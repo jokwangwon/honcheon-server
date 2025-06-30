@@ -1,0 +1,152 @@
+{
+  "general": {
+    "prefix": "§b[Honcheon] §r",
+    "reload": "§aConfiguration has been reloaded.",
+    "no_permission": "§cYou don't have permission.",
+    "player_not_found": "§cPlayer not found.",
+    "invalid_command": "§cInvalid command."
+  },
+  "faction": {
+    "info": {
+      "name": "§6Faction Information",
+      "leader": "§eLeader: §f{leader}",
+      "members": "§eMembers: §f{current}/{max}",
+      "description": "§eDescription: §f{description}",
+      "rank": "§eRank: §f{rank}"
+    },
+    "join": {
+      "success": "§aYou have joined {name} faction.",
+      "already_member": "§cYou are already a member of a faction.",
+      "full": "§cFaction is full.",
+      "invitation_sent": "§aFaction invitation sent to {player}.",
+      "invitation_received": "§a{player} has invited you to {faction} faction.",
+      "invitation_accepted": "§aFaction invitation accepted.",
+      "invitation_declined": "§cFaction invitation declined."
+    },
+    "leave": {
+      "success": "§aYou have left the faction.",
+      "leader_cannot_leave": "§cLeader cannot leave the faction."
+    },
+    "kick": {
+      "success": "§a{player} has been kicked from the faction.",
+      "cannot_kick_leader": "§cCannot kick the leader.",
+      "not_member": "§c{player} is not a member of this faction."
+    },
+    "chat": {
+      "enabled": "§aFaction chat enabled.",
+      "disabled": "§cFaction chat disabled.",
+      "format": "§b[Faction] §f{player}: §r{message}"
+    },
+    "home": {
+      "teleported": "§aTeleported to faction home.",
+      "not_set": "§cFaction home is not set.",
+      "set": "§aFaction home has been set."
+    }
+  },
+  "cultivation": {
+    "info": {
+      "current_realm": "§6Current Realm: §f{realm}",
+      "current_level": "§6Current Level: §f{level}/{max_level}",
+      "experience": "§6Experience: §f{exp}/{required_exp}",
+      "progress": "§6Progress: §f{progress}%"
+    },
+    "breakthrough": {
+      "success": "§a§lBreakthrough successful! §f{new_realm}",
+      "failed": "§c§lBreakthrough failed.",
+      "requirements_not_met": "§cBreakthrough requirements not met.",
+      "items_required": "§cRequired items: {items}",
+      "location_required": "§cRequired location: {location}",
+      "rank_required": "§cRequired rank: {rank}"
+    },
+    "training": {
+      "meditation_started": "§aMeditation started.",
+      "meditation_completed": "§aMeditation completed. §f+{exp} experience",
+      "cultivation_started": "§aCultivation training started.",
+      "cultivation_completed": "§aCultivation training completed. §f+{exp} experience",
+      "cooldown": "§cCannot train yet. §f{time} seconds remaining"
+    }
+  },
+  "skill": {
+    "use": {
+      "success": "§aUsed {skill} skill.",
+      "failed": "§cSkill use failed.",
+      "cooldown": "§cSkill is on cooldown. §f{time} seconds remaining",
+      "no_mana": "§cNot enough mana.",
+      "not_learned": "§cSkill not learned yet.",
+      "level_required": "§cRequired realm: {level}"
+    },
+    "learn": {
+      "success": "§aLearned {skill} skill.",
+      "already_learned": "§cSkill already learned.",
+      "requirements_not_met": "§cSkill learning requirements not met."
+    },
+    "info": {
+      "name": "§6Skill: §f{name}",
+      "description": "§eDescription: §f{description}",
+      "type": "§eType: §f{type}",
+      "level": "§eLevel: §f{level}",
+      "cooldown": "§eCooldown: §f{cooldown} seconds",
+      "mana_cost": "§eMana Cost: §f{mana_cost}",
+      "damage": "§eDamage: §f{damage}",
+      "range": "§eRange: §f{range}"
+    }
+  },
+  "item": {
+    "obtained": "§aObtained {item}.",
+    "used": "§aUsed {item}.",
+    "not_enough": "§cNot enough {item}.",
+    "info": {
+      "name": "§6Item: §f{name}",
+      "description": "§eDescription: §f{description}",
+      "rarity": "§eRarity: §f{rarity}",
+      "value": "§eValue: §f{value}"
+    }
+  },
+  "commands": {
+    "faction": {
+      "help": "§6Faction Commands",
+      "join": "§e/faction join <faction> §f- Join a faction",
+      "leave": "§e/faction leave §f- Leave current faction",
+      "info": "§e/faction info [faction] §f- View faction information",
+      "chat": "§e/faction chat §f- Toggle faction chat",
+      "home": "§e/faction home §f- Teleport to faction home",
+      "invite": "§e/faction invite <player> §f- Invite player to faction",
+      "kick": "§e/faction kick <player> §f- Kick player from faction"
+    },
+    "cultivation": {
+      "help": "§6Cultivation Commands",
+      "info": "§e/cultivation info §f- View cultivation information",
+      "train": "§e/cultivation train <method> §f- Start training",
+      "breakthrough": "§e/cultivation breakthrough §f- Attempt breakthrough"
+    },
+    "skill": {
+      "help": "§6Skill Commands",
+      "list": "§e/skill list §f- List learned skills",
+      "info": "§e/skill info <skill> §f- View skill information",
+      "use": "§e/skill use <skill> §f- Use skill"
+    }
+  },
+  "errors": {
+    "config_error": "§cConfiguration file error occurred.",
+    "database_error": "§cDatabase error occurred.",
+    "plugin_error": "§cPlugin error occurred.",
+    "unknown_error": "§cUnknown error occurred."
+  },
+  "success": {
+    "data_saved": "§aData saved successfully.",
+    "data_loaded": "§aData loaded successfully.",
+    "operation_completed": "§aOperation completed successfully."
+  },
+  "warnings": {
+    "low_health": "§cHealth is low!",
+    "low_mana": "§cMana is insufficient!",
+    "dangerous_area": "§eDangerous area!",
+    "enemy_nearby": "§cEnemy nearby!"
+  },
+  "notifications": {
+    "level_up": "§a§lLevel Up! §fReached level {new_level}!",
+    "skill_mastered": "§a§lSkill Mastered! §f{skill} skill completed!",
+    "faction_war": "§c§lFaction War has begun!",
+    "server_restart": "§e§lServer will restart soon!"
+  }
+} 

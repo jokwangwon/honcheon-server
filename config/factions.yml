@@ -1,0 +1,118 @@
+# 혼천 서버 문파 설정 파일
+
+factions:
+  # 청운문 (靑雲門)
+  cheongyun:
+    name: "청운문"
+    display_name: "靑雲門"
+    description: "바람과 구름을 다루는 심법으로 유명한 문파"
+    color: "AQUA"
+    prefix: "[청운]"
+    leader: "청운진인"
+    home_location:
+      world: "world"
+      x: 1000
+      y: 64
+      z: 1000
+    spawn_location:
+      world: "world"
+      x: 1000
+      y: 64
+      z: 1000
+    max_members: 50
+    default_rank: "수련생"
+    ranks:
+      - "수련생"
+      - "내문제자"
+      - "외문제자"
+      - "진전제자"
+      - "장로"
+      - "부수장"
+      - "수장"
+
+  # 화염문 (火焰門)
+  hwayeom:
+    name: "화염문"
+    display_name: "火焰門"
+    description: "불과 열을 조작하는 강력한 공격형 문파"
+    color: "RED"
+    prefix: "[화염]"
+    leader: "화염진인"
+    home_location:
+      world: "world"
+      x: -1000
+      y: 64
+      z: -1000
+    spawn_location:
+      world: "world"
+      x: -1000
+      y: 64
+      z: -1000
+    max_members: 50
+    default_rank: "수련생"
+    ranks:
+      - "수련생"
+      - "내문제자"
+      - "외문제자"
+      - "진전제자"
+      - "장로"
+      - "부수장"
+      - "수장"
+
+  # 태산문 (泰山門)
+  taesan:
+    name: "태산문"
+    display_name: "泰山門"
+    description: "대지와 산의 힘을 활용하는 방어형 문파"
+    color: "GRAY"
+    prefix: "[태산]"
+    leader: "태산진인"
+    home_location:
+      world: "world"
+      x: 1000
+      y: 64
+      z: -1000
+    spawn_location:
+      world: "world"
+      x: 1000
+      y: 64
+      z: -1000
+    max_members: 50
+    default_rank: "수련생"
+    ranks:
+      - "수련생"
+      - "내문제자"
+      - "외문제자"
+      - "진전제자"
+      - "장로"
+      - "부수장"
+      - "수장"
+
+  # 수월문 (水月門)
+  suwol:
+    name: "수월문"
+    display_name: "水月門"
+    description: "물과 달의 기운을 다루는 치유형 문파"
+    color: "BLUE"
+    prefix: "[수월]"
+    leader: "수월진인"
+    home_location:
+      world: "world"
+      x: -1000
+      y: 64
+      z: 1000
+    spawn_location:
+      world: "world"
+      x: -1000
+      y: 64
+      z: 1000
+    max_members: 50
+    default_rank: "수련생"
+    ranks:
+      - "수련생"
+      - "내문제자"
+      - "외문제자"
+      - "진전제자"
+      - "장로"
+      - "부수장"
+      - "수장" 

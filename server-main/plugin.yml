@@ -1,0 +1,41 @@
+name: HoncheonServerMain
+version: '${version}'
+main: com.honcheon.servermain.Main
+api-version: '1.20'
+authors: [HoncheonTeam]
+description: 혼천 서버 메인 월드 플러그인 - 동방 신선 세계를 배경으로 한 마인크래프트 서버
+
+commands:
+  faction:
+    description: 문파 관련 명령어
+    usage: /faction <join|leave|info|chat|home|invite|kick>
+    permission: honcheon.faction
+  cultivation:
+    description: 심법 수련 관련 명령어
+    usage: /cultivation <info|train|breakthrough>
+    permission: honcheon.cultivation
+  skill:
+    description: 스킬 관련 명령어
+    usage: /skill <list|info|use>
+    permission: honcheon.skill
+
+permissions:
+  honcheon.*:
+    description: 모든 혼천 서버 권한
+    children:
+      honcheon.faction: true
+      honcheon.cultivation: true
+      honcheon.skill: true
+      honcheon.admin: true
+  honcheon.faction:
+    description: 문파 관련 권한
+    default: true
+  honcheon.cultivation:
+    description: 심법 수련 관련 권한
+    default: true
+  honcheon.skill:
+    description: 스킬 관련 권한
+    default: true
+  honcheon.admin:
+    description: 관리자 권한
+    default: op 

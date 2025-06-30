@@ -1,0 +1,166 @@
+version: '3.8'
+
+services:
+  # 허브 서버
+  hub:
+    image: openjdk:17-jre-slim
+    container_name: honcheon-hub
+    ports:
+      - "25566:25566"
+    volumes:
+      - ./hub:/server
+      - ./config:/server/config
+      - ./resources:/server/resources
+      - ./datapack:/server/world/datapacks
+    working_dir: /server
+    command: >
+      java -Xms512M -Xmx1G
+      -XX:+UseG1GC
+      -XX:+ParallelRefProcEnabled
+      -XX:MaxGCPauseMillis=200
+      -XX:+UnlockExperimentalVMOptions
+      -XX:+DisableExplicitGC
+      -XX:+AlwaysPreTouch
+      -XX:G1NewSizePercent=30
+      -XX:G1MaxNewSizePercent=40
+      -XX:G1HeapRegionSize=8M
+      -XX:G1ReservePercent=20
+      -XX:G1HeapWastePercent=5
+      -XX:G1MixedGCCountTarget=4
+      -XX:InitiatingHeapOccupancyPercent=15
+      -XX:G1MixedGCLiveThresholdPercent=90
+      -XX:G1RSetUpdatingPauseTimePercent=5
+      -XX:SurvivorRatio=32
+      -XX:+PerfDisableSharedMem
+      -XX:MaxTenuringThreshold=1
+      -jar server.jar nogui
+    environment:
+      - SERVER_PORT=25566
+    networks:
+      - honcheon-network
+    restart: unless-stopped
+
+  # 메인 월드 서버
+  main:
+    image: openjdk:17-jre-slim
+    container_name: honcheon-main
+    ports:
+      - "25567:25567"
+    volumes:
+      - ./main:/server
+      - ./config:/server/config
+      - ./resources:/server/resources
+      - ./datapack:/server/world/datapacks
+    working_dir: /server
+    command: >
+      java -Xms1G -Xmx2G
+      -XX:+UseG1GC
+      -XX:+ParallelRefProcEnabled
+      -XX:MaxGCPauseMillis=200
+      -XX:+UnlockExperimentalVMOptions
+      -XX:+DisableExplicitGC
+      -XX:+AlwaysPreTouch
+      -XX:G1NewSizePercent=30
+      -XX:G1MaxNewSizePercent=40
+      -XX:G1HeapRegionSize=8M
+      -XX:G1ReservePercent=20
+      -XX:G1HeapWastePercent=5
+      -XX:G1MixedGCCountTarget=4
+      -XX:InitiatingHeapOccupancyPercent=15
+      -XX:G1MixedGCLiveThresholdPercent=90
+      -XX:G1RSetUpdatingPauseTimePercent=5
+      -XX:SurvivorRatio=32
+      -XX:+PerfDisableSharedMem
+      -XX:MaxTenuringThreshold=1
+      -jar server.jar nogui
+    environment:
+      - SERVER_PORT=25567
+    networks:
+      - honcheon-network
+    restart: unless-stopped
+
+  # 문파 전용 서버
+  faction:
+    image: openjdk:17-jre-slim
+    container_name: honcheon-faction
+    ports:
+      - "25568:25568"
+    volumes:
+      - ./faction:/server
+      - ./config:/server/config
+      - ./resources:/server/resources
+      - ./datapack:/server/world/datapacks
+    working_dir: /server
+    command: >
+      java -Xms1G -Xmx2G
+      -XX:+UseG1GC
+      -XX:+ParallelRefProcEnabled
+      -XX:MaxGCPauseMillis=200
+      -XX:+UnlockExperimentalVMOptions
+      -XX:+DisableExplicitGC
+      -XX:+AlwaysPreTouch
+      -XX:G1NewSizePercent=30
+      -XX:G1MaxNewSizePercent=40
+      -XX:G1HeapRegionSize=8M
+      -XX:G1ReservePercent=20
+      -XX:G1HeapWastePercent=5
+      -XX:G1MixedGCCountTarget=4
+      -XX:InitiatingHeapOccupancyPercent=15
+      -XX:G1MixedGCLiveThresholdPercent=90
+      -XX:G1RSetUpdatingPauseTimePercent=5
+      -XX:SurvivorRatio=32
+      -XX:+PerfDisableSharedMem
+      -XX:MaxTenuringThreshold=1
+      -jar server.jar nogui
+    environment:
+      - SERVER_PORT=25568
+    networks:
+      - honcheon-network
+    restart: unless-stopped
+
+  # BungeeCord 프록시
+  bungee:
+    image: openjdk:17-jre-slim
+    container_name: honcheon-bungee
+    ports:
+      - "25565:25565"
+    volumes:
+      - ./bungee:/server
+    working_dir: /server
+    command: >
+      java -Xms512M -Xmx1G
+      -XX:+UseG1GC
+      -XX:+ParallelRefProcEnabled
+      -XX:MaxGCPauseMillis=200
+      -XX:+UnlockExperimentalVMOptions
+      -XX:+DisableExplicitGC
+      -XX:+AlwaysPreTouch
+      -XX:G1NewSizePercent=30
+      -XX:G1MaxNewSizePercent=40
+      -XX:G1HeapRegionSize=8M
+      -XX:G1ReservePercent=20
+      -XX:G1HeapWastePercent=5
+      -XX:G1MixedGCCountTarget=4
+      -XX:InitiatingHeapOccupancyPercent=15
+      -XX:G1MixedGCLiveThresholdPercent=90
+      -XX:G1RSetUpdatingPauseTimePercent=5
+      -XX:SurvivorRatio=32
+      -XX:+PerfDisableSharedMem
+      -XX:MaxTenuringThreshold=1
+      -jar BungeeCord.jar
+    environment:
+      - PROXY_PORT=25565
+    networks:
+      - honcheon-network
+    restart: unless-stopped
+    depends_on:
+      - hub
+      - main
+      - faction
+
+networks:
+  honcheon-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

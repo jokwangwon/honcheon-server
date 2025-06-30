@@ -1,0 +1,143 @@
+# 혼천 서버 스킬 설정 파일
+
+skills:
+  # 청운문 스킬
+  cheongyun_skills:
+    wind_step:
+      name: "풍보"
+      display_name: "風步"
+      description: "바람을 타고 빠르게 이동하는 기본 스킬"
+      type: "movement"
+      level: 1
+      cooldown: 5
+      mana_cost: 10
+      damage: 0
+      range: 10
+      effects:
+        - "SPEED:2:3"
+        - "JUMP:1:3"
+      requirements:
+        faction: "cheongyun"
+        cultivation_level: 1
+    
+    cloud_veil:
+      name: "운장"
+      display_name: "雲障"
+      description: "구름으로 자신을 감싸는 방어 스킬"
+      type: "defense"
+      level: 2
+      cooldown: 15
+      mana_cost: 20
+      damage: 0
+      range: 0
+      effects:
+        - "DAMAGE_RESISTANCE:1:5"
+        - "INVISIBILITY:1:3"
+      requirements:
+        faction: "cheongyun"
+        cultivation_level: 2
+
+  # 화염문 스킬
+  hwayeom_skills:
+    fire_ball:
+      name: "화구"
+      display_name: "火球"
+      description: "불덩이를 던지는 기본 공격 스킬"
+      type: "attack"
+      level: 1
+      cooldown: 3
+      mana_cost: 15
+      damage: 20
+      range: 12
+      effects:
+        - "FIRE:1:3"
+      requirements:
+        faction: "hwayeom"
+        cultivation_level: 1
+    
+    flame_armor:
+      name: "화갑"
+      display_name: "火甲"
+      description: "불꽃으로 갑옷을 만들어 방어하는 스킬"
+      type: "defense"
+      level: 2
+      cooldown: 20
+      mana_cost: 25
+      damage: 0
+      range: 0
+      effects:
+        - "FIRE_RESISTANCE:1:8"
+        - "DAMAGE_RESISTANCE:1:5"
+      requirements:
+        faction: "hwayeom"
+        cultivation_level: 2
+
+  # 태산문 스킬
+  taesan_skills:
+    stone_skin:
+      name: "석피"
+      display_name: "石皮"
+      description: "돌같은 피부로 방어력을 높이는 스킬"
+      type: "defense"
+      level: 1
+      cooldown: 8
+      mana_cost: 20
+      damage: 0
+      range: 0
+      effects:
+        - "DAMAGE_RESISTANCE:2:6"
+        - "SLOW:1:4"
+      requirements:
+        faction: "taesan"
+        cultivation_level: 1
+    
+    mountain_strike:
+      name: "산격"
+      display_name: "山擊"
+      description: "산의 힘을 담아 강력한 일격을 날리는 스킬"
+      type: "attack"
+      level: 2
+      cooldown: 12
+      mana_cost: 25
+      damage: 35
+      range: 8
+      effects:
+        - "SLOW:1:2"
+      requirements:
+        faction: "taesan"
+        cultivation_level: 2
+
+  # 수월문 스킬
+  suwol_skills:
+    water_heal:
+      name: "수치"
+      display_name: "水治"
+      description: "물의 힘으로 상처를 치유하는 스킬"
+      type: "heal"
+      level: 1
+      cooldown: 10
+      mana_cost: 20
+      damage: 0
+      range: 8
+      effects:
+        - "HEAL:10:1"
+        - "REGENERATION:1:5"
+      requirements:
+        faction: "suwol"
+        cultivation_level: 1
+    
+    moon_light:
+      name: "월광"
+      display_name: "月光"
+      description: "달빛으로 적을 공격하는 스킬"
+      type: "attack"
+      level: 2
+      cooldown: 8
+      mana_cost: 18
+      damage: 25
+      range: 12
+      effects:
+        - "BLINDNESS:1:2"
+      requirements:
+        faction: "suwol"
+        cultivation_level: 2 

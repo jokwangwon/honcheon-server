@@ -1,0 +1,259 @@
+# 혼천 서버 심법 수련 설정 파일
+
+cultivation:
+  # 경지 체계
+  realms:
+    # 초급 경지
+    beginner:
+      # 기감기 (氣感期)
+      qi_sensing:
+        name: "기감기"
+        display_name: "氣感期"
+        description: "기를 느끼기 시작하는 단계"
+        level: 1
+        max_level: 10
+        exp_required: 100
+        exp_multiplier: 1.2
+        benefits:
+          max_health: 20
+          max_mana: 50
+          attack_damage: 1
+          defense: 1
+        skills_unlocked: 1
+        breakthrough_requirements:
+          items:
+            - "basic_qi_stone:1"
+          location: "any"
+      
+      # 기운기 (氣運期)
+      qi_circulation:
+        name: "기운기"
+        display_name: "氣運期"
+        description: "기를 운용할 수 있는 단계"
+        level: 11
+        max_level: 20
+        exp_required: 200
+        exp_multiplier: 1.3
+        benefits:
+          max_health: 25
+          max_mana: 75
+          attack_damage: 2
+          defense: 2
+        skills_unlocked: 2
+        breakthrough_requirements:
+          items:
+            - "circulation_qi_stone:1"
+          location: "faction_home"
+      
+      # 기화기 (氣化期)
+      qi_transformation:
+        name: "기화기"
+        display_name: "氣化期"
+        description: "기를 변화시킬 수 있는 단계"
+        level: 21
+        max_level: 30
+        exp_required: 500
+        exp_multiplier: 1.4
+        benefits:
+          max_health: 30
+          max_mana: 100
+          attack_damage: 3
+          defense: 3
+        skills_unlocked: 3
+        breakthrough_requirements:
+          items:
+            - "transformation_qi_stone:1"
+            - "spirit_herb:3"
+          location: "faction_home"
+    
+    # 중급 경지
+    intermediate:
+      # 심법기 (心法期)
+      heart_method:
+        name: "심법기"
+        display_name: "心法期"
+        description: "심법을 익히는 단계"
+        level: 31
+        max_level: 40
+        exp_required: 1000
+        exp_multiplier: 1.5
+        benefits:
+          max_health: 40
+          max_mana: 150
+          attack_damage: 5
+          defense: 5
+        skills_unlocked: 4
+        breakthrough_requirements:
+          items:
+            - "heart_method_stone:1"
+            - "spirit_herb:5"
+            - "cultivation_pill:1"
+          location: "faction_home"
+          faction_rank: "진전제자"
+      
+      # 심운기 (心運期)
+      heart_circulation:
+        name: "심운기"
+        display_name: "心運期"
+        description: "심법을 자유자재로 사용하는 단계"
+        level: 41
+        max_level: 50
+        exp_required: 2000
+        exp_multiplier: 1.6
+        benefits:
+          max_health: 50
+          max_mana: 200
+          attack_damage: 7
+          defense: 7
+        skills_unlocked: 5
+        breakthrough_requirements:
+          items:
+            - "heart_circulation_stone:1"
+            - "spirit_herb:10"
+            - "cultivation_pill:2"
+          location: "faction_home"
+          faction_rank: "장로"
+      
+      # 심화기 (心化期)
+      heart_transformation:
+        name: "심화기"
+        display_name: "心化期"
+        description: "심법을 변화시키는 단계"
+        level: 51
+        max_level: 60
+        exp_required: 5000
+        exp_multiplier: 1.7
+        benefits:
+          max_health: 60
+          max_mana: 250
+          attack_damage: 10
+          defense: 10
+        skills_unlocked: 6
+        breakthrough_requirements:
+          items:
+            - "heart_transformation_stone:1"
+            - "spirit_herb:15"
+            - "cultivation_pill:3"
+            - "divine_essence:1"
+          location: "faction_home"
+          faction_rank: "부수장"
+    
+    # 고급 경지
+    advanced:
+      # 진인기 (眞人期)
+      true_person:
+        name: "진인기"
+        display_name: "眞人期"
+        description: "진인 경지에 도달"
+        level: 61
+        max_level: 70
+        exp_required: 10000
+        exp_multiplier: 1.8
+        benefits:
+          max_health: 80
+          max_mana: 350
+          attack_damage: 15
+          defense: 15
+        skills_unlocked: 7
+        breakthrough_requirements:
+          items:
+            - "true_person_stone:1"
+            - "spirit_herb:20"
+            - "cultivation_pill:5"
+            - "divine_essence:3"
+          location: "faction_home"
+          faction_rank: "수장"
+      
+      # 진선기 (眞仙期)
+      true_immortal:
+        name: "진선기"
+        display_name: "眞仙期"
+        description: "진선 경지에 도달"
+        level: 71
+        max_level: 80
+        exp_required: 20000
+        exp_multiplier: 1.9
+        benefits:
+          max_health: 100
+          max_mana: 500
+          attack_damage: 20
+          defense: 20
+        skills_unlocked: 8
+        breakthrough_requirements:
+          items:
+            - "true_immortal_stone:1"
+            - "spirit_herb:30"
+            - "cultivation_pill:10"
+            - "divine_essence:5"
+            - "heavenly_essence:1"
+          location: "faction_home"
+          faction_rank: "수장"
+      
+      # 진신기 (眞神期)
+      true_god:
+        name: "진신기"
+        display_name: "眞神期"
+        description: "진신 경지에 도달"
+        level: 81
+        max_level: 100
+        exp_required: 50000
+        exp_multiplier: 2.0
+        benefits:
+          max_health: 150
+          max_mana: 1000
+          attack_damage: 30
+          defense: 30
+        skills_unlocked: 10
+        breakthrough_requirements:
+          items:
+            - "true_god_stone:1"
+            - "spirit_herb:50"
+            - "cultivation_pill:20"
+            - "divine_essence:10"
+            - "heavenly_essence:5"
+            - "cosmic_essence:1"
+          location: "faction_home"
+          faction_rank: "수장"
+
+  # 수련 방법
+  training_methods:
+    # 명상 수련
+    meditation:
+      name: "명상"
+      description: "조용한 곳에서 명상하여 경험치를 얻습니다"
+      exp_gain: 10
+      cooldown: 300
+      requirements:
+        location: "quiet_area"
+        items: []
+    
+    # 전투 수련
+    combat:
+      name: "전투"
+      description: "몬스터와 전투하여 경험치를 얻습니다"
+      exp_gain: 20
+      cooldown: 0
+      requirements:
+        location: "any"
+        items: []
+    
+    # 심법 수련
+    cultivation:
+      name: "심법수련"
+      description: "심법을 연마하여 경험치를 얻습니다"
+      exp_gain: 15
+      cooldown: 600
+      requirements:
+        location: "faction_home"
+        items:
+          - "cultivation_pill:1"
+    
+    # 문파 임무
+    faction_quest:
+      name: "문파임무"
+      description: "문파 임무를 완료하여 경험치를 얻습니다"
+      exp_gain: 50
+      cooldown: 3600
+      requirements:
+        location: "any"
+        items: [] 

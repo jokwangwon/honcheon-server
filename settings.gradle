@@ -1,0 +1,6 @@
+rootProject.name = 'honcheon-server'
+
+include 'core'
+include 'server-main'
+include 'server-faction'
+include 'server-hub' 
