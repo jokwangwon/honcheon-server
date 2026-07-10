@@ -6,6 +6,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
 mkdir -p "$RUN/plugins"
 
+# 사전 점검: Java 21+ (Paper 1.21.4 요구)
+JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')
+if [ -z "${JAVA_MAJOR:-}" ] || [ "$JAVA_MAJOR" -lt 21 ]; then
+  echo "오류: Java 21 이상이 필요합니다 (현재: ${JAVA_MAJOR:-없음})."
+  echo "설치 예: sudo apt install openjdk-21-jdk   (우분투/데비안)"
+  exit 1
+fi
+
 echo "[1/4] 플러그인 빌드 (:server-mvt)"
 if [ -x "$ROOT/gradlew" ]; then GRADLE="$ROOT/gradlew"; else GRADLE="gradle"; fi
 (cd "$ROOT" && "$GRADLE" :server-mvt:build -q)
