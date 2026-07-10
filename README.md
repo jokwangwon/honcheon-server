@@ -41,6 +41,7 @@
 | [`docs/design/map_generation.md`](docs/design/map_generation.md) | AI 맵 생성 파이프라인 — "맵은 컴파일한다", 4계층(지형/구조/배치/바인딩), AI 역할 분담, 로드맵 |
 | [`docs/design/platform_decision.md`](docs/design/platform_decision.md) | 플랫폼 결정 — Paper 1.21.4 + 서버 리소스팩(바닐라 접속), 자체 모드는 후순위 선택 옵션 |
 | [`docs/design/performance_and_netcode.md`](docs/design/performance_and_netcode.md) | 성능·통신 품질 — 장애 유형 예측 15종(F-목록)과 방어책, 스킬 8단계 파이프라인, 예산·부하 테스트 기준 |
+| [`docs/design/world_capacity.md`](docs/design/world_capacity.md) | 세계 정원 — 동접 상한(기술)과 세계 정원(디자인)의 분리, 평행 강호, 인구-사건 스케일링 |
 | [`docs/design/skill_mechanics.md`](docs/design/skill_mechanics.md) | 스킬 메커니즘 — 히트박스 6유형, 회피 3단 체계, 무적 상한·상성 삼각, 프레임 데이터 예시 6종 |
 | [`docs/design/internal_energy.md`](docs/design/internal_energy.md) | 내공 시스템 v2 — 삼원 구조: 선천진기(수명 100년 균등)·원기(생명력, 역혈=원기 증폭)·후천진기(내력), 두 개의 죽음, 마공 분류 기준 |
 | [`docs/design/dantian_and_simbeop.md`](docs/design/dantian_and_simbeop.md) | 단전 시각화와 심법 — 그릇 모델(용량·순도·결), 축기 방식 6종 분리, 정순 내공의 정화력(배독·도인도기·해주), 겸수·전환 |
