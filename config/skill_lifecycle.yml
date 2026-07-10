@@ -1,0 +1,63 @@
+# 무공 생애주기 규칙 (기계 판독용) — 습득·숙련·세팅·사용
+# 기준 문서: docs/design/skill_lifecycle.md
+
+# ─── 습득 경로 4종 ───
+acquisition_paths:
+  사사:
+    efficiency: 1.0
+    requires: "스승 (해당 무공 숙련이 학습자보다 높을 것 — training.yml과 동일)"
+    note: "심법·비전의 표준 경로"
+  비급:
+    efficiency: 0.5
+    entry_check: "오성(지혜) + 2d6 vs 무공 등급 난이도 (실패 = 형이 비뚤어짐, 재입문)"
+    risk: "심법 독학 = 주화입마 위험 (internal_energy qi_deviation)"
+  견식:
+    condition: "공개 시전 3회 이상 목격 + 감각 판정"
+    grants: "'견식' 상태 — 시전 불가, 이후 사사·비급 입문 기간 -30%"
+    solo_entry: { efficiency: 0.25, check: "오성 판정 — 실패 잦음" }
+    restrictions:
+      - "심법 견식 불가 — 기의 운용은 밖에서 보이지 않는다"
+      - "은닉 시전·비전 오의 견식 불가"
+    world_hook: "타 문파 비전을 견식으로 흉내 → public_use_rumor → 출처 추궁"
+  기연: "fortune_encounters.yml 등록분 (등록제)"
+
+# ─── 숙련 사다리 ───
+mastery_ladder:
+  견식: { level: null, effect: "시전 불가 — 입문 가속만" }
+  입문: { level: 0, effect: "시전 가능 (최하 위력)" }
+  숙련: { level: [1, 5], growth: "training.yml 환산표 (0→1 3개월, 배증)" }
+  대성: { level: [6, 7], effect: "특수 속성 완전 발현" }
+  극성: { level: 8, effect: "계열 오의 개안 자격 (ultimate_arts 정합)" }
+
+entry_duration_by_grade:      # 입문 기간 (× 경로 효율 × 유년·소년 1.5 × 견식 -30%)
+  입문급: 보름
+  삼류급: 1개월
+  이류급: 3개월
+  절정급: 1년
+
+learning_limits:
+  count: 무제한               # 시간이 유한하므로 자연 분산 — 박이부정 vs 일이관지
+  simbeop_exception: "심법만 겸수 페널티 (simbeop.yml — 그릇은 하나)"
+  forgetting: 없음            # 무공은 잊히지 않는다 (부기 단순화)
+
+# ─── 세팅 (로드아웃) ───
+loadout:
+  text_rpg: "없음 — 아는 것 + 경지 게이트 + 내력 + 상황이 유일한 제약"
+  mc:
+    slots:
+      주무공: { count: 1, binding: "좌클릭 콤보 체인" }
+      스킬: { count: 4, binding: "핫바 6~9 우클릭" }
+      보법: { count: 1, binding: "회피(Shift 탭) 강화·대체" }
+      심법: { count: 1, binding: "패시브 — 결·기운 프로파일·운기 색" }
+      오의: { count: 1, binding: "F키 (개안·전승분만)" }
+    swap_rule: "비전투 10초 + 안전 지역/정지 상태 — 경락도 GUI. 전투 중 교체 불가"
+    design_intent: "세팅 = 준비도 보정의 물리적 형태 (호위/잠입/비무 세트가 갈린다)"
+
+# ─── 사용 (기존 규칙 참조 색인) ───
+usage_refs:
+  판정: judgment.yml
+  내력_소모: "internal_energy.yml cost_bands × simbeop.yml qi_profile"
+  프레임: skill_mechanics.yml
+  파이프라인: "performance.yml 8단계 (MC)"
+  다운캐스트: internal_energy.yml
+  공개_사용: "skills.yml public_use_rumor → 소문·세력 반응"
