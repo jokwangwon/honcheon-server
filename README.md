@@ -31,6 +31,7 @@
 | [`docs/design/text_rpg_design.md`](docs/design/text_rpg_design.md) | **프로젝트 기준 기획 문서** — 세계 구조, 세력, 성장/무공/판정/소문/세력 반응 시스템, 청하현 첫 10턴 테스트 전체 |
 | [`docs/design/judgment_system.md`](docs/design/judgment_system.md) | 판정 수치 계산식 — 실행력/저항값 공식, 결과 등급, 보정표, 첫 10턴 재계산 검증, 실패 분기 예시 |
 | [`docs/design/character_creation.md`](docs/design/character_creation.md) | 캐릭터 생성 — 능력치 배분 규칙, 성향 7종 프리셋, 시작 신분 8종 |
+| [`docs/design/design_review.md`](docs/design/design_review.md) | 설계 검토 보고서 — 판정 밸런스 정량 검증, 3갈래 분기 스트레스 테스트, 공백 목록(G1~G8), 퀄리티 평가 |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약
