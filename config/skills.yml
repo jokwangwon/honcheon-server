@@ -17,7 +17,7 @@ schema:
   faction: "소속 세력"
   required_realm: "요구 경지 (삼류~생사경)"
   required_stats: "요구 능력치"
-  required_mastery: "요구 숙련도"
+  required_mastery: "선행 무공 요구 숙련 (0~10 — mastery_ladder 스케일)"
   acquisition: "습득 조건"
   bloodline_restricted: "혈통 제한 여부"
   requires_master: "스승 필요 여부"
@@ -57,7 +57,7 @@ martial_arts:
     required_realm: "삼류"
     required_stats:
       민첩: 3
-    required_mastery: 20        # 육합검 숙련도
+    required_mastery: 2         # 육합검 숙련 2 (0~10 스케일 정규화)
     acquisition: "육합검 일정 숙련 후 사부 판단으로 전수"
     bloodline_restricted: false
     requires_master: true
@@ -75,7 +75,7 @@ martial_arts:
     required_realm: "이류"
     required_stats:
       지혜: 3
-    required_mastery: 30
+    required_mastery: 3
     acquisition: "입문제자 승급 시험 통과 후 전수"
     bloodline_restricted: false
     requires_master: true
@@ -95,7 +95,7 @@ martial_arts:
     required_stats:
       근력: 5
       지혜: 4
-    required_mastery: 120
+    required_mastery: 6         # 선행 검법 대성 (0~10 스케일 정규화)
     acquisition: "남궁세가 직계 혈족 또는 세가주의 특별 허락"
     bloodline_restricted: true
     requires_master: true
@@ -114,7 +114,7 @@ martial_arts:
     required_stats:
       근력: 3
       민첩: 3
-    required_mastery: 20
+    required_mastery: 2
     acquisition: "소림 속가 또는 관군 교두에게 사사"
     bloodline_restricted: false
     requires_master: true
@@ -142,3 +142,461 @@ martial_arts:
     side_effects: true          # 심마, 폭주 위험
     public_use_rumor: true      # 목격 시 즉시 금기 무공 소문
     faction_reaction: true      # 정파/관군 토벌 대상, 혈교 접촉 시도
+
+  # ═══ 첫 시즌 확장 (G6) — 청하현 중심: 민간·낭인 공용 → 인접 세력 순 ═══
+  # 표기: required_stats 인라인, required_mastery = 선행 무공 숙련 (0~10)
+
+  # ─── 민간·낭인 공용 (스승 = 퇴역 무사·사냥꾼·군문 출신 — 어디서나 배울 길이 있다) ───
+  taejo_jangkwon:
+    name: "태조장권"
+    category: "권법"
+    sub_category: "기본 권각"
+    grade: "입문"
+    faction: "민간"
+    required_realm: "범인"
+    required_stats: { 근력: 2 }
+    required_mastery: 0
+    acquisition: "퇴역 무사·표사 등 유경험자 사사 (가장 흔한 첫 무공)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  cheolsan_go:
+    name: "철산고"
+    category: "박투"
+    sub_category: "몸통 부딪히기"
+    grade: "삼류"
+    faction: "민간"
+    required_realm: "삼류"
+    required_stats: { 근력: 3, 체력: 3 }
+    required_mastery: 0
+    acquisition: "씨름꾼·군문 출신 사사"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  yeopho_gungsul:
+    name: "엽호궁술"
+    category: "궁술"
+    sub_category: "수렵 궁술"
+    grade: "삼류"
+    faction: "민간"
+    required_realm: "범인"
+    required_stats: { 감각: 3 }
+    required_mastery: 0
+    acquisition: "사냥꾼 사사 (덫·사냥 기술과 병행 관례)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  ohodanmun_chang:
+    name: "오호단문창"
+    category: "창법"
+    sub_category: "표국 창술"
+    grade: "이류"
+    faction: "표국"
+    required_realm: "삼류"
+    required_stats: { 근력: 3 }
+    required_mastery: 0
+    acquisition: "표국 입사 후 표두 사사"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  hwalin_chimbeop:
+    name: "활인침법"
+    category: "의술"
+    sub_category: "침구·응급"
+    grade: "이류"
+    faction: "의가"
+    required_realm: "범인"
+    required_stats: { 지혜: 4, 감각: 3 }
+    required_mastery: 0
+    acquisition: "의원 사사 (유문 계열 — 열병 사건 연결 훅)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  # ─── 하오문·뒷골목 ───
+  biyeon_dangeom:
+    name: "비연단검술"
+    category: "단검술"
+    sub_category: "속검"
+    grade: "삼류"
+    faction: "하오문"
+    required_realm: "삼류"
+    required_stats: { 민첩: 3 }
+    required_mastery: 0
+    acquisition: "하오문 연줄 사사 (돈보다 신용을 요구한다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  gwisik_sul:
+    name: "귀식술"
+    category: "은신술"
+    sub_category: "기식 은폐"
+    grade: "이류"
+    faction: "하오문"
+    required_realm: "이류"
+    required_stats: { 감각: 4 }
+    required_mastery: 0
+    acquisition: "하오문 상급 연줄 또는 살막 방계 비급"
+    bloodline_restricted: false
+    requires_master: false
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: false      # 들키지 않는 것이 본체다
+    faction_reaction: false
+
+  # ─── 화산파 (기존 3종 위 확장) ───
+  maehwa_geombeop:
+    name: "매화검법"
+    category: "검법"
+    sub_category: "본산 검법"
+    grade: "일류"
+    faction: "화산파"
+    required_realm: "일류"
+    required_stats: { 민첩: 4, 지혜: 3 }
+    required_mastery: 4          # 육합검 숙련 4
+    acquisition: "내문 제자 승급 후 전수 (비급각 2층)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true       # 매화 검영 — 화산의 지문
+    faction_reaction: true
+    # 계열 오의: 매화만개 (ultimate_arts)
+
+  maehwa_geomjin:
+    name: "매화검진"
+    category: "합격진"
+    sub_category: "검진 (2~5인)"
+    grade: "절정"
+    faction: "화산파"
+    required_realm: "일류"
+    required_stats: { 지혜: 4 }
+    required_mastery: 3          # 매화검법 숙련 3 (전 성원)
+    acquisition: "진전 제자 이상, 진법 구결은 장로 전수 (party.yml 합격진 정합)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 소림사 ───
+  nahan_kwon:
+    name: "나한권"
+    category: "권법"
+    sub_category: "본산 권법"
+    grade: "이류"
+    faction: "소림사"
+    required_realm: "삼류"
+    required_stats: { 근력: 3, 체력: 3 }
+    required_mastery: 0
+    acquisition: "소림 속가 전수 (속가는 18수까지 — 본산 108수는 승적 필요)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  geumgang_budong:
+    name: "금강부동신법"
+    category: "신법"
+    sub_category: "방신 신법"
+    grade: "절정"
+    faction: "소림사"
+    required_realm: "절정"
+    required_stats: { 체력: 5 }
+    required_mastery: 5          # 나한권 숙련 5
+    acquisition: "본산 승적 + 계율원 허가"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 무당파 ───
+  taegeuk_kwon:
+    name: "태극권"
+    category: "권법"
+    sub_category: "유권 (동공 병행)"
+    grade: "이류"
+    faction: "무당파"
+    required_realm: "삼류"
+    required_stats: { 지혜: 3 }
+    required_mastery: 0
+    acquisition: "무당 속가·도관 전수 (태극기공 축기 동공 재료 — simbeop 정합)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  taegeuk_geom:
+    name: "태극검"
+    category: "검법"
+    sub_category: "유검"
+    grade: "절정"
+    faction: "무당파"
+    required_realm: "절정"
+    required_stats: { 지혜: 5, 민첩: 4 }
+    required_mastery: 5          # 태극권 숙련 5
+    acquisition: "본산 내문 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  jewoon_jong:
+    name: "제운종"
+    category: "경공"
+    sub_category: "본산 경공"
+    grade: "절정"
+    faction: "무당파"
+    required_realm: "일류"
+    required_stats: { 민첩: 5 }
+    required_mastery: 0
+    acquisition: "본산 내문 전수 — 무당의 지문 중의 지문"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 남궁세가 (제왕검형 선행) ───
+  changgung_geom:
+    name: "창궁무애검"
+    category: "검법"
+    sub_category: "세가 정전"
+    grade: "이류"
+    faction: "남궁세가"
+    required_realm: "이류"
+    required_stats: { 근력: 3, 지혜: 3 }
+    required_mastery: 0
+    acquisition: "세가 방계·가신 전수 (제왕검형의 선행 — 직계는 이 검부터 밟는다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  # ─── 사천당가 ───
+  dangmun_bisu:
+    name: "당문비수술"
+    category: "암기"
+    sub_category: "투척 비수"
+    grade: "삼류"
+    faction: "사천당가"
+    required_realm: "삼류"
+    required_stats: { 민첩: 3, 감각: 3 }
+    required_mastery: 0
+    acquisition: "당가 방계·상단 호위 출신 사사 (기초는 바깥에도 흘렀다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  chilbo_dokjang:
+    name: "칠보독장"
+    category: "독공"
+    sub_category: "독장"
+    grade: "일류"
+    faction: "사천당가"
+    required_realm: "일류"
+    required_stats: { 체력: 4, 지혜: 3 }
+    required_mastery: 0
+    acquisition: "당가 내당 전수 — 독 내성 수련 선행 (원기 대가)"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: true           # 수련 중 자가 중독 위험
+    public_use_rumor: true       # 일곱 걸음의 소문
+    faction_reaction: true
+    # 대처: 정화 규칙 (simbeop) — 대부분의 무사는 독에 무력하다
+
+  manchon_hwau:
+    name: "만천화우"
+    category: "암기"
+    sub_category: "세가 비전 (광역 투척)"
+    grade: "절정"
+    faction: "사천당가"
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 5 }
+    required_mastery: 6          # 당문비수술 대성
+    acquisition: "당가 직계 한정 — 유출 시 세가가 전쟁을 불사한다"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 개방 ───
+  chwipalseon_bo:
+    name: "취팔선보"
+    category: "경공"
+    sub_category: "취보 (변칙 보법)"
+    grade: "이류"
+    faction: "개방"
+    required_realm: "이류"
+    required_stats: { 민첩: 4 }
+    required_mastery: 0
+    acquisition: "개방 3결 제자 이상 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true       # 비틀거리는데 안 맞는다 — 개방의 지문
+    faction_reaction: false
+
+  tagu_bongbeop:
+    name: "타구봉법"
+    category: "봉법"
+    sub_category: "방주 비전"
+    grade: "절정"
+    faction: "개방"
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 지혜: 4 }
+    required_mastery: 5          # 취팔선보 숙련 5
+    acquisition: "방주·장로 한정 전승 (개방 최심부)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 관군 ───
+  chamma_dobeop:
+    name: "참마도법"
+    category: "도법"
+    sub_category: "군문 도법"
+    grade: "이류"
+    faction: "관군"
+    required_realm: "삼류"
+    required_stats: { 근력: 4 }
+    required_mastery: 0
+    acquisition: "군문 교두 사사 (포두·포쾌의 표준 무장)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false      # 관의 도법 — 지문이라기보다 제복
+    faction_reaction: false
+
+  # ─── 녹림·사파 ───
+  sando_sippallo:
+    name: "산도십팔로"
+    category: "도법"
+    sub_category: "산채 도법"
+    grade: "삼류"
+    faction: "녹림"
+    required_realm: "삼류"
+    required_stats: { 근력: 3 }
+    required_mastery: 0
+    acquisition: "산채 선배 사사 (갈호의 도법 — north_road_bandits 정합)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true       # 녹림 물이 든 도법 — 관군이 눈여겨본다
+    faction_reaction: false
+
+  heuksal_dobeop:
+    name: "흑살도법"
+    category: "도법"
+    sub_category: "살초 위주"
+    grade: "일류"
+    faction: "녹림"
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 4 }
+    required_mastery: 3          # 산도십팔로 숙련 3
+    acquisition: "채주급 전수 또는 흑도 비급 (암시장)"
+    bloodline_restricted: false
+    requires_master: false
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true       # 정파·관군: 흑도 고수 경보
+  eumpung_geom:
+    name: "음풍검"
+    category: "검법"
+    sub_category: "쾌검 (변초)"
+    grade: "이류"
+    faction: "사파"
+    required_realm: "이류"
+    required_stats: { 민첩: 4 }
+    required_mastery: 0
+    acquisition: "사파 낭인 사사 또는 암시장 비급"
+    bloodline_restricted: false
+    requires_master: false
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  # ─── 살막 ───
+  muyeong_bisu:
+    name: "무영비수"
+    category: "암살술"
+    sub_category: "일격 이탈"
+    grade: "절정"
+    faction: "살막"
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 4 }
+    required_mastery: 4          # 귀식술 숙련 4
+    acquisition: "살막 정식 살수 한정 (조직 밖 유출 사례 없음 — 있다면 사건이다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true       # 시전 목격자가 살아 있다면
+    faction_reaction: true
+
+  # ─── 혈교 ───
+  hyeolsu_magong:
+    name: "혈수마공"
+    category: "장법"
+    sub_category: "금기 마공"
+    grade: "절정"
+    faction: "혈교"
+    required_realm: "일류"
+    required_stats: { 체력: 5 }
+    required_mastery: 0
+    acquisition: "혈교 내부 전승 — 혈기심공 선행 (마공 분류 ①: 타인 원기 약탈)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: true           # 심마 누적, 흡성 의존
+    public_use_rumor: true       # 손이 핏빛으로 — 즉시 금기 소문 강도 3
+    faction_reaction: true

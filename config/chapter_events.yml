@@ -1,0 +1,152 @@
+# 장(章) 사건 풀 — 출도 후 세계가 던지는 이야기 (G6)
+# 원칙: 장은 대본이 아니라 '압력'이다 — 트리거(세계 상태)가 열고, 데드라인이 몰아가고,
+#       어느 결말이든 지역 델타로 남는다. GM은 이 재료로 장을 연다 (의뢰 생성기와 상보:
+#       의뢰 = 작은 증상, 장 = 큰 병).
+
+chapter_events:
+  salt_road_blockade:
+    name: "소금길 봉쇄"
+    trigger: { 치안: "< 35", incident: north_road_bandits_미해결 }
+    premise: "갈호가 북로 목을 잡았다 — 소금이 끊기고 물가가 뛴다"
+    stage_hooks:
+      - "상단 호위 의뢰 급증(허대인·진철산)"
+      - "관군 토벌 논의(조문원 — 실적 계산)"
+      - "갈호의 뒷배 단서(흑랑 정보선)"
+    factions: [noklim, sangdan, gwangun, haomun]
+    deadline: "봉쇄 14일 지속 시 경제 -8·소금 +80% (기근 문법 진입)"
+    outcomes:
+      토벌_해결: { 치안: +5, 민심: +3, hooks: [갈호의 배후 미해결 — 하오문 정보 유출선 잔존] }
+      협상_해결: { 치안: +2, 경제: +3, hooks: [갈호와의 거래 소문 — 정파 favor 리스크] }
+      방치: { 경제: -8, 민심: -5, escalation: 관군_대규모_개입 }
+
+  fever_resurgence:
+    name: "열병 재확산"
+    trigger: { 민심: "< 40", incident: cheongha_fever_rumor }
+    premise: "약재가 끊기자 병이 되돌아왔다 — 유문은 한계, 가짜 약이 돈다"
+    stage_hooks:
+      - "약초 채집 의뢰(곰보영감 안내)"
+      - "가짜 약 유통 조사(백석 장부 대필 단서)"
+      - "병의 근원 추적(금기 세력 장기 떡밥)"
+    factions: [mingan, sangdan, uiga]
+    deadline: "주당 민심 -3 누적 (기존 델타)"
+    outcomes:
+      완화: { 민심: +4, 경제: +1, favor: 유문_은인급 }
+      가짜약_적발: { 민심: +2, hooks: [유통 배후 = 하오문 자금선] }
+      방치: { 민심: -9, escalation: 유언비어_희생양_사건 }
+
+  wanted_fugitive:
+    name: "수배범 잠입"
+    trigger: { 세계: 인접_지역_사건, random_window: 계절 }
+    premise: "타지에서 사고 친 일류 무인이 청하현에 숨어들었다 — 현상금 은 50냥"
+    stage_hooks:
+      - "박호의 비공식 협조 요청"
+      - "객잔 투숙객 관찰(한백·소칠)"
+      - "수배범의 사정(진범 별도? — 조사 분기)"
+    factions: [gwangun, haomun]
+    deadline: "7일 내 미검거 시 수배범 도주 or 사건 재발"
+    outcomes:
+      검거: { 치안: +3, reward: 현상금, favor: 관군_신용 }
+      진범_규명: { 민심: +4, hooks: [원 사건 지역의 세력 반응 — 타지 favor] }
+      방치: { 치안: -3, escalation: 현내_강도_사건 }
+
+  hwasan_examination:
+    name: "화산파 입문 시험"
+    trigger: { favor: 정파_안면_이상, npc: 진운_추천장 }
+    premise: "진운의 추천장이 통했다 — 화산에서 시험관이 내려온다"
+    stage_hooks:
+      - "자질 시험(판정 연속 — 무재만 보지 않는다)"
+      - "동기 경쟁자(NPC 소년 — 사형제 예고)"
+      - "시험관의 진짜 관찰(성정 — 성향 흔적)"
+    factions: [hwasan]
+    deadline: "시험일 고정 — 준비 기간이 곧 장"
+    outcomes:
+      입문: { result: "외문 제자 (sect_life 개시)", hooks: [동기와의 서열 시작] }
+      낙방: { hooks: [재도전 조건 제시, "타 루트(속가·독학) 부각"], favor: 유지 }
+
+  blood_scent:
+    name: "혈향(血香)"
+    trigger: { registry: 마병_지역_유입, npc: 혜각_감지 }
+    premise: "혜각이 저자에서 혈향을 맡았다 — 누군가 마병을 들여왔다"
+    stage_hooks:
+      - "출처 추적(야철수 감정 거절 이력)"
+      - "소지자의 사정(침식 진행 — 구할 것인가 벨 것인가)"
+      - "혈교 회수조 등장(emergent 규칙 발화)"
+    factions: [bulga, hyeolgyo, gwangun]
+    deadline: "침식 계절 진행 — 소지자 전향 판정 임박"
+    outcomes:
+      정화: { 민심: +2, favor: 불가_신용, hooks: [마병의 원 주인 단서] }
+      회수조_격퇴: { 치안: +2, hooks: [혈교 주목 +8 — 표적이 된다] }
+      방치: { escalation: 소지자_전향_사건, 치안: -5 }
+
+  forged_notes:
+    name: "위조 전표"
+    trigger: { 경제: "< 40" }
+    premise: "가짜 전표가 돌기 시작했다 — 금서방의 신용이 흔들린다"
+    stage_hooks:
+      - "위조범 추적(글눈 — 백석 감정)"
+      - "피해 상인 연쇄(시장 민심)"
+      - "전장 본가의 압박(금서방 생애 위기 — 개입 기회)"
+    factions: [sangdan, haomun, gwanchung]
+    deadline: "10일 내 미해결 시 전장 지점 폐쇄 검토 (경제 -6)"
+    outcomes:
+      검거: { 경제: +4, favor: "금서방 공신급 (전장 가주 사다리 개입 기록)" }
+      방치: { 경제: -6, hooks: [전장 철수 — 예치 인출 대란] }
+
+  sacred_beast:
+    name: "북산의 영물"
+    trigger: { rumor: 곰보영감_목격담, random_window: 계절 }
+    premise: "백년 묵은 것이 북산에 나왔다 — 사냥꾼들이 술렁인다"
+    stage_hooks:
+      - "목격담 검증(허풍인가 진짜인가 — 조사)"
+      - "경쟁 사냥조 등장(타지 낭인 — 동시 개입 무대)"
+      - "영물의 정체(기연 등록물 — 죽일 것인가 얻을 것인가)"
+    factions: [mingan, noklim]
+    deadline: "선착순 — registry UNIQUE (경쟁이 곧 시계)"
+    outcomes:
+      기연: { registry: 영물_기연_획득, rumor: 강도3 }
+      토벌: { reward: 영물_재료_경매, 민심: +2 }
+      경쟁_패배: { hooks: [승자와의 은원 — 타 플레이어/NPC] }
+
+  martial_tournament:
+    name: "청하 비무연"
+    trigger: { 치안: "> 55", 경제: "> 50", cycle: 연1회 }
+    premise: "현령이 민심 수습 겸 비무연을 연다 — 문파 시험관들도 온다"
+    stage_hooks:
+      - "예선(비무 판정 연속 — 마크 없음·명성 있음)"
+      - "뒷돈 승부 조작 제안(하오문 — 성향 시험)"
+      - "시상대의 스카우트(문파·세가 favor 입구)"
+    factions: [gwanchung, hwasan, sangdan, haomun]
+    deadline: "대회 일정 고정"
+    outcomes:
+      입상: { rumor: 강도2_별호_후보, favor: 관청·문파_상승 }
+      조작_폭로: { 치안: +2, 민심: +3, hooks: [하오문 원한] }
+      조작_가담: { reward: 뒷돈, hooks: [약점 잡힘 — 하오문 장부에 오른다] }
+
+  vanishing_chain:
+    name: "실종 연쇄"
+    trigger: { 민심: "< 35" }
+    premise: "보름새 셋이 사라졌다 — 저자에 흉흉한 말이 돈다"
+    stage_hooks:
+      - "실종자 공통점 조사(장부·행적 — 백석·소칠 단서)"
+      - "인신매매선 부상(하오문 상선? 외부 살막?)"
+      - "마지막 실종의 목격자(냉월의 노래에 숨은 단서)"
+    factions: [haomun, salmak, gwangun, mingan]
+    deadline: "3일마다 추가 실종 판정 (민심 -2씩)"
+    outcomes:
+      구출: { 민심: +6, favor: 민간_은인급, hooks: [매매선의 상류 — 타 지역 연결] }
+      방치: { 민심: -10, escalation: 희생양_폭동 }
+
+  expelled_disciple:
+    name: "파문제자의 그림자"
+    trigger: { 세계: "문파 파문 사건 발생 (sect_life 연동)", random_window: 계절 }
+    premise: "파문된 자가 청하현에 흘러들었다 — 사문의 비전을 품은 채"
+    stage_hooks:
+      - "정체 은닉(견식 판정으로 들킬 수 있다 — 무공은 지문)"
+      - "문파 추격조 도착(비급 반납 요구)"
+      - "그의 사정(억울한 파문? — 조사 분기)"
+    factions: [해당_문파, jeongpa, haomun]
+    deadline: "추격조 도착 7일 후 강제 집행"
+    outcomes:
+      인도: { favor: 문파_신용, hooks: [억울했다면 — 양심의 흔적] }
+      비호: { hooks: [문파 적대 — 그러나 그가 아는 비전의 조각], risk: 연대_책임 }
+      복권_주선: { favor: 문파_공신, condition: "대공 증거 확보 (sect_life 복권 규칙)" }

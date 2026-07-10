@@ -210,3 +210,171 @@ npcs:
       - "화산파 입문 시험으로 이어지는 접촉 이벤트의 핵심"
     incident_links: [north_road_bandits]
     notes: "북쪽 산길 사건 해결 공적이 확인되면 화산파 입문 추천 루트가 열린다"
+
+  # ═══ 첫 시즌 확충 (G6) — 청하현 생활상 완성: 관·시장·신앙·뒷골목 ═══
+
+  jomunwon:
+    name: "조문원"
+    tier: 4                       # 핵심 NPC — 청하현의 관(官)
+    role: "청하현 현령"
+    location: county_office
+    faction: gwanchung
+    stats: { 지혜: 5, 화술: 4, 행정: 5, 위험_회피: 4 }
+    disposition:
+      - "무림 사건이 관할 안에서 시끄러워지는 것을 극도로 꺼린다"
+      - "증거와 절차를 요구한다 — 그러나 실적이 되는 사건은 빠르다"
+    schedule:
+      새벽: { place: 관사, activity: 취침, access: 폐쇄 }
+      아침: { place: county_office, activity: 집무, access: 조건부 }
+      낮: { place: county_office, activity: 송사_처리, access: 조건부 }
+      해질녘: { place: county_office, activity: 향리_보고, access: 폐쇄 }
+      밤: { place: 관사, activity: 서신, access: 폐쇄 }
+    lifepath: { ladder: 관인의_길, rung: 현령, ambition: "지부사 영전", trajectory: 유지 }
+    incident_links: [north_road_bandits, cheongha_fever_rumor]
+
+  bakho:
+    name: "박호"
+    tier: 3
+    role: "청하현 포두 (관군)"
+    location: county_office
+    faction: gwangun
+    realm: "이류"
+    stats: { 근력: 4, 체력: 4, 감각: 3, 참마도법: 3, 수사: 3 }
+    disposition:
+      - "우직하다 — 뇌물은 안 통하고 술은 통한다"
+      - "낭인을 반쯤 의심하고 반쯤 의지한다 (인력이 늘 모자라다)"
+    schedule:
+      새벽: { place: county_office, activity: 교대_보고, access: 조건부 }
+      아침: { place: market, activity: 순찰, access: 공개 }
+      낮: { place: north_road, activity: 순찰, access: 공개 }
+      해질녘: { place: cheongha_inn, activity: 술자리, access: 공개 }   # 정보 캐기의 명당
+      밤: { place: county_office, activity: 당직, access: 조건부 }
+    incident_links: [north_road_bandits]
+
+  yacheolsu:
+    name: "야철수"
+    tier: 3
+    role: "대장장이 (철방 주인)"
+    location: smithy
+    faction: mingan
+    stats: { 근력: 5, 체력: 4, 단조: 5, 감정: 3 }
+    disposition:
+      - "말수가 적고 물건으로 말한다 — 정련 주문은 반년 대기 원칙 (economy 정합)"
+      - "병기 내력에 밝다 — 무기 감정의 민간 창구 (마병은 손사래 친다)"
+    lifepath: { ladder: 상인의_길, rung: 점포주, ambition: "정련 명공 인정", trajectory: 상승 }
+
+  geumseobang:
+    name: "금서방"
+    tier: 3
+    role: "전장 청하 지점주"
+    location: bank_branch
+    faction: sangdan
+    stats: { 지혜: 4, 화술: 4, 상술: 5, 고객_파악: 4 }
+    disposition:
+      - "예의 바르고 차갑다 — 장부가 곧 인격"
+      - "신용 없는 자에게 전표를 끊지 않는다 (favor 신용부터 고액 거래)"
+    lifepath: { ladder: 상인의_길, rung: 상단_지점주, ambition: "전장 가주", trajectory: 유지 }
+    # 죽음 규칙의 예치·상속 실무 창구 — death_and_legacy 접합
+
+  sochil:
+    name: "소칠"
+    tier: 2                       # 기능 NPC — 사건으로 이름을 얻으면 3 승격 (관측이 개성을 만든다)
+    role: "청하객잔 점소이"
+    location: cheongha_inn
+    faction: mingan
+    stats: { 민첩: 3, 고객_파악: 3, 정보수집: 2 }
+    disposition: ["눈치 백단 — 동전 한 닢에 한 마디, 두 닢에 두 마디"]
+
+  jincheolsan:
+    name: "진철산"
+    tier: 3
+    role: "철산표국 국주"
+    location: pyoguk
+    faction: pyoguk
+    realm: "일류"
+    stats: { 근력: 4, 체력: 5, 오호단문창: 5, 통솔: 4, 상단로_지식: 4 }
+    disposition:
+      - "표행은 신용 장사 — 한 번 깬 자와는 두 번 일하지 않는다"
+      - "곽진의 옛 상관 — 북로 사정에 누구보다 밝다"
+    lifepath: { ladder: 상인의_길, rung: 상단_지점주, ambition: "상단주 (총국 승격)", trajectory: 상승 }
+    incident_links: [north_road_bandits]
+    # 의뢰 발생원 ②의 단골 — 호위·표행 의뢰의 출처
+
+  hyegak:
+    name: "혜각"
+    tier: 3
+    role: "성외 사당 승려 (불가)"
+    location: temple
+    faction: bulga
+    realm: "일류"
+    stats: { 지혜: 5, 체력: 3, 나한권: 3, 불법: 4 }
+    disposition:
+      - "온화하나 마(魔)에는 단호하다"
+      - "혈향을 맡는다 — 마병·심마의 민간 감지 창구 (equipment 감정 규칙 접합)"
+    schedule:
+      새벽: { place: temple, activity: 예불, access: 공개 }
+      아침: { place: temple, activity: 접객_상담, access: 공개 }
+      낮: { place: patient_homes, activity: 탁발_왕진, access: 공개 }
+      해질녘: { place: temple, activity: 예불, access: 공개 }
+      밤: { place: temple, activity: 참선, access: 폐쇄 }
+    # 도인도기 불가 계열 — 독·심마 정화 의뢰의 조건부 해결처 (simbeop 정합)
+
+  baekseok:
+    name: "백석"
+    tier: 2
+    role: "서당 훈장"
+    location: school
+    faction: mingan
+    stats: { 지혜: 5, 화술: 3, 글눈: 5 }
+    disposition: ["몰락한 향반 — 글값은 싸게, 자존심은 비싸게", "장부·서신 대필의 창구 (증거 조사 훅)"]
+
+  masam:
+    name: "마삼"
+    tier: 2
+    role: "저자 왈패 두목 (하오문 말단)"
+    location: market
+    faction: haomun
+    realm: "삼류"
+    stats: { 근력: 3, 체력: 3, 태조장권: 2, 위협: 3 }
+    disposition: ["자릿세를 걷고 소문을 판다 — 묵삼의 눈과 귀 중 하나", "강한 자에게 약하다 (기세 읽기의 교보재)"]
+    incident_links: [inn_unorthodox_contact]
+
+  heodaein:
+    name: "허대인"
+    tier: 3
+    role: "염상(鹽商) — 북행 소금 상단주"
+    location: market
+    faction: sangdan
+    stats: { 지혜: 4, 화술: 4, 상술: 4, 흥정: 5 }
+    disposition:
+      - "PT-005 북행 소금 수레의 주인 — 습격 사건의 이해 당사자"
+      - "위험 수당에 인색하고 성공 보수에 후하다"
+    lifepath: { ladder: 상인의_길, rung: 점포주, ambition: "상단 지점주 (북로 독점)", trajectory: 상승 }
+    incident_links: [north_road_bandits]
+
+  naengwol:
+    name: "냉월"
+    tier: 3
+    role: "유랑 악사 (비파) — 떠도는 소문의 그릇"
+    location: cheongha_inn
+    faction: jeongboSang
+    stats: { 감각: 4, 화술: 5, 연주: 5, 정보수집: 4 }
+    disposition:
+      - "노래 한 곡에 소문 한 자락 — 정보상 민간 창구 (economy 정보 가격표 접합)"
+      - "타지 소문을 물어온다 — 지역 밖 세계의 창 (스텁 지역 떡밥 통로)"
+    schedule:
+      새벽: { place: cheongha_inn, activity: 취침, access: 폐쇄 }
+      아침: { place: market, activity: 거리_연주, access: 공개 }
+      낮: { place: market, activity: 거리_연주, access: 공개 }
+      해질녘: { place: cheongha_inn, activity: 공연, access: 공개 }
+      밤: { place: cheongha_inn, activity: 술손님_노래, access: 공개 }
+
+  gombo:
+    name: "곰보영감"
+    tier: 2
+    role: "약초꾼 노인"
+    location: north_road
+    faction: mingan
+    stats: { 감각: 4, 산길_지리: 5, 약초_지식: 4 }
+    disposition: ["북산 구석구석을 안다 — 영물 소문의 첫 목격자 단골", "유문에게 약재를 댄다 (열병 사건 물류 축)"]
+    incident_links: [cheongha_fever_rumor]
