@@ -118,7 +118,7 @@ demonic_weapons:
 # ─── 접합 ───
 integration:
   weapon_break: "감당 격 원천 = qi_manifestation.yml weapon_break — 본 파일은 살"
-  economy: "price_band는 임시 — 경제 시스템 설계 시 economy.yml로 이관"
+  economy: "가격 원천 = economy.yml price_table.장비 (이관 완료 — price_band는 서사 표기로 유지)"
   mc: "등급·속성 = lore/커스텀모델데이터, 애병 이력 = PDC, 내구 = 바닐라 재활용"
   rumor: "보병+ 소지 / 신병 이동 / 명병 명명 / 마병 발각 — 소문·세력 반응 표준 입력"
   creation: "시작 장비 범철 고정 (player_creation 유년·소년 정합 — 좋은 검은 서사로 번다)"

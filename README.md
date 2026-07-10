@@ -59,6 +59,7 @@
 | [`docs/design/qi_manifestation.md`](docs/design/qi_manifestation.md) | 기 발현 체계 — 형태 4종(두름/쏨/두름-몸/부림) × 격 사다리(발경<검기<강기<어검<심검), 격 상성 3원칙, 무기 내구·파괴 규칙, 이기어검 상세 |
 | [`docs/design/equipment_system.md`](docs/design/equipment_system.md) | 장비 체계 — 무기 4등급 구체화(캡 +2 원칙), 방어구(갑옷은 회피를 판다)·기물·특수 속성, 애병 성장 3단계, 혈교 마병(힘과 침식) |
 | [`docs/design/stats_and_progression.md`](docs/design/stats_and_progression.md) | 스탯·성장 통합 — 시트 4층 구조, 성장 4원천(실전 가속 수치), 경지 승급 관문표(요건+계기, 실전·사선 마크), cultivation.yml v2 교체 |
+| [`docs/design/economy_system.md`](docs/design/economy_system.md) | 경제 체계 — 화폐 4종(문/냥/금/전표), 전낭 vs 전장(예치), 물가 기준표·수입/싱크, 지역 경제 배율·품목 시세 이벤트, 비매품 원칙 |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약
