@@ -178,7 +178,9 @@ def main():
     write_png(FONT_DIR / "gise.png", gise_icon())
     providers = [{
         "type": "bitmap", "file": "honcheon:font/gise.png",
-        "height": 8, "ascent": 7, "chars": [""],
+        # PUA 리터럴 금지 — 편집기가 사설 영역 문자를 조용히 지울 수 있다 (M2b에서 실제 유실
+        # → 빈 chars 하나가 팩 전체를 무효화). 다른 프로바이더처럼 chr()로 만든다.
+        "height": 8, "ascent": 7, "chars": [chr(0xE000)],
     }]
     for n in range(9):
         write_png(FONT_DIR / f"gauge_{n}.png", gauge(n))
