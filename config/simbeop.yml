@@ -68,7 +68,7 @@ simbeop:
     capacity: 8
     purity: 1.5
     qi_profile: { 연비: "검기·강기 소모 -1", 발력: 없음 }   # 알뜰하고 오래 간다 — 지구전형
-    passive: "방어 시 반격 확률, 내력 회복 강화 (cultivation.yml technique_by_internal 정합)"
+    passive: "방어 시 반격 확률, 내력 회복 강화"   # 결(結) — 심법 고유 패시브 (구 cultivation technique_by_internal에서 이관)
     circulation_color: "흑백 쌍환"
 
   jaha_singong:
@@ -81,7 +81,7 @@ simbeop:
     capacity: 9
     purity: 1.3
     qi_profile: { 연비: "경신(보법) 소모 -1", 발력: 없음 }   # 가볍고 빠른 기운 — 발에 실린다
-    passive: "회피·속도 계열 (cultivation.yml 정합)"
+    passive: "회피·속도 계열"   # 결(結) — 심법 고유 패시브
     circulation_color: "보랏빛 노을"
 
   jeongsim_geomgyeol:
@@ -108,7 +108,7 @@ simbeop:
     capacity: 8
     purity: 1.1
     qi_profile: { 연비: "독 계열 소모 -1", 발력: "독 위력 +1" }   # 스미는 기운
-    passive: "중독 면역, 독 피해 증폭 (cultivation.yml 정합)"
+    passive: "중독 면역, 독 피해 증폭"   # 결(結) — 심법 고유 패시브
     circulation_color: "검푸른 아지랑이"
 
   hyeolgi_simgong:
