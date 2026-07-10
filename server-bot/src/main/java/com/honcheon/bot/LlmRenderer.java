@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 턴 렌더러 결선 — llm.yml roles.turn_renderer (기본 claude-haiku-4-5).
@@ -29,10 +33,15 @@ final class LlmRenderer {
             기준 서사가 주어지면 그 사실 범위 안에서만 살을 붙여라.""";
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Logger LOG = LoggerFactory.getLogger(LlmRenderer.class);
+    private static final long WARN_COOLDOWN_MS = 60_000;
 
     private final String apiKey;
     private final String model;
     private final HttpClient http;
+    // F25 — 폴백 관측성: 실패는 반드시 한 줄 WARN (스팸 방지 쿨다운 1분 + 억제 건수 보고)
+    private final AtomicLong lastWarnAt = new AtomicLong();
+    private final AtomicLong suppressed = new AtomicLong();
 
     LlmRenderer(String model) {
         this.apiKey = System.getenv("ANTHROPIC_API_KEY");
@@ -70,24 +79,53 @@ final class LlmRenderer {
                     .build();
             return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenApply(resp -> extract(resp, fallback))
-                    .exceptionally(e -> fallback);
+                    .exceptionally(e -> fallbackWith("호출 예외/타임아웃: " + rootMessage(e), fallback));
         } catch (Exception e) {
-            return CompletableFuture.completedFuture(fallback);
+            return CompletableFuture.completedFuture(
+                    fallbackWith("요청 구성 실패: " + rootMessage(e), fallback));
         }
     }
 
     private String extract(HttpResponse<String> resp, String fallback) {
         try {
             if (resp.statusCode() != 200) {
-                return fallback;
+                // 크레딧 소진(400)·인증(401)·과부하(529) 등 — 사유를 남겨야 폴백과 구분된다 (F25)
+                String snippet = resp.body() == null ? ""
+                        : resp.body().substring(0, Math.min(160, resp.body().length())).replaceAll("\\s+", " ");
+                return fallbackWith("HTTP " + resp.statusCode() + " — " + snippet, fallback);
             }
             JsonNode content = JSON.readTree(resp.body()).path("content");
             String text = content.isArray() && content.size() > 0
                     ? content.get(0).path("text").asText("") : "";
             // 길이 예산 밖(빈 응답·폭주)은 폴백 — embed description 한계도 방어
-            return (text.isBlank() || text.length() > 1500) ? fallback : text.strip();
+            if (text.isBlank() || text.length() > 1500) {
+                return fallbackWith("응답 길이 예산 밖 (" + text.length() + "자)", fallback);
+            }
+            return text.strip();
         } catch (Exception e) {
-            return fallback;
+            return fallbackWith("응답 파싱 실패: " + rootMessage(e), fallback);
         }
+    }
+
+    /** 폴백 발생 = 반드시 흔적 — 1분 쿨다운, 억제분은 다음 WARN에 합산 보고 (F25) */
+    private String fallbackWith(String reason, String fallback) {
+        long now = System.currentTimeMillis();
+        long last = lastWarnAt.get();
+        if (now - last >= WARN_COOLDOWN_MS && lastWarnAt.compareAndSet(last, now)) {
+            long missed = suppressed.getAndSet(0);
+            LOG.warn("LLM 렌더 폴백 — {}{}", reason,
+                    missed > 0 ? " (직전 1분간 " + missed + "건 추가 억제)" : "");
+        } else {
+            suppressed.incrementAndGet();
+        }
+        return fallback;
+    }
+
+    private static String rootMessage(Throwable e) {
+        Throwable cur = e;
+        while (cur.getCause() != null && cur.getCause() != cur) {
+            cur = cur.getCause();
+        }
+        return cur.getClass().getSimpleName() + (cur.getMessage() == null ? "" : ": " + cur.getMessage());
     }
 }
