@@ -1,0 +1,90 @@
+# 오의(奧義) 시스템 규칙 (기계 판독용)
+# 기준 문서: docs/design/ultimate_arts.md
+# 오의는 배우는 것이 아니라 얻는 것 — 최상위 자원을 태우는 전투의 문장부호
+
+realm_ladder:
+  초절정: { stage: 개안, rule: "전승 오의 불완전 시전 — 위력 절반, 직후 내공 고갈 + 내상 판정" }
+  화경: { stage: 완성, rule: "전승 오의 1개 완전 시전, 전투당 1회" }
+  현경: { stage: 자재, rule: "횟수 제한 해제 (내력 허용 시), 복수 오의 보유 가능" }
+  생사경: { stage: 창작, rule: "창작 오의 — 예산 조립 + 명명" }
+
+casting:
+  cost: "내력 총량의 50% 이상 (오의별 명시)"
+  per_combat_limit: { 화경_이하: 1, 현경_이상: 무제한 }
+  activation_condition:            # 발동권 — '흐름'을 얻어야 한다
+    any_of:
+      - 패링_성공
+      - 회피_후_반격_적중
+      - "아슬아슬한 성공 이상 공방 3회 누적"
+    note: "오의는 버튼이 아니라 읽어낸 순간 — cultivation.yml '오의 충전'의 실체"
+  frames: "긴 선딜 = 긴 텔레그래프, 큰 후딜. 시전 중 무적(상한 20틱) 또는 슈퍼아머 — 오의별 명시"
+  soul_burn_combo: "연혼일격(수명 3년) 중첩 시 시전 1회를 경지 +1로 취급 — 최후의 수"
+
+clash:                             # 오의 격돌 — 오의 vs 오의
+  trigger: "같은 라운드 양측 오의 선언"
+  resolution: "양측 실행력 경합 (각자 굴림, 마진 비교) — 승자 관통, 패자는 마진 차 피해"
+  draw: { gap: [0, 1], effect: "상쇄 — 충격파 광역 + 양측 내력 전소" }
+
+acquisition:
+  legacy:                          # 전승 오의
+    requires: ["해당 계열 무공 숙련 6+", "초절정 이상", "전승 자격 (장문·장로 전수 or 최심부 비급)"]
+    awakening_event: [생사의_실전_대성공, 파벽_수명5년, 스승의_마지막_가르침]
+    leak_consequence: "오의 비급 유출 = 소문·세력 반응 최대 등급 — 문파는 전쟁을 불사한다"
+
+creation:                          # 창작 오의 (생사경) — 예산 12점 조립
+  budget: 12
+  options:
+    위력: { per_point: "무공 위력 +1", max: 6 }
+    범위: { per_point: "히트박스 1단 확장 (호→광호→원→광역)", max: 3 }
+    무적: { per_2_points: "+4틱", cap: "20틱 절대 상한" }
+    특수:
+      파격: 3
+      다단히트: 2
+      경직_1단_상향: 2
+      자기_회복: 3
+      기질_각인: { cost: 2, note: "심법의 결을 새김 — 도가: 시전 시 정화 동반 등" }
+    사거리: { per_point: "+4m", cap: "24m 성능 상한" }
+  naming:
+    rule: "플레이어가 명명 — 세계에 등록 (등록제), 같은 세계에 동명 오의 없음 (세계 유일)"
+    fame: "오의명이 별호와 함께 소문망을 탄다 — 이름은 가장 비싼 재산"
+
+world_weight:                      # 오의는 신분증이다
+  rumor: "시전 목격 = 강도 3 소문 자동 생성 — 억제 불가"
+  identity: "경지·소속 사실상 노출 (전승 오의는 문파의 지문)"
+  faction_inputs: ["자파 오의 사용자 미상 = 해당 문파 즉시 조사", "적대 세력 고수 경보", "관군 관찰 대상"]
+  particle_priority: "파티클 예산 내 최우선순위 (예외 아닌 우선권)"
+
+# ─── 전승 오의 초기 4종 ───
+legacy_arts:
+  maehwa_mangae:
+    name: "매화만개(梅花滿開)"
+    faction: 화산파
+    type: { hitbox: 원, range: 6, multi_hit: 5 }
+    frames: [16, 6, 18]
+    defense: "시전 중 무적 12틱"
+    cost: "내력 50%"
+    resonance: "자하신공 보유 시 범위 +1단 (심법 공명)"
+  taegeuk_hyegeom:
+    name: "태극혜검(太極慧劍)"
+    faction: 무당파
+    type: { form: 반격_오의, window_ticks: 10 }
+    effect: "지속 중 받은 공격 1회를 무효화하고 위력 그대로 반사 (패링의 극의)"
+    frames: [8, 10, 12]
+    cost: "내력 50%"
+  jewang_gunrim:
+    name: "제왕검형·군림(君臨)"
+    faction: 남궁세가
+    type: { hitbox: 선, width: 2, length: 12 }
+    frames: [20, 4, 20]
+    defense: "시전 중 슈퍼아머"
+    effect: "적중 시 다운 + 내구 50% 피해"
+    cost: "내력 60%"
+    bloodline_restricted: true
+  hyeolhae_malli:
+    name: "혈해만리(血海萬里)"
+    faction: 혈교
+    type: { hitbox: 원, range: 8 }
+    frames: [14, 8, 16]
+    effect: "범위 내 원기·내력 약탈 (흡수량으로 자기 회복)"
+    cost: "내력 50%"
+    demonic: "마공 분류 ①+② — 목격자는 토벌령의 증인이 된다"
