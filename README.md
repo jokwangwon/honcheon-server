@@ -54,6 +54,7 @@
 | [`docs/playtests/PT-004.md`](docs/playtests/PT-004.md) / [`PT-005.md`](docs/playtests/PT-005.md) | 고경지 통합 검증(F11~F12) / 첫 사용자 인터랙티브 세션(F13~F16, 재개 정보 포함) |
 | [`docs/playtests/PT-006.md`](docs/playtests/PT-006.md) | 1막 「생존과 첫 실전」 — 실전 화후·생계 경제 루프 실주사위 검증, 엔진 수치 대조 (F17~F19) |
 | [`docs/playtests/PT-007.md`](docs/playtests/PT-007.md) | 2막 「강호의 관계」 — 동행 협력 판정·협공·NPC 계절 정산(은혜가 문턱을 넘긴다) 검증 (F20~F21) |
+| [`docs/playtests/PT-008.md`](docs/playtests/PT-008.md) | 2인 동시 세션 「북산의 영물」 — 장면 잠금·경쟁 판정·격상의 협력 압력 실측, PvP 판정식 신설 (F22~F23) |
 | [`docs/mvt/admin_test_guide.md`](docs/mvt/admin_test_guide.md) | MVT 관리자 테스트 가이드 — 로컬 Paper 1.21.4 원커맨드 기동(scripts/run_mvt_server.sh), 인게임 배선표·체크리스트 10항 |
 | [`docs/design/llm_runtime_policy.md`](docs/design/llm_runtime_policy.md) | LLM 런타임 정책 — 역할별 모델 사다리(렌더러/GM/배치/심사), 지연·비용 예산, 프롬프트 캐싱 설계, 텍스트 생성 7계, 폴백, 실테스트 준비도 |
 | [`docs/design/resourcepack_design.md`](docs/design/resourcepack_design.md) | 리소스팩 디자인 규정 — 무협 수묵 디자인 언어, 글리프 슬롯 등록제(코드포인트 = 계약), 픽셀 스펙(2값 규율), 제작 경로·승격 절차 |
