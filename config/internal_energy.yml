@@ -60,7 +60,7 @@ vitality:
 
 # ─── 후천진기 (내력) — v1 유지 ───
 internal_energy:
-  pool: "내공 능력치 × 3"
+  pool: "round(내공 실수치 × 3)"   # 화후 규칙 — 내공 2.9 = 내력 9 (양자화 절벽 제거, simbeop.yml hwahu)
   recovery:
     natural_per_segment_by_simbeop: [0.5, 2]
     meditation_per_segment: "내공 × 1 (운기조식 — 무방비)"
