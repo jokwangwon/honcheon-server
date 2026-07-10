@@ -37,6 +37,7 @@
 | [`docs/design/fortune_and_wanderer.md`](docs/design/fortune_and_wanderer.md) | 낭인 생태계 + 범인(凡人) 시작 + 기연(奇緣) 시스템 — 일반인이 문파에 닿는 세 경로 |
 | [`docs/design/combat_system.md`](docs/design/combat_system.md) | 전투 상세 규칙 — 라운드/공방/피해/부상/내력/도주/살상 선택, NPC간 약식 규칙, 기존 테스트 재계산 검증 |
 | [`docs/design/minecraft_port_feasibility.md`](docs/design/minecraft_port_feasibility.md) | 마인크래프트 이식 타당성 — 시스템별 이식 지도, 3대 전환(액션 전투/프롤로그 인스턴스/템플릿 서사), 로드맵 |
+| [`docs/design/training_and_time.md`](docs/design/training_and_time.md) | 수련과 시간 — 자동 세계 달력에서의 압축 성장(수련 상태=몽타주), F7 환산표, 수련 중 세계 개입 |
 | [`docs/design/age_and_lifepath.md`](docs/design/age_and_lifepath.md) | 시작 나이와 인생 진행 v2 — 전원 유년/소년 시작, 집안·발단 사건 생성, 장(章) 단위 시간 도약(사건이 나이를 먹인다) |
 | [`docs/gm/gm_master_prompt.md`](docs/gm/gm_master_prompt.md) | GM 마스터 프롬프트 — 턴 처리 12단계 절차, 출력 형식, 절대 규칙 |
 | [`docs/playtests/PT-001.md`](docs/playtests/PT-001.md) | 첫 실주사위 플레이 테스트 — 턴 3에서 각본과 분기, 실패 연쇄에서도 진행 유지 검증, 발견 과제 F1~F4 |

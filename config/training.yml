@@ -1,0 +1,54 @@
+# 수련·시간 규칙 (기계 판독용) — F7 압축 성장 환산표
+# 기준 문서: docs/design/training_and_time.md
+# 원칙: 시간을 건너뛰는 것은 세계가 아니라 플레이어다.
+# 텍스트 RPG의 '장 도약'과 MMO의 '수련 상태'는 이 표의 두 인터페이스.
+
+world_calendar:
+  time_ratio: "현실 1일 = 게임 15일"    # 조정 가능 파라미터 (초기 가설)
+  note: "나이·계절·세계 공통 이벤트·데드라인 전부 이 달력에 자동 연동. 개인이 통제 불가"
+
+# 수련 방식별 효율
+training_methods:
+  생활_노동: { efficiency: 0.2, requires: [], risk: "없음 (보수 발생)" }
+  독학: { efficiency: 0.5, requires: [비급_또는_경험], risk: "심법 독학 시 주화입마 이벤트 확률" }
+  사사: { efficiency: 1.0, requires: [스승_기술이_자신보다_높음], risk: "은원 상속" }
+  문파_정규_수련: { efficiency: 1.2, requires: [문파_소속], risk: "잡무·규율 이벤트" }
+  폐관_수련: { efficiency: 1.5, requires: [심법, 폐관_장소], risk: "최소 기간 커밋, 중단 시 성과 반감, 장소 안전도" }
+
+efficiency_bonuses:
+  유년_소년: 1.5          # 곱연산
+  스승_경지_2단계_이상_우위: 1.2
+
+# 숙련 단계별 필요 수련량 (효율 1.0, 게임 시간)
+skill_progression_cost:
+  "0_to_1": 3개월
+  "1_to_2": 6개월
+  "2_to_3": 1년
+  "3_to_4": 2년
+  "4_to_5": 4년
+  "5_to_6": 8년
+  beyond: "수련만으로 도달 불가 — 실전·깨달음·경지 돌파 필요"
+
+attribute_progression:
+  cost: "능력치 +1 = 집중 단련 1년"
+  cap: "경지·나이 상한 내에서만 (attribute_cap_by_realm / age_brackets)"
+
+internal_energy_progression:
+  requires: 심법
+  rate: "심법 등급이 연간 성장량을 정한다 (심법별 정의)"
+
+bottlenecks:
+  realm_cap: "숙련·능력치는 현재 경지 상한에서 멈춤"
+  combat_requirement: "경지 승급의 실전 경험·깨달음은 수련 상태로 채울 수 없음"
+  diminishing: "같은 기술 연속 수련 게임 1년 초과 시 효율 -25%씩"
+
+# 수련 장소 안전도 — 수련 중에도 세계는 흐른다
+location_safety:
+  문파_내부_관아: { level: 안전, events: "개입 불가" }
+  민가_객잔: { level: 보통, events: "소문 노출 (두문불출 소문)" }
+  야산_동굴_폐가: { level: 위험, events: "세력 반응 5단계(직접 개입)의 습격 이벤트 가능 — NPC 약식 전투 규칙 적용" }
+
+# 귀환 리포트 — 장 재개/접속 시
+return_report:
+  - "수련 성과 정산 (이 표 기준, 재량 금지)"
+  - "부재 기간 세계 변화 다이제스트: 도달 소문, 지역 상태, 자신에 대한 세력 반응 진행"
