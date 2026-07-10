@@ -51,6 +51,8 @@
 | [`docs/gm/gm_master_prompt.md`](docs/gm/gm_master_prompt.md) | GM 마스터 프롬프트 v2 — 통합 런타임: 생성 절차, 턴 13단계, 전문 절차(전투/독/정화/오의/장 종결/기연), 절대 규칙 |
 | [`docs/playtests/PT-001.md`](docs/playtests/PT-001.md) | 첫 실주사위 플레이 테스트 — 턴 3에서 각본과 분기, 실패 연쇄에서도 진행 유지 검증, 발견 과제 F1~F4 |
 | [`docs/playtests/PT-002.md`](docs/playtests/PT-002.md) / [`PT-003.md`](docs/playtests/PT-003.md) | 유년 시작·발단·시간 도약 검증(F5~F7) / 내공·심법 규칙 스모크 테스트(F8~F10) |
+| [`docs/playtests/PT-004.md`](docs/playtests/PT-004.md) / [`PT-005.md`](docs/playtests/PT-005.md) | 고경지 통합 검증(F11~F12) / 첫 사용자 인터랙티브 세션(F13~F16, 재개 정보 포함) |
+| [`docs/design/runtime_architecture.md`](docs/design/runtime_architecture.md) | 런타임 아키텍처 — 2단 파이프라인(엔진 계산→LLM 렌더)·프리페치, 실시간 판정=이벤트 훅, 시간 도약의 운영 등가물과 동기화 규칙 |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약
