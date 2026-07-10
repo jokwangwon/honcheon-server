@@ -106,6 +106,9 @@ public final class GameListener extends ListenerAdapter {
         eb.addField("발단", String.valueOf(sheet.get("발단")), true);
         double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
         eb.addField("화후 원장", String.format("%.2f일치", hwahu), true);
+        if (sheet.get("가문_대여") != null) {
+            eb.addField("소지품", String.valueOf(sheet.get("가문_대여")), false);
+        }
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
 
@@ -240,6 +243,10 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> sheet = new LinkedHashMap<>();
         sheet.put("성향", disposition);
         sheet.put("집안", family.replace('_', ' '));
+        if ("무가의_자식".equals(family)) {
+            // armory 시작 대여 — 판정 보정 0 (equipment.yml), 팔거나 잃으면 support 단계 입력
+            sheet.put("가문_대여", "정련급 가문 검 (가문 소유 — 잃으면 문책)");
+        }
         sheet.put("연령대", bracket);
         sheet.put("나이", age);
         sheet.put("발단", incident.replace('_', ' '));
@@ -418,6 +425,23 @@ public final class GameListener extends ListenerAdapter {
 
     /** 발단 3장면 — 엔진 골격 (서사는 렌더러/템플릿, 수치는 여기) */
     private Scene[] scenes(Character ch) {
+        if ("수행_파견".equals(ch.incident())) {
+            // 무가의 자식 전용 서장 — 재난이 아니라 명령: 도주극이 아닌 첫 출문의 이야기
+            return new Scene[]{
+                    new Scene("출문(出門)", 9, new Choice[]{
+                            new Choice("예를 다해 하직한다", "화술", 2),
+                            new Choice("무기고에서 손에 맞는 검을 고른다", "감각", 2),
+                            new Choice("밤새 가전 검형을 다잡는다", "근력", 2)}),
+                    new Scene("이름 없는 길", 11, new Choice[]{
+                            new Choice("상단 행렬에 동행을 청한다", "화술", 2),
+                            new Choice("산길 지름길로 접어든다", "감각", 2),
+                            new Choice("대로를 당당히 걷는다", "체력", 2)}),
+                    new Scene("청하현 — 전표와 이름", 10, new Choice[]{
+                            new Choice("전장에서 전표부터 수령한다", "지혜", 2),
+                            new Choice("객잔에 들어 소문부터 듣는다", "화술", 2),
+                            new Choice("저잣거리와 뒷골목을 눈에 익힌다", "민첩", 2)})
+            };
+        }
         return new Scene[]{
                 new Scene("그날 밤", 10, new Choice[]{
                         new Choice("숨을 죽이고 숨는다", "민첩", 2),

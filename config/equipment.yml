@@ -122,3 +122,4 @@ integration:
   mc: "등급·속성 = lore/커스텀모델데이터, 애병 이력 = PDC, 내구 = 바닐라 재활용"
   rumor: "보병+ 소지 / 신병 이동 / 명병 명명 / 마병 발각 — 소문·세력 반응 표준 입력"
   creation: "시작 장비 범철 고정 (player_creation 유년·소년 정합 — 좋은 검은 서사로 번다)"
+  creation_exception: "무가의_자식 = 정련급 가문 검 1점 대여 (판정 보정 0이라 백지 평등 무손상 — 소유권·문책은 player_creation armory)"

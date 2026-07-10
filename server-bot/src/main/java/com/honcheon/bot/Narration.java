@@ -36,15 +36,15 @@ final class Narration {
 
     /** 장면 서사 — prevTier(직전 판정 등급명)에 따라 이음새가 달라진다 */
     static String scene(GameListener.Character ch, int idx, String prevTier) {
+        if ("수행_파견".equals(ch.incident())) {
+            return dispatchScene(idx, bridge(prevTier));
+        }
         String bridge = bridge(prevTier);
         return switch (idx) {
             case 0 -> INCIDENT_OPENING.getOrDefault(ch.incident(),
                     "그날 밤, 모든 것이 달라졌다.")
                     + "\n\n숨이 목까지 차올랐다. 지금, 무엇을 하는가.";
-            case 1 -> "수행_파견".equals(ch.incident())
-                    ? bridge + "동트기 전의 관도를 홀로 걸었다. 뒤에는 돌아갈 집이 있다 — 그래서 더 이상했다. "
-                    + "수행원도, 이름도 없이 걷는 길은 생각보다 낯설고, 생각보다 가벼웠다.\n\n길은 세 갈래로 이어진다."
-                    : bridge + "동트기 전의 관도는 텅 비어 있었다. 뒤는 돌아볼 수 없다 — "
+            case 1 -> bridge + "동트기 전의 관도는 텅 비어 있었다. 뒤는 돌아볼 수 없다 — "
                     + "돌아볼 곳이 남아 있지 않으니까. 발바닥이 부르트도록 걸어도, "
                     + "쫓아오는 것이 사람인지 기억인지 알 수 없었다.\n\n길은 세 갈래로 이어진다.";
             case 2 -> bridge + "성문도 없는 작은 고을 — 청하현이라 했다. "
@@ -54,8 +54,39 @@ final class Narration {
         };
     }
 
+    /**
+     * 무가의 자식 전용 서장 「수행 파견」 — 재난이 아니라 명령. 도주극이 아닌 첫 출문.
+     * 판돈이 다르다: 목숨이 아니라 이름과 체면, 그리고 가문의 기대.
+     */
+    private static String dispatchScene(int idx, String bridge) {
+        return switch (idx) {
+            case 0 -> "\"강호를 눈으로 보고 오너라. 이름은 밝히지 말고, 검은 뽑지 말고.\"\n"
+                    + "사랑채의 아버지는 그 말뿐이었다. 문책인지 시험인지 물을 틈도 없었다. "
+                    + "떠나는 날 새벽, 무기고 문이 열려 있었다 — 가주의 무언의 허락이다. "
+                    + "수행원은 없다. 처음으로, 혼자다.";
+            case 1 -> bridge + "관도에 오르자 세상이 달라졌다. 집안의 담장 안에서 이름이 하던 일 — "
+                    + "길을 비키게 하고, 값을 깎아 주고, 시비를 걸러 주던 그 모든 일을 이제 아무것도 해 주지 않는다. "
+                    + "허리의 검이 문득 무거웠다. 이것이 아버지가 보라던 강호인가.\n\n길은 세 갈래로 이어진다.";
+            case 2 -> bridge + "성문도 없는 작은 고을 — 청하현. 가문의 연고가 닿는 전장에 월례 전표가 와 있을 것이다. "
+                    + "굶을 걱정은 없다. 다만 여기서 나는 아무개다 — 이름을 대면 편해지고, 대는 순간 수행은 끝난다. "
+                    + "어디서부터 시작할 것인가.";
+            default -> "이야기는 계속된다.";
+        };
+    }
+
     /** 서장 에필로그 — 마지막 판정 등급이 첫 정착의 온도를 정한다 */
     static String epilogue(GameListener.Character ch, String tierName) {
+        if ("수행_파견".equals(ch.incident())) {
+            // 판돈이 다르므로 착지도 다르다 — 잠자리가 아니라 이름을 지켰는가
+            String landing = switch (grade(tierName)) {
+                case GOOD -> "첫날의 일들이 매끄럽게 풀렸다. 전표는 수중에, 이름은 아직 아무도 모른다 — 좋은 시작이다.";
+                case MIXED -> "일은 됐지만 매끄럽지는 않았다. 객잔 주인이 힐끗거린다 — 말씨인지 예법인지, 어딘가 태가 났나 보다.";
+                case BAD -> "첫날부터 꼬였다. 저잣거리에서 시비가 붙을 뻔했고, 하마터면 이름이 나올 뻔했다. "
+                        + "검자루를 쥐었다 놓은 손바닥에 땀이 배어 있었다.";
+            };
+            return landing + "\n\n" + ch.name() + "의 수행은 이렇게 시작되었다. "
+                    + "돌아갈 집이 있는 자의 강호 — 그것이 짐인지 힘인지는, 이제부터 알게 된다.";
+        }
         String landing = switch (grade(tierName)) {
             case GOOD -> "다행히 첫날 밤부터 지붕 아래서 잘 수 있었다. 주인은 무뚝뚝했지만 밥그릇은 넉넉했다.";
             case MIXED -> "처마 밑이나마 자리를 얻었다. 내일도 써 주겠다는 말은 없었지만, 내쫓지도 않았다.";
