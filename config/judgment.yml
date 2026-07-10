@@ -63,6 +63,8 @@ side_risks:
   - "자원 소모 (내공, 도구)"
 
 # 선택 규칙: 극단 주사위 (대립 판정에만)
+# F24(봇 알파 검증): 엔진·봇 어디에도 미배선 — 알파는 고정 난이도 판정뿐이라 위반은 아니나,
+#                    대립 판정(pvp direct_opposed)이 결선되는 봇 베타에서 반드시 함께 배선할 것.
 optional_extreme_dice:
   enabled: true
   snake_eyes_2: "등급 1단계 하락"
