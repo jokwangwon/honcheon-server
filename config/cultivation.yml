@@ -1,4 +1,21 @@
+# 경지 체계: 삼류 → 이류 → 일류 → 절정 → 초절정 → 화경 → 현경 → 생사경
+# 기준 문서: docs/design/text_rpg_design.md 6장 (성장 시스템)
+# 경지 상승은 경험치 누적만으로 처리하지 않는다.
+# 능력치, 내공, 무공 숙련도, 실전 경험, 깨달음, 사건 기여, 명성/악명이 함께 충족되어야 한다.
+
 cultivation_stages:
+  - name: "삼류"
+    id: THIRD_CLASS
+    description: "강호에 갓 발을 들인 초보 무인. 낭인 지망생 수준."
+    requirements:
+      level: 1
+      external_mastery: 0
+      internal_mastery: 0
+      reputation: 0
+    max_skill_tier: "입문"
+    technique_by_internal: []
+    bonus_by_stat_path: {}
+
   - name: "이류"
     id: SECOND_CLASS
     description: "무림 입문자 단계. 기본적인 무공 형식만 익힌 상태."

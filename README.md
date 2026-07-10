@@ -1,82 +1,82 @@
-# 🗡 Honcheon Server (혼천)
+# 🗡 혼천 (混天)
 
-> **혼천(混天)**: 무림의 균형이 무너진 시대, 네 세력이 충돌하는 강호 속으로 당신을 초대합니다.
+> 강호의 균형이 무너진 시대. 플레이어의 행동이 세계에 흔적을 남기는 무협 RPG 프로젝트.
 
----
+## 📘 프로젝트 개요
 
-## 📘 소개 (Introduction)
+혼천은 **텍스트 기반 무협 RPG를 먼저 만들고, 이후 온라인 멀티플레이 MMORPG로 확장**하는 것을 목표로 하는 게임 프로젝트입니다.
 
-**Honcheon** is a scalable Minecraft-based **Wuxia RPG server project**.  
-It begins as a single-server deployment and is designed to evolve into a **multi-server architecture** using modular components such as BungeeCord or Velocity.
+그래픽·실시간 전투·액션 조작부터 만드는 것이 아니라, 텍스트 단계에서 다음 요소들이 실제로 재미있게 작동하는지 먼저 검증합니다.
 
-Inspired by Korean martial arts webtoons and novels like *Return of the Mount Hua Sect*, the game features a dynamic world where justice, chaos, ambition, and blood cultism collide.
+- 플레이어 자유 행동
+- 지역 상태 변화 / NPC 영속성
+- 소문 전달 / 세력 반응
+- 문파 입문 및 정파·사파·상단·의원·낭인·히든 루트 분기
+- 플레이어 선택이 세계에 남기는 흔적
 
----
+핵심 방향은 **"플레이어가 반드시 강해지는 것만을 목표로 하지 않아도 되는 무협 RPG"**입니다.
 
-## ⚔ 주요 특징 (Key Features)
+```text
+내 행동이 세계에 흔적을 남기고,
+그 흔적이 다른 플레이어의 세계에도 영향을 주며,
+각 플레이어가 강호 속에서 자기만의 삶을 살아가는 것.
+```
 
-- 🔹 **네 대세력 구도**: 정파, 사파, 마교, 혈교
-- ⚔ **PvP 중심의 실시간 전투 시스템**
-- 📈 **무공 숙련도 + 경지(이류 → 생사경)** 성장 구조
-- 🌀 **문파별 스킬, 심법, 오의** 체계
-- 🎮 **4슬롯 스킬 세팅 + 실시간 회피/카운터/경공**
-- 🧱 **유동적 서버 구조**: 단일 서버 기반 → Bungee 기반 다중 서버 확장 가능
+여러 플레이어가 각자 다른 채팅방에서 플레이하더라도 **하나의 공유 세계 상태**를 사용합니다.
 
----
+## 📚 기준 문서
 
-## 🏗 폴더 구조 요약
+| 문서 | 내용 |
+|------|------|
+| [`docs/design/text_rpg_design.md`](docs/design/text_rpg_design.md) | **프로젝트 기준 기획 문서** — 세계 구조, 세력, 성장/무공/판정/소문/세력 반응 시스템, 청하현 첫 10턴 테스트 전체 |
+| [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
+
+## ⚔ 핵심 시스템 요약
+
+- **세력 구조**: 정파(구파일방·오대세가) / 사파·흑도(하오문·녹림·장강수로채·살막) / 사교·금기(마교·혈교) / 관군·관청 / 상단·민간·정보상 — 단순 정사 대립이 아닌 5계열 이해관계 구도
+- **경지**: 삼류 → 이류 → 일류 → 절정 → 초절정 → 화경 → 현경 → 생사경
+- **성장 4축**: 신체 성장 / 무공 성장 / 사회적 성장 / 세계 영향 성장
+- **무공**: 데이터 단위 관리. 무공은 전투 기술이자 신분과 출신을 드러내는 장치 (공개 사용 → 소문 → 세력 반응)
+- **판정**: 위험·저항·숨겨진 정보가 있을 때만. 플레이어 실행력 vs NPC 저항값 비교
+- **시간**: 개인 시간 / 지역 누적 시간 / 세계 공통 시간 3계층
+- **시작 지역**: 청하현 — 묵삼 사건, 북쪽 산길 도적, 열병 소문 3개 초기 사건
+
+## 🏗 저장소 구조
 
 ```plaintext
 honcheon-server/
-├── core/             # 공통 유틸 및 로직 모듈
-├── server-main/      # 메인 서버 (단일 서버 시 진입점)
-├── server-faction/   # 문파별 콘텐츠 서버 (확장 대비)
-├── server-hub/       # 허브/로비 서버 (멀티서버 연동)
-├── config/           # 스킬, 심법, 경지 등 게임 설정
-├── docs/             # 세계관 및 스토리 요약
-├── scripts/          # 실행 스크립트 (start-single.sh 등)
-├── docker/           # (선택) Docker 기반 다중 서버 구성
-└── resources/        # 텍스처, 언어 등 리소스 파일
+├── docs/
+│   ├── design/text_rpg_design.md   # ★ 기준 기획 문서
+│   └── story_summary.md            # 세계관 요약
+├── config/
+│   ├── factions.yml                # 5계열 세력 구조 + 세력 반응 단계
+│   ├── cultivation.yml             # 경지 체계 (삼류 ~ 생사경)
+│   ├── skills.yml                  # 무공 카탈로그 (스키마 + 예시)
+│   ├── regions/cheongha_hyeon.yml  # 청하현 지역 상태 / 장소 / 초기 사건
+│   └── npcs/cheongha_npcs.yml      # 청하현 주요 NPC (한백, 묵삼, 곽진, 유문, 소연)
+├── core/ server-main/ server-hub/ server-faction/
+│   # (레거시) 마인크래프트 플러그인 스캐폴딩 — MMORPG 확장 단계 검토 대상
+├── scripts/ docker/ datapack/ resources/
+│   # (레거시) 마인크래프트 서버 실행 환경
+└── auto_git/                       # AI 커밋 메시지 생성 도구 (requirements.txt는 이 도구용)
+```
 
-##🚀 실행 방법 (How to Run)
-###✅ 단일 서버 (개발/테스트용)
-bash scripts/start-single.sh
-###🔁 다중 서버 (운영 확장 시)
-bash scripts/start-bungee.sh
-각 서버에는 개별 설정(server.properties, 포트 번호 등)을 지정해야 합니다.
+> ⚠ **폐기된 설정**: 과거 저장소에 있던 원소 속성 4문파(청운문/화염문/태산문/수월문)와
+> 그에 딸린 스킬 설정은 잘못 생성된 것으로 폐기되었습니다. `core/`, `server-*/` 등
+> 마인크래프트 플러그인 코드에 남아 있는 관련 참조는 MMORPG 확장 단계에서
+> 기준 기획 문서에 맞게 재작성해야 합니다.
 
-📚 문서 및 기획 참고
-docs/story_summary.md — 세계관 및 스토리 개요
+## 🧭 개발 단계
 
-config/ 폴더 내 .yml — 문파/스킬/경지 등 게임 밸런스 자료
+1. **텍스트 RPG 단계 (현재)** — 자유 행동, 판정, 소문, 세력 반응, NPC 영속성, 문파 입문 루트가 재미있게 작동하는지 검증. 청하현 첫 10턴 대화형 테스트 완료.
+2. **MMORPG 확장 단계** — 검증된 구조를 서버, DB, UI, 실시간 전투, 지역 시스템, NPC 스케줄, 세력 이벤트로 이전.
 
-🧩 기술 스택 (Tech Stack)
-Minecraft Java Edition (1.xx.x)
+## 📜 라이선스
 
-Spigot / Paper / BungeeCord (확장 예정)
+MIT License
 
-Java 17+
+## 👤 제작
 
-(Optional) Gradle / Docker / YAML-based config management
+개발 및 기획: [@jokwangwon](https://github.com/jokwangwon) (Solo Dev)
 
-📜 라이선스
-본 프로젝트는 MIT License를 따릅니다.
-
-👤 제작
-개발 및 기획: @jokwangwon (Solo Dev)
-
-문의: GitHub Issues 또는 Discussions 활용
-
-“강호의 운명은 당신의 검끝에 달려 있습니다.”
-지금, 혼천의 세계로 뛰어드십시오. 🐉
-
-
----
-
-## 💡 비고
-
-- 서버 버전(`1.xx.x`)은 실제 사용하는 마인크래프트 버전에 맞게 수정하세요.
-- 다국어 지원이 필요할 경우 `README.ko.md`, `README.en.md`로 분리 가능
-- `스크린샷`, `아키텍처 다이어그램`, `문파 무공표` 등이 생기면 이미지도 추가 가능
-
-필요하다면 Markdown 파일로 바로 내려드릴 수도 있습니다!
+> "혼돈의 하늘 아래, 누가 패왕이 될 것인가."

@@ -1,143 +1,124 @@
-# 혼천 서버 스킬 설정 파일
+# 혼천 서버 무공 카탈로그
+# 기준 문서: docs/design/text_rpg_design.md 7장 (무공 시스템)
+#
+# 주의: 과거의 원소 문파 스킬(풍보/화구/석피/수치 등)은 잘못 생성된 설정으로 폐기됨.
+#
+# 무공은 단순 이름 목록이 아니라 데이터 단위로 관리한다.
+# 무공은 전투 기술인 동시에 "신분과 출신을 드러내는 장치"다.
+# 공개 사용 시 소문이 생기고 세력 반응으로 이어질 수 있다.
 
-skills:
-  # 청운문 스킬
-  cheongyun_skills:
-    wind_step:
-      name: "풍보"
-      display_name: "風步"
-      description: "바람을 타고 빠르게 이동하는 기본 스킬"
-      type: "movement"
-      level: 1
-      cooldown: 5
-      mana_cost: 10
-      damage: 0
-      range: 10
-      effects:
-        - "SPEED:2:3"
-        - "JUMP:1:3"
-      requirements:
-        faction: "cheongyun"
-        cultivation_level: 1
-    
-    cloud_veil:
-      name: "운장"
-      display_name: "雲障"
-      description: "구름으로 자신을 감싸는 방어 스킬"
-      type: "defense"
-      level: 2
-      cooldown: 15
-      mana_cost: 20
-      damage: 0
-      range: 0
-      effects:
-        - "DAMAGE_RESISTANCE:1:5"
-        - "INVISIBILITY:1:3"
-      requirements:
-        faction: "cheongyun"
-        cultivation_level: 2
+# 무공 데이터 스키마 (모든 무공 공통 필드)
+schema:
+  id: "무공 ID"
+  name: "무공명 (고유 명칭 사용. '화산기초검' 같은 범용 명칭 금지)"
+  category: "분류 (검법/도법/경공/심법/독공/의술 ...)"
+  sub_category: "하위 분류"
+  grade: "등급"
+  faction: "소속 세력"
+  required_realm: "요구 경지 (삼류~생사경)"
+  required_stats: "요구 능력치"
+  required_mastery: "요구 숙련도"
+  acquisition: "습득 조건"
+  bloodline_restricted: "혈통 제한 여부"
+  requires_master: "스승 필요 여부"
+  requires_manual: "비급 필요 여부"
+  side_effects: "부작용 여부"
+  public_use_rumor: "공개 사용 시 소문 여부"
+  faction_reaction: "세력 반응 여부"
 
-  # 화염문 스킬
-  hwayeom_skills:
-    fire_ball:
-      name: "화구"
-      display_name: "火球"
-      description: "불덩이를 던지는 기본 공격 스킬"
-      type: "attack"
-      level: 1
-      cooldown: 3
-      mana_cost: 15
-      damage: 20
-      range: 12
-      effects:
-        - "FIRE:1:3"
-      requirements:
-        faction: "hwayeom"
-        cultivation_level: 1
-    
-    flame_armor:
-      name: "화갑"
-      display_name: "火甲"
-      description: "불꽃으로 갑옷을 만들어 방어하는 스킬"
-      type: "defense"
-      level: 2
-      cooldown: 20
-      mana_cost: 25
-      damage: 0
-      range: 0
-      effects:
-        - "FIRE_RESISTANCE:1:8"
-        - "DAMAGE_RESISTANCE:1:5"
-      requirements:
-        faction: "hwayeom"
-        cultivation_level: 2
+martial_arts:
+  # ─── 화산파 입문 무공 ───
+  # 기초 무공이라도 문파의 철학과 상위 무공으로 이어지는 고유 명칭을 쓴다.
+  yukhap_geom:
+    name: "육합검"
+    category: "검법"
+    sub_category: "입문 검법"
+    grade: "삼류"
+    faction: "화산파"
+    required_realm: "삼류"
+    required_stats:
+      근력: 2
+      민첩: 2
+    required_mastery: 0
+    acquisition: "화산파 입문 후 외문 제자 과정에서 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true      # 공개 사용 시 화산파 제자로 인식됨
+    faction_reaction: false
 
-  # 태산문 스킬
-  taesan_skills:
-    stone_skin:
-      name: "석피"
-      display_name: "石皮"
-      description: "돌같은 피부로 방어력을 높이는 스킬"
-      type: "defense"
-      level: 1
-      cooldown: 8
-      mana_cost: 20
-      damage: 0
-      range: 0
-      effects:
-        - "DAMAGE_RESISTANCE:2:6"
-        - "SLOW:1:4"
-      requirements:
-        faction: "taesan"
-        cultivation_level: 1
-    
-    mountain_strike:
-      name: "산격"
-      display_name: "山擊"
-      description: "산의 힘을 담아 강력한 일격을 날리는 스킬"
-      type: "attack"
-      level: 2
-      cooldown: 12
-      mana_cost: 25
-      damage: 35
-      range: 8
-      effects:
-        - "SLOW:1:2"
-      requirements:
-        faction: "taesan"
-        cultivation_level: 2
+  maehwa_bo:
+    name: "매화보"
+    category: "경공"
+    sub_category: "보법"
+    grade: "이류"
+    faction: "화산파"
+    required_realm: "삼류"
+    required_stats:
+      민첩: 3
+    required_mastery: 20        # 육합검 숙련도
+    acquisition: "육합검 일정 숙련 후 사부 판단으로 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
 
-  # 수월문 스킬
-  suwol_skills:
-    water_heal:
-      name: "수치"
-      display_name: "水治"
-      description: "물의 힘으로 상처를 치유하는 스킬"
-      type: "heal"
-      level: 1
-      cooldown: 10
-      mana_cost: 20
-      damage: 0
-      range: 8
-      effects:
-        - "HEAL:10:1"
-        - "REGENERATION:1:5"
-      requirements:
-        faction: "suwol"
-        cultivation_level: 1
-    
-    moon_light:
-      name: "월광"
-      display_name: "月光"
-      description: "달빛으로 적을 공격하는 스킬"
-      type: "attack"
-      level: 2
-      cooldown: 8
-      mana_cost: 18
-      damage: 25
-      range: 12
-      effects:
-        - "BLINDNESS:1:2"
-      requirements:
-        faction: "suwol"
-        cultivation_level: 2 
+  jeongsim_geomgyeol:
+    name: "정심검결"
+    category: "심법"
+    sub_category: "검문 심법"
+    grade: "이류"
+    faction: "화산파"
+    required_realm: "이류"
+    required_stats:
+      지혜: 3
+    required_mastery: 30
+    acquisition: "입문제자 승급 시험 통과 후 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: false     # 심법은 외부에서 식별하기 어렵다
+    faction_reaction: false
+
+  # ─── 세가 무공 예시 ───
+  namgung_jehwang_geom:
+    name: "제왕검형"
+    category: "검법"
+    sub_category: "세가 비전"
+    grade: "절정"
+    faction: "남궁세가"
+    required_realm: "절정"
+    required_stats:
+      근력: 5
+      지혜: 4
+    required_mastery: 120
+    acquisition: "남궁세가 직계 혈족 또는 세가주의 특별 허락"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true      # 공개 사용 시 "남궁세가 혈족인가? 도둑 배움인가?" 소문 발생
+    faction_reaction: true      # 남궁세가가 출처를 조사하러 나설 수 있다
+
+  # ─── 사파 / 금기 무공 예시 ───
+  hyeolgi_simgong:
+    name: "혈기심공"
+    category: "심법"
+    sub_category: "금기 마공"
+    grade: "절정"
+    faction: "혈교"
+    required_realm: "일류"
+    required_stats:
+      체력: 4
+    required_mastery: 0
+    acquisition: "혈교 히든 루트 전용. 초기 튜토리얼에서는 등장하지 않음."
+    bloodline_restricted: false
+    requires_master: false
+    requires_manual: true
+    side_effects: true          # 심마, 폭주 위험
+    public_use_rumor: true      # 목격 시 즉시 금기 무공 소문
+    faction_reaction: true      # 정파/관군 토벌 대상, 혈교 접촉 시도

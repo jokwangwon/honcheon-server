@@ -1,0 +1,93 @@
+# 청하현 주요 NPC
+# 기준 문서: docs/design/text_rpg_design.md 9장 (NPC 영속성), 14장, 18장, 20장
+#
+# NPC 등급:
+#   1단계 배경 NPC / 2단계 기능 NPC / 3단계 관계 NPC / 4단계 핵심 NPC / 5단계 세력 대표 NPC
+#
+# 중요 NPC는 생존, 사망, 이동, 성장, 배신, 관계 변화, 세력 전향,
+# 소문 전달, 사건 영향까지 영속적으로 관리한다.
+
+npcs:
+  hanbaek:
+    name: "한백"
+    tier: 3                       # 관계 NPC
+    role: "청하객잔 주인"
+    location: cheongha_inn
+    faction: mingan
+    stats:
+      감각: 4
+      화술: 3
+      위험_회피: 5
+      고객_파악: 4
+    disposition:
+      - "객잔 보호 성향 높음"
+      - "사파 보복 우려"
+      - "낯선 이에 대한 신뢰 낮음"
+    knowledge:
+      - "묵삼이 평범한 손님이 아니라는 것을 어느 정도 알고 있다"
+    incident_links: [inn_unorthodox_contact]
+
+  muksam:
+    name: "묵삼"
+    tier: 4                       # 핵심 NPC
+    role: "사파 / 하오문 연락책"
+    location: cheongha_inn        # 객잔 2층 투숙, 밤에 북쪽 골목 창고로 이동
+    faction: haomun
+    stats:
+      감각: 4
+      미행_감지: 4
+      은신: 3
+      도주: 3
+    disposition:
+      - "밤에 몰래 이동하며 비밀 접촉을 한다"
+      - "미행을 예상한 사람처럼 행동한다"
+    secrets:
+      - "하오문과 연결된 사파 연락책"
+      - "상단 이동 정보를 외부로 유출 중"
+      - "북쪽 산길 도적 사건과 연결되는 핵심 인물"
+    incident_links: [inn_unorthodox_contact, north_road_bandits]
+
+  gwakjin:
+    name: "곽진"
+    tier: 3                       # 관계 NPC
+    role: "상단 호위무사"
+    location: north_road
+    faction: sangdan
+    stats:
+      근력: 4
+      체력: 4
+      감각: 3
+      호위_전술: 4
+      위협_감지: 3
+      상단로_지식: 3
+    disposition:
+      - "실용적"
+      - "낯선 사람을 쉽게 믿지 않음"
+      - "증거를 중시함"
+    incident_links: [north_road_bandits]
+
+  yumun:
+    name: "유문"
+    tier: 3                       # 관계 NPC
+    role: "청하현 의원"
+    location: medicine_shop
+    faction: mingan
+    disposition:
+      - "환자를 우선하는 성실한 의원"
+      - "열병 환자 증가로 과로 중"
+    incident_links: [cheongha_fever_rumor]
+    notes: "열병 사건, 민심, 약재 가격, 상단 물류 문제와 연결되는 중심 NPC"
+
+  soyeon:
+    name: "소연"
+    tier: 3                       # 관계 NPC
+    role: "의뢰소 관리자"
+    location: request_office
+    faction: orthodox_heroes
+    disposition:
+      - "조심스럽지만 실무적"
+      - "확실한 정보와 태도를 중시함"
+    connections:
+      - "정파 연락망과 약하게 연결됨"
+      - "화산파 입문 단서(매화 문양 목패)로 이어지는 역할"
+    incident_links: [north_road_bandits, inn_unorthodox_contact]
