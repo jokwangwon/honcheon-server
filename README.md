@@ -61,6 +61,8 @@
 | [`docs/design/interface_decision.md`](docs/design/interface_decision.md) | 플레이 인터페이스 결정(G4) — 디스코드 봇: 채널=지역/스레드=장면/버튼=선택지(프리페치 결합), Java 단일 스택, 단계 I~IV |
 | [`docs/design/death_and_legacy.md`](docs/design/death_and_legacy.md) | 죽음과 유산(G3) — 패배 기본값=제압, 사망 확정 파이프, 유산 3갈래, 세계의 기억(피의 장부·favor 승계), 새 캐릭터(혈연/무관) |
 | [`docs/design/persistence.md`](docs/design/persistence.md) | 영속화(G5) — SQLite 단일 작성자·WAL, 3군 11테이블(db/schema.sql), registry UNIQUE = 세계 유일 등록제 집행자 |
+| [`docs/design/quest_generation.md`](docs/design/quest_generation.md) | 의뢰 생성기(G1) — 발생원 4종(지역 임계/NPC 생애/시세/세력), 자정 배치 파이프, 방치=세계 악화 루프, 비독점 수주·검수 |
+| [`docs/design/sect_life.md`](docs/design/sect_life.md) | 문파 생활(G2) — 신분 사다리(외문→진전), 공적 내부 통화, 비급각 4층, 문규 3진·파문(낙인·복권), 사형제, NPC 대칭 |
 | [`docs/design/runtime_architecture.md`](docs/design/runtime_architecture.md) | 런타임 아키텍처 — 2단 파이프라인(엔진 계산→LLM 렌더)·프리페치, 실시간 판정=이벤트 훅, 서장·출도·공유 세계 시간축 합류 모델 |
 | [`docs/design/mc_action_mapping.md`](docs/design/mc_action_mapping.md) | MC 행동 전수 매핑 — 바닐라 입력 예산 내 전 행동 구현 (입력·HUD 재해석·판정 12종·전투·내공·생활), 우선순위 P1~P6 |
 | [`docs/design/skill_lifecycle.md`](docs/design/skill_lifecycle.md) | 무공 생애주기 — 습득 4경로(사사/비급/견식/기연), 숙련 5단계, MC 로드아웃 7칸, 사용 규칙 색인 |

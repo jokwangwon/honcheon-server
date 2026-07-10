@@ -1,0 +1,39 @@
+# 의뢰 생성 규칙 (기계 판독용) — G1 해소
+# 기준 문서: docs/design/quest_generation.md
+# 원칙: 의뢰 = 세계 상태의 증상 (템플릿 뽑기 아님) — 기존 수치가 의뢰를 낳는다
+
+sources:
+  region_state:                    # ① 지역 임계 (region_state.yml threshold와 연동)
+    치안_30_미만: [도적_소탕_현상, 상단_호위, 야간_순찰_보조]
+    경제_30_미만: [물자_호송, 채무_회수, 일손]
+    민심_30_미만: [실종_조사, 유언비어_추적, 민원_중재]
+  npc_lifecycle:                   # ② NPC 생애 (계절 정산 연동)
+    상승_도전: { quests: [호위, 시세_정보, 거래처_소개], on_success: "개입 기록 +1 자동 (회수 루프 입구)" }
+    하락_위기: { quests: [채무_해결, 구출, 누명_벗기기], note: "몰락을 막으면 은인이 된다" }
+  price_events: { 급등_품목: "채집·호송 의뢰 (수매가 상승분 보수 반영)" }
+  faction:
+    favor_신용_이상: "세력 전용 의뢰 접근 (공개 게시판에 없는 것)"
+    주목_상승: "세력이 먼저 찾아온다 — 시험 의뢰"
+
+pipeline:
+  batch: 자정                       # 발생원 스캔 → 후보 생성 → 게시 (world_batch와 동형)
+  reward: "economy.yml 의뢰_보수 × region_multipliers 의뢰_보수 배율 (신규 표 없음 — 재사용)"
+  slots_per_region: [5, 8]         # 초과 후보는 대기열
+  channels: [의뢰소_공개, 세력_경유_favor게이트, NPC_직접_지명]
+  deadline: "전 의뢰 만료일 — 방치 = 사건 발생 → 지역 델타 악화 (의뢰 무시 = 세계 악화 루프)"
+
+acceptance:
+  exclusivity: { 공개: 비독점_선해결, 세력_지명: 독점 }
+  scene: "수주 = scenes 스레드 개설 (동시성 잠금 정합)"
+  rewards: [보수, 발주처_favor, 마크_전투의뢰, 정보_단서]
+  failure: "favor 하락 + 게시판 복귀 (만료 시계 지속)"
+  verification: "발주 NPC 검수 — 증거 요구 (수급·장부·증언: 조사 판정의 무대)"
+
+grade_ladder:
+  rungs:
+    - { grade: 잔심부름, realm: 범인 }
+    - { grade: 조사_채집, realm: 삼류 }
+    - { grade: 호위_소탕, realm: 이류 }
+    - { grade: 표행_현상금, realm: 일류 }
+    - { grade: 세력_전속, realm: 절정 }
+  gate: "느슨하게 — 격상 의뢰 도전 허용 (사선이 될 뿐, 금지 아님)"
