@@ -26,6 +26,18 @@ npcs:
     knowledge:
       - "묵삼이 평범한 손님이 아니라는 것을 어느 정도 알고 있다"
     incident_links: [inn_unorthodox_contact]
+    schedule:                      # npc_lifecycle.yml 일과 규칙 예시
+      새벽: { place: inn_kitchen, activity: 주방_준비, access: 폐쇄 }
+      아침: { place: inn_hall, activity: 접객, access: 공개 }
+      낮: { place: inn_hall, activity: 접객, access: 공개 }
+      해질녘: { place: inn_hall, activity: 접객_피크, access: 공개 }
+      밤: { place: inn_counter, activity: 장부_정리, access: 조건부 }   # 계단 밑 장부와 정합 (PT-005)
+    lifepath:                      # 생애 시뮬 예시 — 상인의 길
+      ladder: 상인의_길
+      rung: 점포주
+      ambition: "현성 안 2호점"
+      assets: 소상
+      trajectory: 유지
 
   muksam:
     name: "묵삼"
@@ -46,6 +58,13 @@ npcs:
       - "상단 이동 정보를 외부로 유출 중"
       - "북쪽 산길 도적 사건과 연결되는 핵심 인물"
     incident_links: [inn_unorthodox_contact, north_road_bandits]
+    schedule:
+      새벽: { place: inn_room_2f, activity: 취침, access: 폐쇄 }
+      아침: { place: inn_room_2f, activity: 칩거, access: 폐쇄 }
+      낮: { place: inn_hall, activity: 투숙객_행세, access: 공개 }
+      해질녘: { place: inn_hall, activity: 식사_관찰, access: 공개 }
+      밤: { place: north_alley_warehouse, activity: 접선, access: 조건부, cycle: "3일 주기 — 나머지 밤은 2층" }
+      # 스케줄 이탈 = 단서: "묵삼이 오늘은 낮에 나갔다?" (npc_lifecycle overrides)
 
   gwakjin:
     name: "곽진"
@@ -76,6 +95,13 @@ npcs:
       - "환자를 우선하는 성실한 의원"
       - "열병 환자 증가로 과로 중"
     incident_links: [cheongha_fever_rumor]
+    schedule:
+      새벽: { place: patient_homes, activity: 왕진, access: 조건부 }
+      아침: { place: medicine_shop, activity: 진료, access: 공개 }
+      낮: { place: medicine_shop, activity: 진료, access: 공개 }
+      해질녘: { place: medicine_shop, activity: 약재_정리, access: 조건부 }
+      밤: { place: home, activity: 휴식, access: 폐쇄 }
+      override_열병_활성: "밤에도 의방 진료 (npc_lifecycle overrides — 과로 disposition의 실체)"
     notes: "열병 사건, 민심, 약재 가격, 상단 물류 문제와 연결되는 중심 NPC"
 
   soyeon:

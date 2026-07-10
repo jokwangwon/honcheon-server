@@ -1,0 +1,96 @@
+# NPC 일과·생애 규칙 (기계 판독용)
+# 기준 문서: docs/design/npc_lifecycle.md
+# 원칙: NPC도 플레이어와 같은 문법으로 산다 — 일과 = 5구간제, 생애 = 관문 사다리, 정산 = NPC 판정(+7)
+
+# ─── 일과(日課) — 하루 5구간의 시계 ───
+schedule:
+  segments_source: "time.yml day_segments (새벽/아침/낮/해질녘/밤)"
+  format: "npcs/*.yml 각 NPC에 schedule: {구간: {place, activity, access}}"
+  access_levels:
+    공개: "누구나 접근 (영업 중 상점, 거리)"
+    조건부: "명분·소개·판정 필요 (집무, 접선)"
+    폐쇄: "침입 취급 (침소, 밀실) — 잠입 판정"
+  activity_context_modifiers:      # 환경 보정 ±3 내 계상 — 만남의 '때'가 전략이 된다
+    접객_중: { 화술_판정: +1 }
+    집무_중: { 화술_판정: -1 }
+    술자리: { 화술_판정: +1, 정보_캐기: +1 }
+    이동_중: { 접촉_가능_시간: "구간 일부 — minor 행동만" }
+  night_intrusion:
+    alertness_delta: -2            # 침소의 경계는 낮다
+    on_detection: "즉시 적대 + '밤손님' 소문 후보 — 싸게 들어가면 비싸게 나온다"
+  overrides:                       # 일과는 깨지라고 있다 — 평소와 다른 위치 = 단서
+    incident: "활성 incident_links가 스케줄 우선 (습격 예고일의 두목은 산길에 나와 있다)"
+    region_state:
+      열병_활성: "의원 밤 진료 (과로 서사의 실체)"
+      치안_30_미만: "밤 구간 민간 NPC 실내 대피 — 밤거리에 위험 조우만 남는다"
+    market_day: { cycle_days: 5, effect: "상인·농민 스케줄 일괄 대체, 시장 밀도 상승 — 소문 전파 보정 +" }
+  mc:
+    tier_3_plus: "구간 전환 시 경로 이동 — 텔레포트 금지 (이동이 목격 가능해야 미행이 성립)"
+    unloaded: "로딩 밖 전환만 즉시 재배치"
+    tier_1_2: "구간별 스폰 프리셋 (개체 추적 없음)"
+    shops: "영업 구간 밖 = 상점 GUI 게이트 닫힘"
+  perf: "구간 전환 배치 1회 (world_batch_apply 예산 내) — 전투 AI think_interval과 별개"
+
+# ─── 생애(生涯) — 계절 1회의 시계 ───
+life_simulation:
+  scope: "등급 3+ 개체 시뮬 (지역당 ~20명) — 배경(1~2)은 지역 통계로만"
+  cadence: "세계 달력 계절 1회 (자정 배치 정산)"
+  check: "생애 판정 = NPC 능력치 + 기술 + 상황 보정 + 7 vs 다음 칸 난이도 (npc_vs_npc 문법 — 주사위 없음)"
+  situation_inputs: [자산, 지역_경제_지표, 세력_favor, 활성_사건, 플레이어_개입_기록]
+  trajectory: [상승, 유지, 하락]   # 성공 누적 → 상승 / 실패 누적 → 하락 판정 (fall_events)
+  pace: "1칸 = 수년 표준 (계절 성공 누적 + 계기 사건) — 급성장은 등록 기연뿐 (NPC 기연도 등록제)"
+
+  ladders:                         # 생애 사다리 — 경지 관문과 같은 문법 (요건+계기)
+    상인의_길:
+      rungs:
+        - { name: 행상, difficulty: 10 }
+        - { name: 점포주, difficulty: 12, requires: [자산_소상, 연속_성공_2] }
+        - { name: 상단_지점주, difficulty: 14, requires: [자산_중상, 상단_favor_신용, 연속_성공_3] }
+        - { name: 상단주, difficulty: 16, requires: [자산_대상, 계기_등록_사건] }
+        - { name: 전장_가주, difficulty: 18, requires: [계기_세계급_등록_사건], world_rung: true }
+    무인의_길: "cultivation.yml 관문 그대로 — NPC도 실전 마크·벽·깨달음 (완전 대칭)"
+    관인의_길:
+      rungs: [서리, 현승, 현령, 지부사]
+      note: "관군·관청 favor가 주 재료. 현령+ = world_rung"
+  world_rung_rule: "정점 칸 도달 = 세계급 등록 이벤트 — 소문 강도 3 + 세력 지형 변화"
+  fall_events: [도박_빚, 병_원기, 습격, 배신, 후계_분쟁]   # 하락 판정 실패 시 표에서 — 몰락도 서사다
+
+  player_hand:                     # 은혜와 원한의 장기 회수 — 이 시스템의 존재 이유
+    help: { bonus: [1, 3], examples: [호위_성공, 결정적_정보_시세, 치료, 누명_벗김], record: true }
+    harm: { penalty: [-3, -1], examples: [약탈, 사업_방해, 신용_훼손], record: true }
+    payback:
+      on_rung_up: "기여자 favor 상향 + 회수 이벤트 자동 발화 ('10년 전 호위했던 행상이 전장 가주가 되어')"
+      on_fall: "원한 동형 — 몰락시킨 상인의 아들이 자객이 되어 돌아온다"
+    design_intent: "세계에 심는 것이 최고의 저축 — 돈으로 못 사는 것을 세월과 은혜로 산다 (unpurchasable 접합)"
+
+  death_and_succession:
+    causes: [노환_수명100년_대칭, 병_원기, 사건]
+    rumor: "사망 = 소문 자동 생성"
+    succession: "핵심 NPC 사망 = 후계 이벤트 등록 — 상속 분쟁, 유산(애병·비급), 조직 승계전"
+
+  tier_mobility:
+    promote: "배경 NPC가 사건으로 '이름'을 얻으면 등급 3 개체화 (시트 생성, 생애 시뮬 편입) — 관측이 개성을 만든다"
+    demote: "은퇴·잊힘 = 배경화 (시트 동결 — 삭제 아닌 동면, 재등장 가능)"
+
+  render:
+    engine: "정산 = 엔진 표 (2단 파이프라인 엔진 단)"
+    llm: "서사화 = 렌더 단 — 귀환 리포트 다이제스트 ('당신이 없는 사이 한백이 2호점을 냈다')"
+    mc: "계절 정산 = 자정 배치 (world_batch_apply) — 간판·상점 GUI·NPC 위치 갱신"
+
+# ─── 창발 상호작용 — 경지 변화·물건 습득·전향 (부하 통제 설계) ───
+emergent_interactions:
+  principle: "스캔 금지, 접점 판정 — 'NPC가 세계를 훑는' 것이 아니라 '등록 물건·사건이 자기 좌표의 통행자를 굴린다'"
+  object_pickup:                   # NPC가 우연히 마병을 줍는 것의 실체
+    eligible: "등록 물건만 (마병·보병·비급 — 이미 전부 등록제·양산 금지)"
+    check: "계절 정산 시, 물건 좌표와 일과·사건 동선이 교차하는 NPC만 발견 판정"
+    cost: "O(등록 물건 수) — 세계 전체 수십 건/계절"
+  npc_transformation:
+    경지: "무인의 길 = cultivation.yml 관문 그대로 — NPC 사선 마크도 실제 사건(습격·세력전)에서만 나온다 (인플레 자연 억제)"
+    마병_침식: "equipment.yml demonic_weapons 침식 규칙을 계절 입자로 적용 — 침식 누적 → 심마 → 전향 후보"
+    전향: "혈교화·사파行 = 등록 이벤트 (성향·침식·favor 입력) — 전향은 소문·세력 반응 자동"
+  safety_valves:                   # 감당 불가를 막는 4개의 밸브
+    - "지역별 계절 세계 이벤트 예산: 상한 3건/지역 — 초과분은 다음 계절 대기열 (연쇄 폭주 차단)"
+    - "정점·금기 변화(world_rung·전향·신병 이동)는 세계 동시 진행 상한 — 등록 큐"
+    - "관측 기반 렌더: 엔진은 전부 계산하되 LLM 서사화는 플레이어가 접한 것만 (다이제스트·소문 경유)"
+    - "고수 총량 관리: 초절정+ NPC 수 세계 상한 (세계 정원 120명과 동일 사상 — 벽 규칙이 자연 상한)"
+  load_estimate: "개체 시뮬 ~500명 × 계절 1회 조회 연산 + 접점 판정 수십 건 = 자정 배치 수 ms — MSPT 예산 무관"
