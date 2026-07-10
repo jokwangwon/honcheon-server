@@ -1,0 +1,87 @@
+# 청하현 맵 스펙 v0 (기계 판독용 — 맵 컴파일러 입력)
+# 기준 문서: docs/design/map_generation.md
+# 논리 원천: config/regions/cheongha_hyeon.yml — 이 스펙은 그 지역의 '공간' 표현이다.
+
+map_spec:
+  region_ref: config/regions/cheongha_hyeon.yml
+  seed: 20260710            # 고정 시드 — 같은 스펙+시드 = 같은 맵
+  scale:
+    town_diameter: 260       # 현성 지름 (블록)
+    outskirt_radius: 900     # 외곽 반경 — 북쪽 산길·흑수나루·폐사당 포함
+  mood: "섬서 외곽의 중소 현성. 번화하지도 황폐하지도 않은, 가라앉은 긴장감"
+
+  terrain:
+    base: "온대 구릉 — 북쪽으로 갈수록 산세, 남서쪽에 강"
+    heightmap_source: "노이즈 조합 v0 (이미지 AI 하이트맵은 M4 검토 옵션)"
+    constraints:
+      - "북쪽: 산길이 지나는 협곡 지형 (매복 지점이 성립해야 함 — 좌우 경사)"
+      - "남서쪽: 강 + 나루터 성립 지형"
+      - "현성: 완만한 평지, 낮은 토성벽"
+
+  districts:
+    town_center: { name: "현성 중심", contains: [request_office], features: [관아, 광장] }
+    market: { name: "장터", contains: [medicine_shop], features: [노점, 곡물상, 포목점] }
+    inn_quarter: { name: "객잔 거리", contains: [cheongha_inn], features: [뒷골목, 북쪽_골목_창고] }
+    outskirt_north: { name: "북쪽 산길", contains: [north_road], features: [협곡_매복지점, 이정표] }
+    riverside: { name: "강변", contains: [heuksu_ferry], features: [나루터, 창고들] }
+    forest_edge: { name: "외곽 숲", contains: [abandoned_shrine], features: [성황당_옛길] }
+
+  roads:
+    - { from: town_center, to: market, type: 대로 }
+    - { from: market, to: inn_quarter, type: 거리 }
+    - { from: town_center, to: outskirt_north, type: 관도, note: "상단 행렬 동선 = 습격 사건 무대" }
+    - { from: market, to: riverside, type: 짐길 }
+    - { from: inn_quarter, to: forest_edge, type: 오솔길, note: "이용 흔적 적음 — 폐사당의 고립감" }
+
+  locations:
+    cheongha_inn:
+      district: inn_quarter
+      generator: inn_generator
+      params: { floors: 2, courtyard: false, back_door: true, worn: 0.4 }
+      placement: "거리에 면하되 뒷문이 북쪽 골목으로 통할 것 (턴 4~5 잠복·미행 동선)"
+    north_alley_warehouse:
+      district: inn_quarter
+      generator: warehouse_generator
+      params: { size: small, back_door: true, worn: 0.7 }
+      placement: "객잔 뒷골목 끝, 큰길에서 시야 차단"
+    request_office:
+      district: town_center
+      generator: office_generator
+      params: { notice_board: true }
+    medicine_shop:
+      district: market
+      generator: shop_generator
+      params: { herb_storage: true, sickroom: true }
+    north_road:
+      district: outskirt_north
+      generator: road_generator
+      params: { ambush_points: 2, milestone: true }
+    heuksu_ferry:
+      district: riverside
+      generator: ferry_generator
+      params: { sunken_ship_offshore: true }   # 기연: 침몰선 (수면 아래, 발견 조건부)
+    abandoned_shrine:
+      district: forest_edge
+      generator: shrine_generator
+      params: { decay: 0.8, hidden_resident_space: true }   # 기연: 취걸개 기거 흔적
+
+  bindings:
+    npc_anchors:
+      hanbaek: { location: cheongha_inn, spot: "1층 계산대", routine: "2층 계단 쪽을 흘끗거림" }
+      muksam: { location: cheongha_inn, spot: "2층 객실", routine: "밤에 뒷문 → 북쪽 골목 창고" }
+      soyeon: { location: request_office, spot: "접수대" }
+      yumun: { location: medicine_shop, spot: "진료방" }
+      gwakjin: { location: north_road, spot: "상단 대기소", routine: "호위 일정에 따라 이동" }
+      heukrang: { location: north_alley_warehouse, spot: "내부", condition: "접선 시간에만" }
+      galho: { location: north_road, spot: "협곡 매복지점", condition: "사건 단계 연동" }
+    trigger_zones:
+      abandoned_shrine_visit: { zone: abandoned_shrine 반경 20, counts: "기연 조건 방문 카운터" }
+      warehouse_backdoor: { zone: "창고 뒷문 5", action: "조사/엿듣기 상호작용" }
+      north_road_ambush: { zone: "협곡 구간", event: "north_road_bandits 사건 무대" }
+      sunken_ship: { zone: "나루 앞 수중", condition: "기연 조건 충족 시 발견 가능" }
+    broadcast_zones:
+      inn_hall: { location: cheongha_inn, network: inn_net, note: "소문 대사 풀 재생 구역" }
+      market_square: { location: market, network: mingan_market }
+    spawn_rules:
+      bandit_spawn: { district: outskirt_north, rate_by: "지역 치안 (region_state 연동)" }
+      patrol_spawn: { district: town_center, rate_by: "치안 > 70 시 증가" }
