@@ -1,0 +1,98 @@
+# 캐릭터 생성 규칙 (기계 판독용)
+# 기준 문서: docs/design/character_creation.md
+
+attribute_allocation:
+  base_value: 2                 # 모든 능력치 기본치
+  free_points: 6                # 자유 배분
+  creation_max: 4               # 생성 시 상한 (삼류의 한계)
+  creation_min: 1               # 하한 (1 감소로 포인트 회수, 최대 2회)
+  reduce_for_points_limit: 2
+
+# 경지별 능력치 상한 (성장 시)
+attribute_cap_by_realm:
+  삼류: 4
+  이류: 5
+  일류: 6
+  절정: 7
+  초절정: 8
+  화경: 9
+  현경: 10
+  생사경: 10
+
+# 성향별 추천 프리셋 — 추천일 뿐 강제 배정하지 않는다
+# 배열 순서: [근력, 민첩, 체력, 내공, 감각, 화술, 지혜]
+disposition_presets:
+  협의형:
+    stats: [3, 3, 3, 3, 3, 3, 2]
+    recommended_identities: [낭인_지망생, 문파_지원자]
+    routes: [정파, 협객, 화산파, 소림사, 아미파, 관군_협력]
+  생존형:
+    stats: [2, 3, 4, 2, 4, 2, 3]
+    recommended_identities: [고아_출신_부랑객, 낭인_지망생]
+    routes: [낭인, 개방, 사파_접촉, 정보상, 은거_전승]
+  야망형:
+    stats: [4, 3, 3, 3, 2, 3, 2]
+    recommended_identities: [몰락_세가_자제, 낭인_지망생]
+    routes: [세가_재건, 문파_권력, 사파_두각]
+  자유형:
+    stats: [3, 4, 3, 2, 3, 3, 2]
+    recommended_identities: [떠돌이_표사]
+    routes: [낭인, 표국, 유람]
+  탐구형:
+    stats: [2, 2, 3, 3, 3, 2, 5]    # 하한 규칙 사용 예 (근력/민첩에서 회수)
+    recommended_identities: [의원_제자]
+    routes: [제갈세가, 무당파, 의원, 약재상_제자, 정보상, 약왕곡]
+  은밀형:
+    stats: [2, 4, 2, 2, 4, 3, 3]
+    recommended_identities: [하오문_말단, 고아_출신_부랑객]
+    routes: [하오문, 살막, 사천당가, 사파, 마교_히든_루트, 무영각]
+  이익형:
+    stats: [2, 3, 3, 2, 3, 4, 3]
+    recommended_identities: [상단_견습]
+    routes: [상단, 정보상, 중개인]
+
+# 시작 신분 — 초기 기술(2/1/1), 시작 위치, 초기 관계
+starting_identities:
+  낭인_지망생:
+    skills: { 조사: 2, 은신: 1, 추적: 1 }
+    start_location: cheongha_hyeon
+    initial_relations: {}
+    notes: "무소속. 무엇이든 될 수 있는 백지. 첫 10턴 테스트 기준 신분."
+  문파_지원자:
+    skills: { 교섭: 2, 조사: 1, 호위: 1 }
+    start_location: request_office
+    initial_relations: { soyeon: "안면" }
+    notes: "문파 직행 루트 열림"
+  고아_출신_부랑객:
+    skills: { 은신: 2, 정보수집: 1, 도주: 1 }
+    start_location: cheongha_hyeon
+    initial_relations: {}
+    notes: "민간 하층 소문망 접근"
+  몰락_세가_자제:
+    skills: { 교섭: 2, 검법: 1, 조사: 1 }
+    start_location: cheongha_hyeon
+    initial_relations: {}
+    notes: "가문의 이름값 — 명성이자 표적"
+  떠돌이_표사:
+    skills: { 호위: 2, 추적: 1, 도주: 1 }
+    start_location: north_road
+    initial_relations: { gwakjin: "구면 (신뢰 0)" }
+  의원_제자:
+    skills: { 의술: 2, 조사: 1, 교섭: 1 }
+    start_location: medicine_shop
+    initial_relations: { yumun: "사제 관계" }
+    notes: "열병 사건 최근접 신분"
+  하오문_말단:
+    skills: { 정보수집: 2, 은신: 1, 교섭: 1 }
+    start_location: cheongha_inn
+    initial_relations: { muksam: "존재를 이미 안다 (양날)" }
+  상단_견습:
+    skills: { 상술: 2, 교섭: 1, 조사: 1 }
+    start_location: cheongha_hyeon
+    initial_relations: { gwakjin: "동료" }
+    notes: "상단 내부 정보 접근"
+
+# 생성 마지막 단계: 초기 목표 선언 → 길라잡이 시스템 입력값
+initial_goal:
+  required: true
+  examples: ["화산파 입문 단서 찾기", "청하현에서 자리 잡기", "가문의 원수 조사"]

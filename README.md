@@ -29,6 +29,8 @@
 | 문서 | 내용 |
 |------|------|
 | [`docs/design/text_rpg_design.md`](docs/design/text_rpg_design.md) | **프로젝트 기준 기획 문서** — 세계 구조, 세력, 성장/무공/판정/소문/세력 반응 시스템, 청하현 첫 10턴 테스트 전체 |
+| [`docs/design/judgment_system.md`](docs/design/judgment_system.md) | 판정 수치 계산식 — 실행력/저항값 공식, 결과 등급, 보정표, 첫 10턴 재계산 검증, 실패 분기 예시 |
+| [`docs/design/character_creation.md`](docs/design/character_creation.md) | 캐릭터 생성 — 능력치 배분 규칙, 성향 7종 프리셋, 시작 신분 8종 |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약
@@ -52,8 +54,10 @@ honcheon-server/
 │   ├── factions.yml                # 5계열 세력 구조 + 세력 반응 단계
 │   ├── cultivation.yml             # 경지 체계 (삼류 ~ 생사경)
 │   ├── skills.yml                  # 무공 카탈로그 (스키마 + 예시)
+│   ├── judgment.yml                # 판정 계산 규칙 (공식, 등급, 보정, 행동 대응표)
+│   ├── player_creation.yml         # 캐릭터 생성 규칙 (배분, 성향 프리셋, 시작 신분)
 │   ├── regions/cheongha_hyeon.yml  # 청하현 지역 상태 / 장소 / 초기 사건
-│   └── npcs/cheongha_npcs.yml      # 청하현 주요 NPC (한백, 묵삼, 곽진, 유문, 소연)
+│   └── npcs/cheongha_npcs.yml      # 청하현 주요 NPC + 흑랑/갈호/진운
 ├── core/ server-main/ server-hub/ server-faction/
 │   # (레거시) 마인크래프트 플러그인 스캐폴딩 — MMORPG 확장 단계 검토 대상
 ├── scripts/ docker/ datapack/ resources/

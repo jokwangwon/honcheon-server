@@ -1,0 +1,105 @@
+# 판정 수치 계산 규칙 (기계 판독용)
+# 기준 문서: docs/design/judgment_system.md
+
+scales:
+  attribute: { min: 1, max: 10 }        # 기본 능력치
+  skill: { min: 0, max: 10 }            # 기술 / 무공 숙련
+  alertness: { min: 0, max: 5 }         # NPC 경계도
+  suspicion: { min: 0, max: 5 }         # NPC 의심도 (대상 특정)
+
+attributes: [근력, 민첩, 체력, 내공, 감각, 화술, 지혜]
+
+skills:
+  general: [은신, 추적, 조사, 정보수집, 교섭, 잠입, 도주, 의술, 독술, 호위, 상술]
+  martial: "config/skills.yml 카탈로그의 숙련도와 연동"
+
+# 대립 판정: 실행력 = 능력치 + 기술 + 상황보정(캡 ±5) + 2d6
+#            저항값 = NPC능력치 + NPC기술 + 경계도 + 의심도 + NPC상태보정 + 7
+#            마진   = 실행력 - 저항값
+formula:
+  player_roll: "2d6"
+  npc_fixed_bonus: 7            # NPC는 주사위 대신 고정값
+  situation_modifier_cap: 5     # 상황 보정 합계 절대값 상한
+
+situation_modifiers:
+  preparation: { range: [0, 2] }            # 준비도: 계획, 도구, 변장
+  information: { per_key_clue: 1, max: 2 }  # 정보량: 핵심 단서당 +1
+  environment: { range: [-3, 3] }           # 환경: 행동에 따라 부호가 바뀜
+  condition:                                # 신체 상태
+    경상: -1
+    중상: -2
+    빈사: -3
+    피로: -1
+    내공_고갈: -2
+  realm_gap_per_stage: 2                    # 경지 격차 (무공 개입 판정에만)
+
+npc_modifiers:
+  focus_on_other_task: { range: [-2, 0] }   # 목적 집중
+  psychology: { range: [-2, 2] }            # 심리 상태 (공포는 저항 +, 다급함은 -)
+
+# 비대립 판정 난이도 기준치
+static_difficulty:
+  쉬움: 10
+  보통: 12
+  어려움: 14
+  매우_어려움: 16
+  극한: 18
+
+# 결과 등급 (마진 기준)
+result_tiers:
+  - { id: critical_success, name: "대성공", min_margin: 6 }
+  - { id: success, name: "성공", min_margin: 2 }
+  - { id: narrow_success, name: "아슬아슬한 성공", min_margin: 0, side_risk: true }
+  - { id: partial_success, name: "부분 성공", min_margin: -3 }
+  - { id: failure, name: "실패", min_margin: -7 }
+  - { id: critical_failure, name: "치명적 실패", min_margin: null }   # -8 이하
+
+# 아슬아슬한 성공의 부수 리스크 (GM이 상황에 맞게 1개 선택, 서사로만 표현)
+side_risks:
+  - "대상 NPC 의심도 +1"
+  - "제3자 목격 → 소문 후보 생성"
+  - "물리적 흔적 발생"
+  - "시간 추가 소모"
+  - "자원 소모 (내공, 도구)"
+
+# 선택 규칙: 극단 주사위 (대립 판정에만)
+optional_extreme_dice:
+  enabled: true
+  snake_eyes_2: "등급 1단계 하락"
+  boxcars_12: "등급 1단계 상승"
+
+# 판정 생략 (기대 마진 = 실행력(주사위 7 가정) - 저항값)
+auto_resolution:
+  auto_success_expected_margin: 8       # 이상이면 판정 생략, 자동 성공
+  auto_fail_expected_margin: -8         # 이하이면 자동 실패 (강행 전 서사로 무모함 암시)
+  no_judgment_actions:                  # 계산 자체를 하지 않는 행동
+    - "단순 이동"
+    - "상점 이용"
+    - "안전한 대화"
+    - "이미 확보한 정보 확인"
+
+# 재시도 규칙
+retry:
+  same_approach_penalty: 2              # 같은 대상 + 같은 접근 → 저항값 +2
+  new_information_resets: true          # 새 정보/새 접근이면 페널티 없음
+
+# 행동-판정 대응표
+action_pairs:
+  은신_잠복: { player: [감각, 은신], npc: [감각], npc_state: [경계도] }
+  미행: { player: [감각, 추적], npc: [감각, 미행_감지] }
+  설득: { player: [화술, 교섭], npc: [화술_또는_위험_회피], npc_state: [심리] }
+  정보_캐기: { player: [화술, 정보수집], npc: [감각, 고객_파악] }
+  잠입: { player: [민첩, 잠입], npc: [감각, 경비] }
+  엿듣기: { player: [감각, 은신], npc: [감각], npc_state: [경계도] }
+  조사: { player: [감각, 조사], npc: null, difficulty: static }
+  기습: { player: [민첩, 은신], npc: [감각, 위협_감지], realm_gap: true }
+  추적: { player: [감각, 추적], npc: [민첩, 도주] }
+  도주: { player: [민첩, 도주], npc: [감각, 추적] }
+  치료: { player: [지혜, 의술], npc: null, difficulty: static }
+  증거_제시_설득: { player: [화술, 교섭], npc: [위협_감지], information_bonus: true }
+
+# 전투 개요 (상세는 combat_system.md 예정)
+combat:
+  damage: "무공 기본 위력 + floor(마진 / 2)"
+  wound_stages: { 경상: -1, 중상: -2, 빈사: -3 }
+  note: "전투도 등급 결과를 사용한다. 아슬아슬한 승리는 부상을 남긴다."

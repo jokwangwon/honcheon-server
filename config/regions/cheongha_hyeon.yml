@@ -67,6 +67,13 @@ locations:
     linked_incidents: []
     linked_npcs: []
 
+  north_alley_warehouse:
+    name: "북쪽 골목 창고"
+    description: "묵삼의 야간 접선 장소. 뒷문과 최근 물건을 옮긴 흔적이 있다. (턴 5~7 무대)"
+    hidden: true                  # 잠복/미행으로만 발견되는 장소
+    linked_incidents: [inn_unorthodox_contact, north_road_bandits]
+    linked_npcs: [muksam, heukrang]
+
   abandoned_shrine:
     name: "폐사당"
     description: "초기에는 금기 루트를 열지 않는다. 불길한 소문 / 장기 떡밥으로만 유지."

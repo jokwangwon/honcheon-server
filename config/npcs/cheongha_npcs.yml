@@ -84,6 +84,11 @@ npcs:
     role: "의뢰소 관리자"
     location: request_office
     faction: orthodox_heroes
+    stats:
+      감각: 3
+      화술: 3
+      정보수집: 3
+      조사: 2
     disposition:
       - "조심스럽지만 실무적"
       - "확실한 정보와 태도를 중시함"
@@ -91,3 +96,91 @@ npcs:
       - "정파 연락망과 약하게 연결됨"
       - "화산파 입문 단서(매화 문양 목패)로 이어지는 역할"
     incident_links: [north_road_bandits, inn_unorthodox_contact]
+
+  # ─── 기획서 23장 보완: 미정의였던 NPC ───
+
+  heukrang:
+    name: "흑랑"
+    tier: 3                       # 관계 NPC
+    role: "하오문 접선자 (묵삼의 상선)"
+    location: north_alley_warehouse   # 북쪽 골목 창고, 접선 때만 등장
+    faction: haomun
+    realm: "이류"
+    stats:
+      감각: 4
+      은신: 4
+      정보_거래: 4
+      도주: 4
+      단검술: 3
+    disposition:
+      - "묵삼보다 신중하고 냉정하다"
+      - "싸움보다 정보와 거래를 우선한다"
+      - "위험해지면 미련 없이 접선을 끊고 사라진다"
+    secrets:
+      - "상단 이동 정보를 사들여 녹림 쪽에 되파는 중개자"
+      - "청하현 하오문 지부와 직접 연결"
+    incident_links: [inn_unorthodox_contact, north_road_bandits]
+    notes: "턴 7에서 창고 안 '낮고 거친 목소리'의 정체"
+
+  galho:
+    name: "갈호"
+    tier: 3                       # 관계 NPC
+    role: "북쪽 산길 도적 두목 (녹림 방계)"
+    location: north_road
+    faction: noklim
+    realm: "이류"
+    stats:
+      근력: 5
+      체력: 4
+      감각: 3
+      도법: 3
+      매복: 4
+      통솔: 3
+    disposition:
+      - "힘을 과시하지만 손해 보는 싸움은 피한다"
+      - "하오문이 넘긴 정보값이 아깝지 않을 사냥감만 노린다"
+      - "관군이 움직일 낌새면 산채로 물러난다"
+    incident_links: [north_road_bandits]
+
+  north_road_bandit:
+    name: "산길 도적 (졸개)"
+    tier: 1                       # 배경 NPC — 개체 아닌 템플릿
+    template: true
+    role: "갈호 휘하 도적"
+    location: north_road
+    faction: noklim
+    realm: "삼류"
+    stats:
+      근력: 3
+      민첩: 2
+      체력: 3
+      감각: 2
+      도법: 1
+      매복: 2
+    count_hint: "매복 시 4~6명 규모"
+    incident_links: [north_road_bandits]
+
+  jinun:
+    name: "진운"
+    tier: 3                       # 관계 NPC
+    role: "화산파 외문 제자 (청하현 방면 연락 담당)"
+    location: request_office      # 소연을 통해 접촉 가능
+    faction: orthodox             # 화산파
+    realm: "이류"
+    stats:
+      근력: 3
+      민첩: 4
+      체력: 3
+      감각: 3
+      검법: 3                     # 육합검 숙련
+      경공: 2                     # 매화보 입문 수준
+    disposition:
+      - "원칙적이고 꼼꼼하다"
+      - "공적과 평판을 직접 확인한 뒤에만 문파에 추천장을 쓴다"
+      - "사파와 거래한 흔적이 있는 자는 이유를 캐묻는다"
+    connections:
+      - "소연의 정파 연락망 상대"
+      - "매화 문양 목패의 발신자"
+      - "화산파 입문 시험으로 이어지는 접촉 이벤트의 핵심"
+    incident_links: [north_road_bandits]
+    notes: "북쪽 산길 사건 해결 공적이 확인되면 화산파 입문 추천 루트가 열린다"
