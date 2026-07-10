@@ -22,7 +22,8 @@ casting:
 
 clash:                             # 오의 격돌 — 오의 vs 오의
   trigger: "같은 라운드 양측 오의 선언"
-  resolution: "양측 실행력 경합 (각자 굴림, 마진 비교) — 승자 관통, 패자는 마진 차 피해"
+  resolution: "양측 실행력 경합 (각자 굴림, 마진 비교) — 승자 관통"
+  loser_damage: "마진 차 + 승자 오의 기본 위력 6 (PT-004 F11 — '마진 차만'은 오의급에 너무 가벼움)"
   draw: { gap: [0, 1], effect: "상쇄 — 충격파 광역 + 양측 내력 전소" }
 
 acquisition:
