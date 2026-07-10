@@ -6,8 +6,25 @@ map_spec:
   region_ref: config/regions/cheongha_hyeon.yml
   seed: 20260710            # 고정 시드 — 같은 스펙+시드 = 같은 맵
   scale:
-    town_diameter: 260       # 현성 지름 (블록)
-    outskirt_radius: 900     # 외곽 반경 — 북쪽 산길·흑수나루·폐사당 포함
+    # v1 확대 — 실제 중소 현성 연상 (1블록=1m, 실측 60~70% MC 체감 보정)
+    town_diameter: 520       # 현성 지름 (성벽 내) — 구 260에서 2배 확대
+    town_wall: { height: 7, thickness: 2, gates: [남문, 북문, 동문] }
+    outskirt_radius: 1500    # 외곽 반경 — 북쪽 산길·흑수나루·폐사당·농경지
+    region_extent: "3000×3000 (청하현 지역 전체)"
+    walking_feel:            # 도보 체감 (걷기 4.3m/s, 달리기 5.6m/s)
+      남문_장터: "도보 약 1분"
+      장터_객잔거리: "도보 약 40초"
+      북문_산길_매복지점: "달려서 4~5분 — 호위 여정의 체감 거리"
+      성문_폐사당: "도보 약 8분 — 외곽 숲의 고립감"
+    building_estimate: "민가 120~150채 + 주요 건물 30채 + 성벽·도로 — 건축 블록 약 30만~50만"
+  building_standards:        # 건물 표준 크기 (생성기 파라미터 기준표)
+    민가: { w: 9, d: 8, floors: 1 }
+    상점: { w: 11, d: 9, floors: 1 }
+    객잔: { w: 25, d: 20, floors: 2, courtyard: true }   # ㅁ자 마당집
+    의원: { w: 15, d: 12, floors: 1 }
+    관아: { w: 40, d: 35, floors: 1, compound: true }
+    창고: { w: 12, d: 9, floors: 1 }
+    로폭: { 대로: 8, 거리: 5, 골목: 3 }
   mood: "섬서 외곽의 중소 현성. 번화하지도 황폐하지도 않은, 가라앉은 긴장감"
 
   terrain:
@@ -37,7 +54,7 @@ map_spec:
     cheongha_inn:
       district: inn_quarter
       generator: inn_generator
-      params: { floors: 2, courtyard: false, back_door: true, worn: 0.4 }
+      params: { size: { w: 25, d: 20 }, floors: 2, courtyard: true, back_door: true, worn: 0.4 }
       placement: "거리에 면하되 뒷문이 북쪽 골목으로 통할 것 (턴 4~5 잠복·미행 동선)"
     north_alley_warehouse:
       district: inn_quarter
