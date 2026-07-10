@@ -19,11 +19,14 @@ battle_marks:
 combat_hwahu:
   unit: 유효_전투_1회
   base_grant: "사용 무공·기술 숙련 화후 +2일치 수련 상당"
+  base_grant_days: 2               # 엔진 판독용 수치 (ProgressionEngine)
   multipliers:
     상대_격차: { 상수: 2.0, 동수: 1.0, 하수: 0.25, 압도적_하수: 0 }   # 자동 판정권(기대마진 +8) = 적립 0
     목숨_무게: { 생사: 2.0, 실전_사냥: 1.0, 비무_대련: 0.5 }
   repetition_decay: "같은 상대 유형 연속 — 회당 -25% (training diminishing 동형), 새 유형·새 지역서 리셋"
+  repetition_decay_rate: 0.25     # 엔진 판독용 수치
   daily_cap: "+16일치/일 — 실전은 수련을 대체하지 않고 압축한다"
+  daily_cap_days: 16              # 엔진 판독용 수치 — 연속식 적립에만 적용 (단발_보정은 별도 상한)
   beast_ranks:                   # 짐승에게도 격이 있다 — 사냥 = 실전
     들짐승: { examples: [늑대, 멧돼지], rank: 삼류_상당 }
     맹수: { examples: [호랑이, 곰], rank: 일류_상당 }
