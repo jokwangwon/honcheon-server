@@ -1,0 +1,94 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gise.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_0.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_1.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_2.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_3.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_4.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_5.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_6.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_7.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gauge_8.png",
+      "height": 7,
+      "ascent": 6,
+      "chars": [
+        ""
+      ]
+    }
+  ]
+}

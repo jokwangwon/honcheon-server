@@ -58,7 +58,8 @@ public final class HuntListener implements Listener {
             case "하수" -> ChatColor.WHITE;
             default -> ChatColor.GRAY;
         };
-        actionBar(player, color + "기세: " + gap.replace('_', ' '));
+        // 기세 글리프(백색 비트맵)는 색 코드로 틴트된다 — 리소스팩 미설치 시 □
+        actionBar(player, color + Glyphs.GISE + " 기세: " + gap.replace('_', ' '));
     }
 
     @EventHandler

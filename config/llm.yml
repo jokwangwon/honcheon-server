@@ -1,0 +1,77 @@
+# LLM 런타임 규칙 (기계 판독용) — 모델 선택·캐싱·생성 원칙·폴백
+# 기준 문서: docs/design/llm_runtime_policy.md
+# 대원칙: LLM은 게임 로직에 관여하지 않는다 — 엔진이 사실을 계산하고 LLM은 서사만 렌더한다
+# 가격·모델 ID는 2026-07 기준 (Claude API) — 세대 교체 시 이 파일만 갱신
+
+roles:
+  turn_renderer:
+    model: claude-haiku-4-5
+    price_per_mtok: { input: 1.00, output: 5.00 }
+    traits: [고빈도, 저지연, 좁은_과제]
+    note: "엔진이 사실을 전부 주므로 과제가 좁다 — 속도·비용 최우선"
+  gm_narrative:
+    model: claude-sonnet-5
+    price_per_mtok: { input: 3.00, output: 15.00 }
+    scope: [장_전환, 발단_사건_생성, 심층_NPC_대화, 귀환_리포트]
+  world_batch:
+    model: claude-sonnet-5
+    api: batch                     # 50% 할인 — 계절 정산 서사화·다이제스트 (자정 배치와 동형)
+    scope: [계절_정산_서사화, 세계_다이제스트]
+  world_event_judge:
+    model: claude-opus-4-8
+    price_per_mtok: { input: 5.00, output: 25.00 }
+    scope: [창작_오의_심사, 세계급_등록_이벤트, 신병_내력_생성]
+  escalation: "렌더러 스키마 불일치 2회 → 해당 턴만 gm_narrative로 승격"
+
+latency_budget:
+  판정_체감: "0ms — 엔진 즉시 + 결과 한 줄은 엔진 템플릿 선표시"
+  서사_첫_글자: "1.5s 이내 — 스트리밍 (타자기 출력)"
+  서사_전문: "5s 이내"
+  prefetch: "유력 선택지 다음 턴 사전 렌더 (PT-005 실측 ~90% 적중) — 적중 시 체감 0"
+
+prompt_caching:
+  prefix_order:                    # 캐시는 접두사 일치 — 안정된 것부터
+    - { layer: 고정, content: "GM 마스터 프롬프트 v2 + 룰 다이제스트 + 은유 사전", cache_control: ephemeral }
+    - { layer: 세션, content: "캐릭터 시트 + 지역 상태 스냅샷" }
+    - { layer: 가변, content: "이번 턴 엔진 사실 JSON — 캐시 뒤, 매턴 교체" }
+  forbidden: [시스템_프롬프트_내_시각·난수, 턴별_도구·모델_변경]
+  min_cacheable_note: "Haiku 4.5 최소 4096토큰 — GM 프롬프트+다이제스트로 충족"
+  monitor: "usage.cache_read_input_tokens — 0이면 침묵 무효화 추적"
+  cost_estimate_per_turn: "$0.005 (캐시 읽기 8K + 신규 1K + 출력 0.6K) — 동접 60 기준 ~$1.8/시간"
+
+# ─── 텍스트 생성 7계 ───
+generation_principles:
+  - id: 엔진_불가침
+    rule: "수치·판정 결과·자원 변동의 발명/변경 금지 — LLM은 성공을 정하지 않는다, 들었을 뿐"
+  - id: 스키마_강제
+    rule: "출력 = JSON {narration, choices[], npc_lines[]} — output_config.format json_schema로 API 수준 보장"
+  - id: 수치_은닉
+    rule: "서사에 숫자 노출 금지 — 판정은 서사로 (마진 +2 = '아슬아슬하게'), 단전은 은유 사전 경유"
+  - id: 정보_경계
+    rule: "미해금 진실 누설 금지 — 소문은 엔진이 준 정확도만큼만, secrets는 해금 플래그 시에만"
+  - id: 등록제_명사
+    rule: "NPC·지명·무공명 신조 금지 — 새 이름 필요 시 등록 절차로 반환, 이번 턴은 무명 서술"
+  - id: 길이_예산
+    rule: "턴 서술 400~700자 / 선택지 3~5개 × 한 줄 / NPC 대사 2줄 — GM 서사만 상한 완화"
+  - id: 문체
+    rule: "한국어 무협 문법 (GM 마스터 프롬프트 v2 승계) — 사건의 무게는 수치가 정한다, 형용사가 아니라"
+
+render_schema:                     # 턴 렌더 구조화 출력 스키마 (프로토타입 스펙)
+  type: object
+  properties:
+    narration: { type: string }
+    choices: { type: array, items: { type: object, properties: { id: {type: string}, text: {type: string} }, required: [id, text], additionalProperties: false } }
+    npc_lines: { type: array, items: { type: object, properties: { npc: {type: string}, line: {type: string} }, required: [npc, line], additionalProperties: false } }
+  required: [narration, choices]
+  additionalProperties: false
+
+failure_handling:
+  schema_mismatch: [SDK_재시도_1회, 렌더러_승격, 폴백]
+  api_outage: "폴백 = 엔진 원시 출력 (판정 결과 표 + 정적 선택지 템플릿) — 서사 없는 턴은 심심하지만 유효하다"
+  overload_529: "지수 백오프 (SDK 기본) + 프리페치 재활용 (렌더된 분기 우선 소진)"
+  logging: "(엔진 사실 해시, 응답, usage) 전 호출 기록 — 7계 위반 감사 재료"
+
+readiness:                         # 실 테스트 준비도 (llm_runtime_policy.md 6장)
+  mc_mvt: 준비됨                    # LLM 무관 — 엔진 단만 배선
+  text_rpg_blockers: [2단_파이프라인_프로토타입, 프리페치_구현, 세션_영속화]
+  note: "본 정책이 프로토타입의 스펙이다"

@@ -52,8 +52,10 @@ public final class MvtCommand implements CommandExecutor {
         PlayerLedger ledger = plugin.ledger(player.getUniqueId());
         sender.sendMessage(ChatColor.GOLD + "── 화후 원장 ──");
         ledger.allSkills().forEach((skill, days) -> sender.sendMessage(String.format(
-                ChatColor.AQUA + "%s" + ChatColor.WHITE + " 누적 %.2f일 (숙련 %d)",
-                skill, days, ledger.levelOf(skill, plugin.progression()))));
+                ChatColor.AQUA + "%s %s" + ChatColor.WHITE + " 누적 %.2f일 (숙련 %d → 다음 %.0f%%)",
+                skill, Glyphs.gauge(ledger.progressToNext(skill, plugin.progression())),
+                days, ledger.levelOf(skill, plugin.progression()),
+                ledger.progressToNext(skill, plugin.progression()) * 100)));
         sender.sendMessage(ChatColor.WHITE + "오늘 적립 " + String.format("%.2f", ledger.grantedToday())
                 + "일 / 전낭 " + ChatColor.YELLOW + ledger.money() + "문"
                 + ChatColor.WHITE + " / 마크: 실전 " + ledger.marks실전() + " · 사선 " + ledger.marks사선());

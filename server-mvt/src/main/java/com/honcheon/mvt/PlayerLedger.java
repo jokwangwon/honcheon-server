@@ -62,6 +62,18 @@ public final class PlayerLedger {
         return skillDays.getOrDefault(skill, 0.0);
     }
 
+    /** 다음 숙련까지의 진행도 0.0~1.0 — 화후 게이지의 입력 (환산표 상한 도달 시 1.0) */
+    public double progressToNext(String skill, ProgressionEngine progression) {
+        double remaining = skillDays.getOrDefault(skill, 0.0);
+        int level = 0;
+        int cost;
+        while ((cost = progression.skillLevelUpDays(level)) > 0 && remaining >= cost) {
+            remaining -= cost;
+            level++;
+        }
+        return cost <= 0 ? 1.0 : remaining / cost;
+    }
+
     public Map<String, Double> allSkills() {
         return skillDays;
     }

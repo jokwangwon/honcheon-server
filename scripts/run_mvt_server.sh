@@ -16,6 +16,12 @@ mkdir -p "$RUN/plugins/HoncheonMVT"
 rm -rf "$RUN/plugins/HoncheonMVT/config"
 cp -r "$ROOT/config" "$RUN/plugins/HoncheonMVT/config"
 
+echo "[2.5/4] 리소스팩 컴파일·패키징 (기세·화후 글리프)"
+python3 "$ROOT/tools/build_resourcepack.py"
+(cd "$ROOT/resourcepack" && rm -f "$RUN/honcheon_pack.zip" && zip -qr "$RUN/honcheon_pack.zip" pack.mcmeta assets)
+echo "      → 클라이언트 resourcepacks 폴더에 $RUN/honcheon_pack.zip 를 넣고 활성화하세요"
+echo "      (미설치 시 기세·게이지 글리프가 □ 로 보임 — 기능은 동일)"
+
 echo "[3/4] Paper 1.21.4 다운로드 (최초 1회)"
 if [ ! -f "$RUN/paper.jar" ]; then
   BUILD=$(curl -fsS https://api.papermc.io/v2/projects/paper/versions/1.21.4/builds \
