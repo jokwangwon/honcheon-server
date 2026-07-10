@@ -6,9 +6,12 @@ import com.honcheon.core.rules.NpcLifecycleEngine;
 import com.honcheon.core.rules.PartyEngine;
 import com.honcheon.core.rules.ProgressionEngine;
 import com.honcheon.core.rules.RulesConfig;
+import org.bukkit.Location;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +31,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private PartyEngine party;
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
+    private final Map<String, Location> anchors = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -49,11 +53,45 @@ public final class HoncheonMvt extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getCommand("honcheon").setExecutor(new MvtCommand(this));
-        getLogger().info("혼천 MVT 기동 — 룰 엔진 5종 로드 완료 (/혼천 도움말)");
+        loadAnchors();
+        getLogger().info("혼천 MVT 기동 — 룰 엔진 5종 로드 완료 (/혼천 도움말)"
+                + (anchors.isEmpty() ? " — 청하현 미조성 (/혼천 조성)" : " — 청하현 앵커 " + anchors.size() + "곳"));
     }
 
     public PlayerLedger ledger(UUID playerId) {
         return ledgers.computeIfAbsent(playerId, id -> new PlayerLedger());
+    }
+
+    // ─── 청하현 장소 앵커 — 조성이 세우고 파일이 기억한다 (재기동 생존) ───
+
+    public Location anchor(String name) {
+        return anchors.get(name);
+    }
+
+    public void setAnchors(Map<String, Location> built) {
+        anchors.clear();
+        anchors.putAll(built);
+        YamlConfiguration yml = new YamlConfiguration();
+        anchors.forEach(yml::set);   // Location = ConfigurationSerializable
+        try {
+            yml.save(new File(getDataFolder(), "anchors.yml"));
+        } catch (IOException e) {
+            getLogger().warning("앵커 저장 실패: " + e.getMessage());
+        }
+    }
+
+    private void loadAnchors() {
+        File file = new File(getDataFolder(), "anchors.yml");
+        if (!file.isFile()) {
+            return;
+        }
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
+        for (String key : yml.getKeys(false)) {
+            Location at = yml.getLocation(key);
+            if (at != null) {
+                anchors.put(key, at);
+            }
+        }
     }
 
     public JudgmentEngine judgment() {

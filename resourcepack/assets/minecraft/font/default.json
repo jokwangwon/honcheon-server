@@ -6,7 +6,7 @@
       "height": 8,
       "ascent": 7,
       "chars": [
-        ""
+        ""
       ]
     },
     {
@@ -88,6 +88,87 @@
       "ascent": 6,
       "chars": [
         ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_0.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_1.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_2.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_3.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_4.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_5.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_6.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/crest_7.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/gui_ledger.png",
+      "height": 110,
+      "ascent": 13,
+      "chars": [
+        ""
       ]
     }
   ]

@@ -20,4 +20,26 @@ final class Glyphs {
         int filled = (int) Math.round(Math.max(0.0, Math.min(1.0, ratio)) * 8);
         return String.valueOf((char) (GAUGE_BASE + filled));
     }
+
+    private static final char CREST_BASE = 0xE020;
+    /** cultivation_stages 순서 (범인 제외) — build_resourcepack.py REALM_CRESTS와 동서열 */
+    private static final String[] CREST_REALMS =
+            {"삼류", "이류", "일류", "절정", "초절정", "화경", "현경", "생사경"};
+
+    /** U+E020~E027 — 경지 문장 8단 (미등록 경지·범인은 빈 문자열) */
+    static String realmCrest(String realm) {
+        for (int i = 0; i < CREST_REALMS.length; i++) {
+            if (CREST_REALMS[i].equals(realm)) {
+                return String.valueOf((char) (CREST_BASE + i));
+            }
+        }
+        return "";
+    }
+
+    static String[] crestRealms() {
+        return CREST_REALMS.clone();
+    }
+
+    /** U+E080 — 경락도 GUI 배경 패널 (음수 공백 기법 — 정식 GUI 결선 시 사용) */
+    static final String GUI_LEDGER = String.valueOf((char) 0xE080);
 }

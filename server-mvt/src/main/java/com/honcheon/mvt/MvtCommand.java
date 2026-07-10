@@ -2,6 +2,7 @@ package com.honcheon.mvt;
 
 import com.honcheon.core.rules.JudgmentEngine;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -37,6 +38,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "물가" -> prices(sender, args);
                 case "정산" -> settle(sender, args);
                 case "협공" -> coop(sender, args);
+                case "조성" -> buildTown(sender);
+                case "문장" -> crests(sender);
                 default -> help(sender);
             };
         } catch (Exception e) {
@@ -79,6 +82,14 @@ public final class MvtCommand implements CommandExecutor {
 
     private boolean sell(CommandSender sender) {
         if (!(sender instanceof Player player)) {
+            return true;
+        }
+        // 조성된 마을이 있으면 매각은 장터에서만 — 맵이 의미를 갖기 시작한다 (M2b)
+        Location market = plugin.anchor("장터");
+        if (market != null && (player.getWorld() != market.getWorld()
+                || player.getLocation().distanceSquared(market) > 15 * 15)) {
+            player.sendMessage(ChatColor.GRAY + "여기서는 아무도 가죽을 사지 않는다 — 장터로 가라. ("
+                    + market.getBlockX() + ", " + market.getBlockZ() + " 부근, 붉은 차양 노점)");
             return true;
         }
         int total = 0;
@@ -143,11 +154,41 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /** 청하현 조성 (M2b) — 관리자 전용, 재조성 = 같은 마을 (결정론 생성) */
+    private boolean buildTown(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        if (!player.isOp()) {
+            player.sendMessage(ChatColor.RED + "조성은 관리자의 몫이다.");
+            return true;
+        }
+        Map<String, Location> anchors = CheonghaBuilder.build(player);
+        plugin.setAnchors(anchors);
+        player.sendMessage(ChatColor.GOLD + "청하현이 섰다 — 장소 " + anchors.size()
+                + "곳: 광장·우물·객잔·의뢰소·의방·전장·장터·북쪽 산길 표지 + NPC 5인");
+        player.sendMessage(ChatColor.GRAY + "이제 /혼천 팔기 는 장터에서만 통한다. 사냥터는 북쪽 산길.");
+        return true;
+    }
+
+    /** 경지 문장 글리프 시연 — 리소스팩 검증용 (E020~E027) */
+    private boolean crests(CommandSender sender) {
+        StringBuilder line = new StringBuilder(ChatColor.GOLD + "경지 문장: ");
+        for (String realm : Glyphs.crestRealms()) {
+            line.append(ChatColor.WHITE).append(Glyphs.realmCrest(realm))
+                    .append(ChatColor.GRAY).append(realm).append("  ");
+        }
+        sender.sendMessage(line.toString());
+        sender.sendMessage(ChatColor.DARK_GRAY + "□로 보이면 리소스팩 미적용 — 팩 재컴파일·재적용 필요");
+        return true;
+    }
+
     private boolean help(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "── 혼천 MVT ──");
         sender.sendMessage("/혼천 원장 — 화후·전낭·마크 / /혼천 판정 <실행력> <저항>");
         sender.sendMessage("/혼천 팔기 — 가죽 매각(50%) / /혼천 물가 [경제지수 0~100]");
         sender.sendMessage("/혼천 정산 [개입 -3~3] — 한백 계절 정산 / /혼천 협공 <인원>");
+        sender.sendMessage("/혼천 조성 — 청하현 마을 생성 (관리자) / /혼천 문장 — 경지 문장 글리프 확인");
         sender.sendMessage(ChatColor.GRAY + "사냥 루프: 늑대·여우(격상) vs 가축(회색) — 기세·적립·감쇠·돌파를 몸으로 확인");
         return true;
     }
