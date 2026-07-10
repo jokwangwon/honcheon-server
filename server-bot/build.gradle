@@ -1,0 +1,40 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.honcheon'
+version = '0.1.0'
+
+// 봇 알파 (단계 Ⅱ) — 디스코드에서 생성 문답 → 서장 → 판정 턴 루프 1인 완주.
+// 스택: JDA + :core 룰 엔진 직결 + SQLite 영속화 (interface_decision.md)
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':core')
+    implementation 'net.dv8tion:JDA:5.2.1'
+    implementation 'org.xerial:sqlite-jdbc:3.47.1.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    implementation 'org.yaml:snakeyaml:2.2'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.16'   // JDA 로그 출력 (없으면 NOP 침묵)
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+application {
+    mainClass = 'com.honcheon.bot.HoncheonBot'
+}
+
+jar {
+    manifest { attributes 'Main-Class': 'com.honcheon.bot.HoncheonBot' }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+}
