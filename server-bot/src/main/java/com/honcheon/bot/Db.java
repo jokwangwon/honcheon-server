@@ -10,6 +10,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -86,6 +87,99 @@ public final class Db implements AutoCloseable {
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
+            }
+        }
+    }
+
+    public Optional<Map<String, Object>> findCharacterById(long id) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT id, name, status, realm, location, sheet_json, wallet FROM characters WHERE id = ?")) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                Map<String, Object> sheet = JSON.readValue(rs.getString("sheet_json"), Map.class);
+                return Optional.of(Map.of(
+                        "id", rs.getLong("id"), "name", rs.getString("name"),
+                        "status", rs.getString("status"), "realm", rs.getString("realm"),
+                        "location", String.valueOf(rs.getString("location")),
+                        "sheet", sheet, "wallet", rs.getInt("wallet")));
+            }
+        }
+    }
+
+    /** 시트·전낭·신분·위치 갱신 — 서장 진행·출도·사냥·비무의 영속화 지점 */
+    public void updateCharacter(long id, Map<String, Object> sheet, int wallet,
+                                String status, String location) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE characters SET sheet_json = ?, wallet = ?, status = ?, location = ? WHERE id = ?")) {
+            ps.setString(1, JSON.writeValueAsString(sheet));
+            ps.setInt(2, wallet);
+            ps.setString(3, status);
+            ps.setString(4, location);
+            ps.setLong(5, id);
+            ps.executeUpdate();
+        }
+    }
+
+    // ─── 장면 영속화 (scenes) — 봇 재시작 생존의 핵심 (알파 한계 1 해소) ───
+
+    public void openScene(String channel, String thread, long characterId) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO scenes(channel, thread, state, participants, opened_day) "
+                        + "VALUES(?, ?, '진행', ?, ?)")) {
+            ps.setString(1, channel);
+            ps.setString(2, thread);
+            ps.setString(3, JSON.writeValueAsString(List.of(characterId)));
+            ps.setInt(4, worldDay());
+            ps.executeUpdate();
+        }
+    }
+
+    public void closeScene(String thread) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE scenes SET state = '종결', closed_day = ? WHERE thread = ? AND state = '진행'")) {
+            ps.setInt(1, worldDay());
+            ps.setString(2, thread);
+            ps.executeUpdate();
+        }
+    }
+
+    /** 진행 중 장면의 첫 참가자 캐릭터 ID — 서장은 1인 장면 */
+    @SuppressWarnings("unchecked")
+    public Optional<Long> sceneCharacter(String thread) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT participants FROM scenes WHERE thread = ? AND state = '진행' LIMIT 1")) {
+            ps.setString(1, thread);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                List<Number> ids = JSON.readValue(rs.getString(1), List.class);
+                return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0).longValue());
+            }
+        }
+    }
+
+    // ─── world_meta 범용 키 — 지역 채널 바인딩 등 ───
+
+    public void setMeta(String key, String value) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO world_meta(key, value) VALUES(?, ?) "
+                        + "ON CONFLICT(key) DO UPDATE SET value = excluded.value")) {
+            ps.setString(1, key);
+            ps.setString(2, value);
+            ps.executeUpdate();
+        }
+    }
+
+    public Optional<String> getMeta(String key) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT value FROM world_meta WHERE key = ?")) {
+            ps.setString(1, key);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(rs.getString(1)) : Optional.empty();
             }
         }
     }

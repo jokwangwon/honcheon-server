@@ -21,6 +21,7 @@ public final class Rules {
     public final Map<String, Object> dispositionTest;
     public final Map<String, Object> playerCreation;
     private final Map<String, Object> economyCfg;
+    private final Map<String, Object> llmCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -33,6 +34,15 @@ public final class Rules {
         this.economy = new EconomyEngine(economyCfg);
         this.dispositionTest = RulesConfig.load(configDir.resolve("disposition_test.yml"));
         this.playerCreation = RulesConfig.load(configDir.resolve("player_creation.yml"));
+        this.llmCfg = RulesConfig.load(configDir.resolve("llm.yml"));
+    }
+
+    /** llm.yml roles.turn_renderer.model — 세대 교체는 config 만 갱신하면 된다 */
+    @SuppressWarnings("unchecked")
+    public String turnRendererModel() {
+        Map<String, Object> roles = RulesConfig.section(llmCfg, "roles");
+        Map<String, Object> renderer = (Map<String, Object>) roles.get("turn_renderer");
+        return (String) renderer.get("model");
     }
 
     @SuppressWarnings("unchecked")

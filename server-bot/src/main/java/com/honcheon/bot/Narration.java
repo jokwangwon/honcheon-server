@@ -72,6 +72,36 @@ final class Narration {
         };
     }
 
+    // ─── 출도·청하현 (봇 베타) ───
+
+    /** 서장 종료 → 출도 안내 — 지역 채널이 열린다 */
+    static String debut(GameListener.Character ch) {
+        return "몇 계절이 흘렀다. " + ch.name() + "은(는) 청하현의 골목과 장터, 뒷산 능선까지 발로 익혔다. "
+                + "이제 이 고을이 낯설지 않다 — 하지만 강호는 이제부터다.\n\n"
+                + "**청하현 지역 채널에서 `/혼천 사냥` `/혼천 비무` 를 쓸 수 있다.**";
+    }
+
+    /** 사냥 결과 폴백 — tierName 3분류로 온도만 정한다 (수치는 embed 몫) */
+    static String hunt(String beast, String tierName, boolean pelt) {
+        return switch (grade(tierName)) {
+            case GOOD -> pelt
+                    ? "한 호흡에 끝났다. " + beast + "은(는) 미처 방향을 틀기도 전에 무너졌고, 가죽은 흠집 하나 없이 벗겨졌다."
+                    : "한 호흡에 끝났다. " + beast + "은(는) 미처 방향을 틀기도 전에 무너졌다.";
+            case MIXED -> "엎치락뒤치락 끝에 겨우 숨통을 끊었다. 몸 여기저기 생채기가 남았고, "
+                    + (pelt ? "가죽도 성한 곳이 많지 않다." : "가죽은 못 쓰게 됐다 — 그래도 손에 익은 것이 남았다.");
+            case BAD -> beast + "이(가) 더 빨랐다. 덤불 사이로 놓치고 나서야 옆구리가 쓰라린 것을 알았다 — 오늘은 여기까지다.";
+        };
+    }
+
+    /** 비무 결과 폴백 — 승/무/패는 엔진이 정했고, 여기는 예의만 */
+    static String duel(String winner, String loser, boolean draw) {
+        if (draw) {
+            return "수십 합이 오갔지만 승부는 갈리지 않았다. 두 사람은 동시에 물러나 포권했다 — 오늘의 합은 여기까지.";
+        }
+        return "합이 갈렸다. " + winner + "의 마지막 일수가 반 박자 빨랐고, " + loser
+                + "은(는) 깨끗이 패배를 인정하며 포권했다. 구경꾼들 사이에서 낮은 탄성이 새어 나왔다.";
+    }
+
     private enum Grade { GOOD, MIXED, BAD }
 
     /** judgment.yml result_tiers의 name 기준 3분류 — 수치가 아니라 결의 문제 */
