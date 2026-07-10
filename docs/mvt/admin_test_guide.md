@@ -126,7 +126,7 @@ Paper 1.21.4 다운로드(최초 1회) → 기동. 월드는 기본 생성 월�
 **F26 채번·수정 완료 (로컬 [fix] 88a20a7 + 원격 후속 강화)**: 컴파일러 재작성 중 기세 프로바이더의
 PUA 문자 리터럴(U+E000)이 빈 문자열로 유실 → 빈 chars 하나가 default.json 폰트를 무효화 → 클라이언트가
 **팩 전체를 버림** (증상이 원인에서 멀다 — 전 글리프 □). 수정: chars = chr(0xE000).
-재발 방지 3종: ① Glyphs.java 리터럴 2곳 →  이스케이프 ② 산출 default.json도
+재발 방지 3종: ① Glyphs.java 리터럴 2곳 → `\uE000`/`\uE010` 이스케이프 ② 산출 default.json도
 ensure_ascii=True (파일에서 PUA 리터럴 자체 제거) ③ resourcepack_design.yml에 pua_rule 등록
 — "소스·데이터 어디에도 PUA 리터럴 직접 삽입 금지".
 
