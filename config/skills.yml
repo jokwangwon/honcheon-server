@@ -104,6 +104,26 @@ martial_arts:
     public_use_rumor: true      # 공개 사용 시 "남궁세가 혈족인가? 도둑 배움인가?" 소문 발생
     faction_reaction: true      # 남궁세가가 출처를 조사하러 나설 수 있다
 
+  geumna_su:
+    name: "금나수"
+    category: "금나술"
+    sub_category: "관절기·포박"
+    grade: "이류"
+    faction: "소림사"          # 속가로도 퍼진 실전 기예 — 출처 소문은 약함
+    required_realm: "이류"
+    required_stats:
+      근력: 3
+      민첩: 3
+    required_mastery: 20
+    acquisition: "소림 속가 또는 관군 교두에게 사사"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false    # 널리 퍼진 기예 — 문파 지문이 아니다
+    faction_reaction: false
+    # 액션 데이터: skill_mechanics.yml geumna_su (파격 — 가드·패링 관통)
+
   # ─── 사파 / 금기 무공 예시 ───
   hyeolgi_simgong:
     name: "혈기심공"
