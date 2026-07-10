@@ -1,0 +1,59 @@
+# 성능·통신 품질 예산 (기계 판독용)
+# 기준 문서: docs/design/performance_and_netcode.md
+# 원칙: 예산 초과 시 연출은 강등되어도 판정은 불변이다.
+
+tick_budget:
+  server_target_mspt: 40          # 50ms 중 여유 20% 확보
+  subsystem_budget_ms:            # 서브시스템별 틱 소요 상한 (계측 경보 기준)
+    skill_execution: 8
+    effect_ticker: 5
+    npc_logic: 6
+    world_batch_apply: 3          # 일 배치 결과의 메인 스레드 반영분
+
+particles:                        # F-P1 파티클 예산
+  global_per_tick: 4000
+  per_player_view_per_tick: 600
+  lod:
+    full_distance: 16             # 16m 이내 전량
+    half_distance: 32             # 16~32m 절반
+    cull_beyond: 32               # 32m 밖 생략
+  over_budget: "연출 자동 강등 (핵심 타격 표시만 유지)"
+
+vfx_entities:                     # F-P4
+  pool: true
+  global_cap: 120
+  max_lifetime_ticks: 60
+  over_cap: "파티클 연출로 강등"
+
+effects:                          # F-P2
+  central_ticker: true            # 효과별 개별 태스크 생성 금지
+  cleanup_on: [death, quit, world_change]
+  application_order: [부상, 상태이상, 버프, 장비]   # F-R5 — 명세 고정
+  stacking: "같은 계열 강한 것 우선, 계수는 가산 후 곱산"
+
+skills:
+  duplicate_request_window_ticks: 1    # F-R1 동일 틱 중복 시전 폐기
+  atomic_check_and_deduct: true        # 검사·차감 분리 금지
+  revalidate_before_execute: true      # F-R2 실행 직전 재검증
+  refund_on_invalid_target: 0.5        # 무효 대상 시 내력 50% 환불
+  max_targets_default: 8               # F-P3 AoE 대상 상한
+  max_range_default: 24                # 사거리 ≤ 시뮬레이션 거리
+  movement_velocity_per_tick: 1        # F-N3 틱당 velocity 적용 1회
+  movement_min_interval_ticks: 2
+
+netcode:
+  counter_window_grace_ticks: 2        # F-N1 지연 보상 유예 (±100ms)
+  client_timing_authority: false       # 클라이언트 타이밍 불신뢰
+  resourcepack_gate: true              # F-N2 팩 적용 전 스킬 게이트
+
+async:
+  bukkit_api_from_async: 금지
+  db_callbacks_hold: uuid              # F-R3 — Player 객체 보관 금지
+  world_state_writes: "메인 스레드 큐 직렬화 (단일 작성자)"   # F-R4
+  login_preload: async                 # F-P6
+
+load_test:                             # 배포 전 의무 시나리오
+  concurrent_players: 60
+  casts_per_second: 30
+  combat_cluster_size: 20
+  pass_criteria: { mspt_under: 40, particle_over_budget_rate_under: 0.05 }
