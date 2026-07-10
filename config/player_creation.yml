@@ -128,10 +128,12 @@ age_and_lifepath:
   age_brackets:
     유년:
       age_range: [8, 12]
+      base_value: 1             # 아이는 성인 평균(2)보다 약하다 (F5 패치 — PT-002)
       free_points: 4
       creation_max: 2           # 아이의 몸
     소년:
       age_range: [13, 15]
+      base_value: 2
       free_points: 5
       creation_max: 3
 
