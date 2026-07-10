@@ -56,6 +56,7 @@
 | [`docs/design/mc_action_mapping.md`](docs/design/mc_action_mapping.md) | MC 행동 전수 매핑 — 바닐라 입력 예산 내 전 행동 구현 (입력·HUD 재해석·판정 12종·전투·내공·생활), 우선순위 P1~P6 |
 | [`docs/design/skill_lifecycle.md`](docs/design/skill_lifecycle.md) | 무공 생애주기 — 습득 4경로(사사/비급/견식/기연), 숙련 5단계, MC 로드아웃 7칸, 사용 규칙 색인 |
 | [`docs/design/npc_combat_and_dialogue.md`](docs/design/npc_combat_and_dialogue.md) | NPC 전투·모션·대화 — 대칭 원칙, AI 등급제, 모션 대체 언어(궤적·예고), 태세 스펙트럼(전투 중 대화), 전의 시스템 |
+| [`docs/design/qi_manifestation.md`](docs/design/qi_manifestation.md) | 기 발현 체계 — 형태 4종(두름/쏨/두름-몸/부림) × 격 사다리(발경<검기<강기<어검<심검), 격 상성 3원칙, 무기 내구·파괴 규칙, 이기어검 상세 |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약
