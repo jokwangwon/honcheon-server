@@ -47,6 +47,7 @@
 | [`docs/design/age_and_lifepath.md`](docs/design/age_and_lifepath.md) | 시작 나이와 인생 진행 v2 — 전원 유년/소년 시작, 집안·발단 사건 생성, 장(章) 단위 시간 도약(사건이 나이를 먹인다) |
 | [`docs/gm/gm_master_prompt.md`](docs/gm/gm_master_prompt.md) | GM 마스터 프롬프트 — 턴 처리 12단계 절차, 출력 형식, 절대 규칙 |
 | [`docs/playtests/PT-001.md`](docs/playtests/PT-001.md) | 첫 실주사위 플레이 테스트 — 턴 3에서 각본과 분기, 실패 연쇄에서도 진행 유지 검증, 발견 과제 F1~F4 |
+| [`docs/playtests/PT-002.md`](docs/playtests/PT-002.md) / [`PT-003.md`](docs/playtests/PT-003.md) | 유년 시작·발단·시간 도약 검증(F5~F7) / 내공·심법 규칙 스모크 테스트(F8~F10) |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약

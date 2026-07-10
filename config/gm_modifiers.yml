@@ -46,3 +46,4 @@ log_schema:
   margin: "마진"
   result: "등급 id"
   side_risk: "아슬아슬한 성공 시 선택한 리스크"
+  resources: "{내력: 잔량/변화, 원기: 잔량/변화, 수명_연소: 있으면 기록}"   # PT-003 F9
