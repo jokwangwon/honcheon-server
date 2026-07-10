@@ -126,6 +126,12 @@
 
 핵심 진단: **행동 → 판정 → NPC 변화까지는 수치화 완료. NPC 변화 → 소문 → 세력 반응 → 지역/후속 사건의 뒷 절반이 서사 규칙뿐이다.** "살아 숨쉬는 세계" 루프의 앞 절반만 기계가 굴리고 뒷 절반은 아직 GM의 손끝에 있다.
 
+> **후속 조치 (검토 이후 반영):** G1~G6은 `world_reaction_system.md` + `gm_modifier_guide.md`
+> 및 config 5종(rumor / faction_reaction / region_state / time / gm_modifiers)으로 수치화 완료.
+> `tools/simulate_world_reaction.py`가 경로 B를 새 규칙만으로 재생하여 본 검토 3장의 결과와
+> 일치함을 확인했다 (검증 중 설계 결함 2건 발견·수정: 조직 채널 원칙, 중복 가산 금지).
+> 잔여: G7(전투 상세), G8(MMO 단계 보류).
+
 ---
 
 ## 5. 종합 평가 — 도달 가능한 퀄리티

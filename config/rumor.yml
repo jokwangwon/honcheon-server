@@ -1,0 +1,122 @@
+# 소문 시스템 수치 규칙 (기계 판독용)
+# 기준 문서: docs/design/world_reaction_system.md 3장
+# 설계 검토 공백 G1 해결
+
+# 소문 객체 스키마
+rumor_schema:
+  id: "고유 ID"
+  source_event: "발생 사건 ID"
+  origin_location: "발생 장소"
+  created_day: "지역 누적 시간 기준 발생일"
+  truth: "사실 내용 (내부 전용, 플레이어 비노출)"
+  subject_tags: "관련 태그 목록 (세력 관심 필터와 대조)"
+  intensity: "강도 0~5 (전파 범위와 수명 결정)"
+  network_states: "도달한 소문망별 {도달일, 정확도, 변형문}"
+
+# 소문 생성 — 사건의 노출 수준이 초기 강도를 정한다
+generation:
+  intensity_by_visibility:
+    공개_다수_목격: 3        # 장터 습격, 공개 결투
+    소수_목격_또는_간접: 2    # 객잔 내 소동, 목격자 1~2명
+    흔적만: 1                # 시체, 부서진 문, 핏자국
+    완전_은밀: 0             # 소문 없음
+  judgment_link:
+    대성공: "강도 -1 (최소 0) — 흔적을 남기지 않음"
+    아슬아슬한_성공_부수리스크_소문: "강도 1 소문 후보 생성"
+    치명적_실패: "강도 +1 — 요란하게 노출"
+  initial_accuracy:
+    직접_목격: 90
+    간접_전문: 70            # 목격자에게 들은 것
+    흔적_추론: 50
+
+# 소문망 — 청하현 기준 6망
+# speed_days: 관심 일치 소문이 이 망에 도달하는 소요일
+# distortion: 이 망으로 건너올 때 정확도 감소량
+networks:
+  mingan_market:
+    name: "민간 / 장터"
+    speed_days: 1
+    distortion: 20
+    interests: [폭력, 괴사, 질병, 관군, 생활, 물가]
+  inn_net:
+    name: "객잔 / 낭인"
+    speed_days: 1
+    distortion: 15
+    interests: [무인, 폭력, 의뢰, 사파, 문파]
+  sangdan_net:
+    name: "상단 연락망"
+    speed_days: 2
+    distortion: 10
+    interests: [물류, 금전, 치안, 도적, 정보_유출]
+  haomun_net:
+    name: "하오문 / 암시장"
+    speed_days: 1
+    distortion: 5
+    interests: [조직원, 정보_유출, 무인, 관군_동향, 사파]
+  orthodox_net:
+    name: "정파 / 의뢰소 연락망"
+    speed_days: 3
+    distortion: 5
+    interests: [사파, 협행, 금기, 문파, 무인]
+  gwan_net:
+    name: "관청 / 관군"
+    speed_days: 2
+    distortion: 10
+    interests: [살인, 치안, 도적, 반란, 질병]
+
+# 전파 규칙
+propagation:
+  reach_by_intensity:
+    0: "전파 없음"
+    1: "발생 장소의 기본 망 1개"
+    2: "현 내 관심 일치 망 전체"
+    3: "현 전체 + 인접 현"
+    4: "지역권 전체"
+    5: "천하"
+  origin_network_by_location:      # 장소별 기본(발원) 소문망
+    cheongha_inn: inn_net
+    market: mingan_market
+    request_office: orthodox_net
+    medicine_shop: mingan_market
+    north_road: sangdan_net
+    heuksu_ferry: sangdan_net
+  cross_network:
+    condition: "강도 2 이상이면 관심 일치하는 다른 망으로 건너감 (허브 장소 경유)"
+    accuracy_rule: "도달 정확도 = 발원 정확도 - 대상 망 distortion"
+  decay:
+    every_days: 3
+    amount: -1
+    on_zero: "소문 소멸 — 접촉했던 NPC의 기억 태그로만 잔존"
+  refresh:
+    same_subject_new_event: "강도 +1~2, 정확도는 새 사건 기준으로 재계산"
+
+# 정확도 구간 — 같은 소문이 어떻게 들리는가
+accuracy_bands:
+  사실적: { min: 80, style: "사건이 거의 그대로 전달" }
+  과장: { min: 50, style: "규모·실력·잔혹함이 부풀려짐" }
+  오해: { min: 30, style: "범인·동기·대상이 뒤바뀜" }
+  괴담: { min: 0, style: "원형을 알아볼 수 없는 흉흉한 이야기" }
+
+# 세력 인지 조건 (faction_reaction.yml의 입력으로 연결)
+faction_awareness:
+  rule: |
+    세력의 '조직적 인지'는 그 세력의 조직 채널에 소문이 도달했을 때만 발생한다.
+    조직원 개인이 현장에서 들은 것은 NPC 기억 태그일 뿐이며,
+    보고 체계(채널)를 거쳐야 세력 반응 점수가 된다.
+    → 망별 speed_days가 곧 "세력이 조직적으로 반응하기까지의 시차"가 된다.
+  network_access:
+    haomun: [haomun_net]
+    orthodox: [orthodox_net]
+    sangdan: [sangdan_net]
+    gwan_gun: [gwan_net]
+    noklim: [haomun_net]        # 녹림은 자체 망 없이 하오문 망에 얹혀 있다
+
+# NPC 기억 태그 스키마 (G6) — 소문 소멸 후에도 개인의 기억은 남는다
+npc_memory_tags:
+  schema:
+    type: "직접_경험 | 전해들음 | 소문"
+    content: "한 문장 서술"
+    day: "기록일"
+    accuracy: "전해들음/소문이면 해당 시점 정확도 계승"
+    decay: "직접_경험은 소멸 없음. 전해들음/소문은 30일 후 흐려짐(세부 상실)"
+  transfer: "NPC 간 대화로 전달 가능 — 전달 시 '전해들음'으로 강등, 정확도 -10"

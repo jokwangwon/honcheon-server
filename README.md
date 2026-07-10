@@ -32,6 +32,8 @@
 | [`docs/design/judgment_system.md`](docs/design/judgment_system.md) | 판정 수치 계산식 — 실행력/저항값 공식, 결과 등급, 보정표, 첫 10턴 재계산 검증, 실패 분기 예시 |
 | [`docs/design/character_creation.md`](docs/design/character_creation.md) | 캐릭터 생성 — 능력치 배분 규칙, 성향 7종 프리셋, 시작 신분 8종 |
 | [`docs/design/design_review.md`](docs/design/design_review.md) | 설계 검토 보고서 — 판정 밸런스 정량 검증, 3갈래 분기 스트레스 테스트, 공백 목록(G1~G8), 퀄리티 평가 |
+| [`docs/design/world_reaction_system.md`](docs/design/world_reaction_system.md) | 세계 반응 시스템 — 소문 수치화, 세력 반응 전이표, 지역 상태 변화량, 시간 5구간제, 경로 B 기계 재생 검증 |
+| [`docs/design/gm_modifier_guide.md`](docs/design/gm_modifier_guide.md) | GM 보정 예시집 — 상황 보정 부여 가드레일 (LLM GM 프롬프트 자료) |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
 
 ## ⚔ 핵심 시스템 요약
@@ -57,6 +59,11 @@ honcheon-server/
 │   ├── skills.yml                  # 무공 카탈로그 (스키마 + 예시)
 │   ├── judgment.yml                # 판정 계산 규칙 (공식, 등급, 보정, 행동 대응표)
 │   ├── player_creation.yml         # 캐릭터 생성 규칙 (배분, 성향 프리셋, 시작 신분)
+│   ├── rumor.yml                   # 소문 생성/전파/왜곡/소멸 + 소문망 6종 + NPC 기억 태그
+│   ├── faction_reaction.yml        # 세력 반응 점수/전이 임계값/입력표/대상 추적
+│   ├── region_state.yml            # 지역 상태 변화량/회복/임계 효과
+│   ├── time.yml                    # 하루 5구간제, 행동 시간 비용, 데드라인 규칙
+│   ├── gm_modifiers.yml            # GM 상황 보정 가드레일
 │   ├── regions/cheongha_hyeon.yml  # 청하현 지역 상태 / 장소 / 초기 사건
 │   └── npcs/cheongha_npcs.yml      # 청하현 주요 NPC + 흑랑/갈호/진운
 ├── core/ server-main/ server-hub/ server-faction/
