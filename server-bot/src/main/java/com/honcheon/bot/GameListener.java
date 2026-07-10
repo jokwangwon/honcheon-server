@@ -219,8 +219,14 @@ public final class GameListener extends ListenerAdapter {
 
         List<String> familyKeys = new ArrayList<>(rules.families().keySet());
         String family = familyKeys.get(dice.nextInt(familyKeys.size()));
-        List<String> incidentKeys = new ArrayList<>(rules.incidents().keySet());
-        String incident = incidentKeys.get(dice.nextInt(incidentKeys.size()));
+        // 집안별 발단 풀 — 건재한 집에 재난형 발단은 모순 (incident_pool 명시 시 그 안에서만)
+        @SuppressWarnings("unchecked")
+        Map<String, Object> familyCfg = (Map<String, Object>) rules.families().get(family);
+        @SuppressWarnings("unchecked")
+        List<String> incidentPool = familyCfg != null && familyCfg.get("incident_pool") instanceof List<?>
+                ? (List<String>) familyCfg.get("incident_pool")
+                : new ArrayList<>(rules.incidents().keySet());
+        String incident = incidentPool.get(dice.nextInt(incidentPool.size()));
         String bracket = dice.nextBoolean() ? "유년" : "소년";
 
         Map<String, Integer> attrs = allocate(top.get(0), bracket);
