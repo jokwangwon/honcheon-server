@@ -58,7 +58,9 @@ public final class GameListener extends ListenerAdapter {
                 case "원장" -> showSheet(event);
                 case "사냥" -> startHunt(event);
                 case "비무" -> startDuel(event);
+                case "수련" -> train(event);
                 case "지역등록" -> registerRegion(event);
+                case "정산" -> settleDay(event);
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
             }
         } catch (Exception e) {
@@ -109,6 +111,11 @@ public final class GameListener extends ListenerAdapter {
         if (sheet.get("가문_대여") != null) {
             eb.addField("소지품", String.valueOf(sheet.get("가문_대여")), false);
         }
+        if (sheet.get("기술") instanceof Map<?, ?> skills && !skills.isEmpty()) {
+            StringBuilder sk = new StringBuilder();
+            skills.forEach((k, v) -> sk.append(k).append(' ').append(v).append("  "));
+            eb.addField("기술", sk.toString(), false);
+        }
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
 
@@ -118,7 +125,9 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 원장` 시트 조회\n"
                         + "`/혼천 사냥` 청하현 뒷산 사냥 — 화후와 생계 (출도 후, 지역 채널에서)\n"
                         + "`/혼천 비무 @상대` 비무 신청 — 양측 2d6 대립 판정 (출도 후)\n"
+                        + "`/혼천 수련` 기초 단련 — 하루 한 번, 화후 +1일치 (출도 후)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
+                        + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
                 .build();
     }
@@ -247,6 +256,11 @@ public final class GameListener extends ListenerAdapter {
             // armory 시작 대여 — 판정 보정 0 (equipment.yml), 팔거나 잃으면 support 단계 입력
             sheet.put("가문_대여", "정련급 가문 검 (가문 소유 — 잃으면 문책)");
         }
+        // 집안 grants의 기술 축 배선 — 몰락_무가 검법0 = "아무 무공 입문 (숙련 0)" 승급 요건 충족
+        if (familyCfg != null && familyCfg.get("grants") instanceof Map<?, ?> grants
+                && grants.get("기술") instanceof Map<?, ?> granted) {
+            sheet.put("기술", new LinkedHashMap<>((Map<String, Object>) granted));
+        }
         sheet.put("연령대", bracket);
         sheet.put("나이", age);
         sheet.put("발단", incident.replace('_', ' '));
@@ -368,7 +382,7 @@ public final class GameListener extends ListenerAdapter {
         if (next < scenes(s.ch).length) {
             // 진행 영속화 — 재시작해도 직전 등급의 이음새가 유지된다
             s.sheet.put("서장_직전등급", tier.name());
-            db.updateCharacter(s.ch.id(), s.sheet, s.ch.wallet(), "서장", "서장");
+            db.updateCharacter(s.ch.id(), s.sheet, s.ch.wallet(), "범인", "서장", "서장");
             postScene(thread, s.ch, next, tier.name());
         } else {
             closeSeojang(thread, s, tier.name());
@@ -378,7 +392,7 @@ public final class GameListener extends ListenerAdapter {
     /** 서장 종료 = 출도 — 신분 강호·위치 청하현, 지역 채널이 열린다 */
     private void closeSeojang(ThreadChannel thread, Seojang s, String lastTier) throws Exception {
         s.sheet.remove("서장_직전등급");
-        db.updateCharacter(s.ch.id(), s.sheet, s.ch.wallet(), "강호", "청하현");
+        db.updateCharacter(s.ch.id(), s.sheet, s.ch.wallet(), "범인", "강호", "청하현");
         db.closeScene(thread.getId());
         db.logEvent("출도", "character", String.valueOf(s.ch.id()), Map.of("지역", "청하현", "등급", lastTier));
         seojangs.remove(thread.getIdLong());
@@ -568,7 +582,12 @@ public final class GameListener extends ListenerAdapter {
         if (gains.isEmpty()) {
             gains.append("소득 없음");
         }
-        db.updateCharacter(chId, sheet, wallet, "강호", "청하현");
+        String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
+        if (!realm.equals(row.get("realm"))) {
+            gains.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (기초가 몸에 뱄다)");
+            db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+        }
+        db.updateCharacter(chId, sheet, wallet, realm, "강호", "청하현");
         db.logEvent("사냥", "character", String.valueOf(chId),
                 Map.of("짐승", beast.name(), "접근", approach[0], "굴림", roll, "마진", margin,
                         "등급", tier.name()));
@@ -604,6 +623,58 @@ public final class GameListener extends ListenerAdapter {
         sheet.put("오늘_적립", grantedToday + granted);
         sheet.put("화후_원장", ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue() + granted);
         return granted;
+    }
+
+    // ─── 수련 — 기초 단련: 하루 한 번, 화후 1일치 (training 축의 최소 배선) ───
+
+    @SuppressWarnings("unchecked")
+    private void train(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        int today = db.worldDay();
+        if (today == ((Number) sheet.getOrDefault("수련일", -1)).intValue()) {
+            event.reply("오늘 몫의 수련은 끝났다 — 몸은 하루치 이상을 받아들이지 못한다. (다음 날에 다시)")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        // 수련은 실전 연속식과 별개 축 — 일일 상한(cappedGrant) 미적용 (cultivation daily_cap 주석)
+        double granted = rules.progression.trainingAccrualDays(1.0);
+        sheet.put("수련일", today);
+        sheet.put("화후_원장", ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue() + granted);
+
+        long chId = ((Number) row.get("id")).longValue();
+        StringBuilder body = new StringBuilder(String.format(
+                "해 뜨기 전부터 몸을 다졌다. 화후 **+%.2f일치** (원장 %.2f일치)",
+                granted, ((Number) sheet.get("화후_원장")).doubleValue()));
+        String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
+        if (!realm.equals(row.get("realm"))) {
+            body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (기초가 몸에 뱄다)");
+            db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+        }
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                realm, "강호", "청하현");
+        db.logEvent("수련", "character", String.valueOf(chId), Map.of("적립", granted));
+        event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                .setTitle("수련 — " + row.get("name")).setDescription(body).build()).queue();
+    }
+
+    /** 관리자 정산 — 세계일 +1 (자정 스케줄러의 수동판, 감쇠·수련 리셋 테스트용) */
+    private void settleDay(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        int day = db.advanceDay();
+        event.replyEmbeds(new EmbedBuilder().setColor(BLOOD)
+                .setTitle(day + "일차 아침이 밝았다")
+                .setDescription("몸이 개운하다 — 일일 적립·수련·연속 감쇠가 새로 시작된다.").build()).queue();
     }
 
     // ─── 비무 — pvp direct_opposed (F22) + 극단 주사위 (F24) 실전 배선 ───
@@ -713,10 +784,35 @@ public final class GameListener extends ListenerAdapter {
         sheet.put("비무_연속", Map.of("횟수", rep + 1, "일", today));
         double accrual = rules.progression.combatAccrualDays("동수", "비무_대련", rep);
         double granted = grantHwahu(sheet, accrual, today);
-        db.updateCharacter(((Number) row.get("id")).longValue(), sheet,
-                ((Number) row.get("wallet")).intValue(),
-                String.valueOf(row.get("status")), String.valueOf(row.get("location")));
+        String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
+        long id = ((Number) row.get("id")).longValue();
+        if (!realm.equals(row.get("realm"))) {
+            db.logEvent("승급", "character", String.valueOf(id), Map.of("경지", realm));
+        }
+        db.updateCharacter(id, sheet, ((Number) row.get("wallet")).intValue(),
+                realm, String.valueOf(row.get("status")), String.valueOf(row.get("location")));
         return granted;
+    }
+
+    // ─── 승급 — 요건은 문턱이고 계기가 문이다 (cultivation_stages) ───
+
+    /** 기초 단련 3개월 = 90일치 — 엔진 환산 (하드코딩 아님) */
+    private static final int BASIC_TRAINING_DAYS =
+            com.honcheon.core.rules.ProgressionEngine.durationToDays("3개월");
+
+    /**
+     * 범인 → 삼류 (trigger 자동): 아무 무공 입문(기술에 검법 — 숙련 0도 입문이다) + 기초 단련 3개월.
+     * 이류+ 요건(주력 숙련·실전 마크)은 기술 화후 축과 함께 다음 증분. 승급 후 경지를 돌려준다.
+     */
+    @SuppressWarnings("unchecked")
+    private String promoteIfDue(Map<String, Object> sheet, String realm) {
+        if (!"범인".equals(realm)) {
+            return realm;
+        }
+        Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
+        boolean martial = skills != null && skills.containsKey("검법");
+        double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
+        return (martial && hwahu >= BASIC_TRAINING_DAYS) ? "삼류" : realm;
     }
 
     private String extremeMark(int roll) {

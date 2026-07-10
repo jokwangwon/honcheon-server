@@ -79,18 +79,26 @@ final class Narration {
         if ("수행_파견".equals(ch.incident())) {
             // 판돈이 다르므로 착지도 다르다 — 잠자리가 아니라 이름을 지켰는가
             String landing = switch (grade(tierName)) {
+                case CRIT_GOOD -> "첫날이 놀랄 만큼 매끄러웠다. 전표는 수중에, 얼굴은 익혔고, 이름은 아무도 모른다 — "
+                        + "담장 밖에서도 통하는 것이 있다는 확신이 생겼다.";
                 case GOOD -> "첫날의 일들이 매끄럽게 풀렸다. 전표는 수중에, 이름은 아직 아무도 모른다 — 좋은 시작이다.";
                 case MIXED -> "일은 됐지만 매끄럽지는 않았다. 객잔 주인이 힐끗거린다 — 말씨인지 예법인지, 어딘가 태가 났나 보다.";
                 case BAD -> "첫날부터 꼬였다. 저잣거리에서 시비가 붙을 뻔했고, 하마터면 이름이 나올 뻔했다. "
                         + "검자루를 쥐었다 놓은 손바닥에 땀이 배어 있었다.";
+                case CRIT_BAD -> "최악의 첫날이었다. 시비 끝에 멱살까지 잡혔고, 뉘 집 자식이냐는 물음에 입을 다무느라 "
+                        + "얻어맞기까지 했다. 담장 안에서는 몰랐던 세상의 맨살이었다.";
             };
             return landing + "\n\n" + ch.name() + "의 수행은 이렇게 시작되었다. "
                     + "돌아갈 집이 있는 자의 강호 — 그것이 짐인지 힘인지는, 이제부터 알게 된다.";
         }
         String landing = switch (grade(tierName)) {
+            case CRIT_GOOD -> "일손이 마음에 들었는지, 주인이 저녁상에 고기 한 점을 얹어 주었다. "
+                    + "잠자리와 내일 일까지 — 첫날치고는 과분한 시작이다.";
             case GOOD -> "다행히 첫날 밤부터 지붕 아래서 잘 수 있었다. 주인은 무뚝뚝했지만 밥그릇은 넉넉했다.";
             case MIXED -> "처마 밑이나마 자리를 얻었다. 내일도 써 주겠다는 말은 없었지만, 내쫓지도 않았다.";
             case BAD -> "문전박대였다. 결국 다리 밑에서 첫 밤을 났다 — 하지만 살아 있다. 그거면 됐다.";
+            case CRIT_BAD -> "쫓겨나며 등 뒤로 물벼락까지 맞았다. 다리 밑, 젖은 옷으로 웅크린 첫 밤 — "
+                    + "그래도 숨은 붙어 있다. 여기서부터 시작이다.";
         };
         return landing + "\n\n" + ch.name() + "의 강호는 이렇게 시작되었다. "
                 + "유년의 기억 다섯 조각과 " + ch.incident().replace('_', ' ')
@@ -102,9 +110,11 @@ final class Narration {
             return "";
         }
         return switch (grade(prevTier)) {
+            case CRIT_GOOD -> "일이 뜻보다 잘 풀렸다 — 발걸음에 힘이 붙는다. ";
             case GOOD -> "고비는 넘겼다. ";
             case MIXED -> "가까스로였다. 심장은 아직 뛰고 있다. ";
             case BAD -> "일이 틀어졌다. 그래도 발은 멈추지 않았다. ";
+            case CRIT_BAD -> "크게 데였다. 그 대가는 몸이 기억할 것이다 — 그래도 두 발은 아직 앞을 향해 있다. ";
         };
     }
 
@@ -117,15 +127,19 @@ final class Narration {
                 + "**청하현 지역 채널에서 `/혼천 사냥` `/혼천 비무` 를 쓸 수 있다.**";
     }
 
-    /** 사냥 결과 폴백 — tierName 3분류로 온도만 정한다 (수치는 embed 몫) */
+    /** 사냥 결과 폴백 — 등급 5분류로 온도를 정한다 (수치는 embed 몫) */
     static String hunt(String beast, String tierName, boolean pelt) {
         return switch (grade(tierName)) {
+            case CRIT_GOOD -> "몸이 먼저 움직였다 — 스스로도 놀랄 만큼 깨끗한 일수. " + beast
+                    + "은(는) 소리도 없이 무너졌다. 오늘의 감각은 오래 기억날 것이다.";
             case GOOD -> pelt
                     ? "한 호흡에 끝났다. " + beast + "은(는) 미처 방향을 틀기도 전에 무너졌고, 가죽은 흠집 하나 없이 벗겨졌다."
                     : "한 호흡에 끝났다. " + beast + "은(는) 미처 방향을 틀기도 전에 무너졌다.";
             case MIXED -> "엎치락뒤치락 끝에 겨우 숨통을 끊었다. 몸 여기저기 생채기가 남았고, "
                     + (pelt ? "가죽도 성한 곳이 많지 않다." : "가죽은 못 쓰게 됐다 — 그래도 손에 익은 것이 남았다.");
             case BAD -> beast + "이(가) 더 빨랐다. 덤불 사이로 놓치고 나서야 옆구리가 쓰라린 것을 알았다 — 오늘은 여기까지다.";
+            case CRIT_BAD -> "발을 헛디딘 순간 " + beast + "의 이빨이 코앞까지 왔다. 구른 끝에 간신히 빠져나왔다 — "
+                    + "찢긴 옷자락이 산비탈에 남았다. 산이 오늘은 나를 거부한다.";
         };
     }
 
@@ -138,14 +152,16 @@ final class Narration {
                 + "은(는) 깨끗이 패배를 인정하며 포권했다. 구경꾼들 사이에서 낮은 탄성이 새어 나왔다.";
     }
 
-    private enum Grade { GOOD, MIXED, BAD }
+    private enum Grade { CRIT_GOOD, GOOD, MIXED, BAD, CRIT_BAD }
 
-    /** judgment.yml result_tiers의 name 기준 3분류 — 수치가 아니라 결의 문제 */
+    /** judgment.yml result_tiers의 name 기준 5분류 — 수치가 아니라 결의 문제 */
     private static Grade grade(String tierName) {
         return switch (tierName) {
-            case "대성공", "성공" -> Grade.GOOD;
+            case "대성공" -> Grade.CRIT_GOOD;
+            case "성공" -> Grade.GOOD;
             case "아슬아슬한 성공", "부분 성공" -> Grade.MIXED;
-            default -> Grade.BAD;
+            case "실패" -> Grade.BAD;
+            default -> Grade.CRIT_BAD;
         };
     }
 }

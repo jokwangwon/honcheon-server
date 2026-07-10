@@ -7,6 +7,12 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 혼천 봇 베타 (단계 Ⅱ~Ⅲ) — 생성 문답 → 서장(영속) → 출도 → 청하현 사냥·비무.
@@ -44,12 +50,47 @@ public final class HoncheonBot {
                                 new SubcommandData("사냥", "청하현 뒷산 사냥 — 화후와 생계 (지역 채널에서)"),
                                 new SubcommandData("비무", "비무 신청 — 양측 2d6 대립 판정")
                                         .addOption(OptionType.USER, "상대", "비무를 청할 상대", true),
+                                new SubcommandData("수련", "기초 단련 — 하루 한 번, 화후 +1일치"),
                                 new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
+                                new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                                 new SubcommandData("도움말", "명령과 규칙 안내"))
         ).queue();
 
+        scheduleMidnight(jda, db);
         System.out.println("혼천 봇 기동 — 룰 로드: " + configDir + " / DB: " + dbPath
                 + " / LLM 렌더러: " + (renderer.enabled()
                         ? rules.turnRendererModel() : "비활성 (ANTHROPIC_API_KEY 없음 — 폴백 템플릿)"));
+    }
+
+    /** 자정(Asia/Seoul)마다 세계일 +1 — 실제 하루 = 세계 1일. 청하현 채널이 있으면 아침을 알린다 */
+    private static void scheduleMidnight(JDA jda, Db db) {
+        ScheduledExecutorService sched = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "honcheon-day");
+            t.setDaemon(true);
+            return t;
+        });
+        ZoneId seoul = ZoneId.of("Asia/Seoul");
+        Runnable[] tick = new Runnable[1];
+        tick[0] = () -> {
+            try {
+                int day = db.advanceDay();
+                db.getMeta("지역채널:청하현").ifPresent(channelId -> {
+                    var channel = jda.getTextChannelById(channelId);
+                    if (channel != null) {
+                        channel.sendMessage("**" + day + "일차 아침이 밝았다** — 몸이 개운하다. "
+                                + "(일일 적립·수련·연속 감쇠 재시작)").queue();
+                    }
+                });
+            } catch (Exception e) {
+                System.err.println("세계일 정산 실패: " + e.getMessage());
+            } finally {
+                ZonedDateTime next = ZonedDateTime.now(seoul).plusDays(1).toLocalDate().atStartOfDay(seoul);
+                sched.schedule(tick[0], Duration.between(ZonedDateTime.now(seoul), next).toMillis(),
+                        TimeUnit.MILLISECONDS);
+            }
+        };
+        ZonedDateTime next = ZonedDateTime.now(seoul).plusDays(1).toLocalDate().atStartOfDay(seoul);
+        sched.schedule(tick[0], Duration.between(ZonedDateTime.now(seoul), next).toMillis(),
+                TimeUnit.MILLISECONDS);
     }
 }
