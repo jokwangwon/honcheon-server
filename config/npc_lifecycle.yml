@@ -58,6 +58,7 @@ life_simulation:
   player_hand:                     # 은혜와 원한의 장기 회수 — 이 시스템의 존재 이유
     help: { bonus: [1, 3], examples: [호위_성공, 결정적_정보_시세, 치료, 누명_벗김], record: true }
     harm: { penalty: [-3, -1], examples: [약탈, 사업_방해, 신용_훼손], record: true }
+    record_expiry: "기록은 계절 반영 후 소멸 (1회성 — 인플레 방지). 단 큰 은혜·원한(±3)은 마크로 영구 보존 — favor·회수 이벤트의 재료 (은혜는 잊혀도 은인은 잊히지 않는다)"   # F21 — PT-007
     payback:
       on_rung_up: "기여자 favor 상향 + 회수 이벤트 자동 발화 ('10년 전 호위했던 행상이 전장 가주가 되어')"
       on_fall: "원한 동형 — 몰락시킨 상인의 아들이 자객이 되어 돌아온다"

@@ -21,6 +21,7 @@ cooperative_checks:
     resolution: "판정 1회, 실행력 = 최약자 기준"
     size_penalty: { from: 4, value: -1 }
     intent: "무리는 가장 서툰 발소리만큼 조용하다 — 혼자가 유리한 일이 존재해야 한다"
+    failure_attribution: "부수 리스크·발각은 '무리 전체' 귀속 (개인 탓 금지 — 동행은 운명 공동체), 서사 표현만 최약자 시점 우선"   # F20 — PT-007
   분담:                            # 동시에 다른 일을
     resolution: "각자 판정, 같은 구간 소모 — 실패는 각자의 것, 결과는 모두의 것"
 
