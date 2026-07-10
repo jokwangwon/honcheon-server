@@ -1,0 +1,34 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.honcheon'
+version = '1.0.0'
+
+// MVT(최소 검증판) — 관리자 1인 로컬 테스트 서버용 Paper 플러그인.
+// 주의: 원격 개발 환경에서는 repo.papermc.io 가 프록시 정책상 403이라 빌드 불가 —
+// 이 모듈은 로컬(사용자 PC)에서 scripts/run_mvt_server.sh 로 빌드·기동한다.
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    implementation project(':core')          // 룰 엔진 — 단일 진실 원천 config/*.yml 을 읽는다
+    implementation 'org.yaml:snakeyaml:2.2'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21   // Paper 1.21.4 = Java 21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// 셰이드 플러그인 없이 core+snakeyaml 을 플러그인 jar 에 포함 (MVT 규모에선 이걸로 충분)
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+}

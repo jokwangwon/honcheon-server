@@ -1,0 +1,10 @@
+name: HoncheonMVT
+version: '1.0.0'
+main: com.honcheon.mvt.HoncheonMvt
+api-version: '1.21'
+description: 혼천 최소 검증판 — 룰 엔진 인게임 배선 (관리자 1인 테스트)
+commands:
+  honcheon:
+    description: 혼천 검증 명령
+    usage: /혼천 도움말
+    aliases: [혼천]
