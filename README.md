@@ -52,6 +52,7 @@
 | [`docs/playtests/PT-001.md`](docs/playtests/PT-001.md) | 첫 실주사위 플레이 테스트 — 턴 3에서 각본과 분기, 실패 연쇄에서도 진행 유지 검증, 발견 과제 F1~F4 |
 | [`docs/playtests/PT-002.md`](docs/playtests/PT-002.md) / [`PT-003.md`](docs/playtests/PT-003.md) | 유년 시작·발단·시간 도약 검증(F5~F7) / 내공·심법 규칙 스모크 테스트(F8~F10) |
 | [`docs/playtests/PT-004.md`](docs/playtests/PT-004.md) / [`PT-005.md`](docs/playtests/PT-005.md) | 고경지 통합 검증(F11~F12) / 첫 사용자 인터랙티브 세션(F13~F16, 재개 정보 포함) |
+| [`docs/playtests/PT-006.md`](docs/playtests/PT-006.md) | 1막 「생존과 첫 실전」 — 실전 화후·생계 경제 루프 실주사위 검증, 엔진 수치 대조 (F17~F19) |
 | [`docs/design/runtime_architecture.md`](docs/design/runtime_architecture.md) | 런타임 아키텍처 — 2단 파이프라인(엔진 계산→LLM 렌더)·프리페치, 실시간 판정=이벤트 훅, 서장·출도·공유 세계 시간축 합류 모델 |
 | [`docs/design/mc_action_mapping.md`](docs/design/mc_action_mapping.md) | MC 행동 전수 매핑 — 바닐라 입력 예산 내 전 행동 구현 (입력·HUD 재해석·판정 12종·전투·내공·생활), 우선순위 P1~P6 |
 | [`docs/design/skill_lifecycle.md`](docs/design/skill_lifecycle.md) | 무공 생애주기 — 습득 4경로(사사/비급/견식/기연), 숙련 5단계, MC 로드아웃 7칸, 사용 규칙 색인 |

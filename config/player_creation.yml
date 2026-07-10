@@ -154,7 +154,7 @@ age_and_lifepath:
       world_link: "가문이 지역 지배 세력에 상납하는 관계 (예: 사천당가)"
     농가의_자식:
       start_region_examples: [청하현_외곽]
-      grants: { 소양: "체력 수련 가점" }
+      grants: { 소양: "체력 수련 가점", 생활_기술_선택_1종: { options: [덫_사냥, 농사, 목축], level: 2 } }   # F17 — PT-006
       world_link: "땅과 계절, 도적의 첫 표적"
     객잔집_자식:
       start_region_examples: [청하현]
