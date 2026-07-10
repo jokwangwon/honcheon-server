@@ -88,6 +88,7 @@ Thumbs.db
 logs/
 
 # Server files
+run/
 server.jar
 spigot.jar
 paper.jar
