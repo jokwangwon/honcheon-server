@@ -56,6 +56,7 @@
 | [`docs/playtests/PT-007.md`](docs/playtests/PT-007.md) | 2막 「강호의 관계」 — 동행 협력 판정·협공·NPC 계절 정산(은혜가 문턱을 넘긴다) 검증 (F20~F21) |
 | [`docs/mvt/admin_test_guide.md`](docs/mvt/admin_test_guide.md) | MVT 관리자 테스트 가이드 — 로컬 Paper 1.21.4 원커맨드 기동(scripts/run_mvt_server.sh), 인게임 배선표·체크리스트 10항 |
 | [`docs/design/llm_runtime_policy.md`](docs/design/llm_runtime_policy.md) | LLM 런타임 정책 — 역할별 모델 사다리(렌더러/GM/배치/심사), 지연·비용 예산, 프롬프트 캐싱 설계, 텍스트 생성 7계, 폴백, 실테스트 준비도 |
+| [`docs/design/resourcepack_design.md`](docs/design/resourcepack_design.md) | 리소스팩 디자인 규정 — 무협 수묵 디자인 언어, 글리프 슬롯 등록제(코드포인트 = 계약), 픽셀 스펙(2값 규율), 제작 경로·승격 절차 |
 | [`docs/design/runtime_architecture.md`](docs/design/runtime_architecture.md) | 런타임 아키텍처 — 2단 파이프라인(엔진 계산→LLM 렌더)·프리페치, 실시간 판정=이벤트 훅, 서장·출도·공유 세계 시간축 합류 모델 |
 | [`docs/design/mc_action_mapping.md`](docs/design/mc_action_mapping.md) | MC 행동 전수 매핑 — 바닐라 입력 예산 내 전 행동 구현 (입력·HUD 재해석·판정 12종·전투·내공·생활), 우선순위 P1~P6 |
 | [`docs/design/skill_lifecycle.md`](docs/design/skill_lifecycle.md) | 무공 생애주기 — 습득 4경로(사사/비급/견식/기연), 숙련 5단계, MC 로드아웃 7칸, 사용 규칙 색인 |
