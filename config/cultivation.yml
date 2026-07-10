@@ -4,6 +4,18 @@
 # 능력치, 내공, 무공 숙련도, 실전 경험, 깨달음, 사건 기여, 명성/악명이 함께 충족되어야 한다.
 
 cultivation_stages:
+  - name: "범인"
+    id: COMMONER
+    description: "무공을 익히지 않은 보통 사람. 강호 인구의 절대다수. 내공 성장 불가(심법 습득 전)."
+    requirements:
+      level: 0
+      external_mastery: 0
+      internal_mastery: 0
+      reputation: 0
+    max_skill_tier: "없음 (생활 기술만)"
+    technique_by_internal: []
+    bonus_by_stat_path: {}
+
   - name: "삼류"
     id: THIRD_CLASS
     description: "강호에 갓 발을 들인 초보 무인. 낭인 지망생 수준."

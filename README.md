@@ -34,6 +34,8 @@
 | [`docs/design/design_review.md`](docs/design/design_review.md) | 설계 검토 보고서 — 판정 밸런스 정량 검증, 3갈래 분기 스트레스 테스트, 공백 목록(G1~G8), 퀄리티 평가 |
 | [`docs/design/world_reaction_system.md`](docs/design/world_reaction_system.md) | 세계 반응 시스템 — 소문 수치화, 세력 반응 전이표, 지역 상태 변화량, 시간 5구간제, 경로 B 기계 재생 검증 |
 | [`docs/design/gm_modifier_guide.md`](docs/design/gm_modifier_guide.md) | GM 보정 예시집 — 상황 보정 부여 가드레일 (LLM GM 프롬프트 자료) |
+| [`docs/design/fortune_and_wanderer.md`](docs/design/fortune_and_wanderer.md) | 낭인 생태계 + 범인(凡人) 시작 + 기연(奇緣) 시스템 — 일반인이 문파에 닿는 세 경로 |
+| [`docs/design/age_and_lifepath.md`](docs/design/age_and_lifepath.md) | 시작 나이와 인생 경로 — 세월의 교환비, 유년기 흔적, 지나온 장, 문파 입문 연령 규범 |
 | [`docs/gm/gm_master_prompt.md`](docs/gm/gm_master_prompt.md) | GM 마스터 프롬프트 — 턴 처리 12단계 절차, 출력 형식, 절대 규칙 |
 | [`docs/playtests/PT-001.md`](docs/playtests/PT-001.md) | 첫 실주사위 플레이 테스트 — 턴 3에서 각본과 분기, 실패 연쇄에서도 진행 유지 검증, 발견 과제 F1~F4 |
 | [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |

@@ -10,6 +10,7 @@ attribute_allocation:
 
 # 경지별 능력치 상한 (성장 시)
 attribute_cap_by_realm:
+  범인: 3
   삼류: 4
   이류: 5
   일류: 6
@@ -91,6 +92,79 @@ starting_identities:
     start_location: cheongha_hyeon
     initial_relations: { gwakjin: "동료" }
     notes: "상단 내부 정보 접근"
+
+# ─── 일반인(범인) 시작 신분 — 하드모드 (기준: fortune_and_wanderer.md 2장) ───
+# 배분 5, 상한 3, 무공 기술 없음. 보상은 능력치가 아니라 '자격' (무공 백지 조건 기연)
+commoner_identities:
+  객잔_점소이:
+    realm: 범인
+    skills: { 고객_파악: 2, 정보수집: 1, 흥정: 1 }
+    start_location: cheongha_inn
+    initial_relations: { hanbaek: "고용 관계" }
+    notes: "소문의 한가운데서 산다"
+  약초꾼:
+    realm: 범인
+    skills: { 산길_지리: 2, 조사: 1, 의술: 1 }
+    start_location: north_road
+    initial_relations: { yumun: "거래 관계" }
+    notes: "산에서 벌어지는 일을 본다"
+  장터_잡부:
+    realm: 범인
+    skills: { 흥정: 2, 손재주: 1, 정보수집: 1 }
+    start_location: market
+    initial_relations: {}
+    notes: "민간 소문망의 말단"
+
+# ─── 시작 나이와 인생 경로 (기준: age_and_lifepath.md) ───
+# 생성 절차: 성향 → 유년기 배경 → 시작 나이 → (청년+) 지나온 장 → 신분 → 배분 → 목표
+age_and_lifepath:
+  age_brackets:
+    소년:
+      age_range: [13, 15]
+      free_points: 5
+      creation_max: 3
+      starting_skills: "1개만"
+      perks: ["수련 성장 효율 +1", "문파 내문 제자 트랙 자격", "사승 기연 선호 대상"]
+      identity_limit: [낭인_지망생, 객잔_점소이, 장터_잡부, 문파_지원자]
+    약관:
+      age_range: [16, 19]
+      free_points: 6
+      creation_max: 4
+      starting_skills: "신분 기술 2/1/1 (표준)"
+      perks: []
+    청년:
+      age_range: [20, 29]
+      free_points: 6
+      creation_max: 4
+      past_chapters: 1
+      perks: ["기술 +1 또는 인연 태그 1 (지나온 장)"]
+      costs: ["문파 정식 입문 문턱 상승 (외문 초입까지)"]
+    장년:
+      age_range: [30, 45]
+      free_points: 7
+      creation_max: 4
+      past_chapters: 2
+      perks: ["기술 +2 또는 인연 태그 (장당 택1)", "약간의 재산"]
+      costs: ["내공 입문 수련 기간 2배", "일부 심법 습득 불가", "문파 정식 제자 불가 (객경만)"]
+
+  childhood_backgrounds:   # 유년기 배경 — 기술이 아니라 '흔적'을 남긴다
+    농가의_자식: { trace: "근면", effect: "체력 수련 가점" }
+    저잣거리_고아: { trace: "눈치", effect: "개방·하오문 계열 기연/접촉 가점" }
+    몰락_세가: { trace: "이름", effect: "가문 옛 지인 인연 태그 — 명성이자 표적" }
+    의원_집안: { trace: "약냄새", effect: "의원 계열 NPC 초기 신뢰 +1" }
+    표국_집안: { trace: "길눈", effect: "산길_지리 또는 호위 기술 가점" }
+
+  past_chapters:           # 지나온 장 — 장당 기술 +1 또는 인연 태그 1
+    점소이_시절: { skill: 고객_파악, relation: hanbaek }
+    짐꾼_시절: { skill_note: "체력 수련 가점", relation: "상단 말단" }
+    군역_복무: { skill: 호위, relation: "관군 하급 무관" }
+    행상_시절: { skill: 흥정, relation: "타지역 상인" }
+    서당_수학: { skill: 조사, relation: "서생/관청 서리" }
+
+  sect_entry_age_norms:    # 문파 입문 연령 규범
+    내문_제자: "소년기 입문 원칙"
+    외문_제자: "약관까지. 공적·추천 있으면 청년 초반 가능"
+    속가_객경: "나이 무관. 정식 제자 아님 — 장년 입문자의 현실적 자리"
 
 # 생성 마지막 단계: 초기 목표 선언 → 길라잡이 시스템 입력값
 initial_goal:
