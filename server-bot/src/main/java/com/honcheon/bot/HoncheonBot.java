@@ -51,6 +51,7 @@ public final class HoncheonBot {
                                 new SubcommandData("비무", "비무 신청 — 양측 2d6 대립 판정")
                                         .addOption(OptionType.USER, "상대", "비무를 청할 상대", true),
                                 new SubcommandData("수련", "기초 단련 — 하루 한 번, 화후 +1일치"),
+                                new SubcommandData("사사", "곽진에게 무공을 청한다 — 무공 백지만"),
                                 new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                                 new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                                 new SubcommandData("도움말", "명령과 규칙 안내"))

@@ -59,6 +59,7 @@ public final class GameListener extends ListenerAdapter {
                 case "사냥" -> startHunt(event);
                 case "비무" -> startDuel(event);
                 case "수련" -> train(event);
+                case "사사" -> apprentice(event);
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
@@ -126,6 +127,7 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 사냥` 청하현 뒷산 사냥 — 화후와 생계 (출도 후, 지역 채널에서)\n"
                         + "`/혼천 비무 @상대` 비무 신청 — 양측 2d6 대립 판정 (출도 후)\n"
                         + "`/혼천 수련` 기초 단련 — 하루 한 번, 화후 +1일치 (출도 후)\n"
+                        + "`/혼천 사사` 곽진에게 무공을 청한다 — 무공 백지만 (과제→문답→입문)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
@@ -653,6 +655,17 @@ public final class GameListener extends ListenerAdapter {
         StringBuilder body = new StringBuilder(String.format(
                 "해 뜨기 전부터 몸을 다졌다. 화후 **+%.2f일치** (원장 %.2f일치)",
                 granted, ((Number) sheet.get("화후_원장")).doubleValue()));
+        // 사사 과제 연동 — 곽진이 새벽마다 지켜보고 있다
+        Map<String, Object> sasa = (Map<String, Object>) sheet.get("사사");
+        if (sasa != null) {
+            int done = ((Number) sasa.getOrDefault("과제_수련", 0)).intValue() + 1;
+            Map<String, Object> updated = new LinkedHashMap<>(sasa);
+            updated.put("과제_수련", done);
+            sheet.put("사사", updated);
+            body.append("\n곽진의 과제 — 새벽 수련 **").append(Math.min(done, APPRENTICE_TRAININGS))
+                    .append("/").append(APPRENTICE_TRAININGS).append("**")
+                    .append(done >= APPRENTICE_TRAININGS ? " — 다 채웠다. `/혼천 사사`로 찾아가라." : "");
+        }
         String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
         if (!realm.equals(row.get("realm"))) {
             body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (기초가 몸에 뱄다)");
@@ -794,6 +807,108 @@ public final class GameListener extends ListenerAdapter {
         return granted;
     }
 
+    // ─── 사사 — 무공 입문: 곽진의 태조장권 (skills.yml "가장 흔한 첫 무공") ───
+
+    /** 시트에 기록되는 무공 기술 키 — 승급 요건 "아무 무공 입문"의 판별 집합 */
+    private static final java.util.Set<String> MARTIAL_SKILLS = java.util.Set.of("검법", "태조장권");
+    private static final int APPRENTICE_TRAININGS = 3;   // 곽진의 과제 — 새벽 수련 사흘
+
+    @SuppressWarnings("unchecked")
+    private void apprentice(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+
+        Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
+        if (skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains)) {
+            // 백지의 역설 — 사승은 백지에게만 (fortune_and_wanderer)
+            event.replyEmbeds(new EmbedBuilder().setColor(INK).setTitle("사사 — 곽진")
+                    .setDescription("곽진이 손을 저었다. \"이미 길이 있는 몸이다 — 두 길을 함께 걷다간 둘 다 잃는다. "
+                            + "네 집의 것을 갈고닦아라.\"").build()).queue();
+            return;
+        }
+        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        if (((Number) attrs.getOrDefault("근력", 2)).intValue() < 2) {
+            // 태조장권 required_stats { 근력: 2 }
+            event.reply("곽진이 어깨를 짚어 보더니 고개를 저었다. \"아직 몸이 여물지 않았다 — 밥부터 먹여라.\"")
+                    .setEphemeral(true).queue();
+            return;
+        }
+
+        Map<String, Object> sasa = (Map<String, Object>) sheet.get("사사");
+        if (sasa == null) {
+            sheet.put("사사", Map.of("스승", "곽진", "무공", "태조장권", "과제_수련", 0));
+            db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                    String.valueOf(row.get("realm")), "강호", "청하현");
+            db.logEvent("사사_시작", "character", String.valueOf(chId), Map.of("스승", "곽진"));
+            event.replyEmbeds(new EmbedBuilder().setColor(INK).setTitle("사사 — 곽진")
+                    .setDescription("장터 어귀의 표사 곽진은 한참 아래위를 훑어보더니 짧게 말했다.\n\n"
+                            + "\"배우고 싶으면 성의부터 보여라 — **새벽 수련 사흘**. 하루라도 빼먹으면 없던 일이다.\"\n\n"
+                            + "*(`/혼천 수련` " + APPRENTICE_TRAININGS + "회를 채우고 다시 찾아오라)*").build()).queue();
+            return;
+        }
+        int done = ((Number) sasa.getOrDefault("과제_수련", 0)).intValue();
+        if (done < APPRENTICE_TRAININGS) {
+            event.reply("곽진: \"아직이다 — 새벽 수련 " + done + "/" + APPRENTICE_TRAININGS
+                    + ". 몸이 먼저 대답하게 하라.\"").setEphemeral(true).queue();
+            return;
+        }
+        if (today == ((Number) sasa.getOrDefault("마지막_시도일", -1)).intValue()) {
+            event.reply("곽진: \"오늘 보인 것은 봤다 — 내일 다시.\" (하루 한 번)").setEphemeral(true).queue();
+            return;
+        }
+
+        // 문답 — 곽진 앞에서 권형을 밟는다 (근력 판정, 공개)
+        int str = ((Number) attrs.getOrDefault("근력", 2)).intValue();
+        int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
+        int resist = 10;
+        JudgmentEngine.Tier tier = rules.judgment.resolve(str + 2, roll, resist);
+        int margin = str + 2 + roll - resist;
+        db.logEvent("사사_문답", "character", String.valueOf(chId),
+                Map.of("굴림", roll, "마진", margin, "등급", tier.name()));
+
+        EmbedBuilder result = new EmbedBuilder().setColor(INK)
+                .setTitle("문답 — 곽진 앞에서 권형을 밟는다")
+                .setDescription("**근력 " + str + "** + 2d6 = **" + (str + 2 + roll) + "** vs " + resist
+                        + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **" + tier.name() + "**");
+        if (margin >= 0) {
+            Map<String, Object> newSkills = skills == null ? new LinkedHashMap<>() : new LinkedHashMap<>(skills);
+            newSkills.put("태조장권", 0);
+            sheet.put("기술", newSkills);
+            sheet.remove("사사");
+            StringBuilder body = new StringBuilder(
+                    "곽진이 처음으로 자세를 고쳐 앉았다. \"됐다 — 오늘부터 **태조장권**이다. "
+                            + "가장 흔한 권법이지만, 흔한 것은 이유가 있어 흔한 법이다.\"\n기술에 **태조장권 0** 이 올랐다.");
+            String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
+            if (!realm.equals(row.get("realm"))) {
+                body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (쌓아 둔 기초가 문을 밀었다)");
+                db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+            }
+            db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                    realm, "강호", "청하현");
+            db.logEvent("입문", "character", String.valueOf(chId), Map.of("무공", "태조장권", "스승", "곽진"));
+            event.replyEmbeds(result.build(), new EmbedBuilder().setColor(BLOOD)
+                    .setTitle("입문 — 태조장권").setDescription(body.toString()).build()).queue();
+        } else {
+            Map<String, Object> updated = new LinkedHashMap<>(sasa);
+            updated.put("마지막_시도일", today);
+            sheet.put("사사", updated);
+            db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                    String.valueOf(row.get("realm")), "강호", "청하현");
+            event.replyEmbeds(result.build(), new EmbedBuilder().setColor(INK)
+                    .setTitle("곽진은 고개를 저었다")
+                    .setDescription("\"힘만 앞섰다 — 권은 어깨가 아니라 허리로 치는 것이다. 내일 다시.\"").build()).queue();
+        }
+    }
+
     // ─── 승급 — 요건은 문턱이고 계기가 문이다 (cultivation_stages) ───
 
     /** 기초 단련 3개월 = 90일치 — 엔진 환산 (하드코딩 아님) */
@@ -810,7 +925,7 @@ public final class GameListener extends ListenerAdapter {
             return realm;
         }
         Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
-        boolean martial = skills != null && skills.containsKey("검법");
+        boolean martial = skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains);
         double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
         return (martial && hwahu >= BASIC_TRAINING_DAYS) ? "삼류" : realm;
     }
