@@ -1,0 +1,51 @@
+# NPC 대화 상호작용 규칙 (기계 판독용)
+# 기준 문서: docs/design/npc_dialogue_interaction.md
+# 3층 구조: 잡담(판정 없음) / 판정(말이 무기) / 세계(대화도 기록이다)
+
+layers:
+  잡담: { judgment: 없음, time: minor, llm: "지식 경계 안에서 자유 (7계 ④)" }
+  판정: { flow: "자유 입력 → 의도 분류 → action_pairs 매핑 → 엔진 판정 → 렌더" }
+  세계: { records: [단서_획득_이벤트로그, 실언_의심도_소문후보, 대화_요지_NPC_기억] }
+
+# ─── 의도 분류 — LLM 허용 범위의 경계선 ───
+intent_classification:
+  classifier: LLM                  # '어떤 행동인가'만 — 수치·성패는 전부 엔진 (7계 ① 불가침)
+  intents: [잡담, 정보_캐기, 설득, 위협, 흥정, 거짓말]
+  mapping: "judgment.yml action_pairs (정보_캐기→정보수집, 설득→교섭, 흥정→상술 …)"
+  low_confidence: "플레이어 확인 버튼 — '[정보 캐기로 판정] [그냥 잡담]'"
+  fallback: "분류 실패 = 잡담 처리 (판정을 억지로 만들지 않는다)"
+
+discord:
+  start: ["장면 서술 속 NPC → [말 걸기] 버튼", "/대화 <이름>"]
+  precondition: "schedule 조회 선행 — 일과가 위치를 정한다 (밤의 한백은 카운터에 없다)"
+  window: 장면_스레드
+  npc_voice: { method: 웹훅_페르소나, display: "NPC 이름 + 초상 아바타 발화 — 몰입 장치" }
+  input: { free_text: 상시_우선, buttons: { count: [3, 5], source: "LLM choices — 프리페치" } }
+  judgment_display: "embed 공개 (기존 원칙)"
+  end: [자리를_뜬다_버튼, 침묵_10분_자동_이탈, NPC_선종료_일과·태세_변화]
+  private: "밀담 = 개인 스레드 분기 — 엿듣기 판정의 표적"
+
+mc:
+  start: { action: NPC_우클릭, radius_blocks: 5, exit: "반경 이탈 = 자연 종료" }
+  window: 채팅창
+  npc_line_format: "[이름] 대사 — 이름 색 = 태세 (백 중립/녹 우호/적 적대)"
+  choices: { method: tellraw_클릭_텍스트, count: [1, 4], hover: 부가_설명 }
+  free_text: "대화 중 채팅 = NPC에게 자동 라우팅"
+  judgment_display: "액션바 한 줄 + 채팅 상세 (즉시성 문법)"
+  in_combat: "npc_combat.yml combat_dialogue 그대로 — 외치기 쿨다운 시전, 발화 중 가드 불가"
+
+# ─── 동시 대화 중재 — NPC의 입은 하나다 (G8 문법 첫 적용례) ───
+concurrency:
+  lock: "대화 = scenes 장면 잠금"
+  waiting: "후발자는 곁에서 대기 (대화 내용은 안 보인다 — 밀담 제외)"
+  interrupt:
+    flow: "개입 선언 → 기존 참가자 통지 → 3자 장면 병합"
+    price: "NPC 심증 보정 -1 (무례함의 대가)"
+  crowd_exception: "상인 접객(거래·짧은 문답)은 잠금 없이 병렬 — 점소이는 바쁘다"
+
+npc_side:
+  knowledge_boundary: "아는 것만 말한다 — secrets는 해금 플래그 없인 LLM도 못 꺼낸다"
+  memory: "대화 요지 누적 (npcs.state_json) — 거짓말 들통: 과거 발언 어긋남 = 의심도 +1"
+  stance: "태세가 답을 바꾼다 (활동 컨텍스트 보정 기존)"
+  time_cost: { 잡담: minor, 본격_문답_설득: 구간_소모 }
+  npc_initiated: "NPC가 먼저 온다 — 의뢰 지명·세력 접촉·회수 이벤트는 NPC발 대화"
