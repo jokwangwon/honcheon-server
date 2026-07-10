@@ -29,7 +29,7 @@ damage:
   critical: "대성공 공격은 부상 단계 즉시 +1 (급소)"
 
 durability:
-  formula: "10 + 체력 * 2"
+  formula: "round(10 + 체력 실수치 × 2)"   # 화후 규칙 — 절벽 감사 반영 (balance_audit_cliffs.md)
   wound_thresholds:
     경상: { below_ratio: 0.5, penalty: -1 }
     중상: { below_ratio: 0.25, penalty: -2 }
@@ -37,7 +37,7 @@ durability:
   note: "부상 페널티는 judgment.yml condition과 동일 값 — 전투 밖 판정에도 지속"
 
 internal_energy:
-  pool: "내공 * 3"
+  pool: "round(내공 실수치 × 3)"   # 화후 규칙 (internal_energy.yml 정본과 동일)
   detail: "config/internal_energy.yml 이 상세 정본 — 소모 밴드(외공기~오의), 경지 게이트, 선천진기"
   depleted: "'내공 고갈' 상태(-2) + 내공기는 다운캐스트('맨 기술'로 시전, 위력·속성 상실)"
   recovery: "운기조식 1구간당 내공×1 회복. 전투 중 불가"

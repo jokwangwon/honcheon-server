@@ -2,6 +2,8 @@
 # 기준 문서: docs/design/character_creation.md
 
 attribute_allocation:
+  # 화후 규칙: 모든 능력치는 내부 실수로 적립 (수련 진행도). 판정 가산은 정수부,
+  # 파생치(내력/내구/회피 회복 등)는 실수치 사용 — balance_audit_cliffs.md
   base_value: 2                 # 모든 능력치 기본치
   free_points: 6                # 자유 배분
   creation_max: 4               # 생성 시 상한 (삼류의 한계)

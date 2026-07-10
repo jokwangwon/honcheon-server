@@ -18,7 +18,7 @@ dodge:                            # 기본 회피 (전 캐릭터 공통)
   charges: 2
   recharge_ticks: 100
   spam_penalty: "5초 내 2충전 소진 시 회복 50% 지연"
-  agility_bonus: "민첩 1당 회복 -3틱"
+  agility_bonus: "민첩 실수치 1당 회복 -3틱 (내부 실수 계산 — 절벽 감사 반영)"
   gyeonggong_escape: { iframe: 0, hit_while_moving: "경직 2배" }   # 도주는 회피가 아니다
 
 iframe_caps:                      # 무적 시간 절대 상한 (등급별)
