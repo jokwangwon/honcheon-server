@@ -6,17 +6,19 @@ plugins {
 group = 'com.honcheon'
 version = '1.0.0'
 
+// core = 엔진 불문 순수 자바 룰 엔진. Bukkit/Spigot 의존 금지 —
+// 플러그인 어댑터(SharedUtil 등)는 server-* 모듈에 둔다.
 repositories {
     mavenCentral()
-    maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
 }
 
 dependencies {
-    compileOnly 'org.spigotmc:spigot-api:1.20.4-R0.1-SNAPSHOT'
-    compileOnly 'org.bukkit:bukkit:1.20.4-R0.1-SNAPSHOT'
-    
+    // 룰 엔진(com.honcheon.core.rules)은 config/*.yml 을 직접 읽는다
+    implementation 'org.yaml:snakeyaml:2.2'
+
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.9.2'
 }
 
 java {
@@ -26,6 +28,8 @@ java {
 
 test {
     useJUnitPlatform()
+    // 패리티 테스트가 저장소 루트의 config/*.yml (단일 진실 원천)을 읽는다
+    systemProperty 'honcheon.config.dir', rootProject.projectDir.toPath().resolve('config').toString()
 }
 
 publishing {

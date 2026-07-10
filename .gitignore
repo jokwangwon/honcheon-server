@@ -111,3 +111,7 @@ server.properties
 *.tmp
 *.temp
 hook_debug.log
+
+# Gradle build output
+build/
+.gradle/
