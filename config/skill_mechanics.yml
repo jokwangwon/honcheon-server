@@ -1,0 +1,104 @@
+# 스킬 액션 데이터 (기계 판독용 — MC 액션 전투 층)
+# 기준 문서: docs/design/skill_mechanics.md
+# skills.yml(무공 카탈로그: 습득·사회적 속성)과 2층 구조 — 여기는 히트박스·프레임·무적만.
+# 시간 단위: 틱(50ms). 성능 상한은 config/performance.yml을 따른다.
+
+global_rules:
+  hitbox_types: [호, 선, 원, 시, 돌, 진]
+  max_targets_default: 8          # performance.yml F-P3와 동일
+  max_range_default: 24
+  hits_per_target_per_active: 1   # 다단히트는 hit_count 명시로만
+  counter_hit_bonus: 0.25         # 후딜 중 피격 +25%
+  trade_allowed: true             # 동시 히트 허용
+
+dodge:                            # 기본 회피 (전 캐릭터 공통)
+  distance: 3
+  iframe_ticks: 4
+  startup_ticks: 0
+  charges: 2
+  recharge_ticks: 100
+  spam_penalty: "5초 내 2충전 소진 시 회복 50% 지연"
+  agility_bonus: "민첩 1당 회복 -3틱"
+  gyeonggong_escape: { iframe: 0, hit_while_moving: "경직 2배" }   # 도주는 회피가 아니다
+
+iframe_caps:                      # 무적 시간 절대 상한 (등급별)
+  기본_회피: 4
+  보법_무공_이류급: 6
+  절정급_방어_오의: 10
+  오의: 20
+iframe_rules:
+  - "무적 중 내력 회복 정지"
+  - "무적 종료 직후 후딜 = 카운터 히트 판정"
+  - "무적기는 내력 + 충전/쿨다운 이중 과금"
+
+defense_states:
+  가드: { arc: 120, damage_reduction: 0.7, gauge: true, break_stun: 강 }
+  패링: { window_ticks: 4, success: { iframe: 2, counter_window: 10 }, fail_recovery_penalty: 1.5 }
+  슈퍼아머: { effect: "경직 무시, 피해 그대로" }
+  파격: { pierces: [가드, 패링], not_pierces: [무적], rarity: "희귀 — 카탈로그에 명시" }
+
+priority_same_tick: [무적, 파격, 패링, 가드, 슈퍼아머, 일반피격]
+
+stagger:
+  levels: { 약: 2, 중: 5, 강: 10, 다운: 20 }
+  wakeup_iframe: 3
+  realm_resist: "경지 2단계 우위당 1등급 경감"
+  hard_stagger_immunity: "같은 대상 강경직 3초당 1회"
+
+stat_mapping:
+  민첩: { 이동속도: true, 회피_회복: "-3틱/점", 후딜: "-5%/점" }
+  감각: { 패링_유예: "+0.5틱/2점 (상한 +2)", 텔레그래프_강조: true }
+  근력_내공: "combat.yml 피해 공식"
+  체력: [내구, 가드_게이지]
+
+# ─── 무공별 액션 데이터 (skills.yml의 id와 연결) ───
+skills:
+  yukhap_geom:                    # 육합검 — 화산파 입문 검법 (3타 콤보)
+    combo:
+      - { type: 호, angle: 100, range: 3, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 100, range: 3, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 120, range: 3.5, frames: [6, 3, 10], stagger: 강, cost: 1 }
+    combo_input_window: 10        # 다음 타 입력 유예
+
+  maehwa_bo:                      # 매화보 — 보법 (회피 무공)
+    type: 돌
+    distance: 5
+    frames: [0, 0, 3]
+    iframe: 6
+    cost: 2
+    cooldown_ticks: 160
+    vfx: "잔상 (파티클 예산 경유)"
+
+  jeongsim_geomgyeol:             # 정심검결 — 패링 태세
+    type: 가드태세
+    frames: [2, 10, 6]
+    parry_window: 4
+    on_success: { iframe: 2, counter_window: 10, counter_bonus: 0.5 }
+    cost: 1
+
+  namgung_jehwang_geom:           # 제왕검형 — 남궁 비전 (긴 텔레그래프 강공)
+    type: 선
+    width: 1.5
+    length: 8
+    frames: [12, 3, 14]
+    super_armor: "선딜~지속"
+    stagger: 다운
+    cost: 4
+    telegraph: "검로 파티클 12틱"
+
+  geumna_su:                      # 금나수 — 잡기 (파격 예시)
+    type: 호
+    angle: 60
+    range: 1.5
+    frames: [8, 2, 12]
+    property: 파격
+    on_hit: { stagger: 다운 }
+    cost: 2
+
+  galho_sando:                    # 갈호의 산도 — NPC 돌진 강공 표본
+    type: 돌
+    distance: 4
+    frames: [10, 3, 12]
+    stagger: 중
+    telegraph: "자세 낮춤 + 경로 표시 10틱"
+    npc_only: true
