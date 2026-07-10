@@ -202,7 +202,8 @@ def main():
 
     font = PACK / "assets" / "minecraft" / "font" / "default.json"
     font.parent.mkdir(parents=True, exist_ok=True)
-    font.write_text(json.dumps({"providers": providers}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # ensure_ascii=True — 산출 JSON에서도 PUA가 \uXXXX 이스케이프로 남는다 (F26: 리터럴 유실 방지)
+    font.write_text(json.dumps({"providers": providers}, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
     (PACK / "pack.mcmeta").write_text(json.dumps({
         "pack": {"pack_format": 46, "description": "혼천 — 기세·화후·경지 문장·경락도 글리프 (M2)"}

@@ -23,6 +23,7 @@ glyph_slots:
   E060_E07F: { band: 세력_문장 }
   E080_E09F: { band: GUI_배경, used: { E080: "경락도 배경 패널 176x110 (먹색+화선지 테두리)" }, note: "전낭 탭·상점은 E081+ — 음수 공백 기법, ascent 인게임 튜닝" }
   registration: "슬롯 추가 = 본 파일 등록 + build_resourcepack.py 반영 (등록제 문법)"
+  pua_rule: "F26 — 소스·데이터 어디에도 PUA 문자 리터럴 직접 삽입 금지: 코드 chr()/\\uXXXX, JSON ensure_ascii. 편집·전송 중 조용히 유실되며 빈 chars 하나가 팩 전체를 무효화한다"
 
 # ─── 픽셀 스펙 ───
 pixel_spec:

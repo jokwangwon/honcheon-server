@@ -8,9 +8,9 @@ package com.honcheon.mvt;
 final class Glyphs {
 
     /** U+E000 — 기세 아이콘 (색 코드로 틴트: 회/백/황/적) */
-    static final String GISE = "";
+    static final String GISE = "\uE000";   // F26: PUA 리터럴 금지 — 이스케이프로만 쓴다
 
-    private static final char GAUGE_BASE = '';
+    private static final char GAUGE_BASE = '\uE010';
 
     private Glyphs() {
     }
