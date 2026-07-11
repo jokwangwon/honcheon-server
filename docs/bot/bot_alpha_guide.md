@@ -348,3 +348,42 @@ export DISCORD_TOKEN='발급받은 토큰'
 **디자인 백로그 (사용자 체감 6건)**: UI — 게임형 인벤토리 탭(스탯/퀘스트/스킬 등록)·GUI 버튼
 오프셋 보정·이미지 기반 아이콘 / 마을 — 건물 이격 확보·지붕 자재 겹침 해소·
 **빈부 계층 변주** ("형태 변주 다음은 계층 변주" — 천막~기와집)
+
+---
+
+## 12. 로컬 LLM — 크레딧 없이 서사 렌더 (선택)
+
+> llm.yml local_provider — **턴 렌더러만** 로컬 허용. GM 서사·세계급 심사는 세계 일관성 때문에
+> Claude 유지 (크레딧 확보 시). 우선순위: 로컬 URL → ANTHROPIC_API_KEY → 폴백 템플릿.
+
+### 설치 (Ollama 기준, 1회)
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull exaone3.5:7.8b        # 한국어 권장 1순위 (LG, 7.8B)
+# 대안: ollama pull qwen2.5:14b   # VRAM 여유 있으면 (한국어 양호, 14B)
+```
+
+### 기동
+
+```bash
+export HONCHEON_LLM_URL='http://localhost:11434/v1'
+export HONCHEON_LLM_MODEL='exaone3.5:7.8b'    # 생략 시 이 값이 기본
+./scripts/run_bot.sh
+```
+
+기동 로그: `LLM 렌더러: 로컬 (http://localhost:11434/v1 · exaone3.5:7.8b)`
+
+### 기대치와 가드
+
+- GPU 8GB+ = 서사 1~3초 / CPU 전용 = 5~20초 (타임아웃 25초 — 초과 시 폴백)
+- 소형 모델의 7계 위반(수치 노출·명사 발명) 가능성 ↑ — 길이 가드·폴백·F25 WARN 로그가 방어.
+  서사에 숫자가 새는 게 보이면 사례를 기록해 달라 (시스템 프롬프트 보강 재료)
+- MC 클라이언트와 같은 PC면 VRAM 경합 주의 — 봇만 켠 상태에서 먼저 품질 확인 권장
+
+### 검증 (7차 — 시나리오 6의 로컬판)
+
+1. Ollama 기동 후 봇 재기동 → 로그에 "로컬" 공급자 표시
+2. 새 캐릭터 서장 진행 → 서사가 템플릿과 다른 문장으로, 수치 없이 나오는지
+3. Ollama를 끄고 서장 진행 → WARN 로그(로컬 호출 예외) + 폴백 템플릿 무중단
+4. 품질 소감 기록 — exaone vs qwen 비교 환영 (HONCHEON_LLM_MODEL만 바꾸면 됨)

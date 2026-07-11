@@ -38,6 +38,9 @@ final class LlmRenderer {
 
     private final String apiKey;
     private final String model;
+    // 로컬 LLM (llm.yml local_provider) — OpenAI 호환 엔드포인트 (Ollama 등). 설정 시 로컬 우선
+    private final String localUrl;
+    private final String localModel;
     private final HttpClient http;
     // F25 — 폴백 관측성: 실패는 반드시 한 줄 WARN (스팸 방지 쿨다운 1분 + 억제 건수 보고)
     private final AtomicLong lastWarnAt = new AtomicLong();
@@ -46,11 +49,25 @@ final class LlmRenderer {
     LlmRenderer(String model) {
         this.apiKey = System.getenv("ANTHROPIC_API_KEY");
         this.model = model;
+        this.localUrl = System.getenv("HONCHEON_LLM_URL");
+        this.localModel = System.getenv().getOrDefault("HONCHEON_LLM_MODEL", "exaone3.5:7.8b");
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).build();
     }
 
+    private boolean localEnabled() {
+        return localUrl != null && !localUrl.isBlank();
+    }
+
     boolean enabled() {
-        return apiKey != null && !apiKey.isBlank();
+        return localEnabled() || (apiKey != null && !apiKey.isBlank());
+    }
+
+    /** 기동 로그용 — 어느 공급자로 렌더하는가 */
+    String providerLabel() {
+        if (localEnabled()) {
+            return "로컬 (" + localUrl + " · " + localModel + ")";
+        }
+        return apiKey != null && !apiKey.isBlank() ? "Claude API (" + model + ")" : "비활성 — 폴백 템플릿";
     }
 
     /**
@@ -60,6 +77,9 @@ final class LlmRenderer {
     CompletableFuture<String> render(String facts, String fallback) {
         if (!enabled()) {
             return CompletableFuture.completedFuture(fallback);
+        }
+        if (localEnabled()) {
+            return renderLocal(facts, fallback);
         }
         try {
             ObjectNode body = JSON.createObjectNode();
@@ -83,6 +103,49 @@ final class LlmRenderer {
         } catch (Exception e) {
             return CompletableFuture.completedFuture(
                     fallbackWith("요청 구성 실패: " + rootMessage(e), fallback));
+        }
+    }
+
+    /** 로컬 LLM — OpenAI 호환 /chat/completions (Ollama·llama.cpp·vLLM). 실패는 전부 폴백 수렴 */
+    private CompletableFuture<String> renderLocal(String facts, String fallback) {
+        try {
+            ObjectNode body = JSON.createObjectNode();
+            body.put("model", localModel);
+            body.put("max_tokens", 700);
+            var messages = body.putArray("messages");
+            messages.addObject().put("role", "system").put("content", SYSTEM);
+            messages.addObject().put("role", "user").put("content", facts);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(localUrl.replaceAll("/+$", "") + "/chat/completions"))
+                    .header("content-type", "application/json")
+                    .timeout(Duration.ofSeconds(25))   // 로컬은 하드웨어 편차가 크다 (llm.yml hardware_note)
+                    .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
+                    .build();
+            return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(resp -> extractLocal(resp, fallback))
+                    .exceptionally(e -> fallbackWith("로컬 호출 예외/타임아웃: " + rootMessage(e), fallback));
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(
+                    fallbackWith("로컬 요청 구성 실패: " + rootMessage(e), fallback));
+        }
+    }
+
+    private String extractLocal(HttpResponse<String> resp, String fallback) {
+        try {
+            if (resp.statusCode() != 200) {
+                String snippet = resp.body() == null ? ""
+                        : resp.body().substring(0, Math.min(160, resp.body().length())).replaceAll("\\s+", " ");
+                return fallbackWith("로컬 HTTP " + resp.statusCode() + " — " + snippet, fallback);
+            }
+            JsonNode choices = JSON.readTree(resp.body()).path("choices");
+            String text = choices.isArray() && choices.size() > 0
+                    ? choices.get(0).path("message").path("content").asText("") : "";
+            if (text.isBlank() || text.length() > 1500) {
+                return fallbackWith("로컬 응답 길이 예산 밖 (" + text.length() + "자)", fallback);
+            }
+            return text.strip();
+        } catch (Exception e) {
+            return fallbackWith("로컬 응답 파싱 실패: " + rootMessage(e), fallback);
         }
     }
 

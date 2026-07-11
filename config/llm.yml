@@ -3,6 +3,16 @@
 # 대원칙: LLM은 게임 로직에 관여하지 않는다 — 엔진이 사실을 계산하고 LLM은 서사만 렌더한다
 # 가격·모델 ID는 2026-07 기준 (Claude API) — 세대 교체 시 이 파일만 갱신
 
+# ─── 로컬 LLM (선택) — 크레딧 없이 턴 렌더러만 로컬로 (HONCHEON_LLM_URL 설정 시) ───
+local_provider:
+  scope: turn_renderer_only        # GM·세계급은 로컬 금지 — 세계 일관성은 품질이 좌우한다
+  api: openai_compatible           # Ollama /v1/chat/completions (llama.cpp·vLLM 동일)
+  env: { url: HONCHEON_LLM_URL, model: HONCHEON_LLM_MODEL }   # 예: http://localhost:11434/v1 + exaone3.5:7.8b
+  recommended_models: [exaone3.5:7.8b, qwen2.5:14b]   # 한국어 품질 기준
+  priority: "로컬 URL 설정 시 로컬 우선 → 없으면 ANTHROPIC_API_KEY → 없으면 폴백 템플릿"
+  guards: "7계·길이 예산·폴백 동일 적용 — 소형 모델의 위반은 가드가 거르고 폴백이 받친다"
+  hardware_note: "GPU 8GB+ 권장 (첫 글자 1~3초). CPU 전용은 5~20초 — 체감 저하 감수"
+
 roles:
   turn_renderer:
     model: claude-haiku-4-5

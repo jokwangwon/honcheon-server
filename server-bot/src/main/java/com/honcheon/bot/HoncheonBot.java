@@ -71,8 +71,7 @@ public final class HoncheonBot {
 
         scheduleMidnight(jda, db);
         System.out.println("혼천 봇 기동 — 룰 로드: " + configDir + " / DB: " + dbPath
-                + " / LLM 렌더러: " + (renderer.enabled()
-                        ? rules.turnRendererModel() : "비활성 (ANTHROPIC_API_KEY 없음 — 폴백 템플릿)"));
+                + " / LLM 렌더러: " + renderer.providerLabel());
     }
 
     /** 자정(Asia/Seoul)마다 세계일 +1 — 실제 하루 = 세계 1일. 청하현 채널이 있으면 아침을 알린다 */
