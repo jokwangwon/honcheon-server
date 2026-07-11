@@ -47,7 +47,7 @@ visualization:
 simbeop:
   hyeoncheon_tonapbeop:
     name: "현천토납법"
-    faction: 개방
+    faction: gaebang
     lineage: 잡가                  # 취걸개 기연 보상 (fortune_encounters 연동)
     grade: 기초
     method: 좌공
@@ -60,7 +60,7 @@ simbeop:
 
   taegeuk_gigong:
     name: "태극기공"
-    faction: 무당파
+    faction: mudang
     lineage: 도가          # 정순 — 정화(배독·도인도기·해주) 자격
     grade: 상승
     method: 좌공
@@ -73,7 +73,7 @@ simbeop:
 
   jaha_singong:
     name: "자하신공"
-    faction: 화산파
+    faction: hwasan
     lineage: 도가          # 화산은 도문 — 정화 자격
     grade: 상승
     method: 시공
@@ -86,7 +86,7 @@ simbeop:
 
   jeongsim_geomgyeol:
     name: "정심검결"
-    faction: 화산파
+    faction: hwasan
     lineage: 검문
     grade: 중급
     method: 동공
@@ -100,7 +100,7 @@ simbeop:
 
   chilsal_eumdokgyeong:
     name: "칠살음독경"
-    faction: 독문
+    faction: dokmun
     lineage: 독문          # 면역은 동화 — 정화 불가                   # 사천당가 방계 전승
     grade: 상승
     method: 식공
@@ -113,7 +113,7 @@ simbeop:
 
   hyeolgi_simgong:
     name: "혈기심공"
-    faction: 혈교
+    faction: hyeolgyo
     lineage: 마도
     grade: 금기
     method: 흡성

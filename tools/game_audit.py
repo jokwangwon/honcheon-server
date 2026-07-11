@@ -665,10 +665,11 @@ def lint_registries(cfg, rep):
                  f"region_state.yml threshold_effects 키 {sorted(rs_axes)} 가 하나도 겹치지 않는다 "
                  f"— 같은 임계를 두 철자로 부른다 (조인 불가, 의미로만 이어져 있다)")
         n += 1
-    rs_no_quest = {a for a in rs_axes if "과잉" in a or "초과" in a}
-    for a in sorted(rs_no_quest):
-        rep.warn(f"region_state.yml threshold_effects.{a} — 대응하는 의뢰 발생원이 quest_generation.yml 에 없다 "
-                 f"(임계를 넘겨도 세계가 반응하지 않는다)")
+    # 임계마다 대응하는 의뢰 발생원이 실제로 있는지 — quest_generation 을 조회해서 판정한다
+    # (조회 없이 이름만 보고 경고하면 이미 넣어둔 발생원까지 오탐한다 — v1 도구의 실수)
+    for a in sorted(rs_axes - qg_axes):
+        rep.warn(f"region_state.yml threshold_effects.{a} — 대응하는 의뢰 발생원이 quest_generation.yml "
+                 f"sources.region_state 에 없다 (임계를 넘겨도 세계가 반응하지 않는다)")
         n += 1
 
     # ── id 충돌 (같은 id 가 두 등록부에)

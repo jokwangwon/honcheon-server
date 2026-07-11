@@ -79,7 +79,50 @@ locations:
     description: "초기에는 금기 루트를 열지 않는다. 불길한 소문 / 장기 떡밥으로만 유지."
     long_term_hook: true
     linked_incidents: []
-    linked_npcs: []
+    linked_npcs: [chuigeolgae_master]
+
+  # ─── 현성(縣城) 시설 — 이미 NPC·맵·죽음 규칙이 쓰고 있던 장소들의 등록 (2026-07 정합 패스) ───
+  market:
+    name: "저잣거리"
+    description: "청하현 장터. 매입 상인·행상·시세 소문의 무대. broadcast_zone market_square 의 본체."
+    linked_incidents: [cheongha_fever_rumor]
+    linked_npcs: [market_peddler, sochil, gombo]
+
+  smithy:
+    name: "대장간"
+    description: "야철수의 철방. 범철 병기 매매와 수리 — 정련급은 주문·대기."
+    linked_incidents: []
+    linked_npcs: [yacheolsu]
+
+  temple:
+    name: "청하 사찰"
+    description: "혜각이 머무는 절. 탁발·왕진·해독의 민간 창구(의원 부재 시 대행)."
+    linked_incidents: [cheongha_fever_rumor]
+    linked_npcs: [hyegak]
+
+  school:
+    name: "서당"
+    description: "백석의 글방. 문맹 해소·서찰 대필·비급 판독의 유일 창구."
+    linked_incidents: []
+    linked_npcs: [baekseok]
+
+  county_office:
+    name: "현 관아"
+    description: "조문원(현령)과 박호(포두)의 자리. 수배·신고·관 개입의 문."
+    linked_incidents: [north_road_bandits]
+    linked_npcs: [jomunwon, bakho]
+
+  bank_branch:
+    name: "금서방 전장"
+    description: "예치·인출·전표 발행. 사망 시 전낭은 떨어져도 전장은 남는다 — 단, 상속 절차가 있다."
+    linked_incidents: []
+    linked_npcs: [geumseobang]
+
+  pyoguk:
+    name: "청하 표국"
+    description: "진철산의 표국 지점. 호위 의뢰의 발주처이자 북로 지식의 창고."
+    linked_incidents: [north_road_bandits]
+    linked_npcs: [jincheolsan]
 
 # 청하현 초기 사건 3개
 incidents:

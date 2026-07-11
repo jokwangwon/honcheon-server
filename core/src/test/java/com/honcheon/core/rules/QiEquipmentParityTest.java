@@ -38,7 +38,7 @@ class QiEquipmentParityTest {
         assertEquals(3, qi.gradeRank("강기"));
         assertEquals(4, qi.gradeRank("어검"));
         assertEquals(5, qi.gradeRank("심검"));
-        assertEquals("삼류", qi.gradeGate("발경"));
+        assertEquals("일류", qi.gradeGate("발경"));   // 개화 이후에야 내력이 있다 (internal_energy realm_gates 정합)
         assertEquals("절정", qi.gradeGate("검기"));
         assertEquals("화경", qi.gradeGate("강기"));
         assertThrows(IllegalArgumentException.class, () -> qi.gradeRank("없는격"));

@@ -218,7 +218,7 @@ npcs:
     tier: 4                       # 핵심 NPC — 청하현의 관(官)
     role: "청하현 현령"
     location: county_office
-    faction: gwanchung
+    faction: hyeollyeong
     stats: { 지혜: 5, 화술: 4, 행정: 5, 위험_회피: 4 }
     disposition:
       - "무림 사건이 관할 안에서 시끄러워지는 것을 극도로 꺼린다"
@@ -237,7 +237,7 @@ npcs:
     tier: 3
     role: "청하현 포두 (관군)"
     location: county_office
-    faction: gwangun
+    faction: gwan_gun
     realm: "이류"
     stats: { 근력: 4, 체력: 4, 감각: 3, 참마도법: 3, 수사: 3 }
     disposition:
@@ -368,7 +368,7 @@ npcs:
     tier: 3
     role: "유랑 악사 (비파) — 떠도는 소문의 그릇"
     location: cheongha_inn
-    faction: jeongboSang
+    faction: jeongbosang
     stats: { 감각: 4, 화술: 5, 연주: 5, 정보수집: 4 }
     disposition:
       - "노래 한 곡에 소문 한 자락 — 정보상 민간 창구 (economy 정보 가격표 접합)"
@@ -379,6 +379,21 @@ npcs:
       낮: { place: market, activity: 거리_연주, access: 공개 }
       해질녘: { place: cheongha_inn, activity: 공연, access: 공개 }
       밤: { place: cheongha_inn, activity: 술손님_노래, access: 공개 }
+
+  chuigeolgae_master:
+    name: "취걸개"
+    tier: 3
+    role: "폐사당의 걸인 — 은거 고수 (개방 파문 장로 출신)"
+    location: abandoned_shrine
+    faction: gaebang
+    realm: "절정"
+    stats: { 감각: 5, 지혜: 5, 화술: 4, 취팔선보: 6, 현천토납법: 5 }
+    disposition:
+      - "사람을 시험하고서야 가르친다 — 한 달을 지켜보고 사흘을 굶겨본다"
+      - "정체를 발설하면 사라진다 (fortune_encounters price — 인연 단절)"
+    # 등록 사유: fortune_encounters.chuigeolgae_master 의 주인이자 npc_death 루트 NPC.
+    # 죽을 수 있는 사람이므로 사람으로 등록한다 (npc_death irreplaceable_guard 정합).
+    incident_links: []
 
   gombo:
     name: "곰보영감"

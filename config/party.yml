@@ -32,7 +32,7 @@ combat_coop:
   합격진:                          # 훈련된 협공 — 등록제 무공 (카탈로그 규칙 전부 적용)
     rule: "같은 진법 숙련자끼리만 — 습득(문파 비전 사사)·숙련·경지 게이트"
     example_maehwa_geomjin:
-      faction: 화산파
+      faction: hwasan
       size: [2, 5]
       effect: { 협공_상한: 5 }
       break_condition: "성원 1인 무력화 시 진 붕괴 (라운드 종료까지 전원 -1)"

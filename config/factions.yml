@@ -5,6 +5,17 @@
 # 이 세계는 "정파 vs 사파" 이분 구도가 아니라, 이해관계에 따라 협력/거래/적대가 뒤섞이는
 # 5계열 세력 구조로 움직인다.
 
+# ─── id 규약 (단일 네임스페이스) ───
+# 전 config 의 `faction:` / `factions:` / `group:` 값은 **반드시 이 파일의 id** 를 쓴다.
+#   · 계열(5) = faction_groups 의 키          (orthodox, unorthodox, forbidden, authority, civilian)
+#   · 조직·문파 = faction_groups.*.members 의 키 (소문자 스네이크 — hwasan, haomun, pyoguk …)
+# 한글명(name)은 **표기 전용**이다 — 참조 값으로 쓰지 마라 (member id / group id / 한글명 삼중 분기 금지).
+# 한글로 들어온 입력(LLM·플레이어 발화)은 aliases 로 id 에 붙인다.
+id_policy:
+  reference_key: "faction / factions / group 값 = group id 또는 member id (소문자 스네이크)"
+  display_only: name
+  exempt: [무소속, 미상, 없음, 해당_문파]   # 세력이 아닌 서술 값 — 등록부 대조에서 제외
+
 # 세력 반응 단계 (모든 세력 공통)
 reaction_stages:
   0: "무관심"
@@ -47,6 +58,35 @@ faction_groups:
         name: "정파 협객"
         description: "문파에 소속되지 않은 정파 성향 무인들"
 
+      # 개별 참조되는 문파·세가는 1급 id 를 갖는다 (sects/clans 명단은 상위 조직의 로스터로 유지)
+      hwasan:
+        name: "화산파"
+        parent: gupailbang
+        description: "청하현 알파의 정파 입문 목표 문파 (매화 목패·진운 루트)"
+      sorimsa:
+        name: "소림사"
+        parent: gupailbang
+        description: "불가 무학의 종가 — 속가로 퍼진 실전 기예의 출처"
+      mudang:
+        name: "무당파"
+        parent: gupailbang
+        description: "도가 무학의 종가"
+      namgung:
+        name: "남궁세가"
+        parent: odaesega
+        description: "오대세가 검가"
+      dangga:
+        name: "사천당가"
+        parent: odaesega
+        description: "오대세가 독가 — 방계 전승이 독문으로 흘러나갔다"
+      gaebang:
+        name: "개방"
+        parent: gupailbang
+        description: "거지들의 방파. 정보와 발이 무기다 — 취걸개(폐사당 기연)가 파문 장로 출신."
+      bulga:
+        name: "불가"
+        description: "사찰·승려 계열 — 문파가 아니라 계보다 (혜각 등 탁발승)"
+
   # 2. 사파 / 흑도 계열
   unorthodox:
     name: "사파 / 흑도 계열"
@@ -64,6 +104,9 @@ faction_groups:
       salmak:
         name: "살막"
         description: "청부 살수 조직"
+      dokmun:
+        name: "독문"
+        description: "독을 다루는 방계 문파들 (사천당가 방계 전승 — 칠살음독경의 출처)"
 
   # 3. 사교 / 금기 계열 — 초기 튜토리얼에서는 직접 노출하지 않는 장기 위협
   forbidden:
@@ -103,3 +146,44 @@ faction_groups:
       jeongbosang:
         name: "정보상"
         description: "소문과 정보를 사고파는 이들"
+      pyoguk:
+        name: "표국"
+        description: "물건과 사람을 지켜 나르는 무력 운송업 (진철산 — 청하 표국 지점)"
+      uiga:
+        name: "의가"
+        description: "의원 계보 — 활인침법의 전승자들 (유문·혜각의 왕진)"
+
+# ─── 별칭 — 한글·구철자 입력을 id 로 붙인다 (표기·LLM 입력 정규화 전용, 참조 값 아님) ───
+aliases:
+  정파: orthodox
+  사파: unorthodox
+  흑도: unorthodox
+  사교: forbidden
+  관: authority
+  관청: hyeollyeong
+  현령: hyeollyeong
+  관군: gwan_gun
+  민간: mingan
+  상단: sangdan
+  정보상: jeongbosang
+  표국: pyoguk
+  의가: uiga
+  불가: bulga
+  독문: dokmun
+  개방: gaebang
+  화산파: hwasan
+  소림사: sorimsa
+  무당파: mudang
+  남궁세가: namgung
+  사천당가: dangga
+  장강수로채: jangang_suroche
+  하오문: haomun
+  녹림: noklim
+  살막: salmak
+  마교: magyo
+  혈교: hyeolgyo
+  # 구철자 교정 (2026-07 정합 패스에서 폐기된 표기)
+  gwangun: gwan_gun
+  gwanchung: hyeollyeong
+  jeongboSang: jeongbosang
+  jeongpa: orthodox

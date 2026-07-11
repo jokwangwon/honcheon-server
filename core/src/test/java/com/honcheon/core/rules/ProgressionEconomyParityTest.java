@@ -32,32 +32,35 @@ class ProgressionEconomyParityTest {
 
     // ─── 성장: 실전의 경험치화 v2.1 ───
 
+    // 2026-07 성장 곡선 재조정 — base_grant 2 → 0.3일치 · 감쇠 -25% → -50% · 일일 상한 16 → 3일치
+    // (배율표는 그대로: 무엇이 가르치는가는 옳았고, 한 판이 얼마냐가 틀렸다)
+
     @Test
     void 실전_적립_배율() {
-        // 동수 × 생사 = 2×1.0×2.0 — 소년의 첫 늑대는 사선이다
-        assertEquals(4.0, progression.combatAccrualDays("동수", "생사", 0), 1e-9);
+        // 동수 × 생사 = 0.3×1.0×2.0 — 소년의 첫 늑대는 사선이다
+        assertEquals(0.6, progression.combatAccrualDays("동수", "생사", 0), 1e-9);
         // 상수 × 생사 = 최고의 스승
-        assertEquals(8.0, progression.combatAccrualDays("상수", "생사", 0), 1e-9);
+        assertEquals(1.2, progression.combatAccrualDays("상수", "생사", 0), 1e-9);
         // 하수 × 사냥 = 배울 게 적다
-        assertEquals(0.5, progression.combatAccrualDays("하수", "실전_사냥", 0), 1e-9);
+        assertEquals(0.075, progression.combatAccrualDays("하수", "실전_사냥", 0), 1e-9);
         // 압도적 하수 = 0 — 늑대 백 마리째에는 늑대에게 배울 게 없다
         assertEquals(0.0, progression.combatAccrualDays("압도적_하수", "실전_사냥", 7), 1e-9);
         // 비무는 절반
-        assertEquals(1.0, progression.combatAccrualDays("동수", "비무_대련", 0), 1e-9);
+        assertEquals(0.15, progression.combatAccrualDays("동수", "비무_대련", 0), 1e-9);
     }
 
     @Test
     void 반복_감쇠() {
-        assertEquals(2.0, progression.combatAccrualDays("동수", "실전_사냥", 0), 1e-9);
-        assertEquals(1.5, progression.combatAccrualDays("동수", "실전_사냥", 1), 1e-9);   // -25%
-        assertEquals(1.125, progression.combatAccrualDays("동수", "실전_사냥", 2), 1e-9); // ×0.75²
+        assertEquals(0.3, progression.combatAccrualDays("동수", "실전_사냥", 0), 1e-9);
+        assertEquals(0.15, progression.combatAccrualDays("동수", "실전_사냥", 1), 1e-9);   // -50%
+        assertEquals(0.075, progression.combatAccrualDays("동수", "실전_사냥", 2), 1e-9);  // ×0.5²
     }
 
     @Test
     void 일일_상한() {
-        assertEquals(4.0, progression.cappedGrant(0.0, 4.0), 1e-9);
-        assertEquals(1.0, progression.cappedGrant(15.0, 4.0), 1e-9);  // 상한 16 — 잘린다
-        assertEquals(0.0, progression.cappedGrant(16.0, 2.0), 1e-9);  // "오늘은 몸이 벅차다"
+        assertEquals(3.0, progression.cappedGrant(0.0, 4.0), 1e-9);   // 상한 3 — 잘린다
+        assertEquals(0.5, progression.cappedGrant(2.5, 1.0), 1e-9);
+        assertEquals(0.0, progression.cappedGrant(3.0, 2.0), 1e-9);   // "오늘은 몸이 벅차다"
     }
 
     @Test
@@ -101,19 +104,21 @@ class ProgressionEconomyParityTest {
         assertEquals(0.7, economy.rewardMultiplier(20), 1e-9);
     }
 
+    // 2026-07 경제 조정 — 사냥 부산물 ×0.6 · 매입가 50% → 40% · 인출 수수료 1% → 5%
+
     @Test
     void 매입가_상술_캡() {
-        int tigerPelt = economy.basePrice("사냥_부산물", "호랑이_가죽");   // 15,000문
-        assertEquals(7500, economy.npcBuyPrice(tigerPelt, false));       // 시세 50%
-        assertEquals(10500, economy.npcBuyPrice(tigerPelt, true));       // 상술 성공 70% 캡
-        // 늑대 가죽 100 → 매입 50문 — 서민 일당(30~50)과 정합: 사냥꾼 생계 성립
-        assertEquals(50, economy.npcBuyPrice(economy.basePrice("사냥_부산물", "늑대_가죽"), false));
+        int tigerPelt = economy.basePrice("사냥_부산물", "호랑이_가죽");   // 9,000문
+        assertEquals(3600, economy.npcBuyPrice(tigerPelt, false));       // 시세 40%
+        assertEquals(6300, economy.npcBuyPrice(tigerPelt, true));        // 상술 성공 70% 캡
+        // 늑대 가죽 60 → 매입 24문 — 서민 일당(30~50)의 절반. 사냥은 생계가 되지만 부자는 못 된다
+        assertEquals(24, economy.npcBuyPrice(economy.basePrice("사냥_부산물", "늑대_가죽"), false));
     }
 
     @Test
     void 전장_수수료() {
-        assertEquals(100, economy.withdrawFee(10000, false));   // 은 10냥 인출 = 100문
-        assertEquals(300, economy.withdrawFee(10000, true));    // 타지 환거래 3배
+        assertEquals(500, economy.withdrawFee(10000, false));    // 은 10냥 인출 = 500문 (안전의 값)
+        assertEquals(1000, economy.withdrawFee(10000, true));    // 타지 환거래 10%
     }
 
     @Test

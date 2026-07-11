@@ -59,7 +59,7 @@ world_weight:                      # 오의는 신분증이다
 legacy_arts:
   maehwa_mangae:
     name: "매화만개(梅花滿開)"
-    faction: 화산파
+    faction: hwasan
     type: { hitbox: 원, range: 6, multi_hit: 5 }
     frames: [16, 6, 18]
     defense: "시전 중 무적 12틱"
@@ -67,14 +67,14 @@ legacy_arts:
     resonance: "자하신공 보유 시 범위 +1단 (심법 공명)"
   taegeuk_hyegeom:
     name: "태극혜검(太極慧劍)"
-    faction: 무당파
+    faction: mudang
     type: { form: 반격_오의, window_ticks: 10 }
     effect: "지속 중 받은 공격 1회를 무효화하고 위력 그대로 반사 (패링의 극의)"
     frames: [8, 10, 12]
     cost: "내력 50%"
   jewang_gunrim:
     name: "제왕검형·군림(君臨)"
-    faction: 남궁세가
+    faction: namgung
     type: { hitbox: 선, width: 2, length: 12 }
     frames: [20, 4, 20]
     defense: "시전 중 슈퍼아머"
@@ -83,7 +83,7 @@ legacy_arts:
     bloodline_restricted: true
   hyeolhae_malli:
     name: "혈해만리(血海萬里)"
-    faction: 혈교
+    faction: hyeolgyo
     type: { hitbox: 원, range: 8 }
     frames: [14, 8, 16]
     effect: "범위 내 원기·내력 약탈 (흡수량으로 자기 회복)"

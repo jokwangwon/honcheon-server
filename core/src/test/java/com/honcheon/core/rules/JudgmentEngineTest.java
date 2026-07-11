@@ -29,28 +29,41 @@ class JudgmentEngineTest {
 
     @Test
     void 등급_경계가_설계_문서와_일치한다() {
-        assertEquals("critical_success", engine.tierOf(6).id());
-        assertEquals("success", engine.tierOf(5).id());
+        // 2026-07 재설계 — 문턱을 2d6 마진 분포에 맞췄다 (judgment.yml result_tiers 주석이 스펙)
+        assertEquals("critical_success", engine.tierOf(4).id());   // 대등 판정의 쌍륙 = 마진 +4
+        assertEquals("success", engine.tierOf(3).id());
         assertEquals("success", engine.tierOf(2).id());
         assertEquals("narrow_success", engine.tierOf(1).id());
         assertEquals("narrow_success", engine.tierOf(0).id());
         assertEquals("partial_success", engine.tierOf(-1).id());
         assertEquals("partial_success", engine.tierOf(-3).id());
         assertEquals("failure", engine.tierOf(-4).id());
-        assertEquals("failure", engine.tierOf(-7).id());
-        assertEquals("critical_failure", engine.tierOf(-8).id());
+        assertEquals("failure", engine.tierOf(-5).id());
+        assertEquals("critical_failure", engine.tierOf(-6).id());  // 대등 판정의 뱀눈 = 마진 −6
     }
 
     @Test
-    void 턴3_한백_설득_분포가_파이썬_시뮬레이터와_일치한다() {
-        // 정본 시나리오 턴 3: 실행력 기본 4 vs 저항 14
-        // 파이썬 출력: 성공 2.8% / 아슬 13.9% / 부분 41.7% / 실패 38.9% / 치명 2.8%
-        Map<String, Double> dist = engine.distribution(4, 14);
-        assertEquals(1 / 36.0, dist.get("success"), 1e-9);
-        assertEquals(5 / 36.0, dist.get("narrow_success"), 1e-9);
+    void 대등_판정에서_6단이_전부_굴러간다() {
+        // 표준 대립: 실행력 5 vs 저항 13 → 마진 = 2d6 − 8 (범위 −6 ~ +4)
+        // 신 문턱: 대성공 1/36 · 성공 5/36 · 아슬 9/36 · 부분 15/36 · 실패 5/36 · 치명 1/36
+        Map<String, Double> dist = engine.distribution(5, 13);
+        assertEquals(1 / 36.0, dist.get("critical_success"), 1e-9);
+        assertEquals(5 / 36.0, dist.get("success"), 1e-9);
+        assertEquals(9 / 36.0, dist.get("narrow_success"), 1e-9);
         assertEquals(15 / 36.0, dist.get("partial_success"), 1e-9);
-        assertEquals(14 / 36.0, dist.get("failure"), 1e-9);
+        assertEquals(5 / 36.0, dist.get("failure"), 1e-9);
         assertEquals(1 / 36.0, dist.get("critical_failure"), 1e-9);
+    }
+
+    @Test
+    void 턴3_한백_설득_분포() {
+        // 정본 시나리오 턴 3: 실행력 기본 4 vs 저항 14 → 마진 = 2d6 − 10 (범위 −8 ~ +2)
+        Map<String, Double> dist = engine.distribution(4, 14);
+        assertEquals(1 / 36.0, dist.get("success"), 1e-9);          // 마진 +2 (쌍륙)
+        assertEquals(5 / 36.0, dist.get("narrow_success"), 1e-9);   // 0 ~ +1
+        assertEquals(15 / 36.0, dist.get("partial_success"), 1e-9); // −3 ~ −1
+        assertEquals(9 / 36.0, dist.get("failure"), 1e-9);          // −5 ~ −4
+        assertEquals(6 / 36.0, dist.get("critical_failure"), 1e-9); // ≤ −6 — 격차는 파국을 낳는다
     }
 
     @Test

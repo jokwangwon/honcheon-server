@@ -159,13 +159,13 @@ succession:
 
     bakho:                            # 포두 — 관군 (기능: 치안·수배)
       heir: null
-      faction_standin: { faction: gwangun, days: 3, arrival: 신임_포두 }   # 관은 자리를 비우지 않는다
+      faction_standin: { faction: gwan_gun, days: 3, arrival: 신임_포두 }   # 관은 자리를 비우지 않는다
       region_delta_on_death: { 치안: -3 }
       note: "관은 조직이다 — 사람이 죽어도 자리는 즉시 메워진다. 단 신임은 낭인을 모른다 (favor 0)"
 
     jomunwon:                         # 현령 — 관 (세계급)
       heir: null
-      faction_standin: { faction: gwanchung, days: 14, arrival: 신임_현령 }
+      faction_standin: { faction: hyeollyeong, days: 14, arrival: 신임_현령 }
       region_delta_on_death: { 치안: -5, 민심: -3 }
       escalation: "현령 살해 = 소문 강도 3 + 상급 관청 개입 (지역권 사건 승격 — 관군 6단계 토벌)"
       note: "죽일 수 있다. 그러나 이 죽음은 현을 바꾼다 (world_rung 대칭)"
@@ -224,7 +224,7 @@ killer_response:
   missing_person:                     # 시신을 숨겨도 사람은 없어진다
     trigger: "tier 3+ NPC가 3일 연속 일과(schedule) 이탈"
     rumor: { intensity: 1, subject: 실종 }
-    faction: 연락책_연락두절            # +3 (사망 확인 시 +1 차액)
+    faction_input: 연락책_연락두절            # +3 (사망 확인 시 +1 차액)
     succession: "실종 중에는 대행만 가능 — 정식 후계 불가 (사망 확인 전까지)"
   stages:                             # 세계 반응 단계 (누적)
     은밀:   { when: "witness 0 + body 은닉 + evidence 없음", 관: 없음, 세력: 없음, 민심: 0 }
@@ -281,7 +281,7 @@ revenge:
     haomun: 살수_청부                 # 하오문 망 경유 (묵삼·마삼 라인)
     sangdan: 현상금_게시
     orthodox: 토벌_명분
-    gwangun: 포교_수배
+    gwan_gun: 포교_수배
     noklim: 보복_습격
     mingan: null                      # 민간은 복수하지 못한다 → 민심 부채
     pyoguk: 현상금_게시

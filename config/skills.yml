@@ -34,7 +34,7 @@ martial_arts:
     category: "검법"
     sub_category: "입문 검법"
     grade: "삼류"
-    faction: "화산파"
+    faction: hwasan
     required_realm: "삼류"
     required_stats:
       근력: 2
@@ -53,7 +53,7 @@ martial_arts:
     category: "경공"
     sub_category: "보법"
     grade: "이류"
-    faction: "화산파"
+    faction: hwasan
     required_realm: "삼류"
     required_stats:
       민첩: 3
@@ -66,23 +66,9 @@ martial_arts:
     public_use_rumor: true
     faction_reaction: false
 
-  jeongsim_geomgyeol:
-    name: "정심검결"
-    category: "심법"
-    sub_category: "검문 심법"
-    grade: "이류"
-    faction: "화산파"
-    required_realm: "이류"
-    required_stats:
-      지혜: 3
-    required_mastery: 3
-    acquisition: "입문제자 승급 시험 통과 후 전수"
-    bloodline_restricted: false
-    requires_master: true
-    requires_manual: true
-    side_effects: false
-    public_use_rumor: false     # 심법은 외부에서 식별하기 어렵다
-    faction_reaction: false
+  # 정심검결(jeongsim_geomgyeol)은 **심법**이다 → 정본은 simbeop.yml simbeop.jeongsim_geomgyeol.
+  # 무공 카탈로그의 중복 등재를 폐기한다 (단일 id 공간 — skill_mechanics 참조가 어느 쪽인지 몰랐다).
+  # 액션 데이터(패링 태세)는 skill_mechanics.yml jeongsim_geomgyeol 이 그대로 갖는다.
 
   # ─── 세가 무공 예시 ───
   namgung_jehwang_geom:
@@ -90,7 +76,7 @@ martial_arts:
     category: "검법"
     sub_category: "세가 비전"
     grade: "절정"
-    faction: "남궁세가"
+    faction: namgung
     required_realm: "절정"
     required_stats:
       근력: 5
@@ -109,7 +95,7 @@ martial_arts:
     category: "금나술"
     sub_category: "관절기·포박"
     grade: "이류"
-    faction: "소림사"          # 속가로도 퍼진 실전 기예 — 출처 소문은 약함
+    faction: sorimsa          # 속가로도 퍼진 실전 기예 — 출처 소문은 약함
     required_realm: "이류"
     required_stats:
       근력: 3
@@ -125,23 +111,8 @@ martial_arts:
     # 액션 데이터: skill_mechanics.yml geumna_su (파격 — 가드·패링 관통)
 
   # ─── 사파 / 금기 무공 예시 ───
-  hyeolgi_simgong:
-    name: "혈기심공"
-    category: "심법"
-    sub_category: "금기 마공"
-    grade: "절정"
-    faction: "혈교"
-    required_realm: "일류"
-    required_stats:
-      체력: 4
-    required_mastery: 0
-    acquisition: "혈교 히든 루트 전용. 초기 튜토리얼에서는 등장하지 않음."
-    bloodline_restricted: false
-    requires_master: false
-    requires_manual: true
-    side_effects: true          # 심마, 폭주 위험
-    public_use_rumor: true      # 목격 시 즉시 금기 무공 소문
-    faction_reaction: true      # 정파/관군 토벌 대상, 혈교 접촉 시도
+  # 혈기심공(hyeolgi_simgong)도 **심법**이다 → 정본은 simbeop.yml simbeop.hyeolgi_simgong
+  # (capacity 10 · purity 0.8 · method 흡성 · demonic true). 무공 카탈로그 중복 등재 폐기.
 
   # ═══ 첫 시즌 확장 (G6) — 청하현 중심: 민간·낭인 공용 → 인접 세력 순 ═══
   # 표기: required_stats 인라인, required_mastery = 선행 무공 숙련 (0~10)
@@ -152,7 +123,7 @@ martial_arts:
     category: "권법"
     sub_category: "기본 권각"
     grade: "입문"
-    faction: "민간"
+    faction: mingan
     required_realm: "범인"
     required_stats: { 근력: 2 }
     required_mastery: 0
@@ -169,7 +140,7 @@ martial_arts:
     category: "박투"
     sub_category: "몸통 부딪히기"
     grade: "삼류"
-    faction: "민간"
+    faction: mingan
     required_realm: "삼류"
     required_stats: { 근력: 3, 체력: 3 }
     required_mastery: 0
@@ -186,7 +157,7 @@ martial_arts:
     category: "궁술"
     sub_category: "수렵 궁술"
     grade: "삼류"
-    faction: "민간"
+    faction: mingan
     required_realm: "범인"
     required_stats: { 감각: 3 }
     required_mastery: 0
@@ -203,7 +174,7 @@ martial_arts:
     category: "창법"
     sub_category: "표국 창술"
     grade: "이류"
-    faction: "표국"
+    faction: pyoguk
     required_realm: "삼류"
     required_stats: { 근력: 3 }
     required_mastery: 0
@@ -220,7 +191,7 @@ martial_arts:
     category: "의술"
     sub_category: "침구·응급"
     grade: "이류"
-    faction: "의가"
+    faction: uiga
     required_realm: "범인"
     required_stats: { 지혜: 4, 감각: 3 }
     required_mastery: 0
@@ -238,7 +209,7 @@ martial_arts:
     category: "단검술"
     sub_category: "속검"
     grade: "삼류"
-    faction: "하오문"
+    faction: haomun
     required_realm: "삼류"
     required_stats: { 민첩: 3 }
     required_mastery: 0
@@ -255,7 +226,7 @@ martial_arts:
     category: "은신술"
     sub_category: "기식 은폐"
     grade: "이류"
-    faction: "하오문"
+    faction: haomun
     required_realm: "이류"
     required_stats: { 감각: 4 }
     required_mastery: 0
@@ -273,7 +244,7 @@ martial_arts:
     category: "검법"
     sub_category: "본산 검법"
     grade: "일류"
-    faction: "화산파"
+    faction: hwasan
     required_realm: "일류"
     required_stats: { 민첩: 4, 지혜: 3 }
     required_mastery: 4          # 육합검 숙련 4
@@ -291,7 +262,7 @@ martial_arts:
     category: "합격진"
     sub_category: "검진 (2~5인)"
     grade: "절정"
-    faction: "화산파"
+    faction: hwasan
     required_realm: "일류"
     required_stats: { 지혜: 4 }
     required_mastery: 3          # 매화검법 숙련 3 (전 성원)
@@ -309,7 +280,7 @@ martial_arts:
     category: "권법"
     sub_category: "본산 권법"
     grade: "이류"
-    faction: "소림사"
+    faction: sorimsa
     required_realm: "삼류"
     required_stats: { 근력: 3, 체력: 3 }
     required_mastery: 0
@@ -326,7 +297,7 @@ martial_arts:
     category: "신법"
     sub_category: "방신 신법"
     grade: "절정"
-    faction: "소림사"
+    faction: sorimsa
     required_realm: "절정"
     required_stats: { 체력: 5 }
     required_mastery: 5          # 나한권 숙련 5
@@ -344,7 +315,7 @@ martial_arts:
     category: "권법"
     sub_category: "유권 (동공 병행)"
     grade: "이류"
-    faction: "무당파"
+    faction: mudang
     required_realm: "삼류"
     required_stats: { 지혜: 3 }
     required_mastery: 0
@@ -361,7 +332,7 @@ martial_arts:
     category: "검법"
     sub_category: "유검"
     grade: "절정"
-    faction: "무당파"
+    faction: mudang
     required_realm: "절정"
     required_stats: { 지혜: 5, 민첩: 4 }
     required_mastery: 5          # 태극권 숙련 5
@@ -378,7 +349,7 @@ martial_arts:
     category: "경공"
     sub_category: "본산 경공"
     grade: "절정"
-    faction: "무당파"
+    faction: mudang
     required_realm: "일류"
     required_stats: { 민첩: 5 }
     required_mastery: 0
@@ -396,7 +367,7 @@ martial_arts:
     category: "검법"
     sub_category: "세가 정전"
     grade: "이류"
-    faction: "남궁세가"
+    faction: namgung
     required_realm: "이류"
     required_stats: { 근력: 3, 지혜: 3 }
     required_mastery: 0
@@ -414,7 +385,7 @@ martial_arts:
     category: "암기"
     sub_category: "투척 비수"
     grade: "삼류"
-    faction: "사천당가"
+    faction: dangga
     required_realm: "삼류"
     required_stats: { 민첩: 3, 감각: 3 }
     required_mastery: 0
@@ -431,7 +402,7 @@ martial_arts:
     category: "독공"
     sub_category: "독장"
     grade: "일류"
-    faction: "사천당가"
+    faction: dangga
     required_realm: "일류"
     required_stats: { 체력: 4, 지혜: 3 }
     required_mastery: 0
@@ -449,7 +420,7 @@ martial_arts:
     category: "암기"
     sub_category: "세가 비전 (광역 투척)"
     grade: "절정"
-    faction: "사천당가"
+    faction: dangga
     required_realm: "절정"
     required_stats: { 민첩: 5, 감각: 5 }
     required_mastery: 6          # 당문비수술 대성
@@ -467,7 +438,7 @@ martial_arts:
     category: "경공"
     sub_category: "취보 (변칙 보법)"
     grade: "이류"
-    faction: "개방"
+    faction: gaebang
     required_realm: "이류"
     required_stats: { 민첩: 4 }
     required_mastery: 0
@@ -484,7 +455,7 @@ martial_arts:
     category: "봉법"
     sub_category: "방주 비전"
     grade: "절정"
-    faction: "개방"
+    faction: gaebang
     required_realm: "절정"
     required_stats: { 민첩: 5, 지혜: 4 }
     required_mastery: 5          # 취팔선보 숙련 5
@@ -502,7 +473,7 @@ martial_arts:
     category: "도법"
     sub_category: "군문 도법"
     grade: "이류"
-    faction: "관군"
+    faction: gwan_gun
     required_realm: "삼류"
     required_stats: { 근력: 4 }
     required_mastery: 0
@@ -520,7 +491,7 @@ martial_arts:
     category: "도법"
     sub_category: "산채 도법"
     grade: "삼류"
-    faction: "녹림"
+    faction: noklim
     required_realm: "삼류"
     required_stats: { 근력: 3 }
     required_mastery: 0
@@ -537,7 +508,7 @@ martial_arts:
     category: "도법"
     sub_category: "살초 위주"
     grade: "일류"
-    faction: "녹림"
+    faction: noklim
     required_realm: "일류"
     required_stats: { 근력: 4, 체력: 4 }
     required_mastery: 3          # 산도십팔로 숙련 3
@@ -553,7 +524,7 @@ martial_arts:
     category: "검법"
     sub_category: "쾌검 (변초)"
     grade: "이류"
-    faction: "사파"
+    faction: unorthodox
     required_realm: "이류"
     required_stats: { 민첩: 4 }
     required_mastery: 0
@@ -571,7 +542,7 @@ martial_arts:
     category: "암살술"
     sub_category: "일격 이탈"
     grade: "절정"
-    faction: "살막"
+    faction: salmak
     required_realm: "절정"
     required_stats: { 민첩: 5, 감각: 4 }
     required_mastery: 4          # 귀식술 숙련 4
@@ -589,7 +560,7 @@ martial_arts:
     category: "장법"
     sub_category: "금기 마공"
     grade: "절정"
-    faction: "혈교"
+    faction: hyeolgyo
     required_realm: "일류"
     required_stats: { 체력: 5 }
     required_mastery: 0

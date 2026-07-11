@@ -258,7 +258,7 @@ routes:
 
   haomun_entry:
     id: haomun_entry
-    faction: 하오문
+    faction: haomun
     group: unorthodox
     visibility: 공개
     grammar: 공범화                  # 사파는 사람을 뽑지 않는다 — 적신다
@@ -335,7 +335,7 @@ routes:
 
   noklim_entry:
     id: noklim_entry
-    faction: 녹림
+    faction: noklim
     group: unorthodox
     visibility: 공개
     grammar: 공범화_부작위            # ★ 아무것도 '하지' 않는 것이 첫 범행이다
@@ -417,7 +417,7 @@ routes:
 
   suroche_entry:
     id: suroche_entry
-    faction: 장강수로채
+    faction: jangang_suroche
     group: unorthodox
     visibility: 조건부                # 청하현에 거점 없음 — 밖에서 온다
     grammar: 공범화_청구서            # ★ 이 루트는 플레이어가 찾아가지 않는다. 찾아온다
@@ -488,7 +488,7 @@ routes:
 
   salmak_entry:
     id: salmak_entry
-    faction: 살막
+    faction: salmak
     group: unorthodox
     visibility: 조건부                # 가장 좁고 가장 어두운 문
     grammar: 회수                     # ★ 살막은 사람을 모집하지 않는다 — 목격자를 처리하거나, 회수한다

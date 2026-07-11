@@ -97,7 +97,7 @@ demonic_weapons:
   power:
     withstand_rank_up: 1
     damage_bonus: 2
-    drain: { target_vitality: -2, self_internal_energy: +2, on: 적중 }
+    drain: { target_vitality: -2, self_internal_energy: +2, "on": 적중 }   # 따옴표 필수 — YAML 1.1이 on 을 불리언으로 바꾼다
   price:
     침식: "전투마다 심마 흔적 +1 (internal_energy qi_deviation simma 연동 — 히든 루트 재료)"
     갈증: "열흘 이상 흡혈 없으면 주인 원기 -5/열흘"

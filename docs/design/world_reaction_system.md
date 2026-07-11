@@ -86,6 +86,28 @@
 
 ## 4. 세력 반응 시스템 (G2)
 
+### 4.0 세력 id 규약 — 이름은 하나여야 한다 (2026-07)
+
+세력을 부르는 이름이 **세 갈래**로 갈라져 있었다: 구성원 id(`haomun`) · 계열 id(`unorthodox`) ·
+한글명(`하오문`). 같은 세력을 파일마다 다른 철자로 불렀고, 12종이 등록부에서 해소되지 않았다
+(`gwangun` vs `gwan_gun`, `jeongboSang` vs `jeongbosang`, `사파`, `표국`, `의가` …).
+조인이 안 되는 참조는 **조용히 빗나가는 참조**다.
+
+**규약: 전 config 의 `faction:` / `factions:` / `group:` 값은 `factions.yml` 의 id 를 쓴다.**
+
+```text
+계열(5)     faction_groups 의 키           orthodox · unorthodox · forbidden · authority · civilian
+조직·문파   faction_groups.*.members 의 키  소문자 스네이크 (haomun · hwasan · pyoguk · gaebang …)
+한글명      표기 전용 — 참조 값으로 쓰지 않는다
+별칭        factions.yml `aliases` — 한글·구철자 입력(LLM·플레이어 발화)을 id 로 정규화
+예외        무소속 · 미상 · 없음 · 해당_문파 (세력이 아닌 서술 값)
+```
+
+개별 참조되던 문파·세가는 **1급 id 를 받았다** (화산파 `hwasan`, 소림사 `sorimsa`, 무당파 `mudang`,
+남궁세가 `namgung`, 사천당가 `dangga` — `parent` 로 상위 조직을 가리킨다). 실재하는데 등록만 없던
+세력도 등재했다: 개방 `gaebang` · 불가 `bulga` · 독문 `dokmun` · 표국 `pyoguk` · 의가 `uiga`.
+`sects` / `clans` 명단은 상위 조직의 로스터로 그대로 남는다.
+
 ### 4.1 조직적 인지의 규칙
 
 핵심 설계 결정: **세력의 반응은 그 세력의 조직 채널에 정보가 도달했을 때만 시작된다.** 조직원 개인이 객잔에서 들은 것은 그 NPC의 기억 태그일 뿐이다. 이 규칙 덕분에 망별 전파 속도가 곧 "세력별 반응 시차"가 된다 — 하오문은 하루 만에 움직이고 정파는 사흘 뒤에 보고를 받는다.
