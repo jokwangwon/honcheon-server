@@ -222,7 +222,12 @@ def main():
 
     groups = {
         "blocks": sorted((PACK / "minecraft" / "textures" / "block").glob("*.png")),
-        "items": sorted((PACK / "honcheon" / "textures").rglob("*.png")),
+        # 16x16 아이템만 — 큰 GUI 텍스처가 섞이면 타일 크기가 그것에 맞춰져
+        # 아이템이 셀 구석의 점이 된다 (시트가 못 쓰게 된다). 크기로 갈라 담는다.
+        "items": [f for f in sorted((PACK / "honcheon" / "textures").rglob("*.png"))
+                  if read_png(f)[0] <= 32],
+        "gui": [f for f in sorted((PACK / "honcheon" / "textures").rglob("*.png"))
+                if read_png(f)[0] > 32],
         "ui": sorted((PACK / "minecraft" / "textures" / "gui").rglob("*.png"))
              + sorted((PACK / "minecraft" / "textures" / "font").rglob("*.png")),
     }
