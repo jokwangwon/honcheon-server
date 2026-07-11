@@ -799,7 +799,7 @@ public final class GameListener extends ListenerAdapter {
         long chId = ((Number) row.get("id")).longValue();
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                 String.valueOf(row.get("realm")), "강호", "청하현");
-        db.logEvent("의뢰_수주", "character", String.valueOf(chId), Map.of("의뢰", q.key()));
+        db.logEvent("의뢰_수주", "character", String.valueOf(chId), q.key(), Map.of("의뢰", q.key()));
         event.editMessageEmbeds(new EmbedBuilder().setColor(INK)
                         .setTitle("수주 — " + q.name())
                         .setDescription("소연이 대장에 이름을 적었다. \"기한은 오늘 해 질 녘까지 — 검수는 확실히 하네.\"\n"
@@ -868,12 +868,12 @@ public final class GameListener extends ListenerAdapter {
                 realm = promoted;
             }
             result.setColor(BLOOD).appendDescription("\n" + gains);
-            db.logEvent("의뢰_완수", "character", String.valueOf(chId),
+            db.logEvent("의뢰_완수", "character", String.valueOf(chId), q.key(),
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward));
         } else {
             result.setColor(INK).appendDescription(
                     "\n일이 어그러졌다 — 소연: \"빈손이면 보수도 없네. 게시판은 내일 다시 열리네.\"");
-            db.logEvent("의뢰_실패", "character", String.valueOf(chId),
+            db.logEvent("의뢰_실패", "character", String.valueOf(chId), q.key(),
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin));
         }
         db.updateCharacter(chId, sheet, wallet, realm, "강호", "청하현");
@@ -1021,6 +1021,7 @@ public final class GameListener extends ListenerAdapter {
         String winner = opposed.draw() ? null : (opposed.margin() > 0 ? nameA : nameB);
         String loser = opposed.draw() ? null : (opposed.margin() > 0 ? nameB : nameA);
         db.logEvent("비무", "character", String.valueOf(((Number) challengerRow.get().get("id")).longValue()),
+                String.valueOf(((Number) targetRow.get().get("id")).longValue()),
                 Map.of("상대", nameB, "굴림A", rollA, "굴림B", rollB, "마진", opposed.margin(),
                         "등급", opposed.tier().name(), "무승부", opposed.draw()));
 
@@ -1112,7 +1113,7 @@ public final class GameListener extends ListenerAdapter {
             sheet.put("사사", Map.of("스승", "곽진", "무공", "태조장권", "과제_수련", 0));
             db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                     String.valueOf(row.get("realm")), "강호", "청하현");
-            db.logEvent("사사_시작", "character", String.valueOf(chId), Map.of("스승", "곽진"));
+            db.logEvent("사사_시작", "character", String.valueOf(chId), "곽진", Map.of("스승", "곽진"));
             event.replyEmbeds(new EmbedBuilder().setColor(INK).setTitle("사사 — 곽진")
                     .setDescription("장터 어귀의 표사 곽진은 한참 아래위를 훑어보더니 짧게 말했다.\n\n"
                             + "\"배우고 싶으면 성의부터 보여라 — **새벽 수련 사흘**. 하루라도 빼먹으면 없던 일이다.\"\n\n"

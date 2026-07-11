@@ -238,13 +238,21 @@ public final class Db implements AutoCloseable {
     /** append-only 이벤트 로그 — 진실의 원장 (판정·생성·선택 전부) */
     public synchronized void logEvent(String type, String actorType, String actorId, Map<String, Object> data)
             throws Exception {
+        logEvent(type, actorType, actorId, null, data);
+    }
+
+    /** F32 — 대상 있는 이벤트 (의뢰 키·비무 상대·스승 등): target_id 를 채워 추적 가능하게 */
+    public synchronized void logEvent(String type, String actorType, String actorId, String targetId,
+                                      Map<String, Object> data) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO events(day, type, actor_type, actor_id, data_json) VALUES(?, ?, ?, ?, ?)")) {
+                "INSERT INTO events(day, type, actor_type, actor_id, target_id, data_json) "
+                        + "VALUES(?, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, worldDay());
             ps.setString(2, type);
             ps.setString(3, actorType);
             ps.setString(4, actorId);
-            ps.setString(5, JSON.writeValueAsString(data));
+            ps.setString(5, targetId);
+            ps.setString(6, JSON.writeValueAsString(data));
             ps.executeUpdate();
         }
     }
