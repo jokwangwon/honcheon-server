@@ -66,6 +66,152 @@ decision_process:
   acceptance: [1초_가독, 2값_규율, 틴트_4색_검증, 바닐라_이질감_없음]
   promotion_timing: "아트는 게임플레이를 막지 않는다 — M3(정식 서버) 전까지 플레이스홀더 허용"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 아이템·블록 텍스처 레이어 (신규 절 — 기준 문서: docs/design/texture_layer_design.md)
+# 두 갈래의 문법: 아이템 = 개별 지정(item_model 컴포넌트, 세계 오염 0) /
+#                블록 = 전역 치환(징발 — 세계의 모든 인스턴스가 바뀐다)
+# 상속: 위 glyph_slots.registration(등록제) · glyph_slots.pua_rule(F26) 그대로 적용
+# ═══════════════════════════════════════════════════════════════════════════
+
+texture_rules:
+  inherits: [glyph_slots.registration, glyph_slots.pua_rule, pixel_spec.아이템_텍스처]
+  registration: "채널 추가 = 본 파일 등록 + build_resourcepack.py 반영 — 미등록 텍스처 = 즉흥 재텍스처 = 삭제 대상"
+  pua_rule: "F26 계승 — 아이템 키·블록 경로는 ASCII이나 산출 JSON은 ensure_ascii=True 유지 (한글 노트는 JSON 금지)"
+
+  model_channel:
+    decision: item_model              # minecraft:item_model 컴포넌트 (1.21.4)
+    rejected: custom_model_data_정수_오버라이드
+    reason: "1.21.4는 아이템 정의(assets/<ns>/items/*.json)로 데이터 주도화 — 구식 overrides predicate는 폐기 경로.
+             문자열 키(honcheon:weapon/sword_beomcheol)는 대역 충돌이 구조적으로 불가능하고 사람이 읽는다"
+    secondary: "custom_model_data.strings — '같은 자산의 상태 변주'에만 (마병 미감정/발현, 애병 3단계). 정수 CMD 금지"
+
+  global_replacement_warning: |
+    블록 텍스처는 스택이 아니라 블록 타입에 붙는다. deepslate_tiles.png 한 장을 기와로 바꾸면
+    청하현 지붕만이 아니라 세계의 모든 심층암 타일이 기와가 된다 — 고대 도시 바닥까지.
+    판정 없이 재텍스처하면 광산 깊은 곳까지 오염된다. block_channels 등록 없이 블록 PNG 금지.
+  natural_block_ban: "자연이 만든 블록은 건드리지 않는다 — stone·dirt·gravel·*_log·stone_bricks·cobblestone·smooth_stone·dirt_path 등 지형·구조물 대량 생성 블록 징발 금지. 후보는 '사람이 만든 블록'(제작 전용·구조물 한정)에서만"
+  pack_gate: |
+    팩 없이도 플레이 가능해야 한다 (require-resource-pack=false 유지).
+    텍스처는 강화지 의미의 유일한 전달자가 아니다 — 모든 채널은 팩없음_폴백을 함께 등록한다.
+    블록: deepslate_tiles는 팩 없이도 '검은 기와처럼 보이는 돌' (건축 가이드가 그렇게 골랐다).
+    아이템: 베이스 아이템 선택이 곧 폴백 — 등급은 바닐라 재질 색(돌·철·다이아·금·네더라이트), 계열은 이름·lore.
+  colorblind_rule: "색 단독 금지 계승 — 무기 등급은 재질 색 + 자루 끝 고리 수(0/1/2/3, 마병=혈적) + 등급명 lore 3중 표기"
+  blockstate_trick:
+    adopted: false                    # note_block instrument·mushroom_block face 트릭 — 불채택
+    reason: "① 팩 게이트 정면 위배 (팩 없으면 그냥 노트블록 — 의미 0) ② 우클릭으로 note가 바뀌면 텍스처가 변한다:
+             서버 상시 차단 + CheonghaBuilder 결정론에 상태 관리 계층 추가 ③ 원하는 자산(기와·격자창·회벽·발·족자·현판)
+             여섯 다 징발로 커버된다 — 트릭은 징발 등록부가 고갈된 뒤의 우회로"
+    reserve: "note_block은 재텍스처하지 않고 보류 — 트릭의 재료를 미리 태우지 않는다"
+    future_syntax: "채택 시 block_channels.trick: { carrier, state, model_key, 팩없음_폴백 } — 폴백 칸이 비면 등록 거부"
+  placeholder_rule: "2~3값 팔레트 (먹 외곽 + 몸체 [+ 의미 강조]) · 16x16 고정 · 외곽 1px 여백 · 그라디언트/AA 금지 · 실루엣 우선"
+  canon_rule: "이미 등록된 사물만 시각화 — equipment.yml / economy.yml / skills.yml / simbeop.yml에 실재하는 것만. 신규 아이템 발명 금지"
+
+# ─── 아이템 채널 등록부 — 개별 지정 (컴포넌트 단위, 전역 오염 0) ───
+# base_item = 팩 미적용 폴백의 실체. model_key = 코드와 아트의 유일한 접점.
+item_channels:
+  무기:
+    grade_base_items:               # 등급 = 베이스 아이템 (팩 없이도 재질 색이 등급이다)
+      범철: { base_item: stone_sword, tint: gray }
+      정련: { base_item: iron_sword, tint: white }
+      보병: { base_item: diamond_sword, tint: aqua }
+      신병: { base_item: golden_sword, tint: gold }
+      마병: { base_item: netherite_sword, tint: dark_red }
+    grade_mark: "자루 끝 고리 0/1/2/3개 (범철~신병) + 신병 수실 / 마병 = 고리 없음 + 혈적 1점 (위가 아니라 밖)"
+    series:                         # 계열 = item_model (같은 베이스에 다른 실루엣)
+      검: { model_key: "honcheon:weapon/sword_<등급>", note: "곧은 양날 + 원형 호수 + 자루 술" }
+      도: { model_key: "honcheon:weapon/dao_<등급>", note: "한쪽 날 + 완만한 휨 + 원반 호수" }
+      창: { model_key: "honcheon:weapon/spear_<등급>", note: "긴 자루 + 좁은 삼각 창날 + 홍영 1점" }
+      권갑: { model_key: "honcheon:weapon/gauntlet_<등급>", note: "손등 판 + 손목 띠 2줄 (날 없음)" }
+      단검: { model_key: "honcheon:weapon/dagger_<등급>", note: "짧은 날 + 손잡이 절반 비율 (비연단검술)" }
+    spear_base_pending: "trident 베이스가 팩 게이트상 최선이나 우클릭 투척 차단 접합이 선행 조건 — 확정 전까지 등급 sword 베이스"
+    혈음도:
+      base_item: netherite_sword
+      model_key: "honcheon:weapon/dao_mabyeong"
+      state_split: "custom_model_data.strings: unidentified | revealed — 미감정은 평범한 도 텍스처 (감정 전엔 정체 불명 정합)"
+      note: "발현 시 날 중앙 1px 혈적 세로선 + 검붉은 자루 술 — 혈향의 시각 신호"
+    vanilla_stat_warning: "재질 티어가 공격력·내구를 딸고 온다 — 판정 기반 전투와 무관하나 지급 시 Unbreakable·attribute 정리는 접합 조건"
+
+  지물:                              # 소모품·서물·증서·화물
+    비급_진본: { base_item: written_book, model_key: "honcheon:tome/manual_original", 팩없음: "글 쓰인 책", note: "죽간 말이 + 봉인 끈 + 주사 인장 1점" }
+    비급_필사본: { base_item: book, model_key: "honcheon:tome/manual_copy", 팩없음: "맨 책", note: "얇은 철(綴), 인장 없음 — 진본과의 차이가 인장" }
+    심법_구결: { base_item: writable_book, model_key: "honcheon:tome/gugyeol", 팩없음: "책과 깃펜", note: "접힌 낱장 + 붓 자국 세로 3획" }
+    전표: { base_item: paper, model_key: "honcheon:coin/jeonpyo", 팩없음: "종이 한 장", note: "가로 종이 + 전장 인장(주사) + 액면 획. 액면은 lore — 텍스처 1장이 모든 액면" }
+    단약_영약: { base_item: magma_cream, model_key: "honcheon:pill/yeongyak", 팩없음: "붉은 구슬", note: "구형 + 좌상 광점 1px — HUD 기혈 구슬과 같은 문법 (먹는 것과 채워지는 것이 같은 그림)" }
+    표물: { base_item: chest_minecart, model_key: "honcheon:cargo/pyomul", 팩없음: "궤짝 실린 수레", note: "궤 + 봉인 끈 십자 + 표국 인패. 레일 없는 세계에선 설치 불가 — 바닐라 규칙이 곧 방어" }
+
+  기물:                              # equipment.yml trinkets 5종 (등록제 — 발명 금지)
+    피독주: { base_item: heart_of_the_sea, model_key: "honcheon:trinket/pidokju", 팩없음: "청록 구슬", note: "구슬 + 표면 균열 2획", status: 징발 }
+    야명주: { base_item: nether_star, model_key: "honcheon:trinket/yamyeongju", 팩없음: "빛나는 별(glint)", note: "구슬 + 방사 광선 4방 1px — 유일하게 밝은 값 허용", status: 징발 }
+    청낭: { base_item: bundle, model_key: "honcheon:trinket/cheongnang", 팩없음: "주머니", note: "아가리 묶은 주머니 + 침 3개", status: 보류, blocker: "바닐라 수납 GUI 차단 접합 필요" }
+    호신부: { base_item: name_tag, model_key: "honcheon:trinket/hosinbu", 팩없음: "매다는 패", note: "세로 부적 + 주사 부문 3획 + 끈 고리", status: 보류, blocker: "개체 명명 동작 차단 필요" }
+    천잠사_요대: { base_item: lead, model_key: "honcheon:trinket/yodae", 팩없음: "끈 뭉치", note: "감긴 띠 + 매듭 1 + 은사 광택 1px", status: 보류, blocker: "개체 매기 동작 차단 필요" }
+
+  재료:                              # economy.yml price_table.사냥_부산물
+    늑대_가죽: { base_item: leather, model_key: "honcheon:pelt/wolf", note: "펼친 가죽 + 네 발 외곽 — 가죽 3종은 윤곽으로 구별" }
+    여우_가죽: { base_item: leather, model_key: "honcheon:pelt/fox", note: "좁고 긴 형 + 꼬리 술 (붉은 기 한 점 — 시세 3배의 표식)" }
+    호랑이_가죽: { base_item: leather, model_key: "honcheon:pelt/tiger", note: "넓은 형 + 줄무늬 3획 (150배 가격은 색이 아니라 이름이 판다)" }
+    웅담: { base_item: slime_ball, model_key: "honcheon:spoil/ungdam", note: "쓸개 주머니 + 매단 끈 1" }
+    약재: { base_item: wheat, model_key: "honcheon:herb/yakjae", note: "묶은 약초 다발 + 끈 2줄. 컴포넌트 없는 일반 밀은 바닐라 그대로 — 전역 오염 0" }
+
+  채널_불요:                         # 설계의 절반은 안 만드는 것
+    해독약: { base_item: potion, method: "minecraft:potion_contents.custom_color — 컴포넌트가 칠한다 (팩 불필요)", note: "바닐라 효과는 비워 지급 — 효과는 판정층이 준다" }
+    호골: { base_item: bone, note: "바닐라 뼈가 이미 호골 — 이름만" }
+    화폐_문_냥_금: { note: "아이템 없음 — economy.yml mc.ledger_based (복제·인플레 원천 차단). 전표만 아이템인 이유" }
+
+# ─── 블록 희생 등록부 — 전역 치환 (징발 12 / 보류 4 / 금지 6계열) ───
+# 입력: docs/design/building_style_guide.md 팔레트. 판정: 세계 오염 검사 + 팩 게이트.
+block_channels:
+  징발:
+    deepslate_tiles:
+      무협_자산: "흑와 — 기와면·용마루·추녀마루·담 갓"
+      covers: [deepslate_tile_stairs, deepslate_tile_slab, deepslate_tile_wall]   # PNG 1장이 계단·반블록·담장을 전부 덮는다
+      징발_판정: "자연 생성 없음(제작 전용). 고대 도시(Deep Dark)가 유일 오염원 — 접근 난도 극히 높고 콘텐츠 밖"
+      팩없음_폴백: "검은 기와처럼 보이는 돌 (건축 가이드가 이미 그렇게 골랐다)"
+    cracked_deepslate_tiles: { 무협_자산: "깨진 기와 (폐사당 잔해)", 징발_판정: "동일 — 고대 도시 오염 동반", 팩없음_폴백: "금 간 검은 돌" }
+    white_terracotta:
+      무협_자산: "백벽 — 상가·관아급 벽 (수묵 정체성)"
+      징발_판정: "배들랜드 지층에 대량 자연 생성 — 그러나 무늬 없는 저대비 회백을 유지하면 지층에서 튀지 않는다 (텍스처 디자인으로 오염 무력화)"
+      조건: "무늬·이음선 금지"
+      팩없음_폴백: "하얀 벽"
+    light_gray_terracotta: { 무협_자산: "회벽 — 서민 벽", 징발_판정: "동일(배들랜드)", 조건: "무늬·이음선 금지", 팩없음_폴백: "회색 벽" }
+    glass_pane:
+      무협_자산: "격자창(格子窓)"
+      textures: [block/glass.png, block/glass_pane_top.png]
+      징발_판정: "면 텍스처를 유리 블록과 공유 — 유리도 격자창이 된다. 그러나 전근대 강호에 판유리는 없다: 오염이 아니라 정합. 바닐라 마을 창문의 동아시아화는 이득"
+      팩없음_폴백: "유리창 (투명 = 창)"
+    bamboo_planks: { 무협_자산: "죽렴(竹簾) — 발·좌판·건조대", 징발_판정: "자연 생성 없음. 세로 결 텍스처는 좌판·바닥으로도 읽힌다", 팩없음_폴백: "밝은 대나무 판" }
+    dark_oak_hanging_sign: { 무협_자산: "현판·주기(酒旗)", texture: "entity/signs/hanging/dark_oak.png", 징발_판정: "자연 생성 없음. 다크오크 변종만 — 다른 목재는 바닐라 유지", 팩없음_폴백: "매달린 나무 간판" }
+    decorated_pot: { 무협_자산: "청화 술단지·약단지·쌀독", texture: "entity/decorated_pot/decorated_pot_base.png", 징발_판정: "흔적 폐허에 자연 생성 — sherd 무늬는 별도 텍스처라 유지. base만 교체(무해)", 팩없음_폴백: "장식 항아리 (이미 도자기)" }
+    chiseled_bookshelf: { 무협_자산: "한약장 서랍·문서철", 징발_판정: "자연 생성 없음. 책 유무 슬롯을 서랍 문법으로 재해석 — '꽂힌 책 = 채운 서랍'", 팩없음_폴백: "칸 있는 책장", risk: "아트 난도 높음 — 2차 실패 시 보류로 강등" }
+    lantern: { 무협_자산: "등롱(燈籠)", 징발_판정: "구조물 소량 생성(드묾) — 무해", 팩없음_폴백: "매단 등 (팩 없이도 등롱처럼)" }
+    soul_lantern: { 무협_자산: "백등롱 — 폐사당 냉광 전용", 징발_판정: "네더 요새 생성 — 냉색=금기 의미 유지", 팩없음_폴백: "푸른 등" }
+    painting: { 무협_자산: "족자 — 수묵 산수·서예", scope: "1x1·2x1 소형 우선", 징발_판정: "마을·삼림 저택 벽에 생성 — 그림이 족자가 되는 것은 전역 이득", 팩없음_폴백: "벽에 걸린 그림" }
+
+  보류:
+    note_block: { 사유: "blockstate 트릭의 재료 — 지금 재텍스처하면 트릭 여지가 사라진다 (texture_rules.blockstate_trick.reserve)" }
+    mud_bricks: { 사유: "팩 없이도 이미 흙벽 — 얻는 것이 없다 (효용 미달)" }
+    red_wool: { 사유: "팩 없이도 붉은 천 — 얻는 것이 적다" }
+    stripped_dark_oak_log: { 사유: "목재는 이미 목재 (효용 미달)" }
+
+  금지:                              # 자연이 만든 블록은 건드리지 않는다
+    지형: { blocks: [stone, dirt, gravel, dirt_path, smooth_stone], 사유: "지형 그 자체 — 재텍스처 = 세계 전체 오염" }
+    수목: { blocks: [dark_oak_log, spruce_log, oak_log], 사유: "숲 바이옴 전체가 이 블록이다 — 나무 한 그루가 기둥이 된다" }
+    석조: { blocks: [stone_bricks, cobblestone, mossy_cobblestone, cracked_stone_bricks], 사유: "요새·던전·감시탑에 대량 자연 생성" }
+    기물_생성: { blocks: [hay_block, barrel, chest, lectern, cauldron, brewing_stand], 사유: "마을·구조물 전반 생성 + 팩 없이도 각자 읽힌다" }
+    구리: { blocks: [oxidized_cut_copper_stairs, oxidized_cut_copper_slab], 사유: "플레이어 건축·구리 사용처 광범위, 얻는 것 적음" }
+    잔여_오염_감시: "징발 12종 중 자연 생성 오염이 남는 것 3종 — deepslate_tiles(고대 도시) / *_terracotta(배들랜드) / decorated_pot(흔적 폐허). 육안 확인 전엔 수용 판정도 가설이다"
+
+# ─── 파이프라인 계약 (build_resourcepack.py 확장 — 구현은 다음 증분) ───
+texture_pipeline:
+  dirs:
+    아이템_정의: "assets/honcheon/items/<key>.json — item_model 컴포넌트가 가리키는 곳 (1.21.4 신규)"
+    아이템_모델: "assets/honcheon/models/item/<key>.json — parent: handheld(무기) | generated(그 외)"
+    아이템_텍스처: "assets/honcheon/textures/item/<key>.png — 16x16"
+    블록_텍스처: "assets/minecraft/textures/block|entity|painting/<vanilla>.png — 전역 치환 (blockstate/model JSON 불요)"
+  builder_hooks: [ITEM_ART_등록표, write_item_assets, BLOCK_ART_등록부, write_block_textures, "main() 산출 집계", "pack.mcmeta description 갱신 (pack_format 46 불변)"]
+  promotion: "플레이스홀더 → 정식 PNG 교체 시 ITEM_ART의 art 자리를 PNG 경로로 교체 (load_png 1개 추가) — 키·코드 불변"
+  distribution: "server.properties resource-pack + sha1. require-resource-pack=false 유지 — 팩 게이트의 서버 측 표현"
+
 roadmap:
   MVT: { slots: [기세, 화후_게이지], status: 완료_플레이스홀더 }
   M2: { slots: [내력_원기_게이지, 경지_칭호_문장, 경락도_GUI_배경], status: 완료_플레이스홀더 }
