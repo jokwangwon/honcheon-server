@@ -894,6 +894,18 @@ public final class GameListener extends ListenerAdapter {
             "곽진", "상단로가 요즘 험하다. 호위 삯이 오르는 중이야 — 실력이 있다면 기회지.",
             "장쇠", "요즘 은근히 좋은 물건을 싸게 넘기려는 자들이 있어 — 출처는 안 물어봤네.");
 
+    /**
+     * F36 — 정보 질문 결정론 게이트: LLM 분류(확률적)와 OR. 키워드가 있으면 LLM을 거치지 않고
+     * 곧장 판정층 — 오분류로 잡담층이 소문을 발명해 판정 게이트를 우회하는 길을 막는다 (8차-②).
+     */
+    private static final List<String> INFO_KEYWORDS = List.of(
+            "소문", "소식", "들리는", "들은 거", "들은 것", "들은 얘기",
+            "아는 거", "아는 것", "정보", "무슨 일", "알려주", "알려 주", "귀띔");
+
+    private static boolean isInfoSeeking(String say) {
+        return INFO_KEYWORDS.stream().anyMatch(say::contains);
+    }
+
     private final Map<String, Long> talkCooldown = new ConcurrentHashMap<>();
 
     private void talkToNpc(SlashCommandInteractionEvent event) throws Exception {
@@ -930,6 +942,11 @@ public final class GameListener extends ListenerAdapter {
         String persona = personaPrompt(npcName, npc);
         String fallback = fallbackLine(npcName, npc);
         event.deferReply().queue();   // 로컬 LLM 1~3초 — 3초 응답 제한 회피
+        // F36 — 키워드 게이트가 먼저: 정보 질문은 결정론으로 판정층 (LLM 호출도 절약)
+        if (isInfoSeeking(say)) {
+            resolveInfoCheck(event, row, chId, npcName, say);
+            return;
+        }
         renderer.chat(persona, say, fallback).thenAccept(reply -> {
             try {
                 // F35 — 소형 모델이 잡담과 [판정]을 섞어 낸다: 관용 매칭 + 앞 텍스트 폐기
@@ -985,18 +1002,22 @@ public final class GameListener extends ListenerAdapter {
         Object disp = npc.get("disposition");
         String dispositions = disp instanceof List<?> list
                 ? String.join(", ", list.stream().map(String::valueOf).toList()) : "";
-        // v2 — 8차 채집물 반영: 역할 반전(소연)·직함 발명(금서방)·톤 비일관(장쇠)·무색무취(유문)·혼합 출력(한백)
+        // v3 — 8차-② 채집물 반영: 소문 발명(금서방 철공소·소연 청하정)이 판정 게이트를 우회 →
+        //      질문 예시 명시 + 소문·사건 발명을 별도 금지 조항으로 (서버측 F36 키워드 게이트와 이중 방어)
         return "너는 무협 세계 청하현의 NPC 「" + name + "」이다. 너의 역할: " + npc.get("role")
                 + ". 너의 성향: " + dispositions + ".\n"
                 + "말을 거는 상대는 강호에 갓 나온 손님이다 — 상대에게 너의 직업을 투사하지 마라.\n"
                 + "규칙 (가장 중요한 것부터):\n"
                 + "1. 상대의 말이 정보 요구·부탁·설득·흥정·위협이면 **다른 글자 없이 [판정] 넉 자만** 출력하라."
-                + " 소문·정보 내용을 지어내 답하는 것은 금지다.\n"
+                + " \"요즘 소문 있소?\" \"무슨 소식 없나?\" \"들리는 얘기 좀\" 이 대표 예다 —"
+                + " 소문·소식·정보를 묻는 말에 잡담으로 답하는 것은 금지다.\n"
                 + "2. 그 외(인사·잡담·농담)는 2문장 이내로 대답한다 — 판정을 억지로 만들지 않는다.\n"
-                + "3. 네가 아는 것만 말한다 — 청하현 안의 일상 수준. 새 인명·지명·조직명·직함·사건 발명 금지."
+                + "3. 소문·사건·시설을 지어내지 마라 — 세상 소식은 네가 정하는 게 아니다."
+                + " 모르면 모른다고 하거나 [판정]으로 넘겨라.\n"
+                + "4. 네가 아는 것만 말한다 — 청하현 안의 일상 수준. 새 인명·지명·조직명·직함 발명 금지."
                 + " 너의 이름과 직함은 위에 주어진 것이 전부다. 숫자 금지.\n"
-                + "4. 말투는 처음부터 끝까지 하나로 — 하게체(장사꾼·무인) 또는 하오체. 존댓말로 바꾸지 마라.\n"
-                + "5. 직업의 어휘를 써라 — 의원이면 맥·약재, 상인이면 값·물건, 무인이면 손속·길.";
+                + "5. 말투는 처음부터 끝까지 하나로 — 하게체(장사꾼·무인) 또는 하오체. 존댓말로 바꾸지 마라.\n"
+                + "6. 직업의 어휘를 써라 — 의원이면 맥·약재, 상인이면 값·물건, 무인이면 손속·길.";
     }
 
     /** LLM 비활성·실패 시 폴백 — 역할 기반 한 줄 (대화가 죽지 않는다) */
