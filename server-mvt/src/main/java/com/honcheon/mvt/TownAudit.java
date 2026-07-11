@@ -291,6 +291,14 @@ public final class TownAudit {
             }
         }
         out.add(INFO + "  골목(z±21) 폭 " + String.join("/", al) + " (최소 " + alleyMin + ")");
+        for (int dz : new int[]{-21, 21}) {
+            for (int x : new int[]{-40, -20, 0, 20, 40}) {
+                if (runZ(g, x, dz) == 0) {
+                    out.add(WARN + "  진단: 골목 (" + (cx + x) + "," + (cz + dz) + ") 이 길이 아니다 — "
+                            + WORLD_PROBE.getBlockAt(cx + x, PROBE_Y, cz + dz).getType());
+                }
+            }
+        }
         if (alleyMin >= ALLEY_MIN) {
             out.add(OK + "골목 최소 폭 " + alleyMin + " ≥ " + ALLEY_MIN);
         } else {

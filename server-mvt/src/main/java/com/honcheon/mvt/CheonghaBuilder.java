@@ -147,6 +147,31 @@ import java.util.Set;
  * ④ 텃밭 축소 — 4필지의 크기를 5x4 이하로 줄이고 둘은 **빈 밭(farmland만)** 으로 비웠다. 걷어낸 자리는
  *    다진 흙 마당 + 건초 더미·퇴비통·장작더미(생활 흔적 8곳 추가). 담장 안 FARMLAND ≈ 53칸 / 지면 14161칸
  *    = 0.4% (기준 10% 이하).
+ *
+ * v6.5 — 조감도 4차: **지붕이 능선이 아니라 고원이다** + 잡초 줄무늬 + 휑한 마당.
+ *   검수 위반 0건을 달성한 v6.4 에 새 항목(③-b 지붕 능선)을 걸었더니 **다섯 채 전부** 떨어졌다:
+ *   꼭대기 평지 56~78%. 물매는 대역 안(0.67)이었는데도 지붕이 "검은 상자"로 보인 이유가 여기 있었다.
+ * ① 【능선 수렴】 물매 rise(s)=(s+1)/3 은 너무 완만해서 **반폭을 다 전진해도 두 경사면이 만나지 못했다**.
+ *    남은 꼭대기 평지에 용마루 몸통·등·치미·덧단·뿔을 네 켜로 얹으니 "고원 위의 모자"가 됐고,
+ *    최상단 y 평면이 그 용마루 구조물로만 채워져 평지 비율 78% 가 나왔다 (실루엣을 얻으려 얹은 것이
+ *    실루엣을 죽였다). v6.5 는 **지붕 높이를 폭에서 역산**한다 — roofShape 가 우진각 링 수(nHip)와
+ *    수렴 단 수(nTotal)를 먼저 세고, 능선 상승 H = ceil(0.65 × run) 을 정한 뒤 rise(s)=round(s·H/nTotal)
+ *    로 균일하게 오른다. 마지막 경사단은 풀 블록 한 켜(적새)로 마감하고, 그 위에 **폭 1~2칸의 용마루 선**
+ *    하나만 얹는다 — 등·치미·덧단·뿔은 전부 폐기. 최상단 평면 = 용마루 5~7칸 / 그 밑 켜 = 경사면 30~38칸
+ *    → 평지 13~16% (기준 20% 이하). 물매 = H/nHip = 0.67~0.71 (0.5~0.8 대역 유지).
+ *    지붕 최고 높이는 v6.4 와 **같다** (덜어낸 용마루 네 켜만큼 경사면이 올라왔다) → 처마 겹침 회귀 0.
+ *    덤: 뿔 폐기로 모든 지붕이 제 사각형 안에 갇혀 이웃의 검수 단면을 오염시키지 못한다 (v6.4 ③의 근절).
+ * ② 【줄무늬 파괴】 잡초·잔디가 초록 세로줄로 마을을 지배했다 — 범인은 선형 해시 `x*a + z*b` 다:
+ *    그 식의 등고선이 직선이므로 **반드시 줄이 선다**. noise() = 곱셈·xorshift 혼합 해시로 갈아
+ *    등고선을 깨고, 잡초 밀도 22% → 14% · 잔디 12.5% → 8% 로 낮췄다 (마당은 맨땅이 지배한다).
+ *    노면 점치환·광장 결·뒷골목·디딤돌의 해시도 전부 비선형으로 (사선 줄무늬는 길에도 있었다).
+ * ③ 【마을 채우기】 121x121 에 건물 15채면 담장 안이 휑하다. 밭이 아니라 **살림**으로 채운다:
+ *    우물 3·공동 빨래터 3·짐수레 4·노점 좌판 4·개집 4·닭장 3·장작 야적 7·건초·퇴비·돌담 모퉁이 4
+ *    (=마을 살림 46곳) + 참나무·자작 24그루 + 필지 뒷마당 벽 11줄. 세 규칙을 지킨다 —
+ *    (a) 지붕 자재(심층암·흑목 계단/반 블록)를 한 조각도 쓰지 않는다 (검수의 지붕 상자가 부풀면 처마 겹침 오탐),
+ *    (b) 노면 자재(조약돌·돌 벽돌·자갈)를 지면(cy)에 놓지 않는다 (마당의 돌 한 장이 '길'로 세어진다),
+ *    (c) 채색 금지 — 벚나무는 광장의 몫이고 마당엔 참나무·자작·짚·무명천뿐.
+ *    전부 freeCell() 통과분만 = 길·골목·광장·담·건물·등롱·울타리를 한 칸도 밀어내지 않는다.
  */
 final class CheonghaBuilder {
 
@@ -224,7 +249,15 @@ final class CheonghaBuilder {
 
         marketStalls(world, cx, cy, cz);
         streetLanterns(world, cx, cy, cz);   // v6.1 ① — 길을 7칸으로 넓혔으므로 등롱은 건물·길을 다 세운 뒤 빈 자리에만 선다
+        villageFill(world, cx, cy, cz);      // v6.5 ③ — 우물·빨래터·수레·좌판·개집·나무·필지 벽 (휑한 마당을 살림으로 채운다)
         weeds(world, cx, cy, cz);            // v6.2 ① — 잡초는 맨 끝 (등롱·소품 자리를 뺏지 않는다)
+        // v6.5 마감 — 노면 재포장. 뒤에 도는 패스(마당·필지 벽·잡초)가 길 한 칸이라도 덮으면
+        // 그 자리에서 길이 끊긴다 (검수: 골목 폭 0 관측 — 골목 가장자리 한 칸이 거친 흙이 됐다).
+        // 길은 마을의 뼈대다 — 맨 마지막에 다시 깔아 아무도 못 덮게 한다.
+        roads(world, cx, cy, cz);
+        alleys(world, cx, cy, cz);
+        doorPaths(world, cx, cy, cz);
+        cottageDoorsteps(world, cx, cy, cz);
         placeSign(world, cx + 5, cy + 1, cz - 58, BlockFace.WEST, "북쪽 산길 →", "늑대·여우 — 도적 소문 있음");   // 대로(±3) 밖 갓길
         anchors.put("북쪽_산길", loc(world, cx, cy + 1, cz - 59));
 
@@ -613,20 +646,97 @@ final class CheonghaBuilder {
                 putProp(world, cx, cy, cz, x, z, Material.COMPOSTER);
                 putProp(world, cx, cy, cz, x + 1, z, Material.BARREL);
             }
-            default -> {   // v6.4 ④ 건초 더미 — 2x2 짚단 1단 + 한 귀만 2단 (베어 쌓은 결)
+            case 5 -> {   // v6.4 ④ 건초 더미 — 2x2 짚단 1단 + 한 귀만 2단 (베어 쌓은 결)
                 for (int dx = 0; dx <= 1; dx++) {
                     for (int dz = 0; dz <= 1; dz++) {
                         if (!freeCell(world, cx, cy, cz, x + dx, z + dz)) {
                             continue;
                         }
                         Orientable hay = (Orientable) Material.HAY_BLOCK.createBlockData();
-                        hay.setAxis(Math.floorMod(x + z, 2) == 0 ? Axis.X : Axis.Z);
+                        hay.setAxis(hash(x, z, 2) == 0 ? Axis.X : Axis.Z);
                         world.getBlockAt(x + dx, cy + 1, z + dz).setBlockData(hay);
                         if (dx == 0 && dz == 0) {
                             world.getBlockAt(x, cy + 2, z).setBlockData(hay);
                         }
                     }
                 }
+            }
+            case 6 -> {   // v6.5 ③ 우물 — 3x3 조약돌 담 테 + 가운데 물 + 두레박 장대 (마을 우물의 동생들)
+                for (int dx = 0; dx <= 2; dx++) {
+                    for (int dz = 0; dz <= 2; dz++) {
+                        if (!freeCell(world, cx, cy, cz, x + dx, z + dz)) {
+                            continue;
+                        }
+                        boolean center = dx == 1 && dz == 1;
+                        if (center) {
+                            world.getBlockAt(x + 1, cy, z + 1).setType(Material.WATER);   // 물은 노면 자재가 아니다
+                        } else {
+                            world.getBlockAt(x + dx, cy + 1, z + dz).setType(Material.COBBLESTONE_WALL);
+                        }
+                    }
+                }
+                if (freeCell(world, cx, cy, cz, x + 1, z + 3)) {   // 두레박 장대 + 매단 사슬
+                    for (int y = cy + 1; y <= cy + 3; y++) {
+                        world.getBlockAt(x + 1, y, z + 3).setType(Material.SPRUCE_FENCE);
+                    }
+                    Orientable chain = (Orientable) Material.CHAIN.createBlockData();
+                    chain.setAxis(Axis.Y);
+                    world.getBlockAt(x + 1, cy + 3, z + 2).setBlockData(chain);
+                }
+            }
+            case 7 -> {   // v6.5 ③ 공동 빨래터 — 물확 2칸 + 방망잇돌 + 널어 둔 무명천
+                for (int dz = 0; dz <= 1; dz++) {
+                    if (freeCell(world, cx, cy, cz, x, z + dz)) {
+                        world.getBlockAt(x, cy, z + dz).setType(Material.WATER);
+                        world.getBlockAt(x - 1, cy + 1, z + dz).setType(Material.COBBLESTONE_WALL);
+                    }
+                }
+                putProp(world, cx, cy, cz, x + 1, z, Material.CAULDRON);
+                putProp(world, cx, cy, cz, x + 1, z + 1, Material.BARREL);
+                lifeTrace(world, cx, cy, cz, x + 2, z, 2);   // 곁의 빨랫줄 (널어 둔 천 = 흰색 = 채색 아님)
+            }
+            case 8 -> {   // v6.5 ③ 짐수레 — 참나무 짐칸(다락문 측판) + 끌채 2 + 실은 짚
+                if (!freeCell(world, cx, cy, cz, x, z) || !freeCell(world, cx, cy, cz, x + 1, z)) {
+                    return;
+                }
+                world.getBlockAt(x, cy + 1, z).setType(Material.HAY_BLOCK);          // 실은 짐
+                world.getBlockAt(x + 1, cy + 1, z).setType(Material.OAK_PLANKS);     // 짐칸 바닥
+                awningTrapdoor(world, x, cy + 2, z, BlockFace.NORTH);                // 젖힌 측판
+                awningTrapdoor(world, x + 1, cy + 2, z, BlockFace.SOUTH);
+                for (int dx = 2; dx <= 3; dx++) {   // 끌채 — 땅에 내려 둔 채
+                    putProp(world, cx, cy, cz, x + dx, z, Material.OAK_FENCE);
+                }
+            }
+            case 9 -> {   // v6.5 ③ 노점 좌판 — 기둥 2 + 널 상판 3 + 통 (차양은 장터의 것 = 붉은 차양 계약 불변)
+                for (int dx : new int[]{0, 2}) {
+                    if (freeCell(world, cx, cy, cz, x + dx, z)) {
+                        world.getBlockAt(x + dx, cy + 1, z).setType(Material.SPRUCE_FENCE);
+                    }
+                }
+                for (int dx = 0; dx <= 2; dx++) {
+                    if (world.getBlockAt(x + dx, cy + 2, z).getType().isAir()) {
+                        topSlab(world, x + dx, cy + 2, z, Material.OAK_SLAB);        // 상판 (지붕 자재 아님)
+                    }
+                }
+                putProp(world, cx, cy, cz, x + 1, z, Material.BARREL);
+            }
+            case 10 -> {   // v6.5 ③ 개집 — 참나무 계단 두 짝이 만드는 맞배 한 채 + 짚 + 밥그릇
+                if (!freeCell(world, cx, cy, cz, x, z) || !freeCell(world, cx, cy, cz, x + 1, z)) {
+                    return;
+                }
+                stair(world, x, cy + 1, z, Material.OAK_STAIRS, BlockFace.EAST);
+                stair(world, x + 1, cy + 1, z, Material.OAK_STAIRS, BlockFace.WEST);
+                putProp(world, cx, cy, cz, x, z + 1, Material.HAY_BLOCK);
+                putProp(world, cx, cy, cz, x + 2, z, Material.CAULDRON);             // 물그릇
+            }
+            default -> {   // v6.5 ③ 돌담 모퉁이 — ㄱ 자로 꺾인 낮은 돌담 (필지가 여기서 꺾인다)
+                for (int dx = 0; dx <= 4; dx++) {
+                    putProp(world, cx, cy, cz, x + dx, z, Material.COBBLESTONE_WALL);
+                }
+                for (int dz = 1; dz <= 3; dz++) {
+                    putProp(world, cx, cy, cz, x, z + dz, Material.COBBLESTONE_WALL);
+                }
+                putProp(world, cx, cy, cz, x + 2, z + 2, Material.DECORATED_POT);     // 담 안쪽 살림
             }
         }
     }
@@ -635,6 +745,138 @@ final class CheonghaBuilder {
         if (freeCell(world, cx, cy, cz, x, z)) {
             world.getBlockAt(x, cy + 1, z).setType(mat);
         }
+    }
+
+    // ─── v6.5 ③ 마을 살림 — 121x121 에 건물 15채면 담장 안이 휑하다 ───
+    //
+    // 채우되 **밭으로 채우지 않는다** (텃밭은 v6.4 에서 이미 줄였다). 향촌의 빈 땅을 메우는 것은
+    // 작물이 아니라 **살림의 흔적**이다: 우물·빨래터·장작 야적·수레·좌판·개집·닭장·돌담 모퉁이,
+    // 그리고 나무. 여기 놓는 것은 전부 세 규칙을 지킨다 —
+    //   ① 지붕 자재(심층암 계열·흑목 계단/반 블록)를 **한 조각도 쓰지 않는다**.
+    //      검수의 지붕 스캔은 벽 ±8 안의 지붕 자재를 전부 그 건물의 지붕으로 읽는다 —
+    //      마당에 흑목 반 블록 하나만 놓아도 관청의 지붕 상자가 부풀어 **처마 겹침 오탐**이 난다.
+    //   ② 노면 자재(조약돌·돌 벽돌·안산암·자갈)를 **지면(cy)에 놓지 않는다**. 검수는 cy 의 자재로
+    //      길을 판정한다 — 마당에 깐 돌 한 장이 '길'이 되어 길 폭 히스토그램을 오염시킨다.
+    //      돌은 담(COBBLESTONE_WALL — 별개 자재)으로만, 그것도 cy+1 위에만 쓴다.
+    //   ③ 채색 금지 (수묵 2% 예산) — 참나무·자작·가문비·짚·흰 무명천만. 벚나무는 광장의 몫이다.
+    // 전부 freeCell() 를 통과한 칸에만 놓으므로 길·골목·광장·담·건물·등롱·울타리를 한 칸도 밀어내지 않는다.
+
+    /**
+     * 마을 살림 40곳 — {x, z, 종류}. 종류는 lifeTrace 확장 번호:
+     *   0 장독대 / 1 장작더미 / 2 빨랫줄 / 3 닭장 / 4 퇴비통 / 5 건초 더미
+     *   6 우물(마을 우물 외) / 7 공동 빨래터 / 8 짐수레 / 9 노점 좌판 / 10 개집 / 11 돌담 모퉁이
+     * 좌표는 건물 지붕 상자·텃밭·뒷골목·표국 부지를 피해 잡은 상수 (난수 0).
+     */
+    private static final int[][] VILLAGE_LIFE = {
+            // 북쪽 대공터 (담 발치 ~ 민가 뒤편 — 마을에서 가장 넓게 비어 있던 띠)
+            {-50, -50, 6}, {-44, -48, 1}, {-38, -52, 10}, {-30, -46, 9}, {-24, -50, 3},
+            {-14, -46, 8}, {-16, -52, 11}, {8, -48, 7}, {16, -52, 1}, {24, -46, 0},
+            {32, -50, 10}, {40, -44, 8}, {48, -50, 6}, {30, -42, 3}, {44, -34, 1},
+            {50, -30, 5},
+            // 서쪽 띠 (객잔 서편 ~ 담 발치)
+            {-52, -30, 5}, {-52, -28, 1}, {-52, -12, 9}, {-46, -10, 4},
+            {-40, -14, 11}, {-34, -12, 8},
+            // 동쪽 띠 (의뢰소·전장 동편)
+            {30, -14, 9}, {36, -10, 10}, {33, 8, 6}, {36, 14, 1}, {44, 8, 7},
+            {50, 10, 3}, {30, 26, 5}, {50, 28, 8},
+            // 서쪽 중·남 띠
+            {-54, 8, 5}, {-54, 12, 9}, {-56, 15, 4}, {-54, 26, 6}, {-52, 34, 1},
+            // 남쪽 대공터
+            {-50, 40, 9}, {-42, 46, 8}, {-34, 52, 10}, {-26, 42, 7}, {-18, 50, 1},
+            {-10, 44, 3}, {-8, 36, 4}, {8, 46, 11}, {16, 52, 6}, {22, 44, 0},
+            {20, 50, 1}, {-22, 38, 5},
+    };
+
+    /** 마을 나무 24그루 — {x, z, 자작나무?}. 벚나무(채색)는 광장 전용이므로 참나무·자작만. */
+    private static final int[][] VILLAGE_TREES = {
+            {-54, -44, 0}, {-46, -52, 1}, {-36, -44, 0}, {-28, -54, 1}, {-20, -46, 0},
+            {-12, -54, 1}, {12, -44, 0}, {20, -54, 1}, {28, -46, 0}, {36, -54, 1},
+            {46, -42, 0}, {54, -36, 1}, {-54, -30, 0}, {-36, -12, 1}, {-56, 30, 0},
+            {-54, 44, 1}, {-44, 52, 0}, {-30, 46, 1}, {-16, 42, 0}, {12, 50, 1},
+            {24, 52, 0}, {38, 10, 1}, {42, 12, 0}, {54, 12, 1},
+    };
+
+    /**
+     * 뒷마당 벽 10줄 — {x0, x1, z0, z1, 자재}. 필지 경계를 촘촘히 그어 "빈 흙바닥"의 덩어리를 쪼갠다.
+     * 자재: 0 돌담(COBBLESTONE_WALL — 노면 판정 자재가 아니다) / 1 참나무 목책 / 2 대나무 목책.
+     * 한복판 한 칸은 삽짝으로 비운다 (담이 아니라 필지다 — 사람이 드나든다).
+     */
+    private static final int[][] YARD_WALLS = {
+            {-50, -38, -42, -42, 0}, {-30, -18, -42, -42, 1}, {6, 20, -44, -44, 0},
+            {28, 42, -44, -44, 1}, {-48, -48, -38, -26, 0}, {50, 50, -40, -28, 2},
+            {-50, -38, 38, 38, 0}, {-30, -18, 40, 40, 1}, {8, 22, 42, 42, 0},
+            {-51, -51, 6, 14, 2}, {30, 30, 6, 14, 0},
+    };
+
+    /** 마을 살림·나무·필지 벽 — 등롱 뒤·잡초 앞에 돈다 (등롱 자리를 뺏지 않고, 잡초에 자리를 내준다) */
+    private static void villageFill(World world, int cx, int cy, int cz) {
+        for (int[] w : YARD_WALLS) {
+            yardWall(world, cx, cy, cz, cx + w[0], cx + w[1], cz + w[2], cz + w[3], fenceMat(w[4] == 0 ? 2 : w[4] - 1));
+        }
+        for (int[] t : VILLAGE_LIFE) {
+            lifeTrace(world, cx, cy, cz, cx + t[0], cz + t[1], t[2]);
+        }
+        for (int[] t : VILLAGE_TREES) {
+            villageTree(world, cx, cy, cz, cx + t[0], cz + t[1], t[2] == 1);
+        }
+    }
+
+    /** 필지 벽 한 줄 — 한복판 한 칸은 삽짝 (직선이 아니라 '경계'로 읽히게) */
+    private static void yardWall(World world, int cx, int cy, int cz,
+                                 int x0, int x1, int z0, int z1, Material mat) {
+        int gx = (x0 + x1) / 2;
+        int gz = (z0 + z1) / 2;
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                if (x == gx && z == gz) {
+                    continue;   // 삽짝
+                }
+                if (freeCell(world, cx, cy, cz, x, z)) {
+                    world.getBlockAt(x, cy + 1, z).setType(mat);
+                }
+            }
+        }
+    }
+
+    /**
+     * 마을 나무 한 그루 — 참나무/자작 (벚나무 = 채색 예산이므로 광장 밖에서는 쓰지 않는다).
+     * 밑동 4단 + 잎 두 켜 + 꼭대기 한 칸. 지면은 뿌리 흙으로 갈아 나무가 흙에서 자란 것처럼 보이게 한다
+     * (ROOTED_DIRT 는 등롱 지면 화이트리스트에도 있으므로 길 판정을 오염시키지 않는다).
+     */
+    private static void villageTree(World world, int cx, int cy, int cz, int x, int z, boolean birch) {
+        if (!freeCell(world, cx, cy, cz, x, z)) {
+            return;
+        }
+        for (int dx = -1; dx <= 1; dx++) {   // 잎이 덮을 자리가 다 비어 있어야 심는다 (허공에 뜬 잎 금지)
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int y = cy + 1; y <= cy + 6; y++) {
+                    if (!world.getBlockAt(x + dx, y, z + dz).getType().isAir()) {
+                        return;
+                    }
+                }
+            }
+        }
+        Material log = birch ? Material.BIRCH_LOG : Material.OAK_LOG;
+        Material lv = birch ? Material.BIRCH_LEAVES : Material.OAK_LEAVES;
+        world.getBlockAt(x, cy, z).setType(Material.ROOTED_DIRT);
+        for (int y = cy + 1; y <= cy + 4; y++) {
+            world.getBlockAt(x, y, z).setType(log);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx != 0 || dz != 0) {
+                    persistentLeaf(world, x + dx, cy + 4, z + dz, lv);
+                }
+                persistentLeaf(world, x + dx, cy + 5, z + dz, lv);
+            }
+        }
+        persistentLeaf(world, x, cy + 6, z, lv);
+    }
+
+    private static void persistentLeaf(World world, int x, int y, int z, Material mat) {
+        Leaves data = (Leaves) mat.createBlockData();
+        data.setPersistent(true);
+        world.getBlockAt(x, y, z).setBlockData(data);
     }
 
     /**
@@ -726,7 +968,7 @@ final class CheonghaBuilder {
      * shoulder(갓길) = 자갈/거친 흙 교대, 노면 = 흙길에 자갈·거친 흙 20% 점치환. 전부 좌표 해시.
      */
     private static void roadCell(World world, int x, int cy, int z, boolean shoulder) {
-        int h = hash(x, z, 10);   // v6.5 ② — 점치환 해시도 비선형으로 (사선 줄무달 제거)
+        int h = hash(x, z, 10);   // v6.5 ② — 점치환 해시도 비선형으로 (사선 줄무늬 제거)
         Material top;
         if (shoulder) {
             // 갓길도 노면의 일부다 — 거친 흙을 섞으면 마차가 다니는 폭이 줄어 보인다
@@ -830,9 +1072,11 @@ final class CheonghaBuilder {
     }
 
     private static void alleyCell(World world, int x, int cy, int z, boolean edge) {
-        int h = hash(x, z, 10);   // v6.5 ② — 점치환 해시도 비선형으로 (사선 줄무달 제거)
+        int h = hash(x, z, 10);   // v6.5 ② — 점치환 해시도 비선형으로 (사선 줄무늬 제거)
+        // 노면에 거친 흙 금지 — 담장 안 지면의 절반이 거친 흙이라 그걸 섞으면 길이 땅과
+        // 구별되지 않고, 그 칸에서 통행 폭이 끊긴다 (검수: 골목 폭 0 — 대로에서도 같은 병이었다)
         world.getBlockAt(x, cy, z).setType(
-                edge && h < 2 ? Material.COARSE_DIRT : Material.DIRT_PATH);
+                edge && h < 2 ? Material.GRAVEL : Material.DIRT_PATH);
         world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);
         if (edge && h == 5 && world.getBlockAt(x, cy + 1, z).getType().isAir()) {
             world.getBlockAt(x, cy + 1, z).setType(Material.SHORT_GRASS);   // 갓길 잡초

@@ -178,6 +178,43 @@ def sheet(files, out_path, scale=8, cols=4, label_h=0):
     return out_path, [t[0] for t in tiles]
 
 
+def roof_mock(tex_path, out_path, scale=6):
+    """계단 지붕 목업 — 텍스처를 실제 지붕(계단 블록 층계)에 얹어 아이소메트릭으로 그린다.
+
+    16x16 확대만 보면 예뻐 보여도 계단에 깔리면 골함석처럼 보이는 일이 있다.
+    지붕은 '한 장'이 아니라 '층계에 반복된 면'으로 보이는 것이 진실이다 — 그걸 먼저 본다.
+    """
+    w, h, rows = read_png(tex_path)
+    steps, run = 6, 3                      # 6단 계단, 단마다 3칸 전진
+    tiles_w = 10
+    TW = 16 * scale
+    W = (tiles_w + steps) * TW
+    H = (steps + 4) * TW
+    canvas = [bytearray(b"\x1a\x1a\x22\xff" * W) for _ in range(H)]
+
+    def blit(ox, oy, shade):
+        for y in range(TW):
+            for x in range(TW):
+                p = px(rows, (x // scale) % w, (y // scale) % h)
+                if p[3] == 0:
+                    continue
+                r = int(p[0] * shade); g = int(p[1] * shade); b = int(p[2] * shade)
+                X, Y = ox + x, oy + y
+                if 0 <= X < W and 0 <= Y < H:
+                    o = X * 4
+                    canvas[Y][o:o + 4] = bytes((min(r, 255), min(g, 255), min(b, 255), 255))
+
+    # 층계: 위 면(밝게) + 앞 면(어둡게) — 계단 블록의 두 얼굴
+    for s in range(steps):
+        top_y = (s + 1) * TW
+        for t in range(tiles_w - s):
+            ox = (s + t) * TW
+            blit(ox, top_y - TW, 1.0)      # 윗면 (기와가 깔린 면)
+            blit(ox, top_y, 0.62)          # 앞면 (단의 수직면 — 그림자)
+    write_png(out_path, W, H, canvas)
+    return out_path
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lint-only", action="store_true")
@@ -208,6 +245,10 @@ def main():
                       f" · 채도 {m['chroma']:.0f} · 이음매 {m['seam']:.2f} · 평균 {m['avg']}")
 
     if not args.lint_only:
+        roof = PACK / "minecraft" / "textures" / "block" / "deepslate_tiles.png"
+        if roof.exists():
+            roof_mock(roof, OUT / "roof_mock.png")
+            print(f"\n── 계단 지붕 목업 ──\n  {OUT / 'roof_mock.png'}")
         print("\n── 확대 시트 (8배) ──")
         for group, files in groups.items():
             if not files:
