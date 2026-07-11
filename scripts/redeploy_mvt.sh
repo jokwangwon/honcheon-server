@@ -42,7 +42,7 @@ if [ "${1:-}" = "--backup" ]; then
   echo "[백업] $BK"
 fi
 
-echo "[1/4] 서버 정지"
+echo "[1/5] 서버 정지"
 rcon "say 재배포 — 잠시 후 재기동" >/dev/null 2>&1 || true
 rcon stop >/dev/null 2>&1 || true
 for _ in $(seq 1 30); do
@@ -51,16 +51,24 @@ for _ in $(seq 1 30); do
 done
 pgrep -f "paper.jar" >/dev/null && { echo "경고: 서버가 안 멈춘다 — 수동 확인 필요"; exit 1; }
 
-echo "[2/4] 빌드 (:server-mvt)"
+echo "[2/5] 리소스팩 빌드·서빙 (서버 정지 상태에서 server.properties 갱신)"
+# HTTP 서버가 이미 떠 있으면 재사용한다 (재배포마다 중복 기동하지 않는다 — 스크립트가 포트를 확인).
+# 보안: 8123 은 LAN 전용. 공유기 포워딩은 25565 만 — 8123 은 절대 열지 마라.
+bash "$ROOT/scripts/serve_resourcepack.sh"
+
+echo "[3/5] 빌드 (:server-mvt)"
 ./gradlew :server-mvt:build -q
 
-echo "[3/4] jar 교체 + config 동기화"
+echo "[4/5] jar 교체 + config 동기화"
 cp "$ROOT"/server-mvt/build/libs/server-mvt-*.jar "$RUN/plugins/"
 rm -rf "$RUN/plugins/HoncheonMVT/config"
 cp -r "$ROOT/config" "$RUN/plugins/HoncheonMVT/config"
 
-echo "[4/4] 재기동 (백그라운드)"
-cd "$RUN" && nohup "$JAVA_HOME/bin/java" -Xms2G -Xmx2G -jar paper.jar nogui \
+echo "[5/5] 재기동 (백그라운드)"
+# -DHONCHEON_PACK_DIR — 팩 인식 렌더러(TownRender)가 읽을 팩 경로. 없으면 렌더러가 상대경로로
+# 자동 탐색하고, 그것도 실패하면 하드코딩 팔레트로 폴백한다 (팩 없이도 렌더는 돈다).
+cd "$RUN" && nohup "$JAVA_HOME/bin/java" -Xms2G -Xmx2G \
+  -DHONCHEON_PACK_DIR="$ROOT/resourcepack" -jar paper.jar nogui \
   > "$RUN/server-console.log" 2>&1 &
 for _ in $(seq 1 60); do
   grep -q 'Done (' "$RUN/server-console.log" 2>/dev/null && break

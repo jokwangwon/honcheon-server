@@ -76,6 +76,11 @@ public final class HoncheonMvt extends JavaPlugin {
         return anchors.get(name);
     }
 
+    /** 전 앵커 — 검수·조감(TownAudit·TownRender)의 입력 */
+    public Map<String, Location> anchors() {
+        return java.util.Collections.unmodifiableMap(anchors);
+    }
+
     public void setAnchors(Map<String, Location> built) {
         anchors.clear();
         anchors.putAll(built);
