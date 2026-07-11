@@ -39,6 +39,48 @@ public final class Db implements AutoCloseable {
             }
         }
         ensureWorldDay();
+        schemaVersionGate(schemaPath);
+    }
+
+    /**
+     * 스키마 버전 게이트 (db_migration.md 7절) — 신규 DB는 최신 번호로 스탬프(소급 불필요),
+     * 구 DB가 최신 미만이면 경고만 (기동은 허용 — 적용은 사람이 백업 확인 후 tools/migrate_db.py).
+     */
+    private void schemaVersionGate(Path schemaPath) throws SQLException {
+        Path migrationsDir = schemaPath.toAbsolutePath().getParent().resolve("migrations");
+        int latest = 0;
+        if (Files.isDirectory(migrationsDir)) {
+            try (var files = Files.list(migrationsDir)) {
+                latest = files.map(p -> p.getFileName().toString())
+                        .filter(n -> n.length() > 3 && n.substring(0, 3).chars().allMatch(Character::isDigit))
+                        .mapToInt(n -> Integer.parseInt(n.substring(0, 3))).max().orElse(0);
+            } catch (java.io.IOException e) {
+                return;   // 등록부를 못 읽으면 게이트 생략
+            }
+        }
+        if (latest == 0) {
+            return;
+        }
+        try (Statement st = conn.createStatement()) {
+            var rs = st.executeQuery("SELECT value FROM world_meta WHERE key='스키마_버전'");
+            Integer version = rs.next() ? Integer.parseInt(rs.getString(1)) : null;
+            if (version == null) {
+                var count = st.executeQuery("SELECT COUNT(*) FROM characters");
+                count.next();
+                if (count.getInt(1) == 0) {
+                    // 신규 DB — 최신으로 스탬프 (스키마가 이미 최신이므로 소급 불필요)
+                    st.execute("INSERT OR REPLACE INTO world_meta(key, value) VALUES('스키마_버전', '"
+                            + latest + "')");
+                    return;
+                }
+                version = 0;   // 구 DB(버전 표기 이전) — 소급 대상
+            }
+            if (version < latest) {
+                System.err.println("경고: DB 스키마 버전 " + version + " < 최신 " + latest
+                        + " — 봇을 멈추고 백업 후 `python3 tools/migrate_db.py <db경로>` 를 실행하라"
+                        + " (docs/design/db_migration.md)");
+            }
+        }
     }
 
     private void ensureWorldDay() throws SQLException {
