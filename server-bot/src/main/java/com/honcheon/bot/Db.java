@@ -235,7 +235,12 @@ public final class Db implements AutoCloseable {
         }
     }
 
-    /** append-only 이벤트 로그 — 진실의 원장 (판정·생성·선택 전부) */
+    /**
+     * append-only 이벤트 로그 — 진실의 원장 (판정·생성·선택 전부).
+     * 규약 (F32·F39): 대상이 있는 이벤트는 반드시 target_type/target_id 를 채운다 —
+     * npc(대화)·quest(의뢰)·character(비무)·fortune(기연)·simbeop(개화·운기)·place(탐방).
+     * 새 이벤트 타입을 추가할 때 대상이 있으면 6-인자 오버로드를 쓰라.
+     */
     public synchronized void logEvent(String type, String actorType, String actorId, Map<String, Object> data)
             throws Exception {
         logEvent(type, actorType, actorId, null, data);

@@ -1102,7 +1102,8 @@ public final class GameListener extends ListenerAdapter {
         }
         sheet.put("탐방일", today);
         String state = (String) sheet.get("취걸개");
-        db.logEvent("탐방", "character", String.valueOf(chId), Map.of("장소", "폐사당"));
+        db.logEvent("탐방", "character", String.valueOf(chId), "place", "폐사당",
+                Map.of("장소", "폐사당"));
 
         // 1회성 — 획득 즉시 세계에서 소모 (공유 세계 선착순, fortune rules)
         boolean consumed = db.getMeta(FORTUNE_KEY).isPresent();
@@ -1135,7 +1136,7 @@ public final class GameListener extends ListenerAdapter {
         int deeds = db.countEvents("character", String.valueOf(chId), List.of("의뢰_완수"));
         if (visits >= SHRINE_VISITS_REQUIRED && deeds >= GOOD_DEEDS_REQUIRED && realmOk) {
             sheet.put("취걸개", "시험");
-            db.logEvent("기연_발견", "character", String.valueOf(chId),
+            db.logEvent("기연_발견", "character", String.valueOf(chId), "fortune", "chuigeolgae_master",
                     Map.of("기연", "chuigeolgae_master"));
             persistAndReply(event, row, sheet, "폐사당",
                     "그늘에서 쉰 목소리가 났다. \"…또 왔군.\" 처음 보는 걸인이 — 아니, 늘 있었던 걸인이 "
@@ -1211,7 +1212,7 @@ public final class GameListener extends ListenerAdapter {
                             ? new ArrayList<>((List<String>) l) : new ArrayList<>();
                     ties.add("개방_계열(취걸개)");
                     sheet.put("인연", ties);
-                    db.logEvent("기연", "character", String.valueOf(chId),
+                    db.logEvent("기연", "character", String.valueOf(chId), "fortune", "chuigeolgae_master",
                             Map.of("기연", "chuigeolgae_master", "보상", "현천토납법",
                                     "대가", List.of("발설_금지", "원수_상속")));
                     body = "사흘째 밥을 나누자, 걸인이 문득 자세를 고쳐 앉았다 — 등이 산처럼 펴진다.\n"
@@ -1259,14 +1260,16 @@ public final class GameListener extends ListenerAdapter {
             // 개화 — 단전 개방. 현천토납법은 실패 없음 (기초의 미덕), 수명을 태우지 않는다
             sheet.put("단전", "개화");
             sheet.put("축기_원장", 0.0);
-            db.logEvent("개화", "character", String.valueOf(chId), Map.of("심법", "현천토납법"));
+            db.logEvent("개화", "character", String.valueOf(chId), "simbeop", "현천토납법",
+                    Map.of("심법", "현천토납법"));
             body.append("구결대로 숨을 고르자, 아랫배 깊은 곳에서 무언가 열렸다 — 옅은 백색의 기운이 "
                     + "실오라기처럼 돌기 시작한다.\n💥 **개화 — 단전이 열렸다** (이제 매일 운기로 기를 쌓는다)");
         } else {
             double days = ((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue() + 1.0;
             sheet.put("축기_원장", days);
             double naegong = naegongOf(days);
-            db.logEvent("운기", "character", String.valueOf(chId), Map.of("적립", 1));
+            db.logEvent("운기", "character", String.valueOf(chId), "simbeop",
+                    String.valueOf(sheet.get("심법")), Map.of("적립", 1));
             body.append(String.format("가부좌를 틀고 한 주천을 돌렸다. 축기 **+1일치** (누적 %.0f일)\n"
                             + "내공 화후 **%s** · 내력 %d",
                     days, hwahuLabel(naegong), Math.round(naegong * 3)));
