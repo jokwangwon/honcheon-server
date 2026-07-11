@@ -178,6 +178,7 @@ public final class TownAudit {
             }
         }
         eavesAndRoofs(out, violations, blds);
+        roofPlateau(out, violations, world, blds);
         props(out, violations, world, blds);
         spacing(out, violations, blds);
         doorPathWidths(out, violations, path, blds, cx, cz);
@@ -420,6 +421,41 @@ public final class TownAudit {
             }
         }
         return last == Integer.MIN_VALUE ? null : last;
+    }
+
+    /**
+     * 지붕 상단의 평지(고원) 비율 — 두 경사면은 용마루 '선'에서 만나야 한다.
+     * 물매가 완만해도 꼭대기가 넓은 평지면 지붕이 아니라 '검은 상자'로 보인다 (v6.4 조감 관측).
+     */
+    private static void roofPlateau(List<String> out, List<String> violations, World world, List<Bld> blds) {
+        out.add(HEAD + "③-b 지붕 능선 (꼭대기 평지 비율 — 20% 초과 = 평지붕)");
+        for (Bld b : blds) {
+            if (!b.roofFound) {
+                continue;
+            }
+            int top = b.roofMaxY;
+            int flat = 0, area = 0;
+            for (int x = b.rx0; x <= b.rx1; x++) {
+                for (int z = b.rz0; z <= b.rz1; z++) {
+                    Material m = world.getBlockAt(x, top, z).getType();
+                    Material below = world.getBlockAt(x, top - 1, z).getType();
+                    if (ROOF.contains(below) || ROOF.contains(m)) {
+                        area++;
+                        if (ROOF.contains(m)) {
+                            flat++;   // 최상단 y에 지붕 자재가 깔려 있다 = 그 칸은 평지
+                        }
+                    }
+                }
+            }
+            double pct = area == 0 ? 0 : 100.0 * flat / area;
+            if (pct > 20.0) {
+                out.add(BAD + String.format("  %s — 꼭대기 평지 %.0f%% (%d/%d칸) — 용마루가 선이 아니라 고원이다",
+                        b.name, pct, flat, area));
+                violations.add("평지붕 " + b.name);
+            } else {
+                out.add(OK + String.format("  %s — 꼭대기 평지 %.0f%% (능선 수렴)", b.name, pct));
+            }
+        }
     }
 
     private static void eavesAndRoofs(List<String> out, List<String> violations, List<Bld> blds) {
