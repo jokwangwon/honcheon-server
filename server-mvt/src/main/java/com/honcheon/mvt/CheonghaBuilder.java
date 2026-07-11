@@ -1135,13 +1135,14 @@ final class CheonghaBuilder {
             return;
         }
         int m = Math.floorMod(idx, 6);
+        boolean cross = !alongX;   // v6.6 ① 기와 갓의 결도 담장이 뻗는 방향을 따른다 (Z 담장 = 직각 결)
         if (m == 0 || m == 5) {   // 기와 갓 구간의 양끝 = 갓의 처마
             BlockFace face = alongX
                     ? (m == 0 ? BlockFace.WEST : BlockFace.EAST)
                     : (m == 0 ? BlockFace.NORTH : BlockFace.SOUTH);
-            stair(world, x, cy + 3, z, Material.DEEPSLATE_TILE_STAIRS, face);
+            stair(world, x, cy + 3, z, stairMat(RoofStyle.TILE, cross), face);
         } else {
-            world.getBlockAt(x, cy + 3, z).setType(Material.DEEPSLATE_TILE_SLAB);   // 기와 갓
+            world.getBlockAt(x, cy + 3, z).setType(ridgeMat(RoofStyle.TILE, cross));   // 기와 갓
         }
     }
 
@@ -1175,7 +1176,9 @@ final class CheonghaBuilder {
                 BlockFace face = Math.abs(dx) == 2
                         ? (dx < 0 ? BlockFace.EAST : BlockFace.WEST)
                         : (dz < 0 ? BlockFace.SOUTH : BlockFace.NORTH);
-                roofBlock(world, tx + dx, cy + 6, tz + dz, face, corner, RoofStyle.TILE);
+                // 모임지붕 — 동·서 면은 직각 결, 추녀마루(모서리) 4칸은 TILE 로 통일
+                roofBlock(world, tx + dx, cy + 6, tz + dz, face, corner, RoofStyle.TILE,
+                        !corner && crossGrain(face));
             }
         }
         for (int dx = -1; dx <= 1; dx++) {
@@ -1580,18 +1583,18 @@ final class CheonghaBuilder {
         roofShape(world, x0 - 2, z0 - 2, x1 + 2, z1 + 2, cy + 10,
                 RoofStyle.TILE, Material.DARK_OAK_PLANKS, 99, true);
         // 층간 띠 스커트 = 1층 처마 (2층집의 허리선). 위 지붕과 같이 2칸 내밀어 두 겹 처마가 겹쳐 보이게.
-        for (int x = x0 - 2; x <= x1 + 2; x++) {
+        for (int x = x0 - 2; x <= x1 + 2; x++) {   // 북·남 스커트 — 결이 X 를 따른다 (TILE)
             for (int dz : new int[]{-2, -1, 1, 2}) {
                 int z = dz < 0 ? z0 + dz : z1 + dz;
-                world.getBlockAt(x, cy + 5, z).setType(
-                        Math.abs(dz) == 2 ? Material.DEEPSLATE_TILE_SLAB : Material.DEEPSLATE_TILES);
+                world.getBlockAt(x, cy + 5, z).setType(Math.abs(dz) == 2
+                        ? ridgeMat(RoofStyle.TILE, false) : solidMat(RoofStyle.TILE, false));
             }
         }
-        for (int z = z0 - 1; z <= z1 + 1; z++) {
+        for (int z = z0 - 1; z <= z1 + 1; z++) {   // 동·서 스커트 — 직각 결 (BRICK)
             for (int dx : new int[]{-2, -1, 1, 2}) {
                 int x = dx < 0 ? x0 + dx : x1 + dx;
-                world.getBlockAt(x, cy + 5, z).setType(
-                        Math.abs(dx) == 2 ? Material.DEEPSLATE_TILE_SLAB : Material.DEEPSLATE_TILES);
+                world.getBlockAt(x, cy + 5, z).setType(Math.abs(dx) == 2
+                        ? ridgeMat(RoofStyle.TILE, true) : solidMat(RoofStyle.TILE, true));
             }
         }
         for (int x = x0 - 2; x <= x1 + 2; x++) {   // 1층 처마 밑 서까래 라인 (남·북)
@@ -1714,37 +1717,69 @@ final class CheonghaBuilder {
         world.getBlockAt(cx - 16, cy + 6, cz - 7).setType(Material.LANTERN);
     }
 
+    // ─── v6.6 ① 결의 축 — 경사면 방향에 따라 자재를 바꾼다 ───
+    //
+    // 블록 텍스처는 방향이 고정이다. 기와의 결(가로 단 이음)은 북·남 경사면에서는 능선과 나란히 눕지만,
+    // 같은 자재를 동·서 경사면에 쓰면 결이 **물매를 따라 세로로** 서서 기와가 옆으로 누운 것처럼 보인다.
+    // 사용자 지적: "한 방향으로 되어 조금 이질감이 듦."
+    //
+    // 리소스팩이 DEEPSLATE_BRICKS(+계단·반블록)를 DEEPSLATE_TILES 의 **90도 회전판**으로 재텍스처했다.
+    // 두 자재의 결이 서로 직각이므로, 조성기는 **면의 방향에 따라 자재를 고르기만 하면 된다**:
+    //   결이 X 를 따라 흘러야 하는 면(북·남 경사면 — 칸이 x 로 늘어선다, 계단 facing = NORTH/SOUTH) → TILE
+    //   결이 Z 를 따라 흘러야 하는 면(동·서 경사면 — 칸이 z 로 늘어선다, 계단 facing = EAST/WEST)  → BRICK
+    // 용마루는 능선 방향과 결을 맞춘다 (X 능선 → TILE, Z 능선 → BRICK).
+    // 추녀마루(모서리)는 두 면이 만나는 대각선이라 어느 결도 맞지 않는다 → **TILE 로 통일**(우진각 링의
+    // 모서리가 이미 x 루프에서 나오므로 이 쪽이 기존 실루엣과 같다).
+    //
+    // TILE 계열과 BRICK 계열은 TownAudit 의 ROOF 집합에 **둘 다** 들어 있고(74~78행), 검수는 자재의
+    // 소속만 볼 뿐 계열을 구분하지 않는다 → 지붕 인식·처마·물매·능선 평지 판정은 전부 불변이다.
+    // 형태(계단/반블록/풀블록)도 1:1로 보존한다. 결정론: 자재 선택이 좌표가 아니라 **면의 방향**만 본다.
+
+    /** 이 면의 결이 Z 를 따라 흘러야 하는가 — 동·서 경사면(계단이 x 축으로 오르내리는 면) */
+    private static boolean crossGrain(BlockFace facing) {
+        return facing == BlockFace.EAST || facing == BlockFace.WEST;
+    }
+
     private static void roofBlock(World world, int x, int y, int z, BlockFace facing,
                                   boolean corner, RoofStyle rs) {
+        roofBlock(world, x, y, z, facing, corner, rs, crossGrain(facing));
+    }
+
+    /**
+     * 지붕 한 칸. cross = 직각 결 자재(회전판)를 쓸 것인가.
+     * 추녀마루처럼 결이 어느 쪽도 아닌 칸은 호출자가 cross=false 로 눌러 통일한다.
+     */
+    private static void roofBlock(World world, int x, int y, int z, BlockFace facing,
+                                  boolean corner, RoofStyle rs, boolean cross) {
         Block block = world.getBlockAt(x, y, z);
         if (corner) {
-            block.setType(solidMat(rs));   // 추녀마루
+            block.setType(solidMat(rs, cross));   // 추녀마루 · 기와골 · 적새
             return;
         }
-        Stairs stairs = (Stairs) stairMat(rs).createBlockData();
+        Stairs stairs = (Stairs) stairMat(rs, cross).createBlockData();
         stairs.setFacing(facing);   // 안쪽으로 오르는 기와면
         block.setBlockData(stairs);
     }
 
-    private static Material ridgeMat(RoofStyle rs) {
+    private static Material ridgeMat(RoofStyle rs, boolean cross) {
         return switch (rs) {
-            case TILE -> Material.DEEPSLATE_TILE_SLAB;
-            case SHINGLE -> Material.DARK_OAK_SLAB;
+            case TILE -> cross ? Material.DEEPSLATE_BRICK_SLAB : Material.DEEPSLATE_TILE_SLAB;
+            case SHINGLE -> Material.DARK_OAK_SLAB;   // 너와 = 목재, 결이 방향을 타지 않는다
             case MUD_TILE -> Material.MUD_BRICK_SLAB;
         };
     }
 
-    private static Material solidMat(RoofStyle rs) {
+    private static Material solidMat(RoofStyle rs, boolean cross) {
         return switch (rs) {
-            case TILE -> Material.DEEPSLATE_TILES;
+            case TILE -> cross ? Material.DEEPSLATE_BRICKS : Material.DEEPSLATE_TILES;
             case SHINGLE -> Material.DARK_OAK_PLANKS;
             case MUD_TILE -> Material.MUD_BRICKS;
         };
     }
 
-    private static Material stairMat(RoofStyle rs) {
+    private static Material stairMat(RoofStyle rs, boolean cross) {
         return switch (rs) {
-            case TILE -> Material.DEEPSLATE_TILE_STAIRS;
+            case TILE -> cross ? Material.DEEPSLATE_BRICK_STAIRS : Material.DEEPSLATE_TILE_STAIRS;
             case SHINGLE -> Material.DARK_OAK_STAIRS;
             case MUD_TILE -> Material.MUD_BRICK_STAIRS;
         };
@@ -1945,20 +1980,23 @@ final class CheonghaBuilder {
      * 합각벽·환기창·박공널은 지붕이 아니라 벽이므로 건드리지 않는다 (안 그러면 다락에 구멍이 난다).
      */
     private static void eaveRim(World world, int x0, int z0, int x1, int z1, int y, RoofStyle rs) {
-        for (int x = x0; x <= x1; x++) {
-            rimSlab(world, x, y, z0, rs);
-            rimSlab(world, x, y, z1, rs);
+        for (int x = x0; x <= x1; x++) {   // 북·남 처마 끝 = 북·남 경사면의 결 (TILE)
+            rimSlab(world, x, y, z0, rs, false);
+            rimSlab(world, x, y, z1, rs, false);
         }
-        for (int z = z0 + 1; z <= z1 - 1; z++) {
-            rimSlab(world, x0, y, z, rs);
-            rimSlab(world, x1, y, z, rs);
+        for (int z = z0 + 1; z <= z1 - 1; z++) {   // 동·서 처마 끝 = 직각 결 (BRICK)
+            rimSlab(world, x0, y, z, rs, true);
+            rimSlab(world, x1, y, z, rs, true);
         }
     }
 
-    private static void rimSlab(World world, int x, int y, int z, RoofStyle rs) {
+    /** 처마 끝 한 칸을 반 블록으로 깎는다. 그 자리에 깔린 자재의 **결 계열을 그대로 이어받는다**. */
+    private static void rimSlab(World world, int x, int y, int z, RoofStyle rs, boolean cross) {
         Material now = world.getBlockAt(x, y, z).getType();
-        if (now == stairMat(rs) || now == solidMat(rs)) {
-            world.getBlockAt(x, y, z).setType(ridgeMat(rs));   // 반 블록(하단) — 얇은 처마 끝
+        if (now == stairMat(rs, cross) || now == solidMat(rs, cross)) {
+            world.getBlockAt(x, y, z).setType(ridgeMat(rs, cross));   // 반 블록(하단) — 얇은 처마 끝
+        } else if (now == stairMat(rs, !cross) || now == solidMat(rs, !cross)) {
+            world.getBlockAt(x, y, z).setType(ridgeMat(rs, !cross));  // 모서리(추녀마루) 계열 = 반대 결
         }
     }
 
@@ -1981,7 +2019,9 @@ final class CheonghaBuilder {
      * 아니라 조각의 몫이다 — 이 마을의 격은 지붕의 켜가 아니라 물매가 말한다.
      */
     private static void ridgeLine(World world, int ax, int az, int bx, int bz, int y, RoofStyle rs) {
-        Material solid = solidMat(rs);
+        // v6.6 ① 용마루의 결은 **능선을 따라 흐른다** — X 능선이면 TILE, Z 능선이면 직각 결(BRICK).
+        // (roofShape 의 ridgeX 와 같은 판정: 맞배 단은 짧은 변만 좁히므로 장단 비교가 뒤집히지 않는다)
+        Material solid = solidMat(rs, (bx - ax) < (bz - az));
         for (int x = ax; x <= bx; x++) {
             for (int z = az; z <= bz; z++) {
                 world.getBlockAt(x, y, z).setType(solid);
@@ -2590,18 +2630,20 @@ final class CheonghaBuilder {
                 roofBlock(world, rx0, yb, z, BlockFace.EAST, false, RoofStyle.TILE);   // 서측 = 듬성듬성
             }
         }
-        for (int i = 1; x1 - i >= xMid; i++) {   // 동측 지붕면만 마루까지 오른다
+        for (int i = 1; x1 - i >= xMid; i++) {   // 동측 지붕면만 마루까지 오른다 (동·서면 = 직각 결)
             int x = rx1 - i;
             int y = yb + i;
             for (int z = rz0 + i; z <= rz1 - i; z++) {
-                roofBlock(world, x, y, z, BlockFace.WEST, z == rz0 + i || z == rz1 - i, RoofStyle.TILE);
+                boolean hip = z == rz0 + i || z == rz1 - i;   // 추녀마루 = TILE 로 통일
+                roofBlock(world, x, y, z, BlockFace.WEST, hip, RoofStyle.TILE,
+                        !hip && crossGrain(BlockFace.WEST));
             }
         }
         int ridgeX = xMid;
         int ridgeY = yb + (rx1 - xMid);
-        for (int z = z0 + 2; z <= z1 - 4; z++) {   // 부러진 용마루 — 남쪽 끝은 무너져 없다
+        for (int z = z0 + 2; z <= z1 - 4; z++) {   // 부러진 용마루 — 남쪽 끝은 무너져 없다. 능선이 Z 축 = 직각 결
             world.getBlockAt(ridgeX, ridgeY, z).setType(
-                    z == z0 + 2 ? Material.DEEPSLATE_TILES : Material.DEEPSLATE_TILE_SLAB);   // 치미 1단만 남음
+                    z == z0 + 2 ? Material.DEEPSLATE_BRICKS : Material.DEEPSLATE_BRICK_SLAB);   // 치미 1단만 남음
         }
         for (int z = z0 + 2; z <= z1 - 4; z += 3) {   // 무너진 단면의 잔해 (심층암 벽돌)
             world.getBlockAt(ridgeX - 1, ridgeY - 1, z).setType(Material.DEEPSLATE_BRICKS);

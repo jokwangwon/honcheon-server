@@ -575,6 +575,15 @@ public final class TownRender {
     // ─── 하이트맵 스캔 ───
 
     /** 각 (x,z) 열의 최상단 비공기 블록의 y와 색을 채운다. 블록 읽기 횟수를 돌려준다. */
+    /**
+     * 반 칸 높이 블록 — 반블록만이다.
+     * 계단은 '반쪽'처럼 보이지만 뒤쪽이 통 칸이라 지붕에서는 통 칸으로 읽는 것이 실물에 가깝다
+     * (계단을 반 칸으로 그렸더니 지붕이 실제보다 납작해져 판단이 반대로 흘렀다).
+     */
+    private static boolean isHalfHeight(Material m) {
+        return m.name().endsWith("_SLAB");
+    }
+
     private static long scanHeightmap(World world, int cx, int cy, int cz, int yMin, int yMax,
                                       int[][] h, int[][] col) {
         long reads = 0;
@@ -591,7 +600,9 @@ public final class TownRender {
                     if (m.isAir()) {
                         continue;
                     }
-                    h[ix][iz] = y;
+                    // 반 칸 단위 — 계단·반블록은 실제로 반 칸이다. 통 블록으로 그리면 지붕이
+                    // 실물보다 훨씬 계단져 보여 판단을 그르친다 (루프의 눈이 거짓말을 한다).
+                    h[ix][iz] = 2 * y + (isHalfHeight(m) ? 1 : 2);
                     col[ix][iz] = color(m);
                     break;
                 }
@@ -685,7 +696,7 @@ public final class TownRender {
                     continue;
                 }
                 int sx = ox + (ix - iz) * hw;
-                int sy = oy + (ix + iz) * hh - (y - lo) * hz;
+                int sy = oy + (ix + iz) * hh - ((y - lo) * hz) / 2;
                 int rgb = col[ix][iz];
                 // 측면 깊이 = 앞쪽 이웃과의 고도차 (없으면 skirt)
                 int nxh = ix + 1 < n ? h[ix + 1][iz] : y - skirt;
@@ -693,7 +704,7 @@ public final class TownRender {
                 int dxDepth = clamp(y - (nxh == Integer.MIN_VALUE ? y - skirt : nxh), 0, skirt);
                 int dzDepth = clamp(y - (nzh == Integer.MIN_VALUE ? y - skirt : nzh), 0, skirt);
                 // 화면 좌반부 = z+1 이웃 쪽, 우반부 = x+1 이웃 쪽 (sx = ox + (ix-iz)*hw 이므로)
-                drawCube(img, sx, sy, hw, hh, rgb, dzDepth * hz, dxDepth * hz);
+                drawCube(img, sx, sy, hw, hh, rgb, (dzDepth * hz) / 2, (dxDepth * hz) / 2);
             }
         }
         return write(img, f);
