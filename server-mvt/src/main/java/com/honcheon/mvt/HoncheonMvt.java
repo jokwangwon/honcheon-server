@@ -32,6 +32,7 @@ public final class HoncheonMvt extends JavaPlugin {
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
+    private final java.util.List<Zone> zones = new java.util.ArrayList<>();
 
     @Override
     public void onEnable() {
@@ -52,8 +53,13 @@ public final class HoncheonMvt extends JavaPlugin {
         this.party = new PartyEngine(RulesConfig.load(cfg.resolve("party.yml")));
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
+        getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
         getCommand("honcheon").setExecutor(new MvtCommand(this));
         loadAnchors();
+        loadZones();
+        // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
+        getServer().getScheduler().runTaskTimer(this,
+                () -> getServer().getOnlinePlayers().forEach(this::updateSidebar), 100L, 100L);
         getLogger().info("혼천 MVT 기동 — 룰 엔진 5종 로드 완료 (/혼천 도움말)"
                 + (anchors.isEmpty() ? " — 청하현 미조성 (/혼천 조성)" : " — 청하현 앵커 " + anchors.size() + "곳"));
     }
@@ -91,6 +97,73 @@ public final class HoncheonMvt extends JavaPlugin {
             if (at != null) {
                 anchors.put(key, at);
             }
+        }
+    }
+
+    /** 정보 패널 — 우측 사이드바 (관리자 피드백: 표지판 외 상시 정보 채널) */
+    public void updateSidebar(org.bukkit.entity.Player player) {
+        org.bukkit.scoreboard.Scoreboard board =
+                getServer().getScoreboardManager().getNewScoreboard();
+        org.bukkit.scoreboard.Objective obj = board.registerNewObjective(
+                "honcheon", org.bukkit.scoreboard.Criteria.DUMMY, "§6§l혼 천");
+        obj.setDisplaySlot(org.bukkit.scoreboard.DisplaySlot.SIDEBAR);
+        Zone zone = zoneAt(player.getLocation());
+        PlayerLedger ledger = ledger(player.getUniqueId());
+        obj.getScore("§7위치: §f" + (zone == null ? "야외" : zone.name())).setScore(3);
+        obj.getScore("§e소지금 " + ledger.money() + "문").setScore(2);
+        obj.getScore(String.format("§f오늘 수련 +%.1f일", ledger.grantedToday())).setScore(1);
+        player.setScoreboard(board);
+    }
+
+    // ─── 구역 (입장 타이틀) — 조성이 만들고 zones.yml 이 기억한다 ───
+
+    /** 위치가 속한 구역 — 중첩 시 부피가 작은 쪽 (건물 > 마을) */
+    public Zone zoneAt(Location at) {
+        Zone best = null;
+        for (Zone zone : zones) {
+            if (zone.contains(at) && (best == null || zone.volume() < best.volume())) {
+                best = zone;
+            }
+        }
+        return best;
+    }
+
+    public void setZones(java.util.List<Zone> built) {
+        zones.clear();
+        zones.addAll(built);
+        YamlConfiguration yml = new YamlConfiguration();
+        int i = 0;
+        for (Zone z : zones) {
+            String k = "zone" + i++;
+            yml.set(k + ".name", z.name());
+            yml.set(k + ".subtitle", z.subtitle());
+            yml.set(k + ".world", z.world());
+            yml.set(k + ".box", java.util.List.of(z.x1(), z.y1(), z.z1(), z.x2(), z.y2(), z.z2()));
+        }
+        try {
+            yml.save(new File(getDataFolder(), "zones.yml"));
+        } catch (java.io.IOException e) {
+            getLogger().warning("구역 저장 실패: " + e.getMessage());
+        }
+    }
+
+    private void loadZones() {
+        File file = new File(getDataFolder(), "zones.yml");
+        if (!file.isFile()) {
+            return;
+        }
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
+        for (String key : yml.getKeys(false)) {
+            java.util.List<Integer> box = yml.getIntegerList(key + ".box");
+            if (box.size() == 6) {
+                zones.add(new Zone(yml.getString(key + ".name", "?"),
+                        yml.getString(key + ".subtitle", ""),
+                        yml.getString(key + ".world", "world"),
+                        box.get(0), box.get(1), box.get(2), box.get(3), box.get(4), box.get(5)));
+            }
+        }
+        if (!zones.isEmpty()) {
+            getLogger().info("구역 " + zones.size() + "곳 로드 (입장 타이틀)");
         }
     }
 

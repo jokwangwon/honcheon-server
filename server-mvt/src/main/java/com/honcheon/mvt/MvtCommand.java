@@ -163,10 +163,12 @@ public final class MvtCommand implements CommandExecutor {
             player.sendMessage(ChatColor.RED + "조성은 관리자의 몫이다.");
             return true;
         }
-        Map<String, Location> anchors = CheonghaBuilder.build(player);
+        java.util.List<Zone> zones = new java.util.ArrayList<>();
+        Map<String, Location> anchors = CheonghaBuilder.build(player, zones);
         plugin.setAnchors(anchors);
+        plugin.setZones(zones);
         player.sendMessage(ChatColor.GOLD + "청하현이 섰다 — 장소 " + anchors.size()
-                + "곳: 광장·우물·객잔·의뢰소·의방·전장·장터·북쪽 산길 표지 + NPC 5인");
+                + "곳 · 구역 " + zones.size() + "곳 (입장 타이틀)");
         player.sendMessage(ChatColor.GRAY + "이제 /혼천 팔기 는 장터에서만 통한다. 사냥터는 북쪽 산길.");
         return true;
     }
