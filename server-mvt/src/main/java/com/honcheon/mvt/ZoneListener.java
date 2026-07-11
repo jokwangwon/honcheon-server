@@ -37,7 +37,11 @@ final class ZoneListener implements Listener {
         Zone zone = plugin.zoneAt(event.getTo());
         String name = zone == null ? "" : zone.name();
         String before = lastZone.put(player.getUniqueId(), name);
-        if (name.equals(before) || zone == null) {
+        if (name.equals(before)) {
+            return;
+        }
+        plugin.updateSidebar(player);   // 구역 변경 즉시 갱신 — 5초 폴링은 소지금·수련용 보조
+        if (zone == null) {
             return;
         }
         Map<String, Long> shown = lastShown.computeIfAbsent(player.getUniqueId(),

@@ -50,5 +50,12 @@ if [ ! -f "$RUN/paper.jar" ]; then
 fi
 echo "eula=true" > "$RUN/eula.txt"
 
+# 외부 공개 모드 — HONCHEON_PUBLIC=1 이면 화이트리스트 강제 (포트포워딩 전 필수)
+# 안내: docs/mvt/admin_test_guide.md 「외부 공개 체크리스트」
+if [ "${HONCHEON_PUBLIC:-}" = "1" ] && [ -f "$RUN/server.properties" ]; then
+  sed -i 's/^white-list=.*/white-list=true/; s/^enforce-whitelist=.*/enforce-whitelist=true/' "$RUN/server.properties"
+  echo "      공개 모드: white-list 강제 — 콘솔에서 whitelist add <닉네임> 필요"
+fi
+
 echo "[4/4] 기동 — 접속 후 콘솔에서: op <닉네임>  /  테스트 절차: docs/mvt/admin_test_guide.md"
 cd "$RUN" && exec "$JAVA_BIN" -Xms2G -Xmx2G -jar paper.jar nogui
