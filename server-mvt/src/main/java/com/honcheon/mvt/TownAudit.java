@@ -147,7 +147,13 @@ public final class TownAudit {
 
     // ─── 진입점 ───
 
+    /** 구역 정보 없이 (하위호환) — 폐사당은 기본 좌표로 추정한다 */
     public static List<String> audit(World world, Map<String, Location> anchors, int cx, int cy, int cz) {
+        return audit(world, anchors, List.of(), cx, cy, cz);
+    }
+
+    public static List<String> audit(World world, Map<String, Location> anchors, List<Zone> zones,
+                                     int cx, int cy, int cz) {
         List<String> out = new ArrayList<>();
         out.add(HEAD + "══ 청하현 규칙 린트 (building_style_guide.md 대조) ══");
         out.add(INFO + "중심 (" + cx + ", " + cy + ", " + cz + ") · 스캔 반경 " + SCAN_R);
@@ -176,7 +182,7 @@ public final class TownAudit {
 
         Volume vol = scanVolume(world, cx, cy, cz);
         inkWash(out, violations, vol);
-        coldLight(out, violations, world, vol, cx, cy, cz);
+        coldLight(out, violations, world, vol, cx, cy, cz, zones);
         nightLight(out, violations, world, path, cx, cy, cz);
         contracts(out, violations, world, anchors, cx, cy, cz);
 
@@ -645,23 +651,57 @@ public final class TownAudit {
     }
 
     private static void coldLight(List<String> out, List<String> violations, World world, Volume v,
-                                  int cx, int cy, int cz) {
+                                  int cx, int cy, int cz, List<Zone> zones) {
         out.add(HEAD + "⑦ 냉색 격리 (영혼 계열 = 폐사당 전용)");
-        // 폐사당 자체(마을 스캔 밖)도 확인 — 냉광이 아예 없으면 폐사당이 없는 것이다
-        int sx = cx + SHRINE_DX, sz = cz + SHRINE_DZ;
+        // 폐사당은 마을 스캔(±65) 밖이고 부지가 옮겨질 수 있다 — 좌표를 짐작하지 말고
+        // 구역(Zone)이 말하는 실제 경계를 읽는다 (구역이 없으면 옛 기본 좌표로 폴백)
+        Zone shrine = zones.stream().filter(z -> z.name().contains("폐사당")).findFirst().orElse(null);
+        int x1, z1, x2, z2, y1, y2;
+        if (shrine != null) {
+            x1 = Math.min(shrine.x1(), shrine.x2()) - 4;
+            x2 = Math.max(shrine.x1(), shrine.x2()) + 4;
+            z1 = Math.min(shrine.z1(), shrine.z2()) - 4;
+            z2 = Math.max(shrine.z1(), shrine.z2()) + 4;
+            y1 = Math.min(shrine.y1(), shrine.y2()) - 4;
+            y2 = Math.max(shrine.y1(), shrine.y2()) + 4;
+        } else {
+            int sx = cx + SHRINE_DX, sz = cz + SHRINE_DZ;
+            int baseY = world.getHighestBlockYAt(sx, sz);
+            x1 = sx - SHRINE_R; x2 = sx + SHRINE_R;
+            z1 = sz - SHRINE_R; z2 = sz + SHRINE_R;
+            y1 = baseY - 8; y2 = baseY + 16;
+        }
         int shrineCold = v.coldInsideShrine;
-        int baseY = world.getHighestBlockYAt(sx, sz);
-        for (int x = sx - SHRINE_R; x <= sx + SHRINE_R; x++) {
-            for (int z = sz - SHRINE_R; z <= sz + SHRINE_R; z++) {
-                for (int y = baseY - 4; y <= baseY + 14; y++) {
-                    if (COLD_LIGHT.contains(world.getBlockAt(x, y, z).getType())) {
+        int water = 0, solid = 0;
+        for (int x = x1; x <= x2; x++) {
+            for (int z = z1; z <= z2; z++) {
+                for (int y = y1; y <= y2; y++) {
+                    Material m = world.getBlockAt(x, y, z).getType();
+                    if (COLD_LIGHT.contains(m)) {
                         shrineCold++;
+                    }
+                    if (m == Material.WATER) {
+                        water++;
+                    } else if (!m.isAir()) {
+                        solid++;
                     }
                 }
             }
         }
-        out.add(INFO + "  폐사당(" + sx + "," + sz + " ±" + SHRINE_R + ") 내 냉광 " + shrineCold
+        out.add(INFO + "  폐사당 " + (shrine == null ? "(구역 없음 — 기본 좌표)" : "구역 [" + x1 + ".." + x2
+                + ", " + z1 + ".." + z2 + "]") + " 냉광 " + shrineCold
                 + "개 · 마을 안 냉광 " + v.coldOutside.size() + "개");
+        // 수몰 검사 — 폐허는 지형에 순응하되 호수 위에 서면 안 된다 (v6.3 관측 버그)
+        if (water > 0) {
+            double wpct = 100.0 * water / Math.max(1, water + solid);
+            if (wpct > 10.0) {
+                out.add(BAD + String.format("폐사당 부지에 물 %d블록 (%.0f%%) — 수몰됐다 (육지 부지 탐색 필요)",
+                        water, wpct));
+                violations.add("폐사당 수몰");
+            } else {
+                out.add(INFO + "  부지 내 물 " + water + "블록 (연못·습지 인접 — 허용)");
+            }
+        }
         if (v.coldOutside.isEmpty()) {
             out.add(OK + "마을 안 영혼 계열 광원 0개 — 온색/냉색 분리 유지");
         } else {

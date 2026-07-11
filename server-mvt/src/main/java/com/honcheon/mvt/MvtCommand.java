@@ -201,7 +201,7 @@ public final class MvtCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 조성");
             return true;
         }
-        for (String line : TownAudit.audit(center.getWorld(), plugin.anchors(),
+        for (String line : TownAudit.audit(center.getWorld(), plugin.anchors(), plugin.zones(),
                 center.getBlockX(), center.getBlockY() - 1, center.getBlockZ())) {
             sender.sendMessage(line);
         }

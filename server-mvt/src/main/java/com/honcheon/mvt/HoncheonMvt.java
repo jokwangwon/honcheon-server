@@ -124,6 +124,11 @@ public final class HoncheonMvt extends JavaPlugin {
 
     // ─── 구역 (입장 타이틀) — 조성이 만들고 zones.yml 이 기억한다 ───
 
+    /** 전 구역 — 검수(TownAudit)가 폐사당 같은 앵커 없는 장소를 찾는 입력 */
+    public java.util.List<Zone> zones() {
+        return java.util.Collections.unmodifiableList(zones);
+    }
+
     /** 위치가 속한 구역 — 중첩 시 부피가 작은 쪽 (건물 > 마을) */
     public Zone zoneAt(Location at) {
         Zone best = null;
