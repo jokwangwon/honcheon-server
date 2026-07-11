@@ -801,7 +801,7 @@ public final class GameListener extends ListenerAdapter {
         long chId = ((Number) row.get("id")).longValue();
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                 String.valueOf(row.get("realm")), "강호", "청하현");
-        db.logEvent("의뢰_수주", "character", String.valueOf(chId), q.key(), Map.of("의뢰", q.key()));
+        db.logEvent("의뢰_수주", "character", String.valueOf(chId), "quest", q.key(), Map.of("의뢰", q.key()));
         event.editMessageEmbeds(new EmbedBuilder().setColor(INK)
                         .setTitle("수주 — " + q.name())
                         .setDescription("소연이 대장에 이름을 적었다. \"기한은 오늘 해 질 녘까지 — 검수는 확실히 하네.\"\n"
@@ -870,12 +870,12 @@ public final class GameListener extends ListenerAdapter {
                 realm = promoted;
             }
             result.setColor(BLOOD).appendDescription("\n" + gains);
-            db.logEvent("의뢰_완수", "character", String.valueOf(chId), q.key(),
+            db.logEvent("의뢰_완수", "character", String.valueOf(chId), "quest", q.key(),
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward));
         } else {
             result.setColor(INK).appendDescription(
                     "\n일이 어그러졌다 — 소연: \"빈손이면 보수도 없네. 게시판은 내일 다시 열리네.\"");
-            db.logEvent("의뢰_실패", "character", String.valueOf(chId), q.key(),
+            db.logEvent("의뢰_실패", "character", String.valueOf(chId), "quest", q.key(),
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin));
         }
         db.updateCharacter(chId, sheet, wallet, realm, "강호", "청하현");
@@ -932,17 +932,22 @@ public final class GameListener extends ListenerAdapter {
         event.deferReply().queue();   // 로컬 LLM 1~3초 — 3초 응답 제한 회피
         renderer.chat(persona, say, fallback).thenAccept(reply -> {
             try {
-                if (reply.strip().startsWith("[판정]")) {
-                    // 판정층 — 의도 분류 결과: 정보 캐기 (action_pairs 정보_캐기 → 화술+정보수집)
+                // F35 — 소형 모델이 잡담과 [판정]을 섞어 낸다: 관용 매칭 + 앞 텍스트 폐기
+                if (reply.contains("[판정]")) {
                     resolveInfoCheck(event, row, chId, npcName, say);
                     return;
+                }
+                // 잔여 토큰 방어 — 원시 토큰이 사용자에게 보이면 안 된다
+                String clean = reply.replace("[판정]", "").strip();
+                if (clean.isBlank()) {
+                    clean = fallback;
                 }
                 // 잡담층 + 세계층 기록 (대화 요지 — NPC 기억의 재료)
                 db.logEvent("대화", "character", String.valueOf(chId), npcName,
                         Map.of("말", say.substring(0, Math.min(80, say.length()))));
                 event.getHook().sendMessageEmbeds(new EmbedBuilder().setColor(INK)
                         .setTitle("「" + npcName + "」")
-                        .setDescription(reply.strip()).build()).queue();
+                        .setDescription(clean).build()).queue();
             } catch (Exception e) {
                 event.getHook().sendMessage("오류: " + e.getMessage()).queue();
             }
@@ -980,12 +985,18 @@ public final class GameListener extends ListenerAdapter {
         Object disp = npc.get("disposition");
         String dispositions = disp instanceof List<?> list
                 ? String.join(", ", list.stream().map(String::valueOf).toList()) : "";
-        return "너는 무협 세계 청하현의 NPC 「" + name + "」이다. 역할: " + npc.get("role")
-                + ". 성향: " + dispositions + ".\n플레이어가 말을 건다. 규칙:\n"
-                + "1. 네가 아는 것만 말한다 — 청하현 안의 일상 수준. 새 인명·지명·사건 발명 금지. 숫자 금지.\n"
-                + "2. 2문장 이내, 한국어 사극 말투. 역할과 성향대로.\n"
-                + "3. 플레이어의 말이 정보 요구·부탁·설득·흥정·위협이면 응답하지 말고 정확히 [판정] 만 출력하라.\n"
-                + "4. 그 외(인사·잡담·농담)는 그냥 대답한다 — 판정을 억지로 만들지 않는다.";
+        // v2 — 8차 채집물 반영: 역할 반전(소연)·직함 발명(금서방)·톤 비일관(장쇠)·무색무취(유문)·혼합 출력(한백)
+        return "너는 무협 세계 청하현의 NPC 「" + name + "」이다. 너의 역할: " + npc.get("role")
+                + ". 너의 성향: " + dispositions + ".\n"
+                + "말을 거는 상대는 강호에 갓 나온 손님이다 — 상대에게 너의 직업을 투사하지 마라.\n"
+                + "규칙 (가장 중요한 것부터):\n"
+                + "1. 상대의 말이 정보 요구·부탁·설득·흥정·위협이면 **다른 글자 없이 [판정] 넉 자만** 출력하라."
+                + " 소문·정보 내용을 지어내 답하는 것은 금지다.\n"
+                + "2. 그 외(인사·잡담·농담)는 2문장 이내로 대답한다 — 판정을 억지로 만들지 않는다.\n"
+                + "3. 네가 아는 것만 말한다 — 청하현 안의 일상 수준. 새 인명·지명·조직명·직함·사건 발명 금지."
+                + " 너의 이름과 직함은 위에 주어진 것이 전부다. 숫자 금지.\n"
+                + "4. 말투는 처음부터 끝까지 하나로 — 하게체(장사꾼·무인) 또는 하오체. 존댓말로 바꾸지 마라.\n"
+                + "5. 직업의 어휘를 써라 — 의원이면 맥·약재, 상인이면 값·물건, 무인이면 손속·길.";
     }
 
     /** LLM 비활성·실패 시 폴백 — 역할 기반 한 줄 (대화가 죽지 않는다) */
@@ -1133,7 +1144,7 @@ public final class GameListener extends ListenerAdapter {
         String winner = opposed.draw() ? null : (opposed.margin() > 0 ? nameA : nameB);
         String loser = opposed.draw() ? null : (opposed.margin() > 0 ? nameB : nameA);
         db.logEvent("비무", "character", String.valueOf(((Number) challengerRow.get().get("id")).longValue()),
-                String.valueOf(((Number) targetRow.get().get("id")).longValue()),
+                "character", String.valueOf(((Number) targetRow.get().get("id")).longValue()),
                 Map.of("상대", nameB, "굴림A", rollA, "굴림B", rollB, "마진", opposed.margin(),
                         "등급", opposed.tier().name(), "무승부", opposed.draw()));
 

@@ -241,18 +241,24 @@ public final class Db implements AutoCloseable {
         logEvent(type, actorType, actorId, null, data);
     }
 
-    /** F32 — 대상 있는 이벤트 (의뢰 키·비무 상대·스승 등): target_id 를 채워 추적 가능하게 */
+    /** F32 — 대상 있는 이벤트: target_type/target_id 를 채워 추적 가능하게 (8차 보완: type 동반) */
     public synchronized void logEvent(String type, String actorType, String actorId, String targetId,
                                       Map<String, Object> data) throws Exception {
+        logEvent(type, actorType, actorId, null, targetId, data);
+    }
+
+    public synchronized void logEvent(String type, String actorType, String actorId, String targetType,
+                                      String targetId, Map<String, Object> data) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO events(day, type, actor_type, actor_id, target_id, data_json) "
-                        + "VALUES(?, ?, ?, ?, ?, ?)")) {
+                "INSERT INTO events(day, type, actor_type, actor_id, target_type, target_id, data_json) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, worldDay());
             ps.setString(2, type);
             ps.setString(3, actorType);
             ps.setString(4, actorId);
-            ps.setString(5, targetId);
-            ps.setString(6, JSON.writeValueAsString(data));
+            ps.setString(5, targetType == null && targetId != null ? "npc" : targetType);
+            ps.setString(6, targetId);
+            ps.setString(7, JSON.writeValueAsString(data));
             ps.executeUpdate();
         }
     }
