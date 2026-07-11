@@ -145,7 +145,9 @@ public final class GameListener extends ListenerAdapter {
             eb.addField("심법", sheet.get("심법") + (opened ? " · 단전 개화" : " · 단전 미개화"), true);
             if (opened) {
                 double naegong = naegongOf(((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue());
-                eb.addField("내공", hwahuLabel(naegong) + " · 내력 " + Math.round(naegong * 3), true);
+                int cur = ((Number) sheet.getOrDefault("내력", 0)).intValue();
+                eb.addField("내공", hwahuLabel(naegong) + " · 내력 " + cur + "/"
+                        + rules.energy.pool(naegong), true);
             }
         }
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
@@ -608,9 +610,14 @@ public final class GameListener extends ListenerAdapter {
 
         Map<String, Object> attrsRaw = (Map<String, Object>) sheet.get("능력치");
         int stat = ((Number) attrsRaw.getOrDefault(approach[1], 2)).intValue();
+        // 발경 — 개화자는 타격에 기를 싣는다 (내력 1 → +1, 부족하면 맨 기술)
+        int balgyeong = canBalgyeong(sheet, String.valueOf(row.get("realm"))) ? 1 : 0;
+        if (balgyeong > 0) {
+            payBalgyeong(sheet);
+        }
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
-        JudgmentEngine.Tier tier = rules.judgment.resolve(stat + 2, roll, beast.resist());
-        int margin = stat + 2 + roll - beast.resist();
+        JudgmentEngine.Tier tier = rules.judgment.resolve(stat + 2 + balgyeong, roll, beast.resist());
+        int margin = stat + 2 + balgyeong + roll - beast.resist();
 
         boolean effective = !tier.id().equals("failure") && !tier.id().equals("critical_failure");
         boolean pelt = margin >= 0;
@@ -650,9 +657,14 @@ public final class GameListener extends ListenerAdapter {
 
         EmbedBuilder result = new EmbedBuilder().setColor(INK)
                 .setTitle("판정 — " + approach[0])
-                .setDescription("**" + approach[1] + " " + stat + "** + 2d6 = **" + (stat + 2 + roll)
+                .setDescription("**" + approach[1] + " " + stat + "**"
+                        + (balgyeong > 0 ? " + ⚡발경 1" : "")
+                        + " + 2d6 = **" + (stat + 2 + balgyeong + roll)
                         + "** vs " + beast.resist() + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin
-                        + "** → **" + tier.name() + "**\n" + gains
+                        + "** → **" + tier.name() + "**"
+                        + (balgyeong > 0 ? "\n타격에 기가 실렸다 (내력 -1, 남은 "
+                                + ((Number) sheet.getOrDefault("내력", 0)).intValue() + ")" : "")
+                        + "\n" + gains
                         + "\n\n" + Narration.hunt(beast.name(), tier.name(), pelt));
         event.editMessageEmbeds(event.getMessage().getEmbeds().get(0), result.build()).setComponents().queue();
     }
@@ -1082,6 +1094,23 @@ public final class GameListener extends ListenerAdapter {
         return stage + "단계 " + seong + "성";
     }
 
+    /**
+     * 발경 자격 — 개화 + 경지 게이트(삼류부터) + 내력 1 이상 (cost_bands 발경 = 1).
+     * 부족하면 맨 기술 — 시전 불가가 아니라 다운캐스트 (internal_energy).
+     */
+    @SuppressWarnings("unchecked")
+    private boolean canBalgyeong(Map<String, Object> sheet, String realm) {
+        return "개화".equals(sheet.get("단전"))
+                && rules.canUseQi(realm, "발경")
+                && ((Number) sheet.getOrDefault("내력", 0)).intValue() >= 1;
+    }
+
+    /** 발경 대금 — 내력 1 차감 (호출 전 canBalgyeong 확인) */
+    private void payBalgyeong(Map<String, Object> sheet) {
+        int energy = ((Number) sheet.getOrDefault("내력", 0)).intValue();
+        sheet.put("내력", Math.max(0, energy - 1));
+    }
+
     @SuppressWarnings("unchecked")
     private void visitShrine(SlashCommandInteractionEvent event) throws Exception {
         if (notInRegion(event)) {
@@ -1268,11 +1297,14 @@ public final class GameListener extends ListenerAdapter {
             double days = ((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue() + 1.0;
             sheet.put("축기_원장", days);
             double naegong = naegongOf(days);
+            // 운기조식 — 내력 전량 회복 (internal_energy meditation, 알파: 하루 1회 운기에 통합)
+            int pool = rules.energy.pool(naegong);
+            sheet.put("내력", pool);
             db.logEvent("운기", "character", String.valueOf(chId), "simbeop",
                     String.valueOf(sheet.get("심법")), Map.of("적립", 1));
             body.append(String.format("가부좌를 틀고 한 주천을 돌렸다. 축기 **+1일치** (누적 %.0f일)\n"
-                            + "내공 화후 **%s** · 내력 %d",
-                    days, hwahuLabel(naegong), Math.round(naegong * 3)));
+                            + "내공 화후 **%s** · 내력 %d/%d (운기조식 — 가득 찼다)",
+                    days, hwahuLabel(naegong), pool, pool));
         }
         String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
         if (!realm.equals(row.get("realm"))) {
@@ -1408,8 +1440,11 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
 
-        int execA = duelExec(challengerRow.get());
-        int execB = duelExec(targetRow.get());
+        // 발경 — 양측 각자 자격이 되면 기를 싣는다 (대칭 원칙, 차감은 duelGrant에서)
+        boolean qiA = duelBalgyeong(challengerRow.get());
+        boolean qiB = duelBalgyeong(targetRow.get());
+        int execA = duelExec(challengerRow.get()) + (qiA ? 1 : 0);
+        int execB = duelExec(targetRow.get()) + (qiB ? 1 : 0);
         int rollA = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int rollB = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         JudgmentEngine.Opposed opposed = rules.judgment.directOpposed(execA, rollA, execB, rollB);
@@ -1419,8 +1454,8 @@ public final class GameListener extends ListenerAdapter {
         int today = db.worldDay();
         boolean challengerWins = !opposed.draw() && opposed.margin() > 0;
         boolean targetWins = !opposed.draw() && opposed.margin() < 0;
-        double grantedA = duelGrant(challengerRow.get(), today, challengerWins);
-        double grantedB = duelGrant(targetRow.get(), today, targetWins);
+        double grantedA = duelGrant(challengerRow.get(), today, challengerWins, qiA);
+        double grantedB = duelGrant(targetRow.get(), today, targetWins, qiB);
 
         String winner = opposed.draw() ? null : (opposed.margin() > 0 ? nameA : nameB);
         String loser = opposed.draw() ? null : (opposed.margin() > 0 ? nameB : nameA);
@@ -1435,13 +1470,21 @@ public final class GameListener extends ListenerAdapter {
                         + "** → **" + opposed.tier().name() + "** (" + nameA + " 시점) — 승자 **" + winner + "**";
         EmbedBuilder result = new EmbedBuilder().setColor(BLOOD)
                 .setTitle("비무 — " + nameA + " 대 " + nameB)
-                .setDescription(nameA + ": 무예 " + execA + " + 2d6 = **" + (execA + rollA) + "**" + extremeMark(rollA)
-                        + "\n" + nameB + ": 무예 " + execB + " + 2d6 = **" + (execB + rollB) + "**" + extremeMark(rollB)
+                .setDescription(nameA + ": 무예 " + execA + (qiA ? " ⚡발경" : "")
+                        + " + 2d6 = **" + (execA + rollA) + "**" + extremeMark(rollA)
+                        + "\n" + nameB + ": 무예 " + execB + (qiB ? " ⚡발경" : "")
+                        + " + 2d6 = **" + (execB + rollB) + "**" + extremeMark(rollB)
                         + "\n" + verdict
                         + "\n수련: " + nameA + String.format(" +%.2f일치 · ", grantedA)
                         + nameB + String.format(" +%.2f일치", grantedB)
                         + "\n\n" + Narration.duel(winner, loser, opposed.draw()));
         event.editMessageEmbeds(result.build()).setComponents().queue();
+    }
+
+    /** 비무 발경 자격 — 시트 읽기 전용 (차감은 duelGrant의 단일 영속 지점) */
+    @SuppressWarnings("unchecked")
+    private boolean duelBalgyeong(Map<String, Object> row) {
+        return canBalgyeong((Map<String, Object>) row.get("sheet"), String.valueOf(row.get("realm")));
     }
 
     /** 비무 실행력 = 근력·민첩 중 높은 쪽 (베타 단순화 — 무공 숙련은 후속) */
@@ -1454,8 +1497,12 @@ public final class GameListener extends ListenerAdapter {
     }
 
     @SuppressWarnings("unchecked")
-    private double duelGrant(Map<String, Object> row, int today, boolean won) throws Exception {
+    private double duelGrant(Map<String, Object> row, int today, boolean won, boolean usedQi)
+            throws Exception {
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        if (usedQi) {
+            payBalgyeong(sheet);
+        }
         Map<String, Object> streak = (Map<String, Object>) sheet.get("비무_연속");
         int rep = streak != null && today == ((Number) streak.getOrDefault("일", -1)).intValue()
                 ? ((Number) streak.getOrDefault("횟수", 0)).intValue() : 0;

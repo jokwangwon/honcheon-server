@@ -1,6 +1,7 @@
 package com.honcheon.bot;
 
 import com.honcheon.core.rules.EconomyEngine;
+import com.honcheon.core.rules.InternalEnergyEngine;
 import com.honcheon.core.rules.JudgmentEngine;
 import com.honcheon.core.rules.ProgressionEngine;
 import com.honcheon.core.rules.RulesConfig;
@@ -18,6 +19,7 @@ public final class Rules {
     public final JudgmentEngine judgment;
     public final ProgressionEngine progression;
     public final EconomyEngine economy;
+    public final InternalEnergyEngine energy;
     public final Map<String, Object> dispositionTest;
     public final Map<String, Object> playerCreation;
     private final Map<String, Object> economyCfg;
@@ -33,10 +35,20 @@ public final class Rules {
                 RulesConfig.load(configDir.resolve("training.yml")));
         this.economyCfg = RulesConfig.load(configDir.resolve("economy.yml"));
         this.economy = new EconomyEngine(economyCfg);
+        this.energy = new InternalEnergyEngine(RulesConfig.load(configDir.resolve("internal_energy.yml")));
         this.dispositionTest = RulesConfig.load(configDir.resolve("disposition_test.yml"));
         this.playerCreation = RulesConfig.load(configDir.resolve("player_creation.yml"));
         this.llmCfg = RulesConfig.load(configDir.resolve("llm.yml"));
         this.npcsCfg = RulesConfig.load(configDir.resolve("npcs/cheongha_npcs.yml"));
+    }
+
+    /** 기 운용 게이트 — realm_gates에 없는 경지(범인)는 게이트 없음 = 불가 */
+    public boolean canUseQi(String realm, String costBand) {
+        try {
+            return energy.canUse(realm, costBand);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     /** 등록 NPC 항목을 표시 이름으로 찾는다 (등록제 명사 — 대화 페르소나의 원천) */
