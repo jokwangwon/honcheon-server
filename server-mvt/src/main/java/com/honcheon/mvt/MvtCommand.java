@@ -39,6 +39,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "정산" -> settle(sender, args);
                 case "협공" -> coop(sender, args);
                 case "조성" -> buildTown(sender);
+                case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
+                case "조감" -> renderTown(sender);   // 조감도 PNG — 콘솔 가능
                 case "문장" -> crests(sender);
                 default -> help(sender);
             };
@@ -163,20 +165,61 @@ public final class MvtCommand implements CommandExecutor {
 
     /** 청하현 조성 (M2b) — 관리자 전용, 재조성 = 같은 마을 (결정론 생성) */
     private boolean buildTown(CommandSender sender) {
-        if (!(sender instanceof Player player)) {
-            return true;
-        }
-        if (!player.isOp()) {
-            player.sendMessage(ChatColor.RED + "조성은 관리자의 몫이다.");
-            return true;
-        }
         java.util.List<Zone> zones = new java.util.ArrayList<>();
-        Map<String, Location> anchors = CheonghaBuilder.build(player, zones);
+        Map<String, Location> anchors;
+        if (sender instanceof Player player) {
+            if (!player.isOp()) {
+                player.sendMessage(ChatColor.RED + "조성은 관리자의 몫이다.");
+                return true;
+            }
+            anchors = CheonghaBuilder.build(player, zones);
+        } else {
+            // 콘솔·RCON — 직전 마을 중심(장터 앵커)에 재조성. 결정론이므로 같은 마을이 선다
+            Location center = plugin.anchor("장터");
+            if (center == null) {
+                sender.sendMessage(ChatColor.RED
+                        + "콘솔 조성은 기존 마을이 있어야 한다 (중심을 모른다) — 최초 1회는 인게임에서.");
+                return true;
+            }
+            anchors = CheonghaBuilder.build(center.getWorld(), center.getBlockX(),
+                    center.getBlockY() - 1, center.getBlockZ(), zones);
+        }
         plugin.setAnchors(anchors);
         plugin.setZones(zones);
-        player.sendMessage(ChatColor.GOLD + "청하현이 섰다 — 장소 " + anchors.size()
+        sender.sendMessage(ChatColor.GOLD + "청하현이 섰다 — 장소 " + anchors.size()
                 + "곳 · 구역 " + zones.size() + "곳 (입장 타이틀)");
-        player.sendMessage(ChatColor.GRAY + "이제 /혼천 팔기 는 장터에서만 통한다. 사냥터는 북쪽 산길.");
+        return true;
+    }
+
+    /**
+     * 검수 — 조성된 마을을 가이드 규칙으로 린트 (building_style_guide.md).
+     * 콘솔 가능: 좌표를 앵커에서 얻으므로 플레이어가 필요 없다 (자동 반복 루프의 눈).
+     */
+    private boolean auditTown(CommandSender sender) {
+        Location center = plugin.anchor("장터");
+        if (center == null) {
+            sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 조성");
+            return true;
+        }
+        for (String line : TownAudit.audit(center.getWorld(), plugin.anchors(),
+                center.getBlockX(), center.getBlockY() - 1, center.getBlockZ())) {
+            sender.sendMessage(line);
+        }
+        return true;
+    }
+
+    /** 조감 — 탑다운·아이소메트릭·건물별 PNG 렌더 (plugins/HoncheonMVT/render/). 콘솔 가능 */
+    private boolean renderTown(CommandSender sender) {
+        Location center = plugin.anchor("장터");
+        if (center == null) {
+            sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 조성");
+            return true;
+        }
+        java.io.File dir = new java.io.File(plugin.getDataFolder(), "render");
+        for (String line : TownRender.render(center.getWorld(), plugin.anchors(),
+                center.getBlockX(), center.getBlockY() - 1, center.getBlockZ(), dir)) {
+            sender.sendMessage(ChatColor.GRAY + line);
+        }
         return true;
     }
 
