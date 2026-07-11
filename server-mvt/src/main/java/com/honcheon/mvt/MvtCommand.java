@@ -32,7 +32,7 @@ public final class MvtCommand implements CommandExecutor {
         }
         try {
             return switch (args[0]) {
-                case "원장" -> ledger(sender);
+                case "원장", "정보" -> ledger(sender);   // 원장 = 하위호환 (terminology)
                 case "판정" -> judge(sender, args);
                 case "팔기" -> sell(sender);
                 case "물가" -> prices(sender, args);
@@ -53,14 +53,14 @@ public final class MvtCommand implements CommandExecutor {
             return true;
         }
         PlayerLedger ledger = plugin.ledger(player.getUniqueId());
-        sender.sendMessage(ChatColor.GOLD + "── 화후 원장 ──");
+        sender.sendMessage(ChatColor.GOLD + "── 수련 기록 ──");
         ledger.allSkills().forEach((skill, days) -> sender.sendMessage(String.format(
                 ChatColor.AQUA + "%s %s" + ChatColor.WHITE + " 누적 %.2f일 (숙련 %d → 다음 %.0f%%)",
                 skill, Glyphs.gauge(ledger.progressToNext(skill, plugin.progression())),
                 days, ledger.levelOf(skill, plugin.progression()),
                 ledger.progressToNext(skill, plugin.progression()) * 100)));
         sender.sendMessage(ChatColor.WHITE + "오늘 적립 " + String.format("%.2f", ledger.grantedToday())
-                + "일 / 전낭 " + ChatColor.YELLOW + ledger.money() + "문"
+                + "일 / 소지금 " + ChatColor.YELLOW + ledger.money() + "문"
                 + ChatColor.WHITE + " / 마크: 실전 " + ledger.marks실전() + " · 사선 " + ledger.marks사선());
         return true;
     }
@@ -185,7 +185,7 @@ public final class MvtCommand implements CommandExecutor {
 
     private boolean help(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "── 혼천 MVT ──");
-        sender.sendMessage("/혼천 원장 — 화후·전낭·마크 / /혼천 판정 <실행력> <저항>");
+        sender.sendMessage("/혼천 정보 — 수련·소지금·마크 / /혼천 판정 <실행력> <저항>");
         sender.sendMessage("/혼천 팔기 — 가죽 매각(50%) / /혼천 물가 [경제지수 0~100]");
         sender.sendMessage("/혼천 정산 [개입 -3~3] — 한백 계절 정산 / /혼천 협공 <인원>");
         sender.sendMessage("/혼천 조성 — 청하현 마을 생성 (관리자) / /혼천 문장 — 경지 문장 글리프 확인");

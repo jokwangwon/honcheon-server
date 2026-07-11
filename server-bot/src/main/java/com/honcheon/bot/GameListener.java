@@ -55,7 +55,7 @@ public final class GameListener extends ListenerAdapter {
         try {
             switch (String.valueOf(event.getSubcommandName())) {
                 case "시작" -> startCreation(event);
-                case "원장" -> showSheet(event);
+                case "원장", "정보" -> showSheet(event);   // 원장 = 하위호환 (terminology)
                 case "사냥" -> startHunt(event);
                 case "비무" -> startDuel(event);
                 case "수련" -> train(event);
@@ -71,7 +71,7 @@ public final class GameListener extends ListenerAdapter {
 
     private void startCreation(SlashCommandInteractionEvent event) throws Exception {
         if (db.findCharacter(event.getUser().getId()).isPresent()) {
-            event.reply("이미 살아 있는 캐릭터가 있다 — `/혼천 원장`으로 확인하라. (계정당 하나, 죽음만이 끝낸다)")
+            event.reply("이미 살아 있는 캐릭터가 있다 — `/혼천 정보`로 확인하라. (계정당 하나, 죽음만이 끝낸다)")
                     .setEphemeral(true).queue();
             return;
         }
@@ -96,7 +96,7 @@ public final class GameListener extends ListenerAdapter {
         @SuppressWarnings("unchecked")
         Map<String, Object> sheet = (Map<String, Object>) ch.get("sheet");
         EmbedBuilder eb = new EmbedBuilder().setColor(INK)
-                .setTitle("원장 — " + ch.get("name"))
+                .setTitle("정보 — " + ch.get("name"))
                 .setDescription(sheet.get("나이") + "세 " + sheet.get("연령대") + " · " + ch.get("realm")
                         + " · " + sheet.get("집안") + " · 성향 " + sheet.get("성향")
                         + "\n" + ch.get("status") + " · " + ch.get("location"));
@@ -105,10 +105,10 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Integer> attr = (Map<String, Integer>) sheet.get("능력치");
         attr.forEach((k, v) -> stats.append(k).append(' ').append(v).append("  "));
         eb.addField("능력치", stats.toString(), false);
-        eb.addField("전낭", ch.get("wallet") + "문", true);
+        eb.addField("소지금", ch.get("wallet") + "문", true);
         eb.addField("발단", String.valueOf(sheet.get("발단")), true);
         double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
-        eb.addField("화후 원장", String.format("%.2f일치", hwahu), true);
+        eb.addField("수련 누적", String.format("%.2f일치", hwahu), true);
         if (sheet.get("가문_대여") != null) {
             eb.addField("소지품", String.valueOf(sheet.get("가문_대여")), false);
         }
@@ -123,11 +123,11 @@ public final class GameListener extends ListenerAdapter {
     private MessageEmbed help() {
         return new EmbedBuilder().setColor(INK).setTitle("혼천 — 무협 텍스트 RPG")
                 .setDescription("`/혼천 시작` 캐릭터 생성 (유년의 기억 5문항 → 운명이 나머지를 정한다)\n"
-                        + "`/혼천 원장` 시트 조회\n"
-                        + "`/혼천 사냥` 청하현 뒷산 사냥 — 화후와 생계 (출도 후, 지역 채널에서)\n"
+                        + "`/혼천 정보` 내 캐릭터 정보 (`원장`도 동작)\n"
+                        + "`/혼천 사냥` 청하현 뒷산 사냥 — 수련과 생계 (출도 후, 지역 채널에서)\n"
                         + "`/혼천 비무 @상대` 비무 신청 — 양측 2d6 대립 판정 (출도 후)\n"
-                        + "`/혼천 수련` 기초 단련 — 하루 한 번, 화후 +1일치 (출도 후)\n"
-                        + "`/혼천 사사` 곽진에게 무공을 청한다 — 무공 백지만 (과제→문답→입문)\n"
+                        + "`/혼천 수련` 기초 단련 — 하루 한 번, 수련 +1일치 (출도 후)\n"
+                        + "`/혼천 사사` 곽진에게 무공을 청한다 — 무공 백지만 (과제→시험→입문)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
@@ -371,7 +371,7 @@ public final class GameListener extends ListenerAdapter {
             s = restoreSeojang(event.getChannel().getIdLong());
         }
         if (s == null) {
-            event.editMessage("이 서장은 이미 끝났거나 기록이 없다 — `/혼천 원장`으로 상태를 확인하라.")
+            event.editMessage("이 서장은 이미 끝났거나 기록이 없다 — `/혼천 정보`로 상태를 확인하라.")
                     .setComponents().queue();
             return;
         }
@@ -584,8 +584,8 @@ public final class GameListener extends ListenerAdapter {
             double accrual = rules.progression.combatAccrualDays(beast.gap(), "실전_사냥", rep);
             double granted = grantHwahu(sheet, accrual, today);
             gains.append(granted > 0
-                    ? String.format("화후 **+%.2f일치**", granted)
-                    : "화후 적립 없음 — *오늘은 몸이 벅차다* (일일 상한)");
+                    ? String.format("수련 **+%.2f일치**", granted)
+                    : "수련 적립 없음 — *오늘은 몸이 벅차다* (일일 상한)");
         }
         if (pelt) {
             int base = rules.economy.basePrice("사냥_부산물", beast.peltKey());
@@ -666,7 +666,7 @@ public final class GameListener extends ListenerAdapter {
 
         long chId = ((Number) row.get("id")).longValue();
         StringBuilder body = new StringBuilder(String.format(
-                "해 뜨기 전부터 몸을 다졌다. 화후 **+%.2f일치** (원장 %.2f일치)",
+                "해 뜨기 전부터 몸을 다졌다. 수련 **+%.2f일치** (누적 %.2f일치)",
                 granted, ((Number) sheet.get("화후_원장")).doubleValue()));
         // 사사 과제 연동 — 곽진이 새벽마다 지켜보고 있다
         Map<String, Object> sasa = (Map<String, Object>) sheet.get("사사");
@@ -786,7 +786,7 @@ public final class GameListener extends ListenerAdapter {
                 .setDescription(nameA + ": 무예 " + execA + " + 2d6 = **" + (execA + rollA) + "**" + extremeMark(rollA)
                         + "\n" + nameB + ": 무예 " + execB + " + 2d6 = **" + (execB + rollB) + "**" + extremeMark(rollB)
                         + "\n" + verdict
-                        + "\n화후: " + nameA + String.format(" +%.2f일치 · ", grantedA)
+                        + "\n수련: " + nameA + String.format(" +%.2f일치 · ", grantedA)
                         + nameB + String.format(" +%.2f일치", grantedB)
                         + "\n\n" + Narration.duel(winner, loser, opposed.draw()));
         event.editMessageEmbeds(result.build()).setComponents().queue();
@@ -889,7 +889,7 @@ public final class GameListener extends ListenerAdapter {
                 Map.of("굴림", roll, "마진", margin, "등급", tier.name()));
 
         EmbedBuilder result = new EmbedBuilder().setColor(INK)
-                .setTitle("문답 — 곽진 앞에서 권형을 밟는다")
+                .setTitle("시험 — 곽진 앞에서 권형을 밟는다")
                 .setDescription("**근력 " + str + "** + 2d6 = **" + (str + 2 + roll) + "** vs " + resist
                         + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **" + tier.name() + "**");
         if (margin >= 0) {

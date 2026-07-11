@@ -46,11 +46,12 @@ public final class HoncheonBot {
                 Commands.slash("혼천", "무협 텍스트 RPG 혼천")
                         .addSubcommands(
                                 new SubcommandData("시작", "새 캐릭터를 만든다 — 유년의 기억 다섯 문항"),
-                                new SubcommandData("원장", "내 캐릭터 시트를 본다"),
-                                new SubcommandData("사냥", "청하현 뒷산 사냥 — 화후와 생계 (지역 채널에서)"),
+                                new SubcommandData("정보", "내 캐릭터 정보를 본다"),
+                                new SubcommandData("원장", "정보와 같다 — 옛 명령 (하위호환)"),
+                                new SubcommandData("사냥", "청하현 뒷산 사냥 — 수련과 생계 (지역 채널에서)"),
                                 new SubcommandData("비무", "비무 신청 — 양측 2d6 대립 판정")
                                         .addOption(OptionType.USER, "상대", "비무를 청할 상대", true),
-                                new SubcommandData("수련", "기초 단련 — 하루 한 번, 화후 +1일치"),
+                                new SubcommandData("수련", "기초 단련 — 하루 한 번, 수련 +1일치"),
                                 new SubcommandData("사사", "곽진에게 무공을 청한다 — 무공 백지만"),
                                 new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                                 new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
