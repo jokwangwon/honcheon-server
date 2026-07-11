@@ -1,0 +1,433 @@
+# 등록 NPC의 죽음과 그 이후 (기계 판독용)
+# 기준 문서: docs/design/npc_death_consequences.md
+# 원칙: 죽음은 막다른 길이 아니다 — 기능·서사·루트는 이어진다. 단 더 비싸게·더 어둡게·더 늦게.
+#
+# 새 통화 없음. 전부 기존 표의 재사용:
+#   소문 강도·정확도 = rumor.yml / 세력 반응 = faction_reaction.yml inputs
+#   치안·민심·경제 델타 = region_state.yml event_deltas / 가격·보수 = economy.yml
+#   후계·복수자 = npcs/cheongha_npcs.yml 등록 관계에서만 (신규 인물 발명 금지)
+
+# ─── NPC 유형별 죽음의 무게 ───
+# death_weight = 계절 이벤트 예산(지역 상한 3건, npc_lifecycle safety_valves) 점유량
+npc_types:
+  기능:
+    members: [hanbaek, soyeon, yumun, geumseobang, jincheolsan, market_peddler,
+              yacheolsu, hyegak, baekseok, jomunwon, bakho]
+    death_weight: 2
+    rumor_intensity: 2                # 소수_목격_또는_간접 기준 (3변수로 재계산 — killer_response)
+    faction_input: { 소속_세력: 조직원_사망_또는_중상_확인, 관군: 관할_치안_중대사건 }
+    region_delta_ref: 기능별 (service_gap.*.region_delta)
+    quest_count: [1, 2]
+    service_gap: true
+  루트:
+    members: [jinun, gwakjin, chuigeolgae_master, jincheolsan]   # 취걸개 = fortune_encounters 등록
+    death_weight: 3
+    rumor_intensity: 2                # 사인·정체 공개 시 3 (refresh 규칙)
+    faction_input: { 소속_세력: 조직원_사망_또는_중상_확인, 정파망: 소문_도달_고정확도 }
+    region_delta: { 민심: -1 }
+    quest_count: 2
+    service_gap: false                # 대신 route_gate (아래 substitute_doors)
+  서사:
+    tier4:
+      members: [muksam, jomunwon]
+      death_weight: 3
+      rumor_intensity: 3
+      faction_input: { 소속_세력: 조직원_사망_또는_중상_확인, 선행: 연락책_연락두절 }
+      region_delta_ref: region_state.event_deltas.길거리_살인_미해결
+      quest_count: [2, 3]
+    tier3:
+      members: [heukrang, galho, masam, heodaein, naengwol, bakho]
+      death_weight: 2
+      rumor_intensity: 2
+      faction_input: { 소속_세력: 조직원_사망_또는_중상_확인 }
+      region_delta: { 치안: -1 }
+      quest_count: 1
+      note: "갈호 사망 = region_state.도적_두목_제거 (치안 +5, 민심 +3) — 죽음이 이득인 경우도 있다"
+  배경:
+    members: [sochil, gombo, north_road_bandit]
+    death_weight: 1
+    rumor_intensity: 1
+    faction_input: { 관군: 소문_도달_관심일치 }
+    region_delta: { 민심: -1 }
+    quest_count: [0, 1]
+    promote_on_death_of_master: true  # 주인이 죽으면 후계자로 승격 (tier_mobility.promote)
+
+  overlap_rule: "겸직 NPC는 무거운 유형으로 1회만 정산 (max, 합산 아님)"
+  cause_modifier:                     # 사인이 무게에 곱해진다
+    노환_병사: { rumor: -1, faction: 없음, quests: [애도_장례] }
+    사고:      { rumor: 0,  faction: 없음, quests: [애도_장례, 시신_수습] }
+    사건_피살: { rumor: 0,  faction: 가해_세력_대상_주목, quests: [하수인_추적, 시신_수습] }
+    플레이어_살해: { ref: killer_response }
+    자멸_심마: { rumor: 0, accuracy: -20, quests: [시신_수습], note: "시신에 흔적 — 혜각·야철수 감정 훅" }
+
+# ─── 후계 3분기 — 기능 NPC 사망 시 (결정론, 주사위 없음) ───
+succession:
+  branch_order: [후계, 대행, 세력_대행, 폐업_외지인]
+  branch_rule: |
+    ① 등록부 후계 후보 생존·현지·수행가능 → 후계
+    ② 없으면 등록부 대행 후보 → 대행 (반드시 페널티)
+    ③ 없으면 소속 세력 영향력 >= 20 → 세력 대행 → 외지인 부임
+    ④ 그것도 없으면 폐업 → 외지인 부임 (영구 폐쇄 금지) 또는 플레이어 계승
+  world_state_modifier:
+    치안_30_미만: { outsider_days: +7 }
+    치안_70_초과: { outsider_days: -3 }
+    민심_30_미만: { heir_resume_days: +3 }
+
+  # 등록부(cheongha_npcs.yml)의 실제 관계에서만 생성 — 신규 인물 발명 금지
+  npcs:
+    hanbaek:                          # 청하객잔 — cheongha_inn
+      heir: sochil                    # 점소이 (등록부 tier 2 → 사망 시 tier 3 승격)
+      heir_resume_days: 3
+      heir_penalty: { 가격: 1.1, 정보_캐기_판정: -1, knowledge_lost: ["묵삼이 평범한 손님이 아니다"] }
+      standin: null
+      outsider_days: null             # 후계 확정이므로 불요
+      note: "한백의 knowledge 상실 = 묵삼 사건 단서 하나가 세계에서 사라진다"
+
+    soyeon:                           # 의뢰소 — request_office
+      heir: null                      # 등록 제자·유족 없음
+      standin: baekseok               # 서당 훈장 (글눈 5 — 장부·서신 대필 창구)
+      standin_days: 2
+      standin_penalty: { 의뢰_등급_상한: 호위_소탕, 보수: 0.9, 세력_경유_의뢰: 불가 }
+      faction_standin: { faction: orthodox, via: jinun, days: 7, note: "정파 연락망이 임시 접수 — 진운 생존 시" }
+      outsider_days: 14
+      note: "소연 사망 = 정파 연락망의 청하 창구 소실 → 화산 루트 우회로도 함께 좁아진다"
+
+    yumun:                            # 의원 — medicine_shop
+      heir: null                      # 제자 없음
+      standin: gombo                  # 약초꾼 노인 (약초_지식 4 — 유문에게 약재를 대던 자)
+      standin_days: 1
+      standin_penalty:
+        품질: "economy.yml 의원.민간요법 그대로 (회복 지연·효과 절반)"
+        가격: 1.3
+        의술_판정: -2
+        불가_서비스: [중상_치료, 해독_중급]
+      standin_secondary: hyegak       # 탁발 왕진 — 부분 대행 (불법 계열, 심마·독 조건부)
+      outsider_days: 21
+      region_delta_on_death: { 민심: -4 }   # region_state.의원_과로_이탈 재사용
+      cascade: "열병 사건 활성 시 열병_방치_주당(민심 -3, 경제 -2) 누적 시작 — 가장 비싼 죽음"
+
+    geumseobang:                      # 전장 청하 지점 — bank_branch
+      heir: null
+      standin: null
+      faction_standin: { faction: sangdan, days: 7, arrival: 상단_파견_지점주 }   # 조직이라 빠르다
+      service_freeze: { during_days: 7, effect: "예치·인출·전표 발행 전면 정지" }
+      outsider_days: 7
+      note: "death_and_legacy 예치 상속 실무 창구 — 봉인 기간에는 상속 절차 자체가 멈춘다"
+
+    jincheolsan:                      # 철산표국 — pyoguk (기능 + 루트 겸직)
+      heir: gwakjin                   # 등록부 명시: "곽진의 옛 상관"
+      heir_resume_days: 5
+      heir_penalty:
+        의뢰_등급_상한: 호위_소탕      # 표행_동행(10000) → 단거리_호위(2000)
+        통솔: "곽진에 통솔 없음 — 표행 규모 축소"
+        보수: 0.8
+      heir_absent_fallback: 폐업       # 곽진도 사망 시
+      outsider_days: 30
+      region_delta_on_closure: { 경제: -3, 치안: -2 }   # 북로 상단 통행 축소 연쇄
+      note: "표국 폐업 = 북로 물류 공백 → 상단로_장기_불안정_주당(경제 -2) 누적"
+
+    market_peddler:                   # 장쇠 — market
+      heir: null
+      standin: masam                  # 저자 왈패 두목 — 좌판을 차지한다
+      standin_days: 1
+      standin_penalty:
+        매입가: 0.3                   # economy.yml black_market.rate 그대로 (npc_buy_rate 0.5 → 0.3)
+        장물_취급: true               # 소문 후보 + 하오문 경유 (public_use_rumor 동형)
+        상술_판정: -2
+      standin_secondary: heodaein     # 염상이 수하로 좌판 인수 (favor 신용 이상 시 우선)
+      outsider_days: 10
+      note: "죽이면 파는 곳이 없어진다 — 가장 즉물적인 죽음의 대가"
+
+    yacheolsu:                        # 철방 — smithy
+      heir: null
+      standin: hyegak                 # 마병 판별만 부분 대행 (혈향 — 등록부 disposition)
+      standin_penalty: { 불가_서비스: [정련, 수리_정련], 감정: "마병 여부만" }
+      outsider_days: 21
+
+    hyegak:                           # 성외 사당 — temple
+      heir: null
+      standin: yumun                  # 약물 계열 해독만 (심마 정화 불가)
+      standin_penalty: { 불가_서비스: [심마_정화, 마병_정화] }
+      no_standin_fallback: "정화 불가 → 봉인 (equipment.yml 봉인 규칙)"
+      outsider_days: 30
+
+    baekseok:                         # 서당 — school
+      heir: null
+      standin: soyeon                 # 문서 실무 (조사 2 — 대필 가능)
+      standin_penalty: { 가격: 1.2 }
+      outsider_days: 14
+
+    bakho:                            # 포두 — 관군 (기능: 치안·수배)
+      heir: null
+      faction_standin: { faction: gwangun, days: 3, arrival: 신임_포두 }   # 관은 자리를 비우지 않는다
+      region_delta_on_death: { 치안: -3 }
+      note: "관은 조직이다 — 사람이 죽어도 자리는 즉시 메워진다. 단 신임은 낭인을 모른다 (favor 0)"
+
+    jomunwon:                         # 현령 — 관 (세계급)
+      heir: null
+      faction_standin: { faction: gwanchung, days: 14, arrival: 신임_현령 }
+      region_delta_on_death: { 치안: -5, 민심: -3 }
+      escalation: "현령 살해 = 소문 강도 3 + 상급 관청 개입 (지역권 사건 승격 — 관군 6단계 토벌)"
+      note: "죽일 수 있다. 그러나 이 죽음은 현을 바꾼다 (world_rung 대칭)"
+
+  outsider_arrival:                   # 폐업 분기의 일반 규칙 (등록 예약 명사 — 부임 시 등록·명명)
+    favor_start: 0                    # 전임자의 관계는 상속되지 않는다
+    knowledge: 없음
+    quality: "전임자 기준 -1칸 (외지인은 이 현을 모른다) — 계절 정산으로 회복"
+    quest_hook: 외지인_호송            # 부임자를 데려오는 의뢰 — 성공 시 outsider_days -50%
+
+  player_succession:                  # 플레이어가 직접 잇는다 (생활계 자유도의 문)
+    requires: [유족_또는_세력_합의, 관_허가(현령 favor 안면 이상), 자본(시설별 인수가)]
+    grants: [시설_소유, 의뢰_발주권, 서비스_운영]
+    costs: [세력_표적화, 유지_비용, 상권_분쟁]
+    note: "시설주가 된 플레이어는 다음 죽음의 대상이 된다 (대칭)"
+
+# ─── 서비스 공백 — 봇/MVT가 읽는 상태 ───
+service_gap:
+  states: [정상, 공백, 대행, 후계_초기, 폐업]
+  state_effects:
+    정상:      { available: true,  price_mult: 1.0, check_mod: 0 }
+    공백:      { available: false, note: "문이 닫혀 있다 — 상점 GUI 게이트 폐쇄, 발주 정지" }
+    대행:      { available: true,  price_mult: [1.2, 1.5], check_mod: -2, grade_cap: "한 칸 하향" }
+    후계_초기: { available: true,  price_mult: 1.1, check_mod: -1, duration_days: 30 }
+    폐업:      { available: false, region_delta: "시설별 (succession.*.region_delta_on_closure)" }
+  facilities:                         # 시설 ← NPC (cheongha_hyeon.yml locations 정합)
+    cheongha_inn:  { npc: hanbaek,      services: [숙박, 식사, 소문_청취] }
+    request_office: { npc: soyeon,      services: [의뢰_수주, 의뢰_검수, 정파_연락] }
+    medicine_shop: { npc: yumun,        services: [진료, 경상_치료, 중상_치료, 해독, 요양] }
+    bank_branch:   { npc: geumseobang,  services: [예치, 인출, 전표_발행, 상속_실무] }
+    pyoguk:        { npc: jincheolsan,  services: [표행_의뢰_발주, 호위_고용, 북로_정보] }
+    market:        { npc: market_peddler, services: [매입, 매각] }
+    smithy:        { npc: yacheolsu,    services: [수리, 정련, 무기_감정] }
+    temple:        { npc: hyegak,       services: [심마_정화, 마병_판별, 장례] }
+    school:        { npc: baekseok,     services: [대필, 문서_판독] }
+    county_office: { npc: [jomunwon, bakho], services: [신고, 수배, 송사] }
+  mc_render:
+    폐쇄: "간판 내림 + 문에 널빤지 (CheonghaBuilder 시설 블록 교체)"
+    네임플레이트: "사망 NPC 아머스탠드 제거 — '빈 자리' (TradeListener 우클릭 시 대행 안내)"
+
+# ─── 살해자 반응 — 목격·시신·증거의 3변수 ───
+killer_response:
+  variables:
+    witness: { 0: 없음, 1: "소수 (1~2명)", 2: "다수 (백주·장터·객잔 주청)" }
+    body:     [은닉, 유기_지연발견, 즉시_발견]
+    evidence: [없음, 정황, 확정]
+  rumor_matrix:                       # rumor.yml intensity_by_visibility 그대로
+    - { witness: 2, intensity: 3, accuracy: 90, delay_days: 0, network: 장소별_기본망 }
+    - { witness: 1, intensity: 2, accuracy: 70, delay_days: 1 }
+    - { witness: 0, body: 즉시_발견, intensity: 1, accuracy: 50, delay_days: 0, target: 미상의_무인 }
+    - { witness: 0, body: 유기_지연발견, intensity: 1, accuracy: 50, delay_days: [3, 14], target: 미상의_무인 }
+    - { witness: 0, body: 은닉, intensity: 0, note: "소문 없음 — 은밀형의 보상" }
+  judgment_link:                      # rumor.yml judgment_link 재사용
+    대성공: { intensity: -1 }
+    치명적_실패: { intensity: +1 }
+  missing_person:                     # 시신을 숨겨도 사람은 없어진다
+    trigger: "tier 3+ NPC가 3일 연속 일과(schedule) 이탈"
+    rumor: { intensity: 1, subject: 실종 }
+    faction: 연락책_연락두절            # +3 (사망 확인 시 +1 차액)
+    succession: "실종 중에는 대행만 가능 — 정식 후계 불가 (사망 확인 전까지)"
+  stages:                             # 세계 반응 단계 (누적)
+    은밀:   { when: "witness 0 + body 은닉 + evidence 없음", 관: 없음, 세력: 없음, 민심: 0 }
+    흔적:   { when: "evidence 정황, 범인 미상", 관: 수사_개시, 세력: 미상의_무인_적립, 민심: -1 }
+    지목:   { when: "witness 1+ 또는 evidence 확정", 관: 수배, 세력: 조직원_사망_확인(+4), 민심: -3 }
+    공개:   { when: "witness 2", 관: 즉시_수배+현상금, 세력: 3~5단계_직행, 민심: -3, 치안: -3 }
+  official_response:                  # 관 — 조문원·박호
+    수배: { trigger: "지목 이상", bounty_ref: "economy.yml 의뢰_보수.고수_현상금 (50000)" }
+    tone: "박호 favor 신용(8) 이상 → 체포 전 해명 요구 (심문). 미만 → 즉시 포박 시도"
+    치안_70_초과: "검문 이벤트 (region_state 임계 효과 그대로)"
+  social_friction:                    # 민심 하락의 생활 마찰 — 진짜 형벌
+    민심_30_미만:
+      - "민간 협조 판정 저항 +2"
+      - "소문 정확도 -20 (악명 괴담화)"
+      - "민간 발주 의뢰 지명 제외 (유문·한백·장쇠 계열)"
+      - "물가 상승 (economy region_multipliers 경제 연쇄)"
+
+# ─── 대응 3종 ───
+responses:
+  자수:
+    effect: { 수배: 소멸, 민심: +2, 관군_favor: 0 }
+    cost: [벌금_또는_노역, 구금_기간, 무공_몰수_가능]
+    revenge: "약화 (명분 소멸) — 소멸은 아님"
+  배상:
+    effect: { 유족_favor: 회복_경로_개방, revenge: 생성_취소_가능 }
+    cost:
+      기능_NPC: "시설 1년 수익 상당 (economy 기준)"
+      무인_NPC: ">= 고수_현상금(50000) + 공적 요구 (해당 세력 의뢰 수행)"
+    note: "관의 수배는 남는다 — 민간 합의와 관의 법은 다른 법정"
+  은폐:
+    effect: "3변수 하향 시도 (witness·body·evidence)"
+    cost: "목격자 제거 = 새로운 죽음 (이 규칙 전체가 재귀)"
+    on_fail: "evidence 확정으로 도약 — 수배 + 세력 5단계 직행"
+    always: "실종 소문(missing_person)은 뜬다 — 완전 범죄 없음, 느린 발각만"
+
+# ─── 복수 — 피의 장부의 거울 (death_and_legacy.world_memory.피의_장부) ───
+revenge:
+  generation_order: [유족_제자_동업자, 세력_대행, 없음_민심부채]
+  registered_only: true               # 등록부 관계에서만 — 신규 인물 발명 금지
+  from_registry:                      # 대상 NPC → 복수자 (cheongha_npcs.yml 관계)
+    hanbaek: sochil
+    jincheolsan: gwakjin
+    gwakjin: jincheolsan              # 옛 상관 — 부하의 죽음을 갚는다
+    muksam: heukrang                  # 하오문 상선
+    heukrang: masam                   # 하오문 말단이 뒤를 잇는다
+    galho: north_road_bandit          # 졸개 → 승격 (템플릿에서 개체화)
+    yumun: gombo                      # 약재를 대던 노인 (무력 없음 → 세력 대행 또는 민심 부채)
+    soyeon: jinun                     # 정파 연락망 상대
+    jinun: soyeon
+    market_peddler: null              # 무연고 → 민심 부채
+    gombo: null
+    sochil: null
+  faction_proxy:                      # 유족 없을 때 — 세력 성격이 복수의 형태를 정한다
+    haomun: 살수_청부                 # 하오문 망 경유 (묵삼·마삼 라인)
+    sangdan: 현상금_게시
+    orthodox: 토벌_명분
+    gwangun: 포교_수배
+    noklim: 보복_습격
+    mingan: null                      # 민간은 복수하지 못한다 → 민심 부채
+    pyoguk: 현상금_게시
+    bulga: null                       # 불가는 복수하지 않는다 → 업(業)으로 남는다
+  civil_debt:                         # 3순위 — 복수자도 세력도 없을 때
+    effect: "해당 민심 델타를 자연 회복 대상에서 제외 (region_state recovery 미적용)"
+    note: "가장 약한 자를 죽인 대가는 복수가 아니라 지역의 냉기다"
+  avenger_growth:
+    promote: "tier 1~2 → tier 3 개체화 (npc_lifecycle tier_mobility.promote)"
+    ladder: 무인의_길                 # cultivation.yml 관문 그대로 — NPC 대칭
+    trigger: "계절 정산에서 조건 충족 시 발화 (경지 >= 대상 -1, 또는 세력 반응 3단계 이상)"
+    note: "복수는 식혀서 낸다 — npc_lifecycle payback.on_fall 문법 재사용"
+
+# ─── 죽음이 낳는 의뢰 (quest_generation.yml sources에 주입) ───
+quest_injection:
+  pipeline: "자정 배치 — 사망 이벤트 스캔 → 후보 생성 → 기존 슬롯(지역당 5~8)에 얹는다"
+  reward_ref: "economy.yml 의뢰_보수 × region_multipliers (신규 표 없음)"
+  types:
+    실종_수색:
+      trigger: "body 은닉 + missing_person 발화"
+      issuer: [유족, 소속_세력, soyeon]
+      grade: 조사_채집
+      reward: 조사
+      twist: "수색자가 살해자일 수 있다 (알리바이 세탁 — 자유도의 어두운 문)"
+    시신_수습:
+      trigger: "body 발견 + 위험 지역(north_road·heuksu_ferry)"
+      issuer: [유족, 관]
+      grade: 잔심부름
+      reward: 조사
+      drop: "유품 — 대체 문(substitute_doors)의 재료. 회수 경쟁 발생"
+    하수인_추적:
+      trigger: "사인 = 사건_피살, 가해 세력 미상"
+      issuer: [bakho, 피살자_세력]
+      grade: 호위_소탕
+      reward: 도적_소탕_현상
+      chain: "성공 시 가해 세력 주목 상승 — 반응 사다리가 플레이어에게 향한다"
+    유산_분쟁_중재:
+      trigger: "후계 후보 2인 이상 또는 채무 존재"
+      issuer: [geumseobang, baekseok]
+      grade: 조사
+      reward: 조사
+      outcome: "누가 잇는지를 플레이어가 정한다 (succession 분기에 손을 넣는 지점)"
+    후계_옹립:
+      trigger: "후계 후보 존재 + 자격·자본·경쟁자 문제로 승계 지연"
+      issuer: 후계_후보_본인
+      grade: [조사, 호위_소탕]
+      reward: { 보수: 낮음, favor: 대폭 }
+      outcome: "heir_resume_days 단축 — 세계에 심는 저축 (npc_lifecycle player_hand)"
+    복수_청부:
+      trigger: "유족·세력의 복수 의지 + 자력 부족"
+      issuer: [유족, 하오문_경유]
+      grade: [표행_현상금, 세력_전속]
+      reward: 고수_현상금
+      cost: "수락 = 스스로 피의 장부에 이름을 올린다 (정파 favor 하락)"
+    공백_메우기:
+      trigger: "service_gap 상태 = 폐업 또는 대행 지속 N일 이상"
+      issuer: [jomunwon, 시설_이용자]
+      grade: 잔심부름
+      variants: [일손, 외지인_호송]
+      outcome: "outsider_days -50%"
+    애도_장례:
+      trigger: "사인 = 노환_병사 또는 사고"
+      issuer: [유족, hyegak]
+      grade: 잔심부름
+      reward: { 보수: 낮음, 민심: +1, 유족_favor: +1 }
+      note: "가장 싼 의뢰이자 관계층의 문 — 장례에서 유족을 만난다"
+  board_shift_rule: "누가 죽었는가에 따라 게시판이 바뀐다 — 게시판을 보면 누가 죽었는지 안다"
+
+# ─── 대체 문 — 루트 NPC 사망 시 (일반 원칙. 상세 규칙은 faction_entry_routes 소관) ───
+substitute_doors:
+  principle: "문은 좁아지되 닫히지 않는다 — 반드시 더 비싸거나·더 어둡거나·더 늦다"
+  forms:
+    우회로: { cost: 시간,      effect: "다른 등록 경유자·조직 — 소요일 증가" }
+    직행:   { cost: 난이도,    effect: "보증인 없이 직접 심사 — 판정 난이도 +2, 요구 공적 상향" }
+    유품:   { cost: 회수+의심, effect: "사후 단서가 자격의 증거 — 단 '어떻게 가졌나'를 묻는다" }
+  routes:
+    jinun:
+      owner_doc: docs/design/faction_entry_routes.md   # 상세 규칙은 그쪽 소관
+      우회로: { via: soyeon, faction: orthodox, delay_days: 14 }
+      직행:   { target: 화산파_입문_심사, difficulty: +2, requires: 공적_직접_제출 }
+      유품:   { items: [매화_문양_목패, 진운의_서찰], effect: "직행 난이도 -1" }
+      trap: "진운을 죽이고 그 목패를 들고 화산파에 서면 — 정파망 소문 정확도 >= 70 시 즉시 발각"
+    gwakjin:
+      우회로: { via: jincheolsan, delay_days: 7, requires: favor_신용 }
+      직행:   { target: pyoguk, note: "진철산의 신용 원칙 — 한 번 깬 자와는 두 번 일하지 않는다" }
+      유품:   { items: [상단로_지도, 호위_기록], effect: "북로 지식 단서" }
+    chuigeolgae_master:               # fortune_encounters.yml 등록 기연 NPC
+      우회로: { form: 다른_등록_기연, targets: [sunken_ship_manual, fever_elder_legacy],
+                note: "심법 성격은 다르다 — 같은 것을 주지 않는다" }
+      직행:   { form: 유품_구결, location: abandoned_shrine,
+                cost: "스승 없는 수련 규칙 — 독학 부작용 위험 (sunken_ship_manual price 문법)" }
+      유품:   { form: 개방_인연_상속, note: "인연 태그는 죽음으로 끊기지 않는다 — 단 '옛 원수'도 함께 온다 (price 조기 발화)" }
+      trial_downgrade: "선택_시험 → 판정_시험 (인품을 보는 것은 산 사람만 할 수 있다)"
+
+# ─── 세계 유일 기능 보호 — 등록 의무와 검증 ───
+irreplaceable_guard:
+  design_rule: "죽을 수 있는 NPC를 만들 때는 그의 죽음 이후를 함께 등록한다"
+  immortality: false                  # 무적 NPC·불사 플래그 없음 (npc_combat 대칭 원칙)
+  protected: 기능이지_사람이_아니다     # 사람은 죽는다. 기능은 이어진다.
+  validation:
+    - "모든 unique_function 항목은 fallbacks >= 1 (없으면 검증 실패)"
+    - "fallback은 등록된 것만 참조 (등록부 NPC · 등록 기연 · 등록 세력 · 일반 규칙)"
+    - "fallback은 cost를 반드시 명시 (시간·금전·판정 난이도·서사 대가 중 최소 1)"
+  unique_functions:
+    chuigeolgae_master:
+      function: "심법 원천 — 범인 → 삼류 승급의 유일 경로 (fortune_encounters 명시)"
+      fallbacks: [유품_구결, 등록_기연_이관, 개방_인연_상속]
+      cost: "독학 부작용 · 옛 원수 상속 · 시험 강등"
+    jinun:
+      function: "화산파 추천장 유일 발신자"
+      fallbacks: [소연_정파망_우회, 직행_심사, 목패_유품]
+      cost: "+14일 · 난이도 +2 · 살해 의심"
+    yumun:
+      function: "의원 — 중상 치료·해독의 유일 창구"
+      fallbacks: [곰보영감_민간요법_대행, 혜각_탁발_왕진, 외지_의원_부임]
+      cost: "효과 절반 · 가격 ×1.3 · 21일"
+    geumseobang:
+      function: "전장 — 예치·전표·상속 실무의 유일 창구"
+      fallbacks: [상단_파견_지점주]
+      cost: "예치 봉인 7일 (상속 절차 정지)"
+    yacheolsu:
+      function: "무기 정련·감정의 유일 민간 창구"
+      fallbacks: [외지_대장장이_부임, 혜각_마병_판별]
+      cost: "21일 · 감정 범위 축소 (마병 여부만)"
+    hyegak:
+      function: "심마·마병 정화, 독 조건부 해결"
+      fallbacks: [유문_약물_계열, 외지_승려, 봉인]
+      cost: "정화 불가 시 봉인 (equipment 봉인 규칙 — 문제를 미룰 뿐 풀지 못한다)"
+    jincheolsan:
+      function: "표행 등급(일류) 의뢰의 유일 발주처"
+      fallbacks: [곽진_승계, 허대인_직접_발주]
+      cost: "의뢰 등급 상한 한 칸 하향 (표행_동행 → 단거리_호위)"
+
+# ─── 봇/MVT 알파 배선 후보 (구현 순서) ───
+alpha_wiring:
+  1_사망_게이트:
+    reads: [db.npcs.status, service_gap]
+    effect: "사망 NPC 대화 제외 · MVT 우클릭 '빈 자리' · 장쇠 사망 시 매입 차단/대행 0.3"
+    new_tables: 없음
+  2_사망_소문:
+    reads: [db.events(type=사망), killer_response.rumor_matrix, npc_types.rumor_intensity]
+    writes: db.rumors
+    effect: "자정 배치 스캔 → 소문 생성 (network = rumor.yml origin_network_by_location)"
+    stealth: "witness 0 + body 은닉 → 소문 미생성 (은밀형 보상 최소 구현)"
+  3_의뢰_주입:
+    reads: [db.events(type=사망), quest_injection.types]
+    effect: "Quests.board(worldDay)에 사망 파생 의뢰 1~2건 동적 병합 (POOL은 정적 유지)"
+  deferred: [복수자_생성(계절_정산_필요), 세력_반응_사다리(faction_standing NPC축 미구현),
+             플레이어_시설_계승(소유·경제 배관 필요)]
