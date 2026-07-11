@@ -11,9 +11,12 @@ import org.bukkit.block.data.type.Lantern;
 import org.bukkit.block.data.type.Leaves;
 import org.bukkit.block.data.type.Stairs;
 import org.bukkit.block.sign.Side;
+import org.bukkit.block.data.Rotatable;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
+import org.bukkit.util.BoundingBox;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -38,7 +41,9 @@ final class CheonghaBuilder {
         int cy = admin.getLocation().getBlockY() - 1;   // 발밑 = 지면
         int cz = admin.getLocation().getBlockZ();
 
+        clearNpcs(world, cx, cy, cz);        // F29 — 재조성 시 기존 NPC 정리 (중복 스폰 방지)
         clearAndFlatten(world, cx, cy, cz);
+        blendEdge(world, cx, cy, cz);        // F31 — 경계 절단면을 자연 지형으로 완사면 접합
         plazaAndWell(world, cx, cy, cz);
         roads(world, cx, cy, cz);
         townWall(world, cx, cy, cz);
@@ -67,15 +72,15 @@ final class CheonghaBuilder {
         doorPaths(world, cx, cy, cz);
 
         marketStalls(world, cx, cy, cz);
-        placeSign(world, cx + 2, cy + 1, cz - 26, "북쪽 산길 →", "늑대·여우 — 도적 소문 있음");
+        placeSign(world, cx + 2, cy + 1, cz - 26, BlockFace.WEST, "북쪽 산길 →", "늑대·여우 — 도적 소문 있음");   // 독자 = 북로 위
         anchors.put("북쪽_산길", loc(world, cx, cy + 1, cz - 27));
 
         // NPC 5인 — cheongha_npcs.yml (이름 = 등록제 명사)
-        npc(world, anchors.get("청하객잔"), "객잔 주인 한백");
-        npc(world, anchors.get("의뢰소"), "의뢰소 관리인 소연");
-        npc(world, anchors.get("의방"), "의원 유문");
-        npc(world, anchors.get("전장"), "전장 지점주 금서방");   // F28 — 조문원은 현령이다 (등록부 정합)
-        npc(world, loc(world, cx + 3, cy + 1, cz + 3), "표사 곽진");
+        npc(world, anchors.get("청하객잔"), 0f, "객잔 주인 한백");
+        npc(world, anchors.get("의뢰소"), 0f, "의뢰소 관리인 소연");
+        npc(world, anchors.get("의방"), 180f, "의원 유문");
+        npc(world, anchors.get("전장"), 180f, "전장 지점주 금서방");   // F28 — 조문원은 현령이다 (등록부 정합)
+        npc(world, loc(world, cx + 3, cy + 1, cz + 3), 135f, "표사 곽진");   // 우물 쪽
         return anchors;
     }
 
@@ -88,6 +93,42 @@ final class CheonghaBuilder {
                 for (int y = cy + 1; y <= cy + 12; y++) {
                     world.getBlockAt(x, y, z).setType(Material.AIR);
                 }
+            }
+        }
+    }
+
+    /** F29 — 조성 영역 내 기존 혼천 NPC(명패+무적 주민) 제거 — 재조성 = 같은 마을, NPC도 한 벌 */
+    private static void clearNpcs(World world, int cx, int cy, int cz) {
+        BoundingBox box = new BoundingBox(cx - 31, cy - 8, cz - 31, cx + 32, cy + 16, cz + 32);
+        for (Entity e : world.getNearbyEntities(box)) {
+            if (e instanceof Villager v && v.getCustomName() != null && v.isInvulnerable()) {
+                v.remove();
+            }
+        }
+    }
+
+    /** F31 — 평탄화 경계의 수직 절단면을 6칸 완사면으로 자연 지형에 접합 */
+    private static void blendEdge(World world, int cx, int cy, int cz) {
+        int r = 30;
+        int skirt = 6;
+        for (int x = cx - r - skirt; x <= cx + r + skirt; x++) {
+            for (int z = cz - r - skirt; z <= cz + r + skirt; z++) {
+                int d = Math.max(Math.abs(x - cx), Math.abs(z - cz)) - r;
+                if (d <= 0 || d > skirt) {
+                    continue;
+                }
+                int natural = world.getHighestBlockYAt(x, z);
+                int target = cy + (natural - cy) * d / (skirt + 1);   // 안쪽 = 마을 높이, 밖 = 자연
+                if (natural > target) {
+                    for (int y = target + 1; y <= natural; y++) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);
+                    }
+                } else {
+                    for (int y = natural; y < target; y++) {
+                        world.getBlockAt(x, y, z).setType(Material.DIRT);
+                    }
+                }
+                world.getBlockAt(x, target, z).setType(Material.GRASS_BLOCK);
             }
         }
     }
@@ -200,7 +241,7 @@ final class CheonghaBuilder {
         }
         hangingLantern(world, gx, cy + 4, gz);
         int in = north ? 1 : -1;   // 간판은 마을 안쪽
-        placeSign(world, gx + 2, cy + 1, gz + in, name, subtitle);
+        placeSign(world, gx + 2, cy + 1, gz + in, north ? BlockFace.SOUTH : BlockFace.NORTH, name, subtitle);   // 마을 안쪽에서 읽는다
     }
 
     // ─── 가로 시설 — 등롱·조경 ───
@@ -310,7 +351,7 @@ final class CheonghaBuilder {
         world.getBlockAt(doorX, y0 + 1, doorZ).setType(Material.AIR);
         world.getBlockAt(doorX, y0 + 2, doorZ).setType(Material.AIR);
         int out = doorNorth ? -1 : 1;
-        placeSign(world, doorX + 1, y0 + 1, doorZ + out, name, subtitle);
+        placeSign(world, doorX + 1, y0 + 1, doorZ + out, doorNorth ? BlockFace.NORTH : BlockFace.SOUTH, name, subtitle);   // 입구 앞에서 읽는다
         world.getBlockAt(x0 + 1, y0 + 1, z0 + 1).setType(Material.LANTERN);
         world.getBlockAt(x1 - 1, y0 + 1, z1 - 1).setType(Material.LANTERN);
         return loc(world, doorX, y0 + 1, z0 + d / 2);   // 앵커 = 실내 중앙
@@ -416,7 +457,7 @@ final class CheonghaBuilder {
         stall(world, cx + 6, cy, cz + 4, -1, Material.LIME_WOOL);
         stall(world, cx + 10, cy, cz + 4, -1, Material.LIGHT_BLUE_WOOL);
         stall(world, cx - 12, cy, cz - 4, 1, Material.ORANGE_WOOL);   // 서시(西市) 외톨이 노점
-        placeSign(world, cx + 5, cy + 1, cz - 2, "장터", "가죽 매입 — /혼천 팔기");
+        placeSign(world, cx + 5, cy + 1, cz - 2, BlockFace.WEST, "장터", "가죽 매입 — /혼천 팔기");   // 독자 = 광장 쪽
     }
 
     /** 노점 한 채 — 기둥 2주 + 차양 3x2 + 좌판(술통). toward = 도로 쪽 z 방향(+1/-1) */
@@ -440,9 +481,13 @@ final class CheonghaBuilder {
         world.getBlockAt(x, y, z).setBlockData(data);
     }
 
-    private static void placeSign(World world, int x, int y, int z, String line1, String line2) {
+    /** 입간판 — face = 글면이 향하는 방향(독자가 서는 쪽). F30: 기본 회전이 뒤집혀 보이던 버그 */
+    private static void placeSign(World world, int x, int y, int z, BlockFace face,
+                                  String line1, String line2) {
         Block block = world.getBlockAt(x, y, z);
-        block.setType(Material.OAK_SIGN);
+        Rotatable data = (Rotatable) Material.OAK_SIGN.createBlockData();
+        data.setRotation(face);
+        block.setBlockData(data);
         writeSign(block, line1, line2);
     }
 
@@ -462,8 +507,11 @@ final class CheonghaBuilder {
         }
     }
 
-    private static void npc(World world, Location at, String name) {
-        Villager v = (Villager) world.spawnEntity(at, EntityType.VILLAGER);
+    /** F30 — yaw: 몸·시선 방향 (0=남, 90=서, 180=북, 270=동). AI off 라 스폰 방향이 곧 시선이다 */
+    private static void npc(World world, Location at, float yaw, String name) {
+        Location spawn = at.clone();
+        spawn.setYaw(yaw);
+        Villager v = (Villager) world.spawnEntity(spawn, EntityType.VILLAGER);
         v.setCustomName(name);
         v.setCustomNameVisible(true);
         v.setAI(false);            // MVT — 일과 스케줄 배선 전까지 제자리 (npc_lifecycle는 후속)
