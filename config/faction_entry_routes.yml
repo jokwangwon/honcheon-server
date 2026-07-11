@@ -1,0 +1,776 @@
+# 세력 입문 루트 (기계 판독용)
+# 기준 문서: docs/design/faction_entry_routes.md
+#
+# ─── 제1원칙: 레일 금지 ───
+# 체인은 순서가 아니라 세계의 반응 규칙이다.
+#   ① gates는 선형 배열이 아니라 '조건 게이트 집합'이다 — 배열 순서는 표기의 편의일 뿐,
+#      평가는 전부 독립 조건식. 어떤 경로로 상태를 채웠든 같은 문이 열린다.
+#   ② direct_approach는 전 공개 세력에 상시 열려 있다 — 조건 미달의 결과는 '진행 불가'가 아니라
+#      세계의 반응(난이도 상승 / 잡역 / 낮은 문 안내 / 눈여겨봄 태그 / 소문)이다.
+#   ③ quest_injection — 루트 상태가 quest_generation ④ 세력 발생원에 의뢰를 흘린다.
+#      세계가 플레이어에게 문을 내미는 것이지, 플레이어가 정해진 문을 찾아가는 게 아니다.
+#   ④ 마교는 순서가 아니라 누적 상태(심마·침식·접촉)의 문턱이다.
+#
+# 신규 통화 발명 없음 — favor(faction_reaction) / 주목 score / 소문 강도(rumor) /
+# 경지(cultivation) / 공적(sect_life, 입문 '이후'의 축) / 판정(judgment) 만 사용.
+
+meta:
+  gate_semantics: "조건 게이트 집합 — 전제는 '이전 게이트 완료'가 아니라 '상태 조건'"
+  judgment: "능력치 + 기술 + 2d6 vs 난이도 (judgment.yml 그대로 — 신규 판정식 없음)"
+  registry: "factions.yml 등재 세력만. 신규 세력·NPC 발명 금지 (직책 예약은 문서 7장)"
+  exclusivity: "동시 소속 1개 — 겸적 = 배신 (common_rules.dual_membership)"
+
+# ═══════════════════════════════════════════════════════════════════
+# 정파 문파 — 시험의 공식화 (참조 구현)
+# ═══════════════════════════════════════════════════════════════════
+routes:
+
+  hwasan_entry:
+    id: hwasan_entry
+    faction: 화산파                  # factions.yml orthodox.gupailbang.sects
+    group: orthodox
+    visibility: 공개
+    grammar: 심사                    # 문파는 제자를 '심사'한다 — 제도이고, 공표되어 있다
+    region_access: "청하현에서 닿는 유일한 구파 (진운 = 청하현 방면 연락 담당)"
+
+    triggers:                        # 서사 의도: 문은 여러 방향에서 보인다 — 하나만 봐도 된다 (OR)
+      - { type: 소지품, key: 매화_목패, note: "의뢰소 단서 (cheongha_hyeon request_office)" }
+      - { type: 소지품, key: 화산_고식_검결_절편, note: "fortune_encounters fever_elder_legacy 회수" }
+      - { type: 인연, npc: jinun, note: "진운 조우 — 의뢰소·객잔" }
+      - { type: 인연, npc: soyeon, note: "소연이 화산 사람의 존재를 알린다" }
+      - { type: 목표, key: "화산파 입문 단서 찾기", note: "player_creation initial_goal 예시" }
+      - { type: 없음, note: "★ 트리거가 하나도 없어도 direct_approach는 열려 있다" }
+
+    gates:
+      - id: 안면
+        # 서사 의도: 문파는 모르는 사람을 심사대에 올리지 않는다 — 심사는 비용이다
+        condition: { favor: { faction: orthodox, min: 4 } }   # 안면
+        fill_paths: [의뢰_완수, 북쪽산길_사건_개입, 열병_사건_기여, 진운_조력, 문전_잡역, 비무연_입상]
+        opens: [진운_이름_기억, quest_injection_정파_경유]
+        judgment: 없음                # 상태 게이트 — 판정 없음
+
+      - id: 추천
+        # 서사 의도: 세 개의 독립 열쇠 — 하나만 있으면 된다 (경로는 묻지 않는다)
+        condition_any:
+          - { favor: { faction: orthodox, min: 8 }, npc_trust: { jinun: 신뢰 } }   # 열쇠 ① 신용 = 신원 보증
+          - { item_any: [매화_목패, 화산_고식_검결_절편] }                          # 열쇠 ② 단서 소지
+          - { rumor: { intensity_min: 2, accuracy_band: 사실적, tags: [무재, 협행], network: orthodox_net } }  # 열쇠 ③ 재목 소문 → 문파가 먼저 찾아온다
+        judgment: { 열쇠2: "화술+지혜 vs 보통(10) — 실패해도 단서는 남는다 (재시도 가능)" }
+        price: "추천에는 보증인이 있다 — 진운의 이름이 걸린다 (입문 후 물의 = 진운 문책)"
+        opens: [추천장]
+
+      - id: 입문_심사
+        # 서사 의도: 시험관은 무공을 보러 온 것이 아니다 — 성정(性情)이 지배한다
+        condition_any:
+          - { item: 추천장 }
+          - { flag: 문전_잡역_누적, days_min: 30 }             # 직행자의 정공법
+          - { rumor: { intensity_min: 3, tags: [무재] } }
+        event: chapter_events.hwasan_examination               # 기존 장 사건 재사용
+        examiner: "화산파 심사 장로 (직책 예약 — 이름 없음)"
+        trial:
+          자질: "판정 연속 (무재)"
+          경쟁자: "동기 NPC 소년 — 사형제 예고"
+          성정: "★ 시험관의 진짜 관찰 — 자질 전패해도 합격 가능, 무재 우수해도 성정 낙방 가능"
+        on_fail: { favor: 유지, offers: [재도전_조건, 속가_루트, 독학_루트] }   # 문은 닫히지 않는다
+        opens: [입문식]
+
+    direct_approach:                 # ★ 제1원칙 0.1의 참조 구현 — 항상 시도 가능
+      declaration: "화산으로 간다 / 산문에 직접 찾아가 받아달라고 한다"
+      always_allowed: true
+      travel:
+        judgment: "여비·기간 — 청하현 → 화산(섬서 화음). 소지 은자 vs 노자 기준선"
+        on_insufficient: "걸식·품팔이 여정 — 기간 2배 + 원기 소모 (죽지 않는다: 세계는 잔인하되 공정하다)"
+        encounters: "도중 산길 도적·표행 동승 — 여정 자체가 소문과 인연을 만든다"
+      branches:                      # 상태에 따라 문의 '얼굴'이 다르다 (닫히지는 않는다)
+        조건_전무:                    # favor 0, 경지 범인, 단서 없음
+          condition: { favor_max: 0, realm: 범인, items: [] }
+          result: 문전_잡역_제안
+          detail:
+            favor_gain: "잡역 일수당 정파 favor +1 (상한 8) — 잡역 = 사실상의 안면 단계 진입"
+            tag: 눈여겨봄
+            auto_qualify: "30일 누적 시 심사 자격 자동 획득 — 추천장 없는 자의 정공법"
+            on_abandon: "이탈해도 '눈여겨봄' 태그는 남는다 — 후일 재방문 시 심사 난이도 -2"
+        경지_있음_추천_없음:
+          condition: { realm_min: 삼류, favor_max: 3 }
+          result: 즉석_심사
+          difficulty_modifier: +4     # 추천 없는 자의 벽
+          on_fail: 문전_잡역_제안      # 낙방 = 강등 접속 (탈락이 아니다)
+        단서_소지:
+          condition: { item_any: [매화_목패, 화산_고식_검결_절편] }
+          result: 즉시_접견            # ★ 직행이 정공법과 같은 문에 도착한다 (게이트 = 상태의 증명)
+        악명_보유:
+          condition_any:
+            - { favor: { faction: haomun, min: 8 } }
+            - { rumor: { tags: [살인], intensity_min: 3 } }
+          result: 문전_축객_경고
+          still_offered: [속가, 객경]  # 낮은 문은 닫지 않는다
+          side_effect: { rumor: { intensity: 2, note: "사파망에서는 오히려 평판이 오른다 — 문은 하나가 아니다" } }
+      rumor_on_attempt:
+        intensity: [1, 2]
+        networks: [orthodox_net, inn_net]
+        text: "산문 앞에서 소리친 아이가 있었다 — 무모함 자체가 소문이 된다"
+      design_note: "무모한 직행은 실패가 아니라 가장 느린 경로다. 느린 경로에는 느린 경로의 이야기가 있다"
+
+    point_of_no_return:
+      key: 입문식
+      effect: "사문 등록 — 이후 겸적 불가. 되돌리려면 탈문 또는 파문뿐"
+
+    first_duty:
+      - "월 임무 1회 (quest_generation ④ 세력 발생원) — 첫 임무는 심부름 등급"
+      - "정규 수련 참석 (training location_safety 최상급)"
+
+    betrayal:
+      탈문:
+        effects: [공적_몰수, 비급_반납_요구, "정파망 소문 강도 2 (화산을 등진 아이)", 진운_신뢰_붕괴]
+      파문:
+        causes: [문규_3진, 살문, 마공_겸수, 비급_유출]        # sect_life expulsion 그대로
+        effects: ["'파문제자' 낙인 = 강도 3 소문 + 문파 적대 + 정파권 NPC 저항 +2"]
+        hook: "★ 파문제자 = 마교 잠식 계수 가산 대상 (magyo_encroachment)"
+      복권: "대공 1건 + 장문 재가 (sect_life reinstatement)"
+
+    sect_life_entry: { rank: 외문_제자, ref: "sect_life.yml rank_ladder" }
+
+    quest_injection:                 # 서사 의도: 세계가 상태를 보고 문을 내민다
+      - { when: { favor_min: 4 }, inject: 진운_경유_의뢰, channel: 의뢰소_공개 }
+      - { when: { tag: 눈여겨봄 }, inject: 진운_지명_의뢰, channel: NPC_직접_지명 }
+      - { when: { favor_min: 8 }, inject: 문파_전용_의뢰, channel: 세력_경유_favor게이트 }
+
+# ═══════════════════════════════════════════════════════════════════
+# 세가 — 혈연 조직: 외부인은 제자가 아니라 '등재'된다
+# ═══════════════════════════════════════════════════════════════════
+
+  dangga_entry:
+    id: dangga_entry
+    faction: 사천당가                # factions.yml orthodox.odaesega.clans
+    group: orthodox
+    visibility: 공개
+    grammar: 등재                    # ★ 문파와 다른 문법 — 세가는 제자를 받지 않는다
+    region_access: "청하현=섬서 / 당가=사천 — ★ 거리 자체가 게이트다 (떠나는 이야기로 시작한다)"
+    internal_currency: 가문_은혜      # 공적(功績)은 세가에 통용되지 않는다 — 세가의 축은 '집'의 장부다
+
+    triggers:
+      - { type: 집안, key: 상가의_자식, note: "world_link: 가문이 사천당가에 상납 — 얼굴이 이미 알려져 있다" }
+      - { type: 집안, key: 무가의_자식, note: "향반 무가의 예법과 검 — '어느 집 아이냐'에 답이 있는 자" }
+      - { type: 집안, key: 몰락_무가의_자식, note: "답이 없는 자. 그러나 '이름' 흔적이 있다" }
+      - { type: 사건, key: 독_계열_접촉, note: "열병 '원인 불명 환자' / 가짜 약 유통 / 독물 감정" }
+      - { type: 기예, key: 당문비수술, note: "skills: '기초는 바깥에도 흘렀다' — 공개 사용 시 당가가 출처를 캐묻는다" }
+      - { type: 세력, key: sangdan, note: "당가 상단·행상이 청하현을 지난다 (배경 처리 — 신규 NPC 없음)" }
+
+    gates:
+      - id: 문전_알현
+        # 서사 의도: 세가의 문은 무공이 아니라 소개장이 연다 — 만나주는 것 자체가 이미 호의다
+        condition_any:
+          - { favor: { faction: sangdan, min: 8 }, item: 소개장 }        # ① 상인이 여는 문 (가장 흔하다)
+          - { family: 무가의_자식 }                                       # ② 이름 — 예법상 문전박대는 없다
+          - { item_any: [당가_유출_기예, 독물, 암기] }                     # ③ 물건 — 출처 추궁 = 접견의 다른 이름
+          - { judgment: "암기/독/의술 시연 vs 어려움(14)" }               # ④ 재주 — 세가는 쓸모를 본다
+        family_modifier:
+          무가의_자식: +2              # 예법
+          몰락_무가의_자식: +1         # 이름은 남았다 — 단 '몰락'은 식객 이상을 어렵게 한다 (후견인 필요)
+
+      - id: 식객_등재
+        # 서사 의도: 소속이 아니라 체류다. 언제든 나갈 수 있고, 언제든 쫓겨난다
+        condition: { favor: { faction: 사천당가, min: 4 }, gate_passed: 문전_알현 }
+        grants: [당가_외당_서고_하급, 당문비수술_사사, 당가_이름의_그늘]
+        price: "재주를 계속 증명해야 한다 — 무용해지면 조용히 밥상이 줄어든다"
+        exit: 자유                    # ★ 식객은 PONR 이전 — 이것이 식객 단계가 존재하는 유일한 이유다
+        dual_membership: 허용         # 체류는 겸적이 아니다
+
+      - id: 가신_등재
+        # 서사 의도: 충성을 등재한다. 세가에는 문규 3진이 없다 — 한 번이면 족하다
+        condition:
+          favor: { faction: 사천당가, min: 13 }        # 공신
+          tag: { 가문_은혜: 1 }
+          ritual: 서약_문서
+        earn_은혜:                     # 가문 은혜 태그 획득 경로 (택1)
+          - { key: 구명, ref: "faction_reaction favor 공적_대 +4 — 당가 사람의 목숨을 구한다" }
+          - { key: 손실_방지, note: "유출된 기예·독물 회수, 상행 방어" }
+          - { key: 조달, note: "당가가 원하는 것을 가져온다 — 독물·약재·정보" }
+        grants: [방계_무공_상한_전수, 봉록, 세가_보호]
+        cap: "칠보독장은 내당 — 가신은 원칙적으로 못 넘는다"
+        price: "충성. 명령 거부 = 문규가 아니라 '배신'이다"
+        point_of_no_return: true      # ★ 장부 등재
+
+      - id: 방계_등재
+        # 서사 의도: 세가는 무공을 파는 곳이 아니라 핏줄을 관리하는 곳이다 — 방계 등재는 입양에 가깝다
+        condition:
+          gate_passed: 가신_등재
+          tag: { 가문_은혜: 2 }
+          대공: 1
+          후견인: "당가 외당 총관 (직책 예약 — 이름 없음)"
+          ritual: 혈서
+        grants:
+          - { simbeop: chilsal_eumdokgyeong, ref: "simbeop.yml: '사천당가 방계 전승' — 이 게이트의 존재 이유" }
+        lineage_price:
+          독문_동화: "면역은 동화 — 남을 해독하지 못하고, 독을 축기 재료로 흡수 (정화 자격 영구 상실)"
+          전환_비용: "도가·불가 lineage 전환 시 carry_over 0.5 + 주화입마 판정 (simbeop conversion opposed)"
+          자가_중독: "독 내성 수련 — 원기 대가 (skills chilbo_dokjang side_effects)"
+        ceiling: "만천화우는 직계 한정 — ★ 방계의 천장을 명시한다 (그 위는 핏줄이다)"
+        price: "성을 빌린 자는 가문을 떠날 수 없다 — 방계 이탈 = 배신 = 추격 (파문보다 무겁다)"
+
+    direct_approach:
+      declaration: "당가로 간다 / 대문 앞에서 받아달라고 한다"
+      always_allowed: true
+      travel: "섬서 → 사천. 원거리 — 기간·여비 판정 (화산의 수 배). ★ 거리 자체가 첫 시험이다"
+      branches:
+        소개_없음:
+          result: 문전_시연_요구        # 세가는 낯선 자를 만나주지 않는다 — 재주를 보여야 한다
+          judgment: "암기/독/의술 vs 어려움(14)"
+          on_fail: 문전_잡역_제안        # 마당·약재 손질 — 화산 잡역의 세가판 (favor +1/일, 상한 4)
+          tag_on_fail: 눈여겨봄
+        이름_있음:                     # 무가의_자식
+          result: 접견_허용
+          note: "다만 '향반'은 향반이다 — 식객 이상은 은혜가 필요하다"
+        물건_소지:
+          condition: { item_any: [당가_유출_기예, 칠살음독경_구결, 당가_암기] }
+          result: 출처_추궁_접견         # ★ 추궁이 곧 접견이다 (통칙 ③-b 세가판)
+      design_note: "세가 직행은 '무공을 보이는 자리'가 아니라 '쓸모를 보이는 자리'다"
+
+    point_of_no_return:
+      key: 가신_서약
+      effect: "가문 장부 등재 — 대를 넘긴다 (death_and_legacy 피의_장부 연동)"
+
+    first_duty:
+      식객: "없음 (재주 증명이 곧 의무)"
+      가신: "월 임무 1회 — 호송·독물 수배·추적"
+      방계: "월 임무 + 가문 행사 참석 (시간 몰수가 더 크다)"
+
+    betrayal:
+      effects:
+        - "당가 주목 축 급상승 + 독 계열 추격"
+        - "살막 청부 가능 — ★ 세가는 돈이 있다"
+        - "가문 장부는 대를 넘긴다 — death_and_legacy 피의_장부 등재, 후계 캐릭터에게 상속"
+
+    sect_life_entry:                 # ★ sect_life는 문파 문법 — 세가는 매핑으로 접속한다
+      식객: { maps_to: 속가_외문, note: "공적 대신 '재주 증명' — 봉록 없음, 비급각 1층 상당" }
+      가신: { maps_to: 내문_제자, note: "봉록 有, 방계 무공 상한" }
+      방계: { maps_to: 진전_제자, note: "내당 심법 접근, 직계 비전은 영구 차단" }
+      ceiling_note: "★ 세가에는 '진전 위'가 없다 — 그 위는 핏줄이다. 문파보다 천장이 낮다.
+        대신 세가는 재산을 준다 (문파는 시간을 준다) — 이것이 세가를 고르는 이유다"
+
+    quest_injection:
+      - { when: { favor_min: 4 }, inject: [독물_수배, 약재_수배, 당가_상단_호송], channel: 의뢰소_공개 }
+      - { when: { gate: 가신_등재 }, inject: [추적, 독물_회수, 유출_기예_회수], channel: 세력_경유_favor게이트 }
+
+# ═══════════════════════════════════════════════════════════════════
+# 사파 — 시험이 아니라 공범화(共犯化): 발을 담그게 만든다
+# ═══════════════════════════════════════════════════════════════════
+
+  haomun_entry:
+    id: haomun_entry
+    faction: 하오문
+    group: unorthodox
+    visibility: 공개
+    grammar: 공범화                  # 사파는 사람을 뽑지 않는다 — 적신다
+    npcs: [muksam, heukrang, masam]
+
+    triggers:
+      - { type: 사건, key: inn_unorthodox_contact, note: "묵삼 미행·추적·거래 — 어느 쪽이든 접점이 생긴다" }
+      - { type: 신분, key: 하오문_말단, note: "player_creation: '묵삼의 존재를 이미 안다 (양날)'" }
+      - { type: 행위, key: 정보_구매, note: "정보를 사는 행위 자체가 첫 접촉이다" }
+      - { type: 인연, npc: masam, note: "저자 왈패 — 얻어맞거나, 그 밑에서 잔심부름을 한다" }
+
+    gates:
+      - id: 심부름
+        # 서사 의도: 거절할 이유가 없는 일. 전부 합법이거나, 합법처럼 보인다 — 미끼는 달아야 한다
+        condition: { favor: { faction: haomun, min: 4 } }
+        tasks: [편지_전달, 출입_감시, 장부_필사, 미행]
+        reward_note: "보수가 좋다 — 하오문은 첫 몇 번을 후하게 쳐준다"
+        opens: [haomun_net_접근, 암시장_접근, quest_injection_개시]
+
+      - id: 문서_한_장         # ★ PONR
+        # 서사 의도: 정보 조직이 사람을 붙잡는 방법은 폭력이 아니라 기록이다
+        condition: { favor: { faction: haomun, min: 8 }, npc: heukrang }
+        surface: "'받아둬. 자네 몫 계산서일세.'"
+        truth: "하오문 장부에 오른 당신의 이름 + 상단 정보 유출의 수령증 (관군에 넘어가면 당신이 범인이다)"
+        item_granted: 하오문_수령증
+        choice:
+          수령: { point_of_no_return: true, tag: 장부_등재 }
+          거절: { favor_freeze: 8, tag: 흑랑_경계, note: "문은 닫히지 않고 '얕아진다'" }
+        design_note: "★ 시험이 아니라 '동의'를 요구한다. 그리고 동의는 서명이다"
+
+      - id: 소속_통보
+        condition: { favor: { faction: haomun, min: 13 }, tag: 장부_등재 }
+        surface: "'이제 자네는 우리 사람이야.' — 의식 없음. 고지뿐이다"
+        grants: [정보망_상시_접근, 은신처, 신분_세탁_서비스, "은신·암행 계열 무공 (상급 연줄)"]
+        grants_note: "★ 신분 세탁: 남의 것은 해주고 자기 것은 안 된다"
+        price: "월 1회 정보 상납 — 하오문은 당신을 눈으로 쓴다"
+        cost_note: "★ 당신이 아는 모든 사람의 약점을 하오문도 알게 된다"
+
+    direct_approach:
+      declaration: "'일 좀 하겠소' — 객잔 2층, 묵삼에게 직접"
+      always_allowed: true
+      note: "★ 하오문은 절대 거절하지 않는다 — 문턱이 없는 것이 하오문의 문턱이다"
+      branches:
+        신원_미상:
+          result: 즉시_심부름_부여      # 사파에서 직행은 정공법보다 '빠르다'
+          price: "★ 위험한 일부터 준다 (버려도 되는 패). 실패 시 보수 없음 + 하오문 주목 +2"
+        악명_보유:
+          result: 환대                 # 정파에서 문전박대당한 자가 여기서는 우대받는다
+        정파_줄_보유:
+          condition: { favor: { faction: orthodox, min: 8 } }
+          result: 우대_가속
+          note: "★ '정파에 줄 있는 사람'은 최고의 상품이다 — 공범화가 더 빨리 온다"
+
+    point_of_no_return: { key: 문서_수령, effect: "장부 등재 — 이탈 시 그 문서가 관군에 흘러간다" }
+
+    first_duty: "월 1회 정보 상납 (소문·동향 보고)"
+
+    betrayal:
+      effects:
+        - "장부 공개 — 문서 한 장이 관군에 도착한다 (death_and_legacy 수배 규칙)"
+        - "★ 하오문은 죽이지 않는다 — 죽은 자는 쓸모가 없다. 대신 사회적으로 매장한다"
+        - "소문 강도 3 + 정확도 조작 (하오문은 소문망의 주인이다 — 원하는 이야기를 만든다)"
+
+    sect_life_entry:
+      말단: { maps_to: 속가_외문 }
+      연락책: { maps_to: 내문_제자, npc_ref: muksam }
+      상선: { maps_to: 진전_제자, npc_ref: heukrang }
+      note: "★ 하오문에는 비급각이 없다 — 장부가 있다. 공적 대신 정보로 지불한다"
+
+    quest_injection:
+      - { when: { favor_min: 4 }, inject: [출처_모호한_조사, 전달, 미행], channel: 의뢰소_공개,
+          note: "★ 게시판에 하오문 계열 의뢰가 '섞인다' — 발주처가 모호하다" }
+      - { when: { tag: 장부_등재 }, inject: 묵삼_직접_지명, channel: NPC_직접_지명, exclusivity: 독점 }
+
+  noklim_entry:
+    id: noklim_entry
+    faction: 녹림
+    group: unorthodox
+    visibility: 공개
+    grammar: 공범화_부작위            # ★ 아무것도 '하지' 않는 것이 첫 범행이다
+    npcs: [galho, north_road_bandit]
+    network_note: "녹림은 자체 소문망 없이 하오문 망에 얹혀 있다 (rumor faction_awareness) — 하오문 루트와 교차"
+
+    triggers:
+      - { type: 사건, key: north_road_bandits, note: "★ 토벌 의뢰의 반대편 문 — 싸운 것도 접점이다" }
+      - { type: 상태, key: 포로, note: "제압·강탈이 패배의 기본값 (death_and_legacy) — 붙잡힌 뒤가 가장 자연스러운 입구다" }
+      - { type: 경로, key: 사파_거래, note: "north_road_bandits resolution_paths에 이미 등록되어 있다" }
+      - { type: 장_사건, key: chapter_events.salt_road_blockade, outcome: 협상_해결 }
+      - { type: 집안, key: 농가의_자식, note: "'땅과 계절, 도적의 첫 표적' — 피해자가 가해자가 되는 길" }
+
+    gates:
+      - id: 눈감아주기
+        # 서사 의도: 산적은 사람을 물들이지 않는다. 사람이 스스로 눈을 감는다
+        condition: { favor: { faction: noklim, min: 4 } }
+        tasks: [상행_시각_유출, 순찰_경로_묵인, 갈호_목격_부인]
+        world_effect: { region_state: { security: "-" }, note: "북쪽 산길 치안 하락 — 세계가 진짜로 나빠진다" }
+
+      - id: 상행_참여          # ★ PONR
+        condition: { favor: { faction: noklim, min: 8 }, event: 습격_참여_1회 }
+        truth: "습격 참여 = 목격자가 생긴다 — 곽진(상단 호위)이 얼굴을 보면 상단 장부와 관군 수배에 동시에 오른다"
+        lethality_choice:
+          비살상: "제압·강탈만 — ★ '도적이 되었으나 살인자는 아니다'. 이 좁은 길이 후일 세탁의 유일한 밑천이다"
+          살상: "살인 = 피의 장부 등재 (세탁 불가)"
+        effects: { 관군_주목: "+", 정파_favor: -4 }             # 배신_적대
+
+      - id: 산채_등재
+        # 서사 의도: 녹림에는 사제가 없다 — 형제와 몫이 있을 뿐이다
+        condition: { favor: { faction: noklim, min: 13 } }
+        grants: [산채_은신, 산길_지리, 도법_사사, 약탈_수익_배분]
+        grants_note: "★ 녹림의 진짜 혜택은 '자유' — 문규도, 월 임무도, 정규 수련도 없다"
+        price: "★ 대신 관군이 온다. 토벌 의뢰의 표적이 된다 — 어제의 동료 낭인이 내일 나를 사냥한다"
+        danger: 최고                  # salt_road_blockade '토벌_해결'이 이제 당신의 사망 시나리오다
+
+    direct_approach:
+      declaration: "산채로 걸어 올라가 받아달라고 한다"
+      always_allowed: true
+      travel: "북쪽 산길 상단부 — 도중 매복 조우 판정 (은신 실패 시 얻어맞고 끌려간다. 결과는 같다, 아프기만 하다)"
+      branches:
+        기본:
+          result: 갈호_즉석_시험
+          detail: "'한 판 붙어보자' (대립 판정 — 패배해도 탈락 아님. 갈호는 근성을 본다)
+            / '뭘 할 줄 아나' (산길 지리·사냥·도적질 시연)"
+        무재_무기술:
+          result: 잡역_제안            # ★ '밥이나 짓게' — 화산 문전 잡역의 사파판 (대칭)
+        정파_이력_보유:
+          condition: { favor: { faction: orthodox, min: 8 } }
+          result: 첩자_의심
+          difficulty_modifier: +4
+          tag: 감시
+          note: "★ 사파 → 정파 세탁이 어렵듯, 정파 → 사파도 공짜가 아니다. 소문은 양방향이다"
+        관군_favor_보유:
+          result: 즉시_살해_위험        # 녹림은 포두를 살려두지 않는다
+
+    point_of_no_return: { key: 습격_참여, effect: "목격·증거 → 관군 수배 가능 + 정파 favor 영구 손상" }
+
+    first_duty: "상행 참여 (약탈 = 수익 = 공적의 녹림판)"
+
+    betrayal:
+      effects:
+        - "산채 추격 — 그러나 녹림은 조직력이 약하다"
+        - "★ 진짜 위험은 하오문이다 — 녹림이 하오문 망에 얹혀 있으므로 배신 정보가 하오문을 통해 퍼진다"
+        - "'산을 배신한 놈' 소문 강도 3 (haomun_net → inn_net) — 사파권 전체에서 신용 불가"
+      투항: "관군 자수 가능 — 형벌 + 정보 제공 → 관군 favor 회복 경로. 단 사파권 영구 적대"
+
+    sect_life_entry:
+      졸개: { maps_to: 속가_외문 }
+      두목: { maps_to: 내문_제자, npc_ref: galho }
+      채주: { maps_to: 진전_제자, note: "지역 밖" }
+      note: "★ 공적 = 약탈 수익. 비급각 없음 — 녹림의 무공은 훔쳐온 것이거나 몸으로 익힌 것이다"
+
+    quest_injection:
+      - { when: { favor_min: 4 }, inject: [산길_안내, 눈감기], remove: 도적_토벌_현상,
+          note: "★ 게시판의 토벌 의뢰가 줄어든다 — 녹림이 정보를 미리 사간다" }
+      - { when: { gate: 산채_등재 }, board_access: 차단, inject: 갈호_상행_정보,
+          note: "★ 게시판 자체에 접근 불가 — 세계가 뒤집힌다" }
+
+  suroche_entry:
+    id: suroche_entry
+    faction: 장강수로채
+    group: unorthodox
+    visibility: 조건부                # 청하현에 거점 없음 — 밖에서 온다
+    grammar: 공범화_청구서            # ★ 이 루트는 플레이어가 찾아가지 않는다. 찾아온다
+    region_access: "흑수나루 (수로 물류 거점). 등록 NPC 없음 — 수로채 사자는 직책 예약"
+
+    triggers:
+      - { type: 기연, key: fortune_encounters.sunken_ship_manual, note: "침몰선 수공 비급 습득" }
+      - { type: 행위, key: 수공_비급_공개_사용,
+          ref: "fortune_encounters price: 'public_use_rumor — 공개 사용 시 장강수로채가 출처를 캐묻는다'",
+          effect: { 수로채_주목: +3, ref: "faction_reaction 거점_또는_연락망_노출 — 그들의 배, 그들의 비급이다" },
+          note: "★ 주목 3단계(접촉) 도달 시 수로채 사자가 찾아온다" }
+      - { type: 조사, key: 흑수나루_괴담, note: "잠수하지 않아도 접점은 생긴다 — 나루 뱃사람들이 기억한다" }
+      - { type: 의뢰, key: 수로_호송, note: "통행세 협상 조우" }
+
+    gates:
+      - id: 출처_추궁          # ★ 이 루트의 시험은 '대응'이다 (통칙 ③-b 그대로)
+        prompt: "'그 물건, 어디서 났나.'"
+        responses:
+          숨긴다: { judgment: "화술 대립", on_fail: { 주목: +3 }, on_success: { tag: 감시, note: "수로채는 잊지 않는다" } }
+          실토한다: { favor: +2, note: "★ 가장 유리하다 — '우리 배에서 건졌다' = 당신은 도굴꾼이 아니라 발견자다",
+                     반납: { favor: +4 }, 거부: { 주목: +3 } }
+          거래한다: { judgment: "상술·교섭", note: "비급을 대가로 무언가를 요구한다 (이익형의 길)" }
+          싸운다: { 주목: +5, note: "격퇴 가능. 그러나 수로채는 조직이다 — 다음엔 배로 온다.
+                   ★ 그리고 이것도 문이다: '쓸 만한 놈이군' → 회유 대상" }
+        design_note: "★ 수로채가 원하는 것은 비급이 아니라 그 비급을 쓸 줄 아는 사람이다"
+
+      - id: 통행세_명부         # ★ PONR
+        condition: { favor: { faction: jangang_suroche, min: 8 }, event: 수로_사업_참여_1회 }
+        tasks: [통행세_징수, 밀수_호송, 관선_회피_항행]
+        truth: "★ 수로채의 장부는 '나루의 장부'다 — 모든 나루의 뱃사람이 당신 이름을 안다"
+        irreversibility: "지리적 PONR — 수로를 쓰는 한 벗어날 수 없다 (강을 버리지 않는 한)"
+
+      - id: 채_등재
+        condition: { favor: { faction: jangang_suroche, min: 13 }, gate_passed: 통행세_명부 }
+        grants: [수공_상위_무공, 배, 수로_전역_이동권, 밀무역_수익]
+        price: "관군 상시 적대 (관선 단속). 상단과는 ★ 적이자 거래처 — 수로채는 뜯되 죽이지 않는다"
+
+    direct_approach:
+      declaration: "흑수나루에서 '수로채 사람을 만나고 싶다'"
+      always_allowed: true
+      immediate_result: "★ 아무 일도 일어나지 않는다 (수로채는 청하현에 거점이 없다)"
+      delayed_result:
+        rumor: { intensity: 1, network: sangdan_net }
+        arrival_days: [7, 14]        # rumor speed_days 규칙 준용
+        note: "★ '찾아가는 것이 아니라 부르는 것' — 직행조차 이 루트에서는 '기다림'의 형태를 띤다"
+      envoy_first_line: "'왜 우리를 찾나.' — 동기 심문 (화술 판정)"
+      branches:
+        쓸모_없음: { result: 나루_잡역_안내, note: "짐꾼·삿대잡이 — 세계는 언제나 낮은 문을 내민다" }
+        쓸모_있음: { condition: { skill_any: [수공_비급, 수영, 항해] }, result: "게이트 출처_추궁으로 직결" }
+
+    point_of_no_return: { key: 수로_사업_참여, effect: "나루의 장부 등재 — 지리적 비가역" }
+
+    first_duty: "통행세 징수 또는 밀수 호송 (월 1회)"
+
+    betrayal:
+      effects:
+        - "★ 물에서 죽는다 — 소문 없이 사라지는 유일한 사파. 강은 시체를 숨긴다"
+        - "rumor 강도 0 (완전_은밀) — 세계가 모르는 죽음. ★ 유일하게 피의 장부가 열리지 않는 배신"
+
+    sect_life_entry:
+      수부: { maps_to: 속가_외문 }
+      향주: { maps_to: 내문_제자 }
+      채주: { maps_to: 진전_제자 }
+
+    quest_injection:
+      - { when: { 주목_stage_min: 3 }, inject: 통행세_협상, side_effect: "수로 의뢰에 감시자가 따라붙는다" }
+      - { when: { gate: 채_등재 }, inject: [밀수_호송, 관선_회피], channel: 세력_경유_favor게이트 }
+
+  salmak_entry:
+    id: salmak_entry
+    faction: 살막
+    group: unorthodox
+    visibility: 조건부                # 가장 좁고 가장 어두운 문
+    grammar: 회수                     # ★ 살막은 사람을 모집하지 않는다 — 목격자를 처리하거나, 회수한다
+    npcs: []                          # ★ 살막은 얼굴이 없다 — 신규 NPC를 만들지 않는 것이 이 루트의 설계다
+
+    triggers:                         # ★ 셋뿐이다. 그리고 셋 다 사고다
+      - { type: 목격, key: 청부_현장,
+          ref: "chapter_events.vanishing_chain — '마지막 실종의 목격자' 훅 / '외부 살막?'",
+          note: "★ 목격자의 기본 처분은 '처리'다 — 살아남는 것 자체가 첫 시험이다" }
+      - { type: 생존, key: 살수_표적_생존,
+          note: "★ 살막은 실패한 청부를 회수한다 — 그리고 자신들을 이긴 자를 기억한다" }
+      - { type: 기예, key: [귀식술, 무영비수],
+          ref: "skills: '하오문 상급 연줄 또는 살막 방계 비급' / '조직 밖 유출 사례 없음 — 있다면 사건이다'",
+          note: "소지 자체가 살막을 부른다" }
+
+    gates:
+      - id: 쪽지               # ★ 살막은 제안하지 않는다. 시험한다
+        surface: "어느 날 방에 쪽지가 있다. 이름 하나, 날짜 하나, 금액 하나."
+        investigation: "'누가 놓았는가' 조사 가능 — ★ 설계상 실패한다 (살막은 흔적을 남기지 않는다)"
+        choices:
+          무시: { count_to_close: 3, note: "3번 무시하면 쪽지가 끊긴다 (문이 조용히 닫힌다).
+                 ★ 단, 마지막 쪽지에 당신 이름이 적혀 있다 — 무시한 자는 위험 요소다" }
+          신고: { 관군_favor: +2, 살막_주목: +5, note: "표적 전환" }
+          경고: { 살막_주목: +5, note: "★ 그러나 살막은 감탄한다 ('청부를 방해할 실력이 있는 자')
+                 → 회유 시도로 전환 (faction_reaction interplay: 주목 高 × 우호 高 = 영입 대상)" }
+          수행: { point_of_no_return: true, goto: 첫_청부 }
+
+      - id: 첫_청부            # ★ PONR — 이 세계에서 가장 무거운 한 걸음
+        act: "사람을 죽인다. 서사적 상황이 아니라 ★ 계약에 의해, 모르는 사람을."
+        ref: "death_and_legacy: '살인은 비싸다 — 소문·수배·세력 반응 (세계가 청구)'.
+          ★ lethal_condition을 플레이어가 스스로 만든다 — 이것이 다른 모든 살인과 다른 점이다"
+        effects:
+          - { registry: 피의_장부, note: "유족 NPC 복수 훅 생성 — 대를 넘어 새 캐릭터에게 상속 (lineage_choice)" }
+          - { favor: { faction: orthodox, delta: -8, permanent: true } }
+          - { block: 문파_입문_자격, ref: "sect_life expulsion causes '살문'과 대칭 — ★ 이 한 걸음이 정파의 모든 문을 동시에 닫는다" }
+        on_success: "살막이 이름을 준다 (본명이 아닌 코드) — ★ 이때부터 당신은 사람이 아니라 도구다"
+        on_fail: "★ 살막은 실패한 살수를 회수한다 — 당신이 다음 표적이다"
+
+    direct_approach:                 # ★ 제1원칙의 유일한 예외이자 증명
+      declaration: "'살막에 들어가겠다'"
+      always_allowed: true
+      physical_destination: 없음      # 산문도, 산채도, 객잔 2층도 없다 — 도착할 곳이 없다
+      but_world_responds: true       # ★ 선언 자체가 세계의 반응을 낳는다 (제1원칙은 여전히 작동한다)
+      branches:
+        rumor: { intensity: 1, network: haomun_net, text: "살수를 찾는 애송이가 있다" }
+        사기꾼: { probability: 높음, result: "가짜 살막 — 돈만 뜯긴다 (세계의 정직한 대답)" }
+        하오문_중개:
+          result: "★ 진짜 경로 — 살막의 문은 언제나 하오문을 경유한다"
+          requires: { favor: { faction: haomun, min: 8 }, price: "하오문은 공짜로 문을 열어주지 않는다" }
+        살막_인지: { 살막_주목: +2, result: "'우리를 찾는 자는 왜 찾는가' → 쪽지 게이트 발화" }
+      design_note: "★ 직행은 '불가'가 아니라 '가장 비싼 경로'다 — 문이 없는 것이 아니라, 문이 남의 집에 있다"
+
+    point_of_no_return: { key: 첫_청부, effect: "피의 장부 — 세탁 불가 (common_rules.laundering 예외)" }
+
+    first_duty: "청부 (지명 — 게시판을 거치지 않는다)"
+
+    betrayal:
+      effects:
+        - "★ 청부 대상이 된다 — 유일하게 세력 반응 6단계(숙청)로 직행하는 배신"
+        - "살막은 협상하지 않는다. 이탈 = 사망 판정의 시작"
+
+    sect_life_entry:
+      방계_살수: { maps_to: 속가_외문 }
+      정식_살수: { maps_to: 내문_제자, grants: 무영비수, ref: "skills: '살막 정식 살수 한정'" }
+      막주: { maps_to: 진전_제자, note: "지역 밖" }
+
+    quest_injection:
+      - { when: { gate: 쪽지 }, channel: 쪽지, note: "★ 의뢰가 아니다. 게시판을 거치지 않는다 — 채널 자체가 다르다" }
+
+# ═══════════════════════════════════════════════════════════════════
+# 마교 — 입문이 아니라 잠식 (hidden)
+# ═══════════════════════════════════════════════════════════════════
+
+  magyo_encroachment:
+    id: magyo_encroachment
+    faction: 마교                    # factions.yml forbidden.magyo (hidden: true)
+    group: forbidden
+    visibility: hidden
+    grammar: 잠식                     # 마교는 문을 열지 않는다 — 당신 안에서 자란다
+
+    display_prohibition:             # ★ 절대 규칙 — 위반 시 설계 붕괴
+      금지:
+        - "'마교 루트 진행 중' 류 표기 일체"
+        - "잠식 단계·문턱 이름 노출"
+        - "진행도 게이지·퍼센트"
+        - "선택지·UI·나레이션에 '마교'라는 단어"
+      허용:
+        - "소문 (금기·괴담 밴드)"
+        - "NPC 반응 변화 (혜각·유문·진운이 거리를 둔다 — 아무도 이유를 말하지 않는다)"
+        - "나레이션 온도 · 꿈 · 환각 · 신체 증상"
+      rule: "★ 감지 가능한 유일한 창구는 '남'이다 — 나를 대하는 세계의 눈빛이 달라진다"
+
+    encroachment_counters:           # 신규 수치 없음 — 기존 축 재사용
+      심마_흔적: { ref: "internal_energy qi_deviation.simma ('금기 심법 실패 시 심마 성향 흔적 — 히든 루트 재료')" }
+      마병_침식: { ref: "equipment demonic_weapons.침식 ('전투마다 심마 흔적 +1')" }
+      금기_접촉: { ref: "금기 심법·마공 비급 열람, 폐사당 금기 사건 개입, 마병 감정 시도, 파문제자 비호" }
+      파문: { ref: "sect_life expulsion — '파문제자는 히든 루트의 단골 재료'. 트리거 가산" }
+
+    thresholds:                      # ★ gates가 아니라 thresholds — 순서가 아니라 문턱이다 (0.4)
+      - id: 호기심
+        condition_any:
+          - { 심마_흔적: { min: 1 } }
+          - { 금기_접촉: { min: 1 } }
+        world_response: "꿈자리가 사납다. 폐사당 소문이 유난히 귀에 들어온다.
+          ★ 아무 시스템 메시지도 뜨지 않는다 — 나레이션의 온도만 바뀐다"
+        opportunity: "금기 심법 구결의 '한 줄'이 손에 들어온다 — 읽지 않을 수도 있다"
+
+      - id: 편의
+        condition_any:
+          - { 심마_흔적: { min: 3 } }
+          - { 마병_침식: { min: 2 } }
+          - { 금기_접촉: { min: 3 } }
+        world_response: "그 힘이 실제로 편하다 — 이길 수 없던 싸움을 이긴다"
+        body: { ref: "equipment 마병 갈증 — 열흘 이상 흡혈 없으면 원기 -5/열흘. ★ 몸이 요구하기 시작한다" }
+        npc_detection:
+          - { npc: hyegak, event: chapter_events.blood_scent, note: "혜각이 혈향을 맡는다 (발화 조건과 정합)" }
+          - { npc: yumun, note: "맥을 짚다 손을 뗀다" }
+          - { npc: jinun, note: "거리를 둔다" }
+
+      - id: 의존              # ★ PONR — 단전이 물든다
+        condition_any:
+          - { 마병_침식: { min: 3 }, ref: "equipment 놓기: 침식 3+부터 손에서 놓으려면 지혜 판정 — 검이 사람을 쓴다" }
+          - { simbeop_lineage: 마도, state: 축기_개시 }
+        point_of_no_return: true
+        irreversibility: "lineage 전환 시 carry_over 0.5 + 주화입마 판정 (simbeop conversion opposed)"
+        world_response:
+          rumor: { intensity: 3, tags: [금기], network: orthodox_net }   # orthodox_net interests에 '금기' 포함
+          faction: "정파·관군 주목 축 상승 — 문파 입문 자격 사실상 소멸"
+        contact:
+          who: "'이해해주는 사람' (직책 예약 — ★ 마교 사자이나 그렇게 불러서는 안 된다)"
+          behavior: "그는 자신을 마교라 소개하지 않는다. 추격을 막아주고, 약을 주고, 이해해준다"
+          design_note: "★ 이 NPC는 '마교 사자'가 아니라 '이해해주는 유일한 사람'으로 등장해야 한다"
+
+      - id: 소속
+        condition: { threshold_held: 의존, favors_done: 3 }   # 그 사람의 '부탁' 3회
+        surface: "★ 입문식 없음. 어느 날 그가 말한다: '이제 돌아갈 데가 없지 않나.'
+          그리고 그것은 사실이다 — 세계가 이미 그를 배제했으므로"
+        design_note: "★ 플레이어는 이 순간 '자기가 선택했다'고 느낀다. 그것이 이 설계의 목표다"
+
+    direct_approach:
+      declaration: "'마교에 들어가겠다'"
+      result: 없음
+      note: "★ 문이 없다. 플레이어는 마교를 '찾아갈' 수 없다 — 애초에 알지 못하므로 (hidden).
+        마교를 입에 담는 것 자체가 금기 소문(강도 1)이 되어 정파·관군 주목만 올린다"
+
+    reversal:                        # 되돌리기 — 가능하다. 그러나 쉽지 않다
+      마병_정화: { judgment: "도가 순도 판정 vs 16 (simbeop purification / equipment counters)" }
+      해주: { by: hyegak, lineage: 불가, ref: "simbeop purification.해주 — 사기·사술 정화" }
+      심마_흔적: "★ 지워지지 않는다 — 흔적은 성향 태그다. 지운 것은 힘이지 기억이 아니다"
+      tag_after: { key: 돌아온_자, effect: "정파 재접근 시 심사 난이도 +4 — 그러나 문은 열린다" }
+
+    first_duty: "'부탁' — 명령이라 부르지 않는다. 거절 가능하고, 거절하면 그가 슬퍼한다. 그것으로 충분하다"
+
+    betrayal: "마교 이탈 = 정파 적대 + 마교 숙청 — ★ 세계 어디에도 갈 곳이 없다 (파멸 서사의 입구)"
+
+    sect_life_entry: 없음             # ★ 마교에는 공적도 비급각도 없다 — '힘'과 '그가 시키는 일'뿐이다
+
+    quest_injection:
+      - { when: { 심마_흔적: { min: 2 } }, inject: [폐사당_조사, 괴이_퇴치], channel: 의뢰소_공개,
+          note: "★ 게시판에 금기 관련 의뢰가 눈에 띄기 시작한다 — 세계가 시험한다" }
+      - { when: { item: 마병 }, event: chapter_events.blood_scent }
+      - { when: { tag: 파문제자 }, event: chapter_events.expelled_disciple, block: 정파_의뢰_접근 }
+
+# ═══════════════════════════════════════════════════════════════════
+# 혈교 — 입문이 아니라 오염 (파멸 서사 전용)
+# ═══════════════════════════════════════════════════════════════════
+
+  hyeolgyo_contamination:
+    id: hyeolgyo_contamination
+    faction: 혈교                    # factions.yml forbidden.hyeolgyo (hidden: true)
+    group: forbidden
+    visibility: hidden
+    grammar: 오염                     # ★ 입문 루트가 아니다 — 이 항목은 '경계의 명문화'다
+    is_entry_route: false            # ★ 엔진 판독: 이것은 입문 루트가 아니다. 플레이어는 '소속원'이 될 수 없다
+
+    boundary_vs_magyo:               # 마교(입문 가능) vs 혈교(오염) 명문화
+      마교: { 성격: 세력, 문: "없음 — 잠식으로 들어간다", 플레이어_지위: 소속원, 결말: 세력_서사 }
+      혈교: { 성격: 금기_그_자체, 문: "★ 없다 — 들어가는 것이 아니라 먹히는 것이다",
+              플레이어_지위: "★ 숙주(宿主)", 결말: "★ 파멸 서사 전용 — 캐릭터 종결 루트" }
+      세계_반응: { 마교: 정파_적대, 혈교: "정파·관군·불가 전원 토벌 대상 (세력 반응 6단계 직행)" }
+
+    contamination_vectors:
+      혈기심공: { ref: "simbeop hyeolgi_simgong (lineage: 마도, grade: 금기, method: 흡성)" }
+      혈수마공: { ref: "skills hyeolsu_magong — '손이 핏빛으로, 즉시 금기 소문 강도 3'" }
+      마병: { ref: "equipment demonic_weapons — 혈교 인신공양 의식의 잔재" }
+
+    point_of_no_return:
+      key: 첫_흡성
+      act: "타인의 내력을 약탈한다 (흡성 30% — simbeop method_condition)"
+      irreversibility:
+        - { ref: "simbeop depletion_override: 고갈 시 다운캐스트 대신 원기 자동 잠식 (시전당 원기 -5)" }
+        - "'탁한 기운은 주인을 문다' — 안 쓰면 자기를 먹는다.
+           ★ 흡성을 멈추면 죽는다 — 이것이 '오염'과 '입문'의 차이다"
+        - { ref: "simbeop price: 운기 색 '굶주린 탁한 적색' — 은폐 불가. 운기조식하는 순간 목격자가 안다" }
+      outcome: "파멸 — 캐릭터 종결. death_and_legacy 신규 캐릭터 규칙으로 이관"
+      design_note: "★ 혈교 루트는 '클리어'할 수 없다. 그것이 금기의 정의다"
+
+    why_it_exists: "★ 혈교라는 바닥이 있어야 마교가 '그래도 사람으로 남을 수 있는 어둠'이 된다.
+      금기는 다른 금기를 유혹적으로 만들기 위해 존재한다"
+
+# ═══════════════════════════════════════════════════════════════════
+# 공통 규칙
+# ═══════════════════════════════════════════════════════════════════
+
+common_rules:
+
+  dual_membership:                   # 동시 소속 불가 — 겸적 = 배신
+    limit: 1
+    on_discovery: "양쪽 모두 배신_적대 (favor -4 + 주목 가산) — 둘 다 잃는다"
+    exceptions:
+      - { key: 식객, note: "세가 식객은 소속이 아니라 체류 — 겸적 아님" }
+      - { key: 속가_객경, note: "준소속 — 문파 겸적 불가하나 낭인 활동 허용" }
+    infiltration: "잠입 가능. 그러나 시스템이 보호해주지 않는다 — 소문망이 정직하게 굴러갈 뿐이다"
+    design_note: "★ 강호에서 이름은 하나뿐이다 — 두 개의 이름을 가진 자를 세계는 배신자라 부른다"
+
+  laundering:                        # 루트 간 전환 — ★ 소문은 지워지지 않는다
+    정파_to_사파: { difficulty: 낮음, side_effect: "정파 이력 = '첩자 의심' 태그" }
+    사파_to_정파:
+      difficulty: 최고
+      requires:
+        - { key: 탈퇴, note: "PONR을 넘었다면 물리적 이탈부터가 사건이다 (문서·장부·목격자)" }
+        - { key: 시간, ref: "faction_reaction decay: 주목 -1/7일, floor_after_stage_3=4 / favor -1/30일",
+            note: "★ 은혜는 천천히 잊히고, 낙인은 더 천천히 잊힌다" }
+        - { key: 대공, ref: "faction_reaction 큰_공적_또는_구명 (-4) — 정파 favor를 벌어서 덮는 수밖에 없다" }
+        - { key: 증인, note: "소연·진운 등 정파권 NPC 기억 태그를 뒤집어야 한다 (직접_경험은 소멸하지 않는다)" }
+      residue: "★ rumor decay는 소문을 없애지만 npc_memory_tags는 남는다 —
+        '저 사람, 예전에 산길에서 봤는데' — 10년 뒤에도 누군가는 말한다"
+      exception: "★ 살문(청부 살인) 이력은 세탁 불가 — 피의 장부는 지워지지 않는다"
+    정파_to_정파: "타 문파 이적 = 사실상 파문 후 재입문 — 배신자를 두 번 받는 문파는 없다"
+    사파_to_사파: "가장 쉽다. 다만 하오문망이 이력을 기억한다"
+    마교: { ref: "magyo_encroachment.reversal — 힘은 지울 수 있고 흔적은 지울 수 없다" }
+
+  registry:                          # 등록제
+    - "이 파일에 등록된 루트만 존재한다 — GM 즉석 발명 금지 (fortune_encounters 5대 규칙과 동형)"
+    - "신규 세력 발명 금지 — factions.yml 등재 세력만"
+    - "신규 NPC 최소화 — 직책 예약으로 대체 (문서 7장 '등록 예약 명사')"
+
+  death_and_succession:              # death_and_legacy 접합
+    비이전: [favor, 공적, 경지, 숙련]   # 몸에 새긴 것은 무덤까지
+    소속_승계: 없음                    # ★ 자리는 사람의 것이다
+    favor_승계: { ref: "death_and_legacy world_memory.favor_승계 — 은인의 favor 일부 → 유족·제자" }
+    혈연_시작: { grants: [상속분_접근, 피의_장부_상속], note: "★ 아버지의 원수가 내 원수다" }
+    by_faction:
+      문파: "사문 등록 말소 + 사형제 복수 의뢰 발생 (sect_life revenge_hook)"
+      세가: "★ 가문 장부는 대를 넘긴다 — 은혜/원한이 유족에게 상속된다"
+      하오문: "장부에서 이름을 지운다 (죽은 자는 상품이 아니다)"
+      녹림: "몫이 소멸"
+      살막: "★ 기록 자체가 없다 — 살수의 죽음은 소문조차 남지 않는다"
+      마교: "'숙주'의 죽음 — 마병은 현장 드랍, 다음 손을 기다린다 (다음 플레이어의 훅)"
+
+# ═══════════════════════════════════════════════════════════════════
+# 봇 알파 배선 후보 (코드 없음 — 현 봇의 청하현·대화·의뢰·탐방 축에 얹을 최소 조각)
+# ═══════════════════════════════════════════════════════════════════
+
+bot_alpha_candidates:
+
+  - id: A1_직행_시도             # ★ 필수 — 제1원칙의 실물 증명
+    name: "'화산으로 간다' — 직행 선언 조각"
+    input: "플레이어 자유 선언 → 판정층 '세력 직행 선언' 라우팅 (기존 판정층 라우팅 재사용)"
+    steps:
+      - "여비·기간 판정 — 소지 은자 vs 노자 기준선 (부족 시 걸식 여정: 기간 2배 + 원기 소모)"
+      - "상태 조회 — 정파 favor / 경지 / 단서 소지(매화 목패·검결 절편) / 악명"
+      - "hwasan_entry.direct_approach.branches 반응표로 분기"
+    output: "서사 1문단 + 상태 갱신 (눈여겨봄 태그 / favor +1 / 소문 강도 1~2)"
+    cost: 낮음                      # 신규 장소 불요 — 화산은 '오프스크린 여정'
+    value: "★ 이 조각 하나가 '레일이 없다'를 플레이어에게 즉시 체감시킨다"
+
+  - id: A2_눈여겨봄_주입
+    name: "눈여겨봄 태그 → 진운 지명 의뢰 (유동 주입 최소 실증)"
+    input: "정파 favor ≥ 4 또는 '눈여겨봄' 태그 (★ A1의 출력이 곧 이 조각의 입력 — 루프가 닫힌다)"
+    steps: ["자정 배치(또는 의뢰소 방문 시) 후보 풀에 '진운 경유' 태그 의뢰 1건 주입"]
+    output: "의뢰소 게시판/진운 대화에 지명 의뢰 등장 — '자네, 요전에 봤네만'"
+    cost: 낮음                      # 기존 Quests 발생원에 조건부 후보 1종 추가
+    value: "★ '세계가 내 상태를 보고 문을 내민다'의 최소 실증"
+
+  - id: A3_묵삼_공범화
+    name: "묵삼의 첫 심부름 → 문서 한 장 (사파 공범화 최소 실증)"
+    input: "청하객잔 묵삼 대화 (기존 NPC·대화 축) 또는 '일 좀 하겠소' 직행 선언"
+    steps:
+      - "잔심부름 의뢰 1건 (편지 전달) — 보수 후함. 완수 시 하오문 favor +2"
+      - "favor ≥ 4 도달 시 다음 대화에서 '문서 한 장' 제시 (수령/거절)"
+      - "수령 = 장부 등재 플래그 (비가역) → 게시판에 하오문 계열 의뢰 혼입"
+    output: "선택지 2개 + 상태 플래그. ★ 수령 시 아무 경고도 띄우지 않는다 (그것이 함정의 설계다)"
+    cost: 중간                      # 비가역 플래그 1개 + 게시판 필터 1개
+    value: "★ 사파 문법의 실물. 봇에서 처음으로 '되돌릴 수 없는 선택'이 생긴다"
