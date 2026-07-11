@@ -64,6 +64,8 @@ public final class HoncheonBot {
                                                 .addChoice("장터 잡화상 장쇠", "장쇠"),
                                         new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.STRING, "말", "하고 싶은 말 (자유 입력)", true)),
+                        new SubcommandData("탐방", "폐사당을 살핀다 — 발품에는 이유가 있다 (하루 한 번)"),
+                        new SubcommandData("운기", "심법으로 기를 돌린다 — 하루 한 번, 축기"),
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                         new SubcommandData("도움말", "명령과 규칙 안내"));

@@ -263,6 +263,24 @@ public final class Db implements AutoCloseable {
         }
     }
 
+    /** 특정 행위자의 이벤트 유형 합계 — 기연 트리거(선행 기억 등)의 조회 지점 */
+    public synchronized int countEvents(String actorType, String actorId, List<String> types)
+            throws SQLException {
+        String in = String.join(",", types.stream().map(t -> "?").toList());
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COUNT(*) FROM events WHERE actor_type = ? AND actor_id = ? AND type IN (" + in + ")")) {
+            ps.setString(1, actorType);
+            ps.setString(2, actorId);
+            for (int i = 0; i < types.size(); i++) {
+                ps.setString(3 + i, types.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
     @Override
     public void close() throws SQLException {
         conn.close();

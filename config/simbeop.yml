@@ -6,7 +6,7 @@
 dantian:
   attributes: [용량, 순도, 결]
   # 내공은 유일한 배증형 능력치 — 단전은 근육이 아니다 (다른 능력치는 +1=1년 균일)
-  accumulation_cost: "내공 n→n+1 = 전용 수련 n년 (축기 방식·보정 적용 전)"
+  accumulation_cost: "내공 n→n+1 = 전용 수련 n년 (축기 방식·보정 적용 전). 0→1 = 1년 (개화 직후 첫 단계 — 봇 단계 2에서 확정, 1년 = 360일)"
   # 화후(火候) — 양자화 절벽 제거 (dantian_and_simbeop.md 6.4)
   hwahu:
     internal: "내공은 실수로 적립 (축기 시간 = 진행도)"

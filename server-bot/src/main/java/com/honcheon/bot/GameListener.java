@@ -62,6 +62,8 @@ public final class GameListener extends ListenerAdapter {
                 case "사사" -> apprentice(event);
                 case "의뢰" -> questBoard(event);
                 case "대화" -> talkToNpc(event);
+                case "탐방" -> visitShrine(event);
+                case "운기" -> circulate(event);
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
@@ -138,6 +140,14 @@ public final class GameListener extends ListenerAdapter {
         if (marks > 0) {
             eb.addField("실전 마크", String.valueOf(marks), true);
         }
+        if (sheet.get("심법") != null) {
+            boolean opened = "개화".equals(sheet.get("단전"));
+            eb.addField("심법", sheet.get("심법") + (opened ? " · 단전 개화" : " · 단전 미개화"), true);
+            if (opened) {
+                double naegong = naegongOf(((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue());
+                eb.addField("내공", hwahuLabel(naegong) + " · 내력 " + Math.round(naegong * 3), true);
+            }
+        }
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
 
@@ -151,6 +161,8 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 사사` 곽진에게 무공을 청한다 — 무공 백지만 (과제→시험→입문)\n"
                         + "`/혼천 의뢰` 소연의 게시판 — 오늘의 의뢰 3건, 수주 1건씩 (출도 후)\n"
                         + "`/혼천 대화` 청하현 사람에게 말 걸기 — 자유 입력, 정보를 캐면 판정 (출도 후)\n"
+                        + "`/혼천 탐방` 폐사당을 살핀다 — 발품에는 이유가 있다 (출도 후, 하루 한 번)\n"
+                        + "`/혼천 운기` 심법으로 기를 돌린다 — 하루 한 번, 축기 (심법 보유자)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
@@ -183,6 +195,7 @@ public final class GameListener extends ListenerAdapter {
                 case "bm" -> onDuelAnswer(event, "ok".equals(id[1]), id[2], id[3]);
                 case "qa" -> onQuestAccept(event, id[1], id[2]);
                 case "qp" -> onQuestPerform(event, id[1], Integer.parseInt(id[2]), id[3]);
+                case "gs" -> onMealChoice(event, "share".equals(id[1]), id[2]);
                 default -> event.deferEdit().queue();
             }
         } catch (Exception e) {
@@ -902,8 +915,18 @@ public final class GameListener extends ListenerAdapter {
             "소문", "소식", "들리는", "들은 거", "들은 것", "들은 얘기",
             "아는 거", "아는 것", "정보", "무슨 일", "알려주", "알려 주", "귀띔");
 
+    /** F37 — 전언 종결(…라던데)은 게이트 제외: 진짜 확인 질문이면 LLM 백업이 잡는다 (OR 구조 유지) */
+    private static final List<String> HEARSAY_ENDINGS = List.of(
+            "라던데", "다던데", "라며", "다며", "라더군", "다더군", "라더라", "다더라");
+
     private static boolean isInfoSeeking(String say) {
-        return INFO_KEYWORDS.stream().anyMatch(say::contains);
+        // F37 — 관형형 "소문난 ~"(유명하다는 뜻)은 정보 요구가 아니다 (8차-③ FP: 소문난 국밥집)
+        String s = say.replace("소문난", "");
+        String core = s.replaceAll("[?!.…~\\s]+$", "");
+        if (HEARSAY_ENDINGS.stream().anyMatch(core::endsWith)) {
+            return false;
+        }
+        return INFO_KEYWORDS.stream().anyMatch(s::contains);
     }
 
     private final Map<String, Long> talkCooldown = new ConcurrentHashMap<>();
@@ -982,8 +1005,10 @@ public final class GameListener extends ListenerAdapter {
         int resist = 11;
         JudgmentEngine.Tier tier = rules.judgment.resolve(stat, roll, resist);
         int margin = stat + roll - resist;
+        // F38 — 판정 대화도 질문 요지를 남긴다 (세계층: NPC 기억 재료 — 잡담 경로와 대칭)
         db.logEvent("대화_판정", "character", String.valueOf(chId), npcName,
-                Map.of("굴림", roll, "마진", margin, "등급", tier.name()));
+                Map.of("말", say.substring(0, Math.min(80, say.length())),
+                        "굴림", roll, "마진", margin, "등급", tier.name()));
         String outcome = margin >= 0
                 ? NPC_HINTS.get(npcName)
                 : "…" + npcName + "은(는) 화제를 돌렸다. 오늘은 입이 무겁다.";
@@ -1023,6 +1048,238 @@ public final class GameListener extends ListenerAdapter {
     /** LLM 비활성·실패 시 폴백 — 역할 기반 한 줄 (대화가 죽지 않는다) */
     private String fallbackLine(String name, Map<String, Object> npc) {
         return npc.get("role") + " " + name + "은(는) 고개만 끄덕였다. 바빠 보인다.";
+    }
+
+    // ─── 개화 축 (단계 2) — 폐사당의 취걸개(fortune_encounters) → 심법 전수 → 운기·축기 → 일류 ───
+
+    /** 기연 트리거 (chuigeolgae_master 알파 배선): 방문 3회 + 선행 기억(의뢰 완수) 2건 + 이류 이하 */
+    private static final int SHRINE_VISITS_REQUIRED = 3;
+    private static final int GOOD_DEEDS_REQUIRED = 2;
+    private static final int MEAL_SHARE_DAYS = 3;
+    private static final String FORTUNE_KEY = "기연:chuigeolgae_master";
+
+    /** 축기 환산 — 내공 n→n+1 = max(1,n)년 전용 수련 (simbeop accumulation_cost, 1년 = 360일) */
+    private static final double YEAR_DAYS = 360.0;
+
+    /** 축기 누적일 → 내공 실수 (화후 규칙 — 내부는 연속) */
+    private static double naegongOf(double days) {
+        int level = 0;
+        double remain = days;
+        while (true) {
+            double cost = Math.max(1, level) * YEAR_DAYS;
+            if (remain < cost) {
+                return level + remain / cost;
+            }
+            remain -= cost;
+            level++;
+        }
+    }
+
+    /** 화후 어법 표시 — "0단계 3성" (dantian hwahu display) */
+    private static String hwahuLabel(double naegong) {
+        int stage = (int) naegong;
+        int seong = (int) ((naegong - stage) * 10);
+        return stage + "단계 " + seong + "성";
+    }
+
+    @SuppressWarnings("unchecked")
+    private void visitShrine(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+        if (today == ((Number) sheet.getOrDefault("탐방일", -1)).intValue()) {
+            event.reply("오늘은 이미 다녀왔다 — 해가 바뀌면 다시. (탐방은 하루 한 번)")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        sheet.put("탐방일", today);
+        String state = (String) sheet.get("취걸개");
+        db.logEvent("탐방", "character", String.valueOf(chId), Map.of("장소", "폐사당"));
+
+        // 1회성 — 획득 즉시 세계에서 소모 (공유 세계 선착순, fortune rules)
+        boolean consumed = db.getMeta(FORTUNE_KEY).isPresent();
+        if ("전수".equals(state) || (consumed && !"시험".equals(state))) {
+            persistAndReply(event, row, sheet, "폐사당",
+                    "무너진 사당은 비어 있다. 낡은 신상만 먼지 속에 앉아 있을 뿐 — 인연은 한 번뿐이다.");
+            return;
+        }
+        if ("시험".equals(state)) {
+            // 시험 중 — 걸인이 곁에 앉는다. 시험임은 알려주지 않는다 (선택_시험)
+            db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                    String.valueOf(row.get("realm")), "강호", "청하현");
+            int streak = ((Number) sheet.getOrDefault("밥_연속", 0)).intValue();
+            event.replyEmbeds(new EmbedBuilder().setColor(INK).setTitle("폐사당")
+                            .setDescription("걸인이 오늘도 그 자리에 있다. 해진 발우를 무릎에 얹고, "
+                                    + "당신이 꺼낸 끼니를 물끄러미 본다."
+                                    + (streak > 0 ? " 어제 나눈 밥을 기억하는 눈치다." : ""))
+                            .build())
+                    .addComponents(ActionRow.of(
+                            Button.primary("gs:share:" + event.getUser().getId(), "밥을 나눈다"),
+                            Button.secondary("gs:alone:" + event.getUser().getId(), "혼자 먹는다")))
+                    .queue();
+            return;
+        }
+        // 발견 전 — 방문 적립 + 트리거 판정 (등록 조건의 알파 배선: 선행 기억 태그 → 의뢰 완수 이력)
+        int visits = ((Number) sheet.getOrDefault("폐사당_방문", 0)).intValue() + 1;
+        sheet.put("폐사당_방문", visits);
+        String realm = String.valueOf(row.get("realm"));
+        boolean realmOk = List.of("범인", "삼류", "이류").contains(realm);
+        int deeds = db.countEvents("character", String.valueOf(chId), List.of("의뢰_완수"));
+        if (visits >= SHRINE_VISITS_REQUIRED && deeds >= GOOD_DEEDS_REQUIRED && realmOk) {
+            sheet.put("취걸개", "시험");
+            db.logEvent("기연_발견", "character", String.valueOf(chId),
+                    Map.of("기연", "chuigeolgae_master"));
+            persistAndReply(event, row, sheet, "폐사당",
+                    "그늘에서 쉰 목소리가 났다. \"…또 왔군.\" 처음 보는 걸인이 — 아니, 늘 있었던 걸인이 "
+                            + "당신을 보고 있다. \"젊은 것이 발품은 부지런해. 밥은 먹고 다니나?\"\n"
+                            + "*(내일부터 폐사당에서 그를 다시 만날 수 있을 것 같다)*");
+            return;
+        }
+        String scene = switch (Math.min(visits, 3)) {
+            case 1 -> "무너진 사당이다. 지붕은 반이 내려앉았고, 낡은 신상 앞에 탄 향 자국만 남았다.";
+            case 2 -> "구석에 밥그릇이 하나 있다 — 최근 것이다. 누가 여기 사는 걸까.";
+            default -> visits >= SHRINE_VISITS_REQUIRED && deeds < GOOD_DEEDS_REQUIRED
+                    ? "그늘에 걸인이 앉아 있다. 눈길도 주지 않는다. \"…네 얼굴엔 아직 이야기가 없군.\" "
+                            + "(청하현 사람들을 도운 적이 있던가 — 의뢰 게시판이 떠오른다)"
+                    : "그늘에 걸인이 앉아 있다. 눈길도 주지 않는다.";
+        };
+        persistAndReply(event, row, sheet, "폐사당", scene);
+    }
+
+    private void persistAndReply(SlashCommandInteractionEvent event, Map<String, Object> row,
+                                 Map<String, Object> sheet, String title, String body) throws Exception {
+        db.updateCharacter(((Number) row.get("id")).longValue(), sheet,
+                ((Number) row.get("wallet")).intValue(),
+                String.valueOf(row.get("realm")), "강호", "청하현");
+        event.replyEmbeds(new EmbedBuilder().setColor(INK).setTitle(title)
+                .setDescription(body).build()).queue();
+    }
+
+    /** 밥 나눔 선택 — 사흘 연속이면 전수 (시험임을 알려주지 않았다 — trial 선택_시험) */
+    @SuppressWarnings("unchecked")
+    private void onMealChoice(ButtonInteractionEvent event, boolean share, String userId) throws Exception {
+        if (!event.getUser().getId().equals(userId)) {
+            event.reply("남의 끼니다.").setEphemeral(true).queue();
+            return;
+        }
+        var found = db.findCharacter(userId);
+        if (found.isEmpty()) {
+            event.editMessage("캐릭터가 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        long chId = ((Number) row.get("id")).longValue();
+        if (!"시험".equals(sheet.get("취걸개"))) {
+            event.editMessage("그 순간은 지나갔다.").setComponents().queue();
+            return;
+        }
+        int today = db.worldDay();
+        if (today == ((Number) sheet.getOrDefault("밥_선택일", -1)).intValue()) {
+            event.editMessage("오늘 끼니는 이미 정했다.").setComponents().queue();
+            return;
+        }
+        sheet.put("밥_선택일", today);
+        String body;
+        if (!share) {
+            sheet.put("밥_연속", 0);
+            body = "당신은 등을 돌리고 혼자 먹었다. 걸인은 아무 말이 없다.";
+        } else {
+            int last = ((Number) sheet.getOrDefault("밥_최종일", -99)).intValue();
+            int streak = (last == today - 1)
+                    ? ((Number) sheet.getOrDefault("밥_연속", 0)).intValue() + 1 : 1;
+            sheet.put("밥_연속", streak);
+            sheet.put("밥_최종일", today);
+            if (streak >= MEAL_SHARE_DAYS) {
+                if (db.getMeta(FORTUNE_KEY).isPresent()) {
+                    // 그 사이 다른 이가 인연을 맺었다 — 공유 세계의 선착순
+                    sheet.put("취걸개", "전수");   // 재시도 무의미 — 상태만 닫는다
+                    body = "걸인의 자리에 빈 발우만 남아 있다. 인연은 이미 다른 손을 잡았다.";
+                } else {
+                    db.setMeta(FORTUNE_KEY, String.valueOf(chId));
+                    sheet.put("취걸개", "전수");
+                    sheet.put("심법", "현천토납법");
+                    List<String> ties = sheet.get("인연") instanceof List<?> l
+                            ? new ArrayList<>((List<String>) l) : new ArrayList<>();
+                    ties.add("개방_계열(취걸개)");
+                    sheet.put("인연", ties);
+                    db.logEvent("기연", "character", String.valueOf(chId),
+                            Map.of("기연", "chuigeolgae_master", "보상", "현천토납법",
+                                    "대가", List.of("발설_금지", "원수_상속")));
+                    body = "사흘째 밥을 나누자, 걸인이 문득 자세를 고쳐 앉았다 — 등이 산처럼 펴진다.\n"
+                            + "\"사흘을 나눴으면 됐다. 숨 쉬는 법부터 가르쳐 주지.\"\n"
+                            + "그날 밤, 당신은 **현천토납법**의 구결을 받았다. (`/혼천 운기`)\n"
+                            + "*\"이 인연을 입에 올리면 나는 없던 사람이다. …그리고 언젠가, 내 빚을 네가 갚게 될지도 모르지.\"*";
+                }
+            } else {
+                body = "밥을 반으로 갈랐다. 걸인은 말없이 받아, 천천히 씹었다. (" + streak + "일째)";
+            }
+        }
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                String.valueOf(row.get("realm")), "강호", "청하현");
+        event.editMessageEmbeds(new EmbedBuilder().setColor(INK).setTitle("폐사당")
+                .setDescription(body).build()).setComponents().queue();
+    }
+
+    /** 운기 — 개화(첫 운기, 현천토납법 = 실패 없음) 후 매일 좌공 축기 1일치 */
+    @SuppressWarnings("unchecked")
+    private void circulate(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        if (sheet.get("심법") == null) {
+            event.reply("기를 돌릴 법을 모른다 — 심법이 없다. (강호 어딘가에 스승이 있을지도)")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        int today = db.worldDay();
+        if (today == ((Number) sheet.getOrDefault("운기일", -1)).intValue()) {
+            event.reply("오늘 몫의 운기는 끝났다 — 단전이 벅차다. (운기는 하루 한 번)")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        sheet.put("운기일", today);
+        long chId = ((Number) row.get("id")).longValue();
+        StringBuilder body = new StringBuilder();
+        if (!"개화".equals(sheet.get("단전"))) {
+            // 개화 — 단전 개방. 현천토납법은 실패 없음 (기초의 미덕), 수명을 태우지 않는다
+            sheet.put("단전", "개화");
+            sheet.put("축기_원장", 0.0);
+            db.logEvent("개화", "character", String.valueOf(chId), Map.of("심법", "현천토납법"));
+            body.append("구결대로 숨을 고르자, 아랫배 깊은 곳에서 무언가 열렸다 — 옅은 백색의 기운이 "
+                    + "실오라기처럼 돌기 시작한다.\n💥 **개화 — 단전이 열렸다** (이제 매일 운기로 기를 쌓는다)");
+        } else {
+            double days = ((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue() + 1.0;
+            sheet.put("축기_원장", days);
+            double naegong = naegongOf(days);
+            db.logEvent("운기", "character", String.valueOf(chId), Map.of("적립", 1));
+            body.append(String.format("가부좌를 틀고 한 주천을 돌렸다. 축기 **+1일치** (누적 %.0f일)\n"
+                            + "내공 화후 **%s** · 내력 %d",
+                    days, hwahuLabel(naegong), Math.round(naegong * 3)));
+        }
+        String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
+        if (!realm.equals(row.get("realm"))) {
+            body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (개화한 몸 — 정식 무인이다)");
+            db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+        }
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                realm, "강호", "청하현");
+        event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                .setTitle("운기 — " + row.get("name")).setDescription(body).build()).queue();
     }
 
     // ─── 수련 — 기초 단련: 하루 한 번, 화후 1일치 (training 축의 최소 배선) ───
@@ -1343,7 +1600,15 @@ public final class GameListener extends ListenerAdapter {
             int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
             return (mastery >= 2 && marks >= 1) ? "이류" : realm;
         }
-        return realm;   // 일류+ 요건(개화·단전)은 내공 축과 함께 후속
+        if ("이류".equals(realm) && skills != null) {
+            // 일류 (trigger 자동 — 개화가 사실상의 관문): 주력 숙련 3 + 개화 + 실전 마크 3
+            int mastery = MARTIAL_SKILLS.stream().filter(skills::containsKey)
+                    .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
+            int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
+            boolean opened = "개화".equals(sheet.get("단전"));
+            return (mastery >= 3 && opened && marks >= 3) ? "일류" : realm;
+        }
+        return realm;   // 절정+ 은 벽(壁) — 깨달음 사건이 문 (자동 승급 없음)
     }
 
     private String extremeMark(int roll) {
