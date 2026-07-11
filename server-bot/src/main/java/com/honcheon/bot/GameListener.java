@@ -116,6 +116,25 @@ public final class GameListener extends ListenerAdapter {
             StringBuilder sk = new StringBuilder();
             skills.forEach((k, v) -> sk.append(k).append(' ').append(v).append("  "));
             eb.addField("기술", sk.toString(), false);
+            // 주력 수련 진행 — 다음 숙련까지 (training 환산표)
+            if (sheet.get("기술_수련") instanceof Map<?, ?> prog) {
+                StringBuilder pr = new StringBuilder();
+                prog.forEach((k, v) -> {
+                    Object levelRaw = ((Map<?, ?>) skills).get(k);
+                    int level = levelRaw instanceof Number n ? n.intValue() : 0;
+                    int cost = rules.progression.skillLevelUpDays(level);
+                    pr.append(k).append(String.format(" %.1f", ((Number) v).doubleValue()))
+                            .append(cost > 0 ? "/" + cost + "일" : "일 (환산표 밖 — 수련만으론 불가)")
+                            .append("  ");
+                });
+                if (!pr.isEmpty()) {
+                    eb.addField("수련 진행", pr.toString(), false);
+                }
+            }
+        }
+        int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
+        if (marks > 0) {
+            eb.addField("실전 마크", String.valueOf(marks), true);
         }
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
@@ -586,6 +605,9 @@ public final class GameListener extends ListenerAdapter {
             gains.append(granted > 0
                     ? String.format("수련 **+%.2f일치**", granted)
                     : "수련 적립 없음 — *오늘은 몸이 벅차다* (일일 상한)");
+            for (String note : creditSkill(sheet, granted, today, tier.name())) {
+                gains.append('\n').append(note);
+            }
         }
         if (pelt) {
             int base = rules.economy.basePrice("사냥_부산물", beast.peltKey());
@@ -629,6 +651,55 @@ public final class GameListener extends ListenerAdapter {
         return rep;
     }
 
+    /**
+     * 주력 무공 수련 적립 (이류+ 승급 축) — combat_hwahu "사용 무공·기술 숙련 화후" 배선.
+     * 단발 보정(대성공·치명적 실패 = +1일치, 기술당 1일 1회)과 숙련 상승(training 환산표)을 함께 처리.
+     * 반환: 결과 embed에 붙일 알림 문장들.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> creditSkill(Map<String, Object> sheet, double granted, int today, String tierName) {
+        List<String> notes = new ArrayList<>();
+        Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
+        if (skills == null) {
+            return notes;
+        }
+        String main = MARTIAL_SKILLS.stream().filter(skills::containsKey).findFirst().orElse(null);
+        if (main == null) {
+            return notes;
+        }
+        double add = Math.max(0, granted);
+        // 단발_보정.대성공_또는_치명_실패 — 해당 기술 화후 +1일치 (기술당 1일 1회)
+        if ("대성공".equals(tierName) || "치명적 실패".equals(tierName)) {
+            Map<String, Object> bonusDays = new LinkedHashMap<>(
+                    (Map<String, Object>) sheet.getOrDefault("단발_보정일", Map.of()));
+            if (today != ((Number) bonusDays.getOrDefault(main, -1)).intValue()) {
+                add += 1.0;
+                bonusDays.put(main, today);
+                sheet.put("단발_보정일", bonusDays);
+                notes.add("단발 보정 — " + tierName + ": " + main + " 수련 +1.00일치");
+            }
+        }
+        if (add <= 0) {
+            return notes;
+        }
+        Map<String, Object> prog = new LinkedHashMap<>(
+                (Map<String, Object>) sheet.getOrDefault("기술_수련", Map.of()));
+        double days = ((Number) prog.getOrDefault(main, 0)).doubleValue() + add;
+        int level = ((Number) skills.getOrDefault(main, 0)).intValue();
+        int cost;
+        while ((cost = rules.progression.skillLevelUpDays(level)) > 0 && days >= cost) {
+            days -= cost;
+            level++;
+            notes.add("⚡ **숙련 상승 — " + main + " " + level + "** (손이 검결을 기억하기 시작한다)");
+        }
+        Map<String, Object> newSkills = new LinkedHashMap<>(skills);
+        newSkills.put(main, level);
+        sheet.put("기술", newSkills);
+        prog.put(main, days);
+        sheet.put("기술_수련", prog);
+        return notes;
+    }
+
     /** 화후 적립 — 일일 상한(cappedGrant)을 시트에 기장하고 실적립분을 돌려준다 */
     private double grantHwahu(Map<String, Object> sheet, double accrual, int today) {
         int day = ((Number) sheet.getOrDefault("적립일", -1)).intValue();
@@ -668,6 +739,9 @@ public final class GameListener extends ListenerAdapter {
         StringBuilder body = new StringBuilder(String.format(
                 "해 뜨기 전부터 몸을 다졌다. 수련 **+%.2f일치** (누적 %.2f일치)",
                 granted, ((Number) sheet.get("화후_원장")).doubleValue()));
+        for (String note : creditSkill(sheet, granted, today, null)) {
+            body.append('\n').append(note);
+        }
         // 사사 과제 연동 — 곽진이 새벽마다 지켜보고 있다
         Map<String, Object> sasa = (Map<String, Object>) sheet.get("사사");
         if (sasa != null) {
@@ -767,9 +841,12 @@ public final class GameListener extends ListenerAdapter {
         JudgmentEngine.Opposed opposed = rules.judgment.directOpposed(execA, rollA, execB, rollB);
 
         // 양측 화후 — 패배도 배움이다 (동수·비무_대련, 각자의 일일 상한)
+        // 승자 = 실전 마크 +1 (battle_marks: "비무 승리" — 이류 승급 요건의 사건 축)
         int today = db.worldDay();
-        double grantedA = duelGrant(challengerRow.get(), today);
-        double grantedB = duelGrant(targetRow.get(), today);
+        boolean challengerWins = !opposed.draw() && opposed.margin() > 0;
+        boolean targetWins = !opposed.draw() && opposed.margin() < 0;
+        double grantedA = duelGrant(challengerRow.get(), today, challengerWins);
+        double grantedB = duelGrant(targetRow.get(), today, targetWins);
 
         String winner = opposed.draw() ? null : (opposed.margin() > 0 ? nameA : nameB);
         String loser = opposed.draw() ? null : (opposed.margin() > 0 ? nameB : nameA);
@@ -802,7 +879,7 @@ public final class GameListener extends ListenerAdapter {
     }
 
     @SuppressWarnings("unchecked")
-    private double duelGrant(Map<String, Object> row, int today) throws Exception {
+    private double duelGrant(Map<String, Object> row, int today, boolean won) throws Exception {
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
         Map<String, Object> streak = (Map<String, Object>) sheet.get("비무_연속");
         int rep = streak != null && today == ((Number) streak.getOrDefault("일", -1)).intValue()
@@ -810,6 +887,10 @@ public final class GameListener extends ListenerAdapter {
         sheet.put("비무_연속", Map.of("횟수", rep + 1, "일", today));
         double accrual = rules.progression.combatAccrualDays("동수", "비무_대련", rep);
         double granted = grantHwahu(sheet, accrual, today);
+        creditSkill(sheet, granted, today, null);   // 비무 단발 보정은 후속 (양측 등급 거울 계산 필요)
+        if (won) {
+            sheet.put("실전_마크", ((Number) sheet.getOrDefault("실전_마크", 0)).intValue() + 1);
+        }
         String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
         long id = ((Number) row.get("id")).longValue();
         if (!realm.equals(row.get("realm"))) {
@@ -934,13 +1015,20 @@ public final class GameListener extends ListenerAdapter {
      */
     @SuppressWarnings("unchecked")
     private String promoteIfDue(Map<String, Object> sheet, String realm) {
-        if (!"범인".equals(realm)) {
-            return realm;
-        }
         Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
-        boolean martial = skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains);
-        double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
-        return (martial && hwahu >= BASIC_TRAINING_DAYS) ? "삼류" : realm;
+        if ("범인".equals(realm)) {
+            boolean martial = skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains);
+            double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
+            return (martial && hwahu >= BASIC_TRAINING_DAYS) ? "삼류" : realm;
+        }
+        if ("삼류".equals(realm) && skills != null) {
+            // 이류 (trigger 자동): 주력 무공 숙련 2 + 실전 마크 1 (cultivation_stages·battle_marks)
+            int mastery = MARTIAL_SKILLS.stream().filter(skills::containsKey)
+                    .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
+            int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
+            return (mastery >= 2 && marks >= 1) ? "이류" : realm;
+        }
+        return realm;   // 일류+ 요건(개화·단전)은 내공 축과 함께 후속
     }
 
     private String extremeMark(int roll) {

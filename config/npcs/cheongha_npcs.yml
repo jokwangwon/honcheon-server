@@ -251,6 +251,17 @@ npcs:
       밤: { place: county_office, activity: 당직, access: 조건부 }
     incident_links: [north_road_bandits]
 
+  market_peddler:                 # 매입 상인 — MVT 우클릭 매각 상호작용의 대상 (등록: 디자인 패스 2)
+    name: "장쇠"
+    tier: 4                       # 배경 NPC
+    role: "장터 잡화상 — 가죽·부산물 매입"
+    location: market
+    faction: mingan
+    disposition:
+      - "셈이 빠르다"
+      - "시세보다 싸게, 그러나 정직하게"
+    note: "매입가 = economy npc_buy_rate. 흥정(상술 판정)은 후속 배선"
+
   yacheolsu:
     name: "야철수"
     tier: 3

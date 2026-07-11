@@ -54,6 +54,7 @@ public final class HoncheonMvt extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
+        getServer().getPluginManager().registerEvents(new TradeListener(this), this);
         getCommand("honcheon").setExecutor(new MvtCommand(this));
         loadAnchors();
         loadZones();
