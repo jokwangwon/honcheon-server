@@ -22,14 +22,37 @@ glyph_slots:
   E040_E05F: { band: 장비_등급_아이콘, note: "범철~신병 + 마병 혈향" }
   E060_E07F: { band: 세력_문장 }
   E080_E09F: { band: GUI_배경, used: { E080: "경락도 배경 패널 176x110 (먹색+화선지 테두리+전각 도장풍 주사색 4귀 ㄱ자획+제목 구분선 y=17+5px 인셋 점선 여백 가이드)" }, note: "전낭 탭·상점은 E081+ — 음수 공백 기법, ascent 인게임 튜닝" }
+  E0A0_E0AF: { band: 음수_공백, used: { E0A0_E0A5: "space 프로바이더 advances — -8/-16/-32/-64/-128/+1 (2^n 음수 폭 + 미세조정 +1, E080 제목 음수 공백 기법용)" }, note: "비트맵 아님 — 폭만 갖는 space 프로바이더. F26 동일 적용: advances 키도 chr()로만" }
   registration: "슬롯 추가 = 본 파일 등록 + build_resourcepack.py 반영 (등록제 문법)"
   pua_rule: "F26 — 소스·데이터 어디에도 PUA 문자 리터럴 직접 삽입 금지: 코드 chr()/\\uXXXX, JSON ensure_ascii. 편집·전송 중 조용히 유실되며 빈 chars 하나가 팩 전체를 무효화한다"
+
+# ─── 바닐라 텍스처 교체 채널 등록제 — HUD·인벤토리 (1.21.4 / pack_format 46) ───
+# 폰트 글리프와 달리 틴트 불가 채널 — 직접 채색 허용. 크기·슬롯 좌표는 바닐라 계약 (틀리면 HUD가 깨진다)
+vanilla_texture_channels:
+  hud_체력:
+    path: "minecraft/textures/gui/sprites/hud/heart/"
+    sprites: { container: 9x9, full: 9x9, half: 9x9, container_blinking: 9x9, full_blinking: 9x9, half_blinking: 9x9 }
+    design: "하트 대신 기혈 구슬(단약) — 주사 채움+먹 테두리, 점멸=화선지 백화. half는 절단면 음영 열로 반 칸 1초 가독"
+    out_of_scope: "absorbing·poisoned·withered·hardcore 변형 = 바닐라 유지 (미등록 = 교체 금지)"
+  hud_핫바:
+    path: "minecraft/textures/gui/sprites/hud/"
+    sprites: { hotbar: 182x22, hotbar_selection: 24x23 }
+    design: "먹색 반투명 패널+화선지 테두리+희미한 슬롯 구분선, 선택 프레임은 주사 2px"
+    note: "hotbar_selection은 24x24가 아니라 24x23 (바닐라 blit 계약) — 하단 걸침 인게임 확인"
+  container_인벤토리:
+    path: "minecraft/textures/gui/container/"
+    sprites: { inventory: "256x256 (유효 176x166)", generic_54: "256x256 (유효 176x222, y=125 심 행)" }
+    design: "화선지 몸체+먹 외곽+슬롯 인셋 3톤(음영·내부·광) — 바닐라 입체 문법을 수묵 톤으로만 재채색"
+    invariant: "슬롯 18x18 격자 좌표 = 바닐라 메뉴 계약(아이템 좌표-1) 불변 — 위치·크기 변경 금지, 색만"
+  xp_bar_불가침: "XP 바 기능·위치는 내력 표시용 예약 — 텍스처 톤 변경만 허용, 숨기기 금지 (이번 교체 범위 밖, 바닐라 유지)"
+  registration: "교체 추가 = 본 채널 등록 + build_resourcepack.py 반영 (glyph_slots와 같은 등록제 문법)"
 
 # ─── 픽셀 스펙 ───
 pixel_spec:
   폰트_아이콘: { size: 8x8, colors: "백색+투명 2값 — 색은 틴트가 입힌다 (기세=화염+불티, 경지=획/봉우리·검/원환 계열)" }
   게이지: { size: 20x6, colors: "2값 — 눈금 틱·끝단 테이퍼도 백색+투명 안에서 처리" }
   GUI_배경: { size: 256x256, colors: "먹색 직접 채색 허용 (틴트 불가 채널) — 화선지 테두리·주사색 도장 획·반농도 구분선·점선 가이드 포함, GUI 배경만 다색 허용" }
+  HUD_컨테이너_교체: { rule: "바닐라 원본 치수 정확 준수 (스프라이트는 아틀라스 계약) — 팔레트는 먹·화선지·주사 3계열 안에서만, 채도는 의미(체력=주사, 선택=주사)에만" }
   아이템_텍스처: { size: 16x16, rule: "바닐라 해상도 준수 — 고해상도 금지 (이질감 방지)" }
   사운드: { format: "ogg 모노", 돌파_적립: "<1.5s", 세계_공지: "종(鐘) 계열" }
 
@@ -46,5 +69,6 @@ decision_process:
 roadmap:
   MVT: { slots: [기세, 화후_게이지], status: 완료_플레이스홀더 }
   M2: { slots: [내력_원기_게이지, 경지_칭호_문장, 경락도_GUI_배경], status: 완료_플레이스홀더 }
+  M2_HUD: { slots: [체력_기혈구슬, 핫바_수묵패널, 인벤토리_화선지_재채색, 음수_공백], status: 완료_플레이스홀더, note: "바닐라 텍스처 교체 채널 — vanilla_texture_channels 등록" }
   M3: [장비_등급_아이콘, 세력_문장, 커스텀_사운드]
   rule: "슬롯·컴파일러 대응 먼저, 아트는 교체형 — 코드 재작업 0"

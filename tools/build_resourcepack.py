@@ -9,6 +9,12 @@
   U+E020~E027   경지 문장 8단: 삼류~생사경 (하위=획 수, 중위=봉우리/검, 상위=원환+중심)
   U+E080        경락도 GUI 배경 (먹색 패널 + 전각 도장풍 모서리 + 제목 구분선 + 여백 가이드,
                 인벤토리 제목 음수 공백 기법용)
+  U+E0A0~E0A5   음수 공백 (space 프로바이더: -8/-16/-32/-64/-128/+1 — E080 제목 오프셋용)
+바닐라 텍스처 교체 (1.21.4 / pack_format 46 — 화면 HUD·인벤토리 수묵 재해석):
+  hud/heart/    container·full·half (+_blinking) 9x9 — 하트 대신 기혈 구슬 (주사+먹)
+  hud/          hotbar 182x22 (먹 반투명+화선지 테두리), hotbar_selection 24x23 (주사 프레임)
+  gui/container inventory·generic_54 256x256 — 화선지 재채색 (슬롯 18x18 좌표는 바닐라 계약 불변)
+  ※ XP 바는 내력 표시용 예약 — 기능·위치 불가침, 이번엔 바닐라 유지 (숨기기 금지)
 의존성 없음 — 순수 표준 라이브러리 PNG 작성기.
 """
 import json
@@ -285,6 +291,120 @@ def hotbar():
     return rows
 
 
+def hotbar_selection():
+    """24x23 선택 프레임 (gui/sprites/hud/hotbar_selection) — 주사색 2px 테 + 투명 내부.
+    치수 주의: 1.21.4 바닐라 스프라이트는 24x24가 아니라 24x23 (Gui가 24x23으로 blit,
+    하단 1px이 핫바 아래로 걸치는 바닐라 관례) — 치수·걸침 인게임 확인 필요."""
+    width, height = 24, 23
+    rows = []
+    for y in range(height):
+        row = []
+        for x in range(width):
+            frame = x < 2 or x >= width - 2 or y < 2 or y >= height - 2
+            row.append(SEL_FRAME if frame else T)
+        rows.append(row)
+    return rows
+
+
+# ─── 인벤토리 컨테이너 (gui/container/) — 화선지 재채색, 슬롯 좌표는 바닐라 계약 그대로 ───
+def blank_canvas(width=256, height=256):
+    return [[T] * width for _ in range(height)]
+
+
+def draw_panel(grid, gw, gh):
+    """(0,0) 기준 gw x gh 패널 — 먹 외곽선 + 화선지 몸체.
+    모서리는 바닐라 둥근 귀 관례를 2px 사선 컷으로 재현 (컷 밖 투명).
+    상·좌 2px 밝은 획 / 하·우 2px 음영 — 바닐라 입체(양각) 문법 유지."""
+    for y in range(gh):
+        for x in range(gw):
+            cx, cy = min(x, gw - 1 - x), min(y, gh - 1 - y)   # 가장 가까운 모서리까지 거리
+            s = cx + cy
+            if s < 2:
+                continue                       # 모서리 컷 — 투명 유지
+            if s == 2 or cx == 0 or cy == 0:
+                grid[y][x] = INK_SOLID         # 먹 외곽선 (사선 포함)
+            elif (x <= 2 or y <= 2) and x < gw - 3 and y < gh - 3:
+                grid[y][x] = PAPER_LIGHT       # 상·좌 밝은 획
+            elif x >= gw - 3 or y >= gh - 3:
+                grid[y][x] = PAPER_SHADOW      # 하·우 음영
+            else:
+                grid[y][x] = PAPER_BODY
+
+
+def draw_slot(grid, sx, sy):
+    """18x18 슬롯 — 바닐라 인셋 문법 그대로 (상·좌 음영, 하·우 광, 모서리 2px는 몸체 톤).
+    좌표 계약: 슬롯 박스 = 아이템 좌표 - 1. 위치·크기 불변 — 색만 수묵 계열."""
+    for dy in range(18):
+        for dx in range(18):
+            if (dx, dy) in ((17, 0), (0, 17)):
+                c = SLOT_BASE                  # 바닐라 모서리 절충 픽셀
+            elif dy == 0 or dx == 0:
+                c = SLOT_DARK
+            elif dy == 17 or dx == 17:
+                c = SLOT_LIGHT
+            else:
+                c = SLOT_BASE
+            grid[sy + dy][sx + dx] = c
+
+
+def draw_window(grid, wx, wy, ww, wh):
+    """인물 미리보기 창 — 먹 테두리 + 짙은 먹 내부 (장식 요소, 슬롯 아님)."""
+    for dy in range(wh):
+        for dx in range(ww):
+            edge = dy in (0, wh - 1) or dx in (0, ww - 1)
+            grid[wy + dy][wx + dx] = INK_SOLID if edge else WINDOW_INK
+
+
+def inventory_container():
+    """256x256 (유효 176x166) — 생존 인벤토리 (gui/container/inventory.png).
+    슬롯 박스(아이템 좌표-1, InventoryMenu 계약): 방어구 (7,7+18r) r=0..3 /
+    보조손 (76,61) / 제작 2x2 (97+18c,17+18r) / 제작 결과 (153,27) /
+    본가방 (7+18c,83+18r) r=0..2 / 핫바열 (7+18c,141). 좌표 불변 — 색만 교체.
+    인물 창(25,7,54x72)·제작 화살표는 장식 — 정확 위치 인게임 확인 필요."""
+    grid = blank_canvas()
+    draw_panel(grid, 176, 166)
+    draw_window(grid, 25, 7, 54, 72)           # 인물 창 (장식 — 바닐라 근사)
+    for r in range(4):
+        draw_slot(grid, 7, 7 + 18 * r)         # 방어구 4
+    draw_slot(grid, 76, 61)                    # 보조손 (창 우하단에 겹침 — 바닐라 동일)
+    for r in range(2):
+        for c in range(2):
+            draw_slot(grid, 97 + 18 * c, 17 + 18 * r)   # 제작 2x2
+    draw_slot(grid, 153, 27)                   # 제작 결과
+    for x in range(135, 147):                  # 제작 화살표 — 먹 획 (장식)
+        grid[31][x] = SLOT_DARK
+        grid[32][x] = SLOT_DARK
+    for dy, span in ((-2, 0), (-1, 1), (0, 2), (1, 1), (2, 0)):
+        for dx in range(span + 1):
+            grid[31 + dy][144 + dx] = SLOT_DARK   # 화살촉
+    for r in range(3):
+        for c in range(9):
+            draw_slot(grid, 7 + 18 * c, 83 + 18 * r)    # 본가방 9x3
+    for c in range(9):
+        draw_slot(grid, 7 + 18 * c, 141)       # 핫바열
+    return grid
+
+
+def generic_54_container():
+    """256x256 (유효 176x222) — 궤짝 6줄 (gui/container/generic_54.png).
+    렌더 계약(ContainerScreen): 화면 = 텍스처 y0..(줄수*18+16) + y126..221 두 조각 —
+    y=125 는 화면에 안 그려지는 심(seam) 행. 몸체가 균일 톤이라 심은 보이지 않는다.
+    슬롯 박스(ChestMenu 계약, 아이템 좌표-1): 궤짝 (7+18c,17+18r) r=0..5 /
+    플레이어 인벤 (7+18c,139+18r) r=0..2 / 핫바열 (7+18c,197) — 텍스처 기준 좌표
+    (화면 좌표는 심 때문에 -1). 좌표 불변 — 색만 교체."""
+    grid = blank_canvas()
+    draw_panel(grid, 176, 222)
+    for r in range(6):
+        for c in range(9):
+            draw_slot(grid, 7 + 18 * c, 17 + 18 * r)    # 궤짝 9x6
+    for r in range(3):
+        for c in range(9):
+            draw_slot(grid, 7 + 18 * c, 139 + 18 * r)   # 플레이어 인벤 9x3
+    for c in range(9):
+        draw_slot(grid, 7 + 18 * c, 197)                # 핫바열
+    return grid
+
+
 def gui_background():
     """176x110 경락도 GUI 배경 패널 — 먹색 + 화선지 테두리 + 수묵 표구 장식.
     - 모서리: 전각 도장풍 주사색 ㄱ자 쌍획 4귀 (인장 테두리 모티프, 4px 인셋·팔 6px·2px 두께)
@@ -350,11 +470,24 @@ def main():
     for name, art, palette in HEART_SPRITES:
         write_png(HUD_DIR / "heart" / f"{name}.png", paint_rows(art, palette))
     write_png(HUD_DIR / "hotbar.png", hotbar())
+    write_png(HUD_DIR / "hotbar_selection.png", hotbar_selection())
+    write_png(CONTAINER_DIR / "inventory.png", inventory_container())
+    write_png(CONTAINER_DIR / "generic_54.png", generic_54_container())
 
     write_png(FONT_DIR / "gui_ledger.png", gui_background())
     providers.append({
         "type": "bitmap", "file": "honcheon:font/gui_ledger.png",
         "height": 110, "ascent": 13, "chars": [chr(0xE080)],   # ascent는 인게임 튜닝 대상
+    })
+
+    # 음수 공백 프로바이더 (E0A0~E0A5) — 경락도 GUI 배경(E080) 제목 음수 공백 기법용.
+    # 2의 거듭제곱 음수 폭 + 미세조정 +1 폭 조합으로 임의 오프셋 구성. F26: 키도 chr()로만.
+    providers.append({
+        "type": "space",
+        "advances": {
+            chr(0xE0A0): -8, chr(0xE0A1): -16, chr(0xE0A2): -32,
+            chr(0xE0A3): -64, chr(0xE0A4): -128, chr(0xE0A5): 1,
+        },
     })
 
     font = PACK / "assets" / "minecraft" / "font" / "default.json"
@@ -363,11 +496,13 @@ def main():
     font.write_text(json.dumps({"providers": providers}, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
     (PACK / "pack.mcmeta").write_text(json.dumps({
-        "pack": {"pack_format": 46, "description": "혼천 — 기세·화후·경지 문장·경락도 글리프 (M2)"}
+        "pack": {"pack_format": 46, "description": "혼천 — 글리프 + HUD·인벤토리 수묵 텍스처 (M2)"}
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     total = 1 + 9 + len(REALM_CRESTS) + 1
-    print(f"팩 컴파일 완료: {PACK.relative_to(ROOT)} (글리프 {total}종 + 폰트 주입 + pack.mcmeta)")
+    vanilla = len(HEART_SPRITES) + 2 + 2   # 하트 6 + 핫바 2 + 컨테이너 2
+    print(f"팩 컴파일 완료: {PACK.relative_to(ROOT)} "
+          f"(글리프 {total}종 + 음수공백 6폭 + 바닐라 교체 {vanilla}장 + 폰트 주입 + pack.mcmeta)")
 
 
 if __name__ == "__main__":
