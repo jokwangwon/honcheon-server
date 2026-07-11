@@ -64,8 +64,10 @@ public final class GameListener extends ListenerAdapter {
                 case "대화" -> talkToNpc(event);
                 case "탐방" -> visitShrine(event);
                 case "운기" -> circulate(event);
+                case "출행" -> travel(event);
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
+                case "사망" -> adminKill(event);
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
             }
         } catch (Exception e) {
@@ -165,8 +167,10 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 대화` 청하현 사람에게 말 걸기 — 자유 입력, 정보를 캐면 판정 (출도 후)\n"
                         + "`/혼천 탐방` 폐사당을 살핀다 — 발품에는 이유가 있다 (출도 후, 하루 한 번)\n"
                         + "`/혼천 운기` 심법으로 기를 돌린다 — 하루 한 번, 축기 (심법 보유자)\n"
+                        + "`/혼천 출행 화산` 산문으로 직행한다 — 여비·기간을 치르고 문 앞에 선다 (조건 불문)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
+                        + "`/혼천 사망 <NPC>` NPC를 죽인다 — 연쇄 검증용 (서버 관리자)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
                 .build();
     }
@@ -198,6 +202,7 @@ public final class GameListener extends ListenerAdapter {
                 case "qa" -> onQuestAccept(event, id[1], id[2]);
                 case "qp" -> onQuestPerform(event, id[1], Integer.parseInt(id[2]), id[3]);
                 case "gs" -> onMealChoice(event, "share".equals(id[1]), id[2]);
+                case "ex" -> onGateChoice(event, id[1], Integer.parseInt(id[2]), id[3]);
                 default -> event.deferEdit().queue();
             }
         } catch (Exception e) {
@@ -636,11 +641,22 @@ public final class GameListener extends ListenerAdapter {
             }
         }
         if (pelt) {
+            // B1 — 장쇠가 죽으면 파는 곳이 없어진다. 마삼이 좌판을 차지하면 장물 시세(0.3)다
+            Deaths.Gap market = gapOf(MARKET_NPC, today, db.deadNpcs());
             int base = rules.economy.basePrice("사냥_부산물", beast.peltKey());
-            int sale = rules.economy.npcBuyPrice(base, false);
-            wallet += sale;
-            gains.append(gains.isEmpty() ? "" : " · ").append(beast.peltLabel())
-                    .append(" 매각 **+").append(sale).append("문**");
+            if (!market.open()) {
+                gains.append(gains.isEmpty() ? "" : " · ").append(beast.peltLabel())
+                        .append(" — **살 사람이 없다** (좌판이 비었다: ").append(market.state()).append(')');
+            } else {
+                Double rate = market.buyRate();
+                int sale = rate == null ? rules.economy.npcBuyPrice(base, false)
+                        : (int) Math.floor(base * rate);
+                wallet += sale;
+                gains.append(gains.isEmpty() ? "" : " · ").append(beast.peltLabel())
+                        .append(" 매각 **+").append(sale).append("문**")
+                        .append(rate == null ? ""
+                                : " *(" + rules.npcName(market.actorKey()) + "의 좌판 — 장물 시세 ×" + rate + ")*");
+            }
         }
         if (gains.isEmpty()) {
             gains.append("소득 없음");
@@ -744,6 +760,45 @@ public final class GameListener extends ListenerAdapter {
 
     // ─── 의뢰 — 소연의 게시판: 세계일 결정론 3건, 수주 1건, 판정 완수 (quest_generation G1) ───
 
+    /** 의뢰소 창구 = 소연 (service_gap.facilities.request_office) — 죽으면 창구가 바뀐다 */
+    private static final String OFFICE_NPC = "soyeon";
+    /** 장터 매입처 = 장쇠 (service_gap.facilities.market) — 죽으면 파는 곳이 없어진다 */
+    private static final String MARKET_NPC = "market_peddler";
+
+    /**
+     * A2·B3 — 오늘의 동적 주입분. 입력은 (정파 favor · 상태 태그 · 사망 등록부 · 세계일)뿐 —
+     * 주사위가 없으므로 같은 날 같은 상태면 같은 게시판이다 (결정론).
+     */
+    private List<Quests.Quest> injectedToday(long chId, Map<String, Object> sheet, int today)
+            throws Exception {
+        List<Quests.Quest> out = new ArrayList<>(Injections.routeQuests(rules,
+                db.favor("orthodox", chId), tagsOf(sheet).keySet()));
+        out.addAll(Injections.deathQuests(rules, db.deadNpcs(), today));
+        return out;
+    }
+
+    /** 지금 대장을 넘기는 사람 — 소연(정상) · 대행자 · 외지에서 온 낯선 사람 */
+    private String clerkName(Deaths.Gap office) {
+        if (office.normal() && office.actorKey() != null) {
+            return rules.npcName(office.actorKey());
+        }
+        if (office.actorKey() != null) {
+            return rules.npcName(office.actorKey());
+        }
+        return office.arrival() != null ? office.arrival() : "외지에서 온 접수인";
+    }
+
+    /** 대행 창구의 등급 상한 (소연 사후 백석: 호위_소탕까지) — quest_generation grade_ladder 서열 */
+    private java.util.function.Predicate<String> gradeGate(Deaths.Gap office) {
+        String cap = office.gradeCap();
+        if (cap == null) {
+            return grade -> true;
+        }
+        List<String> ladder = rules.gradeLadder();
+        int capRank = ladder.indexOf(cap);
+        return grade -> capRank < 0 || ladder.indexOf(grade) <= capRank;
+    }
+
     @SuppressWarnings("unchecked")
     private void questBoard(SlashCommandInteractionEvent event) throws Exception {
         if (notInRegion(event)) {
@@ -755,12 +810,16 @@ public final class GameListener extends ListenerAdapter {
         }
         Map<String, Object> row = found.get();
         Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+        long chId = ((Number) row.get("id")).longValue();
         int today = db.worldDay();
+        var dead = db.deadNpcs();
+        Deaths.Gap office = gapOf(OFFICE_NPC, today, dead);
+        List<Quests.Quest> injected = injectedToday(chId, sheet, today);
 
         Map<String, Object> holding = (Map<String, Object>) sheet.get("의뢰");
         if (holding != null) {
             // 수주 중 — 수행 화면
-            Quests.Quest q = Quests.byKey(String.valueOf(holding.get("키")));
+            Quests.Quest q = Quests.find(String.valueOf(holding.get("키")), injected);
             if (q == null) {
                 event.reply("대장에 없는 의뢰다 — 소연에게 문의하라 (기록 오류).").setEphemeral(true).queue();
                 return;
@@ -778,20 +837,37 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
 
-        // 게시판 — 오늘의 의뢰 3건
+        // B1 — 서비스 공백: 창구가 비면 게시판 자체가 닫힌다 (문이 닫혀 있다)
+        if (!office.open()) {
+            event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                    .setTitle("의뢰소 — 문이 닫혀 있다")
+                    .setDescription("널빤지가 대문에 가로질러 박혀 있다. " + rules.npcName(OFFICE_NPC)
+                            + "이(가) 죽은 뒤로 대장을 넘길 사람이 없다.\n"
+                            + "\"…발주도, 검수도 못 하오. 사람이 와야 하오.\"\n"
+                            + "*(공백 — 상태 " + office.state() + ")*").build()).queue();
+            return;
+        }
+
+        // 게시판 — 정적 3건 + 동적 주입분 (죽은 발주자의 의뢰는 사라진다)
         Map<String, Object> done = (Map<String, Object>) sheet.getOrDefault("의뢰_완료", Map.of());
+        String clerk = clerkName(office);
         EmbedBuilder eb = new EmbedBuilder().setColor(INK)
                 .setTitle("의뢰소 게시판 — " + today + "일차")
-                .setDescription("소연이 대장을 넘긴다. \"골라 보게 — 보수는 완수 후, 검수는 확실히 하네.\"");
+                .setDescription(office.normal()
+                        ? clerk + "이 대장을 넘긴다. \"골라 보게 — 보수는 완수 후, 검수는 확실히 하네.\""
+                        : "**" + clerk + "**이(가) 대신 대장을 넘긴다. 손이 느리다.\n"
+                                + "\"내 소관이 아니오만… 사람이 없으니 어쩌겠소. 큰 일은 못 받소.\"\n"
+                                + "*(대행 — 등급 상한 " + office.gradeCap() + " · 보수 ×" + office.rewardMult() + ")*");
         List<Button> buttons = new ArrayList<>();
-        for (Quests.Quest q : Quests.board(today)) {
+        for (Quests.Quest q : Quests.board(today, injected, dead.keySet(), gradeGate(office))) {
             boolean doneToday = today == ((Number) ((Map<String, Object>) done)
                     .getOrDefault(q.key(), -1)).intValue();
             boolean above = Quests.realmRank(q.realmReq()) > Quests.realmRank(String.valueOf(row.get("realm")));
-            eb.addField(q.name() + (above ? " ⚠격상" : ""),
+            boolean fresh = Quests.POOL.stream().noneMatch(p -> p.key().equals(q.key()));
+            eb.addField((fresh ? "🔸 " : "") + q.name() + (above ? " ⚠격상" : ""),
                     q.brief() + "\n등급 " + q.grade() + " · 권장 " + q.realmReq()
                             + (doneToday ? " · **오늘은 마감**" : ""), false);
-            if (!doneToday) {
+            if (!doneToday && buttons.size() < 5) {
                 buttons.add(Button.secondary("qa:" + q.key() + ":" + event.getUser().getId(),
                         "수주 — " + q.name()));
             }
@@ -810,18 +886,24 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         var found = db.findCharacter(ownerId);
-        Quests.Quest q = Quests.byKey(key);
-        if (found.isEmpty() || q == null) {
+        if (found.isEmpty()) {
             event.editMessage("기록이 없다.").setComponents().queue();
             return;
         }
         Map<String, Object> row = found.get();
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        int today = db.worldDay();
+        long ownerCh = ((Number) row.get("id")).longValue();
+        Quests.Quest q = Quests.find(key, injectedToday(ownerCh, sheet, today));
+        if (q == null) {
+            event.editMessage("그 의뢰는 대장에서 내려졌다 — 발주자가 없거나 창구가 받지 않는다.")
+                    .setComponents().queue();
+            return;
+        }
         if (sheet.get("의뢰") != null) {
             event.reply("이미 맡은 일이 있다 — 하나씩. (`/혼천 의뢰`로 진행)").setEphemeral(true).queue();
             return;
         }
-        int today = db.worldDay();
         sheet.put("의뢰", Map.of("키", q.key(), "수주일", today));
         long chId = ((Number) row.get("id")).longValue();
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
@@ -842,13 +924,18 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         var found = db.findCharacter(ownerId);
-        Quests.Quest q = Quests.byKey(key);
-        if (found.isEmpty() || q == null) {
+        if (found.isEmpty()) {
             event.editMessage("기록이 없다.").setComponents().queue();
             return;
         }
         Map<String, Object> row = found.get();
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        Quests.Quest q = Quests.find(key,
+                injectedToday(((Number) row.get("id")).longValue(), sheet, db.worldDay()));
+        if (q == null) {
+            event.editMessage("기록이 없다.").setComponents().queue();
+            return;
+        }
         Map<String, Object> holding = (Map<String, Object>) sheet.get("의뢰");
         if (holding == null || !q.key().equals(holding.get("키"))) {
             event.editMessage("이 의뢰는 이미 끝났다 — `/혼천 의뢰`로 게시판을 보라.").setComponents().queue();
@@ -881,9 +968,13 @@ public final class GameListener extends ListenerAdapter {
         int wallet = ((Number) row.get("wallet")).intValue();
         String realm = String.valueOf(row.get("realm"));
         if (margin >= 0) {
-            int reward = rules.questReward(q.rewardKey(), dice);
+            // B1 — 대행 창구는 값을 깎는다 (standin_penalty.보수 0.9)
+            Deaths.Gap office = gapOf(OFFICE_NPC, today, db.deadNpcs());
+            String clerk = clerkName(office);
+            int reward = (int) Math.round(rules.questReward(q.rewardKey(), dice) * office.rewardMult());
             wallet += reward;
-            StringBuilder gains = new StringBuilder("소연의 검수 통과 — 보수 **+" + reward + "문**");
+            StringBuilder gains = new StringBuilder(clerk + "의 검수 통과 — 보수 **+" + reward + "문**"
+                    + (office.rewardMult() < 1.0 ? " *(대행 창구 ×" + office.rewardMult() + ")*" : ""));
             if (q.combatMark()) {
                 sheet.put("실전_마크", ((Number) sheet.getOrDefault("실전_마크", 0)).intValue() + 1);
                 gains.append(" · **실전 마크 +1** (전투 의뢰)");
@@ -899,7 +990,7 @@ public final class GameListener extends ListenerAdapter {
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward));
         } else {
             result.setColor(INK).appendDescription(
-                    "\n일이 어그러졌다 — 소연: \"빈손이면 보수도 없네. 게시판은 내일 다시 열리네.\"");
+                    "\n일이 어그러졌다 — 창구: \"빈손이면 보수도 없네. 게시판은 내일 다시 열리네.\"");
             db.logEvent("의뢰_실패", "character", String.valueOf(chId), "quest", q.key(),
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin));
         }
@@ -962,6 +1053,23 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> npc = rules.npcByName(npcName);
         if (npc == null || !NPC_HINTS.containsKey(npcName)) {
             event.reply("그 이름은 청하현에 없다.").setEphemeral(true).queue();
+            return;
+        }
+        // B1 — 사망 게이트: 죽은 자와는 말할 수 없다. 그 자리를 누가 메웠는지만 알려준다
+        String npcKey = rules.npcKeyByName(npcName);
+        int day = db.worldDay();
+        var deadNpcs = db.deadNpcs();
+        if (npcKey != null && deadNpcs.containsKey(npcKey)) {
+            Deaths.Gap gap = gapOf(npcKey, day, deadNpcs);
+            String successor = gap.actorKey() != null ? rules.npcName(gap.actorKey()) : gap.arrival();
+            event.replyEmbeds(new EmbedBuilder().setColor(BLOOD)
+                    .setTitle("「" + npcName + "」 — 대답이 없다")
+                    .setDescription(npcName + "은(는) 죽었다. 산 자의 말은 죽은 자에게 닿지 않는다.\n"
+                            + (gap.open()
+                                    ? "그 자리에는 지금 **" + (successor == null ? "낯선 사람" : successor)
+                                            + "**이(가) 있다. *(" + gap.state() + ")*"
+                                    : "그 자리는 아직 비어 있다. *(" + gap.state() + " — 사람이 와야 한다)*"))
+                    .build()).queue();
             return;
         }
         long now = System.currentTimeMillis();
@@ -1315,6 +1423,368 @@ public final class GameListener extends ListenerAdapter {
                 realm, "강호", "청하현");
         event.replyEmbeds(new EmbedBuilder().setColor(INK)
                 .setTitle("운기 — " + row.get("name")).setDescription(body).build()).queue();
+    }
+
+    // ─── A1. 출행 — 세력 직행 (faction_entry_routes 제1원칙: 레일 금지) ───
+    //
+    // 화산은 오프스크린이다 — 신규 장소 없이 여비·기간만 소모한다.
+    // 조건 미달의 결과는 '진행 불가'가 아니다: 잡역 제안 · 난이도 +4 · 축객 + 낮은 문 안내.
+    // 무엇이 되었든 결과는 상태 태그로 시트에 남고, 그 태그가 A2(게시판)의 입력이 된다.
+
+    private static final String HWASAN = Injections.HWASAN;
+    private static final String TAG_KEY = "상태태그";
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> tagsOf(Map<String, Object> sheet) {
+        return new LinkedHashMap<>((Map<String, Object>) sheet.getOrDefault(TAG_KEY, Map.of()));
+    }
+
+    private static void putTag(Map<String, Object> sheet, String tag, Object value) {
+        Map<String, Object> tags = tagsOf(sheet);
+        tags.put(tag, value);
+        sheet.put(TAG_KEY, tags);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void travel(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        var destOpt = event.getOption("목적지");
+        String dest = destOpt == null ? "화산" : destOpt.getAsString();
+        if (!"화산".equals(dest)) {
+            event.reply("그 방면의 길은 아직 열리지 않았다 — 지금 청하현에서 닿는 산문은 **화산**뿐이다.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+        int back = ((Number) sheet.getOrDefault("출행_복귀일", -1)).intValue();
+        if (today < back) {
+            event.reply("아직 길 위다 — 청하현으로 돌아오려면 **" + (back - today) + "일** 남았다. "
+                    + "(오프스크린 여정: 기간이 소모된다)").setEphemeral(true).queue();
+            return;
+        }
+
+        // ① 여비·기간 — time.yml 지역권_이동 (3~7일) × economy.yml 생활 물가에서 유도한 노자
+        List<Integer> range = rules.regionTravelDays();
+        int days = range.get(0) + dice.nextInt(range.get(1) - range.get(0) + 1);
+        int wallet = ((Number) row.get("wallet")).intValue();
+        int fare = days * rules.dailyTravelCost();
+        boolean begging = wallet < fare;
+        StringBuilder road = new StringBuilder();
+        if (begging) {
+            // on_insufficient — 걸식·품팔이 여정: 기간 2배 + 원기 소모. 죽지 않는다 (잔인하되 공정하다)
+            days *= 2;
+            sheet.put("내력", 0);
+            road.append("노자가 모자랐다. 걸식과 품팔이로 길을 이었다 — **").append(days)
+                    .append("일**이 걸렸고, 몸에서 기운이 다 빠졌다. (내력 0)");
+        } else {
+            wallet -= fare;
+            road.append("봉놋방과 국밥으로 **").append(days).append("일** 길을 갔다 — 노자 **-")
+                    .append(fare).append("문**.");
+        }
+        sheet.put("출행_복귀일", today + days);
+        sheet.put("출행_여정일", days);
+
+        // ② 상태 조회 — favor · 단서 · 소문 · 악명
+        int favor = db.favor("orthodox", chId);
+        Routes.Infamy infamy = rules.routes.infamy(HWASAN);
+        int haomunFavor = db.favor("haomun", chId);
+        List<String> clues = rules.routes.clueItems(HWASAN);
+        List<Object> items = sheet.get("소지품") instanceof List<?> l ? new ArrayList<>((List<Object>) l)
+                : new ArrayList<>();
+        boolean hasClue = items.stream().map(String::valueOf).anyMatch(clues::contains);
+        Map<String, Object> tags = tagsOf(sheet);
+        // 열쇠 ③ — 재목 소문이 정파망에 강도 2 이상으로 돌면 문파가 먼저 찾아온다 (gates.추천)
+        boolean talent = hasRumor(today, rules.routes.gateRumorIntensity(HWASAN, "추천", 2),
+                List.of("무재", "협행"));
+        boolean notorious = haomunFavor >= infamy.haomunFavorMin()
+                || hasRumor(today, infamy.rumorIntensityMin(), List.of(infamy.rumorTag()));
+        int favorGate = rules.routes.gateFavorMin(HWASAN, "안면");
+        String realm = String.valueOf(row.get("realm"));
+
+        // ③ 직행 자체가 소문이 된다 — rumor_on_attempt (산문 앞에서 소리친 아이가 있었다)
+        Routes.Attempt attempt = rules.routes.rumorOnAttempt(HWASAN);
+        db.createRumor(Map.of("내용", attempt.text(), "주체", String.valueOf(row.get("name")),
+                        "태그", List.of("무인", "문파")),
+                attempt.intensityMin(), rules.initialAccuracy("간접_전문"),
+                attempt.networks().get(0), Db.REGION, today);
+
+        // ④ 분기 — hwasan_entry.direct_approach.branches (닫히는 문은 없다)
+        String branch;
+        String body;
+        List<Button> buttons = new ArrayList<>();
+        int walkIn = rules.routes.walkInDifficultyModifier(HWASAN);
+        if (notorious) {
+            branch = "문전_축객_경고";
+            putTag(sheet, "축객", today);
+            body = "산문 앞에 서기도 전에 젊은 도사가 길을 막았다. 눈이 차다.\n"
+                    + "\"…그 이름은 여기까지 왔소. 돌아가시오.\"\n"
+                    + "문은 열리지 않았다. 다만 등 뒤로 한마디가 따라왔다 — \"**"
+                    + String.join("·", infamy.lowDoors()) + "**의 길이 없는 것은 아니오. 그것도 문이오.\"\n"
+                    + "*(사파망에서는 오히려 이름값이 올랐다)*";
+        } else if (hasClue || favor >= favorGate || talent || tags.containsKey("심사_자격")) {
+            branch = "즉시_접견";
+            body = "산문지기가 당신을 위아래로 훑더니, 뜻밖에 옆으로 비켜섰다.\n"
+                    + (hasClue ? "\"그 물건은 어디서 났소.\" — 손에 든 것이 말을 대신했다.\n"
+                            : talent ? "\"산 아래에서 자네 이야기를 들었네.\" 소문이 먼저 도착해 있었다.\n"
+                            : "\"연락망에서 자네 이름을 봤네.\" 쌓아 둔 것이 문을 열었다.\n")
+                    + "\"들어오시오. 심사 장로께서 보시겠다 하오.\"";
+            buttons.add(Button.primary("ex:exam:0:" + event.getUser().getId(), "심사에 응한다"));
+        } else if (Quests.realmRank(realm) >= Quests.realmRank("삼류") && favor <= favorGate - 1) {
+            branch = "즉석_심사";
+            body = "\"추천장은.\" 없다고 하자 산문지기의 눈이 가늘어졌다.\n"
+                    + "\"…굳이 보겠다면 말리지는 않소. 다만 보증인 없는 자의 심사는 다른 심사요.\"\n"
+                    + "*(추천 없는 자의 벽 — 난이도 +" + walkIn + ")*";
+            buttons.add(Button.danger("ex:exam:" + walkIn + ":" + event.getUser().getId(),
+                    "그래도 심사를 본다 (난이도 +" + walkIn + ")"));
+            buttons.add(Button.secondary("ex:chore:0:" + event.getUser().getId(), "문전 잡역을 청한다"));
+        } else {
+            branch = "문전_잡역_제안";
+            body = "산문지기는 당신을 오래 보지도 않았다.\n"
+                    + "\"이름도 없고, 보증도 없고, 든 것도 없소. …돌아가시오.\"\n"
+                    + "돌아서려는데, 늙은 도사가 마당을 쓸다 말고 불렀다.\n"
+                    + "\"물이나 길어 볼 텐가. 밥은 먹여 주네.\" — *문은 그렇게도 열린다.*";
+            buttons.add(Button.primary("ex:chore:0:" + event.getUser().getId(), "문전 잡역을 청한다"));
+            buttons.add(Button.secondary("ex:exam:" + walkIn + ":" + event.getUser().getId(),
+                    "그래도 심사를 본다 (난이도 +" + walkIn + ")"));
+        }
+
+        db.updateCharacter(chId, sheet, wallet, realm, "강호", "청하현");
+        db.logEvent("출행", "character", String.valueOf(chId), "faction", "화산파",
+                Map.of("목적지", dest, "여정일", days, "노자", begging ? 0 : fare, "걸식", begging,
+                        "분기", branch, "favor", favor));
+
+        var reply = event.replyEmbeds(new EmbedBuilder().setColor(BLOOD)
+                .setTitle("출행 — 화산으로 간다")
+                .setDescription("청하현을 등지고 서쪽 길을 잡았다. " + road + "\n\n" + body
+                        + "\n\n*(돌아오는 길까지 " + days + "일 — 그동안 다시 출행할 수 없다)*")
+                .build());
+        if (!buttons.isEmpty()) {
+            reply.addComponents(ActionRow.of(buttons));
+        }
+        reply.queue();
+    }
+
+    /** 소문 조회 — 강도 하한 + 태그 일치 (rumors 원장. 세계가 나를 어떻게 말하는가) */
+    @SuppressWarnings("unchecked")
+    private boolean hasRumor(int today, int minIntensity, List<String> anyTag) throws Exception {
+        for (Map<String, Object> rumor : db.liveRumors(today)) {
+            if (((Number) rumor.get("강도")).intValue() < minIntensity) {
+                continue;
+            }
+            Map<String, Object> content = (Map<String, Object>) rumor.get("내용");
+            if (content.get("태그") instanceof List<?> tags
+                    && tags.stream().map(String::valueOf).anyMatch(anyTag::contains)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 문전 잡역 · 즉석 심사 — 직행자의 두 문 (둘 다 상태 태그를 남긴다) */
+    @SuppressWarnings("unchecked")
+    private void onGateChoice(ButtonInteractionEvent event, String kind, int mod, String ownerId)
+            throws Exception {
+        if (!event.getUser().getId().equals(ownerId)) {
+            event.reply("남의 산문 앞이다 — `/혼천 출행`으로 직접 서라.").setEphemeral(true).queue();
+            return;
+        }
+        var found = db.findCharacter(ownerId);
+        if (found.isEmpty()) {
+            event.editMessage("기록이 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+        String realm = String.valueOf(row.get("realm"));
+        Map<String, Object> tags = tagsOf(sheet);
+
+        if ("chore".equals(kind)) {
+            // 일수당 favor +1 (상한 8) — 잡역 = 사실상의 안면 단계 진입. 누적 30일이면 심사 자격 자동
+            int stay = Math.max(1, ((Number) sheet.getOrDefault("출행_여정일", 1)).intValue());
+            int cap = rules.routes.choreFavorCap(HWASAN);
+            int favor = db.addFavor("orthodox", chId, stay, cap);
+            int chore = ((Number) tags.getOrDefault("문전_잡역", 0)).intValue() + stay;
+            putTag(sheet, "문전_잡역", chore);
+            putTag(sheet, rules.routes.choreTag(HWASAN), today);   // 눈여겨봄 — 이탈해도 남는다
+            int auto = rules.routes.choreAutoQualifyDays(HWASAN);
+            boolean qualified = chore >= auto;
+            if (qualified) {
+                putTag(sheet, "심사_자격", today);
+            }
+            db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(), realm, "강호", "청하현");
+            db.logEvent("세력_잡역", "character", String.valueOf(chId), "faction", "화산파",
+                    Map.of("일수", stay, "누적", chore, "favor", favor));
+            event.editMessageEmbeds(new EmbedBuilder().setColor(INK)
+                    .setTitle("문전 잡역 — " + stay + "일")
+                    .setDescription("물을 긷고, 마당을 쓸고, 장작을 팼다. 아무도 이름을 묻지 않았다.\n"
+                            + "다만 마당을 지나던 늙은 도사가 한 번, 두 번 걸음을 늦췄다.\n\n"
+                            + "**정파 favor " + favor + "** (상한 " + cap + ") · **문전 잡역 누적 "
+                            + chore + "/" + auto + "일**\n"
+                            + "상태 태그: **" + rules.routes.choreTag(HWASAN) + "**"
+                            + (qualified ? " · **심사 자격** (추천장 없는 자의 정공법 — 다음 출행에서 접견)" : "")
+                            + "\n\n*(청하현에 돌아오면 게시판이 조금 달라져 있을 것이다)*")
+                    .build()).setComponents().queue();
+            return;
+        }
+
+        // 즉석 심사 — 보통(12) + 추천 없는 자의 벽(+4) − 눈여겨봄(-2)
+        int discount = tags.containsKey(rules.routes.choreTag(HWASAN))
+                ? rules.routes.watchedTagDiscount(HWASAN) : 0;
+        int resist = rules.difficulty("보통") + mod - discount;
+        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        int talent = Math.max(((Number) attrs.getOrDefault("근력", 2)).intValue(),
+                ((Number) attrs.getOrDefault("민첩", 2)).intValue());
+        int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
+        JudgmentEngine.Tier tier = rules.judgment.resolve(talent, roll, resist);
+        int margin = talent + roll - resist;
+
+        EmbedBuilder judge = new EmbedBuilder().setColor(INK)
+                .setTitle("판정 — 화산파 입문 심사" + (mod > 0 ? " (보증인 없음 +" + mod + ")" : ""))
+                .setDescription("**무재 " + talent + "** + 2d6 = **" + (talent + roll) + "** vs " + resist
+                        + (discount > 0 ? " *(눈여겨봄 -" + discount + ")*" : "")
+                        + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **" + tier.name() + "**");
+        EmbedBuilder scene = new EmbedBuilder();
+        if (margin >= 0) {
+            putTag(sheet, "화산_심사_통과", today);
+            int favor = db.addFavor("orthodox", chId, rules.routes.gateFavorMin(HWASAN, "안면"),
+                    rules.routes.choreFavorCap(HWASAN));
+            if ("대성공".equals(tier.name())) {
+                // judgment_link — 재목 소문이 정파망을 탄다 (다음 직행은 즉시 접견)
+                db.createRumor(Map.of("내용", "산문에서 아이 하나가 눈에 띄었다더군",
+                                "주체", String.valueOf(row.get("name")), "태그", List.of("무재")),
+                        2, rules.initialAccuracy("직접_목격"), "orthodox_net", Db.REGION, today);
+            }
+            db.logEvent("세력_심사", "character", String.valueOf(chId), "faction", "화산파",
+                    Map.of("결과", "합격", "굴림", roll, "마진", margin, "등급", tier.name()));
+            scene.setColor(BLOOD).setTitle("심사 — 장로는 손속을 보지 않았다")
+                    .setDescription("검을 세 번 휘두르게 하고, 장로는 더 보지 않았다. 대신 물었다.\n"
+                            + "\"…무엇이 되고 싶어 여기까지 왔나.\"\n\n"
+                            + "당신의 대답을 장로는 오래 곱씹었다. 그리고 고개를 끄덕였다.\n"
+                            + "**상태 태그: 화산_심사_통과** · 정파 favor **" + favor + "**\n"
+                            + "*(입문식은 아직이다 — 사문 등록은 봇 다음 증분. 그러나 문은 열렸다)*");
+        } else {
+            putTag(sheet, rules.routes.choreTag(HWASAN), today);   // 낙방해도 눈여겨봄은 남는다
+            db.logEvent("세력_심사", "character", String.valueOf(chId), "faction", "화산파",
+                    Map.of("결과", "낙방", "굴림", roll, "마진", margin, "등급", tier.name()));
+            scene.setColor(INK).setTitle("심사 — 낙방")
+                    .setDescription("장로는 오래 보지 않았다. \"기초가 없군.\"\n"
+                            + "그러나 문은 닫히지 않았다 — 마당을 쓸던 늙은 도사가 다시 물었다.\n"
+                            + "\"물이나 길어 볼 텐가.\"\n\n"
+                            + "**상태 태그: " + rules.routes.choreTag(HWASAN)
+                            + "** (다시 오면 심사 난이도 -" + rules.routes.watchedTagDiscount(HWASAN) + ")");
+        }
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(), realm, "강호", "청하현");
+        event.editMessageEmbeds(judge.build(), scene.build()).setComponents().queue();
+    }
+
+    // ─── B. NPC 사망 연쇄 — 죽음은 막다른 길이 아니다 (npc_death.yml) ───
+
+    /** 오늘 기준 서비스 상태 — 죽은 자의 자리를 누가, 언제부터 메우는가 (결정론) */
+    private Deaths.Gap gapOf(String npcKey, int today, Map<String, Map<String, Object>> dead)
+            throws Exception {
+        Map<String, Object> state = dead.get(npcKey);
+        int elapsed = state == null ? 0
+                : today - ((Number) state.getOrDefault("사망일", today)).intValue();
+        return rules.deaths.serviceState(npcKey, Math.max(0, elapsed), dead.keySet());
+    }
+
+    /** 관리자 검증 명령 — NPC를 죽인다. 연쇄(공백·후계·소문·게시판)를 시험하는 유일한 손잡이 */
+    private void adminKill(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        var target = event.getOption("상대");
+        if (target == null) {
+            event.reply("`/혼천 사망 상대:<NPC>`").setEphemeral(true).queue();
+            return;
+        }
+        String name = target.getAsString();
+        String npcKey = rules.npcKeyByName(name);
+        if (npcKey == null) {
+            event.reply("등록부에 없는 이름이다 — 세계에 없는 자는 죽지도 않는다.").setEphemeral(true).queue();
+            return;
+        }
+        var dead = db.deadNpcs();
+        if (dead.containsKey(npcKey)) {
+            event.reply(name + "은(는) 이미 죽었다. (두 번 죽지는 않는다)").setEphemeral(true).queue();
+            return;
+        }
+        String cause = optionOr(event, "사인", "사건_피살");
+        int witness = event.getOption("목격") == null ? 1 : (int) event.getOption("목격").getAsLong();
+        String bodyState = optionOr(event, "시신", "즉시_발견");
+        int today = db.worldDay();
+
+        Map<String, Object> state = new LinkedHashMap<>(Map.of("사망일", today, "사인", cause,
+                "목격", witness, "시신", bodyState));
+        db.killNpc(npcKey, rules.npcTier(npcKey), state);
+        db.logEvent("사망", "world", "gm", "npc", npcKey,
+                Map.of("사인", cause, "목격", witness, "시신", bodyState));
+
+        // B2 — 사망 → 소문 자동 (killer_response.rumor_matrix). 목격 0 + 은닉 = 소문 없음 (은밀형의 보상)
+        Deaths.RumorSpec spec = rules.deaths.rumorFor(witness, bodyState, cause);
+        String facility = rules.deaths.facilityOf(npcKey);
+        String network = rules.originNetwork(facility == null ? "market" : facility);
+        StringBuilder note = new StringBuilder();
+        if (spec.intensity() > 0) {
+            String subject = spec.target() == null ? name : name + " — 하수인은 " + spec.target();
+            db.createRumor(Map.of("내용", name + "이(가) 죽었다 (" + cause.replace('_', ' ') + ")",
+                            "주체", subject, "태그", List.of("살인", "괴사", "폭력")),
+                    spec.intensity(), spec.accuracy(), network, Db.REGION,
+                    today + spec.delayDays());
+            note.append("소문 — 강도 **").append(spec.intensity()).append("** · 정확도 ")
+                    .append(spec.accuracy()).append(" · ").append(network)
+                    .append(spec.delayDays() > 0 ? " (" + spec.delayDays() + "일 뒤 도달)" : " (즉시)");
+        } else {
+            db.logEvent("실종", "world", "gm", "npc", npcKey,
+                    Map.of("사유", "시신 은닉 — 소문 미생성", "발화일", today + rules.deaths.missingPersonDays()));
+            note.append("소문 — **없음** (목격 0 + 시신 은닉: 은밀형의 보상). 다만 ")
+                    .append(rules.deaths.missingPersonDays()).append("일 뒤 *실종*이 게시판에 뜬다");
+        }
+
+        // B1 — 서비스 공백·후계 예고
+        StringBuilder gapNote = new StringBuilder();
+        if (facility != null) {
+            Deaths.Gap now = rules.deaths.serviceState(npcKey, 0, db.deadNpcs().keySet());
+            Deaths.Gap later = rules.deaths.serviceState(npcKey, 30, db.deadNpcs().keySet());
+            gapNote.append("시설 **").append(facility).append("** — 지금 상태 **").append(now.state())
+                    .append("** (문이 닫혔다)");
+            if (later.actorKey() != null) {
+                gapNote.append(" → 이윽고 **").append(later.state()).append("** (")
+                        .append(rules.npcName(later.actorKey())).append(")");
+            } else if (later.arrival() != null) {
+                gapNote.append(" → **").append(later.state()).append("** (").append(later.arrival()).append(")");
+            } else {
+                gapNote.append(" → **").append(later.state()).append("**");
+            }
+        } else {
+            gapNote.append("시설 없음 — 서비스 공백 없이 서사·루트만 흔들린다");
+        }
+
+        event.replyEmbeds(new EmbedBuilder().setColor(BLOOD)
+                .setTitle("[GM] " + name + "이(가) 죽었다")
+                .setDescription("**" + rules.npcRole(npcKey) + "** · 사인 " + cause.replace('_', ' ')
+                        + " · 목격 " + witness + " · 시신 " + bodyState + "\n\n"
+                        + gapNote + "\n" + note + "\n\n"
+                        + "· `/혼천 대화`에서 이 이름은 사라진다 (죽은 자와 말할 수 없다)\n"
+                        + "· 내일 게시판이 바뀐다 — 죽음이 낳은 의뢰가 뜬다 (`/혼천 정산` → `/혼천 의뢰`)")
+                .build()).queue();
+    }
+
+    private String optionOr(SlashCommandInteractionEvent event, String key, String fallback) {
+        var opt = event.getOption(key);
+        return opt == null ? fallback : opt.getAsString();
     }
 
     // ─── 수련 — 기초 단련: 하루 한 번, 화후 1일치 (training 축의 최소 배선) ───

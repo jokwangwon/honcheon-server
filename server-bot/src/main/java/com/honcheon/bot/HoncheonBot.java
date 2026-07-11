@@ -66,8 +66,40 @@ public final class HoncheonBot {
                                                 OptionType.STRING, "말", "하고 싶은 말 (자유 입력)", true)),
                         new SubcommandData("탐방", "폐사당을 살핀다 — 발품에는 이유가 있다 (하루 한 번)"),
                         new SubcommandData("운기", "심법으로 기를 돌린다 — 하루 한 번, 축기"),
+                        new SubcommandData("출행", "세력의 산문으로 직행한다 — 조건 불문, 세계가 대답한다")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                        OptionType.STRING, "목적지", "어디로 가는가", true)
+                                        .addChoice("화산 (화산파 산문)", "화산")),
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
+                        new SubcommandData("사망", "NPC를 죽인다 — 사망 연쇄 검증용 (서버 관리자)")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "상대", "죽일 등록 NPC", true)
+                                                .addChoice("객잔 주인 한백", "한백")
+                                                .addChoice("의뢰소 관리인 소연", "소연")
+                                                .addChoice("의원 유문", "유문")
+                                                .addChoice("전장 지점주 금서방", "금서방")
+                                                .addChoice("표사 곽진", "곽진")
+                                                .addChoice("장터 잡화상 장쇠", "장쇠")
+                                                .addChoice("표국주 진철산", "진철산")
+                                                .addChoice("화산파 진운", "진운")
+                                                .addChoice("포두 박호", "박호"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "사인", "죽음의 원인 (기본: 사건_피살)", false)
+                                                .addChoice("노환·병사", "노환_병사")
+                                                .addChoice("사고", "사고")
+                                                .addChoice("사건·피살", "사건_피살")
+                                                .addChoice("자멸·심마", "자멸_심마"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.INTEGER, "목격", "목격자 (0 없음 / 1 소수 / 2 다수)", false)
+                                                .addChoice("0 — 없음", 0)
+                                                .addChoice("1 — 소수", 1)
+                                                .addChoice("2 — 다수 (백주·장터)", 2),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "시신", "시신 처리 (기본: 즉시_발견)", false)
+                                                .addChoice("은닉", "은닉")
+                                                .addChoice("유기 — 지연 발견", "유기_지연발견")
+                                                .addChoice("즉시 발견", "즉시_발견")),
                         new SubcommandData("도움말", "명령과 규칙 안내"));
         // 개발 중엔 길드 스코프 등록(즉시 반영) — HONCHEON_GUILD_ID 설정 시. 글로벌은 최대 1시간 지연
         String guildId = System.getenv("HONCHEON_GUILD_ID");

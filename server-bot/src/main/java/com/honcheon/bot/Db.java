@@ -39,7 +39,18 @@ public final class Db implements AutoCloseable {
             }
         }
         ensureWorldDay();
+        ensureRegion();
         schemaVersionGate(schemaPath);
+    }
+
+    /** 청하현 지역 행 — 소문·NPC 의 외래키 대상 (region_state 기본값 50/50/50). 스키마 변경 아님 */
+    public static final String REGION = "cheongha_hyeon";
+
+    private void ensureRegion() throws SQLException {
+        try (Statement st = conn.createStatement()) {
+            st.execute("INSERT OR IGNORE INTO regions(id, security, economy, sentiment, updated_day) "
+                    + "VALUES('" + REGION + "', 50, 50, 50, 1)");
+        }
     }
 
     /**
@@ -266,6 +277,105 @@ public final class Db implements AutoCloseable {
             ps.setString(7, JSON.writeValueAsString(data));
             ps.executeUpdate();
         }
+    }
+
+    // ─── 세력 우호 (faction_standing) — 직행 루트의 favor 축 (faction_reaction.yml 통화) ───
+
+    public synchronized int favor(String factionId, long characterId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT favor FROM faction_standing WHERE faction_id = ? AND character_id = ?")) {
+            ps.setString(1, factionId);
+            ps.setLong(2, characterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    /** favor 가산 — 상한(cap)까지. 새 통화 발명 없음 (faction_reaction favor 그대로). 새 값을 돌려준다 */
+    public synchronized int addFavor(String factionId, long characterId, int delta, int cap)
+            throws SQLException {
+        int next = Math.min(cap, favor(factionId, characterId) + delta);
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO faction_standing(faction_id, character_id, attention, favor) VALUES(?, ?, 0, ?) "
+                        + "ON CONFLICT(faction_id, character_id) DO UPDATE SET favor = excluded.favor")) {
+            ps.setString(1, factionId);
+            ps.setLong(2, characterId);
+            ps.setInt(3, next);
+            ps.executeUpdate();
+        }
+        return next;
+    }
+
+    // ─── NPC 생사 (npcs.status) — 죽은 자와는 말할 수 없다 ───
+
+    /** NPC 사망 기록 — state_json 에 사망일·사인·목격·시신 (연쇄의 전체 입력) */
+    public synchronized void killNpc(String npcKey, int tier, Map<String, Object> state) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO npcs(id, region, tier, status, state_json, updated_day) "
+                        + "VALUES(?, '" + REGION + "', ?, '사망', ?, ?) "
+                        + "ON CONFLICT(id) DO UPDATE SET status = '사망', state_json = excluded.state_json, "
+                        + "updated_day = excluded.updated_day")) {
+            ps.setString(1, npcKey);
+            ps.setInt(2, tier);
+            ps.setString(3, JSON.writeValueAsString(state));
+            ps.setInt(4, worldDay());
+            ps.executeUpdate();
+        }
+    }
+
+    /** 사망 NPC 등록부 — 키 → state_json (사망일·사인·목격·시신). 서비스 공백·게시판 주입의 입력 */
+    @SuppressWarnings("unchecked")
+    public synchronized Map<String, Map<String, Object>> deadNpcs() throws Exception {
+        Map<String, Map<String, Object>> out = new java.util.LinkedHashMap<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT id, state_json FROM npcs WHERE status = '사망' ORDER BY id")) {
+            while (rs.next()) {
+                out.put(rs.getString(1), JSON.readValue(rs.getString(2), Map.class));
+            }
+        }
+        return out;
+    }
+
+    // ─── 소문 (rumors) — 사망·직행이 세계에 남기는 자국 ───
+
+    /** 소문 생성 — 강도 0 은 호출하지 마라 (소문 없음 = 은밀형의 보상) */
+    public synchronized long createRumor(Map<String, Object> content, int strength, int accuracy,
+                                         String network, String region, int bornDay) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO rumors(content_json, strength, accuracy, network, region, born_day, state) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, '전파중') RETURNING id")) {
+            ps.setString(1, JSON.writeValueAsString(content));
+            ps.setInt(2, strength);
+            ps.setInt(3, accuracy);
+            ps.setString(4, network);
+            ps.setString(5, region);
+            ps.setInt(6, bornDay);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    /** 오늘 이미 퍼진 소문 — born_day <= 오늘 (도달 지연 delay_days 반영) */
+    @SuppressWarnings("unchecked")
+    public synchronized List<Map<String, Object>> liveRumors(int day) throws Exception {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT content_json, strength, accuracy, network FROM rumors "
+                        + "WHERE state = '전파중' AND born_day <= ? ORDER BY id DESC LIMIT 200")) {
+            ps.setInt(1, day);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> content = JSON.readValue(rs.getString(1), Map.class);
+                    out.add(Map.of("내용", content, "강도", rs.getInt(2),
+                            "정확도", rs.getInt(3), "망", String.valueOf(rs.getString(4))));
+                }
+            }
+        }
+        return out;
     }
 
     /** 특정 행위자의 이벤트 유형 합계 — 기연 트리거(선행 기억 등)의 조회 지점 */
