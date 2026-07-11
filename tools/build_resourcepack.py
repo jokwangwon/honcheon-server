@@ -131,6 +131,7 @@ HEART_SPRITES = [
     ("half", ORB_HALF_ART, ORB_PALETTE),
     ("container_blinking", ORB_CONTAINER_ART, BLINK_PALETTE),
     ("full_blinking", ORB_FULL_ART, BLINK_PALETTE),
+    ("half_blinking", ORB_HALF_ART, BLINK_PALETTE),
 ]
 
 
@@ -265,6 +266,25 @@ REALM_CRESTS = {
 }
 
 
+def hotbar():
+    """182x22 핫바 (gui/sprites/hud/hotbar) — 먹색 반투명 패널 + 화선지 테두리.
+    182 = 테두리 2 + 슬롯 9칸 x 20px. 아이템은 x=3+20i 오프셋에 얹힌다 (바닐라 렌더 계약).
+    슬롯 경계 x=20·40·…·160 에 희미한 화선지 세로 구분선 — 배경은 조용하게."""
+    width, height = 182, 22
+    rows = []
+    for y in range(height):
+        row = []
+        for x in range(width):
+            if y in (0, height - 1) or x in (0, width - 1):
+                row.append(HOT_EDGE)
+            elif x % 20 == 0:   # x=20..160 (양끝 테두리 인접 제외 — 20*9=180 은 x=181 테두리 안쪽 몸체)
+                row.append(HOT_DIV if x < 180 else HOT_PANEL)
+            else:
+                row.append(HOT_PANEL)
+        rows.append(row)
+    return rows
+
+
 def gui_background():
     """176x110 경락도 GUI 배경 패널 — 먹색 + 화선지 테두리 + 수묵 표구 장식.
     - 모서리: 전각 도장풍 주사색 ㄱ자 쌍획 4귀 (인장 테두리 모티프, 4px 인셋·팔 6px·2px 두께)
@@ -329,6 +349,7 @@ def main():
     # ─── 바닐라 HUD 텍스처 교체 (폰트 아님 — 스프라이트 직접 교체, 9x9 치수 계약) ───
     for name, art, palette in HEART_SPRITES:
         write_png(HUD_DIR / "heart" / f"{name}.png", paint_rows(art, palette))
+    write_png(HUD_DIR / "hotbar.png", hotbar())
 
     write_png(FONT_DIR / "gui_ledger.png", gui_background())
     providers.append({
