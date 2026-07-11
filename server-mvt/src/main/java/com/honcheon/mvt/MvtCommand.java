@@ -52,14 +52,21 @@ public final class MvtCommand implements CommandExecutor {
         if (!(sender instanceof Player player)) {
             return true;
         }
+        // 화면 UI — 채팅 대신 경락도 GUI (조작 가능한 인벤토리 창). 채팅판은 chatLedger 폴백
+        LedgerGui.open(plugin, player);
+        return true;
+    }
+
+    @SuppressWarnings("unused")   // 팩 미적용 환경 폴백 — /혼천 정보 채팅판 (필요 시 재배선)
+    private boolean chatLedger(Player player) {
         PlayerLedger ledger = plugin.ledger(player.getUniqueId());
-        sender.sendMessage(ChatColor.GOLD + "── 수련 기록 ──");
-        ledger.allSkills().forEach((skill, days) -> sender.sendMessage(String.format(
+        player.sendMessage(ChatColor.GOLD + "── 수련 기록 ──");
+        ledger.allSkills().forEach((skill, days) -> player.sendMessage(String.format(
                 ChatColor.AQUA + "%s %s" + ChatColor.WHITE + " 누적 %.2f일 (숙련 %d → 다음 %.0f%%)",
                 skill, Glyphs.gauge(ledger.progressToNext(skill, plugin.progression())),
                 days, ledger.levelOf(skill, plugin.progression()),
                 ledger.progressToNext(skill, plugin.progression()) * 100)));
-        sender.sendMessage(ChatColor.WHITE + "오늘 적립 " + String.format("%.2f", ledger.grantedToday())
+        player.sendMessage(ChatColor.WHITE + "오늘 적립 " + String.format("%.2f", ledger.grantedToday())
                 + "일 / 소지금 " + ChatColor.YELLOW + ledger.money() + "문"
                 + ChatColor.WHITE + " / 마크: 실전 " + ledger.marks실전() + " · 사선 " + ledger.marks사선());
         return true;

@@ -19,6 +19,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PACK = ROOT / "resourcepack"
 FONT_DIR = PACK / "assets" / "honcheon" / "textures" / "font"
+GUI_DIR = PACK / "assets" / "minecraft" / "textures" / "gui"
+HUD_DIR = GUI_DIR / "sprites" / "hud"        # 1.21.4 스프라이트 아틀라스 경로 (pack_format 46)
+CONTAINER_DIR = GUI_DIR / "container"        # 컨테이너 GUI는 스프라이트 분리 대상이 아님 — 기존 경로
 
 W = (255, 255, 255, 255)   # 백색 — 인게임 색 코드가 틴트한다
 T = (0, 0, 0, 0)           # 투명
@@ -27,6 +30,34 @@ INK_EDGE = (214, 205, 186, 255)   # 화선지 테두리
 INK_LINE = (214, 205, 186, 150)   # 제목 구분선 — 화선지 톤 절반 농도
 INK_GUIDE = (214, 205, 186, 70)   # 여백 가이드 점선 — 희미하게 (배경은 조용하게)
 SEAL = (150, 56, 44, 255)         # 주사(朱砂) — 전각 도장풍 모서리 장식 전용 (저채도 진사홍)
+
+# ─── 바닐라 HUD·컨테이너 교체 채널 팔레트 (직접 채색 허용 채널 —
+#     resourcepack_design.yml vanilla_texture_channels 등록) ───
+INK_SOLID = (26, 24, 22, 255)       # 불투명 먹 — HUD 테두리·패널 외곽선
+# 체력 = 기혈 구슬(단약): 주사 채움 + 먹 테두리
+ORB_OUT = (26, 24, 22, 255)         # 구슬 먹 테두리
+ORB_EMPTY = (214, 205, 186, 80)     # 빈 소켓 내부 — 화선지 톤 희미하게
+ORB_FILL = (150, 56, 44, 255)       # 주사 채움 (SEAL 동일 계열)
+ORB_LIGHT = (208, 112, 88, 255)     # 좌상단 광택
+ORB_DARK = (96, 34, 26, 255)        # 우하단 음영
+BLINK_OUT = (240, 232, 214, 255)    # 피격 점멸 — 화선지 백 테두리 (바닐라 점멸=백화 관례)
+BLINK_EMPTY = (240, 232, 214, 120)  # 점멸 빈 소켓 내부
+BLINK_FILL = (208, 112, 88, 255)    # 점멸 채움 — 한 단계 밝은 주사
+BLINK_LIGHT = (244, 202, 184, 255)  # 점멸 광택
+BLINK_DARK = (150, 56, 44, 255)     # 점멸 음영
+# 핫바 — 먹색 반투명 패널 + 화선지 테두리
+HOT_PANEL = (26, 24, 22, 160)       # 반투명 먹 패널 (바닐라도 반투명 — 월드가 비친다)
+HOT_EDGE = (214, 205, 186, 200)     # 화선지 테두리
+HOT_DIV = (214, 205, 186, 60)       # 슬롯 구분 세로선 — 희미하게
+SEL_FRAME = (150, 56, 44, 255)      # 선택 프레임 — 주사
+# 인벤토리 컨테이너 — 화선지 몸체 + 먹 외곽 (명암 3톤은 바닐라 입체 문법 유지)
+PAPER_BODY = (216, 208, 190, 255)   # 패널 몸체 — 화선지
+PAPER_LIGHT = (238, 231, 214, 255)  # 상·좌 내부 프레임 밝은 획
+PAPER_SHADOW = (172, 162, 140, 255) # 하·우 내부 프레임 음영
+SLOT_DARK = (96, 86, 72, 255)       # 슬롯 상·좌 음영 (먹 계열)
+SLOT_BASE = (176, 166, 146, 255)    # 슬롯 내부 (몸체보다 어둡게 — 바닐라 인셋 문법)
+SLOT_LIGHT = (240, 234, 220, 255)   # 슬롯 하·우 광
+WINDOW_INK = (18, 16, 14, 255)      # 인물 창 내부 — 짙은 먹
 
 
 def write_png(path: Path, rows):
@@ -46,6 +77,61 @@ def write_png(path: Path, rows):
 
 def art_rows(art):
     return [[W if c == "#" else T for c in row] for row in art]
+
+
+def paint_rows(art, palette):
+    """다색 아트 — 문자→RGBA 팔레트 매핑 (미등록 문자는 투명)."""
+    return [[palette.get(c, T) for c in row] for row in art]
+
+
+# ─── 체력바 — 하트 대신 기혈 구슬(단약) 9x9 (gui/sprites/hud/heart/) ───
+# 바닐라 렌더 계약: container 먼저, 그 위에 full/half를 겹쳐 그린다 —
+# half는 우측을 투명으로 남겨 아래 container 소켓이 비쳐 보이게 한다 (바닐라 동일 문법).
+# 문자: # 테두리, ~ 빈 소켓 내부, o 채움, L 광택, D 음영
+ORB_CONTAINER_ART = [
+    ".........",
+    "..#####..",
+    ".#~~~~~#.",
+    ".#~~~~~#.",
+    ".#~~~~~#.",
+    ".#~~~~~#.",
+    ".#~~~~~#.",
+    "..#####..",
+    ".........",
+]
+ORB_FULL_ART = [
+    ".........",
+    "..#####..",
+    ".#LLooo#.",
+    ".#Loooo#.",
+    ".#ooooo#.",
+    ".#ooooD#.",
+    ".#oDDDD#.",
+    "..#####..",
+    ".........",
+]
+ORB_HALF_ART = [   # 좌반만 — 절단면(D 열)으로 반 칸이 1초에 읽힌다
+    ".........",
+    "..###....",
+    ".#LLD....",
+    ".#LoD....",
+    ".#ooD....",
+    ".#ooD....",
+    ".#oDD....",
+    "..###....",
+    ".........",
+]
+ORB_PALETTE = {"#": ORB_OUT, "~": ORB_EMPTY, "o": ORB_FILL, "L": ORB_LIGHT, "D": ORB_DARK}
+BLINK_PALETTE = {"#": BLINK_OUT, "~": BLINK_EMPTY, "o": BLINK_FILL, "L": BLINK_LIGHT, "D": BLINK_DARK}
+
+# (이름, 아트, 팔레트) — 흡수(absorbing)·독(poisoned)·시듦(withered) 변형은 범위 밖: 바닐라 유지
+HEART_SPRITES = [
+    ("container", ORB_CONTAINER_ART, ORB_PALETTE),
+    ("full", ORB_FULL_ART, ORB_PALETTE),
+    ("half", ORB_HALF_ART, ORB_PALETTE),
+    ("container_blinking", ORB_CONTAINER_ART, BLINK_PALETTE),
+    ("full_blinking", ORB_FULL_ART, BLINK_PALETTE),
+]
 
 
 def gise_icon():
@@ -240,6 +326,10 @@ def main():
             "type": "bitmap", "file": f"honcheon:font/crest_{i}.png",
             "height": 8, "ascent": 7, "chars": [chr(0xE020 + i)],
         })
+    # ─── 바닐라 HUD 텍스처 교체 (폰트 아님 — 스프라이트 직접 교체, 9x9 치수 계약) ───
+    for name, art, palette in HEART_SPRITES:
+        write_png(HUD_DIR / "heart" / f"{name}.png", paint_rows(art, palette))
+
     write_png(FONT_DIR / "gui_ledger.png", gui_background())
     providers.append({
         "type": "bitmap", "file": "honcheon:font/gui_ledger.png",
