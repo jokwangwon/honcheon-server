@@ -179,6 +179,7 @@ public final class TownAudit {
         }
         eavesAndRoofs(out, violations, blds);
         roofPlateau(out, violations, world, blds);
+        roofTerracing(out, violations, world, blds);
         props(out, violations, world, blds);
         spacing(out, violations, blds);
         doorPathWidths(out, violations, path, blds, cx, cz);
@@ -187,6 +188,7 @@ public final class TownAudit {
         inkWash(out, violations, vol);
         coldLight(out, violations, world, vol, cx, cy, cz, zones);
         nightLight(out, violations, world, path, cx, cy, cz);
+        outsideTown(out, violations, world, cx, cy, cz);
         contracts(out, violations, world, anchors, cx, cy, cz);
 
         out.add(HEAD + "── 총평 ──");
@@ -463,6 +465,99 @@ public final class TownAudit {
             } else {
                 out.add(OK + String.format("  %s — 꼭대기 평지 %.0f%% (능선 수렴)", b.name, pct));
             }
+        }
+    }
+
+    /**
+     * 지붕 단 평탄도 — 같은 높이로 이어지는 칸이 길면 '층계(웨딩케이크)'로 보인다.
+     * 물매를 완만하게 하려고 평평한 단을 3칸씩 두면 수치(rise/run)는 통과하지만 눈에는 테라스다.
+     * 반블록으로 반 칸씩 쪼개면 이 값이 내려간다.
+     */
+    private static void roofTerracing(List<String> out, List<String> violations, World world, List<Bld> blds) {
+        out.add(HEAD + "③-c 지붕 단 평탄도 (같은 높이 연속 — 3.0 초과 = 층계로 보인다)");
+        for (Bld b : blds) {
+            if (!b.roofFound) {
+                continue;
+            }
+            long runs = 0, cells = 0;
+            for (int z = b.rz0; z <= b.rz1; z++) {
+                int prev = Integer.MIN_VALUE, run = 0;
+                for (int x = b.rx0; x <= b.rx1; x++) {
+                    int top = roofTopAt(world, x, z, b);
+                    if (top == Integer.MIN_VALUE) {
+                        prev = Integer.MIN_VALUE;
+                        continue;
+                    }
+                    if (top == prev) {
+                        run++;
+                    } else {
+                        if (run > 0) {
+                            runs += run;
+                            cells++;
+                        }
+                        run = 1;
+                        prev = top;
+                    }
+                }
+                if (run > 0) {
+                    runs += run;
+                    cells++;
+                }
+            }
+            double avg = cells == 0 ? 0 : (double) runs / cells;
+            if (avg > 3.0) {
+                out.add(BAD + String.format("  %s — 평균 단 길이 %.1f칸 (층계로 보인다 — 반블록으로 쪼개라)",
+                        b.name, avg));
+                violations.add("지붕층계 " + b.name);
+            } else {
+                out.add(OK + String.format("  %s — 평균 단 길이 %.1f칸", b.name, avg));
+            }
+        }
+    }
+
+    /** 그 (x,z) 열에서 지붕 자재의 최상단 y (없으면 MIN_VALUE) */
+    private static int roofTopAt(World world, int x, int z, Bld b) {
+        for (int y = b.roofMaxY; y >= b.roofMinY; y--) {
+            if (ROOF.contains(world.getBlockAt(x, y, z).getType())) {
+                return y;
+            }
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /** 담장 밖 접근부 — 마을만 정성 들이고 바깥이 허허벌판이면 마을이 무대장치로 보인다 */
+    private static void outsideTown(List<String> out, List<String> violations, World world,
+                                    int cx, int cy, int cz) {
+        out.add(HEAD + "⑩ 담장 밖 접근부 (허허벌판 방지)");
+        int r0 = 62, r1 = 88;    // 담장 밖 링
+        int structures = 0, path = 0, sampled = 0;
+        for (int x = cx - r1; x <= cx + r1; x += 2) {
+            for (int z = cz - r1; z <= cz + r1; z += 2) {
+                int d = Math.max(Math.abs(x - cx), Math.abs(z - cz));
+                if (d < r0 || d > r1) {
+                    continue;
+                }
+                sampled++;
+                int y = world.getHighestBlockYAt(x, z);
+                Material m = world.getBlockAt(x, y - 1, z).getType();
+                Material top = world.getBlockAt(x, y, z).getType();
+                if (PATH.contains(m) || PATH.contains(top)) {
+                    path++;
+                } else if (!top.isAir() && (top.name().endsWith("_LOG") || top.name().endsWith("_LEAVES")
+                        || PROP.contains(top) || top.name().endsWith("_WALL") || top.name().endsWith("_SIGN")
+                        || top.name().endsWith("_FENCE") || top == Material.COBBLESTONE)) {
+                    structures++;
+                }
+            }
+        }
+        double pct = sampled == 0 ? 0 : 100.0 * (structures + path) / sampled;
+        out.add(INFO + String.format("  샘플 %d칸 · 길 %d · 구조물·수목 %d → 채움 %.1f%%",
+                sampled, path, structures, pct));
+        if (pct < 5.0) {
+            out.add(BAD + String.format("담장 밖 채움 %.1f%% < 5%% — 허허벌판 (관도·산길·이정표·수목이 없다)", pct));
+            violations.add("담장밖 " + String.format("%.1f%%", pct));
+        } else {
+            out.add(OK + String.format("담장 밖 접근부 %.1f%%", pct));
         }
     }
 
