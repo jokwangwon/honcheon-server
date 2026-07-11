@@ -38,6 +38,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "물가" -> prices(sender, args);
                 case "정산" -> settle(sender, args);
                 case "협공" -> coop(sender, args);
+                case "경지" -> realm(sender, args);   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
+                case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
                 case "조감" -> renderTown(sender);   // 조감도 PNG — 콘솔 가능
@@ -160,6 +162,28 @@ public final class MvtCommand implements CommandExecutor {
         sender.sendMessage(ChatColor.GOLD + "협공 " + attackers + "인 → 보정 +"
                 + plugin.party().coopAttackBonus(attackers)
                 + ChatColor.GRAY + " (캡 +3 — 그 위는 합격진의 영역)");
+        return true;
+    }
+
+    /** /혼천 경지 <경지> [내공] — MVT엔 캐릭터 시트가 없다. 무공 검증용으로 몸을 세운다 */
+    private boolean realm(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GRAY + "/혼천 경지 <삼류|이류|일류|절정|초절정|화경> [내공]");
+            return true;
+        }
+        plugin.skills().setRealm(player, args[1],
+                args.length > 2 ? Double.parseDouble(args[2]) : 1.0);
+        return true;
+    }
+
+    /** /혼천 운기 — 운기조식 1구간 (내력 회복) */
+    private boolean meditate(CommandSender sender) {
+        if (sender instanceof Player player) {
+            plugin.skills().meditate(player);
+        }
         return true;
     }
 

@@ -29,6 +29,8 @@ public final class HoncheonMvt extends JavaPlugin {
     private EconomyEngine economy;
     private NpcLifecycleEngine lifecycle;
     private PartyEngine party;
+    private SkillEngine skillEngine;
+    private SkillListener skills;
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
@@ -51,11 +53,15 @@ public final class HoncheonMvt extends JavaPlugin {
         this.lifecycle = new NpcLifecycleEngine(
                 RulesConfig.load(cfg.resolve("npc_lifecycle.yml")), RulesConfig.load(cfg.resolve("judgment.yml")));
         this.party = new PartyEngine(RulesConfig.load(cfg.resolve("party.yml")));
+        this.skillEngine = new SkillEngine(cfg);
+        this.skills = new SkillListener(this, skillEngine);
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
         getServer().getPluginManager().registerEvents(new TradeListener(this), this);
         getServer().getPluginManager().registerEvents(new LedgerGui(this), this);
+        getServer().getPluginManager().registerEvents(skills, this);
+        skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         getCommand("honcheon").setExecutor(new MvtCommand(this));
         loadAnchors();
         loadZones();
@@ -197,5 +203,13 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public PartyEngine party() {
         return party;
+    }
+
+    public SkillEngine skillEngine() {
+        return skillEngine;
+    }
+
+    public SkillListener skills() {
+        return skills;
     }
 }
