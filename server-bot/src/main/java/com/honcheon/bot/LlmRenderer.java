@@ -23,14 +23,17 @@ import java.util.concurrent.atomic.AtomicLong;
 final class LlmRenderer {
 
     /** 생성 7계의 렌더러 축약 — llm.yml generation_principles (수치 은닉·등록제 명사·길이 예산·문체) */
+    // 7차 검증(로컬 소형 모델)에서 채집된 위반 반영: 선택 선점·기준 서사 대체·외국어 누출·길이 초과
     private static final String SYSTEM = """
             너는 한국어 무협 텍스트 RPG의 서사 렌더러다. 규칙:
             1. 주어진 사실(판정 결과·상황)을 절대 바꾸지 않는다 — 성공을 정하는 것은 엔진이고, 너는 들었을 뿐이다.
             2. 서사에 숫자를 쓰지 않는다 — 마진·주사위·가격 언급 금지, 결과의 무게는 문장으로.
-            3. 새 인명·지명·무공명을 지어내지 않는다 — 주어진 이름만 쓴다. 필요하면 무명으로 서술.
-            4. 길이는 300~500자, 한 문단 산문. 선택지·목록·머리말 없이 서사 본문만.
-            5. 문체는 한국어 무협 — 건조하고 즉물적으로, 형용사보다 사물과 동작으로.
-            기준 서사가 주어지면 그 사실 범위 안에서만 살을 붙여라.""";
+            3. 새 인명·지명·무공명·소지품을 지어내지 않는다 — 주어진 이름만 쓴다. 필요하면 무명으로 서술.
+            4. 길이는 300~500자, 한 문단 산문. 500자를 넘기지 마라. 선택지·목록·머리말 없이 서사 본문만.
+            5. 문체는 한국어 무협 — 건조하고 즉물적으로, 형용사보다 사물과 동작으로. 한국어만 쓴다 (영문·로마자 금지).
+            6. 선택을 대신 하지 마라 — 곧 플레이어가 고른다. 서사는 갈림길 직전에서 멈춘다.
+               "결국 ~를 선택했다" 류의 문장 금지.
+            7. 기준 서사가 주어지면 대체하지 말고 그 문장을 뼈대로 확장만 하라 — 새 사건·인물 발명 금지.""";
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Logger LOG = LoggerFactory.getLogger(LlmRenderer.class);
@@ -112,6 +115,9 @@ final class LlmRenderer {
             ObjectNode body = JSON.createObjectNode();
             body.put("model", localModel);
             body.put("max_tokens", 700);
+            // F33 — 유휴 언로드로 콜드 로드(38~52초) > 타임아웃 방지: Ollama 는 keep_alive 를 존중,
+            // 다른 OpenAI 호환 서버는 미지 필드로 무시한다
+            body.put("keep_alive", "30m");
             var messages = body.putArray("messages");
             messages.addObject().put("role", "system").put("content", SYSTEM);
             messages.addObject().put("role", "user").put("content", facts);

@@ -35,8 +35,10 @@ if [ -x "$ROOT/gradlew" ]; then GRADLE="$ROOT/gradlew"; else GRADLE="gradle"; fi
 (cd "$ROOT" && "$GRADLE" :server-bot:build -q)
 
 echo "[2/2] 봇 기동 — 중지: Ctrl+C / DB: run/bot/honcheon.db"
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  echo "      (참고: ANTHROPIC_API_KEY 미설정 — 서사는 폴백 템플릿. LLM 렌더는 키만 넣으면 켜진다)"
+if [ -n "${HONCHEON_LLM_URL:-}" ]; then
+  echo "      LLM: 로컬 (${HONCHEON_LLM_URL} · ${HONCHEON_LLM_MODEL:-기본})"
+elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+  echo "      (참고: LLM 미설정 — 서사는 폴백 템플릿. HONCHEON_LLM_URL 또는 ANTHROPIC_API_KEY 로 켜진다)"
 fi
 cd "$ROOT"   # config·db/schema.sql 상대 경로의 기준
 export HONCHEON_CONFIG="${HONCHEON_CONFIG:-config}"

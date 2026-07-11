@@ -8,7 +8,8 @@ local_provider:
   scope: turn_renderer_only        # GM·세계급은 로컬 금지 — 세계 일관성은 품질이 좌우한다
   api: openai_compatible           # Ollama /v1/chat/completions (llama.cpp·vLLM 동일)
   env: { url: HONCHEON_LLM_URL, model: HONCHEON_LLM_MODEL }   # 예: http://localhost:11434/v1 + exaone3.5:7.8b
-  recommended_models: [exaone3.5:7.8b, qwen2.5:14b]   # 한국어 품질 기준
+  recommended_models: [qwen3-30b-a3b, exaone3.5:7.8b]   # 7차 실측: qwen3 우세 (선택 선점 0·기준 서사 준수)
+  benchmark_note: "2026-07-11 실측 — exaone3.5: 선택 선점 2회·기준 서사 대체·영문 지명 누출 / qwen3-30b: 위반 없음, 어색 조어만. 수치 유출은 양쪽 0건"
   priority: "로컬 URL 설정 시 로컬 우선 → 없으면 ANTHROPIC_API_KEY → 없으면 폴백 템플릿"
   guards: "7계·길이 예산·폴백 동일 적용 — 소형 모델의 위반은 가드가 거르고 폴백이 받친다"
   hardware_note: "GPU 8GB+ 권장 (첫 글자 1~3초). CPU 전용은 5~20초 — 체감 저하 감수"
