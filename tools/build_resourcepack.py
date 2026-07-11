@@ -58,21 +58,35 @@ SEAL = (150, 56, 44, 255)         # 주사(朱砂) — 전각 도장풍 모서�
 #     resourcepack_design.yml vanilla_texture_channels 등록) ───
 INK_SOLID = (26, 24, 22, 255)       # 불투명 먹 — HUD 테두리·패널 외곽선
 # 체력 = 기혈 구슬(단약): 주사 채움 + 먹 테두리
+# 빈 소켓(container)은 '구슬이 빠진 자리'다 — 평면 채움이면 구멍이 아니라 얼룩으로 보인다.
+# 파인 자리의 문법(바닐라 인셋): 상·좌 안쪽이 그늘, 하·우 안쪽이 되비침 (빛은 좌상단).
 ORB_OUT = (26, 24, 22, 255)         # 구슬 먹 테두리
-ORB_EMPTY = (214, 205, 186, 80)     # 빈 소켓 내부 — 화선지 톤 희미하게
+ORB_SOCK_DARK = (44, 40, 36, 215)   # 빈 소켓 상·좌 안쪽 — 파인 그늘
+ORB_EMPTY = (74, 68, 60, 195)       # 빈 소켓 바닥
+ORB_SOCK_LIT = (110, 102, 90, 195)  # 빈 소켓 하·우 안쪽 — 바닥에서 되비친 빛
 ORB_FILL = (150, 56, 44, 255)       # 주사 채움 (SEAL 동일 계열)
 ORB_LIGHT = (208, 112, 88, 255)     # 좌상단 광택
 ORB_DARK = (96, 34, 26, 255)        # 우하단 음영
 BLINK_OUT = (240, 232, 214, 255)    # 피격 점멸 — 화선지 백 테두리 (바닐라 점멸=백화 관례)
-BLINK_EMPTY = (240, 232, 214, 120)  # 점멸 빈 소켓 내부
+BLINK_SOCK_DARK = (178, 170, 154, 225)
+BLINK_EMPTY = (212, 204, 188, 205)
+BLINK_SOCK_LIT = (248, 242, 228, 205)
 BLINK_FILL = (208, 112, 88, 255)    # 점멸 채움 — 한 단계 밝은 주사
 BLINK_LIGHT = (244, 202, 184, 255)  # 점멸 광택
 BLINK_DARK = (150, 56, 44, 255)     # 점멸 음영
-# 핫바 — 먹색 반투명 패널 + 화선지 테두리
-HOT_PANEL = (26, 24, 22, 160)       # 반투명 먹 패널 (바닐라도 반투명 — 월드가 비친다)
-HOT_EDGE = (214, 205, 186, 200)     # 화선지 테두리
-HOT_DIV = (214, 205, 186, 60)       # 슬롯 구분 세로선 — 희미하게
-SEL_FRAME = (150, 56, 44, 255)      # 선택 프레임 — 주사
+# 핫바 — 먹 반투명 패널 + 화선지 테두리. 이전 판은 테두리와 구분선이 **같은 RGB**(알파만 달랐다)라
+# 실질 2색 = 완전 평면 회색 막대였다 (린트·육안 동시 확인). 색이 아니라 알파로만 명암을 주면
+# 배경이 밝을 때 두 획이 한 색으로 붙어버린다 — HUD의 명암은 RGB로 새겨야 한다.
+HOT_EDGE_HI = (222, 214, 196, 210)  # 상단·좌 화선지 테두리 — 빛 받는 모
+HOT_EDGE_LO = (146, 138, 122, 210)  # 하단·우 테두리 — 그늘진 모 (테두리도 입체다)
+HOT_INK_TOP = (56, 52, 46, 172)     # 패널 상단 — 옅은 먹 (세로 그라데이션 시작)
+HOT_INK_BOT = (24, 22, 20, 188)     # 패널 하단 — 짙은 먹 (먹이 아래로 가라앉는다)
+HOT_DIV = (12, 11, 10, 205)         # 슬롯 구분 — 먹선 1px (패널보다 짙어야 '그은 선'이다)
+HOT_WEAR = (198, 190, 172, 130)     # 모서리 마모 — 화선지가 닳아 비친 자국
+SEL_DARK = (92, 32, 24, 255)        # 선택 프레임 — 주사 그늘(바깥 테)
+SEL_FRAME = (150, 56, 44, 255)      # 선택 프레임 — 주사 몸
+SEL_HI = (212, 116, 92, 255)        # 선택 프레임 — 좌상 광 (이중 테의 안쪽 밝은 선)
+SEL_SEAL = (72, 24, 18, 255)        # 네 귀 전각 점 — 가장 짙은 주사
 # 인벤토리 컨테이너 — 화선지 몸체 + 먹 외곽 (명암 3톤은 바닐라 입체 문법 유지)
 PAPER_BODY = (216, 208, 190, 255)   # 패널 몸체 — 화선지
 PAPER_LIGHT = (238, 231, 214, 255)  # 상·좌 내부 프레임 밝은 획
@@ -80,7 +94,11 @@ PAPER_SHADOW = (172, 162, 140, 255) # 하·우 내부 프레임 음영
 SLOT_DARK = (96, 86, 72, 255)       # 슬롯 상·좌 음영 (먹 계열)
 SLOT_BASE = (176, 166, 146, 255)    # 슬롯 내부 (몸체보다 어둡게 — 바닐라 인셋 문법)
 SLOT_LIGHT = (240, 234, 220, 255)   # 슬롯 하·우 광
-WINDOW_INK = (18, 16, 14, 255)      # 인물 창 내부 — 짙은 먹
+WINDOW_DEEP = (22, 20, 18, 255)     # 인물 창 인셋 — 상·좌 파인 최암
+WINDOW_INK = (44, 40, 35, 255)      # 인물 창 내부 — 짙은 먹 (순검정 금지: 검정은 구멍으로 보인다)
+WINDOW_HAZE = (78, 71, 62, 255)     # 인물 창 아래 — 옅어지는 먹 안개 (인물이 설 바닥)
+WINDOW_LIT = (96, 88, 76, 255)      # 인물 창 인셋 — 하·우 되비침
+PAPER_FIBER = (228, 221, 204, 255)  # 화선지 결 — 몸체 위에 성기게 뜨는 밝은 섬유
 
 
 def write_png(path: Path, rows):
@@ -161,15 +179,15 @@ def smooth_octave(x, y, cell, salt, amp):
 # ─── 체력바 — 하트 대신 기혈 구슬(단약) 9x9 (gui/sprites/hud/heart/) ───
 # 바닐라 렌더 계약: container 먼저, 그 위에 full/half를 겹쳐 그린다 —
 # half는 우측을 투명으로 남겨 아래 container 소켓이 비쳐 보이게 한다 (바닐라 동일 문법).
-# 문자: # 테두리, ~ 빈 소켓 내부, o 채움, L 광택, D 음영
+# 문자: # 테두리, s 소켓 상·좌 그늘, ~ 소켓 바닥, v 소켓 하·우 되비침, o 채움, L 광택, D 음영
 ORB_CONTAINER_ART = [
     ".........",
     "..#####..",
-    ".#~~~~~#.",
-    ".#~~~~~#.",
-    ".#~~~~~#.",
-    ".#~~~~~#.",
-    ".#~~~~~#.",
+    ".#sssss#.",
+    ".#s~~~v#.",
+    ".#s~~~v#.",
+    ".#s~~~v#.",
+    ".#~vvvv#.",
     "..#####..",
     ".........",
 ]
@@ -195,8 +213,10 @@ ORB_HALF_ART = [   # 좌반만 — 절단면(D 열)으로 반 칸이 1초에 읽
     "..###....",
     ".........",
 ]
-ORB_PALETTE = {"#": ORB_OUT, "~": ORB_EMPTY, "o": ORB_FILL, "L": ORB_LIGHT, "D": ORB_DARK}
-BLINK_PALETTE = {"#": BLINK_OUT, "~": BLINK_EMPTY, "o": BLINK_FILL, "L": BLINK_LIGHT, "D": BLINK_DARK}
+ORB_PALETTE = {"#": ORB_OUT, "s": ORB_SOCK_DARK, "~": ORB_EMPTY, "v": ORB_SOCK_LIT,
+               "o": ORB_FILL, "L": ORB_LIGHT, "D": ORB_DARK}
+BLINK_PALETTE = {"#": BLINK_OUT, "s": BLINK_SOCK_DARK, "~": BLINK_EMPTY, "v": BLINK_SOCK_LIT,
+                 "o": BLINK_FILL, "L": BLINK_LIGHT, "D": BLINK_DARK}
 
 # (이름, 아트, 팔레트) — 흡수(absorbing)·독(poisoned)·시듦(withered) 변형은 범위 밖: 바닐라 유지
 HEART_SPRITES = [
@@ -341,26 +361,46 @@ REALM_CRESTS = {
 
 
 def hotbar():
-    """182x22 핫바 (gui/sprites/hud/hotbar) — 먹색 반투명 패널 + 화선지 테두리.
-    182 = 테두리 2 + 슬롯 9칸 x 20px. 아이템은 x=3+20i 오프셋에 얹힌다 (바닐라 렌더 계약).
-    슬롯 경계 x=20·40·…·160 에 희미한 화선지 세로 구분선 — 배경은 조용하게."""
+    """182x22 핫바 (gui/sprites/hud/hotbar) — 먹 반투명 패널 + 화선지 테두리.
+    182 = 테두리 2 + 슬롯 9칸 x 20px. 아이템은 x=3+20i 오프셋에 얹힌다 (바닐라 렌더 계약 — 불변).
+    입체는 세 겹으로 온다: ① 테두리 상·좌 밝고 하·우 어둡게 ② 패널이 위→아래로 짙어지는
+    먹 그라데이션 ③ 슬롯 경계 x=20·40·…·160 에 그은 1px 먹선.
+    네 귀의 마모 자국은 결정론 해시로 — 종이가 닳아 먹이 벗겨진 자리다."""
     width, height = 182, 22
+    body = height - 2
     rows = []
     for y in range(height):
         row = []
         for x in range(width):
-            if y in (0, height - 1) or x in (0, width - 1):
-                row.append(HOT_EDGE)
-            elif x % 20 == 0:   # x=20..160 (양끝 테두리 인접 제외 — 20*9=180 은 x=181 테두리 안쪽 몸체)
-                row.append(HOT_DIV if x < 180 else HOT_PANEL)
+            if y == 0 or x == 0:
+                row.append(HOT_EDGE_HI)                    # 상·좌 — 빛 받는 모
+            elif y == height - 1 or x == width - 1:
+                row.append(HOT_EDGE_LO)                    # 하·우 — 그늘진 모
+            elif x % 20 == 0 and x < 180:
+                row.append(HOT_DIV)                        # 슬롯 구분 먹선
             else:
-                row.append(HOT_PANEL)
+                # 패널 — 위에서 아래로 먹이 가라앉는다 (평면 채움 금지)
+                row.append(mix(HOT_INK_TOP, HOT_INK_BOT, (y - 1) / (body - 1)))
         rows.append(row)
+    # 네 귀 마모 — 테두리 안쪽 3x3 안에서만, 해시로 성기게 (난수 금지)
+    for cy in (1, height - 2):
+        for cx in (1, width - 2):
+            for dy in range(3):
+                for dx in range(3):
+                    x = cx + (dx if cx == 1 else -dx)
+                    y = cy + (dy if cy == 1 else -dy)
+                    if h32(x, y, 0x4D) % 5 == 0:
+                        rows[y][x] = HOT_WEAR
     return rows
 
 
 def hotbar_selection():
-    """24x23 선택 프레임 (gui/sprites/hud/hotbar_selection) — 주사색 2px 테 + 투명 내부.
+    """24x23 선택 프레임 (gui/sprites/hud/hotbar_selection) — 주사 이중 테 + 투명 내부.
+    이전 판은 2px를 한 색으로 채운 '빨간 네모' 한 겹이라 인장이 아니라 스티커로 보였다.
+    두께(2px)는 그대로 두되 — 안쪽 1px을 밝은 주사로 올려 **이중 테**를 만든다:
+    바깥이 그늘, 안쪽이 광. 그래야 테가 두께를 갖고 프레임으로 읽힌다.
+    좌상은 빛을 받으므로 안쪽 선이 가장 밝고, 우하는 한 단 죽인다.
+    네 귀에는 전각 도장풍 짙은 점 — 무협 UI의 서명.
     치수 주의: 1.21.4 바닐라 스프라이트는 24x24가 아니라 24x23 (Gui가 24x23으로 blit,
     하단 1px이 핫바 아래로 걸치는 바닐라 관례) — 치수·걸침 인게임 확인 필요."""
     width, height = 24, 23
@@ -368,9 +408,18 @@ def hotbar_selection():
     for y in range(height):
         row = []
         for x in range(width):
-            frame = x < 2 or x >= width - 2 or y < 2 or y >= height - 2
-            row.append(SEL_FRAME if frame else T)
+            ring = min(x, y, width - 1 - x, height - 1 - y)   # 0 = 바깥 테, 1 = 안쪽 테
+            if ring == 0:
+                row.append(SEL_DARK)                          # 바깥 — 주사 그늘 (배경과 분리)
+            elif ring == 1:
+                lit = x <= 1 or y <= 1                        # 좌·상 안쪽 선이 빛을 받는다
+                row.append(SEL_HI if lit else SEL_FRAME)
+            else:
+                row.append(T)                                 # 내부 투명 — 아이템이 보여야 한다
         rows.append(row)
+    for cy in (0, height - 1):                                # 네 귀 전각 점
+        for cx in (0, width - 1):
+            rows[cy][cx] = SEL_SEAL
     return rows
 
 
@@ -396,7 +445,19 @@ def draw_panel(grid, gw, gh):
             elif x >= gw - 3 or y >= gh - 3:
                 grid[y][x] = PAPER_SHADOW      # 하·우 음영
             else:
-                grid[y][x] = PAPER_BODY
+                # 화선지 결 — 성긴 섬유가 빛을 받는다. 균일 채움이면 종이가 아니라 플라스틱이다
+                grid[y][x] = PAPER_FIBER if h32(x, y, 0xC5) % 11 == 0 else PAPER_BODY
+
+
+def draw_seal_corners(grid, gw, gh):
+    """네 귀 전각(篆刻) 도장풍 ㄱ자 쌍획 — 주사. 최소한으로: 팔 3px, 두께 1px, 4px 인셋.
+    슬롯 좌표(최소 x=7, y=7)를 절대 침범하지 않는다 (3+3 = x 3..5 — 슬롯 앞에서 멈춘다)."""
+    off, arm = 3, 3
+    for oy, sy in ((off, 1), (gh - 1 - off, -1)):
+        for ox, sx in ((off, 1), (gw - 1 - off, -1)):
+            for a in range(arm):
+                grid[oy][ox + sx * a] = SEAL   # 가로 팔
+                grid[oy + sy * a][ox] = SEAL   # 세로 팔
 
 
 def draw_slot(grid, sx, sy):
@@ -416,11 +477,27 @@ def draw_slot(grid, sx, sy):
 
 
 def draw_window(grid, wx, wy, ww, wh):
-    """인물 미리보기 창 — 먹 테두리 + 짙은 먹 내부 (장식 요소, 슬롯 아님)."""
+    """인물 미리보기 창 — 먹빛 감실(龕室). 장식 요소, 슬롯 아님.
+    이전 판은 내부를 순검정 한 색으로 채워 화선지 패널에 **구멍**이 뚫린 것처럼 보였다 (육안 확인).
+    검정은 '없음'이지 '어두움'이 아니다 — 어두운 면도 빛을 받아야 면으로 읽힌다.
+    → 먹 테두리 + 인셋 베벨(상·좌 최암 / 하·우 되비침) + 위에서 아래로 옅어지는 먹 그라데이션 +
+      희미한 종이 결. 인물 모델이 그 앞에 서면 안개 낀 먹 배경으로 떠오른다."""
     for dy in range(wh):
         for dx in range(ww):
-            edge = dy in (0, wh - 1) or dx in (0, ww - 1)
-            grid[wy + dy][wx + dx] = INK_SOLID if edge else WINDOW_INK
+            x, y = wx + dx, wy + dy
+            if dy in (0, wh - 1) or dx in (0, ww - 1):
+                grid[y][x] = INK_SOLID                     # 먹 테두리
+            elif dy == 1 or dx == 1:
+                grid[y][x] = WINDOW_DEEP                   # 상·좌 안쪽 — 파인 최암 (인셋)
+            elif dy == wh - 2 or dx == ww - 2:
+                grid[y][x] = WINDOW_LIT                    # 하·우 안쪽 — 바닥에서 되비친 빛
+            else:
+                # 먹물이 위로 갈수록 짙다 — 인물의 발치가 밝아 서 있는 바닥이 생긴다
+                t = (dy - 2) / max(1, wh - 5)
+                c = mix(WINDOW_INK, WINDOW_HAZE, t)
+                if h32(x, y, 0xB3) % 7 == 0:
+                    c = mix(c, WINDOW_HAZE, 0.4)           # 종이 결 — 먹이 고르지 않게 스민다
+                grid[y][x] = c
 
 
 def inventory_container():
@@ -431,6 +508,7 @@ def inventory_container():
     인물 창(25,7,54x72)·제작 화살표는 장식 — 정확 위치 인게임 확인 필요."""
     grid = blank_canvas()
     draw_panel(grid, 176, 166)
+    draw_seal_corners(grid, 176, 166)
     draw_window(grid, 25, 7, 54, 72)           # 인물 창 (장식 — 바닐라 근사)
     for r in range(4):
         draw_slot(grid, 7, 7 + 18 * r)         # 방어구 4
@@ -462,6 +540,7 @@ def generic_54_container():
     (화면 좌표는 심 때문에 -1). 좌표 불변 — 색만 교체."""
     grid = blank_canvas()
     draw_panel(grid, 176, 222)
+    draw_seal_corners(grid, 176, 222)
     for r in range(6):
         for c in range(9):
             draw_slot(grid, 7 + 18 * c, 17 + 18 * r)    # 궤짝 9x6
@@ -1136,81 +1215,125 @@ def write_item_assets() -> int:
 # 금지 원칙: 자연이 만든 블록은 건드리지 않는다 (stone·dirt·*_log·stone_bricks…) — 팩에 1장도 없다.
 # ═══════════════════════════════════════════════════════════════════════════
 # ─── 흑와(黑瓦) — deepslate_tiles PNG 1장이 계단·반블록·담장 전부를 덮는다. 마을의 인상. ───
-# 가로(x, 주기 8): 수키와(丸瓦 — 볼록한 반원통) 5px + 암키와(平瓦 — 오목한 골) 3px 교대.
-#   → 넓고 둥근 마루 / 좁고 깊은 골. 지붕이 '결'을 갖는 건 이 대비 덕이다.
-# 세로(y, 주기 16 = 텍스처 한 장): 한 장에 기와 한 단(course).
-#   지붕은 인게임에서 계단 블록으로 쌓인다 — 블록 하나가 곧 한 단이다. 한 장에 단을 둘 넣으면
-#   가로 리듬이 세로 리듬과 같은 세기로 부딪혀 격자무늬(체크)가 된다. 이게 첫 시도의 실패 모드였다.
-# 랩 안전: x는 8(16의 약수), y는 16 그 자체 — 위아래로 이으면 아랫단 처마 그늘이 윗단 겹침
-#   그늘로 그대로 이어진다.
-ROOF_SHADES = ramp((23, 23, 28, 255), (103, 104, 113, 255), 9)   # 9단 — 먹빛 청회색 기와
-# 곡면 명암 (x % 8) — 빛은 좌상단. 볼록한 마루는 왼쪽 어깨가 가장 밝고 오른쪽으로 떨어진다.
-#   0 마루 왼쪽 이음 그늘 / 1~2 마루 하이라이트·등 / 3~4 우측 falloff / 5~7 골 (마루 그림자가 진다)
-ROOF_CURVE = [-1.0, 2.6, 2.0, 0.6, -0.9, -2.2, -1.7, -2.0]
-# 단(course) 명암 (y) — 윗단 기와가 덮은 자리(y0~1)가 가장 어둡고, 노출된 기와 코(y2)가 빛을 받는다.
-# 아래로 완만히 어두워지다가 기와 끝 젖힌 턱(y13~14)이 다시 빛을 받고, 그 아래(y15)가 그늘 —
-# 그 그늘이 곧 아랫단의 y0 겹침 그늘로 이어진다 (랩이 곧 구조).
-ROOF_COURSE = [-2.9, -1.4, 1.2, 0.8, 0.5, 0.3, 0.2, 0.0,
-               0.0, -0.1, -0.2, -0.2, -0.1, 0.3, 0.6, -1.5]
-# 마루(수키와)는 둥근 코가 다음 장을 타고 넘으므로 이음 턱이 얕다 — 단 그림자를 절반만 받는다.
-# 이 감쇠가 없으면 가로 검은 띠가 마루를 관통해 다시 격자가 된다.
-ROOF_CAP_DAMP = 0.45
-ROOF_MID = 4.8          # 계단 중앙값 — 얼룩·곡면이 여기서 위아래로 흔들린다
+# 기와가 기와로 읽히려면 두 리듬이 **동시에** 있어야 한다:
+#   가로(x, 주기 8) 수키와(丸瓦 — 볼록한 반원통 마루) 5px + 암키와(平瓦 — 오목한 골) 3px 교대,
+#   세로(y, 주기 8) 단(段, course) 이음 — 기와는 위에서 아래로 겹쳐 이어 내려온다.
+# 세로 리듬이 없으면 골함석·세로 널판이 된다 (첫 시도의 실패 모드 — 육안 확인).
+# 격자(타탄)를 피하는 열쇠 — 단 이음을 '가로로 그은 어두운 선'으로 그리면 안 된다 (실측 확인:
+#   마루 위에서 감쇠만 시켜도 전 폭에 걸친 검은 띠가 남아 세로 결과 교차해 체크무늬가 된다).
+#   실물 기와의 단 이음은 **선이 아니라 단차(段差)**다: 윗단 기와의 둥근 끝(코)이 아랫단 위로
+#   올라타 있으므로 — 마루에서는 그 코가 빛을 되쏘는 **밝은 점**이고,
+#                      골에서는 그 코가 드리운 그늘이 채널에 고인 **짙은 점**이다.
+#   그래서 이음 행을 가로로 훑으면 밝다-밝다-밝다-어둡다-어둡다 로 끊긴다 → 연속선이 아니다 →
+#   격자가 원천적으로 생기지 않으면서도 단(段)은 또렷이 읽힌다. (마루·골에 서로 다른 단 프로파일)
+# 계단 블록 계약: 지붕은 계단으로 쌓이고 계단은 윗면·옆면에 같은 PNG를 쓴다 —
+#   한 장에 단이 둘(y=0, y=8) 있어야 계단 한 칸마다 단 이음이 최소 하나 걸린다.
+# 랩 안전: x 주기 8, y 주기 8 (둘 다 16의 약수) — 상하좌우로 이어 붙여도 리듬이 끊기지 않는다.
+# 색: 무채색 목탄. 기와는 검다 — 심층암의 푸른 기(B > R)를 완전히 뺀다 (B - R ≤ 0).
+ROOF_SHADES = ramp((20, 19, 18, 255), (128, 125, 120, 255), 12)   # 12단 — 중성 목탄 회흑색
+# 마루·골 단면 (x % 8) — 빛은 좌상단. 볼록한 마루는 왼쪽 어깨가 가장 밝고 오른쪽으로 떨어지며,
+# 오목한 골은 바닥이 가장 어둡고 벽면이 중간톤이다 (골 바닥 = 텍스처 최암부).
+#   0 마루 좌어깨 / 1 마루 하이라이트 / 2 마루 등(중간톤) / 3 우측 falloff / 4 마루 우측 그림자
+#   5 골 좌벽 (마루가 드리운 그늘) / 6 골 바닥 (최암) / 7 골 우벽 (다음 마루로 오르는 사면 — 빛)
+ROOF_CURVE = [1.6, 3.6, 2.4, 0.8, -1.4, -2.8, -3.4, -1.3]
+# 단(段) 이음 — 마루(수키와)용: 어두운 선이 아니라 **밝은 코**다.
+#   7 윗단 기와의 둥근 끝이 아랫단 위로 올라타며 빛을 되쏜다 (텍스처 최명부)
+#   0 그 코 바로 밑 — 얕은 단차 그늘 (1단 정도. 여기가 깊으면 검은 띠가 되어 격자가 된다)
+#   1~6 기와 몸 — 원통 아래로 빛이 완만히 죽는다
+ROOF_COURSE_CAP = [-1.7, 0.9, 0.3, 0.1, 0.0, -0.1, 0.5, 1.8]
+# 단(段) 이음 — 골(암키와)용: 마루의 코가 드리운 그늘이 채널 바닥에 고인다.
+#   0 겹침 그늘 (최암 — 3단 이상 떨어진다) / 1 그늘 꼬리 / 2~7 골 바닥 본래 톤
+ROOF_COURSE_PAN = [-3.2, -1.0, 0.4, 0.2, 0.0, -0.2, -0.3, 0.2]
+# ★ 격자 파괴의 핵심 — 단 이음은 '자'로 그은 직선이 아니다.
+#   수키와의 끝은 반원통을 잘라낸 **둥근 코**라 아랫단 위로 불룩 처져 내려온다.
+#   그래서 겹침 그늘도 그 코를 따라 **호(弧)를 그리며 물결친다**: 마루 한가운데서 가장 낮고
+#   골에서 가장 높다. 이 위상차(0~2px)가 이음선을 톱니처럼 흩뜨려 —
+#   직선 격자가 원천적으로 성립하지 않으면서 단은 더 또렷해진다 (직선일 때가 타탄이었다, 실측).
+#   x % 8 → 단 위상이 아래로 처지는 픽셀 수. 주기 8이라 상하 랩에서 호가 그대로 이어진다.
+ROOF_NOSE = [1, 2, 2, 2, 1, 0, 0, 0]
+ROOF_CAP_W = 5          # 마루 폭 (x % 8 < 5) — 나머지 3px 이 골
+ROOF_MID = 6.0          # 계단 중앙값 — 얼룩·곡면이 여기서 위아래로 흔들린다
 
 
 def roof_stain(x, y):
-    """오래된 기와의 얼룩 — 저주파(4px) 큰 얼룩 + 중주파(2px) + 픽셀 결.
-    구조(곡면·단)를 덮지 않을 만큼만. 셀 크기 4·2 는 16의 약수라 랩에서 끊기지 않는다."""
-    return (smooth_octave(x, y, 8, 0x11, 0.80)
-            + smooth_octave(x, y, 4, 0x23, 0.50)
-            + octave(x, y, 1, 0x37, 0.28))
+    """오래된 기와의 얼룩 — 저주파 큰 얼룩 + 중주파 + 픽셀 결.
+    구조(곡면·단)를 덮지 않을 만큼만 — 진폭을 구조보다 한참 낮게 둔다.
+    셀 크기 8·4·1 은 16의 약수라 랩에서 끊기지 않는다."""
+    return (smooth_octave(x, y, 8, 0x11, 0.42)
+            + smooth_octave(x, y, 4, 0x23, 0.30)
+            + octave(x, y, 1, 0x37, 0.20))
 
 
 def roof_rows(cracked=False):
+    """흑와 한 장. cracked=True 면 같은 지붕 위에 균열만 얹는다 (딴 그림이 아니라 상한 판)."""
+    crack = dict(ROOF_CRACKS) if cracked else {}
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
-            damp = ROOF_CAP_DAMP if x % 8 < 5 else 1.0      # 마루는 단 그림자를 덜 받는다
-            v = ROOF_MID + ROOF_CURVE[x % 8] + ROOF_COURSE[y] * damp + roof_stain(x, y)
+            cap = x % 8 < ROOF_CAP_W                        # 마루(수키와)냐 골(암키와)이냐
+            course = ROOF_COURSE_CAP if cap else ROOF_COURSE_PAN
+            phase = (y - ROOF_NOSE[x % 8]) % 8              # 둥근 코를 따라 물결치는 단 이음
+            v = ROOF_MID + ROOF_CURVE[x % 8] + course[phase] + roof_stain(x, y)
+            # 균열은 '칠하는 색'이 아니라 '표면에 주는 변형'이다 — 절대색으로 덮으면
+            # 아래 기와의 곡면 명암이 지워져 얼룩(S자 반점)으로 뜬다 (지난 판의 실패 모드).
+            # 델타로 얹으면 마루에서든 골에서든 제 밝기 위에서 파이므로 언제나 '금'으로 읽힌다.
+            v += crack.get((x, y), 0.0)
             row.append(step(ROOF_SHADES, v))
         rows.append(row)
-    if cracked:
-        for (x, y), d in ROOF_CRACKS:
-            row = rows[y]
-            row[x] = ROOF_SHADES[0] if d < 0 else step(ROOF_SHADES, 7.2)   # 깨진 틈 / 파단면 光
     return rows
 
 
-# 깨진 기와(폐사당 잔해) — 같은 결 위의 균열이라야 같은 지붕으로 읽힌다.
-# d=-1 어둠(갈라진 틈) / d=+1 파단면 하이라이트 — 틈의 좌상단에 붙여 깊이를 만든다.
-ROOF_CRACKS = [((4, 1), -1), ((4, 2), -1), ((3, 2), 1), ((5, 3), -1), ((5, 4), -1),
-               ((4, 4), 1), ((6, 5), -1), ((6, 6), -1), ((7, 7), -1), ((6, 7), 1),
-               ((11, 2), -1), ((12, 3), -1), ((11, 3), 1), ((12, 4), -1),
-               ((13, 10), -1), ((13, 11), -1), ((12, 11), 1), ((14, 12), -1),
-               ((2, 11), -1), ((2, 12), -1), ((1, 12), 1), ((3, 13), -1), ((3, 14), -1),
-               ((9, 13), -1), ((9, 14), -1), ((8, 14), 1)]
+# 깨진 기와(폐사당 잔해) — 얼룩이 아니라 '균열'이라야 같은 지붕의 상한 판으로 읽힌다.
+# 균열은 기와의 결을 따라 간다: 반원통 마루를 세로로 쪼개고, 단 이음에서 조각이 떨어져 나간다.
+# 값 = 명암 계단 델타. 음수 = 갈라진 틈(파고든 그늘) / 양수 = 파단면(갓 깨진 면이 되쏘는 빛) —
+# 틈의 왼쪽에 붙여야 '깨진 두께'가 생긴다 (빛은 좌상단).
+ROOF_CRACKS = {
+    # 좌측 마루 — 세로로 쪼갠 균열. 결(반원통)을 따라 내려오며 한 칸씩 비껴간다
+    (2, 1): -4.2, (1, 1): +2.0,
+    (2, 2): -4.2, (2, 3): -4.2, (1, 3): +1.8,
+    (3, 4): -4.0, (3, 5): -4.0, (2, 5): +1.8, (3, 6): -3.8, (2, 7): -3.6,
+    # 단 이음(y=8~9)에서 떨어져 나간 조각 — 이음을 따라 벌어진 틈
+    (5, 8): -3.8, (6, 8): -3.8, (6, 9): -3.6, (5, 9): +2.0, (7, 9): -3.4,
+    # 우측 마루 — 세로 균열 + 파단면
+    (10, 2): -4.2, (10, 3): -4.2, (9, 3): +2.0,
+    (11, 4): -4.0, (11, 5): -4.0, (10, 5): +1.8,
+    # 우측 아래 단 — 골을 가로질러 벌어진 균열
+    (13, 10): -3.8, (13, 11): -3.8, (12, 11): +1.8, (14, 12): -3.6, (14, 13): -3.4,
+    # 좌측 아래 마루 — 짧은 실금
+    (9, 13): -3.6, (9, 14): -3.6, (8, 14): +1.8,
+}
 
 
 # ─── 회벽(灰壁) — 거친 회칠. 무늬·이음선 금지(block_channels 조건): 배들랜드 지층에
 #     대량 자연 생성되므로 무늬가 있으면 지층이 벽으로 튄다.
-#     '균열'을 직선으로 그으면 그 선이 16px마다 되풀이돼 벽 전체에 사선 격자가 뜬다 (실측 확인).
-#     그래서 형상(선·점)은 하나도 두지 않는다 — 4옥타브 노이즈장만으로 얼룩과 팬 자국을 만든다.
+#     '균열'을 직선으로 길게 그으면 그 선이 16px마다 되풀이돼 벽 전체에 사선 격자가 뜬다 (실측 확인).
+#     그래서 실금은 짧게(3~4px), 옅게(1단 미만), 텍스처 가장자리에 닿지 않게 둔다 —
+#     가장자리에 닿으면 이웃 장의 실금과 이어져 벽을 가로지르는 긴 선이 된다 (랩 사고).
 #     저주파는 보간 노이즈(smooth_octave)라야 한다. 계단형이면 4px 네모 얼룩이 그대로 보인다.
-def plaster_rows(dark, light):
+# 색: **차가운 회백색**. 이전 판은 R-B 가 +21이라 사막 흙벽(누런 베이지)으로 보였다 (육안 확인).
+#     R≈G≈B (max-min ≤ 4) 로 채도를 사실상 0에 두고, 명도 폭도 좁혀 얼룩이 2~3톤만 읽히게 한다.
+PLASTER_HAIRLINES = [(4, 5), (5, 6), (6, 6), (6, 7),        # 실금 1 — 짧은 사선
+                     (11, 10), (11, 11), (12, 12), (12, 13)]  # 실금 2
+
+
+def plaster_rows(dark, light, hairlines=True):
     """회벽 — 6단 저대비 계단. 명도 폭이 좁아 바닐라 배들랜드/석재 옆에서 튀지 않는다."""
     shades = ramp(dark, light, 6)
+    fine = set(PLASTER_HAIRLINES) if hairlines else set()
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
             v = (2.6
-                 + smooth_octave(x, y, 8, 0x5B, 0.95)   # 큰 얼룩 — 미장의 물결
-                 + smooth_octave(x, y, 4, 0x6D, 0.70)   # 흙손 자국
-                 + octave(x, y, 2, 0x7F, 0.55)          # 거친 결
-                 + octave(x, y, 1, 0x91, 0.60))         # 모래 입자
+                 + smooth_octave(x, y, 8, 0x5B, 0.80)   # 큰 얼룩 — 미장의 물결
+                 + smooth_octave(x, y, 4, 0x6D, 0.58)   # 흙손 자국
+                 + octave(x, y, 2, 0x7F, 0.42)          # 거친 결
+                 + octave(x, y, 1, 0x91, 0.45))         # 모래 입자
             if h32(x, y, 0xA7) % 23 == 0:
-                v -= 1.6                                # 회칠이 패인 곰보 자국 (선이 아니라 점 — 격자가 안 생긴다)
+                v -= 1.4                                # 회칠이 패인 곰보 자국 (선이 아니라 점 — 격자가 안 생긴다)
+            if (x, y) in fine:
+                v -= 0.9                                # 실금 — 1단 미만. 눈에 겨우 걸릴 만큼만
             row.append(step(shades, v))
         rows.append(row)
     return rows
@@ -1218,42 +1341,47 @@ def plaster_rows(dark, light):
 
 # ─── 격자창 — glass.png(면). glass_pane와 유리 블록이 면 텍스처를 공유하므로
 #     유리도 격자창이 된다: 전근대 강호에 판유리는 없다 — 오염이 아니라 정합.
-#     창살은 목재(4단 명암), 창호(窓戶)는 창호지 — 따뜻한 반투명 백지.
-#     알파 주의: 바닐라 glass 는 cutout 렌더(알파 이진 판정)라 부분 알파는 사실상 불투명으로
-#     보인다. 창호지는 원래 들여다보이지 않는 종이다 — 이 렌더 특성이 곧 의도한 그림이다.
-WOOD_HI = (138, 110, 78, 255)     # 창살 — 빛 받는 위/왼쪽 모
-WOOD_MID = (104, 82, 58, 255)     # 창살 몸
-WOOD_DIM = (74, 58, 40, 255)      # 창살 그늘
-WOOD_OUT = (44, 34, 24, 255)      # 창틀 외곽 — 가장 어두운 목재
-WIN_PAPER_HI = (240, 232, 206, 190)   # 창호지 — 살에 닿는 밝은 결
-WIN_PAPER_MID = (226, 216, 188, 175)  # 창호지 몸
-WIN_PAPER_DIM = (206, 195, 166, 165)  # 창호지 그늘 (살 그림자가 지는 아래·오른쪽)
+#     창살은 목재(4단 명암), 창호(窓戶)는 창호지 — 따뜻한 미색 종이.
+#     이전 판은 살대가 2px에 3x3 칸이라 창살이 굵고 뭉툭해 '문짝'으로 보였다 (육안 확인).
+#     → 살대를 **1px**로 깎고 세로살 위주(細箭窓)로 잘게 나눈다: 세로살 4대(x=3·6·9·12) +
+#       중간 가로살 1대(y=7). 세로 우세 = 조선 세살창의 문법이고, 칸이 잘아 창으로 읽힌다.
+#     알파: 바닐라 glass 는 cutout 렌더(알파 이진 판정)라 부분 알파가 사실상 불투명으로 보인다 —
+#       창호지는 원래 들여다보이지 않는 종이다. **불투명(alpha 255)으로 확정**하고 그에 맞게 그린다
+#       (반투명인 척하는 알파는 렌더에서 어차피 뭉개져 톤만 어지럽힌다).
+WOOD_HI = (146, 118, 84, 255)     # 창살 — 빛 받는 위/왼쪽 모
+WOOD_MID = (108, 86, 60, 255)     # 창살 몸 — 세로살
+WOOD_DIM = (78, 62, 42, 255)      # 창살 그늘 — 가로살(세로살보다 뒤에 있다)
+WOOD_OUT = (46, 36, 26, 255)      # 창틀 외곽 — 가장 어두운 목재
+WIN_PAPER_HI = (242, 234, 210, 255)   # 창호지 — 살에 닿는 밝은 결 (따뜻한 미색. 순백 금지)
+WIN_PAPER_MID = (230, 221, 196, 255)  # 창호지 몸
+WIN_PAPER_DIM = (208, 198, 172, 255)  # 창호지 그늘 (살 그림자가 지는 아래·오른쪽)
+
+WIN_VBARS = (3, 6, 9, 12)   # 세로살 1px — 세살창
+WIN_HBARS = (7,)            # 중간 가로살 1px
 
 
 def lattice_window_rows():
-    """井자 창살(x·y = 5, 10) + 창호지 4×4 칸. 살마다 좌상 하이라이트·우하 그림자."""
-    bars = (5, 10)
+    """세살창 — 1px 세로살 4대 + 중간 가로살 1대 + 창호지.
+    1px 살대는 제 몸에 명암을 담을 수 없다 — 그래서 입체는 **창호지 쪽에서** 만든다:
+    살 바로 오른쪽·아래 칸에 그림자를 앉히면 살이 종이 위로 떠오른다 (빛은 좌상단)."""
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
-            on_frame = x in (0, 15) or y in (0, 15)
-            on_bar = x in bars or y in bars
-            if on_frame:
+            if x in (0, 15) or y in (0, 15):
                 # 창틀 — 좌·상은 한 단 밝게, 우·하는 최암 (테두리도 입체다)
-                row.append(WOOD_MID if (x == 0 or y == 0) else WOOD_OUT)
-            elif on_bar:
-                # 살의 좌상 모서리(살 바로 앞 칸)는 빛, 우하는 그늘
-                lit = (x in bars and y not in bars and x == 5) or (y in bars and y == 5)
-                row.append(WOOD_HI if lit else WOOD_MID if (x == 10 or y == 10) else WOOD_DIM)
+                row.append(WOOD_HI if (x == 0 or y == 0) else WOOD_OUT)
+            elif x in WIN_VBARS:
+                row.append(WOOD_MID)                  # 세로살 — 앞에 있다 (밝은 목재)
+            elif y in WIN_HBARS:
+                row.append(WOOD_DIM)                  # 가로살 — 세로살 뒤 (그늘진 목재)
             else:
-                # 창호지 — 살에 인접한 위/왼쪽은 밝고, 아래/오른쪽엔 살 그림자가 앉는다
-                near_lit = (x - 1) in bars or (y - 1) in bars or x == 1 or y == 1
-                near_dim = (x + 1) in bars or (y + 1) in bars or x == 14 or y == 14
-                base = WIN_PAPER_DIM if near_dim else WIN_PAPER_HI if near_lit else WIN_PAPER_MID
-                # 종이 섬유 — 1px 결정론 결. 알파는 건드리지 않는다 (컷아웃 안정)
-                f = h32(x, y, 0x9C) % 3
-                row.append(base if f else mix(base, WIN_PAPER_HI, 0.35)[:3] + (base[3],))
+                # 창호지 — 살에 인접한 위/왼쪽은 빛, 아래/오른쪽엔 살 그림자가 앉는다
+                lit = (x - 1) in WIN_VBARS or (y - 1) in WIN_HBARS or x == 1 or y == 1
+                dim = (x + 1) in WIN_VBARS or (y + 1) in WIN_HBARS or x == 14 or y == 14
+                base = WIN_PAPER_DIM if dim else WIN_PAPER_HI if lit else WIN_PAPER_MID
+                # 종이 섬유 — 1px 결정론 결 (닥섬유가 비쳐 보이는 결). 불투명 유지
+                row.append(base if h32(x, y, 0x9C) % 3 else mix(base, WIN_PAPER_HI, 0.35))
         rows.append(row)
     return rows
 
@@ -1275,10 +1403,17 @@ def pane_top_rows():
 
 
 # ─── 죽렴(竹簾) — bamboo_planks. 대나무 쪽을 나란히 엮은 발.
-#     쪽 폭 4px (16의 약수) → 좌우 랩 매끄러움. 마디(節)는 8행 주기이되 쪽마다 어긋난다
-#     (결정론 오프셋) — 일직선 마디는 격자로 보이지만, 어긋난 마디는 결로 보인다.
-BAMBOO_SHADES = ramp((92, 80, 50, 255), (222, 210, 164, 255), 7)
-BAMBOO_CURVE = [-2.4, 1.9, 0.6, -0.9]   # 쪽 단면(볼록): 골 / 좌측 광 / 몸 / 우측 falloff
+#     쪽 폭 4px (16의 약수) → 좌우 랩 매끄러움.
+# 색: **마른 대나무**의 연한 황갈색. 이전 판은 초록기가 남아(G가 R에 육박) 형광 노랑-연두로
+#     튀었다 — 옥수수처럼 보였다 (육안 확인). R > G > B 를 또렷이 벌려 갈색 쪽으로 눕히고
+#     채도를 크게 낮춘다 (light 의 max-min 을 58 → 50 아래로).
+BAMBOO_SHADES = ramp((96, 84, 64, 255), (198, 180, 148, 255), 7)
+# 쪽 단면 (x % 4) — 볼록한 대쪽. 좌측이 빛을 받고 우측이 그늘, 쪽과 쪽 사이가 골이다.
+#   0 좌측 하이라이트 / 1 몸(중간톤) / 2 우측 falloff / 3 우측 그림자 = 쪽 사이 골
+BAMBOO_CURVE = [2.1, 0.9, -0.4, -2.5]
+# 마디(節) — 가로선 2개. 마디 홈(짙은 선) 바로 아래에 융기(밝은 선)가 온다.
+#   주기 16(텍스처 한 장)이라 상하 랩에서 마디 간격이 일정하게 이어진다.
+BAMBOO_NODES = (3, 11)
 
 
 def bamboo_rows():
@@ -1286,14 +1421,12 @@ def bamboo_rows():
     for y in range(16):
         row = []
         for x in range(16):
-            strip = x // 4                              # 쪽 번호 0~3
-            v = 4.0 + BAMBOO_CURVE[x % 4] + octave(x, y, 2, 0xC1, 0.45)
-            v += octave(x, y, 1, 0xD3, 0.25)
-            node = (y + (h32(strip, 0xE7) % 5)) % 8     # 쪽마다 어긋난 마디 위상
-            if node == 0:
-                v -= 2.6                                # 마디 홈 — 가로 그늘
-            elif node == 1:
-                v += 1.1                                # 마디 아래 융기 — 빛 받는 턱
+            v = 4.0 + BAMBOO_CURVE[x % 4]
+            v += octave(x, y, 2, 0xC1, 0.38) + octave(x, y, 1, 0xD3, 0.22)   # 대나무 결
+            if y in BAMBOO_NODES:
+                v -= 2.4                                # 마디 홈 — 가로 그늘
+            elif (y - 1) in BAMBOO_NODES:
+                v += 1.2                                # 마디 아래 융기 — 빛 받는 턱
             row.append(step(BAMBOO_SHADES, v))
         rows.append(row)
     return rows
@@ -1452,8 +1585,9 @@ def write_block_textures() -> int:
     blocks = {
         "deepslate_tiles": roof_rows(),
         "cracked_deepslate_tiles": roof_rows(cracked=True),
-        "white_terracotta": plaster_rows((186, 179, 165, 255), (236, 231, 219, 255)),
-        "light_gray_terracotta": plaster_rows((142, 138, 131, 255), (190, 186, 179, 255)),
+        # 회벽 — 차가운 회백(R≈G≈B). 서민 벽(light_gray)은 같은 계열 한 톤 아래.
+        "white_terracotta": plaster_rows((172, 174, 177, 255), (232, 233, 235, 255)),
+        "light_gray_terracotta": plaster_rows((130, 132, 135, 255), (186, 187, 189, 255)),
         "glass": lattice_window_rows(),
         "glass_pane_top": pane_top_rows(),
         "bamboo_planks": bamboo_rows(),

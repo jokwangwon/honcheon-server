@@ -331,17 +331,41 @@ final class CheonghaBuilder {
     // 이 패스는 광장·길·담장·건물보다 **먼저** 돈다 — 뒤에 오는 것들이 제 자리를 덮어쓴다 (충돌 0의 구조적 보장).
     // 자재 선택 규칙: DIRT_PATH·GRAVEL 은 '길'의 자재다. 일반 지면에 뿌리면 길과 마당의 구분이 사라진다.
 
-    /** 지면 조직 — 거친 흙 62% · 흙 19% · 뿌리 흙 6% · 잔디 12.5% (잔디는 남길 곳만 남긴다) */
+    /**
+     * v6.5 ② 【줄무늬 파괴】 좌표 해시 — 선형식 `x*a + z*b` 는 **반드시 사선/줄무늬를 만든다**.
+     * 그 식의 등고선(x*a + z*b = const)이 직선이기 때문이다: 마을 전체가 같은 기울기의 줄로 덮인다.
+     * 조감도에서 잡초(초록)와 잔디(초록)가 세로줄로 반복돼 마을을 지배한 것이 이 줄무늬였다.
+     *
+     * <p>해법은 **비선형 혼합**이다 — 곱셈으로 비트를 섞고 오른쪽 시프트로 상위 비트를 하위로 되접는다
+     * (xorshift-multiply). 등고선이 직선이 아니게 되므로 어떤 방향으로도 줄이 서지 않는다.
+     * 난수가 아니다: 좌표만의 순수 함수 = 같은 (x,z) 면 영원히 같은 값 (재조성 결정론 불변).
+     */
+    private static int noise(int x, int z) {
+        int h = x * 374761393 + z * 668265263;   // 서로 소인 큰 소수 — 격자 정렬을 깬다
+        h = (h ^ (h >>> 13)) * 1274126177;       // 곱셈 혼합 (비선형)
+        h ^= h >>> 16;
+        return h;
+    }
+
+    /** 좌표 해시 [0, n) — noise 의 결과를 구간에 접는다 */
+    private static int hash(int x, int z, int n) {
+        return Math.floorMod(noise(x, z), n);
+    }
+
+    /**
+     * 지면 조직 — 거친 흙 66% · 흙 20% · 뿌리 흙 6% · 잔디 8% (v6.5 ②: 12.5% → 8%, 그리고 줄무늬 없이).
+     * 잔디도 초록이다 — 조감도의 세로줄은 잡초만의 죄가 아니었다. 마당은 맨땅이 지배해야 한다.
+     */
     private static void groundCover(World world, int cx, int cy, int cz) {
         for (int x = cx - 59; x <= cx + 59; x++) {
             for (int z = cz - 59; z <= cz + 59; z++) {
-                int h = Math.floorMod(x * 7 + z * 11, 16);
+                int h = hash(x, z, 50);
                 Material m;
-                if (h < 2) {
-                    m = Material.GRASS_BLOCK;      // 12.5% — 밟히지 않는 자리에만 풀이 남는다
-                } else if (h == 2) {
+                if (h < 4) {
+                    m = Material.GRASS_BLOCK;      // 8% — 밟히지 않는 자리에만 풀이 남는다
+                } else if (h < 7) {
                     m = Material.ROOTED_DIRT;
-                } else if (h <= 5) {
+                } else if (h < 17) {
                     m = Material.DIRT;
                 } else {
                     m = Material.COARSE_DIRT;      // 다진 흙 — 마을의 바탕색
@@ -459,7 +483,7 @@ final class CheonghaBuilder {
                     if (!world.getBlockAt(x, cy + 1, z).getType().isAir()) {
                         continue;   // 무언가 이미 섰다 — 뒷골목이 밀어내지 않는다
                     }
-                    int h = Math.floorMod(x * 7 + z * 11, 10);
+                    int h = hash(x, z, 10);   // v6.5 ② — 선형 해시가 노면에 사선 줄을 그었다
                     world.getBlockAt(x, cy, z).setType(
                             h < 2 ? Material.COARSE_DIRT : Material.DIRT_PATH);
                     world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);
@@ -614,18 +638,20 @@ final class CheonghaBuilder {
     }
 
     /**
-     * 공터 잡초 — 다진 흙 위에 좌표 해시로 잡풀·고사리. 마지막에 돈다:
-     * 등롱·노점·울타리가 이미 선 자리는 freeCell 이 아니므로 잡초가 그 자리를 뺏지 못한다.
+     * v6.5 ② 공터 잡초 — **비선형 해시 + 밀도 14%**.
+     * v6.4 는 `floorMod(x*13 + z*5, 9) <= 1` 이었다: 밀도 22% 에 등고선이 직선 → 마을을 덮은 초록 세로줄.
+     * 이제 noise() 로 줄무늬를 깨고, 공터의 14%(< 20%) 에만 심는다 — 마당은 맨땅이 지배한다.
+     * 마지막에 돈다: 등롱·노점·울타리·마을 살림이 이미 선 자리는 freeCell 이 아니므로 잡초가 뺏지 못한다.
      */
     private static void weeds(World world, int cx, int cy, int cz) {
         for (int x = cx - 57; x <= cx + 57; x++) {
             for (int z = cz - 57; z <= cz + 57; z++) {
-                int h = Math.floorMod(x * 13 + z * 5, 9);
-                if (h > 1 || !freeCell(world, cx, cy, cz, x, z)) {
+                int h = hash(x, z, 100);
+                if (h >= 14 || !freeCell(world, cx, cy, cz, x, z)) {
                     continue;
                 }
                 world.getBlockAt(x, cy + 1, z).setType(
-                        h == 0 ? Material.SHORT_GRASS : Material.FERN);
+                        h < 10 ? Material.SHORT_GRASS : Material.FERN);
             }
         }
     }
@@ -639,7 +665,7 @@ final class CheonghaBuilder {
         for (int x = cx - 9; x <= cx + 9; x++) {   // 광장 19x19
             for (int z = cz - 9; z <= cz + 9; z++) {
                 boolean rim = Math.abs(x - cx) == 9 || Math.abs(z - cz) == 9;
-                int h = Math.floorMod((x - cx) * 7 + (z - cz) * 11, 12);
+                int h = hash(x, z, 12);   // v6.5 ② — 비선형 해시 (돌바닥의 결도 줄이 서면 안 된다)
                 Material m = rim ? Material.COBBLESTONE
                         : h == 0 ? Material.ANDESITE
                         : h == 1 ? Material.STONE_BRICKS
@@ -700,7 +726,7 @@ final class CheonghaBuilder {
      * shoulder(갓길) = 자갈/거친 흙 교대, 노면 = 흙길에 자갈·거친 흙 20% 점치환. 전부 좌표 해시.
      */
     private static void roadCell(World world, int x, int cy, int z, boolean shoulder) {
-        int h = Math.floorMod(x * 7 + z * 11, 10);
+        int h = hash(x, z, 10);   // v6.5 ② — 점치환 해시도 비선형으로 (사선 줄무달 제거)
         Material top;
         if (shoulder) {
             // 갓길도 노면의 일부다 — 거친 흙을 섞으면 마차가 다니는 폭이 줄어 보인다
@@ -717,7 +743,7 @@ final class CheonghaBuilder {
     /** 디딤돌 — 흙길에서 문지방으로 들어가는 전이. 조약돌/안산암 교대 (좌표 해시) */
     private static void steppingStone(World world, int x, int cy, int z) {
         world.getBlockAt(x, cy, z).setType(
-                Math.floorMod(x * 3 + z * 5, 2) == 0 ? Material.COBBLESTONE : Material.ANDESITE);
+                hash(x, z, 2) == 0 ? Material.COBBLESTONE : Material.ANDESITE);
         world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);
     }
 
@@ -804,7 +830,7 @@ final class CheonghaBuilder {
     }
 
     private static void alleyCell(World world, int x, int cy, int z, boolean edge) {
-        int h = Math.floorMod(x * 7 + z * 11, 10);
+        int h = hash(x, z, 10);   // v6.5 ② — 점치환 해시도 비선형으로 (사선 줄무달 제거)
         world.getBlockAt(x, cy, z).setType(
                 edge && h < 2 ? Material.COARSE_DIRT : Material.DIRT_PATH);
         world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);
@@ -1245,10 +1271,10 @@ final class CheonghaBuilder {
         int ex0 = x0 - eave, ez0 = z0 - eave, ex1 = x1 + eave, ez1 = z1 + eave;
         if (paljak) {
             roofShape(world, ex0, ez0, ex1, ez1, y0 + wallH + 1, rs,
-                    Material.DARK_OAK_PLANKS, 99, true, eave >= 2);    // 합각 = 판자 테두리 + 울타리 살대
+                    Material.DARK_OAK_PLANKS, 99, eave >= 2);    // 팔작 = 우진각 링 → 상부 맞배 → 능선
         } else {
             roofShape(world, ex0, ez0, ex1, ez1, y0 + wallH + 1, rs,
-                    Material.DARK_OAK_PLANKS, 0, false, eave >= 2);    // 박공 = 판자 테두리 + 울타리 살대
+                    Material.DARK_OAK_PLANKS, 0, eave >= 2);     // 맞배 = 박공 널판(풍판) + 능선
         }
         if (eave >= 2) {   // 활주 — 깊은 처마 네 귀를 받치는 툇기둥
             eavePosts(world, ex0 + 1, y0, ez0 + 1, ex1 - 1, ez1 - 1, y0 + wallH);
@@ -1306,9 +1332,9 @@ final class CheonghaBuilder {
                 }
             }
         }
-        // v6.3 ②③ — 처마 2칸(지붕 최외곽 = 벽+2) + 완만한 물매 + 도톰한 용마루 (용마루 cy+13, 치미 cy+15)
+        // v6.5 ① — 처마 2칸(지붕 최외곽 = 벽+2) + 능선 수렴 (우진각 링 7 → 맞배 1 → 용마루 선 cy+15)
         roofShape(world, x0 - 2, z0 - 2, x1 + 2, z1 + 2, cy + 10,
-                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 99, true, true);
+                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 99, true);
         // 층간 띠 스커트 = 1층 처마 (2층집의 허리선). 위 지붕과 같이 2칸 내밀어 두 겹 처마가 겹쳐 보이게.
         for (int x = x0 - 2; x <= x1 + 2; x++) {
             for (int dz : new int[]{-2, -1, 1, 2}) {
@@ -1494,48 +1520,51 @@ final class CheonghaBuilder {
      * 지붕 한 채. (x0,z0)-(x1,z1) 은 **처마 끝** 사각형(벽이 아니라 처마 외곽)이므로,
      * 호출자가 벽 사각형에서 원하는 만큼(주요 건물 2칸, 부속채 1칸) 부풀려 넘긴다.
      * hipSteps = 팔작 하부 우진각 링 수 (0 이면 순수 맞배 — 민가의 위계).
-     * thickRidge = 큰 집(객잔·표국·관아)의 도톰한 용마루.
      */
     private static void roofShape(World world, int x0, int z0, int x1, int z1, int yBase,
-                                  RoofStyle rs, Material gable, int hipSteps, boolean thickRidge) {
-        roofShape(world, x0, z0, x1, z1, yBase, rs, gable, hipSteps, thickRidge, false);
+                                  RoofStyle rs, Material gable, int hipSteps) {
+        roofShape(world, x0, z0, x1, z1, yBase, rs, gable, hipSteps, false);
     }
 
     /**
-     * v6.3 ①③ — deepEave 의 의미가 바뀌었다.
-     *   v6.2: 서까래를 지붕 외곽보다 **한 칸 더 내밀어**(벽+3) 그늘을 진하게 → 지붕이 벽보다 훨씬 넓어졌다
-     *         (조감도 "버섯"). 폐기한다.
-     *   v6.3: 지붕 최외곽은 **벽+2** 로 못 박고, 그 자리엔 두 켜를 쌓는다 —
-     *         (a) 처마 끝단 반 블록(eaveRim) 바로 밑에 흑목 울타리 마구리 한 줄(eaveFenceRim) = 서까래 끝의 결,
-     *         (b) 그 한 칸 안쪽(벽+1)에 흑목 반 블록 서까래 = 그늘 선.
-     *   deepEave 는 이제 (b) 를 놓을지의 플래그다 (처마 2칸 집만 — 부속채·잡화점은 마구리만 = 위계).
+     * v6.5 ① 【능선 수렴】 — 지붕은 '고원'이 아니라 '능선'이다.
+     *
+     * <p>v6.4 의 지붕은 물매 rise(s)=(s+1)/3 (세 칸 전진 한 칸 상승)로 너무 완만해서, 건물 반폭을 다
+     * 전진해도 두 경사면이 만나지 못했다. 남은 꼭대기 평지에 용마루 몸통·등·치미·덧단을 4켜로 얹으니
+     * **넓은 검은 평지 위에 작은 모자**가 됐다 (조감도 클로즈업). 검수(③-b)의 실측:
+     * 최상단 y 평면의 지붕 자재 비율이 56~78% — 용마루가 선이 아니라 면이었다.
+     *
+     * <p>v6.5 는 지붕 높이를 **건물 폭에서 역산**한다:
+     * <pre>
+     *   nHip   = 실제로 도는 우진각 링 수 (팔작 하부)          — 검수 물매의 run 이 바로 이 값이다
+     *   nTotal = 경사면이 능선에서 만나기까지의 전체 단 수      — 짧은 변이 0 이 될 때까지
+     *   H      = ridgeRise(nHip, nTotal) ≈ 0.65 × run          — 능선의 상승량
+     *   rise(s)= round(s × H / nTotal)                          — 단마다 균일하게 오른다 (증분 ≤ 1)
+     * </pre>
+     * 마지막 경사단은 y = yBase+H-1 에서 **풀 블록 한 켜**로 마감하고(적새), 그 위 y = yBase+H 에
+     * **폭 1~2칸의 용마루 선** 하나만 얹는다. 용마루 위에는 아무것도 없다 — 등·치미·덧단·뿔을 전부
+     * 걷어냈다. 그것들이 최상단 y 평면을 '용마루 line 만'으로 채워 평지 비율을 78% 로 만든 범인이다.
+     *   → 최상단 평면 = 용마루 선(5~7칸) / 그 밑 한 켜 = 경사면 30~38칸 → 평지 비율 13~16%.
+     *   → 검수 물매 = H / nHip = 4/6 · 5/7 → 0.67~0.71 (0.5~0.8 대역 유지).
+     *   → 지붕 최고 높이는 v6.4 와 **같다** (덜어낸 용마루 4켜만큼 경사면이 올라왔다) = 처마 겹침 회귀 0.
+     *
+     * <p>deepEave: 지붕 최외곽(벽+2) 한 칸 안쪽(벽+1)에 흑목 반 블록 서까래를 깔지 여부
+     * (처마 2칸 집만 — 부속채·잡화점은 마구리 울타리만 = 위계).
      */
     private static void roofShape(World world, int x0, int z0, int x1, int z1, int yBase,
-                                  RoofStyle rs, Material gable, int hipSteps, boolean thickRidge,
-                                  boolean deepEave) {
-        roofShape(world, x0, z0, x1, z1, yBase, rs, gable, hipSteps, thickRidge, deepEave, true);
-    }
-
-    /**
-     * v6.4 ③ — horns: 용마루 양 끝의 **들린 뿔**(ridge 가 마루 밖으로 한 칸 내미는 풀 블록)을 놓을지.
-     * 이 한 칸이 지붕 사각형 **밖으로** 나가므로, 좁은 부지에서는 이웃 건물의 검수 단면에 얹힌다:
-     *   잡화점(z-19..-13)의 남쪽 뿔이 z=cz-12 = **의뢰소 앵커 z행**에 서서, 검수가 의뢰소 지붕 단면을
-     *   잡화점 뿔(x=cx+5, y=cy+6)에서 시작하도록 만들었다 → 물매 (9-6)/(15-5) = 0.30 "너무 평평" 오탐.
-     *   뿔을 끄면 잡화점 지붕은 제 사각형 안(≤ cz-13)에 갇히고, 의뢰소 단면은 제 처마(cx+9, cy+5)에서
-     *   시작해 (9-5)/(15-9) = 0.67 — 실제 물매 그대로다.
-     * 위계로도 옳다: 치미의 뿔은 격이 있는 집의 표식이고, 잡화점은 마을에서 가장 낮은 격의 점포다.
-     */
-    private static void roofShape(World world, int x0, int z0, int x1, int z1, int yBase,
-                                  RoofStyle rs, Material gable, int hipSteps, boolean thickRidge,
-                                  boolean deepEave, boolean horns) {
+                                  RoofStyle rs, Material gable, int hipSteps, boolean deepEave) {
         eaveFenceRim(world, x0, z0, x1, z1, yBase - 1);   // ① 마구리 — 처마 끝에 매단 흑목 살
         if (deepEave) {
             rafterLine(world, x0 + 1, z0 + 1, x1 - 1, z1 - 1, yBase - 1);   // 서까래 그늘 (한 칸 안쪽)
         }
+        int nHip = hipRingCount(x1 - x0, z1 - z0, hipSteps);
+        int nTotal = Math.max(1, convergeSteps(x1 - x0, z1 - z0, nHip));
+        int h = ridgeRise(nHip, nTotal);
+
         int ax = x0, bx = x1, az = z0, bz = z1;
         int s = 0;
-        while (s < hipSteps && bx - ax > 2 && bz - az > 2) {   // 우진각(팔작 하부) 링
-            hipRing(world, ax, az, bx, bz, yBase + rise(s), rs, flat(s));
+        while (s < nHip) {   // 우진각(팔작 하부) 링
+            hipRing(world, ax, az, bx, bz, yBase + rise(s, h, nTotal), rs, capping(s, h, nTotal));
             ax++;
             bx--;
             az++;
@@ -1543,11 +1572,11 @@ final class CheonghaBuilder {
             s++;
         }
         boolean ridgeX = (bx - ax) >= (bz - az);   // 용마루는 장변을 따라 눕는다
-        boolean plaster = hipSteps > 0;            // v6.4 ⑤ 팔작 = 합각 회벽 / 맞배 = 박공 널판(풍판)
+        boolean plaster = hipSteps > 0;            // 팔작 = 합각 회벽 / 맞배 = 박공 널판(풍판)
         boolean first = true;                      // 합각 살창은 첫 단(가장 넓은 단) 한가운데
         while (ridgeX ? bz - az > 1 : bx - ax > 1) {
-            int y = yBase + rise(s);
-            boolean solid = flat(s);
+            int y = yBase + rise(s, h, nTotal);
+            boolean solid = capping(s, h, nTotal);
             if (ridgeX) {
                 for (int x = ax; x <= bx; x++) {
                     roofCell(world, x, y, az, BlockFace.SOUTH, rs, solid || groove(x));
@@ -1582,8 +1611,52 @@ final class CheonghaBuilder {
             first = false;
             s++;
         }
-        ridge(world, ax, az, bx, bz, yBase + rise(s), rs, ridgeX, thickRidge, horns);
-        eaveRim(world, x0, z0, x1, z1, yBase, rs);   // v6.2 ③ — 처마 끝단을 반 블록으로 깎아 그림자 선을 낸다
+        ridgeLine(world, ax, az, bx, bz, yBase + h, rs);
+        eaveRim(world, x0, z0, x1, z1, yBase, rs);   // 처마 끝단을 반 블록으로 깎아 그림자 선을 낸다
+    }
+
+    /** 실제로 도는 우진각 링 수 — roofShape 의 링 루프와 같은 조건을 미리 센다 (물매 역산의 run) */
+    private static int hipRingCount(int dx, int dz, int hipSteps) {
+        int s = 0;
+        while (s < hipSteps && dx - 2 * s > 2 && dz - 2 * s > 2) {
+            s++;
+        }
+        return s;
+    }
+
+    /** 경사면이 능선에서 만나기까지의 전체 단 수 — 우진각 링 + (짧은 변이 0 이 될 때까지의) 맞배 단 */
+    private static int convergeSteps(int dx, int dz, int nHip) {
+        int rx = dx - 2 * nHip;
+        int rz = dz - 2 * nHip;
+        return nHip + ((rx >= rz ? rz : rx) / 2);
+    }
+
+    /**
+     * v6.5 ① 능선 상승량 — 폭에서 역산한다.
+     * 검수 물매는 앵커 x 행의 단면이고, 팔작에서 그 행에 지붕이 얹히는 구간은 **우진각 링이 도는 만큼**이다
+     * (맞배 단은 짧은 변만 좁히므로 앵커 행에 새 칸을 얹지 않는다) → 검수 run = nHip.
+     * 따라서 H ≈ 0.65 × nHip 이면 검수 물매가 0.5~0.8 한복판에 떨어진다 (13/20 = ceil 0.65).
+     * 맞배(민가·부속채)는 우진각 링이 없으므로 nTotal(= 실제 반폭)으로 같은 물매를 만든다.
+     * 하한 nTotal/2 + 1 — 이보다 낮으면 rise(nTotal) == rise(nTotal-1) 이 되어 용마루가 마지막 경사단과
+     * 같은 높이에 깔린다 = 다시 고원이다. 능선은 **반드시 경사면보다 한 칸 위**여야 한다.
+     */
+    private static int ridgeRise(int nHip, int nTotal) {
+        int run = nHip > 0 ? nHip : nTotal;
+        int h = (13 * run + 19) / 20;                       // ceil(0.65 × run)
+        return Math.max(Math.max(h, nTotal / 2 + 1), 2);
+    }
+
+    /** 물매 — 단 s 의 상승량. round(s × H / nTotal) : 증분은 늘 0 또는 1 (H ≤ nTotal) = 하늘이 새지 않는다 */
+    private static int rise(int s, int h, int n) {
+        return (2 * s * h + n) / (2 * n);
+    }
+
+    /**
+     * 그 단을 풀 블록으로 깔 것인가 — ① 앞 단과 같은 y (그 y 의 두 번째 단) 또는
+     * ② **마지막 경사단**(용마루 바로 밑 = 적새). 용마루는 이 켜 위에 올라앉는다.
+     */
+    private static boolean capping(int s, int h, int n) {
+        return s == n - 1 || (s > 0 && rise(s, h, n) == rise(s - 1, h, n));
     }
 
     /**
@@ -1599,23 +1672,6 @@ final class CheonghaBuilder {
             return first && Math.abs(off) <= 1;   // 합각 중앙 살창 (최대 3칸)
         }
         return run <= 3 && off == 0;              // 박공 꼭짓점 밑 통풍구 1칸
-    }
-
-    /**
-     * v6.3 ② 물매 — rise(s) = (s+1)/3 : **세 칸 전진 한 칸 상승**.
-     * v6.2 는 (2s+2)/3 (세 칸에 두 칸)로 지붕면을 세우고 용마루를 한 칸 더 얹었다 —
-     *   그 결과 검수식 (지붕최고−지붕최저)/(폭/2) 가 1.13~1.17 로 튀어 "급경사" 경고가 났다.
-     *   용마루 실루엣(몸통+등+치미 = 지붕면 위 2칸)은 조감도에 꼭 필요하므로 **지붕면을 눕힌다**:
-     *   관청급 13x11 기준 반폭 6칸에 지붕면 2칸 + 용마루 2칸 = rise 4 → 물매 0.67.
-     *   객잔 17x13 은 반폭 7칸에 rise 5 → 0.71. 다섯 채 전부 0.5~0.8 대역에 들어온다.
-     */
-    private static int rise(int s) {
-        return (s + 1) / 3;
-    }
-
-    /** 그 단이 앞 단과 같은 높이인가 (= 그 y 의 두 번째 평평한 단 → 풀 블록) */
-    private static boolean flat(int s) {
-        return s > 0 && rise(s) == rise(s - 1);
     }
 
     /**
@@ -1669,48 +1725,22 @@ final class CheonghaBuilder {
     }
 
     /**
-     * 용마루 — v6.2 ③. v6.1 의 용마루는 지붕면과 같은 높이의 반 블록 줄이라 조감도에서 **선이 안 보였다**.
-     * 이제 세 켜다: 몸통(y, 풀 블록) → 마루 등(y+1, 풀 블록 = 주변 지붕면보다 확실히 1칸 높다)
-     * → 양단 치미(y+2, 풀 블록) + 마루 밖으로 한 칸 내민 뿔(y+1). thick(객잔·표국·관아)는 y+2 에 반 블록 덧단.
-     * 위에서 내려다보면 검은 판때기 한복판에 마루 선 한 줄이 그어지고, 그 양 끝이 뿔처럼 들린다.
+     * v6.5 ① 용마루 — **폭 1~2칸의 선**. 두 경사면이 만난 자리(마지막 적새 켜)보다 딱 한 칸 위에
+     * 풀 블록 한 줄을 눕힌다. 그 위에는 아무것도 없다.
+     *
+     * <p>v6.4 의 용마루는 몸통(y) + 등(y+1) + 치미·덧단(y+2) + 뿔의 네 켜짜리 **구조물**이었다.
+     * 그래서 지붕의 최상단 y 평면이 '용마루 선'으로만 채워졌고(그 밑 y 도 마찬가지), 검수의
+     * 평지 비율 = 용마루/(용마루+뿔) = 56~78% → "고원". 실루엣을 얻으려고 얹은 것이 실루엣을 죽였다.
+     *
+     * <p>이제 실루엣은 **경사면이 만든다**: 능선 한 줄이 넓은 경사면(30~38칸) 위에 그어지고,
+     * 최상단 평면은 그 선(5~7칸)뿐이다 → 평지 비율 13~16%. 치미·뿔이 필요하다면 그것은 지붕이
+     * 아니라 조각의 몫이다 — 이 마을의 격은 지붕의 켜가 아니라 물매가 말한다.
      */
-    private static void ridge(World world, int ax, int az, int bx, int bz, int y,
-                             RoofStyle rs, boolean ridgeX, boolean thick, boolean horns) {
+    private static void ridgeLine(World world, int ax, int az, int bx, int bz, int y, RoofStyle rs) {
         Material solid = solidMat(rs);
         for (int x = ax; x <= bx; x++) {
             for (int z = az; z <= bz; z++) {
-                world.getBlockAt(x, y, z).setType(solid);   // 몸통
-            }
-        }
-        int mx = (ax + bx) / 2;
-        int mz = (az + bz) / 2;
-        if (ridgeX) {
-            for (int x = ax; x <= bx; x++) {
-                world.getBlockAt(x, y + 1, mz).setType(solid);              // 마루 등 — 1칸 세운다
-                if (thick) {
-                    topSlab(world, x, y + 2, mz, ridgeMat(rs));             // 덧단 (격이 높은 집)
-                }
-            }
-            for (int x : new int[]{ax, bx}) {
-                world.getBlockAt(x, y + 2, mz).setType(solid);              // 치미 — 양단을 확실히 세운다
-            }
-            if (horns) {   // v6.4 ③ — 뿔은 지붕 사각형 밖으로 한 칸 나간다 (좁은 부지에서는 끈다)
-                world.getBlockAt(ax - 1, y + 1, mz).setType(solid);         // 들린 양 끝 (치미의 뿔)
-                world.getBlockAt(bx + 1, y + 1, mz).setType(solid);
-            }
-        } else {
-            for (int z = az; z <= bz; z++) {
-                world.getBlockAt(mx, y + 1, z).setType(solid);
-                if (thick) {
-                    topSlab(world, mx, y + 2, z, ridgeMat(rs));
-                }
-            }
-            for (int z : new int[]{az, bz}) {
-                world.getBlockAt(mx, y + 2, z).setType(solid);
-            }
-            if (horns) {
-                world.getBlockAt(mx, y + 1, az - 1).setType(solid);
-                world.getBlockAt(mx, y + 1, bz + 1).setType(solid);
+                world.getBlockAt(x, y, z).setType(solid);
             }
         }
     }
@@ -1928,8 +1958,8 @@ final class CheonghaBuilder {
         for (int x = cx + 37; x <= cx + 39; x++) {   // 기단 진입 계단 3칸 폭
             stair(world, x, cy + 1, z0 - 1, Material.STONE_BRICK_STAIRS, BlockFace.SOUTH);
         }
-        roofShape(world, x0 - 2, z0 - 2, x1 + 2, z1 + 2, cy + 6,   // v6.3 ③ — 처마 2칸 (지붕 최외곽 = 벽+2)
-                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 99, true, true);
+        roofShape(world, x0 - 2, z0 - 2, x1 + 2, z1 + 2, cy + 6,   // 처마 2칸 (지붕 최외곽 = 벽+2)
+                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 99, true);
         for (int px : new int[]{cx + 36, cx + 44}) {   // 활주(活柱) 2주 — 정면 깊은 처마를 받는다 (마당 바닥에서)
             for (int y = cy + 1; y <= cy + 5; y++) {
                 world.getBlockAt(px, y, z0 - 2).setType(Material.SPRUCE_FENCE);
@@ -1997,7 +2027,7 @@ final class CheonghaBuilder {
             }
         }
         roofShape(world, cx + 30, cz + 36, cx + 37, cz + 40, cy + 4,
-                RoofStyle.SHINGLE, Material.DARK_OAK_PLANKS, 0, false);
+                RoofStyle.SHINGLE, Material.DARK_OAK_PLANKS, 0);
         world.getBlockAt(cx + 33, cy + 1, cz + 39).setType(Material.SPRUCE_FENCE);   // 칸막이
         world.getBlockAt(cx + 33, cy + 2, cz + 39).setType(Material.SPRUCE_FENCE);
         world.getBlockAt(cx + 32, cy + 1, cz + 38).setType(Material.HAY_BLOCK);
@@ -2826,10 +2856,10 @@ final class CheonghaBuilder {
             awningTrapdoor(world, x0, cy + 3, z, BlockFace.WEST);
             steppingStone(world, x0 - 1, cy, z);   // 점두 앞 디딤돌 (대로 갓길 → 문지방 전이)
         }
-        // v6.4 ③ — horns=false: 용마루 뿔이 지붕 밖(z1+2 = cz-12)으로 나가 의뢰소 앵커 z행에 얹혔다.
-        //   뿔을 끄면 잡화점 지붕은 z ≤ cz-13 안에 갇히고, 의뢰소 검수 단면은 제 처마에서 시작한다.
+        // v6.5 ① — 용마루 뿔은 전 건물에서 폐기됐다 (지붕 사각형 밖으로 나가 이웃 검수 단면에 얹혔다).
+        //   잡화점 지붕은 이제 구조적으로 z ≤ cz-13 안에 갇히고, 의뢰소 검수 단면은 제 처마에서 시작한다.
         roofShape(world, x0 - 1, z0 - 1, x1, z1 + 1, cy + 4,   // 맞배 + 박공. 동면 처마 0 = 의뢰소 처마와 이웃
-                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 0, false, false, false);
+                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 0);
         hangingSign(world, x0 - 1, cy + 3, cz - 16, BlockFace.WEST, "장쇠네 잡화", "잡화 — 되는 대로 다 있다");
         hangingLantern(world, x0 - 1, cy + 3, cz - 18);   // 처마 밑 등롱 (밤에도 점두가 읽힌다)
         generalStoreInterior(world, cx, cy, cz, x0, x1);

@@ -102,11 +102,14 @@ def seam_score(rows, w, h):
     def row_diff(y0, y1):
         return sum(edge_diff(px(rows, x, y0), px(rows, x, y1)) for x in range(w)) / w
 
+    # 분모는 중앙값이 아니라 상위 경계(90퍼센타일)다 — 기와 골·판자 결처럼 '의도된 강한 경계'가
+    # 있는 텍스처를 중앙값으로 재면, 매끈한 내부만 보고 정상 랩을 이음매로 오판한다.
+    # 판정 질문은 "랩 경계가 이 텍스처의 강한 경계들 사이에서 이상치인가"이다.
     inner_x = sorted(col_diff(x, x + 1) for x in range(w - 1))
     inner_y = sorted(row_diff(y, y + 1) for y in range(h - 1))
-    med_x = inner_x[len(inner_x) // 2] or 1
-    med_y = inner_y[len(inner_y) // 2] or 1
-    return max(col_diff(w - 1, 0) / med_x, row_diff(h - 1, 0) / med_y)
+    ref_x = inner_x[int(len(inner_x) * 0.9)] or 1
+    ref_y = inner_y[int(len(inner_y) * 0.9)] or 1
+    return max(col_diff(w - 1, 0) / ref_x, row_diff(h - 1, 0) / ref_y)
 
 
 def lint(path, name):
