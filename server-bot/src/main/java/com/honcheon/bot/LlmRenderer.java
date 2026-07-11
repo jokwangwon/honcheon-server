@@ -78,20 +78,25 @@ final class LlmRenderer {
      * 반환 future 는 절대 예외로 완료되지 않는다 — 호출부는 서사를 받기만 하면 된다.
      */
     CompletableFuture<String> render(String facts, String fallback) {
+        return chat(SYSTEM, facts, fallback);
+    }
+
+    /** 범용 대화 — NPC 페르소나 등 커스텀 시스템 프롬프트 (라우팅·폴백 규칙은 render 와 동일) */
+    CompletableFuture<String> chat(String system, String user, String fallback) {
         if (!enabled()) {
             return CompletableFuture.completedFuture(fallback);
         }
         if (localEnabled()) {
-            return renderLocal(facts, fallback);
+            return chatLocal(system, user, fallback);
         }
         try {
             ObjectNode body = JSON.createObjectNode();
             body.put("model", model);
             body.put("max_tokens", 700);
-            body.put("system", SYSTEM);
+            body.put("system", system);
             body.putArray("messages").addObject()
                     .put("role", "user")
-                    .put("content", facts);
+                    .put("content", user);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.anthropic.com/v1/messages"))
                     .header("x-api-key", apiKey)
@@ -110,7 +115,7 @@ final class LlmRenderer {
     }
 
     /** 로컬 LLM — OpenAI 호환 /chat/completions (Ollama·llama.cpp·vLLM). 실패는 전부 폴백 수렴 */
-    private CompletableFuture<String> renderLocal(String facts, String fallback) {
+    private CompletableFuture<String> chatLocal(String system, String user, String fallback) {
         try {
             ObjectNode body = JSON.createObjectNode();
             body.put("model", localModel);
@@ -119,8 +124,8 @@ final class LlmRenderer {
             // 다른 OpenAI 호환 서버는 미지 필드로 무시한다
             body.put("keep_alive", "30m");
             var messages = body.putArray("messages");
-            messages.addObject().put("role", "system").put("content", SYSTEM);
-            messages.addObject().put("role", "user").put("content", facts);
+            messages.addObject().put("role", "system").put("content", system);
+            messages.addObject().put("role", "user").put("content", user);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(localUrl.replaceAll("/+$", "") + "/chat/completions"))
                     .header("content-type", "application/json")

@@ -61,6 +61,7 @@ public final class GameListener extends ListenerAdapter {
                 case "수련" -> train(event);
                 case "사사" -> apprentice(event);
                 case "의뢰" -> questBoard(event);
+                case "대화" -> talkToNpc(event);
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
@@ -149,6 +150,7 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 수련` 기초 단련 — 하루 한 번, 수련 +1일치 (출도 후)\n"
                         + "`/혼천 사사` 곽진에게 무공을 청한다 — 무공 백지만 (과제→시험→입문)\n"
                         + "`/혼천 의뢰` 소연의 게시판 — 오늘의 의뢰 3건, 수주 1건씩 (출도 후)\n"
+                        + "`/혼천 대화` 청하현 사람에게 말 걸기 — 자유 입력, 정보를 캐면 판정 (출도 후)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
@@ -879,6 +881,116 @@ public final class GameListener extends ListenerAdapter {
         db.updateCharacter(chId, sheet, wallet, realm, "강호", "청하현");
         event.editMessageEmbeds(event.getMessage().getEmbeds().get(0), result.build())
                 .setComponents().queue();
+    }
+
+    // ─── 대화 — NPC 3층 구조의 최소 배선 (npc_dialogue.yml: 잡담/판정/세계) ───
+
+    /** 대화 가능한 NPC 6인 + 정보 캐기 성공 시 내주는 단서 (등록 사건 기반 — 세계층의 지식 경계) */
+    private static final Map<String, String> NPC_HINTS = Map.of(
+            "한백", "요즘 밤에만 드나드는 낯선 손이 있어. 셋째 방 — 아니, 내가 말이 많았군.",
+            "소연", "북쪽 산길에 도적이 늘었네. 조만간 현상 의뢰가 걸릴 걸세 — 게시판을 봐 두게.",
+            "유문", "고을에 열병 소문이 돌아. 약재가 동나기 전에 구해 두는 게 좋을 게야.",
+            "금서방", "시세가 들썩입니다 — 북쪽 길 소문 때문이지요. 가죽 값도 곧 움직일 겁니다.",
+            "곽진", "상단로가 요즘 험하다. 호위 삯이 오르는 중이야 — 실력이 있다면 기회지.",
+            "장쇠", "요즘 은근히 좋은 물건을 싸게 넘기려는 자들이 있어 — 출처는 안 물어봤네.");
+
+    private final Map<String, Long> talkCooldown = new ConcurrentHashMap<>();
+
+    private void talkToNpc(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        var npcOpt = event.getOption("상대");
+        var sayOpt = event.getOption("말");
+        if (npcOpt == null || sayOpt == null) {
+            event.reply("`/혼천 대화 상대:<이름> 말:<하고 싶은 말>`").setEphemeral(true).queue();
+            return;
+        }
+        String npcName = npcOpt.getAsString();
+        String say = sayOpt.getAsString();
+        Map<String, Object> npc = rules.npcByName(npcName);
+        if (npc == null || !NPC_HINTS.containsKey(npcName)) {
+            event.reply("그 이름은 청하현에 없다.").setEphemeral(true).queue();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = talkCooldown.get(event.getUser().getId());
+        if (last != null && now - last < 5_000) {
+            event.reply("숨 좀 돌리고 — (대화는 5초에 한 번)").setEphemeral(true).queue();
+            return;
+        }
+        talkCooldown.put(event.getUser().getId(), now);
+
+        Map<String, Object> row = found.get();
+        long chId = ((Number) row.get("id")).longValue();
+        String persona = personaPrompt(npcName, npc);
+        String fallback = fallbackLine(npcName, npc);
+        event.deferReply().queue();   // 로컬 LLM 1~3초 — 3초 응답 제한 회피
+        renderer.chat(persona, say, fallback).thenAccept(reply -> {
+            try {
+                if (reply.strip().startsWith("[판정]")) {
+                    // 판정층 — 의도 분류 결과: 정보 캐기 (action_pairs 정보_캐기 → 화술+정보수집)
+                    resolveInfoCheck(event, row, chId, npcName, say);
+                    return;
+                }
+                // 잡담층 + 세계층 기록 (대화 요지 — NPC 기억의 재료)
+                db.logEvent("대화", "character", String.valueOf(chId), npcName,
+                        Map.of("말", say.substring(0, Math.min(80, say.length()))));
+                event.getHook().sendMessageEmbeds(new EmbedBuilder().setColor(INK)
+                        .setTitle("「" + npcName + "」")
+                        .setDescription(reply.strip()).build()).queue();
+            } catch (Exception e) {
+                event.getHook().sendMessage("오류: " + e.getMessage()).queue();
+            }
+        });
+    }
+
+    /** 판정층 — 정보 캐기: 화술 vs 11 (judgment action_pairs). 성공 = 등록 단서, 실패 = 침묵 */
+    @SuppressWarnings("unchecked")
+    private void resolveInfoCheck(SlashCommandInteractionEvent event, Map<String, Object> row,
+                                  long chId, String npcName, String say) throws Exception {
+        Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        int stat = ((Number) attrs.getOrDefault("화술", 2)).intValue();
+        int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
+        int resist = 11;
+        JudgmentEngine.Tier tier = rules.judgment.resolve(stat, roll, resist);
+        int margin = stat + roll - resist;
+        db.logEvent("대화_판정", "character", String.valueOf(chId), npcName,
+                Map.of("굴림", roll, "마진", margin, "등급", tier.name()));
+        String outcome = margin >= 0
+                ? NPC_HINTS.get(npcName)
+                : "…" + npcName + "은(는) 화제를 돌렸다. 오늘은 입이 무겁다.";
+        event.getHook().sendMessageEmbeds(
+                new EmbedBuilder().setColor(INK).setTitle("판정 — 정보 캐기")
+                        .setDescription("**화술 " + stat + "** + 2d6 = **" + (stat + roll) + "** vs " + resist
+                                + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **"
+                                + tier.name() + "**").build(),
+                new EmbedBuilder().setColor(margin >= 0 ? BLOOD : INK)
+                        .setTitle("「" + npcName + "」").setDescription(outcome).build()).queue();
+    }
+
+    /** 페르소나 시스템 프롬프트 — 등록부(역할·성향)가 원천, 지식 경계·판정 라우팅 포함 */
+    @SuppressWarnings("unchecked")
+    private String personaPrompt(String name, Map<String, Object> npc) {
+        Object disp = npc.get("disposition");
+        String dispositions = disp instanceof List<?> list
+                ? String.join(", ", list.stream().map(String::valueOf).toList()) : "";
+        return "너는 무협 세계 청하현의 NPC 「" + name + "」이다. 역할: " + npc.get("role")
+                + ". 성향: " + dispositions + ".\n플레이어가 말을 건다. 규칙:\n"
+                + "1. 네가 아는 것만 말한다 — 청하현 안의 일상 수준. 새 인명·지명·사건 발명 금지. 숫자 금지.\n"
+                + "2. 2문장 이내, 한국어 사극 말투. 역할과 성향대로.\n"
+                + "3. 플레이어의 말이 정보 요구·부탁·설득·흥정·위협이면 응답하지 말고 정확히 [판정] 만 출력하라.\n"
+                + "4. 그 외(인사·잡담·농담)는 그냥 대답한다 — 판정을 억지로 만들지 않는다.";
+    }
+
+    /** LLM 비활성·실패 시 폴백 — 역할 기반 한 줄 (대화가 죽지 않는다) */
+    private String fallbackLine(String name, Map<String, Object> npc) {
+        return npc.get("role") + " " + name + "은(는) 고개만 끄덕였다. 바빠 보인다.";
     }
 
     // ─── 수련 — 기초 단련: 하루 한 번, 화후 1일치 (training 축의 최소 배선) ───

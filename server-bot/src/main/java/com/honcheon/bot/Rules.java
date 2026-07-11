@@ -22,6 +22,7 @@ public final class Rules {
     public final Map<String, Object> playerCreation;
     private final Map<String, Object> economyCfg;
     private final Map<String, Object> llmCfg;
+    private final Map<String, Object> npcsCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -35,6 +36,19 @@ public final class Rules {
         this.dispositionTest = RulesConfig.load(configDir.resolve("disposition_test.yml"));
         this.playerCreation = RulesConfig.load(configDir.resolve("player_creation.yml"));
         this.llmCfg = RulesConfig.load(configDir.resolve("llm.yml"));
+        this.npcsCfg = RulesConfig.load(configDir.resolve("npcs/cheongha_npcs.yml"));
+    }
+
+    /** 등록 NPC 항목을 표시 이름으로 찾는다 (등록제 명사 — 대화 페르소나의 원천) */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> npcByName(String name) {
+        Map<String, Object> registry = RulesConfig.section(npcsCfg, "npcs");
+        for (Object value : registry.values()) {
+            if (value instanceof Map<?, ?> npc && name.equals(npc.get("name"))) {
+                return (Map<String, Object>) npc;
+            }
+        }
+        return null;
     }
 
     /** llm.yml roles.turn_renderer.model — 세대 교체는 config 만 갱신하면 된다 */

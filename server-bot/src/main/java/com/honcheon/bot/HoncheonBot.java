@@ -53,6 +53,17 @@ public final class HoncheonBot {
                         new SubcommandData("수련", "기초 단련 — 하루 한 번, 수련 +1일치"),
                         new SubcommandData("사사", "곽진에게 무공을 청한다 — 무공 백지만"),
                         new SubcommandData("의뢰", "소연의 게시판 — 오늘의 의뢰 3건 (수주·수행)"),
+                        new SubcommandData("대화", "청하현 사람에게 말을 건다 — 자유 입력")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "상대", "말을 걸 사람", true)
+                                                .addChoice("객잔 주인 한백", "한백")
+                                                .addChoice("의뢰소 관리인 소연", "소연")
+                                                .addChoice("의원 유문", "유문")
+                                                .addChoice("전장 지점주 금서방", "금서방")
+                                                .addChoice("표사 곽진", "곽진")
+                                                .addChoice("장터 잡화상 장쇠", "장쇠"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "말", "하고 싶은 말 (자유 입력)", true)),
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                         new SubcommandData("도움말", "명령과 규칙 안내"));
