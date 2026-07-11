@@ -234,12 +234,13 @@ public final class GameListener extends ListenerAdapter {
         List<String> familyKeys = new ArrayList<>(rules.families().keySet());
         String family = familyKeys.get(dice.nextInt(familyKeys.size()));
         // 집안별 발단 풀 — 건재한 집에 재난형 발단은 모순 (incident_pool 명시 시 그 안에서만)
+        // F27: 풀이 없는 집안도 family_only 표기된 전용 발단(수행_파견)은 뽑지 않는다
         @SuppressWarnings("unchecked")
         Map<String, Object> familyCfg = (Map<String, Object>) rules.families().get(family);
         @SuppressWarnings("unchecked")
         List<String> incidentPool = familyCfg != null && familyCfg.get("incident_pool") instanceof List<?>
                 ? (List<String>) familyCfg.get("incident_pool")
-                : new ArrayList<>(rules.incidents().keySet());
+                : defaultIncidentPool(family);
         String incident = incidentPool.get(dice.nextInt(incidentPool.size()));
         String bracket = dice.nextBoolean() ? "유년" : "소년";
 
@@ -273,6 +274,18 @@ public final class GameListener extends ListenerAdapter {
         db.logEvent("생성", "character", String.valueOf(id),
                 Map.of("성향", disposition, "집안", family, "발단", incident, "나이", age));
         return new Born(new Character(id, name, disposition, family, incident, bracket, age, attrs, wallet), sheet);
+    }
+
+    /** F27 — 기본 발단 풀: family_only가 없거나 이 집안을 가리키는 발단만 */
+    private List<String> defaultIncidentPool(String family) {
+        List<String> pool = new ArrayList<>();
+        rules.incidents().forEach((key, value) -> {
+            Object only = value instanceof Map<?, ?> m ? m.get("family_only") : null;
+            if (only == null || only.equals(family)) {
+                pool.add(key);
+            }
+        });
+        return pool;
     }
 
     /** 브래킷 규칙(base·free·cap)대로 배분 — 프리셋의 높은 능력치부터 (player_creation 정합) */
