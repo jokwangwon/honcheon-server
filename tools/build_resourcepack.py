@@ -110,6 +110,54 @@ def paint_rows(art, palette):
     return [[palette.get(c, T) for c in row] for row in art]
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 명암 엔진 — 픽셀 아트의 입체감은 '색'이 아니라 '계단'에서 온다.
+# 빛은 좌상단에서 온다 (바닐라 관례). 위·왼쪽 밝게, 아래·오른쪽 어둡게.
+# 난수 금지 — 결정론 해시(crc32)만. 같은 좌표는 언제나 같은 값.
+# ═══════════════════════════════════════════════════════════════════════════
+def mix(c1, c2, t):
+    """RGBA 선형 보간 (t=0 → c1, t=1 → c2)."""
+    return tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
+
+
+def ramp(dark, light, n):
+    """어두운색 → 밝은색 n단 명암 계단. 인덱스 0이 가장 어둡다.
+    한 텍스처의 모든 픽셀이 이 계단 위에만 앉으면 색이 흩어지지 않는다 (팔레트 규율)."""
+    return [mix(dark, light, i / (n - 1)) for i in range(n)]
+
+
+def step(shades, v):
+    """실수 명암값 v를 계단 인덱스로 스냅 — 계단 밖은 양 끝으로 클램프."""
+    return shades[max(0, min(len(shades) - 1, int(round(v))))]
+
+
+def h32(*args):
+    """결정론 해시 — crc32. 산술식(x*a+y*b)은 규칙적 사선 격자를 낳고, 사선 격자는 곧 무늬다."""
+    return zlib.crc32(bytes(v & 0xFF for v in args))
+
+
+def octave(x, y, cell, salt, amp):
+    """셀 격자 결정론 노이즈 (계단형) — 진폭 ±amp. 입자·결 같은 고주파용.
+    타일링 안전 조건: 16 % cell == 0 (셀 경계가 텍스처 경계와 맞아야 랩이 매끄럽다)."""
+    return (h32(x // cell, y // cell, salt) % 1001 / 1000.0 * 2 - 1) * amp
+
+
+def smooth_octave(x, y, cell, salt, amp):
+    """격자 보간 결정론 노이즈 — 셀 모서리 4점을 smoothstep 이중선형 보간.
+    계단형 octave를 저주파로 쓰면 셀이 '네모 얼룩'으로 보인다 (회칠이 아니라 모자이크가 된다).
+    격자 인덱스를 n = 16 // cell 로 모듈러 → 텍스처를 이어 붙여도 노이즈장이 연속이다 (랩 안전)."""
+    n = 16 // cell
+
+    def corner(i, j):
+        return h32((x // cell + i) % n, (y // cell + j) % n, salt) % 1001 / 1000.0 * 2 - 1
+
+    tx, ty = (x % cell) / cell, (y % cell) / cell
+    sx, sy = tx * tx * (3 - 2 * tx), ty * ty * (3 - 2 * ty)      # smoothstep — 셀 경계를 무디게
+    a = corner(0, 0) + (corner(1, 0) - corner(0, 0)) * sx
+    b = corner(0, 1) + (corner(1, 1) - corner(0, 1)) * sx
+    return (a + (b - a) * sy) * amp
+
+
 # ─── 체력바 — 하트 대신 기혈 구슬(단약) 9x9 (gui/sprites/hud/heart/) ───
 # 바닐라 렌더 계약: container 먼저, 그 위에 full/half를 겹쳐 그린다 —
 # half는 우측을 투명으로 남겨 아래 container 소켓이 비쳐 보이게 한다 (바닐라 동일 문법).
@@ -471,392 +519,561 @@ def gui_background():
 # 등록 원천: config/resourcepack_design.yml item_channels — 미등록 키 생성 금지 (등록제)
 # 팩 게이트: 등급 = 베이스 바닐라 아이템(재질 색) / 계열 = model_key / 등급 = 자루 고리 수
 # ═══════════════════════════════════════════════════════════════════════════
-# 무기 팔레트 — 등급 색은 바닐라 재질이 이미 말한다. 텍스처는 형태(실루엣·고리)에 집중.
-BLADE = (176, 178, 182, 255)      # 날 — 저채도 강철
-BLADE_EDGE = (128, 132, 138, 255) # 날 중심선/인(刃) 음영
-FITTING = (150, 140, 116, 255)    # 호수(護手)·장식 쇠붙이 — 놋
-GRIP = (74, 58, 44, 255)          # 자루 — 어두운 나무·가죽
-RING = (200, 192, 168, 255)       # 자루 고리(등급 표식) — 화선지 톤 금속 테
-TASSEL = (150, 56, 44, 255)       # 신병 수실 — 주사
-BLOOD = (140, 30, 26, 255)        # 마병 혈적 — 다른 계보임을 형태로 선언 (위가 아니라 밖)
+# ─── 무기 팔레트 — 등급 '색'은 바닐라 재질이 말한다. 텍스처가 말하는 건 재질감과 형태다.
+#     강철은 평면 회색이 아니다: 인(刃)은 빛을 되쏘고, 몸은 중간이고, 등 쪽 사면은 그늘에 잠긴다.
+#     4단 강철 계단 + 3단 놋 + 4단 자루 = 무기 한 자루에 최소 8색.
+BLADE_HI = (232, 236, 242, 255)   # 인(刃) — 날이 빛을 되쏘는 선. 무기에서 가장 밝은 값
+BLADE_LIT = (188, 193, 201, 255)  # 날 밝은 사면
+BLADE_MID = (146, 151, 160, 255)  # 날 몸
+BLADE_DIM = (104, 109, 119, 255)  # 날 그늘 사면
+BLADE_SPINE = (72, 76, 85, 255)   # 척(脊) — 도의 두꺼운 등
+FIT_HI = (198, 178, 128, 255)     # 호수(護手) 놋 — 광
+FIT_MID = (150, 132, 92, 255)     # 놋 몸
+FIT_DIM = (98, 84, 56, 255)       # 놋 그늘
+GRIP_HI = (120, 96, 70, 255)      # 자루 감기 — 빛 받는 마루
+GRIP_MID = (86, 68, 48, 255)      # 자루 몸
+GRIP_DIM = (58, 45, 32, 255)      # 감기 사이 골
+GRIP_DARK = (40, 31, 22, 255)     # 자루 깊은 골
+RING_HI = (236, 230, 210, 255)    # 자루 고리(등급 표식) — 광
+RING_MID = (176, 168, 144, 255)   # 고리 그늘 (2톤이라야 금속 테로 읽힌다)
+TASSEL = (168, 62, 48, 255)       # 신병 수실 — 주사
+TASSEL_HI = (206, 96, 78, 255)
+BLOOD = (150, 32, 28, 255)        # 마병 혈적 — 다른 계보임을 형태로 선언 (위가 아니라 밖)
+BLOOD_HI = (196, 56, 46, 255)
+WPN_OUT = (24, 22, 20, 255)       # 먹 외곽선
 
-# 지물·기물·재료 공용 팔레트 (먹·화선지·주사 3계열 + 재질 최소값)
-PAPER = (216, 208, 190, 255)      # 화선지
-PAPER_DIM = (176, 166, 146, 255)  # 화선지 음영(접힘)
-CORD = (74, 58, 44, 255)          # 끈·자루
-BRASS = (150, 140, 116, 255)      # 놋·인패
-JADE = (108, 142, 136, 255)       # 피독주 청록
-GLOW = (240, 232, 214, 255)       # 야명주 — 유일하게 밝은 값 허용
-GLOW_HI = (255, 252, 240, 255)
-HIDE = (140, 116, 88, 255)        # 가죽
-GALL = (104, 102, 66, 255)        # 웅담 — 녹갈
-HERB = (108, 124, 84, 255)        # 약재 — 마른 풀
+WPN_PALETTE = {
+    "H": BLADE_HI, "L": BLADE_LIT, "B": BLADE_MID, "S": BLADE_DIM, "D": BLADE_SPINE,
+    "G": FIT_HI, "g": FIT_MID, "f": FIT_DIM,
+    "W": GRIP_HI, "w": GRIP_MID, "x": GRIP_DIM, "X": GRIP_DARK,
+    "R": RING_HI, "e": RING_MID,
+    "t": TASSEL, "T": TASSEL_HI, "m": BLOOD, "M": BLOOD_HI, "K": WPN_OUT,
+}
 
-# ─── 무기 실루엣 16x16 (외곽 1px 여백 준수) ───
-# 문자: # 먹 외곽 / b 날 / v 날 중심선(마병=혈적) / g 호수 / h 자루 / r 홍영(창 전용)
-#       1·2·3 자루 고리 슬롯(등급별 점등, 미점등은 자루색) / t 수실(신병) / m 혈적(마병)
-SWORD_ART = [   # 검 — 곧은 양날 + 대각 호수 + 자루
+# 무기는 대각선으로 눕는다 (좌하 자루 → 우상 칼끝, 바닐라 아이템 관례).
+# 대각선 띠를 (1,-1)·(1,1) 두 벡터로만 찍으면 격자의 절반(홀수 패리티)에 구멍이 남는다 —
+# 외곽선을 두르는 순간 그 구멍이 전부 검게 메워져 체크무늬가 된다 (첫 시도의 실패, 실측 확인).
+# 그래서 띠는 '한 걸음마다 한 행을 가로로 채우는' 계단식으로 찍는다 — 빈틈이 원천적으로 없다.
+# 가닥(strands)은 그 행에서 왼쪽부터 오른쪽 순서다. 빛이 좌상단에서 오므로 왼쪽이 밝다:
+# 첫 가닥이 인(刃)의 하이라이트, 마지막 가닥이 척(脊)의 그늘.
+def band(grid, x0, y0, steps, strands, sx=1, sy=-1, vertical=False):
+    """(x0, y0)에서 (sx, sy)씩 steps번 걸으며, 걸음마다 strands를 가로(기본)로 나란히 찍는다.
+    strands = 문자 리스트, 또는 걸음 i를 받아 문자 리스트를 돌려주는 함수 (자루 감기용)."""
+    for i in range(steps):
+        use = strands(i) if callable(strands) else strands
+        x, y = x0 + sx * i, y0 + sy * i
+        for j, ch in enumerate(use):
+            px, py = (x, y + j) if vertical else (x + j, y)
+            if 0 <= px < 16 and 0 <= py < 16 and ch != ".":
+                grid[py][px] = ch
+
+
+def outline(grid, ch="K"):
+    """실루엣 자동 외곽선 — 빈 칸이 채워진 칸과 상하좌우로 맞닿으면 먹으로 두른다.
+    바닐라 아이템은 예외 없이 어두운 외곽선을 두른다 (인벤토리 배경에서 형태가 떠오르는 이유).
+    손으로 외곽을 찍지 않으니 형태를 고쳐도 외곽선이 저절로 따라오고,
+    행 길이가 어긋나는 아트 오타의 주된 원인 하나가 사라진다."""
+    edge = [(x, y) for y in range(16) for x in range(16) if grid[y][x] == "."
+            and any(0 <= x + dx < 16 and 0 <= y + dy < 16 and grid[y + dy][x + dx] != "."
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+    for x, y in edge:
+        grid[y][x] = ch
+    return grid
+
+
+def blank16():
+    return [["."] * 16 for _ in range(16)]
+
+
+def wrap_grip(i):
+    """자루 감기 — 걸음마다 밝은 마루와 어두운 골이 번갈아 온다 (가죽끈을 감은 결)."""
+    return ["W", "w", "x"] if i % 2 == 0 else ["w", "x", "X"]
+
+
+def put_rings(grid, x0, y0, rings, slots, sx=-1, sy=1):
+    """등급 고리 — 자루를 가로지르는 2톤 금속 테. slots = 자루 걸음 번호(위에서부터).
+    colorblind_rule: 색 단독 금지 → 회색조에서도 '고리 몇 개'로 등급이 읽힌다."""
+    for k in range(min(rings, len(slots))):
+        i = slots[k]
+        band(grid, x0 + sx * i, y0 + sy * i, 1, ["R", "R", "e"])
+
+
+def blade_strands(mabyeong, spine):
+    """날 단면 4가닥: 인(가장 밝음) → 밝은 사면 → 혈조(血槽) → 등.
+    혈조 자리가 마병에서는 혈적이 된다 — 형태는 같고 '피가 밴 홈'만 다르다.
+    도(刀)는 한날이라 등이 두껍고 어둡다 (spine=True) — 검과의 차이는 오직 등의 그늘로 읽힌다."""
+    return ["H", "L", "m" if mabyeong else "B", "D" if spine else "S"]
+
+
+def _hilt(g, rings, mabyeong, gx, gy, guard, slots):
+    """자루 한 벌 — 감기 5걸음 + 고리 + 놋 물미 + 신병 수실 + 마병 혈적.
+    검·도·비수가 공유한다 (자루는 계열이 아니라 등급이 말하는 부위다)."""
+    band(g, gx, gy, 5, wrap_grip, sx=-1, sy=1)
+    band(g, *guard, 5, ["G", "g", "f"], sx=1, sy=1)          # 코등이 — 날에 수직인 가로대
+    put_rings(g, gx, gy, rings, slots)
+    band(g, gx - 4, gy + 4, 1, ["G", "g", "f"])              # 물미(자루 끝 놋)
+    if rings >= 3:                                            # 신병 수실 — 물미에 매단다
+        g[gy + 5][gx - 4] = "T"
+        g[gy + 5][gx - 3] = "t"
+    if mabyeong:                                              # 마병 혈적 — 자루 끝의 낙인
+        g[gy + 4][gx - 2] = "M"
+
+
+def sword_grid(rings, mabyeong):
+    """검(劍) — 곧은 양날 + 날에 수직으로 가로지르는 긴 코등이."""
+    g = blank16()
+    band(g, 6, 8, 5, blade_strands(mabyeong, False))          # 날 y=8..4
+    band(g, 11, 3, 1, ["H", "L"])                             # 칼끝 2px
+    band(g, 12, 2, 1, ["H"])                                  # 칼끝 1px
+    _hilt(g, rings, mabyeong, 5, 9, (4, 6), (1, 2, 3))
+    return g
+
+
+def dao_grid(rings, mabyeong):
+    """도(刀) — 한날. 코등이는 짧은 원반(圓盤)이라 검과 실루엣이 갈린다."""
+    g = blank16()
+    band(g, 6, 8, 5, blade_strands(mabyeong, True))
+    band(g, 11, 3, 1, ["H", "L"])
+    band(g, 12, 2, 1, ["H"])
+    _hilt(g, rings, mabyeong, 5, 9, (5, 7), (1, 2, 3))        # 원반 호수 — 짧게
+    return g
+
+
+def dagger_grid(rings, mabyeong):
+    """비수(匕首) — 짧은 날. 자루가 날보다 길다 (비율이 곧 정체다)."""
+    g = blank16()
+    band(g, 7, 9, 4, ["H", "L", "m" if mabyeong else "S"])    # 짧은 날 y=9..6
+    band(g, 11, 5, 1, ["H"])
+    _hilt(g, rings, mabyeong, 6, 10, (5, 8), (1, 2, 3))
+    return g
+
+
+def spear_grid(rings, mabyeong):
+    """창(槍) — 긴 자루 + 좁은 창날 + 홍영(紅纓, 창날 밑 붉은 술).
+    자루가 길어 고리를 넉넉히 벌려 꽂는다 — 등급이 멀리서도 세어진다."""
+    g = blank16()
+    band(g, 1, 14, 9, wrap_grip, sx=1, sy=-1)                 # 긴 자루 (1,14)→(9,6)
+    put_rings(g, 1, 14, rings, (2, 4, 6), sx=1, sy=-1)
+    band(g, 10, 5, 1, ["T", "t", "t"])                        # 홍영 — 붉은 술
+    band(g, 11, 4, 1, ["G", "g", "f"])                        # 물미(창날 목)
+    band(g, 12, 3, 1, ["H", "L", "m" if mabyeong else "S"])   # 창날
+    band(g, 13, 2, 1, ["H", "L"])
+    band(g, 13, 1, 1, ["H"])                                  # 창끝
+    if mabyeong:
+        g[15][1] = "M"
+    return g
+
+
+# 권갑(拳甲) — 날이 없다. 손등 판의 못머리와 손목 띠로 읽힌다.
+# 고리(등급)는 손목 띠를 감는 금속 테 개수 — 다른 무기와 같은 문법이다.
+GAUNTLET_ART = [
     "................",
-    ".............##.",
-    "............#bv.",
-    "...........#bv#.",
-    "..........#bv#..",
-    ".........#bv#...",
-    "...#....#bv#....",
-    "....g..#bv#.....",
-    ".....g#bv#......",
-    ".....#gv#.......",
-    "....#3#g........",
-    "...#23#.#.......",
-    "..#12#..........",
-    ".t#1#...........",
-    ".t#m............",
+    "....GGGGG.......",
+    "...GgggggG......",
+    "...GgfffgG......",
+    "...GgfGfgG......",
+    "...GgfffgG......",
+    "...GgggggG......",
+    "...ffffffG......",
+    "....WwwwX.......",
+    "....11111.......",
+    "....WwwwX.......",
+    "....22222.......",
+    "....WwwwX.......",
+    "....33333.......",
+    "....XxwwX.......",
     "................",
 ]
-DAO_ART = [     # 도 — 한날(등 = 먹 척, 인 = v) + 원반 호수
-    "................",
-    "............##..",
-    "...........#bb#.",
-    "..........#bbv#.",
-    ".........#bbv#..",
-    "........#bbv#...",
-    ".......#bbv#....",
-    "......#bbv#.....",
-    ".....#bbv#......",
-    "....#gg#........",
-    "....#3#.........",
-    "...#23#.........",
-    "..#12#..........",
-    ".t#1#...........",
-    ".t#m............",
-    "................",
-]
-SPEAR_ART = [   # 창 — 좁은 삼각 창날 + 홍영 + 긴 자루
-    "................",
-    ".............#..",
-    "............#b#.",
-    "...........#bv#.",
-    "..........#bv#..",
-    ".........#bv#...",
-    "........#rr#....",
-    ".......#hh#.....",
-    "......#hh#......",
-    ".....#hh#.......",
-    "....#hh#........",
-    "...#33#.........",
-    "..#22#..........",
-    ".t11#...........",
-    ".t##m...........",
-    "................",
-]
-GAUNTLET_ART = [  # 권갑 — 손등 판 + 손목 띠 (날 없음: 고리는 띠의 밝은 줄로 읽힌다)
-    "................",
-    "....#####.......",
-    "...#ggggg#......",
-    "...#g###g#......",
-    "...#ggggg#......",
-    "...#g###g#......",
-    "...#ggggg#......",
-    "...#######......",
-    "....#hhh#.......",
-    "....#333#.......",
-    "....#hhh#.......",
-    "....#222#.......",
-    "....#hhh#.......",
-    "....#111#.......",
-    "...t#h#m........",
-    "................",
-]
-DAGGER_ART = [  # 단검 — 짧은 날 + 손잡이 절반 비율
-    "................",
-    "................",
-    "................",
-    "...........#....",
-    "..........#b#...",
-    ".........#bv#...",
-    "........#bv#....",
-    ".......#bv#.....",
-    ".....#gg#.......",
-    ".....#hh#.......",
-    "....#hh#........",
-    "...#33#.........",
-    "..#22#..........",
-    ".t11#...........",
-    ".t##m...........",
-    "................",
-]
+
+
+def gauntlet_grid(rings, mabyeong):
+    g = [list(r) for r in GAUNTLET_ART]
+    for n in (1, 2, 3):
+        for y in range(16):
+            for x in range(16):
+                if g[y][x] == str(n):
+                    # 점등 = 2톤 금속 테 (아래 절반이 그늘) / 미점등 = 자루색 — 구멍이 나지 않는다
+                    g[y][x] = ("R" if x < 7 else "e") if rings >= n else "x"
+    if mabyeong:
+        g[4][6] = "M"                                         # 손등 못머리에 밴 혈적
+    if rings >= 3:
+        g[14][3] = g[14][9] = "t"                             # 수실 — 손목 띠 양끝
+    return g
+
+
 WEAPON_SERIES = {          # 계열 = model_key 앞자리 (config item_channels.무기.series)
-    "sword": SWORD_ART, "dao": DAO_ART, "spear": SPEAR_ART,
-    "gauntlet": GAUNTLET_ART, "dagger": DAGGER_ART,
+    "sword": sword_grid, "dao": dao_grid, "spear": spear_grid,
+    "gauntlet": gauntlet_grid, "dagger": dagger_grid,
 }
 # 등급 = 베이스 바닐라 아이템(팩 게이트). 여기서는 고리 수만 쥔다 — 색은 바닐라 재질의 몫.
 WEAPON_GRADES = [("beomcheol", 0), ("jeongryeon", 1), ("bobyeong", 2), ("sinbyeong", 3)]
 
 
-def weapon_palette(rings: int, mabyeong: bool = False):
-    """등급 표식 팔레트 — 고리 수(0~3) + 신병 수실 + 마병 혈적.
-    colorblind_rule: 색 단독 금지 → 회색조에서도 고리 수로 등급이 읽힌다."""
-    pal = {
-        "#": INK_SOLID, "b": BLADE, "g": FITTING, "h": GRIP, "r": SEAL,
-        "v": BLOOD if mabyeong else BLADE_EDGE,      # 마병: 날 중심 혈적 세로선
-        "t": TASSEL if rings >= 3 else T,            # 신병만 수실
-        "m": BLOOD if mabyeong else T,               # 마병만 자루 끝 혈적 1점
-    }
-    for n in (1, 2, 3):
-        pal[str(n)] = RING if rings >= n else GRIP   # 미점등 고리는 자루색 — 구멍 나지 않는다
-    return pal
+def weapon_rows(series, rings, mabyeong=False):
+    return paint_rows(outline(WEAPON_SERIES[series](rings, mabyeong)), WPN_PALETTE)
 
 
 # ─── 지물·기물·재료 16x16 ───
-# 문자: # 먹 / p 화선지 / P 화선지 음영 / r 주사 / h 끈·나무 / g 놋 / j 청록 / w 광 / W 강광
-#       L 가죽 / G 녹갈·초록 / o 단약 채움 / O 단약 광점
-MANUAL_ORIGINAL_ART = [   # 비급 진본 — 죽간 말이 + 봉인 끈 + 주사 인장 (진본의 차이 = 인장)
-    "................", "................", "................",
-    "...##########...",
-    "..#pppppppppp#..",
-    "..#p#p#p#p#pp#..",
-    "..#p#p#p#p#pp#..",
+# 재질마다 3~4단 계단을 준다 (몸 / 광 / 그늘). 외곽선은 손으로 찍지 않는다 — outline()이 두른다.
+# 종이는 흰 사각형이 아니다: 위쪽 모서리가 빛을 받고, 겹친 아래쪽은 그늘에 잠기고, 먹은 종이에 스민다.
+INK_OUT = (28, 25, 22, 255)       # 외곽 먹
+INK_SOFT = (78, 70, 62, 255)      # 흐린 먹 — 글씨·인쇄 획 (외곽선보다 옅어야 '글씨'로 읽힌다)
+PAPER_LIT = (248, 242, 226, 255)  # 화선지 — 빛 받는 윗면
+PAPER = (224, 215, 194, 255)      # 화선지 몸
+PAPER_SHADE = (188, 178, 154, 255)  # 접힘·아랫면 그늘
+PAPER_DEEP = (150, 140, 118, 255)   # 겹친 종이 사이 깊은 그늘
+SEAL_HI = (196, 88, 70, 255)      # 주사 인장 — 광
+CORD = (88, 70, 50, 255)          # 끈
+CORD_HI = (128, 104, 74, 255)
+CORD_DIM = (54, 42, 30, 255)
+BRASS = (152, 134, 94, 255)       # 놋
+BRASS_LIT = (204, 184, 132, 255)
+BRASS_SHADE = (98, 84, 56, 255)
+HIDE = (150, 124, 94, 255)        # 가죽
+HIDE_HI = (188, 160, 124, 255)
+HIDE_DIM = (104, 84, 60, 255)
+HIDE_DARK = (62, 48, 34, 255)     # 호피 줄무늬 — 그늘(HIDE_DIM)로는 줄무늬가 안 읽힌다 (대비 부족)
+HERB = (112, 128, 86, 255)        # 약재 — 마른 풀
+HERB_HI = (148, 164, 114, 255)
+HERB_DIM = (74, 88, 56, 255)
+GALL = (112, 110, 72, 255)        # 웅담 — 녹갈
+GALL_HI = (148, 146, 100, 255)
+GALL_DIM = (74, 72, 46, 255)
+CRATE = (128, 102, 72, 255)       # 표물 궤 — 목재
+CRATE_HI = (166, 136, 100, 255)
+CRATE_DIM = (82, 64, 44, 255)
+
+GOODS_PALETTE = {
+    "#": INK_OUT, "i": INK_SOFT,
+    "q": PAPER_LIT, "p": PAPER, "P": PAPER_SHADE, "d": PAPER_DEEP,
+    "r": SEAL, "R": SEAL_HI,
+    "h": CORD, "H": CORD_HI, "k": CORD_DIM,
+    "g": BRASS, "G": BRASS_LIT, "f": BRASS_SHADE,
+    "L": HIDE, "l": HIDE_HI, "n": HIDE_DIM, "N": HIDE_DARK,
+    "e": HERB, "E": HERB_HI, "c": HERB_DIM,
+    "a": GALL, "A": GALL_HI, "b": GALL_DIM,
+    "w": CRATE, "W": CRATE_HI, "x": CRATE_DIM,
+}
+
+MANUAL_ORIGINAL_ART = [   # 비급 진본 — 선장본(線裝本): 실 꿰맨 등 + 제첨(題簽) + 주사 인장.
+    "................",   # 진본과 필사본의 차이는 '인장' 하나 — 형태로 위조를 구별한다
+    "................",
+    "..qqqqqqqqqqqq..",
+    "..qppppppppppP..",
+    "..qkpqqqpppppP..",
+    "..qppqiqpppppP..",
+    "..qkpqqqpppppP..",
+    "..qppqiqpppppP..",
+    "..qkpqqqpppppP..",
+    "..qppqiqpppppP..",
+    "..qkpqqqppRrrP..",
+    "..qppqqqpprrrP..",
+    "..ppPPPPPPrrrd..",
+    "..dddddddddddd..",
+    "................",
+    "................",
+]
+MANUAL_COPY_ART = [       # 비급 필사본 — 얇은 철(綴), 제첨도 인장도 없다 (베낀 것은 베낀 티가 난다)
+    "................",
+    "................",
+    "................",
+    "...qqqqqqqqqq...",
+    "...qkpppppppP...",
+    "...qppppppppP...",
+    "...qkpppppppP...",
+    "...qppppppppP...",
+    "...qkpppppppP...",
+    "...qppppppppP...",
+    "...qkpppppppP...",
+    "...qppppppppP...",
+    "...pPPPPPPPPd...",
+    "...dddddddddd...",
+    "................",
+    "................",
+]
+GUGYEOL_ART = [           # 심법 구결 — 접힌 낱장 + 세로쓰기 먹획 + 말린 오른아래 귀
+    "................",
+    "................",
+    "................",
+    "..qqqqqqqqqqqq..",
+    "..qppppppppppP..",
+    "..qpipipipippP..",
+    "..qpipipipippP..",
+    "..qpipipipippP..",
+    "..qpipipipippP..",
+    "..qpipipipippP..",
+    "..qppppppppppP..",
+    "..pPPPPPPPPqqd..",
+    "..dddddddddq....",
+    "................",
+    "................",
+    "................",
+]
+JEONPYO_ART = [           # 전표 — 가로 지폐. 먹 테두리 + 전장 인장(주사) + 액면 획 (액면은 lore)
+    "................",
+    "................",
+    "................",
+    "................",
+    ".qqqqqqqqqqqqqq.",
+    ".qpiiiiiiiiiipP.",
+    ".qpiRrpiiiiiipP.",
+    ".qpirrpiiiiiipP.",
+    ".qpipppiiiiiipP.",
+    ".qpippppppppppP.",
+    ".qpiiiiiiiiiipP.",
+    ".pPPPPPPPPPPPdd.",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+PYOMUL_ART = [            # 표물 — 궤 + 봉인 끈 십자 + 표국 인패 (chest_minecart: 레일 없는 세계엔 설치 불가)
+    "................",
+    "................",
+    "................",
+    "..WWWWWWWWWWWW..",
+    "..Wwwwwhhwwwwx..",
+    "..Wwwwwhhwwwwx..",
+    "..Wwwwwhhwwwwx..",
+    "..HHHHHHHHHHHH..",
     "..hhhhhhhhhhhh..",
-    "..hhhhhhhhhhhh..",
-    "..#p#p#p#p#pp#..",
-    "..#prr#p#p#pp#..",
-    "..############..",
-    "................", "................", "................", "................",
-]
-MANUAL_COPY_ART = [       # 비급 필사본 — 얇은 철(綴), 인장 없음
-    "................", "................", "................", "................",
-    "...##########...",
-    "..#pppppppppp#..",
-    "..#p#p#p#p#pp#..",
-    "..#p#p#p#p#pp#..",
-    "..#p#p#p#p#pp#..",
-    "..#p#p#p#p#pp#..",
-    "..#pppppppppp#..",
-    "...##########...",
-    "................", "................", "................", "................",
-]
-GUGYEOL_ART = [           # 심법 구결 — 접힌 낱장 + 붓 자국 세로 3획 (베껴 적는 것)
-    "................", "................", "................",
-    "...##########...",
-    "..#pppppppppp#..",
-    "..#p##p##p##p#..",
-    "..#p##p##p##p#..",
-    "..#p##p##p##p#..",
-    "..#p##p##p##p#..",
-    "..#pppppppppp#..",
-    "..#ppppppppPP#..",
-    "...#########P#..",
-    "..........###...",
-    "................", "................", "................",
-]
-JEONPYO_ART = [           # 전표 — 가로 종이 + 전장 인장(주사) + 액면 획 (액면은 lore, 텍스처 1장)
-    "................", "................", "................", "................",
-    "..############..",
-    "..#pppppppppp#..",
-    "..#rrpppppppp#..",
-    "..#rrpppppppp#..",
-    "..#pppppppppp#..",
-    "..#p########p#..",
-    "..#pppppppppp#..",
-    "..#p######ppp#..",
-    "..############..",
-    "................", "................", "................",
-]
-YEONGYAK_ART = [          # 단약(영약) — 구형 + 좌상 광점 (HUD 기혈 구슬과 같은 문법)
-    "................", "................", "................",
-    "......####......",
-    "....##oooo##....",
-    "...#OOoooooo#...",
-    "..#Ooooooooo#...",
-    "..#ooooooooo#...",
-    "..#ooooooooo#...",
-    "..#ooooooooo#...",
-    "...#ooooooo#....",
-    "....#######.....",
-    "................", "................", "................", "................",
-]
-PYOMUL_ART = [            # 표물 — 궤 + 봉인 끈 십자 + 표국 인패 (chest_minecart: 레일 없는 세계에선 설치 불가)
-    "................", "................", "................",
-    "..############..",
-    "..#LLLLhhLLLL#..",
-    "..#LLLLhhLLLL#..",
-    "..############..",
-    "..#LLLLhhLLLL#..",
-    "..#hhhhhhhhhh#..",
-    "..#LLLLhhLLLL#..",
-    "..#LLLLrrLLLL#..",
-    "..#LLLLhhLLLL#..",
-    "..############..",
-    "................", "................", "................",
-]
-PIDOKJU_ART = [           # 피독주 — 구슬 + 표면 균열 2획 (독을 머금은 흠)
-    "................", "................", "................",
-    "......####......",
-    "....##jjjj##....",
-    "...#jjj#jjjj#...",
-    "..#jjj#jjjjj#...",
-    "..#jjjjj#jjj#...",
-    "..#jjjj#jjjj#...",
-    "..#jjjjjjjjj#...",
-    "...#jjjjjjj#....",
-    "....#######.....",
-    "................", "................", "................", "................",
-]
-YAMYEONGJU_ART = [        # 야명주 — 구슬 + 방사 광선 4방 1px (유일하게 밝은 값 허용)
+    "..wwwwwhhwwwwx..",
+    "..wwwwGGGGwwwx..",
+    "..wwwwgffgwwwx..",
+    "..xxxxxxxxxxxx..",
     "................",
-    ".......w........",
     "................",
-    "......####......",
-    "....##WWWW##....",
-    "...#WWwwwwww#...",
-    "..#Wwwwwwwww#...",
-    ".w#wwwwwwwww#w..",
-    "..#wwwwwwwww#...",
-    "..#wwwwwwwww#...",
-    "...#wwwwwww#....",
-    "....#######.....",
     "................",
-    ".......w........",
-    "................", "................",
 ]
-CHEONGNANG_ART = [        # 청낭 — 아가리 묶은 주머니 + 침 3개 (의술의 표식)
-    "................",
-    "....#..#..#.....",
-    "....#..#..#.....",
+CHEONGNANG_ART = [        # 청낭 — 아가리 묶은 가죽 주머니 + 삐져나온 침 3개 (의술의 표식)
+    "................",   # 침 간격은 3px — 그보다 좁으면 외곽선이 사이를 메워 통짜 검은 덩이가 된다
+    "....G...G...G...",
+    "....G...G...G...",
+    "...HHHHHHHHHH...",
     "...hhhhhhhhhh...",
-    "..#LLLLLLLLLL#..",
-    "..#LLLLLLLLLL#..",
-    ".#LLLLLLLLLLLL#.",
-    ".#LLLLLLLLLLLL#.",
-    ".#LLLLLLLLLLLL#.",
-    ".#LLLLLLLLLLLL#.",
-    "..#LLLLLLLLLL#..",
-    "...##########...",
-    "................", "................", "................", "................",
-]
-HOSINBU_ART = [           # 호신부 — 세로 부적 + 주사 부문 3획 + 끈 고리
+    "..lLLLLLLLLLLn..",
+    ".lLLLLLLLLLLLLn.",
+    ".lLLLLLLLLLLLLn.",
+    ".lLLLLLLLLLLLLn.",
+    ".lLLLLLLLLLLLLn.",
+    ".nLLLLLLLLLLLnn.",
+    "..nLLLLLLLLLLn..",
+    "...nnnnnnnnnn...",
     "................",
-    "......hhhh......",
-    "....########....",
-    "....#pppppp#....",
-    "....#prrrrp#....",
-    "....#pppppp#....",
-    "....#prrrrp#....",
-    "....#pppppp#....",
-    "....#prrrrp#....",
-    "....#pppppp#....",
-    "....#pppppp#....",
-    "....#pppppp#....",
-    "....########....",
-    "................", "................", "................",
-]
-YODAE_ART = [             # 천잠사 요대 — 감긴 띠 + 매듭 + 은사 광택 1px
-    "................", "................", "................",
-    "...##########...",
-    "..#hhhhhhhhhh#..",
-    "..#whhhhhhhhh#..",
-    "..############..",
-    "..#hhhhhhhhhh#..",
-    "..#hhhhhhhhwh#..",
-    "..############..",
-    "..#hhhh##hhhh#..",
-    "..#hhh#gg#hhh#..",
-    "..############..",
-    "................", "................", "................",
-]
-PELT_WOLF_ART = [         # 늑대 가죽 — 펼친 가죽 + 네 발 외곽 (가죽 3종은 윤곽으로 구별)
-    "................", "................",
-    "..##........##..",
-    "..#LL#....#LL#..",
-    "..#LLL####LLL#..",
-    "...#LLLLLLLL#...",
-    "...#LLLLLLLL#...",
-    "...#LLLLLLLL#...",
-    "...#LLLLLLLL#...",
-    "...#LLLLLLLL#...",
-    "..#LLL####LLL#..",
-    "..#LL#....#LL#..",
-    "..##........##..",
-    "................", "................", "................",
-]
-PELT_FOX_ART = [          # 여우 가죽 — 좁고 긴 형 + 꼬리 술 (붉은 기 한 점 = 시세 3배의 표식)
     "................",
-    "......##........",
-    ".....#LL#.......",
-    ".....#LL#.......",
-    "....#LLLL#......",
-    "....#LLLL#......",
-    "....#LLLL#......",
-    "....#LLLL#......",
-    "....#LLLL#......",
-    "....#LLLL#......",
-    ".....#LL##......",
-    ".....#LLL#......",
-    "......#LLL#.....",
-    ".......#Lr#.....",
-    ".......###......",
     "................",
 ]
-PELT_TIGER_ART = [        # 호랑이 가죽 — 넓은 형 + 줄무늬 3획 (150배 가격은 색이 아니라 이름이 판다)
-    "................", "................",
-    "..############..",
-    ".#LLLLLLLLLLLL#.",
-    ".#L##LL##LL##L#.",
-    ".#LLLLLLLLLLLL#.",
-    ".#L##LL##LL##L#.",
-    ".#LLLLLLLLLLLL#.",
-    ".#L##LL##LL##L#.",
-    ".#LLLLLLLLLLLL#.",
-    ".#LLLLLLLLLLLL#.",
-    "..############..",
-    "................", "................", "................", "................",
+HOSINBU_ART = [           # 호신부 — 세로 부적 + 주사 부문(符文) 3획 + 매단 끈
+    "................",
+    "......Hh........",
+    "....qqqqqqqq....",
+    "....qppppppP....",
+    "....qprrrrpP....",
+    "....qppppppP....",
+    "....qprRRrpP....",
+    "....qppppppP....",
+    "....qprrrrpP....",
+    "....qppppppP....",
+    "....qprrrrpP....",
+    "....qppppppP....",
+    "....pPPPPPPd....",
+    "....dddddddd....",
+    "................",
+    "................",
 ]
-UNGDAM_ART = [            # 웅담 — 쓸개 주머니 + 매단 끈 1
+YODAE_ART = [             # 천잠사 요대 — 감아 둔 띠 3바퀴 + 놋 교구(鉸具)
+    "................",
+    "................",
+    "................",
+    "...HHHHHHHHHH...",
+    "..hhhhhhhhhhhh..",
+    "..kkkkkkkkkkkk..",
+    "..HHHHHHHHHHHH..",
+    "..hhhhhhhhhhhh..",
+    "..kkkkkkkkkkkk..",
+    "..HHHHGGGGHHHH..",
+    "..hhhhGffGhhhh..",
+    "..kkkkGGGGkkkk..",
+    "..kkkkkkkkkkkk..",
+    "................",
+    "................",
+    "................",
+]
+# 가죽 3종은 오직 윤곽으로 구별된다 (색은 셋 다 같은 무두질 가죽이다).
+# 실패 사례 둘을 피한다: 몸통보다 다리가 더 벌어지면 모래시계로 보이고,
+# 줄무늬를 행마다 끊으면 격자(와플)로 보인다. 몸통은 꽉 찬 판, 다리는 그 밖으로 삐져나온 토막,
+# 줄무늬는 끊기지 않는 세로 획 — 그래야 '펼쳐 못 박은 짐승 가죽'으로 읽힌다.
+PELT_WOLF_ART = [         # 늑대 가죽 — 펼쳐 못 박은 네 다리
+    "................",
+    "................",
+    "...lL......Ln...",
+    "...lL......Ln...",
+    "..llllllllllln..",
+    "..lLLLLLLLLLLn..",
+    "..lLLLLLLLLLLn..",
+    "..lLLLLLLLLLLn..",
+    "..lLLLLLLLLLLn..",
+    "..lLLLLLLLLLLn..",
+    "..nnnnnnnnnnnn..",
+    "...nL......Ln...",
+    "...nL......Ln...",
+    "................",
+    "................",
+    "................",
+]
+PELT_FOX_ART = [          # 여우 가죽 — 같은 못질 윤곽이되 확연히 작다 + 붉은 털 한 점 (시세 3배의 표식)
+    "................",
+    "................",
+    "....lL...Ln.....",
+    "....lL...Ln.....",
+    "...lllllllln....",
+    "...lLLLLLLLn....",
+    "...lLLLLLLLn....",
+    "...lLrLLLLLn....",
+    "...lLLLLLLLn....",
+    "...nnnnnnnnn....",
+    "....nL...Ln.....",
+    "....nL...Ln.....",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+PELT_TIGER_ART = [        # 호랑이 가죽 — 늑대와 같은 못질 윤곽 + 끊기지 않는 세로 줄무늬.
+    "................",   # 줄무늬를 행마다 끊으면 격자(와플)가 되고, 윤곽이 네모나면 널빤지가 된다 —
+    "................",   # 다리를 달아야 비로소 '가죽'으로 읽힌다 (150배 값은 색이 아니라 이름이 판다)
+    "...lL......Ln...",
+    "...lL......Ln...",
+    "..llllllllllln..",
+    "..lLNLLNNLLNLn..",
+    "..lLNLLNNLLNLn..",
+    "..lLNLLNNLLNLn..",
+    "..lLNLLNNLLNLn..",
+    "..lLNLLNNLLNLn..",
+    "..nnnnnnnnnnnn..",
+    "...nL......Ln...",
+    "...nL......Ln...",
+    "................",
+    "................",
+    "................",
+]
+UNGDAM_ART = [            # 웅담 — 쓸개 주머니 + 매단 끈 (녹갈 3단 — 물컹한 것도 빛은 받는다)
     "................",
     ".......h........",
     ".......h........",
-    "......####......",
-    ".....#GGGG#.....",
-    "....#GGGGGG#....",
-    "...#GGGGGGGG#...",
-    "...#GGGGGGGG#...",
-    "...#GGGGGGGG#...",
-    "...#GGGGGGGG#...",
-    "....#GGGGGG#....",
-    ".....######.....",
-    "................", "................", "................", "................",
+    "......AAA.......",
+    ".....Aaaab......",
+    "....Aaaaaaab....",
+    "...Aaaaaaaaab...",
+    "...Aaaaaaaaab...",
+    "...Aaaaaaaaab...",
+    "...Aaaaaaaaab...",
+    "...baaaaaaabb...",
+    "....baaaaab.....",
+    ".....bbbbb......",
+    "................",
+    "................",
+    "................",
 ]
 YAKJAE_ART = [            # 약재 — 묶은 약초 다발 + 끈 2줄 (널어 둔 약초와 동형)
+    "................",   # 줄기 사이는 투명이 아니라 짙은 풀색 — 투명이면 외곽선이 사이를 메운다
+    "...EcEcEcEcE....",
+    "...EcEcEcEcE....",
+    "...EEEEEEEEE....",
+    "....eeeeeee.....",
+    "....HHHHHHH.....",
+    "....hhhhhhh.....",
+    "....eeeeeee.....",
+    "....eeeeeee.....",
+    "....HHHHHHH.....",
+    "....hhhhhhh.....",
+    "....ccccccc.....",
+    ".....ccccc......",
+    ".....c.c.c......",
     "................",
-    "...G.G.G.G.G....",
-    "...G.G.G.G.G....",
-    "...GGGGGGGGG....",
-    "....GGGGGGG.....",
-    "....hhhhhhh.....",
-    "....GGGGGGG.....",
-    "....GGGGGGG.....",
-    "....hhhhhhh.....",
-    "....GGGGGGG.....",
-    ".....GGGGG......",
-    ".....G.G.G......",
-    ".....G.G.G......",
-    "................", "................", "................",
+    "................",
 ]
-GOODS_PALETTE = {
-    "#": INK_SOLID, "p": PAPER, "P": PAPER_DIM, "r": SEAL, "h": CORD, "g": BRASS,
-    "j": JADE, "w": GLOW, "W": GLOW_HI, "L": HIDE, "G": HERB,
-    "o": ORB_FILL, "O": ORB_LIGHT,
-}
+
+# ─── 구슬 3종 (단약·피독주·야명주) — 램버트 명암으로 굽는다 ───
+# 평평한 원에 광점 하나 찍는 것과 이건 다른 그림이다. 구는 빛이 감기는 방향으로 밝기가 '휜다':
+# 좌상단 정반사 → 몸 → 우하 그늘 → 그리고 우하 가장자리에 반사광(rim)이 한 줄 돈다.
+# 그 반사광이 있어야 구슬이 배경에서 떨어져 나와 '떠 있는 구'로 보인다.
+ORB_STEPS = 7
+
+
+def orb_shades(dark, light, spec):
+    """구슬 계단 — 마지막 칸만 정반사(spec)로 따로 뗀다.
+    본체 계단을 그냥 밝은 값까지 늘리면 구 전체가 허옇게 뜬다 (실측: 야명주가 흰 덩어리가 됐다).
+    정반사는 '한 점'이라야 광택이지, 넓게 퍼지면 그냥 밝은 색일 뿐이다."""
+    s = ramp(dark, light, ORB_STEPS)
+    s[-1] = spec
+    return s
+
+
+PILL_SHADES = orb_shades((58, 18, 14, 255), (198, 88, 68, 255), (244, 178, 158, 255))      # 단약 — 주사 계열
+JADE_SHADES = orb_shades((32, 58, 54, 255), (142, 188, 176, 255), (212, 238, 230, 255))    # 피독주 — 청록
+GLOW_SHADES = orb_shades((112, 104, 78, 255), (238, 232, 208, 255), (255, 255, 248, 255))  # 야명주 — 유일하게 밝은 값 허용
+
+
+def orb_grid():
+    """구슬 명암 — 문자 '0'(가장 어두움) ~ '5'(몸통 최명), '6'(정반사). 팔레트만 갈면 다른 구슬이 된다.
+    정반사를 계단 맨 윗칸으로 두면 안 된다: 밝은 반구 전체가 그 칸에 몰려 구슬이 흰 덩어리가 된다.
+    정반사는 '빛을 정면으로 마주 본 법선'(lam > 0.9)에만 따로 준다 — 그래야 광택 한 점이 된다."""
+    g = blank16()
+    cx, cy, r = 7.6, 8.4, 5.9
+    lx, ly, lz = -0.52, -0.58, 0.63          # 좌상단·앞에서 오는 빛
+    body = ORB_STEPS - 2                     # 몸통 계단 상한 (0~5) — 6은 정반사 전용
+    for y in range(16):
+        for x in range(16):
+            nx, ny = (x + 0.5 - cx) / r, (y + 0.5 - cy) / r
+            q = nx * nx + ny * ny
+            if q > 1.0:
+                continue
+            nz = (1 - q) ** 0.5
+            lam = nx * lx + ny * ly + nz * lz                    # 램버트 항 (-1..1)
+            rim = max(0.0, -(nx * lx + ny * ly)) * (1 - nz) ** 2  # 우하 반사광 — 구슬을 배경에서 떼어낸다
+            v = 2.4 + lam * 3.4 + rim * 1.5
+            idx = ORB_STEPS - 1 if lam > 0.90 else max(0, min(body, int(round(v))))
+            g[y][x] = str(idx)
+    return g
+
+
+def orb_palette(shades, extra=None):
+    pal = {str(i): shades[i] for i in range(ORB_STEPS)}
+    pal["#"] = INK_OUT
+    if extra:
+        pal.update(extra)
+    return pal
+
+
+PIDOKJU_CRACKS = [(6, 5), (7, 6), (6, 7), (7, 8), (8, 9), (10, 6), (11, 7)]   # 독을 머금은 흠
+
+
+def goods_rows(key):
+    """지물 1종 → RGBA 행. 구슬 3종만 절차적, 나머지는 아트 + 자동 외곽선."""
+    if key == "pill/yeongyak":
+        return paint_rows(outline(orb_grid(), "#"), orb_palette(PILL_SHADES))
+    if key == "trinket/yamyeongju":
+        return paint_rows(outline(orb_grid(), "#"), orb_palette(GLOW_SHADES))
+    if key == "trinket/pidokju":
+        g = orb_grid()
+        for x, y in PIDOKJU_CRACKS:
+            if g[y][x] != ".":
+                g[y][x] = "v"                # 균열 — 구슬 표면을 가르는 어두운 실금
+        return paint_rows(outline(g, "#"), orb_palette(JADE_SHADES, {"v": (30, 54, 50, 255)}))
+    return paint_rows(outline([list(r) for r in GOODS_ART[key]], "#"), GOODS_PALETTE)
+
+
 # 지물/기물/재료 등록표 — key = model_key 경로 (config item_channels 등록분 그대로. 발명 0건)
 GOODS_ART = {
     "tome/manual_original": MANUAL_ORIGINAL_ART,
     "tome/manual_copy": MANUAL_COPY_ART,
     "tome/gugyeol": GUGYEOL_ART,
     "coin/jeonpyo": JEONPYO_ART,
-    "pill/yeongyak": YEONGYAK_ART,
+    "pill/yeongyak": None,                     # 절차적 (orb_grid)
     "cargo/pyomul": PYOMUL_ART,
-    "trinket/pidokju": PIDOKJU_ART,
-    "trinket/yamyeongju": YAMYEONGJU_ART,
+    "trinket/pidokju": None,                   # 절차적
+    "trinket/yamyeongju": None,                # 절차적
     "trinket/cheongnang": CHEONGNANG_ART,      # status: 보류 — 텍스처만 준비, 지급은 접합 후
     "trinket/hosinbu": HOSINBU_ART,            # status: 보류
     "trinket/yodae": YODAE_ART,                # status: 보류
@@ -866,8 +1083,6 @@ GOODS_ART = {
     "spoil/ungdam": UNGDAM_ART,
     "herb/yakjae": YAKJAE_ART,
 }
-# 웅담 팔레트 보정 — G를 녹갈로 (약재의 G와 의미가 다르다)
-UNGDAM_PALETTE = dict(GOODS_PALETTE, G=GALL)
 
 
 def write_item_asset(key: str, rows, handheld: bool):
@@ -887,14 +1102,14 @@ def write_item_asset(key: str, rows, handheld: bool):
 def write_item_assets() -> int:
     """무기 20(계열 5 × 등급 4) + 마병 1 + 지물·기물·재료 16 = 37종."""
     made = 0
-    for series, art in WEAPON_SERIES.items():
+    for series in WEAPON_SERIES:
         for grade, rings in WEAPON_GRADES:
-            write_item_asset(f"weapon/{series}_{grade}", paint_rows(art, weapon_palette(rings)), True)
+            write_item_asset(f"weapon/{series}_{grade}", weapon_rows(series, rings), True)
             made += 1
 
     # 혈음도(마병) — identification.default가 "감정 전엔 정체 불명"이므로 미감정은 평범한 도.
     # 상태 분기는 custom_model_data.strings (§1.2 보조 채널) — 정수 CMD는 쓰지 않는다.
-    write_item_asset("weapon/dao_mabyeong", paint_rows(DAO_ART, weapon_palette(0, mabyeong=True)), True)
+    write_item_asset("weapon/dao_mabyeong", weapon_rows("dao", 0, mabyeong=True), True)
     made += 1
     write_json(ITEM_DEF_DIR / "weapon" / "dao_mabyeong.json", {
         "model": {
@@ -910,9 +1125,8 @@ def write_item_assets() -> int:
         },
     })
 
-    for key, art in GOODS_ART.items():
-        palette = UNGDAM_PALETTE if key == "spoil/ungdam" else GOODS_PALETTE
-        write_item_asset(key, paint_rows(art, palette), False)
+    for key in GOODS_ART:
+        write_item_asset(key, goods_rows(key), False)
         made += 1
     return made
 
@@ -921,149 +1135,249 @@ def write_item_assets() -> int:
 # 블록 채널 — 전역 치환 (징발). config block_channels.징발 등록분만.
 # 금지 원칙: 자연이 만든 블록은 건드리지 않는다 (stone·dirt·*_log·stone_bricks…) — 팩에 1장도 없다.
 # ═══════════════════════════════════════════════════════════════════════════
-# 흑와(黑瓦) — 기와골이 보이는 결. deepslate_tiles PNG 1장이 계단·반블록·담장 전체를 덮는다.
-ROOF_PALETTE = {
-    "E": (26, 26, 30, 255),   # 기와 이음 그늘 — 골(course) 경계
-    "R": (78, 78, 86, 255),   # 수키와 마루 — 빛 받는 등
-    "r": (56, 56, 63, 255),   # 수키와 옆면
-    "c": (43, 43, 49, 255),   # 암키와 골
-    "C": (34, 34, 39, 255),   # 골 바닥 그늘
-}
-ROOF_COURSE = "rRrccCccrRrccCcc"   # 수키와(3px) + 암키와 골(5px) 2주기 — 세로 결
-ROOF_ART = ["E" * 16 if y % 8 == 0 else ROOF_COURSE for y in range(16)]
-# 깨진 기와(폐사당 잔해) — 금 간 자리만 덮어쓴다 (같은 결 위의 균열이라야 같은 지붕으로 읽힌다)
-ROOF_CRACKS = [(3, 2), (4, 3), (4, 4), (5, 5), (5, 6), (6, 7), (9, 2), (10, 3),
-               (11, 10), (12, 11), (12, 12), (13, 13), (2, 12), (3, 13), (7, 14)]
+# ─── 흑와(黑瓦) — deepslate_tiles PNG 1장이 계단·반블록·담장 전부를 덮는다. 마을의 인상. ───
+# 가로(x, 주기 8): 수키와(丸瓦 — 볼록한 반원통) 5px + 암키와(平瓦 — 오목한 골) 3px 교대.
+#   → 넓고 둥근 마루 / 좁고 깊은 골. 지붕이 '결'을 갖는 건 이 대비 덕이다.
+# 세로(y, 주기 16 = 텍스처 한 장): 한 장에 기와 한 단(course).
+#   지붕은 인게임에서 계단 블록으로 쌓인다 — 블록 하나가 곧 한 단이다. 한 장에 단을 둘 넣으면
+#   가로 리듬이 세로 리듬과 같은 세기로 부딪혀 격자무늬(체크)가 된다. 이게 첫 시도의 실패 모드였다.
+# 랩 안전: x는 8(16의 약수), y는 16 그 자체 — 위아래로 이으면 아랫단 처마 그늘이 윗단 겹침
+#   그늘로 그대로 이어진다.
+ROOF_SHADES = ramp((23, 23, 28, 255), (103, 104, 113, 255), 9)   # 9단 — 먹빛 청회색 기와
+# 곡면 명암 (x % 8) — 빛은 좌상단. 볼록한 마루는 왼쪽 어깨가 가장 밝고 오른쪽으로 떨어진다.
+#   0 마루 왼쪽 이음 그늘 / 1~2 마루 하이라이트·등 / 3~4 우측 falloff / 5~7 골 (마루 그림자가 진다)
+ROOF_CURVE = [-1.0, 2.6, 2.0, 0.6, -0.9, -2.2, -1.7, -2.0]
+# 단(course) 명암 (y) — 윗단 기와가 덮은 자리(y0~1)가 가장 어둡고, 노출된 기와 코(y2)가 빛을 받는다.
+# 아래로 완만히 어두워지다가 기와 끝 젖힌 턱(y13~14)이 다시 빛을 받고, 그 아래(y15)가 그늘 —
+# 그 그늘이 곧 아랫단의 y0 겹침 그늘로 이어진다 (랩이 곧 구조).
+ROOF_COURSE = [-2.9, -1.4, 1.2, 0.8, 0.5, 0.3, 0.2, 0.0,
+               0.0, -0.1, -0.2, -0.2, -0.1, 0.3, 0.6, -1.5]
+# 마루(수키와)는 둥근 코가 다음 장을 타고 넘으므로 이음 턱이 얕다 — 단 그림자를 절반만 받는다.
+# 이 감쇠가 없으면 가로 검은 띠가 마루를 관통해 다시 격자가 된다.
+ROOF_CAP_DAMP = 0.45
+ROOF_MID = 4.8          # 계단 중앙값 — 얼룩·곡면이 여기서 위아래로 흔들린다
 
 
-def cracked_roof_art():
-    grid = [list(row) for row in ROOF_ART]
-    for x, y in ROOF_CRACKS:
-        grid[y][x] = "K"
-    return ["".join(row) for row in grid]
+def roof_stain(x, y):
+    """오래된 기와의 얼룩 — 저주파(4px) 큰 얼룩 + 중주파(2px) + 픽셀 결.
+    구조(곡면·단)를 덮지 않을 만큼만. 셀 크기 4·2 는 16의 약수라 랩에서 끊기지 않는다."""
+    return (smooth_octave(x, y, 8, 0x11, 0.80)
+            + smooth_octave(x, y, 4, 0x23, 0.50)
+            + octave(x, y, 1, 0x37, 0.28))
 
 
-CRACK_PALETTE = dict(ROOF_PALETTE, K=(16, 16, 19, 255))
-
-
-def plaster_rows(base, light, dark):
-    """회벽(灰壁) — 거친 회칠. 무늬·이음선 금지(block_channels 조건):
-    배들랜드 지층에 대량 자연 생성되므로 무늬가 있으면 지층이 벽으로 튄다.
-    저대비 3값 결정론 노이즈만 — 텍스처 디자인으로 세계 오염을 무력화한다.
-    노이즈원은 crc32: 산술식(x*a+y*b)은 규칙적인 사선 격자를 만들고, 사선 격자는 곧 무늬다."""
+def roof_rows(cracked=False):
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
-            n = zlib.crc32(bytes((x, y))) % 12
-            row.append(light if n < 2 else dark if n < 4 else base)
+            damp = ROOF_CAP_DAMP if x % 8 < 5 else 1.0      # 마루는 단 그림자를 덜 받는다
+            v = ROOF_MID + ROOF_CURVE[x % 8] + ROOF_COURSE[y] * damp + roof_stain(x, y)
+            row.append(step(ROOF_SHADES, v))
+        rows.append(row)
+    if cracked:
+        for (x, y), d in ROOF_CRACKS:
+            row = rows[y]
+            row[x] = ROOF_SHADES[0] if d < 0 else step(ROOF_SHADES, 7.2)   # 깨진 틈 / 파단면 光
+    return rows
+
+
+# 깨진 기와(폐사당 잔해) — 같은 결 위의 균열이라야 같은 지붕으로 읽힌다.
+# d=-1 어둠(갈라진 틈) / d=+1 파단면 하이라이트 — 틈의 좌상단에 붙여 깊이를 만든다.
+ROOF_CRACKS = [((4, 1), -1), ((4, 2), -1), ((3, 2), 1), ((5, 3), -1), ((5, 4), -1),
+               ((4, 4), 1), ((6, 5), -1), ((6, 6), -1), ((7, 7), -1), ((6, 7), 1),
+               ((11, 2), -1), ((12, 3), -1), ((11, 3), 1), ((12, 4), -1),
+               ((13, 10), -1), ((13, 11), -1), ((12, 11), 1), ((14, 12), -1),
+               ((2, 11), -1), ((2, 12), -1), ((1, 12), 1), ((3, 13), -1), ((3, 14), -1),
+               ((9, 13), -1), ((9, 14), -1), ((8, 14), 1)]
+
+
+# ─── 회벽(灰壁) — 거친 회칠. 무늬·이음선 금지(block_channels 조건): 배들랜드 지층에
+#     대량 자연 생성되므로 무늬가 있으면 지층이 벽으로 튄다.
+#     '균열'을 직선으로 그으면 그 선이 16px마다 되풀이돼 벽 전체에 사선 격자가 뜬다 (실측 확인).
+#     그래서 형상(선·점)은 하나도 두지 않는다 — 4옥타브 노이즈장만으로 얼룩과 팬 자국을 만든다.
+#     저주파는 보간 노이즈(smooth_octave)라야 한다. 계단형이면 4px 네모 얼룩이 그대로 보인다.
+def plaster_rows(dark, light):
+    """회벽 — 6단 저대비 계단. 명도 폭이 좁아 바닐라 배들랜드/석재 옆에서 튀지 않는다."""
+    shades = ramp(dark, light, 6)
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = (2.6
+                 + smooth_octave(x, y, 8, 0x5B, 0.95)   # 큰 얼룩 — 미장의 물결
+                 + smooth_octave(x, y, 4, 0x6D, 0.70)   # 흙손 자국
+                 + octave(x, y, 2, 0x7F, 0.55)          # 거친 결
+                 + octave(x, y, 1, 0x91, 0.60))         # 모래 입자
+            if h32(x, y, 0xA7) % 23 == 0:
+                v -= 1.6                                # 회칠이 패인 곰보 자국 (선이 아니라 점 — 격자가 안 생긴다)
+            row.append(step(shades, v))
         rows.append(row)
     return rows
 
 
-LATTICE_FRAME = (58, 46, 36, 255)    # 창틀 — 어두운 목재
-LATTICE_BAR = (92, 74, 54, 255)      # 창살(muntin)
+# ─── 격자창 — glass.png(면). glass_pane와 유리 블록이 면 텍스처를 공유하므로
+#     유리도 격자창이 된다: 전근대 강호에 판유리는 없다 — 오염이 아니라 정합.
+#     창살은 목재(4단 명암), 창호(窓戶)는 창호지 — 따뜻한 반투명 백지.
+#     알파 주의: 바닐라 glass 는 cutout 렌더(알파 이진 판정)라 부분 알파는 사실상 불투명으로
+#     보인다. 창호지는 원래 들여다보이지 않는 종이다 — 이 렌더 특성이 곧 의도한 그림이다.
+WOOD_HI = (138, 110, 78, 255)     # 창살 — 빛 받는 위/왼쪽 모
+WOOD_MID = (104, 82, 58, 255)     # 창살 몸
+WOOD_DIM = (74, 58, 40, 255)      # 창살 그늘
+WOOD_OUT = (44, 34, 24, 255)      # 창틀 외곽 — 가장 어두운 목재
+WIN_PAPER_HI = (240, 232, 206, 190)   # 창호지 — 살에 닿는 밝은 결
+WIN_PAPER_MID = (226, 216, 188, 175)  # 창호지 몸
+WIN_PAPER_DIM = (206, 195, 166, 165)  # 창호지 그늘 (살 그림자가 지는 아래·오른쪽)
 
 
 def lattice_window_rows():
-    """격자창 — glass.png(면). glass_pane와 유리 블록이 면 텍스처를 공유하므로
-    유리도 격자창이 된다: 전근대 강호에 판유리는 없다 — 오염이 아니라 정합."""
+    """井자 창살(x·y = 5, 10) + 창호지 4×4 칸. 살마다 좌상 하이라이트·우하 그림자."""
+    bars = (5, 10)
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
-            if x in (0, 15) or y in (0, 15):
-                row.append(LATTICE_FRAME)
-            elif x in (5, 10) or y in (5, 10):
-                row.append(LATTICE_BAR)
+            on_frame = x in (0, 15) or y in (0, 15)
+            on_bar = x in bars or y in bars
+            if on_frame:
+                # 창틀 — 좌·상은 한 단 밝게, 우·하는 최암 (테두리도 입체다)
+                row.append(WOOD_MID if (x == 0 or y == 0) else WOOD_OUT)
+            elif on_bar:
+                # 살의 좌상 모서리(살 바로 앞 칸)는 빛, 우하는 그늘
+                lit = (x in bars and y not in bars and x == 5) or (y in bars and y == 5)
+                row.append(WOOD_HI if lit else WOOD_MID if (x == 10 or y == 10) else WOOD_DIM)
             else:
-                row.append(T)          # 창호 — 투명 (팩 없음 폴백 = 유리창)
+                # 창호지 — 살에 인접한 위/왼쪽은 밝고, 아래/오른쪽엔 살 그림자가 앉는다
+                near_lit = (x - 1) in bars or (y - 1) in bars or x == 1 or y == 1
+                near_dim = (x + 1) in bars or (y + 1) in bars or x == 14 or y == 14
+                base = WIN_PAPER_DIM if near_dim else WIN_PAPER_HI if near_lit else WIN_PAPER_MID
+                # 종이 섬유 — 1px 결정론 결. 알파는 건드리지 않는다 (컷아웃 안정)
+                f = h32(x, y, 0x9C) % 3
+                row.append(base if f else mix(base, WIN_PAPER_HI, 0.35)[:3] + (base[3],))
         rows.append(row)
     return rows
 
 
 def pane_top_rows():
-    """glass_pane_top.png — 창살 마구리. 통짜 목재 색 (모델이 어느 UV를 잡아도 나무로 읽힌다)."""
-    return [[LATTICE_FRAME] * 16 for _ in range(16)]
-
-
-BAMBOO_PALETTE = {
-    "l": (204, 190, 140, 255),   # 대나무 겉대 — 빛
-    "b": (182, 166, 114, 255),   # 대나무 몸
-    "d": (128, 112, 72, 255),    # 쪽 사이 골
-    "n": (104, 90, 58, 255),     # 마디(節) — 가로 결
-}
-BAMBOO_ART = ["n" * 16 if y in (3, 11) else "lbbd" * 4 for y in range(16)]
-
-LANTERN_PALETTE = {   # 등롱 — 종이에 스민 불빛
-    "#": (58, 46, 36, 255), "P": (198, 168, 106, 255),
-    "p": (236, 214, 152, 255), "w": (252, 240, 200, 255),
-}
-SOUL_LANTERN_PALETTE = {   # 백등롱 — 폐사당 냉광 (냉색 = 금기의 의미 유지)
-    "#": (40, 48, 56, 255), "P": (142, 186, 200, 255),
-    "p": (196, 230, 240, 255), "w": (236, 250, 255, 255),
-}
-
-
-def lantern_art():
-    """등롱 — 위아래 테 + 세로 살대 + 중심 심지 광.
-    lantern.png는 모델이 여러 UV 조각으로 잡으므로 어느 조각을 잡아도 '종이 등'으로 읽히게 균질 구성."""
+    """glass_pane_top.png — 창살 마구리(끝면). 통짜 목재 + 결 3단
+    (모델이 어느 UV를 잡아도 '깎아 놓은 나무 단면'으로 읽힌다)."""
     rows = []
     for y in range(16):
-        if y in (0, 1, 14, 15):
-            rows.append("#" * 16)
-            continue
         row = []
         for x in range(16):
-            if x in (0, 15):
-                row.append("#")
-            elif x % 5 == 0:
-                row.append("P")                     # 살대
-            elif 6 <= x <= 9 and 6 <= y <= 9:
-                row.append("w")                     # 심지 광
+            if y in (0, 15) or x in (0, 15):
+                row.append(WOOD_OUT)
             else:
-                row.append("p")
-        rows.append("".join(row))
+                v = 1 + octave(x, y, 2, 0xA5, 0.9) + (0.8 if y < 8 else -0.5)
+                row.append(step([WOOD_OUT, WOOD_DIM, WOOD_MID, WOOD_HI], v))
+        rows.append(row)
     return rows
 
 
-SHELF_PALETTE = {
-    "d": (58, 46, 36, 255),    # 서랍 테두리·문선
-    "w": (128, 102, 72, 255),  # 서랍 앞판
-    "W": (150, 122, 88, 255),  # 결 밝은 획
-    "k": (22, 20, 18, 255),    # 빈 칸 — 열린 서랍 속 어둠
-    "g": BRASS,                # 놋 손잡이
-}
-SHELF_COLS = [(0, 4), (5, 10), (11, 15)]   # 3열 × 2단 = 6칸 (바닐라 chiseled_bookshelf 슬롯 배치)
+# ─── 죽렴(竹簾) — bamboo_planks. 대나무 쪽을 나란히 엮은 발.
+#     쪽 폭 4px (16의 약수) → 좌우 랩 매끄러움. 마디(節)는 8행 주기이되 쪽마다 어긋난다
+#     (결정론 오프셋) — 일직선 마디는 격자로 보이지만, 어긋난 마디는 결로 보인다.
+BAMBOO_SHADES = ramp((92, 80, 50, 255), (222, 210, 164, 255), 7)
+BAMBOO_CURVE = [-2.4, 1.9, 0.6, -0.9]   # 쪽 단면(볼록): 골 / 좌측 광 / 몸 / 우측 falloff
+
+
+def bamboo_rows():
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            strip = x // 4                              # 쪽 번호 0~3
+            v = 4.0 + BAMBOO_CURVE[x % 4] + octave(x, y, 2, 0xC1, 0.45)
+            v += octave(x, y, 1, 0xD3, 0.25)
+            node = (y + (h32(strip, 0xE7) % 5)) % 8     # 쪽마다 어긋난 마디 위상
+            if node == 0:
+                v -= 2.6                                # 마디 홈 — 가로 그늘
+            elif node == 1:
+                v += 1.1                                # 마디 아래 융기 — 빛 받는 턱
+            row.append(step(BAMBOO_SHADES, v))
+        rows.append(row)
+    return rows
+
+# ─── 등롱(燈籠) — 종이에 스민 불빛. 심지에서 멀어질수록 어두워지는 방사 그라데이션이
+#     '안에서 타는 불'을 만든다 (평면 채움으로는 절대 안 나오는 그림).
+#     lantern.png는 모델이 여러 UV 조각으로 잡으므로 어느 조각을 잡아도 종이 등으로 읽히게 균질 구성.
+LANTERN_SHADES = ramp((92, 62, 28, 255), (255, 246, 214, 255), 8)      # 등롱 — 유등 난색
+SOUL_SHADES = ramp((46, 62, 76, 255), (238, 250, 255, 255), 8)         # 백등롱 — 폐사당 냉광
+LANTERN_CAP = (48, 38, 28, 255)      # 위아래 쇠테
+LANTERN_CAP_HI = (86, 70, 50, 255)   # 쇠테 상단 광
+SOUL_CAP = (34, 42, 50, 255)
+SOUL_CAP_HI = (66, 80, 92, 255)
+
+
+def lantern_rows(shades, cap, cap_hi):
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            if y in (0, 1, 14, 15):                       # 쇠테 — 위테 윗줄만 광
+                row.append(cap_hi if y == 0 else cap)
+                continue
+            if x in (0, 15):
+                row.append(cap)                           # 세로 모서리 살
+                continue
+            # 심지 방사광 — 중심(7.5, 8.5)에서의 거리로 감쇠. 심지는 살짝 아래에 있다.
+            d = ((x - 7.5) ** 2 * 0.9 + (y - 8.5) ** 2) ** 0.5
+            v = 7.4 - d * 0.72
+            if x % 5 == 0:
+                v -= 2.2                                  # 세로 살대 — 불빛을 가로막는 그림자
+            v += octave(x, y, 2, 0xF3, 0.35)              # 종이 결 얼룩
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 한약장 — chiseled_bookshelf 재해석 ('꽂힌 책 = 채운 서랍').
+#     6칸(3열 × 2단)은 바닐라 슬롯 배치 계약. occupied = 앞판 + 놋 손잡이 / empty = 열린 칸의 어둠.
+SHELF_WOOD = ramp((44, 34, 24, 255), (168, 138, 100, 255), 7)
+SHELF_VOID = (18, 16, 14, 255)      # 빈 칸 깊은 어둠
+SHELF_VOID_HI = (44, 38, 32, 255)   # 빈 칸 안쪽 바닥 — 위에서 든 빛이 겨우 닿는 곳
+BRASS_HI = (204, 184, 132, 255)     # 놋 손잡이 광
+BRASS_DIM = (104, 90, 60, 255)      # 놋 손잡이 그늘
+SHELF_COLS = [(0, 4), (5, 10), (11, 15)]
 SHELF_ROWS = [(0, 7), (8, 15)]
 
 
-def shelf_face_art(occupied: bool):
-    """한약장 서랍 — '꽂힌 책 = 채운 서랍' 재해석.
-    occupied = 앞판 + 놋 손잡이 / empty = 열린 칸의 어둠. 6칸을 텍스처 안에서 그대로 배치."""
-    grid = [["d"] * 16 for _ in range(16)]
+def shelf_grain(x, y, vertical, base=3.6):
+    """목재 결 — 결 방향으로 길게 늘인 노이즈 (결은 한 방향으로 흐른다)."""
+    gx, gy = (x, y // 4) if vertical else (x // 4, y)
+    return base + octave(gx, gy, 1, 0x2D, 1.5) + octave(x, y, 1, 0x41, 0.4)
+
+
+def shelf_face_rows(occupied):
+    grid = [[SHELF_WOOD[2]] * 16 for _ in range(16)]      # 문선(칸 사이 기둥)
+    for y in range(16):
+        for x in range(16):
+            grid[y][x] = step(SHELF_WOOD, shelf_grain(x, y, True, 2.6))
     for x0, x1 in SHELF_COLS:
         for y0, y1 in SHELF_ROWS:
             for y in range(y0, y1 + 1):
                 for x in range(x0, x1 + 1):
-                    edge = x in (x0, x1) or y in (y0, y1)
-                    grid[y][x] = "d" if edge else ("w" if occupied else "k")
-            if occupied:
-                for x in range(x0 + 1, x1):
-                    grid[(y0 + y1) // 2][x] = "g"      # 가로 놋 손잡이
-    return ["".join(row) for row in grid]
+                    if x == x0 or y == y0:
+                        grid[y][x] = SHELF_WOOD[0]        # 칸 상·좌 — 인셋 그림자
+                    elif x == x1 or y == y1:
+                        grid[y][x] = SHELF_WOOD[5]        # 칸 하·우 — 빛 받는 턱
+                    elif occupied:
+                        grid[y][x] = step(SHELF_WOOD, shelf_grain(x, y, False, 4.2))
+                    else:
+                        # 빈 서랍 속 — 위는 칠흑, 아래로 갈수록 바닥이 희미하게 보인다
+                        t = (y - y0) / max(1, (y1 - y0))
+                        grid[y][x] = mix(SHELF_VOID, SHELF_VOID_HI, t)
+            if occupied:                                   # 가로 놋 손잡이 (2px — 광 + 그늘)
+                my = (y0 + y1) // 2
+                for x in range(x0 + 2, x1 - 1):
+                    grid[my][x] = BRASS_HI
+                    grid[my + 1][x] = BRASS_DIM
+    return grid
 
 
-def shelf_grain_art(vertical: bool):
+def shelf_grain_rows(vertical):
     """약장 몸통(top·side) — 결만 있는 목재. 무늬 금지 대상이 아니라 자유롭다."""
-    rows = []
-    for y in range(16):
-        row = []
-        for x in range(16):
-            t = x if vertical else y
-            row.append("W" if t % 5 == 0 else "d" if t % 5 == 4 else "w")
-        rows.append("".join(row))
-    return rows
+    return [[step(SHELF_WOOD, shelf_grain(x, y, vertical)) for x in range(16)] for y in range(16)]
 
 
 # ─── 족자(簇子) — painting 소형 4종. 세계의 모든 액자가 강호가 된다 ───
@@ -1136,19 +1450,19 @@ def scroll_art(motif):
 def write_block_textures() -> int:
     """징발 등록부 순회 — 바닐라 경로에 16x16 덮어쓰기 (blockstate/model JSON 불요)."""
     blocks = {
-        "deepslate_tiles": paint_rows(ROOF_ART, ROOF_PALETTE),
-        "cracked_deepslate_tiles": paint_rows(cracked_roof_art(), CRACK_PALETTE),
-        "white_terracotta": plaster_rows((214, 208, 196, 255), (226, 221, 210, 255), (198, 191, 178, 255)),
-        "light_gray_terracotta": plaster_rows((168, 164, 156, 255), (180, 176, 168, 255), (152, 148, 141, 255)),
+        "deepslate_tiles": roof_rows(),
+        "cracked_deepslate_tiles": roof_rows(cracked=True),
+        "white_terracotta": plaster_rows((186, 179, 165, 255), (236, 231, 219, 255)),
+        "light_gray_terracotta": plaster_rows((142, 138, 131, 255), (190, 186, 179, 255)),
         "glass": lattice_window_rows(),
         "glass_pane_top": pane_top_rows(),
-        "bamboo_planks": paint_rows(BAMBOO_ART, BAMBOO_PALETTE),
-        "lantern": paint_rows(lantern_art(), LANTERN_PALETTE),
-        "soul_lantern": paint_rows(lantern_art(), SOUL_LANTERN_PALETTE),
-        "chiseled_bookshelf_top": paint_rows(shelf_grain_art(False), SHELF_PALETTE),
-        "chiseled_bookshelf_side": paint_rows(shelf_grain_art(True), SHELF_PALETTE),
-        "chiseled_bookshelf_empty": paint_rows(shelf_face_art(False), SHELF_PALETTE),
-        "chiseled_bookshelf_occupied": paint_rows(shelf_face_art(True), SHELF_PALETTE),
+        "bamboo_planks": bamboo_rows(),
+        "lantern": lantern_rows(LANTERN_SHADES, LANTERN_CAP, LANTERN_CAP_HI),
+        "soul_lantern": lantern_rows(SOUL_SHADES, SOUL_CAP, SOUL_CAP_HI),
+        "chiseled_bookshelf_top": shelf_grain_rows(False),
+        "chiseled_bookshelf_side": shelf_grain_rows(True),
+        "chiseled_bookshelf_empty": shelf_face_rows(False),
+        "chiseled_bookshelf_occupied": shelf_face_rows(True),
     }
     for name, rows in blocks.items():
         write_png(BLOCK_DIR / f"{name}.png", rows)

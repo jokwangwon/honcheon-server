@@ -161,6 +161,8 @@ public final class TownAudit {
         List<String> violations = new ArrayList<>();
 
         boolean[][] path = pathGrid(world, cx, cy, cz);
+        WORLD_PROBE = world;
+        PROBE_Y = cy;
         roadWidths(out, violations, path, cx, cz);
 
         List<Bld> blds = new ArrayList<>();
@@ -243,6 +245,9 @@ public final class TownAudit {
         return i >= 0 && i <= 2 * SCAN_R;
     }
 
+    private static World WORLD_PROBE;   // 진단 출력용 (측정에는 쓰지 않는다)
+    private static int PROBE_Y;
+
     private static void roadWidths(List<String> out, List<String> violations, boolean[][] g, int cx, int cz) {
         out.add(HEAD + "① 길 폭 (실측 DIRT_PATH/GRAVEL 스팬)");
 
@@ -258,6 +263,13 @@ public final class TownAudit {
             ewMin = Math.min(ewMin, w2);
         }
         out.add(INFO + "  남북대로 폭 " + String.join("/", ns) + " (최소 " + nsMin + ")");
+        // 폭 0 = 그 행에 길 자재가 아예 없다 — 무엇이 길을 덮었는지 이름을 대라 (오탐/실버그 판별)
+        for (int d : sample) {
+            if (runX(g, 0, d) == 0) {
+                out.add(WARN + "  진단: 남북대로 z=" + (cz + d) + " 중심선이 길이 아니다 — "
+                        + WORLD_PROBE.getBlockAt(cx, PROBE_Y, cz + d).getType());
+            }
+        }
         out.add(INFO + "  동서대로 폭 " + String.join("/", ew) + " (최소 " + ewMin + ")");
         int boulevard = Math.min(nsMin, ewMin);
         if (boulevard >= BOULEVARD_MIN) {

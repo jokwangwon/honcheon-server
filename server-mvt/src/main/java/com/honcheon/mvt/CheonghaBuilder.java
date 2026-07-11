@@ -1,6 +1,7 @@
 package com.honcheon.mvt;
 
 import org.bukkit.Axis;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -28,9 +29,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
 import org.bukkit.util.BoundingBox;
 
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 청하현 조성기 (M2b·v6) — config/regions/cheongha_hyeon.yml 의 장소를 실블록으로 세운다.
@@ -116,6 +119,34 @@ import java.util.Map;
  *    물길 방향도 이랑과 나란히). 비운 자리는 다진 흙 마당·공터로 두고 좁은 뒷골목 3줄(backLanes)을 냈다.
  * ⑤ 소품 여백 — 벽 한 면 3점 규칙을 좌표로 강제. 의방 약장을 남벽 3 + 서벽 2 로 쪼개고(구 남벽 10),
  *    의뢰소 문서철을 북벽 3점으로 줄이고, 객잔 서벽 4→3 · 북벽 술단지 3점, 전장 남벽 4→3.
+ *
+ * v6.4 — 조감도 3차: **폐사당이 호수 한복판에 반쯤 잠겨 있었다** + 검수 위반 2건(야간 암흑 47.5% · 의뢰소 물매 0.30).
+ * ① 【버그】 폐사당 수몰 — getHighestBlockYAt 은 **물도 최상단 블록으로 센다**. 폐사당만 평탄화 없이 지형에
+ *    순응하므로, 담장 밖 (-75,-75) 가 호수면 수면 위에 기단을 얹었다. 뿌리는 "지면 판정"이었다:
+ *    naturalGroundY() — 최상단에서 아래로 내려가며 **액체·수생·인공 블록을 건너뛰고 자연 지면 화이트리스트에
+ *    처음 닿는 y** 를 돌려준다. 도중에 WATER/LAVA/ICE/KELP 를 만나면 그 칸은 **부적격(MIN_VALUE)**.
+ *    부지 선정은 SHRINE_SITES 12곳을 **순서대로** 검사해 (담 흔적 17x21 전 칸 육지 && 높이 편차 ≤5) 인
+ *    **첫 자리**에 짓는다 — 난수 0, 같은 월드면 항상 같은 자리. 다 소진하면 1번 후보를 최소 정지(整地)해
+ *    쓰고 경고 로그를 남긴다. 기단 밑은 packed_mud 로 메워 공중에 뜨지 않는다.
+ *    재조성 결정론: 메움(packed_mud)·마루 구멍(mud)·기단(stone_bricks)은 전부 **자연 지면 화이트리스트 밖**이라
+ *    naturalGroundY 가 통과해 내려간다 → 두 번째 조성의 부지 판정이 첫 번째와 **같은 값**을 읽는다.
+ *    부지 판정은 담 흔적 **+ 사방 4칸**까지 마른 땅을 요구한다 — 검수가 폐사당 **구역(Zone)을 ±4 로 넓혀**
+ *    수몰을 재기 때문이다(TownAudit 0e5b97c). 구역은 우리가 실제로 고른 자리로 나가므로 냉광 4점(제단 랜턴 2·
+ *    마당 랜턴·뒷마당 모닥불)은 어느 후보를 잡아도 구역 안 = **냉광 0 경고 소멸**.
+ *    후보는 전부 ox∈[-88,-82] · oz∈[-86,-64] — 부지 전체가 blendEdge 스커트(±68) 밖이라 마을 조성 패스가
+ *    지면을 흔들지 못하고(재조성 결정론), 앞의 여섯은 옛 좌표 (cx-75,cz-75) 를 부지 안에 품는다.
+ * ② 야간 암흑 47.5% → 등롱 밀도 재설계. 대로 갓길 밖 ±5 열·간격 7 → **±4 열·간격 3**(양측),
+ *    광장 12주 · 담 발치 링(±58, 간격 6) · 골목 양옆(z∓18·z∓22, 간격 6) · 뒷골목 · 앞마당 · 표국 소로.
+ *    등롱은 이제 **맨땅(흙 계열)에만** 선다 — DIRT_PATH·GRAVEL·돌 포장을 지면 화이트리스트에서 빼서
+ *    "노면 위에 서지 않는다"를 자재로 강제했다 (구 v6.1 가드는 흙길을 허용해 길 한복판에 설 수 있었다).
+ * ③ 의뢰소 물매 0.30 — 물매는 정상(0.67)이었다. 잡화점 **용마루 뿔**(ridge 의 ax-1/bz+1 한 칸 내밈)이
+ *    z=cz-13 지붕 밖으로 한 칸 더 나와 **의뢰소 앵커 z행(cz-12)** 에 얹혔고, 검수 단면이 그 뿔(y=cy+6)에서
+ *    시작해 (9-6)/(15-5)=0.30 을 읽었다. 잡화점만 뿔 없는 용마루로(roofShape horns=false — 격이 가장
+ *    낮은 점포의 소박한 마루) → 지붕 최남단 cz-13, 앵커 행 cz-12 는 비었다 → 단면은 제 처마(cx+9)에서
+ *    시작해 (9-5)/(15-9)=0.67.
+ * ④ 텃밭 축소 — 4필지의 크기를 5x4 이하로 줄이고 둘은 **빈 밭(farmland만)** 으로 비웠다. 걷어낸 자리는
+ *    다진 흙 마당 + 건초 더미·퇴비통·장작더미(생활 흔적 8곳 추가). 담장 안 FARMLAND ≈ 53칸 / 지면 14161칸
+ *    = 0.4% (기준 10% 이하).
  */
 final class CheonghaBuilder {
 
@@ -246,11 +277,24 @@ final class CheonghaBuilder {
 
     /** F29 — 조성 영역 내 기존 혼천 NPC(명패+무적 주민) 제거 — 재조성 = 같은 마을, NPC도 한 벌 */
     private static void clearNpcs(World world, int cx, int cy, int cz) {
+        // 콘솔·자동 조성에는 근처에 플레이어가 없다 → 부지 청크가 언로드 상태이고
+        // getNearbyEntities 가 빈 목록을 돌려준다. 정리가 조용히 실패해 조성마다 NPC 가 7인씩
+        // 쌓였다 (F29 회귀 — 검수가 "NPC 35인" 으로 잡았다). 찾기 전에 청크를 먼저 로드한다.
+        for (int chunkX = (cx - 64) >> 4; chunkX <= (cx + 64) >> 4; chunkX++) {
+            for (int chunkZ = (cz - 64) >> 4; chunkZ <= (cz + 64) >> 4; chunkZ++) {
+                world.getChunkAt(chunkX, chunkZ).load(true);
+            }
+        }
         BoundingBox box = new BoundingBox(cx - 63, cy - 8, cz - 63, cx + 64, cy + 20, cz + 64);
+        int removed = 0;
         for (Entity e : world.getNearbyEntities(box)) {
             if (e instanceof Villager v && v.getCustomName() != null && v.isInvulnerable()) {
                 v.remove();
+                removed++;
             }
+        }
+        if (removed > 0) {
+            org.bukkit.Bukkit.getLogger().info("[혼천/조성] 기존 NPC " + removed + "인 정리");
         }
     }
 
@@ -342,19 +386,21 @@ final class CheonghaBuilder {
     }
 
     /**
-     * v6.3 ④ 민가 뒤뜰 텃밭 — 7필지 → **4필지**. 조감도에서 마을 절반이 밭이었고 이랑이 전부 같은 방향
-     * 줄무늬라 인공적으로 보였다. 향촌의 밭은 남는 땅에 제각각 붙는 것이지 격자로 깔리는 것이 아니다.
-     *   {x0, x1, z0, z1, 울타리, 작물, 이랑}. 전부 상수 (난수 금지) — 크기·작물·이랑 방향을 필지마다 어긋나게.
+     * v6.4 ④ 민가 뒤뜰 텃밭 — 4필지는 유지하되 **필지를 5x4 이하로 줄이고, 둘은 아예 비웠다**.
+     * v6.3 은 필지 수만 줄였고 조감도에서는 여전히 초록 이랑이 마을을 지배했다 — 문제는 개수가 아니라
+     * **한 필지의 크기와 작물의 채도**였다. 향촌의 마당은 밭이 아니라 '사람이 쓰는 빈 땅'이 지배한다:
+     * 갈아만 두고 비워 둔 밭(crop = -1 → farmland 만)과 건초 더미·퇴비통·장작더미가 그 자리를 대신한다.
+     *   {x0, x1, z0, z1, 울타리, 작물, 이랑}. 전부 상수 (난수 금지).
      *   울타리: 0 참나무 목책 / 1 대나무 목책 / 2 낮은 돌담.
-     *   작물:   0 밀 / 1 당근 / 2 감자 / 3 비트 — 필지당 한 가지 (한 집이 한 해에 한 작물을 심는다).
+     *   작물:   -1 없음(빈 밭) / 0 밀 / 1 당근 / 2 감자 / 3 비트 — 필지당 한 가지.
      *   이랑:   0 세로(물길이 한 x열) / 1 가로(물길이 한 z행).
-     * 지운 3필지(#2 곁밭·#4 뒤뜰·#9 서편밭) 자리는 다진 흙 마당·공터로 남기고 뒷골목(BACK_LANES)이 지난다.
+     * 지운 자리는 다진 흙 마당·공터로 남기고 뒷골목(BACK_LANES)과 생활 흔적(LIFE_TRACES)이 채운다.
      */
     private static final int[][] GARDENS = {
-            {-43, -37, -39, -36, 0, 0, 0},   // #1 대장간 뒤뜰 7x4 — 밀, 세로 이랑 (울타리 줄이 #1 지붕 밖)
-            {10, 14, -40, -36, 1, 1, 1},     // #3 일자집 뒤뜰 5x5 — 당근, 가로 이랑
-            {-27, -24, 26, 32, 2, 2, 0},     // #6 ㄱ자집 곁밭 4x7 — 감자, 세로 이랑
-            {9, 14, 35, 38, 0, 3, 1},        // #7 직조간 뒤뜰 6x4 — 비트, 가로 이랑
+            {-43, -39, -39, -36, 0, 0, 0},   // #1 대장간 뒤뜰 5x4 — 밀, 세로 이랑
+            {10, 14, -40, -38, 1, -1, 1},    // #3 일자집 뒤뜰 5x3 — **빈 밭**(갈아만 둔 땅), 가로 물길
+            {-27, -24, 26, 29, 2, 2, 0},     // #6 ㄱ자집 곁밭 4x4 — 감자, 세로 이랑
+            {9, 13, 35, 38, 0, -1, 1},       // #7 직조간 뒤뜰 5x4 — **빈 밭**, 가로 물길
     };
 
     /**
@@ -368,7 +414,11 @@ final class CheonghaBuilder {
             {-12, -11, 22, 34},     // 의방 뒤(z+20) ↔ 남쪽 들판 (구 텃밭 자리를 가른다)
     };
 
-    /** 생활 흔적 — {x, z, 종류}. 0 장독대 / 1 장작더미 / 2 빨랫줄 / 3 닭장 / 4 퇴비통 */
+    /**
+     * 생활 흔적 — {x, z, 종류}. 0 장독대 / 1 장작더미 / 2 빨랫줄 / 3 닭장 / 4 퇴비통 / 5 건초 더미 (v6.4).
+     * v6.4 ④: 줄인 텃밭이 비운 마당을 **밭이 아닌 것**으로 채운다 — 건초 더미·퇴비통·장작더미가
+     * 초록 이랑 자리에 들어서면 조감도의 지배색이 작물(연두)에서 흙·짚(갈색)으로 돌아온다.
+     */
     private static final int[][] LIFE_TRACES = {
             {-46, -28, 1}, {-46, -26, 0}, {-47, -31, 3},   // #1 대장간 서편
             {-8, -34, 0}, {-8, -32, 1},                    // #2 안마당
@@ -379,6 +429,11 @@ final class CheonghaBuilder {
             {6, 26, 0}, {6, 29, 1}, {24, 30, 2}, {14, 33, 4},   // #7 서·동·남편 (빨랫줄은 G4 울타리를 피해 동편으로)
             {32, 26, 0}, {32, 29, 1},                      // #8 서편
             {-31, 10, 0}, {-31, 13, 1}, {-31, 16, 2},      // #9 동편
+            // v6.4 ④ — 걷어낸 텃밭 자리의 마당 살림 (건초·퇴비·장작이 밭을 대신한다)
+            {-37, -39, 5}, {-34, -38, 4}, {-37, -35, 1},   // #1 뒤뜰 (구 7x4 밭의 동쪽 절반)
+            {10, -35, 5}, {13, -34, 1},                    // #3 뒤뜰 (구 5x5 밭의 남쪽)
+            {-27, 31, 5}, {-25, 34, 4},                    // #6 곁밭 (구 4x7 밭의 남쪽)
+            {9, 33, 5}, {12, 32, 1},                       // #7 뒤뜰 (구 6x4 밭의 북쪽 — 집과 밭 사이 마당)
     };
 
     /** 필지 — 텃밭·울타리·생활 흔적. "울타리가 마을을 마을로 만든다" */
@@ -437,7 +492,8 @@ final class CheonghaBuilder {
             case 0 -> Material.WHEAT;
             case 1 -> Material.CARROTS;
             case 2 -> Material.POTATOES;
-            default -> Material.BEETROOTS;
+            case 3 -> Material.BEETROOTS;
+            default -> null;                     // v6.4 ④ — 빈 밭: 갈아만 두고 심지 않았다
         };
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {
@@ -449,6 +505,9 @@ final class CheonghaBuilder {
                     continue;
                 }
                 world.getBlockAt(x, cy, z).setType(Material.FARMLAND);
+                if (seed == null) {
+                    continue;
+                }
                 BlockData data = seed.createBlockData();
                 Ageable age = (Ageable) data;
                 age.setAge(age.getMaximumAge());   // 성장 고정 — 재조성해도 같은 이삭
@@ -526,9 +585,24 @@ final class CheonghaBuilder {
                     }
                 }
             }
-            default -> {   // 퇴비통 + 통
+            case 4 -> {   // 퇴비통 + 통
                 putProp(world, cx, cy, cz, x, z, Material.COMPOSTER);
                 putProp(world, cx, cy, cz, x + 1, z, Material.BARREL);
+            }
+            default -> {   // v6.4 ④ 건초 더미 — 2x2 짚단 1단 + 한 귀만 2단 (베어 쌓은 결)
+                for (int dx = 0; dx <= 1; dx++) {
+                    for (int dz = 0; dz <= 1; dz++) {
+                        if (!freeCell(world, cx, cy, cz, x + dx, z + dz)) {
+                            continue;
+                        }
+                        Orientable hay = (Orientable) Material.HAY_BLOCK.createBlockData();
+                        hay.setAxis(Math.floorMod(x + z, 2) == 0 ? Axis.X : Axis.Z);
+                        world.getBlockAt(x + dx, cy + 1, z + dz).setBlockData(hay);
+                        if (dx == 0 && dz == 0) {
+                            world.getBlockAt(x, cy + 2, z).setBlockData(hay);
+                        }
+                    }
+                }
             }
         }
     }
@@ -629,9 +703,12 @@ final class CheonghaBuilder {
         int h = Math.floorMod(x * 7 + z * 11, 10);
         Material top;
         if (shoulder) {
-            top = h < 6 ? Material.GRAVEL : Material.COARSE_DIRT;
+            // 갓길도 노면의 일부다 — 거친 흙을 섞으면 마차가 다니는 폭이 줄어 보인다
+            top = Material.GRAVEL;
         } else {
-            top = h == 0 ? Material.GRAVEL : h == 1 ? Material.COARSE_DIRT : Material.DIRT_PATH;
+            // 노면은 흙길·자갈만 — 거친 흙을 섞으면 그건 '길'이 아니라 '땅'이다 (담장 안 지면의
+            // 62%가 거친 흙이라 노면과 구별이 사라진다). 질감은 자갈 점치환으로 낸다.
+            top = h < 2 ? Material.GRAVEL : Material.DIRT_PATH;
         }
         world.getBlockAt(x, cy, z).setType(top);
         world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);   // 노반 — 흙길 밑 다짐
@@ -895,37 +972,133 @@ final class CheonghaBuilder {
 
     // ─── 가로 시설 — 등롱·조경 ───
 
+    // ─── v6.4 ② 등롱 — 밤에도 마을이어야 한다 ───
+    //
+    // 검수: 길 위 샘플의 47.5% 가 블록 광원 <7 (기준 15% 이하). 원인은 두 겹이었다:
+    //   ㉮ 대로 등롱이 간격 7·측거 5 → 랜턴(y=cy+3)에서 대로 한복판(y=cy+1)까지 맨해튼 5+2+3=10 → 광원 5.
+    //   ㉯ 대로 말고는 등롱이 아예 없었다 — 광장(19x19 돌바닥)·담 발치 흙길 링(4x119)·골목 2줄·뒷골목·
+    //      앞마당·표국 소로가 전부 '길'로 세어지는데(검수 PATH 자재) 전부 캄캄했다.
+    // v6.4 의 규칙은 **맨해튼 8 이내**: 랜턴이 cy+3, 길바닥이 cy+1 이므로 수직 2 + 수평 6 이면 광원 7 이상.
+    //   대로 = 측거 4(갓길 ±3 바로 밖) · 간격 3 → 최악 4+2+1 = 7 → 광원 8.
+    //   담 발치 = ±58 링 간격 6 → 발치 길(±59)까지 1+2+3 = 6 → 광원 9.
+    //   골목 = 갓길 밖 z∓18 · z∓22 간격 6 → 골목 반대편 줄까지 3+2+3 = 8 → 광원 7.
+    //   광장 = 12주(±4/±8 격자, 우물·매화·화단 자리를 피한다) → 어느 돌바닥도 8 이내.
+    // 그리고 v6.1 의 "노면에 서지 않는다"를 자재로 못 박는다: 지면 화이트리스트에서 DIRT_PATH·GRAVEL 을 뺐다
+    //   → 등롱은 **다진 흙·풀 위에만** 선다. 대로·골목·소로·뒷골목·디딤돌·광장 돌바닥에는 물리적으로 못 선다.
+
+    /** 등롱이 설 수 있는 지면 — 맨땅뿐 (길 자재·포장은 제외 = 노면 금지 가드) */
+    private static final Set<Material> LAMP_GROUND = EnumSet.of(
+            Material.GRASS_BLOCK, Material.DIRT, Material.COARSE_DIRT, Material.ROOTED_DIRT);
+
+    /** 광장 등롱만 서는 지면 — 광장 포장 (여기서만 돌 위 설치를 허용한다) */
+    private static final Set<Material> PLAZA_GROUND = EnumSet.of(
+            Material.SMOOTH_STONE, Material.ANDESITE, Material.STONE_BRICKS, Material.COBBLESTONE);
+
+    /** 광장 등롱 12주 — {dx, dz}. 우물(±2)·매화(±8,±8)·화단(±5..±6)·대로 축(|d|≤3)을 비켜선다 */
+    private static final int[][] PLAZA_LAMPS = {
+            {-4, -4}, {4, -4}, {-4, 4}, {4, 4},
+            {-8, -4}, {8, -4}, {-8, 4}, {8, 4},
+            {-4, -8}, {4, -8}, {-4, 8}, {4, 8},
+    };
+
     /**
-     * 가로 등롱 — 대로 갓길(±3) 밖 ±5 열. 골목 줄(z∓20±1)과 겹치지 않게 간격 7 (d=12,19,26,...).
-     * v6.1 ①: 길을 7칸으로 넓히면서 등롱 열이 노면 위로 올라오는 사고가 나므로,
-     * 조성 순서를 건물·노점 뒤로 미루고 "빈 자리에만 선다"는 규칙을 코드로 강제한다.
+     * 소로 등롱 — {dx, dz}. 관청·객잔 앞마당은 제 문 현수 등롱 쌍(y+4)이 이미 덮는다(맨해튼 5 → 광원 10).
+     * 등롱이 필요한 건 **문 등롱이 없는 소로**뿐: 민가 9 소로와 표국 진입 소로(3칸 x 16칸)·대문 앞마당.
      */
+    private static final int[][] DOOR_LAMPS = {
+            {-44, 17}, {-38, 17},                                  // 민가 9 소로(x-43..-39) 양옆 맨땅
+            {47, 22}, {47, 26}, {47, 30}, {47, 34}, {38, 34},      // 표국 진입 소로 · 대문 앞
+    };
+
+    /** 가로 등롱 — 대로·광장·담 발치·골목·뒷골목·앞마당. 건물·노점을 다 세운 뒤 빈 자리에만 선다. */
     private static void streetLanterns(World world, int cx, int cy, int cz) {
-        for (int d = 12; d <= 54; d += 7) {
-            for (int side = -5; side <= 5; side += 10) {
-                lanternPost(world, cx + side, cy, cz - d);   // 남북대로 양측
+        for (int d = 10; d <= 58; d += 3) {          // 대로 4갈래 양측 — 측거 4, 간격 3
+            for (int side = -4; side <= 4; side += 8) {
+                lanternPost(world, cx + side, cy, cz - d);   // 남북대로
                 lanternPost(world, cx + side, cy, cz + d);
-                lanternPost(world, cx - d, cy, cz + side);   // 동서대로 양측
+                lanternPost(world, cx - d, cy, cz + side);   // 동서대로
                 lanternPost(world, cx + d, cy, cz + side);
+            }
+        }
+        for (int side = -4; side <= 4; side += 8) {   // 대로 x 골목 교차부 — 간격 3 열이 골목 줄(±19~21)을 건너뛴다
+            for (int d : new int[]{18, 22}) {
+                lanternPost(world, cx + side, cy, cz - d);
+                lanternPost(world, cx + side, cy, cz + d);
+            }
+        }
+        for (int i = -54; i <= 54; i += 6) {          // 담 발치 링 — 발치 흙길(±59) 안쪽 ±58
+            lanternPost(world, cx + i, cy, cz - 58);
+            lanternPost(world, cx + i, cy, cz + 58);
+            lanternPost(world, cx - 58, cy, cz + i);
+            lanternPost(world, cx + 58, cy, cz + i);
+        }
+        for (int x = cx - 45; x <= cx + 45; x += 6) { // 골목 양옆 갓길 밖 (골목 노면 z∓19~21 은 비운다)
+            for (int dz : new int[]{-22, -18, 18, 22}) {
+                lanternPost(world, x, cy, cz + dz);
+            }
+        }
+        for (int[] l : BACK_LANES) {                  // 뒷골목 — 길 양옆 맨땅, 간격 5
+            for (int z = cz + l[2]; z <= cz + l[3]; z += 5) {
+                lanternPost(world, cx + l[0] - 1, cy, z);
+                lanternPost(world, cx + l[1] + 1, cy, z);
+            }
+        }
+        for (int[] p : DOOR_LAMPS) {                  // 앞마당·소로 어귀
+            lanternPost(world, cx + p[0], cy, cz + p[1]);
+        }
+        for (int[] p : PLAZA_LAMPS) {                 // 광장 12주
+            plazaLantern(world, cx + p[0], cy, cz + p[1]);
+        }
+        for (int x = cx - 48; x <= cx + 48; x += 4) {  // 골목 처마 밑 현수 등롱 (땅이 없는 구간의 답)
+            for (int dz : new int[]{-21, -19, 19, 21}) {
+                eaveLantern(world, x, cy + 4, cz + dz);
             }
         }
     }
 
     /**
-     * 등롱 기둥 — 지면이 길·맨땅이고 위 3칸이 비었을 때만 선다 (건물·처마·담을 뚫지 않는다).
-     * v6.2 ①: groundCover 가 흙·뿌리 흙을 깔면서 지면 판정을 넓히지 않으면 등롱이 통째로 사라진다
-     * (→ 야간 암흑 위반). 등롱 열(±5)은 reserved 이므로 울타리·텃밭·잡초가 그 자리를 뺏지 못한다.
+     * 처마 밑 현수 등롱 — 골목 갓길에 **땅이 없는 구간**의 답. 의방·전장의 남벽(z+18)은 남골목(z+19~21)에
+     * 딱 붙어 있어 등롱 기둥을 세울 맨땅이 한 칸도 없다. 그 대신 처마(y+5) 밑 y+4 에 등롱을 매단다:
+     *   노면(cy)도 통행 높이(cy+1~2)도 건드리지 않으므로 길 폭·길 판정에 영향이 0이고,
+     *   위에 지붕이 있는 칸에만 걸리므로(받침 검사) 허공에 뜬 등이 생기지 않는다.
+     * 향촌 골목의 실제 조명 방식이기도 하다 — 등은 처마에서 내려온다.
+     */
+    private static void eaveLantern(World world, int x, int y, int z) {
+        if (!world.getBlockAt(x, y, z).getType().isAir()
+                || world.getBlockAt(x, y + 1, z).getType().isAir()) {
+            return;   // 자리가 찼거나, 매달 처마가 없다
+        }
+        hangingLantern(world, x, y, z);
+    }
+
+    /**
+     * 등롱 기둥 — 지면이 **맨땅**(잔디·흙·다진 흙·뿌리 흙)이고 위 3칸이 비었을 때만 선다.
+     * 길 자재(DIRT_PATH·GRAVEL)·포장(조약돌·안산암)은 화이트리스트 밖 = 등롱은 노면에 서지 못한다.
+     * 등롱 열(±4)·담 발치(±58)·골목 갓길(z∓18·∓22)은 전부 reserved() 이므로 울타리·텃밭·잡초가 뺏지 못한다.
      */
     private static void lanternPost(World world, int x, int cy, int z) {
-        Material ground = world.getBlockAt(x, cy, z).getType();
-        boolean open = ground == Material.GRASS_BLOCK || ground == Material.DIRT_PATH
-                || ground == Material.GRAVEL || ground == Material.COARSE_DIRT
-                || ground == Material.DIRT || ground == Material.ROOTED_DIRT;
-        for (int y = cy + 1; y <= cy + 3; y++) {
-            open &= world.getBlockAt(x, y, z).getType().isAir();
-        }
-        if (!open) {
+        if (!LAMP_GROUND.contains(world.getBlockAt(x, cy, z).getType())) {
             return;
+        }
+        for (int y = cy + 1; y <= cy + 3; y++) {
+            if (!world.getBlockAt(x, y, z).getType().isAir()) {
+                return;   // 건물·처마·담·노점·소품 — 등롱이 밀어내지 않는다
+            }
+        }
+        world.getBlockAt(x, cy + 1, z).setType(Material.SPRUCE_FENCE);
+        world.getBlockAt(x, cy + 2, z).setType(Material.SPRUCE_FENCE);
+        world.getBlockAt(x, cy + 3, z).setType(Material.LANTERN);
+    }
+
+    /** 광장 등롱 — 돌바닥 위에만(광장 포장 화이트리스트). 광장은 노면이 아니라 '마당'이다 */
+    private static void plazaLantern(World world, int x, int cy, int z) {
+        if (!PLAZA_GROUND.contains(world.getBlockAt(x, cy, z).getType())) {
+            return;
+        }
+        for (int y = cy + 1; y <= cy + 3; y++) {
+            if (!world.getBlockAt(x, y, z).getType().isAir()) {
+                return;
+            }
         }
         world.getBlockAt(x, cy + 1, z).setType(Material.SPRUCE_FENCE);
         world.getBlockAt(x, cy + 2, z).setType(Material.SPRUCE_FENCE);
@@ -1340,6 +1513,21 @@ final class CheonghaBuilder {
     private static void roofShape(World world, int x0, int z0, int x1, int z1, int yBase,
                                   RoofStyle rs, Material gable, int hipSteps, boolean thickRidge,
                                   boolean deepEave) {
+        roofShape(world, x0, z0, x1, z1, yBase, rs, gable, hipSteps, thickRidge, deepEave, true);
+    }
+
+    /**
+     * v6.4 ③ — horns: 용마루 양 끝의 **들린 뿔**(ridge 가 마루 밖으로 한 칸 내미는 풀 블록)을 놓을지.
+     * 이 한 칸이 지붕 사각형 **밖으로** 나가므로, 좁은 부지에서는 이웃 건물의 검수 단면에 얹힌다:
+     *   잡화점(z-19..-13)의 남쪽 뿔이 z=cz-12 = **의뢰소 앵커 z행**에 서서, 검수가 의뢰소 지붕 단면을
+     *   잡화점 뿔(x=cx+5, y=cy+6)에서 시작하도록 만들었다 → 물매 (9-6)/(15-5) = 0.30 "너무 평평" 오탐.
+     *   뿔을 끄면 잡화점 지붕은 제 사각형 안(≤ cz-13)에 갇히고, 의뢰소 단면은 제 처마(cx+9, cy+5)에서
+     *   시작해 (9-5)/(15-9) = 0.67 — 실제 물매 그대로다.
+     * 위계로도 옳다: 치미의 뿔은 격이 있는 집의 표식이고, 잡화점은 마을에서 가장 낮은 격의 점포다.
+     */
+    private static void roofShape(World world, int x0, int z0, int x1, int z1, int yBase,
+                                  RoofStyle rs, Material gable, int hipSteps, boolean thickRidge,
+                                  boolean deepEave, boolean horns) {
         eaveFenceRim(world, x0, z0, x1, z1, yBase - 1);   // ① 마구리 — 처마 끝에 매단 흑목 살
         if (deepEave) {
             rafterLine(world, x0 + 1, z0 + 1, x1 - 1, z1 - 1, yBase - 1);   // 서까래 그늘 (한 칸 안쪽)
@@ -1355,7 +1543,8 @@ final class CheonghaBuilder {
             s++;
         }
         boolean ridgeX = (bx - ax) >= (bz - az);   // 용마루는 장변을 따라 눕는다
-        boolean vent = true;                       // 환기창은 합각·박공 첫 단에 한 칸
+        boolean plaster = hipSteps > 0;            // v6.4 ⑤ 팔작 = 합각 회벽 / 맞배 = 박공 널판(풍판)
+        boolean first = true;                      // 합각 살창은 첫 단(가장 넓은 단) 한가운데
         while (ridgeX ? bz - az > 1 : bx - ax > 1) {
             int y = yBase + rise(s);
             boolean solid = flat(s);
@@ -1365,10 +1554,12 @@ final class CheonghaBuilder {
                     roofCell(world, x, y, bz, BlockFace.NORTH, rs, solid || groove(x));
                 }
                 int mid = (az + bz) / 2;
+                int run = bz - az - 1;                          // 이 단의 삼각면 폭
                 for (int z = az + 1; z <= bz - 1; z++) {
                     boolean edge = z == az + 1 || z == bz - 1;   // 경사변에 닿는 칸 = 판자 테두리
-                    gableBlock(world, ax, y, z, gable, vent && z == mid, edge);
-                    gableBlock(world, bx, y, z, gable, vent && z == mid, edge);
+                    boolean lattice = lattice(plaster, first, run, z - mid);
+                    gableBlock(world, ax, y, z, gable, plaster, edge, lattice);
+                    gableBlock(world, bx, y, z, gable, plaster, edge, lattice);
                 }
                 az++;
                 bz--;
@@ -1378,19 +1569,36 @@ final class CheonghaBuilder {
                     roofCell(world, bx, y, z, BlockFace.WEST, rs, solid || groove(z));
                 }
                 int mid = (ax + bx) / 2;
+                int run = bx - ax - 1;
                 for (int x = ax + 1; x <= bx - 1; x++) {
                     boolean edge = x == ax + 1 || x == bx - 1;
-                    gableBlock(world, x, y, az, gable, vent && x == mid, edge);
-                    gableBlock(world, x, y, bz, gable, vent && x == mid, edge);
+                    boolean lattice = lattice(plaster, first, run, x - mid);
+                    gableBlock(world, x, y, az, gable, plaster, edge, lattice);
+                    gableBlock(world, x, y, bz, gable, plaster, edge, lattice);
                 }
                 ax++;
                 bx--;
             }
-            vent = false;
+            first = false;
             s++;
         }
-        ridge(world, ax, az, bx, bz, yBase + rise(s), rs, ridgeX, thickRidge);
+        ridge(world, ax, az, bx, bz, yBase + rise(s), rs, ridgeX, thickRidge, horns);
         eaveRim(world, x0, z0, x1, z1, yBase, rs);   // v6.2 ③ — 처마 끝단을 반 블록으로 깎아 그림자 선을 낸다
+    }
+
+    /**
+     * v6.4 ⑤ 살창(欌窓) 판정 — **울타리는 면이 아니라 점·선이다** (사용자 정정).
+     * v6.3 은 "지붕 옆면을 나무 울타리로"를 삼각면 **전체**를 흑목 울타리 격자로 채우는 것으로 읽었다.
+     * 한옥에서 목재가 드러나는 자리는 한정돼 있다 — 서까래 끝(마구리 한 줄), 난간(한 줄), 그리고
+     * 합각·박공에 난 **작은 살창 몇 칸**. 면(面)은 널판(풍판)과 회벽이 맡는다.
+     *   합각(팔작) — 회벽 면 + 첫 단 한가운데 최대 3칸 살창 (좁은 합각이면 1칸).
+     *   박공(맞배·민가) — 널판 면(풍판) + 꼭짓점 아래(폭 ≤3인 상단 1~2단) 한가운데 1칸 통풍구.
+     */
+    private static boolean lattice(boolean plaster, boolean first, int run, int off) {
+        if (plaster) {
+            return first && Math.abs(off) <= 1;   // 합각 중앙 살창 (최대 3칸)
+        }
+        return run <= 3 && off == 0;              // 박공 꼭짓점 밑 통풍구 1칸
     }
 
     /**
@@ -1467,7 +1675,7 @@ final class CheonghaBuilder {
      * 위에서 내려다보면 검은 판때기 한복판에 마루 선 한 줄이 그어지고, 그 양 끝이 뿔처럼 들린다.
      */
     private static void ridge(World world, int ax, int az, int bx, int bz, int y,
-                             RoofStyle rs, boolean ridgeX, boolean thick) {
+                             RoofStyle rs, boolean ridgeX, boolean thick, boolean horns) {
         Material solid = solidMat(rs);
         for (int x = ax; x <= bx; x++) {
             for (int z = az; z <= bz; z++) {
@@ -1486,8 +1694,10 @@ final class CheonghaBuilder {
             for (int x : new int[]{ax, bx}) {
                 world.getBlockAt(x, y + 2, mz).setType(solid);              // 치미 — 양단을 확실히 세운다
             }
-            world.getBlockAt(ax - 1, y + 1, mz).setType(solid);             // 들린 양 끝 (치미의 뿔)
-            world.getBlockAt(bx + 1, y + 1, mz).setType(solid);
+            if (horns) {   // v6.4 ③ — 뿔은 지붕 사각형 밖으로 한 칸 나간다 (좁은 부지에서는 끈다)
+                world.getBlockAt(ax - 1, y + 1, mz).setType(solid);         // 들린 양 끝 (치미의 뿔)
+                world.getBlockAt(bx + 1, y + 1, mz).setType(solid);
+            }
         } else {
             for (int z = az; z <= bz; z++) {
                 world.getBlockAt(mx, y + 1, z).setType(solid);
@@ -1498,22 +1708,28 @@ final class CheonghaBuilder {
             for (int z : new int[]{az, bz}) {
                 world.getBlockAt(mx, y + 2, z).setType(solid);
             }
-            world.getBlockAt(mx, y + 1, az - 1).setType(solid);
-            world.getBlockAt(mx, y + 1, bz + 1).setType(solid);
+            if (horns) {
+                world.getBlockAt(mx, y + 1, az - 1).setType(solid);
+                world.getBlockAt(mx, y + 1, bz + 1).setType(solid);
+            }
         }
     }
 
     /**
-     * v6.3 ① 합각·박공 한 칸 — **사용자 지시: "지붕 옆면은 나무 울타리가 좋을 거 같고"**.
-     * v6.2 까지 이 삼각면은 백벽/흑목 판재 덩어리였고, 위에서 보면 검은 판때기의 옆구리였다.
-     * 이제 경사변에 닿는 양 끝 칸(edge)만 판자 테두리로 두고 속은 **흑목 울타리 격자**로 채운다:
-     *   울타리 블록은 서로 연결되며 살대(창살) 실루엣을 만든다 = 실제 향촌 건축의 박공 밑 서까래·살대.
-     *   충돌 부피는 그대로라(울타리는 1.5칸 높이) 다락·실내가 뚫리지 않고, 빛과 결만 통과한다.
-     * gable = 테두리 판재 (호출자가 흑목 판자를 넘긴다). vent = 가운데 한 칸 유리판 환기창.
+     * v6.4 ⑤ 합각·박공 한 칸 — **사용자 정정: "지붕의 모든 면을 울타리로 바꾸라는 뜻이 아니었다.
+     *   한옥 특성상 지붕의 특정 부분만 울타리로 표현하면 좋지 않을까 라는 뜻이었어."**
+     * v6.3 은 삼각면 속을 통째로 흑목 울타리 격자로 채웠다 — 지붕 옆구리가 통으로 뚫려 보였다.
+     * 이제 **면은 널판·회벽, 울타리는 선과 점**이다:
+     *   plaster(팔작 합각) — 회벽(백벽) 면 + 경사변 접합칸은 판자 테두리 + 첫 단 한가운데 살창(lattice).
+     *   !plaster(맞배 박공 — 민가·부속채·잡화점) — 흑목 널판 풍판 한 면 + 꼭짓점 밑 통풍구 1칸.
+     * 나머지 목재 노출은 그대로 유지한다: 처마 마구리 한 줄(eaveFenceRim = 서까래 끝) · 난간 한 줄
+     * (balustradeRing = 객잔 2층·표국 툇마루). 선과 점이면 결이고, 면이면 구멍이다.
      */
     private static void gableBlock(World world, int x, int y, int z, Material gable,
-                                   boolean vent, boolean edge) {
-        Material m = vent ? Material.GLASS_PANE : edge ? gable : Material.DARK_OAK_FENCE;
+                                   boolean plaster, boolean edge, boolean lattice) {
+        Material m = lattice ? Material.DARK_OAK_FENCE
+                : plaster ? (edge ? gable : Material.WHITE_TERRACOTTA)
+                : gable;
         world.getBlockAt(x, y, z).setType(m);
     }
 
@@ -1812,29 +2028,139 @@ final class CheonghaBuilder {
         world.getBlockAt(cx + 50, cy + 1, cz + 51).setType(Material.OAK_LOG);
     }
 
-    // ─── 폐사당 (v6 ② — abandoned_shrine, 담장 밖 북서 외곽) ───
+    // ─── 폐사당 (v6 ② — abandoned_shrine, 담장 밖 북서 외곽 / v6.4 ① — 물 위에 짓지 않는다) ───
     //
-    // 마을 중심에서 (-75,-75) — 담장(r=60)·완사면(r=68) 밖. 평탄화하지 않는다: 폐허는 지형에 순응해야 폐허답다.
-    //   본전 11x15 = x[cx-80..cx-70] · z[cz-82..cz-68], 무너진 담 흔적 17x21 = x[cx-83..cx-67]·z[cz-85..cz-65].
-    //   기준 높이는 부지 밖 한 점(cx-75, cz-90 — 우리가 절대 건드리지 않는 좌표)의 지표에서 뽑는다 →
-    //   재조성해도 같은 baseY (getHighestBlockYAt 이 제 건물을 다시 읽는 비결정론을 차단).
+    // 【v6.4 ① 버그】 조감도 클로즈업에서 폐사당이 **호수 한복판에 반쯤 잠긴 채** 서 있었다.
+    //   폐사당만 평탄화 없이 지형에 순응하는데(폐허는 순응해야 폐허다), 지면 판정을 getHighestBlockYAt 으로
+    //   했다 — 이 함수는 **물도 '최상단 블록'으로 센다**. 그래서 수면이 지면으로 읽혀 호수 위에 기단이 얹혔다.
+    //
+    // v6.4 의 부지 선정 — 결정론 후보 탐색 (난수 0, 같은 월드 = 같은 자리):
+    //   ① naturalGroundY(x,z) — 최상단에서 내려가며 **자연 지면 화이트리스트**(풀·흙·모래·돌…)에 처음 닿는 y.
+    //      가는 길에 WATER/LAVA/ICE/KELP 를 만나면 그 칸은 **부적격(MIN_VALUE)** — 물은 지면이 아니다.
+    //      나뭇잎·통나무·눈·풀은 물론 **폐사당이 지난번에 놓은 인공 블록도** 전부 통과해 내려간다.
+    //   ② SHRINE_SITES 후보 12곳을 **순서대로** 검사 — 담 흔적 17x21 전 칸이 육지이고 지면 높이 편차 ≤ 5
+    //      (절벽 배제)인 **첫 자리**. 다 소진하면 1번 후보를 최소 정지(整地)해 쓰고 경고 로그를 남긴다.
+    //   ③ baseY = 부지 지면 최고점 + 1. 기단 밑은 packed_mud 로 메우고(공중 부양 금지), **자연 지면 블록은
+    //      건드리지 않는다**(ground+1 부터 메운다). packed_mud·mud·stone_bricks 는 전부 화이트리스트 밖이라
+    //      재조성 시 naturalGroundY 가 이들을 통과해 **같은 자연 지면**을 읽는다 → 두 번째 조성도 같은 후보.
+    //   ④ 후보 제약 — ox ∈ [-88,-82] · oz ∈ [-86,-64]:
+    //      (a) 부지 전체가 담장(r=60)·완사면 스커트(r=68) 밖 (blendEdge 가 지면을 흔들지 못한다),
+    //      (b) 냉광 4점이 전부 검수 창 (cx-75, cz-75) ±20 안 → "폐사당 냉광 0" 경고 해소,
+    //      (c) (cx-75, cz-75) 열에 폐사당 지붕이 얹히지 않는다 — 검수는 그 열의 getHighestBlockYAt 으로
+    //          냉광 y창 [base-4, base+14] 를 잡으므로, 지붕(≈base+11)이 얹히면 제단 랜턴(base+2)이 창 밑으로
+    //          빠진다. **이것이 "냉광 0" 경고의 진짜 원인이었다** (물 버그와 별개의 두 번째 버그).
     //   간판·명패·앵커 없음 (hidden — 발견은 서사의 몫). 광원은 전부 영혼 계열 = 마을의 온색과 정반대.
 
-    private static final int[][] SH_COBWEBS = {   // 거미줄 5곳 — 천장 모서리·부러진 기둥 틈 (좌표 상수)
-            {-79, -81, 4}, {-71, -81, 4}, {-79, -69, 4}, {-72, -73, 3}, {-77, -77, 4}
+    /** 자연 지면 — 여기 닿으면 그것이 '땅'이다. 인공 블록(기단·메움·마루·담)은 전부 이 밖 = 통과해 내려간다. */
+    private static final Set<Material> NATURAL_GROUND = EnumSet.of(
+            Material.GRASS_BLOCK, Material.DIRT, Material.COARSE_DIRT, Material.ROOTED_DIRT,
+            Material.PODZOL, Material.MYCELIUM, Material.MOSS_BLOCK, Material.CLAY,
+            Material.SAND, Material.RED_SAND, Material.GRAVEL, Material.SANDSTONE, Material.RED_SANDSTONE,
+            Material.STONE, Material.ANDESITE, Material.DIORITE, Material.GRANITE, Material.TUFF,
+            Material.DEEPSLATE, Material.CALCITE, Material.SNOW_BLOCK, Material.TERRACOTTA);
+
+    /** 액체·수생·빙결 — 한 칸이라도 만나면 그 열은 부지가 될 수 없다 (물 위에 절은 서지 않는다) */
+    private static final Set<Material> WET = EnumSet.of(
+            Material.WATER, Material.LAVA, Material.BUBBLE_COLUMN, Material.POWDER_SNOW,
+            Material.ICE, Material.PACKED_ICE, Material.BLUE_ICE, Material.FROSTED_ICE,
+            Material.KELP, Material.KELP_PLANT, Material.SEAGRASS, Material.TALL_SEAGRASS,
+            Material.LILY_PAD, Material.SEA_PICKLE);
+
+    /**
+     * 폐사당 부지 후보 — {ox, oz} 마을 중심 기준 폐사당 중심. **순서가 곧 우선순위**(난수 금지).
+     * 1번이 원위치에 가장 가깝고, 뒤로 갈수록 북서 바깥으로 물러난다. 제약은 위 ④ 참조.
+     */
+    private static final int[][] SHRINE_SITES = {
+            // 1~6 — ox ∈ {-82,-83}: 검수의 y창 기준 열 (cx-75, cz-75) 이 부지 안에 들어와 냉광 검출이 **보장**된다
+            {-82, -75}, {-82, -82}, {-83, -68}, {-82, -85}, {-83, -74}, {-83, -80},
+            // 7~12 — 더 물러난 예비지 (앞의 여섯이 전부 물·절벽일 때만)
+            {-85, -70}, {-85, -78}, {-86, -84}, {-88, -74}, {-86, -65}, {-88, -82},
     };
-    private static final int[][] SH_FLOOR_HOLES = {   // 썩어 내려앉은 마루 5칸
-            {-78, -79}, {-77, -79}, {-73, -76}, {-76, -71}, {-75, -70}
+
+    private static final int SH_HW = 5;    // 본전 반폭 (11x15)
+    private static final int SH_HD = 7;
+    private static final int SH_YW = 8;    // 담 흔적 반폭 (17x21)
+    private static final int SH_YD = 10;
+    private static final int SH_MAX_RELIEF = 5;   // 부지 지면 높이 편차 상한 (넘으면 절벽 — 다음 후보로)
+    private static final int SH_MARGIN = 4;       // 물 회피 여유 — 검수(TownAudit)가 폐사당 구역을 ±4 로 넓혀
+                                                  // 수몰을 재므로, 담 흔적 밖 4칸까지 마른 땅이어야 위반이 안 난다
+
+    private static final int[][] SH_COBWEBS = {   // 거미줄 5곳 — 중심 기준 {dx, dz, dy}
+            {-4, -6, 4}, {4, -6, 4}, {-4, 6, 4}, {3, 2, 3}, {-2, -2, 4}
+    };
+    private static final int[][] SH_FLOOR_HOLES = {   // 썩어 내려앉은 마루 5칸 — 중심 기준
+            {-3, -4}, {-2, -4}, {2, -1}, {-1, 4}, {0, 5}
     };
     private static final int[][] SH_DEBRIS = {   // 바닥에 떨어진 기와 4곳 (서측 무너진 쪽)
-            {-79, -79}, {-78, -73}, {-79, -71}, {-77, -70}
+            {-4, -4}, {-3, 2}, {-4, 4}, {-2, 5}
     };
+
+    /**
+     * 지면 판정 — 최상단에서 내려가며 **자연 지면**에 처음 닿는 y. 물·용암·얼음·수초를 만나면 MIN_VALUE.
+     * getHighestBlockYAt 은 물을 최상단 블록으로 세므로 그것만으로는 호수를 땅으로 읽는다 (v6.3 의 버그).
+     * 나뭇잎·통나무·풀·눈층과 **지난 조성의 인공 블록**은 화이트리스트 밖이므로 그냥 통과한다 → 재조성 결정론.
+     */
+    private static int naturalGroundY(World world, int x, int z) {
+        int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 1);
+        int floor = Math.max(world.getMinHeight(), top - 48);
+        for (int y = top; y >= floor; y--) {
+            Material m = world.getBlockAt(x, y, z).getType();
+            if (WET.contains(m)) {
+                return Integer.MIN_VALUE;   // 물·용암 — 이 열은 부지가 아니다
+            }
+            if (NATURAL_GROUND.contains(m)) {
+                return y;
+            }
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /**
+     * 부지 검사 — 두 겹으로 본다.
+     *   물: 담 흔적 17x21 **+ 사방 4칸**(= 검수가 폐사당 구역을 넓혀 수몰을 재는 바로 그 상자) 전 칸.
+     *       한 칸이라도 젖었으면 실격 — 호수를 4칸 옆에 두고 짓지 않는다.
+     *   경사: 담 흔적 17x21 안의 지면 높이 편차. SH_MAX_RELIEF 를 넘으면 절벽이므로 다음 후보로.
+     * 통과하면 기단 높이(부지 지면 최고점 + 1)를 돌려준다 — 어느 열도 기단 위로 솟지 않는다.
+     */
+    private static int shrineSiteBaseY(World world, int sx, int sz) {
+        int lo = Integer.MAX_VALUE;
+        int hi = Integer.MIN_VALUE;
+        for (int x = sx - SH_YW - SH_MARGIN; x <= sx + SH_YW + SH_MARGIN; x++) {
+            for (int z = sz - SH_YD - SH_MARGIN; z <= sz + SH_YD + SH_MARGIN; z++) {
+                int g = naturalGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE) {
+                    return Integer.MIN_VALUE;   // 액체 한 칸 = 부지 전체 실격 (여유 4칸까지)
+                }
+                if (Math.abs(x - sx) <= SH_YW && Math.abs(z - sz) <= SH_YD) {
+                    lo = Math.min(lo, g);       // 경사는 부지 안만 본다 (밖의 언덕은 폐허의 배경이다)
+                    hi = Math.max(hi, g);
+                }
+            }
+        }
+        return hi - lo > SH_MAX_RELIEF ? Integer.MIN_VALUE : hi + 1;
+    }
 
     /** 폐사당 — 반파 팔작·부러진 기둥·냉색 제단. 마을 안에 영혼 계열 광원은 단 하나도 없다. */
     private static void abandonedShrine(World world, int cx, int cy, int cz, List<Zone> out) {
-        int x0 = cx - 80, x1 = cx - 70, z0 = cz - 82, z1 = cz - 68;   // 본전 11x15
-        int wx0 = cx - 83, wx1 = cx - 67, wz0 = cz - 85, wz1 = cz - 65;   // 무너진 담 17x21
-        int baseY = world.getHighestBlockYAt(cx - 75, cz - 90);   // 부지 밖 기준점 = 재조성 결정론
+        int sx = cx + SHRINE_SITES[0][0];
+        int sz = cz + SHRINE_SITES[0][1];
+        int baseY = Integer.MIN_VALUE;
+        for (int[] site : SHRINE_SITES) {   // 결정론 탐색 — 첫 번째 육지·완만한 자리
+            int cand = shrineSiteBaseY(world, cx + site[0], cz + site[1]);
+            if (cand != Integer.MIN_VALUE) {
+                sx = cx + site[0];
+                sz = cz + site[1];
+                baseY = cand;
+                break;
+            }
+        }
+        if (baseY == Integer.MIN_VALUE) {   // 후보 소진 — 1번 자리를 최소 정지해서 쓴다
+            baseY = shrineGrade(world, sx, sz);
+            Bukkit.getLogger().warning("[혼천/조성] 폐사당 부지 후보 " + SHRINE_SITES.length
+                    + "곳이 모두 물·절벽 — (" + sx + "," + sz + ") 을 최소 정지(整地)해 세운다. baseY=" + baseY);
+        }
+        int x0 = sx - SH_HW, x1 = sx + SH_HW, z0 = sz - SH_HD, z1 = sz + SH_HD;   // 본전 11x15
+        int wx0 = sx - SH_YW, wx1 = sx + SH_YW, wz0 = sz - SH_YD, wz1 = sz + SH_YD;   // 무너진 담 17x21
         for (int x = wx0; x <= wx1; x++) {           // 부지 비우기 — 이전 조성물 제거 (재조성 = 같은 폐허)
             for (int z = wz0; z <= wz1; z++) {
                 for (int y = baseY + 1; y <= baseY + 13; y++) {
@@ -1842,26 +2168,60 @@ final class CheonghaBuilder {
                 }
             }
         }
-        shrinePlatform(world, cx, cy, cz, x0, x1, z0, z1, baseY);
-        shrineFrame(world, cx, cz, x0, x1, z0, z1, baseY);
-        shrineRoof(world, cx, cz, x0, x1, z0, z1, baseY);
-        shrineAltar(world, cx, cz, baseY);
-        shrineRuinYard(world, cx, cz, wx0, wx1, wz0, wz1, baseY);
+        shrinePlatform(world, sx, sz, x0, x1, z0, z1, baseY);
+        shrineFrame(world, sx, sz, x0, x1, z0, z1, baseY);
+        shrineRoof(world, sx, sz, x0, x1, z0, z1, baseY);
+        shrineAltar(world, sx, sz, baseY);
+        shrineRuinYard(world, sx, sz, wx0, wx1, wz0, wz1, baseY);
         out.add(new Zone("폐사당", "신상이 없는 제단 — 누군가 다녀갔다", world.getName(),
                 wx0, baseY - 3, wz0, wx1, baseY + 13, wz1));
     }
 
-    /** 기단 — 돌 벽돌 1단(이끼·금간 변종 상수 치환) + 마루(썩어 내려앉은 구멍 5칸). 지형은 기단 밑만 메운다. */
-    private static void shrinePlatform(World world, int cx, int cy, int cz,
+    /**
+     * 최소 정지(整地) — 후보를 다 소진했을 때만 돈다. 부지의 물·용암을 흙으로 메우고 지면을 고른다.
+     * 기준 높이는 **부지 열들의 최상단 중앙값이 아니라 최댓값**(공중 부양 금지) — 결정론 상수식.
+     */
+    private static int shrineGrade(World world, int sx, int sz) {
+        int rw = SH_YW + SH_MARGIN;
+        int rd = SH_YD + SH_MARGIN;
+        int hi = world.getMinHeight();
+        for (int x = sx - rw; x <= sx + rw; x++) {
+            for (int z = sz - rd; z <= sz + rd; z++) {
+                hi = Math.max(hi, world.getHighestBlockYAt(x, z));
+            }
+        }
+        int baseY = hi + 1;
+        for (int x = sx - rw; x <= sx + rw; x++) {         // 검수 상자(구역 ±4)까지 물을 뺀다
+            for (int z = sz - rd; z <= sz + rd; z++) {
+                for (int y = baseY - 1; y > baseY - 12; y--) {   // 물·용암·공기 → 흙 (기단 밑을 메운다)
+                    Material m = world.getBlockAt(x, y, z).getType();
+                    if (m.isAir() || WET.contains(m)) {
+                        world.getBlockAt(x, y, z).setType(Material.DIRT);
+                    }
+                }
+            }
+        }
+        return baseY;
+    }
+
+    /**
+     * 기단 — 돌 벽돌 1단(이끼·금간 변종 상수 치환) + 마루(썩어 내려앉은 구멍 5칸). 지형은 기단 밑만 메운다.
+     * v6.4 ①: 메움 자재는 packed_mud (자연 지면 화이트리스트 밖) 이고 **자연 지면 블록 위(ground+1)부터**
+     * 쌓는다 — 다음 조성의 naturalGroundY 가 이 메움을 통과해 **같은 자연 지면**을 읽어야 부지가 안 움직인다.
+     */
+    private static void shrinePlatform(World world, int sx, int sz,
                                        int x0, int x1, int z0, int z1, int baseY) {
         for (int x = x0 - 1; x <= x1 + 1; x++) {
             for (int z = z0 - 1; z <= z1 + 1; z++) {
-                int ground = world.getHighestBlockYAt(x, z);
-                for (int y = ground; y < baseY; y++) {
-                    world.getBlockAt(x, y, z).setType(Material.DIRT);   // 평탄화가 아니라 기단 아래 메움
+                int ground = naturalGroundY(world, x, z);
+                if (ground == Integer.MIN_VALUE) {
+                    ground = baseY - 1;   // 정지(整地) 경로 — 이미 메워져 있다
                 }
-                int dx = x - cx;
-                int dz = z - cz;
+                for (int y = ground + 1; y < baseY; y++) {
+                    world.getBlockAt(x, y, z).setType(Material.PACKED_MUD);   // 평탄화가 아니라 기단 아래 메움
+                }
+                int dx = x - sx;
+                int dz = z - sz;
                 Material m = Material.STONE_BRICKS;
                 if (Math.floorMod(dx * 3 + dz * 5, 10) < 2) {
                     m = Material.CRACKED_STONE_BRICKS;                  // 금 간 돌 벽돌 ~20%
@@ -1876,12 +2236,12 @@ final class CheonghaBuilder {
                 world.getBlockAt(x, baseY, z).setType(Material.SPRUCE_PLANKS);
             }
         }
-        for (int[] h : SH_FLOOR_HOLES) {   // 썩어 내려앉은 마루 — 흙이 드러나고 잡초가 올라온다
-            world.getBlockAt(cx + h[0], baseY, cz + h[1]).setType(Material.COARSE_DIRT);
+        for (int[] h : SH_FLOOR_HOLES) {   // 썩어 내려앉은 마루 — 진흙이 드러나고 잡초가 올라온다
+            world.getBlockAt(sx + h[0], baseY, sz + h[1]).setType(Material.MUD);   // 화이트리스트 밖 = 결정론
         }
-        world.getBlockAt(cx + SH_FLOOR_HOLES[0][0], baseY + 1, cz + SH_FLOOR_HOLES[0][1])
+        world.getBlockAt(sx + SH_FLOOR_HOLES[0][0], baseY + 1, sz + SH_FLOOR_HOLES[0][1])
                 .setType(Material.SHORT_GRASS);
-        world.getBlockAt(cx + SH_FLOOR_HOLES[3][0], baseY + 1, cz + SH_FLOOR_HOLES[3][1])
+        world.getBlockAt(sx + SH_FLOOR_HOLES[3][0], baseY + 1, sz + SH_FLOOR_HOLES[3][1])
                 .setType(Material.FERN);
     }
 
@@ -1890,7 +2250,7 @@ final class CheonghaBuilder {
      * 벽은 백벽이 아니라 회백 테라코타(빛바랜 회벽), 남벽은 절반만 세운다(뻥 뚫린 폐허의 단면).
      * 창은 없다 — 유리는 오래전에 깨졌다. 벽 구멍은 좌표식 결정론 치환.
      */
-    private static void shrineFrame(World world, int cx, int cz,
+    private static void shrineFrame(World world, int sx, int sz,
                                     int x0, int x1, int z0, int z1, int baseY) {
         int zMid = (z0 + z1) / 2;
         int xMid = (x0 + x1) / 2;
@@ -1909,7 +2269,7 @@ final class CheonghaBuilder {
                 for (int y = baseY + 1; y <= top; y++) {
                     if (post) {
                         world.getBlockAt(x, y, z).setType(Material.STRIPPED_OAK_LOG);   // 빛바랜 기둥
-                    } else if (Math.floorMod((x - cx) * 5 + (z - cz) * 3, 11) == 0) {
+                    } else if (Math.floorMod((x - sx) * 5 + (z - sz) * 3, 11) == 0) {
                         world.getBlockAt(x, y, z).setType(Material.AIR);                // 허물어진 벽 구멍
                     } else {
                         world.getBlockAt(x, y, z).setType(Material.LIGHT_GRAY_TERRACOTTA);
@@ -1925,8 +2285,8 @@ final class CheonghaBuilder {
             log2.setAxis(Axis.Z);
             world.getBlockAt(x1, baseY + 1, z1 - 1 - i).setBlockData(log2);
         }
-        for (int[] c : SH_COBWEBS) {   // 거미줄 5곳 — 좌표 상수
-            world.getBlockAt(cx + c[0], baseY + c[2], cz + c[1]).setType(Material.COBWEB);
+        for (int[] c : SH_COBWEBS) {   // 거미줄 5곳 — 폐사당 중심 기준 상수
+            world.getBlockAt(sx + c[0], baseY + c[2], sz + c[1]).setType(Material.COBWEB);
         }
     }
 
@@ -1934,13 +2294,13 @@ final class CheonghaBuilder {
      * 지붕 — 팔작의 동측 절반만 온전하다. 서측 계단 링은 1층에서 끊기고, 구멍 가장자리에
      * 심층암 타일·벽돌 잔해가 흩뿌려진다(상수 좌표). 바닥에도 떨어진 기와 4곳.
      */
-    private static void shrineRoof(World world, int cx, int cz,
+    private static void shrineRoof(World world, int sx, int sz,
                                   int x0, int x1, int z0, int z1, int baseY) {
         int xMid = (x0 + x1) / 2;
         int rx0 = x0 - 1, rx1 = x1 + 1, rz0 = z0 - 1, rz1 = z1 + 1;
         int yb = baseY + 5;
         for (int x = rx0; x <= rx1; x++) {   // 처마 링 1층 — 서측 일부는 이미 떨어져 나갔다
-            if (Math.floorMod(x - cx, 5) != 0 || x >= xMid) {
+            if (Math.floorMod(x - sx, 5) != 0 || x >= xMid) {
                 roofBlock(world, x, yb, rz0, BlockFace.SOUTH, x == rx0 || x == rx1, RoofStyle.TILE);
                 roofBlock(world, x, yb, rz1, BlockFace.NORTH, x == rx0 || x == rx1, RoofStyle.TILE);
             }
@@ -1952,7 +2312,7 @@ final class CheonghaBuilder {
         for (int z = rz0 + 1; z <= rz1 - 1; z++) {
             roofBlock(world, rx1, yb, z, BlockFace.WEST, false, RoofStyle.TILE);    // 동측 처마 = 온전
             world.getBlockAt(rx1, yb - 1, z).setType(Material.DARK_OAK_SLAB);
-            if (Math.floorMod(z - cz, 4) == 0) {
+            if (Math.floorMod(z - sz, 4) == 0) {
                 roofBlock(world, rx0, yb, z, BlockFace.EAST, false, RoofStyle.TILE);   // 서측 = 듬성듬성
             }
         }
@@ -1973,20 +2333,25 @@ final class CheonghaBuilder {
             world.getBlockAt(ridgeX - 1, ridgeY - 1, z).setType(Material.DEEPSLATE_BRICKS);
         }
         for (int[] d : SH_DEBRIS) {   // 바닥에 떨어진 기와 4곳
-            world.getBlockAt(cx + d[0], baseY + 1, cz + d[1]).setType(Material.DEEPSLATE_TILE_SLAB);
+            world.getBlockAt(sx + d[0], baseY + 1, sz + d[1]).setType(Material.DEEPSLATE_TILE_SLAB);
         }
     }
 
-    /** 무너진 담(진흙 벽돌 높이 0~2·지형 순응) + 매화 관목 + 뒷마당 영혼 모닥불 */
-    private static void shrineRuinYard(World world, int cx, int cz,
+    /**
+     * 무너진 담(진흙 벽돌 높이 0~2·지형 순응) + 매화 관목 + 뒷마당 영혼 모닥불.
+     * v6.4 ①: 담 발치도 getHighestBlockYAt 이 아니라 naturalGroundY 로 잡는다 — 그렇지 않으면
+     * ㉮ 물 위에 담이 서고, ㉯ 재조성 때 **지난번 담(진흙 벽돌) 위에 담을 또 쌓아** 담이 자란다.
+     * 냉광 2점(영혼 랜턴·영혼 모닥불)도 제 지면 위에 놓는다 (공중에 뜬 등은 등이 아니다).
+     */
+    private static void shrineRuinYard(World world, int sx, int sz,
                                        int wx0, int wx1, int wz0, int wz1, int baseY) {
         for (int x = wx0; x <= wx1; x++) {
             for (int z = wz0; z <= wz1; z++) {
                 if (x != wx0 && x != wx1 && z != wz0 && z != wz1) {
                     continue;
                 }
-                int h = Math.floorMod((x - cx) * 7 + (z - cz) * 11, 3);   // 높이 0~2 — 들쭉날쭉 (상수식)
-                int ground = world.getHighestBlockYAt(x, z);
+                int h = Math.floorMod((x - sx) * 7 + (z - sz) * 11, 3);   // 높이 0~2 — 들쭉날쭉 (상수식)
+                int ground = yardGroundY(world, x, z, baseY);
                 for (int i = 1; i <= h; i++) {
                     world.getBlockAt(x, ground + i, z).setType(Material.MUD_BRICKS);
                 }
@@ -1995,9 +2360,18 @@ final class CheonghaBuilder {
                 }
             }
         }
-        plumBush(world, cx - 82, baseY, cz - 75);          // 폐허에 홀로 피는 매화 (화산파 복선)
-        soulLantern(world, cx - 68, baseY + 1, cz - 84, false);
-        world.getBlockAt(cx - 68, baseY + 1, cz - 66).setType(Material.SOUL_CAMPFIRE);   // 누군가 다녀갔다
+        plumBush(world, sx - 7, yardGroundY(world, sx - 7, sz, baseY), sz);   // 폐허에 홀로 피는 매화
+        int lz = sz - 9;
+        soulLantern(world, sx + 7, yardGroundY(world, sx + 7, lz, baseY) + 1, lz, false);
+        int cz2 = sz + 9;
+        world.getBlockAt(sx + 7, yardGroundY(world, sx + 7, cz2, baseY) + 1, cz2)
+                .setType(Material.SOUL_CAMPFIRE);   // 누군가 다녀갔다
+    }
+
+    /** 마당(기단 밖) 지면 — 자연 지면. 액체·미검출이면 기단 높이로 (정지 경로에서도 뜨지 않는다) */
+    private static int yardGroundY(World world, int x, int z, int baseY) {
+        int g = naturalGroundY(world, x, z);
+        return g == Integer.MIN_VALUE ? baseY : g;
     }
 
     /** 매화 관목 — 벚나무 잎(persistent) 한 그루. 폐사당 마당의 유일한 색 */
@@ -2017,21 +2391,21 @@ final class CheonghaBuilder {
      * 신상 자리는 비운다: 신상이 '없다'는 것이 이 건물의 최대 소품이다.
      * 곁에 경전 시렁(조각된 책장 — 두 칸만 남았다) + 바닥에 떨어진 책(갈색 양탄자).
      */
-    private static void shrineAltar(World world, int cx, int cz, int baseY) {
-        for (int x = cx - 77; x <= cx - 73; x++) {
-            world.getBlockAt(x, baseY + 1, cz - 80).setType(Material.STONE_BRICKS);        // 제단 1단
-            world.getBlockAt(x, baseY + 1, cz - 81).setType(Material.MOSSY_STONE_BRICKS);
-            world.getBlockAt(x, baseY + 2, cz - 81).setType(Material.STONE_BRICK_SLAB);    // 제단 2단
+    private static void shrineAltar(World world, int sx, int sz, int baseY) {
+        for (int x = sx - 2; x <= sx + 2; x++) {
+            world.getBlockAt(x, baseY + 1, sz - 5).setType(Material.STONE_BRICKS);        // 제단 1단
+            world.getBlockAt(x, baseY + 1, sz - 6).setType(Material.MOSSY_STONE_BRICKS);
+            world.getBlockAt(x, baseY + 2, sz - 6).setType(Material.STONE_BRICK_SLAB);    // 제단 2단
         }
-        world.getBlockAt(cx - 75, baseY + 2, cz - 80).setType(Material.DECORATED_POT);      // 향로
-        candles(world, cx - 77, baseY + 2, cz - 80, 3, false);                              // 꺼진 양초 3
-        soulLantern(world, cx - 78, baseY + 2, cz - 81, false);                             // 냉색 — 여긴 다르다
-        soulLantern(world, cx - 72, baseY + 2, cz - 81, false);
-        // 신상 자리 (cx-75, baseY+3, cz-81) 는 비워 둔다 — 코드로도 비운다
-        world.getBlockAt(cx - 75, baseY + 3, cz - 81).setType(Material.AIR);
-        bookshelf(world, cx - 79, baseY + 1, cz - 77, BlockFace.EAST, 2);                   // 경전 시렁 — 두 권만
-        world.getBlockAt(cx - 78, baseY + 1, cz - 77).setType(Material.BROWN_CARPET);       // 떨어진 책
-        world.getBlockAt(cx - 71, baseY + 1, cz - 79).setType(Material.DECORATED_POT);      // 깨진 살림 항아리
+        world.getBlockAt(sx, baseY + 2, sz - 5).setType(Material.DECORATED_POT);          // 향로
+        candles(world, sx - 2, baseY + 2, sz - 5, 3, false);                              // 꺼진 양초 3
+        soulLantern(world, sx - 3, baseY + 2, sz - 6, false);                             // 냉색 — 여긴 다르다
+        soulLantern(world, sx + 3, baseY + 2, sz - 6, false);
+        // 신상 자리 (sx, baseY+3, sz-6) 는 비워 둔다 — 코드로도 비운다
+        world.getBlockAt(sx, baseY + 3, sz - 6).setType(Material.AIR);
+        bookshelf(world, sx - 4, baseY + 1, sz - 2, BlockFace.EAST, 2);                   // 경전 시렁 — 두 권만
+        world.getBlockAt(sx - 3, baseY + 1, sz - 2).setType(Material.BROWN_CARPET);       // 떨어진 책
+        world.getBlockAt(sx + 4, baseY + 1, sz - 4).setType(Material.DECORATED_POT);      // 깨진 살림 항아리
     }
 
     // ─── 일반 민가 — 앵커·구역·NPC 없는 순수 풍경 (마을의 생기) ───
@@ -2452,8 +2826,10 @@ final class CheonghaBuilder {
             awningTrapdoor(world, x0, cy + 3, z, BlockFace.WEST);
             steppingStone(world, x0 - 1, cy, z);   // 점두 앞 디딤돌 (대로 갓길 → 문지방 전이)
         }
+        // v6.4 ③ — horns=false: 용마루 뿔이 지붕 밖(z1+2 = cz-12)으로 나가 의뢰소 앵커 z행에 얹혔다.
+        //   뿔을 끄면 잡화점 지붕은 z ≤ cz-13 안에 갇히고, 의뢰소 검수 단면은 제 처마에서 시작한다.
         roofShape(world, x0 - 1, z0 - 1, x1, z1 + 1, cy + 4,   // 맞배 + 박공. 동면 처마 0 = 의뢰소 처마와 이웃
-                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 0, false);
+                RoofStyle.TILE, Material.DARK_OAK_PLANKS, 0, false, false, false);
         hangingSign(world, x0 - 1, cy + 3, cz - 16, BlockFace.WEST, "장쇠네 잡화", "잡화 — 되는 대로 다 있다");
         hangingLantern(world, x0 - 1, cy + 3, cz - 18);   // 처마 밑 등롱 (밤에도 점두가 읽힌다)
         generalStoreInterior(world, cx, cy, cz, x0, x1);

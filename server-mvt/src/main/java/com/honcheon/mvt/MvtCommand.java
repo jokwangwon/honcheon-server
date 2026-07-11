@@ -38,7 +38,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "물가" -> prices(sender, args);
                 case "정산" -> settle(sender, args);
                 case "협공" -> coop(sender, args);
-                case "조성" -> buildTown(sender);
+                case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
                 case "조감" -> renderTown(sender);   // 조감도 PNG — 콘솔 가능
                 case "문장" -> crests(sender);
@@ -164,9 +164,24 @@ public final class MvtCommand implements CommandExecutor {
     }
 
     /** 청하현 조성 (M2b) — 관리자 전용, 재조성 = 같은 마을 (결정론 생성) */
-    private boolean buildTown(CommandSender sender) {
+    private boolean buildTown(CommandSender sender, String[] args) {
         java.util.List<Zone> zones = new java.util.ArrayList<>();
         Map<String, Location> anchors;
+        // 좌표 지정: /혼천 조성 <x> <y> <z> — 마을을 특정 자리에 못박는다.
+        // (플레이어가 엉뚱한 데 서서 조성하면 마을이 통째로 이사한다 — 물가·저지대면 부지가 망가진다)
+        if (args.length >= 4) {
+            org.bukkit.World world = sender instanceof Player p ? p.getWorld()
+                    : org.bukkit.Bukkit.getWorlds().get(0);
+            int bx = Integer.parseInt(args[1]);
+            int by = Integer.parseInt(args[2]);
+            int bz = Integer.parseInt(args[3]);
+            anchors = CheonghaBuilder.build(world, bx, by, bz, zones);
+            plugin.setAnchors(anchors);
+            plugin.setZones(zones);
+            sender.sendMessage(ChatColor.GOLD + "청하현이 섰다 (" + bx + ", " + by + ", " + bz + ") — 장소 "
+                    + anchors.size() + "곳 · 구역 " + zones.size() + "곳");
+            return true;
+        }
         if (sender instanceof Player player) {
             if (!player.isOp()) {
                 player.sendMessage(ChatColor.RED + "조성은 관리자의 몫이다.");
