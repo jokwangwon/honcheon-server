@@ -51,6 +51,36 @@ mkdir -p "$SERVE_DIR"
 echo "[팩 1/5] 리소스팩 컴파일 (tools/build_resourcepack.py)"
 python3 "$ROOT/tools/build_resourcepack.py"
 
+# ─── 수동 설치 모드 (PACK_MODE=manual, 기본값) ───
+# 클라이언트가 서버의 LAN 주소에 도달하지 못하는 경우(라우터 너머 접속)에는 자동 배포가
+# 실패하고 접속 때마다 실패 팝업이 뜬다. 그럴 땐 zip 만 만들어 두고 사람이 옮겨 넣는다.
+# 자동 배포를 되살리려면: PACK_MODE=serve scripts/serve_resourcepack.sh
+if [ "${PACK_MODE:-manual}" = "manual" ]; then
+  MANUAL_ZIP="$ROOT/run/honcheon_pack.zip"
+  python3 - "$ROOT/resourcepack" "$MANUAL_ZIP" <<'PY'
+import sys, zipfile
+from pathlib import Path
+src, out = Path(sys.argv[1]), Path(sys.argv[2])
+files = sorted(p for p in src.rglob('*') if p.is_file())
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    for p in files:
+        info = zipfile.ZipInfo(str(p.relative_to(src)), date_time=(1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        z.writestr(info, p.read_bytes())
+print(f"[팩] 수동 설치용 zip — {out} ({len(files)}개 파일, {out.stat().st_size} bytes)")
+PY
+  # 자동 다운로드 끄기 — 안 그러면 접속마다 "리소스팩 다운로드 실패" 팝업이 뜬다
+  if [ -f "$RUN/server.properties" ]; then
+    sed -i 's|^resource-pack=.*|resource-pack=|; s|^resource-pack-sha1=.*|resource-pack-sha1=|' \
+        "$RUN/server.properties"
+  fi
+  stop_server
+  echo "[팩] 수동 설치 모드 — 자동 다운로드 꺼짐 (접속 실패 팝업 없음)"
+  echo "     → 이 zip 을 마인크래프트 PC 의 .minecraft/resourcepacks/ 에 넣고 게임에서 켜라"
+  exit 0
+fi
+
 # ─── 2. zip (결정론) ───
 # 파일명 정렬 + 고정 타임스탬프로 묶는다 → 내용이 같으면 SHA-1 도 같다.
 # (mtime 이 섞이면 팩이 안 바뀌었는데도 sha1 이 달라져 클라이언트가 매번 재다운로드한다)
