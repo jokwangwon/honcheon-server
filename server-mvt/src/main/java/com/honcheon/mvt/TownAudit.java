@@ -61,7 +61,15 @@ public final class TownAudit {
 
     // ─── 자재 분류 ───
 
-    private static final Set<Material> PATH = EnumSet.of(Material.DIRT_PATH, Material.GRAVEL);
+    /**
+     * 길로 세는 자재 — 흙길·자갈 갓길에 더해 포장(디딤돌·광장 결)까지.
+     * 디딤돌 한 줄이 대로를 가로지르면 스팬이 0으로 끊겨 "대로 폭 0"이라는 오탐이 났다 (v6.2 관측).
+     * 사람이 밟고 다니는 면이면 길이다.
+     */
+    private static final Set<Material> PATH = EnumSet.of(
+            Material.DIRT_PATH, Material.GRAVEL,
+            Material.COBBLESTONE, Material.ANDESITE, Material.STONE_BRICKS, Material.SMOOTH_STONE,
+            Material.MOSSY_COBBLESTONE, Material.STONE);
 
     private static final Set<Material> ROOF = EnumSet.of(
             Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_STAIRS, Material.DEEPSLATE_TILE_SLAB,
