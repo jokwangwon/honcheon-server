@@ -60,6 +60,7 @@ public final class GameListener extends ListenerAdapter {
                 case "비무" -> startDuel(event);
                 case "수련" -> train(event);
                 case "사사" -> apprentice(event);
+                case "의뢰" -> questBoard(event);
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
@@ -147,6 +148,7 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 비무 @상대` 비무 신청 — 양측 2d6 대립 판정 (출도 후)\n"
                         + "`/혼천 수련` 기초 단련 — 하루 한 번, 수련 +1일치 (출도 후)\n"
                         + "`/혼천 사사` 곽진에게 무공을 청한다 — 무공 백지만 (과제→시험→입문)\n"
+                        + "`/혼천 의뢰` 소연의 게시판 — 오늘의 의뢰 3건, 수주 1건씩 (출도 후)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서. 죽음은 비가역 — 계정당 한 삶.")
@@ -177,6 +179,8 @@ public final class GameListener extends ListenerAdapter {
                 case "tn" -> onTurnChoice(event, Integer.parseInt(id[1]), Integer.parseInt(id[2]));
                 case "ht" -> onHuntChoice(event, Integer.parseInt(id[1]), Integer.parseInt(id[2]), id[3]);
                 case "bm" -> onDuelAnswer(event, "ok".equals(id[1]), id[2], id[3]);
+                case "qa" -> onQuestAccept(event, id[1], id[2]);
+                case "qp" -> onQuestPerform(event, id[1], Integer.parseInt(id[2]), id[3]);
                 default -> event.deferEdit().queue();
             }
         } catch (Exception e) {
@@ -709,6 +713,172 @@ public final class GameListener extends ListenerAdapter {
         sheet.put("오늘_적립", grantedToday + granted);
         sheet.put("화후_원장", ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue() + granted);
         return granted;
+    }
+
+    // ─── 의뢰 — 소연의 게시판: 세계일 결정론 3건, 수주 1건, 판정 완수 (quest_generation G1) ───
+
+    @SuppressWarnings("unchecked")
+    private void questBoard(SlashCommandInteractionEvent event) throws Exception {
+        if (notInRegion(event)) {
+            return;
+        }
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+        int today = db.worldDay();
+
+        Map<String, Object> holding = (Map<String, Object>) sheet.get("의뢰");
+        if (holding != null) {
+            // 수주 중 — 수행 화면
+            Quests.Quest q = Quests.byKey(String.valueOf(holding.get("키")));
+            if (q == null) {
+                event.reply("대장에 없는 의뢰다 — 소연에게 문의하라 (기록 오류).").setEphemeral(true).queue();
+                return;
+            }
+            boolean above = Quests.realmRank(q.realmReq()) > Quests.realmRank(String.valueOf(row.get("realm")));
+            List<Button> buttons = new ArrayList<>();
+            for (int i = 0; i < q.approaches().size(); i++) {
+                buttons.add(Button.primary("qp:" + q.key() + ":" + i + ":" + event.getUser().getId(),
+                        q.approaches().get(i).label()));
+            }
+            event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                            .setTitle("수행 — " + q.name() + (above ? " (격상 — 사선)" : ""))
+                            .setDescription(q.brief() + "\n\n어떻게 해낼 것인가.").build())
+                    .addComponents(ActionRow.of(buttons)).queue();
+            return;
+        }
+
+        // 게시판 — 오늘의 의뢰 3건
+        Map<String, Object> done = (Map<String, Object>) sheet.getOrDefault("의뢰_완료", Map.of());
+        EmbedBuilder eb = new EmbedBuilder().setColor(INK)
+                .setTitle("의뢰소 게시판 — " + today + "일차")
+                .setDescription("소연이 대장을 넘긴다. \"골라 보게 — 보수는 완수 후, 검수는 확실히 하네.\"");
+        List<Button> buttons = new ArrayList<>();
+        for (Quests.Quest q : Quests.board(today)) {
+            boolean doneToday = today == ((Number) ((Map<String, Object>) done)
+                    .getOrDefault(q.key(), -1)).intValue();
+            boolean above = Quests.realmRank(q.realmReq()) > Quests.realmRank(String.valueOf(row.get("realm")));
+            eb.addField(q.name() + (above ? " ⚠격상" : ""),
+                    q.brief() + "\n등급 " + q.grade() + " · 권장 " + q.realmReq()
+                            + (doneToday ? " · **오늘은 마감**" : ""), false);
+            if (!doneToday) {
+                buttons.add(Button.secondary("qa:" + q.key() + ":" + event.getUser().getId(),
+                        "수주 — " + q.name()));
+            }
+        }
+        var reply = event.replyEmbeds(eb.build());
+        if (!buttons.isEmpty()) {
+            reply.addComponents(ActionRow.of(buttons));
+        }
+        reply.queue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void onQuestAccept(ButtonInteractionEvent event, String key, String ownerId) throws Exception {
+        if (!event.getUser().getId().equals(ownerId)) {
+            event.reply("남의 게시판 화면이다 — `/혼천 의뢰`로 직접 보라.").setEphemeral(true).queue();
+            return;
+        }
+        var found = db.findCharacter(ownerId);
+        Quests.Quest q = Quests.byKey(key);
+        if (found.isEmpty() || q == null) {
+            event.editMessage("기록이 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        if (sheet.get("의뢰") != null) {
+            event.reply("이미 맡은 일이 있다 — 하나씩. (`/혼천 의뢰`로 진행)").setEphemeral(true).queue();
+            return;
+        }
+        int today = db.worldDay();
+        sheet.put("의뢰", Map.of("키", q.key(), "수주일", today));
+        long chId = ((Number) row.get("id")).longValue();
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                String.valueOf(row.get("realm")), "강호", "청하현");
+        db.logEvent("의뢰_수주", "character", String.valueOf(chId), Map.of("의뢰", q.key()));
+        event.editMessageEmbeds(new EmbedBuilder().setColor(INK)
+                        .setTitle("수주 — " + q.name())
+                        .setDescription("소연이 대장에 이름을 적었다. \"기한은 오늘 해 질 녘까지 — 검수는 확실히 하네.\"\n"
+                                + "`/혼천 의뢰`로 수행하라.").build())
+                .setComponents().queue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void onQuestPerform(ButtonInteractionEvent event, String key, int opt, String ownerId)
+            throws Exception {
+        if (!event.getUser().getId().equals(ownerId)) {
+            event.reply("남의 의뢰다.").setEphemeral(true).queue();
+            return;
+        }
+        var found = db.findCharacter(ownerId);
+        Quests.Quest q = Quests.byKey(key);
+        if (found.isEmpty() || q == null) {
+            event.editMessage("기록이 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        Map<String, Object> holding = (Map<String, Object>) sheet.get("의뢰");
+        if (holding == null || !q.key().equals(holding.get("키"))) {
+            event.editMessage("이 의뢰는 이미 끝났다 — `/혼천 의뢰`로 게시판을 보라.").setComponents().queue();
+            return;
+        }
+        Quests.Approach approach = q.approaches().get(opt);
+        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        int stat = ((Number) attrs.getOrDefault(approach.stat(), 2)).intValue();
+        // 격상 도전 — 금지가 아니라 사선: 저항 +2 (gate 느슨)
+        boolean above = Quests.realmRank(q.realmReq()) > Quests.realmRank(String.valueOf(row.get("realm")));
+        int resist = q.resist() + (above ? 2 : 0);
+        int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
+        JudgmentEngine.Tier tier = rules.judgment.resolve(stat + approach.bonus(), roll, resist);
+        int margin = stat + approach.bonus() + roll - resist;
+        int today = db.worldDay();
+        long chId = ((Number) row.get("id")).longValue();
+
+        // 의뢰 종결 — 성패 무관 오늘 재수주 불가 (실패 = 게시판 복귀, 만료 시계는 후속)
+        sheet.remove("의뢰");
+        Map<String, Object> done = new LinkedHashMap<>(
+                (Map<String, Object>) sheet.getOrDefault("의뢰_완료", Map.of()));
+        done.put(q.key(), today);
+        sheet.put("의뢰_완료", done);
+
+        EmbedBuilder result = new EmbedBuilder()
+                .setTitle("판정 — " + approach.label() + (above ? " (격상)" : ""))
+                .setDescription("**" + approach.stat() + " " + stat + "** + 2d6 = **"
+                        + (stat + approach.bonus() + roll) + "** vs " + resist
+                        + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **" + tier.name() + "**");
+        int wallet = ((Number) row.get("wallet")).intValue();
+        String realm = String.valueOf(row.get("realm"));
+        if (margin >= 0) {
+            int reward = rules.questReward(q.rewardKey(), dice);
+            wallet += reward;
+            StringBuilder gains = new StringBuilder("소연의 검수 통과 — 보수 **+" + reward + "문**");
+            if (q.combatMark()) {
+                sheet.put("실전_마크", ((Number) sheet.getOrDefault("실전_마크", 0)).intValue() + 1);
+                gains.append(" · **실전 마크 +1** (전투 의뢰)");
+            }
+            String promoted = promoteIfDue(sheet, realm);
+            if (!promoted.equals(realm)) {
+                gains.append("\n💥 **돌파 — ").append(promoted).append("에 올랐다**");
+                db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", promoted));
+                realm = promoted;
+            }
+            result.setColor(BLOOD).appendDescription("\n" + gains);
+            db.logEvent("의뢰_완수", "character", String.valueOf(chId),
+                    Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward));
+        } else {
+            result.setColor(INK).appendDescription(
+                    "\n일이 어그러졌다 — 소연: \"빈손이면 보수도 없네. 게시판은 내일 다시 열리네.\"");
+            db.logEvent("의뢰_실패", "character", String.valueOf(chId),
+                    Map.of("의뢰", q.key(), "굴림", roll, "마진", margin));
+        }
+        db.updateCharacter(chId, sheet, wallet, realm, "강호", "청하현");
+        event.editMessageEmbeds(event.getMessage().getEmbeds().get(0), result.build())
+                .setComponents().queue();
     }
 
     // ─── 수련 — 기초 단련: 하루 한 번, 화후 1일치 (training 축의 최소 배선) ───

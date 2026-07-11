@@ -85,6 +85,20 @@ public final class Rules {
         return Math.max(1, (int) Math.round(base * mult));
     }
 
+    /** 의뢰 보수 — economy.yml price_table.의뢰_보수: 고정값 또는 [min, max] 범위 */
+    @SuppressWarnings("unchecked")
+    public int questReward(String key, Random dice) {
+        Map<String, Object> table = RulesConfig.section(economyCfg, "price_table");
+        Map<String, Object> rewards = (Map<String, Object>) table.get("의뢰_보수");
+        Object value = rewards.get(key);
+        if (value instanceof List<?> range) {
+            int min = ((Number) range.get(0)).intValue();
+            int max = ((Number) range.get(1)).intValue();
+            return min + dice.nextInt(max - min + 1);
+        }
+        return ((Number) value).intValue();
+    }
+
     @SuppressWarnings("unchecked")
     public List<Integer> presetStats(String disposition) {
         Map<String, Object> presets = RulesConfig.section(playerCreation, "disposition_presets");
