@@ -67,7 +67,7 @@ INK_SOLID = (26, 24, 22, 255)       # 불투명 먹 — HUD 테두리·패널 �
 ORB_OUT = (26, 24, 22, 255)         # 구슬 먹 테두리
 ORB_SOCK_DARK = (44, 40, 36, 215)   # 빈 소켓 상·좌 안쪽 — 파인 그늘
 ORB_EMPTY = (74, 68, 60, 195)       # 빈 소켓 바닥
-ORB_SOCK_LIT = (110, 102, 90, 195)  # 빈 소켓 하·우 안쪽 — 바닥에서 되비친 빛
+ORB_SOCK_LIT = (152, 142, 124, 215)  # 빈 소켓 하·우 안쪽 — 바닥에서 되비친 빛 (립)
 ORB_FILL = (150, 56, 44, 255)       # 주사 채움 (SEAL 동일 계열)
 ORB_LIGHT = (208, 112, 88, 255)     # 좌상단 광택
 ORB_DARK = (96, 34, 26, 255)        # 우하단 음영
@@ -184,13 +184,19 @@ def smooth_octave(x, y, cell, salt, amp):
 # 바닐라 렌더 계약: container 먼저, 그 위에 full/half를 겹쳐 그린다 —
 # half는 우측을 투명으로 남겨 아래 container 소켓이 비쳐 보이게 한다 (바닐라 동일 문법).
 # 문자: # 테두리, s 소켓 상·좌 그늘, ~ 소켓 바닥, v 소켓 하·우 되비침, o 채움, L 광택, D 음영
+# ★ 빈 소켓의 되비침(v)을 넓히고 밝혔다 — 양배경 가독 축(축 8)이 잡은 결함:
+#   검은 배경에 합성했을 때 휘도차 55 이상인 픽셀이 **7개**뿐이었다. 즉 동굴·밤하늘 위에서
+#   빈 구슬은 사실상 보이지 않았다 (남은 목숨을 못 세는 HUD는 HUD가 아니다).
+#   원인은 소켓을 '검은 구멍'으로 칠했기 때문이다 — 그러나 돌에 판 구멍은 검지 않다:
+#   맞은편 벽이 빛을 되받아 **밝은 립(lip)** 이 선다. 그 립을 대각으로 넓혀(4 → 10px) 밝히면
+#   흰 배경에서는 먹 테두리가, 검은 배경에서는 립이 읽힌다 — 양쪽에서 사는 그림이 된다.
 ORB_CONTAINER_ART = [
     ".........",
     "..#####..",
     ".#sssss#.",
-    ".#s~~~v#.",
-    ".#s~~~v#.",
-    ".#s~~~v#.",
+    ".#ss~~v#.",
+    ".#s~~vv#.",
+    ".#s~vvv#.",
     ".#~vvvv#.",
     "..#####..",
     ".........",
@@ -728,13 +734,49 @@ def wrap_grip(i):
     return ["W", "w", "x"] if i % 2 == 0 else ["w", "x", "X"]
 
 
-def put_rings(grid, x0, y0, rings, slots, sx=-1, sy=1, strands=("R", "R", "e")):
-    """등급 고리 — 자루를 가로지르는 2톤 금속 테. slots = 자루 걸음 번호(위에서부터).
-    colorblind_rule: 색 단독 금지 → 회색조에서도 '고리 몇 개'로 등급이 읽힌다.
-    strands = 테 한 줄의 가닥. 자루가 두꺼우면(부斧의 4가닥) 테도 같이 두꺼워야 자루를 다 감는다."""
+def thin_grip(i):
+    """창(槍)의 자루 — 2가닥. 검·도의 3가닥보다 한 가닥 얇다.
+    창은 '긴 막대에 촉을 단 것'이다. 자루가 날만큼 굵으면 그건 검을 길게 늘인 것에 지나지 않는다
+    (실측: 3가닥 자루일 때 검과 창의 실루엣 자카드가 0.742 — 둘이 같은 대각선 띠였다)."""
+    return ["W", "x"] if i % 2 == 0 else ["w", "X"]
+
+
+def put_rings(grid, x0, y0, rings, slots, sx=-1, sy=1, width=3):
+    """등급 고리 — 자루를 **감고 좌우로 삐져나온** 2톤 금속 테. slots = 자루 걸음 번호(위에서부터).
+
+    colorblind_rule 의 집행자다: 색을 빼도 '고리 몇 개'로 등급이 읽혀야 한다.
+    ★ 고리를 자루 폭에 딱 맞춰 찍던 첫 판은 그 규약을 못 지켰다 — 인접 등급 간 회색조 상이가
+      2~3px 에 불과했다 (측정 축 10). 자루 안에만 있는 표식은 **실루엣을 바꾸지 못하고**,
+      16px에서 3px 색 변화는 아무도 못 본다. 그래서 고리를 자루보다 좌우 1px씩 넓게 두른다 —
+      테가 자루 밖으로 나오는 순간 그것은 **윤곽선의 사건**이 되고, 핫바에서 세어진다.
+    width = 자루 폭 (검 3 · 창 2 · 부 4). 테는 언제나 width+2.
+    """
+    n = width + 2
+    lit = (n + 1) // 2                       # 빛은 좌상단에서 온다 — 테의 왼쪽 절반이 마루
+    strands = ["R"] * lit + ["e"] * (n - lit)
     for k in range(min(rings, len(slots))):
         i = slots[k]
-        band(grid, x0 + sx * i, y0 + sy * i, 1, list(strands))
+        band(grid, x0 + sx * i - 1, y0 + sy * i, 1, strands)
+
+
+def grade_butt(grid, x, y, rings, width=3, tassel=True):
+    """자루 끝 — **등급이 자라는 곳**. 아홉 계열이 모두 공유하는 두 번째 표식이다.
+    고리 하나(≈7px)만으로는 인접 등급 사이에 8px 계단을 못 만든다 (측정 축 10). 그래서 물미를 키운다:
+      범철(0) 민자루 — 놋이 없다 (가장 싼 무기에 장식은 사치다)
+      정련(1) 물미 — 자루 폭에 맞춘 놋 마구리
+      보병(2) 물미가 자루 밖으로 벌어진다 (좌우 1px씩) — 실루엣이 바뀐다
+      신병(3) + 수실 한 줄 — 물미 아래로 늘어진다
+    (x, y) = 자루 끝 걸음의 왼쪽 위 칸. width = 자루 폭."""
+    if rings == 0:
+        return
+    n = width if rings < 2 else width + 2
+    lit = (n + 1) // 2
+    band(grid, x - (0 if rings < 2 else 1), y, 1,
+         ["G"] * (lit - 1) + ["g"] + ["f"] * (n - lit))
+    if rings >= 3 and tassel:            # 수실 — 한 줄. 15행(캔버스 테두리)에 닿으면 안 된다:
+        for k, ch in enumerate(("T", "t", "t")):   # 테두리엔 outline()이 먹을 두를 자리가 없다 (축 6)
+            if 0 <= x - 1 + k < 16 and y + 1 < 16:
+                grid[y + 1][x - 1 + k] = ch
 
 
 def blade_strands(mabyeong, spine):
@@ -745,18 +787,20 @@ def blade_strands(mabyeong, spine):
 
 
 def _hilt(g, rings, mabyeong, gx, gy, guard, slots, guard_steps=5):
-    """자루 한 벌 — 감기 5걸음 + 고리 + 놋 물미 + 신병 수실 + 마병 혈적.
+    """자루 한 벌 — 감기 5걸음 + 돌출 고리 + 놋 물미(등급 성장) + 신병 수실 + 마병 혈적.
     검·도·비수가 공유한다 (자루는 계열이 아니라 등급이 말하는 부위다).
     guard_steps = 코등이 걸음 수. 검은 길게 뻗은 가로대(5), 도는 뭉툭한 원반(2) —
-    이 값이 같으면 검과 도가 같은 물건이 된다 (그것이 첫 판의 실패였다)."""
+    이 값이 같으면 검과 도가 같은 물건이 된다 (그것이 첫 판의 실패였다).
+
+    ★ 자루 기준선을 한 행 올렸다 (gy 10 → 9). 물미가 14행에 있으면 수실이 15행 —
+      캔버스 테두리 — 으로 밀려 outline()이 먹으로 두를 자리를 잃는다. 그러면 밝은 주사 픽셀이
+      배경에 그대로 노출돼 아이템의 테가 끊긴다 (측정 축 6이 잡아낸 4건이 정확히 이것이었다).
+      아이템 아트는 **사방 1px 여백**을 남긴다 — 그 여백이 외곽선의 자리다."""
     band(g, gx, gy, 5, wrap_grip, sx=-1, sy=1)
     band(g, *guard, guard_steps, ["G", "g", "f"], sx=1, sy=1)  # 코등이 — 날에 수직인 가로대
     put_rings(g, gx, gy, rings, slots)
-    band(g, gx - 4, gy + 4, 1, ["G", "g", "f"])              # 물미(자루 끝 놋)
-    if rings >= 3:                                            # 신병 수실 — 물미에 매단다
-        g[gy + 5][gx - 4] = "T"
-        g[gy + 5][gx - 3] = "t"
-    if mabyeong:                                              # 마병 혈적 — 자루 끝의 낙인
+    grade_butt(g, gx - 4, gy + 4, rings)                       # 물미 + 신병 수실 (등급이 자라는 곳)
+    if mabyeong:                                               # 마병 혈적 — 자루 끝의 낙인
         g[gy + 4][gx - 2] = "M"
 
 
@@ -770,64 +814,83 @@ def _hilt(g, rings, mabyeong, gx, gy, guard, slots, guard_steps=5):
 #
 # 즉 '가로대가 있는가'와 '날 폭이 균일한가'가 실루엣 질문이다 — 둘 다 회색조에서 읽힌다.
 def sword_grid(rings, mabyeong):
-    """검(劍) — 곧은 양날. 폭이 끝까지 균일하고 좌우 대칭이다 (등줄기가 가운데)."""
+    """검(劍) — 곧은 양날. 폭이 끝까지 균일하고 좌우 대칭이다 (등줄기가 가운데).
+    자루는 (6,9)에 앉는다 — 옛 (5,10)에서 날을 따라 한 칸 올라왔다. 물미가 13행에 서야
+    수실이 14행에 걸리고, 15행(테두리)에 밝은 픽셀을 흘리지 않는다 (측정 축 6)."""
     g = blank16()
     ridge = "m" if mabyeong else "H"                          # 등줄기(鎬) — 마병은 혈조가 된다
     for i in range(7):                                        # 날 (6,9) → (12,3), 폭 3 균일
         band(g, 6 + i, 9 - i, 1, ["L", ridge, "L"], vertical=True)
     band(g, 13, 3, 1, ["H", "L"], vertical=True)              # 끝 좁힘
     band(g, 14, 3, 1, ["H"], vertical=True)                   # 칼끝
-    _hilt(g, rings, mabyeong, 5, 10, (3, 8), (1, 2, 3))       # 긴 가로대 코등이
+    _hilt(g, rings, mabyeong, 6, 9, (4, 7), (1, 2, 3))        # 긴 가로대 코등이
     return g
 
 
 # 도의 날 — (x, y_top, 세로 가닥). 등(D)은 곧은 대각선인데 인(H) 쪽 배가 불러
 # 중간에서 가장 넓고 끝에서 좁아진다. 이 '배'가 곡선을 만든다 (16px에서 곡률보다 폭 변화가 읽힌다).
+# ★ 배를 한 가닥 더 불렸다 (4 → 5). 비수와의 실루엣 자카드가 0.760 이었다 (측정 축 9) —
+#   비수는 도의 앞부분을 잘라 낸 것과 같은 모양이었다는 뜻이다. 둘을 가르는 길은 둘 중 하나다:
+#   비수를 더 줄이거나, 도를 더 불리거나. **도를 불렸다** — 도는 원래 무겁고 두꺼운 병기고,
+#   비수를 더 줄이면 아이콘이 점이 된다 (16px에는 줄일 여지가 없다).
+# 배는 **등(D) 쪽으로** 불린다 — 인(H) 쪽으로 불리면 날이 자루 선 아래로 흘러내려 고리를 덮는다.
+# 도가 무거워 보이는 것은 등이 두껍기 때문이지 날이 넓기 때문이 아니다 (한날 병기의 문법).
 DAO_BLADE = [
-    (7,  9, "DLH"),      # 밑동
-    (8,  8, "D*LH"),
-    (9,  7, "D*LH"),     # 배 — 가장 넓다
-    (10, 6, "D*LH"),
-    (11, 5, "DLH"),
-    (12, 4, "DLH"),
-    (13, 3, "LH"),       # 끝 좁힘
-    (14, 2, "H"),        # 칼끝
+    (8,  8, "DLH"),      # 밑동 (호수가 덮는다)
+    (9,  6, "DD*LH"),
+    (10, 5, "DD*LLH"),   # 배 — 가장 두껍다 (6가닥)
+    (11, 4, "DD*LLH"),
+    (12, 4, "D*LH"),
+    (13, 3, "DLH"),      # 끝 좁힘
+    (14, 2, "LH"),       # 칼끝
 ]
 
 
 def dao_grid(rings, mabyeong):
-    """도(刀) — 한날. 등이 두껍고 인 쪽 배가 부르며, 코등이는 뭉툭한 원반이다."""
+    """도(刀) — 한날. 등이 두껍고 인 쪽 배가 부르며, 코등이는 뭉툭한 원반이다.
+
+    ★ 그리는 순서를 뒤집었다 (날 → 자루). 자루를 먼저 긋고 날을 덮던 첫 판은 **등급 고리를 날이
+      먹었다**: 슬롯 1의 고리 5칸 중 3칸이 날 밑동에 덮여, 범철→정련 계단이 7px 로 주저앉았다
+      (다른 여덟 계열은 12px 이상). 표식끼리 자리를 다투면 이기는 쪽은 언제나 등급이다 —
+      호수는 멋이고 고리는 정보다 (구鉤에서 이미 배운 교훈이었는데 도刀에서 되풀이했다).
+      대신 날의 아랫배를 자루 선 위로 끌어올려(밑동 y≤10) 접합부가 벌어지지 않게 했다."""
     g = blank16()
-    _hilt(g, rings, mabyeong, 6, 10, (5, 9), (1, 2, 3), guard_steps=2)   # 원반 호수 — 뭉툭하게
-    for x, y, strands in DAO_BLADE:                           # 날은 자루 위에 얹는다 (접합부를 덮는다)
+    for x, y, strands in DAO_BLADE:
         band(g, x, y, 1, [("m" if mabyeong else "B") if c == "*" else c
                           for c in strands], vertical=True)
+    _hilt(g, rings, mabyeong, 7, 9, (6, 8), (1, 2, 3), guard_steps=2)   # 원반 호수 — 뭉툭하게
     return g
 
 
 def dagger_grid(rings, mabyeong):
-    """비수(匕首) — 짧은 날. 자루가 날보다 길다 (비율이 곧 정체다)."""
+    """비수(匕首) — 짧은 날. 자루가 날보다 길다 (비율이 곧 정체다).
+    날을 한 걸음 더 줄였다 (4 → 3): 도가 배를 불린 만큼 비수는 더 짧아져야 둘이 갈린다."""
     g = blank16()
-    band(g, 7, 9, 4, ["H", "L", "m" if mabyeong else "S"])    # 짧은 날 y=9..6
-    band(g, 11, 5, 1, ["H"])
+    band(g, 7, 7, 3, ["H", "L", "m" if mabyeong else "S"])    # 짧은 날 y=7..5
+    band(g, 10, 4, 1, ["H"])                                  # 칼끝
     # 코등이는 짧다(3). 검과 같은 긴 가로대를 달면 '작은 검'이 되어 계열이 흐려진다.
-    _hilt(g, rings, mabyeong, 6, 10, (5, 8), (1, 2, 3), guard_steps=3)
+    _hilt(g, rings, mabyeong, 6, 8, (5, 6), (1, 2, 3), guard_steps=3)
     return g
 
 
 def spear_grid(rings, mabyeong):
-    """창(槍) — 긴 자루 + 좁은 창날 + 홍영(紅纓, 창날 밑 붉은 술).
-    자루가 길어 고리를 넉넉히 벌려 꽂는다 — 등급이 멀리서도 세어진다."""
+    """창(槍) — **얇은** 긴 자루 + 좁은 창날 + 홍영(紅纓, 창날 밑 붉은 술).
+
+    ★ 자루를 2가닥으로 깎았다. 3가닥이던 첫 판은 검과 실루엣 자카드 0.742 —
+      둘 다 좌하에서 우상으로 뻗은 폭 3의 대각선 띠였고, 회색조에서 같은 물건이었다.
+      창의 정체는 '길다'가 아니라 **자루가 날보다 훨씬 가늘다**이다. 그 비율만 지키면
+      같은 대각선 위에 놓여도 눈이 갈라 본다 (자카드가 떨어지는 이유이기도 하다)."""
     g = blank16()
-    band(g, 1, 14, 9, wrap_grip, sx=1, sy=-1)                 # 긴 자루 (1,14)→(9,6)
-    put_rings(g, 1, 14, rings, (2, 4, 6), sx=1, sy=-1)
+    band(g, 2, 13, 9, thin_grip, sx=1, sy=-1)                 # 얇은 긴 자루 (2,13)→(10,5)
+    put_rings(g, 2, 13, rings, (2, 4, 6), sx=1, sy=-1, width=2)
+    grade_butt(g, 2, 13, rings, width=2)                      # 자루 끝 — 등급이 자란다
     band(g, 10, 5, 1, ["T", "t", "t"])                        # 홍영 — 붉은 술
     band(g, 11, 4, 1, ["G", "g", "f"])                        # 물미(창날 목)
     band(g, 12, 3, 1, ["H", "L", "m" if mabyeong else "S"])   # 창날
     band(g, 13, 2, 1, ["H", "L"])
     band(g, 13, 1, 1, ["H"])                                  # 창끝
     if mabyeong:
-        g[15][1] = "M"
+        g[12][3] = "M"                                        # 혈적 — 자루에 밴 낙인 (테두리 금지)
     return g
 
 
@@ -840,7 +903,7 @@ def spear_grid(rings, mabyeong):
 # 마디 4개 — (왼쪽 칸, 마루 높이). 높이가 들쭉날쭉해야 한다: 네 마디를 같은 높이로 나란히 세우면
 # 성가퀴(battlement)가 되어 망루로 읽힌다 (둘째 판의 실패). 사람의 주먹은 가운뎃마디가 가장 높고
 # 새끼 쪽으로 흘러내린다 — 그 아치가 '손'이라고 말한다.
-GAUNT_KNUCKLES = ((3, 2), (6, 1), (9, 2), (12, 3))
+GAUNT_KNUCKLES = ((3, 3), (6, 2), (9, 3), (12, 4))
 GAUNT_PLATE = ((5, 3, 13), (6, 3, 13), (7, 4, 12))   # (y, x0, x1) — 마디 쪽이 넓은 사다리꼴
 GAUNT_CUFF = (5, 11)                    # 손목 띠 좌우 — 판보다 좁다
 
@@ -878,14 +941,19 @@ def gauntlet_grid(rings, mabyeong):
     for y in (9, 11, 13):                                     # 가죽 띠 — 고리 사이의 몸
         for x in range(cx0, cx1 + 1):
             g[y][x] = "W" if x == cx0 else ("X" if x == cx1 else "w")
-    for n, y in ((1, 10), (2, 12), (3, 14)):                  # 고리 3자리 — 한 줄 걸러 하나 (세어진다)
-        for x in range(cx0, cx1 + 1):
-            # 점등 = 2톤 금속 테 (오른쪽 절반이 그늘) / 미점등 = 가죽색 — 구멍이 나지 않는다
-            g[y][x] = ("R" if x < 9 else "e") if rings >= n else ("x" if x < cx1 else "X")
+    # 고리 3자리 — 한 줄 걸러 하나 (세어진다). 점등한 테는 띠보다 **좌우로 1px씩 넓다**:
+    # 다른 여덟 계열의 돌출 고리와 같은 문법이다 — 표식은 실루엣을 바꿔야 등급이 읽힌다 (축 10).
+    for n, y in ((1, 10), (2, 12), (3, 14)):
+        for x in range(cx0 - 1, cx1 + 2):
+            if rings >= n:
+                g[y][x] = "R" if x < 9 else "e"               # 점등 = 2톤 금속 테 (오른쪽이 그늘)
+            elif cx0 <= x <= cx1:
+                g[y][x] = "x" if x < cx1 else "X"             # 미점등 = 가죽색 (구멍이 나지 않는다)
     for x in range(cx0, cx1 + 1):
         g[15][x] = "x"                                        # 띠 아랫단
-    if rings >= 3:                                            # 신병 수실 — 띠 양끝에 늘어뜨린다
-        g[15][cx0 - 1], g[15][cx1 + 1] = "T", "t"
+    if rings >= 3:                                            # 신병 수실 — 띠 양옆에 늘어뜨린다
+        for x in (cx0 - 2, cx1 + 2):                          # 고리 돌출(cx0-1..cx1+1) 바깥 자리
+            g[13][x], g[14][x] = "T", "t"
     return g
 
 
@@ -952,9 +1020,8 @@ def bu_grid(rings, mabyeong):
     g = blank16()
     blit(g, BU_HEAD, mabyeong)
     band(g, 2, 13, 9, heavy_grip, sx=1, sy=-1)        # 자루를 날 위에 덧긋는다 (눈을 꿰뚫는다)
-    put_rings(g, 2, 13, rings, (1, 3, 5), sx=1, sy=-1, strands=("R", "R", "R", "e"))
-    if rings >= 3:
-        g[13][2], g[13][3] = "T", "t"                 # 신병 수실 — 자루 끝
+    put_rings(g, 2, 13, rings, (1, 3, 5), sx=1, sy=-1, width=4)   # 굵은 자루 → 굵은 테
+    grade_butt(g, 2, 13, rings, width=4)              # 자루 끝 — 물미(등급 2 이상은 벌어진다) + 신병 수실
     return g
 
 
@@ -967,8 +1034,7 @@ def gyeom_grid(rings, mabyeong):
               ("H", "L", "m" if mabyeong else "B", "S"))
     band(g, 5, 13, 6, wrap_grip, sx=1, sy=-1)         # 짧은 자루 — 날 밑동까지만
     put_rings(g, 5, 13, rings, (1, 2, 3), sx=1, sy=-1)
-    if rings >= 3:
-        g[13][4], g[13][5] = "T", "t"
+    grade_butt(g, 5, 13, rings)
     return g
 
 
@@ -986,8 +1052,7 @@ def gu_grid(rings, mabyeong):
     arc_blade(g, (9.4, 5.0), 2.6, 300, 168, 2.2, 1.4,    # 작은 발톱 — 겸의 큰 날과 대비된다
               ("H", "L", "m" if mabyeong else "B", "S"))
     g[7][12], g[8][12], g[9][13] = "B", "L", "H"         # 미늘 — 자루 뒤로 뻗은 턱
-    if rings >= 3:
-        g[13][2], g[13][3] = "T", "t"
+    grade_butt(g, 2, 13, rings)
     return g
 
 
@@ -1044,6 +1109,12 @@ def wolasan_grid(rings, mabyeong):
     # 아홉 계열 중 쇠가 '양끝'에 달린 것은 이것뿐이다 — 그 비대칭이 곧 이름이다.
     crescent(g, (10.8, 5.2), 3.2, (8.2, 7.8), 3.4,
              ("H", "L", "m" if mabyeong else "B", "S"))
+    # 등급 표식 — 월아산만 자루 끝이 비어 있지 않다 (거기 삽날이 달렸다). 그래서 물미는
+    # '삽날 목의 놋 테'가 되고, 수실은 물미가 아니라 **삽날 아래**로 늘어진다 (석장의 문법).
+    grade_butt(g, 5, 11, rings, tassel=False)
+    if rings >= 3:
+        for k, ch in enumerate(("T", "t", "t")):
+            g[14][3 + k] = ch
     return g
 
 
@@ -1741,14 +1812,32 @@ WIN_PAPER_HI = (242, 234, 210, 255)   # 창호지 — 살에 닿는 밝은 결 (
 WIN_PAPER_MID = (230, 221, 196, 255)  # 창호지 몸
 WIN_PAPER_DIM = (208, 198, 172, 255)  # 창호지 그늘 (살 그림자가 지는 아래·오른쪽)
 
-WIN_VBARS = (3, 6, 9, 12)   # 세로살 1px — 세살창
-WIN_HBARS = (7,)            # 중간 가로살 1px
+WIN_VBARS = (3, 6, 9, 12)   # 세로살 1px — 세살창 (세로 우세는 유지)
+# ★ 가로살을 하나에서 **둘**로 늘렸다 (4, 10). 하나뿐이던 첫 판은 세로 이동 자기상관이 0.902 —
+#   창이 사실상 '세로 창살만 있는 격자(바코드)'였고, 창문 벽 한 면을 채우면 칸이 안 보였다.
+#   간격도 일부러 어긋나게 둔다 (4·6·5): 등간격이면 그 간격이 곧 새로운 주기가 된다.
+WIN_HBARS = (4, 10)
 
 
 def lattice_window_rows():
     """세살창 — 1px 세로살 4대 + 중간 가로살 1대 + 창호지.
     1px 살대는 제 몸에 명암을 담을 수 없다 — 그래서 입체는 **창호지 쪽에서** 만든다:
-    살 바로 오른쪽·아래 칸에 그림자를 앉히면 살이 종이 위로 떠오른다 (빛은 좌상단)."""
+    살 바로 오른쪽·아래 칸에 그림자를 앉히면 살이 종이 위로 떠오른다 (빛은 좌상단).
+
+    ★ 2차 — 자기 복제 r(0,8) = 0.902 (축 7). 종이 칸이 전부 같은 톤이라 이 텍스처는 세로로
+      **평행 이동해도 자기 자신**이었다: 창을 벽 한 면에 이어 붙이면 세로 줄무늬(바코드)만 남고
+      '칸'이 사라진다. 창호지는 칸마다 따로 바른다 — 풀 먹인 날도, 볕에 삭은 정도도 다르다.
+      그래서 **칸(pane)마다 톤을 달리** 하고, 오래된 칸에는 얼룩(누런 물때)을 앉힌다.
+      이것이 세로 이동 대칭을 깨서 벽이 격자로 읽히게 한다 — 창은 원래 격자다."""
+    # 칸 톤 — (세로 칸 0~4) × (가로 칸 0~1). 값은 결정론 상수: 같은 창은 언제나 같다.
+    pane_tone = [[0.00, -0.30, 0.35], [-0.55, 0.22, -0.15], [0.30, -0.42, 0.50],
+                 [-0.18, 0.45, -0.35], [0.40, -0.12, 0.18]]
+
+    def pane_of(x, y):
+        cx = sum(1 for b in WIN_VBARS if x > b)       # 몇 번째 세로 칸인가
+        cy = sum(1 for b in WIN_HBARS if y > b)       # 위 칸인가 아래 칸인가
+        return pane_tone[cx][cy]
+
     rows = []
     for y in range(16):
         row = []
@@ -1765,6 +1854,8 @@ def lattice_window_rows():
                 lit = (x - 1) in WIN_VBARS or (y - 1) in WIN_HBARS or x == 1 or y == 1
                 dim = (x + 1) in WIN_VBARS or (y + 1) in WIN_HBARS or x == 14 or y == 14
                 base = WIN_PAPER_DIM if dim else WIN_PAPER_HI if lit else WIN_PAPER_MID
+                t = pane_of(x, y) + smooth_octave(x, y, 4, 0x3B, 0.35)   # 칸 톤 + 물때 번짐
+                base = mix(base, WIN_PAPER_DIM if t < 0 else WIN_PAPER_HI, min(abs(t), 1.0) * 0.75)
                 # 종이 섬유 — 1px 결정론 결 (닥섬유가 비쳐 보이는 결). 불투명 유지
                 row.append(base if h32(x, y, 0x9C) % 3 else mix(base, WIN_PAPER_HI, 0.35))
         rows.append(row)
@@ -1798,13 +1889,22 @@ def pane_top_rows():
 #   쪽 폭 4px 은 지킨다 — 잘게 엮인 살이 죽렴의 정체성이고, 대비만 낮추면 격자가 아니라 발이 된다.
 # 색: **마른 대나무**의 연한 황갈색. R > G > B 로 갈색 쪽에 눕힌다 (초록기가 남으면 옥수수가 된다).
 #     채도도 한 번 더 낮춘다 (light 의 max-min 50 → 34) — 골판지 같던 노랑을 빼고 바랜 대나무로.
+# ★ 2차 — 자기 복제 축(축 7)이 잡아낸 마지막 잔재. 대비를 낮춰 격자는 지웠지만, 네 쪽이
+#   **여전히 서로의 복사본**이었다: 자기상관 r(4,0) = 0.886. 벽에 이어 붙이면 블록보다 잘은
+#   주기 4의 세로 줄무늬가 화면 전체를 가로지른다 — 사용자가 두 번 지적한 '한 방향 반복'의
+#   같은 병이 대나무에서 살아 있었다는 뜻이다. 대비를 낮추는 것으로는 못 고친다 (연한 줄무늬도
+#   줄무늬다). 고칠 것은 **복제 자체**다:
+#     ① 쪽마다 밝기가 다르다 — 대는 한 그루에서 잘라도 쪽마다 볕을 달리 먹었다
+#     ② 쪽마다 마디 높이가 다르다 — 마디가 한 줄로 가지런한 발은 없다 (그게 골판지다)
+#   쪽 폭 4px(=16의 약수)은 지킨다: 좌우 랩의 위상이 어긋나면 이음매가 터진다.
 BAMBOO_SHADES = ramp((116, 106, 88, 255), (184, 172, 150, 255), 12)   # 12단 — 한 단 ≈ 5.8
 # 쪽 단면 (x % 4) — 볼록한 대쪽. 좌측이 빛을 받고 우측이 그늘, 쪽과 쪽 사이가 골이다.
-#   주기 4는 16의 약수 → 좌우 랩 경계가 내부 쪽 경계와 같은 위상이라 이음매 위험이 없다.
 BAMBOO_CURVE = [1.3, 0.5, -0.4, -1.4]
-# 마디(節) — 가로선 2개. 마디 홈(짙은 선) 바로 아래에 융기(밝은 선)가 온다.
-#   주기 16(텍스처 한 장)이라 상하 랩에서 마디 간격이 일정하게 이어진다.
-BAMBOO_NODES = (3, 11)
+# 쪽 4개의 밝기 — 넷이 다 다르다. 값은 이음매 축과 함께 풀어 고른 것이다: 톤을 아무렇게나
+# 흩으면 랩 경계(쪽3→쪽0)가 내부 쪽 경계들보다 큰 이상치가 되어 이음매가 터진다 (1.35 실측).
+# 지금 값은 복제 0.765 / 이음매 0.80 — 두 축이 동시에 통과하는 자리다.
+BAMBOO_STRIP_TONE = [0.0, -0.9, -0.3, 0.3]
+BAMBOO_STRIP_NODES = [(3, 12), (7,), (1, 10), (5, 14)]   # 쪽마다 마디 높이가 다르다
 
 
 def bamboo_rows():
@@ -1812,11 +1912,13 @@ def bamboo_rows():
     for y in range(16):
         row = []
         for x in range(16):
-            v = 6.2 + BAMBOO_CURVE[x % 4]
+            s = x // 4                                  # 쪽 번호 0~3 — 네 쪽이 서로 다른 대나무다
+            v = 6.2 + BAMBOO_STRIP_TONE[s] + BAMBOO_CURVE[x % 4]
             v += octave(x, y, 2, 0xC1, 0.42) + octave(x, y, 1, 0xD3, 0.26)   # 대나무 결
-            if y in BAMBOO_NODES:
+            nodes = BAMBOO_STRIP_NODES[s]
+            if y in nodes:
                 v -= 1.4                                # 마디 홈 — 가로 그늘 (약하게)
-            elif (y - 1) in BAMBOO_NODES:
+            elif (y - 1) % 16 in nodes:
                 v += 0.7                                # 마디 아래 융기 — 빛 받는 턱
             row.append(step(BAMBOO_SHADES, v))
         rows.append(row)
@@ -1866,10 +1968,19 @@ SHELF_COLS = [(0, 4), (5, 10), (11, 15)]
 SHELF_ROWS = [(0, 7), (8, 15)]
 
 
-def shelf_grain(x, y, vertical, base=3.6):
-    """목재 결 — 결 방향으로 길게 늘인 노이즈 (결은 한 방향으로 흐른다)."""
+def shelf_grain(x, y, vertical, base=3.6, salt=0x2D):
+    """목재 결 — 결 방향으로 길게 늘인 노이즈 (결은 한 방향으로 흐른다).
+    salt = 칸마다 다른 씨앗. 서랍 여섯이 같은 결을 쓰면 그 여섯은 한 판을 여섯 번 찍은 것이다."""
     gx, gy = (x, y // 4) if vertical else (x // 4, y)
-    return base + octave(gx, gy, 1, 0x2D, 1.5) + octave(x, y, 1, 0x41, 0.4)
+    return base + octave(gx, gy, 1, salt, 1.5) + octave(x, y, 1, salt ^ 0x6C, 0.4)
+
+
+# ★ 2차 — 자기 복제 r(0,8) = 0.984 (축 7). 위아래 두 단이 **완전한 복사본**이었다 (0.98은
+#   거의 1이다: 8칸 밀면 자기 자신이 된다). 약장이 여섯 서랍이 아니라 '한 서랍의 도장 여섯 번'으로
+#   보였다는 뜻이다. 서랍마다 결의 씨앗과 밝기, 손잡이 길이를 달리해 복제를 끊는다 —
+#   목수가 나무 여섯 장을 같은 무늬로 켤 수는 없다.
+SHELF_CELL_SALT = (0x2D, 0x53, 0x71, 0x97, 0xB3, 0xC9)
+SHELF_CELL_TONE = (0.0, -0.45, 0.35, 0.5, -0.25, 0.15)
 
 
 def shelf_face_rows(occupied):
@@ -1877,8 +1988,10 @@ def shelf_face_rows(occupied):
     for y in range(16):
         for x in range(16):
             grid[y][x] = step(SHELF_WOOD, shelf_grain(x, y, True, 2.6))
-    for x0, x1 in SHELF_COLS:
-        for y0, y1 in SHELF_ROWS:
+    for ci, (x0, x1) in enumerate(SHELF_COLS):
+        for ri, (y0, y1) in enumerate(SHELF_ROWS):
+            k = ri * 3 + ci                               # 서랍 번호 0~5
+            salt, tone = SHELF_CELL_SALT[k], SHELF_CELL_TONE[k]
             for y in range(y0, y1 + 1):
                 for x in range(x0, x1 + 1):
                     if x == x0 or y == y0:
@@ -1886,26 +1999,30 @@ def shelf_face_rows(occupied):
                     elif x == x1 or y == y1:
                         grid[y][x] = SHELF_WOOD[5]        # 칸 하·우 — 빛 받는 턱
                     elif occupied:
-                        grid[y][x] = step(SHELF_WOOD, shelf_grain(x, y, False, 4.2))
+                        grid[y][x] = step(SHELF_WOOD,
+                                          shelf_grain(x, y, False, 4.2 + tone, salt))
                     elif y == y1 - 1:
                         # 서랍 바닥판 — 열린 칸으로 빛이 들어 바닥이 환히 드러난다.
                         # 이 한 줄이 '빈 칸'에 깊이를 준다 (어둠만 칠하면 서랍이 아니라 검은 구멍이다).
                         # 판정상으로도 이 줄이 없으면 empty의 강한 가로 경계가 하나뿐이라
                         # 이음매 기준선(내부 경계 90퍼센타일)이 무너져 랩이 이상치로 몰린다 (1.31의 정체).
-                        grid[y][x] = step(SHELF_WOOD, shelf_grain(x, y, False, 5.0))
+                        grid[y][x] = step(SHELF_WOOD,
+                                          shelf_grain(x, y, False, 5.0 + tone, salt))
                     else:
                         # 빈 서랍 속 뒷판 — 열린 칸 위로 든 빛이 뒷판 윗쪽을 스치고,
                         # 뒷판과 바닥이 만나는 아래 구석은 빛이 닿지 않아 가장 깊이 잠긴다.
                         # 그 구석의 어둠이 바로 밑 바닥판의 밝음과 부딪쳐 깊이를 만든다
                         # ('무(無)'가 아니다 — 어둠에 잠긴 뒷판의 결이 어스름히 비친다).
+                        # 칸마다 든 빛의 양이 다르다 (tone) — 여섯 서랍이 같은 어둠일 리 없다
                         t = (y - y0) / max(1, (y1 - y0))
                         base = mix(SHELF_VOID_HI, SHELF_VOID, t)
-                        n = shelf_grain(x, y, False, 0.0) * 5.0
+                        n = shelf_grain(x, y, False, 0.0, salt) * 5.0 + tone * 6.0
                         grid[y][x] = tuple(max(0, min(255, round(c + n)))
                                            for c in base[:3]) + (255,)
             if occupied:                                   # 가로 놋 손잡이 (2px — 광 + 그늘)
-                my = (y0 + y1) // 2
-                for x in range(x0 + 2, x1 - 1):
+                # 손잡이 높이·길이도 칸마다 다르다 — 여섯을 한 자리에 못 박으면 그것이 복제다
+                my = (y0 + y1) // 2 + (1 if k % 3 == 1 else 0)
+                for x in range(x0 + 2, x1 - 1 - (1 if k % 2 else 0)):
                     grid[my][x] = BRASS_HI
                     grid[my + 1][x] = BRASS_DIM
     return grid
