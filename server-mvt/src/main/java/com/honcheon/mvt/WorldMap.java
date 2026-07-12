@@ -456,11 +456,29 @@ final class WorldMap {
     // 5개 시드를 검사했더니 4,380청크를 한 틱 안에서 만들다가 워치독이 서버를 죽였다.
     //   → 후보를 하나씩 꺼내 쓰도록 쪼갠다. 부르는 쪽(MvtCommand)이 틱을 나눠 먹는다.
 
-    /** 한 지역의 후보 좌표 — 등록 좌표가 먼저, 그다음 링(가까운 고리부터). {x, z, shift} */
+    /**
+     * 한 지역의 후보 좌표 — 등록 좌표가 먼저, 그다음 링(가까운 고리부터). {x, z, shift}
+     *
+     * <p><b>원거리는 더 멀리 찾는다.</b> 화산파를 세웠더니 <b>사막</b>에 섰다 — 등록 좌표가 요구하는
+     * 험산(jagged_peaks)이 시드 8888 의 그 자리엔 없고, 링(≤1024칸)을 다 돌아도 없어서 최고점 자리에
+     * 앉혔기 때문이다. 실지리 1:1 + 바닐라 생성이라 33곳의 지형을 시드 하나로 다 맞출 수는 없다.
+     *
+     * <p>답은 <b>더 멀리 옮기는 것</b>이다. 화산은 "그 근처 어딘가의 험한 봉우리"에 있으면 된다 —
+     * 4,096칸(4km)은 하루 도보(40km)의 10분의 1이고, 여정 일수(반올림)를 흔들지 않는다.
+     * 무대 안(stage_local: 청하현·산길)은 그대로 둔다 — 거기서 1km 씩 밀리면 마을이 사라진다.
+     */
     List<int[]> probeCandidates(Place p) {
         List<int[]> out = new ArrayList<>();
         out.add(new int[]{worldX(p), worldZ(p), 0});
-        for (int step : ringSteps) {
+        List<Integer> steps = new ArrayList<>(ringSteps);
+        if (!p.stageLocal()) {
+            for (int far : new int[]{1536, 2048, 3072, 4096}) {
+                if (!steps.contains(far)) {
+                    steps.add(far);
+                }
+            }
+        }
+        for (int step : steps) {
             for (int[] b : bearings) {
                 out.add(new int[]{worldX(p) + b[0] * step, worldZ(p) + b[1] * step, step});
             }

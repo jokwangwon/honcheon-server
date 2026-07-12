@@ -38,6 +38,33 @@ final class RemoteBuilder {
     private static final int R = 22;
 
     /**
+     * 자연이 놓은 자재 — <b>사람이 지은 것과 가르는 선</b>.
+     *
+     * <p>이 선이 없어서 두 번 속았다: 재조성이 옛 지붕(기와)을 자연으로 알고 남겨 두었고,
+     * 그 지붕 때문에 "지면이 이미 높다"고 읽어 <b>산을 세우지 않았다</b>(사막 위 도관이 두 번 섰다).
+     * 자연은 이 목록뿐이고, 나머지는 전부 사람의 것이다.
+     */
+    private static final java.util.Set<Material> NATURAL = java.util.EnumSet.of(
+            Material.STONE, Material.DEEPSLATE, Material.TUFF, Material.GRANITE, Material.DIORITE,
+            Material.ANDESITE, Material.CALCITE, Material.DIRT, Material.COARSE_DIRT,
+            Material.ROOTED_DIRT, Material.GRASS_BLOCK, Material.PODZOL, Material.MYCELIUM,
+            Material.SAND, Material.RED_SAND, Material.SANDSTONE, Material.RED_SANDSTONE,
+            Material.GRAVEL, Material.CLAY, Material.TERRACOTTA, Material.SNOW_BLOCK,
+            Material.PACKED_ICE, Material.ICE, Material.WATER, Material.LAVA, Material.BEDROCK,
+            Material.MOSS_BLOCK, Material.MUD);
+
+    /** 자연 지면 — 사람이 지은 것을 <b>세지 않는다</b>. 없으면 최저값 */
+    private static int naturalGround(World world, int x, int z, int from) {
+        for (int y = from; y >= from - 80; y--) {
+            Material m = world.getBlockAt(x, y, z).getType();
+            if (NATURAL.contains(m) || (m.isSolid() && m.name().endsWith("_ORE"))) {
+                return y;
+            }
+        }
+        return from - 80;
+    }
+
+    /**
      * 지역 하나를 짓는다. 원형은 세력이 고른다.
      *
      * @return 등록할 구역 (없으면 빈 목록 — 원형이 없는 세력은 아직 못 짓는다)
@@ -46,12 +73,20 @@ final class RemoteBuilder {
         if ("noklim".equals(place.faction())) {
             return stockade(world, place, cx, cy, cz);
         }
+        if (SECTS.contains(place.faction())) {
+            return sect(world, place, cx, cy, cz);
+        }
         return List.of();
     }
 
+    /** 문파 원형을 쓰는 세력 — 구파일방·오대세가는 <b>같은 문법</b>을 쓴다 (산문 → 계단 → 문전 → 본전) */
+    private static final java.util.Set<String> SECTS = java.util.Set.of(
+            "hwasan", "gupailbang", "jongnam", "sorimsa", "mudang", "gonryun",
+            "jeomchang", "cheongseong", "ami", "haenam", "gaebang");
+
     /** 원형을 가진 세력인가 — 명령이 미리 물어 "아직 못 짓는다"고 말할 수 있게 */
     static boolean canBuild(WorldMap.Place place) {
-        return "noklim".equals(place.faction());
+        return "noklim".equals(place.faction()) || SECTS.contains(place.faction());
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -359,6 +394,358 @@ final class RemoteBuilder {
             world.getBlockAt(cx + 9, y, cz + 9).setType(Material.SPRUCE_FENCE);
         }
         world.getBlockAt(cx + 9, cy + 6, cz + 9).setType(Material.GREEN_WOOL);   // 녹림(綠林) — 푸른 숲
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  도관(道觀) — 산문 · 천 계단 · 문전 · 본전 · 연무장
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * 문파의 문법 — <b>오르는 길이 시험이다</b> (등록부: "산문 → 계단 → 문전. 잡역은 문전에서 시작한다").
+     *
+     * <p>산채는 평평한 한 켜였다. 문파는 <b>두 켜</b>다: 아래 문전(門前)과 위 본전(本殿).
+     * 그 사이를 계단이 잇는다 — 걸어 올라가는 동안 사람이 무엇을 보게 되는가가 이 건축의 전부다.
+     * 문전에서 올려다보면 본전이 하늘에 걸려 있고, 본전에서 내려다보면 세상이 발밑에 있다.
+     *
+     * <p>자재는 청하현 관아의 어휘다 — <b>회벽(white_terracotta)과 검은 기와(deepslate_tiles)</b>.
+     * 도적의 통나무와 다른 것이 곧 위계다. 채색은 <b>매화</b>뿐 (등록부가 cherry_grove 를 적어 두었다).
+     */
+    private static List<Zone> sect(World world, WorldMap.Place place, int cx, int cy, int cz) {
+        int lower = cy;               // 문전 — 산문이 선다
+        int upper = cy + 9;           // 본전 — 아홉 켜 위 (오르는 길이 시험이다)
+
+        clearSect(world, cx, cy, cz);
+        // 화산파를 세웠더니 **사막**에 섰다. 시드 8888 의 그 일대(4km 반경)에 험산이 없기 때문이다.
+        // 실지리 1:1 좌표는 못 옮긴다(그것이 이 지도의 뼈대다). 그러면 남는 답은 하나다 —
+        // **없으면 세운다.** 화산은 험한 봉우리 위에 있어야 화산이다. 조성기가 그 봉우리를 빚는다.
+        shapeTerrain(world, place, cx, upper, cz);
+        pad(world, cx, lower, cz + 20, 17, 13, Material.POLISHED_ANDESITE);   // 문전 마당
+        pad(world, cx, upper, cz - 12, 27, 21, Material.POLISHED_ANDESITE);   // 본전 단
+
+        mountainGate(world, cx, lower, cz + 27);          // 산문(山門) — 패방
+        thousandSteps(world, cx, lower, cz + 13, upper, cz - 1);   // 계단 — 문전에서 본전으로
+        mainHall(world, cx - 7, upper, cz - 10, 15, 13);  // 본전 15x13 — 회벽·검은 기와
+        trainingGround(world, cx, upper, cz + 4);         // 연무장 — 목인장 셋 (오르면 먼저 이것이 보인다)
+        plumTrees(world, cx, upper, cz);                  // 매화 — 채색은 여기뿐이다
+
+        return List.of(new Zone(place.name(), sectSubtitle(place), world.getName(),
+                cx - 20, lower - 6, cz - 26, cx + 20, upper + 16, cz + 32));
+    }
+
+    private static String sectSubtitle(WorldMap.Place place) {
+        return "rich".equals(place.tier()) ? "도관 — 산문에서 본전까지 천 계단"
+                : "산문 — 오르는 길이 시험이다";
+    }
+
+    /**
+     * 지형 빚기 — <b>기본 세계를 쓰되, 없으면 만든다</b> (사용자 판정: "없으면 산을 생성하든 필드를 생성하든").
+     *
+     * <p>등록부는 장소마다 지형을 요구한다(험산·산·평지·고원·분지·강). 바닐라 생성은 실지리를 모른다 —
+     * 화산파의 좌표에 사막을 놓았다. 좌표를 옮기면 지도(실지리 1:1)가 무너지고, 그냥 지으면
+     * 사막 한복판의 도관이 된다. <b>세 번째 답: 땅을 요구에 맞춘다.</b>
+     *
+     * <p>이미 맞는 땅은 건드리지 않는다 — 자연이 준 것이 언제나 더 낫다. 빚는 것은 <b>모자랄 때뿐</b>이다.
+     */
+    private static void shapeTerrain(World world, WorldMap.Place place, int cx, int topY, int cz) {
+        String terrain = place.terrain() == null ? "" : place.terrain();
+        // 지면은 **자연 자재로만** 잰다. getHighestBlockYAt 은 지난 조성이 남긴 기와를 지면으로 세어
+        // "이미 충분히 높다"고 거짓말했다 — 그래서 산이 서지 않았다 (조감이 사막 위 도관을 두 번 보여줬다).
+        int natural = naturalGround(world, cx, cz, topY + 40);
+        switch (terrain) {
+            case "험산", "산" -> {
+                if (natural < topY - 2) {           // 이미 봉우리 위면 그대로 (자연이 준 산)
+                    // 봉우리의 중심은 **본전**이지 마당이 아니다. 남쪽(문전·계단)으로 비탈이 흘러내려야
+                    // 계단이 비탈을 타고 오른다 — 산을 마당 한가운데 세웠더니 문전이 파묻혀 분화구가 됐다.
+                    raiseMassif(world, cx, topY, cz - 8, 34, 16);
+                }
+            }
+            case "고원" -> {
+                if (natural < topY - 2) {
+                    raiseMassif(world, cx, topY, cz - 8, 40, 22);   // 대지(臺地) — 같은 손, 정상이 넓다
+                }
+            }
+            case "평지", "분지" -> levelField(world, cx, topY, cz);
+            default -> {
+                // 강·폐허·밀림 — 아직 빚지 않는다. 자연이 준 대로 앉힌다 (원형이 늘 때 함께 온다)
+            }
+        }
+    }
+
+    /**
+     * 들 — 평지를 요구하는데 땅이 울퉁불퉁하면 고른다. 벼랑을 깎는 게 아니라 <b>발치를 메운다</b>:
+     * 낮은 데를 흙으로 채우고 높은 데만 깎는다 (파낸 자국은 사람이 산 흔적이 아니라 상처다).
+     */
+    private static void levelField(World world, int cx, int topY, int cz) {
+        int radius = 40;
+        for (int x = cx - radius; x <= cx + radius; x++) {
+            for (int z = cz - radius; z <= cz + radius; z++) {
+                double d = dist(x - cx, z - cz);
+                if (d > radius) {
+                    continue;
+                }
+                int edge = Math.floorMod(x * 5 + z * 3, 3);      // 가장자리는 자연으로 풀어 준다
+                int target = topY - (d > radius - 6 ? edge : 0);
+                for (int y = target + 1; y <= target + 8; y++) {
+                    if (!world.getBlockAt(x, y, z).getType().isAir()) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);
+                    }
+                }
+                for (int y = target; y >= target - 6; y--) {
+                    if (!world.getBlockAt(x, y, z).getType().isAir()
+                            && !world.getBlockAt(x, y, z).isLiquid()) {
+                        break;
+                    }
+                    world.getBlockAt(x, y, z).setType(y == target ? Material.GRASS_BLOCK : Material.DIRT);
+                }
+            }
+        }
+    }
+
+    /**
+     * 봉우리 — <b>땅이 요구를 못 맞추면 땅을 빚는다</b>.
+     *
+     * <p>등록부는 화산파에 험산(jagged_peaks)을 요구하는데, 시드가 그 자리에 사막을 놓았다.
+     * 좌표를 옮기면(실지리 1:1) 지도가 무너지고, 그냥 지으면 사막 한복판의 도관이 된다.
+     * 그래서 <b>산을 세운다</b> — 본전 단을 받치는 암반과 그 아래로 흘러내리는 비탈.
+     *
+     * <p>모양의 규칙: 완만한 원뿔이 아니라 <b>층진 벼랑</b>이다 (험산은 깎아지른 것이 성격이다).
+     * 높이는 방위·거리의 좌표 해시로 흔들려 등고선이 반듯해지지 않는다.
+     */
+    private static void raiseMassif(World world, int cx, int topY, int cz, int radius, int flatR) {
+        for (int x = cx - radius; x <= cx + radius; x++) {
+            for (int z = cz - radius; z <= cz + radius; z++) {
+                double d = dist(x - cx, z - cz);
+                if (d > radius) {
+                    continue;
+                }
+                // 정상 평탄(flatR) → 비탈 → 발치.
+                //   v2 — 구판은 **탁상(메사)** 이 됐다: 옆이 수직 벼랑이고 등고가 반듯한 원이라 산이 아니라
+                //   기단으로 읽혔다. 봉우리는 ① 발치로 갈수록 완만하고(비탈이 오목한 게 아니라 볼록하다),
+                //   ② 능선이 방위마다 다르고(좌표 해시 ±5), ③ 발치가 자연 지면에 스며든다.
+                double t = Math.max(0, (d - flatR) / (double) (radius - flatR));   // 0 = 정상, 1 = 발치
+                int crest = topY + 1;
+                int ridge = Math.floorMod(x * 11 + z * 7, 11) - 5;        // 능선의 요철 (방위마다 다른 산줄기)
+                int drop = (int) Math.round(Math.pow(t, 1.4) * 40);        // 볼록한 비탈 (아래로 갈수록 완만)
+                int y = crest - drop + (int) Math.round(ridge * (1 - t) * 0.6);
+                y = y - Math.floorMod(y, 2);                                // 두 칸 단 — 험산의 결
+                int ground = naturalGround(world, x, z, topY + 40);
+                if (y <= ground) {
+                    continue;   // 발치가 자연 지면에 닿았다 — 그 아래는 산의 몫이다 (파내지 않는다)
+                }
+                for (int yy = y; yy >= y - 40; yy--) {
+                    Material here = world.getBlockAt(x, yy, z).getType();
+                    if (!here.isAir() && !here.isSolid()) {
+                        world.getBlockAt(x, yy, z).setType(Material.STONE);
+                        continue;
+                    }
+                    if (here.isAir()) {
+                        world.getBlockAt(x, yy, z).setType(
+                                Math.floorMod(x * 3 + yy * 5 + z, 9) == 0 ? Material.ANDESITE
+                                        : yy > y - 3 ? Material.STONE : Material.DEEPSLATE);
+                    } else {
+                        break;   // 자연 지면에 닿았다 — 그 아래는 산의 몫이다
+                    }
+                }
+                for (int yy = y + 1; yy <= topY + 14; yy++) {   // 봉우리 위 허공을 비운다
+                    if (!world.getBlockAt(x, yy, z).getType().isAir()) {
+                        world.getBlockAt(x, yy, z).setType(Material.AIR);
+                    }
+                }
+            }
+        }
+    }
+
+    /** 부지를 비운다 — 두 켜 모두. 산은 남기고 그 위의 것만 걷는다 */
+    private static void clearSect(World world, int cx, int cy, int cz) {
+        for (int x = cx - 20; x <= cx + 20; x++) {
+            for (int z = cz - 26; z <= cz + 32; z++) {
+                for (int y = cy + 1; y <= cy + 30; y++) {
+                    Material m = world.getBlockAt(x, y, z).getType();
+                    if (m.isAir()) {
+                        continue;
+                    }
+                    boolean natural = NATURAL.contains(m) || m.name().endsWith("_ORE");
+                    if (!natural) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);   // 지난 조성·초목은 걷는다
+                    }
+                }
+            }
+        }
+    }
+
+    /** 단(段) — 돌로 다진 평평한 바닥 + 그 밑을 받치는 축대 (험산에 집을 앉히는 법) */
+    private static void pad(World world, int cx, int y, int cz, int w, int d, Material floor) {
+        for (int x = cx - w / 2; x <= cx + w / 2; x++) {
+            for (int z = cz - d / 2; z <= cz + d / 2; z++) {
+                world.getBlockAt(x, y, z).setType(floor);
+                for (int yy = y + 1; yy <= y + 12; yy++) {
+                    world.getBlockAt(x, yy, z).setType(Material.AIR);
+                }
+                boolean edge = x == cx - w / 2 || x == cx + w / 2 || z == cz - d / 2 || z == cz + d / 2;
+                for (int yy = y - 1; yy >= y - 14; yy--) {   // 축대 — 허공이면 돌로 받친다
+                    if (!world.getBlockAt(x, yy, z).getType().isAir()
+                            && !world.getBlockAt(x, yy, z).isLiquid()) {
+                        break;
+                    }
+                    world.getBlockAt(x, yy, z).setType(edge ? Material.STONE_BRICKS : Material.COBBLESTONE);
+                }
+            }
+        }
+    }
+
+    /** 산문(山門) — 패방(牌坊). 돌기둥 넷 + 현판 + 검은 기와. 여기서부터 문파의 땅이다 */
+    private static void mountainGate(World world, int cx, int cy, int cz) {
+        for (int dx : new int[]{-4, -3, 3, 4}) {
+            for (int y = cy + 1; y <= cy + 5; y++) {
+                world.getBlockAt(cx + dx, y, cz).setType(Material.STONE_BRICKS);
+            }
+        }
+        for (int x = cx - 5; x <= cx + 5; x++) {   // 들보 + 기와 처마
+            world.getBlockAt(x, cy + 6, cz).setType(Material.POLISHED_ANDESITE);
+            world.getBlockAt(x, cy + 7, cz).setType(Material.DEEPSLATE_TILES);
+        }
+        for (int x = cx - 6; x <= cx + 6; x++) {
+            stair(world, x, cy + 7, cz - 1, Material.DEEPSLATE_TILE_STAIRS, BlockFace.NORTH, false);
+            stair(world, x, cy + 7, cz + 1, Material.DEEPSLATE_TILE_STAIRS, BlockFace.SOUTH, false);
+        }
+        world.getBlockAt(cx, cy + 5, cz).setType(Material.DARK_OAK_PLANKS);   // 현판 자리
+        lanternPost(world, cx - 6, cy, cz + 1);
+        lanternPost(world, cx + 6, cy, cz + 1);
+    }
+
+    /** 천 계단 — 문전에서 본전으로. 한 켜씩 올라가며 폭이 좁아진다 (오를수록 좁아지는 길) */
+    private static void thousandSteps(World world, int cx, int yLow, int zLow, int yHigh, int zHigh) {
+        int rise = yHigh - yLow;
+        int run = zLow - zHigh;
+        for (int i = 0; i <= run; i++) {
+            int z = zLow - i;
+            int y = yLow + (int) Math.round((double) rise * i / run);
+            int half = Math.max(2, 5 - i / 5);   // 폭 11 → 5 (오를수록 좁아진다)
+            for (int x = cx - half; x <= cx + half; x++) {
+                world.getBlockAt(x, y, z).setType(Material.POLISHED_ANDESITE);
+                for (int yy = y + 1; yy <= y + 6; yy++) {
+                    world.getBlockAt(x, yy, z).setType(Material.AIR);
+                }
+                for (int yy = y - 1; yy >= y - 12; yy--) {
+                    if (!world.getBlockAt(x, yy, z).getType().isAir()) {
+                        break;
+                    }
+                    world.getBlockAt(x, yy, z).setType(Material.COBBLESTONE);
+                }
+            }
+            if (Math.floorMod(i, 8) == 0) {   // 여덟 단마다 석등 — 밤에도 오른다
+                lanternPost(world, cx - half - 1, y, z);
+                lanternPost(world, cx + half + 1, y, z);
+            }
+        }
+    }
+
+    /** 본전(本殿) — 회벽·검은 기와. 청하현 관아의 어휘다 (도적의 통나무와 다른 것이 위계다) */
+    private static void mainHall(World world, int x0, int cy, int z0, int w, int d) {
+        int x1 = x0 + w - 1;
+        int z1 = z0 + d - 1;
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                world.getBlockAt(x, cy, z).setType(Material.POLISHED_ANDESITE);
+                boolean edge = x == x0 || x == x1 || z == z0 || z == z1;
+                if (!edge) {
+                    continue;
+                }
+                boolean corner = (x == x0 || x == x1) && (z == z0 || z == z1);
+                for (int y = cy + 1; y <= cy + 4; y++) {
+                    world.getBlockAt(x, y, z).setType(corner ? Material.DARK_OAK_LOG
+                            : Material.WHITE_TERRACOTTA);   // 회벽 · 기둥은 목재
+                }
+            }
+        }
+        // 문 — 남향 (계단이 남에서 온다). 삼문(三門)이 아니라 하나 (문파의 본전은 겸손하다)
+        for (int x = (x0 + x1) / 2 - 1; x <= (x0 + x1) / 2 + 1; x++) {
+            world.getBlockAt(x, cy + 1, z1).setType(Material.AIR);
+            world.getBlockAt(x, cy + 2, z1).setType(Material.AIR);
+            world.getBlockAt(x, cy + 3, z1).setType(Material.AIR);
+        }
+        // 지붕 — 검은 기와, 능선 수렴 (청하현 검수가 요구하는 물매)
+        int peak = Math.min(w, d) / 2;
+        for (int i = 0; i <= peak; i++) {
+            int y = cy + 5 + i;
+            for (int x = x0 - 1 + i; x <= x1 + 1 - i; x++) {
+                put(world, x, y, z0 - 1 + i, Material.DEEPSLATE_TILES);
+                put(world, x, y, z1 + 1 - i, Material.DEEPSLATE_TILES);
+            }
+            for (int z = z0 + i; z <= z1 - i; z++) {
+                put(world, x0 - 1 + i, y, z, Material.DEEPSLATE_TILES);
+                put(world, x1 + 1 - i, y, z, Material.DEEPSLATE_TILES);
+            }
+        }
+        // 실내 — 제단(향로)과 시렁. 본전에 걸린 것은 노획물이 아니라 **전승의 병기**다
+        int mx = (x0 + x1) / 2;
+        int mz = (z0 + z1) / 2;
+        world.getBlockAt(mx, cy + 1, z0 + 1).setType(Material.CAULDRON);        // 향로
+        candlesAt(world, mx - 1, cy + 1, z0 + 1);
+        candlesAt(world, mx + 1, cy + 1, z0 + 1);
+        long seed = Math.floorMod(31L * x0 + z0, 1_000_003L);
+        shelf(world, mx - 3, cy + 2, z0, BlockFace.SOUTH,
+                Weapons.makeSeeded(Weapons.Series.검, Weapons.Grade.보병, seed),
+                null,
+                Weapons.makeSeeded(Weapons.Series.검, Weapons.Grade.정련, seed + 1));
+        lantern(world, mx, cy + 4, mz);
+    }
+
+    /** 연무장 — 돌바닥 + 목인장 셋. 오르면 먼저 이것이 보인다 (문파는 무엇을 하는 집인가) */
+    private static void trainingGround(World world, int cx, int cy, int cz) {
+        for (int x = cx - 8; x <= cx + 8; x++) {
+            for (int z = cz - 4; z <= cz + 4; z++) {
+                world.getBlockAt(x, cy, z).setType(Math.floorMod(x + z, 7) == 0
+                        ? Material.ANDESITE : Material.POLISHED_ANDESITE);
+            }
+        }
+        for (int i = -1; i <= 1; i++) {   // 목인장(木人樁) — 팔이 셋 달린 나무 사람
+            int px = cx + i * 6;
+            world.getBlockAt(px, cy + 1, cz).setType(Material.STRIPPED_DARK_OAK_LOG);
+            world.getBlockAt(px, cy + 2, cz).setType(Material.STRIPPED_DARK_OAK_LOG);
+            world.getBlockAt(px, cy + 3, cz).setType(Material.STRIPPED_DARK_OAK_LOG);
+            world.getBlockAt(px - 1, cy + 2, cz).setType(Material.DARK_OAK_FENCE);   // 팔
+            world.getBlockAt(px + 1, cy + 2, cz).setType(Material.DARK_OAK_FENCE);
+            world.getBlockAt(px, cy + 2, cz + 1).setType(Material.DARK_OAK_FENCE);
+        }
+    }
+
+    /** 매화 — 채색은 여기뿐이다 (등록부가 cherry_grove 를 적어 두었다). 본전 마당 모서리에 셋 */
+    private static void plumTrees(World world, int cx, int cy, int cz) {
+        int[][] spots = {{-11, -6}, {11, -6}, {-11, 6}};
+        for (int[] s : spots) {
+            int x = cx + s[0];
+            int z = cz + s[1];
+            for (int y = cy + 1; y <= cy + 4; y++) {
+                world.getBlockAt(x, y, z).setType(Material.CHERRY_LOG);
+            }
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) > 3) {
+                        continue;
+                    }
+                    put(world, x + dx, cy + 5, z + dz, Material.CHERRY_LEAVES);
+                    if (Math.abs(dx) + Math.abs(dz) <= 1) {
+                        put(world, x + dx, cy + 6, z + dz, Material.CHERRY_LEAVES);
+                    }
+                }
+            }
+        }
+    }
+
+    /** 석등 — 돌기둥 + 등롱 (계단·산문의 불빛) */
+    private static void lanternPost(World world, int x, int cy, int z) {
+        world.getBlockAt(x, cy + 1, z).setType(Material.COBBLESTONE_WALL);
+        world.getBlockAt(x, cy + 2, z).setType(Material.COBBLESTONE_WALL);
+        world.getBlockAt(x, cy + 3, z).setType(Material.LANTERN);
+    }
+
+    private static void candlesAt(World world, int x, int y, int z) {
+        org.bukkit.block.data.type.Candle data =
+                (org.bukkit.block.data.type.Candle) Material.CANDLE.createBlockData();
+        data.setCandles(2);
+        data.setLit(true);
+        world.getBlockAt(x, y, z).setBlockData(data);
     }
 
     // ─── 손 ───
