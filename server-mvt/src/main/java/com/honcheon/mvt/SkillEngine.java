@@ -153,11 +153,20 @@ public final class SkillEngine {
     private final Blend displayBlend;
     private final Map<String, DisplayModel> displayModels;
     private final Map<String, DisplayMotion> displayMotions;
-    private final Map<String, String> displayByGrade;        // 격 → 모션 id (null = 형체 없음)
+    private final Map<String, String> slashByTrail;          // 히트박스 모양 → 참격선 모션
+    private final Map<String, Ink> gradeInk;                 // 격 → 획의 굵기·밝기 (외공기도 있다)
+    private final Map<String, Sheath> sheathByGrade;         // 격 → 날에 서리는 기 (지속)
     private final Map<String, String> displayByForm;         // 형태 → 모션 id
     private final Map<String, String> displayByUltimate;     // 오의 → 모션 id
-    private final Map<String, Swing> swings;                 // 무기 계열 → 휘두름 (병기 그 자체가 그린다)
-    private final DisplayMotion swingMotion;                 // kind: 휘두름 인 모션 (하나뿐이다)
+    private final Map<String, Swing> swings;                 // 계열 → 획의 손 (굵기·길이·시간)
+    private final Map<String, Body> bodyByClass;             // 계열 → 몸의 자세
+    private final Map<String, Body> bodyByTrail;             // 궤적 → 몸의 자세 (궤적이 계열을 이긴다)
+    private final BodyLimits bodyLimits;
+    private final String throwMotion;                        // 던진 물건이 나는 모션
+    private final List<String> throwClasses;
+    private final Map<String, Basic> basicStrike;            // 【무공 없는 손】 계열 → 기본 히트박스
+    private final int basicCooldownTicks;
+    private final Map<String, List<String>> artsByClass;     // 계열 → 그 계열로 나가는 무공 (원장 해석용)
 
     @SuppressWarnings("unchecked")
     public SkillEngine(Path cfg) {
@@ -486,10 +495,9 @@ public final class SkillEngine {
                 intOr(db.get("per_cast_max"), 6),
                 intOr(db.get("per_player_max"), 8),
                 (float) dblOr(db.get("view_range"), 0.5),
-                intOr(db.get("ring_heartbeat_ticks"), 12),
-                intOr(db.get("swing_min_ticks"), 3),
-                intOr(db.get("swing_max_ticks"), 18),
-                intOr(db.get("swing_fade_ticks"), 2));
+                intOr(db.get("heartbeat_ticks"), 12),
+                intOr(db.get("slash_min_ticks"), 3),
+                intOr(db.get("slash_max_ticks"), 18));
 
         Map<String, Object> bl = asMap(dp.get("blend"));
         this.displayBlend = new Blend(
@@ -512,13 +520,13 @@ public final class SkillEngine {
         asMap(dp.get("motions")).forEach((id, raw) -> {
             Map<String, Object> m = asMap(raw);
             dmo.put(id, new DisplayMotion(id, str(m.get("kind")), str(m.get("model")),
-                    vec3(m.get("scale"), 1.0f),
                     Math.min(intOr(m.get("lifetime"), 10), displayBudget.maxLifetimeTicks()),
                     intOr(m.get("birth"), 0), intOr(m.get("fade"), 0),
                     Math.max(1, intOr(m.get("interpolation"), 2)),
+                    (float) dblOr(m.get("spread"), 1.0),
                     (float) dblOr(m.get("spin"), 0.0), dblOr(m.get("speed"), 0.0),
                     (float) dblOr(m.get("impact_scale"), 1.0),
-                    intOr(m.get("impact_ticks"), 3),
+                    intOr(m.get("impact_ticks"), 3), intOr(m.get("stick_ticks"), 0),
                     intOr(m.get("count"), 1), dblOr(m.get("radius"), 0.85),
                     dblOr(m.get("height"), 1.0), (float) dblOr(m.get("orbit"), 0.0),
                     (float) dblOr(m.get("burst_scale"), 1.0),
@@ -529,15 +537,37 @@ public final class SkillEngine {
         this.displayMotions = Collections.unmodifiableMap(dmo);
 
         Map<String, Object> bind = asMap(dp.get("bind"));
-        this.displayByGrade = bindMap(bind.get("grades"));
         this.displayByForm = bindMap(bind.get("forms"));
         this.displayByUltimate = bindMap(bind.get("ultimates"));
+        this.slashByTrail = bindMap(dp.get("slashes"));
 
-        // 병기 휘두름 — 계열마다 다른 손짓. reach 는 **1.0 을 넘지 못한다** (히트박스보다 길게 그릴 수 없다)
+        // 격이 획에 스며든다 — 외공기도 획을 그린다 (그것이 이 층의 요점이다)
+        Map<String, Ink> inks = new LinkedHashMap<>();
+        asMap(dp.get("grade_ink")).forEach((grade, raw) -> {
+            Map<String, Object> i = asMap(raw);
+            inks.put(grade, new Ink(grade, (float) dblOr(i.get("thickness"), 1.0),
+                    intOr(idx(i.get("brightness"), 0), 0), intOr(idx(i.get("brightness"), 1), 15),
+                    intOr(i.get("hold"), 0)));
+        });
+        this.gradeInk = Collections.unmodifiableMap(inks);
+
+        // 날의 기 — 격을 두르면 손에 든 병기에 겹쳐 서린다 (지속)
+        Map<String, Sheath> shs = new LinkedHashMap<>();
+        asMap(dp.get("sheaths")).forEach((grade, raw) -> {
+            if (!(raw instanceof Map<?, ?>)) {
+                return;   // null — 몸에 두른 것(호신강기)은 고리가 그 자리다
+            }
+            Map<String, Object> s = asMap(raw);
+            shs.put(grade, new Sheath(grade, str(s.get("motion")), vec3(s.get("scale"), 1.0f),
+                    intOr(idx(s.get("brightness"), 0), 15), intOr(idx(s.get("brightness"), 1), 15)));
+        });
+        this.sheathByGrade = Collections.unmodifiableMap(shs);
+
+        // 계열의 손 — reach 는 **1.0 을 넘지 못한다** (히트박스보다 길게 그릴 수 없다 · 불변식 ㅂ)
         Map<String, Swing> sws = new LinkedHashMap<>();
         asMap(dp.get("swings")).forEach((cls, raw) -> {
             if (!(raw instanceof Map<?, ?>)) {
-                return;   // null — 휘두를 병기가 없는 계열 (맨손·무관·짐승)
+                return;   // null — 벨 것이 없는 계열 (무관·짐승)
             }
             Map<String, Object> s = asMap(raw);
             double ratio = dblOr(s.get("span_ratio"), 0.0);
@@ -546,11 +576,73 @@ public final class SkillEngine {
             }
             sws.put(cls, new Swing(cls, ratio,
                     Math.min(1.0, dblOr(s.get("reach"), 1.0)),   // 【정직의 못】 등록부는 줄일 수만 있다
-                    (float) dblOr(s.get("roll"), 0.0), (float) dblOr(s.get("tilt"), 0.0)));
+                    (float) dblOr(s.get("thickness"), 1.0), (float) dblOr(s.get("tilt"), 0.0)));
         });
         this.swings = Collections.unmodifiableMap(sws);
-        this.swingMotion = displayMotions.values().stream()
-                .filter(m -> "휘두름".equals(m.kind())).findFirst().orElse(null);
+
+        // 몸의 자세 — 되는 것만 (전진·pose). 팔다리 각도는 바닐라 프로토콜에 자리가 없다
+        Map<String, Object> body = asMap(dp.get("body"));
+        Map<String, Object> lim = asMap(body.get("limits"));
+        this.bodyLimits = new BodyLimits(
+                dblOr(lim.get("max_lunge"), 0.45),
+                intOr(lim.get("max_pose_ticks"), 8),
+                !Boolean.FALSE.equals(lim.get("require_ground")),
+                Boolean.TRUE.equals(lim.get("yaw_kick_enabled")));
+        this.bodyByClass = bodyMap(body.get("by_class"), bodyLimits);
+        this.bodyByTrail = bodyMap(body.get("by_trail"), bodyLimits);
+
+        Map<String, Object> thr = asMap(dp.get("throw"));
+        this.throwMotion = str(thr.get("motion"));
+        this.throwClasses = thr.get("classes") instanceof List<?> l
+                ? l.stream().map(String::valueOf).toList() : List.of();
+
+        // 【무공 없는 손】 병기를 들고 좌클릭하면 그것만으로 궤적이 뜬다 (가장 흔한 경로)
+        Map<String, Object> bs = RulesConfig.section(mo, "basic_strike");
+        this.basicCooldownTicks = intOr(bs.get("cooldown_ticks"), 4);
+        Map<String, Basic> bsc = new LinkedHashMap<>();
+        asMap(bs.get("by_class")).forEach((cls, raw) -> {
+            if (!(raw instanceof Map<?, ?>)) {
+                return;   // null — 활·무관·짐승: 우리가 얹을 것이 없다
+            }
+            Map<String, Object> b2 = asMap(raw);
+            bsc.put(cls, new Basic(cls, String.valueOf(b2.getOrDefault("trail", "호")),
+                    dblOr(b2.get("range"), 3.0), dblOr(b2.get("angle"), 100.0),
+                    b2.get("frames") instanceof List<?> ? frames(b2.get("frames")) : new Frames(2, 2, 4)));
+        });
+        this.basicStrike = Collections.unmodifiableMap(bsc);
+
+        // 계열 → 무공 (원장 해석용) — 하드코딩된 무공표를 지운 자리다
+        Map<String, List<String>> abc = new LinkedHashMap<>();
+        RulesConfig.section(sk, "martial_arts").forEach((id, raw) -> {
+            if (!mechSkills.containsKey(id)) {
+                return;   // 액션 데이터가 없는 무공은 손에 실리지 않는다
+            }
+            Object wc = asMap(raw).get("weapon_class");
+            List<?> classes = wc instanceof List<?> l ? l : wc == null ? List.of() : List.of(wc);
+            for (Object c : classes) {
+                abc.computeIfAbsent(String.valueOf(c), k -> new ArrayList<>()).add(id);
+            }
+        });
+        this.artsByClass = Collections.unmodifiableMap(abc);
+    }
+
+    /** 몸의 자세 한 줄 — 상한(limits)을 여기서 이미 물린다 (등록부가 조작감을 해치지 못한다) */
+    private static Map<String, Body> bodyMap(Object raw, BodyLimits limits) {
+        Map<String, Body> out = new LinkedHashMap<>();
+        asMap(raw).forEach((key, v) -> {
+            if (!(v instanceof Map<?, ?>)) {
+                return;
+            }
+            Map<String, Object> b = asMap(v);
+            double lunge = dblOr(b.get("lunge"), 0.0);
+            lunge = Math.max(-limits.maxLunge(), Math.min(limits.maxLunge(), lunge));
+            String pose = String.valueOf(b.getOrDefault("pose", "없음"));
+            int poseTicks = Math.min(limits.maxPoseTicks(), intOr(b.get("pose_ticks"), 0));
+            float yaw = limits.yawKickEnabled() ? (float) dblOr(b.get("yaw_kick"), 0.0) : 0.0f;
+            float pitch = limits.yawKickEnabled() ? (float) dblOr(b.get("pitch_kick"), 0.0) : 0.0f;
+            out.put(key, new Body(key, lunge, pose, poseTicks, yaw, pitch));
+        });
+        return Collections.unmodifiableMap(out);
     }
 
     /** 배선표 — 값이 null(형체 없음)인 칸은 아예 담지 않는다 (없는 것과 같다) */
@@ -1248,10 +1340,10 @@ public final class SkillEngine {
         return mechSkills.containsKey(skillId);
     }
 
-    @SuppressWarnings("unchecked")
+    /** 콤보 칸 수 — 단발형은 <b>1</b> 이다 (0 이면 나누기에서 터진다) */
     public int comboSize(String skillId) {
         Object combo = mechOf(skillId).get("combo");
-        return combo instanceof List<?> l ? l.size() : 0;
+        return combo instanceof List<?> l ? l.size() : 1;
     }
 
     public int comboWindow(String skillId) {
@@ -1282,7 +1374,10 @@ public final class SkillEngine {
     public Cast planCombo(String skillId, int index, String realm, int energy,
                           String armed, String weaponClass) {
         Map<String, Object> mech = mechOf(skillId);
-        List<Object> combo = (List<Object>) mech.get("combo");
+        // 단발형(철산고·비홍침·매화참…)은 combo 가 없다 — 그 몸 전체가 한 칸이다.
+        //   (하드코딩 무공표를 지우고 원장이 무공을 고르게 된 순간부터, 단발형이 이 문을 통과한다)
+        List<Object> combo = mech.get("combo") instanceof List<?> l
+                ? (List<Object>) l : List.of((Object) mech);
         int step = Math.floorMod(index, combo.size());
         Map<String, Object> hit = (Map<String, Object>) combo.get(step);
 
@@ -1307,13 +1402,24 @@ public final class SkillEngine {
             want = armed;                                     // 두름이 타격의 격을 끌어올린다
             cost = sustainCost(armed) > 0 ? 0 : bandCost(armed);
         }
+        // 【고침】 쿨다운을 읽지 않던 자리 — Cast.cooldownTicks() 가 늘 0 이었다.
+        //   태조장권 60 · 매화검법 90 · 흑살도법 180 이 등록부에만 있고 **한 번도 적용된 적이 없다**.
+        //   쿨다운은 콤보의 **마무리 타 전용**이다 (등록부 주석: "1·2타는 쿨다운 없음 — 연타가 권법의 값").
+        int cooldown = step + 1 == combo.size() && mech.get("cooldown_ticks") instanceof Number c
+                ? c.intValue() : 0;
         return finish(skillId, want, cost, realm, energy, weaponClass,
                 frames(hit.get("frames")),
                 String.valueOf(hit.getOrDefault("stagger", "약")),
                 String.valueOf(hit.getOrDefault("type", "호")),
                 hit.get("range") instanceof Number r ? r.doubleValue() : 3.0,
                 hit.get("angle") instanceof Number a ? a.doubleValue() : 100.0,
-                0);
+                cooldown);
+    }
+
+    /** 단발형 무공의 쿨다운 (콤보가 아닌 것 — 철산고 120 · 엽호궁술 30). 없으면 0 */
+    public int skillCooldown(String skillId) {
+        return hasActionData(skillId) && mechOf(skillId).get("cooldown_ticks") instanceof Number c
+                ? c.intValue() : 0;
     }
 
     /**
@@ -1652,21 +1758,59 @@ public final class SkillEngine {
     }
 
     /**
-     * 근접 한 타에 겹치는 <b>기의 획</b> — 격이 실렸을 때만 뜬다.
-     * 격이 없으면(외공기·발경) 형체는 병기 그 자체가 그린다 ({@link #swing}) — 쇠의 궤적은 쇠가 그린다.
+     * 참격선 — 히트박스 모양이 획을 고른다 (호=초승달 · 선/돌=곧은 획 · 원/진=고리).
+     * <b>검을 그리지 않는다. 지나간 자리를 그린다.</b> 투사체(시)는 제 몸이 궤적이므로 획이 없다.
      */
-    public DisplayMotion displayForSwing(String grade) {
-        return displayMotion(displayByGrade.get(grade == null ? BARE : grade));
+    public DisplayMotion slashFor(String hitType) {
+        return displayMotion(slashByTrail.get(hitType));
     }
 
-    /** 병기 휘두름 — 계열의 손짓 (검은 벤다 · 창은 뻗는다 · 겸은 거꾸로 돈다). 없으면 형체가 없다 */
+    /** 격이 획에 스며든다 — <b>외공기도 획을 그린다</b> (격은 그것을 밝고 굵게 만들 뿐이다) */
+    public Ink ink(String grade) {
+        Ink i = gradeInk.get(grade == null ? BARE : grade);
+        return i != null ? i : gradeInk.get(BARE);
+    }
+
+    /** 날의 기 — 격을 두르면 <b>손에 든 병기에 겹쳐</b> 서린다 (지속). 호신강기는 고리가 그 자리다 */
+    public Sheath sheath(String grade) {
+        return grade == null || GUARD.equals(grade) ? null : sheathByGrade.get(grade);
+    }
+
+    /** 계열의 손 — 획의 굵기·길이·시간 (검은 눕혀 긋고 · 단검은 가늘고 · 부는 굵다) */
     public Swing swing(String weaponClass) {
         return weaponClass == null ? null : swings.get(weaponClass);
     }
 
-    /** 휘두름의 모션 — 수명·보간·밝기 (등록부에 kind: 휘두름 은 하나뿐이다) */
-    public DisplayMotion swingMotion() {
-        return swingMotion;
+    /** 몸의 자세 — <b>궤적이 계열을 이긴다</b> (돌진은 어떤 병기를 들었든 몸을 던지는 것이다) */
+    public Body body(String weaponClass, String hitType) {
+        Body byTrail = bodyByTrail.get(hitType);
+        return byTrail != null ? byTrail : bodyByClass.get(weaponClass);
+    }
+
+    public BodyLimits bodyLimits() {
+        return bodyLimits;
+    }
+
+    /** 던진 물건이 나는 모션 — 이 계열의 '시' 궤적만 (활은 바닐라 화살이 이미 3D 다) */
+    public DisplayMotion throwMotion(String weaponClass) {
+        return throwClasses.contains(weaponClass) ? displayMotion(throwMotion) : null;
+    }
+
+    /** 【무공 없는 손】 병기를 든 것만으로 성립하는 기본 초식 — 없으면 null (활·무관·짐승) */
+    public Basic basicStrike(String weaponClass) {
+        return weaponClass == null ? null : basicStrike.get(weaponClass);
+    }
+
+    public int basicCooldownTicks() {
+        return basicCooldownTicks;
+    }
+
+    /**
+     * 이 계열로 나가는 무공들 — <b>원장이 고른다</b> (하드코딩된 무공표를 지운 자리).
+     * {@code skills.yml martial_arts[].weapon_class} 정본. 액션 데이터가 없는 무공은 손에 실리지 않는다.
+     */
+    public List<String> artsFor(String weaponClass) {
+        return artsByClass.getOrDefault(weaponClass, List.of());
     }
 
     /** 형태의 3D 형체 — 쏨(투사) · 두름_몸(고리) · 부림(어검). 두름(손끝 잔광)은 형체가 없다 */
@@ -1681,8 +1825,42 @@ public final class SkillEngine {
     /** 3D 예산 — performance.yml vfx_entities 와 등록부 중 작은 쪽 */
     public record DisplayBudget(int globalCap, int maxLifetimeTicks, int degradeAt,
                                 int reserveForUltimate, int perCastMax, int perPlayerMax,
-                                float viewRange, int ringHeartbeatTicks,
-                                int swingMinTicks, int swingMaxTicks, int swingFadeTicks) {
+                                float viewRange, int heartbeatTicks,
+                                int slashMinTicks, int slashMaxTicks) {
+    }
+
+    /** 격이 획에 스며든다 — 굵기·밝기·머무는 틱. <b>외공기도 있다</b> (무공 없는 손도 획을 그린다) */
+    public record Ink(String grade, float thickness, int blockLight, int skyLight, int hold) {
+    }
+
+    /** 날의 기 — 손에 든 병기에 <b>겹쳐</b> 서리는 형체 (복제가 아니다) */
+    public record Sheath(String grade, String motion, float[] scale, int blockLight, int skyLight) {
+    }
+
+    /**
+     * 몸의 자세 — <b>되는 것만</b>.
+     *
+     * <p>바닐라 클라이언트에서 플레이어의 <b>팔다리 각도는 서버가 줄 수 없다</b> (애니메이션은 클라이언트가
+     * 돌리고, 팩으로 플레이어 지오메트리를 바꿀 수 없다). 남는 수단은 셋뿐이다:
+     * 전진({@code lunge}) · 자세({@code pose} — 바닐라가 가진 자세만) · 정지(프레임이 이미 발을 묶는다).
+     *
+     * @param pose SWIMMING(몸을 눕힌다 — 찌르기·돌진) · SNEAKING(웅크린다 — 들어올림) ·
+     *             SPIN_ATTACK(몸이 돈다 — 회전 베기) · 없음
+     */
+    public record Body(String key, double lunge, String pose, int poseTicks,
+                       float yawKick, float pitchKick) {
+        public boolean hasPose() {
+            return pose != null && !"없음".equals(pose) && poseTicks > 0;
+        }
+    }
+
+    /** 자세의 상한 — 등록부가 조작감을 해치지 못하게 하는 못 */
+    public record BodyLimits(double maxLunge, int maxPoseTicks, boolean requireGround,
+                             boolean yawKickEnabled) {
+    }
+
+    /** 【무공 없는 손】 병기를 든 것만으로 성립하는 한 타 — 히트박스·프레임 (지금은 연출 전용) */
+    public record Basic(String weaponClass, String trail, double range, double angle, Frames frames) {
     }
 
     /** 두 층의 조율 — 3D 획이 떴을 때 궤적 파티클을 깎는 비율 (타격 파티클은 건드리지 않는다) */
@@ -1708,22 +1886,29 @@ public final class SkillEngine {
     }
 
     /**
-     * 병기 휘두름 — 계열의 손짓.
+     * 계열의 손 — 획의 굵기·길이·시간.
      *
-     * @param spanRatio 자세가 돌아오는 시간(프레임·계열 공속 중 긴 쪽)에 곱해진다 — <b>공속이 곧 리듬이다</b>
-     * @param reach     히트박스 사거리 대비 병기가 나가는 비율. <b>1.0 을 넘지 못한다</b> —
-     *                  등록부는 판정이 준 사거리를 <b>줄일 수만</b> 있다 (거짓말을 구조로 막는다)
-     * @param roll      휘두르는 동안 병기가 도는 총 각(rad). 음수 = 거꾸로 (겸은 걸어 챈다)
-     * @param tilt      병기의 기울기(도). 음수 = 날이 아래를 본다 (부는 내려찍는다)
+     * @param spanRatio 자세가 돌아오는 시간(프레임·계열 공속 중 긴 쪽)에 곱해 <b>획을 그리는 틱</b>을 낸다
+     *                  — 공속이 곧 리듬이다 (단검 3틱 · 부 18틱)
+     * @param reach     히트박스 사거리 대비 획의 길이. <b>1.0 을 넘지 못한다</b> — 등록부는 판정이 준
+     *                  사거리를 <b>줄일 수만</b> 있다 (불변식 ㅂ · 거짓말을 구조로 막는다)
+     * @param thickness 속도가 곧 두께다 — 단검 0.55 · 부 1.70
+     * @param tilt      획이 누운 각(도). MC 규약: pitch 양수 = 아래 (내려베는 것일수록 크다)
      */
-    public record Swing(String weaponClass, double spanRatio, double reach, float roll, float tilt) {
+    public record Swing(String weaponClass, double spanRatio, double reach, float thickness,
+                        float tilt) {
     }
 
-    /** 모션 한 줄 — 궤(제자리) · 투사(날아간다) · 고리(궤도) · 개화(전개→폭발→수축) */
-    public record DisplayMotion(String id, String kind, String model, float[] scale,
-                                int lifetime, int birth, int fade, int interpolation,
+    /**
+     * 모션 한 줄 — 참격(그렸다 지워진다) · 서림(병기에 겹쳐 지속) · 투사(날아간다) · 고리 · 개화.
+     *
+     * @param spread     참격선이 지워질 때 살짝 <b>퍼지며</b> 사라지는 배율 (연기처럼)
+     * @param stickTicks 던진 물건이 땅에 <b>꽂혀</b> 남는 틱 (빗나간 비수는 그 자리에 있다)
+     */
+    public record DisplayMotion(String id, String kind, String model,
+                                int lifetime, int birth, int fade, int interpolation, float spread,
                                 float spin, double speed, float impactScale, int impactTicks,
-                                int count, double radius, double height, float orbit,
+                                int stickTicks, int count, double radius, double height, float orbit,
                                 float burstScale, String billboard, int blockLight, int skyLight) {
         public boolean isBolt() {
             return "투사".equals(kind);
@@ -1737,9 +1922,14 @@ public final class SkillEngine {
             return "개화".equals(kind);
         }
 
-        /** 병기 휘두름 — 실은 것이 사람의 병기 그 자체다 (팩 게이트가 저절로 충족되는 유일한 kind) */
-        public boolean isSwing() {
-            return "휘두름".equals(kind);
+        /** 참격선 — 검이 아니라 <b>지나간 자리</b>다 (만화의 검격) */
+        public boolean isSlash() {
+            return "참격".equals(kind);
+        }
+
+        /** 날의 기 — 손에 든 병기에 겹쳐 지속한다 */
+        public boolean isSheath() {
+            return "서림".equals(kind);
         }
     }
 }

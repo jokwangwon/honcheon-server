@@ -63,6 +63,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
                 case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
+                case "모션진단" -> motionDiag(sender, args);   // 3D 층이 실제로 떴는가 (팩 유무 포함)
                 case "문장" -> crests(sender);
                 default -> help(sender);
             };
@@ -1105,6 +1106,22 @@ public final class MvtCommand implements CommandExecutor {
         if (sender instanceof Player p) {
             int durability = args.length >= 2 ? Integer.parseInt(args[1]) : 20;
             plugin.dojang().dummy(p, durability);
+        }
+        return true;
+    }
+
+    /**
+     * /혼천 모션진단 [초] — <b>3D 층이 실제로 떴는가</b>.
+     *
+     * <p>"공격 모션이 안 바뀐 것 같다"는 보고를 받고서야 알았다 — 3D 획이 <b>무공 시전 경로에만</b> 살아 있어서,
+     * 무공을 안 배운 채 칼을 휘두르면 아무것도 안 떴다. <b>가장 흔한 손이 빈 경로였다.</b>
+     * 검수는 등록부만 봤고 빈 경로는 못 봤다. 이제 눈으로도 물을 수 있다:
+     * 안 뜬 것(등록부가 획을 안 준 계열)과 못 뜬 것(예산 강등)이 <b>다른 사건으로</b> 보인다.
+     */
+    private boolean motionDiag(CommandSender sender, String[] args) {
+        int seconds = args.length >= 2 ? Integer.parseInt(args[1]) : 30;
+        for (String line : plugin.skills().motionDiagnostics(seconds)) {
+            sender.sendMessage(line);
         }
         return true;
     }

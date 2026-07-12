@@ -54,13 +54,9 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public final class SkillListener implements Listener {
 
-    /** 손에 든 것 → 그 손에 실리는 무공. 액션 데이터(skill_mechanics.yml)가 없으면 바닐라로 흘려보낸다 */
-    private static final Map<String, String> SKILL_BY_WEAPON_CLASS = Map.of(
-            "검", "yukhap_geom",
-            "도", "yukhap_geom",
-            "맨손", "taejo_jangkwon");   // skill_mechanics.yml 에 combo 가 생기는 날 자동 점등
-
     private static final String CD_SHOT = "발출";
+    /** 기본 초식(무공 없는 손)의 연출 간격 — 바닐라 연타에 획이 겹쳐 쌓이지 않게 */
+    private static final String CD_BASIC = "기본초식";
     /** NPC 격 시전 간격 — 응집과 응집 사이 (라운드 = 두름 과금 주기와 같은 눈금) */
     private static final String CD_QI = "npc_격";
     /** NPC 근접 사거리 — 이 안에 들어와야 응집을 시작한다 (config 등록 대기: npc_combat.yml reach) */
@@ -110,6 +106,16 @@ public final class SkillListener implements Listener {
      */
     public void shutdown() {
         display.clearAll();
+    }
+
+    /**
+     * 모션 진단 — <b>인게임에 못 들어가는 눈</b>(RCON·콘솔)이 "3D 획이 정말 떴는가"를 확인하는 창구.
+     *
+     * <p><b>배선</b>: {@code MvtCommand} 에 {@code /혼천 모션진단 [초]} 를 붙이고 이 줄들을 그대로 뿌린다.
+     * 안 뜬 것(등록부가 획을 안 준 계열)과 못 뜬 것(예산 강등)이 <b>다른 사건</b>으로 보인다.
+     */
+    public List<String> motionDiagnostics(int seconds) {
+        return display.diagnostics(seconds);
     }
 
     /**
@@ -388,7 +394,9 @@ public final class SkillListener implements Listener {
         if (event.getDamager() instanceof Player player) {
             String skillId = skillInHand(player);
             if (skillId == null) {
-                return;   // 무공이 실리지 않는 손 — 바닐라 그대로
+                // 무공이 실리지 않는 손 — 판정은 바닐라 그대로. 그러나 **획은 뜬다** (기본 초식)
+                basicSwing(player);
+                return;
             }
             event.setCancelled(true);
             swing(player, skillId, target);
@@ -465,10 +473,151 @@ public final class SkillListener implements Listener {
         String skillId = skillInHand(player);
         if (skillId != null) {
             swing(player, skillId, null);
+            return;
         }
+        basicSwing(player);   // 무공이 없어도 병기는 궤적을 그린다 (허공을 갈라도 획은 남는다)
     }
 
     // ─── 콤보 ───
+
+    /**
+     * <b>【무공 없는 손】</b> 병기를 들고 좌클릭한다 — 그것만으로 궤적이 뜬다.
+     *
+     * <p>사용자 보고("공격 모션은 아직 안 바뀐 거 같고")의 원인이 여기 있었다: 3D 층이 <b>무공 시전 경로
+     * 안에만</b> 살아 있었고, 무공을 안 배운 손(= 가장 흔한 손)은 그 경로에 들어오지도 못했다.
+     *
+     * <p><b>무공은 궤적을 바꾸는 것이지, 무공이 없다고 궤적이 없는 것이 아니다.</b>
+     * 히트박스·프레임은 등록부({@code basic_strike})가 준다 — 코드가 지어내지 않는다.
+     * 판정은 건드리지 않는다 (바닐라 피해 그대로 = 외공기). 이것은 <b>연출 층</b>이다.
+     */
+    private void basicSwing(Player player) {
+        SkillEngine.State state = state(player);
+        if (state.onCooldown(CD_BASIC, tick)) {
+            return;   // 바닐라 연타에 획이 겹쳐 쌓이지 않게 (등록부 basic_strike.cooldown_ticks)
+        }
+        String weaponClass = engine.weaponClassOf(
+                player.getInventory().getItemInMainHand(), materialName(player));
+        SkillEngine.Basic basic = engine.basicStrike(weaponClass);
+        if (basic == null) {
+            return;   // 활·무관·짐승 — 우리가 얹을 것이 없다 (바닐라가 제 일을 한다)
+        }
+        state.cooldownUntil.put(CD_BASIC, tick + engine.basicCooldownTicks());
+
+        // 격은 두른 것을 그대로 쓴다 — 검기를 두르고 그냥 휘둘러도 **기의 획**이 나간다 (무공과 무관하게)
+        String grade = offense(state) == null ? SkillEngine.BARE : offense(state);
+        int swingTicks = (int) Math.max(basic.frames().total(), swingInterval(player));
+
+        strike(player, basic.trail(), grade, weaponClass, basic.range(), basic.angle(), swingTicks);
+    }
+
+    /**
+     * 한 번의 손 — <b>3D 층 + 몸의 자세</b>. 무공이 있든 없든 여기를 지난다 (경로가 하나여야 거짓말이 없다).
+     *
+     * @return 3D 형체가 실제로 떴는가 (떴으면 궤적 파티클은 물러선다)
+     */
+    private boolean strike(Player player, String hitType, String grade, String weaponClass,
+                           double range, double angle, int swingTicks) {
+        boolean solid = display.slash(player, hitType, grade, weaponClass, range, angle, swingTicks);
+        if ("시".equals(hitType)) {
+            // 던진 물건은 **실제로 날아간다** (암기) — 복제가 아니다. 손을 떠났으므로
+            solid |= display.thrown(player, weaponClass, range);
+        }
+        posture(player, weaponClass, hitType);
+        return solid;
+    }
+
+    /**
+     * 몸의 자세(體勢) — <b>되는 것만</b>.
+     *
+     * <p><b>못 하는 것</b>: 바닐라 클라이언트에서 플레이어의 <b>팔다리 각도는 서버가 줄 수 없다</b>
+     * (애니메이션은 클라이언트가 돌리고, 팩으로 플레이어 지오메트리를 바꿀 수 없다). "다리를 뒤로 보내고
+     * 허리를 쓰는" 골격 애니메이션은 바닐라 프로토콜에 자리가 없다. 억지로 흉내 내면 조작감만 죽는다.
+     *
+     * <p><b>하는 것</b>: 전진(lunge — <b>창의 5m 는 몸이 나가야 5m 다</b>) · 자세(pose — 바닐라가 가진
+     * 자세만: SWIMMING 은 몸을 눕히고 · SNEAKING 은 낮추고 · SPIN_ATTACK 은 돈다) · 정지(프레임이 이미
+     * 발을 묶는다). 자세는 <b>관중의 눈</b>에 보이는 것이고, 제 클라이언트는 제 자세를 스스로 그리므로
+     * 1인칭 조작감을 해치지 않는다 — 그것이 이 수단을 고른 이유다.
+     *
+     * <p>공중·물속·활강 중에는 손대지 않는다 (바닐라 자세와 싸우면 몸이 굳는다).
+     */
+    private void posture(Player player, String weaponClass, String hitType) {
+        SkillEngine.Body body = engine.body(weaponClass, hitType);
+        SkillEngine.BodyLimits limits = engine.bodyLimits();
+        if (body == null || player.isSwimming() || player.isGliding() || player.isInsideVehicle()) {
+            return;
+        }
+        if (limits.requireGround() && !player.isOnGround()) {
+            return;   // 공중에서 밀면 낙하와 싸운다 — 그것은 무공이 아니라 버그로 읽힌다
+        }
+        if (body.lunge() != 0.0) {
+            Vector push = player.getLocation().getDirection().setY(0);
+            if (push.lengthSquared() > 1.0e-6) {
+                // 체중이 실린다 — 창은 나가고(0.42), 겸은 당긴다(−0.10). 상한은 등록부가 이미 물렸다
+                player.setVelocity(player.getVelocity().add(
+                        push.normalize().multiply(body.lunge())));
+            }
+        }
+        if (!body.hasPose()) {
+            return;
+        }
+        try {
+            player.setPose(org.bukkit.entity.Pose.valueOf(body.pose()), true);
+        } catch (IllegalArgumentException e) {
+            return;   // 등록부가 모르는 자세를 적었다 — 조용히 지나간다 (연출이 판정을 멈추지 않는다)
+        }
+        pending.add(new Pending(tick + body.poseTicks(), () -> {
+            if (player.isOnline() && player.hasFixedPose()) {
+                player.setPose(org.bukkit.entity.Pose.STANDING, false);   // 몸을 돌려준다 (굳지 않게)
+            }
+        }));
+    }
+
+    /**
+     * 절기 한 타를 <b>정본 파이프라인</b>으로 흘려보낸다 (commit → resolve).
+     *
+     * <p>무공 카탈로그 담당의 청구서: 지금 절기는 출처 없는 {@code damage(double)} 로 근사되어
+     * <b>기 방어·무기 격돌·사냥 적립을 못 탄다</b>. 이 문을 통과하면 전부 탄다 (한 대는 한 대다).
+     *
+     * @param step    콤보 칸 (0-기반). 단발형은 0
+     * @param primary 주 대상 (없으면 히트박스가 찾는다)
+     * @return 시전됐는가 (자세가 안 돌아왔거나 쿨다운이면 false)
+     */
+    public boolean castArt(Player player, String skillId, int step, LivingEntity primary) {
+        if (skillId == null || !engine.hasActionData(skillId)) {
+            return false;
+        }
+        SkillEngine.State state = state(player);
+        if (tick < state.busyUntil || state.onCooldown(skillId, tick)
+                || tick - state.lastCastTick < engine.duplicateWindowTicks()) {
+            return false;
+        }
+        String weaponClass = engine.weaponClassOf(
+                player.getInventory().getItemInMainHand(), materialName(player));
+        SkillEngine.Cast cast = engine.planCombo(
+                skillId, step, state.realm, state.energy, offense(state), weaponClass);
+        state.busyUntil = tick + Math.max(cast.frames().total(), swingInterval(player));
+        state.lastCastTick = tick;
+        state.energy -= cast.paid();
+        applyCooldown(player, state, skillId, cast);
+        commit(player, state, cast, primary, engine.skillName(skillId), step);
+        return true;
+    }
+
+    /**
+     * 쿨다운 — <b>【고침】 한 번도 적용된 적이 없던 규칙</b>.
+     * {@code planCombo} 가 {@code cooldown_ticks} 를 읽지 않아 {@code Cast.cooldownTicks()} 가 늘 0 이었다.
+     * 태조장권 60 · 매화검법 90 · 흑살도법 180 이 등록부에만 있었다.
+     */
+    private void applyCooldown(Player player, SkillEngine.State state, String skillId,
+                               SkillEngine.Cast cast) {
+        int cd = cast.cooldownTicks();
+        if (cd <= 0) {
+            return;   // 콤보의 1·2타는 쿨다운이 없다 — 연타가 권법의 값이다 (마무리 타에만 붙는다)
+        }
+        state.cooldownUntil.put(skillId, tick + cd);
+        state.comboIndex = 0;             // 마무리를 냈다 — 콤보는 처음으로 돌아간다
+        itemCooldown(player, cd);         // 바닐라 스와이프 = 쿨다운 (mc_action_mapping 2장)
+    }
 
     private void swing(Player player, String skillId, LivingEntity primary) {
         SkillEngine.State state = state(player);
@@ -478,6 +627,11 @@ public final class SkillListener implements Listener {
         if (tick < state.busyUntil) {
             SkillHud.actionBar(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
             return;   // 경직·후딜 — 연타 방지
+        }
+        if (state.onCooldown(skillId, tick)) {
+            // 무공이 쉬는 동안에도 손은 움직인다 — 기본 초식으로 친다 (획은 뜬다. 무공만 안 나갈 뿐)
+            basicSwing(player);
+            return;
         }
         if (tick > state.comboDeadline) {
             state.comboIndex = 0;   // 입력 유예창을 놓쳤다 — 처음부터
@@ -491,6 +645,7 @@ public final class SkillListener implements Listener {
         int size = engine.comboSize(skillId);
         state.comboIndex = (state.comboIndex + 1) % size;
         state.comboDeadline = tick + cast.frames().total() + engine.comboWindow(skillId);
+        applyCooldown(player, state, skillId, cast);
         // 공속이 거짓말하지 않게 — 무공이 실리면 바닐라 피해가 취소되고 프레임이 스윙 간격을 정한다.
         // 계열 공속(부 0.9/s = 22틱)이 프레임(9틱)보다 느리면 "가장 느린 병기"가 연출로만 남는다.
         state.busyUntil = tick + Math.max(cast.frames().total(), swingInterval(player));
@@ -1262,13 +1417,21 @@ public final class SkillListener implements Listener {
         sfx(at, e.sounds());
     }
 
-    /** 두름의 잔광 — 켜져 있다는 사실 자체가 정보다 (상대가 보고 판단한다). 호신강기는 몸을 두르는 고리 */
+    /**
+     * 두름의 잔광 — 켜져 있다는 사실 자체가 정보다 (상대가 보고 판단한다).
+     *
+     * <p>두 층으로 알린다: <b>손끝 잔광 파티클</b>(언제나) 위에 <b>날의 기</b>(3D — 팩이 있으면).
+     * 후자가 사용자가 요구한 것이다: "검기 강기 등 <b>무기에</b> 효과가 발현되어야지, 눈 앞에 발현된다고
+     * 다가 아님." 격은 <b>날에 서리는 것</b>이고, 그래야 태세만 잡아도 남이 안다 (전의 규칙의 전제).
+     * 호신강기만은 몸에 두른 것이므로 고리다 (실루엣이 달라야 형태가 갈린다).
+     */
     private void aura(Location hand, LivingEntity body, String stance) {
         if (SkillEngine.GUARD.equals(stance)) {
             guardRing(body);
             return;
         }
         hud.emit(hand, engine.motionGrade(stance).aura(), false);
+        display.sheath(body, stance);   // 날에 기가 흐른다 (지속 — 심장박동으로 산다)
     }
 
     /**
@@ -1368,18 +1531,15 @@ public final class SkillListener implements Listener {
         SkillEngine.FormMotion shot = SkillEngine.SHOT.equals(cast.skillId()) ? engine.shotForm(cast.grade()) : null;
 
         // ─── 3D 층 (파티클 위에 얹는다) ───
-        // ① 병기 휘두름 — 손에 든 것 그 자체가 히트박스를 훑는다 (팩 게이트 자동 충족)
-        // ② 기의 획 — 격이 실렸을 때만 그 위에 겹친다 (검기 이상)
-        // ③ 발출 — 기가 날아간다 (한 자루의 빛나는 획)
-        // 셋 다 실패해도(예산·팩·미등록) 아래 파티클 층이 그대로 돈다 — 강등이지 실종이 아니다
+        //   참격선 — 지나간 자리가 남는다 (검을 복제하지 않는다) · 던진 암기는 정말로 날아간다 ·
+        //   발출은 기가 날아간다. 전부 실패해도(예산·팩·미등록) 아래 파티클 층이 그대로 돈다
         boolean solid;
         if (shot != null) {
             solid = display.bolt(player, shot.name(), cast.range());
         } else {
             int swingTicks = (int) Math.max(cast.frames().total(), swingInterval(player));
-            solid = display.sweep(player, cast.hitType(), weaponClass,
+            solid = strike(player, cast.hitType(), cast.grade(), weaponClass,
                     cast.range(), cast.angle(), swingTicks);
-            solid |= display.streak(player, cast.hitType(), cast.grade(), cast.range(), cast.angle());
         }
 
         // 점당 파티클: 초식이 정한 개수. 격이 실렸으면 격의 궤적 파티클이 무기의 것을 덮는다
@@ -1527,9 +1687,28 @@ public final class SkillListener implements Listener {
 
     // ══════════ 도우미 ══════════
 
+    /**
+     * 이 손에 실리는 무공 — <b>원장이 고른다</b> (하드코딩된 무공표를 지운 자리).
+     *
+     * <p>손에 든 병기의 계열로 나갈 수 있는 무공들({@code skills.yml weapon_class}) 중,
+     * <b>이 사람이 실제로 익힌</b>(원장에 일수가 쌓인) 것 하나를 고른다 — 가장 오래 판 것이 주무공이다.
+     * 아무것도 안 익혔으면 {@code null} → 그 손은 <b>기본 초식</b>(basic_strike)으로 친다.
+     * 예전엔 검을 들면 누구나 육합검이 나갔고(배우지 않아도), 매화검법·나한권은 <b>시전 경로가 아예 없었다</b>.
+     */
     private String skillInHand(Player player) {
-        String id = SKILL_BY_WEAPON_CLASS.get(engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player)));
-        return id != null && engine.hasActionData(id) ? id : null;
+        String weaponClass = engine.weaponClassOf(
+                player.getInventory().getItemInMainHand(), materialName(player));
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        String best = null;
+        double bestDays = 0.0;
+        for (String id : engine.artsFor(weaponClass)) {
+            double days = ledger.daysOf(engine.skillName(id));
+            if (days > bestDays) {
+                bestDays = days;
+                best = id;
+            }
+        }
+        return best;
     }
 
     /** 계열 공속 → 스윙 간격(틱). 혼천 병기가 아니면 0 (프레임이 전부다) */

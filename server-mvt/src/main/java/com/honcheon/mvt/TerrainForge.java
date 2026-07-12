@@ -297,16 +297,20 @@ final class TerrainForge {
         }
         tidyWater(world, cx, cy, cz, radius + FEATHER_WIDTH);
 
-        // 경계 전이대 — **산을 세웠으면 산의 발치를 편다**. 부지 경계를 펴 봐야 소용없다:
-        //   벼랑은 부지가 아니라 **봉우리의 발치**에 선다 (경계 급단차 32.3% · 최대 33칸).
+        // 경계 전이대 — **산을 세웠으면 산의 발치만 편다** (그 위는 벼랑이어야 산이다).
+        //   벼랑은 부지가 아니라 **봉우리의 발치**에 선다.
+        BlockFace trail = null;
         if (massifR > 0) {
-            feather(world, peak[0], peak[1], massifR - 12, massifR + 30, peak[2]);
+            feather(world, peak[0], peak[1], massifR - 4, massifR + 18, peak[2]);
+            // ★ 등반로 — **오르는 길은 하나면 된다** (사용자의 판정).
+            //   구판은 산 전체를 완만하게 만들어 사방에서 걷게 했다 → 흙무더기가 됐다.
+            //   이제 산은 깎아지르고, 길 하나가 그것을 감아 오른다.
+            trail = carveTrail(world, peak[0], peak[1], peak[2], massifR, cy, SUMMIT_R);
         } else {
             feather(world, cx, cz, radius, radius + FEATHER_WIDTH, cy);
+            // 진입로 보장 (계약 ②) — 산이 아닌 곳은 여전히 사방에서 걸어 들어온다
+            ensureApproach(world, place, cx, cy, cz, radius);
         }
-
-        // 진입로 보장 (계약 ②) — **걸어 들어올 수 없는 땅은 땅이 아니다**
-        ensureApproach(world, place, cx, cy, cz, radius);
 
         // 표층 (계약 ⑤) — **눈과 모래는 우리가 얹는다** (바이옴이 주던 것을 우리가 준다).
         //   맨 마지막에 돈다: 봉우리·사구·전이대·램프가 전부 놓인 뒤에 그 위를 덮어야
@@ -326,7 +330,13 @@ final class TerrainForge {
             carveOasis(world, cx, cy, cz, radius);
         }
 
-        return survey(world, place, cx, cy, cz, radius, peak[0], peak[1], peak[2]);
+        SiteSpec spec = survey(world, place, cx, cy, cz, radius, peak[0], peak[1], peak[2]);
+        // 등반로가 있으면 그것이 진입이다 — 직선 광선 검사(approaches)는 굽이치는 산길을 못 본다.
+        //   길은 나선이라 어느 직선도 그 길만 따라가지 않는다. **길이 있다는 사실은 우리가 안다.**
+        if (trail != null && !spec.approaches().contains(trail)) {
+            spec.approaches().add(trail);
+        }
+        return spec;
     }
 
     /**
@@ -727,20 +737,33 @@ final class TerrainForge {
         int natural = naturalTop(world, cx, cz, cy + 70, cy - 40);
         switch (p) {
             case 봉우리 -> {
-                // 봉우리의 중심은 부지 중심에서 **북으로 8칸** — 남쪽(산문·계단)으로 비탈이 흘러내려야
-                //   걸어 오를 수 있다. 산을 마당 한가운데 세웠더니 문전이 파묻혀 분화구가 됐다.
+                // 봉우리의 중심은 부지 중심에서 **북으로 8칸** — 남쪽(산문)으로 비탈이 흘러내린다
                 int px = cx;
                 int pz = cz - 8;
                 boolean plateau = "고원".equals(place.terrain());
-                int top = cy + (plateau ? LIFT_PLATEAU : LIFT_MOUNTAIN);
+                int top = cy + lift(place, plateau);
                 if (natural >= top - 2) {
                     return new int[]{px, pz, natural, 0};   // 자연이 이미 산을 줬다 — 손대지 않는다
                 }
-                // 발치를 **넓게** 편다. 좁은 산은 벼랑이 된다 (경계 급단차 32.3% 의 절반은 여기서 왔다):
-                //   높이 36 을 반경 60 에 세우면 평균 물매가 1:1.7 이고, 볼록 비탈이라 발치가 더 가파르다.
-                //   반경을 높이의 **2.4배 이상**으로 잡아 물매를 1:2.4 로 눕힌다.
-                int massifR = Math.max(radius + 24, (int) ((top - cy) * 2.4) + 20);
-                raiseMassif(world, px, top, pz, massifR, plateau ? 26 : 18);
+                // ★★ v3 — **완만함을 버렸다.** 사용자의 판정: "사람이 굳이 오를 정도로 완만하게 산을
+                //   안 만들어도 됨. 올라갈 수 있는 특정 길을 만들어서 그 길로 올라갈 수 있게."
+                //
+                //   구판은 발치 반경을 높이의 2.4배로 잡아 물매를 1:2.4 로 눕혔다 (사방에서 걸어 오르게
+                //   하려고). 그 결과가 **거대한 흙무더기**다 — 검수(경계 급단차 5.4%)는 통과하는데
+                //   조감에는 산이 아니었고, 산이 화면을 다 먹어 문파 건물이 보이지도 않았다.
+                //   **검수가 통과한다고 좋은 산이 아니다.**
+                //
+                //   이제 반경은 높이의 **0.9배**다 (물매 1:0.9 — 깎아지른다). 산은 좁고 높다.
+                //   사방은 벼랑이어도 좋다 — 오르는 길은 **하나면 된다** ({@link #carveTrail}).
+                int height = top - cy;
+                // ★★ 산의 크기는 **부지 반경과 무관하다**. 구판은 {@code max(radius + 24, ...)} 였다 —
+                //   부지를 키우면 산이 같이 뚱뚱해져 물매가 눕는다. 그것이 흙무더기의 또 다른 뿌리였다.
+                //   산은 **제 높이가 정한다**: 반경 = 높이×0.9 (깎아지른다).
+                //   부지가 산보다 넓으면 그 바깥은 그냥 들이다 — 산문과 문전이 거기 선다 (그게 옳다).
+                int massifR = plateau
+                        ? Math.max(SUMMIT_R + 40, (int) (height * 2.0))   // 대지는 넓고 낮다 (여전히)
+                        : Math.max(SUMMIT_R + 28, (int) (height * 0.9));  // 봉우리는 좁고 높다
+                raiseMassif(world, px, top, pz, massifR, plateau ? 30 : SUMMIT_R, cy);
                 return new int[]{px, pz, top, massifR};
             }
             case 중턱단 -> {
@@ -855,62 +878,258 @@ final class TerrainForge {
         }
     }
 
-    /** 산의 들이 — 문전에서 본전까지 서른여섯 켜 (오르는 길이 시험이다) */
-    private static final int LIFT_MOUNTAIN = 36;
+    /**
+     * 산의 들이 — <b>험산은 높다</b>.
+     *
+     * <p>사용자: "산의 높이는 더 높여도 될 거 같음". 구판은 36켜였다 — 그건 언덕이지 험산이 아니다.
+     * 이제 <b>72켜</b>다 (등록부가 장소마다 고친다: {@code terrain.yml lift:}).
+     */
+    private static final int LIFT_MOUNTAIN = 72;
+
+    /** 산(험산이 아닌) — 그 절반 */
+    private static final int LIFT_HILL = 44;
 
     /** 대지의 들이 — 고원은 오르는 산이 아니라 <b>올라선 들</b>이다 */
-    private static final int LIFT_PLATEAU = 22;
+    private static final int LIFT_PLATEAU = 24;
+
+    /** 정상 평탄지의 반경 — 본전(15×13)과 연무장이 앉을 만큼. <b>그 밖은 벼랑이다</b> */
+    private static final int SUMMIT_R = 22;
+
+    /** 이 산의 높이 — 등록부가 먼저({@code terrain.yml lift:}), 없으면 지형이 정한다 */
+    private static int lift(WorldMap.Place place, boolean plateau) {
+        Integer registered = liftRegistry.get(place.id());
+        if (registered != null) {
+            return registered;
+        }
+        if (plateau) {
+            return LIFT_PLATEAU;
+        }
+        String terrain = place.terrain() == null ? "" : place.terrain();
+        return "험산".equals(terrain) || "설산".equals(terrain) ? LIFT_MOUNTAIN : LIFT_HILL;
+    }
 
     /**
-     * 봉우리 — <b>땅이 요구를 못 맞추면 땅을 빚는다</b>.
+     * 봉우리 v3 — <b>산이 산으로 보이게</b>.
      *
-     * <p>모양의 규칙: 완만한 원뿔이 아니라 <b>층진 벼랑</b>이다 (험산은 깎아지른 것이 성격이다).
-     * 등고선이 나이테처럼 보이면 그것은 산이 아니라 지형도다 — 그래서
-     * ① 능선을 방위의 함수로 흔들고(골과 날), ② 단의 위상을 자리마다 어긋내고, ③ 발치를 자연에 스미게 한다.
+     * <p>사용자가 조감을 보고 말했다: "산을 이상하게 만듦 — <b>점이 찍힌 느낌</b>이고
+     * <b>제대로 채워지지 않음</b>. 사람이 굳이 오를 정도로 완만하게 산을 안 만들어도 됨.
+     * <b>올라갈 수 있는 특정 길</b>을 만들어서 그 길로 올라갈 수 있게 해도 됨.
+     * 산의 높이는 더 높여도 될 거 같음."
+     *
+     * <p><b>검수가 통과한다고 좋은 산이 아니다.</b> 경계 급단차 5.4% 를 통과한 그 산은
+     * 조감에서 <b>거대한 흙무더기</b>였다. 세 가지 병을 각각 고쳤다:
+     *
+     * <ol>
+     *   <li><b>점무늬</b> — 구판의 요철은 {@code floorMod(x*11+z*7,7)-3} 이었다. <b>파장이 한 칸</b>이라
+     *       이웃끼리 아무 상관이 없다 — 바위가 <b>낱알로 흩어졌다</b>. 그 위에 2칸 계단 양자화
+     *       ({@code y - floorMod(y+phase,2)})가 얼룩을 얹었다. <b>둘 다 버렸다.</b>
+     *       이제 요철은 파장 11~23칸의 저주파 결이다 —
+     *       <b>바위는 덩어리로 있지 낱알로 흩어지지 않는다.</b></li>
+     *   <li><b>구멍</b> ("제대로 채워지지 않음") — 구판의 채움 고리는 단단한 블록을 만나면 {@code break}
+     *       했다. 비탈 속에 공기 주머니가 있으면 그 위만 덮고 <b>아래를 비운 채</b> 지나갔다.
+     *       환경 검수 ⑤(부유 블록)는 그것을 못 본다 — <b>검수가 못 보는 결함</b>이었다.
+     *       이제 <b>자연 지면까지 전부 채운다. break 가 없다.</b></li>
+     *   <li><b>흙무더기</b> — 물매를 1:2.4 로 눕혔더니(사방에서 걷게 하려고) 산이 무더기가 됐다.
+     *       이제 <b>1:0.9</b> 다. 오목한 비탈({@code t^0.85})이라 <b>정상 부근이 깎아지른다</b>.
+     *       사방이 벼랑이어도 좋다 — <b>오르는 길은 하나면 된다</b> ({@link #carveTrail}).</li>
+     * </ol>
+     *
+     * @param baseY 산이 서는 들의 높이 — <b>여기까지 채운다</b>
      */
-    private static void raiseMassif(World world, int cx, int topY, int cz, int radius, int flatR) {
+    private static void raiseMassif(World world, int cx, int topY, int cz,
+                                    int radius, int flatR, int baseY) {
+        long seed = Math.floorMod(31L * cx + 17L * cz, 1_000_003L);
+        double phase = (seed % 628) / 100.0;
+        int height = topY - baseY;
+
         for (int x = cx - radius; x <= cx + radius; x++) {
             for (int z = cz - radius; z <= cz + radius; z++) {
                 double d = dist(x - cx, z - cz);
                 if (d > radius) {
                     continue;
                 }
-                double t = Math.max(0, (d - flatR) / (double) (radius - flatR));   // 0 = 정상, 1 = 발치
-                int crest = topY + 1;
-                double ang = Math.atan2(z - cz, x - cx);
-                double lobes = Math.sin(ang * 3 + 0.7) * 5 + Math.sin(ang * 5 - 1.3) * 3;   // 산줄기 셋·다섯
-                int ridge = Math.floorMod(x * 11 + z * 7, 7) - 3;           // 바위의 요철
-                double dEff = d - lobes * (1 - t) - lobes * 0.4;            // 골과 날 — 등고가 원이 아니다
-                double tEff = Math.max(0, Math.min(1, (dEff - flatR) / (double) (radius - flatR)));
-                int drop = (int) Math.round(Math.pow(tEff, 1.4) * 48);      // 볼록한 비탈
-                int y = crest - drop + (int) Math.round(ridge * (1 - tEff) * 0.8);
-                int stepPhase = Math.floorMod(x * 3 + z * 5, 3);            // 단의 위상을 어긋낸다
-                y = y - Math.floorMod(y + stepPhase, 2);
-                int ground = naturalTop(world, x, z, topY + 40, topY - 60);
+                double t = slopeT(x, z, cx, cz, d, radius, flatR);
+                int y = (int) Math.round(topY - Math.pow(t, 0.85) * height
+                        + crag(x, z, phase) * cragFactor(t));
+                int ground = naturalTop(world, x, z, topY + 40, baseY - 60);
                 if (y <= ground) {
                     continue;   // 발치가 자연 지면에 닿았다 — 그 아래는 산의 몫이다 (파내지 않는다)
                 }
-                for (int yy = y; yy >= y - 48; yy--) {
-                    Material here = world.getBlockAt(x, yy, z).getType();
-                    if (!here.isAir() && !here.isSolid()) {
-                        world.getBlockAt(x, yy, z).setType(Material.STONE);   // 물·용암을 만나면 막는다
-                        continue;
+                Material skin = rockSkin(x, z, t,
+                        slopeAt(x, z, cx, cz, radius, flatR, height, phase));
+                // ── 채운다 — **자연 지면까지 전부**. break 하지 않는다 (그것이 구멍의 원인이었다) ──
+                for (int yy = y; yy > ground; yy--) {
+                    Block b = world.getBlockAt(x, yy, z);
+                    Material here = b.getType();
+                    if (here.isSolid() && !NATURAL.contains(here)) {
+                        continue;   // 사람이 지은 것 — 지나친다 (그건 건축 계층의 것이다)
                     }
-                    if (here.isAir()) {
-                        world.getBlockAt(x, yy, z).setType(
-                                Math.floorMod(x * 3 + yy * 5 + z, 9) == 0 ? Material.ANDESITE
-                                        : yy > y - 3 ? Material.STONE : Material.DEEPSLATE);
-                    } else {
-                        break;   // 자연 지면에 닿았다
-                    }
+                    b.setType(yy == y ? skin
+                            : yy > y - 4 ? Material.STONE
+                            : Material.DEEPSLATE, false);
                 }
-                for (int yy = y + 1; yy <= topY + 16; yy++) {   // 봉우리 위 허공을 비운다
-                    if (!world.getBlockAt(x, yy, z).getType().isAir()) {
-                        world.getBlockAt(x, yy, z).setType(Material.AIR);
+                for (int yy = y + 1; yy <= topY + 20; yy++) {   // 봉우리 위 허공을 비운다
+                    Block b = world.getBlockAt(x, yy, z);
+                    if (!b.getType().isAir()) {
+                        b.setType(Material.AIR, false);
                     }
                 }
             }
         }
+    }
+
+    /**
+     * 정상(0) ~ 발치(1) — <b>능선 왜곡을 먹인</b> 유효 거리.
+     * 등고가 완전한 원이면 그것은 산이 아니라 <b>기단</b>이다. 방위마다 반경이 다르다 (산줄기 3·5·7).
+     */
+    private static double slopeT(int x, int z, int cx, int cz, double d, int radius, int flatR) {
+        double ang = Math.atan2(z - cz, x - cx);
+        double ridge = Math.sin(ang * 3 + 0.7) * 0.10 + Math.sin(ang * 5 - 1.3) * 0.06
+                + Math.sin(ang * 7 + 2.1) * 0.035;
+        double rEff = radius * (1 + ridge);
+        double fEff = flatR * (1 + ridge * 0.5);
+        if (d <= fEff) {
+            return 0;
+        }
+        return Math.max(0, Math.min(1, (d - fEff) / Math.max(1, rEff - fEff)));
+    }
+
+    /**
+     * 바위의 결 — <b>파장 11~23칸</b>. 구판은 파장이 <b>한 칸</b>이라 점무늬가 됐다.
+     * 진폭 ~7에 파장이 그 두세 배이므로 <b>바위 하나가 3~6칸 덩어리</b>로 읽힌다.
+     */
+    private static double crag(int x, int z, double phase) {
+        return Math.sin(x / 13.0 + phase) * Math.cos(z / 11.0 - phase) * 3.5
+                + Math.sin((x + z) / 23.0 + phase) * 2.5
+                + Math.sin((x - z) / 17.0) * 1.5;
+    }
+
+    /**
+     * 바위 결의 세기 — <b>정상은 매끈하고 중턱이 가장 험하다</b>.
+     *
+     * <p>구판(v3 초안)은 계수가 정상에서 1.0 이었다 — 그래서 <b>봉우리 꼭대기가 ±7칸으로 울퉁불퉁했고</b>,
+     * 본전이 앉을 자리가 없었다({@code peakY} 가 거짓말을 했다). 정상은 <b>단(壇)</b>이어야 한다.
+     * 발치도 눅여야 전이대가 자연으로 스민다.
+     */
+    private static double cragFactor(double t) {
+        double ramp = Math.max(0, Math.min(1, (t - 0.05) / 0.25));   // 정상 부근은 0 (매끈한 단)
+        return ramp * (0.5 + 0.5 * (1 - t));                          // 중턱이 가장 험하다
+    }
+
+    /** 그 자리의 물매(칸/칸) — 자재를 고르는 데 쓴다 (절벽은 암반, 발치는 너덜) */
+    private static double slopeAt(int x, int z, int cx, int cz,
+                                  int radius, int flatR, int height, double phase) {
+        double a = surfH(x + 2, z, cx, cz, radius, flatR, height, phase);
+        double b = surfH(x - 2, z, cx, cz, radius, flatR, height, phase);
+        double c = surfH(x, z + 2, cx, cz, radius, flatR, height, phase);
+        double e = surfH(x, z - 2, cx, cz, radius, flatR, height, phase);
+        return Math.max(Math.abs(a - b), Math.abs(c - e)) / 4.0;
+    }
+
+    private static double surfH(int x, int z, int cx, int cz,
+                                int radius, int flatR, int height, double phase) {
+        double d = dist(x - cx, z - cz);
+        double t = slopeT(x, z, cx, cz, d, radius, flatR);
+        return -Math.pow(t, 0.85) * height + crag(x, z, phase) * cragFactor(t);
+    }
+
+    /**
+     * 바위의 결(자재) — <b>능선·절벽·너덜·암반을 가른다</b>.
+     *
+     * <p>구판은 STONE/ANDESITE 를 좌표 해시로 점점이 섞었다 — 그것은 결이 아니라 <b>노이즈</b>다.
+     * 자재는 <b>지형이 정해야</b> 한다: 깎아지른 데는 암반이 드러나고, 발치에는 너덜(스크리)이 쌓이고,
+     * 능선에는 굳은 바위가 솟는다. 그리고 <b>덩어리로</b> 나온다 (파장 9~19칸의 패치).
+     */
+    private static Material rockSkin(int x, int z, double t, double slope) {
+        double patch = Math.sin(x / 9.0) * Math.sin(z / 7.0) + Math.sin((x + z) / 19.0) * 0.7;
+        if (slope > 1.5) {
+            return patch > 0.2 ? Material.STONE : Material.DEEPSLATE;   // 절벽 — 암반이 드러난다
+        }
+        if (t > 0.82 && patch > 0.1) {
+            return Material.GRAVEL;      // 너덜(스크리) — 발치에 부스러기가 쌓인다
+        }
+        if (patch > 0.85) {
+            return Material.ANDESITE;    // 암반 노출 — 덩어리로
+        }
+        if (patch < -0.9) {
+            return Material.TUFF;        // 응회암 — 결의 변주
+        }
+        return Material.STONE;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 등반로 — **오르는 길은 하나면 된다**
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 등반로의 반폭 — 3칸 폭의 좁은 산길 (램프의 5칸과 다르다. 이건 길이지 도로가 아니다) */
+    private static final int TRAIL_HALF = 1;
+
+    /**
+     * 등반로 — <b>사용자의 판정 그대로</b>.
+     *
+     * <blockquote>"사람이 굳이 오를 정도로 완만하게 산을 안 만들어도 됨 —
+     * <b>올라갈 수 있는 특정 길을 만들어서 그 길로 올라갈 수 있게</b> 해도 됨"</blockquote>
+     *
+     * <p>구판은 <b>산 전체</b>를 완만하게 만들어 사방에서 걷게 했다. 그래서 흙무더기가 됐다.
+     * 이제 산은 깎아지르고, <b>길 하나</b>가 그것을 감아 오른다.
+     *
+     * <p>모양: 발치에서 정상까지 <b>굽이치며 감아 오르는 나선</b>(switchback). 한 칸에 한 칸 넘게
+     * 오르지 않는다(걸어 오른다). 길이는 높이에 맞춰 늘어난다 — 72켜를 오르려면 그만큼 감는다.
+     * 자재는 놓지 않는다: 바위를 깎아 낸 <b>턱</b>일 뿐이다 (계단·석등·포석은 건축 계층의 것이다).
+     *
+     * @return 길이 시작되는 방위 — 부지 사양의 진입 방향이 된다
+     */
+    private static BlockFace carveTrail(World world, int px, int pz, int peakY,
+                                        int massifR, int baseY, int flatR) {
+        long seed = Math.floorMod(31L * px + 17L * pz, 1_000_003L);
+        // 길머리는 **남쪽**에서 든다 (등록부: 산문은 남쪽에 선다). 좌표 해시로 조금 흔든다
+        double a0 = Math.PI / 2 + (Math.floorMod(seed, 40) - 20) / 100.0;
+        int rise = peakY - baseY;
+        double turns = 1.15;                                  // 한 바퀴 조금 더 — 굽이가 보인다
+        int steps = Math.max(rise * 2, 180);                  // 물매 ≤ 0.5/칸 — 넉넉히 걷는다
+
+        int footX = px + (int) Math.round(Math.cos(a0) * (massifR - 2));
+        int footZ = pz + (int) Math.round(Math.sin(a0) * (massifR - 2));
+        int footY = naturalTop(world, footX, footZ, peakY + 20, baseY - 40);
+
+        int prevY = footY;
+        for (int i = 0; i <= steps; i++) {
+            double s = i / (double) steps;                    // 0 = 발치, 1 = 정상
+            double r = (massifR - 2) * (1 - s) + (flatR - 4) * s;
+            double ang = a0 + s * turns * 2 * Math.PI;
+            int x = px + (int) Math.round(Math.cos(ang) * r);
+            int z = pz + (int) Math.round(Math.sin(ang) * r);
+            int y = (int) Math.round(footY + (peakY - footY) * s);
+            if (y - prevY > 1) {
+                y = prevY + 1;      // **한 칸에 한 칸** — 걸어 오른다 (도달성 검사가 이것을 잰다)
+            }
+            prevY = y;
+
+            for (int dx = -TRAIL_HALF - 1; dx <= TRAIL_HALF + 1; dx++) {
+                for (int dz = -TRAIL_HALF - 1; dz <= TRAIL_HALF + 1; dz++) {
+                    if (dist(dx, dz) > TRAIL_HALF + 0.6) {
+                        continue;
+                    }
+                    for (int yy = y + 1; yy <= y + 5; yy++) {   // 머리 위를 깎는다 (바위를 판다)
+                        Block b = world.getBlockAt(x + dx, yy, z + dz);
+                        Material m = b.getType();
+                        if (!m.isAir() && (NATURAL.contains(m) || foliage(m))) {
+                            b.setType(Material.AIR, false);
+                        }
+                    }
+                    Block floor = world.getBlockAt(x + dx, y, z + dz);   // 딛는 턱
+                    if (floor.getType().isAir() || floor.isLiquid()) {
+                        floor.setType(Material.STONE, false);
+                    }
+                    sealBelow(world, x + dx, y, z + dz);                 // 계약 ① — 길 밑도 단단하다
+                }
+            }
+        }
+        // 길머리를 자연 지면으로 잇는다 — 산 밖에서 길머리까지 걸어올 수 있어야 한다
+        BlockFace face = Math.abs(Math.cos(a0)) > Math.abs(Math.sin(a0))
+                ? (Math.cos(a0) > 0 ? BlockFace.EAST : BlockFace.WEST)
+                : (Math.sin(a0) > 0 ? BlockFace.SOUTH : BlockFace.NORTH);
+        return face;
     }
 
     /**
@@ -1750,6 +1969,9 @@ final class TerrainForge {
     /** 오아시스 등록부 — 모래 한가운데 물을 파는 자리 */
     private static Set<String> oasisRegistry = new java.util.LinkedHashSet<>();
 
+    /** 산 높이 등록부 — 장소마다 다르다 (험산 72 · 산 44 · 고원 24 가 기본) */
+    private static Map<String, Integer> liftRegistry = new LinkedHashMap<>();
+
     /** {@code config/terrain.yml} 판독 — 없어도 돈다 (그때는 등록부에서 <b>읽어 낸다</b>) */
     @SuppressWarnings("unchecked")
     static void load(Path configDir) {
@@ -1793,6 +2015,14 @@ final class TerrainForge {
         if (root.get("oasis") instanceof List<?> list) {
             for (Object o : list) {
                 oasisRegistry.add(String.valueOf(o));
+            }
+        }
+        // 산 높이 — lift: { <id>: 72 }  (★ 조감을 보고 장소마다 조절한다. 코드를 안 고쳐도 된다)
+        if (root.get("lift") instanceof Map<?, ?> lifts) {
+            for (Map.Entry<?, ?> e : lifts.entrySet()) {
+                if (e.getValue() instanceof Number n) {
+                    liftRegistry.put(String.valueOf(e.getKey()), n.intValue());
+                }
             }
         }
 
