@@ -14,13 +14,13 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
     implementation project(':core')          // 룰 엔진 — 단일 진실 원천 config/*.yml 을 읽는다
     implementation 'org.yaml:snakeyaml:2.2'
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21   // Paper 1.21.4 = Java 21
+    sourceCompatibility = JavaVersion.VERSION_21   // Paper 1.21.11 = Java 21 (마지막 Java 21 버전 — 26.x 부터 Java 25)
     targetCompatibility = JavaVersion.VERSION_21
 }
 

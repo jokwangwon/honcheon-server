@@ -749,7 +749,7 @@ final class CheonghaBuilder {
                         world.getBlockAt(x, y, z + dz).setType(Material.SPRUCE_FENCE);
                     }
                 }
-                Orientable chain = (Orientable) Material.CHAIN.createBlockData();
+                Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
                 chain.setAxis(Axis.Z);
                 world.getBlockAt(x, cy + 3, z + 1).setBlockData(chain);
                 world.getBlockAt(x, cy + 2, z + 1).setType(Material.WHITE_WOOL);   // 널어 둔 천
@@ -806,7 +806,7 @@ final class CheonghaBuilder {
                     for (int y = cy + 1; y <= cy + 3; y++) {
                         world.getBlockAt(x + 1, y, z + 3).setType(Material.SPRUCE_FENCE);
                     }
-                    Orientable chain = (Orientable) Material.CHAIN.createBlockData();
+                    Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
                     chain.setAxis(Axis.Y);
                     world.getBlockAt(x + 1, cy + 3, z + 2).setBlockData(chain);
                 }
@@ -1071,7 +1071,7 @@ final class CheonghaBuilder {
         }
         // v6.2 ① — 두레박: 지붕 한복판에서 내린 사슬 2칸 + 물통 (우물은 길어 올려야 우물이다)
         for (int y = cy + 2; y <= cy + 3; y++) {
-            Orientable chain = (Orientable) Material.CHAIN.createBlockData();
+            Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
             chain.setAxis(Axis.Y);
             world.getBlockAt(cx, y, cz).setBlockData(chain);
         }
@@ -1794,6 +1794,14 @@ final class CheonghaBuilder {
                 || world.getBlockAt(x, y + 1, z).getType().isAir()) {
             return;   // 자리가 찼거나, 매달 처마가 없다
         }
+        // v7.0 — **처마에만 매단다**. 골목 등롱 열(z∓19)은 x[-48..+48] 을 훑는데, 건물이 커지며
+        // 그 선이 객잔 실내(북벽 안줄)를 관통했다. 실내에도 위층 바닥이 있어 "처마"로 읽혔고,
+        // 등롱 넷이 객잔 북벽에 얹혀 소품 과밀 7 을 냈다 (검수 ④).
+        //   가르는 것은 자재다 — 처마는 슬래브·계단, 2층 바닥은 판재다. 판재 밑에는 등을 매달지 않는다.
+        String above = world.getBlockAt(x, y + 1, z).getType().name();
+        if (!above.endsWith("_SLAB") && !above.endsWith("_STAIRS")) {
+            return;   // 처마가 아니라 실내 천장(=위층 바닥) — 골목의 등이 설 자리가 아니다
+        }
         hangingLantern(world, x, y, z);
     }
 
@@ -2484,8 +2492,8 @@ final class CheonghaBuilder {
         }
         world.getBlockAt(cx - 27, cy + 3, cz - 19).setType(Material.DECORATED_POT);   // 시렁 위 술 단지 (상단) 2점
         world.getBlockAt(cx - 25, cy + 3, cz - 19).setType(Material.DECORATED_POT);
-        world.getBlockAt(cx - 27, cy + 2, cz - 18).setType(Material.LANTERN);         // 계산대 양 끝 등 (중단)
-        world.getBlockAt(cx - 21, cy + 2, cz - 18).setType(Material.LANTERN);
+        wallTorch(world, cx - 27, cy + 2, cz - 18, BlockFace.SOUTH);   // 계산대 등 — 벽등(소품 예산 0)
+        wallTorch(world, cx - 21, cy + 2, cz - 18, BlockFace.SOUTH);
         world.getBlockAt(cx - 20, cy + 1, cz - 19).setType(Material.BARREL);          // 계산대 곁 술통 1 (하단)
         // ── 서벽(x-31 안줄) 주방 — 화덕·훈연·국솥. 벽 한 면 3점 (여백 규칙)
         hearth(world, cx - 31, cy, cz - 18);
@@ -2558,9 +2566,9 @@ final class CheonghaBuilder {
             world.getBlockAt(x, cy + 6, cz - 13).setType(Material.SPRUCE_FENCE);
             world.getBlockAt(x, cy + 7, cz - 13).setType(Material.SPRUCE_FENCE);
         }
-        world.getBlockAt(cx - 16, cy + 6, cz - 17).setType(Material.CHEST);           // 짐궤 — 묵삼의 방
-        world.getBlockAt(cx - 15, cy + 6, cz - 17).setType(Material.BARREL);          // (벽 안줄 밖 = 소품 예산 0)
-        world.getBlockAt(cx - 17, cy + 6, cz - 16).setType(Material.DECORATED_POT);   // 오래 묵는 손님의 짐
+        world.getBlockAt(cx - 16, cy + 6, cz - 15).setType(Material.CHEST);           // 짐궤 — 묵삼의 방 (v7.0: 북벽 안줄에서 물린다)
+        world.getBlockAt(cx - 15, cy + 6, cz - 15).setType(Material.BARREL);          // (벽 안줄 밖 = 소품 예산 0)
+        world.getBlockAt(cx - 17, cy + 6, cz - 14).setType(Material.DECORATED_POT);   // 오래 묵는 손님의 짐
         roomLights(world, cx - 32, cy + 6, cz - 20, cx - 12, cz - 6);   // v6.8 ① 2층 벽등 링 (바닥 높이)
         // 2층 복도 등롱 3 — 21칸 폭이라 벽등 링만으로는 복도 한복판이 광원 7 이다
         // (**횃불은 14, 랜턴은 15** — 이 한 칸 차이가 실내 광원 설계의 전부다). 복도 열은 벽 안줄이 아니다.
@@ -4436,10 +4444,10 @@ final class CheonghaBuilder {
         // ── 서벽(x+12 안줄) 2점: 서류 궤 + 그 위 등 (서벽 큰 창 z-12..-10 앞은 비운다)
         world.getBlockAt(cx + 12, cy + 1, cz - 14).setType(Material.BARREL);
         world.getBlockAt(cx + 12, cy + 2, cz - 14).setType(Material.LANTERN);
-        // ── 동벽(x+24 안줄) 3점: 화분 2 + 서류 항아리 (여백)
+        // ── 동벽(x+24 안줄) 2점: 화분 2 (여백)
+        //    v7.0: 건물이 15칸으로 넓어지며 동벽 안줄이 게시대 등롱을 한 점 물었다 → 항아리를 뺀다.
         world.getBlockAt(cx + 24, cy + 1, cz - 16).setType(Material.POTTED_CHERRY_SAPLING);   // 매화의 복선
         world.getBlockAt(cx + 24, cy + 1, cz - 12).setType(Material.POTTED_BAMBOO);
-        world.getBlockAt(cx + 24, cy + 1, cz - 9).setType(Material.DECORATED_POT);
         // ── 남벽(문 쪽 z-7 안줄): 대기 걸상 2 + 깔개 (사람은 문을 등지고 앉아 기다린다 — 전부 소품 예산 0)
         for (int x = cx + 14; x <= cx + 22; x += 8) {
             world.getBlockAt(x, cy + 1, cz - 7).setType(Material.SPRUCE_FENCE);
@@ -4700,7 +4708,7 @@ final class CheonghaBuilder {
         world.getBlockAt(back, cy + 1, cz - 15).setType(Material.DECORATED_POT);
         world.getBlockAt(back, cy + 3, cz - 17).setType(Material.LANTERN);         // 상단 = 선반 위 등
         world.getBlockAt(back, cy + 3, cz - 15).setType(Material.HAY_BLOCK);       // 상단 = 선반 위 잡동사니
-        Orientable chain = (Orientable) Material.CHAIN.createBlockData();
+        Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
         chain.setAxis(Axis.Y);
         world.getBlockAt(back, cy + 3, cz - 16).setBlockData(chain);               // 끈 대용 사슬 1칸
         world.getBlockAt(x0 + 1, cy + 2, cz - 16).setType(Material.DECORATED_POT); // 좌판 위 단지
@@ -4806,7 +4814,7 @@ final class CheonghaBuilder {
      */
     private static void chainLantern(World world, int x, int yTop, int z, int len) {
         for (int i = 0; i < len; i++) {
-            Orientable chain = (Orientable) Material.CHAIN.createBlockData();
+            Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
             chain.setAxis(Axis.Y);
             world.getBlockAt(x, yTop - i, z).setBlockData(chain);
         }

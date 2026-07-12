@@ -177,7 +177,7 @@ public final class TownRender {
         p(Material.CAMPFIRE, 0xE07B3A);
         p(Material.SOUL_CAMPFIRE, 0x2E9EA6);
         p(Material.CANDLE, 0xE8DFC8);
-        p(Material.CHAIN, 0x6A6A72);
+        p(Material.IRON_CHAIN, 0x6A6A72);
         p(Material.TORCH, 0xF0B45A);
         p(Material.WALL_TORCH, 0xF0B45A);
 

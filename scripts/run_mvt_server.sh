@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
 mkdir -p "$RUN/plugins"
 
-# Java 21+ 탐지 — Paper 1.21.4 와 :server-mvt 빌드 모두 21이 필요하다.
+# Java 21+ 탐지 — Paper 1.21.11 과 :server-mvt 빌드 모두 21이 필요하다 (1.21.11 = 마지막 Java 21 버전).
 # 시스템 java 가 21 미만이면 run/jdk-21 (수동 설치본)을 찾는다.
 find_java21() {
   local cand ver
@@ -41,10 +41,10 @@ python3 "$ROOT/tools/build_resourcepack.py"
 echo "      → 클라이언트 resourcepacks 폴더에 $RUN/honcheon_pack.zip 를 넣고 활성화하세요"
 echo "      (미설치 시 기세·게이지 글리프가 □ 로 보임 — 기능은 동일)"
 
-echo "[3/4] Paper 1.21.4 다운로드 (최초 1회)"
+echo "[3/4] Paper 1.21.11 다운로드 (최초 1회)"
 # 구 api.papermc.io v2 는 410 Gone — 후속 Fill API(v3)를 쓴다.
 if [ ! -f "$RUN/paper.jar" ]; then
-  URL=$(curl -fsS "https://fill.papermc.io/v3/projects/paper/versions/1.21.4/builds/latest" \
+  URL=$(curl -fsS "https://fill.papermc.io/v3/projects/paper/versions/1.21.11/builds/latest" \
     | python3 -c "import sys,json;print(json.load(sys.stdin)['downloads']['server:default']['url'])")
   curl -fSo "$RUN/paper.jar" "$URL"
 fi

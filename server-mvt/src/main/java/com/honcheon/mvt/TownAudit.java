@@ -137,6 +137,10 @@ public final class TownAudit {
         int[] eave = new int[4];     // 서·동·북·남 처마 내밀기
         double slope = -1;           // 물매 (rise/run)
         int[] wallProps = new int[4];
+        /** 과밀 진단 — 벽면별 소품의 자재·좌표 (루프의 눈: 어느 블록이 넘쳤는지 말한다) */
+        final java.util.List<String>[] wallDetail = new java.util.List[]{
+                new java.util.ArrayList<String>(), new java.util.ArrayList<String>(),
+                new java.util.ArrayList<String>(), new java.util.ArrayList<String>()};
         double floorFree = -1;
         int propTotal;
 
@@ -618,6 +622,13 @@ public final class TownAudit {
             if (max > PROP_MAX_PER_WALL) {
                 out.add(WARN + line + " · 벽면 최대 " + max + " > " + PROP_MAX_PER_WALL + " (과밀)");
                 violations.add(b.name + " 소품과밀" + max);
+                String[] faceName = {"서", "동", "북", "남"};
+                for (int f = 0; f < 4; f++) {
+                    if (b.wallProps[f] > PROP_MAX_PER_WALL) {
+                        out.add(INFO + "    " + faceName[f] + "벽 내역 — "
+                                + String.join(" ", b.wallDetail[f]));
+                    }
+                }
             } else if (b.propTotal == 0) {
                 out.add(BAD + line + " · 소품 0 (빈 집)");
                 violations.add(b.name + " 소품0");
@@ -649,17 +660,22 @@ public final class TownAudit {
                         continue;
                     }
                     b.propTotal++;
+                    String at = m.name() + "(" + x + "," + y + "," + z + ")";
                     if (x == b.wx0 + 1) {
                         b.wallProps[0]++;
+                        b.wallDetail[0].add(at);
                     }
                     if (x == b.wx1 - 1) {
                         b.wallProps[1]++;
+                        b.wallDetail[1].add(at);
                     }
                     if (z == b.wz0 + 1) {
                         b.wallProps[2]++;
+                        b.wallDetail[2].add(at);
                     }
                     if (z == b.wz1 - 1) {
                         b.wallProps[3]++;
+                        b.wallDetail[3].add(at);
                     }
                 }
             }
