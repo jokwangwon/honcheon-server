@@ -36,6 +36,8 @@ public final class HoncheonBot {
         Db db = new Db(dbPath, schemaPath);
         LlmRenderer renderer = new LlmRenderer(rules.turnRendererModel());
         GameListener listener = new GameListener(rules, db, renderer);
+        // 세계 개막 소문 — 등록 사건 3건은 첫날부터 이미 돌고 있다 (1회성, 멱등)
+        listener.seedWorldRumors();
 
         JDA jda = JDABuilder.createLight(token)
                 .addEventListeners(listener)
@@ -70,8 +72,33 @@ public final class HoncheonBot {
                                 .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                         OptionType.STRING, "목적지", "어디로 가는가", true)
                                         .addChoice("화산 (화산파 산문)", "화산")),
+                        new SubcommandData("소문", "저잣거리에 도는 말 — 퍼질수록 이야기가 달라진다"),
+                        new SubcommandData("의방", "부상을 다스리고 외상을 갚는다 (유문의 의방)"),
+                        new SubcommandData("구조", "빈사의 동행을 지혈한다 — 의술 판정 (사람을 살리는 손)")
+                                .addOption(OptionType.USER, "상대", "쓰러진 사람", true),
+                        new SubcommandData("전장", "금서방의 전장 — 예치·인출·상속인 지정")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.INTEGER, "예치", "맡길 금액 (문)", false),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.INTEGER, "인출", "찾을 금액 (문 — 수수료 별도)", false),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.USER, "상속인", "내가 죽으면 예치금을 받을 사람", false)),
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
+                        new SubcommandData("사선", "플레이어에게 사선을 긋는다 — 죽음 검증용 (서버 관리자)")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.USER, "상대", "사선에 세울 플레이어", true),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "단계", "어디까지 (기본: 빈사)", false)
+                                                .addChoice("부상 — 한 칸 (살의 없음, 중상까지)", "부상")
+                                                .addChoice("빈사 — 사선 (사망 위기 파이프)", "빈사")
+                                                .addChoice("즉사 — 개입 없이 확정 (유산·소문 검증)", "즉사"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "장소", "어디서 쓰러졌나 (기본: 마을)", false)
+                                                .addChoice("마을 안 — 누군가 의방으로 업고 뛴다", "마을")
+                                                .addChoice("야외 — 아무도 옮겨 주지 않는다", "야외"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "살해자", "피의 장부에 적힐 이름", false)),
                         new SubcommandData("사망", "NPC를 죽인다 — 사망 연쇄 검증용 (서버 관리자)")
                                 .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.STRING, "상대", "죽일 등록 NPC", true)
@@ -114,13 +141,16 @@ public final class HoncheonBot {
                             : " (경고: HONCHEON_GUILD_ID=" + guildId + " 길드를 찾지 못함)"));
         }
 
-        scheduleMidnight(jda, db);
+        scheduleMidnight(jda, db, listener);
         System.out.println("혼천 봇 기동 — 룰 로드: " + configDir + " / DB: " + dbPath
                 + " / LLM 렌더러: " + renderer.providerLabel());
     }
 
-    /** 자정(Asia/Seoul)마다 세계일 +1 — 실제 하루 = 세계 1일. 청하현 채널이 있으면 아침을 알린다 */
-    private static void scheduleMidnight(JDA jda, Db db) {
+    /**
+     * 자정(Asia/Seoul)마다 세계일 +1 — 실제 하루 = 세계 1일.
+     * 세계일이 넘어가면 세계가 산다: 소문이 새 망에 닿고, 세력이 인지하고, 빈사의 창구가 닫힌다.
+     */
+    private static void scheduleMidnight(JDA jda, Db db, GameListener listener) {
         ScheduledExecutorService sched = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "honcheon-day");
             t.setDaemon(true);
@@ -130,12 +160,12 @@ public final class HoncheonBot {
         Runnable[] tick = new Runnable[1];
         tick[0] = () -> {
             try {
-                int day = db.advanceDay();
+                GameListener.Dawn dawn = listener.advanceWorld();
                 db.getMeta("지역채널:청하현").ifPresent(channelId -> {
                     var channel = jda.getTextChannelById(channelId);
                     if (channel != null) {
-                        channel.sendMessage("**" + day + "일차 아침이 밝았다** — 몸이 개운하다. "
-                                + "(일일 적립·수련·연속 감쇠 재시작)").queue();
+                        channel.sendMessage("**" + dawn.day() + "일차 아침이 밝았다** — 몸이 개운하다. "
+                                + "(일일 적립·수련·연속 감쇠 재시작)\n\n" + dawn.report()).queue();
                     }
                 });
             } catch (Exception e) {

@@ -26,6 +26,12 @@ public final class Rules {
     public final Routes routes;
     /** NPC 사망 연쇄 — 서비스 공백·후계·소문·의뢰 주입의 단일 원천 */
     public final Deaths deaths;
+    /** 소문망 (단계 4 B) — 전파(망별 속도·왜곡)·감쇠·세력 인지의 단일 원천 */
+    public final Rumors rumors;
+    /** 세력 반응 (단계 4 C) — 주목·우호 2축, 반응 사다리·감쇠의 단일 원천 */
+    public final Factions factions;
+    /** 죽음과 유산 (단계 4 A) — 부상 사다리·사망 위기·상속·피의 장부의 단일 원천 */
+    public final Legacy legacy;
     private final Map<String, Object> judgmentCfg;
     private final Map<String, Object> economyCfg;
     private final Map<String, Object> llmCfg;
@@ -33,6 +39,9 @@ public final class Rules {
     private final Map<String, Object> rumorCfg;
     private final Map<String, Object> timeCfg;
     private final Map<String, Object> questCfg;
+    private final Map<String, Object> regionCfg;
+    private final Map<String, Object> innateQiCfg;
+    private final Map<String, Object> factionsCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -53,6 +62,88 @@ public final class Rules {
         this.questCfg = RulesConfig.load(configDir.resolve("quest_generation.yml"));
         this.routes = new Routes(RulesConfig.load(configDir.resolve("faction_entry_routes.yml")));
         this.deaths = new Deaths(RulesConfig.load(configDir.resolve("npc_death.yml")));
+        this.rumors = new Rumors(rumorCfg);
+        this.factions = new Factions(RulesConfig.load(configDir.resolve("faction_reaction.yml")));
+        this.legacy = new Legacy(RulesConfig.load(configDir.resolve("death_and_legacy.yml")));
+        this.regionCfg = RulesConfig.load(configDir.resolve("regions/cheongha_hyeon.yml"));
+        this.innateQiCfg = RulesConfig.load(configDir.resolve("internal_energy.yml"));
+        this.factionsCfg = RulesConfig.load(configDir.resolve("factions.yml"));
+    }
+
+    /** judgment.yml formula.npc_fixed_bonus — NPC는 주사위 대신 고정값 (+7) */
+    public int npcFixedBonus() {
+        return RulesConfig.intValue(RulesConfig.section(judgmentCfg, "formula").get("npc_fixed_bonus"));
+    }
+
+    /** judgment.yml formula.situation_modifier_cap — 상황 보정 합계 절대값 상한 (±5) */
+    public int situationCap() {
+        return RulesConfig.intValue(
+                RulesConfig.section(judgmentCfg, "formula").get("situation_modifier_cap"));
+    }
+
+    /** judgment.yml situation_modifiers.condition — 경상 -1 · 중상 -2 · 빈사 -3 (전투 밖 판정에도 지속) */
+    @SuppressWarnings("unchecked")
+    public int conditionModifier(String wound) {
+        if (wound == null || wound.isBlank()) {
+            return 0;
+        }
+        Map<String, Object> mods = RulesConfig.section(judgmentCfg, "situation_modifiers");
+        Map<String, Object> condition = (Map<String, Object>) mods.get("condition");
+        Object value = condition.get(wound);
+        return value instanceof Number n ? n.intValue() : 0;
+    }
+
+    /** internal_energy.yml innate_qi.burn_uses.회생.cost_years — 빈사 사망 위기 자동 통과 1회의 값 */
+    @SuppressWarnings("unchecked")
+    public int revivalCostYears() {
+        Map<String, Object> innate = RulesConfig.section(innateQiCfg, "innate_qi");
+        Map<String, Object> burns = (Map<String, Object>) innate.get("burn_uses");
+        Map<String, Object> revival = (Map<String, Object>) burns.get("회생");
+        return RulesConfig.intValue(revival.get("cost_years"));
+    }
+
+    /** internal_energy.yml innate_qi.total_at_birth — 수명 100년 (전원 균등, 재능과 무관) */
+    public int innateQiTotal() {
+        return RulesConfig.intValue(RulesConfig.section(innateQiCfg, "innate_qi").get("total_at_birth"));
+    }
+
+    /**
+     * 청하현 등록 사건 (regions/cheongha_hyeon.yml incidents) — 세계 개막 소문의 원천.
+     * 신규 사건 발명 없음: 이미 등록된 3건(사파 연락책·북로 도적·열병)이 첫날부터 돌고 있어야 한다.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> incidentsRegistry() {
+        Object incidents = regionCfg.get("incidents");
+        return incidents instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
+    }
+
+    /** 등록 NPC 의 장소 키 (cheongha_inn · market · request_office …) — 그가 어느 소문망에 사는가 */
+    public String npcLocation(String key) {
+        Map<String, Object> npc = npcByKey(key);
+        return npc == null ? null : String.valueOf(npc.get("location"));
+    }
+
+    /** 등록 NPC 의 소속 세력 (mingan · haomun · orthodox_heroes · sangdan · gwan_gun …) */
+    public String npcFaction(String key) {
+        Map<String, Object> npc = npcByKey(key);
+        return npc == null ? null : String.valueOf(npc.get("faction"));
+    }
+
+    /**
+     * 세력 id → 표시 이름 — factions.yml aliases 를 뒤집어 읽는다 (haomun → 하오문).
+     * 별칭표가 곧 등록부다: 여기에 없는 id 는 그대로 보여 준다 (신규 세력 발명 금지).
+     */
+    @SuppressWarnings("unchecked")
+    public String factionName(String id) {
+        Object aliases = factionsCfg.get("aliases");
+        if (aliases instanceof Map<?, ?> m) {
+            for (Map.Entry<String, Object> e : ((Map<String, Object>) m).entrySet()) {
+                if (id.equals(String.valueOf(e.getValue()))) {
+                    return e.getKey();
+                }
+            }
+        }
+        return id;
     }
 
     /** quest_generation.yml grade_ladder — 등급 사다리 (낮은 것부터). 등급 상한 집행의 원천 */

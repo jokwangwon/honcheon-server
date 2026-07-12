@@ -69,10 +69,15 @@ CREATE TABLE IF NOT EXISTS rumors (
 CREATE INDEX IF NOT EXISTS idx_rumors_live ON rumors(region, state);
 
 CREATE TABLE IF NOT EXISTS faction_standing (    -- 세력 × 캐릭터 2축
-    faction_id   TEXT NOT NULL,
-    character_id INTEGER NOT NULL REFERENCES characters(id),
-    attention    INTEGER NOT NULL DEFAULT 0,     -- 주목 0~30
-    favor        INTEGER NOT NULL DEFAULT 0,     -- 우호 (안면4/신용8/공신13/은인19)
+    faction_id    TEXT NOT NULL,
+    character_id  INTEGER NOT NULL REFERENCES characters(id),
+    attention     INTEGER NOT NULL DEFAULT 0,    -- 주목 0~30
+    favor         INTEGER NOT NULL DEFAULT 0,    -- 우호 (안면4/신용8/공신13/은인19)
+    -- 감쇠 축 (faction_reaction.yml decay) — 읽는 순간 정산한다 (세계일 결정론: 같은 날 = 같은 값)
+    attention_day INTEGER NOT NULL DEFAULT 0,    -- 주목 마지막 갱신일 (7일마다 -1)
+    favor_day     INTEGER NOT NULL DEFAULT 0,    -- 우호 마지막 갱신일 (30일마다 -1 — 은혜는 천천히 잊힌다)
+    peak_stage    INTEGER NOT NULL DEFAULT 0,    -- 도달 최고 주목 단계 (3단계 이력 = 감쇠 하한 4)
+    peak_favor    INTEGER NOT NULL DEFAULT 0,    -- 도달 최고 우호 (공신13 이력 = 감쇠 하한 8)
     PRIMARY KEY (faction_id, character_id)
 );
 
