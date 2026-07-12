@@ -1191,7 +1191,12 @@ public final class SkillEngine {
         return engageSlots;
     }
 
-    /** 협공 보정 — 추가 공격자당 +1 (캡 2) */
+    /** 협공 보정의 캡 — combat.yml attack.gang_up.max (화면에 찍는 숫자도 여기서 나와야 한다) */
+    public int gangUpCap() {
+        return gangCap;
+    }
+
+    /** 협공 보정 — 추가 공격자당 +1 (캡은 등록부가 정한다) */
     public int gangUpBonus(int attackers) {
         return Math.min(Math.max(0, attackers - 1) * gangPer, gangCap);
     }

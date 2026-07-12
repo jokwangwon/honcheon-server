@@ -178,11 +178,20 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * /혼천 협공 &lt;인원&gt; — 협공 보정.
+     *
+     * <p>이 명령은 오랫동안 <b>"캡 +3"</b> 이라고 화면에 찍었다. config 는 <b>2</b> 다.
+     * 설계 감사(gap_audit)가 잡았다 — 문구가 손으로 적혀 있었고, 아무도 등록부와 대조하지 않았다.
+     * <b>화면에 찍는 숫자도 등록부에서 나와야 한다.</b> 안 그러면 화면이 세계에 대해 거짓말을 한다.
+     */
     private boolean coop(CommandSender sender, String[] args) {
         int attackers = Integer.parseInt(args[1]);
+        int cap = plugin.skillEngine().gangUpCap();     // combat.yml attack.gang_up.max
+        int slots = plugin.skillEngine().engageSlots(); // 한 사람을 동시에 벨 수 있는 자리
         sender.sendMessage(ChatColor.GOLD + "협공 " + attackers + "인 → 보정 +"
                 + plugin.party().coopAttackBonus(attackers)
-                + ChatColor.GRAY + " (캡 +3 — 그 위는 합격진의 영역)");
+                + ChatColor.GRAY + " (캡 +" + cap + " · 동시 교전 " + slots + "인 — 그 위는 대기다)");
         return true;
     }
 

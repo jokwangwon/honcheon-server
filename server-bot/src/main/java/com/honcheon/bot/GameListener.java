@@ -4420,7 +4420,7 @@ public final class GameListener extends ListenerAdapter {
      * 그리고 금기 태그가 켜진다 — <b>무고만으로는 안 뭉친 무림이 금기에는 뭉친다.</b>
      * 마교는 이 발화를 피할 수 있고(은폐 가능), 혈교는 못 피한다. 두 어둠의 수명이 여기서 갈린다.
      */
-    private void magongWitnessed(long chId, String name, String simbeop, int today) throws Exception {
+    void magongWitnessed(long chId, String name, String simbeop, int today) throws Exception {
         if (simbeop == null || !rules.isMagong(simbeop) || rules.canHideCirculation(simbeop)) {
             return;   // 정파의 심법 · 또는 숨길 수 있는 마공 (마교) — 아무도 모른다
         }

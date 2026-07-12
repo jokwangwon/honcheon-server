@@ -1,0 +1,279 @@
+# 장강수로채 총채 — 수로채의 인구
+# 척추: config/npcs/region_populace.yml   ·   설계: docs/design/region_populace.md
+# 부지: config/world_map.yml places.jangang_suroche (pos 415400, 550700 · faction jangang_suroche
+#       · architecture: "물 위의 채 — 뗏목과 배를 엮어 만든 마을. **뭍에 집이 없다**")
+# 집:  RemoteBuilder.Archetype.수로채 (나루 · 잔교 · 본채 뗏목 · 오두막 셋 · 쇠사슬 관문 · 선창)
+#
+# ★ "뭍에 집이 없다" 가 이 원형의 전부다 (region_archetypes.md §3.2).
+#   그러므로 **뭍에 사람도 거의 없다.** 뭍에 서 있는 것은 나루를 지키는 자 하나뿐이고,
+#   나머지는 전부 **물 위**에 산다. 뭍에 사람이 많으면 그것은 수로채가 아니라 나루터 마을이다.
+#
+# ★ 통행세가 이 채의 심장이다 (world_map routes.sulo_jangang: "이 물길의 통행세를 그들이 걷는다").
+#   faction_entry_routes.suroche_entry.gates.통행세_명부.tasks = [통행세_징수, 밀수_호송, 관선_회피_항행]
+#   → required_roles.수로채 = [채주, 노잡이, 통행세] — 통행세 걷는 자가 없으면 쇠사슬은 그냥 쇠사슬이다.
+#
+# ★ 세력이 무공의 주인이다 — 그런데 config/skills.yml 에 **jangang_suroche 무공이 없다.**
+#   그래서 지어내지 않는다. 이들은 등록된 무공 없이 **병기와 몸**으로 싸운다 (창·도·갈고리).
+#   수공(水功)은 fortune_encounters.sunken_ship_manual 의 침몰선 비급으로만 세상에 있다 —
+#   그 비급이 등록되면 그때 이 표에 실린다. **없는 무공을 쓰게 하지 않는다.**
+
+version: 1
+region: jangang_suroche
+name: "장강수로채 총채"
+zone: "장강수로채 총채"
+archetype: 수로채
+faction: jangang_suroche
+
+performance:
+  max_active: 10
+  activate_radius: 44
+  deactivate_radius: 72
+
+# ─── 태세 — 물 위의 셈법 ───
+# ★ 수로채는 **뜯되 죽이지 않는다** (suroche_entry.gates.채_등재.price:
+#   "상단과는 적이자 거래처 — 수로채는 뜯되 죽이지 않는다").
+#   그래서 default 가 **경계**다 — 산채(적대)와 도관(중립)의 사이다. 통행세를 부르지, 칼을 부르지 않는다.
+# ★ 다만 관(官)은 다르다: "관군 상시 적대 (관선 단속)" — 관의 사람이 뗏목에 오르면 그것은 단속이다.
+stance:
+  default: 경계
+  rules:
+    - when: { favor: { faction: gwan_gun, min: 8 } }
+      stance: 적대
+      why: "suroche_entry gates.채_등재.price — '관군 상시 적대 (관선 단속)'"
+      line: "관선이다! 사슬 올려!"
+    - when: { wanted: true }
+      stance: 중립
+      why: "★ 관에 쫓기는 자는 강에서 오히려 안전하다 — 수로채는 관의 장부를 읽지 않는다"
+      line: "관에 쫓기나. …여기선 아무도 안 묻는다. 뱃삯만 내라."
+    - when: { favor: { faction: jangang_suroche, min: 13 } }
+      stance: 우호
+      why: "suroche_entry gates.채_등재 (favor 13) — 배와 수로 전역 이동권"
+      line: "왔는가. 자네 배는 저쪽에 대 뒀네."
+    - when: { favor: { faction: jangang_suroche, min: 8 } }
+      stance: 중립
+      why: "suroche_entry gates.통행세_명부 (favor 8) — 나루의 장부에 이름이 있다"
+      line: "명부에 있는 얼굴이군. 통행세는 면제다."
+
+# ─── 자리 ───
+# ★ 원점이 둘이다: **나루**(뭍의 유일한 자리)와 **뗏목**(본채 중심 — 물 위).
+#   f 는 **물 쪽**이 + 다 (수로채만 진입 방위가 아니라 물의 방위로 돈다 — RemoteBuilder.waterStockade).
+# 근거 좌표: 나루 = shore-7 · 잔교 = shore+1~5 · 본채 뗏목 = shore+6~28 (중심 rc = shore+17, 폭 ±11)
+#           선창 = shore+29 · 쇠사슬 관문 = shore+33
+places:
+  나루:       { origin: 나루, f: 0,   l: 0,  radius: 3, y: 지표 }   # 뭍에 있는 유일한 것
+  잔교:       { origin: 뗏목, f: -14, l: 0,  radius: 2, y: 갑판 }   # rc-14 ≈ shore+3
+  뗏목_마당:  { origin: 뗏목, f: 0,   l: 0,  radius: 4, y: 갑판 }   # 돌 위의 모닥불 (뗏목에 불을 놓으면 화재다)
+  뗏목_동:    { origin: 뗏목, f: 0,   l: -7, radius: 3, y: 갑판 }
+  뗏목_서:    { origin: 뗏목, f: 0,   l: 7,  radius: 3, y: 갑판 }
+  오두막:     { origin: 뗏목, f: -5,  l: 0,  radius: 3, y: 갑판 }
+  그물자리:   { origin: 뗏목, f: 6,   l: -8, radius: 3, y: 갑판 }   # 어부이기도 하다 — 위장이자 살림
+  선창:       { origin: 뗏목, f: 11,  l: 0,  radius: 3, y: 갑판 }   # 물에서 기어오르는 계단
+  쇠사슬_관문: { origin: 뗏목, f: 15, l: 0,  radius: 3, y: 갑판 }   # ★ 배는 여기서 멈춘다 (통행세)
+  관문_동:    { origin: 뗏목, f: 15,  l: -4, radius: 2, y: 갑판 }
+  관문_서:    { origin: 뗏목, f: 15,  l: 4,  radius: 2, y: 갑판 }
+
+# ─── 일과 — 물의 하루는 **물때**다 ───
+# ★ 산채는 망보고, 문파는 수련하고, 관은 교대하고, 수로채는 **배를 기다린다.**
+#   통행세 걷는 자는 관문에 붙박이고, 노잡이는 물때를 따라 나갔다 들어온다.
+routines:
+  채주:     { 새벽: 오두막,     아침: 뗏목_마당,  낮: 쇠사슬_관문, 해질녘: 뗏목_마당, 밤: 오두막 }
+  통행세_주: { 새벽: 쇠사슬_관문, 아침: 쇠사슬_관문, 낮: 쇠사슬_관문, 해질녘: 관문_동, 밤: 뗏목_마당 }
+  통행세_야: { 새벽: 관문_서,   아침: 뗏목_마당,  낮: 관문_서,    해질녘: 쇠사슬_관문, 밤: 쇠사슬_관문 }
+  노잡이_갑: { 새벽: 선창,      아침: 잔교,       낮: 나루,       해질녘: 선창,     밤: 뗏목_동 }
+  노잡이_을: { 새벽: 뗏목_동,   아침: 선창,       낮: 선창,       해질녘: 뗏목_마당, 밤: 뗏목_마당 }
+  노잡이_병: { 새벽: 뗏목_서,   아침: 뗏목_마당,  낮: 잔교,       해질녘: 뗏목_서,   밤: 뗏목_서 }
+  어부:     { 새벽: 그물자리,  아침: 그물자리,   낮: 뗏목_동,    해질녘: 그물자리, 밤: 오두막 }
+  나루지기: { 새벽: 나루,      아침: 나루,       낮: 나루,       해질녘: 나루,     밤: 잔교 }
+  살림:     { 새벽: 뗏목_마당, 아침: 뗏목_마당,  낮: 오두막,     해질녘: 뗏목_마당, 밤: 뗏목_마당 }
+
+# ─── 사람 (10인) ───
+people:
+
+  suroche_chaeju:
+    name: "조패"
+    age: 48
+    job: 채주 (총채주 · 별호 수룡水龍)
+    rank: 채주
+    realm: 절정
+    home: 오두막
+    routine: 채주
+    voice: 채주
+    disposition: "물에서 나고 물에서 늙었다. 상단을 죽이지 않는다 — 죽은 상단은 두 번 뜯을 수 없으므로.
+      ★ 그 셈법이 이 세력의 도덕이다 (suroche_entry: '뜯되 죽이지 않는다')"
+    body: { entity: ZOMBIE, durability: 30 }
+    combat:
+      loadout: { 계열: 도, 등급: 보병 }
+      skills: []                    # ★ skills.yml 에 수로채 무공이 없다 — 지어내지 않는다
+      qi_grade: 검기
+      morale: { start: 11, break: 1 }
+    lines:
+      적대: ["강에서 관을 만나면 물어보지 않는다."]
+      경계: ["뭘 찾아 여기까지 왔나."]
+      중립: ["물길은 우리 것이다. 지나가려면 값을 낸다. 그뿐이다."]
+      우호: ["강은 잊지 않네. 자네 배는 늘 대 둘 자리가 있어."]
+
+  suroche_tonghaeng_1:
+    name: "손갈"
+    age: 39
+    job: 통행세 (쇠사슬 관문)
+    rank: 통행세
+    realm: 이류
+    home: 쇠사슬_관문
+    routine: 통행세_주
+    voice: 뱃사람
+    disposition: "갈고리로 뱃전을 건다. 사슬을 올리고 내리는 손이 그의 장부다"
+    body: { entity: ZOMBIE, durability: 22 }
+    combat: { loadout: { 계열: 창, 등급: 범철 }, skills: [], morale: { start: 7, break: 2 } }
+    lines:
+      적대: ["사슬 내리지 마! 붙여!"]
+      경계: ["배는 여기서 멈춘다. 값부터."]
+      중립: ["한 척에 은자 두 냥. 사람만이면 스무 문."]
+      우호: ["사슬 내려라! 우리 사람이다!"]
+  suroche_tonghaeng_2:
+    name: "여삼"
+    age: 33
+    job: 통행세 (야번)
+    rank: 통행세
+    realm: 삼류
+    home: 쇠사슬_관문
+    routine: 통행세_야
+    voice: 뱃사람
+    disposition: "밤에 지나가려는 배가 가장 값을 많이 낸다는 걸 안다 — 밤에 지나가는 배는 이유가 있으니까"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["관선이다!"]
+      경계: ["밤에 지나가려면 곱절이다."]
+      중립: ["밤 삯은 곱절이오. 밤에 가는 데는 이유가 있잖소."]
+      우호: ["오늘 밤엔 관선이 없소. 지나가시오."]
+
+  suroche_nojab_1:
+    name: "노덕"
+    age: 45
+    job: 노잡이 (사공 우두머리)
+    rank: 노잡이
+    realm: 삼류
+    home: 뗏목_동
+    routine: 노잡이_갑
+    voice: 뱃사람
+    disposition: "장강의 여울을 스물여덟 개 안다. 그 지식이 그를 죽지 않게 했다"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 봉, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["삿대 들어!"]
+      경계: ["배에 오르지 마시오."]
+      중립: ["여울이 스물여덟이오. 모르고 가면 스물여덟 번 죽소."]
+      우호: ["태워 드리리다. 어디까지 가시오?"]
+  suroche_nojab_2:
+    name: "추만"
+    age: 27
+    job: 노잡이
+    rank: 노잡이
+    realm: 삼류
+    home: 뗏목_마당
+    routine: 노잡이_을
+    voice: 뱃사람
+    disposition: "물에서 잔다. 뭍에서 자면 땅이 흔들린다고 한다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 봉, 등급: 범철 }, skills: [], morale: { start: 5, break: 3 } }
+    lines:
+      적대: ["물에 처넣어!"]
+      경계: ["뭍 사람이군."]
+      중립: ["뭍에서 자면 땅이 흔들리오. 나는 물이 편하오."]
+      우호: ["헤엄은 칠 줄 아시오? 여긴 그게 무공이오."]
+  suroche_nojab_3:
+    name: "강돌"
+    age: 22
+    job: 노잡이
+    rank: 노잡이
+    realm: 삼류
+    home: 뗏목_서
+    routine: 노잡이_병
+    voice: 뱃사람
+    disposition: "채주의 조카다. 그래서 아무도 그를 부리지 않고, 그래서 그는 아무것도 배우지 못한다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 단검, 등급: 범철 }, skills: [], morale: { start: 4, break: 4 } }
+    lines:
+      적대: ["숙, 숙부님!"]
+      경계: ["…뭐요."]
+      중립: ["나는 채주 조카요. 함부로 굴지 마시오."]
+      우호: ["숙부님이 부르시오."]
+
+  suroche_eobu_1:
+    name: "안노"
+    age: 56
+    job: 어부 (그물)
+    rank: 어부
+    realm: 범인
+    home: 그물자리
+    routine: 어부
+    voice: 뱃사람
+    disposition: "★ 여기 사는 자들은 어부이기도 하다. 그것이 위장이자 살림이다 (region_archetypes §3.2).
+      그는 위장이 아니라 진짜 어부다 — 그리고 그 사실이 이 채에서 가장 좋은 위장이다"
+    body: { entity: VILLAGER, profession: FISHERMAN }
+    lines:
+      적대: ["그물! 그물 걷어!"]
+      경계: ["고기 사러 오셨소?"]
+      중립: ["잉어 두 마리에 열 문이오. 우리도 먹고살아야 하오."]
+      우호: ["오늘 잡은 게 좋소. 구워 드리리다."]
+  suroche_eobu_2:
+    name: "어랑"
+    age: 19
+    job: 어부 (그물 · 아이)
+    rank: 어부
+    realm: 범인
+    home: 그물자리
+    routine: 어부
+    voice: 뱃사람
+    disposition: "물에서 태어났다. 뭍을 본 적이 세 번뿐이다"
+    body: { entity: VILLAGER, profession: FISHERMAN }
+    lines:
+      적대: ["할아버지!"]
+      경계: ["…"]
+      중립: ["뭍은 세 번 봤소. 뭐가 좋은지 모르겠소."]
+      우호: ["물속에 뭐가 있는지 아시오? 배가 있소. 가라앉은 배가."]
+
+  suroche_naru:
+    name: "물개"
+    age: 35
+    job: 나루지기 (뭍의 유일한 사람)
+    rank: 나루지기
+    realm: 삼류
+    home: 나루
+    routine: 나루지기
+    voice: 뱃사람
+    disposition: "★ 뭍에 서 있는 유일한 수로채 사람. 뭍에 집이 없으므로 그도 집이 없다 —
+      나루의 통 위에서 잔다. 그것이 이 세력이 뭍을 대하는 방식이다"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["채로 알려라!"]
+      경계: ["배를 대려면 값을 내시오."]
+      중립: ["여기서 물까지 스무 걸음이오. 배 없이는 못 건너오."]
+      우호: ["채주께 알리리다. 잠시 기다리시오."]
+
+  suroche_salim:
+    name: "아지"
+    age: 43
+    job: 살림 (물밥)
+    rank: 살림
+    realm: 범인
+    home: 뗏목_마당
+    routine: 살림
+    voice: 살림
+    disposition: "돌 위에 불을 피운다 — 뗏목에 그냥 불을 놓으면 그것은 화재다.
+      그 한 가지를 아는 것으로 그녀는 이 채에서 없어서는 안 될 사람이 되었다"
+    body: { entity: VILLAGER, profession: NONE }
+    lines:
+      적대: ["불! 불 끄시오!"]
+      경계: ["뗏목에서 불장난 마시오."]
+      중립: ["돌 위에만 불을 놓소. 안 그러면 다 타오."]
+      우호: ["밥 드시오. 물 위에서 굶으면 못 견디오."]
+
+relations:
+  - { person: suroche_nojab_3, type: 아비,  kin: suroche_chaeju }   # 조카지만 이 아이에겐 아비다
+  - { person: suroche_chaeju,  type: 자식,  kin: suroche_nojab_3 }
+  - { person: suroche_eobu_2,  type: 스승,  kin: suroche_eobu_1 }
+  - { person: suroche_eobu_1,  type: 도제,  kin: suroche_eobu_2 }
+  - { person: suroche_tonghaeng_2, type: 동료, kin: suroche_tonghaeng_1 }
+  - { person: suroche_tonghaeng_1, type: 동료, kin: suroche_tonghaeng_2 }
