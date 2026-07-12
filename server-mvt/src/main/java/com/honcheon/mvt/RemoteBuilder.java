@@ -53,6 +53,66 @@ final class RemoteBuilder {
             Material.PACKED_ICE, Material.ICE, Material.WATER, Material.LAVA, Material.BEDROCK,
             Material.MOSS_BLOCK, Material.MUD);
 
+    /**
+     * 기초 봉인 — <b>바닥 밑이 비면 그것은 껍데기다</b>.
+     *
+     * <p>인게임에서 드러난 파탄: 우리가 깐 길·마당이 바닐라 동굴 위에 얇게 덮여 있었다(환경 검수 13%).
+     * 발밑을 딛으면 그 아래가 허공이고, 어딘가는 뚫려 있고, 협곡이 잘려 열렸다.
+     * 조성 지면 아래 <b>여섯 칸</b>은 반드시 단단해야 한다 — 그 아래 동굴은 살려 둔다(세계의 자산이다).
+     * 채우는 자재는 자연을 따른다: 얕은 데는 흙, 깊은 데는 돌.
+     */
+    private static void sealBelow(World world, int x, int y, int z) {
+        for (int i = 1; i <= 6; i++) {
+            org.bukkit.block.Block b = world.getBlockAt(x, y - i, z);
+            if (b.getType().isAir() || b.isLiquid()) {
+                b.setType(i <= 2 ? Material.DIRT : Material.STONE);
+            }
+        }
+    }
+
+    /**
+     * 경계 페더링 — <b>부지가 자연으로 스며들게 한다</b>.
+     *
+     * <p>단(段)을 놓으면 그 가장자리에서 지형이 뚝 끊긴다. 산채는 경계 급단차 52.7%(최대 20칸)였고,
+     * <b>북쪽에서는 아예 걸어 들어올 수 없었다</b> — 우리가 산비탈에 벼랑을 냈기 때문이다.
+     *
+     * <p>페더링은 안(조성 지면)에서 밖(자연 지면)으로 높이를 <b>여러 칸에 걸쳐</b> 잇는다:
+     * 낮은 데는 메우고 높은 데는 깎되, 거리에 비례해 자연 쪽으로 수렴한다. 좌표 해시로 흔들어
+     * 전이대가 자로 그은 것처럼 보이지 않게 한다.
+     */
+    private static void feather(World world, int cx, int cy, int cz, int rInner, int rOuter) {
+        for (int x = cx - rOuter; x <= cx + rOuter; x++) {
+            for (int z = cz - rOuter; z <= cz + rOuter; z++) {
+                double d = dist(x - cx, z - cz);
+                if (d < rInner || d > rOuter) {
+                    continue;
+                }
+                int natural = naturalGround(world, x, z, cy + 50);
+                double t = (d - rInner) / (double) (rOuter - rInner);   // 0 = 부지, 1 = 자연
+                int jitter = Math.floorMod(x * 7 + z * 11, 3) - 1;
+                int target = (int) Math.round(cy * (1 - t) + natural * t) + jitter;
+                if (Math.abs(target - natural) <= 1) {
+                    continue;   // 이미 자연과 같다 — 손대지 않는다
+                }
+                // 위를 비운다(깎기) — **여섯 칸으로는 모자랐다**: 비탈을 자른 자리에 20칸짜리 절개 벼랑이
+                //   그대로 서 있었고(환경 검수: 경계 급단차 41%), 우리는 그것을 못 봤다.
+                //   전이대의 높이까지 깎아야 전이대다.
+                for (int y = target + 1; y <= target + 24; y++) {
+                    org.bukkit.block.Block b = world.getBlockAt(x, y, z);
+                    if (!b.getType().isAir() && (NATURAL.contains(b.getType())
+                            || b.getType().name().endsWith("_LEAVES") || b.getType().name().endsWith("_LOG"))) {
+                        b.setType(Material.AIR);
+                    }
+                }
+                org.bukkit.block.Block top = world.getBlockAt(x, target, z);
+                if (top.getType().isAir() || top.isLiquid()) {
+                    top.setType(Material.GRASS_BLOCK);
+                }
+                sealBelow(world, x, target, z);   // 메운 자리 밑도 단단해야 한다
+            }
+        }
+    }
+
     /** 자연 지면 — 사람이 지은 것을 <b>세지 않는다</b>. 없으면 최저값 */
     private static int naturalGround(World world, int x, int z, int from) {
         for (int y = from; y >= from - 80; y--) {
@@ -122,6 +182,7 @@ final class RemoteBuilder {
         watchtower(world, cx + 14, cy, cz - 13);
 
         yard(world, cx, cy, cz);
+        feather(world, cx, cy, cz, R + 1, R + 22);   // 목책 밖 22칸 — 산으로 스며든다 (경사가 완만해야 스민다)
         return List.of(new Zone(place.name(), "녹림 — 목책과 통나무", world.getName(),
                 cx - R - 2, cy - 4, cz - R - 2, cx + R + 2, cy + 14, cz + R + 2));
     }
@@ -173,13 +234,7 @@ final class RemoteBuilder {
                 Material floor = Math.floorMod(x * 7 + z * 3, 11) == 0
                         ? Material.COARSE_DIRT : Material.DIRT_PATH;   // 다져진 흙 마당
                 world.getBlockAt(x, cy, z).setType(floor);
-                for (int y = cy - 1; y >= cy - 6; y--) {   // 밑을 받친다 (허공이면 기둥)
-                    if (!world.getBlockAt(x, y, z).getType().isAir()
-                            && !world.getBlockAt(x, y, z).isLiquid()) {
-                        break;
-                    }
-                    world.getBlockAt(x, y, z).setType(Material.SPRUCE_LOG);
-                }
+                sealBelow(world, x, cy, z);   // 밑이 비면 껍데기다 (환경 검수: 바닥 공동 13%)
             }
         }
     }
@@ -456,6 +511,7 @@ final class RemoteBuilder {
             }
         }
         plumTrees(world, cx, upper, cz);                               // 매화 — 채색은 여기뿐이다
+        feather(world, cx, lower, cz + FOOT_Z, 10, 22);                // 문전 마당 밖 — 들로 스며든다
 
         return List.of(new Zone(place.name(), sectSubtitle(place), world.getName(),
                 cx - 40, lower - 8, cz - 44, cx + 40, upper + 18, cz + FOOT_Z + 14));
@@ -633,6 +689,7 @@ final class RemoteBuilder {
                     }
                     world.getBlockAt(x, yy, z).setType(edge ? Material.STONE_BRICKS : Material.COBBLESTONE);
                 }
+                sealBelow(world, x, y, z);   // 축대가 닿은 뒤에도 그 밑 여섯 칸은 단단해야 한다
             }
         }
     }

@@ -53,6 +53,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "지역조성" -> buildRegion(sender, args);   // 원거리 등록지 하나를 짓는다 (관리자·콘솔 가능)
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
+                case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
@@ -858,6 +859,46 @@ public final class MvtCommand implements CommandExecutor {
         for (String line : RegionAudit.audit(world, place, zone)) {
             sender.sendMessage(line);
             plugin.getLogger().info("[지역검수] " + org.bukkit.ChatColor.stripColor(line));
+        }
+        return true;
+    }
+
+    /**
+     * /혼천 환경검수 [지역id] — <b>조성물과 자연의 이음매</b>를 잰다 (콘솔 가능).
+     *
+     * <p>지금까지의 검수는 전부 <b>안</b>을 봤다. 그런데 인게임에서 드러난 파탄은 <b>바깥</b>이었다 —
+     * 바닥 밑에서 잘린 동굴, 산 위에 남은 웅덩이, 뚝 끊긴 부지 경계. 조성기는 자연 위에 상자를
+     * 찍어 넣었고, <b>그것을 볼 눈이 없었다.</b>
+     */
+    private boolean auditTerrain(CommandSender sender, String[] args) {
+        World world;
+        java.util.List<String> lines;
+        if (args.length >= 2) {
+            WorldMap map = plugin.worldMap();
+            WorldMap.Place place = map == null ? null : map.place(args[1]);
+            Zone zone = place == null ? null : plugin.zones().stream()
+                    .filter(z -> z.name().equals(place.name())).findFirst().orElse(null);
+            if (zone == null) {
+                sender.sendMessage(ChatColor.RED + "서지 않은 지역이다: " + args[1]);
+                return true;
+            }
+            world = org.bukkit.Bukkit.getWorld(zone.world());
+            int cx = (zone.x1() + zone.x2()) / 2;
+            int cz = (zone.z1() + zone.z2()) / 2;
+            int radius = Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 8;
+            lines = TerrainAudit.audit(world, place.name(), cx, zone.y1() + 6, cz, radius,
+                    place.terrain() == null ? "평지" : place.terrain());
+        } else {
+            Location center = plugin.anchor("장터");
+            if (center == null) {
+                sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 세계조성");
+                return true;
+            }
+            lines = TerrainAudit.auditTown(center.getWorld(), center, 61);
+        }
+        for (String line : lines) {
+            sender.sendMessage(line);
+            plugin.getLogger().info("[환경검수] " + ChatColor.stripColor(line));
         }
         return true;
     }
