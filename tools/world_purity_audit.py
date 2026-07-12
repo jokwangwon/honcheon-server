@@ -87,12 +87,37 @@ def vanilla_json(jar: zipfile.ZipFile, path: str) -> dict:
         raise SystemExit(f"{BAD} 바닐라 정본에 없다: {path} — 버전이 바뀌었는가?")
 
 
-def vanilla_biome_ids(jar: zipfile.ZipFile) -> set[str]:
+def vanilla_biome_names(jar: zipfile.ZipFile) -> set[str]:
+    """바닐라 바이옴 **파일 이름** (namespace 없음) — 65종."""
     return {
-        "minecraft:" + n.split("/")[-1][:-5]
+        n.split("/")[-1][:-5]
         for n in jar.namelist()
         if n.startswith("data/minecraft/worldgen/biome/") and n.endswith(".json")
     }
+
+
+def vanilla_biome_ids(jar: zipfile.ZipFile) -> set[str]:
+    return {"minecraft:" + n for n in vanilla_biome_names(jar)}
+
+
+def vanilla_entity_ids() -> set[str] | None:
+    """바닐라 엔티티 id 전부 — 데이터 생성기의 registries.json 이 정본.
+
+    이게 있어야 `wild_spawn.allow` 의 **오타를 잡는다.** 자바 쪽 판독기는 모르는 이름을
+    조용히 건너뛰고(`IllegalArgumentException ignored`), 데이터팩 쪽은 모르는 이름이
+    허용 목록에 있어도 그냥 아무것도 통과시키지 않는다 — 둘 다 **말없이** 실패한다.
+    오타 하나로 이리가 세계에서 사라져도 아무도 모른다. 그래서 여기서 잡는다.
+    """
+    reports = CACHE / "out" / "reports" / "registries.json"
+    if not reports.is_file():
+        return None
+    data = json.loads(reports.read_text())
+    return set(data["minecraft:entity_type"]["entries"].keys())
+
+
+def allow_ids(reg: dict) -> set[str]:
+    """등록부의 야생 스폰 허용 목록 → `minecraft:wolf` 꼴. **데이터팩과 자바가 같은 줄을 읽는다.**"""
+    return {"minecraft:" + str(n).lower() for n in reg["wild_spawn"]["allow"]}
 
 
 def vanilla_climate(reg: dict, *, allow_datagen: bool = True) -> list[dict] | None:
@@ -226,6 +251,60 @@ def build(reg: dict) -> int:
 
     changed = sum(1 for a, b in zip(vanilla, boxes) if a["biome"] != b["biome"])
     print(f"{OK} world_preset/normal.json — 기후 상자 {len(boxes)}개 중 {changed}개 이름표 교체")
+
+    # ── ④ 야생 스폰 : 바이옴의 spawners 를 **허용 목록으로 거른다** ────────────
+    #
+    #   지금까지 자연 스폰은 **리스너 한 겹**으로만 막혔다 (HuntingGrounds.onSpawn 이 취소).
+    #   그것은 옳게 작동하지만 — 마인크래프트는 여전히 매 틱 **뿌리려고 시도한다.**
+    #   개체를 고르고, 자리를 찾고, 청크를 훑고, 이벤트를 쏘고, 우리가 취소한다.
+    #   막는 것과 **애초에 나지 않는 것**은 다르다. 여기서 원천을 끈다.
+    #
+    #   방법 — 구조물·피처와 같은 문법: 바닐라 정본에서 **한 필드만.**
+    #     biome json 의 `spawners` (MobCategory → 후보 목록) 에서 허용 목록에 없는 줄을 **뺀다.**
+    #     `spawn_costs` 도 같이 (남은 것을 가리키는 비용만 남긴다).
+    #     parameters·features·carvers·effects 는 **한 글자도 건드리지 않는다.**
+    #     빈 목록은 코덱이 받는다 (simpleMap + LIST_CODEC — 빈 리스트가 정상값이다).
+    #     → 그 바이옴은 그 범주의 몹을 **고를 후보가 없다.** 확률이 아니라 불가능이다.
+    #
+    #   ★ 그런데 **끄기만 하면 세계가 텅 빈다.** 그래서 이것은 「전부 지우기」가 아니라 「거르기」다:
+    #     허용 목록(WOLF·FOX·RABBIT·BAT·물고기)의 줄은 **그대로 남는다.** 산야는 살아 있다.
+    #     산늑대·멧돼지·호랑이·반달곰·산적은 HuntingGrounds 가 정원제로 **심는다** (CUSTOM).
+    #     아래 「남은 것」 표가 세계가 비지 않았음을 매 빌드마다 다시 증명한다.
+    allow = allow_ids(reg)
+    biome_dir = data / "biome"
+    if biome_dir.is_dir():
+        for stale in biome_dir.glob("*.json"):
+            stale.unlink()   # 등록부에서 빠진 것이 파일로 남으면 등록제가 아니다
+
+    survivors: dict[str, int] = {}
+    written = 0
+    for name in sorted(vanilla_biome_names(jar)):
+        doc = vanilla_json(jar, f"worldgen/biome/{name}.json")
+        touched = False
+        for category, entries in doc.get("spawners", {}).items():
+            keep = [e for e in entries if e["type"] in allow]
+            if len(keep) != len(entries):
+                touched = True
+            doc["spawners"][category] = keep
+            for e in keep:
+                survivors[e["type"]] = survivors.get(e["type"], 0) + 1
+        costs = doc.get("spawn_costs", {})
+        for gone in [t for t in costs if t not in allow]:
+            del costs[gone]
+            touched = True
+        if touched:
+            write_json(biome_dir / f"{name}.json", doc)
+            written += 1
+
+    print(f"{OK} biome {written}/{len(vanilla_biome_names(jar))} 종 — spawners 를 허용 {len(allow)}종으로 거름")
+    if survivors:
+        alive = ", ".join(f"{t.split(':')[1]}×{n}" for t, n in sorted(survivors.items()))
+        print(f"{OK} 남은 것 (세계는 비지 않았다) — {alive}")
+    dead = sorted(allow - set(survivors))
+    for d in dead:
+        print(f"{WARN} 허용했으나 어느 바이옴도 뿌리지 않는다: {d} "
+              f"(바닐라가 애초에 안 뿌리거나 — **오타다**)")
+
     print(f"\n{OK} 데이터팩: {pack.relative_to(ROOT)}")
     print("   → 새 월드의 datapacks/ 에 넣어라. **기존 월드의 청크는 안 바뀐다.**")
     return 0
@@ -348,17 +427,11 @@ def audit(reg: dict) -> int:
                     print(f"     금지 {len(forbidden)}종이 구획에서 0회 등장 → 이 세계는 그것들을 "
                           f"**생성할 수 없다**(확률이 아니라 불가능)")
 
-    # ── ④ 야생 스폰 : 등록부 ↔ 배선 ────────────────────────────────────────
-    hg = ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt" / "HuntingGrounds.java"
-    if hg.is_file():
-        src = hg.read_text(encoding="utf-8")
-        if "world_purity.yml" not in src:
-            fail("HuntingGrounds.java 가 world_purity.yml 을 읽지 않는다 — 야생 스폰 등록부가 배선되지 않았다")
-        else:
-            print(f"{OK} 야생 스폰 — 허용 {len(reg['wild_spawn']['allow'])}종이 "
-                  f"HuntingGrounds 에 배선됨 (나머지는 전부 취소)")
-    else:
-        warn.append("HuntingGrounds.java 를 못 찾았다")
+    # ── ④ 야생 스폰 ───────────────────────────────────────────────────────
+    audit_spawn(reg, data, jar, fail, warn)
+
+    # ── ⑤ 사냥터 — **우리가 부른 것은 나오는가** ──────────────────────────
+    audit_hunt(fail, warn)
 
     # ── 결과 ──────────────────────────────────────────────────────────────
     print()

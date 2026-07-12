@@ -346,8 +346,14 @@ final class Dojang implements Listener {
         });
     }
 
-    /** 연무장의 허수아비·몹은 세계의 장부에 오르지 않는다 (소문·명분·혈채 없음) */
+    /**
+     * 연무장의 허수아비·몹은 세계의 장부에 오르지 않는다 (소문·명분·혈채 없음).
+     *
+     * <p><b>입도진(나루)도 같다</b> — 강호에 들지 않은 자가 나루의 허수아비를 백 번 베어도
+     * 그것은 강호의 일이 아니다. 세 곳({@code SkillCast}·{@code SkillListener}·{@code HuntingGrounds})이
+     * 이미 이 한 문장을 부르고 있으므로, <b>여기 한 줄이 세 곳을 다 막는다</b>.
+     */
     static boolean suppressWorldEvents(World world) {
-        return isDojang(world);
+        return isDojang(world) || Antechamber.isAntechamber(world);
     }
 }

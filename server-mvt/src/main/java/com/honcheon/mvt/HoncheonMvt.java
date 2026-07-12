@@ -37,6 +37,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
     private SkillCast skillCast;   // 절기(絶技) — 삼문(承·間·虛)이 열려야 나간다
     private Dojang dojang;
+    private Antechamber antechamber;   // 입도진 — 강호에 들지 않은 자를 세계에 떨구지 않는다
     private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
 
@@ -83,6 +84,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.incidents = new Incidents(this);   // 순서 중요 — 생성자가 populace 에 스스로 접합한다
         this.skillCast = new SkillCast(this, skillEngine, skills, cfg);
         this.dojang = new Dojang(this);
+        this.antechamber = new Antechamber(this, cfg);
         this.dojangGui = new DojangGui(this);
         this.gyeonggong = new GyeonggongListener(this);   // 몸이 땅을 딛는 법
         Onboarding.init(cfg);   // 첫 접속의 목소리 — player_creation.yml mvt_onboarding
@@ -100,6 +102,7 @@ public final class HoncheonMvt extends JavaPlugin {
         PackPusher packPusher = new PackPusher(this);
         packPusher.load(cfg);                    // 팩은 **접속한 주소**로 나간다 (박힌 URL 은 LAN 밖에서 죽는다)
         getServer().getPluginManager().registerEvents(packPusher, this);
+        getServer().getPluginManager().registerEvents(antechamber, this);
         getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
@@ -117,6 +120,7 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         gyeonggong.start();   // 켜져 있는 사람만 돈다 (Metrics 가 잰다 — probes.gyeonggong)
+        antechamber.start();   // 몸짓·경공·물안개·문이 열리는 순간을 본다
         skillCast.start();   // 절기의 삼문 — 창(窓)·간격·허를 매 틱 읽는다
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
         populace.start();   // 중앙 티커 — 행인의 일과·배회 (마을이 비어 있으면 세계가 아니다)
@@ -147,6 +151,10 @@ public final class HoncheonMvt extends JavaPlugin {
         WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
         if (skills != null) {
             skills.shutdown();   // 무공의 3D 형체를 세계에 남기지 않는다
+        }
+        if (antechamber != null) {
+            // 글판을 걷는다 — 안 걷으면 다시 지을 때 **글이 두 겹으로 겹친다**
+            antechamber.shutdown();
         }
         if (gyeonggong != null) {
             // 걷기 속도를 되돌린다 — 경공을 켠 채 로그아웃한 자가 **영영 빨라지면 안 된다**
@@ -432,6 +440,10 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public SkillEngine skillEngine() {
         return skillEngine;
+    }
+
+    public Antechamber antechamber() {
+        return antechamber;
     }
 
     public SkillListener skills() {

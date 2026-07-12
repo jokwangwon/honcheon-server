@@ -60,6 +60,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
                 case "조감" -> renderTown(sender, args);   // 조감도 PNG — 콘솔 가능 (인자 = 지역id)
                 case "출행" -> travel(sender, args);          // 지역으로 간다 (조성된 곳만)
+                case "입도" -> antechamber(sender);          // 나루로 — 몸을 다시 익힌다
+                case "도강" -> crossRiver(sender);           // 강을 건넌다 (= 부두의 종)
                 case "연무장" -> dojangEnter(sender);        // 시험 월드로 (스킬·몹·허수아비)
                 case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
@@ -1379,6 +1381,34 @@ public final class MvtCommand implements CommandExecutor {
         player.sendMessage(ChatColor.GRAY + "주무공 " + ChatColor.WHITE
                 + (led.primaryArt() == null ? "없음 (무공 백지)" : led.primaryArt())
                 + ChatColor.GRAY + " · 실전 마크 " + ChatColor.WHITE + led.marks실전());
+        return true;
+    }
+
+    /** <b>/혼천 입도</b> — 나루로 돌아간다 (몸을 다시 익히고 싶은 자를 위해) */
+    private boolean antechamber(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
+            return true;
+        }
+        plugin.antechamber().enter(player);
+        return true;
+    }
+
+    /**
+     * <b>/혼천 도강</b> — 강을 건넌다.
+     *
+     * <p>문은 <b>배</b>다. 그리고 사공은 <b>이름 없는 자를 태우지 않는다</b> — 나룻배는 장부에 적고 건넨다.
+     * 그것이 접합(接合)이 무엇인지에 대한 이 세계의 은유다.
+     *
+     * <p>다만 <b>봇이 꺼져 있으면 그냥 건넨다.</b> 장부가 없어서 못 적는 것을 사람 탓으로 돌릴 수 없다 —
+     * 갇히지 않는다. 그 대신 사공이 말해 준다: "네가 벤 것은 아무 데도 적히지 않는다."
+     */
+    private boolean crossRiver(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
+            return true;
+        }
+        plugin.antechamber().cross(player);
         return true;
     }
 }
