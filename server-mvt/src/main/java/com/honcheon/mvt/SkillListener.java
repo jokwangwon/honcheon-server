@@ -213,7 +213,7 @@ public final class SkillListener implements Listener {
             state.comboIndex = 0;   // 입력 유예창을 놓쳤다 — 처음부터
         }
 
-        String weaponClass = engine.weaponClassOf(materialName(player));
+        String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player));
         SkillEngine.Cast cast = engine.planCombo(
                 skillId, state.comboIndex, state.realm, state.energy, state.armed, weaponClass);
 
@@ -221,7 +221,9 @@ public final class SkillListener implements Listener {
         int size = engine.comboSize(skillId);
         state.comboIndex = (state.comboIndex + 1) % size;
         state.comboDeadline = tick + cast.frames().total() + engine.comboWindow(skillId);
-        state.busyUntil = tick + cast.frames().total();
+        // 공속이 거짓말하지 않게 — 무공이 실리면 바닐라 피해가 취소되고 프레임이 스윙 간격을 정한다.
+        // 계열 공속(부 0.9/s = 22틱)이 프레임(9틱)보다 느리면 "가장 느린 병기"가 연출로만 남는다.
+        state.busyUntil = tick + Math.max(cast.frames().total(), swingInterval(player));
         state.lastCastTick = tick;
         state.energy -= cast.paid();
 
@@ -238,7 +240,7 @@ public final class SkillListener implements Listener {
         if (state.onCooldown(CD_SHOT, tick)) {
             return;
         }
-        String weaponClass = engine.weaponClassOf(materialName(player));
+        String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player));
         SkillEngine.Cast cast = engine.planShot(state.armed, state.realm, state.energy, weaponClass);
         if (cast.downcast() || engine.gradeRank(cast.grade()) < 2) {
             // 발출만은 다운캐스트가 없다 — 프레임이 아니라 기 그 자체가 본체다 (skill_motion.md 4장)
@@ -248,7 +250,9 @@ public final class SkillListener implements Listener {
             state.cooldownUntil.put(CD_SHOT, tick + 10L);
             return;
         }
-        state.busyUntil = tick + cast.frames().total();
+        // 공속이 거짓말하지 않게 — 무공이 실리면 바닐라 피해가 취소되고 프레임이 스윙 간격을 정한다.
+        // 계열 공속(부 0.9/s = 22틱)이 프레임(9틱)보다 느리면 "가장 느린 병기"가 연출로만 남는다.
+        state.busyUntil = tick + Math.max(cast.frames().total(), swingInterval(player));
         state.lastCastTick = tick;
         state.energy -= cast.paid();
         state.cooldownUntil.put(CD_SHOT, tick + cast.cooldownTicks());
@@ -622,8 +626,14 @@ public final class SkillListener implements Listener {
     // ══════════ 도우미 ══════════
 
     private String skillInHand(Player player) {
-        String id = SKILL_BY_WEAPON_CLASS.get(engine.weaponClassOf(materialName(player)));
+        String id = SKILL_BY_WEAPON_CLASS.get(engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player)));
         return id != null && engine.hasActionData(id) ? id : null;
+    }
+
+    /** 계열 공속 → 스윙 간격(틱). 혼천 병기가 아니면 0 (프레임이 전부다) */
+    private long swingInterval(Player player) {
+        Weapons.Series series = Weapons.seriesOf(player.getInventory().getItemInMainHand());
+        return series == null ? 0L : Math.round(20.0 / series.attackSpeed());
     }
 
     private static String materialName(Player player) {
@@ -632,7 +642,7 @@ public final class SkillListener implements Listener {
     }
 
     private String weaponGrade(Player player) {
-        return engine.weaponGradeOf(materialName(player));
+        return engine.weaponGradeOf(player.getInventory().getItemInMainHand(), materialName(player));
     }
 
     private static Location handLocation(Player player) {

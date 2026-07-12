@@ -292,7 +292,23 @@ public final class SkillEngine {
      * 무기 감당 등급 — MVT 근사: 바닐라 재질을 등급 사다리에 얹는다 (equipment.yml weapon_grades).
      * 나무·돌·철·금 = 범철 / 다이아 = 정련 / 네더라이트 = 보병. (신병은 세계 등록제 — 재질로 못 준다)
      */
-    public String weaponGradeOf(String materialName) {
+    /**
+     * 무기 등급 — 정식 PDC 태그가 있으면 그것이 진실이다.
+     * 재질 근사(legacy)는 바닐라 무기용 폴백일 뿐 — 도구를 병기화하면서 근사가 거짓말을 하기
+     * 시작했다 (곡괭이(구) → "맨손", 도끼(부) → "도", 창·권갑·단검이 전부 "검"으로 뭉갠다).
+     */
+    public String weaponGradeOf(org.bukkit.inventory.ItemStack hand, String materialName) {
+        String tagged = Weapons.gradeNameOf(hand);
+        return tagged != null ? tagged : legacyGradeOf(materialName);
+    }
+
+    /** 무기 계열 — 정식 태그 우선, 없으면 재질 근사 (바닐라 무기 하위호환) */
+    public String weaponClassOf(org.bukkit.inventory.ItemStack hand, String materialName) {
+        String tagged = Weapons.weaponClassOf(hand);
+        return tagged != null ? tagged : legacyClassOf(materialName);
+    }
+
+    private String legacyGradeOf(String materialName) {
         String m = materialName.toUpperCase(Locale.ROOT);
         if (m.startsWith("NETHERITE_")) {
             return "보병";
@@ -304,7 +320,7 @@ public final class SkillEngine {
     }
 
     /** 무기 계열 — combat.yml damage.weapon_power 의 키로 환산 */
-    public String weaponClassOf(String materialName) {
+    private String legacyClassOf(String materialName) {
         String m = materialName == null ? "" : materialName.toUpperCase(Locale.ROOT);
         if (m.endsWith("_SWORD")) {
             return "검";

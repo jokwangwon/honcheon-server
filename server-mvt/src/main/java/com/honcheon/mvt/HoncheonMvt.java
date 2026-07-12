@@ -54,12 +54,14 @@ public final class HoncheonMvt extends JavaPlugin {
                 RulesConfig.load(cfg.resolve("npc_lifecycle.yml")), RulesConfig.load(cfg.resolve("judgment.yml")));
         this.party = new PartyEngine(RulesConfig.load(cfg.resolve("party.yml")));
         this.skillEngine = new SkillEngine(cfg);
+        Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         this.skills = new SkillListener(this, skillEngine);
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
         getServer().getPluginManager().registerEvents(new TradeListener(this), this);
         getServer().getPluginManager().registerEvents(new LedgerGui(this), this);
+        getServer().getPluginManager().registerEvents(new WeaponShop(this), this);
         getServer().getPluginManager().registerEvents(skills, this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         getCommand("honcheon").setExecutor(new MvtCommand(this));

@@ -38,7 +38,9 @@ public final class MvtCommand implements CommandExecutor {
                 case "물가" -> prices(sender, args);
                 case "정산" -> settle(sender, args);
                 case "협공" -> coop(sender, args);
-                case "경지" -> realm(sender, args);   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
+                case "경지" -> realm(sender, args);
+                case "병기" -> giveWeapon(sender, args);   // 관리자 지급 — 검증용
+                case "병기상" -> weaponShop(sender);        // 장쇠 좌판   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
@@ -176,6 +178,37 @@ public final class MvtCommand implements CommandExecutor {
         }
         plugin.skills().setRealm(player, args[1],
                 args.length > 2 ? Double.parseDouble(args[2]) : 1.0);
+        return true;
+    }
+
+    /** /혼천 병기 <계열> <등급> [속성...] — 관리자 지급 (검증용) */
+    private boolean giveWeapon(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        if (!player.isOp()) {
+            player.sendMessage(ChatColor.RED + "병기 지급은 관리자의 몫이다.");
+            return true;
+        }
+        if (args.length < 3) {
+            player.sendMessage(ChatColor.GRAY
+                    + "/혼천 병기 <검|도|창|권갑|단검|부|겸|월아산|구> <범철|정련|보병|신병|마병> [속성…]");
+            return true;
+        }
+        java.util.List<String> properties = args.length > 3
+                ? java.util.List.of(java.util.Arrays.copyOfRange(args, 3, args.length))
+                : java.util.List.of();
+        player.getInventory().addItem(Weapons.make(
+                Weapons.Series.of(args[1]), Weapons.Grade.of(args[2]), properties));
+        player.sendMessage(ChatColor.GOLD + "병기를 손에 쥐었다 — " + args[2] + " " + args[1]);
+        return true;
+    }
+
+    /** /혼천 병기상 — 장쇠의 병기 좌판 */
+    private boolean weaponShop(CommandSender sender) {
+        if (sender instanceof Player player) {
+            WeaponShop.open(plugin, player);
+        }
         return true;
     }
 
