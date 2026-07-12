@@ -570,6 +570,22 @@ public final class MvtCommand implements CommandExecutor {
         if (remembered == null) {
             plugin.setRegionBase(place.id(), baseY);
         }
+        // ─── 지형 계층이 먼저 땅을 빚는다 (계약: docs/design/terrain_layer.md) ───
+        // 땅과 집은 관심사가 다르다. 지형이 부지를 보장하고(딛는 땅·경계·수역·주문 대조),
+        // 건축은 그 위에만 세운다. 동굴은 이제 **우리가 판다** — 자연 동굴을 껐으니까.
+        int forgeRadius = "noklim".equals(place.faction()) ? 24 : 44;
+        TerrainForge.SiteSpec spec = TerrainForge.prepare(world, place, site.x(), baseY, site.z(), forgeRadius);
+        plugin.getLogger().info("[지형] " + spec.summary());
+        TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
+        if (kind != null) {
+            TerrainForge.CaveSpec cave = TerrainForge.digCave(world, spec, kind);
+            plugin.getLogger().info("[지형/동굴] " + place.id() + " — " + kind + " 입구 ("
+                    + cave.mouthX() + "," + cave.mouthY() + "," + cave.mouthZ()
+                    + ") · 파낸 칸 " + cave.carved());
+            sender.sendMessage(ChatColor.GRAY + "굴 입구: /tp " + cave.mouthX() + " "
+                    + cave.mouthY() + " " + cave.mouthZ());
+        }
+
         java.util.List<Zone> built = RemoteBuilder.build(world, place, site.x(), baseY, site.z());
         if (built.isEmpty()) {
             sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
