@@ -35,6 +35,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private HuntingGrounds hunting;
     private Populace populace;   // 무명(無名) — 세계에 사는 사람들 (config/npcs/populace.yml)
     private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
+    private Dojang dojang;   // 연무장 — 따로 두들겨 보는 자리 (별도 월드 · 세계에 자국을 남기지 않는다)
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
@@ -69,6 +70,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.hunting = new HuntingGrounds(this);
         this.populace = new Populace(this);
         this.incidents = new Incidents(this);   // 순서 중요 — 생성자가 populace 에 스스로 접합한다
+        this.dojang = new Dojang(this);
         // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾼다 (워커 스레드 → 메인 스레드로 태워 준다)
         WorldBridge.onState(state -> getServer().getScheduler().runTask(this, () -> {
             for (String tag : WorldBridge.reactionTags()) {
@@ -86,6 +88,7 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(hunting, this);
         getServer().getPluginManager().registerEvents(populace, this);
         getServer().getPluginManager().registerEvents(incidents, this);
+        getServer().getPluginManager().registerEvents(dojang, this);
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
@@ -296,6 +299,11 @@ public final class HoncheonMvt extends JavaPlugin {
     /** 사냥터·산적·비무 — 적의 세 층 */
     public HuntingGrounds hunting() {
         return hunting;
+    }
+
+    /** 연무장 — 시험은 세계에 자국을 남기면 안 된다 */
+    public Dojang dojang() {
+        return dojang;
     }
 
     /** 무명(無名) — 행인·주민. 세계가 사람이 사는 곳으로 보이려면 이들이 있어야 한다 */

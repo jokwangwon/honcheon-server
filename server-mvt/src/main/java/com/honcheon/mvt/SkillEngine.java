@@ -37,10 +37,13 @@ public final class SkillEngine {
     // ─── config 미정의 폴백 (skill_motion.md 4장에 근거·제안 키를 적어 두었다) ───
     /** 실시간 '라운드' 길이 — 두름(지속형) 유지비 과금 주기. 제안 키: combat.yml realtime.round_ticks */
     private static final int DEFAULT_ROUND_TICKS = 60;
-    /** 발출(쏨)의 프레임·쿨다운 — qi_manifestation.yml forms.쏨 에 frames/cooldown_ticks 가 없다 */
+    /**
+     * 발출(쏨)의 프레임·쿨다운·사거리 — <b>이제 코드의 폴백이 아니다</b>.
+     * skill_motion.yml {@code forms.검기_참격 / 강기_포} 가 frames·cooldown_ticks·length·width 를 갖는다.
+     * 아래 값은 그 등록이 지워졌을 때의 최후 폴백일 뿐이다 (등록부가 우선).
+     */
     private static final Frames DEFAULT_SHOT_FRAMES = new Frames(8, 2, 12);
     private static final int DEFAULT_SHOT_COOLDOWN = 40;
-    /** 발출 사거리 — 선(참격) 길이. 제왕검형(선, length 8)을 기준선으로 삼는다 */
     private static final double DEFAULT_SHOT_LENGTH = 8.0;
     private static final double DEFAULT_SHOT_WIDTH = 1.5;
 
@@ -48,6 +51,8 @@ public final class SkillEngine {
     public static final String BARE = "외공기";
     /** 호신강기 — 격이 아니라 '형태'(두름_몸)다. 방어 격은 강기 (qi_manifestation forms.두름_몸) */
     public static final String GUARD = "호신강기";
+    /** 기 발출(쏨) — 무공이 아니라 기의 운용. 모션은 forms.검기_참격 / 강기_포 가 갖는다 */
+    public static final String SHOT = "__shot__";
 
     /**
      * 전투 창(窓) — '한 전투'의 MVT 근사. 이 시간 안에 아무 공방도 없으면 전투가 끝난 것으로 본다
@@ -130,6 +135,17 @@ public final class SkillEngine {
     private final int lodHalf;
     private final int cullBeyond;
     private final int duplicateWindowTicks;
+
+    // ─── 모션 등록부 (skill_motion.yml) — 【등록제 규약】 연출도 config 가 정본이다 ───
+    // 코드에는 파티클 이름도 사운드 키도 없다. 여기 담기는 것은 전부 '문자열'이다 (Bukkit 의존 0 유지).
+    private final Map<String, GradeMotion> gradeMotion;
+    private final Map<String, FormMotion> formMotion;
+    private final Map<String, SkillMotion> skillMotion;
+    private final Map<String, UltimateMotion> ultimateMotion;
+    private final Map<String, EventMotion> eventMotion;
+    private final Map<String, Traj> trajectories;
+    private final Map<String, Style> weaponStyles;
+    private final Budget budget;
 
     @SuppressWarnings("unchecked")
     public SkillEngine(Path cfg) {
@@ -335,6 +351,160 @@ public final class SkillEngine {
         this.cullBeyond = RulesConfig.intValue(lod.get("cull_beyond"));
         this.duplicateWindowTicks = RulesConfig.intValue(
                 RulesConfig.section(pf, "skills").get("duplicate_request_window_ticks"));
+
+        // ─── 모션 등록부 (config/skill_motion.yml) ───
+        Map<String, Object> mo = RulesConfig.load(cfg.resolve("skill_motion.yml"));
+        Map<String, Object> bd = RulesConfig.section(mo, "budget");
+        this.budget = new Budget(
+                intOr(bd.get("per_point_tick_max"), 30),
+                intOr(bd.get("per_cast_max"), 160),
+                intOr(bd.get("telegraph_pool"), 32),
+                intOr(bd.get("trail_pool"), 24),
+                intOr(bd.get("impact_pool"), 48),
+                intOr(bd.get("min_impact_per_target"), 3),
+                intOr(bd.get("ultimate_per_tick_max"), 48),
+                intOr(bd.get("telegraph_step_ticks"), 2),
+                intOr(bd.get("trail_max_points"), 12),
+                intOr(bd.get("ultimate_ring_points"), 8));
+
+        Map<String, GradeMotion> gms = new LinkedHashMap<>();
+        RulesConfig.section(mo, "grades").forEach((grade, raw) -> {
+            Map<String, Object> g = asMap(raw);
+            Map<String, Object> sounds = asMap(g.get("sounds"));
+            gms.put(grade, new GradeMotion(grade,
+                    intOr(g.get("rank"), 0), intOr(g.get("brightness"), 0),
+                    String.valueOf(g.getOrDefault("color", "GRAY")),
+                    fx(g.get("charge")), fx(g.get("aura")), fx(g.get("impact")), fx(g.get("accent")),
+                    str(asMap(g.get("trail")).get("particle")), intOr(asMap(g.get("trail")).get("per_point"), 1),
+                    sfxList(sounds.get("charge")), sfxList(sounds.get("arm")), sfxList(sounds.get("impact"))));
+        });
+        this.gradeMotion = Collections.unmodifiableMap(gms);
+
+        Map<String, FormMotion> fms = new LinkedHashMap<>();
+        RulesConfig.section(mo, "forms").forEach((name, raw) -> {
+            Map<String, Object> f = asMap(raw);
+            Map<String, Object> sounds = asMap(f.get("sounds"));
+            Map<String, Object> ring = asMap(f.get("ring"));
+            Object fr = f.get("frames");
+            fms.put(name, new FormMotion(name,
+                    str(f.get("kind")), str(f.get("grade")), str(f.get("trail")),
+                    dblOr(f.get("length"), DEFAULT_SHOT_LENGTH), dblOr(f.get("width"), DEFAULT_SHOT_WIDTH),
+                    fr instanceof List<?> ? frames(fr) : DEFAULT_SHOT_FRAMES,
+                    intOr(f.get("cooldown_ticks"), DEFAULT_SHOT_COOLDOWN),
+                    fx(f.get("charge")), str(asMap(f.get("beam")).get("particle")),
+                    intOr(asMap(f.get("beam")).get("per_point"), 1),
+                    fx(f.get("burst")), fx(f.get("aura")),
+                    str(ring.get("particle")), intOr(ring.get("points"), 0),
+                    dblOr(ring.get("radius"), 0.9), intOr(ring.get("per_point"), 1),
+                    dblOr(ring.get("height"), 1.0),
+                    sfxList(sounds.get("charge")), sfxList(sounds.get("release")),
+                    sfxList(sounds.get("deploy"))));
+        });
+        this.formMotion = Collections.unmodifiableMap(fms);
+
+        Map<String, SkillMotion> sms = new LinkedHashMap<>();
+        RulesConfig.section(mo, "skills").forEach((id, raw) -> {
+            Map<String, Object> s = asMap(raw);
+            List<Step> steps = new ArrayList<>();
+            if (s.get("steps") instanceof List<?> list) {
+                for (Object o : list) {
+                    Map<String, Object> st = asMap(o);
+                    steps.add(new Step(str(st.get("trail")), str(st.get("particle")),
+                            intOr(st.get("count"), 1), Boolean.TRUE.equals(st.get("finisher")),
+                            intOr(st.get("telegraph_boost"), 0), sfx(st.get("sound"))));
+                }
+            }
+            sms.put(id, new SkillMotion(id, String.valueOf(s.getOrDefault("name", id)),
+                    String.valueOf(s.getOrDefault("style", "무관")), List.copyOf(steps)));
+        });
+        this.skillMotion = Collections.unmodifiableMap(sms);
+
+        Map<String, UltimateMotion> ums = new LinkedHashMap<>();
+        RulesConfig.section(mo, "ultimates").forEach((id, raw) -> {
+            Map<String, Object> u = asMap(raw);
+            Map<String, Object> charge = asMap(u.get("charge"));
+            Map<String, Object> sounds = asMap(u.get("sounds"));
+            ums.put(id, new UltimateMotion(id, str(u.get("trail")),
+                    str(charge.get("particle")), intOr(charge.get("ring_points"), 8),
+                    intOr(charge.get("per_point"), 2), str(charge.get("core")),
+                    intOr(charge.get("core_count"), 0),
+                    fx(u.get("burst")), fx(u.get("accent")),
+                    dblOr(asMap(u.get("burst")).get("spread_ratio"), 0.33),
+                    sfxList(sounds.get("charge")), sfxList(sounds.get("release")),
+                    sfxList(sounds.get("hit"))));
+        });
+        this.ultimateMotion = Collections.unmodifiableMap(ums);
+
+        Map<String, EventMotion> ems = new LinkedHashMap<>();
+        RulesConfig.section(mo, "events").forEach((name, raw) -> {
+            Map<String, Object> e = asMap(raw);
+            ems.put(name, new EventMotion(name, fx(e), sfxList(e.get("sounds"))));
+        });
+        this.eventMotion = Collections.unmodifiableMap(ems);
+
+        Map<String, Traj> tjs = new LinkedHashMap<>();
+        RulesConfig.section(mo, "trajectories").forEach((type, raw) -> {
+            Map<String, Object> t = asMap(raw);
+            tjs.put(type, new Traj(type, str(t.get("shape")),
+                    Math.min(intOr(t.get("points"), 4), budget.trailMaxPoints()),
+                    str(t.get("phase")), dblOr(t.get("radius_ratio"), 1.0),
+                    dblOr(t.get("step"), 1.0), str(t.get("accent_at"))));
+        });
+        this.trajectories = Collections.unmodifiableMap(tjs);
+
+        Map<String, Style> sts = new LinkedHashMap<>();
+        RulesConfig.section(mo, "weapon_styles").forEach((cls, raw) -> {
+            Map<String, Object> s = asMap(raw);
+            sts.put(cls, new Style(cls, str(s.get("verb")), str(s.get("arc")), str(s.get("thrust")),
+                    str(s.get("trail")), sfx(s.get("swing"))));
+        });
+        this.weaponStyles = Collections.unmodifiableMap(sts);
+    }
+
+    // ─── 모션 등록부 판독 도우미 (전부 문자열·수치 — Bukkit 타입은 SkillListener 가 해석한다) ───
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object raw) {
+        return raw instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
+    }
+
+    private static String str(Object raw) {
+        return raw == null ? null : String.valueOf(raw);
+    }
+
+    private static int intOr(Object raw, int fallback) {
+        return raw instanceof Number n ? n.intValue() : fallback;
+    }
+
+    private static double dblOr(Object raw, double fallback) {
+        return raw instanceof Number n ? n.doubleValue() : fallback;
+    }
+
+    private static Fx fx(Object raw) {
+        Map<String, Object> m = asMap(raw);
+        return new Fx(str(m.get("particle")), intOr(m.get("count"), 0),
+                dblOr(m.get("spread"), 0.1), dblOr(m.get("extra"), 0.0));
+    }
+
+    private static Sfx sfx(Object raw) {
+        Map<String, Object> m = asMap(raw);
+        return m.get("key") == null ? null
+                : new Sfx(String.valueOf(m.get("key")),
+                        (float) dblOr(m.get("volume"), 0.8), (float) dblOr(m.get("pitch"), 1.0));
+    }
+
+    private static List<Sfx> sfxList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Sfx> out = new ArrayList<>();
+        for (Object o : list) {
+            Sfx s = sfx(o);
+            if (s != null) {
+                out.add(s);
+            }
+        }
+        return List.copyOf(out);
     }
 
     // ─── config 문자열에서 수치를 캐낸다 (서술문 안의 정본 수치 — 별도 키가 생기면 이 정규식은 사라진다) ───
@@ -509,6 +679,75 @@ public final class SkillEngine {
 
     /** 한 대상에 대한 판정 결과 — 전투는 주사위를 쓴다 (조성기와 달리 난수 허용) */
     public record Strike(int roll, int margin, String tierId, String tierName, boolean hit, int damage) {
+    }
+
+    // ══════════ 모션 등록부 값 타입 (skill_motion.yml) ══════════
+    // 【등록제 규약】 여기 담기는 것은 전부 문자열·수치다. Bukkit 의 Particle·Sound 로 바꾸는 것은
+    // SkillListener 의 몫이다 (이 클래스의 Bukkit 의존 0 불변식을 지킨다).
+
+    /** 파티클 한 발 — 팔레트 이름(smoke·crit·end_rod…) · 개수 · 퍼짐 · 속도 */
+    public record Fx(String particle, int count, double spread, double extra) {
+        public boolean present() {
+            return particle != null && count > 0;
+        }
+    }
+
+    /** 소리 한 발 — 바닐라 사운드 키("block.anvil.land"). 1.21 의 Sound 는 열거형이 아니다 (문자열 재생) */
+    public record Sfx(String key, float volume, float pitch) {
+    }
+
+    /** 파티클 예산 — 한 지점·한 틱 상한과 세 개의 풀(응집·궤적·타격) */
+    public record Budget(int perPointTickMax, int perCastMax, int telegraphPool, int trailPool,
+                         int impactPool, int minImpactPerTarget, int ultimateTickMax,
+                         int telegraphStepTicks, int trailMaxPoints, int ultimateRingPoints) {
+    }
+
+    /** 격의 모션 — 사다리의 한 칸. rank 가 오르면 charge·impact·aura 가 반드시 커진다 (motion_audit ③) */
+    public record GradeMotion(String grade, int rank, int brightness, String color,
+                              Fx charge, Fx aura, Fx impact, Fx accent,
+                              String trailParticle, int trailPerPoint,
+                              List<Sfx> chargeSounds, List<Sfx> armSounds, List<Sfx> impactSounds) {
+    }
+
+    /** 형태의 모션 — 두름(잔광) · 쏨(발출: 응집→광선→작렬) · 두름_몸(호신강기 고리) · 부림(어검) */
+    public record FormMotion(String name, String kind, String grade, String trail,
+                             double length, double width, Frames frames, int cooldownTicks,
+                             Fx charge, String beamParticle, int beamPerPoint, Fx burst, Fx aura,
+                             String ringParticle, int ringPoints, double ringRadius,
+                             int ringPerPoint, double ringHeight,
+                             List<Sfx> chargeSounds, List<Sfx> releaseSounds, List<Sfx> deploySounds) {
+    }
+
+    /** 초식 한 칸의 모션 — trail 은 skill_mechanics 의 히트박스 type 과 같아야 한다 (motion_audit ②) */
+    public record Step(String trail, String particle, int count, boolean finisher,
+                       int telegraphBoost, Sfx sound) {
+    }
+
+    public record SkillMotion(String id, String name, String style, List<Step> steps) {
+        public Step step(int index) {
+            return steps.isEmpty() ? null : steps.get(Math.floorMod(index, steps.size()));
+        }
+    }
+
+    /** 오의의 모션 — 응집 고리(다른 어떤 모션도 고리를 쓰지 않는다) · 개시 섬광 · 작렬 */
+    public record UltimateMotion(String id, String trail, String chargeParticle, int ringPoints,
+                                 int ringPerPoint, String coreParticle, int coreCount,
+                                 Fx burst, Fx accent, double burstSpreadRatio,
+                                 List<Sfx> chargeSounds, List<Sfx> releaseSounds, List<Sfx> hitSounds) {
+    }
+
+    /** 사건의 모션 — 무기 균열·파괴·절단 · 다운캐스트 · 호신강기 무효/관통/붕괴 · 패링 … */
+    public record EventMotion(String name, Fx fx, List<Sfx> sounds) {
+    }
+
+    /** 궤적 — 히트박스 type 과 1:1 (호=arc · 선=line · 원=circle · 시=shot · 돌=dash · 진=ring) */
+    public record Traj(String type, String shape, int points, String phase,
+                       double radiusRatio, double step, String accentAt) {
+    }
+
+    /** 무기 계열의 모션 — 검은 벤다(sweep_attack), 창은 찌른다(enchanted_hit) */
+    public record Style(String weaponClass, String verb, String arc, String thrust,
+                        String trail, Sfx swing) {
     }
 
     /** 플레이어 무공 런타임 상태 — 순수 데이터 (엔진은 이걸 읽고 쓰지 않는다; 리스너가 소유) */
@@ -964,10 +1203,15 @@ public final class SkillEngine {
         if (gradeRank(grade) < 2) {
             throw new IllegalArgumentException("발출할 수 없는 격: " + grade);   // 발경은 근접 유일
         }
-        // 발출은 '무공'이 아니라 기의 운용 — 코스트는 강등된 격 기준으로 다시 읽는다 (COST_BY_GRADE)
-        return finish("__shot__", grade, -1, realm, energy, weaponClass,
-                DEFAULT_SHOT_FRAMES, "중", "선", DEFAULT_SHOT_LENGTH, DEFAULT_SHOT_WIDTH,
-                DEFAULT_SHOT_COOLDOWN);
+        // 발출은 '무공'이 아니라 기의 운용 — 코스트는 강등된 격 기준으로 다시 읽는다 (COST_BY_GRADE).
+        // 프레임·사거리·폭·쿨다운은 이제 모션 등록부가 정본이다 (skill_motion.yml forms.쏨).
+        FormMotion form = shotForm(grade);
+        return finish(SHOT, grade, -1, realm, energy, weaponClass,
+                form == null ? DEFAULT_SHOT_FRAMES : form.frames(), "중",
+                form == null ? "선" : form.trail(),
+                form == null ? DEFAULT_SHOT_LENGTH : form.length(),
+                form == null ? DEFAULT_SHOT_WIDTH : form.width(),
+                form == null ? DEFAULT_SHOT_COOLDOWN : form.cooldownTicks());
     }
 
     /** 발출(쏨) 1회 소모 — qi_manifestation.yml forms.쏨 */
@@ -987,7 +1231,7 @@ public final class SkillEngine {
     private Cast finish(String skillId, String wantGrade, int cost, String realm, int energy,
                         String weaponClass, Frames frames, String stagger, String hitType,
                         double range, double angle, int cooldown) {
-        boolean shot = "__shot__".equals(skillId);
+        boolean shot = SHOT.equals(skillId);
         String grade = wantGrade;
         boolean gated = false;
         while (!BARE.equals(grade) && !internal.canUse(realm, grade)) {
@@ -1020,6 +1264,11 @@ public final class SkillEngine {
     }
 
     // ══════════ NPC — 대칭 원칙 (npc_combat.yml symmetry) ══════════
+
+    /** 경지의 내력 풀 — 그 경지의 내공 하한으로 세운다 (연무장이 경지를 바꿀 때 쓴다) */
+    public int poolOf(String realm) {
+        return internal.pool(naegongFloor.getOrDefault(realm, 0.0));
+    }
 
     /** 등록부의 그 몸 (npcs/cheongha_npcs.yml) — 없으면 null (전투에 서지 않는 NPC) */
     public Npc npc(String id) {
@@ -1193,5 +1442,59 @@ public final class SkillEngine {
     /** F-R1 — 같은 틱 중복 시전 폐기 창 */
     public int duplicateWindowTicks() {
         return duplicateWindowTicks;
+    }
+
+    // ══════════ 모션 등록부 (skill_motion.yml) — 연출의 단일 진실 원천 ══════════
+
+    public Budget motionBudget() {
+        return budget;
+    }
+
+    /**
+     * 격의 모션. 호신강기는 격이 아니라 형태이므로 그 방어 격(강기)의 모션으로 선다 —
+     * 그러나 <b>몸을 두르는 고리</b>는 형태(두름_몸)가 따로 갖는다 (실루엣이 달라야 읽힌다).
+     */
+    public GradeMotion motionGrade(String grade) {
+        String key = grade == null ? BARE : GUARD.equals(grade) ? guardGrade : grade;
+        GradeMotion m = gradeMotion.get(key);
+        return m != null ? m : gradeMotion.get(BARE);
+    }
+
+    /** 형태의 모션 — 검기_두름 · 검강_두름 · 검기_참격 · 강기_포 · 호신강기 · 이기어검 */
+    public FormMotion motionForm(String form) {
+        return formMotion.get(form);
+    }
+
+    /** 발출(쏨)의 형태 — 격에 따라 참격/포. 프레임·사거리·쿨다운도 여기서 나온다 (코드 폴백 아님) */
+    public FormMotion shotForm(String grade) {
+        return switch (grade == null ? "" : grade) {
+            case "검기" -> formMotion.get("검기_참격");
+            case "강기" -> formMotion.get("강기_포");
+            default -> null;
+        };
+    }
+
+    public SkillMotion motionSkill(String skillId) {
+        return skillMotion.get(skillId);
+    }
+
+    public UltimateMotion motionUltimate(String id) {
+        return ultimateMotion.get(id);
+    }
+
+    /** 사건의 모션 — 등록되지 않은 이름을 부르면 null (코드가 수치를 지어내지 않는다) */
+    public EventMotion motionEvent(String name) {
+        return eventMotion.get(name);
+    }
+
+    /** 궤적 — 보이는 모양. skill_mechanics 의 히트박스 type 을 그대로 받는다 */
+    public Traj trajectory(String type) {
+        return trajectories.get(type);
+    }
+
+    /** 무기 계열의 모션 — 등록에 없는 계열은 '무관'(움직인다)으로 떨어진다 */
+    public Style weaponStyle(String weaponClass) {
+        Style s = weaponStyles.get(weaponClass);
+        return s != null ? s : weaponStyles.get("무관");
     }
 }

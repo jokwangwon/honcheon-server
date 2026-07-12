@@ -1,0 +1,616 @@
+#!/usr/bin/env python3
+"""모션 감사 — 무공이 눈에 보이는가를 재는 자.
+
+맵에는 `/혼천 검수`, 팩에는 `texture_audit.py`, 전투에는 `combat_audit.py` 가 있다.
+**모션**에는 없었다. 무공을 배워도 눈으로는 구별되지 않았다 — 격(格)별로만 파티클이 갈렸으니까.
+
+이 도구는 config/ 를 읽어 여섯 가지를 잰다:
+
+  ① 커버리지  — skills.yml · skill_mechanics.yml · qi_manifestation.yml · ultimate_arts.yml 의
+                모든 무공·초식·격·형태·오의가 skill_motion.yml 에 모션을 갖는가 (목표 100%)
+  ② 궤적 정합 — 보이는 모양(trail)과 맞는 모양(hitbox type)이 같은가
+                【보이는 것과 맞는 것이 다르면 그건 거짓말이다】
+  ③ 격 사다리 — 격이 오를수록 파티클 수·밝기가 **단조 증가**하는가
+                (강해진 것이 눈에 덜 띄면 격은 장식이다)
+  ④ 팔레트    — 등록된 바닐라 파티클 13종 밖의 것을 쓰지 않는가 (팩이 못 따라간 획은 없어야 한다)
+  ⑤ 예산      — 한 지점·한 틱 상한, 한 시전 총량 (performance.yml F-P1 을 넘지 않는가)
+  ⑥ 배선      — 등록부의 사건이 코드에 배선됐는가 · 코드에 파티클·소리가 하드코딩됐는가 (등록제 규약)
+
+config 를 고치지 않는다 — 재기만 한다.
+
+사용법:
+    python3 tools/motion_audit.py                 # 전체
+    python3 tools/motion_audit.py --coverage-only
+
+외부 라이브러리 없음 (game_audit.py 의 YAML 서브셋 파서·Report 를 그대로 계승).
+종료 코드: 위반(❌) 1건 이상이면 1, 아니면 0.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from game_audit import (  # noqa: E402  — 문법·출력 형식 계승 (읽기 전용 재사용)
+    FAIL,
+    Report,
+    YamlError,
+    dig,
+    load_all,
+)
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MVT = os.path.join(ROOT, "server-mvt", "src", "main", "java", "com", "honcheon", "mvt")
+
+# 비타격형 히트박스 — global_rules.hitbox_types 에는 없지만 skill_mechanics 가 type 으로 쓴다
+NON_HIT_TYPES = ["태세", "가드태세", "시전"]
+SOUND_KEY = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
+# 오의 hitbox → 궤적 (반격 오의는 벨 것을 찾지 않는다 — 기다리는 태세다)
+ULT_TRAIL = {"원": "원", "선": "선", "반격_오의": "가드태세"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  판독 도우미
+# ══════════════════════════════════════════════════════════════════════════════
+
+def mech_types(spec):
+    """무공 하나의 초식별 히트박스 type 목록 (콤보면 여러 칸, 단발이면 한 칸)."""
+    combo = spec.get("combo")
+    if isinstance(combo, list):
+        return [str(h.get("type", "호")) for h in combo]
+    return [str(spec.get("type", "호"))]
+
+
+def mech_frames(spec):
+    """초식별 프레임 [선딜, 지속, 후딜]."""
+    combo = spec.get("combo")
+    if isinstance(combo, list):
+        return [list(h.get("frames", [0, 0, 0])) for h in combo]
+    return [list(spec.get("frames", [0, 0, 0]))]
+
+
+def steps_of(motion):
+    s = motion.get("steps")
+    return s if isinstance(s, list) else []
+
+
+def particles_in(node, out):
+    """등록부 전체에서 파티클 이름을 긁는다 (팔레트 대조용)."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k in ("particle", "arc", "thrust", "trail", "beam", "core", "swing") \
+                    and isinstance(v, str):
+                out.add(v)
+            elif k == "trail" and isinstance(v, str):
+                out.add(v)
+            else:
+                particles_in(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            particles_in(v, out)
+    return out
+
+
+def sounds_in(node, out):
+    if isinstance(node, dict):
+        if "key" in node and isinstance(node["key"], str):
+            out.add(node["key"])
+        for v in node.values():
+            sounds_in(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            sounds_in(v, out)
+    return out
+
+
+def form_leaves(forms):
+    """qi_manifestation.yml forms 의 잎 = 실제 형태 (note 같은 서술 키는 뺀다)."""
+    leaves = []
+    for group, body in (forms or {}).items():
+        if not isinstance(body, dict):
+            continue
+        for name, spec in body.items():
+            if isinstance(spec, dict):
+                leaves.append(name)
+    return leaves
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ① 커버리지 — 빠진 무공이 없는가
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_coverage(cfg, mo, rep):
+    rep.head("① 커버리지 — 등록되지 않은 모션은 존재하지 않는 모션이다")
+
+    arts = dig(cfg, "skills.yml", "martial_arts", default={}) or {}
+    mechs = dig(cfg, "skill_mechanics.yml", "skills", default={}) or {}
+    grades = dig(cfg, "qi_manifestation.yml", "grades", default={}) or {}
+    forms = dig(cfg, "qi_manifestation.yml", "forms", default={}) or {}
+    ults = dig(cfg, "ultimate_arts.yml", "legacy_arts", default={}) or {}
+
+    m_skills = mo.get("skills", {}) or {}
+    m_grades = mo.get("grades", {}) or {}
+    m_forms = mo.get("forms", {}) or {}
+    m_ults = mo.get("ultimates", {}) or {}
+
+    total = hit = 0
+
+    # 카탈로그 무공 — 액션 데이터가 있는 것은 모션도 있어야 한다
+    missing_mech = [k for k in arts if k not in mechs]
+    rep.verdict(not missing_mech,
+                f"카탈로그 {len(arts)}종 → 액션 데이터"
+                + ("" if not missing_mech else f" — 누락 {missing_mech}"))
+
+    for sid in mechs:
+        total += 1
+        if sid in m_skills:
+            hit += 1
+        else:
+            rep.fail(f"무공 모션 누락: {sid} (skill_mechanics 에 있는데 skill_motion 에 없다)")
+
+    # 초식(콤보 칸) 단위 커버리지 — 3타 검법이 모션 한 줄이면 3타가 다 같아 보인다
+    step_total = step_hit = 0
+    for sid, spec in mechs.items():
+        types = mech_types(spec)
+        steps = steps_of(m_skills.get(sid, {}))
+        step_total += len(types)
+        if len(steps) != len(types):
+            rep.fail(f"초식 수 불일치: {sid} — 액션 {len(types)}칸 vs 모션 {len(steps)}칸")
+            step_hit += min(len(steps), len(types))
+        else:
+            step_hit += len(types)
+
+    for g in grades:
+        total += 1
+        if g in m_grades:
+            hit += 1
+        else:
+            rep.fail(f"격 모션 누락: {g}")
+
+    leaves = form_leaves(forms)
+    for f in leaves:
+        total += 1
+        if f in m_forms:
+            hit += 1
+        else:
+            rep.fail(f"형태 모션 누락: {f} (qi_manifestation forms)")
+
+    for u in ults:
+        total += 1
+        if u in m_ults:
+            hit += 1
+        else:
+            rep.fail(f"오의 모션 누락: {u}")
+
+    # 미참조 — 등록부에만 있고 아무도 안 부르는 키
+    orphan = [k for k in m_skills if k not in mechs]
+    if orphan:
+        rep.fail(f"미참조 모션: {orphan} (skill_mechanics 에 없는 무공)")
+    # 외공기는 '격'이 아니라 소모 밴드다 (internal_energy.yml cost_bands) — 사다리의 0번 칸으로 등록한다
+    bands = dig(cfg, "internal_energy.yml", "cost_bands", default={}) or {}
+    for g in m_grades:
+        if g in grades or g in bands:
+            continue
+        rep.fail(f"미참조 격 모션: {g} (qi_manifestation grades · internal_energy cost_bands 어느 쪽에도 없다)")
+    for u in m_ults:
+        if u not in ults:
+            rep.fail(f"미참조 오의 모션: {u}")
+
+    pct = 100.0 * hit / total if total else 0.0
+    spct = 100.0 * step_hit / step_total if step_total else 0.0
+    rep.verdict(hit == total,
+                f"커버리지 {hit}/{total} = {pct:.1f}%"
+                f"  (무공 {len(mechs)} · 격 {len(grades)} · 형태 {len(leaves)} · 오의 {len(ults)})")
+    rep.verdict(step_hit == step_total,
+                f"초식(콤보 칸) 커버리지 {step_hit}/{step_total} = {spct:.1f}%"
+                " — 3타 검법의 세 타는 서로 달라야 한다")
+    return pct, spct
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ② 궤적 정합 — 보이는 모양 = 맞는 모양
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_trajectory(cfg, mo, rep):
+    rep.head("② 궤적 정합 — 보이는 것과 맞는 것이 다르면 그건 거짓말이다")
+
+    mechs = dig(cfg, "skill_mechanics.yml", "skills", default={}) or {}
+    hitbox_types = dig(cfg, "skill_mechanics.yml", "global_rules", "hitbox_types", default=[]) or []
+    ults = dig(cfg, "ultimate_arts.yml", "legacy_arts", default={}) or {}
+    traj = mo.get("trajectories", {}) or {}
+    m_skills = mo.get("skills", {}) or {}
+    m_ults = mo.get("ultimates", {}) or {}
+    m_forms = mo.get("forms", {}) or {}
+
+    missing = [t for t in list(hitbox_types) + NON_HIT_TYPES if t not in traj]
+    rep.verdict(not missing,
+                f"히트박스 {len(hitbox_types)}종 + 비타격 {len(NON_HIT_TYPES)}종 → 궤적 등록"
+                + ("" if not missing else f" — 누락 {missing}"))
+
+    bad = 0
+    for sid, spec in mechs.items():
+        types = mech_types(spec)
+        steps = steps_of(m_skills.get(sid, {}))
+        for i, t in enumerate(types):
+            if i >= len(steps):
+                break
+            trail = str(steps[i].get("trail", ""))
+            if trail != t:
+                bad += 1
+                rep.fail(f"궤적 불일치: {sid}[{i + 1}타] — 히트박스 '{t}' 인데 궤적 '{trail}'")
+            elif trail not in traj:
+                bad += 1
+                rep.fail(f"미등록 궤적: {sid}[{i + 1}타] — '{trail}' 이 trajectories 에 없다")
+    rep.verdict(bad == 0, f"초식 궤적 ↔ 히트박스 일치 (불일치 {bad}건)")
+
+    # 오의 — ultimate_arts type.hitbox / type.form
+    ubad = 0
+    for uid, spec in ults.items():
+        t = spec.get("type", {}) or {}
+        want = ULT_TRAIL.get(str(t.get("hitbox") or t.get("form") or ""))
+        got = str((m_ults.get(uid) or {}).get("trail", ""))
+        if want and got != want:
+            ubad += 1
+            rep.fail(f"오의 궤적 불일치: {uid} — 정본 '{t.get('hitbox') or t.get('form')}' → '{want}' 인데 '{got}'")
+    rep.verdict(ubad == 0, f"오의 궤적 ↔ ultimate_arts hitbox 일치 (불일치 {ubad}건)")
+
+    # 발출(쏨) — qi_manifestation forms.쏨.hitbox 서술("선(참격) 또는 시(투사체)")과 궤적
+    shot_hit = str(dig(cfg, "qi_manifestation.yml", "forms", "쏨", "검기_참격", "hitbox", default=""))
+    shot_trail = str((m_forms.get("검기_참격") or {}).get("trail", ""))
+    rep.verdict(shot_trail and shot_trail in shot_hit,
+                f"발출 궤적 '{shot_trail}' ↔ forms.쏨.hitbox '{shot_hit}'")
+
+    # 미참조 궤적
+    used = {str(s.get("trail")) for m in m_skills.values() for s in steps_of(m)}
+    used |= {str(u.get("trail")) for u in m_ults.values()}
+    used |= {str(f.get("trail")) for f in m_forms.values() if f.get("trail")}
+    unused = [t for t in traj if t not in used]
+    if unused:
+        rep.warn(f"미참조 궤적: {unused} (등록됐지만 아무 초식도 쓰지 않는다)")
+    return bad + ubad
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ③ 격의 사다리 — 시각적 단조 증가
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_ladder(cfg, mo, rep):
+    rep.head("③ 격의 사다리 — 강해질수록 눈에 띄어야 한다 (단조 증가)")
+
+    grades = dig(cfg, "qi_manifestation.yml", "grades", default={}) or {}
+    m_grades = mo.get("grades", {}) or {}
+
+    # rank 정합 — 외공기는 qi_manifestation 에 없다 (격이 아니라 밴드다). rank 0 으로 선다
+    bad = 0
+    for g, spec in grades.items():
+        mg = m_grades.get(g)
+        if not mg:
+            continue
+        if int(mg.get("rank", -1)) != int(spec.get("rank", -2)):
+            bad += 1
+            rep.fail(f"격 rank 불일치: {g} — 정본 {spec.get('rank')} vs 모션 {mg.get('rank')}")
+    rep.verdict(bad == 0, f"격 rank ↔ qi_manifestation 정본 일치 (불일치 {bad}건)")
+
+    order = sorted(m_grades.items(), key=lambda kv: int(kv[1].get("rank", 0)))
+    axes = [
+        ("밝기(brightness)", lambda s: int(s.get("brightness", 0))),
+        ("응집 파티클(charge)", lambda s: int((s.get("charge") or {}).get("count", 0))),
+        ("타격 파티클(impact)", lambda s: int((s.get("impact") or {}).get("count", 0))),
+        ("두름 잔광(aura)", lambda s: int((s.get("aura") or {}).get("count", 0))),
+    ]
+    fails = 0
+    for label, get in axes:
+        seq = [(g, get(s)) for g, s in order]
+        mono = all(seq[i][1] < seq[i + 1][1] for i in range(len(seq) - 1))
+        line = " < ".join(f"{g} {v}" for g, v in seq)
+        if mono:
+            rep.ok(f"{label}: {line}")
+        else:
+            fails += 1
+            rep.fail(f"{label} 단조 증가 위반: {line}")
+
+    # 소리 — 격마다 타격음이 있어야 한다 (눈을 감아도 격이 읽힌다)
+    silent = [g for g, s in order if not (s.get("sounds") or {}).get("impact")]
+    rep.verdict(not silent, "격마다 타격음 등록" + ("" if not silent else f" — 없음: {silent}"))
+    # 응집음 — 외공기 말고는 전부 예고음이 있어야 한다 (응집을 보고/듣고 물러설 수 있다)
+    quiet = [g for g, s in order
+             if int(s.get("rank", 0)) > 0 and not (s.get("sounds") or {}).get("charge")]
+    rep.verdict(not quiet, "격(외공기 제외)마다 응집음 등록" + ("" if not quiet else f" — 없음: {quiet}"))
+    return bad + fails + len(silent) + len(quiet)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ④ 팔레트 — 팩이 다시 그릴 13장 밖으로 나가지 않는다
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_palette(mo, rep):
+    rep.head("④ 팔레트 — 팩이 못 따라간 획은 없어야 한다 (수묵 규약)")
+
+    palette = mo.get("palette", {}) or {}
+    used = particles_in({k: v for k, v in mo.items() if k != "palette"}, set())
+    used.discard(None)
+    # trajectories/skills 의 'trail' 은 궤적 이름(호·선…)이지 파티클이 아니다 — 팔레트 대조에서 뺀다
+    traj_names = set(mo.get("trajectories", {}) or {})
+    used = {p for p in used if p not in traj_names}
+
+    unknown = sorted(p for p in used if p not in palette)
+    rep.verdict(not unknown,
+                f"파티클 참조 {len(used)}종 ⊆ 팔레트 {len(palette)}종"
+                + ("" if not unknown else f" — 팔레트 밖: {unknown}"))
+
+    unused = sorted(p for p in palette if p not in used)
+    if unused:
+        rep.warn(f"미사용 팔레트: {unused} (팩이 그릴 이유가 없는 텍스처)")
+
+    # 채색 예외는 명시된 것뿐이어야 한다 (수묵 규약)
+    colored = [p for p in used if p in ("crimson_spore",)]
+    rep.ok(f"채색 예외 {len(colored)}종 — {colored or '없음'} (마공의 혈점: 예외 자체가 정보다)")
+    return len(unknown)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑤ 예산 — 한 시전이 수백 개를 뿌리면 서버가 죽는다
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_budget(cfg, mo, rep):
+    rep.head("⑤ 파티클 예산 (performance.yml F-P1)")
+
+    view = int(dig(cfg, "performance.yml", "particles", "per_player_view_per_tick", default=600))
+    cluster = int(dig(cfg, "performance.yml", "load_test", "combat_cluster_size", default=20))
+    b = mo.get("budget", {}) or {}
+    point_max = int(b.get("per_point_tick_max", 30))
+    cast_max = int(b.get("per_cast_max", 160))
+    tele_pool = int(b.get("telegraph_pool", 32))
+    trail_pool = int(b.get("trail_pool", 24))
+    impact_pool = int(b.get("impact_pool", 48))
+    ult_tick = int(b.get("ultimate_per_tick_max", 48))
+    ult_cast = int(b.get("ultimate_per_cast_max", 320))
+
+    rep.verdict(point_max * cluster <= view,
+                f"한 지점·한 틱 {point_max} × 군집 {cluster}인 = {point_max * cluster}"
+                f" ≤ 시야 예산 {view}/틱")
+
+    grades = mo.get("grades", {}) or {}
+    events = mo.get("events", {}) or {}
+    crit = int((events.get("대성공") or {}).get("count", 0))
+
+    # 가장 비싼 한 지점 = 최상위 격의 타격 + 강조 + 대성공
+    worst_g, worst_n = None, 0
+    for g, s in grades.items():
+        n = int((s.get("impact") or {}).get("count", 0)) + int((s.get("accent") or {}).get("count", 0)) + crit
+        if n > worst_n:
+            worst_g, worst_n = g, n
+    rep.verdict(worst_n <= point_max,
+                f"가장 비싼 타격 지점: {worst_g} {worst_n}개 (타격+강조+대성공) ≤ {point_max}")
+
+    # 응집 한 발 (격 응집 + telegraph_boost 최대치)
+    boost = max([int(s.get("telegraph_boost", 0))
+                 for m in (mo.get("skills") or {}).values() for s in steps_of(m)] or [0])
+    worst_charge = max(int((s.get("charge") or {}).get("count", 0)) for s in grades.values()) + boost
+    rep.verdict(worst_charge <= point_max,
+                f"가장 비싼 응집 1회: {worst_charge}개 (최상위 격 + 텔레그래프 가중 {boost}) ≤ {point_max}")
+
+    # 한 시전 총량 (단일 대상 최악치)
+    worst_cast = tele_pool + trail_pool + 1 + worst_n
+    rep.verdict(worst_cast <= cast_max,
+                f"한 시전 총량 최악치: 응집풀 {tele_pool} + 궤적풀 {trail_pool} + 강조 1"
+                f" + 타격 {worst_n} = {worst_cast} ≤ {cast_max}")
+
+    # 다중 대상 — 타격 풀을 나눠 쓴다
+    max_targets = int(dig(cfg, "skill_mechanics.yml", "global_rules", "max_targets_default", default=8))
+    per_target = max(int(b.get("min_impact_per_target", 3)), impact_pool // max_targets)
+    rep.verdict(per_target * max_targets <= point_max * max_targets,
+                f"광역 {max_targets}인: 타격풀 {impact_pool} ÷ {max_targets} = 대상당 {per_target}개"
+                f" (하한 {b.get('min_impact_per_target')} — 맞았다는 사실은 언제나 보인다)")
+
+    # 궤적 — 점당 개수 × 표본점이 풀을 넘으면 코드가 솎아야 한다 (등록부는 그 상한을 알린다)
+    traj = mo.get("trajectories", {}) or {}
+    over = []
+    for m_id, m in (mo.get("skills") or {}).items():
+        for i, s in enumerate(steps_of(m)):
+            pts = int((traj.get(str(s.get("trail"))) or {}).get("points", 0))
+            n = pts * int(s.get("count", 1))
+            if n > trail_pool:
+                over.append(f"{m_id}[{i + 1}타] {n}")
+    # 궤적이 풀을 넘으면 엔진이 표본점을 솎는다 (SkillListener.trail: points = trail_pool / per).
+    # 위반이 아니라 설계다 — 사거리 12m 선을 그려도 파티클은 24개를 넘지 않는다.
+    rep.ok(f"궤적 ≤ 궤적풀 {trail_pool}: 점당 개수로 표본점을 솎는 초식 {len(over)}건"
+           + (f" (예: {over[:3]})" if over else " — 없음"))
+
+    # 오의
+    ubad = 0
+    for uid, u in (mo.get("ultimates") or {}).items():
+        c = u.get("charge") or {}
+        ring = int(c.get("ring_points", 0)) * int(c.get("per_point", 0)) + int(c.get("core_count", 0))
+        burst = int((u.get("burst") or {}).get("count", 0)) + int((u.get("accent") or {}).get("count", 0))
+        if ring > ult_tick or burst > ult_tick:
+            ubad += 1
+            rep.fail(f"오의 예산 초과: {uid} — 응집 {ring} / 폭발 {burst} > {ult_tick}")
+    rep.verdict(ubad == 0,
+                f"오의 {len(mo.get('ultimates') or {})}종: 응집·폭발 ≤ 한 틱 {ult_tick}"
+                f" (우선권 — 생략이 아니라 감축)")
+    # 오의 총량 (선딜 20틱 = 10회 응집 + 폭발 + 타격풀)
+    ult_worst = 0
+    for uid, u in (mo.get("ultimates") or {}).items():
+        c = u.get("charge") or {}
+        ring = int(c.get("ring_points", 0)) * int(c.get("per_point", 0)) + int(c.get("core_count", 0))
+        frames = dig(cfg, "ultimate_arts.yml", "legacy_arts", uid, "frames", default=[0, 0, 0])
+        emits = int(frames[0]) // int(b.get("telegraph_step_ticks", 2))
+        total = ring * emits + int((u.get("burst") or {}).get("count", 0)) + impact_pool
+        ult_worst = max(ult_worst, total)
+    rep.verdict(ult_worst <= ult_cast,
+                f"오의 한 시전 총량 최악치 {ult_worst} ≤ {ult_cast}")
+
+    fails = int(worst_n > point_max) + int(worst_charge > point_max) + int(worst_cast > cast_max) \
+        + ubad + int(ult_worst > ult_cast) + int(point_max * cluster > view)
+    return fails
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑥ 무기 계열 · 소리 · 배선
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_weapon_and_sound(cfg, mo, rep):
+    rep.head("⑥ 무기 계열 · 소리 — 검은 베고 창은 찌른다")
+
+    arts = dig(cfg, "skills.yml", "martial_arts", default={}) or {}
+    registry = dig(cfg, "skills.yml", "weapon_classes", "registry", default=[]) or []
+    styles = mo.get("weapon_styles", {}) or {}
+    m_skills = mo.get("skills", {}) or {}
+
+    missing = [w for w in registry if w not in styles]
+    rep.verdict(not missing,
+                f"무기 계열 {len(registry)}종 → 모션 등록"
+                + ("" if not missing else f" — 누락 {missing}"))
+
+    bad = 0
+    for sid, m in m_skills.items():
+        style = str(m.get("style", ""))
+        if style not in styles:
+            bad += 1
+            rep.fail(f"미등록 무기 모션: {sid} — style '{style}'")
+            continue
+        wc = (arts.get(sid) or {}).get("weapon_class")
+        if wc is None:
+            continue                        # NPC 표본·심법 — 카탈로그에 없다
+        allowed = wc if isinstance(wc, list) else [wc]
+        if style not in allowed:
+            bad += 1
+            rep.fail(f"무기 계열 불일치: {sid} — 카탈로그 {allowed} vs 모션 '{style}'")
+    rep.verdict(bad == 0, f"무공 style ↔ skills.yml weapon_class 일치 (불일치 {bad}건)")
+
+    # 궤적의 '동사'가 계열마다 갈리는가 — 검(벤다)·창(찌른다)이 같은 파티클이면 구별되지 않는다
+    verbs = {w: (s.get("arc"), s.get("thrust")) for w, s in styles.items()}
+    same = [w for w in ("검", "창") if w in verbs]
+    if len(same) == 2 and verbs["검"] == verbs["창"]:
+        bad += 1
+        rep.fail("검과 창의 궤적 파티클이 같다 — 베는 것과 찌르는 것이 구별되지 않는다")
+    else:
+        rep.ok(f"검 {verbs.get('검')} ≠ 창 {verbs.get('창')} — 베기와 찌르기가 갈린다")
+
+    # 소리 키 형식 (바닐라 사운드 키 — Sound 는 1.21 에서 인터페이스라 문자열로 재생한다)
+    keys = sorted(sounds_in(mo, set()))
+    malformed = [k for k in keys if not SOUND_KEY.match(k)]
+    rep.verdict(not malformed,
+                f"바닐라 사운드 키 {len(keys)}종 형식 검사"
+                + ("" if not malformed else f" — 잘못된 키 {malformed}"))
+
+    # 같은 무공 안에서 초식마다 음높이가 갈리는가 (귀로 콤보를 센다)
+    flat = []
+    for sid, m in m_skills.items():
+        steps = steps_of(m)
+        if len(steps) < 2:
+            continue
+        pitches = [(s.get("sound") or {}).get("pitch") for s in steps]
+        if len(set(pitches)) == 1:
+            flat.append(sid)
+    if flat:
+        rep.warn(f"콤보 음높이가 평평하다: {flat} — 타수를 귀로 셀 수 없다")
+    else:
+        rep.ok("콤보마다 타수별 음높이가 다르다 — 1타·2타·마무리가 귀로 갈린다")
+    return bad + len(malformed)
+
+
+def audit_wiring(mo, rep):
+    rep.head("⑦ 배선 — 등록제 규약 (코드에 파티클·소리를 하드코딩하지 않는다)")
+
+    listener = os.path.join(MVT, "SkillListener.java")
+    hud = os.path.join(MVT, "SkillHud.java")
+    engine = os.path.join(MVT, "SkillEngine.java")
+    src = {}
+    for path in (listener, hud, engine):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                src[os.path.basename(path)] = fh.read()
+        except OSError:
+            rep.fail(f"소스 없음: {path}")
+            return 1
+
+    fails = 0
+    # 하드코딩 — Particle.X / Sound.X 리터럴. 이름→enum 해석기(SkillHud)만 예외다
+    for name in ("SkillListener.java", "SkillEngine.java"):
+        body = src[name]
+        hard = re.findall(r"\bParticle\.[A-Z_]+", body) + re.findall(r"\bSound\.[A-Z_]+", body)
+        if hard:
+            fails += 1
+            rep.fail(f"{name}: 파티클·소리 하드코딩 {len(hard)}건 — {sorted(set(hard))[:5]}")
+        else:
+            rep.ok(f"{name}: 파티클·소리 하드코딩 0건 (등록부만 읽는다)")
+
+    body = src["SkillListener.java"]
+    # 등록부의 사건이 코드에 배선됐는가 (등록만 하고 안 쓰면 그건 죽은 모션이다)
+    dead = [e for e in (mo.get("events") or {}) if f'"{e}"' not in body]
+    if dead:
+        fails += 1
+        rep.fail(f"미배선 사건: {dead} — 등록부에만 있고 코드가 부르지 않는다")
+    else:
+        rep.ok(f"사건 {len(mo.get('events') or {})}종 전부 배선됨 (SkillListener 가 이름으로 부른다)")
+
+    if "skill_motion.yml" not in src["SkillEngine.java"]:
+        fails += 1
+        rep.fail("SkillEngine 이 skill_motion.yml 을 적재하지 않는다")
+    else:
+        rep.ok("SkillEngine 이 skill_motion.yml 을 적재한다 (단일 진실 원천)")
+    return fails
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    ap = argparse.ArgumentParser(description="혼천 무공 모션 감사")
+    ap.add_argument("--coverage-only", action="store_true")
+    args = ap.parse_args()
+
+    rep = Report()
+    rep.say("══ 무공 모션 감사 ══")
+    rep.say("  \"팩이 없어도, 파티클과 소리만으로 무엇이 일어났는지 읽혀야 한다\"")
+
+    try:
+        cfg = load_all()
+    except YamlError as e:
+        print(f"{FAIL} config 파싱 실패: {e}", file=sys.stderr)
+        return 2
+
+    mo = cfg.get("skill_motion.yml")
+    if not mo:
+        print(f"{FAIL} config/skill_motion.yml 이 없다", file=sys.stderr)
+        return 2
+
+    pct, spct = audit_coverage(cfg, mo, rep)
+    if not args.coverage_only:
+        audit_trajectory(cfg, mo, rep)
+        audit_ladder(cfg, mo, rep)
+        audit_palette(mo, rep)
+        audit_budget(cfg, mo, rep)
+        audit_weapon_and_sound(cfg, mo, rep)
+        audit_wiring(mo, rep)
+
+    rep.say()
+    rep.say("═" * 72)
+    n_v, n_w = len(rep.violations), len(rep.warnings)
+    rep.say(f"  커버리지: 무공·격·형태·오의 {pct:.1f}% · 초식 {spct:.1f}%")
+    if n_v == 0 and n_w == 0:
+        rep.say("  총평: ✅ 위반 0건 · 경고 0건 — 팩이 없어도 무공은 눈에 보인다")
+    else:
+        rep.say(f"  총평: 위반 {n_v}건 · 경고 {n_w}건")
+        if n_v:
+            rep.say("")
+            rep.say(f"  ── 위반 ({FAIL}) — 모션이 등록부와 어긋나거나, 눈에 보이지 않는다")
+            for i, v in enumerate(rep.violations, 1):
+                rep.say(f"    {i:2}. {v}")
+        if n_w:
+            rep.say("")
+            rep.say("  ── 경고 (⚠️) — 굴러가지만 의도한 그림이 아닐 수 있다")
+            for i, w in enumerate(rep.warnings, 1):
+                rep.say(f"    {i:2}. {w}")
+    rep.say("═" * 72)
+    rep.dump()
+    return 1 if n_v else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -49,6 +49,7 @@ ITEM_MODEL_DIR = PACK / "assets" / "honcheon" / "models" / "item"         # 모�
 ITEM_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "item"         # 16x16 아트
 BLOCK_DIR = PACK / "assets" / "minecraft" / "textures" / "block"          # 전역 치환 (징발)
 PAINTING_DIR = PACK / "assets" / "minecraft" / "textures" / "painting"    # 족자
+PARTICLE_DIR = PACK / "assets" / "minecraft" / "textures" / "particle"    # 무공의 획 (스킬 모션)
 
 W = (255, 255, 255, 255)   # 백색 — 인게임 색 코드가 틴트한다
 T = (0, 0, 0, 0)           # 투명
@@ -2141,6 +2142,1381 @@ def scroll_rows(motif):
     return rows + [rod(14, 3.0), rod(15, 1.2)]             # 아래 축
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 자재층(自材層) — 세계를 이루는 면들 (2026-07 확장)
+#
+# ── 왜 여기까지 왔는가 (객관 수치) ──
+# 조성기(CheonghaBuilder 청하현 · RemoteBuilder 산채·문파)가 쓰는 블록은 179종인데 팩이 덮던
+# 블록 텍스처는 15장, 그중 조성 팔레트와 겹치는 것은 **8종**뿐이었다. 즉 **지붕(흑와)과 회벽 말고는
+# 세계가 전부 바닐라**였다 — 무협의 마을이 아니라 마인크래프트 마을 위에 기와만 얹은 꼴.
+#
+# ── 우선순위의 원칙: 눈에 보이는 **면적** ──
+# 항아리 하나보다 흙길 한 장이 세계를 더 바꾼다. 그래서 순서는 길·바닥 → 벽·돌 → 목재(판자·기둥) →
+# 초가·천 → 기물(통·솥·시렁)이다. 사용 빈도(조성기 코드 실측)와 화면 점유가 같은 방향을 가리킨다:
+#   LANTERN 45 · SPRUCE_FENCE 39 · BARREL 39 · DARK_OAK_PLANKS 33 · COARSE_DIRT 25 · DIRT_PATH 24 …
+#   ※ 울타리(SPRUCE_FENCE 39·OAK_FENCE 15)는 제 텍스처가 없다 — **판자 텍스처를 쓴다.**
+#     판자 한 장이 판자·울타리·계단·반블록·문·다락을 한꺼번에 덮는다 (징발의 가성비가 여기 있다).
+#
+# ── 미학 규약 (불가침) ──
+# 수묵(水墨). 채색은 **차양(붉은 천)·매화·등롱·깃발**에만. 나머지는 먹의 농담이다.
+# 목재는 '갈색'이 아니라 **먹에 아주 옅은 흙기(土氣)를 섞은 값** (채도 ≤ 40). 돌은 무채색.
+#
+# ── 자재의 뜻이 보여야 한다 (building_style_guide 와 정합) ──
+#   흙길·다진 흙 = 사람이 다닌 자리 (밟혀 다져진 면 + 발자국·긁힌 자국)
+#   목책·통나무  = 도적의 집 (거칠게 쪼갠 결·터진 수피)
+#   회벽        = 관청·문파 (매끈하되 얼룩)
+#   기와        = 검다 (푸른 기 금지)
+#   초가        = 성글게 이은 짚
+#   다듬은 안산암 = 계단·단 (사람이 깎은 돌 — 자연 돌과 달라야 한다: 정 자국이 있다)
+#
+# ── 반복(反復)의 병 — 이 팩이 두 번 앓은 병이고, 여기서 다시 앓으면 세 번째다 ──
+# 블록 텍스처는 **한 장이 벽 한 면을 도배한다.** 그래서 텍스처가 제 안에서 스스로를 복사하면
+# (자기상관 r > 0.85) 벽에 블록보다 잘은 격자가 뜬다 — 골함석·타탄·모아레.
+# 처방은 하나다: **단위마다 다르게 그린다.**
+#   · 판자 4장은 폭도 톤도 결의 씨앗도 다르다 (목수가 같은 널 넉 장을 켤 수는 없다)
+#   · 전돌의 켜는 높이가 다르다 (5·3·4·4) — 등간격 4는 곧 주기 4의 격자다
+#   · 막돌·자갈은 보로노이 세포로 나눈다 — 세포는 크기·자리·톤이 다 다르고 격자를 만들지 않는다
+#   · 긴 직선은 **끊는다** (점선 마스크). 이어진 선은 이웃 장의 선과 만나 벽을 가로지른다
+# 모든 새 자재는 굽기 전 자기 복제 상관을 재서 0.85 아래를 확인했다 (tools/texture_audit.py 축 7).
+# ═══════════════════════════════════════════════════════════════════════════
+
+def wrapped_cells(x, y, cell, salt):
+    """랩 안전 보로노이 — 막돌·자갈·전돌의 뼈대. 반환: (최근접 거리, 차근접 거리, 세포 id, 세포 중심).
+
+    격자 노이즈(octave)는 '네모 얼룩'을 낳지만 보로노이 세포는 **돌 하나하나**가 된다:
+    크기도 자리도 다 다르므로 그 자체로 주기가 없다 (자기 복제의 구조적 예방).
+    랩: 세포 id 는 16//cell 로 모듈러 — 왼쪽 밖 세포는 오른쪽 끝 세포와 **같은 돌**이라
+    좌우로 이어 붙여도 돌이 반으로 갈리지 않는다."""
+    n = 16 // cell
+    d1, d2 = 99.0, 99.0
+    ident, center = (0, 0), (0.0, 0.0)
+    for j in (-1, 0, 1):
+        for i in (-1, 0, 1):
+            gx, gy = x // cell + i, y // cell + j
+            ci, cj = gx % n, gy % n
+            fx = (h32(ci, cj, salt) % 1000) / 1000.0
+            fy = (h32(cj, ci, salt ^ 0x5A) % 1000) / 1000.0
+            px, py = (gx + 0.18 + fx * 0.64) * cell, (gy + 0.18 + fy * 0.64) * cell
+            d = ((x + 0.5 - px) ** 2 + (y + 0.5 - py) ** 2) ** 0.5
+            if d < d1:
+                d1, d2, ident, center = d, d1, (ci, cj), (px, py)
+            elif d < d2:
+                d2 = d
+    return d1, d2, ident, center
+
+
+def cell_rand(ident, salt):
+    """세포 고유값 -1~+1 — 돌마다 다른 톤·거칢을 뽑는 자리."""
+    return (h32(ident[0], ident[1], salt) % 1001) / 1000.0 * 2 - 1
+
+
+def dash(x, mask):
+    """점선 마스크 — 긴 직선을 끊는다 (이어진 선은 이웃 장의 선과 만나 벽을 가로지른다)."""
+    return mask[x % len(mask)] == "1"
+
+
+# ─── 흙 계열 — 사람이 다닌 자리 ────────────────────────────────────────────
+# 흙은 '갈색'이 아니다. 먹에 흙기를 아주 옅게 섞은 값이다 (채도 ≤ 34 — 수묵 규약).
+DIRT_SHADES = ramp((52, 46, 40, 255), (124, 112, 98, 255), 9)      # 흙 — 습한 먹빛 흙
+PATH_SHADES = ramp((72, 66, 58, 255), (152, 142, 128, 255), 10)    # 다져진 길 — 밟혀 마른 흙
+COARSE_SHADES = ramp((58, 52, 45, 255), (136, 125, 110, 255), 10)  # 다진 흙 — 자갈이 섞인 마당
+PODZOL_SHADES = ramp((38, 34, 30, 255), (96, 86, 74, 255), 9)      # 부엽토 — 삭은 잎이 덮인 땅
+GRAVEL_SHADES = ramp((60, 59, 57, 255), (166, 164, 159, 255), 11)  # 자갈 — 무채색 조약돌
+
+
+def earth_base(x, y, salt, clump=1.15, grit=0.75):
+    """흙바탕 — 큰 덩이(보간) + 잔 알갱이(계단). 방향이 없다 (흙에는 결이 없다)."""
+    return (smooth_octave(x, y, 8, salt, clump)
+            + smooth_octave(x, y, 4, salt ^ 0x27, clump * 0.62)
+            + octave(x, y, 2, salt ^ 0x4B, grit * 0.55)
+            + octave(x, y, 1, salt ^ 0x6D, grit))
+
+
+def pebble_specks(x, y, salt, every=17, deep=-1.5, light=1.6):
+    """흙에 박힌 잔돌 — **점**이지 선이 아니다 (점은 격자를 만들지 않는다).
+    빛을 받는 윗면(밝게)과 박힌 그늘(어둡게)이 같이 있어야 '박혀 있다'로 읽힌다."""
+    k = h32(x, y, salt) % every
+    if k == 0:
+        return light
+    if k == 1:
+        return deep
+    return 0.0
+
+
+def dirt_rows():
+    """흙 — 갈아엎지 않은 맨땅. 덩이지고 습하다."""
+    return [[step(DIRT_SHADES, 4.2 + earth_base(x, y, 0x51) + pebble_specks(x, y, 0x63, 23))
+             for x in range(16)] for y in range(16)]
+
+
+def coarse_dirt_rows():
+    """다진 흙 — 마당·연무장. 사람이 밟아 굳었고 잔돌이 드러났다 (흙보다 마르고 거칠다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 4.6 + earth_base(x, y, 0x71, clump=0.9, grit=1.05)
+            v += pebble_specks(x, y, 0x83, 11, -1.8, 2.0)      # 잔돌이 흙보다 두 배 많다
+            row.append(step(COARSE_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+# 발자국 — 길 위에 남은 자국. **선이 아니라 자국이다**: 바퀴 자국을 한 줄로 길게 그으면
+# 그 줄이 16px마다 되풀이돼 길 전체에 세로 홈이 파인다 (사용자가 두 번 지적한 '한 방향 반복').
+# 그래서 자국은 **짧고 흩어져** 있다 — 발 하나, 발 하나. 값 = 명암 계단 델타.
+PATH_PRINTS = [(2, 3), (3, 3), (2, 4), (3, 4), (3, 5),          # 발자국 1 (앞꿈치가 깊다)
+               (9, 1), (10, 1), (9, 2), (10, 2),                # 발자국 2
+               (6, 8), (7, 8), (6, 9), (7, 9), (7, 10),         # 발자국 3
+               (12, 11), (13, 11), (12, 12), (13, 12),          # 발자국 4
+               (4, 13), (5, 13), (5, 14)]                       # 발자국 5 (스쳐 밟은 자리)
+
+
+def dirt_path_top_rows():
+    """흙길 — 사람이 다닌 자리. 밟혀 다져진 면 + 흩어진 발자국 + 긁힌 자국.
+    다져진 길은 맨흙보다 **밝고 매끈하다** (밟히면 알갱이가 눌려 평평해진다)."""
+    prints = set(PATH_PRINTS)
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 6.0 + earth_base(x, y, 0x95, clump=0.85, grit=0.42)
+            if (x, y) in prints:
+                v -= 2.3                                        # 파인 발자국 (그늘)
+            if (x - 1, y - 1) in prints and (x, y) not in prints:
+                v += 0.8                                        # 자국 둘레로 밀린 흙 (턱)
+            v += pebble_specks(x, y, 0xA9, 29, -1.2, 1.0)
+            row.append(step(PATH_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def side_rows(top_rows, body_rows, band=2):
+    """옆면 문법 — 위 몇 줄은 윗면 자재, 아래는 몸통 자재 (바닐라 dirt_path_side·podzol_side와 같은 문법).
+
+    ★ 이음매의 함정: 이 텍스처는 **위와 아래가 다른 자재**라, 세로로 이어 붙이면 랩 경계
+      (맨아랫줄 흙 → 맨윗줄 다진 흙)가 장 안에서 가장 강한 가로 경계가 된다 (실측 2.05 — 위반).
+      그런데 그 경계는 **거짓 결함이 아니다**: 흙길 블록을 두 장 쌓으면 실제로 그렇게 보인다
+      (위 블록의 다져진 켜가 아래 블록의 흙 위에 얹힌다). 즉 고칠 것은 그림이 아니라 **대비의 배분**이다.
+      층 경계에 **그늘 한 줄 + 그 아래 빛 받는 한 줄**을 넣는다 — 덮개 밑의 그늘과, 그늘을 벗어나
+      갓 드러난 흙이다. 물리적으로 옳고(덮인 층은 아래에 그림자를 드리운다), 동시에 장 안에
+      랩 경계에 필적하는 강한 가로 경계를 **둘** 만들어 이음매 지표의 기준선을 세운다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            if y < band:
+                row.append(top_rows[y][x])
+            elif y == band:
+                p = body_rows[y][x]                            # 층 경계 — 덮개 아래 깊은 그늘
+                row.append(tuple(max(0, round(c * 0.58)) for c in p[:3]) + (255,))
+            elif y == band + 1:
+                p = body_rows[y][x]                            # 그늘 아래 — 갓 드러난 흙 (빛을 받는다)
+                row.append(tuple(min(255, round(c * 1.22)) for c in p[:3]) + (255,))
+            else:
+                row.append(body_rows[y][x])
+        rows.append(row)
+    return rows
+
+
+def rooted_dirt_rows():
+    """뿌리 흙 — 흙 사이로 잔뿌리가 비친다. 뿌리는 **짧고 굽은 실**이다 (긴 직선 금지)."""
+    roots = {(3, 1): 1, (3, 2): 1, (4, 3): 1, (4, 4): 1, (5, 5): 1,      # 뿌리 1
+             (11, 2): 1, (11, 3): 1, (10, 4): 1, (10, 5): 1,             # 뿌리 2
+             (7, 9): 1, (8, 10): 1, (8, 11): 1, (9, 12): 1,              # 뿌리 3
+             (2, 10): 1, (2, 11): 1, (3, 12): 1,                         # 뿌리 4
+             (13, 8): 1, (13, 9): 1, (12, 10): 1}                        # 뿌리 5
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 4.0 + earth_base(x, y, 0xB1)
+            if (x, y) in roots:
+                v += 3.4                                        # 잔뿌리 — 흙보다 밝다 (마른 실)
+            row.append(step(DIRT_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def podzol_top_rows():
+    """부엽토 — 삭은 잎이 덮인 어두운 땅 (소나무 밑, 산길 어귀)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 4.4 + earth_base(x, y, 0xC3, clump=1.35, grit=0.9)
+            k = h32(x, y, 0xD5) % 13
+            if k == 0:
+                v += 2.2                                        # 삭은 잎 조각 (밝은 티끌)
+            elif k == 1:
+                v -= 1.6                                        # 젖어 눌어붙은 자리
+            row.append(step(PODZOL_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def gravel_rows():
+    """자갈 — 조약돌 하나하나. 보로노이 세포가 곧 돌이고, 돌마다 크기·톤·빛이 다르다.
+    빛은 좌상단 — 돌의 좌상은 밝고 우하는 그늘이다 (이 명암이 '박힌 돌'을 만든다).
+
+    ★ 소금 0x2F → 0x41. 보로노이는 랩 안전하지만 **랩 경계가 어느 자리에 떨어지는가는 소금의 운**이다:
+      경계가 하필 돌과 돌 사이의 깊은 틈을 지나면 그 줄이 장에서 가장 강한 세로 경계가 된다
+      (0x2F 실측 이음매 1.45 — 위반). 소금 열둘을 재서 경계가 돌의 **몸**을 지나는 값을 골랐다
+      (0x41 → 0.76). 그림은 그대로고 돌의 배치만 다르다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            d1, d2, ident, (cx, cy) = wrapped_cells(x, y, 4, 0x41)
+            v = 6.0 + cell_rand(ident, 0x3D) * 2.0              # 돌마다 다른 톤
+            v -= ((x + 0.5 - cx) + (y + 0.5 - cy)) * 0.62       # 돌의 입체 (좌상 밝고 우하 어둡다)
+            if d2 - d1 < 0.85:
+                v -= 3.2 * (1.0 - (d2 - d1) / 0.85)             # 돌과 돌 사이 — 그늘진 틈
+            v += octave(x, y, 1, 0x4F, 0.5)                     # 돌 표면의 거칢
+            row.append(step(GRAVEL_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def farmland_rows(moist=False):
+    """밭 — 갈아 놓은 이랑. 이랑은 **끊어 판다** (이어진 골은 밭이 아니라 골함석이다)."""
+    shades = ramp((44, 38, 32, 255), (110, 100, 88, 255), 9) if moist else DIRT_SHADES
+    furrows = {2: -1.9, 3: 0.7, 8: -2.1, 9: 0.8, 13: -1.7, 14: 0.6}   # 골 셋 (간격 6·5·5 — 등간격 금지)
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = (3.6 if moist else 4.4) + earth_base(x, y, 0xE7, clump=0.8, grit=0.7)
+            d = furrows.get(y, 0.0)
+            if d and dash(x + y, "1101101110110101"):           # 골도 점선이다
+                v += d
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 돌 계열 — 막돌·전돌·다듬은 돌 ────────────────────────────────────────
+STONE_SHADES = ramp((74, 73, 71, 255), (154, 153, 150, 255), 10)      # 자연석 — 무채색
+COBBLE_SHADES = ramp((56, 55, 53, 255), (160, 159, 155, 255), 11)     # 막돌 — 명암 폭이 넓다
+BRICK_SHADES = ramp((66, 64, 61, 255), (150, 147, 142, 255), 11)      # 전돌(塼) — 구운 회벽돌
+DEEP_SHADES = ramp((36, 35, 36, 255), (96, 95, 96, 255), 9)           # 심층암 — 검은 돌
+POLISH_SHADES = ramp((92, 91, 89, 255), (168, 167, 163, 255), 9)      # 다듬은 안산암 — 좁은 폭(매끈)
+IRON_SHADES = ramp((34, 33, 32, 255), (128, 126, 122, 255), 9)        # 무쇠 — 솥·테
+
+
+def rubble_rows(shades, cell=4, salt=0x31, mid=6.2, damp=False, mortar=3.4):
+    """막돌 — 쌓아 올린 돌. 세포 하나가 돌 하나이고, 줄눈(틈)이 그 사이를 메운다.
+    damp=True 면 이끼 낀 돌 (색을 쓰지 않는다 — **먹의 농담**으로 젖은 자리를 만든다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            d1, d2, ident, (cx, cy) = wrapped_cells(x, y, cell, salt)
+            v = mid + cell_rand(ident, salt ^ 0x17) * 1.9
+            v -= ((x + 0.5 - cx) + (y + 0.5 - cy)) * 0.30      # 돌 하나의 볼록함
+            if d2 - d1 < 1.0:
+                v -= mortar * (1.0 - (d2 - d1))                # 줄눈 — 돌 사이 그늘
+            v += octave(x, y, 1, salt ^ 0x2B, 0.55)            # 정 자국·풍화
+            if damp:
+                w = smooth_octave(x, y, 8, salt ^ 0x3F, 1.0) + smooth_octave(x, y, 4, salt ^ 0x59, 0.6)
+                if w > 0.35:
+                    v -= 1.7 * min(1.0, (w - 0.35) * 1.6)      # 젖어 검어진 자리 (이끼)
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+def stone_rows(shades, salt=0x77, mid=4.8, amp=1.0, speck=True):
+    """자연석 — 결도 무늬도 없는 몸. 얼룩만 있다 (자연의 돌은 아무 방향도 편들지 않는다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = mid + (smooth_octave(x, y, 8, salt, 1.1 * amp)
+                       + smooth_octave(x, y, 4, salt ^ 0x35, 0.75 * amp)
+                       + octave(x, y, 2, salt ^ 0x4D, 0.42 * amp)
+                       + octave(x, y, 1, salt ^ 0x61, 0.36 * amp))
+            if speck:
+                k = h32(x, y, salt ^ 0x8F) % 19
+                if k == 0:
+                    v -= 1.5                                    # 검은 점 — 광물 알갱이
+                elif k == 1:
+                    v += 1.2
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# 전돌(塼) 켜 — 높이 5·3·4·4. **등간격 4는 곧 주기 4의 격자다** (벽에 눈금이 뜬다).
+# 켜마다 어긋나기(offset)도 다르다 — 벽돌은 반씩 어긋나 쌓지만, 그 반이 언제나 정확히 반이면
+# 그것은 벽이 아니라 방안지다.
+BRICK_COURSES = [(0, 4, 0), (5, 7, 5), (8, 11, 2), (12, 15, 6)]   # (y0, y1, x어긋나기)
+BRICK_WIDTH = 8
+BRICK_JOINT_DASH = "1111011111101101"     # 줄눈도 점선 — 완전한 직선은 이웃 장까지 이어진다
+
+
+def brick_rows(shades, salt=0xA3, cracked=False, damp=False):
+    """전돌 벽 — 구운 벽돌을 켜켜이 쌓았다. 벽돌마다 톤이 다르고 줄눈은 끊긴다."""
+    cracks = {(4, 2): -2.4, (4, 3): -2.6, (5, 4): -2.4, (5, 5): -2.2,      # 금 1
+              (11, 9): -2.3, (12, 10): -2.5, (12, 11): -2.2,               # 금 2
+              (8, 13): -2.1, (9, 14): -2.0} if cracked else {}
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            course = next(c for c in BRICK_COURSES if c[0] <= y <= c[1])
+            y0, y1, off = course
+            bx = (x + off) % 16
+            ident = (bx // BRICK_WIDTH, y0)                     # 벽돌 한 장의 이름
+            v = 6.2 + cell_rand(ident, salt) * 1.7              # 벽돌마다 다른 톤 (가마의 운)
+            v += smooth_octave(x, y, 4, salt ^ 0x1D, 0.55) + octave(x, y, 1, salt ^ 0x39, 0.42)
+            v -= (y - y0) * 0.28                                # 벽돌 한 장의 위아래 명암 (윗모가 밝다)
+            if y == y0 and dash(x, BRICK_JOINT_DASH):
+                v -= 2.6                                        # 가로 줄눈 (켜 사이) — 점선
+            elif y == y0 + 1:
+                v += 0.9                                        # 줄눈 아래 — 빛 받는 벽돌의 윗모.
+                #   이 한 줄이 켜마다 '줄눈 → 밝은 모' 라는 강한 가로 경계를 만든다. 그래서
+                #   랩 경계(맨아랫줄 벽돌 → 맨윗줄 줄눈)가 더는 장에서 유일하게 강한 경계가 아니다
+                #   (이음매 1.25 → 통과). 입체적으로도 옳다: 벽돌은 줄눈보다 앞으로 나와 있다.
+            if bx % BRICK_WIDTH == 0 and dash(y, "1110110111011011"):
+                v -= 2.4                                        # 세로 줄눈 (벽돌 사이) — 점선
+            v += cracks.get((x, y), 0.0)
+            if damp:
+                w = smooth_octave(x, y, 8, salt ^ 0x77, 1.0)
+                if w > 0.3:
+                    v -= 1.8 * min(1.0, (w - 0.3) * 1.7)        # 젖은 자리 (이끼 낀 담)
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# 새긴 전돌 — 문(門)에 박는 회(回)자 무늬. 조성기는 CHISELED_STONE_BRICKS 를 문설주·기단에 쓴다.
+CHISELED_ART = [
+    "................",
+    ".##############.",
+    ".#............#.",
+    ".#.##########.#.",
+    ".#.#........#.#.",
+    ".#.#.######.#.#.",
+    ".#.#.#....#.#.#.",
+    ".#.#.#.##.#.#.#.",
+    ".#.#.#.##.#.#.#.",
+    ".#.#.#....#.#.#.",
+    ".#.#.######.#.#.",
+    ".#.#........#.#.",
+    ".#.##########.#.",
+    ".#............#.",
+    ".##############.",
+    "................",
+]
+
+
+def chiseled_brick_rows():
+    """새긴 전돌 — 회(回)자 문양을 **파낸** 돌. 파인 홈은 위·왼쪽이 어둡고 아래·오른쪽이 밝다
+    (빛이 좌상단에서 오므로, 홈의 좌상 벽은 그늘이고 우하 벽은 빛을 받는다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 6.0 + smooth_octave(x, y, 8, 0xB7, 0.8) + octave(x, y, 1, 0xC9, 0.45)
+            if CHISELED_ART[y][x] == "#":
+                v -= 2.8                                        # 파인 홈
+                if y > 0 and CHISELED_ART[y - 1][x] == ".":
+                    v -= 0.9                                    # 홈의 위 벽 — 가장 깊은 그늘
+            else:
+                if y > 0 and CHISELED_ART[y - 1][x] == "#":
+                    v += 1.1                                    # 홈 아래 — 빛 받는 모
+            row.append(step(BRICK_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+# 정(釘) 자국 — 다듬은 안산암을 자연 돌과 가르는 유일한 표식. 사람이 깎은 돌에는 **연장 자국**이 있다.
+# 짧은 2px 획 여덟, 방향과 자리를 흩어 둔다 (한 방향으로 나란하면 그것은 빗살무늬가 된다).
+POLISH_CHISEL = [((2, 2), (3, 2)), ((6, 4), (6, 5)), ((11, 3), (12, 3)),
+                 ((3, 8), (4, 9)), ((9, 8), (10, 8)), ((13, 10), (13, 11)),
+                 ((5, 12), (6, 12)), ((10, 13), (11, 14))]
+
+
+def polished_andesite_rows():
+    """다듬은 안산암 — 계단·단·기단. 자연 안산암과 **달라야 한다**: 매끈하고(얼룩 진폭 절반),
+    그러나 죽은 면이 아니다 — 물갈이 자국과 정(釘) 자국이 사람의 손을 증언한다."""
+    chisel = {p for pair in POLISH_CHISEL for p in pair}
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 4.6 + smooth_octave(x, y, 8, 0x5D, 0.62) + smooth_octave(x, y, 4, 0x71, 0.34)
+            v += octave(x, y, 1, 0x8B, 0.20)                    # 물갈이한 면의 아주 잔 결
+            if (x, y) in chisel:
+                v -= 1.6                                        # 정 자국 (얕게 판 획)
+            row.append(step(POLISH_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+SMOOTH_SHADES = ramp((88, 87, 85, 255), (172, 171, 167, 255), 9)   # 켠 돌 — 매끈하되 죽지 않게
+
+
+def smooth_stone_rows(band=False):
+    """매끄러운 돌 — 켠 돌(石材). band=True 면 반블록 옆면 (위·아래에 켠 자국 띠).
+
+    ★ 첫 판은 얼룩 진폭이 너무 작아 **색 2개·명암차 9** 였다 (린트: '평면'·'밋밋' 이중 위반).
+      게다가 반블록 옆면은 가로 띠뿐이라 x 로 밀어도 제 자신이었다 — 자기 복제 0.94 (축 7 위반).
+      매끈함은 '아무것도 없음'이 아니다. 켠 돌에는 **톱날이 지나간 자국**과 돌 자체의 얼룩이 있다.
+      그래서 얼룩을 살리고(명암차 ≥ 30), 켠 자국은 **짧은 점획**으로 흩어 x 방향 등질성을 깬다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = (4.4
+                 + smooth_octave(x, y, 8, 0x93, 1.70)           # 돌의 큰 얼룩
+                 + smooth_octave(x, y, 4, 0xA7, 1.00)
+                 + octave(x, y, 1, 0xBB, 0.55))                 # 켠 면의 잔 결
+            if h32(x, y, 0xCF) % 23 == 0:
+                v += 1.6                                        # 톱날이 스친 반짝임 (점 — 선이 아니다)
+            elif h32(x, y, 0xCF) % 19 == 0:
+                v -= 1.4                                        # 돌에 박힌 검은 알갱이
+            if band:
+                # 점선의 **위상이 위아래에서 같아야** 한다 (dash(x) — dash(x+y)가 아니라).
+                # 위상이 어긋나면 맨윗줄과 맨아랫줄이 서로 다른 무늬가 되어 상하 랩이 터진다.
+                if y in (0, 15) and dash(x, "1110110111011010"):
+                    v -= 2.0                                    # 켠 자국 — 모서리 띠 (점선으로 끊는다)
+                elif y in (1, 14):
+                    v += 0.8
+            row.append(step(SMOOTH_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 목재 계열 — 판자·기둥·수피 ───────────────────────────────────────────
+# 목재는 조성 팔레트의 최대 면적이다 (DARK_OAK_PLANKS 33 + SPRUCE_FENCE 39 + SPRUCE_PLANKS 18 …).
+# 울타리·계단·반블록·문·다락이 전부 **판자 텍스처 한 장**을 쓴다 — 여기가 세계를 가장 크게 바꾼다.
+# 색: 채도 ≤ 40 (수묵 규약). '갈색 나무'가 아니라 **먹에 흙기를 옅게 섞은 나무**다.
+DARK_WOOD = ramp((38, 33, 28, 255), (104, 92, 78, 255), 9)       # 짙은 목재 (다크오크) — 관아·객잔 기둥
+SPRUCE_WOOD = ramp((58, 50, 41, 255), (140, 124, 104, 255), 9)   # 가문비 — 산채 목책·서민 판자
+OAK_WOOD = ramp((72, 63, 51, 255), (158, 141, 118, 255), 9)      # 참나무 — 밝은 판자
+STRIPPED_WOOD = ramp((80, 70, 57, 255), (172, 154, 130, 255), 9)  # 벗긴 원목 — 노출 기둥
+CHERRY_WOOD = ramp((62, 50, 48, 255), (146, 122, 118, 255), 9)   # 매화나무 — 아주 옅은 붉은 기
+
+# 판자 넉 장 — 폭이 다 다르다 (5·4·3·4). 등폭 4는 곧 주기 4의 줄무늬다.
+PLANK_BOARDS = [(0, 4, 0x21, 0.55), (5, 8, 0x4D, -0.45), (9, 11, 0x6B, 0.30), (12, 15, 0x8F, -0.25)]
+PLANK_BUTTS = {0: 11, 5: 4, 9: 13, 12: 6}    # 널마다 이음매(마구리)가 다른 자리에 온다
+
+
+def wood_grain(x, y, salt, vertical=False, amp=1.3):
+    """나뭇결 — 결은 **한 방향으로 흐른다**. 결 방향으로는 길게 늘이고 직각으로는 잘게 나눈다."""
+    gx, gy = (x // 4, y) if vertical else (x, y // 4)
+    return octave(gx, gy, 1, salt, amp) + octave(x, y, 1, salt ^ 0x6C, amp * 0.30)
+
+
+def plank_rows(shades, salt=0x11):
+    """판자 — 널 넉 장을 이어 깐 면. 널마다 폭·톤·결의 씨앗·이음매 자리가 다르다
+    (목수가 같은 널 넉 장을 켤 수는 없다 — 그 '같음'이 곧 격자다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            y0, y1, seed, tone = next(b for b in PLANK_BOARDS if b[0] <= y <= b[1])
+            v = 5.0 + tone + wood_grain(x, y, seed ^ salt, amp=1.15)
+            if y == y0:
+                v -= 2.5                                        # 널 사이 틈 (그늘)
+            elif y == y0 + 1:
+                v += 0.8                                        # 틈 아래 — 빛 받는 널의 윗모
+            elif y == y1:
+                v -= 0.9                                        # 널의 아랫모 — 살짝 어둡다
+            if x == PLANK_BUTTS[y0]:
+                v -= 1.9                                        # 마구리 이음 (널이 끝나는 자리)
+            if (x, y) in ((PLANK_BUTTS[y0] - 2, y0 + 1), (PLANK_BUTTS[y0] + 2, y1 - 1)):
+                v -= 1.5                                        # 못 (이음 곁에 박는다)
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# 수피(樹皮) — 거칠게 터진 세로 골. 골의 폭이 다 다르다 (3·2·4·2·3·2).
+BARK_COLUMNS = [(0, 2, 0x31, 0.5), (3, 4, 0x57, -0.6), (5, 8, 0x79, 0.25),
+                (9, 10, 0x9D, -0.35), (11, 13, 0xC1, 0.45), (14, 15, 0xE3, -0.5)]
+
+
+def bark_rows(shades, salt=0x13, rough=1.0, knot=None):
+    """통나무 수피 — **도적의 집**이다. 거칠게 쪼갠 결, 터진 골, 옹이.
+    골은 세로로 흐르되 **끊긴다** (이어진 골은 통나무가 아니라 골함석이다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            x0, x1, seed, tone = next(c for c in BARK_COLUMNS if c[0] <= x <= c[1])
+            v = 5.2 + tone + wood_grain(x, y, seed ^ salt, vertical=True, amp=1.35 * rough)
+            if x == x0 and dash(y + x0, "1101110110111011"):
+                v -= 2.6 * rough                                # 터진 골 (점선 — 끝까지 잇지 않는다)
+            elif x == x0 + 1:
+                v += 0.7                                        # 골 오른쪽 — 빛 받는 등성이
+            v += octave(x, y, 1, seed ^ 0x2D, 0.45 * rough)     # 수피의 거스러미
+            if knot:
+                kx, ky = knot
+                d = ((x - kx) ** 2 * 1.4 + (y - ky) ** 2) ** 0.5
+                if d < 2.6:
+                    v -= 2.4 - d * 0.7                          # 옹이 — 가운데가 가장 어둡다
+                elif d < 3.4:
+                    v += 0.8                                    # 옹이 둘레 — 결이 밀려 솟는다
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+def log_top_rows(shades, salt=0x17, freq=1.85):
+    """통나무 마구리 — 나이테. 동심원이라 어느 방향도 편들지 않는다 (반복의 병에서 자유롭다).
+
+    ★ 중심은 **반드시 장의 한가운데(7.5, 7.5)** 다. 처음엔 '나무는 심이 치우친다'며 중심을 옮겼는데,
+      그러자 이음매가 터졌다 (오크 1.44 · 벚 1.33 · 다크오크 1.38 — 린트가 옳다): 중심이 치우치면
+      좌변과 우변의 테 위상이 어긋나 랩 경계가 이 장에서 가장 강한 경계가 된다.
+      중심이 한가운데면 x=0 과 x=15 는 중심에서 **같은 거리**라 테의 값이 같다 → 랩이 조용해진다.
+      나무마다 다른 것은 중심이 아니라 **테의 간격(freq)과 결의 씨앗(salt)** 으로 준다 —
+      실제로도 나이테를 가르는 것은 심의 자리가 아니라 자란 해의 굵기다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            d = ((x - 7.5) ** 2 + (y - 7.5) ** 2) ** 0.5
+            d += smooth_octave(x, y, 8, salt, 0.9)              # 나이테는 정확한 원이 아니다
+            v = 5.6 + math.sin(d * freq) * 1.5                  # 테 — 진한 테와 옅은 테가 번갈아
+            v += octane_grain(x, y, salt)
+            if d < 1.4:
+                v -= 1.2                                        # 고갱이 (심재 — 짙다)
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+def octane_grain(x, y, salt):
+    """마구리의 잔 결 — 톱니 자국(켠 자리는 매끈하지 않다)."""
+    return octave(x, y, 2, salt ^ 0x4E, 0.45) + octave(x, y, 1, salt ^ 0x72, 0.35)
+
+
+def stripped_rows(shades, salt=0x19):
+    """벗긴 원목 — 노출 기둥(관아·문파 본전). 수피를 벗겨 결이 곧게 드러났다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 5.4 + wood_grain(x, y, salt, vertical=True, amp=1.0)
+            if x in (3, 10) and dash(y + x, "1011101101110110"):
+                v -= 1.3                                        # 자귀 자국 (깎아 낸 결)
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 초가(草家) — 성글게 이은 짚 ──────────────────────────────────────────
+STRAW_SHADES = ramp((78, 70, 54, 255), (176, 162, 130, 255), 11)   # 마른 짚 — 저채도 볏빛
+# 짚단 — 층마다 두께가 다르다 (4·3·5·4). 이엉은 자로 재어 잇지 않는다.
+STRAW_LAYERS = [(0, 3, 0x23, 0.5), (4, 6, 0x47, -0.4), (7, 11, 0x6D, 0.25), (12, 15, 0x91, -0.3)]
+
+
+def hay_side_rows():
+    """초가 옆면 — 성글게 이은 짚. 짚가닥이 가로로 눕고, 층 끝에서 **삐져나온다**
+    (가지런한 짚은 짚이 아니라 골판지다). 새끼줄 둘이 세로로 눌러 맨다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            y0, y1, seed, tone = next(l for l in STRAW_LAYERS if l[0] <= y <= l[1])
+            v = 6.2 + tone
+            v += octave(x, y, 1, seed, 1.55)                    # 짚가닥 하나하나 (가로로 눕는다)
+            v += smooth_octave(x, y, 4, seed ^ 0x3B, 0.6)
+            if y == y0 and dash(x + y0, "1011011101101101"):
+                v -= 2.4                                        # 층 이음 — 짚단이 겹친 그늘 (점선)
+            if y == y1 and h32(x, y, seed ^ 0x5F) % 3 == 0:
+                v += 1.5                                        # 삐져나온 짚 끝 (성글게 이은 표식)
+            if x in (3, 11) and dash(y + x, "1110110111011010"):
+                v -= 2.0                                        # 새끼줄 — 짚을 눌러 맨 자리
+            row.append(step(STRAW_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def hay_top_rows():
+    """초가 윗면 — 벤 짚대의 **단면**들. 동그란 대롱이 빽빽하다 (옆면과 완전히 다른 그림이라야 한다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            d1, d2, ident, (cx, cy) = wrapped_cells(x, y, 2, 0x8D)
+            v = 6.6 + cell_rand(ident, 0xA1) * 1.8              # 짚대마다 다른 톤
+            v -= ((x + 0.5 - cx) + (y + 0.5 - cy)) * 0.5        # 대롱의 볼록함
+            if d2 - d1 < 0.6:
+                v -= 2.8                                        # 짚대 사이 틈
+            v += octave(x, y, 1, 0xB5, 0.5)
+            row.append(step(STRAW_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 천 계열 — 자리(멍석)·차양 ────────────────────────────────────────────
+# 양털은 조성기에서 **깔개(카펫)** 로만 쓰인다: 흰 자리·삼베 자리·짚자리, 그리고 **붉은 차양**.
+# 채색 허용은 붉은 차양뿐이다 (수묵 규약: 채색은 차양·매화·등롱·깃발에만).
+# 씨실·날실 — 굵기가 다 다르다 (2·3·2·3·2·2·2). 등간격 격자는 곧 모눈종이다.
+WEAVE_WARP = [(0, 1, 0.5), (2, 4, -0.4), (5, 6, 0.3), (7, 9, -0.25), (10, 11, 0.45),
+              (12, 13, -0.35), (14, 15, 0.2)]
+
+
+def cloth_rows(shades, salt=0x2B, mid=6.0):
+    """자리(蓆) — 짜인 천. 실 굵기가 고르지 않고, 짜인 결이 위아래로 엇갈린다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            wx = next(w for w in WEAVE_WARP if w[0] <= x <= w[1])
+            wy = next(w for w in WEAVE_WARP if w[0] <= y <= w[1])
+            over = (wx[0] // 2 + wy[0] // 2) % 2 == 0           # 씨실이 위로 지나가는 칸
+            v = mid + wx[2] * 0.6 + wy[2] * 0.6
+            v += 0.75 if over else -0.75                        # 짜임 — 위로 지난 실이 빛을 받는다
+            if x == wx[0] or y == wy[0]:
+                v -= 0.7                                        # 실과 실 사이 골
+            v += octave(x, y, 1, salt, 0.6) + smooth_octave(x, y, 8, salt ^ 0x39, 0.7)  # 올·물때
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 기물 — 통(술독)·솥(약탕)·시렁 ────────────────────────────────────────
+# 통 널 — 폭이 다 다르다 (3·2·4·3·4). BARREL 39회는 조성 팔레트 3위다 (객잔·표국·산채가 통으로 산다).
+BARREL_STAVES = [(0, 2, 0x35, 0.45), (3, 4, 0x59, -0.5), (5, 8, 0x7D, 0.2),
+                 (9, 11, 0xA3, -0.3), (12, 15, 0xC7, 0.4)]
+BARREL_HOOPS = (2, 13)      # 테 두 줄 (대나무 테)
+
+
+def barrel_side_rows():
+    """술독·쌀독 옆면 — 세로로 세운 널과 그것을 조인 대나무 테 둘."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            x0, x1, seed, tone = next(s for s in BARREL_STAVES if s[0] <= x <= s[1])
+            v = 5.2 + tone + wood_grain(x, y, seed, vertical=True, amp=1.1)
+            if x == x0:
+                v -= 2.2                                        # 널 사이 틈
+            elif x == x0 + 1:
+                v += 0.6
+            if y in BARREL_HOOPS:
+                v = 7.2 + octave(x, y, 1, 0xD9, 0.5)            # 테 — 빛 받는 대오리
+            elif y - 1 in BARREL_HOOPS:
+                v = 2.6 + octave(x, y, 1, 0xE5, 0.4)            # 테 아래 그늘 (테가 떠 보인다)
+            row.append(step(SPRUCE_WOOD, v))
+        rows.append(row)
+    return rows
+
+
+def barrel_top_rows(open_lid=False):
+    """독 뚜껑 — 널을 짜 맞춘 원판 + 테. open_lid=True 면 열린 독 (안이 깊이 어둡다)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            d = ((x - 7.5) ** 2 + (y - 7.5) ** 2) ** 0.5
+            if open_lid and d < 5.4:
+                t = min(1.0, d / 5.4)
+                base = mix((16, 14, 12, 255), (52, 45, 38, 255), t)   # 독 안 — 바닥이 어렴풋
+                n = octave(x, y, 1, 0xF1, 6.0)
+                row.append(tuple(max(0, min(255, round(c + n))) for c in base[:3]) + (255,))
+                continue
+            y0, y1, seed, tone = next(b for b in PLANK_BOARDS if b[0] <= y <= b[1])
+            v = 5.4 + tone + wood_grain(x, y, seed ^ 0x44, amp=1.05)
+            if y == y0:
+                v -= 2.0                                        # 널 사이 틈
+            if 6.0 < d < 7.2:
+                v = 7.0 + octave(x, y, 1, 0x2D, 0.5)            # 테 (독 아가리를 두른 대오리)
+            elif 7.2 <= d < 7.9:
+                v = 2.8                                         # 테 바깥 그늘
+            row.append(step(SPRUCE_WOOD, v))
+        rows.append(row)
+    return rows
+
+
+def cauldron_rows(part):
+    """약탕관(藥湯罐) — 무쇠 솥. 의방·객잔 부엌·산채 취사장의 물그릇.
+    무쇠는 매끈하지 않다: 두들겨 편 자국(움푹)과 그을음이 있다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 5.2 + smooth_octave(x, y, 4, 0x63, 0.85) + octave(x, y, 1, 0x87, 0.55)
+            if h32(x, y, 0x9B) % 11 == 0:
+                v -= 1.4                                        # 두들긴 자국 (움푹 팬 곳)
+            if part == "side":
+                # ★ 이음매(실측 2.86 — 위반)의 원인은 '밝은 전(y0) ↔ 그을린 밑동(y15)'이었다.
+                #   솥은 세로로 쌓는 물건이 아니지만 이음매 축은 그것을 모른다 — 통과해야 한다.
+                #   처방: 밑동의 그을음을 얕게 깎고(-1.6 → -0.9), 대신 **솥의 허리(y11)에 띠**를
+                #   둘러 장 안에 강한 가로 경계를 하나 더 만든다 (무쇠 솥의 덧테 — 실제로 있는 것이다).
+                if y in (0, 1):
+                    v += 2.0                                    # 솥 전(테두리) — 빛을 받는다
+                elif y == 2:
+                    v -= 2.2                                    # 전 아래 깊은 그늘
+                elif y == 3:
+                    v += 0.9                                    # 그늘 아래 — 배가 부른 몸통이 빛을 받는다
+                if y == 11:
+                    v -= 2.4                                    # 허리 덧테 (무쇠를 두른 자리)
+                elif y == 12:
+                    v += 1.2                                    # 덧테 아래 — 되비침
+                if y >= 13:
+                    v -= 0.9                                    # 불에 그을린 밑동 (얕게)
+            elif part == "top":
+                d = ((x - 7.5) ** 2 + (y - 7.5) ** 2) ** 0.5
+                if d < 5.8:
+                    v -= 3.4 - d * 0.25                         # 솥 안 — 깊이 어둡다
+                elif d < 7.0:
+                    v += 1.6                                    # 솥 전
+            elif part == "inner":
+                v -= 2.6                                        # 솥 바닥 — 검다
+                if h32(x, y, 0xAF) % 7 == 0:
+                    v -= 0.8                                    # 눌어붙은 자국
+            elif part == "bottom":
+                v -= 1.2
+                if h32(x, y, 0xC5) % 5 == 0:
+                    v -= 1.0                                    # 그을음
+            row.append(step(IRON_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+# 시렁(*_SHELF) — 1.21.9 신규 블록. 조성기가 표국·의방·객잔·산채 두목 막사·문파 본전에 건다
+# (병장기 걸이·약장·술선반). 텍스처 한 장이 여섯 면을 다 덮는데, 모델이 잡는 UV 구역은 다음과 같다
+# (client jar 의 template_shelf_body.json 에서 읽었다 — 짐작이 아니다):
+#   x8~16 / y0~8   = 뒷판 (선반 뒤에 서는 판벽 — 가장 넓게 보이는 면)
+#   x0~8  / y0~2   = 윗널의 앞모   ·  x0~8 / y6~8 = 아랫널의 앞모
+#   x8~16 / y3.5~6 = 널의 윗면·밑면
+# 그래서 **뒷판 구역은 세로 판벽**으로, **널의 앞모 구역은 널의 마구리**로 그린다 — UV를 알고 그리면
+# 어느 면을 보아도 '벽에 건 널'로 읽힌다.
+def shelf_rows(shades, salt=0x3D):
+    """시렁 — 벽에 건 널 둘. 뒷판은 세로 판벽, 널의 앞모에는 못이 박혀 있다.
+
+    ★ 아래 절반(y ≥ 8)은 **위 절반의 거울**이다. 두 가지 이유가 겹친다:
+      ① 모델이 잡는 UV는 y 0~8 뿐이다 (client jar 의 template_shelf_body.json — 아래 절반은 안 쓰인다).
+      ② 그래서 아래 절반을 아무렇게나 채우면 랩 경계(y15 → y0)가 장에서 가장 강한 가로 경계가 되어
+         이음매가 터진다 (실측 1.46~1.60 — 위반). 거울로 접으면 맨아랫줄이 곧 맨윗줄이라
+         랩이 0에 가까워진다. 안 보이는 자리를 **이음매를 재는 자가 보는 방식**으로 채운 것이다.
+      거울은 병진(平行移動)이 아니므로 자기 복제 상관을 올리지 않는다 (축 7과 충돌하지 않는다)."""
+    rows = []
+    for y in range(16):
+        yy = y if y < 8 else 15 - y                             # 아래 절반 = 위 절반의 거울
+        row = []
+        for x in range(16):
+            if x >= 8:                                          # 뒷판 — 세로로 세운 판벽
+                col = (x - 8) // 3                              # 판벽 널 (폭 3)
+                v = 5.2 + (0.4, -0.35, 0.25)[col % 3]
+                v += wood_grain(x, yy, salt ^ (0x11 * (col + 1)), vertical=True, amp=1.2)
+                if (x - 8) % 3 == 0:
+                    v -= 1.9                                    # 판벽 널 사이 틈
+                if yy in (3, 6):
+                    v += 0.9                                    # 널이 뒷판을 가로지른 자리 (반사광)
+            else:                                               # 널의 앞모 (마구리) — 못이 보인다
+                v = 5.8 + wood_grain(x, yy, salt ^ 0x71, amp=0.9)
+                if yy in (0, 6):
+                    v -= 1.8                                    # 널의 윗모 그늘
+                elif yy in (1, 7):
+                    v += 0.8                                    # 윗모 아래 — 빛 받는 널의 낯
+                if (x, yy) in ((2, 1), (6, 1), (2, 7), (6, 7)):
+                    v -= 2.6                                    # 못 (널을 벽에 박은 자리)
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+def bone_block_rows(top=False):
+    """백골(白骨) — 산채의 위협 표식. 색을 쓰지 않는다: 뼈는 **바랜 흰빛**이다."""
+    shades = ramp((96, 93, 86, 255), (208, 204, 192, 255), 9)
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            if top:
+                d1, d2, ident, (cx, cy) = wrapped_cells(x, y, 4, 0x4B)
+                v = 6.0 + cell_rand(ident, 0x6F) * 1.4          # 뼈 단면 — 골수 구멍
+                if d1 < 1.3:
+                    v -= 3.0                                    # 골수 (구멍은 어둡다)
+                v += octave(x, y, 1, 0x93, 0.5)
+            else:
+                x0, x1, seed, tone = next(c for c in BARK_COLUMNS if c[0] <= x <= c[1])
+                v = 6.0 + tone * 0.7 + wood_grain(x, y, seed ^ 0x5C, vertical=True, amp=0.85)
+                if x == x0:
+                    v -= 2.0                                    # 뼈와 뼈 사이 그늘
+                if h32(x, y, 0xB9) % 17 == 0:
+                    v -= 1.3                                    # 금 간 자리
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 매화(梅) — 채색이 허락된 유일한 자리 ─────────────────────────────────
+# 수묵의 세계에서 매화만 붉다. 그래서 매화는 **아껴 써야 하고**, 쓰는 자리에서는 확실히 붉어야 한다.
+# 잎(꽃잎)은 성글다 — 매화는 잎보다 가지가 그림이다.
+PLUM_BLOSSOM = (206, 152, 164, 255)      # 매화 꽃잎 — 바랜 분홍 (형광 금지)
+PLUM_BLOSSOM_HI = (232, 194, 202, 255)   # 꽃잎 광
+PLUM_CORE = (150, 96, 108, 255)          # 꽃 술 — 짙은 분홍
+PLUM_BRANCH = (52, 44, 42, 255)          # 가지 — 먹
+PLUM_BRANCH_HI = (84, 72, 68, 255)
+
+
+def cherry_leaves_rows():
+    """매화 가지 — 먹으로 친 가지 위에 꽃이 성글게 앉는다. 잎사귀 덩어리가 아니라 **가지와 꽃**이다.
+    빈 자리는 투명 — 매화는 하늘이 비쳐야 매화다 (빽빽한 분홍 덩어리는 벚꽃 사탕이다)."""
+    art = [
+        "...#....#.......",
+        "..o#...#o.......",
+        "...##.##...#....",
+        "....###...#o....",
+        "o#..#o#..##.....",
+        ".##..##.##...#..",
+        "..####o##...#o..",
+        "...#o####..##...",
+        "..##..###.##....",
+        ".#o....####..#..",
+        "#o......##..#o..",
+        ".........#.##...",
+        "..#o.....###....",
+        "..##....#o.#....",
+        ".#.......#..#o..",
+        "..o.........##..",
+    ]
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            c = art[y][x]
+            if c == "#":
+                v = smooth_octave(x, y, 4, 0x77, 1.0)
+                row.append(PLUM_BRANCH_HI if v > 0.35 else PLUM_BRANCH)
+            elif c == "o":
+                k = h32(x, y, 0x8D) % 3
+                row.append(PLUM_CORE if k == 0 else (PLUM_BLOSSOM_HI if k == 1 else PLUM_BLOSSOM))
+            else:
+                row.append(T)                                   # 빈 하늘 — 매화의 여백
+        rows.append(row)
+    return rows
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 획층(劃層) — 무공의 모션 (파티클 텍스처)
+#
+# ── 두 층으로 설계한다 (사용자 요구: "팩이 없어도 파티클로 어느 정도는 확인이 되어야 한다") ──
+#   팩이 없으면 — 엔진이 쏘는 **바닐라 파티클**만으로 무엇이 일어났는지 읽힌다 (팩 게이트 불가침).
+#   팩이 있으면 — 그 파티클의 **그림**이 수묵의 획으로 바뀐다. 엔진은 한 줄도 안 고친다.
+# 이 층이 성립하는 이유가 바로 그 점이다: 파티클 텍스처 교체는 **아트만의 층**이다.
+# SkillListener 가 Particle.END_ROD 를 쏘는 한, 팩은 그 END_ROD 가 **무엇으로 보이는지**만 정한다.
+#
+# ── 엔진이 지금 쓰는 파티클 → 바닐라 텍스처 (client jar 의 assets/minecraft/particles/*.json 에서
+#    읽었다. 짐작이 아니다 — 없는 경로에 그리면 죽은 텍스처가 된다) ──
+#   발경   SWEEP_ATTACK   → sweep_0..7 (32x32)      · CRIT → critical_hit (8x8)
+#   검기   ELECTRIC_SPARK → glow (8x8)              · END_ROD → glitter_0..7 (8x8)
+#   강기   END_ROD + EXPLOSION → explosion_0..15 (32x32)
+#   어검·심검  END_ROD → glitter_*                  · FLASH → flash (32x32)
+#   빗나감 CLOUD / 다운캐스트 SMOKE → generic_0..7 (8x8) — 둘이 **같은 텍스처를 공유한다**
+#
+# ── 렌더 계약 (틀리면 그림이 사라진다) ──
+# 바닐라 파티클 텍스처는 전부 **회색조 + 알파**이고, 렌더러가 거기에 **파티클 색을 곱한다.**
+#   · 연기(SMOKE)는 색이 어두운 회색(≈0.25)이다 → generic_* 를 먹빛으로 칠하면 곱셈의 결과가
+#     **거의 검정**이 되어 연기가 사라진다. 그래서 generic_* 의 먹은 **알파에** 있고 밝기는 흰빛으로 둔다
+#     (농담 = 알파의 농담. 이것이 '먹이 물에 번진다'의 정확한 구현이다).
+#   · END_ROD·CRIT·SWEEP·EXPLOSION 은 흰색으로 곱해진다 → 텍스처의 명암이 그대로 산다.
+#     여기서는 먹을 **밝기로** 쓸 수 있다 (발경의 점획이 검을 수 있는 이유).
+#
+# ── 전역성의 값 ──
+# 파티클도 블록처럼 전역이다. critical_hit 은 바닐라 치명타에도, generic_* 은 모닥불 연기에도 쓰인다.
+# 그래서 "무공 전용 기호"를 그리면 안 된다 (화살 치명타에 검기가 뜨면 그건 오염이다).
+# 그리는 것은 **먹의 획**이다 — 획은 어느 맥락에서도 어색하지 않다. 모닥불 연기가 수묵으로 번지고,
+# 치명타가 먹이 튄 자국이 되는 것은 오염이 아니라 정합이다 (세계 전체가 수묵이므로).
+# ═══════════════════════════════════════════════════════════════════════════
+
+def free_octave(x, y, cell, salt, amp):
+    """랩 없는 보간 노이즈 — 파티클용. 블록의 smooth_octave 는 16px 주기로 **감기지만**(랩 안전),
+    32x32 파티클에 그걸 쓰면 16px마다 무늬가 되풀이된다 (타일이 아닌 그림에 타일의 문법을 쓴 셈).
+    파티클은 이어 붙지 않으므로 감을 필요가 없다 — 감지 않는 것이 옳다."""
+    def corner(i, j):
+        # 격자 인덱스는 **정수**라야 한다 — h32(crc32)는 바이트를 먹는다.
+        # 방사(放射) 노이즈는 좌표에 cos·sin 을 넣으므로 x·y 가 실수로 들어온다 (여기서 한 번 터졌다).
+        return (h32(int(x // cell) + i, int(y // cell) + j, salt) % 1001) / 1000.0 * 2 - 1
+
+    tx, ty = (x % cell) / cell, (y % cell) / cell
+    sx, sy = tx * tx * (3 - 2 * tx), ty * ty * (3 - 2 * ty)
+    a = corner(0, 0) + (corner(1, 0) - corner(0, 0)) * sx
+    b = corner(0, 1) + (corner(1, 1) - corner(0, 1)) * sx
+    return (a + (b - a) * sy) * amp
+
+
+def ink(v, a):
+    """획 한 점 — v = 밝기(0~255), a = 농도(알파). 채색 없음 (수묵 규약: 격은 밝기로만 가른다)."""
+    c = max(0, min(255, round(v)))
+    return (c, c, c, max(0, min(255, round(a))))
+
+
+def blank(w, h):
+    return [[(255, 255, 255, 0) for _ in range(w)] for _ in range(h)]
+
+
+def stroke_field(rows, w, h, pts, width, v0, v1, a0, a1, salt, dry=0.55):
+    """붓의 획 — 점들을 잇는 심(心)을 따라 먹을 얹는다.
+
+    획이 '선'이 아니라 '붓'인 이유 셋 (이것이 없으면 그냥 그어진 금이다):
+      ① 필압(筆壓) — 획은 눌러 시작해 들어 올리며 끝난다 (굵기와 농도가 길이를 따라 변한다)
+      ② 갈필(渴筆) — 마른 붓은 털이 갈라져 획 안에 **흰 결**이 남는다 (dry: 그 결의 세기)
+      ③ 번짐 — 획의 가장자리는 종이에 스며 흐려진다 (알파가 가장자리에서 떨어진다)
+    """
+    n = len(pts)
+    for y in range(h):
+        for x in range(w):
+            best, t_at = 1e9, 0.0
+            for i in range(n - 1):                      # 심에서 픽셀까지의 최단 거리
+                (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+                dx, dy = x1 - x0, y1 - y0
+                L = dx * dx + dy * dy
+                t = 0.0 if L == 0 else max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / L))
+                px, py = x0 + dx * t, y0 + dy * t
+                d = ((x - px) ** 2 + (y - py) ** 2) ** 0.5
+                if d < best:
+                    best, t_at = d, (i + t) / (n - 1)
+            wid = width * (0.45 + 0.55 * math.sin(math.pi * min(1.0, t_at * 1.15)))   # ① 필압
+            wid *= 1.0 + free_octave(x, y, 3, salt ^ 0x27, 0.22)
+            if best > wid:
+                continue
+            edge = 1.0 - (best / wid) ** 1.7            # ③ 번짐 — 심에서 멀수록 옅다
+            grit = free_octave(x, y, 2, salt, 1.0)      # ② 갈필 — 붓털이 갈라진 흰 결
+            body = edge * max(0.0, 1.0 - dry * max(0.0, grit) * (best / max(wid, 0.6)))
+            if body <= 0.02:
+                continue
+            v = v0 + (v1 - v0) * t_at
+            a = (a0 + (a1 - a0) * t_at) * body
+            prev = rows[y][x]
+            if a > prev[3]:
+                rows[y][x] = ink(v, a)
+
+
+def arc_points(cx, cy, r, a0, a1, n=14):
+    """호(弧) — 붓이 도는 자리. 발경의 쓸어치기는 직선이 아니라 원호다."""
+    return [(cx + math.cos(a0 + (a1 - a0) * i / (n - 1)) * r,
+             cy + math.sin(a0 + (a1 - a0) * i / (n - 1)) * r) for i in range(n)]
+
+
+def sweep_rows(frame):
+    """발경·쓸어치기 (SWEEP_ATTACK, 32x32 · 8프레임) — **붓의 한 획**.
+    프레임이 갈수록 획이 커지고 옅어진다 (붓이 지나간 뒤 먹이 마른다). 별·마법 느낌 금지."""
+    w = h = 32
+    rows = blank(w, h)
+    t = frame / 7.0
+    r = 9.5 + t * 4.2                                   # 획이 퍼진다
+    a = 236 - t * 196                                   # 그리고 마른다
+    pts = arc_points(16, 17.5, r, math.pi * 1.14, math.pi * 1.92, 16)
+    stroke_field(rows, w, h, pts, 3.6 - t * 1.1, 250, 176, a, a * 0.42, 0x31 + frame, dry=0.62)
+    # 획의 꼬리 — 붓을 들어 올린 자리에서 먹이 몇 점 튄다 (마른 획의 끝은 갈라진다)
+    for k, (ox, oy) in enumerate(((3.4, -2.2), (-3.0, 2.6), (2.0, 3.4))):
+        if t > 0.15 + k * 0.12:
+            tail = arc_points(16 + ox, 17.5 + oy, r * 0.86, math.pi * 1.30, math.pi * 1.64, 8)
+            stroke_field(rows, w, h, tail, 1.25, 236, 150, a * 0.5, 0.0, 0x77 + frame * 3 + k, dry=0.8)
+    return rows
+
+
+def critical_hit_rows():
+    """발경의 점획 (CRIT, 8x8) — **먹이 튄 자국**. 짧은 충격 하나.
+
+    검은 먹만 찍으면 밤·동굴에서 사라진다 (HUD 의 양배경 가독과 같은 문제다). 튄 먹에는
+    **젖은 테**가 있다 — 먹물이 종이에 닿는 순간 가장자리가 반짝인다. 그 테를 밝게 두면
+    밝은 하늘에서는 먹이, 어두운 굴에서는 테가 읽힌다."""
+    rows = blank(8, 8)
+    core = {(3, 3), (4, 3), (3, 4), (4, 4), (2, 3), (4, 2), (5, 4), (3, 5)}
+    rim = {(2, 2), (5, 2), (2, 5), (5, 5), (1, 3), (6, 4), (4, 6), (3, 1)}
+    drop = {(0, 5), (6, 1), (7, 6), (1, 7)}             # 튀어 나간 방울 — 충격의 방향감
+    for y in range(8):
+        for x in range(8):
+            if (x, y) in core:
+                rows[y][x] = ink(34 + free_octave(x, y, 2, 0x4D, 14), 255)
+            elif (x, y) in rim:
+                rows[y][x] = ink(214, 232)              # 젖은 테 (먹이 종이에 닿은 자리)
+            elif (x, y) in drop:
+                rows[y][x] = ink(58, 176)
+    return rows
+
+
+def glow_rows():
+    """검기 조각 (ELECTRIC_SPARK, 8x8) — 짧은 **마른 획**. 번개도 별도 아니다: 갈라진 붓끝이다."""
+    rows = blank(8, 8)
+    stroke_field(rows, 8, 8, [(1.2, 6.4), (3.4, 3.6), (6.6, 1.2)], 1.35,
+                 252, 186, 246, 96, 0x59, dry=0.72)
+    return rows
+
+
+def glitter_rows(frame):
+    """검기·강기·어검·심검의 실선 (END_ROD, 8x8 · 8프레임) — **가늘고 긴 흰 획**.
+    어검은 보이지 않는 검이 지나간 자리다: 획은 실낱같고, 지나간 뒤 곧 사라진다."""
+    rows = blank(8, 8)
+    t = frame / 7.0
+    a = 250 - t * 214                                   # 획이 사라진다 (검이 지나갔다)
+    span = 1.0 - t * 0.42                               # 그리고 짧아진다 (꼬리부터 마른다)
+    pts = [(0.9 + (1 - span) * 2.4, 6.8 - (1 - span) * 2.0), (3.6, 3.9), (7.0, 1.1)]
+    stroke_field(rows, 8, 8, pts, 1.15 - t * 0.3, 255, 208, a, a * 0.30, 0x6B + frame, dry=0.5)
+    return rows
+
+
+def generic_rows(frame):
+    """연기·구름 (SMOKE·CLOUD, 8x8 · 8프레임) — **먹이 물에 번진다**.
+
+    ★ 렌더 계약 (위 머리말): 연기는 파티클 색이 **어두운 회색**이라 텍스처에 곱해진다.
+      그래서 먹을 밝기로 칠하면 곱셈의 결과가 검정이 되어 연기가 사라진다.
+      먹의 농담은 **알파**에 둔다 — 물에 번진 먹이 옅어지는 것과 정확히 같은 물리다."""
+    rows = blank(8, 8)
+    t = frame / 7.0
+    r = 2.05 + t * 1.30                                 # 번져 나간다
+    peak = 252 - t * 150                                # 그리고 옅어진다
+    for y in range(8):
+        for x in range(8):
+            d = ((x - 3.5) ** 2 + (y - 3.5) ** 2) ** 0.5
+            # 번짐의 가장자리는 고르지 않다 — 그러나 **가장자리만** 그렇다.
+            #   노이즈를 심(心)에까지 먹이면 연기의 한복판이 뚫려 옅어진다 (빗나감·다운캐스트의
+            #   신호가 흐려진다 — 연기는 '무엇이 일어났는가'를 말하는 파티클이다).
+            #   그래서 노이즈의 진폭을 거리에 비례시킨다: 심은 단단하고 가장자리만 번진다.
+            # 0 으로 물리는 것도 잊지 말 것 — 거리가 음수로 내려가면 (d/r)**1.45 가 **복소수**가 된다.
+            d = max(0.0, d + free_octave(x, y, 2, 0x83 + frame, 0.80) * min(1.0, d / 2.0))
+            # 감쇠는 **가우스**여야 하고, **모서리에 닿기 전에 죽어야** 한다.
+            #   첫 판은 계단형(1-(d/r)^k)에 반경도 넓어, 8x8 안이 낮은 알파로 가득 차 **네모난 연기**가
+            #   됐다 (확대 시트로 확인 — 먹이 아니라 주사위였다). 물에 번진 먹은 둥글게 죽는다.
+            f = math.exp(-((d / r) ** 2) * 2.30)
+            a = peak * f
+            if a < 8:
+                continue
+            v = 252 - free_octave(x, y, 2, 0x97 + frame, 26) * 0.5   # 흰빛 유지 (틴트가 먹을 입힌다)
+            rows[y][x] = ink(v, a)
+    return rows
+
+
+# 강기(剛氣)의 획 — 터진 먹이 뻗는 다섯 갈래. 각도는 고르지 않다 (등각으로 벌리면 그것은 별이다).
+EXPLOSION_RAYS = ((0.35, 1.00), (1.42, 0.78), (2.71, 0.94), (3.86, 0.68), (5.16, 0.86))
+
+
+def explosion_rows(frame):
+    """강기 (EXPLOSION, 32x32 · 16프레임) — **터져 나가는 먹**.
+
+    ★ 첫 판은 각도 노이즈로 외곽을 삐죽하게 만들었다 — 확대해 보니 **별(★)** 이었다.
+      별은 마법이다. 강기는 마법이 아니라 **내력이 실린 획**이다 (규약: 별·마법 느낌 금지).
+      그래서 다시 그렸다: 가운데 먹이 뭉치고(墨團), 거기서 **붓의 획 다섯**이 고르지 않은 각도로
+      뻗는다. 프레임이 갈수록 획이 길어지고 먹이 옅어진다 — 터진 먹이 종이를 달리는 그림."""
+    w = h = 32
+    rows = blank(w, h)
+    t = frame / 15.0
+    r = 2.6 + t * 6.4                                   # 가운데 먹뭉치 — 번지며 커진다
+    a0 = 246 - t * 226
+    for y in range(h):
+        for x in range(w):
+            d = ((x - 15.5) ** 2 + (y - 15.5) ** 2) ** 0.5
+            d = max(0.0, d + free_octave(x, y, 4, 0x2B + frame, 1.5) * min(1.0, d / 3.0))
+            if d > r * 1.5:
+                continue
+            f = math.exp(-((d / r) ** 2) * 1.5)         # 먹뭉치도 가우스로 죽는다 (네모 방지)
+            a = a0 * f
+            if a < 8:
+                continue
+            v = 96 + 150 * f                            # 심은 희고 가장자리로 갈수록 먹이 진다
+            rows[y][x] = ink(v, a)
+    # 뻗는 획 다섯 — 먹뭉치에서 밖으로. 프레임이 갈수록 길고 가늘고 옅어진다
+    reach = 4.0 + t * 11.5
+    for i, (ang, scale) in enumerate(EXPLOSION_RAYS):
+        L = reach * scale
+        bend = 0.22 * math.sin(ang * 2.0 + 1.3)         # 획은 곧지 않다 (붓은 휜다)
+        pts = [(15.5 + math.cos(ang + bend * k / 3) * (L * k / 3),
+                15.5 + math.sin(ang + bend * k / 3) * (L * k / 3)) for k in range(4)]
+        stroke_field(rows, w, h, pts, 3.0 - t * 1.5, 250, 130,
+                     a0 * 0.92, a0 * 0.18, 0x91 + frame * 5 + i, dry=0.66)
+    return rows
+
+
+def flash_rows():
+    """어검·심검의 발현 (FLASH, 32x32) — 획이 아니라 **빛무리**.
+    보이지 않는 검이 서는 순간의 흰 기운. 아주 옅게 — 화면을 때리면 그것은 마법이다."""
+    w = h = 32
+    rows = blank(w, h)
+    for y in range(h):
+        for x in range(w):
+            d = ((x - 15.5) ** 2 + (y - 15.5) ** 2) ** 0.5
+            if d > 15.5:
+                continue
+            f = max(0.0, 1.0 - d / 15.5)
+            a = 96 * f ** 2.3                            # 가운데만 겨우 밝다
+            if 8.0 < d < 10.4:
+                a += 30 * (1.0 - abs(d - 9.2) / 1.2)     # 붓이 한 바퀴 돈 자국 (옅은 테)
+            a *= 1.0 + free_octave(x, y, 4, 0xC1, 0.22)
+            if a < 4:
+                continue
+            rows[y][x] = ink(252, a)
+    return rows
+
+
+# ─── 쇠붙이·풀·불 — 남은 자재들 ─────────────────────────────────────────────
+# 알파가 있는 블록(철창·사슬)은 **바닐라의 실루엣을 지켜야 한다.** 모델이 그 알파를 전제로 UV를 잡기
+# 때문이다 (살대 자리를 옮기면 창살이 허공에 뜬다). 그래서 실루엣은 1.21.11 client jar 에서 읽어
+# 그대로 두고, 그 안의 **픽셀만** 다시 칠한다 — 형(形)은 바닐라의 계약, 색(色)은 우리 것.
+IRON_BARS_MASK = [
+    "..##...##...##..", "..##...##...##..", "..#######...##..", "..#######...##..",
+    "..##...##...##..", "..##...##...##..", "..##...##...##..", "####...##...####",
+    "####...##...####", "..##...##...##..", "..##...##...##..", "..##...##...##..",
+    "..##...#######..", "..##...#######..", "..##...##...##..", "..##...##...##..",
+]
+IRON_CHAIN_MASK = [
+    "...#.#..........", "######..........", "#.#.............", "######..........",
+    "...#.#..........", "...#.#..........", "######..........", "#.#.............",
+    "#.#.............", "######..........", "...#.#..........", "...#.#..........",
+    "######..........", "#.#.............", "######..........", "...#.#..........",
+]
+
+
+def iron_rows(mask, salt=0x2D):
+    """철창(鐵窓)·사슬 — 두들겨 편 쇠. 빛은 좌상단: 살대의 왼쪽 모가 밝고 오른쪽이 그늘이다.
+    (관아 옥사의 창살, 등롱을 매단 사슬 — 둘 다 무협의 쇠다)"""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            if mask[y][x] != "#":
+                row.append(T)
+                continue
+            left = x == 0 or mask[y][x - 1] != "#"          # 살대의 왼쪽 모 — 빛을 받는다
+            right = x == 15 or mask[y][x + 1] != "#"        # 오른쪽 모 — 그늘
+            v = 4.4 + (1.9 if left else 0.0) - (1.5 if right else 0.0)
+            v += octave(x, y, 1, salt, 0.8)                 # 망치 자국
+            if h32(x, y, salt ^ 0x51) % 9 == 0:
+                v -= 1.1                                    # 녹슬어 패인 자리
+            row.append(step(IRON_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def moss_rows():
+    """이끼 — 담 밑·물가에 앉은 것. 색이 아니라 **농담**이다 (수묵 규약: 초록을 쓰지 않는다).
+    이끼는 덩이져 자란다 — 보로노이 덩이에 잔털을 얹는다."""
+    shades = ramp((42, 44, 41, 255), (104, 107, 100, 255), 9)     # 채도 ≤ 7 — 거의 무채색
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            d1, d2, ident, _ = wrapped_cells(x, y, 4, 0x6B)
+            v = 5.0 + cell_rand(ident, 0x8F) * 1.5          # 덩이마다 다른 깊이
+            v += octave(x, y, 1, 0xA3, 1.35)                # 잔털 (이끼의 결)
+            if d2 - d1 < 0.6:
+                v -= 1.6                                    # 덩이 사이 그늘
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+def lectern_rows(part):
+    """서안(書案) — 장부·비급을 펴 놓는 경상. 관아·표국·문파 서고에 선다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            if part == "top":                               # 상판 — 널을 짜 맞춘 면
+                y0, y1, seed, tone = next(b for b in PLANK_BOARDS if b[0] <= y <= b[1])
+                v = 5.6 + tone + wood_grain(x, y, seed ^ 0x2A, amp=1.0)
+                if y == y0:
+                    v -= 2.0
+            elif part == "front":                           # 앞면 — 책을 받치는 턱
+                v = 5.2 + wood_grain(x, y, 0x4C, amp=1.1)
+                if y in (2, 12) and dash(x, "1111011110111101"):
+                    v -= 2.2                                # 가로 살 (책턱)
+                elif y in (3, 13):
+                    v += 0.8
+            elif part == "sides":                           # 옆면 — 세로 결
+                v = 5.0 + wood_grain(x, y, 0x6E, vertical=True, amp=1.15)
+                if x in (2, 13):
+                    v -= 1.6                                # 다리의 모
+            else:                                           # base — 받침 (무겁고 어둡다)
+                v = 4.4 + wood_grain(x, y, 0x8A, amp=1.5)
+                if y in (0, 15):
+                    v -= 1.8                                # 받침의 모 (바닥에 닿는 자리)
+                elif y in (1, 14):
+                    v += 1.2                                # 모 안쪽 — 빛을 받는다
+            row.append(step(DARK_WOOD, v))
+        rows.append(row)
+    return rows
+
+
+def crafting_table_rows(part):
+    """목공대(木工臺) — 대장간·공방의 작업대. 상판은 연장에 파이고, 옆면엔 연장이 걸린다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            if part == "top":
+                # 상판도 **널을 짜 맞춘 면**이다. 첫 판은 결만 있어 장 안에 강한 가로 경계가 없었고,
+                # 그래서 랩 경계가 유일한 강한 경계가 되어 이음매가 터졌다 (1.45 — 위반).
+                y0, y1, seed, tone = next(b for b in PLANK_BOARDS if b[0] <= y <= b[1])
+                v = 5.4 + tone + wood_grain(x, y, seed ^ 0x35, amp=1.1)
+                if y == y0:
+                    v -= 2.2                                # 널 사이 틈
+                elif y == y0 + 1:
+                    v += 0.8
+                if h32(x, y, 0x59) % 13 == 0:
+                    v -= 1.8                                # 끌·칼이 파고든 자국 (점 — 선이 아니다)
+            elif part == "front":
+                v = 5.0 + wood_grain(x, y, 0x71, vertical=True, amp=1.0)
+                if 3 <= x <= 12 and y in (4, 10) and dash(x, "1101111011110110"):
+                    v -= 2.3                                # 걸어 둔 연장 (가로로 건 자귀·끌)
+                elif 3 <= x <= 12 and y in (5, 11):
+                    v += 0.9
+            else:                                           # side
+                v = 5.0 + wood_grain(x, y, 0x93, vertical=True, amp=1.0)
+                if x in (4, 11) and dash(y, "1110110111011010"):
+                    v -= 1.9                                # 세로 버팀목
+            row.append(step(SPRUCE_WOOD, v))
+        rows.append(row)
+    return rows
+
+
+EMBER = (168, 92, 44, 255)          # 잉걸 — 등롱과 같은 계열의 난색 (불은 채색이 허락된다)
+EMBER_HI = (208, 138, 72, 255)
+
+
+def campfire_log_rows(lit=False):
+    """모닥불 장작 — 산채·객잔 마당의 불자리. lit=True 면 밑동에 잉걸이 산다.
+    불빛은 등롱과 같은 계열의 난색이다 (수묵 규약의 예외: 등롱·불)."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 4.0 + wood_grain(x, y, 0x4D, amp=1.2)
+            char = smooth_octave(x, y, 4, 0x77, 1.0)
+            if char > 0.15:
+                v -= 2.2 * min(1.0, (char - 0.15) * 1.8)    # 그을려 숯이 된 자리
+            px = step(DARK_WOOD, v)
+            if lit and h32(x, y, 0x95) % 11 == 0 and char > 0.0:
+                px = EMBER_HI if h32(x, y, 0xB1) % 3 == 0 else EMBER   # 잉걸 (숯 사이로 붉게)
+            row.append(px)
+        rows.append(row)
+    return rows
+
+
+def snow_rows():
+    """눈 덮인 옆면 — 겨울 산길. 흰빛이되 죽은 흰색은 아니다 (그늘이 있어야 눈이다)."""
+    shades = ramp((168, 173, 180, 255), (250, 252, 254, 255), 9)
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            # 눈은 흰색 한 장이 아니다 — 바람에 밀린 두둑과 그늘진 골이 있다 (진폭을 죽이면 평면이 된다)
+            v = (4.8 + smooth_octave(x, y, 8, 0xD3, 1.85) + smooth_octave(x, y, 4, 0xE7, 1.05)
+                 + octave(x, y, 1, 0xF9, 0.55))
+            if h32(x, y, 0x2B) % 17 == 0:
+                v -= 1.5                                    # 눈이 패여 그늘이 앉은 점
+            row.append(step(shades, v))
+        rows.append(row)
+    return rows
+
+
+# ─── 기물 두 점 — 블록이되 **블록 엔티티**라 텍스처가 entity/ 아래 산다 ───
+# DECORATED_POT 21회 · CHEST 14회 — 조성 팔레트의 상위권인데 block/ 아래에 텍스처가 없다
+# (bakedmodel 이 아니라 블록 엔티티 렌더러가 그린다). 경로는 client jar 로 확인했다:
+#   entity/decorated_pot/decorated_pot_base.png (32x32) · decorated_pot_side.png (16x16)
+#   entity/chest/normal.png (64x64) · normal_left.png · normal_right.png (쌍궤)
+# ★ UV 를 모르는 면에는 **무늬를 그리지 않는다.** 모델이 어느 조각을 잡을지 모르는 채로 문양을 얹으면
+#   문양이 뚜껑 뒤나 바닥에 가서 앉는다. 그래서 이 둘은 '어느 조각을 잘라 내도 옳은 면'으로 그린다:
+#   도기는 **물레 자국이 도는 유약면**, 궤는 **결이 흐르는 낡은 나무**. 어디를 잘라도 도기이고 나무다.
+POT_GLAZE = ramp((40, 37, 35, 255), (132, 124, 118, 255), 10)   # 먹빛 유약 (청화 아님 — 수묵 규약)
+CHEST_WOOD = ramp((46, 40, 33, 255), (122, 106, 86, 255), 9)    # 궤 — 오래 쓴 나무
+
+
+def pottery_rows(w, h):
+    """도기(陶器) — 술단지·약단지·쌀독. 물레에 돌린 자국이 가로로 감기고, 유약이 흘러 고인다."""
+    rows = []
+    for y in range(h):
+        row = []
+        for x in range(w):
+            v = 5.6 + free_octave(x, y, 6, 0x2D, 1.15) + free_octave(x, y, 3, 0x51, 0.55)
+            v += math.sin(y * 1.15 + free_octave(x, y, 8, 0x73, 1.4)) * 0.55   # 물레 자국 (가로로 감긴다)
+            v += octave(x % 16, y % 16, 1, 0x9B, 0.30)                          # 흙의 입자
+            if h32(x, y, 0xB7) % 29 == 0:
+                v += 1.4                                                        # 유약이 뭉친 방울
+            row.append(step(POT_GLAZE, v))
+        rows.append(row)
+    return rows
+
+
+def chest_rows(w, h):
+    """궤(櫃) — 나무 궤짝. 널의 결이 가로로 흐르고, 오래 쓴 자리가 닳아 밝다."""
+    rows = []
+    for y in range(h):
+        row = []
+        for x in range(w):
+            v = 5.0 + wood_grain(x % 16, y % 16, 0x3B, amp=1.2)
+            v += free_octave(x, y, 8, 0x67, 0.85)          # 널마다 다른 볕 (큰 얼룩)
+            if y % 8 == 0:
+                v -= 1.7                                   # 널과 널 사이 (가로 이음)
+            elif y % 8 == 1:
+                v += 0.6                                   # 이음 아래 — 빛 받는 모
+            if h32(x, y, 0xC3) % 41 == 0:
+                v -= 2.0                                   # 못 (드문드문)
+            row.append(step(CHEST_WOOD, v))
+        rows.append(row)
+    return rows
+
+
+def write_prop_textures() -> int:
+    """블록 엔티티 기물 — 항아리·궤 (entity/ 아래 살지만 세계에 서는 것은 블록이다)."""
+    out = {
+        "decorated_pot/decorated_pot_base": pottery_rows(32, 32),
+        "decorated_pot/decorated_pot_side": pottery_rows(16, 16),
+        "chest/normal": chest_rows(64, 64),
+        "chest/normal_left": chest_rows(64, 64),
+        "chest/normal_right": chest_rows(64, 64),
+    }
+    for name, rows in out.items():
+        write_png(ENTITY_DIR / f"{name}.png", rows)
+    return len(out)
+
+
+def soul_rows(frame):
+    """은신·암살의 그림자 (SOUL, 16x16 · 11프레임) — 귀식술·무영비수.
+
+    다른 획은 전부 **기(氣)** 다 — 밝다. 이것만 **없음**이다: 그림자는 빛이 아니라 빛의 부재다.
+    (config/skill_motion.yml 이 이 파티클에 붙인 뜻이 그러하다: "기가 아니라 없음")
+    그래서 홀로 먹빛으로 그린다 — 소울 파티클은 흰색으로 곱해지므로 텍스처의 어둠이 그대로 산다.
+    다만 밤에 아주 사라지지는 않게 **옅은 테**를 남긴다 (밤의 암살자도 형(形)은 있다)."""
+    rows = blank(16, 16)
+    t = frame / 10.0
+    a = 232 - t * 200                                   # 스미듯 사라진다
+    lift = t * 3.2                                      # 그림자가 위로 풀린다
+    pts = [(8.4, 14.2 - lift), (7.4, 10.6 - lift), (8.6, 7.2 - lift), (7.8, 4.4 - lift * 1.3)]
+    stroke_field(rows, 16, 16, pts, 2.9 - t * 1.4, 40, 96, a, a * 0.25, 0xA7 + frame, dry=0.58)
+    # 옅은 테 — 그림자의 가장자리는 아주 조금 밝다 (어둠 위에서도 형이 남는다).
+    #   HUD 의 양배경 가독과 같은 문제다: 먹만 찍으면 밤·동굴에서 **아무것도 일어나지 않은 것**이 된다.
+    #   은신은 '보이지 않음'이 아니라 '겨우 보임'이라야 한다 — 안 보이면 그건 신호가 아니다.
+    for y in range(16):
+        for x in range(16):
+            if rows[y][x][3] > 8:
+                continue
+            near = any(0 <= x + dx < 16 and 0 <= y + dy < 16 and rows[y + dy][x + dx][3] > 70
+                       for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
+                                      (1, 1), (-1, -1), (1, -1), (-1, 1)))
+            if near:
+                rows[y][x] = ink(208, a * 0.55)
+    return rows
+
+
+def write_particle_textures() -> int:
+    """획층 — 바닐라 파티클 텍스처 전역 치환 (엔진 불변: SkillListener 는 한 줄도 안 고친다).
+
+    ※ ash(독·취기)는 바닐라가 generic_0 를 쓴다 (particles/ash.json) — 따로 그릴 것이 없다.
+      item(무기 파편)은 아이템 텍스처를 쓰므로 이미 우리 것이다. crimson_spore 도 generic_0 다."""
+    out = {"critical_hit": critical_hit_rows(), "glow": glow_rows(), "flash": flash_rows()}
+    for i in range(8):
+        out[f"sweep_{i}"] = sweep_rows(i)
+        out[f"glitter_{i}"] = glitter_rows(i)
+        out[f"generic_{i}"] = generic_rows(i)
+    for i in range(16):
+        out[f"explosion_{i}"] = explosion_rows(i)
+    for i in range(11):
+        out[f"soul_{i}"] = soul_rows(i)
+    for name, rows in out.items():
+        write_png(PARTICLE_DIR / f"{name}.png", rows)
+    return len(out)
+
+
 def write_block_textures() -> int:
     """징발 등록부 순회 — 바닐라 경로에 16x16 덮어쓰기 (blockstate/model JSON 불요)."""
     blocks = {
@@ -2164,6 +3540,115 @@ def write_block_textures() -> int:
         "chiseled_bookshelf_empty": shelf_face_rows(False),
         "chiseled_bookshelf_occupied": shelf_face_rows(True),
     }
+
+    # ── 자재층 (2026-07) — 조성 팔레트의 상위 블록을 무협의 자재로 다시 그린다 ──
+    # 순서는 **면적** 순이다 (조성기 실측 빈도 = 화면 점유). 옆에 적은 수는 조성기 사용 횟수.
+    dirt = dirt_rows()
+    path_top = dirt_path_top_rows()
+    podzol_top = podzol_top_rows()
+    blocks.update({
+        # 흙·길 (COARSE_DIRT 25 · DIRT_PATH 24 · DIRT 21 · ROOTED_DIRT 10 · GRAVEL 11 · PODZOL 7)
+        "dirt": dirt,
+        "coarse_dirt": coarse_dirt_rows(),
+        "dirt_path_top": path_top,
+        "dirt_path_side": side_rows(path_top, dirt, band=1),      # 길은 15/16 높이 — 윗 한 줄만 길이다
+        "rooted_dirt": rooted_dirt_rows(),
+        "podzol_top": podzol_top,
+        "podzol_side": side_rows(podzol_top, dirt, band=3),
+        "gravel": gravel_rows(),
+        "farmland": farmland_rows(),
+        "farmland_moist": farmland_rows(moist=True),
+        # 돌 (COBBLESTONE 17 · COBBLESTONE_WALL 15 · STONE_BRICKS 14 · POLISHED_ANDESITE 10 …)
+        #   ※ 담장(WALL)·계단·반블록은 제 텍스처가 없다 — 몸 블록의 텍스처를 그대로 쓴다.
+        "cobblestone": rubble_rows(COBBLE_SHADES, 4, 0x31),
+        "mossy_cobblestone": rubble_rows(COBBLE_SHADES, 4, 0x31, damp=True),
+        "stone_bricks": brick_rows(BRICK_SHADES),
+        "cracked_stone_bricks": brick_rows(BRICK_SHADES, cracked=True),
+        "mossy_stone_bricks": brick_rows(BRICK_SHADES, damp=True),
+        "chiseled_stone_bricks": chiseled_brick_rows(),
+        "stone": stone_rows(STONE_SHADES),
+        "smooth_stone": smooth_stone_rows(),
+        "smooth_stone_slab_side": smooth_stone_rows(band=True),
+        "andesite": stone_rows(STONE_SHADES, 0x4F, amp=1.25),     # 자연 안산암 — 얼룩이 굵다
+        "polished_andesite": polished_andesite_rows(),            # 다듬은 안산암 — 정 자국이 있다
+        "tuff": stone_rows(ramp((62, 61, 58, 255), (132, 130, 124, 255), 9), 0x8D, amp=1.35),
+        "deepslate": stone_rows(DEEP_SHADES, 0xB3, amp=0.9),
+        # 심층암 마구리 — amp 0.75·speck 없음으로는 색 3개·명암차 15 였다 (평면·밋밋 이중 위반).
+        # 검은 돌이라고 해서 얼룩이 없는 것은 아니다 — 검은 것은 밝기이지 균질함이 아니다.
+        "deepslate_top": stone_rows(DEEP_SHADES, 0xC7, amp=1.3),
+        "cobbled_deepslate": rubble_rows(DEEP_SHADES, 4, 0x75, mid=5.4),   # 소금은 이음매로 골랐다 (gravel 주석)
+        "bricks": brick_rows(ramp((72, 66, 60, 255), (146, 138, 128, 255), 11), 0x6D),
+        "mud_bricks": brick_rows(ramp((70, 64, 55, 255), (140, 130, 114, 255), 10), 0x9F),
+        "packed_mud": stone_rows(ramp((66, 60, 52, 255), (136, 126, 110, 255), 9), 0xD1, amp=1.2),
+        "clay": stone_rows(ramp((88, 86, 84, 255), (156, 154, 150, 255), 8), 0xE9, amp=0.8),
+        "terracotta": plaster_rows((124, 118, 112, 255), (176, 169, 161, 255), hairlines=False),
+        # 목재 — 판자 한 장이 판자·울타리·계단·반블록·문을 전부 덮는다
+        #   (DARK_OAK_PLANKS 33 · SPRUCE_FENCE 39 · SPRUCE_PLANKS 18 · OAK_FENCE 15 · OAK_PLANKS 9)
+        "dark_oak_planks": plank_rows(DARK_WOOD, 0x11),
+        "spruce_planks": plank_rows(SPRUCE_WOOD, 0x33),
+        "oak_planks": plank_rows(OAK_WOOD, 0x55),
+        # 통나무 — 목책(산채)·귀틀·기둥 (SPRUCE_LOG 15 · OAK_LOG 11 · DARK_OAK_LOG 10)
+        "spruce_log": bark_rows(SPRUCE_WOOD, 0x13, rough=1.15, knot=(11, 5)),   # 산채 목책 — 가장 거칠다
+        "spruce_log_top": log_top_rows(SPRUCE_WOOD, 0x17, freq=1.78),
+        "oak_log": bark_rows(OAK_WOOD, 0x2B, rough=0.9, knot=(4, 10)),
+        "oak_log_top": log_top_rows(OAK_WOOD, 0x2F, freq=1.62),
+        "dark_oak_log": bark_rows(DARK_WOOD, 0x43, rough=1.0, knot=(12, 12)),
+        "dark_oak_log_top": log_top_rows(DARK_WOOD, 0x47, freq=2.05),
+        "stripped_oak_log": stripped_rows(STRIPPED_WOOD, 0x19),
+        "stripped_oak_log_top": log_top_rows(STRIPPED_WOOD, 0x1D, freq=1.55),
+        "stripped_dark_oak_log": stripped_rows(ramp((66, 57, 47, 255), (140, 124, 104, 255), 9), 0x61),
+        "stripped_dark_oak_log_top": log_top_rows(DARK_WOOD, 0x65, freq=1.94),
+        "stripped_spruce_log": stripped_rows(SPRUCE_WOOD, 0x7F),
+        "stripped_spruce_log_top": log_top_rows(SPRUCE_WOOD, 0x83, freq=1.71),
+        # 매화 — 채색이 허락된 유일한 자리 (CHERRY_LOG 4 · CHERRY_LEAVES 3)
+        "cherry_log": bark_rows(CHERRY_WOOD, 0x95, rough=0.8, knot=(5, 4)),
+        "cherry_log_top": log_top_rows(CHERRY_WOOD, 0x99, freq=2.18),
+        "cherry_leaves": cherry_leaves_rows(),
+        # 초가 (HAY_BLOCK 20) — 녹림 산채의 지붕
+        "hay_block_side": hay_side_rows(),
+        "hay_block_top": hay_top_rows(),
+        # 자리·차양 (WHITE_CARPET 11 · BROWN_CARPET 9 · LIGHT_GRAY_CARPET 8 · RED_CARPET 4)
+        #   깔개는 제 텍스처가 없다 — **양털 텍스처**를 쓴다. 그래서 양털을 자리로 그린다.
+        "white_wool": cloth_rows(ramp((176, 172, 164, 255), (238, 235, 228, 255), 9), 0x2B),
+        "light_gray_wool": cloth_rows(ramp((118, 116, 112, 255), (182, 180, 175, 255), 9), 0x4D),
+        "brown_wool": cloth_rows(ramp((78, 68, 54, 255), (146, 130, 106, 255), 9), 0x6F),
+        "red_wool": cloth_rows(ramp((96, 40, 36, 255), (176, 86, 72, 255), 9), 0x91),   # 붉은 차양 (채색 허용)
+        # 기물 (BARREL 39 · DECORATED_POT 21 · CAULDRON 12 · *_SHELF 5)
+        "barrel_side": barrel_side_rows(),
+        "barrel_top": barrel_top_rows(),
+        "barrel_top_open": barrel_top_rows(open_lid=True),
+        "barrel_bottom": barrel_top_rows(),
+        "cauldron_side": cauldron_rows("side"),
+        "cauldron_top": cauldron_rows("top"),
+        "cauldron_inner": cauldron_rows("inner"),
+        "cauldron_bottom": cauldron_rows("bottom"),
+        # 시렁 — 1.21.9 신규 블록. 병장기 걸이·약장·술선반 (UV 구역은 shelf_rows 주석 참조)
+        "spruce_shelf": shelf_rows(SPRUCE_WOOD, 0x3D),
+        "dark_oak_shelf": shelf_rows(DARK_WOOD, 0x5B),
+        "oak_shelf": shelf_rows(OAK_WOOD, 0x79),
+        "bamboo_shelf": shelf_rows(ramp((104, 96, 78, 255), (176, 164, 142, 255), 9), 0x97),
+        "cherry_shelf": shelf_rows(CHERRY_WOOD, 0xB5),
+        # 백골 (BONE_BLOCK 4) — 산채의 위협 표식
+        "bone_block_side": bone_block_rows(),
+        "bone_block_top": bone_block_rows(top=True),
+        # 쇠붙이 (IRON_CHAIN 6 · IRON_BARS 6) — 실루엣은 바닐라 계약, 픽셀만 우리 것 (iron_rows 주석)
+        "iron_bars": iron_rows(IRON_BARS_MASK, 0x2D),
+        "iron_chain": iron_rows(IRON_CHAIN_MASK, 0x4F),      # ※ 1.21.9+ 에서 chain → iron_chain 개명
+        # 이끼·눈·불 (MOSS_CARPET 6 · CAMPFIRE 7 · 눈 덮인 면)
+        "moss_block": moss_rows(),
+        "grass_block_snow": snow_rows(),
+        "campfire_log": campfire_log_rows(),
+        "campfire_log_lit": campfire_log_rows(lit=True),
+        # 세간 (LECTERN 5 · CRAFTING_TABLE 4) — 서안·목공대
+        "lectern_top": lectern_rows("top"),
+        "lectern_front": lectern_rows("front"),
+        "lectern_sides": lectern_rows("sides"),
+        "lectern_base": lectern_rows("base"),
+        "crafting_table_top": crafting_table_rows("top"),
+        "crafting_table_front": crafting_table_rows("front"),
+        "crafting_table_side": crafting_table_rows("side"),
+    })
+
     for name, rows in blocks.items():
         write_png(BLOCK_DIR / f"{name}.png", rows)
     for name in SCROLL_MOTIFS:
@@ -3063,6 +4548,8 @@ def main():
     # ─── 아이템·블록 텍스처 레이어 (texture_layer_design.md — 1차) ───
     items = write_item_assets()
     blocks = write_block_textures()
+    parts = write_particle_textures()
+    props = write_prop_textures()
     ents = write_entity_textures(sheet)
 
     # pack_format 은 클라이언트 버전이 정한다 — 서버 jar 의 version.json(pack_version.resource_major)이 진실.
@@ -3080,6 +4567,8 @@ def main():
           f"(글리프 {total}종 + 음수공백 6폭 + 바닐라 교체 {vanilla}장 + 폰트 주입 + pack.mcmeta)")
     print(f"  아이템 채널 {items}종 (PNG {items} + 모델 {items} + 아이템 정의 {items}) — item_model, 전역 오염 0")
     print(f"  블록 징발 {blocks}장 (전역 치환 — block_channels.징발 등록분만)")
+    print(f"  획층(파티클) {parts}장 (무공 모션 — 엔진 불변. 팩 없으면 바닐라 파티클로 폴백)")
+    print(f"  기물(블록 엔티티) {props}장 (항아리·궤 — 블록이되 텍스처는 entity/ 아래 산다)")
     print(f"  엔티티 징발 {ents}장 (전역 치환 — 사람 2 + 늑대 변종 27 + 고양잇과 2 + 곰·멧돼지·호랑이 3)")
 
 

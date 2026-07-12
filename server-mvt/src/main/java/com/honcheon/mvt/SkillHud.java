@@ -32,6 +32,9 @@ final class SkillHud {
     /** 이번 틱 전역 발행량 — newTick() 이 0으로 되돌린다 (중앙 티커 1개, F-P2) */
     private int globalThisTick;
     private final Map<UUID, Integer> viewThisTick = new HashMap<>();
+    /** 팔레트 이름(smoke·end_rod…) → 바닐라 파티클. 등록부의 문자열이 Bukkit 타입이 되는 <b>유일한 자리</b> */
+    private final Map<String, Particle> resolved = new HashMap<>();
+    private final java.util.Set<String> unknownReported = new java.util.HashSet<>();
 
     SkillHud(SkillEngine engine) {
         this.engine = engine;
@@ -42,7 +45,73 @@ final class SkillHud {
         viewThisTick.clear();
     }
 
-    // ─── 파티클 ───
+    // ─── 팔레트 해석 ───
+
+    /**
+     * 등록부의 팔레트 이름 → 바닐라 파티클. <b>코드가 파티클을 고르지 않는다</b> — 이름을 받아 옮길 뿐이다
+     * (등록제 규약: config/skill_motion.yml palette 가 정본. motion_audit ④가 팔레트 밖의 이름을 잡는다).
+     * 모르는 이름은 조용히 버린다 — 연출이 없다고 판정이 멈추면 안 된다.
+     */
+    private Particle particle(String name) {
+        if (name == null || name.isEmpty() || "null".equals(name)) {
+            return null;
+        }
+        Particle cached = resolved.get(name);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            Particle p = Particle.valueOf(name.toUpperCase(java.util.Locale.ROOT));
+            resolved.put(name, p);
+            return p;
+        } catch (IllegalArgumentException e) {
+            if (unknownReported.add(name)) {
+                org.bukkit.Bukkit.getLogger().warning(
+                        "[혼천] 모션 등록부에 없는 파티클: " + name + " (config/skill_motion.yml palette)");
+            }
+            return null;
+        }
+    }
+
+    // ─── 파티클 (등록부 이름으로 발행 — 이 이름 오버로드가 SkillListener 의 유일한 창구다) ───
+
+    int emit(Location at, String particle, int count, double spread, double extra) {
+        Particle p = particle(particle);
+        return p == null ? 0 : emit(at, p, count, spread, spread, spread, extra, null, false);
+    }
+
+    int emit(Location at, String particle, int count, double spread, double extra, Object data) {
+        Particle p = particle(particle);
+        return p == null ? 0 : emit(at, p, count, spread, spread, spread, extra, data, false);
+    }
+
+    /** 오의 — 예산 내 최우선권 (생략되지 않고 깎인다) */
+    int emitPriority(Location at, String particle, int count, double spread, double extra) {
+        Particle p = particle(particle);
+        return p == null ? 0 : emit(at, p, count, spread, spread, spread, extra, null, true);
+    }
+
+    /** 한 발 = 등록부의 Fx 한 줄 (파티클·개수·퍼짐·속도) */
+    int emit(Location at, SkillEngine.Fx fx, boolean priority) {
+        if (fx == null || !fx.present()) {
+            return 0;
+        }
+        Particle p = particle(fx.particle());
+        return p == null ? 0
+                : emit(at, p, fx.count(), fx.spread(), fx.spread(), fx.spread(), fx.extra(), null, priority);
+    }
+
+    /** 개수만 등록부에서 떼어 낸 발행 (타격 풀을 대상 수로 나눌 때 — budget.impact_pool) */
+    int emit(Location at, SkillEngine.Fx fx, int count, boolean priority) {
+        if (fx == null || fx.particle() == null || count <= 0) {
+            return 0;
+        }
+        Particle p = particle(fx.particle());
+        return p == null ? 0
+                : emit(at, p, count, fx.spread(), fx.spread(), fx.spread(), fx.extra(), null, priority);
+    }
+
+    // ─── 파티클 (내부 — 예산 게이트) ───
 
     /**
      * 관람자별 발행 — 시야당 예산을 지키려면 브로드캐스트가 아니라 관람자별로 쏴야 한다.
@@ -50,8 +119,8 @@ final class SkillHud {
      *
      * @return 실제 발행량 (예산 초과 시 0 — 강등)
      */
-    int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
-             double extra, Object data) {
+    private int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
+                     double extra, Object data) {
         return emit(at, particle, count, dx, dy, dz, extra, data, false);
     }
 
@@ -59,8 +128,8 @@ final class SkillHud {
      * @param priority 오의 — "파티클 예산 내 최우선순위 (예외 아닌 우선권)" (ultimate_arts world_weight).
      *                 예산이 모자라면 <b>생략되는 대신 개수가 깎인다</b>. 예산 자체는 절대 넘지 않는다.
      */
-    int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
-             double extra, Object data, boolean priority) {
+    private int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
+                     double extra, Object data, boolean priority) {
         if (count <= 0 || at.getWorld() == null) {
             return 0;
         }
@@ -94,15 +163,6 @@ final class SkillHud {
             viewer.spawnParticle(particle, at, n, dx, dy, dz, extra, data);
         }
         return emitted;
-    }
-
-    int emit(Location at, Particle particle, int count, double spread, double extra) {
-        return emit(at, particle, count, spread, spread, spread, extra, null, false);
-    }
-
-    /** 오의 전용 — 예산 내 최우선순위 */
-    int emitPriority(Location at, Particle particle, int count, double spread, double extra) {
-        return emit(at, particle, count, spread, spread, spread, extra, null, true);
     }
 
     // ─── HUD ───
@@ -166,17 +226,23 @@ final class SkillHud {
         return SkillEngine.BARE.equals(grade) ? "외공(外功)" : grade + "(氣)";
     }
 
-    /** 격의 색 — 응집이 높을수록 밝고 차갑다 (텔레그래프의 색 문법: 상대가 눈으로 읽는다) */
-    static ChatColor gradeColor(String grade) {
-        return switch (grade == null ? "" : grade) {
-            case "발경" -> ChatColor.GOLD;
-            case "검기" -> ChatColor.AQUA;
-            case "강기" -> ChatColor.LIGHT_PURPLE;
-            case "호신강기" -> ChatColor.YELLOW;
-            case "어검" -> ChatColor.DARK_PURPLE;
-            case "심검" -> ChatColor.WHITE;
-            default -> ChatColor.GRAY;
-        };
+    /**
+     * 격의 색 — <b>등록부가 정한다</b> (skill_motion.yml grades[].color).
+     *
+     * <p>수묵 규약: 채색으로 격을 가르지 않는다. 색은 무채(회·백) 뿐이고, 격을 가르는 것은 <b>밝기</b>다
+     * (파티클 수·잔광). 색 문법에 기대면 팩 없는 클라이언트에서 격이 사라진다 — 색맹 규약과도 어긋난다.
+     * 호신강기만은 형태가 달라 노랑을 쓴다 (액션바 한 줄에서 공격 격과 방어 형태를 갈라야 하므로).
+     */
+    ChatColor gradeColor(String grade) {
+        if (SkillEngine.GUARD.equals(grade)) {
+            return ChatColor.YELLOW;
+        }
+        SkillEngine.GradeMotion m = engine.motionGrade(grade);
+        try {
+            return m == null ? ChatColor.GRAY : ChatColor.valueOf(m.color());
+        } catch (IllegalArgumentException e) {
+            return ChatColor.GRAY;
+        }
     }
 
     static void actionBar(Player player, String message) {

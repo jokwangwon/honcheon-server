@@ -58,6 +58,10 @@ public final class MvtCommand implements CommandExecutor {
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
                 case "조감" -> renderTown(sender, args);   // 조감도 PNG — 콘솔 가능 (인자 = 지역id)
+                case "연무장" -> dojangEnter(sender);        // 시험 월드로 (스킬·몹·허수아비)
+                case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
+                case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
+                case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
                 case "문장" -> crests(sender);
                 default -> help(sender);
             };
@@ -573,7 +577,9 @@ public final class MvtCommand implements CommandExecutor {
         // ─── 지형 계층이 먼저 땅을 빚는다 (계약: docs/design/terrain_layer.md) ───
         // 땅과 집은 관심사가 다르다. 지형이 부지를 보장하고(딛는 땅·경계·수역·주문 대조),
         // 건축은 그 위에만 세운다. 동굴은 이제 **우리가 판다** — 자연 동굴을 껐으니까.
-        int forgeRadius = "noklim".equals(place.faction()) ? 24 : 44;
+        // 문파의 반경 44 는 봉우리(+36)를 못 받는다 — 계단 run 이 26칸이라 본전이 22켜에서 멎는다
+        // (건축 담당의 계측). "천 계단"이 서려면 발치가 넓어야 한다.
+        int forgeRadius = "noklim".equals(place.faction()) ? 24 : 64;
         TerrainForge.SiteSpec spec = TerrainForge.prepare(world, place, site.x(), baseY, site.z(), forgeRadius);
         plugin.getLogger().info("[지형] " + spec.summary());
         TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
@@ -586,7 +592,8 @@ public final class MvtCommand implements CommandExecutor {
                     + cave.mouthY() + " " + cave.mouthZ());
         }
 
-        java.util.List<Zone> built = RemoteBuilder.build(world, place, site.x(), baseY, site.z());
+        // 건축 계층은 **부지 사양만** 받는다 (땅은 지형 계층이 이미 빚었다)
+        java.util.List<Zone> built = RemoteBuilder.build(world, place, spec);
         if (built.isEmpty()) {
             sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
             return;
@@ -959,6 +966,68 @@ public final class MvtCommand implements CommandExecutor {
                     }
                     plugin.getLogger().info("[조감] " + id + " → " + dir.getAbsolutePath());
                 }));
+        return true;
+    }
+
+    // ═══ 연무장 — 따로 두들겨 보는 자리 (별도 월드) ═══
+
+    private boolean dojangEnter(CommandSender sender) {
+        if (sender instanceof Player p) {
+            plugin.dojang().enter(p);
+        }
+        return true;
+    }
+
+    private boolean dojangLeave(CommandSender sender) {
+        if (sender instanceof Player p) {
+            plugin.dojang().leave(p);
+        }
+        return true;
+    }
+
+    /** /혼천 시험 경지|내력|무공|몹|치움 … */
+    private boolean dojangTune(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player p)) {
+            return true;
+        }
+        if (args.length < 2) {
+            p.sendMessage(ChatColor.GRAY + "/혼천 시험 경지 <경지> · 내력 <값> · 무공 <id> [일수] · "
+                    + "몹 <id> · 치움");
+            return true;
+        }
+        switch (args[1]) {
+            case "경지" -> {
+                if (args.length >= 3) {
+                    plugin.dojang().setRealm(p, args[2]);
+                }
+            }
+            case "내력" -> {
+                if (args.length >= 3) {
+                    plugin.dojang().setEnergy(p, Integer.parseInt(args[2]));
+                }
+            }
+            case "무공" -> {
+                if (args.length >= 3) {
+                    double days = args.length >= 4 ? Double.parseDouble(args[3]) : 30.0;
+                    plugin.dojang().grantSkill(p, args[2], days);
+                }
+            }
+            case "몹" -> {
+                if (args.length >= 3) {
+                    plugin.dojang().mob(p, args[2]);
+                }
+            }
+            case "치움" -> plugin.dojang().clear(p);
+            default -> p.sendMessage(ChatColor.GRAY + "경지 · 내력 · 무공 · 몹 · 치움");
+        }
+        return true;
+    }
+
+    private boolean dojangDummy(CommandSender sender, String[] args) {
+        if (sender instanceof Player p) {
+            int durability = args.length >= 2 ? Integer.parseInt(args[1]) : 20;
+            plugin.dojang().dummy(p, durability);
+        }
         return true;
     }
 

@@ -309,6 +309,9 @@ final class CheonghaBuilder {
         //   측량 → 판정(거부 사유 로그) → 정지 → 기초 봉인 → 수역 → 페더링 → 호안 → 잘린 물 청소.
         //   순서가 곧 논리다: 봉인은 정지 뒤라야 지면(cy)이 정해지고, 페더링은 봉인 뒤라야 코어 경계값이
         //   고정되며, 호안은 페더링 뒤라야 물가의 최종 지표를 안다. 잘린 물 청소는 맨 끝(모두 확정 뒤).
+        // v7.2 【마을의 기복】 — 정지(整地) 전에 고도장을 먼저 빚는다. 이제 코어는 'cy 한 평면'이 아니라
+        //   **완만한 기복 + 필지별 기단**이다 (노면·담장은 cy 에 못 박혀 있다 — 검수가 cy 한 켜를 읽는다).
+        buildRelief(cx, cy, cz);
         Terrain terrain = surveyTerrain(world, cx, cy, cz);
         clearAndFlatten(world, terrain);
         foundationSeal(world, terrain);      // 바닥 밑 6칸 봉인 (동굴은 살려 둔다 · 심연은 돌기둥으로 받친다)
@@ -345,8 +348,11 @@ final class CheonghaBuilder {
                 "약재상 · 의방", "외상 장부 있음", WindowStyle.CLINIC));
         anchors.put("전장", house(world, cx + 11, cy, cz + 6, 15, 13, 5, true,
                 "청하전장", "전표 = 가져온 이가 임자", WindowStyle.VAULT));
-        anchors.put("표국", pyoguk(world, cx, cy, cz));   // v6 ① — 등록 장소 pyoguk (키는 추가만, 기존 6키 불변)
-        anchors.put("관아", countyOffice(world, cx, cy, cz));   // v7.0 ① — 등록 장소 county_office (현령 조문원·포두 박호)
+        // v7.2 【위계를 높이로】 — 관아와 표국은 **한 켜 높은 자리**에 선다 (PLOT_PADS 와 같은 값이어야 한다).
+        //   담 안이 통째로 cy+1 이므로 마당·기단·석등·담·문루가 다 함께 오른다. 담 밖 소로는 cy 라
+        //   대문 앞에 한 칸 턱이 생긴다 — 그것이 곧 댓돌이고, 걸어 넘는 높이다 (1-립시츠 유지).
+        anchors.put("표국", pyoguk(world, cx, cy + PAD_PYOGUK, cz));   // v6 ① — 등록 장소 pyoguk (키는 추가만, 기존 6키 불변)
+        anchors.put("관아", countyOffice(world, cx, cy + PAD_OFFICE, cz));   // v7.0 ① — 등록 장소 county_office
 
         medicineInterior(world, cx, cy, cz);
         exchangeInterior(world, cx, cy, cz);
@@ -390,8 +396,8 @@ final class CheonghaBuilder {
         //   그럼에도 스폰하는 이유: 세력 정치(관무불가침)가 **현령을 죽일 수 있어야** 성립한다 —
         //   죽일 수 없는 현령은 규칙이 아니라 문서다. 앉을 자리를 지었으면 앉혀야 한다.
         // 현령은 앵커(정청 중앙)가 아니라 **단(壇) 위**에 앉는다 — 앵커는 검수의 자이고, 자리는 서사의 것이다.
-        npc(world, loc(world, cx - 20, cy + 2, cz + 50), 180f, "현령 조문원");   // 전돌 단 위 — 삼문을 내려다본다
-        npc(world, loc(world, cx - 26, cy + 1, cz + 39), 180f, "포두 박호");     // 형방 앞 — 마당을 본다
+        npc(world, loc(world, cx - 20, cy + PAD_OFFICE + 2, cz + 50), 180f, "현령 조문원");   // 전돌 단 위 — 삼문을 내려다본다
+        npc(world, loc(world, cx - 26, cy + PAD_OFFICE + 1, cz + 39), 180f, "포두 박호");     // 형방 앞 — 마당을 본다
 
         approaches(world, cx, cy, cz);   // v6.7 ③ — 담장 밖 접근부 (관도·산길·이정표·돌무더기·숲. 평탄화 없음)
 
@@ -449,16 +455,20 @@ final class CheonghaBuilder {
         for (int dx = -SITE_R; dx <= SITE_R; dx++) {
             for (int dz = -SITE_R; dz <= SITE_R; dz++) {
                 int x = cx + dx, z = cz + dz;
-                world.getBlockAt(x, cy, z).setType(Material.GRASS_BLOCK);
+                // v7.2 — 코어의 지표는 **cy 한 평면이 아니라 고도장(cy + lift)** 이다.
+                //   담 발치(r ≥ 58)는 lift = 0 이므로 코어 경계 링은 여전히 cy 고, 페더링의 고정
+                //   경계값도 그대로다 (전이대는 한 줄도 안 바뀐다 — 환경 검수 ③ 불변).
+                int g = cy + lift(dx, dz);
+                world.getBlockAt(x, g, z).setType(Material.GRASS_BLOCK);
                 int top = Math.max(cy + 18,
                         Math.min(world.getHighestBlockYAt(x, z), Math.min(world.getMaxHeight() - 1, cy + 80)));
-                for (int y = cy + 1; y <= top; y++) {
+                for (int y = g + 1; y <= top; y++) {
                     Block b = world.getBlockAt(x, y, z);
                     if (!b.getType().isAir()) {
                         b.setType(Material.AIR);
                     }
                 }
-                t.target[t.idx(dx, dz)] = cy;   // 코어의 최종 지표 = cy (페더링의 고정 경계값)
+                t.target[t.idx(dx, dz)] = g;   // 코어의 최종 지표 (페더링·봉인·마감이 다 이 값을 본다)
             }
         }
     }
@@ -906,16 +916,18 @@ final class CheonghaBuilder {
      * 전부 자연 지면 화이트리스트 안이라 **재조성 때 측량이 같은 지면 높이를 읽는다** (결정론 불변).
      */
     private static void foundationSeal(World world, Terrain t) {
-        int cy = t.cy;
         t.caveCols = 0;
         t.voidCols = 0;
         for (int dx = -SITE_R; dx <= SITE_R; dx++) {
             for (int dz = -SITE_R; dz <= SITE_R; dz++) {
                 int x = t.cx + dx, z = t.cz + dz;
+                // v7.2 — 봉인은 **그 열의 지표 밑**을 채운다 (cy 가 아니다). 기복이 들어왔으므로
+                //   cy 밑을 채우면 솟은 자리(lift +2)의 발밑이 두 칸 빈다 = 검수 ①의 껍데기.
+                int g = t.target[t.idx(dx, dz)];
                 Material sub = subsoil(t.surf[t.idx(dx, dz)]);
                 boolean cave = false;
                 for (int d = 1; d <= SEAL_DEPTH; d++) {
-                    int y = cy - d;
+                    int y = g - d;
                     Block b = world.getBlockAt(x, y, z);
                     if (firm(b.getType())) {
                         continue;                     // 자연 암반·흙 — 손대지 않는다
@@ -926,10 +938,10 @@ final class CheonghaBuilder {
                 if (cave) {
                     t.caveCols++;
                 }
-                if (voidBelow(world, x, cy - SEAL_DEPTH, z)) {
+                if (voidBelow(world, x, g - SEAL_DEPTH, z)) {
                     t.voidCols++;
                     if (Math.floorMod(x, PIER_STEP) == 0 && Math.floorMod(z, PIER_STEP) == 0) {
-                        pier(world, x, cy - SEAL_DEPTH, z);
+                        pier(world, x, g - SEAL_DEPTH, z);
                     }
                 }
             }
@@ -983,18 +995,19 @@ final class CheonghaBuilder {
                 }
                 int x = t.cx + dx, z = t.cz + dz;
                 int bed = t.ground[i];
+                int g = t.target[i];   // v7.2 — 지표는 고도장이 정한다 (cy 평면이 아니다)
                 // 수심이 너무 깊으면(호수 한복판) 전부 메우는 것은 산을 옮기는 짓이다 — 봉인(6칸)만 믿고
                 // 그 아래 물은 **밀폐된 채로 남긴다** (고체 뚜껑 밑의 물은 새지 않는다). 이 부지는 어차피
                 // inspectSite 가 거부한다.
-                int from = (bed == Integer.MIN_VALUE || cy - bed > WATER_FILL_MAX)
-                        ? cy - SEAL_DEPTH : bed + 1;
-                for (int y = from; y <= cy - 1; y++) {
+                int from = (bed == Integer.MIN_VALUE || g - bed > WATER_FILL_MAX)
+                        ? g - SEAL_DEPTH : bed + 1;
+                for (int y = from; y <= g - 1; y++) {
                     Block b = world.getBlockAt(x, y, z);
                     if (!firm(b.getType())) {
-                        b.setType(y >= cy - 2 ? subsoil(t.surf[i]) : bedrock(y));
+                        b.setType(y >= g - 2 ? subsoil(t.surf[i]) : bedrock(y));
                     }
                 }
-                world.getBlockAt(x, cy, z).setType(Material.GRASS_BLOCK);   // 평탄화와 같은 지면
+                world.getBlockAt(x, g, z).setType(Material.GRASS_BLOCK);   // 평탄화와 같은 지면
             }
         }
     }
@@ -1014,8 +1027,8 @@ final class CheonghaBuilder {
                     continue;                    // 강·호수·바다 — 보존
                 }
                 int x = t.cx + dx, z = t.cz + dz;
-                int base = Terrain.core(dx, dz) ? cy
-                        : (t.target[i] != Integer.MIN_VALUE ? t.target[i] : t.ground[i]);
+                // v7.2 — 코어의 지표도 target 이다 (고도장이 채워 뒀다). cy 를 쓰면 솟은 자리 위의 물을 놓친다
+                int base = t.target[i] != Integer.MIN_VALUE ? t.target[i] : t.ground[i];
                 if (base == Integer.MIN_VALUE) {
                     base = cy;
                 }
@@ -1219,7 +1232,7 @@ final class CheonghaBuilder {
                 if (t.in(dx, dz)) {
                     int i = t.idx(dx, dz);
                     nat = t.surf[i];
-                    plane = Terrain.core(dx, dz) ? cy : t.target[i];
+                    plane = t.target[i];   // v7.2 — 코어도 target (고도장) · 전이대도 target
                     if (plane == Integer.MIN_VALUE) {
                         continue;                  // 보존 수역·심연 — 바닥을 놓지 않았다
                     }
@@ -1291,6 +1304,339 @@ final class CheonghaBuilder {
         return Math.floorMod(noise(x, z), n);
     }
 
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    //  v7.2 【마을의 기복】 — 책상 위의 마을을 땅 위로 내린다
+    //
+    //  사용자 피드백: "마을이 평지일 수도 있지만 조금의 높낮이 차이가 있을 수도 있다.
+    //     너무 평지로써의 획일감을 주지 말고 변주를 해 달라."
+    //
+    //  v7.1 은 코어(±62)를 **cy 한 평면**으로 골랐다. 그래서 마을이 책상 위에 놓인 디오라마였다.
+    //
+    //  【기복이 설 수 없는 자리 — 검수가 그은 선】
+    //    TownAudit 은 노면을 **cy 한 켜만** 읽는다 (pathGrid: getBlockAt(cx+dx, cy, cz+dz)).
+    //    야간 광원도 **cy+1** 한 켜에서 잰다. 즉 길·골목·소로·광장의 노면이 cy 를 떠나는 순간
+    //    그 칸은 검수의 눈에서 **사라진다** — "길 폭 0 · 골목 폭 0 · 길 없음".
+    //    그러므로 <b>걷는 길은 cy 에 있어야 한다</b>. 이것은 제약이 아니라 서사이기도 하다:
+    //    길은 사람이 깎고 다져 평평하게 만든 것이다 (절토·성토). 그리고 사용자도 그렇게 말했다 —
+    //    <b>"대로는 특히 완만하게."</b>
+    //
+    //  【그래서 기복은 어디에 사는가 — 두 자리】
+    //    ① <b>마당·공터의 땅</b> — 길과 길 사이, 집과 집 사이. 여기가 굽이친다 (진폭 ±2 · 파장 30~40).
+    //       길은 그 굽이를 가르는 평평한 띠가 된다 (실제 향촌의 길이 그렇다).
+    //    ② <b>필지의 기단</b> — 집은 제 기단 위에서 평평하되, <b>필지끼리는 높이가 다르다</b>.
+    //       위계를 높이로 말한다: 관아 +1 · 표국 +1 (높은 자리) / 빈촌 민가 -1 (낮은 자리).
+    //
+    //  【불가침 — 1-립시츠】 어떤 인접 두 칸도 높이차 ≤ 1. 계단 없이 걷는다. 이것은 사인 합성으로
+    //    "대략" 지키는 것이 아니라 <b>사영(projection)으로 강제</b>한다 (featherEdge 와 같은 손).
+    //    그래야 환경 검수 ③(경계 급단차 ≤ 8%)이 구조적으로 통과한다.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    /** 기복의 진폭 — ±2칸. 3칸이면 마을이 언덕이 되고, 1칸이면 눈이 못 읽는다 */
+    private static final int RELIEF_A = 2;
+    /** 못끼리 어긋나지 않게 살펴보는 거리 (L1) — 진폭 2 의 두 배면 충분하다 */
+    private static final int PIN_REACH = 4;
+
+    /** 고도장 — cy 기준 상대 높이. 조성마다 build() 가 다시 빚는다 */
+    private static int[] RELIEF;
+    private static int RX;
+    private static int RY;
+    private static int RZ;
+
+    private static int reliefIdx(int dx, int dz) {
+        return (dx + SITE_R) * (2 * SITE_R + 1) + (dz + SITE_R);
+    }
+
+    /** 그 칸의 상대 고도 (cy 기준). 코어 밖이면 0 — 전이대는 지형 계층의 몫이다 */
+    private static int lift(int dx, int dz) {
+        if (RELIEF == null || Math.abs(dx) > SITE_R || Math.abs(dz) > SITE_R) {
+            return 0;
+        }
+        return RELIEF[reliefIdx(dx, dz)];
+    }
+
+    /**
+     * <b>그 열의 지면 y</b> — 마을 안에서 "땅이 어디 있나"는 전부 이 함수가 답한다.
+     * 지면에 무언가 놓는 패스는 {@code cy} 를 직접 쓰지 않는다 (그것이 책상 위의 마을을 만들었다).
+     */
+    private static int gy(int x, int z) {
+        return RY + lift(x - RX, z - RZ);
+    }
+
+    /**
+     * 소품 자리의 지면 — 그 상자가 <b>평평할 때만</b> y 를 준다.
+     * 기울어진 땅에 좌판을 놓으면 다리 하나가 뜬다 (환경 검수 ⑤ 부유 블록).
+     * 살림 필지는 buildRelief 가 미리 다져 두었으므로(5x5 기단) 대개 통과한다.
+     */
+    private static int levelGround(int x, int z, int w, int d) {
+        int g = gy(x, z);
+        for (int dx = 0; dx < w; dx++) {
+            for (int dz = 0; dz < d; dz++) {
+                if (gy(x + dx, z + dz) != g) {
+                    return Integer.MIN_VALUE;
+                }
+            }
+        }
+        return g;
+    }
+
+    /**
+     * 기본 고도장 — <b>사인 셋의 합</b> (난수 0 · 좌표만의 순수 함수 = 재조성 결정론).
+     *
+     * <p>파장: 2π·6 ≈ 38칸(x) · 2π·5 ≈ 31칸(z) · 2π·9/√2 ≈ 40칸(대각) — 셋의 주기가 서로 어긋나
+     * 등고선이 반듯한 줄이 되지 않는다 (noise() 가 배운 교훈: 규칙식은 반드시 패턴을 만든다).
+     *
+     * <p><b>기울기의 산수</b> — 축마다 |∂f/∂x| ≤ 1.2/6 + 0.8/9 = 0.29 < 0.5.
+     * 0.5 미만이면 반올림한 두 이웃의 차가 <b>구조적으로</b> 1 이하다. 사영은 그 위의 안전망일 뿐이다.
+     */
+    private static double reliefBase(int dx, int dz) {
+        return 1.20 * Math.sin(dx / 6.0 + 0.9)
+                + 1.00 * Math.sin(dz / 5.0 + 2.3)
+                + 0.80 * Math.sin((dx + dz) / 9.0 + 4.1);
+    }
+
+    /**
+     * <b>평평해야 하는 자리</b> — 여기 고도는 0(=cy)에 못 박힌다.
+     *
+     * <p>규칙은 하나다: <b>{@code cy} 를 그대로 쓰는 패스가 한 칸이라도 쓰는 자리</b>는 전부 여기 든다.
+     * 안 그러면 그 패스가 깐 노면이 굽이친 지면 <b>밑에 묻히거나 위에 뜬다</b>.
+     * (대로·골목·광장·소로·뒷골목·디딤돌·담장·문루·각루, 그리고 기단을 주지 않은 건물의 필지.)
+     */
+    private static boolean flatZone(int dx, int dz) {
+        if (reserved(dx, dz)) {
+            return true;   // 광장·대로·골목·담장·표국/관아 부지·진입 소로
+        }
+        for (int[] l : BACK_LANES) {   // 뒷골목 (노면 = DIRT_PATH · cy)
+            if (dx >= l[0] - 1 && dx <= l[1] + 1 && dz >= l[2] - 1 && dz <= l[3] + 1) {
+                return true;
+            }
+        }
+        if (dx >= -48 && dx <= -40 && dz >= 15 && dz <= 20) {
+            return true;   // 민가 9 소로 (doorPath x-46..-42 · z+17..+18)
+        }
+        for (int[] p : FLAT_PLOTS) {
+            if (dx >= p[0] && dx <= p[1] && dz >= p[2] && dz <= p[3]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 기단 없는 필지 — 지면 그대로(cy) 서는 집. {x0, x1, z0, z1}.
+     *
+     * <p>객잔은 <b>북골목이 그 북벽 줄(z-20..-19)을 지나므로</b> 기단을 줄 수 없다 (골목 노면은 cy 고정).
+     * 관청류 3채는 광장·대로에 면해 있어 그 앞마당이 곧 대로다 — 대로가 cy 면 그 앞집도 cy 다.
+     * ㄱ자형·작업장형 민가는 날개·부속간이 있어 필지 경계가 사각형이 아니다 (기단은 사각형 위에만 선다).
+     */
+    private static final int[][] FLAT_PLOTS = {
+            {-35, -9, -23, -3},    // 청하객잔 (벽 x-32..-12 · z-20..-6 · 지붕 ±2)
+            {8, 28, -21, -3},      // 의뢰소 (벽 x+11..+25 · z-18..-6)
+            {-28, -8, 3, 21},      // 의방
+            {8, 28, 3, 21},        // 청하전장
+            {-46, -24, -32, -21},  // 민가 #1 대장간 (본채 + 작업간 — 부속이 있어 사각형이 아니다)
+            {-19, -3, -33, -22},   // 민가 #2 ㄱ자형 (뒷날개)
+            {-45, -29, 21, 33},    // 민가 #6 ㄱ자형
+            {6, 22, 22, 33},       // 민가 #7 직조간 (본채 + 작업간)
+    };
+
+    /**
+     * <b>기단이 있는 필지</b> — {x0, x1, z0, z1, 기단}. <b>위계를 높이로 말한다.</b>
+     *
+     * <ul>
+     *   <li><b>관아 +1</b> — 관은 무림 위에 있다. 삼문에 오르는 한 켜가 그것을 말한다</li>
+     *   <li><b>표국 +1</b> — 담 안이 곧 점포다. 작은 성은 한 켜 높다</li>
+     *   <li><b>민가 #4·#5 +1</b> — 동편 다락집·중촌 일자집 (골목 동쪽이 높은 자리)</li>
+     *   <li><b>민가 #3 -1</b> — 북골목 빈촌. 가난은 자재로도 말하고 <b>높이로도 말한다</b></li>
+     *   <li><b>민가 #8·#9 -1</b> — 남쪽 저지대</li>
+     * </ul>
+     *
+     * <p>불가침: 기단은 {-1, 0, +1} 뿐이다. 못 박힌 노면(0) 과 맞닿아도 <b>한 칸 턱</b>이면 걸어 넘는다
+     * (그리고 그 턱이 곧 댓돌이다 — 스타일 가이드의 기단 문법). ±2 면 벽이 된다.
+     *
+     * <p>필지 안에 {@code cy} 를 그대로 쓰는 패스가 한 칸도 들어오지 않는지 좌표로 검산했다:
+     * 골목(z∓19..∓21) · 문턱 디딤돌(z∓21·∓22) · 뒷골목 · 진입 소로 전부 이 상자들 밖이다.
+     */
+    /** 관아의 기단 — cottages·build() 가 쓰는 값과 PLOT_PADS 가 **한 값**이어야 한다 */
+    private static final int PAD_OFFICE = 1;
+    /** 표국의 기단 */
+    private static final int PAD_PYOGUK = 1;
+
+    private static final int[][] PLOT_PADS = {
+            {-31, -9, 33, 57, PAD_OFFICE},     // 청하현 관아 (담 CO_X0..CO_X1 · CO_Z0..CO_Z1) — 한 켜 높다
+            {28, 52, 36, 57, PAD_PYOGUK},      // 철산표국 (담 PY_*) — 한 켜 높다
+            {8, 18, -30, -22, -1},    // 민가 #3 일자형 빈촌 11x9 — 한 켜 낮다
+            {29, 37, -33, -22, 1},    // 민가 #4 다락형 9x12
+            {42, 56, -18, -8, 1},     // 민가 #5 일자형 15x11
+            {34, 42, 22, 33, -1},     // 민가 #8 다락형 9x12
+            {-51, -37, 6, 16, -1},    // 민가 #9 일자형 15x11
+    };
+
+    /**
+     * 고도장을 빚는다 — <b>사인 합성 → 못 박기 → 1-립시츠 사영</b>.
+     *
+     * <p>순서가 곧 보장이다: 사영이 마지막에 돌아야 못(노면 0 · 기단 ±1)과 자유 지면 사이의 이음매가
+     * 한 칸씩 이어진다. 못끼리는 이미 서로 ≤1 이므로(노면 0 · 기단 ±1) 사영이 발산하지 않는다.
+     */
+    private static void buildRelief(int cx, int cy, int cz) {
+        RX = cx;
+        RY = cy;
+        RZ = cz;
+        int n = 2 * SITE_R + 1;
+        int[] h = new int[n * n];
+        boolean[] pin = new boolean[n * n];
+
+        for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+            for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                int i = reliefIdx(dx, dz);
+                int v = (int) Math.round(reliefBase(dx, dz));
+                h[i] = Math.max(-RELIEF_A, Math.min(RELIEF_A, v));
+            }
+        }
+        // ① 기단 — **가장 먼저**. 위계는 양보하지 않는다 (관아·표국은 한 켜 높다).
+        //    기단은 {-1,0,+1} 뿐이라 뒤에 올 노면 못(0)과 맞닿아도 한 칸 턱 = 댓돌이다.
+        for (int[] p : PLOT_PADS) {
+            pinBox(h, pin, p[0], p[1], p[2], p[3], p[4]);
+        }
+        // ② 노면·담장·기단 없는 필지 → 0. **이미 기단이 못 박은 칸은 건드리지 않는다**
+        for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+            for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                int i = reliefIdx(dx, dz);
+                if (!pin[i] && flatZone(dx, dz)) {
+                    h[i] = 0;
+                    pin[i] = true;
+                }
+            }
+        }
+        // ③ 살림 필지 — 사람이 놓고 쓰는 자리는 다져져 평평하다 (5x5 기단, 그 자리의 제 높이로).
+        //    노면·기단과 겹치면 통째로 포기한다 (반만 다진 필지는 소품의 다리를 띄운다).
+        for (int[] g : GARDENS) {   // 밭이 **먼저** — 물길이 한 켜로 흘러야 물 댄 밭이다 (소품보다 급하다)
+            pinBox(h, pin, g[0] - 1, g[1] + 1, g[2] - 1, g[3] + 1, Integer.MIN_VALUE);
+        }
+        for (int[] t : VILLAGE_LIFE) {
+            pinPad(h, pin, t[0], t[1]);
+        }
+        for (int[] t : LIFE_TRACES) {
+            pinPad(h, pin, t[0], t[1]);
+        }
+        // ④ 1-립시츠 사영 — **계단 없이 걷는다** (인접 두 칸의 높이차 ≤ 1).
+        //
+        //   반복 완화(min/max 클램프)를 먼저 썼는데 **진동했다**: 위 못(-1)과 아래 자유칸(+2) 사이에
+        //   끼인 칸이 내리기 스윕에서 0 이 됐다가 올리기 스윕에서 다시 1 로 튀어 올랐다. 두 스윕이 싸운다.
+        //
+        //   답은 반복이 아니라 **구성**이다. 못들이 만드는 두 포락선을 먼저 그린다:
+        //     상한 up(c)  = min over 못 p ( v(p) + L1거리(c,p) )   ← 못보다 이만큼까지만 높을 수 있다
+        //     하한 low(c) = max over 못 p ( v(p) − L1거리(c,p) )   ← 못보다 이만큼까지만 낮을 수 있다
+        //   둘 다 정의상 1-립시츠고, 기본장(사인 합성 + 반올림)도 기울기 0.29 < 0.5 라 1-립시츠다.
+        //   **1-립시츠 함수 셋의 중앙값은 1-립시츠다** → h = clamp(기본장, low, up) 이 곧 해(解)다.
+        //   반복도 진동도 없다. 재조성하면 같은 값이 나온다 (결정론).
+        //
+        //   포락선은 4방향 체임퍼 거리변환(전진·후진 스윕)으로 구한다.
+        final int inf = 1 << 20;
+        int[] up = new int[n * n];
+        int[] low = new int[n * n];
+        for (int i = 0; i < n * n; i++) {
+            up[i] = pin[i] ? h[i] : inf;
+            low[i] = pin[i] ? h[i] : -inf;
+        }
+        for (int sweep = 0; sweep < 2; sweep++) {
+            for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+                for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                    envelope(up, low, dx, dz, -1, 0);
+                    envelope(up, low, dx, dz, 0, -1);
+                }
+            }
+            for (int dx = SITE_R; dx >= -SITE_R; dx--) {
+                for (int dz = SITE_R; dz >= -SITE_R; dz--) {
+                    envelope(up, low, dx, dz, 1, 0);
+                    envelope(up, low, dx, dz, 0, 1);
+                }
+            }
+        }
+        for (int i = 0; i < n * n; i++) {
+            if (pin[i]) {
+                continue;
+            }
+            h[i] = low[i] > up[i] ? up[i] : Math.max(low[i], Math.min(up[i], h[i]));
+        }
+        RELIEF = h;
+    }
+
+    /** 포락선 한 걸음 — 이웃에서 한 칸 멀어지면 상한은 +1, 하한은 -1 (체임퍼 거리변환) */
+    private static void envelope(int[] up, int[] low, int dx, int dz, int ox, int oz) {
+        int nx = dx + ox;
+        int nz = dz + oz;
+        if (Math.abs(nx) > SITE_R || Math.abs(nz) > SITE_R) {
+            return;
+        }
+        int i = reliefIdx(dx, dz);
+        int j = reliefIdx(nx, nz);
+        up[i] = Math.min(up[i], up[j] + 1);
+        low[i] = Math.max(low[i], low[j] - 1);
+    }
+
+    /** 살림 한 자리의 기단 — 소품이 딛는 칸(최대 5x4)을 그 자리의 제 높이로 다진다 */
+    private static void pinPad(int[] h, boolean[] pin, int dx, int dz) {
+        pinBox(h, pin, dx, dx + 4, dz, dz + 3, Integer.MIN_VALUE);
+    }
+
+    /**
+     * 상자 하나를 한 높이로 못 박는다. {@code value == MIN_VALUE} 면 <b>그 상자 한복판의 높이</b>를 쓴다.
+     *
+     * <p>두 가지를 지킨다:
+     * <ol>
+     *   <li><b>겹치면 포기한다</b> — 이미 못 박힌 칸(노면·담장·다른 기단)이 하나라도 섞이면 통째로 접는다.
+     *       노면을 들어 올리는 것은 검수를 깨는 짓이고, 반만 다진 필지는 소품의 다리를 띄운다.</li>
+     *   <li><b>이웃 못과 한 칸 안에서 만난다</b> — 상자 둘레의 이미 못 박힌 칸을 보고 그 ±1 로 값을 조인다.
+     *       못끼리 두 칸 차가 나면 사영이 그것을 못 고친다 (못은 안 움직인다) = 걸을 수 없는 턱.</li>
+     * </ol>
+     */
+    private static void pinBox(int[] h, boolean[] pin, int x0, int x1, int z0, int z1, int value) {
+        if (x0 < -SITE_R || x1 > SITE_R || z0 < -SITE_R || z1 > SITE_R) {
+            return;
+        }
+        for (int dx = x0; dx <= x1; dx++) {
+            for (int dz = z0; dz <= z1; dz++) {
+                if (pin[reliefIdx(dx, dz)]) {
+                    return;   // 노면·담장·다른 기단과 겹친다 — 이 상자는 포기한다
+                }
+            }
+        }
+        int v = value == Integer.MIN_VALUE ? h[reliefIdx((x0 + x1) / 2, (z0 + z1) / 2)] : value;
+        // 둘레의 이미 못 박힌 이웃과 **L1 거리 안에서** 만난다: |v - v(이웃)| ≤ 거리.
+        //   거리 4 까지 보면 충분하다 — 고도는 [-2,+2] 뿐이라 5칸 이상 떨어진 못과는 자동으로 어긋나지 않는다.
+        //   이걸 안 하면 못끼리 두 칸 차가 나고, 사영은 못을 못 움직이므로 그 턱이 영원히 남는다.
+        int lo = Integer.MIN_VALUE;
+        int hi = Integer.MAX_VALUE;
+        for (int dx = x0 - PIN_REACH; dx <= x1 + PIN_REACH; dx++) {
+            for (int dz = z0 - PIN_REACH; dz <= z1 + PIN_REACH; dz++) {
+                if (Math.abs(dx) > SITE_R || Math.abs(dz) > SITE_R) {
+                    continue;
+                }
+                int i = reliefIdx(dx, dz);
+                if (!pin[i]) {
+                    continue;
+                }
+                int d = Math.max(0, Math.max(x0 - dx, dx - x1)) + Math.max(0, Math.max(z0 - dz, dz - z1));
+                if (d == 0 || d > PIN_REACH) {
+                    continue;
+                }
+                lo = Math.max(lo, h[i] - d);
+                hi = Math.min(hi, h[i] + d);
+            }
+        }
+        if (lo != Integer.MIN_VALUE) {
+            v = Math.max(lo, Math.min(hi, v));
+        }
+        v = Math.max(-RELIEF_A, Math.min(RELIEF_A, v));
+        for (int dx = x0; dx <= x1; dx++) {
+            for (int dz = z0; dz <= z1; dz++) {
+                int i = reliefIdx(dx, dz);
+                h[i] = v;
+                pin[i] = true;
+            }
+        }
+    }
+
     /**
      * 지면 조직 — 거친 흙 66% · 흙 20% · 뿌리 흙 6% · 잔디 8% (v6.5 ②: 12.5% → 8%, 그리고 줄무늬 없이).
      * 잔디도 초록이다 — 조감도의 세로줄은 잡초만의 죄가 아니었다. 마당은 맨땅이 지배해야 한다.
@@ -1319,7 +1665,7 @@ final class CheonghaBuilder {
                 } else {
                     m = Material.COARSE_DIRT;      // 다진 흙 — 마을의 바탕색
                 }
-                world.getBlockAt(x, cy, z).setType(m);
+                world.getBlockAt(x, gy(x, z), z).setType(m);   // v7.2 — 지면은 고도장을 따른다
             }
         }
     }
@@ -1339,7 +1685,7 @@ final class CheonghaBuilder {
     private static void lampApron(World world, int x, int cy, int z) {
         for (int ox = -1; ox <= 1; ox++) {
             for (int oz = -1; oz <= 1; oz++) {
-                Block b = world.getBlockAt(x + ox, cy, z + oz);
+                Block b = world.getBlockAt(x + ox, gy(x + ox, z + oz), z + oz);
                 if (LAMP_GROUND.contains(b.getType())) {
                     b.setType(Material.DIRT);
                 }
@@ -1381,10 +1727,11 @@ final class CheonghaBuilder {
         if (reserved(x - cx, z - cz)) {
             return false;
         }
-        Material g = world.getBlockAt(x, cy, z).getType();
+        int g0 = gy(x, z);   // v7.2 — 그 열의 지면 (마당은 굽이친다)
+        Material g = world.getBlockAt(x, g0, z).getType();
         boolean bare = g == Material.COARSE_DIRT || g == Material.DIRT
                 || g == Material.ROOTED_DIRT || g == Material.GRASS_BLOCK;
-        return bare && world.getBlockAt(x, cy + 1, z).getType().isAir();
+        return bare && world.getBlockAt(x, g0 + 1, z).getType().isAir();
     }
 
     /**
@@ -1458,13 +1805,14 @@ final class CheonghaBuilder {
         for (int[] l : BACK_LANES) {
             for (int x = cx + l[0]; x <= cx + l[1]; x++) {
                 for (int z = cz + l[2]; z <= cz + l[3]; z++) {
-                    if (!world.getBlockAt(x, cy + 1, z).getType().isAir()) {
+                    if (!world.getBlockAt(x, gy(x, z) + 1, z).getType().isAir()) {
                         continue;   // 무언가 이미 섰다 — 뒷골목이 밀어내지 않는다
                     }
+                    int g = gy(x, z);   // v7.2 — 뒷골목도 노면이라 고도장이 0 에 못 박아 두었다
                     int h = hash(x, z, 10);   // v6.5 ② — 선형 해시가 노면에 사선 줄을 그었다
-                    world.getBlockAt(x, cy, z).setType(
+                    world.getBlockAt(x, g, z).setType(
                             h < 2 ? Material.COARSE_DIRT : Material.DIRT_PATH);
-                    world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);
+                    world.getBlockAt(x, g - 1, z).setType(Material.COARSE_DIRT);
                 }
             }
         }
@@ -1497,23 +1845,27 @@ final class CheonghaBuilder {
             case 3 -> Material.BEETROOTS;
             default -> null;                     // v6.4 ④ — 빈 밭: 갈아만 두고 심지 않았다
         };
+        // v7.2 — 물길은 **평평한 밭에만** 낸다. 기울어진 밭에 물을 부으면 흘러내려 '잘린 물'이 된다
+        //   (환경 검수 ② 수역 파탄). 그런 필지는 마른 고랑(다진 흙)으로 둔다 — 물 못 대는 밭도 밭이다.
+        boolean level = levelGround(x0, z0, x1 - x0 + 1, z1 - z0 + 1) != Integer.MIN_VALUE;
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {
                 if (!freeCell(world, cx, cy, cz, x, z)) {
                     continue;
                 }
+                int g = gy(x, z);
                 if (alongZ ? z == channel : x == channel) {
-                    world.getBlockAt(x, cy, z).setType(Material.WATER);
+                    world.getBlockAt(x, g, z).setType(level ? Material.WATER : Material.COARSE_DIRT);
                     continue;
                 }
-                world.getBlockAt(x, cy, z).setType(Material.FARMLAND);
+                world.getBlockAt(x, g, z).setType(Material.FARMLAND);
                 if (seed == null) {
                     continue;
                 }
                 BlockData data = seed.createBlockData();
                 Ageable age = (Ageable) data;
                 age.setAge(age.getMaximumAge());   // 성장 고정 — 재조성해도 같은 이삭
-                world.getBlockAt(x, cy + 1, z).setBlockData(age);
+                world.getBlockAt(x, g + 1, z).setBlockData(age);
             }
         }
     }
@@ -1525,14 +1877,14 @@ final class CheonghaBuilder {
         for (int x = x0; x <= x1; x++) {
             for (int z : new int[]{z0, z1}) {
                 if (x != gate && freeCell(world, cx, cy, cz, x, z)) {
-                    world.getBlockAt(x, cy + 1, z).setType(mat);
+                    world.getBlockAt(x, gy(x, z) + 1, z).setType(mat);   // v7.2 — 울타리는 땅을 따라 오르내린다
                 }
             }
         }
         for (int z = z0 + 1; z <= z1 - 1; z++) {
             for (int x : new int[]{x0, x1}) {
                 if (freeCell(world, cx, cy, cz, x, z)) {
-                    world.getBlockAt(x, cy + 1, z).setType(mat);
+                    world.getBlockAt(x, gy(x, z) + 1, z).setType(mat);
                 }
             }
         }
@@ -1540,6 +1892,14 @@ final class CheonghaBuilder {
 
     /** 생활 흔적 한 무더기 — 장독대·장작더미·빨랫줄·닭장·퇴비통 (전부 freeCell 검사 통과분만) */
     private static void lifeTrace(World world, int cx, int cy, int cz, int x, int z, int kind) {
+        // v7.2 【마을의 기복】 — 소품은 **평평한 자리**에만 놓는다. 기울어진 땅에 좌판·닭장·우물을 놓으면
+        //   다리 하나가 뜨고(환경 검수 ⑤ 부유 블록) 우물물이 흘러내린다(검수 ② 수역 파탄).
+        //   살림 필지는 buildRelief 가 미리 다져 두었다 (5x4 소품 + 사방 여유). 못 다진 자리는 비운다.
+        int[] box = PROP_BOX[Math.min(kind, PROP_BOX.length - 1)];
+        int g = levelGround(x, z, box[0], box[1]);
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
         switch (kind) {
             case 0 -> {   // 장독대 — 항아리 2~3
                 putProp(world, cx, cy, cz, x, z, Material.DECORATED_POT);
@@ -1551,7 +1911,7 @@ final class CheonghaBuilder {
                     if (!freeCell(world, cx, cy, cz, x, z + dz)) {
                         continue;
                     }
-                    for (int y = cy + 1; y <= cy + 2; y++) {
+                    for (int y = g + 1; y <= g + 2; y++) {
                         Orientable log = (Orientable) Material.OAK_LOG.createBlockData();
                         log.setAxis(Axis.X);
                         world.getBlockAt(x, y, z + dz).setBlockData(log);
@@ -1563,14 +1923,14 @@ final class CheonghaBuilder {
                     return;
                 }
                 for (int dz : new int[]{0, 2}) {
-                    for (int y = cy + 1; y <= cy + 3; y++) {
+                    for (int y = g + 1; y <= g + 3; y++) {
                         world.getBlockAt(x, y, z + dz).setType(Material.SPRUCE_FENCE);
                     }
                 }
                 Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
                 chain.setAxis(Axis.Z);
-                world.getBlockAt(x, cy + 3, z + 1).setBlockData(chain);
-                world.getBlockAt(x, cy + 2, z + 1).setType(Material.WHITE_WOOL);   // 널어 둔 천
+                world.getBlockAt(x, g + 3, z + 1).setBlockData(chain);
+                world.getBlockAt(x, g + 2, z + 1).setType(Material.WHITE_WOOL);   // 널어 둔 천
             }
             case 3 -> {   // 닭장 — 목책 3x3(삽짝 한 칸) + 짚
                 for (int dx = 0; dx <= 2; dx++) {
@@ -1580,9 +1940,9 @@ final class CheonghaBuilder {
                             continue;
                         }
                         if (rim && !(dx == 1 && dz == 0)) {
-                            world.getBlockAt(x + dx, cy + 1, z + dz).setType(Material.OAK_FENCE);
+                            world.getBlockAt(x + dx, g + 1, z + dz).setType(Material.OAK_FENCE);
                         } else if (dx == 1 && dz == 1) {
-                            world.getBlockAt(x + dx, cy + 1, z + dz).setType(Material.HAY_BLOCK);
+                            world.getBlockAt(x + dx, g + 1, z + dz).setType(Material.HAY_BLOCK);
                         }
                     }
                 }
@@ -1599,9 +1959,9 @@ final class CheonghaBuilder {
                         }
                         Orientable hay = (Orientable) Material.HAY_BLOCK.createBlockData();
                         hay.setAxis(hash(x, z, 2) == 0 ? Axis.X : Axis.Z);
-                        world.getBlockAt(x + dx, cy + 1, z + dz).setBlockData(hay);
+                        world.getBlockAt(x + dx, g + 1, z + dz).setBlockData(hay);
                         if (dx == 0 && dz == 0) {
-                            world.getBlockAt(x, cy + 2, z).setBlockData(hay);
+                            world.getBlockAt(x, g + 2, z).setBlockData(hay);
                         }
                     }
                 }
@@ -1614,26 +1974,26 @@ final class CheonghaBuilder {
                         }
                         boolean center = dx == 1 && dz == 1;
                         if (center) {
-                            world.getBlockAt(x + 1, cy, z + 1).setType(Material.WATER);   // 물은 노면 자재가 아니다
+                            world.getBlockAt(x + 1, g, z + 1).setType(Material.WATER);   // 물은 노면 자재가 아니다
                         } else {
-                            world.getBlockAt(x + dx, cy + 1, z + dz).setType(Material.COBBLESTONE_WALL);
+                            world.getBlockAt(x + dx, g + 1, z + dz).setType(Material.COBBLESTONE_WALL);
                         }
                     }
                 }
                 if (freeCell(world, cx, cy, cz, x + 1, z + 3)) {   // 두레박 장대 + 매단 사슬
-                    for (int y = cy + 1; y <= cy + 3; y++) {
+                    for (int y = g + 1; y <= g + 3; y++) {
                         world.getBlockAt(x + 1, y, z + 3).setType(Material.SPRUCE_FENCE);
                     }
                     Orientable chain = (Orientable) Material.IRON_CHAIN.createBlockData();
                     chain.setAxis(Axis.Y);
-                    world.getBlockAt(x + 1, cy + 3, z + 2).setBlockData(chain);
+                    world.getBlockAt(x + 1, g + 3, z + 2).setBlockData(chain);
                 }
             }
             case 7 -> {   // v6.5 ③ 공동 빨래터 — 물확 2칸 + 방망잇돌 + 널어 둔 무명천
                 for (int dz = 0; dz <= 1; dz++) {
                     if (freeCell(world, cx, cy, cz, x, z + dz)) {
-                        world.getBlockAt(x, cy, z + dz).setType(Material.WATER);
-                        world.getBlockAt(x - 1, cy + 1, z + dz).setType(Material.COBBLESTONE_WALL);
+                        world.getBlockAt(x, g, z + dz).setType(Material.WATER);
+                        world.getBlockAt(x - 1, g + 1, z + dz).setType(Material.COBBLESTONE_WALL);
                     }
                 }
                 putProp(world, cx, cy, cz, x + 1, z, Material.CAULDRON);
@@ -1644,10 +2004,10 @@ final class CheonghaBuilder {
                 if (!freeCell(world, cx, cy, cz, x, z) || !freeCell(world, cx, cy, cz, x + 1, z)) {
                     return;
                 }
-                world.getBlockAt(x, cy + 1, z).setType(Material.HAY_BLOCK);          // 실은 짐
-                world.getBlockAt(x + 1, cy + 1, z).setType(Material.OAK_PLANKS);     // 짐칸 바닥
-                awningTrapdoor(world, x, cy + 2, z, BlockFace.NORTH);                // 젖힌 측판
-                awningTrapdoor(world, x + 1, cy + 2, z, BlockFace.SOUTH);
+                world.getBlockAt(x, g + 1, z).setType(Material.HAY_BLOCK);          // 실은 짐
+                world.getBlockAt(x + 1, g + 1, z).setType(Material.OAK_PLANKS);     // 짐칸 바닥
+                awningTrapdoor(world, x, g + 2, z, BlockFace.NORTH);                // 젖힌 측판
+                awningTrapdoor(world, x + 1, g + 2, z, BlockFace.SOUTH);
                 for (int dx = 2; dx <= 3; dx++) {   // 끌채 — 땅에 내려 둔 채
                     putProp(world, cx, cy, cz, x + dx, z, Material.OAK_FENCE);
                 }
@@ -1655,12 +2015,12 @@ final class CheonghaBuilder {
             case 9 -> {   // v6.5 ③ 노점 좌판 — 기둥 2 + 널 상판 3 + 통 (차양은 장터의 것 = 붉은 차양 계약 불변)
                 for (int dx : new int[]{0, 2}) {
                     if (freeCell(world, cx, cy, cz, x + dx, z)) {
-                        world.getBlockAt(x + dx, cy + 1, z).setType(Material.SPRUCE_FENCE);
+                        world.getBlockAt(x + dx, g + 1, z).setType(Material.SPRUCE_FENCE);
                     }
                 }
                 for (int dx = 0; dx <= 2; dx++) {
-                    if (world.getBlockAt(x + dx, cy + 2, z).getType().isAir()) {
-                        topSlab(world, x + dx, cy + 2, z, Material.OAK_SLAB);        // 상판 (지붕 자재 아님)
+                    if (world.getBlockAt(x + dx, g + 2, z).getType().isAir()) {
+                        topSlab(world, x + dx, g + 2, z, Material.OAK_SLAB);        // 상판 (지붕 자재 아님)
                     }
                 }
                 putProp(world, cx, cy, cz, x + 1, z, Material.BARREL);
@@ -1669,8 +2029,8 @@ final class CheonghaBuilder {
                 if (!freeCell(world, cx, cy, cz, x, z) || !freeCell(world, cx, cy, cz, x + 1, z)) {
                     return;
                 }
-                stair(world, x, cy + 1, z, Material.OAK_STAIRS, BlockFace.EAST);
-                stair(world, x + 1, cy + 1, z, Material.OAK_STAIRS, BlockFace.WEST);
+                stair(world, x, g + 1, z, Material.OAK_STAIRS, BlockFace.EAST);
+                stair(world, x + 1, g + 1, z, Material.OAK_STAIRS, BlockFace.WEST);
                 putProp(world, cx, cy, cz, x, z + 1, Material.HAY_BLOCK);
                 putProp(world, cx, cy, cz, x + 2, z, Material.CAULDRON);             // 물그릇
             }
@@ -1686,9 +2046,19 @@ final class CheonghaBuilder {
         }
     }
 
+    /**
+     * 소품이 딛는 칸의 크기 {가로, 세로} — 종류별. 이 상자가 평평해야 그 소품이 선다.
+     * 0 장독대 / 1 장작 / 2 빨랫줄 / 3 닭장 / 4 퇴비 / 5 건초 / 6 우물 / 7 빨래터 / 8 수레 / 9 좌판
+     * / 10 개집 / 11 돌담 모퉁이
+     */
+    private static final int[][] PROP_BOX = {
+            {2, 2}, {1, 2}, {1, 3}, {3, 3}, {2, 1}, {2, 2},
+            {3, 4}, {4, 3}, {4, 1}, {3, 1}, {3, 2}, {5, 4},
+    };
+
     private static void putProp(World world, int cx, int cy, int cz, int x, int z, Material mat) {
         if (freeCell(world, cx, cy, cz, x, z)) {
-            world.getBlockAt(x, cy + 1, z).setType(mat);
+            world.getBlockAt(x, gy(x, z) + 1, z).setType(mat);   // v7.2 — 소품은 제 발밑 땅 위에
         }
     }
 
@@ -1777,7 +2147,7 @@ final class CheonghaBuilder {
                     continue;   // 삽짝
                 }
                 if (freeCell(world, cx, cy, cz, x, z)) {
-                    world.getBlockAt(x, cy + 1, z).setType(mat);
+                    world.getBlockAt(x, gy(x, z) + 1, z).setType(mat);   // v7.2 — 필지 벽도 땅을 따른다
                 }
             }
         }
@@ -1792,16 +2162,17 @@ final class CheonghaBuilder {
         if (!freeCell(world, cx, cy, cz, x, z)) {
             return;
         }
+        int g = gy(x, z);
         for (int dx = -1; dx <= 1; dx++) {   // 잎이 덮을 자리가 다 비어 있어야 심는다 (허공에 뜬 잎 금지)
             for (int dz = -1; dz <= 1; dz++) {
-                for (int y = cy + 1; y <= cy + 6; y++) {
+                for (int y = g + 1; y <= g + 6; y++) {
                     if (!world.getBlockAt(x + dx, y, z + dz).getType().isAir()) {
                         return;
                     }
                 }
             }
         }
-        growTree(world, x, cy, z, birch);
+        growTree(world, x, g, z, birch);   // v7.2 — 나무는 제 자리 지면에서 자란다
     }
 
     /** 나무 한 그루 — 밑동 4단 + 잎 두 켜 + 꼭대기. gy = 그 자리의 지면 y (마을 안은 cy, 담 밖은 지형) */
@@ -1842,7 +2213,7 @@ final class CheonghaBuilder {
                 if (h >= 14 || !freeCell(world, cx, cy, cz, x, z)) {
                     continue;
                 }
-                world.getBlockAt(x, cy + 1, z).setType(
+                world.getBlockAt(x, gy(x, z) + 1, z).setType(
                         h < 10 ? Material.SHORT_GRASS : Material.FERN);
             }
         }
@@ -2614,27 +2985,76 @@ final class CheonghaBuilder {
     private static final Set<Material> PLAZA_GROUND = EnumSet.of(
             Material.SMOOTH_STONE, Material.ANDESITE, Material.STONE_BRICKS, Material.COBBLESTONE);
 
-    /** 광장 등롱 12주 — {dx, dz}. 우물(±2)·매화(±8,±8)·화단(±5..±6)·대로 축(|d|≤3)을 비켜선다 */
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    //  v7.2 【등롱은 리듬이다】 — 사용자 피드백: "조명이 너무 다닥다닥 붙어 있다.
+    //     조명이 없는 부분도 존재해도 되니 적당히 유지해 달라."
+    //
+    //  v7.1 은 등롱을 **균등 격자**로 뿌렸다: 대로 간격 3 · 담 발치 간격 6 · 골목 간격 6 · 광장 12주.
+    //  자로 재면 통과했다 (암흑 3.5%). 그러나 그것은 **안전한 마을**이지 무협의 마을이 아니다 —
+    //  밤길이 무서운 것이 무협이고, 등롱이 반가운 것은 그 사이가 어둡기 때문이다.
+    //
+    //  【새 규칙 — 등롱은 자리에 뜻이 있어야 선다】
+    //    ① 밝아야 하는 곳 = **주 동선**. 대로 · 광장 · 문 앞. 여기는 검수도 15% 로 조인다.
+    //    ② 어두워도 되는 곳 = 골목 속 · 담 발치 · 뒷골목 · 마당. 여기 등롱은 **길목에만** 선다.
+    //    ③ 등롱이 서는 자리의 이름: 광장 어귀 · 골목 어귀 · 각루 발치 · 문 앞 · 소로 어귀 · 우물가.
+    //       "몇 칸마다"가 아니라 "무엇 옆에".
+    //
+    //  【개수】 등롱 기둥 시도 325 → 93 (-71%). 실제 선 등롱은 절반 이하로 떨어진다.
+    //    대로 136→56 · 담 발치 76→8 · 골목 64→7 · 뒷골목 16→6 · 광장 12→8 · 소로 13→8 · 교차부 8→0
+    //    처마 현수 100→36 (간격 4→11)
+    //
+    //  【빛의 산수 — 왜 이만큼이면 되는가】 랜턴은 광원 15, 등롱 갓은 cy+3, 길 판정면은 cy+1.
+    //    수직 2 + 수평 맨해튼 ≤ 6 이면 광원 ≥ 7 (검수의 '밝음' 문턱).
+    //    대로: 등롱 열이 ±4, 노면은 ±3 → 가까운 쪽 열까지 |4-|w|| ≤ 4 → 세로 여유 ≤ 2+|w|.
+    //      간격 8 이면 한복판(w=0) 세 칸과 그 옆 두 칸만 어둡다 = 대로 암흑 8.9% (< 15%).
+    //      → **대로는 밝고, 그 밝음 사이에 그늘이 있다.**
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 대로 등롱 자리 — 광장 어귀(11) · 골목 어귀(18) · 그 뒤로 여덟 칸 리듬 · 대문 앞(58).
+     *
+     * <p>d ∈ [19,21] 은 골목 노면이라 등롱이 물리적으로 못 선다(노면 금지 가드) — 리듬이 그 자리를 비켜 간다.
+     * 간격이 7·8·8·8·8·8 인 것은 균등해서가 아니라 <b>양 끝(광장·대문)이 못이고 그 사이를 나눈</b> 결과다.
+     */
+    private static final int[] ROAD_LAMPS = {11, 18, 26, 34, 42, 50, 58};
+
+    /**
+     * 광장 등롱 8주 (구 12주) — {dx, dz}. 우물(±2)·매화(±8,±8)·화단(±5..±6)·대로 축(|d|≤3)을 비켜선다.
+     *
+     * <p>안쪽 넷(±4,±4)이 **대로 축**을 밝히고, 바깥 넷(±8,±4)이 **광장 네 귀**를 밝힌다
+     * (귀퉁이 (9,9) 까지 맨해튼 6 — 딱 닿는다). 구 12주의 (±4,±8) 넷은 안쪽 넷과 중복이라 걷어냈다.
+     */
     private static final int[][] PLAZA_LAMPS = {
             {-4, -4}, {4, -4}, {-4, 4}, {4, 4},
             {-8, -4}, {8, -4}, {-8, 4}, {8, 4},
-            {-4, -8}, {4, -8}, {-4, 8}, {4, 8},
     };
 
     /**
-     * 소로 등롱 — {dx, dz}. 관청·객잔 앞마당은 제 문 현수 등롱 쌍(y+4)이 이미 덮는다(맨해튼 5 → 광원 10).
-     * 등롱이 필요한 건 **문 등롱이 없는 소로**뿐: 민가 9 소로와 표국 진입 소로(3칸 x 16칸)·대문 앞마당.
+     * 소로 등롱 — {dx, dz}. 관청·객잔 앞마당은 제 문 현수 등롱 쌍이 이미 덮는다(맨해튼 5 → 광원 10).
+     * 등롱이 필요한 건 **문 등롱이 없는 소로**뿐: 민가 9 소로 · 표국 진입 소로 · 관아 진입 소로.
+     * v7.2 — 13 → 8. 소로 한복판까지 맨해튼 ≤ 6 만 지키면 그 사이는 성겨도 된다.
      */
     private static final int[][] DOOR_LAMPS = {
-            {-47, 17}, {-41, 17},                                  // 민가 9 소로(x-46..-42) 양옆 맨땅
-            {47, 22}, {47, 26}, {47, 30}, {47, 34}, {38, 34},      // 표국 진입 소로 · 대문 앞
-            // v7.0 ① 관아 진입 소로(x-22..-20 · z+22..+32) 양옆 맨땅 — 소로 한복판까지 맨해튼 ≤8
-            {-24, 24}, {-18, 24}, {-24, 28}, {-18, 28}, {-24, 32}, {-18, 32},
+            {-47, 17}, {-41, 17},                    // 민가 9 소로(x-46..-42) 어귀 양옆
+            {47, 24}, {47, 32}, {38, 34},            // 표국 진입 소로 · 대문 앞 (구 5 → 3)
+            {-24, 23}, {-18, 28}, {-24, 32},         // 관아 진입 소로 (구 6 → 3 — 지그재그로 소로를 덮는다)
     };
 
-    /** 가로 등롱 — 대로·광장·담 발치·골목·뒷골목·앞마당. 건물·노점을 다 세운 뒤 빈 자리에만 선다. */
+    /**
+     * 골목 등롱 — <b>문 앞에만</b> (구: x 간격 6 의 균등 열 64기).
+     *
+     * <p>골목은 주 동선이 아니다. 골목의 밤은 어두워도 된다 — 다만 <b>문 앞</b>은 보여야 한다
+     * (집에 돌아오는 자가 제 문을 찾는다). 민가 문턱(COTTAGE_DOORSTEPS) 곁 맨땅에 한 기씩,
+     * 그것도 <b>전부가 아니라 절반만</b>. 나머지 문은 처마 밑 현수 등롱이 있거나, 아니면 어둡다.
+     */
+    private static final int[][] ALLEY_LAMPS = {
+            {-35, -22}, {-8, -22}, {16, -22}, {36, -22},   // 북골목 — 문 넷 곁 (집 쪽 줄)
+            {-40, 22}, {11, 22}, {35, 22},                 // 남골목 — 문 셋 곁
+    };
+
+    /** 가로 등롱 — 길목·문 앞·각루 발치·우물가. 건물·노점을 다 세운 뒤 빈 자리에만 선다. */
     private static void streetLanterns(World world, int cx, int cy, int cz) {
-        for (int d = 10; d <= 58; d += 3) {          // 대로 4갈래 양측 — 측거 4, 간격 3
+        for (int d : ROAD_LAMPS) {                   // 대로 4갈래 양측 — 측거 4, 리듬 7~8
             for (int side = -4; side <= 4; side += 8) {
                 lanternPost(world, cx + side, cy, cz - d);   // 남북대로
                 lanternPost(world, cx + side, cy, cz + d);
@@ -2642,36 +3062,26 @@ final class CheonghaBuilder {
                 lanternPost(world, cx + d, cy, cz + side);
             }
         }
-        for (int side = -4; side <= 4; side += 8) {   // 대로 x 골목 교차부 — 간격 3 열이 골목 줄(±19~21)을 건너뛴다
-            for (int d : new int[]{18, 22}) {
-                lanternPost(world, cx + side, cy, cz - d);
-                lanternPost(world, cx + side, cy, cz + d);
-            }
-        }
-        for (int i = -54; i <= 54; i += 6) {          // 담 발치 링 — 발치 흙길(±59) 안쪽 ±58
+        for (int i : new int[]{-54, 54}) {           // 담 발치 — **각루 발치에만** (담 밑은 어둡다)
             lanternPost(world, cx + i, cy, cz - 58);
             lanternPost(world, cx + i, cy, cz + 58);
             lanternPost(world, cx - 58, cy, cz + i);
             lanternPost(world, cx + 58, cy, cz + i);
         }
-        for (int x = cx - 45; x <= cx + 45; x += 6) { // 골목 양옆 갓길 밖 (골목 노면 z∓19~21 은 비운다)
-            for (int dz : new int[]{-22, -18, 18, 22}) {
-                lanternPost(world, x, cy, cz + dz);
-            }
-        }
-        for (int[] l : BACK_LANES) {                  // 뒷골목 — 길 양옆 맨땅, 간격 5
-            for (int z = cz + l[2]; z <= cz + l[3]; z += 5) {
-                lanternPost(world, cx + l[0] - 1, cy, z);
-                lanternPost(world, cx + l[1] + 1, cy, z);
-            }
-        }
-        for (int[] p : DOOR_LAMPS) {                  // 앞마당·소로 어귀
+        for (int[] p : ALLEY_LAMPS) {                // 골목 — 문 앞에만
             lanternPost(world, cx + p[0], cy, cz + p[1]);
         }
-        for (int[] p : PLAZA_LAMPS) {                 // 광장 12주
+        for (int[] l : BACK_LANES) {                 // 뒷골목 — **어귀에만** 한 기씩 (골목 속은 어둡다)
+            lanternPost(world, cx + l[0] - 1, cy, cz + l[2]);
+            lanternPost(world, cx + l[1] + 1, cy, cz + l[3]);
+        }
+        for (int[] p : DOOR_LAMPS) {                 // 앞마당·소로 어귀
+            lanternPost(world, cx + p[0], cy, cz + p[1]);
+        }
+        for (int[] p : PLAZA_LAMPS) {                // 광장 8주
             plazaLantern(world, cx + p[0], cy, cz + p[1]);
         }
-        for (int x = cx - 48; x <= cx + 48; x += 4) {  // 골목 처마 밑 현수 등롱 (땅이 없는 구간의 답)
+        for (int x = cx - 44; x <= cx + 44; x += 11) {  // 골목 처마 밑 현수 등롱 (간격 4 → 11)
             for (int dz : new int[]{-21, -19, 19, 21}) {
                 eaveLantern(world, x, cy + 4, cz + dz);
             }
@@ -2707,18 +3117,19 @@ final class CheonghaBuilder {
      * 등롱 열(±4)·담 발치(±58)·골목 갓길(z∓18·∓22)은 전부 reserved() 이므로 울타리·텃밭·잡초가 뺏지 못한다.
      */
     private static void lanternPost(World world, int x, int cy, int z) {
-        if (!LAMP_GROUND.contains(world.getBlockAt(x, cy, z).getType())) {
+        int g = gy(x, z);   // v7.2 — 등롱도 제 자리 땅 위에 선다 (마당은 굽이친다)
+        if (!LAMP_GROUND.contains(world.getBlockAt(x, g, z).getType())) {
             return;
         }
-        for (int y = cy + 1; y <= cy + 3; y++) {
+        for (int y = g + 1; y <= g + 3; y++) {
             if (!world.getBlockAt(x, y, z).getType().isAir()) {
                 return;   // 건물·처마·담·노점·소품 — 등롱이 밀어내지 않는다
             }
         }
-        world.getBlockAt(x, cy + 1, z).setType(Material.SPRUCE_FENCE);
-        world.getBlockAt(x, cy + 2, z).setType(Material.SPRUCE_FENCE);
-        world.getBlockAt(x, cy + 3, z).setType(Material.LANTERN);
-        lampApron(world, x, cy, z);   // v7.1 — 등롱 발치는 자연의 흙 (검수 ③의 이음매를 만들지 않는다)
+        world.getBlockAt(x, g + 1, z).setType(Material.SPRUCE_FENCE);
+        world.getBlockAt(x, g + 2, z).setType(Material.SPRUCE_FENCE);
+        world.getBlockAt(x, g + 3, z).setType(Material.LANTERN);
+        lampApron(world, x, g, z);   // v7.1 — 등롱 발치는 자연의 흙 (검수 ③의 이음매를 만들지 않는다)
     }
 
     /** 광장 등롱 — 돌바닥 위에만(광장 포장 화이트리스트). 광장은 노면이 아니라 '마당'이다 */
@@ -4998,15 +5409,19 @@ final class CheonghaBuilder {
      * 필지 예외의 상한(마을 건물 수의 30%)도 지킨다: 15채 중 3채 = 20%.
      */
     private static void cottages(World world, int cx, int cy, int cz) {
+        // v7.2 【필지끼리는 높이가 달라도 된다】 — 기단은 PLOT_PADS 와 **같은 값**이어야 한다
+        //   (고도장이 그 필지를 그 높이로 다져 놓았다. 두 표가 어긋나면 집이 땅에 묻히거나 뜬다).
+        //   기단이 붙는 것은 **사각형 필지**뿐이다: ㄱ자형(#2·#6)·작업장형(#1·#7)은 날개·부속간 때문에
+        //   필지가 사각형이 아니라서 0 으로 둔다 (기단은 사각형 위에만 선다).
         workshopHouse(world, cx - 44, cy, cz - 30, false, true, true);                 // #1 대장간 — 빈촌 필지
         lHouse(world, cx - 17, cy, cz - 31, false, true);                              // #2 — 빈촌 필지
-        linearHouse(world, cx + 8, cy, cz - 30, false, Material.OAK_FENCE, true);      // #3 — 빈촌 필지 (11x9)
-        loftHouse(world, cx + 29, cy, cz - 33, false);                                 // #4
-        linearHouse(world, cx + 42, cy, cz - 18, true, Material.SPRUCE_FENCE, false);  // #5 (v7.0 ③ 15x11)
+        linearHouse(world, cx + 8, cy - 1, cz - 30, false, Material.OAK_FENCE, true);  // #3 빈촌 — **한 켜 낮은 자리**
+        loftHouse(world, cx + 29, cy + 1, cz - 33, false);                             // #4 — 한 켜 높은 자리
+        linearHouse(world, cx + 42, cy + 1, cz - 18, true, Material.SPRUCE_FENCE, false);  // #5 (15x11) — 한 켜 높다
         lHouse(world, cx - 43, cy, cz + 22, true, false);                              // #6
         workshopHouse(world, cx + 8, cy, cz + 23, true, false, false);                 // #7 직조간
-        loftHouse(world, cx + 34, cy, cz + 22, true);                                  // #8
-        linearHouse(world, cx - 51, cy, cz + 6, false, null, false);                   // #9 (v7.0 ③ 15x11 · 서쪽 4칸 후퇴)
+        loftHouse(world, cx + 34, cy - 1, cz + 22, true);                              // #8 — 한 켜 낮은 자리
+        linearHouse(world, cx - 51, cy - 1, cz + 6, false, null, false);               // #9 (15x11) — 한 켜 낮다
         poorPlots(world, cx, cy, cz);
     }
 

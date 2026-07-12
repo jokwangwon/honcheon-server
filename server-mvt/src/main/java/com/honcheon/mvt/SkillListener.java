@@ -3,8 +3,6 @@ package com.honcheon.mvt;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.Particle;
-import org.bukkit.Sound;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
@@ -45,9 +43,13 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p>불변식:
  * <ul>
- *   <li>수치는 전부 config — 이 파일에는 파티클 개수와 사운드 이름만 있다 (연출은 코드의 몫)</li>
+ *   <li><b>연출도 config 다</b> — 이 파일에는 파티클 이름도 사운드 키도 없다. 전부
+ *       {@code config/skill_motion.yml} 의 등록부를 이름으로 부른다 (등록제 규약).
+ *       {@code tools/motion_audit.py} ⑦이 하드코딩을 잡는다.</li>
  *   <li>중앙 티커 1개 (performance.yml F-P2) — 예약 타격·텔레그래프·유지비·HUD 가 한 태스크를 공유한다</li>
  *   <li>파티클은 SkillHud.emit() 을 통해서만 — 예산 초과 시 연출만 강등, 판정은 불변</li>
+ *   <li><b>보이는 것 = 맞는 것</b> — 궤적(호·선·원·시·돌·진)은 히트박스와 같은 모양으로 그린다.
+ *       상대가 본 것으로 물러설 수 있어야 규칙이 정직하다.</li>
  * </ul>
  */
 public final class SkillListener implements Listener {
@@ -270,14 +272,13 @@ public final class SkillListener implements Listener {
             if (tick >= state.nextSustainTick) {
                 if (state.energy < sustain) {
                     state.armed = null;   // 다운캐스트 — 규칙이 대칭이어야 세계가 정직하다
-                    hud.emit(hand, Particle.SMOKE, 5, 0.12, 0.01);
-                    mob.getWorld().playSound(mob.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.6f);
+                    event(hand, "격_소산");
                     return;
                 }
                 state.energy -= sustain;
                 state.nextSustainTick = tick + engine.roundTicks();
             }
-            hud.emit(hand, qiParticle(state.armed), 3, 0.12, 0.0);   // 응집은 빛으로 보인다 (두름 잔광)
+            aura(hand, mob.getLocation(), state.armed);   // 두름 잔광 — 플레이어와 같은 등록부를 탄다
             return;
         }
 
@@ -290,15 +291,9 @@ public final class SkillListener implements Listener {
         SkillEngine.Frames f = engine.comboFrames("yukhap_geom", 2);   // 발경이 실리는 칸 (3타)
         state.cooldownUntil.put(CD_QI, tick + engine.roundTicks());
         state.qiHotUntil = tick + f.startup() + NPC_HOT_TICKS;
-        for (int t = 0; t < f.startup(); t += 2) {
-            pending.add(new Pending(tick + t, () -> {
-                if (mob.isValid()) {
-                    hud.emit(mob.getEyeLocation(), qiParticle(npc.grade()),
-                            2 + engine.gradeRank(npc.grade()), 0.1, 0.01);
-                }
-            }));
-        }
-        mob.getWorld().playSound(mob.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.4f);
+        // 응집 — 플레이어와 **같은 함수**를 탄다 (npc_combat.yml symmetry: "응집은 빛으로 보인다").
+        // 그 창을 보고 물러서면 맨 주먹이 온다 — NPC 의 텔레그래프는 규칙의 일부다
+        scheduleTelegraph(mob::getEyeLocation, npc.grade(), f.startup(), 0);
     }
 
     /** 지금 이 몸의 타격에 실리는 격 — 두름(상시) 또는 응집이 끝난 창(발경). 그 밖엔 외공기 */
@@ -317,11 +312,14 @@ public final class SkillListener implements Listener {
         }
         int cost = engine.sustainCost(state.armed);
         if (cost <= 0) {
-            return;   // 발경은 유지비가 없다 — 타격 순간에만 실린다
+            // 발경은 유지비가 없다 — 타격 순간에만 실린다. 그래도 <b>켜져 있다는 사실</b>은 보여야 한다
+            // (등록부의 발경 잔광은 1개 — 검기 3, 강기 5 보다 흐리다. 격의 사다리는 잔광에서도 단조 증가한다)
+            aura(handLocation(player), player.getLocation(), state.armed);
+            return;
         }
         if (tick < state.nextSustainTick) {
-            // 응집은 빛으로 보인다 — 두름 유지 중 저강도 잔광 (텔레그래프, npc_combat 대칭 원칙)
-            hud.emit(handLocation(player), qiParticle(state.armed), 2, 0.08, 0.0);
+            // 두름은 잔광으로만 알린다 — 켜져 있다는 사실 자체가 상대에게 정보다 (소리는 응집의 몫)
+            aura(handLocation(player), player.getLocation(), state.armed);
             return;
         }
         if (state.energy < cost) {
@@ -330,7 +328,7 @@ public final class SkillListener implements Listener {
         }
         state.energy -= cost;
         state.nextSustainTick = tick + engine.roundTicks();
-        hud.emit(handLocation(player), qiParticle(state.armed), 4, 0.1, 0.0);
+        aura(handLocation(player), player.getLocation(), state.armed);
     }
 
     // ══════════ 입력 → 시전 ══════════
@@ -381,13 +379,13 @@ public final class SkillListener implements Listener {
             if (state.energy < cost) {
                 grade = SkillEngine.BARE;                     // 다운캐스트 — 빈약함이 곧 정보다
                 state.armed = null;
-                hud.emit(attacker.getEyeLocation(), Particle.SMOKE, 4, 0.1, 0.01);
+                event(attacker.getEyeLocation(), "다운캐스트");
             } else {
                 state.energy -= cost;
                 state.qiHotUntil = -1;                        // 응집을 태웠다 — 다시 모아야 한다
                 event.setDamage(event.getDamage() + engine.qiPower(grade));
                 impact(target.getLocation().add(0, 1, 0), grade,
-                        new SkillEngine.Strike(0, 0, "success", "성공", true, 0));
+                        new SkillEngine.Strike(0, 0, "success", "성공", true, 0), 1);
             }
         }
 
@@ -460,7 +458,7 @@ public final class SkillListener implements Listener {
         state.lastCastTick = tick;
         state.energy -= cast.paid();
 
-        commit(player, state, cast, primary, shown + "타");
+        commit(player, state, cast, primary, shown + "타", shown - 1);
     }
 
     // ─── 발출 (쏨) ───
@@ -478,8 +476,7 @@ public final class SkillListener implements Listener {
         if (cast.downcast() || engine.gradeRank(cast.grade()) < 2) {
             // 발출만은 다운캐스트가 없다 — 프레임이 아니라 기 그 자체가 본체다 (skill_motion.md 4장)
             SkillHud.actionBar(player, ChatColor.RED + "기가 흩어진다 — 쏠 것이 없다");
-            hud.emit(handLocation(player), Particle.SMOKE, 4, 0.1, 0.01);
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_NODAMAGE, 0.6f, 0.7f);
+            event(handLocation(player), "발출_불발");
             state.cooldownUntil.put(CD_SHOT, tick + 10L);
             return;
         }
@@ -491,18 +488,20 @@ public final class SkillListener implements Listener {
         state.cooldownUntil.put(CD_SHOT, tick + cast.cooldownTicks());
         itemCooldown(player, cast.cooldownTicks());
 
-        commit(player, state, cast, null, "발출");
+        commit(player, state, cast, null, "발출", 0);
     }
 
     /** 선딜 텔레그래프 → 지속 프레임에 판정 → 후딜. 프레임은 다운캐스트해도 남는다 */
     private void commit(Player player, SkillEngine.State state, SkillEngine.Cast cast,
-                        LivingEntity primary, String label) {
+                        LivingEntity primary, String label, int stepIndex) {
         if (cast.gated()) {
             SkillHud.actionBar(player, ChatColor.GRAY + "그 격은 아직 이 몸의 것이 아니다 ("
                     + engine.gradeGate(offense(state) == null ? "발경" : offense(state)) + "부터)");
         }
         if (cast.downcast()) {
+            // 【빈약함이 곧 정보다】 격이 외공기로 떨어지면 연출도 회색으로 떨어진다 — 상대가 그것을 읽는다
             SkillHud.actionBar(player, ChatColor.DARK_GRAY + "기가 실리지 않는다 — 맨 기술");
+            event(handLocation(player), "다운캐스트");
         }
 
         SkillEngine.Frames f = cast.frames();
@@ -511,26 +510,23 @@ public final class SkillListener implements Listener {
             player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,
                     Math.max(1, f.total()), f.total() >= 16 ? 2 : 1, false, false, false));
         }
-        // 텔레그래프 — 응집은 빛으로 보인다. 선딜 2틱마다 손끝에 기가 모인다
-        int rank = engine.gradeRank(cast.grade());
-        if (cast.manifested() && f.startup() >= 2) {
-            for (int t = 0; t < f.startup(); t += 2) {
-                pending.add(new Pending(tick + t, () -> telegraph(player, cast)));
-            }
-            if (rank >= 2) {
-                player.getWorld().playSound(player.getLocation(),
-                        rank >= 3 ? Sound.BLOCK_BEACON_POWER_SELECT : Sound.BLOCK_AMETHYST_BLOCK_CHIME,
-                        0.7f, rank >= 3 ? 0.6f : 1.4f);
-            }
+        // 텔레그래프 — 응집은 빛으로 보인다. 등록부가 개수·주기·소리·예산을 전부 정한다.
+        // 텔레그래프 가중(telegraph_boost)은 초식이 정한다: 제왕검형·만천화우는 선딜이 곧 예고다
+        SkillEngine.SkillMotion motion = engine.motionSkill(cast.skillId());
+        SkillEngine.Step step = motion == null ? null : motion.step(stepIndex);
+        int boost = step == null ? 0 : step.telegraphBoost();
+        if (cast.manifested() || boost > 0) {
+            scheduleTelegraph(() -> handLocation(player), cast.grade(), f.startup(), boost);
         }
         player.swingMainHand();
-        pending.add(new Pending(tick + f.startup(), () -> resolve(player, state, cast, primary, label)));
+        pending.add(new Pending(tick + f.startup(),
+                () -> resolve(player, state, cast, primary, label, stepIndex)));
     }
 
     // ══════════ 판정 · 적용 ══════════
 
     private void resolve(Player player, SkillEngine.State state, SkillEngine.Cast cast,
-                         LivingEntity primary, String label) {
+                         LivingEntity primary, String label, int stepIndex) {
         if (!player.isOnline()) {
             return;
         }
@@ -550,6 +546,14 @@ public final class SkillListener implements Listener {
         int swings = art == null ? 1 : Math.max(1, art.multiHit());
 
         Location origin = swingLocation(player, cast);
+        // 궤적 — 판정과 같은 틱에 같은 모양을 그린다 (보이는 것 = 맞는 것).
+        // 헛쳐도 그린다: 상대가 '지나간 자리'를 보고 다음 수를 읽을 수 있어야 공방이 성립한다
+        String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(),
+                materialName(player));
+        if (art == null) {
+            trail(player, cast, weaponClass, stepIndex);
+        }
+        int shown = Math.max(1, targets.size()) * swings;   // 타격 풀을 나눌 몫 (광역이 예산을 터뜨리지 않게)
         int hits = 0;
         for (LivingEntity target : targets) {
             for (int swing = 0; swing < swings; swing++) {
@@ -590,7 +594,7 @@ public final class SkillListener implements Listener {
                     applying = false;
                 }
                 stagger(target, player, cast);
-                impact(target.getLocation().add(0, 1, 0), cast.grade(), strike);
+                impact(target.getLocation().add(0, 1, 0), cast.grade(), strike, shown);
                 if (art != null) {
                     ultimateEffect(player, state, art, target, defense.damage());
                 }
@@ -599,7 +603,7 @@ public final class SkillListener implements Listener {
 
         // 세계 다리 — **격은 목격될 때 비로소 강호의 일이 된다** ("그자가 검기를 뿜었다더라").
         // 아무도 없는 산속에서 강기를 터뜨린 것은 소문이 아니다. 본 사람이 있어야 이야기가 된다.
-        if (hits > 0 && cast.manifested()) {
+        if (hits > 0 && cast.manifested() && !Dojang.suppressWorldEvents(player.getWorld())) {
             Location me = player.getLocation();
             int seen = (int) me.getWorld().getNearbyEntities(me, 24, 12, 24).stream()
                     .filter(e -> (e instanceof Player p && !p.equals(player))
@@ -611,14 +615,11 @@ public final class SkillListener implements Listener {
         }
 
         if (hits == 0) {
-            player.getWorld().playSound(origin, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.5f, 1.3f);
-            hud.emit(origin, Particle.CLOUD, 3, 0.1, 0.01);
-        } else {
-            swingSound(player, origin, cast);
+            event(origin, "헛손질");   // 마른 붓 자국 — 빗나갔다는 것도 정보다
         }
         strain(player, state, cast);
 
-        SkillHud.actionBar(player, SkillHud.gradeColor(cast.grade()) + label + " "
+        SkillHud.actionBar(player, hud.gradeColor(cast.grade()) + label + " "
                 + ChatColor.DARK_GRAY + "│ " + SkillHud.gradeLabel(cast.grade())
                 + (hits > 0 ? ChatColor.WHITE + " · " + hits + "타" : ChatColor.GRAY + " · 헛손질"));
         hud.energyBar(player, state);
@@ -643,8 +644,7 @@ public final class SkillListener implements Listener {
         }
         state.flow++;
         if (state.flow >= engine.flowRequired()) {
-            player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 0.9f, 1.6f);
-            hud.emitPriority(player.getLocation().add(0, 1, 0), Particle.END_ROD, 12, 0.4, 0.02);
+            event(player.getLocation().add(0, 1, 0), "흐름_충전");
             SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + "흐름을 읽었다 — 오의 (F)");
         }
     }
@@ -676,12 +676,17 @@ public final class SkillListener implements Listener {
         }
         touchCombat(state);
 
+        // 무기 접촉 격돌 — 방패로 받아 낸 순간 (defense_states.패링 / weapon_break.trigger "가드·패링·합").
+        // 판정을 바꾸지 않는다 (바닐라가 이미 피해를 깎는다) — 그 순간이 **보이고 들리게** 할 뿐이다.
+        if (target instanceof Player guarding && guarding.isBlocking()) {
+            event(target.getLocation().add(0, 1.2, 0), "패링_성공");
+        }
+
         // 태극혜검 — 패링의 극의. 지속 중 받은 공격 1회를 무효화하고 위력 그대로 반사한다
         if (tick <= state.counterUntil) {
             state.counterUntil = -1;
             Location at = target.getLocation().add(0, 1, 0);
-            hud.emitPriority(at, Particle.END_ROD, 20, 0.4, 0.05);
-            sound(at, Sound.ITEM_TRIDENT_RETURN, 1.0f, 1.2f);
+            event(at, "반격_오의");
             applying = true;
             try {
                 attacker.damage(incoming, target);   // 위력 그대로 되돌아간다
@@ -701,9 +706,7 @@ public final class SkillListener implements Listener {
         if (state.energy < guard.drain()) {
             state.armed = null;                      // 상쇄 소모를 못 냈다 — 강기가 흩어진다
             state.nextSustainTick = -1;
-            Location at = target.getLocation().add(0, 1, 0);
-            hud.emit(at, Particle.SMOKE, 8, 0.2, 0.02);
-            sound(at, Sound.BLOCK_GLASS_BREAK, 0.7f, 0.8f);
+            event(target.getLocation().add(0, 1, 0), "호신강기_붕괴");
             if (target instanceof Player player) {
                 SkillHud.actionBar(player, ChatColor.RED + "호신강기가 깨진다 — 상쇄할 내력이 없다");
             }
@@ -711,9 +714,7 @@ public final class SkillListener implements Listener {
         }
         state.energy -= guard.drain();
         Location at = target.getLocation().add(0, 1, 0);
-        hud.emit(at, Particle.END_ROD, guard.blocked() ? 10 : 16, 0.35, 0.03);
-        sound(at, guard.blocked() ? Sound.BLOCK_CONDUIT_DEACTIVATE : Sound.BLOCK_ANVIL_LAND,
-                0.8f, guard.blocked() ? 1.6f : 0.7f);
+        event(at, guard.blocked() ? "호신강기_무효" : "호신강기_관통");
         if (target instanceof Player player) {
             SkillHud.actionBar(player, guard.blocked()
                     ? ChatColor.YELLOW + "호신강기 — 튕겨 낸다 " + ChatColor.DARK_GRAY + "(상쇄 −" + guard.drain() + ")"
@@ -755,8 +756,7 @@ public final class SkillListener implements Listener {
             return;
         }
         wear(held, gear);   // 금이 간다 — 1회째부터 예고 (weapon_break telegraph)
-        hud.emit(at, Particle.CRIT, 8, 0.2, 0.05);
-        sound(at, Sound.BLOCK_ANVIL_LAND, 0.5f, 1.9f);
+        event(at, "무기_균열");
         if (defender instanceof Player player) {
             player.sendMessage(ChatColor.YELLOW + "날에 금이 간다 — " + weaponGrade + "의 몸으로 " + grade
                     + "를 받았다 (" + count + "/" + engine.breaksAt() + "합)");
@@ -768,9 +768,8 @@ public final class SkillListener implements Listener {
                              boolean sever, String weaponGrade, String grade) {
         Location at = holder.getLocation().add(0, 1.2, 0);
         gear.setItemInMainHand(null);
-        hud.emit(at, Particle.ITEM, 20, 0.3, 0.3, 0.3, 0.08, held);
-        sound(at, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f);
-        sound(at, Sound.BLOCK_ANVIL_DESTROY, 0.6f, 1.4f);
+        // 절단(2격 초과, 한 합)과 파괴(누적 3합)는 다른 사건이다 — 소리와 파편 수가 다르다
+        event(at, sever ? "무기_절단" : "무기_파괴", held);
         // 무기가 사라졌으니 손이 가벼워진다 — NPC 의 공격력을 맨손으로 되돌린다 (combat.yml weapon_power)
         if (!(holder instanceof Player)) {
             var attribute = holder.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
@@ -896,15 +895,12 @@ public final class SkillListener implements Listener {
         }
         // 【고침】 바닐라는 '사용'해야 부러진다 — 내구를 넘긴 손상은 그대로 부러뜨린다 (after_break: 맨손)
         if (wear(item, gear)) {
-            Location at = player.getLocation().add(0, 1.2, 0);
-            hud.emit(at, Particle.ITEM, 20, 0.3, 0.3, 0.3, 0.08, item);
-            sound(at, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f);
+            event(player.getLocation().add(0, 1.2, 0), "무기_파괴", item);
             player.sendMessage(ChatColor.RED + "검이 부러졌다 — 제 격을 못 견딘 쇠는 결국 제 주인을 버린다.");
             state.selfStrainCount = 0;
             return;
         }
-        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_ANVIL_LAND, 0.4f, 1.9f);
-        hud.emit(handLocation(player), Particle.CRIT, 6, 0.12, 0.02);
+        event(handLocation(player), "자기_손상");
         player.sendMessage(ChatColor.RED + "검이 운다 — " + grade + "의 몸으로 "
                 + cast.grade() + "를 감당하지 못한다 (" + every + "합마다 금이 간다)");
     }
@@ -932,20 +928,26 @@ public final class SkillListener implements Listener {
         state.armed = next;
         state.nextSustainTick = tick + engine.roundTicks();
 
-        Location hand = handLocation(player);
-        hud.emit(hand, qiParticle(next), 10, 0.15, 0.02);
-        player.getWorld().playSound(player.getLocation(),
-                engine.gradeRank(next) >= 3 ? Sound.BLOCK_CONDUIT_ACTIVATE : Sound.ITEM_TRIDENT_RIPTIDE_1,
-                0.8f, engine.gradeRank(next) >= 3 ? 0.7f : 1.5f);
-        SkillHud.actionBar(player, SkillHud.gradeColor(next) + next + " — " + gradeFlavor(next));
+        // 태세 진입 — 두름은 손끝에, 호신강기는 몸에. 형태가 다르면 실루엣도 소리도 달라야 한다
+        if (SkillEngine.GUARD.equals(next)) {
+            SkillEngine.FormMotion form = engine.motionForm(SkillEngine.GUARD);
+            guardRing(player.getLocation());
+            hud.emit(player.getLocation().add(0, 1, 0), form.aura(), false);
+            sfx(player.getLocation(), form.deploySounds());
+        } else {
+            SkillEngine.GradeMotion m = engine.motionGrade(next);
+            hud.emit(handLocation(player), m.charge(),
+                    Math.min(m.charge().count() * 2, engine.motionBudget().perPointTickMax()), false);
+            sfx(player.getLocation(), m.armSounds());
+        }
+        SkillHud.actionBar(player, hud.gradeColor(next) + next + " — " + gradeFlavor(next));
         hud.energyBar(player, state);
     }
 
     private void dispel(Player player, SkillEngine.State state, String why) {
         state.armed = null;
         state.nextSustainTick = -1;
-        hud.emit(handLocation(player), Particle.SMOKE, 5, 0.12, 0.01);
-        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.6f);
+        event(handLocation(player), "격_소산");
         SkillHud.actionBar(player, ChatColor.GRAY + why);
     }
 
@@ -1069,7 +1071,7 @@ public final class SkillListener implements Listener {
                     cast.frames().total(), 2, false, false, false));
         }
         pending.add(new Pending(tick + cast.frames().startup(),
-                () -> resolve(player, state, cast, null, art.name())));
+                () -> resolve(player, state, cast, null, art.name(), 0)));
         if (cast.halved()) {
             // 개안 — 벽 너머를 훔쳐본 대가: 내력 전소 + 내상 (원기 계통은 MVT 미배선 — 몸이 무거워진다)
             pending.add(new Pending(tick + cast.frames().total(), () -> {
@@ -1082,34 +1084,49 @@ public final class SkillListener implements Listener {
         }
     }
 
-    /** 긴 선딜 = 긴 텔레그래프 — "세계가 멈춘 듯한 연출". 파티클 예산 내 최우선순위 */
+    /**
+     * 긴 선딜 = 긴 텔레그래프 — "세계가 멈춘 듯한 연출". 파티클 예산 내 <b>최우선권</b>.
+     *
+     * <p>【오의는 어떤 격과도 헷갈리지 않는다】 구분 수단이 셋이다:
+     * ① <b>응집 고리</b> — 사방에서 몸으로 빨려드는 고리 (다른 어떤 모션도 고리를 쓰지 않는다)
+     * ② <b>개시 섬광</b> — flash 1개 + 뇌격음 (팔레트에서 flash 를 쓰는 것은 오의와 심검뿐이다)
+     * ③ <b>이름</b> — 32m 안의 모든 눈에 오의명 (world_weight: 시전 목격 = 강도 3 소문)
+     * 파티클·소리·개수는 전부 등록부(skill_motion.yml ultimates)가 정한다.
+     */
     private void ultimateTelegraph(Player player, SkillEngine.Cast cast, SkillEngine.Ultimate art) {
-        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 1.0f, 0.5f);
+        SkillEngine.UltimateMotion m = engine.motionUltimate(art.id());
+        if (m == null) {
+            return;   // 등록되지 않은 오의는 연출이 없다 (판정은 그대로 나간다)
+        }
+        SkillEngine.Budget b = engine.motionBudget();
+        sfx(player.getLocation(), m.chargeSounds());
         player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,
                 cast.frames().startup(), 3, false, false, false));
-        for (int t = 0; t < cast.frames().startup(); t += 2) {
+
+        int points = Math.min(m.ringPoints(), b.ultimateRingPoints());
+        for (int t = 0; t < cast.frames().startup(); t += b.telegraphStepTicks()) {
             double phase = t / (double) Math.max(1, cast.frames().startup());
             pending.add(new Pending(tick + t, () -> {
                 if (!player.isOnline()) {
                     return;
                 }
                 Location at = player.getLocation().add(0, 1, 0);
-                // 응집 — 고리가 좁아지며 몸으로 빨려든다 (선딜이 길수록 크게 보인다)
-                double radius = art.range() * (1.0 - phase);
-                for (int i = 0; i < 8; i++) {
-                    double angle = Math.PI * 2 * i / 8 + phase * Math.PI;
+                double radius = art.range() * (1.0 - phase);   // 고리가 좁아지며 몸으로 빨려든다
+                for (int i = 0; i < points; i++) {
+                    double angle = Math.PI * 2 * i / points + phase * Math.PI;
                     hud.emitPriority(at.clone().add(Math.cos(angle) * radius, 0, Math.sin(angle) * radius),
-                            Particle.END_ROD, 2, 0.02, 0.0);
+                            m.chargeParticle(), m.ringPerPoint(), 0.02, 0.0);
                 }
-                hud.emitPriority(at, Particle.ELECTRIC_SPARK, 6, 0.3, 0.02);
+                hud.emitPriority(at, m.coreParticle(), m.coreCount(), 0.3, 0.02);
             }));
         }
         pending.add(new Pending(tick + cast.frames().startup(), () -> {
             if (player.isOnline()) {
                 Location at = player.getLocation().add(0, 1, 0);
-                player.getWorld().playSound(at, Sound.ENTITY_LIGHTNING_BOLT_IMPACT, 1.0f, 1.3f);
-                hud.emitPriority(at, Particle.FLASH, 1, 0.0, 0.0);
-                hud.emitPriority(at, Particle.END_ROD, 40, art.range() / 3, 0.08);
+                sfx(at, m.releaseSounds());
+                hud.emitPriority(at, m.accent().particle(), m.accent().count(), 0.0, 0.0);
+                hud.emitPriority(at, m.burst().particle(), m.burst().count(),
+                        art.range() * m.burstSpreadRatio(), m.burst().extra());
             }
         }));
     }
@@ -1118,6 +1135,10 @@ public final class SkillListener implements Listener {
     private void ultimateEffect(Player player, SkillEngine.State state, SkillEngine.Ultimate art,
                                 LivingEntity target, double damage) {
         String effect = art.effect();
+        SkillEngine.UltimateMotion m = engine.motionUltimate(art.id());
+        if (m != null) {
+            sfx(target.getLocation(), m.hitSounds());   // 오의의 적중음 — 오의마다 다르다 (혈해만리는 마시는 소리)
+        }
         if (effect.contains("내구")) {
             // 제왕검형·군림 — 적중 시 다운 + 내구 50% 피해 (내구 = 이 세계의 체력. combat.yml durability)
             var max = target.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
@@ -1142,7 +1163,7 @@ public final class SkillListener implements Listener {
                 prey.energy -= stolen;
                 state.energy = Math.min(engine.pool(state.naegong), state.energy + stolen);
             }
-            hud.emitPriority(target.getLocation().add(0, 1, 0), Particle.CRIMSON_SPORE, 12, 0.4, 0.02);
+            event(target.getLocation().add(0, 1, 0), "흡성");   // 【채색 예외】 붉은 점 — 예외 자체가 경고다
         }
     }
 
@@ -1162,81 +1183,209 @@ public final class SkillListener implements Listener {
         return out;
     }
 
-    // ══════════ 연출 ══════════
+    // ══════════ 연출 — 전부 등록부(config/skill_motion.yml) 판독 ══════════
+    // 【등록제 규약】 이 아래에는 파티클 이름도 사운드 키도 없다. 이름을 등록부에서 받아 옮길 뿐이다.
+    // 【팩 없이도 읽힌다】 격의 사다리(밝기·개수) · 응집(제자리, 2틱마다) · 발출(날아간다) ·
+    //   두름(머문다) · 호신강기(몸을 두르는 고리) · 오의(고리 + 섬광 + 이름) — 여섯이 서로 다르다.
 
-    /** 텔레그래프 — 상대가 읽을 수 있어야 한다 (npc_combat 대칭 원칙: 응집은 빛으로 보인다) */
-    private void telegraph(Player player, SkillEngine.Cast cast) {
-        if (!player.isOnline()) {
-            return;
+    /** 등록부의 소리 한 줄 — 1.21 의 Sound 는 열거형이 아니다. 바닐라 키를 문자열로 재생한다 */
+    private void sfx(Location at, SkillEngine.Sfx sfx) {
+        if (sfx != null && at.getWorld() != null) {
+            at.getWorld().playSound(at, sfx.key(), sfx.volume(), sfx.pitch());
         }
-        int n = 2 + engine.gradeRank(cast.grade());   // 격이 높을수록 밝다 (최대 7)
-        hud.emit(handLocation(player), qiParticle(cast.grade()), n, 0.1, 0.01);
     }
 
-    /** 타격 순간 — 격을 눈에 보이게. 단발 파티클 상한 24개 (시야 예산 600/틱의 4%) */
-    private void impact(Location at, String grade, SkillEngine.Strike strike) {
-        boolean crit = "critical_success".equals(strike.tierId());
+    private void sfx(Location at, List<SkillEngine.Sfx> sounds) {
+        for (SkillEngine.Sfx s : sounds) {
+            sfx(at, s);
+        }
+    }
+
+    /**
+     * 사건의 모션 — 무기 균열·파괴·절단 · 다운캐스트 · 호신강기 무효/관통/붕괴 · 패링 · 흐름 …
+     * 등록되지 않은 이름은 조용히 아무것도 하지 않는다 (연출이 없다고 판정이 멈추면 안 된다).
+     */
+    private void event(Location at, String name) {
+        event(at, name, null);
+    }
+
+    private void event(Location at, String name, Object data) {
+        SkillEngine.EventMotion e = engine.motionEvent(name);
+        if (e == null) {
+            return;
+        }
+        SkillEngine.Fx f = e.fx();
+        if (f.present()) {
+            hud.emit(at, f.particle(), f.count(), f.spread(), f.extra(), data);
+        }
+        sfx(at, e.sounds());
+    }
+
+    /** 두름의 잔광 — 켜져 있다는 사실 자체가 정보다 (상대가 보고 판단한다). 호신강기는 몸을 두르는 고리 */
+    private void aura(Location hand, Location body, String stance) {
+        if (SkillEngine.GUARD.equals(stance)) {
+            guardRing(body);
+            return;
+        }
+        hud.emit(hand, engine.motionGrade(stance).aura(), false);
+    }
+
+    /**
+     * 호신강기 — <b>몸을 두르는 고리</b> (forms.두름_몸.ring). 손끝 잔광(두름)과 실루엣이 다르다.
+     * 그 차이가 곧 정보다: "저 자는 검에 기를 실은 것이 아니라 몸에 둘렀다 — 하위 격은 닿지 않는다."
+     */
+    private void guardRing(Location body) {
+        SkillEngine.FormMotion form = engine.motionForm(SkillEngine.GUARD);
+        if (form == null || form.ringPoints() <= 0) {
+            return;
+        }
+        Location at = body.clone().add(0, form.ringHeight(), 0);
+        for (int i = 0; i < form.ringPoints(); i++) {
+            double angle = Math.PI * 2 * i / form.ringPoints() + tick * 0.05;   // 천천히 돈다
+            hud.emit(at.clone().add(Math.cos(angle) * form.ringRadius(), 0,
+                            Math.sin(angle) * form.ringRadius()),
+                    form.ringParticle(), form.ringPerPoint(), 0.02, 0.0);
+        }
+    }
+
+    /**
+     * 텔레그래프(응집) — 상대가 읽을 수 있어야 한다 ("응집은 빛으로 보인다", npc_combat 대칭 원칙).
+     *
+     * <p>선딜 2틱마다(budget.telegraph_step_ticks) 손끝에 격의 응집이 맺힌다. 예산은 <b>풀</b>이다:
+     * 선딜이 길다고 파티클이 비례해 늘지 않는다 (budget.telegraph_pool). 응집을 보고 물러서면 맨 주먹이 온다.
+     */
+    private void telegraph(Location at, String grade, int boost) {
+        SkillEngine.GradeMotion m = engine.motionGrade(grade);
+        int n = m.charge().count() + boost;
+        if (n <= 0) {
+            return;
+        }
+        hud.emit(at, m.charge(), Math.min(n, engine.motionBudget().perPointTickMax()), false);
+    }
+
+    /** 응집 예약 — 선딜 동안 몇 번 발행할지는 예산 풀이 정한다 (프레임이 길어도 풀이 마르면 멈춘다) */
+    private void scheduleTelegraph(java.util.function.Supplier<Location> at, String grade, int startup,
+                                   int boost) {
+        SkillEngine.GradeMotion m = engine.motionGrade(grade);
+        SkillEngine.Budget b = engine.motionBudget();
+        int per = m.charge().count() + boost;
+        if (per <= 0 || startup < b.telegraphStepTicks()) {
+            return;
+        }
+        int max = Math.max(1, b.telegraphPool() / per);          // 응집 풀 — 이만큼만 발행한다
+        int emits = Math.min(max, startup / b.telegraphStepTicks());
+        for (int i = 0; i < emits; i++) {
+            pending.add(new Pending(tick + (long) i * b.telegraphStepTicks(),
+                    () -> telegraph(at.get(), grade, boost)));
+        }
+        sfx(at.get(), m.chargeSounds());                          // 귀로도 예고한다 (감각이 낮아도 읽힌다)
+    }
+
+    /**
+     * 타격 순간 — 격을 눈에 보이게.
+     *
+     * <p><b>타격 풀</b>(budget.impact_pool)을 대상 수로 나눈다: 광역 8인을 쳐도 예산이 터지지 않는다.
+     * 아무리 나눠도 대상당 최소치(min_impact_per_target)는 남긴다 —
+     * <i>맞았다는 사실</i>은 언제나 보여야 한다 (performance.yml over_budget: "핵심 타격 표시만 유지").
+     */
+    private void impact(Location at, String grade, SkillEngine.Strike strike, int targets) {
+        SkillEngine.GradeMotion m = engine.motionGrade(grade);
+        SkillEngine.Budget b = engine.motionBudget();
         HuntingGrounds.witnessQi(at, grade);   // 격을 본 자는 전의가 꺾인다 (npc_combat morale 상대_위세)
-        switch (grade) {
-            case "발경" -> {   // 짧은 충격파 — 기가 몸 안에서 터진다
-                hud.emit(at, Particle.SWEEP_ATTACK, 1, 0.0, 0.0);
-                hud.emit(at, Particle.CRIT, 10, 0.25, 0.15);
-                sound(at, Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, 0.9f, 0.9f);
-                sound(at, Sound.BLOCK_ANVIL_LAND, 0.35f, 1.8f);
-            }
-            case "검기" -> {   // 날에 서린 기운이 살을 가른다
-                hud.emit(at, Particle.ELECTRIC_SPARK, 12, 0.3, 0.05);
-                hud.emit(at, Particle.END_ROD, 5, 0.2, 0.02);
-                sound(at, Sound.ITEM_TRIDENT_THROW, 0.8f, 1.5f);
-            }
-            case "강기" -> {   // 응집 — 터지는 것이 아니라 뚫는다
-                hud.emit(at, Particle.END_ROD, 16, 0.35, 0.06);
-                hud.emit(at, Particle.EXPLOSION, 1, 0.0, 0.0);
-                sound(at, Sound.BLOCK_CONDUIT_ACTIVATE, 0.9f, 1.2f);
-            }
-            case "어검", "심검" -> {
-                hud.emit(at, Particle.END_ROD, 20, 0.4, 0.08);
-                sound(at, Sound.BLOCK_BEACON_ACTIVATE, 0.9f, 1.4f);
-            }
-            default -> {       // 외공기 — 몸과 무기뿐. 다운캐스트도 여기로 온다 (빈약함이 정보다)
-                hud.emit(at, Particle.CRIT, crit ? 8 : 4, 0.15, 0.05);
-                sound(at, Sound.ENTITY_PLAYER_ATTACK_STRONG, 0.8f, 1.0f);
-            }
-        }
-        if (crit) {
-            hud.emit(at, Particle.CRIT, 6, 0.3, 0.2);
-            sound(at, Sound.ENTITY_PLAYER_ATTACK_CRIT, 0.9f, 1.0f);
+
+        int share = Math.max(b.minImpactPerTarget(), b.impactPool() / Math.max(1, targets));
+        hud.emit(at, m.impact(), Math.min(m.impact().count(), share), false);
+        hud.emit(at, m.accent(), false);
+        sfx(at, m.impactSounds());
+        if ("critical_success".equals(strike.tierId())) {
+            event(at, "대성공");   // 급소 — 격과 무관하게 타격 위에 겹친다
         }
     }
 
-    private void swingSound(Player player, Location at, SkillEngine.Cast cast) {
-        if ("선".equals(cast.hitType())) {
-            // 발출의 궤적 — 선을 그린다 (상대가 피할 수 있게 눈에 남는다)
-            Vector dir = player.getLocation().getDirection().normalize();
-            Location step = player.getEyeLocation().clone();
-            for (int i = 0; i < (int) cast.range(); i++) {
-                step.add(dir);
-                hud.emit(step, qiParticle(cast.grade()), 2, 0.05, 0.0);
-            }
-            sound(at, Sound.ITEM_TRIDENT_THROW, 1.0f, 0.8f);
+    /**
+     * 궤적(軌跡) — <b>보이는 모양 = 맞는 모양</b>. 히트박스 type 을 그대로 그린다 (motion_audit ②).
+     *
+     * <p>검은 벤다(호 — 부채꼴에 획이 남는다) · 창은 찌른다(선 — 점이 앞으로 뻗는다) ·
+     * 매화검법 4타는 원을 그린다 · 보법은 지나온 자리에 잔상을 남긴다(돌).
+     * 계열의 지문(weapon_styles)이 같은 '호'라도 검과 봉을 가른다.
+     */
+    private void trail(Player player, SkillEngine.Cast cast, String weaponClass, int stepIndex) {
+        SkillEngine.Traj traj = engine.trajectory(cast.hitType());
+        if (traj == null) {
             return;
         }
-        sound(at, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.7f, 1.1f);
-    }
+        SkillEngine.Style style = engine.weaponStyle(weaponClass);
+        SkillEngine.SkillMotion motion = engine.motionSkill(cast.skillId());
+        SkillEngine.Step step = motion == null ? null : motion.step(stepIndex);
+        SkillEngine.GradeMotion grade = engine.motionGrade(cast.grade());
+        // 발출(쏨)은 무공이 아니다 — 형태(forms.쏨)가 제 광선과 발사음을 갖는다.
+        // 【발출이 두름·응집과 헷갈리지 않는 이유】 기가 **날아간다**: 8m 직선 광선 + 큰 발사음 + 끝의 작렬
+        SkillEngine.FormMotion shot = SkillEngine.SHOT.equals(cast.skillId()) ? engine.shotForm(cast.grade()) : null;
 
-    private static Particle qiParticle(String grade) {
-        return switch (grade == null ? "" : grade) {
-            case "발경" -> Particle.CRIT;
-            case "검기" -> Particle.ELECTRIC_SPARK;
-            case "강기", SkillEngine.GUARD, "어검", "심검" -> Particle.END_ROD;
-            default -> Particle.SMOKE;
-        };
-    }
+        // 점당 파티클: 초식이 정한 개수. 격이 실렸으면 격의 궤적 파티클이 무기의 것을 덮는다
+        //   (검기를 두른 검은 '검의 획'이 아니라 '기의 획'을 남긴다 — 그것이 격이 보인다는 말이다)
+        String particle = shot != null ? shot.beamParticle()
+                : cast.manifested() ? grade.trailParticle()
+                : step != null && step.particle() != null ? step.particle()
+                : "선".equals(cast.hitType()) || "시".equals(cast.hitType()) ? style.thrust() : style.arc();
+        int per = shot != null ? shot.beamPerPoint() : step == null ? 1 : step.count();
+        SkillEngine.Budget b = engine.motionBudget();
+        int points = Math.min(traj.points(), Math.max(1, b.trailPool() / Math.max(1, per)));
 
-    private void sound(Location at, Sound sound, float volume, float pitch) {
-        if (at.getWorld() != null) {
-            at.getWorld().playSound(at, sound, volume, pitch);
+        Location eye = player.getEyeLocation();
+        Vector dir = player.getLocation().getDirection().normalize();
+        Vector flat = dir.clone().setY(0);
+        if (flat.lengthSquared() < 1e-6) {
+            flat = new Vector(1, 0, 0);
         }
+        flat.normalize();
+
+        switch (traj.shape()) {
+            case "arc" -> {          // 호 — 정면 부채꼴을 훑는다 (angle 을 points 로 나눈다)
+                double radius = cast.range() * traj.radiusRatio();
+                double half = Math.toRadians(cast.angle() / 2.0);
+                for (int i = 0; i < points; i++) {
+                    double t = points == 1 ? 0.5 : i / (double) (points - 1);
+                    double a = -half + 2 * half * t;
+                    Vector v = flat.clone().rotateAroundY(a).multiply(radius);
+                    hud.emit(eye.clone().add(v).subtract(0, 0.3, 0), particle, per, 0.05, 0.0);
+                }
+            }
+            case "line", "shot" -> { // 선·시 — 앞으로 뻗는다 (찌르기·참격·투척)
+                for (int i = 1; i <= points; i++) {
+                    Location p = eye.clone().add(dir.clone().multiply(
+                            Math.min(cast.range(), i * traj.step())));
+                    hud.emit(p, particle, per, 0.05, 0.0);
+                }
+            }
+            case "circle", "ring" -> {   // 원·진 — 사방
+                double radius = cast.range() * traj.radiusRatio();
+                Location center = player.getLocation().add(0, 1, 0);
+                for (int i = 0; i < points; i++) {
+                    double a = Math.PI * 2 * i / points;
+                    hud.emit(center.clone().add(Math.cos(a) * radius, 0, Math.sin(a) * radius),
+                            particle, per, 0.05, 0.0);
+                }
+            }
+            case "dash" -> {         // 돌 — 지나온 자리에 잔상 (뒤로 그린다)
+                for (int i = 1; i <= points; i++) {
+                    hud.emit(player.getLocation().add(0, 0.8, 0)
+                                    .subtract(dir.clone().multiply(i * traj.step())),
+                            particle, per, 0.08, 0.0);
+                }
+            }
+            default -> {             // aura — 태세·가드태세·시전: 몸에 머문다
+                hud.emit(player.getLocation().add(0, 1, 0), particle,
+                        Math.min(per * points, b.trailPool()), 0.35, 0.0);
+            }
+        }
+        if (shot != null) {
+            // 광선의 끝에서 작렬한다 — 어디까지 갔는지 눈에 남는다 (빗나가면 그 자리에 코스트만 흩어진다)
+            hud.emit(eye.clone().add(dir.clone().multiply(cast.range())), shot.burst(), false);
+            sfx(player.getLocation(), shot.releaseSounds());
+            return;
+        }
+        sfx(player.getLocation(), step != null && step.sound() != null ? step.sound() : style.swing());
     }
 
     // ══════════ 관리 명령 접합 (MvtCommand 가 부른다) ══════════
@@ -1279,8 +1428,7 @@ public final class SkillListener implements Listener {
         int before = state.energy;
         state.energy = Math.min(pool, state.energy + engine.meditationRecover(state.naegong, 1.0));
         hud.energyBar(player, state);
-        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_AMBIENT, 0.6f, 1.2f);
-        hud.emit(player.getLocation().add(0, 1, 0), Particle.END_ROD, 8, 0.3, 0.01);
+        event(player.getLocation().add(0, 1, 0), "운기조식");
         player.sendMessage(ChatColor.AQUA + "한 구간을 앉았다 — 내력 " + before + " → " + state.energy
                 + "/" + pool);
     }

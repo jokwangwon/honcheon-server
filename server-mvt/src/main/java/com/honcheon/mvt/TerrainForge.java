@@ -285,12 +285,103 @@ final class TerrainForge {
      * @param radius 부지 반경 (산채 24 · 문파 44 · 마을 61)
      */
     static SiteSpec prepare(World world, WorldMap.Place place, int cx, int cy, int cz, int radius) {
-        preload(world, cx, cz, radius + FEATHER_WIDTH + 8);
+        int[] peak = new int[]{cx, cz, cy, 0};
+        int reach = radius + FEATHER_WIDTH + 8;
+        preload(world, cx, cz, reach);
+
         clearSurface(world, cx, cy, cz, radius);
-        int[] peak = shape(world, place, cx, cy, cz, radius);
+        peak = shape(world, place, cx, cy, cz, radius);
+        int massifR = peak[3];
+        if (massifR > 0) {
+            preload(world, peak[0], peak[1], massifR + 40);   // 산의 발치까지 땅이 실려 있어야 한다
+        }
         tidyWater(world, cx, cy, cz, radius + FEATHER_WIDTH);
-        feather(world, cx, cy, cz, radius, radius + FEATHER_WIDTH);
+
+        // 경계 전이대 — **산을 세웠으면 산의 발치를 편다**. 부지 경계를 펴 봐야 소용없다:
+        //   벼랑은 부지가 아니라 **봉우리의 발치**에 선다 (경계 급단차 32.3% · 최대 33칸).
+        if (massifR > 0) {
+            feather(world, peak[0], peak[1], massifR - 12, massifR + 30, peak[2]);
+        } else {
+            feather(world, cx, cz, radius, radius + FEATHER_WIDTH, cy);
+        }
+
+        // 진입로 보장 (계약 ②) — **걸어 들어올 수 없는 땅은 땅이 아니다**
+        ensureApproach(world, place, cx, cy, cz, radius);
+
         return survey(world, place, cx, cy, cz, radius, peak[0], peak[1], peak[2]);
+    }
+
+    /**
+     * 진입로 보장 — <b>최소 한 방위에서는 걸어 오를 수 있어야 한다</b> (환경 검수 ④).
+     *
+     * <p>산채는 진입 <b>0방위</b>였다. 봉우리를 세운 탓도 있지만, 근본은 <b>지형 계층이 길을 보장하지 않았다</b>는
+     * 것이다. 우리는 땅을 빚었으면 <b>그 땅에 닿는 길</b>까지 책임져야 한다.
+     *
+     * <p>이미 걸어 들어올 수 있으면 아무것도 하지 않는다 (자연이 준 길이 언제나 낫다).
+     * 막혔으면 <b>남쪽</b>에 램프를 낸다 — 등록부가 그렇게 적고 있다:
+     * 산채는 "산길이 채문(남)으로 온다", 도관은 "산문 → 천 계단"(남에서 오른다).
+     */
+    private static BlockFace ensureApproach(World world, WorldMap.Place place,
+                                            int cx, int cy, int cz, int radius) {
+        if (!approaches(world, cx, cy, cz, radius).isEmpty()) {
+            return null;   // 자연이 이미 길을 줬다
+        }
+        int centerY = naturalTop(world, cx, cz, cy + 80, cy - 40);
+        carveRamp(world, cx, cz, centerY, radius, BlockFace.SOUTH, cy);
+        if (!approaches(world, cx, cy, cz, radius).isEmpty()) {
+            return BlockFace.SOUTH;
+        }
+        // 남쪽이 물이거나 절벽이면 나머지 방위를 순서대로 (결정론 — 북·동·서)
+        for (BlockFace f : new BlockFace[]{BlockFace.NORTH, BlockFace.EAST, BlockFace.WEST}) {
+            carveRamp(world, cx, cz, centerY, radius, f, cy);
+            if (!approaches(world, cx, cy, cz, radius).isEmpty()) {
+                return f;
+            }
+        }
+        return null;   // 네 방위 다 냈는데도 못 걸어온다 — 검수가 잡을 것이다 (숨기지 않는다)
+    }
+
+    /** 램프의 반폭 — 5칸 폭 (요구: 3칸 이상. 사람 둘이 비켜 간다) */
+    private static final int RAMP_HALF = 2;
+
+    /**
+     * 램프 — <b>걸어 오르는 길</b>. 계단이 아니라 비탈이다 (계단·석등은 건축 계층의 것이다).
+     *
+     * <p>규칙은 하나: <b>인접 칸 높이차 ≤ 1</b>. 그래서 길이를 높이차에 맞춰 늘린다 —
+     * 36켜를 올라야 하면 최소 36칸을 걷는다. 짧은 길로 높이 오르려 하면 그것은 길이 아니라 벼랑이다.
+     */
+    private static void carveRamp(World world, int cx, int cz, int centerY, int radius,
+                                  BlockFace dir, int yHint) {
+        int dx = dir.getModX();
+        int dz = dir.getModZ();
+        // 바깥 착지점 — 자연 지면에 닿는 곳. 높이차만큼 길이를 늘려 물매를 1:1 아래로 눕힌다
+        int len = radius + 40;
+        for (int pass = 0; pass < 2; pass++) {
+            int outer = naturalTop(world, cx + dx * len, cz + dz * len, yHint + 80, yHint - 60);
+            len = Math.max(len, Math.abs(centerY - outer) + 20);
+        }
+        int outerY = naturalTop(world, cx + dx * len, cz + dz * len, yHint + 80, yHint - 60);
+
+        for (int i = 0; i <= len; i++) {
+            int d = len - i;                                    // 바깥(len) → 중심(0)
+            int y = (int) Math.round(outerY + (centerY - outerY) * (double) i / len);
+            for (int w = -RAMP_HALF; w <= RAMP_HALF; w++) {
+                int x = cx + dx * d + (dx == 0 ? w : 0);
+                int z = cz + dz * d + (dz == 0 ? w : 0);
+                for (int yy = y + 1; yy <= y + 6; yy++) {       // 머리 위를 비운다 (사람이 선다)
+                    Block b = world.getBlockAt(x, yy, z);
+                    Material m = b.getType();
+                    if (!m.isAir() && (NATURAL.contains(m) || foliage(m))) {
+                        b.setType(Material.AIR);
+                    }
+                }
+                Block top = world.getBlockAt(x, y, z);          // 딛는 자리를 놓는다
+                if (top.getType().isAir() || top.isLiquid()) {
+                    top.setType(grassOrStone(world, x, y, z));
+                }
+                sealBelow(world, x, y, z);                      // 계약 ① — 길 밑도 단단하다
+            }
+        }
     }
 
     /** 지형을 빚지 않고 <b>재기만</b> 한다 — 검수·조회용 (땅을 건드리지 않는다) */
@@ -330,25 +421,37 @@ final class TerrainForge {
      * <p>단(段)을 놓으면 그 가장자리에서 지형이 뚝 끊긴다. 산채는 경계 급단차 52.7%(최대 20칸)였고,
      * <b>북쪽에서는 아예 걸어 들어올 수 없었다</b> — 우리가 산비탈에 벼랑을 냈기 때문이다.
      *
-     * <p>안(조성 지면)에서 밖(자연 지면)으로 높이를 여러 칸에 걸쳐 잇는다: 낮은 데는 메우고 높은 데는
-     * 깎되, 거리에 비례해 자연 쪽으로 수렴한다. 좌표 해시로 흔들어 전이대가 자로 그은 것처럼 보이지 않게 한다.
+     * <p><b>v2 — 안쪽 높이를 상수로 잡으면 안 된다.</b> 구판은 안쪽 기준을 조성 지면 {@code cy} 로 못박았다.
+     * 그런데 봉우리를 세우면 <b>경계에서의 실제 지면은 cy 가 아니라 산비탈(cy+30 언저리)</b>이다.
+     * 전이대가 그 비탈을 cy 까지 깎아 내려 <b>33칸짜리 절개 벼랑</b>을 냈고, 산채는 사방이 막혔다
+     * (경계 급단차 32.3% · 진입 0방위 — 도적이 못 드나드는 산채가 됐다).
+     *
+     * <p>고친 것: 안쪽 높이를 <b>그 방위의 실제 지형에서 읽는다</b>(rInner 에서 표본). 그러면 전이대는
+     * "부지 → 자연"이 아니라 <b>"지형 → 지형"</b>을 잇는다. 봉우리를 세워도 그 발치가 자연으로 흘러내린다.
      *
      * <p><b>물은 건드리지 않는다</b> (계약 ③) — 젖은 열은 건너뛴다. 강을 메우면 강이 아니다.
+     *
+     * @param yHint 표본을 시작할 높이 (그 언저리의 지형을 찾는다)
      */
-    static void feather(World world, int cx, int cy, int cz, int rInner, int rOuter) {
+    static void feather(World world, int cx, int cz, int rInner, int rOuter, int yHint) {
         for (int x = cx - rOuter; x <= cx + rOuter; x++) {
             for (int z = cz - rOuter; z <= cz + rOuter; z++) {
                 double d = dist(x - cx, z - cz);
-                if (d < rInner || d > rOuter) {
+                if (d < rInner || d > rOuter || d < 1) {
                     continue;
                 }
-                int natural = naturalGround(world, x, z, cy + 60);
+                int natural = naturalGround(world, x, z, yHint + 70);
                 if (natural == WET_COLUMN) {
                     continue;   // 강·호수 — 메우지 않는다 (물은 흘러야 물이다)
                 }
-                double t = (d - rInner) / (double) Math.max(1, rOuter - rInner);   // 0 = 부지, 1 = 자연
+                // 그 방위의 **안쪽 지형**과 **바깥쪽 지형** — 상수가 아니라 땅에게 묻는다
+                double ux = (x - cx) / d;
+                double uz = (z - cz) / d;
+                int innerY = rayHeight(world, cx, cz, ux, uz, rInner, yHint);
+                int outerY = rayHeight(world, cx, cz, ux, uz, rOuter, yHint);
+                double t = (d - rInner) / (double) Math.max(1, rOuter - rInner);   // 0 = 안, 1 = 바깥
                 int jitter = Math.floorMod(x * 7 + z * 11, 3) - 1;
-                int target = (int) Math.round(cy * (1 - t) + natural * t) + jitter;
+                int target = (int) Math.round(innerY * (1 - t) + outerY * t) + jitter;
                 if (Math.abs(target - natural) <= 1) {
                     continue;   // 이미 자연과 같다 — 손대지 않는다
                 }
@@ -368,6 +471,22 @@ final class TerrainForge {
                 sealBelow(world, x, target, z);   // 메운 자리 밑도 단단해야 한다
             }
         }
+    }
+
+    /**
+     * 그 방위 그 거리의 지형 높이 — <b>땅에게 묻는다</b>. 한 열은 거짓말을 하므로(바위 하나·구덩이 하나)
+     * 세 점을 표본해 가운데 값을 쓴다.
+     */
+    private static int rayHeight(World world, int cx, int cz, double ux, double uz, int d, int yHint) {
+        int[] s = new int[3];
+        for (int i = 0; i < 3; i++) {
+            int dd = d + (i - 1) * 2;
+            int x = cx + (int) Math.round(ux * dd);
+            int z = cz + (int) Math.round(uz * dd);
+            s[i] = naturalTop(world, x, z, yHint + 70, yHint - 70);
+        }
+        java.util.Arrays.sort(s);
+        return s[1];   // 가운데 값
     }
 
     /** 메우는 자재는 자연을 따른다 — 사막에 잔디를 깔면 그것도 상처다 */
@@ -437,49 +556,155 @@ final class TerrainForge {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
+     * 조성 윤곽(profile) — <b>같은 "산"이라도 서는 집이 다르면 빚는 땅이 다르다</b>.
+     *
+     * <p>인게임이 가르쳐 준 것: 녹림 소채에 {@code terrain: 산} 이 적혀 있다고 <b>봉우리(+36)</b>를 세웠더니
+     * 사방이 33칸 벼랑이 되어 <b>진입 0방위</b>가 됐다. 도적이 못 드나드는 산채는 산채가 아니다.
+     *
+     * <p><b>산채는 봉우리가 아니다.</b> 산채는 산 중턱의 완만한 단(段)에 목책을 두른 집이고,
+     * 등록부도 그렇게 적고 있다 ("목책과 통나무 막사. 도적의 집은 언제든 버릴 수 있어야 한다" · tier: poor).
+     * 봉우리는 <b>도관의 것</b>이다 — "산문 → 천 계단 → 본전"을 적어 둔 집만이 봉우리를 요구한다.
+     *
+     * <p><b>지도가 관리한다</b> — 세력과 architecture 가 윤곽을 고른다.
+     */
+    enum Profile {
+        /** 봉우리 — 문파의 산. 오르는 길이 시험이다 (+36, 천 계단) */
+        봉우리,
+        /** 중턱단 — 산채·마을. <b>산을 세우지 않는다.</b> 있는 산의 중턱을 필요한 만큼만 고른다 */
+        중턱단,
+        /** 들 — 평지·분지·폐허. 발치를 메워 고른다 */
+        들,
+        /** 그대로 — 강·수향·섬·밀림. 물과 숲은 자연이 준 대로가 옳다 */
+        그대로
+    }
+
+    /** 봉우리를 요구하는 세력 — 구파일방·오대세가. <b>산문에서 본전까지 오르는 집</b>들이다 */
+    private static final Set<String> PEAK_FACTIONS = Set.of(
+            "hwasan", "gupailbang", "jongnam", "sorimsa", "mudang", "gonryun",
+            "jeomchang", "cheongseong", "ami", "haenam", "gaebang");
+
+    /**
+     * 이 자리를 어떤 윤곽으로 빚는가 — <b>등록부(terrain.yml)가 먼저, 없으면 지도에서 읽어 낸다</b>.
+     *
+     * <p>읽는 순서: ① terrain.yml 의 명시 지정 → ② 세력(녹림은 중턱단 · 구파·세가는 봉우리)
+     * → ③ architecture 서술("산문"·"본전"·"계단"이 적혀 있으면 봉우리다) → ④ 지형.
+     */
+    static Profile profile(WorldMap.Place place) {
+        Profile registered = shapeRegistry.get(place.id());
+        if (registered != null) {
+            return registered;
+        }
+        String terrain = place.terrain() == null ? "" : place.terrain();
+        String faction = place.faction() == null ? "" : place.faction().toLowerCase(Locale.ROOT);
+        String arch = place.note() == null ? "" : place.note();
+        boolean mountainous = "산".equals(terrain) || "험산".equals(terrain)
+                || "설산".equals(terrain) || "고원".equals(terrain);
+
+        if (!mountainous) {
+            return switch (terrain) {
+                case "평지", "평야", "분지", "초원", "폐허" -> Profile.들;
+                default -> Profile.그대로;   // 강·수향·섬·밀림 — 빚지 않는다
+            };
+        }
+        if ("noklim".equals(faction)) {
+            return Profile.중턱단;   // ★ 산채는 봉우리가 아니다 — 중턱에 걸터앉는다
+        }
+        if (PEAK_FACTIONS.contains(faction)) {
+            return Profile.봉우리;   // 도관 — 오르는 길이 시험이다
+        }
+        // 세력이 없거나 모르는 세력이면 **등록부의 말**을 듣는다 (지도가 관리한다)
+        if (arch.contains("산문") || arch.contains("본전") || arch.contains("계단")
+                || arch.contains("도관") || arch.contains("석성")) {
+            return Profile.봉우리;
+        }
+        return Profile.중턱단;   // 모르면 산을 세우지 않는다 — **덜 하는 쪽이 안전하다**
+    }
+
+    /**
      * 지형 빚기 — <b>기본 세계를 쓰되, 없으면 만든다</b>.
      *
-     * <p>등록부는 장소마다 지형을 요구한다(험산·산·평지·고원·분지·강). 바닐라 생성은 실지리를 모른다 —
-     * 화산파의 좌표에 <b>사막</b>을 놓았다. 좌표를 옮기면 지도(실지리 1:1)가 무너지고, 그냥 지으면
-     * 사막 한복판의 도관이 된다. <b>세 번째 답: 땅을 주문에 맞춘다.</b>
+     * <p>등록부는 장소마다 지형을 요구한다. 바닐라 생성은 실지리를 모른다 — 화산파의 좌표에 <b>사막</b>을 놓았다.
+     * 좌표를 옮기면 지도(실지리 1:1)가 무너지고, 그냥 지으면 사막 한복판의 도관이 된다.
+     * <b>세 번째 답: 땅을 주문에 맞춘다.</b> 다만 <b>주문이 봉우리를 요구할 때만</b> 봉우리를 세운다.
      *
      * <p>이미 맞는 땅은 건드리지 않는다 — 자연이 준 것이 언제나 더 낫다. 빚는 것은 <b>모자랄 때뿐</b>이다.
      *
-     * @return {peakX, peakZ, peakY} — 봉우리의 자리와 정상 (빚지 않았으면 자연 정상)
+     * @return {peakX, peakZ, peakY, massifRadius} — massifRadius 0 이면 산을 세우지 않았다
      */
     private static int[] shape(World world, WorldMap.Place place, int cx, int cy, int cz, int radius) {
-        String terrain = place.terrain() == null ? "" : place.terrain();
-        int natural = naturalTop(world, cx, cz, cy + 60, cy);
-        switch (terrain) {
-            case "험산", "산", "설산" -> {
-                // 봉우리의 중심은 부지 중심에서 **북으로 8칸** — 남쪽(진입·계단)으로 비탈이 흘러내려야
+        Profile p = profile(place);
+        int natural = naturalTop(world, cx, cz, cy + 70, cy - 40);
+        switch (p) {
+            case 봉우리 -> {
+                // 봉우리의 중심은 부지 중심에서 **북으로 8칸** — 남쪽(산문·계단)으로 비탈이 흘러내려야
                 //   걸어 오를 수 있다. 산을 마당 한가운데 세웠더니 문전이 파묻혀 분화구가 됐다.
                 int px = cx;
                 int pz = cz - 8;
-                int top = cy + LIFT_MOUNTAIN;
+                boolean plateau = "고원".equals(place.terrain());
+                int top = cy + (plateau ? LIFT_PLATEAU : LIFT_MOUNTAIN);
                 if (natural >= top - 2) {
-                    return new int[]{px, pz, natural};   // 자연이 이미 산을 줬다 — 손대지 않는다
+                    return new int[]{px, pz, natural, 0};   // 자연이 이미 산을 줬다 — 손대지 않는다
                 }
-                raiseMassif(world, px, top, pz, Math.max(radius + 16, 60), 18);
-                return new int[]{px, pz, top};
+                // 발치를 **넓게** 편다. 좁은 산은 벼랑이 된다 (경계 급단차 32.3% 의 절반은 여기서 왔다):
+                //   높이 36 을 반경 60 에 세우면 평균 물매가 1:1.7 이고, 볼록 비탈이라 발치가 더 가파르다.
+                //   반경을 높이의 **2.4배 이상**으로 잡아 물매를 1:2.4 로 눕힌다.
+                int massifR = Math.max(radius + 24, (int) ((top - cy) * 2.4) + 20);
+                raiseMassif(world, px, top, pz, massifR, plateau ? 26 : 18);
+                return new int[]{px, pz, top, massifR};
             }
-            case "고원" -> {
-                int px = cx;
-                int pz = cz - 8;
-                int top = cy + LIFT_PLATEAU;
-                if (natural >= top - 2) {
-                    return new int[]{px, pz, natural};
-                }
-                raiseMassif(world, px, top, pz, Math.max(radius + 22, 66), 26);   // 대지(臺地) — 정상이 넓다
-                return new int[]{px, pz, top};
+            case 중턱단 -> {
+                // ★ **산을 세우지 않는다.** 있는 산의 중턱을 필요한 만큼만 고른다 (기존 지형을 살린다).
+                //   부지(목책 안)만 다듬고, 그 바깥은 산이 산으로 남는다 — 산채는 산에 붙어 있어야 산채다.
+                benchTerrace(world, cx, cy, cz, radius);
+                return new int[]{cx, cz, cy, 0};
             }
-            case "평지", "평야", "분지", "초원", "폐허" -> {
+            case 들 -> {
                 levelField(world, cx, cy, cz, Math.max(radius + 8, 40));
-                return new int[]{cx, cz, cy};
+                return new int[]{cx, cz, cy, 0};
             }
             default -> {
-                // 강·수향·섬·밀림·물가 — 빚지 않는다. 물과 숲은 자연이 준 대로가 옳다
-                return new int[]{cx, cz, Math.max(natural, cy)};
+                // 강·수향·섬·밀림 — 빚지 않는다
+                return new int[]{cx, cz, Math.max(natural, cy), 0};
+            }
+        }
+    }
+
+    /**
+     * 중턱단 — <b>산에 걸터앉는다</b> (산채·산마을).
+     *
+     * <p>봉우리를 세우지도, 산을 밀어 평지로 만들지도 않는다. 부지 안만 조성 지면으로 고르되
+     * <b>가장자리는 자연 쪽으로 풀어 준다</b>(바깥으로 갈수록 원지형을 따라간다). 그래야
+     * 목책 밖이 여전히 산이고, 산길이 채문으로 올라온다.
+     */
+    private static void benchTerrace(World world, int cx, int cy, int cz, int radius) {
+        for (int x = cx - radius; x <= cx + radius; x++) {
+            for (int z = cz - radius; z <= cz + radius; z++) {
+                double d = dist(x - cx, z - cz);
+                if (d > radius) {
+                    continue;
+                }
+                int natural = naturalGround(world, x, z, cy + 70);
+                if (natural == WET_COLUMN) {
+                    continue;   // 산속의 못 — 메우지 않는다
+                }
+                // 안쪽(0.6R 까지)은 조성 지면, 바깥은 원지형으로 <b>선형 수렴</b>한다.
+                //   부지 안에서 이미 전이가 시작되므로 목책 밖에 벼랑이 생기지 않는다.
+                double inner = radius * 0.6;
+                double t = d <= inner ? 0 : (d - inner) / (radius - inner);
+                int jitter = Math.floorMod(x * 7 + z * 11, 3) - 1;
+                int target = (int) Math.round(cy * (1 - t) + natural * t) + (t > 0 ? jitter : 0);
+                for (int y = target + 1; y <= target + 18; y++) {   // 깎기
+                    Block b = world.getBlockAt(x, y, z);
+                    Material m = b.getType();
+                    if (!m.isAir() && (NATURAL.contains(m) || foliage(m))) {
+                        b.setType(Material.AIR);
+                    }
+                }
+                Block top = world.getBlockAt(x, target, z);   // 메우기
+                if (top.getType().isAir() || top.isLiquid()) {
+                    top.setType(grassOrStone(world, x, target, z));
+                }
+                sealBelow(world, x, target, z);
             }
         }
     }
@@ -1162,31 +1387,47 @@ final class TerrainForge {
 
     private static Map<String, CaveKind> caveRegistry = new LinkedHashMap<>();
 
-    /** {@code config/terrain.yml} 판독 — 없어도 돈다 (그때는 등록부에서 원형을 <b>읽어 낸다</b>) */
+    /** 조성 윤곽 등록부 — <b>지도가 관리한다</b>. 코드의 추론보다 이 표가 우선이다 */
+    private static Map<String, Profile> shapeRegistry = new LinkedHashMap<>();
+
+    /** {@code config/terrain.yml} 판독 — 없어도 돈다 (그때는 등록부에서 <b>읽어 낸다</b>) */
     @SuppressWarnings("unchecked")
     static void load(Path configDir) {
         caveRegistry = new LinkedHashMap<>();
+        shapeRegistry = new LinkedHashMap<>();
         Path file = configDir.resolve("terrain.yml");
         if (!Files.isRegularFile(file)) {
             return;
         }
         Map<String, Object> root = RulesConfig.load(file);
-        Object raw = root.get("caves");
-        if (!(raw instanceof Map)) {
-            return;
+
+        if (root.get("caves") instanceof Map<?, ?> caves) {
+            for (Map.Entry<?, ?> e : caves.entrySet()) {
+                if (!(e.getValue() instanceof Map)) {
+                    continue;
+                }
+                Object kind = ((Map<String, Object>) e.getValue()).get("archetype");
+                if (kind == null) {
+                    continue;
+                }
+                try {
+                    caveRegistry.put(String.valueOf(e.getKey()), CaveKind.valueOf(String.valueOf(kind).trim()));
+                } catch (IllegalArgumentException ignored) {
+                    // 모르는 원형 — 조용히 넘긴다 (등록부가 앞서 갈 수 있다)
+                }
+            }
         }
-        for (Map.Entry<String, Object> e : ((Map<String, Object>) raw).entrySet()) {
-            if (!(e.getValue() instanceof Map)) {
-                continue;
-            }
-            Object kind = ((Map<String, Object>) e.getValue()).get("archetype");
-            if (kind == null) {
-                continue;
-            }
-            try {
-                caveRegistry.put(e.getKey(), CaveKind.valueOf(String.valueOf(kind).trim()));
-            } catch (IllegalArgumentException ignored) {
-                // 모르는 원형 — 조용히 넘긴다 (등록부가 앞서 갈 수 있다)
+        if (root.get("shaping") instanceof Map<?, ?> shaping) {
+            for (Map.Entry<?, ?> e : shaping.entrySet()) {
+                Object v = e.getValue();
+                String name = v instanceof Map
+                        ? String.valueOf(((Map<String, Object>) v).get("profile"))
+                        : String.valueOf(v);
+                try {
+                    shapeRegistry.put(String.valueOf(e.getKey()), Profile.valueOf(name.trim()));
+                } catch (IllegalArgumentException ignored) {
+                    // 모르는 윤곽 — 조용히 넘긴다
+                }
             }
         }
     }

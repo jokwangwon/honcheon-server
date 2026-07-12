@@ -1,0 +1,754 @@
+# 무공 모션 등록부 (기계 판독용) — 「팩이 없어도 읽힌다」
+# 기준 문서: docs/design/skill_motion.md · resourcepack_design.yml (수묵 규약)
+# 엔진: SkillEngine (판독) · SkillListener (발행) · SkillHud (예산 게이트)
+#
+# ─── 두 층의 모션 ───
+#   ① 팩이 있으면 — 여기 적힌 바닐라 파티클의 **텍스처**가 수묵 획으로 다시 그려진다 (팩 담당의 몫)
+#   ② 팩이 없어도 — 여기 적힌 **개수·퍼짐·소리·궤적**만으로 무엇이 일어났는지 읽힌다 (이 파일의 몫)
+#   불가침: require-resource-pack=false — 팩을 거절해도 플레이는 된다. 그러므로 ②가 본체다.
+#
+# ─── 불변식 4개 ───
+#   ㄱ. 코드에 파티클·소리를 하드코딩하지 않는다 (등록제 규약). 이 파일이 정본이다.
+#   ㄴ. 보이는 것과 맞는 것이 같아야 한다 — trail 은 skill_mechanics.yml 의 히트박스 type 과 **같은 모양**이다.
+#      (호를 그렸는데 선으로 맞으면 그건 거짓말이다. motion_audit 이 그 거짓말을 잡는다.)
+#   ㄷ. 격의 사다리는 시각적으로 **단조 증가**한다 — rank 가 오르면 count·brightness·aura 가 반드시 커진다.
+#      (강해진 것이 눈에 덜 띄면 격은 장식이다.)
+#   ㄹ. 채색 금지 — 격은 색이 아니라 **밝기**로 갈린다 (수묵). 예외는 마공의 혈점(crimson_spore)뿐이며
+#      그 예외 자체가 정보다: "저것은 사람의 기가 아니다".
+
+# ══════════════════════════════════════════════════════════════════════
+#  파티클 예산 (performance.yml F-P1 을 무공 층으로 좁힌 값)
+# ══════════════════════════════════════════════════════════════════════
+# 【한 지점·한 틱 30개】가 이 설계의 못이다. 근거:
+#   · 시야당 예산 600/틱 (performance.yml particles.per_player_view_per_tick)
+#   · load_test.combat_cluster_size = 20 — 한 시야에 20인이 동시에 친다고 가정한다
+#   · 600 ÷ 20 = 30 ⇒ per_point_tick_max 30. 스무 명이 같은 틱에 때려도 시야 예산에 **정확히** 들어온다.
+#     (가장 비싼 한 지점 = 심검 타격 24 + 강조 1 + 대성공 4 = 29 ≤ 30)
+#   · 그 위의 세 예산(응집·궤적·타격)은 **풀**이다 — 프레임이 길다고 파티클이 비례해 늘면 안 된다:
+#       응집 풀 32 — 선딜 20틱짜리 오의급 초식도 응집에 32개까지만 쓴다 (2틱마다 발행, 풀이 마르면 멈춘다)
+#       궤적 풀 24 — 사거리 12m 선을 그려도 24개 (점당 개수 × 표본점이 이 값을 넘으면 점을 솎는다)
+#       타격 풀 48 — 다중 대상은 **나눠 쓴다** (광역 8인 = 6개씩). 아무리 나눠도 대상당 3개는 남긴다
+#                    (performance over_budget: "핵심 타격 표시만 유지" — 타격이 안 보이면 판정이 거짓말이 된다)
+#   · 한 수의 총합 = 32 + 24 + 1 + 29 = 86 ≤ per_cast_max 160 (여유는 무기 격돌·자기 손상 같은 겹침 몫)
+#   · 오의는 우선권(ultimate_arts world_weight.particle_priority) — 생략되지 않고 **깎인다**.
+#     전투당 1회(화경 이하)라 동시성이 낮다: 한 틱 48 × 동시 12인 = 576 < 600.
+budget:
+  per_point_tick_max: 30          # 한 지점·한 틱 상한 (응집·궤적·타격 각각) — 600 ÷ 군집 20인
+  per_cast_max: 160               # 한 시전(단일 대상)이 전 프레임에 걸쳐 쓰는 총량
+  telegraph_pool: 32              # 응집 총 예산 — 선딜이 길어도 여기서 끊는다
+  trail_pool: 24                  # 궤적 총 예산 — 사거리가 길어도 여기서 끊는다
+  impact_pool: 48                 # 타격 총 예산 — 대상 수로 나눈다 (다중 히트가 예산을 터뜨리지 못한다)
+  min_impact_per_target: 3        # 나눠도 이만큼은 남긴다 — 맞았다는 사실은 언제나 보여야 한다
+  ultimate_per_tick_max: 48       # 오의 — 우선권. 전투당 1회이므로 동시성이 낮다
+  ultimate_per_cast_max: 320
+  telegraph_step_ticks: 2         # 응집은 2틱마다 한 번 (선딜이 6틱이면 3회 = 상대가 셀 수 있다)
+  trail_max_points: 12            # 궤적 표본점 상한 — 점당 파티클은 아래 trajectories 가 정한다
+  ultimate_ring_points: 8         # 오의 응집 고리의 표본점
+
+# ══════════════════════════════════════════════════════════════════════
+#  파티클 팔레트 — 【팩 담당에게 넘기는 목록】
+# ══════════════════════════════════════════════════════════════════════
+# 우리가 쓰기로 한 바닐라 파티클은 이 13종뿐이다. 팩은 이 13장의 텍스처만 수묵으로 다시 그리면 된다.
+# (여기 없는 파티클을 코드가 쓰면 motion_audit 이 위반으로 잡는다 — 팩이 못 따라간 획은 없어야 한다)
+palette:
+  smoke:          { ink: 담묵, 뜻: "먹의 번짐 — 외공·기 소산·다운캐스트. '저 자의 내력이 다했다'" }
+  crit:           { ink: 농묵, 뜻: "먹점 — 타격의 착지. 발경의 알갱이" }
+  sweep_attack:   { ink: 획,   뜻: "한 획 — 검·도의 벤 자리 (호 궤적의 마침표)" }
+  cloud:          { ink: 비백, 뜻: "마른 붓 자국 — 헛손질·보법 잔상·돌진의 꼬리" }
+  electric_spark: { ink: 세필, 뜻: "날에 서린 서슬 — 검기" }
+  end_rod:        { ink: 백호, 뜻: "흰 획 — 강기·호신강기·어검·심검·오의. 격의 상단" }
+  enchanted_hit:  { ink: 점획, 뜻: "찌름의 점 — 창·봉·암기·화살의 직선" }
+  explosion:      { ink: 파묵, 뜻: "터진 먹 — 강기의 관통·오의의 파열 (개당 1개만)" }
+  flash:          { ink: 여백, 뜻: "빈 자리 — 오의 개시의 한 순간 (개당 1개만)" }
+  item:           { ink: 파편, 뜻: "부러진 병기의 조각 (아이템 데이터 필요)" }
+  crimson_spore:  { ink: 혈점, 뜻: "【채색 예외】 마공의 붉은 점 — 흡성·약탈. 예외가 곧 정보다" }
+  soul:           { ink: 그림자, 뜻: "은신·암살 — 귀식술·무영비수. 기가 아니라 없음" }
+  ash:            { ink: 재,   뜻: "독·취기 — 칠보독장·취팔선보" }
+
+# ══════════════════════════════════════════════════════════════════════
+#  격(格)의 사다리 — 팩 없이 읽히는 첫 번째 축
+# ══════════════════════════════════════════════════════════════════════
+# 【불변식 ㄷ】 rank 가 오르면 brightness · charge.count · impact.count · aura.count 가 **전부** 커진다.
+# 상대가 알아야 하는 것은 하나다: "지금 저것이 나보다 위인가 아래인가."
+#   숫자를 못 세어도 밝기와 밀도로 안다 — 외공(먹점 4개)과 강기(흰 획 18개)는 착각할 수 없다.
+grades:
+  외공기:
+    rank: 0
+    brightness: 0                 # 검산용 — 시각 등급 (단조 증가해야 한다)
+    color: GRAY                   # 액션바 색 (ChatColor 이름 — 무채색 계열이 원칙)
+    charge:  { particle: smoke, count: 0, spread: 0.00, extra: 0.00 }   # 응집이 없다 (예고할 격이 없다)
+    aura:    { particle: smoke, count: 0, spread: 0.00, extra: 0.00 }   # 두름이 없다
+    impact:  { particle: crit,  count: 4, spread: 0.15, extra: 0.05 }
+    accent:  { particle: null,  count: 0 }
+    trail:   { particle: cloud, per_point: 1 }
+    sounds:
+      charge: []
+      arm:    []
+      impact: [{ key: "entity.player.attack.strong", volume: 0.8, pitch: 1.0 }]
+
+  발경:
+    rank: 1
+    brightness: 1
+    color: WHITE
+    charge:  { particle: crit, count: 3, spread: 0.10, extra: 0.01 }
+    aura:    { particle: crit, count: 1, spread: 0.08, extra: 0.00 }    # 태세 잔광 — 켜져 있다는 사실이 정보다
+    impact:  { particle: crit, count: 10, spread: 0.25, extra: 0.15 }
+    accent:  { particle: sweep_attack, count: 1 }                        # 짧은 충격파 — 기가 몸 안에서 터진다
+    trail:   { particle: crit, per_point: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.6, pitch: 1.4 }]
+      arm:    [{ key: "item.trident.riptide_1", volume: 0.8, pitch: 1.5 }]
+      impact: [{ key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.9 },
+               { key: "block.anvil.land", volume: 0.35, pitch: 1.8 }]
+
+  검기:
+    rank: 2
+    brightness: 2
+    color: GRAY                   # 무채 — 밝기(count)가 격을 가른다. 색으로 가르지 않는다
+    charge:  { particle: electric_spark, count: 4, spread: 0.12, extra: 0.01 }
+    aura:    { particle: electric_spark, count: 3, spread: 0.10, extra: 0.00 }
+    impact:  { particle: electric_spark, count: 14, spread: 0.30, extra: 0.05 }
+    accent:  { particle: end_rod, count: 5 }                             # 날에 서린 기운이 살을 가른다
+    trail:   { particle: electric_spark, per_point: 2 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.4 }]
+      arm:    [{ key: "item.trident.riptide_1", volume: 0.8, pitch: 1.2 }]
+      impact: [{ key: "item.trident.throw", volume: 0.8, pitch: 1.5 }]
+
+  강기:
+    rank: 3
+    brightness: 3
+    color: WHITE
+    charge:  { particle: end_rod, count: 5, spread: 0.14, extra: 0.02 }
+    aura:    { particle: end_rod, count: 5, spread: 0.12, extra: 0.00 }
+    impact:  { particle: end_rod, count: 18, spread: 0.35, extra: 0.06 }
+    accent:  { particle: explosion, count: 1 }                           # 터지는 것이 아니라 뚫는다
+    trail:   { particle: end_rod, per_point: 2 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.7, pitch: 0.6 }]
+      arm:    [{ key: "block.conduit.activate", volume: 0.8, pitch: 0.7 }]
+      impact: [{ key: "block.conduit.activate", volume: 0.9, pitch: 1.2 }]
+
+  어검:
+    rank: 4
+    brightness: 4
+    color: WHITE
+    charge:  { particle: end_rod, count: 6, spread: 0.16, extra: 0.02 }
+    aura:    { particle: end_rod, count: 7, spread: 0.14, extra: 0.01 }
+    impact:  { particle: end_rod, count: 22, spread: 0.40, extra: 0.08 }
+    accent:  { particle: explosion, count: 1 }
+    trail:   { particle: end_rod, per_point: 2 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.8, pitch: 0.5 }]
+      arm:    [{ key: "block.conduit.activate", volume: 0.9, pitch: 0.6 }]
+      impact: [{ key: "block.beacon.activate", volume: 0.9, pitch: 1.4 }]
+
+  심검:
+    rank: 5
+    brightness: 5
+    color: WHITE
+    charge:  { particle: end_rod, count: 7, spread: 0.18, extra: 0.02 }
+    aura:    { particle: end_rod, count: 9, spread: 0.16, extra: 0.01 }
+    impact:  { particle: end_rod, count: 24, spread: 0.45, extra: 0.08 }   # 사다리의 꼭대기 = 한 지점 예산의 상한(30)에 닿는다
+    accent:  { particle: flash, count: 1 }                               # 형(形)이 사라진다 — 빈 자리만 남는다
+    trail:   { particle: end_rod, per_point: 2 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.5 }]
+      arm:    [{ key: "block.conduit.activate", volume: 1.0, pitch: 0.5 }]
+      impact: [{ key: "block.beacon.activate", volume: 1.0, pitch: 1.7 }]
+
+# ══════════════════════════════════════════════════════════════════════
+#  형태(形) — qi_manifestation.yml forms 의 6개 잎 전수 (두름 · 쏨 · 두름_몸 · 부림)
+# ══════════════════════════════════════════════════════════════════════
+# 팩 없이 읽히는 두 번째 축: **응집(선딜) vs 발출(쏨) vs 두름(근접타)** 이 서로 달라야 한다.
+#   응집 — 기가 손끝으로 **모인다** (제자리, 2틱마다, 소리 있음) → 보고 물러설 수 있다
+#   두름 — 잔광이 **머문다** (라운드마다, 손끝, 소리 없음) → 켜져 있다는 사실만 알린다
+#   발출 — 기가 **날아간다** (직선 궤적 8m, 큰 소리) → 몸을 빼는 것 말고는 답이 없다
+forms:
+  검기_두름:
+    kind: 두름
+    grade: 검기
+    aura_from_grade: true         # 잔광 = grades.검기.aura (한 곳에서만 정의한다)
+    on_sustain_sound: []          # 두름은 소리로 알리지 않는다 — 잔광만이 정보다 (소리는 응집의 몫)
+
+  검강_두름:
+    kind: 두름
+    grade: 강기
+    aura_from_grade: true
+    on_sustain_sound: []
+
+  검기_참격:
+    kind: 쏨
+    grade: 검기
+    trail: 선                     # skill_mechanics hitbox 와 같은 모양 (qi_manifestation forms.쏨.hitbox: 선)
+    length: 8.0
+    width: 1.5
+    frames: [8, 2, 12]            # 코드 폴백(DEFAULT_SHOT_FRAMES)을 등록부로 끌어올린다
+    cooldown_ticks: 40
+    charge:  { particle: electric_spark, count: 5, spread: 0.14, extra: 0.02 }
+    beam:    { particle: electric_spark, per_point: 2 }
+    burst:   { particle: end_rod, count: 8, spread: 0.25, extra: 0.05 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.8, pitch: 1.6 }]
+      release: [{ key: "item.trident.throw", volume: 1.0, pitch: 0.8 }]
+
+  강기_포:
+    kind: 쏨
+    grade: 강기
+    trail: 선
+    length: 8.0
+    width: 1.5
+    frames: [8, 2, 12]
+    cooldown_ticks: 40
+    charge:  { particle: end_rod, count: 6, spread: 0.16, extra: 0.02 }
+    beam:    { particle: end_rod, per_point: 2 }
+    burst:   { particle: explosion, count: 1, spread: 0.0, extra: 0.0 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.5 }]
+      release: [{ key: "block.conduit.activate", volume: 1.0, pitch: 0.7 },
+                { key: "item.trident.throw", volume: 0.8, pitch: 0.6 }]
+
+  호신강기:
+    kind: 두름_몸
+    grade: 강기
+    # 【읽힘 요건】 "호신강기가 켜져 있다"를 상대가 보고 판단할 수 있어야 한다.
+    #   손끝 잔광(두름)과 달리 **몸을 두르는 고리**다 — 실루엣이 다르다. 그것이 형태의 차이다.
+    ring: { particle: end_rod, points: 6, radius: 0.9, per_point: 1, height: 1.0 }
+    aura: { particle: end_rod, count: 6, spread: 0.45, extra: 0.00 }
+    sounds:
+      deploy: [{ key: "block.conduit.activate", volume: 0.9, pitch: 0.6 }]
+
+  이기어검:
+    kind: 부림
+    grade: 어검
+    # MVT 미배선 (P5 — 디스플레이 엔티티). 모션만 먼저 등록한다: 등록되지 않은 것은 배선될 수 없다.
+    trail: 시
+    length: 16.0
+    charge:  { particle: end_rod, count: 6, spread: 0.20, extra: 0.02 }
+    beam:    { particle: end_rod, per_point: 1 }
+    burst:   { particle: end_rod, count: 12, spread: 0.30, extra: 0.05 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.4 }]
+      release: [{ key: "item.trident.return", volume: 1.0, pitch: 0.8 }]
+    mc: "VFX 엔티티 풀 120 · 수명 60틱 (performance.yml vfx_entities) — 파티클 궤적은 폴백"
+
+# ══════════════════════════════════════════════════════════════════════
+#  궤적(軌跡) — skill_mechanics.yml 의 히트박스 type 과 1:1
+# ══════════════════════════════════════════════════════════════════════
+# 【불변식 ㄴ】 여기 키 = hitbox_types [호, 선, 원, 시, 돌, 진] + 비타격형 [태세, 가드태세, 시전]
+#   보이는 모양이 맞는 모양이다. 호는 부채꼴로 그리고 부채꼴로 맞는다.
+#   points = 표본점 수 (budget.trail_max_points 이하) · phase = 어느 프레임에 그리는가
+trajectories:
+  호:
+    shape: arc                    # 정면 부채꼴 — angle 을 points 로 나눠 훑는다
+    points: 7
+    phase: active                 # 판정 프레임 — 벤 자리가 남는다
+    radius_ratio: 0.8             # 사거리의 80% 반경에 획을 놓는다 (닿는 자리)
+    accent_at: mid                # sweep_attack 은 호의 중앙 1개
+  선:
+    shape: line                   # 시선 방향 직선 — 찌르기·참격·발출
+    points: 8
+    phase: active
+    step: 1.0                     # 1m 간격 표본
+    accent_at: end
+  원:
+    shape: circle                 # 사방 — 매화검법 4타·태극검·매화만개
+    points: 12
+    phase: active
+    radius_ratio: 1.0
+    accent_at: center
+  시:
+    shape: shot                   # 투사체 — 화살·비수. 궤적은 발사점 → 표적선
+    points: 10
+    phase: active
+    step: 2.0                     # 사거리가 길다 (활 40m) — 2m 간격으로 성기게
+    accent_at: end
+  돌:
+    shape: dash                   # 돌진·보법 — 지나온 자리에 잔상이 남는다 (뒤로 그린다)
+    points: 6
+    phase: active
+    step: 0.8
+    accent_at: start
+  진:
+    shape: ring                   # 합격진 — 진주를 중심으로 한 고리 (radius = 진의 반경)
+    points: 12
+    phase: startup                # 진 전개는 선딜에 보인다 (20틱 — 성원이 자리를 잡을 시간)
+    radius_ratio: 1.0
+    accent_at: center
+  태세:
+    shape: aura                   # 몸에 머문다 — 금강부동·귀식술
+    points: 4
+    phase: active
+    radius_ratio: 0.5
+    accent_at: center
+  가드태세:
+    shape: aura                   # 태극권·정심검결 — 패링 창이 열린 동안 몸 앞에 머문다
+    points: 4
+    phase: active
+    radius_ratio: 0.6
+    accent_at: center
+  시전:
+    shape: aura                   # 활인침법 — 비전투 시전 (표적에 머문다)
+    points: 4
+    phase: startup
+    radius_ratio: 0.4
+    accent_at: center
+
+# ══════════════════════════════════════════════════════════════════════
+#  무기 계열별 모션 — 검은 벤다, 창은 찌른다
+# ══════════════════════════════════════════════════════════════════════
+# 같은 '호'라도 검의 호와 봉의 호는 다르다: 검은 날이 지나간 자리(sweep_attack)를 남기고,
+# 봉은 바람을 밀어낸다(cloud). 같은 '선'이라도 창은 점으로 찌르고(enchanted_hit) 검은 획으로 벤다.
+# 키 = skills.yml weapon_classes.registry + 무관 + 짐승(NPC)
+weapon_styles:
+  검:      { verb: 벤다,   arc: sweep_attack, thrust: sweep_attack,   trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.1 } }
+  도:      { verb: 내려벤다, arc: sweep_attack, thrust: sweep_attack, trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.9 } }
+  창:      { verb: 찌른다, arc: cloud,        thrust: enchanted_hit, trail: enchanted_hit, swing: { key: "item.trident.throw", volume: 0.6, pitch: 1.3 } }
+  봉:      { verb: 후려친다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 0.8 } }
+  단검:    { verb: 찌른다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.6 } }
+  암기:    { verb: 던진다, arc: enchanted_hit, thrust: enchanted_hit, trail: enchanted_hit, swing: { key: "entity.arrow.shoot", volume: 0.6, pitch: 1.5 } }
+  활:      { verb: 쏜다,   arc: enchanted_hit, thrust: enchanted_hit, trail: enchanted_hit, swing: { key: "entity.arrow.shoot", volume: 0.8, pitch: 1.0 } }
+  맨손:    { verb: 지른다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.player.attack.knockback", volume: 0.6, pitch: 1.2 } }
+  권갑:    { verb: 지른다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.player.attack.knockback", volume: 0.7, pitch: 1.0 } }
+  겸:      { verb: 걸어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+  월아산:  { verb: 휘두른다, arc: sweep_attack, thrust: enchanted_hit, trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.7 } }
+  구:      { verb: 찍는다, arc: cloud,        thrust: enchanted_hit, trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.7, pitch: 0.9 } }
+  중병기:  { verb: 짓뭉갠다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.6 } }
+  부:      { verb: 찍어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.9, pitch: 0.8 } }
+  무관:    { verb: 움직인다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.4 } }
+  짐승:    { verb: 덮친다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.wolf.growl", volume: 0.8, pitch: 0.9 } }
+
+# ══════════════════════════════════════════════════════════════════════
+#  무공·초식별 모션 — skill_mechanics.yml skills 33종 전수
+# ══════════════════════════════════════════════════════════════════════
+# 【커버리지】 skill_mechanics.yml 의 모든 무공, 그 모든 초식(콤보 칸)이 여기 한 줄씩 있어야 한다.
+#   steps[i].trail 은 skill_mechanics combo[i].type (또는 단발형의 type) 과 **같아야 한다** (불변식 ㄴ).
+# 초식이 서로 달라 보이는 수단 3개 (파티클 종류를 바꾸는 것은 마지막 수단이다 — 팔레트가 13장뿐이므로):
+#   ① 궤적의 모양 (호/선/원/돌/시) — 히트박스가 이미 다르다. 그것을 그대로 그린다.
+#   ② 소리의 음높이(pitch) — 같은 검이라도 쾌검(음풍검 1.6)과 중검(제왕검형 0.5)은 귀로 갈린다.
+#   ③ 강조(accent) — 마무리 타(finisher)에만 붙는 한 개의 획. "이번 것이 무겁다"는 신호.
+skills:
+  # ── 민간·낭인 ──
+  taejo_jangkwon:
+    name: "태조장권"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.3 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.4 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.9 } }   # 붕권 — 3타는 무겁다
+
+  cheolsan_go:
+    name: "철산고"
+    style: 맨손
+    steps:
+      - { trail: 돌, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.7 } }
+
+  yeopho_gungsul:
+    name: "엽호궁술"
+    style: 활
+    steps:
+      - { trail: 시, count: 1, sound: { key: "entity.arrow.shoot", volume: 0.9, pitch: 1.0 } }
+    charge_hint: "시위를 당기는 14틱 — 응집이 아니라 '조준'이다 (격이 없어도 텔레그래프가 있다)"
+
+  ohodanmun_chang:
+    name: "오호단문창"
+    style: 창
+    steps:
+      - { trail: 선, count: 2, sound: { key: "item.trident.throw", volume: 0.6, pitch: 1.4 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "item.trident.throw", volume: 0.8, pitch: 1.1 } }
+
+  hwalin_chimbeop:
+    name: "활인침법"
+    style: 무관
+    steps:
+      - { trail: 시전, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.5, pitch: 1.8 } }
+
+  # ── 하오문·뒷골목 ──
+  biyeon_dangeom:
+    name: "비연단검술"
+    style: 단검
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.7 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.8 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.9 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.7, pitch: 1.6 } }
+
+  gwisik_sul:
+    name: "귀식술"
+    style: 무관
+    steps:
+      - { trail: 태세, particle: soul, count: 3, sound: { key: "block.sculk_sensor.clicking_stop", volume: 0.5, pitch: 0.8 } }
+
+  # ── 화산파 ──
+  yukhap_geom:
+    name: "육합검"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.1 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+      - { trail: 호, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.9 } }   # 3타 = 발경 라이더
+
+  maehwa_bo:
+    name: "매화보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.4, pitch: 1.8 } }   # 잔상
+
+  maehwa_geombeop:
+    name: "매화검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.3 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 원, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.8 } }   # 광역 마무리 — 매화만개의 선행
+
+  maehwa_geomjin:
+    name: "매화검진"
+    style: 검
+    steps:
+      - { trail: 진, count: 2, sound: { key: "block.beacon.activate", volume: 0.7, pitch: 1.5 } }
+
+  # ── 소림사 ──
+  nahan_kwon:
+    name: "나한권"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.0 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.8, pitch: 0.9 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.7 } }
+
+  geumgang_budong:
+    name: "금강부동신법"
+    style: 무관
+    steps:
+      - { trail: 태세, count: 4, sound: { key: "block.anvil.land", volume: 0.7, pitch: 0.5 } }   # 부동 — 쇠가 땅에 박히는 소리
+
+  # ── 무당파 ──
+  taegeuk_kwon:
+    name: "태극권"
+    style: 맨손
+    steps:
+      - { trail: 가드태세, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.5, pitch: 0.9 } }
+
+  taegeuk_geom:
+    name: "태극검"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }   # 원을 그리는 반격 검
+
+  jewoon_jong:
+    name: "제운종"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.phantom.flap", volume: 0.5, pitch: 1.6 } }   # 수직 이동 — 무당의 지문
+
+  # ── 남궁세가 ──
+  changgung_geom:
+    name: "창궁무애검"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.8 } }
+
+  namgung_jehwang_geom:
+    name: "제왕검형"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.5 } }   # 검로 12틱 텔레그래프 — 가장 낮은 음
+
+  # ── 사천당가 ──
+  dangmun_bisu:
+    name: "당문비수술"
+    style: 암기
+    steps:
+      - { trail: 시, count: 2, sound: { key: "entity.arrow.shoot", volume: 0.6, pitch: 1.7 } }   # 쌍비수
+
+  chilbo_dokjang:
+    name: "칠보독장"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: ash, count: 3, finisher: true, sound: { key: "entity.witch.throw", volume: 0.7, pitch: 0.9 } }   # 독 — 재가 흩날린다
+
+  manchon_hwau:
+    name: "만천화우"
+    style: 암기
+    steps:
+      - { trail: 시, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.arrow.shoot", volume: 1.0, pitch: 1.2 } }   # 손이 하늘로 — 16틱
+
+  # ── 개방 ──
+  chwipalseon_bo:
+    name: "취팔선보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: ash, count: 3, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.1 } }   # 취보 — 비틀거리는 잔상
+
+  tagu_bongbeop:
+    name: "타구봉법"
+    style: 봉
+    steps:
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 0.9 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.8 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.6 } }
+
+  # ── 관군 ──
+  chamma_dobeop:
+    name: "참마도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.7 } }   # 내려베기 — 갑주를 가른다
+
+  # ── 녹림·사파 ──
+  sando_sippallo:
+    name: "산도십팔로"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.1 } }
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.9 } }
+
+  heuksal_dobeop:
+    name: "흑살도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, particle: soul, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.8 } }   # 파격 — 가드·패링을 관통한다 (그림자가 낀다)
+
+  eumpung_geom:
+    name: "음풍검"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.8 } }   # 쾌검 — 가장 높은 음
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.9 } }
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.5 } }
+
+  # ── 살막 ──
+  muyeong_bisu:
+    name: "무영비수"
+    style: 단검
+    steps:
+      - { trail: 선, particle: soul, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.6, pitch: 1.4 } }   # 일격 이탈 — 소리가 작다 (은신의 값)
+
+  # ── 혈교 ──
+  hyeolsu_magong:
+    name: "혈수마공"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: crimson_spore, count: 4, finisher: true,
+          sound: { key: "entity.wither.shoot", volume: 0.7, pitch: 0.6 } }   # 【채색 예외】 흡성 — 붉은 점이 곧 경고다
+
+  # ── 잡기 ──
+  geumna_su:
+    name: "금나수"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.8 } }   # 관절기 — 파격
+
+  # ── 심법 태세 (정본은 simbeop.yml — 여기는 모션만) ──
+  jeongsim_geomgyeol:
+    name: "정심검결"
+    style: 검
+    steps:
+      - { trail: 가드태세, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.6, pitch: 1.2 } }
+
+  # ── NPC 전용 표본 (대칭 원칙 — NPC 도 같은 등록부를 탄다) ──
+  galho_sando:
+    name: "갈호의 산도"
+    style: 도
+    steps:
+      - { trail: 돌, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.8 } }   # 자세 낮춤 + 경로 표시 10틱
+
+  beast_pounce:
+    name: "덮치기"
+    style: 짐승
+    steps:
+      - { trail: 돌, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.wolf.growl", volume: 1.0, pitch: 0.8 } }   # 짐승도 예고한다 — 몸을 낮추는 8틱
+
+# ══════════════════════════════════════════════════════════════════════
+#  오의(奧義) — ultimate_arts.yml legacy_arts 전수. 한 번 보면 잊지 못할 것
+# ══════════════════════════════════════════════════════════════════════
+# 【읽힘 요건】 오의는 격 사다리의 어느 칸과도 헷갈리면 안 된다. 구분 수단 3개:
+#   ① 응집 고리 — 사방에서 몸으로 **빨려드는** 고리 (다른 어떤 모션도 고리를 쓰지 않는다)
+#   ② 개시 섬광 — flash 1개 + 뇌격음 (팔레트에서 flash 를 쓰는 것은 오의와 심검뿐이다)
+#   ③ 이름 — 32m 안의 모든 눈에 오의명 타이틀 (world_weight: 시전 목격 = 강도 3 소문)
+# 예산: emitPriority — 생략되지 않고 깎인다. ultimate_per_tick_max 48.
+ultimates:
+  maehwa_mangae:
+    name: "매화만개"
+    trail: 원                     # ultimate_arts type.hitbox 와 같아야 한다
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.33, extra: 0.08 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.5 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.3 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.6 }]
+
+  taegeuk_hyegeom:
+    name: "태극혜검"
+    trail: 가드태세               # 반격 오의 — 벨 것을 찾지 않는다. 기다린다 (hitbox 가 없다)
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 20, spread_ratio: 0.25, extra: 0.05 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.7 }]
+      release: [{ key: "item.trident.return", volume: 1.0, pitch: 1.2 }]
+      hit: [{ key: "item.trident.return", volume: 1.0, pitch: 1.2 }]
+
+  jewang_gunrim:
+    name: "제왕검형·군림"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: explosion, core_count: 1 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.25, extra: 0.10 }
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.6 }]
+      hit: [{ key: "block.anvil.destroy", volume: 1.0, pitch: 0.7 }]
+
+  hyeolhae_malli:
+    name: "혈해만리"
+    trail: 원
+    charge: { particle: crimson_spore, ring_points: 8, per_point: 2, core: crimson_spore, core_count: 6 }
+    burst:  { particle: crimson_spore, count: 36, spread_ratio: 0.33, extra: 0.04 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "entity.wither.spawn", volume: 0.8, pitch: 1.4 }]
+      release: [{ key: "entity.wither.shoot", volume: 1.0, pitch: 0.5 }]
+      hit: [{ key: "entity.generic.drink", volume: 0.8, pitch: 0.5 }]   # 약탈 — 마시는 소리
+
+# ══════════════════════════════════════════════════════════════════════
+#  사건(事件) — 격 밖의 읽힘. 무기 파괴·격돌·패링·고갈
+# ══════════════════════════════════════════════════════════════════════
+# 이 다섯은 격이 아니지만 **판단의 재료**다. 상대가 보고 결정을 바꿀 수 있어야 한다:
+#   "저 자의 검에 금이 갔다" → 한 합 더 밀어붙인다
+#   "저 자의 기가 흩어졌다" → 지금 들어간다
+events:
+  헛손질:
+    particle: cloud
+    count: 3
+    spread: 0.10
+    extra: 0.01
+    sounds: [{ key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.3 }]
+
+  다운캐스트:                     # 내력이 모자라 맨 기술로 떨어졌다 — 【빈약함이 곧 정보다】
+    particle: smoke
+    count: 4
+    spread: 0.10
+    extra: 0.01
+    sounds: [{ key: "block.fire.extinguish", volume: 0.5, pitch: 1.6 }]
+
+  격_소산:                        # 두름 유지비를 못 냈다 / 태세를 거뒀다
+    particle: smoke
+    count: 5
+    spread: 0.12
+    extra: 0.01
+    sounds: [{ key: "block.fire.extinguish", volume: 0.5, pitch: 1.6 }]
+
+  발출_불발:                      # 쏠 것이 없다 (발출엔 다운캐스트가 없다)
+    particle: smoke
+    count: 4
+    spread: 0.10
+    extra: 0.01
+    sounds: [{ key: "entity.player.attack.nodamage", volume: 0.6, pitch: 0.7 }]
+
+  호신강기_무효:                  # 하위·동격을 튕겨 냈다 (상쇄 소모는 냈다 — 공짜가 아니다)
+    particle: end_rod
+    count: 10
+    spread: 0.35
+    extra: 0.03
+    sounds: [{ key: "block.conduit.deactivate", volume: 0.8, pitch: 1.6 }]
+
+  호신강기_관통:                  # 상위 격이 강기를 갈랐다
+    particle: end_rod
+    count: 16
+    spread: 0.35
+    extra: 0.03
+    sounds: [{ key: "block.anvil.land", volume: 0.8, pitch: 0.7 }]
+
+  호신강기_붕괴:                  # 상쇄할 내력이 없다 — 다음 타격은 맨몸으로 받는다
+    particle: smoke
+    count: 8
+    spread: 0.20
+    extra: 0.02
+    sounds: [{ key: "block.glass.break", volume: 0.7, pitch: 0.8 }]
+
+  무기_균열:                      # 격돌 누적 (breaks_at 3합) — "날에 금이 간다"
+    particle: crit
+    count: 8
+    spread: 0.20
+    extra: 0.05
+    sounds: [{ key: "block.anvil.land", volume: 0.5, pitch: 1.9 }]
+
+  무기_파괴:                      # 3합째 — 그 뒤는 맨손이다
+    particle: item                # 아이템 데이터 필요 (부러진 병기 그 자체가 파편이 된다)
+    count: 20
+    spread: 0.30
+    extra: 0.08
+    sounds: [{ key: "entity.item.break", volume: 1.0, pitch: 0.8 },
+             { key: "block.anvil.destroy", volume: 0.6, pitch: 1.4 }]
+
+  무기_절단:                      # 2격 초과 — 한 합에 잘린다 (범철 vs 검강)
+    particle: item
+    count: 24
+    spread: 0.35
+    extra: 0.10
+    sounds: [{ key: "entity.item.break", volume: 1.0, pitch: 0.6 },
+             { key: "block.anvil.destroy", volume: 0.8, pitch: 1.0 }]
+
+  자기_손상:                      # 제 격을 못 견디는 쇠 — "검이 운다" (self_damage_every 3)
+    particle: crit
+    count: 6
+    spread: 0.12
+    extra: 0.02
+    sounds: [{ key: "block.anvil.land", volume: 0.4, pitch: 1.9 }]
+
+  패링_성공:                      # 태극권·정심검결의 창 (defense_states.패링)
+    particle: sweep_attack
+    count: 1
+    spread: 0.0
+    extra: 0.0
+    sounds: [{ key: "item.shield.block", volume: 0.9, pitch: 1.4 },
+             { key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.8 }]
+
+  반격_오의:                      # 태극혜검 — 받은 것을 그대로 돌려준다
+    particle: end_rod
+    count: 20
+    spread: 0.40
+    extra: 0.05
+    sounds: [{ key: "item.trident.return", volume: 1.0, pitch: 1.2 }]
+
+  대성공:                         # 급소 (judgment critical_success) — 격과 무관하게 타격 위에 겹쳐 붙는다
+    particle: crit
+    count: 4                      # 심검 타격(24) + 강조(1) + 이것(4) = 29 ≤ per_point_tick_max 30
+    spread: 0.30
+    extra: 0.20
+    sounds: [{ key: "entity.player.attack.crit", volume: 0.9, pitch: 1.0 }]
+
+  흐름_충전:                      # 발동권을 얻었다 — 오의가 열린다 (읽어낸 순간)
+    particle: end_rod
+    count: 12
+    spread: 0.40
+    extra: 0.02
+    sounds: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 1.6 }]
+
+  운기조식:                       # /혼천 운기 — 앉아서 한 구간
+    particle: end_rod
+    count: 8
+    spread: 0.30
+    extra: 0.01
+    sounds: [{ key: "block.beacon.ambient", volume: 0.6, pitch: 1.2 }]
+
+  흡성:                           # 마공 — 남의 것을 빼앗는다 (혈수마공 on_hit · 혈해만리)
+    particle: crimson_spore
+    count: 12
+    spread: 0.40
+    extra: 0.02
+    sounds: [{ key: "entity.generic.drink", volume: 0.7, pitch: 0.6 }]

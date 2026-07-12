@@ -591,6 +591,12 @@ public final class HuntingGrounds implements Listener {
      * 등록부의 한 줄이 인게임의 한 마리가 되는 자리.
      * 내구 → 최대 체력 · 무기 위력(+무공 위력) → 공격력 · 격 → 명패 색 · 전의 → PDC.
      */
+    /** 등록부 id 로 부른다 — 연무장의 몹 시험 (없으면 null) */
+    public LivingEntity spawnById(String foeId, Location at) {
+        Foe foe = FOES.get(foeId);
+        return foe == null ? null : spawn(foe, at, null);
+    }
+
     public LivingEntity spawn(Foe foe, Location at, String zoneName) {
         World world = at.getWorld();
         if (world == null) {
@@ -1013,7 +1019,8 @@ public final class HuntingGrounds implements Listener {
         // 세계 다리 — **벤 자의 이름이 강호에 돈다** (도적 토벌 → 치안·소문·세력 주목).
         // 지금까지 마크에서 벤 도적은 봇의 장부에 한 줄도 남지 않았다: 세계가 둘로 쪼개져 있었다.
         org.bukkit.entity.Player slayer = event.getEntity().getKiller();
-        if (slayer != null && !"비무상대".equals(foe.role())) {
+        if (slayer != null && !"비무상대".equals(foe.role())
+                && !Dojang.suppressWorldEvents(event.getEntity().getWorld())) {   // 연무장의 일은 강호의 일이 아니다
             org.bukkit.Location at = event.getEntity().getLocation();
             int seen = (int) at.getWorld().getNearbyEntities(at, 24, 12, 24).stream()
                     .filter(e -> (e instanceof org.bukkit.entity.Player p && !p.equals(slayer))

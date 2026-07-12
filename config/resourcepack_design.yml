@@ -209,19 +209,73 @@ block_channels:
     soul_lantern: { 무협_자산: "백등롱 — 폐사당 냉광 전용", 징발_판정: "네더 요새 생성 — 냉색=금기 의미 유지", 팩없음_폴백: "푸른 등" }
     painting: { 무협_자산: "족자 — 수묵 산수·서예", scope: "1x1·2x1 소형 우선", 징발_판정: "마을·삼림 저택 벽에 생성 — 그림이 족자가 되는 것은 전역 이득", 팩없음_폴백: "벽에 걸린 그림" }
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # 자재층(自材層) — 2026-07. **위 「금지」 판정의 반전**이다. 반전은 조용히 하지 않는다.
+  #
+  # 원래의 금지 (아래 잔존_금지 참조): "자연이 만든 블록은 건드리지 않는다 — 재텍스처 = 세계 전체 오염."
+  # 그 판정을 뒤집은 것은 **객관 수치**다: 조성기(CheonghaBuilder·RemoteBuilder)가 쓰는 블록은 170종인데
+  # 팩이 덮던 것은 14종, 사용 빈도로 가중하면 **11.4%** 였다. 즉 지붕(흑와)과 회벽 말고는
+  # 세계가 전부 바닐라였다 — 무협의 마을이 아니라 **마인크래프트 마을 위에 기와만 얹은 것**.
+  #
+  # 금지가 지키려던 값은 "세계의 일관성"이었다. 그런데 그 논증에는 숨은 전제가 있었다:
+  #   *바닐라의 흙·돌·나무가 지킬 만한 정당한 모습이라는 전제.*
+  # 혼천은 **총체적 개조(total conversion)** 다. 이 서버의 세계는 처음부터 강호이고, 지켜야 할
+  # '바닐라 세계'는 없다. 흙길을 바닐라로 남기는 것은 중립이 아니라 **마인크래프트를 택하는 것**이다.
+  #
+  # 그러나 금지가 가리키던 위험 자체는 진짜였다 — 다만 그 이름이 틀렸다. 위험은 '오염'이 아니라
+  # **정체(正體)의 상실**이다: 광산 깊은 곳의 돌이 돌로 안 보이면 그것은 버그다. 그래서 금지는
+  # 폐기가 아니라 **조건**이 된다 (아래 자재_규약). 자재는 다시 그리되, 제 정체로 읽혀야 한다.
+  # ═══════════════════════════════════════════════════════════════════════
+  자재층:
+    자재_규약:                       # 금지를 대신하는 조건 — 이것을 어기면 그 블록은 다시 금지다
+      정체_보존: "흙은 흙으로, 돌은 돌로 보여야 한다 (광산·동굴·숲에서도). 자재는 무협의 **자재**이지 무협의 **무늬**가 아니다"
+      수묵: "채도는 의미에만 — 채색 허용은 차양(red_wool)·매화(cherry_*)·등롱·불(campfire_log_lit)뿐. 목재는 '갈색'이 아니라 먹에 흙기를 옅게 섞은 값(채도 ≤ 40), 돌은 무채색"
+      뜻이_보이는_자재: "흙길=밟혀 다져진 면+발자국 · 목책·통나무=거칠게 쪼갠 결(도적의 집) · 회벽=매끈하되 얼룩(관청) · 기와=검다 · 초가=성글게 이은 짚 · 다듬은 안산암=정(釘) 자국(사람이 깎은 돌)"
+      반복_금지: "면 반복재는 자기 복제 상관 ≤ 0.85 (texture_audit 축 7). 단위(널·켜·쪽·돌)마다 폭·톤·씨앗을 달리하고 긴 직선은 점선으로 끊는다 — 사용자가 두 번 지적한 '한 방향 반복·격자 이음'의 재발 방지"
+    covers_문법: "울타리·계단·반블록·담장·문·다락은 **제 텍스처가 없다** — 몸 블록의 PNG를 쓴다 (spruce_planks 1장이 SPRUCE_FENCE 39회를 함께 덮는다. 징발의 가성비가 여기 있다)"
+    흙_길: { blocks: [dirt, coarse_dirt, dirt_path_top, dirt_path_side, rooted_dirt, podzol_top, podzol_side, gravel, farmland, farmland_moist], 무협_자산: "흙길·다진 마당·자갈·부엽토 — 사람이 다닌 자리", 팩없음_폴백: "흙·자갈 (지형은 팩 없이도 지형이다)" }
+    석재: { blocks: [cobblestone, mossy_cobblestone, stone_bricks, cracked_stone_bricks, mossy_stone_bricks, chiseled_stone_bricks, stone, smooth_stone, smooth_stone_slab_side, andesite, polished_andesite, tuff, deepslate, deepslate_top, cobbled_deepslate, bricks, mud_bricks, packed_mud, clay, terracotta], 무협_자산: "막돌 담·전돌 벽·기단·계단(다듬은 안산암)·새긴 전돌(회回자 문양)", 팩없음_폴백: "돌·벽돌" }
+    목재: { blocks: [dark_oak_planks, spruce_planks, oak_planks, spruce_log, oak_log, dark_oak_log, stripped_oak_log, stripped_dark_oak_log, stripped_spruce_log, "*_log_top"], 무협_자산: "판자·울타리·목책(산채)·귀틀·노출 기둥", 팩없음_폴백: "나무 판자·통나무", note: "조성 팔레트 최대 면적 (판자 60 + 울타리 61 + 통나무 36회)" }
+    매화: { blocks: [cherry_log, cherry_log_top, cherry_leaves], 무협_자산: "매화 — 채색이 허락된 유일한 자리", 팩없음_폴백: "벚나무 (이미 분홍)" }
+    초가: { blocks: [hay_block_side, hay_block_top], 무협_자산: "초가 — 녹림 산채의 지붕 (성글게 이은 짚)", 팩없음_폴백: "건초 더미" }
+    자리_차양: { blocks: [white_wool, light_gray_wool, brown_wool, red_wool], 무협_자산: "자리(멍석·삼베)·붉은 차양", 팩없음_폴백: "양털 깔개", note: "깔개(CARPET)는 제 텍스처가 없다 — 양털 PNG를 쓴다. red_wool 은 「보류」에서 승격 (차양은 수묵의 유일한 붉은 점)" }
+    기물: { blocks: [barrel_side, barrel_top, barrel_top_open, barrel_bottom, cauldron_side, cauldron_top, cauldron_inner, cauldron_bottom, bone_block_side, bone_block_top, iron_bars, iron_chain, moss_block, campfire_log, campfire_log_lit, lectern_top, lectern_front, lectern_sides, lectern_base, crafting_table_top, crafting_table_front, crafting_table_side, grass_block_snow], 무협_자산: "술독·약탕관·백골(산채)·철창·사슬(등롱을 매단다)·모닥불·서안·목공대", 팩없음_폴백: "통·솥·뼈·창살·사슬", note: "IRON_CHAIN 텍스처는 1.21.9+ 에서 chain → **iron_chain** 으로 개명됐다 (client jar 확인)" }
+    시렁: { blocks: [spruce_shelf, dark_oak_shelf, oak_shelf, bamboo_shelf, cherry_shelf], 무협_자산: "시렁 — 병장기 걸이·약장·술선반 (표국·의방·객잔·산채 두목 막사·문파 본전)", 팩없음_폴백: "나무 선반 (1.21.9 신규 블록)", uv: "모델이 잡는 구역은 x8~16/y0~8=뒷판 · x0~8/y0~2·y6~8=널의 앞모 (template_shelf_body.json). 아래 절반은 안 쓰인다 — 위 절반의 거울로 채워 이음매를 잡았다" }
+    기물_블록엔티티:
+      blocks: [decorated_pot, chest]
+      textures: ["entity/decorated_pot/decorated_pot_base.png (32x32)", "entity/decorated_pot/decorated_pot_side.png", "entity/chest/normal.png (64x64)", "entity/chest/normal_left.png", "entity/chest/normal_right.png"]
+      무협_자산: "도기 항아리(물레 자국 도는 먹빛 유약)·궤(櫃)"
+      note: "블록이되 블록 엔티티라 텍스처가 entity/ 아래 산다. **UV를 모르는 면에는 무늬를 그리지 않는다** — 어느 조각을 잘라 내도 도기이고 나무인 면으로 그렸다 (문양을 얹으면 뚜껑 뒤에 가서 앉는다)"
+    커버리지:
+      지표: "조성 팔레트 커버리지 = 조성기가 쓰는 블록 중 팩이 덮는 비율 (사용 빈도 가중, 블록당 필요 텍스처 전부를 덮어야 1로 센다)"
+      이전: "11.4% (완전히 덮은 블록 14종 / 170종)"
+      현재: "84.7% (완전히 덮은 블록 94종 / 170종)"
+      남은_구멍: "풀·고사리(SHORT_GRASS·FERN — 바이옴 틴트라 회색조를 칠해도 초록으로 물든다) · 거미줄 · 사다리 · 화덕/베틀/대장간 세간 · grass_block (지형 틴트)"
+
   보류:
     note_block: { 사유: "blockstate 트릭의 재료 — 지금 재텍스처하면 트릭 여지가 사라진다 (texture_rules.blockstate_trick.reserve)" }
-    mud_bricks: { 사유: "팩 없이도 이미 흙벽 — 얻는 것이 없다 (효용 미달)" }
-    red_wool: { 사유: "팩 없이도 붉은 천 — 얻는 것이 적다" }
-    stripped_dark_oak_log: { 사유: "목재는 이미 목재 (효용 미달)" }
+    풀_고사리: { blocks: [short_grass, fern, grass_block_top, grass_block_side], 사유: "바이옴 컬러맵이 초록으로 틴트한다 — 회색조를 칠해도 초록이 곱해진다. 수묵으로 만들려면 colormap/grass.png 까지 손대야 하고, 그것은 세계의 초록을 전부 죽인다 (별도 판정 사안)" }
 
-  금지:                              # 자연이 만든 블록은 건드리지 않는다
-    지형: { blocks: [stone, dirt, gravel, dirt_path, smooth_stone], 사유: "지형 그 자체 — 재텍스처 = 세계 전체 오염" }
-    수목: { blocks: [dark_oak_log, spruce_log, oak_log], 사유: "숲 바이옴 전체가 이 블록이다 — 나무 한 그루가 기둥이 된다" }
-    석조: { blocks: [stone_bricks, cobblestone, mossy_cobblestone, cracked_stone_bricks], 사유: "요새·던전·감시탑에 대량 자연 생성" }
-    기물_생성: { blocks: [hay_block, barrel, chest, lectern, cauldron, brewing_stand], 사유: "마을·구조물 전반 생성 + 팩 없이도 각자 읽힌다" }
-    구리: { blocks: [oxidized_cut_copper_stairs, oxidized_cut_copper_slab], 사유: "플레이어 건축·구리 사용처 광범위, 얻는 것 적음" }
-    잔여_오염_감시: "징발 12종 중 자연 생성 오염이 남는 것 3종 — deepslate_tiles(고대 도시) / *_terracotta(배들랜드) / decorated_pot(흔적 폐허). 육안 확인 전엔 수용 판정도 가설이다"
+  잔존_금지:                          # 반전 뒤에도 남는 금지 — 이것들은 여전히 손대지 않는다
+    구리: { blocks: [oxidized_cut_copper_stairs, oxidized_cut_copper_slab], 사유: "플레이어 건축·구리 사용처 광범위, 얻는 것 적음 (판정 불변)" }
+    자연_광물: { blocks: ["*_ore", bedrock, obsidian], 사유: "채광의 기능 신호 — 광석이 광석으로 안 보이면 그것은 미학이 아니라 버그다" }
+    잔여_오염_감시: "자연 생성 오염이 남는 것 — deepslate_tiles(고대 도시) / *_terracotta(배들랜드) / decorated_pot(흔적 폐허) / 그리고 이제 **자재층 전부**(동굴·숲·산). 자재_규약.정체_보존이 그 방벽이다 — 육안 확인 전엔 수용 판정도 가설이다"
+
+  # ─── 획층(劃層) — 무공의 모션 (파티클 텍스처). 2026-07 신설 ───
+  # 요구: "스킬 모션도 리소스팩으로 적용되되, 팩이 없어도 바닐라 파티클로 무엇이 일어났는지 읽혀야 한다."
+  # 그래서 **두 층**이다. 엔진(SkillListener)은 한 줄도 바뀌지 않는다 — 팩은 그 파티클이
+  # **무엇으로 보이는지**만 정한다. 팩이 빠지면 바닐라 파티클이 그대로 남는다 (팩 게이트 자동 충족).
+  획층:
+    엔진_불변: "SkillListener.impact()·qiParticle() 이 쏘는 파티클 종류는 그대로 — 팩은 텍스처만 바꾼다"
+    매핑:                            # 파티클 → 바닐라 텍스처 (client jar 의 assets/minecraft/particles/*.json 에서 확인 — 짐작 금지)
+      발경: { particles: [SWEEP_ATTACK, CRIT], textures: ["particle/sweep_0..7.png (32x32)", "particle/critical_hit.png (8x8)"], 획: "쓸어치는 호(弧) 한 획 + 먹이 튄 점획" }
+      검기: { particles: [ELECTRIC_SPARK, END_ROD], textures: ["particle/glow.png", "particle/glitter_0..7.png"], 획: "짧은 마른 획 + 가늘고 긴 흰 실선" }
+      강기: { particles: [END_ROD, EXPLOSION], textures: ["particle/explosion_0..15.png (32x32)"], 획: "터진 먹뭉치에서 뻗는 획 다섯 (별·마법 느낌 금지)" }
+      어검_심검: { particles: [END_ROD, FLASH], textures: ["particle/flash.png (32x32)"], 획: "거의 투명한 흰 빛무리 — 보이지 않는 검이 서는 순간" }
+      빗나감_다운캐스트: { particles: [CLOUD, SMOKE], textures: ["particle/generic_0..7.png"], 획: "먹이 물에 번지는 농담 (둘이 같은 텍스처를 공유한다)" }
+    렌더_계약: "바닐라 파티클 텍스처는 회색조+알파이고 렌더러가 **파티클 색을 곱한다**. 연기(SMOKE)는 색이 어두운 회색이라 텍스처를 먹빛으로 칠하면 곱셈 결과가 검정이 되어 연기가 사라진다 — 그래서 generic_* 의 먹은 **알파에** 두고 밝기는 흰빛으로 남긴다 (END_ROD·CRIT·SWEEP 은 흰색 곱이라 명암을 그대로 쓸 수 있다)"
+    전역성: "파티클도 전역이다 (critical_hit 은 바닐라 치명타에도, generic_* 은 모닥불 연기에도 쓰인다). 그래서 '무공 전용 기호'를 그리지 않는다 — 그리는 것은 **먹의 획**이고, 획은 어느 맥락에서도 어색하지 않다"
+    registration: "획 추가 = 본 절 등록 + write_particle_textures 반영 (블록과 같은 등록제 문법)"
 
 # ─── 파이프라인 계약 (build_resourcepack.py 확장 — 구현은 다음 증분) ───
 texture_pipeline:
