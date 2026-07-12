@@ -1,0 +1,337 @@
+# 마을 등급 체계 (기계 판독용) — 조성기가 등급 하나를 인자로 받아 마을을 짓는다
+# 기준 문서: docs/design/village_tiers.md
+# 상위 문법: docs/design/building_style_guide.md (수묵 3색·지붕 문법·검수 12종 — 불변)
+# 판정 원천: config/region_state.yml (치안·경제·민심) / config/economy.yml (region_multipliers 밴드 재사용)
+# 검수 원천: server-mvt/.../TownAudit.java — 아래 audit_invariants 는 그 코드에서 역산한 값이다
+#
+# 원칙: 부(富)는 '소품의 수'가 아니라 '자재의 격 + 면적의 여유'다.
+#       소품을 늘려 부를 표현하면 검수(소품 벽면 ≤3 / 바닥 여백 ≥55%)에 걸린다.
+# 자재: 마인크래프트 1.21.4 바닐라만. 결정론(좌표 상수, 난수 금지).
+
+version: 1
+
+# ─── 등급 판정 ───
+tier_score:
+  formula: "경제 × 0.60 + 치안 × 0.25 + 민심 × 0.15"    # 전부 region_state.yml, 0~100
+  bands:                                                 # economy.yml region_multipliers 밴드와 정합
+    - { tier: rich,   min: 70, max: 100 }
+    - { tier: middle, min: 30, max: 69 }
+    - { tier: poor,   min: 0,  max: 29 }
+  variants:
+    famine: { when: "tier_score < 15", tier: poor, note: "등급이 아니라 빈촌의 표층 변주 — 자재 재정의 없음" }
+
+# ─── 검수 불변식 (전 등급 공통 — 깨면 실패) ───
+audit_invariants:
+  boulevard_width_min: 7
+  alley_width_min: 3
+  doorpath_width_min: 2
+  eave_min: 2                  # 앵커 건물 기준. 처마 최외곽 링은 반드시 roof_material_set 자재
+  roof_slope: { min: 0.35, max: 1.0, target: [0.5, 0.8] }
+  roof_plateau_max_pct: 20
+  roof_terrace_run_max: 3.0
+  props_per_wall_max: 3        # TownAudit.PROP 집합 + 모든 표지판만 해당
+  floor_free_min_pct: 55
+  colored_max_pct: 2.0
+  dark_max_pct: 15
+  cold_light_in_town: 0        # 영혼 계열 = 폐사당 전용. 등급 팔레트에 냉색 금지
+  outside_fill_min_pct: 5
+  anchor_keys_immutable: [장터, 청하객잔, 의뢰소, 의방, 전장, 표국, 북쪽_산길]   # 추가만 허용, 삭제·개명 금지
+  red_awning_within_market_r: 15
+
+# ─── 자재 집합 함정 (조성기가 반드시 알아야 하는 것) ───
+material_traps:
+  roof_material_set:           # 이 집합 밖의 자재로 지붕을 덮으면 검수가 "지붕 없음"으로 잡는다
+    members: [deepslate_tiles, deepslate_tile_stairs, deepslate_tile_slab,
+              deepslate_bricks, deepslate_brick_stairs, deepslate_brick_slab,
+              dark_oak_stairs, dark_oak_slab]
+    excluded_but_tempting: [hay_block, mud_brick_stairs, mud_brick_slab]
+    rule: "초가·흙기와는 처마 최외곽 링·용마루 링을 위 집합 자재로 짜고, 그 사이 면만 점치환한다"
+  path_material_set:           # 실내 바닥에 쓰면 '길'로 세어져 길 폭·야간 광원 검수를 오염시킨다
+    members: [dirt_path, gravel, cobblestone, andesite, stone_bricks, smooth_stone, mossy_cobblestone, stone]
+    interior_floor_substitute: polished_andesite    # 부촌 전돌 — PATH·ROOF·채색 어느 집합에도 없다
+  prop_budget_set:             # 벽면당 3칸을 소모하는 것들 (+ 모든 *_sign)
+    costs: [decorated_pot, chiseled_bookshelf, bookshelf, barrel, chest, lectern, candle, brewing_stand,
+            cauldron, lantern, flower_pot, potted_bamboo, potted_cherry_sapling, potted_poppy, potted_fern,
+            loom, smithing_table, anvil, blast_furnace, smoker, composter, note_block, hay_block, campfire]
+    free: [모든 계단, 모든 반블록, 모든 울타리, 모든 감압판, 모든 양탄자, wall_torch, torch,
+           trapdoor, ladder, glass_pane, iron_bars, door]
+    rule: "등급이 올라도 벽면당 3은 그대로. 부촌의 '많음'은 방 수 증가 + 무료 자재 조합으로 짓는다"
+  colored_set:                 # TownAudit.isColored — 채색 2% 예산을 먹는다
+    counts_as_colored: ["무채색(white/light_gray/gray/black) 아닌 모든 양털·양탄자",
+                        "brown_carpet (양탄자에서 갈색은 면제되지 않는다)",
+                        "모든 copper", "모든 cherry_*",
+                        "white/light_gray/gray/black/brown 아닌 모든 terracotta"]
+    safe_luxury: [decorated_pot, white_wool, light_gray_wool, dark_oak_hanging_sign,
+                  spruce_trapdoor, stone_brick_wall, polished_andesite]
+
+# ─── 등급 정의 ───
+tiers:
+
+  poor:
+    id: poor
+    name: "빈촌"
+    one_line: "무너지지만 않으면 된다"
+    site:
+      radius: 40                 # 담장 반경
+      footprint: "81x81"
+      flatten_extent: 42
+      scan_r: 45                 # TownAudit.SCAN_R (= radius + 5)
+      outside_ring: [42, 72]     # radius+2 ~ radius+32
+      alley_offset: 14           # 골목 z = ±round(0.35r)
+      boulevard_samples: [-33, -27, -20, -10, 10, 20, 27, 33]
+      build_cost_ratio: 0.49     # 중촌=1.0
+    palette:
+      roof:
+        surface: dark_oak_stairs
+        eave_ring: dark_oak_slab          # 필수 — 검수 측정면
+        ridge: dark_oak_slab              # 필수 — 검수 측정면
+        thatch_speckle: { material: hay_block, max_pct: 25, note: "처마·용마루 링 제외한 내부면만" }
+      wall:
+        primary: mud_bricks
+        secondary: spruce_log             # 귀틀
+        accent: light_gray_terracotta     # 드물게 (수리 흔적)
+        skirting: none
+      floor_interior: packed_mud
+      floor_doorstep: dirt_path
+      foundation: none
+      road: { surface: dirt_path, shoulder: gravel, shape: "굽는다 (직선 금지)" }
+      fence: { material: oak_fence, base: mud_bricks, height: 2, note: "높이 불균일 — 기운 울타리" }
+      town_wall: { lower: mud_bricks, upper: oak_fence, height: 3, gate_height: 4, battlement: none }
+    scale:
+      inn:        { w: 13, d: 11, wall_h: 4, floors: 1, name_hint: "주막" }
+      office:     null                     # 관청류 없음 — 게시대만
+      notice_post: { w: 3,  d: 1,  wall_h: 3 }
+      pyoguk:     null
+      cottage_line:  { w: 11, d: 9,  wall_h: 3 }
+      cottage_l:     { w: 11, d: 9,  wing: { w: 5, d: 5 }, wall_h: 3 }
+      cottage_loft:  { w: 9,  d: 9,  wall_h: 4 }
+      shop:       null                     # 좌판만
+      stall:      { w: 3, d: 2, count: 2 }
+    layout:
+      buildings: { cottages: 12, inn: 1, notice_post: 1 }
+      spacing_between_buildings: [1, 2]    # 붙어 있다
+      alignment: "필지 열이 어긋난다 (±1칸 오프셋 허용)"
+      plaza: none                          # 길이 넓어진 자리가 광장이다
+      well: 1
+      anchor_keys: [장터, 주막, 게시대]
+    interior:
+      floor_budget: { free_min_pct: 70, carpet_max_pct: 15, furniture_max_pct: 15 }
+      rooms: "통칸 — 나누지 않는다"
+      wall_zones_filled: 1                 # 하단만 (중단 창 듬성, 상단 비움)
+      furniture:
+        table:   "spruce_pressure_plate 1 (흙바닥 소반 — 다리 없음)"
+        seat:    "없음 (바닥에 앉는다)"
+        bed:     "light_gray_carpet 2 + hay_block 1 (짚자리)"
+        storage: "barrel 1"
+        hearth:  "campfire + cobblestone (가마솥 없음)"
+      focal_prop: "금 간 술항아리 1 (decorated_pot) / 민가: 문간에 쌓인 짚단"
+    lighting:
+      street: { fixture: "oak_fence 2단 + torch", spacing_same_side: 12, alternating: true }
+      node:   { fixture: campfire, at: [대로 교차점, 우물, 주막 앞] }
+      interior: { fixture: wall_torch, spacing: 5, y: "+2" }
+      target_dark_pct: [12, 14]            # 어둡되 캄캄하지 않다 — 어둠도 등급이다
+    props_pool:
+      - decorated_pot (금 간 것 — 곁에 엎어진 것 하나)
+      - hay_block (짚단)
+      - composter (퇴비통)
+      - barrel
+      - oak_fence (기운 울타리)
+      - cobblestone / mossy_cobblestone (돌무더기)
+      - coarse_dirt (마당 맨땅)
+    outside_town: [잡초, 돌무더기, 마른 나무, 흙길 이정표]
+    color_budget_pct: 0.5                  # 채색 사실상 0 — 빈촌은 검수상 가장 안전하다
+
+  middle:
+    id: middle
+    name: "중촌"
+    one_line: "그럭저럭 산다"
+    reference_impl: "server-mvt/.../CheonghaBuilder.java v6.8 — 이 등급의 참조 구현이자 회귀 기준선"
+    site:
+      radius: 60
+      footprint: "121x121"
+      flatten_extent: 62
+      scan_r: 65
+      outside_ring: [62, 92]
+      alley_offset: 21
+      boulevard_samples: [-50, -40, -30, -15, 15, 30, 40, 50]
+      build_cost_ratio: 1.00
+    palette:
+      roof:
+        surface: deepslate_tile_stairs
+        eave_ring: deepslate_tile_slab
+        ridge: deepslate_tile_slab
+        rafter: dark_oak_slab              # 처마 밑 그림자 라인 — 전 등급 불변
+        cottage_variant: [dark_oak_stairs, mud_brick_stairs]   # 서민 지붕 변주 (저채도 안에서만)
+      wall:
+        primary: white_terracotta          # 상가·관청류 (백벽 = 수묵 정체성)
+        secondary: light_gray_terracotta   # 민가 회벽 + 목골 스터드 (x+z)%3==0
+        frame: dark_oak_log
+        skirting: dark_oak_log             # 귀틀 1열
+      floor_interior: spruce_planks
+      foundation: cobblestone_slab         # 조약돌 반칸 노출 (전장·표국)
+      road: { surface: dirt_path, shoulder: gravel, shape: "십자 정형" }
+      fence: { material: spruce_fence, base: cobblestone, height: 2 }
+      town_wall: { lower: cobblestone, upper: stone_bricks, cap: "여장(stone_brick_wall) / 기와갓(deepslate_tile_slab) 6칸 교대",
+                   height: 3, gate_height: 4, gatehouse_h: 7 }
+    scale:
+      inn:        { w: 21, d: 15, wall_h: [5, 4], floors: 2 }     # 확대: 17x13 → 21x15
+      office:     { w: 15, d: 13, wall_h: 5, count: 3 }           # 확대: 13x11 → 15x13
+      pyoguk:     { w: 17, d: 13, wall_h: 5, yard: { w: 25, d: 19 } }
+      cottage_line:  { w: 15, d: 11, wall_h: 4 }                  # 확대: 13x9 → 15x11
+      cottage_l:     { w: 15, d: 11, wing: { w: 8, d: 8 }, wall_h: 4 }
+      cottage_loft:  { w: 11, d: 15, wall_h: 4 }
+      shop:       { w: 11, d: 9, wall_h: 3 }
+      stall:      { w: 3, d: 2, count: 5 }
+    layout:
+      buildings: { cottages: 9, inn: 1, office: 3, pyoguk: 1, shop: 1 }
+      spacing_between_buildings: [3, 4]
+      alignment: "대체로 열이 맞는다"
+      plaza: { w: 15, d: 15, surface: smooth_stone }
+      well: 1
+      anchor_keys: [장터, 청하객잔, 의뢰소, 의방, 전장, 표국, 북쪽_산길]
+      expansion_check: "건물 확대 후 검수 ⑤(이격 ≥2·처마 비겹침) 우선 실행. 깨지면 배치 좌표를 바깥으로 민다(부지 확대는 차선)"
+    interior:
+      floor_budget: { free_min_pct: 60, carpet_max_pct: 20, furniture_max_pct: 20 }
+      rooms: "주요 방 1 + 부속 1. 객잔 2층 = 객방 5조를 spruce_fence 칸막이로 (빛이 통과한다)"
+      wall_zones_filled: 2                 # 하단 귀틀 + 중단 창·벽등
+      furniture:
+        table:   "spruce_fence 다리 + spruce_pressure_plate 상판 (술상)"
+        seat:    "spruce_stairs 2 (마주 앉는다)"
+        bed:     "white_carpet 2 + 머리맡 spruce_stairs"
+        storage: "barrel 1 + chest 1"
+        hearth:  "campfire + cobblestone + cauldron"
+      focal_prop: "계산대 뒤 항아리 3단 시렁 / 민가: 쌀독 항아리 2"
+    lighting:
+      street: { fixture: "울타리 2단 + lantern", spacing: [6, 7] }
+      eave:   { fixture: "chain 1~2 + lantern (hanging)" }
+      interior: { fixture: wall_torch, spacing: 4, plus: "대들보 현수 lantern 2" }
+      target_dark_pct: [5, 8]
+    props_pool:
+      - decorated_pot (술단지·약단지·쌀독)
+      - chiseled_bookshelf (약장·장부·문서철)
+      - barrel / chest / lectern / cauldron / brewing_stand / candle
+      - dark_oak_hanging_sign (현판·주기)
+      - hay_block (약초 다발·마구간)
+      - red_wool (장터 차양 — 마을에서 색이 가장 시끄러운 곳)
+    outside_town: [관도 흙길, 이정표, 수목, 돌무더기]
+    color_budget_pct: 2.0
+
+  rich:
+    id: rich
+    name: "부촌"
+    one_line: "보여주려고 지었다"
+    site:
+      radius: 80
+      footprint: "161x161"
+      flatten_extent: 82
+      scan_r: 85
+      outside_ring: [82, 112]
+      alley_offset: 28
+      boulevard_samples: [-66, -53, -40, -20, 20, 40, 53, 66]
+      build_cost_ratio: 1.74
+      cost_note: "스캔 볼륨 171²×22 ≈ 640k 셀 (현행 1.71배). 조성·검수 각 수 초 증가를 감수한다"
+    palette:
+      roof:
+        surface: deepslate_brick_stairs    # 심층암 벽돌 = 결이 정연하다 (타일보다 격이 높다)
+        eave_ring: deepslate_brick_slab
+        ridge: { material: deepslate_brick_slab, width: 2 }
+        rafter: dark_oak_slab
+        finial: deepslate_bricks           # 용마루 양단 치미 (풀 블록)
+      wall:
+        primary: white_terracotta
+        column: stripped_dark_oak_log      # 노출 기둥 (관아급 표식)
+        skirting: { material: stone_bricks, rows: 2 }   # 굽도리 2단
+      floor_interior: polished_andesite    # 전돌 — stone_bricks 금지(PATH 집합 오염)
+      floor_accent: [white_carpet, light_gray_carpet]
+      foundation: { material: stone_bricks, rows: 1, entry: stone_brick_stairs }   # 반 층 올라선다
+      road: { surface: stone_bricks, pattern: "andesite 결 (x+z)%4==0", shape: "곧다" }
+      fence: { material: stone_brick_wall, cap: deepslate_tile_slab, height: 2 }
+      town_wall: { lower: stone_bricks, upper: stone_bricks, cap: "기와 갓 (deepslate_tile_slab) 연속",
+                   height: 4, gate: 솟을대문, gatehouse_h: 8 }
+    scale:
+      inn:        { w: 25, d: 19, wall_h: [5, 5], floors: 2, courtyard: { w: 7, d: 5 } }
+      office:     { w: 19, d: 15, wall_h: 6, annex: { w: 9, d: 7 }, count: 3 }
+      pyoguk:     { w: 21, d: 15, wall_h: 6, yard: { w: 31, d: 23 }, stable: { w: 9, d: 6 } }
+      manor:      { w: 21, d: 17, wall_h: 5, courtyard: { w: 9, d: 7 }, annex_count: 2 }   # 대저택 (부촌 신규)
+      cottage_line:  { w: 17, d: 13, wall_h: 4, annex: { w: 7, d: 5 } }
+      cottage_l:     { w: 17, d: 13, wing: { w: 10, d: 9 }, wall_h: 4 }
+      cottage_loft:  { w: 13, d: 17, wall_h: 5, floors: 2 }
+      shop:       { w: 15, d: 11, wall_h: 4, count: 2 }
+      stall:      { w: 3, d: 2, count: 7 }
+      note: "map_spec/cheongha_hyeon_map.yml 의 building_standards(객잔 25x20)는 사실상 이 등급의 규격이다"
+    layout:
+      buildings: { cottages: 7, inn: 1, office: 3, pyoguk: 1, manor: 1, shop: 2 }
+      spacing_between_buildings: [5, 7]
+      alignment: "자로 잰 듯 맞는다 (오프셋 0)"
+      plaza: { w: 21, d: 21, surface: stone_bricks, lamps: 4 }
+      well: 1
+      anchor_keys: [장터, 청하객잔, 의뢰소, 의방, 전장, 표국, 북쪽_산길, 서당, 관아]   # 등록 장소 school·county_office
+      extra_locations: [school, county_office]
+    interior:
+      floor_budget: { free_min_pct: 55, carpet_max_pct: 25, furniture_max_pct: 20 }
+      floor_budget_note: "하한 직행 — 그래서 건물을 키운다. 19x15 관청류 실내 221칸 = 여백 121칸"
+      rooms: "문 달린 개별 방. 칸막이 = white_terracotta 1켜 + spruce_door. 방 최소 5x4"
+      room_lighting_rule: "벽으로 막으면 빛이 끊긴다 → 방마다 wall_torch 1점 의무 (y+2, 문 맞은편 벽)"
+      wall_zones_filled: 3                 # 하단 굽도리 + 중단 창·족자 + 상단 선반 2열
+      furniture:
+        table:   "polished_andesite 단 + dark_oak_fence 다리 + 감압판 2칸 상판 + candle 1 + white_carpet 상보 (교자상)"
+        seat:    "dark_oak_stairs 4 + 등받이 dark_oak_fence"
+        bed:     "spruce_slab 단 + white_carpet 2 + 병풍 spruce_trapdoor 세로 3"
+        storage: "chest 2 + chiseled_bookshelf 1"
+        hearth:  "campfire + smoker + cauldron 2 + bricks 굴뚝"
+        screen:  "대문 안 병풍 담 — white_terracotta 3x3 가림벽 (안이 바로 안 보인다)"
+      focal_prop: "중정 한가운데 석등 1기 + 매화 1그루 — 문을 열면 마당이 먼저 보인다"
+    lighting:
+      street: { fixture: "석등 = stone_brick_wall 2단 + lantern + stone_brick_stairs 갓", spacing: 6 }
+      eave:   { fixture: "처마 등롱 열 (chain + lantern, 4칸 간격)" }
+      interior: { fixture: wall_torch, spacing: 4, plus: "현수 lantern 2 + candle 촛대" }
+      target_dark_pct: [0, 3]
+    props_pool:
+      - decorated_pot (청화 항아리 — 무늬는 텍스처의 몫, 블록은 무채색)
+      - chiseled_bookshelf (서가 2단)
+      - dark_oak_hanging_sign (족자·현판 — 글씨는 표지판이 쓴다)
+      - spruce_trapdoor (병풍)
+      - white_wool / light_gray_wool (비단 휘장 — 비단의 표식은 색이 아니라 광택 없는 흰 천이다)
+      - candle (촛대) / lectern / chest
+      - stone_brick_wall + lantern (석등)
+    outside_town: [전돌 관도, 가로수, 이정표 석비, 정자]
+    color_budget_pct: 2.0
+    color_caps: { red_wool_max_cells: 40, note: "차양 예산과 합산해 스캔 볼륨 2% 안" }
+
+# ─── 등급 배정 (등록제 — 새 지명 발명 금지) ───
+assignment:
+  regions:
+    cheongha_hyeon: { tier: middle, score: 49.55, calc: "경제48×0.6 + 치안50×0.25 + 민심55×0.15" }
+    heuksu_ferry:   { tier: poor, note: "등록 장소. 북로 물류 불안 → 나루 쇠락. 빈촌 조성기의 첫 무대 후보" }
+    abandoned_shrine: { tier: none, note: "폐허 — 냉색 격리 규칙이 지배한다. 등급 팔레트 적용 금지" }
+  rich_unassigned: "등록된 부유 마을이 없다. 새 지명을 발명하지 않는다 — 부촌 문법은 필지 단위로 먼저 쓴다"
+
+  # 필지 단위 예외 — 한 마을 안의 빈부 (±1 등급, 마을 건물 수의 30% 이내)
+  parcel_overrides:
+    max_pct_of_buildings: 30
+    cheongha_hyeon:
+      - { parcel: 표국, tier: rich, reason: "돌 기단·노출 기둥·2칸 처마 — 이미 코드가 그렇게 짓고 있다" }
+      - { parcel: 전장, tier: rich, reason: "돌 기단 스커트·철창 — 마을에서 가장 단단한 집" }
+      - { parcel: 북골목_민가_3채, tier: poor,
+          reason: "cheongha_fever_rumor(열병) + north_road_bandits(물류 불안)의 1차 피해자" }
+
+# ─── 동적 변화 (장기 백로그 — 지금 구현하지 않는다) ───
+dynamic:
+  surface_layer:                 # 블록 20~60개 교체로 끝난다. 재조성 없음
+    치안_저하: { when: "치안 < 30", changes: [대문 널빤지 보강(trapdoor 2), 담장 밖 등롱 소등, 초소에 barrel 추가] }
+    경제_저하: { when: "경제 < 30", changes: [노점 차양 1~2 철거(빈 비계만 남긴다), 좌판 비우기, 창에 덧문] }
+    민심_저하: { when: "민심 < 30", changes: [마당 잡초 치환율 +10%, 빨래 걷기, 게시판 방(榜) 문구 교체] }
+    열병_진행: { when: "cheongha_fever_rumor 진행", changes: [의방 진료 평상 2→3조, 문 앞 대기 자리 추가] }
+  tier_rebuild:
+    gate: "tier_score가 밴드 경계를 ±10 넘어 벗어난 상태로 게임 내 30일 이상 유지"
+    trigger: manual_admin_only
+    reason: "자동 재조성 금지 — 마을이 눈앞에서 다시 지어지는 것은 세계가 아니라 버그로 보인다"
+
+# ─── 조성기 인터페이스 (다음 사이클) ───
+builder_contract:
+  entry: "CheonghaBuilder.build(world, cx, cy, cz, zonesOut, Tier tier)"
+  regression_baseline: "tier=middle 은 현행 v6.8과 블록 단위 동일해야 한다"
+  audit_entry: "TownAudit.audit(world, anchors, zones, cx, cy, cz, tier) — 기존 시그니처는 middle 로 위임"
+  audit_params_to_promote: [SCAN_R, outsideTown_ring, boulevard_samples, alley_offset, ANCHOR_KEYS, npc_count]
+  determinism: "등급별 소품 좌표도 전부 상수 표. 난수 금지 — 재조성 2회 → 블록 단위 동일"
+  new_nouns: 0                   # 등급명은 용어일 뿐 지명이 아니다. 마을 이름은 등록부에서만 온다
