@@ -389,6 +389,16 @@ final class RemoteBuilder {
             world.getBlockAt(x, cy + 2, cz - 8).setType(Math.floorMod(x, 2) == 0
                     ? Material.BARREL : Material.CHEST);
         }
+        // 마당의 불 — 지역 검수가 "길 위 암흑 84%"라고 했다. 모닥불 하나로는 채가 안 밝다.
+        //   도적도 밤에 걸어 다닌다 (망보러 나가고, 오줌 누러 나온다).
+        for (int dx = -14; dx <= 14; dx += 7) {
+            for (int dz = -14; dz <= 14; dz += 7) {
+                if (Math.abs(dx) + Math.abs(dz) < 5) {
+                    continue;   // 모닥불 자리는 비운다
+                }
+                lanternPost(world, cx + dx, cy, cz + dz);
+            }
+        }
         // 채기(寨旗) — 채색은 여기뿐이다 (수묵 규칙: 깃발·불빛에만 색을 허락한다)
         for (int y = cy + 1; y <= cy + 5; y++) {
             world.getBlockAt(cx + 9, y, cz + 9).setType(Material.SPRUCE_FENCE);
@@ -414,8 +424,11 @@ final class RemoteBuilder {
         // v3 — 조감이 잡은 것: "천 계단"이 **아홉 칸**이었다. 본전 단을 지면 +9 로 잡았으니
         //   봉우리랄 것도 없는 둔덕이 섰고, 산문·계단은 그 둔덕의 발치에서 뭉개졌다.
         //   오르는 길이 시험이라면 **올라야 한다**: 본전은 지면에서 36켜 위, 계단은 45칸을 오른다.
-        int lower = naturalGround(world, cx, cz + FOOT_Z, cy + 40);   // 문전 — 산의 발치(자연 지면)
-        int upper = lower + 36;                                        // 본전 — 서른여섯 켜 위
+        // 발치 높이를 **한 열에서** 재다가 물웅덩이 바닥(y53)을 지면으로 읽었다 — 계단이 못에서 시작해
+        // 정상에 닿지 못했다(지역 검수의 도달성 검사가 잡았다: 오른 최고 y73 · 목표 y92).
+        // 지면은 지도가 이미 계산해 뒀다(site.groundY) — 그 값을 쓴다. 한 열은 거짓말을 한다.
+        int lower = cy;                 // 문전 — 산의 발치
+        int upper = cy + 36;            // 본전 — 서른여섯 켜 위 (오르는 길이 시험이다)
 
         clearSect(world, cx, lower, cz);
         // 화산파를 세웠더니 **사막**에 섰다 — 시드 8888 의 그 일대(4km)에 험산이 없다.
@@ -428,14 +441,32 @@ final class RemoteBuilder {
         thousandSteps(world, cx, lower, cz + FOOT_Z - 7, upper, cz - 1);   // 계단 — 발치에서 정상으로
         mainHall(world, cx - 7, upper, cz - 10, 15, 13);               // 본전 15x13 — 회벽·검은 기와
         trainingGround(world, cx, upper, cz + 4);                      // 연무장 — 오르면 먼저 이것이 보인다
+        // 정상 마당·문전의 석등 — 계단만 밝혀서는 밤에 못 다닌다 (지역 검수: 길 위 암흑 67%)
+        for (int dx = -12; dx <= 12; dx += 6) {
+            for (int dz = -10; dz <= 8; dz += 6) {
+                if (Math.abs(dx) <= 8 && dz >= -11 && dz <= 3) {
+                    continue;   // 본전 자리 — 등이 벽 속에 박힌다 (밝은 벽은 밝은 길이 아니다)
+                }
+                lanternPost(world, cx + dx, upper, cz + dz);
+            }
+        }
+        for (int dx = -7; dx <= 7; dx += 4) {
+            for (int dz = -5; dz <= 5; dz += 5) {
+                lanternPost(world, cx + dx, lower, cz + FOOT_Z + dz);
+            }
+        }
         plumTrees(world, cx, upper, cz);                               // 매화 — 채색은 여기뿐이다
 
         return List.of(new Zone(place.name(), sectSubtitle(place), world.getName(),
                 cx - 40, lower - 8, cz - 44, cx + 40, upper + 18, cz + FOOT_Z + 14));
     }
 
-    /** 산문·문전이 서는 자리 — 봉우리 중심(cz-8)에서 남쪽으로 이만큼. 산의 발치 바깥이다 */
-    private static final int FOOT_Z = 46;
+    /**
+     * 산문·문전이 서는 자리 — 봉우리 중심(cz-8)에서 남쪽으로 이만큼.
+     * <b>산의 발치 바깥이어야 한다</b>: 봉우리 반경 60 + 중심 오프셋 8 = 68. 46 은 산 속이었고,
+     * 그래서 문전이 산에 파묻혀 계단이 시작할 자리를 잃었다.
+     */
+    private static final int FOOT_Z = 74;
 
     private static String sectSubtitle(WorldMap.Place place) {
         return "rich".equals(place.tier()) ? "도관 — 산문에서 본전까지 천 계단"
@@ -646,9 +677,14 @@ final class RemoteBuilder {
                     world.getBlockAt(x, yy, z).setType(Material.COBBLESTONE);
                 }
             }
-            if (Math.floorMod(i, 8) == 0) {   // 여덟 단마다 석등 — 밤에도 오른다
-                lanternPost(world, cx - half - 1, y, z);
-                lanternPost(world, cx + half + 1, y, z);
+            // 석등은 **길 안쪽 가장자리**에 세운다. 길 밖(바위 쪽)에 세우면 등이 바위에 박혀 빛이 길로
+            //   못 나온다 — 검수는 세 사이클 내리 "암흑 47%"라고 했고, 조감으로는 등이 서 있는 것처럼 보였다.
+            //   눈에 보이는 등과 밝은 길은 다른 것이다.
+            if (Math.floorMod(i, 2) == 0) {
+                for (int dx : new int[]{-half, half}) {
+                    world.getBlockAt(cx + dx, y + 1, z).setType(Material.COBBLESTONE_WALL);
+                    world.getBlockAt(cx + dx, y + 2, z).setType(Material.LANTERN);
+                }
             }
         }
     }

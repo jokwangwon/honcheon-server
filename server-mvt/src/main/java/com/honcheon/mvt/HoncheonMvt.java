@@ -34,6 +34,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private WorldMap worldMap;
     private HuntingGrounds hunting;
     private Populace populace;   // 무명(無名) — 세계에 사는 사람들 (config/npcs/populace.yml)
+    private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
@@ -61,9 +62,19 @@ public final class HoncheonMvt extends JavaPlugin {
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         HuntingGrounds.init(cfg);   // 적 등록부 — 짐승·사람 스탯 (npcs·npc_combat·combat)
         Populace.init(cfg);   // 인구 등록부 — 행인·주민 28인 (npcs/populace.yml)
+        WorldBridge.init(cfg, getLogger());   // 세계 다리 — 마크의 사건이 봇의 장부로 간다 (world_bridge.yml)
+        Incidents.init(cfg);   // 사건 등록부 — 살해 연쇄·시신·수사·무명의 의뢰 (npc_death.populace_layer)
         this.skills = new SkillListener(this, skillEngine);
         this.hunting = new HuntingGrounds(this);
         this.populace = new Populace(this);
+        this.incidents = new Incidents(this);   // 순서 중요 — 생성자가 populace 에 스스로 접합한다
+        // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾼다 (워커 스레드 → 메인 스레드로 태워 준다)
+        WorldBridge.onState(state -> getServer().getScheduler().runTask(this, () -> {
+            for (String tag : WorldBridge.reactionTags()) {
+                populace.rumor(tag, state.reactions().contains(tag));
+            }
+        }));
+        WorldBridge.start();
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
@@ -73,13 +84,16 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(skills, this);
         getServer().getPluginManager().registerEvents(hunting, this);
         getServer().getPluginManager().registerEvents(populace, this);
+        getServer().getPluginManager().registerEvents(incidents, this);
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
         populace.start();   // 중앙 티커 — 행인의 일과·배회 (마을이 비어 있으면 세계가 아니다)
+        incidents.start();   // 중앙 티커 — 시신 발견·은닉·포교의 추적·무명의 의뢰
         getCommand("honcheon").setExecutor(new MvtCommand(this));
         loadAnchors();
         loadZones();
+        loadRegionBases();
         // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
         getServer().getScheduler().runTaskTimer(this,
                 () -> getServer().getOnlinePlayers().forEach(this::updateSidebar), 100L, 100L);
@@ -90,6 +104,11 @@ public final class HoncheonMvt extends JavaPlugin {
                 + (fighters.isEmpty() ? "없음 — 등록부에 realm 이 없다" : String.join(", ", fighters)));
         getLogger().info("혼천 MVT 기동 — 룰 엔진 5종 로드 완료 (/혼천 도움말)"
                 + (anchors.isEmpty() ? " — 청하현 미조성 (/혼천 조성)" : " — 청하현 앵커 " + anchors.size() + "곳"));
+    }
+
+    @Override
+    public void onDisable() {
+        WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
     }
 
     public PlayerLedger ledger(UUID playerId) {
@@ -202,6 +221,41 @@ public final class HoncheonMvt extends JavaPlugin {
         }
         if (!zones.isEmpty()) {
             getLogger().info("구역 " + zones.size() + "곳 로드 (입장 타이틀)");
+        }
+    }
+
+    // ─── 지역 원장(元帳) — 지역의 **첫 조성 때 잰 자연 지면** ───
+    //
+    // 재조성이 산 위에 산을 또 쌓고 있었다: 지면을 재는데 **지난번에 세운 산**을 읽었고,
+    // 그 위에 다시 36켜를 얹었다 (조성할 때마다 화산파가 하늘로 자랐다).
+    // 자연이 놓은 돌과 우리가 놓은 돌은 자재로는 구별되지 않는다 — 그러니 **기억해 둔다.**
+    // 첫 조성이 잰 값이 그 지역의 지면이다. 그 뒤로는 몇 번을 다시 지어도 같은 자리에 선다.
+
+    private final Map<String, Integer> regionBase = new HashMap<>();
+
+    public Integer regionBase(String placeId) {
+        return regionBase.get(placeId);
+    }
+
+    public void setRegionBase(String placeId, int groundY) {
+        regionBase.put(placeId, groundY);
+        YamlConfiguration yml = new YamlConfiguration();
+        regionBase.forEach(yml::set);
+        try {
+            yml.save(new File(getDataFolder(), "regions.yml"));
+        } catch (IOException e) {
+            getLogger().warning("지역 원장 저장 실패: " + e.getMessage());
+        }
+    }
+
+    private void loadRegionBases() {
+        File file = new File(getDataFolder(), "regions.yml");
+        if (!file.isFile()) {
+            return;
+        }
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
+        for (String key : yml.getKeys(false)) {
+            regionBase.put(key, yml.getInt(key));
         }
     }
 

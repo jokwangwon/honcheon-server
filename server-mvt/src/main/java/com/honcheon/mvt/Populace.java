@@ -72,7 +72,7 @@ public final class Populace implements Listener {
 
     /** 사람 — 등록부 한 줄이 세계의 한 사람이 된다. */
     private record Person(String id, String name, int age, String job, String home, String disposition,
-                          Map<String, String> routine, String profession, boolean baby) {
+                          Map<String, String> routine, String profession, boolean baby, String voice) {
     }
 
     /** 사건 반응 — 소문이 돌면 다니는 자리가 바뀐다. */
@@ -87,6 +87,15 @@ public final class Populace implements Listener {
     private static final Map<String, Reaction> REACTIONS = new LinkedHashMap<>();
     private static final List<String> IDLE_LINES = new ArrayList<>();
 
+    // 말투 — populace.yml voice_by_routine (일과 → 목소리) + npc_dialogue.yml populace.voices (목소리 → 말)
+    private static final Map<String, String> VOICE_BY_ROUTINE = new LinkedHashMap<>();
+    private static final Map<String, Map<String, List<String>>> VOICE_LINES = new LinkedHashMap<>();
+    private static final Map<String, String> SEGMENT_MAP = new LinkedHashMap<>();
+    private static String nameFormat = "[{name} · {job}]";
+    private static String introFormat = "{name}이라 하오.";
+    private static double introChance = 0.25;
+    private static long talkCooldownMs = 1000L;
+
     // 성능 예산 (populace.yml performance)
     private static int tickerPeriod = 40;
     private static double activateRadius = 56;
@@ -97,12 +106,8 @@ public final class Populace implements Listener {
     private static double wanderChance = 0.25;
     private static int groundScanTries = 12;
 
-    // 죽음 (populace.yml death) — npc_death.yml 배경층 아래의 무명층
-    private static int deathBaseIntensity = 1;
-    private static int deathMaxIntensity = 2;
-    private static int witnessRadius = 16;
-    private static int witnessPublicMin = 2;
-    private static int minsimDelta = -1;
+    // 죽음의 규칙(목격·시신·단계·소문·현상금·favor)은 이 클래스가 읽지 않는다 —
+    // npc_death.yml populace_layer 를 Incidents 가 읽는다. 여기는 사람을 세우는 층이다.
 
     /**
      * 등록부 판독. HoncheonMvt.onEnable 에서 다른 init 들과 함께 한 번 부른다.
@@ -116,6 +121,9 @@ public final class Populace implements Listener {
         SEG_FROM.clear();
         REACTIONS.clear();
         IDLE_LINES.clear();
+        VOICE_BY_ROUTINE.clear();
+        VOICE_LINES.clear();
+        SEGMENT_MAP.clear();
 
         Map<String, Object> root;
         try {
@@ -171,24 +179,63 @@ public final class Populace implements Listener {
         wanderChance = chance instanceof Number n ? n.doubleValue() : wanderChance;
         groundScanTries = num(perf.get("ground_scan_tries"), groundScanTries);
 
-        Map<String, Object> death = asMap(root.get("death"));
-        deathBaseIntensity = num(death.get("base_intensity"), deathBaseIntensity);
-        deathMaxIntensity = num(death.get("max_intensity"), deathMaxIntensity);
-        witnessRadius = num(death.get("witness_radius"), witnessRadius);
-        witnessPublicMin = num(death.get("witness_public_min"), witnessPublicMin);
-        minsimDelta = num(asMap(death.get("region_delta")).get("민심"), minsimDelta);
+        asMap(root.get("voice_by_routine")).forEach((k, v) -> VOICE_BY_ROUTINE.put(k, String.valueOf(v)));
 
         for (Map.Entry<String, Object> e : asMap(root.get("people")).entrySet()) {
             Map<String, Object> p = asMap(e.getValue());
-            Map<String, String> routine = new LinkedHashMap<>(
-                    ROUTINES.getOrDefault(String.valueOf(p.get("routine")), Map.of()));
+            String preset = String.valueOf(p.get("routine"));
+            Map<String, String> routine = new LinkedHashMap<>(ROUTINES.getOrDefault(preset, Map.of()));
             asMap(p.get("routine_override")).forEach((k, v) -> routine.put(k, String.valueOf(v)));
             Map<String, Object> body = asMap(p.get("body"));
             PEOPLE.add(new Person(e.getKey(), String.valueOf(p.get("name")), num(p.get("age"), 0),
                     String.valueOf(p.get("job")), String.valueOf(p.get("home")),
                     String.valueOf(p.get("disposition")), routine,
                     body.get("profession") == null ? "NONE" : String.valueOf(body.get("profession")),
-                    Boolean.TRUE.equals(body.get("baby"))));
+                    Boolean.TRUE.equals(body.get("baby")),
+                    VOICE_BY_ROUTINE.getOrDefault(preset, "농민")));
+        }
+
+        loadDialogue(configDir);
+    }
+
+    /**
+     * 무명의 말 — config/npc_dialogue.yml populace.
+     * 대사 원문은 대화 등록부가 단일 진실 원천이다 (여기서 지어내지 않는다).
+     */
+    private static void loadDialogue(Path configDir) {
+        Map<String, Object> root;
+        try {
+            root = RulesConfig.load(configDir.resolve("npc_dialogue.yml"));
+        } catch (RuntimeException e) {
+            return;
+        }
+        Map<String, Object> pop = asMap(root == null ? null : root.get("populace"));
+        if (pop.isEmpty()) {
+            return;
+        }
+        if (pop.get("cooldown_ms") instanceof Number n) {
+            talkCooldownMs = n.longValue();
+        }
+        if (pop.get("name_format") != null) {
+            nameFormat = String.valueOf(pop.get("name_format"));
+        }
+        if (pop.get("intro_format") != null) {
+            introFormat = String.valueOf(pop.get("intro_format"));
+        }
+        if (pop.get("intro_chance") instanceof Number n) {
+            introChance = n.doubleValue();
+        }
+        asMap(pop.get("segment_map")).forEach((k, v) -> SEGMENT_MAP.put(k, String.valueOf(v)));
+        for (Map.Entry<String, Object> e : asMap(pop.get("voices")).entrySet()) {
+            Map<String, List<String>> byKey = new LinkedHashMap<>();
+            asMap(e.getValue()).forEach((k, v) -> {
+                List<String> lines = new ArrayList<>();
+                for (Object l : list(v)) {
+                    lines.add(String.valueOf(l));
+                }
+                byKey.put(k, lines);
+            });
+            VOICE_LINES.put(e.getKey(), byKey);
         }
     }
 
@@ -216,12 +263,137 @@ public final class Populace implements Listener {
     private final Map<String, UUID> bodies = new LinkedHashMap<>();          // 등록 id → 몸
     private final Map<UUID, Long> lastTalk = new ConcurrentHashMap<>();      // 우클릭 쿨다운
     private final Set<String> activeRumors = new LinkedHashSet<>();          // 켜진 사건 반응
+    private final Set<String> dead = new LinkedHashSet<>();                  // 죽은 사람 — 자리가 빈다
+    private final Map<String, String> pinned = new LinkedHashMap<>();        // 사건이 붙잡아 둔 사람 (목격자·길잃은 아이)
+    private final Map<String, UUID> following = new LinkedHashMap<>();       // 플레이어를 따라가는 사람
+    private Incidents incidents;   // 사건층 — 죽음·의뢰는 그쪽 소관 (생성자가 스스로 접합한다)
+    private boolean curfew;
     private String segment = "";
     private int cursor;   // 배회 라운드로빈 커서 (틱당 경로탐색 예산을 나눠 쓴다)
 
     public Populace(HoncheonMvt plugin) {
         this.plugin = plugin;
         this.keyId = new NamespacedKey(plugin, "populace");
+    }
+
+    // ─── 사건층과의 접합 (Incidents 가 스스로 붙는다 — HoncheonMvt 는 몰라도 된다) ───
+
+    void bind(Incidents incidents) {
+        this.incidents = incidents;
+    }
+
+    /** 지금 구간 (새벽·아침·낮·해질녘·밤) */
+    public String segment() {
+        return segment;
+    }
+
+    String nameOf(String id) {
+        Person p = person(id);
+        return p == null ? id : p.name();
+    }
+
+    String jobOf(String id) {
+        Person p = person(id);
+        return p == null ? "행인" : p.job();
+    }
+
+    String voiceOf(String id) {
+        Person p = person(id);
+        return p == null ? null : p.voice();
+    }
+
+    boolean knows(String id) {
+        return person(id) != null;
+    }
+
+    boolean isDead(String id) {
+        return dead.contains(id);
+    }
+
+    /** 등록 id 중 이 말투를 쓰는 사람들 (길잃음 후보 — 아이) */
+    List<String> idsWithVoice(String voice) {
+        List<String> out = new ArrayList<>();
+        for (Person p : PEOPLE) {
+            if (p.voice().equals(voice)) {
+                out.add(p.id());
+            }
+        }
+        return out;
+    }
+
+    /** 이 반경 안에 살아 있는 무명들 (목격·발견 판정의 눈) */
+    List<String> aliveNear(Location at, double radius) {
+        List<String> out = new ArrayList<>();
+        if (at.getWorld() == null) {
+            return out;
+        }
+        for (Map.Entry<String, UUID> e : bodies.entrySet()) {
+            Entity body = plugin.getServer().getEntity(e.getValue());
+            if (body == null || body.isDead() || body.getWorld() != at.getWorld()) {
+                continue;
+            }
+            if (body.getLocation().distance(at) <= radius) {
+                out.add(e.getKey());
+            }
+        }
+        return out;
+    }
+
+    Mob bodyOf(String id) {
+        UUID uuid = bodies.get(id);
+        Entity body = uuid == null ? null : plugin.getServer().getEntity(uuid);
+        return body instanceof Mob mob ? mob : null;
+    }
+
+    /** 등록된 자리 이름 — 사건층이 '어디서 났는가'를 되짚을 때 (다리의 place_map 키) */
+    Set<String> placeNames() {
+        return PLACES.keySet();
+    }
+
+    /** 자리의 중심 좌표 (사건층이 목표·출동 지점을 잡을 때) */
+    Location placeCenter(String placeName) {
+        Location market = plugin.anchor("장터");
+        Place place = place(placeName);
+        if (market == null || market.getWorld() == null || place == null) {
+            return null;
+        }
+        return center(market.getWorld(), place);
+    }
+
+    /** 죽었다 — 자리가 빈다. 등록부는 남지만 몸은 서지 않는다 */
+    void markDead(String id) {
+        dead.add(id);
+        bodies.remove(id);
+        pinned.remove(id);
+        following.remove(id);
+    }
+
+    /** 자리를 메운다 — 무명은 대체된다. 그것이 무명의 정의다 (npc_death.populace_layer.respawn) */
+    void revive(String id) {
+        dead.remove(id);
+    }
+
+    /** 사건이 사람을 붙잡아 둔다 (목격자는 관아로, 길 잃은 아이는 산길 어귀에) */
+    void pin(String id, String place) {
+        if (place == null) {
+            pinned.remove(id);
+        } else {
+            pinned.put(id, place);
+        }
+    }
+
+    void follow(String id, UUID player) {
+        following.put(id, player);
+        pinned.remove(id);
+    }
+
+    void unfollow(String id) {
+        following.remove(id);
+    }
+
+    /** 통행금지 — 밤에 사람이 다니지 않는다 (npc_death.populace_layer.curfew) */
+    void curfew(boolean active) {
+        this.curfew = active;
     }
 
     /** 중앙 티커 하나 — 개체별 태스크를 만들지 않는다 (performance.yml effects.central_ticker 규약) */
@@ -255,8 +427,16 @@ public final class Populace implements Listener {
                 + (activeRumors.isEmpty() ? "" : " §7· 소문 §c" + String.join(", ", activeRumors)));
         for (Person p : PEOPLE) {
             boolean up = bodies.containsKey(p.id());
+            if (dead.contains(p.id())) {
+                out.add("§4✖ §7" + p.name() + " §8(" + p.job() + ") — 죽었다");
+                continue;
+            }
             out.add((up ? "§a● " : "§8○ ") + "§f" + p.name() + " §7(" + p.age() + ", " + p.job() + ") — "
-                    + (up ? "§7" + station(p) : "§8쉬는 중"));
+                    + (up ? "§7" + station(p) : "§8쉬는 중")
+                    + (incidents != null && incidents.hasOffer(p.id()) ? " §e[의뢰]" : ""));
+        }
+        if (incidents != null) {
+            out.addAll(incidents.status());
         }
         return out;
     }
@@ -306,6 +486,12 @@ public final class Populace implements Listener {
                 gone.add(e.getKey());
                 continue;
             }
+            Person person = person(e.getKey());
+            if (person != null && station(person) == null) {
+                body.remove();   // 통행금지 — 문을 잠그고 들어갔다
+                gone.add(e.getKey());
+                continue;
+            }
             if (nearest(players, body.getLocation()) > deactivateRadius) {
                 body.remove();   // 아무도 안 보는 마을은 비어 있다 (엔티티 예산)
                 gone.add(e.getKey());
@@ -321,8 +507,8 @@ public final class Populace implements Listener {
             if (bodies.size() >= maxActive || spawned >= spawnsPerTick) {
                 return;
             }
-            if (bodies.containsKey(person.id())) {
-                continue;
+            if (bodies.containsKey(person.id()) || dead.contains(person.id())) {
+                continue;   // 죽은 사람은 서지 않는다 — 빈 자리가 남는다
             }
             Place place = place(station(person));
             if (place == null) {
@@ -351,6 +537,15 @@ public final class Populace implements Listener {
             Person person = person(id);
             Entity body = plugin.getServer().getEntity(bodies.get(id));
             if (person == null || !(body instanceof Mob mob) || mob.isDead()) {
+                continue;
+            }
+            UUID lead = following.get(id);
+            if (lead != null) {
+                Player owner = plugin.getServer().getPlayer(lead);
+                if (owner != null && owner.getWorld() == mob.getWorld()
+                        && mob.getLocation().distance(owner.getLocation()) > 2.5) {
+                    mob.getPathfinder().moveTo(owner.getLocation(), 1.1);   // 아이가 옷자락을 붙잡고 따라온다
+                }
                 continue;
             }
             Place place = place(station(person));
@@ -426,11 +621,27 @@ public final class Populace implements Listener {
 
     // ─── 자리 계산 ───
 
-    /** 지금 이 사람이 있어야 할 자리 이름 — 일과 + 사건 반응(소문) */
+    /**
+     * 지금 이 사람이 있어야 할 자리 이름 — 사건(붙잡힘) &gt; 통행금지 &gt; 소문 &gt; 일과.
+     * null 이면 이 사람은 지금 세계에 서지 않는다 (집 안에 있다).
+     */
     private String station(Person person) {
+        String held = pinned.get(person.id());
+        if (held != null) {
+            return held;   // 목격자는 관아로 달리고, 길 잃은 아이는 그 자리에 있다
+        }
         String name = person.routine().get(segment);
         if (name == null && !SEG_NAMES.isEmpty()) {
             name = person.routine().get(SEG_NAMES.get(0));
+        }
+        // 통행금지 — 밤에는 관졸만 남는다. 해질녘부터는 집으로 (npc_death.populace_layer.curfew)
+        if (curfew && !"관졸".equals(person.voice())) {
+            if ("밤".equals(segment) || "새벽".equals(segment)) {
+                return null;   // 문을 잠갔다. 빈 거리가 곧 형벌이다
+            }
+            if ("해질녘".equals(segment)) {
+                return person.home();
+            }
         }
         for (String tag : activeRumors) {
             Reaction reaction = REACTIONS.get(tag);
@@ -541,45 +752,20 @@ public final class Populace implements Listener {
         event.setDroppedExp(0);
 
         Person person = person(id);
-        Location at = event.getEntity().getLocation();
-        int witnesses = witnesses(at, event.getEntity());
-        int intensity = Math.min(deathMaxIntensity,
-                deathBaseIntensity + (witnesses >= witnessPublicMin ? 1 : 0));
-        String name = person == null ? id : person.name();
-        String job = person == null ? "행인" : person.job();
-
+        if (person == null) {
+            return;
+        }
         Player killer = event.getEntity().getKiller();
-        plugin.getLogger().info("[무명 사망] " + name + " (" + job + ") — 목격 " + witnesses
-                + "인 · 소문 강도 " + intensity + " · 민심 " + minsimDelta
+        plugin.getLogger().info("[무명 사망] " + person.name() + " (" + person.job() + ")"
                 + (killer == null ? " · 사인 미상" : " · 살해 " + killer.getName())
                 + " · 복수자 없음 (civil_debt — 민심 자연회복 제외)");
 
-        String head = ChatColor.DARK_RED + "[소문] " + ChatColor.GRAY;
-        String tail = witnesses >= witnessPublicMin
-                ? name + "이(가) 백주에 죽었다. 장터가 조용해졌다."
-                : (witnesses > 0 ? name + "이(가) 죽었다는 말이 돈다." : "누군가 " + job + " 하나가 보이지 않는다.");
-        for (Player player : at.getWorld().getPlayers()) {
-            if (player.getLocation().distance(at) <= 64) {
-                player.sendMessage(head + tail);
-                player.sendMessage(ChatColor.DARK_GRAY + "(무명의 죽음 — 후계도 복수자도 없다. 남는 것은 민심 "
-                        + minsimDelta + " 뿐이다.)");
-            }
+        // 목격·시신·증거의 3변수와 그 연쇄는 사건층의 몫이다 (npc_death.yml populace_layer)
+        if (incidents != null) {
+            incidents.onDeath(id, event.getEntity(), killer);
+        } else {
+            markDead(id);   // 사건층이 없으면 자리만 빈다 (등록부 death 절이 최소 기본값)
         }
-    }
-
-    /** 목격자 — 반경 안의 다른 행인과 플레이어 (killer_response.variables.witness) */
-    private int witnesses(Location at, Entity dead) {
-        int count = 0;
-        for (Entity e : at.getWorld().getNearbyEntities(at, witnessRadius, witnessRadius, witnessRadius)) {
-            if (e.equals(dead) || e.isDead()) {
-                continue;
-            }
-            if (e instanceof Player
-                    || e.getPersistentDataContainer().has(keyId, PersistentDataType.STRING)) {
-                count++;
-            }
-        }
-        return count;
     }
 
     /**
@@ -601,7 +787,7 @@ public final class Populace implements Listener {
         Player player = event.getPlayer();
         long now = System.currentTimeMillis();
         Long last = lastTalk.get(player.getUniqueId());
-        if (last != null && now - last < 1000L) {
+        if (last != null && now - last < talkCooldownMs) {
             return;
         }
         lastTalk.put(player.getUniqueId(), now);
@@ -610,22 +796,59 @@ public final class Populace implements Listener {
         if (person == null) {
             return;
         }
-        // 소문이 돌면 그 얘기부터 한다 — 행인은 소문의 다리다 (rumor.yml mingan_market: 가장 빠르고 가장 부정확하다)
+        // ① 사건층이 먼저 본다 — 의뢰·자수·길 잃은 아이는 잡담보다 앞선다
+        if (incidents != null && incidents.onTalk(player, id, player.isSneaking())) {
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.7f, 0.9f);
+            return;
+        }
+        // ② 잡담 — 무명도 이름이 있다. 이름을 대고, 생업을 말하고, 오늘의 세계를 말한다
+        player.sendMessage(ChatColor.GRAY + label(person) + ChatColor.WHITE + " " + say(person));
+        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.6f, 1.1f);
+    }
+
+    private String label(Person person) {
+        return nameFormat.replace("{name}", person.name()).replace("{job}", person.job());
+    }
+
+    /**
+     * 무명의 한 마디. 고르는 순서는 등록부가 정한다 (npc_dialogue.yml populace):
+     * 애도(혈육을 잃었다) &gt; 공포(미해결 살인) &gt; 소문(사건 반응) &gt; 구간(아침·낮·밤).
+     * 아이와 노인과 관졸의 말투가 다른 것은 코드가 아니라 voice_by_routine 이 정한 것이다.
+     */
+    private String say(Person person) {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        Map<String, List<String>> voice = VOICE_LINES.getOrDefault(person.voice(), Map.of());
+        String mood = incidents == null ? null : incidents.moodOf(person.id());
+
         List<String> lines = new ArrayList<>();
-        for (String tag : activeRumors) {
-            Reaction reaction = REACTIONS.get(tag);
-            if (reaction != null) {
-                lines.addAll(reaction.lines());
+        if (mood != null) {
+            lines.addAll(voice.getOrDefault(mood, List.of()));
+        }
+        if (lines.isEmpty()) {
+            // 사건 반응(populace.yml reactions.lines)이 있으면 그 얘기부터 한다 — 행인은 소문의 다리다
+            for (String tag : activeRumors) {
+                Reaction reaction = REACTIONS.get(tag);
+                if (reaction != null) {
+                    lines.addAll(reaction.lines());
+                }
             }
+            if (!lines.isEmpty()) {
+                lines.addAll(voice.getOrDefault("소문", List.of()));
+            }
+        }
+        if (lines.isEmpty()) {
+            if (rng.nextDouble() < introChance) {
+                return introFormat.replace("{name}", person.name())
+                        .replace("{age}", String.valueOf(person.age()))
+                        .replace("{job}", person.job())
+                        .replace("{home}", person.home().replace('_', ' '));
+            }
+            lines.addAll(voice.getOrDefault(SEGMENT_MAP.getOrDefault(segment, "낮"), List.of()));
         }
         if (lines.isEmpty()) {
             lines.addAll(IDLE_LINES);
         }
-        String line = lines.isEmpty() ? "..."
-                : lines.get(ThreadLocalRandom.current().nextInt(lines.size()));
-        player.sendMessage(ChatColor.GRAY + "[" + person.name() + " · " + person.job() + "] "
-                + ChatColor.WHITE + line);
-        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.6f, 1.1f);
+        return lines.isEmpty() ? "…" : lines.get(rng.nextInt(lines.size()));
     }
 
     /** 등록 인원 (배선·검수용) */

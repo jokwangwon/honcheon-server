@@ -315,6 +315,16 @@ public final class Sparring implements Listener {
                 + ChatColor.WHITE + winnerName + ChatColor.GRAY + " 승 · "
                 + ChatColor.WHITE + loserName + ChatColor.GRAY + " 패");
 
+        // 세계 다리 — 비무도 이야깃거리다 (장터에서 하면 더욱). 죽이지 않고 이긴 이름이 돈다.
+        if (winner instanceof Player w) {
+            org.bukkit.Location at = w.getLocation();
+            int seen = (int) at.getWorld().getNearbyEntities(at, 24, 12, 24).stream()
+                    .filter(e -> e instanceof Player p && !p.equals(w) && !p.equals(loser)).count();
+            WorldBridge.sparring(w.getUniqueId(), winnerName,
+                    loser instanceof Player l ? l.getUniqueId() : null, loserName,
+                    how, "장터_광장", seen);
+        }
+
         if (loser instanceof LivingEntity wounded) {
             wound(wounded);
         }

@@ -1009,6 +1009,23 @@ public final class HuntingGrounds implements Listener {
                 event.getDrops().add(Weapons.make(foe.loadout()[0], foe.loadout()[1]));
             }
         }
+
+        // 세계 다리 — **벤 자의 이름이 강호에 돈다** (도적 토벌 → 치안·소문·세력 주목).
+        // 지금까지 마크에서 벤 도적은 봇의 장부에 한 줄도 남지 않았다: 세계가 둘로 쪼개져 있었다.
+        org.bukkit.entity.Player slayer = event.getEntity().getKiller();
+        if (slayer != null && !"비무상대".equals(foe.role())) {
+            org.bukkit.Location at = event.getEntity().getLocation();
+            int seen = (int) at.getWorld().getNearbyEntities(at, 24, 12, 24).stream()
+                    .filter(e -> (e instanceof org.bukkit.entity.Player p && !p.equals(slayer))
+                            || e instanceof org.bukkit.entity.Villager).count();
+            if (foe.isBeast()) {
+                WorldBridge.beastSlain(foe.id(), foe.name(), foe.realm(), "north_road", seen,
+                        slayer.getUniqueId(), slayer.getName());
+            } else {
+                WorldBridge.banditSlain(foe.id(), foe.name(), foe.role(), foe.realm(), "north_road", seen,
+                        slayer.getUniqueId(), slayer.getName());
+            }
+        }
     }
 
     /**

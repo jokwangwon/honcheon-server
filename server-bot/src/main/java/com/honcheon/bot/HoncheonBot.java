@@ -39,6 +39,11 @@ public final class HoncheonBot {
         // 세계 개막 소문 — 등록 사건 3건은 첫날부터 이미 돌고 있다 (1회성, 멱등)
         listener.seedWorldRumors();
 
+        // 세계 다리 — 마크(MVT)에서 벌어진 일이 이 장부로 흘러 들어온다 (config/world_bridge.yml).
+        // 봇이 꺼져 있던 동안의 사건도 파일에 그대로 남아 있다 — 켜는 순간 전부 따라잡는다.
+        Bridge bridge = new Bridge(rules, db, listener, configDir);
+        bridge.start();
+
         JDA jda = JDABuilder.createLight(token)
                 .addEventListeners(listener)
                 .build()

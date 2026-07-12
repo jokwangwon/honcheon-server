@@ -164,3 +164,25 @@ CREATE TABLE IF NOT EXISTS scenes (              -- 장면 = 동시성 잠금 �
     closed_day   INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_scenes_open ON scenes(channel, state);
+
+-- ─── 세계 다리 (마이그레이션 005) — 마크(MVT)의 사건이 이 장부로 흘러 들어오는 통로 ───
+-- 규칙: config/world_bridge.yml (등록제) · 설계: docs/design/world_bridge.md
+-- 세계 상태를 새로 만들지 않는다: 사건은 events·rumors·regions 로 흘러간다.
+-- 이 둘은 다리의 부속이다 — 신원(누가 죽였는가)과 멱등(두 번 죽이지 않는다).
+
+CREATE TABLE IF NOT EXISTS mvt_link (            -- 마크의 몸(uuid) ↔ 봇의 장부(character_id)
+    mc_uuid      TEXT PRIMARY KEY,
+    mc_name      TEXT NOT NULL,                  -- 마지막으로 본 이름 (키가 아니다 — 닉은 바뀐다)
+    character_id INTEGER REFERENCES characters(id),   -- NULL = 아직 안 이어졌다 (이름만 남는 소문)
+    linked_day   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mvt_link_char ON mvt_link(character_id);
+CREATE INDEX IF NOT EXISTS idx_mvt_link_name ON mvt_link(mc_name);
+
+CREATE TABLE IF NOT EXISTS bridge_inbox (        -- 멱등의 못 — 재생은 무해하다 (append-only 로그의 값)
+    event_id    TEXT PRIMARY KEY,                -- MVT 봉투의 id (uuid)
+    kind        TEXT NOT NULL,
+    world_day   INTEGER NOT NULL,
+    applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_inbox_kind ON bridge_inbox(kind, world_day);

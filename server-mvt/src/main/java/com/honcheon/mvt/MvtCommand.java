@@ -52,6 +52,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "시드검사" -> seedCheck(sender, args);    // 지형 적합성 점수 (관리자)
                 case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "지역조성" -> buildRegion(sender, args);   // 원거리 등록지 하나를 짓는다 (관리자·콘솔 가능)
+                case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
                 case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
@@ -561,7 +562,14 @@ public final class MvtCommand implements CommandExecutor {
 
     /** 땅이 실린 뒤 — 짓고 구역을 등록한다 (메인 스레드) */
     private void finishRegion(CommandSender sender, World world, WorldMap.Place place, WorldMap.Site site) {
-        java.util.List<Zone> built = RemoteBuilder.build(world, place, site.x(), site.groundY(), site.z());
+        // 지면은 **첫 조성이 잰 값**을 쓴다 (원장). 다시 재면 지난번에 세운 산을 지면으로 읽어
+        // 그 위에 또 산을 쌓는다 — 조성할 때마다 화산파가 36켜씩 하늘로 자랐다.
+        Integer remembered = plugin.regionBase(place.id());
+        int baseY = remembered == null ? site.groundY() : remembered;
+        if (remembered == null) {
+            plugin.setRegionBase(place.id(), baseY);
+        }
+        java.util.List<Zone> built = RemoteBuilder.build(world, place, site.x(), baseY, site.z());
         if (built.isEmpty()) {
             sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
             return;
@@ -820,6 +828,36 @@ public final class MvtCommand implements CommandExecutor {
         for (String line : TownRender.render(center.getWorld(), plugin.anchors(),
                 center.getBlockX(), center.getBlockY() - 1, center.getBlockZ(), dir)) {
             sender.sendMessage(ChatColor.GRAY + line);
+        }
+        return true;
+    }
+
+    /**
+     * /혼천 지역검수 &lt;id&gt; — 지역의 자동 검산 (콘솔 가능).
+     *
+     * <p>청하현에는 검수 12종이 있는데 산채·문파에는 아무 눈도 없었다. 조감은 "보기에 이상하다"까지만
+     * 말하고 <b>"오를 수 없다"는 말은 못 한다</b>. 지역 검수의 첫 질문이 그것이다 — 정말 걸어 올라가지는가.
+     */
+    private boolean auditRegion(CommandSender sender, String[] args) {
+        WorldMap map = plugin.worldMap();
+        if (map == null || args.length < 2) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 지역검수 <지역id>  (예: hwasan · nokrim_sochae)");
+            return true;
+        }
+        WorldMap.Place place = map.place(args[1]);
+        if (place == null) {
+            sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + args[1]);
+            return true;
+        }
+        Zone zone = plugin.zones().stream().filter(z -> z.name().equals(place.name())).findFirst().orElse(null);
+        if (zone == null) {
+            sender.sendMessage(ChatColor.RED + place.name() + " 은 아직 서지 않았다 — /혼천 지역조성 " + args[1]);
+            return true;
+        }
+        World world = org.bukkit.Bukkit.getWorld(zone.world());
+        for (String line : RegionAudit.audit(world, place, zone)) {
+            sender.sendMessage(line);
+            plugin.getLogger().info("[지역검수] " + org.bukkit.ChatColor.stripColor(line));
         }
         return true;
     }

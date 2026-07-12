@@ -444,3 +444,122 @@ alpha_wiring:
     effect: "Quests.board(worldDay)에 사망 파생 의뢰 1~2건 동적 병합 (POOL은 정적 유지)"
   deferred: [복수자_생성(계절_정산_필요), 세력_반응_사다리(faction_standing NPC축 미구현),
              플레이어_시설_계승(소유·경제 배관 필요)]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 무명(無名)층 — tier 0 의 죽음 (npc_types.배경 '아래')
+# 등록부: config/npcs/populace.yml (28인) / 읽는 코드: server-mvt/.../Incidents.java
+#
+# 위 표는 등록 NPC(tier 1~5)의 죽음을 다룬다. 무명은 그 아래 한 층이다:
+#   death_weight 0 (계절 예산 미점유) · 후계 없음 · 등록 복수자 없음 · 서비스 공백 없음.
+# 그러나 **규칙은 위와 같은 규칙이다** — 새 통화를 만들지 않는다:
+#   목격·시신·증거 3변수 = killer_response.variables 그대로
+#   소문 강도·정확도·지연 = killer_response.rumor_matrix 그대로
+#   관 반응 단계 = killer_response.stages 그대로
+#   민심 부채 = revenge.civil_debt 그대로 (무명에게는 복수자가 없다)
+#   현상금 = economy.yml 의뢰_보수 (아래 bounty 는 그 표의 참조 배율일 뿐)
+#
+# 무명이 위 표와 다른 딱 세 가지:
+#   ① 사망이 서비스를 끊지 않는다 (service_gap 대상 아님)
+#   ② 복수자가 없다 → 대가는 전부 지역(민심)과 관(수배)으로 간다
+#   ③ 대신 **가족이 있다** → 의뢰가 자란다 (populace.yml quests — 어미가 아들을 찾는다)
+populace_layer:
+  tier: 0
+  death_weight: 0
+  service_gap: false
+  registered_avenger: false        # 등록 복수자 없음 → revenge.civil_debt 로 직행
+
+  # ─── 3변수의 인게임 실체 (MVT 가 실제로 측정하는 것) ───
+  variables:
+    witness:
+      how: "사망 시점 반경 안의 살아 있는 무명·플레이어 (시야 차단 무시 — 무명은 소리도 듣는다)"
+      radius: 16
+      public_min: 2                # 이 수 이상 = killer_response.variables.witness 2 (백주·장터)
+      night_blind: 0.5             # 밤 구간에는 목격 판정에 이 배수 (어두우면 덜 본다 — 난수 허용)
+    body:
+      은닉: "살해자가 시신 위에서 웅크린 채 conceal_seconds 를 버틴다 (populace.yml incidents.conceal)"
+      유기_지연발견: "그대로 두고 떠난다 — 지나가는 무명이 발견하거나, auto_days 뒤 관이 찾는다"
+      즉시_발견: "목격자가 있으면 시신은 이미 발견된 것이다"
+    evidence:
+      없음: "목격 0 + 시신 은닉"
+      정황: "시신 발견 · 범인 미상 (목격 0)"
+      확정: "목격 1 이상 — 무명은 얼굴을 기억한다"
+
+  # ─── 단계 → 세계의 반응 (killer_response.stages 를 무명층 수치로 정산) ───
+  # 각 단계는 위 stages 의 이름을 그대로 쓴다. 새 단계를 만들지 않는다.
+  stages:
+    은밀:
+      when: "witness 0 · body 은닉"
+      rumor: { intensity: 0 }                 # 소문 없음 — 은밀형의 보상
+      official: 없음
+      region_delta: {}
+      quests: [실종_수색]                      # ★ 그래도 사람은 없어진다 (killer_response.missing_person)
+      note: "완전 범죄는 없다. 느린 발각만 있다 — 어미는 사흘 뒤에 사람을 부른다"
+    흔적:
+      when: "witness 0 · body 발견 (즉시 또는 지연)"
+      rumor: { intensity: 1, accuracy: 50, target: 미상의_무인 }
+      official: 수사_개시                       # 포두가 시신 자리에 나온다 — 아직 당신을 모른다
+      region_delta: { 민심: -1, 치안: -1 }
+      quests: [시신_수습]
+      curfew: true                             # 밤에 사람이 다니지 않는다
+    지목:
+      when: "witness 1 (소수 목격)"
+      rumor: { intensity: 2, accuracy: 70, delay_days: 1 }
+      official: 수배
+      bounty_ref: economy.yml:의뢰_보수.도적_소탕_현상   # 무명 살해 = 도적 값 (고수_현상금은 등록 NPC 몫)
+      region_delta: { 민심: -3, 치안: -1 }
+      pursuit: true                            # 포교(捕校)가 추적한다
+      curfew: true
+      quests: [시신_수습, 하수인_추적]
+    공개:
+      when: "witness 2+ (백주·장터)"
+      rumor: { intensity: 3, accuracy: 90, delay_days: 0 }
+      official: 즉시_수배_현상금
+      bounty_ref: economy.yml:의뢰_보수.도적_소탕_현상
+      bounty_mult: 2                           # 백주의 값은 두 배다
+      region_delta: { 민심: -3, 치안: -3 }      # region_state.event_deltas.길거리_살인_미해결 정합
+      pursuit: true
+      curfew: true
+      quests: [시신_수습, 하수인_추적, 복수_청부]
+
+  # ─── 세력 반응 — 무명 하나로는 세력이 움직이지 않는다. 쌓여야 움직인다 ───
+  # 수치의 원천은 faction_reaction.yml inputs · faction_entry_routes 의 사파/혈교 루트.
+  # MVT 는 이 값을 DB 에 못 쓴다 (봇 소관) → bridge 큐로 내보낸다 (populace.yml bridge).
+  faction_response:
+    관군:
+      input: 관할_치안_중대사건            # faction_reaction.inputs = +3
+      per_kill: 3
+      from_stage: 흔적                     # 시신만 나와도 관은 움직인다 (범인은 몰라도)
+    정파:
+      input: 소문_도달_관심일치
+      per_kill: -1                         # 정파 우호 하락 (favor 축)
+      from_stage: 지목
+    혈교:
+      route_ref: faction_entry_routes.yml:혈교
+      favor_per_kill: 2                    # "힘에 미쳐 마을 원을 죽였다" — 그들은 그것을 자격으로 읽는다
+      from_stage: 은밀                     # ★ 아무도 못 봐도 그들은 안다 (혈교의 눈)
+      threshold: 3                         # 무명 3인 → 혈교의 접촉 (faction_reaction stage 3 '접촉 또는 경고')
+      contact_line: "당신의 손에서 피 냄새가 난다고, 누군가 전하라 하였소."
+    마교:
+      favor_per_kill: 1
+      from_stage: 지목
+
+  # ─── 민심 부채 (revenge.civil_debt) — 무명을 죽인 대가의 전부 ───
+  civil_debt:
+    effect: "이 민심 델타는 region_state.recovery 의 자연 회복 대상에서 제외된다"
+    note: "가장 약한 자를 죽인 대가는 복수가 아니라 지역의 냉기다"
+
+  # ─── 통행금지 (curfew) — 사람이 줄면 마을이 달라진다 ───
+  curfew:
+    trigger: "미해결 살인 1건 이상 (흔적 단계 이상)"
+    days: 5                                 # 해결(자수·배상)되거나 이 날수가 지나면 풀린다
+    effect:
+      밤_외출: false                        # 밤 구간에 무명이 자리에 서지 않는다 (관졸만 남는다)
+      해질녘_귀가: true                      # 해질녘부터 집 쪽 자리로 (routine 무시)
+      대사_mood: 공포                        # npc_dialogue.populace.voices.*.공포
+    note: "빈 거리가 곧 형벌이다 — 아무도 당신에게 말을 걸지 않는 마을"
+
+  # ─── 자리를 메운다 (respawn) — 무명은 대체된다. 그것이 무명의 정의다 ───
+  respawn:
+    days: 3                                  # populace.yml death.respawn_days 와 같은 수
+    name: 전임자_그대로                       # 같은 이름의 다른 사람이 아니라, 세계가 잊는 것이다
+    exception: "관계(relations)가 걸린 사람은 즉시 부활하지 않는다 — 유족의 의뢰가 끝나야 자리가 메워진다"

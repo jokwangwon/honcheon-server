@@ -126,7 +126,10 @@ reactions:
 #   witness 0 → 강도 1 ("미상의 무인"), witness 1 → 강도 1, witness 2 이상(백주 장터) → 강도 2.
 # 후계·복수는 없다 (등록 관계가 없다) → npc_death.revenge.civil_debt: 민심 부채.
 #   "가장 약한 자를 죽인 대가는 복수가 아니라 지역의 냉기다" — 그 냉기가 이 층의 전부다.
+# ★ 살아 있는 규칙은 npc_death.yml populace_layer 다 (Incidents.java 가 그것을 읽는다).
+#   아래 표는 그 요약이자 이 등록부의 자기설명이다 — 수치를 고칠 때는 npc_death.yml 쪽을 고쳐라.
 death:
+  live_source: npc_death.yml:populace_layer
   death_weight: 0
   base_intensity: 1
   max_intensity: 2
@@ -407,3 +410,275 @@ people:
     routine: 의방잡일
     disposition: "유문의 손이 모자란 자리를 메운다 — 열병 환자를 가장 많이 본 사람"
     body: { profession: NONE }
+
+# ─── 말투 층위 — 사람 → 목소리 ───
+# 대사 원문은 config/npc_dialogue.yml populace.voices 에 있다 (대화 등록부는 그쪽이 단일 진실 원천).
+# 여기서는 "이 일과를 사는 사람은 어떤 말투로 말하는가"만 잇는다.
+voice_by_routine:
+  농사:     농민
+  나무:     농민
+  물지게:   품팔이
+  짐꾼:     품팔이
+  객잔부엌: 품팔이
+  마부:     품팔이
+  행상:     장사치
+  주막:     장사치
+  철방:     장인
+  글:       서생
+  전장사환: 서생
+  아이:     아이
+  노인:     노인
+  걸식:     거지
+  관졸:     관졸
+  빨래:     아낙
+  의방잡일: 아낙
+
+# ─── 관계(relations) — 의뢰는 관계에서 자란다 ───
+# ★ 관계가 없으면 의뢰가 자라지 않는다. 구자(거지)에게 아무도 없는 것은 실수가 아니라 설계다:
+#   그가 죽으면 아무도 그를 찾지 않는다 (npc_death.revenge.civil_debt — 지역의 냉기만 남는다).
+# 표기: person 의 <type> 이 kin 이다.  (순아의 어미는 진묘다)
+# type: 어미·아비·자식·형·아우·스승·도제·동료·이웃·주인
+# 코드는 이 표를 양방향으로 색인한다 (Incidents.kinOf / Incidents.dependentsOf).
+relations:
+  # 장이 일가 — 밭과 딸
+  - { person: suna,     type: 아비,   kin: jangi }
+  - { person: suna,     type: 어미,   kin: jinmyo }
+  - { person: jangi,    type: 자식,   kin: suna }
+  - { person: jinmyo,   type: 자식,   kin: suna }
+  # 임화의 아들 — 핏물 밴 옷을 빨던 아낙에게 아들이 하나 있다
+  - { person: abok,     type: 어미,   kin: imhwa }
+  - { person: imhwa,    type: 자식,   kin: abok }
+  # 왕노인의 손녀 — 말 없는 아이. 무엇이든 먼저 본다
+  - { person: myoa,     type: 아비,   kin: wangnoin }     # 조부지만 이 아이에겐 아비다
+  - { person: wangnoin, type: 자식,   kin: myoa }
+  # 나무꾼 형제
+  - { person: seomok,   type: 형,     kin: honosam }
+  - { person: honosam,  type: 아우,   kin: seomok }
+  # 물지게 사제
+  - { person: imaeng,   type: 스승,   kin: sonpa }
+  - { person: sonpa,    type: 도제,   kin: imaeng }
+  # 철방 도제 — 스승은 계약 NPC 야철수 (층을 건너는 유일한 줄)
+  - { person: seokgeun, type: 스승,   kin: yacheolsu }
+  # 짐꾼 동료
+  - { person: yuchil,   type: 동료,   kin: wangdaeryeok }
+  - { person: wangdaeryeok, type: 동료, kin: yuchil }
+  # 객잔 술청 — 주모와 부엌데기
+  - { person: chunhwa,  type: 주인,   kin: churan }
+  - { person: churan,   type: 도제,   kin: chunhwa }
+  # 관졸 동료
+  - { person: jeongo,   type: 동료,   kin: jeongyuk }
+  - { person: jeongyuk, type: 동료,   kin: jeongo }
+  # 우물가 노인 둘 — 매일 다투고 매일 다시 앉는다
+  - { person: wangnoin, type: 동료,   kin: sangnoin }
+  - { person: sangnoin, type: 동료,   kin: wangnoin }
+  # 서생과 나물장수 — 위생이 밥을 비는 어머니
+  - { person: wisaeng,  type: 어미,   kin: maechae }
+  - { person: maechae,  type: 자식,   kin: wisaeng }
+  # 여분은 의방의 손 — 유문(계약 NPC)의 아래
+  - { person: yeobun,   type: 주인,   kin: yumun }
+  # 구자(거지) — 없음. 전복·노두부·정삼·노각·석근의 유족도 등재하지 않는다.
+  #   그들이 죽으면 의뢰는 자라지 않는다. 남는 것은 민심뿐이다.
+
+# ─── 사건 기계(incidents) — MVT 가 실제로 측정·집행하는 값 ───
+# 규칙(강도·정확도·단계·현상금·favor)의 원천은 npc_death.yml populace_layer 다.
+# 여기는 인게임 기계값만 둔다 (반경·초·틱) — 규칙과 기계를 섞지 않는다.
+incidents:
+  ticker_period_ticks: 20         # 1초 — 시신 발견·은닉 진행·추적 갱신
+  conceal:
+    seconds: 6                    # 시신 위에서 웅크린 채 버텨야 하는 시간 (은닉)
+    radius: 3                     # 이 안에서 웅크리고 있어야 진행된다
+    interrupt_radius: 12          # 이 안에 다른 무명·플레이어가 들어오면 중단 + 목격 +1
+    line_progress: "시신을 치우는 중… {pct}%"
+    line_done: "시신을 치웠다. 아무도 보지 못했다. — 그러나 사람은 없어진다."
+    line_fail: "누가 온다. 손이 멈췄다."
+  corpse:
+    marker: ARMOR_STAND           # 시신 표식 (무적·중력 없음 — 우클릭으로 은닉/확인)
+    name_format: "{name}의 시신"
+    discovery_radius: 7           # 살아 있는 무명·다른 플레이어가 이 안에 들면 발견
+    auto_discover_days: 3         # 아무도 못 봐도 관이 찾는다 (killer_response delay_days [3,14] 하한)
+    despawn_days: 7               # 발견 뒤 이 날수가 지나면 표식 제거 (수습됨)
+    line_found: "{finder}이(가) 비명을 질렀다 — {name}의 시신이다."
+  witness:
+    flee_to: 관아_앞               # 목격자는 관아로 달린다 (걸어서 — 텔레포트 없음)
+    shout: "사람이 죽었소! 사람이!"
+    speed: 1.3
+  pursuit:                        # 포교(捕校) — 관의 손
+    name: "포교"
+    entity: VINDICATOR            # 사람 형상 + 근접 추적 (바닐라). 무기는 관의 환도
+    weapon: IRON_SWORD
+    count_by_stage: { 지목: 1, 공개: 2 }
+    spawn_at: 관아_앞
+    spawn_delay_seconds: { 지목: 30, 공개: 5 }   # 목격되면 즉시 온다. 지목은 신고가 도는 시간만큼 늦다
+    give_up_days: 3
+    line_spawn: "관아 쪽에서 발소리가 몰려온다 — 포교다."
+    line_reach: "게 섰거라! 관의 이름으로 포박한다!"
+  bounty:
+    base: 5000                    # economy.yml 의뢰_보수.도적_소탕_현상 정합 (신규 표 아님 — 참조값)
+    line: "당신의 목에 값이 붙었다 — {amount}문."
+  region:                         # MVT 지역 상태 거울 (진짜 장부는 봇 DB)
+    baseline: 50
+    low: 30                       # region_state.yml threshold_effects.치안_저하 (치안 < 30)
+    low_rumor: 도적_소문           # 치안이 무너지면 산길 소문이 돈다
+    # ★ quest_generation.yml sources.region_state.치안_저하 = [도적_소탕_현상, 상단_호위, 야간_순찰_보조].
+    #   무명층은 그 표의 민간 대응물을 낸다 — 산길_대행(나무꾼)·야간_순라_보조(관졸).
+    #   즉 살인이 쌓이면 치안이 무너지고, 치안이 무너지면 **의뢰가 저절로 자란다.**
+    line_minsim: "청하현 민심 {value} ({delta})"
+
+# ─── 무명 의뢰(quests) — 세계의 상태가 의뢰를 낳는다 ───
+# ★ 의뢰소의 공식 의뢰(quest_generation.yml sources / Quests.POOL)와 다른 층이다:
+#   보수가 적고, 사적이고, 절박하다. 게시판에 붙지 않는다 — 사람이 소매를 붙잡는다.
+#   등급(grade)·보수 키는 quest_generation.grade_ladder / economy.yml 의뢰_보수 그대로 재사용한다.
+#
+# 사전에 적어 둔 의뢰 목록이 아니라 **조건 → 의뢰**의 규칙이다:
+#   when 이 참인 순간 발주자가 정해지고(issuer: 관계에서 찾는다), 그가 다음 우클릭에 의뢰를 건다.
+#   관계(relations)가 없으면 발주자가 없다 → 의뢰가 자라지 않는다.
+quests:
+  max_active_per_player: 3
+  offer_expire_days: 7            # 아무도 받지 않으면 의뢰가 늙는다 (on_expire)
+  objectives:                     # 코드가 아는 목표 유형 (이 넷뿐 — 새로 발명 금지)
+    시신_확인: "시신 표식 반경 안에 들어선다"
+    장소_방문: "등록 자리(places) 반경 안에 들어선다"
+    생존_귀환: "대상 무명을 발주자 반경 안으로 데려온다 (살아 있을 때만)"
+    귀환: "발주자를 다시 우클릭한다 (모든 의뢰의 마지막 칸)"
+
+  rules:
+
+    # ① 어미가 아들을 찾는다 — 무명 의뢰의 원형
+    #    조건: 아이가 사라졌다 (시신 은닉 = 실종). 시신이 발견되면 ②로 전환된다.
+    아이_실종:
+      when: { subject_state: 실종, subject_voice: 아이 }
+      issuer_order: [어미, 아비, 스승, 주인, 동료, 형]
+      grade: 잔심부름                # quest_generation.grade_ladder — 범인도 받는다
+      reward_key: 잔심부름            # economy.yml 의뢰_보수
+      money: 300
+      objective: 시신_확인
+      alt_objective: 생존_귀환        # 아이가 살아 있으면 데려오는 것이 성공이다
+      delay_days: 1                  # 하루는 기다린다 — "곧 오겠지요"
+      offer: "나리. …우리 {victim}이(가) 어젯밤부터 안 들어왔소. 어디서든 좀 봐 주시오. 삯은 이것뿐이오."
+      accept: "고맙소. 고맙소… 골목이든 개울이든, 어디든."
+      decline: "…그렇겠지요. 무인 나리께 청할 일이 아니지요."
+      success:                       # 살아 돌아왔다 (alt_objective)
+        text: "{issuer}이(가) 아이를 끌어안는다. 아무 말도 못 한다."
+        money_mult: 1.0
+        region: { 민심: +1 }
+      fail_body:                     # 시신을 찾았다 — 실패도 서사다
+        text: "{issuer}은(는) 옷자락을 먼저 알아본다. …그리고 무릎이 꺾인다."
+        money_mult: 0.5              # 삯은 준다. 손이 떨려서 잘 못 센다
+        region: { 민심: -1 }
+        mood: 애도                    # 이 사람의 대사가 영구히 바뀐다 (npc_dialogue 애도)
+        rumor: 살인_소문
+      on_expire:
+        text: "{issuer}은(는) 더 묻지 않는다. 우물가에 앉아 있다."
+        region: { 민심: -1 }
+        mood: 애도
+      killer_irony:                  # ★ 살해자가 이 의뢰를 받을 수 있다. 그 아이러니가 이 세계의 값이다
+        offer_suffix: "…나리 같은 분이면 찾아 주실 게요."
+        complete: "{issuer}이(가) 당신이 가리킨 자리를 본다. 당신의 손을 본다. 그리고 다시 시신을 본다.
+                   — 아무것도 묻지 않는다. 삯을 쥐여 준다."
+        blood_favor: 1               # 혈교는 이것을 자격으로 읽는다 (npc_death.populace_layer.faction_response)
+        confess_hint: "관에 자수하면 수배가 소멸한다 (npc_death.responses.자수)"
+
+    # ② 시신을 수습해 달라 — 시신이 발견된 뒤
+    시신_수습:
+      when: { subject_state: 사망_확인 }
+      issuer_order: [어미, 아비, 형, 아우, 스승, 도제, 동료, 주인, 자식]
+      grade: 잔심부름
+      reward_key: 잔심부름
+      money: 200
+      objective: 시신_확인
+      offer: "{victim}이(가) 죽었다 들었소. …나는 못 가겠소. 나리가 좀 봐 주시오. 어디에 누웠는지만이라도."
+      accept: "고맙소. 그 자리만 알려 주시오."
+      decline: "…예."
+      success:
+        text: "{issuer}은(는) 고개를 끄덕인다. 그리고 삽을 든다. 장례는 산 사람의 일이다."
+        money_mult: 1.0
+        region: { 민심: +1 }
+        mood: 애도
+      on_expire:
+        text: "{issuer}은(는) 결국 혼자 갔다. 당신을 보지 않는다."
+        region: { 민심: -1 }
+        mood: 애도
+
+    # ③ 도적 소문이 돌면 나무꾼은 산에 못 간다 — 소문이 낳는 의뢰
+    산길_대행:
+      when: { rumor: 도적_소문 }
+      issuer_id: honosam            # 등록 개인 지명 (관계가 아니라 처지에서 자란다)
+      grade: 잔심부름
+      reward_key: 잔심부름
+      money: 250
+      objective: 장소_방문
+      place: 산길_어귀
+      offer: "산길에 도적이 났다지 않소. 나는 못 가오 — 아우가 붙잡소.
+              나리가 어귀까지만 가서 사람 그림자가 있나 봐 주시오."
+      accept: "어귀까지만이오. 그 위는 짐승의 땅이오."
+      decline: "…나도 안 가는데 누가 가겠소."
+      success:
+        text: "{issuer}은(는) 한참 듣더니 침을 삼킨다. — '그럼 내일은 나무를 하러 가도 되겠소?'"
+        money_mult: 1.0
+        region: { 민심: +1 }
+      on_expire:
+        text: "{issuer}은(는) 사흘째 나무를 못 했다. 땔감값이 올랐다."
+        region: { 민심: -1, 경제: -1 }
+
+    # ④ 관졸이 순라 동무를 구한다 — 통행금지가 낳는 의뢰
+    야간_순라_보조:
+      when: { curfew: true }
+      issuer_order: [동료]
+      issuer_id: jeongyuk
+      grade: 조사_채집               # quest_generation.region_state.치안_저하 → 야간_순찰_보조 정합
+      reward_key: 조사
+      money: 400
+      objective: 장소_방문
+      place: 서쪽_골목
+      offer: "밤에 사람이 죽었소. 나 혼자 순라를 도오. …같이 한 바퀴 돌아 주겠소?
+              낭인은 싫소만, 오늘은 사람이 하나라도 더 필요하오."
+      accept: "서쪽 골목부터요. 거기가 제일 어둡소."
+      decline: "그럴 줄 알았소. 낭인은 늘 그렇지."
+      success:
+        text: "{issuer}은(는) 처음으로 당신 이름을 묻는다. — '오늘은… 고맙소.'"
+        money_mult: 1.0
+        region: { 치안: +1 }
+      on_expire:
+        text: "{issuer}은(는) 혼자 돌았다. 그리고 아무 말도 하지 않는다."
+        region: { 치안: -1 }
+
+# ─── 봇과의 다리(bridge) — 무명층이 세계의 장부에 닿는 곳 ───
+# ★ 다리는 하나다. 무명층은 자기 큐를 따로 파지 않는다:
+#   config/world_bridge.yml (WorldBridge.java / Bridge.java) 이 이 저장소의 유일한 통로다.
+#   등록되지 않은 kind 는 그쪽이 버린다 — 그것이 등록제의 집행이다.
+#
+# MVT 는 **사실만** 보낸다 (kind: npc_death — 이미 등록돼 있다):
+#   registry=populace · npc_id · npc_name · job · place · witnesses · night · body · cause · killer
+# 파생값(소문 강도·정확도·세력 점수·지역 델타)은 **봇이 npc_death.yml 로 계산한다.**
+#   파생값을 둘이 계산하면 세계가 둘이 된다. MVT 안의 수치는 인게임 즉시 피드백용 거울일 뿐이다.
+#
+# 발신 시점 = 시신의 처지가 정해지는 때다 (완전 범죄는 없다. 느린 발각만 있다):
+#   목격 1+  → 즉시        body=즉시_발견
+#   은닉 성공 → 그 순간     body=은닉
+#   발견(사람이 지나가거나 3일 뒤 관이 찾거나) → 그때  body=유기_지연발견
+bridge:
+  enabled: true
+  via: world_bridge.yml           # 다리의 등록부는 그쪽이다 (여기는 무명층의 사용 선언일 뿐)
+  emits: [npc_death]              # 지금 등록된 kind 중 무명층이 쓰는 것
+  wanted_kinds:                   # ★ 다리 담당자에게 — 이 kind 들이 등록되면 무명층이 바로 실어 보낸다
+    populace_quest: "무명 의뢰 발생·완료·만료 {rule, issuer, victim, player, outcome}"
+    surrender: "자수 {player, fine} → faction_politics.authority_mandate.drains.자수 (-10)"
+    bounty: "수배 {player, amount, stage} — 지금은 MVT 안에서만 굴린다"
+  note: "등록될 때까지 이 사건들은 서버 로그로만 남는다 ([사건] …). 다리에 없는 것은 장부에도 없다."
+
+# ─── 길잃음(strays) — 죽이지 않아도 아이는 사라진다 ───
+# ★ 사용자의 예시("어미가 아들을 잃어버려 찾아달라") 의 무혈(無血) 경로다.
+# 밤이 오는데 세상이 흉흉하면(도적 소문 또는 통행금지) 아이 하나가 집에 못 들어간다.
+# 그러면 quests.rules.아이_실종 이 **같은 규칙으로** 자란다 — 살인이든 길잃음이든 어미의 말은 같다.
+# 다만 결말이 다르다: 살아 있으면 데려올 수 있고(생존_귀환 → success), 죽었으면 시신뿐이다(fail_body).
+strays:
+  enabled: true
+  voice: 아이                     # 잃어버리는 것은 아이뿐이다 (어른은 스스로 돌아온다)
+  chance_per_night: 0.34          # 밤이 시작될 때 (흉흉할 때만 굴린다)
+  requires_any: [rumor, curfew]   # 소문이 돌거나 통행금지일 때만 — 평온한 밤에는 아이가 집에 온다
+  lost_places: [산길_어귀, 개울_빨래터, 남쪽_들, 북문_어귀]
+  line_lost: "어디선가 아이 우는 소리가 들린 것도 같다. …바람이었을까."
+  line_found: "{name}이(가) 당신을 보고 울음을 터뜨린다. — '집에… 집에 가고 싶어요.'"
+  line_follow: "{name}이(가) 당신의 옷자락을 붙잡는다. 이제 따라온다."
+  return_radius: 6                # 발주자(어미) 이 반경 안에 데려오면 생존_귀환 성립
+  note: "아이는 죽지 않았다. 다만 어두운 데 있다."

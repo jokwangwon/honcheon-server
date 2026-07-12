@@ -1,0 +1,196 @@
+# 세계 다리(世界橋) — 마크(MVT)에서 벌어진 일이 봇의 장부로 흐르고,
+# 봇의 세계 상태가 마크의 행동으로 되먹임되는 단 하나의 통로.
+#
+# 원칙 (등록제): **이 파일에 없는 이벤트는 세계에 존재하지 않는다.**
+#   MVT 는 여기 등록된 kind 만 발신하고, 봇은 여기 등록된 kind 만 수신한다.
+#   봇이 소문을 어떤 태그·강도·정확도로 낳는지도 코드가 아니라 이 파일이 정한다
+#   (수치의 원천은 여전히 rumor.yml · npc_death.yml — 여기는 '어느 칸을 읽을지'의 배선표다).
+#
+# 몸이 둘이다:
+#   MVT (Paper 플러그인, 별도 JVM) — 사건이 벌어지는 곳. 사람이 죽고, 도적을 베고, 격을 터뜨린다.
+#   봇  (JDA + SQLite)             — 세계의 장부. 소문·명분·수사·세력·의뢰.
+# 봇은 항상 떠 있지 않다. 그러니 다리는 **비동기·내구성 큐**여야 한다 (docs/design/world_bridge.md).
+
+transport:
+  mode: jsonl_spool                # 파일 기반 append-only JSONL + 봇의 폴링 (후보 비교는 설계 문서 2장)
+  dir: run/bridge                  # 저장소 루트 기준. MVT 는 데이터 폴더에서 거슬러 올라 루트를 찾는다
+                                   #   (또는 환경변수 HONCHEON_BRIDGE 로 직접 지정)
+  outbox: mvt                      # MVT → 봇: <dir>/mvt/<YYYYMMDD>.jsonl (한 줄 = 한 사건, 추가만)
+  snapshot: world_state.json       # 봇 → MVT: <dir>/world_state.json (원자적 교체 — 최신이 이긴다)
+  poll_seconds: 5                  # 봇의 수신 주기 (꺼져 있던 동안의 것은 켤 때 전부 따라잡는다)
+  snapshot_seconds: 20             # MVT 의 되먹임 갱신 주기
+  retain_days: 30                  # 처리 끝난 조각의 보관 기간 (감사·재생용 — 지우는 것은 사람이 한다)
+  cursor_key: 다리:커서            # 봇 world_meta 키 — "<파일>:<바이트오프셋>". 여기까지 읽었다
+  # 멱등: 모든 이벤트는 id(uuid)를 지고, 봇은 bridge_inbox(PK=event_id)에 먼저 못을 박는다.
+  # 커서를 못 쓰고 죽어도 두 번 적용되지 않는다 (재기동 = 재생, 재생 = 무해).
+
+# ─── 봉투 (모든 이벤트 공통) ───
+envelope:
+  id: "uuid — 멱등 키 (봇의 bridge_inbox PK)"
+  kind: "이벤트 종류 — 아래 events 등록부의 키. 미등록이면 봇이 무시하고 로그만 남긴다"
+  at: "발신 시각 (epoch millis, 현실 시간)"
+  source: "mvt"
+  actor: "행위자 — mc_uuid · mc_name (있으면). 봇은 mvt_link 로 캐릭터를 찾는다"
+  place: "장소 키 (rumor.yml propagation.origin_network_by_location 의 키 — 발원 소문망의 근거)"
+  night: "밤인가 (bool) — 목격·은닉의 배경"
+  data: "kind 별 페이로드"
+
+# ─── 신원 접합 (마크 플레이어 ↔ 봇 캐릭터) ───
+# 마크의 몸과 봇의 장부는 서로를 모른다. 이 표가 없으면 "누가 죽였는가"가 세계에 남지 않는다.
+identity:
+  table: mvt_link                  # (mc_uuid PK, mc_name, character_id, linked_day) — 마이그레이션 005
+  link_command: "/혼천 접속 <디스코드ID>"   # (배선 대기 — 지금은 mc_name 으로 느슨히 잇는다)
+  fallback: mc_name                # 링크가 없으면 이름만 장부에 적는다 (주체 없는 소문 = 세계의 배경음)
+
+# ─── 장소 접합 — 마크의 자리(populace.yml places) → 소문망의 장소 키 ───
+# 이것이 없으면 산길에서 난 일이 장터의 소문이 된다. 발원망이 곧 그 소문이 처음 도는 곳이다
+# (rumor.yml propagation.origin_network_by_location — 여기 없는 자리는 mingan_market 으로 떨어진다).
+place_map:
+  장터_광장: market
+  우물가: market
+  좌판_거리: market
+  남북대로_북: market
+  남북대로_남: market
+  동서대로_동: market
+  동서대로_서: market
+  서쪽_골목: market
+  동쪽_골목: market
+  남쪽_들: market
+  개울_빨래터: market
+  전장_앞: market
+  표국_마당: market
+  관아_앞: market
+  객잔_앞: cheongha_inn
+  의방_앞: medicine_shop
+  의뢰소_앞: request_office
+  북문_어귀: north_road          # 북문 밖은 이미 길이다 — 상단망이 먼저 듣는다
+  산길_어귀: north_road
+
+# ═══════════════ 이벤트 등록부 ═══════════════
+# effects 는 봇이 무엇을 하는지의 선언이다. 코드는 이 표를 읽어서 움직인다.
+events:
+
+  npc_death:
+    desc: "사람이 죽었다 — 무명(populace) 또는 등록 NPC(cheongha_npcs)"
+    payload:
+      npc_id: "등록부 키 (populace.yml people.<id> 또는 cheongha_npcs.yml npcs.<key>)"
+      npc_name: "이름"
+      registry: "populace | cheongha_npcs — 어느 등록부의 사람인가 (연쇄의 깊이가 다르다)"
+      job: "생업 (무명일 때)"
+      witnesses: "목격자 수 (실제로 센 값 — populace.yml death.witness_radius 반경)"
+      body: "즉시_발견 | 유기_지연발견 | 은닉 (npc_death.yml killer_response.variables.body)"
+      cause: "노환_병사 | 사고 | 사건_피살 | 자멸_심마 (npc_death.yml npc_types.cause_modifier)"
+      killer_uuid: "가해자 (플레이어일 때)"
+      killer_name: "가해자 이름 (몹·미상이면 없음)"
+    effects:
+      # 목격자 수 → npc_death.yml killer_response.rumor_matrix 의 witness 칸 (0 없음 / 1 소수 / 2 다수)
+      witness_band: { none: 0, few: 1, many: 2 }
+      witness_many_min: 2          # populace.yml death.witness_public_min 과 같은 눈금
+      rumor:
+        tags: [살인, 괴사, 폭력, 치안]
+        # 강도·정확도·지연은 npc_death.yml killer_response.rumor_matrix 가 정한다 (여기서 발명하지 않는다)
+        matrix: npc_death.killer_response.rumor_matrix
+        subject_is_killer: true    # 목격자가 있으면 소문의 주체는 가해자다 → 세력이 그를 주목한다
+        subject_needs_witness: true # 아무도 못 봤으면 이름이 남지 않는다 (은밀형의 보상)
+      region:
+        민심: -1                   # populace.yml death.region_delta (무명). 등록 NPC 는 npc_death.yml 이 정한다
+      succession: registry_only     # 무명에게는 후계도 복수자도 없다 (populace.yml death.revenge: civil_debt)
+      mandate: npc_death.succession  # 관(官)을 죽였는가 — 법명분은 그 등록부만이 정한다
+
+  bandit_slain:
+    desc: "도적을 베었다 — 토벌 (사람을 죽인 것이지만, 이쪽은 명분이 있는 죽음이다)"
+    payload:
+      foe_id: "north_road_bandit …"
+      foe_name: "표시 이름"
+      role: "졸개 | 두목"
+      realm: "적의 경지"
+      witnesses: "목격자 수"
+      killer_uuid: "벤 자"
+      killer_name: "벤 자의 이름"
+    effects:
+      rumor:
+        tags: [도적, 치안, 무재]
+        intensity_by_role: { 졸개: 1, 두목: 2 }
+        accuracy_kind: 직접_목격      # rumor.yml generation.initial_accuracy (90)
+        subject_is_killer: true
+      region:
+        치안: 1                      # 도적이 줄면 길이 안전해진다 (두목이면 ×2 — scale_by_role)
+      scale_by_role: { 졸개: 1, 두목: 2 }
+
+  beast_slain:
+    desc: "짐승을 잡았다 — 사냥 (생계와 수련)"
+    payload:
+      foe_id: "san_neukdae · baegyeongmyo …"
+      foe_name: "표시 이름"
+      realm: "적의 경지"
+      witnesses: "목격자 수"
+      killer_uuid: "잡은 자"
+      killer_name: "잡은 자의 이름"
+    effects:
+      rumor:
+        tags: [사냥, 무재]
+        intensity: 1                # 늑대 한 마리는 소문이 되지 못한다 — 영물(rare)만 사람들이 말한다
+        rare_foes: [baegyeongmyo]   # 등록 영물은 강도 3 (세계 유일 — registry 대상)
+        rare_intensity: 3
+        accuracy_kind: 간접_전문
+        subject_is_killer: true
+        min_intensity_to_spread: 2  # 강도 1 은 심지 않는다 (장부만 남는다 — 소문판이 늑대로 덮이지 않게)
+
+  qi_manifested:
+    desc: "격(格)이 터졌다 — 소문의 씨앗. \"그자가 검기를 뿜었다더라\""
+    payload:
+      grade: "발경 | 검기 | 강기 | 어검 | 심검"
+      witnesses: "본 자의 수 (사람·행인·적 전부 — HuntingGrounds.witnessQi 와 같은 반경)"
+      player_uuid: "터뜨린 자"
+      player_name: "터뜨린 자의 이름"
+    effects:
+      rumor:
+        tags: [무재, 무인, 격]
+        intensity_by_grade: { 발경: 1, 검기: 2, 강기: 3, 어검: 4, 심검: 4 }
+        accuracy_kind: 직접_목격
+        subject_is_killer: true     # 주체 = 터뜨린 자 → 정파·사파가 그를 주목하기 시작한다
+        min_witnesses: 1            # 아무도 없는 산속의 검기는 소문이 되지 않는다
+        min_intensity_to_spread: 2  # 발경 하나로는 강호가 움직이지 않는다
+      # 한 전투에서 검기를 열 번 뿜어도 소문은 하나다 — 같은 자의 같은 격은 이 시간 안에 한 번만 발신한다
+      # (MVT 쪽에서 거른다. 다리에 실리지 않은 것은 장부에도 없다)
+      dedupe_seconds: 600
+
+  sparring:
+    desc: "비무 — 죽이지 않는 싸움. 이겨도 죽지 않고, 져도 죽지 않는다"
+    payload:
+      winner_uuid: "이긴 자"
+      winner_name: ""
+      loser_uuid: "진 자 (NPC 면 없음)"
+      loser_name: ""
+      reason: "중상 | 항복 | 장외 | 시간"
+      witnesses: "구경꾼 수"
+    effects:
+      rumor:
+        tags: [무재, 무인, 비무]
+        intensity: 1
+        public_intensity: 2         # 구경꾼이 many 이상이면 (장터 비무는 이야깃거리다)
+        accuracy_kind: 직접_목격
+        subject_is_winner: true
+        min_intensity_to_spread: 2
+
+# ═══════════════ 되먹임 (봇 → MVT) ═══════════════
+# 사실은 이벤트로 흐르고(순서·유실 금지), 상태는 스냅숏으로 흐른다(최신이 이긴다).
+# 스냅숏은 재생할 필요가 없다 — 어제의 소문판을 다시 트는 것은 세계가 아니라 녹음이다.
+feedback:
+  world_state:
+    world_day: "봇의 세계일 (마크의 낮밤과 별개 — 장부의 시간)"
+    rumor_tags: "지금 살아 있는 소문의 태그 (Db.heard 유효강도 > 0)"
+    populace_reactions: "위 태그를 populace.yml reactions 키로 옮긴 것 — Populace.rumor(tag, on)"
+    region: "치안·경제·민심 (regions 표)"
+    wanted: "수배 — mc_uuid × 법명분 게이지 (authority_mandate). 문턱을 넘으면 관졸이 적대한다"
+    favor: "세력 우호 — mc_uuid × 세력 (faction_standing). 산문의 문이 열리고 닫힌다"
+
+  # 소문 태그 → 행인 반응 (populace.yml reactions 의 키). 이것이 "도적 소문이 돌면 무명이 산길을 피한다"의 배선
+  reaction_map:
+    도적_소문: [도적, 치안]        # 둘 중 하나라도 살아 있으면 켠다
+    열병_소문: [질병]
+
+  # 수배 문턱 (faction_politics.yml authority_mandate.inputs 의 눈금을 그대로 읽는다 — 발명 금지)
+  wanted:
+    gauge_min: 8                   # 포두가 움직이는 값 (관졸 적대)
+    disavowal_min: 10              # 강호의 절연 — 정파도 등을 돌린다 (murim_disavowal)

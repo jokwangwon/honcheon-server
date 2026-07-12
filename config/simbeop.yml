@@ -28,6 +28,8 @@ accumulation_methods:
   전공: { rule: "수련 무관 — 실전 전투마다 축기 점수 (생사의 경계가 그릇을 넓힌다)" }
   식공: { rule: "좌공 + 약재·독물·영초 복용 시 가속 (재료 소모)" }
   흡성: { rule: "타인 내력 즉시 약탈 30% — 마공 분류 ① (internal_energy.yml)" }
+  연수: { rule: "수명(선천진기)을 태워 축기 가속 — 마공 분류 ② (internal_energy demonic_classification).
+           수련 1일 = 축기 2일치, 수명 -1일. ★ 선언형 — 켜고 끌 수 있다 (magong.② 참조)" }
 
 # 시각화 — 텍스트 은유 사전 (GM은 수치 대신 이것을 말한다)
 visualization:
@@ -125,7 +127,37 @@ simbeop:
     passive: "재생 (원기 증폭 계열과 중첩 시 폭주 판정)"
     price: ["심마 누적 (성향 태그)", "운기 색 은폐 불가"]
     circulation_color: "굶주린 탁한 적색"
+    stealth_option: false          # ★ 은폐 불가 — 운기조식하는 순간 목격자가 안다 (이것이 혈교가 잠식 못 하는 이유)
     demonic: true                  # skills.yml hyeolgi_simgong과 연결
+    magong_class: ①                # magong.branches.① 흡성 — 남을 먹는다
+
+  cheonma_mugeukgong:
+    # ★ 마교의 마도 심법. magyo_encroachment 문턱 3(의존)의 `simbeop_lineage: 마도`가
+    #   지금까지 혈교 심법(혈기심공)으로만 충족됐다 — 마교와 혈교가 같은 어둠이 되어 버렸다.
+    #   이 항목은 신규 발명이 아니라 **이미 참조되고 있던 빈칸**을 메운다.
+    #   (factions.yml forbidden.magyo 등재 세력 · internal_energy demonic_classification ② 연수 계열)
+    name: "천마무극공"
+    faction: magyo
+    lineage: 마도
+    grade: 금기
+    method: 연수
+    method_condition: { burn: 수명, ratio: 2.0, lifespan_cost_days: 1,
+                        note: "★ 선언형 — 켜지 않으면 좌공 표준(1일=1일치). 자기 속도를 스스로 태운다" }
+    capacity: 9
+    purity: 0.9
+    qi_profile: { 연비: 없음, 발력: "전 무공 위력 +1" }
+    passive: "역혈(逆血) — 원기를 내력으로 강제 전환 (원기 -3 → 내력 +3, 구간당 1회).
+              ★ 자기 원기의 운용이므로 그 자체는 마공이 아니다 (internal_energy is_not_demonic) —
+              마공인 것은 '수명을 태우는 축기'다"
+    price: ["수명 (축기 1일당 -1일)", "심마 누적 (축기 1년당 흔적 +1)", "깨달음 경로 봉쇄 — 파벽만 남는다"]
+    circulation_color: "칠흑에 은빛 결"
+    stealth_option: true           # ★ 은폐 가능 (회복 -20%, visualization.circulation_particles 규칙 그대로)
+                                   #   ★★ 이 한 줄이 마교와 혈교를 가르는 전부다:
+                                   #      마교는 숨을 수 있다 → 잠식이 가능하다 (사람 사이에서 산다)
+                                   #      혈교는 못 숨는다   → 즉시 토벌 (사람 사이에서 살 수 없다)
+    demonic: true
+    magong_class: ②                # magong.branches.② 연수 — 자기를 태운다
+    dual_cultivation_note: "★ 도가·불가·검문 전 계열과 opposed (겸수 = 주화입마 판정)"
 
 # 기질 — 정순한 내공의 정화력 (순도 = 회복 배율이자 정화력)
 # 독 대처 3층 — 대부분의 무사는 독 앞에 무력하다 (해독에는 조건이 필요)
@@ -172,7 +204,8 @@ dual_cultivation:
   primary_rule: "주(主) 심법 1개"
   same_lineage: { effect: "충돌 없음 (dual_approved 명시 조합)" }
   neutral: { effect: "부(副) 심법 축기 효율 50%" }
-  opposed: { effect: "겸수 시도 = 주화입마 판정", examples: [[jaha_singong, hyeolgi_simgong]] }
+  opposed: { effect: "겸수 시도 = 주화입마 판정",
+             examples: [[jaha_singong, hyeolgi_simgong], [taegeuk_gigong, cheonma_mugeukgong]] }
 
 # 심법 전환 (산공 후 재축기의 규칙화)
 conversion:
@@ -180,3 +213,159 @@ conversion:
   neutral: { carry_over: 0.7, note: "재축기 기간 필요" }
   opposed: { carry_over: 0.5, risk: "주화입마 판정" }
   from_basic: { carry_over: 0.9, note: "현천토납법 등 기초 심법의 존재 이유" }
+  # ★ 마도 특칙 — 개심(改心)의 값이 여기서 정해진다 (magong.redemption 이 이 규칙을 쓴다)
+  마도_특칙:
+    흡성분_몰수:
+      rule: "★ 흡성으로 얻은 내공은 carry_over 0 — **남의 것은 승계되지 않는다.**
+             자기가 앉아서 번 몫(좌공 적립분)만 opposed(0.5)를 탄다"
+      engine: "엔진은 내공 실수치를 두 원장으로 나눠 적립해야 한다 (자력분 / 흡성분) — magong.ledger"
+    마도_to_마도:
+      carry_over: 0.9              # same_lineage — ★ 혈교(흡성) → 마교(연수) 전향이 **가장 싼 길**이다
+      note: "★ 그리고 이것이 '그래도 사람으로 남는 어둠'의 실체다:
+             먹기를 멈추는 가장 싼 방법은 착해지는 것이 아니라 **자기를 태우는 것**이다.
+             혈교 오염자에게 마교가 손을 내미는 이유 (relations: magyo↔hyeolgyo = -3 숙적)"
+    마도_to_도가_불가:
+      carry_over: 0.5              # opposed
+      risk: "주화입마 판정 + 경지 봉인 (cultivation.yml demotion.sealed_state)"
+      note: "가장 비싼 길. 그리고 이 길만이 혈채를 '속죄'로 바꿀 수 있다 (magong.redemption)"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 마공(魔功)의 경제학 — 왜 유혹적이고, 무엇을 갈아 넣는가
+# ═══════════════════════════════════════════════════════════════════════════
+# ★ 신규 축 발명 없음. 전부 이 파일의 기존 축이다:
+#     용량(capacity) · 순도(purity) · 축기 방식(accumulation_methods) · 화후(hwahu) ·
+#     기운 프로파일(qi_profile) · 겸수/전환(dual_cultivation, conversion)
+#   + cultivation.yml accumulation_cost(내공 n→n+1 = n년) · internal_energy 원기·수명·파벽
+#
+# ★ 한 줄: **마공은 시간을 사는 기술이다. 값을 남으로 치르면 혈교, 자기로 치르면 마교다.**
+magong:
+
+  definition: "internal_energy.yml demonic_classification 이 정본이다 —
+    ① 타인의 원기·진기 약탈(흡성) · ② 수명(선천진기)의 강제 연소(연수).
+    이 절은 그 두 줄을 **수치와 시간**으로 옮긴 것이다"
+
+  # ── 왜 유혹적인가: 정공법의 시간표를 먼저 본다 ──────────────────────────
+  baseline:
+    ref: "cultivation.yml accumulation_cost — 내공 n→n+1 = 전용 수련 n년 (1년 = 360일)"
+    table:                          # 좌공(표준) 기준 누적 축기 년수
+      내공_1: 1                     # 개화 직후
+      내공_3: 6                     # 절정 요건 (1+2+3)
+      내공_5: 15                    # 초절정 요건
+      내공_7: 28                    # 화경 요건
+      내공_9: 45                    # 현경 관행
+    truth: "★ 정파의 벽은 무공이 아니라 **달력**이다. 절정에 6년, 초절정에 15년.
+      마공이 유혹인 이유는 힘이 세서가 아니라 — **기다리지 않아도 되기 때문이다**"
+
+  # ── ① 흡성 (혈교 — hyeolgi_simgong) : 남을 먹는다 ────────────────────────
+  branches:
+    ①_흡성:
+      simbeop: hyeolgi_simgong
+      faction: hyeolgyo
+      harvest:                      # 한 번의 흡성이 무엇을 가져오는가 — ★ 두 갈래다
+        진기:
+          formula: "대상 내공 실수치 × 0.3 → **즉시 화후 적립** (method_condition.absorb_ratio 그대로)"
+          examples:                 # 대상 경지 → 수확 → 좌공 환산
+            범인:   { 대상_내공: 0,    수확: 0,    좌공_환산: "0일 — ★ 아무것도 없다" }
+            삼류:   { 대상_내공: 0.3,  수확: 0.09, 좌공_환산: "약 33일" }
+            일류:   { 대상_내공: 1.0,  수확: 0.3,  좌공_환산: "약 110일" }
+            절정:   { 대상_내공: 3.0,  수확: 0.9,  좌공_환산: "★ 약 2.7년 — 한 번에" }
+            초절정: { 대상_내공: 5.0,  수확: 1.5,  좌공_환산: "★ 약 7년" }
+          cap: "자기 capacity(10)를 넘지 못한다. 넘치는 몫은 폭주 판정 (passive 재생 중첩 규칙)"
+        원기:
+          formula: "대상 원기 상한 × 0.5 → 자기 원기 회복 (범인 원기 10 기준 +5)"
+          why: "★ 무공 없는 자에게도 원기는 있다 — 그래서 **아무나 죽여도 연료는 된다**"
+      # ★★ 이 설계의 심장 — 사용자 시나리오('힘에 미쳐 마을 사람을 몰래 죽인다')의 규칙적 근거
+      the_trap:
+        갈증:
+          ref: "equipment.yml demonic_weapons.갈증 문법 재사용 (마병과 같은 몸의 법)"
+          rule: "흡성 없이 30일 경과 → 원기 -5/10일. 그리고 줄지 않는다"
+          depletion: "simbeop.hyeolgi_simgong.depletion_override — 내력 고갈 시 시전당 원기 -5.
+            ★ 즉 **싸울수록 원기가 준다.** 원기를 채우는 길은 흡성뿐이다"
+        연료_계산: "범인 1명 = 원기 +5 = **시전 1회분**. 마을 사람 한 명이 발경 한 번이다"
+        the_lie: |
+          ★ 마을 사람을 죽여도 **내공은 늘지 않는다** (대상 내공 0 → 수확 0).
+            늘어나는 것은 혈채(血債)뿐이다.
+
+            힘을 얻으려면 무인을 먹어야 한다. 그런데 무인은 반격한다.
+            그래서 약한 자를 죽인다. 그러면 갈증만 잠깐 꺼지고, 세계의 장부만 두꺼워진다.
+            힘은 그대로인데 쫓기는 자만 된다 — 그리고 그때쯤엔 이미 멈출 수가 없다.
+
+            ★ **이것이 마공의 함정이고, 이 함정 자체가 서사다.**
+              플레이어에게 이 계산을 미리 알려주지 마라. 몸으로 배우게 하라.
+      price:
+        순도: "0.8 — 전 심법 최저. 내력 회복이 가장 느리다"
+        연비: "검기·강기 소모 +1 — 크고 거칠고 **헤프다.** 폭발형이지 지구전형이 아니다"
+        심마: "흡성 1회당 심마 흔적 +1 (internal_energy qi_deviation.simma)"
+        은폐: "★ 불가 (stealth_option: false) — 운기조식하는 순간 목격자가 안다"
+        정화: "영구 상실 — 도가·불가 lineage 로만 가능한 배독·도인도기·해주 전부 봉쇄"
+        관계: "심법 색(굶주린 탁한 적색)이 소문의 재료다 → 혈채(현) 노출 배수를 스스로 올린다"
+
+    ②_연수:
+      simbeop: cheonma_mugeukgong
+      faction: magyo
+      harvest:
+        formula: "연수 선언 중 수련 1일 = 축기 2일치. 대가: 수명 -1일"
+        examples:
+          내공_3: { 정공법: "6년", 연수: "3년 + 수명 -3년" }
+          내공_5: { 정공법: "15년", 연수: "7.5년 + 수명 -7.5년" }
+        toggle: "★ 선언형 — 끄면 좌공 표준. **자기 속도를 스스로 정한다** (그래서 사람으로 남는다)"
+      price:
+        수명: "축기 1일당 -1일 (internal_energy vitality — 신규 축 아님)"
+        심마: "축기 1년당 흔적 +1 — 흡성(1회당 +1)보다 훨씬 느리다"
+        은폐: "★ 가능 (회복 -20%) — 그래서 마교는 사람 사이에서 산다. **잠식이 가능한 이유**"
+        벽: "아래 walls"
+      contrast: "★ 마교는 **자기를 태우고**, 혈교는 **남을 먹는다.**
+        그래서 마교인은 늙고, 혈교인은 굶는다. 그리고 늙는 것은 사람의 일이다"
+
+  # ── 벽(壁) — 마공이 진짜로 못 사는 것 ────────────────────────────────────
+  walls:
+    ref: "cultivation.yml cultivation_stages — 절정 이상의 trigger 는 '깨달음 사건'이다 (수치가 아니다)"
+    rule: |
+      ★ 마도 lineage 는 **깨달음의 문이 막힌다.**
+        · '실전 깨달음'  — 심마 흔적이 관(觀)을 흐린다 → 판정 -2/흔적 3당 (누적)
+        · '스승의 인도'  — 마도에는 스승이 없다. 혈교에는 교주가, 마교에는 '그 사람'이 있을 뿐이다
+        · '파벽(破壁)'   — ★ **남는 것은 이것 하나뿐이다** (internal_energy: 수명 5년/회)
+      그래서 마공은 요건(내공·숙련)을 가장 빨리 채우고 **문 앞에서 가장 오래 선다.**
+      그리고 결국 수명을 태워 문을 연다. 흡성이든 연수든, **끝에서 만나는 값은 같다 — 수명이다.**
+    mental_guard_asymmetry: "도가·불가는 심마·주화입마 판정 +2 (purification.mental_guard).
+      마도는 그 보정이 없다 — 벽 앞에서 가장 자주 미치는 것이 마공을 익힌 자다"
+    design_note: "★ 마공은 '빠른 길'이 아니라 **'앞당겨 쓰는 길'** 이다. 값은 언제나 뒤에 온다"
+
+  # ── 원장 분리 — 엔진이 알아야 하는 것 ────────────────────────────────────
+  ledger:
+    자력분: "좌공·동공·시공·식공·연수로 적립한 내공 실수치"
+    흡성분: "흡성으로 약탈한 내공 실수치 — ★ 별도 원장. conversion.마도_특칙.흡성분_몰수 가 이것을 읽는다"
+    rule: "표시는 합산(내공 하나). 분리는 내부 상태 — 플레이어는 산공하는 날에 처음 알게 된다"
+
+  # ── 개심(改心) — 되돌아올 수 있는가 ─────────────────────────────────────
+  # ★ 있다. 셋뿐이고, 셋 다 무언가를 영구히 잃는다.
+  #   그리고 **어느 길로도 혈채는 지워지지 않는다** — 개심은 힘을 버리는 일이지, 빚을 갚는 일이 아니다.
+  redemption:
+    ①_전향:                         # 가장 싸다 — 그리고 여전히 어둠이다
+      act: "혈교(흡성) → 마교(연수). 먹기를 멈추고 태우기를 시작한다"
+      cost: { carry_over: 0.9, ref: conversion.마도_특칙.마도_to_마도 }
+      price: "수명. 그리고 그 사람의 사람이 된다 (magyo_encroachment 문턱 4 = 소속)"
+      truth: "★ 갈증은 멎는다. 혈채는 남는다. 세계는 여전히 그를 쫓는다 —
+        다만 이제 **그를 숨겨줄 조직이 있다**"
+    ②_산공:                         # 정도(正道) — 가장 비싸다
+      act: "단전을 흩는다. 마도 → 도가·불가 전환 (conversion opposed)"
+      requires: [해주, 사문_또는_승려의_인도]
+      해주: { by: hyegak, ref: "purification.해주 — targets 에 '혈교_사술' 이미 등재. 불가 계열" }
+      cost:
+        내공: "흡성분 전량 몰수(carry_over 0) + 자력분 × 0.5"
+        판정: "주화입마 (opposed) — ★ 실패 시 폐인 또는 사망. **개심은 도박이다**"
+        경지: "봉인 (cultivation.yml demotion.sealed_state) — 재축기까지 발휘 불가"
+        원기: "상한 영구 -20% (흡성으로 뚫린 몸은 다시 메워지지 않는다)"
+      residue:
+        심마_흔적: "★ 지워지지 않는다 (magyo_encroachment.reversal 과 동일 — 흔적은 성향 태그다)"
+        혈채: "★ 지워지지 않는다. **'속죄' 태그로 바뀔 뿐이다** (faction_reaction blood_debt.atonement)"
+      tag_after: { key: 돌아온_자, ref: "magyo_encroachment.reversal.tag_after — 정파 심사 난이도 +4, 그러나 문은 열린다" }
+    ③_속죄:                         # 힘의 문제가 아니라 장부의 문제 — ②와 병행해야 의미가 있다
+      act: "자수 · 배상 · 대공"
+      ref: ["npc_death.yml responses.자수 (법명분 -10)", "npc_death.yml responses.배상 (-6)",
+            "faction_reaction.yml favor.inputs.큰_공적_또는_구명 (-4)"]
+      effect: "현혈채(known) 감쇠 개시. **암혈채(hidden)는 영원하다** — 몸이 기억한다"
+      truth: "★ 개심한 자는 살 수 있다. 다만 **범인(凡人)에 가까운 몸으로** 산다.
+        그것이 이 세계가 줄 수 있는 가장 정직한 사면이다"
+    impossible: "★ '개심하고도 강한 자'는 없다. 그런 길을 열면 마공의 값이 사라지고,
+      마공의 값이 사라지면 정파를 고를 이유가 없어진다"

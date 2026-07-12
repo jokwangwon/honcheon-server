@@ -1007,6 +1007,146 @@ public final class Db implements AutoCloseable {
         }
     }
 
+    // ═══ 세계 다리 (마이그레이션 005) — 마크(MVT)의 사건이 이 장부로 들어오는 문 ═══
+    //
+    // 다리는 세계 상태를 새로 만들지 않는다. 무명이 죽으면 rumors 가 자라고 regions.민심이 깎인다 —
+    // 이미 있는 표들이다. 여기 새로 드는 것은 부속 둘뿐이다:
+    //   mvt_link     신원 — 마크의 몸(uuid)과 봇의 장부(character_id)를 잇는다.
+    //                이 표가 비면 소문에 **주체가 없다** → 세력이 아무도 주목하지 않는다 (배경음).
+    //   bridge_inbox 멱등 — 같은 줄을 두 번 읽어도 사람은 한 번만 죽는다.
+
+    /**
+     * 이 사건을 지금 처음 보는가 — 처음이면 못을 박고 true. 이미 박혀 있으면 false (건너뛴다).
+     * 커서를 못 쓰고 죽어도, 파일을 통째로 재생해도 세계는 같은 자리에 선다.
+     */
+    public synchronized boolean claimBridgeEvent(String eventId, String kind) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO bridge_inbox(event_id, kind, world_day) VALUES(?, ?, ?)")) {
+            ps.setString(1, eventId);
+            ps.setString(2, kind);
+            ps.setInt(3, worldDay());
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /** 마크 플레이어 ↔ 캐릭터 접합 (character_id 가 null 이면 '아직 안 이어진 몸'으로만 등록된다) */
+    public synchronized void linkMvt(String mcUuid, String mcName, Long characterId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO mvt_link(mc_uuid, mc_name, character_id, linked_day) VALUES(?, ?, ?, ?) "
+                        + "ON CONFLICT(mc_uuid) DO UPDATE SET mc_name = excluded.mc_name, "
+                        + "character_id = COALESCE(excluded.character_id, mvt_link.character_id)")) {
+            ps.setString(1, mcUuid);
+            ps.setString(2, mcName);
+            if (characterId == null) {
+                ps.setNull(3, java.sql.Types.INTEGER);
+            } else {
+                ps.setLong(3, characterId);
+            }
+            ps.setInt(4, worldDay());
+            ps.executeUpdate();
+        }
+    }
+
+    /** 이 몸은 누구인가 — 살아 있는 캐릭터만 (죽은 자의 이름으로는 소문이 붙지 않는다) */
+    public synchronized Optional<Long> characterOfMc(String mcUuid) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT l.character_id FROM mvt_link l JOIN characters c ON c.id = l.character_id "
+                        + "WHERE l.mc_uuid = ? AND c.status != '사망'")) {
+            ps.setString(1, mcUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(rs.getLong(1)) : Optional.empty();
+            }
+        }
+    }
+
+    /** 이어진 몸들 — 되먹임 스냅숏(수배·우호)의 순회 대상 (mc_uuid → character_id) */
+    public synchronized Map<String, Long> linkedBodies() throws SQLException {
+        Map<String, Long> out = new java.util.LinkedHashMap<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT l.mc_uuid, l.character_id FROM mvt_link l "
+                             + "JOIN characters c ON c.id = l.character_id "
+                             + "WHERE c.status != '사망' ORDER BY l.mc_uuid")) {
+            while (rs.next()) {
+                out.put(rs.getString(1), rs.getLong(2));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 지역 상태를 흔든다 — 치안·경제·민심 (0~100 clamp). 무명이 죽으면 민심이 식고,
+     * 도적을 베면 길이 안전해진다. 값은 config 가 정한다 (여기서 발명하지 않는다).
+     */
+    public synchronized Map<String, Integer> nudgeRegion(Map<String, Integer> deltas) throws SQLException {
+        Map<String, Integer> now = region();
+        Map<String, String> column = Map.of("치안", "security", "경제", "economy", "민심", "sentiment");
+        for (Map.Entry<String, Integer> e : deltas.entrySet()) {
+            String col = column.get(e.getKey());
+            if (col == null || e.getValue() == 0) {
+                continue;
+            }
+            int next = Math.max(0, Math.min(100, now.get(e.getKey()) + e.getValue()));
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE regions SET " + col + " = ?, updated_day = ? WHERE id = ?")) {
+                ps.setInt(1, next);
+                ps.setInt(2, worldDay());
+                ps.setString(3, REGION);
+                ps.executeUpdate();
+            }
+            now.put(e.getKey(), next);
+        }
+        return now;
+    }
+
+    /** 청하현의 오늘 — 치안·경제·민심 */
+    public synchronized Map<String, Integer> region() throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT security, economy, sentiment FROM regions WHERE id = ?")) {
+            ps.setString(1, REGION);
+            try (ResultSet rs = ps.executeQuery()) {
+                Map<String, Integer> out = new java.util.LinkedHashMap<>();
+                if (rs.next()) {
+                    out.put("치안", rs.getInt(1));
+                    out.put("경제", rs.getInt(2));
+                    out.put("민심", rs.getInt(3));
+                } else {
+                    out.put("치안", 50);
+                    out.put("경제", 50);
+                    out.put("민심", 50);
+                }
+                return out;
+            }
+        }
+    }
+
+    /**
+     * 지금 살아 있는 소문의 태그들 — 되먹임의 심장.
+     * 도적 소문이 아직 안 죽었으면 마크의 나무꾼은 오늘도 산길을 피한다 (Populace.rumor).
+     * 감쇠는 여기서도 읽는 순간 정산한다 (heard 와 같은 공식 — 같은 날이면 같은 소문판).
+     */
+    @SuppressWarnings("unchecked")
+    public synchronized java.util.Set<String> liveRumorTags(int day, int decayEveryDays) throws Exception {
+        int every = Math.max(1, decayEveryDays);
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT content_json FROM rumors WHERE state = '전파중' AND born_day <= ? "
+                        + "AND (strength - (? - born_day) / ?) > 0")) {
+            ps.setInt(1, day);
+            ps.setInt(2, day);
+            ps.setInt(3, every);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> content = JSON.readValue(rs.getString(1), Map.class);
+                    if (content.get("태그") instanceof List<?> tags) {
+                        tags.forEach(t -> out.add(String.valueOf(t)));
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     @Override
     public void close() throws SQLException {
         conn.close();

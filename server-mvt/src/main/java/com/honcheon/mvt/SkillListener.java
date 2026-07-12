@@ -597,6 +597,19 @@ public final class SkillListener implements Listener {
             }
         }
 
+        // 세계 다리 — **격은 목격될 때 비로소 강호의 일이 된다** ("그자가 검기를 뿜었다더라").
+        // 아무도 없는 산속에서 강기를 터뜨린 것은 소문이 아니다. 본 사람이 있어야 이야기가 된다.
+        if (hits > 0 && cast.manifested()) {
+            Location me = player.getLocation();
+            int seen = (int) me.getWorld().getNearbyEntities(me, 24, 12, 24).stream()
+                    .filter(e -> (e instanceof Player p && !p.equals(player))
+                            || e instanceof org.bukkit.entity.Villager).count();
+            Location market = plugin.anchor("장터");
+            String where = market != null && market.getWorld() == me.getWorld()
+                    && market.distance(me) <= 60 ? "장터_광장" : "산길_어귀";
+            WorldBridge.qiManifested(cast.grade(), where, seen, player.getUniqueId(), player.getName());
+        }
+
         if (hits == 0) {
             player.getWorld().playSound(origin, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.5f, 1.3f);
             hud.emit(origin, Particle.CLOUD, 3, 0.1, 0.01);
