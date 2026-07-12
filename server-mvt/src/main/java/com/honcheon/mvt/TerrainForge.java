@@ -308,6 +308,24 @@ final class TerrainForge {
         // 진입로 보장 (계약 ②) — **걸어 들어올 수 없는 땅은 땅이 아니다**
         ensureApproach(world, place, cx, cy, cz, radius);
 
+        // 표층 (계약 ⑤) — **눈과 모래는 우리가 얹는다** (바이옴이 주던 것을 우리가 준다).
+        //   맨 마지막에 돈다: 봉우리·사구·전이대·램프가 전부 놓인 뒤에 그 위를 덮어야
+        //   산의 발치도 걸어 오르는 길도 같은 표층을 입는다 (길만 잔디인 설산은 우습다).
+        //   ★ 봉우리를 세웠으면 **산의 발치까지** 덮는다 — 부지 반경만 덮으면 정상만 희고 산은 검다.
+        Surface s = surface(place);
+        if (s != Surface.자연) {
+            int overlayR = massifR > 0 ? massifR + 30 : radius + FEATHER_WIDTH;
+            int ox = massifR > 0 ? peak[0] : cx;
+            int oz = massifR > 0 ? peak[1] : cz;
+            applySurface(world, ox, oz, overlayR, s, snowline(place), Math.max(cy, peak[2]));
+        }
+
+        // 오아시스 (W3) — 사막의 예외. **모래 한가운데 진짜 물**이 있어야 그 서사가 지형에서 읽힌다.
+        //   표층(모래) 다음에 판다 — 오아시스는 모래를 덮는 것이지 모래에 덮이는 것이 아니다
+        if (hasOasis(place)) {
+            carveOasis(world, cx, cy, cz, radius);
+        }
+
         return survey(world, place, cx, cy, cz, radius, peak[0], peak[1], peak[2]);
     }
 
@@ -574,8 +592,37 @@ final class TerrainForge {
         중턱단,
         /** 들 — 평지·분지·폐허. 발치를 메워 고른다 */
         들,
+        /** 사막 — 서역. <b>사막은 평평한 게 아니라 물결친다</b> (사구). 봉우리처럼 세우지 않는다 */
+        사막,
         /** 그대로 — 강·수향·섬·밀림. 물과 숲은 자연이 준 대로가 옳다 */
         그대로
+    }
+
+    /**
+     * 표층 덧입힘(surface overlay) — <b>눈과 모래는 블록이지 바이옴이 아니다</b>.
+     *
+     * <p>사용자가 "사막 필드도 얼음 지역도 필요없다"고 했고, 순도 담당이 바이옴 12종을 껐다. 옳다 —
+     * <b>무작위로 흩뿌려지는 사막·빙원은 통제 불가능</b>하기 때문이다. 그런데 끄는 순간
+     * <b>이 세계에서 모래와 눈의 유일한 출처가 사라졌다</b>: 곤륜(설산)은 회색 돌산이 됐고,
+     * 가욕관(사막)은 잔디밭이 됐다. <b>둘 다 이미 등록된 중원의 장소다.</b>
+     *
+     * <p>원칙은 이미 정해져 있다 — <b>자연 동굴을 끄고 굴을 우리가 판 것과 정확히 같다</b>:
+     * <pre>
+     *   끈다   — 통제 불가능한 무작위 배치는.
+     *   만든다 — 등록 좌표의 의도된 지형은.
+     * </pre>
+     * 지금까지 앞의 절반만 했다. 이것이 뒤의 절반이다.
+     *
+     * <p><b>덧입힘은 윤곽(Profile)이 아니다</b> — 어느 윤곽 위에도 얹힌다
+     * (봉우리 + 설원 = 곤륜 · 고원 + 설원 = 토번 · 들 + 사막 = 가욕관).
+     */
+    enum Surface {
+        /** 자연 — 땅이 준 표층 그대로 (중원의 기본) */
+        자연,
+        /** 사막 — 모래·사암·자갈의 결. 표층 SAND/RED_SAND, 그 아래 SANDSTONE */
+        사막,
+        /** 설원 — <b>설선(雪線) 위에만</b> 눈이 얹힌다. 고도가 눈을 정한다 */
+        설원
     }
 
     /** 봉우리를 요구하는 세력 — 구파일방·오대세가. <b>산문에서 본전까지 오르는 집</b>들이다 */
@@ -602,8 +649,11 @@ final class TerrainForge {
 
         if (!mountainous) {
             return switch (terrain) {
-                case "평지", "평야", "분지", "초원", "폐허" -> Profile.들;
-                default -> Profile.그대로;   // 강·수향·섬·밀림 — 빚지 않는다
+                case "평지", "평야", "분지", "초원", "폐허", "구릉" -> Profile.들;
+                // ★ 사막이 switch 에 **없어서** default(그대로) 로 떨어졌다 — 지형 계층이 사막을 빚지 않았다.
+                //   바닐라 사막 바이옴이 살아 있을 때는 티가 안 났고, 그것이 꺼지자 가욕관이 잔디밭이 됐다.
+                case "사막" -> Profile.사막;
+                default -> Profile.그대로;   // 강·수향·섬·밀림 — 빚지 않는다 (★ 섬은 자연에 맡긴다)
             };
         }
         if ("noklim".equals(faction)) {
@@ -618,6 +668,47 @@ final class TerrainForge {
             return Profile.봉우리;
         }
         return Profile.중턱단;   // 모르면 산을 세우지 않는다 — **덜 하는 쪽이 안전하다**
+    }
+
+    /**
+     * 이 자리의 표층 — <b>등록부가 먼저, 없으면 지형이 말한다</b>.
+     *
+     * <p>{@code 설산 → 설원} · {@code 사막 → 사막}. 그 밖은 자연이다.
+     * 고원+눈(토번)처럼 지형만으로 못 읽는 것은 {@code config/terrain.yml} 의 {@code surfacing:} 이 지정한다.
+     */
+    static Surface surface(WorldMap.Place place) {
+        Surface registered = surfaceRegistry.get(place.id());
+        if (registered != null) {
+            return registered;
+        }
+        String terrain = place.terrain() == null ? "" : place.terrain();
+        return switch (terrain) {
+            case "사막" -> Surface.사막;
+            case "설산" -> Surface.설원;
+            default -> Surface.자연;
+        };
+    }
+
+    /**
+     * 설선(雪線) — <b>이 높이 위에만 눈이 얹힌다</b>.
+     *
+     * <p>지역마다 다르다 (곤륜은 낮고 화산은 높다 — 위도와 기후가 다르므로).
+     * 등록부가 정한다. 없으면 {@value #SNOWLINE_DEFAULT}.
+     *
+     * <p><b>눈을 산 전체에 덮지 않는 이유</b>: 설산의 그림은 흰 산이 아니라
+     * <b>돌과 눈이 갈라지는 선</b>이다. 발치는 검고 정상은 희다 — 그 대비가 설산이다.
+     */
+    static int snowline(WorldMap.Place place) {
+        Integer registered = snowlineRegistry.get(place.id());
+        return registered == null ? SNOWLINE_DEFAULT : registered;
+    }
+
+    /** 설선의 기본값 — 곤륜 y120 · 토번 y110 언저리 (등록부가 장소마다 고쳐 준다) */
+    static final int SNOWLINE_DEFAULT = 120;
+
+    /** 오아시스를 파는 자리인가 — <b>모래 한가운데 진짜 물이 있어야</b> 그 서사가 지형에서 읽힌다 */
+    static boolean hasOasis(WorldMap.Place place) {
+        return oasisRegistry.contains(place.id());
     }
 
     /**
@@ -662,11 +753,66 @@ final class TerrainForge {
                 levelField(world, cx, cy, cz, Math.max(radius + 8, 40));
                 return new int[]{cx, cz, cy, 0};
             }
+            case 사막 -> {
+                duneField(world, cx, cy, cz, Math.max(radius + 8, 40));
+                return new int[]{cx, cz, cy, 0};
+            }
             default -> {
                 // 강·수향·섬·밀림 — 빚지 않는다
                 return new int[]{cx, cz, Math.max(natural, cy), 0};
             }
         }
+    }
+
+    /**
+     * 사구(砂丘) — <b>사막은 평평한 게 아니라 물결친다</b>.
+     *
+     * <p>구판은 사막을 몰랐다(switch 에 없어 {@code 그대로} 로 떨어졌다). 그래서 바닐라 사막 바이옴에
+     * 얹혀 살았고, 그것이 꺼지자 <b>가욕관이 잔디밭이 됐다</b>.
+     *
+     * <p>봉우리처럼 <b>세우지 않는다</b>. 저주파 사인 넷을 겹쳐 완만한 물결을 만든다
+     * (진폭 ~18 · 파장 60~120 · 물매 0.3/칸 — 벼랑이 생기지 않으므로 어디서든 걸어 들어온다).
+     * 난수는 없다: 좌표의 순수 함수다 (같은 자리면 같은 사구).
+     *
+     * <p><b>부지 한가운데는 평평하다</b> — 0.45R 안쪽은 조성 지면. 사구는 그 바깥에서 일어난다.
+     * 물결 위에 관문을 세울 수는 없다 (집이 설 땅은 평평해야 한다).
+     */
+    private static void duneField(World world, int cx, int cy, int cz, int radius) {
+        for (int x = cx - radius; x <= cx + radius; x++) {
+            for (int z = cz - radius; z <= cz + radius; z++) {
+                double d = dist(x - cx, z - cz);
+                if (d > radius) {
+                    continue;
+                }
+                if (naturalGround(world, x, z, cy + 70) == WET_COLUMN) {
+                    continue;   // 사막의 물 — 오아시스다. 메우지 않는다
+                }
+                double flat = radius * 0.45;
+                double amp = d <= flat ? 0 : Math.min(1.0, (d - flat) / (radius - flat));
+                int target = cy + (int) Math.round(amp * dune(x, z));
+                for (int y = target + 1; y <= target + 16; y++) {   // 깎기
+                    Block b = world.getBlockAt(x, y, z);
+                    Material m = b.getType();
+                    if (!m.isAir() && (NATURAL.contains(m) || foliage(m))) {
+                        b.setType(Material.AIR);
+                    }
+                }
+                for (int y = target; y >= target - SEAL_DEPTH; y--) {   // 메우기
+                    Block b = world.getBlockAt(x, y, z);
+                    if (!b.getType().isAir() && !b.isLiquid()) {
+                        break;
+                    }
+                    b.setType(y == target ? Material.SAND : Material.SANDSTONE, false);
+                }
+                sealBelow(world, x, target, z);
+            }
+        }
+    }
+
+    /** 사구의 높이 — 좌표의 순수 함수. 저주파 넷을 겹쳐 결을 만든다 (등고가 반듯해지지 않는다) */
+    private static double dune(int x, int z) {
+        return Math.sin(x / 47.0) * 6 + Math.sin(z / 61.0) * 5
+                + Math.sin((x + z) / 89.0) * 4 + Math.sin((x - z) / 113.0) * 3;
     }
 
     /**
@@ -800,6 +946,211 @@ final class TerrainForge {
                     b.setType(y == target ? grassOrStone(world, x, target, z) : Material.DIRT);
                 }
             }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 표층 덧입힘 — 눈과 모래 (W1·W2·W4)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 표층을 입힌다 — <b>바이옴이 주던 것을 우리가 준다</b>.
+     *
+     * <p>맨 마지막에 돈다: 봉우리·사구·전이대·램프가 <b>전부 놓인 뒤</b>에 그 위를 덮는다.
+     * 그래야 산의 발치도, 걸어 오르는 길도 같은 표층을 입는다 (길만 잔디인 설산은 우습다).
+     *
+     * <p><b>설원</b> — 설선 위에만 눈이 얹힌다. 높이 올라갈수록 두꺼워지고, 아주 높은 데는 얼음이 섞인다.
+     * 설선 아래는 <b>돌과 흙 그대로 둔다</b> — 설산의 그림은 흰 산이 아니라 <b>돌과 눈이 갈라지는 선</b>이다.
+     * 물이 있으면 표면을 얼린다.
+     *
+     * <p><b>사막</b> — 표층은 모래, 그 아래 다섯 칸은 사암. 자갈이 드문드문 섞인다
+     * (사막은 모래만이 아니다 — 자갈의 결이 있어야 사막으로 읽힌다). <b>식생은 남기지 않는다.</b>
+     *
+     * @param radius 덮는 반경 — <b>봉우리를 세웠으면 산의 발치까지</b> 덮어야 한다
+     */
+    static void applySurface(World world, int cx, int cz, int radius, Surface s, int snowline, int yHint) {
+        if (s == Surface.자연) {
+            return;   // 중원 — 자연이 준 표층이 옳다
+        }
+        for (int x = cx - radius; x <= cx + radius; x++) {
+            for (int z = cz - radius; z <= cz + radius; z++) {
+                if (dist(x - cx, z - cz) > radius) {
+                    continue;
+                }
+                int g = naturalGround(world, x, z, yHint + 90);
+                if (g == WET_COLUMN) {
+                    if (s == Surface.설원) {
+                        freezeTop(world, x, z, yHint);   // 얼어붙은 못 — 설원의 물은 얼음이다
+                    }
+                    continue;   // 물 — 모래로 메우지 않는다 (오아시스·강은 물이다)
+                }
+                if (s == Surface.사막) {
+                    sandColumn(world, x, g, z);
+                } else {
+                    snowColumn(world, x, g, z, snowline);
+                }
+            }
+        }
+    }
+
+    /** 모래 기둥 — 표층 모래(붉은 모래가 드문드문) · 그 아래 사암 · 자갈의 결 */
+    private static void sandColumn(World world, int x, int g, int z) {
+        Block top = world.getBlockAt(x, g, z);
+        if (!SOLID_NATURAL.contains(top.getType())) {
+            return;   // 사람이 지은 것 — 덮지 않는다 (건축 계층의 바닥을 모래로 만들지 않는다)
+        }
+        // 자갈의 결 — 30칸에 하나꼴. 사막은 모래만이 아니다
+        Material surface = Math.floorMod(x * 31 + z * 17, 29) == 0 ? Material.GRAVEL
+                : Math.floorMod(x * 13 + z * 7, 11) == 0 ? Material.RED_SAND : Material.SAND;
+        top.setType(surface, false);   // 물리 갱신 없이 — 모래가 우수수 떨어지면 안 된다
+        for (int i = 1; i <= 5; i++) {
+            Block b = world.getBlockAt(x, g - i, z);
+            if (SOLID_NATURAL.contains(b.getType())) {
+                b.setType(Material.SANDSTONE, false);
+            }
+        }
+    }
+
+    /**
+     * 눈 기둥 — <b>설선 위에만</b>. 높이 올라갈수록 두꺼워진다.
+     *
+     * <p>설선 바로 위는 눈이 얇게 앉고(돌이 비친다), 한참 위는 두껍고, 아주 높은 데는 얼음이 섞인다.
+     * 좌표 해시로 설선 자체를 ±3 흔든다 — <b>자로 그은 설선은 설선이 아니다</b>.
+     */
+    private static void snowColumn(World world, int x, int g, int z, int snowline) {
+        int wobble = Math.floorMod(x * 7 + z * 11, 7) - 3;   // 설선의 들쭉날쭉 (±3)
+        if (g < snowline + wobble) {
+            return;   // 설선 아래 — 돌과 흙 그대로. **돌과 눈이 갈라지는 선이 설산이다**
+        }
+        Block top = world.getBlockAt(x, g, z);
+        if (!SOLID_NATURAL.contains(top.getType())) {
+            return;   // 사람이 지은 것 — 덮지 않는다
+        }
+        top.setType(Material.SNOW_BLOCK, false);
+        int depth = Math.min(3, (g - snowline) / 12 + 1);   // 높을수록 두껍다
+        for (int i = 1; i <= depth; i++) {
+            Block b = world.getBlockAt(x, g - i, z);
+            if (!SOLID_NATURAL.contains(b.getType())) {
+                break;
+            }
+            // 아주 높은 데는 만년빙 — 다만 **표층에는 얼음을 쓰지 않는다**
+            //   (ICE/PACKED_ICE 는 '젖은 열'로 읽혀 건축 마스크에서 빠진다. 정상에 집을 못 짓게 된다)
+            boolean glacier = g >= snowline + 30 && i >= 2 && Math.floorMod(x * 5 + z * 3, 4) == 0;
+            b.setType(glacier ? Material.PACKED_ICE : Material.SNOW_BLOCK, false);
+        }
+    }
+
+    /** 언 물 — 설원의 못은 얼음이다. 표면 한 켜만 (밑은 물로 남는다 — 물은 흘러야 물이다) */
+    private static void freezeTop(World world, int x, int z, int yHint) {
+        for (int y = yHint + 40; y >= yHint - 20; y--) {
+            Block b = world.getBlockAt(x, y, z);
+            if (b.getType() == Material.WATER) {
+                b.setType(Material.ICE, false);
+                return;
+            }
+            if (!b.getType().isAir() && b.getType() != Material.SNOW) {
+                return;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 오아시스 (W3) — 모래 한가운데 진짜 물
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 오아시스 — <b>서역 설계의 심장</b>.
+     *
+     * <p>"오아시스를 놓치면 죽는다"(routes.sangro_silk.survival)가 <b>지형에서 읽혀야</b> 한다.
+     * 그러려면 모래 한가운데 <b>진짜 물</b>이 있어야 한다.
+     *
+     * <p>지금까지 {@code TerrainForge} 는 물을 <b>만들지 않았다</b> ({@link #tidyWater} 는 정리만 한다).
+     * 오아시스가 그 첫 예외다 — 그리고 <b>바다는 여전히 만들지 않는다</b>(섬은 자연에 맡긴다. 해남파의 선례).
+     * 못 하나는 만들 수 있고 바다는 못 만든다 — 그 선을 여기서 긋는다.
+     *
+     * <p><b>경계는 급격하다.</b> 오아시스는 그라데이션이 아니다 —
+     * <b>물이 닿는 데까지가 초록이고 그 밖은 모래다.</b> 그 대비가 오아시스다.
+     *
+     * <p>수면은 조성 지면 <b>아래</b>(cy-1)에 둔다. 그래야 환경 검수 ②가 이 물을
+     * "산 위의 웅덩이"(고인 물 = 지면 +3 초과)로 세지 않는다 — <b>오아시스는 웅덩이가 아니라 못이다.</b>
+     */
+    static void carveOasis(World world, int cx, int cy, int cz, int radius) {
+        int pond = Math.max(14, radius / 2);      // 못 — 부지의 절반
+        int green = pond + 12;                    // 녹지 띠 — 물이 닿는 데까지
+
+        for (int x = cx - green; x <= cx + green; x++) {
+            for (int z = cz - green; z <= cz + green; z++) {
+                double d = dist(x - cx, z - cz);
+                if (d > green) {
+                    continue;
+                }
+                if (d <= pond) {
+                    // 못 — 그릇 모양. 가운데가 깊고 가장자리가 얕다 (수직 벽의 못은 우물이다)
+                    int depth = 1 + (int) Math.round(5 * (1 - d / (double) pond));
+                    int floorY = cy - 1 - depth;
+                    for (int y = cy + 14; y >= floorY + 1; y--) {   // 파낸다
+                        Block b = world.getBlockAt(x, y, z);
+                        Material m = b.getType();
+                        if (!m.isAir() && (NATURAL.contains(m) || foliage(m))) {
+                            b.setType(Material.AIR, false);
+                        }
+                    }
+                    world.getBlockAt(x, floorY, z).setType(Material.SAND, false);   // 못 바닥
+                    sealBelow(world, x, floorY, z);                                  // 계약 ① — 못 밑도 단단하다
+                    for (int y = floorY + 1; y <= cy - 1; y++) {                     // 물을 채운다 (수면 = cy-1)
+                        world.getBlockAt(x, y, z).setType(Material.WATER, false);
+                    }
+                } else {
+                    // 녹지 — 물가의 풀. **경계는 급격하다** (여기까지가 초록이고 그 밖은 모래다)
+                    int g = naturalGround(world, x, z, cy + 40);
+                    if (g == WET_COLUMN) {
+                        continue;
+                    }
+                    Block top = world.getBlockAt(x, g, z);
+                    if (SOLID_NATURAL.contains(top.getType())) {
+                        top.setType(Material.GRASS_BLOCK, false);
+                    }
+                    for (int i = 1; i <= 3; i++) {
+                        Block b = world.getBlockAt(x, g - i, z);
+                        if (b.getType() == Material.SANDSTONE || b.getType() == Material.SAND) {
+                            b.setType(Material.DIRT, false);   // 풀 밑은 흙이다
+                        }
+                    }
+                }
+            }
+        }
+        // 대추야자 대용 — 아카시아. 못을 둘러 여섯 그루 (좌표 해시 — 같은 오아시스면 같은 나무)
+        for (int i = 0; i < 6; i++) {
+            double a = Math.PI * i / 3.0 + Math.floorMod(cx * 7L + cz * 13L, 6) * 0.17;
+            int tx = cx + (int) Math.round(Math.cos(a) * (pond + 5));
+            int tz = cz + (int) Math.round(Math.sin(a) * (pond + 5));
+            palm(world, tx, cz == tz && cx == tx ? cy : naturalGround(world, tx, tz, cy + 40), tz, cy);
+        }
+    }
+
+    /** 종려(대용: 아카시아) — 줄기 다섯에 잎 한 겹. 사막의 나무는 성글다 */
+    private static void palm(World world, int x, int g, int z, int cy) {
+        if (g == WET_COLUMN || Math.abs(g - cy) > 8) {
+            return;
+        }
+        int h = 5 + Math.floorMod(x * 3 + z * 5, 3);
+        for (int i = 1; i <= h; i++) {
+            world.getBlockAt(x, g + i, z).setType(Material.ACACIA_LOG, false);
+        }
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (Math.abs(dx) + Math.abs(dz) > 2 || (dx == 0 && dz == 0)) {
+                    continue;
+                }
+                Block b = world.getBlockAt(x + dx, g + h, z + dz);
+                if (b.getType().isAir()) {
+                    b.setType(Material.ACACIA_LEAVES, false);
+                }
+            }
+        }
+        Block crown = world.getBlockAt(x, g + h + 1, z);
+        if (crown.getType().isAir()) {
+            crown.setType(Material.ACACIA_LEAVES, false);
         }
     }
 
@@ -1390,16 +1741,60 @@ final class TerrainForge {
     /** 조성 윤곽 등록부 — <b>지도가 관리한다</b>. 코드의 추론보다 이 표가 우선이다 */
     private static Map<String, Profile> shapeRegistry = new LinkedHashMap<>();
 
+    /** 표층 등록부 — 눈·모래를 어디에 얹는가 (고원+눈=토번처럼 지형만으로 못 읽는 것) */
+    private static Map<String, Surface> surfaceRegistry = new LinkedHashMap<>();
+
+    /** 설선 등록부 — 장소마다 다르다 (곤륜은 낮고 화산은 높다) */
+    private static Map<String, Integer> snowlineRegistry = new LinkedHashMap<>();
+
+    /** 오아시스 등록부 — 모래 한가운데 물을 파는 자리 */
+    private static Set<String> oasisRegistry = new java.util.LinkedHashSet<>();
+
     /** {@code config/terrain.yml} 판독 — 없어도 돈다 (그때는 등록부에서 <b>읽어 낸다</b>) */
     @SuppressWarnings("unchecked")
     static void load(Path configDir) {
         caveRegistry = new LinkedHashMap<>();
         shapeRegistry = new LinkedHashMap<>();
+        surfaceRegistry = new LinkedHashMap<>();
+        snowlineRegistry = new LinkedHashMap<>();
+        oasisRegistry = new java.util.LinkedHashSet<>();
         Path file = configDir.resolve("terrain.yml");
         if (!Files.isRegularFile(file)) {
             return;
         }
         Map<String, Object> root = RulesConfig.load(file);
+
+        // 표층 — surfacing: { <id>: 사막|설원 }  (없으면 지형이 말한다: 설산 → 설원 · 사막 → 사막)
+        if (root.get("surfacing") instanceof Map<?, ?> surfacing) {
+            for (Map.Entry<?, ?> e : surfacing.entrySet()) {
+                Object v = e.getValue();
+                String name = v instanceof Map
+                        ? String.valueOf(((Map<String, Object>) v).get("surface"))
+                        : String.valueOf(v);
+                try {
+                    surfaceRegistry.put(String.valueOf(e.getKey()), Surface.valueOf(name.trim()));
+                } catch (IllegalArgumentException ignored) {
+                    // 모르는 표층 — 조용히 넘긴다
+                }
+                if (v instanceof Map && ((Map<String, Object>) v).get("snowline") instanceof Number n) {
+                    snowlineRegistry.put(String.valueOf(e.getKey()), n.intValue());
+                }
+            }
+        }
+        // 설선 — snowline: { <id>: 120 }  (surfacing 안에 적어도 되고, 따로 적어도 된다)
+        if (root.get("snowline") instanceof Map<?, ?> snow) {
+            for (Map.Entry<?, ?> e : snow.entrySet()) {
+                if (e.getValue() instanceof Number n) {
+                    snowlineRegistry.put(String.valueOf(e.getKey()), n.intValue());
+                }
+            }
+        }
+        // 오아시스 — oasis: [id, id]
+        if (root.get("oasis") instanceof List<?> list) {
+            for (Object o : list) {
+                oasisRegistry.add(String.valueOf(o));
+            }
+        }
 
         if (root.get("caves") instanceof Map<?, ?> caves) {
             for (Map.Entry<?, ?> e : caves.entrySet()) {

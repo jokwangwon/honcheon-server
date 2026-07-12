@@ -2051,9 +2051,9 @@ def lantern_rows(shades, cap, cap_hi):
 
 # ─── 한약장 — chiseled_bookshelf 재해석 ('꽂힌 책 = 채운 서랍').
 #     6칸(3열 × 2단)은 바닐라 슬롯 배치 계약. occupied = 앞판 + 놋 손잡이 / empty = 열린 칸의 어둠.
-SHELF_WOOD = ramp((70, 56, 41, 255), (190, 160, 120, 255), 7)
-SHELF_VOID = (18, 16, 14, 255)      # 빈 칸 깊은 어둠
-SHELF_VOID_HI = (44, 38, 32, 255)   # 빈 칸 안쪽 바닥 — 위에서 든 빛이 겨우 닿는 곳
+SHELF_WOOD = ramp((104, 86, 65, 255), (222, 190, 146, 255), 7)
+SHELF_VOID = (52, 45, 38, 255)      # 빈 칸 깊은 어둠 (순먹 금지 — 검정은 구멍으로 보인다)
+SHELF_VOID_HI = (96, 84, 69, 255)   # 빈 칸 안쪽 바닥 — 위에서 든 빛이 겨우 닿는 곳
 BRASS_HI = (204, 184, 132, 255)     # 놋 손잡이 광
 BRASS_DIM = (104, 90, 60, 255)      # 놋 손잡이 그늘
 SHELF_COLS = [(0, 4), (5, 10), (11, 15)]
@@ -2684,9 +2684,9 @@ def smooth_stone_rows(band=False):
 # 목재는 조성 팔레트의 최대 면적이다 (DARK_OAK_PLANKS 33 + SPRUCE_FENCE 39 + SPRUCE_PLANKS 18 …).
 # 울타리·계단·반블록·문·다락이 전부 **판자 텍스처 한 장**을 쓴다 — 여기가 세계를 가장 크게 바꾼다.
 # 색: 채도 ≤ 40 (수묵 규약). '갈색 나무'가 아니라 **먹에 흙기를 옅게 섞은 나무**다.
-DARK_WOOD = ramp((60, 52, 43, 255), (152, 135, 113, 255), 9)       # 짙은 목재 (다크오크) — 관아·객잔 기둥
-SPRUCE_WOOD = ramp((76, 66, 54, 255), (172, 154, 129, 255), 9)   # 가문비 — 산채 목책·서민 판자
-OAK_WOOD = ramp((94, 82, 67, 255), (188, 169, 142, 255), 9)      # 참나무 — 밝은 판자
+DARK_WOOD = ramp((80, 70, 58, 255), (176, 157, 131, 255), 9)       # 짙은 목재 (다크오크) — 관아·객잔 기둥
+SPRUCE_WOOD = ramp((88, 77, 63, 255), (184, 165, 138, 255), 9)   # 가문비 — 산채 목책·서민 판자
+OAK_WOOD = ramp((104, 91, 74, 255), (198, 178, 150, 255), 9)      # 참나무 — 밝은 판자
 STRIPPED_WOOD = ramp((102, 90, 74, 255), (200, 180, 152, 255), 9)  # 벗긴 원목 — 노출 기둥
 CHERRY_WOOD = ramp((84, 66, 64, 255), (180, 148, 144, 255), 9)   # 매화나무 — 아주 옅은 붉은 기
 
@@ -3115,20 +3115,20 @@ def cherry_sapling_rows():
     이전 판은 sprig_rows(CHERRY_WOOD) 로 구워 밝기 82의 먹빛 삭정이였다."""
     art = [
         "................",
-        ".......@@.......",
         "......@@@@......",
-        ".....@@%@@@.....",
+        ".....@@@@@@.....",
         "....@@@@@@@@....",
-        "...@@%@@@@%@....",
+        "...@@@@%@@@@@...",
+        "...@@@@@@@@@@...",
+        "...@@@@@#@@@@@..",
+        "..@@@@@@#@@@@@..",
+        "...@@@@@#@@@@@..",
         "....@@@@#@@@@...",
-        "...@@@@#@@@@....",
-        "....@%@#@@%@....",
-        ".....@@#@@@.....",
-        "......@#@@......",
-        ".......#........",
+        ".....@@@#@@@....",
+        "......@@#@@.....",
+        ".......@#.......",
         ".......#........",
         "......##........",
-        ".......#........",
         "................",
     ]
     rows = []
@@ -3523,8 +3523,8 @@ def crafting_table_rows(part):
     return rows
 
 
-EMBER = (168, 92, 44, 255)          # 잉걸 — 등롱과 같은 계열의 난색 (불은 채색이 허락된다)
-EMBER_HI = (208, 138, 72, 255)
+EMBER = (206, 116, 52, 255)         # 잉걸 — 등롱과 같은 계열의 난색 (불은 채색이 허락된다)
+EMBER_HI = (246, 176, 98, 255)      # 타는 속 — 밝다. 불이 어두우면 그건 재다
 
 
 def campfire_log_rows(lit=False):
@@ -3537,9 +3537,9 @@ def campfire_log_rows(lit=False):
             v = 4.0 + wood_grain(x, y, 0x4D, amp=1.2)
             char = smooth_octave(x, y, 4, 0x77, 1.0)
             if char > 0.15:
-                v -= 2.2 * min(1.0, (char - 0.15) * 1.8)    # 그을려 숯이 된 자리
+                v -= (1.2 if lit else 2.2) * min(1.0, (char - 0.15) * 1.8)  # 그을려 숯이 된 자리
             px = step(DARK_WOOD, v)
-            if lit and h32(x, y, 0x95) % 11 == 0 and char > 0.0:
+            if lit and h32(x, y, 0x95) % 4 == 0 and char > -0.15:
                 px = EMBER_HI if h32(x, y, 0xB1) % 3 == 0 else EMBER   # 잉걸 (숯 사이로 붉게)
             row.append(px)
         rows.append(row)
@@ -3880,8 +3880,8 @@ def composter_rows(part):
     if part == "bottom":
         return plank_rows(wood, 0x79)
     # compost / ready — 삭는 거름. ready 는 다 삭아 검고 기름지다
-    dark = ramp((36, 32, 26, 255), (92, 82, 66, 255), 7) if part == "ready" else \
-        ramp((52, 46, 34, 255), (124, 110, 82, 255), 7)
+    dark = ramp((54, 48, 39, 255), (122, 109, 88, 255), 7) if part == "ready" else \
+        ramp((70, 62, 46, 255), (152, 135, 101, 255), 7)
     g = [[step(dark, 3.6 + smooth_octave(x, y, 4, 0x7B, 1.4) + octave(x, y, 1, 0x7D, 0.9))
           for x in range(16)] for y in range(16)]
     if part == "ready":
@@ -4197,7 +4197,7 @@ def write_block_textures() -> int:
         "dark_oak_log_top": log_top_rows(DARK_WOOD, 0x47, freq=2.05),
         "stripped_oak_log": stripped_rows(STRIPPED_WOOD, 0x19),
         "stripped_oak_log_top": log_top_rows(STRIPPED_WOOD, 0x1D, freq=1.55),
-        "stripped_dark_oak_log": stripped_rows(ramp((66, 57, 47, 255), (140, 124, 104, 255), 9), 0x61),
+        "stripped_dark_oak_log": stripped_rows(ramp((86, 75, 62, 255), (166, 148, 124, 255), 9), 0x61),
         "stripped_dark_oak_log_top": log_top_rows(DARK_WOOD, 0x65, freq=1.94),
         "stripped_spruce_log": stripped_rows(SPRUCE_WOOD, 0x7F),
         "stripped_spruce_log_top": log_top_rows(SPRUCE_WOOD, 0x83, freq=1.71),
