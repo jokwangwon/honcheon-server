@@ -164,6 +164,15 @@
     },
     {
       "type": "bitmap",
+      "file": "honcheon:font/bimu.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        "\ue030"
+      ]
+    },
+    {
+      "type": "bitmap",
       "file": "honcheon:font/gui_ledger.png",
       "height": 110,
       "ascent": 13,
