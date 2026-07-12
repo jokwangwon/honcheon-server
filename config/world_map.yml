@@ -195,6 +195,54 @@ terrain_sampling:
   score_full: 100                   # 전 조건 충족
   score_fail: 0
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ★★ 3-b. 바이옴 정책 (biome_policy) — **모래와 눈은 바이옴이 아니라 블록이다**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ★ 세계 순도 담당이 사막·빙설 바이옴을 **재배치**했다 (config/world_purity.yml biomes.remap).
+#   사용자의 지시다: "사막 필드도 다 필요없음. 얼음 지역도 필요없음."
+#   → desert → savanna/beach · snowy_* → plains/taiga/grove · frozen_peaks → jagged_peaks …
+#
+# ★★★ 그리고 그것이 이 등록부를 깨뜨리지 **않는다.** 그 이유가 이 절이다:
+#
+#   ┌─ 이 파일에는 지형을 말하는 필드가 **셋**이고, 셋의 무게가 전혀 다르다 ─────────┐
+#   │                                                                                │
+#   │  terrain:  ★ **요구(要求)**. 부지 판정의 기준이다 (WorldMap.fit).              │
+#   │            → water_pct · relief · mean_y 로만 정의된다 (아래 terrain_types).   │
+#   │            ★★ **바이옴 이름이 하나도 안 들어간다.** 그래서 안 깨진다.          │
+#   │                                                                                │
+#   │  biomes:   ○ **선호(選好)**. 시드 점수 가산일 뿐이다 — 없어도 부지는 선다.     │
+#   │            → 순도 remap 을 따라 갱신했다 (17줄). **의미가 줄었다**             │
+#   │                                                                                │
+#   │  forge:    ★ **주문(注文)**. ← 이 패스에서 신설.                               │
+#   │            → 지형 계층이 **실제로 빚어야 하는 것** (§15 terrain_requests)      │
+#   └────────────────────────────────────────────────────────────────────────────────┘
+#
+#   ★★ 무게 중심이 `biomes` → `forge` 로 옮겨갔다. 그것이 이 조율의 핵심이다:
+#      **바닐라에게 바라던 것을, 이제 우리가 주문한다.**
+#
+# ★ 사막·설산은 여전히 만들 수 있다 — **눈과 모래는 블록이지 바이옴이 아니다.**
+#   (world_purity.yml conflicts_with_world_map.청해_서역 이 같은 결론을 적었다:
+#    "그래도 설산은 만들 수 있다 — TerrainForge 가 산을 세우고 그 위에 눈을 얹으면 된다")
+#   ★ 자연 동굴을 끄고 우리가 굴을 판 것과 **정확히 같은 원칙**이다.
+biome_policy:
+  authority: "config/world_purity.yml biomes.remap 이 정본이다. 이 파일의 biomes: 는 그 결과를 따른다"
+  reconciled: "★ 2026-07 새외 패스에서 17줄 갱신 — 생성되지 않는 바이옴을 remap 표 그대로 치환했다"
+  removed: [desert, snowy_plains, snowy_taiga, snowy_slopes, frozen_peaks, ice_spikes, snowy_beach, frozen_river]
+  survivors: [grove, badlands, eroded_badlands, savanna, savanna_plateau, windswept_savanna, cherry_grove, jagged_peaks]
+  the_rule: |
+    ★★ **terrain 은 요구이고 biomes 는 선호다. 요구는 바이옴을 모른다.**
+      terrain_types(아래)는 water_pct·relief·mean_y 로만 정의돼 있다 — 바이옴 이름이 없다.
+      → **부지 판정(WorldMap.fit)은 순도 작업에 영향받지 않는다.** 좌표는 안전하다.
+    ★ 잃은 것은 '그림'뿐이고, 그림은 **forge 가 되찾아 온다** (§15)
+  what_forge_must_restore:        # ★ 바이옴이 주던 것 중 **지형 계층이 대신 줘야 하는 것**
+    모래: "★ desert 가 사라졌다 → SAND/SANDSTONE 을 **표층으로 깔아야** 한다 (§15 archetypes.사막)"
+    눈:   "★ snowy_* 가 사라졌다 → SNOW_BLOCK 을 **설선 위에 얹어야** 한다 (§15 archetypes.설원).
+      ★ 다만 grove 는 남았다 (고산 침엽수림) — **높은 데의 눈은 여전히 자연이 준다**"
+    그_외: "★ 초원(plains)·밀림(jungle)·섬(ocean/beach)은 **전부 살아 있다.**
+      그래서 막북·남만·동영은 **요청할 것이 거의 없다** (§15 archetypes 참조).
+      ★ 우리가 빚어야 하는 것은 **사막과 설원, 둘뿐이다**"
+
 terrain_types:
   평지:   { water_pct: [0, 6],   relief: [0, 10],   desc: "현성·장터·관아가 서는 땅. 물도 절벽도 없다" }
   구릉:   { water_pct: [0, 10],  relief: [8, 30],   desc: "온대 구릉 — 청하현 외곽의 기본" }
@@ -2386,26 +2434,34 @@ terrain_requests:
 
   # ─── 우선순위 0 — ★ 바이옴을 끄면 **지금 당장** 깨지는 것 (새외보다 먼저다) ───
   priority_0_regression:
-    - place: gonryun
+    gonryun:
       terrain: 설산
       forge: [설산, 설원]
-      breaks_how: "★ 이미 등록된 구파일방 본산이다. 지금은 바닐라 snowy_slopes 에 의존한다.
-        바이옴을 끄면 **눈 없는 설산** — Profile.봉우리가 회색 돌산을 세운다 (팔레트 STONE/DEEPSLATE 하드코딩)"
-      need: "봉우리 위에 **설선(雪線)** — 일정 y 이상 표층을 SNOW_BLOCK/POWDER_SNOW 로. 팔레트 분기 하나면 된다"
-    - place: gunjin_gayokgwan
+      breaks_how: "★ 이미 등록된 구파일방 본산이다. 지금은 바닐라 snowy_slopes 에 의존했다 —
+        그리고 그것이 방금 사라졌다 (순도 remap: snowy_slopes → grove).
+        → Profile.봉우리가 **회색 돌산**을 세운다 (팔레트 STONE/DEEPSLATE/ANDESITE 하드코딩). **눈 없는 설산**"
+      need: "봉우리 위에 **설선(雪線)** — 일정 y 이상 표층을 SNOW_BLOCK 으로. 팔레트 분기 하나면 된다"
+    gunjin_gayokgwan:
       terrain: 사막
       forge: [사막]
       breaks_how: "★ terrain '사막'은 profile() switch 에 **없다** → default → Profile.그대로 →
-        바닐라가 준 땅을 그대로 쓴다. 바닐라 사막을 끄면 **잔디밭 위의 서북 관문**이 된다"
+        바닐라가 준 땅을 그대로 쓴다. 그런데 바닐라 사막이 방금 사라졌다 (desert → savanna) →
+        **초원 위의 서북 관문**이 된다"
       need: "사막 원형 — 아래 archetypes.사막"
-    - place: taebaeksan
+    taebaeksan:
       terrain: 험산
       forge: []
-      breaks_how: "biomes 에 snowy_slopes 가 있으나 **요구가 아니라 선호**다 — 눈이 없어도 험산은 성립한다. ✔ 안전"
+      breaks_how: "★ 안전 ✔ — biomes 는 **요구가 아니라 선호**다. snowy_slopes → grove 로 갱신했고,
+        grove(고산 침엽수림)는 **순도 담당이 남겼다.** 험산은 눈 없이도 성립한다"
       need: 없음
-    - note: "★ 하북(taiga·snowy_plains)·산서(badlands)는 **지역권 biomes** 일 뿐 장소 요구가 아니다.
-      다만 worldgen 담당이 **전역으로** 끄면 하북의 '겨울이 길다'가 그림에서 사라진다 —
-      ★ **중원의 눈까지 끄지는 말 것.** 끌 것은 '무작위 배치'이지 '눈' 자체가 아니다"
+    verdict: |
+      ★ 하북·산서는 **지역권 biomes** 일 뿐 장소 요구가 아니다 — 안전하다.
+      ★ 그리고 순도 담당이 이미 정확히 판단했다: **grove 를 남겼다** —
+        "우리가 끄는 것은 「얼음 지역」이지 「높은 데의 눈」이 아니다."
+        → 화산·무당·태백의 봉우리에는 여전히 눈이 얹힌다 (바닐라가 고도로 온도를 보정하므로).
+      ★★ **깨지는 것은 딱 둘이다: 곤륜(설산)과 가욕관(사막).**
+        이 둘만은 바이옴이 아니라 **terrain 요구**이기 때문이다 — 그림이 아니라 **정체성**이다.
+        ★ 그래서 W1·W2 가 새외보다 먼저다
 
   # ─── 지형 원형 (archetypes) — ★ 지형 담당이 만들 것. Profile enum 확장 또는 shape() 분기 ───
   #   현재 Profile: [봉우리, 중턱단, 들, 그대로] — 넷뿐이다.
@@ -2494,36 +2550,36 @@ terrain_requests:
 
   # ─── ★ 지형 담당에게 넘기는 최소 작업 목록 (우선순위 순) ───
   work_items:
-    - id: W1
-      what: "raiseMassif() 팔레트에 **설선 분기** — y >= snowline 이면 SNOW_BLOCK/PACKED_ICE"
-      why: "★ 곤륜(등록된 구파)이 바이옴을 끄는 순간 깨진다. **가장 급하고 가장 싸다**"
+    W1:
+      what: "raiseMassif() 팔레트에 **설선 분기** — y >= snowline 이면 표층 SNOW_BLOCK"
+      why: "★★ **곤륜이 지금 깨져 있다.** 등록된 구파일방 본산인데 눈이 없다
+        (순도 remap 으로 snowy_slopes 가 사라졌고, raiseMassif 팔레트는 회색 돌 하드코딩이다).
+        ★ 가장 급하고 가장 싸다 — 팔레트 분기 하나"
       places: [gonryun, gonryun_seolseon]
       effort: 낮음
-
-    - id: W2
+    W2:
       what: "profile() switch 에 사막 케이스 추가 + 사막 원형 구현
-        (levelField + SAND/SANDSTONE 표층 + 저주파 사구)"
-      why: "★ 가욕관(등록된 군진)이 깨진다. 그리고 서역 전체의 전제다.
-        ★ 지금은 '사막'이 switch 에 없어 default → Profile.그대로 로 떨어진다 (아무것도 안 한다)"
+        (levelField 기반 + SAND/SANDSTONE 표층 + 저주파 사구)"
+      why: "★★ **가욕관이 지금 깨져 있다** (등록된 군진 — terrain: 사막).
+        지금은 '사막'이 switch 에 없어 default → Profile.그대로 로 떨어진다 (아무것도 안 한다).
+        ★ 그리고 이것이 서역 전체(고창·돈황·성화단)의 전제다"
       places: [gunjin_gayokgwan, seoyeok_gochang, donhwang, baehwa_seonghwadan]
       effort: 중간
-
-    - id: W3
+    W3:
       what: "오아시스 패치 — 사막 원형 위에 얕은 못 + 국지 녹지 (경계는 급격하게)"
-      why: "★ '오아시스를 놓치면 죽는다'가 지형에서 읽혀야 한다 (routes.sangro_silk.survival)"
+      why: "★ '오아시스를 놓치면 죽는다'가 **지형에서 읽혀야** 한다 (routes.sangro_silk.survival)"
       places: [seoyeok_gochang, donhwang]
       effort: 중간
-
-    - id: W4
+    W4:
       what: "설원 덧입힘을 고원(LIFT_PLATEAU)에도 적용"
-      why: "토번 = 고원 + 눈. W1 이 끝나면 거의 공짜다"
+      why: "토번 = 고원 + 눈. ★ W1 이 끝나면 거의 공짜다"
       places: [seolyeok_daesa]
       effort: 낮음
-
-    - id: W5
+    W5:
       what: "config/terrain.yml shaping: 에 새외 장소 등재 (Profile 강제 지정)"
-      why: "★ TerrainForge.PEAK_FACTIONS 는 하드코딩이고 새외 세력이 **거기 없다** —
-        설역 대사(밀교)가 Profile.중턱단 으로 떨어진다. shaping: 이 그 우회로다 (등록부가 코드보다 세다)"
+      why: "★ TerrainForge.PEAK_FACTIONS 는 **하드코딩**이고 새외 세력이 거기 없다 —
+        설역 대사(밀교 대사원)가 Profile.중턱단 으로 떨어진다.
+        shaping: 이 그 우회로다 — **등록부가 코드보다 세다** (profile() 이 shapeRegistry 를 먼저 본다)"
       effort: 낮음
       proposed_patch: |
         # ★ config/terrain.yml 은 **소유자가 다르다** — 조각만 제안한다.
@@ -2536,23 +2592,42 @@ terrain_requests:
           bukmak_hanjeong:     들        # ★ 천막이다. 세울 것이 없다
           odokgyo_odokchae:    그대로    # 밀림은 자연이 준 대로
           dongyeong_do:        그대로    # ★ 섬은 빚지 않는다
-
-    - id: W6
+    W6:
       what: "★ **하지 않을 것** — 섬 원형"
-      why: "물을 만드는 것은 현 계약(terrain_layer §5) 밖이다. 바다 바이옴은 안 끄므로 자연에 맡긴다.
+      why: "물을 만드는 것은 현 계약(terrain_layer §5) 밖이다. 바다 바이옴은 **안 껐으므로** 자연에 맡긴다.
         ★ 해남파가 이미 그렇게 서 있다 (terrain: 섬 → Profile.그대로) — **선례를 따른다**"
       effort: 없음
+    order: "★ W1 → W2 → (W5) → W3 → W4.  **W1·W2 는 새외가 아니라 중원을 위한 것이다** —
+      곤륜과 가욕관은 이미 등록돼 있고 지금 깨져 있다. 새외 7 좌표는 전부 build: later 다"
 
-  # ─── ★ worldgen 담당(세계 순도)에게 보내는 교차 확인 ───
+  # ─── ★ 세계 순도 담당과의 교차 확인 — **이미 착지했다** (읽기만 했다. 안 건드렸다) ───
   cross_check_worldgen:
-    ref: "worldgen/honcheon_no_caves — ★ 건드리지 않았다. 읽기만 했다"
-    현재_상태: "동굴·협곡만 끈다 (configured_carver probability 0.0 + 동굴 밀도함수 상수화). **바이옴 파일은 아직 없다**"
-    요청_1: "★ **끌 것은 바이옴이 아니라 '무작위 배치'다.** desert/badlands/snowy_* 를
-      multi_noise 파라미터에서 **중원 위도대(z -700k ~ +700k)** 에서만 빼는 것이 이상적이다.
-      전역으로 제거하면 곤륜·가욕관·하북·산서가 함께 죽는다 (priority_0_regression 참조)"
-    요청_2: "★ 그것이 어려우면 **전역으로 끄고 TerrainForge 가 전부 빚는다** — 그래도 된다.
-      다만 그때는 W1·W2 가 **선행 조건**이다 (안 하면 곤륜·가욕관이 즉시 깨진다)"
-    요청_3: "★ **plains·jungle·ocean 은 끄지 말 것.** 초원·밀림·섬이 그 위에 서 있고,
-      이 셋은 무작위로 깔려도 중원을 해치지 않는다 (사막·빙설과 다른 점)"
-    verdict: "★ 어느 쪽이든 지도는 안 바뀐다 — **좌표는 바이옴에 의존하지 않는다.**
-      terrain_types(§3)는 water_pct·relief·mean_y 로만 정의돼 있다. **그것이 이 설계가 견디는 이유다**"
+    ref: "config/world_purity.yml · worldgen/honcheon_purity · worldgen/honcheon_no_caves"
+    착지_상태: |
+      ★ 인게임 실측 통과 (2026-07):
+        · 바닐라 구조물 20종 + placed_feature 4종 제거 — /locate 로 "찾을 수 없음" 확인
+        · **바이옴 12종 재배치** — desert → savanna/beach · snowy_* → plains/taiga/grove ·
+          frozen_peaks → jagged_peaks · ice_spikes → plains …
+        · ★ **남긴 것**: grove(고산 침엽수림) · badlands(황토고원) · savanna · cherry_grove ·
+          plains · jungle · ocean/beach
+      ★ 방법이 영리하다: 바이옴을 **삭제하지 않고** 기후 구획의 **이름표만 바꿨다** —
+        기후 공간에 구멍도 겹침도 안 생긴다. 레지스트리가 안 깨진다
+    내가_한_것: "★ world_map.yml 의 `biomes:` **17줄을 remap 표 그대로 갱신했다** (§3-b biome_policy).
+      순도 담당이 보고한 conflicts_with_world_map 4건(하북·산서·청해_서역·새외_북막) 전부 해소"
+    확인_1_좌표는_안전하다: |
+      ★★ **부지 판정은 바이옴을 안 본다.** terrain_types(§3)는 water_pct·relief·mean_y 로만 정의돼 있다.
+        → 순도 작업이 등록 좌표를 **하나도 못 옮긴다.** 이것이 이 설계가 견디는 이유다
+    확인_2_사막과_설산은_여전히_가능하다: |
+      ★★ **눈과 모래는 블록이지 바이옴이 아니다.** 순도 담당도 같은 결론을 적었다
+        (world_purity conflicts_with_world_map.청해_서역:
+         "그래도 설산은 만들 수 있다 — TerrainForge 가 산을 세우고 그 위에 눈을 얹으면 된다").
+      ★ 그래서 조율 판단이 성립한다: **끈다 — 무작위는. 만든다 — 등록 좌표는.**
+    남은_것: |
+      ★★ 그런데 **'만든다'가 아직 코드에 없다.** 그것이 §15 의 전부다:
+        · TerrainForge.profile() switch 에 '사막'이 **없다** → default → Profile.그대로 (아무것도 안 함)
+        · grassOrStone() 은 주변 SAND/SNOW 를 **읽어서 따라갈** 뿐, **만들지 못한다**
+        · raiseMassif() 팔레트는 STONE/DEEPSLATE/ANDESITE **하드코딩** — 눈이 없다
+      ★ 순도 담당이 사막·빙설 바이옴을 껐으므로 — **이제 읽을 모래도, 따라갈 눈도 없다.**
+        → W1(설선 팔레트) · W2(사막 원형)가 **곤륜·가욕관을 위해 필요하다.** 새외보다 먼저다
+    verdict: "★ 순도 담당의 판단에 이견 없다. 오히려 **그 판단이 이 요청서를 필요하게 만들었다** —
+      그리고 그것이 옳은 순서다: **먼저 통제 불가능한 것을 끄고, 그다음 필요한 것을 만든다**"
