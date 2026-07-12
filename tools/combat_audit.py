@@ -876,13 +876,29 @@ def sim_qi_counters(cfg, rep, max_rounds):
     rep.say(f"       호신강기(강기)는 '하위 격 자동 무효' → 절정의 검기·발경·외공기 전부 무효 → 피해/합 = 0.00")
     rep.say(f"       화경 내력 풀 {hwa.pool} → 호신강기 전개 {deploy:g} + 유지 {sustain:g}/합 = "
             f"{max_sustain}합 무한 방어. 그 사이 화경은 {ttd_i}합에 절정을 눕힌다")
+    # 상쇄 소모는 **밴드별로** 적혀 있다 (on_hit.하위_격/동격/상위_격). 구판은 on_hit 최상단에서만 찾다가
+    # 못 보고 "수치가 없다"고 외쳤다 — 눈이 한 켜 얕았다.
     on_hit = dig(cfg, "qi_manifestation.yml", "forms", "두름_몸", "호신강기", "on_hit", default=None)
-    drain = on_hit.get("상쇄_소모") if isinstance(on_hit, dict) else None
-    if not drain:
-        rep.fail("호신강기가 절대 방어다 — '동격은 소모 상쇄전'이라 쓰였으나 **상쇄 소모량이 수치로 없다**. "
+    bands = {}
+    if isinstance(on_hit, dict):
+        for band in ("하위_격", "동격", "상위_격"):
+            b = on_hit.get(band)
+            if isinstance(b, dict) and b.get("상쇄_소모") is not None:
+                bands[band] = num(b.get("상쇄_소모"), 0)
+    if not bands.get("하위_격"):
+        rep.fail("호신강기가 절대 방어다 — 하위 격을 무효화하는 대가(상쇄_소모)가 수치로 없다. "
                  "하위 격의 답이 규칙에 없으면 승률은 구조적으로 0 이다")
     else:
-        rep.ok(f"호신강기는 두들기면 깎인다 (상쇄 소모 {drain}) — 절대 방어가 아니다")
+        drain = bands["하위_격"]
+        # 하위 격이 두들겨 강기를 말리는 데 몇 합이 걸리나 = (풀 - 전개) / (유지 + 상쇄)
+        per_round = sustain + drain
+        strip = int((hwa.pool - deploy) // per_round) if per_round else 0
+        rep.ok(f"호신강기는 두들기면 깎인다 — 무효화 1회당 상쇄 소모 {drain:g} "
+               f"(동격 {bands.get('동격', 0):g} · 상위 격 {bands.get('상위_격', 0):g}). "
+               f"절정이 매 합 두들기면 화경의 강기는 {strip}합에 마른다 (유지 {sustain:g} + 상쇄 {drain:g}/합). "
+               f"하위 격의 답 = 소모전이다")
+        if strip > max_rounds:
+            rep.warn(f"그래도 {strip}합 — 전투 상한({max_rounds}합)보다 길다. 소모전이 이론에만 있다")
 
 
 def sim_weapon_grades(cfg, rep, max_rounds):
@@ -943,10 +959,25 @@ def sim_weapon_grades(cfg, rep, max_rounds):
         rep.fail(f"무기 파괴의 영향 −{loss:.0f}% < 5% — 무기 등급이 장식이다")
 
     rep.say("")
-    rep.fail("무기 파괴가 '접촉 격돌(가드·패링·합)'에만 걸리는데 회피는 접촉이 없다 "
-             "(weapon_break.trigger) — 즉 **검기 이상 상대로는 절대 막지 않는 것이 항상 옳다**. "
-             "방어 선택지 3종(회피/막기/방어_전념) 중 2종이 상위 격 앞에서 자살 수단이 된다. "
-             "정련 무기를 사기 전에는 '막기'라는 행동 자체가 죽은 선택지다")
+    # 무기 파괴는 접촉(가드·패링·합)에만 걸린다 — 회피는 접촉이 없다. 그러면 "늘 회피"가 답인가?
+    #   답은 **회피가 자원인가**에 달렸다. 무한 회피면 막기는 죽은 선택지고, 유한하면 선택이 산다.
+    #   구판은 이걸 묻지 않고 "막기는 죽었다"고 박아 두었다 — config 를 읽지 않는 결론이었다.
+    charges = num(dig(cfg, "skill_mechanics.yml", "dodge", "charges"), 0)
+    recharge = num(dig(cfg, "skill_mechanics.yml", "dodge", "recharge_ticks"), 0)
+    swings_per_sec = 1.6   # 검 표준 공속 (equipment.yml 계열 공속 — 검 1.6/s)
+    rep.say(f"     회피 = 충전 {charges:g}회 · 회복 {recharge:g}틱({recharge / 20:.1f}초) "
+            f"→ 회복 한 주기에 회피 {charges:g}회, 그 사이 상대는 {recharge / 20 * swings_per_sec:.1f}타를 낸다")
+    if not charges or not recharge:
+        rep.fail("회피에 충전·회복이 없다 = 무한 회피. 그러면 상위 격 앞에서 '막기'는 죽은 선택지다 "
+                 "(무기 파괴는 접촉에만 걸리므로 안 막으면 무기가 안 부러진다)")
+    else:
+        covered = charges / max(1e-9, recharge / 20 * swings_per_sec)
+        if covered >= 1.0:
+            rep.fail(f"회피가 들어오는 타격의 {covered * 100:.0f}% 를 덮는다 = 사실상 무한 회피 — "
+                     f"막기가 죽은 선택지다")
+        else:
+            rep.ok(f"회피는 들어오는 타격의 {covered * 100:.0f}% 만 덮는다 — 나머지는 막거나 맞는다. "
+                   f"'상위 격은 피하고 하위 격은 막는다'가 성립한다 (무기 파괴는 그 선택의 값이다)")
 
 
 def sim_gangup(cfg, rep, max_rounds):
@@ -1087,11 +1118,21 @@ def sim_dead_options(cfg, rep):
     if not dead:
         rep.ok("액션 데이터를 가진 무공 중 죽은 선택지 없음")
 
-    # 발경: 코스트 1 인데 이득이 0
+    # 발경의 이득 — 수치로 묻는다 (구판은 "이득이 없다"고 박아 두었다. combat.yml damage.qi_power 가 생긴 뒤로 거짓이다)
     rep.say("")
-    rep.fail("발경(코스트 1) — 이득이 config 어디에도 수치로 없다(피해 공식에 격 항 없음). "
-             "'개화한 몸의 첫 권능'이자 일류의 유일한 새 자원 소비처인데, 지금 규칙대로면 "
-             "내력을 태우고 아무 것도 얻지 못한다. 합리적 플레이어는 발경을 쓰지 않는다")
+    balgyeong = num(dig(cfg, "combat.yml", "damage", "qi_power", "발경"), 0)
+    cost_balgyeong = num(dig(cfg, "internal_energy.yml", "cost_bands", "발경"), 1)
+    if balgyeong <= 0:
+        rep.fail("발경(코스트 1) — 이득이 config 어디에도 수치로 없다(피해 공식에 격 항 없음). "
+                 "내력을 태우고 아무 것도 얻지 못한다면 합리적 플레이어는 발경을 쓰지 않는다")
+    else:
+        pw = Fighter(cfg, "일류 무인", "일류", weapon="검")
+        ew = Fighter(cfg, "일류 무인", "일류", weapon="검", is_npc=True)
+        _, base_d, _ = strike(pw, ew, qi_power=0.0)
+        _, qi_d, _ = strike(pw, ew, qi_power=balgyeong)
+        gain = (qi_d - base_d) / base_d * 100 if base_d else 0
+        rep.ok(f"발경(코스트 {cost_balgyeong:g}) — 위력 +{balgyeong:g} → 피해 {base_d:.2f} → {qi_d:.2f} "
+               f"({gain:+.1f}%). 내력을 태우면 아프다")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
