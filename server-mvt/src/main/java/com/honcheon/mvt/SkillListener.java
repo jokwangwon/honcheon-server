@@ -14,9 +14,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.potion.PotionEffect;
@@ -56,11 +59,23 @@ public final class SkillListener implements Listener {
             "맨손", "taejo_jangkwon");   // skill_mechanics.yml 에 combo 가 생기는 날 자동 점등
 
     private static final String CD_SHOT = "발출";
+    /** NPC 격 시전 간격 — 응집과 응집 사이 (라운드 = 두름 과금 주기와 같은 눈금) */
+    private static final String CD_QI = "npc_격";
+    /** NPC 근접 사거리 — 이 안에 들어와야 응집을 시작한다 (config 등록 대기: npc_combat.yml reach) */
+    private static final double NPC_REACH = 3.5;
+    /** 응집이 끝난 뒤 격이 실려 있는 창 — 바닐라 근접 AI 의 스윙 타이밍을 우리가 못 정한다 (근사) */
+    private static final int NPC_HOT_TICKS = 20;
+    /** 전투 밖 NPC 내력 회복 — 라운드당 1 (config 등록 대기: internal_energy 자연 회복은 '구간'(일) 단위다) */
+    private static final int NPC_REGEN_PER_ROUND = 1;
 
     private final HoncheonMvt plugin;
     private final SkillEngine engine;
     private final SkillHud hud;
     private final Map<UUID, SkillEngine.State> states = new HashMap<>();
+    /** NPC 의 격 — 대칭 원칙. 같은 State 를 쓴다 (내력·두름·다운캐스트가 같은 규칙이라는 뜻이다) */
+    private final Map<UUID, SkillEngine.State> npcStates = new HashMap<>();
+    /** 무기 격돌 누적 — 몸(플레이어·NPC)당. breaks_at 회째에 병기가 부러진다 (weapon_break) */
+    private final Map<UUID, Integer> clashCounts = new HashMap<>();
     private final List<Pending> pending = new ArrayList<>();
 
     private long tick;
@@ -109,6 +124,9 @@ public final class SkillListener implements Listener {
             }
         }
 
+        if (tick % engine.npcThinkTicks() == 0) {
+            npcSweep();   // NPC 격 — 매 틱 사고 금지 (npc_combat think_interval_ticks)
+        }
         if (tick % 4 != 0) {
             return;   // HUD·유지비는 4틱(0.2초)마다 — 액션바 갱신 비용 절감
         }
@@ -117,12 +135,144 @@ public final class SkillListener implements Listener {
             if (state == null) {
                 continue;
             }
+            if (state.combatUntil > 0 && tick > state.combatUntil) {
+                endCombat(player, state);   // 전투가 끝났다 — 흐름은 흩어지고 오의 횟수는 돌아온다
+            }
             sustain(player, state);
             hud.energyBar(player, state);
             if (state.armed != null || engine.pool(state.naegong) > 0) {
                 hud.statusBar(player, state, tick);
             }
         }
+    }
+
+    /** 전투의 끝 — 흐름(발동권)은 그 전투의 것이다. 다음 싸움은 처음부터 읽어내야 한다 */
+    private void endCombat(Player player, SkillEngine.State state) {
+        state.combatUntil = -1;
+        state.ultimateUses = 0;
+        if (state.flow > 0) {
+            state.flow = 0;
+            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "숨을 고른다 — 흐름이 흩어졌다");
+        }
+    }
+
+    /** 공방이 오갈 때마다 전투 창을 민다 (오의 횟수·흐름의 수명) */
+    private void touchCombat(SkillEngine.State state) {
+        state.combatUntil = tick + engine.combatWindowTicks();
+    }
+
+    // ══════════ NPC 격 — 대칭 원칙 (npc_combat.yml symmetry) ══════════
+
+    /**
+     * 격을 쓰는 NPC 는 <b>플레이어와 같은 규칙</b>으로 쓴다: 경지 게이트 · 내력 · 두름 유지비 ·
+     * 다운캐스트 · 텔레그래프. 사람이 가까이 있을 때만 돈다 (performance.yml npc_logic 6ms).
+     */
+    private void npcSweep() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            for (org.bukkit.entity.Entity entity : player.getNearbyEntities(
+                    engine.cullBeyond(), 12, engine.cullBeyond())) {
+                if (!(entity instanceof Mob mob) || !mob.isValid()) {
+                    continue;
+                }
+                SkillEngine.Npc npc = npcOf(mob);
+                if (npc == null || !npc.manifests()) {
+                    continue;   // 외공의 몸 — 갈호(이류)도, 졸개도, 들짐승·맹수도 여기서 끝난다
+                }
+                npcThink(mob, npc, npcState(mob, npc));
+            }
+        }
+        npcStates.keySet().removeIf(id -> {
+            org.bukkit.entity.Entity e = plugin.getServer().getEntity(id);
+            return e == null || e.isDead();   // 죽은 몸의 내력은 남지 않는다 (F-P2 cleanup_on death)
+        });
+    }
+
+    private SkillEngine.Npc npcOf(org.bukkit.entity.Entity entity) {
+        String id = HuntingGrounds.tag(entity, HuntingGrounds.KEY_ID);   // 등록부의 몸인가 (읽기 전용)
+        return id == null ? null : engine.npc(id);
+    }
+
+    /** NPC 의 내력 장부 — 처음 보는 몸이면 등록부대로 세운다 (경지·내력 풀·두를 격) */
+    private SkillEngine.State npcState(Mob mob, SkillEngine.Npc npc) {
+        return npcStates.computeIfAbsent(mob.getUniqueId(), id -> {
+            SkillEngine.State state = new SkillEngine.State();
+            state.realm = npc.realm();
+            state.naegong = npc.pool() / 3.0;   // 표시용 — 풀이 진실이다 (등록부가 내력을 직접 적는다)
+            state.energy = npc.pool();
+            if (engine.sustainCost(npc.grade()) > 0) {
+                state.armed = npc.grade();      // 두름형(검기·강기) — 켠 채로 선다. 유지비는 아래에서 낸다
+                state.nextSustainTick = tick;
+            }
+            return state;
+        });
+    }
+
+    /**
+     * 한 번의 사고 — 유지비 · 회복 · 응집(텔레그래프).
+     *
+     * <p><b>두름</b>(검기·강기): 라운드마다 유지비. 못 내면 기가 흩어진다 — 플레이어가 그것을 본다.
+     * <p><b>발경</b>: 유지비가 없다. 사거리에 들어오면 <b>응집을 시작</b>하고(선딜 = 텔레그래프),
+     * 응집이 끝난 창 안에 들어간 타격에만 격이 실린다. 그 창을 보고 물러서면 맨 주먹이 온다.
+     */
+    private void npcThink(Mob mob, SkillEngine.Npc npc, SkillEngine.State state) {
+        Location hand = mob.getEyeLocation();
+        boolean fighting = mob.getTarget() instanceof Player;
+
+        if (!fighting) {
+            if (tick >= state.nextSustainTick && state.energy < npc.pool()) {
+                state.energy = Math.min(npc.pool(), state.energy + NPC_REGEN_PER_ROUND);
+                state.nextSustainTick = tick + engine.roundTicks();
+            }
+            if (state.armed == null && state.energy >= engine.sustainCost(npc.grade())
+                    && engine.sustainCost(npc.grade()) > 0) {
+                state.armed = npc.grade();   // 숨을 고르고 다시 두른다 (다운캐스트는 영구형이 아니다)
+            }
+            return;
+        }
+
+        int sustain = engine.sustainCost(state.armed);
+        if (state.armed != null && sustain > 0) {
+            if (tick >= state.nextSustainTick) {
+                if (state.energy < sustain) {
+                    state.armed = null;   // 다운캐스트 — 규칙이 대칭이어야 세계가 정직하다
+                    hud.emit(hand, Particle.SMOKE, 5, 0.12, 0.01);
+                    mob.getWorld().playSound(mob.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.6f);
+                    return;
+                }
+                state.energy -= sustain;
+                state.nextSustainTick = tick + engine.roundTicks();
+            }
+            hud.emit(hand, qiParticle(state.armed), 3, 0.12, 0.0);   // 응집은 빛으로 보인다 (두름 잔광)
+            return;
+        }
+
+        // 발경 — 두름이 없는 격. 사거리 + 쿨다운이 맞으면 응집한다
+        if (state.energy < engine.npcStrikeCost(npc.grade())
+                || mob.getLocation().distance(mob.getTarget().getLocation()) > NPC_REACH
+                || state.onCooldown(CD_QI, tick)) {
+            return;
+        }
+        SkillEngine.Frames f = engine.comboFrames("yukhap_geom", 2);   // 발경이 실리는 칸 (3타)
+        state.cooldownUntil.put(CD_QI, tick + engine.roundTicks());
+        state.qiHotUntil = tick + f.startup() + NPC_HOT_TICKS;
+        for (int t = 0; t < f.startup(); t += 2) {
+            pending.add(new Pending(tick + t, () -> {
+                if (mob.isValid()) {
+                    hud.emit(mob.getEyeLocation(), qiParticle(npc.grade()),
+                            2 + engine.gradeRank(npc.grade()), 0.1, 0.01);
+                }
+            }));
+        }
+        mob.getWorld().playSound(mob.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.4f);
+    }
+
+    /** 지금 이 몸의 타격에 실리는 격 — 두름(상시) 또는 응집이 끝난 창(발경). 그 밖엔 외공기 */
+    private String npcActiveGrade(SkillEngine.Npc npc, SkillEngine.State state) {
+        if (state.armed != null) {
+            return state.armed;
+        }
+        return tick <= state.qiHotUntil && tick >= state.qiHotUntil - NPC_HOT_TICKS
+                ? npc.grade() : SkillEngine.BARE;
     }
 
     /** 두름 유지비 — 라운드마다 과금. 못 내면 기가 흩어진다 (상대가 읽을 수 있는 고갈 신호) */
@@ -150,21 +300,69 @@ public final class SkillListener implements Listener {
 
     // ══════════ 입력 → 시전 ══════════
 
-    /** 좌클릭 = 공격. 대상을 맞힌 순간 바닐라 피해를 취소하고 무공 판정으로 대체한다 */
+    /**
+     * 한 대가 오가는 자리. 세 갈래다.
+     * <ul>
+     *   <li><b>플레이어의 칼</b> — 바닐라 피해를 취소하고 무공 판정으로 대체한다 (좌클릭 = 공격)</li>
+     *   <li><b>NPC 의 칼</b> — 격이 실려 있으면 격 위력을 얹고, 방어자의 기 방어·무기를 판정한다</li>
+     *   <li><b>그 밖</b> — 격 없는 타격(외공기). 그래도 호신강기·반격 오의는 반응한다</li>
+     * </ul>
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onMelee(EntityDamageByEntityEvent event) {
-        if (applying || !(event.getDamager() instanceof Player player)) {
+        if (applying || !(event.getEntity() instanceof LivingEntity target)) {
             return;
         }
-        if (!(event.getEntity() instanceof LivingEntity target)) {
+        if (event.getDamager() instanceof Player player) {
+            String skillId = skillInHand(player);
+            if (skillId == null) {
+                return;   // 무공이 실리지 않는 손 — 바닐라 그대로
+            }
+            event.setCancelled(true);
+            swing(player, skillId, target);
             return;
         }
-        String skillId = skillInHand(player);
-        if (skillId == null) {
-            return;   // 무공이 실리지 않는 손 — 바닐라 그대로
+        if (!(event.getDamager() instanceof LivingEntity attacker)) {
+            return;
         }
-        event.setCancelled(true);
-        swing(player, skillId, target);
+        npcStrike(event, attacker, target);
+    }
+
+    /**
+     * NPC 의 한 대 — 대칭 원칙의 마지막 칸.
+     *
+     * <p>격이 실려 있으면 <b>격 위력</b>(combat.yml qi_power)이 피해에 더해지고, 발경은 그 자리에서
+     * 내력을 낸다 (못 내면 다운캐스트 — 맨 주먹이 온다). 그리고 방어자의 <b>기 방어</b>(호신강기)와
+     * <b>무기</b>(격돌 — 범철은 검기를 세 합 못 견딘다)가 같은 규칙으로 판정된다.
+     */
+    private void npcStrike(EntityDamageByEntityEvent event, LivingEntity attacker, LivingEntity target) {
+        SkillEngine.Npc npc = npcOf(attacker);
+        SkillEngine.State state = npc == null || !npc.manifests()
+                ? null : npcStates.get(attacker.getUniqueId());
+        String grade = state == null ? SkillEngine.BARE : npcActiveGrade(npc, state);
+
+        if (state != null && !SkillEngine.BARE.equals(grade)) {
+            int cost = engine.npcStrikeCost(grade);
+            if (state.energy < cost) {
+                grade = SkillEngine.BARE;                     // 다운캐스트 — 빈약함이 곧 정보다
+                state.armed = null;
+                hud.emit(attacker.getEyeLocation(), Particle.SMOKE, 4, 0.1, 0.01);
+            } else {
+                state.energy -= cost;
+                state.qiHotUntil = -1;                        // 응집을 태웠다 — 다시 모아야 한다
+                event.setDamage(event.getDamage() + engine.qiPower(grade));
+                impact(target.getLocation().add(0, 1, 0), grade,
+                        new SkillEngine.Strike(0, 0, "success", "성공", true, 0));
+            }
+        }
+
+        Defense defense = defend(target, attacker, grade, event.getDamage());
+        if (defense.blocked()) {
+            event.setCancelled(true);
+            return;
+        }
+        event.setDamage(defense.damage());
+        clashWeapon(target, grade);                            // 무기가 격을 견뎌야 한다 (원칙 3)
     }
 
     /** 허공 좌클릭 = 헛손질(콤보는 진행된다) / Shift+좌클릭 = 발출 / Shift+우클릭 = 격 태세 */
@@ -188,7 +386,7 @@ public final class SkillListener implements Listener {
             return;   // LEFT_CLICK_BLOCK 은 건드리지 않는다 — 채굴을 무공이 잡아먹으면 안 된다
         }
         SkillEngine.State state = state(player);
-        if (player.isSneaking() && state.armed != null && engine.gradeRank(state.armed) >= 2) {
+        if (player.isSneaking() && engine.gradeRank(offense(state)) >= 2) {
             shoot(player, state);
             return;
         }
@@ -215,7 +413,7 @@ public final class SkillListener implements Listener {
 
         String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player));
         SkillEngine.Cast cast = engine.planCombo(
-                skillId, state.comboIndex, state.realm, state.energy, state.armed, weaponClass);
+                skillId, state.comboIndex, state.realm, state.energy, offense(state), weaponClass);
 
         int shown = state.comboIndex + 1;
         int size = engine.comboSize(skillId);
@@ -241,7 +439,7 @@ public final class SkillListener implements Listener {
             return;
         }
         String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player));
-        SkillEngine.Cast cast = engine.planShot(state.armed, state.realm, state.energy, weaponClass);
+        SkillEngine.Cast cast = engine.planShot(offense(state), state.realm, state.energy, weaponClass);
         if (cast.downcast() || engine.gradeRank(cast.grade()) < 2) {
             // 발출만은 다운캐스트가 없다 — 프레임이 아니라 기 그 자체가 본체다 (skill_motion.md 4장)
             SkillHud.actionBar(player, ChatColor.RED + "기가 흩어진다 — 쏠 것이 없다");
@@ -266,7 +464,7 @@ public final class SkillListener implements Listener {
                         LivingEntity primary, String label) {
         if (cast.gated()) {
             SkillHud.actionBar(player, ChatColor.GRAY + "그 격은 아직 이 몸의 것이 아니다 ("
-                    + engine.gradeGate(state.armed == null ? "발경" : state.armed) + "부터)");
+                    + engine.gradeGate(offense(state) == null ? "발경" : offense(state)) + "부터)");
         }
         if (cast.downcast()) {
             SkillHud.actionBar(player, ChatColor.DARK_GRAY + "기가 실리지 않는다 — 맨 기술");
@@ -301,37 +499,67 @@ public final class SkillListener implements Listener {
         if (!player.isOnline()) {
             return;
         }
-        List<LivingEntity> targets = "선".equals(cast.hitType())
-                ? lineTargets(player, cast) : arcTargets(player, cast, primary);
+        SkillEngine.Ultimate art = cast.ultimate();
+        if (art != null && art.isCounter()) {
+            // 반격 오의 — 벨 것을 찾지 않는다. 상대가 오기를 기다린다 (지속 창 = window_ticks)
+            state.counterUntil = tick + cast.frames().active() + art.counterWindow();
+            SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + art.name()
+                    + ChatColor.WHITE + " — 기다린다 (" + art.counterWindow() + "틱)");
+            return;
+        }
+        List<LivingEntity> targets = switch (cast.hitType()) {
+            case "선" -> lineTargets(player, cast);
+            case "원" -> circleTargets(player, cast);
+            default -> arcTargets(player, cast, primary);
+        };
+        int swings = art == null ? 1 : Math.max(1, art.multiHit());
 
         Location origin = swingLocation(player, cast);
         int hits = 0;
         for (LivingEntity target : targets) {
-            // 실행력 = 무공 숙련 + 무기 보정 + 경지 격차(gm_modifiers realm_gap) + 상태 보정
-            // MVT 근사: 능력치 시트가 없다 — 경지가 능력치의 자리를 대신한다 (skill_motion.md 4장)
-            boolean hostile = target instanceof Monster;
-            int mastery = plugin.ledger(player.getUniqueId())
-                    .levelOf(engine.skillName(cast.skillId()), plugin.progression());
-            int execBase = mastery + engine.weaponJudgmentBonus(weaponGrade(player))
-                    + engine.realmGapBonus(state.realm, hostile ? "삼류" : "범인")
-                    + (engine.isDepleted(state.energy) ? -2 : 0);   // 내공 고갈 = 판정 -2
-            int resist = engine.difficulty(hostile ? "보통" : "쉬움");
-            int roll = ThreadLocalRandom.current().nextInt(6) + 1
-                    + ThreadLocalRandom.current().nextInt(6) + 1;   // 전투는 주사위를 쓴다
+            for (int swing = 0; swing < swings; swing++) {
+                if (!target.isValid()) {
+                    break;
+                }
+                // 실행력 = 무공 숙련 + 무기 보정 + 경지 격차(gm_modifiers realm_gap) + 상태 보정
+                // MVT 근사: 능력치 시트가 없다 — 경지가 능력치의 자리를 대신한다 (skill_motion.md 4장)
+                boolean hostile = target instanceof Monster;
+                int mastery = plugin.ledger(player.getUniqueId())
+                        .levelOf(engine.skillName(cast.skillId()), plugin.progression());
+                int execBase = mastery + engine.weaponJudgmentBonus(weaponGrade(player))
+                        + engine.realmGapBonus(state.realm, foeRealm(target, hostile))
+                        + (engine.isDepleted(state.energy) ? -2 : 0);   // 내공 고갈 = 판정 -2
+                int resist = engine.difficulty(hostile ? "보통" : "쉬움");
+                int roll = ThreadLocalRandom.current().nextInt(6) + 1
+                        + ThreadLocalRandom.current().nextInt(6) + 1;   // 전투는 주사위를 쓴다
 
-            SkillEngine.Strike strike = engine.strike(cast, execBase, roll, resist);
-            if (!strike.hit()) {
-                continue;
+                SkillEngine.Strike strike = engine.strike(cast, execBase, roll, resist);
+                touchCombat(state);
+                if (engine.isFlowTier(strike.tierId())) {
+                    gainFlow(player, state);   // 발동권 — 읽어낸 순간이 쌓인다 (오의 충전의 실체)
+                }
+                if (!strike.hit()) {
+                    continue;
+                }
+                // 상대의 기 방어·무기가 같은 규칙으로 판정된다 (대칭)
+                Defense defense = defend(target, player, cast.grade(), strike.damage());
+                if (defense.blocked()) {
+                    continue;   // 기 방어가 먹었다 — 검이 닿지 않았으니 격돌도 없다
+                }
+                clashWeapon(target, cast.grade());   // 무기가 격을 견뎌야 한다 (원칙 3)
+                hits++;
+                applying = true;
+                try {
+                    target.damage(defense.damage(), player);
+                } finally {
+                    applying = false;
+                }
+                stagger(target, player, cast);
+                impact(target.getLocation().add(0, 1, 0), cast.grade(), strike);
+                if (art != null) {
+                    ultimateEffect(player, state, art, target, defense.damage());
+                }
             }
-            hits++;
-            applying = true;
-            try {
-                target.damage(strike.damage(), player);
-            } finally {
-                applying = false;
-            }
-            stagger(target, player, cast);
-            impact(target.getLocation().add(0, 1, 0), cast.grade(), strike);
         }
 
         if (hits == 0) {
@@ -346,6 +574,185 @@ public final class SkillListener implements Listener {
                 + ChatColor.DARK_GRAY + "│ " + SkillHud.gradeLabel(cast.grade())
                 + (hits > 0 ? ChatColor.WHITE + " · " + hits + "타" : ChatColor.GRAY + " · 헛손질"));
         hud.energyBar(player, state);
+    }
+
+    /** 상대의 경지 — 등록부의 몸이면 그 경지로 격차를 잰다 (몹 = 삼류 취급은 미등록 몸의 폴백) */
+    private String foeRealm(LivingEntity target, boolean hostile) {
+        SkillEngine.Npc npc = npcOf(target);
+        if (npc != null) {
+            return npc.realm();
+        }
+        if (target instanceof Player other) {
+            return state(other).realm;
+        }
+        return hostile ? "삼류" : "범인";
+    }
+
+    /** 흐름 — 아슬아슬한 성공 이상 공방 n회 누적. 차는 순간을 연출로 고지한다 (mc_action_mapping) */
+    private void gainFlow(Player player, SkillEngine.State state) {
+        if (engine.ultimateStage(state.realm) == null || state.flow >= engine.flowRequired()) {
+            return;
+        }
+        state.flow++;
+        if (state.flow >= engine.flowRequired()) {
+            player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 0.9f, 1.6f);
+            hud.emitPriority(player.getLocation().add(0, 1, 0), Particle.END_ROD, 12, 0.4, 0.02);
+            SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + "흐름을 읽었다 — 오의 (F)");
+        }
+    }
+
+    // ══════════ 방어 — 기 방어(호신강기) · 반격 오의 · 무기 격돌 ══════════
+
+    /** 한 대를 받아 낸 결과 — 무효(blocked) 이거나, 깎여서 들어온다 (관통 = 격 위력 차) */
+    private record Defense(boolean blocked, double damage) {
+    }
+
+    /** 방어자의 장부 — 플레이어는 없으면 만든다 (무공을 한 번도 안 쓴 몸도 맞기는 한다) */
+    private SkillEngine.State stateOf(LivingEntity entity) {
+        return entity instanceof Player player
+                ? state(player) : npcStates.get(entity.getUniqueId());
+    }
+
+    /**
+     * 방어의 두 층 — 반격 오의(무효 + 반사) · 기 방어(호신강기).
+     *
+     * <p><b>절대 방어는 없다</b> (qi_manifestation forms.두름_몸.호신강기.on_hit): 하위 격을 무효화하는
+     * 것은 공짜가 아니라 유지 내력을 깎아 낸다(상쇄 소모 1). 동격은 2. 상위 격은 <b>관통</b>한다 —
+     * 격 위력 차만큼 들어오고, 방어자는 그 위에 2를 더 잃는다. 지불할 내력이 없으면 강기는 그 자리에서
+     * 흩어진다 (collapse) — 다음 타격은 맨몸으로 받는다.
+     */
+    private Defense defend(LivingEntity target, LivingEntity attacker, String grade, double incoming) {
+        SkillEngine.State state = stateOf(target);
+        if (state == null) {
+            return new Defense(false, incoming);
+        }
+        touchCombat(state);
+
+        // 태극혜검 — 패링의 극의. 지속 중 받은 공격 1회를 무효화하고 위력 그대로 반사한다
+        if (tick <= state.counterUntil) {
+            state.counterUntil = -1;
+            Location at = target.getLocation().add(0, 1, 0);
+            hud.emitPriority(at, Particle.END_ROD, 20, 0.4, 0.05);
+            sound(at, Sound.ITEM_TRIDENT_RETURN, 1.0f, 1.2f);
+            applying = true;
+            try {
+                attacker.damage(incoming, target);   // 위력 그대로 되돌아간다
+            } finally {
+                applying = false;
+            }
+            if (target instanceof Player player) {
+                SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + "태극 — 그대의 힘이 그대에게 돌아간다");
+            }
+            return new Defense(true, 0);
+        }
+
+        if (!SkillEngine.GUARD.equals(state.armed)) {
+            return new Defense(false, incoming);
+        }
+        SkillEngine.Guard guard = engine.guard(grade, state.armed);
+        if (state.energy < guard.drain()) {
+            state.armed = null;                      // 상쇄 소모를 못 냈다 — 강기가 흩어진다
+            state.nextSustainTick = -1;
+            Location at = target.getLocation().add(0, 1, 0);
+            hud.emit(at, Particle.SMOKE, 8, 0.2, 0.02);
+            sound(at, Sound.BLOCK_GLASS_BREAK, 0.7f, 0.8f);
+            if (target instanceof Player player) {
+                SkillHud.actionBar(player, ChatColor.RED + "호신강기가 깨진다 — 상쇄할 내력이 없다");
+            }
+            return new Defense(false, incoming);
+        }
+        state.energy -= guard.drain();
+        Location at = target.getLocation().add(0, 1, 0);
+        hud.emit(at, Particle.END_ROD, guard.blocked() ? 10 : 16, 0.35, 0.03);
+        sound(at, guard.blocked() ? Sound.BLOCK_CONDUIT_DEACTIVATE : Sound.BLOCK_ANVIL_LAND,
+                0.8f, guard.blocked() ? 1.6f : 0.7f);
+        if (target instanceof Player player) {
+            SkillHud.actionBar(player, guard.blocked()
+                    ? ChatColor.YELLOW + "호신강기 — 튕겨 낸다 " + ChatColor.DARK_GRAY + "(상쇄 −" + guard.drain() + ")"
+                    : ChatColor.RED + "관통 — " + grade + "가 강기를 갈랐다 " + ChatColor.DARK_GRAY
+                            + "(피해 " + guard.pierce() + " · 상쇄 −" + guard.drain() + ")");
+            hud.energyBar(player, states.get(player.getUniqueId()));
+        }
+        return guard.blocked()
+                ? new Defense(true, 0)
+                : new Defense(false, guard.pierce());   // 관통 피해 = 격 위력 차 (원칙 1)
+    }
+
+    /**
+     * 무기 격돌 — 원칙 3: 무기가 격을 견뎌야 한다 (보검이 비싼 이유).
+     * 범철이 검기를 받으면 <b>3합째 부러진다</b>(CRACK 누적), 범철이 검강을 받으면 <b>한 합에 잘린다</b>(SEVER).
+     * 발경은 예외 — 기가 몸·무기 안에 머문다.
+     */
+    private void clashWeapon(LivingEntity defender, String grade) {
+        if (engine.gradeRank(grade) < 2) {
+            return;
+        }
+        EntityEquipment gear = defender.getEquipment();
+        ItemStack held = gear == null ? null : gear.getItemInMainHand();
+        if (held == null || held.getType() == Material.AIR) {
+            return;   // 맨손은 부러지지 않는다 (짐승도 여기서 빠진다 — 무기를 들지 않으니 격돌이 없다)
+        }
+        String weaponGrade = engine.weaponGradeOf(held, held.getType().name());
+        var clash = engine.clash(weaponGrade, grade, 0);
+        if (clash == com.honcheon.core.rules.QiManifestationEngine.Clash.NONE) {
+            return;
+        }
+        boolean sever = clash == com.honcheon.core.rules.QiManifestationEngine.Clash.SEVER;
+        int count = clashCounts.merge(defender.getUniqueId(), 1, Integer::sum);
+        Location at = defender.getLocation().add(0, 1.2, 0);
+
+        if (sever || count % engine.breaksAt() == 0) {
+            breakWeapon(defender, gear, held, sever, weaponGrade, grade);
+            clashCounts.remove(defender.getUniqueId());
+            return;
+        }
+        wear(held, gear);   // 금이 간다 — 1회째부터 예고 (weapon_break telegraph)
+        hud.emit(at, Particle.CRIT, 8, 0.2, 0.05);
+        sound(at, Sound.BLOCK_ANVIL_LAND, 0.5f, 1.9f);
+        if (defender instanceof Player player) {
+            player.sendMessage(ChatColor.YELLOW + "날에 금이 간다 — " + weaponGrade + "의 몸으로 " + grade
+                    + "를 받았다 (" + count + "/" + engine.breaksAt() + "합)");
+        }
+    }
+
+    /** 병기의 끝 — 절단(2격 초과)은 한 합, 누적 파괴는 3합째. 그 뒤는 맨손이다 (after_break) */
+    private void breakWeapon(LivingEntity holder, EntityEquipment gear, ItemStack held,
+                             boolean sever, String weaponGrade, String grade) {
+        Location at = holder.getLocation().add(0, 1.2, 0);
+        gear.setItemInMainHand(null);
+        hud.emit(at, Particle.ITEM, 20, 0.3, 0.3, 0.3, 0.08, held);
+        sound(at, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f);
+        sound(at, Sound.BLOCK_ANVIL_DESTROY, 0.6f, 1.4f);
+        // 무기가 사라졌으니 손이 가벼워진다 — NPC 의 공격력을 맨손으로 되돌린다 (combat.yml weapon_power)
+        if (!(holder instanceof Player)) {
+            var attribute = holder.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
+            if (attribute != null) {
+                double drop = engine.weaponPower(engine.weaponClassOf(held, held.getType().name()))
+                        - engine.weaponPower("맨손");
+                attribute.setBaseValue(Math.max(1, attribute.getBaseValue() - drop));
+            }
+        }
+        if (holder instanceof Player player) {
+            player.sendMessage(ChatColor.RED + (sever
+                    ? "검이 잘렸다 — " + weaponGrade + "이(가) " + grade + "를 한 합도 못 견딘다."
+                    : "검이 부러졌다 — " + engine.breaksAt() + "합을 버텼다. 남은 것은 맨손이다."));
+        }
+    }
+
+    /** 내구 1 — 등급별 최대 내구를 넘기면 그 자리에서 부러진다 (바닐라는 '사용'해야 부러진다) */
+    private static boolean wear(ItemStack item, EntityEquipment gear) {
+        if (!(item.getItemMeta() instanceof Damageable meta)) {
+            return false;
+        }
+        int max = item.getType().getMaxDurability();
+        int damage = meta.getDamage() + 1;
+        if (max > 0 && damage >= max) {
+            gear.setItemInMainHand(null);
+            return true;
+        }
+        meta.setDamage(damage);
+        item.setItemMeta(meta);
+        return false;
     }
 
     /** 호(arc) 히트박스 — 정면 부채꼴. max_targets 상한 (F-P3) */
@@ -434,10 +841,19 @@ public final class SkillListener implements Listener {
         if (state.selfStrainCount % every != 0) {
             return;   // 아직 견딘다 — 1회째부터 '금이 간다'는 예고는 아래 손상 시점에만
         }
-        ItemStack item = player.getInventory().getItemInMainHand();
-        if (item.getItemMeta() instanceof Damageable dmg) {
-            dmg.setDamage(dmg.getDamage() + 1);
-            item.setItemMeta(dmg);
+        EntityEquipment gear = player.getEquipment();
+        ItemStack item = gear.getItemInMainHand();
+        if (item.getType() == Material.AIR) {
+            return;
+        }
+        // 【고침】 바닐라는 '사용'해야 부러진다 — 내구를 넘긴 손상은 그대로 부러뜨린다 (after_break: 맨손)
+        if (wear(item, gear)) {
+            Location at = player.getLocation().add(0, 1.2, 0);
+            hud.emit(at, Particle.ITEM, 20, 0.3, 0.3, 0.3, 0.08, item);
+            sound(at, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f);
+            player.sendMessage(ChatColor.RED + "검이 부러졌다 — 제 격을 못 견딘 쇠는 결국 제 주인을 버린다.");
+            state.selfStrainCount = 0;
+            return;
         }
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_ANVIL_LAND, 0.4f, 1.9f);
         hud.emit(handLocation(player), Particle.CRIT, 6, 0.12, 0.02);
@@ -459,9 +875,9 @@ public final class SkillListener implements Listener {
             dispel(player, state, "기를 거둔다");
             return;
         }
-        int deploy = engine.sustainCost(next);
+        int deploy = engine.deployCost(next);   // 호신강기는 전개비 4 를 따로 낸다 (두름은 유지비 선납)
         if (deploy > 0 && state.energy < deploy) {
-            SkillHud.actionBar(player, ChatColor.RED + "기를 두를 내력이 없다 (" + next + " 유지 " + deploy + ")");
+            SkillHud.actionBar(player, ChatColor.RED + "기를 두를 내력이 없다 (" + next + " 전개 " + deploy + ")");
             return;
         }
         state.energy -= deploy;
@@ -490,10 +906,212 @@ public final class SkillListener implements Listener {
             case "발경" -> "타격에 기를 싣는다";
             case "검기" -> "기가 날에 서린다";
             case "강기" -> "기가 응집한다";
+            case SkillEngine.GUARD -> "기를 몸에 두른다 — 하위 격은 닿지 않는다";
             case "어검" -> "검이 손을 떠난다";
             case "심검" -> "형(形)이 사라진다";
             default -> grade;
         };
+    }
+
+    /** 공격에 실리는 격 — 호신강기는 <b>몸</b>에 두른 것이지 검에 두른 것이 아니다 (형태가 다르다) */
+    private static String offense(SkillEngine.State state) {
+        return SkillEngine.GUARD.equals(state.armed) ? null : state.armed;
+    }
+
+    // ══════════ 오의(奧義) — 격이 아니다. 별개의 사다리다 ══════════
+
+    /**
+     * F (스왑) = 오의 · Shift+F = 오의 선택 (mc_action_mapping 1장 "F = 오의, 발동권 획득 시에만 활성").
+     * 오의를 느끼지 못하는 몸(초절정 미만)에게 F 는 그냥 손 바꾸기다 — 세계를 건드리지 않는다.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onSwapHands(PlayerSwapHandItemsEvent event) {
+        Player player = event.getPlayer();
+        SkillEngine.State state = state(player);
+        if (engine.ultimateStage(state.realm) == null) {
+            return;   // 벽 너머를 아직 훔쳐보지 못한 몸 — 바닐라 스왑 그대로
+        }
+        event.setCancelled(true);
+        if (player.isSneaking()) {
+            cycleUltimate(player, state);
+            return;
+        }
+        castUltimate(player, state);
+    }
+
+    /** 전승 오의 순환 — MVT 엔 전승(사문·비급)이 없다. 손으로 고른다 (검증 수단) */
+    private void cycleUltimate(Player player, SkillEngine.State state) {
+        List<String> ids = engine.ultimateIds();
+        int idx = state.ultimateId == null ? -1 : ids.indexOf(state.ultimateId);
+        state.ultimateId = ids.get((idx + 1) % ids.size());
+        SkillEngine.Ultimate art = engine.ultimate(state.ultimateId);
+        int cost = engine.ultimateCost(art, engine.pool(state.naegong));
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "「" + art.name() + "」"
+                + ChatColor.GRAY + " · " + art.faction() + " · 내력 " + cost
+                + " (" + Math.round(art.costRatio() * 100) + "%)"
+                + (art.bloodline() ? ChatColor.DARK_RED + " · 혈통 제한" : "")
+                + (art.demonic() ? ChatColor.DARK_RED + " · 마공" : ""));
+        SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + art.name() + ChatColor.DARK_GRAY
+                + " — " + engine.ultimateStage(state.realm) + "  (F: 시전 · Shift+F: 다음 오의)");
+    }
+
+    /**
+     * 오의 시전 — 발동권(흐름) · 횟수 · 내력. 셋을 다 채워야 나간다.
+     *
+     * <p>초절정(개안)은 <b>불완전 시전</b>이다: 위력 절반, 직후 내력 전소 + 내상.
+     * 화경(완성)은 전투당 1회. 현경(자재)부터 횟수 제한이 풀린다.
+     */
+    private void castUltimate(Player player, SkillEngine.State state) {
+        if (state.ultimateId == null) {
+            SkillHud.actionBar(player, ChatColor.GRAY + "펼칠 오의가 없다 — Shift+F 로 고른다");
+            return;
+        }
+        if (tick < state.busyUntil) {
+            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
+            return;
+        }
+        if (state.flow < engine.flowRequired()) {
+            SkillHud.actionBar(player, ChatColor.GRAY + "흐름이 없다 — 오의는 버튼이 아니라 읽어낸 순간이다 ("
+                    + state.flow + "/" + engine.flowRequired() + ")");
+            return;
+        }
+        if (state.ultimateUses >= engine.ultimateLimit(state.realm)) {
+            SkillHud.actionBar(player, ChatColor.GRAY + "이 전투에서 이미 한 번 펼쳤다 (자재는 현경부터다)");
+            return;
+        }
+        SkillEngine.Ultimate art = engine.ultimate(state.ultimateId);
+        int pool = engine.pool(state.naegong);
+        SkillEngine.Cast cast = engine.planUltimate(art, state.realm, state.energy, pool,
+                state.armed, engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player)));
+        if (cast == null) {
+            SkillHud.actionBar(player, ChatColor.RED + "내력이 반도 남지 않았다 — 태울 것이 없다 ("
+                    + state.energy + "/" + engine.ultimateCost(art, pool) + ")");
+            return;
+        }
+        state.energy -= cast.paid();
+        state.flow = 0;
+        state.ultimateUses++;
+        state.busyUntil = tick + cast.frames().total();
+        state.lastCastTick = tick;
+        touchCombat(state);
+
+        // 세계가 알게 된다 — 시전 목격 = 강도 3 소문 (world_weight.rumor). MVT: 목격자에게 그대로 고지
+        String stage = engine.ultimateStage(state.realm);
+        for (Player viewer : player.getWorld().getPlayers()) {
+            if (viewer.getLocation().distance(player.getLocation()) <= engine.cullBeyond()) {
+                viewer.sendTitle(ChatColor.LIGHT_PURPLE + "「" + art.name() + "」",
+                        ChatColor.GRAY + player.getName() + " — " + stage
+                                + (cast.halved() ? " (불완전)" : ""), 5, 30, 15);
+            }
+        }
+        ultimateTelegraph(player, cast, art);
+
+        // 시전 중 무적(상한 20틱) 또는 슈퍼아머 — 오의별 명시 (skill_mechanics iframe_caps.오의)
+        if (art.iframeTicks() > 0) {
+            state.invulnerableUntil = tick + art.iframeTicks();
+            player.setInvulnerable(true);
+            pending.add(new Pending(tick + art.iframeTicks(), () -> {
+                if (tick >= state.invulnerableUntil) {
+                    player.setInvulnerable(false);
+                }
+            }));
+        }
+        if (art.superArmor()) {
+            player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE,
+                    cast.frames().total(), 2, false, false, false));
+        }
+        pending.add(new Pending(tick + cast.frames().startup(),
+                () -> resolve(player, state, cast, null, art.name())));
+        if (cast.halved()) {
+            // 개안 — 벽 너머를 훔쳐본 대가: 내력 전소 + 내상 (원기 계통은 MVT 미배선 — 몸이 무거워진다)
+            pending.add(new Pending(tick + cast.frames().total(), () -> {
+                state.energy = 0;
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 600, 0, true, true));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 600, 0, true, true));
+                player.sendMessage(ChatColor.RED + "내상 — 벽 너머의 것을 억지로 끌어왔다. 내력이 전소했다.");
+                hud.energyBar(player, state);
+            }));
+        }
+    }
+
+    /** 긴 선딜 = 긴 텔레그래프 — "세계가 멈춘 듯한 연출". 파티클 예산 내 최우선순위 */
+    private void ultimateTelegraph(Player player, SkillEngine.Cast cast, SkillEngine.Ultimate art) {
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 1.0f, 0.5f);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,
+                cast.frames().startup(), 3, false, false, false));
+        for (int t = 0; t < cast.frames().startup(); t += 2) {
+            double phase = t / (double) Math.max(1, cast.frames().startup());
+            pending.add(new Pending(tick + t, () -> {
+                if (!player.isOnline()) {
+                    return;
+                }
+                Location at = player.getLocation().add(0, 1, 0);
+                // 응집 — 고리가 좁아지며 몸으로 빨려든다 (선딜이 길수록 크게 보인다)
+                double radius = art.range() * (1.0 - phase);
+                for (int i = 0; i < 8; i++) {
+                    double angle = Math.PI * 2 * i / 8 + phase * Math.PI;
+                    hud.emitPriority(at.clone().add(Math.cos(angle) * radius, 0, Math.sin(angle) * radius),
+                            Particle.END_ROD, 2, 0.02, 0.0);
+                }
+                hud.emitPriority(at, Particle.ELECTRIC_SPARK, 6, 0.3, 0.02);
+            }));
+        }
+        pending.add(new Pending(tick + cast.frames().startup(), () -> {
+            if (player.isOnline()) {
+                Location at = player.getLocation().add(0, 1, 0);
+                player.getWorld().playSound(at, Sound.ENTITY_LIGHTNING_BOLT_IMPACT, 1.0f, 1.3f);
+                hud.emitPriority(at, Particle.FLASH, 1, 0.0, 0.0);
+                hud.emitPriority(at, Particle.END_ROD, 40, art.range() / 3, 0.08);
+            }
+        }));
+    }
+
+    /** 오의별 부가 효과 — ultimate_arts.yml legacy_arts effect (수치는 config 가 정한다) */
+    private void ultimateEffect(Player player, SkillEngine.State state, SkillEngine.Ultimate art,
+                                LivingEntity target, double damage) {
+        String effect = art.effect();
+        if (effect.contains("내구")) {
+            // 제왕검형·군림 — 적중 시 다운 + 내구 50% 피해 (내구 = 이 세계의 체력. combat.yml durability)
+            var max = target.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+            double half = (max == null ? 20 : max.getValue()) * 0.5;
+            applying = true;
+            try {
+                target.damage(half, player);
+            } finally {
+                applying = false;
+            }
+            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,
+                    engine.staggerTicks("다운"), 6, false, false, true));
+        }
+        if (effect.contains("약탈") || effect.contains("흡수")) {
+            // 혈해만리 — 원기·내력 약탈 (마공 ①). 흡수량으로 자기를 채운다
+            var max = player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+            player.setHealth(Math.min(max == null ? 20 : max.getValue(),
+                    player.getHealth() + damage * 0.5));
+            SkillEngine.State prey = stateOf(target);
+            if (prey != null && prey.energy > 0) {
+                int stolen = Math.min(prey.energy, 2);
+                prey.energy -= stolen;
+                state.energy = Math.min(engine.pool(state.naegong), state.energy + stolen);
+            }
+            hud.emitPriority(target.getLocation().add(0, 1, 0), Particle.CRIMSON_SPORE, 12, 0.4, 0.02);
+        }
+    }
+
+    /** 원(圓) 히트박스 — 사방. 매화만개·혈해만리의 자리 (skill_mechanics hitbox_types 원) */
+    private List<LivingEntity> circleTargets(Player player, SkillEngine.Cast cast) {
+        double range = cast.range();
+        List<LivingEntity> out = new ArrayList<>();
+        for (org.bukkit.entity.Entity e : player.getNearbyEntities(range, range, range)) {
+            if (out.size() >= cast.maxTargets()) {
+                break;
+            }
+            if (e instanceof LivingEntity le && !le.equals(player) && le.isValid()
+                    && le.getLocation().distance(player.getLocation()) <= range) {
+                out.add(le);
+            }
+        }
+        return out;
     }
 
     // ══════════ 연출 ══════════
@@ -558,10 +1176,10 @@ public final class SkillListener implements Listener {
     }
 
     private static Particle qiParticle(String grade) {
-        return switch (grade) {
+        return switch (grade == null ? "" : grade) {
             case "발경" -> Particle.CRIT;
             case "검기" -> Particle.ELECTRIC_SPARK;
-            case "강기", "어검", "심검" -> Particle.END_ROD;
+            case "강기", SkillEngine.GUARD, "어검", "심검" -> Particle.END_ROD;
             default -> Particle.SMOKE;
         };
     }
@@ -581,13 +1199,24 @@ public final class SkillListener implements Listener {
         state.naegong = naegong;
         state.energy = engine.pool(naegong);
         state.armed = null;
+        state.flow = 0;
+        state.ultimateUses = 0;
+        state.combatUntil = -1;
         hud.energyBar(player, state);
         player.sendMessage(ChatColor.GOLD + Glyphs.realmCrest(realm) + " " + realm
                 + ChatColor.WHITE + " — 내공 " + String.format("%.2f", naegong)
                 + " / 내력 " + state.energy
-                + ChatColor.GRAY + " · 열린 격: "
-                + (engine.armableGrades(realm).isEmpty() ? "없음 (외공기뿐)"
-                        : String.join(" → ", engine.armableGrades(realm))));
+                + ChatColor.GRAY + " · 열린 태세: "
+                + (engine.armableStances(realm).isEmpty() ? "없음 (외공기뿐)"
+                        : String.join(" → ", engine.armableStances(realm))));
+        String stage = engine.ultimateStage(realm);
+        if (stage != null) {
+            player.sendMessage(ChatColor.LIGHT_PURPLE + "오의 — " + stage
+                    + ChatColor.GRAY + " (Shift+F: 오의 선택 · F: 시전 · 발동권 = 아슬아슬한 성공 이상 공방 "
+                    + engine.flowRequired() + "회)"
+                    + (engine.isAwakening(realm) ? ChatColor.DARK_GRAY
+                            + "  — 개안: 불완전 시전 (위력 절반 · 직후 내력 전소 + 내상)" : ""));
+        }
     }
 
     /** /혼천 운기 — 운기조식 1구간 (전투 밖). 하한 1 + 순도 배율 (internal_energy recovery) */
@@ -612,6 +1241,14 @@ public final class SkillListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         states.remove(event.getPlayer().getUniqueId());
+        clashCounts.remove(event.getPlayer().getUniqueId());
+    }
+
+    /** 죽은 몸의 내력은 남지 않는다 (F-P2 cleanup_on death) */
+    @EventHandler
+    public void onDeath(EntityDeathEvent event) {
+        npcStates.remove(event.getEntity().getUniqueId());
+        clashCounts.remove(event.getEntity().getUniqueId());
     }
 
     @EventHandler

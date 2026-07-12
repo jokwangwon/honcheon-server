@@ -276,30 +276,34 @@ public final class MvtCommand implements CommandExecutor {
 
     /** /혼천 세계조성 — 등록된 지역을 제 좌표에 짓는다 (관리자). 지금은 청하현 일대 */
     private boolean buildWorld(CommandSender sender) {
-        if (!(sender instanceof Player player) || !player.isOp()) {
+        if (sender instanceof Player p && !p.isOp()) {
             return true;
         }
         WorldMap map = plugin.worldMap();
         if (map == null) {
-            player.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
+            sender.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
             return true;
         }
         WorldMap.Place home = map.place("cheongha_hyeon");
         if (home == null) {
-            player.sendMessage(ChatColor.RED + "청하현이 지도에 없다.");
+            sender.sendMessage(ChatColor.RED + "청하현이 지도에 없다.");
             return true;
         }
-        WorldMap.Site site = map.resolve(player.getWorld(), home);
-        player.sendMessage(ChatColor.GRAY + "청하현 부지 (" + site.x() + ", " + site.z()
-                + ") · 지형 점수 " + site.fit().score() + " (" + site.fit().verdict() + ")");
+        // 콘솔 가능 — 지면 높이는 지도가 계산한다 (플레이어 발밑이 아니라 지형이 정한다)
+        org.bukkit.World world = sender instanceof Player p2 ? p2.getWorld()
+                : org.bukkit.Bukkit.getWorlds().get(0);
+        WorldMap.Site site = map.resolve(world, home);
+        sender.sendMessage(ChatColor.GRAY + "청하현 부지 (" + site.x() + ", " + site.z()
+                + ") · 지면 y" + site.groundY()
+                + " · 지형 점수 " + site.fit().score() + " (" + site.fit().verdict() + ")");
         java.util.List<Zone> zones = new java.util.ArrayList<>();
-        Map<String, Location> anchors = CheonghaBuilder.build(player.getWorld(),
+        Map<String, Location> anchors = CheonghaBuilder.build(world,
                 site.x(), site.groundY(), site.z(), zones);
         plugin.setAnchors(anchors);
         plugin.setZones(zones);
-        player.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 (" + site.x() + ", " + site.z()
+        sender.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 (" + site.x() + ", " + site.z()
                 + ") · 장소 " + anchors.size() + "곳 · 구역 " + zones.size() + "곳");
-        player.sendMessage(ChatColor.GRAY + "원거리 지역은 좌표만 등록돼 있다 (/혼천 지도)");
+        sender.sendMessage(ChatColor.GRAY + "원거리 지역은 좌표만 등록돼 있다 (/혼천 지도)");
         return true;
     }
 

@@ -46,6 +46,21 @@ public final class SkillEngine {
 
     /** 격 없는 타격 (외공기) — 격 이름이 아니라 코스트 밴드 이름이다 */
     public static final String BARE = "외공기";
+    /** 호신강기 — 격이 아니라 '형태'(두름_몸)다. 방어 격은 강기 (qi_manifestation forms.두름_몸) */
+    public static final String GUARD = "호신강기";
+
+    /**
+     * 전투 창(窓) — '한 전투'의 MVT 근사. 이 시간 안에 아무 공방도 없으면 전투가 끝난 것으로 본다
+     * (오의 전투당 1회 제한·흐름 누적이 여기서 초기화된다).
+     * <b>config 등록 대기</b>: 제안 키 {@code combat.yml realtime.combat_window_ticks: 200}
+     */
+    private static final int DEFAULT_COMBAT_WINDOW = 200;
+    /**
+     * 일류 무인의 내공 하한 — cultivation.yml 은 절정(3)·초절정(5)·화경(7)·현경(9)만 수치로 적는다.
+     * 일류는 '개화'가 요건이라 수치가 없다 (simbeop.yml: 0→1 = 1년 = 개화 직후 첫 단계).
+     * <b>config 등록 대기</b>: 제안 키 {@code cultivation.yml 일류.promotion.requirements 에 "내공 1"}
+     */
+    private static final double DEFAULT_FIRST_CLASS_NAEGONG = 1.0;
 
     // ─── core 엔진 ───
     private final InternalEnergyEngine internal;
@@ -65,7 +80,35 @@ public final class SkillEngine {
     private final int realmGapPerStage;                    // gm_modifiers.yml: realm_gap.per_stage
     private final List<String> gradeLadder;                // qi_manifestation.yml: grades (rank 오름차순)
     private final int roundTicks;
+    private final int combatWindowTicks;
     private final int meditationFloor;                     // internal_energy.yml: recovery.meditation_floor
+
+    // 격 위력 — 【엔진 정본】 combat.yml damage.qi_power (qi_manifestation grades[].power 와 동일 값)
+    private final Map<String, Integer> qiPower;
+    /** 형태별 위력 — 발출형은 더 아프다 (검기_참격 3 > 검기 두름 2). forms[].power 가 격 기본값보다 우선 */
+    private final Map<String, Integer> formPower;
+    /** 소모 밴드의 스칼라 코스트 — internal_energy.yml cost_bands (발경 1). 범위형([1,3])은 형태가 정한다 */
+    private final Map<String, Integer> bandCost;
+    // 호신강기 (두름_몸) — 절대 방어는 없다. 무효화는 상쇄 소모를 낸다
+    private final String guardGrade;
+    private final int guardDeploy;
+    private final int guardSustain;
+    private final int drainLower;
+    private final int drainEqual;
+    private final int drainHigher;
+
+    // NPC — 대칭 원칙 (npc_combat.yml symmetry). 등록부는 npcs/cheongha_npcs.yml 이 정본
+    private final Map<String, Npc> npcs;
+    private final Map<String, Double> naegongFloor;        // cultivation.yml promotion "내공 N"
+    private final int npcThinkTicks;                       // npc_combat.yml think_interval_ticks (상한)
+
+    // 오의 — 격과는 별개의 사다리 (ultimate_arts.yml)
+    private final Map<String, Ultimate> ultimates;
+    private final Map<String, String> ultimateStage;       // 경지 → 개안|완성|자재|창작
+    private final int ultimateFlow;                        // 발동권 — 아슬아슬한 성공 이상 공방 n회
+    private final int ultimateBasePower;                   // 오의 기본 위력 (clash.loser_damage)
+    private final int ultimateIframeCap;                   // skill_mechanics iframe_caps.오의 (20틱 절대 상한)
+    private final String freeLimitRealm;                   // 이 경지부터 전투당 횟수 제한 해제 (자재)
 
     // 성능 예산 (performance.yml)
     private final int particleGlobalPerTick;
@@ -127,6 +170,122 @@ public final class SkillEngine {
         Object realtime = cb.get("realtime");
         this.roundTicks = realtime instanceof Map<?, ?> m && m.get("round_ticks") instanceof Number n
                 ? n.intValue() : DEFAULT_ROUND_TICKS;
+        this.combatWindowTicks = realtime instanceof Map<?, ?> m2
+                && m2.get("combat_window_ticks") instanceof Number n2 ? n2.intValue() : DEFAULT_COMBAT_WINDOW;
+
+        // ─── 격 위력 (엔진 정본 = combat.yml) · 형태 위력 (발출은 더 아프다) ───
+        this.qiPower = intMap((Map<String, Object>) damage.get("qi_power"));
+        Map<String, Integer> powers = new LinkedHashMap<>();
+        Map<String, Integer> sustains = new LinkedHashMap<>();
+        RulesConfig.section(qm, "forms").forEach((category, raw) -> {
+            if (raw instanceof Map<?, ?> group) {
+                ((Map<String, Object>) group).forEach((form, spec) -> {
+                    if (spec instanceof Map<?, ?> s && ((Map<String, Object>) s).get("power") instanceof Number p) {
+                        powers.put(form, p.intValue());
+                    }
+                    if (spec instanceof Map<?, ?> s2
+                            && ((Map<String, Object>) s2).get("sustain_per_round") instanceof Number sp) {
+                        sustains.put(form, sp.intValue());
+                    }
+                });
+            }
+        });
+        this.formPower = Collections.unmodifiableMap(powers);
+
+        Map<String, Object> bands = RulesConfig.section(ie, "cost_bands");
+        Map<String, Integer> costs = new LinkedHashMap<>();
+        bands.forEach((band, raw) -> {
+            if (raw instanceof Map<?, ?> m && ((Map<String, Object>) m).get("cost") instanceof Number n) {
+                costs.put(band, n.intValue());   // 범위형([1,3])·서술형은 담기지 않는다 — 형태가 정한다
+            }
+        });
+        this.bandCost = Collections.unmodifiableMap(costs);
+
+        // 호신강기 — 방어 격은 forms.두름_몸.호신강기.power 가 가리키는 격 (power 3 = 강기 rank 3)
+        this.guardGrade = gradeLadder.get(Math.max(0, formPower.getOrDefault(GUARD, 3) - 1));
+        this.guardDeploy = qi.deployCost(GUARD);
+        this.guardSustain = sustains.getOrDefault(GUARD, 2);
+        Map<String, Object> onHit = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>)
+                RulesConfig.section(qm, "forms").get("두름_몸")).get(GUARD)).get("on_hit");
+        this.drainLower = drain(onHit, "하위_격", 1);
+        this.drainEqual = drain(onHit, "동격", 2);
+        this.drainHigher = drain(onHit, "상위_격", 2);
+
+        // ─── NPC 등록부 (대칭 원칙) ───
+        Map<String, Double> floors = new LinkedHashMap<>();
+        for (Map<String, Object> stage : stages) {
+            Object promotion = stage.get("promotion");
+            double floor = 0;
+            if (promotion instanceof Map<?, ?> pm && ((Map<String, Object>) pm).get("requirements") instanceof List<?> reqs) {
+                for (Object req : reqs) {
+                    java.util.regex.Matcher m = NAEGONG_REQ.matcher(String.valueOf(req));
+                    if (m.find()) {
+                        floor = Double.parseDouble(m.group(1));
+                    }
+                }
+            }
+            floors.put(String.valueOf(stage.get("name")), floor);
+        }
+        floors.computeIfPresent("일류", (r, v) -> v > 0 ? v : DEFAULT_FIRST_CLASS_NAEGONG);
+        this.naegongFloor = Collections.unmodifiableMap(floors);
+
+        Map<String, Object> nc = RulesConfig.load(cfg.resolve("npc_combat.yml"));
+        Object think = nc.get("think_interval_ticks");
+        this.npcThinkTicks = think instanceof List<?> l && !l.isEmpty()
+                ? ((Number) l.get(l.size() - 1)).intValue() : 10;   // 매 틱 사고 금지 (npc_logic 예산)
+
+        Map<String, Npc> registry = new LinkedHashMap<>();
+        RulesConfig.section(RulesConfig.load(cfg.resolve("npcs/cheongha_npcs.yml")), "npcs")
+                .forEach((id, raw) -> {
+                    if (raw instanceof Map<?, ?> entry) {
+                        Npc npc = parseNpc(id, (Map<String, Object>) entry);
+                        if (npc != null) {
+                            registry.put(id, npc);
+                        }
+                    }
+                });
+        this.npcs = Collections.unmodifiableMap(registry);
+
+        // ─── 오의 (ultimate_arts.yml) — 격이 아니다. 별개의 사다리다 ───
+        Map<String, Object> ua = RulesConfig.load(cfg.resolve("ultimate_arts.yml"));
+        Map<String, String> ladderStages = new LinkedHashMap<>();
+        RulesConfig.section(ua, "realm_ladder").forEach((realm, raw) -> {
+            if (raw instanceof Map<?, ?> m) {
+                ladderStages.put(realm, String.valueOf(((Map<String, Object>) m).get("stage")));
+            }
+        });
+        this.ultimateStage = Collections.unmodifiableMap(ladderStages);
+
+        Map<String, Object> casting = RulesConfig.section(ua, "casting");
+        Map<String, Object> limit = (Map<String, Object>) casting.get("per_combat_limit");
+        this.freeLimitRealm = limit == null ? "현경" : limit.keySet().stream()
+                .filter(k -> k.contains("이상")).findFirst()
+                .map(k -> k.substring(0, k.indexOf('_'))).orElse("현경");
+        int flow = 3;
+        Object activation = casting.get("activation_condition");
+        if (activation instanceof Map<?, ?> am && ((Map<String, Object>) am).get("any_of") instanceof List<?> any) {
+            for (Object condition : any) {
+                java.util.regex.Matcher m = FLOW_REQ.matcher(String.valueOf(condition));
+                if (m.find()) {
+                    flow = Integer.parseInt(m.group(1));
+                }
+            }
+        }
+        this.ultimateFlow = flow;
+        java.util.regex.Matcher basePower = POWER_NUM.matcher(
+                String.valueOf(RulesConfig.section(ua, "clash").get("loser_damage")));
+        this.ultimateBasePower = basePower.find() ? Integer.parseInt(basePower.group(1)) : 6;
+        Object caps = mech.get("iframe_caps");
+        this.ultimateIframeCap = caps instanceof Map<?, ?> cm && ((Map<String, Object>) cm).get("오의") instanceof Number cn
+                ? cn.intValue() : 20;
+
+        Map<String, Ultimate> arts = new LinkedHashMap<>();
+        RulesConfig.section(ua, "legacy_arts").forEach((id, raw) -> {
+            if (raw instanceof Map<?, ?> m) {
+                arts.put(id, parseUltimate(id, (Map<String, Object>) m));
+            }
+        });
+        this.ultimates = Collections.unmodifiableMap(arts);
 
         Map<String, Object> particles = RulesConfig.section(pf, "particles");
         this.particleGlobalPerTick = RulesConfig.intValue(particles.get("global_per_tick"));
@@ -137,6 +296,98 @@ public final class SkillEngine {
         this.cullBeyond = RulesConfig.intValue(lod.get("cull_beyond"));
         this.duplicateWindowTicks = RulesConfig.intValue(
                 RulesConfig.section(pf, "skills").get("duplicate_request_window_ticks"));
+    }
+
+    // ─── config 문자열에서 수치를 캐낸다 (서술문 안의 정본 수치 — 별도 키가 생기면 이 정규식은 사라진다) ───
+    private static final java.util.regex.Pattern NAEGONG_REQ = java.util.regex.Pattern.compile("내공\\s*(\\d+)");
+    private static final java.util.regex.Pattern FLOW_REQ =
+            java.util.regex.Pattern.compile("공방\\s*(\\d+)\\s*회");
+    private static final java.util.regex.Pattern POWER_NUM = java.util.regex.Pattern.compile("위력\\s*(\\d+)");
+    private static final java.util.regex.Pattern PERCENT = java.util.regex.Pattern.compile("(\\d+)\\s*%");
+    private static final java.util.regex.Pattern IFRAME = java.util.regex.Pattern.compile("무적\\s*(\\d+)\\s*틱");
+
+    @SuppressWarnings("unchecked")
+    private static int drain(Map<String, Object> onHit, String key, int fallback) {
+        if (onHit.get(key) instanceof Map<?, ?> m
+                && ((Map<String, Object>) m).get("상쇄_소모") instanceof Number n) {
+            return n.intValue();
+        }
+        return fallback;
+    }
+
+    /**
+     * 등록부 한 줄 → 격을 쓸 수 있는 몸. 대칭 원칙(npc_combat.yml symmetry): NPC 도 같은 규칙이다.
+     *
+     * <p>내력의 출처 (config 그대로):
+     * <ul>
+     *   <li>개체에 {@code internal_energy} 가 적혀 있으면 그것이 진실이다 (백영묘 9 = round(내공 3.0 × 3))</li>
+     *   <li>짐승 — "들짐승·맹수는 내력이 없다 (내공 0). 영물만 내력을 쓴다" (npc_combat.yml beasts.rules)</li>
+     *   <li>사람 — 경지의 내공 하한(cultivation.yml promotion "내공 N")으로 풀을 세운다</li>
+     * </ul>
+     */
+    @SuppressWarnings("unchecked")
+    private Npc parseNpc(String id, Map<String, Object> e) {
+        String rank = e.get("beast_rank") == null ? null : String.valueOf(e.get("beast_rank"));
+        Object realmValue = e.get("realm");
+        if (realmValue == null && rank == null) {
+            return null;   // 전투에 서지 않는 사람 (객잔 주인·의원…) — 경지가 없으면 격도 없다
+        }
+        String realm = realmValue == null ? "삼류" : String.valueOf(realmValue);
+        boolean beast = rank != null;
+        boolean spirit = "영물".equals(rank);
+
+        int pool;
+        if (e.get("internal_energy") instanceof Number n) {
+            pool = n.intValue();
+        } else if (beast && !spirit) {
+            pool = 0;                                        // 이빨과 발톱뿐 — 내력이 없다
+        } else {
+            pool = internal.pool(naegongFloor.getOrDefault(realm, 0.0));
+        }
+
+        // 격 — 개체가 선언했으면 그것, 아니면 경지 게이트가 허락하는 가장 높은 격 (사람도 짐승도 같은 사다리)
+        String grade;
+        if (e.get("qi_grade") != null) {
+            grade = String.valueOf(e.get("qi_grade"));
+        } else if (pool <= 0) {
+            grade = BARE;
+        } else {
+            List<String> armable = armableGrades(realm);
+            grade = armable.isEmpty() ? BARE : armable.get(armable.size() - 1);
+        }
+        if (!BARE.equals(grade) && !internal.canUse(realm, grade)) {
+            grade = BARE;   // 등록값이라도 경지 게이트를 못 넘으면 못 쓴다 (게이트에 예외는 없다)
+        }
+        return new Npc(id, String.valueOf(e.getOrDefault("name", id)),
+                beast ? "짐승" : "사람", rank, realm, pool, grade);
+    }
+
+    /** 전승 오의 한 줄 → 시전 가능한 한 수 (ultimate_arts.yml legacy_arts) */
+    @SuppressWarnings("unchecked")
+    private Ultimate parseUltimate(String id, Map<String, Object> a) {
+        Map<String, Object> type = a.get("type") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : Map.of();
+        String hitbox = type.get("form") != null ? "반격"
+                : String.valueOf(type.getOrDefault("hitbox", "원"));
+        double range = type.get("range") instanceof Number r ? r.doubleValue()
+                : type.get("length") instanceof Number l ? l.doubleValue() : 6.0;
+        double width = type.get("width") instanceof Number w ? w.doubleValue() : 2.0;
+        int multiHit = type.get("multi_hit") instanceof Number h ? h.intValue() : 1;
+        int window = type.get("window_ticks") instanceof Number t ? t.intValue() : 0;
+
+        String defense = String.valueOf(a.getOrDefault("defense", ""));
+        java.util.regex.Matcher iframe = IFRAME.matcher(defense);
+        int iframeTicks = iframe.find()
+                ? Math.min(ultimateIframeCap, Integer.parseInt(iframe.group(1))) : 0;
+
+        java.util.regex.Matcher cost = PERCENT.matcher(String.valueOf(a.getOrDefault("cost", "내력 50%")));
+        double ratio = cost.find() ? Integer.parseInt(cost.group(1)) / 100.0 : 0.5;
+
+        return new Ultimate(id, String.valueOf(a.getOrDefault("name", id)),
+                String.valueOf(a.getOrDefault("faction", "")), hitbox, range, width, multiHit, window,
+                frames(a.get("frames")), iframeTicks, defense.contains("슈퍼아머"), ratio,
+                String.valueOf(a.getOrDefault("effect", "")),
+                Boolean.TRUE.equals(a.get("bloodline_restricted")), a.get("demonic") != null);
     }
 
     private static Map<String, Integer> intMap(Map<String, Object> raw) {
@@ -166,6 +417,9 @@ public final class SkillEngine {
      * @param paid       실제 차감 (0 이고 cost>0 이면 다운캐스트)
      * @param downcast   내력이 모자라 '맨 기술'로 나갔는가 (위력·속성 상실, 프레임 유지)
      * @param gated      경지 게이트에 막혀 격이 강등됐는가 (요청 격 → 실제 격)
+     * @param gradeBonus 격 위력 (combat.yml damage.qi_power — 형태 위력이 있으면 그쪽이 우선)
+     * @param ultimate   오의 (없으면 null) — 격과는 다른 사다리다
+     * @param halved     개안(초절정)의 불완전 시전 — 위력 절반
      */
     public record Cast(
             String skillId, String skillName,
@@ -173,11 +427,45 @@ public final class SkillEngine {
             Frames frames, String stagger, int staggerTicks,
             String hitType, double range, double angle,
             int weaponPower, int techniquePower, int gradeBonus,
-            int maxTargets, int cooldownTicks) {
+            int maxTargets, int cooldownTicks,
+            Ultimate ultimate, boolean halved) {
 
         public boolean manifested() {
             return !BARE.equals(grade);
         }
+    }
+
+    /**
+     * 격을 쓰는 NPC — 등록부(npcs/cheongha_npcs.yml)가 정본. 대칭 원칙의 자리.
+     *
+     * @param grade 이 몸이 두르는 격 (BARE = 외공만 — 갈호·졸개·들짐승·맹수)
+     * @param pool  내력 총량 (0 = 격을 못 쓴다)
+     */
+    public record Npc(String id, String name, String kind, String beastRank, String realm,
+                      int pool, String grade) {
+
+        public boolean manifests() {
+            return !BARE.equals(grade) && pool > 0;
+        }
+
+        public boolean isBeast() {
+            return "짐승".equals(kind);
+        }
+    }
+
+    /** 전승 오의 — ultimate_arts.yml legacy_arts. 격이 아니라 '도달'이다 */
+    public record Ultimate(String id, String name, String faction,
+                           String hitType, double range, double width, int multiHit, int counterWindow,
+                           Frames frames, int iframeTicks, boolean superArmor,
+                           double costRatio, String effect, boolean bloodline, boolean demonic) {
+
+        public boolean isCounter() {
+            return "반격".equals(hitType);
+        }
+    }
+
+    /** 호신강기가 한 대의 타격을 맞았을 때 (qi_manifestation forms.두름_몸.호신강기.on_hit) */
+    public record Guard(boolean blocked, int pierce, int drain) {
     }
 
     /** 한 대상에 대한 판정 결과 — 전투는 주사위를 쓴다 (조성기와 달리 난수 허용) */
@@ -202,6 +490,26 @@ public final class SkillEngine {
         public final Map<String, Long> cooldownUntil = new HashMap<>();
         /** 자기 무기가 자기 격을 못 견딜 때의 시전 카운터 (n회마다 손상 1) */
         public int selfStrainCount;
+
+        // ─── 오의 (ultimate_arts) — 격과 독립된 사다리 ───
+        /** 지금 몸에 실린 전승 오의 (Shift+F 로 고른다). null = 아직 아무것도 얻지 못했다 */
+        public String ultimateId;
+        /** 발동권 — '흐름'. 아슬아슬한 성공 이상 공방 누적. 전투가 끝나면 흩어진다 */
+        public int flow;
+        /** 이번 전투의 오의 시전 횟수 (화경 이하 1회) */
+        public int ultimateUses;
+        /** 전투 창 — 이 틱까지 아무 공방도 없으면 전투가 끝난 것 (흐름·횟수 초기화) */
+        public long combatUntil = -1;
+        /** 반격 오의(태극혜검)의 창 — 이 틱까지 들어온 공격 1회를 무효화하고 반사한다 */
+        public long counterUntil = -1;
+        /** 오의 무적 — 이 틱까지 (skill_mechanics iframe_caps.오의 = 20틱 절대 상한) */
+        public long invulnerableUntil = -1;
+
+        // ─── NPC 전용 (대칭 원칙 — 같은 State 를 쓴다) ───
+        /** 격이 실린 창 — 응집(선딜)이 끝나고 이 틱까지의 타격에 격이 실린다 (발경: 두름이 없는 격) */
+        public long qiHotUntil = -1;
+        /** 다음 응집 시도 틱 */
+        public long nextCastTick = -1;
 
         public boolean onCooldown(String key, long now) {
             return cooldownUntil.getOrDefault(key, -1L) > now;
@@ -238,9 +546,21 @@ public final class SkillEngine {
         return out;
     }
 
-    /** 격 태세 순환 — 외공기(null) → 발경 → 검기 → … → 외공기. 경지가 못 여는 격은 건너뛴다 */
+    /**
+     * 태세 순환 목록 — 격(두름) + 호신강기(두름_몸). 몸에 두르는 것은 격이 아니라 형태다.
+     * 강기를 여는 경지(화경)는 검강(공격)과 호신강기(방어) 중 하나를 고른다 — 둘은 다른 형태다.
+     */
+    public List<String> armableStances(String realm) {
+        List<String> out = new ArrayList<>(armableGrades(realm));
+        if (internal.canUse(realm, guardGrade)) {
+            out.add(GUARD);
+        }
+        return out;
+    }
+
+    /** 태세 순환 — 외공기(null) → 발경 → 검기 → 검강 → 호신강기 → 외공기. 경지가 못 여는 것은 건너뛴다 */
     public String cycleArmed(String realm, String current) {
-        List<String> armable = armableGrades(realm);
+        List<String> armable = armableStances(realm);
         if (armable.isEmpty()) {
             return null;   // 개화 전 — 몸과 무기가 전부다
         }
@@ -251,12 +571,34 @@ public final class SkillEngine {
         return idx < 0 || idx + 1 >= armable.size() ? null : armable.get(idx + 1);
     }
 
+    /** 격 rank — 호신강기는 격이 아니라 형태지만, 상성 비교에는 그 방어 격(강기)의 rank 로 선다 */
     public int gradeRank(String grade) {
-        return BARE.equals(grade) ? 0 : qi.gradeRank(grade);
+        if (grade == null || BARE.equals(grade)) {
+            return 0;
+        }
+        return qi.gradeRank(GUARD.equals(grade) ? guardGrade : grade);
+    }
+
+    /** 격 위력 — 【엔진 정본】 combat.yml damage.qi_power. 피해 공식의 '격 위력' 항이다 */
+    public int qiPower(String grade) {
+        if (grade == null || BARE.equals(grade)) {
+            return 0;
+        }
+        return qiPower.getOrDefault(GUARD.equals(grade) ? guardGrade : grade, gradeRank(grade));
+    }
+
+    /** 형태 위력 — 발출형은 1회에 몰아 쓰므로 더 아프다 (검기_참격 3 > 검기 두름 2) */
+    public int formPower(String form) {
+        return formPower.getOrDefault(form, 0);
+    }
+
+    /** 소모 밴드의 코스트 — internal_energy.yml cost_bands (발경 1). 범위형은 0 (형태가 정한다) */
+    public int bandCost(String band) {
+        return bandCost.getOrDefault(band, 0);
     }
 
     public String gradeGate(String grade) {
-        return qi.gradeGate(grade);
+        return qi.gradeGate(GUARD.equals(grade) ? guardGrade : grade);
     }
 
     /** 원칙 1 — 한 격 위는 아래 격의 기 방어를 관통한다 */
@@ -264,9 +606,43 @@ public final class SkillEngine {
         return gradeRank(attack) > gradeRank(defense);
     }
 
-    /** 두름 유지비 — 검기_두름 1, 검강_두름 2 (라운드당). 없는 격은 0 */
+    // ─── 호신강기 (두름_몸) — 절대 방어는 없다 ───
+
+    public String guardGrade() {
+        return guardGrade;
+    }
+
+    /** 전개비 — 호신강기 4 (qi_manifestation forms.두름_몸.호신강기.deploy) */
+    public int deployCost(String stance) {
+        return GUARD.equals(stance) ? guardDeploy : sustainCost(stance);
+    }
+
+    /**
+     * 원칙 4 — 기 방어는 소모품이다. 하위 격이라도 때린 만큼 상대의 내력을 깎는다.
+     *
+     * @return blocked = 피해 0 (하위·동격) / pierce = 관통 피해 (상위 격 — 격 위력 차) · drain = 상쇄 소모
+     */
+    public Guard guard(String attackGrade, String stance) {
+        if (!GUARD.equals(stance)) {
+            return new Guard(false, 0, 0);   // 기 방어가 없다 — 그냥 맞는다
+        }
+        int attack = gradeRank(attackGrade);
+        int defense = gradeRank(guardGrade);
+        if (attack < defense) {
+            return new Guard(true, 0, drainLower);      // 무효 — 그러나 두들기면 깎인다
+        }
+        if (attack == defense) {
+            return new Guard(true, 0, drainEqual);      // 강기 대 강기 — 먼저 마르는 쪽이 진다
+        }
+        return new Guard(false, Math.max(1, qiPower(attackGrade) - qiPower(guardGrade)), drainHigher);
+    }
+
+    /** 두름 유지비 — 검기_두름 1, 검강_두름·호신강기 2 (라운드당). 없는 격은 0 */
     public int sustainCost(String grade) {
-        String form = switch (grade) {
+        if (GUARD.equals(grade)) {
+            return guardSustain;
+        }
+        String form = switch (grade == null ? "" : grade) {
             case "검기" -> "검기_두름";
             case "강기" -> "검강_두름";
             default -> null;
@@ -276,6 +652,11 @@ public final class SkillEngine {
 
     public int roundTicks() {
         return roundTicks;
+    }
+
+    /** 전투 창 — 이만큼 공방이 없으면 '그 전투'는 끝난 것 (오의 횟수·흐름 초기화) */
+    public int combatWindowTicks() {
+        return combatWindowTicks;
     }
 
     /**
@@ -440,13 +821,31 @@ public final class SkillEngine {
     @SuppressWarnings("unchecked")
     public Cast planCombo(String skillId, int index, String realm, int energy,
                           String armed, String weaponClass) {
-        List<Object> combo = (List<Object>) mechOf(skillId).get("combo");
-        Map<String, Object> hit = (Map<String, Object>) combo.get(Math.floorMod(index, combo.size()));
+        Map<String, Object> mech = mechOf(skillId);
+        List<Object> combo = (List<Object>) mech.get("combo");
+        int step = Math.floorMod(index, combo.size());
+        Map<String, Object> hit = (Map<String, Object>) combo.get(step);
 
+        // 【정본】 초식 자체는 내력을 쓰지 않는다 (cost 0). 내력을 먹는 것은 '격'이다:
+        //   ① 격 라이더 — 그 초식의 특정 타에 격이 실려 태어난다 (skill_mechanics qi_rider:
+        //      "개화한 자는 3타에 발경(내력 1)을 얹는다"). 경지가 못 열면 finish() 가 강등한다.
+        //   ② 두름 — 두른 격이 라이더보다 높으면 타격의 격을 끌어올린다.
+        //      두름(검기·강기)은 라운드 유지비로 이미 값을 냈으므로 타격마다는 0,
+        //      발경은 두름이 없는 격이라 타격마다 밴드 코스트(1)를 낸다.
         int cost = hit.get("cost") instanceof Number n ? n.intValue() : 0;
-        String want = cost > 0 ? "발경" : BARE;               // 코스트가 있으면 그 자체가 발경이다
+        String want = cost > 0 ? "발경" : BARE;               // (하위호환) 초식이 코스트를 직접 적은 경우
+        Object rider = mech.get("qi_rider");
+        if (rider instanceof Map<?, ?> r) {
+            Map<String, Object> qr = (Map<String, Object>) r;
+            int riderStep = qr.get("step") instanceof Number s ? s.intValue() : 0;
+            if (riderStep == step + 1) {
+                want = String.valueOf(qr.getOrDefault("격", "발경"));
+                cost = qr.get("cost") instanceof Number c ? c.intValue() : bandCost(want);
+            }
+        }
         if (armed != null && gradeRank(armed) > gradeRank(want)) {
             want = armed;                                     // 두름이 타격의 격을 끌어올린다
+            cost = sustainCost(armed) > 0 ? 0 : bandCost(armed);
         }
         return finish(skillId, want, cost, realm, energy, weaponClass,
                 frames(hit.get("frames")),
@@ -488,6 +887,7 @@ public final class SkillEngine {
     private Cast finish(String skillId, String wantGrade, int cost, String realm, int energy,
                         String weaponClass, Frames frames, String stagger, String hitType,
                         double range, double angle, int cooldown) {
+        boolean shot = "__shot__".equals(skillId);
         String grade = wantGrade;
         boolean gated = false;
         while (!BARE.equals(grade) && !internal.canUse(realm, grade)) {
@@ -501,13 +901,126 @@ public final class SkillEngine {
         if (downcast) {
             grade = BARE;                                     // 맨 기술 — 위력·속성 상실, 프레임 유지
         }
-        int gradeBonus = gradeRank(grade);                    // 격 사다리 = 위력 보정 (rank 그대로)
-        return new Cast(skillId, "__shot__".equals(skillId) ? "기 발출" : skillName(skillId),
+        // 격 위력 — combat.yml qi_power (엔진 정본). 발출형은 형태 위력이 우선한다 (검기_참격 3 · 강기_포 5)
+        int gradeBonus = shot ? shotPower(grade) : qiPower(grade);
+        return new Cast(skillId, shot ? "기 발출" : skillName(skillId),
                 grade, effCost, paid, downcast, gated,
                 frames, stagger, staggerTicks(stagger), hitType, range, angle,
-                weaponPower(weaponClass),
-                "__shot__".equals(skillId) ? 0 : techniquePowerOf(skillId),
-                gradeBonus, maxTargets, cooldown);
+                weaponPower(weaponClass), shot ? 0 : techniquePowerOf(skillId),
+                gradeBonus, maxTargets, cooldown, null, false);
+    }
+
+    /** 발출(쏨)의 위력 — qi_manifestation forms.쏨 power (검기_참격 3, 강기_포 5) */
+    private int shotPower(String grade) {
+        return switch (grade) {
+            case "검기" -> formPower("검기_참격");
+            case "강기" -> formPower("강기_포");
+            default -> qiPower(grade);
+        };
+    }
+
+    // ══════════ NPC — 대칭 원칙 (npc_combat.yml symmetry) ══════════
+
+    /** 등록부의 그 몸 (npcs/cheongha_npcs.yml) — 없으면 null (전투에 서지 않는 NPC) */
+    public Npc npc(String id) {
+        return npcs.get(id);
+    }
+
+    public List<String> manifestingNpcs() {
+        List<String> out = new ArrayList<>();
+        npcs.forEach((id, npc) -> {
+            if (npc.manifests()) {
+                out.add(id);
+            }
+        });
+        return out;
+    }
+
+    /** NPC 사고 주기 — 매 틱 사고 금지 (npc_combat.yml think_interval_ticks · performance npc_logic 예산) */
+    public int npcThinkTicks() {
+        return npcThinkTicks;
+    }
+
+    /**
+     * NPC 타격 1회의 내력 — 발경은 타격마다 1(밴드 코스트), 두름(검기·강기)은 유지비로 이미 냈다.
+     * 못 내면 다운캐스트한다 — 규칙이 대칭이어야 세계가 정직하다 (npc_combat.yml symmetry).
+     */
+    public int npcStrikeCost(String grade) {
+        return sustainCost(grade) > 0 ? 0 : bandCost(grade);
+    }
+
+    /** 무공의 한 칸(프레임) — NPC 응집(선딜)의 길이를 이 데이터에서 빌린다 (수치를 지어내지 않는다) */
+    @SuppressWarnings("unchecked")
+    public Frames comboFrames(String skillId, int index) {
+        List<Object> combo = (List<Object>) mechOf(skillId).get("combo");
+        Map<String, Object> hit = (Map<String, Object>) combo.get(Math.floorMod(index, combo.size()));
+        return frames(hit.get("frames"));
+    }
+
+    // ══════════ 오의 (ultimate_arts.yml) — 격이 아니다 ══════════
+
+    public List<String> ultimateIds() {
+        return List.copyOf(ultimates.keySet());
+    }
+
+    public Ultimate ultimate(String id) {
+        return id == null ? null : ultimates.get(id);
+    }
+
+    /** 오의의 단계 — 초절정 개안 / 화경 완성 / 현경 자재 / 생사경 창작. 그 아래는 null (느끼지도 못한다) */
+    public String ultimateStage(String realm) {
+        return internal.canUse(realm, "오의") || internal.canUse(realm, "오의_개안")
+                ? ultimateStage.get(realm) : null;
+    }
+
+    /** 개안 — 전승 오의의 불완전 시전 (위력 절반, 직후 내력 전소 + 내상). 초절정이 벽 너머를 훔쳐보는 대가 */
+    public boolean isAwakening(String realm) {
+        return internal.canUse(realm, "오의_개안") && !internal.canUse(realm, "오의");
+    }
+
+    /** 전투당 시전 상한 — 화경 이하 1회, 현경(자재)부터 해제 */
+    public int ultimateLimit(String realm) {
+        return realmIndex(realm) >= realmIndex(freeLimitRealm) ? Integer.MAX_VALUE : 1;
+    }
+
+    /** 발동권 — '흐름'. 아슬아슬한 성공 이상 공방 n회 누적 (오의는 버튼이 아니라 읽어낸 순간이다) */
+    public int flowRequired() {
+        return ultimateFlow;
+    }
+
+    /** 이 판정 등급이 흐름을 쌓는가 — 아슬아슬한 성공 이상 */
+    public boolean isFlowTier(String tierId) {
+        return "narrow_success".equals(tierId) || "success".equals(tierId)
+                || "critical_success".equals(tierId);
+    }
+
+    /** 오의 코스트 — 내력 총량의 50% 이상 (오의별 명시). 시전 후 그 전투의 여력이 반토막난다 */
+    public int ultimateCost(Ultimate art, int pool) {
+        return Math.max(1, (int) Math.ceil(pool * art.costRatio()));
+    }
+
+    public int ultimateBasePower() {
+        return ultimateBasePower;
+    }
+
+    /**
+     * 오의 시전 계획. 격 사다리와 독립이다 — 두른 격이 있으면 그대로 실리고, 없어도 오의는 나간다.
+     * 위력 = 무기 위력 + 무공 위력(절정급) + 오의 기본 위력 + 격 위력 + ⌊마진/2⌋ (개안이면 절반).
+     */
+    public Cast planUltimate(Ultimate art, String realm, int energy, int pool, String armed,
+                             String weaponClass) {
+        int cost = ultimateCost(art, pool);
+        int paid = internal.payOrDowncast(energy, cost);
+        if (paid == 0) {
+            return null;   // 오의에는 다운캐스트가 없다 — 태울 것이 없으면 나가지 않는다
+        }
+        String grade = armed == null || GUARD.equals(armed) ? BARE : armed;
+        return new Cast(art.id(), art.name(), grade, cost, paid, false, false,
+                art.frames(), "다운", staggerTicks("다운"),
+                art.hitType(), art.range(), art.width(),
+                weaponPower(weaponClass), techniquePower.getOrDefault("절정급", 2),
+                qiPower(grade) + ultimateBasePower, maxTargets, 0,
+                art, isAwakening(realm));
     }
 
     // ══════════ 판정 (주사위) ══════════
@@ -548,6 +1061,9 @@ public final class SkillEngine {
                 + Math.floorDiv(margin, 2) + cast.gradeBonus();
         if ("critical_success".equals(tier.id())) {
             damage += 2;                                      // 급소 — 부상 단계 즉시 +1 의 MVT 근사
+        }
+        if (cast.halved()) {
+            damage = (int) Math.ceil(damage / 2.0);           // 개안 — 불완전 시전 (위력 절반)
         }
         return new Strike(roll2d6, margin, tier.id(), tier.name(), true, Math.max(1, damage));
     }

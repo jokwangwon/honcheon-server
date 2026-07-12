@@ -52,6 +52,15 @@ final class SkillHud {
      */
     int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
              double extra, Object data) {
+        return emit(at, particle, count, dx, dy, dz, extra, data, false);
+    }
+
+    /**
+     * @param priority 오의 — "파티클 예산 내 최우선순위 (예외 아닌 우선권)" (ultimate_arts world_weight).
+     *                 예산이 모자라면 <b>생략되는 대신 개수가 깎인다</b>. 예산 자체는 절대 넘지 않는다.
+     */
+    int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
+             double extra, Object data, boolean priority) {
         if (count <= 0 || at.getWorld() == null) {
             return 0;
         }
@@ -71,9 +80,13 @@ final class SkillHud {
             }
             UUID id = viewer.getUniqueId();
             int used = viewThisTick.getOrDefault(id, 0);
-            if (used + n > engine.particlePerPlayerPerTick()
-                    || globalThisTick + n > engine.particleGlobalPerTick()) {
-                continue;                                     // 예산 초과 — 이 관람자에겐 강등(생략)
+            int room = Math.min(engine.particlePerPlayerPerTick() - used,
+                    engine.particleGlobalPerTick() - globalThisTick);
+            if (n > room) {
+                if (!priority || room <= 0) {
+                    continue;                                 // 예산 초과 — 이 관람자에겐 강등(생략)
+                }
+                n = room;                                     // 오의는 생략되지 않는다 — 깎일 뿐이다
             }
             viewThisTick.put(id, used + n);
             globalThisTick += n;
@@ -84,7 +97,12 @@ final class SkillHud {
     }
 
     int emit(Location at, Particle particle, int count, double spread, double extra) {
-        return emit(at, particle, count, spread, spread, spread, extra, null);
+        return emit(at, particle, count, spread, spread, spread, extra, null, false);
+    }
+
+    /** 오의 전용 — 예산 내 최우선순위 */
+    int emitPriority(Location at, Particle particle, int count, double spread, double extra) {
+        return emit(at, particle, count, spread, spread, spread, extra, null, true);
     }
 
     // ─── HUD ───
@@ -117,19 +135,44 @@ final class SkillHud {
             line.append(ChatColor.DARK_GRAY).append(" │ ").append(ChatColor.YELLOW)
                     .append("발출 ").append(String.format("%.1f초", shot / 20.0));
         }
+        // 오의 — 발동권('흐름')은 게이지가 아니라 '읽어낸 순간'이다. 찼다는 사실만 보여 준다
+        String stage = engine.ultimateStage(state.realm);
+        if (stage != null && state.ultimateId != null) {
+            SkillEngine.Ultimate art = engine.ultimate(state.ultimateId);
+            boolean ready = state.flow >= engine.flowRequired()
+                    && state.ultimateUses < engine.ultimateLimit(state.realm);
+            line.append(ChatColor.DARK_GRAY).append(" │ ")
+                    .append(ready ? ChatColor.LIGHT_PURPLE : ChatColor.DARK_GRAY)
+                    .append(art == null ? "오의" : art.name())
+                    .append(ready ? ChatColor.WHITE + " ▶F" : ChatColor.DARK_GRAY + " "
+                            + flowDots(state.flow, engine.flowRequired()));
+        }
         actionBar(player, line.toString());
     }
 
+    /** 흐름 — 아슬아슬한 성공 이상 공방 누적 (수치가 아니라 점으로 — 오의는 게이지가 아니다) */
+    private static String flowDots(int flow, int need) {
+        StringBuilder dots = new StringBuilder();
+        for (int i = 0; i < need; i++) {
+            dots.append(i < flow ? '●' : '○');
+        }
+        return dots.toString();
+    }
+
     static String gradeLabel(String grade) {
+        if (SkillEngine.GUARD.equals(grade)) {
+            return "호신강기(護身)";
+        }
         return SkillEngine.BARE.equals(grade) ? "외공(外功)" : grade + "(氣)";
     }
 
     /** 격의 색 — 응집이 높을수록 밝고 차갑다 (텔레그래프의 색 문법: 상대가 눈으로 읽는다) */
     static ChatColor gradeColor(String grade) {
-        return switch (grade) {
+        return switch (grade == null ? "" : grade) {
             case "발경" -> ChatColor.GOLD;
             case "검기" -> ChatColor.AQUA;
             case "강기" -> ChatColor.LIGHT_PURPLE;
+            case "호신강기" -> ChatColor.YELLOW;
             case "어검" -> ChatColor.DARK_PURPLE;
             case "심검" -> ChatColor.WHITE;
             default -> ChatColor.GRAY;

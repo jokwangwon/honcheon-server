@@ -284,13 +284,19 @@ final class CheonghaBuilder {
         // v6.9 ③ — 창호도 격이다. 같은 백벽·흑와·팔작이어도 창이 다르면 밖에서 봐도 무슨 집인지 안다:
         // 의뢰소는 정면을 게시대에 내주고 창을 측면으로 물렸고, 의방은 볕이 들게 정면을 크게 열었고,
         // 전장은 창을 작고 높게 올려 철창을 박았다.
-        anchors.put("의뢰소", house(world, cx + 11, cy, cz - 17, 13, 11, 5, false,
+        // v7.0 ③ — 중촌 규모표(village_tiers.md 2.1): 관청류 13x11 → **15x13**. 실내가 99 → 143칸이 되어
+        //   가구를 놓고도 바닥 여백 ≥55% 가 남는다 ("크기를 늘려도 되니 여유롭게"의 구현은 면적이다).
+        //   부지 검산: 의뢰소 z[-18..-6] (문 남향 · 앞마당 z-5..-4) / 의방·전장 z[+6..+18] (문 북향 · 앞마당 z+4..+5).
+        //   지붕은 벽+2 → 의뢰소 z[-20..-4] · 의방·전장 z[+4..+20] — 대로 갓길(±3)·등롱 열(±4) 위를 처마가
+        //   덮되 지면(cy)은 한 칸도 먹지 않는다 (길 폭·야간 표본 불변).
+        anchors.put("의뢰소", house(world, cx + 11, cy, cz - 18, 15, 13, 5, false,
                 "의뢰소", "정파 연락망 — 일과 보수", WindowStyle.OFFICE));
-        anchors.put("의방", house(world, cx - 24, cy, cz + 8, 13, 11, 5, true,
+        anchors.put("의방", house(world, cx - 25, cy, cz + 6, 15, 13, 5, true,
                 "약재상 · 의방", "외상 장부 있음", WindowStyle.CLINIC));
-        anchors.put("전장", house(world, cx + 12, cy, cz + 8, 13, 11, 5, true,
+        anchors.put("전장", house(world, cx + 11, cy, cz + 6, 15, 13, 5, true,
                 "청하전장", "전표 = 가져온 이가 임자", WindowStyle.VAULT));
         anchors.put("표국", pyoguk(world, cx, cy, cz));   // v6 ① — 등록 장소 pyoguk (키는 추가만, 기존 6키 불변)
+        anchors.put("관아", countyOffice(world, cx, cy, cz));   // v7.0 ① — 등록 장소 county_office (현령 조문원·포두 박호)
 
         medicineInterior(world, cx, cy, cz);
         exchangeInterior(world, cx, cy, cz);
@@ -320,7 +326,7 @@ final class CheonghaBuilder {
         placeSign(world, cx + 5, cy + 1, cz - 58, BlockFace.WEST, "북쪽 산길 →", "늑대·여우 — 도적 소문 있음");   // 대로(±3) 밖 갓길
         anchors.put("북쪽_산길", loc(world, cx, cy + 1, cz - 59));
 
-        // NPC 6인 — cheongha_npcs.yml (이름 = 등록제 명사)
+        // NPC — cheongha_npcs.yml (이름 = 등록제 명사)
         npc(world, anchors.get("청하객잔"), 0f, "객잔 주인 한백");
         npc(world, anchors.get("의뢰소"), 0f, "의뢰소 관리인 소연");
         npc(world, anchors.get("의방"), 180f, "의원 유문");
@@ -328,6 +334,13 @@ final class CheonghaBuilder {
         npc(world, loc(world, cx + 3, cy + 1, cz + 3), 135f, "표사 곽진");   // 우물 쪽
         npc(world, loc(world, cx + 8, cy + 1, cz - 6), 90f, "장터 잡화상 장쇠");   // market_peddler — 붉은 차양 좌판 뒤, 광장(서쪽)을 본다
         npc(world, anchors.get("표국"), 0f, "표국주 진철산");   // v6 ① — 등록부 jincheolsan (본채 중앙, 대문 쪽을 본다)
+        // v7.0 ① 관(官) 2인 — 등록부 county_office.linked_npcs: [jomunwon, bakho].
+        //   ★ 검수 ⑨ 는 NPC 를 **7인 정수**로 못 박고 있다 (TownAudit.contracts) → 이 두 스폰으로 "NPC 9/7" 이 뜬다.
+        //   조성기는 검수기를 소유하지 않는다. 보고서에 수정 지시서를 남긴다 (기대값 7 → 9).
+        //   그럼에도 스폰하는 이유: 세력 정치(관무불가침)가 **현령을 죽일 수 있어야** 성립한다 —
+        //   죽일 수 없는 현령은 규칙이 아니라 문서다. 앉을 자리를 지었으면 앉혀야 한다.
+        npc(world, anchors.get("관아"), 180f, "현령 조문원");        // 정청 중앙 — 북향 문(삼문)을 본다
+        npc(world, loc(world, cx - 26, cy + 1, cz + 39), 180f, "포두 박호");   // 형방 앞 — 마당을 본다
 
         approaches(world, cx, cy, cz);   // v6.7 ③ — 담장 밖 접근부 (관도·산길·이정표·돌무더기·숲. 평탄화 없음)
 
@@ -348,17 +361,19 @@ final class CheonghaBuilder {
         out.add(new Zone("청하현", "섬서의 작은 현 — 강호의 첫 걸음", w,
                 cx - 60, cy - 2, cz - 60, cx + 60, cy + 19, cz + 60));
         out.add(new Zone("청하객잔", "소문은 국밥보다 빨리 식는다", w,
-                cx - 28, cy - 2, cz - 18, cx - 12, cy + 19, cz - 6));
+                cx - 32, cy - 2, cz - 20, cx - 12, cy + 19, cz - 6));
         out.add(new Zone("의뢰소", "정파 연락망 — 일과 보수", w,
-                cx + 11, cy - 2, cz - 17, cx + 23, cy + 13, cz - 7));
+                cx + 11, cy - 2, cz - 18, cx + 25, cy + 13, cz - 6));
         out.add(new Zone("의방", "약재상 — 외상 장부 있음", w,
-                cx - 24, cy - 2, cz + 8, cx - 12, cy + 13, cz + 18));
+                cx - 25, cy - 2, cz + 6, cx - 11, cy + 13, cz + 18));
         out.add(new Zone("청하전장", "전표 = 가져온 이가 임자", w,
-                cx + 12, cy - 2, cz + 8, cx + 24, cy + 13, cz + 18));
+                cx + 11, cy - 2, cz + 6, cx + 25, cy + 13, cz + 18));
         out.add(new Zone("장터", "가죽 매입 — /혼천 팔기", w,
-                cx + 5, cy - 2, cz - 7, cx + 15, cy + 7, cz + 7));
+                cx + 5, cy - 2, cz - 5, cx + 14, cy + 7, cz + 5));
         out.add(new Zone("철산표국", "표행은 신용 장사 — 한 번 깬 자와는 두 번 일하지 않는다", w,   // v6 ①
                 cx + PY_X0, cy - 2, cz + PY_Z0, cx + PY_X1, cy + 14, cz + PY_Z1));
+        out.add(new Zone("청하현 관아", "관은 무림이 아니다 — 여기서는 법이 이긴다", w,   // v7.0 ①
+                cx + CO_X0, cy - 2, cz + CO_Z0, cx + CO_X1, cy + 16, cz + CO_Z1));
     }
 
     // ─── 지형 ───
@@ -493,6 +508,12 @@ final class CheonghaBuilder {
         }
         if (dx >= 26 && dx <= 54 && dz >= 33 && dz <= 59) {
             return true;                                        // 철산표국 부지(마당 담 + 처마)
+        }
+        if (dx >= -34 && dx <= -6 && dz >= 30 && dz <= 59) {
+            return true;                                        // v7.0 ① 청하현 관아 부지 (담 + 처마 + 삼문 앞)
+        }
+        if (dx >= -24 && dx <= -18 && dz >= 21 && dz <= 33) {
+            return true;                                        // v7.0 ① 관아 진입 소로 (남골목 → 삼문)
         }
         return dx >= 36 && dx <= 48 && dz >= 16 && dz <= 36;    // 표국 진입 소로
     }
@@ -1065,12 +1086,16 @@ final class CheonghaBuilder {
      * 대로가 x/z ±3 을 먹으므로 소로는 ±4 에서 끝난다 (대로가 소로를 삼키지 않게).
      */
     private static void doorPaths(World world, int cx, int cy, int cz) {
-        // v6.2 ② — 소로가 아니라 '앞마당'이다. 문 앞 7~8칸 폭 다진 흙 + 문지방 줄 디딤돌 → 대로 접속.
-        doorPath(world, cx - 24, cx - 17, cz - 5, cz - 4, cy, cz - 5);          // 객잔 (남향 2칸 대문)
-        doorPath(world, cx + 14, cx + 20, cz - 6, cz - 4, cy, cz - 6);          // 의뢰소 (남향 문)
-        doorPath(world, cx - 21, cx - 15, cz + 4, cz + 7, cy, cz + 7);          // 의방 (북향 문)
-        doorPath(world, cx + 15, cx + 21, cz + 4, cz + 7, cy, cz + 7);          // 전장 (북향 문)
-        doorPath(world, cx - 43, cx - 39, cz + 17, cz + 18, cy, cz + 17);       // 민가 9 → 남골목 (v6.3 ③ — 문 x-41)
+        // v6.2 ② — 소로가 아니라 '앞마당'이다. 문 앞 다진 흙 + 문지방 줄 디딤돌 → 대로 접속.
+        // v7.0 ③ — 건물이 커지면서 벽이 대로 쪽으로 두 칸 나왔다: 앞마당은 z∓5..∓4 두 줄(디딤돌 + 흙길)로 조인다.
+        //   검수 ①-b(문 앞 소로 ≥2)는 통로폭 = min(runX, runZ) 이고, 앞마당 줄(z∓4)이 대로 갓길(z∓3)과
+        //   맞닿아 z 스팬이 대로와 하나로 이어지므로 runZ ≥ 9 · runX = 앞마당 폭(7~8) → 통로폭 7 이상.
+        doorPath(world, cx - 26, cx - 19, cz - 5, cz - 4, cy, cz - 5);          // 객잔 (남향 2칸 대문 x-23·-22)
+        doorPath(world, cx + 15, cx + 21, cz - 5, cz - 4, cy, cz - 5);          // 의뢰소 (남향 문 x+18)
+        doorPath(world, cx - 21, cx - 15, cz + 4, cz + 5, cy, cz + 5);          // 의방 (북향 문 x-18)
+        doorPath(world, cx + 15, cx + 21, cz + 4, cz + 5, cy, cz + 5);          // 전장 (북향 문 x+18)
+        // v7.0 ① 관아 진입 소로 — 남골목(z+21) → 삼문(z+33). 폭 3칸(축선 x-21..-19), 접속부 한 줄은 디딤돌.
+        doorPath(world, cx - 21, cx - 19, cz + 22, cz + 32, cy, cz + 22);
         // 표국 — 남골목(z+19..21) → 민가 8 동측 우회(x+44..46) → 대문 앞(z+33..35) → 대문(z+36)
         for (int x = cx + 44; x <= cx + 46; x++) {
             for (int z = cz + 20; z <= cz + 35; z++) {
@@ -1099,10 +1124,11 @@ final class CheonghaBuilder {
             {-11, -22},               // #2 (v6.3 ③ — 집이 1칸 북으로 물러나 문턱도 z-22)
             {14, -21},                // #3
             {33, -21},                // #4
-            {48, -19},                // #5 (북향 — 골목 남쪽 줄)
+            {49, -19},                // #5 (북향 — 골목 남쪽 줄. v7.0 ③ 15x11 로 커져 문 x+48→x+49)
             {-37, 21},                // #6
             {14, 22}, {22, 22},       // #7 본채 · 직조간 (v6.3 ③ — 집이 1칸 남으로 물러나 문턱도 z+22)
             {38, 21},                 // #8
+            {-44, 19},                // #9 (v7.0 ③ 15x11 — 남벽 z+18 이 남골목에 붙어 소로가 필요 없어졌다)
     };
 
     private static void cottageDoorsteps(World world, int cx, int cy, int cz) {
@@ -1663,8 +1689,9 @@ final class CheonghaBuilder {
      * 등롱이 필요한 건 **문 등롱이 없는 소로**뿐: 민가 9 소로와 표국 진입 소로(3칸 x 16칸)·대문 앞마당.
      */
     private static final int[][] DOOR_LAMPS = {
-            {-44, 17}, {-38, 17},                                  // 민가 9 소로(x-43..-39) 양옆 맨땅
             {47, 22}, {47, 26}, {47, 30}, {47, 34}, {38, 34},      // 표국 진입 소로 · 대문 앞
+            // v7.0 ① 관아 진입 소로(x-22..-20 · z+22..+32) 양옆 맨땅 — 소로 한복판까지 맨해튼 ≤8
+            {-24, 24}, {-18, 24}, {-24, 28}, {-18, 28}, {-24, 32}, {-18, 32},
     };
 
     /** 가로 등롱 — 대로·광장·담 발치·골목·뒷골목·앞마당. 건물·노점을 다 세운 뒤 빈 자리에만 선다. */
@@ -1922,6 +1949,7 @@ final class CheonghaBuilder {
         VAULT,     // 전장 — 작고 높고 철창. 뒷벽 창 0 (돈이 있는 집의 뒷벽은 막는다)
         COTTAGE,   // 민가 — 작고 적다. 건물 해시로 폭·측면이 갈린다
         LOFT,      // 다락형 민가 — 창이 하나 더 높다
+        COURT,     // v7.0 ① 관아 정청 — 창 켜를 한 칸 올린다(y0+3..y0+4). 밑 두 켜(y0+1·y0+2)는 굽도리 돌의 자리
         NONE       // 부속채(날개·작업간) — 창 없음 (헛간에 창을 내지 않는다)
     }
 
@@ -2053,7 +2081,121 @@ final class CheonghaBuilder {
                             y0 + 2, y0 + 2, Pane.PAPER);
                 }
             }
+            // ── v7.0 ① 관아 정청: 관은 무림과 다르다 — 창도 위엄이다.
+            //    창 켜를 y0+3..y0+4 로 **한 칸 올려** 벽 하부 두 켜를 굽도리 돌(stone_bricks 2단)에 내준다.
+            //    probeY = y0+3 이 창 켜에 드므로 그 켜는 세살창(blocking) — 벽 박스 불변 (winMat 이 강제).
+            //    정면(문 쪽) 큰 창 두 짝 · 측면 각 한 짝 · 뒷면(현령의 등 뒤 = 정청 병풍벽)엔 창 0.
+            case COURT -> {
+                int cyb = y0 + 3, cyt = y0 + 4;
+                windowUnit(world, x0, y0, z0, x1, z1, front, x0 + 2, x0 + 4, cyb, cyt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, front, x1 - 4, x1 - 2, cyb, cyt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, 2, z0 + 4, z0 + 6, cyb, cyt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, 3, z0 + 4, z0 + 6, cyb, cyt, Pane.SASH);
+            }
             default -> { }
+        }
+    }
+
+    /**
+     * v7.0 ② 굽도리(基石) — 부촌 필지의 표식. 벽 하부 두 켜를 돌 벽돌로 갈아 벽이 땅에서 '올라선' 것처럼 보이게.
+     * 백벽만 갈아친다 — 기둥(원목)·창(유리/철창)·문(공기)·상인방(판재)은 건드리지 않는다.
+     *
+     * <p>검수 정합: STONE_BRICKS 는 PATH 집합이지만 검수의 길 판정은 **지면(cy) 한 켜만** 읽는다
+     * (pathGrid). 굽도리는 cy+1·cy+2 이므로 길 폭·야간 암흑 표본에 한 칸도 보태지 않는다.
+     * isOccluding = true → 벽 레이캐스트(probeY = cy+3)와도 무관하고 벽 박스도 그대로다.
+     */
+    private static void kerb(World world, int x0, int y0, int z0, int x1, int z1, int courses) {
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                if (x != x0 && x != x1 && z != z0 && z != z1) {
+                    continue;
+                }
+                for (int y = y0 + 1; y <= y0 + courses; y++) {
+                    Block b = world.getBlockAt(x, y, z);
+                    if (b.getType() == Material.WHITE_TERRACOTTA
+                            || b.getType() == Material.LIGHT_GRAY_TERRACOTTA) {
+                        b.setType(Material.STONE_BRICKS);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * v7.0 ② 전돌 바닥 — 부촌 필지의 실내. **반드시 POLISHED_ANDESITE** 다:
+     * stone_bricks · smooth_stone · andesite · cobblestone 은 전부 TownAudit.PATH 라 실내에 깔면
+     * 그 칸이 '길'로 세어져 길 폭 히스토그램과 야간 광원 표본을 오염시킨다 (village_tiers.md 3.5).
+     * 가장자리 한 줄은 흑목 귀틀을 남겨 마루의 결을 잇는다.
+     */
+    private static void tiledFloor(World world, int x0, int y, int z0, int x1, int z1) {
+        for (int x = x0 + 1; x <= x1 - 1; x++) {
+            for (int z = z0 + 1; z <= z1 - 1; z++) {
+                Material now = world.getBlockAt(x, y, z).getType();
+                if (now != Material.SPRUCE_PLANKS) {
+                    continue;   // 귀틀(흑목)은 남긴다
+                }
+                world.getBlockAt(x, y, z).setType(Material.POLISHED_ANDESITE);
+            }
+        }
+    }
+
+    /**
+     * v7.0 ② 석등(石燈) — 부촌 필지의 조명. 돌 벽돌 담 2단 + 등롱 + 반 블록 갓.
+     * 검수: STONE_BRICK_WALL·STONE_BRICK_SLAB 은 PATH 집합 밖이고(집합에 든 것은 STONE_BRICKS 풀 블록뿐),
+     * 지면(cy)에는 한 칸도 놓지 않는다 → 길 판정 불변. LANTERN 은 PROP 이지만 전부 **벽 사각형 밖**이라
+     * propScan 이 세지 않는다. 광원 15 (cy+3) → 평면 6 까지 길 위 광원 ≥7.
+     */
+    private static void stoneLamp(World world, int x, int cy, int z) {
+        for (int y = cy + 1; y <= cy + 2; y++) {
+            if (!world.getBlockAt(x, y, z).getType().isAir()) {
+                return;
+            }
+            world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL);
+        }
+        world.getBlockAt(x, cy + 3, z).setType(Material.LANTERN);
+        topSlab(world, x, cy + 4, z, Material.STONE_BRICK_SLAB);
+    }
+
+    /**
+     * v7.0 ② 초가 점치환 — **빈촌 필지의 지붕**.
+     *
+     * <p>함정(village_tiers.md 6.1): TownAudit.ROOF 에 HAY_BLOCK 은 **없다**. 짚으로 지붕을 통째로 덮으면
+     * 검수가 "지붕 자재를 찾지 못했다(지붕 없음)"로 잡고 처마·물매·능선·단 길이 네 항목이 통째로 측정 불능이 된다.
+     * 그러므로 초가는 "짚으로 덮은 지붕"이 아니라 **"너와 지붕에 짚을 얹은 것"** 으로 짓는다:
+     *   ㉮ 처마 최외곽 링 = DARK_OAK_SLAB (eaveRim 이 이미 반 블록으로 깎았다) — 손대지 않는다
+     *   ㉯ 용마루·적새(capping) = DARK_OAK_PLANKS (solidMat) — 손대지 않는다
+     *   ㉰ 그 사이 **경사면의 계단(DARK_OAK_STAIRS)만** 좌표 해시 25% 로 HAY_BLOCK 점치환
+     * 검수가 자를 대는 두 면(처마단·용마루)이 전부 ROOF 자재로 남으므로 지붕 인식은 온전하다.
+     * 덤: 짚 칸은 roofTopAt 이 건너뛰므로 단 길이 평균이 오히려 내려간다 (검수 ③-c 완화).
+     * HAY_BLOCK 은 PROP 집합이지만 민가 지붕은 어느 앵커의 벽 사각형에도 들지 않아 propScan 밖이다.
+     */
+    private static void thatch(World world, int x0, int z0, int x1, int z1, int yBase) {
+        for (int x = x0 + 1; x <= x1 - 1; x++) {
+            for (int z = z0 + 1; z <= z1 - 1; z++) {
+                if (hash(x, z, 4) != 0) {
+                    continue;   // 25% — 좌표 해시 (난수 0)
+                }
+                for (int y = yBase; y <= yBase + 12; y++) {
+                    if (world.getBlockAt(x, y, z).getType() == Material.DARK_OAK_STAIRS) {
+                        world.getBlockAt(x, y, z).setType(Material.HAY_BLOCK);
+                    }
+                }
+            }
+        }
+    }
+
+    /** v7.0 ② 기운 울타리 — 빈촌 필지의 담. 한 칸 걸러 서고, 세 칸에 하나는 아예 넘어져 있다(빈칸) */
+    private static void leaningFence(World world, int cx, int cy, int cz, int x0, int x1, int z0, int z1) {
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                if (x != x0 && x != x1 && z != z0 && z != z1) {
+                    continue;
+                }
+                if (hash(x, z, 3) == 0) {
+                    continue;   // 넘어진 칸 — 가난은 정돈되지 않는다
+                }
+                putProp(world, cx, cy, cz, x, z, Material.OAK_FENCE);
+            }
         }
     }
 
@@ -3120,6 +3262,215 @@ final class CheonghaBuilder {
         world.getBlockAt(cx + 49, cy + 1, cz + 50).setType(Material.OAK_LOG);
         world.getBlockAt(cx + 50, cy + 1, cz + 49).setType(Material.OAK_LOG);
         world.getBlockAt(cx + 50, cy + 1, cz + 51).setType(Material.OAK_LOG);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    //  v7.0 ① 청하현 관아 (county_office — 현령 조문원 · 포두 박호)
+    //
+    //  등록부(config/regions/cheongha_hyeon.yml · config/world_map.yml)에 이름이 있는데 실물이 없던
+    //  **청하현에서 유일하게 무대가 빈 등록 장소**다. 세력 정치(관무불가침)가 배선된 지금,
+    //  "현령을 죽이면 강호가 그를 버린다"는 규칙은 **현령이 앉아 있을 자리**가 있어야 성립한다.
+    //
+    //  【관은 무림이 아니다】 표국·객잔·전장이 '무림의 격'(팔작·깊은 처마·목골)이라면, 관아는 **질서와 법**이다:
+    //    ㉮ 삼문(三門) — 정문 3칸 + 협문 2. 사람은 협문으로 들고, 정문은 현령과 형(刑)이 지난다.
+    //    ㉯ 정청(正廳) 15x13 — 마당의 축 정중앙. 문을 열면 곧장 현령의 단(壇)이 보인다. 축 위엔 그것뿐.
+    //    ㉰ 형방(刑房) 6x4 서편 · 옥(獄) 6x4 동편 — 마당을 사이에 두고 마주 본다 (좌형 우옥의 대칭 = 위엄).
+    //    ㉱ 부촌 필지(village_tiers.md 4.3) — 돌 기단·굽도리 2단·전돌 마당·석등. 관은 보여 주려고 짓는다.
+    //
+    //  【검수 정합 — 왜 이 좌표인가】 (전부 실좌표로 역산했다)
+    //    · 마당 담 x[-31..-9] · z[+33..+57] / 정청 벽 x[-27..-13] · z[+41..+53] / 지붕 x[-29..-11] · z[+39..+55]
+    //    · 담 기둥 최상단은 **STONE_BRICK_SLAB** 이다 — isOccluding()=false 라 검수의 벽 레이캐스트
+    //      (probeY = cy+3)가 담을 '정청의 벽'으로 오인하지 않는다. 담을 풀 블록으로 3단 쌓으면 벽 박스가
+    //      담까지 밀려 **처마 내밀기가 음수**가 된다 (표국이 같은 이유로 갓돌을 반 블록으로 쓴다).
+    //    · 앵커(= 검수의 자) = 정청 실내 중앙 (cx-20, cz+47). 그 x행·z열에는 형방·옥·삼문의 지붕이
+    //      한 칸도 걸리지 않는다 → 물매 단면이 제 처마(x-29)에서 시작한다: h/nHip = 5/7 = 0.71.
+    //    · 처마 실측: 서 3 (형방 지붕이 x-30 까지 나온다) · 동 2 · 북 8 (삼문 처마 z+33) · 남 2 → 최소 2 ✅
+    //    · 민가 #6(ㄱ자, 지붕 x[-45..-30]·z[+20..+32])은 정청 지붕 스캔 상자(벽±8 = z≥33)의 **밖**이다 —
+    //      한 칸이라도 걸리면 v6.3 ③ 의 "이웃 지붕이 내 물매를 읽는" 버그가 재발한다.
+    //    · 마당 바닥은 **전돌(POLISHED_ANDESITE)** 이고 축선만 흙길이다. 마당 전체를 흙길로 깔면
+    //      길 표본이 500칸 늘어 야간 암흑률이 폭발한다 — 전돌은 PATH 집합 밖이라 표본을 만들지 않는다.
+    //      대신 축선(3칸)만 길로 두고 석등 4기 + 삼문·정청 현수 등롱으로 맨해튼 8 안에 가둔다.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    private static final int CO_X0 = -31;   // 마당 담 서변
+    private static final int CO_X1 = -9;    // 마당 담 동변
+    private static final int CO_Z0 = 33;    // 마당 담 북변 (삼문)
+    private static final int CO_Z1 = 57;    // 마당 담 남변
+    private static final int CO_HX0 = -27;  // 정청 서벽
+    private static final int CO_HZ0 = 41;   // 정청 북벽 (정면)
+    private static final int CO_DOOR = -20; // 정청 문 x (= 삼문 정문·진입 소로와 한 축)
+
+    /** 청하현 관아 — 삼문·정청·형방·옥. 앵커 "관아" 를 돌려준다 (기존 7키는 불변, 추가만) */
+    private static Location countyOffice(World world, int cx, int cy, int cz) {
+        int x0 = cx + CO_X0, x1 = cx + CO_X1, z0 = cz + CO_Z0, z1 = cz + CO_Z1;
+        // 마당 — 전돌(부촌 필지). 흙이 20% 섞여 관청 마당이 박물관 바닥이 되지 않게 (좌표 해시 = 난수 0)
+        for (int x = x0 + 1; x <= x1 - 1; x++) {
+            for (int z = z0 + 1; z <= z1 - 1; z++) {
+                world.getBlockAt(x, cy, z).setType(
+                        hash(x, z, 10) < 2 ? Material.COARSE_DIRT : Material.POLISHED_ANDESITE);
+            }
+        }
+        for (int x = x0; x <= x1; x++) {   // 담 — 표국과 같은 문법(조약돌·돌 벽돌·반 블록 갓돌)
+            coWallColumn(world, x, cy, z0);
+            coWallColumn(world, x, cy, z1);
+        }
+        for (int z = z0 + 1; z <= z1 - 1; z++) {
+            coWallColumn(world, x0, cy, z);
+            coWallColumn(world, x1, cy, z);
+        }
+        coWings(world, cx, cy, cz);      // 형방·옥 (삼문보다 먼저 — 삼문이 제 문주를 지킨다)
+        coGate(world, cx, cy, cz);       // 삼문
+        coHall(world, cx, cy, cz);       // 정청
+        // 축선 — 삼문(z+33) → 정청 문(z+41). 마당에서 유일한 '길'이다 (검수 ①-b 문 앞 소로의 근거)
+        for (int x = cx - 21; x <= cx - 19; x++) {
+            for (int z = z0; z <= cz + 40; z++) {
+                world.getBlockAt(x, cy, z).setType(Material.DIRT_PATH);
+                world.getBlockAt(x, cy - 1, z).setType(Material.COARSE_DIRT);
+            }
+        }
+        // 석등 4기 (부촌 필지). 앞의 둘은 축선 한복판(z+36~+38)을 맨해튼 8 안에 가두는 자리다 —
+        // 삼문 현수 등롱(z+33)과 정청 처마 등롱(z+39) 사이의 골이 여기서 메워진다 (야간 암흑 0칸).
+        stoneLamp(world, cx - 23, cy, cz + 38);
+        stoneLamp(world, cx - 18, cy, cz + 38);
+        stoneLamp(world, cx - 30, cy, cz + 48);
+        stoneLamp(world, cx - 10, cy, cz + 48);
+        return loc(world, cx + CO_DOOR, cy + 1, cz + 47);   // 앵커 = 정청 실내 중앙
+    }
+
+    /** 관아 담 한 칸 — 갓돌은 반드시 반 블록 (검수의 벽 레이캐스트가 담을 벽으로 읽지 않게) */
+    private static void coWallColumn(World world, int x, int cy, int z) {
+        world.getBlockAt(x, cy + 1, z).setType(
+                Math.floorMod(x * 5 + z * 3, 11) == 0 ? Material.MOSSY_COBBLESTONE : Material.COBBLESTONE);
+        world.getBlockAt(x, cy + 2, z).setType(Material.STONE_BRICKS);
+        world.getBlockAt(x, cy + 3, z).setType(Material.STONE_BRICK_SLAB);
+    }
+
+    /**
+     * 삼문(三門) — 정문 3칸(x-21..-19, 축선) + 협문 2(x-27 · x-13, 정청 벽선과 한 축).
+     * 문주는 흑목 통기둥, 인방 위에 흑와 미니 처마. 현판 "청하현 관아" + 현수 등롱 쌍.
+     */
+    private static void coGate(World world, int cx, int cy, int cz) {
+        int gz = cz + CO_Z0;
+        for (int x = cx - 28; x <= cx - 12; x++) {   // 문간채 벽면 (담이 아니라 건물이다)
+            for (int y = cy + 1; y <= cy + 4; y++) {
+                world.getBlockAt(x, y, gz).setType(Material.WHITE_TERRACOTTA);
+            }
+            world.getBlockAt(x, cy + 5, gz).setType(Material.DARK_OAK_PLANKS);   // 인방
+        }
+        for (int x : new int[]{cx - 28, cx - 26, cx - 22, cx - 18, cx - 14, cx - 12}) {
+            for (int y = cy + 1; y <= cy + 4; y++) {
+                world.getBlockAt(x, y, gz).setType(Material.DARK_OAK_LOG);       // 문주 6주
+            }
+        }
+        for (int x = cx - 21; x <= cx - 19; x++) {   // 정문 개구 3칸
+            for (int y = cy + 1; y <= cy + 4; y++) {
+                world.getBlockAt(x, y, gz).setType(Material.AIR);
+            }
+        }
+        for (int x : new int[]{cx - 27, cx - 13}) {  // 협문 개구 1칸씩
+            for (int y = cy + 1; y <= cy + 3; y++) {
+                world.getBlockAt(x, y, gz).setType(Material.AIR);
+            }
+            world.getBlockAt(x, cy, gz).setType(Material.DIRT_PATH);
+        }
+        for (int x = cx - 29; x <= cx - 11; x++) {   // 미니 처마 (흑와 반 블록) — 관아의 얼굴
+            world.getBlockAt(x, cy + 6, gz).setType(Material.DEEPSLATE_TILE_SLAB);
+        }
+        chainLantern(world, cx - 22, cy + 4, gz, 1);
+        chainLantern(world, cx - 18, cy + 4, gz, 1);
+        hangingSign(world, cx - 20, cy + 5, gz - 1, BlockFace.NORTH,
+                "청하현 관아", "송사·신고·수배 — 관은 무림이 아니다");
+        // x-25 인 이유: x-24·x-18 은 진입 소로 등롱 열(DOOR_LAMPS)이다. 그 칸에 팻말을 붙이면
+        // 뒤에 도는 streetLanterns 가 등롱을 못 세워 소로 끝이 캄캄해진다 (v6.8 게시대와 같은 함정).
+        placeSign(world, cx - 25, cy + 1, gz - 1, BlockFace.NORTH,
+                "현령 조문원", "포두 박호 — 관무불가침");
+    }
+
+    /**
+     * 정청(正廳) 15x13 — 관아급 부촌 필지. 돌 기단(반 칸 댓돌) + 굽도리 2단 + 전돌 바닥 + 팔작·처마 2칸.
+     * 시선 축: 삼문 → 마당 → 북향 문(x-20) → 정면 남벽의 **현령의 단(壇)**. 축 위엔 그것 하나뿐이다.
+     * 벽면 소품 ≤3 (남 3: 문서궤·대장·현판 / 북 2 / 서 3 / 동 3) · 바닥 여백 ≈ 78%.
+     */
+    private static void coHall(World world, int cx, int cy, int cz) {
+        int x0 = cx + CO_HX0, z0 = cz + CO_HZ0;
+        int x1 = x0 + 14, z1 = z0 + 12;
+        shell(world, x0, cy, z0, 15, 13, 5, true,
+                WallStyle.PLASTER_WHITE, RoofStyle.TILE, true, WindowStyle.COURT);
+        kerb(world, x0, cy, z0, x1, z1, 2);              // 굽도리 2단 (부촌 필지)
+        tiledFloor(world, x0, cy, z0, x1, z1);           // 전돌 바닥 (polished_andesite — PATH 집합 밖)
+        for (int x = x0 - 1; x <= x1 + 1; x++) {         // 돌 기단 — 반 칸 댓돌 한 바퀴
+            if (x < cx - 21 || x > cx - 19) {            // 축선(진입 3칸)은 비운다 — 길 위에 댓돌을 얹지 않는다
+                plinth(world, x, cy + 1, z0 - 1);
+            }
+            plinth(world, x, cy + 1, z1 + 1);
+        }
+        for (int z = z0; z <= z1; z++) {
+            plinth(world, x0 - 1, cy + 1, z);
+            plinth(world, x1 + 1, cy + 1, z);
+        }
+        tieBeams(world, x0, cy + 5, z0, x1, z1);         // 대들보 2 (z+44 · z+50)
+        hangingLantern(world, cx + CO_DOOR, cy + 4, z0 + 3);
+        hangingLantern(world, cx + CO_DOOR, cy + 4, z1 - 3);
+        chainLantern(world, cx - 22, cy + 4, z0 - 2, 1);   // 문 양옆 처마 등롱 — 축선 끝(z+39~+40)을 밝힌다
+        chainLantern(world, cx - 18, cy + 4, z0 - 2, 1);
+        hangingSign(world, cx + CO_DOOR, cy + 5, z0 - 2, BlockFace.NORTH, "正廳", "청하현령 조문원");
+        for (int px : new int[]{cx - 23, cx - 17}) {     // 정면 활주 2주 (깊은 처마의 그늘에 구조를)
+            for (int y = cy + 1; y <= cy + 4; y++) {
+                world.getBlockAt(px, y, z0 - 2).setType(Material.SPRUCE_FENCE);
+            }
+        }
+        // ── 시선 축: 남벽 앞 현령의 단 (전돌 1단 + 교의). 방 한복판(z+44..+48)은 비운다 — 송사가 서는 자리.
+        for (int x = cx - 22; x <= cx - 18; x++) {
+            for (int z = cz + 50; z <= cz + 52; z++) {
+                world.getBlockAt(x, cy + 1, z).setType(Material.POLISHED_ANDESITE);
+            }
+        }
+        stair(world, cx - 20, cy + 2, cz + 51, Material.DARK_OAK_STAIRS, BlockFace.NORTH);   // 교의(交椅)
+        world.getBlockAt(cx - 21, cy + 2, cz + 51).setType(Material.DARK_OAK_FENCE);         // 단 난간
+        world.getBlockAt(cx - 19, cy + 2, cz + 51).setType(Material.DARK_OAK_FENCE);
+        world.getBlockAt(cx - 20, cy + 2, cz + 50).setType(Material.LIGHT_GRAY_CARPET);      // 단 앞 자리
+        // ── 남벽(z+52 안줄) 3점: 문서 궤 · 송사 대장 · 현판
+        world.getBlockAt(cx - 25, cy + 1, cz + 52).setType(Material.CHEST);
+        world.getBlockAt(cx - 15, cy + 1, cz + 52).setType(Material.LECTERN);
+        placeWallSign(world, cx - 19, cy + 3, cz + 52, BlockFace.NORTH, "淸河縣", "법은 무림의 밖에 있다");
+        // ── 북벽(z+42) 2점 · 서벽(x-26) 3점 · 동벽(x-14) 3점 (여백 규칙 — 벽 한 면 3점 이하)
+        world.getBlockAt(cx - 25, cy + 1, cz + 42).setType(Material.BARREL);
+        world.getBlockAt(cx - 15, cy + 1, cz + 42).setType(Material.DECORATED_POT);
+        bookshelf(world, cx - 26, cy + 1, cz + 46, BlockFace.EAST, 5);       // 서가 — 율(律)과 장부
+        bookshelf(world, cx - 26, cy + 1, cz + 47, BlockFace.EAST, 4);
+        world.getBlockAt(cx - 26, cy + 2, cz + 50).setType(Material.LANTERN);
+        bookshelf(world, cx - 14, cy + 1, cz + 46, BlockFace.WEST, 3);       // 수배·호적 문서철
+        bookshelf(world, cx - 14, cy + 1, cz + 47, BlockFace.WEST, 2);
+        world.getBlockAt(cx - 14, cy + 1, cz + 50).setType(Material.DECORATED_POT);
+        for (int z = cz + 42; z <= cz + 49; z++) {   // 문 → 단 동선 (무채색 — 관아에 붉은색은 없다)
+            world.getBlockAt(cx + CO_DOOR, cy + 1, z).setType(Material.LIGHT_GRAY_CARPET);
+        }
+    }
+
+    /**
+     * 형방(刑房, 서) · 옥(獄, 동) — 마당을 사이에 두고 마주 본다. 6x4 맞배 부속채(처마 1칸 = 위계).
+     * 옥의 창은 철창이고, 옥의 문은 안에서 열리지 않는다 (철창 한 겹을 문간에 세웠다).
+     */
+    private static void coWings(World world, int cx, int cy, int cz) {
+        // 형방 — 수배 대장·포박 도구. 문은 남향(마당을 본다)
+        shell(world, cx - 29, cy, cz + 35, 6, 4, 3, false,
+                WallStyle.PLASTER_WHITE, RoofStyle.TILE, false, 1, WindowStyle.NONE);
+        kerb(world, cx - 29, cy, cz + 35, cx - 24, cz + 38, 1);
+        world.getBlockAt(cx - 28, cy + 1, cz + 36).setType(Material.LECTERN);      // 수배 대장
+        world.getBlockAt(cx - 25, cy + 1, cz + 36).setType(Material.BARREL);
+        world.getBlockAt(cx - 25, cy + 2, cz + 36).setType(Material.LANTERN);
+        placeSign(world, cx - 27, cy + 1, cz + 39, BlockFace.SOUTH, "형방", "포두 박호 — 수배·포박");
+        // 옥 — 철창. 안에 짚 한 자리와 물그릇뿐이다
+        shell(world, cx - 17, cy, cz + 35, 6, 4, 3, false,
+                WallStyle.PLASTER_WHITE, RoofStyle.TILE, false, 1, WindowStyle.NONE);
+        kerb(world, cx - 17, cy, cz + 35, cx - 12, cz + 38, 1);
+        for (int x = cx - 16; x <= cx - 13; x++) {   // 남벽 철창 (마당에서 안이 보인다 — 그것이 형벌이다)
+            world.getBlockAt(x, cy + 2, cz + 38).setType(Material.IRON_BARS);
+        }
+        world.getBlockAt(cx - 14, cy + 1, cz + 38).setType(Material.IRON_BARS);    // 문간 철창 한 겹
+        world.getBlockAt(cx - 16, cy + 1, cz + 36).setType(Material.HAY_BLOCK);    // 짚 한 자리
+        world.getBlockAt(cx - 13, cy + 1, cz + 36).setType(Material.CAULDRON);     // 물그릇
+        placeSign(world, cx - 15, cy + 1, cz + 39, BlockFace.SOUTH, "옥", "들어오는 문은 하나다");
     }
 
     // ─── 폐사당 (v6 ② — abandoned_shrine, 담장 밖 북서 외곽 / v6.4 ① — 물 위에 짓지 않는다) ───
