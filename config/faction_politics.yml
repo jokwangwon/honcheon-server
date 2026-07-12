@@ -1,0 +1,562 @@
+# 세력 정치 — 파편 · 명분 · 연합 · 억지 (기계 판독용)
+# 기준 문서: docs/design/faction_politics.md
+#
+# ─── 제1원칙: 정파는 세력이 아니라 연합의 이름이다 ───
+# factions.yml 의 faction_groups(orthodox / unorthodox)는 '하나의 세력'이 아니다.
+# **연합체(coalition)** 다 — 평시엔 성립해 있지 않고, 각 member 가 단일 세력으로 각자 논다.
+# 구파일방(10) + 오대세가(5) = **15개 독립 세력**. 사파도 5개로 찢어져 있다.
+# 그룹 id(orthodox)는 "지금 이 명분으로 뭉친 자들"의 **동적 명단**을 가리키는 이름이지,
+# 상시 존재하는 지휘부가 아니다.
+#
+# ─── 제2원칙: 뭉치려면 명분이 필요하다 ───
+# 명분(名分)은 사건이 쌓는 게이지다. 문턱을 넘은 세력만 연합에 붙는다.
+# 명분이 소진되면 연합은 흩어진다. **연합은 언제나 임시다.**
+#
+# ─── 제3원칙: 관무불가침은 도덕이 아니라 계산이다 ───
+# 무림은 관을 못 이긴다 (찢어져 있고, 황실은 대군을 낸다).
+# 관도 선빵을 못 친다 (선빵이 곧 무림에게 명분을 주고, 연합한 무림은 지형과 무력에서 강하다).
+# 둘 다 먼저 치면 손해다. 그래서 불가침이 유지된다. 이 파일은 그 손익을 수치로 적는다.
+#
+# 새 통화 발명 없음 — 명분/법명분은 faction_reaction 의 score·favor 와 **같은 0~30 스케일**,
+# 같은 감쇠 문법(7일 -1)을 쓴다. 무력·전파는 rumor / region_state / economy 표를 그대로 재사용한다.
+
+meta:
+  registry: "factions.yml 등재 세력만. 신규 세력 발명 금지"
+  scale_reuse: "명분(myeongbun) · 법명분(authority_mandate) = 0~30 (faction_reaction score/favor 와 동일 스케일)"
+  layering: "faction_reaction.yml(주목·우호) = 세력 대 개인. 이 파일 = 세력 대 세력. 반응 사다리 위에 정치를 얹는다"
+  visibility: "전부 내부 상태. 플레이어에게는 소문·NPC 발언·사건으로만 보인다 (world_reaction_system 원칙)"
+
+# ═══════════════════════════════════════════════════════════════════
+# ① 파편화 — 15개 독립 세력 (+ 사파 5 + 관)
+# ═══════════════════════════════════════════════════════════════════
+# registry: 1급   = factions.yml members 에 id 존재
+#           로스터 = factions.yml 의 sects/clans 명단에만 존재 → 1급 승격 제안 (문서 8장 YAML 조각)
+#           예약   = factions.yml 주석의 확장 예약 (아미) — 현 시점 비활성
+
+roster:
+  # ── 구파일방 (9파 1방) — 각각이 단일 세력이다
+  sorimsa:          { name: 소림사,     registry: 1급,    coalition: orthodox, seat: 숭산,   martial: 10, mandate_weight: 3, temper: 신중 }
+  mudang:           { name: 무당파,     registry: 1급,    coalition: orthodox, seat: 무당산, martial: 9,  mandate_weight: 3, temper: 신중 }
+  hwasan:           { name: 화산파,     registry: 1급,    coalition: orthodox, seat: 화산,   martial: 8,  mandate_weight: 2, temper: 강경 }
+  gonryun:          { name: 곤륜파,     registry: 로스터, coalition: orthodox, seat: 곤륜산, martial: 6,  mandate_weight: 1, temper: 은둔 }
+  jongnam:          { name: 종남파,     registry: 로스터, coalition: orthodox, seat: 종남산, martial: 6,  mandate_weight: 1, temper: 강경 }
+  jeomchang:        { name: 점창파,     registry: 로스터, coalition: orthodox, seat: 운남,   martial: 5,  mandate_weight: 1, temper: 은둔 }
+  cheongseong:      { name: 청성파,     registry: 로스터, coalition: orthodox, seat: 청성산, martial: 6,  mandate_weight: 1, temper: 실리 }
+  haenam:           { name: 해남파,     registry: 로스터, coalition: orthodox, seat: 해남도, martial: 5,  mandate_weight: 1, temper: 은둔 }
+  ami:              { name: 아미파,     registry: 예약,   coalition: orthodox, seat: 아미산, martial: 5,  mandate_weight: 2, temper: 협의, active: false }
+  gaebang:          { name: 개방,       registry: 1급,    coalition: orthodox, seat: 없음,   martial: 6,  mandate_weight: 3, temper: 협의,
+                      note: "본거지가 없다 = 관이 칠 표적이 없다. 대신 어디에나 있다 — 명분의 최초 발화자" }
+
+  # ── 오대세가
+  namgung:          { name: 남궁세가,   registry: 1급,    coalition: orthodox, seat: 안휘,   martial: 8, mandate_weight: 2, temper: 강경 }
+  moyong:           { name: 모용세가,   registry: 로스터, coalition: orthodox, seat: 요동,   martial: 6, mandate_weight: 1, temper: 실리 }
+  jegal:            { name: 제갈세가,   registry: 로스터, coalition: orthodox, seat: 형주,   martial: 5, mandate_weight: 2, temper: 실리,
+                      note: "무력은 낮으나 관에 줄이 있다 — 문사 계보. 연합 참여 시 관의 병력 배치 정보(전투 보정 +2)" }
+  paengga:          { name: 하북팽가,   registry: 로스터, coalition: orthodox, seat: 하북,   martial: 7, mandate_weight: 1, temper: 호전 }
+  dangga:           { name: 사천당가,   registry: 1급,    coalition: orthodox, seat: 사천,   martial: 7, mandate_weight: 1, temper: 폐쇄 }
+
+  # ── 사파 — 여기도 하나가 아니다
+  haomun:           { name: 하오문,       registry: 1급, coalition: unorthodox, seat: 없음, martial: 5, mandate_weight: 0, temper: 실리 }
+  noklim:           { name: 녹림,         registry: 1급, coalition: unorthodox, seat: 산채, martial: 8, mandate_weight: 0, temper: 호전 }
+  jangang_suroche:  { name: 장강수로채,   registry: 1급, coalition: unorthodox, seat: 장강, martial: 7, mandate_weight: 0, temper: 실리 }
+  salmak:           { name: 살막,         registry: 1급, coalition: unorthodox, seat: 미상, martial: 4, mandate_weight: 0, temper: 청부 }
+  dokmun:           { name: 독문,         registry: 1급, coalition: unorthodox, seat: 사천, martial: 4, mandate_weight: 0, temper: 폐쇄 }
+
+  # ── 관 — 유일하게 찢어져 있지 않다
+  gwan_gun:         { name: 관군,        registry: 1급, coalition: authority, martial: 3,  scope: 현,     note: "현 단위 상비 병력" }
+  hyeollyeong:      { name: 현령_관청,   registry: 1급, coalition: authority, martial: 0,  scope: 현,     note: "무력이 아니라 명분·행정이 무기다" }
+
+  # ── 금기 — 관계표에 없다 (은폐 중이므로). 정체가 드러나는 순간 관계가 생성된다
+  magyo:            { name: 마교,   registry: 1급, coalition: forbidden, martial: 12, hidden: true }
+  hyeolgyo:         { name: 혈교,   registry: 1급, coalition: forbidden, martial: 10, hidden: true }
+
+totals:
+  orthodox_15: 99          # 정파 15개 세력 무력 총합 (아미 포함)
+  unorthodox_5: 28
+  murim_all: 127           # 사상 최대 연합의 상한 — 실제로는 절대 다 붙지 않는다
+  note: "이 총합이 '무림'이다. 그리고 무림은 이 총합으로 존재한 적이 없다"
+
+# ═══════════════════════════════════════════════════════════════════
+# ① -b 세력 관계표 — 같은 정파끼리도 앙숙이다
+# ═══════════════════════════════════════════════════════════════════
+# relation: +3 동맹 / +1~2 우호·거래 / 0 중립 / -1 경쟁 / -2 원한 / -3 숙적
+# 연합 계산에서 쓰인다: 동맹이 참여 중이면 임계 -3, 원한이 참여 중이면 임계 +5
+
+relation_scale:
+  3: { name: 동맹, effect: "상대가 연합에 있으면 join_threshold -3. 상대 피해는 자파 피해에 준함(임계 -6)" }
+  2: { name: 우호, effect: "join_threshold -2" }
+  1: { name: 거래, effect: "join_threshold -1. 이익이 갈리면 즉시 0으로 떨어진다" }
+  0: { name: 중립, effect: "보정 없음" }
+  -1: { name: 경쟁, effect: "join_threshold +2 (저쪽이 공을 세우는 판에는 늦게 붙는다)" }
+  -2: { name: 원한, effect: "join_threshold +5. 상대가 이미 참여 중이면 참여 거부 판정" }
+  -3: { name: 숙적, effect: "같은 연합에 들어가지 않는다. 존망(existential) 태그일 때만 예외" }
+
+relations:
+  # ── 정파 내부 (연합이 '느슨한' 이유의 목록)
+  - { a: sorimsa, b: mudang,   value: 3,  reason: "불·도 양대 종가. 서로를 인정한다 — 둘이 함께 나서면 그것이 곧 명분이다" }
+  - { a: sorimsa, b: ami,      value: 3,  reason: "같은 불가 계보 (bulga)" }
+  - { a: mudang,  b: gonryun,  value: 2,  reason: "도맥의 형제" }
+  - { a: hwasan,  b: namgung,  value: 1,  reason: "검의 예 — 비무로 얼굴을 익힌 사이" }
+  - { a: hwasan,  b: jongnam,  value: -2, reason: "★ 같은 섬서 땅. 도맥의 정통·향화·후원자를 두고 대대로 다툰다" }
+  - { a: hwasan,  b: cheongseong, value: -1, reason: "검맥 우열 다툼 — 비무연에서 매번 붙는다" }
+  - { a: hwasan,  b: jeomchang,  value: -1, reason: "쾌검 vs 매화검 — 오래된 서열 논쟁" }
+  - { a: namgung, b: paengga,  value: -1, reason: "★ 검가 vs 도가. 오대세가 서열의 앙금 — 혼담이 깨진 뒤로 더" }
+  - { a: jegal,   b: moyong,   value: -1, reason: "지략 vs 명성 — 조정 인맥을 두고 경쟁" }
+  - { a: dangga,  b: sorimsa,  value: -1, reason: "독은 협(俠)이 아니다 — 불가의 오랜 냉대" }
+  - { a: dangga,  b: ami,      value: -2, reason: "사천 한 땅의 두 이름. 아미는 당가의 독을 죄로 본다" }
+  - { a: gaebang, b: sorimsa,  value: 2,  reason: "속가·탁발의 오랜 연 — 개방이 소림에 먼저 알린다" }
+  - { a: paengga, b: moyong,   value: -1, reason: "하북·요동 접경 — 마적 토벌 공적 다툼" }
+  - { a: jegal,   b: hyeollyeong, value: 1, reason: "관에 줄이 있다 (문사 계보). 연합 참여 시 관의 배치를 읽는다 — 동시에 관의 귀이기도 하다" }
+
+  # ── 정파 ↔ 사파
+  - { a: gaebang, b: haomun,   value: -2, reason: "★ 같은 바닥, 다른 규칙. 정보 밥그릇 — 무림에서 가장 오래된 원한" }
+  - { a: paengga, b: noklim,   value: -3, reason: "하북 도적 소탕이 팽가의 가업이다 — 대를 이은 피" }
+  - { a: namgung, b: jangang_suroche, value: -2, reason: "장강 상권 — 남궁의 물류를 수로채가 먹는다" }
+  - { a: dangga,  b: dokmun,   value: -2, reason: "표면은 원한(방계의 배신). 실제는 혈연 — 당가는 독문을 끝내 죽이지 않는다" }
+  - { a: mudang,  b: haomun,   value: 0,  reason: "무당은 하오문에게 정보를 사기도 한다 (부인하지만)" }
+
+  # ── 사파 내부 (사파도 하나가 아니다)
+  - { a: haomun,  b: noklim,   value: 1,  reason: "녹림은 자체 소문망이 없다 — 하오문 망에 얹혀 있다 (rumor.yml network_access)" }
+  - { a: haomun,  b: salmak,   value: 1,  reason: "청부의 중개인 — 하오문이 물건을 받고 살막이 친다" }
+  - { a: dokmun,  b: salmak,   value: 1,  reason: "독과 살수. 가장 효율적인 조합" }
+  - { a: noklim,  b: jangang_suroche, value: -1, reason: "육로 통행세 vs 수로 통행세 — 환적 나루에서 매년 피가 난다" }
+  - { a: haomun,  b: jangang_suroche, value: -1, reason: "밀무역 이권 — 겉으로는 웃는다" }
+  - { a: salmak,  b: null,     value: 0,  reason: "살막은 누구의 편도 아니다. 돈이 편이다 — 명분으로 움직이지 않는 유일한 세력" }
+
+  # ── 관 ↔ 무림 (핵심 — 이 관계가 이 파일의 주제다)
+  - { a: gwan_gun, b: orthodox,   value: 0,  reason: "치안에는 협력한다. 그러나 무장 집단은 언제나 경계 대상이다 (factions.yml 원문)" }
+  - { a: gwan_gun, b: unorthodox, value: -2, reason: "적대. 단 하오문과는 뒷거래가 있다 — 관도 정보가 필요하다" }
+  - { a: hyeollyeong, b: haomun,  value: 1,  reason: "장부에 없는 관계. 발각되면 관리가 목이 날아간다 — 명분의 재료" }
+  - { a: gwan_gun, b: magyo,      value: 0,  reason: "관계 없음 = 마교가 원하는 상태. 잠식의 전제조건이다" }
+
+  # ── 금기
+  - { a: magyo,   b: hyeolgyo,  value: -3, reason: "혈교는 마교를 기습한 적이 있다 (story_summary 2장)" }
+
+# ═══════════════════════════════════════════════════════════════════
+# ② 명분(名分) — 연합의 방아쇠
+# ═══════════════════════════════════════════════════════════════════
+myeongbun:
+  definition: "사안(issue)마다 하나씩 생기는 게이지. '누구를 상대로, 무엇 때문에 뭉치는가'"
+  scale: [0, 30]
+  schema:
+    id: "사안 ID"
+    target: "명분이 겨누는 세력 id (gwan_gun · magyo · noklim · <문파> …)"
+    tags: "명분 태그 — 세력별 감응 필터 (아래 tags 표)"
+    gauge: "0~30"
+    participants: "현재 연합 참여 세력 id 목록"
+    origin_rumor: "이 명분을 실어 나른 소문 id (rumor.yml) — 정확도가 곧 명분의 진위다"
+    created_day: "지역 누적 시간"
+
+  # ── 명분은 소문을 타고 온다 — 정확도가 곧 명분의 힘이다 (rumor.yml accuracy_bands 재사용)
+  accuracy_gate:
+    사실적_80이상:  { multiplier: 1.0,  note: "그대로 명분이 된다" }
+    과장_50_79:     { multiplier: 0.7,  note: "부풀려진 만큼 반박당한다 — 신중한 문파(소림·무당)는 확인부터 한다" }
+    오해_30_49:     { multiplier: 0.5,  target_swap: true,
+                      note: "★ 범인이 뒤바뀐다 = 명분이 **엉뚱한 세력에게 붙는다.** 마교 이간의 유일한 통로" }
+    괴담_29이하:    { multiplier: 0.0,  note: "명분이 되지 못한다. 흉흉함(민심 -)만 남는다" }
+    rule: "명분 가산 = 사건 점수 × multiplier. 세력이 자기 조직 채널로 확인(정확도 80+)하면 multiplier 1.0으로 재계산"
+
+  # ── 명분을 쌓는 사건 (0~30 스케일)
+  inputs:
+    # 관의 폭거 (target: gwan_gun / hyeollyeong)
+    관리의_사적_폭거_백성살해:   { value: 6,  tags: [무고, 법의배신] }
+    관의_문파_제자_다수_살해:    { value: 7,  tags: [무고, 무림침해] }
+    관의_문파_토벌_멸문:         { value: 10, tags: [무림침해, 존망], escalate: existential }
+    관의_은폐_발각:              { value: 4,  tags: [법의배신], note: "덮으려다 더 크게 준다" }
+    관의_무림_일제_검속:         { value: 8,  tags: [무림침해, 존망], escalate: existential }
+    관과_금기세력의_결탁_증거:   { value: 9,  tags: [금기, 법의배신], note: "관이 마교에 잠식됐다는 증거 — 가장 무거운 명분" }
+
+    # 금기 (target: magyo / hyeolgyo)
+    마교_준동_확증:              { value: 8,  tags: [금기, 존망] }
+    금기_마공_사용_확인:         { value: 5,  tags: [금기] }
+    인신공양_의식_발각:          { value: 9,  tags: [금기, 무고] }
+
+    # 무림 내부 (target: 가해 문파 / 사파 세력)
+    문파_멸문:                   { value: 10, tags: [무림침해, 존망] }
+    장문인_피살:                 { value: 7,  tags: [무림침해] }
+    무고한_학살_장터_촌락:       { value: 8,  tags: [무고] }
+    사파의_민간_학살:            { value: 5,  tags: [무고] }
+    비무_규약_파기_독_암기:      { value: 3,  tags: [규약] }
+    맹세_배신_동맹_공격:         { value: 4,  tags: [규약, 법의배신] }
+    상단로_장기_봉쇄:            { value: 2,  tags: [생계], note: "생계 명분은 약하다 — 상단·개방만 반응" }
+
+  # ── 명분을 깎는 것 (연합을 흩는다 — 관의 유일한 무기)
+  drains:
+    가해자_처형_공개:      { value: -6, actor: 관, note: "★ 꼬리 자르기. 관이 자기 관리를 버린다 — 가장 싸게 명분을 끄는 법" }
+    배상_공개:             { value: -4, actor: 관, note: "economy.yml 보수 문법 — 문파 피해액 상당" }
+    진범_규명:             { value: transfer, note: "★ 명분이 소멸하지 않고 **진범에게 이전**된다 (마교 이간 해소 경로)" }
+    참여_세력_이익_배분:   { value: -3, note: "관이 한 문파만 매수한다 — 그 세력 이탈 + 전체 명분 -3 (연합에 금이 간다)" }
+    피해_당사자_화해:      { value: -8, note: "당사자가 용서하면 남이 대신 화낼 명분이 없다" }
+    전시_소모:             { ref: deterrence.war_model.myeongbun_burn }
+
+  decay:
+    every_days: 7
+    amount: -1                      # faction_reaction.score 와 같은 문법
+    floor:
+      존망_태그: 4                  # 멸문·검속의 기억은 완전히 꺼지지 않는다 (score.floor_after_stage_3 대칭)
+      기타: 0
+    note: "명분은 소진된다. 그래서 관은 **버티기만 해도 이긴다** — 이것이 억지의 절반이다"
+
+  # ── 태그 감응 — 어떤 명분에 누가 반응하는가
+  tags:
+    무고:     { resonates: [sorimsa, ami, gaebang, hwasan, mudang], threshold_mod: -3, note: "협의(俠)의 핵심" }
+    무림침해: { resonates: "전 정파 + 사파(존망일 때)", threshold_mod: -2 }
+    존망:     { resonates: "전 무림 (사파 포함)", threshold_mod: -10,
+                note: "★ '다음은 우리 차례다' — 사파조차 붙게 하는 유일한 태그" }
+    금기:     { resonates: [sorimsa, mudang, hwasan, ami, gonryun], threshold_mod: -4 }
+    법의배신: { resonates: [gaebang, jegal, mingan], threshold_mod: -2, note: "제갈은 관을 알기에 관의 배신에 가장 민감하다" }
+    규약:     { resonates: "정파 전반", threshold_mod: -1, note: "약한 명분 — 연합까지는 못 간다. 규탄·절교로 끝난다" }
+    생계:     { resonates: [gaebang, sangdan, mingan, pyoguk], threshold_mod: -3, note: "개방은 배고픔에 가장 먼저 움직인다" }
+
+# ═══════════════════════════════════════════════════════════════════
+# ② -b 연합 — 성립 · 크기 · 붕괴
+# ═══════════════════════════════════════════════════════════════════
+coalition:
+  # 각 세력의 기본 임계 (명분 게이지가 이 값 이상이면 참여를 검토한다)
+  join_threshold:
+    # 정파 — 낮을수록 빨리 나선다
+    gaebang:      8    # 가장 빠르다. 정보로 먼저 알고, 잃을 본거지가 없다
+    paengga:      10   # 호전적 — 명분이 조금만 있어도 도를 뽑는다
+    hwasan:       11
+    sorimsa:      12   # 무겁다. 그러나 소림이 나서면 그것 자체가 명분이 된다 (아래 anchor)
+    mudang:       13
+    namgung:      13
+    ami:          14
+    jongnam:      14
+    cheongseong:  15
+    jegal:        15   # 이길 판에만 낀다
+    moyong:       16
+    dangga:       17   # 폐쇄적 — 사천 밖 일에 관심 없다
+    jeomchang:    17   # 멀다 (운남)
+    gonryun:      18   # 멀다 (서역)
+    haenam:       20   # 가장 멀다 (섬)
+    # 사파 — 명분으로는 거의 안 움직인다. 존망 태그(-10)가 있어야 겨우
+    noklim:           20
+    jangang_suroche:  20
+    dokmun:           21
+    haomun:           22   # 장사꾼. 명분이 아니라 이익으로 움직인다
+    salmak:           26   # ★ 사실상 불참. 살막은 고용될 뿐이다
+
+  # 임계 보정 — 이해가 걸린 세력은 낮고, 먼 세력은 높다
+  threshold_modifiers:
+    피해_당사자:            -8    # 자파 제자·장문인·본산이 당했다 → 사실상 즉시 참여
+    동맹_피해:              -6    # relation +3 상대가 당했다
+    인접_지역:              -4    # 사건이 자파 세력권·인접 현
+    태그_감응:              { ref: myeongbun.tags.*.threshold_mod }   # -1 ~ -10
+    동맹_이미_참여:         -3
+    소림_또는_무당_참여:    -3    # ★ anchor — 종가가 나섰다는 것 자체가 명분의 보증이다
+    우호_참여:              -2
+    경쟁_세력_참여:         +2    # 저쪽이 공을 세우는 판에 늦게 붙는다
+    원한_세력_참여:         +5    # 앙숙이 낀 연합엔 안 들어간다
+    숙적_참여:              불참  # relation -3 — 존망 태그일 때만 예외
+    상대와_이익_관계:       +3    # 그 관과 거래 중, 그 상단의 표행을 맡는 중
+    자파_내부_사정:         +2..+6 # 장문 교체기·내분·경지 이탈 (sect_life / npc_lifecycle 상태에서 읽음)
+    거리_원거리:            +2    # seat 가 지역권 밖
+
+  formation:
+    check: "참여 = (myeongbun.gauge >= join_threshold + Σ modifiers)"
+    evaluate_every: 7일          # 명분 감쇠 주기와 동기 — 명분이 줄면 늦게 붙은 세력부터 빠진다
+    channel_gate: "그 세력의 조직 채널에 사건이 도달해야 평가한다 (rumor.yml faction_awareness — 정파망 3일, 개방/하오문 1일)"
+    naming: "참여 세력 >= 3 이면 이름이 붙는다 ('무림맹'이 아니라 '<사안> 연합' — 임시 조직이다)"
+    leadership:
+      rule: "최고 mandate_weight 세력이 맹주. 동률이면 martial 합이 큰 쪽"
+      dispute: "mandate_weight 동률 + relation <= -1 인 두 세력이 함께 참여하면 **맹주 다툼** → 연합 명분 -2/주"
+
+  size_effect:
+    참여_1_2:   { name: 규탄,   effect: "성명·절교. 무력 행동 없음", gwan_perception: 무시 }
+    참여_3_5:   { name: 소연합, effect: "합동 조사·토벌대 파견 (5단계)", gwan_perception: 경계 }
+    참여_6_9:   { name: 대연합, effect: "지역권 전쟁 상태 (6단계). 관이 계산을 다시 한다", gwan_perception: 협상 }
+    참여_10_이상: { name: 무림공적_선포, effect: "천하 소문(강도 5). 관은 물러서거나 국력을 태운다", gwan_perception: 후퇴_검토 }
+    note: "연합의 크기 = 명분의 크기 × 각 세력의 이해관계. 하나의 사건이 15개를 다 붙이는 일은 사실상 없다"
+
+  # ── 붕괴 — 연합은 임시다
+  collapse:
+    triggers:
+      명분_소진:      { when: "gauge < join_threshold(해당 세력)", effect: "그 세력만 이탈. 명분이 계속 줄면 순차 붕괴" }
+      명분_0:         { effect: "연합 해산. 남은 것은 개별 문파의 원한(faction_reaction score)뿐" }
+      목적_달성:      { effect: "가해자가 죽었다/처벌됐다 → 명분 -6~-10 → 대부분 이탈. '이제 됐다'" }
+      이익_충돌:      { when: "전리·영역·공적 배분", effect: "명분 -3, 충돌한 두 세력 relation -1 (영구)" }
+      맹주_다툼:      { effect: "명분 -2/주. 3주 지속 시 연합 분열 (두 개의 작은 연합)" }
+      배신:           { effect: "이탈 세력에 배신 명분(+4, 규약·법의배신) 발생 → **새 명분의 대상이 된다**" }
+      관의_매수:      { effect: "threshold_modifiers.상대와_이익_관계 +3 를 특정 세력에 주입 → 이탈. 발각 시 명분 +4 (은폐 발각)" }
+    aftermath: "연합이 끝나면 relation 갱신 — 함께 싸운 세력 +1 (최대 우호), 배분에서 다툰 세력 -1"
+    truth: "★ 연합은 이겨도 흩어진다. 무림에 상설 지휘부가 생기지 않는 이유이자, 관이 무림을 두려워하되 무너뜨리지 않는 이유다"
+
+# ═══════════════════════════════════════════════════════════════════
+# ③ 억지 균형 — 관무불가침의 손익계산서
+# ═══════════════════════════════════════════════════════════════════
+deterrence:
+  # ── 관 측 전력 (유일하게 단일 지휘)
+  authority_power:
+    현_관군: 3                    # gwan_gun.martial
+    지역권_상급관청_동원: 20
+    황실_정규군: 300              # 칙명(勅命) 필요 — 조정의 정치가 걸린다
+    troop_to_martial: 0.1         # 병사 10 = 무인 무력 1 (스케일 정합)
+    defense_burden: 0.75          # ★ 지켜야 할 영토. 북방 국경·타 지역 치안에 묶인 비율
+    expedition_available: "황실_정규군 × (1 - defense_burden) × troop_to_martial = 300 × 0.25 × 0.1 = 7.5"
+    total_war_available:  "defense_burden 을 0.30 까지 풀 수 있다 = 300 × 0.70 × 0.1 = 21. **단 이것이 '국력을 태우는' 것이다**"
+    note: "관의 강함은 무력의 크기가 아니라 **단일 지휘 + 무한 재보급 + 명분 우위**다"
+
+  # ── 무림 측 전력
+  murim_power:
+    formula: "Σ(참여 세력 martial) × terrain_hold × unit_quality"
+    terrain_hold:
+      본산_산문_수채: 2.0         # ★ 무림은 지역을 사실상 점거하고 있다
+      세력권_내: 1.5
+      평지_원정: 1.0              # 무림이 관을 치러 나가면 이 배수를 잃는다
+    unit_quality: 2.0             # ★ 구성원 대다수가 무력 행사 가능 — 관군은 열에 하나가 정병이다
+    reinforcement: 0.0            # ★★ 결정적 비대칭: 무림은 보충되지 않는다. 죽으면 그만큼 줄어든다
+    jegal_bonus: +2               # 제갈 참여 시 관 배치 정보 (전투 보정)
+
+  # ── 전쟁 모델 — 7일 = 1라운드
+  war_model:
+    round_days: 7
+    engagement:
+      무림_승리: { gwan_war_cost: +6, myeongbun_burn: -2, murim_loss: "martial -3%" ,
+                   note: "이겨도 명분이 준다 — '이제 됐다, 물러나자' 는 목소리가 커진다" }
+      관_승리:   { gwan_war_cost: +3, myeongbun_burn: -3, murim_loss: "martial -10%",
+                   note: "지면 이익이 갈린다 — '왜 남의 일에 우리 제자가 죽나'" }
+      resolve: "murim_power > gwan_expedition → 무림 승리 (본산 방어전에서는 거의 언제나)"
+    gwan_reinforce: "라운드마다 병력 100% 회복 (국가다). 단 war_cost 는 누적된다"
+    murim_attrition: "martial 이 초기의 50% 미만 → 이탈 연쇄 (명분 추가 -5/라운드)"
+
+    # ── 승리 조건이 비대칭이다 (여기가 이 설계의 심장)
+    victory:
+      murim: "관의 war_cost >= 60 (국력 임계) → 조정이 계산을 접는다 → **관이 물러서거나 그 관리를 버린다**"
+      gwan:  "무림 명분 = 0 → 연합 해산 → 각개격파 (관이 원정력을 한 문파에 집중 → 필패)"
+      race:  "★ 명분의 감쇠 vs war_cost 의 누적. 이 경주가 관무불가침의 전부다"
+    gwan_political_threshold:
+      value: 60
+      composition: "교전 비용 + 점거 실패 유지비(주당 +2) + 조정 반대파의 정치 공격"
+      note: "황제는 무림을 이길 수 있다. 다만 그 값을 치를 이유가 없다"
+
+  # ── 균형점 — 어느 조건에서 깨지는가 (검산)
+  equilibrium:
+    balance_point: "명분 20 · 참여 세력 6"
+    proof_murim_win: |
+      명분 30 / 참여 10 / martial 70:
+        무림 본산 전투력 = 70 × 2.0(지형) × 2.0(병질) = 280  >>  관 원정 7.5 → 매 라운드 무림 승리
+        관 war_cost = +6/라운드 → 10라운드(70일)에 60 도달 → 관 후퇴
+        무림 명분 = 30 - 2×10 = 10 → 아직 살아 있다
+        → **무림 승리 (관이 꼬리를 자른다)**
+    proof_gwan_win: |
+      명분 18 / 참여 5 / martial 35:
+        참여 5 = 관이 원정력을 각개 집중할 수 있다 → 관 승리 라운드가 섞인다 (war_cost +3만 쌓임)
+        무림 명분 = 18, 라운드당 -2~-3 → 7~9라운드에 0
+        관 war_cost = 약 35 < 60 → 관은 물러서지 않는다
+        → **관 승리 (연합 해산 → 각개격파)**
+    thresholds:
+      명분_20_이상_AND_참여_6_이상: "무림 승리 경로. 관은 **이 상태를 만들지 않는 것**을 최우선으로 한다"
+      명분_26_이상_AND_참여_10_이상: "관이 물러서도 연합이 멈추지 않는다 → 국지 대전 → 황실 총력전(21) → 양패구상. 왕조가 흔들린다"
+      명분_20_미만: "관 승리. 그래서 관은 명분을 20 아래로 관리하는 데에만 힘을 쓴다 (꼬리 자르기 -6, 배상 -4)"
+      법명분_15_이상: "역방향 — 관이 쳐도 무림이 연합하지 않는다 (아래 authority_mandate)"
+
+  # ── 왜 무림이 먼저 못 치는가
+  murim_cannot_strike_first:
+    - "명분 없이 관을 치면 명분 게이지가 생기지 않는다 → 연합이 성립하지 않는다 (formation.check 미달)"
+    - "단독 문파(martial 5~10) × 평지 원정 1.0 × 2.0 = 10~20 vs 관 총력 21 → 진다. 게다가 본산이 비어 있다"
+    - "관은 반드시 반격한다 (법명분). 무림 전체가 그 문파를 버린다 (murim_disavowal)"
+    - "결론: 무림의 선빵은 **자멸이다.** 그래서 아무도 하지 않는다"
+
+  # ── 왜 관이 먼저 못 치는가
+  gwan_cannot_strike_first:
+    - "선빵 = 명분 입력이다 (관의_문파_토벌_멸문 +10, 존망 태그 → 전 무림 임계 -10)"
+    - "문파 하나를 치면 명분 10~14 (인접·동맹 3~5개 세력 즉시 참여). 아직 20 미만 → 여기서 멈추면(장수 처형 -6) 진화된다"
+    - "★ 두 번째를 치면 명분 20 돌파 → 참여 6 이상 → 관 패배 경로 확정"
+    - "그래서 **관은 절대 두 번째를 치지 않는다.** 관무불가침의 실체는 이 한 줄이다"
+    - "관이 무림을 이기는 유일한 길: 무림이 먼저 명분을 잃게 만드는 것 (= 무림의 선빵을 유도하는 것)"
+
+# ═══════════════════════════════════════════════════════════════════
+# ③ -b 법명분(法名分) — 관 측의 명분 게이지
+# ═══════════════════════════════════════════════════════════════════
+authority_mandate:
+  definition: "관이 무림을 치기 위한 명분. 관은 '의(義)'가 아니라 '법(法)'으로 움직인다"
+  scale: [0, 30]
+  target: "개인 또는 문파"
+  inputs:
+    포두_살해:            8
+    현령_살해:            14      # npc_death.yml jomunwon.escalation 접합 ("관군 6단계 토벌")
+    관군_부대_습격:       12
+    상급관리_살해:        20
+    조세_강탈:            6
+    관아_방화_파옥:       10
+    무장_집단_이동_무신고: 3
+    반란_선언:            30      # 즉시 칙명 — defense_burden 해제
+  drains:
+    자수:        -10             # npc_death.yml responses.자수
+    배상:        -6              # npc_death.yml responses.배상
+    진범_규명:   전량_소멸
+    무림_자체_처벌: -12          # ★ 강호가 먼저 그를 쳤다 → 관은 더 칠 명분이 없다
+  decay: { every_days: 7, amount: -1, floor_after_15: 8 }
+  effects:
+    "0~9":   "지역 수배 (npc_death.official_response.수배 그대로)"
+    "10~14": "★ murim_disavowal 발동 — 강호가 그를 버린다 (아래)"
+    "15~24": "관이 대상 문파를 토벌해도 **무림이 연합하지 않는다** (명분 태그 불일치 — '그놈이 잘못했다')"
+    "25+":   "무림이 관에 협조한다. 강호가 먼저 그를 친다 (관에 빌미를 주지 않으려고)"
+  overreach:
+    trigger: "관이 대상을 넘어 확대 (연좌·인접 문파 검속·무림 일제 단속)"
+    effect: "무림 명분 +8 (무림침해·존망) 신규 발생 → 억지 복원. 법명분은 그대로 남는다"
+    note: "★ 관의 유일한 실수 지점. 이겼다고 밀어붙이면 다시 명분을 준다"
+
+# ── 강호의 절연 — 무림이 선빵을 쳤을 때 (플레이어 포함)
+murim_disavowal:
+  trigger: "authority_mandate >= 10 (관 인원 살해·관아 습격) AND 무림 명분(myeongbun) < 8"
+  logic: "명분이 없으므로 연합이 생기지 않는다. 대신 **강호가 먼저 그를 친다** — 관에게 빌미를 주지 않으려고"
+  effects:
+    정파_주목:      { faction_reaction.score: +6, note: "3단계(접촉/경고) 이상으로 직행" }
+    정파_우호:      { faction_reaction.favor: -8, note: "공신 이력의 floor(8)조차 무너진다" }
+    사파_우호:      { faction_reaction.favor: -4, note: "★ 사파도 반긴다? 아니다. 관이 무림 전체를 훑으면 사파가 먼저 죽는다" }
+    비호_정지:      "favor 공신(13) 혜택 '세력 비호 1회' 사용 불가 — 어느 문파도 관 앞에서 그를 감싸지 않는다"
+    토벌_명분:      "npc_death.yml revenge.faction_proxy.orthodox = 토벌_명분 발동 (기존 규칙 재사용)"
+    현상금:         "economy.yml 고수_현상금 × 2 (50000 → 100000). 무림 세력도 이 방을 붙인다"
+    입문_차단:      "faction_entry_routes 전 루트 게이트 폐쇄 (favor 조건 미달) — 마교 루트만 열린다"
+  release:
+    자수:      "법명분 -10 → 절연 해제 검토 (favor 회복은 별개, 매우 느림)"
+    배상:      "법명분 -6 + 피해 세력 favor 회복 경로 개방 (npc_death.responses.배상)"
+    진범_규명: "★ 오해였다면 전량 소멸 + 명분이 진범에게 이전 (myeongbun.drains.진범_규명)"
+  truth: "무림이 그를 버리는 것은 냉혹함이 아니라 **생존이다.** 한 사람 때문에 관무전쟁을 할 수는 없다"
+
+# ═══════════════════════════════════════════════════════════════════
+# ④ 파열 시나리오 — 균형이 깨지는 조건
+# ═══════════════════════════════════════════════════════════════════
+rupture_scenarios:
+
+  # ── ① 관이 선빵 — 그리고 대개는 꼬리를 자른다
+  gwan_first_strike:
+    name: "관의 폭거"
+    causes: [부패한_관리, 실적에_눈먼_관리, 마교에_잠식된_관리, 오판한_상급자]
+    stages:
+      1_지역:
+        event: "관리의_사적_폭거_백성살해 (+6, 무고)"
+        state: "명분 6. 개방(임계 8, 태그 -3 → 실질 5) 만 반응 → 규탄 (참여 1)"
+        gwan_option: "★ 여기서 그 관리를 처형하면 -6 → 명분 0. 끝난다. 관은 거의 언제나 이 선택을 한다"
+      2_확대:
+        event: "덮으려다 발각 (+4, 법의배신) → 항의한 문파의 제자 살해 (+7, 무림침해)"
+        state: "명분 17. 인접·피해 당사자 문파 3~5개 참여 → 소연합 (지역권 6단계)"
+        gwan_option: "배상(-4) + 장수 처형(-6) → 명분 7 → 대부분 이탈. 여전히 수습 가능"
+      3_파열:
+        event: "관이 그 문파를 토벌 (+10, 존망) — 멸문"
+        state: "명분 27. 존망 태그 → 전 무림 임계 -10 → 참여 8~12 (사파 포함) → 무림공적 선포"
+        outcome: "war_model 가동 → 관 war_cost 60 도달 → **황제가 그 관리와 그 군을 버린다** (꼬리 자르기)"
+        cost: "관: 국력·정통성 손상. 무림: 문파 하나가 사라졌다. 연합은 이기고 흩어진다 (collapse.목적_달성)"
+      4_불가역:
+        event: "관이 멈추지 못한다 (잠식된 관 — 그 관리가 곧 조정이다)"
+        state: "명분 26+ · 참여 10+ → equilibrium.thresholds 두 번째 문턱"
+        outcome: "황실 총력전(21) → 양패구상. 왕조가 흔들리고 무림의 절반이 죽는다. **마교가 웃는다**"
+    player_seat:
+      - "불씨: 폭거의 유일한 생존 목격자 — 어느 소문망에 증언을 넣느냐가 누가 먼저 아는가를 정한다 (개방망 1일 vs 정파망 3일)"
+      - "증거: 은폐 문서 확보 → 정확도 80+ → accuracy_gate multiplier 1.0 (명분 만배)"
+      - "소화: 관의 의뢰를 받아 그 관리를 잡아 온다 (drains.가해자_처형_공개 -6 의 실행자) — 무림은 그를 관의 개로 본다"
+      - "방화: 위조 증거 → 거짓 명분. 발각 시 **자신이 명분의 대상**이 된다 (myeongbun.target 이 플레이어로)"
+
+  # ── ② 무림이 선빵 — 그리고 강호가 먼저 그를 친다
+  murim_first_strike:
+    name: "빌미"
+    causes: [개인의_폭거_플레이어, 문파의_오판, 도발에_넘어감]
+    trace:
+      1_행위: "플레이어가 포두(박호)를 죽인다 → 법명분 +8. 현령(조문원)이면 +14"
+      2_인지: "npc_death.yml killer_response 3변수(목격·시신·증거) 그대로 → 지목/공개 단계"
+      3_무림_명분: "0. **관이 잘못한 게 없다** → 연합의 방아쇠가 당겨지지 않는다"
+      4_절연: "법명분 >= 10 → murim_disavowal 발동 → 정파 주목 +6 / 우호 -8 / 비호 정지 / 현상금 ×2"
+      5_강호가_먼저: "npc_death.revenge.faction_proxy.orthodox(토벌_명분) + gwan_gun(포교_수배) 동시 가동 —
+                     **정파 토벌대가 관보다 먼저 온다.** 관에게 무림을 칠 구실을 주지 않으려고"
+      6_출구: "자수(-10) / 배상(-6) / 진범 규명(전량) / 도주 → 마교 루트만 열려 있다 (faction_entry_routes 마교 = 누적 상태의 문턱)"
+    faction_escalation:
+      "문파 단위 폭거였다면": "법명분 15+ → 관이 그 문파를 토벌해도 아무도 안 붙는다 → 멸문.
+                              단 관이 **연좌로 확대하면**(overreach) 명분 +8 → 억지 복원 → 반전"
+    player_seat:
+      - "당사자: 이 시나리오의 주인공은 대개 플레이어다. 관을 건드리는 순간 세계 전체가 등을 돌린다"
+      - "누명: 위 4~5단계를 남이 뒤집어씌울 수 있다 (rumor 정확도 30~49 오해 밴드) → 진범 규명이 유일한 문"
+      - "구명: 다른 플레이어/NPC 를 위해 진실을 밝힌다 (favor 공적_대 +4, 관 favor +)"
+
+  # ── ③ 마교의 이간 — 가장 좋은 이야기
+  magyo_deception:
+    name: "사칭"
+    logic: "★ 마교는 관도 무림도 이길 수 없다. 그러나 **둘이 싸우게 만들 수는 있다**"
+    vectors:
+      관_사칭:
+        act: "마교가 관군 복색으로 문파를 친다"
+        mechanic: "명분 +7~10 이 **gwan_gun 에게** 붙는다. 소문 정확도 조작(오해 밴드 30~49, target_swap: true)"
+        gwan_side: "관은 결백하다 → 꼬리 자를 관리가 없다 → **drains 를 쓸 수 없다** → 명분이 안 꺼진다"
+        outcome: "명분이 20을 향해 자란다. 관은 영문도 모른 채 연합의 표적이 된다"
+      무림_사칭:
+        act: "마교가 무림 복색으로 관아를 친다"
+        mechanic: "법명분 +10~14 가 **엉뚱한 문파에게** 붙는다"
+        outcome: "murim_disavowal 발동 → 무림이 자기 문파를 버린다 → 관이 그 문파를 친다 → 무림 명분 발생 → 연쇄"
+      관_잠식:
+        act: "마교가 관리 자체가 된다 (사람을 바꾸는 것이 아니라 사람을 얻는다)"
+        mechanic: "관의_문파_토벌 명령이 실제로 관에서 나온다. gwan_first_strike 4단계(불가역)로 직행"
+        tell: "은밀한 흔적 — 심마 잔재(qi_manifestation), 금기 마공 흔적(혜각·야철수 감정 훅, npc_death cause_modifier.자멸_심마)"
+        counter: "관과_금기세력의_결탁_증거 (+9, 금기·법의배신) → 명분의 대상이 gwan_gun 에서 magyo 로 **이전**된다 → 관무 공동 토벌"
+    resolution_gate:
+      truth_requires: "정확도 80+ (사실적 밴드) 증거를 **양쪽 조직 채널 모두에** 도달시킬 것 (rumor.faction_awareness)"
+      on_success: "myeongbun.drains.진범_규명 = transfer → 명분 전량이 magyo 로 이전. 관+무림 임계 -10(존망·금기) → 사상 최대 연합"
+      on_failure: "관무전쟁 → 양쪽 소모 → 마교가 빈 자리를 먹는다 (region_state 치안·경제 붕괴 → 마교 침식 가속)"
+    player_seat:
+      - "★ 유일한 목격자가 플레이어인 구조가 기본형이다 — 진실은 아무도 믿지 않는다 (정확도가 낮으므로)"
+      - "증거 3종: 시신의 마공 흔적 / 위조 관인 / 마교 접선자의 증언 — 정확도 50→70→90 으로 올린다"
+      - "채널 선택: 개방(1일, 정확도 -5)에 넣을 것인가 관청(2일, -10)에 넣을 것인가 — 먼저 믿는 쪽이 이긴다"
+      - "가담: 마교의 이간을 알고도 침묵하거나 돕는다 → 마교 루트 누적 상태 (faction_entry_routes 마교 문턱)"
+
+  # ── ④ 사파의 존망 — 정파는 붙지 않는다
+  unorthodox_purge:
+    name: "대소탕"
+    event: "관이 사파 일제 토벌 (녹림·수로채 — 법명분 충분: 조세 강탈·통행세)"
+    orthodox_reaction: "**붙지 않는다.** 명분 태그 불일치 (무고 아님 / 사파는 실제로 죄가 있다). 오히려 협조"
+    unorthodox_reaction: "존망 태그(-10) → 사파 5개가 처음으로 뭉친다. 그러나 martial 28 × 지형 → 지역별 방어전, 지원 없음"
+    twist: "관이 '무림 일제 검속'으로 확대하면 (overreach) → 무림 명분 +8(존망) → **정파도 붙는다** → 억지 복원"
+    player_seat: "사파 루트 플레이어의 존망 사건. 정파에 명분을 만들어 줄 수 있는가 (관의 무고한 살해를 증명)"
+
+  # ── ⑤ 연합의 붕괴 — 이겨도 흩어진다
+  coalition_collapse:
+    name: "전리(戰利)"
+    event: "연합이 이겼다. 관이 물러났다. 이제 무엇을 나누는가"
+    mechanic: "collapse.triggers.목적_달성(-6~-10) + 이익_충돌(-3, relation -1 영구)"
+    outcome: "맹주 다툼(mandate_weight 동률 × relation -1) → 명분 -2/주 → 3주 후 분열.
+              화산-종남, 남궁-팽가의 앙금이 여기서 깊어진다 (relations 갱신)"
+    truth: "★ 이 시나리오가 왜 무림에 상설 지휘부가 없는지를 매번 다시 증명한다"
+    player_seat: "배분 협상의 사자 역할 (화술 판정) / 어느 문파 편에 서는가 = 다음 시대의 relation 을 정한다"
+
+# ═══════════════════════════════════════════════════════════════════
+# ⑤ 기존 시스템 접합 — 새 배선이 아니라 기존 배선 위의 층
+# ═══════════════════════════════════════════════════════════════════
+bindings:
+  faction_reaction:
+    rule: "주목(score)·우호(favor)는 **세력 대 개인**. 명분·연합은 **세력 대 세력**. 두 층은 곱해진다"
+    interplay:
+      - "연합 참여 세력은 그 사안 관련 대상의 주목 score 를 **+2/라운드** 가산한다 (전시 = 온 조직이 찾는다)"
+      - "연합에 기여한 플레이어: 참여 세력 **전체**에 favor 공적_소(+2) — 연합이 곧 인맥이다"
+      - "murim_disavowal 은 favor 의 floor_after_공신(8)조차 무너뜨린다 — 유일한 예외"
+      - "우호 '공신(13)' 의 '세력 비호 1회' 는 법명분 >= 10 이면 사용 불가 (관 앞에서는 아무도 감싸지 않는다)"
+  rumor:
+    - "명분은 소문을 타고 온다. 정확도 밴드가 그대로 accuracy_gate 다 (오해 밴드 = 이간의 통로)"
+    - "연합 성립 = 소문 강도 4(지역권) / 무림공적 선포 = 강도 5(천하)"
+    - "조직 채널 원칙 그대로: 세력은 자기 망에 도달해야 명분을 평가한다 (개방 1일 vs 정파망 3일 = 반응 시차)"
+  region_state:
+    - "연합 전쟁 상태 지역: 주당 { 치안: -5, 경제: -4, 민심: -3 } — recovery 정지"
+    - "관군_대규모_개입(치안 +3, 민심 -1) 은 기존 event_deltas 그대로. 계엄이 길면 명분의 재료가 된다"
+    - "치안 < 30 이 30일 지속 → 마교 침식 가속 (magyo_deception 의 토양)"
+  npc_death:
+    - "jomunwon(현령) 살해 → authority_mandate +14 → murim_disavowal 즉시 발동.
+       기존 escalation('상급 관청 개입 → 관군 6단계 토벌') 에 **무림 측 반응**을 추가하는 것이 이 파일의 몫이다"
+    - "bakho(포두) 살해 → +8. 절연 문턱(10) 직전 — 한 번 더 하면 끝이다"
+    - "responses(자수·배상·은폐) 가 그대로 법명분 drains 다. 새 대응 발명 없음"
+    - "faction_proxy.orthodox(토벌_명분) 이 murim_disavowal 의 실행 주체"
+  chapter_events:
+    - "장(章) 사건이 명분 입력의 발생원이다. 예: salt_road_blockade 방치 → 관군_대규모_개입 → 계엄 → 폭거 발화 가능"
+    - "연합 성립 자체가 지역권 장(章) 승격 조건 (참여 6+)"
+  economy:
+    - "현상금·배상액은 economy.yml 그대로 (고수_현상금 50000). murim_disavowal 시 ×2"
+    - "관의 매수(collapse.관의_매수) 비용 = 그 세력 1년 수익 상당"
+  faction_entry_routes:
+    - "연합 참여 = favor 획득의 대량 경로 (참여 세력 전체 +2) → 입문 게이트 '안면(4)' 를 한 사건으로 넘길 수 있다"
+    - "murim_disavowal = 전 정파·사파 루트 폐쇄. 마교 루트만 남는다 (누적 상태의 문턱)"
+
+# 관측 가능성 — 플레이어는 수치를 못 본다. 이것만 본다
+observable:
+  명분_1_7:   "객잔에서 사람들이 화를 낸다. 개방 거지가 먼저 안다"
+  명분_8_14:  "문파의 사자(使者)가 오간다. 의뢰소에 '조사' 의뢰가 붙는다"
+  명분_15_19: "무림첩(武林帖)이 돈다. 각 문파의 답신이 소문이 된다 — 누가 붙고 누가 빠졌는가"
+  명분_20_25: "산문이 닫힌다. 제자들이 하산한다. 관아가 성문을 잠근다"
+  명분_26_30: "천하에 방(榜)이 붙는다. 이제 물러설 자리가 없다"
+  법명분:     "수배 → 현상금 → 방(榜) → **어제까지 밥을 먹던 객잔이 문을 잠근다**"
