@@ -514,7 +514,7 @@ Bukkit 의존 0. 순수 함수. `core` 룰 엔진 4종에 위임한다.
 
 | 판단 | 위임처 | config |
 |---|---|---|
-| 내력 풀 = round(내공×3) | `InternalEnergyEngine.pool` | internal_energy.yml |
+| 내력 풀 = round(축기_세월(내공)×3) | `InternalEnergyEngine.pool` | internal_energy.yml |
 | 경지 게이트 (발경=일류, 검기=절정, 강기=화경) | `InternalEnergyEngine.canUse` | internal_energy.yml `realm_gates` |
 | 다운캐스트 | `InternalEnergyEngine.payOrDowncast` | internal_energy.yml `downcast` |
 | 격 rank·상성·무기 감당·자기손상 | `QiManifestationEngine` | qi_manifestation.yml |

@@ -502,7 +502,9 @@ npcs:
     stats: { 근력: 6, 민첩: 9, 체력: 6, 감각: 9, 내공: 3.0 }
     natural_weapon: { name: 발톱, weapon_power_as: 검, reach: 2 }       # 4 — 기가 서린 발톱
     durability: 22
-    internal_energy: 9             # round(내공 3.0 × 3) — 영물만 내력을 쓴다
+    internal_energy: 18            # 내공 3.0 = 축기 6년 → 풀 18 (internal_energy.yml pool_curve) — 영물만 내력을 쓴다
+                                   # ★ 9 였다 (구 선형 곡선 round(내공×3)). 그대로 두면 이 영물만 홀로
+                                   #   절정의 절반 단전으로 서고, npc_combat.yml symmetry 가 거짓말이 된다
     qi_grade: 검기                 # 발톱에 검기를 두른다 (qi_manifestation 검기_두름 — 유지 1/합, 피해 +2)
     actions: [할퀴기, 덮치기, 검기_두름]
     morale: { start: 10, 도주_문턱: 0, note: "붕괴하지 않는다 — 대신 떠난다. 이길 수 없다고 판단하면 사라진다" }

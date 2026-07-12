@@ -489,7 +489,7 @@ def body_of(cfg, b, realm, bobeop):
     agility = b.attrs.get("민첩", 0.0)
     naegong = b.attrs.get("내공", 0.0)
     p = profile(cfg, realm, agility, simbeop=b.simbeop, bobeop=bobeop)
-    pool = pool_of(naegong)
+    pool = pool_of(naegong, cfg)
     secs = flight_seconds(cfg, pool, p)
     return {
         "name": b.name, "agility": agility, "pool": pool, "p": p,

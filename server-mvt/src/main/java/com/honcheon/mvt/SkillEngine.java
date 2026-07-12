@@ -60,13 +60,6 @@ public final class SkillEngine {
      * <b>config 등록 대기</b>: 제안 키 {@code combat.yml realtime.combat_window_ticks: 200}
      */
     private static final int DEFAULT_COMBAT_WINDOW = 200;
-    /**
-     * 일류 무인의 내공 하한 — cultivation.yml 은 절정(3)·초절정(5)·화경(7)·현경(9)만 수치로 적는다.
-     * 일류는 '개화'가 요건이라 수치가 없다 (simbeop.yml: 0→1 = 1년 = 개화 직후 첫 단계).
-     * <b>config 등록 대기</b>: 제안 키 {@code cultivation.yml 일류.promotion.requirements 에 "내공 1"}
-     */
-    private static final double DEFAULT_FIRST_CLASS_NAEGONG = 1.0;
-
     // ─── core 엔진 ───
     private final InternalEnergyEngine internal;
     private final QiManifestationEngine qi;
@@ -87,10 +80,18 @@ public final class SkillEngine {
     private final int roundTicks;
     private final int combatWindowTicks;
     private final int meditationFloor;                     // internal_energy.yml: recovery.meditation_floor
+    private final double meditationFraction;               // internal_energy.yml: recovery.meditation_pool_fraction
 
     // ─── 조식(調息) — 전투 중 내력 회복 (internal_energy.yml recovery.in_combat.조식) ───
-    private final int combatRegen;
+    /** 내공 1단계당 조식 회복량 — ★ '어디서부터 넘치기 시작하는가'를 정하는 수치 */
+    private final double regenPerNaegong;
+    /** 조식 하한 — 개화한 몸은 숨만 쉬어도 이만큼은 돈다 */
+    private final int regenFloor;
     private final boolean regenOnlyIfUnspent;
+    /** 두름(병기에 실은 격)의 유지비는 '태운 것'이 아니다 — 숨을 막지 않는다 */
+    private final boolean regenUpkeepExempt;
+    /** 호신강기(두름_몸) 전개 중에는 단전이 안 돈다 — 무한 방어를 막는 못 */
+    private final boolean regenBlockedByGuard;
 
     // ─── 포위 — 슬롯·협공·피포위 방어·강제 태세 (combat.yml attack) ───
     private final int engageSlots;
@@ -217,8 +218,8 @@ public final class SkillEngine {
         this.techniquePower = intMap((Map<String, Object>) damage.get("technique_power"));
         this.staticDifficulty = intMap(RulesConfig.section(jd, "static_difficulty"));
 
-        List<Map<String, Object>> stages = (List<Map<String, Object>>)
-                RulesConfig.load(cfg.resolve("cultivation.yml")).get("cultivation_stages");
+        Map<String, Object> cu = RulesConfig.load(cfg.resolve("cultivation.yml"));
+        List<Map<String, Object>> stages = (List<Map<String, Object>>) cu.get("cultivation_stages");
         List<String> realms = new ArrayList<>();
         stages.forEach(s -> realms.add(String.valueOf(s.get("name"))));
         this.realmOrder = List.copyOf(realms);
@@ -233,13 +234,18 @@ public final class SkillEngine {
         Map<String, Object> recovery = (Map<String, Object>) RulesConfig
                 .section(ie, "internal_energy").get("recovery");
         this.meditationFloor = RulesConfig.intValue(recovery.get("meditation_floor"));
+        this.meditationFraction = recovery.get("meditation_pool_fraction") instanceof Number mf
+                ? mf.doubleValue() : 0.0;
 
         // ─── 조식 — 전투 중의 숨. config 에 없으면 0 (회복 없음). 코드가 수치를 지어내지 않는다 ───
         Map<String, Object> breath = recovery.get("in_combat") instanceof Map<?, ?> ic
                 && ((Map<String, Object>) ic).get("조식") instanceof Map<?, ?> b
                 ? (Map<String, Object>) b : Map.of();
-        this.combatRegen = breath.get("per_round") instanceof Number n3 ? n3.intValue() : 0;
+        this.regenPerNaegong = breath.get("per_naegong") instanceof Number n3 ? n3.doubleValue() : 0.0;
+        this.regenFloor = breath.get("floor") instanceof Number nf ? nf.intValue() : 0;
         this.regenOnlyIfUnspent = Boolean.TRUE.equals(breath.get("only_if_unspent"));
+        this.regenUpkeepExempt = Boolean.TRUE.equals(breath.get("upkeep_exempt"));
+        this.regenBlockedByGuard = Boolean.TRUE.equals(breath.get("blocked_by_guard"));
 
         // ─── 포위 — 한 사람을 에워싸면 서로 걸리적거린다 (combat.yml attack) ───
         Map<String, Object> attack = RulesConfig.section(cb, "attack");
@@ -362,7 +368,14 @@ public final class SkillEngine {
             }
             floors.put(String.valueOf(stage.get("name")), floor);
         }
-        floors.computeIfPresent("일류", (r, v) -> v > 0 ? v : DEFAULT_FIRST_CLASS_NAEGONG);
+        // 요건에 '내공 N'이 없는 경지(일류 — 요건이 '개화'다 · 생사경 — 요건이 없다)는 등록 보충표를 읽는다.
+        // ★ 여기 코드 상수(DEFAULT_FIRST_CLASS_NAEGONG)가 박혀 있었다. 이제 cultivation.yml 이 정본이다 —
+        //   그리고 생사경은 내공 0 이라 **심검을 못 쓰는 생사경**이었다 (내력 풀 0). 그 빈칸도 함께 메워진다.
+        RulesConfig.section(cu, "realm_naegong_floor").forEach((realm, v) -> {
+            if (v instanceof Number n7 && floors.getOrDefault(realm, 0.0) <= 0) {
+                floors.put(realm, n7.doubleValue());
+            }
+        });
         this.naegongFloor = Collections.unmodifiableMap(floors);
 
         Map<String, Object> nc = RulesConfig.load(cfg.resolve("npc_combat.yml"));
@@ -1104,8 +1117,13 @@ public final class SkillEngine {
         public long busyUntil = -1;
         public long lastCastTick = -1;
         public long nextSustainTick = -1;
-        /** 이 합이 시작될 때의 내력 — 합이 끝날 때 줄어 있으면 '쓴 것'이다 (조식이 돌지 않는다) */
+        /** 이 합이 시작될 때의 내력 — 줄어든 만큼에서 두름 유지비를 뺀 나머지가 '태운 것'이다 */
         public int energyAtRoundStart = -1;
+        /**
+         * 이 합에 낸 <b>두름 유지비</b> — 태운 것이 아니다 (조식을 막지 않는다).
+         * 서리게 한 것과 태운 것을 가르는 장부. 조식이 정산될 때 0 으로 돌아간다.
+         */
+        public int upkeepThisRound;
         /** 다음 조식 정산 틱 — 한 라운드에 한 번만 돈다 */
         public long nextRegenTick = -1;
         public final Map<String, Long> cooldownUntil = new HashMap<>();
@@ -1143,9 +1161,19 @@ public final class SkillEngine {
 
     // ══════════ 내력 · 경지 게이트 ══════════
 
-    /** 내력 풀 = round(내공 × 3) — 화후 규칙 */
+    /** 내력 풀 — internal_energy.yml pool_curve · pool_per_year (축기 세월에 비례) */
     public int pool(double naegong) {
         return internal.pool(naegong);
+    }
+
+    /** 풀 → 내공 (역함수) — 등록부가 내력을 직접 적은 몸(npcs/*.yml)의 내공을 되찾는다 (조식이 읽는다) */
+    public double naegongOf(int pool) {
+        return internal.naegongOf(pool);
+    }
+
+    /** 경지의 표준 내공 — cultivation.yml 승급 요건 '내공 N' + realm_naegong_floor (보충 등록) */
+    public double naegongFloor(String realm) {
+        return naegongFloor.getOrDefault(realm, 0.0);
     }
 
     public boolean canUse(String realm, String band) {
@@ -1281,11 +1309,17 @@ public final class SkillEngine {
     }
 
     /**
-     * 운기조식 1구간 회복 — max(내공 × 순도, floor). 하한은 config (meditation_floor).
-     * 무방비의 값을 한다: 개화 직후에도 한 구간이면 발경 한 번은 돌아온다.
+     * 운기조식 1구간 회복 — max(ceil(풀 × pool_fraction × 순도), floor).
+     * 전부 config (recovery.meditation_pool_fraction · meditation_floor).
+     *
+     * <p>구판은 {@code 내공 × 순도} 였다. 풀이 축기 세월(배증형)을 따르게 된 뒤로는 그 선형 회복이
+     * <b>화경의 단전을 채우는 데 보름</b>을 요구했다. 한 구간 = 풀의 1/4 로 옮긴다:
+     * <b>하루를 앉으면 누구든 만충이다</b> (하루 5구간 중 4구간 운기). 경지가 올라도 '앉아야 하는
+     * 날 수'는 늘지 않는다 — 늘어나는 것은 한 번 앉아 얻는 양이다.
      */
     public int meditationRecover(double naegong, double purity) {
-        return (int) Math.max(Math.round(naegong * purity), meditationFloor);
+        int byPool = (int) Math.ceil(pool(naegong) * meditationFraction * purity);
+        return Math.max(byPool, meditationFloor);
     }
 
     // ══════════ 조식(調息) — 전투 중의 숨 (internal_energy.yml recovery.in_combat.조식) ══════════
@@ -1298,13 +1332,34 @@ public final class SkillEngine {
      * 그리고 규칙이 비대칭이었다: NPC 만 라운드당 1씩 회복하고 있었다(하드코딩) —
      * npc_combat.yml symmetry 가 거짓이었다. 이제 둘 다 config 를 읽는다.
      */
-    public int combatRegen() {
-        return combatRegen;
+    public int combatRegen(double naegong) {
+        return Math.max((int) Math.floor(naegong * regenPerNaegong), regenFloor);
     }
 
-    /** 【조건】 그 합에 내력을 한 점도 쓰지 않았을 때만 돈다. 이 조건이 규칙의 전부다 — 없으면 발경은 공짜다 */
+    /** 【조건】 그 합에 내력을 <b>태우지</b> 않았을 때만 돈다 — 없으면 발경(코스트 1)은 공짜가 된다 */
     public boolean regenOnlyIfUnspent() {
         return regenOnlyIfUnspent;
+    }
+
+    /**
+     * 【구분 ①】 <b>두름의 유지비는 '태운 것'이 아니다.</b> 날에 기를 서리게 한 채로도 숨은 쉰다.
+     *
+     * <p>이 한 줄이 '넘침'을 만든다: 조식(내공 × 1) − 두름 유지비 = 순수지.
+     * 절정(3 − 1 = +2)부터 검기가 하루 종일 간다. 일류는 두를 격이 없다(발경은 두름이 아니다) —
+     * 태울 때마다 숨이 막힌다. <b>성장의 체감은 그대로 남는다.</b>
+     */
+    public boolean regenUpkeepExempt() {
+        return regenUpkeepExempt;
+    }
+
+    /**
+     * 【구분 ②】 <b>호신강기를 두른 자는 숨을 못 고른다.</b> 몸을 통째로 기로 감싼 것이기 때문이다.
+     *
+     * <p>이 못이 없으면 넘치는 내력이 곧 <b>무한 방어</b>가 되고, 방어 삼문(회피·막기·흘리기)이 죽는다.
+     * 격을 <b>두르는 것</b>(병기 — 숨이 돈다)과 격으로 <b>막는 것</b>(몸 — 숨이 멎는다)은 다른 일이다.
+     */
+    public boolean regenBlockedByGuard() {
+        return regenBlockedByGuard;
     }
 
     // ══════════ 포위 — 다구리의 규칙 (combat.yml attack) ══════════

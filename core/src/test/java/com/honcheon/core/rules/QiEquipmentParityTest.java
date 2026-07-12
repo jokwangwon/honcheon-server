@@ -103,7 +103,10 @@ class QiEquipmentParityTest {
         assertEquals(6, qi.oneShotCost("강기_포"));
         // 2026-07 전투 정합: 전개 2 → 4 (강기 밴드 2~6 안으로). 강기를 두르는 값은 강기의 값이어야 한다.
         assertEquals(4, qi.deployCost("호신강기"));
-        assertEquals(2, qi.sustainPerRound("호신강기"));   // 유지는 밴드 하단 — 두르는 것은 싸고, 쏘는 것은 비싸다
+        // 2026-07 내력 수지 패스: 유지 2 → 3. ★ **몸을 통째로 감싸는 것은 날 하나에 서리게 하는 것보다 비싸다.**
+        //   풀이 커진 화경(84)이 유지 2 로는 절정 1인의 소모전을 26합 버텼다 — 전투 상한(25합) 밖.
+        //   한 전투 안에서 절대 안 마르는 방어는 '무한 방어'다. 3 이면 20합 — 소모전이 실제로 끝난다.
+        assertEquals(3, qi.sustainPerRound("호신강기"));   // 검강_두름(2) < 호신강기(3) < 발출(6)
         assertEquals(4, qi.deployCost("이기어검"));        // cast 4 + 유지 2/라운드
         assertEquals(2, qi.sustainPerRound("이기어검"));
         assertEquals(-2, qi.eogeomCasterDodgePenalty());   // 마음이 검에 가 있다

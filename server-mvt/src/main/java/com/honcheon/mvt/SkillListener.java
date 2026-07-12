@@ -281,23 +281,32 @@ public final class SkillListener implements Listener {
      * 그전엔 NPC 만 하드코딩된 라운드당 1을 받고 있었고, 그 대칭은 거짓이었다.
      */
     private void regulateBreath(SkillEngine.State state, int pool) {
-        int regen = engine.combatRegen();
+        int regen = engine.combatRegen(state.naegong);
         if (regen <= 0 || pool <= 0) {
             return;   // config 가 조식을 등록하지 않았다 — 코드가 수치를 지어내지 않는다
         }
         if (state.energyAtRoundStart < 0 || state.nextRegenTick < 0) {
             state.energyAtRoundStart = state.energy;
+            state.upkeepThisRound = 0;
             state.nextRegenTick = tick + engine.roundTicks();
             return;
         }
         if (tick < state.nextRegenTick) {
             return;
         }
-        boolean spent = state.energy < state.energyAtRoundStart;   // 시전·발출·두름 유지비 — 전부 '쓴 것'이다
-        if (!(engine.regenOnlyIfUnspent() && spent) && state.energy < pool) {
+        // 【태운 것 vs 서리게 한 것】 이 합에 빠져나간 내력에서 **두름 유지비를 뺀 나머지**가 '태운 것'이다.
+        //   두름(병기에 실은 격)의 유지비는 숨을 막지 않는다 — 날에 기를 서리게 한 채로도 호흡은 돈다.
+        //   그 밖의 전부(발경·발출·경신[경공]·오의·호신강기 전개)는 태운 것이고, 태운 합엔 단전이 멎는다.
+        int drained = state.energyAtRoundStart - state.energy;
+        int burned = engine.regenUpkeepExempt() ? drained - state.upkeepThisRound : drained;
+        boolean spent = burned > 0;
+        // 【무한 방어의 못】 호신강기를 두른 자는 숨을 못 고른다 — 몸을 통째로 기로 감쌌기 때문이다.
+        boolean guarding = engine.regenBlockedByGuard() && SkillEngine.GUARD.equals(state.armed);
+        if (!guarding && !(engine.regenOnlyIfUnspent() && spent) && state.energy < pool) {
             state.energy = Math.min(pool, state.energy + regen);
         }
         state.energyAtRoundStart = state.energy;
+        state.upkeepThisRound = 0;
         state.nextRegenTick = tick + engine.roundTicks();
     }
 
@@ -352,7 +361,9 @@ public final class SkillListener implements Listener {
         return npcStates.computeIfAbsent(mob.getUniqueId(), id -> {
             SkillEngine.State state = new SkillEngine.State();
             state.realm = npc.realm();
-            state.naegong = npc.pool() / 3.0;   // 표시용 — 풀이 진실이다 (등록부가 내력을 직접 적는다)
+            // 풀 → 내공 (역함수) — 등록부가 내력을 직접 적었어도 조식은 내공을 읽는다 (대칭 원칙).
+            // ★ 여기 `/ 3.0` 이 박혀 있었다. 풀 곡선이 세월(x(x+1)/2)로 바뀐 지금 그 나눗셈은 거짓말이다
+            state.naegong = engine.naegongOf(npc.pool());
             state.energy = npc.pool();
             if (engine.sustainCost(npc.grade()) > 0) {
                 state.armed = npc.grade();      // 두름형(검기·강기) — 켠 채로 선다. 유지비는 아래에서 낸다
@@ -394,6 +405,7 @@ public final class SkillListener implements Listener {
                     return;
                 }
                 state.energy -= sustain;
+                state.upkeepThisRound += sustain;   // 대칭 — NPC 의 두름도 숨을 막지 않는다
                 state.nextSustainTick = tick + engine.roundTicks();
             }
             aura(hand, mob, state.armed);   // 두름 잔광 — 플레이어와 같은 등록부를 탄다
@@ -445,6 +457,7 @@ public final class SkillListener implements Listener {
             return;
         }
         state.energy -= cost;
+        state.upkeepThisRound += cost;   // 두름 유지비 — 태운 것이 아니라 서리게 한 것이다 (조식을 막지 않는다)
         state.nextSustainTick = tick + engine.roundTicks();
         aura(handLocation(player), player, state.armed);
     }

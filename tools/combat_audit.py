@@ -72,9 +72,15 @@ NO_DAMAGE_CATEGORIES = {"경공", "신법", "은신술", "의술", "심법"}
 
 
 def realm_axis(cfg):
-    """경지별 표준 무인 — cultivation.yml 승급 요건에서 직접 읽는다."""
+    """경지별 표준 무인 — cultivation.yml 승급 요건에서 직접 읽는다.
+
+    ★ 요건에 '내공 N'이 없는 경지(일류 — 요건이 '개화'다 · 생사경 — 요건이 없다)는
+      cultivation.yml realm_naegong_floor 가 정본이다. 그전엔 이 도구에도 엔진에도 '일류면 1.0'이
+      손으로 박혀 있었다 — 같은 숫자가 두 군데 살면 언젠가 갈라진다.
+    """
     names = realm_names(cfg)
     caps = dig(cfg, "player_creation.yml", "attribute_cap_by_realm", default={}) or {}
+    floors = dig(cfg, "cultivation.yml", "realm_naegong_floor", default={}) or {}
     stages = {s.get("name"): s for s in (dig(cfg, "cultivation.yml", "cultivation_stages", default=[]) or [])
               if isinstance(s, dict)}
     axis = {}
@@ -88,6 +94,8 @@ def realm_axis(cfg):
             m = re.search(r"내공\s*(\d+)", str(r))
             if m:
                 naegong = float(m.group(1))
+        if isinstance(floors.get(nm), (int, float)) and float(floors[nm]) > naegong:
+            naegong = float(floors[nm])   # 보충 등록 — 요건이 수치를 말하지 않는 경지의 단전
         cap = int(num(caps.get(nm), 3))
         axis[nm] = {
             "cap": cap,
@@ -99,9 +107,23 @@ def realm_axis(cfg):
     return names, axis
 
 
-def pool_of(naegong):
-    """내력 풀 = round(내공 실수치 × 3) — internal_energy.yml 정본."""
-    return int(round(naegong * 3))
+def pool_of(naegong, cfg=None):
+    """내력 풀 — internal_energy.yml 정본 (pool_curve · pool_per_year).
+
+    ★ 축기 '세월'에 비례한다: 축기_세월(x) = x(x+1)/2 년 (cultivation.yml accumulation_cost 의 누적).
+      단전에 쌓이는 것은 단계가 아니라 앉아 있던 시간이다. 구판(선형 ×3)은 절대 넘치지 않았다.
+    cfg 를 주면 config 를 읽고, 안 주면 등록된 기본값(3 · 세월 곡선)으로 선다 — 계산은 한 군데서만 한다.
+    """
+    if naegong <= 0:
+        return 0
+    per_year = 3.0
+    curve = "누적_축기_년수"
+    if cfg is not None:
+        inner = dig(cfg, "internal_energy.yml", "internal_energy", default={}) or {}
+        per_year = num(inner.get("pool_per_year"), 3)
+        curve = str(inner.get("pool_curve") or curve)
+    years = naegong * (naegong + 1) / 2 if curve == "누적_축기_년수" else naegong
+    return int(round(years * per_year))
 
 
 def tech_power(cfg, grade):
@@ -181,12 +203,30 @@ def cost_band_of(cfg, cost, category):
     return "발경"
 
 
-def combat_regen(cfg):
-    """조식(調息) — 전투 중 내력 회복. internal_energy.yml recovery.in_combat.조식 (없으면 0 = 회복 없음)."""
+def combat_regen(cfg, naegong=0.0):
+    """조식(調息) — 전투 중 내력 회복. internal_energy.yml recovery.in_combat.조식 (없으면 0 = 회복 없음).
+
+    ★ 2026-07 내력 수지 패스 — 상수 1 이 아니라 **내공에 비례**한다: max(floor(내공 × per_naegong), floor).
+      고수는 숨만 쉬어도 단전이 돈다. 이 한 줄이 '어디서부터 넘치기 시작하는가'를 정한다.
+    """
     spec = dig(cfg, "internal_energy.yml", "internal_energy", "recovery", "in_combat", "조식", default=None)
     if not isinstance(spec, dict):
         return 0, False
-    return int(num(spec.get("per_round"), 0)), bool(spec.get("only_if_unspent"))
+    per = num(spec.get("per_naegong"), 0)
+    floor = int(num(spec.get("floor"), 0))
+    return max(int(naegong * per), floor), bool(spec.get("only_if_unspent"))
+
+
+def upkeep_exempt(cfg):
+    """두름(병기에 실은 격)의 유지비는 '태운 것'이 아니다 — 조식을 막지 않는다."""
+    return bool(dig(cfg, "internal_energy.yml", "internal_energy", "recovery",
+                    "in_combat", "조식", "upkeep_exempt", default=False))
+
+
+def guard_blocks_breath(cfg):
+    """호신강기(두름_몸) 전개 중에는 단전이 안 돈다 — 무한 방어를 막는 못."""
+    return bool(dig(cfg, "internal_energy.yml", "internal_energy", "recovery",
+                    "in_combat", "조식", "blocked_by_guard", default=False))
 
 
 def qi_casts(pool, cost, regen, rounds):
@@ -455,7 +495,7 @@ def lint_qi_gates(cfg, rep):
             rr = None
         band = cost_band_of(cfg, cost, cat)
         gr = gate_realm(cfg, band, names) if cost > 0 else names[0]
-        pool = pool_of(axis[rr]["naegong"]) if rr in axis else 0
+        pool = pool_of(axis[rr]["naegong"], cfg) if rr in axis else 0
         if rr is None:
             verdict = "무공 카탈로그 밖"
         elif cost <= 0:
@@ -516,9 +556,7 @@ def lint_energy_budget(cfg, rep):
         if rr not in axis:
             continue
         ng = axis[rr]["naegong"]
-        if rr == "일류" and ng == 0:
-            ng = 1.0
-        p = pool_of(ng)
+        p = pool_of(ng, cfg)
         uses = int(p // cost)
         mark = "❌ 0회" if uses == 0 else ("⚠️ 1회" if uses == 1 else f"{uses}회")
         rep.say(f"       {sid:<18} {rr:<8} {ng:>4.2f}  {p:>5}  {cost:>5.0f}   {mark}")
@@ -765,7 +803,7 @@ class Fighter:
         #   (엔진 배선 주의: HuntingGrounds 가 NPC 내구를 10+체력×2 로 하드코딩하고 있다면
         #    이 모델과 어긋나고 플레이어만 두꺼워진다 — lint_vitality 가 그 규약을 못 보므로 사람이 봐야 한다)
         self.dur = durability(cfg, self.che, realm, beast=beast, equip=equip)
-        self.pool = pool_of(self.naegong)
+        self.pool = pool_of(self.naegong, cfg)
 
     def wound_pen(self, hp):
         r = hp / self.dur if self.dur else 0
@@ -1148,41 +1186,43 @@ def sim_energy_curve(cfg, rep, max_rounds):
     bal = mid(dig(bands, "발경", "cost"), 1)
     depleted = str(dig(cfg, "internal_energy.yml", "internal_energy", "depleted", "state", default="내공 고갈"))
     dep_pen = num(dig(cfg, "judgment.yml", "situation_modifiers", "condition", "내공_고갈"), -2)
-    regen, conditional = combat_regen(cfg)
+    regen, conditional = combat_regen(cfg, 1.0)   # 일류(내공 1)의 숨 — 이 절의 주인공
     fight = 7           # 표준 전투 = 5~9합의 중앙값 (본 도구의 기준 전투)
     rep.say(f"     발경 = 내력 {bal:g}/합 · 고갈 = '{depleted}'(판정 {dep_pen:g}) + 다운캐스트('맨 기술')")
-    rep.say(f"     전투 중 회복(조식) = {regen:g}/합"
-            f"{' · 조건: 내력을 안 쓴 합에만' if conditional else ' · 무조건'}"
+    rep.say(f"     전투 중 회복(조식) = 내공에 비례 (일류 = {regen:g}/합)"
+            f"{' · 조건: 내력을 태운 합에는 안 돈다' if conditional else ' · 무조건'}"
             f" · 운기조식(앉기) = {dig(cfg, 'internal_energy.yml', 'internal_energy', 'recovery', 'in_combat', '운기조식', default='불가')}")
     rep.say(f"     표준 전투 {fight}합 기준 — '지속 합수'가 아니라 '{fight}합 동안 몇 번 싣는가'를 잰다")
     rep.say("")
-    rep.say("       내공  내력풀   발경 연발(버스트)   발경/7합   검기_참격(3)/7합   호신강기(전개2+유지2)")
+    rep.say("       내공  내력풀  조식/합   발경 연발(버스트)   발경/7합   검기_참격(3)/7합   호신강기(전개2+유지2)")
     for ng in (0.33, 1.0, 2.0, 3.0, 5.0, 7.0):
-        p = pool_of(ng)
+        p = pool_of(ng, cfg)
+        rg = combat_regen(cfg, ng)[0]
         burst = int(p // bal) if bal else 0
-        b = qi_casts(p, bal, regen, fight)
-        gi = qi_casts(p, 3, regen, fight)
-        hosin = int((p - 2) // 2) if p >= 2 else 0
-        rep.say(f"       {ng:>4.2f}  {p:>5}   {burst:>13}합   {b:>7}회   {gi:>13}회   {hosin:>16}합")
+        b = qi_casts(p, bal, rg, fight)
+        gi = qi_casts(p, 3, rg, fight)
+        hosin = int((p - 2) // 2) if p >= 2 else 0   # 호신강기 중엔 조식이 멎는다 (blocked_by_guard)
+        rep.say(f"       {ng:>4.2f}  {p:>5}  {rg:>5}   {burst:>13}합   {b:>7}회   {gi:>13}회   {hosin:>16}합")
 
     rep.say("")
     # ① 개화의 보상 — 한 번은 형벌이다. 그러나 매 합이면 격은 공짜다. 그 사이가 '자원 관리'다
-    p_bloom = pool_of(1.0 / 3.0)
-    bloom_casts = qi_casts(p_bloom, bal, regen, fight)
+    p_bloom = pool_of(1.0 / 3.0, cfg)
+    regen_bloom = combat_regen(cfg, 1.0 / 3.0)[0]
+    bloom_casts = qi_casts(p_bloom, bal, regen_bloom, fight)
     if bloom_casts < 3:
         rep.fail(f"개화 직후(내공 0.33 → 내력 {p_bloom}) = 표준 전투 {fight}합에서 발경 {bloom_casts}회. "
                  f"'개화의 보상'인 발경이 전투당 {bloom_casts}회다 — 자원 관리가 아니라 형벌 "
-                 f"(조식 회복 {regen:g}/합)")
+                 f"(조식 회복 {regen_bloom:g}/합)")
     elif bloom_casts >= fight:
         rep.fail(f"개화 직후(내력 {p_bloom})가 {fight}합 내내 발경을 싣는다 ({bloom_casts}회) — 격이 공짜다. "
-                 f"조식 회복 {regen:g}/합이 발경 코스트 {bal:g} 이상인데 조건"
+                 f"조식 회복 {regen_bloom:g}/합이 발경 코스트 {bal:g} 이상인데 조건"
                  f"('내력을 안 쓴 합에만')이 {'없다' if not conditional else '있는데도 물지 않았다'}")
     else:
         rep.ok(f"개화 직후(내력 {p_bloom}): {fight}합에서 발경 {bloom_casts}회 — 한 합 태우고 한 합 고른다. "
                f"자원의 리듬이 있다 (전소도 무한도 아니다)")
 
     # ② 축기의 값 — 총량이 아니라 '연발'이다
-    p_first = pool_of(1.0)
+    p_first = pool_of(1.0, cfg)
     burst_bloom = int(p_bloom // bal) if bal else 0
     burst_first = int(p_first // bal) if bal else 0
     first_casts = qi_casts(p_first, bal, regen, fight)
@@ -1602,9 +1642,7 @@ def sim_dead_options(cfg, rep):
             continue
         rr = art.get("required_realm")
         ng = axis.get(rr, {}).get("naegong", 0.0)
-        if rr == "일류" and ng == 0:
-            ng = 1.0
-        p = pool_of(ng)
+        p = pool_of(ng, cfg)
         tp = tech_power(cfg, art.get("grade"))
         reasons = []
         if p < cost:

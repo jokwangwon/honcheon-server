@@ -748,26 +748,52 @@ LUMA_BANDS = [
 LUMA_EXEMPT = ["glass", "glass_pane_top", "cobweb", "dead_bush", "ladder", "glow_lichen",
                "sea_pickle", "torch"]
 BLOCK_LUMA_MEAN = (128, 172)   # 전역 평균 밝기 대역 — 세계의 인상은 평균이 만든다
-# ── ⑫-d 채도 **상한** — 【2026-07 신설】 형광은 밝기가 아니라 **채도**의 실패다 ──
+# ── ⑫-d 자연물 채도 **밴드** — 【2026-07 재설계】 형광도 실패지만 **죽음도 실패다** ──
 #
-# ⑫-c 는 채도의 **하한**을 잰다 (매화가 먹빛이면 규약이 자기모순이니까).
-# 그런데 그 반대쪽 — **너무 진한 색** — 은 아무도 재지 않았다. 그래서 형광 초록이 통과했다.
-#   바닐라 평원 잔디의 화면색 = 텍스처(회색 ~150) × 틴트 #91BD59 → 채도 **59**.
-#   그것이 "마인크래프트 초록"의 정체다: 어두워서가 아니라 **채도가 높아서** 튄다.
-# 수묵 규약은 "채도는 의미에만" 이다 — 풀·잎·물은 의미가 아니라 **바탕**이다. 그러므로 상한을 건다.
-# ★ 이 상한은 **곱한 뒤의 색**에 건다 (파일이 아니라 눈에 닿는 색 — 「틴트 인지」 절).
-CHROMA_CEIL = [
+# 【이 축의 역사 — 두 번 틀렸다】
+#   1차: 채도를 아무도 안 쟀다 ⇒ 형광 초록이 통과했다.
+#   2차: **상한만** 달았다 (풀 ≤ 40) ⇒ 이번엔 반대로 넘어갔다. 잔디 58 → 32, 나뭇잎 → 25,
+#        다시마 → 22. 세계에서 **피가 빠졌다.** 상한은 형광을 잡았지만 **죽음은 아무도 안 잡았다.**
+#   ⇒ 한쪽만 재는 자는 반드시 반대쪽으로 넘어간다. 그래서 이제 **양쪽을 잰다** (밴드).
+#
+# 【기준선 — 바닐라 잔디의 화면 채도 58】 (사용자 판정: *"일반적인 세상을 표현하기에 잔디블럭은 적합"*)
+#   ★ 아래 「바닐라」 수치는 전부 **client jar 에서 우리 잣대로 실측한 값**이다 (짐작이 아니다).
+#     그 과정에서 앞선 증분이 적어 둔 두 수가 **틀렸음**이 드러났다:
+#       · 물   — 「바닐라 139」라 적혀 있었다. 실측 **115**.
+#       · 연잎 — 「바닐라 75」라 적혀 있었다. 실측 **30** (외려 우리가 더 진했다).
+#     **틀린 근거 위에 세운 상한은 상한이 아니라 미신이다.** 그래서 다시 쟀다.
+#
+# 【밴드의 뜻】  하한 = "죽었다" · 상한 = "형광이다".  기준선 58 을 감싼다.
+#   자연물은 **서로 나란해야** 한다 — 잔디가 58 인 세상에서 나뭇잎이 25 면 나뭇잎이 시체로 보인다.
+# ★ 이 밴드는 **곱한 뒤의 색**에 건다 (파일이 아니라 눈에 닿는 색 — 「틴트 인지」 절).
+# ★ 자재(기와·나무·흙벽·석재)는 이 밴드의 **대상이 아니다** — 수묵 건축의 저채도는 이미 통과한
+#   계약이다 (⑫-a·⑫-b 자재 모집단). 두 모집단은 갈라져 있다: **자연은 살고 자재는 먹이다.**
+VANILLA_GRASS_CHROMA = 58     # ★ 기준선 (client jar 실측 · 평원). 이 수가 이 팩의 채도 원점이다
+# ⑫-e 자재 모집단 — **등록된 자재 등급만** 센다 (「나머지 전부」가 아니다).
+#   꽃·작물·차양·등롱은 자재가 아니다 (채색이 허락된 자리 — ⑫-c 가 따로 잰다). 그것들을 자재에
+#   섞으면 자재 평균이 부풀어 **자재가 채도를 올려도 안 잡힌다** (모집단을 게으르게 잡으면 눈이 먼다).
+MATERIAL_CLASSES = {"먹_기와·심층암", "무쇠·화로", "그릇 속(내부·구멍)", "젖은 땅·삭은 거름",
+                    "여백_회벽·눈·얼음", "짚·죽", "자작(白樺)", "목재", "돌", "땅",
+                    "삭은땅_부엽토·이끼"}
+MAT_CHROMA_MEAN_MAX = 25      # 자재 평균 채도 상한 — 수묵의 정체 (자연을 올려도 여기는 안 움직인다)
+# ★ 실측 23.1 (이 증분에서 **한 톨도 안 움직였다** — 자재 PNG 는 바이트 동일. md5 로 확인).
+#   상한은 그 위에 **드리프트 감지선**으로 둔다: 훗날 누가 자연을 올리며 자재까지 끌어올리면 여기서 걸린다.
+#   ⇒ 실측값 아래로 상한을 잡는 것은 검수가 아니라 **자해**다 (못 고칠 위반을 스스로 만드는 짓).
+NAT_CHROMA_MEAN_MIN = 46      # 자연 평균 채도 하한 — 세계가 다시 빛바래면 여기서 걸린다
+POP_GAP_MIN = 25              # 두 모집단의 **격차** — 자연과 자재가 붙으면 이 팩은 정체를 잃는다
+CHROMA_BAND = [
     (["grass_block_top", "grass_block_side_overlay", "short_grass", "fern", "tall_grass_*",
-      "large_fern_*", "sugar_cane"], 40,
-     "풀 — 바닐라 화면 채도 59. 이것을 40 아래로 내리는 것이 이 증분의 **전부**다"),
-    (["oak_leaves", "spruce_leaves", "birch_leaves", "vine"], 40,
-     "잎 — 상록수의 바닐라 채도는 상수(0x619961)가 정한다. 역틴트로 그것을 내렸는지 여기서 검산된다"),
-    (["water_still", "water_flow"], 62,
-     "물 — 바닐라 화면 채도 **139** (형광 파랑의 정체). 틴트 B(228)가 높아 0 까지는 못 내린다"),
-    (["kelp", "kelp_plant", "seagrass", "tall_seagrass_*"], 45, "수초 — 틴트가 없으니 변명도 없다"),
-    (["lily_pad"], 58,
-     "연잎 — **천장이 변명이 아니라 사실인 자리**: R 32 가 상한이라 채도를 이 아래로는 못 내린다 "
-     "(바닐라 화면 채도 75 → 우리 47. 내릴 수 있는 데까지 내린 값이다)"),
+      "large_fern_*", "sugar_cane"], 46, 72,
+     "풀 — ★ **기준선**. 바닐라 잔디 58 (실측). 세계를 덮는 가장 큰 면이라 이것이 세계의 채도다"),
+    (["oak_leaves", "spruce_leaves", "birch_leaves", "vine"], 44, 72,
+     "잎 — 바닐라 참나무 70 · 가문비 17 · 자작 41 (실측). 풀과 **나란해야** 한다 (잎만 죽으면 나무가 시체다)"),
+    (["water_still", "water_flow"], 50, 80,
+     "물 — 바닐라 115 (형광 파랑의 정체 · 실측). 틴트 R 이 63 이라 위로도 아래로도 갇혀 있다"),
+    (["kelp", "kelp_plant", "seagrass", "tall_seagrass_*"], 44, 74,
+     "수초 — 바닐라 다시마 97 · 잘피 118 (실측). **틴트가 없으니 변명도 없다** (칠한 값이 그대로 선다)"),
+    (["lily_pad"], 46, 82,
+     "연잎 — **저채도가 원천 불가능한 자리**: 틴트 R 천장이 32 라 무채색이 되려면 새까매지는 수밖에 없다. "
+     "그런데 우리는 이제 저채도를 **원하지 않는다** ⇒ 천장은 우리를 가려던 곳으로 떠민다 (바닐라 30)"),
 ]
 # ⑫-b 를 **두 모집단**으로 가른다 — 자재와 자연을 한 통에 넣는 순간 평균이 거짓말을 한다.
 #   자재(목재·돌·땅·회벽)의 밝기는 **우리가 고른다** → 기존 대역 [128,172] 그대로 (계약 불변).
@@ -877,9 +903,11 @@ def brightness_bands():
         print(f"     {'✅' if ok else '❌'} {name:18s} {kind} {v:+5.0f} ≥ {floor:3d} · 밝기 {L:5.0f}"
               + ("" if ok else f"  ← **색이 죽었다** · {why}"))
 
-    # ⑫-d 채도 **상한** — 형광은 밝기가 아니라 채도의 실패다 (이 축이 없어서 초록이 통과했다)
-    print("  ── ⑫-d 채도 상한 (풀·잎·물) — **곱한 뒤의 색**을 잰다. 파일이 아니라 눈에 닿는 색 ──")
-    for pats, ceil, why in CHROMA_CEIL:
+    # ⑫-d 자연물 채도 **밴드** — 형광도 죽음도 둘 다 실패다 (한쪽만 재면 반대쪽으로 넘어간다)
+    print(f"  ── ⑫-d 자연물 채도 밴드 (풀·잎·물·수초) — 기준선 **바닐라 잔디 {VANILLA_GRASS_CHROMA}** ──")
+    print("     **곱한 뒤의 색**을 잰다 (파일이 아니라 눈에 닿는 색). 자재는 이 밴드 밖이다 (수묵 = 자재의 몫)")
+    nat_chromas = []
+    for pats, floor, ceil, why in CHROMA_BAND:
         hits = [f for f in files if any(fnmatch.fnmatch(f.stem, p) for p in pats)]
         for f in sorted(hits):
             st = _tex_stats(f)
@@ -887,11 +915,38 @@ def brightness_bands():
                 continue
             L, chroma, _ = st
             tint = tint_of(f.stem)
-            ok = chroma <= ceil
+            nat_chromas.append(chroma)
+            ok = floor <= chroma <= ceil
             violations += 0 if ok else 1
             src = f"틴트 {tint}" if tint else "무틴트"
-            print(f"     {'✅' if ok else '❌'} {f.stem:22s} 채도 {chroma:5.0f} ≤ {ceil:3d} · 밝기 {L:5.0f} · {src}"
-                  + ("" if ok else f"  ← **형광이다** · {why}"))
+            mark = "✅" if ok else "❌"
+            print(f"     {mark} {f.stem:22s} 채도 {chroma:5.0f} ∈ [{floor:3d},{ceil:3d}] · 밝기 {L:5.0f} · {src}"
+                  + ("" if ok else
+                     f"  ← **{'죽었다' if chroma < floor else '형광이다'}** · {why}"))
+
+    # ⑫-e 자연 ↔ 자재의 **갈라짐** — 두 모집단이 실제로 갈라져 있는지 잰다.
+    #   이것이 이 팩의 정체다: **자연은 살아 있고(≈58) 자재는 먹이다(≤ 25).**
+    #   자연을 올린다고 자재까지 끌려 올라가면 수묵이 무너진다 (그 반대도 마찬가지다).
+    if nat_chromas:
+        mat_chromas = []
+        for cls, lo, hi, pats, why in LUMA_BANDS:
+            if cls not in MATERIAL_CLASSES:
+                continue
+            for f in files:
+                if any(fnmatch.fnmatch(f.stem, p) for p in pats):
+                    st = _tex_stats(f)
+                    if st:
+                        mat_chromas.append(st[1])
+        nat_mean = sum(nat_chromas) / len(nat_chromas)
+        mat_mean = sum(mat_chromas) / len(mat_chromas) if mat_chromas else 0.0
+        gap = nat_mean - mat_mean
+        ok = (nat_mean >= NAT_CHROMA_MEAN_MIN and mat_mean <= MAT_CHROMA_MEAN_MAX
+              and gap >= POP_GAP_MIN)
+        violations += 0 if ok else 1
+        print(f"  {'✅' if ok else '❌'} 모집단 갈라짐 — 자연 평균 채도 {nat_mean:5.1f} (n={len(nat_chromas)}, "
+              f"≥{NAT_CHROMA_MEAN_MIN}) ↔ 자재 평균 {mat_mean:5.1f} (n={len(mat_chromas)}, "
+              f"≤{MAT_CHROMA_MEAN_MAX}) · 격차 {gap:5.1f} ≥ {POP_GAP_MIN}"
+              + ("" if ok else "  ← **두 모집단이 붙었다** (자연을 올리며 자재를 함께 올렸거나 그 반대다)"))
     return violations
 
 

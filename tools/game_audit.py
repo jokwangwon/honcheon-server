@@ -25,6 +25,7 @@ config 를 고치지 않는다 — 재기만 한다.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import re
 import sys
@@ -1163,6 +1164,7 @@ def simulate(cfg, rep, days):
     sim_economy(cfg, rep, growth)
     sim_judgment(cfg, rep)
     sim_internal_energy(cfg, rep)
+    sim_qi_sustain(cfg, rep)   # ★ 절정 고수의 하루 — 아무도 재지 않던 것
 
 
 # ── 성장 곡선 ────────────────────────────────────────────────────────────────
@@ -1592,6 +1594,96 @@ def sim_judgment(cfg, rep):
 
 # ── 내력 수지 ────────────────────────────────────────────────────────────────
 
+def energy_pool(cfg, naegong):
+    """내력 풀 — internal_energy.yml pool_curve · pool_per_year 를 **읽어서** 계산한다.
+
+    ★ 곡선을 여기 베껴 적지 않는다: 축기_세월(x) = x(x+1)/2 (누적_축기_년수) 인지 선형인지를
+      등록부가 말한다. 등록부를 고치면 이 눈도 함께 움직인다 (잣대를 베끼면 언젠가 둘이 갈라진다).
+    """
+    if naegong <= 0:
+        return 0
+    inner = dig(cfg, "internal_energy.yml", "internal_energy", default={}) or {}
+    per_year = num(inner.get("pool_per_year"), 0)
+    curve = str(inner.get("pool_curve") or "")
+    years = naegong * (naegong + 1) / 2 if curve == "누적_축기_년수" else naegong
+    return int(round(years * per_year))
+
+
+def breath_spec(cfg):
+    """조식(調息) — 전투 중의 숨. 없으면 전부 0/False (코드가 규칙을 지어내지 않는다)."""
+    b = dig(cfg, "internal_energy.yml", "internal_energy", "recovery", "in_combat", "조식",
+            default={}) or {}
+    return {
+        "per_naegong": num(b.get("per_naegong"), 0),
+        "floor": num(b.get("floor"), 0),
+        "only_if_unspent": bool(b.get("only_if_unspent")),
+        "upkeep_exempt": bool(b.get("upkeep_exempt")),
+        "blocked_by_guard": bool(b.get("blocked_by_guard")),
+    }
+
+
+def breath_of(cfg, naegong):
+    """이 몸이 한 합에 고르는 숨 = max(floor(내공 × per_naegong), floor)."""
+    b = breath_spec(cfg)
+    return max(int(naegong * b["per_naegong"]), int(b["floor"]))
+
+
+# 격 → 그 격을 '두르는' 형태 (qi_manifestation.yml forms — 두름·부림). 호신강기는 '두름_몸'이라 별도다
+WEAR_FORM = {"검기": "검기_두름", "강기": "검강_두름", "어검": "이기어검"}
+
+
+def wear_cost(cfg, grade):
+    """그 격을 한 합 두르는 값 — forms 의 sustain_per_round (없으면 0 = 두르는 격이 아니다)."""
+    for group in (dig(cfg, "qi_manifestation.yml", "forms", default={}) or {}).values():
+        if isinstance(group, dict):
+            spec = group.get(WEAR_FORM.get(grade, ""))
+            if isinstance(spec, dict):
+                return num(spec.get("sustain_per_round"), 0)
+    return 0
+
+
+def guard_spec(cfg):
+    """호신강기 — 전개비 · 유지비 · 상쇄 소모(동격)."""
+    g = dig(cfg, "qi_manifestation.yml", "forms", "두름_몸", "호신강기", default={}) or {}
+    return (num(g.get("deploy"), 0), num(g.get("sustain_per_round"), 0),
+            num(dig(g, "on_hit", "동격", "상쇄_소모"), 0),
+            num(dig(g, "on_hit", "하위_격", "상쇄_소모"), 0))
+
+
+def sustain_rounds(pool, upkeep, regen, deploy=0):
+    """이 격을 몇 합이나 두르는가. 순수지가 0 이상이면 None(무한 — '하루 종일')."""
+    net = upkeep - regen
+    if net <= 0:
+        return None
+    return max(0, (pool - deploy)) / net
+
+
+def fmt_rounds(rounds, round_secs):
+    if rounds is None:
+        return "  ∞ (하루 종일)"
+    secs = rounds * round_secs
+    return f"{rounds:>5.0f}합 ({secs:>5.0f}초)"
+
+
+def realm_naegong(cfg, realm):
+    """그 경지의 표준 내공 — 승급 요건 '내공 N' (없으면 cultivation.yml realm_naegong_floor)."""
+    names = realm_names(cfg)
+    stages = {s.get("name"): s for s in (dig(cfg, "cultivation.yml", "cultivation_stages", default=[]) or [])
+              if isinstance(s, dict)}
+    floors = dig(cfg, "cultivation.yml", "realm_naegong_floor", default={}) or {}
+    ng = 0.0
+    for nm in names:
+        for r in (dig(stages.get(nm, {}), "promotion", "requirements", default=[]) or []):
+            m = re.search(r"내공\s*(\d+)", str(r))
+            if m:
+                ng = float(m.group(1))
+        if isinstance(floors.get(nm), (int, float)) and float(floors[nm]) > ng:
+            ng = float(floors[nm])
+        if nm == realm:
+            return ng
+    return 0.0
+
+
 def sim_internal_energy(cfg, rep):
     rep.head("내력 수지 — 개화 직후의 몸은 실제로 굴러가는가")
     ie = cfg.get("internal_energy.yml") or {}
@@ -1602,17 +1694,20 @@ def sim_internal_energy(cfg, rep):
 
     nat = dig(rec, "natural_per_segment_by_simbeop", default=[0.5, 2])
     nat_lo, nat_hi = (float(nat[0]), float(nat[-1])) if isinstance(nat, list) and nat else (0.5, 2.0)
+    frac = num(dig(rec, "meditation_pool_fraction"), 0)
+    med_floor = num(dig(rec, "meditation_floor"), 1)
 
-    def pool(naegong):
-        return round(naegong * 3)
+    def meditation(naegong, purity=1.0):
+        """운기조식 1구간 = max(ceil(풀 × pool_fraction × 순도), floor) — 등록부 그대로."""
+        return max(math.ceil(energy_pool(cfg, naegong) * frac * purity), med_floor)
 
     # 개화 직후 — 축기 1년 중 초반. 내력 1이 되는 최소 내공
     bloom_naegong = 1.0 / 3.0
-    p = pool(bloom_naegong)
+    p = energy_pool(cfg, bloom_naegong)
     balgyeong = mid(dig(bands, "발경", "cost"), 1)
 
-    rep.say(f"     내력 = round(내공 실수치 × 3) · 하루 {segments:g}구간 · 자연 회복 {nat_lo:g}~{nat_hi:g}/구간(심법별)")
-    rep.say(f"     운기조식 = 내공 × 1 /구간 (무방비)")
+    rep.say(f"     내력 풀 = {inner.get('pool')} · 하루 {segments:g}구간 · 자연 회복 {nat_lo:g}~{nat_hi:g}/구간(심법별)")
+    rep.say(f"     운기조식 = 풀 × {frac:g} × 순도 /구간 (무방비)")
     rep.say("")
     rep.say(f"     개화 직후 (내공 {bloom_naegong:.2f} = 축기 {bloom_naegong * YEAR:.0f}일차): 내력 풀 = {p}")
     rep.say(f"     발경 1회 = 내력 {balgyeong:g}  →  잔량 {p - balgyeong:g}")
@@ -1620,36 +1715,34 @@ def sim_internal_energy(cfg, rep):
     if p - balgyeong <= 0:
         rep.say(f"       → 발경 한 번에 고갈. 고갈 상태 = 판정 −2 + 다운캐스트('맨 기술')")
 
-    med = bloom_naegong * 1.0
-    nat_day_lo, nat_day_hi = nat_lo * segments, nat_hi * segments
+    med = meditation(bloom_naegong)
     rep.say("")
-    rep.say(f"     회복: 운기조식 1구간 = {med:.2f}  vs  자연 회복 1구간 = {nat_lo:g}~{nat_hi:g}")
-    rep.say(f"           하루(운기 1회 + 나머지 {segments - 1:g}구간 자연) = "
-            f"{med + nat_lo * (segments - 1):.2f} ~ {med + nat_hi * (segments - 1):.2f}")
+    rep.say(f"     회복: 운기조식 1구간 = {med:g}  vs  자연 회복 1구간 = {nat_lo:g}~{nat_hi:g}")
 
-    daily_recovery = med + nat_lo * (segments - 1)
-    if daily_recovery >= p:
-        rep.ok(f"하루 회복량({daily_recovery:.2f}) ≥ 풀 전체({p}) — 하루 운기 1회로 완전 회복된다. 구조는 돈다")
-    else:
-        rep.fail(f"하루 회복량({daily_recovery:.2f}) < 풀 전체({p}) — 하루로 못 채운다")
-
-    # 핵심 이상: 운기조식이 자연 회복보다 못한 구간
     if med < nat_lo:
-        breakeven = nat_lo
-        rep.fail(f"운기조식(내공 {bloom_naegong:.2f} × 1 = {med:.2f}/구간)이 자연 회복 최저치({nat_lo:g}/구간)보다 "
-                 f"{nat_lo - med:.2f} 낮다 — '무방비'라는 대가를 치르고 손해를 본다. "
-                 f"운기조식이 자연 회복을 넘으려면 내공 > {breakeven:g} 필요")
-        rep.say(f"       → 상승 심법(자연 회복 {nat_hi:g}/구간)이면 내공 {nat_hi:g} 초과까지 운기조식은 계속 손해다. "
-                f"개화~절정 구간(내공 0~3)이 게임의 대부분인데, 그 내내 운기조식은 쓸 이유가 없다")
+        rep.fail(f"운기조식({med:g}/구간)이 자연 회복 최저치({nat_lo:g}/구간)보다 낮다 — "
+                 f"'무방비'라는 대가를 치르고 손해를 본다")
 
-    # 축기 진행에 따른 내력 수지 표
+    # ★ 하루를 앉으면 만충인가 — 전 경지 (구판은 개화 직후 한 몸만 봤다. 그래서 아무도 고수의 하루를 안 쟀다)
     rep.say("")
-    rep.say("     축기 진행별 내력 (발경 = 내력 1):")
-    rep.say("       내공    내력   발경 가능  운기/구간   자연/구간(최저)   운기가 이득?")
-    for ng in (0.33, 0.5, 1.0, 2.0, 3.0, 5.0):
-        pl = pool(ng)
-        rep.say(f"       {ng:>4.2f}   {pl:>4}   {int(pl // max(balgyeong, 1)):>7}회   "
-                f"{ng * 1.0:>7.2f}   {nat_lo:>13.2f}   {'예' if ng * 1.0 > nat_lo else '아니오'}")
+    rep.say(f"     하루를 앉으면 만충인가 (운기 {segments - 1:g}구간 + 자연 1구간, 하급 심법 순도 1.0):")
+    unfilled = []
+    for realm in realm_names(cfg):
+        ng = realm_naegong(cfg, realm)
+        pl = energy_pool(cfg, ng)
+        if pl <= 0:
+            continue
+        day = meditation(ng) * (segments - 1) + nat_lo
+        mark = "✅" if day >= pl else "❌"
+        rep.say(f"       {realm:<5} 내공 {ng:>4.1f} · 풀 {pl:>4}  ←  하루 회복 {day:>6.1f}  {mark}")
+        if day < pl:
+            unfilled.append(f"{realm}(풀 {pl} > 하루 {day:.0f})")
+    rep.verdict(not unfilled,
+                "★ **하루를 앉으면 누구든 만충이다** — 경지가 올라도 '앉아야 하는 날 수'는 늘지 않는다. "
+                "늘어나는 것은 한 번 앉아 얻는 양이다 (운기조식이 풀에 비례하므로)"
+                if not unfilled else
+                f"하루를 앉아도 못 채우는 경지가 있다: {', '.join(unfilled)} — "
+                f"풀은 배증형인데 회복이 선형이면 고수는 제 단전을 채우다 늙는다")
 
     # 발경의 경지 게이트 vs 개화 시점
     gates = ie.get("realm_gates") or {}
@@ -1666,6 +1759,140 @@ def sim_internal_energy(cfg, rep):
         if bloom_at and names.index(first_gate) < names.index(bloom_at):
             rep.fail(f"'{first_gate}'에게 발경을 열어주지만 단전이 없다(내공 0 → 내력 0) — "
                      f"'{bloom_at}' 전까지 발경은 장부에만 있는 권한이다")
+
+
+# ── 내력 수지 ② — 절정 고수의 하루 ──────────────────────────────────────────────
+
+def sim_qi_sustain(cfg, rep):
+    """<b>절정 고수는 검기를 하루 종일 두를 수 있는가.</b>
+
+    ★ 이 눈이 없었다. 「내력 수지」는 <b>개화 직후의 몸 하나</b>만 쟀고 — 그 한 몸은 잘 굴러갔다.
+      그래서 아무도 <b>절정 고수의 하루</b>를 재지 않았고, 아무도 그가 27초 만에 기가 흩어진다는
+      것을 몰랐다. 무협에서 절정은 '검기의 경지'다. 27초짜리 검기는 경지가 아니라 소모품이다.
+
+    재는 것: 경지별로 (풀 · 조식 · 유지비) → <b>그 격을 몇 합/몇 초 두르는가.</b>
+      순수지(조식 − 유지비)가 0 이상이면 ∞ — 그것이 '넘친다'의 기계적 정의다.
+    """
+    rep.head("내력 수지 ② — 절정 고수는 검기를 하루 종일 두를 수 있는가 (경지별 지속 가능 시간)")
+    b = breath_spec(cfg)
+    round_ticks = num(dig(cfg, "combat.yml", "realtime", "round_ticks"), 0)
+    if round_ticks <= 0 or b["per_naegong"] <= 0 and b["floor"] <= 0:
+        rep.fail("combat.yml realtime.round_ticks 또는 조식 규칙이 등록되지 않았다 — 잴 수가 없다")
+        return
+    secs = round_ticks / 20.0
+    gates = dig(cfg, "internal_energy.yml", "realm_gates", default={}) or {}
+    grades = list((dig(cfg, "qi_manifestation.yml", "grades", default={}) or {}).keys())
+    deploy, g_sustain, drain_eq, drain_lo = guard_spec(cfg)
+
+    rep.say(f"     1합 = {round_ticks:g}틱 ({secs:g}초, combat.yml realtime) · "
+            f"조식 = max(floor(내공 × {b['per_naegong']:g}), {b['floor']:g}) /합")
+    rep.say(f"     규칙: 두름 유지비는 태운 것이 아니다(upkeep_exempt={b['upkeep_exempt']}) · "
+            f"호신강기 중 조식 정지(blocked_by_guard={b['blocked_by_guard']})")
+    rep.say("")
+    rep.say("       경지    내공   풀    조식/합   두를 수 있는 격 → 유지비/합 → 순수지 → 지속")
+
+    rows = {}
+    for realm in realm_names(cfg):
+        ng = realm_naegong(cfg, realm)
+        pool = energy_pool(cfg, ng)
+        regen = breath_of(cfg, ng) if pool > 0 else 0
+        # ★★ 【이 눈이 거짓말한 자리】 처음엔 여기서 upkeep_exempt 를 **읽지 않았다.**
+        #   두름 유지비가 '태운 것'이면(구판 규칙) 그 합엔 조식이 멎는다 — 순수지는 음(−)이고 격은 마른다.
+        #   그런데 눈은 그 경우에도 조식이 도는 것처럼 셌다. 즉 등록부를 끄고 돌려도 **✅ 가 떴다.**
+        #   돌연변이 시험(upkeep_exempt: true → false)이 그것을 잡았다. 그 전까지 이 눈은 통과하는
+        #   눈처럼 보였다 — 잣대가 규칙을 안 읽으면 그 잣대는 규칙이 아니라 내 기대를 재고 있는 것이다.
+        worn_regen = regen if (b["upkeep_exempt"] or not b["only_if_unspent"]) else 0
+        open_grades = [g for g in grades if g in (gates.get(realm) or []) and wear_cost(cfg, g) > 0]
+        rows[realm] = {"ng": ng, "pool": pool, "regen": regen, "worn": worn_regen, "grades": {}}
+        if pool <= 0:
+            rep.say(f"       {realm:<5} {ng:>5.1f}  {pool:>3}   {'—':>6}    내력이 없다 — 몸과 무기가 전부다 (외공)")
+            continue
+        if not open_grades:
+            rep.say(f"       {realm:<5} {ng:>5.1f}  {pool:>3}   {regen:>6}    두를 격이 없다 — 발경뿐 "
+                    f"(태운 합엔 숨이 멎는다 → 여전히 아껴야 한다)")
+            continue
+        for g in open_grades:
+            up = wear_cost(cfg, g)
+            r = sustain_rounds(pool, up, worn_regen)
+            rows[realm]["grades"][g] = r
+            rep.say(f"       {realm:<5} {ng:>5.1f}  {pool:>3}   {worn_regen:>6}    "
+                    f"{g:<4} → {up:>2g}/합 → {worn_regen - up:>+3g} → {fmt_rounds(r, secs)}")
+
+    # ① 사용자 계약 — 검기(2격)를 여는 경지는 그것을 '하루 종일' 두를 수 있어야 한다
+    rep.say("")
+    broke = [r for r, v in rows.items() if "검기" in v["grades"] and v["grades"]["검기"] is not None]
+    first_gigi = next((r for r in realm_names(cfg) if "검기" in rows.get(r, {}).get("grades", {})), None)
+    rep.verdict(not broke,
+                f"★ **검기를 여는 경지({first_gigi})부터 검기는 상시다** — 순수지가 양(+)이라 지속이 무한하다. "
+                f"두르는 것이 아깝지 않다. 아까운 것은 **쏘는 것**(검기_참격 3)뿐이다"
+                if not broke else
+                f"검기를 열어주고도 상시 유지가 안 되는 경지: {broke} — "
+                f"'검기의 경지'가 검기를 못 두른다")
+
+    # ② 강기(3격) — 그것을 여는 경지도 마찬가지여야 한다
+    gang = [r for r, v in rows.items() if "강기" in v["grades"]]
+    gang_broke = [r for r in gang if rows[r]["grades"]["강기"] is not None]
+    rep.verdict(gang and not gang_broke,
+                f"★ 강기를 여는 경지({', '.join(gang)})는 **검강도 하루 종일** 두른다 — "
+                f"격이 높아질수록 그 격을 두를 자격이 곧 경지다"
+                if gang and not gang_broke else
+                f"강기를 상시 두르지 못하는 경지: {gang_broke or '강기를 여는 경지가 없다'}")
+
+    # ③ 낮은 경지는 여전히 아껴야 한다 — 넘침이 '언제부터'인지가 성장의 체감이다
+    rep.say("")
+    overflow = [r for r in realm_names(cfg) if rows.get(r, {}).get("grades")
+                and all(v is None for v in rows[r]["grades"].values())]
+    below = [r for r in realm_names(cfg) if rows.get(r, {}).get("pool", 0) > 0
+             and r not in overflow]
+    start = overflow[0] if overflow else None
+    rep.verdict(bool(below) and bool(start),
+                f"★ **넘치기 시작하는 자리 = {start}.** 그 아래({', '.join(below)})는 두를 격이 없거나 "
+                f"순수지가 음(−)이다 — 내력을 태울 때마다 숨이 멎는다. **성장의 체감이 남아 있다**"
+                if below and start else
+                "모든 경지가 넘치거나(성장의 체감이 없다) 아무 경지도 넘치지 않는다(고수가 없다)")
+
+    # ④ ★★ 무한 방어 금지 — 호신강기는 어느 경지에서도 유한해야 한다
+    rep.say("")
+    rep.say(f"     호신강기 (두름_몸 — 전개 {deploy:g} · 유지 {g_sustain:g}/합 · "
+            f"상쇄 소모 동격 {drain_eq:g} · 하위 격 {drain_lo:g}):")
+    infinite_guard = []
+    for realm in realm_names(cfg):
+        v = rows.get(realm, {})
+        if not v.get("pool") or not (gates.get(realm) and "강기" in gates[realm]):
+            continue
+        # 호신강기 중에는 단전이 안 돈다 (blocked_by_guard). 등록이 꺼져 있으면 조식이 그대로 돈다
+        # (그리고 그때도 upkeep_exempt 가 꺼져 있으면 유지비가 숨을 막는다 — 둘 다 읽어야 한다)
+        regen = 0 if b["blocked_by_guard"] else v["worn"]
+        alone = sustain_rounds(v["pool"], g_sustain, regen, deploy)
+        under = sustain_rounds(v["pool"], g_sustain + drain_eq, regen, deploy)
+        gang3 = sustain_rounds(v["pool"], g_sustain + drain_lo * 3, regen, deploy)
+        rep.say(f"       {realm:<5} 풀 {v['pool']:>3} → 무피격 {fmt_rounds(alone, secs)} · "
+                f"동격 피격 {fmt_rounds(under, secs)} · 하위 격 3인 협공 {fmt_rounds(gang3, secs)}")
+        if alone is None:
+            infinite_guard.append(realm)
+    rep.verdict(not infinite_guard,
+                "★★ **호신강기는 어느 경지에서도 유한하다** — 몸을 통째로 기로 감싼 자는 숨을 못 고른다. "
+                "넘치는 내력이 곧 무적이 되지 않는다: 방어 삼문(회피·막기·흘리기)이 산다. "
+                "그리고 호신강기를 켠 자는 **검강을 못 두른다** — 방어는 위력을 판다"
+                if not infinite_guard else
+                f"호신강기를 무한히 두르는 경지: {infinite_guard} — **무적이다.** "
+                f"조식이 호신강기 중에도 돈다 (blocked_by_guard 미등록)")
+
+    # ⑤ 경공과의 이음매 — 같은 단전이다. 넘치는 내력은 더 오래 날게 하지만, 나는 동안 단전은 마른다
+    up = num(dig(cfg, "gyeonggong.yml", "qi", "upkeep", "cost"), 0)
+    iv = num(dig(cfg, "gyeonggong.yml", "qi", "upkeep", "interval_ticks"), 0)
+    if up > 0 and iv > 0:
+        rep.say("")
+        burn = up * (round_ticks / iv)     # 한 합에 경공이 태우는 내력
+        rep.say(f"     경공(경신): 유지 {up:g} / {iv:g}틱 = {burn:g}/합 — **태우는 것**이다 (조식이 멎는다)")
+        bad = [r for r, v in rows.items() if v["pool"] > 0 and v["regen"] >= burn
+               and not b["only_if_unspent"]]
+        rep.verdict(not bad,
+                    "★ 경공은 조식을 멈춘다 (경신은 두름이 아니라 태움이다) — "
+                    "넘치는 내력은 **더 오래 날게** 하지만(고수는 오래 난다) 나는 동안 단전은 마른다. "
+                    "'크기는 민첩이 사고 지속은 내공이 산다'가 그대로 성립한다"
+                    if not bad else
+                    f"조식이 경공 유지비를 무료로 만든다: {bad} — 공짜로 나는 몸은 무협이 아니다")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

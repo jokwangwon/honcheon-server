@@ -28,12 +28,22 @@ class InternalEnergyParityTest {
     }
 
     @Test
-    void 내력_풀_화후_규칙() {
-        assertEquals(6, energy.pool(2.0));    // PT-003 소년: 내공 2 → 내력 6
-        assertEquals(24, energy.pool(8.0));   // PT-004 청현자: 내공 8 → 내력 24
-        // 양자화 절벽 제거 — 2.9와 3.0은 같은 내력
-        assertEquals(9, energy.pool(2.9));
-        assertEquals(9, energy.pool(3.0));
+    void 내력_풀_축기_세월_곡선() {
+        // ★ 2026-07 내력 수지 패스 — 풀은 내공(단계)이 아니라 **축기 세월**에 비례한다:
+        //   pool = round(x(x+1)/2 × 3). x(x+1)/2 = cultivation.yml accumulation_cost 의 누적이고,
+        //   simbeop.yml magong.baseline.table 이 이미 그 표(내공 3=6년 · 5=15년 · 7=28년)를 적고 있다.
+        //   ★ 낮은 쪽은 **그대로다** — 개화의 몸도, 일류의 몸도 구판과 같은 값이다:
+        assertEquals(1, energy.pool(1.0 / 3.0));   // 개화 직후 — 발경 한 번 (구판과 동일)
+        assertEquals(3, energy.pool(1.0));         // 일류 — '한 합 태우고 한 합 고른다' (구판과 동일)
+        //   그 위로 넘치기 시작한다 (구판: 6 · 9 · 24):
+        assertEquals(9, energy.pool(2.0));
+        assertEquals(18, energy.pool(3.0));        // 절정 — 검기를 두르고도 참격 6회를 품는다
+        assertEquals(108, energy.pool(8.0));       // PT-004 청현자 (내공 8 = 축기 36년)
+        // 양자화 절벽 제거 — 화후는 실수로 적립된다 (2.9 와 3.0 사이에 벽이 없다)
+        assertEquals(17, energy.pool(2.9));
+        // 역함수 — 등록부가 내력을 직접 적은 몸(npcs/*.yml)의 내공을 되찾는다
+        assertEquals(3.0, energy.naegongOf(18), 0.01);
+        assertEquals(0, energy.pool(0.0));
     }
 
     @Test

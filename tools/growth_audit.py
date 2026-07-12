@@ -325,7 +325,7 @@ class Build:
 
     @property
     def pool(self):
-        return pool_of(self.attr("내공"))
+        return pool_of(self.attr("내공"), self.cfg)
 
     @property
     def mastery(self):
@@ -519,7 +519,7 @@ def duel_build(cfg, b, foe, max_rounds=25, qi_band=None, player_first=None, ambu
 
 def _duel(cfg, b, foe, max_rounds, qi_band, first, pen1):
     atk = build_attack(cfg, b, qi_band=qi_band)
-    regen, _ = combat_regen(cfg)
+    regen, _ = combat_regen(cfg, b.attr("내공"))   # 조식은 내공에 비례한다 (고수는 숨만 쉬어도 단전이 돈다)
     energy = b.pool
     hp_me, hp_foe = float(b.dur), float(foe["dur"])
     ttk = ttd = None
@@ -579,7 +579,7 @@ def melee_build(cfg, b, foe, count, max_rounds=25):
     atk = build_attack(cfg, b)
     hp_me = float(b.dur)
     hps = [float(foe["dur"])] * count
-    regen, _ = combat_regen(cfg)
+    regen, _ = combat_regen(cfg, b.attr("내공"))
     energy = b.pool
 
     for r in range(1, max_rounds + 1):
@@ -1017,7 +1017,7 @@ def scenarios(cfg, rep, builds, realm, max_rounds):
         # ⑤ 지구전 — 8합 동안 격을 몇 번 싣는가. ★ 개화 전에는 내력이 없다 — 이 축은 존재하지 않는다
         atk = build_attack(cfg, b)
         s_long = qi_casts(b.pool, qi_cost(cfg, atk["band"]),
-                          combat_regen(cfg)[0], 8) if bloomed else 0
+                          combat_regen(cfg, b.attr("내공"))[0], 8) if bloomed else 0
 
         scores[b.name] = dict(zip(AXES, [s_duel, s_up, s_gang, s_amb, s_long]))
         rep.say(f"     {b.name:<12} {('선' if first else '후'):>4} "
