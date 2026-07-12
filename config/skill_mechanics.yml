@@ -1,7 +1,16 @@
 # 스킬 액션 데이터 (기계 판독용 — MC 액션 전투 층)
 # 기준 문서: docs/design/skill_mechanics.md
-# skills.yml(무공 카탈로그: 습득·사회적 속성)과 2층 구조 — 여기는 히트박스·프레임·무적만.
+# skills.yml(무공 카탈로그: 습득·사회적 속성)과 2층 구조 — 여기는 히트박스·프레임·무적·쿨다운만.
 # 시간 단위: 틱(50ms). 성능 상한은 config/performance.yml을 따른다.
+#
+# 2026-07 정합 패스 (combat_audit) — 두 가지가 바뀌었다:
+#   ① cost 0 이 기본이다. 【무공 초식은 내력을 쓰지 않는다】 — 내력을 먹는 것은 '격'이다
+#      (초식에 발경·검기·강기를 얹으면 qi_manifestation.yml forms 의 코스트를 따로 낸다).
+#      예외는 '절정 이상을 요구하는 비전 초식'뿐이다 — 그 초식은 검기를 품고 태어난다 (cost 3).
+#      근거: 삼류·이류의 내력 풀은 0이다. 초식이 내력을 요구하면 배워도 못 쓰는 무공이 된다
+#            (육합검 3타 cost 1 · 매화보 cost 2 · 금나수 cost 2 — 전부 시전 불가였다).
+#   ② 커버리지 4/30 → 30/30. 쿨다운 1종 → 13종. 무한 연타를 막는 것은 내력이 아니라 쿨다운이다
+#      (내력이 0인 삼류·이류에게는 쿨다운만이 유일한 과금이다).
 
 global_rules:
   hitbox_types: [호, 선, 원, 시, 돌, 진]
@@ -10,6 +19,25 @@ global_rules:
   hits_per_target_per_active: 1   # 다단히트는 hit_count 명시로만
   counter_hit_bonus: 0.25         # 후딜 중 피격 +25%
   trade_allowed: true             # 동시 히트 허용
+
+# ─── 원거리 (궁술·암기) — 사거리를 위력으로 바꾼다 ───
+# combat.yml weapon_power 활 3 · 암기 2 (검 4 보다 낮다 — 거리의 값을 위력에서 뺀다)
+ranged:
+  활:
+    range: 40                     # max_range_default(24) 초과 — 궁술 고유값
+    draw_ticks: 14                # 시위를 당기는 시간 = 원거리의 대가
+    min_range: 4                  # 코앞에서는 못 쏜다 (그 안은 활대로 치는 맨손 취급)
+    ammo: 화살                    # 소모품 — economy.yml 잡화
+    cover_rule: "엄폐 -2 · 이동 표적 -1 · 원거리 구간 -1/16m"
+    interrupt: "당기는 중 피격 시 시전 취소 + 화살 소모"
+  암기:
+    range: 16
+    draw_ticks: 4                 # 비수는 빠르다 — 그래서 위력이 낮다
+    min_range: 0
+    ammo: 비수                    # 회수 가능 (전투 후 절반)
+    volley: "만천화우 등 광역 투척은 max_targets 8 · 개별 판정"
+    concealed: "발동 전 은닉 — 기습 판정 +1 (경명 속성과 중첩 불가)"
+  note: "원거리 무공에도 격은 실린다 — 검기를 실은 화살(내력 3)은 갑주를 뚫는다"
 
 dodge:                            # 기본 회피 (전 캐릭터 공통)
   distance: 3
@@ -29,15 +57,16 @@ iframe_caps:                      # 무적 시간 절대 상한 (등급별)
 iframe_rules:
   - "무적 중 내력 회복 정지"
   - "무적 종료 직후 후딜 = 카운터 히트 판정"
-  - "무적기는 내력 + 충전/쿨다운 이중 과금"
+  - "무적기는 쿨다운으로 과금한다 (초식 자체는 cost 0) — 여기에 경신(격)을 얹으면 내력까지 이중 과금"
 
 defense_states:
   가드: { arc: 120, damage_reduction: 0.7, gauge: true, break_stun: 강 }
   패링: { window_ticks: 4, success: { iframe: 2, counter_window: 10 }, fail_recovery_penalty: 1.5 }
+  흘리기: { window_ticks: 6, damage_reduction: 0.85, weapon_safe: true, check_penalty: -2 }   # combat.yml defender_choice 흘리기
   슈퍼아머: { effect: "경직 무시, 피해 그대로" }
-  파격: { pierces: [가드, 패링], not_pierces: [무적], rarity: "희귀 — 카탈로그에 명시" }
+  파격: { pierces: [가드, 패링], not_pierces: [무적, 흘리기], rarity: "희귀 — 카탈로그에 명시" }
 
-priority_same_tick: [무적, 파격, 패링, 가드, 슈퍼아머, 일반피격]
+priority_same_tick: [무적, 파격, 패링, 흘리기, 가드, 슈퍼아머, 일반피격]
 
 stagger:
   levels: { 약: 2, 중: 5, 강: 10, 다운: 20 }
@@ -51,30 +80,168 @@ stat_mapping:
   근력_내공: "combat.yml 피해 공식"
   체력: [내구, 가드_게이지]
 
-# ─── 무공별 액션 데이터 (skills.yml의 id와 연결) ───
+# ─── 무공별 액션 데이터 (skills.yml의 id와 연결 — 카탈로그 30종 전수) ───
+# cost 규칙: 0 = 외공 초식(기본). 3 = 절정+ 요구 비전 초식(검기를 품고 태어난다 — 절정 내력 풀 9 → 3회).
 skills:
+  # ── 민간·낭인 공용 ──
+  taejo_jangkwon:                 # 태조장권 — 기본 권각 (3타 · 맨손 전용)
+    # 【사용자 지시 반영】 권법은 무기를 들지 않아도 나가야 한다.
+    #   MVT SkillListener 의 맨손 매핑(SKILL_BY_WEAPON_CLASS: 맨손 → taejo_jangkwon)이 여기 프레임을 읽는다.
+    #   권법의 성격: 간격이 짧고(3.0), 빠르고, 한 방이 가볍다 — 대신 연타가 이어진다.
+    #   프레임 합 7/7/16 (육합검 9/11/19 보다 빠르다). 위력은 맨손 1 — 검 4의 4분의 1이다.
+    #   그 대신 권법가는 개화하면 무섭다: 3타에 발경(내력 1)을 실으면 위력 +1 = 맨손이 두 배가 된다.
+    weapon_class: [맨손, 권갑]     # 권갑은 맨손의 연장 — 같은 초식이 그대로 실린다 (combat.yml weapon_power 권갑 2)
+    combo:
+      - { type: 호, angle: 90, range: 3.0, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 90, range: 3.0, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 3.0, frames: [5, 3, 8], stagger: 강, cost: 0 }   # 붕권 — 3타는 무겁다
+    combo_input_window: 8         # 검보다 짧다 — 권법은 끊기면 처음부터다
+    cooldown_ticks: 60            # 3타 마무리 전용 (1·2타는 쿨다운 없음 — 연타가 권법의 값)
+    # 격 라이더 — 초식 코스트는 0 이고, 격은 얹는 것이다 (combat.yml internal_energy.skill_cost_rule)
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "주먹에 기가 맺힌다 — 짧은 섬광" }
+
+  cheolsan_go:                    # 철산고 — 몸통 부딪히기 (돌진 강공)
+    type: 돌
+    distance: 4
+    frames: [9, 3, 12]
+    stagger: 강
+    super_armor: "선딜~지속"
+    cooldown_ticks: 120
+    cost: 0
+
+  yeopho_gungsul:                 # 엽호궁술 — 수렵 궁술
+    type: 시
+    weapon: 활
+    range: 40
+    frames: [14, 1, 8]            # draw_ticks 14 (ranged.활)
+    stagger: 약
+    cooldown_ticks: 30
+    cost: 0
+    note: "조준 유지 가능 (최대 40틱) — 유지 중 이동 속도 절반"
+
+  ohodanmun_chang:                # 오호단문창 — 표국 창술 (찌르기 리치)
+    combo:
+      - { type: 선, width: 0.8, length: 4, frames: [5, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.8, length: 4.5, frames: [6, 2, 8], stagger: 중, cost: 0 }
+    combo_input_window: 12
+
+  hwalin_chimbeop:                # 활인침법 — 침구·응급 (비전투 시전)
+    type: 시전
+    target: 아군_또는_자신
+    frames: [30, 0, 10]
+    effect: "부상 1단계 완화 (전투 중 1회/대상) — 시전 중 피격 시 취소"
+    cooldown_ticks: 600
+    cost: 0
+    note: "무기 아님 — 피해 공식 밖. 의술 판정으로 해소"
+
+  # ── 하오문·뒷골목 ──
+  biyeon_dangeom:                 # 비연단검술 — 속검 (연타)
+    combo:
+      - { type: 호, angle: 70, range: 1.8, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 70, range: 1.8, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 70, range: 1.8, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.6, length: 2, frames: [4, 1, 7], stagger: 중, cost: 0 }
+    combo_input_window: 8
+
+  gwisik_sul:                     # 귀식술 — 기식 은폐 (태세)
+    type: 태세
+    frames: [20, 0, 6]
+    effect: "은신 판정 +3 · 이동 속도 -40% · 피격 시 즉시 해제"
+    cooldown_ticks: 200
+    cost: 0
+
+  # ── 화산파 ──
   yukhap_geom:                    # 육합검 — 화산파 입문 검법 (3타 콤보)
     combo:
       - { type: 호, angle: 100, range: 3, frames: [3, 2, 4], stagger: 약, cost: 0 }
       - { type: 호, angle: 100, range: 3, frames: [4, 2, 5], stagger: 약, cost: 0 }
-      - { type: 호, angle: 120, range: 3.5, frames: [6, 3, 10], stagger: 강, cost: 1 }
+      - { type: 호, angle: 120, range: 3.5, frames: [6, 3, 10], stagger: 강, cost: 0 }   # 삼류의 3타 — 외공으로 완결된다
     combo_input_window: 10        # 다음 타 입력 유예
+    qi_note: "개화한 자는 3타에 발경(내력 1)을 얹는다 — 그때 이 초식은 피해 +1 을 얻는다"
 
   maehwa_bo:                      # 매화보 — 보법 (회피 무공)
     type: 돌
     distance: 5
     frames: [0, 0, 3]
     iframe: 6
-    cost: 2
+    cost: 0                       # 삼류가 배우는 보법 — 외공으로 나간다 (경신 격은 일류부터 선택 사항)
     cooldown_ticks: 160
     vfx: "잔상 (파티클 예산 경유)"
+    qi_note: "경신(내력 1~2)을 얹으면 거리 5 → 8, iframe 6 유지 (일류+)"
 
-  jeongsim_geomgyeol:             # 정심검결 — 패링 태세
+  maehwa_geombeop:                # 매화검법 — 본산 검법 (4타 · 광역 마무리)
+    combo:
+      - { type: 호, angle: 110, range: 3.2, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 110, range: 3.2, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1, length: 4, frames: [6, 2, 7], stagger: 중, cost: 0 }
+      - { type: 원, radius: 3.5, frames: [10, 3, 14], stagger: 강, cost: 0 }
+    combo_input_window: 12
+    cooldown_ticks: 90            # 4타 마무리(원) 전용 쿨다운
+    qi_note: "일류의 검 — 발경(1)을 실으면 매 타 +1. 매화만개(오의)의 선행 초식"
+
+  maehwa_geomjin:                 # 매화검진 — 합격진 (2~5인)
+    type: 진
+    size: [2, 5]
+    radius: 6
+    frames: [20, 0, 10]           # 진 전개 = 진주(리더) 시전
+    effect: "협공 슬롯 5 개방 (combat.yml engage_slots 3 을 진법이 연다) · 성원 판정 +1"
+    break_condition: "성원 1인 무력화 시 진 붕괴 — 라운드 종료까지 전원 -1"
+    cooldown_ticks: 400
+    cost: 0
+    note: "party.yml 합격진 정합 — 진법은 내력이 아니라 대형(隊形)을 쓴다"
+
+  # ── 소림사 ──
+  nahan_kwon:                     # 나한권 — 본산 권법 (강직 3타)
+    combo:
+      - { type: 호, angle: 80, range: 2.2, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 80, range: 2.2, frames: [4, 2, 5], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.5, frames: [8, 3, 11], stagger: 강, cost: 0 }
+    combo_input_window: 10
+    super_armor: "3타 선딜~지속"
+
+  geumgang_budong:                # 금강부동신법 — 방신 신법 (절정 · 부동의 태세)
+    type: 태세
+    frames: [8, 0, 10]
+    super_armor: "지속 전체"
+    effect: "경직 면역 · 피해 -3 · 이동 불가 (지속 5합 또는 해제 선언까지)"
+    cost: 3                       # 절정 비전 — 기를 몸에 가둔다 (내력 풀 9 → 3회)
+    cooldown_ticks: 300
+    note: "호신강기(화경)의 아래층 — 격이 아니라 몸으로 버틴다"
+
+  # ── 무당파 ──
+  taegeuk_kwon:                   # 태극권 — 유권 (반격형)
     type: 가드태세
-    frames: [2, 10, 6]
-    parry_window: 4
-    on_success: { iframe: 2, counter_window: 10, counter_bonus: 0.5 }
-    cost: 1
+    frames: [3, 12, 5]
+    parry_window: 6               # 감각 보정 적용 전 기본값 (기본 패링 4보다 길다 — 유권의 값)
+    on_success: { iframe: 2, counter_window: 12, counter_bonus: 0.5 }
+    cost: 0
+    cooldown_ticks: 60
+
+  taegeuk_geom:                   # 태극검 — 유검 (절정 · 원을 그리는 반격 검)
+    type: 원
+    radius: 3
+    frames: [8, 4, 10]
+    stagger: 중
+    on_success: { counter_window: 14, counter_bonus: 0.5 }
+    cost: 3                       # 절정 비전 — 검기를 품는다
+    cooldown_ticks: 200
+
+  jewoon_jong:                    # 제운종 — 본산 경공
+    type: 돌
+    distance: 8
+    frames: [0, 0, 4]
+    iframe: 6
+    cost: 0                       # 초식은 외공 — 경신(격)을 얹는 것은 선택
+    cooldown_ticks: 140
+    vertical: true                # 무당의 지문 — 수직 이동 (벽·나무)
+    qi_note: "경신(내력 2)을 얹으면 거리 8 → 14 + 낙하 피해 무효"
+
+  # ── 남궁세가 ──
+  changgung_geom:                 # 창궁무애검 — 세가 정전 (제왕검형 선행)
+    combo:
+      - { type: 호, angle: 120, range: 3.5, frames: [5, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 5, frames: [7, 3, 9], stagger: 중, cost: 0 }
+    combo_input_window: 12
 
   namgung_jehwang_geom:           # 제왕검형 — 남궁 비전 (긴 텔레그래프 강공)
     type: 선
@@ -83,9 +250,120 @@ skills:
     frames: [12, 3, 14]
     super_armor: "선딜~지속"
     stagger: 다운
-    cost: 4
+    cost: 3                       # 4 → 3 (검기 밴드 — 절정에서 어느 격으로 나가는지 확정)
+    cooldown_ticks: 250
     telegraph: "검로 파티클 12틱"
 
+  # ── 사천당가 ──
+  dangmun_bisu:                   # 당문비수술 — 투척 비수
+    type: 시
+    weapon: 암기
+    range: 16
+    frames: [4, 1, 5]
+    stagger: 약
+    cost: 0
+    cooldown_ticks: 40
+    hit_count: 2                  # 쌍비수
+
+  chilbo_dokjang:                 # 칠보독장 — 독장 (일류)
+    type: 호
+    angle: 70
+    range: 2
+    frames: [7, 2, 10]
+    stagger: 중
+    on_hit: { 중독: "7합간 매 합 내구 -1 · 판정 -1 (해독 전까지 누적 없음)" }
+    cost: 0                       # 독은 내력이 아니라 몸에서 나온다 (수련의 대가 = 원기)
+    cooldown_ticks: 220
+
+  manchon_hwau:                   # 만천화우 — 세가 비전 광역 투척 (절정)
+    type: 시
+    weapon: 암기
+    range: 16
+    radius: 8
+    max_targets: 8
+    frames: [16, 2, 18]
+    stagger: 약
+    cost: 3                       # 절정 비전 — 비수 하나하나에 검기를 실어 뿌린다
+    cooldown_ticks: 350
+    telegraph: "손이 하늘로 — 16틱"
+
+  # ── 개방 ──
+  chwipalseon_bo:                 # 취팔선보 — 취보 (변칙 보법)
+    type: 돌
+    distance: 4
+    frames: [0, 0, 5]
+    iframe: 6
+    cost: 0
+    cooldown_ticks: 150
+    irregular: "이동 방향 무작위 편향 ±30° — 상대 예측 판정 -2, 자기 명중 판정 -1 (취보의 값과 대가)"
+
+  tagu_bongbeop:                  # 타구봉법 — 방주 비전 (절정)
+    combo:
+      - { type: 선, width: 0.8, length: 4, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 140, range: 4, frames: [6, 3, 8], stagger: 중, cost: 0 }
+      - { type: 선, width: 1, length: 4.5, frames: [9, 3, 12], stagger: 다운, cost: 3 }   # 3타만 검기
+    combo_input_window: 12
+    cooldown_ticks: 200
+
+  # ── 관군 ──
+  chamma_dobeop:                  # 참마도법 — 군문 도법 (내려베기)
+    combo:
+      - { type: 호, angle: 100, range: 3, frames: [5, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.4, length: 3.5, frames: [9, 3, 11], stagger: 강, cost: 0 }
+    combo_input_window: 12
+    armor_pierce: 1               # 관군 도법 — 갑주 감쇄 1 무시 (제복의 값)
+
+  # ── 녹림·사파 ──
+  sando_sippallo:                 # 산도십팔로 — 산채 도법
+    combo:
+      - { type: 호, angle: 110, range: 3, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 110, range: 3, frames: [5, 2, 7], stagger: 중, cost: 0 }
+    combo_input_window: 10
+
+  heuksal_dobeop:                 # 흑살도법 — 살초 위주 (일류)
+    combo:
+      - { type: 호, angle: 90, range: 3, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1, length: 3.5, frames: [5, 2, 8], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 4, frames: [7, 2, 12], stagger: 강, cost: 0 }
+    combo_input_window: 9
+    property: 파격                # 가드·패링 관통 — 살초의 값
+    cooldown_ticks: 180           # 파격 3타 전용 쿨다운
+    counter_hit_bonus: 0.5        # 후딜 중 피격에 특히 취약한 자를 노린다
+
+  eumpung_geom:                   # 음풍검 — 쾌검 (변초)
+    combo:
+      - { type: 선, width: 0.6, length: 3, frames: [2, 1, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.6, length: 3, frames: [2, 1, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 80, range: 2.8, frames: [4, 2, 9], stagger: 중, cost: 0 }
+    combo_input_window: 7
+    feint: "1타를 취소해 2타로 잇는 변초 — 상대 패링 유예 -2 (사파 검의 지문)"
+
+  # ── 살막 ──
+  muyeong_bisu:                   # 무영비수 — 일격 이탈 (절정)
+    type: 선
+    width: 0.5
+    length: 2
+    frames: [6, 1, 4]
+    stagger: 약
+    cost: 3                       # 절정 비전 — 비수에 검기를 싣는다
+    cooldown_ticks: 400
+    property: 파격
+    backstab: "은신 상태 시전 시 대성공 취급 (부상 +1 — combat.yml critical)"
+    retreat: "적중 후 즉시 후방 6 이탈 (iframe 4)"
+
+  # ── 혈교 ──
+  hyeolsu_magong:                 # 혈수마공 — 금기 마공 (장법)
+    type: 호
+    angle: 80
+    range: 2.2
+    frames: [8, 2, 11]
+    stagger: 중
+    on_hit: { 흡성: "적중 시 대상 원기 -2 · 자기 내력 +2 (internal_energy demonic_classification ①)" }
+    cost: 0                       # 마공은 내력을 쓰지 않는다 — 남의 것을 빼앗는다 (그래서 마공이다)
+    cooldown_ticks: 160
+    side_effect: "전투당 심마 흔적 +1 (흡성 성공 시)"
+
+  # ── 잡기 ──
   geumna_su:                      # 금나수 — 잡기 (파격 예시)
     type: 호
     angle: 60
@@ -93,12 +371,34 @@ skills:
     frames: [8, 2, 12]
     property: 파격
     on_hit: { stagger: 다운 }
-    cost: 2
+    cost: 0                       # 이류의 관절기 — 외공이다 (내력 풀 0인 경지에 코스트를 물릴 수 없다)
+    cooldown_ticks: 140
 
+  # ── 심법 액션 데이터 (정본은 simbeop.yml — 여기는 패링 태세 프레임만) ──
+  jeongsim_geomgyeol:             # 정심검결 — 패링 태세
+    type: 가드태세
+    frames: [2, 10, 6]
+    parry_window: 4
+    on_success: { iframe: 2, counter_window: 10, counter_bonus: 0.5 }
+    cost: 0                       # 심법의 태세 — 운기는 코스트가 아니다
+    cooldown_ticks: 50
+
+  # ── NPC 전용 표본 ──
   galho_sando:                    # 갈호의 산도 — NPC 돌진 강공 표본
     type: 돌
     distance: 4
     frames: [10, 3, 12]
     stagger: 중
     telegraph: "자세 낮춤 + 경로 표시 10틱"
+    cooldown_ticks: 180
+    npc_only: true
+
+  beast_pounce:                   # 짐승 공통 — 덮치기 (늑대·호랑이·곰)
+    type: 돌
+    distance: 6
+    frames: [8, 3, 14]
+    stagger: 강
+    on_hit: { 넘어뜨림: "다운 — 기상까지 1합 (wakeup_iframe 3)" }
+    telegraph: "몸을 낮춘다 — 8틱 (짐승도 예고한다)"
+    cooldown_ticks: 200
     npc_only: true

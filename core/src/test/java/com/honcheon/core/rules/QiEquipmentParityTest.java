@@ -101,8 +101,9 @@ class QiEquipmentParityTest {
         assertEquals(2, qi.sustainPerRound("검강_두름"));
         assertEquals(3, qi.oneShotCost("검기_참격"));      // 내력 관리의 도박
         assertEquals(6, qi.oneShotCost("강기_포"));
-        assertEquals(2, qi.deployCost("호신강기"));
-        assertEquals(2, qi.sustainPerRound("호신강기"));
+        // 2026-07 전투 정합: 전개 2 → 4 (강기 밴드 2~6 안으로). 강기를 두르는 값은 강기의 값이어야 한다.
+        assertEquals(4, qi.deployCost("호신강기"));
+        assertEquals(2, qi.sustainPerRound("호신강기"));   // 유지는 밴드 하단 — 두르는 것은 싸고, 쏘는 것은 비싸다
         assertEquals(4, qi.deployCost("이기어검"));        // cast 4 + 유지 2/라운드
         assertEquals(2, qi.sustainPerRound("이기어검"));
         assertEquals(-2, qi.eogeomCasterDodgePenalty());   // 마음이 검에 가 있다
@@ -112,11 +113,15 @@ class QiEquipmentParityTest {
 
     @Test
     void 장비_판정_보정_캡_2() {
+        // 2026-07 전투 정합: 무기 등급의 판정 보정을 전부 0으로 내렸다.
+        //   2d6에서 +1 은 피해 +28% — 격의 위력(발경 +1 ~ 심검 +5)과 맞먹었다. 보병 한 자루가 강기보다 강했다.
+        //   등급의 값은 오직 '감당 격'(부러지지 않는 것)이다. 검에서 나오는 유일한 보정은 애병(손에_익다 +1) —
+        //   검의 값은 등급이 아니라 함께한 세월이다.
         assertEquals(0, equipment.weaponJudgmentBonus("범철"));
         assertEquals(0, equipment.weaponJudgmentBonus("정련"));   // 가치는 생존이지 보정이 아니다
-        assertEquals(1, equipment.weaponJudgmentBonus("보병"));
-        assertEquals(1, equipment.weaponJudgmentBonus("신병"));
-        assertEquals(2, equipment.cappedBonus(4));    // 보병 1 + 애병 1 + 기물 2 시도 → 캡 2
+        assertEquals(0, equipment.weaponJudgmentBonus("보병"));
+        assertEquals(0, equipment.weaponJudgmentBonus("신병"));
+        assertEquals(2, equipment.cappedBonus(4));    // 애병 1 + 기물 3 시도 → 캡 2
         assertEquals(1, equipment.cappedBonus(1));
         assertEquals(2, equipment.trinketSlots());
     }

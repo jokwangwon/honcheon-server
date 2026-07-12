@@ -12,12 +12,16 @@ schema:
   id: "무공 ID"
   name: "무공명 (고유 명칭 사용. '화산기초검' 같은 범용 명칭 금지)"
   category: "분류 (검법/도법/경공/심법/독공/의술 ...)"
+  weapon_class: "【정본】 이 무공이 실리는 무기 계열 — combat.yml weapon_power 등록 키. '무관' = 무기 불문(경공·신법·은신·의술·심법). 리스트면 어느 쪽에나 실린다"
   sub_category: "하위 분류"
   grade: "등급"
   faction: "소속 세력"
   required_realm: "요구 경지 (삼류~생사경)"
   required_stats: "요구 능력치"
   required_mastery: "선행 무공 요구 숙련 (0~10 — mastery_ladder 스케일)"
+  requires_skill: "선행 무공 (기계 판독 — { id, mastery }). required_mastery > 0 이면 반드시 있어야 한다 — 주석에 적힌 선행은 규칙이 아니다"
+  action_data: "히트박스·프레임·경직·쿨다운·코스트 = skill_mechanics.yml skills[id] (2층 구조 — 카탈로그 30종 전수 정의)"
+  cost_policy: "【정본】 초식 자체는 내력을 쓰지 않는다 (cost 0). 내력을 먹는 것은 격이다 — 예외는 절정+ 요구 비전 초식(cost 3)뿐 (combat.yml internal_energy.skill_cost_rule)"
   acquisition: "습득 조건"
   bloodline_restricted: "혈통 제한 여부"
   requires_master: "스승 필요 여부"
@@ -26,12 +30,42 @@ schema:
   public_use_rumor: "공개 사용 시 소문 여부"
   faction_reaction: "세력 반응 여부"
 
+# ─── 무기 계열 ↔ 무공 결합 (【정본】 — 코드가 config 보다 앞서지 않는다) ───
+# MVT SkillListener 의 SKILL_BY_WEAPON_CLASS 는 이 표를 읽어야 한다 (하드코딩 금지).
+# 위력 수치는 combat.yml damage.weapon_power — 여기는 '어떤 무공이 어떤 병장기에 실리는가'만.
+weapon_classes:
+  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 월아산, 구, 중병기, 부]
+  unarmed_family: [맨손, 권갑]     # 권갑은 맨손의 연장 — 권법·장법·박투·금나술·독공이 그대로 실린다
+  rule: "무공은 자기 weapon_class 의 병장기를 들었을 때만 온전히 나간다. 다른 병장기를 들면 다운캐스트('맨 기술')"
+  unarmed_rule: "【사용자 지시】 권법을 배운 자는 무기를 들지 않아도 초식이 나간다 — 맨손이 곧 그 무공의 병장기다"
+  default_by_category:
+    검법: 검
+    도법: 도
+    창법: 창
+    봉법: 봉
+    단검술: 단검
+    암살술: 단검
+    권법: [맨손, 권갑]
+    장법: [맨손, 권갑]
+    박투: [맨손, 권갑]
+    금나술: [맨손, 권갑]
+    독공: [맨손, 권갑]
+    궁술: 활
+    암기: 암기
+    합격진: 검
+    경공: 무관
+    신법: 무관
+    은신술: 무관
+    의술: 무관
+    심법: 무관
+
 martial_arts:
   # ─── 화산파 입문 무공 ───
   # 기초 무공이라도 문파의 철학과 상위 무공으로 이어지는 고유 명칭을 쓴다.
   yukhap_geom:
     name: "육합검"
     category: "검법"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "입문 검법"
     grade: "삼류"
     faction: hwasan
@@ -51,6 +85,7 @@ martial_arts:
   maehwa_bo:
     name: "매화보"
     category: "경공"
+    weapon_class: 무관   # 무기와 무관한 계열 (피해 공식 밖 또는 무기 불문)
     sub_category: "보법"
     grade: "이류"
     faction: hwasan
@@ -58,6 +93,7 @@ martial_arts:
     required_stats:
       민첩: 3
     required_mastery: 2         # 육합검 숙련 2 (0~10 스케일 정규화)
+    requires_skill: { id: yukhap_geom, mastery: 2 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "육합검 일정 숙련 후 사부 판단으로 전수"
     bloodline_restricted: false
     requires_master: true
@@ -74,6 +110,7 @@ martial_arts:
   namgung_jehwang_geom:
     name: "제왕검형"
     category: "검법"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "세가 비전"
     grade: "절정"
     faction: namgung
@@ -82,6 +119,7 @@ martial_arts:
       근력: 5
       지혜: 4
     required_mastery: 6         # 선행 검법 대성 (0~10 스케일 정규화)
+    requires_skill: { id: changgung_geom, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "남궁세가 직계 혈족 또는 세가주의 특별 허락"
     bloodline_restricted: true
     requires_master: true
@@ -93,6 +131,7 @@ martial_arts:
   geumna_su:
     name: "금나수"
     category: "금나술"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "관절기·포박"
     grade: "이류"
     faction: sorimsa          # 속가로도 퍼진 실전 기예 — 출처 소문은 약함
@@ -100,7 +139,7 @@ martial_arts:
     required_stats:
       근력: 3
       민첩: 3
-    required_mastery: 2
+    required_mastery: 0            # 선행 없음 — 널리 퍼진 실전 기예 (문파 계보를 타지 않는다)
     acquisition: "소림 속가 또는 관군 교두에게 사사"
     bloodline_restricted: false
     requires_master: true
@@ -121,6 +160,7 @@ martial_arts:
   taejo_jangkwon:
     name: "태조장권"
     category: "권법"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "기본 권각"
     grade: "입문"
     faction: mingan
@@ -138,6 +178,7 @@ martial_arts:
   cheolsan_go:
     name: "철산고"
     category: "박투"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "몸통 부딪히기"
     grade: "삼류"
     faction: mingan
@@ -155,6 +196,7 @@ martial_arts:
   yeopho_gungsul:
     name: "엽호궁술"
     category: "궁술"
+    weapon_class: 활   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "수렵 궁술"
     grade: "삼류"
     faction: mingan
@@ -172,6 +214,7 @@ martial_arts:
   ohodanmun_chang:
     name: "오호단문창"
     category: "창법"
+    weapon_class: 창   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "표국 창술"
     grade: "이류"
     faction: pyoguk
@@ -189,6 +232,7 @@ martial_arts:
   hwalin_chimbeop:
     name: "활인침법"
     category: "의술"
+    weapon_class: 무관   # 무기와 무관한 계열 (피해 공식 밖 또는 무기 불문)
     sub_category: "침구·응급"
     grade: "이류"
     faction: uiga
@@ -207,6 +251,7 @@ martial_arts:
   biyeon_dangeom:
     name: "비연단검술"
     category: "단검술"
+    weapon_class: 단검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "속검"
     grade: "삼류"
     faction: haomun
@@ -224,6 +269,7 @@ martial_arts:
   gwisik_sul:
     name: "귀식술"
     category: "은신술"
+    weapon_class: 무관   # 무기와 무관한 계열 (피해 공식 밖 또는 무기 불문)
     sub_category: "기식 은폐"
     grade: "이류"
     faction: haomun
@@ -242,12 +288,14 @@ martial_arts:
   maehwa_geombeop:
     name: "매화검법"
     category: "검법"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "본산 검법"
     grade: "일류"
     faction: hwasan
     required_realm: "일류"
     required_stats: { 민첩: 4, 지혜: 3 }
     required_mastery: 4          # 육합검 숙련 4
+    requires_skill: { id: yukhap_geom, mastery: 4 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "내문 제자 승급 후 전수 (비급각 2층)"
     bloodline_restricted: false
     requires_master: true
@@ -260,12 +308,14 @@ martial_arts:
   maehwa_geomjin:
     name: "매화검진"
     category: "합격진"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "검진 (2~5인)"
     grade: "절정"
     faction: hwasan
     required_realm: "일류"
     required_stats: { 지혜: 4 }
     required_mastery: 3          # 매화검법 숙련 3 (전 성원)
+    requires_skill: { id: maehwa_geombeop, mastery: 3 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "진전 제자 이상, 진법 구결은 장로 전수 (party.yml 합격진 정합)"
     bloodline_restricted: false
     requires_master: true
@@ -278,6 +328,7 @@ martial_arts:
   nahan_kwon:
     name: "나한권"
     category: "권법"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "본산 권법"
     grade: "이류"
     faction: sorimsa
@@ -295,12 +346,14 @@ martial_arts:
   geumgang_budong:
     name: "금강부동신법"
     category: "신법"
+    weapon_class: 무관   # 무기와 무관한 계열 (피해 공식 밖 또는 무기 불문)
     sub_category: "방신 신법"
     grade: "절정"
     faction: sorimsa
     required_realm: "절정"
     required_stats: { 체력: 5 }
     required_mastery: 5          # 나한권 숙련 5
+    requires_skill: { id: nahan_kwon, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "본산 승적 + 계율원 허가"
     bloodline_restricted: false
     requires_master: true
@@ -313,6 +366,7 @@ martial_arts:
   taegeuk_kwon:
     name: "태극권"
     category: "권법"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "유권 (동공 병행)"
     grade: "이류"
     faction: mudang
@@ -330,12 +384,14 @@ martial_arts:
   taegeuk_geom:
     name: "태극검"
     category: "검법"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "유검"
     grade: "절정"
     faction: mudang
     required_realm: "절정"
     required_stats: { 지혜: 5, 민첩: 4 }
     required_mastery: 5          # 태극권 숙련 5
+    requires_skill: { id: taegeuk_kwon, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "본산 내문 전수"
     bloodline_restricted: false
     requires_master: true
@@ -347,6 +403,7 @@ martial_arts:
   jewoon_jong:
     name: "제운종"
     category: "경공"
+    weapon_class: 무관   # 무기와 무관한 계열 (피해 공식 밖 또는 무기 불문)
     sub_category: "본산 경공"
     grade: "절정"
     faction: mudang
@@ -365,6 +422,7 @@ martial_arts:
   changgung_geom:
     name: "창궁무애검"
     category: "검법"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "세가 정전"
     grade: "이류"
     faction: namgung
@@ -383,6 +441,7 @@ martial_arts:
   dangmun_bisu:
     name: "당문비수술"
     category: "암기"
+    weapon_class: 암기   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "투척 비수"
     grade: "삼류"
     faction: dangga
@@ -400,6 +459,7 @@ martial_arts:
   chilbo_dokjang:
     name: "칠보독장"
     category: "독공"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "독장"
     grade: "일류"
     faction: dangga
@@ -418,12 +478,14 @@ martial_arts:
   manchon_hwau:
     name: "만천화우"
     category: "암기"
+    weapon_class: 암기   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "세가 비전 (광역 투척)"
     grade: "절정"
     faction: dangga
     required_realm: "절정"
     required_stats: { 민첩: 5, 감각: 5 }
     required_mastery: 6          # 당문비수술 대성
+    requires_skill: { id: dangmun_bisu, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "당가 직계 한정 — 유출 시 세가가 전쟁을 불사한다"
     bloodline_restricted: true
     requires_master: true
@@ -436,6 +498,7 @@ martial_arts:
   chwipalseon_bo:
     name: "취팔선보"
     category: "경공"
+    weapon_class: 무관   # 무기와 무관한 계열 (피해 공식 밖 또는 무기 불문)
     sub_category: "취보 (변칙 보법)"
     grade: "이류"
     faction: gaebang
@@ -453,12 +516,14 @@ martial_arts:
   tagu_bongbeop:
     name: "타구봉법"
     category: "봉법"
+    weapon_class: 봉   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "방주 비전"
     grade: "절정"
     faction: gaebang
     required_realm: "절정"
     required_stats: { 민첩: 5, 지혜: 4 }
     required_mastery: 5          # 취팔선보 숙련 5
+    requires_skill: { id: chwipalseon_bo, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "방주·장로 한정 전승 (개방 최심부)"
     bloodline_restricted: false
     requires_master: true
@@ -471,6 +536,7 @@ martial_arts:
   chamma_dobeop:
     name: "참마도법"
     category: "도법"
+    weapon_class: 도   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "군문 도법"
     grade: "이류"
     faction: gwan_gun
@@ -489,6 +555,7 @@ martial_arts:
   sando_sippallo:
     name: "산도십팔로"
     category: "도법"
+    weapon_class: 도   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "산채 도법"
     grade: "삼류"
     faction: noklim
@@ -506,12 +573,14 @@ martial_arts:
   heuksal_dobeop:
     name: "흑살도법"
     category: "도법"
+    weapon_class: 도   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "살초 위주"
     grade: "일류"
     faction: noklim
     required_realm: "일류"
     required_stats: { 근력: 4, 체력: 4 }
     required_mastery: 3          # 산도십팔로 숙련 3
+    requires_skill: { id: sando_sippallo, mastery: 3 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "채주급 전수 또는 흑도 비급 (암시장)"
     bloodline_restricted: false
     requires_master: false
@@ -522,6 +591,7 @@ martial_arts:
   eumpung_geom:
     name: "음풍검"
     category: "검법"
+    weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "쾌검 (변초)"
     grade: "이류"
     faction: unorthodox
@@ -540,12 +610,14 @@ martial_arts:
   muyeong_bisu:
     name: "무영비수"
     category: "암살술"
+    weapon_class: 단검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "일격 이탈"
     grade: "절정"
     faction: salmak
     required_realm: "절정"
     required_stats: { 민첩: 5, 감각: 4 }
     required_mastery: 4          # 귀식술 숙련 4
+    requires_skill: { id: gwisik_sul, mastery: 4 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "살막 정식 살수 한정 (조직 밖 유출 사례 없음 — 있다면 사건이다)"
     bloodline_restricted: false
     requires_master: true
@@ -558,6 +630,7 @@ martial_arts:
   hyeolsu_magong:
     name: "혈수마공"
     category: "장법"
+    weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
     sub_category: "금기 마공"
     grade: "절정"
     faction: hyeolgyo

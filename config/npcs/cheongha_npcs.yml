@@ -404,3 +404,102 @@ npcs:
     stats: { 감각: 4, 산길_지리: 5, 약초_지식: 4 }
     disposition: ["북산 구석구석을 안다 — 영물 소문의 첫 목격자 단골", "유문에게 약재를 댄다 (열병 사건 물류 축)"]
     incident_links: [cheongha_fever_rumor]
+
+  # ═══ 짐승 (2026-07 전투 정합 패스 — combat_audit ④) ═══
+  # 병: 짐승에게 '격'(들짐승·맹수·영물)만 있고 능력치·내구·피해·전의가 어디에도 없었다.
+  #     사냥은 성장(cultivation combat_hwahu)과 경제(부산물)의 기둥인데 '늑대 한 마리'가 몇 합인지 계산이 안 됐다.
+  # 약: 개체 스탯을 등록한다. 공통 규칙은 npc_combat.yml beasts.
+  #     내구 = round(10 + 체력×2) — 사람과 같은 공식 (대칭 원칙).
+  #     짐승은 무공이 없다 → 무공 위력 0 (technique_power 입문). 위력은 이빨·발톱 = 무기 위력에서 온다.
+  #     짐승은 무기가 없다 → weapon_break 대상 아님. 내력이 없다 (영물 제외) → 격 위력 0.
+  # 표준 TTK 검산 (combat.yml damage 개정판):
+  #     삼류 무인(검 4 + 삼류급 1) vs 산늑대(내구 16) → 6합. 두 마리면 진다 — 늑대는 무리로 온다.
+  #     일류 무인(발경) vs 호랑이(내구 20) → 5합. 발경 없이는 8합 — 개화가 사냥터를 바꾼다.
+
+  san_neukdae:
+    name: "산늑대"
+    tier: 1
+    template: true
+    role: "들짐승 — 늑대 (북산 무리)"
+    location: north_road
+    beast_rank: 들짐승             # npc_combat.yml beasts.ranks — 삼류 상당
+    realm: "삼류"
+    stats: { 근력: 3, 민첩: 4, 체력: 3, 감각: 4, 사냥: 3 }
+    natural_weapon: { name: 이빨, weapon_power_as: 맨손, reach: 1.5 }   # combat.yml weapon_power 맨손 1
+    durability: 16                 # round(10 + 체력 3 × 2)
+    actions: [물기, 덮치기]        # skill_mechanics.yml beast_pounce
+    morale: { start: 4, 도주_문턱: 3 }
+    pack: "3~5마리 — 협공 슬롯 3 을 그대로 쓴다 (combat.yml engage_slots). 두목 개체 없음 → 절반이 죽으면 흩어진다"
+    drops: [늑대_가죽, 늑대_고기]
+    count_hint: "무리 3~5마리"
+
+  metdwaeji:
+    name: "멧돼지"
+    tier: 1
+    template: true
+    role: "들짐승 — 성난 짐승 (북산 밭 습격)"
+    location: north_road
+    beast_rank: 들짐승
+    realm: "삼류"
+    stats: { 근력: 5, 민첩: 2, 체력: 5, 감각: 2, 돌진: 4 }
+    natural_weapon: { name: 엄니, weapon_power_as: 단검, reach: 1.5 }   # 3 — 이빨보다 아프다
+    durability: 20
+    actions: [들이받기, 덮치기]
+    morale: { start: 6, 도주_문턱: 2, note: "돌진 중에는 붕괴 판정 없음 — 멈추지 않는다" }
+    charge: "덮치기 성공 시 다운 + 피해 +2. 대신 빗나가면 후딜 14틱 (나무에 박힌다)"
+    drops: [멧돼지_가죽, 멧돼지_고기, 엄니]
+    count_hint: "단독 또는 2마리"
+
+  horangi:
+    name: "호랑이"
+    tier: 2
+    template: true
+    role: "맹수 — 북산의 주인"
+    location: north_road            # 북산 = 북쪽 산길 상단 (등록 장소 north_road 안)
+    beast_rank: 맹수               # 일류 상당
+    realm: "일류"
+    stats: { 근력: 6, 민첩: 6, 체력: 5, 감각: 6, 사냥: 6, 은신: 5 }
+    natural_weapon: { name: 발톱, weapon_power_as: 단검, reach: 2 }
+    durability: 20
+    actions: [할퀴기, 물기, 덮치기]
+    morale: { start: 7, 도주_문턱: 2, note: "내구 25% 이하에서 결사 가중 +3 — 부상 입은 맹수가 가장 위험하다" }
+    ambush: "은신 기습 +2 (숲) — 먼저 보지 못하면 첫 합을 그냥 내준다"
+    drops: [호피, 호랑이_뼈, 고기]
+    count_hint: "단독 (영역 동물)"
+
+  bandal_gom:
+    name: "반달곰"
+    tier: 2
+    template: true
+    role: "맹수 — 곰"
+    location: north_road            # 북산 = 북쪽 산길 상단 (등록 장소 north_road 안)
+    beast_rank: 맹수
+    realm: "일류"
+    stats: { 근력: 7, 민첩: 3, 체력: 7, 감각: 4, 완력: 6 }
+    natural_weapon: { name: 앞발, weapon_power_as: 봉, reach: 2 }       # 3 — 뭉툭하지만 무겁다
+    durability: 24                 # 가장 두꺼운 짐승 — 오래 걸린다
+    actions: [후려치기, 껴안기, 덮치기]
+    morale: { start: 7, 도주_문턱: 1 }
+    super_armor: "경직 1등급 경감 (덩치)"
+    drops: [곰_가죽, 웅담, 고기]   # 웅담 = economy 고가 부산물
+    count_hint: "단독"
+
+  baegyeongmyo:
+    name: "백영묘(白影猫)"
+    tier: 3                        # 개체 — 영물은 템플릿이 아니다 (한 마리는 한 마리다)
+    role: "영물 — 북산 설령의 흰 짐승"
+    location: north_road            # 북산 = 북쪽 산길 상단 (등록 장소 north_road 안)
+    beast_rank: 영물               # 절정 이상
+    realm: "절정"
+    stats: { 근력: 6, 민첩: 9, 체력: 6, 감각: 9, 내공: 3.0 }
+    natural_weapon: { name: 발톱, weapon_power_as: 검, reach: 2 }       # 4 — 기가 서린 발톱
+    durability: 22
+    internal_energy: 9             # round(내공 3.0 × 3) — 영물만 내력을 쓴다
+    qi_grade: 검기                 # 발톱에 검기를 두른다 (qi_manifestation 검기_두름 — 유지 1/합, 피해 +2)
+    actions: [할퀴기, 덮치기, 검기_두름]
+    morale: { start: 10, 도주_문턱: 0, note: "붕괴하지 않는다 — 대신 떠난다. 이길 수 없다고 판단하면 사라진다" }
+    disposition:
+      - "먼저 공격하지 않는다 — 영역을 밟은 자에게만 온다"
+      - "죽이면 산이 기억한다 (강도 2 소문 + 곰보영감 경유 전승)"
+    drops: [백영묘_가죽, 영단_재료]
+    incident_links: []

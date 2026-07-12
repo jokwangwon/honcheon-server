@@ -835,12 +835,23 @@ def sim_qi_counters(cfg, rep, max_rounds):
     e = Fighter(cfg, "절정", "절정", weapon="검", is_npc=True)
     _, d0, _ = strike(p, e, qi_power=0.0)
     rep.say(f"       외공기(격 없음)  피해/합 {d0:.2f}")
-    rep.say(f"       발경(내력 1)     피해/합 {d0:.2f}   Δ +0.0%   ← 발경의 위력값이 config 에 없다")
-    rep.say(f"       검기_두름(유지 1) 피해/합 {d0:.2f}   Δ +0.0%   ← effect: '근접 위력 +무공 보정' (수치 아님)")
-    rep.say(f"       검강_두름(유지 2) 피해/합 {d0:.2f}   Δ +0.0%   ← effect: '위력 ++' (수치 아님)")
-    rep.fail("격 3단(발경·검기·강기)의 **피해 기여가 전부 0%** — 피해 공식에 격 항이 없고, "
-             "forms 의 effect 는 서술문이다. 내력을 태워도 상대의 내구는 똑같이 준다. "
-             "기준(5% 미만 = 장식)에 의해 격은 피해에 관한 한 장식이다")
+    qi_power = dig(cfg, "combat.yml", "damage", "qi_power", default={}) or {}
+    if not qi_power:
+        rep.fail("격의 위력이 config 에 없다 — 피해 공식에 격 항이 없으면 내력을 태워도 피해가 같다 "
+                 "(발경은 쓸 이유가 없는 죽은 선택지가 된다)")
+    else:
+        base = d0 if d0 else 1.0
+        worst = None
+        for grade in ("발경", "검기", "강기"):
+            power = float(qi_power.get(grade, 0) or 0)
+            dmg = d0 + power
+            delta = 100.0 * (dmg - base) / base
+            rep.say(f"       {grade}(위력 +{power:g})   피해/합 {dmg:.2f}   Δ +{delta:.1f}%")
+            worst = delta if worst is None else min(worst, delta)
+        if worst is None or worst < 5.0:
+            rep.fail(f"격의 피해 기여가 {worst:.1f}% — 5% 미만이면 장식이다 (내력을 태울 이유가 없다)")
+        else:
+            rep.ok(f"격이 피해를 움직인다 (최소 +{worst:.1f}%) — 내력을 태우면 아프다")
 
     rep.say("")
     rep.say("     [B] 격이 위력을 갖는다면 — 도구의 참조 제안(발경 +1 / 검기 +2 / 강기 +3)")
@@ -865,9 +876,13 @@ def sim_qi_counters(cfg, rep, max_rounds):
     rep.say(f"       호신강기(강기)는 '하위 격 자동 무효' → 절정의 검기·발경·외공기 전부 무효 → 피해/합 = 0.00")
     rep.say(f"       화경 내력 풀 {hwa.pool} → 호신강기 전개 {deploy:g} + 유지 {sustain:g}/합 = "
             f"{max_sustain}합 무한 방어. 그 사이 화경은 {ttd_i}합에 절정을 눕힌다")
-    rep.fail(f"호신강기 앞에서 절정(하위 격)의 승률은 구조적으로 0 이다 — 피해 0, 상대는 {max_sustain}합을 "
-             f"버틴다. '동격은 소모 상쇄전(피해 대신 내력 소모)'이라 쓰여 있으나 **상쇄 소모량이 수치로 없다** — "
-             f"회피(원칙 2)조차 공격이 아니라 방어라 격을 뚫지 못한다. 하위 격의 유일한 답이 규칙에 없다")
+    on_hit = dig(cfg, "qi_manifestation.yml", "forms", "두름_몸", "호신강기", "on_hit", default=None)
+    drain = on_hit.get("상쇄_소모") if isinstance(on_hit, dict) else None
+    if not drain:
+        rep.fail("호신강기가 절대 방어다 — '동격은 소모 상쇄전'이라 쓰였으나 **상쇄 소모량이 수치로 없다**. "
+                 "하위 격의 답이 규칙에 없으면 승률은 구조적으로 0 이다")
+    else:
+        rep.ok(f"호신강기는 두들기면 깎인다 (상쇄 소모 {drain}) — 절대 방어가 아니다")
 
 
 def sim_weapon_grades(cfg, rep, max_rounds):

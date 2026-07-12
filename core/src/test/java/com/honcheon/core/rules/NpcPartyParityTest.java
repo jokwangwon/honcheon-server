@@ -90,7 +90,9 @@ class NpcPartyParityTest {
     void 협공과_포위() {
         assertEquals(0, party.coopAttackBonus(1));   // 혼자는 협공이 아니다
         assertEquals(1, party.coopAttackBonus(2));   // PT-007 T2 재현 — 둘이서 +1
-        assertEquals(3, party.coopAttackBonus(5));   // 캡 +3 (합격진만이 이 위를 연다)
+        // 2026-07 전투 정합: 캡 3 → 2. 포위 슬롯 3(한 표적을 동시에 칠 수 있는 손은 셋)의 귀결이다.
+        // 5인이 몰려도 넷째부터는 대기 — 머릿수는 '교대'가 되지 '동시타'가 되지 않는다 (party.yml combat_coop).
+        assertEquals(2, party.coopAttackBonus(5));   // 캡 +2 (합격진만이 슬롯 5를 연다)
         assertEquals(-2, party.encirclementEscapePenalty());
         assertEquals(5, party.maxPartySize());       // 그 이상은 세력의 영역
     }
