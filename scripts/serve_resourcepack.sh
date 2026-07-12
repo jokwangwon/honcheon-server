@@ -71,10 +71,33 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
 print(f"[팩] 수동 설치용 zip — {out} ({len(files)}개 파일, {out.stat().st_size} bytes)")
 PY
   # 자동 다운로드 끄기 — 안 그러면 접속마다 "리소스팩 다운로드 실패" 팝업이 뜬다
-  if [ -f "$RUN/server.properties" ]; then
-    sed -i 's|^resource-pack=.*|resource-pack=|; s|^resource-pack-sha1=.*|resource-pack-sha1=|' \
-        "$RUN/server.properties"
-  fi
+# ★ server.properties 에 URL 을 박지 않는다 — 여기가 "다운로드만 실패" 의 진원지였다.
+#   이 기계는 주소가 여럿이다 (LAN 192.168.x · Tailscale 100.x · 공인 IP). 그런데 이 파일엔 URL 을
+#   **하나**만 적을 수 있다. LAN 주소를 박아 두면, LAN 밖에서 들어온 사람은 게임(25565)은 붙는데
+#   팩(8123)만 실패한다 — 그 사람 컴퓨터에서 **닿지 않는 주소**이기 때문이다. 로그엔 아무것도 안 남는다.
+#
+#   그래서 배급은 이제 플러그인이 한다 (PackPusher.java + config/resource_pack.yml).
+#   플러그인은 **그 사람이 접속할 때 친 주소**로 팩을 준다 — 방금 그걸로 들어왔으니 닿는 것이 증명된 주소다.
+#   sha1 도 플러그인이 실물에서 매 기동 다시 잰다 (사람이 옮겨 적으면 언젠가 낡고, 낡으면 조용히 거절된다).
+#
+#   이 스크립트가 할 일은 둘뿐이다: **팩을 굽고, 8123 에서 내주는 것.**
+if [ -f "$RUN/server.properties" ]; then
+  python3 - "$RUN/server.properties" <<'PY'
+import sys
+p = sys.argv[1]
+keys = ('resource-pack=', 'resource-pack-sha1=', 'resource-pack-id=', 'resource-pack-prompt=')
+out = []
+for line in open(p, encoding='utf-8'):
+    if line.startswith(keys):
+        out.append(line.split('=', 1)[0] + '=\n')       # 비워 둔다 — 배급은 플러그인의 일이다
+    elif line.startswith('require-resource-pack='):
+        out.append('require-resource-pack=false\n')     # 팩 게이트 불가침
+    else:
+        out.append(line)
+open(p, 'w', encoding='utf-8').write(''.join(out))
+PY
+  echo "      server.properties — 팩 항목을 비웠다 (배급은 플러그인이 접속 주소를 따라 한다)"
+fi
   stop_server
   echo "[팩] 수동 설치 모드 — 자동 다운로드 꺼짐 (접속 실패 팝업 없음)"
   echo "     → 이 zip 을 마인크래프트 PC 의 .minecraft/resourcepacks/ 에 넣고 게임에서 켜라"
@@ -175,36 +198,32 @@ if pgrep -f "paper.jar" >/dev/null 2>&1; then
   echo "      팩 설정을 확실히 먹이려면 서버를 내리고 다시 실행하라 (scripts/redeploy_mvt.sh)." >&2
 fi
 
-python3 - "$RUN/server.properties" "$URL" "$SHA1" <<'PY'
+# ★ 여기서 URL 을 박지 않는다 — 이 자리가 "다운로드만 실패" 의 진원지였다.
+#   이 파일엔 URL 을 **하나**만 적을 수 있는데, 이 기계는 주소가 여럿이다
+#   (LAN 192.168.x · Tailscale 100.x · 공인 IP). LAN 주소를 박으면 LAN 밖에서 들어온 사람은
+#   게임(25565)은 붙는데 팩(8123)만 죽는다 — 그 사람 컴퓨터에서 **닿지 않는 주소**라서다.
+#   서버 로그엔 아무것도 안 남는다. 그래서 이 실패는 눈에 안 보인다.
+#
+#   배급은 이제 플러그인이 한다 (PackPusher.java + config/resource_pack.yml):
+#   **그 사람이 접속할 때 친 주소**로 준다 — 방금 그걸로 들어왔으니 닿는 것이 증명된 주소다.
+#   sha1 도 실물에서 매 기동 다시 잰다 (사람이 옮겨 적으면 언젠가 낡고, 낡으면 조용히 거절된다).
+python3 - "$RUN/server.properties" <<'PY'
 import sys
 from pathlib import Path
-path, url, sha1 = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-# resource-pack-prompt 는 JSON 텍스트 컴포넌트다 (평문은 무시될 수 있다).
-prompt = '{"text":"혼천 리소스팩 — 수묵 HUD·기세/화후 글리프가 켜집니다. 거절해도 플레이는 가능합니다.","color":"gold"}'
-want = {
-    'resource-pack': url,
-    'resource-pack-sha1': sha1,
-    'resource-pack-prompt': prompt,
-    'require-resource-pack': 'false',   # 팩 게이트 불가침 — 강제 금지
-}
-lines = path.read_text(encoding='utf-8').splitlines()
-seen = set()
+path = Path(sys.argv[1])
+blank = ('resource-pack', 'resource-pack-sha1', 'resource-pack-id', 'resource-pack-prompt')
 out = []
-for line in lines:
+for line in path.read_text(encoding='utf-8').splitlines():
     key = line.split('=', 1)[0] if '=' in line and not line.startswith('#') else None
-    if key in want:
-        out.append(f'{key}={want[key]}')
-        seen.add(key)
+    if key in blank:
+        out.append(key + '=')                       # 비워 둔다 — 바닐라는 팩을 밀지 않는다
+    elif key == 'require-resource-pack':
+        out.append('require-resource-pack=false')   # 팩 게이트 불가침
     else:
         out.append(line)
-for key, val in want.items():
-    if key not in seen:
-        out.append(f'{key}={val}')
 path.write_text('\n'.join(out) + '\n', encoding='utf-8')
-print(f'      server.properties 갱신 — resource-pack={url}')
-print(f'                             resource-pack-sha1={sha1}')
-print('                             require-resource-pack=false (팩 없이도 플레이 가능)')
 PY
+echo "      server.properties — 팩 항목을 비웠다 (배급은 플러그인이 접속 주소를 따라 한다)"
 
 echo
 echo "→ 클라이언트는 접속 시 팩을 자동으로 받는다 (수동 설치 불필요)."

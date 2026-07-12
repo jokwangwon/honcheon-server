@@ -108,6 +108,12 @@ simbeop:
     gyeol: { 회피_판정: 1 }        # 발에 실리는 기운 — 몸을 빼는 것에 붙는다
     build_affinity: [신법]         # 1대1의 왕. 그리고 포위당하면 이 결이 통째로 죽는다 (forced_guard.loses 회피)
     circulation_color: "보랏빛 노을"
+    # ★ 노션 원천: 자하신공은 **화산 장문인 일인전승**이다. 수치 축(capacity 9 · purity 1.3 · gyeol)은
+    #   그대로 두고 계보 축만 얹는다 — 얻는 길이 하나뿐이라는 사실이 이 심법의 값의 절반이다.
+    acquisition: "★ 화산 장문 계승 시에만 — 일인전승 (sect_life.yml succession_ladder.hwasan)"
+    sole_transmission: true
+    lineage_role: 장문_전승
+    predecessor: maehwa_simbeop
 
   jeongsim_geomgyeol:
     name: "정심검결"
@@ -189,6 +195,405 @@ simbeop:
     demonic: true
     magong_class: ②                # magong.branches.② 연수 — 자기를 태운다
     dual_cultivation_note: "★ 도가·불가·검문 전 계열과 opposed (겸수 = 주화입마 판정)"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # 문파 심법 — 노션 원천의 실명 심법 22종 (설계: docs/design/sect_lineage.md)
+  # ═════════════════════════════════════════════════════════════════════════
+  # ★ 심법이 곧 내공의 뼈대다. 무공은 배우면 되지만 심법은 **하나뿐이다** (dual_cultivation.primary_rule).
+  #   그래서 문파를 고르는 것은 무공을 고르는 것이 아니라 **그릇을 고르는 것**이다.
+  #
+  # 【용량·순도의 밴드】 기존 등재분의 축을 건드리지 않고 그 사이에 선다:
+  #   기초 4~5 / 1.0   ·   중급 6 / 1.1   ·   상승 7~8 / 1.2~1.3   ·   장문인 9 / 1.4~1.5
+  #   ★ 마공(혈기심공 10 / 0.8 · 천마무극공 9 / 0.9)의 자리는 건드리지 않는다 —
+  #     정파 심법은 **크기로 마공을 이기지 않는다.** 마공이 파는 것은 크기가 아니라 시간이다
+  #     (magong.baseline: "정파의 벽은 무공이 아니라 달력이다"). 그 명제를 깨지 않는 것이 이 표의 규율이다.
+  #
+  # 【lineage 세가(世家)】 신규 계열 — 정순하지도 탁하지도 않다. 정화 자격 없음(도가·불가만).
+  #   혈족 전승이 그 자체로 문(門)이다. 남궁·당가·팽가·모용이 여기 선다.
+  #
+  # 【일인전승 sole_transmission】 장문인 심법은 **한 세계에 한 사람**이다.
+  #   얻는 길이 하나뿐이다 — 장문 계승(sect_life.yml succession_ladder). 비급도, 기연도, 도둑 배움도 없다.
+  #   전대 장문이 죽거나 물러나야 다음 사람이 배운다. 그것이 '더 높은' 값의 대가다.
+
+  # ─── 화산파 ───
+  maehwa_simbeop:
+    name: "매화심법"
+    faction: hwasan
+    lineage: 도가
+    grade: 중급
+    method: 좌공
+    capacity: 6
+    purity: 1.1
+    qi_profile: { 연비: 없음, 발력: "검에 실은 발경 위력 +1" }
+    passive: "매화 계열 무공 숙련 성장 +10% (계보의 심법 — 제 문파 무공에만 붙는다)"
+    circulation_color: "옅은 분홍"
+    acquisition: "외문 제자 정규 과정 — 화산의 모든 제자가 여기서 시작한다"
+    dual_approved: [jaha_singong, jeongsim_geomgyeol]
+    lineage_role: 문파_기초       # 자하신공(장문인)으로 가는 아래층
+
+  # ─── 남궁세가 ───
+  changgung_daeyeon_singong:
+    name: "창궁대연신공"
+    faction: namgung
+    lineage: 검문
+    grade: 상승
+    method: 동공
+    method_condition: { source: "검술 수련·실전", ratio: 0.5 }
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: 없음, 발력: "검에 실은 격 위력 +1" }
+    passive: "검 계열 무공 위력·리치 보정 (남궁의 검은 길다)"
+    circulation_color: "푸른 하늘빛"
+    acquisition: "세가 방계·가신까지 전수 — 창궁검법과 함께 온다"
+    lineage_role: 세가_기초
+
+  cheonroe_jewang_singong:
+    name: "천뢰제왕신공"
+    faction: namgung
+    lineage: 검문
+    grade: 상승
+    method: 동공
+    method_condition: { source: "검술 수련·실전", ratio: 0.5 }
+    capacity: 9
+    purity: 1.4
+    qi_profile: { 연비: "검기 소모 -1", 발력: "검에 실은 격 위력 +1" }
+    passive: "제왕(帝王) — 기세: 경지가 낮은 상대의 판정 -1 (군림의 결. 오의 제왕검형·군림과 공명)"
+    circulation_color: "뇌광이 도는 청색"
+    acquisition: "★ 남궁세가 가주 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 가주_전승
+    predecessor: changgung_daeyeon_singong   # 창궁대연신공을 대성(6)한 자만 이어받는다
+
+  # ─── 사천당가 ───
+  hyeonmu_simgong:
+    name: "현무심공"
+    faction: dangga
+    lineage: 세가
+    grade: 기초
+    method: 좌공
+    capacity: 5
+    purity: 1.0
+    qi_profile: { 연비: 없음, 발력: 없음 }
+    passive: "독 저항 +2 (poison_response.저항 — 해독이 아니다. 당가 사람은 독에 익숙할 뿐이다)"
+    circulation_color: "검은 물빛"
+    acquisition: "당가 자제·방계 전원 — 독을 다루기 전에 몸부터 만든다"
+    lineage_role: 세가_기초
+
+  doban_samyang:
+    name: "도반삼양귀원공"
+    faction: dangga
+    lineage: 세가
+    grade: 상승
+    method: 식공
+    method_condition: { material: "약재·영초 복용", price: "축기 중 원기 소모" }
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: "암기에 실은 격 소모 -1", 발력: 없음 }
+    passive: "귀원(歸元) — 소모한 내력의 20%가 전투 종료 시 돌아온다"
+    circulation_color: "세 갈래 황백색"
+    acquisition: "당가 내당 — 암기 계보(당문비접표)와 함께 전수"
+    lineage_role: 세가_상승
+
+  manryu_gwiwon:
+    name: "만류귀원신공"
+    faction: dangga
+    lineage: 세가
+    grade: 상승
+    method: 식공
+    method_condition: { material: "독물·영초 복용", price: "축기 중 원기 소모" }
+    capacity: 9
+    purity: 1.4
+    qi_profile: { 연비: "암기·독 계열 소모 -1", 발력: "독 위력 +1" }
+    passive: "만류귀원(萬流歸元) — 몸에 들어온 모든 독을 내력으로 돌린다 (중독 시 내력 회복).
+              ★ 칠살음독경의 '동화'와 다르다: 이쪽은 면역이 아니라 **연료화**다"
+    circulation_color: "온갖 빛이 한 점으로"
+    acquisition: "★ 사천당가 가주 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 가주_전승
+    predecessor: doban_samyang
+
+  # ─── 하북팽가 ───
+  soho_simbeop:
+    name: "소호심법"
+    faction: paengga
+    lineage: 세가
+    grade: 기초
+    method: 좌공
+    capacity: 4
+    purity: 1.0
+    qi_profile: { 연비: 없음, 발력: 없음 }
+    passive: 없음
+    special: ["개화 실패 없음 (기초 심법의 미덕 — 현천토납법과 같다)"]
+    circulation_color: "누런 흙빛"
+    acquisition: "팽가 가솔 전원 — 도를 쥐기 전에 배우는 첫 호흡"
+    lineage_role: 세가_기초
+
+  geongon_miheo:
+    name: "건곤미허신공"
+    faction: paengga
+    lineage: 세가
+    grade: 상승
+    method: 동공
+    method_condition: { source: "도법 수련·실전", ratio: 0.5 }
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: 없음, 발력: "도에 실은 발경 위력 +1" }
+    passive: "가드 게이지 +2 (팽가의 도는 받아치고 나서 벤다)"
+    gyeol: { 막기_판정: 1 }        # 가드 = 막기. 팽가의 도는 받아치고 나서 벤다
+    build_affinity: [외공, 초식]   # 도(道)는 근력의 병기다 (combat.yml attacker_attribute.근력)
+    circulation_color: "탁한 금색"
+    acquisition: "팽가 내당 — 혼원도법과 함께 전수"
+    lineage_role: 세가_상승
+
+  honwon_byeokryeok_singong:
+    name: "혼원벽력신공"
+    faction: paengga
+    lineage: 세가
+    grade: 상승
+    method: 동공
+    method_condition: { source: "도법 수련·실전", ratio: 0.5 }
+    capacity: 9
+    purity: 1.4
+    qi_profile: { 연비: 없음, 발력: "도에 실은 격 위력 +1" }
+    passive: "벽력(霹靂) — 파격 속성 무공의 가드 관통 시 추가 경직 1단 (오의 혼원벽력도의 자격)"
+    circulation_color: "번개가 이는 황금색"
+    acquisition: "★ 하북팽가 가주 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 가주_전승
+    predecessor: geongon_miheo
+
+  # ─── 소림사 ───
+  banya_singong:
+    name: "반야신공"
+    faction: sorimsa
+    lineage: 불가          # 정순 — 정화(배독·해주) 자격
+    grade: 상승
+    method: 좌공
+    capacity: 8
+    purity: 1.3
+    qi_profile: { 연비: 없음, 발력: "권·장 계열 발경 위력 +1" }
+    passive: "심마·주화입마 판정 +2 (purification.mental_guard 불가 계열)"
+    circulation_color: "은은한 금빛"
+    acquisition: "소림 승적 — 머리를 깎으면 이 호흡부터 배운다"
+    lineage_role: 문파_기초
+
+  daebanya_geumgang:
+    name: "대반야금강공"
+    faction: sorimsa
+    lineage: 불가
+    grade: 상승
+    method: 좌공
+    capacity: 9
+    purity: 1.5
+    qi_profile: { 연비: "강기 소모 -1", 발력: "권·장 계열 격 위력 +1" }
+    passive: "금강불괴의 아래층 — 피해 -1 상시 (금강부동신법과 중첩되지 않는다)"
+    circulation_color: "무너지지 않는 금강석 빛"
+    acquisition: "★ 소림 방장 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 장문_전승
+    predecessor: banya_singong
+
+  yeokgeungyeong:
+    name: "역근경(易筋經)"
+    faction: sorimsa
+    lineage: 불가
+    grade: 상승
+    method: 좌공
+    capacity: 10                   # 혈기심공과 같은 최대 용량 — 다만 **빠르지 않다**
+    purity: 1.4
+    qi_profile: { 연비: 없음, 발력: 없음 }   # ★ 위력을 주지 않는다. 근골을 바꿀 뿐이다
+    passive: "세수역근(洗髓易筋) — 몸의 바탕을 갈아엎는다:
+              ① 어떤 심법으로도 전환 승계 100% (conversion 전 항목 무시 — 유일)
+              ② 겸수 상극 없음 (opposed 판정 면제 — 유일)
+              ③ 마공 오염(심마 흔적) 1년당 -1 감쇄 — ★ 마도에서 돌아오는 **네 번째 길**"
+    circulation_color: "빛이 없다 — 몸이 그냥 달라진다"
+    acquisition: "★ 히든 — 장경각 최심부. 승적으로도, 방장의 재가로도 열리지 않는다.
+                  '읽을 자격'이 아니라 '읽어도 미치지 않을 자'만 가져간다 (심마 흔적 0 + 불가 lineage + 화경)"
+    hidden: true
+    sole_transmission: false       # 일인전승이 아니다 — 다만 조건을 채운 자가 강호에 거의 없다
+    lineage_role: 히든
+    design_note: "★ 역근경이 용량 10 인데도 마공의 유혹을 죽이지 않는 이유:
+      **시간을 줄여주지 않는다.** 그릇은 커지지만 채우는 데는 여전히 45년이 걸린다
+      (magong.baseline). 마공이 파는 것은 그릇이 아니라 달력이다 — 그 값은 그대로 남는다.
+      역근경이 파는 것은 **되돌릴 수 있음**이다. 그것이 불가(佛家)가 줄 수 있는 유일한 자비다"
+
+  # ─── 무당파 ───
+  # 태극신공 = 기존 taegeuk_gigong(태극기공)이 그 자리다 (노션의 '태극신공'과 동일 대상 — 개명하지 않는다.
+  #   이미 cultivation·training·fortune 축이 이 id 를 참조한다. 별칭으로만 기록한다)
+  yangui_mugeuk_singong:
+    name: "양의무극신공"
+    faction: mudang
+    lineage: 도가
+    grade: 상승
+    method: 좌공
+    method_bonus: { 동공_병행: "태극권·태극검 수련 시간 30% 계상" }
+    capacity: 9
+    purity: 1.5
+    qi_profile: { 연비: "검기·강기 소모 -1", 발력: 없음 }
+    passive: "양의(兩儀) — 패링 성공 시 소모 내력 전액 환급 (되돌리는 것이 무당의 이치)"
+    circulation_color: "흑백이 서로를 문다"
+    acquisition: "★ 무당 장문 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 장문_전승
+    predecessor: taegeuk_gigong
+    dual_approved: [taegeuk_gigong]
+
+  # ─── 개방 ───
+  okhyeon_gwijin:
+    name: "옥현귀진현공"
+    faction: gaebang
+    lineage: 잡가          # 개방은 계보가 없다 — 그것이 개방의 계보다
+    grade: 상승
+    method: 전공           # ★ 실전마다 축기 — 거지는 앉아서 수련할 방이 없다
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: "경신(보법) 소모 -1", 발력: "권·봉 계열 발경 위력 +1" }
+    passive: "귀진(歸眞) — 굶주림·부상·추위 상태에서 내력 회복 배율 유지 (거지의 몸)"
+    circulation_color: "때 묻은 잿빛"
+    acquisition: "개방 3결(분타주) 이상 — 구결(口訣)로 전한다. 비급이 없다 (거지는 글을 안 쓴다)"
+    lineage_role: 문파_기초
+    note: "★ 전공(戰功) 축기 — accumulation_methods 의 '전공'을 쓰는 유일한 심법.
+      개방은 폐관하지 않는다. 맞으면서 큰다"
+
+  # ─── 곤륜파 ───
+  gonryun_hyeoncheon:
+    name: "곤륜현천공"
+    faction: gonryun
+    lineage: 도가
+    grade: 상승
+    method: 시공
+    method_condition: { segment: 새벽, multiplier: 2, daily_cap: "1구간" }
+    capacity: 8
+    purity: 1.3
+    qi_profile: { 연비: "경신(경공) 소모 -2", 발력: 없음 }   # ★ 전 심법 최대 경신 할인 — '절세의 경공'의 수치
+    passive: "답운(踏雲) — 경공 이동 거리 +20% · 낙하 피해 무효"
+    gyeol: { 회피_판정: 1 }        # 답운 = 몸을 빼는 것. 곤륜의 기운은 발에 실린다
+    build_affinity: [신법]         # ★ 회피 결의 **보급 뼈대** — 자하신공(장문 일인전승)의 아래층.
+                                   #   근거: 회피 결이 일인전승에만 있으면 신법 빌드를 고를 수 있는
+                                   #   플레이어가 세계에 한 명뿐이다 (growth_audit lint_gyeol ③).
+    circulation_color: "설산의 흰빛"
+    acquisition: "곤륜 내문 — 서역까지 온 자에게만"
+    lineage_role: 문파_기초
+    # ★지어냄 — 노션에 곤륜 심법의 이름이 없다. 다만 '절세의 신법과 경공'은 원천이 명시한 정체성이고,
+    #   그것을 심법의 qi_profile(경신 -2)로 옮긴 것이 이 항목이다
+
+  # ─── 종남파 ───
+  taeeul_singong:
+    name: "태을신공"
+    faction: jongnam
+    lineage: 도가
+    grade: 상승
+    method: 좌공
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: 없음, 발력: "중검(重劍) 계열 발경 위력 +1" }
+    passive: "슈퍼아머 상태에서 받는 피해 -1 (맞으면서 베는 검의 심법)"
+    circulation_color: "묵직한 남색"
+    acquisition: "종남 내문 — 천강검법과 함께 전수"
+    lineage_role: 문파_기초
+
+  eunha_cheongang:
+    name: "은하천강신공"
+    faction: jongnam
+    lineage: 도가
+    grade: 상승
+    method: 시공
+    method_condition: { segment: 심야, multiplier: 2, daily_cap: "1구간" }   # 은하는 밤에 보인다
+    capacity: 9
+    purity: 1.4
+    qi_profile: { 연비: 없음, 발력: "중검 계열 격 위력 +1" }
+    passive: "천강(天罡) — 슈퍼아머 지속 중 경직 면역 + 넉백 면역 (종남의 검은 밀리지 않는다)"
+    circulation_color: "별이 흐르는 검푸른 빛"
+    acquisition: "★ 종남 장문 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 장문_전승
+    predecessor: taeeul_singong
+
+  # ─── 점창파 ───
+  bungwang_singong:
+    name: "분광신공"
+    faction: jeomchang
+    lineage: 검문
+    grade: 상승
+    method: 동공
+    method_condition: { source: "검술 수련·실전", ratio: 0.5 }
+    capacity: 7
+    purity: 1.1
+    qi_profile: { 연비: "발경 소모 -1", 발력: 없음 }   # ★ 발경이 싸다 = 쾌검이 매 타 기를 싣는다
+    passive: "쾌검 — 다단히트(hit_count) 무공의 매 히트에 발경 적용 (분광십팔수 5히트가 여기서 산다)"
+    circulation_color: "갈라지는 흰 섬광"
+    acquisition: "점창 내문 — 운남의 쾌검은 심법도 빠르다"
+    lineage_role: 문파_기초
+    # ★지어냄 — 노션에 점창 심법이 없다. 다만 '쾌검'은 원천이 명시했고,
+    #   연비(발경 -1)가 그 쾌검을 수치로 성립시킨다 (다단 5히트에 매번 기를 싣는 유일한 길)
+
+  # ─── 청성파 ───
+  cheongun_simbeop:
+    name: "청운심법"
+    faction: cheongseong
+    lineage: 도가
+    grade: 중급
+    method: 좌공
+    capacity: 6
+    purity: 1.1
+    qi_profile: { 연비: 없음, 발력: 없음 }
+    passive: "흘리기 유예 +1틱 (청성의 검은 받아넘긴다 — 송풍검법과 공명)"
+    gyeol: { 흘리기_판정: 1 }      # passive 가 이미 '흘리기'라고 말하고 있었다 — 기계 키로 옮겼을 뿐이다
+    build_affinity: [심안, 초식]   # 받아넘기는 검 — 다구리에서 값이 온다 (forced_guard 가 회피를 지울 때)
+    circulation_color: "푸른 구름"
+    acquisition: "청성 외문 과정"
+    lineage_role: 문파_기초
+    # ★지어냄
+
+  # ─── 해남파 ───
+  haeryu_simgyeol:
+    name: "해류심결"
+    faction: haenam
+    lineage: 검문
+    grade: 중급
+    method: 동공
+    method_condition: { source: "검술 수련·실전", ratio: 0.5 }
+    capacity: 6
+    purity: 1.1
+    qi_profile: { 연비: 없음, 발력: "카운터 히트 시 발경 위력 +1" }
+    passive: "해류(海流) — counter_hit_bonus 를 가진 무공의 보정 +0.1 (역수·좌수의 심법)"
+    circulation_color: "밀려왔다 밀려가는 청록"
+    acquisition: "해남 외문 과정 — 파도를 세는 법부터 배운다"
+    lineage_role: 문파_기초
+    # ★지어냄
+
+  # ─── 모용세가 (입문 불가 — 심법만 등재. 무공 계보 없음) ───
+  geongon_mujeok:
+    name: "건곤무적공"
+    faction: moyong
+    lineage: 세가
+    grade: 상승
+    method: 좌공
+    capacity: 8
+    purity: 1.3
+    qi_profile: { 연비: 없음, 발력: 없음 }
+    passive: "★ 미설계 — 모용의 무학은 강호에 알려진 바가 없다 (그것이 모용이 무서운 이유다)"
+    circulation_color: "알려지지 않음"
+    acquisition: "★ 모용 혈족 전승 — 플레이어 입문 불가 (사유: docs/design/sect_lineage.md 5장)"
+    bloodline_restricted: true
+    lineage_role: 세가_전승
+    player_obtainable: false
+
+  yeongui_palgeuk:
+    name: "영의팔극공"
+    faction: moyong
+    lineage: 세가
+    grade: 상승
+    method: 좌공
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: 없음, 발력: 없음 }
+    passive: "★ 미설계 — 위와 같다"
+    circulation_color: "알려지지 않음"
+    acquisition: "★ 모용 혈족 전승 — 플레이어 입문 불가"
+    bloodline_restricted: true
+    lineage_role: 세가_전승
+    player_obtainable: false
 
 # 기질 — 정순한 내공의 정화력 (순도 = 회복 배율이자 정화력)
 # 독 대처 3층 — 대부분의 무사는 독 앞에 무력하다 (해독에는 조건이 필요)

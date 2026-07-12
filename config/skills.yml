@@ -495,7 +495,11 @@ martial_arts:
     faction: dangga
     required_realm: "일류"
     required_stats: { 체력: 4, 지혜: 3 }
-    required_mastery: 0      # 독 곁가지의 첫 칸 — 선행 무공이 아니라 **심법**(칠살음독경)이 문이다
+    required_mastery: 0      # 독 곁가지의 첫 칸 — 선행 **무공**이 없다 (하급이 없는 계보다)
+    # ★ 문(門)이 무공이 아니라 심법이다. 독은 손이 아니라 몸으로 배운다 —
+    #   칠살음독경(식공·독문)으로 몸을 독에 동화시킨 자만 제 손에 독을 얹을 수 있다.
+    #   그래서 이 계보에는 하급이 없고, 대신 **심법이 문턱**이다 (기계 판독 필드).
+    requires_simbeop: { id: chilsal_eumdokgyeong, note: "독문 lineage — 동화(면역)가 선행이다" }
     acquisition: "당가 내당 전수 — 독 내성 수련 선행 (원기 대가)"
     bloodline_restricted: true
     requires_master: true

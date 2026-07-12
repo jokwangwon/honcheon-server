@@ -145,9 +145,17 @@ def defense_rules(cfg):
     return out
 
 
-def attacker_attr(cfg, ranged=False):
+def attacker_attr(cfg, weapon="검"):
+    """★ 병기가 능력치를 정한다 — combat.yml attack.attacker_attribute (계열 → 능력치).
+
+    이 한 줄이 '외공 지배 전략'을 푼 매듭이다: 근력 하나가 공격·막기·경감을 다 사면
+    그 과목이 정답이 된다 (= 노션 원설계의 병). 병기가 능력치를 나누면 빌드가 병기를 고른다.
+    """
     spec = dig(cfg, "combat.yml", "attack", "attacker_attribute", default={}) or {}
-    return str(spec.get("원거리" if ranged else "기본", "근력"))
+    for attr, weapons in spec.items():
+        if isinstance(weapons, list) and weapon in weapons:
+            return str(attr)
+    return str(spec.get("default", "근력"))
 
 
 def gyeol_of(cfg, simbeop_id):
@@ -161,20 +169,53 @@ def simbeop_all(cfg):
     return dig(cfg, "simbeop.yml", "simbeop", default={}) or {}
 
 
+def obtainable_simbeop(cfg, stance):
+    """그 방어를 사는 결(結)을 가진 심법 중 **실제로 얻을 수 있는 것** — 일인전승은 제외한다.
+
+    ★ 세계에 한 자루뿐인 심법(sole_transmission)은 빌드의 뼈대가 될 수 없다 —
+      그 빌드를 고를 수 있는 플레이어가 서버에 한 명뿐이라면 그건 선택지가 아니다.
+    """
+    for sid, spec in simbeop_all(cfg).items():
+        if not isinstance(spec, dict) or spec.get("demonic"):
+            continue
+        if spec.get("sole_transmission"):
+            continue
+        if gyeol_of(cfg, sid).get(stance, 0) > 0:
+            return sid
+    return None
+
+
+def sole_only_stances(cfg):
+    """★ 결이 일인전승 심법에만 있는 방어 — 그 축의 뼈대에 아무도 닿을 수 없다."""
+    out = []
+    for stance in STANCES:
+        holders = [sid for sid, spec in simbeop_all(cfg).items()
+                   if isinstance(spec, dict) and gyeol_of(cfg, sid).get(stance, 0) > 0]
+        if holders and all((simbeop_all(cfg)[s] or {}).get("sole_transmission") for s in holders):
+            out.append((stance, holders))
+    return out
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  성장 모델 — 예산(일치)을 배분표대로 쓴다. 캡에 닿으면 차선으로 흐른다
 # ══════════════════════════════════════════════════════════════════════════════
 
+#: 캡에 닿았을 때 구간이 흘러갈 곳 — 이성적인 플레이어는 배분을 바꾼다 (버리지 않는다)
+FALLBACK = {"외공": ["초식", "심안"], "내공": ["초식", "외공"], "초식": ["외공", "심안"],
+            "신법": ["심안", "초식"], "심안": ["신법", "초식"]}
+
+
 class Build:
     """한 사람의 성장 결과 — 배분표 + 예산 → 능력치·숙련·내공.
 
-    ★ 캡 처리가 이 모델의 핵심이다: 캡에 닿은 과목은 적립이 멈추고, 이성적인 플레이어는
-      남은 구간을 **차선 과목**으로 돌린다 (배분표 순서대로). 그래서 몰빵은 캡에서 저절로 꺾인다 —
-      지배 전략을 막는 것이 밸런스 수치가 아니라 '천장'이라는 설계 주장이 여기서 검증된다.
+    ★ 캡 처리가 이 모델의 심장이다: 캡에 닿은 과목은 적립이 멈추고, 이성적인 플레이어는 남은 구간을
+      **차선 과목**으로 돌린다 (FALLBACK). 그래서 몰빵은 캡에서 저절로 꺾인다 —
+      "지배 전략을 막는 것은 밸런스 수치가 아니라 천장과 시간이다" 라는 설계 주장이 여기서 검증된다.
+      (버려진 일치를 세는 것은 배분을 **안 바꾼 자**의 손실을 재기 위해서다 — wasted)
     """
 
     def __init__(self, cfg, name, alloc, realm, budget, simbeop=None,
-                 base_attrs=None, base_skill=3, base_naegong=1.0 / 3.0, blurb=""):
+                 base_attrs=None, base_skill=3.0, base_naegong=1.0 / 3.0, blurb=""):
         self.cfg = cfg
         self.name = name
         self.alloc = dict(alloc)          # 과목 → 구간 수 (합 = segments_per_day)
@@ -182,65 +223,75 @@ class Build:
         self.simbeop = simbeop
         self.blurb = blurb
         self.cap = attr_cap(cfg, realm)
-        self.attrs = dict(base_attrs or {a: 3.0 for a in COMBAT_ATTRS})
+        self.weapon = "검"                # ★ 빌드가 병기를 고른다 (standard_builds 가 덮어쓴다)
+        self.attrs = {a: float(num((base_attrs or {}).get(a), 3.0)) for a in COMBAT_ATTRS}
         self.attrs["내공"] = base_naegong
+        self.ladder = skill_ladder(cfg)
+        # ★ 숙련은 이미 치른 몫에서 출발한다 (일류 = 주력 숙련 3). 원장은 '일치'이므로 되돌려 심는다
+        self.skill_days = self._days_for(self.ladder, base_skill)
         self.skill = float(base_skill)
-        self.skill_days = 0.0
-        self.wasted = 0.0                 # 캡에 닿아 버려진 일치 (배분을 안 바꾼 자의 손실)
-        self.capped_at = {}               # 과목 → 캡에 닿은 날(일치 누적)
+        self.wasted = 0.0                 # 캡에 닿았는데 배분을 안 바꿨다면 버려졌을 일치
+        self.capped_at = {}               # 과목 → 캡에 닿은 예산 지점(일치)
         self._grow(cfg, budget)
 
-    # ── 배분표대로 예산을 흘린다 ──────────────────────────────────────────────
+    # ── 배분표대로 예산을 흘린다 (하루 단위 — 뭉텅이로 넣으면 캡을 넘긴다) ──────
     def _grow(self, cfg, budget):
         segs = segments_per_day(cfg)
-        dps = days_per_segment(cfg)
         subj = subjects(cfg)
-        ladder = skill_ladder(cfg)
         cost1 = attr_cost_days(cfg)
-
-        # 하루 단위로 흘린다 (캡 도달 시점을 정확히 잡기 위해 — 뭉텅이로 넣으면 넘친다)
         spent = 0.0
-        day_days = segs * dps                      # 하루에 배분되는 총 일치 (= 1.0)
-        step = day_days
+        day_days = segs * days_per_segment(cfg)     # 하루 = 1.0일치
         while spent + 1e-9 < budget:
             step = min(day_days, budget - spent)
             for name, n_seg in self.alloc.items():
-                if n_seg <= 0:
-                    continue
-                share = step * (n_seg / segs)
-                self._pour(cfg, subj, ladder, cost1, name, share, spent)
+                if n_seg > 0:
+                    self._pour(cfg, subj, cost1, name, step * (n_seg / segs), spent, depth=0)
             spent += step
 
-    def _pour(self, cfg, subj, ladder, cost1, name, days, spent):
+    def _pour(self, cfg, subj, cost1, name, days, spent, depth):
+        """한 과목에 days 일치를 붓는다. 캡에 닿으면 차선 과목으로 흘린다 (FALLBACK)."""
+        if days <= 0 or depth > 3:
+            self.wasted += max(0.0, days)
+            return
+        overflow = 0.0
         spec = subj.get(name) or {}
         ledgers = spec.get("ledger") or []
+
         if name == "초식":
-            self.skill_days += days
-            self.skill = self._skill_of(ladder, self.skill_days)
+            self.skill_days += days                 # 숙련에는 캡이 없다 — 비용이 곧 천장이다
+            self.skill = self._skill_of(self.ladder, self.skill_days)
             return
+
         if name == "내공":
-            if self.simbeop is None:               # 심법 게이트 — 개화하지 않으면 이 과목은 0
-                self.wasted += days
-                return
-            cur = self.attrs["내공"]
-            capacity = num(dig(cfg, "simbeop.yml", "simbeop", self.simbeop, "capacity"), 4)
-            room = min(self.cap, capacity)
-            if cur >= room:
-                self.wasted += days
-                self.capped_at.setdefault(name, spent)
-                return
-            self.attrs["내공"] = min(room, cur + days / naegong_cost_days(cfg, int(cur)))
-            return
-        # 능력치 과목 (외공은 두 축을 split 으로 나눠 진다)
-        split = spec.get("split") or [1.0 / max(1, len(ledgers))] * len(ledgers)
-        for attr, frac in zip(ledgers, split):
-            share = days * num(frac, 1.0)
-            cur = self.attrs.get(attr, 0.0)
-            if cur >= self.cap:
-                self.wasted += share
-                self.capped_at.setdefault(name, spent)
-                continue
-            self.attrs[attr] = min(self.cap, cur + share / cost1)
+            if self.simbeop is None:                # 심법 게이트 — 개화 못 한 몸은 이 과목이 0
+                overflow = days
+            else:
+                cur = self.attrs["내공"]
+                capacity = num(dig(cfg, "simbeop.yml", "simbeop", self.simbeop, "capacity"), 4)
+                room = min(self.cap, capacity)      # 경지 캡 ∧ 단전 용량 — 둘 중 낮은 쪽
+                if cur >= room:
+                    overflow = days
+                    self.capped_at.setdefault(name, spent)
+                else:
+                    self.attrs["내공"] = min(room, cur + days / naegong_cost_days(cfg, int(cur)))
+        else:
+            # 능력치 과목 (외공은 근력·체력 두 축을 split 으로 나눠 진다)
+            split = spec.get("split") or [1.0 / max(1, len(ledgers))] * len(ledgers)
+            for attr, frac in zip(ledgers, split):
+                share = days * num(frac, 1.0)
+                cur = self.attrs.get(attr, 0.0)
+                if cur >= self.cap:
+                    overflow += share
+                    self.capped_at.setdefault(name, spent)
+                    continue
+                self.attrs[attr] = min(self.cap, cur + share / cost1)
+
+        if overflow > 1e-9:
+            self.wasted += overflow                 # 배분을 안 바꿨다면 여기서 버려졌다
+            for nxt in FALLBACK.get(name, []):
+                if nxt in subj:
+                    self._pour(cfg, subj, cost1, nxt, overflow, spent, depth + 1)
+                    return
 
     @staticmethod
     def _skill_of(ladder, days):
@@ -249,11 +300,16 @@ class Build:
         while True:
             cost = ladder.get(level)
             if cost is None or cost <= 0:
-                return float(level)                # 환산표 상한 — 수련만으로는 여기까지
+                return float(level)                # 환산표 상한 — 수련만으로는 여기까지 (beyond)
             if remaining < cost:
                 return level + remaining / cost
             remaining -= cost
             level += 1
+
+    @staticmethod
+    def _days_for(ladder, level):
+        """숙련 n 에 이미 든 일치 (되돌려 심기 — 원장은 언제나 일치가 정본이다)."""
+        return sum(ladder.get(i, 0.0) for i in range(int(level)))
 
     # ── 파생치 — 전부 등록부의 공식 ────────────────────────────────────────────
     def attr(self, name):
@@ -332,33 +388,60 @@ def exchange(cfg, att, dfn, att_pen=0, dfn_pen=0, mod=0, att_qi=0.0,
     return best     # (기대 피해, 고른 태세, 명중률)
 
 
-def build_attack(cfg, b, weapon="검", qi_band=None):
-    """빌드의 공격 프로파일 — 무기·무공 위력은 combat.yml 등록부."""
-    wp = num(dig(cfg, "combat.yml", "damage", "weapon_power", weapon), 4)
+def build_attack(cfg, b, weapon=None, qi_band=None):
+    """빌드의 공격 프로파일 — 병기가 능력치를 정하고(attacker_attribute), 위력표는 그대로다."""
+    w = weapon or b.weapon
+    wp = num(dig(cfg, "combat.yml", "damage", "weapon_power", w), 4)
     tps = dig(cfg, "combat.yml", "damage", "technique_power", default={}) or {}
     tp = num(tps.get(b.realm + "급"), 1)
     qis = dig(cfg, "combat.yml", "damage", "qi_power", default={}) or {}
     band = qi_band or top_band(cfg, b.realm)
     return {
-        "atk": b.ai(attacker_attr(cfg)) + b.mastery,
+        "atk": b.ai(attacker_attr(cfg, w)) + b.mastery,   # ★ 병기가 정한 능력치 + 무공 숙련
         "wpower": wp,
         "tpower": tp,
         "qi": num(qis.get(band), 0),
         "band": band,
+        "weapon": w,
+        "attr": attacker_attr(cfg, w),
     }
 
 
 def foe_profile(cfg, realm, weapon="도", skill=None):
-    """상대 — combat_audit 의 표준 무인 모델 (Fighter) 을 그대로 빌려 온다."""
+    """상대 — combat_audit 의 표준 무인 모델 (Fighter) 을 그대로 빌려 온다 (전투 수학은 하나뿐이다)."""
     f = Fighter(cfg, "상대", realm, weapon=weapon, is_npc=True, skill=skill)
     return {
         "atk": int(f.atk_stat) + int(f.skill),
         "wpower": f.wpower,
         "tpower": f.tpower,
-        "qi": num(dig(cfg, "combat.yml", "damage", "qi_power",
-                      top_band(cfg, realm)), 0),
+        "qi": num(dig(cfg, "combat.yml", "damage", "qi_power", top_band(cfg, realm)), 0),
         "dur": f.dur,
         "def_stat": int(f.def_stat) + int(f.skill),
+        "민첩": int(f.def_stat),          # 선공 비교용 (initiative.frontal)
+        "감각": int(f.def_stat),          # Fighter 는 감각을 따로 갖지 않는다 — 표준 무인은 균질하다
+        "은신": int(f.skill),             # 기습 판정의 저항 (심안의 간파 대상)
+        "realm": realm,
+    }
+
+
+def mirror_profile(cfg, mirror, realm):
+    """빌드 하나를 '상대'로 세운다 — 동예산·동경지의 사람.
+
+    ★ combat_audit 의 표준 무인(능력치 = 캡 −1)을 상대로 쓰면 그는 ~9년치를 쓴 몸이라
+      5년치 빌드가 전원 진다. 그건 빌드 비교가 아니라 **예산 비교**다.
+      (예산이 실력인 것은 맞다 — 그러나 그건 빌드의 우열이 아니다.)
+    """
+    atk = build_attack(cfg, mirror)
+    return {
+        "atk": atk["atk"],
+        "wpower": atk["wpower"],
+        "tpower": atk["tpower"],
+        "qi": atk["qi"],
+        "dur": mirror.dur,
+        "def_stat": mirror.ai("민첩") + mirror.mastery,
+        "민첩": mirror.ai("민첩"),
+        "감각": mirror.ai("감각"),
+        "은신": mirror.mastery,
         "realm": realm,
     }
 
@@ -374,55 +457,103 @@ def wound_pen(hp, dur):
     return 0
 
 
-def duel_build(cfg, b, foe, max_rounds=25, qi_band=None, player_first=True):
+def initiative(cfg, b, foe):
+    """선공 — combat.yml initiative.frontal: "민첩+감각 합 비교 — 높은 쪽 선공,
+    동률이면 경지 높은 쪽, 그것도 동률이면 감각 단독 비교".
+
+    ★ 이 규칙을 모델에서 빼면 신법·심안의 공격 기여가 **통째로 사라진다** —
+      그 둘이 사는 유일한 공격 자산이 '먼저 친다'는 것이다. 그리고 combat_audit 이 이미
+      증언했다: "선공은 전부다 — 대칭 대결의 승패가 판정이 아니라 선공 결정에서 이미 끝난다".
+    """
+    _ = cfg
+    mine = b.ai("민첩") + b.ai("감각")
+    theirs = foe["민첩"] + foe["감각"]
+    if mine != theirs:
+        return mine > theirs
+    return b.ai("감각") >= foe["감각"]           # 동률이면 감각 단독 비교
+
+
+def ambush_detected(cfg, b, foe):
+    """기습 간파 확률 — 감각 + 2d6 vs 상대 은신(judgment.yml 보통 12 근사).
+
+    ★ 심안(감각)의 공격적 자산이 여기 있다: **매복을 읽으면 매복이 아니다.**
+    """
+    dc = num(dig(cfg, "judgment.yml", "static_difficulty", "보통"), 12)
+    need = dc + foe.get("은신", 0) - b.ai("감각")
+    p = sum(Fraction(w, 36) for roll, w in DICE_ITEMS if roll >= need)
+    return float(min(Fraction(1), max(Fraction(0), p)))
+
+
+def attack_damage(cfg, atk, foe, pen_me, pen_foe, qi):
+    """한 합의 기대 피해 (플레이어 → 상대) — 상대는 combat_audit 의 저항치로 막는다."""
+    _ = cfg
+    a = atk["atk"] + pen_me
+    d = foe["def_stat"] + pen_foe
+    dmg = Fraction(0)
+    for roll, w in DICE_ITEMS:
+        margin = (a + roll) - (d + 7)
+        if margin >= 0:
+            base = max(0.0, atk["wpower"] + atk["tpower"] + qi + (margin // 2))
+            dmg += Fraction(w, 36) * Fraction(int(base * 2), 2)
+    return float(dmg)
+
+
+def duel_build(cfg, b, foe, max_rounds=25, qi_band=None, player_first=None, ambush=False):
     """빌드 vs 상대 — 매 합 양측 기대 피해. 방어자는 태세를 고른다.
+
+    선공은 **규칙이 정한다** (민첩+감각). 매복이면 상대가 선공 + 첫 합 방어 −2 (initiative.ambush),
+    단 감각으로 간파하면 그 이점이 사라진다 — 확률 가중으로 두 갈래를 섞는다.
 
     반환: (내가 눕히는 합, 내가 눕는 합, 남은 내구 비율)
     """
+    if ambush:
+        p_see = ambush_detected(cfg, b, foe)
+        seen = _duel(cfg, b, foe, max_rounds, qi_band, first=initiative(cfg, b, foe), pen1=0)
+        blind = _duel(cfg, b, foe, max_rounds, qi_band, first=False, pen1=-2)
+        # 확률 가중 — 잔존 내구는 섞고, 합수는 나쁜 쪽(당한 쪽)을 보고한다 (감사는 인색해야 한다)
+        left = p_see * seen[2] + (1 - p_see) * blind[2]
+        return blind[0], blind[1], left
+    first = initiative(cfg, b, foe) if player_first is None else player_first
+    return _duel(cfg, b, foe, max_rounds, qi_band, first=first, pen1=0)
+
+
+def _duel(cfg, b, foe, max_rounds, qi_band, first, pen1):
     atk = build_attack(cfg, b, qi_band=qi_band)
     regen, _ = combat_regen(cfg)
     energy = b.pool
     hp_me, hp_foe = float(b.dur), float(foe["dur"])
-
     ttk = ttd = None
+
     for r in range(1, max_rounds + 1):
-        pen_me = wound_pen(hp_me, b.dur)
+        pen_me = wound_pen(hp_me, b.dur) + (pen1 if r == 1 else 0)
         pen_foe = wound_pen(hp_foe, foe["dur"])
 
-        # 내 차례 — 격을 태울 수 있으면 태운다 (내력 예산)
+        # 격을 태울 수 있으면 태운다 (내력 예산 · 조식 규칙)
         cost = qi_cost(cfg, atk["band"])
-        qi = 0.0
         if cost <= 0 or energy >= cost:
             qi = atk["qi"]
             energy -= max(0, cost)
         else:
-            energy = min(b.pool, energy + regen)     # 숨을 고른 합 (조식)
-        a = atk["atk"] + pen_me
-        d = foe["def_stat"] + pen_foe
-        dmg = Fraction(0)
-        for roll, w in DICE_ITEMS:
-            margin = (a + roll) - (d + 7)
-            if margin >= 0:
-                base = max(0.0, atk["wpower"] + atk["tpower"] + qi + (margin // 2))
-                dmg += Fraction(w, 36) * Fraction(int(base * 2), 2)
-        if player_first:
-            hp_foe -= float(dmg)
-            if hp_foe <= 0:
-                ttk = ttk or r
-                break
+            qi = 0.0
+            energy = min(b.pool, energy + regen)     # 숨을 고른 합
+        mine = attack_damage(cfg, atk, foe, pen_me, pen_foe, qi)
 
-        # 상대 차례 — 내가 태세를 고른다
-        exp, _stance, _hit = exchange(cfg, foe, b, att_pen=pen_foe, dfn_pen=pen_me,
-                                      att_qi=foe["qi"], att_is_npc=True)
-        hp_me -= exp
-        if not player_first:
-            hp_foe -= float(dmg)
+        if first:
+            hp_foe -= mine
+            if hp_foe <= 0:
+                ttk = r
+                break
+        # 상대 차례 — 내가 태세를 고른다 (회피/막기/흘리기 중 기대 피해 최소)
+        hp_me -= exchange(cfg, foe, b, att_pen=pen_foe, dfn_pen=pen_me,
+                          att_qi=foe["qi"], att_is_npc=True)[0]
         if hp_me <= 0:
-            ttd = ttd or r
+            ttd = r
             break
-        if hp_foe <= 0:
-            ttk = ttk or r
-            break
+        if not first:
+            hp_foe -= mine
+            if hp_foe <= 0:
+                ttk = r
+                break
     return ttk, ttd, max(0.0, hp_me) / b.dur
 
 
@@ -437,8 +568,14 @@ def melee_build(cfg, b, foe, count, max_rounds=25):
     """1대다 — 포위 규칙(engage_slots · 순보정 · forced_guard)을 combat_audit 에서 그대로 빌린다.
 
     ★ 이 시뮬이 '신법 빌드는 다구리에 벌거벗는다'는 설계 주장의 검산이다.
+
+    ★★ 강제 태세는 **audit_floor(흘리기)** 로 잰다 — combat.yml forced_guard.audit_floor 의 규약:
+       "감사는 경감이 가장 낮은 강제 태세로 잰다 — 방어자에게 인색해야 눈이 산다".
+       (막기도 고를 수는 있지만 무기가 격을 먹는다(weapon_break). 그 값을 안 매기고 막기를 허용하면
+        포위가 1대1보다 안전해진다 — 그것이 등록부가 감사 바닥을 못 박아 둔 이유다.)
     """
     rules = gang_rules(cfg)
+    floor = str(forced_guard(cfg).get("audit_floor", "흘리기"))
     atk = build_attack(cfg, b)
     hp_me = float(b.dur)
     hps = [float(foe["dur"])] * count
@@ -450,39 +587,32 @@ def melee_build(cfg, b, foe, count, max_rounds=25):
         if not alive:
             return r - 1, hp_me / b.dur, None
         n_eng = engaged(rules, len(alive))
-        forced = len(alive) - 1 >= num(dig(rules_raw(cfg), "forced_guard", "trigger_extra_attackers"), 1)
+        trigger = num(forced_guard(cfg).get("trigger_extra_attackers"), 1)
+        forced = (len(alive) - 1) >= trigger      # 둘 이상에게 잡히는 순간부터
 
         pen_me = wound_pen(hp_me, b.dur)
-        # 나는 하나를 벤다 (집중)
         cost = qi_cost(cfg, atk["band"])
         qi = atk["qi"] if (cost <= 0 or energy >= cost) else 0.0
         energy = (energy - cost) if qi else min(b.pool, energy + regen)
-        tgt = alive[0]
-        pen_t = wound_pen(hps[tgt], foe["dur"])
-        a = atk["atk"] + pen_me
-        d = foe["def_stat"] + pen_t
-        dmg = Fraction(0)
-        for roll, w in DICE_ITEMS:
-            margin = (a + roll) - (d + 7)
-            if margin >= 0:
-                base = max(0.0, atk["wpower"] + atk["tpower"] + qi + (margin // 2))
-                dmg += Fraction(w, 36) * Fraction(int(base * 2), 2)
-        hps[tgt] -= float(dmg)
 
-        # 그들이 나를 친다 — 동시에 칠 수 있는 손은 engage_slots 까지
+        tgt = alive[0]                             # 하나에 집중한다 (머릿수를 줄이는 것이 유일한 길)
+        hps[tgt] -= attack_damage(cfg, atk, foe, pen_me, wound_pen(hps[tgt], foe["dur"]), qi)
+
         alive = [i for i, h in enumerate(hps) if h > 0]
-        mod = net_mod(rules, min(n_eng, len(alive)))
-        for _ in range(min(n_eng, len(alive))):
-            exp, _s, _h = exchange(cfg, foe, b, dfn_pen=wound_pen(hp_me, b.dur), mod=mod,
-                                   att_qi=foe["qi"], att_is_npc=True, forced=forced)
-            hp_me -= exp
+        hands = min(n_eng, len(alive))             # 동시에 칠 수 있는 손은 engage_slots 까지
+        mod = net_mod(rules, hands)
+        for _ in range(hands):
+            hp_me -= exchange(cfg, foe, b, dfn_pen=wound_pen(hp_me, b.dur), mod=mod,
+                              att_qi=foe["qi"], att_is_npc=True, forced=forced,
+                              dfn_stance=(floor if forced else None))[0]
         if hp_me <= 0:
             return None, 0.0, r
     return None, max(0.0, hp_me) / b.dur, None
 
 
-def rules_raw(cfg):
-    return dig(cfg, "combat.yml", "attack", "gang_up", default={}) or {}
+def forced_guard(cfg):
+    """포위된 자의 태세 — combat.yml attack.outnumbered_defense.forced_guard (gang_up 이 아니다)."""
+    return dig(cfg, "combat.yml", "attack", "outnumbered_defense", "forced_guard", default={}) or {}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -578,7 +708,7 @@ def lint_defense_axes(cfg, rep):
                 f"(그 축이 지배 전략이 된다)")
 
     # 포위가 회피를 지우는가 — 신법 빌드의 약점이 규칙에 등록돼 있어야 한다
-    fg = dig(cfg, "combat.yml", "attack", "gang_up", "forced_guard", default={}) or {}
+    fg = forced_guard(cfg)
     loses = fg.get("loses") or []
     rep.verdict("회피" in loses,
                 f"포위 시 회피가 봉쇄된다 (forced_guard.loses = {loses}) — "
@@ -596,6 +726,10 @@ def lint_defense_axes(cfg, rep):
                 "규칙이 말하지 않는다. 엔진은 그 항을 뺄 수밖에 없다 (실제로 그랬다)")
 
 
+#: 방어를 말하는 낱말 — passive 프로즈가 방어 결인데 기계 정의가 없는 경우만 짚는다 (오탐 방지)
+DEFENSE_WORDS = ("회피", "방어", "패링", "막기", "흘리", "반격", "받아")
+
+
 def lint_gyeol(cfg, rep):
     rep.head("심법의 결(結) — 빌드의 뼈대가 기계로 읽히는가")
     all_sim = simbeop_all(cfg)
@@ -605,34 +739,48 @@ def lint_gyeol(cfg, rep):
         if not isinstance(spec, dict):
             continue
         g = gyeol_of(cfg, sid)
-        name = spec.get("name", sid)
-        aff = spec.get("build_affinity")
-        rep.say(f"     {str(name):<8} 결 {str(g) if g else '없음':<22} 궁합 {aff}")
-        if "passive" in spec and str(spec.get("passive")) != "없음" and not g and not spec.get("demonic"):
-            if str(spec.get("grade")) != "기초":
-                rep.warn(f"{name}: passive('{spec.get('passive')}') 는 있는데 기계 정의(gyeol)가 비었다 — "
-                         f"엔진이 못 읽는 패시브다")
+        name = str(spec.get("name", sid))
+        if g or spec.get("build_affinity"):
+            rep.say(f"     {name:<8} 결 {str(g) if g else '없음':<20} "
+                    f"궁합 {spec.get('build_affinity')}"
+                    f"{'  [일인전승]' if spec.get('sole_transmission') else ''}")
+        passive = str(spec.get("passive", ""))
+        if not g and any(w in passive for w in DEFENSE_WORDS):
+            rep.warn(f"{name}: passive('{passive[:28]}…') 가 방어를 말하는데 기계 정의(gyeol)가 없다 — "
+                     f"엔진이 못 읽는 패시브다 (빌드의 뼈대가 프로즈로만 있다)")
         for stance, val in g.items():
             if abs(val) > cap:
                 rep.fail(f"{name} 결 {stance} {val:+g} 이 캡({cap:g})을 넘는다 — "
                          f"심법이 격차를 만든다 (심법은 색이지 격차가 아니다)")
-            hits.setdefault(stance, []).append(str(name))
+            hits.setdefault(stance, []).append(name)
 
-    # ★ 한 심법이 방어 둘 이상을 사면 그것이 지배 심법이 된다
-    multi = [spec.get("name", sid) for sid, spec in all_sim.items()
+    # ① 한 심법이 방어 둘 이상을 사면 그것이 지배 심법이 된다
+    multi = [str(spec.get("name", sid)) for sid, spec in all_sim.items()
              if isinstance(spec, dict) and len(gyeol_of(cfg, sid)) > 1]
     rep.verdict(not multi,
                 "결을 둘 이상 가진 심법 없음 — 어떤 심법도 두 방어를 동시에 사지 못한다 (지배 심법 없음)"
                 if not multi else
                 f"두 방어를 동시에 사는 심법: {multi} — 지배 심법이다")
 
+    # ② 세 방어에 결이 하나씩 걸려 있는가
     covered = set(hits)
     rep.verdict(covered == set(STANCES),
-                f"세 방어에 결이 하나씩 걸려 있다 — "
+                "세 방어에 결이 하나씩 걸려 있다 — "
                 + " · ".join(f"{s}({'/'.join(hits[s])})" for s in STANCES if s in hits)
                 if covered == set(STANCES) else
                 f"결이 걸리지 않은 방어: {sorted(set(STANCES) - covered)} — "
                 f"그 방어를 고르는 심법이 없다 (그 축을 뼈대로 삼는 빌드가 없다)")
+
+    # ③ ★ 얻을 수 있는가 — 일인전승 심법은 빌드의 뼈대가 될 수 없다 (서버에 한 명뿐이다)
+    for stance, holders in sole_only_stances(cfg):
+        names = [str((all_sim[h] or {}).get("name", h)) for h in holders]
+        rep.warn(f"'{stance}' 결이 일인전승 심법에만 있다 ({'/'.join(names)}) — "
+                 f"그 빌드의 뼈대를 가질 수 있는 플레이어가 세계에 한 명뿐이다. "
+                 f"보급형 대체 심법(일인전승 아님)이 하나 필요하다")
+    for stance in STANCES:
+        sid = obtainable_simbeop(cfg, stance)
+        if sid:
+            rep.say(f"     {stance:<4} 보급 뼈대: {(all_sim[sid] or {}).get('name', sid)}")
 
 
 def lint_elixirs(cfg, rep):
@@ -690,50 +838,48 @@ def lint_elixirs(cfg, rep):
 #  ② 빌드 시뮬
 # ══════════════════════════════════════════════════════════════════════════════
 
-def standard_builds(cfg, realm, budget):
-    """다섯 몰빵 + 균형 — 배분표는 등록부의 과목 이름을 그대로 쓴다."""
-    segs = segments_per_day(cfg)
-    subj = list(subjects(cfg))
-    out = []
-    # 몰빵 5종 — 캡에 닿으면 다음 과목으로 흐른다 (Build 가 wasted 를 세지만,
-    # 이성적 플레이어는 배분을 바꾼다. 그 전환을 '2순위'로 모델링한다)
-    seconds = {"외공": "초식", "내공": "초식", "초식": "외공", "신법": "심안", "심안": "신법"}
-    sims = {"외공": "jeongsim_geomgyeol", "내공": "taegeuk_gigong", "초식": "jeongsim_geomgyeol",
-            "신법": "jaha_singong", "심안": "taegeuk_gigong"}
-    blurbs = {
-        "외공": "몸 — 단단하다. 막기(-3)로 산다",
-        "내공": "단전 — 격을 몰아 쓴다",
-        "초식": "손 — 명중과 마진",
-        "신법": "발 — 안 맞는다 (회피)",
-        "심안": "눈 — 먼저 본다 (흘리기)",
-    }
-    for name in subj:
-        alloc = {name: segs}
-        b = Build(cfg, f"{name} 몰빵", alloc, realm, budget,
-                  simbeop=sims.get(name), blurb=blurbs.get(name, ""))
-        # 캡에 닿아 버려진 몫은 2순위 과목으로 다시 흘린다 (배분을 바꾸는 플레이어)
-        if b.wasted > 1.0:
-            second = seconds.get(name)
-            b2 = Build(cfg, f"{name} 몰빵", alloc, realm, budget - b.wasted,
-                       simbeop=sims.get(name), blurb=blurbs.get(name, ""))
-            b2._pour_budget_into(cfg, second, b.wasted) if hasattr(b2, "_pour_budget_into") else None
-            # 간단히: 남은 예산을 2순위 과목 몰빵으로 이어 붙인다
-            b3 = Build(cfg, f"{name} 몰빵", {second: segs}, realm, b.wasted,
-                       simbeop=sims.get(name),
-                       base_attrs={k: v for k, v in b2.attrs.items() if k != "내공"},
-                       base_skill=b2.skill, base_naegong=b2.attrs["내공"])
-            b3.name = f"{name} 몰빵"
-            b3.alloc = alloc
-            b3.blurb = blurbs.get(name, "") + f" (캡 후 {second}으로)"
-            b3.wasted = b.wasted - (budget - b.wasted) * 0  # 표시용
-            b3.capped_at = b.capped_at
-            b = b3
-        out.append(b)
+#: 각 몰빵이 뼈대로 삼는 방어 — 심법은 그 방어의 결을 가진 **보급형**에서 고른다 (일인전승 제외)
+BUILD_STANCE = {"외공": "막기", "내공": "흘리기", "초식": "막기", "신법": "회피", "심안": "흘리기"}
 
-    even = {name: 1 for name in subj}
-    out.append(Build(cfg, "균형 (1구간씩)", even, realm, budget,
-                     simbeop="hyeoncheon_tonapbeop",
-                     blurb="다 조금씩 — 정수부가 안 오른다"))
+#: ★ 빌드가 병기를 고른다 (combat.yml attacker_attribute) — 키운 능력치로 낼 수 있는 병기를 든다
+BUILD_WEAPON = {"외공": "도", "내공": "도", "초식": "도", "신법": "검", "심안": "검"}
+
+BUILD_BLURB = {
+    "외공": "몸(근력·체력) — 도를 들고 막기(−3)로 산다",
+    "내공": "단전 — 격을 몰아 쓴다",
+    "초식": "손 — 명중과 마진 (일찍 싸고 늦게 비싸다)",
+    "신법": "발(민첩) — 검. 먼저 치고 안 맞는다",
+    "심안": "눈(감각) — 먼저 보고 흘린다",
+}
+
+
+def standard_builds(cfg, realm, budget, base_attrs=None, base_skill=3.0, bloomed=True):
+    """다섯 몰빵 + 균형 — 과목 이름은 등록부(training.yml)에서 읽는다 (도구가 짓지 않는다).
+
+    심법은 **플레이어가 실제로 얻을 수 있는 것**만 고른다 (일인전승 제외) — 아무도 못 가지는
+    심법에 기대어 축이 산다고 말하면 그건 검산이 아니라 변명이다.
+    개화 전(bloomed=False)에는 심법이 없다 → 내공 과목의 구간이 통째로 흘러넘친다 (게이트).
+    """
+    segs = segments_per_day(cfg)
+    all_subj = list(subjects(cfg))
+    # ★ 개화 전에는 '내공' 과목에 구간을 넣을 수 없다 (curriculum.내공.requires: 심법) —
+    #   그 배분은 **불법**이다. 도구가 불법 배분을 후보로 올리면 그것과 남의 몰빵이 같아 보이고
+    #   (구간이 차선 과목으로 흘러가니까), 동점이 지배 전략으로 오독된다. 후보에서 뺀다.
+    subj = [s for s in all_subj if bloomed or not (subjects(cfg).get(s) or {}).get("requires")]
+    basic = "hyeoncheon_tonapbeop" if bloomed else None
+    kw = dict(base_attrs=base_attrs, base_skill=base_skill,
+              base_naegong=(1.0 / 3.0 if bloomed else 0.0))
+    out = [Build(cfg, f"{name} 몰빵", {name: segs}, realm, budget,
+                 simbeop=(obtainable_simbeop(cfg, BUILD_STANCE.get(name, "막기")) or basic)
+                 if bloomed else None,
+                 blurb=BUILD_BLURB.get(name, ""), **kw)
+           for name in subj]
+    for b, name in zip(out, subj):
+        b.weapon = BUILD_WEAPON.get(name, "검")
+    even = Build(cfg, "균형(1구간씩)", {name: 1 for name in subj}, realm, budget,
+                 simbeop=basic, blurb="다 조금씩 — 정수부가 안 오른다", **kw)
+    even.weapon = "검"
+    out.append(even)
     return out
 
 
@@ -743,191 +889,327 @@ def simulate(cfg, rep, budget, max_rounds):
     rep.say("  ② 빌드 시뮬 — 지배 전략이 있는가 (해석적, 2d6 = 36가지)")
     rep.say("═" * 72)
 
-    realm = "일류"                     # 개화한 몸 — 격·심법·내력이 전부 열리는 첫 경지
-    builds = standard_builds(cfg, realm, budget)
-    sheet(cfg, rep, builds, realm, budget)
-    scores = scenarios(cfg, rep, builds, realm, max_rounds)
-    dominance(cfg, rep, builds, scores)
-    spread(cfg, rep, builds, realm, budget)
-    band_guard(cfg, rep, builds, realm, max_rounds)
+    # ★ 세 시기에서 잰다. 이유: **축마다 비용 곡선이 다르고, 그래서 값이 오는 때가 다르다.**
+    #     초식 — 90 → 180 → 360 → 720 → 1440 (일찍 싸고 늦게 비싸다)
+    #     능력치 — 360 균일 (언제나 같다)
+    #     내공 — n→n+1 = n년 (배증. 늦게 비싸고, 격은 절정에서야 값을 한다)
+    #   한 시기만 보면 '늦게 오는 축'을 '죽은 축'으로 오독한다.
+    #   세 시기를 겹쳐 봐야 **축의 순환**(무엇을 언제 키우는가)이 보인다 — 그것이 이 게임의 성장 서사다.
+    parity(cfg, rep, max_rounds)
+
+    all_champs = {}
+    stages = [
+        # (경지, 예산, 시작 능력치, 시작 숙련, 개화 여부)
+        ("삼류", budget / 3, 2.0, 0.0, False),     # 소년·개화 전 — 심법이 없다 (내공 과목 봉쇄)
+        ("일류", budget, 3.0, 3.0, True),          # 개화한 몸 — 발경이 열린다
+        ("절정", budget, 3.0, 3.0, True),          # 검기의 경지
+    ]
+    for realm, bud, base, skill, bloomed in stages:
+        builds = standard_builds(cfg, realm, bud,
+                                 base_attrs={a: base for a in COMBAT_ATTRS},
+                                 base_skill=skill, bloomed=bloomed)
+        sheet(cfg, rep, builds, realm, bud, base, skill, bloomed)
+        scores = scenarios(cfg, rep, builds, realm, max_rounds)
+        champs = dominance(cfg, rep, builds, scores, realm, tutorial=not bloomed)
+        for who, axes in champs.items():
+            all_champs.setdefault(who, []).extend(f"{realm}:{a}" for a in axes)
+        band_guard(cfg, rep, builds, realm, max_rounds)
+
+    dead_axis(cfg, rep, all_champs, budget)
+    spread(cfg, rep, budget)
 
 
-def sheet(cfg, rep, builds, realm, budget):
-    rep.head(f"캐릭터 시트 — {realm}(캡 {attr_cap(cfg, realm)}) · 수련 예산 {budget:g}일치 "
-             f"({budget / 360:.1f}년 몰빵분)")
-    rep.say("     시작: 전 능력치 3 · 주력 숙련 3 · 내공 0.33 (개화 직후) — 승급 요건은 이미 치른 몸")
+def parity(cfg, rep, max_rounds):
+    """★ combat_audit 정합 — 예산 0 의 '표준 무인'이 기존 도구와 같은 몸인가.
+
+    성장 축을 얹고도 **기존 밸런스가 흔들리지 않았다**는 것의 증거. 이게 깨지면 나머지는 볼 필요가 없다.
+    """
+    _ = max_rounds
+    rep.head("정합 — 표준 무인(예산 0)이 combat_audit 과 같은 몸인가")
+    for realm in ("삼류", "이류", "일류", "절정"):
+        cap = attr_cap(cfg, realm)
+        std = {a: float(cap - 1) for a in COMBAT_ATTRS}          # combat_audit realm_axis 의 표준 무인
+        b = Build(cfg, "표준", {}, realm, 0, base_attrs=std,
+                  base_naegong=Fighter(cfg, "x", realm).naegong)
+        f = Fighter(cfg, "표준", realm, weapon="검")
+        ok = b.dur == f.dur
+        rep.verdict(ok,
+                    f"{realm}: 내구 {b.dur} = combat_audit {f.dur} · 체력 {cap - 1} (캡 −1)"
+                    if ok else
+                    f"{realm}: 내구 {b.dur} ≠ combat_audit {f.dur} — 성장 축이 기존 곡선을 흔들었다")
+
+
+def sheet(cfg, rep, builds, realm, budget, base, skill, bloomed):
+    rep.head(f"[{realm}] 캐릭터 시트 — 캡 {attr_cap(cfg, realm)} · 수련 예산 {budget:g}일치 "
+             f"({budget / 360:.1f}년)")
+    rep.say(f"     시작: 전 능력치 {base:g} · 주력 숙련 {skill:g} · "
+            + ("내공 0.33 (개화 직후)" if bloomed else "★ 개화 전 — 심법 없음 (내공 과목 봉쇄)"))
     rep.say("")
-    rep.say(f"     {'빌드':<14} {'근력':>5} {'민첩':>5} {'체력':>5} {'감각':>5} {'내공':>5} "
-            f"{'숙련':>5} │ {'내구':>5} {'내력':>5}")
+    rep.say(f"     {'빌드':<14} {'병기':>4} {'근력':>5} {'민첩':>5} {'체력':>5} {'감각':>5} "
+            f"{'내공':>5} {'숙련':>5} │ {'공격':>5} {'내구':>5} {'내력':>5}")
     for b in builds:
-        rep.say(f"     {b.name:<14} {b.attr('근력'):>5.1f} {b.attr('민첩'):>5.1f} "
+        atk = build_attack(cfg, b)
+        rep.say(f"     {b.name:<14} {b.weapon:>4} {b.attr('근력'):>5.1f} {b.attr('민첩'):>5.1f} "
                 f"{b.attr('체력'):>5.1f} {b.attr('감각'):>5.1f} {b.attr('내공'):>5.2f} "
-                f"{b.skill:>5.2f} │ {b.dur:>5} {b.pool:>5}")
+                f"{b.skill:>5.2f} │ {atk['atk']:>5} {b.dur:>5} {b.pool:>5}")
     rep.say("")
+    rep.say("     공격 = 병기가 정한 능력치 + 무공 숙련 (combat.yml attacker_attribute — "
+            "도=근력 · 검=민첩 · 활/암기=감각)")
     rep.say("     ※ 판정에 서는 것은 **정수부**다 (화후 규칙) — 3.9와 4.0은 세계가 다르다")
 
 
+#: 다섯 상황 — 무협의 전투가 실제로 벌어지는 자리들
+AXES = ["1대1", "격상", "다구리", "매복", "지구"]
+
+
 def scenarios(cfg, rep, builds, realm, max_rounds):
-    """다섯 상황 — 각 빌드가 어디서 사는가. ★ 이 표가 '지배 전략 없음'의 증거다."""
-    rep.head("다섯 상황 — 어느 빌드가 어디서 사는가")
+    """다섯 상황 — 각 빌드가 어디서 사는가. ★ 이 표가 '지배 전략 없음'의 증거다.
 
-    foe_same = foe_profile(cfg, realm)                    # 동경지 1대1
-    foe_up = foe_profile(cfg, "절정")                     # 격상 상대
-    foe_mook = foe_profile(cfg, "이류", weapon="도")      # 졸개 (다구리용)
+    ★ 상대는 **같은 예산의 균형 빌드**다 (budget-matched). combat_audit 의 표준 무인(능력치 = 캡 −1)을
+      상대로 쓰면 그는 ~9년치를 쓴 몸이라 5년치 빌드가 전원 진다 — 그건 빌드 비교가 아니라 예산 비교다.
+      격상 상대만은 combat_audit 의 표준 절정 고수를 그대로 쓴다 (격상은 원래 더 투자한 사람이다).
+    """
+    rep.head(f"[{realm}] 다섯 상황 — 어느 빌드가 어디서 사는가")
 
-    rep.say(f"     상대: 동경지({realm} 내구 {foe_same['dur']}) · "
-            f"격상(절정 내구 {foe_up['dur']}) · 졸개(이류 내구 {foe_mook['dur']})")
+    mirror = next(b for b in builds if "균형" in b.name)      # 동예산 표준 상대
+    foe_same = mirror_profile(cfg, mirror, realm)
+
+    # 격상 = **한 계단** 위 (경지 사다리에서 읽는다 — 삼류에게 초절정을 붙이면 그건 시험이 아니라 처형이다)
+    names = realm_names(cfg)
+    up_realm = names[min(names.index(realm) + 1, len(names) - 1)]
+    foe_up = foe_profile(cfg, up_realm)
+
+    # 다구리 — 졸개는 한 계단 아래. 머릿수는 경지가 감당할 만큼 (삼류에게 4인은 그냥 죽음이다)
+    mook_realm = names[max(names.index(realm) - 1, 1)]
+    mooks = 2 if realm == "삼류" else 4
+    foe_mook = foe_profile(cfg, mook_realm, weapon="도")
+
+    bloomed = mirror.pool > 0 or mirror.attr("내공") > 0
+    rep.say(f"     상대: 동예산 표준({realm} 균형 배분, 내구 {foe_same['dur']} · "
+            f"선공치 {foe_same['민첩'] + foe_same['감각']}) · "
+            f"격상({up_realm} 내구 {foe_up['dur']}) · 졸개({mook_realm} ×{mooks})")
+    rep.say("     선공은 규칙이 정한다 — 민첩+감각 비교 (combat.yml initiative.frontal)")
     rep.say("")
-    rep.say(f"     {'빌드':<14} {'1대1 TTK':>9} {'잔존':>6} {'격상 생존':>9} "
-            f"{'다구리 4인':>11} {'매복(-2)':>9} {'장기 8합':>9}")
+    rep.say(f"     {'빌드':<12} {'선공':>4} {'1대1':>7} {'잔존':>6} {'격상 생존':>9} "
+            f"{'다구리':>12} {'매복(간파)':>11} {'지구(8합)':>9}")
 
     scores = {}
     for b in builds:
-        # ① 동경지 1대1 — 이기는 합수 (짧을수록 좋다) + 잔존 내구
+        # ① 동경지 1대1 — 선공은 민첩+감각이 정한다 (그것이 신법·심안의 유일한 공격 자산이다)
+        first = initiative(cfg, b, foe_same)
         ttk, ttd, left = duel_build(cfg, b, foe_same, max_rounds)
-        s_duel = (1000 - (ttk or 999)) + left * 100 if ttk and (not ttd or ttk <= ttd) else 0
+        won = ttk and (not ttd or ttk <= ttd)
+        s_duel = (100 - ttk) + left * 100 if won else left * 10
 
-        # ② 격상 상대(절정) — 이기진 못한다. **몇 합을 버티는가**가 값이다
-        _t2, ttd2, left2 = duel_build(cfg, b, foe_up, max_rounds)
-        s_up = (ttd2 or max_rounds) + left2 * 10
+        # ② 격상 상대 — 이기진 못한다. **몇 합을 버티는가**가 값이다 (도주의 창)
+        t2, ttd2, left2 = duel_build(cfg, b, foe_up, max_rounds)
+        s_up = (200 if t2 else 0) + (ttd2 or max_rounds) + left2 * 10
 
-        # ③ 다구리 4인 — 포위. 회피가 봉쇄된다 (forced_guard)
-        clear, left3, dead = melee_build(cfg, b, foe_mook, 4, max_rounds)
-        s_gang = (100 - (clear or 99)) + left3 * 100 if clear else left3 * 10
+        # ③ 다구리 — 포위. 회피가 봉쇄되고 흘리기(감각)만 남는다 ★ 신법의 무덤 · 심안의 집
+        clear, left3, dead = melee_build(cfg, b, foe_mook, mooks, max_rounds)
+        s_gang = (100 - clear) + left3 * 100 if clear else (dead or 0) + left3 * 10
 
-        # ④ 매복당함 — 첫 라운드 방어 -2 (initiative.ambush). 선공을 뺏긴 몸
-        _t4, ttd4, left4 = duel_build(cfg, b, foe_same, max_rounds, player_first=False)
+        # ④ 매복당함 — 선공을 뺏기고 첫 합 −2. 단 감각으로 간파하면 무효 (심안의 자리)
+        seen = ambush_detected(cfg, b, foe_same)
+        _t4, ttd4, left4 = duel_build(cfg, b, foe_same, max_rounds, ambush=True)
         s_amb = (ttd4 or max_rounds) + left4 * 20
 
-        # ⑤ 장기전 8합 — 내력이 바닥난 뒤에도 싸울 수 있는가 (격 없이 순수 기대 피해)
+        # ⑤ 지구전 — 8합 동안 격을 몇 번 싣는가. ★ 개화 전에는 내력이 없다 — 이 축은 존재하지 않는다
         atk = build_attack(cfg, b)
-        casts = qi_casts(b.pool, qi_cost(cfg, atk["band"]), combat_regen(cfg)[0], 8)
-        s_long = casts
+        s_long = qi_casts(b.pool, qi_cost(cfg, atk["band"]),
+                          combat_regen(cfg)[0], 8) if bloomed else 0
 
-        scores[b.name] = {"1대1": s_duel, "격상": s_up, "다구리": s_gang,
-                          "매복": s_amb, "장기": s_long}
-        rep.say(f"     {b.name:<14} {str(ttk) + '합' if ttk else '패배':>9} "
-                f"{left * 100:>5.0f}% {str(ttd2 or '>' + str(max_rounds)) + '합':>9} "
-                f"{(str(clear) + '합 소탕' if clear else '패배 ' + str(dead) + '합'):>11} "
-                f"{str(ttd4 or '>' + str(max_rounds)) + '합':>9} {s_long:>7}회 격")
+        scores[b.name] = dict(zip(AXES, [s_duel, s_up, s_gang, s_amb, s_long]))
+        rep.say(f"     {b.name:<12} {('선' if first else '후'):>4} "
+                f"{(str(ttk) + '합' if won else '패배'):>7} "
+                f"{left * 100:>5.0f}% "
+                f"{(str(t2) + '합 승' if t2 else (str(ttd2) + '합' if ttd2 else '>' + str(max_rounds))):>9} "
+                f"{(str(clear) + '합 소탕' if clear else str(dead) + '합에 패배'):>12} "
+                f"{((str(ttd4) + '합' if ttd4 else '생존') + f' ({seen * 100:.0f}%)'):>11} "
+                f"{(str(s_long) + '회 격' if bloomed else '— (개화 전)'):>9}")
     rep.say("")
-    rep.say("     1대1=이기는 합수/잔존 · 격상=눕기까지 버틴 합 · 다구리=4인 소탕/패배 · "
-            "매복=후공으로 버틴 합 · 장기=8합 중 격 실은 횟수")
+    rep.say("     1대1=이기는 합수/잔존 · 격상=버틴 합(이기면 '승') · 다구리=소탕 or 패배 합 · "
+            "매복=버틴 합(간파율) · 지구=8합 중 격 실은 횟수")
+    if not bloomed:
+        rep.say("     ※ 개화 전 — 내력이 없다. '지구' 축은 이 시기에 존재하지 않는다 (내공 과목도 봉쇄)")
     return scores
 
 
-def dominance(cfg, rep, builds, scores):
-    """★ 이 도구의 존재 이유 — 하나가 언제나 옳으면 그건 선택이 아니다."""
-    _ = cfg
-    rep.head("지배 전략 검사 — 하나가 언제나 옳은가")
-    axes = ["1대1", "격상", "다구리", "매복", "장기"]
+def dominance(cfg, rep, builds, scores, realm, tutorial=False):
+    """★ 이 도구의 존재 이유 — 하나가 언제나 옳으면 그건 선택이 아니다.
 
-    winners = {}
-    for axis in axes:
-        best = max(builds, key=lambda b: scores[b.name][axis])
-        winners[axis] = best.name
-        rep.say(f"     {axis:<5} 최선: {best.name}")
+    동점은 동점으로 다룬다 — max() 는 사전 순서로 조용히 승자를 지어낸다 (그 버그에 한 번 속았다).
+
+    ★★ 단, **개화 전(삼류·이류)에는 정답이 있는 것이 옳다** (tutorial=True):
+      · 숙련 0→1 은 90일, 1→2 는 180일. 능력치는 언제나 360일. **초식이 압도적으로 싸다.**
+      · 그리고 규칙이 이미 그렇게 말하고 있다 — 삼류→이류 승급 요건이 '주력 무공 숙련 2' 다.
+      · 내력이 없고(개화 전) 심법이 없으니 내공 과목은 잠겨 있다.
+      → 무공을 아직 못 익힌 자에게 '무엇을 키울까'는 질문이 아니다. **빌드는 개화부터 시작한다.**
+        그래서 이 시기엔 '지배 전략 없음'이 아니라 **'초식이 정답인가'**를 검사한다 (규칙과 수치의 일치).
+    """
+    _ = cfg
+    rep.head(f"[{realm}] "
+             + ("입문기 검사 — 초식이 정답인가 (개화 전에는 선택지가 없는 것이 옳다)"
+                if tutorial else "지배 전략 검사 — 하나가 언제나 옳은가"))
+
+    champs = {}
+    for axis in AXES:
+        top = max(scores[b.name][axis] for b in builds)
+        best = [b for b in builds if abs(scores[b.name][axis] - top) < 1e-6]
+        if len(best) == len(builds):
+            # ★ 전원 동점 = 그 축은 빌드를 **가르지 못한다**. 아무도 왕관을 쓰지 않는다.
+            #   (전원 동점을 '전원 1등'으로 세면 그 축이 지배 전략을 지어낸다 — 그 버그에 한 번 속았다)
+            rep.say(f"     {axis:<5} 최선: {'—':<28} (전원 동점 — 이 축은 빌드를 가르지 못한다)")
+            continue
+        for b in best:
+            champs.setdefault(b.name, []).append(axis)
+        label = " = ".join(b.name for b in best)
+        rep.say(f"     {axis:<5} 최선: {label:<28} "
+                f"{best[0].blurb if len(best) == 1 else '(공동 1등)'}")
     rep.say("")
 
-    # ① 어떤 빌드도 모든 축에서 1등이 아니어야 한다
-    champs = {}
-    for axis, who in winners.items():
-        champs.setdefault(who, []).append(axis)
-    tyrant = [(who, ax) for who, ax in champs.items() if len(ax) >= len(axes) - 1]
+    if tutorial:
+        # 입문기 — '초식이 정답'이어야 한다. 규칙(승급 요건 = 주력 숙련 2)과 수치(환산표 90/180)가
+        # 같은 말을 하는가. 여기서 능력치 축이 이기면 규칙과 수치가 서로 다른 말을 하는 것이다.
+        won = champs.get("초식 몰빵", [])
+        rep.verdict(len(won) >= len(AXES) - 2,
+                    f"초식이 입문기의 답이다 ({len(won)}/{len(AXES)} 상황 1등) — "
+                    f"환산표(0→1 = 3개월 · 1→2 = 6개월 vs 능력치 1년)와 승급 요건('주력 무공 숙련 2')이 "
+                    f"같은 말을 한다. **개화 전에는 고를 것이 없고, 그것이 옳다** — 빌드는 개화부터다"
+                    if len(won) >= len(AXES) - 2 else
+                    f"입문기에 초식이 답이 아니다 (1등 {len(won)}/{len(AXES)}) — "
+                    f"승급 요건은 '주력 숙련 2'를 요구하는데 수치는 다른 축을 가리킨다 (규칙과 수치의 불일치)")
+        return champs
+
+    # ① 한 빌드가 (거의) 모든 축에서 1등이면 그건 선택이 아니라 정답이다
+    tyrant = [(who, ax) for who, ax in champs.items() if len(ax) >= len(AXES) - 1]
     rep.verdict(not tyrant,
-                f"지배 전략 없음 — {len(champs)}개 빌드가 {len(axes)}개 상황의 1등을 나눠 갖는다: "
+                f"지배 전략 없음 — {len(champs)}개 빌드가 {len(AXES)}개 상황의 1등을 나눠 갖는다: "
                 + " · ".join(f"{w}({'/'.join(a)})" for w, a in champs.items())
                 if not tyrant else
-                f"★ 지배 전략: {tyrant[0][0]} 이 {len(tyrant[0][1])}/{len(axes)} 상황에서 1등이다 "
+                f"★ 지배 전략: {tyrant[0][0]} 이 {len(tyrant[0][1])}/{len(AXES)} 상황에서 1등이다 "
                 f"({'/'.join(tyrant[0][1])}) — 이건 선택이 아니라 정답이다")
 
-    # ② 죽은 축 — 어느 상황에서도 1등이 아닌 몰빵 빌드
-    solos = [b for b in builds if "균형" not in b.name]
-    dead = [b.name for b in solos if b.name not in champs]
+    # ② 균형 빌드가 어느 축에서도 1등이면 안 된다 (분산이 공짜면 고를 필요가 없다)
+    even = next(b for b in builds if "균형" in b.name)
+    rep.verdict(even.name not in champs,
+                "균형 배분은 어느 상황에서도 1등이 아니다 — 분산에는 값이 있다 (고르라는 압력)"
+                if even.name not in champs else
+                f"★ 균형 배분이 {champs[even.name]} 에서 1등이다 — 다 키우는 것이 최선이면 선택이 없다")
+    return champs
+
+
+def dead_axis(cfg, rep, all_champs, budget):
+    """죽은 축 — 두 경지 × 다섯 상황(10칸) 어디에서도 최선이 아닌 과목이 있는가."""
+    rep.head("죽은 축 — 구간을 넣을 이유가 없는 과목이 있는가 (일류·절정 통합)")
+    subj = list(subjects(cfg))
+    for name in subj:
+        won = all_champs.get(f"{name} 몰빵", [])
+        rep.say(f"     {name:<4} 몰빵 — 최선인 자리 {len(won)}칸: {' · '.join(won) if won else '없음'}")
+    rep.say("")
+
+    dead = [n for n in subj if not all_champs.get(f"{n} 몰빵")]
     rep.verdict(not dead,
-                "죽은 축 없음 — 다섯 몰빵이 전부 어딘가에서 최선이다 (모든 축이 쓸모 있다)"
+                f"죽은 축 없음 — 다섯 과목이 전부 어딘가에서 최선이다 (예산 {budget:g}일치 기준). "
+                f"모든 축이 쓸모 있다"
                 if not dead else
-                f"★ 죽은 축: {dead} — 어느 상황에서도 최선이 아니다. 그 과목에 구간을 넣을 이유가 없다")
+                f"★ 죽은 축: {dead} — 두 경지 어느 상황에서도 최선이 아니다. 그 과목에 구간을 넣을 이유가 없다")
 
-    # ③ 균형 빌드가 어느 축에서도 1등이면 안 된다 (분산이 공짜면 고를 필요가 없다)
-    even = next((b for b in builds if "균형" in b.name), None)
-    if even:
-        rep.verdict(even.name not in champs,
-                    "균형 빌드는 어느 상황에서도 1등이 아니다 — 분산에는 값이 있다 (고르라는 압력)"
-                    if even.name not in champs else
-                    f"★ 균형 빌드가 {champs[even.name]} 에서 1등이다 — 다 키우는 것이 최선이면 선택이 없다")
+    # ★ '늦게 오는 축' 은 죽은 축이 아니다 — 그것이 두 경지를 재는 이유다
+    late = [n for n in subj
+            if all_champs.get(f"{n} 몰빵") and not any(w.startswith("일류") for w in all_champs[f"{n} 몰빵"])]
+    if late:
+        rep.ok(f"늦게 오는 축: {late} — 일류에서는 최선이 아니지만 절정에서 값이 온다. "
+               f"배증 비용(내공 n→n+1 = n년)의 뜻이 그것이다: **일찍 심어야 늦게 거둔다**")
 
 
-def spread(cfg, rep, builds, realm, budget):
+def spread(cfg, rep, budget):
     """분산의 값 — 판정은 정수부만 본다. 그 절벽이 실제로 작동하는가."""
     rep.head("분산의 절벽 — 다 키우면 정말 아무것도 안 오르는가")
-    even = next((b for b in builds if "균형" in b.name), None)
-    solo = next((b for b in builds if b.name.startswith("신법")), None)
-    if not (even and solo):
-        return
+    realm = "일류"
+    builds = standard_builds(cfg, realm, budget)
+    even = next(b for b in builds if "균형" in b.name)
+    solo = next(b for b in builds if b.name.startswith("신법"))
 
     seg = segments_per_day(cfg)
     cost1 = attr_cost_days(cfg)
-    years_solo = cost1 / 360
-    years_even = cost1 * seg / 360
-    rep.say(f"     능력치 +1 = {cost1:g}일치 — 몰빵({seg}구간)이면 {years_solo:.1f}년, "
-            f"1구간이면 {years_even:.1f}년 ({seg}배)")
-    rep.say(f"     균형 빌드: 민첩 {even.attr('민첩'):.2f} → 판정 {even.ai('민첩')} "
-            f"(정수부) · 신법 빌드: 민첩 {solo.attr('민첩'):.2f} → 판정 {solo.ai('민첩')}")
+    rep.say(f"     능력치 +1 = {cost1:g}일치 — 몰빵({seg}구간)이면 {cost1 / 360:.1f}년, "
+            f"1구간이면 {cost1 * seg / 360:.1f}년 ({seg}배)")
+    rep.say(f"     균형: 민첩 {even.attr('민첩'):.2f} → 판정 +{even.ai('민첩')} · "
+            f"신법: 민첩 {solo.attr('민첩'):.2f} → 판정 +{solo.ai('민첩')}  (정수부만 주사위 옆에 선다)")
 
-    gained_even = sum(even.ai(a) - 3 for a in ("근력", "민첩", "체력", "감각")) + (even.mastery - 3)
-    gained_solo = sum(solo.ai(a) - 3 for a in ("근력", "민첩", "체력", "감각")) + (solo.mastery - 3)
+    base = 3
+    gained_even = sum(even.ai(a) - base for a in ("근력", "민첩", "체력", "감각")) + (even.mastery - 3)
+    gained_solo = sum(solo.ai(a) - base for a in ("근력", "민첩", "체력", "감각")) + (solo.mastery - 3)
     rep.verdict(gained_even < gained_solo,
                 f"★ 같은 {budget:g}일치로 균형은 판정 +{gained_even} 를, 몰빵은 +{gained_solo} 를 얻는다 — "
-                f"판정은 정수부만 본다. 분산은 실수 원장에만 쌓이고 주사위 옆에는 서지 못한다"
+                f"분산은 실수 원장에만 쌓이고 주사위 옆에는 서지 못한다"
                 if gained_even < gained_solo else
                 f"균형(+{gained_even})이 몰빵(+{gained_solo})에 뒤지지 않는다 — 분산이 손해가 아니다")
 
-    # 자원 축(외공·내공)은 실수치를 쓴다 — 분산해도 값이 있다 (비대칭이 의도인가)
     rep.say("")
-    rep.say(f"     그러나 자원 축은 다르다: 균형 빌드도 내구 {even.dur} · 내력 {even.pool} 은 얻는다 "
+    rep.say(f"     그러나 자원 축은 다르다: 균형 배분도 내구 {even.dur} · 내력 {even.pool} 은 얻는다 "
             f"(실수 파생 — 정수 절벽이 없다)")
     rep.ok("몸과 단전은 조금씩이라도 자라고, 손·발·눈은 몰아야 자란다 — "
-           "화후 규칙('판정은 정수, 자원은 실수')의 귀결이지 새 페널티가 아니다")
+           "화후 규칙('판정은 정수, 자원은 실수')의 귀결이지 새로 만든 페널티가 아니다")
+
+    # 캡에 닿고도 배분을 안 바꾼 자의 손실 — 천장이 실제로 무는가
+    rep.say("")
+    for b in standard_builds(cfg, "일류", budget):
+        if b.capped_at:
+            first = min(b.capped_at.values())
+            rep.say(f"     {b.name:<12} 캡 도달 {first:.0f}일치 ({first / 360:.1f}년) 지점 — "
+                    f"그 뒤 배분을 안 바꿨다면 {b.wasted:.0f}일치가 버려진다")
+    rep.ok("천장(경지 캡)이 몰빵을 저절로 꺾는다 — 지배 전략을 막는 것은 밸런스 수치가 아니라 "
+           "**천장과 시간**이다 (player_creation.yml attribute_cap_by_realm)")
 
 
 def band_guard(cfg, rep, builds, realm, max_rounds):
-    """★ 불가침 — 어떤 빌드도 combat_audit 의 TTK 밴드를 깨면 안 된다."""
-    rep.head("불가침 — 빌드가 전투를 없애거나 늘어뜨리는가 (combat_audit 밴드)")
-    hard_lo, hard_hi = 3, 12
+    """★ 불가침 — 어떤 빌드도 combat_audit 의 TTK 밴드를 깨면 안 된다.
+
+    빌드는 전투의 **모양**을 바꿀 수 있다. **길이**를 부수면 실패다 —
+    내구 빌드가 20합을 만들거나 위력 빌드가 2합에 끝내면 전투가 사라진다.
+    """
+    rep.head(f"[{realm}] 불가침 — 빌드가 전투를 없애거나 늘어뜨리는가 (combat_audit 밴드)")
+    hard_lo, hard_hi = 3, 12          # combat_audit sim_vitality_curve 와 같은 밴드
     soft_lo, soft_hi = 5, 9
-    foe = foe_profile(cfg, realm)
-    rep.say(f"     동경지 대결 — 불가침 {hard_lo}~{hard_hi}합 · 설계 목표 {soft_lo}~{soft_hi}합")
+    # ★ **거울 대결** — 같은 빌드끼리 붙인다 (외공 vs 외공 · 신법 vs 신법).
+    #   이것이 이 검사의 유일하게 옳은 상대다. 브리프의 걱정("내구 빌드가 TTK 20합을 만들면 실패")은
+    #   **대칭 대결에서만** 드러난다: 두꺼운 몸끼리 두꺼운 몸을 치면 판이 늘어지고,
+    #   회피끼리 붙으면 서로 안 맞아 영원히 끝나지 않으며, 위력끼리는 두 합에 끝난다.
+    #   (약한 상대를 빨리 이기는 것은 밸런스 문제가 아니다. 자기 자신을 못 이기는 것이 문제다.)
+    rep.say(f"     거울 대결 (같은 빌드끼리 — 대칭) — 불가침 {hard_lo}~{hard_hi}합 · "
+            f"설계 목표 {soft_lo}~{soft_hi}합")
     rep.say("")
 
     bad, soft = [], []
     for b in builds:
-        ttk, ttd, _ = duel_build(cfg, b, foe, max_rounds)
-        mine = ttk if ttk else None
-        # 내구 빌드가 '내가 눕는 합'을 얼마나 늘리는가 — 상대의 TTK 도 밴드 안이어야 한다
-        theirs = ttd
-        rep.say(f"     {b.name:<14} 내가 눕히는 합 {str(mine) + '합' if mine else '>' + str(max_rounds):>6} · "
-                f"상대가 나를 눕히는 합 {str(theirs) + '합' if theirs else '>' + str(max_rounds):>6}")
-        for who, t in (("내 TTK", mine), ("피격 TTK", theirs)):
-            if t is None:
-                if who == "내 TTK":
-                    bad.append((b.name, who, f">{max_rounds}"))
-                continue
-            if t < hard_lo or t > hard_hi:
-                bad.append((b.name, who, t))
-            elif not (soft_lo <= t <= soft_hi):
-                soft.append((b.name, who, t))
+        foe = mirror_profile(cfg, b, realm)      # 나와 똑같은 사람
+        ttk, ttd, _ = duel_build(cfg, b, foe, max_rounds, player_first=True)
+        decided = min([t for t in (ttk, ttd) if t], default=None)   # 이 판이 끝나는 합
+        atk = build_attack(cfg, b)
+        rep.say(f"     {b.name:<12} {b.weapon} · 공격 {atk['atk']:>2} vs 방어 {foe['def_stat']:>2} · "
+                f"내구 {b.dur:>2} │ 판이 끝나는 합 "
+                f"{(str(decided) + '합' if decided else '>' + str(max_rounds) + '합 — 안 끝난다'):>16}")
+        if decided is None:
+            bad.append((b.name, f">{max_rounds}합"))
+        elif decided < hard_lo or decided > hard_hi:
+            bad.append((b.name, f"{decided}합"))
+        elif not (soft_lo <= decided <= soft_hi):
+            soft.append((b.name, f"{decided}합"))
 
     rep.say("")
     rep.verdict(not bad,
-                f"모든 빌드의 TTK 가 불가침 밴드({hard_lo}~{hard_hi}합) 안 — "
-                f"빌드는 전투의 **모양**을 바꾸지 길이를 부수지 않는다"
+                f"거울 대결 전부 불가침 밴드({hard_lo}~{hard_hi}합) 안 — "
+                f"빌드는 전투의 **모양**을 바꾸지 **길이**를 부수지 않는다. "
+                f"내구 빌드도 늘어뜨리지 않고, 회피 빌드도 교착시키지 않는다"
                 if not bad else
-                f"밴드를 깬 빌드: {bad} — 내구 빌드가 전투를 늘어뜨리거나 위력 빌드가 전투를 없앴다")
+                f"거울 대결이 밴드를 깬다: {bad} — "
+                f"내구·회피 빌드가 전투를 늘어뜨렸거나 위력 빌드가 전투를 없앴다")
     if soft:
-        rep.warn(f"설계 목표({soft_lo}~{soft_hi}합) 밖 (불가침은 아니다): {soft}")
+        rep.warn(f"[{realm}] 거울 대결이 설계 목표({soft_lo}~{soft_hi}합) 밖 (불가침은 아니다): {soft}")
     else:
-        rep.ok(f"모든 빌드가 설계 목표 {soft_lo}~{soft_hi}합 안 — 빌드를 바꿔도 한 판의 길이는 그대로다")
+        rep.ok(f"거울 대결 전부 설계 목표 {soft_lo}~{soft_hi}합 — 빌드를 바꿔도 한 판의 길이는 그대로다")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

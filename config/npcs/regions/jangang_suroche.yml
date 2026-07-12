@@ -60,17 +60,17 @@ stance:
 # 근거 좌표: 나루 = shore-7 · 잔교 = shore+1~5 · 본채 뗏목 = shore+6~28 (중심 rc = shore+17, 폭 ±11)
 #           선창 = shore+29 · 쇠사슬 관문 = shore+33
 places:
-  나루:       { origin: 나루, f: 0,   l: 0,  radius: 3, y: 지표 }   # 뭍에 있는 유일한 것
-  잔교:       { origin: 뗏목, f: -14, l: 0,  radius: 2, y: 갑판 }   # rc-14 ≈ shore+3
-  뗏목_마당:  { origin: 뗏목, f: 0,   l: 0,  radius: 4, y: 갑판 }   # 돌 위의 모닥불 (뗏목에 불을 놓으면 화재다)
-  뗏목_동:    { origin: 뗏목, f: 0,   l: -7, radius: 3, y: 갑판 }
-  뗏목_서:    { origin: 뗏목, f: 0,   l: 7,  radius: 3, y: 갑판 }
-  오두막:     { origin: 뗏목, f: -5,  l: 0,  radius: 3, y: 갑판 }
-  그물자리:   { origin: 뗏목, f: 6,   l: -8, radius: 3, y: 갑판 }   # 어부이기도 하다 — 위장이자 살림
-  선창:       { origin: 뗏목, f: 11,  l: 0,  radius: 3, y: 갑판 }   # 물에서 기어오르는 계단
-  쇠사슬_관문: { origin: 뗏목, f: 15, l: 0,  radius: 3, y: 갑판 }   # ★ 배는 여기서 멈춘다 (통행세)
-  관문_동:    { origin: 뗏목, f: 15,  l: -4, radius: 2, y: 갑판 }
-  관문_서:    { origin: 뗏목, f: 15,  l: 4,  radius: 2, y: 갑판 }
+  나루:       { origin: 나루, f: 0,   l: 0,  radius: 3, 높이: 지표 }   # 뭍에 있는 유일한 것
+  잔교:       { origin: 뗏목, f: -14, l: 0,  radius: 2, 높이: 갑판 }   # rc-14 ≈ shore+3
+  뗏목_마당:  { origin: 뗏목, f: 0,   l: 0,  radius: 4, 높이: 갑판 }   # 돌 위의 모닥불 (뗏목에 불을 놓으면 화재다)
+  뗏목_동:    { origin: 뗏목, f: 0,   l: -7, radius: 3, 높이: 갑판 }
+  뗏목_서:    { origin: 뗏목, f: 0,   l: 7,  radius: 3, 높이: 갑판 }
+  오두막:     { origin: 뗏목, f: -5,  l: 0,  radius: 3, 높이: 갑판 }
+  그물자리:   { origin: 뗏목, f: 6,   l: -8, radius: 3, 높이: 갑판 }   # 어부이기도 하다 — 위장이자 살림
+  선창:       { origin: 뗏목, f: 11,  l: 0,  radius: 3, 높이: 갑판 }   # 물에서 기어오르는 계단
+  쇠사슬_관문: { origin: 뗏목, f: 15, l: 0,  radius: 3, 높이: 갑판 }   # ★ 배는 여기서 멈춘다 (통행세)
+  관문_동:    { origin: 뗏목, f: 15,  l: -4, radius: 2, 높이: 갑판 }
+  관문_서:    { origin: 뗏목, f: 15,  l: 4,  radius: 2, 높이: 갑판 }
 
 # ─── 일과 — 물의 하루는 **물때**다 ───
 # ★ 산채는 망보고, 문파는 수련하고, 관은 교대하고, 수로채는 **배를 기다린다.**

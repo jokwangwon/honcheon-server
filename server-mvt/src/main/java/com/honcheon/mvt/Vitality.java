@@ -142,9 +142,32 @@ public final class Vitality {
         return (int) Math.round(base + perChe * che + bonus + eq);
     }
 
-    /** 표준 무인 — 그 경지의 체력 기본값 (능력치 상한 − 1) */
+    /**
+     * 표준 무인 — 그 경지의 체력 기본값 (능력치 상한 − 1).
+     *
+     * <p><b>이것은 캐릭터 시트가 없을 때의 대체값이다.</b> {@code combat_audit} 의 표준 무인 모델과 같은
+     * 자리이고, NPC·짐승·시트 없는 몸은 계속 이 값을 쓴다.
+     *
+     * <p><b>플레이어는 더 이상 이 값을 쓰지 않는다</b> ({@link #cheOf}): 체력은 이제 <b>수련 배분이
+     * 쌓은 화후</b>다 ({@code training.yml curriculum.외공}). 그 전까지 이 게임의 플레이어는
+     * <b>경지만 같으면 완전히 같은 몸</b>이었다 — 고를 자리가 없었다는 말의 코드판 증거가 이 메서드였다.
+     */
     public double defaultChe(String realm) {
         return Math.max(1, attrCap.getOrDefault(realm, 3) - 1);
+    }
+
+    /**
+     * <b>이 사람의 체력</b> — 원장이 있으면 원장이 정본이고, 없으면 경지 대체값이다.
+     *
+     * <p>원장의 체력이 0 이면(아직 아무것도 수련하지 않은 몸) 대체값으로 돌아간다 —
+     * 성장 축이 배선되기 전의 세이브·NPC 가 갑자기 종잇장이 되지 않게 한다 (확장은 공짜, 대체는 비싸다).
+     */
+    public double cheOf(PlayerLedger ledger, String realm) {
+        if (ledger == null) {
+            return defaultChe(realm);
+        }
+        double che = ledger.attr("체력");
+        return che > 0 ? che : defaultChe(realm);
     }
 
     /** 그 경지의 표준 내구 (체력 미지정 시 — MVT 기본) */
@@ -222,11 +245,22 @@ public final class Vitality {
      * @return 몸이 바뀌었으면 true
      */
     public boolean reconcile(Player player, String realm) {
+        return reconcile(player, realm, null);
+    }
+
+    /**
+     * 원장을 보고 몸을 맞춘다 — <b>수련이 하트가 되는 자리</b>.
+     *
+     * <p>HUD 틱마다 불리므로, 외공에 구간을 넣은 플레이어는 <b>체력 화후가 정수부를 넘는 날</b>
+     * 하트가 실제로 두꺼워지는 것을 본다 (경지 승급을 기다리지 않는다). 그것이 사용자가 요구한
+     * <i>"직관적으로 뭔가 와닿는 것"</i> 의 가장 단순한 형태다: <b>몸을 단련하면 몸이 커진다.</b>
+     */
+    public boolean reconcile(Player player, String realm, PlayerLedger ledger) {
         var attr = player.getAttribute(Attribute.MAX_HEALTH);
         if (attr == null) {
             return false;
         }
-        int target = durability(realm, defaultChe(realm), equipBonus(player), false);
+        int target = durability(realm, cheOf(ledger, realm), equipBonus(player), false);
         double clamped = Math.max(1.0, Math.min(target, VANILLA_ATTRIBUTE_CEILING));
         if (Math.abs(attr.getBaseValue() - clamped) < 0.01 && player.isHealthScaled()) {
             return false;   // 이미 맞다 — 매 틱 쓰지 않는다

@@ -6187,6 +6187,79 @@ def qi_textures():
     _disc(g, QI_TEX / 2, QI_TEX / 2, 15.5, steps=BT_STEPS, r_in=9.0)
     _disc(g, QI_TEX / 2, QI_TEX / 2, 6.5, steps=BT_STEPS)
     tex["ult/blood_tide"] = g
+
+    # ── 15문파 전승 오의 4장 (skill_motion.yml display.models 의 신규 청구) ──
+    # 히트박스가 형체를 정한다: **원**은 펴지고(고리·손바닥), **선**은 앞에 선다(빗살).
+    # 문파 17종이 이 넷 + 기존 넷(매화·태극·군림·혈해)을 나눠 쓴다 — 파티클·소리가 문파를 가른다.
+    g = _qi_blank()                                   # 검풍(劍風) — 여덟 획이 사방으로 (원 오의)
+    c = QI_TEX / 2
+    # 【깊이 버퍼】 붓은 겹쳐도 **진한 쪽이 남는다.** 그냥 덮어쓰면 뒤에 지나간 획의 옅은 끝이
+    #   앞 획의 속을 지운다 — 그러면 4단 먹이 3단으로 무너진다 (texture_audit 이 그것을 잡는다).
+    depth = [[0.0] * QI_TEX for _ in range(QI_TEX)]
+    for k in range(8):
+        a = k * math.pi / 4 + math.pi / 16
+        for step in range(28):                        # 안(r=5)에서 밖(r=15)으로 — 밖으로 갈수록 가늘고 옅다
+            r = 5.0 + step * (10.0 / 27)
+            t = step / 27.0
+            th = 2.6 * (1.0 - t) ** 0.7               # 획의 반두께 (뿌리가 굵다)
+            bend = 0.30 * t                           # 살짝 휜다 — 곧은 살이 아니라 **베고 지나간 자리**다
+            px_, py_ = c + r * math.cos(a + bend), c + r * math.sin(a + bend)
+            for dy in range(-4, 5):
+                for dx in range(-4, 5):
+                    d = math.hypot(dx, dy)
+                    edge = th + 1.5                   # 획의 가장자리는 **스민다** (속이 진하고 끝이 번진다)
+                    if d > edge:
+                        continue
+                    x, y = int(px_) + dx, int(py_) + dy
+                    if 0 <= x < QI_TEX and 0 <= y < QI_TEX:
+                        depth[y][x] = max(depth[y][x],
+                                          (1.0 - d / edge) ** 1.3 * (1.0 - 0.30 * t))
+    for y in range(QI_TEX):
+        for x in range(QI_TEX):
+            if depth[y][x] > 0.02:
+                _ink(g, x, y, depth[y][x])
+    tex["ult/sword_gale"] = g
+
+    g = _qi_blank()                                   # 뇌격의 빗살 — 앞에 선 여러 세로 획 (선 오의)
+    for k in range(13):                               # 열셋 (섬전십삼검뢰의 수 — 다른 선 오의도 이 형체를 쓴다)
+        x0 = 3 + k * 2                                # 2px 간격 — 가운데가 높고 양옆이 낮다 (한 줄로 간다)
+        h = 26.0 * (0.35 + 0.65 * math.sin(math.pi * (k + 0.5) / 13) ** 0.8)
+        for y in range(int(QI_TEX - 2 - h), QI_TEX - 2):
+            t = min(1.0, (QI_TEX - 2 - y) / max(1.0, h))   # 아래(뿌리)가 진하고 위(끝)가 스민다
+            _ink(g, x0, y, 0.35 + 0.65 * (1.0 - t) ** 0.6)
+            _ink(g, x0 + 1, y, (0.25 + 0.55 * (1.0 - t) ** 0.6) * 0.8)
+    tex["ult/bolt_comb"] = g
+
+    g = _qi_blank()                                   # 장심(掌心) — 손바닥 하나 (소림의 원 오의)
+    _disc(g, c, c + 4.0, 7.4)                         # 손바닥
+    for k, (ax, ay, ln, w) in enumerate((                 # 다섯 손가락 — 엄지가 짧고 굵다
+            (-9.5, -2.0, 6.5, 2.2), (-4.0, -8.5, 8.0, 1.9), (0.0, -10.0, 9.0, 2.0),
+            (4.2, -8.8, 8.0, 1.9), (8.6, -5.0, 6.8, 1.8))):
+        ang = math.atan2(ay, ax)
+        for step in range(16):
+            t = step / 15.0
+            r = t * ln
+            px_ = c + ax * 0.55 + r * math.cos(ang)
+            py_ = c + 2.0 + ay * 0.55 + r * math.sin(ang)
+            th = w * (1.0 - 0.45 * t)
+            for dy in range(-3, 4):
+                for dx in range(-3, 4):
+                    d = math.hypot(dx, dy)
+                    if d <= th:
+                        _ink(g, int(px_) + dx, int(py_) + dy, 1.0 - d / max(0.8, th))
+    tex["ult/palm_bloom"] = g
+
+    g = _qi_blank()                                   # 무형의 독 — 바닥을 기는 재의 겹고리 (터지지 않는다)
+    for r_out, r_in in ((15.5, 12.6), (11.2, 8.6), (6.8, 4.6)):
+        for y in range(QI_TEX):
+            for x in range(QI_TEX):
+                d = math.hypot(x + 0.5 - c, y + 0.5 - c)
+                if not (r_in <= d <= r_out):
+                    continue
+                # 고리의 속이 진하고 테가 스민다 (4단 먹). **어둡게 만드는 것은 코드다** —
+                # 텍스처를 뭉개면 형체가 사라진다 (motions.독무_범람 brightness 4 가 그 일을 한다)
+                _ink(g, x, y, min(1.0, min(r_out - d, d - r_in) / 1.6))
+    tex["ult/toxin_veil"] = g
     return tex
 
 
@@ -6279,6 +6352,13 @@ QI_MODELS = {
     "ult/plum_bloom": _cross(), "ult/taegeuk_disc": _plate("z"),
     "ult/emperor_edge": _plate("z"),      # 길이축이 Y 다 (4.0m 짜리 칼이 떨어진다)
     "ult/blood_tide": _plate("y"),        # 바닥을 훑는 파문 — 위/아래 면이 그림을 문다
+    # ── 15문파 전승 오의 4장 (2026-07) ──
+    #   bloom() 은 **회전을 주지 않는다** (yaw 로 서고 scale 만 자란다) ⇒ 앞으로 뻗는 축을 모델에 못 새긴다.
+    #   그래서 원 오의는 **눕고**(y-plate) 선 오의는 **앞에 선다**(z-plate). 못 하는 것을 굽지 않는다.
+    "ult/sword_gale": _plate("y"),        # 원 오의 — 사방으로 뻗은 검풍 (바닥에 눕는다)
+    "ult/toxin_veil": _plate("y"),        # 당가의 독 — 바닥을 기는 재의 겹고리
+    "ult/bolt_comb": _plate("z"),         # 선 오의 — 몸 앞에 선 세로 획 열셋
+    "ult/palm_bloom": _plate("z"),        # 소림 — 앞을 향해 펴지는 손바닥
 }
 
 

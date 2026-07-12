@@ -186,8 +186,9 @@ public final class SkillListener implements Listener {
             }
             sustain(player, state);
             regulateBreath(state, engine.pool(state.naegong));   // 조식 — 격을 싣지 않은 합에 단전이 돈다
+            settleTraining(player, state);   // 날이 바뀌면 하루치 수련이 배분대로 갈린다
             // 생명 — 경지·장비가 바뀌면 다음 틱에 몸이 따라온다 (훅은 빠뜨리면 조용히 틀리고, 대조는 못 빠뜨린다)
-            hud.vitalityTick(player, state);
+            hud.vitalityTick(player, state, plugin.ledger(player.getUniqueId()));
             hud.energyBar(player, state);
             // 내구·부상은 격이 없어도 보인다 — 게이트를 두면 **삼류가 제 목숨을 영영 못 본다**
             hud.statusBar(player, state, tick);
@@ -754,12 +755,17 @@ public final class SkillListener implements Listener {
                 if (!target.isValid()) {
                     break;
                 }
-                // 실행력 = 무공 숙련 + 무기 보정 + 경지 격차(gm_modifiers realm_gap) + 상태 보정
-                // MVT 근사: 능력치 시트가 없다 — 경지가 능력치의 자리를 대신한다 (skill_motion.md 4장)
+                // 실행력 = 능력치 + 무공 숙련 + 무기 보정 + 경지 격차(gm_modifiers realm_gap) + 상태 보정
+                // ★ 능력치 항이 오래 빠져 있었다 — 그래서 **같은 경지의 두 사람이 완전히 같은 사람**이었다.
+                //   무엇이 실리는지는 **병기가 정한다** (도=근력·검=민첩·암기=감각, combat.yml attacker_attribute).
+                //   한 과목이 공격과 방어를 함께 사면 그 과목이 지배 전략이 된다 — 그것이 우리가 버린 MMO 문법이다.
                 boolean hostile = target instanceof Monster;
-                int mastery = plugin.ledger(player.getUniqueId())
-                        .levelOf(engine.skillName(cast.skillId()), plugin.progression());
-                int execBase = mastery + engine.weaponJudgmentBonus(weaponGrade(player))
+                PlayerLedger led = plugin.ledger(player.getUniqueId());
+                int mastery = led.levelOf(engine.skillName(cast.skillId()), plugin.progression());
+                Growth growth = Growth.get();
+                int attrBonus = growth == null ? 0 : growth.attackBonus(led,
+                        engine.weaponClassOf(player.getInventory().getItemInMainHand(), null));
+                int execBase = attrBonus + mastery + engine.weaponJudgmentBonus(weaponGrade(player))
                         + engine.realmGapBonus(state.realm, foeRealm(target, hostile))
                         + (engine.isDepleted(state.energy) ? -2 : 0);   // 내공 고갈 = 판정 -2
                 int resist = engine.difficulty(hostile ? "보통" : "쉬움");
@@ -1739,6 +1745,36 @@ public final class SkillListener implements Listener {
         Material m = player.getInventory().getItemInMainHand().getType();
         if (!m.isAir() && ticks > 0) {
             player.setCooldown(m, ticks);   // 바닐라 아이템 쿨다운 스와이프 = 스킬 쿨다운 (mc_action_mapping 2장)
+        }
+    }
+
+    /**
+     * <b>날이 바뀌면 수련이 갈린다.</b>
+     *
+     * <p>여기 있는 이유: 원래 {@code rollDay} 는 <b>몹을 죽일 때만</b> 불렸다 ({@code HuntListener}).
+     * 수련이 사냥에 묶여 있으면 <b>"앉아서 쌓는 몸"이 성립하지 않는다</b> — 외공·내공·심안은
+     * 베어서 느는 것이 아니라 <b>앉아서</b> 느는 것이고, 실전 화후만이 손(초식)에 쌓인다.
+     * 그래서 정산은 모두에게 매일 온다. 사냥은 그 위에 얹힌다.
+     *
+     * <p>넘치는 몫은 버린다 — <b>천장이 몰빵을 꺾는 자리</b>다. 신법을 끝까지 민 자는 어느 날부터
+     * 하루치의 일부가 허공에 흩어지는 것을 본다. 배분을 바꾸라는 세계의 말이다.
+     */
+    private void settleTraining(Player player, SkillEngine.State state) {
+        Growth growth = Growth.get();
+        if (growth == null) {
+            return;
+        }
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        long day = player.getWorld().getFullTime() / 24000L;
+        if (!ledger.isNewDay(day)) {
+            return;
+        }
+        double wasted = growth.train(ledger, state.realm, 1.0);
+        ledger.addWasted(wasted);
+        ledger.rollDay(day);
+        if (wasted > 0.0) {
+            player.sendMessage(org.bukkit.ChatColor.DARK_GRAY + "수련 "
+                    + String.format("%.1f", wasted) + "일치가 흩어졌다 — 천장에 닿았다 (/혼천 수련)");
         }
     }
 }

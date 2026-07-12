@@ -68,6 +68,8 @@ public final class HoncheonMvt extends JavaPlugin {
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
+        Growth.init(cfg);     // 성장 축 — training.yml curriculum · combat.yml attacker_attribute.
+                              // ★ 이것이 없으면 **같은 경지의 두 사람이 코드 수준에서 완전히 같은 사람**이 된다
         HuntingGrounds.init(cfg);   // 적 등록부 — 짐승·사람 스탯 (npcs·npc_combat·combat)
         Populace.init(cfg);   // 인구 등록부 — 행인·주민 28인 (npcs/populace.yml)
         WorldBridge.init(cfg, getLogger());   // 세계 다리 — 마크의 사건이 봇의 장부로 간다 (world_bridge.yml)
@@ -87,6 +89,9 @@ public final class HoncheonMvt extends JavaPlugin {
         }));
         WorldBridge.start();
 
+        PackPusher packPusher = new PackPusher(this);
+        packPusher.load(cfg);                    // 팩은 **접속한 주소**로 나간다 (박힌 URL 은 LAN 밖에서 죽는다)
+        getServer().getPluginManager().registerEvents(packPusher, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
         getServer().getPluginManager().registerEvents(new TradeListener(this), this);

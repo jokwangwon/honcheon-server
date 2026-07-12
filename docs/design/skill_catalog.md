@@ -188,3 +188,27 @@ this.skillCast = new SkillCast(this, skillEngine, skills, cfg);   // skills 생�
 getServer().getPluginManager().registerEvents(skillCast, this);
 skillCast.start();                                                 // skills.start() 옆
 ```
+
+---
+
+## 문파 무공 계보 (系譜) — 하급 → 중급 → 상급 → 오의
+
+이 카탈로그는 오래 **평평했다**: 무공이 30여 종 있었지만 **심법 → 무공 → 오의로 오르는 사다리가 없었다.**
+사용자의 옛 설계(노션)에 15문파의 계보가 실명으로 다 짜여 있었고, 그것을 등록부로 옮겼다.
+
+**정본**: `skills.yml`(`tier`·`lineage`·`mastery_gate`) · `skill_mechanics.yml`(`mastery_degradation`) ·
+`simbeop.yml`(심법·`sole_transmission`) · `ultimate_arts.yml`(전승 오의 21종) · `sect_life.yml`(전수·승계)
+**설계 문서**: [`sect_lineage.md`](sect_lineage.md) — 계보표 · 지어낸 것의 장부 · 입문 불가 사유
+
+### 절기(絶技)와 계보의 관계 — 헷갈리기 쉬운 자리
+
+| | 무공 (계보) | 절기 (이 문서의 10수) |
+|---|---|---|
+| 층위 | 하급·중급·상급 (`tier`) | **어미 무공에서 피어나는 한 수** |
+| 배우는 법 | 비급 + 공적 (`lineage_transmission`) | **전수받는다** — 사람이 준다 |
+| 발동 | 콤보 (`combo`) | **삼문(承·間·虛)** — `cast_gate` |
+| 게이트 | `requires_skill` 숙련 5 | 어미 무공 숙련 3~6 |
+
+**계보가 절기의 어미다.** 그리고 계보의 「본래 위력」 규약(`mastery_degradation`)은 **절기까지 잠근다** —
+상급 무공이 미대성이면 `cast_gate` 承이 열리지 않는다. **그 무공에서 절기가 피지 않는다.**
+(절기는 결에서 피어난다 — 결이 안 잡혔으면 필 자리가 없다.)

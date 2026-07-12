@@ -619,6 +619,275 @@ skills:
     steps:
       - { trail: 가드태세, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.6, pitch: 1.2 } }
 
+  # ══════════════════════════════════════════════════════════════════
+  #  15문파 계보 (docs/design/sect_lineage.md) — 문파가 궤적으로 갈린다
+  # ══════════════════════════════════════════════════════════════════
+  # 【문파의 지문 — 무엇으로 가르는가】 파티클 종류는 마지막 수단이다 (팔레트 13장). 앞의 셋으로 가른다:
+  #   ① 궤적의 짜임 — 히트박스가 이미 다르다. 그것을 그대로 그린다.
+  #        화산 호→원 (꽃이 벌어진다) · 남궁 선 (가장 길다) · 무당 원으로 닫는다 ·
+  #        점창 선·선·선·선 (네 번 다 찌른다) · 청성 돌로 연다 (검 계보 유일) ·
+  #        해남 짧은 호와 역수의 선 · 팽가 호에서 내려베는 선 · 개방 150° 의 호
+  #   ② 음높이 — 점창 1.85~1.95 (전 무공 최고) ↔ 종남 0.45~0.85 (전 무공 최저). 눈을 감아도 문파가 갈린다.
+  #        같은 검이라도 쾌검과 중검은 **귀로** 먼저 갈린다.
+  #   ③ 텔레그래프 — 종남 +3 (가장 크게 예고한다) · 점창 0 (예고하지 않는다) ·
+  #        곤륜 무성무색 **−9 (응집이 아예 없다 — 전 무공 유일. 소리도 안 난다)**
+  #
+  # ── 화산파 (계보) — 호로 열고 **원으로 진다**: 꽃이 벌어지는 짜임 ──
+  nagyeong_geom:
+    name: "낙영검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.35 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.25 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.05 } }   # 떨어지는 꽃잎 하나 (발경 라이더)
+
+  maehwa_nanman_geom:
+    name: "매화난만검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.30 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.10 } }
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.85 } }   # 난만(爛漫) — 선딜 11틱에 검기가 원을 연다
+
+  # ── 남궁세가 (계보) — **선이 가장 길다** (7.5m). 낮은 음 · 큰 예고 ──
+  daeyeon_geom:
+    name: "대연검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.00 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.95, pitch: 0.75 } }
+
+  changgung_daeyeon_geom:
+    name: "창궁대연검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.55 } }   # 검로가 12틱 서 있다 — 보고도 못 피한다
+
+  # ── 사천당가 (계보) — 손을 떠나는 것 (시). 가장 높고 가장 잦다 ──
+  dangmun_bijeop:
+    name: "당문비접표"
+    style: 암기
+    steps:
+      - { trail: 시, count: 2, finisher: true,
+          sound: { key: "entity.arrow.shoot", volume: 0.7, pitch: 1.75 } }   # 네 마리 나비 — 궤가 넷으로 갈린다 (hit_count 4)
+
+  # ── 하북팽가 (계보) — 호에서 **내려베는 선**으로. 도의 무게 (음이 낮다) ──
+  gaesan_do:
+    name: "개산도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.75 } }   # 산을 연다 — 흙이 튄다
+
+  honwon_do:
+    name: "혼원도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.85, pitch: 0.80 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.60 } }   # 도신이 운다 — 벼락의 예고
+
+  byeokryeok_do:
+    name: "벽력도법"
+    style: 도
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.50 } }   # 파격 — 11틱 보인다. 그래도 막을 수 없다
+
+  # ── 소림사 (계보) — 리치 2.4 (최단). 대신 **네 번** 친다 ──
+  sorim_kwonbeop:
+    name: "소림권법"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.10 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.05 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.8, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.70 } }   # 108수의 끝 — 4타에 발경
+
+  banya_jang:
+    name: "반야장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.60 } }   # 장심(掌心) — 여래신장의 아래층
+
+  # ── 무당파 (계보) — **원으로 닫는다**. 마무리가 사방이다 (반격의 결) ──
+  yuun_geom:
+    name: "유운검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.15 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.05 } }
+      - { trail: 원, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.95 } }   # 구름이 감긴다 — 원을 그린다
+
+  jinmu_geom:
+    name: "진무검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.10 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.00 } }
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.85 } }   # 검이 원을 닫는다
+
+  # ── 개방 (계보) — 취기가 흩날린다(ash) · 봉은 **150° 를 훑는다** (최광각) ──
+  chwikwon:
+    name: "취권"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.20 } }
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.10 } }
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.85 } }   # 휘청이다 갑자기 곧게 온다
+
+  gaebang_bongbeop:
+    name: "개방봉법"
+    style: 봉
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.75, pitch: 0.95 } }   # 150° — 포위를 푸는 획
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.70 } }   # 먼지가 인다
+
+  # ── 곤륜파 (계보) — 경공의 문파. **무성무색은 응집도 소리도 없다 (전 무공 유일)** ──
+  yangui_geom:
+    name: "양의검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.30 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.10 } }   # 두 획이 엇갈린다 — 음양
+
+  museong_musaek:
+    name: "무성무색"
+    style: 검
+    # 【전 무공 유일 — 텔레그래프가 없다】 telegraph_boost −9 는 응집 파티클을 0 으로 만들고
+    #   (SkillListener.telegraph: n ≤ 0 이면 발행하지 않는다) **응집음까지 함께 죽인다**
+    #   (scheduleTelegraph 는 per ≤ 0 에서 되돌아가므로 charge 사운드도 안 난다).
+    #   그래서 이 검은 **오는 것이 보이지도 들리지도 않는다** — 그것이 곤륜 중급의 값이다.
+    #   스윙음도 −60% (0.25 · 다른 검의 0.7 대비). 다만 **타격은 보인다** — 맞았다는 사실까지 지우면
+    #   그것은 판정이 거짓말하는 것이다 (격의 타격 파티클·타격음은 grades 의 것이므로 여기서 못 줄인다).
+    steps:
+      - { trail: 선, count: 1, telegraph_boost: -9, sound: { key: "entity.player.attack.weak", volume: 0.25, pitch: 1.45 } }
+      - { trail: 선, count: 1, telegraph_boost: -9, sound: { key: "entity.player.attack.weak", volume: 0.25, pitch: 1.40 } }
+      - { trail: 호, count: 2, finisher: true, telegraph_boost: -9,
+          sound: { key: "entity.player.attack.weak", volume: 0.30, pitch: 1.25 } }
+
+  taeheo_geom:
+    name: "태허검법"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.90 } }   # 원이 비어 있다 — 그 안이 전부 검이다
+
+  dabun_jong:
+    name: "답운종"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 4, sound: { key: "entity.phantom.flap", volume: 0.6, pitch: 1.40 } }   # 거리 10 — 제운종(8)보다 멀리 간다. 잔상이 더 길다
+
+  # ── 종남파 (계보) — **가장 느리고 가장 낮다**. 예고가 가장 크다 (숨지 않는다) ──
+  gusang_geom:
+    name: "구상검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.85, pitch: 0.85 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.65 } }   # 공기가 밀린다
+
+  cheongang_geom:
+    name: "천강검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, telegraph_boost: 1, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.80 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.60 } }   # 은하가 흐른다 — 검신에 별빛
+
+  taeeul_bungwang_geom:
+    name: "태을분광검"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 3,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.45 } }   # 13틱 — 전 무공 최장 선딜 · 최저 음. 종남의 검은 숨지 않는다
+
+  # ── 점창파 (계보) — **가장 빠르고 가장 높다**. 네 번 다 찌른다 · 예고가 없다 ──
+  bungwang_geom:
+    name: "분광검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.85 } }
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.90 } }
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.95 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.7, pitch: 1.70 } }   # 빛 한 줄 — 이미 지나갔다
+
+  hoepung_muryu_geom:
+    name: "회풍무류검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.80 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.75 } }   # 궤가 둘로 보인다 — 찌르다 벤다
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.85 } }
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.60 } }
+
+  bungwang_sippalsu:
+    name: "분광십팔수"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.8, pitch: 1.90 } }   # 다섯 점의 빛 — 선딜 3틱. 세는 사이에 끝난다 (예고 없음)
+
+  # ── 청성파 (계보) — **검 계보 유일: 돌(突)로 연다**. 바람의 음 (높다) ──
+  cheongpung_geom:
+    name: "청풍검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.40 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.65, pitch: 1.30 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.10 } }
+
+  neungpung_geom:
+    name: "능풍검법"
+    style: 검
+    steps:
+      - { trail: 돌, particle: cloud, count: 2, sound: { key: "entity.phantom.flap", volume: 0.5, pitch: 1.35 } }   # 바람을 밟고 들어간다 — 검 계보 유일의 돌진 개시
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.25 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.05 } }
+
+  songpung_geom:
+    name: "송풍검법"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.00 } }   # 솔잎이 인다 — 받아넘기며 벤다 (흘리기 +3틱)
+
+  # ── 해남파 (계보) — 짧고 날카롭다. **역수·좌수** — 어느 손에서 나올지 모른다 ──
+  haepung_geom:
+    name: "해풍검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.50 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.55 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.35 } }   # 짠 바람 — 획이 짧다
+
+  yeoksu_geom:
+    name: "역수검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.60 } }   # 칼등이 먼저 온다
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.50 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.30 } }
+
+  jwasu_khwaegeom:
+    name: "좌수쾌검"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.8, pitch: 1.70 } }   # 왼쪽에서 빛 — 보던 손이 아니다 (가드 각 바깥)
+
   # ── NPC 전용 표본 (대칭 원칙 — NPC 도 같은 등록부를 탄다) ──
   galho_sando:
     name: "갈호의 산도"
@@ -686,6 +955,219 @@ ultimates:
       charge: [{ key: "entity.wither.spawn", volume: 0.8, pitch: 1.4 }]
       release: [{ key: "entity.wither.shoot", volume: 1.0, pitch: 0.5 }]
       hit: [{ key: "entity.generic.drink", volume: 0.8, pitch: 0.5 }]   # 약탈 — 마시는 소리
+
+  # ══════════════════════════════════════════════════════════════════
+  #  문파 전승 오의 17종 (ultimate_arts.yml · docs/design/sect_lineage.md)
+  # ══════════════════════════════════════════════════════════════════
+  # 【궤적】 원(圓)·선(線)뿐이다 — 새 궤적 타입이 없으므로 도구도 안 고친다 (ULT_TRAIL 그대로).
+  # 【응집 고리가 오의의 얼굴이다】 ring_points × per_point + core_count 가 곧 "얼마나 크게 모으는가"다.
+  #   선딜이 길수록 고리가 크다 (혼원벽력 22틱 = 가장 오래 모은다) — 그리고 예산이 그 상한을 잡는다:
+  #   ring × (선딜÷2) + burst + 타격풀 48 ≤ ultimate_per_cast_max 320.
+  # 【두 예외 — 예외 자체가 정보다】
+  #   · 무형지독 — **응집이 없다. 개시 섬광도 없다. 응집음도 없다.** 오의인데 아무 예고가 없는 유일한 것.
+  #     터진 뒤의 재(ash)만 보인다 — 그때는 이미 마셨다.
+  #   · 사일검법 — 선딜 6틱(최속). 고리를 그릴 시간이 없다 (emits 3) → 가장 작은 고리.
+
+  # ── 화산파 ── 매화는 벌어진다 (원)
+  isipsasu_maehwa:
+    name: "이십사수매화검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.33, extra: 0.07 }   # 여덟 번 벤다 — 전 오의 최다단
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.9, pitch: 1.5 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.5 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.8 }]     # 여덟 번 — 가장 잦고 가장 높다
+
+  jaha_nanhwa:
+    name: "자하난화검수"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 38, spread_ratio: 0.30, extra: 0.09 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.8 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.1 }]
+      hit: [{ key: "block.conduit.activate", volume: 0.9, pitch: 1.3 }]         # 자하(紫霞)가 그 자리에 남는다
+
+  # ── 남궁세가 ── 하늘은 끝이 없다 (원) · 번개는 한 줄이다 (선)
+  changgung_muae:
+    name: "창궁무애검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.25, extra: 0.10 }   # 반경 8 — 전 오의 최대
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.6 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.9 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.9 }]
+
+  seomjeon_sipsam:
+    name: "섬전십삼검뢰"
+    trail: 선
+    charge: { particle: electric_spark, ring_points: 6, per_point: 2, core: end_rod, core_count: 2 }   # 선딜 10 — 번개는 예고하지 않는다
+    burst:  { particle: end_rod, count: 36, spread_ratio: 0.20, extra: 0.14 }   # 열셋이 한 줄에 겹친다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.9 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.7 }]
+      hit: [{ key: "item.trident.throw", volume: 0.8, pitch: 1.6 }]
+
+  # ── 사천당가 ── 하늘을 덮는다 (원) · 그리고 보이지 않는 것 (원)
+  manchon_nakhwa:
+    name: "만천화우·낙화"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: ash, count: 36, spread_ratio: 0.40, extra: 0.06 }       # 반경 10 — 재가 하늘을 덮는다 (독)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "entity.arrow.shoot", volume: 0.8, pitch: 1.4 }]
+      release: [{ key: "entity.arrow.shoot", volume: 1.0, pitch: 0.8 }]
+      hit: [{ key: "entity.witch.throw", volume: 0.8, pitch: 1.1 }]
+
+  muhyeong_jidok:
+    name: "무형지독"
+    trail: 원
+    # 【전 오의 유일 — 예고가 없다】 응집 고리 0 · 개시 섬광 없음 · 응집음 없음.
+    #   "보이지 않는다"가 이 오의의 본체다 (텔레그래프 없음 · 기독 20). 다른 오의는 전부 고리로 예고한다.
+    #   그래도 **터진 뒤의 재는 보인다** — 맞았다는 사실까지 지우면 그것은 판정이 거짓말하는 것이다.
+    charge: { particle: ash, ring_points: 0, per_point: 0, core: ash, core_count: 0 }
+    burst:  { particle: ash, count: 40, spread_ratio: 0.45, extra: 0.02 }       # 터지지 않는다 — **퍼진다** (느리게, 넓게)
+    accent: { particle: null, count: 0 }                                        # 섬광이 없다 — 개시를 알리지 않는다
+    sounds:
+      charge: []
+      release: [{ key: "entity.witch.throw", volume: 0.4, pitch: 0.6 }]         # 숨소리만 한 소리
+      hit: [{ key: "entity.witch.throw", volume: 0.5, pitch: 0.9 }]
+
+  # ── 하북팽가 ── 다섯 범이 문을 끊는다 (선) · 벼락은 모였다 떨어진다 (원)
+  oho_danmun_do:
+    name: "오호단문도"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: crit, core_count: 2 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.22, extra: 0.12 }   # 파격 — 가드를 관통한다 (전 오의 유일)
+    accent: { particle: explosion, count: 1 }                                   # 터지는 것이 아니라 **끊는** 것이다
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.5 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.7 }]
+      hit: [{ key: "block.anvil.destroy", volume: 1.0, pitch: 0.8 }]            # 문이 끊긴다 — 쇠가 부러지는 소리
+
+  honwon_byeokryeok_do:
+    name: "혼원벽력도"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }   # 22틱 — 가장 오래 모은다
+    burst:  { particle: end_rod, count: 28, spread_ratio: 0.30, extra: 0.14 }
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.5 }]
+      hit: [{ key: "block.anvil.land", volume: 1.0, pitch: 0.6 }]               # 병기를 든 손을 친다 — 쇠가 땅에 떨어진다
+
+  # ── 소림사 ── 백 보 밖을 친다 (선) · 손바닥이 내려온다 (원)
+  baekbo_singwon:
+    name: "백보신권"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: crit, core_count: 4 }
+    burst:  { particle: end_rod, count: 30, spread_ratio: 0.12, extra: 0.16 }   # 24m — 전 오의 최장. 퍼짐이 가장 좁다 (한 줄로 간다)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.9 }]
+      release: [{ key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.5 }]   # 주먹 소리가 백 보를 간다
+      hit: [{ key: "block.anvil.land", volume: 0.9, pitch: 0.9 }]
+
+  yeorae_sinjang:
+    name: "여래신장"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 36, spread_ratio: 0.35, extra: 0.05 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.ambient", volume: 0.9, pitch: 0.7 }]        # 종소리가 아니라 **울림** — 정화의 결
+      release: [{ key: "block.beacon.activate", volume: 1.0, pitch: 0.8 }]
+      hit: [{ key: "block.conduit.activate", volume: 1.0, pitch: 1.0 }]
+
+  # ── 개방 ── 용을 항복시킨다 (선) — 지형이 무기다
+  hangryong_sippalchang:
+    name: "항룡십팔장"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: cloud, core_count: 2 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.28, extra: 0.18 }   # 넉백 8 — 퍼지는 것이 아니라 **민다** (extra 최대)
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "entity.generic.drink", volume: 0.8, pitch: 0.6 }]        # 거지의 오의 — 한 모금 마시고 시작한다
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.8 }]
+      hit: [{ key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.6 }]
+
+  # ── 곤륜파 ── 구름 위의 용 (원) · 용을 잡는 검 (선)
+  unryong_daepalsik:
+    name: "운룡대팔식"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: cloud, core_count: 4 }
+    burst:  { particle: end_rod, count: 38, spread_ratio: 0.36, extra: 0.10 }   # 여덟 번 밟고 여덟 번 벤다 (무적 20틱 — 상한)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "entity.phantom.flap", volume: 0.8, pitch: 0.9 }]         # 경공의 오의 — 발이 먼저 운다
+      release: [{ key: "entity.lightning_bolt.impact", volume: 0.9, pitch: 1.4 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.4 }]
+
+  taeheo_doryong:
+    name: "태허도룡검법"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 32, spread_ratio: 0.18, extra: 0.12 }
+    accent: { particle: explosion, count: 1 }                                   # 격을 벗긴다 — 남의 기가 터진다
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.7 }]
+      release: [{ key: "block.conduit.deactivate", volume: 1.0, pitch: 0.6 }]   # **남의 격이 꺼지는 소리** (전 오의 유일)
+      hit: [{ key: "block.conduit.deactivate", volume: 1.0, pitch: 0.9 }]
+
+  # ── 종남파 ── 서른여섯 검로가 여섯 방위로 (원) — 맞으면서 벤다
+  cheonha_36geom:
+    name: "천하삼십육검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.30, extra: 0.08 }
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]   # 종남은 오의에서도 가장 낮다
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.6 }]
+      hit: [{ key: "block.anvil.destroy", volume: 0.9, pitch: 0.7 }]            # 내구 40% — 상대의 검이 운다
+
+  # ── 점창파 ── 해를 쏜다 (선) — 전 오의 최속. 예고할 시간이 없다
+  sail_geom:
+    name: "사일검법"
+    trail: 선
+    charge: { particle: electric_spark, ring_points: 4, per_point: 2, core: electric_spark, core_count: 2 }   # 선딜 6틱 — 고리를 다 그리지 못한다
+    burst:  { particle: end_rod, count: 30, spread_ratio: 0.10, extra: 0.20 }   # 아홉 점이 한 줄로 — 가장 좁고 가장 빠르다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.6, pitch: 2.0 }]  # 전 등록부 최고음 — 들렸을 때는 이미 왔다
+      release: [{ key: "item.trident.throw", volume: 1.0, pitch: 1.9 }]
+      hit: [{ key: "entity.player.attack.crit", volume: 0.9, pitch: 1.9 }]
+
+  # ── 청성파 ── 푸른 달 한 획 (선) — 그어 두고 기다린다 (설치형 참격)
+  cheongwol_geom:
+    name: "청월검법"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 6, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 28, spread_ratio: 0.16, extra: 0.03 }   # 터지지 않는다 — **그 자리에 10틱 머문다** (extra 최소)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.8, pitch: 1.2 }]
+      release: [{ key: "block.beacon.activate", volume: 0.9, pitch: 1.3 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.2 }]     # 다가온 자가 벤다 — 획은 이미 거기 있었다
+
+  # ── 해남파 ── 여섯 획이 사방에서 (원) — 어느 손에서 나올지 모른다
+  namhae_36geom:
+    name: "남해삼십육검"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: crit, core_count: 2 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.32, extra: 0.09 }   # 가드 각(120°) 무시 — 뒤에서도 온다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.7 }]
+      release: [{ key: "entity.player.attack.sweep", volume: 1.0, pitch: 1.6 }]
+      hit: [{ key: "entity.player.attack.crit", volume: 0.8, pitch: 1.5 }]
 
 # ══════════════════════════════════════════════════════════════════════
 #  사건(事件) — 격 밖의 읽힘. 무기 파괴·격돌·패링·고갈
@@ -973,6 +1455,46 @@ display:
       size: [1.0, 0.08, 1.0]
       form: "붉은 파문 — 바닥에 깔린 고리가 사방으로 퍼진다"
 
+    # 【15문파 오의의 형체 4장】 — 17종이 이 넷과 기존 넷(매화·태극·군림·혈해)을 나눠 쓴다.
+    #   문파마다 형체를 하나씩 굽는 길도 있었으나, 그것은 **팩 21장**이다 (예산·유지비 모두 진다).
+    #   대신 **히트박스가 형체를 정하게** 했다 — 원은 펴지고(고리·꽃·손바닥), 선은 앞에 선다(빗살).
+    #   그것이 이 등록부의 규칙이기도 하다: 보이는 모양 = 맞는 모양 (불변식 ㄴ).
+    #   문파는 그 안에서 **파티클·소리·응집 고리**가 가른다 (형체는 히트박스의 것이다).
+    #
+    # 【방향 계약】 오의 형체는 시전자의 yaw 로 서고 scale 만 자란다 (SkillDisplay.bloom — 회전이 없다).
+    #   그러므로 **앞으로 뻗는 축을 모델에 새길 수 없다.** 눕는 것(XZ 평면)과 앞에 서는 것(XY 평면)뿐이다.
+    #   선 오의를 '앞으로 뻗은 창'으로 굽지 않고 **앞에 선 여러 세로 획(빗살)** 으로 세운 이유가 그것이다 —
+    #   못 하는 것을 등록하면 그것이 거짓말이다.
+    검풍_고리:
+      key: "honcheon:ult/sword_gale"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [2.0, 0.06, 2.0]      # XZ 평면에 눕는다 (몸을 중심으로 사방)
+      form: "여덟 획이 사방으로 뻗은 검풍(劍風) — 원 오의의 얼굴. 꽃이 아니라 **검의 자리**다"
+
+    뇌격_빗살:
+      key: "honcheon:ult/bolt_comb"
+      base: PAPER
+      fallback: END_ROD
+      size: [1.4, 2.2, 0.06]      # 앞에 서는 판 (XY 평면) — 세로 획 여럿
+      form: "몸 앞에 선 여러 세로 획 — 선 오의(섬전 13 · 오호 5 · 항룡 3 · 사일 9)의 다발.
+             가운데가 높고 양옆이 낮다 — 한 줄로 간다는 뜻이다"
+
+    장심_인:
+      key: "honcheon:ult/palm_bloom"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.6, 1.6, 0.06]
+      form: "거대한 장심(掌心) — 다섯 손가락이 펴진 손바닥 하나 (소림의 원 오의). 앞을 향해 선다"
+
+    독무_고리:
+      key: "honcheon:ult/toxin_veil"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.0, 0.06, 1.0]
+      form: "바닥을 기는 재(灰)의 겹고리 — **독은 터지지 않는다. 퍼진다.**
+             다른 오의의 형체가 한 순간에 펴진다면 이것은 느리게 밀려 나간다"
+
   # ─── 모션 등록부 — 어떻게 움직이는가 (보간이 부드러움의 전부다) ───
   # kind: 참격(그렸다 지워진다) · 서림(병기에 겹쳐 지속) · 투사(날아간다) · 고리(궤도) · 개화(오의)
   #   draw          획이 그려지는 틱 (꼬리가 자란다) — 실제 값은 계열 공속이 정한다 (swings.span_ratio)
@@ -1010,6 +1532,22 @@ display:
                 interpolation: 3, spin: 0.0, burst_scale: 0.8, billboard: FIXED, brightness: [15, 15] }
     혈해_범람: { kind: 개화, model: 혈해_파문, lifetime: 30, birth: 0, fade: 8,
                 interpolation: 4, spin: 0.04, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+
+    # 15문파 오의 (17종이 이 넷을 나눠 쓴다 — 히트박스가 형체를 정한다)
+    검풍_개화: { kind: 개화, model: 검풍_고리, lifetime: 30, birth: 0, fade: 8,
+                interpolation: 4, spin: 0.10, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+                # 원 오의 — 사방으로 펴진다 (창궁무애·혼원벽력·운룡대팔식·천하36검·남해36검)
+    뇌격_강림: { kind: 개화, model: 뇌격_빗살, lifetime: 22, birth: 0, fade: 4,
+                interpolation: 2, spin: 0.0, burst_scale: 0.15, billboard: FIXED, brightness: [15, 15] }
+                # 선 오의 — 앞에 선다. **자전하지 않는다** (한 줄로 가는 것은 돌지 않는다)
+                # burst_scale 0.15 — 선 오의의 range 는 length(최대 24m)다. 1.0 이면 하늘을 덮는다
+    장심_개화: { kind: 개화, model: 장심_인,  lifetime: 26, birth: 2, fade: 6,
+                interpolation: 4, spin: 0.02, burst_scale: 0.60, billboard: FIXED, brightness: [15, 15] }
+                # 소림 — 손바닥이 천천히 펴진다 (여래신장). 거의 돌지 않는다
+    독무_범람: { kind: 개화, model: 독무_고리, lifetime: 40, birth: 0, fade: 10,
+                interpolation: 6, spin: 0.03, burst_scale: 1.0, billboard: FIXED, brightness: [4, 15] }
+                # 당가 독 — 가장 오래 산다(40틱) · 가장 느리게 펴진다(보간 6) · **가장 어둡다**(밝기 4)
+                # 다른 오의는 빛나고, 이것은 **빛나지 않는다** — 그것이 무형(無形)이다
 
   # ─── 참격선 배선 — 히트박스 모양 → 획 (【불변식 ㅂ】 모양은 판정이 정한다) ───
   slashes:
@@ -1154,6 +1692,24 @@ display:
       taegeuk_hyegeom: 태극_대기
       jewang_gunrim:  군림_강림
       hyeolhae_malli: 혈해_범람
+      # ── 15문파 전승 오의 17종 — 원은 펴지고, 선은 앞에 선다 ──
+      isipsasu_maehwa:       매화_개화     # 화산의 오의는 매화다 (문파의 지문 — 형체를 나눠 쓴다)
+      jaha_nanhwa:           매화_개화
+      changgung_muae:        검풍_개화
+      seomjeon_sipsam:       뇌격_강림
+      manchon_nakhwa:        독무_범람     # 당가의 원 = 하늘을 덮는 재
+      muhyeong_jidok:        독무_범람     # 응집은 없다. 형체는 **터진 뒤에만** 뜬다
+      oho_danmun_do:         뇌격_강림
+      honwon_byeokryeok_do:  검풍_개화
+      baekbo_singwon:        뇌격_강림
+      yeorae_sinjang:        장심_개화
+      hangryong_sippalchang: 뇌격_강림
+      unryong_daepalsik:     검풍_개화
+      taeheo_doryong:        뇌격_강림
+      cheonha_36geom:        검풍_개화
+      sail_geom:             뇌격_강림
+      cheongwol_geom:        뇌격_강림
+      namhae_36geom:         검풍_개화
 
 # ══════════════════════════════════════════════════════════════════════
 #  기본 초식(基本) — 【무공이 없어도 병기는 궤적을 그린다】

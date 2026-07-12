@@ -64,6 +64,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
                 case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
                 case "계측" -> metrics(sender, args);        // MSPT·티커별 예산 (performance.yml 대조)
+                case "수련" -> training(sender, args);       // 하루 5구간을 무엇에 쓸 것인가 (성장 축)
+                case "접속" -> link(sender);                 // 마크의 몸 ↔ 디스코드의 이름 (코드 발급)
                 case "모션진단" -> motionDiag(sender, args);   // 3D 층이 실제로 떴는가 (팩 유무 포함)
                 case "문장" -> crests(sender);
                 default -> help(sender);
@@ -580,54 +582,69 @@ public final class MvtCommand implements CommandExecutor {
 
     /** 땅이 실린 뒤 — 짓고 구역을 등록한다 (메인 스레드) */
     private void finishRegion(CommandSender sender, World world, WorldMap.Place place, WorldMap.Site site) {
-        // 지면은 **첫 조성이 잰 값**을 쓴다 (원장). 다시 재면 지난번에 세운 산을 지면으로 읽어
-        // 그 위에 또 산을 쌓는다 — 조성할 때마다 화산파가 36켜씩 하늘로 자랐다.
+        // 지면은 **첫 조성이 잰 값**을 쓴다 (원장). 다시 재면 지난번에 세운 산을 지면으로 읽는다.
         Integer remembered = plugin.regionBase(place.id());
         int baseY = remembered == null ? site.groundY() : remembered;
         if (remembered == null) {
             plugin.setRegionBase(place.id(), baseY);
         }
-        // ─── 지형 계층이 먼저 땅을 빚는다 (계약: docs/design/terrain_layer.md) ───
-        // 땅과 집은 관심사가 다르다. 지형이 부지를 보장하고(딛는 땅·경계·수역·주문 대조),
-        // 건축은 그 위에만 세운다. 동굴은 이제 **우리가 판다** — 자연 동굴을 껐으니까.
-        // 문파의 반경 44 는 봉우리(+36)를 못 받는다 — 계단 run 이 26칸이라 본전이 22켜에서 멎는다
-        // (건축 담당의 계측). "천 계단"이 서려면 발치가 넓어야 한다.
         // 문파 부지 110 — 산이 72켜로 서면 계단이 그만큼 길어야 오른다 (반경 44 는 17켜에서 멎는다).
-        // 부지가 산(반경 64)보다 큰 것이 옳다: 산문·문전은 **산 발치의 들**에 서고, 천 계단이 정상으로 오른다.
-        // "오르는 길이 시험이다"가 그제야 참이 된다.
         int forgeRadius = "noklim".equals(place.faction()) ? 24 : 110;
-        TerrainForge.SiteSpec spec = TerrainForge.prepare(world, place, site.x(), baseY, site.z(), forgeRadius);
-        plugin.getLogger().info("[지형] " + spec.summary());
-        TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
-        TerrainForge.CaveSpec cave = null;
-        if (kind != null) {
-            cave = TerrainForge.digCave(world, spec, kind);
-            plugin.getLogger().info("[지형/동굴] " + place.id() + " — " + kind + " 입구 ("
-                    + cave.mouthX() + "," + cave.mouthY() + "," + cave.mouthZ()
-                    + ") · 파낸 칸 " + cave.carved());
-            sender.sendMessage(ChatColor.GRAY + "굴 입구: /tp " + cave.mouthX() + " "
-                    + cave.mouthY() + " " + cave.mouthZ());
-        }
 
-        // 건축 계층은 **부지 사양과 굴**을 받는다 (땅은 지형 계층이 이미 빚었다).
-        // 은신처는 굴이 본체라 굴 좌표 없이는 짓지 않는다 — 입구가 부지 밖 24칸까지 나간다.
-        java.util.List<Zone> built = RemoteBuilder.build(world, place, spec, cave);
-        if (built.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
+        if (TickBudget.busy()) {
+            sender.sendMessage(ChatColor.RED + "이미 조성이 돌고 있다.");
             return;
         }
-        // 구역은 **더한다** — 청하현의 구역을 지우지 않는다 (세계는 하나고, 지역은 쌓인다)
-        java.util.List<Zone> all = new java.util.ArrayList<>(plugin.zones());
-        all.removeIf(z -> z.name().equals(place.name()));   // 재조성 = 덮어쓰기
-        all.addAll(built);
-        plugin.setZones(all);
-        sender.sendMessage(ChatColor.GOLD + place.name() + " 이(가) 섰다 — (" + site.x() + ", "
-                + site.groundY() + ", " + site.z() + ") · 구역 " + built.size() + "곳");
-        sender.sendMessage(ChatColor.GRAY + "채문 앞: /tp " + site.x() + " " + (site.groundY() + 1)
-                + " " + (site.z() + 24));
-        plugin.getLogger().info("[지역조성] " + place.id() + " (" + place.name() + ") — ("
-                + site.x() + ", " + site.groundY() + ", " + site.z() + ") · 구역 " + built.size() + "곳");
+        // ★ 청크를 **먼저 실어야 한다.** 안 그러면 드레인 도중 메인이 청크를 동기 생성한다 —
+        //   땅을 빚느라 느린 게 아니라 **청크를 기다리느라** 느려진다 (화산파가 300초 안전핀에 걸린 진범).
+        //   실어 둘 반경은 지형이 빚을 반경이 정한다 — 등록부가 아니라 **이 조성이 손댈 범위**가.
+        int preloadRadius = forgeRadius + 24;
+        // 지형·굴·건축 셋을 **한 세션**으로 묶어 틱을 나눠 먹인다 (셋 다 world 를 받으므로 대역 하나로 덮인다).
+        // 봉우리 하나가 반경 64 × 높이 72 다 — 청하현보다 큰 폭탄이었다.
+        TickBudget.preload(plugin, world, site.x(), site.z(), preloadRadius).thenRun(() ->
+            org.bukkit.Bukkit.getScheduler().runTask(plugin, () ->
+        TickBudget.build(plugin, "조성:" + place.id(), world,
+                w -> {   // ★ 워커 스레드 — Bukkit API 직접 호출 금지 (대역 월드를 통하는 것만 안전하다)
+                    TerrainForge.SiteSpec spec =
+                            TerrainForge.prepare(w, place, site.x(), baseY, site.z(), forgeRadius);
+                    TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
+                    TerrainForge.CaveSpec cave = kind == null ? null : TerrainForge.digCave(w, spec, kind);
+                    return new RegionResult(spec, cave, RemoteBuilder.build(w, place, spec, cave));
+                },
+                r -> {   // ★ 메인 스레드 — 여기서 말한다
+                    plugin.getLogger().info("[지형] " + r.spec().summary());
+                    if (r.cave() != null) {
+                        plugin.getLogger().info("[지형/동굴] " + place.id() + " — 입구 ("
+                                + r.cave().mouthX() + "," + r.cave().mouthY() + "," + r.cave().mouthZ()
+                                + ") · 파낸 칸 " + r.cave().carved());
+                        sender.sendMessage(ChatColor.GRAY + "굴 입구: /tp " + r.cave().mouthX() + " "
+                                + r.cave().mouthY() + " " + r.cave().mouthZ());
+                    }
+                    if (r.built().isEmpty()) {
+                        sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
+                        return;
+                    }
+                    java.util.List<Zone> all = new java.util.ArrayList<>(plugin.zones());
+                    all.removeIf(z -> z.name().equals(place.name()));   // 재조성 = 덮어쓰기
+                    all.addAll(r.built());
+                    plugin.setZones(all);
+                    // ★ 사람은 **조성 순간에만** 설 수 있다. 지역 앵커는 SiteSpec/CaveSpec 에만 있고
+                    //   Zone 상자는 중심 대칭이라 방위를 모른다 — 나중에 재측량하면 장문이 허공에 선다.
+                    plugin.populace().bindRegion(place, r.spec(), r.cave());
+                    sender.sendMessage(ChatColor.GOLD + place.name() + " 이(가) 섰다 — (" + site.x() + ", "
+                            + baseY + ", " + site.z() + ") · 구역 " + r.built().size() + "곳");
+                    plugin.getLogger().info("[지역조성] " + place.id() + " (" + place.name() + ") — ("
+                            + site.x() + ", " + baseY + ", " + site.z() + ") · 구역 "
+                            + r.built().size() + "곳");
+                },
+                err -> sender.sendMessage(ChatColor.RED + "조성 실패: " + err),
+                sender::sendMessage)));
     }
+
+    /** 지형·굴·건축을 한 세션으로 묶은 결과 */
+    private record RegionResult(TerrainForge.SiteSpec spec, TerrainForge.CaveSpec cave,
+                                java.util.List<Zone> built) { }
+
 
     /** /혼천 세계조성 — 등록된 지역을 제 좌표에 짓는다 (관리자). 지금은 청하현 일대 */
     private boolean buildWorld(CommandSender sender) {
@@ -1204,6 +1221,100 @@ public final class MvtCommand implements CommandExecutor {
         sender.sendMessage("/혼천 정산 [개입 -3~3] — 한백 계절 정산 / /혼천 협공 <인원>");
         sender.sendMessage("/혼천 조성 — 청하현 마을 생성 (관리자) / /혼천 문장 — 경지 문장 글리프 확인");
         sender.sendMessage(ChatColor.GRAY + "사냥 루프: 늑대·여우(격상) vs 가축(회색) — 기세·적립·감쇠·돌파를 몸으로 확인");
+        return true;
+    }
+
+    /**
+     * <b>/혼천 수련 [과목] [구간]</b> — 하루 다섯 구간을 무엇에 쓸 것인가.
+     *
+     * <p>이것이 성장의 축이다. 경지는 <b>천장</b>을 정하고, 배분은 <b>어떤 사람이 되는가</b>를 정한다.
+     * 그전까지 같은 경지의 두 사람은 코드 수준에서 완전히 같은 사람이었다.
+     *
+     * <p>인자 없이 부르면 지금의 배분과 원장을 보여준다. 과목·구간은 <b>등록부가 댄다</b>
+     * ({@code training.yml curriculum}) — 코드가 이름을 지어내지 않는다.
+     */
+    private boolean training(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
+            return true;
+        }
+        Growth growth = Growth.get();
+        if (growth == null) {
+            sender.sendMessage(ChatColor.RED + "성장 축이 서지 않았다 (training.yml).");
+            return true;
+        }
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        int perDay = growth.segmentsPerDay();
+        if (args.length < 3) {
+            player.sendMessage(ChatColor.GOLD + "수련 배분 — 하루 " + perDay + "구간");
+            int used = 0;
+            for (Map.Entry<String, Growth.Subject> e : growth.subjects().entrySet()) {
+                int seg = ledger.curriculum().getOrDefault(e.getKey(), 0);
+                used += seg;
+                player.sendMessage(ChatColor.GRAY + "  " + e.getKey() + " "
+                        + ChatColor.WHITE + "▮".repeat(seg) + ChatColor.DARK_GRAY + "▯".repeat(perDay - seg)
+                        + ChatColor.GRAY + "  " + e.getValue().name());
+            }
+            player.sendMessage(ChatColor.DARK_GRAY + "  남은 구간 " + (perDay - used)
+                    + " · /혼천 수련 <과목> <구간>");
+            return true;
+        }
+        String subject = args[1];
+        if (!growth.subjects().containsKey(subject)) {
+            player.sendMessage(ChatColor.RED + "그런 과목은 없다: " + subject
+                    + ChatColor.GRAY + " (" + String.join(", ", growth.subjects().keySet()) + ")");
+            return true;
+        }
+        int want;
+        try {
+            want = Integer.parseInt(args[2]);
+        } catch (NumberFormatException notNumber) {
+            player.sendMessage(ChatColor.RED + "구간은 숫자다 (0~" + perDay + ").");
+            return true;
+        }
+        int others = 0;
+        for (String key : growth.subjects().keySet()) {
+            if (!key.equals(subject)) {
+                others += ledger.curriculum().getOrDefault(key, 0);
+            }
+        }
+        if (want < 0 || others + want > perDay) {
+            player.sendMessage(ChatColor.RED + "하루는 " + perDay + "구간뿐이다 — 남은 것은 "
+                    + (perDay - others) + "구간.");
+            return true;
+        }
+        ledger.setSegments(subject, want);
+        player.sendMessage(ChatColor.GOLD + subject + " → " + want + "구간 "
+                + ChatColor.GRAY + "(내일부터 그렇게 쌓인다)");
+        return true;
+    }
+
+    /**
+     * <b>/혼천 접속</b> — 마크의 몸에 디스코드의 이름을 붙인다.
+     *
+     * <p>코드는 마크가 내고 <b>확정은 디스코드가 한다</b> (반대가 아니다). 훔칠 수 있는 것은 코드뿐이고
+     * 지킬 것은 캐릭터이므로, 최종 결속을 <b>인증된 자리</b>에 둔다 — 남의 캐릭터를 뺏으려면
+     * 남의 디스코드 계정이 필요해진다. 코드가 새도 도둑이 할 수 있는 최악은 <b>제 캐릭터에 남의 몸을 붙이는 것</b>,
+     * 곧 자해다.
+     */
+    private boolean link(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
+            return true;
+        }
+        String code = WorldBridge.requestLink(player.getUniqueId(), player.getName());
+        if (code == null) {
+            player.sendMessage(ChatColor.RED + "세계 다리가 서지 않았다.");
+            return true;
+        }
+        String linked = WorldBridge.linkedName(player.getUniqueId());
+        if (linked != null) {
+            player.sendMessage(ChatColor.GRAY + "이미 " + ChatColor.WHITE + linked
+                    + ChatColor.GRAY + " 으로 이어져 있다 (디스코드 /혼천 접속해제)");
+        }
+        player.sendMessage(ChatColor.YELLOW + "접합 코드 " + ChatColor.WHITE + ChatColor.BOLD + code);
+        player.sendMessage(ChatColor.GRAY + "디스코드에서 " + ChatColor.WHITE + "/혼천 접속 코드:" + code
+                + ChatColor.GRAY + " (유효 " + (WorldBridge.linkTtlSeconds() / 60) + "분)");
         return true;
     }
 }

@@ -89,3 +89,238 @@ legacy_arts:
     effect: "범위 내 원기·내력 약탈 (흡수량으로 자기 회복)"
     cost: "내력 50%"
     demonic: "마공 분류 ①+② — 목격자는 토벌령의 증인이 된다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 문파 전승 오의 — 노션 원천의 실명 오의 17종 (설계: docs/design/sect_lineage.md)
+# ═══════════════════════════════════════════════════════════════════════════
+# 요구 경지: 화경(완성) — realm_ladder 그대로. 초절정은 '개안'(위력 절반 + 내상)이다.
+# 선행: 해당 계보 **상급 무공 숙련 8(극성)** — mastery_ladder 극성 = "계열 오의 개안 자격".
+#   (acquisition.legacy.requires 의 '숙련 6+' 는 **전수 자격**이다: 비급을 받고 구결을 듣는 문턱.
+#    6 에 전수받고, 8 에 개안한다 — 두 수는 다른 문이다. 그 사이가 '배웠는데 안 나가는' 구간이다)
+#
+# ★ 히트박스는 원(圓)·선(線)뿐이다 — motion_audit ULT_TRAIL 이 아는 두 궤적.
+#   새 궤적을 요구하면 모션 담당이 도구까지 고쳐야 한다. 오의는 그럴 이유가 없다.
+#
+# ★ 장문인 오의(sole_transmission)는 **한 세계에 한 사람**이다:
+#   자하난화검수(화산) · 혼원벽력도(팽가) · 청월검법(청성) — sect_life.yml succession_ladder 가 집행한다.
+
+  # ── 화산파 ──
+  isipsasu_maehwa:
+    name: "이십사수매화검법(二十四手梅花劍法)"
+    faction: hwasan
+    lineage: hwasan_geom
+    requires_skill: { id: maehwa_nanman_geom, mastery: 8 }
+    type: { hitbox: 원, range: 5, multi_hit: 8 }     # 스물넷의 수 — 다단의 오의 (전 오의 최다단)
+    frames: [14, 8, 16]
+    defense: "시전 중 무적 10틱"
+    cost: "내력 50%"
+    effect: "여덟 번 벤다 — 한 수마다 개별 판정 (가드 게이지가 먼저 깨진다)"
+    resonance: "매화심법 보유 시 다단 +1 (심법 공명 — 매화만개의 자하 공명과 같은 문법)"
+
+  jaha_nanhwa:
+    name: "자하난화검수(紫霞爛華劍手)"
+    faction: hwasan
+    lineage: hwasan_geom
+    requires_skill: { id: maehwa_nanman_geom, mastery: 8 }
+    type: { hitbox: 원, range: 7 }
+    frames: [18, 5, 20]
+    defense: "시전 중 무적 14틱"
+    cost: "내력 60%"
+    effect: "적중 시 다운 + 자하(紫霞)가 남는다 — 3합간 그 자리를 밟는 자에게 지속 피해"
+    resonance: "자하신공 필수 — 이 오의는 자하신공 없이는 **개안하지 않는다** (심법이 곧 자격이다)"
+    sole_transmission: true    # ★ 화산 장문인 일인전승 — 자하신공과 함께 넘어간다
+
+  # ── 남궁세가 ──
+  changgung_muae:
+    name: "창궁무애검법(蒼穹無涯劍法)"
+    faction: namgung
+    lineage: namgung_geom
+    requires_skill: { id: changgung_daeyeon_geom, mastery: 8 }
+    type: { hitbox: 원, range: 8 }                   # 무애(無涯) — 끝이 없다. 전 오의 최대 반경
+    frames: [16, 6, 18]
+    defense: "시전 중 무적 12틱"
+    cost: "내력 50%"
+    effect: "반경 8 전방위 — 포위를 통째로 지운다 (max_targets 8 전부 개별 판정)"
+
+  seomjeon_sipsam:
+    name: "섬전십삼검뢰(閃電十三劍雷)"
+    faction: namgung
+    lineage: namgung_geom
+    requires_skill: { id: changgung_daeyeon_geom, mastery: 8 }
+    type: { hitbox: 선, width: 1, length: 14, multi_hit: 13 }   # 열셋의 뇌격 — 한 줄로
+    frames: [10, 4, 22]                              # 가장 짧은 선딜(10) — 번개는 예고하지 않는다
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 55%"
+    effect: "열세 번의 찌르기가 한 줄에 겹친다 — 관통(뒤의 적까지). 후딜 22틱이 대가다"
+
+  # ── 사천당가 ──
+  manchon_nakhwa:
+    name: "만천화우·낙화(滿天花雨·落花)"
+    faction: dangga
+    lineage: dangga_amgi
+    requires_skill: { id: manchon_hwau, mastery: 8 }
+    type: { hitbox: 원, range: 10 }                  # 절정 초식 만천화우(반경 8)의 완성형
+    frames: [20, 4, 18]
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 55%"
+    effect: "하늘을 덮는다 — 반경 10 · 중독 부여 (7합 누적독. 칠보독장과 같은 독)"
+    bloodline_restricted: true
+    # ★ 제왕검형 → 제왕검형·군림 의 선례 그대로: 이미 절정 초식으로 선 이름은 **완성형**으로 한 층 위에 선다
+
+  muhyeong_jidok:
+    name: "무형지독(無形之毒)"
+    faction: dangga
+    lineage: dangga_dok
+    requires_skill: { id: chilbo_dokjang, mastery: 8 }
+    type: { hitbox: 원, range: 9 }
+    frames: [8, 12, 10]                              # 선딜이 가장 짧고 지속이 가장 길다 — 퍼지는 것이다
+    defense: "없음 — 무형지독은 몸을 지키지 않는다. 그저 퍼진다"
+    cost: "내력 50%"
+    effect: "보이지 않는다 — **텔레그래프 없음.** 반경 9 무차별 중독(기독 등급 20).
+      해독 조건(simbeop poison_response.해독) 없는 자는 그대로 죽는다. 아군도 포함된다"
+    resonance: "칠살음독경 필수 — 독문 lineage 만이 자기 독에 안 죽는다 (동화)"
+    demonic: false             # 마공이 아니다. 다만 강호가 그렇게 부르지 않을 뿐이다
+    # ★ 이것이 '독이 고수 킬러'인 이유의 끝 — 화경 고수도 해독 조건이 없으면 무형지독에 죽는다
+
+  # ── 하북팽가 ──
+  oho_danmun_do:
+    name: "오호단문도(五虎斷門刀)"
+    faction: paengga
+    lineage: paengga_do
+    requires_skill: { id: byeokryeok_do, mastery: 8 }
+    type: { hitbox: 선, width: 3, length: 10, multi_hit: 5 }    # 다섯 범 — 다섯 획이 문을 끊는다
+    frames: [18, 5, 18]
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 55%"
+    effect: "파격 — 가드·패링 관통 (전 오의 유일). 적중 시 내구 40% 피해 + 가드 게이지 전소"
+
+  honwon_byeokryeok_do:
+    name: "혼원벽력도(混元霹靂刀)"
+    faction: paengga
+    lineage: paengga_do
+    requires_skill: { id: byeokryeok_do, mastery: 8 }
+    type: { hitbox: 원, range: 7 }
+    frames: [22, 4, 20]                              # 전 오의 최장 선딜 — 벼락은 모였다 떨어진다
+    defense: "시전 중 무적 16틱"
+    cost: "내력 60%"
+    effect: "적중 시 다운 + 파격. 반경 7 안의 **무기를 든 손을 친다** (무장 해제 판정)"
+    resonance: "혼원벽력신공 필수 — 심법이 곧 자격이다"
+    sole_transmission: true    # ★ 팽가 가주 일인전승
+
+  # ── 소림사 ──
+  baekbo_singwon:
+    name: "백보신권(百步神拳)"
+    faction: sorimsa
+    lineage: sorim_kwon
+    requires_skill: { id: banya_jang, mastery: 8 }
+    type: { hitbox: 선, width: 1.5, length: 24 }     # 백 보 — 성능 상한(24m) 그대로. 전 오의 최장 사거리
+    frames: [16, 3, 20]
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 55%"
+    effect: "주먹이 닿지 않는 곳을 친다 — **맨손인데 원거리다** (근접 계열의 유일한 24m).
+      관통 (일직선상 전원)"
+
+  yeorae_sinjang:
+    name: "여래신장(如來神掌)"
+    faction: sorimsa
+    lineage: sorim_kwon
+    requires_skill: { id: banya_jang, mastery: 8 }
+    type: { hitbox: 원, range: 7 }
+    frames: [20, 6, 16]
+    defense: "시전 중 무적 16틱"
+    cost: "내력 60%"
+    effect: "거대한 손바닥 — 적중 시 다운 + 사기(邪氣) 정화 (purification.해주 를 타격으로 건다).
+      혈교·마교·괴이에게 위력 +2 (전 오의 유일의 대상 특효)"
+    resonance: "대반야금강공 보유 시 정화 판정 +2"
+
+  # ── 개방 ──
+  hangryong_sippalchang:
+    name: "항룡십팔장(降龍十八掌)"
+    faction: gaebang
+    lineage: gaebang_bong
+    requires_skill: { id: tagu_bongbeop, mastery: 8 }
+    type: { hitbox: 선, width: 2.5, length: 12, multi_hit: 3 }
+    frames: [12, 5, 20]
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 55%"
+    effect: "용을 항복시킨다 — 적중 시 강경직 + **넉백 8**. 벽·낭떠러지에 처박으면 추가 판정
+      (지형을 무기로 쓰는 유일한 오의 — 개방은 땅을 안다)"
+    resonance: "옥현귀진현공 보유 시 넉백 8 → 12"
+
+  # ── 곤륜파 ──
+  unryong_daepalsik:
+    name: "운룡대팔식(雲龍大八式)"
+    faction: gonryun
+    lineage: gonryun_geom
+    requires_skill: { id: taeheo_geom, mastery: 8 }
+    type: { hitbox: 원, range: 6, multi_hit: 8 }     # 여덟 식 — 구름 위의 용
+    frames: [14, 8, 14]
+    defense: "시전 중 무적 20틱"                     # ★ iframe_caps 오의 상한 20 — 유일하게 상한을 친다
+    cost: "내력 55%"
+    effect: "여덟 번 밟고 여덟 번 벤다 — 시전 중 **자유 이동** (경공의 오의).
+      노션이 곤륜에만 붙인 '절세의 신법과 경공'의 끝"
+
+  taeheo_doryong:
+    name: "태허도룡검법(太虛屠龍劍法)"
+    faction: gonryun
+    lineage: gonryun_geom
+    requires_skill: { id: taeheo_geom, mastery: 8 }
+    type: { hitbox: 선, width: 2, length: 16 }
+    frames: [16, 4, 20]
+    defense: "시전 중 무적 12틱"
+    cost: "내력 60%"
+    effect: "용을 잡는 검 — 적중 시 **격 파괴**: 상대가 두른 격(호신강기·검기 두름)을 한 단 벗긴다.
+      고수 대 고수의 검 (전 오의 유일의 대(對)격 효과)"
+
+  # ── 종남파 ──
+  cheonha_36geom:
+    name: "천하삼십육검법(天下三十六劍法)"
+    faction: jongnam
+    lineage: jongnam_geom
+    requires_skill: { id: taeeul_bungwang_geom, mastery: 8 }
+    type: { hitbox: 원, range: 6, multi_hit: 6 }
+    frames: [20, 6, 22]                              # 무겁다 — 종남의 검은 오의에서도 느리다
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 60%"
+    effect: "서른여섯 검로가 여섯 방위로 — 적중 시 다운 + 내구 40% 피해.
+      **슈퍼아머라 무적이 없다** (맞으면서 벤다 — 종남의 대가)"
+
+  # ── 점창파 ──
+  sail_geom:
+    name: "사일검법(射日劍法)"
+    faction: jeomchang
+    lineage: jeomchang_geom
+    requires_skill: { id: bungwang_sippalsu, mastery: 8 }
+    type: { hitbox: 선, width: 0.8, length: 18, multi_hit: 9 }
+    frames: [6, 3, 24]                               # ★ 선딜 6 — 전 오의 **최속**. 해를 쏘는 화살에 예고는 없다
+    defense: "없음 — 점창의 오의는 몸을 지키지 않는다. 먼저 닿을 뿐이다"
+    cost: "내력 50%"
+    effect: "해를 쏜다 — 아홉 점이 한 줄로. **오의 격돌(clash) 시 선공 자동 획득**
+      (frames 최속의 값). 후딜 24틱 — 빗나가면 그 자리에서 진다"
+
+  # ── 청성파 ──
+  cheongwol_geom:
+    name: "청월검법(靑月劍法)"
+    faction: cheongseong
+    lineage: cheongseong_geom
+    requires_skill: { id: songpung_geom, mastery: 8 }
+    type: { hitbox: 선, width: 1.2, length: 12 }
+    frames: [12, 10, 14]                             # 지속 10틱 — 초승달이 그어지는 시간
+    defense: "시전 중 무적 12틱"
+    cost: "내력 50%"
+    effect: "푸른 달 한 획 — 지속 10틱 동안 **그 선 위를 지나는 모든 것**이 베인다 (설치형 참격).
+      상대가 다가오는 것을 벤다 (전 오의 유일의 지속 판정)"
+    sole_transmission: true    # ★ 청성 장문인 일인전승
+
+  # ── 해남파 ──
+  namhae_36geom:
+    name: "남해삼십육검(南海三十六劍)"
+    faction: haenam
+    lineage: haenam_geom
+    requires_skill: { id: jwasu_khwaegeom, mastery: 8 }
+    type: { hitbox: 원, range: 5, multi_hit: 6 }
+    frames: [10, 6, 16]
+    defense: "시전 중 무적 10틱"
+    cost: "내력 50%"
+    effect: "좌수·역수가 함께 — 여섯 획이 사방에서. **가드 각(120°) 무시**
+      (뒤에서도 온다. 해남의 검은 어느 손에서 나올지 모른다)"

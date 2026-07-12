@@ -174,10 +174,11 @@ final class SkillHud {
      * 대조는 빠뜨릴 수가 없다. 어긋났을 때만 쓰므로 비용은 비교 한 번이다 (O(1)).
      * {@link Vitality} 가 배선되지 않았으면 아무 일도 하지 않는다.
      */
-    void vitalityTick(Player player, SkillEngine.State state) {
+    void vitalityTick(Player player, SkillEngine.State state, PlayerLedger ledger) {
         Vitality vitality = Vitality.get();
         if (vitality != null) {
-            vitality.reconcile(player, state.realm);
+            // 원장을 함께 준다 — 내구는 경지만이 아니라 **수련한 몸**에서도 온다 (외공 = 근력·체력)
+            vitality.reconcile(player, state.realm, ledger);
         }
     }
 

@@ -10,7 +10,18 @@ rank_ladder:                       # 승격 = 경지 관문 문법 (요건 + 계
     - { rank: 외문_제자, requires: [입문_시험_통과] }
     - { rank: 내문_제자, requires: [공적_20, 삼류_이상, 연차_1년], trigger: 사부_추천 }
     - { rank: 진전_제자, requires: [공적_60, 일류_이상, 기여_사건_1], trigger: [비무_입상, 장문_재가] }
+    # ★ 천장을 연다 — 여기까지가 '손님'이었다. 그 위는 npc_ranks 로만 있어서 플레이어는
+    #   문파의 손님으로 늙어 죽게 되어 있었다. 계보의 끝(일인전승 심법·오의)에 닿으려면 이 두 칸이 필요하다.
+    #   상세(계기 · 자리가 비는 법 · 세계 효과)는 succession_ladder. 여기는 **계급 등록부**다.
+    - { rank: 장로, requires: [공적_200, 절정_이상, 상급_무공_대성_6, 기여_사건_3],
+        trigger: [장문_지명, 장로회_과반],
+        note: "★ 남을 가르칠 수 있다 — 전수의 방향이 뒤집힌다 (받는 자에서 주는 자로)" }
+    - { rank: 장문, requires: [장로_연차_3년, 초절정_이상, 계보_오의_보유, 문파_대공_1],
+        trigger: [전대_장문의_지명, 장문_비무_승리, 장로회_인준],
+        note: "★ 자리가 비어야 오른다 — 일인전승 심법·오의가 여기서 넘어온다" }
   npc_ranks: [집사, 당주, 장로, 장문]   # 생애 사다리 '무인의 길' 문파 트랙
+  # ★ 장로·장문은 이제 player_ranks 와 npc_ranks 에 **둘 다** 선다 — 같은 자리다 (npc_symmetry).
+  #   NPC 사제가 먼저 장로가 되면 그 자리는 **찬 것이다.** 플레이어는 자리가 빌 때까지 기다리거나, 도전한다
 
 merit:                             # 공적 — 문파 내부 통화 (명성·favor와 별개의 '안' 축)
   earn: { 문파_임무: [5, 15], 기여_사건: [10, 30], 비무_입상: 10 }
@@ -107,3 +118,118 @@ sect_state:
       → 그 문파는 다음 명분에 못 붙는다. ★ 마교가 하는 일이 정확히 이것이다 (magyo_deception 의 사전 작업)"
     design_intent: "연합의 크기는 명분만으로 정해지지 않는다 — **누가 지금 여력이 있는가**로도 정해진다.
       그리고 그것은 플레이어가 몇 달에 걸쳐 손댈 수 있는 것이다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 무공 계보의 전수 — 무엇을 공짜로 주고, 무엇을 팔 것인가 (설계: docs/design/sect_lineage.md)
+# ═══════════════════════════════════════════════════════════════════════════
+# 노션 원칙: "경지 상승 시 1개는 무상 전수, 나머지는 사거나 퀘스트로"
+#   → 문파는 거래다 (이 파일의 대원칙). 무공도 거래다. 다만 **첫 한 자루는 문파가 쥐여 준다** —
+#     그러지 않으면 가난한 제자는 영원히 이류에 머문다 (그리고 그것은 이 게임을 재미없게 만든다).
+
+lineage_transmission:
+  free_grant:                      # 무상 전수 — 경지 승급마다 **1종**
+    trigger: "해당 경지로 승급한 날 (이류·일류·절정 — cultivation.yml 승급 시점)"
+    count: 1
+    tier_by_realm: { 이류: 하급, 일류: 중급, 절정: 상급 }
+    chosen_by: 사부                # 플레이어가 고르지 않는다 — **사부가 준다** (그것이 사문이다)
+    default: "문파 계보의 정통 칸 (skills.yml lineage 의 그 tier 첫 무공)"
+    note: "★ 공짜로 받는 것은 '한 자루'다. 계보에 상급이 셋이면 나머지 둘은 값을 치른다"
+
+  purchase:                        # 나머지 — 공적(merit)으로 산다
+    ref: "benefits.비급각 — tier 가 곧 층수다"
+    tier_to_floor: { 하급: 1층, 중급: 2층, 상급: 3층, 오의: 최심부 }
+    cost: { 하급: 0, 중급: 10, 상급: 30 }      # merit.spend.비급각_열람 그대로 — 새 통화 없음
+    gate: "층수 접근 권한(access)이 먼저다 — 공적이 있어도 외문은 2층에 못 올라간다"
+
+  quest:                           # 또는 퀘스트로
+    ref: "quest_generation ④ 세력 발생원 · obligations.월_임무"
+    rule: "문파 임무 완수로 사사_우선권(공적 15) 을 사거나, 장로가 직접 '한 수'를 내준다"
+    note: "★ 절기(絶技)는 **이 길로만** 온다 — skills.yml 절기 acquisition: '비급 없음. 사람이 준다'"
+
+  # ★ 본래 위력의 경제학 — 왜 상급을 먼저 사면 손해인가
+  why_not_skip:
+    fact: "상급을 공적 30 에 사서 미대성으로 쓰면 (skill_mechanics mastery_degradation):
+      격이 안 실리고(발경 1) · 특수 속성이 안 피고 · 후딜이 1.5배가 된다"
+    math: "미대성 상급(발경 1) 의 피해 = 대성 중급(발경 1) 의 피해 — **같다.**
+      그런데 후딜은 1.5배다. 즉 상급을 먼저 사면 **더 느린 중급**을 30 공적에 사는 것이다"
+    truth: "★ 사다리를 건너뛸 수는 있다. 다만 건너뛴 자리는 **비어 있다** — 그리고 그 사실이 몸으로 온다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 올라가는 사다리 — 제자에서 장문까지 (일인전승의 끝)
+# ═══════════════════════════════════════════════════════════════════════════
+# rank_ladder 의 player_ranks 는 **진전_제자에서 끝난다.** 그 위(장로·장문)는 npc_ranks 로만 있었다 —
+# 즉 플레이어는 문파의 손님으로 늙어 죽게 되어 있었다. 이 절이 그 천장을 연다.
+#
+# ★ 그리고 그 끝에는 **하나뿐인 것**이 있다: 장문인 심법과 장문인 오의.
+#   simbeop.yml sole_transmission · ultimate_arts.yml sole_transmission 이 그 자물쇠다.
+
+succession_ladder:
+  # 계급 정본은 rank_ladder.player_ranks (장로·장문이 거기 등재됐다). 여기는 그 두 칸의 **운영 규칙**이다.
+  ranks_ref: [장로, 장문]
+  elder_benefits: [비급각_최심부_접근, 문파_임무_발주권, 제자_배정]
+
+  vacancy:                         # 자리는 어떻게 비는가 — 이것이 없으면 사다리는 그림이다
+    causes:
+      전대_사망: { ref: "npc_lifecycle life_simulation.death_and_succession", weight: "가장 흔하다" }
+      전대_은퇴: { trigger: "폐관 은둔 선언 — sect_state.sources.폐관_은둔(부담 2)" }
+      장문_비무: { rule: "★ 도전할 수 있다. 지면 파문(expulsion.causes 에 준한다) — 이기면 그 자리다",
+                   note: "정파 문파는 이 도전을 문규로 금하지 않는다. 다만 **한 번뿐이다**" }
+      파문_폐위: { trigger: "장문의 문규 3진·마공 겸수 — 장로회 탄핵" }
+    world_effect: "★ 장문 자리가 비면 그 문파는 **전쟁을 결정하지 못한다**
+      (sect_state.sources.장문_교체기 부담 3 — 이미 등재된 축이다).
+      즉 플레이어가 장문이 되는 길은 그 자체로 강호의 정치를 흔든다"
+
+  sole_transmission:               # 일인전승 — 한 세계에 한 사람
+    rule: "★ 장문인 심법·오의는 **동시에 두 사람이 보유할 수 없다.**
+      계승 시 전대 장문의 것이 소멸하는 것이 아니다 — 전대가 죽거나 산공해야 다음이 배운다"
+    holders:                       # 자물쇠가 걸린 것들 (정본은 각 파일의 sole_transmission: true)
+      심법: [jaha_singong, cheonroe_jewang_singong, manryu_gwiwon, honwon_byeokryeok_singong,
+             daebanya_geumgang, yangui_mugeuk_singong, eunha_cheongang]
+      무공: [tagu_bongbeop]
+      오의: [jaha_nanhwa, honwon_byeokryeok_do, cheongwol_geom]
+    theft: "★ 도둑 배움이 불가능하다 — 비급이 없다. 구결(口訣)로만 전한다.
+      비급을 훔쳐도 나오는 것이 없다 (그래서 이것들만은 유출 사건이 없다)"
+    npc_holder: "플레이어가 장문이 아니면 그 자리에는 **NPC 장문이 있다** —
+      즉 이 무공들은 강호에 실재한다. 다만 그 한 사람의 것이다 (npc_symmetry)"
+
+  # ─── 개방 구결(口訣) — 자루가 아니라 매듭으로 센다 ───
+  # ★ 노션 원천을 그대로 받는다. 이것이 좋은 축인 이유: 개방은 **계급이 몸에 보인다** (자루의 매듭 수).
+  #   다른 문파의 계급은 아는 사람만 알지만, 거지의 결(結)은 지나가는 아이도 센다.
+  gaebang_gyeol:
+    axis: "결(結) — 자루에 묶은 매듭의 수. 1~9결"
+    ladder:
+      - { gyeol: 수습, rank: 백의개, note: "★ 흰옷 — 아직 자루가 없다. 거지가 되기로 한 날의 옷" }
+      - { gyeol: [1, 2], rank: 개목, maps_to: 외문_제자, skill: chwikwon }
+      - { gyeol: 3, rank: 분타주, maps_to: 내문_제자, simbeop: okhyeon_gwijin,
+          note: "★ 심법이 여기서 온다 — 개방은 글을 안 쓴다. 구결로 준다" }
+      - { gyeol: 4, rank: 호법, maps_to: 내문_제자 }
+      - { gyeol: 5, rank: 당주, maps_to: 진전_제자, skill: gaebang_bongbeop }
+      - { gyeol: 6, rank: 법개, maps_to: 진전_제자, note: "법(法) — 방규를 집행한다" }
+      - { gyeol: 7, rank: 장로, maps_to: 장로 }
+      - { gyeol: 8, rank: 후개, maps_to: 장로,
+          note: "★ 후개(後丐) — 다음 방주로 지명된 자. 이 자리가 곧 계승 예약이다" }
+      - { gyeol: 9, rank: 용두방주, maps_to: 장문, skill: tagu_bongbeop, ultimate: hangryong_sippalchang,
+          note: "★ 타구봉법과 항룡십팔장이 여기 있다 — 9결은 한 사람뿐이다" }
+    visible: "★ 매듭은 숨길 수 없다 — 개방도의 계급은 **공개 정보**다.
+      (다른 문파는 계급을 숨길 수 있다. 개방은 못 한다. 그것이 거지의 정직함이자 약점이다)"
+    promotion: "공적(merit) 이 아니라 **정보**로 오른다 —
+      개방의 공적 획득원은 rumor.yml 소문 제보·정보 거래다 (개방이 파는 것은 무공이 아니라 귀다)"
+
+  # ─── 문파별 계승 자물쇠 (누가 무엇을 들고 있는가) ───
+  by_faction:
+    hwasan:      { 장문: { simbeop: jaha_singong, ultimate: jaha_nanhwa } }
+    namgung:     { 가주: { simbeop: cheonroe_jewang_singong, ultimate: jewang_gunrim } }
+    dangga:      { 가주: { simbeop: manryu_gwiwon, ultimate: manchon_nakhwa } }
+    paengga:     { 가주: { simbeop: honwon_byeokryeok_singong, ultimate: honwon_byeokryeok_do } }
+    sorimsa:     { 방장: { simbeop: daebanya_geumgang, ultimate: yeorae_sinjang },
+                   히든: { simbeop: yeokgeungyeong, note: "★ 방장의 것이 아니다 — 장경각의 것이다" } }
+    mudang:      { 장문: { simbeop: yangui_mugeuk_singong, ultimate: taegeuk_hyegeom } }
+    gaebang:     { 용두방주: { simbeop: okhyeon_gwijin, skill: tagu_bongbeop, ultimate: hangryong_sippalchang } }
+    jongnam:     { 장문: { simbeop: eunha_cheongang, ultimate: cheonha_36geom } }
+    cheongseong: { 장문: { ultimate: cheongwol_geom } }
+    gonryun:     { 장문: { ultimate: taeheo_doryong } }
+    jeomchang:   { 장문: { ultimate: sail_geom } }
+    haenam:      { 장문: { ultimate: namhae_36geom } }
+    moyong:      { note: "★ 입문 불가 — 혈족 전승. sect_lineage.md 5장" }
+    ami:         { note: "★ 입문 불가 — factions.yml registry: 예약 · active: false" }
+    jegal:       { note: "★ 무공 계보 없음 — 부적·기관진식은 무공 축이 아니다. sect_lineage.md 5장" }
