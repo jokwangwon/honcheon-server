@@ -167,10 +167,22 @@ def audit_graph(rep: Report, engines, tools) -> dict[str, dict]:
     graph: dict[str, dict] = {}
     for cfg in config_files():
         base = os.path.basename(cfg)
+        # ★ 파일명만 찾으면 **디렉터리를 통째로 읽는 로더를 못 본다.**
+        #   Populace 는 `configDir.resolve("npcs/regions")` 로 폴더를 열고 그 안의 yml 을 전부 읽는다 —
+        #   코드 어디에도 "hwasan.yml" 이라는 글자는 없다. 그런데 그 파일은 살아 있다.
+        #   눈이 이것을 못 보면 살아 있는 규칙을 죽었다고 부르고, 루프는 멀쩡한 것을 파러 간다.
+        #   그러므로 **파일이 든 폴더의 이름**도 함께 찾는다 (config/ 아래 상대 경로).
+        #   ※ **하위 폴더일 때만** 폴더를 잣대로 쓴다. config/ 바로 밑의 파일에까지 이 잣대를 대면
+        #      needle 이 "config" 가 되어 **모든 코드와 매칭된다** — 눈이 반대 방향으로 거짓말한다.
+        #      죽은 것을 살았다고 부르는 눈은, 산 것을 죽었다고 부르는 눈보다 나쁘다.
+        holder = os.path.dirname(rel(cfg))            # 예: config/npcs/regions
+        needles = [base]
+        if holder.startswith("config/"):              # 하위 폴더에 사는 파일만
+            needles.append(f'"{holder[len("config/"):]}"')   # resolve("npcs/regions")
         readers = {layer: [] for layer in ENGINE_ROOTS}
         for layer, files in engines.items():
             for path, body in files:
-                if base in body:
+                if any(n in body for n in needles):
                     readers[layer].append(os.path.basename(path)[:-5])
         tool_readers = [os.path.basename(p)[:-3] for p, body in tools if base in body]
         graph[base] = {

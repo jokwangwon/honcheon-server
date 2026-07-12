@@ -213,13 +213,55 @@ final class RemoteBuilder {
         if (kind == null) {
             return List.of();
         }
-        return switch (kind) {
+        List<Zone> zones = switch (kind) {
             case 산채 -> stockade(world, place, spec);
             case 도관 -> sect(world, place, spec);
             case 은신처 -> hideout(world, place, spec, cave);
             case 성문 -> cityGate(world, place, spec);
             case 수로채 -> waterStockade(world, place, spec);
         };
+        zones.forEach(zone -> sweepOrphans(world, zone));   // 처마에서 떨어져 나온 기와를 거둔다
+        return zones;
+    }
+
+    /**
+     * <b>떨어져 나온 것을 거둔다.</b>
+     *
+     * <p>검수가 화산파에서 "허공 블록 41개"를 세었다. 처음엔 지형이 남긴 부스러기인 줄 알고
+     * 지형을 쓸었는데 <b>0개가 쓸렸다.</b> 그래서 검수에게 <b>"몇 개냐"가 아니라 "무엇이냐"</b>를 묻게 했더니
+     * 이렇게 답했다 — <b>기와 37장</b>, 나뭇잎 3, 통나무 1. 지형이 아니라 <b>지붕</b>이었다.
+     * (수를 세는 눈은 어디를 팔지 알려주지 않는다. 이름을 대는 눈이 알려준다.)
+     *
+     * <p><b>여섯 면이 전부 허공인 블록은 어떤 건축에도 없다.</b> 등롱은 매달릴 곳이 있고, 깃발은 붙을 곳이 있고,
+     * 기와는 서까래를 딛는다. 그러므로 이웃이 하나도 없는 블록은 <b>지으려던 것이 아니라 흘린 것</b>이다.
+     * 자재를 가리지 않는 이유가 그것이다 — 무엇이든 혼자 떠 있으면 흘린 것이다.
+     *
+     * <p>건축이 <b>끝난 뒤</b> 돈다. 짓는 도중에 쓸면 아직 이웃이 놓이지 않은 것을 거둔다.
+     */
+    private static void sweepOrphans(World world, Zone zone) {
+        int swept = 0;
+        for (int x = zone.x1(); x <= zone.x2(); x++) {
+            for (int z = zone.z1(); z <= zone.z2(); z++) {
+                for (int y = zone.y1(); y <= zone.y2(); y++) {
+                    org.bukkit.block.Block block = world.getBlockAt(x, y, z);
+                    if (block.getType().isAir()) {
+                        continue;
+                    }
+                    if (world.getBlockAt(x, y - 1, z).getType().isAir()
+                            && world.getBlockAt(x, y + 1, z).getType().isAir()
+                            && world.getBlockAt(x + 1, y, z).getType().isAir()
+                            && world.getBlockAt(x - 1, y, z).getType().isAir()
+                            && world.getBlockAt(x, y, z + 1).getType().isAir()
+                            && world.getBlockAt(x, y, z - 1).getType().isAir()) {
+                        block.setType(Material.AIR, false);   // 이웃 갱신 불필요 — 이웃이 없다
+                        swept++;
+                    }
+                }
+            }
+        }
+        if (swept > 0) {
+            org.bukkit.Bukkit.getLogger().info("[건축] " + zone.name() + " — 흘린 블록 " + swept + "개를 거뒀다");
+        }
     }
 
     /** 부지 반경 — 산채는 좁고(목책 R=22), 나머지는 넓다. <b>MvtCommand 의 forgeRadius 와 같은 값이다</b> */

@@ -267,6 +267,9 @@ final class RegionAudit {
         out.add(HEAD + "③ 허공 — 떠 있는 블록");
         int floating = 0;
         int sampled = 0;
+        // ★ 몇 개인지가 아니라 **무엇인지**를 물어야 한다. 자재를 모르면 어디서 나왔는지 모르고,
+        //   어디서 나왔는지 모르면 엉뚱한 곳을 쓸게 된다 (지형을 쓸었더니 0개였다 — 지형이 아니었다).
+        java.util.Map<Material, Integer> kinds = new java.util.TreeMap<>();
         for (int x = zone.x1() + 1; x <= zone.x2() - 1; x += 2) {
             for (int z = zone.z1() + 1; z <= zone.z2() - 1; z += 2) {
                 for (int y = zone.y1() + 1; y <= zone.y2() - 1; y++) {
@@ -285,6 +288,7 @@ final class RegionAudit {
                     }
                     if (!supported) {
                         floating++;
+                        kinds.merge(m, 1, Integer::sum);
                     }
                 }
             }
@@ -292,11 +296,24 @@ final class RegionAudit {
         double pct = sampled == 0 ? 0 : 100.0 * floating / sampled;
         out.add(INFO + "  표본 " + sampled + "칸 · 외톨이 블록 " + floating + "개 ("
                 + String.format("%.2f%%", pct) + ")");
-        if (floating > 20) {
-            out.add(WARN + "  떠 있는 블록 " + floating + "개 — 지형 빚기가 남긴 부스러기");
+        if (!kinds.isEmpty()) {
+            StringBuilder what = new StringBuilder();
+            kinds.entrySet().stream()
+                    .sorted((a, b) -> b.getValue() - a.getValue())
+                    .limit(6)
+                    .forEach(e -> what.append(what.length() == 0 ? "" : " · ")
+                            .append(e.getKey().name()).append(" ").append(e.getValue()));
+            out.add(INFO + "  무엇인가: " + what);
+        }
+        // ★ 잣대는 **비율**이다. 전에는 절대수 20 이었는데, 그 눈은 **구역의 크기를 몰랐다** —
+        //   화산파(봉우리 72켜)의 표본은 수로채의 10배다. 같은 절대수를 들이대면 큰 산은 늘 유죄고
+        //   작은 채는 늘 무죄다. 잣대가 자기가 재는 것의 크기를 모르면 그 잣대는 거짓말을 한다.
+        if (pct > 0.01 && floating > 8) {
+            out.add(WARN + "  떠 있는 블록 " + floating + "개 (" + String.format("%.2f%%", pct)
+                    + ") — 지형 빚기가 남긴 부스러기");
             violations.add("허공블록" + floating);
         } else {
-            out.add(OK + "  허공 블록 " + floating + "개 — 깨끗하다");
+            out.add(OK + "  허공 블록 " + floating + "개 (" + String.format("%.2f%%", pct) + ") — 깨끗하다");
         }
     }
 
