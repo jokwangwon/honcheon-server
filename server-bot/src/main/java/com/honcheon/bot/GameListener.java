@@ -70,6 +70,8 @@ public final class GameListener extends ListenerAdapter {
                 case "의방" -> clinicVisit(event);       // A — 부상 치료·외상 상환
                 case "구조" -> rescue(event);            // A — 빈사의 동행을 살린다
                 case "전장" -> bank(event);              // A — 예치·상속인 지정 (죽어서 남기는 것)
+                case "접속" -> linkAccount(event);        // ★ 신원 접합 — 마크의 몸을 이 이름에 잇는다
+                case "접속해제" -> unlinkAccount(event);  // 스스로 끊는다 (혈채는 남는다)
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 case "사망" -> adminKill(event);
@@ -1075,6 +1077,19 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
 
+        // ★ B7 — 혈채 15+: 게시판이 그를 위해 닫힌다. 세계에서 **일이 사라진다**
+        //   (blood_debt §11 — 객잔이 문을 잠근다. 남은 수입은 약탈뿐이다. 녹림 산채_등재와 같은 문법)
+        if (boardClosedByDebt(chId, today)) {
+            event.replyEmbeds(new EmbedBuilder().setColor(BLOOD)
+                    .setTitle("의뢰소 — 대장을 덮는다")
+                    .setDescription("문을 밀고 들어서자 말소리가 끊긴다. " + clerkName(office)
+                            + "이(가) 대장을 소리 없이 덮고, 눈을 들지 않는다.\n"
+                            + "\"…오늘은 붙은 것이 없소.\"\n"
+                            + "널빤지에는 방이 두 장 붙어 있다. **둘 다 당신 이야기다.**\n"
+                            + "*(세계에서 일이 사라졌다 — 남은 벌이는 약탈뿐이다)*").build()).queue();
+            return;
+        }
+
         // B1 — 서비스 공백: 창구가 비면 게시판 자체가 닫힌다 (문이 닫혀 있다)
         if (!office.open()) {
             event.replyEmbeds(new EmbedBuilder().setColor(INK)
@@ -1765,6 +1780,9 @@ public final class GameListener extends ListenerAdapter {
             sheet.put("내력", pool);
             db.logEvent("운기", "character", String.valueOf(chId), "simbeop",
                     String.valueOf(sheet.get("심법")), Map.of("적립", 1));
+            // ★ B6 — 숨길 수 없는 심법이면 운기 색이 곧 자백이다 (혈교는 숨을 수 없다)
+            magongWitnessed(chId, String.valueOf(row.get("name")),
+                    String.valueOf(sheet.get("심법")), today);
             body.append(String.format("가부좌를 틀고 한 주천을 돌렸다. 축기 **+1일치** (누적 %.0f일)\n"
                             + "내공 화후 **%s** · 내력 %d/%d (운기조식 — 가득 찼다)",
                     days, hwahuLabel(naegong), pool, pool));
@@ -4186,6 +4204,266 @@ public final class GameListener extends ListenerAdapter {
     }
 
     record Beast(String name, String gap, int resist, String peltKey, String peltLabel) {
+    }
+
+    // ═══════════════ 신원 접합(身元接合) — 다리를 건너는 것은 사건이 아니라 사람이다 ═══════════════
+    //
+    // 다리는 놓였는데(WorldBridge·Bridge) 사람이 안 건넜다. mvt_link.character_id 를 채우는 명령이
+    // 없었으므로 — 마크에서 사람을 죽여도 소문에 **주체가 안 붙었고**, 어느 세력도 그를 보지 않았다.
+    //
+    // ★ 방향: 마크가 코드를 내고, **디스코드가 확정한다** (world_bridge.yml identity).
+    //   최종 결속이 인증된 자리(디스코드)에 있으므로, 남의 캐릭터를 뺏으려면 남의 계정이 필요하다.
+    //   코드가 새어 나가도 도둑이 할 수 있는 최악은 '제 캐릭터에 남의 몸을 붙이는 것' — 자해다.
+
+    private void linkAccount(SlashCommandInteractionEvent event) throws Exception {
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> row = found.get();
+        long chId = ((Number) row.get("id")).longValue();
+        String name = String.valueOf(row.get("name"));
+        int today = db.worldDay();
+        String raw = event.getOption("코드") == null ? "" : event.getOption("코드").getAsString();
+        String code = raw.strip().toUpperCase(java.util.Locale.ROOT).replace(" ", "");
+
+        var pending = db.linkCode(code);
+        if (pending.isEmpty()) {
+            event.reply("그런 코드는 없다. 마크에서 `/혼천 접속` 을 쳐서 코드를 받아라.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        Db.LinkCode c = pending.get();
+        if (!"대기".equals(c.state())) {
+            event.reply("이미 쓰였거나 폐기된 코드다 (1회용). 마크에서 새로 받아라.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        if (c.expired(System.currentTimeMillis())) {
+            event.reply("코드가 만료됐다 (10분). 마크에서 `/혼천 접속` 을 다시 쳐라.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        // 도난 방지 — 이미 이어진 몸/캐릭터는 **해제 후에만** 다시 잇는다 (one_body_one_character)
+        var owner = db.rawCharacterOfMc(c.mcUuid());
+        if (owner.isPresent() && owner.get() != chId) {
+            var other = db.findCharacterById(owner.get());
+            boolean alive = other.isPresent() && !"사망".equals(other.get().get("status"));
+            if (alive) {
+                event.reply("그 몸은 이미 **" + other.get().get("name") + "** 에게 이어져 있다. "
+                        + "그쪽에서 `/혼천 접속해제` 를 해야 한다.").setEphemeral(true).queue();
+                return;
+            }
+            // 죽은 자의 몸은 놓아준다 — 새 삶은 같은 몸으로 시작한다 (identity.on_character_death)
+        }
+        var mine = db.mcOfCharacter(chId);
+        if (mine.isPresent() && !mine.get().equals(c.mcUuid())) {
+            event.reply("이 이름에는 이미 다른 몸이 붙어 있다. 먼저 `/혼천 접속해제` 를 하라.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+
+        db.linkMvt(c.mcUuid(), c.mcName(), chId);
+        db.burnLinkCode(code, chId, today);
+        // ★ 병합 — 이름 없이 쌓인 장부가 한 사람의 이름으로 합산된다.
+        //   그 전까지 세계는 열 개의 사고를 보았고, 그 후로 세계는 한 마리의 짐승을 본다.
+        Db.Debt merged = db.mergeBloodDebt("mc:" + c.mcUuid(), chId, today);
+        db.logEvent("접합", "character", String.valueOf(chId), "mvt", c.mcUuid(),
+                Map.of("마크이름", c.mcName(), "코드", code, "병합_혈채_건수", merged.kills()));
+        bloodDebtLadder(chId, name, null, today);   // 병합으로 칸을 넘었을 수 있다 — 세계가 이제 그를 본다
+
+        event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                .setTitle("접합 — 몸과 이름이 이어졌다")
+                .setDescription("마크의 **" + c.mcName() + "** 이(가) 이제 **" + name + "** 이다.\n"
+                        + "이제부터 그 손이 하는 일은 전부 이 이름의 장부에 적힌다 — "
+                        + "벤 것도, 뿜은 것도, **죽인 것도.**\n"
+                        + "*(끊으려면 `/혼천 접속해제`. 다만 이미 적힌 것은 지워지지 않는다)*")
+                .build()).setEphemeral(true).queue();
+    }
+
+    private void unlinkAccount(SlashCommandInteractionEvent event) throws Exception {
+        var found = requireDebuted(event, event.getUser());
+        if (found.isEmpty()) {
+            return;
+        }
+        long chId = ((Number) found.get().get("id")).longValue();
+        var mine = db.mcOfCharacter(chId);
+        if (mine.isEmpty()) {
+            event.reply("이어진 몸이 없다.").setEphemeral(true).queue();
+            return;
+        }
+        db.unlinkMc(mine.get());
+        db.logEvent("접합해제", "character", String.valueOf(chId), "mvt", mine.get(), Map.of());
+        event.reply("접합을 끊었다 — 마크의 그 몸은 다시 **이름 없는 자**가 된다.\n"
+                        + "*(혈채는 이 이름의 장부에 그대로 남는다. 빚은 몸을 바꾼다고 없어지지 않는다)*")
+                .setEphemeral(true).queue();
+    }
+
+    // ═══════════════ 혈채(血債) — 감쇠하지 않는 유일한 축 ═══════════════
+    //
+    // 주목은 7일에 1씩 준다. 우호는 30일에 1씩. **세계는 잊는다.**
+    // 그런데 죽은 사람은 돌아오지 않는다. 그래서 이 장부만은 안 준다 (암혈채).
+    //
+    // 여기 있는 것은 배선뿐이다 — 수치·문턱·발화 대상은 전부 faction_reaction.yml blood_debt.engine.
+
+    /** 오늘의 현혈채 — 세계가 아는 몫 (읽는 순간 정산. 암혈채는 여기 없다. 세계는 그것을 모른다) */
+    int knownBloodDebt(long chId, int today) throws Exception {
+        Db.Debt d = db.bloodDebtOf(chId);
+        return rules.bloodDebt.decayedKnown(d.knownRaw(), d.publicCount(), d.knownDay(), today);
+    }
+
+    /** ★ B7 — 혈채 15+ 면 게시판이 닫힌다. 세계에서 일이 사라진다 (남는 수입은 약탈뿐이다) */
+    boolean boardClosedByDebt(long chId, int today) throws Exception {
+        return knownBloodDebt(chId, today) >= rules.bloodDebt.boardBlockMin();
+    }
+
+    /**
+     * ★ 사다리 — 살인 1건과 10건은 다르다.
+     *
+     * <p>각 칸은 <b>기존 표만 호출한다</b> (신규 반응 발명 없음): 수배·현상금(economy) ·
+     * 정파 주목/우호(faction_reaction) · 명분(faction_politics) · 법명분(authority_mandate).
+     * 멱등이다 — 한 칸은 한 번만 발화한다 (events 원장이 문지기다).
+     *
+     * @param rumorGroup 이 혈채를 낳은 소문의 군 (없으면 null) — 세력이 자기 채널로 읽을 명분의 근거다
+     */
+    void bloodDebtLadder(long chId, String name, String rumorGroup, int today) throws Exception {
+        int known = knownBloodDebt(chId, today);
+        if (known <= 0) {
+            return;
+        }
+        BloodDebt bd = rules.bloodDebt;
+        String actor = String.valueOf(chId);
+        BloodDebt.Rung rung = bd.rungOf(known);
+
+        // ① 관 — 수배와 현상금 (혈채 3+). 아직 이름은 없다. 세계는 '누군가'를 찾는다
+        if (known >= bd.bountyMin() && !db.eventExists("수배", actor, "혈채:수배")) {
+            int bounty = rules.price("의뢰_보수", bd.bountyRef());
+            db.logEvent("수배", "character", actor, "blood_debt", "혈채:수배",
+                    Map.of("현상금", bounty, "혈채", known, "칸", rung.name(), "발주", "gwan_gun"));
+            if (rung.rumorIntensity() > 0) {
+                spread(rumorGroup("수배", chId, today),
+                        "관아에 방이 붙었다 — " + name + josa(name, "을", "를") + " 잡는 자에게 "
+                                + bounty + "문", name, chId, List.of("수배", "치안", "살인"),
+                        rung.rumorIntensity(), rules.initialAccuracy("간접_전문"),
+                        rules.originNetwork("market"), today);
+            }
+        }
+
+        // ② 정파 — 세계가 그를 버리는 칸 (혈채 6+: 주목 +4 / 우호 -4).
+        //    ★ 바로 그 지점에서 어둠이 그를 줍는다 (마교 접촉·혈교 회수조는 faction_entry_routes 의 몫)
+        for (BloodDebt.FactionStep step : bd.factionSteps()) {
+            String key = "혈채:" + step.faction() + ":" + step.min();
+            if (known < step.min() || db.eventExists("혈채_세력", actor, key)) {
+                continue;
+            }
+            int score = db.addAttention(step.faction(), chId, step.score(), today, rules.factions);
+            int favor = db.addFavor(step.faction(), chId, step.favor(), rules.factions.favorMax(),
+                    today, rules.factions);
+            db.logEvent("혈채_세력", "character", actor, "faction", key,
+                    Map.of("세력", step.faction(), "주목", score, "우호", favor,
+                            "혈채", known, "칸", rung.name()));
+        }
+
+        // ③ 명분 — 혈채는 명분을 **만들지 않고 발화시킨다** (faction_politics 제2원칙).
+        //    ★ 그래도 무림은 잘 안 온다: victims = [mingan] 이므로 이해관계 보정이 전부 0이다.
+        //      뭉치는 것은 무고가 아니라 **금기**다 (B6 — 마공 목격이 그 문을 연다)
+        for (BloodDebt.Step step : bd.myeongbunSteps()) {
+            String key = step.input() + ":" + chId;
+            if (known < step.min() || db.eventExists("혈채_명분", actor, key)) {
+                continue;
+            }
+            fireMyeongbun(chId, name, step.input(), step.victims(), rumorGroup, today);
+            db.logEvent("혈채_명분", "character", actor, "myeongbun", key,
+                    Map.of("사건", step.input(), "혈채", known, "칸", rung.name()));
+        }
+
+        // ④ 법명분 — 관이 층위를 올린다 (혈채 15+ 사교_준동_확증 16 · 26+ 사교_대발호 30).
+        //    ★ 가산이 아니라 **개방**이다: 게이지를 그 값까지 끌어올린다 (등록부의 절대값)
+        for (BloodDebt.Step step : bd.mandateSteps()) {
+            String key = step.input() + ":" + chId;
+            if (known < step.min() || db.eventExists("혈채_법명분", actor, key)) {
+                continue;
+            }
+            int now = db.mandate(chId, today, rules.politics);
+            int mandate = step.value() > now
+                    ? db.addMandate(chId, step.value() - now, today, rules.politics) : now;
+            db.logEvent("혈채_법명분", "character", actor, "authority_mandate", key,
+                    Map.of("입력", step.input(), "법명분", mandate, "혈채", known,
+                            "구간", String.valueOf(rules.politics.mandateEffect(mandate))));
+            // 관이 그를 치는데 무림이 막지 않는다 — 두 층위 모두에서 벌거벗는 자리
+            if (disavowed(chId, today)) {
+                applyDisavowal(chId, "혈채:" + step.input(), today);
+            }
+        }
+    }
+
+    /**
+     * 명분 하나를 발화시킨다 — 값·태그는 faction_politics.yml myeongbun.inputs 가 정한다.
+     * 대상은 <b>사람</b>이다 (blood_debt_ignition.target — 개인 대상은 이미 인정돼 있다).
+     * 피해자는 [mingan] — 민간은 등재 세력이지만 <b>무림이 아니다.</b> 그래서 아무도 급하지 않다.
+     */
+    private void fireMyeongbun(long chId, String name, String input, List<String> victims,
+                               String rumorGroup, int today) throws Exception {
+        int value = rules.politics.inputValue(input);
+        List<String> tags = rules.politics.inputTags(input);
+        Db.Issue issue = db.addMyeongbun(input + ":" + chId, name, victims, tags, value,
+                rules.initialAccuracy("직접_목격"), rumorGroup, null, today,
+                rules.politics.gaugeMax(), rules.politics);
+        db.logEvent("명분", "character", String.valueOf(chId), "myeongbun", issue.issue(),
+                Map.of("사건", input, "게이지", issue.rawGauge(), "태그", tags, "피해", victims));
+    }
+
+    /**
+     * ★ B6 — 운기조식을 목격당했다. <b>혈교는 숨을 수 없다</b> (simbeop stealth_option: false).
+     *
+     * <p>운기 색이 곧 자백이다: 노출 배수 하한 1.0 이 이 몸에 박힌다 — 그 뒤로 <b>완전 범죄는 없다.</b>
+     * 그리고 금기 태그가 켜진다 — <b>무고만으로는 안 뭉친 무림이 금기에는 뭉친다.</b>
+     * 마교는 이 발화를 피할 수 있고(은폐 가능), 혈교는 못 피한다. 두 어둠의 수명이 여기서 갈린다.
+     */
+    private void magongWitnessed(long chId, String name, String simbeop, int today) throws Exception {
+        if (simbeop == null || !rules.isMagong(simbeop) || rules.canHideCirculation(simbeop)) {
+            return;   // 정파의 심법 · 또는 숨길 수 있는 마공 (마교) — 아무도 모른다
+        }
+        String actor = String.valueOf(chId);
+        if (db.eventExists("마공_목격", actor, simbeop)) {
+            return;   // 이미 한 번 들켰다 — 자백은 한 번이면 족하다
+        }
+        Map<String, Object> cfg = rules.bloodDebt.magongWitness();
+        db.setExposureFloor("character:" + chId, chId, rules.bloodDebt.magongExposureFloor(), today);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rumorCfg = cfg.get("rumor") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : Map.of();
+        List<String> tags = new ArrayList<>();
+        if (rumorCfg.get("tags") instanceof List<?> l) {
+            l.forEach(t -> tags.add(String.valueOf(t)));
+        }
+        int intensity = rumorCfg.get("intensity") instanceof Number n ? n.intValue() : 3;
+        String group = rumorGroup("마공", chId, today);
+        spread(group, name + josa(name, "이", "가") + " 기를 돌리는데 그 빛이 탁한 적색이었다 — "
+                        + "사람들이 뒤로 물러섰다", name, chId, tags, intensity,
+                rules.initialAccuracy(String.valueOf(rumorCfg.getOrDefault("accuracy_kind", "직접_목격"))),
+                rules.originNetwork("market"), today);
+        db.logEvent("마공_목격", "character", actor, "simbeop", simbeop,
+                Map.of("심법", simbeop, "은폐", false, "노출_하한", rules.bloodDebt.magongExposureFloor()));
+
+        Object input = cfg.get("myeongbun");
+        if (input != null) {
+            fireMyeongbun(chId, name, String.valueOf(input), List.of("mingan"), group, today);
+        }
+        bloodDebtLadder(chId, name, group, today);
+    }
+
+    /** 조사(助詞) — 소문은 사람의 입에서 나온 문장이다 ("이름을" / "이름를"이라 말하는 사람은 없다) */
+    private static String josa(String word, String withBatchim, String without) {
+        if (word == null || word.isBlank()) {
+            return withBatchim + "(" + without + ")";
+        }
+        char last = word.charAt(word.length() - 1);
+        if (last < 0xAC00 || last > 0xD7A3) {
+            return withBatchim + "(" + without + ")";
+        }
+        return (last - 0xAC00) % 28 == 0 ? without : withBatchim;
     }
 
     /** DB 행 → Character 복원 — 시트의 표기(공백)를 키(밑줄)로 되돌린다 */

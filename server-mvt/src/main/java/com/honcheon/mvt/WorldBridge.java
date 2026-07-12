@@ -110,6 +110,12 @@ public final class WorldBridge {
         dedupeMillis = 1000L * num(map(map(events.get("qi_manifested")).get("effects"))
                 .get("dedupe_seconds"), 600);
 
+        // 신원 접합 — 코드의 알파벳·길이·수명 (등록부가 정한다. 0·O·1·I 가 없는 것은 옮겨 적는 값이기 때문)
+        Map<String, Object> identity = map(root.get("identity"));
+        codeAlphabet = String.valueOf(identity.getOrDefault("code_alphabet", codeAlphabet));
+        codeLength = Math.max(4, num(identity.get("code_length"), codeLength));
+        codeTtlSeconds = Math.max(30, num(identity.get("ttl_seconds"), codeTtlSeconds));
+
         Map<String, Object> feedback = map(root.get("feedback"));
         map(feedback.get("reaction_map")).forEach((tag, tags) -> {
             List<String> want = new ArrayList<>();
@@ -220,7 +226,7 @@ public final class WorldBridge {
         data.put("witnesses", witnesses);
         data.put("night", night);
         data.put("body", body);
-        data.put("cause", cause);
+        data.put("cause", cause(cause));
         if (killerUuid != null) {
             data.put("killer_uuid", killerUuid.toString());
         }
@@ -228,6 +234,22 @@ public final class WorldBridge {
             data.put("killer_name", killerName);
         }
         emit("npc_death", data);
+    }
+
+    /**
+     * 사인(死因)을 등록부의 낱말로 되돌린다 — 봇은 npc_death.yml 의 어휘만 안다
+     * ({@code 노환_병사 · 사고 · 사건_피살 · 자멸_심마}). 부르는 쪽이 "플레이어_살해"라고 말해도
+     * 장부에는 <b>사건_피살</b>로 적힌다. 그러지 않으면 사인 보정(cause_modifier)이 조용히 0이 되고,
+     * 아무도 그것을 모른다 — <b>등록부에 없는 낱말은 세계에 존재하지 않는다.</b>
+     */
+    private static String cause(String cause) {
+        if (cause == null || cause.isBlank()) {
+            return "사건_피살";
+        }
+        return switch (cause) {
+            case "플레이어_살해", "피살", "살해" -> "사건_피살";
+            default -> cause;
+        };
     }
 
     /** 도적을 베었다 — 명분 있는 죽음. 길이 그만큼 안전해진다 (region 치안 +) */
@@ -287,6 +309,54 @@ public final class WorldBridge {
         emit("qi_manifested", data);
     }
 
+    // ─── 신원 접합 — 다리를 건너는 것은 사건이 아니라 사람이다 ───
+
+    /** 접합 코드의 알파벳·길이·수명 (config/world_bridge.yml identity) — 여기서 발명하지 않는다 */
+    private static String codeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static int codeLength = 6;
+    private static int codeTtlSeconds = 600;
+    private static final java.security.SecureRandom RNG = new java.security.SecureRandom();
+
+    /**
+     * 접합 코드를 낸다 — <b>이 몸이 누구인지 봇에게 물어보는 손짓</b>. 여기서는 아직 아무것도 안 이어진다.
+     *
+     * <p><b>왜 마크가 코드를 내고 디스코드가 확정하는가.</b> 지켜야 할 것은 캐릭터(장부·혈채·세력)이고,
+     * 훔칠 수 있는 것은 코드뿐이다. 최종 결속을 <b>인증된 자리</b>(디스코드)에 두면 남의 캐릭터를
+     * 뺏으려면 남의 디스코드 계정이 필요해진다. 반대 방향(봇이 코드 발급 → 마크에서 입력)이면
+     * 코드 한 줄이 곧 캐릭터의 열쇠가 된다 — 어깨너머로 본 사람이 남의 삶을 가져간다.
+     *
+     * <p>코드는 <b>부르는 쪽이 그 플레이어에게만</b> 보여 줘야 한다 (귓속말·액션바 — 공개 채팅 금지).
+     *
+     * @return 그 자리에서 보여 줄 코드 (다리가 안 섰으면 null — 세계의 절반이 꺼져 있다)
+     */
+    public static String requestLink(UUID player, String name) {
+        if (bridgeDir == null || !KINDS.contains("link_request")) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(codeLength);
+        for (int i = 0; i < codeLength; i++) {
+            sb.append(codeAlphabet.charAt(RNG.nextInt(codeAlphabet.length())));
+        }
+        String code = sb.toString();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("code", code);
+        data.put("mc_uuid", player.toString());
+        data.put("mc_name", name);
+        data.put("ttl_seconds", codeTtlSeconds);
+        emit("link_request", data);
+        return code;
+    }
+
+    /** 코드의 수명 (초) — 안내 문구에 쓴다 */
+    public static int linkTtlSeconds() {
+        return codeTtlSeconds;
+    }
+
+    /** 지금 이 몸은 누구인가 — 접합됐으면 장부의 이름, 아니면 null (되먹임 스냅숏이 정본이다) */
+    public static String linkedName(UUID player) {
+        return current.linkedName(player);
+    }
+
     /** 비무 — 죽이지 않는 싸움. 장터에서 하면 이야깃거리가 된다 */
     public static void sparring(UUID winnerUuid, String winnerName, UUID loserUuid, String loserName,
                                 String reason, String place, int witnesses) {
@@ -321,10 +391,29 @@ public final class WorldBridge {
      */
     public record State(int day, Set<String> tags, Set<String> reactions, Map<String, Integer> region,
                         Map<String, Integer> wanted, Map<String, Map<String, Integer>> favor,
-                        int wantedMin) {
+                        Map<String, String> links, Map<String, Integer> bounty, int wantedMin) {
 
         static State empty() {
-            return new State(0, Set.of(), Set.of(), Map.of(), Map.of(), Map.of(), 8);
+            return new State(0, Set.of(), Set.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+                    Map.of(), 8);
+        }
+
+        /** 접합된 몸인가 — 그의 장부 이름 (아니면 null. 이름 없는 자의 일은 세계의 배경음이다) */
+        public String linkedName(UUID player) {
+            return player == null ? null : links.get(player.toString());
+        }
+
+        public boolean linked(UUID player) {
+            return linkedName(player) != null;
+        }
+
+        /**
+         * 그의 목에 걸린 값 — 0 이면 아직 방이 안 붙었다 (혈채 3+ 에서 관이 붙인다).
+         * ★ 혈채 수치는 여기 없다 (blood_debt.visibility: 내부). 내려오는 것은 <b>세계의 반응</b>뿐이다.
+         */
+        public int bounty(UUID player) {
+            Integer v = player == null ? null : bounty.get(player.toString());
+            return v == null ? 0 : v;
         }
 
         /** 관에 쫓기는가 — 마을 관졸이 적대할 문턱 (world_bridge.yml feedback.wanted.gauge_min) */
@@ -467,10 +556,16 @@ public final class WorldBridge {
                 map(table).forEach((faction, v) -> mine.put(faction, num(v, 0)));
                 favor.put(who, mine);
             });
+            // 신원 — 접합된 몸만 여기 있다 (mc_uuid → 장부의 이름)
+            Map<String, String> links = new LinkedHashMap<>();
+            map(root.get("links")).forEach((who, info) ->
+                    links.put(who, String.valueOf(map(info).getOrDefault("name", "?"))));
+            Map<String, Integer> bounty = new LinkedHashMap<>();
+            map(root.get("bounty")).forEach((who, v) -> bounty.put(who, num(v, 0)));
             int wantedMin = num(map(root.get("thresholds")).get("wanted"), 8);
 
             State next = new State(num(root.get("world_day"), 0), tags, reactions, region,
-                    wanted, favor, wantedMin);
+                    wanted, favor, links, bounty, wantedMin);
             current = next;
             for (Consumer<State> listener : LISTENERS) {
                 try {

@@ -105,7 +105,18 @@ echo "[팩 3/5] SHA-1 = $SHA1"
 
 # ─── 4. LAN IP 탐지 ───
 # localhost/127.0.0.1 을 쓰면 같은 PC 클라이언트만 받는다 — 다른 기기는 못 받는다.
-LAN_IP="${PACK_HOST:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+# ★ 결정론적 IP 탐지 — `hostname -I` 의 첫 토큰은 **순서가 보장되지 않는다.**
+#   이 기계엔 docker 브리지가 4개(172.17~172.20) 있어서, 그것이 앞에 오는 날 아무도 팩을 못 받는다.
+#   기본 경로의 소스 주소를 물으면 항상 진짜 LAN IP 가 나온다.
+#
+# ★ 그리고 팩 다운로드 실패의 진짜 원인은 **네트워크가 아니라 주소**였다:
+#   http.log 는 200 OK 를 기록했다 — 클라이언트는 정상으로 받았다. 문제는 **다른 경로로 접속한 클라이언트**다.
+#   Tailscale(100.x)로 들어오면 팩 URL(192.168.x)에 못 닿는다.
+#   → 플레이어가 실제로 접속하는 주소를 PACK_HOST 로 못박아라 (예: PACK_HOST=100.102.41.122).
+LAN_IP="${PACK_HOST:-$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+')}"
+if [ -z "$LAN_IP" ]; then
+  LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+fi
 if [ -z "$LAN_IP" ]; then
   echo "경고: LAN IP 탐지 실패 — 127.0.0.1 로 폴백한다 (같은 PC 클라이언트만 팩을 받는다)" >&2
   LAN_IP="127.0.0.1"
@@ -137,6 +148,20 @@ else
   fi
   echo "[팩 5/5] HTTP 서버 기동 — pid $(cat "$PIDFILE"), :$PORT, 서빙 폴더 $SERVE_DIR"
 fi
+
+# ─── 자가검진 — 스크립트가 그 자리에서 실패를 말한다 ───
+# 구판은 "클라이언트에 팝업이 뜬다"는 미궁을 남겼다. 여기서 **LAN IP 로** 직접 받아 SHA-1 을 대조한다
+# (127.0.0.1 로 받으면 아무것도 증명 못 한다 — 같은 기계니까).
+FETCHED="$(curl -sf --max-time 5 "$URL" 2>/dev/null | sha1sum | cut -d' ' -f1)"
+if [ "$FETCHED" != "$SHA1" ]; then
+  echo "❌ 자가검진 실패 — $URL 로 받은 것이 우리 zip 이 아니다 (받은 sha1=$FETCHED)" >&2
+  echo "   플레이어가 다른 경로(예: Tailscale 100.x)로 접속한다면 PACK_HOST 로 그 주소를 못박아라." >&2
+  echo "   자동 배포를 끄고 수동 설치로 폴백한다 — 접속 실패 팝업은 뜨지 않는다." >&2
+  sed -i 's|^resource-pack=.*|resource-pack=|; s|^resource-pack-sha1=.*|resource-pack-sha1=|' "$RUN/server.properties" 2>/dev/null || true
+  stop_server
+  exit 0
+fi
+echo "[팩] 자가검진 통과 — $URL 에서 받은 sha1 이 우리 zip 과 같다"
 
 # ─── server.properties 갱신 ───
 # 주의: 서버가 떠 있는 동안 고쳐도 소용없다 (부팅 시 1회 로드 + 종료 시 되쓰기).

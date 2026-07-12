@@ -458,8 +458,9 @@ public final class MvtCommand implements CommandExecutor {
         // 땅이 다 실린 뒤에 짓는다: 짓는 것 자체는 메인 스레드의 일이다 (블록 API 는 그것만 허락한다).
         java.util.List<java.util.concurrent.CompletableFuture<org.bukkit.Chunk>> loading =
                 new java.util.ArrayList<>();
-        for (int chunkX = (site.x() - 48) >> 4; chunkX <= (site.x() + 48) >> 4; chunkX++) {
-            for (int chunkZ = (site.z() - 48) >> 4; chunkZ <= (site.z() + 48) >> 4; chunkZ++) {
+        int pre = "noklim".equals(place.faction()) ? 64 : 150;   // 부지보다 넓게 — 동기 청크 생성이 서버를 멈춘다
+        for (int chunkX = (site.x() - pre) >> 4; chunkX <= (site.x() + pre) >> 4; chunkX++) {
+            for (int chunkZ = (site.z() - pre) >> 4; chunkZ <= (site.z() + pre) >> 4; chunkZ++) {
                 loading.add(world.getChunkAtAsync(chunkX, chunkZ, true));
             }
         }
@@ -581,7 +582,10 @@ public final class MvtCommand implements CommandExecutor {
         // 건축은 그 위에만 세운다. 동굴은 이제 **우리가 판다** — 자연 동굴을 껐으니까.
         // 문파의 반경 44 는 봉우리(+36)를 못 받는다 — 계단 run 이 26칸이라 본전이 22켜에서 멎는다
         // (건축 담당의 계측). "천 계단"이 서려면 발치가 넓어야 한다.
-        int forgeRadius = "noklim".equals(place.faction()) ? 24 : 64;
+        // 문파 부지 110 — 산이 72켜로 서면 계단이 그만큼 길어야 오른다 (반경 44 는 17켜에서 멎는다).
+        // 부지가 산(반경 64)보다 큰 것이 옳다: 산문·문전은 **산 발치의 들**에 서고, 천 계단이 정상으로 오른다.
+        // "오르는 길이 시험이다"가 그제야 참이 된다.
+        int forgeRadius = "noklim".equals(place.faction()) ? 24 : 110;
         TerrainForge.SiteSpec spec = TerrainForge.prepare(world, place, site.x(), baseY, site.z(), forgeRadius);
         plugin.getLogger().info("[지형] " + spec.summary());
         TerrainForge.CaveKind kind = TerrainForge.caveKind(place);

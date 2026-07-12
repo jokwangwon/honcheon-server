@@ -1047,6 +1047,94 @@ public final class Db implements AutoCloseable {
         }
     }
 
+    // ═══ 신원 접합 (마이그레이션 006) — 마크가 코드를 내고, 디스코드가 확정한다 ═══
+    //
+    // ★ 최종 결속이 디스코드에 있는 이유: 캐릭터를 훔치려면 그 사람의 **디스코드 계정**이 필요해진다.
+    //   코드가 새어 나가도 도둑이 할 수 있는 최악은 '제 캐릭터에 남의 몸을 붙이는 것' — 자해다.
+    //   (config/world_bridge.yml identity.direction: mvt_issues_discord_confirms)
+
+    /** 마크가 낸 코드를 대기열에 앉힌다 — 그 몸의 이전 대기 코드는 폐기된다 (one_pending_per_body) */
+    public synchronized void pendLinkCode(String code, String mcUuid, String mcName,
+                                          long issuedAt, long expiresAt) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE mvt_link_code SET state = '폐기' WHERE mc_uuid = ? AND state = '대기'")) {
+            ps.setString(1, mcUuid);
+            ps.executeUpdate();
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO mvt_link_code(code, mc_uuid, mc_name, issued_at, expires_at, state) "
+                        + "VALUES(?, ?, ?, ?, ?, '대기') ON CONFLICT(code) DO NOTHING")) {
+            ps.setString(1, code);
+            ps.setString(2, mcUuid);
+            ps.setString(3, mcName);
+            ps.setLong(4, issuedAt);
+            ps.setLong(5, expiresAt);
+            ps.executeUpdate();
+        }
+    }
+
+    /** 대기 중인 코드 한 장 (만료 여부는 부르는 쪽이 판정한다 — 이유를 사람에게 말해 줘야 하므로) */
+    public record LinkCode(String code, String mcUuid, String mcName, long expiresAt, String state) {
+
+        public boolean expired(long now) {
+            return now > expiresAt;
+        }
+    }
+
+    public synchronized Optional<LinkCode> linkCode(String code) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT code, mc_uuid, mc_name, expires_at, state FROM mvt_link_code WHERE code = ?")) {
+            ps.setString(1, code);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(new LinkCode(rs.getString(1), rs.getString(2),
+                        rs.getString(3), rs.getLong(4), rs.getString(5))) : Optional.empty();
+            }
+        }
+    }
+
+    /** 코드를 태운다 (single_use) — 한 번 쓰면 그 문자열은 죽는다 */
+    public synchronized void burnLinkCode(String code, long characterId, int day) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE mvt_link_code SET state = '사용됨', used_by = ?, used_day = ? WHERE code = ?")) {
+            ps.setLong(1, characterId);
+            ps.setInt(2, day);
+            ps.setString(3, code);
+            ps.executeUpdate();
+        }
+    }
+
+    /** 이 캐릭터에게 이미 몸이 있는가 (one_body_one_character — 양쪽 다 1:1) */
+    public synchronized Optional<String> mcOfCharacter(long characterId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT mc_uuid FROM mvt_link WHERE character_id = ?")) {
+            ps.setLong(1, characterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(rs.getString(1)) : Optional.empty();
+            }
+        }
+    }
+
+    /** 이 몸에 붙어 있는 캐릭터 (죽은 캐릭터도 본다 — 재접합 판정은 산 자만 막는다) */
+    public synchronized Optional<Long> rawCharacterOfMc(String mcUuid) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT character_id FROM mvt_link WHERE mc_uuid = ? AND character_id IS NOT NULL")) {
+            ps.setString(1, mcUuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(rs.getLong(1)) : Optional.empty();
+            }
+        }
+    }
+
+    /** 접합 해제 — 몸은 남고 이름만 떨어진다 (혈채는 캐릭터 원장에 그대로 남는다. 빚은 안 없어진다) */
+    public synchronized void unlinkMc(String mcUuid) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE mvt_link SET character_id = NULL, linked_day = ? WHERE mc_uuid = ?")) {
+            ps.setInt(1, worldDay());
+            ps.setString(2, mcUuid);
+            ps.executeUpdate();
+        }
+    }
+
     /** 이 몸은 누구인가 — 살아 있는 캐릭터만 (죽은 자의 이름으로는 소문이 붙지 않는다) */
     public synchronized Optional<Long> characterOfMc(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
@@ -1142,6 +1230,141 @@ public final class Db implements AutoCloseable {
                         tags.forEach(t -> out.add(String.valueOf(t)));
                     }
                 }
+            }
+        }
+        return out;
+    }
+
+    // ═══ 혈채 (마이그레이션 006) — ★ 이 세계에서 감쇠하지 않는 유일한 값 ═══
+    //
+    // subject: character:<id> (이어진 자) · mc:<uuid> (아직 안 이어진 몸) · 미상의_살인마 (몸도 모를 때).
+    // ★ 접합의 순간 mc:<uuid> 가 character:<id> 로 병합된다 —
+    //   그 전까지 세계는 열 개의 사고를 보았고, 그 후로 세계는 한 마리의 짐승을 본다.
+
+    /** 혈채 원장 한 줄 (known 은 저장값 — 오늘의 값은 BloodDebt.decayedKnown 이 읽는 순간 정산한다) */
+    public record Debt(String subject, Long characterId, double hidden, double knownRaw,
+                       int knownDay, int publicCount, int kills, double exposureFloor) {
+
+        public static Debt empty(String subject) {
+            return new Debt(subject, null, 0, 0, 0, 0, 0, 0);
+        }
+    }
+
+    public synchronized Debt bloodDebt(String subject) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT subject, character_id, hidden, known_raw, known_day, public_count, kills, "
+                        + "exposure_floor FROM blood_debt WHERE subject = ?")) {
+            ps.setString(1, subject);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Debt.empty(subject);
+                }
+                Long chId = rs.getObject(2) == null ? null : rs.getLong(2);
+                return new Debt(rs.getString(1), chId, rs.getDouble(3), rs.getDouble(4),
+                        rs.getInt(5), rs.getInt(6), rs.getInt(7), rs.getDouble(8));
+            }
+        }
+    }
+
+    /** 캐릭터의 장부 (subject = character:<id>) */
+    public synchronized Debt bloodDebtOf(long characterId) throws SQLException {
+        return bloodDebt("character:" + characterId);
+    }
+
+    /**
+     * 한 건을 적는다. <b>암혈채는 노출과 무관하게 자란다</b> (몸이 장부다) —
+     * 현혈채만 노출·정확도 배수를 먹는다. 공개(witness 2) 건은 감쇠 하한(×2)의 근거로 따로 센다.
+     */
+    public synchronized Debt addBloodDebt(String subject, Long characterId, double hidden,
+                                          double known, boolean publicKill, int day)
+            throws SQLException {
+        Debt now = bloodDebt(subject);
+        double nextHidden = now.hidden() + hidden;
+        double nextKnown = now.knownRaw() + known;
+        int publicCount = now.publicCount() + (publicKill ? 1 : 0);
+        int kills = now.kills() + (hidden > 0 ? 1 : 0);
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO blood_debt(subject, character_id, hidden, known_raw, known_day, "
+                        + "public_count, kills, exposure_floor, updated_day) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(subject) DO UPDATE SET "
+                        + "character_id = COALESCE(excluded.character_id, blood_debt.character_id), "
+                        + "hidden = excluded.hidden, known_raw = excluded.known_raw, "
+                        + "known_day = excluded.known_day, public_count = excluded.public_count, "
+                        + "kills = excluded.kills, updated_day = excluded.updated_day")) {
+            ps.setString(1, subject);
+            if (characterId == null) {
+                ps.setNull(2, java.sql.Types.INTEGER);
+            } else {
+                ps.setLong(2, characterId);
+            }
+            ps.setDouble(3, nextHidden);
+            ps.setDouble(4, nextKnown);
+            ps.setInt(5, day);
+            ps.setInt(6, publicCount);
+            ps.setInt(7, kills);
+            ps.setDouble(8, now.exposureFloor());
+            ps.setInt(9, day);
+            ps.executeUpdate();
+        }
+        return bloodDebt(subject);
+    }
+
+    /**
+     * ★ 병합 — 접합의 순간, 이름 없이 쌓인 장부가 한 사람의 이름으로 합산된다.
+     * 그 전까지 세계는 열 개의 사고를 보았다. 그 후로 세계는 한 마리의 짐승을 본다.
+     */
+    public synchronized Debt mergeBloodDebt(String from, long characterId, int day) throws SQLException {
+        Debt src = bloodDebt(from);
+        if (src.hidden() <= 0 && src.knownRaw() <= 0 && src.exposureFloor() <= 0) {
+            return bloodDebtOf(characterId);
+        }
+        Debt dst = addBloodDebt("character:" + characterId, characterId, src.hidden(),
+                src.knownRaw(), false, day);
+        // 공개 건수·건수·노출 하한은 합산 (addBloodDebt 이 못 옮기는 것들)
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE blood_debt SET public_count = ?, kills = ?, exposure_floor = ? "
+                        + "WHERE subject = ?")) {
+            ps.setInt(1, dst.publicCount() + src.publicCount());
+            ps.setInt(2, dst.kills() + src.kills());
+            ps.setDouble(3, Math.max(dst.exposureFloor(), src.exposureFloor()));
+            ps.setString(4, "character:" + characterId);
+            ps.executeUpdate();
+        }
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM blood_debt WHERE subject = ?")) {
+            ps.setString(1, from);
+            ps.executeUpdate();
+        }
+        return bloodDebtOf(characterId);
+    }
+
+    /** ★ B6 — 마공 운기를 목격당했다. 이 몸에 '은밀'은 이제 없다 (노출 배수 하한 1.0) */
+    public synchronized void setExposureFloor(String subject, Long characterId, double floor, int day)
+            throws SQLException {
+        Debt now = bloodDebt(subject);
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO blood_debt(subject, character_id, exposure_floor, updated_day) "
+                        + "VALUES(?, ?, ?, ?) ON CONFLICT(subject) DO UPDATE SET "
+                        + "exposure_floor = MAX(blood_debt.exposure_floor, excluded.exposure_floor), "
+                        + "updated_day = excluded.updated_day")) {
+            ps.setString(1, subject);
+            if (characterId == null) {
+                ps.setNull(2, java.sql.Types.INTEGER);
+            } else {
+                ps.setLong(2, characterId);
+            }
+            ps.setDouble(3, Math.max(floor, now.exposureFloor()));
+            ps.setInt(4, day);
+            ps.executeUpdate();
+        }
+    }
+
+    /** 모든 장부 (검산·되먹임 순회용) */
+    public synchronized List<Debt> bloodDebts() throws SQLException {
+        List<Debt> out = new java.util.ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT subject FROM blood_debt ORDER BY subject")) {
+            while (rs.next()) {
+                out.add(bloodDebt(rs.getString(1)));
             }
         }
         return out;

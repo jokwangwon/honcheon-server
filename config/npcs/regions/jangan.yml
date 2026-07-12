@@ -1,0 +1,329 @@
+# 장안 — 성문의 인구
+# 척추: config/npcs/region_populace.yml   ·   설계: docs/design/region_populace.md
+# 부지: config/world_map.yml places.jangan (pos 37800, 6600 · 평지 · tier rich · faction gwan_gun
+#       · scale 3000 · "섬서 성도(省都). 관군 절도사·전장 본점·하오문 대거점. 청하현에서 관도로 하루")
+# 집:  RemoteBuilder.Archetype.성문 (성벽 12켜 · 홍예문 · 성루 · 치 · 마도 · 관도 7칸 · 저잣거리)
+#
+# ★ 성 안은 짓지 않는다 (region_archetypes.md §2.2 — "문 앞에서 멈추는 편이 정직하다").
+#   그러므로 **성 안에는 사람도 세우지 않는다.** 사람이 없는 도시를 채우느니 문 앞이 붐비는 편이 낫다.
+#   등록된 인구는 전부 **성벽 바깥**에 산다 — 문 앞 광장 · 관도 · 저잣거리.
+#   그것은 타협이 아니라 사실이다: 저잣거리가 성문 밖에 서는 것은 **문세(門稅) 때문이다**
+#   (region_archetypes.md §2.3 — "성 안으로 물건을 들이면 문세를 문다").
+#
+# ★ 통행증이 이 문의 심장이다 (faction_entry_routes.gwangun_entry):
+#   포쾌_등재 → 관군 favor +4 · "세계에서 가장 싼 favor". 그 등재를 확인하는 자가 **검사관**이다.
+#   그래서 required_roles.성문 = [수문장, 관졸, 검사관, 상인] — 검사관이 없으면 통행증이 종이다.
+
+version: 1
+region: jangan
+name: "장안"
+zone: "장안"
+archetype: 성문
+faction: gwan_gun
+
+performance:
+  max_active: 14
+  activate_radius: 48
+  deactivate_radius: 76
+
+# ─── 태세 — 문은 누구에게 열리는가 ───
+# ★ 성문의 태세는 favor 가 아니라 **수배(手配)** 가 먼저 가른다.
+#   world_bridge.yml feedback.wanted = "법명분 게이지. 문턱을 넘으면 관졸이 적대한다"
+#   (faction_politics.yml authority_mandate — 관은 사감으로 움직이지 않는다. 명분으로 움직인다)
+#   그래서 default 는 중립이다. 관은 지나가는 사람을 이유 없이 잡지 않는다 — **명분이 있어야 잡는다.**
+stance:
+  default: 중립
+  rules:
+    - when: { wanted: true }
+      stance: 적대
+      why: "world_bridge feedback.wanted — 법명분 게이지가 문턱을 넘었다. 관은 명분으로 움직인다"
+      line: "저자다! 수배된 자다 — 문을 닫아라!"
+    - when: { favor: { faction: noklim, min: 13 } }
+      stance: 적대
+      why: "noklim_entry gates.산채_등재 = '관군이 온다. 토벌 의뢰의 표적이 된다'"
+      line: "산에서 내려온 놈이군. 그 칼자국을 내가 모를 줄 아나."
+    - when: { favor: { faction: gwan_gun, min: 8 } }
+      stance: 우호
+      why: "gwangun_entry — 포쾌 등재 이상. 관의 사람이다"
+      line: "수고하십니다. 통행증은 됐습니다. 지나가시지요."
+    - when: { favor: { faction: gwan_gun, min: 4 } }
+      stance: 중립
+      why: "gwangun_entry 포쾌_등재 (favor +4) — 얼굴이 장부에 있다"
+      line: "…아, 등재된 분이군. 통행증만 보이시오."
+
+# ─── 자리 ───
+# 근거 좌표 (RemoteBuilder.cityGate): 성벽 f∈[-10,-6] (WALL_F -8 · WALL_T 2) · 홍예문 l∈[-3,3]
+#   · 광장 f∈[-2,14], l∈[-12,12] · 관도 f=15~ · 노점 f=18/24/30 l=±6 · 점포 f=26 l=±13
+# ★ +f 가 **성 밖**이다 (문이 바깥을 본다). f < -10 = 성 안 — **거기엔 아무도 세우지 않는다**
+places:
+  성문_앞:     { origin: 중심, f: -3, l: 0,   radius: 3 }   # 홍예 바로 앞 — 수문장의 자리
+  성문_동:     { origin: 중심, f: -3, l: -5,  radius: 2 }
+  성문_서:     { origin: 중심, f: -3, l: 5,   radius: 2 }
+  검문_탁자:   { origin: 중심, f: 1,  l: 3,   radius: 2 }   # 통행증을 보는 자리 (문과 광장 사이)
+  광장:        { origin: 중심, f: 6,  l: 0,   radius: 6 }   # 다듬은 안산암 · 등롱 열둘
+  광장_동:     { origin: 중심, f: 6,  l: -9,  radius: 3 }
+  광장_서:     { origin: 중심, f: 6,  l: 9,   radius: 3 }
+  관도:        { origin: 중심, f: 16, l: 0,   radius: 4 }   # 폭 7칸 (청하현 관도는 3칸이다)
+  관도_밖:     { origin: 중심, f: 34, l: 0,   radius: 4 }
+  노점_1:      { origin: 중심, f: 18, l: -7,  radius: 2 }
+  노점_2:      { origin: 중심, f: 18, l: 7,   radius: 2 }
+  노점_3:      { origin: 중심, f: 24, l: -7,  radius: 2 }
+  노점_4:      { origin: 중심, f: 24, l: 7,   radius: 2 }
+  노점_5:      { origin: 중심, f: 30, l: -7,  radius: 2 }
+  점포_동:     { origin: 중심, f: 26, l: -15, radius: 2 }   # 점포 벽 밖 (안에 갇히지 않게)
+  점포_서:     { origin: 중심, f: 26, l: 15,  radius: 2 }
+
+# ─── 일과 — 관의 하루는 **교대(交代)** 다 ───
+# ★ 산채는 망보고, 문파는 수련하고, 관은 **교대한다.**
+#   문은 밤에도 사람이 서 있어야 문이다 (region_archetypes: "문은 열려 있어야 문이다").
+#   그래서 관졸에게는 **주번(晝番)과 야번(夜番)** 이 있다 — 낮에 서던 자가 밤엔 없다. 다른 자가 선다.
+routines:
+  수문장:   { 새벽: 성문_앞, 아침: 성문_앞,  낮: 광장,     해질녘: 성문_앞, 밤: 성문_앞 }
+  검사관:   { 새벽: 검문_탁자, 아침: 검문_탁자, 낮: 검문_탁자, 해질녘: 검문_탁자, 밤: 성문_동 }
+  관졸_주번: { 새벽: 성문_동, 아침: 성문_앞,  낮: 관도,     해질녘: 광장,   밤: 성문_동 }
+  관졸_야번: { 새벽: 광장,   아침: 성문_서,  낮: 성문_서,   해질녘: 관도,   밤: 관도 }
+  관졸_순라: { 새벽: 관도,   아침: 광장_동,  낮: 광장_서,   해질녘: 관도_밖, 밤: 광장 }
+  상인_아침: { 새벽: 노점_1, 아침: 노점_1,   낮: 노점_1,    해질녘: 관도,   밤: 광장 }
+  상인_낮:   { 새벽: 관도,   아침: 노점_2,   낮: 노점_2,    해질녘: 노점_2, 밤: 광장 }
+  상인_저녁: { 새벽: 광장,   아침: 노점_3,   낮: 노점_3,    해질녘: 노점_3, 밤: 노점_3 }
+  상인_점포: { 새벽: 점포_동, 아침: 점포_동, 낮: 노점_4,    해질녘: 점포_동, 밤: 점포_동 }
+  짐꾼:     { 새벽: 관도_밖, 아침: 관도,     낮: 광장,      해질녘: 관도,   밤: 점포_서 }
+
+# ─── 사람 (13인 · 동시 상한 14 — 성문은 전원이 동시에 설 수 있는 유일한 지역이다. 문이니까) ───
+people:
+
+  # ── 수문장 — 문의 주인 ──
+  jangan_sumunjang:
+    name: "우문열"
+    age: 46
+    job: 수문장 (교위)
+    rank: 수문장
+    realm: 절정
+    home: 성문_앞
+    routine: 수문장
+    voice: 관장
+    disposition: "군문 도법(참마도법)을 쓴다 — 무림의 검이 아니라 **전장의 도**다.
+      명분 없이는 칼을 뽑지 않고, 명분이 서면 망설이지 않는다"
+    body: { entity: ZOMBIE, durability: 30 }
+    combat:
+      loadout: { 계열: 도, 등급: 정련 }
+      skills: [chamma_dobeop]        # config/skills.yml faction: gwan_gun — 관군의 무공은 이것뿐이다
+      qi_grade: 검기
+      morale: { start: 11, break: 1 }
+    lines:
+      적대: ["관의 이름으로 포박한다. 순순히 무릎 꿇어라."]
+      경계: ["병기를 보이시오. 성문에서는 그것이 예의요."]
+      중립: ["장안이오. 통행증은 저 탁자에서 보이시오."]
+      우호: ["지나가시오. 오늘은 관도가 조용하오."]
+
+  # ── 검사관 — 통행증이 종이가 되지 않게 하는 자 ──
+  jangan_geomsagwan:
+    name: "반춘"
+    age: 38
+    job: 통행증 검사관 (문서 서리)
+    rank: 검사관
+    realm: 범인
+    home: 검문_탁자
+    routine: 검사관
+    voice: 서리
+    disposition: "★ gwangun_entry 의 포쾌_등재를 눈으로 확인하는 자.
+      장부에 없는 이름은 성문을 통과하지 못한다 — 그가 무인이든 아니든.
+      '무공은 성문을 못 엽니다. 종이가 엽니다'"
+    body: { entity: VILLAGER, profession: LIBRARIAN }
+    lines:
+      적대: ["수문장! 이 자입니다! 장부의 그 이름입니다!"]
+      경계: ["…통행증. 없으면 여기서 기다리시오."]
+      중립: ["통행증을 보이시오. 없으면 관아에서 발급받으시오 — 사흘 걸립니다."]
+      우호: ["아, 장부에 계시는군요. 지나가시지요."]
+
+  # ── 관졸 여섯 — 교대로 문을 지킨다 ──
+  jangan_gwanjol_1:
+    name: "정팔"
+    age: 27
+    job: 관졸 (주번)
+    rank: 관졸
+    realm: 삼류
+    home: 성문_동
+    routine: 관졸_주번
+    voice: 관졸
+    disposition: "창을 세워 두고 하품한다. 그러나 수문장의 발소리는 귀신같이 안다"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 창, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["게 섰거라!"]
+      경계: ["줄을 서시오."]
+      중립: ["문은 해 뜨면 열고 해 지면… 아니, 요즘은 밤에도 엽니다."]
+      우호: ["오늘도 수고 많으십니다."]
+  jangan_gwanjol_2:
+    name: "조구"
+    age: 31
+    job: 관졸 (주번)
+    rank: 관졸
+    realm: 삼류
+    home: 성문_동
+    routine: 관졸_주번
+    voice: 관졸
+    disposition: "낭인을 싫어한다 — 사건은 늘 그들이 지나간 뒤에 난다고 믿는다 (청하현 정육과 같은 병이다)"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 창, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["칼 버려!"]
+      경계: ["…낭인이군. 병기를 보이시오."]
+      중립: ["볼일이 뭐요."]
+      우호: ["지나가시오."]
+  jangan_gwanjol_3:
+    name: "임돌"
+    age: 24
+    job: 관졸 (야번)
+    rank: 관졸
+    realm: 삼류
+    home: 광장
+    routine: 관졸_야번
+    voice: 관졸
+    disposition: "밤에만 선다. 낮의 장안을 삼 년째 못 봤다"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 창, 등급: 범철 }, skills: [], morale: { start: 5, break: 3 } }
+    lines:
+      적대: ["횃불! 횃불 들어!"]
+      경계: ["밤에 다니는 데는 이유가 있겠지."]
+      중립: ["밤 관도는 조심하시오. 등롱 밖은 어둡소."]
+      우호: ["밤엔 저를 부르시오. 낮 사람들은 저를 모릅니다."]
+  jangan_gwanjol_4:
+    name: "황보"
+    age: 35
+    job: 관졸 (야번)
+    rank: 관졸
+    realm: 삼류
+    home: 광장
+    routine: 관졸_야번
+    voice: 관졸
+    disposition: "성루에 올라가 관도를 본다. 멀리서 오는 수레의 바퀴 소리로 짐의 무게를 안다"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 창, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["성루에 알려라!"]
+      경계: ["짐을 열어 보이시오."]
+      중립: ["오늘 수레가 열둘 들어왔소. 어제는 스물이었고."]
+      우호: ["관도 서쪽은 요즘 조용하오. 동쪽은 아니오."]
+  jangan_gwanjol_5:
+    name: "차평"
+    age: 29
+    job: 관졸 (순라)
+    rank: 관졸
+    realm: 삼류
+    home: 관도
+    routine: 관졸_순라
+    voice: 관졸
+    disposition: "저잣거리를 돈다. 상인들이 그를 보면 값을 한 문씩 내린다"
+    body: { entity: ZOMBIE, durability: 20 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [], morale: { start: 6, break: 3 } }
+    lines:
+      적대: ["도적이다! 도적이 문 앞에 섰다!"]
+      경계: ["저잣거리에서 소란 피우지 마시오."]
+      중립: ["노점 값은 저자 마음이오. 관이 정하지 않소."]
+      우호: ["저 만두는 사지 마시오. 어제 것이오."]
+  jangan_gwanjol_6:
+    name: "노삼"
+    age: 42
+    job: 관졸 (순라)
+    rank: 관졸
+    realm: 이류
+    home: 관도
+    routine: 관졸_순라
+    voice: 관졸
+    disposition: "이십 년 관졸. 승진하지 못했고, 하려고도 하지 않았다.
+      ★ gwangun_entry 가 말하는 '안전하되 외로운 자리'의 얼굴이다"
+    body: { entity: ZOMBIE, durability: 22 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [chamma_dobeop], morale: { start: 7, break: 2 } }
+    lines:
+      적대: ["…미안하오. 이건 내 일이오."]
+      경계: ["젊은 사람, 여기서 문제 일으키지 마시오."]
+      중립: ["관에 들어오면 강호는 당신을 죽이러 오지 않소. 대신 아무도 안 오오."]
+      우호: ["관은 느리오. 그래도 잊지는 않소."]
+
+  # ── 성문 밖 저잣거리 상인 넷 ──
+  # ★ 이 무대에서 유일하게 색이 있는 자리다 (수묵 규약: 채색은 차양·등롱·매화에만)
+  jangan_sangin_myeon:
+    name: "면삼"
+    age: 44
+    job: 국수 장수 (노점)
+    rank: 상인
+    realm: 범인
+    home: 노점_1
+    routine: 상인_아침
+    voice: 장사치
+    disposition: "성문이 열리기 전에 솥을 건다 — 첫 손님은 늘 야번 관졸이다"
+    body: { entity: VILLAGER, profession: BUTCHER }
+    lines:
+      적대: ["솥! 내 솥!"]
+      경계: ["…국수 안 사실 거면 비켜 주시오."]
+      중립: ["한 그릇 스무 문이오. 성 안에선 서른이오 — 문세 때문이오."]
+      우호: ["고명 얹어 드리리다."]
+  jangan_sangin_po:
+    name: "포월"
+    age: 36
+    job: 포목 장수 (노점)
+    rank: 상인
+    realm: 범인
+    home: 노점_2
+    routine: 상인_낮
+    voice: 장사치
+    disposition: "옷감으로 사람을 잰다. 무인의 소맷단이 해졌는지 새것인지로 형편을 안다"
+    body: { entity: VILLAGER, profession: SHEPHERD }
+    lines:
+      적대: ["아이고, 내 비단!"]
+      경계: ["손대지 마시오. 비단이오."]
+      중립: ["소맷단이 해졌구려. 한 필 끊어 드리리까?"]
+      우호: ["나리 몸에 맞게 재어 드리리다."]
+  jangan_sangin_yak:
+    name: "두약"
+    age: 51
+    job: 약재 장수 (노점)
+    rank: 상인
+    realm: 범인
+    home: 노점_3
+    routine: 상인_저녁
+    voice: 장사치
+    disposition: "성문 밖에서 약을 판다 — 성 안 약방보다 싸고, 그만큼 못 미덥다"
+    body: { entity: VILLAGER, profession: CLERIC }
+    lines:
+      적대: ["약! 약이 쏟아진다!"]
+      경계: ["…볼일이 없으면 가시오."]
+      중립: ["금창약이오. 성 안 약방의 절반값이오. 효험은… 절반은 아니오."]
+      우호: ["이건 진짜요. 나리께만 드리오."]
+  jangan_sangin_jeompo:
+    name: "구노파"
+    age: 67
+    job: 만두 점포 주인
+    rank: 상인
+    realm: 범인
+    home: 점포_동
+    routine: 상인_점포
+    voice: 장사치
+    disposition: "성문 밖에서 사십 년 만두를 쪘다. 이 문을 드나든 사람 절반의 얼굴을 안다
+      — 그리고 그중 누가 돌아오지 않았는지도 안다"
+    body: { entity: VILLAGER, profession: BUTCHER }
+    lines:
+      적대: ["…또 이런 일이."]
+      경계: ["문 앞에서 싸우지 마시오. 손님 떨어지오."]
+      중립: ["만두 다섯 문. 관졸은 넷이오. …관졸이니까."]
+      우호: ["오래 못 봤구려. 살아 돌아왔으면 됐소."]
+
+  # ── 짐꾼 — 문세 때문에 짐은 문 앞에서 갈아탄다 ──
+  jangan_jimkkun:
+    name: "왕칠"
+    age: 30
+    job: 짐꾼 (문 앞 하역)
+    rank: 짐꾼
+    realm: 범인
+    home: 점포_서
+    routine: 짐꾼
+    voice: 품팔이
+    disposition: "성문 밖에서 짐을 내리고 성 안 수레에 옮겨 싣는다 — 문세를 아끼는 상단의 셈법이다.
+      그 셈법이 그의 밥이다"
+    body: { entity: VILLAGER, profession: NONE }
+    lines:
+      적대: ["짐! 짐 먼저!"]
+      경계: ["길 막지 마시오. 수레 지나가오."]
+      중립: ["성 안으로 물건을 들이면 문세를 무오. 그래서 여기서 갈아싣소."]
+      우호: ["짐 있으면 부르시오. 한 짐에 열 문이오."]

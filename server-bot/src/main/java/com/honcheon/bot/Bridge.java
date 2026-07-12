@@ -195,9 +195,38 @@ final class Bridge {
             case "beast_slain" -> slain(data, today, false);
             case "qi_manifested" -> qiManifested(data, today);
             case "sparring" -> sparring(data, today);
+            case "link_request" -> linkRequest(envelope, data);
             default -> System.err.println("다리 — 처리기 없음: " + kind);
         }
         return true;
+    }
+
+    // ─── link_request — 신원 접합의 첫 걸음 (아직 아무것도 이어지지 않았다) ───
+
+    /**
+     * 마크가 코드를 냈다. <b>여기서는 대기열에 앉히기만 한다</b> — 확정은 디스코드에서 한다.
+     *
+     * <p>왜 그런가: 최종 결속을 <b>인증된 자리</b>(디스코드)에 두면, 남의 캐릭터를 뺏으려면
+     * 남의 디스코드 계정이 있어야 한다. 코드가 새어 나가도 도둑이 할 수 있는 최악은
+     * '제 캐릭터에 남의 마크 몸을 붙이는 것' — 자해다. (world_bridge.yml identity.direction)
+     *
+     * <p>만료는 <b>봉투의 at</b> 을 기준으로 잰다. 봇이 꺼져 있던 동안 발급된 코드는 켜는 순간
+     * 이미 죽어 있다 — 그것이 옳다. 10분 전의 승낙으로 지금의 몸을 잇지 않는다.
+     */
+    private void linkRequest(Map<String, Object> envelope, Map<String, Object> data) throws Exception {
+        String code = str(data.get("code"), "").toUpperCase(java.util.Locale.ROOT);
+        String uuid = str(data.get("mc_uuid"), "");
+        String name = str(data.get("mc_name"), uuid);
+        if (code.isBlank() || uuid.isBlank()) {
+            return;
+        }
+        long issuedAt = envelope.get("at") instanceof Number n ? n.longValue()
+                : System.currentTimeMillis();
+        int ttl = num(data.get("ttl_seconds"),
+                num(map(RulesConfig.section(cfg, "identity")).get("ttl_seconds"), 600));
+        db.pendLinkCode(code, uuid, name, issuedAt, issuedAt + ttl * 1000L);
+        db.linkMvt(uuid, name, null);   // 몸은 등록해 둔다 (이름 갱신) — 이어지는 것은 아직 아니다
+        System.out.println("다리 — 접합 코드 대기: " + name + " (" + ttl + "초)");
     }
 
     // ─── npc_death — 사람이 죽었다 ───
@@ -278,6 +307,69 @@ final class Bridge {
                     Map.of("가산", mandateDelta, "법명분", mandate, "출처", "mvt",
                             "구간", String.valueOf(rules.politics.mandateEffect(mandate))));
         }
+
+        // ★ 혈채 — 무고의 장부. 이 한 줄이 없으면 살인 1건과 10건이 같아진다
+        bloodDebt(killer, registry, npcId, job, witnesses, body, cause, spec.accuracy(),
+                flags(data), group(nameless ? "무명사망" : "npc사망", key, today), today);
+    }
+
+    /**
+     * ★ 혈채(血債) — 이 죽음은 얼마인가.
+     *
+     * <p><b>악행 포인트가 아니다.</b> 도적을 베어도(bandit_slain), 비무에서 죽여도(sparring),
+     * 관인을 죽여도(법명분으로 간다) 0이다. 빚은 <b>갚을 수 없는 자를 죽였을 때</b>만 생긴다.
+     *
+     * <p>장부는 둘이다: <b>암혈채</b>는 노출과 무관하게 자라고 <b>감쇠하지 않는다</b> (몸이 안다).
+     * <b>현혈채</b>만 노출·정확도 배수를 먹는다 — 아무도 못 보고 시신을 감췄으면 세계는 모른다.
+     * <b>완전 범죄는 가능하다. 다만 몸은 속일 수 없다.</b>
+     *
+     * <p>아직 접합되지 않은 몸의 빚은 {@code mc:<uuid>} 원장에 쌓이고, 접합하는 순간
+     * 그 사람의 이름으로 <b>병합된다</b> (GameListener.linkAccount).
+     */
+    private void bloodDebt(Killer killer, String registry, String npcId, String job, int witnesses,
+                           String body, String cause, int accuracy, List<String> flags,
+                           String rumorGroup, int today) throws Exception {
+        BloodDebt bd = rules.bloodDebt;
+        boolean registered = "cheongha_npcs".equals(registry);
+        String category = bd.classify(registry,
+                registered ? rules.npcFaction(npcId) : null,
+                registered ? rules.npcRole(npcId) : job,
+                registered ? rules.npcTier(npcId) : 0, cause);
+
+        String subject = killer.linked() ? "character:" + killer.characterId()
+                : killer.uuid() != null ? "mc:" + killer.uuid() : "미상의_살인마";
+        double floor = db.bloodDebt(subject).exposureFloor();   // ★ B6 — 마공은 숨지 못한다
+        BloodDebt.Charge charge = bd.charge(category, flags, witnesses, body, accuracy,
+                rules.rumors.band(accuracy), floor);
+        if (!charge.any()) {
+            return;   // 무장 상대·관인·비무·병사 — 빚이 아니다 (그리고 그것이 이 축의 정직함이다)
+        }
+        Db.Debt debt = db.addBloodDebt(subject, killer.characterId(), charge.hidden(),
+                charge.known(), charge.publicKill(), today);
+        db.logEvent("혈채", killer.actorType(), killer.actorId(), "npc", npcId,
+                Map.of("분류", category, "건당", charge.base(), "배수", charge.multiplier(),
+                        "노출", charge.exposure(), "노출배수", charge.exposureMult(),
+                        "정확도밴드", charge.band(), "암혈채", debt.hidden(),
+                        "현혈채", bd.decayedKnown(debt.knownRaw(), debt.publicCount(),
+                                debt.knownDay(), today),
+                        "출처", "mvt"));
+        if (killer.linked()) {
+            // 사다리 — 수배·현상금 · 정파의 등돌림 · 명분 · 법명분. 세계가 한 층씩 그를 본다
+            game.bloodDebtLadder(killer.characterId(), killer.name(), rumorGroup, today);
+        }
+    }
+
+    /**
+     * 배수 플래그 (의식_살인 ×2.0 · 무력한_자 ×1.5 · 항복자_살해 ×1.5 — 곱해진다).
+     * 마크는 아직 이것을 보내지 않는다 (흡성 시전·포박 상태가 MVT 에 없다) — 오면 그대로 먹는다.
+     * (등록부의 자리: world_bridge.yml npc_death.payload.flags)
+     */
+    private static List<String> flags(Map<String, Object> data) {
+        List<String> out = new ArrayList<>();
+        for (Object f : list(data.get("flags"))) {
+            out.add(String.valueOf(f));
+        }
+        return out;
     }
 
     // ─── bandit_slain / beast_slain — 벤 자의 이름이 강호에 돈다 ───
@@ -422,6 +514,9 @@ final class Bridge {
         Map<String, Object> wantedCfg = map(feedback.get("wanted"));
         Map<String, Object> wanted = new LinkedHashMap<>();
         Map<String, Object> favor = new LinkedHashMap<>();
+        Map<String, Object> links = new LinkedHashMap<>();
+        Map<String, Object> bounty = new LinkedHashMap<>();
+        int bountyAmount = rules.price("의뢰_보수", rules.bloodDebt.bountyRef());
         for (Map.Entry<String, Long> body : db.linkedBodies().entrySet()) {
             long chId = body.getValue();
             int mandate = db.mandate(chId, today, rules.politics);
@@ -437,6 +532,18 @@ final class Bridge {
             if (!mine.isEmpty()) {
                 favor.put(body.getKey(), mine);
             }
+            // ★ 신원 — 마크가 "나는 누구인가"를 읽는 곳 (접합된 몸만 여기 있다)
+            db.findCharacterById(chId).ifPresent(ch -> links.put(body.getKey(),
+                    Map.of("character_id", chId, "name", String.valueOf(ch.get("name")),
+                            "realm", String.valueOf(ch.get("realm")))));
+            // ★ 현상금 — 혈채가 문턱을 넘으면 관이 방을 붙인다.
+            //   ★★ 혈채 수치 자체는 절대 안 내려간다 (visibility: 내부) — 내려가는 것은 세계의 반응뿐이다
+            Db.Debt debt = db.bloodDebtOf(chId);
+            int known = rules.bloodDebt.decayedKnown(debt.knownRaw(), debt.publicCount(),
+                    debt.knownDay(), today);
+            if (known >= rules.bloodDebt.bountyMin()) {
+                bounty.put(body.getKey(), bountyAmount);
+            }
         }
 
         Map<String, Object> snapshot = new LinkedHashMap<>();
@@ -447,6 +554,8 @@ final class Bridge {
         snapshot.put("region", db.region());
         snapshot.put("wanted", wanted);
         snapshot.put("favor", favor);
+        snapshot.put("links", links);
+        snapshot.put("bounty", bounty);
         snapshot.put("thresholds", Map.of(
                 "wanted", num(wantedCfg.get("gauge_min"), 8),
                 "disavowal", num(wantedCfg.get("disavowal_min"), 10)));

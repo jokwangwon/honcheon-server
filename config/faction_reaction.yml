@@ -254,6 +254,65 @@ blood_debt:
     tag: 속죄
     truth: "★ 개심은 힘을 버리는 일이지, 빚을 갚는 일이 아니다"
 
+  # ══ 기계 배선 (engine) — 위의 ladder·inputs 를 코드가 읽는 형태로 옮긴 것 ══════════
+  #
+  # ★ 새 수치를 발명하지 않는다. min 은 ladder 의 min 과 **글자 그대로 같다** —
+  #   ladder 는 사람이 읽는 정본이고, 여기는 그 표를 기계가 집는 손잡이다.
+  #   (배선: server-bot BloodDebt.java · Bridge.java · GameListener.java — docs/design/blood_debt.md §6)
+  engine:
+
+    # ── B2. 사망 훅의 대상 분류 — "누구를 죽였는가" (inputs 의 여섯 칸으로 떨어뜨린다)
+    classification:
+      by_faction:                   # 등록 NPC 의 소속 (npcs/cheongha_npcs.yml faction)
+        gwan_gun: 관인              # ★ 포두·현령 — 혈채 0. 법명분(authority_mandate)으로 간다 (중복 금지)
+      by_tier:                      # 등록 NPC 의 tier (= npc_death.yml death_weight 의 눈금)
+        1: 무고_배경
+        2: 무고_기능
+        3: 무고_서사
+      populace_default: 무고_배경    # 무명(populace) — 소칠·곰보·촌민·행인 (death_weight 1 칸)
+      by_cause:                     # 사인 (npc_death.yml npc_types.cause_modifier)
+        노환_병사: 없음              # ★ 내가 죽인 것이 아니다
+        사고: 없음
+        비무_사고: 비무_사고         # 규약 안의 죽음 — 0
+      armed_roles: [무인, 도적, 산적, 자객, 낭인, 표사, 호위]   # role/job 에 이 낱말이 있으면 무장_상대 (0)
+      zero_kinds: [bandit_slain, beast_slain, sparring]        # ★ 다리의 이 kind 들은 애초에 혈채가 아니다
+
+    # ── B1. 두 원장의 산수 — exposure(노출) × accuracy(정확도) = 현혈채 배수. 암혈채는 배수 없음
+    exposure_rules:                 # npc_death.yml killer_response.variables (witness · body) 그대로
+      은밀:  { witness_max: 0, body: [은닉] }              # → 0.0 (암혈채만 자란다)
+      흔적:  { witness_max: 0 }                            # → 0.5 (범인 미상 — '미상의 살인마'에 적립)
+      지목:  { witness_min: 1 }                            # → 1.0
+      공개:  { witness_min: 2 }                            # → 1.5 (백주·장터)
+    accuracy_multipliers:           # rumor.yml accuracy_bands 의 밴드 이름 그대로 (§2.2)
+      사실적: 1.0
+      과장:   0.7
+      오해:   0.5
+      괴담:   0.5
+
+    # ── 사다리의 각 칸이 실제로 부르는 것 (min = ladder.min)
+    bounty_min: 3                   # stage 2 — 수배·현상금
+    bounty_ref: 고수_현상금          # economy.yml price_table.의뢰_보수.고수_현상금 (50000) — 금액은 저기가 정본
+    board_block_min: 15             # ★ B7. stage 5 — 게시판이 닫힌다 (§11 — 객잔이 문을 잠근다)
+
+    faction:                        # stage 3 — 세계가 그를 버리는 칸
+      - { min: 6, faction: orthodox, score: 4, favor: -4 }
+
+    myeongbun:                      # 명분 발화 (faction_politics.yml myeongbun.inputs — 값·태그는 저기가 정본)
+      - { min: 6,  input: 사파의_민간_학살,      victims: [mingan] }
+      - { min: 10, input: 무고한_학살_장터_촌락, victims: [mingan] }
+      - { min: 20, input: 인신공양_의식_발각,    victims: [mingan] }
+
+    mandate:                        # 법명분 — ★ 가산이 아니라 **개방**이다 (게이지를 이 값까지 올린다)
+      - { min: 15, input: 사교_준동_확증, value: 16 }
+      - { min: 26, input: 사교_대발호,   value: 30 }
+
+    # ── B6. 운기조식 목격 — ★ 혈교는 숨을 수 없다 (simbeop.yml stealth_option: false)
+    magong_witness:
+      trigger: "심법의 stealth_option == false 인 자가 운기조식을 했다 (사람이 보는 곳에서)"
+      myeongbun: 금기_마공_사용_확인   # ignition ① — 무고로는 안 뭉친 무림이 금기에는 뭉친다
+      exposure_floor: 1.0            # ★ 그 뒤로 이 몸에 '은밀'은 없다 — 노출 배수 하한 (§2.2 circulation_tell)
+      rumor: { tags: [금기, 마공, 무인], intensity: 3, accuracy_kind: 직접_목격 }
+
   # ── 다른 축과의 관계 ────────────────────────────────────────────────────
   interplay:
     vs_주목: "혈채는 주목의 **입력**이지 주목 그 자체가 아니다 —

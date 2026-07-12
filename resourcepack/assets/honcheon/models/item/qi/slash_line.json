@@ -1,0 +1,77 @@
+{
+  "textures": {
+    "0": "honcheon:qi/slash_line",
+    "particle": "honcheon:qi/slash_line"
+  },
+  "elements": [
+    {
+      "from": [
+        -16.0,
+        5.2,
+        7.68
+      ],
+      "to": [
+        8.0,
+        10.8,
+        8.32
+      ],
+      "faces": {
+        "north": {
+          "texture": "#0",
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#0",
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#0",
+          "uv": [
+            0.0,
+            0.0,
+            0.25,
+            0.25
+          ]
+        },
+        "west": {
+          "texture": "#0",
+          "uv": [
+            0.0,
+            0.0,
+            0.25,
+            0.25
+          ]
+        },
+        "up": {
+          "texture": "#0",
+          "uv": [
+            0.0,
+            0.0,
+            0.25,
+            0.25
+          ]
+        },
+        "down": {
+          "texture": "#0",
+          "uv": [
+            0.0,
+            0.0,
+            0.25,
+            0.25
+          ]
+        }
+      }
+    }
+  ],
+  "gui_light": "front"
+}

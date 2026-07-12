@@ -9,6 +9,50 @@ tick_budget:
     effect_ticker: 5
     npc_logic: 6
     world_batch_apply: 3          # 일 배치 결과의 메인 스레드 반영분
+    vfx_display: 3                # 3D 형체 층 (SkillDisplay + MobDisplay — 디스플레이 엔티티 추종)
+    world_build: 20               # 조성(조성기·지형 계층)이 한 틱에 먹어도 되는 몫 = tick_slicing.budget_ms
+
+# ══════════════════════════════════════════════════════════════════════
+#  계측 — 예산을 재는 자 (Metrics.java)
+# ══════════════════════════════════════════════════════════════════════
+# 예산이 적혀 있어도 재는 자가 없으면 그것은 문서지 예산이 아니다.
+# 등록제: 코드는 수치를 모른다. 아래 probes 가 "티커 이름 → 예산 항목"을 대고,
+#         tick_budget.subsystem_budget_ms 가 그 값을 댄다. 여기 없는 이름은 재기만 하고 경보하지 않는다.
+metrics:
+  enabled: true
+  warn_to_console: true
+  warn_ratio: 1.0                 # 예산의 이 배수를 넘으면 경보 (1.0 = 초과 즉시)
+  warn_cooldown_ticks: 200        # 같은 티커의 경보 최소 간격 (10초 — 콘솔 도배 방지)
+  probes:                         # 계기 이름 → 예산 항목 (subsystem_budget_ms 의 키)
+    skill_execution: skill_execution      # SkillListener.tick — 무공 중앙 티커 (1틱)
+    skill_cast: skill_execution           # SkillCast.tick — 절기의 삼문 承·間·虛 (1틱)
+    skill_display: vfx_display            # SkillDisplay — 3D 무공 모션
+    mob_display: vfx_display              # MobDisplay.tick — 3D 몹 형체 추종
+    populace: npc_logic                   # Populace.tick — 무명 28인 일과·배회 (2초)
+    incidents: npc_logic                  # Incidents.tick — 사건 엔진 (1초)
+    hunting: npc_logic                    # HuntingGrounds.tick — 구역 스포너·전의·비무 (1초)
+    sidebar: world_batch_apply            # 정보 패널 갱신 (5초)
+    world_bridge: world_batch_apply       # 봇 브릿지 큐 반영
+
+# ══════════════════════════════════════════════════════════════════════
+#  틱 슬라이싱 — 한 틱 폭탄의 해체 (TickBudget.java)
+# ══════════════════════════════════════════════════════════════════════
+# 조성기는 한 틱에 90만 번 블록을 쓴다 (청하현 = 반경 62 코어 + 봉인·전이대·접근부).
+# 봉우리 하나가 반경 60 × 높이 40, 사구가 반경 40 이다. 블록 하나가 5~20µs → 수 초~수십 초 정지.
+# 총량은 못 깎는다 (마을을 지으려면 블록을 놓아야 한다). 깎는 것은 **한 틱에 얼마나 하느냐**다.
+# 조성은 몇십 초가 걸려도 좋다 — 서버가 멈추지만 않으면 된다.
+tick_slicing:
+  budget_ms: 20                   # 한 틱에 집행할 시간 (50ms 틱의 40% — SeedProbe·SiteProbe 와 같은 처방)
+  queue_capacity: 65536           # 워커가 메인보다 앞서 달릴 수 있는 연산 수 (백프레셔)
+  max_seconds: 300                # 조성 한 건의 상한 — 넘으면 중단하고 경고 (무한 루프 방어)
+  progress_every_ticks: 100       # 진행 보고 주기
+  apply_physics: true             # 블록 쓰기의 이웃 갱신.
+  # ★ false 로 내리면 2~4배 빨라지지만 **물이 안 흐르고 모래가 안 떨어진다** = 결과가 달라질 수 있다.
+  #   결정론은 유지되나(순서 불변) 산출물이 바뀌므로, 내리려면 반드시 검수 12/6/5종을 다시 통과시켜라.
+  preload_radius:                 # 조성 전에 비동기로 실어 두고 티켓으로 붙잡을 반경 (블록)
+    town: 96                      # 청하현 — 코어 62 + 전이대 20 + 접근부 여유
+    region: 64                    # 지역 조성 (RemoteBuilder)
+    terrain: 72                   # 지형 계층 (TerrainForge — 봉우리 반경 60 + 여유)
 
 particles:                        # F-P1 파티클 예산
   global_per_tick: 4000
@@ -57,3 +101,34 @@ load_test:                             # 배포 전 의무 시나리오
   casts_per_second: 30
   combat_cluster_size: 20
   pass_criteria: { mspt_under: 40, particle_over_budget_rate_under: 0.05 }
+
+  # ─── 플레이어 없이 되는 것 / 안 되는 것 (RCON 으로 돌리는 범위) ───
+  # 플레이어가 있어야만 서는 층이 셋이다 — 이건 콘솔로 못 만든다:
+  #   · Populace  — activate_radius 56 안에 사람이 있어야 무명이 몸을 세운다
+  #   · MobDisplay — attach_scan_range 48 (사람 곁에서만 형체를 붙인다) + 리소스팩 게이트
+  #   · SkillHud / 파티클 LOD — 시야당 예산은 '보는 눈'이 있어야 재진다
+  # 나머지(몹 밀도 · 무공 판정·중앙 티커 · 조성 · 사건)는 콘솔만으로 선다.
+  scenarios:
+    - id: idle                     # ① 무부하 기준선 — 이걸 모르면 나머지 숫자가 뜻이 없다
+      needs_player: false
+      seconds: 60
+      steps: []
+    - id: build_town               # ② 조성 폭탄 — 슬라이싱 전/후 대조 (가장 큰 부채)
+      needs_player: false
+      seconds: 120
+      steps: ["혼천 조성"]
+    - id: mob_swarm                # ③ 몹 밀도 — 허수아비 N + 몹 N
+      needs_player: true           # 연무장 입장이 플레이어 명령이다
+      seconds: 60
+      dummies: 20
+      mobs: 20
+    - id: cast_storm               # ④ 무공 난사 — casts_per_second 30 을 향해
+      needs_player: true
+      seconds: 60
+      casts_per_second: 30
+    - id: full                     # ⑤ 합산 — 조성 없이, 전부 함께 (이게 진짜 답이다)
+      needs_player: true
+      seconds: 120
+      dummies: 20
+      mobs: 20
+      casts_per_second: 30

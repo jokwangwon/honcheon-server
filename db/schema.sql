@@ -186,3 +186,31 @@ CREATE TABLE IF NOT EXISTS bridge_inbox (        -- 멱등의 못 — 재생은 
     applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_bridge_inbox_kind ON bridge_inbox(kind, world_day);
+
+-- ─── 신원 접합 + 혈채 (마이그레이션 006) — 다리를 건너는 것은 사건이 아니라 사람이다 ───
+-- 규칙: config/world_bridge.yml identity · config/faction_reaction.yml blood_debt.engine
+
+CREATE TABLE IF NOT EXISTS mvt_link_code (       -- 마크가 낸 일회용 코드. 디스코드가 확정한다
+    code         TEXT PRIMARY KEY,
+    mc_uuid      TEXT NOT NULL,
+    mc_name      TEXT NOT NULL,
+    issued_at    INTEGER NOT NULL,               -- epoch millis
+    expires_at   INTEGER NOT NULL,               -- 10분 (identity.ttl_seconds)
+    state        TEXT NOT NULL DEFAULT '대기',   -- 대기 | 사용됨 | 폐기
+    used_by      INTEGER REFERENCES characters(id),
+    used_day     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mvt_link_code_body ON mvt_link_code(mc_uuid, state);
+
+CREATE TABLE IF NOT EXISTS blood_debt (          -- ★ 감쇠하지 않는 유일한 값 (암혈채)
+    subject       TEXT PRIMARY KEY,              -- character:<id> | mc:<uuid> | 미상의_살인마
+    character_id  INTEGER REFERENCES characters(id),
+    hidden        REAL NOT NULL DEFAULT 0,       -- 암혈채 — 감쇠 없음. 몸이 장부다
+    known_raw     REAL NOT NULL DEFAULT 0,       -- 현혈채 (감쇠 전 — 정산은 읽는 순간)
+    known_day     INTEGER NOT NULL DEFAULT 0,
+    public_count  INTEGER NOT NULL DEFAULT 0,    -- 공개(witness 2) 건수 → 감쇠 하한 = ×2
+    kills         INTEGER NOT NULL DEFAULT 0,
+    exposure_floor REAL NOT NULL DEFAULT 0,      -- 마공 운기 목격 이력 (1.0 = 은밀 불가)
+    updated_day   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_blood_debt_char ON blood_debt(character_id);

@@ -32,6 +32,8 @@ public final class Rules {
     public final Factions factions;
     /** 세력 정치 (단계 5) — 명분·연합·관무불가침의 단일 원천 (세력 대 세력) */
     public final Politics politics;
+    /** 혈채 — ★ 감쇠하지 않는 유일한 축 (faction_reaction.yml blood_debt) */
+    public final BloodDebt bloodDebt;
     /** 죽음과 유산 (단계 4 A) — 부상 사다리·사망 위기·상속·피의 장부의 단일 원천 */
     public final Legacy legacy;
     private final Map<String, Object> judgmentCfg;
@@ -46,6 +48,8 @@ public final class Rules {
     private final Map<String, Object> factionsCfg;
     /** 문파 생활 — 계급 사다리·공적·문규, 그리고 ★ 문파 상태(sect_state.internal_burden) */
     private final Map<String, Object> sectLifeCfg;
+    /** 심법 — ★ 은폐 가능 여부가 두 어둠의 운명을 가른다 (simbeop.yml simbeop.&lt;id&gt;.stealth_option) */
+    private final Map<String, Object> simbeopCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -67,7 +71,11 @@ public final class Rules {
         this.routes = new Routes(RulesConfig.load(configDir.resolve("faction_entry_routes.yml")));
         this.deaths = new Deaths(RulesConfig.load(configDir.resolve("npc_death.yml")));
         this.rumors = new Rumors(rumorCfg);
-        this.factions = new Factions(RulesConfig.load(configDir.resolve("faction_reaction.yml")));
+        Map<String, Object> factionReactionCfg = RulesConfig.load(
+                configDir.resolve("faction_reaction.yml"));
+        this.factions = new Factions(factionReactionCfg);
+        this.bloodDebt = new BloodDebt(factionReactionCfg);
+        this.simbeopCfg = RulesConfig.load(configDir.resolve("simbeop.yml"));
         this.politics = new Politics(RulesConfig.load(configDir.resolve("faction_politics.yml")));
         this.legacy = new Legacy(RulesConfig.load(configDir.resolve("death_and_legacy.yml")));
         this.regionCfg = RulesConfig.load(configDir.resolve("regions/cheongha_hyeon.yml"));
@@ -120,6 +128,41 @@ public final class Rules {
     public java.util.Set<String> burdenSourceKeys() {
         Map<String, Object> sources = (Map<String, Object>) internalBurdenCfg().get("sources");
         return sources == null ? java.util.Set.of() : sources.keySet();
+    }
+
+    // ─── 심법 (simbeop.yml) — ★ 은폐 가능 여부 한 줄이 두 어둠의 운명을 가른다 ───
+    //
+    // 마교(천마무극공)는 숨을 수 있다 → 잠식한다. 혈교(혈기심공)는 못 숨는다 → 즉시 토벌.
+    // 그래서 **운기조식을 목격당하는 순간** 혈교도의 은밀함은 끝난다 (blood_debt B6).
+
+    /** 표시 이름(혈기심공)으로 심법 항목을 찾는다 — 시트에 적히는 것은 이름이다 */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> simbeopByName(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        Map<String, Object> catalog = RulesConfig.section(simbeopCfg, "simbeop");
+        for (Object value : catalog.values()) {
+            if (value instanceof Map<?, ?> s && name.equals(s.get("name"))) {
+                return (Map<String, Object>) s;
+            }
+        }
+        return null;
+    }
+
+    /** 마공인가 (demonic: true) — 흡성(혈교) 또는 연수(마교) */
+    public boolean isMagong(String simbeopName) {
+        Map<String, Object> s = simbeopByName(simbeopName);
+        return s != null && Boolean.TRUE.equals(s.get("demonic"));
+    }
+
+    /**
+     * ★ 운기 색을 숨길 수 있는가 (stealth_option). 마공인데 숨길 수 없으면 —
+     * <b>운기조식이 곧 자백이다.</b> 혈기심공은 false 다 (그리고 그것이 혈교의 수명을 정한다).
+     */
+    public boolean canHideCirculation(String simbeopName) {
+        Map<String, Object> s = simbeopByName(simbeopName);
+        return s != null && Boolean.TRUE.equals(s.get("stealth_option"));
     }
 
     /** judgment.yml formula.npc_fixed_bonus — NPC는 주사위 대신 고정값 (+7) */

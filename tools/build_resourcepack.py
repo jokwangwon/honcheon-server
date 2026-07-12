@@ -6038,17 +6038,105 @@ def _disc(g, cx, cy, r, steps=QI_STEPS, r_in=0.0):
                 _ink(g, x, y, min(1.0, edge / 3.0), steps)
 
 
+# ─── 참격선(斬擊線) — 검을 복제하지 않는다. **지나간 자리**를 그린다 (만화의 검격) ──────
+#
+# 【두 갈래의 scale 규약 — 이것을 틀리면 획의 길이가 절반이 된다】
+#   · 투사·지속·고리 (SkillDisplay.sizeUnit)  → scale = size          ⇒ 모델은 **단위 상자**를 채운다
+#   · 참격선          (SkillDisplay.slash)    → scale = {length/size[0], thick, thick}
+#     ← **size 를 곱하지 않는다.** 그러므로 참격선 모델은 **제 실제 미터 치수**로 구워야 하고,
+#       그 치수가 곧 size 여야 한다 (최종 길이 = 모델X × length/size[0] = length ⟺ 모델X == size[0]).
+#
+# 【원점 = 머리(칼끝)】 획은 거기서 **−X 로 늘어진다**. Transformation.scale 은 모델 (8,8,8) 을
+#   중심으로 먹으므로, 머리를 그 점에 두어야 scale.x 를 0→1 로 키울 때 **칼끝 뒤로 꼬리가 자라고**,
+#   1→0 으로 줄일 때 **꼬리부터 지워진다.** 머리가 먼저 지워지면 거꾸로 보인다 — 그것이 사용자 지적이었다.
+#
+# 【그래서 1.5m 다 — 3.0m 는 구울 수 없다】 머리가 x=8 이고 몸이 −X 로 3.0m(48px) 뻗으면 꼬리는 x=−40.
+#   MC 모델 원소 좌표의 한계는 **[-16, 32]** 다 (원점에서 −X 로 24px = **1.5m** 가 최대).
+#   size[0] 은 **상쇄되는 정규화 상수**이므로(모델X == size[0] 이기만 하면 결과가 같다) 1.5 로 굽고
+#   등록부에 1.5 를 청구한다 — 인게임 길이는 한 치도 안 변한다 (길이는 판정의 range 가 정한다).
+#
+# 【무색·반투명】 색을 넣지 않는다. 격의 사다리는 **코드가 밝기(setBrightness)·굵기(thick)로** 올린다
+#   (외공기 0.55 → 심검 2.10). 텍스처가 하는 일은 **형태와 알파**뿐이다 — 꼬리로 갈수록 옅어져
+#   "굽어 사라지는" 인상을 만든다. 사라지는 인상의 절반은 그 그라데이션이 만든다.
+SLASH_W, SLASH_H = 64, 16          # 가로로 긴 획 — 꼬리의 테이퍼에 해상도를 준다 (좌=꼬리 · 우=머리)
+
+
+def _slash_blank(w, h):
+    return [[T] * w for _ in range(h)]
+
+
+def _qi_px(v, a):
+    """무색(無色) 4단 + 알파 — 채도 0. 격은 코드가 올린다 (수묵 규약)."""
+    s = (170, 206, 232, 255)
+    c = s[max(0, min(3, int(v * 4)))]
+    return (c, c, c, max(0, min(255, int(a))))
+
+
+def slash_rows(w, h, thick, bow, head_soft=1.0):
+    """참격선 한 장 — **오른쪽이 머리(원점)**, 왼쪽이 꼬리.
+    thick(t): 걸음 t(0=꼬리 … 1=머리)의 반두께 · bow: 중심선이 휘는 깊이 (호는 굽고 선은 곧다)."""
+    g = _slash_blank(w, h)
+    for x in range(w):
+        t = x / (w - 1)
+        th = thick(t)
+        if th <= 0.35:
+            continue
+        yc = h / 2 - bow * math.sin(math.pi * t) * head_soft
+        for y in range(h):
+            d = abs(y + 0.5 - yc) / th
+            if d > 1.0:
+                continue
+            core = 1.0 - d ** 1.4                       # 속이 밝고 가장자리가 스민다
+            # 꼬리로 갈수록 **알파가 죽는다** — 굽어 사라지는 인상의 절반이 여기서 난다
+            a = 236 * (t ** 0.75) * (0.30 + 0.70 * core)
+            g[y][x] = _qi_px(core, a)
+    return g
+
+
+def sheath_rows():
+    """날의 기 — 병기의 날을 따라 흐르는 빛. 가운데가 굵고 양 끝으로 스민다 (날을 감싼다).
+    **복제가 아니다**: 손에 든 검 위에 겹쳐 흐르는 기다."""
+    w, h = SLASH_W, SLASH_H
+    g = _slash_blank(w, h)
+    for x in range(w):
+        t = x / (w - 1)
+        th = (h / 2 - 1.2) * math.sin(math.pi * t) ** 0.45      # 날의 허리가 가장 굵다
+        for y in range(h):
+            d = abs(y + 0.5 - h / 2) / max(0.6, th)
+            if d > 1.0:
+                continue
+            core = 1.0 - d ** 1.8
+            g[y][x] = _qi_px(core, 214 * (0.35 + 0.65 * core))
+    return g
+
+
+def slash_ring_rows():
+    """참격선(원) — 몸을 훑고 지나간 고리. XZ 평면에 눕는다 (위·아래 면이 그림을 문다)."""
+    n = 32
+    g = [[T] * n for _ in range(n)]
+    for y in range(n):
+        for x in range(n):
+            d = math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2)
+            band = 1.0 - abs(d - 12.5) / 3.2                    # 반지름 12.5 · 두께 ±3.2
+            if band <= 0:
+                continue
+            # 한쪽이 짙고 반대쪽이 옅다 — 고리도 **지나간 자리**다 (시작과 끝이 있다)
+            ang = (math.atan2(y + 0.5 - n / 2, x + 0.5 - n / 2) + math.pi) / (2 * math.pi)
+            g[y][x] = _qi_px(band, 232 * min(1.0, band * 1.3) * (0.35 + 0.65 * ang))
+    return g
+
+
 def qi_textures():
-    """획 9장 — 그림은 알파가 판다 (형체는 판때기, 모양은 이 PNG)."""
+    """획 11장 — 그림은 알파가 판다 (형체는 판때기, 모양은 이 PNG)."""
     tex = {}
 
-    g = _qi_blank()                                   # 검기 — 초승달 한 획. 안쪽이 두껍고 끝이 가늘다
-    _stroke(g, lambda t: 5.5 * math.sin(math.pi * t) ** 0.7, bow=6.0)
-    tex["qi/blade_arc"] = g
-
-    g = _qi_blank()                                   # 강기 — 같은 형태를 **눌러** 두껍게 (뭉개지지 않는다)
-    _stroke(g, lambda t: 9.5 * math.sin(math.pi * t) ** 0.55, bow=5.0)
-    tex["qi/blade_heavy"] = g
+    # 참격선 3종 — 오른쪽이 머리(굵다) · 왼쪽이 꼬리(가늘고 옅다)
+    tex["qi/slash_arc"] = slash_rows(SLASH_W, SLASH_H,
+                                     lambda t: 6.4 * (t ** 0.85), bow=3.4)   # 호 — 굽는다
+    tex["qi/slash_line"] = slash_rows(SLASH_W, SLASH_H,
+                                      lambda t: 4.2 * (t ** 0.75), bow=0.0)  # 선 — 곧다
+    tex["qi/slash_ring"] = slash_ring_rows()
+    tex["qi/blade_sheath"] = sheath_rows()
 
     g = _qi_blank()                                   # 검기 비(飛) — 앞이 뾰족하고 뒤로 꼬리가 늘어진다
     _stroke(g, lambda t: 7.0 * (t ** 1.3) * ((1 - t) ** 0.55) / 0.30, bow=0.0, ybase=QI_TEX / 2)
@@ -6136,10 +6224,58 @@ def _lance():
             {"from": [12, 5.0, 5.0], "to": [16, 11.0, 11.0], "faces": f()}]     # 앞 — 뚫는 끝
 
 
-# 획 9종 = (키, 텍스처, 기하). '길이축 +X' 는 판의 가로(u)가 이미 X 다 (텍스처가 그렇게 그려졌다).
+def _slash(length_m, width_m, thick_m=0.04):
+    """참격선 한 자루 — **머리가 원점(8,8,8)** 이고 몸이 −X 로 늘어진다.
+
+    scale 이 원점을 중심으로 먹으므로, 머리를 그 점에 두어야 꼬리부터 지워진다 (만화의 검격).
+    참격선은 scale 에 size 가 곱해지지 않는다 ⇒ **모델이 제 미터 치수로 구워져야** 한다
+    (모델 X(m) == 등록부 size[0]). 1px = 1/16 m."""
+    lx = length_m * 16.0
+    if 8.0 - lx < -16.0:                     # MC 원소 좌표 한계 — 짐작하지 말고 굽기 전에 막는다
+        raise ValueError(f"참격선 {length_m}m: 꼬리가 x={8 - lx:.0f} — 한계 -16 을 넘는다 "
+                         f"(원점=머리 계약에서 최대는 1.5m). 등록부의 size[0] 을 낮춰야 한다")
+    hy, hz = width_m * 8.0, thick_m * 8.0
+    faces = {f: {"texture": "#0", "uv": [0, 0, 16, 16] if f in ("north", "south") else _HIDE}
+             for f in ("north", "south", "east", "west", "up", "down")}
+    return [{"from": [8.0 - lx, 8.0 - hy, 8.0 - hz],   # 꼬리 (−X) … 머리(원점)
+             "to": [8.0, 8.0 + hy, 8.0 + hz], "faces": faces}]
+
+
+def _slash_ring(dia_m, width_m):
+    """참격선(원) — 몸을 훑고 지나간 고리. **원점 = 고리의 중심** (몸이 그 자리에 선다).
+    XZ 평면에 눕고 위·아래 면이 그림을 문다. scale = {lenScale×2, thick, lenScale×2}."""
+    r, hy = dia_m * 8.0, width_m * 8.0
+    faces = {f: {"texture": "#0", "uv": [0, 0, 16, 16] if f in ("up", "down") else _HIDE}
+             for f in ("north", "south", "east", "west", "up", "down")}
+    return [{"from": [8.0 - r, 8.0 - hy, 8.0 - r],
+             "to": [8.0 + r, 8.0 + hy, 8.0 + r], "faces": faces}]
+
+
+def _sheath():
+    """날의 기 — 손에 든 병기의 날에 **겹쳐** 흐른다 (복제가 아니다).
+    sizeUnit 경로다 (scale = size × 격의 배율) ⇒ **단위 상자를 가득 채운다**.
+    판 두 장을 교차시켜 어느 각도에서 보아도 날이 빛나 보이게 한다 (바닐라 화초의 문법)."""
+    out = []
+    for frm, to, show in (([0, 0, 7.4], [16, 16, 8.6], ("north", "south")),
+                          ([0, 7.4, 0], [16, 8.6, 16], ("up", "down"))):
+        out.append({"from": frm, "to": to,
+                    "faces": {f: {"texture": "#0",
+                                  "uv": [0, 0, 16, 16] if f in show else _HIDE}
+                              for f in ("north", "south", "east", "west", "up", "down")}})
+    return out
+
+
+# 획 11종 = (키, 기하).
+#   · 참격선 3종 — 원점이 **머리**다 (−X 로 늘어진다). 모델이 제 미터 치수로 구워진다.
+#   · 그 밖 8종 — 원점이 중심이고 **단위 상자**를 채운다 (scale = size).
+#   · blade_arc · blade_heavy 는 **버렸다** — 등록부(display.models)에서 사라졌다.
+#     "검을 복제해 날리는" 방식을 폐기하고 참격선으로 갔기 때문이다. 안 쓰는 키는 굽지 않는다.
 QI_MODELS = {
-    "qi/blade_arc": _plate("z"), "qi/blade_heavy": _plate("z"), "qi/bolt_edge": _plate("z"),
-    "qi/bolt_lance": _lance(), "qi/guard_shard": _plate("z"),
+    "qi/slash_arc": _slash(1.5, 0.55),      # ★ size[0] 청구: 3.0 → 1.5 (아래 주석 참조)
+    "qi/slash_line": _slash(1.5, 0.35),     # ★ 동일
+    "qi/slash_ring": _slash_ring(2.0, 0.35),
+    "qi/blade_sheath": _sheath(),
+    "qi/bolt_edge": _plate("z"), "qi/bolt_lance": _lance(), "qi/guard_shard": _plate("z"),
     "ult/plum_bloom": _cross(), "ult/taegeuk_disc": _plate("z"),
     "ult/emperor_edge": _plate("z"),      # 길이축이 Y 다 (4.0m 짜리 칼이 떨어진다)
     "ult/blood_tide": _plate("y"),        # 바닥을 훑는 파문 — 위/아래 면이 그림을 문다

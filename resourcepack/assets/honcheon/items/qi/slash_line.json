@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "honcheon:item/qi/blade_heavy"
+    "model": "honcheon:item/qi/slash_line"
   }
 }

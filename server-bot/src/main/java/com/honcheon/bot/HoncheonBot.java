@@ -90,6 +90,14 @@ public final class HoncheonBot {
                                                 OptionType.INTEGER, "인출", "찾을 금액 (문 — 수수료 별도)", false),
                                         new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.USER, "상속인", "내가 죽으면 예치금을 받을 사람", false)),
+                        // ★ 신원 접합 — 마크에서 `/혼천 접속` 으로 받은 코드를 여기서 확정한다.
+                        //   확정이 **인증된 자리**(디스코드)에 있어야 남의 캐릭터를 훔칠 수 없다
+                        //   (world_bridge.yml identity.direction: mvt_issues_discord_confirms)
+                        new SubcommandData("접속", "마크의 몸을 이 이름에 잇는다 — 마크에서 받은 코드로")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                        OptionType.STRING, "코드",
+                                        "마크에서 `/혼천 접속` 을 쳐서 받은 6자리 코드 (10분간 유효)", true)),
+                        new SubcommandData("접속해제", "마크의 몸과 이 이름을 끊는다 (혈채는 남는다)"),
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                         new SubcommandData("사선", "플레이어에게 사선을 긋는다 — 죽음 검증용 (서버 관리자)")

@@ -214,7 +214,10 @@ final class TerrainAudit {
     private static void cliffs(List<String> out, List<String> violations,
                                World world, int cx, int cy, int cz, int r, boolean mountain) {
         out.add(HEAD + "③ 경계 — 부지 가장자리가 절벽인가" + (mountain ? " (산의 잣대)" : ""));
-        double limit = mountain ? 0.30 : CLIFF_MAX;   // 산은 원래 가파르다 — 벼랑을 금할 수는 없다
+        // 산은 이제 **의도적으로 벼랑**이다 (사용자: "완만하게 안 만들어도 됨. 길 하나 내면 됨").
+        //   0.30 → 0.60. 다만 **없애지는 않는다**: "우리가 낸 길은 걸을 수 있어야 한다"는 여전히 참이고,
+        //   그것은 ④ 연결성과 지역 검수 ① 도달성이 지킨다 (등반로 최대 단차 1칸).
+        double limit = mountain ? 0.60 : CLIFF_MAX;
         int steep = 0;
         int sampled = 0;
         int worst = 0;

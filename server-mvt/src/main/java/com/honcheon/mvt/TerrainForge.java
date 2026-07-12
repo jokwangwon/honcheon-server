@@ -1392,7 +1392,10 @@ final class TerrainForge {
                 }
                 // **지면 위만** 걷는다. 아래로 내려가면 광석(자연이지만 NATURAL 목록에 없다)을 파내
                 //   지하에 구멍을 낸다 — 그것은 조성이 아니라 도굴이다.
-                for (int y = cy + 60; y >= cy + 1; y--) {
+                // 훑는 천장은 **실제 지표**로 묶는다 — 부지 반경이 100을 넘으면서 (봉우리 산문이 들에 서므로)
+                //   고정 천장(cy+60)으로 훑으면 빈 하늘을 수백만 칸 읽는다. 메인 스레드가 그만큼 멈춘다.
+                int ceiling = Math.min(cy + 60, world.getHighestBlockYAt(x, z) + 1);
+                for (int y = ceiling; y >= cy + 1; y--) {
                     Block b = world.getBlockAt(x, y, z);
                     Material m = b.getType();
                     if (m.isAir() || NATURAL.contains(m) || m.name().endsWith("_ORE")) {

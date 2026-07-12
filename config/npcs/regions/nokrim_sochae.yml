@@ -1,0 +1,377 @@
+# 녹림 소채 (북산) — 산채의 인구
+# 척추: config/npcs/region_populace.yml   ·   설계: docs/design/region_populace.md
+# 부지: config/world_map.yml places.nokrim_sochae (pos -5700, -19900 · faction noklim · tier poor)
+# 집:  RemoteBuilder.Archetype.산채 (목책 R=22 · 채문 · 망루 둘 · 막사 셋 · 마당의 모닥불)
+#
+# ★ docs/design/world_map.md 가 적어 둔 빈칸을 여기서 메운다:
+#   "녹림 소채의 **채주가 등록부에 없다**. 갈호는 '북쪽 산길 도적 두목(녹림 방계)'이지 산채의 주인이 아니다.
+#    채주를 등재하면 조성기가 그 자리에 세운다 — faction_entry_routes 의 direct_approach
+#    ('산채로 걸어 올라가 받아달라고 한다')가 말을 걸 상대가 그때 생긴다."
+#   → 채주는 **도백(屠伯)** 이다. 갈호는 그의 아래다 (아래 relations 참조).
+#
+# ★ 겹치지 않는다: 북쪽 산길의 도적(north_road_bandit·갈호)은 HuntingGrounds 의 것이다.
+#   여기 사람은 전부 새 id(sochae_*)이고, 「북쪽 산길」 구역이 아니라 「녹림 소채 (북산)」 구역에 선다.
+#   같은 도적이 두 번 서지 않는다 — **다른 도적이 다른 산에 선다.**
+
+version: 1
+region: nokrim_sochae
+name: "녹림 소채 (북산)"
+zone: "녹림 소채 (북산)"          # RemoteBuilder 가 등록하는 Zone 이름 (= world_map places.name)
+archetype: 산채
+faction: noklim
+
+performance:
+  max_active: 12                 # 등록 14인 ≥ 상한 — 전원이 동시에 서지는 않는다
+  activate_radius: 48
+  deactivate_radius: 76
+
+# ─── 태세 — 걸어 올라온 자를 어떻게 맞는가 ───
+# faction_entry_routes.noklim_entry 의 게이트를 그대로 눈금으로 쓴다:
+#   눈감아주기(favor 4) → 산채가 당신을 안다  ·  상행_참여(8) → 한패다  ·  산채_등재(13) → 형제다
+# ★ 관군 favor 보유자는 **즉시 살해 위험** — 등록부 원문: "녹림은 포두를 살려두지 않는다"
+#   (noklim_entry.direct_approach.branches.관군_favor_보유 = 즉시_살해_위험)
+stance:
+  default: 적대                   # 낯선 자가 목책 안으로 걸어 들어오면 도적이 달려든다. 그것이 산채다
+  rules:
+    - when: { favor: { faction: gwan_gun, min: 8 } }
+      stance: 적대
+      why: "noklim_entry 관군_favor_보유 = 즉시_살해_위험 — 포두는 살려두지 않는다"
+      line: "관의 냄새가 난다. …죽여."
+    - when: { favor: { faction: noklim, min: 13 } }
+      stance: 우호
+      why: "noklim_entry gates.산채_등재 (favor 13) — 형제와 몫이 있을 뿐이다"
+      line: "왔는가. 불 옆에 앉게."
+    - when: { favor: { faction: noklim, min: 8 } }
+      stance: 중립
+      why: "noklim_entry gates.상행_참여 (favor 8) — 한 번 같이 뛴 사이다"
+      line: "…들어와라. 채주가 부르면 가고."
+    - when: { favor: { faction: noklim, min: 4 } }
+      stance: 경계
+      why: "noklim_entry gates.눈감아주기 (favor 4) — 아는 얼굴이지만 아직 우리 사람은 아니다"
+      line: "무슨 볼일이냐. 여기까지 올라온 이유가 있겠지."
+
+# ─── 자리 — 국소 좌표 (f = 채문 쪽, l = 좌우). 배치가 회전하면 사람도 함께 돈다 ───
+# 근거 좌표는 전부 RemoteBuilder.stockade / yard / chiefHall / watchtower 의 국소 상수다.
+places:
+  마당:        { origin: 중심, f: 0,   l: 0,   radius: 4 }   # 모닥불 (cx, cz) — 나눠 먹는 자리
+  채문:        { origin: 중심, f: 20,  l: 0,   radius: 3 }   # 채문 개구는 f=22 — 그 안쪽에 선다
+  채문_밖:     { origin: 중심, f: 23,  l: 0,   radius: 2 }   # 문 밖 진입로 (구역 경계 ±24 안)
+  두목막사:    { origin: 중심, f: -15, l: 0,   radius: 3 }   # chiefHall — f∈[-19,-11], l∈[-6,6]
+  두목막사_앞: { origin: 중심, f: -9,  l: 0,   radius: 2 }   # 문 맞은편에서 마당을 내려다보는 자리
+  좌막사:      { origin: 중심, f: -1,  l: -15, radius: 3 }   # barrackLocal(-4,-19,7,9)
+  우막사:      { origin: 중심, f: -1,  l: 15,  radius: 3 }   # barrackLocal(-4, 11,7,9)
+  망루_좌:     { origin: 중심, f: -14, l: -17, radius: 3 }   # watchtower(-13,-15) 발치
+  망루_우:     { origin: 중심, f: -14, l: 16,  radius: 3 }   # watchtower(-13, 14) 발치
+  국솥:        { origin: 중심, f: 2,   l: -6,  radius: 2 }   # 가마솥 — 밥 짓는 자리
+  술판:        { origin: 중심, f: -2,  l: -6,  radius: 3 }   # 술통 둘 (밤에 여기가 시끄럽다)
+  훈련_말뚝:   { origin: 중심, f: 8,   l: -6,  radius: 4 }   # 목인장 셋 (f=8, l=-9/-6/-3)
+  장작더미:    { origin: 중심, f: 6,   l: 7,   radius: 2 }
+  짐수레:      { origin: 중심, f: -8,  l: -9,  radius: 3 }   # 노획물을 싣는다 — 말이 매인 자리
+  포로_우리:   { origin: 중심, f: -7,  l: -14, radius: 2 }   # 좌막사 뒤. 아무도 안 보는 구석
+
+# ─── 일과 — 산채의 하루는 **망보기 · 훈련 · 술판**이다 ───
+# ★ 문파의 하루(수련·청소·강론)와 다르다. 그 차이가 이 집의 성격이다:
+#   도적은 지키는 자가 아니라 **보는 자**다 (망루). 그리고 밤에 **나눠 마신다** (모닥불).
+routines:
+  채주:     { 새벽: 두목막사,  아침: 마당,       낮: 두목막사,  해질녘: 마당,      밤: 술판 }
+  부두목:   { 새벽: 마당,      아침: 채문,       낮: 훈련_말뚝, 해질녘: 마당,      밤: 술판 }
+  졸개_갑:  { 새벽: 좌막사,    아침: 국솥,       낮: 훈련_말뚝, 해질녘: 술판,      밤: 좌막사 }
+  졸개_을:  { 새벽: 채문,      아침: 훈련_말뚝,  낮: 채문,      해질녘: 마당,      밤: 술판 }
+  졸개_병:  { 새벽: 우막사,    아침: 마당,       낮: 장작더미,  해질녘: 술판,      밤: 우막사 }
+  망꾼_좌:  { 새벽: 망루_좌,   아침: 망루_좌,    낮: 망루_좌,   해질녘: 망루_좌,   밤: 망루_좌 }
+  망꾼_우:  { 새벽: 망루_우,   아침: 망루_우,    낮: 망루_우,   해질녘: 망루_우,   밤: 망루_우 }
+  살림:     { 새벽: 국솥,      아침: 국솥,       낮: 장작더미,  해질녘: 국솥,      밤: 국솥 }
+  말:       { 새벽: 짐수레,    아침: 짐수레,     낮: 채문_밖,   해질녘: 짐수레,    밤: 우막사 }
+  포로:     { 새벽: 포로_우리, 아침: 포로_우리,  낮: 포로_우리, 해질녘: 포로_우리, 밤: 포로_우리 }
+
+# ─── 사람 (14인) ───
+# body.entity — ZOMBIE = 병기가 손에 보이고 근접 AI 가 도는 사람의 몸 (HuntingGrounds 와 같은 징발 근거).
+#               VILLAGER = 싸우지 않는 사람 (살림·포로). 무장하지 않은 자는 적대해도 도망친다.
+# combat      — 이 절이 있는 사람만 적대할 수 있다 (region_populace.yml stance.armed_only).
+# skills      — config/skills.yml 의 등록 id 만 쓴다. **세력이 무공의 주인이다**:
+#               녹림 = 산도십팔로(sando_sippallo) · 흑살도법(heuksal_dobeop) — 그 둘뿐이다.
+people:
+
+  # ── 채주 — 등록부의 빈칸이었던 자리 ──
+  sochae_chaeju:
+    name: "도백"
+    age: 44
+    job: 채주(寨主)
+    rank: 채주
+    realm: 일류                   # 갈호(이류)의 위. 소채의 주인은 산길 두목보다 높다
+    home: 두목막사
+    routine: 채주
+    voice: 채주
+    disposition: "말이 적다. 사람을 볼 때 병기부터 본다 — 그가 사람을 재는 눈금은 그것뿐이다.
+      '나는 관을 미워하지 않는다. 다만 관이 나를 미워한다'"
+    body: { entity: ZOMBIE, durability: 26 }
+    combat:
+      loadout: { 계열: 도, 등급: 정련 }
+      skills: [sando_sippallo, heuksal_dobeop]
+      qi_grade: 발경               # 일류 — 내력 1 (qi_manifestation)
+      morale: { start: 9, break: 1 }
+    lines:
+      적대: ["산을 잘못 골랐다."]
+      경계: ["뭘 보고 여기까지 올라왔나."]
+      중립: ["몫은 일한 만큼이다. 그 이상은 없다."]
+      우호: ["앉게. 오늘은 고기가 있다."]
+
+  sochae_budu:
+    name: "곰치"
+    age: 37
+    job: 부두목
+    rank: 부두목
+    realm: 이류
+    home: 좌막사
+    routine: 부두목
+    voice: 도적
+    disposition: "채주 앞에서만 조용하다. 졸개들에겐 손이 먼저 나간다 — 그래서 아무도 그를 좋아하지 않는다"
+    body: { entity: ZOMBIE, durability: 22 }
+    combat:
+      loadout: { 계열: 도, 등급: 범철 }
+      skills: [sando_sippallo]
+      morale: { start: 7, break: 2 }
+    lines:
+      적대: ["칼 뽑아라. 살려는 보낼 생각 없다."]
+      경계: ["채주께 볼일이면 무기부터 내려놔라."]
+      중립: ["채주는 안에 계신다. 함부로 굴지 마라."]
+      우호: ["왔나. 오늘 몫은 챙겨 뒀다."]
+
+  # ── 졸개 여섯 — 이름이 있다. 무명이 아니다 (그들도 산에 온 이유가 있다) ──
+  sochae_wanggu:
+    name: "왕구"
+    age: 28
+    job: 졸개
+    rank: 졸개
+    realm: 삼류
+    home: 좌막사
+    routine: 졸개_갑
+    voice: 도적
+    disposition: "밭을 잃고 산에 올랐다 — 그 밭이 누구 손에 넘어갔는지 아직도 셈한다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [sando_sippallo], morale: { start: 5, break: 3 } }
+    lines:
+      적대: ["돈이냐 목숨이냐."]
+      경계: ["…뭘 봐."]
+      중립: ["밥때는 지났다."]
+      우호: ["형님, 오셨소."]
+  sochae_samdol:
+    name: "삼돌"
+    age: 24
+    job: 졸개
+    rank: 졸개
+    realm: 삼류
+    home: 좌막사
+    routine: 졸개_을
+    voice: 도적
+    disposition: "가장 어리고 가장 크게 떠든다 — 사람을 아직 베어 보지 못했다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [sando_sippallo], morale: { start: 4, break: 3 } }
+    lines:
+      적대: ["형님! 여기 하나 올라왔소!"]
+      경계: ["여긴 왜 왔소."]
+      중립: ["…나는 아무것도 안 봤소."]
+      우호: ["오늘 술은 형님이 사시오."]
+  sochae_mogae:
+    name: "모개"
+    age: 31
+    job: 졸개
+    rank: 졸개
+    realm: 삼류
+    home: 우막사
+    routine: 졸개_병
+    voice: 도적
+    disposition: "장작을 팬다. 산에서 유일하게 성실한 자 — 그래서 아무도 그를 셈하지 않는다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 부, 등급: 범철 }, skills: [], morale: { start: 5, break: 3 } }
+    lines:
+      적대: ["미안하오. 나도 먹고살아야 하오."]
+      경계: ["길이 아니오. 돌아가시오."]
+      중립: ["장작 팰 사람이 없소."]
+      우호: ["불은 내가 지피오."]
+  sochae_teolbo:
+    name: "털보"
+    age: 35
+    job: 졸개
+    rank: 졸개
+    realm: 삼류
+    home: 좌막사
+    routine: 졸개_갑
+    voice: 도적
+    disposition: "표국 짐을 털 때 가장 즐거워한다 — 표사에게 한 번 크게 당한 뒤로"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [sando_sippallo], morale: { start: 5, break: 3 } }
+    lines:
+      적대: ["표국 놈이냐?"]
+      경계: ["표국 냄새가 나는군."]
+      중립: ["수레는 안 지나갔소."]
+      우호: ["다음 상행은 언제요?"]
+  sochae_jjakgwi:
+    name: "짝귀"
+    age: 26
+    job: 졸개
+    rank: 졸개
+    realm: 삼류
+    home: 우막사
+    routine: 졸개_을
+    voice: 도적
+    disposition: "귀 하나가 없다. 그 이야기를 물으면 웃고, 두 번 물으면 칼을 뽑는다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 단검, 등급: 범철 }, skills: [], morale: { start: 5, break: 3 } }
+    lines:
+      적대: ["조용히 끝내자."]
+      경계: ["귀는 묻지 마라."]
+      중립: ["…"]
+      우호: ["채주가 부르면 가라."]
+  sochae_aegku:
+    name: "애꾸"
+    age: 40
+    job: 졸개
+    rank: 졸개
+    realm: 삼류
+    home: 우막사
+    routine: 졸개_병
+    voice: 도적
+    disposition: "산에서 가장 오래 살아남았다 — 도망치는 때를 아는 자만 늙는다"
+    body: { entity: ZOMBIE, durability: 18 }
+    combat: { loadout: { 계열: 도, 등급: 범철 }, skills: [sando_sippallo], morale: { start: 6, break: 4 } }
+    lines:
+      적대: ["…이건 아니지."]
+      경계: ["오래 안 살고 싶으면 들어오시오."]
+      중립: ["산은 사람을 안 가리오."]
+      우호: ["오래 살려면 나를 보시오."]
+
+  # ── 망꾼 둘 — 도적은 지키는 자가 아니라 **보는 자**다 ──
+  sochae_jwinuni:
+    name: "쥐눈이"
+    age: 19
+    job: 망꾼 (망루)
+    rank: 망꾼
+    realm: 삼류
+    home: 망루_좌
+    routine: 망꾼_좌
+    voice: 도적
+    disposition: "눈이 밝다. 그것 하나로 산에 얹혀 산다 — 칼은 아직 무겁다"
+    body: { entity: ZOMBIE, durability: 16 }
+    combat: { loadout: { 계열: 단검, 등급: 범철 }, skills: [], morale: { start: 3, break: 4 } }
+    lines:
+      적대: ["사람이다! 사람이 올라온다!"]
+      경계: ["멈춰라! 거기 서라!"]
+      중립: ["…지나가시오."]
+      우호: ["오시는 걸 아까부터 봤소."]
+  sochae_kkachi:
+    name: "까치"
+    age: 22
+    job: 망꾼 (망루)
+    rank: 망꾼
+    realm: 삼류
+    home: 망루_우
+    routine: 망꾼_우
+    voice: 도적
+    disposition: "종일 떠든다 — 망루 위에서 혼잣말을 한다. 그래서 아무도 그 자리를 탐내지 않는다"
+    body: { entity: ZOMBIE, durability: 16 }
+    combat: { loadout: { 계열: 단검, 등급: 범철 }, skills: [], morale: { start: 3, break: 4 } }
+    lines:
+      적대: ["채문 닫아! 닫으라고!"]
+      경계: ["누구요! 이름을 대시오!"]
+      중립: ["오늘은 조용하오."]
+      우호: ["관도 쪽은 조용하오. 걱정 마시오."]
+
+  # ── 산채의 살림 — 싸우지 않는 사람들 (산채도 밥을 먹는다) ──
+  sochae_sundeok:
+    name: "순덕"
+    age: 52
+    job: 밥 짓는 아낙
+    rank: 살림
+    realm: 범인
+    home: 국솥
+    routine: 살림
+    voice: 살림
+    disposition: "십 년 전 잡혀 왔고, 이제는 내려갈 데가 없다.
+      ★ 그 사실이 이 산채에서 가장 무서운 이야기다 — 아무도 그녀를 묶어 두지 않는다"
+    body: { entity: VILLAGER, profession: NONE }
+    lines:
+      적대: ["아이고… 나는 아무것도 모르오."]
+      경계: ["국이 식소. 볼일 보고 가시오."]
+      중립: ["한 그릇 뜨겠소?"]
+      우호: ["많이 드시오. 산에서 굶으면 못 견디오."]
+  sochae_dolgeum:
+    name: "돌금"
+    age: 33
+    job: 말 보는 자
+    rank: 살림
+    realm: 범인
+    home: 우막사
+    routine: 말
+    voice: 살림
+    disposition: "말을 사람보다 아낀다. 노획한 수레의 말이 어느 표국 것인지 다 안다 — 말하지 않을 뿐"
+    body: { entity: VILLAGER, profession: LEATHERWORKER }
+    lines:
+      적대: ["나는 말만 보오! 나는 아무것도 안 했소!"]
+      경계: ["말 근처엔 오지 마시오."]
+      중립: ["이 말은 원래 표국 것이오. …그런 걸 물으면 안 되오."]
+      우호: ["말은 산길을 못 오르오. 걸어가시오."]
+
+  # ── 포로 둘 — 산채가 무엇으로 먹고사는지는 여기 묶여 있다 ──
+  sochae_hongmun:
+    name: "홍문"
+    age: 29
+    job: 포로 (상단 서기)
+    rank: 포로
+    realm: 범인
+    home: 포로_우리
+    routine: 포로
+    voice: 포로
+    disposition: "몸값을 기다린다. 열이레째다 — 상단은 서기 하나에 그만큼을 내지 않는다는 걸,
+      그도 알고 산채도 안다"
+    body: { entity: VILLAGER, profession: CARTOGRAPHER }
+    lines:
+      적대: ["나… 나는 상단 서기요! 살려 주시오!"]
+      경계: ["…나리, 관에 좀 알려 주시오. 제발."]
+      중립: ["나를 데리고 나가 주시오. 삯은 상단이 낼 것이오. …아마도."]
+      우호: ["당신도… 이 사람들 편이오?"]
+  sochae_deokgu:
+    name: "덕구"
+    age: 41
+    job: 포로 (나무꾼)
+    rank: 포로
+    realm: 범인
+    home: 포로_우리
+    routine: 포로
+    voice: 포로
+    disposition: "나무하러 올라왔다가 붙잡혔다. 몸값이 없다 — 그래서 장작을 팬다.
+      ★ 포로와 졸개의 경계는 이 산에서 그리 두껍지 않다"
+    body: { entity: VILLAGER, profession: NONE }
+    lines:
+      적대: ["나는 나무꾼이오! 나무꾼이란 말이오!"]
+      경계: ["…아무 말도 안 했소."]
+      중립: ["집에 애가 셋이오."]
+      우호: ["나를 데려가 주시오. 도끼질은 할 줄 아오."]
+
+# ─── 관계 — 이 산이 어떻게 묶여 있는가 ───
+# ★ 갈호(cheongha_npcs.yml — 북쪽 산길 도적 두목)는 **도백의 아래**다.
+#   등록부 원문: "관군이 움직일 낌새면 **산채로 물러난다**" — 그가 물러나는 산채가 여기다.
+#   층을 건너는 줄이다 (청하현 등록부 ↔ 지역 등록부). 무명층의 석근→야철수 와 같은 문법.
+relations:
+  - { person: sochae_budu,   type: 주인,  kin: sochae_chaeju }
+  - { person: galho,         type: 주인,  kin: sochae_chaeju, cross_registry: cheongha_npcs }
+  - { person: sochae_wanggu, type: 동료,  kin: sochae_samdol }
+  - { person: sochae_samdol, type: 동료,  kin: sochae_wanggu }
+  - { person: sochae_deokgu, type: 동료,  kin: sochae_hongmun }
+  - { person: sochae_sundeok, type: 주인, kin: sochae_chaeju }
+
+# ─── 소문 반응 — 산채도 소문을 듣는다 ───
+# 청하현 무명이 "도적 소문"에 산길을 피할 때, 산채는 **관군을 경계한다** (같은 소문의 반대편).
+reactions:
+  도적_소문:
+    note: "우리 얘기가 산 아래까지 내려갔다 — 망을 두 배로 세운다"
+    reinforce: [망루_좌, 망루_우]     # 이 자리의 사람이 늘어난다 (졸개가 망루로 간다)
+    lines:
+      - "산 아래가 시끄럽다지. 관이 움직일지도 모른다."
+      - "채주가 당분간 상행을 쉬라 하셨다."
+  치안_소문:
+    note: "치안이 회복되면 토벌대가 온다"
+    avoid: [채문_밖]
+    fallback: 마당
+    lines:
+      - "관도에 관병이 늘었다더군. …좋은 소식은 아니지."

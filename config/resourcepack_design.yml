@@ -258,19 +258,33 @@ model_channels:
       (검수 축 ⑩도 4등급 27쌍 → 5등급 36쌍으로 넓혔다 — 재는 자가 없으면 규약은 장식이다.)
 
   무공의_획:
-    count: 9                        # config/skill_motion.yml display.models 의 청구서 (use_held 2종은 요구 없음)
-    path: "assets/honcheon/models/item/qi|ult/<key>.json + assets/honcheon/textures/qi|ult/<key>.png (32x32)"
-    keys: [qi/blade_arc, qi/blade_heavy, qi/bolt_edge, qi/bolt_lance, qi/guard_shard,
+    count: 11                       # config/skill_motion.yml display.models 의 청구서 (use_held 2종은 요구 없음)
+    path: "assets/honcheon/models/item/qi|ult/<key>.json + assets/honcheon/textures/qi|ult/<key>.png"
+    keys: [qi/slash_arc, qi/slash_line, qi/slash_ring, qi/blade_sheath,
+           qi/bolt_edge, qi/bolt_lance, qi/guard_shard,
            ult/plum_bloom, ult/taegeuk_disc, ult/emperor_edge, ult/blood_tide]
-    치수_계약: |
-      엔진이 size 를 Transformation.scale 로 **그대로** 곱한다 ⇒ 모델은 1×1×1 단위 상자를 **가득 채운다**.
-      원소가 z 를 1px 만 차지하면 최종 두께 = 0.04m × 1/16 = 0.0025m — 보이지 않는다.
-      그래서 획의 원소는 0..16 을 채우고 **모양은 텍스처의 알파가 판다**
-      (두께 0.04m 짜리 판에 기하를 새기는 것은 낭비다 — 어차피 종잇장의 옆구리다).
-      예외 둘: bolt_lance 는 **말뚝**(2.2×0.7×0.7 — 덩이라서 기하가 형체를 만든다) ·
-               plum_bloom 은 **교차한 판 두 장**(바닐라 화초의 문법 — 어느 각도에서도 꽃이 핀다).
-    채색: "수묵 4단(속이 밝고 끝이 스민다). **유일한 예외는 혈해만리의 혈조(血潮)** — 예외 자체가 정보다"
-    texture_경로_주의: "textures/item/ **아래가 아니다**. 축 ⑥(외곽선 폐합)은 아이콘의 규율이지 반투명 획의 규율이 아니다 — 스민 끝을 먹으로 두르면 그건 획이 아니라 스티커다"
+    폐기: "qi/blade_arc · qi/blade_heavy — 등록부에서 사라졌다 (검을 복제해 날리는 방식을 폐기하고 참격선으로 갔다). 안 쓰는 키는 굽지 않는다"
+    ★scale_규약_두_갈래: |
+      **이것을 틀리면 획의 길이가 절반이 된다.** SkillDisplay 에 경로가 둘이다:
+        · 투사·지속·고리 (sizeUnit)  → scale = size          ⇒ 모델은 **단위 상자(16px)** 를 채운다
+        · 참격선          (slash)    → scale = {length/size[0], thick, thick}
+          ← **size 를 곱하지 않는다.** ⇒ 참격선 모델은 **제 실제 미터 치수**로 구워야 하고,
+            그 치수가 곧 size 여야 한다 (최종 길이 = 모델X × length/size[0] = length ⟺ 모델X == size[0]).
+    참격선_원점: |
+      **원점 = 머리(칼끝)**, 몸은 −X 로 늘어진다. Transformation.scale 은 모델 (8,8,8) 을 중심으로
+      먹으므로, 머리를 그 점에 두어야 scale.x 0→1 에서 **칼끝 뒤로 꼬리가 자라고**, 1→0 에서
+      **꼬리부터 지워진다.** 머리가 먼저 지워지면 거꾸로 보인다 (만화 검격의 핵심 — 사용자 지적).
+    무색: "색을 넣지 않는다 (채도 0 실측). 격의 사다리는 **코드가** 밝기(setBrightness)·굵기(thick 0.55→2.10)로 올린다. 텍스처가 하는 일은 형태와 **알파**뿐 — 꼬리로 갈수록 옅어져 '굽어 사라지는' 인상을 만든다"
+    ★엔진에_넘기는_청구: |
+      **slash_arc · slash_line 의 size[0] 을 3.0 → 1.5 로** (config/skill_motion.yml — 모션 담당의 것).
+      근거: 머리가 원점(x=8)이고 몸이 −X 로 3.0m(48px) 뻗으면 꼬리는 x=−40 인데,
+      **MC 모델 원소 좌표의 한계는 [-16, 32]** 다 (원점에서 −X 로 24px = **1.5m** 가 최대).
+      3.0m 는 물리적으로 구울 수 없다.
+      그런데 size[0] 은 **상쇄되는 정규화 상수**다: 최종 길이 = 모델X × length/size[0] 이므로
+      **모델X == size[0] 이기만 하면 값이 무엇이든 결과가 같다.** 그래서 1.5m 로 굽고 1.5 를 청구한다.
+      ⇒ **인게임 길이는 한 치도 안 변한다** (길이는 판정의 range × reach 가 정한다).
+      지금처럼 size[0]=3.0 인 채로 두면 획이 **정확히 절반 길이**로 뜬다.
+      Y·Z(0.55/0.35 · 0.04)는 그대로 두라 — 모델이 그 치수로 구워져 있다.
 
   짐승의_형체:
     count: 8                        # config/mob_models.yml 의 청구서 (호랑이 3 · 반달곰 2 · 멧돼지 1 · 백영묘 2)

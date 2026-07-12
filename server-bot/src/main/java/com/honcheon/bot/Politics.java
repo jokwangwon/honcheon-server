@@ -151,6 +151,13 @@ final class Politics {
         return inputs().keySet();
     }
 
+    /** myeongbun.scale = [0, 30] — 명분 게이지 상한 (신규 통화 없음: 주목·우호·혈채와 같은 눈금) */
+    @SuppressWarnings("unchecked")
+    int gaugeMax() {
+        Object scale = myeongbun().get("scale");
+        return scale instanceof List<?> l && l.size() > 1 ? intOr(l.get(1), 30) : 30;
+    }
+
     /** myeongbun.inputs.<사건>.value — 관의 문파 토벌 10 · 무고한 학살 8 · 관의 은폐 발각 4 … */
     @SuppressWarnings("unchecked")
     int inputValue(String key) {
