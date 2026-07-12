@@ -51,10 +51,11 @@ public final class MvtCommand implements CommandExecutor {
                 case "지도" -> showMap(sender);               // 세계 지도 — 등록 좌표·여정 일수
                 case "시드검사" -> seedCheck(sender, args);    // 지형 적합성 점수 (관리자)
                 case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
+                case "지역조성" -> buildRegion(sender, args);   // 원거리 등록지 하나를 짓는다 (관리자·콘솔 가능)
                 case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
-                case "조감" -> renderTown(sender);   // 조감도 PNG — 콘솔 가능
+                case "조감" -> renderTown(sender, args);   // 조감도 PNG — 콘솔 가능 (인자 = 지역id)
                 case "문장" -> crests(sender);
                 default -> help(sender);
             };
@@ -400,6 +401,184 @@ public final class MvtCommand implements CommandExecutor {
         }
     }
 
+    /**
+     * /혼천 지역조성 &lt;id&gt; — <b>등록부의 좌표에 실제로 집을 세운다</b> (관리자·콘솔 가능).
+     *
+     * <p>세계 지도에 33곳이 좌표를 갖고 있는데 선 것은 청하현과 산길 도적뿐이었다. 나머지는 build: later —
+     * 등록만 되고 서지 않은 곳은 여행의 목적지가 아니라 문서의 줄이다. 이 명령이 그 줄을 집으로 바꾼다.
+     *
+     * <p>부지는 <b>지도가 고른다</b>: 등록 좌표에서 지형 적합성을 재고, 안 맞으면 링(64~1024칸)을 돌며
+     * 첫 합격지를 잡는다 (청하현과 같은 규칙 — 좌표는 흔들려도 여정 일수는 안 흔들린다).
+     */
+    private boolean buildRegion(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            return true;
+        }
+        WorldMap map = plugin.worldMap();
+        if (map == null || args.length < 2) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 지역조성 <지역id>  (예: nokrim_sochae)");
+            return true;
+        }
+        WorldMap.Place place = map.place(args[1]);
+        if (place == null) {
+            sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + args[1]);
+            return true;
+        }
+        java.util.List<String> blockers = RemoteBuilder.unbuildableReasons(place);
+        if (!blockers.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + place.name() + " — " + String.join(" · ", blockers));
+            return true;
+        }
+        World world = sender instanceof Player p2 ? p2.getWorld() : org.bukkit.Bukkit.getWorlds().get(0);
+        // 부지 탐색이 먼저 서버를 멈춘다 — 후보마다 지형을 표본하며 **청크를 동기 생성**하기 때문이다
+        // (20km 밖의 땅은 아직 존재하지 않는다). 시드검사와 같은 병이고 같은 처방이다: 틱을 나눠 먹는다.
+        sender.sendMessage(ChatColor.GRAY + place.name() + " 부지를 찾는다 — 지형을 표본한다 "
+                + ChatColor.DARK_GRAY + "(틱을 나눠 먹는다 · 서버는 계속 돈다)");
+        new SiteProbe(plugin, map, place, world,
+                site -> preloadThenBuild(sender, world, place, site)).runTaskTimer(plugin, 1L, 1L);
+        return true;
+    }
+
+    /** 부지가 정해진 뒤 — 땅을 비동기로 싣고, 실리면 짓는다 */
+    private void preloadThenBuild(CommandSender sender, World world, WorldMap.Place place, WorldMap.Site site) {
+        sender.sendMessage(ChatColor.GRAY + place.name() + " 부지 (" + site.x() + ", " + site.z()
+                + ") · 지면 y" + site.groundY() + " · 지형 점수 " + site.fit().score()
+                + (site.shift() == 0 ? "" : " (등록 좌표에서 " + site.shift() + "칸 이동)"));
+
+        // 청크를 **비동기로** 실어 온다. 원거리 조성은 20km 밖의 땅을 처음 만드는 일이라,
+        // 메인 스레드에서 동기 로드하면 서버가 15초 멈춘다(워치독이 스레드 덤프를 뜬다 — 시드검사와 같은 병).
+        // 땅이 다 실린 뒤에 짓는다: 짓는 것 자체는 메인 스레드의 일이다 (블록 API 는 그것만 허락한다).
+        java.util.List<java.util.concurrent.CompletableFuture<org.bukkit.Chunk>> loading =
+                new java.util.ArrayList<>();
+        for (int chunkX = (site.x() - 48) >> 4; chunkX <= (site.x() + 48) >> 4; chunkX++) {
+            for (int chunkZ = (site.z() - 48) >> 4; chunkZ <= (site.z() + 48) >> 4; chunkZ++) {
+                loading.add(world.getChunkAtAsync(chunkX, chunkZ, true));
+            }
+        }
+        sender.sendMessage(ChatColor.GRAY + "땅을 싣는다 — 청크 " + loading.size() + "개 (비동기)");
+        java.util.concurrent.CompletableFuture
+                .allOf(loading.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenRun(() -> org.bukkit.Bukkit.getScheduler().runTask(plugin,
+                        () -> finishRegion(sender, world, place, site)));
+    }
+
+    /**
+     * 부지 탐색기 — <b>틱을 나눠 먹는다</b>.
+     *
+     * <p>지형 적합성은 후보 좌표마다 96×96 창을 표본한다. 그 땅이 아직 생성되지 않았으면(원거리는 늘 그렇다)
+     * 표본이 곧 <b>청크 생성</b>이다. 한 틱에 다 하면 서버가 20초 멈춘다 — 워치독이 스레드 덤프를 뜬다.
+     * 후보를 하나씩 꺼내 쓰고 틱 예산(20ms)이 다하면 손을 뗀다.
+     */
+    private static final class SiteProbe extends org.bukkit.scheduler.BukkitRunnable {
+        private static final long TICK_BUDGET_NANOS = 20_000_000L;
+
+        private final HoncheonMvt plugin;
+        private final WorldMap map;
+        private final WorldMap.Place place;
+        private final World world;
+        private final java.util.function.Consumer<WorldMap.Site> then;
+        private final java.util.List<int[]> candidates;
+
+        private int index;
+        private WorldMap.Fit best;
+        private int bestX;
+        private int bestZ;
+        private int bestShift;
+
+        SiteProbe(HoncheonMvt plugin, WorldMap map, WorldMap.Place place, World world,
+                  java.util.function.Consumer<WorldMap.Site> then) {
+            this.plugin = plugin;
+            this.map = map;
+            this.place = place;
+            this.world = world;
+            this.then = then;
+            this.candidates = map.probeCandidates(place);
+        }
+
+        /** 지금 후보의 땅을 싣는 중인가 — 실리기 전에는 표본하지 않는다 */
+        private java.util.concurrent.CompletableFuture<Void> loading;
+
+        /**
+         * 틱 예산만으로는 부족하다 — <b>후보 하나의 표본이 이미 청크 36개를 만든다</b>(96×96 창).
+         * 예산은 후보 <i>사이</i>에서만 물리므로, 후보 하나가 통째로 10초를 먹으면 서버는 그동안 멈춘다.
+         * 그래서 표본하기 전에 그 후보의 땅을 <b>비동기로 싣는다</b>. 생성은 워커 스레드가 하고,
+         * 메인 스레드는 이미 실린 블록을 읽기만 한다 — 그건 빠르다.
+         */
+        @Override
+        public void run() {
+            if (loading != null && !loading.isDone()) {
+                return;   // 땅이 실리는 중 — 기다린다 (서버는 그동안 정상으로 돈다)
+            }
+            long t0 = System.nanoTime();
+            while (System.nanoTime() - t0 < TICK_BUDGET_NANOS) {
+                if (index >= candidates.size()) {          // 후보 소진 — 최고점 자리에 앉힌다
+                    finish(bestX, bestZ, bestShift, best);
+                    return;
+                }
+                int[] c = candidates.get(index);
+                if (loading == null) {                     // 이 후보의 땅을 아직 안 실었다
+                    loading = loadWindow(c[0], c[1]);
+                    return;                                // 다음 틱에 다시 본다
+                }
+                index++;
+                loading = null;
+                WorldMap.Fit fit = map.fitAt(world, place, c[0], c[1]);
+                if (fit.pass()) {
+                    finish(c[0], c[1], c[2], fit);
+                    return;
+                }
+                if (best == null || fit.score() > best.score()) {
+                    best = fit;
+                    bestX = c[0];
+                    bestZ = c[1];
+                    bestShift = c[2];
+                }
+            }
+        }
+
+        /** 후보의 표본 창(96×96 = 반경 48) 청크를 비동기로 싣는다 */
+        private java.util.concurrent.CompletableFuture<Void> loadWindow(int x, int z) {
+            java.util.List<java.util.concurrent.CompletableFuture<org.bukkit.Chunk>> futures =
+                    new java.util.ArrayList<>();
+            for (int chunkX = (x - 48) >> 4; chunkX <= (x + 48) >> 4; chunkX++) {
+                for (int chunkZ = (z - 48) >> 4; chunkZ <= (z + 48) >> 4; chunkZ++) {
+                    futures.add(world.getChunkAtAsync(chunkX, chunkZ, true));
+                }
+            }
+            return java.util.concurrent.CompletableFuture
+                    .allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]));
+        }
+
+        private void finish(int x, int z, int shift, WorldMap.Fit fit) {
+            cancel();
+            if (fit == null) {
+                plugin.getLogger().warning("[지역조성] " + place.id() + " — 후보가 없다");
+                return;
+            }
+            then.accept(new WorldMap.Site(x, z, WorldMap.groundY(world, x, z), shift, fit));
+        }
+    }
+
+    /** 땅이 실린 뒤 — 짓고 구역을 등록한다 (메인 스레드) */
+    private void finishRegion(CommandSender sender, World world, WorldMap.Place place, WorldMap.Site site) {
+        java.util.List<Zone> built = RemoteBuilder.build(world, place, site.x(), site.groundY(), site.z());
+        if (built.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
+            return;
+        }
+        // 구역은 **더한다** — 청하현의 구역을 지우지 않는다 (세계는 하나고, 지역은 쌓인다)
+        java.util.List<Zone> all = new java.util.ArrayList<>(plugin.zones());
+        all.removeIf(z -> z.name().equals(place.name()));   // 재조성 = 덮어쓰기
+        all.addAll(built);
+        plugin.setZones(all);
+        sender.sendMessage(ChatColor.GOLD + place.name() + " 이(가) 섰다 — (" + site.x() + ", "
+                + site.groundY() + ", " + site.z() + ") · 구역 " + built.size() + "곳");
+        sender.sendMessage(ChatColor.GRAY + "채문 앞: /tp " + site.x() + " " + (site.groundY() + 1)
+                + " " + (site.z() + 24));
+        plugin.getLogger().info("[지역조성] " + place.id() + " (" + place.name() + ") — ("
+                + site.x() + ", " + site.groundY() + ", " + site.z() + ") · 구역 " + built.size() + "곳");
+    }
+
     /** /혼천 세계조성 — 등록된 지역을 제 좌표에 짓는다 (관리자). 지금은 청하현 일대 */
     private boolean buildWorld(CommandSender sender) {
         if (sender instanceof Player p && !p.isOp()) {
@@ -415,21 +594,26 @@ public final class MvtCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.RED + "청하현이 지도에 없다.");
             return true;
         }
-        // 콘솔 가능 — 지면 높이는 지도가 계산한다 (플레이어 발밑이 아니라 지형이 정한다)
+        // 콘솔 가능 — 지면 높이는 지도가 계산한다 (플레이어 발밑이 아니라 지형이 정한다).
+        // 부지 탐색은 틱을 나눠 먹는다 (새 월드의 원점도 아직 생성되지 않은 땅이다 — 표본이 곧 청크 생성이다).
         org.bukkit.World world = sender instanceof Player p2 ? p2.getWorld()
                 : org.bukkit.Bukkit.getWorlds().get(0);
-        WorldMap.Site site = map.resolve(world, home);
-        sender.sendMessage(ChatColor.GRAY + "청하현 부지 (" + site.x() + ", " + site.z()
-                + ") · 지면 y" + site.groundY()
-                + " · 지형 점수 " + site.fit().score() + " (" + site.fit().verdict() + ")");
-        java.util.List<Zone> zones = new java.util.ArrayList<>();
-        Map<String, Location> anchors = CheonghaBuilder.build(world,
-                site.x(), site.groundY(), site.z(), zones);
-        plugin.setAnchors(anchors);
-        plugin.setZones(zones);
-        sender.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 (" + site.x() + ", " + site.z()
-                + ") · 장소 " + anchors.size() + "곳 · 구역 " + zones.size() + "곳");
-        sender.sendMessage(ChatColor.GRAY + "원거리 지역은 좌표만 등록돼 있다 (/혼천 지도)");
+        sender.sendMessage(ChatColor.GRAY + "청하현 부지를 찾는다 — 지형을 표본한다");
+        new SiteProbe(plugin, map, home, world, site -> {
+            sender.sendMessage(ChatColor.GRAY + "청하현 부지 (" + site.x() + ", " + site.z()
+                    + ") · 지면 y" + site.groundY()
+                    + " · 지형 점수 " + site.fit().score() + " (" + site.fit().verdict() + ")");
+            java.util.List<Zone> zones = new java.util.ArrayList<>();
+            Map<String, Location> anchors = CheonghaBuilder.build(world,
+                    site.x(), site.groundY(), site.z(), zones);
+            plugin.setAnchors(anchors);
+            plugin.setZones(zones);
+            sender.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 (" + site.x() + ", " + site.z()
+                    + ") · 장소 " + anchors.size() + "곳 · 구역 " + zones.size() + "곳");
+            sender.sendMessage(ChatColor.GRAY + "원거리 지역: /혼천 지역조성 <id> (예: nokrim_sochae)");
+            plugin.getLogger().info("[세계조성] 청하현 — (" + site.x() + ", " + site.groundY()
+                    + ", " + site.z() + ") · 장소 " + anchors.size() + "곳");
+        }).runTaskTimer(plugin, 1L, 1L);
         return true;
     }
 
@@ -617,7 +801,16 @@ public final class MvtCommand implements CommandExecutor {
     }
 
     /** 조감 — 탑다운·아이소메트릭·건물별 PNG 렌더 (plugins/HoncheonMVT/render/). 콘솔 가능 */
-    private boolean renderTown(CommandSender sender) {
+    /**
+     * /혼천 조감 [지역id] — 조감도 PNG (콘솔 가능).
+     *
+     * <p>인자가 있으면 <b>그 지역</b>을 그린다. 원거리 조성기가 지은 것을 볼 눈이 없으면
+     * "섰다"는 로그만 믿게 된다 — 루프의 눈이 없는 조성은 검산이 아니다.
+     */
+    private boolean renderTown(CommandSender sender, String[] args) {
+        if (args.length >= 2) {
+            return renderRegion(sender, args[1]);
+        }
         Location center = plugin.anchor("장터");
         if (center == null) {
             sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 조성");
@@ -628,6 +821,31 @@ public final class MvtCommand implements CommandExecutor {
                 center.getBlockX(), center.getBlockY() - 1, center.getBlockZ(), dir)) {
             sender.sendMessage(ChatColor.GRAY + line);
         }
+        return true;
+    }
+
+    /** 지역 조감 — 등록부의 좌표(지도가 고른 부지)를 중심으로 그린다 */
+    private boolean renderRegion(CommandSender sender, String id) {
+        WorldMap map = plugin.worldMap();
+        WorldMap.Place place = map == null ? null : map.place(id);
+        if (place == null) {
+            sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + id);
+            return true;
+        }
+        Zone zone = plugin.zones().stream().filter(z -> z.name().equals(place.name())).findFirst().orElse(null);
+        if (zone == null) {
+            sender.sendMessage(ChatColor.RED + place.name() + " 은 아직 서지 않았다 — /혼천 지역조성 " + id);
+            return true;
+        }
+        World world = org.bukkit.Bukkit.getWorld(zone.world());
+        int cx = (zone.x1() + zone.x2()) / 2;
+        int cz = (zone.z1() + zone.z2()) / 2;
+        int cy = zone.y1() + 4;   // Zone 의 바닥은 지면 -4 (RemoteBuilder 가 그렇게 잡는다)
+        java.io.File dir = new java.io.File(plugin.getDataFolder(), "render/" + id);
+        for (String line : TownRender.render(world, cx, cy, cz, dir)) {
+            sender.sendMessage(ChatColor.GRAY + line);
+        }
+        plugin.getLogger().info("[조감] " + id + " → " + dir.getAbsolutePath());
         return true;
     }
 

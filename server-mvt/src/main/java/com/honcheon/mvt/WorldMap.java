@@ -81,7 +81,8 @@ final class WorldMap {
      * @param stageLocal true = 청하현 무대(1:1 도보권) 안의 좌표. CheonghaBuilder 가 이미 짓는다
      */
     record Place(String id, String name, int x, int z, String terrain, List<String> biomes,
-                 String build, boolean stageLocal, int days, String section) {
+                 String build, boolean stageLocal, int days, String section,
+                 String faction, String tier, String note) {
 
         boolean buildableNow() {
             return "now".equals(build);
@@ -171,7 +172,11 @@ final class WorldMap {
                     biomes,
                     String.valueOf(m.getOrDefault("build", "later")),
                     Boolean.TRUE.equals(m.get("stage_local")),
-                    days, label));
+                    days, label,
+                    // 원거리 조성기(RemoteBuilder)가 읽는다 — 세력이 원형을 고르고, 등급이 살림의 두께를 정한다
+                    m.get("faction") == null ? null : String.valueOf(m.get("faction")),
+                    String.valueOf(m.getOrDefault("tier", "poor")),
+                    m.get("architecture") == null ? "" : String.valueOf(m.get("architecture"))));
         }
     }
 
