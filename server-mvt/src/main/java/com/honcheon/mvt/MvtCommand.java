@@ -43,7 +43,13 @@ public final class MvtCommand implements CommandExecutor {
                 case "병기상" -> weaponShop(sender);        // 장쇠 좌판
                 case "재련" -> reforgeWeapon(sender);        // 야철수 — 품 1단 상승
                 case "각인" -> inscribeWeapon(sender, args); // 각인 — 슬롯 안에서만
-                case "격돌" -> recordClash(sender);          // 애병 카운터 (검증용)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
+                case "격돌" -> recordClash(sender);          // 애병 카운터 (검증용)
+                case "사냥터" -> census(sender);              // 구역 개체군
+                case "비무" -> spar(sender, args);            // 죽지 않는 싸움
+                case "소환" -> summon(sender, args);          // 영물은 등록제 (관리자)
+                case "지도" -> showMap(sender);               // 세계 지도 — 등록 좌표·여정 일수
+                case "시드검사" -> seedCheck(sender, args);    // 지형 적합성 점수 (관리자)
+                case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
@@ -229,6 +235,117 @@ public final class MvtCommand implements CommandExecutor {
         }
         player.sendMessage(ChatColor.GOLD + "병기를 손에 쥐었다 — " + args[2] + " " + args[1]
                 + " · " + bias.name() + " · " + craft.name());
+        return true;
+    }
+
+    /** /혼천 지도 — 세계 지도 (등록 좌표·거리·여정 일수). 청하현이 원점이다 */
+    private boolean showMap(CommandSender sender) {
+        WorldMap map = plugin.worldMap();
+        if (map == null) {
+            sender.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
+            return true;
+        }
+        sender.sendMessage(ChatColor.GOLD + "── 세계 지도 (청하현 = 원점, 1블록 = 1m) ──");
+        for (WorldMap.Place p : map.all()) {
+            int days = map.travelDays(p);
+            sender.sendMessage(String.format("%s%-14s %s(%+d, %+d) %s· %s · %s",
+                    ChatColor.WHITE, p.name(), ChatColor.GRAY, map.worldX(p), map.worldZ(p),
+                    ChatColor.DARK_GRAY, p.terrain(),
+                    days <= 0 ? "여기" : days + "일 여정"));
+        }
+        return true;
+    }
+
+    /** /혼천 시드검사 <시드...> — 등록 좌표의 지형이 시드와 맞는가 (관리자) */
+    private boolean seedCheck(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            return true;
+        }
+        WorldMap map = plugin.worldMap();
+        if (map == null || args.length < 2) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 시드검사 <시드> [시드...]");
+            return true;
+        }
+        for (int i = 1; i < args.length; i++) {
+            WorldMap.SeedReport report = map.scoreSeed(Long.parseLong(args[i]), false);
+            sender.sendMessage(ChatColor.GOLD + "시드 " + report.seed() + " — 점수 " + report.score());
+            report.lines().forEach(line -> sender.sendMessage(ChatColor.GRAY + "  " + line));
+        }
+        return true;
+    }
+
+    /** /혼천 세계조성 — 등록된 지역을 제 좌표에 짓는다 (관리자). 지금은 청하현 일대 */
+    private boolean buildWorld(CommandSender sender) {
+        if (!(sender instanceof Player player) || !player.isOp()) {
+            return true;
+        }
+        WorldMap map = plugin.worldMap();
+        if (map == null) {
+            player.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
+            return true;
+        }
+        WorldMap.Place home = map.place("cheongha_hyeon");
+        if (home == null) {
+            player.sendMessage(ChatColor.RED + "청하현이 지도에 없다.");
+            return true;
+        }
+        WorldMap.Site site = map.resolve(player.getWorld(), home);
+        player.sendMessage(ChatColor.GRAY + "청하현 부지 (" + site.x() + ", " + site.z()
+                + ") · 지형 점수 " + site.fit().score() + " (" + site.fit().verdict() + ")");
+        java.util.List<Zone> zones = new java.util.ArrayList<>();
+        Map<String, Location> anchors = CheonghaBuilder.build(player.getWorld(),
+                site.x(), site.groundY(), site.z(), zones);
+        plugin.setAnchors(anchors);
+        plugin.setZones(zones);
+        player.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 (" + site.x() + ", " + site.z()
+                + ") · 장소 " + anchors.size() + "곳 · 구역 " + zones.size() + "곳");
+        player.sendMessage(ChatColor.GRAY + "원거리 지역은 좌표만 등록돼 있다 (/혼천 지도)");
+        return true;
+    }
+
+    /** /혼천 사냥터 — 구역별 개체군 (정원 대비 현재) */
+    private boolean census(CommandSender sender) {
+        plugin.hunting().census().forEach(sender::sendMessage);
+        return true;
+    }
+
+    /** /혼천 비무 <플레이어|수락|항복> — 죽지 않는 싸움 (표국 마당의 곽진은 우클릭) */
+    private boolean spar(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        Sparring sparring = plugin.hunting().sparring();
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GRAY
+                    + "/혼천 비무 <플레이어> | 수락 | 항복   (표국 마당의 곽진은 우클릭)");
+        } else if ("수락".equals(args[1])) {
+            sparring.accept(player);
+        } else if ("항복".equals(args[1])) {
+            sparring.yield(player);
+        } else {
+            Player target = plugin.getServer().getPlayer(args[1]);
+            if (target == null) {
+                player.sendMessage(ChatColor.GRAY + "그런 사람이 없다.");
+            } else {
+                sparring.challenge(player, target);
+            }
+        }
+        return true;
+    }
+
+    /** /혼천 소환 <id> — 영물은 등록제다 (관리자) */
+    private boolean summon(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player) || !player.isOp()) {
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GRAY + "/혼천 소환 <"
+                    + String.join("|", HuntingGrounds.registry()) + ">");
+            return true;
+        }
+        var spawned = plugin.hunting().summon(args[1], player.getLocation());
+        player.sendMessage(spawned == null ? ChatColor.RED + "등록되지 않은 개체: " + args[1]
+                : ChatColor.GOLD + spawned.getCustomName() + ChatColor.GRAY + " 이(가) 섰다.");
         return true;
     }
 

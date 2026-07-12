@@ -32,6 +32,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private SkillEngine skillEngine;
     private SkillListener skills;
     private WorldMap worldMap;
+    private HuntingGrounds hunting;
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
@@ -57,7 +58,9 @@ public final class HoncheonMvt extends JavaPlugin {
         this.skillEngine = new SkillEngine(cfg);
         this.worldMap = WorldMap.load(cfg);   // 세계 지도 — world_map.yml (없으면 null)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
+        HuntingGrounds.init(cfg);   // 적 등록부 — 짐승·사람 스탯 (npcs·npc_combat·combat)
         this.skills = new SkillListener(this, skillEngine);
+        this.hunting = new HuntingGrounds(this);
 
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
@@ -65,7 +68,10 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new LedgerGui(this), this);
         getServer().getPluginManager().registerEvents(new WeaponShop(this), this);
         getServer().getPluginManager().registerEvents(skills, this);
+        getServer().getPluginManager().registerEvents(hunting, this);
+        getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
+        hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
         getCommand("honcheon").setExecutor(new MvtCommand(this));
         loadAnchors();
         loadZones();
@@ -220,5 +226,10 @@ public final class HoncheonMvt extends JavaPlugin {
     /** 세계 지도 — 등록 좌표·지형 적합성·여정 일수 (world_map.yml 이 없으면 null) */
     public WorldMap worldMap() {
         return worldMap;
+    }
+
+    /** 사냥터·산적·비무 — 적의 세 층 */
+    public HuntingGrounds hunting() {
+        return hunting;
     }
 }
