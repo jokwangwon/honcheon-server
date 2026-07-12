@@ -1,0 +1,1697 @@
+# 세계 지도 (기계 판독용) — 등록제의 완성
+# 기준 문서: docs/design/world_map.md
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# 이 파일이 존재하는 이유
+#
+#   등록제인데 **좌표만 등록부 밖에 있었다.** 그래서 두 가지가 깨져 있었다:
+#     ① `/혼천 조성`을 친 자리에 마을이 섰다 — 플레이어가 물가에 서면 마을이 물가로 이사했다
+#     ② 봇의 `/혼천 출행 화산`이 쓰는 기간(time.yml 3~7일)이 **지도상 거리와 무관**했다.
+#        봇과 마인크래프트가 서로 다른 세계를 말하고 있었다
+#
+#   이 파일은 그 둘을 하나로 묶는다. **좌표가 곧 거리이고, 거리가 곧 시간이다.**
+#   등록된 모든 지역·본산·산채·사냥터·길에 **고정 좌표**가 있다. 조성은 나중에 해도 좌표는 지금 잡는다 —
+#   되돌리기가 가장 비싼 층이 지도이기 때문이다.
+#
+# 결정론: 이 파일의 좌표에 난수는 없다. 지형 부적합 시의 인근 탐색도 상수 후보표 순회다
+#         (CheonghaBuilder.SHRINE_SITES 방식 계승). 유일한 입력 난수는 **월드 시드**뿐이다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 1. 축척 (scale) — 1블록 = 1미터. 실지리(實地理)를 그대로 옮긴다
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 축소하지 않는다. 중원의 실제 지리를 마인크래프트 좌표계에 1:1로 사상한다.
+#
+#   근거 ① **큰 좌표는 공짜다.** 마인크래프트는 **방문한 청크만 생성**한다. 좌표가 ±100만이어도
+#          디스크 비용은 실제로 지은 곳에만 든다 (아래 disk_budget 참조).
+#   근거 ② **축소는 되돌릴 수 없다.** 지도를 좁게 잡으면 나중에 세가·문파가 들어올 자리가 없어
+#          전부 다시 짜야 한다. 지금 실제 크기로 잡으면 영원히 안 고쳐도 된다.
+#   근거 ③ **원거리는 걷지 않는다.** 봇의 `/혼천 출행`은 이미 오프스크린 여정이다 (기간·여비 소모).
+#          마인크래프트에서도 원거리는 여정(텔레포트 + 시간·여비)이 건넌다. 거리가 커도 게임은 안 죽는다.
+#   근거 ④ 마인크래프트 월드 한계는 ±29,999,984. 이 세계의 최대 범위는 x[-1.94M, +1.38M],
+#          z[-1.07M, +1.58M] — **한계의 11%**. 앞으로 얼마든지 넓힐 수 있다.
+
+scale:
+  meters_per_block: 1               # ★ 1블록 = 1미터. 단일 축척 — 세계는 하나다
+  rationale: "실지리 1:1. 축소하지 않는다 — 축소는 되돌리기가 가장 비싼 결정이다"
+
+  # 좌표계 규약
+  axes: "x = 동(+) / 서(-),  z = 남(+) / 북(-)  — 마인크래프트 규약 그대로 (북 = -z)"
+  origin_place: cheongha_hyeon      # ★ 청하현 광장 중심 = (0, ?, 0). 모든 좌표는 여기서의 오프셋이다
+  origin_world: [0, 0]              # 청하현 중심의 월드 (x, z). y 는 지형이 정한다 (조성 시 실측)
+
+  # 투영 — 실제 위경도를 블록으로 옮긴 방법 (등거리 원통 도법 / equirectangular)
+  projection:
+    kind: equirectangular
+    origin_lat: 34.33               # 청하현의 지리적 위치 — 섬서 관중 평야, 함양 서쪽
+    origin_lon: 108.55              #   위수(渭水) 북안 · 북산(北山) 남록.
+    standard_lat: 32.0              # 표준위도 — 중원의 중심 위도
+    meters_per_deg_lat: 110574
+    meters_per_deg_lon: 94406       # = 111320 × cos(32°)
+    formula: |
+      x = (lon - 108.55) × 94406
+      z = (34.33 - lat) × 110574
+      (100블록 격자로 반올림 — 좌표는 등록부의 값이지 측량값이 아니다)
+    why_cheongha_here: |
+      청하현은 섬서 관중 평야 서부에 있다 — 함양 서쪽, 위수 북안.
+      이 자리가 등록부와 정확히 맞물린다:
+        · map_spec terrain.base "온대 구릉 — 북쪽으로 갈수록 산세, 남서쪽에 강"
+          → 북쪽 = 북산(北山) 산줄기 (= 북쪽 산길). 남서쪽 = 위수 (= 흑수나루).
+        · faction_entry_routes hwasan "청하현에서 닿는 유일한 구파"
+          → 화산까지 직선 146km = 여정 5일. 봇의 time.yml 3~7일 범위 한가운데. ★ 봇을 안 고쳐도 된다
+        · faction_entry_routes dangga "청하현=섬서 / 당가=사천 — 거리 자체가 게이트"
+          → 성도까지 직선 586km = 여정 26일 ≈ 화산의 5배. 원문 "화산의 수 배" 그대로.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2. 이동 (travel) — 거리 ↔ 시간 환산. 봇과 마인크래프트가 같은 세계를 말하게 하는 접합
+# ═══════════════════════════════════════════════════════════════════════════
+
+travel:
+  # ─── 환산의 뿌리 ───
+  blocks_per_walking_day: 40000     # ★ 하루 도보 = 40 km = 40,000 블록
+  rationale_day: |
+    도보 행군의 하루치 = 40 km. 전근대 보행 여행의 표준(하루 10시간 × 4 km/h)이다.
+    이 하나에서 나머지가 전부 파생된다 — 새 수치를 발명하지 않는다.
+  blocks_per_segment: 8000          # 1구간 = 1/5일 (time.yml segments_per_day: 5) = 8 km
+  # 검산 — time.yml action_costs 와의 정합
+  cross_check:
+    현_내_이동: "segment(1구간) = 8,000블록. 청하현 조성 무대 반경 1,500 → 성문↔나루↔산길 전부 1구간 안. ✔"
+    인접_현_여행: "1~2일 = 40,000~80,000블록. 현 사이 40~80 km — 실지리 현(縣) 간격 그대로. ✔"
+    지역권_이동: "3~7일 = 120,000~280,000블록 도로거리. 청하현→화산 도로 220 km = 5일 (범위 한가운데). ✔"
+    지역권_횡단: "★ time.yml 에 없는 등급. 섬서→사천 26일, 섬서→새외 111일. 아래 proposed_time_yml 참조"
+
+  # ─── 여정일 계산식 ───
+  formula: "여정일 = max(1, round( 직선거리(블록) × road_factor / 40000 ))"
+  road_factor:                      # 우회 계수 — 길이 곧게 나 있지 않다. **어느 길로 가느냐가 여정을 정한다**
+    수로: 0.85                      # 배는 빠르다 (장강·대운하) — 굽어도 걷는 것보다 낫다
+    관도: 1.15                      # 官道 — 관이 닦은 큰길. 평야를 가른다
+    상로: 1.20                      # 商路 — 상단이 다니는 길. 관도보다 굽지만 여전히 길이다
+    평지: 1.25                      # 길 없는 평야
+    구릉: 1.40
+    산길: 1.60                      # 고개를 넘는다
+    험산: 1.80                      # 촉도난(蜀道難) — 사천으로 드는 길
+    새외: 2.00                      # 사막·설선. 길이랄 것이 없다
+  note_factor: "각 장소의 travel.factor 는 '청하현에서 그곳까지의 주 경로'의 계수다 (routes 참조)"
+
+  # ─── 이중 이동 수단 (★ 축척은 하나, 이동 수단은 둘) ───
+  #
+  # 축척을 둘로 쪼개지 않는다 (그러면 세계가 두 개가 된다). 축척은 1:1 하나이고,
+  # **이동 수단**이 둘이다 — 걷느냐, 여정으로 건너뛰느냐.
+  modes:
+    도보:
+      range: "≤ 8,000블록 (1구간)"
+      means: "실제로 걷는다. 마인크래프트 안에서 다리로."
+      scope: "조성된 무대 안 — 청하현 성곽·장터·북쪽 산길·흑수나루·폐사당"
+      note: "청하현 무대는 반경 1,500블록. 성문에서 폐사당까지 약 110블록 = 도보 30초. 걸을 만하다"
+    여정:
+      range: "> 8,000블록"
+      means: "/혼천 출행 <목적지> — 오프스크린. **기간과 여비를 치르고 도착한다** (텔레포트)"
+      cost: "여정일 × economy.yml 하루치 노자 (봇 Rules.dailyTravelCost)"
+      on_insufficient: "걸식·품팔이 여정 — 기간 2배 + 원기 소모 (faction_entry_routes 원문)"
+      note: |
+        ★ 이것이 큰 좌표가 게임을 죽이지 않는 이유다. 화산까지 145,400블록을 걸으면 2시간 반이지만,
+        아무도 걷지 않는다 — 여정이 건넌다. 마인크래프트는 도착지 청크만 생성한다.
+      mvt_wiring: "MVT: 여정 = 목적지 좌표로 teleport + 소요일 로그. 봇: 같은 좌표·같은 계산식 (world_map.yml 공유)"
+
+  # ─── time.yml 에 대한 제안 (★ config 는 다른 소유자다 — 조각만 제안한다) ───
+  proposed_time_yml:
+    reason: |
+      time.yml action_costs 에는 인접_현_여행(1~2일)과 지역권_이동(3~7일)까지만 있다.
+      그런데 등록된 여정 중 섬서→사천(26일)·섬서→새외(111일)는 어느 등급에도 안 들어간다.
+      faction_entry_routes dangga 는 이미 "화산의 수 배"라고 쓰여 있는데, 3~7일 상한으로는 그 문장을 지킬 수 없다.
+      ★ 화산은 안 고쳐도 된다 — 지도상 5일이 3~7일 범위 한가운데다. 봇은 그대로 두면 된다.
+    patch: |
+      # config/time.yml action_costs 에 두 줄 추가 (기존 줄은 건드리지 않는다)
+      action_costs:
+        지역권_횡단: "8~40일 (multi_day) — 섬서→사천 26일, 섬서→강남 25일. world_map.yml 이 정확한 일수를 준다"
+        새외_출경: "40일+ (multi_day) — 중원 밖. world_map.yml travel 계산식이 지배한다"
+    authoritative: "★ 최종 일수의 원천은 이 파일(world_map.yml)의 좌표 + travel.formula 다. time.yml 은 등급 라벨만 준다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3. 지형 유형 (terrain_types) — 부지 판정의 기준. WorldMap.java 가 이 규칙으로 실측한다
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 각 장소는 terrain 하나를 요구한다. WorldMap 은 그 좌표의 **실제 지형**을 표본으로 재서
+# 요구를 만족하는지 본다. 안 맞으면 인근 후보를 결정론적으로 뒤진다 (search_ring).
+#
+# 실측 방법: 중심에서 반경 sample_radius 를 sample_step 간격 격자로 훑어
+#   · ground(x,z) = 자연 지면 y (물·용암을 만나면 '젖은 열')  — CheonghaBuilder.naturalGroundY 규약 계승
+#   · water_pct   = 젖은 열의 비율 %
+#   · relief      = 마른 열 y 의 (최고 - 최저)
+#   · mean_y      = 마른 열 y 의 평균
+#   · max_depth   = 가장 깊은 수심
+
+terrain_sampling:
+  sample_radius: 48                 # 96×96 창 — 약 36청크. 시드검사 1회 ≈ 장소당 36청크 생성
+  sample_step: 6                    # 17×17 = 289 표본열
+  score_full: 100                   # 전 조건 충족
+  score_fail: 0
+
+terrain_types:
+  평지:   { water_pct: [0, 6],   relief: [0, 10],   desc: "현성·장터·관아가 서는 땅. 물도 절벽도 없다" }
+  구릉:   { water_pct: [0, 10],  relief: [8, 30],   desc: "온대 구릉 — 청하현 외곽의 기본" }
+  산:     { water_pct: [0, 8],   relief: [25, 70],  mean_y: [80, 200], desc: "산길·산채·곰과 호랑이" }
+  험산:   { water_pct: [0, 5],   relief: [45, 250], mean_y: [110, 320], desc: "화산·종남·아미 — 오르는 길이 시험이다" }
+  설산:   { water_pct: [0, 5],   relief: [50, 250], mean_y: [140, 320], desc: "곤륜의 설선 — 영물이 산다" }
+  분지:   { water_pct: [0, 12],  relief: [0, 25],   basin: true, desc: "사천 — 사방이 높고 가운데가 낮다. 들어가기 어렵고 나오기 어렵다" }
+  물가:   { water_pct: [15, 70], land_pct_min: 30, max_depth_min: 5, relief: [0, 12],
+            desc: "나루 — 물과 뭍이 같이 있어야 한다 (CheonghaBuilder 흑수나루 판정 그대로)" }
+  강:     { water_pct: [40, 90], max_depth_min: 6,  desc: "장강·황하 — 수로채의 무대. 배가 다닌다" }
+  수향:   { water_pct: [20, 55], relief: [0, 15],   desc: "강남 — 물과 정원. 물길이 골목이다" }
+  평야:   { water_pct: [0, 8],   relief: [0, 14],   desc: "하북 대평야 — 도(刀)와 기병의 땅. 숨을 데가 없다" }
+  고원:   { water_pct: [0, 6],   relief: [15, 45],  mean_y: [95, 180], desc: "산서 — 마르고 높다. 상인의 길" }
+  밀림:   { water_pct: [5, 25],  relief: [15, 60],  desc: "운남·남만 — 독충과 호랑이. 길이 아니라 짐승길" }
+  초원:   { water_pct: [0, 8],   relief: [0, 20],   desc: "새외 북막 — 지평선. 마교의 땅" }
+  사막:   { water_pct: [0, 3],   relief: [0, 40],   desc: "서역 — 곤륜으로 드는 길" }
+  섬:     { water_pct: [35, 80], land_pct_min: 20,  desc: "해남 — 바다가 가른다" }
+  폐허:   { water_pct: [0, 4],   relief: [0, 12],   desc: "폐사당·옛 문파 터 — 마른 땅이면 족하다 (평탄화하지 않는다)" }
+
+# 부적합 시 인근 탐색 — **결정론**. 중심에서 링을 넓히며 상수 순서로 후보를 돈다
+search_ring:
+  policy: "등록 좌표에서 8방위 × 링(step 배수)을 순서대로 검사. 첫 합격지 채택. 전부 실격이면 최고점 후보"
+  bearings: [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]   # 북·동·남·서·북동·남동·남서·북서
+  steps: [64, 128, 192, 256, 384, 512, 768, 1024]    # 링 반경 (블록)
+  max_shift: 1024
+  note: "1,024블록 = 여정 계산에 0.03일 영향 — 일수는 변하지 않는다. 좌표는 흔들려도 시간표는 안 흔들린다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4. 지역권 (regions) — 성(省) 단위. 지도의 큰 조각
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 각 지역권은 **무엇인가**를 말한다: 지형·바이옴·기후·마을 등급 경향·지배 세력.
+# 가난과 부가 지도에 나타난다 (village_tiers.yml 등급으로).
+
+regions:
+  섬서:
+    center: [180000, 0]
+    extent: [900000, 500000]        # 대략 x -250k~+650k, z -250k~+250k
+    parent_of: [cheongha_hyeon]
+    terrain: "관중 평야 + 진령 산맥 — 북쪽은 마른 고원, 남쪽은 험산"
+    biomes: [plains, meadow, forest, windswept_hills, jagged_peaks, grove]
+    climate: "온대. 겨울에 마르고 춥다"
+    tier_bias: middle               # village_tiers — 중촌이 기본. 청하현이 그 표준이다
+    factions: [hwasan, jongnam, gwan_gun, noklim, haomun]
+    note: "★ 청하현의 집. 화산 세력권 안이다 — 그래서 화산 입문 루트가 첫 문이다"
+
+  하남:
+    center: [430000, -30000]
+    extent: [400000, 300000]
+    terrain: "중원의 심장 — 대평야. 숭산이 가운데 솟는다"
+    biomes: [plains, sunflower_plains, forest, windswept_hills]
+    climate: "온대. 사계가 뚜렷하다"
+    tier_bias: middle
+    tier_note: "낙양·개봉은 rich — 등록된 첫 부촌 후보 (village_tiers rich_unassigned 를 여는 자리)"
+    factions: [sorimsa, gwan_gun, haomun, jeongbosang]
+
+  하북:
+    center: [650000, -500000]
+    extent: [500000, 400000]
+    terrain: "대평야 — 숨을 데가 없다. 도(刀)와 말의 땅"
+    biomes: [plains, meadow, taiga, snowy_plains]
+    climate: "한랭. 겨울이 길다 — 북쪽 설원 접경"
+    tier_bias: middle
+    factions: [paengga, gwan_gun]
+
+  산서:
+    center: [380000, -390000]
+    extent: [350000, 350000]
+    terrain: "황토 고원 — 마르고 높다. 태행산이 동쪽 벽"
+    biomes: [windswept_hills, savanna_plateau, plains, badlands]
+    climate: "건조 한랭"
+    tier_bias: middle
+    tier_note: "상인의 땅 — 표국·전장이 굵다"
+    factions: [sangdan, haomun, noklim]
+
+  호북:
+    center: [300000, 300000]
+    extent: [450000, 400000]
+    terrain: "무당산 + 장강 중류 — 산이 강으로 떨어진다"
+    biomes: [forest, jagged_peaks, grove, river, swamp]
+    climate: "온난 습윤. 안개"
+    tier_bias: middle
+    factions: [mudang, jegal, jangang_suroche]
+
+  안휘:
+    center: [820000, 280000]
+    extent: [300000, 300000]
+    terrain: "장강 하류 평야 + 물길"
+    biomes: [plains, forest, river, swamp, cherry_grove]
+    climate: "온난 습윤"
+    tier_bias: rich
+    factions: [namgung, sangdan]
+
+  강남:
+    center: [1110000, 400000]
+    extent: [400000, 350000]
+    terrain: "수향(水鄕) — 물과 정원. 물길이 골목이다"
+    biomes: [swamp, river, cherry_grove, bamboo_jungle, plains]
+    climate: "아열대. 습하고 덥다"
+    tier_bias: rich               # ★ 지도에서 가장 부유한 땅. 상단연합의 심장
+    factions: [sangdan, jangang_suroche, haomun]
+
+  사천:
+    center: [-460000, 450000]
+    extent: [450000, 400000]
+    terrain: "분지 — 사방이 험산이다. 들어가기 어렵고 나오기 어렵다 (촉도난)"
+    biomes: [bamboo_jungle, jungle, forest, jagged_peaks, grove]
+    climate: "습하고 흐리다. 안개가 걷히지 않는다"
+    tier_bias: middle
+    tier_note: "성도 상계는 rich (player_creation 사천_당가세력권 = '성도 상계'). 산간은 poor"
+    factions: [dangga, cheongseong, ami, dokmun]
+
+  운남:
+    center: [-790000, 970000]
+    extent: [500000, 450000]
+    terrain: "밀림과 고산 — 남만의 문턱"
+    biomes: [jungle, bamboo_jungle, sparse_jungle, jagged_peaks]
+    climate: "아열대·열대. 독충의 땅"
+    tier_bias: poor
+    factions: [jeomchang, dokmun, hyeolgyo]
+
+  해남:
+    center: [170000, 1580000]
+    extent: [200000, 150000]
+    terrain: "섬 — 바다가 가른다"
+    biomes: [jungle, beach, warm_ocean, sparse_jungle]
+    climate: "열대"
+    tier_bias: poor
+    factions: [haenam]
+
+  청해_서역:
+    center: [-1380000, -180000]
+    extent: [700000, 500000]
+    terrain: "설산과 사막 — 곤륜이 하늘을 받친다"
+    biomes: [snowy_slopes, frozen_peaks, jagged_peaks, desert, badlands]
+    climate: "고산 한랭 + 사막"
+    tier_bias: poor
+    factions: [gonryun]
+
+  새외_북막:
+    center: [-1940000, -1070000]
+    extent: [900000, 600000]
+    terrain: "초원과 사막 — 지평선. 중원이 아니다"
+    biomes: [snowy_plains, snowy_taiga, desert, plains, windswept_savanna]
+    climate: "극한 대륙성 — 여름은 타고 겨울은 얼어붙는다"
+    tier_bias: poor
+    hidden: true                    # ★ 플레이어 지도에 없다
+    factions: [magyo]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. 장소 등록부 (places) — 좌표·지형·성격·접근 조건
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 필드:
+#   pos          : [x, z] — 청하현 원점 기준 오프셋 = 월드 좌표 (origin_world 가 [0,0] 이므로 같다)
+#   region       : 소속 지역권
+#   terrain      : 요구 지형 (terrain_types)
+#   biomes       : 선호 바이옴 (시드 점수에 가산)
+#   tier         : village_tiers.yml 등급 (rich / middle / poor / none)
+#   faction      : factions.yml id (등록제 — 새 세력 발명 없음)
+#   travel       : { factor, days } — 청하현에서. days = travel.formula 결과
+#   access       : 접근 조건 — 언제 열리는가
+#   build        : now(지금 조성) / later(좌표만) / never(조성 안 함 — 서사 장소)
+#   scale        : 조성 시 무대 반경 (블록)
+#   hidden       : true = 플레이어 지도에 표시하지 않는다
+
+places:
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.1 청하현 — 세계의 원점. **지금 조성하는 유일한 곳**
+  # ─────────────────────────────────────────────────────────────────────
+  cheongha_hyeon:
+    name: "청하현"
+    pos: [0, 0]
+    region: 섬서
+    terrain: 평지
+    biomes: [plains, meadow, forest]
+    tier: middle
+    faction: hyeollyeong
+    travel: { factor: 1.00, days: 0 }
+    access: 항상
+    build: now
+    scale: 1500                     # map_spec outskirt_radius 그대로 — 조성 무대 반경
+    builder: "CheonghaBuilder.build(world, cx, cy, cz, zones)"
+    region_file: config/regions/cheongha_hyeon.yml
+    map_spec: config/map_spec/cheongha_hyeon_map.yml
+    note: "섬서 관중 평야 서부. 북쪽에 산(북산), 남서쪽에 강(위수) — map_spec terrain.base 와 일치"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.2 현성·도시 — 관아가 있고 치안이 있는 곳
+  # ─────────────────────────────────────────────────────────────────────
+  jangan:
+    name: "장안"
+    pos: [37800, 6600]
+    region: 섬서
+    terrain: 평지
+    biomes: [plains, sunflower_plains]
+    tier: rich
+    faction: gwan_gun
+    travel: { factor: 1.15, days: 1 }   # 관도
+    access: 항상
+    build: later
+    scale: 3000
+    note: "섬서 성도(省都). 관군 절도사·전장 본점·하오문 대거점. 청하현에서 관도로 하루"
+    registry: 등록_예약               # ★ 신규 지명 — 문서 끝 reserved_nouns 참조
+
+  nakyang:
+    name: "낙양"
+    pos: [368200, -32100]
+    region: 하남
+    terrain: 평지
+    tier: rich
+    faction: gwan_gun
+    travel: { factor: 1.15, days: 11 }
+    access: 항상
+    build: later
+    scale: 3000
+    registry: 등록_예약
+
+  gaebong:
+    name: "개봉"
+    pos: [543800, -52000]
+    region: 하남
+    terrain: 평지
+    tier: rich
+    faction: gwan_gun
+    travel: { factor: 1.15, days: 16 }
+    access: 항상
+    build: later
+    scale: 3000
+    registry: 등록_예약
+
+  taewon:
+    name: "태원"
+    pos: [377600, -391400]
+    region: 산서
+    terrain: 고원
+    tier: rich
+    faction: sangdan
+    travel: { factor: 1.35, days: 18 }
+    access: 항상
+    build: later
+    note: "산서 상인의 도시 — faction_entry_routes 에 '산서' 가 하오문 정보망으로 등장한다"
+    registry: 등록_예약
+
+  muhan:
+    name: "무한"
+    pos: [543800, 413500]
+    region: 호북
+    terrain: 강
+    tier: rich
+    faction: sangdan
+    travel: { factor: 0.85, days: 15 }   # 수로 — 배로 간다
+    access: 항상
+    build: later
+    note: "장강 중류 최대 나루. 수로채와 상단이 같은 물을 쓴다"
+    registry: 등록_예약
+
+  soju:
+    name: "소주"
+    pos: [1139500, 335000]
+    region: 강남
+    terrain: 수향
+    tier: rich
+    faction: sangdan
+    travel: { factor: 0.85, days: 25 }
+    access: 항상
+    build: later
+    registry: 등록_예약
+
+  gangnam_sangro:
+    name: "강남 상로"
+    pos: [1096000, 451100]
+    region: 강남
+    terrain: 수향
+    biomes: [swamp, river, cherry_grove]
+    tier: rich
+    faction: sangdan
+    travel: { factor: 0.85, days: 25 }
+    access: 항상
+    build: later
+    scale: 2000
+    registry: 등록됨               # ★ player_creation start_regions.강남_상로 (스텁)
+    ruling_faction: 상단연합
+    note: "player_creation: '물의 고장. 상세 미설계' — 상가의_자식의 시작 지역. 좌표를 여기 못박는다"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.3 문파 본산 — 각 본거지가 그 세력을 말한다
+  # ─────────────────────────────────────────────────────────────────────
+  hwasan:
+    name: "화산파"
+    pos: [145400, -16600]
+    region: 섬서
+    terrain: 험산
+    biomes: [jagged_peaks, stony_peaks, grove, cherry_grove]   # cherry_grove = 매화
+    tier: rich                      # 도관(道觀) — 관아급 건축. 백벽·청기와
+    architecture: "험준한 봉우리 위 도관. 매화. 산문(山門)에서 본전까지 천 계단"
+    faction: hwasan
+    travel: { factor: 1.50, days: 5 }   # ★ 산길 — 봇 time.yml 지역권_이동 3~7일 범위 한가운데
+    approach: "★ 오르는 길이 시험이다 — 산문 → 계단 → 문전. 잡역은 문전에서 시작한다"
+    access: 항상                     # faction_entry_routes direct_approach.always_allowed
+    entry_route: hwasan_entry
+    build: later
+    scale: 800
+    note: "★ '청하현에서 닿는 유일한 구파' (faction_entry_routes region_access). 봇 /혼천 출행 화산의 목적지"
+
+  jongnam:
+    name: "종남파"
+    pos: [26400, 37600]
+    region: 섬서
+    terrain: 험산
+    biomes: [jagged_peaks, grove, forest]
+    tier: middle
+    architecture: "도가 은거 — 봉우리에 흩어진 암자. 화산보다 가난하고 조용하다"
+    faction: gupailbang
+    travel: { factor: 1.70, days: 2 }
+    access: 항상
+    build: later
+    scale: 600
+    note: "★ 청하현에서 가장 가까운 구파 본산 (2일). 화산 루트의 대안이 앉을 자리 — 지금은 비워 둔다"
+
+  sorimsa:
+    name: "소림사"
+    pos: [422900, -18800]
+    region: 하남
+    terrain: 산
+    biomes: [forest, windswept_hills, grove]
+    tier: rich
+    architecture: "숭산의 거대 사찰 — 산문·천왕전·대웅보전. 무승(武僧)이 마당을 쓸고 무를 익힌다"
+    faction: sorimsa
+    travel: { factor: 1.25, days: 13 }
+    approach: "산문 앞에서 이름을 묻는다. 속가(俗家)의 문이 따로 있다"
+    access: 항상
+    build: later
+    scale: 900
+
+  mudang:
+    name: "무당파"
+    pos: [231300, 213400]
+    region: 호북
+    terrain: 험산
+    biomes: [jagged_peaks, grove, forest]
+    tier: rich
+    architecture: "구름 위 전각 — 도가. 금정(金頂)이 안개 위로 솟는다"
+    faction: mudang
+    travel: { factor: 1.60, days: 13 }
+    access: 항상
+    build: later
+    scale: 800
+
+  gonryun:
+    name: "곤륜파"
+    pos: [-1373600, -184700]
+    region: 청해_서역
+    terrain: 설산
+    biomes: [snowy_slopes, frozen_peaks, jagged_peaks]
+    tier: poor                      # 부유하지 않다 — 멀고 춥고 사람이 없다
+    architecture: "설선(雪線) 위의 석조 도관. 서역으로 나가는 마지막 문"
+    faction: gupailbang
+    travel: { factor: 2.00, days: 69 }
+    access: 항상
+    build: later
+    scale: 600
+    note: "★ 중원 서쪽 끝. 69일 — 여기 다녀오는 것 자체가 한 챕터다"
+
+  jeomchang:
+    name: "점창파"
+    pos: [-792100, 965300]
+    region: 운남
+    terrain: 험산
+    biomes: [jungle, jagged_peaks, sparse_jungle]
+    tier: poor
+    architecture: "밀림 위 고산 — 남만과 중원의 경계에 선 문파"
+    faction: gupailbang
+    travel: { factor: 1.90, days: 59 }
+    access: 항상
+    build: later
+
+  cheongseong:
+    name: "청성파"
+    pos: [-470100, 379300]
+    region: 사천
+    terrain: 험산
+    biomes: [bamboo_jungle, jagged_peaks, grove]
+    tier: middle
+    architecture: "청성산 — 대나무와 안개. 사천 분지의 지붕"
+    faction: gupailbang
+    travel: { factor: 1.80, days: 27 }
+    access: 항상
+    build: later
+
+  ami:
+    name: "아미파"
+    pos: [-492800, 531900]
+    region: 사천
+    terrain: 험산
+    biomes: [jagged_peaks, jungle, grove]
+    tier: middle
+    faction: gupailbang
+    travel: { factor: 1.80, days: 33 }
+    access: 항상
+    build: later
+    note: "factions.yml: '개방·아미파는 추후 확장'. fortune_encounters 의 routes 에는 이미 등장한다 — 좌표만 잡는다"
+
+  haenam:
+    name: "해남파"
+    pos: [167100, 1580100]
+    region: 해남
+    terrain: 섬
+    biomes: [jungle, beach, warm_ocean]
+    tier: poor
+    architecture: "바닷가 검문 — 소금기에 삭은 목조"
+    faction: gupailbang
+    travel: { factor: 0.90, days: 36 }   # 배로 간다
+    access: 항상
+    build: later
+    note: "★ 중원 남쪽 끝. 바다를 건너야 한다 — 수로채·상단의 배가 유일한 길"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.4 세가 본가 — 가문이 지도에서 말해야 한다
+  # ─────────────────────────────────────────────────────────────────────
+  dangga:
+    name: "사천당가"
+    pos: [-422900, 405800]
+    region: 사천
+    terrain: 분지
+    biomes: [bamboo_jungle, jungle, forest]
+    tier: rich
+    architecture: "분지의 폐쇄적 대저택 — 높은 담, 좁은 문, 약재 마당. **외부인이 못 들어온다**"
+    approach: "★ 대문 앞에서 재주를 보여야 한다 (문전_시연_요구). 식객(食客)으로만 들어간다"
+    faction: dangga
+    travel: { factor: 1.80, days: 26 }   # ★ 험산 — 촉도난(蜀道難)
+    access: 항상                     # direct_approach.always_allowed — 다만 거리가 게이트다
+    entry_route: dangga_entry
+    build: later
+    scale: 700
+    note: |
+      ★ faction_entry_routes: "청하현=섬서 / 당가=사천 — 거리 자체가 게이트다"
+        "섬서 → 사천. 원거리 — 기간·여비 판정 (화산의 수 배)"
+      화산 5일 × 5 = 25일. 지도 계산 26일. **원문이 지도에서 그대로 성립한다**
+    aka: 사천_당가세력권             # player_creation start_regions (스텁, "성도 상계")
+
+  paengga:
+    name: "하북팽가"
+    pos: [652300, -502000]
+    region: 하북
+    terrain: 평야
+    biomes: [plains, meadow, taiga]
+    tier: rich
+    architecture: "평야의 개방적 군사 저택 — 넓은 연무장, 낮은 담. 숨기지 않는다 (도(刀)의 가문)"
+    approach: "문이 열려 있다. 다만 연무장에서 맞아야 한다"
+    faction: odaesega
+    travel: { factor: 1.15, days: 24 }   # 관도 — 평야를 가른다
+    access: 항상
+    build: later
+    scale: 700
+    aka: 하북_평야                   # player_creation start_regions (스텁)
+
+  namgung:
+    name: "남궁세가"
+    pos: [819400, 277500]
+    region: 안휘
+    terrain: 수향
+    biomes: [plains, river, cherry_grove, bamboo_jungle]
+    tier: rich
+    architecture: "강남의 검 — 물과 정원. 회랑이 연못을 끼고 돈다. 검각(劍閣)이 정원 가운데"
+    faction: namgung
+    travel: { factor: 1.20, days: 26 }
+    access: 항상
+    build: later
+    scale: 700
+
+  jegal:
+    name: "제갈세가"
+    pos: [337000, 256500]
+    region: 호북
+    terrain: 평지
+    biomes: [plains, forest, bamboo_jungle]
+    tier: rich
+    architecture: "기관(機關)과 진법(陣法)의 집 — 저택 자체가 미로다. 마당의 돌이 자리를 바꾼다"
+    faction: odaesega
+    travel: { factor: 1.25, days: 13 }
+    access: 항상
+    build: later
+
+  moyong:
+    name: "모용세가"
+    pos: [1380200, -767400]
+    region: 하북
+    terrain: 평야
+    biomes: [taiga, snowy_plains, snowy_taiga]
+    tier: rich
+    architecture: "요동의 북방 세가 — 두꺼운 벽, 온돌. 중원과 새외 사이에 선 집"
+    faction: odaesega
+    travel: { factor: 1.30, days: 51 }
+    access: 항상
+    build: later
+    note: "★ 중원 동북 끝. 새외와의 완충 — 마교 남하 시 첫 방벽 (장기 훅)"
+
+  gaebang:
+    name: "개방"
+    pos: null                       # ★ 본거지가 없다
+    kind: network                   # 지도에 점이 아니라 **선**으로 그린다
+    region: 전역
+    faction: gaebang
+    access: "어느 저잣거리에나 있다 — 걸인이 있는 곳이 개방이다"
+    build: never
+    nodes: [cheongha_hyeon, jangan, nakyang, gaebong, taewon, muhan, gangnam_sangro, dangga]
+    note: |
+      ★ 개방은 좌표를 갖지 않는다. 거지들의 망이다.
+      지도 표현: 위 nodes 를 잇는 **선**. 각 도시의 저잣거리·다리 밑이 개방의 '거점'이다.
+      청하현의 취걸개(chuigeolgae_master, 폐사당 기연)가 이 망의 유일한 실물 접점이다.
+      factions.yml: "개방·아미파는 추후 확장 콘텐츠"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.5 녹림(綠林) — 도적의 세계. **산채는 관도·상로를 낀 산에 있다** (털 것이 있어야 한다)
+  # ─────────────────────────────────────────────────────────────────────
+  #
+  # faction_entry_routes.noklim_entry 는 설계돼 있는데 **산채가 지도에 없었다.** 3단으로 앉힌다:
+  #   입문급(무리) → 중급(산채) → 세력 본거지(총채)
+  #
+  nokrim_sangil:
+    name: "산길 도적 무리"
+    pos: [0, -900]                  # ★ 청하현 무대 안 — 북쪽 산길 협곡 매복지점
+    stage_local: true               # 무대 좌표계 (CheonghaBuilder 가 짓는 자리) — cheongha_stage 참조
+    region: 섬서
+    terrain: 산
+    tier: none
+    faction: noklim
+    danger: 1                       # 위험도 1~5
+    beasts: []
+    npcs: [galho, north_road_bandit]      # cheongha_npcs 등록 NPC — 갈호(이류) + 졸개(삼류)
+    travel: { factor: 1.0, days: 0 }
+    access: 항상                     # north_road_bandits 사건의 무대
+    incident: north_road_bandits
+    build: now                       # ★ CheonghaBuilder v6.9 huntingGrounds 가 짓는 산길 안
+    note: "★ 녹림 입문의 첫 문. faction_entry_routes noklim_entry 의 진입점"
+
+  nokrim_sochae:
+    name: "녹림 소채 (북산)"
+    pos: [-5700, -19900]
+    region: 섬서
+    terrain: 산
+    biomes: [windswept_hills, forest, grove]
+    tier: poor
+    architecture: "목책과 통나무 막사. 도적의 집은 언제든 버릴 수 있어야 한다"
+    faction: noklim
+    danger: 2
+    travel: { factor: 1.60, days: 1 }
+    access: 소문                     # ★ 산길 도적을 통해 소문을 들어야 위치가 열린다
+    access_detail: "north_road_bandits 사건 2단계 도달 또는 noklim favor ≥ 4"
+    entry_route: noklim_entry
+    build: later
+    scale: 200
+    note: "★ '산채로 걸어 올라가 받아달라고 한다' (noklim_entry direct_approach) — 그 산채가 여기다"
+
+  nokrim_jungchae:
+    name: "녹림 중채 (진령 관도)"
+    pos: [127400, 31000]
+    region: 섬서
+    terrain: 산
+    biomes: [jagged_peaks, forest, windswept_hills]
+    tier: poor
+    faction: noklim
+    danger: 3
+    travel: { factor: 1.70, days: 6 }
+    access: 소문
+    access_detail: "noklim favor ≥ 8 (습격_참여 1회) 또는 표국 호위 의뢰로 지나간다"
+    build: later
+    on_route: gwando_jangan_nakyang  # ★ 관도를 낀다 — 표행이 지나는 길목
+    note: "★ 청하현→화산 관도가 여기를 지난다. 화산으로 가는 여정에서 도적을 만나는 자리"
+
+  nokrim_chongchae:
+    name: "녹림 총채 (태행산)"
+    pos: [457900, -206800]
+    region: 산서
+    terrain: 산
+    biomes: [windswept_hills, jagged_peaks, forest]
+    tier: middle                    # 총채는 부유하다 — 훔친 것이 쌓인다
+    architecture: "산을 통째로 쓴 채(寨) — 목책 아닌 석성. 약탈물 창고와 시장이 있다"
+    faction: noklim
+    danger: 5
+    travel: { factor: 1.60, days: 20 }
+    access: 세력                     # ★ 녹림 소속이거나 적으로만 들어간다
+    access_detail: "noklim favor ≥ 13 (산채_등재) 또는 토벌대 동행"
+    build: later
+    scale: 500
+    note: "★ 녹림의 본거지. faction_entry_routes noklim_entry 의 최종 게이트(산채_등재)가 여기서 끝난다"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.6 수로채 — 강이 세력인 이유가 지도에서 읽혀야 한다
+  # ─────────────────────────────────────────────────────────────────────
+  jangang_suroche:
+    name: "장강수로채 총채"
+    pos: [415400, 550700]
+    region: 호북
+    terrain: 강
+    biomes: [river, swamp, mangrove_swamp]
+    tier: middle
+    architecture: "물 위의 채 — 뗏목과 배를 엮어 만든 마을. 뭍에 집이 없다"
+    faction: jangang_suroche
+    danger: 4
+    travel: { factor: 0.85, days: 15 }   # 배로 간다
+    access: 조건부                   # ★ 찾아가지 않는다. 찾아온다
+    access_detail: |
+      faction_entry_routes suroche_entry: "청하현에 거점 없음 — 밖에서 온다"
+      직행해도 "아무 일도 일어나지 않는다". 침몰선 비급을 공개 사용하면 7~14일 뒤 사자가 온다.
+    entry_route: suroche_entry
+    build: later
+    note: "★ 왜 강이 세력인가 — 장강은 중원의 대동맥이다. 이 채가 그 목을 쥔다 (routes.sulo_jangang 참조)"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.7 하오문 — 본산이 없다. 도시마다 창구가 있다. **살막의 문이 여기 있다**
+  # ─────────────────────────────────────────────────────────────────────
+  haomun:
+    name: "하오문"
+    pos: null
+    kind: network
+    region: 전역
+    faction: haomun
+    access: "★ 문턱이 없는 것이 하오문의 문턱이다 (faction_entry_routes: '절대 거절하지 않는다')"
+    build: never
+    nodes:                          # 등록된 것만 — 새 창구를 발명하지 않는다
+      cheongha_hyeon:
+        place: north_alley_warehouse    # 등록부 cheongha_hyeon.yml — 북쪽 골목 창고
+        npc: heukrang
+        stage_local: true
+        note: "묵삼의 야간 접선 장소. **청하현 하오문의 유일한 실물 거점**"
+      jangan:   { place: 전장_뒷방, note: "성도(省都) 대거점 — 등록 예약" }
+      nakyang:  { place: 저잣거리, note: "등록 예약" }
+      taewon:   { place: 상단_객잔, note: "faction_entry_routes 에 '산서' 가 정보망으로 등장한다" }
+      muhan:    { place: 나루_객잔, note: "등록 예약" }
+    note: |
+      ★ 하오문은 지도에 **선**이다 (개방과 같다). 거점은 도시의 등록 장소 **안에** 있다.
+      이 망이 있어야 아래 salmak 의 문이 성립한다.
+
+  salmak:
+    name: "살막"
+    pos: null
+    kind: no_fixed_base             # ★ 본거지가 없다 — 직행할 장소가 없다
+    region: 전역
+    faction: salmak
+    access: hidden
+    access_detail: "★ 살막에는 문이 없다. **문이 하오문 집에 있다** — 하오문 중개로만 닿는다"
+    gateway: haomun                 # faction_entry_routes: '하오문_중개'
+    build: never
+    note: "★ 좌표를 잡지 않는다. 그것이 살막의 설계다 — 청부는 어디서든 오고, 어디로도 돌아가지 않는다"
+
+  dokmun:
+    name: "독문"
+    pos: [-505100, 490000]
+    region: 사천
+    terrain: 밀림
+    tier: poor
+    faction: dokmun
+    danger: 4
+    travel: { factor: 1.80, days: 30 }
+    access: hidden
+    access_detail: "simbeop.yml: '사천당가 방계 전승'. 당가에서 갈라져 나온 자들 — 당가 favor 로 실마리가 열린다"
+    build: later
+    hidden: true
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.8 금기 (forbidden) — ★ 좌표는 잡되 **플레이어 지도에 표시되지 않는다**
+  # ─────────────────────────────────────────────────────────────────────
+  #
+  # factions.yml: magyo·hyeolgyo 는 hidden. regions/cheongha_hyeon.yml:
+  #   "마교/혈교는 초기 10턴 내 비노출", "혈교 후보 단서라는 표현을 플레이어 출력에 쓰지 않는다"
+  #
+  # 그런데 **잠식은 어디선가 벌어져야 한다.** 그 무대를 지금 잡는다.
+  # 은신처는 둘로 나뉜다: 새외 본거지(먼 곳) + **중원 잠복지(가까운 곳)**.
+  # 가까운 쪽이 중요하다 — 등록된 훅(폐사당·북쪽 골목 창고)과 이어져야 한다.
+
+  magyo_bonkyo:
+    name: "마교 본교"
+    pos: [-1940000, -1069300]
+    region: 새외_북막
+    terrain: 초원
+    biomes: [snowy_plains, desert, windswept_savanna]
+    tier: rich                      # 마교는 가난하지 않다
+    architecture: "초원의 흑성(黑城) — 중원 건축이 아니다. 돌과 철, 불"
+    faction: magyo
+    danger: 5
+    travel: { factor: 2.00, days: 111 }
+    access: hidden
+    access_detail: "★ 111일. 이곳에 닿는다는 것은 이미 중원을 버렸다는 뜻이다"
+    build: later
+    hidden: true
+    player_map: false               # ★ 플레이어 지도에 없다
+
+  magyo_jinryeong:
+    name: "마교 전초 (진령 심산)"
+    pos: [33000, 86200]
+    region: 섬서
+    terrain: 험산
+    biomes: [jagged_peaks, grove, forest]
+    tier: none
+    architecture: "동굴과 석실 — 사람이 사는 흔적을 지운다"
+    faction: magyo
+    danger: 5
+    travel: { factor: 1.90, days: 4 }
+    access: hidden
+    access_detail: |
+      ★ 청하현에서 4일. **가장 가까운 마(魔)다.**
+      마교 잠식 루트(심마·마병·금기 접촉)가 누적 문턱을 넘으면 이곳의 '손'이 먼저 닿는다.
+      플레이어가 찾아가는 곳이 아니다 — 잠식이 진행돼야 존재를 안다.
+    build: later
+    hidden: true
+    player_map: false
+    hooks: [폐사당, 북쪽_골목_창고]      # ★ 등록된 훅과 이어진다
+    note: "★ 지도에 없는 것이 지도에서 가장 가깝다 — 이것이 이 좌표의 설계 의도다"
+
+  magyo_nakyang:
+    name: "마교 잠복지 (낙양 뒷골목)"
+    pos: [363500, -35400]
+    region: 하남
+    terrain: 평지
+    tier: none
+    faction: magyo
+    danger: 4
+    travel: { factor: 1.15, days: 11 }
+    access: hidden
+    access_detail: "★ 도시 안에 있다. 잠식은 산속이 아니라 사람 사이에서 자란다"
+    build: later
+    hidden: true
+    player_map: false
+
+  hyeolgyo_eungeo:
+    name: "혈교 은거지 (남만 심산)"
+    pos: [-542800, 1120100]
+    region: 운남
+    terrain: 밀림
+    biomes: [jungle, sparse_jungle, jagged_peaks]
+    tier: none
+    faction: hyeolgyo
+    danger: 5
+    travel: { factor: 1.90, days: 59 }
+    access: hidden
+    build: later
+    hidden: true
+    player_map: false
+
+  hyeolgyo_jedan:
+    name: "혈교 옛 제단 (복우산 폐사)"
+    pos: [297400, 80700]
+    region: 하남
+    terrain: 폐허
+    tier: none
+    faction: hyeolgyo
+    danger: 4
+    travel: { factor: 1.70, days: 13 }
+    access: hidden
+    access_detail: "★ 폐허·금기 장소에 남는다. 청하현 폐사당이 이 계열의 **첫 실마리**다"
+    build: later
+    hidden: true
+    player_map: false
+    hooks: [폐사당]
+    note: |
+      ★ regions/cheongha_hyeon.yml locked_routes: "폐사당 금기 사건"
+        cheongha_fever_rumor: "폐사당 근처에 찜찜한 소문이 있지만 확정할 수 없다"
+      그 소문의 반대편 끝이 여기다. 청하현 폐사당 → 복우산 폐사 → 남만 은거지 — 3단 사슬.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. 사냥터 (hunting_grounds) — 성장·경제의 기둥. **등급별로 흩어져 있어야 한다**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# config/npcs/cheongha_npcs.yml 에 짐승이 등록됐다. **그것들이 어디 사는가**를 여기 적는다.
+#   산늑대(삼류) · 멧돼지(삼류) · 호랑이(일류) · 반달곰(일류) · 백영묘(절정)
+#
+# 청하현 북쪽 산길이 첫 사냥터다. 그 위계의 상위 사냥터가 세계에 흩어져 있어야
+# 성장 곡선(300여 일)이 무대를 갖는다.
+
+hunting_grounds:
+
+  bukjjok_sangil:
+    name: "북쪽 산길"
+    pos: [-10, -122]                # ★ 무대 좌표 (CheonghaBuilder HG_X, HG_Z 실측값)
+    stage_local: true
+    region: 섬서
+    terrain: 산
+    grade: 삼류                      # 들짐승
+    beasts: [san_neukdae, metdwaeji]
+    realm_min: 범인                  # 누구나 갈 수 있다 — 첫 사냥터
+    travel: { days: 0 }
+    access: 항상
+    build: now                       # ★ CheonghaBuilder v6.9 huntingGrounds
+    registry: 등록됨                  # regions/cheongha_hyeon.yml north_road
+    danger: 1
+    note: "★ 첫 사냥터. 늑대·여우 — 도적 소문도 여기서 난다 (north_road_bandits)"
+
+  wisu_galdae:
+    name: "위수 갈대밭"
+    pos: [12000, 9000]
+    region: 섬서
+    terrain: 물가
+    biomes: [river, swamp, plains]
+    grade: 삼류
+    beasts: [metdwaeji]
+    realm_min: 범인
+    travel: { factor: 0.90, days: 1 }
+    access: 항상
+    build: later
+    danger: 1
+    note: "청하현 남동. 흑수나루에서 강을 따라 오른다 — 나루의 뱃사람이 알려준다"
+    registry: 등록_예약
+
+  jinryeong_simsan:
+    name: "진령 심산"
+    pos: [-23600, 69700]
+    region: 섬서
+    terrain: 험산
+    biomes: [jagged_peaks, grove, forest]
+    grade: 일류                      # 맹수
+    beasts: [bandal_gom, horangi]
+    realm_min: 이류                  # ★ 삼류가 들어가면 죽는다
+    travel: { factor: 1.80, days: 3 }
+    access: 항상
+    access_detail: "★ 경지 요구는 문이 아니라 경고다 — 막지 않는다. 죽을 뿐이다"
+    build: later
+    scale: 400
+    danger: 3
+    note: "★ 청하현에서 사흘. 삼류 → 이류로 올라선 자의 다음 사냥터"
+
+  taebaeksan:
+    name: "태백산"
+    pos: [-74600, 42000]
+    region: 섬서
+    terrain: 험산
+    biomes: [jagged_peaks, snowy_slopes, grove]
+    grade: 일류
+    beasts: [bandal_gom, horangi]
+    realm_min: 이류
+    travel: { factor: 1.80, days: 4 }
+    access: 항상
+    build: later
+    danger: 3
+    resources: [약초]                # ★ 태백 약령(藥嶺) — 의방 약재의 산지 (resources 참조)
+    registry: 등록_예약
+
+  bukbang_choweon:
+    name: "북방 초원"
+    pos: [561700, -792800]
+    region: 하북
+    terrain: 초원
+    biomes: [snowy_plains, plains, taiga]
+    grade: 일류
+    beasts: [san_neukdae]           # ★ 무리로 온다 — 같은 짐승도 수가 다르면 다른 사냥이다
+    beast_note: "설표(雪豹)가 앉을 자리 — 등록 예약 (cheongha_npcs 에 아직 없다)"
+    realm_min: 이류
+    travel: { factor: 1.30, days: 32 }
+    access: 항상
+    build: later
+    danger: 3
+
+  namman_milim:
+    name: "남만 밀림"
+    pos: [-665600, 1197500]
+    region: 운남
+    terrain: 밀림
+    biomes: [jungle, bamboo_jungle, sparse_jungle]
+    grade: 일류
+    beasts: [horangi]
+    beast_note: "독충(毒蟲)이 앉을 자리 — 등록 예약. 독문·혈교와 지형이 겹친다"
+    realm_min: 이류
+    travel: { factor: 1.90, days: 65 }
+    access: 항상
+    build: later
+    danger: 4
+
+  ami_simsan:
+    name: "아미 심산 영물지"
+    pos: [-505100, 545100]
+    region: 사천
+    terrain: 험산
+    biomes: [jagged_peaks, jungle, grove]
+    grade: 절정                      # ★ 영물(靈物) — 희소
+    beasts: [baegyeongmyo]           # 백영묘(白影猫) — 절정. 기가 서린 발톱
+    realm_min: 절정                  # ★ 경지 요구
+    travel: { factor: 1.90, days: 35 }
+    access: 기연                      # ★ 아무 때나 열리지 않는다
+    access_detail: "영물은 '사냥터'가 아니라 사건이다. 소문·기연 조건이 붙어야 나타난다 (fortune_encounters 확장 자리)"
+    build: later
+    danger: 5
+    note: "★ 절정 이상의 유일한 짐승 무대. 성장 곡선의 천장 — 지금은 좌표만"
+
+  gonryun_seolseon:
+    name: "곤륜 설선 영물지"
+    pos: [-1420800, -162500]
+    region: 청해_서역
+    terrain: 설산
+    biomes: [frozen_peaks, snowy_slopes, jagged_peaks]
+    grade: 절정
+    beasts: [baegyeongmyo]
+    realm_min: 절정
+    travel: { factor: 2.10, days: 75 }
+    access: 기연
+    build: later
+    danger: 5
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. 길 (routes) — 관도·상로·수로. **길이 곧 사건이다**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 지역을 잇는 길이 지도의 뼈대다. 표국이 표행을 가는 길이고, 녹림이 노리는 길이다.
+# 어느 길로 가느냐가 여정을 정한다 (travel.road_factor).
+
+routes:
+
+  gwando_cheongha_jangan:
+    name: "청하현 ↔ 장안 관도"
+    kind: 관도
+    factor: 1.15
+    waypoints: [[0, 0], [12000, 3000], [26000, 5500], [37800, 6600]]
+    danger: 1
+    note: "관군 순찰이 돈다. 표행의 기본 노선 — 청하 표국(진철산)의 밥줄"
+
+  gwando_jangan_nakyang:
+    name: "장안 ↔ 낙양 관도 (중원 대로)"
+    kind: 관도
+    factor: 1.15
+    waypoints: [[37800, 6600], [127400, 31000], [230000, -5000], [368200, -32100]]
+    danger: 3                       # ★ 녹림 중채가 이 길을 낀다
+    hazards: [nokrim_jungchae]
+    note: "★ 중원의 대동맥. 화산으로 가는 길도 이 관도의 첫 구간을 탄다"
+
+  sangil_cheongha_hwasan:
+    name: "청하현 ↔ 화산 산길"
+    kind: 산길
+    factor: 1.50
+    waypoints: [[0, 0], [37800, 6600], [95000, -2000], [145400, -16600]]
+    danger: 2
+    hazards: [nokrim_jungchae]
+    note: |
+      ★ 봇 `/혼천 출행 화산`의 실제 경로. 도로거리 220 km ÷ 40 km/일 = **5일**.
+      faction_entry_routes: "도중 산길 도적·표행 동승 — 여정 자체가 소문과 인연을 만든다"
+      → 그 도적이 nokrim_jungchae 다. **여정 조우가 지도에서 성립한다**
+
+  sangro_cheongha_dangga:
+    name: "청하현 ↔ 사천 상로 (촉도)"
+    kind: 험산
+    factor: 1.80
+    waypoints: [[0, 0], [-23600, 69700], [-150000, 200000], [-300000, 330000], [-422900, 405800]]
+    danger: 4
+    hazards: [nokrim_sochae, magyo_jinryeong]
+    note: "★ 촉도난(蜀道難) — 거리 자체가 게이트. 26일. 진령을 넘어야 한다"
+
+  sulo_jangang:
+    name: "장강 수로"
+    kind: 수로
+    factor: 0.85
+    waypoints: [[-422900, 405800], [231300, 213400], [415400, 550700], [543800, 413500], [703300, 510900], [1096000, 451100]]
+    danger: 3
+    hazards: [jangang_suroche]
+    note: |
+      ★ 사천(성도)에서 강남(항주)까지 물로 이어진다. 중원의 대동맥.
+      **장강수로채가 왜 세력인지가 여기서 읽힌다** — 이 물길의 통행세를 그들이 걷는다.
+      배는 걷는 것보다 빠르다 (factor 0.85). 그래서 상단은 물을 쓰고, 그래서 수로채에게 뜯긴다.
+
+  sulo_wisu:
+    name: "위수 수운"
+    kind: 수로
+    factor: 0.90
+    waypoints: [[0, 0], [12000, 9000], [33000, 8800], [120000, -5000]]
+    danger: 1
+    note: "★ 흑수나루가 이 물길의 한 점이다 — 청하현이 왜 나루를 갖는가의 답"
+
+  gwando_bukbang:
+    name: "북방 관도 (하북·요동)"
+    kind: 관도
+    factor: 1.15
+    waypoints: [[368200, -32100], [543800, -52000], [652300, -502000], [1380200, -767400]]
+    danger: 2
+    note: "하북팽가 → 모용세가. 새외와의 완충선"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 8. 기연·폐허·산지 — 사건이 앉는 자리
+# ═══════════════════════════════════════════════════════════════════════════
+
+fortune_sites:                      # fortune_encounters.yml 의 등록 기연이 서는 곳
+  chuigeolgae_master:
+    place: abandoned_shrine
+    pos: [-82, -75]                 # ★ 무대 좌표 (CheonghaBuilder SHRINE_SITES[0])
+    stage_local: true
+    build: now
+    status: 무대_있음
+  sunken_ship_manual:
+    place: heuksu_ferry
+    pos: [118, 12]                  # ★ 무대 좌표 (CheonghaBuilder FERRY_SITES[0] — 실제는 결정론 탐색 결과)
+    stage_local: true
+    build: now
+    status: 무대_있음
+  fever_elder_legacy:
+    place: medicine_shop
+    pos: [-24, 8]                   # 의방 (CheonghaBuilder anchors."의방")
+    stage_local: true
+    build: now
+    status: 무대_있음
+  # ★ 등록된 기연 3개 전부 무대가 있다. 대조 결과 미결 0건.
+
+ruins:                              # 폐허·고적 — 기연과 금기의 무대
+  abandoned_shrine:
+    name: "폐사당"
+    pos: [-82, -75]
+    stage_local: true
+    region: 섬서
+    terrain: 폐허
+    tier: none                      # village_tiers: "폐허 — 냉색 격리 규칙이 지배한다"
+    access: 기연
+    build: now
+    hooks: [hyeolgyo_jedan, magyo_jinryeong]
+    note: "★ 금기 사슬의 첫 고리 (locked_routes '폐사당 금기 사건')"
+  goguk_terra:
+    name: "고국 폐허 (진령 옛 문파 터)"
+    pos: [99100, 58600]
+    region: 섬서
+    terrain: 폐허
+    access: 소문
+    build: later
+    registry: 등록_예약
+    note: "★ 비워 둔 자리 — 앞으로 들어올 기연·무공의 출처"
+
+resources:                          # 약초·광물 산지 — **경제가 지도에서 나온다**
+  yakcho_taebaek:
+    name: "태백 약령 (약초 산지)"
+    pos: [-80200, 47500]
+    region: 섬서
+    terrain: 험산
+    yields: [약재]
+    consumer: medicine_shop         # ★ 의방(유문)의 약재가 여기서 온다
+    travel: { factor: 1.80, days: 4 }
+    access: 항상
+    build: later
+    note: "★ cheongha_fever_rumor: '약재값이 오르고 있다' — 왜 오르는가의 답이 지도에 있다 (북로 물류 불안)"
+    registry: 등록_예약
+  cheolgwang_taehang:
+    name: "태행 철광"
+    pos: [439000, -184700]
+    region: 산서
+    terrain: 산
+    yields: [철]
+    consumer: smithy                # ★ 대장간(야철수)의 범철이 여기서 온다
+    travel: { factor: 1.40, days: 17 }
+    access: 항상
+    build: later
+    registry: 등록_예약
+    note: "★ 녹림 총채(태행산)와 같은 산이다 — 철이 나는 산을 도적이 쥐고 있다. 사건이 저절로 선다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 9. 관(官) — 무림과 다른 층위. 현 → 부 → 성 → 경사, 그리고 변경의 군진
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# factions.yml 에 gwan_gun(관군)·hyeollyeong(현령/관청)이 등록돼 있는데 **지도엔 관아 하나 없었다.**
+# 관은 무림과 다른 사다리를 탄다. 그 사다리를 여기 세운다.
+#
+# ★ 핵심 설계: **관은 무림보다 강하다. 다만 그 힘을 쓰지 않기로 되어 있다.**
+#   황실이 대군을 내면 어떤 문파도 지워진다 — 그런데 내지 않는다. 왜 안 내는가가
+#   관무불가침(官武不可侵)이고, **언제 내는가**가 이 세계에서 가장 큰 사건이다.
+
+officialdom:
+
+  # ─── 위계 트리 ───
+  hierarchy:
+    현:
+      rank: 1
+      officials: [현령, 포두, 포쾌]
+      npcs: [jomunwon, bakho]        # cheongha_npcs — 조문원(현령) · 박호(포두, 이류)
+      force: "포쾌 10~30인. 무력 삼류~이류. ★ 무림 이류 하나를 못 이긴다"
+      architecture: 관아급             # village_tiers rich 팔레트 — 백벽·청기와·돌 기단
+      scope: "치안·수배·검시·세금. **플레이어가 일상적으로 마주치는 관**"
+      places: [cheongha_gwana]
+    부:
+      rank: 2
+      officials: [지부]
+      force: "부병(府兵) 300~800. 무력 이류~일류 소수. ★ 문파 하나를 못 이긴다"
+      architecture: 관아급
+      scope: "현 여럿을 관할. 현이 못 다루는 사건이 올라간다 (살인·역모·대규모 도적)"
+      places: [jangan_bugwana, bongsangbu]
+    성:
+      rank: 3
+      officials: [순무, 총독, 절도사]
+      force: "성군(省軍) 5,000~20,000 + 위소(衛所). ★ 구파 하나와 정면으로 붙을 수 있다"
+      architecture: 관아급_대
+      scope: "성 전체. 군을 움직인다 — **여기서부터 무림이 긴장한다**"
+      places: [jangan]
+    경사:
+      rank: 4
+      officials: [황제, 육부, 금의위, 금군]
+      force: "금군 100,000+ · 금의위(무력 절정~화경 소수). ★ 천하의 어떤 문파도 못 이긴다"
+      architecture: 황성급
+      scope: "천하. **대군을 내면 문파는 지워진다**"
+      places: [gyeongsa]
+    군진:
+      rank: 3                        # 성과 동급이되 계통이 다르다 (병부 직할)
+      officials: [총병, 변장]
+      force: "변군(邊軍) 10,000~50,000. 실전 군대 — 성군보다 강하다"
+      scope: "새외를 막는다. ★ 마교·이민족과 맞닿는 최전선"
+      places: [gunjin_daedong, gunjin_sanhaegwan, gunjin_gayokgwan]
+
+  # ─── 관무불가침 (官武不可侵) — 세계의 규칙 ───
+  gwanmu_bulgachim:
+    rule_a: "★ 관은 무림에 간섭하지 않는다 — 비무·문파 다툼·강호의 원한을 관이 다루지 않는다"
+    rule_b: "★ 무림은 관을 건드리지 않는다 — 관리를 죽이거나 관아를 치면 강호 전체가 적이 된다"
+    why_it_holds:
+      관의_계산: |
+        관은 무림을 **못 이기는 게 아니라 안 이긴다.**
+        현·부의 무력으로는 문파 하나를 못 잡는다. 성군·금군을 내면 잡는다 — 그러나 그 값이 크다:
+        세금이 걷히지 않고, 상로가 끊기고, 다른 문파가 결집한다. **강호를 치는 것은 나라를 흔드는 일이다.**
+        그래서 관은 무림을 '외면'하는 쪽을 택했다. 강호가 강호 안에서 죽고 죽이는 한, 관은 눈을 감는다.
+      무림의_계산: |
+        무림은 관을 **이겨도 얻을 게 없다.**
+        현령을 죽이면 지부가 오고, 지부를 죽이면 성군이 오고, 성군을 이기면 금군이 온다.
+        그 끝은 멸문(滅門)이다. 이겨도 진다. 그래서 강호는 관에 손을 대지 않는다.
+        ★ 그리고 **강호가 스스로 단속한다** — 관을 건드린 자를 정파가 먼저 친다. 불가침을 지키는 것은
+          관이 아니라 무림이다. 그것이 이 규칙이 살아 있는 진짜 이유다.
+      one_line: "★ 관은 이길 수 있으나 값이 비싸고, 무림은 이겨도 얻을 게 없다. 그래서 서로 안 건드린다"
+    faction_reaction_wiring:          # faction_reaction.yml 반응 단계(0~6)와의 접합
+      관리_살해:      { faction: gwan_gun, stage: 6, note: "토벌 — 즉시 최고 단계. 협상 없음" }
+      관아_습격:      { faction: gwan_gun, stage: 6 }
+      관물_강탈:      { faction: gwan_gun, stage: 5, note: "직접 개입 — 표국이 관물을 잃어도 여기에 걸린다" }
+      포쾌_폭행:      { faction: gwan_gun, stage: 4 }
+      수배자_은닉:    { faction: gwan_gun, stage: 3 }
+      정파의_2차반응: { faction: orthodox, stage: "+2", note: "★ 관을 건드리면 정파가 먼저 온다 — 강호의 자기단속" }
+    exceptions:                       # 불가침이 원래부터 적용되지 않는 것
+      - "도적·마교·혈교는 불가침의 보호를 받지 않는다 (강호의 일원이 아니다) — 관군 토벌 대상"
+      - "관이 무림인을 **개인 자격으로** 고용하는 것은 불가침 위반이 아니다 (포두 박호가 그렇다)"
+      - "표국의 관물 호송 — 관과 무림이 합법적으로 만나는 유일한 접점 (pyoguk)"
+
+  # ─── ★ 불가침이 깨지는 순간 — 이 세계에서 가장 큰 사건 ───
+  breach:
+    principle: "불가침은 법이 아니라 **균형**이다. 균형은 한쪽이 이익을 다시 계산하면 깨진다"
+
+    관이_먼저_깬다:
+      부패_결탁:
+        trigger: "지부·현령이 녹림과 결탁 — 상로 통행세를 나눠 먹는다"
+        stage: nokrim_jungchae        # ★ 관도를 낀 산채. 관이 눈감아 주니 산채가 큰다
+        surface: "북로 도적이 늘었는데 관군이 출동하지 않는다"
+        truth: "출동하지 않는 것이 아니라 출동할 수 없다 — 지부가 몫을 받는다"
+        player_paths: [증거_확보_상급_고발, 지부_협박_거래, 정파_보고, 녹림_합류, 침묵_대가_수령]
+        world_effect: { region_state: { security: "--", public_mood: "-" } }
+        note: "★ 가장 흔한 파열. 관이 썩는 것은 조용하다"
+      마교_잠식:
+        trigger: "금의위·성군 지휘부에 마교 첩자 — 관의 칼을 마교가 쥔다"
+        stage: [magyo_nakyang, jangan]
+        surface: "관군이 엉뚱한 문파를 친다. 수배 명단이 이상하다"
+        truth: "★ 마교는 관을 이기려 하지 않는다. **관이 무림을 치게 만든다**"
+        reveal_gate: "마교 잠식도 3단계 이상 — 초기엔 절대 노출하지 않는다 (locked_routes)"
+        world_effect: "정파 결집 또는 분열 — 강호가 '누가 첩자인가'를 서로 의심한다"
+        note: "★ 이것이 마교 루트의 종착점이다. 마교는 대군을 이끌고 오지 않는다 — 대군을 빌린다"
+      역모_혐의:
+        trigger: "황실이 특정 문파를 역모로 지목 — 봉문(封門) 또는 멸문(滅門) 칙령"
+        stage: [gyeongsa, jangan, 대상_문파]
+        force: "성군 + 금군. ★ 문파는 이길 수 없다"
+        player_paths:
+          - "칙령 집행에 가담 (관군 루트 — 공적·관직)"
+          - "문파와 함께 싸운다 (멸문 — 생존 시 수배자)"
+          - "문파를 피신시킨다 (지하 문파 — 이후 강호 전체가 은신처가 된다)"
+          - "증거를 뒤집는다 (★ 가장 어렵다 — 경사에 닿아야 한다. 황실 접근 경로 참조)"
+        world_effect: "강호가 **연합**하는가 **분열**하는가 — 이 갈림이 다음 시대를 정한다"
+        note: "★ 세계 최대 사건. 발동 조건은 서사 단계이지 플레이어 행동이 아니다 (GM/챕터 이벤트)"
+
+    무림이_먼저_깬다:
+      관리_살해:
+        trigger: "플레이어 또는 문파가 관리를 죽였다"
+        immediate: "현상수배 — 전 현에 방(榜)이 붙는다. 무공 특징·인상착의가 정확하다 (관은 기록한다)"
+        escalation:
+          1: "현 포쾌 추격 (이류 박호) — 도망칠 수 있다"
+          2: "부병 + 무림 현상금 사냥꾼 — ★ 정파 협객이 온다 (강호의 자기단속)"
+          3: "성군 개입 — 소속 문파에 '내놓으라'는 공문. **문파가 당신을 버린다**"
+          4: "봉문 — 문파가 문을 닫는다. 당신 때문에"
+        player_paths: [도주_새외, 사파_합류, 신분_세탁_하오문, 자수_유배, 관에_공을_세워_사면]
+        note: "★ 진짜 대가는 관이 아니라 강호다 — 정파가 먼저 등을 돌린다 (faction_reaction 정파 +2)"
+      관아_습격:
+        trigger: "문파·산채가 관아를 쳤다"
+        result: "★ 불가침의 완전 파기. 성군 출동 → 토벌. 강호는 돕지 않는다"
+        note: "녹림 총채가 이 선을 넘으면 관군 대토벌이 시작된다 — 녹림 루트의 종착 사건"
+      관물_상실:
+        trigger: "표국이 관물(官物) 호송에 실패했다"
+        stage: [gwando_jangan_nakyang, nokrim_jungchae]
+        result: "표국주 문책 — 신용 붕괴. 관은 표국을 벌하지 파주를 벌하지 않는다"
+        player_hook: "★ 진철산(청하 표국)의 파멸 시나리오. 등록 NPC 의 생애 사건으로 쓸 수 있다"
+        note: "★ 불가침이 깨지는 가장 작은 파열 — 그래서 가장 먼저 쓸 수 있다"
+
+    aftermath:                        # 깨진 뒤의 세계
+      강호_연합: "문파들이 뭉친다 — 관이 하나를 치면 다음은 우리다. ★ 무림맹의 탄생 조건"
+      강호_분열: "문파들이 관에 붙는다 — 남의 멸문은 나의 공적이다. ★ 정파가 정파를 친다"
+      결정_요인: "지목된 문파의 명성 + 관의 명분(증거) + 플레이어의 개입. **정해져 있지 않다**"
+      region_state: "치안·민심 전 지역 급락. 소문망 최대 강도 (rumor.yml)"
+
+  # ─── 황실 접근 경로 — ★ 있되 닿을 수 없다 ───
+  imperial_access:
+    principle: "★ 대부분의 플레이어는 평생 못 간다. 그래야 황실이 황실이다"
+    gate_base: "경사까지 28일 여정 + 경사 성문에서 **신분 검문** (무기 소지 무림인은 입성 불가가 원칙)"
+    routes:
+      무과:
+        name: "무과(武科) 응시"
+        requires: { realm_min: 일류, 소양: [글눈, 예법], favor: { faction: gwan_gun, min: 4 } }
+        path: "현 → 부 시험 → 성 시험 → 경사 전시(殿試)"
+        grants: [무관_임용, 금군_입대_자격]
+        cost: "★ 시간. 시험은 해마다 한 번이다 — 세계가 기다려 주지 않는다"
+        note: "가장 정공법. 그리고 가장 느리다"
+      금군_입대:
+        name: "금군(禁軍) 입대"
+        requires: { realm_min: 일류, favor: { faction: gwan_gun, min: 8 }, 추천: 성_절도사_또는_지부 }
+        grants: [황성_출입, 관_무공_열람, 봉록]
+        price: "★ 강호를 버린다 — 문파 소속 불가. 옛 사형제가 수배자가 되면 당신이 잡으러 간다"
+      금의위_차출:
+        name: "금의위(錦衣衛) 차출"
+        requires: { realm_min: 절정, 명성: 높음, faction: gwan_gun, favor_min: 13 }
+        grants: [황제_직속, 관무불가침_면제권, 무림_수사권]
+        price: "★ 강호 전체의 적. 금의위는 무림이 가장 미워하는 이름이다"
+        note: "★ 마교 잠식의 표적이기도 하다 (breach.마교_잠식) — 이 자리에 마교 첩자가 앉는다"
+      호위_청부:
+        name: "황실 호위 청부"
+        requires: { realm_min: 절정, 발주: [pyoguk, sangdan, 성_관아] }
+        grants: [황성_임시_출입, 1회성]
+        note: "★ 문 앞까지만 간다. 안으로는 못 들어간다 — 그것이 청부다"
+      세력_밀사:
+        name: "세력의 밀사"
+        requires: { faction_any: [hwasan, sorimsa, mudang, dangga, namgung, paengga], favor_min: 13 }
+        grants: [황성_알현_1회]
+        note: "★ 문파가 보낸다. 당신이 가는 게 아니다 — 역모 혐의를 벗으러 가는 사절이 그렇다"
+      영원히_못_간다:
+        who: "사파·녹림·수로채·살막·마교·혈교 소속, 또는 수배 이력이 있는 자"
+        note: "★ 이들에게 경사의 문은 없다. 있다면 그것은 침입이고, 침입은 곧 역모다"
+
+places_official:                     # 관의 장소 — places 와 같은 문법
+  cheongha_gwana:
+    name: "청하현 관아"
+    pos: [20, 20]                    # ★ 무대 좌표 (등록부 county_office — 아직 CheonghaBuilder 미조성)
+    stage_local: true
+    region: 섬서
+    rank: 현
+    terrain: 평지
+    tier: rich                        # 관아급 — 마을에서 가장 단단한 집 (village_tiers parcel_override 문법)
+    faction: hyeollyeong
+    npcs: [jomunwon, bakho]
+    force: "포쾌 12인 (삼류) + 포두 박호 (이류)"
+    access: 항상
+    build: later                      # ★ CheonghaBuilder 가 아직 안 짓는다 — 등록부에만 있다 (다음 과업)
+    registry: 등록됨                   # regions/cheongha_hyeon.yml county_office
+    note: "★ 등록부에 있는데 조성이 없다. 청하현에서 유일하게 무대가 빈 등록 장소 — 다음 과업 후보"
+
+  yeokcham_gwanjung:
+    name: "관중 역참 (관도 검문소)"
+    pos: [18900, 3300]
+    region: 섬서
+    rank: 현
+    terrain: 평지
+    faction: gwan_gun
+    force: "역졸 20인. 통행 검문·말 교대"
+    access: 항상
+    build: later
+    danger: 0
+    on_route: gwando_cheongha_jangan
+    note: "★ 관도를 지키는 곳. 녹림과 대립하는 지점 — 역참이 있는 구간은 도적이 없다"
+    registry: 등록_예약
+
+  jangan_bugwana:
+    name: "서안부 관아"
+    pos: [37800, 6600]                # 장안과 같은 자리 (부치 = 성도)
+    region: 섬서
+    rank: 부
+    terrain: 평지
+    tier: rich
+    faction: gwan_gun
+    force: "부병 500 (이류 소수)"
+    access: 항상
+    build: later
+    note: "★ 청하현의 상급부. 현령이 못 다루는 사건이 여기로 올라간다"
+    registry: 등록_예약
+
+  bongsangbu:
+    name: "봉상부"
+    pos: [-108600, -21000]
+    region: 섬서
+    rank: 부
+    terrain: 평지
+    tier: middle
+    faction: gwan_gun
+    travel: { factor: 1.15, days: 3 }
+    access: 항상
+    build: later
+    note: "★ 섬서 서부의 부. 확장 여백 — 청하현 서쪽 방면의 사건이 붙을 자리"
+    registry: 등록_예약
+
+  gyeongsa:
+    name: "경사 (京師) — 황성"
+    pos: [741100, -615900]
+    region: 하북
+    rank: 경사
+    terrain: 평야
+    biomes: [plains, meadow]
+    tier: rich
+    architecture: "황성급 — 성벽 안에 성벽. 자금(紫禁)의 담은 무림인이 넘을 수 있으나, 넘는 순간 역모다"
+    faction: gwan_gun
+    force: "금군 100,000+ · 금의위 (절정~화경 소수)"
+    travel: { factor: 1.15, days: 28 }
+    access: 제한                      # ★ imperial_access 의 5개 경로 중 하나를 통과해야 한다
+    access_detail: "officialdom.imperial_access 참조. 사파·수배자는 영원히 못 간다"
+    build: never                      # ★ 지금은 조성하지 않는다. 좌표와 조건만
+    scale: 5000
+    note: "★ 황실은 있되 닿을 수 없다. 28일 여정 + 신분 검문 + 경지·세력·명성 요구"
+    registry: 등록_예약
+
+  nangyeong:
+    name: "남경 (부도)"
+    pos: [967600, 251000]
+    region: 안휘
+    rank: 경사
+    terrain: 평지
+    tier: rich
+    faction: gwan_gun
+    travel: { factor: 1.15, days: 29 }
+    access: 항상                      # ★ 부도는 열려 있다 — 황제가 없다
+    build: never
+    note: "★ 강남 세력의 관 창구. 남궁세가가 여기를 통해 관과 말한다"
+    registry: 등록_예약
+
+  gunjin_daedong:
+    name: "군진 — 대동 (북방 변경)"
+    pos: [448400, -636900]
+    region: 산서
+    rank: 군진
+    terrain: 고원
+    faction: gwan_gun
+    force: "변군 30,000 — 실전 군대"
+    travel: { factor: 1.30, days: 25 }
+    access: 항상
+    build: later
+    danger: 4
+    note: "★ 마교 남하의 정면. 마교 본교 → 대동 → 경사가 최단 침공로다 (지도가 그렇게 말한다)"
+    registry: 등록_예약
+
+  gunjin_sanhaegwan:
+    name: "군진 — 산해관 (동북 관문)"
+    pos: [1057300, -628100]
+    region: 하북
+    rank: 군진
+    terrain: 평야
+    faction: gwan_gun
+    travel: { factor: 1.20, days: 37 }
+    access: 항상
+    build: later
+    note: "★ 모용세가가 이 관문 밖에 있다 — 중원과 새외 사이의 집"
+    registry: 등록_예약
+
+  gunjin_gayokgwan:
+    name: "군진 — 가욕관 (서북 관문)"
+    pos: [-968600, -604800]
+    region: 청해_서역
+    terrain: 사막
+    rank: 군진
+    faction: gwan_gun
+    travel: { factor: 1.60, days: 46 }
+    access: 항상
+    build: later
+    note: "★ 서역으로 나가는 마지막 관문. 곤륜파로 가는 길이 여기를 지난다"
+    registry: 등록_예약
+
+  yubaeji_ryeongnam:
+    name: "유배지 — 영남 변방"
+    pos: [439000, 1308100]
+    region: 해남
+    terrain: 밀림
+    tier: poor
+    faction: gwan_gun
+    travel: { factor: 1.30, days: 45 }
+    access: 형벌                      # ★ 제 발로 가는 곳이 아니다
+    access_detail: "자수·감형의 종착지. ★ 플레이어가 갈 수 있다 — 관리 살해 후 자수 루트"
+    build: later
+    note: "★ 감옥이 아니라 유배다. 살아서 돌아오면 이야기가 된다"
+    registry: 등록_예약
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 10. 청하현 무대 좌표 (cheongha_stage) — 마을 중심 기준. **CheonghaBuilder 실측값**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ★ 이 값들은 CheonghaBuilder 가 실제로 짓는 오프셋이다. **바꾸지 마라** — 코드가 원천이다.
+#   여기 적는 이유는 봇·LLM 이 "폐사당이 마을 어느 쪽이냐"를 물을 때 답할 데가 있어야 하기 때문이다.
+#
+# 무대(stage)란: 조성된 반경 1,500블록의 1:1 공간. **여기 안은 걷는다.** 밖은 여정이다.
+
+cheongha_stage:
+  center: [0, 0]                    # 장터 = 마을 중심 = 세계 원점
+  radius: 1500                      # map_spec outskirt_radius
+  walkable: true                    # ★ 도보권 — 여정 명령을 쓰지 않는다
+  anchors:                          # CheonghaBuilder anchors (village_tiers anchor_keys_immutable)
+    장터:       { pos: [0, 0],      bearing: "중심" }
+    청하객잔:    { pos: [-20, -12],  bearing: "서북" }
+    의뢰소:      { pos: [11, -17],   bearing: "북동" }
+    의방:        { pos: [-24, 8],    bearing: "서남" }
+    전장:        { pos: [12, 8],     bearing: "동남" }
+    표국:        { pos: [0, 0],      bearing: "마을 안 (PY 상수)" }
+    북쪽_산길:   { pos: [0, -59],    bearing: "북 — 대로 끝 이정표" }
+  outskirts:                        # 담장 밖 — 평탄화 없음
+    폐사당:      { pos: [-82, -75],  bearing: "북서 외곽 숲", terrain: 폐허, search: SHRINE_SITES }
+    사냥터:      { pos: [-10, -122], bearing: "북쪽 산길 너머", terrain: 산, ellipse: [32, 30] }
+    흑수나루:    { pos: [118, 12],   bearing: "동 — 강가", terrain: 물가, search: FERRY_SITES }
+  hidden:
+    북쪽_골목_창고: { pos: [-20, -20], bearing: "객잔 뒷골목", note: "하오문 거점. 등록부 north_alley_warehouse (hidden: true)" }
+  note: |
+    ★ 무대 안의 거리는 세계 축척과 같다 (1블록 = 1m). 다만 **압축된 무대**다:
+      실제 청하현 현역(縣域)은 반경 20 km 지만, 조성하는 것은 현성과 그 주변 1.5 km 뿐이다.
+      나머지는 자연 지형이 그대로 현역을 대신한다 — 들과 산이 곧 현이다.
+    성문에서 폐사당까지 약 110블록 = 도보 30초. **걸을 만하다.** 이것이 국지 스케일이다.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 11. 조성 계획 (build_plan)
+# ═══════════════════════════════════════════════════════════════════════════
+
+build_plan:
+  world: honcheon                   # ★ 전용 월드. 기존 world 는 건드리지 않는다
+  now:                              # `/혼천 세계조성` 이 지금 짓는 것
+    - cheongha_hyeon                # CheonghaBuilder.build(world, 0, groundY, 0, zones)
+    # 폐사당·사냥터·흑수나루·산길 도적은 CheonghaBuilder 가 같이 짓는다 (v6 ②, v6.9 ①②)
+  later:                            # 좌표는 있다. 조성기만 만들면 된다
+    priority_1: [hwasan, nokrim_sochae, jinryeong_simsan]       # ★ 청하현에서 5일 안 — 다음 무대
+    priority_2: [jangan, jongnam, magyo_jinryeong, yakcho_taebaek]
+    priority_3: [dangga, sorimsa, nokrim_chongchae, jangang_suroche]
+    priority_4: [나머지 전부]
+  never: [gaebang, haomun, salmak]  # ★ 망(網)·무거점 — 조성할 것이 없다. 그것이 설계다
+
+# 디스크 예산 — **큰 좌표는 공짜다**를 수치로
+disk_budget:
+  fact: "마인크래프트는 **방문한 청크만 생성**한다. 좌표 크기는 디스크에 영향이 없다"
+  now:
+    generated: "청하현 무대 반경 ~170블록 → 약 22×22 = 484 청크"
+    size: "약 10~25 MB (region 파일 압축 기준)"
+  full_build:                       # 등록된 30여 곳을 **전부** 지었을 때
+    generated: "30곳 × 평균 반경 500블록 → 30 × 63×63 ≈ 119,000 청크"
+    size: "약 2~5 GB"
+    verdict: "★ 다 지어도 5 GB. 좌표가 ±194만이어도 그 사이의 빈 공간은 **1바이트도 안 든다**"
+  world_border: "설정하지 않는다 — 여정이 텔레포트이므로 플레이어가 빈 공간을 걸어 건널 일이 없다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 12. 확장 여지 (expansion_gaps) — ★ 지금 안 쓰는 자리도 비워 둔다
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 나중에 지역 하나를 끼워 넣어도 지도를 다시 안 짜도 되게. 아래는 **의도적으로 비운 자리**다.
+
+expansion_gaps:
+  섬서_내부:
+    where: "청하현 반경 100 km 안 — 현재 등록: 종남(2일)·녹림 소채(1일)·진령 심산(3일)·마교 전초(4일)"
+    room: "★ 인접 현(1~2일) 자리가 통째로 비어 있다. player_creation '인접_현_여행' 이 갈 곳이 아직 없다"
+    next: "청하현 이웃 현 2~3개 — 튜토리얼 이후의 첫 확장"
+  오악_나머지:
+    registered: [화산(서악), 숭산(중악)]
+    empty: [태산(동악) 29일, 형산(남악) 34일, 항산(북악) 31일]
+    note: "좌표는 계산해 뒀다 (docs/design/world_map.md 표). 문파를 앉히기만 하면 된다"
+  구파_나머지:
+    empty: [곤륜, 점창, 청성, 해남]     # 좌표는 잡았다. 본산 상세가 없다
+    note: "factions.yml gupailbang.sects 8개 중 4개가 좌표만 있다 — 언제든 채운다"
+  오대세가_나머지:
+    empty: [모용세가]                 # 좌표만
+  부촌:
+    note: |
+      ★ village_tiers.yml rich_unassigned: "등록된 부유 마을이 없다"
+      → 이 지도가 그 공백을 채운다: 장안·낙양·개봉·소주·항주·강남 상로 = rich.
+        조성기가 rich 등급을 받는 날 바로 쓸 수 있다.
+  빈촌:
+    registered: [heuksu_ferry(poor), nokrim_sochae(poor), 운남·해남·서역 전역]
+    note: "★ 가난과 부가 지도에 있다 — 서쪽·남쪽 변경이 가난하고, 동쪽 강남이 부유하다"
+  관의_여백:
+    note: |
+      ★ 관(官)의 층은 **위계만 세웠고 사건이 비어 있다.** 여백이 크다:
+        · 청하현 관아(county_office)는 등록부에 있는데 조성이 없다 — **가장 가까운 다음 과업**
+        · faction_entry_routes 에 관군 입문 루트가 없다 (8루트 중 관이 빠졌다)
+        · 불가침 파열 사건 3종(부패 결탁 · 마교 잠식 · 역모 혐의)은 무대와 조건만 있고 단계가 없다
+    ready: "★ 좌표·위계·규칙은 다 있다. 사건만 얹으면 된다"
+  미개척:
+    - { name: "감숙·하서주랑", where: "x -300k~-800k, z -200k~+100k", note: "곤륜으로 가는 길목. 통째로 비어 있다" }
+    - { name: "강서·복건", where: "x +700k~+1000k, z +500k~+900k", note: "장강 남안. 통째로 비어 있다" }
+    - { name: "산동", where: "x +700k~+900k, z -300k~-100k", note: "태산이 있다. 문파가 없다" }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 13. 등록 예약 명사 (reserved_nouns) — ★ 이 파일이 새로 만든 지명
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 등록제 원칙: 새 지명 발명 최소화. 아래는 **중원의 실제 지명**이거나(무협 공용 자산),
+# 등록된 세력의 본거지에 이름이 필요해 붙인 것이다. 다른 config 가 참조하기 전까지는 '예약' 상태다.
+
+reserved_nouns:
+  실지명_중원:                        # 실제 중국 지명 — 무협의 공용 자산. 발명이 아니다
+    [장안, 낙양, 개봉, 태원, 무한, 구강, 소주, 항주,
+     화산, 종남산, 숭산, 무당산, 태산, 형산, 항산, 태백산, 진령, 태행산, 복우산, 아미산, 청성산,
+     위수, 장강, 곤륜산, 동정호]
+  지역권:                            # regions/cheongha_hyeon.yml 의 'parent_region: 섬서 지역권' 을 확장한 것
+    [섬서, 하남, 하북, 산서, 호북, 안휘, 강남, 사천, 운남, 해남, 청해_서역, 새외_북막]
+  관_지명:                            # 관(官)의 층 — 실지명 + 실제 행정 명칭. 새 조직은 최소한으로
+    실지명: [경사, 북경, 남경, 봉상부, 서안부, 대동, 산해관, 가욕관, 영남]
+    조직: [지부, 순무, 총독, 절도사, 금군, 금의위, 육부, 무과, 변군, 부병, 성군]
+    note: "★ factions.yml gwan_gun·hyeollyeong 의 하위 위계다. 새 '세력'을 만들지 않았다 — 관군 안의 계급이다"
+  거점_이름:                          # 등록된 세력에 본거지 이름이 필요해 붙였다 (세력은 전부 factions.yml 등록제)
+    - { name: "녹림 소채 / 중채 / 총채", faction: noklim, why: "faction_entry_routes noklim_entry 가 '산채'를 요구하는데 좌표가 없었다" }
+    - { name: "장강수로채 총채", faction: jangang_suroche, why: "suroche_entry 의 '채_등재' 게이트가 갈 곳이 없었다" }
+    - { name: "마교 본교 / 전초 / 잠복지", faction: magyo, why: "마교 잠식 루트가 벌어질 장소가 없었다" }
+    - { name: "혈교 은거지 / 옛 제단", faction: hyeolgyo, why: "폐사당 금기 사슬의 반대편 끝이 없었다" }
+  짐승_예약:                          # cheongha_npcs.yml 에 아직 없다 — 사냥터가 자리를 비워 두고 있다
+    - { name: 설표, where: bukbang_choweon, grade: 일류 }
+    - { name: 독충, where: namman_milim, grade: 일류 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 14. 대조표 (coverage) — 등록된 사건·루트가 전부 무대를 갖는가
+# ═══════════════════════════════════════════════════════════════════════════
+
+coverage:
+  faction_entry_routes:
+    hwasan_entry:   { stage: hwasan, status: 무대_있음 }
+    dangga_entry:   { stage: dangga, status: 무대_있음 }
+    haomun_entry:   { stage: north_alley_warehouse, status: 무대_있음, note: "청하현 무대 안 (hidden)" }
+    noklim_entry:   { stage: [nokrim_sangil, nokrim_sochae, nokrim_chongchae], status: 무대_있음,
+                      note: "★ 이번에 채웠다 — 입문급·중급·총채 3단" }
+    suroche_entry:  { stage: [heuksu_ferry, jangang_suroche], status: 무대_있음 }
+    salmak:         { stage: null, status: 무대_없음_의도적, note: "★ 살막은 좌표를 갖지 않는다. 문이 하오문 집에 있다" }
+  fortune_encounters:
+    chuigeolgae_master: { stage: abandoned_shrine, status: 무대_있음 }
+    sunken_ship_manual: { stage: heuksu_ferry,     status: 무대_있음 }
+    fever_elder_legacy: { stage: medicine_shop,    status: 무대_있음 }
+  regions_cheongha_incidents:
+    inn_unorthodox_contact: { stage: [cheongha_inn, north_alley_warehouse], status: 무대_있음 }
+    north_road_bandits:     { stage: [north_road, nokrim_sangil],           status: 무대_있음 }
+    cheongha_fever_rumor:   { stage: [medicine_shop, market, yakcho_taebaek], status: 무대_있음,
+                              note: "★ 약재값이 오르는 이유가 지도에 생겼다 — 산지가 북로 너머에 있다" }
+  beasts:
+    san_neukdae:  [bukjjok_sangil, bukbang_choweon]
+    metdwaeji:    [bukjjok_sangil, wisu_galdae]
+    horangi:      [jinryeong_simsan, taebaeksan, namman_milim]
+    bandal_gom:   [jinryeong_simsan, taebaeksan]
+    baegyeongmyo: [ami_simsan, gonryun_seolseon]
+    status: "★ 등록된 짐승 5종 전부 서식지가 있다"
+  locked_routes:                    # regions/cheongha_hyeon.yml — 초기에 열지 않는 루트
+    마교_루트:     { stage: [magyo_jinryeong, magyo_nakyang, magyo_bonkyo], status: 무대_있음_hidden }
+    혈교_루트:     { stage: [abandoned_shrine, hyeolgyo_jedan, hyeolgyo_eungeo], status: 무대_있음_hidden }
+    금기_무공_루트: { stage: [abandoned_shrine, goguk_terra], status: 무대_있음 }
+    폐사당_금기_사건: { stage: abandoned_shrine, status: 무대_있음 }
+  officialdom:
+    현:   { stage: cheongha_gwana, status: 등록됨_조성없음, note: "★ county_office 는 등록부에 있는데 CheonghaBuilder 가 안 짓는다" }
+    부:   { stage: [jangan_bugwana, bongsangbu], status: 무대_있음 }
+    성:   { stage: jangan, status: 무대_있음 }
+    경사: { stage: gyeongsa, status: 무대_있음_접근제한 }
+    군진: { stage: [gunjin_daedong, gunjin_sanhaegwan, gunjin_gayokgwan], status: 무대_있음 }
+    관군_입문루트: { status: 미설계, note: "★ faction_entry_routes 에 관군 루트가 없다 — docs/design/world_map.md 에 9번째 루트 제안" }
+  unstaged:                         # ★ 무대 없는 등록 사건
+    - { item: county_office, why: "등록부에 있으나 CheonghaBuilder 가 짓지 않는다 — 다음 과업" }
+    - { item: gwan_gun_entry_route, why: "faction_entry_routes 8루트에 관군이 없다 — 제안만 (파일 소유자가 다르다)" }

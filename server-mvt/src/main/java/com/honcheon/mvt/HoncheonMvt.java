@@ -31,6 +31,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private PartyEngine party;
     private SkillEngine skillEngine;
     private SkillListener skills;
+    private WorldMap worldMap;
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
@@ -54,6 +55,7 @@ public final class HoncheonMvt extends JavaPlugin {
                 RulesConfig.load(cfg.resolve("npc_lifecycle.yml")), RulesConfig.load(cfg.resolve("judgment.yml")));
         this.party = new PartyEngine(RulesConfig.load(cfg.resolve("party.yml")));
         this.skillEngine = new SkillEngine(cfg);
+        this.worldMap = WorldMap.load(cfg);   // 세계 지도 — world_map.yml (없으면 null)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         this.skills = new SkillListener(this, skillEngine);
 
@@ -213,5 +215,10 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public SkillListener skills() {
         return skills;
+    }
+
+    /** 세계 지도 — 등록 좌표·지형 적합성·여정 일수 (world_map.yml 이 없으면 null) */
+    public WorldMap worldMap() {
+        return worldMap;
     }
 }
