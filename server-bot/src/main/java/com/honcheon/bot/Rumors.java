@@ -123,6 +123,41 @@ final class Rumors {
         return engine.accuracyBand(accuracy);
     }
 
+    /**
+     * myeongbun_link.intensity_on_coalition — 연합이 성립하면 그 자체가 소문이 된다.
+     * 연합_성립 = 강도 4 (지역권) · 무림공적_선포 = 강도 5 (천하).
+     * ★ 정치는 수치로 보이지 않는다. 플레이어는 이 소문으로만 그것을 안다.
+     */
+    @SuppressWarnings("unchecked")
+    int coalitionIntensity(String key) {
+        Map<String, Object> link = RulesConfig.section(cfg, "myeongbun_link");
+        Map<String, Object> table = (Map<String, Object>) link.get("intensity_on_coalition");
+        Object v = table.get(key);
+        return v instanceof Number n ? n.intValue() : 3;
+    }
+
+    /** 이 세력이 조직 채널로 쓰는 망들 (faction_awareness.network_access — 없으면 빈 목록) */
+    List<String> networksOf(String faction) {
+        return factionNetworks().getOrDefault(faction, List.of());
+    }
+
+    /**
+     * 정치층의 채널 해석 — 개별 키가 없는 문파는 **계열 연락망**으로 듣는다
+     * (faction_awareness.coalition_channel: 곤륜·종남·팽가… → 정파망 / 사파 → 하오문 망).
+     * '못 듣는다'가 아니라 '늦게, 더 뒤틀려 듣는다' — 그것이 원거리 세력의 참전 시차다.
+     */
+    @SuppressWarnings("unchecked")
+    List<String> politicalNetworksOf(String faction, String coalition) {
+        List<String> own = networksOf(faction);
+        if (!own.isEmpty()) {
+            return own;
+        }
+        Map<String, Object> awareness = RulesConfig.section(cfg, "faction_awareness");
+        Object fallback = ((Map<String, Object>) awareness.get("coalition_channel")).get(coalition);
+        return fallback instanceof List<?> list ? list.stream().map(String::valueOf).toList()
+                : List.of();
+    }
+
     // ─── 전파 — 도달 스케줄 계산 (persist 는 Db.spreadRumor) ───
 
     /**

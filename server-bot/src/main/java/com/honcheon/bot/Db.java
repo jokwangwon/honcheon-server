@@ -409,6 +409,174 @@ public final class Db implements AutoCloseable {
         }
     }
 
+    // ─── 정치층 (myeongbun · authority_mandate) — 세력 대 세력 (단계 5) ───
+    //
+    // faction_standing 이 '세력 대 개인'이라면 이 둘은 '세력 대 세력'이다. 두 층은 곱해진다.
+    // 감쇠는 여기서도 **읽는 순간 정산**한다 (배치 잡 금지 — 같은 세계일이면 같은 상태).
+    //
+    // raw_gauge 는 '장부에 적힌 사실'이고, 세계가 그것을 얼마나 믿는지는 **소문의 정확도**가 정한다.
+    // 그래서 연합(참여 세력)은 저장하지 않는다 — 그것은 상태가 아니라 계산의 결과다 (Politics.form).
+
+    /** 사안 한 칸 — 무엇 때문에, 누구를 겨누는가 (raw_gauge = 배수 적용 전 사건 점수) */
+    record Issue(String issue, String target, List<String> tags, int rawGauge, int originAccuracy,
+                 String originRumor, String trueTarget, int createdDay, int updatedDay) {
+    }
+
+    @SuppressWarnings("unchecked")
+    private Issue readIssue(ResultSet rs) throws Exception {
+        List<String> tags = JSON.readValue(rs.getString("tags_json"), List.class);
+        return new Issue(rs.getString("issue"), rs.getString("target"), tags,
+                rs.getInt("raw_gauge"), rs.getInt("origin_accuracy"),
+                rs.getString("origin_rumor"), rs.getString("true_target"),
+                rs.getInt("created_day"), rs.getInt("updated_day"));
+    }
+
+    /** 지금 세계에 걸린 모든 사안 (저장값 — 감쇠 정산은 Politics.decayed 가 읽는 순간 한다) */
+    public synchronized List<Issue> issues() throws Exception {
+        List<Issue> out = new java.util.ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT * FROM myeongbun ORDER BY created_day, issue")) {
+            while (rs.next()) {
+                out.add(readIssue(rs));
+            }
+        }
+        return out;
+    }
+
+    public synchronized Optional<Issue> issue(String key) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM myeongbun WHERE issue = ?")) {
+            ps.setString(1, key);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(readIssue(rs)) : Optional.empty();
+            }
+        }
+    }
+
+    /**
+     * 명분 가산 — 정산 후 더한다 (사건이 쌓고 시간이 깎는다).
+     * 사안이 없으면 만든다: 그때의 target·tags·발원 소문(정확도)이 이 명분의 정체가 된다.
+     */
+    synchronized Issue addMyeongbun(String key, String target, List<String> tags, int delta,
+                                    int accuracy, String rumorGroup, String trueTarget,
+                                    int day, int max, Politics politics) throws Exception {
+        Optional<Issue> found = issue(key);
+        int base = found.map(i -> politics.decayed(i.rawGauge(), i.tags(), i.updatedDay(), day))
+                .orElse(0);
+        int next = Math.max(0, Math.min(max, base + delta));
+        List<String> mergedTags = found.map(Issue::tags).orElse(tags);
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO myeongbun(issue, target, tags_json, raw_gauge, origin_accuracy, "
+                        + "origin_rumor, true_target, created_day, updated_day) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "ON CONFLICT(issue) DO UPDATE SET raw_gauge = excluded.raw_gauge, "
+                        + "updated_day = excluded.updated_day, target = excluded.target, "
+                        + "origin_accuracy = excluded.origin_accuracy, "
+                        + "origin_rumor = COALESCE(excluded.origin_rumor, myeongbun.origin_rumor), "
+                        + "true_target = COALESCE(excluded.true_target, myeongbun.true_target)")) {
+            ps.setString(1, key);
+            ps.setString(2, target);
+            ps.setString(3, JSON.writeValueAsString(mergedTags));
+            ps.setInt(4, next);
+            ps.setInt(5, accuracy);
+            ps.setString(6, rumorGroup);
+            ps.setString(7, trueTarget);
+            ps.setInt(8, found.map(Issue::createdDay).orElse(day));
+            ps.setInt(9, day);
+            ps.executeUpdate();
+        }
+        return issue(key).orElseThrow();
+    }
+
+    /**
+     * 진범 규명 — 명분은 **소멸하지 않고 이전된다** (myeongbun.drains.진범_규명 = transfer).
+     * 이간(오해 밴드)을 푸는 유일한 문: 엉뚱한 세력에게 붙었던 명분이 진짜 가해자에게 옮겨 간다.
+     */
+    synchronized void transferMyeongbun(String key, String newTarget, int accuracy, int day)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE myeongbun SET target = ?, true_target = NULL, origin_accuracy = ?, "
+                        + "updated_day = ? WHERE issue = ?")) {
+            ps.setString(1, newTarget);
+            ps.setInt(2, accuracy);
+            ps.setInt(3, day);
+            ps.setString(4, key);
+            ps.executeUpdate();
+        }
+    }
+
+    /** 법명분 한 칸 (관 측 게이지 — 대상은 개인이다) */
+    record Mandate(int gauge, int peak, int updatedDay) {
+    }
+
+    private Mandate rawMandate(long characterId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT gauge, peak, updated_day FROM authority_mandate WHERE character_id = ?")) {
+            ps.setLong(1, characterId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? new Mandate(rs.getInt(1), rs.getInt(2), rs.getInt(3))
+                        : new Mandate(0, 0, 0);
+            }
+        }
+    }
+
+    /** 오늘 기준 법명분 — 정산값 (7일마다 -1. 단 15 이력이면 8에서 멈춘다) */
+    synchronized int mandate(long characterId, int today, Politics politics) throws SQLException {
+        Mandate raw = rawMandate(characterId);
+        return politics.decayedMandate(raw.gauge(), raw.peak(), raw.updatedDay(), today);
+    }
+
+    /** 법명분 가산 — 포두 +8 · 현령 +14 / 자수 -10 · 배상 -6. peak 는 감쇠 하한의 근거로 남는다 */
+    synchronized int addMandate(long characterId, int delta, int today, Politics politics)
+            throws SQLException {
+        int now = mandate(characterId, today, politics);
+        int next = Math.max(0, Math.min(politics.mandateMax(), now + delta));
+        int peak = Math.max(rawMandate(characterId).peak(), next);
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO authority_mandate(character_id, gauge, peak, updated_day) "
+                        + "VALUES(?, ?, ?, ?) ON CONFLICT(character_id) DO UPDATE SET "
+                        + "gauge = excluded.gauge, peak = excluded.peak, "
+                        + "updated_day = excluded.updated_day")) {
+            ps.setLong(1, characterId);
+            ps.setInt(2, next);
+            ps.setInt(3, peak);
+            ps.setInt(4, today);
+            ps.executeUpdate();
+        }
+        return next;
+    }
+
+    /**
+     * 그 소문이 이 망에 얼마나 정확하게 닿았는가 — **세력이 자기 조직 채널로 읽는 정확도**.
+     * -1 = 아직 닿지 않았다 (formation.channel_gate: 소식이 없으면 평가 자체가 없다).
+     * ★ 같은 사건이 망마다 다른 정확도로 도착한다 = 세력마다 다른 크기의 명분이 된다.
+     */
+    synchronized int rumorAccuracyIn(String group, String network, int day) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT accuracy FROM rumors WHERE content_json LIKE ? AND network = ? "
+                        + "AND born_day <= ? ORDER BY accuracy DESC LIMIT 1")) {
+            ps.setString(1, "%\"군\":\"" + group + "\"%");
+            ps.setString(2, network);
+            ps.setInt(3, day);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : -1;
+            }
+        }
+    }
+
+    /**
+     * ★ 절연의 집행 — 우호를 깎고 **공신 이력(peak_favor)까지 무효화**한다.
+     * faction_reaction 의 favor.decay.floor_after_공신(8) 을 무너뜨리는 유일한 예외 (politics_hook.disavowal):
+     * peak_favor 를 새 값으로 재스탬프하면 하한의 근거 자체가 사라진다 —
+     * **어느 문파도 관 앞에서 그를 감싸지 않는다.**
+     */
+    synchronized int breakFavor(String factionId, long characterId, int delta, int today, Factions f)
+            throws SQLException {
+        Standing now = standing(factionId, characterId, today, f);
+        int next = Math.max(0, Math.min(f.favorMax(), now.favor() + delta));
+        upsert(factionId, characterId, now.attention(), next, today, today, now.peakStage(), next);
+        return next;
+    }
+
     // ─── NPC 생사 (npcs.status) — 죽은 자와는 말할 수 없다 ───
 
     /** NPC 사망 기록 — state_json 에 사망일·사인·목격·시신 (연쇄의 전체 입력) */

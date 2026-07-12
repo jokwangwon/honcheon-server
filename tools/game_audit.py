@@ -206,6 +206,44 @@ def yaml_load(path: str):
     with open(path, encoding="utf-8") as fh:
         raw = fh.read().split("\n")
 
+    # 여러 줄에 걸친 흐름 리스트/맵을 한 줄로 접는다 — 실제 YAML 은 이것을 허용하고
+    # world_map.yml 이 실제로 그렇게 쓴다. 접지 않으면 파서가 "매핑이 아님"으로 죽는다.
+    folded, buf, depth = [], None, 0
+    for text in raw:
+        stripped = _strip_comment(text)
+        if buf is None:
+            depth = stripped.count("[") - stripped.count("]") + stripped.count("{") - stripped.count("}")
+            if depth > 0:
+                buf = text.rstrip()
+                continue
+            folded.append(text)
+        else:
+            depth += stripped.count("[") - stripped.count("]") + stripped.count("{") - stripped.count("}")
+            buf += " " + stripped.strip()
+            if depth <= 0:
+                folded.append(buf)
+                buf = None
+    if buf is not None:
+        folded.append(buf)
+
+    # "key:" 다음 줄에 흐름 값이 오는 형태(YAML 이 허용한다)도 붙인다 —
+    #   실지명_중원:
+    #     [장안, 낙양, ...]
+    merged, skip = [], False
+    for idx, text in enumerate(folded):
+        if skip:
+            skip = False
+            continue
+        body = _strip_comment(text).rstrip()
+        if body.endswith(":") and idx + 1 < len(folded):
+            nxt = _strip_comment(folded[idx + 1]).strip()
+            if nxt.startswith("[") or nxt.startswith("{"):
+                merged.append(body + " " + nxt)
+                skip = True
+                continue
+        merged.append(text)
+    raw = merged
+
     # 토큰화 — (indent, 본문, 줄번호[, 미리계산된 값])
     lines = []
     i = 0

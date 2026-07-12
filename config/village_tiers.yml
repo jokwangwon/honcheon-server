@@ -128,7 +128,7 @@ tiers:
     lighting:
       street: { fixture: "oak_fence 2단 + torch", spacing_same_side: 12, alternating: true }
       node:   { fixture: campfire, at: [대로 교차점, 우물, 주막 앞] }
-      interior: { fixture: wall_torch, spacing: 5, y: "+2" }
+      interior: { fixture: wall_torch, spacing: 5, y_offset: "+2" }   # y 는 YAML 1.1 불리언이다 (SnakeYAML도 true 로 읽는다)
       target_dark_pct: [12, 14]            # 어둡되 캄캄하지 않다 — 어둠도 등급이다
     props_pool:
       - decorated_pot (금 간 것 — 곁에 엎어진 것 하나)

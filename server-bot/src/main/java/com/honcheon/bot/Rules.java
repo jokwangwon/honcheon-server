@@ -30,6 +30,8 @@ public final class Rules {
     public final Rumors rumors;
     /** 세력 반응 (단계 4 C) — 주목·우호 2축, 반응 사다리·감쇠의 단일 원천 */
     public final Factions factions;
+    /** 세력 정치 (단계 5) — 명분·연합·관무불가침의 단일 원천 (세력 대 세력) */
+    public final Politics politics;
     /** 죽음과 유산 (단계 4 A) — 부상 사다리·사망 위기·상속·피의 장부의 단일 원천 */
     public final Legacy legacy;
     private final Map<String, Object> judgmentCfg;
@@ -64,6 +66,7 @@ public final class Rules {
         this.deaths = new Deaths(RulesConfig.load(configDir.resolve("npc_death.yml")));
         this.rumors = new Rumors(rumorCfg);
         this.factions = new Factions(RulesConfig.load(configDir.resolve("faction_reaction.yml")));
+        this.politics = new Politics(RulesConfig.load(configDir.resolve("faction_politics.yml")));
         this.legacy = new Legacy(RulesConfig.load(configDir.resolve("death_and_legacy.yml")));
         this.regionCfg = RulesConfig.load(configDir.resolve("regions/cheongha_hyeon.yml"));
         this.innateQiCfg = RulesConfig.load(configDir.resolve("internal_energy.yml"));

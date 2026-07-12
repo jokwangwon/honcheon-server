@@ -89,6 +89,52 @@ final class Injections {
         return out;
     }
 
+    // ─── 단계 5 — 정치 주입 (강호의 판이 게시판에 비친다) ───
+
+    /**
+     * 명분·연합이 게시판에 나타나는 방식 — 플레이어는 게이지를 보지 않는다. **의뢰를 본다.**
+     *
+     *   명분 8~14  "문파의 사자(使者)가 오간다. 의뢰소에 '조사' 의뢰가 붙는다" (observable)
+     *   연합 성립  "토벌령이 내렸다" — 연합의 토벌대에 손이 모자란다 (참여 3+)
+     *
+     * ★ 연합 전쟁의 실제 전투(관군 vs 무림)는 봇의 몫이 아니다 (MVT 또는 후속).
+     *   봇에서 그것은 **상태·소문·의뢰**로만 나타난다 — 게시판이 전선의 유일한 창이다.
+     * 등급·보수는 config (quest_generation grade_ladder · economy 의뢰_보수), 산문만 여기.
+     */
+    static List<Quests.Quest> politicsQuests(Rules rules, List<GameListener.Issue> issues) {
+        List<Quests.Quest> out = new ArrayList<>();
+        int inquiryFloor = rules.politics.observableFloor("명분_8_14");
+        for (GameListener.Issue issue : issues) {
+            String target = issue.row().target();
+            String targetName = rules.factionName(target);
+            Politics.Coalition c = issue.coalition();
+
+            if (issue.gauge() >= inquiryFloor) {
+                out.add(quest(rules, "명분_조사_" + target, "조사: " + targetName + "의 소행이라는데",
+                        "조사_채집", "조사", false,
+                        "게시판에 낯선 인장이 찍힌 쪽지가 붙었다 — 문파의 사자(使者)가 다녀갔다. "
+                                + "\"소문이 사실인지부터 알아야 하네. 확인되지 않은 말로 사람이 죽는 걸 "
+                                + "너무 많이 봤어.\"\n*(정확도가 곧 명분의 힘이다 — 증거가 명분을 두 배로 만든다)*",
+                        List.of(new Quests.Approach("현장의 흔적부터 읽는다", "감각", 2),
+                                new Quests.Approach("목격자를 찾아 말을 맞춰 본다", "화술", 2)), "soyeon"));
+            }
+            if (rules.politics.formed(c.count())) {
+                String leader = rules.politics.displayName(c.leader());
+                out.add(quest(rules, "토벌령_" + target, "토벌령: " + targetName + " — " + c.size(),
+                        "호위_소탕", "도적_소탕_현상", true,
+                        "**토벌령이 내렸다.** " + leader + "의 이름으로 무림첩이 돌았다 — "
+                                + c.participants().stream().map(rules.politics::displayName)
+                                        .collect(java.util.stream.Collectors.joining("·"))
+                                + "이(가) 뭉쳤다.\n\"손이 모자라네. 문파 사람이 아니어도 좋아 — "
+                                + "짐을 나르고, 길을 트고, 뒤를 봐 줄 사람이 필요하네.\"\n"
+                                + "*(연합에 기여하면 참여 세력 **전체**에 우호가 오른다 — 연합이 곧 인맥이다)*",
+                        List.of(new Quests.Approach("토벌대의 길잡이로 앞선다", "감각", 2),
+                                new Quests.Approach("보급과 부상자를 맡는다", "체력", 2)), "soyeon"));
+            }
+        }
+        return out;
+    }
+
     // ─── B3 — 사망 파생 주입 (누가 죽었느냐가 게시판을 바꾼다) ───
 
     /**

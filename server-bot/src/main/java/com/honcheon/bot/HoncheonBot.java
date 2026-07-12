@@ -110,7 +110,11 @@ public final class HoncheonBot {
                                                 .addChoice("장터 잡화상 장쇠", "장쇠")
                                                 .addChoice("표국주 진철산", "진철산")
                                                 .addChoice("화산파 진운", "진운")
-                                                .addChoice("포두 박호", "박호"),
+                                                .addChoice("포두 박호 (관 — 법명분 +8)", "박호")
+                                                .addChoice("현령 조문원 (관 — 법명분 +14, 즉시 절연)", "조문원"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.USER, "살해자", "피의 장부에 적힐 이름 "
+                                                        + "(관을 죽였다면 이 사람에게 법명분이 붙는다)", false),
                                         new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.STRING, "사인", "죽음의 원인 (기본: 사건_피살)", false)
                                                 .addChoice("노환·병사", "노환_병사")
@@ -127,6 +131,44 @@ public final class HoncheonBot {
                                                 .addChoice("은닉", "은닉")
                                                 .addChoice("유기 — 지연 발견", "유기_지연발견")
                                                 .addChoice("즉시 발견", "즉시_발견")),
+                        // 정치 검증 — 명분을 쌓고 연합을 성립시켜 본다 (faction_politics.yml)
+                        new SubcommandData("명분", "명분을 쌓거나 끈다 — 연합 검증용 (서버 관리자)")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "사건", "명분을 쌓는 사건 "
+                                                        + "(faction_politics myeongbun.inputs)", false)
+                                                .addChoice("관리의 사적 폭거 — 백성 살해 (+6 무고)",
+                                                        "관리의_사적_폭거_백성살해")
+                                                .addChoice("관의 은폐 발각 (+4 법의배신)", "관의_은폐_발각")
+                                                .addChoice("관의 문파 제자 다수 살해 (+7 무고·무림침해)",
+                                                        "관의_문파_제자_다수_살해")
+                                                .addChoice("관의 문파 토벌 — 멸문 (+10 존망)",
+                                                        "관의_문파_토벌_멸문")
+                                                .addChoice("관의 무림 일제 검속 (+8 존망)", "관의_무림_일제_검속")
+                                                .addChoice("관과 금기세력의 결탁 증거 (+9 금기)",
+                                                        "관과_금기세력의_결탁_증거")
+                                                .addChoice("마교 준동 확증 (+8 금기·존망)", "마교_준동_확증")
+                                                .addChoice("무고한 학살 — 장터·촌락 (+8 무고)",
+                                                        "무고한_학살_장터_촌락")
+                                                .addChoice("문파 멸문 (+10 무림침해·존망)", "문파_멸문"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "대상",
+                                                "명분이 겨누는 세력 id (기본: 관 → gwan_gun · 금기 → magyo)",
+                                                false),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.INTEGER, "정확도",
+                                                "소문의 정확도 = 명분의 배수 (80+ ×1.0 / 50+ ×0.7 / "
+                                                        + "30+ ×0.5 대상전환 / 29- ×0)", false),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "해소",
+                                                "명분을 끈다 — 관의 유일한 무기", false)
+                                                .addChoice("가해자 처형 공개 (-6 꼬리 자르기)",
+                                                        "가해자_처형_공개")
+                                                .addChoice("배상 공개 (-4)", "배상_공개")
+                                                .addChoice("피해 당사자 화해 (-8)", "피해_당사자_화해")
+                                                .addChoice("참여 세력 이익 배분 — 매수 (-3)",
+                                                        "참여_세력_이익_배분")
+                                                .addChoice("진범 규명 (이전 — 대상에 진범을 댈 것)",
+                                                        "진범_규명")),
                         new SubcommandData("도움말", "명령과 규칙 안내"));
         // 개발 중엔 길드 스코프 등록(즉시 반영) — HONCHEON_GUILD_ID 설정 시. 글로벌은 최대 1시간 지연
         String guildId = System.getenv("HONCHEON_GUILD_ID");

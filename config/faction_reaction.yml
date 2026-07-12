@@ -80,6 +80,20 @@ favor:
     - "우호 '공신' 이상은 주목 감쇠를 가속한다 (매 감쇠 -2) — 믿는 자는 덜 감시한다"
   npc_trust_note: "NPC 개인 신뢰와 별개 축 — 곽진이 고마워하는 것(개인)과 상단이 기억하는 것(조직)은 다르다. 개인 신뢰는 보고를 통해 우호 입력이 될 수 있다"
 
+# ─── 정치층 훅 (config/faction_politics.yml) ───
+# 이 파일(주목·우호)은 **세력 대 개인**이다. 명분·연합은 **세력 대 세력**이다.
+# 두 층은 곱해진다 — 아래가 그 접합면이다. 새 통화 없음 (명분도 0~30, 같은 감쇠 문법).
+politics_hook:
+  coalition_wartime:
+    rule: "연합 참여 세력은 해당 사안 대상의 주목 score 를 +2/라운드(7일) 가산 (전시 = 온 조직이 찾는다)"
+  coalition_contribution:
+    rule: "연합에 기여하면 참여 세력 **전체**에 favor 공적_소(+2) — 연합이 곧 인맥이다"
+  disavowal:
+    trigger: "faction_politics.authority_mandate >= 10 AND 무림 명분(myeongbun) < 8"
+    override: "favor.decay.floor_after_공신(8) 무효 — 이 규칙의 유일한 예외 (공신 이력조차 무너진다)"
+    effect: "정파 score +6 / 정파 favor -8 / 사파 favor -4 / '세력 비호 1회'(공신 13 혜택) 사용 불가"
+    note: "무림이 그를 버리는 것은 냉혹함이 아니라 생존이다 — 한 사람 때문에 관무전쟁을 할 수는 없다"
+
 # 단계별 세력 행동 지침 (GM 출력용 — 반드시 서사로 표현)
 stage_actions:
   1: "내부 대화에 화제로 등장. 플레이어는 소문으로만 감지 가능"

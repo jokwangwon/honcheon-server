@@ -81,6 +81,29 @@ CREATE TABLE IF NOT EXISTS faction_standing (    -- 세력 × 캐릭터 2축
     PRIMARY KEY (faction_id, character_id)
 );
 
+-- ─── 정치층 (config/faction_politics.yml) — 세력 대 세력 ───
+-- faction_standing 이 '세력 대 개인'이라면, 이 둘은 '세력 대 세력'이다. 두 층은 곱해진다.
+-- 감쇠는 배치 잡이 아니라 **읽는 순간 정산**한다 (faction_standing 관행 계승 — 같은 날 = 같은 상태).
+
+CREATE TABLE IF NOT EXISTS myeongbun (           -- 명분(名分) — 연합의 방아쇠. 사안(issue)마다 하나
+    issue           TEXT PRIMARY KEY,            -- 사안 id ("<사건키>:<대상>")
+    target          TEXT NOT NULL,               -- 명분이 겨누는 세력 id (factions.yml 등록부)
+    tags_json       TEXT NOT NULL DEFAULT '[]',  -- 무고/무림침해/존망/금기/법의배신/규약/생계
+    raw_gauge       INTEGER NOT NULL DEFAULT 0,  -- 사건 점수 누적 (배수 적용 전 — '장부에 적힌 사실')
+    origin_accuracy INTEGER NOT NULL DEFAULT 90, -- 발원 소문의 정확도 = 명분 배수의 원천
+    origin_rumor    TEXT,                        -- 이 명분을 실어 나른 소문군 (rumors.content_json.군)
+    true_target     TEXT,                        -- 오해 밴드의 진범 (진범_규명 시 명분이 이쪽으로 이전)
+    created_day     INTEGER NOT NULL,
+    updated_day     INTEGER NOT NULL             -- 감쇠 기산점 (7일마다 -1, 존망 태그는 4에서 멈춘다)
+);
+
+CREATE TABLE IF NOT EXISTS authority_mandate (   -- 법명분(法名分) — 관 측의 게이지. 대상 = 개인
+    character_id INTEGER PRIMARY KEY REFERENCES characters(id),
+    gauge        INTEGER NOT NULL DEFAULT 0,     -- 0~30 (포두 8 · 현령 14 · 10 이상 = 강호의 절연)
+    peak         INTEGER NOT NULL DEFAULT 0,     -- 도달 최고치 (15 이력 = 감쇠 하한 8)
+    updated_day  INTEGER NOT NULL                -- 감쇠 기산점 (7일마다 -1)
+);
+
 CREATE TABLE IF NOT EXISTS price_events (
     id         INTEGER PRIMARY KEY,
     item       TEXT NOT NULL,

@@ -73,6 +73,7 @@ public final class GameListener extends ListenerAdapter {
                 case "정산" -> settleDay(event);
                 case "사망" -> adminKill(event);
                 case "사선" -> adminDeathLine(event);    // A — 죽음 검증용 (관리자)
+                case "명분" -> adminMyeongbun(event);    // 단계 5 — 정치 검증용 (관리자)
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
             }
         } catch (Exception e) {
@@ -237,6 +238,30 @@ public final class GameListener extends ListenerAdapter {
             }
             eb.addField("세력 관계", rel.toString(), false);
         }
+
+        // ─── 단계 5 — 정치: 세계가 무엇으로 뭉치는가 / 세계가 나를 어떻게 보는가 ───
+        int mandate = db.mandate(chId, today, rules.politics);
+        if (mandate > 0) {
+            boolean cut = disavowed(chId, today);
+            eb.addField("⚖️ 법명분 (관)", "**" + mandate + "** — " + rules.politics.mandateEffect(mandate)
+                            + "\n*" + rules.politics.observableMandate() + "*"
+                            + (cut ? "\n\n🩸 **강호의 절연** — 어느 문파도 관 앞에서 너를 감싸지 않는다. "
+                                    + "현상금 ×" + rules.politics.bountyMultiplier()
+                                    + " · **입문 루트 전부 폐쇄 (마교 루트만 남는다)**"
+                                    + "\n출구: 자수(" + rules.politics.mandateDrain("자수") + ") · 배상("
+                                    + rules.politics.mandateDrain("배상") + ") · 진범 규명(전량)"
+                                    : "\n*절연 문턱은 " + rules.politics.disavowalMandateMin()
+                                            + " — 한 번 더 하면 끝이다*"),
+                    false);
+        }
+        List<Issue> issues = politics(today);
+        if (!issues.isEmpty()) {
+            StringBuilder pol = new StringBuilder();
+            for (Issue issue : issues) {
+                pol.append(coalitionLine(issue)).append('\n');
+            }
+            eb.addField("🏛️ 명분과 연합 (강호의 판)", pol.toString(), false);
+        }
         if (sheet.get("피의_장부") instanceof List<?> grudges && !grudges.isEmpty()) {
             eb.addField("피의 장부", "전생의 원한: **"
                     + grudges.stream().map(g -> killerLabel(String.valueOf(g)))
@@ -278,8 +303,9 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 전장 [예치] [인출] [상속인]` 금서방의 전장 — 죽어서 남길 수 있는 유일한 재산\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
-                        + "`/혼천 사망 <NPC>` NPC를 죽인다 — 연쇄 검증용 (서버 관리자)\n"
+                        + "`/혼천 사망 <NPC> [살해자]` NPC를 죽인다 — 연쇄 검증용 (서버 관리자)\n"
                         + "`/혼천 사선 @상대` 플레이어에게 사선을 긋는다 — 죽음 검증용 (서버 관리자)\n"
+                        + "`/혼천 명분 <사건>` 명분을 쌓는다 — 연합·절연 검증용 (서버 관리자)\n"
                         + "판정은 공개(2d6), 서사는 스레드에서.\n"
                         + "**죽음은 비가역 — 계정당 한 삶.** 패배의 기본값은 죽음이 아니다(제압·중상). "
                         + "그러나 살의 앞에서는 빈사에 이르고, 개입이 없으면 죽는다.")
@@ -955,6 +981,11 @@ public final class GameListener extends ListenerAdapter {
                 : Injections.routeQuests(rules, db.favor("orthodox", chId, today, rules.factions),
                         tagsOf(sheet).keySet()));
         out.addAll(Injections.deathQuests(rules, db.deadNpcs(), today));
+        // 단계 5 — 강호의 판이 게시판에 비친다 (명분 조사 · 토벌령).
+        // 단 절연당한 자에게 토벌대는 손을 내밀지 않는다 — 그가 곧 토벌의 대상이다
+        if (!disavowed(chId, today)) {
+            out.addAll(Injections.politicsQuests(rules, politics(today)));
+        }
         return out;
     }
 
@@ -1069,6 +1100,14 @@ public final class GameListener extends ListenerAdapter {
                     + "큰 일은 못 주네. 잔심부름이나 가져가게.\"\n"
                     + "*(사파 악명 — 정파 경유 의뢰 없음 · 등급 상한 "
                     + rules.factions.questGradeCap(0) + ")*";
+        }
+        // 단계 5 — 절연: 게시판에 붙은 방(榜)에 **네 이름이 적혀 있다**
+        if (disavowed(chId, today)) {
+            reaction += "\n\n🩸 **게시판 한복판에 방(榜)이 붙어 있다 — 네 이름이다.**\n"
+                    + "\"…관의 사람을 벤 자라더군. 현상금이 두 배로 걸렸소.\"\n"
+                    + "창구는 눈을 마주치지 않는다. 어제까지 밥을 먹던 객잔도 문을 잠갔다.\n"
+                    + "*(강호의 절연 — 법명분 " + db.mandate(chId, today, rules.politics)
+                    + " · 세력 경유 의뢰 없음 · 현상금 ×" + rules.politics.bountyMultiplier() + ")*";
         }
         EmbedBuilder eb = new EmbedBuilder().setColor(INK)
                 .setTitle("의뢰소 게시판 — " + today + "일차")
@@ -1832,11 +1871,24 @@ public final class GameListener extends ListenerAdapter {
                 attempt.networks().get(0), today);
 
         // ④ 분기 — hwasan_entry.direct_approach.branches (닫히는 문은 없다)
+        //   단 하나의 예외가 있다: **강호의 절연.** 관을 죽인 자 앞에서는 문이 닫힌다 —
+        //   냉혹함이 아니라 생존이다 (한 사람 때문에 관무전쟁을 할 수는 없다).
         String branch;
         String body;
         List<Button> buttons = new ArrayList<>();
         int walkIn = rules.routes.walkInDifficultyModifier(HWASAN);
-        if (notorious) {
+        if (disavowed(chId, today)) {
+            branch = "절연_문전_폐쇄";
+            putTag(sheet, "절연", today);
+            body = "산문이 보이기도 전에 길이 막혔다. 화산의 제자 셋이 검을 든 채 서 있다.\n"
+                    + "\"관(官)의 사람을 벤 자가 산문에 온다고?\" — 목소리에 두려움이 섞여 있다.\n"
+                    + "\"…우리는 자네를 감싸지 않네. 감쌀 수 없네. **자네 하나 때문에 관과 전쟁을 할 수는 없어.**\"\n"
+                    + "검끝이 흔들리지 않는다. 이들은 자네를 쫓아내러 온 게 아니라 **베러** 왔다 —\n"
+                    + "관보다 먼저. 관에게 무림을 칠 구실을 주지 않으려고.\n\n"
+                    + "*(강호의 절연 — 법명분 " + db.mandate(chId, today, rules.politics)
+                    + " · 전 입문 루트 폐쇄 · 현상금 ×" + rules.politics.bountyMultiplier() + ")*\n"
+                    + "*열려 있는 문은 하나뿐이다 — 아무도 이름을 묻지 않는 쪽. 출구: 자수 · 배상 · 진범 규명.*";
+        } else if (notorious) {
             branch = "문전_축객_경고";
             putTag(sheet, "축객", today);
             body = "산문 앞에 서기도 전에 젊은 도사가 길을 막았다. 눈이 차다.\n"
@@ -2066,6 +2118,52 @@ public final class GameListener extends ListenerAdapter {
                     .append(rules.deaths.missingPersonDays()).append("일 뒤 *실종*이 게시판에 뜬다");
         }
 
+        // ★ 단계 5 — 관을 죽였는가. 그렇다면 오르는 것은 무림의 명분이 아니라 **관의 법명분**이다
+        //   (npc_death.yml succession.<npc>.political.authority_mandate — 포두 +8 · 현령 +14)
+        StringBuilder politicsNote = new StringBuilder();
+        Integer mandateDelta = rules.deaths.authorityMandateOf(npcKey);
+        var killerOpt = event.getOption("살해자");
+        Map<String, Object> killer = killerOpt == null ? null
+                : db.findCharacter(killerOpt.getAsUser().getId()).orElse(null);
+        if (mandateDelta != null && killer != null) {
+            long killerId = ((Number) killer.get("id")).longValue();
+            int mandate = db.addMandate(killerId, mandateDelta, today, rules.politics);
+            db.logEvent("법명분", "character", String.valueOf(killerId), "npc", npcKey,
+                    Map.of("가산", mandateDelta, "법명분", mandate,
+                            "구간", String.valueOf(rules.politics.mandateEffect(mandate))));
+            int murim = murimGaugeAgainstAuthority(today);
+            politicsNote.append("\n\n⚖️ **법명분 +").append(mandateDelta).append(" → ").append(mandate)
+                    .append("** (").append(killer.get("name")).append(")\n*")
+                    .append(rules.politics.mandateEffect(mandate)).append('*');
+            if (rules.politics.disavowed(mandate, murim)) {
+                boolean fresh = applyDisavowal(killerId, npcKey, today);
+                politicsNote.append("\n\n🩸 **강호의 절연 (murim_disavowal)**")
+                        .append(fresh ? "" : " — *이미 발동해 있다*")
+                        .append("\n무림 명분은 **").append(murim).append("** — 관이 잘못한 게 없다. ")
+                        .append("연합의 방아쇠가 당겨지지 않는다.\n")
+                        .append("대신 **강호가 먼저 그를 친다** — 관에게 무림을 칠 구실을 주지 않으려고.\n")
+                        .append("· 정파 주목 **+").append(rules.politics.disavowalOrthodoxAttention())
+                        .append("** · 정파 우호 **").append(rules.politics.disavowalOrthodoxFavor())
+                        .append("** (공신 이력의 하한조차 무너진다) · 사파 우호 **")
+                        .append(rules.politics.disavowalUnorthodoxFavor()).append("**\n")
+                        .append("· 현상금 **×").append(rules.politics.bountyMultiplier())
+                        .append("** · 비호 정지 · **전 입문 루트 폐쇄 — 마교 루트만 남는다**\n")
+                        .append("· 정파 토벌대(").append(rules.deaths.factionProxy("orthodox"))
+                        .append(")가 관(").append(rules.deaths.factionProxy("gwan_gun"))
+                        .append(")보다 먼저 온다");
+            } else {
+                politicsNote.append("\n*절연 문턱 ").append(rules.politics.disavowalMandateMin())
+                        .append(" 미달 — 아직 강호는 등을 돌리지 않았다*");
+            }
+            String murimEscalation = rules.deaths.escalationMurim(npcKey);
+            if (murimEscalation != null) {
+                politicsNote.append("\n\n*").append(murimEscalation).append('*');
+            }
+        } else if (mandateDelta != null) {
+            politicsNote.append("\n\n⚖️ *관(官)의 사람이다 — 법명분 +").append(mandateDelta)
+                    .append(". 다만 **살해자**를 지정하지 않았다 (`살해자:@아무개`) → 장부에 이름이 없다.*");
+        }
+
         // B1 — 서비스 공백·후계 예고
         StringBuilder gapNote = new StringBuilder();
         if (facility != null) {
@@ -2089,10 +2187,158 @@ public final class GameListener extends ListenerAdapter {
                 .setTitle("[GM] " + name + "이(가) 죽었다")
                 .setDescription("**" + rules.npcRole(npcKey) + "** · 사인 " + cause.replace('_', ' ')
                         + " · 목격 " + witness + " · 시신 " + bodyState + "\n\n"
-                        + gapNote + "\n" + note + "\n\n"
+                        + gapNote + "\n" + note + politicsNote + "\n\n"
                         + "· `/혼천 대화`에서 이 이름은 사라진다 (죽은 자와 말할 수 없다)\n"
                         + "· 내일 게시판이 바뀐다 — 죽음이 낳은 의뢰가 뜬다 (`/혼천 정산` → `/혼천 의뢰`)")
                 .build()).queue();
+    }
+
+    /**
+     * 관리자 검증 명령 — 명분을 쌓거나 끈다 (`/혼천 명분`). 12차 검증의 손잡이.
+     *
+     * 사건은 등록부에서만 온다 (faction_politics.yml myeongbun.inputs — 신규 사건 발명 금지).
+     * ★ 정확도가 곧 배수다: 같은 사건도 괴담(29-)이면 명분이 되지 못하고,
+     *   오해(30~49)면 **엉뚱한 세력에게 붙는다** (마교 이간의 통로).
+     * 사건은 소문으로 세상에 나간다 — 그 소문이 각 세력의 조직 채널에 닿아야 그들이 셈을 시작한다.
+     */
+    private void adminMyeongbun(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        String key = optionOr(event, "사건", "");
+        String drain = optionOr(event, "해소", null);
+        String target = optionOr(event, "대상", null);
+        int today = db.worldDay();
+
+        if (drain != null) {
+            resolveMyeongbun(event, drain, key, target, today);
+            return;
+        }
+        if (!rules.politics.inputKeys().contains(key)) {
+            event.reply("등록부에 없는 사건이다 — faction_politics.yml myeongbun.inputs 의 것만 쓴다.\n등록된 것: "
+                    + String.join(" · ", rules.politics.inputKeys())).setEphemeral(true).queue();
+            return;
+        }
+        if (target == null) {
+            target = defaultTarget(key);
+        }
+        if (rules.politics.coalitionOf(target) == null) {
+            event.reply("등록부에 없는 세력이다 — factions.yml 의 id 만 쓴다 (예: gwan_gun · magyo · noklim)")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        int accuracy = event.getOption("정확도") == null ? rules.initialAccuracy("직접_목격")
+                : (int) event.getOption("정확도").getAsLong();
+        String band = rules.rumors.band(accuracy);
+        int value = rules.politics.inputValue(key);
+        List<String> tags = rules.politics.inputTags(key);
+        String issueKey = key + ":" + target;
+
+        // 사건은 소문을 타고 온다 — 이 소문이 곧 명분의 진위이자, 세력별 참전 시차의 원천이다
+        String group = rumorGroup("명분", issueKey, today);
+        List<String> rumorTags = new ArrayList<>(tags);
+        rumorTags.add("정치");
+        int intensity = rules.rumors.intensityByVisibility(
+                value >= 8 ? "공개_다수_목격" : "소수_목격_또는_간접");
+        spread(group, "《" + key.replace('_', ' ') + "》 — " + rules.factionName(target) + "의 소행이라 한다",
+                rules.factionName(target), null, rumorTags, intensity, accuracy,
+                rules.originNetwork("market"), today);
+
+        Db.Issue row = db.addMyeongbun(issueKey, target, tags, value, accuracy, group, null,
+                today, 30, rules.politics);
+        Issue issue = readIssue(row, today);
+        db.logEvent("명분", "world", "gm", "faction", issueKey,
+                Map.of("사건", key, "대상", target, "사건점수", value, "정확도", accuracy,
+                        "밴드", band, "배수", rules.politics.accuracyMultiplier(band),
+                        "명분", issue.gauge(), "태그", tags,
+                        "참여", issue.coalition().participants()));
+        coalitionWatch(today);
+
+        EmbedBuilder eb = new EmbedBuilder().setColor(BLOOD)
+                .setTitle("[GM] 명분 — " + key.replace('_', ' '))
+                .setDescription("사건 점수 **" + value + "** × 정확도 " + accuracy + " (**" + band
+                        + "** ×" + rules.politics.accuracyMultiplier(band) + ") → 명분 **"
+                        + issue.gauge() + "**\n태그: " + String.join(" · ", tags)
+                        + (rules.politics.targetSwap(band)
+                                ? "\n\n⚠️ **오해 밴드 — 명분이 엉뚱한 세력에게 붙었다.** "
+                                        + "범인·동기·대상이 뒤바뀌었다. 진범 규명만이 이것을 되돌린다 "
+                                        + "(`/혼천 명분 해소:진범_규명 대상:<진범>`)"
+                                : ""));
+        eb.addField("정치판", coalitionLine(issue), false);
+        eb.addField("균형점", rules.politics.balancePoint()
+                + " — 관은 이 상태를 만들지 않는 데 전력을 쓴다", false);
+        eb.setFooter("소문이 각 세력의 조직 채널에 닿아야 그들이 셈을 시작한다 "
+                + "(개방 1일 · 정파망 3일) — `/혼천 정산` 으로 날을 넘겨 보라");
+        event.replyEmbeds(eb.build()).queue();
+    }
+
+    /** 명분의 기본 대상 — 관의 폭거는 관에게, 금기는 마교에게 (등록부 밖의 대상은 발명하지 않는다) */
+    private String defaultTarget(String key) {
+        if (key.startsWith("관")) {
+            return "gwan_gun";
+        }
+        if (key.startsWith("마교") || key.startsWith("금기") || key.startsWith("인신공양")) {
+            return "magyo";
+        }
+        return "noklim";   // 무림 내부 사건의 기본 가해자 — 대상은 옵션으로 덮어쓴다
+    }
+
+    /**
+     * 명분을 끈다 — 관의 유일한 무기 (myeongbun.drains).
+     * 가해자 처형 -6 (꼬리 자르기) · 배상 -4 · 화해 -8 · 진범 규명 = **이전(transfer)**.
+     * 진범 규명만이 소멸이 아니다 — 명분은 사라지지 않고 진짜 가해자에게 옮겨 간다.
+     */
+    private void resolveMyeongbun(SlashCommandInteractionEvent event, String drain, String key,
+                                  String target, int today) throws Exception {
+        Db.Issue row = null;
+        for (Db.Issue candidate : db.issues()) {
+            if (key.isBlank() || candidate.issue().startsWith(key + ":")) {
+                row = candidate;
+                break;
+            }
+        }
+        if (row == null) {
+            event.reply("걸려 있는 사안이 없다 — 먼저 명분을 쌓아라.").setEphemeral(true).queue();
+            return;
+        }
+        if ("진범_규명".equals(drain)) {
+            if (target == null || rules.politics.coalitionOf(target) == null) {
+                event.reply("진범을 대야 한다 — `대상:<세력 id>` (등록부의 id 만)").setEphemeral(true).queue();
+                return;
+            }
+            int confirmed = rules.initialAccuracy("직접_목격");   // 증거는 정확도를 사실적 밴드로 올린다
+            db.transferMyeongbun(row.issue(), target, confirmed, today);
+            Issue after = readIssue(db.issue(row.issue()).orElseThrow(), today);
+            db.logEvent("명분_해소", "world", "gm", "faction", row.issue(),
+                    Map.of("수단", drain, "이전", target, "이전_전_대상", row.target(),
+                            "명분", after.gauge()));
+            coalitionWatch(today);
+            event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                    .setTitle("[GM] 진범 규명 — 명분이 이전됐다")
+                    .setDescription("명분은 소멸하지 않았다. **" + rules.factionName(row.target())
+                            + "**에게서 **" + rules.factionName(target) + "**에게로 옮겨 갔다.\n"
+                            + "정확도가 사실적 밴드(" + confirmed + ")로 확정된다 — 조사가 곧 명분의 확정이다.\n\n"
+                            + coalitionLine(after)).build()).queue();
+            return;
+        }
+        Integer value = rules.politics.drainValue(drain);
+        if (value == null) {
+            event.reply("등록되지 않은 해소 수단이다 — 등록된 것: "
+                    + String.join(" · ", rules.politics.drainKeys())).setEphemeral(true).queue();
+            return;
+        }
+        Db.Issue updated = db.addMyeongbun(row.issue(), row.target(), row.tags(), value,
+                row.originAccuracy(), row.originRumor(), row.trueTarget(), today, 30, rules.politics);
+        Issue after = readIssue(updated, today);
+        db.logEvent("명분_해소", "world", "gm", "faction", row.issue(),
+                Map.of("수단", drain, "가산", value, "명분", after.gauge(),
+                        "참여", after.coalition().participants()));
+        event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                .setTitle("[GM] 명분 해소 — " + drain.replace('_', ' '))
+                .setDescription("명분 **" + value + "** → 남은 명분 **" + after.gauge() + "**\n"
+                        + "*명분은 소진된다. 그래서 관은 버티기만 해도 이긴다 — 이것이 억지의 절반이다.*\n\n"
+                        + coalitionLine(after)).build()).queue();
     }
 
     private String optionOr(SlashCommandInteractionEvent event, String key, String fallback) {
@@ -2107,7 +2353,7 @@ public final class GameListener extends ListenerAdapter {
     // 감쇠는 읽을 때 계산한다 (Db.heard). 전 과정 무주사위 — 같은 날이면 같은 소문판이다.
 
     /** 소문 파종 — 반환: 몇 개의 망에 닿게 되었는가 (0 = 소문 없음) */
-    private int spread(String group, String truth, String subject, Long subjectId, List<String> tags,
+    int spread(String group, String truth, String subject, Long subjectId, List<String> tags,
                        int intensity, int accuracy, String originNet, int day) throws Exception {
         if (intensity <= 0) {
             return 0;
@@ -2211,6 +2457,185 @@ public final class GameListener extends ListenerAdapter {
         return "**" + rules.factionName(s.faction()) + "** — 주목 " + s.attention()
                 + " (" + stage.stage() + "단계 " + stage.name() + ") · 우호 " + s.favor()
                 + " (" + level.name() + ")";
+    }
+
+    // ═══ 단계 5 — 정치층: 명분이 연합을 부르고, 관을 건드리면 강호가 등을 돌린다 ═══
+    //
+    // faction_reaction(주목·우호)이 '세력 대 개인'이라면 이 층은 '세력 대 세력'이다.
+    //
+    //   ① 명분   사건이 쌓는 0~30 게이지 (myeongbun 테이블). **소문의 정확도가 곧 명분의 배수다.**
+    //   ② 연합   세력별 임계를 넘은 자만 붙는다. 저장하지 않는다 — 읽는 순간 계산한다 (결정론).
+    //   ③ 절연   관을 죽이면 법명분이 오르고, 강호가 **관보다 먼저** 그를 친다. 전 입문 루트 폐쇄.
+    //
+    // ★ 각 세력은 **자기 조직 채널에 닿은 정확도**로 명분을 읽는다 (rumor.yml network_access):
+    //   개방은 거리에서 오늘 듣고, 정파망은 사흘 뒤 조금 뒤틀린 이야기로 듣는다.
+    //   → 망별 속도가 곧 참전 시차이고, 오해 밴드는 명분이 엉뚱한 세력에게 붙는 통로다.
+
+    /** 한 사안의 오늘 모습 — 게이지(정산·배수 반영)와 지금 붙어 있는 자들 */
+    record Issue(Db.Issue row, int gauge, Politics.Coalition coalition) {
+    }
+
+    /**
+     * 사안 하나를 오늘 기준으로 읽는다 — 감쇠 정산 + 정확도 배수 + 연합 계산.
+     * 세계 게이지는 발원 정확도로, 각 세력의 게이지는 **그 세력의 조직 채널 정확도**로 잰다.
+     */
+    Issue readIssue(Db.Issue row, int today) throws Exception {
+        int raw = rules.politics.decayed(row.rawGauge(), row.tags(), row.updatedDay(), today);
+        int world = rules.politics.gaugeFrom(raw, rules.rumors.band(row.originAccuracy()));
+
+        Map<String, Integer> byFaction = new LinkedHashMap<>();
+        for (String faction : rules.politics.murim()) {
+            int accuracy = -1;
+            for (String net : rules.rumors.politicalNetworksOf(faction,
+                    rules.politics.coalitionOf(faction))) {
+                accuracy = Math.max(accuracy,
+                        row.originRumor() == null ? -1
+                                : db.rumorAccuracyIn(row.originRumor(), net, today));
+            }
+            if (accuracy < 0) {
+                continue;   // 조직 채널에 소식이 닿지 않았다 — 평가 자체가 없다 (formation.channel_gate)
+            }
+            byFaction.put(faction, rules.politics.gaugeFrom(raw, rules.rumors.band(accuracy)));
+        }
+        return new Issue(row, world,
+                rules.politics.form(byFaction, row.tags(), row.target(), REGION_SECT));
+    }
+
+    /**
+     * 이 지역권의 문파 — 청하현이 닿는 산문은 화산뿐이다 (travel() 의 제약과 같은 사실).
+     * 여기 사건은 화산의 앞마당 일이다 (인접_지역 -4). 곤륜·해남에게는 남의 땅이다 (거리_원거리 +2).
+     */
+    private static final String REGION_SECT = "hwasan";
+
+    /** 오늘의 정치판 — 게이지가 살아 있는 사안들 (같은 세계일이면 같은 판) */
+    List<Issue> politics(int today) throws Exception {
+        List<Issue> out = new ArrayList<>();
+        for (Db.Issue row : db.issues()) {
+            Issue issue = readIssue(row, today);
+            if (issue.gauge() > 0 || issue.coalition().count() > 0) {
+                out.add(issue);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 무림이 관에 대해 가진 명분 — 절연의 두 번째 조건 ("무림 명분 < 8").
+     * 관이 잘못한 게 있으면 강호는 그를 버리지 않는다. 그래서 마교는 관을 사칭한다.
+     */
+    int murimGaugeAgainstAuthority(int today) throws Exception {
+        int max = 0;
+        for (Issue issue : politics(today)) {
+            if ("authority".equals(rules.politics.coalitionOf(issue.row().target()))) {
+                max = Math.max(max, issue.gauge());
+            }
+        }
+        return max;
+    }
+
+    /** 지금 이 사람은 강호에게 버림받았는가 (법명분 >= 10 AND 무림 명분 < 8) */
+    boolean disavowed(long chId, int today) throws Exception {
+        return rules.politics.disavowed(db.mandate(chId, today, rules.politics),
+                murimGaugeAgainstAuthority(today));
+    }
+
+    /**
+     * ★ 강호의 절연 집행 — 정파 주목 +6 / 정파 우호 -8 / 사파 우호 -4.
+     * breakFavor 는 공신 이력(peak_favor)까지 무효화한다 — favor floor 를 무너뜨리는 유일한 예외다.
+     * 봇이 실제로 게이트에 쓰는 그룹 id(orthodox)까지 함께 친다: **입문 루트가 여기서 닫힌다.**
+     * 멱등 — 같은 사건으로 두 번 등을 돌리지는 않는다 (events 원장이 문지기다).
+     */
+    boolean applyDisavowal(long chId, String cause, int today) throws Exception {
+        if (db.eventExists("절연", String.valueOf(chId), cause)) {
+            return false;
+        }
+        int attention = rules.politics.disavowalOrthodoxAttention();
+        int orthodoxFavor = rules.politics.disavowalOrthodoxFavor();
+        int unorthodoxFavor = rules.politics.disavowalUnorthodoxFavor();
+        for (String faction : rules.politics.murim()) {
+            if ("orthodox".equals(rules.politics.coalitionOf(faction))) {
+                db.addAttention(faction, chId, attention, today, rules.factions);
+                db.breakFavor(faction, chId, orthodoxFavor, today, rules.factions);
+            } else {
+                db.breakFavor(faction, chId, unorthodoxFavor, today, rules.factions);
+            }
+        }
+        // 계열 id — 입문 게이트(Routes)·게시판이 읽는 축. 여기가 닫혀야 '전 루트 폐쇄'가 참이 된다
+        db.addAttention("orthodox", chId, attention, today, rules.factions);
+        db.breakFavor("orthodox", chId, orthodoxFavor, today, rules.factions);
+        db.breakFavor("unorthodox", chId, unorthodoxFavor, today, rules.factions);
+        db.logEvent("절연", "character", String.valueOf(chId), "faction", cause,
+                Map.of("법명분", db.mandate(chId, today, rules.politics),
+                        "정파_주목", attention, "정파_우호", orthodoxFavor,
+                        "사파_우호", unorthodoxFavor,
+                        "현상금_배수", rules.politics.bountyMultiplier(),
+                        "입문", "전 루트 폐쇄 — 마교 루트만 남는다"));
+        return true;
+    }
+
+    /**
+     * 연합의 성립은 그 자체가 소문이다 (rumor.yml myeongbun_link.intensity_on_coalition).
+     * 참여 3+ = 강도 4(지역권) · 참여 10+ = 강도 5(천하). 플레이어는 이것으로만 정치를 본다.
+     * 멱등 — 같은 사안의 같은 크기는 한 번만 방(榜)이 붙는다.
+     */
+    int coalitionWatch(int today) throws Exception {
+        int announced = 0;
+        for (Issue issue : politics(today)) {
+            Politics.Coalition c = issue.coalition();
+            if (!rules.politics.formed(c.count())) {
+                continue;
+            }
+            String key = issue.row().issue() + ":" + c.size();
+            if (db.eventExists("연합", c.size(), key)) {
+                continue;
+            }
+            boolean world = c.count() >= 10;
+            int intensity = rules.rumors.coalitionIntensity(world ? "무림공적_선포" : "연합_성립");
+            String targetName = rules.factionName(issue.row().target());
+            String names = c.participants().stream().map(rules.politics::displayName)
+                    .collect(java.util.stream.Collectors.joining("·"));
+            spread(rumorGroup("연합", issue.row().issue(), today),
+                    (world ? "천하에 방이 붙었다 — " : "무림첩이 돈다 — ") + names
+                            + "이(가) " + targetName + "을(를) 두고 뭉쳤다 ("
+                            + rules.politics.displayName(c.leader()) + " 주도)",
+                    null, null, List.of("정치", "연합", "문파"),
+                    intensity, rules.initialAccuracy("간접_전문"),
+                    rules.originNetwork("market"), today);
+            db.logEvent("연합", "world", c.size(), "faction", key,
+                    Map.of("사안", issue.row().issue(), "대상", issue.row().target(),
+                            "참여", c.participants(), "맹주", String.valueOf(c.leader()),
+                            "무력", c.martial(), "관의_인식", rules.politics.gwanPerception(c.count()),
+                            "맹주다툼", c.dispute()));
+            announced++;
+        }
+        return announced;
+    }
+
+    /** 세력 관계 한 줄의 정치판 판본 — 참여 세력·맹주·관의 인식 */
+    private String coalitionLine(Issue issue) {
+        Politics.Coalition c = issue.coalition();
+        String targetName = rules.factionName(issue.row().target());
+        StringBuilder sb = new StringBuilder("**" + targetName + "** 명분 **" + issue.gauge() + "**");
+        String observable = rules.politics.observable(issue.gauge());
+        if (observable != null) {
+            sb.append(" — *").append(observable).append('*');
+        }
+        if (c.count() == 0) {
+            sb.append("\n*아직 아무도 나서지 않았다 (임계 미달 — 소식이 닿은 문파도 셈부터 한다)*");
+            return sb.toString();
+        }
+        sb.append("\n**").append(c.size()).append("** (참여 ").append(c.count()).append(") — ")
+                .append(c.participants().stream().map(rules.politics::displayName)
+                        .collect(java.util.stream.Collectors.joining("·")));
+        if (c.leader() != null) {
+            sb.append("\n맹주 **").append(rules.politics.displayName(c.leader())).append("** · 무력 ")
+                    .append(c.martial()).append(" · 관의 인식 **")
+                    .append(rules.politics.gwanPerception(c.count())).append("**");
+        }
+        if (c.dispute()) {
+            sb.append("\n*맹주 다툼 — 연합 명분이 주당 깎인다 (이겨도 흩어진다)*");
+        }
+        return sb.toString();
     }
 
     /**
@@ -2922,6 +3347,25 @@ public final class GameListener extends ListenerAdapter {
         if (arrived > 0) {
             report.append("🗣️ **소문 ").append(arrived)
                     .append("건이 새 망에 닿았다** — 먼 곳일수록 다른 이야기가 되어 도착한다.\n");
+        }
+
+        // ★ 정치 — 소문이 조직 채널에 닿으면 문파가 셈을 시작한다. 임계를 넘은 자가 붙는다.
+        //   연합의 성립은 그 자체가 소문이 되어 다시 세계로 나간다 (무림첩 → 방(榜)).
+        //   감쇠는 여기서 깎지 않는다 — 읽는 순간 정산한다 (명분도 주목·소문과 같은 관행).
+        coalitionWatch(day);
+        for (Issue issue : politics(day)) {
+            Politics.Coalition c = issue.coalition();
+            report.append("🏛️ **").append(rules.factionName(issue.row().target()))
+                    .append("** 명분 **").append(issue.gauge()).append("**");
+            if (c.count() > 0) {
+                report.append(" · ").append(c.size()).append(" (참여 ").append(c.count())
+                        .append(" — ").append(c.participants().stream()
+                                .map(rules.politics::displayName)
+                                .collect(java.util.stream.Collectors.joining("·")))
+                        .append(")");
+            }
+            String observable = rules.politics.observable(issue.gauge());
+            report.append(observable == null ? "" : "\n*" + observable + "*").append('\n');
         }
 
         // 빈사 마감 — 개입 창구가 닫힌다 (death_pipeline.no_intervention: 사망_확정_비가역)

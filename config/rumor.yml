@@ -32,17 +32,20 @@ generation:
 # 소문망 — 청하현 기준 6망
 # speed_days: 관심 일치 소문이 이 망에 도달하는 소요일
 # distortion: 이 망으로 건너올 때 정확도 감소량
+# ★ 태그 '정치' — 명분을 실어 나르는 태그 (faction_politics). 상단 연락망을 뺀 다섯 망이 받는다:
+#   명분은 강호의 일이고 관의 일이지, 장부의 일이 아니다 (상단은 생계 명분에만 물류·치안으로 반응한다).
+#   같은 사건이 망마다 다른 speed_days·distortion 으로 도착한다 = **세력별 참전 시차와 명분 배수의 차이.**
 networks:
   mingan_market:
     name: "민간 / 장터"
     speed_days: 1
     distortion: 20
-    interests: [폭력, 괴사, 질병, 관군, 생활, 물가]
+    interests: [폭력, 괴사, 질병, 관군, 생활, 물가, 정치]   # 개방의 거리 — 가장 빠르고 가장 부정확하다
   inn_net:
     name: "객잔 / 낭인"
     speed_days: 1
     distortion: 15
-    interests: [무인, 폭력, 의뢰, 사파, 문파]
+    interests: [무인, 폭력, 의뢰, 사파, 문파, 정치]
   sangdan_net:
     name: "상단 연락망"
     speed_days: 2
@@ -52,17 +55,17 @@ networks:
     name: "하오문 / 암시장"
     speed_days: 1
     distortion: 5
-    interests: [조직원, 정보_유출, 무인, 관군_동향, 사파]
+    interests: [조직원, 정보_유출, 무인, 관군_동향, 사파, 정치]   # 사파 5개가 여기로 듣는다
   orthodox_net:
     name: "정파 / 의뢰소 연락망"
     speed_days: 3
     distortion: 5
-    interests: [사파, 협행, 금기, 문파, 무인]
+    interests: [사파, 협행, 금기, 문파, 무인, 관군, 정치]   # 문파 13개가 여기로 듣는다 — 3일 늦게
   gwan_net:
     name: "관청 / 관군"
     speed_days: 2
     distortion: 10
-    interests: [살인, 치안, 도적, 반란, 질병]
+    interests: [살인, 치안, 도적, 반란, 질병, 정치]
 
 # 전파 규칙
 propagation:
@@ -110,6 +113,33 @@ faction_awareness:
     sangdan: [sangdan_net]
     gwan_gun: [gwan_net]
     noklim: [haomun_net]        # 녹림은 자체 망 없이 하오문 망에 얹혀 있다
+    # ── 개별 조직 채널을 가진 세력 (faction_politics.yml roster) ──
+    # ★ 세력은 자기 채널에 소식이 닿아야 명분을 평가한다 (formation.channel_gate).
+    #   망별 speed_days 가 곧 **세력별 참전 시차**다 — 개방이 언제나 첫 번째인 이유가 여기 있다.
+    gaebang: [mingan_market, inn_net]   # 개방은 자체 망이 아니라 '거리' 그 자체다 — 가장 빠르다
+    sorimsa: [orthodox_net]
+    mudang: [orthodox_net]
+    hwasan: [orthodox_net]
+    jegal: [orthodox_net, gwan_net]     # ★ 관청 망에도 접속한다 — 관을 읽는 눈이자 관의 귀
+    hyeollyeong: [gwan_net]
+  coalition_channel:
+    # 개별 키가 없는 문파·세가는 **계열 연락망**으로 듣는다 (곤륜·종남·팽가… → 정파망 3일).
+    # 사파는 자체 망이 없다 — 하오문 망에 얹혀 있다 (녹림의 선례 그대로).
+    # 이것은 '조직 채널이 없다'와 다르다: 늦게, 조금 더 뒤틀려 듣되 **결국은 듣는다.**
+    orthodox: [orthodox_net]
+    unorthodox: [haomun_net]
+    note: "정치층(faction_politics)의 명분 평가에만 쓴다. 개인 주목(faction_awareness)은 위 network_access 그대로"
+
+# ─── 명분 전파 (faction_politics.yml myeongbun.accuracy_gate) ───
+# 정확도 밴드가 그대로 명분 배수다. 소문이 곧 명분의 진위이며,
+# 세력은 **자기 조직 채널에 닿은 정확도**로 명분을 평가한다 (망마다 다른 이야기가 도착한다).
+myeongbun_link:
+  rule: "accuracy_bands = 명분 배수 — 사실적 ×1.0 / 과장 ×0.7 / 오해 ×0.5(대상 전환) / 괴담 ×0.0"
+  target_swap: "오해 밴드(30~49)에서는 명분이 **엉뚱한 세력에게** 붙는다 — 마교 이간의 유일한 통로"
+  confirm: "세력이 자기 조직 채널로 확인(정확도 80+)하면 배수 1.0 으로 재계산 — 조사가 곧 명분의 확정"
+  intensity_on_coalition:
+    연합_성립: 4        # 지역권 (참여 3+)
+    무림공적_선포: 5    # 천하 (참여 10+)
 
 # NPC 기억 태그 스키마 (G6) — 소문 소멸 후에도 개인의 기억은 남는다
 npc_memory_tags:

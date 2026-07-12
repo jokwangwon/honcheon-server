@@ -69,6 +69,51 @@ final class Deaths {
         return entry instanceof Map<?, ?> m ? (Map<String, Object>) m : null;
     }
 
+    // ─── 정치 귀결 (단계 5) — 관을 죽이면 법명분이 오른다 (faction_politics 접합) ───
+
+    /**
+     * succession.npcs.<key>.political.authority_mandate — 포두(박호) +8 · 현령(조문원) +14.
+     * 수치의 원천은 faction_politics.yml authority_mandate.inputs 이고,
+     * 이 키는 "그 NPC 를 죽이는 것이 어느 입력에 해당하는가"의 등록부다 (null = 관이 아니다).
+     */
+    @SuppressWarnings("unchecked")
+    Integer authorityMandateOf(String npcKey) {
+        Map<String, Object> s = succession(npcKey);
+        if (s != null && s.get("political") instanceof Map<?, ?> m) {
+            Object v = ((Map<String, Object>) m).get("authority_mandate");
+            return v instanceof Number n ? n.intValue() : null;
+        }
+        return null;
+    }
+
+    /** escalation_murim — 무림 측 반응 ("강호가 먼저 그를 친다"). 관 살해의 진짜 대가는 이쪽이다 */
+    String escalationMurim(String npcKey) {
+        Map<String, Object> s = succession(npcKey);
+        Object e = s == null ? null : s.get("escalation_murim");
+        return e == null ? null : String.valueOf(e).replaceAll("\\s+", " ").strip();
+    }
+
+    /** responses.<대응>.political.authority_mandate — 자수 -10 · 배상 -6 (법명분 drains) */
+    @SuppressWarnings("unchecked")
+    Integer responseMandate(String response) {
+        Map<String, Object> responses = RulesConfig.section(cfg, "responses");
+        Object r = responses.get(response);
+        if (r instanceof Map<?, ?> m && ((Map<String, Object>) m).get("political") instanceof Map<?, ?> p) {
+            Object v = ((Map<String, Object>) p).get("authority_mandate");
+            return v instanceof Number n ? n.intValue() : null;
+        }
+        return null;
+    }
+
+    /** revenge.faction_proxy.<세력> — 유족이 없을 때 복수의 형태 (orthodox = 토벌_명분) */
+    @SuppressWarnings("unchecked")
+    String factionProxy(String faction) {
+        Map<String, Object> revenge = RulesConfig.section(cfg, "revenge");
+        Map<String, Object> proxy = (Map<String, Object>) revenge.get("faction_proxy");
+        Object v = proxy.get(faction);
+        return v == null ? null : String.valueOf(v);
+    }
+
     /**
      * 서비스 상태 — 결정론 상태 기계.
      * 정상(생존) → 공백(아무도 없다) → 대행/후계_초기(더 비싸고 더 서툴다) → 정상(외지인 부임).

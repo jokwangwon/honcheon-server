@@ -161,6 +161,8 @@ succession:
       heir: null
       faction_standin: { faction: gwan_gun, days: 3, arrival: 신임_포두 }   # 관은 자리를 비우지 않는다
       region_delta_on_death: { 치안: -3 }
+      political: { authority_mandate: +8, ref: faction_politics.authority_mandate.inputs.포두_살해 }
+      escalation_murim: "절연 문턱(10) 직전 — **한 번 더 하면 끝이다.** 아직 강호는 등을 돌리지 않았다"
       note: "관은 조직이다 — 사람이 죽어도 자리는 즉시 메워진다. 단 신임은 낭인을 모른다 (favor 0)"
 
     jomunwon:                         # 현령 — 관 (세계급)
@@ -168,6 +170,13 @@ succession:
       faction_standin: { faction: hyeollyeong, days: 14, arrival: 신임_현령 }
       region_delta_on_death: { 치안: -5, 민심: -3 }
       escalation: "현령 살해 = 소문 강도 3 + 상급 관청 개입 (지역권 사건 승격 — 관군 6단계 토벌)"
+      political: { authority_mandate: +14, ref: faction_politics.murim_disavowal }
+      escalation_murim: "★ 무림은 연합하지 않는다 (무림 명분 0 — 관이 잘못한 게 없다).
+                         오히려 **강호가 먼저 그를 친다** — 관에게 무림을 칠 구실을 주지 않으려고.
+                         법명분 14 >= 10 → murim_disavowal 즉시 발동:
+                         정파 주목 +6 / 정파 우호 -8 (공신 floor 무효) / 사파 우호 -4 /
+                         비호 정지 / 현상금 ×2 / 전 입문 루트 폐쇄 — **마교 루트만 남는다.**
+                         정파 토벌대(revenge.faction_proxy.orthodox = 토벌_명분)가 관보다 먼저 온다"
       note: "죽일 수 있다. 그러나 이 죽음은 현을 바꾼다 (world_rung 대칭)"
 
   outsider_arrival:                   # 폐업 분기의 일반 규칙 (등록 예약 명사 — 부임 시 등록·명명)
@@ -243,13 +252,17 @@ killer_response:
       - "물가 상승 (economy region_multipliers 경제 연쇄)"
 
 # ─── 대응 3종 ───
+# ★ 이 셋이 그대로 법명분(authority_mandate)의 drains 다 — 신규 대응 발명 없음.
+#   진범 규명은 별도 대응이 아니라 은폐·조사 판정의 **결과**로 발생한다 (법명분 전량 소멸 + 명분 이전).
 responses:
   자수:
     effect: { 수배: 소멸, 민심: +2, 관군_favor: 0 }
+    political: { authority_mandate: -10 }   # faction_politics.authority_mandate.drains.자수
     cost: [벌금_또는_노역, 구금_기간, 무공_몰수_가능]
     revenge: "약화 (명분 소멸) — 소멸은 아님"
   배상:
     effect: { 유족_favor: 회복_경로_개방, revenge: 생성_취소_가능 }
+    political: { authority_mandate: -6 }    # faction_politics.authority_mandate.drains.배상
     cost:
       기능_NPC: "시설 1년 수익 상당 (economy 기준)"
       무인_NPC: ">= 고수_현상금(50000) + 공적 요구 (해당 세력 의뢰 수행)"

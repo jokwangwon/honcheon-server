@@ -26,8 +26,14 @@ reaction_stages:
   5: "직접 개입"
   6: "토벌 / 전쟁 / 숙청"
 
+# ─── faction_groups 는 '세력'이 아니라 **연합체(coalition)** 다 ───
+# 주의: orthodox / unorthodox 는 하나의 세력이 아니다. 평시엔 성립해 있지 않고,
+# 각 member 가 **단일 세력**으로 각자 논다 (구파일방 10 + 오대세가 5 = 15개 독립 세력).
+# 그룹 id(orthodox)는 "지금 이 명분으로 뭉친 자들"의 **동적 명단**을 가리키는 이름이지,
+# 상시 존재하는 지휘부가 아니다 — 무림맹은 사건마다 새로 짜이는 임시 조직이고, 이겨도 흩어진다.
+# 연합의 성립·크기·붕괴는 config/faction_politics.yml 이 굴린다 (명분 게이지 → join_threshold).
 faction_groups:
-  # 1. 정파 계열
+  # 1. 정파 계열 — **연합체** (아래 members 각각이 상시 존재하는 단일 세력이다)
   orthodox:
     name: "정파 계열"
     hidden: false
@@ -86,6 +92,51 @@ faction_groups:
       bulga:
         name: "불가"
         description: "사찰·승려 계열 — 문파가 아니라 계보다 (혜각 등 탁발승)"
+
+      # ── 구파일방 (로스터 → 1급 승격: faction_politics 가 이들을 개별 참조한다)
+      # 새 세력이 아니다 — 위 gupailbang.sects / odaesega.clans 명단에 이미 있던 이름에 id 를 붙였을 뿐이다.
+      # (아미파는 승격하지 않는다 — 위 주석의 '추후 확장 콘텐츠' 존중. faction_politics roster 에
+      #  registry: 예약 · active: false 로만 있다)
+      gonryun:
+        name: "곤륜파"
+        parent: gupailbang
+        description: "서역의 도가 문파 — 멀다. 천하가 뒤집혀야 배를 띄운다"
+      jongnam:
+        name: "종남파"
+        parent: gupailbang
+        description: "종남산 도맥 — 화산과 같은 섬서 땅, 대대의 앙숙"
+      jeomchang:
+        name: "점창파"
+        parent: gupailbang
+        description: "운남의 쾌검"
+      ami:
+        name: "아미파"
+        description: "사천의 여승 문파 — 구파일방. 당가와 앙숙(독은 협이 아니다)."
+        registry: 예약        # 상세 미설계 — 좌표·관계만 등록 (world_map·faction_politics 참조)
+        active: false
+
+      cheongseong:
+        name: "청성파"
+        parent: gupailbang
+        description: "청성산 검맥"
+      haenam:
+        name: "해남파"
+        parent: gupailbang
+        description: "해남도 — 무림에서 가장 먼 곳"
+
+      # ── 오대세가 (로스터 → 1급 승격)
+      moyong:
+        name: "모용세가"
+        parent: odaesega
+        description: "요동의 세가 — 실리로 움직인다"
+      jegal:
+        name: "제갈세가"
+        parent: odaesega
+        description: "지략의 세가. 관에 줄이 있다 — 관을 읽는 눈이자, 관의 귀"
+      paengga:
+        name: "하북팽가"
+        parent: odaesega
+        description: "하북 도가(刀家). 도적 소탕이 가업 — 녹림과는 대를 이은 피"
 
   # 2. 사파 / 흑도 계열
   unorthodox:
@@ -176,6 +227,14 @@ aliases:
   무당파: mudang
   남궁세가: namgung
   사천당가: dangga
+  곤륜파: gonryun
+  종남파: jongnam
+  점창파: jeomchang
+  청성파: cheongseong
+  해남파: haenam
+  모용세가: moyong
+  제갈세가: jegal
+  하북팽가: paengga
   장강수로채: jangang_suroche
   하오문: haomun
   녹림: noklim
