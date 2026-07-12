@@ -411,26 +411,31 @@ final class RemoteBuilder {
      * 도적의 통나무와 다른 것이 곧 위계다. 채색은 <b>매화</b>뿐 (등록부가 cherry_grove 를 적어 두었다).
      */
     private static List<Zone> sect(World world, WorldMap.Place place, int cx, int cy, int cz) {
-        int lower = cy;               // 문전 — 산문이 선다
-        int upper = cy + 9;           // 본전 — 아홉 켜 위 (오르는 길이 시험이다)
+        // v3 — 조감이 잡은 것: "천 계단"이 **아홉 칸**이었다. 본전 단을 지면 +9 로 잡았으니
+        //   봉우리랄 것도 없는 둔덕이 섰고, 산문·계단은 그 둔덕의 발치에서 뭉개졌다.
+        //   오르는 길이 시험이라면 **올라야 한다**: 본전은 지면에서 36켜 위, 계단은 45칸을 오른다.
+        int lower = naturalGround(world, cx, cz + FOOT_Z, cy + 40);   // 문전 — 산의 발치(자연 지면)
+        int upper = lower + 36;                                        // 본전 — 서른여섯 켜 위
 
-        clearSect(world, cx, cy, cz);
-        // 화산파를 세웠더니 **사막**에 섰다. 시드 8888 의 그 일대(4km 반경)에 험산이 없기 때문이다.
-        // 실지리 1:1 좌표는 못 옮긴다(그것이 이 지도의 뼈대다). 그러면 남는 답은 하나다 —
-        // **없으면 세운다.** 화산은 험한 봉우리 위에 있어야 화산이다. 조성기가 그 봉우리를 빚는다.
+        clearSect(world, cx, lower, cz);
+        // 화산파를 세웠더니 **사막**에 섰다 — 시드 8888 의 그 일대(4km)에 험산이 없다.
+        // 실지리 1:1 좌표는 못 옮긴다(지도의 뼈대다). 그러면 답은 하나 — **없으면 세운다.**
         shapeTerrain(world, place, cx, upper, cz);
-        pad(world, cx, lower, cz + 20, 17, 13, Material.POLISHED_ANDESITE);   // 문전 마당
-        pad(world, cx, upper, cz - 12, 27, 21, Material.POLISHED_ANDESITE);   // 본전 단
+        pad(world, cx, upper, cz - 12, 27, 21, Material.POLISHED_ANDESITE);   // 본전 단 (봉우리 정상)
+        pad(world, cx, lower, cz + FOOT_Z, 17, 13, Material.POLISHED_ANDESITE);   // 문전 마당 (발치)
 
-        mountainGate(world, cx, lower, cz + 27);          // 산문(山門) — 패방
-        thousandSteps(world, cx, lower, cz + 13, upper, cz - 1);   // 계단 — 문전에서 본전으로
-        mainHall(world, cx - 7, upper, cz - 10, 15, 13);  // 본전 15x13 — 회벽·검은 기와
-        trainingGround(world, cx, upper, cz + 4);         // 연무장 — 목인장 셋 (오르면 먼저 이것이 보인다)
-        plumTrees(world, cx, upper, cz);                  // 매화 — 채색은 여기뿐이다
+        mountainGate(world, cx, lower, cz + FOOT_Z + 7);              // 산문(山門) — 패방. 여기서부터 문파의 땅
+        thousandSteps(world, cx, lower, cz + FOOT_Z - 7, upper, cz - 1);   // 계단 — 발치에서 정상으로
+        mainHall(world, cx - 7, upper, cz - 10, 15, 13);               // 본전 15x13 — 회벽·검은 기와
+        trainingGround(world, cx, upper, cz + 4);                      // 연무장 — 오르면 먼저 이것이 보인다
+        plumTrees(world, cx, upper, cz);                               // 매화 — 채색은 여기뿐이다
 
         return List.of(new Zone(place.name(), sectSubtitle(place), world.getName(),
-                cx - 20, lower - 6, cz - 26, cx + 20, upper + 16, cz + 32));
+                cx - 40, lower - 8, cz - 44, cx + 40, upper + 18, cz + FOOT_Z + 14));
     }
+
+    /** 산문·문전이 서는 자리 — 봉우리 중심(cz-8)에서 남쪽으로 이만큼. 산의 발치 바깥이다 */
+    private static final int FOOT_Z = 46;
 
     private static String sectSubtitle(WorldMap.Place place) {
         return "rich".equals(place.tier()) ? "도관 — 산문에서 본전까지 천 계단"
@@ -456,12 +461,12 @@ final class RemoteBuilder {
                 if (natural < topY - 2) {           // 이미 봉우리 위면 그대로 (자연이 준 산)
                     // 봉우리의 중심은 **본전**이지 마당이 아니다. 남쪽(문전·계단)으로 비탈이 흘러내려야
                     // 계단이 비탈을 타고 오른다 — 산을 마당 한가운데 세웠더니 문전이 파묻혀 분화구가 됐다.
-                    raiseMassif(world, cx, topY, cz - 8, 34, 16);
+                    raiseMassif(world, cx, topY, cz - 8, 60, 18);
                 }
             }
             case "고원" -> {
                 if (natural < topY - 2) {
-                    raiseMassif(world, cx, topY, cz - 8, 40, 22);   // 대지(臺地) — 같은 손, 정상이 넓다
+                    raiseMassif(world, cx, topY, cz - 8, 66, 26);   // 대지(臺地) — 같은 손, 정상이 넓다
                 }
             }
             case "평지", "분지" -> levelField(world, cx, topY, cz);
@@ -525,7 +530,7 @@ final class RemoteBuilder {
                 double t = Math.max(0, (d - flatR) / (double) (radius - flatR));   // 0 = 정상, 1 = 발치
                 int crest = topY + 1;
                 int ridge = Math.floorMod(x * 11 + z * 7, 11) - 5;        // 능선의 요철 (방위마다 다른 산줄기)
-                int drop = (int) Math.round(Math.pow(t, 1.4) * 40);        // 볼록한 비탈 (아래로 갈수록 완만)
+                int drop = (int) Math.round(Math.pow(t, 1.4) * 48);        // 볼록한 비탈 (아래로 갈수록 완만)
                 int y = crest - drop + (int) Math.round(ridge * (1 - t) * 0.6);
                 y = y - Math.floorMod(y, 2);                                // 두 칸 단 — 험산의 결
                 int ground = naturalGround(world, x, z, topY + 40);
@@ -557,9 +562,9 @@ final class RemoteBuilder {
 
     /** 부지를 비운다 — 두 켜 모두. 산은 남기고 그 위의 것만 걷는다 */
     private static void clearSect(World world, int cx, int cy, int cz) {
-        for (int x = cx - 20; x <= cx + 20; x++) {
-            for (int z = cz - 26; z <= cz + 32; z++) {
-                for (int y = cy + 1; y <= cy + 30; y++) {
+        for (int x = cx - 24; x <= cx + 24; x++) {
+            for (int z = cz - 30; z <= cz + FOOT_Z + 12; z++) {
+                for (int y = cy + 1; y <= cy + 50; y++) {
                     Material m = world.getBlockAt(x, y, z).getType();
                     if (m.isAir()) {
                         continue;

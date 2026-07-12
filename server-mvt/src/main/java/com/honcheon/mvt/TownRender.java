@@ -498,13 +498,26 @@ public final class TownRender {
     // ─── 진입점 ───
 
     public static List<String> render(World world, int cx, int cy, int cz, File outDir) {
+        return render(world, cx, cy, cz, outDir, R, Y_DOWN, Y_UP);
+    }
+
+    /**
+     * 창(窓)을 지역 크기에 맞춰 넓히는 오버로드.
+     *
+     * <p>청하현은 반경 65·높이 25 의 창에 들어간다 — 평지의 마을이니까. 문파는 다르다:
+     * 화산파는 <b>서른여섯 켜를 오르는 산</b>이고, 산문에서 본전까지 90칸이다. 마을의 창으로 보면
+     * 산허리만 잘려 나온다 — 조감이 텅 빈 대접을 그렸던 이유다(집은 창 위에 있었다).
+     * 지역마다 창의 크기가 다르다.
+     */
+    public static List<String> render(World world, int cx, int cy, int cz, File outDir,
+                                      int radius, int yDown, int yUp) {
         List<String> out = new ArrayList<>();
         if (!outDir.exists() && !outDir.mkdirs()) {
             out.add("렌더 실패 — 출력 폴더를 만들 수 없다: " + outDir.getAbsolutePath());
             return out;
         }
         long t0 = System.currentTimeMillis();
-        log("렌더 시작 — 중심 (" + cx + "," + cy + "," + cz + ") 반경 " + R);
+        log("렌더 시작 — 중심 (" + cx + "," + cy + "," + cz + ") 반경 " + radius);
 
         // 팩 인식 — 클라이언트가 실제로 보는 텍스처 색으로 팔레트를 덮어쓴다 (없으면 폴백)
         loadPack(outDir);
@@ -513,10 +526,10 @@ public final class TownRender {
                 : "팩 텍스처 " + packHits + "종 반영 (폴백 " + packMisses + "종)");
 
         // 마을 하이트맵 1회 스캔 → 탑다운·아이소 공용 (블록 읽기 1회로 두 뷰를 만든다)
-        int n = 2 * R + 1;
+        int n = 2 * radius + 1;
         int[][] h = new int[n][n];
         int[][] col = new int[n][n];
-        long reads = scanHeightmap(world, cx, cy, cz, cy - Y_DOWN, cy + Y_UP, h, col);
+        long reads = scanHeightmap(world, cx, cy, cz, cy - yDown, cy + yUp, h, col);
         log("하이트맵 스캔 완료 — 블록 읽기 " + reads + "회 (" + (System.currentTimeMillis() - t0) + "ms)");
 
         File top = new File(outDir, "town_top.png");

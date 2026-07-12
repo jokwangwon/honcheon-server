@@ -840,13 +840,18 @@ public final class MvtCommand implements CommandExecutor {
         World world = org.bukkit.Bukkit.getWorld(zone.world());
         int cx = (zone.x1() + zone.x2()) / 2;
         int cz = (zone.z1() + zone.z2()) / 2;
-        int cy = zone.y1() + 4;   // Zone 의 바닥은 지면 -4 (RemoteBuilder 가 그렇게 잡는다)
+        // 창은 **구역이 정한다** — 마을의 창(반경 65·높이 25)으로 문파를 보면 산허리만 잘려 나온다.
+        int cy = zone.y1() + 6;
+        int radius = Math.min(120, Math.max(48,
+                Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 12));
+        int yUp = Math.min(90, Math.max(25, zone.y2() - cy));
         // 렌더 전에 땅을 싣는다 — 안 실린 청크는 공기로 읽혀 조감에 **검은 구멍**이 뚫린다.
         // 루프의 눈이 못 본 것을 "없다"고 그리면, 있는 결함도 없는 것이 된다.
         java.util.List<java.util.concurrent.CompletableFuture<org.bukkit.Chunk>> loading =
                 new java.util.ArrayList<>();
-        for (int chunkX = (cx - 144) >> 4; chunkX <= (cx + 144) >> 4; chunkX++) {
-            for (int chunkZ = (cz - 144) >> 4; chunkZ <= (cz + 144) >> 4; chunkZ++) {
+        int pre = radius + 16;
+        for (int chunkX = (cx - pre) >> 4; chunkX <= (cx + pre) >> 4; chunkX++) {
+            for (int chunkZ = (cz - pre) >> 4; chunkZ <= (cz + pre) >> 4; chunkZ++) {
                 loading.add(world.getChunkAtAsync(chunkX, chunkZ, true));
             }
         }
@@ -854,7 +859,7 @@ public final class MvtCommand implements CommandExecutor {
         java.util.concurrent.CompletableFuture
                 .allOf(loading.toArray(new java.util.concurrent.CompletableFuture[0]))
                 .thenRun(() -> org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-                    for (String line : TownRender.render(world, cx, cy, cz, dir)) {
+                    for (String line : TownRender.render(world, cx, cy, cz, dir, radius, 6, yUp)) {
                         sender.sendMessage(ChatColor.GRAY + line);
                     }
                     plugin.getLogger().info("[조감] " + id + " → " + dir.getAbsolutePath());
