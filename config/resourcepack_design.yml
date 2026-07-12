@@ -123,6 +123,10 @@ item_channels:
       창: { model_key: "honcheon:weapon/spear_<등급>", note: "긴 자루 + 좁은 삼각 창날 + 홍영 1점" }
       권갑: { model_key: "honcheon:weapon/gauntlet_<등급>", note: "손등 판 + 손목 띠 2줄 (날 없음)" }
       단검: { model_key: "honcheon:weapon/dagger_<등급>", note: "짧은 날 + 손잡이 절반 비율 (비연단검술)" }
+      부: { model_key: "honcheon:weapon/bu_<등급>", base_item: "<등급>_axe", note: "긴 자루 + 넓은 도끼날 — 방패 파괴 (18반 병기)" }
+      겸: { model_key: "honcheon:weapon/gyeom_<등급>", base_item: "<등급>_hoe", note: "굽은 낫날 + 짧은 자루 — 걸어 챈다" }
+      월아산: { model_key: "honcheon:weapon/wolasan_<등급>", base_item: "<등급>_shovel", note: "긴 자루 + 초승달 날 + 삽날 — 승려의 병기" }
+      구: { model_key: "honcheon:weapon/gu_<등급>", base_item: "<등급>_pickaxe", note: "갈고리 발톱 — 걸고 당긴다" }
     spear_base_pending: "trident 베이스가 팩 게이트상 최선이나 우클릭 투척 차단 접합이 선행 조건 — 확정 전까지 등급 sword 베이스"
     혈음도:
       base_item: netherite_sword

@@ -281,12 +281,15 @@ final class CheonghaBuilder {
         // v6.7 ② 관청류 벽고 4 → 5. 처마(2칸)·지붕 부피는 그대로인데 벽이 한 켜만 보이면 건물은
         // '뚜껑 덮인 상자'가 된다. 벽을 한 칸 올리면 처마 그늘 밑으로 백벽이 한 켜 더 드러난다.
         anchors.put("청하객잔", inn(world, cx, cy, cz));
+        // v6.9 ③ — 창호도 격이다. 같은 백벽·흑와·팔작이어도 창이 다르면 밖에서 봐도 무슨 집인지 안다:
+        // 의뢰소는 정면을 게시대에 내주고 창을 측면으로 물렸고, 의방은 볕이 들게 정면을 크게 열었고,
+        // 전장은 창을 작고 높게 올려 철창을 박았다.
         anchors.put("의뢰소", house(world, cx + 11, cy, cz - 17, 13, 11, 5, false,
-                "의뢰소", "정파 연락망 — 일과 보수"));
+                "의뢰소", "정파 연락망 — 일과 보수", WindowStyle.OFFICE));
         anchors.put("의방", house(world, cx - 24, cy, cz + 8, 13, 11, 5, true,
-                "약재상 · 의방", "외상 장부 있음"));
+                "약재상 · 의방", "외상 장부 있음", WindowStyle.CLINIC));
         anchors.put("전장", house(world, cx + 12, cy, cz + 8, 13, 11, 5, true,
-                "청하전장", "전표 = 가져온 이가 임자"));
+                "청하전장", "전표 = 가져온 이가 임자", WindowStyle.VAULT));
         anchors.put("표국", pyoguk(world, cx, cy, cz));   // v6 ① — 등록 장소 pyoguk (키는 추가만, 기존 6키 불변)
 
         medicineInterior(world, cx, cy, cz);
@@ -330,6 +333,11 @@ final class CheonghaBuilder {
 
         zones(world, cx, cy, cz, zonesOut);
         abandonedShrine(world, cx, cy, cz, zonesOut);   // v6 ② — 담장 밖 외곽 스팟 조성 (평탄화 밖, 구역만 추가)
+        // v6.9 — 마을 밖 등록 장소. 둘 다 마을 중심에서 89칸 밖 = 검수 스캔 창(≤88) 밖이므로
+        // 12종 수치를 한 톨도 건드리지 않는다. 앵커는 늘리지 않는다 (검수가 앵커를 '건물'로 실측하므로
+        // 야외 앵커 한 개가 "지붕없음" 위반이 된다 — 계약도 7키 그대로).
+        huntingGrounds(world, cx, cy, cz, zonesOut);   // v6.9 ① 북쪽 산길 — 사냥터 (등록부 north_road)
+        heuksuFerry(world, cx, cy, cz, zonesOut);      // v6.9 ② 흑수나루 (등록부 heuksu_ferry — 침몰선 비급)
         return anchors;
     }
 
@@ -1813,9 +1821,9 @@ final class CheonghaBuilder {
      * doorNorth=true 면 북향 입구(광장 남쪽 건물), false 면 남향 입구.
      */
     private static Location house(World world, int x0, int y0, int z0, int w, int d, int wallH,
-                                  boolean doorNorth, String name, String subtitle) {
+                                  boolean doorNorth, String name, String subtitle, WindowStyle win) {
         shell(world, x0, y0, z0, w, d, wallH, doorNorth,
-                WallStyle.PLASTER_WHITE, RoofStyle.TILE, true);   // 주요 건물 = 수묵 3색 + 팔작(격식)
+                WallStyle.PLASTER_WHITE, RoofStyle.TILE, true, win);   // 주요 건물 = 수묵 3색 + 팔작(격식)
         int x1 = x0 + w - 1;
         int z1 = z0 + d - 1;
         int doorX = x0 + w / 2;
@@ -1857,13 +1865,210 @@ final class CheonghaBuilder {
      * paljak = true 면 팔작(상가·관아급), false 면 v5 계단 링 지붕(민가 — 지붕 격식은 위계다).
      * 관청급(w>=9)은 마루 가장자리 1칸을 흑목 귀틀로 둘러 바닥에 변화를 준다 (인테리어 규정).
      */
-    private static void shell(World world, int x0, int y0, int z0, int w, int d, int wallH,
-                              boolean doorNorth, WallStyle ws, RoofStyle rs, boolean paljak) {
-        shell(world, x0, y0, z0, w, d, wallH, doorNorth, ws, rs, paljak, 2);
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    //  v6.9 ③ 창호(窓戶) 문법 — "창은 방이 정하고, 방은 쓰임이 정한다"
+    //
+    //  【전(前) 규칙】  sash = (y == y0+2 || y == y0+wallH-1)  →  if (sash && (x+z) % 2 == 0) GLASS_PANE
+    //    한 칸짜리 유리를 벽면 전체에 **바둑판으로 흩뿌리는** 좌표식이었다. 결과:
+    //      · 모든 벽(정면·측면·뒷벽)이 똑같은 격자 — 벽면의 위계가 0
+    //      · 모든 건물이 똑같은 격자 — 건물의 개성이 0 (v6.8 이 부속으로 겨우 세운 개성을 창이 지웠다)
+    //      · 창이 '개구부'가 아니라 '무늬'였다 — 크기도 틀도 없으니 눈이 창으로 읽지 못한다
+    //    사용자 지적: "창문 유리가 너무 일관적·반복적이라 외관을 해침". 자로 재면 통과하는데 눈이 불편한
+    //    v6.7 ①·v6.5 ② 와 같은 부류다 — 규칙식은 반드시 패턴을 만든다.
+    //
+    //  【후(後) 규칙】  창은 **위치와 크기를 가진 개구부**다. 벽은 먼저 통짜로 서고(격자 0),
+    //    그 뒤 fenestrate() 가 면마다 **창 짝(unit)**을 뚫는다:
+    //      ① 단위      — 3x2 / 2x2 / 1x2 덩어리. 그 사이는 **넉넉한 벽면**으로 남는다
+    //      ② 틀        — 창 좌우에 흑목 설주, 위에 흑목 인방. 틀이 있어야 창이 창으로 읽힌다
+    //      ③ 면의 위계 — 정면(크고 많다) > 측면(적당) > 뒷면(통풍창 하나, 또는 없다)
+    //      ④ 쓰임의 표정 — 전장=작고 높은 철창 / 의방=볕이 드는 큰 창 / 의뢰소=정면은 게시대의 몫이라
+    //                     창은 측면 / 객잔=1층 넓은 창·2층 작은 객방 창 / 민가=작고 적다
+    //      ⑤ 변주      — 민가 9채는 건물 좌표 해시로 창 폭·위치·측면 선택이 갈린다 (난수 0)
+    //      ⑥ 실내 정합 — 약장(의방 남벽)·금고 철창(전장 남벽)·게시 목판(의뢰소 북벽) **뒤에는 창이 없다**.
+    //                     창 짝의 벽 위 구간이 그 가구 구간을 피해 간다 (좌표로 강제).
+    //
+    //  【자재 — 창호지의 논리】 팩이 glass 를 **창호지(불투명 미색)**, glass_pane 을 **세살창(살대)** 으로
+    //    재텍스처했다. 우리 세계의 창은 비치지 않는다 → 창은 채광 장치가 아니라 **외관의 요소**다
+    //    (실내 채광은 v6.8 의 벽등이 이미 풀었다).
+    //      SASH   = GLASS_PANE (세살창) — 살대가 있는 '열리는 창'. 창 짝의 기본.
+    //      PAPER  = GLASS      (전면 창호지) — 살 없는 미색 면. 교창·봉창(작고 높은 고정창) 전용.
+    //      BARRED = IRON_BARS  (철창) — 전장의 창.
+    //
+    //  【검수 정합 — 벽 레이캐스트 켜는 절대 뚫지 않는다】 ★ 이것이 이 문법의 유일한 하드 제약이다.
+    //    TownAudit.measureBuilding 은 앵커에서 4방향으로 **probeY = 바닥 + 3** 켜를 쏘아 벽 최외곽을
+    //    잡는다(wallAt). 그 좌표로 처마 내밀기(②)·물매(③)·능선(③-b)·단 평탄도(③-c)·이격/처마 겹침(⑤)·
+    //    소품·바닥 여백(④)이 전부 파생된다 — **벽 박스가 흔들리면 검수 여섯 항목이 같이 흔들린다.**
+    //    blocking() = isOccluding() ‖ GLASS_PANE ‖ IRON_BARS. 즉:
+    //      · GLASS_PANE·IRON_BARS 는 벽으로 세어진다  → probeY 에 놓아도 벽 박스 불변 ✅
+    //      · GLASS 는 isOccluding()=false 이고 blocking() 목록에도 **없다** → probeY 에 놓으면 그 방향
+    //        레이캐스트가 벽을 못 찾고 null → measureBuilding 이 건물을 통째로 놓친다 ❌
+    //      · AIR(뚫린 개구) 도 마찬가지 ❌
+    //    그러므로 **probeY 켜의 창은 SASH/BARRED 뿐**이고, PAPER 는 probeY 를 절대 포함하지 않는다.
+    //    설계로 지키고(교창=바닥+4 · 봉창=바닥+2), winMat() 이 한 번 더 막는다 (실수해도 위반이 안 난다).
+    //    벽 박스가 불변이므로 v6.8 의 검수 12종 수치는 창호 교체 후에도 **한 톨도 안 움직인다**.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    /** 창호 자재 — 팩 재텍스처 기준 (glass = 창호지 / glass_pane = 세살창 / iron_bars = 철창) */
+    private enum Pane {
+        SASH,     // 세살창 — 창 짝의 기본. blocking() 에 든다 = probeY 에 놓아도 안전
+        PAPER,    // 전면 창호지 — 교창·봉창 전용. blocking() 밖 = probeY 에 놓으면 안 된다
+        BARRED    // 철창 — 전장. blocking() 에 든다
+    }
+
+    /** 창호 문법 — 건물의 쓰임이 창을 정한다 */
+    private enum WindowStyle {
+        CLINIC,    // 의방 — 볕이 든다: 정면 큰 창 두 짝 + 교창. 남벽(약장 뒤)엔 창이 없다
+        OFFICE,    // 의뢰소 — 정면은 게시대의 몫: 정면 작게, 측면에 큰 창
+        VAULT,     // 전장 — 작고 높고 철창. 뒷벽 창 0 (돈이 있는 집의 뒷벽은 막는다)
+        COTTAGE,   // 민가 — 작고 적다. 건물 해시로 폭·측면이 갈린다
+        LOFT,      // 다락형 민가 — 창이 하나 더 높다
+        NONE       // 부속채(날개·작업간) — 창 없음 (헛간에 창을 내지 않는다)
+    }
+
+    /** 창을 뚫어도 되는 벽면인가 — 기둥(원목)·개구(공기)·이미 뚫린 창은 건드리지 않는다 */
+    private static boolean plainWall(Material m) {
+        return m == Material.WHITE_TERRACOTTA || m == Material.LIGHT_GRAY_TERRACOTTA
+                || m == Material.BRICKS || m == Material.MUD_BRICKS
+                || m == Material.SPRUCE_LOG || m == Material.DARK_OAK_PLANKS;
+    }
+
+    /**
+     * 창호 한 칸의 자재. ★ probeY 켜(= 검수의 벽 레이캐스트 켜)에는 **blocking 자재만** 나간다 —
+     * PAPER(GLASS) 가 그 켜에 놓이면 벽 박스가 무너져 검수 여섯 항목이 동시에 어긋난다.
+     * 설계상 그런 일이 없도록 짜 두었지만, 자재 선택에서 한 번 더 막는다 (실수 = 위반이 되지 않게).
+     */
+    private static Material winMat(Pane kind, int y, int probeY) {
+        if (kind == Pane.BARRED) {
+            return Material.IRON_BARS;
+        }
+        if (kind == Pane.PAPER && y != probeY) {
+            return Material.GLASS;      // 창호지 — 살 없는 미색 면
+        }
+        return Material.GLASS_PANE;     // 세살창 (PAPER 라도 probeY 면 여기로 접힌다 = 벽 박스 보존)
+    }
+
+    /**
+     * 창 짝 하나 — 벽면 [a0..a1] x [yb..yt] 를 창호로 갈고 좌우 설주·위 인방을 흑목으로 두른다.
+     * face: 0=북(z0) · 1=남(z1) · 2=서(x0) · 3=동(x1). a 는 그 면을 따라 흐르는 좌표(x 또는 z).
+     * 모서리 기둥과 문 개구는 침범하지 않는다 (a 범위를 벽 안쪽으로 조여서 부른다).
+     */
+    private static void windowUnit(World world, int x0, int y0, int z0, int x1, int z1,
+                                   int face, int a0, int a1, int yb, int yt, Pane kind) {
+        int probeY = y0 + 3;
+        int lo = (face <= 1) ? x0 + 1 : z0 + 1;    // 모서리 기둥 안쪽
+        int hi = (face <= 1) ? x1 - 1 : z1 - 1;
+        if (a0 < lo || a1 > hi || a0 > a1) {
+            return;   // 벽이 짧아 이 창 짝이 안 들어간다 (작은 부속채 — 창을 접는다)
+        }
+        for (int a = a0 - 1; a <= a1 + 1; a++) {   // 설주 + 창 + (틀 밖은 건드리지 않는다)
+            for (int y = yb; y <= yt + 1; y++) {
+                boolean frame = a < a0 || a > a1 || y > yt;   // 좌우 설주 · 위 인방
+                Block b = blockOnFace(world, x0, z0, x1, z1, face, a, y);
+                if (frame) {
+                    if (plainWall(b.getType())) {
+                        b.setType(Material.DARK_OAK_PLANKS);   // 틀 — 창이 창으로 읽히는 이유
+                    }
+                } else if (plainWall(b.getType()) || b.getType() == Material.GLASS_PANE) {
+                    b.setType(winMat(kind, y, probeY));
+                }
+            }
+        }
+    }
+
+    /** 그 면의 (a, y) 칸 */
+    private static Block blockOnFace(World world, int x0, int z0, int x1, int z1,
+                                     int face, int a, int y) {
+        return switch (face) {
+            case 0 -> world.getBlockAt(a, y, z0);
+            case 1 -> world.getBlockAt(a, y, z1);
+            case 2 -> world.getBlockAt(x0, y, a);
+            default -> world.getBlockAt(x1, y, a);
+        };
+    }
+
+    /**
+     * 창호 배치 — 면의 위계(정면 > 측면 > 뒷면)와 쓰임의 표정을 좌표로 쓴다.
+     * 관청급은 벽고 5 (벽 y0+1..y0+5, 인방 y0+5) → 창 켜 y0+2..y0+3(세살창) · 교창 y0+4(창호지).
+     * 민가는 벽고 4 (인방 y0+4) → 창 켜 y0+2..y0+3(세살창) · 봉창 y0+2(창호지, 뒷벽 1칸).
+     * probeY = y0+3 이 창 켜에 들어가므로 그 켜는 **반드시 세살창/철창** (winMat 이 강제).
+     */
+    private static void fenestrate(World world, int x0, int y0, int z0, int x1, int z1,
+                                   int wallH, boolean doorNorth, WindowStyle st) {
+        if (st == WindowStyle.NONE) {
+            return;
+        }
+        int front = doorNorth ? 0 : 1;    // 문이 있는 면
+        int back = doorNorth ? 1 : 0;
+        int w = x1 - x0 + 1;
+        int doorX = x0 + w / 2;
+        int yb = y0 + 2, yt = y0 + 3;     // 창 켜 (2단) — probeY(y0+3) 포함 = 세살창/철창만
+        int transom = y0 + wallH - 1;     // 교창 켜 — 벽고 5 면 y0+4 (probeY 아님 = 창호지 가능)
+        int v = hash(x0, z0, 4);          // 건물 단위 변주 (좌표 해시 — 난수 0)
+
+        switch (st) {
+            // ── 의방: 볕이 드는 집. 정면(광장 쪽) 큰 창 두 짝 + 교창. 남벽은 약장의 벽이다 → 창 0.
+            case CLINIC -> {
+                windowUnit(world, x0, y0, z0, x1, z1, front, x0 + 2, x0 + 4, yb, yt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, front, x1 - 4, x1 - 2, yb, yt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, front, x0 + 2, x0 + 4, transom, transom, Pane.PAPER);
+                windowUnit(world, x0, y0, z0, x1, z1, front, x1 - 4, x1 - 2, transom, transom, Pane.PAPER);
+                windowUnit(world, x0, y0, z0, x1, z1, 3, z0 + 3, z0 + 5, yb, yt, Pane.SASH);   // 동측 — 아침볕
+                windowUnit(world, x0, y0, z0, x1, z1, 2, z0 + 2, z0 + 3, yb, yt, Pane.SASH);   // 서측 — 약장 여벌(z0+6,7) 앞을 피한다
+                // 뒷면(남벽) = 약장 3칸(x0+5..x0+7)의 벽. 창을 내지 않는다 — 약재는 볕을 싫어한다.
+            }
+            // ── 의뢰소: 정면은 옥외 게시대의 몫(v6.8 ②). 창은 측면으로 물러나고 정면엔 좁은 세로창 둘.
+            case OFFICE -> {
+                windowUnit(world, x0, y0, z0, x1, z1, front, x0 + 2, x0 + 2, yb, yt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, front, x1 - 2, x1 - 2, yb, yt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, 2, z0 + 6, z0 + 8, yb, yt, Pane.SASH);   // 서측 큰 창
+                windowUnit(world, x0, y0, z0, x1, z1, 3, z0 + 3, z0 + 5, yb, yt, Pane.SASH);   // 동측 큰 창
+                windowUnit(world, x0, y0, z0, x1, z1, 2, z0 + 6, z0 + 8, transom, transom, Pane.PAPER);
+                windowUnit(world, x0, y0, z0, x1, z1, 3, z0 + 3, z0 + 5, transom, transom, Pane.PAPER);
+                // 뒷면(북벽) = 게시 목판(x0+4..x0+8)의 벽 → 그 밖 양끝에 봉창 하나씩만
+                windowUnit(world, x0, y0, z0, x1, z1, back, x0 + 2, x0 + 2, transom, transom, Pane.PAPER);
+                windowUnit(world, x0, y0, z0, x1, z1, back, x1 - 2, x1 - 2, transom, transom, Pane.PAPER);
+            }
+            // ── 전장: 창이 작고 높고 철창이 박혀 있다. 뒷벽엔 창이 없다 (돈이 있는 집의 뒷벽은 막는다).
+            case VAULT -> {
+                windowUnit(world, x0, y0, z0, x1, z1, front, x0 + 3, x0 + 3, yt, transom, Pane.BARRED);
+                windowUnit(world, x0, y0, z0, x1, z1, front, x1 - 3, x1 - 3, yt, transom, Pane.BARRED);
+                windowUnit(world, x0, y0, z0, x1, z1, 2, z0 + 4, z0 + 4, yt, transom, Pane.BARRED);
+                windowUnit(world, x0, y0, z0, x1, z1, 3, z0 + 3, z0 + 3, yt, transom, Pane.BARRED);   // 동벽 전표철(z0+6) 앞을 피한다
+                // 뒷면(남벽) = 철창 금고(x0+5..x0+7). 창 0.
+            }
+            // ── 민가: 작고 적다. 유리는 비싸다 — 정면 한 짝, 측면 한 짝(어느 쪽인지는 집마다 다르다), 뒷벽 봉창.
+            case COTTAGE, LOFT -> {
+                int fw = 1 + v % 2;                       // 정면 창 폭 2 또는 3 (집마다 다르다)
+                int fa = doorX + (v < 2 ? -4 : 2);        // 문 왼쪽이냐 오른쪽이냐도 갈린다
+                windowUnit(world, x0, y0, z0, x1, z1, front, fa, fa + fw, yb, yt, Pane.SASH);
+                int side = (v % 2 == 0) ? 2 : 3;          // 측면은 한쪽만 (양쪽에 다 내는 살림집은 없다)
+                int sa = z0 + 2 + (v % 3);
+                windowUnit(world, x0, y0, z0, x1, z1, side, sa, sa + 1, yb, yt, Pane.SASH);
+                windowUnit(world, x0, y0, z0, x1, z1, back, doorX - 1 + (v % 2), doorX - 1 + (v % 2),
+                        y0 + 2, y0 + 2, Pane.PAPER);      // 봉창 — 뒷벽엔 이것 하나 (y0+2 = probeY 아님)
+                if (st == WindowStyle.LOFT) {             // 다락 — 박공 아래 한 칸 더 높은 창
+                    windowUnit(world, x0, y0, z0, x1, z1, front, doorX - 1, doorX + 1,
+                            y0 + 1, y0 + 1, Pane.SASH);
+                }
+            }
+            default -> { }
+        }
     }
 
     private static void shell(World world, int x0, int y0, int z0, int w, int d, int wallH,
-                              boolean doorNorth, WallStyle ws, RoofStyle rs, boolean paljak, int eave) {
+                              boolean doorNorth, WallStyle ws, RoofStyle rs, boolean paljak) {
+        shell(world, x0, y0, z0, w, d, wallH, doorNorth, ws, rs, paljak, 2, WindowStyle.COTTAGE);
+    }
+
+    private static void shell(World world, int x0, int y0, int z0, int w, int d, int wallH,
+                              boolean doorNorth, WallStyle ws, RoofStyle rs, boolean paljak,
+                              WindowStyle win) {
+        shell(world, x0, y0, z0, w, d, wallH, doorNorth, ws, rs, paljak, 2, win);
+    }
+
+    private static void shell(World world, int x0, int y0, int z0, int w, int d, int wallH,
+                              boolean doorNorth, WallStyle ws, RoofStyle rs, boolean paljak,
+                              int eave, WindowStyle win) {
         int x1 = x0 + w - 1;
         int z1 = z0 + d - 1;
         for (int x = x0; x <= x1; x++) {
@@ -1881,14 +2086,11 @@ final class CheonghaBuilder {
                     } else if (y == y0 + wallH) {
                         world.getBlockAt(x, y, z).setType(Material.DARK_OAK_PLANKS);     // 상인방(도리)
                     } else {
+                        // v6.9 ③ — 벽은 먼저 **통짜로** 선다. 창은 벽면에 흩뿌리는 무늬가 아니라
+                        // 뒤에 오는 fenestrate() 가 뚫는 **개구부**다 (구 (x+z)%2 격자 폐기).
                         boolean stud = ws == WallStyle.FRAME_GRAY && (x + z) % 3 == 0;   // 목골 노출 스터드
-                        // v6.7 ② 벽고 5 의 관청류는 창을 두 켜로 (아래 = 격자창, 위 = 교창).
-                        // 높아진 벽이 백색 판때기가 되면 안 된다 — 벽은 결이 있어야 벽으로 읽힌다.
-                        boolean sash = y == y0 + 2 || (wallH >= 5 && y == y0 + wallH - 1);
                         if (stud) {
                             world.getBlockAt(x, y, z).setType(Material.DARK_OAK_PLANKS);
-                        } else if (sash && (x + z) % 2 == 0) {
-                            world.getBlockAt(x, y, z).setType(Material.GLASS_PANE);      // 격자창
                         } else {
                             wallBlock(world, x, y, z, ws, z == z0 || z == z1);           // 벽 조직
                         }
@@ -1909,6 +2111,9 @@ final class CheonghaBuilder {
         if (eave >= 2) {   // 활주 — 깊은 처마 네 귀를 받치는 툇기둥
             eavePosts(world, ex0 + 1, y0, ez0 + 1, ex1 - 1, ez1 - 1, y0 + wallH);
         }
+        // v6.9 ③ — 창호. 벽이 통짜로 선 **뒤**, 문을 뚫기 **전**에 창 짝을 뚫는다
+        // (뒤로 미루면 창틀이 문 개구를 메운다).
+        fenestrate(world, x0, y0, z0, x0 + w - 1, z0 + d - 1, wallH, doorNorth, win);
         int doorX = x0 + w / 2;
         int doorZ = doorNorth ? z0 : z1;
         world.getBlockAt(doorX, y0 + 1, doorZ).setType(Material.AIR);
@@ -1958,15 +2163,33 @@ final class CheonghaBuilder {
                         m = (y == cy + 5) ? Material.SPRUCE_PLANKS : Material.AIR;   // 2층 바닥
                     } else if (y == cy + 4 || y == cy + 5 || y == cy + 9) {
                         m = Material.DARK_OAK_PLANKS;                    // 층도리·층간 띠·상인방
-                    } else if ((y == cy + 2 || y == cy + 7) && (x + z) % 2 == 0) {
-                        m = Material.GLASS_PANE;                         // 1·2층 격자창
                     } else {
-                        m = Material.WHITE_TERRACOTTA;                   // 백벽
+                        m = Material.WHITE_TERRACOTTA;                   // 백벽 (v6.9 ③ — 격자 흩뿌리기 폐기)
                     }
                     world.getBlockAt(x, y, z).setType(m);
                 }
             }
         }
+        // ── v6.9 ③ 객잔의 창 — 1층은 넓게(손님이 밖을 본다), 2층은 작고 높게(객방의 사생활).
+        //    1층 창 켜 cy+2..cy+3 (probeY = cy+3 → 세살창만) · 2층 창 켜 cy+7..cy+8 (probeY 밖 → 창호지).
+        //    정면(남, 대문 x-21..-20 양옆) 3칸 세살창 두 짝 = 마을에서 가장 큰 창 = 객잔의 얼굴.
+        windowUnit(world, x0, cy, z0, x1, z1, 1, cx - 26, cx - 24, cy + 2, cy + 3, Pane.SASH);
+        windowUnit(world, x0, cy, z0, x1, z1, 1, cx - 18, cx - 16, cy + 2, cy + 3, Pane.SASH);
+        //    측면 — 서벽은 화덕(x-27, z-16) 앞을 피해 남쪽으로, 동벽은 가운데.
+        windowUnit(world, x0, cy, z0, x1, z1, 2, cz - 13, cz - 11, cy + 2, cy + 3, Pane.SASH);
+        windowUnit(world, x0, cy, z0, x1, z1, 3, cz - 15, cz - 13, cy + 2, cy + 3, Pane.SASH);
+        //    뒷면(북) — 계산대·술단지 시렁(z-17 · x-23..-19)의 벽이다. 양끝 봉창 둘뿐.
+        windowUnit(world, x0, cy, z0, x1, z1, 0, cx - 27, cx - 27, cy + 2, cy + 2, Pane.PAPER);
+        windowUnit(world, x0, cy, z0, x1, z1, 0, cx - 14, cx - 14, cy + 2, cy + 2, Pane.PAPER);
+        //    2층 객방 — 방마다 창 하나 (칸막이 울타리 사이에 정확히 한 짝씩). 작고 높다.
+        for (int px : new int[]{cx - 26, cx - 21, cx - 16}) {
+            windowUnit(world, x0, cy, z0, x1, z1, 1, px, px, cy + 7, cy + 8, Pane.PAPER);
+        }
+        for (int px : new int[]{cx - 26, cx - 22, cx - 18}) {
+            windowUnit(world, x0, cy, z0, x1, z1, 0, px, px, cy + 7, cy + 8, Pane.PAPER);
+        }
+        windowUnit(world, x0, cy, z0, x1, z1, 2, cz - 13, cz - 13, cy + 7, cy + 8, Pane.PAPER);
+        windowUnit(world, x0, cy, z0, x1, z1, 3, cz - 13, cz - 13, cy + 7, cy + 8, Pane.PAPER);
         // v6.5 ① — 처마 2칸(지붕 최외곽 = 벽+2) + 능선 수렴 (우진각 링 7 → 맞배 1 → 용마루 선 cy+15)
         roofShape(world, x0 - 2, z0 - 2, x1 + 2, z1 + 2, cy + 10,
                 RoofStyle.TILE, Material.DARK_OAK_PLANKS, 99, true);
@@ -2002,9 +2225,6 @@ final class CheonghaBuilder {
         for (int x = cx - 21; x <= cx - 20; x++) {
             world.getBlockAt(x, cy + 1, z1).setType(Material.AIR);
             world.getBlockAt(x, cy + 2, z1).setType(Material.AIR);
-        }
-        for (int x : new int[]{cx - 25, cx - 24, cx - 17, cx - 16}) {   // 미세 변주 — 대문 양옆 연속 창 (주청 개방감)
-            world.getBlockAt(x, cy + 2, z1).setType(Material.GLASS_PANE);
         }
         placeSign(world, cx - 18, cy + 1, z1 + 1, BlockFace.SOUTH, "청하객잔", "소문은 국밥보다 빨리 식는다");   // 소로(x-22..-19) 밖
         hangingSign(world, cx - 21, cy + 9, z1 + 2, BlockFace.SOUTH,                 // v6 ④ — 정면 처마 밑 현판
@@ -2777,14 +2997,21 @@ final class CheonghaBuilder {
                         world.getBlockAt(x, y, z).setType(Material.AIR);
                     } else if (y == cy + 5) {
                         world.getBlockAt(x, y, z).setType(Material.DARK_OAK_PLANKS);         // 상인방
-                    } else if (y == cy + 3 && Math.floorMod(x + z, 2) == 0) {
-                        world.getBlockAt(x, y, z).setType(Material.GLASS_PANE);              // 격자창
                     } else {
-                        world.getBlockAt(x, y, z).setType(Material.WHITE_TERRACOTTA);        // 백벽
+                        world.getBlockAt(x, y, z).setType(Material.WHITE_TERRACOTTA);        // 백벽 (창은 아래에서 뚫는다)
                     }
                 }
             }
         }
+        // v6.9 ③ 표국의 창 — 관아급. 본채는 기단 위(바닥 cy+1)라 검수 probeY = cy+4 다.
+        //   창 켜 cy+3..cy+4 → probeY 를 물므로 **세살창(blocking)** 만 쓴다. 정면은 노출 기둥
+        //   (x+35 · x+41)과 문(x+38) 사이 두 짝, 측면은 큰 창 한 짝씩, 뒷벽(남)은 병장기 시렁의 벽 → 봉창 둘.
+        windowUnit(world, x0, cy + 1, z0, x1, z1, 0, cx + 36, cx + 37, cy + 3, cy + 4, Pane.SASH);
+        windowUnit(world, x0, cy + 1, z0, x1, z1, 0, cx + 39, cx + 40, cy + 3, cy + 4, Pane.SASH);
+        windowUnit(world, x0, cy + 1, z0, x1, z1, 2, z0 + 3, z0 + 5, cy + 3, cy + 4, Pane.SASH);
+        windowUnit(world, x0, cy + 1, z0, x1, z1, 3, z0 + 3, z0 + 5, cy + 3, cy + 4, Pane.SASH);
+        windowUnit(world, x0, cy + 1, z0, x1, z1, 1, x0 + 2, x0 + 2, cy + 3, cy + 3, Pane.PAPER);
+        windowUnit(world, x0, cy + 1, z0, x1, z1, 1, x1 - 2, x1 - 2, cy + 3, cy + 3, Pane.PAPER);
         world.getBlockAt(cx + PY_DOOR, cy + 2, z0).setType(Material.AIR);   // 북향 문 1칸
         world.getBlockAt(cx + PY_DOOR, cy + 3, z0).setType(Material.AIR);
         for (int x = cx + 37; x <= cx + 39; x++) {   // 기단 진입 계단 3칸 폭
@@ -3446,7 +3673,8 @@ final class CheonghaBuilder {
                                     boolean doorNorth, Material sideWallMat) {
         int w = 13, d = 9;
         // v6.7 ② 민가 벽고 3 → 4. 처마 2칸 밑에서 벽이 두 켜(창 아래·위)로 보이면 집이 '뚜껑'이 아니라 '집'이 된다.
-        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.FRAME_GRAY, RoofStyle.TILE, false);   // 민가 = 맞배 계열 유지
+        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.FRAME_GRAY, RoofStyle.TILE, false,
+                WindowStyle.COTTAGE);   // 민가 = 맞배 계열 유지 · 창은 작고 적다 (v6.9 ③)
         int x1 = x0 + w - 1, z1 = z0 + d - 1;
         int far = doorNorth ? z1 - 1 : z0 + 1;    // 문 반대편 안쪽
         int near = doorNorth ? z0 + 1 : z1 - 1;   // 문쪽 벽면 안줄
@@ -3482,10 +3710,12 @@ final class CheonghaBuilder {
      */
     private static void lHouse(World world, int x0, int y0, int z0, boolean doorNorth) {
         int w = 12, d = 9;
-        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.BRICK, RoofStyle.SHINGLE, false);   // v6.7 ② 벽고 3 → 4
+        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.BRICK, RoofStyle.SHINGLE, false,
+                WindowStyle.COTTAGE);   // v6.7 ② 벽고 3 → 4
         int x1 = x0 + w - 1, z1 = z0 + d - 1;
         int wingZ0 = doorNorth ? z1 : z0 - 6;   // 날개는 문 반대편(뒤)으로 뻗는다
-        shell(world, x0, y0, wingZ0, 6, 7, 4, doorNorth, WallStyle.BRICK, RoofStyle.SHINGLE, false, 1);   // 부속채 처마 1칸 (위계)
+        shell(world, x0, y0, wingZ0, 6, 7, 4, doorNorth, WallStyle.BRICK, RoofStyle.SHINGLE, false,
+                1, WindowStyle.NONE);   // 부속채 처마 1칸 (위계) · 헛간에 창은 내지 않는다
         // 본채 — 침상·수납·방석·조명
         int far = doorNorth ? z1 - 1 : z0 + 1;
         int near = doorNorth ? z0 + 1 : z1 - 1;
@@ -3532,7 +3762,8 @@ final class CheonghaBuilder {
      */
     private static void loftHouse(World world, int x0, int y0, int z0, boolean doorNorth) {
         int w = 9, d = 12;
-        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.LOG, RoofStyle.MUD_TILE, false);   // v6.2 ④ — 청록 산화동 폐기
+        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.LOG, RoofStyle.MUD_TILE, false,
+                WindowStyle.LOFT);   // v6.2 ④ — 청록 산화동 폐기 · 다락엔 창이 하나 더 (v6.9 ③)
         int x1 = x0 + w - 1, z1 = z0 + d - 1;
         int far = doorNorth ? z1 - 1 : z0 + 1;
         int near = doorNorth ? z0 + 1 : z1 - 1;
@@ -3582,7 +3813,8 @@ final class CheonghaBuilder {
     private static void workshopHouse(World world, int x0, int y0, int z0,
                                       boolean doorNorth, boolean smithy) {
         int w = 12, d = 9;
-        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.MUD_BRICK, RoofStyle.TILE, false);   // v6.7 ② 벽고 3 → 4
+        shell(world, x0, y0, z0, w, d, 4, doorNorth, WallStyle.MUD_BRICK, RoofStyle.TILE, false,
+                WindowStyle.COTTAGE);   // v6.7 ② 벽고 3 → 4
         int x1 = x0 + w - 1, z1 = z0 + d - 1;
         int far = doorNorth ? z1 - 1 : z0 + 1;
         int near = doorNorth ? z0 + 1 : z1 - 1;
@@ -3599,7 +3831,8 @@ final class CheonghaBuilder {
         world.getBlockAt(x0 + 6, y0 + 1, z0 + 4).setType(Material.BROWN_CARPET); // 방석 깔개
         // 작업간 — 본채 동벽에 잇대어 짓는다 (정면 정렬, 골목 쪽 별도 문)
         int sz0 = doorNorth ? z0 : z0 + 3;
-        shell(world, x0 + 11, y0, sz0, 7, 6, 4, doorNorth, WallStyle.FRAME_GRAY, RoofStyle.SHINGLE, false, 1);   // 부속채 처마 1칸
+        shell(world, x0 + 11, y0, sz0, 7, 6, 4, doorNorth, WallStyle.FRAME_GRAY, RoofStyle.SHINGLE, false,
+                1, WindowStyle.NONE);   // 부속채 처마 1칸 · 작업간은 벽으로 막는다
         int sz1 = sz0 + 5;
         int sFar = doorNorth ? sz1 - 1 : sz0 + 1;
         int sNear = doorNorth ? sz0 + 1 : sz1 - 1;
@@ -3957,14 +4190,15 @@ final class CheonghaBuilder {
                         world.getBlockAt(x, y, z).setType(Material.DARK_OAK_PLANKS);          // 상인방
                     } else if (Math.floorMod(x + z, 3) == 0) {
                         world.getBlockAt(x, y, z).setType(Material.DARK_OAK_PLANKS);          // 목골 스터드
-                    } else if (y == cy + 2 && Math.floorMod(x + z, 2) == 0) {
-                        world.getBlockAt(x, y, z).setType(Material.GLASS_PANE);               // 격자창
                     } else {
                         world.getBlockAt(x, y, z).setType(Material.LIGHT_GRAY_TERRACOTTA);    // 회벽
                     }
                 }
             }
         }
+        // v6.9 ③ 잡화점의 창 — 정면(서)이 이미 3칸 통째로 열린 점두다. 창을 더 낼 이유가 없다:
+        //   남측 벽에 세살창 한 짝만 (벽고 2 = 창 켜 cy+2 한 켜. 이 집은 앵커가 아니라 probeY 제약이 없다).
+        windowUnit(world, x0, cy, z0, x1, z1, 1, x0 + 2, x0 + 3, cy + 2, cy + 2, Pane.SASH);
         for (int z = cz - 17; z <= cz - 15; z++) {   // 전면 3칸 개방 (셔터 없는 점두) + 젖힌 덧문
             world.getBlockAt(x0, cy + 1, z).setType(Material.AIR);
             world.getBlockAt(x0, cy + 2, z).setType(Material.AIR);
@@ -4211,5 +4445,1268 @@ final class CheonghaBuilder {
 
     private static Location loc(World world, int x, int y, int z) {
         return new Location(world, x + 0.5, y, z + 0.5);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    //  v6.9 — 마을 밖 등록 장소. 등록부(config/regions/cheongha_hyeon.yml)에 이름이 있는데
+    //  실물이 없던 두 곳을 세운다: 북쪽 산길(사냥터)·흑수나루.
+    //
+    //  【검수 좌표계 — 왜 새 구조물이 검수를 건드리지 않는가】
+    //  TownAudit 의 스캔 창은 전부 유한하다: 볼륨(채색·냉색) ±65 · 길 격자(대로·야간 광원) ±65 ·
+    //  담 밖 접근부 링 62~88 · 계약(NPC) ±65 · 냉색 격리는 **폐사당 구역 상자 ±4**.
+    //  → 마을 중심에서 체비셰프 거리 **89 이상**에 지은 것은 어떤 항목의 자에도 닿지 않는다.
+    //  사냥터(≥92)·흑수나루(≥100)를 그 밖에 앉힌 이유가 이것이다. 검수 12종은 v6.8 값 그대로.
+    //  대신 담 밖 채움(⑩)은 **바닥 기준(≥5%)**이라 늘어나도 위반이 아니다 — 나루 이정표 한 점만
+    //  링 안(d=86)에 세워 채움을 소폭 올린다.
+    //
+    //  【재조성 결정론 — 자재가 곧 계약이다】
+    //  naturalGroundY/outsideGroundY 는 **자연 지면 화이트리스트(NATURAL_GROUND)** 에 처음 닿는 y 를
+    //  돌려준다. 그러므로 지면 **위에** 얹는 것은 전부 화이트리스트 **밖** 자재여야 한다 —
+    //  안 그러면 조성할 때마다 바위가 한 칸씩 자란다. STONE·ANDESITE·GRAVEL·DEEPSLATE 는 전부
+    //  화이트리스트 **안**이므로 바위에 쓰지 않는다. 바위 자재는 COBBLESTONE·MOSSY_COBBLESTONE·
+    //  COBBLED_DEEPSLATE·STONE_BRICKS 계열뿐 (v6.7 stonePile 이 COBBLESTONE_WALL 만 쓴 것과 같은 이유).
+    //  지면 **자리**를 갈아끼우는 것(PODZOL·COARSE_DIRT)은 화이트리스트 안이어도 안전하다 — y 가 안 변한다.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    // ─── v6.9 ① 북쪽 산길 — 사냥터 ───
+    //
+    // 등록부 north_road: "도적 증가, 상단 호위, 녹림 매복". 봇의 /혼천 사냥 · HuntListener 가 가리키는
+    // 성장·경제의 기둥인데 v6.8 까지는 앵커 한 점과 평지뿐이었다. v6.7 의 산길은 담 밖 32칸(d=92)에서
+    // 그냥 끊겼다 — 길이 아무 데도 닿지 않았다.
+    //
+    // 무대: 산길 끝에서 이어지는 분지. 타원 (반폭 32 x 반깊이 30), 중심 (cx-10, cz-122).
+    //   지형에 순응한다 — 평탄화 0. 바위·개울·성긴 침엽수림을 **얹기만** 한다.
+    //   ㉮ 동선 — 산길을 d=92 → d=100 까지 잇고(등롱은 d≤96 에서 끝난다) 그 끝에 사냥꾼 야영터를
+    //      놓는다. 야영터부터는 등불이 없다: 1칸 폭 발자국길이 개울을 건너(널다리) 사당 터까지
+    //      가다 흐지부지 끊긴다. **불이 끝나는 곳부터가 사냥터다.**
+    //   ㉯ 조명 — 온색뿐(횃불·랜턴·모닥불), 그것도 산길과 야영터에만. 숲 속 블록 광원 0 =
+    //      밤에는 몹이 스폰되고 낮에는 사냥터다. 냉색(영혼 계열) 0 — 그것은 폐사당의 몫이다.
+    //   ㉰ 스폰 — 바닥은 풀·포드졸·거친 흙(불투명 풀 블록) + 그 위 2칸 개방 = 스폰 가능 지면.
+    //      숲지붕이 하늘빛을 끊고 광원을 하나도 두지 않으므로 야간 블록 광원 0 (1.18+ 적대 몹 조건).
+    //      늑대·여우는 **생물군계 게이트**가 걸린 수동 스폰이라 지형만으론 안 온다 → 분지의 생물군계를
+    //      TAIGA 로 못 박고(setBiome — 결정론) 초기 개체군을 씨 뿌린다(재조성 시 먼저 걷어낸다).
+    //   ㉱ 위험의 흔적 (north_road_bandits) — 버려진 수레·나무에 박힌 화살·무너진 돌담·꺼진 모닥불·
+    //      낡은 사당 터. 폐사당이 아니다: 냉광 0 · 규모 5x5 · 길가 사당의 잔해다.
+
+    private static final int HG_X = -10;      // 사냥터 중심 (마을 중심 기준)
+    private static final int HG_Z = -122;
+    private static final int HG_A = 32;       // 타원 반폭 (x)
+    private static final int HG_B = 30;       // 타원 반깊이 (z)
+    private static final int HG_TRAIL_END = 100;   // 산길 연장 끝 (담 밖 d)
+    private static final int HG_LAMP_END = 96;     // 등롱이 끝나는 d — 그 너머는 어둠이 사냥터다
+
+    /** 개울 중심선 길이 (셀 수) */
+    private static final int CREEK_N = 46;
+
+    /** 바위 무더기 — {dx, dz, 반경} 사냥터 중심 기준 (난수 0) */
+    private static final int[][] HG_CRAGS = {
+            {-24, -18, 3}, {-6, -24, 2}, {14, -20, 4}, {26, -8, 3}, {-28, 2, 3},
+            {-16, 10, 2}, {2, 16, 3}, {20, 12, 2}, {28, 20, 3}, {-24, 22, 2},
+            {8, -6, 2}, {-2, 24, 3}, {22, -26, 2}, {-14, -8, 2},
+    };
+
+    /** 사냥터 안쪽인가 — 타원 (dx-HG_X)²/32² + (dz-HG_Z)²/30² ≤ 1 (정수식) */
+    private static boolean inHunt(int dx, int dz) {
+        int ux = dx - HG_X;
+        int uz = dz - HG_Z;
+        return (long) HG_B * HG_B * ux * ux + (long) HG_A * HG_A * uz * uz
+                <= (long) HG_A * HG_A * HG_B * HG_B;
+    }
+
+    /**
+     * 사냥터 기준 지면 — 개울 바닥 높이의 유일한 근거. 분지 안 **고정 다섯 점**의 자연 지면 중
+     * 유효한 것들의 최댓값. 이 다섯 점은 개울 회랑 밖이고, 이 위에 얹히는 것(포드졸·나무 밑동)은
+     * 전부 자연 지면 화이트리스트 안의 **같은 y 자리 치환**이라 재조성에도 값이 안 움직인다.
+     */
+    private static int huntRefY(World world, int cx, int cz) {
+        int[][] probes = {{-20, -6}, {6, 6}, {-4, -14}, {18, 4}, {-26, 14}};
+        int hi = Integer.MIN_VALUE;
+        for (int[] p : probes) {
+            int g = naturalGroundY(world, cx + HG_X + p[0], cz + HG_Z + p[1]);
+            if (g != Integer.MIN_VALUE) {
+                hi = Math.max(hi, g);
+            }
+        }
+        return hi == Integer.MIN_VALUE ? world.getHighestBlockYAt(cx + HG_X, cz + HG_Z) : hi;
+    }
+
+    /** 개울 중심선 — i 번째 셀의 마을 중심 기준 {dx, dz}. 상수식 (난수·시간 0) */
+    private static int[] creekAt(int i) {
+        int dx = HG_X + 16 - (2 * i) / 3 + ((i / 7) % 3) - 1;
+        int dz = HG_Z - 22 + i;
+        return new int[]{dx, dz};
+    }
+
+    /** 개울 바닥 y — 기준 지면에서 2칸 내려 시작해 15셀마다 한 칸씩 떨어진다 (물은 되오르지 않는다) */
+    private static int creekBedY(int refY, int i) {
+        return refY - 2 - i / 15;
+    }
+
+    /** 개울 회랑(수로 3 + 둑 2 = 반폭 5) 안인가 — 나무·바위·풀은 여기 못 들어온다 */
+    private static boolean inCreek(int dx, int dz) {
+        int i = dz - (HG_Z - 22);
+        if (i < -1 || i > CREEK_N) {
+            return false;
+        }
+        int[] c = creekAt(Math.max(0, Math.min(CREEK_N - 1, i)));
+        return Math.abs(dx - c[0]) <= 5;
+    }
+
+    /** 산길 회랑 — 노면(2칸) + 갓길. 수목·바위가 길을 덮지 않는다 */
+    private static boolean onHuntTrail(int dx, int dz) {
+        int d = -dz;
+        if (d < OUT_FAR || d > HG_TRAIL_END + 2) {
+            return false;
+        }
+        int off = -((d - OUT_NEAR) / 6);
+        return dx >= off - 3 && dx <= off + 4;
+    }
+
+    /** 무대의 부지 — 나무·바위가 침범하지 않는다 (야영터·사당 터·수레·도적 흔적) */
+    private static boolean huntKeepout(int dx, int dz) {
+        return (Math.abs(dx - HG_X) <= 5 && Math.abs(dz - (HG_Z + 21)) <= 5)             // 사냥꾼 야영터
+                || (Math.abs(dx - (HG_X - 10)) <= 6 && Math.abs(dz - (HG_Z - 8)) <= 6)   // 낡은 사당 터
+                || (Math.abs(dx - (HG_X + 7)) <= 5 && Math.abs(dz - (HG_Z + 14)) <= 4)   // 버려진 수레
+                || (Math.abs(dx - (HG_X - 20)) <= 5 && Math.abs(dz - (HG_Z + 8)) <= 5);  // 도적 야영 흔적
+    }
+
+    /** 사냥터 — 조성 순서: 생물군계 → 지면 → 개울 → 바위 → 숲 → 덤불 → 흔적 → 길·야영터 → 짐승 → 구역 */
+    private static void huntingGrounds(World world, int cx, int cy, int cz, List<Zone> out) {
+        int refY = huntRefY(world, cx, cz);
+        huntBiome(world, cx, cz, refY);
+        huntFloor(world, cx, cz);
+        huntCreek(world, cx, cz, refY);
+        huntCrags(world, cx, cz);
+        huntWoods(world, cx, cz);
+        huntUndergrowth(world, cx, cz);
+        huntRuinShrine(world, cx, cz);
+        huntBrokenWall(world, cx, cz);
+        huntCart(world, cx, cz);
+        huntBanditTrace(world, cx, cz);
+        huntTrailExtension(world, cx, cz);   // 노면은 지형·소품 뒤에 깐다 (아무도 길을 못 덮는다)
+        huntFootpath(world, cx, cz, refY);
+        huntCamp(world, cx, cz);
+        huntArrows(world, cx, cz);
+        huntGame(world, cx, cz);
+
+        int y0 = Math.min(cy, refY) - 14;
+        int y1 = Math.max(cy, refY) + 34;
+        out.add(new Zone("북쪽 산길", "늑대와 여우 — 그리고 도적 소문", world.getName(),
+                cx + HG_X - HG_A - 8, y0, cz + HG_Z - HG_B - 6,
+                cx + HG_X + HG_A + 8, y1, cz - OUT_NEAR - 1));
+    }
+
+    /**
+     * 생물군계 = 타이가. 늑대·여우는 지형이 아니라 **생물군계**로 스폰한다 (풀 블록·광원만으론 안 온다).
+     * 4x4x4 격자가 저장 단위이므로 4칸 간격이면 충분하다. 좌표만의 함수 = 결정론.
+     */
+    private static void huntBiome(World world, int cx, int cz, int refY) {
+        for (int dx = HG_X - HG_A; dx <= HG_X + HG_A; dx += 4) {
+            for (int dz = HG_Z - HG_B; dz <= HG_Z + HG_B; dz += 4) {
+                if (!inHunt(dx, dz)) {
+                    continue;
+                }
+                for (int y = refY - 12; y <= refY + 24; y += 4) {
+                    world.setBiome(cx + dx, y, cz + dz, org.bukkit.block.Biome.TAIGA);
+                }
+            }
+        }
+    }
+
+    /**
+     * 사냥터 지면 — 평탄화가 아니라 **표층 치환**이다 (같은 y 자리의 블록만 갈아끼운다 = 지형 불변).
+     * 포드졸 34% · 거친 흙 18% · 나머지는 원래 지면 그대로. 전부 불투명 풀 블록 = 스폰 가능 지면.
+     */
+    private static void huntFloor(World world, int cx, int cz) {
+        for (int dx = HG_X - HG_A; dx <= HG_X + HG_A; dx++) {
+            for (int dz = HG_Z - HG_B; dz <= HG_Z + HG_B; dz++) {
+                if (!inHunt(dx, dz) || inCreek(dx, dz) || onHuntTrail(dx, dz)) {
+                    continue;
+                }
+                int x = cx + dx, z = cz + dz;
+                int g = outsideGroundY(world, x, z);   // 흙길도 '지면'으로 본다 = 재조성해도 안 내려앉는다
+                if (g == Integer.MIN_VALUE) {
+                    continue;
+                }
+                Material ground = world.getBlockAt(x, g, z).getType();
+                if (ground != Material.GRASS_BLOCK && ground != Material.DIRT
+                        && ground != Material.COARSE_DIRT && ground != Material.PODZOL
+                        && ground != Material.ROOTED_DIRT) {
+                    continue;   // 바위·모래·노면은 그대로 둔다 (지형에 순응 · 길을 덮지 않는다)
+                }
+                int h = hash(x + 4801, z - 2207, 100);
+                if (h < 34) {
+                    world.getBlockAt(x, g, z).setType(Material.PODZOL);
+                } else if (h < 52) {
+                    world.getBlockAt(x, g, z).setType(Material.COARSE_DIRT);
+                }
+            }
+        }
+    }
+
+    /**
+     * 개울 — 수로 3칸 + 둑 2칸. 바닥 높이는 지형을 **읽지 않고** huntRefY 에서 상수식으로 내려간다:
+     * 수로 안의 열은 재조성 때 물이라 지면 판정이 실격(MIN_VALUE)이 되므로, 지형을 읽으면 두 번째
+     * 조성이 개울을 다른 높이에 판다 (v6.4 폐사당 수몰과 같은 부류의 함정). 상수식이면 몇 번을
+     * 조성해도 같은 개울이다. 15셀마다 한 칸씩 떨어지므로 단마다 작은 여울이 진다.
+     */
+    private static void huntCreek(World world, int cx, int cz, int refY) {
+        for (int i = 0; i < CREEK_N; i++) {
+            int[] c = creekAt(i);
+            int bed = creekBedY(refY, i);
+            int z = cz + c[1];
+            for (int w = -3; w <= 3; w++) {
+                int x = cx + c[0] + w;
+                if (Math.abs(w) <= 1) {                       // 수로 — 파내고 물을 채운다
+                    world.getBlockAt(x, bed, z).setType(Material.WATER);
+                    world.getBlockAt(x, bed - 1, z).setType(Material.GRAVEL);
+                    int top = Math.min(world.getHighestBlockYAt(x, z), bed + 14);
+                    for (int y = bed + 1; y <= Math.max(bed + 3, top + 1); y++) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);
+                    }
+                } else {                                      // 둑 — 물이 새지 않게 바닥까지 채운다
+                    for (int y = bed; y >= bed - 10; y--) {
+                        Material m = world.getBlockAt(x, y, z).getType();
+                        if (!m.isAir() && m != Material.WATER) {
+                            break;
+                        }
+                        world.getBlockAt(x, y, z).setType(hash(x, y * 31 + z, 3) == 0
+                                ? Material.MOSSY_COBBLESTONE : Material.COBBLESTONE);
+                    }
+                }
+            }
+        }
+        // 상·하류 마개 — 개울은 분지 안에서 시작해 분지 안에서 끝난다 (들녘으로 새지 않는다)
+        creekPlug(world, cx, cz, creekAt(0), creekBedY(refY, 0), -1);
+        creekPlug(world, cx, cz, creekAt(CREEK_N - 1), creekBedY(refY, CREEK_N - 1), 1);
+    }
+
+    /** 개울 끝 마개 — 수로 단면을 돌로 막는다 (물이 지형으로 흘러나가지 않게) */
+    private static void creekPlug(World world, int cx, int cz, int[] c, int bed, int dir) {
+        int z = cz + c[1] + dir;
+        for (int w = -3; w <= 3; w++) {
+            int x = cx + c[0] + w;
+            for (int y = bed + 1; y >= bed - 10; y--) {
+                Material m = world.getBlockAt(x, y, z).getType();
+                if (!m.isAir() && m != Material.WATER) {
+                    break;
+                }
+                world.getBlockAt(x, y, z).setType(Material.COBBLESTONE);
+            }
+        }
+    }
+
+    /**
+     * 바위 — 무더기 14곳(상수표) + 좌표 해시로 흩뿌린 잔돌. 자재는 전부 자연 지면 화이트리스트 **밖**:
+     * STONE·ANDESITE 를 쓰면 다음 조성의 지면 판정이 바위 꼭대기를 땅으로 읽어 바위가 해마다 자란다.
+     */
+    private static void huntCrags(World world, int cx, int cz) {
+        for (int[] c : HG_CRAGS) {
+            crag(world, cx, cz, c[0], c[1], c[2]);
+        }
+        for (int dx = HG_X - HG_A; dx <= HG_X + HG_A; dx++) {
+            for (int dz = HG_Z - HG_B; dz <= HG_Z + HG_B; dz++) {
+                if (!inHunt(dx, dz) || inCreek(dx, dz) || onHuntTrail(dx, dz) || huntKeepout(dx, dz)) {
+                    continue;
+                }
+                if (hash(cx + dx - 991, cz + dz + 617, 55) != 0) {
+                    continue;
+                }
+                huntPut(world, cx + dx, cz + dz, rockMat(cx + dx, cz + dz));
+            }
+        }
+    }
+
+    /**
+     * 바위 한 무더기 — 반경 r 안에서 높이가 중심으로 갈수록 오르는 돌덩이 (지형에 얹는다).
+     * ox·oz 는 **사냥터 중심** 기준이고 inHunt/inCreek/onHuntTrail 은 **마을 중심** 기준이다 —
+     * 좌표계를 먼저 맞춘 뒤에 묻는다 (섞으면 회피가 통째로 어긋난다).
+     */
+    private static void crag(World world, int cx, int cz, int ox, int oz, int r) {
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dz = -r; dz <= r; dz++) {
+                int d2 = dx * dx + dz * dz;
+                int vdx = HG_X + ox + dx;   // 마을 중심 기준으로 환산
+                int vdz = HG_Z + oz + dz;
+                if (d2 > r * r || !inHunt(vdx, vdz) || inCreek(vdx, vdz)
+                        || onHuntTrail(vdx, vdz) || huntKeepout(vdx, vdz)) {
+                    continue;
+                }
+                int x = cx + vdx, z = cz + vdz;
+                int g = outsideGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE) {
+                    continue;
+                }
+                int h = r + 1 - (int) Math.round(Math.sqrt(d2)) + hash(x, z, 2);
+                for (int k = 1; k <= h; k++) {
+                    if (!outsideVacant(world, x, g + k, z)) {
+                        break;
+                    }
+                    world.getBlockAt(x, g + k, z).setType(rockMat(x, z + k));
+                }
+            }
+        }
+    }
+
+    /** 바위 자재 — 조약돌·이끼 조약돌·조약 심층암 (전부 자연 지면 화이트리스트 밖 = 안 자란다) */
+    private static Material rockMat(int x, int z) {
+        int h = hash(x + 313, z - 77, 10);
+        return h < 5 ? Material.COBBLESTONE
+                : h < 8 ? Material.MOSSY_COBBLESTONE : Material.COBBLED_DEEPSLATE;
+    }
+
+    /** 성긴 침엽수림 — 가문비 우세(타이가) + 참나무·자작 섞기. 밀도 1/18 ≈ 나무 사이 4~5칸 */
+    private static void huntWoods(World world, int cx, int cz) {
+        for (int dx = HG_X - HG_A; dx <= HG_X + HG_A; dx++) {
+            for (int dz = HG_Z - HG_B; dz <= HG_Z + HG_B; dz++) {
+                if (!inHunt(dx, dz) || inCreek(dx, dz) || onHuntTrail(dx, dz) || huntKeepout(dx, dz)) {
+                    continue;
+                }
+                int x = cx + dx, z = cz + dz;
+                if (hash(x + 2311, z + 8807, 18) != 0) {
+                    continue;
+                }
+                int g = outsideGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE) {
+                    continue;
+                }
+                Material ground = world.getBlockAt(x, g, z).getType();
+                if (ground != Material.GRASS_BLOCK && ground != Material.DIRT
+                        && ground != Material.COARSE_DIRT && ground != Material.PODZOL
+                        && ground != Material.ROOTED_DIRT) {
+                    continue;
+                }
+                if (!huntClear(world, x, g, z)) {
+                    continue;   // 잎이 덮을 자리가 다 비어야 심는다 (겹친 나무·허공의 잎 0)
+                }
+                int kind = hash(x - 55, z + 121, 10);
+                if (kind < 7) {
+                    coniferTree(world, x, g, z);
+                } else {
+                    growTree(world, x, g, z, kind == 9);
+                }
+            }
+        }
+    }
+
+    /** 나무 심을 자리 — 밑동 위 8칸 · 사방 2칸이 다 비어 있는가 (겹친 나무·허공의 잎 금지) */
+    private static boolean huntClear(World world, int x, int g, int z) {
+        for (int px = x - 2; px <= x + 2; px++) {
+            for (int pz = z - 2; pz <= z + 2; pz++) {
+                for (int y = g + 1; y <= g + 8; y++) {
+                    if (!world.getBlockAt(px, y, pz).getType().isAir()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /** 가문비나무 — 밑동 5~7단 + 원뿔 잎 (아래가 넓고 위로 좁아진다). 잎이 하늘빛을 끊는다 = 어둠 */
+    private static void coniferTree(World world, int x, int gy, int z) {
+        int h = 5 + hash(x + 71, z - 29, 3);   // 5~7
+        world.getBlockAt(x, gy, z).setType(Material.PODZOL);
+        for (int y = gy + 1; y <= gy + h; y++) {
+            world.getBlockAt(x, y, z).setType(Material.SPRUCE_LOG);
+        }
+        int[] rings = {2, 2, 1, 1};   // 아래에서 위로 좁아지는 잎 반경
+        for (int k = 0; k < rings.length; k++) {
+            int y = gy + h - 2 + k - 1;
+            int r = rings[k];
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) > r + 1 || (dx == 0 && dz == 0 && y <= gy + h)) {
+                        continue;
+                    }
+                    persistentLeaf(world, x + dx, y, z + dz, Material.SPRUCE_LEAVES);
+                }
+            }
+        }
+        persistentLeaf(world, x, gy + h + 2, z, Material.SPRUCE_LEAVES);
+    }
+
+    /** 숲 바닥 — 고사리·수풀·죽은 덤불·버섯·이끼. 절반 이상은 맨땅으로 남긴다 (스폰 자리) */
+    private static void huntUndergrowth(World world, int cx, int cz) {
+        for (int dx = HG_X - HG_A; dx <= HG_X + HG_A; dx++) {
+            for (int dz = HG_Z - HG_B; dz <= HG_Z + HG_B; dz++) {
+                if (!inHunt(dx, dz) || inCreek(dx, dz) || onHuntTrail(dx, dz)) {
+                    continue;
+                }
+                int x = cx + dx, z = cz + dz;
+                int h = hash(x - 6607, z + 4409, 100);
+                if (h >= 30) {
+                    continue;   // 70% 는 맨땅 — 숲 바닥은 정원이 아니다
+                }
+                int g = outsideGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE || !world.getBlockAt(x, g + 1, z).getType().isAir()) {
+                    continue;
+                }
+                Material ground = world.getBlockAt(x, g, z).getType();
+                if (!NATURAL_GROUND.contains(ground) || ground == Material.STONE) {
+                    continue;
+                }
+                Material cover = h < 11 ? Material.FERN
+                        : h < 19 ? Material.SHORT_GRASS
+                        : h < 23 ? Material.DEAD_BUSH
+                        : h < 26 ? Material.BROWN_MUSHROOM
+                        : h < 28 ? Material.RED_MUSHROOM : Material.MOSS_CARPET;
+                world.getBlockAt(x, g + 1, z).setType(cover);
+            }
+        }
+    }
+
+    /**
+     * 낡은 사당 터 — 폐사당이 **아니다**. 길가에 있던 작은 사당의 잔해: 5x5 이끼 기단, 부러진 기둥 넷,
+     * 넘어진 비석, 금간 제단. 냉광 0 (영혼 계열은 폐사당 전용 — 그 계약은 v6 부터 한 번도 안 깼다).
+     * 광원 자체가 없다 = 밤이면 여기가 가장 위험한 자리다.
+     */
+    private static void huntRuinShrine(World world, int cx, int cz) {
+        int ox = cx + HG_X - 10, oz = cz + HG_Z - 8;
+        int base = Integer.MIN_VALUE;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                int g = outsideGroundY(world, ox + dx, oz + dz);
+                if (g != Integer.MIN_VALUE) {
+                    base = Math.max(base, g);
+                }
+            }
+        }
+        if (base == Integer.MIN_VALUE) {
+            return;
+        }
+        int deck = base + 1;   // 기단 윗면 — 부지 최고점 **위**. 자연 지면 블록은 한 칸도 갈아엎지 않는다
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                int x = ox + dx, z = oz + dz;
+                int g = outsideGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE) {
+                    continue;
+                }
+                for (int y = g + 1; y < deck; y++) {
+                    world.getBlockAt(x, y, z).setType(Material.PACKED_MUD);   // 기단 밑 메움 (공중 부양 0)
+                }
+                for (int y = deck + 1; y <= deck + 4; y++) {
+                    world.getBlockAt(x, y, z).setType(Material.AIR);
+                }
+                int h = hash(x + 101, z - 43, 10);   // 이끼·금간 돌 벽돌 (상수 치환)
+                world.getBlockAt(x, deck, z).setType(h < 4 ? Material.MOSSY_STONE_BRICKS
+                        : h < 7 ? Material.CRACKED_STONE_BRICKS : Material.STONE_BRICKS);
+            }
+        }
+        int[][] pillars = {{-2, -2, 3}, {2, -2, 1}, {-2, 2, 2}, {2, 2, 0}};   // 넷 중 하나는 뿌리만 남았다
+        for (int[] pl : pillars) {
+            for (int k = 1; k <= pl[2]; k++) {
+                world.getBlockAt(ox + pl[0], deck + k, oz + pl[1])
+                        .setType(k == pl[2] ? Material.MOSSY_STONE_BRICK_WALL : Material.STONE_BRICK_WALL);
+            }
+        }
+        world.getBlockAt(ox, deck + 1, oz).setType(Material.CHISELED_STONE_BRICKS);   // 신상 없는 제단
+        world.getBlockAt(ox, deck + 2, oz).setType(Material.STONE_BRICK_SLAB);
+        huntPut(world, ox + 1, oz + 3, Material.MOSSY_STONE_BRICKS);                  // 넘어진 비석
+        huntPut(world, ox + 2, oz + 3, Material.CHISELED_STONE_BRICKS);
+        huntPut(world, ox + 3, oz + 3, Material.STONE_BRICK_SLAB);
+        for (int[] r : new int[][]{{-3, 0}, {3, 1}, {0, -3}, {-1, 3}, {3, -2}}) {     // 굴러떨어진 조각
+            huntPut(world, ox + r[0], oz + r[1], Material.MOSSY_COBBLESTONE);
+        }
+    }
+
+    /** 무너진 돌담 — 22칸. 높이는 좌표 해시로 0~2 (끊긴 자리가 무너진 자리다) + 흘러내린 조약돌 */
+    private static void huntBrokenWall(World world, int cx, int cz) {
+        int x0 = cx + HG_X + 4, z0 = cz + HG_Z + 6;
+        for (int i = 0; i < 22; i++) {
+            int x = x0 + i;
+            int z = z0 + (i / 6);   // 완만하게 꺾인다
+            int g = outsideGroundY(world, x, z);
+            if (g == Integer.MIN_VALUE) {
+                continue;
+            }
+            int h = hash(x + 771, z - 331, 4);   // 0 = 무너져 없다
+            for (int k = 1; k <= h; k++) {
+                if (!outsideVacant(world, x, g + k, z)) {
+                    break;
+                }
+                world.getBlockAt(x, g + k, z).setType(hash(x, z + k, 3) == 0
+                        ? Material.MOSSY_COBBLESTONE_WALL : Material.COBBLESTONE_WALL);
+            }
+            if (h == 0) {
+                huntPut(world, x, z + 1, Material.COBBLESTONE_SLAB);   // 흘러내린 담돌
+            }
+        }
+    }
+
+    /** 버려진 수레 — 짐칸이 부서졌고 바퀴 하나는 빠져 옆에 눕는다. 짐은 흩어졌다 (발자국길 옆) */
+    private static void huntCart(World world, int cx, int cz) {
+        int x0 = cx + HG_X + 6, z0 = cz + HG_Z + 14;
+        int g = outsideGroundY(world, x0, z0);
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
+        for (int dx = 0; dx <= 2; dx++) {          // 짐칸 — 널판 (한쪽이 내려앉았다)
+            for (int dz = 0; dz <= 1; dz++) {
+                world.getBlockAt(x0 + dx, g + 1, z0 + dz)
+                        .setType(dx == 2 ? Material.OAK_SLAB : Material.OAK_PLANKS);
+            }
+        }
+        world.getBlockAt(x0, g + 1, z0 - 1).setType(Material.OAK_LOG);       // 끌채
+        world.getBlockAt(x0 + 1, g + 2, z0).setType(Material.BARREL);        // 엎어진 짐
+        world.getBlockAt(x0 + 2, g + 1, z0 + 2).setType(Material.HAY_BLOCK);
+        cartWheel(world, x0 - 1, g + 1, z0, BlockFace.NORTH, false);         // 선 바퀴
+        cartWheel(world, x0 + 3, g + 1, z0 + 3, BlockFace.NORTH, true);      // 빠져 나뒹구는 바퀴
+        huntPut(world, x0 + 4, z0 - 1, Material.BONE_BLOCK);                 // 끌던 짐승의 뼈
+        for (int[] s : new int[][]{{-2, 2}, {4, 1}, {-1, 3}}) {
+            huntPut(world, x0 + s[0], z0 + s[1], Material.COBBLESTONE_SLAB);
+        }
+    }
+
+    /** 수레바퀴 — 참나무 뚜껑문. 열면 판이 서고(바퀴), 닫으면 눕는다(빠진 바퀴) */
+    private static void cartWheel(World world, int x, int y, int z, BlockFace facing, boolean fallen) {
+        TrapDoor td = (TrapDoor) Material.OAK_TRAPDOOR.createBlockData();
+        td.setFacing(facing);
+        td.setOpen(!fallen);
+        td.setHalf(Bisected.Half.BOTTOM);
+        world.getBlockAt(x, y, z).setBlockData(td);
+    }
+
+    /** 도적의 야영 흔적 — 꺼진 모닥불(불씨가 죽었다 = 광원 0)·통나무 걸상·버린 궤짝·나무에 박힌 화살 */
+    private static void huntBanditTrace(World world, int cx, int cz) {
+        int x0 = cx + HG_X - 20, z0 = cz + HG_Z + 8;
+        int g = outsideGroundY(world, x0, z0);
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
+        org.bukkit.block.data.Lightable fire =
+                (org.bukkit.block.data.Lightable) Material.CAMPFIRE.createBlockData();
+        fire.setLit(false);   // 꺼진 모닥불 — 온색이되 빛이 없다 (여기는 밤에 위험해야 한다)
+        world.getBlockAt(x0, g + 1, z0).setBlockData(fire);
+        for (int[] s : new int[][]{{-2, 0}, {2, 0}, {0, 2}}) {
+            huntPut(world, x0 + s[0], z0 + s[1], Material.OAK_LOG);
+        }
+        huntPut(world, x0 + 2, z0 + 2, Material.BARREL);
+        huntPut(world, x0 - 2, z0 - 2, Material.HAY_BLOCK);
+        huntPut(world, x0 + 3, z0 - 2, Material.BONE_BLOCK);
+        for (int[] w : new int[][]{{-3, 1}, {3, 3}, {1, -3}}) {   // 삭은 천막의 실밥
+            huntPut(world, x0 + w[0], z0 + w[1], Material.COBWEB);
+        }
+    }
+
+    /**
+     * 나무에 박힌 화살 — 덫걸이(TRIPWIRE_HOOK)를 밑동에 붙이면 촉이 박히고 오늬가 튀어나온 화살로 읽힌다.
+     * 여덟 자리 전부 밑동을 먼저 확인하고 붙인다 (허공에 뜬 화살 0).
+     */
+    private static void huntArrows(World world, int cx, int cz) {
+        int[][] spots = {{2, -12}, {-6, -16}, {12, 4}, {-18, -2}, {6, 18}, {-12, 20}, {18, -22}, {-2, 8}};
+        for (int[] s : spots) {
+            arrowInTrunk(world, cx + HG_X + s[0], cz + HG_Z + s[1]);
+        }
+    }
+
+    /** 반경 4 안에서 첫 밑동을 찾아 그 옆면에 화살을 박는다 */
+    private static void arrowInTrunk(World world, int ox, int oz) {
+        for (int r = 0; r <= 4; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
+                        continue;
+                    }
+                    int x = ox + dx, z = oz + dz;
+                    int g = outsideGroundY(world, x, z);
+                    if (g == Integer.MIN_VALUE) {
+                        continue;
+                    }
+                    for (int y = g + 2; y <= g + 4; y++) {
+                        if (!world.getBlockAt(x, y, z).getType().name().endsWith("_LOG")) {
+                            continue;
+                        }
+                        if (!world.getBlockAt(x, y, z + 1).getType().isAir()) {
+                            continue;
+                        }
+                        Directional d = (Directional) Material.TRIPWIRE_HOOK.createBlockData();
+                        d.setFacing(BlockFace.SOUTH);   // 화살은 남쪽(마을 쪽)에서 날아와 박혔다
+                        world.getBlockAt(x, y, z + 1).setBlockData(d);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /** 산길 연장 — d=92 에서 끊긴 길을 d=100 까지 잇는다. 등롱은 d=96 에서 끝난다 (그 너머가 사냥터다) */
+    private static void huntTrailExtension(World world, int cx, int cz) {
+        for (int d = OUT_FAR + 1; d <= HG_TRAIL_END; d++) {
+            int off = -((d - OUT_NEAR) / 6);
+            for (int w = 0; w <= 1; w++) {
+                outsideRoadCell(world, cx + off + w, cz - d, true);
+            }
+            roadsideBrush(world, cx, cz, cx + off, cz - d);
+            if (d <= HG_LAMP_END && Math.floorMod(d, 4) == 2) {
+                roadsideLantern(world, cx + off - 3, cz - d);
+                roadsideLantern(world, cx + off + 4, cz - d);
+            }
+        }
+    }
+
+    /**
+     * 발자국길 — 야영터에서 개울을 건너 사당 터까지. 폭 1칸 거친 흙, 등롱 0.
+     * 개울 회랑을 지나는 칸은 흙 대신 **참나무 널다리**를 개울 바닥 위에 놓는다 (물에 흙을 붓지 않는다).
+     */
+    private static void huntFootpath(World world, int cx, int cz, int refY) {
+        int[][] legs = {
+                {HG_X, HG_Z + 21, HG_X + 2, HG_Z + 8},        // 야영터 → 개울 동안 (개울과 나란히 가지 않는다)
+                {HG_X + 2, HG_Z + 8, HG_X - 7, HG_Z - 5},     // 개울을 가로질러 → 사당 터
+        };
+        for (int[] leg : legs) {
+            int steps = Math.max(Math.abs(leg[2] - leg[0]), Math.abs(leg[3] - leg[1]));
+            for (int s = 0; s <= steps; s++) {
+                int dx = leg[0] + (leg[2] - leg[0]) * s / steps;
+                int dz = leg[1] + (leg[3] - leg[1]) * s / steps;
+                footCell(world, cx, cz, dx, dz, refY);
+                if (hash(cx + dx, cz + dz, 3) == 0) {   // 길이 한 칸씩 흔들린다 (자로 그은 길이 아니다)
+                    footCell(world, cx, cz, dx + 1, dz, refY);
+                }
+            }
+        }
+    }
+
+    /** 발자국길 한 칸 — 개울 위면 널다리, 뭍이면 거친 흙 */
+    private static void footCell(World world, int cx, int cz, int dx, int dz, int refY) {
+        int x = cx + dx, z = cz + dz;
+        int i = dz - (HG_Z - 22);
+        if (i >= 0 && i < CREEK_N && Math.abs(dx - creekAt(i)[0]) <= 3) {
+            int bed = creekBedY(refY, i);
+            world.getBlockAt(x, bed + 1, z).setType(Material.OAK_PLANKS);   // 널다리
+            for (int y = bed + 2; y <= bed + 4; y++) {
+                world.getBlockAt(x, y, z).setType(Material.AIR);
+            }
+            return;
+        }
+        int g = outsideGroundY(world, x, z);
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
+        world.getBlockAt(x, g, z).setType(hash(x, z, 4) == 0 ? Material.DIRT_PATH : Material.COARSE_DIRT);
+        for (int y = g + 1; y <= g + 3; y++) {
+            if (!world.getBlockAt(x, y, z).getType().isAir()) {
+                world.getBlockAt(x, y, z).setType(Material.AIR);
+            }
+        }
+    }
+
+    /**
+     * 사냥꾼 야영터 — 산길이 끝나는 자리. 사냥터에서 **불이 있는 유일한 곳**이다:
+     * 모닥불 1(온색) · 랜턴 2 · 횃불 1. 여기서 세 칸만 벗어나면 광원 0 = 몹의 영역.
+     */
+    private static void huntCamp(World world, int cx, int cz) {
+        int ox = cx + HG_X, oz = cz + HG_Z + 21;
+        int base = Integer.MIN_VALUE;
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                int g = outsideGroundY(world, ox + dx, oz + dz);
+                if (g != Integer.MIN_VALUE) {
+                    base = Math.max(base, g);
+                }
+            }
+        }
+        if (base == Integer.MIN_VALUE) {
+            return;
+        }
+        for (int dx = -3; dx <= 3; dx++) {   // 다져진 마당 — 평탄화가 아니라 표층 치환 (제 칸의 지면 자리)
+            for (int dz = -3; dz <= 3; dz++) {
+                int x = ox + dx, z = oz + dz;
+                int g = outsideGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE) {
+                    continue;
+                }
+                world.getBlockAt(x, g, z).setType(hash(x + 17, z + 19, 3) == 0
+                        ? Material.DIRT_PATH : Material.COARSE_DIRT);
+                for (int y = g + 1; y <= g + 3; y++) {
+                    if (!world.getBlockAt(x, y, z).getType().isAir()) {
+                        world.getBlockAt(x, y, z).setType(Material.AIR);
+                    }
+                }
+            }
+        }
+        campPut(world, ox, oz, Material.CAMPFIRE);   // 지펴진 모닥불 — 사냥터에서 불이 있는 유일한 자리
+        for (int[] st : new int[][]{{-2, 0}, {2, 0}, {0, 2}, {0, -2}}) {   // 둘러앉는 통나무
+            campPut(world, ox + st[0], oz + st[1], Material.OAK_LOG);
+        }
+        campPut(world, ox + 2, oz - 2, Material.BARREL);      // 가죽 무두질 통
+        campPut(world, ox - 2, oz + 2, Material.HAY_BLOCK);
+        // 비 가림 — 네 기둥은 **제 칸의 지면에서** 처마 높이(base+4)까지 선다. 판자 지붕만 수평이다
+        // (땅은 기울어도 지붕은 수평이다 — 평탄화하지 않고 기울기를 기둥 길이로 먹는다).
+        for (int[] pl : new int[][]{{-3, -3}, {3, -3}, {-3, 3}, {3, 3}}) {
+            int x = ox + pl[0], z = oz + pl[1];
+            int g = outsideGroundY(world, x, z);
+            if (g == Integer.MIN_VALUE) {
+                continue;
+            }
+            for (int y = g + 1; y <= base + 3; y++) {
+                world.getBlockAt(x, y, z).setType(Material.SPRUCE_FENCE);
+            }
+        }
+        for (int dx = -3; dx <= 3; dx++) {
+            world.getBlockAt(ox + dx, base + 4, oz - 3).setType(Material.SPRUCE_SLAB);
+            world.getBlockAt(ox + dx, base + 4, oz + 3).setType(Material.SPRUCE_SLAB);
+        }
+        world.getBlockAt(ox - 3, base + 4, oz - 3).setType(Material.LANTERN);   // 기둥 위 랜턴 — 온색
+        world.getBlockAt(ox + 3, base + 4, oz + 3).setType(Material.LANTERN);
+        campSign(world, ox + 1, oz + 3, "북쪽 산길 사냥터", "불은 여기까지다");
+        campSign(world, ox - 1, oz + 3, "늑대 · 여우 · 멧돼지", "밤에는 다른 것도 나온다");
+    }
+
+    /** 야영터 소품 — 제 칸의 지면 위 (빈 칸에만). 기울어진 땅에서도 뜨지 않는다 */
+    private static void campPut(World world, int x, int z, Material mat) {
+        int g = outsideGroundY(world, x, z);
+        if (g != Integer.MIN_VALUE && world.getBlockAt(x, g + 1, z).getType().isAir()) {
+            world.getBlockAt(x, g + 1, z).setType(mat);
+        }
+    }
+
+    /** 야영터 표지 — 세우는 표지판은 밑에 받칠 블록이 있어야 한다 (제 칸의 지면 위) */
+    private static void campSign(World world, int x, int z, String l1, String l2) {
+        int g = outsideGroundY(world, x, z);
+        if (g != Integer.MIN_VALUE && world.getBlockAt(x, g + 1, z).getType().isAir()) {
+            placeSign(world, x, g + 1, z, BlockFace.SOUTH, l1, l2);
+        }
+    }
+
+    /**
+     * 초기 개체군 — 늑대 4 · 여우 3 · 돼지(멧돼지 대역) 4. 생물군계(타이가)를 못 박았으므로 이후는
+     * 자연 스폰·번식이 돌지만, 첫 밤부터 사냥이 돌아야 성장·경제 루프가 산다.
+     * 재조성 결정론: 심기 전에 분지 안의 기존 개체를 먼저 걷어낸다 (조성마다 짐승이 쌓이지 않는다).
+     */
+    private static void huntGame(World world, int cx, int cz) {
+        int refY = huntRefY(world, cx, cz);
+        BoundingBox box = new BoundingBox(cx + HG_X - HG_A, refY - 24, cz + HG_Z - HG_B,
+                cx + HG_X + HG_A, refY + 32, cz + HG_Z + HG_B);
+        for (Entity e : world.getNearbyEntities(box)) {
+            EntityType t = e.getType();
+            if (t == EntityType.WOLF || t == EntityType.FOX || t == EntityType.PIG) {
+                e.remove();
+            }
+        }
+        int[][] game = {
+                {-14, -10, 0}, {-11, -8, 0}, {8, 6, 0}, {12, 9, 0},            // 늑대 — 무리 둘
+                {-22, 12, 1}, {16, -16, 1}, {-4, -20, 1},                      // 여우
+                {20, 2, 2}, {-18, -14, 2}, {4, 20, 2}, {24, -10, 2},           // 멧돼지 대역
+        };
+        for (int[] g : game) {
+            int x = cx + HG_X + g[0], z = cz + HG_Z + g[1];
+            int gy = outsideGroundY(world, x, z);
+            if (gy == Integer.MIN_VALUE) {
+                continue;
+            }
+            EntityType type = g[2] == 0 ? EntityType.WOLF : g[2] == 1 ? EntityType.FOX : EntityType.PIG;
+            Entity e = world.spawnEntity(loc(world, x, gy + 1, z), type);
+            if (e instanceof org.bukkit.entity.LivingEntity le) {
+                le.setRemoveWhenFarAway(false);   // 사냥터의 짐승은 청크가 내려가도 남는다
+            }
+            e.setPersistent(true);
+        }
+    }
+
+    /** 사냥터 소품 한 칸 — 지형 위 빈 칸에만 (풀·고사리는 밀어내도 된다) */
+    private static void huntPut(World world, int x, int z, Material mat) {
+        int g = outsideGroundY(world, x, z);
+        if (g != Integer.MIN_VALUE && outsideVacant(world, x, g + 1, z)) {
+            world.getBlockAt(x, g + 1, z).setType(mat);
+        }
+    }
+
+    // ─── v6.9 ② 흑수나루 ───
+    //
+    // 등록부 heuksu_ferry: "수로 물류 거점". 그리고 등록 기연 sunken_ship_manual(침몰선 비급)의 무대다.
+    // 부지는 폐사당의 SHRINE_SITES 방식을 잇는다 — **결정론 후보 목록**을 순서대로 검사해 첫 합격지에
+    // 짓는다. 다만 폐사당이 '물 없는 자리'를 찾았다면 나루는 정반대로 **물과 뭍이 같이 있는 자리**를
+    // 찾는다: 물 열 ≥ 15% · 뭍 열 ≥ 30% · 최대 수심 ≥ 5(침몰선이 잠길 깊이) · 뭍의 기복 ≤ 12.
+    // 후보를 다 소진하면 최고점수 후보에 **선착장 못을 판다**(ferryDig) — 나루는 반드시 선다.
+    //
+    // 모두 마을 중심에서 100칸 이상 = 검수 스캔 창(≤88) 밖. 조명은 온색뿐(랜턴·모닥불) — 나루는
+    // 괴담이 도는 곳이지 저승이 아니다. 냉색은 폐사당의 몫으로 남는다.
+
+    /** 나루 후보 — {ox, oz}. 순서가 곧 우선순위. 북(사냥터)·북서(폐사당) 사분면은 비운다 */
+    private static final int[][] FERRY_SITES = {
+            {118, 12}, {12, 118}, {-118, 20}, {126, -34}, {-30, 128},
+            {112, 96}, {-104, 100}, {132, 52}, {-124, -30}, {48, 140},
+            {150, 8}, {-146, 60}, {8, 158}, {156, 118}, {-152, -20}, {-56, 150},
+    };
+
+    private static final int FR_R = 17;        // 부지 반폭 (35x35)
+    private static final int FR_MIN_WATER = 15;    // 물 열 최소 비율 %
+    private static final int FR_MIN_LAND = 30;     // 뭍 열 최소 비율 %
+    private static final int FR_MIN_DEPTH = 5;     // 난파선이 잠길 최소 수심
+    private static final int FR_MAX_RELIEF = 12;   // 뭍의 높이 편차 상한
+
+    /** 그 열의 수심 — 최상단이 물이 아니면 0 (getHighestBlockYAt 은 물을 최상단으로 센다) */
+    private static int waterDepth(World world, int x, int z) {
+        int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 1);
+        if (world.getBlockAt(x, top, z).getType() != Material.WATER) {
+            return 0;
+        }
+        int d = 0;
+        for (int y = top; y >= top - 40 && y > world.getMinHeight(); y--) {
+            Material m = world.getBlockAt(x, y, z).getType();
+            if (m == Material.WATER || m == Material.KELP || m == Material.KELP_PLANT
+                    || m == Material.SEAGRASS || m == Material.TALL_SEAGRASS) {
+                d++;
+            } else {
+                break;
+            }
+        }
+        return d;
+    }
+
+    /** 나루 부지 실측 — {점수, 수면y, 최대수심, 물중심x, 물중심z, 뭍중심x, 뭍중심z}. 실격이면 점수 -1 */
+    private static int[] ferryProbe(World world, int sx, int sz) {
+        int cells = 0, wet = 0, dry = 0, maxD = 0, surface = Integer.MIN_VALUE;
+        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+        long wxSum = 0, wzSum = 0, lxSum = 0, lzSum = 0;
+        for (int x = sx - FR_R; x <= sx + FR_R; x++) {
+            for (int z = sz - FR_R; z <= sz + FR_R; z++) {
+                cells++;
+                int d = waterDepth(world, x, z);
+                if (d > 0) {
+                    wet++;
+                    wxSum += x;
+                    wzSum += z;
+                    if (d > maxD) {
+                        maxD = d;
+                        surface = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 1);
+                    }
+                    continue;
+                }
+                int g = naturalGroundY(world, x, z);
+                if (g == Integer.MIN_VALUE) {
+                    continue;   // 용암·얼음 — 물도 뭍도 아니다
+                }
+                dry++;
+                lxSum += x;
+                lzSum += z;
+                lo = Math.min(lo, g);
+                hi = Math.max(hi, g);
+            }
+        }
+        if (wet == 0 || dry == 0) {
+            return new int[]{-1, 0, 0, 0, 0, 0, 0};
+        }
+        int wPct = 100 * wet / cells;
+        int lPct = 100 * dry / cells;
+        int relief = hi - lo;
+        int score = (wPct >= FR_MIN_WATER && lPct >= FR_MIN_LAND && maxD >= FR_MIN_DEPTH
+                && relief <= FR_MAX_RELIEF) ? 1000 + Math.min(wPct, lPct) * 10 + maxD
+                : Math.min(wPct, lPct) * 10 + maxD;   // 실격이어도 점수는 남긴다 (최선의 차선지)
+        return new int[]{score, surface, maxD,
+                (int) (wxSum / wet), (int) (wzSum / wet), (int) (lxSum / dry), (int) (lzSum / dry)};
+    }
+
+    /** 흑수나루 — 부지 선정 → 못 파기(필요 시) → 나루터·낡은 배·난파선·오두막·괴담 → 구역 */
+    private static void heuksuFerry(World world, int cx, int cy, int cz, List<Zone> out) {
+        int sx = cx + FERRY_SITES[0][0], sz = cz + FERRY_SITES[0][1];
+        int[] best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (int[] site : FERRY_SITES) {
+            int[] p = ferryProbe(world, cx + site[0], cz + site[1]);
+            if (p[0] >= 1000) {                    // 합격 — 첫 자리에 짓는다 (결정론)
+                sx = cx + site[0];
+                sz = cz + site[1];
+                best = p;
+                break;
+            }
+            if (p[0] > bestScore) {                // 차선지 기억
+                bestScore = p[0];
+                sx = cx + site[0];
+                sz = cz + site[1];
+                best = p;
+            }
+        }
+        if (best == null || best[0] < 1000) {
+            Bukkit.getLogger().warning("[혼천/조성] 흑수나루 후보 " + FERRY_SITES.length
+                    + "곳에 쓸 만한 물가가 없다 — (" + sx + "," + sz + ") 에 나루 못을 판다");
+            ferryDig(world, sx, sz);
+            best = ferryProbe(world, sx, sz);
+            if (best[0] < 0) {
+                return;   // 못 파기까지 실패 — 나루를 접는다 (마을은 그대로 선다)
+            }
+        }
+        int waterY = best[1];
+        int lx = best[5], lz = best[6];   // 뭍 중심
+        int wx = best[3], wz = best[4];   // 물 중심
+        int[] dir = ferryBearing(lx, lz, wx, wz);   // 뭍 → 물 방향 (선착장이 뻗는 쪽)
+        int[] shore = ferryShore(world, sx, sz, dir);
+        if (shore == null) {
+            return;
+        }
+        ferryPier(world, shore[0], shore[1], waterY, dir);
+        ferryHut(world, shore[0], shore[1], waterY, dir);
+        ferryBoats(world, shore[0], shore[1], waterY, dir);
+        ferryReeds(world, sx, sz, waterY);
+        ferryGhost(world, shore[0], shore[1], waterY, dir);
+        int[] wreck = ferryWreck(world, sx, sz, waterY, dir);
+        ferrySign(world, cx, cz, sx, sz);
+        out.add(new Zone("흑수나루", "물귀신 이야기는 여기서 시작된다", world.getName(),
+                sx - FR_R - 4, waterY - 26, sz - FR_R - 4,
+                sx + FR_R + 4, waterY + 24, sz + FR_R + 4));
+        Bukkit.getLogger().info("[혼천/조성] 흑수나루 (" + sx + "," + waterY + "," + sz
+                + ") · 수심 " + best[2] + " · 침몰선 비급 궤짝 "
+                + (wreck == null ? "미배치" : "(" + wreck[0] + "," + wreck[1] + "," + wreck[2] + ")"));
+    }
+
+    /** 뭍 → 물 방향을 축 하나로 접는다 (선착장은 대각으로 뻗지 않는다) */
+    private static int[] ferryBearing(int lx, int lz, int wx, int wz) {
+        int dx = wx - lx, dz = wz - lz;
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            return new int[]{Integer.signum(dx) == 0 ? 1 : Integer.signum(dx), 0};
+        }
+        return new int[]{0, Integer.signum(dz) == 0 ? 1 : Integer.signum(dz)};
+    }
+
+    /** 물가 — 부지 중심에서 물 반대쪽으로 물러났다가 물 쪽으로 걸어와 **마지막 뭍 칸**을 찾는다 */
+    private static int[] ferryShore(World world, int sx, int sz, int[] dir) {
+        int px = sx - dir[0] * FR_R, pz = sz - dir[1] * FR_R;
+        int lastX = Integer.MIN_VALUE, lastZ = 0;
+        for (int step = 0; step <= 2 * FR_R; step++) {
+            int x = px + dir[0] * step, z = pz + dir[1] * step;
+            if (waterDepth(world, x, z) > 0) {
+                return lastX == Integer.MIN_VALUE ? null : new int[]{lastX, lastZ};
+            }
+            if (naturalGroundY(world, x, z) != Integer.MIN_VALUE) {
+                lastX = x;
+                lastZ = z;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 나루터 — 뭍에서 물로 12칸 뻗는 폭 3 참나무 널판 잔교. 다리발(가문비 목책)은 호수 바닥까지 내리고
+     * 물에 잠기는 칸은 **waterlogged** 로 놓는다 (안 그러면 다리발마다 공기 방울이 뚫린다).
+     * 등롱 3주 — 온색. 나루의 밤은 마을의 밤과 같은 색이다.
+     */
+    private static void ferryPier(World world, int shx, int shz, int waterY, int[] dir) {
+        int deck = waterY + 1;
+        for (int step = -1; step <= 12; step++) {
+            for (int side = -1; side <= 1; side++) {
+                int x = shx + dir[0] * step - dir[1] * side;
+                int z = shz + dir[1] * step + dir[0] * side;
+                world.getBlockAt(x, deck, z).setType(Material.OAK_PLANKS);
+                for (int y = deck + 1; y <= deck + 4; y++) {
+                    world.getBlockAt(x, y, z).setType(Material.AIR);
+                }
+                if (step >= 0 && Math.floorMod(step, 4) == 0) {   // 다리발 — 바닥까지
+                    for (int y = waterY; y >= waterY - 16; y--) {
+                        Material m = world.getBlockAt(x, y, z).getType();
+                        if (!m.isAir() && m != Material.WATER) {
+                            break;
+                        }
+                        putWet(world, x, y, z, Material.SPRUCE_FENCE);
+                    }
+                }
+                if (Math.abs(side) == 1 && step >= 1 && Math.floorMod(step, 3) == 1) {
+                    world.getBlockAt(x, deck + 1, z).setType(Material.OAK_FENCE);   // 난간 기둥
+                }
+            }
+        }
+        for (int step : new int[]{4, 8, 12}) {   // 등롱 — 잔교 끝쪽 난간에 매단다 (온색)
+            int x = shx + dir[0] * step - dir[1];
+            int z = shz + dir[1] * step + dir[0];
+            world.getBlockAt(x, deck + 1, z).setType(Material.OAK_FENCE);
+            world.getBlockAt(x, deck + 2, z).setType(Material.OAK_FENCE);
+            hangingLantern(world, x, deck + 3, z);
+        }
+    }
+
+    /** 물에 잠기는 블록 — 물칸이면 waterlogged 로 (공기 방울이 뚫리지 않는다) */
+    private static void putWet(World world, int x, int y, int z, Material mat) {
+        boolean submerged = world.getBlockAt(x, y, z).getType() == Material.WATER;
+        BlockData data = mat.createBlockData();
+        if (submerged && data instanceof org.bukkit.block.data.Waterlogged w) {
+            w.setWaterlogged(true);
+        }
+        world.getBlockAt(x, y, z).setBlockData(data);
+    }
+
+    /** 뱃사공 오두막 — 7x6 가문비 판벽·흑와 맞배. NPC 없음 (NPC 7인 계약 불변). 모닥불·랜턴 = 온색 */
+    private static void ferryHut(World world, int shx, int shz, int waterY, int[] dir) {
+        int hx = shx - dir[0] * 8 - dir[1] * 5;   // 잔교 축에서 옆·뒤로 물러난 뭍
+        int hz = shz - dir[1] * 8 + dir[0] * 5;
+        int base = Integer.MIN_VALUE;
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                int g = naturalGroundY(world, hx + dx, hz + dz);
+                if (g == Integer.MIN_VALUE) {
+                    return;   // 물·절벽 — 오두막은 접는다 (잔교·난파선은 그대로 산다)
+                }
+                base = Math.max(base, g);
+            }
+        }
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int y = base + 1; y <= base + 7; y++) {
+                    world.getBlockAt(hx + dx, y, hz + dz).setType(Material.AIR);
+                }
+                world.getBlockAt(hx + dx, base, hz + dz).setType(Material.COARSE_DIRT);
+            }
+        }
+        for (int dx = -3; dx <= 3; dx++) {          // 벽 — 모서리는 통나무 기둥
+            for (int dz = -2; dz <= 2; dz++) {
+                boolean edge = Math.abs(dx) == 3 || Math.abs(dz) == 2;
+                if (!edge) {
+                    continue;
+                }
+                boolean post = Math.abs(dx) == 3 && Math.abs(dz) == 2;
+                for (int k = 1; k <= 3; k++) {
+                    world.getBlockAt(hx + dx, base + k, hz + dz)
+                            .setType(post ? Material.SPRUCE_LOG : Material.SPRUCE_PLANKS);
+                }
+            }
+        }
+        world.getBlockAt(hx, base + 1, hz - 2).setType(Material.AIR);   // 문
+        world.getBlockAt(hx, base + 2, hz - 2).setType(Material.AIR);
+        for (int dx = -4; dx <= 4; dx++) {          // 흑와 맞배 — 두 켜
+            for (int dz = -3; dz <= 3; dz++) {
+                int y = base + 4 + (2 - Math.min(2, Math.abs(dz)));
+                world.getBlockAt(hx + dx, y, hz + dz).setType(Math.abs(dz) == 3
+                        ? Material.DEEPSLATE_TILE_SLAB : Material.DEEPSLATE_TILES);
+            }
+        }
+        world.getBlockAt(hx - 2, base + 1, hz + 1).setType(Material.BARREL);
+        world.getBlockAt(hx + 2, base + 1, hz + 1).setType(Material.CHEST);
+        wallTorch(world, hx - 2, base + 2, hz - 1, BlockFace.SOUTH);
+        world.getBlockAt(hx + 4, base + 1, hz - 3).setType(Material.CAMPFIRE);   // 마당 모닥불 — 온색
+        hangingLantern(world, hx, base + 3, hz - 3);
+        placeSign(world, hx + 2, base + 1, hz - 3, BlockFace.SOUTH,
+                "흑수나루", "밤배는 태우지 않는다");
+    }
+
+    /** 낡은 배 둘 — 잔교에 매인 나룻배 하나, 물가에 반쯤 부서져 처박힌 하나 */
+    private static void ferryBoats(World world, int shx, int shz, int waterY, int[] dir) {
+        int bx = shx + dir[0] * 6 - dir[1] * 3;   // 잔교 옆에 매인 배
+        int bz = shz + dir[1] * 6 + dir[0] * 3;
+        for (int a = -2; a <= 2; a++) {
+            for (int b = -1; b <= 1; b++) {
+                int x = bx + dir[0] * a - dir[1] * b;
+                int z = bz + dir[1] * a + dir[0] * b;
+                putWet(world, x, waterY, z, Math.abs(a) == 2
+                        ? Material.SPRUCE_STAIRS : Material.SPRUCE_PLANKS);
+                world.getBlockAt(x, waterY + 1, z).setType(Material.AIR);
+            }
+        }
+        world.getBlockAt(bx, waterY + 1, bz).setType(Material.BARREL);          // 짐칸
+        world.getBlockAt(bx - dir[1], waterY + 1, bz + dir[0]).setType(Material.OAK_FENCE);   // 삿대
+
+        int wx = shx - dir[0] * 4 + dir[1] * 7;   // 물가에 처박힌 부서진 배
+        int wz = shz - dir[1] * 4 - dir[0] * 7;
+        int g = naturalGroundY(world, wx, wz);
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
+        for (int a = -2; a <= 2; a++) {
+            int x = wx + a, z = wz;
+            if (naturalGroundY(world, x, z) == Integer.MIN_VALUE) {
+                continue;
+            }
+            world.getBlockAt(x, g + 1, z).setType(a == 1 ? Material.AIR : Material.SPRUCE_PLANKS);
+            if (a != 1 && a != -2) {
+                world.getBlockAt(x, g + 2, z + 1).setType(Material.SPRUCE_SLAB);   // 벌어진 뱃전
+            }
+        }
+        world.getBlockAt(wx + 3, g + 1, wz).setType(Material.OAK_FENCE);           // 부러진 노
+        world.getBlockAt(wx - 1, g + 2, wz + 1).setType(Material.COBWEB);
+    }
+
+    /**
+     * 침몰선 — 등록 기연 sunken_ship_manual 의 무대. 부지에서 **가장 깊은 물**에 눕는다.
+     * 선체 13x5, 뱃머리가 들리고 고물이 처박힌 기울기(상수식). 가운데 선실은 물이 찬 채로 열려 있어
+     * **잠수해서 들어간다** — 그 안에 봉인된 방수 유통(궤짝)이 비급을 품는다.
+     */
+    private static int[] ferryWreck(World world, int sx, int sz, int waterY, int[] dir) {
+        int bx = 0, bz = 0, bd = 0;
+        for (int x = sx - FR_R + 3; x <= sx + FR_R - 3; x++) {   // 가장 깊은 물칸 (선체가 다 잠길 자리)
+            for (int z = sz - FR_R + 3; z <= sz + FR_R - 3; z++) {
+                int d = waterDepth(world, x, z);
+                if (d > bd) {
+                    bd = d;
+                    bx = x;
+                    bz = z;
+                }
+            }
+        }
+        if (bd < 4) {
+            return null;
+        }
+        int floor = waterY - bd + 1;   // 호수 바닥 바로 위
+        boolean alongX = dir[0] == 0;  // 선체는 물가와 나란히 눕는다
+        for (int a = -6; a <= 6; a++) {
+            int lift = Math.max(0, (a + 2) / 3);   // 뱃머리가 들린다 (상수식 기울기)
+            for (int b = -2; b <= 2; b++) {
+                int x = bx + (alongX ? a : b);
+                int z = bz + (alongX ? b : a);
+                int y = floor + lift;
+                if (Math.abs(b) == 2 || Math.abs(a) == 6) {                 // 뱃전 — 갈라진 곳이 있다
+                    if (hash(x, z, 7) == 0) {
+                        continue;   // 부서져 뚫린 자리 (잠수해 들어가는 문)
+                    }
+                    world.getBlockAt(x, y, z).setType(Material.DARK_OAK_PLANKS);
+                    world.getBlockAt(x, y + 1, z).setType(hash(x + 3, z, 5) == 0
+                            ? Material.WATER : Material.DARK_OAK_PLANKS);
+                } else if (Math.abs(a) >= 4) {                              // 바닥 — 이물·고물
+                    world.getBlockAt(x, y, z).setType(Material.OAK_PLANKS);
+                } else {                                                    // 선실 — 물이 찬 통칸
+                    world.getBlockAt(x, y, z).setType(Material.OAK_PLANKS);
+                    world.getBlockAt(x, y + 1, z).setType(Material.WATER);
+                    world.getBlockAt(x, y + 2, z).setType(Material.WATER);
+                }
+            }
+        }
+        // 갈비뼈처럼 드러난 늑재 + 부러진 돛대
+        for (int a = -5; a <= 5; a += 3) {
+            int x = bx + (alongX ? a : 3);
+            int z = bz + (alongX ? 3 : a);
+            putWet(world, x, floor + Math.max(0, (a + 2) / 3) + 1, z, Material.DARK_OAK_LOG);
+        }
+        for (int k = 1; k <= 4; k++) {
+            putWet(world, bx, floor + 3 + k, bz, Material.STRIPPED_SPRUCE_LOG);   // 기울어진 돛대
+        }
+        putWet(world, bx, floor + 8, bz, Material.WHITE_WOOL);                    // 삭은 돛 조각
+        // 비급이 봉인된 방수 유통 — 선실 한복판. 그 옆에 뱃사람의 유해
+        int wy = floor + Math.max(0, 2 / 3) + 1;
+        world.getBlockAt(bx, wy, bz + (alongX ? 1 : 0) + (alongX ? 0 : 1)).setType(Material.BARREL);
+        int cx2 = bx + (alongX ? 1 : 0);
+        int cz2 = bz + (alongX ? 0 : 1);
+        world.getBlockAt(cx2, wy, cz2).setType(Material.BARREL);
+        putWet(world, cx2 + (alongX ? 1 : 0), wy, cz2 + (alongX ? 0 : 1), Material.BONE_BLOCK);
+        for (int a = -6; a <= 6; a += 4) {   // 선체를 삼킨 다시마
+            int x = bx + (alongX ? a : -3);
+            int z = bz + (alongX ? -3 : a);
+            for (int y = floor; y < waterY - 1; y++) {
+                if (world.getBlockAt(x, y, z).getType() == Material.WATER) {
+                    world.getBlockAt(x, y, z).setType(Material.KELP_PLANT);
+                }
+            }
+        }
+        return new int[]{cx2, wy, cz2};
+    }
+
+    /** 물가 갈대·마름 — 나루의 물가는 손대지 않은 곳처럼 보여야 한다 */
+    private static void ferryReeds(World world, int sx, int sz, int waterY) {
+        for (int x = sx - FR_R; x <= sx + FR_R; x++) {
+            for (int z = sz - FR_R; z <= sz + FR_R; z++) {
+                int h = hash(x + 5501, z - 3307, 100);
+                int d = waterDepth(world, x, z);
+                if (d == 0) {   // 뭍 — 물가 한 칸 안쪽이면 갈대
+                    if (h >= 9) {
+                        continue;
+                    }
+                    int g = naturalGroundY(world, x, z);
+                    if (g == Integer.MIN_VALUE || g != waterY
+                            || !world.getBlockAt(x, g + 1, z).getType().isAir()) {
+                        continue;
+                    }
+                    boolean nearWater = waterDepth(world, x + 1, z) > 0 || waterDepth(world, x - 1, z) > 0
+                            || waterDepth(world, x, z + 1) > 0 || waterDepth(world, x, z - 1) > 0;
+                    if (!nearWater) {
+                        continue;
+                    }
+                    world.getBlockAt(x, g + 1, z).setType(Material.SUGAR_CANE);
+                    if (h < 4) {
+                        world.getBlockAt(x, g + 2, z).setType(Material.SUGAR_CANE);
+                    }
+                } else if (h < 3 && d >= 2                          // 물 — 마름 잎
+                        && world.getBlockAt(x, waterY + 1, z).getType().isAir()) {
+                    world.getBlockAt(x, waterY + 1, z).setType(Material.LILY_PAD);
+                }
+            }
+        }
+    }
+
+    /** 괴담의 흔적 — 물가 제단(물귀신을 달랜다)·삭은 그물·건져 올린 뼈. 광원은 초 하나(온색) */
+    private static void ferryGhost(World world, int shx, int shz, int waterY, int[] dir) {
+        int gx = shx - dir[0] * 3 - dir[1] * 9;
+        int gz = shz - dir[1] * 3 + dir[0] * 9;
+        int g = naturalGroundY(world, gx, gz);
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
+        for (int dx = -1; dx <= 1; dx++) {          // 돌 제단 — 이끼 낀 두 단
+            for (int dz = -1; dz <= 1; dz++) {
+                world.getBlockAt(gx + dx, g + 1, gz + dz).setType(hash(gx + dx, gz + dz, 3) == 0
+                        ? Material.MOSSY_COBBLESTONE : Material.COBBLESTONE);
+            }
+        }
+        world.getBlockAt(gx, g + 2, gz).setType(Material.CHISELED_STONE_BRICKS);
+        Candle candle = (Candle) Material.CANDLE.createBlockData();
+        candle.setLit(true);
+        candle.setCandles(3);
+        world.getBlockAt(gx, g + 3, gz).setBlockData(candle);   // 온색 — 누군가 아직 켜 두고 간다
+        placeSign(world, gx, g + 2, gz - 2, BlockFace.SOUTH, "물에 든 이를 위하여", "이름은 적지 않는다");
+        for (int[] n : new int[][]{{3, 1}, {4, 2}, {2, 3}, {5, 1}}) {   // 널어 둔 그물 — 삭았다
+            int x = gx + n[0], z = gz + n[1];
+            int ng = naturalGroundY(world, x, z);
+            if (ng == Integer.MIN_VALUE || !world.getBlockAt(x, ng + 1, z).getType().isAir()) {
+                continue;
+            }
+            world.getBlockAt(x, ng + 1, z).setType(Material.OAK_FENCE);
+            world.getBlockAt(x, ng + 2, z).setType(Material.OAK_FENCE);
+            world.getBlockAt(x, ng + 3, z).setType(Material.COBWEB);
+        }
+        int bx = gx - 3, bz = gz + 2;
+        int bg = naturalGroundY(world, bx, bz);
+        if (bg != Integer.MIN_VALUE && world.getBlockAt(bx, bg + 1, bz).getType().isAir()) {
+            world.getBlockAt(bx, bg + 1, bz).setType(Material.BONE_BLOCK);   // 건져 올린 것
+        }
+    }
+
+    /**
+     * 나루 이정표 — 남문 밖 관도 갓길(담에서 86칸 = 검수 ⑩ 링 안). 나루의 실제 방위를 읽어 쓴다.
+     * 담 밖 채움(⑩)은 **바닥 기준(≥5%)** 이므로 표지 한 점이 늘어도 위반이 아니다 (오히려 오른다).
+     */
+    private static void ferrySign(World world, int cx, int cz, int sx, int sz) {
+        int x = cx + 4, z = cz + 86;
+        int g = outsideGroundY(world, x, z);
+        if (g == Integer.MIN_VALUE || !outsideVacant(world, x, g + 1, z)
+                || !outsideVacant(world, x, g + 2, z)) {
+            return;
+        }
+        int dx = sx - cx, dz = sz - cz;
+        String bearing = (dz > 40 ? "남" : dz < -40 ? "북" : "") + (dx > 40 ? "동" : dx < -40 ? "서" : "");
+        world.getBlockAt(x, g + 1, z).setType(Material.OAK_FENCE);
+        placeSign(world, x, g + 2, z, BlockFace.WEST,
+                "흑수나루 " + (bearing.isEmpty() ? "→" : bearing + "쪽"), "수로 물류 — 물귀신 소문");
+    }
+
+    /**
+     * 나루 못 — 후보 16곳에 물가가 하나도 없을 때만 돈다 (사막·고원 시드의 보험).
+     * 부지 절반을 깊이 7 로 파고 물을 채운다. 결정론 상수식 — 같은 월드면 같은 못.
+     */
+    private static void ferryDig(World world, int sx, int sz) {
+        int base = Integer.MIN_VALUE;
+        for (int x = sx - FR_R; x <= sx + FR_R; x += 4) {
+            for (int z = sz - FR_R; z <= sz + FR_R; z += 4) {
+                int g = naturalGroundY(world, x, z);
+                if (g != Integer.MIN_VALUE) {
+                    base = Math.max(base, g);
+                }
+            }
+        }
+        if (base == Integer.MIN_VALUE) {
+            return;
+        }
+        for (int x = sx - FR_R + 2; x <= sx + FR_R - 2; x++) {
+            for (int z = sz + 1; z <= sz + FR_R - 2; z++) {   // 부지 남쪽 절반이 못이 된다
+                int rim = Math.min(x - (sx - FR_R + 2), Math.min((sx + FR_R - 2) - x,
+                        Math.min(z - sz, (sz + FR_R - 2) - z)));
+                int depth = Math.min(7, rim);
+                if (depth <= 0) {
+                    continue;
+                }
+                for (int y = base + 8; y > base; y--) {
+                    world.getBlockAt(x, y, z).setType(Material.AIR);
+                }
+                for (int y = base; y > base - depth; y--) {
+                    world.getBlockAt(x, y, z).setType(Material.WATER);
+                }
+                world.getBlockAt(x, base - depth, z).setType(Material.GRAVEL);
+            }
+        }
     }
 }

@@ -30,6 +30,7 @@
 의존성 없음 — 순수 표준 라이브러리 PNG 작성기.
 """
 import json
+import math
 import struct
 import zlib
 from pathlib import Path
@@ -703,12 +704,13 @@ def wrap_grip(i):
     return ["W", "w", "x"] if i % 2 == 0 else ["w", "x", "X"]
 
 
-def put_rings(grid, x0, y0, rings, slots, sx=-1, sy=1):
+def put_rings(grid, x0, y0, rings, slots, sx=-1, sy=1, strands=("R", "R", "e")):
     """등급 고리 — 자루를 가로지르는 2톤 금속 테. slots = 자루 걸음 번호(위에서부터).
-    colorblind_rule: 색 단독 금지 → 회색조에서도 '고리 몇 개'로 등급이 읽힌다."""
+    colorblind_rule: 색 단독 금지 → 회색조에서도 '고리 몇 개'로 등급이 읽힌다.
+    strands = 테 한 줄의 가닥. 자루가 두꺼우면(부斧의 4가닥) 테도 같이 두꺼워야 자루를 다 감는다."""
     for k in range(min(rings, len(slots))):
         i = slots[k]
-        band(grid, x0 + sx * i, y0 + sy * i, 1, ["R", "R", "e"])
+        band(grid, x0 + sx * i, y0 + sy * i, 1, list(strands))
 
 
 def blade_strands(mabyeong, spine):
@@ -863,9 +865,169 @@ def gauntlet_grid(rings, mabyeong):
     return g
 
 
+# ═══ 장병기 4계열 (부·겸·월아산·구) — 곡선은 손으로 찍지 않는다 ═══════════════
+# 검·도·창은 직선 띠(band)로 족했다. 그러나 도끼날·낫날·갈고리는 '휨'이 곧 정체다 —
+# 계단식 띠로 곡선을 흉내내면 걸음마다 각이 져서 16px에서 '톱니 막대'가 된다.
+# 그래서 곡선은 원(圓)의 대수로 굽는다: 원 안/밖 판정으로 칠하면 곡률이 저절로 매끈하다.
+# 난수는 없다 — 같은 중심·반지름은 언제나 같은 픽셀을 준다 (결정론).
+def _rad(x, y, c):
+    """칸 중심에서 원 중심까지의 거리 (칸의 한가운데를 재야 곡선이 한쪽으로 밀리지 않는다)."""
+    return math.hypot(x + 0.5 - c[0], y + 0.5 - c[1])
+
+
+def crescent(grid, c1, r1, c2, r2, shades=("H", "L", "B", "S")):
+    """초승달 — 원 A(c1, r1) 안이면서 원 B(c2, r2) 밖. 달을 깎는 것은 언제나 또 하나의 달이다.
+    B가 A를 베어 문 자리가 오목한 안쪽(자루가 붙는 면), 남은 A의 테두리가 볼록한 인(刃).
+    두 테두리에서 먼 안쪽일수록 어둡다 — 날은 가장자리가 얇고 가운데가 두껍기 때문."""
+    for y in range(16):
+        for x in range(16):
+            d1, d2 = _rad(x, y, c1), _rad(x, y, c2)
+            if d1 <= r1 and d2 >= r2:
+                grid[y][x] = shades[min(int(min(r1 - d1, d2 - r2)), len(shades) - 1)]
+    return grid
+
+
+def arc_blade(grid, c, r, a0, a1, w0, w1, shades=("H", "L", "B", "S")):
+    """휜 날 한 벌 — 중심 c 둘레를 반지름 r로 a0→a1(도, 반시계) 돌며 긋는다.
+    폭은 밑동 w0에서 끝 w1로 좁아진다 (낫도 구도 밑동이 굵고 끝이 뾰족하다 — 등폭이면 '철사'가 된다).
+    안쪽(오목한) 테가 가장 밝다: 낫과 갈고리는 바깥이 아니라 안으로 건다 — 안쪽이 인(刃)이다."""
+    span = (a1 - a0) % 360
+    for y in range(16):
+        for x in range(16):
+            d = _rad(x, y, c)
+            ang = math.degrees(math.atan2(c[1] - (y + 0.5), x + 0.5 - c[0])) % 360
+            t = ((ang - a0) % 360) / span
+            if t > 1.0:
+                continue                       # 호(弧) 바깥 — 여기가 갈고리의 '아가리'다
+            half = (w0 + (w1 - w0) * t) / 2
+            if abs(d - r) <= half:
+                grid[y][x] = shades[min(int(d - (r - half)), len(shades) - 1)]
+    return grid
+
+
+def blit(grid, art, mabyeong=False):
+    """각진 조각(도끼 쐐기·삽날)을 아트로 얹는다 — 원의 대수로는 각(角)이 나오지 않는다.
+    마병이면 날의 몸(B)이 혈조(m)가 된다 — 다른 계열과 같은 문법."""
+    for y, row in enumerate(art):
+        for x, ch in enumerate(row):
+            if ch != ".":
+                grid[y][x] = "m" if (mabyeong and ch == "B") else ch
+    return grid
+
+
+def heavy_grip(i):
+    """부(斧)의 자루 — 4가닥. 검·창의 3가닥보다 한 가닥 굵다.
+    '무겁다'는 말은 무게로 못 하고 굵기로 한다 (16px에는 저울이 없다)."""
+    return ["W", "w", "w", "x"] if i % 2 == 0 else ["w", "x", "x", "X"]
+
+
+def bu_grid(rings, mabyeong):
+    """부(斧) — 굵은 자루 + 한쪽에만 달린 넓은 초승달 날. 날이 화면의 절반을 먹는다.
+    날을 먼저 깔고 자루를 그 위에 덧긋는다 — 자루가 날의 눈(구멍)을 꿰뚫고 지나간 것으로 읽힌다.
+    (자루를 먼저 그으면 날이 자루에 '얹힌' 스티커가 된다 — 도끼는 그렇게 생기지 않았다.)"""
+    g = blank16()
+    blit(g, BU_HEAD, mabyeong)
+    band(g, 2, 13, 9, heavy_grip, sx=1, sy=-1)        # 자루를 날 위에 덧긋는다 (눈을 꿰뚫는다)
+    put_rings(g, 2, 13, rings, (1, 3, 5), sx=1, sy=-1, strands=("R", "R", "R", "e"))
+    if rings >= 3:
+        g[13][2], g[13][3] = "T", "t"                 # 신병 수실 — 자루 끝
+    return g
+
+
+def gyeom_grid(rings, mabyeong):
+    """겸(鎌, 낫) — 짧은 자루 + 안으로 크게 감긴 넓은 날. 날이 아래로 열린 C를 그리고
+    끝이 손 쪽으로 돌아온다 (걸어 채는 병기 — 끝이 바깥을 보면 그냥 칼이 된다).
+    구(鉤)와의 갈림은 오직 비율이다: 여기는 자루가 짧고 날이 크고 두껍다. 구는 정확히 그 반대."""
+    g = blank16()
+    arc_blade(g, (7.4, 8.0), 4.4, 5, 205, 4.2, 1.6,   # 두꺼운 날 — '얇은 철사'는 구의 몫이다
+              ("H", "L", "m" if mabyeong else "B", "S"))
+    band(g, 5, 13, 6, wrap_grip, sx=1, sy=-1)         # 짧은 자루 — 날 밑동까지만
+    put_rings(g, 5, 13, rings, (1, 2, 3), sx=1, sy=-1)
+    if rings >= 3:
+        g[13][4], g[13][5] = "T", "t"
+    return g
+
+
+def gu_grid(rings, mabyeong):
+    """구(鉤, 갈고리) — 긴 곧은 자루 + 끝의 작은 발톱 + 미늘(逆鉤) + 손 앞의 초승달 호수.
+    겸과 같은 '휜 것'이지만 비율이 뒤집혀 있다: 자루가 길고 발톱이 작다.
+    그 비율만으로는 16px에서 겸과 갈리지 않아 두 표식을 더 박았다 —
+    미늘(걸린 것이 빠지지 않게 하는 턱)과 호수(鉤의 손앞 초승달). 둘 다 겸에는 없다."""
+    g = blank16()
+    band(g, 2, 13, 9, wrap_grip, sx=1, sy=-1)
+    band(g, 4, 8, 4, ["G", "g", "f"], sx=1, sy=1)        # 호수 — 자루를 가로지르는 초승달 코등이
+    # 고리를 호수보다 뒤에 찍는다 — 호수가 먼저면 가운데 고리를 덮어 등급이 한 단 사라진다.
+    # 표식끼리 자리를 다투면 이기는 쪽은 언제나 등급이다 (호수는 멋이고, 고리는 정보다).
+    put_rings(g, 2, 13, rings, (1, 3, 5), sx=1, sy=-1)   # 발톱 밑동도 피한 자리
+    arc_blade(g, (9.4, 5.0), 2.6, 300, 168, 2.2, 1.4,    # 작은 발톱 — 겸의 큰 날과 대비된다
+              ("H", "L", "m" if mabyeong else "B", "S"))
+    g[7][12], g[8][12], g[9][13] = "B", "L", "H"         # 미늘 — 자루 뒤로 뻗은 턱
+    if rings >= 3:
+        g[13][2], g[13][3] = "T", "t"
+    return g
+
+
+# 부(斧)의 날 — 원으로 깎으면 둥근 덩이(달·국자)가 된다. 도끼는 '쐐기'다:
+# 왼쪽에 곧게 선 인(刃) + 위아래로 뻗은 두 뿔 + 자루 쪽으로 두꺼워지는 몸.
+# 그 각(角)은 원의 대수로 나오지 않으므로 손으로 찍는다.
+BU_HEAD = [
+    "................",
+    "................",
+    "...HLLBBBB......",   # 곧은 윗변 — 둥근 지붕은 도끼가 아니라 종(鐘)이 된다
+    "..HLLLLBBBBB....",
+    "..HLLLLLLBBBB...",
+    "..HLLLLLLLBBB...",
+    "..HLLLLLLBBB....",
+    "..HLLLLLBB......",
+    "..HLLLLB........",
+    "..HLLB..........",   # 수염(beard) — 자루 아래로 흘러내린 아래 뿔
+    "..HLB...........",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+
+# 월아산의 삽날 — 원으로 굽기엔 너무 각지다 (삽은 곡선이 아니라 판이다). 아트로 얹는다.
+# 넓고 납작한 판이어야 '삽'이다 — 작은 덩이는 그냥 자루 끝의 혹으로 읽힌다.
+WOLASAN_SPADE = [
+    "................", "................", "................", "................",
+    "................", "................", "................", "................",
+    "................", "................",
+    "..SBBB..........",
+    "..SBBLB.........",
+    "..SBLLLB........",
+    "..SLLLLB........",
+    "................",
+    "................",
+]
+
+
+def wolasan_grid(rings, mabyeong):
+    """월아산(月牙鏟) — 승려의 병기. 긴 자루의 양끝이 서로 다르다:
+    위는 월아(月牙, 두 뿔이 벌어진 초승달), 아래는 넓은 삽날. 이 '양끝'이 계열의 전부다 —
+    다른 여덟 계열은 모두 한쪽 끝에만 쇠가 달렸다. 실루엣만으로 갈리는 유일한 축이다.
+    월아는 두 뿔이 자루를 사이에 두고 벌어지도록 앉힌다 (오목한 안쪽이 자루 끝을 문다) —
+    뿔이 하나로 뭉치면 갈고리가 되어 구(鉤)와 섞인다. 벌어져야 달이다."""
+    g = blank16()
+    blit(g, WOLASAN_SPADE, mabyeong)                  # 아래 끝 — 삽날 (자루보다 먼저: 자루가 목을 덮는다)
+    band(g, 5, 11, 7, wrap_grip, sx=1, sy=-1)         # 긴 자루
+    put_rings(g, 5, 11, rings, (1, 2, 4), sx=1, sy=-1)   # 월아에 먹히지 않는 자리
+    # 월아 — 자루 끝에 얹힌 초승달. 앞을 보는 대칭 U도 시도했으나 12x12 안에서는
+    # 두 뿔이 각각 1px로 뭉개져 '꺾쇠(⌐)'가 됐다 — 16px이 허락하지 않는 형태가 있다.
+    # 그래서 달은 한쪽으로 눕히고, 구(鉤)와의 갈림은 반대쪽 끝의 삽날에 맡긴다:
+    # 아홉 계열 중 쇠가 '양끝'에 달린 것은 이것뿐이다 — 그 비대칭이 곧 이름이다.
+    crescent(g, (10.8, 5.2), 3.2, (8.2, 7.8), 3.4,
+             ("H", "L", "m" if mabyeong else "B", "S"))
+    return g
+
+
 WEAPON_SERIES = {          # 계열 = model_key 앞자리 (config item_channels.무기.series)
     "sword": sword_grid, "dao": dao_grid, "spear": spear_grid,
     "gauntlet": gauntlet_grid, "dagger": dagger_grid,
+    # 18반 병기 — 바닐라 도구 4종을 병기화한 계열 (axe=부 / hoe=겸 / shovel=월아산 / pickaxe=구)
+    "bu": bu_grid, "gyeom": gyeom_grid, "wolasan": wolasan_grid, "gu": gu_grid,
 }
 # 등급 = 베이스 바닐라 아이템(팩 게이트). 여기서는 고리 수만 쥔다 — 색은 바닐라 재질의 몫.
 WEAPON_GRADES = [("beomcheol", 0), ("jeongryeon", 1), ("bobyeong", 2), ("sinbyeong", 3)]
@@ -1300,7 +1462,7 @@ def write_item_asset(key: str, rows, handheld: bool):
 
 
 def write_item_assets() -> int:
-    """무기 20(계열 5 × 등급 4) + 마병 1 + 지물·기물·재료 16 = 37종."""
+    """무기 36(계열 9 × 등급 4) + 마병 1 + 지물·기물·재료 16 = 53종."""
     made = 0
     for series in WEAPON_SERIES:
         for grade, rings in WEAPON_GRADES:
