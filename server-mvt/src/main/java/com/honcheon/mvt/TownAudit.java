@@ -66,10 +66,18 @@ public final class TownAudit {
      * 디딤돌 한 줄이 대로를 가로지르면 스팬이 0으로 끊겨 "대로 폭 0"이라는 오탐이 났다 (v6.2 관측).
      * 사람이 밟고 다니는 면이면 길이다.
      */
+    /**
+     * 길 자재 — <b>사람이 깐 것만</b>.
+     *
+     * <p>STONE 과 ANDESITE 가 여기 있었다. 그것은 자연의 돌이기도 하다 — 마을 밖 바위 지대(x-129 열)가
+     * 통째로 '길'로 잡혀 <b>야간 암흑 18%</b>가 났고, 나는 등롱을 더 세울 뻔했다. 바위산에 등롱을 세우는
+     * 마을은 없다. 길은 사람이 깐 것이다: 흙길·자갈·조약돌·돌벽돌·매끈한 돌.
+     * (조성기가 포장에 ANDESITE 를 쓴다면 POLISHED_ANDESITE 로 쓰라 — 다듬은 것만이 사람의 것이다.)
+     */
     private static final Set<Material> PATH = EnumSet.of(
             Material.DIRT_PATH, Material.GRAVEL,
-            Material.COBBLESTONE, Material.ANDESITE, Material.STONE_BRICKS, Material.SMOOTH_STONE,
-            Material.MOSSY_COBBLESTONE, Material.STONE);
+            Material.COBBLESTONE, Material.POLISHED_ANDESITE, Material.STONE_BRICKS,
+            Material.SMOOTH_STONE, Material.MOSSY_COBBLESTONE);
 
     private static final Set<Material> ROOF = EnumSet.of(
             Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_STAIRS, Material.DEEPSLATE_TILE_SLAB,
@@ -893,6 +901,7 @@ public final class TownAudit {
                                    int cx, int cy, int cz) {
         out.add(HEAD + "⑧ 야간 광원 커버리지 (길 위 블록 광원 <7 = 암흑)");
         int samples = 0, dark = 0, sum = 0;
+        java.util.List<String> darkSpots = new java.util.ArrayList<>();
         for (int dx = -SCAN_R; dx <= SCAN_R; dx += 2) {
             for (int dz = -SCAN_R; dz <= SCAN_R; dz += 2) {
                 if (!g[dx + SCAN_R][dz + SCAN_R]) {
@@ -904,6 +913,10 @@ public final class TownAudit {
                 sum += light;
                 if (light < 7) {
                     dark++;
+                    if (darkSpots.size() < 12) {   // **어디가** 어두운지 말한다 (등을 엉뚱한 데 세우지 않도록)
+                        darkSpots.add("(" + (cx + dx) + "," + (cz + dz) + ")"
+                                + world.getBlockAt(cx + dx, cy, cz + dz).getType().name().charAt(0));
+                    }
                 }
             }
         }
@@ -915,6 +928,9 @@ public final class TownAudit {
         double pct = 100.0 * dark / samples;
         out.add(INFO + String.format("  샘플 %d칸 · 평균 광원 %.1f · 암흑 %d칸 (%.1f%%)",
                 samples, (double) sum / samples, dark, pct));
+        if (!darkSpots.isEmpty()) {
+            out.add(INFO + "    어두운 자리: " + String.join(" ", darkSpots));
+        }
         if (pct <= DARK_MAX_PCT) {
             out.add(OK + String.format("암흑 구간 %.1f%% ≤ %.0f%%", pct, DARK_MAX_PCT));
         } else {

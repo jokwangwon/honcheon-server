@@ -304,8 +304,19 @@ final class CheonghaBuilder {
      */
     static Map<String, Location> build(World world, int cx, int cy, int cz, List<Zone> zonesOut) {
         clearNpcs(world, cx, cy, cz);        // F29 — 재조성 시 기존 NPC 정리 (중복 스폰 방지)
-        clearAndFlatten(world, cx, cy, cz);
-        blendEdge(world, cx, cy, cz);        // F31 — 경계 절단면을 자연 지형으로 완사면 접합
+
+        // v7.1 【지형 통합】 — 조성 전에 부지를 측량하고(원지형 한 벌), 그 위에서 지형 패스를 돈다.
+        //   측량 → 판정(거부 사유 로그) → 정지 → 기초 봉인 → 수역 → 페더링 → 호안 → 잘린 물 청소.
+        //   순서가 곧 논리다: 봉인은 정지 뒤라야 지면(cy)이 정해지고, 페더링은 봉인 뒤라야 코어 경계값이
+        //   고정되며, 호안은 페더링 뒤라야 물가의 최종 지표를 안다. 잘린 물 청소는 맨 끝(모두 확정 뒤).
+        Terrain terrain = surveyTerrain(world, cx, cy, cz);
+        clearAndFlatten(world, terrain);
+        foundationSeal(world, terrain);      // 바닥 밑 6칸 봉인 (동굴은 살려 둔다 · 심연은 돌기둥으로 받친다)
+        logSite(terrain);                    // 부지 적합성 — 부적합이면 사유를 남긴다 (거부는 호출자의 몫)
+        fillCoreWater(world, terrain);       // 코어 안의 물 — 웅덩이·침범한 물길을 메운다
+        featherEdge(world, terrain);         // F31 후계 — 담 밖 20칸 전이대 (1-립시츠: 계단도 벽도 없다)
+        shoreBank(world, terrain);           // 보존 수역의 물가 — 물이 마을로 새 들어오지 못하게 지형으로 막는다
+        strayWater(world, terrain);          // 잘린 물기둥·공중의 물·물먹은 블록 제거
         groundCover(world, cx, cy, cz);      // v6.2 ① — 담장 안은 사람이 밟고 사는 땅이다 (잔디 공원 폐기)
         plazaAndWell(world, cx, cy, cz);
         roads(world, cx, cy, cz);
@@ -391,6 +402,11 @@ final class CheonghaBuilder {
         // 야외 앵커 한 개가 "지붕없음" 위반이 된다 — 계약도 7키 그대로).
         huntingGrounds(world, cx, cy, cz, zonesOut);   // v6.9 ① 북쪽 산길 — 사냥터 (등록부 north_road)
         heuksuFerry(world, cx, cy, cz, zonesOut);      // v6.9 ② 흑수나루 (등록부 heuksu_ferry — 침몰선 비급)
+
+        // v7.1 ④ 마감 봉인 — **맨 마지막**이어야 한다. 접근로·소품·폐사당·사냥터·나루가 자연 지형 위에
+        //   놓은 바닥까지 남김없이 훑어, 그 밑 5칸의 공기를 자연 자재로 메운다 (검수 ① 바닥 밑 공동 = 0).
+        //   물 위의 널다리는 밑이 물이므로 건드리지 않는다 (강을 막지 않는다).
+        sealLaidFloors(world, terrain);
         return anchors;
     }
 
@@ -418,13 +434,31 @@ final class CheonghaBuilder {
 
     // ─── 지형 ───
 
-    private static void clearAndFlatten(World world, int cx, int cy, int cz) {
-        for (int x = cx - 62; x <= cx + 62; x++) {
-            for (int z = cz - 62; z <= cz + 62; z++) {
+    /**
+     * 부지 정지(整地) — 코어(±SITE_R)의 지면을 cy 로 고르고 그 위를 비운다.
+     *
+     * <p>v7.1 ① 【부유 산 제거】 구 버전은 cy+1..cy+18 만 비웠다. 부지에 cy+18 보다 높은 자연 지형
+     * (언덕·바위 기둥)이 걸리면 그 윗도리가 **허공에 뜬 채 남았다**. 이제 그 열의 실제 최상단까지
+     * (상한 cy+80) 걷어낸다 — 검수 ⑤(부유 블록)의 구조적 방어.
+     *
+     * <p>지면 아래는 여기서 손대지 않는다. 그것은 foundationSeal 의 몫이다 (동굴은 세계의 자산이므로
+     * '통째로 메우기'가 아니라 '얇게 봉인하기'로 푼다).
+     */
+    private static void clearAndFlatten(World world, Terrain t) {
+        int cx = t.cx, cy = t.cy, cz = t.cz;
+        for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+            for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                int x = cx + dx, z = cz + dz;
                 world.getBlockAt(x, cy, z).setType(Material.GRASS_BLOCK);
-                for (int y = cy + 1; y <= cy + 18; y++) {   // 객잔 용마루 cy+17 여유
-                    world.getBlockAt(x, y, z).setType(Material.AIR);
+                int top = Math.max(cy + 18,
+                        Math.min(world.getHighestBlockYAt(x, z), Math.min(world.getMaxHeight() - 1, cy + 80)));
+                for (int y = cy + 1; y <= top; y++) {
+                    Block b = world.getBlockAt(x, y, z);
+                    if (!b.getType().isAir()) {
+                        b.setType(Material.AIR);
+                    }
                 }
+                t.target[t.idx(dx, dz)] = cy;   // 코어의 최종 지표 = cy (페더링의 고정 경계값)
             }
         }
     }
@@ -452,30 +486,781 @@ final class CheonghaBuilder {
         }
     }
 
-    /** F31 — 평탄화 경계의 수직 절단면을 6칸 완사면으로 자연 지형에 접합 */
-    private static void blendEdge(World world, int cx, int cy, int cz) {
-        int r = 62;
-        int skirt = 6;
-        for (int x = cx - r - skirt; x <= cx + r + skirt; x++) {
-            for (int z = cz - r - skirt; z <= cz + r + skirt; z++) {
-                int d = Math.max(Math.abs(x - cx), Math.abs(z - cz)) - r;
-                if (d <= 0 || d > skirt) {
-                    continue;
-                }
-                int natural = world.getHighestBlockYAt(x, z);
-                int target = cy + (natural - cy) * d / (skirt + 1);   // 안쪽 = 마을 높이, 밖 = 자연
-                if (natural > target) {
-                    for (int y = target + 1; y <= natural; y++) {
-                        world.getBlockAt(x, y, z).setType(Material.AIR);
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // v7.1 【지형 통합】 — 마을은 자연 위에 얹은 상자가 아니라 자연에 앉은 마을이어야 한다
+    //   설계 근거·알고리즘 전문: docs/design/terrain_integration.md
+    //
+    // 인게임 관측(사용자) + 환경검수(TerrainAudit) 실측이 같은 것을 가리켰다:
+    //   ① 바닥 밑 공동 8.5% — 우리가 깐 길·바닥이 바닐라 동굴·협곡 위에 **껍데기**로 깔렸다.
+    //   ③ 경계 급단차 24.3% (최대 7칸) — 부지 가장자리에서 우리 지면과 자연 지면이 뚝 끊겼다.
+    //   그리고 물이 걸린 부지에서는: 잘린 강, 산 위의 웅덩이, 벽에서 새는 물.
+    //
+    // 뿌리는 하나다 — **조성기가 지형을 읽지 않았다.** 구 clearAndFlatten 은 cy 에 잔디를 깔고
+    // 위를 지웠을 뿐 아래를 보지 않았고, 구 blendEdge 는 6칸 스커트에 (natural-cy)*d/7 선형 보간을
+    // 했다 — 20칸 단차면 한 칸에 3칸씩 뛴다. 그것이 '급단차'다.
+    //
+    // v7.1 은 조성 전에 **부지를 측량**하고(Terrain), 그 측량 위에 네 패스를 돌린다:
+    //   1. foundationSeal — 기초 봉인: 지면 아래 6칸만 **자연 자재**로 단단히 채운다. 그 아래 동굴은
+    //      살려 둔다 (동굴은 세계의 자산 — 기연·은신처의 무대다). 봉인 밑이 32칸까지 허공이면
+    //      (협곡·거대 공동) 4칸 격자로 돌기둥을 내려 받친다 — 메우지 않고 **받친다**.
+    //   2. waterWorks — 수역 삼분(三分): 갇힌 웅덩이는 메우고 · 관통 수역(강·호수·바다)은 코어 밖에서
+    //      **한 칸도 건드리지 않고** · 잘린 물기둥·공중의 물은 지운다. 물가에는 호안을 세워 새지 않게 한다.
+    //   3. featherEdge — 경계 페더링: 담 밖 20칸 전이대에서 우리 지면(cy)과 자연 지면을 **한 칸에 한 칸씩**
+    //      (1-립시츠) 잇는다. 계단도 벽도 없다 = 어느 방위에서 걸어 들어와도 막히지 않는다(검수 ③④).
+    //   4. sealLaidFloors — 마감 안전망: 조성이 끝난 뒤 **인공 바닥 블록 밑 5칸**을 다시 훑어 공기를 메운다
+    //      (검수 ①의 판정식 그대로 — 소품·접근로·부속이 나중에 놓은 바닥까지 남김없이 덮는다).
+    //
+    // 검수 정합(중요):
+    //   · 인공 바닥 판정 자재(DIRT_PATH·COARSE_DIRT·GRAVEL·*_SLAB·*_STAIRS·*_BRICKS·…)를 **전이대에는
+    //     쓰지 않는다**(safeSurface). 전이대는 '자연'이어야 검수 ③이 자연-자연 단차로 보고 세지 않으며,
+    //     TownAudit ①⑧(길 폭·야간 광원)의 길 표본도 오염되지 않는다 (PATH 집합에 STONE·GRAVEL이 있다).
+    //   · 봉인·메움은 전부 cy 아래 = TownAudit 의 노면 판정(cy 한 켜)·지붕 상자에 한 톨도 안 닿는다.
+    //   · 재조성 결정론: 봉인·메움 자재는 자연 지면 화이트리스트(돌·흙·모래) 안이므로 두 번째 측량이
+    //     같은 지면 높이를 읽는다. 전이대 표고는 1-립시츠 사영의 **고정점**이라 재조성해도 안 움직인다.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    private static final int SITE_R = 62;                  // 조성 코어 반경 (평탄화 = 담 r=60 + 발치 2)
+    private static final int FEATHER = 20;                 // 전이대 폭 — 검수 ③의 스캔 링(49~81)을 다 덮는다
+    private static final int SPAN = SITE_R + FEATHER;      // 측량 반경 82
+    private static final int MAX_STEP = 1;                 // 전이대 인접 칸 최대 높이차 — 1 = 걸어 오를 수 있다
+    private static final int RELAX = 40;                   // 1-립시츠 완화 스윕 수 (결정론 — 난수 0)
+    private static final int SEAL_DEPTH = 6;               // 기초 봉인 두께 (검수 ①: 바닥 밑 5칸까지 단단할 것)
+    private static final int BAND_SEAL = 5;                // 전이대 봉인 두께
+    private static final int VOID_PROBE = 32;              // 봉인 밑 공동 탐침 — 여기까지 허공이면 '심연'
+    private static final int PIER_STEP = 4;                // 심연 위 돌기둥 격자
+    private static final int PIER_MAX = 64;                // 돌기둥 최대 길이
+    private static final int POND_MAX = 400;               // 웅덩이 상한(칸) — 넘으면 호수 = 보존 대상
+    private static final int WATER_FILL_MAX = 14;          // 코어 수역 완전 메움 한계 수심 (넘으면 봉인만)
+    private static final int SEAL_SCAN = 92;               // 마감 봉인 훑기 반경 (접근부 OUT_FAR 와 같다)
+
+    private static final byte W_NONE = 0;
+    private static final byte W_POND = 1;   // 부지 안에 완전히 갇힌 작은 물 — 메운다
+    private static final byte W_KEEP = 2;   // 관통 수역·큰 물 — 코어 밖에서는 한 칸도 건드리지 않는다
+
+    private static final int[][] DIR4 = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
+    /**
+     * 부지 측량표 — 조성 **전**의 원지형. 모든 지형 패스가 이 한 벌의 사실 위에서 돈다
+     * (블록을 다시 읽지 않는다 = 앞 패스가 뒤 패스의 판단을 오염시키지 못한다).
+     */
+    private static final class Terrain {
+        final int cx;
+        final int cy;
+        final int cz;
+        final int side = 2 * SPAN + 1;
+        final int[] ground;      // 자연 지면 y (MIN_VALUE = 32칸 안에 지면 없음 = 심연)
+        final Material[] surf;   // 자연 지면 자재 (전이대 표층·봉인 자재의 근거)
+        final int[] waterTop;    // 물(액체·얼음) 최상단 y (MIN_VALUE = 물 없음)
+        final byte[] wclass;     // 수역 분류
+        final int[] target;      // 최종 지표 y (MIN_VALUE = 손대지 않는다 — 보존 수역·심연)
+
+        int coreWater;      // 코어 안 물 칸
+        int coreKeepWater;  // 코어를 침범한 **관통·대수역** 칸 (조성 거부 사유 ②)
+        int pondCells;      // 메운 웅덩이 칸
+        int caveCols;       // 봉인이 공동을 덮은 열
+        int voidCols;       // 봉인 밑 32칸이 통째로 허공인 열 (협곡·심연)
+        int highWater;      // 수면이 마을 바닥(cy)보다 높은 보존 수역 칸 (거부 사유 ③)
+        int reliefLo = Integer.MAX_VALUE;
+        int reliefHi = Integer.MIN_VALUE;
+
+        Terrain(int cx, int cy, int cz) {
+            this.cx = cx;
+            this.cy = cy;
+            this.cz = cz;
+            int n = side * side;
+            ground = new int[n];
+            surf = new Material[n];
+            waterTop = new int[n];
+            wclass = new byte[n];
+            target = new int[n];
+        }
+
+        int idx(int dx, int dz) {
+            return (dx + SPAN) * side + (dz + SPAN);
+        }
+
+        boolean in(int dx, int dz) {
+            return Math.abs(dx) <= SPAN && Math.abs(dz) <= SPAN;
+        }
+
+        static boolean core(int dx, int dz) {
+            return Math.max(Math.abs(dx), Math.abs(dz)) <= SITE_R;
+        }
+    }
+
+    // ─── 측량 ───
+
+    /**
+     * 부지 측량 — ±SPAN 의 모든 열에서 (자연 지면 y · 지면 자재 · 물 최상단)을 읽는다.
+     *
+     * <p>지면 판정은 naturalGroundY 와 같은 원리다(자연 지면 화이트리스트에 처음 닿는 y).
+     * 다만 **물을 만나도 포기하지 않는다** — 물 밑의 바닥도 알아야 웅덩이를 메울 수 있기 때문이다.
+     * 물의 최상단은 따로 기록해 수역 분류에 쓴다.
+     */
+    private static Terrain surveyTerrain(World world, int cx, int cy, int cz) {
+        Terrain t = new Terrain(cx, cy, cz);
+        for (int dx = -SPAN; dx <= SPAN; dx++) {
+            for (int dz = -SPAN; dz <= SPAN; dz++) {
+                int x = cx + dx, z = cz + dz;
+                int i = t.idx(dx, dz);
+                int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 1);
+                int floor = Math.max(world.getMinHeight(), cy - 40);
+                int g = Integer.MIN_VALUE;
+                int wt = Integer.MIN_VALUE;
+                Material sm = Material.DIRT;
+                for (int y = top; y >= floor; y--) {
+                    Material m = world.getBlockAt(x, y, z).getType();
+                    if (wt == Integer.MIN_VALUE && WET.contains(m)) {
+                        wt = y;                       // 물기둥 최상단 = 수면
                     }
-                } else {
-                    for (int y = natural; y < target; y++) {
-                        world.getBlockAt(x, y, z).setType(Material.DIRT);
+                    if (NATURAL_GROUND.contains(m)) {
+                        g = y;
+                        sm = m;
+                        break;                        // 자연 지면 — 여기가 '땅'이다
                     }
                 }
-                world.getBlockAt(x, target, z).setType(Material.GRASS_BLOCK);
+                t.ground[i] = g;
+                t.surf[i] = sm;
+                t.waterTop[i] = wt;
+                t.target[i] = Integer.MIN_VALUE;
+                if (Terrain.core(dx, dz)) {
+                    if (wt != Integer.MIN_VALUE) {
+                        t.coreWater++;
+                    }
+                    if (g != Integer.MIN_VALUE) {
+                        t.reliefLo = Math.min(t.reliefLo, g);
+                        t.reliefHi = Math.max(t.reliefHi, g);
+                    }
+                }
             }
         }
+        classifyWater(t);
+        return t;
+    }
+
+    /**
+     * 수역 삼분 — 물 칸을 4연결 성분으로 묶어 **웅덩이**와 **관통 수역**을 가른다 (검수·설계의 갈림길).
+     *   · 성분이 코어(±62) 안에 완전히 갇혀 있고 POND_MAX 이하 → 웅덩이(W_POND). 메운다.
+     *   · 코어 밖으로 한 칸이라도 나가거나 POND_MAX 를 넘으면 → 강·호수·바다(W_KEEP). **보존한다.**
+     * 성분이 코어 경계를 넘나들면(관통 수역이 부지를 가로지르면) 그것은 **부지 선정의 실패**이지
+     * 조성기가 물길을 메워 해결할 일이 아니다 — inspectSite 가 그 사실을 수치로 고발한다.
+     */
+    private static void classifyWater(Terrain t) {
+        int n = t.side * t.side;
+        boolean[] seen = new boolean[n];
+        int[] stack = new int[n];
+        int[] cells = new int[n];
+        for (int dx = -SPAN; dx <= SPAN; dx++) {
+            for (int dz = -SPAN; dz <= SPAN; dz++) {
+                int i0 = t.idx(dx, dz);
+                if (seen[i0] || t.waterTop[i0] == Integer.MIN_VALUE) {
+                    continue;
+                }
+                int sp = 0, cn = 0;
+                stack[sp++] = i0;
+                seen[i0] = true;
+                boolean outside = false;
+                while (sp > 0) {
+                    int c = stack[--sp];
+                    cells[cn++] = c;
+                    int ux = c / t.side - SPAN, uz = c % t.side - SPAN;
+                    if (!Terrain.core(ux, uz)) {
+                        outside = true;   // 코어 밖으로 이어진다 = 이 물은 마을의 것이 아니다
+                    }
+                    for (int[] d : DIR4) {
+                        int nx = ux + d[0], nz = uz + d[1];
+                        if (!t.in(nx, nz)) {
+                            continue;
+                        }
+                        int j = t.idx(nx, nz);
+                        if (seen[j] || t.waterTop[j] == Integer.MIN_VALUE) {
+                            continue;
+                        }
+                        seen[j] = true;
+                        stack[sp++] = j;
+                    }
+                }
+                byte cls = (outside || cn > POND_MAX) ? W_KEEP : W_POND;
+                for (int k = 0; k < cn; k++) {
+                    t.wclass[cells[k]] = cls;
+                    int c = cells[k];
+                    int ux = c / t.side - SPAN, uz = c % t.side - SPAN;
+                    if (cls == W_POND) {
+                        t.pondCells++;
+                    } else if (Terrain.core(ux, uz)) {
+                        t.coreKeepWater++;   // 관통 수역이 부지를 침범했다 — 거부 사유
+                    }
+                    if (cls == W_KEEP && t.waterTop[c] > t.cy) {
+                        t.highWater++;       // 수면이 마을 바닥보다 높다 — 거부 사유
+                    }
+                }
+            }
+        }
+    }
+
+    // ─── 부지 적합성 — 언제 조성이 거부되어야 하는가 ───
+
+    /**
+     * 부지 판정 결과. {@code ok()} 가 false 면 **여기에 마을을 세우면 안 된다**.
+     *
+     * <p>조성기는 스스로를 거부할 수 없다(호출자가 이미 좌표를 정했다). 그래서 판정을 **밖으로 낸다** —
+     * MvtCommand·RemoteBuilder 가 조성 전에 {@link #inspectSite}를 불러 게이트를 걸면 된다.
+     * WorldMap.fit 이 이미 water_pct·relief 로 후보를 채점하지만, fit 은 **표면만** 본다:
+     * 지하 공동(협곡)과 관통 수역의 '관통 여부'는 여기서만 드러난다.
+     */
+    record SiteVerdict(boolean ok, List<String> reasons, List<String> stats) {
+    }
+
+    /**
+     * 부지 검사 — 조성 없이 측량만 해서 채점한다 (콘솔에서 안전하게 호출 가능).
+     *
+     * <p>거부 기준 (전부 객관 수치):
+     * <ul>
+     *   <li>① 코어 물 비율 &gt; 15% — 부지의 1/6 이상이 물이면 그것은 마을 터가 아니라 물가다.
+     *       (사용자 예시 "40%가 물이면 짓지 마라" 보다 엄격하다: 15%만 돼도 강 하나가 부지를 가른다.)</li>
+     *   <li>② 관통 수역(강·호수·바다)이 코어 안으로 들어옴 — 건물·길의 좌표는 상수표로 못 박혀 있어
+     *       물길을 비켜 갈 수 없다. 물길을 메우는 것은 '조성'이 아니라 '파괴'다 → 다른 자리로 옮겨라.</li>
+     *   <li>③ 보존 수역의 수면이 마을 바닥(cy)보다 높음 — 마을이 수면 아래다. 호안을 쌓아 막는다 해도
+     *       그것은 마을이 아니라 제방 안의 웅덩이다.</li>
+     *   <li>④ 코어 기복(자연 지면 최고−최저) &gt; 32 — 절벽·산비탈. 평탄화가 산을 절반 깎는다.</li>
+     *   <li>⑤ 심연 비율 &gt; 5% — 부지 아래 32칸이 통째로 허공인 열(대협곡·거대 공동)이 5%를 넘으면
+     *       마을은 다리 위에 선다. 돌기둥으로 받칠 수 있는 한계다.</li>
+     * </ul>
+     * 경고(조성은 하되 기록):
+     * <ul>
+     *   <li>· 코어 기복 &gt; 16 — 평탄화가 크다 (자연이 많이 상한다).</li>
+     *   <li>· 동굴 관통 열 비율 — 봉인이 덮은 동굴의 양. 동굴 자체는 살아 있다 (아래 참조).</li>
+     * </ul>
+     */
+    static SiteVerdict inspectSite(World world, int cx, int cy, int cz) {
+        Terrain t = surveyTerrain(world, cx, cy, cz);
+        probeUnderground(world, t);   // 봉인 없이 탐침만 (블록을 쓰지 않는다)
+        return verdict(t);
+    }
+
+    /** 지하 탐침 — 봉인 대상(공동)과 심연을 **세기만** 한다 (조성 없이 판정하려고 분리했다). */
+    private static void probeUnderground(World world, Terrain t) {
+        t.caveCols = 0;
+        t.voidCols = 0;
+        for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+            for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                int x = t.cx + dx, z = t.cz + dz;
+                boolean cave = false;
+                for (int d = 1; d <= SEAL_DEPTH; d++) {
+                    if (!firm(world.getBlockAt(x, t.cy - d, z).getType())) {
+                        cave = true;
+                        break;
+                    }
+                }
+                if (cave) {
+                    t.caveCols++;
+                }
+                if (voidBelow(world, x, t.cy - SEAL_DEPTH, z)) {
+                    t.voidCols++;
+                }
+            }
+        }
+    }
+
+    private static SiteVerdict verdict(Terrain t) {
+        int coreCells = (2 * SITE_R + 1) * (2 * SITE_R + 1);
+        double waterPct = 100.0 * t.coreWater / coreCells;
+        double voidPct = 100.0 * t.voidCols / coreCells;
+        double cavePct = 100.0 * t.caveCols / coreCells;
+        int relief = (t.reliefHi == Integer.MIN_VALUE) ? 0 : t.reliefHi - t.reliefLo;
+
+        List<String> stats = new java.util.ArrayList<>();
+        stats.add(String.format("물 %.1f%% (%d칸 · 웅덩이 %d · 관통수역 침범 %d)",
+                waterPct, t.coreWater, t.pondCells, t.coreKeepWater));
+        stats.add(String.format("기복 %d칸 (자연 지면 %d~%d)", relief,
+                t.reliefLo == Integer.MAX_VALUE ? 0 : t.reliefLo,
+                t.reliefHi == Integer.MIN_VALUE ? 0 : t.reliefHi));
+        stats.add(String.format("지하 — 동굴 관통 %.1f%% (%d열) · 심연 %.1f%% (%d열)",
+                cavePct, t.caveCols, voidPct, t.voidCols));
+        stats.add("수면이 마을 바닥보다 높은 보존 수역 " + t.highWater + "칸");
+
+        List<String> bad = new java.util.ArrayList<>();
+        if (waterPct > 15.0) {
+            bad.add(String.format("코어 물 %.1f%% > 15%% — 마을 터가 아니라 물가다", waterPct));
+        }
+        if (t.coreKeepWater > 0) {
+            bad.add("관통 수역이 부지를 " + t.coreKeepWater + "칸 가로지른다 — 물길을 메우지 말고 부지를 옮겨라");
+        }
+        if (t.highWater > 0) {
+            bad.add("보존 수역의 수면이 마을 바닥보다 높다 (" + t.highWater + "칸) — 마을이 수면 아래다");
+        }
+        if (relief > 32) {
+            bad.add("코어 기복 " + relief + "칸 > 32 — 절벽·산비탈이다 (평탄화가 산을 깎는다)");
+        }
+        if (voidPct > 5.0) {
+            bad.add(String.format("부지 밑 심연 %.1f%% > 5%% — 마을이 다리 위에 선다", voidPct));
+        }
+        return new SiteVerdict(bad.isEmpty(), bad, stats);
+    }
+
+    /** 조성 로그 — 부지가 부적합해도 조성기는 멈출 수 없다(호출자가 정한다). 대신 **기록으로 고발한다**. */
+    private static void logSite(Terrain t) {
+        SiteVerdict v = verdict(t);
+        for (String s : v.stats()) {
+            Bukkit.getLogger().info("[혼천/지형] " + s);
+        }
+        if (v.ok()) {
+            Bukkit.getLogger().info("[혼천/지형] 부지 적합 — 조성한다");
+            return;
+        }
+        for (String s : v.reasons()) {
+            Bukkit.getLogger().warning("[혼천/지형] ✗ " + s);
+        }
+        Bukkit.getLogger().warning("[혼천/지형] 부지 부적합 — 그럼에도 조성을 강행한다 "
+                + "(코어 안의 물은 메우고 호안을 세운다 = 최후 수단). 부지를 옮기는 것이 옳다.");
+    }
+
+    // ─── 1. 기초 봉인 — 바닥이 뚫리지 않게, 그러나 동굴은 살려 둔다 ───
+
+    /** 단단한가 — 공기·액체·수초·풀은 아니다. 봉인은 이 술어가 false 인 칸만 메운다 (자연 암반은 그대로 둔다). */
+    private static boolean firm(Material m) {
+        return m.isSolid() && !WET.contains(m);
+    }
+
+    /** 봉인 밑이 심연인가 — VOID_PROBE 칸을 내려가도 고체가 없다 (대협곡·거대 공동·허공) */
+    private static boolean voidBelow(World world, int x, int yFrom, int z) {
+        int bottom = Math.max(world.getMinHeight(), yFrom - VOID_PROBE);
+        for (int y = yFrom - 1; y >= bottom; y--) {
+            if (firm(world.getBlockAt(x, y, z).getType())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 표토 — 봉인 위쪽 2켜의 자재. **그 자리의 자연 자재를 따른다** (회벽·판재로 지하를 채우면 지하가 우스워진다).
+     * 모래밭 밑은 모래, 흙밭 밑은 흙, 그 밖은 흙 — 파 보면 그 땅의 단면이 나온다.
+     */
+    private static Material subsoil(Material surface) {
+        return switch (surface) {
+            case SAND, SANDSTONE -> Material.SAND;
+            case RED_SAND, RED_SANDSTONE -> Material.RED_SAND;
+            case CLAY, TERRACOTTA -> Material.CLAY;
+            // ★ GRAVEL 을 자갈로 되돌리지 않는다 — 자갈은 **노면 자재**다 (TownAudit.PATH · TerrainAudit.manMadeFloor).
+            //   봉인 자재가 지표(cy)에 한 켜라도 얹히면 그 칸이 '길'로 세어져 야간 광원 표본이 오염된다.
+            case GRAVEL, STONE, ANDESITE, DIORITE, GRANITE, TUFF, CALCITE, DEEPSLATE,
+                 SNOW_BLOCK, PODZOL, MYCELIUM, MOSS_BLOCK -> Material.DIRT;
+            default -> Material.DIRT;
+        };
+    }
+
+    /**
+     * 기반암 — 봉인 3켜 밑부터는 암반이다. y&lt;0 은 심층암 (바닐라의 지층 규칙을 따른다).
+     *
+     * <p>★ STONE 이 아니라 **TUFF** 인 이유 (v7.1 회귀 수리): TownAudit.PATH 에 STONE 이 들어 있다.
+     * 전이대에서 지표가 cy+3 이상으로 올라간 열은 봉인 3켜째가 정확히 **y = cy** 에 떨어지고,
+     * TownAudit 의 노면 판정은 **cy 한 켜만** 읽으므로 그 돌이 '길'로 세어졌다 — 등롱이 설 수 없는
+     * 지하의 돌이 길 표본에 들어와 **야간 암흑 14.1% → 18%** 의 회귀를 만들었다.
+     * 응회암(TUFF)은 PATH·manMadeFloor 어느 집합에도 없고, 자연 지면 화이트리스트 안이라
+     * 재조성 결정론도 그대로다. 지하를 파면 응회암층이 나온다 — 바닐라에도 있는 지층이다.
+     */
+    private static Material bedrock(int y) {
+        return y < 0 ? Material.DEEPSLATE : Material.TUFF;
+    }
+
+    /**
+     * 전이대 표층 자재 — 자연 자재를 쓰되 **검수의 '인공 바닥' 자재는 피한다**.
+     *
+     * <p>검수 ③(경계 급단차)은 "사람이 깐 바닥과 자연 지면이 만나는 자리"만 센다. 전이대가 인공 자재로
+     * 깔리면 전이대 전체가 그 경계가 되어 자연의 잔주름까지 우리 죄로 세어진다. 또 TownAudit 은
+     * STONE·GRAVEL·COBBLESTONE 을 **길 자재(PATH)** 로 보므로, 담 밖 3칸(스캔 ±65)에 돌바닥이 깔리면
+     * 길 폭 히스토그램과 야간 광원 표본이 오염된다 (어두운 '길'이 늘어 야간 암흑 위반이 난다).
+     *
+     * <p>그래서 돌 계열은 TUFF(자연 응회암 — 두 집합 어디에도 없다), 자갈·거친 흙은 흙으로 갈아 놓는다.
+     * 색은 거의 같고 검수는 조용하다.
+     */
+    private static Material safeSurface(Material natural) {
+        return switch (natural) {
+            case STONE, ANDESITE, COBBLESTONE, SMOOTH_STONE, STONE_BRICKS -> Material.TUFF;
+            case GRAVEL, COARSE_DIRT -> Material.DIRT;
+            case TERRACOTTA -> Material.CLAY;
+            case GRASS_BLOCK, DIRT, ROOTED_DIRT, PODZOL, MYCELIUM, MOSS_BLOCK, CLAY,
+                 SAND, RED_SAND, SANDSTONE, RED_SANDSTONE, DIORITE, GRANITE, TUFF,
+                 DEEPSLATE, CALCITE, SNOW_BLOCK -> natural;
+            default -> Material.GRASS_BLOCK;
+        };
+    }
+
+    /**
+     * 기초 봉인 — 코어(±62)의 지면 아래 6칸을 자연 자재로 단단히 채운다.
+     *
+     * <p>【왜 6칸인가】 검수 ①은 "인공 바닥 블록 **아래 2~5칸** 중 3칸 이상이 공기면 위반"으로 잰다.
+     * 즉 바닥 밑 5칸까지는 단단해야 한다. 우리 바닥은 cy(노면·마당) 또는 cy+1(기단 반 칸·짚단·걸상)에
+     * 앉으므로, cy-1..cy-6 을 채우면 두 경우 다 5칸 여유를 확보한다 (cy+1 기준 cy-1..cy-4 · cy 기준 cy-2..cy-5).
+     *
+     * <p>【왜 통째로 메우지 않는가】 동굴은 세계의 자산이다 — 기연·은신처·도적 소굴의 무대다. 마을이
+     * 편하자고 지하를 다 메우면 세계가 얇아진다. 봉인은 **바닥 두께 6칸의 판** 하나일 뿐, 그 아래 공동은
+     * 그대로 살아 있다 (마을 밖 어디선가 뚫고 들어오면 마을 밑에 도달한다 — 그것이 우리가 원하는 세계다).
+     *
+     * <p>【심연은 메우지 않고 받친다】 봉인 밑 32칸까지 고체가 없으면(대협곡·거대 공동) 봉인 판이 허공에
+     * 뜬다. 그 자리는 4칸 격자로 **돌기둥**을 내려 첫 고체까지 받친다 (최대 64칸). 협곡은 협곡대로 남고,
+     * 그 위를 마을이 다리처럼 건넌다 — 메우는 것보다 정직하고, 검수 ⑤(부유 블록)도 통과한다.
+     *
+     * <p>【자재】 위 2켜 = 그 열의 자연 표토(subsoil: 흙·모래·점토), 그 아래 = 암반(돌/심층암).
+     * 전부 자연 지면 화이트리스트 안이라 **재조성 때 측량이 같은 지면 높이를 읽는다** (결정론 불변).
+     */
+    private static void foundationSeal(World world, Terrain t) {
+        int cy = t.cy;
+        t.caveCols = 0;
+        t.voidCols = 0;
+        for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+            for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                int x = t.cx + dx, z = t.cz + dz;
+                Material sub = subsoil(t.surf[t.idx(dx, dz)]);
+                boolean cave = false;
+                for (int d = 1; d <= SEAL_DEPTH; d++) {
+                    int y = cy - d;
+                    Block b = world.getBlockAt(x, y, z);
+                    if (firm(b.getType())) {
+                        continue;                     // 자연 암반·흙 — 손대지 않는다
+                    }
+                    cave = true;                      // 공기·물·용암 = 동굴·수역·협곡
+                    b.setType(d <= 2 ? sub : bedrock(y));
+                }
+                if (cave) {
+                    t.caveCols++;
+                }
+                if (voidBelow(world, x, cy - SEAL_DEPTH, z)) {
+                    t.voidCols++;
+                    if (Math.floorMod(x, PIER_STEP) == 0 && Math.floorMod(z, PIER_STEP) == 0) {
+                        pier(world, x, cy - SEAL_DEPTH, z);
+                    }
+                }
+            }
+        }
+    }
+
+    /** 돌기둥 — 심연 위의 봉인 판을 첫 고체까지 받친다 (협곡을 메우지 않는다 · 부유 블록 0) */
+    private static void pier(World world, int x, int yFrom, int z) {
+        int bottom = Math.max(world.getMinHeight() + 1, yFrom - PIER_MAX);
+        for (int y = yFrom - 1; y >= bottom; y--) {
+            Block b = world.getBlockAt(x, y, z);
+            if (firm(b.getType())) {
+                return;                                // 바닥에 닿았다
+            }
+            b.setType(bedrock(y));
+        }
+    }
+
+    // ─── 2. 수역 — 메울 물과 비켜설 물을 가른다 ───
+
+    /**
+     * 수역 처리 — 세 갈래.
+     * <ol>
+     *   <li>【웅덩이】 코어 안에 완전히 갇힌 작은 물(≤400칸) → 바닥부터 지면까지 자연 자재로 메운다.
+     *       산 위에 고인 물·마당 한복판의 물웅덩이는 조성의 실패다.</li>
+     *   <li>【관통 수역】 강·호수·바다 → **코어 밖에서는 한 칸도 건드리지 않는다.** 평탄화·페더링·지면·
+     *       소품·나무 패스가 전부 물 칸을 비켜 간다 (featherEdge 는 waterTop 이 있는 열을 통째로 건너뛰고,
+     *       freeCell 은 지면 자재 화이트리스트로 이미 물을 거른다). 길은 널다리로 건넌다.
+     *       코어 **안**으로 들어온 관통 수역은 메울 수밖에 없다 — 상수표로 못 박힌 건물·길이 물길을 비켜
+     *       설 수 없기 때문이다. 그것은 조성기의 한계가 아니라 **부지 선정의 실패**이고, inspectSite 가
+     *       그 사실을 거부 사유로 고발한다 (그래도 강행되면 메우고 경고를 남긴다 = 최후 수단).</li>
+     *   <li>【잘린 물】 우리가 지형을 깎아 생긴 물기둥·공중의 물·벽에서 새는 물 → 지운다.
+     *       흐르는 물이 벽에서 새는 것은 조성의 실패다.</li>
+     * </ol>
+     * 그리고 **호안(護岸)** — 보존 수역에 맞닿은 우리 땅이 수면보다 낮으면 그 열을 수면까지 자연 자재로
+     * 쌓아 올린다. 물이 마을로 새 들어오는 길을 자재로 막는다 (스위치가 아니라 지형으로).
+     *
+     * <p>세 패스는 build() 에서 각각 다른 시점에 돈다 (한 덩이로 묶으면 순서가 틀어진다):
+     * fillCoreWater 는 페더링 **전**(코어 지표를 확정해야 한다), shoreBank 는 페더링 **후**(물가의 최종
+     * 지표를 알아야 한다), strayWater 는 맨 **끝**(모든 지표가 확정된 뒤에야 '지표 위의 물'을 판정할 수 있다).
+     */
+
+    /** 코어 안의 물 — 웅덩이든 관통 수역이든 **마을 바닥 아래로는 물이 없어야 한다**. 바닥부터 메운다. */
+    private static void fillCoreWater(World world, Terrain t) {
+        int cy = t.cy;
+        for (int dx = -SITE_R; dx <= SITE_R; dx++) {
+            for (int dz = -SITE_R; dz <= SITE_R; dz++) {
+                int i = t.idx(dx, dz);
+                if (t.waterTop[i] == Integer.MIN_VALUE) {
+                    continue;
+                }
+                int x = t.cx + dx, z = t.cz + dz;
+                int bed = t.ground[i];
+                // 수심이 너무 깊으면(호수 한복판) 전부 메우는 것은 산을 옮기는 짓이다 — 봉인(6칸)만 믿고
+                // 그 아래 물은 **밀폐된 채로 남긴다** (고체 뚜껑 밑의 물은 새지 않는다). 이 부지는 어차피
+                // inspectSite 가 거부한다.
+                int from = (bed == Integer.MIN_VALUE || cy - bed > WATER_FILL_MAX)
+                        ? cy - SEAL_DEPTH : bed + 1;
+                for (int y = from; y <= cy - 1; y++) {
+                    Block b = world.getBlockAt(x, y, z);
+                    if (!firm(b.getType())) {
+                        b.setType(y >= cy - 2 ? subsoil(t.surf[i]) : bedrock(y));
+                    }
+                }
+                world.getBlockAt(x, cy, z).setType(Material.GRASS_BLOCK);   // 평탄화와 같은 지면
+            }
+        }
+    }
+
+    /**
+     * 잘린 물·공중의 물 청소 — 보존 수역이 아닌 모든 열에서, **최종 지표 위의 물기둥**을 지운다.
+     * 벽에 붙은 물·허공의 물·흐르는 물은 조성이 만든 것이므로 조성이 치운다.
+     * 보존 수역(W_KEEP · 코어 밖)은 한 칸도 건드리지 않는다 — 강은 강대로 흐른다.
+     */
+    private static void strayWater(World world, Terrain t) {
+        int cy = t.cy;
+        for (int dx = -SPAN; dx <= SPAN; dx++) {
+            for (int dz = -SPAN; dz <= SPAN; dz++) {
+                int i = t.idx(dx, dz);
+                boolean keep = t.wclass[i] == W_KEEP && !Terrain.core(dx, dz);
+                if (keep) {
+                    continue;                    // 강·호수·바다 — 보존
+                }
+                int x = t.cx + dx, z = t.cz + dz;
+                int base = Terrain.core(dx, dz) ? cy
+                        : (t.target[i] != Integer.MIN_VALUE ? t.target[i] : t.ground[i]);
+                if (base == Integer.MIN_VALUE) {
+                    base = cy;
+                }
+                for (int y = base + 1; y <= base + 20; y++) {
+                    Block b = world.getBlockAt(x, y, z);
+                    Material m = b.getType();
+                    if (m == Material.WATER || m == Material.LAVA || WET.contains(m)) {
+                        b.setType(Material.AIR);   // 지표 위의 물 = 잘린 물기둥·고인 물
+                    } else if (b.getBlockData() instanceof org.bukkit.block.data.Waterlogged w
+                            && w.isWaterlogged()) {
+                        w.setWaterlogged(false);   // 물먹은 계단·울타리 = 벽에서 새는 물의 정체
+                        b.setBlockData(w, false);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 호안 — 보존 수역에 맞닿은 우리 땅이 수면보다 낮으면 수면까지 쌓아 올린다.
+     * 물은 스위치로 막는 것이 아니라 **지형으로** 막는다. (수면이 마을 바닥보다 높으면 이 호안이
+     * 마을을 둘러싼 제방이 된다 — 그런 부지는 inspectSite 가 이미 거부한 부지다.)
+     */
+    private static void shoreBank(World world, Terrain t) {
+        for (int dx = -SPAN; dx <= SPAN; dx++) {
+            for (int dz = -SPAN; dz <= SPAN; dz++) {
+                int i = t.idx(dx, dz);
+                if (t.wclass[i] != W_KEEP || Terrain.core(dx, dz)) {
+                    continue;
+                }
+                int wt = t.waterTop[i];
+                for (int ox = -1; ox <= 1; ox++) {
+                    for (int oz = -1; oz <= 1; oz++) {
+                        int nx = dx + ox, nz = dz + oz;
+                        if ((ox == 0 && oz == 0) || !t.in(nx, nz)) {
+                            continue;
+                        }
+                        int j = t.idx(nx, nz);
+                        if (t.waterTop[j] != Integer.MIN_VALUE) {
+                            continue;                     // 물 옆의 물 — 호안이 아니다
+                        }
+                        int tg = Terrain.core(nx, nz) ? t.cy : t.target[j];
+                        if (tg == Integer.MIN_VALUE || tg >= wt) {
+                            continue;                     // 이미 수면 위 = 이미 뭍이다
+                        }
+                        int x = t.cx + nx, z = t.cz + nz;
+                        for (int y = tg + 1; y <= wt; y++) {
+                            world.getBlockAt(x, y, z).setType(
+                                    y == wt ? safeSurface(t.surf[j]) : subsoil(t.surf[j]));
+                        }
+                        if (!Terrain.core(nx, nz)) {
+                            t.target[j] = wt;             // 지표가 올라갔다 — 봉인·검수가 이 값을 쓴다
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ─── 3. 경계 페더링 — 바깥에서 걸어 들어올 때 계단도 벽도 만나지 않는다 ───
+
+    /**
+     * 전이대(feathering) — 담 밖 20칸에 걸쳐 우리 지면(cy)과 자연 지형을 **한 칸에 한 칸씩** 잇는다.
+     *
+     * <p>【구 blendEdge 가 왜 실패했나】 6칸 스커트에 선형 보간(target = cy + (natural-cy)*d/7)을 썼다.
+     * 자연 지형이 20칸 높으면 한 걸음에 3칸씩 뛴다 — 검수 ③이 잰 "최대 7칸 · 24.3%" 가 바로 그 계단이다.
+     * 보간의 문제가 아니라 **폭의 문제**였다: 6칸으로는 산을 받아낼 수 없다.
+     *
+     * <p>【알고리즘 — 1-립시츠 사영】
+     * <ol>
+     *   <li>초안: 링 거리 d(1..20) 마다 target = clamp(자연지면, cy−d, cy+d).
+     *       코어 경계(cy)에서 반경 방향으로 한 칸에 한 칸씩만 오르내리게 가둔다 (원뿔 회랑).</li>
+     *   <li>완화: 40번의 결정론 스윕으로 **인접 칸 높이차 ≤ 1** 을 강제한다 (코어 링 cy 는 고정 경계값).
+     *       회랑 밖으로 못 나가게 매 스윕 다시 clamp — 발산 없이 수렴하고, 재조성해도 같은 고정점이다.</li>
+     *   <li>적용: 자연보다 높으면 표토로 쌓고, 낮으면 깎고, 표층은 그 열의 자연 자재(safeSurface).
+     *       깎을 때는 그 위의 나무·풀도 함께 걷어낸다 (허공에 뜬 잎 = 검수 ⑤ 부유 블록).</li>
+     * </ol>
+     * 결과 보장: 전이대의 어떤 인접 두 칸도 높이차 1 이하 → **모든 방위에서 걸어 들어올 수 있다**(검수 ④),
+     * 한 걸음 3칸 도약은 구조적으로 불가능하다(검수 ③). 대각선도 최대 2칸 (3칸 미만).
+     *
+     * <p>물 칸은 통째로 건너뛴다 — 강을 깎지도 메우지도 않는다. 물가의 단차는 shoreBank 가 맡는다.
+     */
+    private static void featherEdge(World world, Terrain t) {
+        int cy = t.cy;
+        // ① 초안 — 원뿔 회랑
+        for (int dx = -SPAN; dx <= SPAN; dx++) {
+            for (int dz = -SPAN; dz <= SPAN; dz++) {
+                if (Terrain.core(dx, dz)) {
+                    continue;                       // 코어는 cy 고정 (clearAndFlatten 이 넣었다)
+                }
+                int i = t.idx(dx, dz);
+                if (t.waterTop[i] != Integer.MIN_VALUE || t.ground[i] == Integer.MIN_VALUE) {
+                    t.target[i] = Integer.MIN_VALUE;   // 물·심연 — 손대지 않는다
+                    continue;
+                }
+                int d = Math.max(Math.abs(dx), Math.abs(dz)) - SITE_R;   // 1..FEATHER
+                int lo = cy - MAX_STEP * d, hi = cy + MAX_STEP * d;
+                t.target[i] = Math.max(lo, Math.min(hi, t.ground[i]));
+            }
+        }
+        // ② 완화 — 1-립시츠 (결정론: 고정 순서·고정 횟수. 난수 0)
+        for (int k = 0; k < RELAX; k++) {
+            for (int dx = -SPAN; dx <= SPAN; dx++) {
+                for (int dz = -SPAN; dz <= SPAN; dz++) {
+                    if (Terrain.core(dx, dz)) {
+                        continue;
+                    }
+                    int i = t.idx(dx, dz);
+                    if (t.target[i] == Integer.MIN_VALUE) {
+                        continue;
+                    }
+                    int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+                    for (int[] dir : DIR4) {
+                        int nx = dx + dir[0], nz = dz + dir[1];
+                        if (!t.in(nx, nz)) {
+                            continue;
+                        }
+                        int nv = Terrain.core(nx, nz) ? cy : t.target[t.idx(nx, nz)];
+                        if (nv == Integer.MIN_VALUE) {
+                            continue;               // 물·심연 이웃은 제약이 아니다 (물가는 벼랑이어도 된다)
+                        }
+                        lo = Math.min(lo, nv);
+                        hi = Math.max(hi, nv);
+                    }
+                    if (lo == Integer.MAX_VALUE) {
+                        continue;
+                    }
+                    int v = t.target[i];
+                    if (v < hi - MAX_STEP) {
+                        v = hi - MAX_STEP;          // 이웃보다 너무 낮다 — 끌어올린다
+                    }
+                    if (v > lo + MAX_STEP) {
+                        v = lo + MAX_STEP;          // 이웃보다 너무 높다 — 깎는다 (충돌 시 '깎기'가 이긴다)
+                    }
+                    int d = Math.max(Math.abs(dx), Math.abs(dz)) - SITE_R;
+                    t.target[i] = Math.max(cy - MAX_STEP * d, Math.min(cy + MAX_STEP * d, v));
+                }
+            }
+        }
+        // ③ 적용
+        for (int dx = -SPAN; dx <= SPAN; dx++) {
+            for (int dz = -SPAN; dz <= SPAN; dz++) {
+                if (Terrain.core(dx, dz)) {
+                    continue;
+                }
+                int i = t.idx(dx, dz);
+                int tg = t.target[i];
+                if (tg == Integer.MIN_VALUE) {
+                    continue;
+                }
+                shapeColumn(world, t.cx + dx, t.cz + dz, tg, t.surf[i], BAND_SEAL);
+            }
+        }
+    }
+
+    /**
+     * 한 열을 목표 표고로 성형한다 — 깎고(위를 비우고) · 쌓고(밑을 채우고) · 표층을 덮고 · 봉인한다.
+     * 지형 패스와 접근로가 함께 쓴다 (같은 규칙 = 같은 보장).
+     */
+    private static void shapeColumn(World world, int x, int z, int tg, Material natural, int seal) {
+        int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 1);
+        for (int y = Math.max(tg + 1, world.getMinHeight()); y <= Math.max(top, tg + 6); y++) {
+            Block b = world.getBlockAt(x, y, z);
+            if (!b.getType().isAir()) {
+                b.setType(Material.AIR);           // 깎기 — 나무·풀·바위 윗도리를 함께 걷는다 (부유 블록 0)
+            }
+        }
+        world.getBlockAt(x, tg, z).setType(safeSurface(natural));
+        Material sub = subsoil(natural);
+        for (int d = 1; d <= seal; d++) {          // 쌓기 + 봉인 — 밑이 비면 껍데기 바닥이 된다 (검수 ①)
+            int y = tg - d;
+            Block b = world.getBlockAt(x, y, z);
+            if (!firm(b.getType())) {
+                b.setType(d <= 2 ? sub : bedrock(y));
+            }
+        }
+    }
+
+    // ─── 4. 마감 봉인 — 나중에 놓인 바닥까지 남김없이 ───
+
+    /**
+     * 검수 ①의 판정식 그대로 되짚는 안전망 — **인공 바닥 블록 밑 5칸의 공기를 메운다**.
+     *
+     * <p>기초 봉인(코어)·전이대 봉인이 지면을 덮지만, 조성은 그 뒤로도 바닥을 놓는다: 접근로(관도·산길),
+     * 담 밖 소품(짚단·통나무 걸상), 폐사당 참배 계단, 사냥터·나루의 판재. 그것들은 **자연 지형 위에**
+     * 앉으므로 그 밑이 동굴이면 그대로 껍데기가 된다. 이 패스가 마지막에 한 번 더 훑는다.
+     *
+     * <p>지붕을 건드리지 않는 법: 열의 **지반면**(코어=cy · 전이대=target · 그 밖=자연 지면)을 먼저 정하고
+     * 그 ±2 안에서만 바닥을 찾는다. 지붕은 cy+6 이상이므로 이 창에 들어오지 않는다 (검수도 같은 이유로
+     * "지표가 조성 지면 ±4 안일 때만" 센다).
+     *
+     * <p>물 위의 널다리는 밑이 물이지 공기가 아니다 → 메우지 않는다 (강을 막지 않는다).
+     */
+    private static void sealLaidFloors(World world, Terrain t) {
+        int cy = t.cy;
+        for (int dx = -SEAL_SCAN; dx <= SEAL_SCAN; dx++) {
+            for (int dz = -SEAL_SCAN; dz <= SEAL_SCAN; dz++) {
+                int x = t.cx + dx, z = t.cz + dz;
+                int plane;
+                Material nat = Material.DIRT;
+                if (t.in(dx, dz)) {
+                    int i = t.idx(dx, dz);
+                    nat = t.surf[i];
+                    plane = Terrain.core(dx, dz) ? cy : t.target[i];
+                    if (plane == Integer.MIN_VALUE) {
+                        continue;                  // 보존 수역·심연 — 바닥을 놓지 않았다
+                    }
+                } else {
+                    plane = outsideGroundY(world, x, z);
+                    if (plane == Integer.MIN_VALUE) {
+                        continue;                  // 물 위 (널다리) — 밑이 공기가 아니다
+                    }
+                }
+                // 창은 지반면 ±1 뿐이다 — 넓히면 실내 소품(cy+2 의 반 블록·계단)을 '바닥'으로 오인해
+                // 그 밑의 **실내 공기**를 흙으로 메운다 (방이 흙으로 찬다). 우리 바닥은 cy·cy+1 에만 앉는다.
+                for (int y = plane + 1; y >= plane - 1; y--) {
+                    if (!laidFloor(world.getBlockAt(x, y, z).getType())) {
+                        continue;
+                    }
+                    for (int d = 1; d <= 5; d++) { // 검수: 바닥 밑 2~5칸 중 3칸 이상 공기 = 위반
+                        Block b = world.getBlockAt(x, y - d, z);
+                        if (b.getType().isAir()) {
+                            b.setType(d <= 2 ? subsoil(nat) : bedrock(y - d));
+                        }
+                    }
+                    break;                         // 그 열의 최상단 바닥 하나면 족하다 (밑은 이제 단단하다)
+                }
+            }
+        }
+    }
+
+    /**
+     * 「사람이 깐 바닥」 판정 — TerrainAudit 과 **같은 자재 목록**을 쓴다 (검수가 세는 것을 우리가 센다).
+     * 목록이 갈리면 보장이 갈린다: 검수기 쪽이 바뀌면 이 술어도 따라 바꿔라.
+     */
+    private static boolean laidFloor(Material m) {
+        if (m == Material.DIRT_PATH || m == Material.POLISHED_ANDESITE || m == Material.COARSE_DIRT
+                || m == Material.GRAVEL || m == Material.HAY_BLOCK || m == Material.STONE_BRICKS
+                || m == Material.SMOOTH_STONE || m == Material.FARMLAND) {
+            return true;
+        }
+        String n = m.name();
+        return n.endsWith("_PLANKS") || n.endsWith("_BRICKS") || n.endsWith("_TILES")
+                || n.endsWith("_SLAB") || n.endsWith("_STAIRS") || n.endsWith("_TERRACOTTA")
+                || n.contains("COBBLESTONE");
     }
 
     // ─── v6.2 ① 지면 — 향촌은 사람이 밟고 사는 땅이다 ───
@@ -515,7 +1300,17 @@ final class CheonghaBuilder {
             for (int z = cz - 59; z <= cz + 59; z++) {
                 int h = hash(x, z, 50);
                 Material m;
-                if (h < 4) {
+                if (WALL_FOOT <= Math.max(Math.abs(x - cx), Math.abs(z - cz))) {
+                    // v7.1 【담 발치는 자연의 땅이다】 — 여기만 다진 흙(COARSE_DIRT)을 쓰지 않는다.
+                    //   TerrainAudit ③ 은 "사람이 깐 바닥 ↔ 자연 지면"의 **이음매**에서만 단차를 센다.
+                    //   다진 흙은 그 검수의 '사람이 깐 바닥'이다. 담(cy+1 조약돌)과 담 발치 등롱(cy+3 랜턴)은
+                    //   둘 다 검수의 눈에 **지형**으로 읽히므로(구조물 목록에 조약돌·랜턴이 없다), 그 발치를
+                    //   다진 흙으로 깔면 걸음마다 "사람이 깐 바닥(cy) → 지형(cy+2~cy+4)" 의 이음매가 생기고
+                    //   3~4칸 단차로 세어진다 — **경계 급단차 8.7%의 정체가 이것이었다** (지형은 이미 평평했다).
+                    //   담 발치를 풀·흙(자연 자재)으로 두면 이음매 자체가 사라진다. 서사도 맞는다:
+                    //   사람이 안 다니는 담 밑에는 풀이 남는다.
+                    m = h < 20 ? Material.GRASS_BLOCK : h < 26 ? Material.ROOTED_DIRT : Material.DIRT;
+                } else if (h < 4) {
                     m = Material.GRASS_BLOCK;      // 8% — 밟히지 않는 자리에만 풀이 남는다
                 } else if (h < 7) {
                     m = Material.ROOTED_DIRT;
@@ -525,6 +1320,29 @@ final class CheonghaBuilder {
                     m = Material.COARSE_DIRT;      // 다진 흙 — 마을의 바탕색
                 }
                 world.getBlockAt(x, cy, z).setType(m);
+            }
+        }
+    }
+
+    /** 담 발치 띠 — 이 거리부터 담장(r=60)까지는 다진 흙을 쓰지 않는다 (등롱 링 ±58 을 넉넉히 품는다) */
+    private static final int WALL_FOOT = 56;
+
+    /**
+     * v7.1 【등롱 발치】 — 등롱이 선 자리와 그 사방 한 칸의 지면을 **자연 자재(흙)** 로 바꾼다.
+     *
+     * <p>랜턴(cy+3)은 TerrainAudit 의 구조물 목록에 없어 **지형 표면**으로 읽힌다 — 즉 등롱 한 기는
+     * 검수의 눈에 "3칸 솟은 땅"이다. 그 발치가 다진 흙(=사람이 깐 바닥)이면 걸음마다 이음매가 생기고
+     * 3칸 단차로 세어진다. 발치를 흙으로 두면 등롱도 그 땅도 '자연'이라 이음매가 없다.
+     *
+     * <p>노면(흙길·자갈·돌)은 절대 건드리지 않는다 — 맨땅(LAMP_GROUND)만 바꾼다. 길 폭 검수는 무사하다.
+     */
+    private static void lampApron(World world, int x, int cy, int z) {
+        for (int ox = -1; ox <= 1; ox++) {
+            for (int oz = -1; oz <= 1; oz++) {
+                Block b = world.getBlockAt(x + ox, cy, z + oz);
+                if (LAMP_GROUND.contains(b.getType())) {
+                    b.setType(Material.DIRT);
+                }
             }
         }
     }
@@ -1464,8 +2282,8 @@ final class CheonghaBuilder {
 
     /** 담 밖 접근부 — 관도·산길·이정표·돌무더기·나무·풀숲 */
     private static void approaches(World world, int cx, int cy, int cz) {
-        southHighway(world, cx, cz);
-        northTrail(world, cx, cz);
+        southHighway(world, cx, cy, cz);
+        northTrail(world, cx, cy, cz);
         for (int[] p : OUTSIDE_PROPS) {
             outsideProp(world, cx, cz, p[0], p[1], p[2]);
         }
@@ -1475,12 +2293,47 @@ final class CheonghaBuilder {
         outskirtGrove(world, cx, cz);   // 길가 나무를 먼저 심고, 남은 들녘에 성긴 숲을 흩뿌린다
     }
 
+    /**
+     * v7.1 ③ 【노선 정지(整地) — 길은 계단이 아니다】
+     *
+     * <p>구 접근로는 지형에 그대로 얹혔다(outsideGroundY 를 열마다 따로 읽었다). 평지에서는 통했지만
+     * 언덕·둔덕을 만나면 한 걸음에 3~5칸씩 뛰는 **계단**이 됐다 — 검수 ④(연결성)의 BFS 는 한 칸 도약만
+     * 허용하므로, 그런 길은 '길'이 아니다.
+     *
+     * <p>대신 **종단 구배(縱斷勾配)** 를 먼저 잡는다: 문 앞(d=OUT_NEAR)에서 마을 지면 cy 로 출발해,
+     * 한 칸 나아갈 때마다 **최대 ±1칸**만 오르내리며 자연 지면을 따라간다. 그렇게 만든 표고선 p[d] 를
+     * 노면 높이로 삼고, 그 높이에 맞춰 **깎고 · 쌓고 · 봉인한다**(shapeColumn 과 같은 규칙).
+     * → 담장에서 담 밖 32칸까지 **계단 0** 이 좌표식으로 보장된다.
+     *
+     * <p>재조성 결정론: outsideGroundY 는 DIRT_PATH·GRAVEL 을 지면으로 인정하므로, 두 번째 조성은
+     * 첫 조성이 깐 노면(=p[d])을 그대로 읽어 같은 표고선을 얻는다 (길이 조성마다 내려앉지 않는다).
+     */
+    private static int[] gradeProfile(World world, int cx, int cy, int cz, boolean south, int last) {
+        int n = last - OUT_NEAR + 1;
+        int[] p = new int[n];
+        int prev = cy;                               // 성문 앞 = 마을 지면. 여기서 출발한다.
+        for (int k = 0; k < n; k++) {
+            int d = OUT_NEAR + k;
+            int x = south ? cx : cx - ((d - OUT_NEAR) / 6);   // 산길은 6칸마다 서쪽으로 한 칸 비튼다
+            int z = south ? cz + d : cz - d;
+            int g = outsideGroundY(world, x, z);
+            int want = (g == Integer.MIN_VALUE) ? prev : g;   // 물 = 널다리 → 높이를 유지한 채 건넌다
+            prev = Math.max(prev - 1, Math.min(prev + 1, want));
+            p[k] = prev;
+        }
+        return p;
+    }
+
     /** 남문 밖 관도 — 폭 3칸, 곧게 (간선은 굽지 않는다). 담 밖 7칸 광폭 접속부는 townWall 이 이미 깔았다 */
-    private static void southHighway(World world, int cx, int cz) {
+    private static void southHighway(World world, int cx, int cy, int cz) {
+        int[] p = gradeProfile(world, cx, cy, cz, true, OUT_FAR);
         for (int d = OUT_NEAR; d <= OUT_FAR; d++) {
+            int y = p[d - OUT_NEAR];
             for (int w = -1; w <= 1; w++) {
-                outsideRoadCell(world, cx + w, cz + d, false);
+                outsideRoadCell(world, cx + w, y, cz + d, false);
             }
+            roadShoulder(world, cx - 2, y, cz + d);   // 노면과 자연 지면 사이 한 칸 완충 (측면 절개면 완화)
+            roadShoulder(world, cx + 2, y, cz + d);
             roadsideBrush(world, cx, cz, cx, cz + d);
             // 길가 등롱 — 관도는 밤에도 걷는다. 측거 4 (담 밖 7칸 접속부의 자갈 갓길 ±3 을 비켜선다 —
             // 등롱은 노면에 서지 않는다) · 간격 4 → 노면 어느 칸도 맨해튼 8 안 = 광원 7 이상.
@@ -1492,12 +2345,16 @@ final class CheonghaBuilder {
     }
 
     /** 북문 밖 산길 — 폭 2칸, 6칸마다 서쪽으로 한 칸씩 비틀린다 (좌표식 — 난수 0). 자갈·거친 흙 노면 */
-    private static void northTrail(World world, int cx, int cz) {
+    private static void northTrail(World world, int cx, int cy, int cz) {
+        int[] p = gradeProfile(world, cx, cy, cz, false, OUT_FAR);
         for (int d = OUT_NEAR; d <= OUT_FAR; d++) {
             int off = -((d - OUT_NEAR) / 6);
+            int y = p[d - OUT_NEAR];
             for (int w = 0; w <= 1; w++) {
-                outsideRoadCell(world, cx + off + w, cz - d, true);
+                outsideRoadCell(world, cx + off + w, y, cz - d, true);
             }
+            roadShoulder(world, cx + off - 1, y, cz - d);
+            roadShoulder(world, cx + off + 2, y, cz - d);
             roadsideBrush(world, cx, cz, cx + off, cz - d);
             if (Math.floorMod(d, 4) == 2) {   // 산길 등롱 — 측거 3~4 · 간격 4 (노면 밖 맨땅에만 선다)
                 roadsideLantern(world, cx + off - 3, cz - d);
@@ -1506,26 +2363,64 @@ final class CheonghaBuilder {
         }
     }
 
-    /** 담 밖 노면 한 칸 — 지형에 얹는다. 물이면 널다리, 뭍이면 흙길/자갈. 길 위 3칸만 걷어낸다(지형은 깎지 않는다) */
-    private static void outsideRoadCell(World world, int x, int z, boolean trail) {
+    /**
+     * 담 밖 노면 한 칸 — **계획 표고 y 에** 앉힌다 (지형이 아니라 노선이 높이를 정한다).
+     * 뭍이면 흙길/자갈 + 밑 5칸 봉인(검수 ①), 물이면 널다리 + 널 밑 기둥(다리 밑이 공기면 그것도 껍데기다).
+     * 노면 위 3칸은 비운다 — 길은 걸을 수 있어야 길이다.
+     */
+    private static void outsideRoadCell(World world, int x, int y, int z, boolean trail) {
         int g = outsideGroundY(world, x, z);
-        if (g == Integer.MIN_VALUE) {
-            int b = bridgeY(world, x, z);
-            if (b != Integer.MIN_VALUE) {
-                world.getBlockAt(x, b, z).setType(Material.OAK_PLANKS);   // 널다리 — 호수를 메우지 않는다
+        if (g == Integer.MIN_VALUE) {                 // 물·심연 — 메우지 않고 건넌다
+            world.getBlockAt(x, y, z).setType(Material.OAK_PLANKS);
+            for (int d = 1; d <= 5; d++) {            // 교각 — 널 밑의 공기를 나무 기둥으로 채운다
+                Block b = world.getBlockAt(x, y - d, z);
+                if (!b.getType().isAir()) {
+                    break;                            // 물·지형에 닿았다 (물은 메우지 않는다)
+                }
+                b.setType(Material.OAK_FENCE);
             }
+            clearHeadroom(world, x, y, z);
             return;
         }
         int h = hash(x, z, 10);   // 비선형 해시 (v6.5 ② — 노면에 사선 줄무늬가 서면 안 된다)
         Material top = trail
                 ? (h < 4 ? Material.GRAVEL : h < 6 ? Material.COARSE_DIRT : Material.DIRT_PATH)
                 : (h < 2 ? Material.GRAVEL : Material.DIRT_PATH);
-        world.getBlockAt(x, g, z).setType(top);
-        for (int y = g + 1; y <= g + 3; y++) {   // 통행고 — 풀·덤불을 걷어낸다 (길은 걸을 수 있어야 길이다)
-            if (!world.getBlockAt(x, y, z).getType().isAir()) {
-                world.getBlockAt(x, y, z).setType(Material.AIR);
+        clearHeadroom(world, x, y, z);
+        world.getBlockAt(x, y, z).setType(top);
+        Material nat = world.getBlockAt(x, g, z).getType();
+        Material sub = subsoil(NATURAL_GROUND.contains(nat) ? nat : Material.DIRT);
+        for (int d = 1; d <= 5; d++) {                // 노반 + 봉인 — 길 밑이 비면 길이 껍데기가 된다
+            Block b = world.getBlockAt(x, y - d, z);
+            if (!firm(b.getType())) {
+                b.setType(d <= 2 ? sub : bedrock(y - d));
             }
         }
+    }
+
+    /** 노면 위를 비운다 — 절개면의 흙·풀·나무를 걷어낸다 (통행고 3칸 + 잘린 나무를 남기지 않는다) */
+    private static void clearHeadroom(World world, int x, int y, int z) {
+        int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 1);
+        for (int cy2 = y + 1; cy2 <= Math.max(top, y + 3); cy2++) {
+            Block b = world.getBlockAt(x, cy2, z);
+            if (!b.getType().isAir()) {
+                b.setType(Material.AIR);
+            }
+        }
+    }
+
+    /**
+     * 갓길 한 칸 — 노면(y)과 자연 지면 사이의 단차를 반으로 접는다. 절개면이 1칸을 넘으면 그 한 칸만
+     * 노면 높이로 끌어와(±1) 옆으로 새 계단을 만들지 않는다. 물 칸은 건드리지 않는다.
+     */
+    private static void roadShoulder(World world, int x, int y, int z) {
+        int g = outsideGroundY(world, x, z);
+        if (g == Integer.MIN_VALUE || Math.abs(g - y) <= 1) {
+            return;                                   // 물이거나 이미 완만하다
+        }
+        int tg = g > y ? y + 1 : y - 1;               // 노면에서 한 칸만 벌린다
+        Material nat = world.getBlockAt(x, g, z).getType();
+        shapeColumn(world, x, z, tg, NATURAL_GROUND.contains(nat) ? nat : Material.GRASS_BLOCK, 5);
     }
 
     /** 길가 풀숲 — 노면 양옆 2~5칸의 16% (맨땅이 지배하되 길가엔 풀이 남는다) */
@@ -1571,6 +2466,7 @@ final class CheonghaBuilder {
         world.getBlockAt(x, g + 1, z).setType(Material.SPRUCE_FENCE);
         world.getBlockAt(x, g + 2, z).setType(Material.SPRUCE_FENCE);
         world.getBlockAt(x, g + 3, z).setType(Material.LANTERN);
+        lampApron(world, x, g, z);   // v7.1 — 길가 등롱도 발치는 흙 (노면 옆의 이음매를 만들지 않는다)
     }
 
     /** 담 밖 소품 한 점 — 이정표·돌무더기·길가 쉼터 */
@@ -1822,6 +2718,7 @@ final class CheonghaBuilder {
         world.getBlockAt(x, cy + 1, z).setType(Material.SPRUCE_FENCE);
         world.getBlockAt(x, cy + 2, z).setType(Material.SPRUCE_FENCE);
         world.getBlockAt(x, cy + 3, z).setType(Material.LANTERN);
+        lampApron(world, x, cy, z);   // v7.1 — 등롱 발치는 자연의 흙 (검수 ③의 이음매를 만들지 않는다)
     }
 
     /** 광장 등롱 — 돌바닥 위에만(광장 포장 화이트리스트). 광장은 노면이 아니라 '마당'이다 */
@@ -5118,7 +6015,7 @@ final class CheonghaBuilder {
         huntBrokenWall(world, cx, cz);
         huntCart(world, cx, cz);
         huntBanditTrace(world, cx, cz);
-        huntTrailExtension(world, cx, cz);   // 노면은 지형·소품 뒤에 깐다 (아무도 길을 못 덮는다)
+        huntTrailExtension(world, cx, cy, cz);   // 노면은 지형·소품 뒤에 깐다 (아무도 길을 못 덮는다)
         huntFootpath(world, cx, cz, refY);
         huntCamp(world, cx, cz);
         huntArrows(world, cx, cz);
@@ -5584,12 +6481,16 @@ final class CheonghaBuilder {
         }
     }
 
-    /** 산길 연장 — d=92 에서 끊긴 길을 d=100 까지 잇는다. 등롱은 d=96 에서 끝난다 (그 너머가 사냥터다) */
-    private static void huntTrailExtension(World world, int cx, int cz) {
+    /**
+     * 산길 연장 — d=92 에서 끊긴 길을 d=100 까지 잇는다. 등롱은 d=96 에서 끝난다 (그 너머가 사냥터다).
+     * v7.1: 표고선을 **북문에서부터 통째로 다시 잡아** 이어 붙인다 (구간을 따로 잡으면 이음매에서 계단이 선다).
+     */
+    private static void huntTrailExtension(World world, int cx, int cy, int cz) {
+        int[] p = gradeProfile(world, cx, cy, cz, false, HG_TRAIL_END);
         for (int d = OUT_FAR + 1; d <= HG_TRAIL_END; d++) {
             int off = -((d - OUT_NEAR) / 6);
             for (int w = 0; w <= 1; w++) {
-                outsideRoadCell(world, cx + off + w, cz - d, true);
+                outsideRoadCell(world, cx + off + w, p[d - OUT_NEAR], cz - d, true);
             }
             roadsideBrush(world, cx, cz, cx + off, cz - d);
             if (d <= HG_LAMP_END && Math.floorMod(d, 4) == 2) {
