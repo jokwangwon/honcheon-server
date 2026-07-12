@@ -92,6 +92,7 @@ final class TerrainAudit {
         cliffs(out, violations, world, cx, cy, cz, r, mountain);
         connectivity(out, violations, world, cx, cy, cz, r, mountain);
         floating(out, violations, world, cx, cy, cz, r);
+        underground(out, violations, world, cx, cy, cz, r);
 
         out.add(HEAD + "── 총평 ──");
         out.add(violations.isEmpty() ? OK + "위반 0건 — 조성물이 자연에 앉아 있다"
@@ -360,6 +361,48 @@ final class TerrainAudit {
             violations.add("부유블록" + loose);
         } else {
             out.add(OK + "  부유 블록 " + loose + "개 — 허용 범위");
+        }
+    }
+
+    // ─── ⑥ 지하 공동 — 자연 동굴이 있는가 (있으면 안 된다) ───
+
+    /**
+     * 지하의 빈 곳 — <b>자연 동굴은 통제할 수 없다</b>는 판단(사용자)에 따라, 세계는 <b>동굴 없이</b> 생성되고
+     * 동굴이 필요하면 <b>우리가 판다</b>. 그 약속이 지켜졌는지 재는 눈이다.
+     *
+     * <p>지면 아래 5~45칸을 표본해 공기(와 물)의 비율을 센다. 자연 동굴이 살아 있으면 이 값이 5~15% 나온다.
+     * 데이터팩(honcheon_no_caves)이 제대로 걸렸다면 <b>1% 미만</b>이어야 한다 —
+     * 우리가 판 동굴이 있다면 그만큼은 정직하게 잡힌다(그건 위반이 아니라 설계다).
+     */
+    private static void underground(List<String> out, List<String> violations,
+                                    World world, int cx, int cy, int cz, int r) {
+        out.add(HEAD + "⑥ 지하 — 자연 동굴이 남아 있는가 (동굴은 우리가 판다)");
+        long air = 0;
+        long total = 0;
+        for (int x = cx - r; x <= cx + r; x += 4) {
+            for (int z = cz - r; z <= cz + r; z += 4) {
+                for (int y = cy - 45; y <= cy - 5; y++) {
+                    if (y < world.getMinHeight() + 5) {
+                        continue;
+                    }
+                    Material m = world.getBlockAt(x, y, z).getType();
+                    total++;
+                    if (m.isAir() || m == Material.WATER || m == Material.LAVA) {
+                        air++;
+                    }
+                }
+            }
+        }
+        double pct = total == 0 ? 0 : (double) air / total;
+        out.add(INFO + "  지하 표본 " + total + "칸 · 빈 곳 " + air + "칸 ("
+                + String.format("%.2f%%", pct * 100) + ")");
+        if (pct > 0.02) {
+            out.add(BAD + "  지하 공동 " + String.format("%.1f%%", pct * 100)
+                    + " — 자연 동굴이 살아 있다 (데이터팩 honcheon_no_caves 미적용?)");
+            violations.add("자연동굴" + String.format("%.0f%%", pct * 100));
+        } else {
+            out.add(OK + "  지하가 채워져 있다 (" + String.format("%.2f%%", pct * 100)
+                    + ") — 동굴은 우리가 판다");
         }
     }
 
