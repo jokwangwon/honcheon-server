@@ -220,7 +220,7 @@ final class RemoteBuilder {
             case 성문 -> cityGate(world, place, spec);
             case 수로채 -> waterStockade(world, place, spec);
         };
-        zones.forEach(zone -> sweepOrphans(world, zone));   // 처마에서 떨어져 나온 기와를 거둔다
+        zones.forEach(zone -> sweepOrphans(world, zone, kind));   // 처마에서 떨어져 나온 기와를 거둔다
         return zones;
     }
 
@@ -232,14 +232,25 @@ final class RemoteBuilder {
      * 이렇게 답했다 — <b>기와 37장</b>, 나뭇잎 3, 통나무 1. 지형이 아니라 <b>지붕</b>이었다.
      * (수를 세는 눈은 어디를 팔지 알려주지 않는다. 이름을 대는 눈이 알려준다.)
      *
-     * <p><b>여섯 면이 전부 허공인 블록은 어떤 건축에도 없다.</b> 등롱은 매달릴 곳이 있고, 깃발은 붙을 곳이 있고,
-     * 기와는 서까래를 딛는다. 그러므로 이웃이 하나도 없는 블록은 <b>지으려던 것이 아니라 흘린 것</b>이다.
-     * 자재를 가리지 않는 이유가 그것이다 — 무엇이든 혼자 떠 있으면 흘린 것이다.
+     * <p>처음엔 <b>"여섯 면이 허공인 블록은 어떤 건축에도 없다"</b> 고 적고 자재를 가리지 않았다.
+     * <b>그것이 틀렸다.</b> 쓸개에게 이름을 대게 했더니 이렇게 답했다 —
+     * {@code {LANTERN=3, SPRUCE_PLANKS=5, STONE=1, TORCH=2}}. <b>망루의 불을 먹고 있었다.</b>
+     * (검수가 곧바로 짖었다: "망루의 불 없음 — TORCH 0개 &lt; 2".)
+     *
+     * <p>그러므로 <b>불은 건드리지 않는다.</b> 등롱이 허공에 걸린 것은 <b>지으려던 것</b>이다 —
+     * 사슬이 빠졌을지언정 그 자리에 불이 있어야 한다는 뜻이고, 그것을 지우면 <b>밤에 사람이 죽는다.</b>
+     * 마찬가지로 <b>구조 계약({@link #contract})의 자재</b>도 건드리지 않는다 —
+     * 그 집이 그 집이려면 있어야 하는 것을 쓸개가 치우면, 쓸개가 곧 파괴다.
+     *
+     * <p>다만 <b>떠 있다는 사실은 감추지 않는다.</b> 남겨 둔 것은 로그가 말한다 — 건축의 흠이지 쓸개의 일이 아니다.
      *
      * <p>건축이 <b>끝난 뒤</b> 돈다. 짓는 도중에 쓸면 아직 이웃이 놓이지 않은 것을 거둔다.
      */
-    private static void sweepOrphans(World world, Zone zone) {
+    private static void sweepOrphans(World world, Zone zone, Archetype kind) {
         int swept = 0;
+        // 무엇을 거뒀는지 이름을 댄다 — **거둔 것이 지으려던 것이면 그건 쓸개가 아니라 파괴다.**
+        java.util.Map<Material, Integer> what = new java.util.TreeMap<>();
+        java.util.Map<Material, Integer> kept = new java.util.TreeMap<>();   // 떠 있으나 지우지 않은 것
         for (int x = zone.x1(); x <= zone.x2(); x++) {
             for (int z = zone.z1(); z <= zone.z2(); z++) {
                 for (int y = zone.y1(); y <= zone.y2(); y++) {
@@ -247,12 +258,14 @@ final class RemoteBuilder {
                     if (block.getType().isAir()) {
                         continue;
                     }
-                    if (world.getBlockAt(x, y - 1, z).getType().isAir()
-                            && world.getBlockAt(x, y + 1, z).getType().isAir()
-                            && world.getBlockAt(x + 1, y, z).getType().isAir()
-                            && world.getBlockAt(x - 1, y, z).getType().isAir()
-                            && world.getBlockAt(x, y, z + 1).getType().isAir()
-                            && world.getBlockAt(x, y, z - 1).getType().isAir()) {
+                    if (protectedFrom(block.getType(), kind)) {
+                        if (isOrphan(world, x, y, z)) {
+                            kept.merge(block.getType(), 1, Integer::sum);   // 떠 있다. 그러나 지우지 않는다
+                        }
+                        continue;
+                    }
+                    if (isOrphan(world, x, y, z)) {
+                        what.merge(block.getType(), 1, Integer::sum);
                         block.setType(Material.AIR, false);   // 이웃 갱신 불필요 — 이웃이 없다
                         swept++;
                     }
@@ -260,8 +273,37 @@ final class RemoteBuilder {
             }
         }
         if (swept > 0) {
-            org.bukkit.Bukkit.getLogger().info("[건축] " + zone.name() + " — 흘린 블록 " + swept + "개를 거뒀다");
+            org.bukkit.Bukkit.getLogger().info("[건축] " + zone.name() + " — 흘린 블록 " + swept + "개를 거뒀다: "
+                    + what);
         }
+        if (!kept.isEmpty()) {
+            // 감추지 않는다 — 이것은 건축의 흠이다 (사슬 빠진 등롱 따위). 쓸개가 치울 일이 아니다.
+            org.bukkit.Bukkit.getLogger().info("[건축] " + zone.name() + " — 떠 있으나 남겨 둔 것: " + kept
+                    + " (불과 계약 자재는 건드리지 않는다)");
+        }
+    }
+
+    /** 쓸개가 손대면 안 되는 것 — <b>불</b>과 <b>그 집을 그 집으로 만드는 자재</b> */
+    private static boolean protectedFrom(Material m, Archetype kind) {
+        if (m.createBlockData().getLightEmission() > 0) {
+            return true;   // 불. 지우면 밤에 사람이 죽는다
+        }
+        for (Need need : contract(kind)) {
+            if (need.material() == m) {
+                return true;   // 검수가 세는 것 — 쓸개가 치우면 쓸개가 곧 파괴다
+            }
+        }
+        return false;
+    }
+
+    /** 여섯 면이 전부 허공인가 */
+    private static boolean isOrphan(World world, int x, int y, int z) {
+        return world.getBlockAt(x, y - 1, z).getType().isAir()
+                && world.getBlockAt(x, y + 1, z).getType().isAir()
+                && world.getBlockAt(x + 1, y, z).getType().isAir()
+                && world.getBlockAt(x - 1, y, z).getType().isAir()
+                && world.getBlockAt(x, y, z + 1).getType().isAir()
+                && world.getBlockAt(x, y, z - 1).getType().isAir();
     }
 
     /** 부지 반경 — 산채는 좁고(목책 R=22), 나머지는 넓다. <b>MvtCommand 의 forgeRadius 와 같은 값이다</b> */

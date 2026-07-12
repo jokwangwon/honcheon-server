@@ -55,6 +55,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "운기" -> meditate(sender);
+                case "태세" -> stance(sender, args);         // 맞는 쪽의 선택 — 회피·막기·흘리기 (기본은 자동)
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
                 case "조감" -> renderTown(sender, args);   // 조감도 PNG — 콘솔 가능 (인자 = 지역id)
@@ -1315,6 +1316,32 @@ public final class MvtCommand implements CommandExecutor {
         player.sendMessage(ChatColor.YELLOW + "접합 코드 " + ChatColor.WHITE + ChatColor.BOLD + code);
         player.sendMessage(ChatColor.GRAY + "디스코드에서 " + ChatColor.WHITE + "/혼천 접속 코드:" + code
                 + ChatColor.GRAY + " (유효 " + (WorldBridge.linkTtlSeconds() / 60) + "분)");
+        return true;
+    }
+
+    /**
+     * <b>/혼천 태세 [회피|막기|흘리기|자동]</b> — <b>맞는 쪽의 선택.</b>
+     *
+     * <p>세 방어는 세 능력치의 뒷면이다 — 신법(민첩)→회피 · 외공(근력)→막기 · 심안(감각)→흘리기.
+     * 그전까진 이 셋이 <b>config 에만 있고 엔진에 없었다</b>. 수련의 절반이 살 곳이 없었다.
+     *
+     * <p><b>없어도 굴러간다.</b> 기본값은 <b>자동</b>이고, 자동은 그 사람의 수련을 보고 가장 좋은 태세를 고른다 —
+     * 명령을 모르는 자가 제 빌드에 안 맞는 태세로 죽으면 안 된다. 그리고 <b>몸짓이 언제나 덮어쓴다</b>
+     * (방패=막기 · 웅크림=흘리기 · 달림=회피). 바닐라가 이미 가진 세 자세다 —
+     * 그래서 <b>남의 눈에도 보인다.</b> "보이는 것 = 맞는 것"이 방어에도 선다.
+     */
+    private boolean stance(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "몸이 있어야 태세가 있다.");
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GRAY + "/혼천 태세 <회피|막기|흘리기|자동>");
+            player.sendMessage(ChatColor.DARK_GRAY
+                    + "  몸짓이 덮어쓴다 — 방패=막기 · 웅크림=흘리기 · 달림=회피");
+            return true;
+        }
+        plugin.skills().setStance(player, args[1]);
         return true;
     }
 }

@@ -63,6 +63,14 @@ public final class SkillListener implements Listener {
     private static final double NPC_REACH = 3.5;
     /** 응집이 끝난 뒤 격이 실려 있는 창 — 바닐라 근접 AI 의 스윙 타이밍을 우리가 못 정한다 (근사) */
     private static final int NPC_HOT_TICKS = 20;
+    /**
+     * NPC 의 고정 판정치 — {@code combat.yml attack.defender_bonus}: <i>"+2d6(플레이어) 또는 +7(NPC)"</i>.
+     * <b>한쪽만 굴린다</b> — 플레이어가 2d6 을 굴리고 NPC 는 기댓값(7)으로 선다.
+     * ({@code tools/combat_audit.py margin_dist} 가 쓰는 것과 같은 규약이다 — 도구와 엔진은 같은 셈을 한다)
+     */
+    private static final int NPC_JUDGMENT = 7;
+    /** 태세의 글자가 액션바에 머무는 시간 — statusBar 가 다시 덮기 전 (0.75초. 읽을 수는 있어야 한다) */
+    private static final int STANCE_READ_TICKS = 15;
     // NPC 내력 회복의 하드코딩(라운드당 1)은 제거됐다 — 이제 조식(internal_energy.yml
     // recovery.in_combat.조식)을 플레이어와 **같은 함수**로 탄다 (regulateBreath).
 
@@ -76,6 +84,13 @@ public final class SkillListener implements Listener {
     private final Map<UUID, SkillEngine.State> npcStates = new HashMap<>();
     /** 무기 격돌 누적 — 몸(플레이어·NPC)당. breaks_at 회째에 병기가 부러진다 (weapon_break) */
     private final Map<UUID, Integer> clashCounts = new HashMap<>();
+    /**
+     * <b>몸에 밴 태세</b> — {@code /혼천 태세 <회피|막기|흘리기|자동>}. 없으면 등록부의 기본값(자동).
+     * 몸짓(방패·웅크림·질주)이 그 순간 이것을 <b>덮어쓴다</b> (combat.yml defender_stance_mc.precedence).
+     */
+    private final Map<UUID, String> stancePin = new HashMap<>();
+    /** 지금 이 몸이 서 있는 태세 — HUD 가 그린다 (화면이 판정에 대해 거짓말하지 않게) */
+    private final Map<UUID, String> stanceNow = new HashMap<>();
     private final List<Pending> pending = new ArrayList<>();
 
     private long tick;
@@ -190,8 +205,8 @@ public final class SkillListener implements Listener {
             // 생명 — 경지·장비가 바뀌면 다음 틱에 몸이 따라온다 (훅은 빠뜨리면 조용히 틀리고, 대조는 못 빠뜨린다)
             hud.vitalityTick(player, state, plugin.ledger(player.getUniqueId()));
             hud.energyBar(player, state);
-            // 내구·부상은 격이 없어도 보인다 — 게이트를 두면 **삼류가 제 목숨을 영영 못 본다**
-            hud.statusBar(player, state, tick);
+            // 내구·부상·태세는 격이 없어도 보인다 — 게이트를 두면 **삼류가 제 목숨을 영영 못 본다**
+            hud.statusBar(player, state, tick, stanceOf(player));
         }
     }
 
@@ -437,13 +452,124 @@ public final class SkillListener implements Listener {
             }
         }
 
-        Defense defense = defend(target, attacker, grade, event.getDamage());
-        if (defense.blocked()) {
+        // ★ 【맞는 쪽의 선택】 방어자가 태세를 세운다 — 회피(민첩+경공) · 막기(근력) · 흘리기(감각)
+        //   여기가 수련의 절반이 사는 자리다. 그전엔 근력·감각·민첩을 아무리 키워도
+        //   **맞을 때 아무 일도 일어나지 않았다.**
+        int attackers = attackersOn(target);
+        boolean surrounded = engine.surrounded(attackers);
+        String stance = chooseStance(target, surrounded);
+        Guardline line = stance == null ? null : guardline(target, stance, surrounded);
+        String note = stanceNote(target, stance, surrounded);
+
+        double incoming = event.getDamage();
+        if (line != null) {
+            // 대립 판정 — 공격 총합(+7) vs 태세 판정치 + 2d6(플레이어) / +7(NPC)
+            int atk = foeAttackScore(attacker, target, attackers);
+            int roll = target instanceof Player ? roll2d6() : NPC_JUDGMENT;
+            int margin = atk - (line.score() + roll);
+            if (margin < 0) {
+                // 태세가 이겼다 — 안 맞는다. 회피면 GyeonggongListener(MONITOR)가 몸을 뒤로 뺀다
+                event.setCancelled(true);
+                stanceSucceeded(target, line, margin, note);
+                return;
+            }
+            // 맞았다 — 그러나 태세는 값을 한다: 피해 = 무기 + 무공 + 격 + floor(마진/2) − 경감
+            //   ★ floor(마진/2) 항이 지금까지 NPC 공격에 통째로 빠져 있었다 (combat.yml damage.formula).
+            //     그 항이 없으면 방어 판정치가 명중/빗나감만 흔들고 **피해의 크기를 못 흔든다** —
+            //     그러면 흘리기의 −2 는 순손해가 되고, 판정을 키우는 수련이 절반만 산다.
+            incoming += foeTechniquePower(attacker) + Math.floorDiv(margin, 2);
+            incoming -= line.soak();
+            stanceFailed(target, line, margin, note);
+            if (line.clashes()) {
+                clashWeapon(target, grade);   // 막기는 무기를 태워 목숨을 산다 (회피·흘리기는 접촉이 없다)
+            }
+        }
+        incoming -= armorSoak(target, grade);   // 갑옷 — 태세와 무관하게 언제나. 단 강기 앞에서는 0
+
+        Defense defense = defend(target, attacker, grade, Math.max(0.0, incoming));
+        if (defense.blocked() || defense.damage() <= 0.0) {
             event.setCancelled(true);
             return;
         }
         event.setDamage(defense.damage());
-        clashWeapon(target, grade);                            // 무기가 격을 견뎌야 한다 (원칙 3)
+        if (line == null) {
+            clashWeapon(target, grade);   // 태세 층이 없던 시절의 경로 (Growth 미배선) — 옛 동작 그대로
+        }
+    }
+
+    /**
+     * <b>빌드의 대가를 규칙이 아니라 화면이 가르친다.</b>
+     *
+     * <p>둘 있다: ① 회피를 고르고 서 있었는데 <b>둘에게 잡혔다</b> — "몸을 뺄 자리가 없다"
+     * (신법 빌드가 다구리에서 벌거벗는 순간. 그것이 규칙이고, 화면이 그 말을 한다).
+     * ② 막기를 골랐는데 <b>손이 비었다</b> — "받을 것이 없다" (경감은 든다. 부러질 물건이 없을 뿐).
+     */
+    private String stanceNote(LivingEntity body, String stance, boolean surrounded) {
+        Growth growth = Growth.get();
+        if (growth == null || stance == null || !(body instanceof Player player)) {
+            return "";
+        }
+        String wanted = stancePin.get(player.getUniqueId());
+        if (wanted == null && player.isSprinting()) {
+            wanted = engine.stanceOfGesture("isSprinting");
+        }
+        if (surrounded && wanted != null && growth.lostWhenSurrounded(wanted)) {
+            return ChatColor.DARK_RED + " │ " + stanceLabel("회피_봉쇄");
+        }
+        EntityEquipment gear = player.getEquipment();
+        if (growth.clashes(stance) && (gear == null || gear.getItemInMainHand().getType().isAir())) {
+            return ChatColor.GRAY + " │ " + stanceLabel("맨손_막기");
+        }
+        return "";
+    }
+
+    /**
+     * 방어자가 지금 세우는 태세 한 줄 — <b>플레이어든 NPC든 같은 규칙</b> (대칭 원칙).
+     * {@code null} 이면 성장 축이 미배선 — 호출자는 조용히 옛 동작(고정 난이도)으로 돌아간다.
+     */
+    private Guardline defenderStance(LivingEntity target) {
+        if (Growth.get() == null) {
+            return null;
+        }
+        boolean surrounded = engine.surrounded(attackersOn(target));
+        String stance = chooseStance(target, surrounded);
+        return stance == null ? null : guardline(target, stance, surrounded);
+    }
+
+    /** 2d6 — 전투는 주사위를 쓴다 (판정 밖의 조성기는 난수를 안 쓴다. 전투만 예외다) */
+    private static int roll2d6() {
+        return ThreadLocalRandom.current().nextInt(6) + 1 + ThreadLocalRandom.current().nextInt(6) + 1;
+    }
+
+    /**
+     * <b>태세가 이겼다</b> — 화면이 그 사실을 말한다 (파티클·소리·글자. 팩이 없어도 셋 다 보인다).
+     * 회피면 {@code event.setCancelled(true)} 위에서 {@link GyeonggongListener#onDodged} 가
+     * 몸을 <b>실제로 뒤로 뺀다</b> — 경공 담당이 깔아 둔 이음매다.
+     */
+    private void stanceSucceeded(LivingEntity body, Guardline line, int margin, String note) {
+        stanceFx(body, line.stance());
+        if (!(body instanceof Player player)) {
+            return;
+        }
+        stanceNow.put(player.getUniqueId(), line.stance());
+        hud.flash(player, ChatColor.AQUA + stanceLabel(line.stance())
+                + ChatColor.DARK_GRAY + " │ 방어 " + line.score() + " (마진 " + margin + ")" + note,
+                tick + STANCE_READ_TICKS);
+    }
+
+    /** <b>태세가 무너졌다</b> — 그래도 경감은 든다 (막는 것은 판정이 아니라 몸이다) */
+    private void stanceFailed(LivingEntity body, Guardline line, int margin, String note) {
+        stanceFx(body, line.soak() > 0 ? line.stance() : "실패");
+        if (!(body instanceof Player player)) {
+            return;
+        }
+        stanceNow.put(player.getUniqueId(), line.stance());
+        String head = line.soak() > 0
+                ? ChatColor.YELLOW + stanceLabel(line.stance())
+                        + ChatColor.DARK_GRAY + " (경감 −" + line.soak() + ")"
+                : ChatColor.RED + stanceLabel("실패");
+        hud.flash(player, head + ChatColor.DARK_GRAY + " │ 마진 " + margin + note,
+                tick + STANCE_READ_TICKS);
     }
 
     /** 허공 좌클릭 = 헛손질(콤보는 진행된다) / Shift+좌클릭 = 발출 / Shift+우클릭 = 격 태세 */
@@ -770,9 +896,15 @@ public final class SkillListener implements Listener {
                 int execBase = attrBonus + mastery + engine.weaponJudgmentBonus(weaponGrade(player))
                         + engine.realmGapBonus(state.realm, foeRealm(target, hostile))
                         + (engine.isDepleted(state.energy) ? -2 : 0);   // 내공 고갈 = 판정 -2
-                int resist = engine.difficulty(hostile ? "보통" : "쉬움");
-                int roll = ThreadLocalRandom.current().nextInt(6) + 1
-                        + ThreadLocalRandom.current().nextInt(6) + 1;   // 전투는 주사위를 쓴다
+
+                // ★ 【대칭】 상대도 태세를 세운다 — 저항치가 고정 난이도(보통 12)가 아니라
+                //   **그 몸이 고른 방어**다. 그전엔 상대가 무엇을 하든 언제나 12 였다
+                //   (등록부는 회피·막기·흘리기를 적어 뒀는데, 엔진의 NPC 는 서 있기만 했다).
+                //   저항 = 태세 판정치 + 7 (NPC 는 굴리지 않는다 — combat.yml defender_bonus).
+                Guardline foeLine = defenderStance(target);
+                int resist = foeLine != null ? foeLine.score() + NPC_JUDGMENT
+                        : engine.difficulty(hostile ? "보통" : "쉬움");
+                int roll = roll2d6();   // 전투는 주사위를 쓴다
 
                 SkillEngine.Strike strike = engine.strike(cast, execBase, roll, resist);
                 touchCombat(state);
@@ -780,14 +912,28 @@ public final class SkillListener implements Listener {
                     gainFlow(player, state);   // 발동권 — 읽어낸 순간이 쌓인다 (오의 충전의 실체)
                 }
                 if (!strike.hit()) {
+                    if (foeLine != null) {
+                        stanceFx(target, foeLine.stance());   // 상대가 무엇으로 살아났는지 보인다
+                    }
                     continue;
                 }
-                // 상대의 기 방어·무기가 같은 규칙으로 판정된다 (대칭)
-                Defense defense = defend(target, player, cast.grade(), strike.damage());
-                if (defense.blocked()) {
-                    continue;   // 기 방어가 먹었다 — 검이 닿지 않았으니 격돌도 없다
+                // 상대의 경감 — 태세는 맞아도 값을 한다 (막기 −3 · 흘리기 −1). 갑옷은 그 뒤에 든다
+                double raw = strike.damage();
+                if (foeLine != null) {
+                    raw -= foeLine.soak();
+                    if (foeLine.clashes()) {
+                        clashWeapon(target, cast.grade());   // 막기 — 그 몸의 무기가 내 격을 먹는다
+                    }
                 }
-                clashWeapon(target, cast.grade());   // 무기가 격을 견뎌야 한다 (원칙 3)
+                raw -= armorSoak(target, cast.grade());
+                // 상대의 기 방어·무기가 같은 규칙으로 판정된다 (대칭)
+                Defense defense = defend(target, player, cast.grade(), Math.max(0.0, raw));
+                if (defense.blocked() || defense.damage() <= 0.0) {
+                    continue;   // 기 방어·태세·갑옷이 먹었다 — 검이 닿지 않았으니 격돌도 없다
+                }
+                if (foeLine == null) {
+                    clashWeapon(target, cast.grade());   // 태세 층이 없던 시절의 경로 (원칙 3)
+                }
                 hits++;
                 applying = true;
                 try {
@@ -853,7 +999,295 @@ public final class SkillListener implements Listener {
         }
     }
 
-    // ══════════ 방어 — 기 방어(호신강기) · 반격 오의 · 무기 격돌 ══════════
+    // ══════════════════════════════════════════════════════════════════════════
+    //  방어 태세 삼문(三門) — 【맞는 쪽의 선택】
+    //
+    //  combat.yml 은 방어 셋을 **완전히 정의해 두고** 있었다 (회피·막기·흘리기). 엔진에는 하나도 없었다 —
+    //  있는 것은 호신강기(내력으로 막는 것)뿐이었고, 그래서 **수련의 절반이 살 곳이 없었다**:
+    //  근력·감각·민첩에 구간을 부어도 **맞을 때 아무 일도 일어나지 않았다.**
+    //
+    //  ★ 누가 고르는가 — **둘 다.** 마인크래프트는 턴제가 아니라 맞는 순간에 메뉴를 못 띄운다.
+    //    ① 몸짓이 먼저다 — 바닐라가 **이미 가진 세 자세**를 읽는다:
+    //         손을 세우면(isBlocking) 받아 내는 것 · 몸을 낮추면(isSneaking) 흘리는 것 ·
+    //         발이 이미 움직이면(isSprinting) 빼는 것.
+    //       새 입력 채널을 열지 않았다. 그래서 **남의 눈에도 보인다** — 상대가 내 자세를 읽고 수를 고른다.
+    //    ② 몸에 밴 태세 — `/혼천 태세`. 무인은 제 자세가 있다.
+    //    ③ 자동 — 몸이 아는 대로 (Growth.bestStance). **기본값이 이것이다.**
+    //       그래서 아무것도 안 배운 삼류도 **제 목숨을 본다** (게이트 없음 — 이 프로젝트가 한 번 데인 죄).
+    //
+    //  ★ 쿨다운이 없다. 태세를 막는 것은 **내력·자세·상황**이다:
+    //    갑옷이 회피를 팔고 · 막기가 무기를 태우고 · 포위가 회피를 지운다.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** 이 몸이 이 합에 서는 태세 — 이름 · 판정치 · 경감 · 무기가 상하는가 */
+    private record Guardline(String stance, int score, int soak, boolean clashes) {
+    }
+
+    /** {@code /혼천 태세 <회피|막기|흘리기|자동>} — MvtCommand 가 부른다 */
+    public void setStance(Player player, String stance) {
+        Growth growth = Growth.get();
+        String auto = engine.stanceDefault();
+        if (growth == null) {
+            SkillHud.actionBar(player, ChatColor.GRAY + "성장 축이 배선되지 않았다");
+            return;
+        }
+        if (auto.equals(stance)) {
+            stancePin.remove(player.getUniqueId());
+            player.sendMessage(ChatColor.AQUA + "태세 — " + auto
+                    + ChatColor.GRAY + " (몸이 아는 대로 선다. 판정치 + 경감이 가장 높은 태세)");
+            return;
+        }
+        if (!growth.stanceNames().contains(stance)) {
+            player.sendMessage(ChatColor.GRAY + "그런 태세는 없다 — "
+                    + String.join(" · ", growth.stanceNames()) + " · " + auto);
+            return;
+        }
+        stancePin.put(player.getUniqueId(), stance);
+        Growth.Stance st = growth.stance(stance);
+        player.sendMessage(ChatColor.AQUA + "태세 — " + stance
+                + ChatColor.GRAY + " (" + st.attribute() + " + " + st.skill()
+                + (st.soak() > 0 ? " · 경감 −" + st.soak() : "")
+                + (st.penalty() != 0 ? " · 판정 " + st.penalty() : "")
+                + (st.weaponSafe() ? " · 무기 안전" : " · 무기가 격을 먹는다") + ")");
+    }
+
+    /** 지금 서 있는 태세 — HUD 가 그린다 (아직 한 대도 안 맞았으면 지금 몸짓으로 계산해 보인다) */
+    public String stanceOf(Player player) {
+        String now = stanceNow.get(player.getUniqueId());
+        return now != null ? now : chooseStance(player, false);
+    }
+
+    /**
+     * <b>태세를 고른다</b> — 몸짓 → 지정 → 자동 (combat.yml defender_stance_mc.precedence).
+     *
+     * <p>포위되면 회피가 사라진다 ({@code forced_guard.loses}) — 몸을 뺄 자리가 없으면 못 고른다.
+     * 회피를 고른 채 포위당한 자는 <b>화면이 그 사실을 가르친다</b>: "몸을 뺄 자리가 없다".
+     */
+    private String chooseStance(LivingEntity body, boolean surrounded) {
+        Growth growth = Growth.get();
+        if (growth == null) {
+            return null;
+        }
+        String picked = null;
+        if (body instanceof Player player) {
+            // ① 몸짓 — 손과 발이 이미 말하고 있다 (등록부가 술어 이름을 준다. 코드가 몸짓을 짓지 않는다)
+            if (player.isBlocking()) {
+                picked = engine.stanceOfGesture("isBlocking");
+            } else if (player.isSneaking()) {
+                picked = engine.stanceOfGesture("isSneaking");
+            } else if (player.isSprinting()) {
+                picked = engine.stanceOfGesture("isSprinting");
+            }
+            // ② 몸에 밴 태세
+            if (picked == null) {
+                picked = stancePin.get(player.getUniqueId());
+            }
+        }
+        if (picked != null && surrounded && growth.lostWhenSurrounded(picked)) {
+            picked = null;   // 회피를 골랐으나 뺄 자리가 없다 — 몸이 남은 것 중에서 고른다
+        }
+        if (picked != null) {
+            return picked;
+        }
+        // ③ 자동 — 몸이 아는 대로. 삼류도 여기서 제 목숨을 본다 (게이트 없음)
+        if (body instanceof Player player) {
+            PlayerLedger led = plugin.ledger(player.getUniqueId());
+            return growth.bestStance(led, weaponSkill(player), gyeonggongSkill(player),
+                    armorDodge(player), surrounded);
+        }
+        return npcBestStance(body, surrounded);
+    }
+
+    /** 병기 기술 — 막기·흘리기의 '기술' 항 (지금 손에 든 병기로 나가는 주무공의 숙련) */
+    private int weaponSkill(Player player) {
+        String skillId = skillInHand(player);
+        return skillId == null ? 0
+                : plugin.ledger(player.getUniqueId())
+                        .levelOf(engine.skillName(skillId), plugin.progression());
+    }
+
+    /**
+     * 경공 — <b>회피의 '기술' 항</b> ({@code combat.yml defender_choice.회피.check = "민첩 + 경공"}).
+     * 경공 담당이 깔아 둔 이음매({@link Gyeonggong#gyeonggongMastery})가 여기서 처음으로 쓰인다.
+     *
+     * <p><b>철갑은 경공을 못 쓴다</b> ({@code gyeonggong.yml armor_gate} — 경공_불가).
+     * 그러면 이 항은 <b>0</b> 이다. 갑옷이 회피를 파는 두 번째 방식이다 (판정 −2 위에 기술 항 상실).
+     */
+    private int gyeonggongSkill(Player player) {
+        Gyeonggong gg = Gyeonggong.get();
+        if (gg == null) {
+            return 0;
+        }
+        if (gg.blocksGyeonggong(armorOf(player))) {
+            return 0;   // 철갑이 몸을 땅에 붙든다 — 발의 기술이 통째로 사라진다
+        }
+        return gg.gyeonggongMastery(plugin.ledger(player.getUniqueId()), plugin.progression());
+    }
+
+    /** 이 몸이 입은 갑옷 계열 (equipment.yml armor) — 바닐라 흉갑을 등록부로 읽는다 */
+    private String armorOf(LivingEntity body) {
+        Gyeonggong gg = Gyeonggong.get();
+        EntityEquipment gear = body.getEquipment();
+        ItemStack chest = gear == null ? null : gear.getChestplate();
+        String material = chest == null || chest.getType().isAir() ? null : chest.getType().name();
+        return gg == null ? "무복" : gg.armorOf(material);
+    }
+
+    /** 갑옷이 파는 것 — 회피 판정 (무복 0 · 피갑 −1 · 철갑 −2). 막기·흘리기는 갑옷을 신경 쓰지 않는다 */
+    private int armorDodge(LivingEntity body) {
+        return engine.armorDodgePenalty(armorOf(body));
+    }
+
+    /**
+     * 갑옷이 사는 것 — <b>경감</b>. 이것이 없어서 지금까지 <b>갑옷은 손해만 봤다</b>
+     * (회피를 팔고 아무것도 못 받았다).
+     *
+     * <p><b>단, 상위 격 앞에서는 0 이다</b> ({@code equipment.yml mitigation_pierced_from: 강기} —
+     * 등록부의 프로즈가 이미 그어 둔 선: <i>"격 상성은 못 이긴다 — 검강 앞 피갑은 종이"</i>).
+     * 그래서 갑옷은 <b>졸개에게 강하고 고수에게 무력하다</b> — 그것이 갑옷의 지배 전략을 스스로 막는다.
+     */
+    private int armorSoak(LivingEntity body, String grade) {
+        return engine.armorPierced(grade) ? 0 : engine.armorMitigation(armorOf(body));
+    }
+
+    /** 이 몸을 지금 붙잡고 있는 손의 수 — 포위 판정 (둘 이상이면 회피가 사라진다) */
+    private int attackersOn(LivingEntity defender) {
+        int n = 0;
+        for (org.bukkit.entity.Entity e : defender.getNearbyEntities(NPC_REACH + 1.0, 2.5, NPC_REACH + 1.0)) {
+            if (e instanceof Mob mob && mob.isValid() && defender.equals(mob.getTarget())) {
+                n++;
+            }
+        }
+        return Math.max(1, n);
+    }
+
+    /**
+     * 이 합의 태세 한 줄 — 판정치 · 경감 · 무기가 상하는가.
+     *
+     * <p>판정치 = 능력치 + 기술 + 결 − 판정 비용 + 갑옷 ({@link Growth#defenseScore}).
+     * NPC 는 등록부의 능력치 시트를, 없으면 <b>그 경지의 표준 무인</b>을 쓴다
+     * ({@code combat_audit realm_axis} 와 같은 셈 — 도구와 엔진이 같은 사람을 세워야 도구가 안 거짓말한다).
+     */
+    private Guardline guardline(LivingEntity body, String stance, boolean surrounded) {
+        Growth growth = Growth.get();
+        Growth.Stance st = growth == null ? null : growth.stance(stance);
+        if (st == null) {
+            return new Guardline(stance, 0, 0, false);
+        }
+        int score;
+        if (body instanceof Player player) {
+            score = growth.defenseScore(plugin.ledger(player.getUniqueId()), stance,
+                    weaponSkill(player), gyeonggongSkill(player), armorDodge(player), surrounded);
+        } else {
+            score = npcDefenseScore(body, st, surrounded);
+        }
+        // 맨손은 태울 것이 없다 — 경감은 그대로 들지만 격돌 판정이 없다 (부러질 물건이 없으니까)
+        EntityEquipment gear = body.getEquipment();
+        ItemStack held = gear == null ? null : gear.getItemInMainHand();
+        boolean armed = held != null && !held.getType().isAir();
+        return new Guardline(stance, score, st.soak(), !st.weaponSafe() && armed);
+    }
+
+    /** NPC 의 방어 판정치 — 등록된 능력치, 없으면 경지의 표준 무인 (코드가 수치를 짓지 않는다) */
+    private int npcDefenseScore(LivingEntity body, Growth.Stance st, boolean surrounded) {
+        SkillEngine.Npc npc = npcOf(body);
+        String realm = foeRealm(body, true);
+        int attr = npc == null ? engine.realmAttr(realm)
+                : npc.attr(st.attribute(), engine.realmAttr(npc.realm()));
+        int skill = engine.realmSkill(realm);
+        Growth growth = Growth.get();
+        int pen = (surrounded && growth != null && growth.forcedFloor().equals(st.name()))
+                ? 0 : st.penalty();
+        return attr + skill + pen + (st.usesGyeonggong() ? armorDodge(body) : 0);
+    }
+
+    /** NPC 가 고르는 태세 — 기대 피해가 가장 작은 것 (플레이어와 같은 규칙. 대칭 원칙) */
+    private String npcBestStance(LivingEntity body, boolean surrounded) {
+        Growth growth = Growth.get();
+        String best = growth.forcedFloor();
+        int bestScore = Integer.MIN_VALUE;
+        for (String name : growth.stanceNames()) {
+            if (surrounded && growth.lostWhenSurrounded(name)) {
+                continue;
+            }
+            Growth.Stance st = growth.stance(name);
+            int score = npcDefenseScore(body, st, surrounded) + st.soak();
+            if (score > bestScore) {
+                bestScore = score;
+                best = name;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * <b>공격자의 판정 총합</b> — {@code combat.yml attack.attacker}:
+     * 능력치 + 무공 숙련 + 보정(경지 격차·협공) + <b>7</b> (NPC 는 굴리지 않는다).
+     *
+     * <p>능력치가 <b>어느 능력치인가</b>는 <b>병기가 정한다</b> ({@code attacker_attribute} —
+     * 도=근력 · 검=민첩 · 활/암기=감각). 등록되지 않은 몸(야생 좀비·짐승)은 그 경지의 표준 무인이다.
+     */
+    private int foeAttackScore(LivingEntity attacker, LivingEntity defender, int attackers) {
+        SkillEngine.Npc npc = npcOf(attacker);
+        Growth growth = Growth.get();
+        String realm = foeRealm(attacker, true);
+        String weaponClass = npc == null ? "맨손" : npc.weaponClass();
+        String attr = growth == null ? "근력" : growth.attackAttribute(weaponClass);
+        int base = npc == null ? engine.realmAttr(realm) : npc.attr(attr, engine.realmAttr(npc.realm()));
+        // 협공 − 피포위 방어 = 0 (같은 눈금이다 — combat.yml 이 그렇게 못 박아 뒀다).
+        // 머릿수는 '더 잘 맞히는 것'이 아니라 '더 많이 치는 것'이다 (engage_slots).
+        return base + engine.realmSkill(realm)
+                + engine.realmGapBonus(realm, defenderRealm(defender))
+                + engine.gangNetModifier(attackers)
+                + NPC_JUDGMENT;
+    }
+
+    /** 방어자의 경지 — 플레이어면 제 경지, NPC면 등록부의 경지 */
+    private String defenderRealm(LivingEntity defender) {
+        if (defender instanceof Player player) {
+            return state(player).realm;
+        }
+        return foeRealm(defender, true);
+    }
+
+    /**
+     * <b>공격자의 무공 위력</b> — {@code damage.formula} 의 둘째 항. 짐승·야생 몸은 0 이다
+     * (이빨에는 초식이 없다). 등록부의 사람만 제 경지의 무공 위력을 싣는다.
+     */
+    private int foeTechniquePower(LivingEntity attacker) {
+        SkillEngine.Npc npc = npcOf(attacker);
+        if (npc == null || npc.isBeast()) {
+            return 0;
+        }
+        return engine.techniquePower(npc.realm());
+    }
+
+    /**
+     * <b>태세 연출</b> — 화면이 판정에 대해 거짓말하면 안 된다.
+     * 막았으면 막았다고, 흘렸으면 흘렸다고, 피했으면 피했다고. <b>팩이 없어도 보인다</b>
+     * (파티클·소리·글자 셋 다 바닐라 — 등록부는 이름만 준다: combat.yml defender_stance_mc.vfx).
+     */
+    private void stanceFx(LivingEntity body, String key) {
+        SkillEngine.StanceFx fx = engine.stanceFx(key);
+        if (fx == null) {
+            return;   // 등록되지 않은 연출 — 조용히 지나간다 (연출이 없다고 판정이 멈추지 않는다)
+        }
+        Location at = body.getLocation().add(0, 1.2, 0);
+        if (fx.hasParticle()) {
+            hud.emit(at, fx.particle(), fx.count(), fx.spread(), 0.0);
+        }
+        if (fx.sound() != null && at.getWorld() != null) {
+            at.getWorld().playSound(at, fx.sound(), 1.0f, fx.pitch());
+        }
+    }
+
+    /** 태세의 글자 — 액션바에 잠깐 뜬다 (statusBar 가 다시 덮기 전까지 read_ticks 동안) */
+    private String stanceLabel(String key) {
+        SkillEngine.StanceFx fx = engine.stanceFx(key);
+        return fx == null ? key : fx.label();
+    }
+
+    // ══════════ 방어 — 태세 → 기 방어(호신강기) → 갑옷 ══════════
 
     /** 한 대를 받아 낸 결과 — 무효(blocked) 이거나, 깎여서 들어온다 (관통 = 격 위력 차) */
     private record Defense(boolean blocked, double damage) {
@@ -887,6 +1321,16 @@ public final class SkillListener implements Listener {
         }
 
         // 태극혜검 — 패링의 극의. 지속 중 받은 공격 1회를 무효화하고 위력 그대로 반사한다
+        return defendInner(target, attacker, grade, incoming, state);
+    }
+
+    /**
+     * <b>기(氣)의 층</b> — 반격 오의 · 호신강기. 태세(몸)가 못 막은 것을 <b>기</b>가 받는다.
+     * 태세는 이 앞에 선다 — 회피가 성공하면 여기까지 오지 않고, 호신강기의 내력도 <b>깎이지 않는다</b>
+     * (몸을 뺀 자는 기를 아낀다 — 회피의 숨은 값).
+     */
+    private Defense defendInner(LivingEntity target, LivingEntity attacker, String grade,
+                                double incoming, SkillEngine.State state) {
         if (tick <= state.counterUntil) {
             state.counterUntil = -1;
             Location at = target.getLocation().add(0, 1, 0);
@@ -1711,9 +2155,12 @@ public final class SkillListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        states.remove(event.getPlayer().getUniqueId());
-        clashCounts.remove(event.getPlayer().getUniqueId());
-        display.clear(event.getPlayer().getUniqueId());   // 떠난 몸의 형체는 남지 않는다
+        UUID id = event.getPlayer().getUniqueId();
+        states.remove(id);
+        clashCounts.remove(id);
+        stanceNow.remove(id);   // 지정 태세(stancePin)는 남긴다 — 몸에 밴 것은 로그아웃으로 안 풀린다
+        hud.forget(id);
+        display.clear(id);      // 떠난 몸의 형체는 남지 않는다
     }
 
     /** 죽은 몸의 내력은 남지 않는다 (F-P2 cleanup_on death) */

@@ -1114,12 +1114,15 @@ public final class HuntingGrounds implements Listener {
         }
         if (foes.indexOf(mob) >= engageSlots) {
             event.setCancelled(true);   // 대기 — 앞선 자가 무력화·후퇴해야 슬롯이 열린다
-            return;
         }
-        int soak = Math.max(0, foes.size() - 1) >= forcedGuardFrom ? forcedGuardSoak : 0;
-        if (soak > 0) {
-            event.setDamage(Math.max(0.0, event.getDamage() - soak));
-        }
+        // ★ 【이관】 강제 태세의 경감(−1)은 여기서 빠졌다 — 이제 **방어 태세 층**이 낸다
+        //   (SkillListener.npcStrike → chooseStance/guardline). 이유:
+        //     이 자리는 포위된 자가 **무엇으로 받는지 모른다**. 등록부는 흘리기(−1)를 바닥으로 주되
+        //     막기(−3, 무기가 격을 먹는다)도 허용한다 (forced_guard.also_allowed).
+        //     여기서 −1 을 일괄로 빼면 태세를 고른 자와 안 고른 자가 같아지고,
+        //     태세 층이 또 빼면 **경감이 두 번** 든다 (둘이 덤비는 것이 하나보다 덜 아파진다 —
+        //     등록부가 명시적으로 금지한 뒤집힘이다).
+        //   forcedGuardFrom·forcedGuardSoak 필드는 남는다: 이 클래스의 사냥 시뮬(`/혼천 사냥검수`)이 쓴다.
     }
 
     // ══════════════ 바닐라 행동의 봉인 ══════════════

@@ -115,6 +115,23 @@ public final class SkillEngine {
     private final int drainEqual;
     private final int drainHigher;
 
+    // ─── 방어 태세 (combat.yml attack.defender_stance_mc) — 맞는 쪽의 선택 ───
+    /** 몸짓 → 태세 (isBlocking → 막기 · isSneaking → 흘리기 · isSprinting → 회피). 코드가 몸짓을 짓지 않는다 */
+    private final Map<String, String> stanceGestures = new LinkedHashMap<>();
+    private final String stanceDefault;
+    /** 태세 연출 — 파티클·소리·글자. 팩이 없어도 셋 다 보인다 (전부 바닐라) */
+    private final Map<String, StanceFx> stanceFx = new LinkedHashMap<>();
+
+    // ─── 갑옷 (equipment.yml armor) — "갑옷은 회피를 판다" 의 반대급부 ───
+    /** 갑옷의 경감이 지나가는 격 (강기 — "검강 앞 피갑은 종이") */
+    private final String armorPiercedFrom;
+
+    // ─── 표준 무인의 축 (combat_audit realm_axis 와 같은 판독) — NPC 능력치 시트의 폴백 ───
+    /** 경지별 능력치 상한 — player_creation.yml attribute_cap_by_realm */
+    private final Map<String, Integer> attrCapByRealm = new LinkedHashMap<>();
+    /** 경지별 주력 숙련 — cultivation.yml promotion.requirements "주력 무공 숙련 N" (누적) */
+    private final Map<String, Integer> realmSkill = new LinkedHashMap<>();
+
     // NPC — 대칭 원칙 (npc_combat.yml symmetry). 등록부는 npcs/cheongha_npcs.yml 이 정본
     private final Map<String, Npc> npcs;
     private final Map<String, Double> naegongFloor;        // cultivation.yml promotion "내공 N"
@@ -242,6 +259,49 @@ public final class SkillEngine {
                 : RulesConfig.section(RulesConfig.section(attack, "defender_choice"), stance)
                         .get("damage_reduction");
         this.forcedGuardSoak = soak instanceof Number n5 ? n5.intValue() : 0;
+
+        // ─── 방어 태세 — 【맞는 쪽의 선택】 몸짓·기본값·연출을 전부 등록부에서 읽는다 ───
+        //   마인크래프트는 턴제가 아니다. 맞는 순간에 메뉴를 못 띄운다 —
+        //   그래서 바닐라가 **이미 가진 세 자세**(손을 세운다·몸을 낮춘다·발이 움직인다)를 읽는다.
+        Map<String, Object> mc = RulesConfig.section(attack, "defender_stance_mc");
+        RulesConfig.section(mc, "gestures")
+                .forEach((posture, predicate) -> stanceGestures.put(String.valueOf(predicate), posture));
+        this.stanceDefault = String.valueOf(mc.getOrDefault("default", "자동"));
+        RulesConfig.section(mc, "vfx").forEach((name, raw) -> {
+            if (raw instanceof Map<?, ?> m3) {
+                Map<String, Object> f = (Map<String, Object>) m3;
+                stanceFx.put(name, new StanceFx(name,
+                        f.get("particle") == null ? null : String.valueOf(f.get("particle")),
+                        f.get("count") instanceof Number c ? c.intValue() : 0,
+                        f.get("spread") instanceof Number s2 ? s2.doubleValue() : 0.0,
+                        f.get("sound") == null ? null : String.valueOf(f.get("sound")),
+                        f.get("pitch") instanceof Number p2 ? p2.floatValue() : 1.0f,
+                        String.valueOf(f.getOrDefault("label", name))));
+            }
+        });
+
+        // ─── 갑옷 — 경감의 상한선. 프로즈("검강 앞 피갑은 종이")가 이미 그은 선이다 ───
+        Map<String, Object> armorSec = RulesConfig.section(eq, "armor");
+        this.armorPiercedFrom = String.valueOf(armorSec.getOrDefault("mitigation_pierced_from", "강기"));
+
+        // ─── 표준 무인의 축 — NPC 능력치 시트가 없을 때의 폴백 (combat_audit realm_axis 와 같은 판독).
+        //   ★ 도구와 엔진이 **같은 표준 무인**을 세워야 도구가 거짓말을 안 한다:
+        //     능력치 = 경지 상한 −1 (상한을 찍은 자는 표준이 아니다) · 숙련 = 승급 요건의 '주력 무공 숙련 N'
+        RulesConfig.section(RulesConfig.load(cfg.resolve("player_creation.yml")), "attribute_cap_by_realm")
+                .forEach((realm, v) -> attrCapByRealm.put(realm, v instanceof Number n6 ? n6.intValue() : 3));
+        int carried = 0;
+        for (Map<String, Object> stage : stages) {
+            Object promo = stage.get("promotion");
+            if (promo instanceof Map<?, ?> pm && ((Map<String, Object>) pm).get("requirements") instanceof List<?> reqs) {
+                for (Object req : reqs) {
+                    java.util.regex.Matcher m4 = SKILL_REQ.matcher(String.valueOf(req));
+                    if (m4.find()) {
+                        carried = Integer.parseInt(m4.group(1));
+                    }
+                }
+            }
+            realmSkill.put(String.valueOf(stage.get("name")), carried);
+        }
 
         Object realtime = cb.get("realtime");
         this.roundTicks = realtime instanceof Map<?, ?> m && m.get("round_ticks") instanceof Number n
@@ -745,6 +805,9 @@ public final class SkillEngine {
     private static final java.util.regex.Pattern POWER_NUM = java.util.regex.Pattern.compile("위력\\s*(\\d+)");
     private static final java.util.regex.Pattern PERCENT = java.util.regex.Pattern.compile("(\\d+)\\s*%");
     private static final java.util.regex.Pattern IFRAME = java.util.regex.Pattern.compile("무적\\s*(\\d+)\\s*틱");
+    /** 승급 요건의 '주력 무공 숙련 N' — 표준 무인의 손 (combat_audit realm_axis 와 같은 정규식) */
+    private static final java.util.regex.Pattern SKILL_REQ =
+            java.util.regex.Pattern.compile("주력 무공 숙련\\s*(\\d+)");
 
     @SuppressWarnings("unchecked")
     private static int drain(Map<String, Object> onHit, String key, int fallback) {
@@ -798,8 +861,25 @@ public final class SkillEngine {
         if (!BARE.equals(grade) && !internal.canUse(realm, grade)) {
             grade = BARE;   // 등록값이라도 경지 게이트를 못 넘으면 못 쓴다 (게이트에 예외는 없다)
         }
+        // 능력치 시트 — 등록된 것만 받는다 (미등록 축은 표준 무인으로 폴백한다. 코드가 수치를 짓지 않는다)
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        if (e.get("stats") instanceof Map<?, ?> raw) {
+            ((Map<String, Object>) raw).forEach((k, v) -> {
+                if (v instanceof Number n2) {
+                    stats.put(String.valueOf(k), n2.intValue());
+                }
+            });
+        }
+        // 병기 계열 — 공격 능력치를 정한다 (combat.yml attacker_attribute: 도=근력·검=민첩)
+        String weaponClass = "맨손";
+        if (e.get("loadout") instanceof Map<?, ?> lo && ((Map<String, Object>) lo).get("계열") != null) {
+            weaponClass = String.valueOf(((Map<String, Object>) lo).get("계열"));
+        } else if (beast) {
+            weaponClass = "맨손";   // 이빨과 발톱 — 병장기가 없다
+        }
         return new Npc(id, String.valueOf(e.getOrDefault("name", id)),
-                beast ? "짐승" : "사람", rank, realm, pool, grade);
+                beast ? "짐승" : "사람", rank, realm, pool, grade,
+                Collections.unmodifiableMap(stats), weaponClass);
     }
 
     /** 전승 오의 한 줄 → 시전 가능한 한 수 (ultimate_arts.yml legacy_arts) */
@@ -882,10 +962,16 @@ public final class SkillEngine {
      * @param pool  내력 총량 (0 = 격을 못 쓴다)
      */
     public record Npc(String id, String name, String kind, String beastRank, String realm,
-                      int pool, String grade) {
+                      int pool, String grade, Map<String, Integer> stats, String weaponClass) {
 
         public boolean manifests() {
             return !BARE.equals(grade) && pool > 0;
+        }
+
+        /** 등록된 능력치 (npcs/*.yml stats) — 없으면 fallback (경지의 표준 무인) */
+        public int attr(String name, int fallback) {
+            Integer v = stats.get(name);
+            return v == null ? fallback : v;
         }
 
         public boolean isBeast() {
@@ -1252,6 +1338,93 @@ public final class SkillEngine {
      */
     public int forcedGuardSoak(int attackers) {
         return Math.max(0, attackers - 1) >= forcedGuardFrom ? forcedGuardSoak : 0;
+    }
+
+    /** 둘 이상에게 잡혔는가 — 회피(몸을 빼는 것)를 잃는 순간 (forced_guard.trigger_extra_attackers) */
+    public boolean surrounded(int attackers) {
+        return Math.max(0, attackers - 1) >= forcedGuardFrom;
+    }
+
+    // ══════════ 방어 태세 — 【맞는 쪽의 선택】 (combat.yml attack.defender_stance_mc) ══════════
+
+    /**
+     * 태세 연출 — <b>화면이 판정에 대해 거짓말하면 안 된다</b>.
+     * 파티클·소리·글자 셋 다 바닐라다 — <b>팩이 없어도 보인다</b>.
+     */
+    public record StanceFx(String name, String particle, int count, double spread,
+                           String sound, float pitch, String label) {
+
+        public boolean hasParticle() {
+            return particle != null && count > 0;
+        }
+    }
+
+    /**
+     * 이 몸짓이 말하는 태세 — {@code isBlocking}(손을 세운다) → 막기 ·
+     * {@code isSneaking}(몸을 낮춘다) → 흘리기 · {@code isSprinting}(발이 움직인다) → 회피.
+     *
+     * <p><b>새 입력 채널을 열지 않았다.</b> 바닐라 클라이언트가 이미 가진 세 자세를 읽을 뿐이다 —
+     * 그래서 <b>남의 눈에도 보인다</b> (보이는 것 = 맞는 것: 상대는 내 자세를 보고 다음 수를 고른다).
+     */
+    public String stanceOfGesture(String bukkitPredicate) {
+        return stanceGestures.get(bukkitPredicate);
+    }
+
+    /** 아무것도 지정하지 않은 몸의 태세 — 기본은 '자동' (몸이 아는 대로) */
+    public String stanceDefault() {
+        return stanceDefault;
+    }
+
+    public StanceFx stanceFx(String name) {
+        return stanceFx.get(name);
+    }
+
+    // ══════════ 표준 무인의 축 — NPC 능력치 폴백 (combat_audit realm_axis 와 같은 셈) ══════════
+
+    /** 그 경지의 표준 능력치 = 상한 −1 (상한을 찍은 자는 표준이 아니다) */
+    public int realmAttr(String realm) {
+        return Math.max(1, attrCapByRealm.getOrDefault(realm, 3) - 1);
+    }
+
+    /** 그 경지의 표준 숙련 — 승급 요건의 '주력 무공 숙련 N' */
+    public int realmSkill(String realm) {
+        return realmSkill.getOrDefault(realm, 0);
+    }
+
+    /** 무공 위력 — combat.yml damage.technique_power (삼류급 1 · 절정급 2 …). 경지로 찾는다 */
+    public int techniquePower(String realm) {
+        return techniquePower.getOrDefault(realm + "급", 0);
+    }
+
+    // ══════════ 갑옷 — "갑옷은 회피를 판다" 의 반대급부 (equipment.yml armor) ══════════
+
+    /** 갑옷의 경감 — 무복 0 · 피갑 1 · 철갑 2 · 내갑 1 */
+    public int armorMitigation(String armor) {
+        try {
+            return equipment.armorMitigation(armor);
+        } catch (IllegalArgumentException e) {
+            return 0;   // 등록되지 않은 갑옷 — 코드가 수치를 지어내지 않는다
+        }
+    }
+
+    /** 갑옷이 파는 것 — 회피 판정 (무복 0 · 피갑 −1 · 철갑 −2) */
+    public int armorDodgePenalty(String armor) {
+        try {
+            return equipment.armorDodgePenalty(armor);
+        } catch (IllegalArgumentException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * 이 격 앞에서 갑옷이 종이가 되는가 — {@code equipment.yml armor.mitigation_pierced_from} (강기).
+     * <b>"격 상성은 못 이긴다 — 검강 앞 피갑은 종이"</b> 가 이미 그어 둔 선이다.
+     *
+     * <p>★ 이것이 갑옷의 지배 전략을 스스로 막는다: 갑옷은 <b>졸개에게 강하고 고수에게 무력하다</b>.
+     */
+    public boolean armorPierced(String grade) {
+        return grade != null && !BARE.equals(grade)
+                && gradeRank(grade) >= gradeRank(armorPiercedFrom);
     }
 
     // ══════════ 무기 ══════════

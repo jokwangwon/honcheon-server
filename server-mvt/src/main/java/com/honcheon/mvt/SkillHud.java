@@ -32,6 +32,15 @@ final class SkillHud {
     /** 이번 틱 전역 발행량 — newTick() 이 0으로 되돌린다 (중앙 티커 1개, F-P2) */
     private int globalThisTick;
     private final Map<UUID, Integer> viewThisTick = new HashMap<>();
+    /**
+     * <b>판정의 한 줄</b> — 방어 태세의 결과가 액션바에 잠깐 머문다.
+     *
+     * <p>이 채널이 없으면 {@link #statusBar}(4틱마다)가 그 글자를 0.2초 만에 덮어 버린다 —
+     * 즉 <b>화면이 판정을 못 말한다</b>. 새 채널(보스바·사이드바)을 열지 않고, 있던 액션바에
+     * <b>우선권</b>을 준다: 잠깐(0.75초) 이 줄이 이긴다.
+     */
+    private final Map<UUID, String> flashText = new HashMap<>();
+    private final Map<UUID, Long> flashUntil = new HashMap<>();
     /** 팔레트 이름(smoke·end_rod…) → 바닐라 파티클. 등록부의 문자열이 Bukkit 타입이 되는 <b>유일한 자리</b> */
     private final Map<String, Particle> resolved = new HashMap<>();
     private final java.util.Set<String> unknownReported = new java.util.HashSet<>();
@@ -201,7 +210,40 @@ final class SkillHud {
      * <b>색과 글자</b>로 동시에 나온다 (색 단독 금지 — resourcepack_design colorblind_rule).
      * 팩이 없으면 게이지 글리프가 □ 로 보이지만 <b>숫자와 글자는 그대로 읽힌다</b>.
      */
-    void statusBar(Player player, SkillEngine.State state, long now) {
+    /**
+     * 판정의 한 줄 — {@code until} 틱까지 액션바를 이 글자가 갖는다.
+     * <b>막았으면 막았다고, 흘렸으면 흘렸다고, 피했으면 피했다고</b> 화면이 말해야 한다.
+     */
+    void flash(Player player, String text, long until) {
+        flashText.put(player.getUniqueId(), text);
+        flashUntil.put(player.getUniqueId(), until);
+        actionBar(player, text);   // 지금 당장 — 다음 statusBar 틱을 기다리지 않는다
+    }
+
+    /** 지금 이 몸의 액션바를 판정 한 줄이 갖고 있는가 */
+    private boolean flashing(Player player, long now) {
+        Long until = flashUntil.get(player.getUniqueId());
+        if (until == null) {
+            return false;
+        }
+        if (now > until) {
+            flashUntil.remove(player.getUniqueId());
+            flashText.remove(player.getUniqueId());
+            return false;
+        }
+        return true;
+    }
+
+    void forget(UUID id) {
+        flashUntil.remove(id);
+        flashText.remove(id);
+    }
+
+    void statusBar(Player player, SkillEngine.State state, long now, String stance) {
+        if (flashing(player, now)) {
+            actionBar(player, flashText.get(player.getUniqueId()));
+            return;   // 판정이 이긴다 — 상태 표시가 판정의 한 줄을 덮지 않는다
+        }
         int pool = engine.pool(state.naegong);
         StringBuilder line = new StringBuilder();
 
@@ -209,6 +251,14 @@ final class SkillHud {
         String vit = vitality(player);
         if (vit != null) {
             line.append(vit).append(ChatColor.DARK_GRAY).append(" │ ");
+        }
+
+        // ─── 방어 태세 — <b>내가 키운 것이 화면에 뜬다</b> (growth_axes.md §6-②) ───
+        //   민첩을 키운 자는 '회피', 근력을 키운 자는 '막기', 감각을 키운 자는 '흘리기'가 뜬다.
+        //   그리고 몸짓을 바꾸면 그 자리에서 글자가 바뀐다 — 무엇을 하고 있는지 화면이 안다.
+        if (stance != null) {
+            line.append(ChatColor.GREEN).append(stance)
+                    .append(ChatColor.DARK_GRAY).append(" │ ");
         }
 
         String grade = state.armed == null ? SkillEngine.BARE : state.armed;

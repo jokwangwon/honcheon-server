@@ -84,8 +84,21 @@ public final class Growth {
         }
     }
 
-    /** 방어 태세 — 세 방어는 세 능력치다 (그것이 빌드의 뒷면이다) */
-    public record Stance(String name, String attribute, int soak, int penalty) {
+    /**
+     * 방어 태세 — 세 방어는 세 능력치다 (그것이 빌드의 뒷면이다).
+     *
+     * @param skill      판정에 서는 '기술' 항 — 회피는 <b>경공</b>, 막기·흘리기는 <b>병기 기술</b>
+     *                   ({@code combat.yml defender_choice.<태세>.check})
+     * @param weaponSafe 접촉이 없는가 — 회피·흘리기는 무기가 상하지 않는다
+     *                   ({@code qi_manifestation.yml weapon_break.trigger} 가 이미 그렇게 적어 뒀다)
+     */
+    public record Stance(String name, String attribute, String skill, int soak, int penalty,
+                         boolean weaponSafe) {
+
+        /** 이 태세의 '기술' 항이 경공인가 (회피) — 아니면 병기 기술이다 */
+        public boolean usesGyeonggong() {
+            return "경공".equals(skill);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -145,8 +158,10 @@ public final class Growth {
                 Map<String, Object> d = (Map<String, Object>) raw;
                 stances.put(name, new Stance(name,
                         String.valueOf(d.getOrDefault("attribute", "민첩")),
+                        String.valueOf(d.getOrDefault("skill", "병기 기술")),
                         (int) num(d.get("damage_reduction"), 0),
-                        (int) num(d.get("penalty"), 0)));
+                        (int) num(d.get("penalty"), 0),
+                        Boolean.TRUE.equals(d.get("weapon_safe"))));
             }
         });
 
@@ -204,6 +219,23 @@ public final class Growth {
 
     public Stance stance(String name) {
         return stances.get(name);
+    }
+
+    /** 등록된 태세 이름들 — 회피 · 막기 · 흘리기 (코드가 목록을 짓지 않는다) */
+    public java.util.Set<String> stanceNames() {
+        return stances.keySet();
+    }
+
+    /** 이 태세의 경감 — 등록부의 damage_reduction (없는 태세면 0) */
+    public int soak(String stanceName) {
+        Stance st = stances.get(stanceName);
+        return st == null ? 0 : st.soak();
+    }
+
+    /** 이 태세가 무기를 태우는가 — 막기만 접촉이 있다 (weapon_break.trigger) */
+    public boolean clashes(String stanceName) {
+        Stance st = stances.get(stanceName);
+        return st != null && !st.weaponSafe();
     }
 
     /** 포위된 자가 못 고르는 태세 (회피 — 몸을 뺄 자리가 없다) */
@@ -306,37 +338,66 @@ public final class Growth {
     }
 
     /**
-     * 방어 판정치 = 능력치 + 무공 숙련(병기 기술/경공) + 심법의 결 − 판정 비용.
+     * <b>방어 판정치</b> = 능력치 + 기술 + 심법의 결 − 판정 비용 + 갑옷.
      *
-     * @param surrounded 둘 이상에게 잡혔는가 — 그러면 흘리기의 −2 를 물지 않는다 (forced_guard.waives)
+     * <p>{@code combat.yml defender_choice} 의 세 {@code check} 문장이 여기서 처음으로 참이 된다:
+     * <ul>
+     *   <li><b>회피</b> = 민첩 + <b>경공</b> + 갑옷(dodge_penalty) — 경공 항은
+     *       {@link Gyeonggong#gyeonggongMastery} 가 댄다 (경공 담당이 깔아 둔 이음매).</li>
+     *   <li><b>막기</b> = 근력 + <b>병기 기술</b></li>
+     *   <li><b>흘리기</b> = 감각 + <b>병기 기술</b> − 2</li>
+     * </ul>
+     *
+     * <p><b>경지 게이트가 없다.</b> 삼류의 회피는 낮지만 존재한다 — 게이트를 두면 삼류가 제 목숨을
+     * 영영 못 본다. 방어를 사는 것은 내력이 아니라 <b>몸</b>이다.
+     *
+     * @param weaponSkill 병기 기술 (주무공 숙련) — 막기·흘리기의 기술 항
+     * @param gyeonggong  경공 숙련 — 회피의 기술 항 (보법을 안 배웠으면 0)
+     * @param armorDodge  갑옷의 회피 페널티 (equipment.yml dodge_penalty — 무복 0 · 피갑 −1 · 철갑 −2).
+     *                    <b>회피에만 든다</b> — 갑옷은 회피를 판다
+     * @param surrounded  둘 이상에게 잡혔는가 — 그러면 흘리기의 −2 를 물지 않는다 (forced_guard.waives)
      */
-    public int defenseScore(PlayerLedger ledger, String stanceName, int mastery, boolean surrounded) {
+    public int defenseScore(PlayerLedger ledger, String stanceName, int weaponSkill, int gyeonggong,
+                            int armorDodge, boolean surrounded) {
         Stance st = stances.get(stanceName);
         if (st == null) {
-            return mastery;
+            return weaponSkill;
         }
+        // 고른 자가 무는 대가는 고른 자만 문다 — 강제당한 자는 물지 않는다 (forced_guard.waives 판정_비용)
         int pen = (surrounded && forcedFloor.equals(stanceName)) ? 0 : st.penalty();
         int gy = ledger.simbeop() == null ? 0
                 : gyeol.getOrDefault(ledger.simbeop(), Map.of()).getOrDefault(stanceName, 0);
-        return (int) ledger.attr(st.attribute()) + mastery + gy + pen;
+        int skill = st.usesGyeonggong() ? gyeonggong : weaponSkill;
+        int armor = st.usesGyeonggong() ? armorDodge : 0;   // 갑옷이 파는 것은 회피뿐이다
+        return (int) ledger.attr(st.attribute()) + skill + gy + pen + armor;
+    }
+
+    /** 옛 서명 — 기술 항을 가르지 않던 시절 (호출자가 남아 있으면 조용히 근사한다) */
+    public int defenseScore(PlayerLedger ledger, String stanceName, int mastery, boolean surrounded) {
+        return defenseScore(ledger, stanceName, mastery, mastery, 0, surrounded);
     }
 
     /**
-     * <b>이 몸이 고를 방어</b> — 판정치가 가장 높은 태세. 포위되면 회피를 못 고른다.
+     * <b>이 몸이 고를 방어</b> — <b>기대 피해가 가장 작은</b> 태세. 포위되면 회피를 못 고른다.
+     *
+     * <p>★ 판정치만 비교하면 안 된다: 회피는 경감이 0 이고 막기는 −3 이다. 그래서 <b>판정치 + 경감</b>을
+     * 함께 잰다 — 그것이 {@code growth_audit.exchange} 가 쓰는 것과 같은 산술이다 (도구와 엔진이 같은
+     * 셈을 해야 도구가 거짓말을 안 한다).
      *
      * <p>★ 이것이 빌드가 <b>눈에 보이는</b> 자리다: 민첩을 키운 자는 회피가 뜨고, 근력을 키운 자는
      * 막기가 뜨고, 감각을 키운 자는 흘리기가 뜬다. 그리고 <b>포위당하는 순간 회피 빌드는 태세를 잃는다</b> —
      * 화면이 그 사실을 말해 준다 ("몸을 뺄 자리가 없다").
      */
-    public String bestStance(PlayerLedger ledger, int mastery, boolean surrounded) {
+    public String bestStance(PlayerLedger ledger, int weaponSkill, int gyeonggong, int armorDodge,
+                             boolean surrounded) {
         String best = forcedFloor;
         int bestScore = Integer.MIN_VALUE;
         for (String name : stances.keySet()) {
             if (surrounded && lostWhenSurrounded(name)) {
                 continue;               // 회피 — 뺄 자리가 없으면 못 고른다
             }
-            int score = defenseScore(ledger, name, mastery, surrounded)
-                    + stances.get(name).soak();      // 경감도 방어의 값이다
+            int score = defenseScore(ledger, name, weaponSkill, gyeonggong, armorDodge, surrounded)
+                    + stances.get(name).soak();      // 경감도 방어의 값이다 (판정만 보면 회피가 늘 이긴다)
             if (score > bestScore) {
                 bestScore = score;
                 best = name;
