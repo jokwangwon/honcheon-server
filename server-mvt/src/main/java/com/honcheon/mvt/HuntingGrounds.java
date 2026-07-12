@@ -83,6 +83,8 @@ public final class HuntingGrounds implements Listener {
     public static final NamespacedKey KEY_KIND = key("foe_kind");
     /** 짐승의 격 — 들짐승 | 맹수 | 영물 (사람은 없음) */
     public static final NamespacedKey KEY_RANK = key("beast_rank");
+    /** 목격한 최고 격 (0=없음 · 1=발경 · 2=검기 · 3=강기 · 4=어검/심검) — 한 번 본 것은 그 전투 내내 남는다 */
+    public static final NamespacedKey KEY_SEEN_QI = key("foe_seen_qi");
     /** 경지 — 삼류 | 이류 | 일류 | 절정 (짐승도 '상당치'를 갖는다) */
     public static final NamespacedKey KEY_REALM = key("foe_realm");
     /** 배역 — 졸개 | 두목 | 비무상대 */
@@ -301,7 +303,7 @@ public final class HuntingGrounds implements Listener {
                     ? (Map<String, Object>) m : Map.of();
             attack = weaponPower.getOrDefault(String.valueOf(nw.getOrDefault("weapon_power_as", "맨손")), 1);
         } else {
-            String[] loadout = DEFAULT_LOADOUT.getOrDefault(id, new String[]{"맨손", "범철"});
+            String[] loadout = loadoutOf(id, e);
             attack = weaponPower.getOrDefault(loadout[0], 1)
                     + techniquePower.getOrDefault(realm + "급", 0);
         }
@@ -324,7 +326,24 @@ public final class HuntingGrounds implements Listener {
                 : "galho".equals(id) ? "두목" : "졸개";
 
         return new Foe(id, name, beast ? "짐승" : "사람", rank, realm, role,
-                durability, attack, start, breakAt, drops, type, DEFAULT_LOADOUT.get(id));
+                durability, attack, start, breakAt, drops, type, loadoutOf(id, e));
+    }
+
+    /**
+     * 손에 든 병기 — <b>등록부가 이긴다</b> ({@code loadout: {계열, 등급}}).
+     *
+     * <p>DEFAULT_LOADOUT 은 등록 전까지의 임시 자리였다. config 에 적어 두고 코드가 안 읽으면
+     * 등록부는 거짓말이 된다 — 적힌 대로 서지 않는 세계는 등록제가 아니다.
+     */
+    @SuppressWarnings("unchecked")
+    private static String[] loadoutOf(String id, Map<String, Object> entry) {
+        if (entry.get("loadout") instanceof Map<?, ?> m) {
+            Map<String, Object> load = (Map<String, Object>) m;
+            return new String[]{
+                    String.valueOf(load.getOrDefault("계열", "맨손")),
+                    String.valueOf(load.getOrDefault("등급", "범철"))};
+        }
+        return DEFAULT_LOADOUT.getOrDefault(id, new String[]{"맨손", "범철"});
     }
 
     private static EntityType entityTypeOf(String id, Map<String, Object> entry) {
@@ -735,10 +754,15 @@ public final class HuntingGrounds implements Listener {
             gauge -= 3;   // 무리가 흩어지면 곧 도망친다 — 아군_수 가중치 2배 (morale_profile.들짐승)
         }
 
-        // ③ 상대 위세 — 경지 격차 (-1 / 2경지, 상한 -4). 격 목격(발경·검기·강기)은 SkillEngine 배선 대기
+        // ③ 상대 위세 — 경지 격차 (-1 / 2경지, 상한 -4) + **격 목격** (SkillListener.impact 가 심는다)
         int gap = realmIndex(playerRealm(plugin, player)) - realmIndex(foe.realm());
         if (gap > 0) {
             gauge -= Math.min(4, gap / 2);
+        }
+        int seenQi = mob.getPersistentDataContainer()
+                .getOrDefault(KEY_SEEN_QI, PersistentDataType.INTEGER, 0);
+        if (seenQi > 0) {
+            gauge += qiWitnessWeight(QI_LADDER[seenQi - 1]);
         }
 
         // ④ 두목 생사 — 두목이 쓰러지면 졸개가 무너진다
@@ -746,6 +770,21 @@ public final class HuntingGrounds implements Listener {
             gauge += weight("두목_생사", "두목_사망", -5);
         }
         return gauge;
+    }
+
+    /** 격 목격 가중치 — morale.weights.상대_위세.격_목격.<격> (발경 0 · 검기 -2 · 강기 -5 · 어검_심검 -8) */
+    private static int qiWitnessWeight(String grade) {
+        if (moraleWeights.get("상대_위세") instanceof Map<?, ?> prestige
+                && prestige.get("격_목격") instanceof Map<?, ?> seen
+                && seen.get(grade) instanceof Number n) {
+            return n.intValue();
+        }
+        return switch (grade) {   // config 가 비면 사다리의 뜻만은 지킨다
+            case "검기" -> -2;
+            case "강기" -> -5;
+            case "어검_심검" -> -8;
+            default -> 0;         // 발경 — 개화한 자는 흔하다
+        };
     }
 
     private static int weight(String group, String key, int fallback) {
@@ -922,6 +961,41 @@ public final class HuntingGrounds implements Listener {
     }
 
     // ══════════════ 판독 — HuntListener·Sparring 이 재질이 아니라 태그로 묻는다 ══════════════
+
+    /** 격의 사다리 — npc_combat.yml morale.weights.상대_위세.격_목격 의 키 순서 그대로 */
+    private static final String[] QI_LADDER = {"발경", "검기", "강기", "어검_심검"};
+
+    /**
+     * 격 목격 — <b>검강을 보고도 안 도망가는 졸개는 없다</b> (npc_combat morale 상대_위세.격_목격).
+     *
+     * <p>지금까지 전의는 내구·머릿수·두목만 봤다. 격은 <b>수치로 적혀 있었지만 아무도 보지 못했다</b> —
+     * 강기(-5)를 눈앞에서 터뜨려도 산적의 전의는 꿈쩍하지 않았다. 이제 본다.
+     *
+     * <p>"한 번 본 것은 그 전투 내내 유지된다" — 그래서 최고 격만 PDC 에 굳힌다 (매 라운드 재계산되는
+     * 다른 입력과 달리, 이것만은 기억이다).
+     */
+    public static void witnessQi(org.bukkit.Location at, String grade) {
+        int rank = 0;
+        for (int i = 0; i < QI_LADDER.length; i++) {
+            if (QI_LADDER[i].equals(grade) || ("어검_심검".equals(QI_LADDER[i])
+                    && ("어검".equals(grade) || "심검".equals(grade)))) {
+                rank = i + 1;
+            }
+        }
+        if (rank == 0 || at.getWorld() == null) {
+            return;   // 외공기 — 볼 것이 없다
+        }
+        for (Entity near : at.getWorld().getNearbyEntities(at, 24, 12, 24)) {
+            if (tag(near, KEY_ID) == null || near.isDead()) {
+                continue;
+            }
+            org.bukkit.persistence.PersistentDataContainer pdc = near.getPersistentDataContainer();
+            int seen = pdc.getOrDefault(KEY_SEEN_QI, PersistentDataType.INTEGER, 0);
+            if (rank > seen) {
+                pdc.set(KEY_SEEN_QI, PersistentDataType.INTEGER, rank);
+            }
+        }
+    }
 
     public static String tag(Entity entity, NamespacedKey key) {
         return entity == null ? null

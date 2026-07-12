@@ -1128,6 +1128,7 @@ public final class SkillListener implements Listener {
     /** 타격 순간 — 격을 눈에 보이게. 단발 파티클 상한 24개 (시야 예산 600/틱의 4%) */
     private void impact(Location at, String grade, SkillEngine.Strike strike) {
         boolean crit = "critical_success".equals(strike.tierId());
+        HuntingGrounds.witnessQi(at, grade);   // 격을 본 자는 전의가 꺾인다 (npc_combat morale 상대_위세)
         switch (grade) {
             case "발경" -> {   // 짧은 충격파 — 기가 몸 안에서 터진다
                 hud.emit(at, Particle.SWEEP_ATTACK, 1, 0.0, 0.0);

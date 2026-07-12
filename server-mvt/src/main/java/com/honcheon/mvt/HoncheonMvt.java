@@ -78,6 +78,11 @@ public final class HoncheonMvt extends JavaPlugin {
         // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
         getServer().getScheduler().runTaskTimer(this,
                 () -> getServer().getOnlinePlayers().forEach(this::updateSidebar), 100L, 100L);
+        // 등록부가 누구를 무인으로 세웠는지 기동 때 말한다 — config 에 적었는데 코드가 안 읽으면
+        // 그 NPC 는 조용히 맨손으로 선다(곽진이 그랬다: realm 이 없어 '전투에 서지 않는 사람'이었다).
+        java.util.List<String> fighters = skillEngine.manifestingNpcs();
+        getLogger().info("격을 쓰는 NPC " + fighters.size() + "인: "
+                + (fighters.isEmpty() ? "없음 — 등록부에 realm 이 없다" : String.join(", ", fighters)));
         getLogger().info("혼천 MVT 기동 — 룰 엔진 5종 로드 완료 (/혼천 도움말)"
                 + (anchors.isEmpty() ? " — 청하현 미조성 (/혼천 조성)" : " — 청하현 앵커 " + anchors.size() + "곳"));
     }

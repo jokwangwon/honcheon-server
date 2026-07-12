@@ -72,6 +72,14 @@ npcs:
     role: "상단 호위무사"
     location: north_road
     faction: sangdan
+    # ─── 무인으로 세운다 (비무 상대 — 표국 마당에 늘 서 있는 사람) ───
+    # realm 이 없으면 SkillEngine 이 "전투에 서지 않는 사람"으로 읽고 지나친다 (객잔 주인·의원과 한 묶음).
+    # 곽진은 비무의 상대다 — 격을 쓰는 일류 무인이라야 개화한 플레이어의 발경이 시험받는다.
+    # 발경(내력 1)만 쓴다: 검기는 절정의 것이고, 비무에서 검기를 뽑는 호위무사는 없다.
+    realm: 일류
+    qi_grade: 발경
+    mc_entity: ZOMBIE             # 인간형 몸 — 병기가 손에 보이고 근접 AI 가 돈다 (HuntingGrounds)
+    loadout: { 계열: 검, 등급: 범철 }
     stats:
       근력: 4
       체력: 4
