@@ -709,7 +709,11 @@ public final class Weapons {
             meta.setUnbreakable(true);   // 신병·마병 — 세계 등록제 유일물은 삽질로 부러지지 않는다
             meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
         }
-        meta.setEnchantable(0);   // 강호의 병기는 마법부여로 강해지지 않는다 (판정이 전부다)
+        // 강호의 병기는 마법부여로 강해지지 않는다 (판정이 전부다).
+        // 1.21.11 — setEnchantable(0) 은 이제 던진다("Enchantability must be positive"): 0 은 컴포넌트가
+        // 담을 수 없는 값이다. 끄는 법은 값을 0 으로 두는 게 아니라 **컴포넌트를 지우는 것**이다.
+        // minecraft:enchantable 이 없는 아이템은 마법부여대가 받지 않는다 (1.21.2+ 규칙).
+        meta.setEnchantable(null);
         meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);   // 바닐라 수치 줄 차단 — 툴팁은 우리가 그린다
         meta.setMaxStackSize(1);
     }

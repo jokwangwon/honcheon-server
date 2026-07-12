@@ -84,7 +84,12 @@ public final class TownAudit {
             Material.FLOWER_POT, Material.POTTED_BAMBOO, Material.POTTED_CHERRY_SAPLING,
             Material.POTTED_POPPY, Material.POTTED_FERN, Material.LOOM, Material.SMITHING_TABLE,
             Material.ANVIL, Material.BLAST_FURNACE, Material.SMOKER, Material.COMPOSTER,
-            Material.NOTE_BLOCK, Material.HAY_BLOCK, Material.CAMPFIRE, Material.SOUL_CAMPFIRE);
+            Material.NOTE_BLOCK, Material.HAY_BLOCK, Material.CAMPFIRE, Material.SOUL_CAMPFIRE,
+            // 1.21.11 선반 — 시렁도 장식이다. 물건이 얹힌다고 예산 밖은 아니다 (벽 한 면 3점 규칙 유지).
+            Material.OAK_SHELF, Material.SPRUCE_SHELF, Material.BIRCH_SHELF, Material.JUNGLE_SHELF,
+            Material.ACACIA_SHELF, Material.DARK_OAK_SHELF, Material.MANGROVE_SHELF,
+            Material.CHERRY_SHELF, Material.PALE_OAK_SHELF, Material.BAMBOO_SHELF,
+            Material.CRIMSON_SHELF, Material.WARPED_SHELF);
 
     private static final Set<Material> COLD_LIGHT = EnumSet.of(Material.SOUL_LANTERN, Material.SOUL_CAMPFIRE,
             Material.SOUL_FIRE, Material.SOUL_TORCH, Material.SOUL_WALL_TORCH);

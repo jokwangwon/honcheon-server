@@ -2490,8 +2490,12 @@ final class CheonghaBuilder {
             world.getBlockAt(x, cy + 1, cz - 18).setType(Material.DARK_OAK_PLANKS);   // 계산대 상판
             topSlab(world, x, cy + 2, cz - 19, Material.DARK_OAK_SLAB);               // 뒤 시렁 (중단)
         }
-        world.getBlockAt(cx - 27, cy + 3, cz - 19).setType(Material.DECORATED_POT);   // 시렁 위 술 단지 (상단) 2점
-        world.getBlockAt(cx - 25, cy + 3, cz - 19).setType(Material.DECORATED_POT);
+        // v7.1(1.21.11) — 단지를 **얹는다**. 블록으로 세운 단지 둘 대신, 시렁 하나에 술 셋.
+        //   소품 예산: 단지 2점 → 시렁 1점 (북벽이 한 칸 넉넉해진다).
+        shelf(world, cx - 26, cy + 3, cz - 19, Material.DARK_OAK_SHELF, BlockFace.SOUTH,
+                new org.bukkit.inventory.ItemStack(Material.DECORATED_POT),
+                new org.bukkit.inventory.ItemStack(Material.HONEY_BOTTLE),
+                new org.bukkit.inventory.ItemStack(Material.GLASS_BOTTLE));
         wallTorch(world, cx - 27, cy + 2, cz - 18, BlockFace.SOUTH);   // 계산대 등 — 벽등(소품 예산 0)
         wallTorch(world, cx - 21, cy + 2, cz - 18, BlockFace.SOUTH);
         world.getBlockAt(cx - 20, cy + 1, cz - 19).setType(Material.BARREL);          // 계산대 곁 술통 1 (하단)
@@ -3254,12 +3258,26 @@ final class CheonghaBuilder {
      * 밀도 등급 = 중간 (무가는 정돈되나 살림이 있다). 국주 앵커(x+38,z+48)와 문 동선은 비운다.
      */
     private static void pyogukHallInterior(World world, int cx, int cy, int cz) {
-        for (int x = cx + 36; x <= cx + 40; x++) {   // 시선 축 — 남벽 앞 병장기 시렁 5칸
+        // 시선 축 — 남벽 병장기 시렁 5칸. v7.1(1.21.11): 중단이 **진짜 시렁**이 됐다.
+        //   진철산의 오호단문창이 실제로 걸린다 — 표국이 무엇으로 먹고사는 집인지 문턱에서 읽힌다.
+        //   씨앗은 좌표 해시다 (조성기 난수 금지 — 같은 마을이면 같은 병기가 걸린다).
+        for (int x = cx + 36; x <= cx + 40; x++) {
             stair(world, x, cy + 2, cz + 52, Material.SPRUCE_STAIRS, BlockFace.NORTH);   // 하단 = 창걸이
             world.getBlockAt(x, cy + 3, cz + 52).setType(Material.DARK_OAK_SLAB);        // 중단 = 시렁 판
         }
-        world.getBlockAt(cx + 36, cy + 4, cz + 52).setType(Material.LANTERN);            // 상단 = 시렁 위 등 2
-        world.getBlockAt(cx + 40, cy + 4, cz + 52).setType(Material.LANTERN);
+        long seed = Math.floorMod(31L * cx + cz, 1_000_003L);
+        shelf(world, cx + 37, cy + 3, cz + 52, Material.DARK_OAK_SHELF, BlockFace.NORTH,
+                Weapons.makeSeeded(Weapons.Series.창, Weapons.Grade.정련, seed),          // 국주의 창
+                Weapons.makeSeeded(Weapons.Series.도, Weapons.Grade.범철, seed + 1),      // 표사의 도
+                Weapons.makeSeeded(Weapons.Series.검, Weapons.Grade.범철, seed + 2));
+        shelf(world, cx + 39, cy + 3, cz + 52, Material.DARK_OAK_SHELF, BlockFace.NORTH,
+                Weapons.makeSeeded(Weapons.Series.월아산, Weapons.Grade.범철, seed + 3),
+                null,                                                                     // 빈 칸 = 지금 표행 나간 병기
+                Weapons.makeSeeded(Weapons.Series.단검, Weapons.Grade.범철, seed + 4));
+        // 상단 = 시렁 위 조명. v7.1 — 등롱 → 벽등: 시렁 둘이 남벽 안줄의 소품 예산(3점)에 들어왔다.
+        //   병장기가 걸린 벽에서 밀려나야 할 것은 병기가 아니라 등이다. 벽등은 예산 0이고 빛은 같다.
+        wallTorch(world, cx + 36, cy + 4, cz + 52, BlockFace.NORTH);
+        wallTorch(world, cx + 40, cy + 4, cz + 52, BlockFace.NORTH);
         placeWallSign(world, cx + 38, cy + 4, cz + 52, BlockFace.NORTH,                  // 남벽에 붙는 현판
                 "철산표국", "표행 — 신용이 곧 물건");
         // 서벽(x+32) — 표물 궤 3점 (여백 규칙)
@@ -4360,6 +4378,14 @@ final class CheonghaBuilder {
             bookshelf(world, x, cy + 1, cz + 17, BlockFace.NORTH, Math.floorMod(cx - x, 3) + 3);
             world.getBlockAt(x, cy + 1, cz + 16).setType(Material.BROWN_CARPET);   // 약장 앞 깔개 (서는 자리)
         }
+        // v7.1(1.21.11) — 약장 위 한 켜는 **진짜 시렁**이다. 말린 약재가 눈에 보인다.
+        //   자리는 약장 바로 위(cy+2) — 소품 예산(벽면 3점)은 약장 3칸이 이미 다 쓴다. 시렁은
+        //   그 위 켜라 검수의 안줄 스캔(y0..지붕)에 걸린다 → 약장 한 칸을 시렁에 내준다(3점 불변).
+        world.getBlockAt(cx - 18, cy + 1, cz + 17).setType(Material.SPRUCE_PLANKS);   // 가운데 약장 → 시렁 받침
+        shelf(world, cx - 18, cy + 2, cz + 17, Material.SPRUCE_SHELF, BlockFace.NORTH,
+                new org.bukkit.inventory.ItemStack(Material.BROWN_MUSHROOM),
+                new org.bukkit.inventory.ItemStack(Material.GLOW_BERRIES),
+                new org.bukkit.inventory.ItemStack(Material.DRIED_KELP));
         // ── 서벽(x-24 안줄) 3점: 약장 여벌 2칸 + 약탕기. 축을 비껴 있다 (서벽 창은 z+8..+9 — 그 앞을 비운다).
         bookshelf(world, cx - 24, cy + 1, cz + 14, BlockFace.EAST, 4);
         bookshelf(world, cx - 24, cy + 1, cz + 13, BlockFace.EAST, 2);
@@ -4843,6 +4869,37 @@ final class CheonghaBuilder {
             data.setSlotOccupied(slot, slot < filled);
         }
         world.getBlockAt(x, y, z).setBlockData(data);
+    }
+
+    /**
+     * 시렁 — 1.21.11 이 준 진짜 선반(_SHELF). 벽에 붙어 <b>물건 셋을 얹는다</b>.
+     *
+     * <p>이주의 값어치가 여기 있다. 지금까지 병장기 시렁은 "계단 + 반 블록"의 흉내였고, 걸린 병기는
+     * 없었다 — 표국이 무엇으로 먹고사는 집인지 문턱에서 읽히지 않았다. 이제 진철산의 창이 벽에 걸린다.
+     *
+     * <p>자리 규칙: <b>벽 판(벽 그 자체)에 박는다</b>. 실내 안줄에 세우면 소품 예산(검수 ④, 벽면 3점)을
+     * 먹는데, 시렁은 장식이 아니라 그 집의 정체다 — 예산이 시렁을 밀어내면 순서가 거꾸로다.
+     * (검수의 propScan 은 벽 안쪽만 훑는다 — 벽 판은 세지 않는다.)
+     *
+     * @param facing 시렁이 바라보는 쪽 = 사람이 서서 보는 쪽 (실내 방향)
+     * @param items  얹을 물건 최대 3 (모자라면 빈 칸 — 빈 칸도 서사다: 팔려나간 자리)
+     */
+    private static void shelf(World world, int x, int y, int z, Material wood,
+                              BlockFace facing, org.bukkit.inventory.ItemStack... items) {
+        org.bukkit.block.data.type.Shelf data =
+                (org.bukkit.block.data.type.Shelf) wood.createBlockData();
+        data.setFacing(facing);
+        world.getBlockAt(x, y, z).setBlockData(data);
+        // 물건은 **스냅샷 인벤토리**에 담고 되쓴다. 라이브 인벤토리에 곧장 넣으면 조성 중(콘솔 실행 ·
+        // 청크가 막 실린 참)에는 조용히 사라진다 — 시렁이 빈 채로 선다 (Items: [] 를 검수가 봤다).
+        if (world.getBlockAt(x, y, z).getState() instanceof org.bukkit.block.Shelf state) {
+            for (int slot = 0; slot < Math.min(items.length, 3); slot++) {
+                if (items[slot] != null) {
+                    state.getSnapshotInventory().setItem(slot, items[slot]);
+                }
+            }
+            state.update(true, false);
+        }
     }
 
     /** 양초 — count 1~4묶음. lit=false 면 꺼진 양초 (폐사당 제단 — 아무도 불을 붙이지 않았다) */

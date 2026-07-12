@@ -899,3 +899,38 @@ Paper 26.3    = 존재하지 않는다
 [Java Edition 26.1](https://minecraft.wiki/w/Java_Edition_26.1) ·
 [Data component format/equippable](https://minecraft.wiki/w/Data_component_format/equippable) ·
 [Minecraft 26.3 Snapshot 3 (공식)](https://www.minecraft.net/en-us/article/minecraft-26-3-snapshot-3)
+
+
+## 이주 실행 기록 (2026-07-12)
+
+### 0단계 — 코드·서버 (완료)
+* `paper-api` 1.21.4 → **1.21.11-R0.1-SNAPSHOT** (Java 21 유지 — 1.21.11 이 마지막 Java 21 릴리스)
+* `Material.CHAIN` → `IRON_CHAIN` (1.21.9 가 `copper_chain` 을 들이며 개명) — 6곳
+* Paper 1.21.11-132 서버 jar 교체, `scripts/run_mvt_server.sh` 갱신
+
+### 1단계 — 리소스팩 (완료)
+* **바닐라 대조**: 1.21.11 클라이언트 jar(piston-meta)를 받아 팩의 minecraft 네임스페이스 64경로 전수 대조 → 죽은 경로 0
+* `pack_format` 46 → **75** (클라이언트 `version.json` 의 `pack_version.resource_major` 가 진실),
+  `supported_formats` 46~75 병기 — 구 클라이언트도 산다
+* `texture_audit` 글리프 오탐 18건 제거 (폰트 글리프는 단색이 정답 — 블록·아이템의 4색·명암 잣대를 대면 안 된다)
+
+### 2단계 — 새 블록 (착수)
+* **선반(`*_SHELF`)** — 1.21.11 이 준 진짜 시렁. 벽에 붙어 **물건 셋을 얹는다**.
+  * 표국 남벽: 진철산의 창(정련) + 표사의 도·검·월아산·단검 — 표국이 무엇으로 먹고사는 집인지 문턱에서 읽힌다.
+    빈 칸 하나는 "지금 표행 나간 병기"다.
+  * 의방 남벽: 약장 가운데 켜 위 약재 시렁 (말린 버섯·열매·해초)
+  * 객잔 북벽: 계산대 뒤 술 시렁 — 블록으로 세운 단지 둘 대신 시렁 하나에 술 셋
+  * 조성기 규약 준수: 개체 굴림 씨앗 = **좌표 해시**(`Math.floorMod(31*cx + cz, …)`) — 난수 금지
+  * `TownAudit.PROP` 에 `*_SHELF` 12종 등록 — 시렁도 소품 예산(벽 한 면 3점)을 먹는다
+* 아직 안 쓴 것: `COPPER_BARS`(옥·금고 창살) · `COPPER_LANTERN` · `COPPER_GOLEM_STATUE`(석상) · `*_SPEAR`(창 계열 베이스)
+  — 구리는 채색이라 **수묵 검수(⑥ 채색 ≤2%) 룰 개정 결정**이 먼저다.
+
+### 이주가 드러낸 결함 (1.21.11 파괴적 변경)
+* **`ItemMeta.setEnchantable(0)` 이 던진다** — "Enchantability must be positive".
+  0 은 컴포넌트가 담을 수 없는 값이다. 마법부여를 끄는 법은 값을 0 으로 두는 게 아니라
+  **컴포넌트를 지우는 것**(`setEnchantable(null)`)이다 — `minecraft:enchantable` 이 없는 아이템은
+  마법부여대가 받지 않는다(1.21.2+ 규칙).
+  이것은 **병기 제작 전체를 죽이고 있었다** (`Weapons.make` 의 마지막 줄) — 조성기가 시렁에 병기를
+  얹기 시작하면서야 드러났다. 이주 검산이 코드만 컴파일해 보고 끝났다면 못 봤을 결함이다.
+* **조성 중 시렁이 빈 채로 섰다** — 라이브 인벤토리에 곧장 넣으면 타일 엔티티가 아직 붙지 않아 조용히 사라진다.
+  스냅샷 인벤토리에 담고 `update()` 로 되쓴다.
