@@ -3,6 +3,7 @@ package com.honcheon.mvt;
 import com.honcheon.core.rules.JudgmentEngine;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -266,12 +267,137 @@ public final class MvtCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.GRAY + "/혼천 시드검사 <시드> [시드...]");
             return true;
         }
+        java.util.List<Long> seeds = new java.util.ArrayList<>();
         for (int i = 1; i < args.length; i++) {
-            WorldMap.SeedReport report = map.scoreSeed(Long.parseLong(args[i]), false);
-            sender.sendMessage(ChatColor.GOLD + "시드 " + report.seed() + " — 점수 " + report.score());
-            report.lines().forEach(line -> sender.sendMessage(ChatColor.GRAY + "  " + line));
+            seeds.add(Long.parseLong(args[i]));
         }
+        sender.sendMessage(ChatColor.GOLD + "시드 검사 " + seeds.size() + "개 — 지형을 생성하며 훑는다 "
+                + ChatColor.GRAY + "(틱을 나눠 먹는다 · 서버는 계속 돈다)");
+        new SeedProbe(plugin, map, seeds, sender).runTaskTimer(plugin, 1L, 1L);
         return true;
+    }
+
+    /**
+     * 시드 검사 — <b>틱을 나눠 먹는 채점기</b>.
+     *
+     * <p>구판은 후보 수백 곳을 한 틱 안에서 훑었다. 후보마다 지형을 표본하며 청크를 동기 생성하니,
+     * 시드 5개에 4,380청크였고 워치독이 "메인 스레드가 60초째 응답 없음"이라며 서버를 죽였다.
+     * 지형을 보려면 지형을 만들어야 한다 — 그 값은 못 깎는다. 깎을 수 있는 건 <b>한 틱에 얼마나 하냐</b>다.
+     *
+     * <p>그래서 후보를 하나씩 꺼내 쓰고, 틱마다 예산(20ms)이 다하면 손을 뗀다. 서버는 계속 돈다.
+     */
+    private static final class SeedProbe extends org.bukkit.scheduler.BukkitRunnable {
+        private static final long TICK_BUDGET_NANOS = 20_000_000L;   // 20ms — 한 틱(50ms)의 절반 이하
+
+        private final HoncheonMvt plugin;
+        private final WorldMap map;
+        private final java.util.List<Long> seeds;
+        private final CommandSender sender;
+
+        private int seedIndex = -1;
+        private World probe;
+        private java.util.List<WorldMap.Place> places;
+        private int placeIndex;
+        private java.util.List<int[]> candidates;
+        private int candIndex;
+        private WorldMap.Fit best;
+        private int bestShift;
+        private java.util.List<String> lines = new java.util.ArrayList<>();
+        private int sum;
+        private int count;
+
+        SeedProbe(HoncheonMvt plugin, WorldMap map, java.util.List<Long> seeds, CommandSender sender) {
+            this.plugin = plugin;
+            this.map = map;
+            this.seeds = seeds;
+            this.sender = sender;
+        }
+
+        @Override
+        public void run() {
+            long t0 = System.nanoTime();
+            while (System.nanoTime() - t0 < TICK_BUDGET_NANOS) {
+                if (!step()) {
+                    cancel();
+                    return;
+                }
+            }
+        }
+
+        /** 한 걸음 = 후보 한 곳 채점. false = 검사 끝 */
+        private boolean step() {
+            if (probe == null) {                      // 다음 시드로
+                seedIndex++;
+                if (seedIndex >= seeds.size()) {
+                    return false;
+                }
+                probe = map.createProbeWorld(seeds.get(seedIndex));
+                places = map.seedProbeTargets(false);
+                placeIndex = 0;
+                candidates = null;
+                lines = new java.util.ArrayList<>();
+                sum = 0;
+                count = 0;
+                return true;
+            }
+            if (candidates == null) {                 // 다음 지역으로
+                if (placeIndex >= places.size()) {
+                    finishSeed();
+                    return true;
+                }
+                candidates = map.probeCandidates(places.get(placeIndex));
+                candIndex = 0;
+                best = null;
+                bestShift = 0;
+                return true;
+            }
+            WorldMap.Place place = places.get(placeIndex);
+            if (candIndex >= candidates.size()) {     // 후보 소진 — 최고점 자리에 앉힌다
+                recordPlace(place, best, bestShift);
+                return true;
+            }
+            int[] c = candidates.get(candIndex++);
+            WorldMap.Fit f = map.fitAt(probe, place, c[0], c[1]);
+            if (f.pass()) {                           // 합격 — 더 볼 것 없다
+                recordPlace(place, f, c[2]);
+                return true;
+            }
+            if (best == null || f.score() > best.score()) {
+                best = f;
+                bestShift = c[2];
+            }
+            return true;
+        }
+
+        private void recordPlace(WorldMap.Place place, WorldMap.Fit fit, int shift) {
+            sum += fit.score();
+            count++;
+            lines.add(String.format("  %-14s %3d점 %s%s", place.name(), fit.score(),
+                    fit.pass() ? "적합" : "부적합 — " + fit.verdict(),
+                    shift == 0 ? "" : " (인근 " + shift + "칸 이동)"));
+            placeIndex++;
+            candidates = null;
+        }
+
+        private void finishSeed() {
+            long seed = seeds.get(seedIndex);
+            int score = count == 0 ? 0 : sum / count;
+            sender.sendMessage(ChatColor.GOLD + "시드 " + seed + " — 점수 " + score);
+            lines.forEach(line -> sender.sendMessage(ChatColor.GRAY + line));
+            // 콘솔(RCON)로 부르면 명령이 끝난 뒤엔 sender 로 보낸 말이 사라진다 — 검사는 몇 분이 걸린다.
+            // 결과는 로그에도 남긴다: 루프의 눈이 결과를 못 보면 검사한 적 없는 것과 같다.
+            plugin.getLogger().info("[시드검사] 시드 " + seed + " — 점수 " + score);
+            lines.forEach(line -> plugin.getLogger().info("[시드검사] " + line));
+            map.disposeProbeWorld(probe);
+            probe = null;
+        }
+
+        @Override
+        public synchronized void cancel() {
+            map.disposeProbeWorld(probe);   // 중도 취소·플러그인 종료에도 임시 월드는 남기지 않는다
+            probe = null;
+            super.cancel();
+        }
     }
 
     /** /혼천 세계조성 — 등록된 지역을 제 좌표에 짓는다 (관리자). 지금은 청하현 일대 */

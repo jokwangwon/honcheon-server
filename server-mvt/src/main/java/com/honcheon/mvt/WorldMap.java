@@ -445,6 +445,43 @@ final class WorldMap {
         return new Site(bestX, bestZ, groundY(world, bestX, bestZ), bestShift, best);
     }
 
+    // ─── 시드 검사 지원 — 한 틱에 다 하지 않기 위한 조각들 ───
+    //
+    // scoreSeed 는 한 번 부르면 후보 수백 곳을 훑고, 후보마다 지형을 표본하면서 **청크를 동기 생성**한다.
+    // 5개 시드를 검사했더니 4,380청크를 한 틱 안에서 만들다가 워치독이 서버를 죽였다.
+    //   → 후보를 하나씩 꺼내 쓰도록 쪼갠다. 부르는 쪽(MvtCommand)이 틱을 나눠 먹는다.
+
+    /** 한 지역의 후보 좌표 — 등록 좌표가 먼저, 그다음 링(가까운 고리부터). {x, z, shift} */
+    List<int[]> probeCandidates(Place p) {
+        List<int[]> out = new ArrayList<>();
+        out.add(new int[]{worldX(p), worldZ(p), 0});
+        for (int step : ringSteps) {
+            for (int[] b : bearings) {
+                out.add(new int[]{worldX(p) + b[0] * step, worldZ(p) + b[1] * step, step});
+            }
+        }
+        return out;
+    }
+
+    /** 후보 한 곳의 지형 적합성 (청크 생성이 여기서 일어난다 — 한 번에 하나씩 부르라) */
+    Fit fitAt(World world, Place p, int x, int z) {
+        return fit(world, x, z, p.terrain(), p.biomes());
+    }
+
+    /** 검사용 임시 월드 — 쓰고 지운다 */
+    World createProbeWorld(long seed) {
+        return new WorldCreator("seedprobe_" + Long.toUnsignedString(seed))
+                .seed(seed).environment(World.Environment.NORMAL).createWorld();
+    }
+
+    /** 검사용 임시 월드 폐기 — 언로드 + 폴더 삭제 */
+    void disposeProbeWorld(World probe) {
+        if (probe != null) {
+            Bukkit.unloadWorld(probe, false);
+            deleteRecursively(probe.getWorldFolder());
+        }
+    }
+
     /** 조성 기준 지면 y — 부지 중심의 자연 지면 (물이면 해수면으로 폴백) */
     static int groundY(World world, int x, int z) {
         int g = naturalGroundY(world, x, z);
