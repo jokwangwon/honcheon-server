@@ -150,13 +150,15 @@ public final class HuntingGrounds implements Listener {
             "gwakjin", new String[]{"검", "범철"});
 
     /**
-     * 구역별 개체군 — <b>config 등록 대기</b>: {@code config/hunting_grounds.yml}
-     * (제안 YAML: docs/design/mob_spawning.md §config 제안). {@code {id, 낮 정원, 밤 정원}}.
+     * 구역별 개체군 — <b>등록부: {@code config/hunting_grounds.yml} grounds</b> ({@link #loadGrounds}).
+     * {@code {id, 낮 정원, 밤 정원}}.
      *
      * <p>낮은 들짐승과 도적, 밤은 맹수. 영물(baegyeongmyo)은 <b>정원 0</b> — 등록제다
      * ({@code cultivation.yml beast_ranks.영물.policy: 양산 금지}). 관리자 소환으로만 선다.
+     *
+     * <p>아래 값은 <b>폴백</b>이다 — 등록부가 유실돼도 산은 서야 한다.
      */
-    private static final Map<String, List<Quota>> POPULATIONS = Map.of(
+    private static Map<String, List<Quota>> populations = Map.of(
             "북쪽 산길", List.of(
                     new Quota("san_neukdae", 4, 6),
                     new Quota("metdwaeji", 3, 2),
@@ -165,20 +167,22 @@ public final class HuntingGrounds implements Listener {
                     new Quota("north_road_bandit", 3, 4),
                     new Quota("galho", 1, 1)));
 
-    /** 마을 구역 이름 — config 등록 대기 (zones.yml 은 이름만 갖는다. '마을인가'는 아직 데이터가 아니다) */
-    private static final String TOWN_ZONE = "청하현";
+    /** 마을 구역 이름 — hunting_grounds.yml town.zone (아래는 폴백) */
+    private static String townZone = "청하현";
     /** 담장 밖 여유 — 마을 무스폰은 구역 상자 + 이 만큼 (스폰이 담 밑에 붙는 것을 막는다) */
-    private static final int TOWN_MARGIN = 8;
+    private static int townMargin = 8;
 
-    /** 스폰 조건 — config 등록 대기 (hunting_grounds.yml spawn) */
-    private static final int SPAWN_CYCLE_TICKS = 200;    // 재생 주기 10초 — 한 구역에 최대 1마리/주기
-    private static final int MORALE_CYCLE_TICKS = 40;    // 전의·표적 스윕 2초
-    private static final int BOSS_RESPAWN_TICKS = 6000;  // 두목은 5분 뒤에야 다시 선다 (양산 금지)
-    private static final int NEAR_PLAYER = 96;           // 구역에 사람이 이 안에 없으면 아무것도 돌지 않는다
-    private static final int SPAWN_MIN_DIST = 20;        // 눈앞에 튀어나오지 않는다
-    private static final int SPAWN_MAX_DIST = 64;
-    private static final int SPAWN_MAX_LIGHT = 7;        // 블록 광원 — 불이 끝나는 곳부터가 사냥터다 (v6.9 ㉯)
-    private static final int ZONE_ENTITY_CAP = 18;       // 구역당 태그 개체 상한 (performance.yml)
+    /** 스폰 조건 — 등록부: hunting_grounds.yml spawn (아래는 전부 폴백값) */
+    private static int spawnCycleTicks = 200;    // 재생 주기 10초 — 한 구역에 최대 1마리/주기
+    private static int moraleCycleTicks = 40;    // 전의·표적 스윕 2초
+    private static int bossRespawnTicks = 6000;  // 두목은 5분 뒤에야 다시 선다 (양산 금지)
+    private static int nearPlayer = 96;          // 구역에 사람이 이 안에 없으면 아무것도 돌지 않는다
+    private static int spawnMinDist = 20;        // 눈앞에 튀어나오지 않는다
+    private static int spawnMaxDist = 64;
+    private static int spawnMaxLight = 7;        // 블록 광원 — 불이 끝나는 곳부터가 사냥터다 (v6.9 ㉯)
+    private static int zoneEntityCap = 18;       // 구역당 태그 개체 상한 (performance.yml)
+    /** 병기 전리품 확률 — hunting_grounds.yml loot.weapon_drop_chance (역할별. 폴백: 졸개 0.5 · 두목 1.0) */
+    private static Map<String, Double> weaponDropChance = Map.of("졸개", 0.5, "두목", 1.0, "default", 0.5);
     private static final int SPIRIT_REACH = 3;           // 영물 수동 타격 사거리
     private static final int SPIRIT_SWING_TICKS = 20;
 
@@ -371,6 +375,87 @@ public final class HuntingGrounds implements Listener {
                 FOES.put(id, foe);
             }
         });
+
+        loadGrounds(cfg);   // 개체군·스폰·전리품 — config/hunting_grounds.yml
+    }
+
+    /**
+     * 사냥터 등록부 — {@code config/hunting_grounds.yml}.
+     *
+     * <p>구역별 정원(낮·밤)·재생 주기·마을 무스폰·병기 전리품 확률이 여기서 온다.
+     * <b>등록부가 없으면 폴백으로 돈다</b> — 산이 비는 것보다는 코드가 심은 산이 낫다 (서버는 떠야 한다).
+     * 다만 정원을 코드가 '짓지는' 않는다: 폴백은 등록부의 사본이지 다른 정본이 아니다.
+     */
+    @SuppressWarnings("unchecked")
+    private static void loadGrounds(Path cfg) {
+        Path file = cfg.resolve("hunting_grounds.yml");
+        if (!java.nio.file.Files.isRegularFile(file)) {
+            return;   // 폴백 유지
+        }
+        Map<String, Object> root = RulesConfig.load(file);
+
+        if (root.get("spawn") instanceof Map<?, ?> raw) {
+            Map<String, Object> s = (Map<String, Object>) raw;
+            spawnCycleTicks = ticks(s.get("cycle_seconds"), spawnCycleTicks);
+            moraleCycleTicks = ticks(s.get("morale_cycle_seconds"), moraleCycleTicks);
+            bossRespawnTicks = ticks(s.get("boss_respawn_seconds"), bossRespawnTicks);
+            nearPlayer = intOr(s.get("player_near"), nearPlayer);
+            spawnMinDist = intOr(s.get("min_distance"), spawnMinDist);
+            spawnMaxDist = intOr(s.get("max_distance"), spawnMaxDist);
+            spawnMaxLight = intOr(s.get("max_block_light"), spawnMaxLight);
+            zoneEntityCap = intOr(s.get("zone_entity_cap"), zoneEntityCap);
+        }
+        if (root.get("town") instanceof Map<?, ?> raw) {
+            Map<String, Object> t = (Map<String, Object>) raw;
+            townZone = String.valueOf(t.getOrDefault("zone", townZone));
+            townMargin = intOr(t.get("margin"), townMargin);
+        }
+        if (root.get("grounds") instanceof Map<?, ?> raw) {
+            Map<String, List<Quota>> parsed = new LinkedHashMap<>();
+            ((Map<String, Object>) raw).forEach((key, value) -> {
+                if (!(value instanceof Map<?, ?> g)) {
+                    return;
+                }
+                Map<String, Object> ground = (Map<String, Object>) g;
+                String zone = String.valueOf(ground.get("zone"));
+                List<Quota> quotas = new ArrayList<>();
+                if (ground.get("population") instanceof Map<?, ?> pop) {
+                    ((Map<String, Object>) pop).forEach((id, q) -> {
+                        if (q instanceof Map<?, ?> qm) {
+                            Map<String, Object> quota = (Map<String, Object>) qm;
+                            quotas.add(new Quota(id, intOr(quota.get("day"), 0),
+                                    intOr(quota.get("night"), 0)));
+                        }
+                    });
+                }
+                if (!quotas.isEmpty()) {
+                    parsed.put(zone, List.copyOf(quotas));
+                }
+            });
+            if (!parsed.isEmpty()) {
+                populations = Map.copyOf(parsed);
+            }
+        }
+        if (root.get("loot") instanceof Map<?, ?> raw
+                && ((Map<String, Object>) raw).get("weapon_drop_chance") instanceof Map<?, ?> chance) {
+            Map<String, Double> parsed = new LinkedHashMap<>();
+            ((Map<String, Object>) chance).forEach((role, value) -> {
+                if (value instanceof Number n) {
+                    parsed.put(role, n.doubleValue());
+                }
+            });
+            if (!parsed.isEmpty()) {
+                weaponDropChance = Map.copyOf(parsed);
+            }
+        }
+    }
+
+    private static int ticks(Object seconds, int fallback) {
+        return seconds instanceof Number n ? Math.max(1, (int) Math.round(n.doubleValue() * 20)) : fallback;
+    }
+
+    private static int intOr(Object value, int fallback) {
+        return value instanceof Number n ? n.intValue() : fallback;
     }
 
     /** 등록부의 한 줄 → 인게임 개체 정의. 전투에 세울 수 없는 NPC(객잔 주인 등)는 null */
@@ -512,22 +597,22 @@ public final class HuntingGrounds implements Listener {
     /** 마을 = 구역 「청하현」 상자 + 여유. 구역이 없으면 장터 앵커 반경 80 (조성 전 폴백) */
     private boolean inTown(Location at) {
         for (Zone zone : plugin.zones()) {
-            if (!TOWN_ZONE.equals(zone.name())) {
+            if (!townZone.equals(zone.name())) {
                 continue;
             }
             return at.getWorld() != null && at.getWorld().getName().equals(zone.world())
-                    && at.getBlockX() >= zone.x1() - TOWN_MARGIN && at.getBlockX() <= zone.x2() + TOWN_MARGIN
-                    && at.getBlockZ() >= zone.z1() - TOWN_MARGIN && at.getBlockZ() <= zone.z2() + TOWN_MARGIN;
+                    && at.getBlockX() >= zone.x1() - townMargin && at.getBlockX() <= zone.x2() + townMargin
+                    && at.getBlockZ() >= zone.z1() - townMargin && at.getBlockZ() <= zone.z2() + townMargin;
         }
         Location market = plugin.anchor("장터");
         return market != null && market.getWorld() == at.getWorld()
                 && market.distanceSquared(at) < 80 * 80;
     }
 
-    /** 사냥터 구역 — 개체군 표(POPULATIONS)에 등록된 이름의 구역 */
+    /** 사냥터 구역 — 개체군 표(populations)에 등록된 이름의 구역 */
     private Zone huntZoneAt(Location at) {
         for (Zone zone : plugin.zones()) {
-            if (POPULATIONS.containsKey(zone.name()) && zone.contains(at)) {
+            if (populations.containsKey(zone.name()) && zone.contains(at)) {
                 return zone;
             }
         }
@@ -544,14 +629,14 @@ public final class HuntingGrounds implements Listener {
     private void tick() {
         cycle += 20;
         sparring.tick();                                  // 비무 판정 (장외·시간초과) — 티커 공유
-        if (cycle % MORALE_CYCLE_TICKS == 0) {
+        if (cycle % moraleCycleTicks == 0) {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 sweep(player);
             }
         }
-        if (cycle % SPAWN_CYCLE_TICKS == 0) {
+        if (cycle % spawnCycleTicks == 0) {
             for (Zone zone : plugin.zones()) {
-                if (POPULATIONS.containsKey(zone.name())) {
+                if (populations.containsKey(zone.name())) {
                     repopulate(zone);
                 }
             }
@@ -567,7 +652,7 @@ public final class HuntingGrounds implements Listener {
         }
         BoundingBox box = new BoundingBox(zone.x1(), zone.y1(), zone.z1(),
                 zone.x2() + 1, zone.y2() + 1, zone.z2() + 1);
-        Player near = nearestPlayer(world, box.getCenter().toLocation(world), NEAR_PLAYER);
+        Player near = nearestPlayer(world, box.getCenter().toLocation(world), nearPlayer);
         if (near == null) {
             return;   // 사람이 없으면 산도 조용하다 (성능)
         }
@@ -580,17 +665,17 @@ public final class HuntingGrounds implements Listener {
                 total++;
             }
         }
-        if (total >= ZONE_ENTITY_CAP) {
+        if (total >= zoneEntityCap) {
             return;
         }
         boolean night = isNight(world);
-        for (Quota quota : POPULATIONS.get(zone.name())) {
+        for (Quota quota : populations.get(zone.name())) {
             Foe foe = FOES.get(quota.id());
             if (foe == null || census.getOrDefault(quota.id(), 0) >= quota.target(night)) {
                 continue;
             }
             String cooldownKey = zone.name() + "/" + quota.id();
-            long wait = "두목".equals(foe.role()) ? BOSS_RESPAWN_TICKS : 0;
+            long wait = "두목".equals(foe.role()) ? bossRespawnTicks : 0;
             if (cycle - lastSpawnTick.getOrDefault(cooldownKey, -wait) < wait) {
                 continue;
             }
@@ -624,11 +709,11 @@ public final class HuntingGrounds implements Listener {
                 continue;
             }
             double distance = at.distance(near.getLocation());
-            if (distance < SPAWN_MIN_DIST || distance > SPAWN_MAX_DIST) {
+            if (distance < spawnMinDist || distance > spawnMaxDist) {
                 continue;
             }
             // 광원 — 짐승은 어둠에서 온다 (야영터·산길 등롱 밑엔 서지 않는다). 사람(산적)은 불을 쬔다
-            if (foe.isBeast() && world.getBlockAt(x, y + 1, z).getLightFromBlocks() > SPAWN_MAX_LIGHT) {
+            if (foe.isBeast() && world.getBlockAt(x, y + 1, z).getLightFromBlocks() > spawnMaxLight) {
                 continue;
             }
             return at;
@@ -1096,8 +1181,9 @@ public final class HuntingGrounds implements Listener {
             }
         }
         if (foe.loadout() != null && !"비무상대".equals(foe.role())) {
-            // 병기 전리품 — 졸개는 반, 두목은 확실히 (config 등록 대기: hunting_grounds.yml loot.weapon_chance)
-            double chance = "두목".equals(foe.role()) ? 1.0 : 0.5;
+            // 병기 전리품 — 역할별 확률은 등록부가 준다 (hunting_grounds.yml loot.weapon_drop_chance)
+            double chance = weaponDropChance.getOrDefault(String.valueOf(foe.role()),
+                    weaponDropChance.getOrDefault("default", 0.5));
             if (ThreadLocalRandom.current().nextDouble() < chance) {
                 event.getDrops().add(Weapons.make(foe.loadout()[0], foe.loadout()[1]));
             }
@@ -1263,7 +1349,7 @@ public final class HuntingGrounds implements Listener {
     public List<String> census() {
         List<String> lines = new ArrayList<>();
         for (Zone zone : plugin.zones()) {
-            if (!POPULATIONS.containsKey(zone.name())) {
+            if (!populations.containsKey(zone.name())) {
                 continue;
             }
             World world = plugin.getServer().getWorld(zone.world());
@@ -1281,7 +1367,7 @@ public final class HuntingGrounds implements Listener {
             }
             lines.add(org.bukkit.ChatColor.GOLD + "── " + zone.name() + " ("
                     + (night ? "밤 — 맹수가 나온다" : "낮 — 들짐승과 도적") + ") ──");
-            for (Quota quota : POPULATIONS.get(zone.name())) {
+            for (Quota quota : populations.get(zone.name())) {
                 Foe foe = FOES.get(quota.id());
                 lines.add(org.bukkit.ChatColor.WHITE + (foe == null ? quota.id() : foe.name())
                         + org.bukkit.ChatColor.GRAY + "  " + census.getOrDefault(quota.id(), 0)

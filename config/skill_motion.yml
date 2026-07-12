@@ -769,13 +769,20 @@ skills:
     #   (SkillListener.telegraph: n ≤ 0 이면 발행하지 않는다) **응집음까지 함께 죽인다**
     #   (scheduleTelegraph 는 per ≤ 0 에서 되돌아가므로 charge 사운드도 안 난다).
     #   그래서 이 검은 **오는 것이 보이지도 들리지도 않는다** — 그것이 곤륜 중급의 값이다.
-    #   스윙음도 −60% (0.25 · 다른 검의 0.7 대비). 다만 **타격은 보인다** — 맞았다는 사실까지 지우면
-    #   그것은 판정이 거짓말하는 것이다 (격의 타격 파티클·타격음은 grades 의 것이므로 여기서 못 줄인다).
+    #
+    # 【2026-07 — 무음이 완결됐다】 지난 판은 **스윙음만** −60% 로 내릴 수 있었다. 타격음은 격의 것
+    #   (grades[].sounds.impact)이라 초식이 손댈 칸이 없었고, 그래서 조용히 다가온 검이 **닿는 순간
+    #   여느 검과 똑같이 울었다**. 이제 `sound_scale` 이 그 칸이다 — 이 초식이 내는 **모든** 소리
+    #   (스윙음·응집음·**타격음**)가 함께 0.4 배로 내려간다. 등록부만으로 무음이 완결된다.
+    #   그래서 스윙음의 volume 은 **검의 정상값(0.7/0.7/0.8)으로 되돌렸다** — 두 번 깎이면 안 된다.
+    #   다만 **타격 파티클은 그대로다** — 맞았다는 사실까지 지우면 화면이 판정에 대해 거짓말하는 것이다.
     steps:
-      - { trail: 선, count: 1, telegraph_boost: -9, sound: { key: "entity.player.attack.weak", volume: 0.25, pitch: 1.45 } }
-      - { trail: 선, count: 1, telegraph_boost: -9, sound: { key: "entity.player.attack.weak", volume: 0.25, pitch: 1.40 } }
-      - { trail: 호, count: 2, finisher: true, telegraph_boost: -9,
-          sound: { key: "entity.player.attack.weak", volume: 0.30, pitch: 1.25 } }
+      - { trail: 선, count: 1, telegraph_boost: -9, sound_scale: 0.4,
+          sound: { key: "entity.player.attack.weak", volume: 0.70, pitch: 1.45 } }
+      - { trail: 선, count: 1, telegraph_boost: -9, sound_scale: 0.4,
+          sound: { key: "entity.player.attack.weak", volume: 0.70, pitch: 1.40 } }
+      - { trail: 호, count: 2, finisher: true, telegraph_boost: -9, sound_scale: 0.4,
+          sound: { key: "entity.player.attack.weak", volume: 0.80, pitch: 1.25 } }
 
   taeheo_geom:
     name: "태허검법"
@@ -1461,10 +1468,15 @@ display:
     #   그것이 이 등록부의 규칙이기도 하다: 보이는 모양 = 맞는 모양 (불변식 ㄴ).
     #   문파는 그 안에서 **파티클·소리·응집 고리**가 가른다 (형체는 히트박스의 것이다).
     #
-    # 【방향 계약】 오의 형체는 시전자의 yaw 로 서고 scale 만 자란다 (SkillDisplay.bloom — 회전이 없다).
-    #   그러므로 **앞으로 뻗는 축을 모델에 새길 수 없다.** 눕는 것(XZ 평면)과 앞에 서는 것(XY 평면)뿐이다.
-    #   선 오의를 '앞으로 뻗은 창'으로 굽지 않고 **앞에 선 여러 세로 획(빗살)** 으로 세운 이유가 그것이다 —
-    #   못 하는 것을 등록하면 그것이 거짓말이다.
+    # 【방향 계약 — 2026-07 개정: 이제 **회전이 있다**】
+    #   좌표계: 형체는 시전자를 향해 선다. 그 몸을 기준으로 **+X 왼쪽 · +Y 위 · +Z 앞** 이다.
+    #           **앞은 Z 다** (바닐라 규약: yaw 0 인 몸은 +Z 를 본다). 이 한 줄이 어디에도 없어서
+    #           지난 판은 '앞으로 뻗는 축'을 모델에 새기지 못했다 (yaw 로만 서고 scale 로만 자랐다).
+    #   이제 `motions[].orient: [pitch, yaw, roll]` (도) 이 형체를 돌려 세우고,
+    #        `motions[].burst_scale: [x, y, z]` 가 **축마다 다르게** 자라게 한다.
+    #        둘이 함께여야 창(槍)이 된다: 한 축만 사거리를 따라 뻗고, orient 가 그 축을 앞으로 눕힌다.
+    #   그래서 선(線) 오의는 이제 **'앞에 선 빗살'이 아니라 '앞으로 뻗는 뇌격의 다발'** 이다 (뇌격_강림).
+    #   ※ 스칼라 burst_scale 은 그대로 돈다 (세 축이 같이 자란다 — 원 오의의 문법은 변하지 않았다).
     검풍_고리:
       key: "honcheon:ult/sword_gale"
       base: PAPER
@@ -1476,9 +1488,18 @@ display:
       key: "honcheon:ult/bolt_comb"
       base: PAPER
       fallback: END_ROD
-      size: [1.4, 2.2, 0.06]      # 앞에 서는 판 (XY 평면) — 세로 획 여럿
-      form: "몸 앞에 선 여러 세로 획 — 선 오의(섬전 13 · 오호 5 · 항룡 3 · 사일 9)의 다발.
-             가운데가 높고 양옆이 낮다 — 한 줄로 간다는 뜻이다"
+      size: [1.4, 2.2, 0.06]      # 폭(X) 1.4 · **길이(Y) 2.2** · 두께(Z) 0.06
+      # 【주의 — 개화의 size 는 치수가 아니라 **종횡비**다】 참격선은 size 로 **나누고**(scale = 길이/size),
+      #   개화는 size 를 **곱한다**(scale = size × 사거리 × burst_scale). 그래서 개화 모델의 실제 뻗은
+      #   길이는 언제나 **1m(16단위)** 여야 한다 — 그보다 길게 구우면 그 배만큼 더 길어진다.
+      # 【원점 계약 — 앞으로 뻗는 형체 · 팩 청구서】 참격선이 원점을 **머리**에 두듯, 뻗는 형체는 원점을
+      #   **꽁무니**(시전자 쪽)에 둔다. 획들은 거기서 **+Y 로 16단위(1m)** 늘어난다 (elements y: 8 → 24).
+      #   그래야 orient [90, 0, 0] 이 그 축을 **앞(+Z)** 으로 눕혔을 때 다발이 시전자의 가슴에서
+      #   **표적을 향해** 뻗는다. 지금 구워진 것은 **원점 중심의 1m 정육면체(자리표)** 이므로,
+      #   다시 굽기 전까지는 다발의 **뒤 절반이 시전자 뒤로 삐져나온다** (팩 미배포라 지금은 안 보인다).
+      #   길이는 판정이 준다 (burst_scale.y × 사거리 — length 10~24m).
+      form: "**앞으로 뻗는 뇌격의 다발** — 선 오의(섬전 13 · 오호 5 · 항룡 3 · 사일 9)의 얼굴.
+             원점은 꽁무니, +Y 로 늘어난다. 가운데가 길고 양옆이 짧다 — 한 줄로 간다는 뜻이다"
 
     장심_인:
       key: "honcheon:ult/palm_bloom"
@@ -1538,9 +1559,16 @@ display:
                 interpolation: 4, spin: 0.10, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
                 # 원 오의 — 사방으로 펴진다 (창궁무애·혼원벽력·운룡대팔식·천하36검·남해36검)
     뇌격_강림: { kind: 개화, model: 뇌격_빗살, lifetime: 22, birth: 0, fade: 4,
-                interpolation: 2, spin: 0.0, burst_scale: 0.15, billboard: FIXED, brightness: [15, 15] }
-                # 선 오의 — 앞에 선다. **자전하지 않는다** (한 줄로 가는 것은 돌지 않는다)
-                # burst_scale 0.15 — 선 오의의 range 는 length(최대 24m)다. 1.0 이면 하늘을 덮는다
+                interpolation: 2, spin: 0.0, orient: [90, 0, 0],
+                burst_scale: [0.06, 0.45, 0.50], billboard: FIXED, brightness: [15, 15] }
+                # 선 오의 — **앞으로 뻗는다**. 자전하지 않는다 (한 줄로 가는 것은 돌지 않는다)
+                # orient [90,0,0] — 모델의 길이축(+Y)을 **앞(+Z)** 으로 눕힌다. 그래서 창이 된다
+                # burst_scale 축이 갈린다 (final = size × 사거리 × 배율):
+                #   y 0.45 = 길이 2.2 × range × 0.45 ≈ **사거리 그대로** (10m → 9.9m · 24m → 23.8m)
+                #   x 0.06 = 폭   1.4 × range × 0.06 ≈ 0.8~2.0m — 히트박스 width(0.8~3)를 따라간다
+                #   z 0.50 = 두께 0.06 × range × 0.50 ≈ 0.3~0.7m (누운 뒤엔 위아래 두께다)
+                # 예전엔 세 축이 **같이** 자라서 길이를 사거리까지 늘리면 폭도 하늘을 덮었다 —
+                # 그래서 0.15 로 통째로 줄여 '앞에 선 빗살'로 세울 수밖에 없었다. 그 청구서를 여기서 갚는다
     장심_개화: { kind: 개화, model: 장심_인,  lifetime: 26, birth: 2, fade: 6,
                 interpolation: 4, spin: 0.02, burst_scale: 0.60, billboard: FIXED, brightness: [15, 15] }
                 # 소림 — 손바닥이 천천히 펴진다 (여래신장). 거의 돌지 않는다

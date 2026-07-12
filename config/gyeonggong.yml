@@ -1,0 +1,237 @@
+# 경공(輕功) — 무협의 몸이 땅을 딛는 법 (기계 판독용)
+# 기준 문서: docs/design/gyeonggong.md
+# 엔진: server-mvt/.../Gyeonggong.java (등록부·산술) · GyeonggongListener.java (몸·티커·파티클)
+# 검산: tools/gyeonggong_audit.py
+#
+# ═══ 세 줄 요약 ═══
+#   ① 경공은 개화(일류)부터다. internal_energy.yml realm_gates 가 '경신'을 일류에 열었다 —
+#      삼류·이류는 내력이 없다(풀 0). 그들은 바닐라처럼 걷는다. **그것이 개화의 보상이다.**
+#   ② 경지가 천장을 정하고, 신법(민첩) 수련이 그 안에서 자란다. 천장은 경지가 열고, 크기는 수련이 정한다
+#      (training.yml curriculum.cap 의 문법 그대로 — "몰빵을 멈추는 것은 페널티가 아니라 천장이다").
+#   ③ 몸은 내력을 태워 뜬다. 그리고 **내력이 끊기면 떨어진다** — 낙법은 기가 도는 몸에만 듣는다.
+#      쿨다운 타이머는 하나도 없다. 경공을 막는 것은 시계가 아니라 **단전과 경지와 갑옷**이다.
+
+mode:
+  name: 답설무흔                  # 踏雪無痕 — 이 '이동 모드'의 이름. ★지어냄 (일반 무협 용어. 문파 무공 아님)
+  band: 경신                      # internal_energy.yml cost_bands.경신 — 이 모드가 무는 격(格)
+  gate_realm_from: 일류           # internal_energy.yml realm_gates 에서 '경신'이 열리는 첫 경지 (린트 대조)
+  activate: "달리며 점프 (mc_action_mapping.md:24 — '점프(달리며 연속) = 경공 모드')"
+  deactivate:
+    - "내력이 유지비를 못 내는 순간 (★ 이 게임의 극적인 자리 — 공중이었다면 떨어진다)"
+    - "멈춰 선 채 idle_off_ticks 경과 (경공은 '달리는 몸'이다)"
+    - "죽음·퇴장·월드 이동"
+  no_cooldown: "★ 쿨다운 없음 — 이 프로젝트는 시계로 막지 않는다. 막는 것은 내력·경지·갑옷이다"
+  idle_off_ticks: 40              # 2초간 수평 이동이 없으면 기가 흩어진다
+
+# ══════════════════════════════════════════════════════════════════════
+#  ① 경지 천장 — 삼류가 지붕을 날면 안 된다
+# ══════════════════════════════════════════════════════════════════════
+# 값의 뜻:
+#   speed_bonus   걷기 속도 배수 가산 (바닐라 0.2 × (1 + n))
+#   jump_bonus    도약 초속 배수 가산 — 도달 높이 ≈ 1.25 × (1 + n)² 블록 (바닐라 1.25)
+#   fall_grace_m  낙법(落法)이 지워 주는 낙하 높이 (m). ★ 내력이 도는 몸에만 듣는다 (fall.requires_energy)
+#   wall_climb_m  벽 딛기로 한 번의 체공에 오를 수 있는 총 높이 (0 = 못 딛는다)
+#   water_run     수상비 — 물 위를 달린다
+#   그리고 이 다섯은 전부 **경지 천장**이다. 실제 값은 아래 growth 가 민첩으로 산다 (min(천장, 성장)).
+realm_ceiling:
+  범인:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false }
+  삼류:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false }
+  이류:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false }
+  # ─── 개화 — 단전이 열린 몸. 여기서부터 땅이 다르게 밟힌다 ───
+  일류:   { speed_bonus: 0.12, jump_bonus: 0.30, fall_grace_m: 10, wall_climb_m: 0,  water_run: false }
+  절정:   { speed_bonus: 0.15, jump_bonus: 0.36, fall_grace_m: 12, wall_climb_m: 4,  water_run: false }
+  초절정: { speed_bonus: 0.17, jump_bonus: 0.42, fall_grace_m: 14, wall_climb_m: 6,  water_run: true }
+  화경:   { speed_bonus: 0.20, jump_bonus: 0.48, fall_grace_m: 16, wall_climb_m: 8,  water_run: true }
+  현경:   { speed_bonus: 0.22, jump_bonus: 0.54, fall_grace_m: 18, wall_climb_m: 9,  water_run: true }
+  생사경: { speed_bonus: 0.25, jump_bonus: 0.60, fall_grace_m: 20, wall_climb_m: 10, water_run: true }
+  # ★ 검산이 첫 판에 잡아낸 것: 처음엔 낙법 천장을 8→48m 로 크게 잡았다. 그런데 신법을 **캡까지 몰아도**
+  #   그 천장에 못 닿았다 (화경 캡 9 × 1.6 = 14.4 < 24) — 즉 그 천장은 **장식**이었고,
+  #   "경지가 천장을 열고 수련이 그 천장까지 자란다"는 말이 거짓이 되어 있었다 (lint ③).
+  #   → 천장을 **수련이 닿는 곳**으로 내렸다. 그리고 그것이 옳다: 공짜로 사는 높이는 경지가 주되,
+  #     **그 위는 내력이 산다** (qi.soften — 내력 1 = 4m). 화경의 단전(풀 21)은 84m 를 살 수 있다.
+
+# ══════════════════════════════════════════════════════════════════════
+#  ② 성장 — 신법(身法)이 천장 안에서 자란다
+# ══════════════════════════════════════════════════════════════════════
+# training.yml curriculum.신법 은 민첩 원장에 쌓인다. 지금까지 그 민첩은 **회피 판정만** 샀다 —
+# 축의 절반(몸이 가벼워지는 쪽)이 비어 있었다. 이 표가 그 절반이다.
+#
+# ★ 눈금의 근거: per_agility × (그 경지의 능력치 캡 − 1) ≈ 그 경지의 천장.
+#   즉 **신법을 캡 직전까지 몰아야 천장에 닿는다.** 대충 키운 발은 천장을 못 본다.
+#   (player_creation.yml attribute_cap_by_realm: 일류 6 · 절정 7 · 초절정 8 · 화경 9 · 현경 10)
+growth:
+  attribute: 민첩                 # training.yml curriculum.신법.ledger
+  per_agility:
+    speed_bonus: 0.025            # 민첩 5 = 0.125 → 일류 천장(0.12) 도달
+    jump_bonus: 0.06              # 민첩 5 = 0.30  → 일류 천장 도달
+    fall_grace_m: 2.0             # 민첩 5 = 10m   → 일류 천장 도달
+    wall_climb_m: 1.0             # 민첩 4 = 4m    → 절정 천장 도달 (일류는 천장이 0 — 벽은 절정부터)
+    dash_m: 0.3                   # 회피 물러남·선공 파고들기의 거리 가산 (기본 거리는 보법이 준다)
+  reads_real_value: false         # 판정이 아니라 몸이다 — 민첩 **실수치**를 그대로 쓴다 (화후 규칙: 자원은 실수)
+  note: "경지가 천장을 열고, 신법이 그 천장까지 자란다. 승급 없이 신법만 판 자는 천장에 갇힌다"
+
+# ══════════════════════════════════════════════════════════════════════
+#  ③ 내력 — 공짜로 나는 몸은 무협이 아니다
+# ══════════════════════════════════════════════════════════════════════
+# 전 코스트는 internal_energy.yml cost_bands.경신 = [1, 2] 안에 있어야 한다 (린트 대조).
+#   하단 1 = 유지(두름), 상단 2 = 발출(쏨) — 밴드의 정의 그대로다.
+qi:
+  upkeep:
+    cost: 1
+    interval_ticks: 20            # = SkillEngine.roundTicks (1합). '한 합에 1' — 조식과 같은 시계다
+    note: "달리는 동안 단전이 돈다. 조식(internal_energy recovery.in_combat.조식)은 내력을 쓴 합에는 안 돈다 —
+      즉 **경공을 켜 둔 자는 숨을 고르지 못한다.** 이 한 줄이 경공의 진짜 값이다"
+  water_upkeep_multiplier: 2      # 수상비 — 물은 딛을 것이 없다 (유지비 2/합 = 밴드 상단)
+  leap: 1                         # 경공 도약 1회
+  wall_kick: 1                    # 벽 딛기 1회
+  retreat: 1                      # 회피 성공 시 몸을 빼는 값 (combat.yml defender_choice.회피 — "몸을 뺀다")
+  close_in: 1                     # 선공을 잡고 먼저 붙는 값 (combat.yml initiative.frontal)
+  soften:
+    cost: 1
+    meters_per_qi: 4              # 천장 위로 떨어진 높이를 내력으로 산다 — 내력 1 = 4m
+  floor: 1                        # ★ 어떤 할인도 코스트를 0으로 만들지 못한다. 공짜로 나는 몸은 없다
+  depleted:
+    grace_multiplier: 0.0         # ★★ 내력이 끊기면 낙법이 안 듣는다 — 돌처럼 떨어진다
+    window_ticks: 60              # 고갈의 여운 (3초) — 이 안에는 다시 못 뜬다. 화면이 그것을 말한다
+    speed_penalty: true           # 걷기 속도가 바닐라로 즉시 돌아간다 (몸이 무거워진다)
+
+# 심법의 결(結) — 【정본은 simbeop.yml qi_profile.연비 / passive】. 여기는 그 문장의 기계 키다.
+#   (프로즈는 엔진이 못 읽는다 — growth_axes.md §2 가 'gyeol' 로 한 일과 같은 번역이다.
+#    감사 도구가 simbeop.yml 원문과 이 표의 어긋남을 잡는다 — lint ⑤)
+simbeop_effects:
+  jaha_singong:        { 경신_할인: 1 }                                   # simbeop.yml:106 "경신(보법) 소모 -1"
+  okhyeon_gwijin:      { 경신_할인: 1 }                                   # simbeop.yml:450 "경신(보법) 소모 -1"
+  gonryun_hyeoncheon:  { 경신_할인: 2, 이동_거리_배율: 1.2, 낙하_무효: true }  # simbeop.yml:468-469 "경신(경공) -2" · "답운 — 경공 이동 거리 +20% · 낙하 피해 무효"
+discount_rule:
+  applies_to: [upkeep_interval]   # ★ 할인은 **유지 간격**을 늘린다 (할인 n → 간격 × (1 + n))
+  action_cost_floor: 1            # 단발 코스트(도약·벽차기·물러남)는 floor 아래로 못 내려간다
+  rationale: |
+    할인을 단발 코스트에 그대로 물리면 곤륜(−2)의 경공이 **공짜**가 된다 (코스트 1 − 2 = −1).
+    공짜로 나는 몸은 무협이 아니다. 그래서 할인은 '얼마를 내는가'가 아니라 '얼마나 오래 버티는가'를 산다:
+    곤륜현천공은 같은 내력으로 **세 배를 난다** (간격 20틱 → 60틱). 그것이 '절세의 경공'의 수치다.
+  fall_immunity: "낙하_무효(곤륜)는 **경공이 켜져 있고 내력이 남아 있을 때만** 듣는다. 고갈된 몸은 곤륜도 떨어진다"
+
+# ══════════════════════════════════════════════════════════════════════
+#  ④ 문파 보법(步法) — 지어내지 않았다. skills.yml 에 이미 넷이 있었다
+# ══════════════════════════════════════════════════════════════════════
+# 【정본】 보법의 목록·문파·경지 요건 = skills.yml (category: 경공)
+#         보법의 거리·수직·변칙   = skill_mechanics.yml (distance · vertical · irregular)
+#   이 절은 그 등록부가 **경공에서 무엇을 여는가**만 정한다 (수치를 복제하지 않는다 — 엔진이 저기서 읽는다).
+#
+#   매화보(화산 · 5)   · 제운종(무당 · 8 · 수직) · 취팔선보(개방 · 4 · 변칙) · 답운종(곤륜 · 10 · 수직)
+bobeop:
+  source_catalog: skills.yml            # category == 경공 인 무공이 곧 보법이다
+  source_mechanics: skill_mechanics.yml  # distance / vertical / irregular 는 저기가 정본
+  grants:
+    vertical: { wall_climb: true }      # ★ 벽은 아무나 못 딛는다 — 제운종·답운종을 익힌 자만 (무당·곤륜)
+    irregular: { dodge_bias_deg: 30 }   # 취팔선보 — "이동 방향 무작위 편향 ±30°" (skill_mechanics 그대로)
+  none:
+    wall_climb: false
+    dodge_bias_deg: 0
+    distance_m: 3                       # 보법이 없는 몸의 물러남 = 기본 회피 (skill_mechanics dodge.distance 3)
+  mastery_bonus_m: 0.25                 # 보법 숙련 1당 이동 거리 +0.25m (숙련은 손이 아니라 발에도 붙는다)
+  wall_climb_note: "벽 딛기 = 경지 천장(wall_climb_m > 0) ∧ 수직 보법 보유. 둘 중 하나라도 없으면 벽은 벽이다"
+
+# ══════════════════════════════════════════════════════════════════════
+#  ⑤ 갑옷이 회피를 판다 — equipment.yml 의 대원칙, 경공 쪽 절반
+# ══════════════════════════════════════════════════════════════════════
+# 【정본】 equipment.yml armor (mitigation · dodge_penalty · restrictions: [경공_불가])
+#   MVT 에는 방어구 착용 체계가 없다 — 그래서 **바닐라 갑옷을 무협의 갑으로 읽는다** (아래 표. ★지어냄).
+#   이것이 없으면 '경공_불가' 는 영원히 문서로만 존재한다 (gap_audit §3-① 이 지적한 바로 그 상태).
+armor_gate:
+  by_chestplate:                        # 바닐라 흉갑 → equipment.yml armor 계열
+    LEATHER_CHESTPLATE: 무복
+    CHAINMAIL_CHESTPLATE: 피갑
+    IRON_CHESTPLATE: 철갑
+    GOLDEN_CHESTPLATE: 피갑
+    DIAMOND_CHESTPLATE: 철갑
+    NETHERITE_CHESTPLATE: 철갑
+  none: 무복                             # 안 입은 몸 = 무복 (무림인 표준 — "경공·보법 온전")
+  blocked_by: 경공_불가                   # equipment.yml armor.<계열>.restrictions 에 이 값이 있으면 경공이 안 열린다
+  dodge_penalty_scale: 0.15             # 피갑(dodge_penalty −1) → 속도·도약·낙법 −15%. 갑옷은 몸을 무겁게 한다
+  note: "철갑을 입은 자는 경공을 못 쓴다. 화면이 그 말을 한다 — '철갑이 몸을 땅에 붙든다'"
+
+# ══════════════════════════════════════════════════════════════════════
+#  ⑤-b 마인크래프트의 상수 — 우리가 고른 값이 아니라 **바닐라가 정한 값**이다
+# ══════════════════════════════════════════════════════════════════════
+# 코드가 수치를 지어내지 않게 여기 적어 둔다 (등록제 불가침). 바닐라를 바꾸면 여기만 고친다.
+mc:
+  base_walk_speed: 0.2            # Player.setWalkSpeed 기본값
+  base_jump_velocity: 0.42        # 점프 초속(블록/틱)
+  jump_height_m: 1.25             # 그 초속이 버는 높이 — 도달 높이 ≈ 1.25 × (1 + jump_bonus)²
+  vanilla_safe_fall_m: 3          # 이 높이까지는 바닐라도 안 아프다 (피해 = 낙하 − 3)
+  walk_speed_hard_cap: 0.6        # setWalkSpeed 상한 안전선 (1.0 은 카메라가 멀미한다)
+  sprint_speed_mps: 5.6           # 바닐라 달리기 속도(블록/초) — 감사가 '얼마나 멀리 나는가'를 재는 자
+
+wall:                             # 벽 딛기 — 경지 천장 ∧ 수직 보법(제운종·답운종)
+  kick_velocity: 0.42             # 한 번 딛을 때의 상승 초속 (= 바닐라 점프)
+  kick_gain_m: 1.25               # 그 한 번이 버는 높이 — wall_climb_m 천장을 이 눈금으로 센다
+  min_interval_ticks: 6           # 연속 딛기의 최소 간격 (쿨다운이 아니라 **몸의 리듬**이다 — 발이 벽에 닿아야 찬다)
+  reach: 0.55                     # 벽을 감지하는 거리 (블록)
+  hold_horizontal: 0.12           # 벽에 붙어 오르게 하는 수평 성분
+
+water:                            # 수상비(水上飛) — 초절정부터 (realm_ceiling.water_run)
+  min_speed: 0.10                 # 이 속도 아래로 느려지면 가라앉는다 — **멈추면 빠진다**
+  lift: 0.10                      # 수면을 딛는 부양 초속
+  note: "물 위를 걷는 게 아니라 **달린다**. 서는 순간 발이 빠진다 (min_speed)"
+
+dash:                             # 회피 물러남 · 선공 파고들기 — 거리를 초속으로 바꾼다
+  velocity_per_meter: 0.09
+  max_velocity: 1.2
+  upward: 0.18                    # 몸을 살짝 띄운다 (지면 마찰을 벗어나야 실제로 물러난다)
+
+# ══════════════════════════════════════════════════════════════════════
+#  ⑥ 보이게 하라 — 팩 게이트 불가침 (파티클만으로 선다)
+# ══════════════════════════════════════════════════════════════════════
+# 예산: performance.yml particles (global 4000/틱 · 시야당 600 · cull_beyond 32m).
+# 계기: performance.yml metrics.probes.gyeonggong → effect_ticker (5ms)
+vfx:
+  footprint:                            # 답설무흔 — 발밑에 자국이 남는다
+    interval_ticks: 2
+    particle: CLOUD
+    count: 1
+    on_snow: SNOWFLAKE                  # 눈을 밟으면 눈이 인다 (踏雪)
+    on_water: SPLASH
+  leap:    { particle: CLOUD,   count: 6, sound: "entity.phantom.flap",       volume: 0.5, pitch: 1.4 }
+  wall_kick: { particle: CRIT,  count: 8, sound: "block.stone.hit",           volume: 0.7, pitch: 1.6 }
+  water_step: { particle: SPLASH, count: 3 }
+  fall_soft: { particle: CLOUD, count: 12, sound: "entity.player.attack.sweep", volume: 0.4, pitch: 1.8 }
+  retreat: { particle: CLOUD,   count: 5, sound: "entity.phantom.flap",       volume: 0.4, pitch: 1.8 }
+  depleted:                             # ★ 내력이 끊기는 순간 — 보이지 않으면 규칙이 아니다
+    particle: SMOKE
+    count: 20
+    sound: "block.fire.extinguish"
+    volume: 0.7
+    pitch: 0.8
+  cull_beyond_ref: "performance.yml particles.lod.cull_beyond — 32m 밖에서는 그리지 않는다"
+  budget_per_tick: 24                   # 경공 한 사람이 한 틱에 쓸 수 있는 파티클 상한 (예산의 0.6%)
+
+messages:
+  # ★ "on"·"off" 는 반드시 따옴표 — 무따옴표면 YAML 1.1 이 **불리언(True/False)** 으로 읽는다.
+  #   SnakeYAML(엔진)도 똑같이 읽어 message("on") 조회가 조용히 실패한다. game_audit 이 이걸 잡았다.
+  "on": "몸이 가벼워진다"
+  "off": "기가 흩어진다"
+  depleted: "내력이 끊긴다 — 몸이 무겁다"
+  fall_soft: "낙법 — 무릎을 접는다"
+  fall_hard: "기가 없는 몸은 돌처럼 떨어진다"
+  armor_blocked: "철갑이 몸을 땅에 붙든다"
+  no_realm: "개화하지 않은 몸은 땅을 딛을 뿐이다"
+  wall_no_bobeop: "벽을 딛는 법을 모른다"
+
+# ══════════════════════════════════════════════════════════════════════
+#  ⑦ 검산 기준선 — tools/gyeonggong_audit.py 가 재는 자리 (도구가 수치를 갖지 않게)
+# ══════════════════════════════════════════════════════════════════════
+audit:
+  landmarks:                            # 이 세계의 높이 (블록)
+    담: 3                               # 사람 키 두 배 — 개화한 자가 넘는 것
+    지붕: 5                             # 민가의 지붕 — 벽을 딛어야 오른다 (뛰어서는 못 오른다)
+    절벽: 20                            # 죽는 높이 — 낙법이 사는 자리
+  contracts:
+    jump_never_reaches_roof: true       # ★ 도약만으로 지붕(5m)에 닿는 경지가 있으면 위반 — 지붕은 딛고 오르는 것이다
+    pre_flowering_is_zero: true         # ★ 삼류·이류의 경공 실효값이 0 이 아니면 위반
+    no_free_flight: true                # ★ 어떤 심법·보법도 유지 코스트를 0 으로 만들면 위반
+    # ★ 고갈 상태로 **자기가 다니던 높이**(max(절벽 20m, 그 경지의 낙법 천장))에서 떨어지면
+    #   내구의 50% 이상이 날아가야 한다 — 높이 나는 자가 더 크게 떨어진다
+    depleted_fall_hurts_ratio: 0.5
+    dominance_max_axes: 2               # ★ 한 빌드가 세 축(지속·속도·높이) 중 3개를 다 1등 하면 지배 전략이다
+  flight_seconds_band: [1, 30]          # 경지·빌드를 통틀어 한 번에 나는 시간이 이 밖이면 경고

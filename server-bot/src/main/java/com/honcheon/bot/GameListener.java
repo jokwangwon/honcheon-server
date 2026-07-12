@@ -1530,11 +1530,12 @@ public final class GameListener extends ListenerAdapter {
 
     // ─── 개화 축 (단계 2) — 폐사당의 취걸개(fortune_encounters) → 심법 전수 → 운기·축기 → 일류 ───
 
-    /** 기연 트리거 (chuigeolgae_master 알파 배선): 방문 3회 + 선행 기억(의뢰 완수) 2건 + 이류 이하 */
-    private static final int SHRINE_VISITS_REQUIRED = 3;
-    private static final int GOOD_DEEDS_REQUIRED = 2;
-    private static final int MEAL_SHARE_DAYS = 3;
-    private static final String FORTUNE_KEY = "기연:chuigeolgae_master";
+    /**
+     * 기연 id — 관문 수치는 여기 없다. <b>config/fortune_encounters.yml 이 정본</b>이고
+     * {@link Fortunes} 가 그것을 읽는다 (방문 30회 · 의뢰_완수 15건 · 이류 이하 · 사흘 연속).
+     * 코드가 이름·수치를 짓지 않는다 — 등록제.
+     */
+    private static final String FORTUNE_ID = "chuigeolgae_master";
 
     /** 축기 환산 — 내공 n→n+1 = max(1,n)년 전용 수련 (simbeop accumulation_cost, 1년 = 360일) */
     private static final double YEAR_DAYS = 360.0;
@@ -1600,11 +1601,12 @@ public final class GameListener extends ListenerAdapter {
         }
         sheet.put("탐방일", today);
         String state = (String) sheet.get("취걸개");
-        db.logEvent("탐방", "character", String.valueOf(chId), "place", "폐사당",
-                Map.of("장소", "폐사당"));
+        Fortunes.Gate gate = rules.fortunes.gate(FORTUNE_ID);
+        db.logEvent("탐방", "character", String.valueOf(chId), "place", gate.place(),
+                Map.of("장소", gate.place()));
 
         // 1회성 — 획득 즉시 세계에서 소모 (공유 세계 선착순, fortune rules)
-        boolean consumed = db.getMeta(FORTUNE_KEY).isPresent();
+        boolean consumed = db.getMeta(rules.fortunes.metaKey(FORTUNE_ID)).isPresent();
         if ("전수".equals(state) || (consumed && !"시험".equals(state))) {
             persistAndReply(event, row, sheet, "폐사당",
                     "무너진 사당은 비어 있다. 낡은 신상만 먼지 속에 앉아 있을 뿐 — 인연은 한 번뿐이다.");
@@ -1626,31 +1628,39 @@ public final class GameListener extends ListenerAdapter {
                     .queue();
             return;
         }
-        // 발견 전 — 방문 적립 + 트리거 판정 (등록 조건의 알파 배선: 선행 기억 태그 → 의뢰 완수 이력)
+        // 발견 전 — 방문 적립 + 관문 판정. 수치는 전부 등록부(gate)에서 온다.
         int visits = ((Number) sheet.getOrDefault("폐사당_방문", 0)).intValue() + 1;
         sheet.put("폐사당_방문", visits);
         String realm = String.valueOf(row.get("realm"));
-        boolean realmOk = List.of("범인", "삼류", "이류").contains(realm);
-        int deeds = db.countEvents("character", String.valueOf(chId), List.of("의뢰_완수"));
-        if (visits >= SHRINE_VISITS_REQUIRED && deeds >= GOOD_DEEDS_REQUIRED && realmOk) {
+        boolean realmOk = rules.fortunes.realmAllowed(FORTUNE_ID, realm);
+        int deeds = db.countEvents("character", String.valueOf(chId), List.of(gate.deedEvent()));
+        if (visits >= gate.visits() && deeds >= gate.deeds() && realmOk) {
             sheet.put("취걸개", "시험");
-            db.logEvent("기연_발견", "character", String.valueOf(chId), "fortune", "chuigeolgae_master",
-                    Map.of("기연", "chuigeolgae_master"));
-            persistAndReply(event, row, sheet, "폐사당",
+            db.logEvent("기연_발견", "character", String.valueOf(chId), "fortune", FORTUNE_ID,
+                    Map.of("기연", FORTUNE_ID));
+            persistAndReply(event, row, sheet, gate.place(),
                     "그늘에서 쉰 목소리가 났다. \"…또 왔군.\" 처음 보는 걸인이 — 아니, 늘 있었던 걸인이 "
                             + "당신을 보고 있다. \"젊은 것이 발품은 부지런해. 밥은 먹고 다니나?\"\n"
                             + "*(내일부터 폐사당에서 그를 다시 만날 수 있을 것 같다)*");
             return;
         }
-        String scene = switch (Math.min(visits, 3)) {
-            case 1 -> "무너진 사당이다. 지붕은 반이 내려앉았고, 낡은 신상 앞에 탄 향 자국만 남았다.";
-            case 2 -> "구석에 밥그릇이 하나 있다 — 최근 것이다. 누가 여기 사는 걸까.";
-            default -> visits >= SHRINE_VISITS_REQUIRED && deeds < GOOD_DEEDS_REQUIRED
-                    ? "그늘에 걸인이 앉아 있다. 눈길도 주지 않는다. \"…네 얼굴엔 아직 이야기가 없군.\" "
-                            + "(청하현 사람들을 도운 적이 있던가 — 의뢰 게시판이 떠오른다)"
-                    : "그늘에 걸인이 앉아 있다. 눈길도 주지 않는다.";
-        };
-        persistAndReply(event, row, sheet, "폐사당", scene);
+        // 걸인은 사람을 한 달 지켜보고서야 입을 연다 — 발품의 장면은 방문 회차를 따라 깊어진다.
+        String scene;
+        if (visits == 1) {
+            scene = "무너진 사당이다. 지붕은 반이 내려앉았고, 낡은 신상 앞에 탄 향 자국만 남았다.";
+        } else if (visits == 2) {
+            scene = "구석에 밥그릇이 하나 있다 — 최근 것이다. 누가 여기 사는 걸까.";
+        } else if (visits < gate.visits()) {
+            scene = "그늘에 걸인이 앉아 있다. 눈길도 주지 않는다."
+                    + (visits * 2 >= gate.visits() ? " …그러나 오늘은, 당신이 왔다 가는 것을 눈으로 좇았다." : "");
+        } else if (deeds < gate.deeds()) {
+            scene = "그늘에 걸인이 앉아 있다. \"…네 얼굴엔 아직 이야기가 없군.\" "
+                    + "(청하현 사람들을 도운 적이 있던가 — 의뢰 게시판이 떠오른다)";
+        } else {
+            scene = "그늘에 걸인이 앉아 있다. 눈길도 주지 않는다. 당신의 손속이 이미 너무 무겁다 — "
+                    + "가르칠 것이 남아 있지 않은 자에게는 아무 말도 하지 않는다.";
+        }
+        persistAndReply(event, row, sheet, gate.place(), scene);
     }
 
     private void persistAndReply(SlashCommandInteractionEvent event, Map<String, Object> row,
@@ -1697,25 +1707,26 @@ public final class GameListener extends ListenerAdapter {
                     ? ((Number) sheet.getOrDefault("밥_연속", 0)).intValue() + 1 : 1;
             sheet.put("밥_연속", streak);
             sheet.put("밥_최종일", today);
-            if (streak >= MEAL_SHARE_DAYS) {
-                if (db.getMeta(FORTUNE_KEY).isPresent()) {
+            if (streak >= rules.fortunes.trialStreakDays(FORTUNE_ID)) {
+                if (db.getMeta(rules.fortunes.metaKey(FORTUNE_ID)).isPresent()) {
                     // 그 사이 다른 이가 인연을 맺었다 — 공유 세계의 선착순
                     sheet.put("취걸개", "전수");   // 재시도 무의미 — 상태만 닫는다
                     body = "걸인의 자리에 빈 발우만 남아 있다. 인연은 이미 다른 손을 잡았다.";
                 } else {
-                    db.setMeta(FORTUNE_KEY, String.valueOf(chId));
+                    String simbeop = rules.fortunes.grantedSimbeopName(FORTUNE_ID);
+                    db.setMeta(rules.fortunes.metaKey(FORTUNE_ID), String.valueOf(chId));
                     sheet.put("취걸개", "전수");
-                    sheet.put("심법", "현천토납법");
+                    sheet.put("심법", simbeop);
                     List<String> ties = sheet.get("인연") instanceof List<?> l
                             ? new ArrayList<>((List<String>) l) : new ArrayList<>();
-                    ties.add("개방_계열(취걸개)");
+                    ties.add(rules.fortunes.grantedTie(FORTUNE_ID));
                     sheet.put("인연", ties);
-                    db.logEvent("기연", "character", String.valueOf(chId), "fortune", "chuigeolgae_master",
-                            Map.of("기연", "chuigeolgae_master", "보상", "현천토납법",
+                    db.logEvent("기연", "character", String.valueOf(chId), "fortune", FORTUNE_ID,
+                            Map.of("기연", FORTUNE_ID, "보상", simbeop,
                                     "대가", List.of("발설_금지", "원수_상속")));
                     body = "사흘째 밥을 나누자, 걸인이 문득 자세를 고쳐 앉았다 — 등이 산처럼 펴진다.\n"
                             + "\"사흘을 나눴으면 됐다. 숨 쉬는 법부터 가르쳐 주지.\"\n"
-                            + "그날 밤, 당신은 **현천토납법**의 구결을 받았다. (`/혼천 운기`)\n"
+                            + "그날 밤, 당신은 **" + simbeop + "**의 구결을 받았다. (`/혼천 운기`)\n"
                             + "*\"이 인연을 입에 올리면 나는 없던 사람이다. …그리고 언젠가, 내 빚을 네가 갚게 될지도 모르지.\"*";
                 }
             } else {

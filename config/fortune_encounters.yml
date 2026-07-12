@@ -1,5 +1,17 @@
 # 기연(奇緣) 시스템 규칙 및 청하현 배치 기연 (기계 판독용 — GM 전용, 플레이어 비노출)
 # 기준 문서: docs/design/fortune_and_wanderer.md 3·5장
+#
+# ═══ 배선 상태 (2026-07 등록부 처분) ═══
+# 엔진: server-bot Fortunes.java → Rules.fortunes → GameListener(탐방·밥 나눔).
+#   ★ 2026-07 이전까지 이 파일은 **아무도 안 읽었다.** 봇은 관문을 자바 상수로 지어 갖고 있었고
+#     (SHRINE_VISITS_REQUIRED=3 · GOOD_DEEDS_REQUIRED=2), 이 등록부는 30회·15건이라 적고 있었다 —
+#     **정본이 둘이었고, 코드가 이겼다.** 이제 관문 수치는 아래 gate 절이 유일한 원천이다.
+#   ★ prose 인 trigger 와 기계 판독인 gate 는 같은 수여야 한다 — lint_config 5 가 어긋나면 잡는다.
+# 실배선: chuigeolgae_master (봇 `/혼천 탐방`).
+# 미배선: sunken_ship_manual · fever_elder_legacy — 흑수나루·의방 무대가 봇에 열릴 때 gate 를 단다.
+#         (무대가 없는데 관문만 다는 것은 또 하나의 죽은 규칙이다.)
+# elixirs 절: 아직 엔진이 안 읽는다 — 소모 명령(복용)이 없다. 검산은 growth_audit 이 맡는다.
+#         조건: 봇에 소지품·복용 흐름이 서면 그때 Fortunes.elixir(id) 를 연다.
 
 # 5대 운영 규칙
 rules:
@@ -89,13 +101,25 @@ encounters:
       - "선행 기억 태그 2개 이상 (지역 NPC 기준) — 봇 알파 배선: events 의뢰_완수 15건"
       - "이류 이하 (구: 삼류 이하 — 청하현 알파에서 일류 개화 경로의 유일한 심법 원천이라 확장)"
     trigger_bonus: "유년기 흔적 '눈치'(저잣거리 고아) 보유 시 방문 20회로 완화 (봇 알파 미배선 — 흔적 시트 키 후속)"
+    # ★ 기계 정본 — 봇(Fortunes.java)이 읽는 관문. 위 trigger 산문의 수와 반드시 같다.
+    gate:
+      place: 폐사당              # 탐방 무대 (봇 `/혼천 탐방`)
+      visits: 30                 # 누적 방문
+      deed_event: 의뢰_완수      # '선행 기억 태그'의 알파 배선 — 이 이벤트의 누적 건수
+      deeds: 15
+      max_realm: 이류            # 이 경지 이하만 (cultivation_stages 사다리 기준)
     discovery: "조건 충족 후 폐사당 방문 시 자동 — 걸인이 먼저 말을 건다"
     trial:
       type: 선택_시험      # 판정이 아니라 인품을 본다
+      streak_days: 3       # 기계 정본 — 사흘 '연속'
       content: "사흘 연속, 자기 몫의 밥을 나누는가. 시험임을 알려주지 않는다."
     reward:
       - "기초 내공심법 전수 (범인 → 삼류 승급 경로 개방)"
       - "개방 계열 인연 태그"
+    # ★ 기계 정본 — 시험 통과 시 세계가 실제로 주는 것. 심법은 **id** 로 적는다 (simbeop.yml 등록부).
+    grants:
+      simbeop: hyeoncheon_tonapbeop    # 현천토납법 — 표시 이름은 simbeop.yml 이 준다
+      tie: "개방_계열(취걸개)"
     price:
       - "이 인연을 발설하면 스승은 사라진다 (인연 단절)"
       - "스승의 옛 원수를 상속한다 (장기 떡밥 — 추후 사건 훅)"

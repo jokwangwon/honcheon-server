@@ -1,0 +1,48 @@
+# 사냥터 개체군 (기계 판독용) — 구역이 곧 생태계다.
+# 기준 문서: docs/design/mob_spawning.md §8
+# 엔진: server-mvt/.../HuntingGrounds.java (init 이 이 파일을 읽는다. 없으면 코드 폴백으로 돈다 — 서버는 떠야 한다)
+#
+# 원칙: 정원(定員)과 재생 주기가 '고갈되지 않되 무한하지 않게' 만든다.
+#       바닐라는 뿌리지 않는다 (world_purity.yml wild_spawn.allow 가 야생 스폰을 막는다) —
+#       산야의 짐승은 이 표가 **심는다**.
+#
+# ★ 여기서 발명하지 않는 것:
+#   - 개체 스탯(내구·전의·자연 무기·드롭·경지) → config/npcs/cheongha_npcs.yml 이 정본
+#   - 짐승의 격(格) → cultivation.yml beast_ranks (영물 policy: 양산 금지 → 정원 0)
+#   - 몸(mc_entity)·무장(loadout) → npcs 등록부의 몫. 아직 그 키가 없어 코드 폴백표가 산다
+#     (docs/design/mob_spawning.md §8 ②. 그 키가 서면 폴백표는 죽는다)
+
+version: 1
+
+spawn:
+  cycle_seconds: 10            # 재생 주기 — 한 구역에 최대 1마리/주기
+  morale_cycle_seconds: 2      # 전의·표적 스윕
+  player_near: 96              # 사람이 이 안에 없으면 산은 조용하다 (performance.yml npc_logic 예산)
+  min_distance: 20             # 눈앞에 튀어나오지 않는다
+  max_distance: 64
+  max_block_light: 7           # 불이 끝나는 곳부터가 사냥터다
+  zone_entity_cap: 18          # 구역당 태그 개체 상한 (performance.yml)
+  boss_respawn_seconds: 300    # 두목은 흔하지 않다 (양산 금지)
+
+# 마을 무스폰 — 담장 밖 여유까지 (스폰이 담 밑에 붙는 것을 막는다)
+town:
+  zone: "청하현"
+  margin: 8
+
+grounds:
+  north_road:
+    zone: "북쪽 산길"          # zones 이름 (조성기가 등록한 구역명 — 발명 금지)
+    population:                # 낮은 들짐승과 도적, 밤은 맹수
+      san_neukdae:       { day: 4, night: 6 }
+      metdwaeji:         { day: 3, night: 2 }
+      horangi:           { day: 0, night: 1 }   # 맹수는 밤에 나온다
+      bandal_gom:        { day: 0, night: 1 }
+      north_road_bandit: { day: 3, night: 4 }
+      galho:             { day: 1, night: 1 }   # 두목 — 한 명뿐이다
+      baegyeongmyo:      { day: 0, night: 0 }   # 영물 = 등록제. 관리자 소환으로만 선다
+
+loot:
+  weapon_drop_chance:          # 병기 전리품 — 졸개는 반, 두목은 확실히
+    졸개: 0.5
+    두목: 1.0
+    default: 0.5

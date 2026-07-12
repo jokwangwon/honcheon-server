@@ -277,7 +277,7 @@ final class SkillDisplay {
         p.dieAt = p.fadeAt + m.fade();
         for (Display d : p.parts) {
             d.setBrightness(new Display.Brightness(ink.blockLight(), ink.skyLight()));
-            transform(d, p.full, 0.0f, draw);         // 그린다 — 칼끝 뒤로 꼬리가 자란다
+            transform(d, m, p.full, 0.0f, draw);      // 그린다 — 칼끝 뒤로 꼬리가 자란다
         }
         note("참격선", hitType + "·" + grade + "·" + weaponClass
                 + " 길이" + String.format("%.1f", length) + "m 굵기" + String.format("%.2f", thick)
@@ -291,7 +291,7 @@ final class SkillDisplay {
         float s = p.m.spread();
         for (Display d : p.parts) {
             // scale.x → 0 : 머리(원점)로 수축한다 = 꼬리가 먼저 사라진다
-            transform(d, new float[]{0.001f, p.full[1] * s, p.full[2] * s}, 0.0f, p.m.fade());
+            transform(d, p.m, new float[]{0.001f, p.full[1] * s, p.full[2] * s}, 0.0f, p.m.fade());
         }
     }
 
@@ -416,7 +416,7 @@ final class SkillDisplay {
             fresh.parts.addAll(part.parts);
             for (Display d : part.parts) {
                 d.setTeleportDuration(Math.max(1, engine.displayBudget().heartbeatTicks() / 3));
-                transform(d, sizeOf(m, variant), 0.0f, m.interpolation());
+                transform(d, m, sizeOf(m, variant), 0.0f, m.interpolation());
             }
         }
         if (fresh.parts.isEmpty()) {
@@ -476,7 +476,7 @@ final class SkillDisplay {
                 (int) Math.ceil(range / m.speed()) + m.impactTicks() + m.stickTicks() + m.fade());
         for (Display d : p.parts) {
             d.setTeleportDuration(1);   // 이동 보간 — 이것이 없으면 순간이동한다
-            transform(d, sizeUnit(m), 0.0f, Math.max(1, m.birth()));
+            transform(d, m, sizeUnit(m), 0.0f, Math.max(1, m.birth()));
         }
         note("투사", what + " " + String.format("%.1f", range) + "m @" + m.speed() + "m/틱");
         return true;
@@ -509,7 +509,7 @@ final class SkillDisplay {
                 burst[i] *= p.m.impactScale();
             }
             for (Display d : p.parts) {
-                transform(d, burst, 0.0f, Math.max(1, p.m.impactTicks()));
+                transform(d, p.m, burst, 0.0f, Math.max(1, p.m.impactTicks()));
             }
         }
     }
@@ -531,27 +531,64 @@ final class SkillDisplay {
         p.burstAt = tick + startup;
         p.burstRadius = range;
         p.dieAt = tick + startup + m.lifetime();
-        float[] bud = sizeUnit(m);
-        float k = (float) Math.max(0.35, range * 0.25);
-        for (int i = 0; i < 3; i++) {
-            bud[i] *= k;
-        }
         for (Display d : p.parts) {
-            transform(d, bud, 0.0f, Math.max(1, startup));
+            transform(d, m, bud(m, range), 0.0f, Math.max(1, startup));
         }
-        note("오의", ultimateId + " 선딜" + startup + "틱 → " + range + "m 개화");
+        note("오의", ultimateId + " 선딜" + startup + "틱 → " + range + "m 개화"
+                + (m.oriented() ? " (앞으로 뻗는다 — orient " + deg(m.orient()) + ")" : ""));
     }
 
     private void bloom(Piece p) {
         p.burstAt = -1;
-        float[] open = sizeUnit(p.m);
-        float k = (float) (p.burstRadius * p.m.burstScale());
-        for (int i = 0; i < 3; i++) {
-            open[i] *= k;
-        }
         for (Display d : p.parts) {
-            transform(d, open, p.m.spin() * p.m.interpolation(), p.m.interpolation());
+            transform(d, p.m, open(p.m, p.burstRadius),
+                    p.m.spin() * p.m.interpolation(), p.m.interpolation());
         }
+    }
+
+    /**
+     * 개시 — 활짝 편 형체. <b>축마다 다르게 자란다</b>({@code burst_scale: [x, y, z]}).
+     *
+     * <p>예전엔 세 축이 <b>같이</b> 자랐다 — 그래서 선(線) 오의의 형체를 '앞으로 뻗는 창'으로 세울 수 없었다
+     * (길이를 사거리까지 늘리면 폭도 같이 하늘을 덮었다). 이제 <b>한 축만</b> 사거리를 따라 뻗고,
+     * {@code orient} 가 그 축을 <b>앞으로</b> 눕힌다. 그 둘이 함께여야 창이 된다.
+     *
+     * <p>스칼라 {@code burst_scale} 은 그대로 돈다 (세 축이 같은 값 — 원 오의의 문법은 변하지 않았다).
+     */
+    private float[] open(SkillEngine.DisplayMotion m, double range) {
+        float[] size = sizeUnit(m);
+        float[] k = m.burstScale();
+        for (int i = 0; i < 3; i++) {
+            size[i] *= (float) (range * k[i]);
+        }
+        return size;
+    }
+
+    /**
+     * 응집 — <b>오므린</b> 형체. 개화의 {@code BUD_RATIO} 만큼이다.
+     *
+     * <p><b>【고침】</b> 예전엔 봉오리를 사거리에서 <b>따로</b> 세웠다({@code size × range × 0.25}) —
+     * 그래서 {@code burst_scale} 이 0.25 보다 작은 형체(뇌격 0.15)는 <b>봉오리가 개화보다 컸다</b>.
+     * 오의가 <b>피는</b> 것이 아니라 <b>오므라들었다</b>. 이제 봉오리는 언제나 개화의 한 조각이다 —
+     * 무엇이 피든 <b>커지는 방향으로만</b> 열린다.
+     * ({@code burst_scale: 1.0} 인 형체에서는 예전 값과 정확히 같다 — 원 오의는 그대로다.)
+     */
+    private float[] bud(SkillEngine.DisplayMotion m, double range) {
+        float[] size = sizeUnit(m);
+        float[] open = open(m, range);
+        for (int i = 0; i < 3; i++) {
+            open[i] = Math.max(open[i] * BUD_RATIO, size[i] * BUD_FLOOR);
+        }
+        return open;
+    }
+
+    /** 봉오리는 개화의 4분의 1이다 (예전 계수 그대로 — 기준만 사거리에서 개화로 옮겼다) */
+    private static final float BUD_RATIO = 0.25f;
+    /** 그래도 보이지 않을 만큼 작아지지는 않는다 (응집을 못 보면 선딜이 예고가 아니다) */
+    private static final float BUD_FLOOR = 0.35f;
+
+    private static String deg(float[] o) {
+        return String.format("%.0f°/%.0f°/%.0f°", o[0], o[1], o[2]);
     }
 
     // ══════════ 발행 (내부) — 예산 · 팩 분기 · 변환 ══════════
@@ -646,8 +683,9 @@ final class SkillDisplay {
             e.setPersistent(false);                     // 저장되지 않는다 (유령의 첫 방벽)
             e.setVisibleByDefault(viewers == null);
             e.getPersistentDataContainer().set(KEY_VFX, PersistentDataType.BYTE, (byte) 1);
-            e.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
-                    new Vector3f(0.001f, 0.001f, 0.001f), new Quaternionf()));   // 씨앗에서 자란다
+            // 씨앗에서 자란다 — 다만 <b>선 각은 처음부터 제 각</b>이다 (뒤에 돌리면 형체가 튄다)
+            e.setTransformation(new Transformation(new Vector3f(), pose(m, 0.0f),
+                    new Vector3f(0.001f, 0.001f, 0.001f), new Quaternionf()));
         });
         if (viewers != null) {
             for (Player viewer : viewers) {
@@ -772,13 +810,14 @@ final class SkillDisplay {
         return new float[]{s[0], s[1], s[2]};
     }
 
-    private void transform(Display d, float[] scale, float roll, int ticks) {
+    private void transform(Display d, SkillEngine.DisplayMotion m, float[] scale, float spin,
+                           int ticks) {
         if (!d.isValid()) {
             return;
         }
         d.setInterpolationDelay(0);
         d.setInterpolationDuration(Math.max(1, ticks));
-        d.setTransformation(new Transformation(new Vector3f(), roll(roll),
+        d.setTransformation(new Transformation(new Vector3f(), pose(m, spin),
                 new Vector3f(scale[0], scale[1], scale[2]), new Quaternionf()));
     }
 
@@ -800,13 +839,38 @@ final class SkillDisplay {
         Transformation t = d.getTransformation();
         d.setInterpolationDelay(0);
         d.setInterpolationDuration(Math.max(1, m.interpolation()));
-        d.setTransformation(new Transformation(t.getTranslation(), roll(angle),
+        d.setTransformation(new Transformation(t.getTranslation(), pose(m, angle),
                 t.getScale(), t.getRightRotation()));
     }
 
-    /** 자전 — 축은 진행 방향(X). 모델 규약이 "획을 X 축에 눕힌다"인 이유가 여기 있다 */
-    private static Quaternionf roll(float angle) {
-        return new Quaternionf(new AxisAngle4f(angle, 1.0f, 0.0f, 0.0f));
+    /**
+     * <b>형체가 서는 각</b> — 등록부의 {@code orient: [pitch, yaw, roll]} (도) + 자전.
+     *
+     * <p><b>【이 층의 좌표계 — 그동안 어디에도 적혀 있지 않았다】</b> 엔티티는 이미 시전자를 향해
+     * 세워져 있다({@code setDirection}). 그 몸을 기준으로 모델의 축은
+     * <b>+X 왼쪽 · +Y 위 · +Z 앞</b> 이다 (바닐라 규약: yaw 0 인 몸은 +Z 를 본다).
+     * <b>앞은 Z 다.</b> 이 사실이 적혀 있지 않아서, 등록부는 <b>앞으로 뻗는 축을 모델에 새길 수 없었다</b> —
+     * 오의의 형체는 yaw 로만 서고 scale 로만 자랐다. 그래서 선(線) 오의가 '앞으로 뻗는 창'이 아니라
+     * '몸 앞에 선 빗살'이었다. 이제 등록부가 그 축을 <b>직접 댄다</b>.
+     *
+     * <p><b>차례</b>: 자전(모델의 X) → roll(모델의 Z) → pitch(모델의 X) → yaw(모델의 Y).
+     * 제 축으로 굴린 뒤 앞으로 눕히고 마지막에 좌우로 튼다.
+     * {@code orient: [90, 0, 0]} 이면 모델의 <b>+Y(길이축)가 +Z(앞)</b> 로 눕는다 — 찌르는 창이 된다.
+     *
+     * <p>회전은 <b>leftRotation</b> 이다: 크기를 <b>모델의 축에서</b> 먼저 조절하고 <b>그 뒤에</b> 돌린다.
+     * 그래야 {@code size}·{@code burst_scale} 의 축이 회전을 따라 흔들리지 않는다
+     * (등록부가 "이 축이 길이다"라고 말한 것이 회전 뒤에도 길이로 남는다).
+     */
+    private static Quaternionf pose(SkillEngine.DisplayMotion m, float spin) {
+        float[] o = m.orient();
+        Quaternionf q = new Quaternionf()
+                .rotateY((float) Math.toRadians(o[1]))     // yaw   — 좌우로 튼다
+                .rotateX((float) Math.toRadians(o[0]))     // pitch — 앞으로 눕는다 (양수 = 앞·아래)
+                .rotateZ((float) Math.toRadians(o[2]));    // roll  — 제 얼굴을 굴린다
+        if (spin != 0.0f) {
+            q.mul(new Quaternionf(new AxisAngle4f(spin, 1.0f, 0.0f, 0.0f)));   // 자전 — 모델의 X 축
+        }
+        return q;
     }
 
     private static Display.Billboard billboard(String name) {

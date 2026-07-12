@@ -26,6 +26,7 @@ metrics:
   probes:                         # 계기 이름 → 예산 항목 (subsystem_budget_ms 의 키)
     skill_execution: skill_execution      # SkillListener.tick — 무공 중앙 티커 (1틱)
     skill_cast: skill_execution           # SkillCast.tick — 절기의 삼문 承·間·虛 (1틱)
+    gyeonggong: effect_ticker             # GyeonggongListener.tick — 경공(유지비·벽·물·자국) (1틱)
     skill_display: vfx_display            # SkillDisplay — 3D 무공 모션
     mob_display: vfx_display              # MobDisplay.tick — 3D 몹 형체 추종
     populace: npc_logic                   # Populace.tick — 무명 28인 일과·배회 (2초)

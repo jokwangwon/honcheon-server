@@ -527,6 +527,7 @@ def lint(cfg, rep):
     lint_creation_arithmetic(cfg, rep)
     lint_gate_coherence(cfg, rep)
     lint_orphans(cfg, rep)
+    audit_weapon_calls(rep)   # 조성기가 못 만드는 병기를 요구하면 그 지역이 안 선다
 
 
 # ── 등록부 ────────────────────────────────────────────────────────────────────
@@ -1670,6 +1671,59 @@ def sim_internal_energy(cfg, rep):
 # ══════════════════════════════════════════════════════════════════════════════
 #  진입점
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+def audit_weapon_calls(rep) -> None:
+    """
+    <b>병기 규칙을 코드가 지키는가</b> — 조성기가 짓다가 예외로 죽지 않는가.
+
+    마교 진령이 조성될 때마다 예외로 죽었다. `RemoteBuilder` 가 **검+마병**을 요구했는데
+    `Weapons.make` 가 *"마병은 도(刀)에만 존재한다"* 며 던졌다. 다섯 지역 중 하나가 서지 못했다.
+
+    ★ 기막힌 것은 **바로 윗줄 주석이 그 규칙을 적어 두고 있었다**는 점이다:
+      "여기엔 부러지지 않는 병기가 걸린다 (Weapons.Grade.마병)". 그리고 다음 줄에서 어겼다.
+      **주석은 규칙을 지키지 않는다. 재는 자가 지킨다.**
+
+    이 검산은 엔진의 가드(`Weapons.make` 가 던지는 조건)를 **코드에서 읽어** 호출부와 대조한다.
+    가드가 바뀌면 이 눈도 함께 바뀐다 — 잣대를 여기 베껴 적으면 언젠가 둘이 갈라진다.
+    """
+    rep.head("병기 호출 — 조성기가 제 규칙을 지키는가 (짓다가 던지면 지역이 안 선다)")
+    # ★ ENGINE_DIR 은 core 룰 엔진이다. **조성기(RemoteBuilder·CheonghaBuilder)는 server-mvt 에 산다.**
+    #   이 눈은 조성기를 봐야 한다 — 안 그러면 "Weapons.java 가 없다"며 조용히 건너뛴다
+    #   (그리고 건너뛴 눈은 통과한 눈과 화면에서 구별되지 않는다).
+    mvt_dir = os.path.join(ROOT, "server-mvt", "src", "main", "java", "com", "honcheon", "mvt")
+    wsrc = os.path.join(mvt_dir, "Weapons.java")
+    if not os.path.isfile(wsrc):
+        rep.say("  Weapons.java 가 없다 — 건너뛴다")
+        return
+    body = open(wsrc, encoding="utf-8").read()
+    # 가드를 코드에서 읽는다: DEMONIC_SERIES = Series.도
+    m = re.search(r"DEMONIC_SERIES\s*=\s*Series\.(\S+?)\s*;", body)
+    demonic = m.group(1) if m else None
+    if not demonic:
+        rep.say("  마병 가드를 못 읽었다 — 건너뛴다 (Weapons.DEMONIC_SERIES)")
+        return
+    rep.say(f"  가드: 마병은 {demonic}(刀) 에만 존재한다 (Weapons.DEMONIC_SERIES)")
+
+    bad = 0
+    for name in sorted(os.listdir(mvt_dir)):
+        if not name.endswith(".java") or name == "Weapons.java":
+            continue
+        path = os.path.join(mvt_dir, name)
+        src = open(path, encoding="utf-8").read()
+        for i, line in enumerate(src.splitlines(), 1):
+            call = re.search(r"Weapons\.(?:makeSeeded|make)\(\s*Weapons\.Series\.(\S+?)\s*,"   # ★ 긴 이름을 먼저 — make 가 먼저면 makeSeeded 를 못 잡는다
+                             r"\s*Weapons\.Grade\.(\S+?)\s*[,)]", line)
+            if not call:
+                continue
+            series, grade = call.group(1), call.group(2)
+            if grade == "마병" and series != demonic:
+                rep.fail(f"{name}:{i} — {series}+마병 을 요구한다. **엔진이 던진다** "
+                        f"(마병은 {demonic} 에만 있다) → 이 조성기가 짓다가 죽는다")
+                bad += 1
+    if bad == 0:
+        rep.ok("  조성기가 요구하는 병기 조합이 전부 만들 수 있는 것이다")
+
 
 def main():
     ap = argparse.ArgumentParser(description="혼천 게임 밸런스·정합 검수")

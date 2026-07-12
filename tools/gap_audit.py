@@ -161,6 +161,43 @@ def key_paths(text: str) -> tuple[list[str], list[str]]:
 #  ① 참조 그래프 — 어느 yml 을 누가 읽는가
 # ══════════════════════════════════════════════════════════════════════════════
 
+UNWIRED_RE = re.compile(r"^unwired:\s*$", re.M)
+# unwired 절의 세 키 — 조건 없는 '미룸'은 미룸이 아니라 방치다.
+# 값은 한 줄이거나 접은 블록(`>-`) 이다 — 둘 다 읽는다 (접힌 값을 못 읽으면 눈이 '>-' 를 조건이라 부른다).
+UNWIRED_KEY_RE = {
+    key: re.compile(rf"^\s{{2}}{key}:[ \t]*(.*(?:\n(?:\s{{4,}}\S.*|\s*))*)", re.M)
+    for key in ("reason", "condition", "doc")
+}
+
+
+def fold(raw: str) -> str:
+    """YAML 접은 스칼라(`>-`) 를 한 줄로 — 값이 없으면 빈 문자열."""
+    lines = [ln.strip() for ln in raw.strip().splitlines()]
+    if lines and lines[0] in (">-", ">", "|-", "|"):
+        lines = lines[1:]
+    return " ".join(ln for ln in lines if ln).strip().strip('"').strip("'")
+
+
+def unwired_marker(path: str) -> dict[str, str] | None:
+    """★ 명시적 미배선 표식 — config 최상위 `unwired:` 절.
+
+    죽은 config 를 '살았다'고 부르기 위한 뒷문이 **아니다.** 이 표식은 죽음을 부정하지 않는다 —
+    죽음을 **서명한다**: 누가, 왜 미뤘고, 무엇이 성립하면 살리는가. 그래서 세 키를 강제한다
+    (reason·condition·doc). 하나라도 없으면 표식은 무효이고 그 config 는 그냥 죽은 규칙이다.
+
+    보고에서도 숨기지 않는다 — ⚠️ 로 조건과 함께 매번 다시 읽힌다. 조용한 죽음만이 금지다.
+    """
+    body = read(path)
+    if not UNWIRED_RE.search(body):
+        return None
+    out = {}
+    for key, pattern in UNWIRED_KEY_RE.items():
+        m = pattern.search(body)
+        if m and fold(m.group(1)):
+            out[key] = fold(m.group(1))
+    return out
+
+
 def audit_graph(rep: Report, engines, tools) -> dict[str, dict]:
     rep.head("① config → 엔진 참조 그래프 — 아무도 안 읽는 규칙은 규칙이 아니다")
 
@@ -209,6 +246,24 @@ def audit_graph(rep: Report, engines, tools) -> dict[str, dict]:
         rep.say()
         for base in sorted(dead):
             info = graph[base]
+            marker = unwired_marker(os.path.join(ROOT, info["path"]))
+            if marker is not None:
+                missing = [k for k in ("reason", "condition", "doc") if not marker.get(k)]
+                if missing:
+                    rep.violation(
+                        f"{base} — unwired 표식에 {'·'.join(missing)} 가 없다. "
+                        f"조건 없는 '미룸'은 미룸이 아니라 방치다 (표식 무효 = 죽은 규칙)"
+                    )
+                    continue
+                doc = marker["doc"]
+                if not os.path.isfile(os.path.join(ROOT, doc)):
+                    rep.violation(f"{base} — unwired.doc 이 없는 문서를 가리킨다: {doc}")
+                    continue
+                rep.warn(
+                    f"{base} — ★ 명시적 미배선 (아무도 안 읽는다. 그리고 그렇다고 적혀 있다). "
+                    f"조건: {marker['condition'][:110]}  → {doc}"
+                )
+                continue
             if info["tools"]:
                 rep.violation(
                     f"{base} — 엔진이 아무도 안 읽는다. 검산 도구({', '.join(info['tools'])})만 읽는다: "
@@ -301,6 +356,14 @@ def layer_of(path: str) -> str:
 
 # 문서가 config 를 가리키는 방법: `config/foo.yml` 또는 백틱 안의 점표기 키
 CFG_REF_RE = re.compile(r"config/([\w/]+\.yml)")
+# ★ 아직 없는 config 를 가리키되 **없다고 밝힌** 참조: `config/npc_visual.yml (미신설)`
+#   문서가 "이 파일이 있다"고 말하면 거짓말이고, "아직 없다"고 말하면 계획이다. 그 차이를 눈이 본다.
+#   (계획도 매번 ⚠️ 로 다시 읽힌다 — 잊히지 않는다.)
+PLANNED_REF_RE = re.compile(r"config/([\w/]+\.yml)\s*\(미신설")
+# ★ 묻힌 config 를 가리키는 참조: `config/interface.yml` (폐기 — …). 이것은 약속이 아니라 **기록**이다.
+#   문서가 "그 파일은 묻었다"고 말하는 것을 눈이 '없는 파일을 가리킨다'고 잡으면, 역사를 지우라고
+#   요구하는 셈이 된다. 그래서 세되(보고에 남기되) 공백으로는 세지 않는다.
+BURIED_REF_RE = re.compile(r"config/([\w/]+\.yml)`?\s*(?:은|는)?\s*\**\s*\(?폐기")
 # 점표기 키 — 파일명(.yml/.md/.py/.json)은 키가 아니다. 그것까지 세면 온통 오탐이 된다
 DOTTED_RE = re.compile(r"`([a-z_]+(?:\.[a-z_]+){1,3})`")
 FILE_SUFFIX = (".yml", ".md", ".py", ".json", ".java", ".sh")
@@ -318,6 +381,8 @@ def audit_docs(rep: Report, graph) -> None:
     docs = walk(DOCS, ".md")
     broken: list[tuple[str, str, str]] = []
     missing_cfg: list[tuple[str, str]] = []
+    planned: list[tuple[str, str]] = []
+    buried: list[tuple[str, str]] = []
     checked = 0
 
     for doc in docs:
@@ -326,9 +391,16 @@ def audit_docs(rep: Report, graph) -> None:
             continue          # 감사 보고서 자신 — 깨진 참조를 '인용'하는 것이 그 일이다
         body = read(doc)
         refs = {os.path.basename(r) for r in CFG_REF_RE.findall(body)}
+        planned_refs = {os.path.basename(r) for r in PLANNED_REF_RE.findall(body)}
+        buried_refs = {os.path.basename(r) for r in BURIED_REF_RE.findall(body)}
         for ref in sorted(refs):
             if ref not in index:
-                missing_cfg.append((name, ref))
+                if ref in buried_refs:
+                    buried.append((name, ref))       # 묻었다고 적힌 것 — 기록이지 약속이 아니다
+                elif ref in planned_refs:
+                    planned.append((name, ref))      # 아직 없다고 밝힌 것 — 계획이지 거짓말이 아니다
+                else:
+                    missing_cfg.append((name, ref))  # 있다고 말하는데 없는 것 — 죽은 약속
                 continue
             # 이 문서가 언급한 점표기 키가 그 config 에 있는가
             for dotted in set(DOTTED_RE.findall(body)):
@@ -347,11 +419,23 @@ def audit_docs(rep: Report, graph) -> None:
         for name, ref in sorted(set(missing_cfg)):
             rep.violation(f"{name} → config/{ref} 를 가리키는데 그런 파일이 없다 (죽은 약속)")
 
+    if planned:
+        for name, ref in sorted(set(planned)):
+            rep.warn(
+                f"{name} → config/{ref} 는 ★ 미신설이라고 문서가 밝혔다 (계획된 약속 — 거짓말은 아니다). "
+                f"신설 조건이 문서 머리에 있는가를 사람이 본다"
+            )
+
+    if buried:
+        rep.say()
+        for name, ref in sorted(set(buried)):
+            rep.say(f"  🪦 {name} → config/{ref} 는 묻혔다 (문서가 그렇게 적고 있다 — 기록이지 약속이 아니다)")
+
     if broken:
         rep.say()
         for name, ref, dotted in sorted(set(broken)):
             rep.warn(f"{name} 이 `{dotted}` 를 약속하는데 {ref} 에 그 키가 없다")
-    if not missing_cfg and not broken:
+    if not missing_cfg and not broken and not planned:
         rep.say(f"  {OK} 문서가 가리키는 config 파일·키 {checked}건 — 모두 실재한다")
     else:
         rep.say()

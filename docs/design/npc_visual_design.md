@@ -5,6 +5,13 @@
 > · 무협 수묵 기조("정보가 장식보다 먼저") 위에서, NPC의 '보이는 것'을 규정한다.
 > 기준 데이터: `config/npcs/cheongha_npcs.yml`(등록 21명) / `docs/design/npc_lifecycle.md`(일과·생애)
 > / `docs/design/npc_dialogue_interaction.md`(웹훅 페르소나) / `docs/design/resourcepack_design.md`(글리프 슬롯)
+>
+> **★ `config/npc_visual.yml` 은 아직 없다 (미신설 — 2026-07 확인).** 본 문서가 그 파일을 세 곳에서
+> 가리키고 있었고, 그 파일은 존재한 적이 없다 — **죽은 약속**이었다. 지금은 그 사실을 명시한다:
+> 아래에서 이 이름이 나올 때마다 `(미신설)` 을 붙였다. **신설 조건**: 9장 ②·③(스폰 확충 + Profession
+> 배선)이 실제로 굴러가 코드가 표를 *읽을 일이 생길 때*. 그 전에 파일만 만들면 아무도 안 읽는 규칙이
+> 하나 더 늘 뿐이다. 그때까지 색·글리프의 정본은 `resourcepack_design.yml` 이고, 본 문서의 표는
+> **사람이 읽는 발주서**다.
 
 ---
 
@@ -12,7 +19,7 @@
 
 ```text
 등록제 명사   비주얼 자산의 키 = cheongha_npcs.yml의 npc_id (hanbaek, muksam …) — 파일명·발주서·코드가 전부 이 키를 쓴다
-토큰 단일 원천 색·글리프·크기는 resourcepack_design.yml 토큰만 참조 — 본 문서의 표는 승격 시 config/npc_visual.yml로 이관 가능한 형태로 쓴다
+토큰 단일 원천 색·글리프·크기는 resourcepack_design.yml 토큰만 참조 — 본 문서의 표는 승격 시 config/npc_visual.yml (미신설) 로 이관 가능한 형태로 쓴다
 수묵 기조     기본은 먹과 한지의 저채도, 채도는 의미(세력·태세)에만 — NPC가 화면에서 시끄러우면 안 된다
 관측 가능한 사실만 명패·연출은 플레이어가 '알 수 있는 것'만 보여준다 — secrets(묵삼의 정체)는 비주얼로도 새지 않는다
 교체형        스펙(이 문서)은 계약, 아트(스킨·초상 PNG)는 교체형 — 플레이스홀더로 시작해 커미션으로 승격 (코드 불변)
@@ -200,7 +207,7 @@ Villager는 armor/handItem 렌더가 안 된다. 대신:
 | bok_min | mingan | 갈백 마의 | 없음 (무채) | — |
 | bok_bulga | bulga | 회 승복 | `#8C7549` (저채도 갈) — 가사 한정 예외색 | 가사 |
 
-위 hex는 스킨용 제안 토큰(MC 틴트 색은 스킨에 과채도) — 확정 시 config/npc_visual.yml로 이관.
+위 hex는 스킨용 제안 토큰(MC 틴트 색은 스킨에 과채도) — 확정 시 config/npc_visual.yml (미신설) 로 이관.
 
 ### 3.3 커미션 발주서 형식
 
@@ -323,7 +330,7 @@ factions.yml            5계열 = 색 배정 단위(1.3)
    default 폰트 provider 추가 (F26 준수)
 ⑤ 세력 id 정합 — cheongha_npcs.yml의 gwanchung/gwangun/jeongboSang/pyoguk/bulga를 factions.yml에
    등록 또는 표기 통일 (1.3 메모)
-⑥ config 이관 — 1.3 색 대응표·2.1 직업표·3.2 복식 코드·4.4 파티클표 → config/npc_visual.yml 신설 시 이동
+⑥ config 이관 — 1.3 색 대응표·2.1 직업표·3.2 복식 코드·4.4 파티클표 → config/npc_visual.yml (미신설) 신설 시 이동
    (본 문서가 기준 문서, yml이 기계 판독 — resourcepack_design 이원 구조 그대로)
 ⑦ M2 이동 규정(4.2) — 구간 전환 훅 + 좌표 프리셋 데이터 (schedule place → 실좌표 매핑이 선행 과제)
 ```

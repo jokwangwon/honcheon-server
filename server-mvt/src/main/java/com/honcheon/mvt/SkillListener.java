@@ -339,7 +339,7 @@ public final class SkillListener implements Listener {
         state.qiHotUntil = tick + f.startup() + NPC_HOT_TICKS;
         // 응집 — 플레이어와 **같은 함수**를 탄다 (npc_combat.yml symmetry: "응집은 빛으로 보인다").
         // 그 창을 보고 물러서면 맨 주먹이 온다 — NPC 의 텔레그래프는 규칙의 일부다
-        scheduleTelegraph(mob::getEyeLocation, npc.grade(), f.startup(), 0);
+        scheduleTelegraph(mob::getEyeLocation, npc.grade(), f.startup(), 0, 1.0f);
     }
 
     /** 지금 이 몸의 타격에 실리는 격 — 두름(상시) 또는 응집이 끝난 창(발경). 그 밖엔 외공기 */
@@ -433,7 +433,7 @@ public final class SkillListener implements Listener {
                 state.qiHotUntil = -1;                        // 응집을 태웠다 — 다시 모아야 한다
                 event.setDamage(event.getDamage() + engine.qiPower(grade));
                 impact(target.getLocation().add(0, 1, 0), grade,
-                        new SkillEngine.Strike(0, 0, "success", "성공", true, 0), 1);
+                        new SkillEngine.Strike(0, 0, "success", "성공", true, 0), 1, 1.0f);
             }
         }
 
@@ -711,7 +711,9 @@ public final class SkillListener implements Listener {
         SkillEngine.Step step = motion == null ? null : motion.step(stepIndex);
         int boost = step == null ? 0 : step.telegraphBoost();
         if (cast.manifested() || boost > 0) {
-            scheduleTelegraph(() -> handLocation(player), cast.grade(), f.startup(), boost);
+            // 응집음도 초식의 배율을 탄다 — '조용한 초식'은 예고부터 조용하다
+            scheduleTelegraph(() -> handLocation(player), cast.grade(), f.startup(), boost,
+                    soundScale(step));
         }
         player.swingMainHand();
         pending.add(new Pending(tick + f.startup(),
@@ -794,7 +796,9 @@ public final class SkillListener implements Listener {
                     applying = false;
                 }
                 stagger(target, player, cast);
-                impact(target.getLocation().add(0, 1, 0), cast.grade(), strike, shown);
+                // 타격음은 **격**의 것이다 — 초식이 그것을 줄이려면 등록부의 sound_scale 한 칸이 필요하다
+                impact(target.getLocation().add(0, 1, 0), cast.grade(), strike, shown,
+                        soundScale(stepOf(cast, stepIndex)));
                 if (art != null) {
                     ultimateEffect(player, state, art, target, defense.damage());
                 }
@@ -1392,15 +1396,50 @@ public final class SkillListener implements Listener {
 
     /** 등록부의 소리 한 줄 — 1.21 의 Sound 는 열거형이 아니다. 바닐라 키를 문자열로 재생한다 */
     private void sfx(Location at, SkillEngine.Sfx sfx) {
-        if (sfx != null && at.getWorld() != null) {
-            at.getWorld().playSound(at, sfx.key(), sfx.volume(), sfx.pitch());
+        sfx(at, sfx, 1.0f);
+    }
+
+    /**
+     * 소리 한 줄 — <b>초식의 배율</b>({@code steps[i].sound_scale})이 걸린다.
+     *
+     * <p>타격음은 <b>격</b>의 것이고(grades[].sounds.impact) 스윙음은 <b>초식·계열</b>의 것이다.
+     * 초식이 제 소리만 줄이면 <b>격의 타격음이 그대로 울려</b> "조용한 검"이 성립하지 않았다 —
+     * 무성무색(곤륜)은 <b>전 무공 유일의 무음 초식</b>인데, 그 정체성이 등록부만으로 완결되지 않았다.
+     * 이 배율이 그 자리다: <b>초식이 제가 내는 모든 소리를 함께 낮춘다</b>.
+     *
+     * <p><b>0 이면 아예 발행하지 않는다</b> — 다만 <b>타격 파티클은 깎지 않는다</b>: 조용한 것은 정보지만,
+     * <i>맞았다는 사실</i>까지 지우면 그것은 화면이 판정에 대해 거짓말하는 것이다.
+     */
+    private void sfx(Location at, SkillEngine.Sfx sfx, float scale) {
+        if (sfx == null || at.getWorld() == null || scale <= 0.0f) {
+            return;
         }
+        float volume = sfx.volume() * scale;
+        if (volume <= 0.0f) {
+            return;   // 무음 — 소리를 0 으로 트는 것과 아예 안 트는 것은 다르다 (후자가 정직하다)
+        }
+        at.getWorld().playSound(at, sfx.key(), volume, sfx.pitch());
     }
 
     private void sfx(Location at, List<SkillEngine.Sfx> sounds) {
+        sfx(at, sounds, 1.0f);
+    }
+
+    private void sfx(Location at, List<SkillEngine.Sfx> sounds, float scale) {
         for (SkillEngine.Sfx s : sounds) {
-            sfx(at, s);
+            sfx(at, s, scale);
         }
+    }
+
+    /** 이번 초식이 소리를 얼마나 내는가 — 등록되지 않았으면 1.0 (그대로 운다) */
+    private static float soundScale(SkillEngine.Step step) {
+        return step == null ? 1.0f : step.soundScale();
+    }
+
+    /** 이번 수의 초식 한 칸 — 등록부 {@code skills[].steps[i]} (없으면 null: 오의·발출·기본 초식) */
+    private SkillEngine.Step stepOf(SkillEngine.Cast cast, int stepIndex) {
+        SkillEngine.SkillMotion motion = engine.motionSkill(cast.skillId());
+        return motion == null ? null : motion.step(stepIndex);
     }
 
     /**
@@ -1479,7 +1518,7 @@ public final class SkillListener implements Listener {
 
     /** 응집 예약 — 선딜 동안 몇 번 발행할지는 예산 풀이 정한다 (프레임이 길어도 풀이 마르면 멈춘다) */
     private void scheduleTelegraph(java.util.function.Supplier<Location> at, String grade, int startup,
-                                   int boost) {
+                                   int boost, float soundScale) {
         SkillEngine.GradeMotion m = engine.motionGrade(grade);
         SkillEngine.Budget b = engine.motionBudget();
         int per = m.charge().count() + boost;
@@ -1492,7 +1531,7 @@ public final class SkillListener implements Listener {
             pending.add(new Pending(tick + (long) i * b.telegraphStepTicks(),
                     () -> telegraph(at.get(), grade, boost)));
         }
-        sfx(at.get(), m.chargeSounds());                          // 귀로도 예고한다 (감각이 낮아도 읽힌다)
+        sfx(at.get(), m.chargeSounds(), soundScale);              // 귀로도 예고한다 (감각이 낮아도 읽힌다)
     }
 
     /**
@@ -1502,15 +1541,17 @@ public final class SkillListener implements Listener {
      * 아무리 나눠도 대상당 최소치(min_impact_per_target)는 남긴다 —
      * <i>맞았다는 사실</i>은 언제나 보여야 한다 (performance.yml over_budget: "핵심 타격 표시만 유지").
      */
-    private void impact(Location at, String grade, SkillEngine.Strike strike, int targets) {
+    private void impact(Location at, String grade, SkillEngine.Strike strike, int targets,
+                        float soundScale) {
         SkillEngine.GradeMotion m = engine.motionGrade(grade);
         SkillEngine.Budget b = engine.motionBudget();
         HuntingGrounds.witnessQi(at, grade);   // 격을 본 자는 전의가 꺾인다 (npc_combat morale 상대_위세)
 
         int share = Math.max(b.minImpactPerTarget(), b.impactPool() / Math.max(1, targets));
+        // 【불가침】 파티클은 배율을 타지 않는다 — 초식이 조용할 수는 있어도, 맞았다는 사실을 지울 수는 없다
         hud.emit(at, m.impact(), Math.min(m.impact().count(), share), false);
         hud.emit(at, m.accent(), false);
-        sfx(at, m.impactSounds());
+        sfx(at, m.impactSounds(), soundScale);   // 타격음만 초식의 배율을 탄다 (무성무색이 조용한 이유)
         if ("critical_success".equals(strike.tierId())) {
             event(at, "대성공");   // 급소 — 격과 무관하게 타격 위에 겹친다
         }
@@ -1614,9 +1655,11 @@ public final class SkillListener implements Listener {
             // 광선의 끝에서 작렬한다 — 어디까지 갔는지 눈에 남는다 (빗나가면 그 자리에 코스트만 흩어진다)
             hud.emit(eye.clone().add(dir.clone().multiply(cast.range())), shot.burst(), false);
             sfx(player.getLocation(), shot.releaseSounds());
-            return;
+            return;   // 발출은 초식이 아니다 (형태의 것) — 초식의 배율이 걸릴 자리가 없다
         }
-        sfx(player.getLocation(), step != null && step.sound() != null ? step.sound() : style.swing());
+        // 스윙음 — 초식이 제 소리를 가졌으면 그것, 아니면 계열의 소리. 둘 다 초식의 배율을 탄다
+        sfx(player.getLocation(), step != null && step.sound() != null ? step.sound() : style.swing(),
+                soundScale(step));
     }
 
     // ══════════ 관리 명령 접합 (MvtCommand 가 부른다) ══════════

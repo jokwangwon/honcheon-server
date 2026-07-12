@@ -1305,7 +1305,14 @@ def sim_weapon_grades(cfg, rep, max_rounds):
     p = Fighter(cfg, "절정 무인", "절정", weapon="검")
     e = Fighter(cfg, "절정 고수", "절정", weapon="검", is_npc=True)
 
-    rep.say("     [A] 판정 보정만 봤을 때 (범철 0 · 정련 0 · 보병 +1 · 신병 +1)")
+    # ★ 등급별 보정을 **글자로 박지 말라.** 예전엔 "(범철 0 · 정련 0 · 보병 +1 · 신병 +1)" 이라 적혀 있었는데
+    #   config 는 이미 전부 0 으로 내려간 뒤였다 (equipment.yml 2026-07 전투 정합 패스).
+    #   그래서 검수는 **없는 죄를 없는 이름으로** 짖었고, 고칠 곳을 찾으러 가면 이미 고쳐져 있었다.
+    #   등록부가 정본이다 — 검수도 등록부에서 읽는다.
+    _grades = dig(cfg, "equipment.yml", "weapon_grades", default={}) or {}
+    _label = " · ".join(f"{g} {int(num((sp or {}).get('judgment_bonus'), 0)):+d}"
+                        for g, sp in _grades.items())
+    rep.say(f"     [A] 판정 보정만 봤을 때 ({_label})")
     rep.say("       등급    보정   명중률   피해/합    TTK    피해 Δ")
     base = None
     for g, spec in we.items():
@@ -1316,17 +1323,43 @@ def sim_weapon_grades(cfg, rep, max_rounds):
             base = d
         delta = (d - base) / base * 100 if base else 0
         rep.say(f"       {g:<6} {b:>+4}   {h * 100:5.1f}%  {d:6.2f}   {t:>2}합   {delta:>+6.1f}%")
+    # 판정 +1 이 피해를 얼마나 올리는가 — **그 +1 을 지금 누가 주는가**를 함께 말해야 한다.
+    #   등급이 전부 0 이면 남는 출처는 애병(손에_익다)뿐이다. 이름을 대야 고칠 곳을 안다.
     h1, d1, _ = strike(p, e, mod=1)
     h0, d0, _ = strike(p, e, mod=0)
     dmg_delta = (d1 - d0) / d0 * 100 if d0 else 0
-    if dmg_delta < 5:
-        rep.warn(f"보병(+1)의 피해 기여 {dmg_delta:+.1f}% — 5% 문턱 아래. 판정 보정만 보면 무기 등급은 장식이다 "
-                 f"(설계 의도와 일치: equipment.yml 'note: 가치는 보정이 아니라 생존')")
+    _givers = [g for g, sp in _grades.items() if int(num((sp or {}).get("judgment_bonus"), 0)) > 0]
+    _who = " · ".join(_givers) if _givers else "등급은 아무도 안 준다 — 남은 출처는 애병(손에_익다 +1)뿐"
+    _qi = dig(cfg, "combat.yml", "damage", "qi_power", default={}) or {}
+    _gang = int(num(_qi.get("강기"), 0))
+    # ★ 묻기만 하면 안 된다 — **재야 한다.** "판정 한 칸이 격 한 단계보다 무거운가"는 대답 가능한 질문이다.
+    #   같은 잣대(기대 피해)로 나란히 놓는다: 판정 +1 의 증분 vs 격 한 단계(외공기→발경)의 증분.
+    #   이 세계의 대원칙은 **위력의 축이 격**이라는 것이다 (combat.yml: "위력의 축은 여전히 격이다").
+    #   장비가 격을 이기면 그 축이 뒤집힌다 — 무협이 아니라 장비 게임이 된다.
+    _step = int(num(_qi.get("발경"), 1)) - int(num(_qi.get("외공기"), 0))   # 격 한 단계의 값
+    _, d_qi, _ = strike(p, e, qi_power=_step)
+    qi_delta = (d_qi - d0) / d0 * 100 if d0 else 0
+    # ★ 한 칸씩 견주는 것은 **틀린 잣대**다. 판정에는 **상한**이 있고(장비 총합 caps.equipment_judgment_bonus_total),
+    #   격은 심검(5)까지 오른다. "한 칸이 더 무겁다"는 사실이어도, 그것만으로 축이 뒤집히지는 않는다 —
+    #   축이 뒤집히는 것은 **끝까지 갔을 때 장비가 격을 이길 때**다. 그러므로 천장끼리 견준다.
+    #   (한 칸 비교도 함께 적는다. 사실이고, 애병의 무게를 아는 데 쓸모가 있다.)
+    _cap = int(num(dig(cfg, "equipment.yml", "caps", "equipment_judgment_bonus_total"), 2))
+    _top = max((int(num(v, 0)) for v in _qi.values()), default=0)   # 심검
+    _, d_capped, _ = strike(p, e, mod=_cap)
+    _, d_top, _ = strike(p, e, qi_power=_top)
+    cap_delta = (d_capped - d0) / d0 * 100 if d0 else 0
+    top_delta = (d_top - d0) / d0 * 100 if d0 else 0
+    rep.say(f"     한 칸: 판정 +1 = {dmg_delta:+.1f}%   ·   격 1단계(+{_step}) = {qi_delta:+.1f}%"
+            f"   → 판정 한 칸이 더 무겁다 (사실이다)")
+    rep.say(f"     천장: 장비 판정 최대(+{_cap}) = {cap_delta:+.1f}%   ·   격 최대(심검 +{_top}) = {top_delta:+.1f}%")
+    if cap_delta >= top_delta:
+        rep.warn(f"**장비의 천장이 격의 천장을 이긴다** (판정 +{_cap} → {cap_delta:+.1f}% ≥ 심검 → {top_delta:+.1f}%). "
+                 f"combat.yml 은 '위력의 축은 격'이라 못박았는데 그 축이 장비로 뒤집혔다. "
+                 f"+1 을 주는 자: {_who}")
     else:
-        rep.warn(f"보병(+1)의 피해 기여 {dmg_delta:+.1f}% — 판정 보정 +1 이 피해를 {dmg_delta:.0f}% 올린다. "
-                 f"equipment.yml 대원칙('장비는 격차가 아니라 속성과 서사를 만든다')과 어긋난다: "
-                 f"2d6 판정에서 +1 은 명중률 {h0 * 100:.1f}%→{h1 * 100:.1f}% 이동 + 마진 상승의 이중 효과다. "
-                 f"게다가 격의 위력이 0 인 현재 규칙에서는 **보병 한 자루가 강기보다 강하다**")
+        rep.say(f"     ✅ 위력의 축은 격이다 — 장비는 천장이 낮다 ({cap_delta:+.1f}% < {top_delta:+.1f}%). "
+                f"판정 한 칸이 무거운 것은 **애병을 귀하게 만드는 것**이지 축을 뒤집는 것이 아니다 "
+                f"(판정 출처: {_who})")
 
     rep.say("")
     rep.say(f"     [B] 무기 파괴 — 검기(절정) 상대로 '막기'를 고른다면 (trigger: {trigger})")

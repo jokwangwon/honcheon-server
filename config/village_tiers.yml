@@ -2,13 +2,32 @@
 # 기준 문서: docs/design/village_tiers.md
 # 상위 문법: docs/design/building_style_guide.md (수묵 3색·지붕 문법·검수 12종 — 불변)
 # 판정 원천: config/region_state.yml (치안·경제·민심) / config/economy.yml (region_multipliers 밴드 재사용)
-# 검수 원천: server-mvt/.../TownAudit.java — 아래 audit_invariants 는 그 코드에서 역산한 값이다
+#
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ ★ 아직 아무도 이 파일을 읽지 않는다 (아래 unwired 절 참조).                 ║
+# ║   지금 세계를 짓는 것은 CheonghaBuilder.java 의 상수다 — 이 표가 아니다.    ║
+# ║   그러니 이 파일을 "세계의 규칙"으로 읽지 말라. 아직은 **약속**이다.         ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
 #
 # 원칙: 부(富)는 '소품의 수'가 아니라 '자재의 격 + 면적의 여유'다.
 #       소품을 늘려 부를 표현하면 검수(소품 벽면 ≤3 / 바닥 여백 ≥55%)에 걸린다.
 # 자재: 마인크래프트 1.21.4 바닐라만. 결정론(좌표 상수, 난수 금지).
 
 version: 1
+
+# ─── ★ 미배선 표식 (등록부 처분 2026-07 — 미룸) ───
+# gap_audit ① 이 이 절을 읽는다. 조용히 놔두는 것만은 하지 않는다.
+unwired:
+  reason: >-
+    조성기(CheonghaBuilder v6.8)가 중촌 하나를 상수로 짓고 있다. 지금 등급 인자를 달면
+    '블록 단위 회귀 기준선(middle == v6.8)'을 세우기 전에 팔레트를 흔들게 된다 —
+    그러면 검수(TownAudit)가 무엇 때문에 깨졌는지 아무도 말할 수 없다.
+    빈촌·부촌은 아직 무대가 없다: heuksu_ferry 는 조성되지 않았고 등록된 부유 마을은 0개다.
+  condition: >-
+    ① CheonghaBuilder.build(..., Tier) 시그니처 승격 + tier=middle 이 v6.8 과 블록 단위 동일함을
+    회귀로 못박는다 → ② 그 다음에 poor 를 heuksu_ferry 에 처음 굴린다 (첫 무대).
+    두 단계 모두 마을 축 담당의 것이다 — 이 파일은 그때 로더(VillageTiers.java)를 얻는다.
+  doc: docs/design/village_tiers.md
 
 # ─── 등급 판정 ───
 tier_score:
@@ -20,23 +39,19 @@ tier_score:
   variants:
     famine: { when: "tier_score < 15", tier: poor, note: "등급이 아니라 빈촌의 표층 변주 — 자재 재정의 없음" }
 
-# ─── 검수 불변식 (전 등급 공통 — 깨면 실패) ───
-audit_invariants:
-  boulevard_width_min: 7
-  alley_width_min: 3
-  doorpath_width_min: 2
-  eave_min: 2                  # 앵커 건물 기준. 처마 최외곽 링은 반드시 roof_material_set 자재
-  roof_slope: { min: 0.35, max: 1.0, target: [0.5, 0.8] }
-  roof_plateau_max_pct: 20
-  roof_terrace_run_max: 3.0
-  props_per_wall_max: 3        # TownAudit.PROP 집합 + 모든 표지판만 해당
-  floor_free_min_pct: 55
-  colored_max_pct: 2.0
-  dark_max_pct: 15
-  cold_light_in_town: 0        # 영혼 계열 = 폐사당 전용. 등급 팔레트에 냉색 금지
-  outside_fill_min_pct: 5
-  anchor_keys_immutable: [장터, 청하객잔, 의뢰소, 의방, 전장, 표국, 북쪽_산길]   # 추가만 허용, 삭제·개명 금지
-  red_awning_within_market_r: 15
+# ─── 검수 불변식 — 여기 적지 않는다 ───
+#
+# ★ 2026-07: 이 자리에 수치 표(boulevard 7 · dark_max_pct 15 · …)가 있었다. **지웠다.**
+#   그것은 TownAudit.java 에서 손으로 베낀 사본이었고, 이미 어긋나 있었다:
+#     village_tiers.yml dark_max_pct: 15   ↔   TownAudit.DARK_MAX_PCT = 40.0
+#   (검수는 사용자 피드백으로 15→40 이 됐는데, 이 사본은 15 에 머물렀다. 아무도 안 읽으니
+#    아무도 안 고쳤다.) 같은 이름 다른 값 — 이 저장소가 이미 한 번 데인 병이다.
+#
+#   불변식의 정본은 **하나다: server-mvt/.../TownAudit.java** — 검수하는 자가 잣대를 갖는다.
+#   등급이 바꾸는 것은 잣대가 아니라 **잣대에 재이는 것**(팔레트·규모·밀도)이다.
+#   등급별로 실제 달라지는 스캔 인자(scan_r · outside_ring · boulevard_samples · alley_offset)는
+#   각 tier 의 site 절이 갖고 있고, 승격 목록은 builder_contract.audit_params_to_promote 에 있다.
+audit_invariants_source: "server-mvt/src/main/java/com/honcheon/mvt/TownAudit.java (정본 — 사본 금지)"
 
 # ─── 자재 집합 함정 (조성기가 반드시 알아야 하는 것) ───
 material_traps:

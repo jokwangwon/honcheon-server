@@ -432,7 +432,9 @@ public final class SkillEngine {
                     Map<String, Object> st = asMap(o);
                     steps.add(new Step(str(st.get("trail")), str(st.get("particle")),
                             intOr(st.get("count"), 1), Boolean.TRUE.equals(st.get("finisher")),
-                            intOr(st.get("telegraph_boost"), 0), sfx(st.get("sound"))));
+                            intOr(st.get("telegraph_boost"), 0), sfx(st.get("sound")),
+                            // 【등록부는 소리를 줄일 수만 있다】 상한 1.0 — 키우는 것은 sound.volume 의 몫
+                            (float) Math.max(0.0, Math.min(1.0, dblOr(st.get("sound_scale"), 1.0)))));
                 }
             }
             sms.put(id, new SkillMotion(id, String.valueOf(s.getOrDefault("name", id)),
@@ -529,7 +531,10 @@ public final class SkillEngine {
                     intOr(m.get("impact_ticks"), 3), intOr(m.get("stick_ticks"), 0),
                     intOr(m.get("count"), 1), dblOr(m.get("radius"), 0.85),
                     dblOr(m.get("height"), 1.0), (float) dblOr(m.get("orbit"), 0.0),
-                    (float) dblOr(m.get("burst_scale"), 1.0),
+                    // burst_scale — 스칼라(세 축이 같이 자란다)도 [x,y,z](축마다 다르게)도 받는다
+                    axes(m.get("burst_scale"), 1.0f),
+                    // orient — [pitch, yaw, roll] 도. 없으면 [0,0,0] = 예전 그대로 (yaw 로만 선다)
+                    axes(m.get("orient"), 0.0f),
                     String.valueOf(m.getOrDefault("billboard", "FIXED")),
                     intOr(idx(m.get("brightness"), 0), 15),
                     intOr(idx(m.get("brightness"), 1), 15)));
@@ -668,6 +673,19 @@ public final class SkillEngine {
             }
         }
         return out;
+    }
+
+    /**
+     * 세 축의 값 — <b>스칼라 하나</b>({@code burst_scale: 0.5}: 세 축이 같다)도
+     * <b>[x, y, z]</b>({@code burst_scale: [0.06, 0.45, 0.30]}: 축마다 다르다)도 받는다.
+     * 스칼라를 그대로 두면 예전 문법이 그대로 돈다 — 등록부는 <b>필요한 칸에서만</b> 축을 가른다.
+     */
+    private static float[] axes(Object raw, float fallback) {
+        if (raw instanceof Number n) {
+            float v = n.floatValue();
+            return new float[]{v, v, v};
+        }
+        return vec3(raw, fallback);
     }
 
     private static Object idx(Object raw, int i) {
@@ -931,9 +949,21 @@ public final class SkillEngine {
                              List<Sfx> chargeSounds, List<Sfx> releaseSounds, List<Sfx> deploySounds) {
     }
 
-    /** 초식 한 칸의 모션 — trail 은 skill_mechanics 의 히트박스 type 과 같아야 한다 (motion_audit ②) */
+    /**
+     * 초식 한 칸의 모션 — trail 은 skill_mechanics 의 히트박스 type 과 같아야 한다 (motion_audit ②).
+     *
+     * @param soundScale <b>이 초식이 내는 모든 소리의 음량 배율</b> — 스윙음(초식의 {@code sound} 또는
+     *                   계열의 {@code swing})·<b>응집음</b>·<b>타격음</b>({@code grades[].sounds.impact})에
+     *                   함께 걸린다. 타격음은 <b>격</b>의 것이라 초식이 제 칸에서 줄일 수단이 없었다 —
+     *                   이 칸이 그 자리다 (무성무색이 <b>전 무공 유일의 무음 초식</b>이라는 정체성은
+     *                   이제 등록부만으로 완결된다).
+     *                   <b>[0, 1] 로 물린다 — 등록부는 소리를 줄일 수만 있다</b> ({@code reach ≤ 1.0} 과 같은
+     *                   문법: 키우는 것은 초식의 {@code sound.volume} 이 한다. 그래야 한 줄이 귀를 못 터뜨린다).
+     *                   기본 1.0. <b>0 이면 아예 발행하지 않는다</b> — 다만 <b>타격 파티클은 그대로다</b>:
+     *                   맞았다는 사실까지 지우면 그것은 화면이 판정에 대해 거짓말하는 것이다
+     */
     public record Step(String trail, String particle, int count, boolean finisher,
-                       int telegraphBoost, Sfx sound) {
+                       int telegraphBoost, Sfx sound, float soundScale) {
     }
 
     public record SkillMotion(String id, String name, String style, List<Step> steps) {
@@ -1909,12 +1939,22 @@ public final class SkillEngine {
      *
      * @param spread     참격선이 지워질 때 살짝 <b>퍼지며</b> 사라지는 배율 (연기처럼)
      * @param stickTicks 던진 물건이 땅에 <b>꽂혀</b> 남는 틱 (빗나간 비수는 그 자리에 있다)
+     * @param orient     <b>형체가 서는 각</b> [pitch, yaw, roll] (도). 시전자 기준 좌표계에서 모델을 돌린다 —
+     *                   <b>+X 왼쪽 · +Y 위 · +Z 앞</b> (엔티티의 yaw 가 이미 시전자를 향해 있다).
+     *                   pitch 양수 = <b>앞으로 눕는다</b> (MC 규약 · {@code swings[].tilt} 와 같은 부호):
+     *                   {@code orient: [90, 0, 0]} 이면 모델의 <b>+Y(길이축)가 앞(+Z)을 향한다</b> —
+     *                   그래서 '몸 앞에 선 획'이 <b>앞으로 뻗는 창</b>이 된다. 없으면 [0,0,0] (예전 그대로).
+     *                   회전은 <b>크기 조절 뒤</b>에 걸린다(leftRotation) — {@code size}·{@code burst_scale} 의
+     *                   축은 언제나 <b>모델의 축</b>이다 (회전해도 축이 흔들리지 않는다)
+     * @param burstScale 개화가 <b>축마다</b> 자라는 비율 [x, y, z] (사거리에 곱한다). 스칼라도 받는다
+     *                   (그러면 세 축이 같이 자란다 — 예전 문법). 축이 갈리면 <b>한 축만 뻗는 창</b>이 된다
      */
     public record DisplayMotion(String id, String kind, String model,
                                 int lifetime, int birth, int fade, int interpolation, float spread,
                                 float spin, double speed, float impactScale, int impactTicks,
                                 int stickTicks, int count, double radius, double height, float orbit,
-                                float burstScale, String billboard, int blockLight, int skyLight) {
+                                float[] burstScale, float[] orient,
+                                String billboard, int blockLight, int skyLight) {
         public boolean isBolt() {
             return "투사".equals(kind);
         }
@@ -1935,6 +1975,11 @@ public final class SkillEngine {
         /** 날의 기 — 손에 든 병기에 겹쳐 지속한다 */
         public boolean isSheath() {
             return "서림".equals(kind);
+        }
+
+        /** 등록부가 이 형체를 돌려 세웠는가 (아니면 예전 그대로 — yaw 로만 선다) */
+        public boolean oriented() {
+            return orient[0] != 0.0f || orient[1] != 0.0f || orient[2] != 0.0f;
         }
     }
 }

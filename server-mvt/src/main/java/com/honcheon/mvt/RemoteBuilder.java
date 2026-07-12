@@ -1215,8 +1215,15 @@ final class RemoteBuilder {
                 Weapons.makeSeeded(Weapons.Series.도, Weapons.Grade.마병, seed),
                 null,
                 Weapons.makeSeeded(Weapons.Series.단검, Weapons.Grade.정련, seed + 1));
+        // ★ 두 번째 시렁 — 예전엔 여기에 **검+마병**을 걸었고, 그것이 조성 전체를 죽였다
+        //   (`Weapons.make`: "마병은 도(刀)에만 존재한다"). 바로 윗줄 주석이 그 규칙을 적어 두고도
+        //   다음 줄에서 어겼다 — **주석은 규칙을 지키지 않는다. 코드가 지킨다.**
+        //   (그래서 마교 진령은 조성될 때마다 예외로 죽었고, 다섯 지역 중 유일하게 서지 못했다.)
+        //
+        //   대신 노획한 검을 건다. 마교는 남의 것을 빼앗아 쓴다 — 걸린 검이 정파의 것이라는 사실 자체가
+        //   이 굴이 무엇을 했는지 말한다. 마병(도)은 첫 시렁에 이미 걸려 있다.
         shelf(world, df.x(ax, 1, 2), ry + 1, df.z(az, 1, 2), deep.getOppositeFace(),
-                Weapons.makeSeeded(Weapons.Series.검, Weapons.Grade.마병, seed + 2),
+                Weapons.makeSeeded(Weapons.Series.검, Weapons.Grade.정련, seed + 2),   // 빼앗은 것
                 null,
                 null);
         putOn(world, df.x(ax, -2, -3), ry, df.z(az, -2, -3), Material.DECORATED_POT);

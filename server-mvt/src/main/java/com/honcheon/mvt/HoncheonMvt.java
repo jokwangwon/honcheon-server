@@ -36,7 +36,8 @@ public final class HoncheonMvt extends JavaPlugin {
     private Populace populace;   // 무명(無名) — 세계에 사는 사람들 (config/npcs/populace.yml)
     private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
     private SkillCast skillCast;   // 절기(絶技) — 삼문(承·間·虛)이 열려야 나간다
-    private Dojang dojang;   // 연무장 — 따로 두들겨 보는 자리 (별도 월드 · 세계에 자국을 남기지 않는다)
+    private Dojang dojang;
+    private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
@@ -68,6 +69,8 @@ public final class HoncheonMvt extends JavaPlugin {
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
+        Gyeonggong.init(cfg); // 경공 — 경지 천장·신법 성장·경신 소모·문파 보법 (config/gyeonggong.yml).
+                              // ★ 이것이 없으면 절정 고수도 삼류도 **바닐라처럼 똑같이 걷는다**
         Growth.init(cfg);     // 성장 축 — training.yml curriculum · combat.yml attacker_attribute.
                               // ★ 이것이 없으면 **같은 경지의 두 사람이 코드 수준에서 완전히 같은 사람**이 된다
         HuntingGrounds.init(cfg);   // 적 등록부 — 짐승·사람 스탯 (npcs·npc_combat·combat)
@@ -81,6 +84,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.skillCast = new SkillCast(this, skillEngine, skills, cfg);
         this.dojang = new Dojang(this);
         this.dojangGui = new DojangGui(this);
+        this.gyeonggong = new GyeonggongListener(this);   // 몸이 땅을 딛는 법
         // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾼다 (워커 스레드 → 메인 스레드로 태워 준다)
         WorldBridge.onState(state -> getServer().getScheduler().runTask(this, () -> {
             for (String tag : WorldBridge.reactionTags()) {
@@ -92,6 +96,7 @@ public final class HoncheonMvt extends JavaPlugin {
         PackPusher packPusher = new PackPusher(this);
         packPusher.load(cfg);                    // 팩은 **접속한 주소**로 나간다 (박힌 URL 은 LAN 밖에서 죽는다)
         getServer().getPluginManager().registerEvents(packPusher, this);
+        getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
         getServer().getPluginManager().registerEvents(new TradeListener(this), this);
@@ -107,6 +112,7 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(dojangGui, this);
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
+        gyeonggong.start();   // 켜져 있는 사람만 돈다 (Metrics 가 잰다 — probes.gyeonggong)
         skillCast.start();   // 절기의 삼문 — 창(窓)·간격·허를 매 틱 읽는다
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
         populace.start();   // 중앙 티커 — 행인의 일과·배회 (마을이 비어 있으면 세계가 아니다)
@@ -133,6 +139,10 @@ public final class HoncheonMvt extends JavaPlugin {
         WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
         if (skills != null) {
             skills.shutdown();   // 무공의 3D 형체를 세계에 남기지 않는다
+        }
+        if (gyeonggong != null) {
+            // 걷기 속도를 되돌린다 — 경공을 켠 채 로그아웃한 자가 **영영 빨라지면 안 된다**
+            gyeonggong.shutdown();
         }
         if (hunting != null) {
             // 형체를 걷고 **투명한 본체를 되돌린다** — 없으면 보이지 않는 호랑이가 세계에 남는다

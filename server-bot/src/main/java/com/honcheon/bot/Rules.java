@@ -36,6 +36,8 @@ public final class Rules {
     public final BloodDebt bloodDebt;
     /** 죽음과 유산 (단계 4 A) — 부상 사다리·사망 위기·상속·피의 장부의 단일 원천 */
     public final Legacy legacy;
+    /** 기연 등록부 (fortune_encounters.yml) — ★ 관문 수치를 코드가 짓지 않는다 (방문 30·의뢰 15·사흘) */
+    public final Fortunes fortunes;
     private final Map<String, Object> judgmentCfg;
     private final Map<String, Object> economyCfg;
     private final Map<String, Object> llmCfg;
@@ -55,8 +57,9 @@ public final class Rules {
     public Rules(Path configDir) {
         this.judgmentCfg = RulesConfig.load(configDir.resolve("judgment.yml"));
         this.judgment = new JudgmentEngine(judgmentCfg);
+        Map<String, Object> cultivationCfg = RulesConfig.load(configDir.resolve("cultivation.yml"));
         this.progression = new ProgressionEngine(
-                RulesConfig.load(configDir.resolve("cultivation.yml")),
+                cultivationCfg,
                 RulesConfig.load(configDir.resolve("training.yml")));
         this.economyCfg = RulesConfig.load(configDir.resolve("economy.yml"));
         this.economy = new EconomyEngine(economyCfg);
@@ -76,6 +79,9 @@ public final class Rules {
         this.factions = new Factions(factionReactionCfg);
         this.bloodDebt = new BloodDebt(factionReactionCfg);
         this.simbeopCfg = RulesConfig.load(configDir.resolve("simbeop.yml"));
+        this.fortunes = new Fortunes(
+                RulesConfig.load(configDir.resolve("fortune_encounters.yml")),
+                cultivationCfg, simbeopCfg);
         this.politics = new Politics(RulesConfig.load(configDir.resolve("faction_politics.yml")));
         this.legacy = new Legacy(RulesConfig.load(configDir.resolve("death_and_legacy.yml")));
         this.regionCfg = RulesConfig.load(configDir.resolve("regions/cheongha_hyeon.yml"));

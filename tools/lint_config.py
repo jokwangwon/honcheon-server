@@ -82,6 +82,40 @@ for eid, e in fortune["encounters"].items():
     if e["location"] not in region_locs:
         issues.append(f"기연 '{eid}' 장소 '{e['location']}' 미정의")
 
+# 5-b. 기연 관문 — ★ 산문(trigger)과 기계 판독(gate)이 같은 수인가.
+#      한 파일 안에 정본이 둘이면, 배선된 쪽(gate)이 이기고 산문은 조용히 거짓말이 된다.
+#      (이 저장소는 바로 그 병으로 취걸개를 3회/2건에 묶어 뒀다 — yml 은 30회/15건이라 적은 채로.)
+import re as _re                                                       # noqa: E402
+
+sim_all = set(simbeop["simbeop"].keys())
+for eid, e in fortune["encounters"].items():
+    gate = e.get("gate")
+    if not gate:
+        continue                     # 무대가 없는 기연 — 관문을 달지 않는다 (미배선 표식)
+    prose = " ".join(str(x) for x in e.get("trigger", []))
+    m = _re.search(r"방문\s*(\d+)\s*회", prose)
+    if m and int(m.group(1)) != gate["visits"]:
+        issues.append(f"기연 '{eid}' 관문 불일치: gate.visits={gate['visits']} ↔ trigger 산문 '{m.group(1)}회'")
+    m = _re.search(r"의뢰_?완수\s*(\d+)", prose)
+    if m and int(m.group(1)) != gate["deeds"]:
+        issues.append(f"기연 '{eid}' 관문 불일치: gate.deeds={gate['deeds']} ↔ trigger 산문 '{m.group(1)}건'")
+    if gate.get("max_realm") and f"{gate['max_realm']} 이하" not in prose:
+        issues.append(f"기연 '{eid}' 관문 불일치: gate.max_realm='{gate['max_realm']}' 가 trigger 산문에 없다")
+    grants = e.get("grants", {})
+    if grants.get("simbeop") and grants["simbeop"] not in sim_all:
+        issues.append(f"기연 '{eid}' grants.simbeop '{grants['simbeop']}' 가 simbeop.yml 등록부에 없다")
+
+# 5-c. 사냥터 개체군 — 등록되지 않은 개체는 심지 않는다. 영물은 양산 금지(정원 0)
+hunting = load("hunting_grounds.yml")
+for gid, ground in (hunting.get("grounds") or {}).items():
+    for nid, quota in (ground.get("population") or {}).items():
+        if nid not in npcs["npcs"]:
+            issues.append(f"사냥터 '{gid}' 개체 '{nid}' 가 npcs 등록부에 없다")
+            continue
+        rank = npcs["npcs"][nid].get("beast_rank")
+        if rank == "영물" and (quota.get("day", 0) or quota.get("night", 0)):
+            issues.append(f"사냥터 '{gid}' 영물 '{nid}' 정원 ≠ 0 — 양산 금지 (cultivation beast_ranks)")
+
 # 6. 심법 겸수/상성 id
 sim_ids = set(simbeop["simbeop"].keys())
 for sid, s in simbeop["simbeop"].items():
