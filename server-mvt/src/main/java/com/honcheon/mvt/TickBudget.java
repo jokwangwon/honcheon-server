@@ -664,6 +664,19 @@ public final class TickBudget {
             if (o instanceof World) {
                 return proxyWorld;
             }
+            // 컬렉션도 편다 — world.getNearbyEntities(box) 는 **살아 있는 엔티티**를 담아 돌려준다.
+            // 안 싸면 조성기가 워커 스레드에서 e.remove() 를 부른다 (clearNpcs — F29 재조성 정리).
+            // 그건 메인 스레드만 할 수 있는 일이다.
+            if (o instanceof java.util.Collection<?> col) {
+                List<Object> out = new ArrayList<>(col.size());
+                boolean changed = false;
+                for (Object e : col) {
+                    Object w = wrap(e);
+                    changed |= w != e;
+                    out.add(w);
+                }
+                return changed ? out : o;
+            }
             if (o instanceof BlockState || o instanceof Entity || o instanceof Chunk || o instanceof Block) {
                 Class<?>[] ifaces = interfaces(o.getClass());
                 if (ifaces.length == 0) {

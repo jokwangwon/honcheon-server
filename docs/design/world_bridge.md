@@ -106,6 +106,86 @@ MVT ◀──poll(20초)── run/bridge/world_state.json ◀──publish()─
 - **장소** (`place_map`) — populace.yml 의 자리(`산길_어귀`) → rumor.yml 의 장소 키(`north_road`).
   이 번역이 없으면 **산길에서 난 일이 장터의 소문이 된다.** 발원망이 곧 그 소문이 처음 도는 곳이다.
 
+---
+
+## 4-A. 신원 접합 (身元接合) — ★ 다리를 건너는 것은 사건이 아니라 **사람**이다
+
+다리가 놓인 뒤에도 세계의 절반은 남의 일이었다. `mvt_link.character_id` 를 채우는 **명령이 없었으므로** —
+마크에서 사람을 죽여도 소문에 이름이 안 붙고, 혈채가 안 쌓이고, 봇의 수배가 그 사람을 못 가리켰다.
+
+### 방향 — 마크가 코드를 내고, **디스코드가 확정한다**
+
+```
+① 마크    /혼천 접속            → WorldBridge.requestLink(uuid, name)
+                                  6자 코드 발급 (0·O·1·I 없는 알파벳) · link_request 이벤트 발신
+                                  ★ 코드는 그 플레이어에게만 보여 준다 (공개 채팅 금지)
+② 봇      Bridge.linkRequest()  → mvt_link_code 에 '대기'로 앉힌다. 세계는 아무것도 안 바뀐다
+③ 디스코드 /혼천 접속 코드:XXXXXX → GameListener.linkAccount()
+                                  검증 → mvt_link.character_id 결속 → 코드 소각 → ★ 혈채 병합
+④ 되먹임  world_state.json      → links{uuid: {character_id, name}} — 마크가 "나는 누구인가"를 읽는다
+```
+
+**왜 반대가 아닌가.** 훔칠 수 있는 것은 코드뿐이고, 지켜야 할 것은 **캐릭터**(장부·혈채·세력)다.
+최종 결속을 **인증된 자리**(디스코드)에 두면 남의 캐릭터를 뺏으려면 **남의 디스코드 계정**이 필요해진다.
+코드가 새어 나가도 도둑이 할 수 있는 최악은 *제 캐릭터에 남의 마크 몸을 붙이는 것* — **자해**다.
+반대 방향(봇이 코드 발급 → 마크에서 입력)이면 **코드 한 줄이 곧 캐릭터의 열쇠**가 된다 —
+어깨너머로 코드를 본 사람이 남의 삶을 가져간다. 서버가 관리자 1인 + 지인 몇이라도 이 비대칭은 공짜다.
+
+### 자물쇠 (config/world_bridge.yml `identity`)
+
+| 규칙 | 값 | 왜 |
+|---|---|---|
+| 유효 시간 | 600초 | 봇이 꺼져 있던 동안 발급된 코드는 **켜는 순간 이미 죽어 있다** (봉투의 `at` 기준) |
+| 1회성 | `single_use` | 쓰면 `사용됨` — 그 문자열은 죽는다 |
+| 몸당 대기 코드 1개 | `one_pending_per_body` | 재발급하면 이전 코드는 즉시 `폐기` |
+| 1:1 | `one_body_one_character` | 이미 이어진 몸/이름은 **해제 후에만** 다시 잇는다 (도난 차단) |
+| 죽으면 풀린다 | `on_character_death` | 죽은 자의 이름으로는 소문이 붙지 않는다 → 새 삶은 같은 몸으로 잇는다 |
+| 감사 | `events.접합 / 접합해제` | 누가 언제 어느 몸을 이었는지 원장에 남는다 |
+
+### ★ 병합 — 이 접합의 절정
+
+접합 **전에** 저지른 일은 `blood_debt` 의 `mc:<uuid>` 원장에 이름 없이 쌓인다.
+접합하는 순간 그것이 **그 사람의 이름으로 합산된다** (`Db.mergeBloodDebt`).
+
+> 그 전까지 세계는 **열 개의 사고**를 보았다.
+> 그 후로 세계는 **한 마리의 짐승**을 본다.
+
+### MVT 쪽 배선 (명령 등록은 배선 담당의 몫)
+
+```java
+// MvtCommand — "접속" 하위 명령
+if (args.length >= 1 && args[0].equals("접속")) {
+    if (!(sender instanceof Player p)) { sender.sendMessage("§c마크에서 쳐라"); return true; }
+    String code = WorldBridge.requestLink(p.getUniqueId(), p.getName());
+    if (code == null) {
+        p.sendMessage("§c세계 다리가 서지 않았다 — 관리자에게 알려라");
+        return true;
+    }
+    String linked = WorldBridge.linkedName(p.getUniqueId());
+    if (linked != null) {
+        p.sendMessage("§7이미 §f" + linked + " §7으로 이어져 있다 (디스코드에서 /혼천 접속해제)");
+    }
+    // ★ 본인에게만 (공개 채팅 금지 — 코드는 이 사람의 것이다)
+    p.sendMessage("§e접합 코드 §f§l" + code + "§r §7— 디스코드에서 §f/혼천 접속 코드:" + code
+            + " §7(유효 " + (WorldBridge.linkTtlSeconds() / 60) + "분)");
+    return true;
+}
+```
+
+되먹임(`onState`)에서 **접합된 자의 이름**을 태그로 세우거나(선택), 현상금이 붙으면 알릴 수 있다:
+
+```java
+WorldBridge.onState(state -> getServer().getScheduler().runTask(this, () -> {
+    for (Player p : getServer().getOnlinePlayers()) {
+        int bounty = state.bounty(p.getUniqueId());   // 혈채 3+ 에서 관이 방을 붙인다
+        if (bounty > 0) {
+            p.sendActionBar(net.kyori.adventure.text.Component.text(
+                    "§c수배 — 네 목에 " + bounty + "문이 걸렸다"));
+        }
+    }
+}));
+```
+
 ### 목격이 모든 것을 정한다
 
 `npc_death` 의 소문 강도·정확도는 **실제로 센 목격자 수**와 시신 처리가 정한다 (`rumor_matrix`).

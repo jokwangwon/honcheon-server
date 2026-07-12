@@ -53,6 +53,9 @@ public final class HoncheonMvt extends JavaPlugin {
             return;
         }
         Path cfg = configDir.toPath();
+        Metrics.load(cfg);      // 계기 등록부 — performance.yml metrics.probes (예산이 정본이다)
+        TickBudget.load(cfg);   // 틱 슬라이싱 예산 — 조성의 한 틱 폭탄을 나눠 먹인다
+        Metrics.start(this);    // 계기 쓸기 (안 돈 틱도 마감한다)
         this.judgment = new JudgmentEngine(RulesConfig.load(cfg.resolve("judgment.yml")));
         this.progression = new ProgressionEngine(
                 RulesConfig.load(cfg.resolve("cultivation.yml")), RulesConfig.load(cfg.resolve("training.yml")));
@@ -109,7 +112,8 @@ public final class HoncheonMvt extends JavaPlugin {
         loadRegionBases();
         // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
         getServer().getScheduler().runTaskTimer(this,
-                () -> getServer().getOnlinePlayers().forEach(this::updateSidebar), 100L, 100L);
+                Metrics.wrap("sidebar", () -> getServer().getOnlinePlayers().forEach(this::updateSidebar)),
+                100L, 100L);
         // 등록부가 누구를 무인으로 세웠는지 기동 때 말한다 — config 에 적었는데 코드가 안 읽으면
         // 그 NPC 는 조용히 맨손으로 선다(곽진이 그랬다: realm 이 없어 '전투에 서지 않는 사람'이었다).
         java.util.List<String> fighters = skillEngine.manifestingNpcs();

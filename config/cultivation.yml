@@ -55,8 +55,20 @@ combat_hwahu:
     지연_예산: "처치→적립 연산(O(1) ≤0.1ms)→패킷 3개 — 같은 틱. 체감 30~90ms (바닐라 XP 구슬과 동일 경로) — LLM 미개입, DB는 비동기 큐"
     불가침: "XP 바 = 내력 유지, 단일 XP 풀 금지 — 삼중 사다리(능력치/숙련/내공)와 '수치는 문턱, 사건이 문' 승급 철학 보존"
   단발_보정:                     # 연속식과 별도 유지
-    사선_경험: { grants: "관련 능력치 화후 +30일치", cap: "장당 1회" }
+    사선_경험:
+      grants: "관련 능력치 화후 +30일치"
+      grants_days: 30              # 엔진 판독용
+      # 【기계 정의】 '관련 능력치' = **현재 수련 배분의 주 과목**이 쌓는 원장 (training.yml curriculum).
+      #   구간이 가장 많은 과목. 동률이면 능력치 표기 순서(judgment.yml attributes).
+      #   ★ 근거: 사선에서 몸이 배우는 것은 그 사람이 그 몸에 새기고 있던 것이다 —
+      #     발로 살아온 자는 발이 늘고, 버텨 온 자는 몸이 는다. 아무 데나 흩뿌리면 그건 사선이 아니라 로또다.
+      goes_to: 현재_배분_주_과목
+      cap: "장당 1회"
     대성공_또는_치명_실패: { grants: "해당 기술 화후 +1일치", cap: "기술당 1일 1회" }
+  # ★ 연속식 적립(base_grant)의 귀속: **초식 원장 하나뿐이다** (사용 무공·기술 숙련).
+  #   training.yml curriculum.combat_accrual 이 정본 — 늑대를 백 마리 잡아도 몸은 안 만들어진다.
+  #   몸·발·눈·단전(외공·신법·심안·내공)은 앉아서 만든다. 사냥터가 빌드를 대신 정해주지 않는다.
+  accrual_target: "training.yml curriculum.combat_accrual"
   marks_note: "실전·사선 마크는 별도 축 그대로 — 승급 요건은 경험 총량이 아니라 사건 (battle_marks)"
 
 # ─── 경지 9단계 — 이름·순서는 전 파일의 참조 축 (lint 검증 대상) ───
@@ -126,7 +138,10 @@ cultivation_stages:
 
 # ─── 승급 효과 — 전부 원천 파일 참조 (본 파일은 관문만 갖는다) ───
 promotion_effects:
-  능력치_캡: "player_creation.yml attribute_cap_by_realm"
+  # ★ 승급이 주는 첫째 것은 '힘'이 아니라 **자리**다 (docs/design/growth_axes.md):
+  #   캡이 열려야 수련이 들어갈 자리가 생긴다. 경지는 성장의 결과가 아니라 성장의 **허가**다.
+  능력치_캡: "player_creation.yml attribute_cap_by_realm — ★ 성장 축(수련 배분)의 천장. 이것이 지배 전략을 막는다"
+  성장_축: "training.yml curriculum — 하루 5구간을 외공·내공·초식·신법·심안에 나눈다 (빌드의 선택지)"
   내구: "combat.yml durability.realm_bonus (개화[일류]부터 +2/단계 — 단전이 열린 몸만 기혈이 두터워진다)"
   기_운용_게이트: "internal_energy.yml realm_gates (발경~심검)"
   노화_저항: "internal_energy.yml vitality.aging_and_realm"

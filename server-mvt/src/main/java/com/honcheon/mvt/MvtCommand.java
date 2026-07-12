@@ -63,6 +63,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
                 case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
+                case "계측" -> metrics(sender, args);        // MSPT·티커별 예산 (performance.yml 대조)
                 case "모션진단" -> motionDiag(sender, args);   // 3D 층이 실제로 떴는가 (팩 유무 포함)
                 case "문장" -> crests(sender);
                 default -> help(sender);
@@ -652,16 +653,33 @@ public final class MvtCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.GRAY + "청하현 부지 (" + site.x() + ", " + site.z()
                     + ") · 지면 y" + site.groundY()
                     + " · 지형 점수 " + site.fit().score() + " (" + site.fit().verdict() + ")");
+            // 조성은 **틱을 나눠 먹는다** — 계측이 잡았다: 한 틱 평균 MSPT **625ms** (목표 40ms 의 15배).
+            //   총량은 못 깎는다(마을을 지으려면 블록을 놓아야 한다). 깎을 수 있는 건 **한 틱에 얼마나 하냐**다.
+            //   조성기는 **한 줄도 안 고친다** — 대역 월드를 주고 쓰기를 큐에 적어 메인이 20ms 씩 집행한다.
             java.util.List<Zone> zones = new java.util.ArrayList<>();
-            Map<String, Location> anchors = CheonghaBuilder.build(world,
-                    site.x(), site.groundY(), site.z(), zones);
-            plugin.setAnchors(anchors);
-            plugin.setZones(zones);
-            sender.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 (" + site.x() + ", " + site.z()
-                    + ") · 장소 " + anchors.size() + "곳 · 구역 " + zones.size() + "곳");
-            sender.sendMessage(ChatColor.GRAY + "원거리 지역: /혼천 지역조성 <id> (예: nokrim_sochae)");
-            plugin.getLogger().info("[세계조성] 청하현 — (" + site.x() + ", " + site.groundY()
-                    + ", " + site.z() + ") · 장소 " + anchors.size() + "곳");
+            if (TickBudget.busy()) {
+                sender.sendMessage(ChatColor.RED + "이미 조성이 돌고 있다.");
+                return;
+            }
+            TickBudget.preload(plugin, world, site.x(), site.z(), 96).thenRun(() ->
+                    org.bukkit.Bukkit.getScheduler().runTask(plugin, () ->
+                            TickBudget.build(plugin, "조성:청하현", world,
+                                    w -> CheonghaBuilder.build(w, site.x(), site.groundY(), site.z(), zones),
+                                    built -> {
+                                        TickBudget.rebind(built, world);   // 앵커가 대역 월드를 물고 있다
+                                        plugin.setAnchors(built);
+                                        plugin.setZones(zones);
+                                        sender.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 ("
+                                                + site.x() + ", " + site.z() + ") · 장소 " + built.size()
+                                                + "곳 · 구역 " + zones.size() + "곳");
+                                        sender.sendMessage(ChatColor.GRAY
+                                                + "원거리 지역: /혼천 지역조성 <id> (예: nokrim_sochae)");
+                                        plugin.getLogger().info("[세계조성] 청하현 — (" + site.x() + ", "
+                                                + site.groundY() + ", " + site.z() + ") · 장소 "
+                                                + built.size() + "곳");
+                                    },
+                                    err -> sender.sendMessage(ChatColor.RED + "조성 실패: " + err),
+                                    sender::sendMessage)));
         }).runTaskTimer(plugin, 1L, 1L);
         return true;
     }
@@ -1119,6 +1137,34 @@ public final class MvtCommand implements CommandExecutor {
         if (sender instanceof Player p) {
             int durability = args.length >= 2 ? Integer.parseInt(args[1]) : 20;
             plugin.dojang().dummy(p, durability);
+        }
+        return true;
+    }
+
+    /**
+     * /혼천 계측 [초기화|켜기|끄기] — <b>예산을 지키는가</b>.
+     *
+     * <p>이 서버는 <b>한 번도 계측된 적이 없었다.</b> 그런데 spark(Paper 번들 프로파일러)는
+     * <b>이미 배경에서 돌고 있었다</b> — 지난 모든 랙의 프로파일이 쌓여 있었고 아무도 안 봤다.
+     * spark 는 "왜 느린가"(스택 트리)에 답하고, 이 계기는 <b>"규약을 어겼는가"</b>(performance.yml 예산 대조)에
+     * 답한다. spark 는 우리 예산을 모른다 — "MobDisplay 가 7.2ms 를 먹었다"고 짖어 줄 자는 우리가 만들어야 한다.
+     */
+    private boolean metrics(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            return true;
+        }
+        if (args.length >= 2 && args[1].equals("초기화")) {
+            Metrics.reset();
+            sender.sendMessage(ChatColor.GRAY + "계기를 0으로 놓았다.");
+            return true;
+        }
+        if (args.length >= 2 && (args[1].equals("켜기") || args[1].equals("끄기"))) {
+            Metrics.enabled(args[1].equals("켜기"));
+            sender.sendMessage(ChatColor.GRAY + "계기 " + args[1]);
+            return true;
+        }
+        for (String line : Metrics.report()) {
+            sender.sendMessage(ChatColor.GRAY + line);
         }
         return true;
     }

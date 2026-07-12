@@ -470,7 +470,14 @@ public final class Db implements AutoCloseable {
         int base = found.map(i -> politics.decayed(i.rawGauge(), i.tags(), i.updatedDay(), day))
                 .orElse(0);
         int next = Math.max(0, Math.min(max, base + delta));
-        List<String> mergedTags = found.map(Issue::tags).orElse(tags);
+        // 태그도 **누적된다** — 한 사안에 두 태그가 겹치면 감응 세력이 늘어난다.
+        // ★ 이것이 혈채 루트의 발화 지점이다: 무고(-3)만으로는 안 뭉친 무림이,
+        //   같은 사안에 금기(-4)가 붙는 순간 뭉친다 (faction_politics blood_debt_ignition.①_금기).
+        java.util.LinkedHashSet<String> mergedTags = new java.util.LinkedHashSet<>(
+                found.map(Issue::tags).orElse(List.of()));
+        if (tags != null) {
+            mergedTags.addAll(tags);
+        }
         // 피해 세력은 **누적된다** — 관이 두 번째 문파를 치면 피해자가 둘이 된다 (그래서 연합이 커진다)
         java.util.LinkedHashSet<String> mergedVictims = new java.util.LinkedHashSet<>(
                 found.map(Issue::victims).orElse(List.of()));
@@ -484,13 +491,16 @@ public final class Db implements AutoCloseable {
                         + "ON CONFLICT(issue) DO UPDATE SET raw_gauge = excluded.raw_gauge, "
                         + "updated_day = excluded.updated_day, target = excluded.target, "
                         + "victims_json = excluded.victims_json, "
+                        // ★ 태그도 갱신한다 — 이 한 줄이 없어서 지금까지 **태그가 겹치지 않았다**:
+                        //   같은 사안에 금기가 붙어도 tags 는 무고인 채였고, 그래서 소림·무당이 오지 않았다
+                        + "tags_json = excluded.tags_json, "
                         + "origin_accuracy = excluded.origin_accuracy, "
                         + "origin_rumor = COALESCE(excluded.origin_rumor, myeongbun.origin_rumor), "
                         + "true_target = COALESCE(excluded.true_target, myeongbun.true_target)")) {
             ps.setString(1, key);
             ps.setString(2, target);
             ps.setString(3, JSON.writeValueAsString(List.copyOf(mergedVictims)));
-            ps.setString(4, JSON.writeValueAsString(mergedTags));
+            ps.setString(4, JSON.writeValueAsString(List.copyOf(mergedTags)));
             ps.setInt(5, next);
             ps.setInt(6, accuracy);
             ps.setString(7, rumorGroup);
@@ -1318,15 +1328,16 @@ public final class Db implements AutoCloseable {
         if (src.hidden() <= 0 && src.knownRaw() <= 0 && src.exposureFloor() <= 0) {
             return bloodDebtOf(characterId);
         }
-        Debt dst = addBloodDebt("character:" + characterId, characterId, src.hidden(),
-                src.knownRaw(), false, day);
-        // 공개 건수·건수·노출 하한은 합산 (addBloodDebt 이 못 옮기는 것들)
+        Debt before = bloodDebtOf(characterId);   // 합치기 전의 그의 장부 (건수 이중 계상 금지)
+        addBloodDebt("character:" + characterId, characterId, src.hidden(), src.knownRaw(),
+                false, day);
+        // 공개 건수·살인 건수·노출 하한은 **원장 그대로** 옮긴다 (addBloodDebt 은 '한 건'만 셀 줄 안다)
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE blood_debt SET public_count = ?, kills = ?, exposure_floor = ? "
                         + "WHERE subject = ?")) {
-            ps.setInt(1, dst.publicCount() + src.publicCount());
-            ps.setInt(2, dst.kills() + src.kills());
-            ps.setDouble(3, Math.max(dst.exposureFloor(), src.exposureFloor()));
+            ps.setInt(1, before.publicCount() + src.publicCount());
+            ps.setInt(2, before.kills() + src.kills());
+            ps.setDouble(3, Math.max(before.exposureFloor(), src.exposureFloor()));
             ps.setString(4, "character:" + characterId);
             ps.executeUpdate();
         }

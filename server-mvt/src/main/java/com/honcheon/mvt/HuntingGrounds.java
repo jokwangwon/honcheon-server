@@ -537,7 +537,7 @@ public final class HuntingGrounds implements Listener {
     // ══════════════ ② 구역 스포너 — 중앙 티커 하나 ══════════════
 
     public void start() {
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 100L, 20L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("hunting", this::tick), 100L, 20L);
         mobDisplay.start();   // 형체 층 — 유령 청소 + 중앙 티커 1개 (1틱 추종)
     }
 

@@ -95,7 +95,7 @@ public final class SkillListener implements Listener {
     /** 중앙 티커 기동 — HoncheonMvt.onEnable 에서 1회 (효과별 개별 태스크 생성 금지, F-P2) */
     public void start() {
         display.start();   // 지난 생의 유령(공중에 얼어붙은 획)을 걷는다
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("skill_execution", this::tick), 1L, 1L);
     }
 
     /**

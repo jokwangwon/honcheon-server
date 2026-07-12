@@ -187,7 +187,7 @@ public final class SkillCast implements Listener {
 
     /** 중앙 티커 — 효과별 개별 태스크 생성 금지 (performance.yml F-P2) */
     public void start() {
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("skill_cast", this::tick), 1L, 1L);
         plugin.getLogger().info("절기 시전 체계 — " + arts.size() + "수 등록 (삼문: 承·間·虛)");
     }
 

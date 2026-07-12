@@ -399,7 +399,7 @@ public final class Populace implements Listener {
     /** 중앙 티커 하나 — 개체별 태스크를 만들지 않는다 (performance.yml effects.central_ticker 규약) */
     public void start() {
         despawnAll();   // 재조성·재기동 잔류 개체 정리 (중복 방지)
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 120L, tickerPeriod);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("populace", this::tick), 120L, tickerPeriod);
         plugin.getLogger().info("청하현 인구 " + PEOPLE.size() + "인 등록 (무명 tier 0 — 자리 "
                 + PLACES.size() + "곳, 일과 " + ROUTINES.size() + "종)");
     }

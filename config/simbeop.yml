@@ -20,6 +20,23 @@ dantian:
     발력: "특정 계열 무공 위력 ±1 (거친 기는 세게 터진다)"
     후력: "순도 = 내력 회복 배율 (끈기)"
 
+  # ─── 결(結) — 심법 고유 패시브의 기계 정의 (2026-07 성장 축 패스) ───
+  # ★ 신규 축이 아니다. 각 심법의 `passive:` 는 이미 있었다 — 프로즈였을 뿐이고 엔진이 못 읽었다.
+  #   이 절은 그 문장을 **기존 규칙의 키**로 옮긴다 (combat.yml attack.defender_choice).
+  #
+  # ★★ 설계의 심장 — **세 심법이 세 방어에 하나씩 걸린다:**
+  #       자하신공("회피·속도 계열")  → 회피 (+1)   … 민첩(신법)의 짝
+  #       정심검결("패링 강화")       → 막기 (+1)   … 근력(외공)의 짝
+  #       태극기공("방어 시 반격")     → 흘리기 (+1) … 감각(심안)의 짝 — 흘려서 되받는 것이 태극이다
+  #     → 심법이 **어느 방어로 살 것인가**를 정하고, 수련 배분이 **그 방어의 크기**를 정한다.
+  #       빌드의 뼈대가 심법이고 살이 수련이라는 말의 기계적 의미가 이것이다.
+  #     → 그리고 지배 심법이 없다: 셋이 서로 다른 방어를 사고, forced_guard(포위)가 회피를 지운다.
+  gyeol_axes:
+    회피_판정: "combat.yml attack.defender_choice.회피 판정에 가산 (민첩 + 경공 + 결)"
+    막기_판정: "combat.yml attack.defender_choice.막기 판정에 가산 (근력 + 병기 기술 + 결)"
+    흘리기_판정: "combat.yml attack.defender_choice.흘리기 판정에 가산 (감각 + 병기 기술 + 결)"
+    cap: 1     # ★ ±1 상한 — qi_profile 과 같은 눈금 (장비 판정 캡 2 보다도 작다. 심법은 격차가 아니라 색이다)
+
 # 축기 방식 정의
 accumulation_methods:
   좌공: { rule: "수련 선언 시간 그대로 계상 (표준)" }
@@ -57,6 +74,8 @@ simbeop:
     purity: 1.0                    # 내력 회복 배율
     qi_profile: { 연비: 없음, 발력: 없음 }   # 평범한 기운 — 기초는 기초다
     passive: 없음
+    gyeol: {}                      # 결 없음 — 기초의 값은 '아무 데도 안 기울었다'는 것이다 (전환 90%)
+    build_affinity: 무색           # 어느 빌드에도 붙지만 어느 빌드도 완성하지 못한다
     special: ["개화 실패 없음", "어떤 심법으로도 전환 승계 90% (기초의 미덕)"]
     circulation_color: "옅은 백색"
 
@@ -71,6 +90,8 @@ simbeop:
     purity: 1.5
     qi_profile: { 연비: "검기·강기 소모 -1", 발력: 없음 }   # 알뜰하고 오래 간다 — 지구전형
     passive: "방어 시 반격 확률, 내력 회복 강화"   # 결(結) — 심법 고유 패시브 (구 cultivation technique_by_internal에서 이관)
+    gyeol: { 흘리기_판정: 1 }      # ★ '흘려서 되받는 것'이 태극이다 — 반격은 흘리기의 자리에서 난다
+    build_affinity: [심안, 내공]   # 다구리·지구전 — 포위가 회피를 지울 때 흘리기는 남는다 (forced_guard)
     circulation_color: "흑백 쌍환"
 
   jaha_singong:
@@ -84,6 +105,8 @@ simbeop:
     purity: 1.3
     qi_profile: { 연비: "경신(보법) 소모 -1", 발력: 없음 }   # 가볍고 빠른 기운 — 발에 실린다
     passive: "회피·속도 계열"   # 결(結) — 심법 고유 패시브
+    gyeol: { 회피_판정: 1 }        # 발에 실리는 기운 — 몸을 빼는 것에 붙는다
+    build_affinity: [신법]         # 1대1의 왕. 그리고 포위당하면 이 결이 통째로 죽는다 (forced_guard.loses 회피)
     circulation_color: "보랏빛 노을"
 
   jeongsim_geomgyeol:
@@ -97,6 +120,8 @@ simbeop:
     purity: 1.0
     qi_profile: { 연비: 없음, 발력: "검에 실은 발경 위력 +1" }   # 검을 위해 벼려진 기운
     passive: "패링 강화 (skill_mechanics.yml 정합)"
+    gyeol: { 막기_판정: 1 }        # 패링 = 막기. 검으로 받는다
+    build_affinity: [초식, 외공]   # 검을 들고 받아치는 자 — 발력(검 발경 +1)이 초식 빌드의 위력을 산다
     circulation_color: "검 궤적의 잔광"
     dual_approved: [jaha_singong]   # 같은 화산 계보 — 겸수 공인
 
@@ -111,6 +136,8 @@ simbeop:
     purity: 1.1
     qi_profile: { 연비: "독 계열 소모 -1", 발력: "독 위력 +1" }   # 스미는 기운
     passive: "중독 면역, 독 피해 증폭"   # 결(結) — 심법 고유 패시브
+    gyeol: {}                      # 방어 결 없음 — 독문의 값은 방어가 아니라 '상대가 죽어간다'는 것이다
+    build_affinity: [초식, 심안]   # 독공·암기 — 원거리 판정이 감각이다 (combat.yml attacker_attribute.원거리)
     circulation_color: "검푸른 아지랑이"
 
   hyeolgi_simgong:
@@ -125,6 +152,8 @@ simbeop:
     qi_profile: { 연비: "검기·강기 소모 +1", 발력: "전 무공 위력 +1" }   # 크고 거칠고 헤프다 — 폭발형
     depletion_override: "고갈 시 다운캐스트 대신 원기 자동 잠식 (시전당 원기 -5) — 탁한 기운은 주인을 문다"
     passive: "재생 (원기 증폭 계열과 중첩 시 폭주 판정)"
+    gyeol: {}                      # ★ 방어 결이 없다 — 마공은 방어를 사지 못한다. 먼저 죽이거나 죽는다
+    build_affinity: [내공, 초식]   # 위력 몰빵 (발력 전 무공 +1 · capacity 10). 대신 순도 0.8 · 연비 +1 — 폭발형이지 지구전형이 아니다
     price: ["심마 누적 (성향 태그)", "운기 색 은폐 불가"]
     circulation_color: "굶주린 탁한 적색"
     stealth_option: false          # ★ 은폐 불가 — 운기조식하는 순간 목격자가 안다 (이것이 혈교가 잠식 못 하는 이유)
@@ -149,6 +178,8 @@ simbeop:
     passive: "역혈(逆血) — 원기를 내력으로 강제 전환 (원기 -3 → 내력 +3, 구간당 1회).
               ★ 자기 원기의 운용이므로 그 자체는 마공이 아니다 (internal_energy is_not_demonic) —
               마공인 것은 '수명을 태우는 축기'다"
+    gyeol: {}                      # 방어 결 없음 (마도 공통)
+    build_affinity: [내공]         # ★ 시간을 산다 — 연수로 축기 2배. 사는 것은 '축기 속도'지 전투력이 아니다
     price: ["수명 (축기 1일당 -1일)", "심마 누적 (축기 1년당 흔적 +1)", "깨달음 경로 봉쇄 — 파벽만 남는다"]
     circulation_color: "칠흑에 은빛 결"
     stealth_option: true           # ★ 은폐 가능 (회복 -20%, visualization.circulation_particles 규칙 그대로)

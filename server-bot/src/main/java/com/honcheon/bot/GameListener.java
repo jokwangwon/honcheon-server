@@ -4401,16 +4401,22 @@ public final class GameListener extends ListenerAdapter {
      * 명분 하나를 발화시킨다 — 값·태그는 faction_politics.yml myeongbun.inputs 가 정한다.
      * 대상은 <b>사람</b>이다 (blood_debt_ignition.target — 개인 대상은 이미 인정돼 있다).
      * 피해자는 [mingan] — 민간은 등재 세력이지만 <b>무림이 아니다.</b> 그래서 아무도 급하지 않다.
+     *
+     * <p>★ <b>사안은 사람마다 하나다</b> (사건마다 하나가 아니다). 그래야 값이 <b>쌓이고</b>
+     * 태그가 <b>겹친다</b> — 그리고 그것이 이 축의 발화 지점이다:
+     * <b>무고(-3)만으로는 안 뭉친 무림이, 같은 사안에 금기(-4)가 붙는 순간 뭉친다.</b>
+     * (blood_debt.md §4① — 누적 명분 13 = 무고 8 + 금기 5 → 소연합 → 토벌대)
      */
     private void fireMyeongbun(long chId, String name, String input, List<String> victims,
                                String rumorGroup, int today) throws Exception {
         int value = rules.politics.inputValue(input);
         List<String> tags = rules.politics.inputTags(input);
-        Db.Issue issue = db.addMyeongbun(input + ":" + chId, name, victims, tags, value,
+        Db.Issue issue = db.addMyeongbun("혈채:" + chId, name, victims, tags, value,
                 rules.initialAccuracy("직접_목격"), rumorGroup, null, today,
                 rules.politics.gaugeMax(), rules.politics);
         db.logEvent("명분", "character", String.valueOf(chId), "myeongbun", issue.issue(),
-                Map.of("사건", input, "게이지", issue.rawGauge(), "태그", tags, "피해", victims));
+                Map.of("사건", input, "가산", value, "게이지", issue.rawGauge(),
+                        "태그", issue.tags(), "피해", issue.victims()));
     }
 
     /**

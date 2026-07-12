@@ -7,6 +7,127 @@ world_calendar:
   time_ratio: "현실 1일 = 게임 15일"    # 조정 가능 파라미터 (초기 가설)
   note: "나이·계절·세계 공통 이벤트·데드라인 전부 이 달력에 자동 연동. 개인이 통제 불가"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 수련 배분(修練配分) — 성장의 선택지. 【정본】 docs/design/growth_axes.md
+# ═══════════════════════════════════════════════════════════════════════════
+# ★ 신규 축 발명 없음. 여기 있는 것은 전부 이미 있던 것이다:
+#     ① 하루 5구간 (time.yml day_segments — 정본은 거기다)
+#     ② 삼중 사다리 (능력치 / 무공 숙련 / 내공 — stats_and_progression.md 1장)
+#     ③ 환산표 (아래 skill_progression_cost · attribute_progression · accumulation_cost)
+#     ④ 경지 캡 (player_creation.yml attribute_cap_by_realm)
+#   이 절이 새로 하는 일은 **셋을 잇는 것** 하나뿐이다: 하루의 구간을 어느 사다리에 넣는가.
+#
+# ★ 한 줄: **포인트를 뿌리는 게 아니라 시간을 쓴다. 무엇을 반복했는가가 곧 그 사람이 된다.**
+#
+# ── 왜 이 산술이 강제되는가 (고른 수치가 아니다) ──────────────────────────────
+#   · 수련 하루 = 1일치 (cultivation.yml combat_hwahu.daily_cap 이 그렇게 말한다:
+#     "실전은 수련(1일치/일)을 대체하지 않고 압축한다")
+#   · 하루 = 5구간 (time.yml segments_per_day)
+#   → 1구간 = 0.2일치. **이 값은 고른 것이 아니라 두 정본의 나눗셈이다.**
+#   → 한 과목에 5구간(몰빵) = 1.0일치/일 = attribute_progression 의 "능력치 +1 = 1년" 과 정확히 일치.
+#     즉 이 배분표는 기존 환산표를 재해석하지 않는다 — 그 환산표의 **분모를 드러낼 뿐**이다.
+curriculum:
+  segments_per_day: 5           # 【참조】 time.yml segments_per_day 가 정본 (여기 값은 대조용)
+  days_per_segment: 0.2         # 5구간 = 1일치 — 위 나눗셈의 결과
+  free_segments: "수련에 안 쓴 구간은 사냥·의뢰·이동에 든다. 그 구간의 수련 적립은 0 — 그것이 시간의 값이다"
+
+  # ─── 과목 5종 — 각 과목은 '기존 원장' 하나에 쌓인다 (새 스탯 없음) ───
+  # gives/costs 는 서술이 아니라 대조표다: 어느 규칙 항이 움직이는지 파일·키로 적는다.
+  subjects:
+    외공:                        # 外功 — 몸. 가장 느리고 가장 오래 간다
+      ledger: [근력, 체력]
+      split: [0.5, 0.5]         # ★ 두 축을 함께 진다 — 그래서 정수부 상승이 절반 속도다
+      cost_ref: attribute_progression.cost      # 능력치 +1 = 1년 → 몰빵 시 각 축 +1 = 2년
+      gives:
+        - "내구 — combat.yml durability (체력 실수치 ×2). 하트가 는다"
+        - "막기 — combat.yml attack.defender_choice.막기 (근력+병기 기술, 피해 -3)"
+        - "공격 판정 — combat.yml attack.attacker_attribute.기본 (근력)"
+        - "부상 페널티를 늦게 먹는다 — 문턱이 비율이므로 내구가 두꺼우면 온전 구간이 길다 (숨은 판정 이득)"
+      costs: "정수부가 가장 늦게 오른다 (두 축 분산). 몰빵해도 2년에 한 칸"
+      build: "몸이 단단해진다 — 격상 상대·장기전·다구리에서 살아 돌아온다. 대신 빨리 못 이긴다"
+
+    내공:                        # 內功 — 단전. 심법이 없으면 0
+      ledger: [내공]
+      requires: 심법             # ★ 게이트 — simbeop.yml. 개화하지 않은 몸은 이 과목에 구간을 넣을 수 없다
+      cost_ref: "simbeop.yml dantian.accumulation_cost (내공 n→n+1 = n년) — 유일한 배증형 사다리"
+      method_scaling: "축기 방식이 계상률을 바꾼다 (accumulation_methods — 동공 0.5 이중계상 · 시공 2배 · 연수 2배)"
+      gives:
+        - "내력 풀 — round(내공 실수치 × 3) (internal_energy.yml)"
+        - "격의 연발 — 축기가 사는 것은 총량이 아니라 '몰아 쓸 수 있는 합'이다 (combat_audit sim_energy_curve)"
+        - "정화력 — 내공 × 순도 (simbeop.yml purification)"
+        - "승급 요건 — 절정 내공 3 · 초절정 5 · 화경 7 (cultivation.yml)"
+      costs: "★ 배증한다. 0→1 은 1년, 2→3 은 3년. 늦게 시작하면 영원히 못 따라간다"
+      build: "격이 오래 간다 — 위력의 축은 격이다(combat.yml). 7합 내내 태우는 자가 된다"
+
+    초식:                        # 招式 — 손. 유일하게 실전으로도 자란다
+      ledger: [무공_숙련]
+      cost_ref: skill_progression_cost           # 90 → 180 → 360 → 720 → 1440 → 2880 (급증)
+      also_from: "★ 실전 (cultivation.yml combat_hwahu) — 다섯 과목 중 이것 하나뿐이다"
+      gives:
+        - "판정 — combat.yml attack.attacker (능력치 + 무공 숙련). 2d6 에서 +1 은 명중률 13.9%p"
+        - "피해 — floor(마진/2) 항을 통해 간접 위력. 그리고 대성공(마진 ≥4 = 급소) 확률"
+        - "승급 요건 — 이류 2 · 일류 3 · 절정 5 · 초절정 6 (cultivation.yml)"
+        - "격의 개방 — 등급이 높은 무공을 익혀야 격을 실을 자리가 생긴다"
+      costs: "★ 비용이 급증한다. 0→1 은 3개월, 5→6 은 8년. 그리고 6 이상은 수련만으로 불가 (beyond)"
+      build: "기술 위력 — 정확히 맞히고, 마진으로 아프게 맞힌다. 대신 몸이 안 는다"
+
+    신법:                        # 身法 — 발. 1대1의 축
+      ledger: [민첩]
+      cost_ref: attribute_progression.cost
+      gives:
+        - "회피 — combat.yml attack.defender_choice.회피 (민첩+경공, 피해 0 · 무기 안전)"
+        - "선공 — combat.yml initiative.frontal (민첩+감각 합)"
+        - "도주 — combat.yml escape (민첩+도주)"
+      costs: |
+        ★ 포위되면 회피를 잃는다 (combat.yml attack.gang_up.forced_guard.loses: [회피]).
+          몸을 뺄 자리가 없으면 못 고른다 — 다구리에서 신법 빌드의 방어는 **0으로 무너진다.**
+          그리고 회피는 피해가 0인 대신 아무것도 얻지 못한다 (반격 창 없음).
+      build: "안 맞는다 — 1대1의 왕. 대신 둘 이상에게 잡히는 순간 벌거벗는다"
+
+    심안:                        # 心眼 — 눈. 1대다의 축
+      ledger: [감각]
+      cost_ref: attribute_progression.cost
+      gives:
+        - "흘리기 — combat.yml attack.defender_choice.흘리기 (감각+병기 기술, 피해 -1). ★ 포위 시 유일하게 남는 태세"
+        - "선공 — initiative.frontal (민첩+감각 합) · 동률 시 감각 단독 비교 (★ 최종 결정권이 감각에 있다)"
+        - "기습 — 기습 감지 · 원거리 공격 판정 (attacker_attribute.원거리 = 감각)"
+        - "추적·엿듣기·견식 (judgment.yml)"
+      costs: "1대1 방어로는 가장 약하다 (경감 1 — 회피 0피해·막기 -3 에 못 미친다)"
+      build: "먼저 본다 — 다구리와 매복에서 값이 뒤집힌다. 포위가 회피를 지울 때 흘리기는 남는다"
+
+  # ─── 분산의 값 — 【핵심】 다 키우면 아무것도 안 오른다 ───
+  # 이것은 페널티가 아니라 **이미 있던 규칙의 귀결**이다 (화후: "판정은 정수, 자원은 실수").
+  #   · 판정 축(초식·신법·심안)은 정수부만 본다 → 5분할하면 정수부가 1/5 속도로 오른다.
+  #     능력치 +1 = 1년인데, 1구간(0.2일치/일)만 넣으면 **5년**이다. 그 5년 동안 판정은 0 이다.
+  #   · 자원 축(외공·내공)은 실수치를 쓴다 → 분산해도 내구·내력은 조금씩 오른다.
+  #   ★ 그래서 몸과 단전은 조금씩이라도 자라고, 손과 발과 눈은 몰아야 자란다. 그것이 무협의 결이다.
+  spread_rule:
+    integer_cliff: "판정 가산은 정수부 (simbeop.yml hwahu.judgment_adders) — 분산은 정수부를 못 넘긴다"
+    real_valued: "내구·내력은 실수 파생 (balance_audit_cliffs) — 외공·내공은 분산해도 값이 있다"
+    verdict: "★ 균형 배분은 '모든 것을 조금'이 아니라 '아무것도 아닌 것'에 가깝다. 고르라는 압력은 여기서 온다"
+
+  # ─── 천장 — 몰빵을 멈추는 것은 페널티가 아니라 경지다 ───
+  cap:
+    attribute: "player_creation.yml attribute_cap_by_realm (일류 6 · 절정 7 …)"
+    on_cap: "★ 캡에 닿은 과목은 적립이 멈춘다 (버려지는 구간). 플레이어는 배분을 바꿔야 한다"
+    rationale: |
+      ★ 지배 전략을 막는 것은 밸런스 패치가 아니라 **천장과 시간**이다.
+        전투 능력치 5축을 일류 캡(6)까지 채우려면 15~20년이 든다. 일류 도달이 1년이 채 안 되는 세계에서
+        그 시간은 없다. → 무엇을 천장까지 올릴지가 곧 빌드다. 그리고 천장을 여는 것은 경지다.
+        **경지가 레벨이라는 말의 뜻이 여기서 완성된다: 경지는 힘이 아니라 자리를 준다.**
+  skill_cap: "무공 숙련에는 캡이 없다 — 대신 비용이 급증한다 (5→6 = 8년, 6+ = 수련 불가). 비용이 곧 천장이다"
+
+  # ─── 실전 적립의 귀속 — 그라인딩은 초식만 준다 ───
+  combat_accrual:
+    goes_to: 초식               # cultivation.yml combat_hwahu — "사용 무공·기술 숙련 화후"
+    not_to: [외공, 신법, 심안, 내공]
+    exception: "사선 마크의 단발 보정(+30일치)만이 능력치에 들어간다 — 현재 배분의 **주 과목**(구간이 가장 많은 것)에.
+                cultivation.yml combat_hwahu.단발_보정.사선_경험 '관련 능력치' 의 기계 정의다"
+    verdict: |
+      ★ 늑대를 백 마리 잡아도 몸은 안 만들어진다 — 손만 는다.
+        몸·발·눈·단전은 앉아서 만드는 것이다. 사냥터가 빌드를 대신 정해주지 않는다.
+        그리고 한 번의 사선은 몸을 바꾼다 (죽다 살아나면 몸이 는다) — 그것이 사선이 특별한 이유다.
+
 # 수련 방식별 효율
 training_methods:
   생활_노동: { efficiency: 0.2, requires: [], risk: "없음 (보수 발생)" }

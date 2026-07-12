@@ -15,11 +15,20 @@ schema:
   weapon_class: "【정본】 이 무공이 실리는 무기 계열 — combat.yml weapon_power 등록 키. '무관' = 무기 불문(경공·신법·은신·의술·심법). 리스트면 어느 쪽에나 실린다"
   sub_category: "하위 분류"
   grade: "등급"
+  tier: "【계보 층위】 하급·중급·상급 — 문파 무공 트리의 칸 (docs/design/sect_lineage.md).
+         없으면 계보 밖(입문 무공·잡가·절기·NPC 표본). 경지 게이트: 하급=이류 · 중급=일류 · 상급=절정.
+         오의는 이 축에 없다 — 오의는 무공이 아니라 ultimate_arts.yml 의 별도 층이다 (요구 경지 화경)"
+  lineage: "【계보】 이 무공이 속한 문파 계보의 id (같은 lineage 안에서만 하급→중급→상급이 이어진다).
+            한 문파가 두 계보를 가질 수 있다 — 당가는 암기(정계보)와 독(곁가지)이 따로다"
   faction: "소속 세력"
   required_realm: "요구 경지 (삼류~생사경)"
   required_stats: "요구 능력치"
   required_mastery: "선행 무공 요구 숙련 (0~10 — mastery_ladder 스케일)"
   requires_skill: "선행 무공 (기계 판독 — { id, mastery }). required_mastery > 0 이면 반드시 있어야 한다 — 주석에 적힌 선행은 규칙이 아니다"
+  mastery_gate: "【상급 전용】 '본래 위력'의 조건 — { 하급: 6, 중급: 6 }. 미달 시 skill_mechanics 의
+                 degraded 규약(격 다운캐스트 + 특수 속성 미발현 + 후딜 1.5배 + 절기 봉쇄)이 걸린다.
+                 배울 수는 있다. 다만 제 힘이 안 난다 (노션 원칙의 수치화 — docs/design/sect_lineage.md 3장)"
+  sole_transmission: "일인전승 여부 — true 면 문파에 단 한 사람만 보유한다 (장문·방주). sect_life.yml succession_ladder"
   action_data: "히트박스·프레임·경직·쿨다운·코스트 = skill_mechanics.yml skills[id] (2층 구조 — 카탈로그 30종 전수 정의)"
   cost_policy: "【정본】 초식 자체는 내력을 쓰지 않는다 (cost 0). 내력을 먹는 것은 격이다 — 예외는 절정+ 요구 비전 초식(cost 3)뿐 (combat.yml internal_energy.skill_cost_rule)"
   acquisition: "습득 조건"
@@ -111,8 +120,10 @@ martial_arts:
     name: "제왕검형"
     category: "검법"
     weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "세가 비전"
+    sub_category: "세가 비전 (상급 — 혈족의 검. 계보의 곁이 아니라 위다)"
     grade: "절정"
+    tier: 상급
+    lineage: namgung_geom
     faction: namgung
     required_realm: "절정"
     required_stats:
@@ -120,6 +131,8 @@ martial_arts:
       지혜: 4
     required_mastery: 6         # 선행 검법 대성 (0~10 스케일 정규화)
     requires_skill: { id: changgung_geom, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    # 【본래 위력】 하급(창궁검법) 대성 6 — 혈족의 검이라 중급을 건너뛴다. 그 대신 하급을 더 깊이 요구한다
+    mastery_gate: { 하급: 6 }
     acquisition: "남궁세가 직계 혈족 또는 세가주의 특별 허락"
     bloodline_restricted: true
     requires_master: true
@@ -289,13 +302,15 @@ martial_arts:
     name: "매화검법"
     category: "검법"
     weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "본산 검법"
+    sub_category: "본산 검법 (중급)"
     grade: "일류"
+    tier: 중급
+    lineage: hwasan_geom
     faction: hwasan
     required_realm: "일류"
     required_stats: { 민첩: 4, 지혜: 3 }
-    required_mastery: 4          # 육합검 숙련 4
-    requires_skill: { id: yukhap_geom, mastery: 4 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    required_mastery: 5          # 낙영검법(하급) 숙련 5 — 계보 게이트 (하위 5 미만이면 상위 불가)
+    requires_skill: { id: nagyeong_geom, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     acquisition: "내문 제자 승급 후 전수 (비급각 2층)"
     bloodline_restricted: false
     requires_master: true
@@ -329,13 +344,15 @@ martial_arts:
     name: "나한권"
     category: "권법"
     weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "본산 권법"
+    sub_category: "속가 권법 18수 (하급)"
     grade: "이류"
+    tier: 하급
+    lineage: sorim_kwon
     faction: sorimsa
     required_realm: "삼류"
     required_stats: { 근력: 3, 체력: 3 }
     required_mastery: 0
-    acquisition: "소림 속가 전수 (속가는 18수까지 — 본산 108수는 승적 필요)"
+    acquisition: "소림 속가 전수 (속가는 18수까지 — 본산 108수(소림권법)는 승적 필요)"
     bloodline_restricted: false
     requires_master: true
     requires_manual: false
@@ -385,13 +402,17 @@ martial_arts:
     name: "태극검"
     category: "검법"
     weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "유검"
+    sub_category: "유검 (상급)"
     grade: "절정"
+    tier: 상급
+    lineage: mudang_geom
     faction: mudang
     required_realm: "절정"
     required_stats: { 지혜: 5, 민첩: 4 }
-    required_mastery: 5          # 태극권 숙련 5
-    requires_skill: { id: taegeuk_kwon, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    required_mastery: 5          # 진무검법(중급) 숙련 5 — 계보 게이트
+    requires_skill: { id: jinmu_geom, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    # 【본래 위력】 유운검법·진무검법을 손에 익히지 않고 태극검을 배우면 원이 그려지지 않는다 (degraded)
+    mastery_gate: { 하급: 6, 중급: 6 }
     acquisition: "본산 내문 전수"
     bloodline_restricted: false
     requires_master: true
@@ -420,16 +441,21 @@ martial_arts:
 
   # ─── 남궁세가 (제왕검형 선행) ───
   changgung_geom:
-    name: "창궁무애검"
+    # 【개명】 '창궁무애검'(이류 정전) → '창궁검법'. 노션 원천에서 **창궁무애검법은 오의**다 —
+    #   이 자리는 하급 검법(창천비성·궁영번운·벽궁홍염)의 자리다. id·액션 데이터·모션은 그대로 둔다
+    #   (이름만 정본에 맞춘다 — 오의 창궁무애검법은 ultimate_arts.yml changgung_muae 로 따로 선다).
+    name: "창궁검법"
     category: "검법"
     weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "세가 정전"
+    sub_category: "세가 정전 (하급 — 초식: 창천비성·궁영번운·벽궁홍염)"
     grade: "이류"
+    tier: 하급
+    lineage: namgung_geom
     faction: namgung
     required_realm: "이류"
     required_stats: { 근력: 3, 지혜: 3 }
     required_mastery: 0
-    acquisition: "세가 방계·가신 전수 (제왕검형의 선행 — 직계는 이 검부터 밟는다)"
+    acquisition: "세가 방계·가신 전수 (계보의 첫 칸 — 직계도 이 검부터 밟는다)"
     bloodline_restricted: false
     requires_master: true
     requires_manual: false
@@ -442,8 +468,10 @@ martial_arts:
     name: "당문비수술"
     category: "암기"
     weapon_class: 암기   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "투척 비수"
+    sub_category: "투척 비수 (하급)"
     grade: "삼류"
+    tier: 하급
+    lineage: dangga_amgi
     faction: dangga
     required_realm: "삼류"
     required_stats: { 민첩: 3, 감각: 3 }
@@ -460,12 +488,14 @@ martial_arts:
     name: "칠보독장"
     category: "독공"
     weapon_class: [맨손, 권갑]   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "독장"
+    sub_category: "독장 (중급 — 독 곁가지)"
     grade: "일류"
+    tier: 중급
+    lineage: dangga_dok      # ★ 당가는 계보가 둘이다 — 암기(정계보)와 독(곁가지). 노션은 '암기'를 정본으로 못박았다
     faction: dangga
     required_realm: "일류"
     required_stats: { 체력: 4, 지혜: 3 }
-    required_mastery: 0
+    required_mastery: 0      # 독 곁가지의 첫 칸 — 선행 무공이 아니라 **심법**(칠살음독경)이 문이다
     acquisition: "당가 내당 전수 — 독 내성 수련 선행 (원기 대가)"
     bloodline_restricted: true
     requires_master: true
@@ -479,13 +509,17 @@ martial_arts:
     name: "만천화우"
     category: "암기"
     weapon_class: 암기   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "세가 비전 (광역 투척)"
+    sub_category: "세가 비전 (상급 — 광역 투척)"
     grade: "절정"
+    tier: 상급
+    lineage: dangga_amgi
     faction: dangga
     required_realm: "절정"
     required_stats: { 민첩: 5, 감각: 5 }
-    required_mastery: 6          # 당문비수술 대성
-    requires_skill: { id: dangmun_bisu, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    required_mastery: 5          # 당문비접표(중급) 숙련 5 — 계보 게이트
+    requires_skill: { id: dangmun_bijeop, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    # 【본래 위력】 손이 익지 않으면 하늘을 덮지 못한다 — 미대성 시 검기가 안 실리고 광역이 안 열린다
+    mastery_gate: { 하급: 6, 중급: 6 }
     acquisition: "당가 직계 한정 — 유출 시 세가가 전쟁을 불사한다"
     bloodline_restricted: true
     requires_master: true
@@ -517,14 +551,18 @@ martial_arts:
     name: "타구봉법"
     category: "봉법"
     weapon_class: 봉   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "방주 비전"
+    sub_category: "방주 비전 (상급 — 일인전승)"
     grade: "절정"
+    tier: 상급
+    lineage: gaebang_bong
     faction: gaebang
     required_realm: "절정"
     required_stats: { 민첩: 5, 지혜: 4 }
-    required_mastery: 5          # 취팔선보 숙련 5
-    requires_skill: { id: chwipalseon_bo, mastery: 5 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
-    acquisition: "방주·장로 한정 전승 (개방 최심부)"
+    required_mastery: 6          # 개방봉법(중급) 대성 — 일인전승은 문턱이 한 칸 높다
+    requires_skill: { id: gaebang_bongbeop, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    mastery_gate: { 하급: 6, 중급: 6 }
+    sole_transmission: true      # ★ 용두방주 9결 한 사람만 — sect_life.yml succession_ladder.gaebang
+    acquisition: "용두방주 계승 시에만 전수 (개방 최심부 — 방주가 죽어야 다음 사람이 배운다)"
     bloodline_restricted: false
     requires_master: true
     requires_manual: false
@@ -872,3 +910,703 @@ martial_arts:
     public_use_rumor: true
     faction_reaction: true        # 정파·관군: 흑도 살수 경보
     # 수치: 파격 + 다운 + 검기(cost 3) — 단 **배후 또는 상대 경직 중에만** 핀다. 살초는 허가 없으면 안 나간다
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 문파 무공 계보(系譜) — 하급 → 중급 → 상급
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 원천: 사용자 노션 설계 (15문파 실명 계보). 설계 문서: docs/design/sect_lineage.md
+  #
+  # 【트리 규칙】 (노션 원문 그대로 — 우리 문법으로 옮겼을 뿐이다)
+  #   · 경지 게이트: 하급 = 이류 · 중급 = 일류 · 상급 = 절정 · 오의 = 화경(ultimate_arts.yml)
+  #   · 선행 게이트: 하위 무공 숙련 **5 미만이면 상위를 배울 수 없다** (requires_skill)
+  #   · 본래 위력:  상급은 하급·중급 **숙련 6(대성) 이상**이어야 제 힘이 난다 (mastery_gate)
+  #                 — 배울 순 있다. 다만 격이 안 실리고 특수 속성이 안 핀다 (skill_mechanics degraded)
+  #   · 무상 전수 1개 + 나머지는 대가 (sect_life.yml lineage_transmission)
+  #
+  # 【수치로 다르다 — 이름만 다르면 그건 하나의 무공이다】
+  #   문파의 지문은 히트박스·프레임·간격·경직·쿨다운에 있다:
+  #     점창(쾌검)  프레임 [2,1,3] · 사거리 2.6 · 4타 · 입력창 6   — 전 계보 최속
+  #     종남(중검)  프레임 [13,4,16] · 사거리 6.5 · 2타 · 슈퍼아머 — 전 계보 최중
+  #     남궁(장검)  선(線) 7.5 — 최장 리치       · 곤륜(경공) 거리 10 — 최장 이동
+  #     팽가(도)    파격 + armor_pierce          · 해남(역수) 패링 유예 -2 + 카운터 0.5
+  #     소림(권)    슈퍼아머 + 리치 2.4(최단)    · 무당(유검) 패링 창 + 반격
+  #     당가(암기)  사거리 18 + 다단             · 청성(능풍) 돌진 결합
+  #     곤륜(무성무색) **텔레그래프 없음** — 전 무공 중 유일
+
+  # ─── 화산파 (hwasan) — 검 · 계보 hwasan_geom ───
+  # 노션: 스킬 낙영검법 / 오의 이십사수매화검법·자하난화검수(장문인). 중급 매화검법은 기존 등재.
+  nagyeong_geom:
+    name: "낙영검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (하급 — 지는 꽃잎을 벤다)"
+    grade: "이류"
+    tier: 하급
+    lineage: hwasan_geom
+    faction: hwasan
+    required_realm: "이류"
+    required_stats: { 민첩: 3, 지혜: 2 }
+    required_mastery: 2          # 육합검(입문) 숙련 2 — 계보의 첫 칸은 입문 검이 연다
+    requires_skill: { id: yukhap_geom, mastery: 2 }
+    acquisition: "외문 제자 정규 과정 — 이류 승급 시 무상 전수 1종의 기본값 (sect_life lineage_transmission)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  maehwa_nanman_geom:
+    name: "매화난만검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (상급 — 만개 직전의 검)"
+    grade: "절정"
+    tier: 상급
+    lineage: hwasan_geom
+    faction: hwasan
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 지혜: 4 }
+    required_mastery: 5
+    requires_skill: { id: maehwa_geombeop, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }   # 【본래 위력】 낙영·매화를 대성해야 꽃이 벌어진다
+    acquisition: "진전 제자 + 장로 전수 (비급각 3층) — 이십사수매화검법(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄 — 노션에 화산 상급 무공의 이름이 없다. 매화검법(중급)과 이십사수매화검법(오의) 사이의 빈칸을 채웠다
+
+  # ─── 남궁세가 (namgung) — 검 · 계보 namgung_geom ───
+  # 노션: 초급 창궁검법(창천비성·궁영번운·벽궁홍염) / 중급 대연검법(대연참영·대연천망…) / 상급 창궁대연검법
+  daeyeon_geom:
+    name: "대연검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "세가 정전 (중급 — 초식: 대연참영·대연천망·대연회류)"
+    grade: "일류"
+    tier: 중급
+    lineage: namgung_geom
+    faction: namgung
+    required_realm: "일류"
+    required_stats: { 근력: 4, 지혜: 4 }
+    required_mastery: 5
+    requires_skill: { id: changgung_geom, mastery: 5 }
+    acquisition: "세가 내당 전수 — 가신도 여기까지는 온다 (직계의 문은 그다음이다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # 노션이 준 초식은 둘(대연참영·대연천망)이고 '…'로 끝난다 — 셋째 '대연회류'는 ★지어냄
+
+  changgung_daeyeon_geom:
+    name: "창궁대연검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "세가 비전 (상급 — 창궁과 대연이 한 검이 된다)"
+    grade: "절정"
+    tier: 상급
+    lineage: namgung_geom
+    faction: namgung
+    required_realm: "절정"
+    required_stats: { 근력: 5, 지혜: 5 }
+    required_mastery: 5
+    requires_skill: { id: daeyeon_geom, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }   # ★ 이름 그대로다 — 창궁(하급)과 대연(중급)을 둘 다 대성해야 합쳐진다
+    acquisition: "세가주 재가 (비급각 최심부 직전) — 창궁무애검법(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 사천당가 (dangga) — 암기 · 계보 dangga_amgi ───
+  dangmun_bijeop:
+    name: "당문비접표"
+    category: "암기"
+    weapon_class: 암기
+    sub_category: "세가 정전 (중급 — 나비처럼 흩어지는 표창)"
+    grade: "일류"
+    tier: 중급
+    lineage: dangga_amgi
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 민첩: 4, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: dangmun_bisu, mastery: 5 }
+    acquisition: "당가 내당 전수 — 만천화우로 가는 유일한 길목"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄 — 노션은 당가의 하급(당문비수술)과 오의(만천화우·무형지독)만 준다. 중급이 비어 있었다
+
+  # ─── 하북팽가 (paengga) — 도 · 계보 paengga_do ───
+  # 노션: 심법 소호심법·건곤미허신공·혼원벽력신공(장문인) / 오의 오호단문도·혼원벽력도
+  #   → 하급·중급·상급 무공의 이름이 원천에 없다. 셋 다 ★지어냄 (오의 이름의 결을 따라 올라간다)
+  gaesan_do:
+    name: "개산도법"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "가전 도법 (하급 — 산을 연다)"
+    grade: "이류"
+    tier: 하급
+    lineage: paengga_do
+    faction: paengga
+    required_realm: "이류"
+    required_stats: { 근력: 4, 체력: 3 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수 (하북팽가의 첫 도 — 도적 소탕이 가업이다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # ★지어냄
+
+  honwon_do:
+    name: "혼원도법"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "가전 도법 (중급 — 혼원벽력신공의 결을 도에 싣는다)"
+    grade: "일류"
+    tier: 중급
+    lineage: paengga_do
+    faction: paengga
+    required_realm: "일류"
+    required_stats: { 근력: 5, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: gaesan_do, mastery: 5 }
+    acquisition: "세가 내당 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄
+
+  byeokryeok_do:
+    name: "벽력도법"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "세가 비전 (상급 — 벼락으로 가른다)"
+    grade: "절정"
+    tier: 상급
+    lineage: paengga_do
+    faction: paengga
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 5
+    requires_skill: { id: honwon_do, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "세가주 재가 — 오호단문도·혼원벽력도(오의)의 선행"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄
+
+  # ─── 소림사 (sorimsa) — 권 · 계보 sorim_kwon ───
+  # 노션: 스킬 소림권법 / 오의 백보신권·여래신장. 하급(나한권 18수)은 기존 등재 — 본산 108수가 중급이다
+  sorim_kwonbeop:
+    name: "소림권법"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "본산 권법 108수 (중급)"
+    grade: "일류"
+    tier: 중급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: nahan_kwon, mastery: 5 }
+    acquisition: "본산 승적 필요 — 속가는 18수(나한권)까지다. 이 문은 머리를 깎아야 열린다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  banya_jang:
+    name: "반야장"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "본산 장법 (상급 — 반야신공의 손)"
+    grade: "절정"
+    tier: 상급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 5
+    requires_skill: { id: sorim_kwonbeop, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "본산 승적 + 계율원 허가 — 백보신권·여래신장(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄 — 노션에 소림 상급 무공 이름이 없다. 심법(반야신공)의 결을 따 장법으로 세웠다
+
+  # ─── 무당파 (mudang) — 검 · 계보 mudang_geom ───
+  # 노션: 스킬 태극검 / 오의 태극혜검. 태극권(기존)은 권법이라 **검 계보의 칸이 아니다** — 동공 재료로 남는다
+  yuun_geom:
+    name: "유운검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (하급 — 흐르는 구름)"
+    grade: "이류"
+    tier: 하급
+    lineage: mudang_geom
+    faction: mudang
+    required_realm: "이류"
+    required_stats: { 지혜: 3, 민첩: 3 }
+    required_mastery: 2
+    requires_skill: { id: taegeuk_kwon, mastery: 2 }   # 무당은 권으로 몸을 만들고 검을 잡는다
+    acquisition: "도관 전수 — 이류 승급 무상 전수 1종의 기본값"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # ★지어냄
+
+  jinmu_geom:
+    name: "진무검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (중급 — 진무대제의 검)"
+    grade: "일류"
+    tier: 중급
+    lineage: mudang_geom
+    faction: mudang
+    required_realm: "일류"
+    required_stats: { 지혜: 4, 민첩: 4 }
+    required_mastery: 5
+    requires_skill: { id: yuun_geom, mastery: 5 }
+    acquisition: "본산 내문 전수 (비급각 2층) — 태극검(상급)의 유일한 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄
+
+  # ─── 개방 (gaebang) — 봉·권 · 계보 gaebang_bong ───
+  # 노션: 스킬 취권·타구봉법(방주) / 오의 항룡십팔장
+  chwikwon:
+    name: "취권"
+    category: "박투"
+    weapon_class: [맨손, 권갑]
+    sub_category: "개방 권각 (하급 — 비틀거리며 친다)"
+    grade: "이류"
+    tier: 하급
+    lineage: gaebang_bong
+    faction: gaebang
+    required_realm: "이류"
+    required_stats: { 민첩: 4, 체력: 3 }
+    required_mastery: 0
+    acquisition: "개방 개목(1~2결) 이상 — 술을 마셔 본 자만 안다 (농이 아니다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  gaebang_bongbeop:
+    name: "개방봉법"
+    category: "봉법"
+    weapon_class: 봉
+    sub_category: "개방 봉술 (중급 — 타구봉법의 아래층)"
+    grade: "일류"
+    tier: 중급
+    lineage: gaebang_bong
+    faction: gaebang
+    required_realm: "일류"
+    required_stats: { 민첩: 4, 지혜: 3 }
+    required_mastery: 5
+    requires_skill: { id: chwikwon, mastery: 5 }
+    acquisition: "개방 5결(당주) 이상 전수 — 타구봉법(상급·일인전승)의 유일한 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # ★지어냄 — 노션은 취권과 타구봉법(방주 전용)만 준다. 방주가 아닌 거지의 봉이 비어 있었다
+
+  # ─── 곤륜파 (gonryun) — 검 + 절세의 신법·경공 · 계보 gonryun_geom ───
+  # 노션: 스킬 양의검법·무성무색 / 오의 운룡대팔식·태허도룡검법 / "절세의 신법과 경공"
+  yangui_geom:
+    name: "양의검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (하급 — 음과 양, 두 갈래로 갈린다)"
+    grade: "이류"
+    tier: 하급
+    lineage: gonryun_geom
+    faction: gonryun
+    required_realm: "이류"
+    required_stats: { 지혜: 3, 민첩: 3 }
+    required_mastery: 0
+    acquisition: "곤륜 입문 과정 — 서역까지 온 자에게 먼저 주는 검"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  museong_musaek:
+    name: "무성무색"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 비전 (중급 — 소리도 없고 색도 없다)"
+    grade: "일류"
+    tier: 중급
+    lineage: gonryun_geom
+    faction: gonryun
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: yangui_geom, mastery: 5 }
+    acquisition: "본산 내문 전수 — 곤륜이 멀어서 살아남은 검"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: false      # ★ 목격해도 못 읽는다 — 이름값 그대로 (전 무공 중 유일)
+    faction_reaction: false
+    # ★ 지문: 전 무공 중 **유일하게 텔레그래프가 없다** (skill_mechanics: telegraph 없음 + 상대 패링 유예 -2)
+
+  taeheo_geom:
+    name: "태허검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 비전 (상급 — 빈 하늘)"
+    grade: "절정"
+    tier: 상급
+    lineage: gonryun_geom
+    faction: gonryun
+    required_realm: "절정"
+    required_stats: { 지혜: 5, 민첩: 5 }
+    required_mastery: 5
+    requires_skill: { id: museong_musaek, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "장로 전수 — 태허도룡검법(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄
+
+  dabun_jong:
+    name: "답운종"
+    category: "경공"
+    weapon_class: 무관
+    sub_category: "본산 경공 (절세 — 계보 밖의 축)"
+    grade: "일류"
+    lineage: gonryun_geom
+    faction: gonryun
+    required_realm: "일류"
+    required_stats: { 민첩: 5 }
+    required_mastery: 0
+    acquisition: "곤륜 내문 전수 — 노션이 곤륜에만 붙인 한 줄('절세의 신법과 경공')의 실체"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★ 지문: 이동 거리 10 — 제운종(무당 8)을 넘는 **전 경공 최장**. 그것이 '절세'의 수치다
+    # ★지어냄 (이름). 다만 '절세의 경공'은 노션이 명시한 곤륜의 정체성이다
+
+  # ─── 종남파 (jongnam) — 중검 · 계보 jongnam_geom ───
+  # 노션: 스킬 구상검법·천강검법 / 오의 천하삼십육검법. 중검(重劍) — 느리고 무겁다
+  gusang_geom:
+    name: "구상검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 중검 (하급)"
+    grade: "이류"
+    tier: 하급
+    lineage: jongnam_geom
+    faction: jongnam
+    required_realm: "이류"
+    required_stats: { 근력: 4, 체력: 3 }
+    required_mastery: 0
+    acquisition: "종남 외문 과정 — 무거운 검부터 쥐여 준다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  cheongang_geom:
+    name: "천강검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 중검 (중급 — 은하천강신공의 검)"
+    grade: "일류"
+    tier: 중급
+    lineage: jongnam_geom
+    faction: jongnam
+    required_realm: "일류"
+    required_stats: { 근력: 5, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: gusang_geom, mastery: 5 }
+    acquisition: "본산 내문 전수 (비급각 2층)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  taeeul_bungwang_geom:
+    name: "태을분광검"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 비전 (상급 — 태을신공의 검)"
+    grade: "절정"
+    tier: 상급
+    lineage: jongnam_geom
+    faction: jongnam
+    required_realm: "절정"
+    required_stats: { 근력: 5, 지혜: 4 }
+    required_mastery: 5
+    requires_skill: { id: cheongang_geom, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "장로 전수 — 천하삼십육검법(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄 (심법 태을신공의 이름을 빌렸다)
+
+  # ─── 점창파 (jeomchang) — 쾌검 · 계보 jeomchang_geom ───
+  # 노션: 오의 사일검법뿐. 하급·중급·상급 셋 다 ★지어냄 — 다만 '쾌검'이라는 정체성은 원천이 준 것이다
+  bungwang_geom:
+    name: "분광검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 쾌검 (하급 — 빛이 갈라지듯)"
+    grade: "이류"
+    tier: 하급
+    lineage: jeomchang_geom
+    faction: jeomchang
+    required_realm: "이류"
+    required_stats: { 민첩: 4 }
+    required_mastery: 0
+    acquisition: "점창 외문 과정 — 운남의 쾌검은 첫날부터 빠르다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # ★지어냄
+
+  hoepung_muryu_geom:
+    name: "회풍무류검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 쾌검 (중급 — 바람이 돌고 버들이 춤춘다)"
+    grade: "일류"
+    tier: 중급
+    lineage: jeomchang_geom
+    faction: jeomchang
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 감각: 3 }
+    required_mastery: 5
+    requires_skill: { id: bungwang_geom, mastery: 5 }
+    acquisition: "본산 내문 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄
+
+  bungwang_sippalsu:
+    name: "분광십팔수"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 비전 (상급 — 열여덟 갈래의 빛)"
+    grade: "절정"
+    tier: 상급
+    lineage: jeomchang_geom
+    faction: jeomchang
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 5 }
+    required_mastery: 5
+    requires_skill: { id: hoepung_muryu_geom, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "장로 전수 — 사일검법(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄. ★ 지문: 다단 5히트 — 전 무공 최다. 한 방이 가장 가볍고 가장 많이 꽂힌다
+
+  # ─── 청성파 (cheongseong) — 검 · 계보 cheongseong_geom ───
+  # 노션: 스킬 청풍검법·능풍검법 / 오의 청월검법(장문인)
+  cheongpung_geom:
+    name: "청풍검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (하급 — 맑은 바람)"
+    grade: "이류"
+    tier: 하급
+    lineage: cheongseong_geom
+    faction: cheongseong
+    required_realm: "이류"
+    required_stats: { 민첩: 3, 지혜: 3 }
+    required_mastery: 0
+    acquisition: "청성 외문 과정"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  neungpung_geom:
+    name: "능풍검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 검법 (중급 — 바람을 타고 넘는다)"
+    grade: "일류"
+    tier: 중급
+    lineage: cheongseong_geom
+    faction: cheongseong
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 지혜: 3 }
+    required_mastery: 5
+    requires_skill: { id: cheongpung_geom, mastery: 5 }
+    acquisition: "본산 내문 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★ 지문: 검 계보 중 **유일하게 돌진(突)으로 시작한다** — 능풍(凌風)의 이름값
+
+  songpung_geom:
+    name: "송풍검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 비전 (상급 — 솔바람은 소리로 벤다)"
+    grade: "절정"
+    tier: 상급
+    lineage: cheongseong_geom
+    faction: cheongseong
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 지혜: 4 }
+    required_mastery: 5
+    requires_skill: { id: neungpung_geom, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "장로 전수 — 청월검법(오의·장문인)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄
+
+  # ─── 해남파 (haenam) — 쾌검·좌수검·역수검 · 계보 haenam_geom ───
+  # 노션: 오의 남해삼십육검뿐. 무공 셋 다 ★지어냄 — 다만 '좌수·역수'라는 정체성은 원천이 준 것이고,
+  #   그것이 그대로 수치가 된다 (역수 = 패링 유예 -2 · 좌수 = 반대 손 = 카운터)
+  haepung_geom:
+    name: "해풍검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 쾌검 (하급 — 바닷바람)"
+    grade: "이류"
+    tier: 하급
+    lineage: haenam_geom
+    faction: haenam
+    required_realm: "이류"
+    required_stats: { 민첩: 4, 감각: 3 }
+    required_mastery: 0
+    acquisition: "해남 외문 과정 — 무림에서 가장 먼 곳의 검"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # ★지어냄
+
+  yeoksu_geom:
+    name: "역수검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 쾌검 (중급 — 칼을 거꾸로 쥔다)"
+    grade: "일류"
+    tier: 중급
+    lineage: haenam_geom
+    faction: haenam
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: haepung_geom, mastery: 5 }
+    acquisition: "본산 내문 전수 — 검을 거꾸로 쥐는 법부터 다시 배운다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄 (이름). ★ 지문: 궤가 거꾸로 온다 — 상대 패링 유예 -2 (음풍검의 변초와 같은 값, 다른 이유)
+
+  jwasu_khwaegeom:
+    name: "좌수쾌검"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "본산 비전 (상급 — 왼손이 먼저 간다)"
+    grade: "절정"
+    tier: 상급
+    lineage: haenam_geom
+    faction: haenam
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 5 }
+    required_mastery: 5
+    requires_skill: { id: yeoksu_geom, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "장로 전수 — 남해삼십육검(오의)의 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★지어냄

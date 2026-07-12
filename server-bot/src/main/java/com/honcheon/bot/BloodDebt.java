@@ -186,9 +186,9 @@ final class BloodDebt {
     int decayedKnown(double knownRaw, int publicCount, int lastDay, int today) {
         int every = knownDecayEveryDays();
         int ticks = Math.max(0, (today - lastDay) / every);
-        int floor = publicCount * 2;
-        int value = (int) Math.floor(knownRaw) - ticks * knownDecayAmount();
-        return Math.max(0, Math.max(Math.min(floor, (int) Math.floor(knownRaw)), value));
+        int raw = Math.min(max(), (int) Math.floor(knownRaw));   // scale [0, 30] — 신규 통화 없음
+        int floor = Math.min(publicCount * 2, raw);   // 백주에 죽인 것은 잊히지 않는다 (하한 ≤ 원값)
+        return Math.max(0, Math.max(floor, raw - ticks * knownDecayAmount()));
     }
 
     // ─── 사다리 — 살인 1건과 10건은 다르다 ───

@@ -327,7 +327,7 @@ final class MobDisplay implements Listener {
             plugin.getLogger().info("[혼천] 지난 생의 몹 형체 " + swept + "개를 걷고, 투명한 몸 "
                     + unveiled + "구를 되돌렸다");
         }
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 40L, budget.followInterval());
+        plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("mob_display", this::tick), 40L, budget.followInterval());
     }
 
     /** 플러그인이 내려간다 — <b>형체를 걷고 본체를 되돌린다</b> (투명한 몸을 세계에 남기지 않는다) */

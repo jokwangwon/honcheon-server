@@ -347,7 +347,7 @@ public final class Incidents implements Listener {
 
     public void start() {
         cleanupMarkers();
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 140L, tickerPeriod);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("incidents", this::tick), 140L, tickerPeriod);
         plugin.getLogger().info("사건 엔진 기동 — 단계 " + STAGES.size() + " · 의뢰 규칙 " + RULES.size()
                 + " · 관계 " + KIN.size() + "인 · 세력 반응 " + FACTIONS.size());
     }

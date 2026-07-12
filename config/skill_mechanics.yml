@@ -576,3 +576,392 @@ skills:
     telegraph: "몸을 낮춘다 — 8틱 (짐승도 예고한다)"
     cooldown_ticks: 200
     npc_only: true
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 문파 계보 무공 — 하급 · 중급 · 상급 (skills.yml tier/lineage 와 짝)
+# ══════════════════════════════════════════════════════════════════════════════
+# 설계: docs/design/sect_lineage.md
+#
+# ★ 이름만 다르면 그건 하나의 무공이다. 계보는 **수치로** 갈린다:
+#   최속 점창 [2,1,3] ↔ 최중 종남 [13,4,16]  ·  최장 남궁 선 7.5 ↔ 최단 소림 호 2.4
+#   최다단 점창 5히트 ↔ 단발 팽가 파격       ·  최장 이동 곤륜 10 ↔ 무당 원 2.8
+
+# ─── 【본래 위력】 미대성 강등 규약 (degraded) ────────────────────────────────
+# 노션 원칙: "상급은 하급·중급 숙련 6 이상이어야 본래 위력을 낸다 — 배울 순 있으나 제 힘이 안 난다"
+#
+# ★ 위력을 깎지 않는다. **격이 안 실리고 특수 속성이 안 핀다.**
+#   근거 ①: combat.yml technique_power — 무공 위력은 **등급**이 정한다 (절정급 2). 등급은 그대로다
+#   근거 ②: mastery_ladder 대성(6~7) = "특수 속성 완전 발현" — 이 사다리가 이미 그렇게 적혀 있었다
+#   근거 ③: combat.yml qi_power_note — "지불이 끊기면 그 합의 피해는 외공기 값으로 떨어진다(다운캐스트)"
+#           → 다운캐스트는 이미 있는 문법이다. 새 축을 만들지 않고 그 문법을 **숙련에 연결**했을 뿐이다
+#
+# 기각한 안:
+#   · 위력 감쇠(× 0.5)  — "위력은 등급이 정한다"와 "절기는 위력을 사지 않는다"를 동시에 깬다
+#   · 실패율(시전 실패) — 2d6 판정에 이미 실패가 있다. 이중 실패 = "안 나가는 검" = 조작감 파괴
+#   · 내력 추가 소모(cost 3→4) — cost 4 는 강기 밴드(2~6)로 새어 들어가 combat_audit 의
+#     격 역추정을 깨뜨린다 (요구 경지 절정인데 개방 경지가 화경으로 잡힌다 = dead_gate)
+# ─── 화산파 — hwasan_geom ───
+  nagyeong_geom:                  # 낙영검법 (하급) — 지는 꽃잎. 매화검법의 아래층
+    combo:
+      - { type: 호, angle: 100, range: 3.0, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 100, range: 3.0, frames: [3, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.0, length: 3.6, frames: [5, 3, 9], stagger: 중, cost: 0 }
+    combo_input_window: 10
+    cooldown_ticks: 70
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "떨어지는 꽃잎 하나 — 옅은 빛" }
+
+  maehwa_nanman_geom:             # 매화난만검법 (상급) — 만개 직전. 넓고 무겁다
+    combo:
+      - { type: 호, angle: 130, range: 3.6, frames: [5, 2, 7], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 4.5, frames: [6, 2, 8], stagger: 중, cost: 0 }
+      - { type: 원, radius: 4.0, frames: [11, 3, 15], stagger: 강, cost: 3 }
+    combo_input_window: 12
+    cooldown_ticks: 210
+    qi_rider: { step: 3, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "꽃이 벌어진다 — 원을 그리는 검기" }
+    mastery_gate: { 하급: 6, 중급: 6 }   # 미달 시 mastery_degradation
+
+# ─── 남궁세가 — namgung_geom ───
+  daeyeon_geom:                   # 대연검법 (중급) — 대연참영·대연천망·대연회류
+    combo:
+      - { type: 선, width: 1.0, length: 5.0, frames: [5, 2, 7], stagger: 약, cost: 0 }
+      - { type: 호, angle: 120, range: 4.0, frames: [6, 2, 8], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.3, length: 5.5, frames: [9, 3, 12], stagger: 강, cost: 0 }
+    combo_input_window: 12
+    cooldown_ticks: 110
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "긴 획 — 하늘이 늘어난다" }
+
+  changgung_daeyeon_geom:         # 창궁대연검법 (상급) — 근접 최장 리치 7.5
+    type: 선
+    width: 1.6
+    length: 7.5
+    range: 7.5
+    angle: 1.6
+    frames: [12, 3, 15]
+    super_armor: "선딜~지속"
+    stagger: 다운
+    cost: 3
+    cooldown_ticks: 240
+    telegraph: "검로가 하늘까지 뻗는다 — 12틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "푸른 강 하나 — 창궁과 대연이 겹친다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    # 정체성: 선 7.5 — 제왕검형(8)에 이은 최장. 대신 30틱(느리다) · 간격을 벌린 자를 벤다
+
+# ─── 사천당가 — dangga_amgi ───
+  dangmun_bijeop:                 # 당문비접표 (중급) — 나비처럼 흩어진다
+    type: 시
+    weapon: 암기
+    range: 18
+    frames: [6, 1, 7]
+    stagger: 약
+    hit_count: 4                  # 네 표창이 부챗살로
+    max_targets: 3                # 한 사람에게 몰리지 않는다 — 흩어지는 것이 이 무공이다
+    cost: 0
+    cooldown_ticks: 90
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "네 마리 나비 — 궤가 갈린다" }
+
+# ─── 하북팽가 — paengga_do ───
+  gaesan_do:                      # 개산도법 (하급) — 산을 연다. 무겁게 내려찍는다
+    combo:
+      - { type: 호, angle: 110, range: 3.2, frames: [5, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.5, length: 3.8, frames: [8, 3, 11], stagger: 강, cost: 0 }
+    combo_input_window: 11
+    cooldown_ticks: 100
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "도신에 실린 무게 — 흙이 튄다" }
+
+  honwon_do:                      # 혼원도법 (중급) — 갑주를 씹는다
+    combo:
+      - { type: 호, angle: 100, range: 3.4, frames: [5, 2, 6], stagger: 약, cost: 0 }
+      - { type: 호, angle: 100, range: 3.4, frames: [6, 2, 7], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.6, length: 4.2, frames: [9, 3, 12], stagger: 강, cost: 0 }
+    combo_input_window: 11
+    armor_pierce: 1               # 참마도법과 같은 값 — 다른 이유(관은 제복, 팽가는 가업)
+    cooldown_ticks: 140
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "벼락의 예고 — 도신이 운다" }
+
+  byeokryeok_do:                  # 벽력도법 (상급) — 막아도 뚫린다
+    type: 선
+    width: 1.8
+    length: 5.0
+    range: 5.0
+    angle: 1.8
+    frames: [11, 3, 14]
+    stagger: 다운
+    property: 파격                # 가드·패링 관통 (희귀 속성 — defense_states)
+    cost: 3
+    cooldown_ticks: 260
+    telegraph: "도가 하늘로 — 11틱. 보인다. 그래도 막을 수 없다"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "벼락 한 줄기 — 소리가 뒤에 온다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    # 정체성: 파격 + 다운 + 폭 1.8(전 무공 최광폭). 금강복마권(파격·28틱)과 같은 결, 더 무겁다
+
+# ─── 소림사 — sorim_kwon ───
+  sorim_kwonbeop:                 # 소림권법 (중급) — 본산 108수. 짧고 끈질기다
+    combo:
+      - { type: 호, angle: 85, range: 2.4, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 85, range: 2.4, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 85, range: 2.4, frames: [4, 2, 5], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.8, frames: [7, 3, 10], stagger: 강, cost: 0 }
+    combo_input_window: 9
+    super_armor: "4타 선딜~지속"
+    cooldown_ticks: 100
+    qi_rider: { step: 4, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "주먹에 금빛 — 108수의 끝" }
+    # 정체성: 리치 2.4 — 전 계보 **최단**. 대신 4타 연타 + 슈퍼아머. 파고들어야 사는 무공
+
+  banya_jang:                     # 반야장 (상급) — 밀어내는 손
+    type: 호
+    angle: 90
+    range: 2.6
+    frames: [9, 3, 13]
+    stagger: 강
+    hit_count: 2                  # 쌍장 — 두 손이 함께 간다
+    super_armor: "지속 전체"
+    cost: 3
+    cooldown_ticks: 230
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "장심에서 퍼지는 금빛 — 여래신장의 아래층" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+
+# ─── 무당파 — mudang_geom ───
+  yuun_geom:                      # 유운검법 (하급) — 흐르는 구름. 원으로 마무리한다
+    combo:
+      - { type: 호, angle: 100, range: 3.0, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 100, range: 3.0, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 원, radius: 2.8, frames: [8, 3, 10], stagger: 중, cost: 0 }
+    combo_input_window: 12
+    cooldown_ticks: 90
+    glance_bonus: "흘리기 유예 +2틱 (defense_states 흘리기 6 → 8) — 유(柔)의 검은 받아넘긴다"
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "구름이 감긴다 — 원을 그리는 잔광" }
+
+  jinmu_geom:                     # 진무검법 (중급) — 기다렸다 되돌린다
+    combo:
+      - { type: 호, angle: 110, range: 3.2, frames: [4, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.0, length: 4.0, frames: [6, 2, 8], stagger: 중, cost: 0 }
+      - { type: 원, radius: 3.2, frames: [9, 3, 12], stagger: 강, cost: 0 }
+    combo_input_window: 12
+    parry_window: 5               # 기본 4 · 태극권 6 사이 — 무당 검 계보의 지문
+    on_success: { iframe: 2, counter_window: 12, counter_bonus: 0.5 }
+    cooldown_ticks: 120
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "검이 원을 닫는다 — 흑백의 결" }
+
+# ─── 개방 — gaebang_bong ───
+  chwikwon:                       # 취권 (하급) — 비틀거린다. 그래서 안 맞는다
+    combo:
+      - { type: 호, angle: 90, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 90, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.0, length: 2.8, frames: [5, 2, 8], stagger: 중, cost: 0 }
+    combo_input_window: 9
+    cooldown_ticks: 80
+    irregular: "취보의 결 — 상대 예측 판정 -2, 자기 명중 판정 -1 (취팔선보와 같은 값과 대가)"
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "휘청이는 주먹 — 궤가 읽히지 않는다" }
+
+  gaebang_bongbeop:               # 개방봉법 (중급) — 봉은 넓다. 포위를 푼다
+    combo:
+      - { type: 호, angle: 150, range: 4.2, frames: [5, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.9, length: 4.5, frames: [5, 2, 7], stagger: 중, cost: 0 }
+      - { type: 호, angle: 150, range: 4.2, frames: [8, 3, 11], stagger: 강, cost: 0 }
+    combo_input_window: 12
+    cooldown_ticks: 130
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "봉이 원을 그린다 — 먼지가 인다" }
+    # 정체성: 호 150° — 전 무공 **최광각** (취호붕격 120°를 넘는다). 봉은 여럿을 상대하는 병기다
+
+# ─── 곤륜파 — gonryun_geom ───
+  yangui_geom:                    # 양의검법 (하급) — 음과 양, 두 갈래
+    combo:
+      - { type: 호, angle: 90, range: 3.0, frames: [3, 2, 5], stagger: 약, cost: 0 }     # 陽 — 벤다
+      - { type: 선, width: 0.9, length: 4.0, frames: [5, 2, 7], stagger: 중, cost: 0 }   # 陰 — 찌른다
+    combo_input_window: 11
+    cooldown_ticks: 80
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "두 획이 엇갈린다 — 음양" }
+
+  museong_musaek:                 # 무성무색 (중급) — 소리도 색도 없다
+    combo:
+      - { type: 선, width: 0.7, length: 3.4, frames: [3, 1, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.7, length: 3.4, frames: [3, 1, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 95, range: 3.2, frames: [5, 2, 8], stagger: 중, cost: 0 }
+    combo_input_window: 9
+    cooldown_ticks: 120
+    telegraph: 없음               # ★ 전 무공 중 유일 — 예고 파티클이 뜨지 않는다 (이름값)
+    silent: "타격음 음량 -60% · 응집 파티클 없음 (motion 등록부 청구서 — 무성무색 전용 무음 초식)"
+    parry_penalty: -2             # 읽히지 않으므로 상대 패링 유예 -2
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "없음 — 기가 실려도 보이지 않는다" }
+    # 정체성: **텔레그래프가 없다.** 위력이 아니라 정보를 판다 (규약: 위력을 사지 않는다 — 상황을 산다)
+
+  taeheo_geom:                    # 태허검법 (상급) — 빈 하늘. 원 안이 전부 사거리다
+    type: 원
+    radius: 4.5
+    range: 4.5
+    frames: [10, 4, 13]
+    stagger: 중
+    iframe: 8                     # iframe_caps 절정급_방어_오의 10 이하 — 비우면서 벤다
+    cost: 3
+    cooldown_ticks: 240
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "원이 비어 있다 — 그 안이 전부 검이다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    # 정체성: 원 4.5 — 전 무공 **최대 반경** (매화만개 오의 6 다음). + 무적 8틱. 공방일체
+
+  dabun_jong:                     # 답운종 — 곤륜의 절세 경공 (계보 밖의 축)
+    type: 돌
+    distance: 10                  # ★ 제운종 8 · 매화보 5 · 취팔선보 4 — 전 경공 **최장**
+    frames: [0, 0, 5]
+    iframe: 6
+    cost: 0
+    cooldown_ticks: 130
+    vertical: true
+    qi_note: "경신(내력 2)을 얹으면 거리 10 → 17 + 낙하 피해 무효 (제운종 8 → 14 를 넘는다)"
+
+# ─── 종남파 — jongnam_geom (중검 — 전 계보 최중) ───
+  gusang_geom:                    # 구상검법 (하급) — 무거운 검부터 쥔다
+    combo:
+      - { type: 호, angle: 100, range: 3.6, frames: [6, 2, 8], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.5, length: 4.2, frames: [9, 3, 13], stagger: 강, cost: 0 }
+    combo_input_window: 14        # 가장 긴 입력창 — 느린 검은 기다려 준다
+    cooldown_ticks: 130
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "무거운 획 — 공기가 밀린다" }
+
+  cheongang_geom:                 # 천강검법 (중급) — 맞으면서 벤다
+    combo:
+      - { type: 호, angle: 110, range: 3.8, frames: [8, 3, 10], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.6, length: 5.0, frames: [10, 3, 14], stagger: 강, cost: 0 }
+    combo_input_window: 14
+    super_armor: "2타 선딜~지속"
+    cooldown_ticks: 150
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "은하가 흐른다 — 검신에 별빛" }
+
+  taeeul_bungwang_geom:           # 태을분광검 (상급) — 전 무공 최장 프레임
+    type: 선
+    width: 1.8
+    length: 6.5
+    range: 6.5
+    angle: 1.8
+    frames: [13, 4, 16]           # 합 33틱 — 전 무공 **최장**. 보고도 못 피하면 그건 실력이다
+    super_armor: "선딜~지속"
+    stagger: 다운
+    cost: 3
+    cooldown_ticks: 270           # 전 무공 최장 쿨다운
+    telegraph: "검을 머리 위로 — 13틱. 종남의 검은 숨지 않는다"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "빛이 갈라진다 — 별이 쏟아진다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+
+# ─── 점창파 — jeomchang_geom (쾌검 — 전 계보 최속) ───
+  bungwang_geom:                  # 분광검법 (하급) — 빛이 갈라지듯
+    combo:
+      - { type: 선, width: 0.5, length: 2.6, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.5, length: 2.6, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.5, length: 2.6, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.6, length: 3.0, frames: [3, 1, 5], stagger: 중, cost: 0 }
+    combo_input_window: 6         # ★ 전 무공 **최단** 입력창 — 쾌검은 끊기면 처음부터다
+    cooldown_ticks: 50            # 최단 쿨다운
+    qi_rider: { step: 4, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "빛 한 줄 — 이미 지나갔다" }
+    # 정체성: 프레임 [2,1,3] — 전 무공 **최속**. 대신 사거리 2.6(짧다) · 경직 약 · 폭 0.5(가장 좁다)
+
+  hoepung_muryu_geom:             # 회풍무류검법 (중급) — 바람이 돌고 버들이 춤춘다
+    combo:
+      - { type: 선, width: 0.6, length: 2.8, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 80, range: 2.8, frames: [3, 1, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.6, length: 3.0, frames: [2, 1, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 90, range: 3.0, frames: [4, 2, 7], stagger: 중, cost: 0 }
+    combo_input_window: 6
+    feint: "2타를 취소해 3타로 잇는 변초 — 상대 패링 유예 -2 (음풍검과 같은 값. 사파의 변초와 정파의 쾌검이 같은 수를 쓴다)"
+    cooldown_ticks: 60
+    qi_rider: { step: 4, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "버들이 흔들린다 — 궤가 둘로 보인다" }
+
+  bungwang_sippalsu:              # 분광십팔수 (상급) — 열여덟 갈래. 다단의 극
+    type: 선
+    width: 0.5
+    length: 3.4
+    range: 3.4
+    angle: 0.5
+    frames: [3, 1, 6]             # ★ 10틱 — 전 **절정 무공 최속** (매화점점 14틱보다 빠르다)
+    stagger: 약                   # 한 방이 가장 가볍다
+    hit_count: 5                  # ★ 전 무공 **최다단** (매화점점·비홍침 3 · 당문비접표 4)
+    cost: 3
+    cooldown_ticks: 150
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "다섯 점의 빛 — 세는 사이에 끝난다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    # 정체성: 최속 + 최다단 + 최약경직. 굳히지 못한다 — 대신 아무도 이만큼 자주 꽂지 못한다
+
+# ─── 청성파 — cheongseong_geom (바람 — 이동과 검이 붙어 있다) ───
+  cheongpung_geom:                # 청풍검법 (하급) — 맑은 바람
+    combo:
+      - { type: 호, angle: 100, range: 3.0, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 100, range: 3.0, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.9, length: 3.6, frames: [6, 2, 9], stagger: 중, cost: 0 }
+    combo_input_window: 10
+    cooldown_ticks: 80
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "바람 한 줄기 — 잎이 날린다" }
+
+  neungpung_geom:                 # 능풍검법 (중급) — 바람을 타고 넘는다
+    combo:
+      - { type: 돌, distance: 4, range: 2.4, angle: 90, frames: [4, 2, 5], stagger: 약, cost: 0 }  # ★ 검 계보 유일 — 돌진으로 연다
+      - { type: 호, angle: 110, range: 3.2, frames: [4, 2, 5], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.0, length: 4.0, frames: [7, 2, 10], stagger: 강, cost: 0 }
+    combo_input_window: 11
+    cooldown_ticks: 110
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "바람을 밟고 오른다 — 발끝에 잔상" }
+    # 정체성: 간격을 **스스로 만든다** (돌진 4로 붙는다). 남궁(간격 3.0 미만 불가)의 정확한 반대편
+
+  songpung_geom:                  # 송풍검법 (상급) — 솔바람은 소리로 벤다
+    type: 원
+    radius: 3.8
+    range: 3.8
+    frames: [9, 3, 12]
+    stagger: 중
+    cost: 3
+    cooldown_ticks: 220
+    glance_bonus: "흘리기 유예 +3틱 (defense_states 흘리기 6 → 9) — 전 무공 최대. 받아넘기며 벤다"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "솔잎이 인다 — 소리가 먼저 온다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+
+# ─── 해남파 — haenam_geom (쾌검·좌수·역수 — 카운터의 문파) ───
+  haepung_geom:                   # 해풍검법 (하급) — 바닷바람
+    combo:
+      - { type: 호, angle: 85, range: 2.8, frames: [3, 1, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 85, range: 2.8, frames: [3, 1, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.7, length: 3.2, frames: [4, 2, 7], stagger: 중, cost: 0 }
+    combo_input_window: 8
+    cooldown_ticks: 70
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "짠 바람 — 획이 짧고 날카롭다" }
+
+  yeoksu_geom:                    # 역수검법 (중급) — 칼을 거꾸로 쥔다. 궤가 거꾸로 온다
+    combo:
+      - { type: 선, width: 0.6, length: 2.8, frames: [2, 1, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 75, range: 2.6, frames: [3, 1, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.8, length: 3.4, frames: [5, 2, 8], stagger: 중, cost: 0 }
+    combo_input_window: 8
+    feint: "역수(逆手) — 궤가 반대로 온다. 상대 패링 유예 -2 (음풍검·회풍무류검과 같은 값, 세 번째 이유)"
+    counter_hit_bonus: 0.4        # 후딜 중인 자를 노린다 (기본 0.25 · 흑살 0.5 사이)
+    cooldown_ticks: 90
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "칼등이 먼저 보인다 — 날은 뒤에 온다" }
+
+  jwasu_khwaegeom:                # 좌수쾌검 (상급) — 왼손이 먼저 간다
+    type: 선
+    width: 0.6
+    length: 3.2
+    range: 3.2
+    angle: 0.6
+    frames: [3, 1, 5]
+    stagger: 중
+    hit_count: 2                  # 좌수·우수 — 두 손이 연이어
+    cost: 3
+    cooldown_ticks: 160
+    counter_hit_bonus: 0.5        # 흑살단수와 같은 값 — 해남은 살초 없이 카운터로 같은 자리에 선다
+    offhand: "반대 손 시전 — 상대의 가드 각(120°) 바깥에서 들어간다: 가드 감쇄 0.7 → 0.85 적용"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "왼쪽에서 빛 — 보던 손이 아니다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    # 정체성: 9틱(절정 최속 타이) + 카운터 0.5 + 가드 반감. 파격 없이 가드를 무의미하게 만든다
+
+
+mastery_degradation:
+  trigger: "skills.yml <무공>.mastery_gate 의 하위 무공 숙련이 하나라도 6 미만"
+  effects:
+    격_다운캐스트: "qi_rider 의 격이 한 단 내려앉는다 (검기 → 발경 · power 2 → 1 · cost 3 → 1).
+                    검기를 품고 태어난 초식인데 기가 안 실린다 — 검은 나가지만 빛이 없다"
+    특수_속성_미발현: "파격·다단히트(hit_count)·슈퍼아머·armor_pierce 가 붙지 않는다
+                       (mastery_ladder 대성 = '특수 속성 완전 발현' 의 대우(對偶))"
+    후딜_1.5배: "frames[2] × 1.5 (올림) — 손에 안 익은 검은 거두는 데 오래 걸린다.
+                 counter_hit_bonus(0.25)의 밥이 된다 = 미대성 상급은 **쓸수록 얻어맞는다**"
+    절기_봉쇄: "cast_gate 承이 열리지 않는다 — 그 무공에서 절기가 피지 않는다"
+  restore: "하급·중급 숙련이 6(대성)에 닿는 순간 즉시 해제 — 되돌릴 수 있다. 다시 배울 필요는 없다"
+  design_note: "★ 감각: 배웠는데 '제 힘이 안 난다'. 위력표를 보면 똑같은데 몸이 다르다.
+    그리고 그 이유가 정직하다 — 기가 안 실리고, 속성이 안 피고, 검이 늦게 돌아온다.
+    수치를 숨기지 않는다: 미대성 상급(발경 1)은 대성 중급(발경 1)과 **피해가 같다.**
+    상급을 먼저 사는 것은 이득이 아니라 낭비다 — 그것이 '하위를 밟아라'의 수치적 정직이다"
