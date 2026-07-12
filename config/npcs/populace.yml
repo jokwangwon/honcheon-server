@@ -659,12 +659,35 @@ quests:
 bridge:
   enabled: true
   via: world_bridge.yml           # 다리의 등록부는 그쪽이다 (여기는 무명층의 사용 선언일 뿐)
-  emits: [npc_death]              # 지금 등록된 kind 중 무명층이 쓰는 것
-  wanted_kinds:                   # ★ 다리 담당자에게 — 이 kind 들이 등록되면 무명층이 바로 실어 보낸다
-    populace_quest: "무명 의뢰 발생·완료·만료 {rule, issuer, victim, player, outcome}"
-    surrender: "자수 {player, fine} → faction_politics.authority_mandate.drains.자수 (-10)"
-    bounty: "수배 {player, amount, stage} — 지금은 MVT 안에서만 굴린다"
-  note: "등록될 때까지 이 사건들은 서버 로그로만 남는다 ([사건] …). 다리에 없는 것은 장부에도 없다."
+  emits: [npc_death, surrender, populace_quest]   # 무명층이 실어 보내는 kind (전부 등록됨)
+
+  # ─── ★ 정본(正本)은 봇이다 — 이 절이 이 층의 가장 비싼 교훈이다 ───
+  #
+  # 예전에 MVT 는 제 안에서 수배·현상금·세력 favor·지역 상태를 **직접 굴렸다** (인메모리 맵).
+  # 그 결과가 이랬다:
+  #   · 재기동하면 수배가 증발했다 — 열 명을 죽이고 다시 접속하면 아무도 그를 쫓지 않았다.
+  #   · 혈교는 "첫 피를 안다"며 말을 걸어 놓고 **다음 날 그를 잊었다.**
+  #   · 봇도 같은 값을 제 장부에서 굴리고 있었다 (blood_debt → 현상금 · faction_standing · regions).
+  #     **세계가 둘이었다.** 그리고 둘은 갈라졌다.
+  #
+  # 그래서 잘라 두었다 — 이 방향은 뒤집지 말 것:
+  #
+  #     사실(事實)은 마크에서 봇으로 흐른다   (누가 죽었나 · 목격 몇 · 시신은 · 자수했나)
+  #     장부(帳簿)는 봇에만 있다              (혈채 → 현상금 · favor · 치안·경제·민심)
+  #     상태(狀態)는 봇에서 마크로 되내려온다 (world_state.json — MVT 는 **읽기만** 한다)
+  #
+  # MVT 가 하는 계산은 하나도 없다. 포교를 부르고, 소문을 켜고, 말을 거는 것 — 그것은 **행동**이다.
+  canon:
+    수배·현상금: 봇 (faction_reaction.yml blood_debt — 현혈채 3+ 면 관이 방을 붙인다)
+    세력_favor:  봇 (faction_standing 표. npc_death.populace_layer.faction_response 는 봇이 정산한다)
+    지역_상태:   봇 (regions 표. populace_layer.stages.region_delta 도 봇이 더한다)
+    포교_추격:   마크 (장부가 아니라 **행동**이다 — 사흘 쫓고 물러난다. 재기동은 곧 추격의 끝이다)
+  reads:                          # MVT 가 스냅숏에서 읽는 것 (world_bridge.yml feedback.world_state)
+    - bounty                      # ★ 재기동을 건너오는 유일한 통로 — 방(榜)은 그대로 붙어 있다
+    - wanted                      # 법명분 (관졸이 등을 돌리는 문턱)
+    - favor                       # 혈교가 말을 거는 순간의 근거
+    - region                      # 치안 < 30 → 도적 소문 → 산길_대행 의뢰가 자란다
+  note: "다리에 없는 것은 장부에도 없다. 그리고 **장부에 없는 것은 재기동을 못 넘는다.**"
 
 # ─── 길잃음(strays) — 죽이지 않아도 아이는 사라진다 ───
 # ★ 사용자의 예시("어미가 아들을 잃어버려 찾아달라") 의 무혈(無血) 경로다.

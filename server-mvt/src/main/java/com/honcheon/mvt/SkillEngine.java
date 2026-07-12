@@ -1081,8 +1081,18 @@ public final class SkillEngine {
 
     /** 플레이어 무공 런타임 상태 — 순수 데이터 (엔진은 이걸 읽고 쓰지 않는다; 리스너가 소유) */
     public static final class State {
-        /** 경지 — MVT 는 캐릭터 시트가 없다. /혼천 경지 로 세운다 (기본: 개화 전) */
-        public String realm = "이류";
+        /**
+         * 경지 — <b>봇의 시트에서 온다</b> ({@code world_state.json} 의 {@code sheet.<uuid>.realm}).
+         *
+         * <p>여기 {@code "이류"} 가 <b>박혀 있었다</b>. 주석은 <i>"MVT 는 캐릭터 시트가 없다"</i> 였고,
+         * 그 한 줄 때문에 <b>모든 플레이어가 영원히 이류</b>였다 — 갓 접속한 자도, 봇에서 일류까지
+         * 올라간 자도. 승급은 강호가 인정하는 것이고 강호의 장부는 봇에 있다.
+         *
+         * <p>초기값은 없다(null). {@link SkillListener#state(org.bukkit.entity.Player)} 가 몸에 실린
+         * 원장에서 받아 세우고, 접합 전이면 등록부의 첫 단(cultivation.yml {@code cultivation_stages[0]}
+         * = 범인)으로 선다. <b>코드가 경지를 지어내지 않는다.</b>
+         */
+        public String realm;
         /** 내공 실수치 — 내력 풀 = round(내공 × 3) */
         public double naegong = 0.0;
         public int energy = 0;
@@ -1834,6 +1844,15 @@ public final class SkillEngine {
     /** 경지 격차 보정 — gm_modifiers.yml realm_gap (전투에만 적용, 단계당 ±2) */
     public int realmGapBonus(String mine, String theirs) {
         return realmGapPerStage * (realmIndex(mine) - realmIndex(theirs));
+    }
+
+    /**
+     * 등록부의 첫 단 — <b>범인</b> (cultivation.yml {@code cultivation_stages[0]}).
+     * 접합되지 않은 몸의 경지다: 강호의 장부에 이름이 없는 자는 무인이 아니다.
+     * (하드코딩 금지 — 이름은 config 가 정한다.)
+     */
+    public String baseRealm() {
+        return realmOrder.isEmpty() ? null : realmOrder.get(0);
     }
 
     public List<String> realmOrder() {

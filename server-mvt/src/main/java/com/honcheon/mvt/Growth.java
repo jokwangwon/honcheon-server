@@ -281,9 +281,18 @@ public final class Growth {
             return 0;
         }
         if (sub.isSkill()) {
+            String art = ledger.primaryArt();
+            if (art == null) {
+                // ★ 무공 게이트 — **익히지 않은 무공은 수련할 수 없다** (무공 백지 = 기연 자격).
+                //   심법 게이트와 같은 모양이다: 원천이 없으면 그 구간은 통째로 샌다.
+                //   전에는 여기에 "육합검"이 기본값으로 박혀 있어, 아무도 배운 적 없는 무공이
+                //   모두의 손에서 자라고 있었다 (봇의 승급 요건은 그것을 인정하지 않는다).
+                return days;
+            }
             // 숙련에는 캡이 없다 — 대신 비용이 급증한다 (0→1 은 3개월, 5→6 은 8년). 비용이 곧 천장이다.
             // 원장은 '일치'가 정본이고 레벨은 환산표로 파생된다 (PlayerLedger.levelOf).
-            ledger.grant(ledger.primaryArt(), days);
+            ledger.grant(art, days);
+            ledger.pendSkill(art, days);   // ★ 다리로 — 시트를 적는 것은 봇이다
             return 0;
         }
         if (sub.isNaegong()) {
@@ -299,7 +308,9 @@ public final class Growth {
             // 내공은 유일한 배증형 사다리 — n→n+1 = n년 (simbeop.yml dantian.accumulation_cost).
             // 늦게 시작하면 영원히 못 따라간다. 그것이 '일찍 심어야 늦게 거둔다'의 수치다.
             double perPoint = Math.max(1.0, Math.floor(cur)) * 360.0;
-            ledger.grantNaegong(Math.min(room - cur, days / perPoint));
+            double gained = Math.min(room - cur, days / perPoint);
+            ledger.grantNaegong(gained);
+            ledger.pendNaegong(gained);
             return 0;
         }
         // 능력치 과목 — 외공은 근력·체력 두 축을 split 으로 나눠 진다 (그래서 정수부가 절반 속도다)
@@ -314,7 +325,9 @@ public final class Growth {
                 continue;
             }
             double room = (cap - cur) * attrCostDays;          // 천장까지 남은 일치
-            ledger.grantAttr(attr, Math.min(room, share) / attrCostDays);
+            double gained = Math.min(room, share) / attrCostDays;
+            ledger.grantAttr(attr, gained);
+            ledger.pendAttr(attr, gained);
             wasted += Math.max(0, share - room);
         }
         return wasted;
@@ -329,12 +342,29 @@ public final class Growth {
 
     /**
      * 공격 판정의 능력치 항 — {@code combat.yml attack.attacker} 의 '능력치'.
-     *
-     * <p><b>지금 엔진은 이 항을 통째로 빼고 돌고 있다</b> ({@code SkillListener} execBase).
-     * 배선하면 그 자리에 들어간다. 판정은 <b>정수부</b>만 본다 (화후 규칙 — 3.9와 4.0은 세계가 다르다).
+     * 판정은 <b>정수부</b>만 본다 (화후 규칙 — 3.9와 4.0은 세계가 다르다).
      */
     public int attackBonus(PlayerLedger ledger, String weaponClass) {
         return (int) ledger.attr(attackAttribute(weaponClass));
+    }
+
+    /**
+     * 공격 판정의 능력치 항 — <b>시트가 없는 몸은 그 경지의 표준 무인이다.</b>
+     *
+     * <p>이것이 없어서 <b>플레이어가 제 급의 산적보다 구조적으로 약했다</b>: 갓 접속한 몸은 능력치가
+     * 전부 0.0 이라 {@link #attackBonus} 가 <b>+0</b> 을 돌려줬는데, 같은 경지의 NPC 는
+     * {@code engine.realmAttr(realm)} 로 <b>표준치</b>를 받았다 ({@code SkillListener.foeAttackScore}).
+     * 산적은 표준 무인이고 사람은 갓난아이였다.
+     *
+     * <p>{@link Vitality#cheOf} 가 이미 같은 답을 갖고 있었다 — <i>"원장의 체력이 0 이면 대체값으로
+     * 돌아간다"</i>. 그 규칙을 공격에도 세운다. 접합된 자는 제 시트로 싸우고, 아직 강호에 없는 자는
+     * 적어도 <b>제 급의 표준</b>으로 선다.
+     *
+     * @param realmStandard 그 경지의 표준 능력치 ({@code SkillEngine.realmAttr}) — 코드가 짓지 않는다
+     */
+    public int attackBonus(PlayerLedger ledger, String weaponClass, int realmStandard) {
+        double attr = ledger.attr(attackAttribute(weaponClass));
+        return attr > 0 ? (int) attr : realmStandard;
     }
 
     /**

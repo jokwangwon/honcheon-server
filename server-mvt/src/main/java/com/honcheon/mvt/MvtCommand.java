@@ -66,6 +66,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
                 case "계측" -> metrics(sender, args);        // MSPT·티커별 예산 (performance.yml 대조)
                 case "수련" -> training(sender, args);       // 하루 5구간을 무엇에 쓸 것인가 (성장 축)
+                case "시트" -> sheetInfo(sender);            // 나는 누구인가 — 강호의 장부가 답한다
                 case "접속" -> link(sender);                 // 마크의 몸 ↔ 디스코드의 이름 (코드 발급)
                 case "모션진단" -> motionDiag(sender, args);   // 3D 층이 실제로 떴는가 (팩 유무 포함)
                 case "문장" -> crests(sender);
@@ -1342,6 +1343,42 @@ public final class MvtCommand implements CommandExecutor {
             return true;
         }
         plugin.skills().setStance(player, args[1]);
+        return true;
+    }
+
+    /**
+     * <b>/혼천 시트</b> — 나는 누구인가.
+     *
+     * <p><b>장부의 정본은 봇이다.</b> 경지·화후·승급은 <b>강호가 인정하는 것</b>이고, 그 장부는 재기동을 넘어
+     * 살아남는 유일한 곳이다. 마크는 <b>몸</b>이다 — 수련하고, 싸우고, 그 증분을 다리로 올려 보낸다.
+     * 내려오는 것은 봇의 확정값(절대값)이므로 <b>두 장부가 영구히 갈라질 수 없다.</b>
+     *
+     * <p>접합 전이면 시트가 없다 — 그리고 그 사실을 <b>소리내어 말한다.</b>
+     * 조용한 게이트가 가장 나쁘다: 반쪽 세계에서 노는 줄도 모른 채 놀게 된다.
+     */
+    private boolean sheetInfo(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "몸이 있어야 시트가 있다.");
+            return true;
+        }
+        PlayerLedger led = plugin.ledger(player.getUniqueId());
+        if (!led.linked()) {
+            player.sendMessage(ChatColor.RED + "너는 아직 강호에 없다 — " + ChatColor.WHITE + "/혼천 접속");
+            return true;
+        }
+        String realm = led.realm(plugin.skillEngine().baseRealm());
+        player.sendMessage(ChatColor.GOLD + "── " + WorldBridge.linkedName(player.getUniqueId())
+                + " · " + realm + " ──");
+        Growth growth = Growth.get();
+        if (growth != null) {
+            growth.sheet(led, realm).forEach(player::sendMessage);
+        }
+        player.sendMessage(ChatColor.GRAY + "심법 " + ChatColor.WHITE
+                + (led.simbeop() == null ? "없음 (개화 전)" : led.simbeop())
+                + ChatColor.GRAY + " · 내공 " + ChatColor.WHITE + String.format("%.2f", led.naegong()));
+        player.sendMessage(ChatColor.GRAY + "주무공 " + ChatColor.WHITE
+                + (led.primaryArt() == null ? "없음 (무공 백지)" : led.primaryArt())
+                + ChatColor.GRAY + " · 실전 마크 " + ChatColor.WHITE + led.marks실전());
         return true;
     }
 }

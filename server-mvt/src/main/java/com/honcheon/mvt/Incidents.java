@@ -298,6 +298,7 @@ public final class Incidents implements Listener {
         boolean offered;
         boolean done;             // 목표 달성
         boolean closed;
+        boolean irony;            // 살해자가 유족의 의뢰를 완수했는가 (혈교가 읽는 사실)
         long offeredAt;
 
         Task(Rule rule, String issuer, String victim, int bornDay) {
@@ -318,18 +319,14 @@ public final class Incidents implements Listener {
 
     private final Map<String, Corpse> corpses = new LinkedHashMap<>();
     private final Map<String, Task> tasks = new LinkedHashMap<>();
-    private final Map<UUID, Integer> bounty = new LinkedHashMap<>();
-    private final Map<UUID, Map<String, Integer>> favor = new LinkedHashMap<>();
-    private final Map<UUID, Integer> kills = new LinkedHashMap<>();
     private final Map<String, String> mood = new LinkedHashMap<>();       // person → 애도
     private final Map<String, Integer> respawnAt = new LinkedHashMap<>(); // person → 부활 세계일
     private final Set<String> strayed = new LinkedHashSet<>();            // 길 잃은 아이
     private final Map<UUID, Long> concealStart = new LinkedHashMap<>();   // 은닉 중인 플레이어
     private final Map<UUID, String> concealTarget = new LinkedHashMap<>();
-    private final Map<UUID, Integer> pursuitAt = new LinkedHashMap<>();   // 수배자 → 포교 출동 세계일
-    private final Map<UUID, Integer> wantedSince = new LinkedHashMap<>();
-    private final Map<String, Integer> region = new LinkedHashMap<>();
-    private final Map<UUID, Long> confirm = new LinkedHashMap<>();        // 재우클릭 확인 창
+    private final Map<UUID, Integer> pursuitAt = new LinkedHashMap<>();   // 추격 중 → 포교 출동 세계일
+    private final Set<UUID> ledgerPursued = new LinkedHashSet<>();        // 장부의 방(榜)을 보고 이미 출동했는가
+    private final Set<String> contacted = new LinkedHashSet<>();          // 세력이 이미 말을 건 자 (uuid|세력)
     private int curfewUntil = -1;
     private int lastNightDay = -1;
 
@@ -337,12 +334,54 @@ public final class Incidents implements Listener {
         this.plugin = plugin;
         this.keyCorpse = new NamespacedKey(plugin, "corpse");
         this.keyPursuer = new NamespacedKey(plugin, "pursuer");
-        region.put("치안", 50);
-        region.put("경제", 50);
-        region.put("민심", 50);
         if (plugin.populace() != null) {
             plugin.populace().bind(this);   // 스스로 접합한다 — HoncheonMvt 는 네 줄만 알면 된다
         }
+    }
+
+    // ══════════════ 장부 판독 — 정본은 봇이다. MVT 는 읽기만 한다 ══════════════
+    //
+    // ★ 여기 있던 세 개의 맵(bounty · favor · region)이 이 층의 가장 큰 거짓말이었다.
+    //   그것들은 인메모리였다 — 재기동하면 수배가 증발했다. 열 명을 죽이고 다시 접속하면
+    //   아무도 그를 쫓지 않았다. 혈교는 "첫 피를 안다"고 말을 걸어 놓고 다음 날 그를 잊었다.
+    //   그리고 더 나빴던 것: 봇도 같은 값을 제 장부에서 굴리고 있었다 (blood_debt → 현상금,
+    //   faction_standing → favor, regions → 치안·경제·민심). **세계가 둘이었다.**
+    //
+    // 이제 정본은 하나다 — **봇의 장부**다. 재기동을 넘어 살아남는 유일한 곳이기 때문이다.
+    // MVT 가 하는 일은 셋뿐이다: ① 사실을 다리로 보낸다 ② 장부를 스냅숏에서 읽는다
+    // ③ 읽은 것으로 인게임 행동을 한다 (포교를 부르고, 소문을 켜고, 말을 건다).
+    // 계산은 하지 않는다. 계산을 둘이 하면 세계가 둘이 된다.
+
+    /** 지역 상태 — 봇의 regions 표 (world_bridge.yml feedback.world_state.region) */
+    private static int region(String stat) {
+        Integer v = WorldBridge.state().region().get(stat);
+        return v == null ? 50 : v;   // 스냅숏이 아직 없다 — 세계는 기준값에 서 있다
+    }
+
+    /** 그의 목에 걸린 값 — 봇이 혈채로 계산한다 (blood_debt.engine.bounty_min 3 → 방이 붙는다) */
+    private static int bountyOf(UUID player) {
+        return WorldBridge.state().bounty(player);
+    }
+
+    /** 세력 우호 — 봇의 faction_standing (MVT 는 여기에 한 점도 더하지 않는다) */
+    private static int favorOf(UUID player, String faction) {
+        return WorldBridge.state().favor(player, faction);
+    }
+
+    /**
+     * 관이 지금 그를 쫓는가.
+     *
+     * <p>둘 중 하나면 참이다: <b>장부</b>가 그의 목에 값을 걸었거나(현상금·법명분 — 재기동을 넘어
+     * 살아남는다), 방금 이 자리에서 <b>단계가 집행됐거나</b>(포교는 사흘 쫓고 물러난다 — 관은
+     * 조직이지 원한이 아니다). 앞의 것이 장부이고, 뒤의 것은 행동이다.
+     */
+    private boolean wanted(UUID player, int day) {
+        WorldBridge.State state = WorldBridge.state();
+        if (state.bounty(player) > 0 || state.wanted(player)) {
+            return true;
+        }
+        Integer since = pursuitAt.get(player);
+        return since != null && day - since <= pursuitGiveUpDays;
     }
 
     public void start() {
@@ -461,10 +500,10 @@ public final class Incidents implements Listener {
         String victim = people.nameOf(corpse.victim);
         int day = day(corpse.at.getWorld());
 
-        stage.region().forEach((k, v) -> region.merge(k, v, Integer::sum));
-        if (!stage.region().isEmpty()) {
-            emit("지역_델타", new LinkedHashMap<>(stage.region()));
-        }
+        // ★ 지역 델타(민심 -3 · 치안 -3 …)는 여기서 더하지 않는다 — 봇이 더한다.
+        //   MVT 는 npc_death 로 **사실**만 보냈고(목격 몇·시신은·밤인가), 봇이 그 사실을
+        //   npc_death.yml populace_layer.stages 로 정산해 regions 표에 적는다.
+        //   같은 델타를 양쪽이 더하면 치안이 두 번 무너진다.
 
         if (stage.intensity() > 0) {
             broadcast(ChatColor.DARK_RED + "[소문 강도 " + stage.intensity() + "] " + ChatColor.GRAY
@@ -480,18 +519,18 @@ public final class Incidents implements Listener {
             broadcast(ChatColor.DARK_GRAY + "해가 지면 아무도 나오지 않는다. 청하현에 통행금지가 내렸다.");
         }
         if (killer != null && stage.pursuit()) {
-            int amount = bountyBase * Math.max(1, stage.bountyMult());
-            bounty.merge(killer.getUniqueId(), amount, Integer::sum);
-            wantedSince.putIfAbsent(killer.getUniqueId(), day);
+            // 포교(捕校)는 **행동**이지 장부가 아니다 — 그래서 여기서 부른다.
+            // 그러나 현상금(액수)은 장부다 — 봇이 혈채로 계산한다. 아직 방이 안 붙었으면
+            // (혈채가 문턱 미만이면) 값을 지어내지 않는다. 관은 아직 그를 '찾을' 뿐이다.
             pursuitAt.put(killer.getUniqueId(), day);
-            killer.sendMessage(ChatColor.RED + fmt(LINE.get("bounty.line"),
-                    Map.of("amount", String.valueOf(bounty.get(killer.getUniqueId())))));
+            int amount = bountyOf(killer.getUniqueId());
+            killer.sendMessage(amount > 0
+                    ? ChatColor.RED + fmt(LINE.get("bounty.line"), Map.of("amount", String.valueOf(amount)))
+                    : ChatColor.RED + "관이 당신을 찾는다.");
             killer.sendMessage(ChatColor.GRAY + "관졸에게 웅크린 채 말을 걸면 "
-                    + ChatColor.WHITE + "자수" + ChatColor.GRAY + "할 수 있다 (수배 소멸 · 민심 +2).");
+                    + ChatColor.WHITE + "자수" + ChatColor.GRAY + "할 수 있다.");
             plugin.getServer().getScheduler().runTaskLater(plugin,
                     () -> summonPursuit(killer, name), 20L * PURSUIT_DELAY.getOrDefault(name, 15));
-            emit("수배", Map.of("killer", killer.getName(), "bounty", bounty.get(killer.getUniqueId()),
-                    "stage", name, "day", day));
         }
         if (killer != null) {
             factions(killer, name);
@@ -507,26 +546,32 @@ public final class Incidents implements Listener {
         };
     }
 
-    /** 세력 반응 — 무명 하나로는 움직이지 않는다. 쌓여야 움직인다 (혈교는 예외다: 그들은 첫 피를 안다) */
+    /**
+     * 세력 반응 — 무명 하나로는 움직이지 않는다. 쌓여야 움직인다 (혈교는 예외다: 그들은 첫 피를 안다).
+     *
+     * <p><b>MVT 는 favor 를 한 점도 더하지 않는다.</b> 점수는 봇의 장부(faction_standing)에만 있고,
+     * 그 값이 스냅숏으로 돌아온다. 여기서 하는 일은 <b>장부가 이미 넘긴 문턱을 사람의 말로 옮기는 것</b>뿐이다 —
+     * 세력이 말을 거는 것은 사건이 아니라 <b>상태</b>이기 때문이다.
+     *
+     * <p>문턱: 등록부의 {@code threshold}(무명 3인) × {@code favor_per_kill}(2) = favor 6.
+     * 새 수치가 아니다 — npc_death.yml populace_layer.faction_response 두 칸의 곱이다.
+     */
     private void factions(Player killer, String stage) {
-        int done = kills.merge(killer.getUniqueId(), 1, Integer::sum);
         int rank = STAGE_ORDER.indexOf(stage);
         for (FactionRule f : FACTIONS) {
-            if (rank < STAGE_ORDER.indexOf(f.fromStage())) {
+            if (rank < STAGE_ORDER.indexOf(f.fromStage()) || f.contactLine() == null
+                    || f.threshold() <= 0 || f.delta() <= 0) {
                 continue;
             }
-            Map<String, Integer> mine = favor.computeIfAbsent(killer.getUniqueId(), k -> new LinkedHashMap<>());
-            int now = mine.merge(f.faction(), f.delta(), Integer::sum);
-            emit("세력_반응", Map.of("faction", f.faction(), "input", f.input() == null ? "" : f.input(),
-                    "delta", f.delta(), "total", now, "killer", killer.getName()));
-            if (f.threshold() > 0 && done == f.threshold() && f.contactLine() != null) {
+            int now = favorOf(killer.getUniqueId(), f.faction());
+            if (now < f.threshold() * f.delta()) {
+                continue;   // 장부가 아직 그를 그렇게 보지 않는다
+            }
+            if (contacted.add(killer.getUniqueId() + "|" + f.faction())) {
                 killer.sendMessage(ChatColor.DARK_PURPLE + "[" + f.faction() + "] "
                         + ChatColor.LIGHT_PURPLE + f.contactLine());
             }
         }
-        killer.sendMessage(ChatColor.DARK_GRAY + "(무명 " + done + "인 — 혈교 favor "
-                + favor.getOrDefault(killer.getUniqueId(), Map.of()).getOrDefault("혈교", 0)
-                + " · 민심 " + region.get("민심") + ")");
     }
 
     // ══════════════ 티커 ══════════════
@@ -542,6 +587,7 @@ public final class Incidents implements Listener {
 
         conceal(world);
         discover(world, day);
+        ledgerWatch(world, day);
         pursue(world, day);
         strays(world, day);
         respawn(day);
@@ -553,7 +599,9 @@ public final class Incidents implements Listener {
         }
         // 치안이 무너지면 산길 소문이 돈다 — region_state.yml threshold_effects.치안_저하.
         // 살인이 쌓이면 치안이 무너지고, 치안이 무너지면 의뢰가 저절로 자란다 (quest_generation.sources.region_state)
-        people.rumor(regionLowRumor, region.get("치안") < regionLow);
+        // ★ 이 치안은 이제 **봇의 표**다 (스냅숏). 예전에는 MVT 안의 사(私)장부였다 —
+        //   그래서 마을을 구해도 눈금이 안 올라갔고, 마을을 망쳐도 봇은 그것을 몰랐다.
+        people.rumor(regionLowRumor, region("치안") < regionLow);
 
         grow(world, day);
         objectives(world);
@@ -649,6 +697,35 @@ public final class Incidents implements Listener {
         }
     }
 
+    /**
+     * ★ 장부 감시 — <b>재기동을 건너온 수배</b>.
+     *
+     * <p>이것이 이 층에서 가장 오래 비어 있던 자리다. 예전에는 수배가 MVT 의 인메모리 맵에만 있었고,
+     * 서버를 껐다 켜면 <b>세계가 그를 잊었다</b>. 이제 장부는 봇에 있고(혈채 → 현상금),
+     * 봇은 20초마다 그 장부를 스냅숏으로 내려보낸다. 그가 다시 접속하면 — <b>방(榜)은 그대로 붙어 있다.</b>
+     *
+     * <p>{@link WorldBridge.State#bounty} 를 부르는 <b>첫 자리</b>다. 여기가 비어 있었기 때문에
+     * 봇이 계산한 현상금은 지금까지 아무도 읽지 않는 숫자였다.
+     */
+    private void ledgerWatch(World world, int day) {
+        for (Player player : world.getPlayers()) {
+            UUID id = player.getUniqueId();
+            int amount = bountyOf(id);
+            if (amount <= 0) {
+                ledgerPursued.remove(id);   // 방이 내려갔다 (혈채가 감쇠했거나 관이 물러섰다)
+                continue;
+            }
+            if (!ledgerPursued.add(id)) {
+                continue;   // 이번 접속에서 이미 그를 보러 갔다
+            }
+            player.sendMessage(ChatColor.DARK_RED + "관아에 방(榜)이 붙어 있다. "
+                    + ChatColor.RED + fmt(LINE.get("bounty.line"), Map.of("amount", String.valueOf(amount))));
+            pursuitAt.put(id, day);
+            plugin.getServer().getScheduler().runTaskLater(plugin,
+                    () -> summonPursuit(player, "지목"), 20L * PURSUIT_DELAY.getOrDefault("지목", 15));
+        }
+    }
+
     /** 포교(捕校) — 관의 손. 사흘 쫓고 물러난다 (관은 조직이지 원한이 아니다) */
     private void pursue(World world, int day) {
         for (Entity e : world.getEntities()) {
@@ -657,7 +734,7 @@ public final class Incidents implements Listener {
             }
             String owner = e.getPersistentDataContainer().get(keyPursuer, PersistentDataType.STRING);
             Player target = owner == null ? null : plugin.getServer().getPlayer(UUID.fromString(owner));
-            if (target == null || !bounty.containsKey(target.getUniqueId())
+            if (target == null || !wanted(target.getUniqueId(), day)
                     || day - pursuitAt.getOrDefault(target.getUniqueId(), day) > pursuitGiveUpDays) {
                 e.remove();
                 continue;
@@ -674,8 +751,8 @@ public final class Incidents implements Listener {
     }
 
     private void summonPursuit(Player target, String stage) {
-        if (!bounty.containsKey(target.getUniqueId())) {
-            return;
+        if (!target.isOnline() || !wanted(target.getUniqueId(), day(target.getWorld()))) {
+            return;   // 그 사이에 자수했거나 관이 물러났다
         }
         Location at = plugin.populace().placeCenter(pursuitSpawnPlace);
         if (at == null || at.getWorld() == null) {
@@ -843,8 +920,8 @@ public final class Incidents implements Listener {
             return;
         }
         tasks.put(task.key(), task);
-        emit("의뢰_발생", Map.of("rule", rule.id(), "issuer", issuer,
-                "victim", victim == null ? "" : victim, "day", day));
+        emit("의뢰_발생", Map.of("event", "발생", "rule", rule.id(), "outcome", "",
+                "issuer", issuer, "victim", victim == null ? "" : victim, "day", day));
         plugin.getLogger().info("[무명 의뢰] " + rule.id() + " — 발주 "
                 + plugin.populace().nameOf(issuer)
                 + (victim == null ? "" : " (대상 " + plugin.populace().nameOf(victim) + ")"));
@@ -901,7 +978,7 @@ public final class Incidents implements Listener {
                 continue;
             }
             task.closed = true;
-            settle(task, task.rule.onExpire(), null, 0);
+            settle(task, task.rule.onExpire(), "on_expire", null, 0);
         }
     }
 
@@ -928,7 +1005,8 @@ public final class Incidents implements Listener {
         }
 
         // ② 자수 — 관졸에게 웅크린 채 말을 건다 (npc_death.responses.자수)
-        if ("관졸".equals(people.voiceOf(id)) && sneaking && bounty.containsKey(player.getUniqueId())) {
+        if ("관졸".equals(people.voiceOf(id)) && sneaking
+                && wanted(player.getUniqueId(), day(player.getWorld()))) {
             surrender(player, id);
             return true;
         }
@@ -1010,22 +1088,27 @@ public final class Incidents implements Listener {
             plugin.populace().unfollow(task.victim);
             plugin.populace().pin(task.victim, null);
         }
-        settle(task, outcome, player, task.rule.money());
+        // ★ 아이러니 — 살해자가 유족의 의뢰를 받아 제 시신을 '찾아 주었다'.
+        //   혈교는 이것을 자격으로 읽는다 (populace.yml killer_irony.blood_favor).
+        //   그 점수는 봇이 준다 — 다리에 irony=true 로 실려 간다. MVT 는 그 사실만 안다.
+        task.irony = isKiller && !task.rule.irony().isEmpty();
+        settle(task, outcome, outcome == task.rule.failBody() ? "fail_body" : "success",
+                player, task.rule.money());
 
-        if (isKiller && !task.rule.irony().isEmpty()) {
+        if (task.irony) {
             player.sendMessage(ChatColor.DARK_PURPLE + clean(task.rule.irony().get("complete")));
-            int blood = num(task.rule.irony().get("blood_favor"), 0);
-            if (blood != 0) {
-                favor.computeIfAbsent(player.getUniqueId(), k -> new LinkedHashMap<>())
-                        .merge("혈교", blood, Integer::sum);
-                emit("세력_반응", Map.of("faction", "혈교", "input", "무명_유족_기만",
-                        "delta", blood, "killer", player.getName()));
-            }
         }
     }
 
-    /** 결말 — 보수·민심·소문·그 사람의 이후 대사. 실패도 서사다 */
-    private void settle(Task task, Map<String, Object> outcome, Player player, int money) {
+    /**
+     * 결말 — 보수·민심·소문·그 사람의 이후 대사. 실패도 서사다.
+     *
+     * <p><b>민심은 여기서 더하지 않는다.</b> 이 의뢰가 어떻게 끝났는지(rule · outcome)만 다리에 싣고,
+     * 그 결말이 지역에 얼마를 얹는지는 <b>봇이 populace.yml 을 읽어</b> 제 표에 적는다.
+     * 등록부는 하나이고(quests.rules.&lt;id&gt;.&lt;outcome&gt;.region), 장부도 하나여야 한다.
+     */
+    private void settle(Task task, Map<String, Object> outcome, String outcomeKey,
+                        Player player, int money) {
         if (outcome == null || outcome.isEmpty()) {
             return;
         }
@@ -1035,11 +1118,6 @@ public final class Incidents implements Listener {
         String text = clean(outcome.get("text"));
         if (text != null) {
             broadcast(ChatColor.GRAY + fmt(text, subs));
-        }
-        map(outcome.get("region")).forEach((k, v) -> region.merge(k, num(v, 0), Integer::sum));
-        if (!map(outcome.get("region")).isEmpty()) {
-            Map<String, Object> delta = new LinkedHashMap<>(map(outcome.get("region")));
-            emit("지역_델타", delta);
         }
         String newMood = str(outcome.get("mood"));
         if (newMood != null) {
@@ -1056,18 +1134,40 @@ public final class Incidents implements Listener {
             player.sendMessage(ChatColor.GOLD + "보수 " + paid + "문 " + ChatColor.GRAY
                     + "(" + task.rule.rewardKey() + " · " + task.rule.grade() + ")");
         }
-        emit(player == null ? "의뢰_만료" : "의뢰_완료", Map.of("rule", task.rule.id(),
-                "issuer", task.issuer, "victim", task.victim == null ? "" : task.victim,
-                "player", player == null ? "" : player.getName()));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("event", player == null ? "만료" : "완료");
+        data.put("rule", task.rule.id());
+        data.put("outcome", outcomeKey);
+        data.put("issuer", task.issuer);
+        data.put("victim", task.victim == null ? "" : task.victim);
+        if (player != null) {
+            data.put("player_uuid", player.getUniqueId().toString());
+            data.put("player_name", player.getName());
+        }
+        data.put("irony", task.irony);
+        emit(player == null ? "의뢰_만료" : "의뢰_완료", data);
     }
 
-    /** 자수 — 수배는 소멸한다. 민심은 오른다. 그러나 죽은 사람은 돌아오지 않는다 */
+    /**
+     * 자수 — <b>포교는 물러난다.</b> 그러나 빚은 지워지지 않는다.
+     *
+     * <p>등록부가 두 법정을 갈라 놓았다 (그리고 그것이 이 세계에서 가장 정직한 줄 중 하나다):
+     * <ul>
+     *   <li><b>관의 법</b> — npc_death.yml responses.자수: 법명분 -10 · 민심 +2.
+     *       법명분이 내려가면 마을 관졸이 등을 돌리지 않는다 (world_bridge feedback.wanted.gauge_min).</li>
+     *   <li><b>혈채</b> — faction_reaction.yml blood_debt.atonement: <b>"혈채는 삭제되지 않는다.
+     *       성격이 바뀔 뿐이다"</b> — 자수는 현혈채의 <b>감쇠를 개시</b>할 뿐이다.
+     *       그래서 목에 걸린 값(현상금)은 자수 한 번으로 사라지지 않는다.</li>
+     * </ul>
+     *
+     * <p>그 정산은 전부 <b>봇</b>이 한다 (장부는 하나다). MVT 가 하는 일은 사실을 보내고
+     * (자수했다 · 벌금 얼마), 포교를 거두는 것뿐이다.
+     */
     private void surrender(Player player, String guardId) {
-        Integer amount = bounty.remove(player.getUniqueId());
+        int amount = bountyOf(player.getUniqueId());
         pursuitAt.remove(player.getUniqueId());
-        wantedSince.remove(player.getUniqueId());
-        region.merge("민심", 2, Integer::sum);
-        int fine = Math.max(0, amount == null ? 0 : amount / 5);
+        ledgerPursued.remove(player.getUniqueId());
+        int fine = Math.max(0, amount / 5);   // 방이 안 붙었으면 벌금도 없다 (관은 값을 지어내지 않는다)
         plugin.ledger(player.getUniqueId()).earn(-fine);
         for (World w : plugin.getServer().getWorlds()) {
             for (Entity e : w.getEntities()) {
@@ -1078,10 +1178,11 @@ public final class Incidents implements Listener {
         }
         player.sendMessage(ChatColor.GRAY + "[" + plugin.populace().nameOf(guardId) + "] "
                 + ChatColor.WHITE + "…따라오시오. 포두 나리께 고하겠소.");
-        player.sendMessage(ChatColor.GREEN + "자수 — 수배 소멸 · 벌금 " + fine + "문 · 민심 +2. "
-                + ChatColor.GRAY + "(관의 법과 유족의 원한은 다른 법정이다)");
-        emit("자수", Map.of("player", player.getName(), "fine", fine,
-                "authority_mandate", -10));
+        player.sendMessage(ChatColor.GREEN + "자수 — 포교가 물러난다"
+                + (fine > 0 ? " · 벌금 " + fine + "문" : "") + ". " + ChatColor.GRAY
+                + "(관의 법과 유족의 원한은 다른 법정이다. 그리고 빚은 지워지지 않는다)");
+        emit("자수", Map.of("player_uuid", player.getUniqueId().toString(),
+                "player_name", player.getName(), "fine", fine));
     }
 
     // ══════════════ 이벤트 ══════════════
@@ -1145,12 +1246,12 @@ public final class Incidents implements Listener {
         return curfewUntil >= 0;
     }
 
-    /** /혼천 인구 — 사건 현황 */
+    /** /혼천 인구 — 사건 현황. 수치는 전부 <b>봇의 장부</b>에서 읽은 것이다 (MVT 는 세지 않는다) */
     public List<String> status() {
         List<String> out = new ArrayList<>();
         out.add("§6── 사건 ──");
-        out.add("§7치안 §f" + region.get("치안") + " §7· 경제 §f" + region.get("경제")
-                + " §7· 민심 §f" + region.get("민심")
+        out.add("§7치안 §f" + region("치안") + " §7· 경제 §f" + region("경제")
+                + " §7· 민심 §f" + region("민심") + " §8(장부)"
                 + (curfew() ? " §c· 통행금지" : ""));
         for (Corpse c : corpses.values()) {
             out.add("§8· §f" + plugin.populace().nameOf(c.victim) + " §7— " + c.stage
@@ -1162,32 +1263,51 @@ public final class Incidents implements Listener {
                     + plugin.populace().nameOf(t.issuer)
                     + (t.player == null ? " §8(미수주)" : " §a(수주)") + (t.done ? " §a목표달성" : ""));
         }
-        bounty.forEach((id, amount) -> {
-            Player p = plugin.getServer().getPlayer(id);
-            out.add("§c수배 §f" + (p == null ? id : p.getName()) + " §7— " + amount + "문");
-        });
+        for (Player p : plugin.getServer().getOnlinePlayers()) {
+            int amount = bountyOf(p.getUniqueId());
+            if (amount > 0) {
+                out.add("§c수배 §f" + p.getName() + " §7— " + amount + "문 §8(봇 장부 · 재기동을 건너온다)");
+            }
+        }
         return out;
     }
 
     // ══════════════ 다리 — 봇으로 흘려보낸다 ══════════════
 
     /**
+     * 사건 이름 → 다리의 등록 kind (config/world_bridge.yml events).
+     *
+     * <p>여기 <b>있는</b> 것은 장부로 간다. 여기 <b>없는</b> 것은 서버 로그에만 남는다 —
+     * 그리고 그것이 옳다: {@code 무명_사망}·{@code 시신_발견}·{@code 시신_은닉}·{@code 소문_발화} 는
+     * 이미 {@code npc_death} 한 줄이 다 싣고 갔고(목격·시신·밤·사인), {@code 수배}·{@code 세력_반응}·
+     * {@code 지역_델타} 는 <b>파생값</b>이다 — 봇이 제 등록부로 계산한다. 파생값을 다리에 실으면
+     * 세계가 그것을 두 번 믿는다.
+     */
+    private static final Map<String, String> KIND = Map.of(
+            "자수", "surrender",
+            "의뢰_발생", "populace_quest",
+            "의뢰_완료", "populace_quest",
+            "의뢰_만료", "populace_quest");
+
+    /**
      * 세계의 장부로 흘려보낸다.
      *
      * <p><b>다리는 하나다.</b> 무명층은 자기 큐를 따로 파지 않는다 — {@link WorldBridge} 가 이 저장소의
      * 유일한 통로다 (config/world_bridge.yml, 등록되지 않은 kind 는 그쪽이 버린다).
-     * 죽음은 등록 kind {@code npc_death} 로 나간다: MVT 는 <b>사실</b>만 보내고
-     * (누가·어디서·목격 몇·밤인가·시신은·사인은), 소문 강도·정확도·세력 점수·지역 델타 같은
-     * <b>파생값은 봇이 npc_death.yml 로 계산한다.</b> 파생값을 둘이 계산하면 세계가 둘이 된다.
-     *
-     * <p>여기 남은 것들(수배·자수·의뢰)은 아직 world_bridge.yml events 에 등록되지 않았다 →
-     * 로그로만 남긴다 (다리 담당자가 kind 를 등록하면 그때 emit 으로 승격한다).
+     * MVT 는 <b>사실</b>만 보낸다 (누가·어디서·목격 몇·밤인가·시신은·사인은 · 무엇을 했는가).
+     * 소문 강도·정확도·세력 점수·지역 델타·현상금 같은 <b>파생값은 봇이 등록부로 계산한다.</b>
+     * 파생값을 둘이 계산하면 세계가 둘이 된다.
      */
     private void emit(String type, Map<String, ?> data) {
         if (!bridgeOn) {
             return;
         }
-        plugin.getLogger().info("[사건] " + type + " " + data);
+        String kind = KIND.get(type);
+        if (kind == null) {
+            plugin.getLogger().info("[사건] " + type + " " + data);   // 장부의 일이 아니다 (파생·중복)
+            return;
+        }
+        WorldBridge.emit(kind, new LinkedHashMap<>(data));
     }
 
     /** 죽음만은 등록 kind 로 장부에 실린다 — 파생은 봇이 한다 (npc_death.yml 이 그쪽에도 있다) */

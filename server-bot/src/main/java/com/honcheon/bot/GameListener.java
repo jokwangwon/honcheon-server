@@ -3752,6 +3752,25 @@ public final class GameListener extends ListenerAdapter {
 
         factionAwareness(day);
 
+        // ★ 지역 자연 회복 — region_state.yml recovery (10일마다 기준값 50 을 향해 1).
+        //   이것이 없어서 **마을을 구해도 치안이 제자리로 안 돌아왔다.** 눈금은 한 번 내려가면 영원히 내려가 있었다.
+        //   다만 **민심 부채는 제외된다** — 무명의 죽음이 깎은 민심까지 되돌리면,
+        //   사람을 죽여도 열흘만 기다리면 없던 일이 된다.
+        int lastRecovery = Integer.parseInt(db.getMeta("지역:회복일").orElse("0"));
+        if (day - lastRecovery >= rules.regions.recoveryEveryDays()) {
+            int debt = Integer.parseInt(db.getMeta("지역:민심부채").orElse("0"));
+            Map<String, Integer> step = rules.regions.recoveryDeltas(db.region(), Map.of("민심", debt));
+            if (!step.isEmpty()) {
+                Map<String, Integer> now = db.nudgeRegion(step);
+                report.append("🏞️ **지역이 조금 되돌아왔다** — 치안 ").append(now.get("치안"))
+                        .append(" · 경제 ").append(now.get("경제"))
+                        .append(" · 민심 ").append(now.get("민심"))
+                        .append(debt > 0 ? " *(민심 부채 " + debt + " — 이만큼은 돌아오지 않는다)*" : "")
+                        .append('\n');
+            }
+            db.setMeta("지역:회복일", String.valueOf(day));
+        }
+
         // 오늘 이 세계에 새로 닿은 이야기들
         int arrived = db.arrivalCountOn(day);
         if (arrived > 0) {
@@ -4179,6 +4198,211 @@ public final class GameListener extends ListenerAdapter {
             return "";
         }
         return roll == 12 ? " ⚡쌍륙" : roll == 2 ? " 💥쌍일" : "";
+    }
+
+    // ═══════════════ 마크 접합 — 몸에서 쌓인 것이 장부로 온다 ═══════════════
+    //
+    // 【정본은 여기다】 시트를 적는 손은 **하나**여야 한다. 마크(MVT)는 규칙의 계산기이고
+    // (Growth 가 curriculum → 능력치·내공·숙련을 계산한다), 그 **결과인 증분**만 다리를 건너온다.
+    // 봇은 그것을 시트에 더하고, **다시 경지 캡으로 조이고**, promoteIfDue 를 굴린다.
+    // 확정된 시트는 world_state.json 의 sheet 블록으로 되내려간다 — 마크는 그것으로 제 거울을 덮어쓴다.
+    //
+    // 내려가는 것이 **절대값**이므로 두 원장은 갈라질 수 없다. 마크가 낙관적으로 먼저 더해 둬도
+    // 다음 스냅숏이 진실로 되돌린다. 이 방향성이 이 패스의 전부다.
+    //
+    // 【단위】 두 몸은 같은 것을 다른 단위로 적는다. 여기가 그 환산의 유일한 자리다:
+    //   능력치   봇 = 정수(판정치) · 마크 = 실수(화후). → `능력치_화후`(실수)를 정본으로 두고 정수부를 능력치에 싣는다
+    //   무공     봇 = 레벨 + 잔여일치(기술_수련) · 마크 = 누적일치. → 잔여에 더하고 환산표를 걷는다
+    //   내공     봇 = 축기 누적일(축기_원장) · 마크 = 내공 '점'. → naegongOf 의 역함수로 되돌린다
+    //   수련     봇 = 화후_원장(총 일치) — 범인→삼류의 관문. 마크는 train_days 로 보낸다
+
+    /** 축기 실수 → 누적일 (naegongOf 의 역함수 — 환산은 한 자리에서만 산다) */
+    static double naegongDays(double points) {
+        double days = 0;
+        int level = 0;
+        while (level < (int) points) {
+            days += Math.max(1, level) * YEAR_DAYS;
+            level++;
+        }
+        return days + (points - level) * Math.max(1, level) * YEAR_DAYS;
+    }
+
+    /**
+     * <b>마크에서 쌓인 것을 시트에 더한다.</b> 반환: 더한 뒤의 경지 (승급했으면 새 경지).
+     *
+     * <p>캡은 <b>여기서 다시 건다</b> — 마크가 알고 있던 경지가 낡았을 수 있고, 장부의 캡을 지키는 것은
+     * 장부의 몫이다 ({@code player_creation.yml attribute_cap_by_realm}).
+     *
+     * <p>배우지 않은 무공은 자라지 않는다 — {@code 기술} 에 없는 키는 무시한다. 마크도 같은 게이트를
+     * 갖고 있지만(주무공 null → 구간이 샌다) 장부가 스스로를 지키지 않으면 그것은 장부가 아니다.
+     */
+    @SuppressWarnings("unchecked")
+    String applyCultivation(Map<String, Object> sheet, String realm, Map<String, Object> data, int today) {
+        // ═══ 하루는 하루다 — **몸이 둘이어도 하루치 이상은 못 받는다** ═══
+        //
+        // `train_days` 가 실린 줄은 마크의 **하루 정산**이다 (수련 배분이 갈린 것).
+        // 봇에도 같은 것이 있다: `/혼천 수련` 은 `수련일 == today` 면 거절한다
+        // ("오늘 몫의 수련은 끝났다 — 몸은 하루치 이상을 받아들이지 못한다").
+        //
+        // 그 두 문이 **각자의 빗장**을 걸고 있으면, 디스코드에서 한 번 수련하고 마크에 접속해
+        // 또 하루치를 받는다 — 같은 세계일에 **이틀을 산다**. 그래서 빗장을 하나로 합친다:
+        // 마크의 정산도 `수련일` 을 보고, 쓰면 `수련일` 을 찍는다. **하루는 한 몸에서만 쓴다.**
+        //
+        // (실전 화후·마크는 이 문 밖이다 — 사냥은 수련이 아니고, 그쪽 상한은 따로 돈다.)
+        boolean settling = num(data.get("train_days")) > 0;
+        boolean daySpent = today == ((Number) sheet.getOrDefault("수련일", -1)).intValue();
+        boolean train = settling && !daySpent;
+        if (settling && daySpent) {
+            System.out.println("다리 — 오늘 몫의 수련은 이미 끝났다 (봇에서 썼다): "
+                    + data.get("player_name"));
+        }
+
+        // ─ 능력치 — 실수 원장(능력치_화후)이 정본, 정수부가 판정치 ─
+        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        Map<String, Object> deltaAttr = train ? asMap(data.get("attr_days")) : Map.of();
+        if (attrs != null && !deltaAttr.isEmpty()) {
+            Map<String, Object> hwahu = new LinkedHashMap<>(
+                    (Map<String, Object>) sheet.getOrDefault("능력치_화후", Map.of()));
+            int cap = attrCap(realm);
+            Map<String, Object> next = new LinkedHashMap<>(attrs);
+            deltaAttr.forEach((attr, raw) -> {
+                if (!attrs.containsKey(attr)) {
+                    return;   // 등록되지 않은 능력치 축 — judgment.yml attributes 가 정본이다
+                }
+                // 첫 접합 — 실수 원장이 없으면 지금까지의 판정치가 곧 화후의 정수부다
+                double cur = ((Number) hwahu.getOrDefault(attr,
+                        ((Number) attrs.get(attr)).doubleValue())).doubleValue();
+                double grown = Math.min(cap, cur + Math.max(0, num(raw)));
+                hwahu.put(attr, grown);
+                next.put(attr, (int) grown);
+            });
+            sheet.put("능력치_화후", hwahu);
+            sheet.put("능력치", next);
+        }
+
+        // ─ 무공 — 잔여 일치에 더하고 환산표를 걷는다 (배우지 않은 무공은 자라지 않는다) ─
+        //   하루 정산(train_days)이 이미 쓰인 날이면 초식 수련분도 안 들어간다. 실전 화후는 별개 줄로 온다.
+        Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
+        Map<String, Object> deltaSkill = settling && !train ? Map.of() : asMap(data.get("skill_days"));
+        if (skills != null && !deltaSkill.isEmpty()) {
+            Map<String, Object> prog = new LinkedHashMap<>(
+                    (Map<String, Object>) sheet.getOrDefault("기술_수련", Map.of()));
+            Map<String, Object> next = new LinkedHashMap<>(skills);
+            deltaSkill.forEach((art, raw) -> {
+                if (!skills.containsKey(art)) {
+                    return;   // 익히지 않은 무공 (무공 백지 = 기연 자격 — 손이 없는 것은 자라지 않는다)
+                }
+                double days = ((Number) prog.getOrDefault(art, 0)).doubleValue() + Math.max(0, num(raw));
+                int level = ((Number) skills.getOrDefault(art, 0)).intValue();
+                int cost;
+                while ((cost = rules.progression.skillLevelUpDays(level)) > 0 && days >= cost) {
+                    days -= cost;
+                    level++;
+                }
+                prog.put(art, days);
+                next.put(art, level);
+            });
+            sheet.put("기술_수련", prog);
+            sheet.put("기술", next);
+        }
+
+        // ─ 내공 — 점(마크) → 축기 누적일(봇). 심법·개화 게이트는 마크가 이미 걸렀다 ─
+        double naegong = train ? num(data.get("naegong")) : 0;
+        if (naegong > 0 && sheet.get("심법") != null) {
+            double cur = ((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue();
+            sheet.put("축기_원장", naegongDays(naegongOf(cur) + naegong));
+        }
+
+        // ─ 수련 총량 — 범인 → 삼류의 관문 ("기초 단련 3개월" = 90일치). 그리고 오늘의 빗장을 지른다 ─
+        if (train) {
+            sheet.put("화후_원장", ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue()
+                    + num(data.get("train_days")));
+            sheet.put("수련일", today);   // ★ 오늘 몫은 마크가 썼다 — 봇의 /혼천 수련 도 이 날은 거절한다
+        }
+
+        // ─ 마크 — 승급 요건 '실전 마크 N' 을 채우는 값 ─
+        int fought = (int) num(data.get("marks_실전"));
+        int deadly = (int) num(data.get("marks_사선"));
+        if (fought + deadly > 0) {
+            sheet.put("실전_마크",
+                    ((Number) sheet.getOrDefault("실전_마크", 0)).intValue() + fought + deadly);
+        }
+        if (deadly > 0) {
+            sheet.put("사선_마크",
+                    ((Number) sheet.getOrDefault("사선_마크", 0)).intValue() + deadly);
+        }
+
+        return promoteIfDue(sheet, realm);   // 승급은 강호가 인정하는 것이다
+    }
+
+    /**
+     * <b>마크로 내려보낼 시트 한 장.</b> 여기 담기지 않는 값은 마크에 존재하지 않는다 —
+     * 그래서 {@code SkillEngine.State.realm} 이 {@code "이류"} 로 박혀 있었고 능력치는 전부 0.0 이었다.
+     *
+     * <p>전부 <b>절대값</b>이다 (증분이 아니다). 마크는 이것으로 제 거울을 통째로 덮어쓴다.
+     */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> mvtSheet(Map<String, Object> character) {
+        Map<String, Object> sheet = (Map<String, Object>) character.get("sheet");
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("realm", String.valueOf(character.get("realm")));
+        out.put("money", ((Number) character.getOrDefault("wallet", 0)).intValue());
+
+        // 능력치 — 실수 원장이 있으면 그것이 정본, 없으면 판정치가 곧 화후다 (아직 마크에서 안 자랐다)
+        Map<String, Object> hwahu = (Map<String, Object>) sheet.get("능력치_화후");
+        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        Map<String, Object> outAttrs = new LinkedHashMap<>();
+        if (attrs != null) {
+            attrs.forEach((k, v) -> outAttrs.put(k, hwahu != null && hwahu.get(k) instanceof Number n
+                    ? n.doubleValue() : ((Number) v).doubleValue()));
+        }
+        out.put("attrs", outAttrs);
+
+        out.put("simbeop", sheet.get("심법"));   // null = 개화 전 (마크의 내공 과목 게이트)
+        double naegong = "개화".equals(sheet.get("단전"))
+                ? naegongOf(((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue()) : 0.0;
+        out.put("naegong", naegong);
+
+        // 주무공 — 승급 요건('주력 무공 숙련')이 쌓이는 무공. 없으면 null (아직 아무것도 안 배웠다)
+        Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
+        String primary = skills == null ? null
+                : MARTIAL_SKILLS.stream().filter(skills::containsKey).findFirst().orElse(null);
+        out.put("primary_art", primary);
+
+        // 누적 일치 — 마크의 원장은 '일치'가 정본이고 레벨은 환산표로 파생된다.
+        // 봇은 (레벨, 잔여)로 쪼개 갖고 있으므로 여기서 되합친다: 지나온 레벨들의 비용 + 잔여.
+        Map<String, Object> prog = (Map<String, Object>) sheet.getOrDefault("기술_수련", Map.of());
+        Map<String, Object> outSkills = new LinkedHashMap<>();
+        if (skills != null) {
+            skills.forEach((art, lv) -> {
+                double days = ((Number) prog.getOrDefault(art, 0)).doubleValue();
+                for (int i = 0; i < ((Number) lv).intValue(); i++) {
+                    days += rules.progression.skillLevelUpDays(i);
+                }
+                outSkills.put(art, days);
+            });
+        }
+        out.put("skill_days", outSkills);
+        out.put("marks_실전", ((Number) sheet.getOrDefault("실전_마크", 0)).intValue());
+        out.put("marks_사선", ((Number) sheet.getOrDefault("사선_마크", 0)).intValue());
+        return out;
+    }
+
+    /** 경지별 능력치 천장 — player_creation.yml attribute_cap_by_realm (여기서 발명하지 않는다) */
+    @SuppressWarnings("unchecked")
+    private int attrCap(String realm) {
+        Object caps = rules.playerCreation.get("attribute_cap_by_realm");
+        Object v = caps instanceof Map<?, ?> m ? ((Map<String, Object>) m).get(realm) : null;
+        return v instanceof Number n ? n.intValue() : 3;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object raw) {
+        return raw instanceof Map<?, ?> m ? new LinkedHashMap<>((Map<String, Object>) m) : Map.of();
+    }
+
+    private static double num(Object raw) {
+        return raw instanceof Number n ? n.doubleValue() : 0.0;
     }
 
     // ─── 상태 객체 ───

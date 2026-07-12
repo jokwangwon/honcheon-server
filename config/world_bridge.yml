@@ -187,6 +187,90 @@ events:
       identity: pending            # mvt_link_code 에 '대기'로 앉힌다. 세계 상태는 아무것도 바뀌지 않는다
       rumor: none                  # ★ 접합은 세계의 사건이 아니다 — 소문도, 지역도, 세력도 움직이지 않는다
 
+  cultivation_logged:
+    desc: "★ 몸에서 쌓인 것이 장부로 올라간다 — 수련 배분의 하루치 · 실전 화후 · 실전/사선 마크"
+    # ═══ 정본(正本)의 방향 — 이 게임에서 가장 중요한 한 칸 ═══
+    #
+    # 【누가 정본인가】 **시트의 정본은 봇이다.** 경지·화후·승급은 *강호가 인정하는 것*이고,
+    #   강호의 장부는 SQLite(characters.sheet_json)에 있다. `promoteIfDue` 가 범인→삼류→이류→일류를 굴린다.
+    #   **마크는 몸이다** — 수련 배분을 고르고, 손으로 익히고, 어디에 서 있는가를 안다.
+    #
+    # 【그런데 규칙은 어디에 있는가】 **규칙(Growth)은 마크에 한 벌만 있다.** 봇이 curriculum→능력치
+    #   환산을 다시 구현하면 *규칙의 정본이 둘*이 되고, 마크가 시트를 쓰면 *장부의 정본이 둘*이 된다.
+    #   이 저장소가 반복해서 데인 병이 바로 그것이다 ("정본이 둘이고 코드가 이기고 있었다").
+    #   그래서 이렇게 잘라 둔다:
+    #
+    #       규칙은 마크에 하나 (Growth.pour 가 계산한다 — 캡·심법 게이트·배증 사다리)
+    #       장부는 봇에 하나  (Bridge.cultivationLogged 가 시트에 더한다 — 그리고 봇이 다시 캡으로 조인다)
+    #
+    #   마크가 보내는 것은 **증분**이고, 봇이 내려보내는 것은 **절대값**이다 (feedback.world_state.sheet).
+    #   덮어쓰기이므로 **이중 계상이 원리적으로 불가능**하다 — 마크가 낙관적으로 먼저 더해 둬도
+    #   다음 스냅숏이 진실로 되돌린다. **두 원장은 갈라질 수 없다.**
+    #
+    # 【시계】 ★ days 는 **세계일**이다 (봇의 자정 스케줄러: 현실 하루 = 세계 1일).
+    #   마크의 하루는 현실 20분이다 — 그 시계로 화후를 재면 같은 config 숫자가 **72배** 다른 뜻이 된다
+    #   (능력치 +1 = 360일 → 마크에선 닷새 앉아 있으면 오른다). 그래서 마크는 제 낮밤을 **쓰지 않고**
+    #   스냅숏의 world_day 를 읽는다. 봇이 꺼져 있으면(world_day = 0) **장부는 움직이지 않는다.**
+    #   두 시계의 대조는 tools/clock_audit.py 가 지킨다.
+    payload:
+      player_uuid: "쌓은 자 (접합된 몸만 — 강호에 이름이 없으면 쌓을 장부가 없다)"
+      player_name: "그때의 이름"
+      realm: "마크가 알고 있던 경지 (대조용 — 봇의 값이 다르면 봇이 이긴다)"
+      attr_days: "능력치 → 증분 (실수). Growth.pour 가 경지 캡까지만 부은 값"
+      skill_days: "무공/과목 → 일치 증분 (실수). 초식 수련 + 실전 화후"
+      naegong: "내공 증분 (실수 — 내공 '점'. 봇은 축기_원장(일치)의 역환산으로 되돌려 적는다)"
+      train_days: "그날 몸에 실제로 들어간 일치 (버려진 몫 제외) → 봇의 화후_원장.
+        ★ 범인 → 삼류의 관문이다 ('기초 단련 3개월' = 90일치). 과목이 무엇이든 몸은 단련된다"
+      marks_실전: "실전 마크 증분 (정수) — ★ 봇의 승급 요건 '실전 마크 N' 을 채우는 값"
+      marks_사선: "사선 마크 증분 (정수)"
+    effects:
+      sheet: 증분_적용            # characters.sheet_json 에 더한다 (능력치·기술·축기_원장·마크)
+      cap: player_creation.attribute_cap_by_realm   # ★ 봇이 다시 조인다 — 마크의 경지가 낡았을 수 있다
+      promote: cultivation.cultivation_stages       # 더한 뒤 promoteIfDue (승급은 강호가 인정한다)
+      rumor: none                # 수련은 세계의 사건이 아니다 — 소문도 지역도 세력도 안 움직인다
+      unlinked: 무시             # 접합되지 않은 몸의 화후는 적을 곳이 없다 (마크가 애초에 안 보낸다)
+
+  surrender:
+    desc: "자수(自首) — 관졸에게 웅크린 채 말을 걸었다. ★ 관의 법과 혈채는 **다른 법정**이다"
+    payload:
+      player_uuid: "자수한 몸"
+      player_name: "그때의 이름"
+      fine: "벌금 (MVT 가 그 자리에서 걷었다 — 문(文). 방이 안 붙었으면 0)"
+    effects:
+      # 관의 법 — 수치의 원천은 등록부다 (여기서 발명하지 않는다. 아래는 그 표를 옮겨 적은 배선값):
+      #   mandate → faction_politics.yml authority_mandate.drains.자수 (-10)
+      #             ★ 코드는 Politics.mandateDrain("자수") 로 **등록부에서 직접** 읽는다
+      #   region  → npc_death.yml responses.자수.effect.민심 (+2)
+      #             (npc_death.effects.region 이 민심 -1 을 여기 적어 둔 것과 같은 관행)
+      mandate_drain: 자수          # faction_politics.yml authority_mandate.drains 의 키
+      region:
+        민심: 2
+      # ★ 혈채는 **삭제되지 않는다** (faction_reaction.yml blood_debt.atonement.principle:
+      #   "혈채는 삭제되지 않는다. 성격이 바뀔 뿐이다"). 자수는 현혈채의 **감쇠를 개시**할 뿐이다.
+      #   그래서 목에 걸린 값(feedback.bounty)은 자수 한 번으로 내려가지 않는다 —
+      #   내려가는 것은 법명분(feedback.wanted)이고, 그것이 관졸의 눈이다.
+      blood_debt: 감쇠_개시                                            # blood_debt.atonement.inputs.자수
+      rumor: none                                                     # 자수는 소문이 아니다 (관의 장부다)
+
+  populace_quest:
+    desc: "무명(無名)의 의뢰 — 게시판에 붙지 않는다. 사람이 소매를 붙잡는다 (populace.yml quests.rules)"
+    payload:
+      event: "발생 | 완료 | 만료"
+      rule: "populace.yml quests.rules 의 키 (아이_실종 · 시신_수습 · 산길_대행 · 야간_순라_보조)"
+      outcome: "success | fail_body | on_expire (발생이면 없음) — 봇은 이 칸으로 등록부를 집는다"
+      issuer: "발주자 (populace.yml people 의 키 — 관계에서 자란다)"
+      victim: "대상 무명 (없을 수 있다 — 소문·통행금지에서 자란 의뢰)"
+      player_uuid: "수주자 (완료일 때)"
+      player_name: ""
+      irony: "★ 살해자가 유족의 의뢰를 완수했는가 — 혈교는 이것을 **자격**으로 읽는다"
+    effects:
+      # 지역 델타는 **봇이 populace.yml 을 읽어** 적는다 (MVT 는 결말의 이름만 보낸다):
+      #   quests.rules.<rule>.<outcome>.region  — 민심 ±1 · 치안 ±1 · 경제 -1
+      region: "npcs/populace.yml quests.rules.<rule>.<outcome>.region"
+      favor: "npcs/populace.yml quests.rules.<rule>.killer_irony.blood_favor (irony=true 일 때 혈교)"
+      rumor: none                  # 무명의 의뢰는 강호의 이야깃거리가 아니다 (마을의 일이다)
+      ledger: 무명의뢰              # events.type — 자국은 남는다
+
   sparring:
     desc: "비무 — 죽이지 않는 싸움. 이겨도 죽지 않고, 져도 죽지 않는다"
     payload:
@@ -220,6 +304,27 @@ feedback:
     bounty: "★ 현상금 — mc_uuid → 문(文). 혈채가 blood_debt.engine.bounty_min 을 넘으면 관이 방을 붙인다
       (금액은 economy.yml 의뢰_보수.고수_현상금 — 여기서 발명하지 않는다).
       ★ 혈채 수치 자체는 절대 내려보내지 않는다 (blood_debt.visibility: 내부) — 내려가는 것은 세계의 반응뿐이다"
+
+    # ═══ 시트 — 마크의 몸에 실릴 캐릭터 (2026-07 접합 패스) ═══
+    #
+    # 이것이 없어서 **마크에는 캐릭터가 없었다**: SkillEngine.State.realm 은 "이류"로 **박혀 있었고**
+    # (주석: "MVT 는 캐릭터 시트가 없다") 능력치는 전부 0.0 이었다. 그 귀결이 이것이다 —
+    # 갓 접속한 몸은 Growth.attackBonus = +0 인데 같은 경지 NPC 는 realmAttr 로 표준치를 받는다.
+    # **플레이어가 제 급의 산적보다 구조적으로 약했다.** 다리는 서 있었는데 시트만 안 실려 있었다.
+    #
+    # 내려가는 값은 전부 **절대값**이다 (증분이 아니다). 마크는 이것으로 제 거울을 덮어쓴다 —
+    # 그래서 두 원장은 갈라질 수 없다. 없는 칸은 "봇이 모르는 값"이고 마크는 제 것을 지킨다.
+    sheet: "mc_uuid → 시트 한 장. 접합된 산 자만 여기 있다"
+    sheet_fields:
+      realm: "경지 — ★ SkillEngine.State.realm 하드코딩 \"이류\" 가 서 있던 자리 (characters.realm)"
+      attrs: "능력치 → 실수 (근력·민첩·체력·내공·감각·화술·지혜 — judgment.yml attributes)"
+      naegong: "내공 실수치 — 내력 풀 = round(내공 × 3) (internal_energy.yml)"
+      simbeop: "익힌 심법 (simbeop.yml id). null = 개화 전 — ★ null 도 진실이다 (내공 과목의 게이트)"
+      primary_art: "주력 무공 — 초식 수련·승급 요건('주력 무공 숙련')이 쌓이는 곳"
+      skill_days: "무공/과목 → 누적 일치 (실수). 레벨은 환산표로 파생 (PlayerLedger.levelOf)"
+      marks_실전: "실전 마크 (승급 요건)"
+      marks_사선: "사선 마크"
+      money: "소지금 (문) — characters.wallet"
 
   # 소문 태그 → 행인 반응 (populace.yml reactions 의 키). 이것이 "도적 소문이 돌면 무명이 산길을 피한다"의 배선
   reaction_map:

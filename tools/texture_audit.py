@@ -122,6 +122,98 @@ SEAM_FACE_MIN_OPAQUE = 0.5
 SEAM_FACES = {"iron_bars", "cherry_leaves", "ladder"}
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 틴트 인지(認知) — 【2026-07 신설】 **재는 자가 파일을 재면, 파일은 맞고 세계는 틀린다.**
+#
+# 【이 축이 왜 생겼나 — 형광 초록은 왜 아무 축도 울리지 않았나】
+#   검수는 열한 축을 재면서도 잔디가 형광인 것을 **한 번도 잡지 못했다.** 잡을 수가 없었다:
+#   바닐라 grass_block_top.png 은 **회색조**다. 초록은 파일에 없다 — 엔진이 **곱한다**.
+#     화면색 = 텍스처 × 틴트 ÷ 255
+#   즉 파일만 재는 눈에게 잔디는 영원히 무채색이다. 검수는 통과를 외치고 세계는 형광이었다.
+#   ★ 재지 않는 축은 조용히 무너진다 — 그런데 이 축은 **재는 척하면서** 무너져 있었다. 더 나쁘다.
+#
+# 【그래서 잰다】 블록을 읽을 때 **엔진이 곱할 것을 우리도 곱한다.** 그 다음에 모든 축을 들이댄다.
+#   ⇒ 물의 PNG 는 금빛이지만(역틴트) 검수가 보는 것은 **비취빛**이다. 파일이 아니라 **눈에 닿는 색**.
+#
+# 【틴트의 출처 — jar 로 확인한 세 갈래】
+#   ① 컬러맵 (팩이 쥔다)  : grass.png / foliage.png  → 잔디·풀·고사리·덩굴·참나무잎·수수깡
+#      ★ 우리가 **직접 구운 컬러맵을 읽어서** 곱한다 — 팩이 실제로 배포하는 그 값이다 (닫힌 고리).
+#   ② 코드 상수 (못 쥔다) : 가문비 0x619961 · 자작 0x80A755 (FoliageColor)
+#   ③ 바이옴 데이터(못 쥔다): 물 water_color 0x3F76E4
+#   ②③ 은 **역틴트**로 되돌린 자리다 — 그 되돌림이 맞았는지 여기서 검산된다.
+# ═══════════════════════════════════════════════════════════════════════════
+# 기준 바이옴 — **어디서 재는지 못 박지 않으면 숫자가 뜻을 잃는다** (컬러맵은 바이옴마다 다른 값을 준다).
+#   청하현이 선 자리 = 평원 (기온 0.8 · 강수 0.4).
+#   검산: 바닐라 grass.png 를 이 색인으로 읽으면 #91BD59 가 나온다 — 우리가 아는 평원의 그 초록이다.
+REF_BIOME = (0.8, 0.4)
+WATER_BIOME_TINT = (63, 118, 228)      # 0x3F76E4 — 바닐라 바이옴 water_color (커스텀 바이옴 0개 확인)
+TINT_CONST = {                          # 코드에 박힌 상수 — 팩이 못 바꾼다 ⇒ 역틴트의 대상
+    "spruce_leaves": (97, 153, 97),     # FoliageColor 0x619961
+    "birch_leaves": (128, 167, 85),     # FoliageColor 0x80A755
+    "lily_pad": (32, 128, 48),          # 0x208030 — ★ R 의 천장이 32 다 (저채도가 **불가능**한 자리)
+    "water_still": WATER_BIOME_TINT,
+    "water_flow": WATER_BIOME_TINT,
+}
+TINT_GRASS = ["grass_block_top", "grass_block_side_overlay", "short_grass", "fern",
+              "tall_grass_bottom", "tall_grass_top", "large_fern_bottom", "large_fern_top",
+              "sugar_cane"]
+TINT_FOLIAGE = ["oak_leaves", "vine"]
+# 프레임 시트 — 애니메이션. **첫 프레임만 잰다** (16x512 를 통째로 재면 32장을 한 장으로 뭉갠다).
+ANIMATED = {"water_still": 32, "water_flow": 32, "lava_still": 20, "lava_flow": 16,
+            "campfire_fire": 8, "soul_campfire_fire": 8,
+            "campfire_log_lit": 4, "soul_campfire_log_lit": 4,
+            "kelp": 20, "kelp_plant": 20, "seagrass": 18,
+            "tall_seagrass_top": 19, "tall_seagrass_bottom": 19}
+_CMAP_CACHE = {}
+
+
+def colormap_tint(kind):
+    """우리가 **실제로 구운** 컬러맵에서 기준 바이옴의 틴트를 뽑는다 (닫힌 고리 — 팩이 곧 진실)."""
+    if kind not in _CMAP_CACHE:
+        f = PACK / "minecraft" / "textures" / "colormap" / f"{kind}.png"
+        if not f.exists():
+            _CMAP_CACHE[kind] = None                    # 컬러맵이 없으면 바닐라가 산다 = 형광
+        else:
+            t, d = REF_BIOME
+            w, h, rows = read_png(f)
+            x = int((1.0 - t) * 255)
+            y = int((1.0 - d * t) * 255)
+            _CMAP_CACHE[kind] = tuple(px(rows, x, y)[:3])   # px() 는 바이트열을 준다 — 튜플로 (보고용)
+    return _CMAP_CACHE[kind]
+
+
+def tint_of(name):
+    """이 텍스처에 엔진이 곱할 틴트 (없으면 None)."""
+    if name in TINT_CONST:
+        return TINT_CONST[name]
+    if name in TINT_GRASS:
+        return colormap_tint("grass")
+    if name in TINT_FOLIAGE:
+        return colormap_tint("foliage")
+    return None
+
+
+def read_block(path, name):
+    """블록을 **눈에 닿는 모습**으로 읽는다 — ① 프레임 시트는 첫 장만 ② 틴트를 곱한다."""
+    w, h, rows = read_png(path)
+    if name in ANIMATED:
+        rows = rows[:w]                       # 첫 프레임 (프레임은 세로로 쌓인다)
+        h = w
+    tint = tint_of(name)
+    if tint:
+        # 행은 **평면 바이트열**이다 (px() 가 4바이트씩 끊어 읽는다) — 그 표현을 지켜서 곱한다.
+        # 알파(4번째)는 곱하지 않는다: 틴트는 색만 물들인다 (물의 알파 180 이 여기서 살아남는다).
+        out = []
+        for row in rows:
+            b = bytearray(row)
+            for i in range(0, len(b), 4):
+                for c in range(3):
+                    b[i + c] = min(255, b[i + c] * tint[c] // 255)
+            out.append(bytes(b))
+        rows = out
+    return w, h, rows
+
+
 def read_png(path):
     d = path.read_bytes()
     pos, w, h, idat = 8, 0, 0, b""
@@ -594,8 +686,9 @@ LUMA_BANDS = [
     ("매화_가지", 95, 165, ["cherry_log", "cherry_log_top", "cherry_shelf"],
      "먹빛 가지 — **꽃의 짝**이다. 어두워야 분홍이 산다 (대비가 곧 수묵)"),
     ("등불·불", 105, 235, ["lantern", "soul_lantern", "candle", "candle_lit", "torch",
-                          "campfire_log_lit"],
-     "불은 **빛나는 것**이다. 어두운 등롱은 등롱이 아니다"),
+                          "campfire_log_lit", "campfire_fire", "lava_still", "lava_flow",
+                          "soul_campfire_fire", "soul_campfire_log_lit"],
+     "불은 **빛나는 것**이다. 어두운 등롱은 등롱이 아니다 (용암·불꽃도 같은 자리 — 불은 의미다)"),
     ("천_깃발·차양", 85, 200,
      ["red_wool", "orange_wool", "yellow_wool", "green_wool", "lime_wool", "cyan_wool",
       "light_blue_wool", "brown_wool"],
@@ -624,7 +717,7 @@ LUMA_BANDS = [
      "사람이 깎은 돌 — 계단·단·담장. 무채색이되 **밝은 회색**이다 (돌은 먹이 아니다)"),
     ("땅", 100, 170,
      ["dirt", "coarse_dirt", "rooted_dirt", "dirt_path_*", "farmland*", "gravel", "sand",
-      "red_sand", "packed_mud", "mud"],
+      "red_sand", "packed_mud", "mud", "grass_block_side"],   # 잔디 옆면 '바탕'은 흙이다 (틴트 없음)
      "밟혀 **마른** 흙은 밝다. 젖은 먹빛 흙이 마을을 그을음으로 만들었다"),
     ("삭은땅_부엽토·이끼", 72, 130, ["podzol_*", "mycelium_*", "moss_block"],
      "부엽토는 **어두운 것이 정체다** (삭은 잎이 덮은 땅) — 밝히면 그것도 거짓말. 다만 60은 과했다"),
@@ -632,12 +725,59 @@ LUMA_BANDS = [
      ["wheat_*", "carrots_*", "potatoes_*", "beetroots_*", "sweet_berry_*", "*mushroom",
       "poppy", "dandelion", "cornflower", "azure_bluet", "oxeye_daisy", "white_tulip"],
      "작물과 꽃 — 폭이 넓다 (익은 밀은 밝고 어린 싹은 어둡다)"),
+    # ── 틴트층 (2026-07) — **곱한 뒤의 색**으로 잰다 (파일이 아니라 눈에 닿는 색) ──
+    ("풀_잔디·포기", 85, 150,
+     ["grass_block_top", "grass_block_side_overlay", "short_grass", "fern",
+      "tall_grass_*", "large_fern_*", "sugar_cane"],
+     "★ 세계를 덮는 **가장 큰 면**이다 (시야의 60~80%). 형광이어도 안 되고 그을려도 안 된다 — "
+     "밝기는 살리고 **채도만 죽인다** (⑫-d 가 그 채도를 잰다)"),
+    ("잎_수관", 78, 145, ["oak_leaves", "spruce_leaves", "birch_leaves", "vine"],
+     "수관은 **그늘을 문다** — 풀보다 짙은 것이 정체다. 다만 상록수의 밝기는 우리가 아니라 "
+     "**틴트의 천장**이 정한다 (가문비 R ≤ 97 — 역틴트로도 그 위로는 못 간다)"),
+    ("물", 58, 115, ["water_still", "water_flow"],
+     "★ 물의 밝기는 **엔진의 산술**이다: 틴트 R 이 63 이므로 화면의 물은 R 63 을 넘지 못한다. "
+     "먹이 풀린 비취빛 — 형광 파랑을 죽이되 시커먼 웅덩이로 만들지 않는다"),
+    ("수초", 80, 155, ["kelp", "kelp_plant", "seagrass", "tall_seagrass_*"],
+     "물속 식생 — **틴트가 없다** (모델에 tintindex 가 없다) ⇒ 우리가 칠한 값이 그대로 선다"),
+    ("연잎", 42, 95, ["lily_pad"],
+     "★ **저채도가 불가능한 유일한 자리**: 틴트 0x208030 의 R 이 32 라 화면의 연잎은 R 32 를 못 넘는다. "
+     "무채색으로 만들려면 새까맣게 만드는 수밖에 없다 — 그래서 짙은 연녹으로 둔다 (못물의 연잎은 원래 짙다)"),
 ]
 # 대역 제외 — **획(劃)·투명 요소**. 세계를 덮는 '면'이 아니라 배경 위에 긋는 '선'이라
 # 어두운 것이 정답이다. 제외도 등록제다 (여기 없는 텍스처는 반드시 대역을 갖는다).
 LUMA_EXEMPT = ["glass", "glass_pane_top", "cobweb", "dead_bush", "ladder", "glow_lichen",
                "sea_pickle", "torch"]
 BLOCK_LUMA_MEAN = (128, 172)   # 전역 평균 밝기 대역 — 세계의 인상은 평균이 만든다
+# ── ⑫-d 채도 **상한** — 【2026-07 신설】 형광은 밝기가 아니라 **채도**의 실패다 ──
+#
+# ⑫-c 는 채도의 **하한**을 잰다 (매화가 먹빛이면 규약이 자기모순이니까).
+# 그런데 그 반대쪽 — **너무 진한 색** — 은 아무도 재지 않았다. 그래서 형광 초록이 통과했다.
+#   바닐라 평원 잔디의 화면색 = 텍스처(회색 ~150) × 틴트 #91BD59 → 채도 **59**.
+#   그것이 "마인크래프트 초록"의 정체다: 어두워서가 아니라 **채도가 높아서** 튄다.
+# 수묵 규약은 "채도는 의미에만" 이다 — 풀·잎·물은 의미가 아니라 **바탕**이다. 그러므로 상한을 건다.
+# ★ 이 상한은 **곱한 뒤의 색**에 건다 (파일이 아니라 눈에 닿는 색 — 「틴트 인지」 절).
+CHROMA_CEIL = [
+    (["grass_block_top", "grass_block_side_overlay", "short_grass", "fern", "tall_grass_*",
+      "large_fern_*", "sugar_cane"], 40,
+     "풀 — 바닐라 화면 채도 59. 이것을 40 아래로 내리는 것이 이 증분의 **전부**다"),
+    (["oak_leaves", "spruce_leaves", "birch_leaves", "vine"], 40,
+     "잎 — 상록수의 바닐라 채도는 상수(0x619961)가 정한다. 역틴트로 그것을 내렸는지 여기서 검산된다"),
+    (["water_still", "water_flow"], 62,
+     "물 — 바닐라 화면 채도 **139** (형광 파랑의 정체). 틴트 B(228)가 높아 0 까지는 못 내린다"),
+    (["kelp", "kelp_plant", "seagrass", "tall_seagrass_*"], 45, "수초 — 틴트가 없으니 변명도 없다"),
+    (["lily_pad"], 58,
+     "연잎 — **천장이 변명이 아니라 사실인 자리**: R 32 가 상한이라 채도를 이 아래로는 못 내린다 "
+     "(바닐라 화면 채도 75 → 우리 47. 내릴 수 있는 데까지 내린 값이다)"),
+]
+# ⑫-b 를 **두 모집단**으로 가른다 — 자재와 자연을 한 통에 넣는 순간 평균이 거짓말을 한다.
+#   자재(목재·돌·땅·회벽)의 밝기는 **우리가 고른다** → 기존 대역 [128,172] 그대로 (계약 불변).
+#   자연(물·풀·잎)의 밝기는 **틴트의 천장이 정한다** → 물의 R 은 63 을 넘을 수 없다 (엔진의 산술).
+#   그 둘을 한 평균에 넣으면, 물이 어둡다는 이유로 마을을 밝히게 된다 — **또 다른 일괄 보정**이다.
+NATURAL = ["water_*", "grass_block_top", "grass_block_side_overlay", "short_grass", "fern",
+           "tall_grass_*", "large_fern_*", "sugar_cane", "*_leaves", "vine",
+           "kelp*", "seagrass", "tall_seagrass_*", "lily_pad"]
+NATURAL_LUMA_MEAN = (82, 150)   # 자연층 평균 — 물이 바닥을 끌고 잔디가 천장을 든다
+FIRE = ["lava_*", "*campfire_fire"]   # 빛나는 것 — 면이 아니다 (평균에서 빼되 ⑫-a 는 잰다)
 # ⑫-c 허락된 채색의 **채도 하한** — 색이 죽으면 규약이 자기모순이다
 CHROMA_FLOOR = {
     "cherry_leaves": ("R-G", 42, "매화 — 채색이 허락된 유일한 자리. 붉은 기가 이 아래면 **색이 죽었다**"),
@@ -650,7 +790,7 @@ CHROMA_FLOOR = {
 
 
 def _tex_stats(f):
-    w, h, rows = read_png(f)
+    w, h, rows = read_block(f, f.stem)      # 밝기도 **곱한 뒤의 색**으로 잰다 (틴트 인지)
     ps = [px(rows, x, y) for y in range(h) for x in range(w) if px(rows, x, y)[3] > 8]
     if not ps:
         return None
@@ -668,6 +808,7 @@ def brightness_bands():
     violations = 0
     by_class, unclassified, lumas = {}, [], []
 
+    nat_lumas = []
     for f in files:
         st = _tex_stats(f)
         if st is None:
@@ -678,7 +819,11 @@ def brightness_bands():
         for cls, lo, hi, pats, why in LUMA_BANDS:
             if any(fnmatch.fnmatch(f.stem, p) for p in pats):
                 by_class.setdefault(cls, (lo, hi, why, []))[3].append((f.stem, L))
-                lumas.append(L)
+                # ⑫-b 는 **두 모집단**이다 (자재 / 자연) — 불은 면이 아니라 빛이라 양쪽에서 뺀다
+                if any(fnmatch.fnmatch(f.stem, p) for p in NATURAL):
+                    nat_lumas.append(L)
+                elif not any(fnmatch.fnmatch(f.stem, p) for p in FIRE):
+                    lumas.append(L)
                 break
         else:
             unclassified.append(f.stem)
@@ -704,15 +849,20 @@ def brightness_bands():
         print(f"  ❌ 미분류 {len(unclassified)}장 — **밝기 계약이 없는 텍스처** (등록되지 않은 것은 "
               f"재어지지 않고, 재어지지 않는 것은 조용히 무너진다): {unclassified[:8]}")
     else:
-        print(f"  ✅ 분류 커버리지 {len(lumas)}/{len(lumas)} = 100% (제외 등록 {len(LUMA_EXEMPT)}종 — 획·투명 요소)")
+        total = sum(len(v[3]) for v in by_class.values())
+        print(f"  ✅ 분류 커버리지 {total}/{total} = 100% (제외 등록 {len(LUMA_EXEMPT)}종 — 획·투명 요소)")
 
-    # ⑫-b 전역 평균
-    gmean = sum(lumas) / len(lumas)
-    lo, hi = BLOCK_LUMA_MEAN
-    ok = lo <= gmean <= hi
-    violations += 0 if ok else 1
-    print(f"  {'✅' if ok else '❌'} 전역 평균 밝기 {gmean:.0f} — 대역 [{lo}–{hi}]"
-          + ("" if ok else "  ← 세계가 통째로 어둡다 (사용자가 본 것이 이것이다)"))
+    # ⑫-b 전역 평균 — **두 모집단**. 자재의 밝기는 우리가 고르고, 자연의 밝기는 틴트의 천장이 정한다
+    for label, vals, (lo, hi), why in (
+            ("자재(목재·돌·땅·회벽)", lumas, BLOCK_LUMA_MEAN, "세계가 통째로 어둡다 (사용자가 본 것이 이것이다)"),
+            ("자연(물·풀·잎)", nat_lumas, NATURAL_LUMA_MEAN, "땅과 물이 그을음이다 — 틴트를 잘못 되돌렸다")):
+        if not vals:
+            continue
+        gmean = sum(vals) / len(vals)
+        ok = lo <= gmean <= hi
+        violations += 0 if ok else 1
+        print(f"  {'✅' if ok else '❌'} 평균 밝기 {gmean:5.0f} · {label:16s} n={len(vals):3d} — 대역 [{lo}–{hi}]"
+              + ("" if ok else f"  ← {why}"))
 
     # ⑫-c 허락된 채색의 채도 하한
     print("  ── ⑫-c 허락된 채색 (매화·차양·등롱·불) — 색이 죽으면 규약이 자기모순이다 ──")
@@ -726,6 +876,22 @@ def brightness_bands():
         violations += 0 if ok else 1
         print(f"     {'✅' if ok else '❌'} {name:18s} {kind} {v:+5.0f} ≥ {floor:3d} · 밝기 {L:5.0f}"
               + ("" if ok else f"  ← **색이 죽었다** · {why}"))
+
+    # ⑫-d 채도 **상한** — 형광은 밝기가 아니라 채도의 실패다 (이 축이 없어서 초록이 통과했다)
+    print("  ── ⑫-d 채도 상한 (풀·잎·물) — **곱한 뒤의 색**을 잰다. 파일이 아니라 눈에 닿는 색 ──")
+    for pats, ceil, why in CHROMA_CEIL:
+        hits = [f for f in files if any(fnmatch.fnmatch(f.stem, p) for p in pats)]
+        for f in sorted(hits):
+            st = _tex_stats(f)
+            if st is None:
+                continue
+            L, chroma, _ = st
+            tint = tint_of(f.stem)
+            ok = chroma <= ceil
+            violations += 0 if ok else 1
+            src = f"틴트 {tint}" if tint else "무틴트"
+            print(f"     {'✅' if ok else '❌'} {f.stem:22s} 채도 {chroma:5.0f} ≤ {ceil:3d} · 밝기 {L:5.0f} · {src}"
+                  + ("" if ok else f"  ← **형광이다** · {why}"))
     return violations
 
 
@@ -827,10 +993,14 @@ def cross_checks():
 
 
 def lint(path, name):
-    w, h, rows = read_png(path)
+    is_block = "/textures/block/" in str(path).replace("\\", "/")
+    # 블록은 **눈에 닿는 모습**으로 읽는다 (프레임 첫 장 + 틴트 곱셈) — 위 「틴트 인지」 절
+    w, h, rows = read_block(path, name) if is_block else read_png(path)
     notes, bad = [], False
-    if (w, h) != (16, 16) and "block" in str(path) or (w, h) != (16, 16) and "/item/" in str(path):
-        notes.append(f"크기 {w}x{h} (16x16 아님)")
+    # 흐르는 유체는 바닐라가 **32x32** 다 (물길·용암길). 치수는 바닐라 계약이라 우리가 못 고른다
+    want = (32, 32) if name in ("water_flow", "lava_flow") else (16, 16)
+    if (w, h) != want and "block" in str(path) or (w, h) != (16, 16) and "/item/" in str(path):
+        notes.append(f"크기 {w}x{h} ({want[0]}x{want[1]} 아님)")
         bad = True
     pxs = opaque(rows, w, h)
     if not pxs:
@@ -840,7 +1010,9 @@ def lint(path, name):
     contrast = max(lum) - min(lum)
     avg = [sum(p[i] for p in pxs) / len(pxs) for i in range(3)]
     chroma = max(avg) - min(avg)
-    seam = seam_score(rows, w, h) if w == h == 16 else 0
+    # 이음매는 **블록의 면**에만 묻는다. 몹 가죽·글리프는 이어 붙는 면이 아니다
+    # (w==h 로만 열었더니 32x32 몹 파츠·문장이 줄줄이 거짓 위반을 냈다 — 축의 범위를 좁힌다).
+    seam = seam_score(rows, w, h) if (w == h == 16 or (is_block and w == h)) else 0
 
     # 폰트 글리프(font/)는 **단색이 정답**이다 — 인게임에서 §색으로 물들여 쓰는 문자다.
     #   여기에 "4색·명암차 24" 를 들이대면 린트가 18건을 거짓으로 외친다 (검수의 눈이 거짓말하면
@@ -903,11 +1075,16 @@ def lint(path, name):
                                   avg=tuple(round(v) for v in avg), extra=extra)
 
 
-def sheet(files, out_path, scale=8, cols=4, label_h=0):
+def sheet(files, out_path, scale=8, cols=4, label_h=0, block=False):
+    """확대 시트 — 사람의 눈이 보는 자리.
+
+    ★ 블록 시트는 **read_block** 으로 읽는다: ① 프레임 시트는 첫 장만 (16x512 를 통째로 깔면
+      칸 크기가 그것에 맞춰져 시트가 4억 9천만 픽셀이 된다 — 실제로 그렇게 터졌다)
+      ② 틴트를 곱한다 (역틴트한 물은 파일로는 금빛이다. 사람이 검수하는 것은 **화면에 설 색**이다)."""
     tiles = []
     for f in files:
         try:
-            w, h, rows = read_png(f)
+            w, h, rows = read_block(f, f.stem) if block else read_png(f)
         except Exception:
             continue
         tiles.append((f.stem, w, h, rows))
@@ -1017,7 +1194,7 @@ def main():
         for group, files in groups.items():
             if not files:
                 continue
-            res = sheet(files, OUT / f"{group}.png")
+            res = sheet(files, OUT / f"{group}.png", block=(group == "blocks"))
             if res:
                 print(f"  {res[0]}  ({len(res[1])}장)")
 

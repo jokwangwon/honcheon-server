@@ -85,11 +85,15 @@ public final class HoncheonMvt extends JavaPlugin {
         this.dojang = new Dojang(this);
         this.dojangGui = new DojangGui(this);
         this.gyeonggong = new GyeonggongListener(this);   // 몸이 땅을 딛는 법
-        // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾼다 (워커 스레드 → 메인 스레드로 태워 준다)
+        Onboarding.init(cfg);   // 첫 접속의 목소리 — player_creation.yml mvt_onboarding
+                                // ★ 이것이 없으면 아무것도 모르는 사람이 **아무 말도 못 듣고** 빈 세계에 선다
+        // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾸고, ★ 봇의 시트가 사람의 몸에 실린다
+        // (워커 스레드 → 메인 스레드로 태워 준다)
         WorldBridge.onState(state -> getServer().getScheduler().runTask(this, () -> {
             for (String tag : WorldBridge.reactionTags()) {
                 populace.rumor(tag, state.reactions().contains(tag));
             }
+            skills.syncAllSheets();   // ★ 경지·능력치·심법·내공 — 정본은 봇이다
         }));
         WorldBridge.start();
 
@@ -121,6 +125,9 @@ public final class HoncheonMvt extends JavaPlugin {
         loadAnchors();
         loadZones();
         loadRegionBases();
+        loadLedgers();   // ★ 원장 — 재기동을 넘어 살아남는다 (여태 순수 HashMap 이었다)
+        // 원장 굽기 — 주기 저장. 크래시는 예고하지 않는다 (onDisable 이 안 불리는 죽음이 있다)
+        getServer().getScheduler().runTaskTimer(this, this::saveLedgers, 6000L, 6000L);   // 5분
         // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
         getServer().getScheduler().runTaskTimer(this,
                 Metrics.wrap("sidebar", () -> getServer().getOnlinePlayers().forEach(this::updateSidebar)),
@@ -136,6 +143,7 @@ public final class HoncheonMvt extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        saveLedgers();        // ★ 원장을 먼저 굽는다 — 재기동 = 능력치·내공·숙련·소지금 전멸이었다
         WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
         if (skills != null) {
             skills.shutdown();   // 무공의 3D 형체를 세계에 남기지 않는다
@@ -168,6 +176,76 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public PlayerLedger ledger(UUID playerId) {
         return ledgers.computeIfAbsent(playerId, id -> new PlayerLedger());
+    }
+
+    // ─── 원장 영속 — **재기동을 넘어 살아남는다** ───
+    //
+    // 여기 저장·적재 코드가 **없었다**. `ledgers` 는 순수 HashMap 이었고 (`new HashMap<>()`),
+    // 재기동 한 번이면 능력치·내공·숙련·소지금·수련 배분이 **전부 소멸**했다. 로그아웃도 마찬가지였다.
+    //
+    // 문법은 이 저장소의 것을 그대로 쓴다 — anchors.yml · zones.yml · regions.yml 과 같은
+    // YamlConfiguration (플러그인 데이터 폴더). 새 형식을 발명하지 않는다.
+    //
+    // ★ 이 파일은 **거울이지 원본이 아니다.** 시트의 정본은 봇(SQLite)이고, 여기 적힌 경지·능력치는
+    //   봇이 꺼져 있을 때 마지막으로 본 상(像)이다 — 봇이 켜지면 스냅숏이 절대값으로 덮어쓴다.
+    //   진짜로 여기서만 사는 값은 **몸의 것**뿐이다: 수련 배분 · 일일 카운터 · 아직 못 올린 미결 증분.
+
+    private static final String LEDGER_FILE = "ledgers.yml";
+
+    /** 한 사람의 원장을 굽는다 — 로그아웃 (SkillListener.onQuit) */
+    public void saveLedger(UUID playerId) {
+        PlayerLedger led = ledgers.get(playerId);
+        if (led == null) {
+            return;
+        }
+        File file = new File(getDataFolder(), LEDGER_FILE);
+        YamlConfiguration yml = file.isFile()
+                ? YamlConfiguration.loadConfiguration(file) : new YamlConfiguration();
+        led.save(yml.createSection(playerId.toString()));
+        try {
+            yml.save(file);
+        } catch (IOException e) {
+            getLogger().severe("원장 저장 실패 — 이 사람의 수련이 사라진다: " + e.getMessage());
+        }
+    }
+
+    /** 전원의 원장을 굽는다 — 5분 주기 · 종료 */
+    public void saveLedgers() {
+        if (ledgers.isEmpty()) {
+            return;
+        }
+        YamlConfiguration yml = new YamlConfiguration();
+        ledgers.forEach((id, led) -> led.save(yml.createSection(id.toString())));
+        try {
+            yml.save(new File(getDataFolder(), LEDGER_FILE));
+        } catch (IOException e) {
+            getLogger().severe("원장 저장 실패 — 재기동하면 전부 사라진다: " + e.getMessage());
+        }
+    }
+
+    private void loadLedgers() {
+        File file = new File(getDataFolder(), LEDGER_FILE);
+        if (!file.isFile()) {
+            return;
+        }
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
+        for (String key : yml.getKeys(false)) {
+            var section = yml.getConfigurationSection(key);
+            if (section == null) {
+                continue;
+            }
+            try {
+                ledgers.put(UUID.fromString(key), PlayerLedger.load(section));
+            } catch (IllegalArgumentException notUuid) {
+                getLogger().warning("원장의 키가 uuid 가 아니다 (건너뛴다): " + key);
+            }
+        }
+        getLogger().info("원장 " + ledgers.size() + "인 적재 — 재기동을 넘어 살아남았다");
+    }
+
+    /** 지금 세계일 — 봇이 굴린다 (현실 하루 = 세계 1일). 0 = 봇이 꺼져 있다 */
+    public long worldDay() {
+        return WorldBridge.worldDay();
     }
 
     // ─── 청하현 장소 앵커 — 조성이 세우고 파일이 기억한다 (재기동 생존) ───
@@ -217,9 +295,25 @@ public final class HoncheonMvt extends JavaPlugin {
         Zone zone = zoneAt(player.getLocation());
         boolean dojang = Dojang.isDojang(player.getWorld());
         PlayerLedger ledger = ledger(player.getUniqueId());
+        // ★ 접합 여부와 경지를 **상시** 보여 준다 — 미접합자가 "조용히 반쪽 세계에서 노는" 것이
+        //   이 게임의 가장 나쁜 상태였다. 화면이 늘 말해 준다: 너는 강호에 있는가, 없는가.
+        if (ledger.linked()) {
+            String name = WorldBridge.linkedName(player.getUniqueId());
+            obj.getScore("§6" + ledger.realm(skillEngine.baseRealm())
+                    + " §7" + (name == null ? "" : name)).setScore(5);
+        } else {
+            obj.getScore("§c강호에 없다 §7/혼천 접속").setScore(5);
+        }
         obj.getScore("§7위치: §f" + (dojang ? "연무장 §8(시험)" : zone == null ? "야외" : zone.name()))
-                .setScore(3);
-        obj.getScore("§e소지금 " + ledger.money() + "문").setScore(2);
+                .setScore(4);
+        obj.getScore("§e소지금 " + ledger.money() + "문").setScore(3);
+        // 수련 배분이 비면 **아무것도 자라지 않는다** (Growth.train 이 즉시 0 을 돌려준다).
+        // 그 침묵이 첫 함정이었다 — 이제 화면이 그것을 말한다.
+        obj.getScore(ledger.curriculum().isEmpty()
+                ? "§c수련 없음 §7/혼천 수련"
+                : "§7수련 §f" + ledger.curriculum().entrySet().stream()
+                        .map(e -> e.getKey() + e.getValue())
+                        .collect(java.util.stream.Collectors.joining(" "))).setScore(2);
         obj.getScore(String.format("§f오늘 수련 +%.1f일", ledger.grantedToday())).setScore(1);
         player.setScoreboard(board);
     }

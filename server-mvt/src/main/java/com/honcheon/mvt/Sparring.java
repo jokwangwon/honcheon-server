@@ -361,7 +361,12 @@ public final class Sparring implements Listener {
         String gap = HuntingGrounds.gapBetween(HuntingGrounds.playerRealm(plugin, player), theirRealm);
 
         PlayerLedger ledger = plugin.ledger(player.getUniqueId());
-        ledger.rollDay(player.getWorld().getFullTime() / 24000L);
+        // ★ 달력은 하나다 — 봇의 세계일 (마크의 20분 하루로 재면 일일 상한이 20분마다 풀린다)
+        long worldDay = WorldBridge.worldDay();
+        if (worldDay <= 0 || !ledger.linked()) {
+            return;   // 봇이 꺼져 있거나 강호에 없는 몸 — 쌓을 장부가 없다
+        }
+        ledger.rollDay(worldDay);
         String key = "비무:" + (opponent == null ? "?" : displayName(opponent));
         double accrual = plugin.progression().combatAccrualDays(gap, "비무_대련", ledger.repetitionOf(key));
         double granted = plugin.progression().cappedGrant(ledger.grantedToday(), accrual);
@@ -373,6 +378,8 @@ public final class Sparring implements Listener {
         }
         int before = ledger.levelOf(SKILL, plugin.progression());
         ledger.grant(SKILL, granted);
+        ledger.pendSkill(SKILL, granted);   // 다리로 — 시트를 적는 것은 봇이다
+        plugin.skills().pushLedger(player, ledger, plugin.skills().state(player));
         int after = ledger.levelOf(SKILL, plugin.progression());
         actionBar(player, ChatColor.AQUA + String.format("겨루며 배운다 (+%.2f일 · 비무 ×0.5)", granted));
         if (after > before) {

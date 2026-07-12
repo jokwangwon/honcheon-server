@@ -118,8 +118,16 @@ final class Dojang implements Listener {
             // 현실의 장부·무공·짐을 떼어 둔다 — 시험은 세계에 자국을 남기지 않는다
             realLedger.put(id, plugin.swapLedger(id,
                     testLedger.computeIfAbsent(id, k -> new PlayerLedger())));
-            realState.put(id, plugin.skills().swapState(id,
-                    testState.computeIfAbsent(id, k -> new SkillEngine.State())));
+            SkillEngine.State mine = plugin.skills().state(player);   // 세계의 나 (경지는 봇의 시트)
+            SkillEngine.State test = testState.computeIfAbsent(id, k -> new SkillEngine.State());
+            if (test.realm == null) {
+                // 시험대에는 **제 경지로** 들어선다 — 그 뒤에 /혼천 시험 경지 로 갈아 낀다.
+                // (경지 기본값이 코드에 없어졌다: 그 자리에 "이류"가 박혀 있었다)
+                test.realm = mine.realm;
+                test.naegong = mine.naegong;
+                test.energy = mine.energy;
+            }
+            realState.put(id, plugin.skills().swapState(id, test));
             realInventory.put(id, player.getInventory().getContents().clone());
             player.getInventory().setContents(testInventory.computeIfAbsent(id,
                     k -> new org.bukkit.inventory.ItemStack[player.getInventory().getSize()]));

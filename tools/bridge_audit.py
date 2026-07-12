@@ -10,6 +10,11 @@
   ③ 혈채     암혈채는 **감쇠하지 않는가.** 무장 상대·관인은 **0인가.** 두 원장이 정합한가.
   ④ 되먹임   봇의 스냅숏이 마크로 내려가는가. ★ **혈채 수치가 새어 나가지는 않는가**
               (blood_debt.visibility: 내부 — 내려가는 것은 세계의 반응뿐이다).
+  ⑤ 사슬     ★★ **"죽였다 · 재기동했다 · 아직도 나를 쫓는가?"**
+              ①~④ 는 다리를 잰다. 다리가 멀쩡해도 세계는 반쪽일 수 있다 —
+              살인 → 혈채 → 수배 → **스냅숏** → 마크가 그것을 **읽는가**.
+              그리고 정본이 하나인가 (MVT 가 제 수배·favor·지역 장부를 다시 파지 않았는가).
+              한 칸이라도 끊기면 플레이어는 열 명을 죽이고 다시 접속해 **아무 일 없는 마을**을 본다.
 
 규약: **DB 를 읽기 전에 백업한다** (봇은 단일 작성자다. 이 도구는 읽기만 하지만 규약은 규약이다).
 
@@ -20,6 +25,7 @@
 
 import argparse
 import json
+import re
 import shutil
 import sqlite3
 import sys
@@ -46,38 +52,94 @@ def load_registry():
     return bridge, reaction.get("blood_debt", {})
 
 
-# MVT 발신부: 이 kind 를 실제로 emit 하는 자바 손잡이가 있는가 (WorldBridge.java 를 읽는다)
-def mvt_emitters():
-    src = (ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt"
-           / "WorldBridge.java").read_text(encoding="utf-8")
-    callers = {}
-    for kind in ("npc_death", "bandit_slain", "beast_slain", "qi_manifested", "sparring",
-                 "link_request"):
-        emits = f'emit("{kind}"' in src
-        # 그 손잡이를 실제로 부르는 자가 있는가 — 다리에 실리지 않은 사건은 장부에도 없다
-        callers[kind] = emits
-    used = {}
-    mvt_dir = ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt"
+# MVT 발신부 — 이 kind 를 **실제로 부르는 자**가 마크에 있는가.
+#
+# 두 가지 발신 방식을 다 본다 (등록부가 앞서 가고 코드가 따라오므로 kind 목록은 config 에서 온다):
+#   ① 이름 붙은 손잡이 — WorldBridge.npcDeath(...) 처럼 kind 마다 파 놓은 문
+#   ② 일반 발신      — WorldBridge.emit("surrender", ...) / KIND 표를 거쳐 나가는 것 (Incidents)
+# 손잡이가 있어도 **부르는 자가 없으면** 그 사건은 마크에서 영원히 일어나지 않는다.
+def mvt_emitters(kinds):
+    bridge_src = src_of(MVT_DIR / "WorldBridge.java")
     handles = {"npc_death": "WorldBridge.npcDeath", "bandit_slain": "WorldBridge.banditSlain",
                "beast_slain": "WorldBridge.beastSlain", "qi_manifested": "WorldBridge.qiManifested",
-               "sparring": "WorldBridge.sparring", "link_request": "WorldBridge.requestLink"}
-    for kind, handle in handles.items():
+               "sparring": "WorldBridge.sparring", "link_request": "WorldBridge.requestLink",
+               "cultivation_logged": "WorldBridge.cultivationLogged"}
+    emits, callers = {}, {}
+    for kind in kinds:
+        handle = handles.get(kind)
+        emits[kind] = (f'emit("{kind}"' in bridge_src) or (handle is not None and handle.split(".")[1] + "(" in bridge_src)
         hits = []
-        for path in mvt_dir.glob("*.java"):
+        for path in sorted(MVT_DIR.glob("*.java")):
             if path.name == "WorldBridge.java":
                 continue
-            if handle in path.read_text(encoding="utf-8"):
+            src = src_of(path)
+            named = handle is not None and handle in src
+            generic = f'"{kind}"' in src and "WorldBridge.emit(" in src
+            if named or generic:
                 hits.append(path.name)
-        used[kind] = hits
-    return callers, used
+        callers[kind] = hits
+        if not emits[kind]:
+            emits[kind] = bool(hits)   # 일반 발신은 WorldBridge 에 kind 리터럴이 없다 (등록부가 문지기다)
+    return emits, callers
 
 
-def bot_handlers():
+def bot_handlers(kinds):
     src = (ROOT / "server-bot" / "src" / "main" / "java" / "com" / "honcheon" / "bot"
            / "Bridge.java").read_text(encoding="utf-8")
-    return {kind: f'case "{kind}"' in src
-            for kind in ("npc_death", "bandit_slain", "beast_slain", "qi_manifested", "sparring",
-                         "link_request")}
+    return {kind: f'case "{kind}"' in src for kind in kinds}
+
+
+# ─── ⑤ 사슬(鎖) — 살인이 세계에 남긴 자국을 끝까지 따라간다 ────────────────────
+#
+# ★ 이 절이 이 도구의 이유다. ①~④ 는 **다리**를 잰다 (발신·수신·되먹임).
+#   그러나 다리가 멀쩡해도 세계는 반쪽일 수 있다 — 물어야 할 것은 이것이다:
+#
+#       "마을 사람을 죽였다. 재기동했다. **아직도 나를 쫓는가?**"
+#
+#   이 물음이 참이 되려면 여섯 칸이 전부 이어져야 한다. 한 칸이라도 끊기면
+#   플레이어는 열 명을 죽이고 다시 접속해서 **아무 일도 없는 마을**을 본다.
+
+MVT_DIR = ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt"
+BOT_DIR = ROOT / "server-bot" / "src" / "main" / "java" / "com" / "honcheon" / "bot"
+
+
+def src_of(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def code_links():
+    """코드가 사슬을 잇고 있는가 — DB 가 비어 있어도(아무도 안 죽였어도) 잴 수 있는 것들."""
+    incidents = src_of(MVT_DIR / "Incidents.java")
+    injections = src_of(BOT_DIR / "Injections.java")
+    bot_all = "\n".join(src_of(p) for p in BOT_DIR.glob("*.java"))
+    mvt_all = "\n".join(src_of(p) for p in MVT_DIR.glob("*.java") if p.name != "WorldBridge.java")
+
+    return {
+        # ★ MVT 가 봇의 현상금을 **읽는가**. 이것이 재기동을 건너는 유일한 통로다.
+        #   State.bounty() 의 호출자가 0이면 봇이 계산한 현상금은 아무도 안 읽는 숫자다.
+        # ★ 이름이 아니라 **판독 자체**를 본다. bountyOf() 라는 이름만 남기고 속을 0 으로 비워도
+        #   눈이 ✅ 를 찍으면, 그 눈은 없느니만 못하다 (실제로 처음 만들었을 때 그렇게 찍었다).
+        "MVT가 장부의 현상금을 읽는다": (
+            bool(re.search(r"(WorldBridge\.state\(\)|state)\.bounty\(", mvt_all)),
+            "WorldBridge.State.bounty() 호출자 0 — 봇이 방을 붙여도 마크는 모른다"),
+
+        # ★ 정본 단일성 — MVT 가 제 수배·favor·지역 장부를 다시 파지 않는가 (거울의 재발 방지)
+        "MVT에 사(私)장부가 없다": (
+            not re.search(r"private final Map<UUID, Integer> bounty", incidents)
+            and not re.search(r"private final Map<UUID, Map<String, Integer>> favor", incidents)
+            and not re.search(r"private final Map<String, Integer> region", incidents),
+            "Incidents 가 bounty/favor/region 을 **필드로** 다시 들었다 — 재기동하면 증발하는 두 번째 세계"),
+
+        # ★ 무명은 게시판에 오르지 않는다 (populace.yml quest_source: false)
+        "무명이 게시판에 안 오른다": (
+            "rules.npcByKey(npcKey) == null" in injections,
+            "Injections.deathQuests 가 무명 키를 거르지 않는다 — '장례: 무명:guja 의 상(喪)'"),
+
+        # ★ 지역 자연 회복이 배선됐는가 (region_state.yml recovery — 10일마다 50을 향해)
+        "지역이 회복한다": (
+            "recoveryDeltas(" in bot_all,
+            "RegionStateEngine.recoveryDeltas 호출자 0 — 한 번 내려간 치안은 영원히 내려가 있다"),
+    }
 
 
 # ─── 검산 ─────────────────────────────────────────────────────────────────────
@@ -129,8 +191,8 @@ def main():
     # ═══ ① 배선 — 발신 → 수신 → 세계 상태 ═══
     section("① 배선 — 사건은 어디까지 흘렀는가 (MVT 발신 → 봇 수신 → 세계 변화)")
     events = bridge_cfg.get("events", {})
-    emitters, callers = mvt_emitters()
-    handlers = bot_handlers()
+    emitters, callers = mvt_emitters(events.keys())
+    handlers = bot_handlers(events.keys())
     inbox = dict(q(conn, "SELECT kind, COUNT(*) FROM bridge_inbox GROUP BY kind"))
     # 세계가 실제로 바뀐 흔적 (kind → 그 사건이 남기는 events.type)
     world_marks = {"npc_death": ("사망", "소문"), "bandit_slain": ("토벌",), "beast_slain": ("사냥",),
@@ -275,6 +337,82 @@ def main():
                         if not missing else f"{NO} 되먹임 — 스냅숏에 빠진 키: {missing}")
         verdicts.append(f"{OK} 혈채 비노출 — 수치는 마크로 내려가지 않는다 (내려가는 것은 반응뿐)"
                         if not leaked else f"{NO} ★ 혈채 수치가 스냅숏으로 새어 나갔다")
+
+    # ═══ ⑤ 사슬 — "죽였다 · 재기동했다 · 아직도 나를 쫓는가" ═══
+    section("⑤ 사슬 — 살인이 세계에 남긴 자국 (★ 재기동을 건너는가)")
+
+    # ── 배선 (DB 가 비어 있어도 잰다 — 사람이 오기 전에 세계가 준비돼 있는가) ──
+    print("배선 — 코드가 사슬을 잇고 있는가")
+    for label, (ok, why) in code_links().items():
+        print(f"  {OK if ok else NO} {label}" + ("" if ok else f"\n      ↳ {why}"))
+        if not ok:
+            verdicts.append(f"{NO} 사슬 — {label}: {why}")
+
+    # 봇이 무명층의 새 kind 를 받는가 (world_bridge.yml 에 등록돼 있는데 처리기가 없으면 조용히 소실된다)
+    for kind in ("surrender", "populace_quest"):
+        if kind not in events:
+            continue
+        if handlers.get(kind):
+            print(f"  {OK} 봇이 {kind} 를 처리한다")
+        else:
+            print(f"  {NO} 봇에 {kind} 처리기가 없다"
+                  f"\n      ↳ 등록됐는데 case 가 없다 — bridge_inbox 에 못만 박히고 세계는 안 바뀐다")
+            verdicts.append(f"{NO} 사슬 — 봇이 {kind} 를 받지 못한다 (Bridge.apply 에 case 없음)")
+
+    # ── 장부 (실제로 누가 죽었고 그 값이 어디까지 갔는가) ──
+    populace_deaths = q(conn, "SELECT target_id, data_json FROM events WHERE type='사망' "
+                              "AND json_extract(data_json,'$.출처')='mvt'")
+    nameless = [r for r in populace_deaths if str(r["target_id"]).startswith(("무명:", "region:"))]
+    print(f"\n장부 — 마크發 사망 {len(populace_deaths)}건 (그중 무명 {len(nameless)}건)")
+
+    # 무명이 게시판에 오를 수 있는 상태로 DB 에 남아 있는가 (등록부에 없는 키 = 기계어 제목의 씨앗)
+    dead = q(conn, "SELECT id, state_json FROM npcs WHERE status='사망'") \
+        if one(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='npcs'") else []
+    junk = [r["id"] for r in dead if str(r["id"]).startswith(("무명:", "region:"))]
+    if junk:
+        print(f"  {WARN} 사망 등록부에 무명 키 {len(junk)}개: {', '.join(junk[:4])}"
+              f"\n      ↳ 코드가 거르므로 게시판엔 안 뜬다 (DB 정리는 불필요 — 그들도 죽은 사람이다)")
+
+    # 혈채 → 수배 → 스냅숏 (사슬의 심장)
+    chain_ok, chain_bad = [], []
+    for r in ledgers:
+        every = blood_cfg["ledgers"]["현혈채"]["decay"]["every_days"]
+        ticks = max(0, (today - r["known_day"]) // every)
+        floor = min(r["public_count"] * 2, int(r["known_raw"]))
+        known = max(0, max(floor, int(r["known_raw"]) - ticks))
+        bounty_min = engine.get("bounty_min", 3)
+        posted = one(conn, "SELECT COUNT(*) FROM events WHERE type='수배' AND actor_id=?",
+                     str(r["character_id"])) > 0
+        # 스냅숏에 실렸는가 — ★ 재기동을 건너는 유일한 칸
+        in_snapshot = False
+        snap_file = BRIDGE_DIR / "world_state.json"
+        if snap_file.exists() and r["character_id"]:
+            snap = json.loads(snap_file.read_text(encoding="utf-8"))
+            links_ = snap.get("links", {})
+            body = next((b for b, v in links_.items()
+                         if v.get("character_id") == r["character_id"]), None)
+            in_snapshot = bool(body and snap.get("bounty", {}).get(body, 0) > 0)
+        who = r["subject"]
+        if known < bounty_min:
+            print(f"  · {who:<18} 현혈채 {known} < 문턱 {bounty_min} — 아직 관이 한 사람을 보지 않는다")
+            continue
+        line = f"  · {who:<18} 현혈채 {known} ≥ {bounty_min} → 수배 {OK if posted else NO}" \
+               f" → 스냅숏 {OK if in_snapshot else NO}"
+        print(line)
+        (chain_ok if posted and in_snapshot else chain_bad).append(who)
+        if posted and not in_snapshot:
+            print(f"      ↳ {NO} ★ **장부는 그를 쫓는데 마크는 모른다** — 접합이 없거나(links) "
+                  f"스냅숏이 낡았다. 재기동하면 세계가 그를 잊는다")
+
+    if not ledgers:
+        print("  아직 아무도 무고한 자를 죽이지 않았다 — 사슬은 배선만 잰다 (위)")
+        verdicts.append(f"{WARN} 사슬 — 피가 없어 장부를 못 쟀다 (배선은 위에서 쟀다)")
+    elif chain_bad:
+        verdicts.append(f"{NO} 사슬 — 수배가 마크에 닿지 않는 자 {len(chain_bad)}명: "
+                        f"{', '.join(chain_bad)}")
+    elif chain_ok:
+        verdicts.append(f"{OK} 사슬 — 살인 → 혈채 → 수배 → 스냅숏 ({len(chain_ok)}명) "
+                        f"— **재기동해도 세계는 그를 기억한다**")
 
     # ═══ 총평 ═══
     section("총평")

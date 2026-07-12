@@ -4118,6 +4118,566 @@ def pickle_rows():
     return g
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 틴트층(染) — 컬러맵 · 물 · 풀 · 잎  【2026-07 신설】
+#
+# 【진단】 자재층까지 끝낸 세계를 걸어 보고 사용자가 말했다: *"기존의 마크의 느낌을 없애 달라"*.
+#   축 ⑪ 이 그 자리를 정확히 짚었다 — 팩이 덮은 것은 **사람이 지은 것**뿐이었다.
+#   땅과 물과 풀은 바닐라 그대로였고, **그것이 시야의 60~80%** 다.
+#   ★ 그리고 이 불일치는 **균일하게 바닐라인 것보다 나쁘다**: 눈은 대비를 본다.
+#     수묵 기와집 **옆의** 형광 초록 잔디는, 전부 형광일 때보다 **더 형광으로** 읽힌다.
+#
+# 【앞선 작업자는 왜 이 자리를 비워 뒀나 — 그 판단은 옳았다】
+#   resourcepack_design.yml 「보류: 풀_고사리」의 사유:
+#     *"바이옴 컬러맵이 초록으로 틴트한다 — 회색조를 칠해도 초록이 곱해진다."*
+#   **사실이다.** 그래서 텍스처만 칠하는 증분은 반드시 실패한다. 틴트를 쥐지 않으면 헛일이다.
+#
+# 【엔진의 진실 — 짐작하지 않고 client jar 에서 캐냈다 (run/client/client-1.21.11.jar)】
+#   ㄱ. 바닐라 water_still.png 은 **순회색조**다 (팔레트 165~255 · 알파 180 균일).
+#      물의 파랑은 텍스처에 **없다** — 전부 바이옴 water_color(0x3F76E4)가 곱한 것이다.
+#          화면색 = 텍스처 × 틴트 ÷ 255
+#   ㄴ. grass_block_top · grass_block_side_overlay · short_grass · fern · vine · oak_leaves
+#      도 전부 회색조 + 모델의 tintindex 0 → 초록은 **colormap/grass.png · foliage.png** 가 곱한다.
+#      ★ 여기가 팩이 쥔 자리다. (검산: 바닐라 grass.png 의 (50,173) = #91BD59 — 우리가 아는
+#        평원의 그 초록. 색인법이 맞다는 증거다.)
+#   ㄷ. spruce_leaves · birch_leaves 는 컬러맵이 아니라 **코드에 박힌 상수**로 물든다
+#      (FoliageColor 상수 0x619961 · 0x80A755). 팩은 그 상수를 못 바꾼다.
+#   ㄹ. water_color · sky_color 는 **바이옴 데이터(서버)** 다. 팩은 못 바꾼다.
+#
+# 【그래서 두 갈래로 푼다】
+#   ① 컬러맵이 원천인 것 (풀·덩굴·참나무잎) → **컬러맵을 갈아엎는다.**
+#      텍스처는 무채색으로 두고 색은 컬러맵이 준다 — 즉 **바닐라의 분업을 그대로 쓰고
+#      곱하는 수만 바꾼다.** (텍스처에 색을 칠하고 컬러맵을 놔두면 틴트가 다시 초록으로 물들인다.)
+#   ② 상수·바이옴이 원천인 것 (물·가문비잎·자작잎) → **역틴트(逆tint)**.
+#      엔진이 틴트를 곱할 것을 아니까 **미리 나눠 둔다**:  텍스처 = 목표 × 255 ÷ 틴트
+#      ⇒ PNG 를 눈으로 보면 이상한 색이다 (물은 금빛, 가문비잎은 분홍빛).
+#        그러나 **화면에 서는 색**은 우리가 정한 그 값이다.
+#      ⇒ 그래서 검수(texture_audit)도 파일이 아니라 **곱한 뒤의 색**을 잰다.
+#        재는 자가 파일을 재면 — 파일은 맞고 세계는 틀린다.
+#
+# 【역틴트의 천장 — 거짓말할 수 없는 한계】
+#   텍스처는 255 를 넘지 못한다 ⇒ **화면색은 틴트값을 넘지 못한다.**
+#   물의 틴트 R 은 63 이다 ⇒ 물의 R 은 무슨 수를 써도 **63 을 넘지 못한다** (물은 붉어질 수 없다).
+#   그래서 물은 태생적으로 어둡고 푸른 쪽에 갇혀 있다 — 이것은 우리의 취향이 아니라 **엔진의 산술**이다.
+#   untint() 는 넘치면 클램프하고 그 사실을 기록한다. main() 이 그것을 **말한다** (조용한 어긋남 금지).
+# ═══════════════════════════════════════════════════════════════════════════
+COLORMAP_DIR = PACK / "assets" / "minecraft" / "textures" / "colormap"
+ENV_DIR = PACK / "assets" / "minecraft" / "textures" / "environment"
+
+UNTINT_CLIP = []      # 역틴트 클램프 기록 — 천장에 부딪힌 자리. main() 이 보고한다
+
+
+def untint(target, tint, who=""):
+    """역틴트 — 엔진이 곱할 틴트를 **미리 나눈다**.  텍스처 = 목표 × 255 ÷ 틴트.
+
+    알파는 건드리지 않는다 — 물의 알파 180 은 **바닐라 계약**이다 (255로 만들면 물이 벽이 된다)."""
+    out = []
+    for i in range(3):
+        v = target[i] * 255.0 / max(1, tint[i])
+        if v > 255.0:
+            UNTINT_CLIP.append((who, "RGB"[i], target[i], tint[i], round(tint[i] * 1.0)))
+            v = 255.0
+        out.append(int(round(v)))
+    return (out[0], out[1], out[2], target[3] if len(target) > 3 else 255)
+
+
+# ─── ① 컬러맵 — ★ **이것이 핵심이다** (세계의 초록은 전부 여기서 나온다) ───
+#
+# 클라이언트의 색인법 (GrassColor·FoliageColor — jar 로 검증했다):
+#     x = (1 − 기온) × 255 ·  y = (1 − 강수 × 기온) × 255   →  픽셀 (x, y)
+#   검산: 바닐라 grass.png (50,173) = #91BD59 = 평원의 그 초록. **색인법이 맞다.**
+#
+# 네 귀퉁이만 정하고 사이는 이중선형으로 잇는다 — 컬러맵은 **룩업표**다. 노이즈를 넣으면
+# 이웃한 바이옴끼리 색이 튄다 (여기서의 '결'은 결이 아니라 버그다).
+#
+# ★ 밝기 계약과의 관계: 컬러맵은 **곱하는 수**다. 이것을 어둡게 만들면 온 세상의 풀이
+#   그을음이 된다 (우리가 한 번 데인 바로 그 실패). 그래서 값은 **밝게 두고**(≈170~195)
+#   채도로만 승부한다. 형광은 밝기가 아니라 **채도**다 — 그러나 **죽음도 채도다**.
+#
+# ═══ 【채도 기준선 — 바닐라 잔디(채도 58)】 (2026-07 재조정) ═══════════════════
+#   앞선 증분은 형광을 잡겠다고 채도를 41 까지 끌어내렸다 (잔디 화면채도 58 → 32).
+#   그 결과 세계가 **빛이 바랬다.** 사용자의 판정: *"일반적인 세상을 표현하기에 잔디블럭은
+#   적합하다 — 잔디블럭의 채도를 기준으로 다른 블럭의 색감을 조정하라."*
+#   ⇒ 기준선은 **바닐라 잔디의 화면 채도 58** 이다 (client jar 실측, 평원 기준).
+#
+#   【그러나 바닐라를 베끼지는 않는다 — 채도의 **크기**만 빌리고 **색상**은 우리가 고른다】
+#     바닐라 평원 틴트 #91BD59 = (145,189,89) — R−B 가 56 이나 되는 **누런 연두**다.
+#     그 형광기의 정체는 채도의 크기가 아니라 **색상(hue)** 이다.
+#     우리는 같은 채도를 **청록(靑綠)** 쪽에서 쓴다: R−B 를 20 까지 좁혀 누런기를 걷어낸다.
+#     ⇒ 근거는 취향이 아니라 화론(畵論)이다 — **청록산수(靑綠山水)**. 동양화에서 산수는
+#       수묵(먹)으로만 그리지 않는다. 석록(malachite)·석청(azurite)의 **선명한 청록**이
+#       정통이다. 수묵은 **자재와 선**에 있고, **자연은 살아 있다.**
+#
+#   【그래서 밝기는 어떻게 되나 — 우리 텍스처는 바닐라보다 **밝다**】
+#     바닐라는 어두운 회색조 텍스처(평균 ~148)에 채도 100 틴트를 곱해 58 을 만든다.
+#     우리 텍스처는 밝다(평균 ~199) ⇒ **같은 58 을 채도 75 틴트로 만든다.**
+#     화면채도 ≈ (텍스처평균 ÷ 255) × 틴트채도.  밝은 텍스처는 **적은 채도로 같은 생기**를 낸다.
+#     ⇒ 채도는 바닐라와 같고, 밝기는 바닐라보다 높다 (밝기 계약 — 수묵은 여백이지 어두움이 아니다).
+GRASS_MAP = {                       # 기온↑습윤 · 기온↑건조 · 기온↓습윤 · 기온↓건조
+    # 평원(기준 바이옴)에서 (138,198,117) 로 합성된다 — 채도 81 · 루마 179 (바닐라 100 · 172)
+    #   ⇒ 잔디 화면채도 **58** = 바닐라와 같다. 색상은 우리 것이다 (R−B 21 · 바닐라 56).
+    "warm_wet": (108, 183, 101, 255),   # 이끼빛 — 물가·숲 (짙은 석록)
+    "warm_dry": (153, 210, 121, 255),   # 볕 든 들풀 (저잣거리·들) — 밝되 누렇지 않다
+    "cold_wet": (114, 177, 117, 255),   # 산 위의 축축한 풀 — 청기(靑氣)가 돈다
+    "cold_dry": (148, 189, 129, 255),   # 시든 서리 풀 — 설산 아래 (겨울은 채도가 낮은 것이 자연이다)
+}
+FOLIAGE_MAP = {                     # 잎은 **그늘을 문다** — 풀보다 한 톤 짙다 (수관 아래는 어둡다)
+    # 평원에서 (119,185,96) — 채도 89. 잎은 풀보다 **짙고 더 푸르다** (수관이 빛을 걸러서다)
+    "warm_wet": (96, 172, 84, 255),
+    "warm_dry": (130, 196, 96, 255),
+    "cold_wet": (104, 166, 102, 255),
+    "cold_dry": (124, 174, 114, 255),
+}
+
+
+def colormap_rows(m):
+    """256x256 바이옴 룩업표 — 이중선형. x축 = 기온(왼쪽이 덥다) · y축 = 건조(아래가 마르다).
+
+    유효 영역은 삼각형(y ≥ x)이지만 **전면을 채운다** — 빈 칸을 남기면 그 바이옴이 자홍색으로 뜬다."""
+    ww, wd, cw, cd = m["warm_wet"], m["warm_dry"], m["cold_wet"], m["cold_dry"]
+    rows = []
+    for y in range(256):
+        warm = mix(ww, wd, y / 255.0)       # 세로 = 건조 축
+        cold = mix(cw, cd, y / 255.0)
+        rows.append([mix(warm, cold, x / 255.0) for x in range(256)])   # 가로 = 한랭 축
+    return rows
+
+
+# ─── ② 물 — 역틴트 (바이옴이 쥔 색을 되돌린다) ───
+#
+# 바닐라 바이옴 water_color = 0x3F76E4 = (63,118,228).  커스텀 바이옴이 **없으므로**
+# (worldgen/ 에 biome 정의 0개 확인) 이 값이 곧 이 세계의 물이다.
+# ★ 전제: 데이터팩이 water_color 를 바꾸면 이 상수도 함께 바꿔야 한다 (yml 에 등록해 둔다).
+WATER_BIOME_TINT = (63, 118, 228)
+# **화면에 서야 할** 물빛 — 먹이 풀린 비취(翡翠). 강물·연못.
+#   알파 180 = 바닐라 계약 (물은 비쳐야 한다. 255 로 만들면 물이 벽이 된다).
+#   R 은 63 이 천장이다 (위 【천장】) — 그래서 물의 밝기는 우리가 아니라 **엔진이** 정한다.
+#   ★ 채도 재조정 (2026-07): 바닐라 물의 화면채도는 **115** 다 (jar 실측 — 코드에 적혀 있던 139 는
+#     틀린 수였다). 형광 파랑인 것은 맞다. 그러나 우리 물은 59 까지 빠져 잔디(58)와 나란한 척했을 뿐,
+#     실은 **잔디만 죽고 물은 안 죽은** 상태였다. 이제 잔디가 58 로 돌아왔으니 물도 그 밴드에 세운다.
+#     G 는 118 이 천장이다 ⇒ 116 까지만 쓴다 (천장에 붙이면 클램프가 조용히 색을 깎는다).
+WATER_TARGET = ramp((38, 74, 86, 180), (60, 116, 148, 180), 9)
+WATER_SHADES = [untint(c, WATER_BIOME_TINT, "water") for c in WATER_TARGET]
+
+
+def water_still_rows():
+    """물(고임) — 16x16 × **32프레임** (바닐라 프레임 수와 같아야 한다).
+    잔물결 두 겹이 서로 다른 방향으로 흐른다 — 한 겹이면 줄무늬로 보인다.
+
+    ★ 루프 계약: 위상은 프레임당 2π/32 씩 돈다. 위상 계수는 **정수**여야 32프레임 뒤 제자리다
+      (1.3 배 같은 값을 쓰면 마지막 프레임에서 물결이 튄다 — 물이 딸꾹질한다)."""
+    rows = []
+    for f in range(32):
+        ph = 2 * math.pi * f / 32
+        for y in range(16):
+            row = []
+            for x in range(16):
+                v = 4.2
+                v += 1.7 * math.sin(2 * math.pi * (x + 2 * y) / 16 + ph)        # 파수 정수 · 랩 안전
+                v += 1.1 * math.sin(2 * math.pi * (3 * x - y) / 16 - 2 * ph)    # 되돌아오는 잔결
+                v += smooth_octave(x, y, 4, 0x5F, 0.55)                          # 물때 (균질하면 비닐이다)
+                row.append(step(WATER_SHADES, v))
+            rows.append(row)
+    return rows
+
+
+def water_flow_rows():
+    """물(흐름) — 32x32 × **32프레임**. 폭포·물길. 결은 **아래로 흐른다**.
+
+    프레임당 정확히 1px 씩 내려간다 (32프레임 × 1px = 32px = 텍스처 높이) ⇒ **완전 루프**."""
+    rows = []
+    for f in range(32):
+        for y in range(32):
+            row = []
+            yy = (y + f) % 32                       # 흐르는 좌표 — 1px/프레임
+            for x in range(32):
+                v = 4.2
+                v += 1.9 * math.sin(2 * math.pi * (x * 2 + yy) / 32)     # 비스듬히 끌리는 물줄기
+                v += 0.9 * math.sin(2 * math.pi * (x * 5 - yy * 2) / 32)
+                v += (h32(x, yy, 0x71) % 1001 / 1000.0 * 2 - 1) * 0.6    # 흐름의 잔거품
+                row.append(step(WATER_SHADES, v))
+            rows.append(row)
+    return rows
+
+
+# ─── ③ 풀·잎 — 텍스처는 **무채색**, 색은 컬러맵이 준다 ───
+# 여기에 초록을 칠하면 컬러맵의 초록과 **두 번 곱해진다** (형광이 되는 지름길).
+# 그래서 이 텍스처들의 채도는 0 에 가깝다 — 우리가 칠하는 것은 **농담(濃淡)** 뿐이다.
+TURF_SHADES = ramp((132, 134, 128, 255), (198, 200, 192, 255), 9)    # 잔디 윗면 — 밝은 회색조
+BLADE_SHADES = ramp((118, 120, 114, 255), (206, 208, 200, 255), 8)   # 풀포기·고사리 — 획
+LEAF_SHADES = ramp((104, 106, 100, 255), (188, 190, 182, 255), 8)    # 나뭇잎 — 무채색 (컬러맵이 물들인다)
+
+
+def grass_block_top_rows():
+    """잔디 윗면 — 컬러맵이 물들일 **무채색 잔디밭**. 위에서 본 풀은 **잎끝의 바다**다.
+
+    ★ 보로노이 '포기'로 그렸다가 물렸다 (이음매 1.37). 원인은 노이즈가 아니라 **구조**였다:
+      셀 격자(4px)가 텍스처 경계와 맞물려, 랩 열(15↔0)은 **항상 셀을 건너는 경계**인데
+      내부 열쌍은 대개 **셀 안**이다 — 검수가 '셀 건너 경계'를 '셀 안 경계'와 견주니 이상치가 된다.
+      셀을 흔들어 지표를 달래는 것은 지표에 맞춰 그리는 짓이다. 그래서 **구조를 바꿨다**:
+      흙·이끼가 쓰는 **랩 안전 노이즈 적층**(smooth_octave 저주파 + octave 고주파)으로 간다.
+      잔디를 잔디로 만드는 것은 포기의 덩이가 아니라 **잎날**이다 — 대비는 그쪽에 준다."""
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            v = 4.4 + earth_base(x, y, 0x3D, clump=1.25, grit=0.5)   # 땅의 굴곡 (풀도 땅 위에 난다)
+            v += octave(x, y, 1, 0x8D, 2.2)                           # 잎날 — 잔디의 본체
+            if h32(x, y, 0x1F) % 5 == 0:
+                v += 1.6                                              # 빛 받는 잎끝
+            elif h32(x, y, 0x4F) % 6 == 0:
+                v -= 1.5                                              # 잎 사이로 보이는 그늘
+            row.append(step(TURF_SHADES, v))
+        rows.append(row)
+    return rows
+
+
+def grass_block_overlay_rows():
+    """잔디 옆면 **덧그림** — 흙 위로 드리운 풀자락 (컷아웃 + 컬러맵 틴트).
+    ★ 이 장이 옆면의 초록을 쥔다. grass_block_side 는 틴트되지 **않는다** (바닐라 모델 실측)."""
+    g = [[T] * 16 for _ in range(16)]
+    for x in range(16):
+        depth = 4 + h32(x, 0x17, 0x2F) % 4          # 풀자락이 흘러내린 깊이 (열마다 다르다)
+        for y in range(depth):
+            v = 5.4 - y * 0.5 + octave(x, y, 1, 0x91, 1.1)
+            g[y][x] = step(BLADE_SHADES, v)
+        y = depth                                    # 자락 끝 — 성글게 한 올 (칼로 자른 듯한 선 금지)
+        if y < 16 and h32(x, 0x23, 0x4D) % 3 == 0:
+            g[y][x] = step(BLADE_SHADES, 1.8)
+    return g
+
+
+def grass_block_side_rows():
+    """잔디 옆면 **바탕** — 흙이다 (틴트되지 않는다 — 바닐라 모델 실측: side 에는 tintindex 가 없다).
+
+    위 두 줄은 **뿌리에 엉킨 떼(뗏장)** 다. 이것을 흙 위에 그라디언트로 흘리면 세로 랩 경계가
+    장 안의 유일한 강한 가로 경계가 되어 이음매가 운다 (실측 2.06 — side_rows 주석이 예언한 함정).
+    그래서 같은 처방을 쓴다: **층 경계에 그늘 한 줄 + 빛 받는 한 줄** (side_rows 가 넣어 준다)."""
+    root = [[step(DIRT_SHADES, 2.6 + earth_base(x, y, 0x7B, clump=1.5)
+                  + pebble_specks(x, y, 0x2D, 13, deep=-1.2, light=1.0))
+             for x in range(16)] for y in range(16)]      # 뗏장 — 뿌리가 흙을 붙든 켜 (어둡고 성기다)
+    return side_rows(root, dirt_rows(), band=2)
+
+
+def blade_rows(salt, tall=13, fronds=6, fern=False):
+    """풀포기·고사리 — 컷아웃. 컬러맵이 물들일 무채색.
+
+    ★ **성글면 풀이 아니라 잡초 몇 올이다.** 처음엔 4획으로 그렸다가 물렸다 (바닐라와 나란히
+      놓고 보니 땅에 난 것이 아니라 **뽑히다 만 것**처럼 보였다 — 옆에서 자라는 획을 덧대 채운다).
+      풀은 **포기(叢)** 다: 큰 획 사이를 짧은 곁획이 메운다.
+    고사리는 잎이 **깃꼴로 갈라진다** (좌우 곁잎) — 풀과 **실루엣으로** 갈린다 (색이 아니라 형태로)."""
+    g = [[T] * 16 for _ in range(16)]
+    for f in range(fronds):
+        x0 = 1 + f * (14 // max(1, fronds - 1))
+        lean = (h32(f, salt, 0x3B) % 5 - 2) * 0.18                  # 포기마다 다른 기울기
+        hh = tall - h32(f, salt, 0x57) % 4
+        for k in range(hh):
+            y = 15 - k
+            xx = int(round(x0 + lean * k))
+            if not (0 <= xx < 16):
+                continue
+            v = 1.6 + 4.4 * (k / max(1, hh - 1)) + octave(xx, y, 1, salt, 0.6)
+            g[y][xx] = step(BLADE_SHADES, v)
+            if fern and k % 3 == 1 and 2 <= k <= hh - 2:            # 깃꼴 곁잎 — 고사리의 표식
+                for dx in (-1, 1):
+                    if 0 <= xx + dx < 16:
+                        g[y][xx + dx] = step(BLADE_SHADES, v - 1.5)
+            elif not fern and k >= hh - 2 and 0 <= xx + 1 < 16:      # 풀은 **끝이 갈라진다**
+                g[y][xx + 1] = step(BLADE_SHADES, v - 1.2)
+            # 포기의 밑동은 두껍다 — 여러 잎이 한 자리에서 솟는다 (밑이 가늘면 떠 있는 것처럼 보인다)
+            if k <= 2 and 0 <= xx - 1 < 16 and g[y][xx - 1] == T:
+                g[y][xx - 1] = step(BLADE_SHADES, v - 1.6)
+    # 곁획 — 큰 획 사이를 메우는 짧은 잎 (성김을 메우되 격자가 되지 않게 해시로 자리를 흩는다)
+    for s in range(5):
+        x = 1 + (h32(s, salt, 0x6D) % 14)
+        hh = 3 + h32(s, salt, 0x71) % 4
+        for k in range(hh):
+            y = 15 - k
+            if g[y][x] == T:
+                g[y][x] = step(BLADE_SHADES, 1.4 + 2.2 * (k / max(1, hh - 1)))
+    return g
+
+
+# 상수로 물드는 잎 — **역틴트의 천장이 여기서 드러난다.**
+#   가문비의 틴트는 (97,153,97) 이다 ⇒ 가문비 잎의 화면색은 **R 97 · B 97 을 넘을 수 없다.**
+#   그러므로 목표 램프를 무채색 램프(최대 190)로 잡으면 천장을 뚫는다 — 뚫린 만큼 색이 어긋난다
+#   (첫 빌드가 클램프 6건으로 그것을 잡아냈다. **재는 자가 있으면 이렇게 잡힌다**).
+#   그래서 목표는 **천장 아래**에서 고른다: 상록수는 원래 짙다 — 짙되 **탁하지 않게**.
+#   ★ 천장은 **채도**의 천장이 아니라 **채널값**의 천장이다 (2026-07 재조정에서 밝혀졌다):
+#     가문비 목표 (53,103,54) 는 채도 50 이면서 **세 채널 모두 천장 아래**다 (R·B ≤ 97 · G ≤ 153).
+#     즉 짙은 상록을 **생기 있게** 만드는 데 천장은 걸림돌이 아니었다 — 앞선 증분이 채도 24 로
+#     떨어뜨린 것은 천장 탓이 아니라 **목표를 그렇게 잡아서**다. 천장을 변명으로 쓰지 않는다.
+SPRUCE_TARGET = ramp((28, 64, 32, 255), (78, 142, 76, 255), 8)      # 소나무·잣나무 — 짙은 청록 상록
+BIRCH_TARGET = ramp((40, 66, 34, 255), (104, 152, 74, 255), 8)      # 자작 — 한 톤 옅고 노랗다 (B ≤ 85)
+
+
+def leaf_rows(salt, shades=None, holes=True):
+    """나뭇잎 — 수관(樹冠)의 면. 잎덩이가 뭉치고 사이가 비친다.
+
+    shades 를 주지 않으면 **무채색**으로 나가고 foliage 컬러맵이 물들인다 (참나무).
+    주면 그 램프를 쓴다 (가문비·자작 — 코드 상수로 물드는 잎은 **역틴트한 램프**를 받는다)."""
+    shades = shades or LEAF_SHADES
+    g = [[T] * 16 for _ in range(16)]
+    for y in range(16):
+        for x in range(16):
+            d1, d2, ident, _ = wrapped_cells(x, y, 4, salt)          # 잎은 덩이로 뭉친다
+            v = 4.4 + cell_rand(ident, salt ^ 0x2D) * 1.5
+            v += octave(x, y, 1, salt ^ 0x61, 1.6)                   # 잎맥·잎끝
+            if d2 - d1 < 0.5:
+                v -= 1.8                                             # 덩이 사이 그늘
+            if holes and h32(x, y, salt ^ 0x7F) % 11 == 0 and v < 4.0:
+                continue                                             # 잎 사이로 하늘이 비친다 (컷아웃)
+            g[y][x] = step(shades, v)
+    return g
+
+
+def vine_rows():
+    """덩굴 — 폐사당 담을 타고 내리는 것 (컷아웃 · foliage 컬러맵 틴트).
+    면이 아니라 **드리운 획**이다 — 성글어야 담이 비친다."""
+    g = [[T] * 16 for _ in range(16)]
+    for s in range(4):
+        x = 1 + s * 4 + h32(s, 0x11, 0x67) % 2
+        drop = 9 + h32(s, 0x29, 0x6B) % 7                       # 줄기마다 다른 길이
+        for y in range(drop):
+            xx = x + (1 if (y // 3) % 2 and x + 1 < 16 else 0)   # 구불구불 내려온다
+            # 명암차가 20 이면 '밋밋'이다 (검수가 잡았다). 덩굴은 **줄기가 밝고 잎이 그늘진다** —
+            # 대비는 장식이 아니라 그것이 덩굴로 읽히는 이유다 (드리운 것은 앞뒤가 겹친다).
+            v = 6.6 - y * 0.16 + octave(xx, y, 1, 0x73, 1.0)
+            g[y][xx] = step(LEAF_SHADES, v)
+            if y % 4 == 2:                                       # 잎 한 장 — 줄기 뒤에 드리운다
+                for dx in (-1, 1):
+                    if 0 <= xx + dx < 16:
+                        g[y][xx + dx] = step(LEAF_SHADES, v - 3.4)
+    return g
+
+
+# ─── ④ 물속 식생 — **틴트되지 않는다** (모델에 tintindex 가 없다 — jar 실측) ───
+# 그러므로 우리가 칠한 값이 그대로 선다. 물빛과 같은 계열로 — 물 아래에서 물과 함께 읽혀야 한다.
+WEED_SHADES = ramp((44, 94, 58, 255), (130, 188, 126, 255), 8)     # 수초 — 청록 (틴트 없다 ⇒ 이 값이 그대로 선다)
+
+
+def weed_rows(frames, salt, tall, tip=False):
+    """수초·다시마 — 물살에 **흔들린다** (프레임 시트). 흔들림은 사인 한 겹 (정수 파수 = 완전 루프)."""
+    rows = []
+    for f in range(frames):
+        g = [[T] * 16 for _ in range(16)]
+        ph = 2 * math.pi * f / frames
+        for s in range(3):
+            x0 = 3 + s * 5
+            hh = tall - h32(s, salt, 0x35) % 3
+            for k in range(hh):
+                y = 15 - k
+                sway = 1.6 * math.sin(ph + k * 0.42 + s * 1.1) * (k / max(1, hh - 1))
+                xx = int(round(x0 + sway))
+                if not (0 <= xx < 16):
+                    continue
+                v = 2.0 + 4.2 * (k / max(1, hh - 1)) + octave(xx, y, 1, salt, 0.6)
+                g[y][xx] = step(WEED_SHADES, v)
+                if tip and k == hh - 1 and 0 <= xx + 1 < 16:
+                    g[y][xx + 1] = step(WEED_SHADES, v - 1.4)       # 다시마 잎사귀
+        rows.extend(g)
+    return rows
+
+
+# ─── ⑤ 불·용암 — **채색이 허락된 자리** (불은 의미다 — 밝기 계약 ⑫-c) ───
+LAVA_SHADES = ramp((92, 44, 24, 255), (238, 186, 108, 255), 10)    # 용암 — 식은 껍질과 튼 틈
+
+
+def lava_still_rows():
+    """용암(고임) — 16x16 × **20프레임**. 식은 껍질이 갈라지며 속불이 비친다 (느리게 도는 대류)."""
+    rows = []
+    for f in range(20):
+        ph = 2 * math.pi * f / 20
+        for y in range(16):
+            row = []
+            for x in range(16):
+                v = 3.4
+                v += 2.2 * math.sin(2 * math.pi * (x + y) / 16 + ph)        # 대류 — 굼뜬 물결
+                v += 1.4 * math.sin(2 * math.pi * (2 * x - 3 * y) / 16 - ph)
+                v += smooth_octave(x, y, 4, 0x9D, 1.1)                       # 굳은 껍질의 얼룩
+                row.append(step(LAVA_SHADES, v))
+            rows.append(row)
+    return rows
+
+
+def lava_flow_rows():
+    """용암(흐름) — 32x32 × **16프레임**. 물보다 느리게, 끈적하게 흘러내린다 (2프레임에 1px)."""
+    rows = []
+    for f in range(16):
+        for y in range(32):
+            row = []
+            yy = (y + f * 2) % 32                                    # 16프레임 × 2px = 32px ⇒ 완전 루프
+            for x in range(32):
+                v = 3.6
+                v += 2.0 * math.sin(2 * math.pi * (x + yy * 2) / 32)
+                v += 1.2 * math.sin(2 * math.pi * (x * 3 - yy) / 32)
+                v += (h32(x, yy, 0xA7) % 1001 / 1000.0 * 2 - 1) * 0.7
+                row.append(step(LAVA_SHADES, v))
+            rows.append(row)
+    return rows
+
+
+FIRE_SHADES = ramp((96, 48, 26, 255), (252, 226, 168, 255), 9)      # 불꽃 — 밑동은 붉고 혀끝은 희다
+SOUL_FIRE_SHADES = ramp((30, 62, 84, 255), (206, 246, 255, 255), 9)  # 혼불 — 폐사당의 **찬** 불
+
+
+def campfire_fire_rows(shades=None):
+    """모닥불의 불꽃 — 16x16 × **8프레임** (컷아웃). 혀가 **올라가며 사그라든다**."""
+    shades = shades or FIRE_SHADES
+    rows = []
+    for f in range(8):
+        g = [[T] * 16 for _ in range(16)]
+        for x in range(16):
+            # 불꽃 높이 — 프레임마다 일렁인다 (정수 파수 = 8프레임 루프)
+            hh = 5.5 + 3.2 * math.sin(2 * math.pi * (f / 8) + x * 0.8) \
+                 + (h32(x, f, 0x4B) % 100) / 100.0 * 1.6
+            for k in range(int(hh)):
+                y = 15 - k
+                if y < 0:
+                    continue
+                v = 7.2 - k * 0.62 + octave(x, y, 1, 0x59 + f, 0.8)   # 밑동이 밝고 혀끝이 옅다
+                if k >= hh - 1.6:
+                    v -= 2.4                                           # 혀끝 — 사그라드는 자리
+                g[y][x] = step(shades, max(0.0, v))
+        rows.extend(g)
+    return rows
+
+
+def campfire_log_lit_rows(soul=False):
+    """타는 장작 — 16x16 × **4프레임** (바닐라 실측: 16x64 · interpolate · frametime 20).
+
+    ★ 팩은 여태 이것을 **16x16 한 장**으로 굽고 있었다. 바닐라 mcmeta 는 파일 단위로 살아남아
+      '보간 애니메이션'을 선언하는데 정작 프레임이 하나였다 — 조용히 어긋나 있던 자리다
+      (지금은 프레임 수를 우리가 굽고 mcmeta 도 우리가 쓴다). 잉걸은 **숨을 쉰다**: 4프레임에
+      걸쳐 붉기가 들고 난다 (interpolate 가 그 사이를 잇는다)."""
+    ember, ember_hi = ((SOUL_CAP_HI, (196, 240, 255, 255)) if soul else (EMBER, EMBER_HI))
+    rows = []
+    for f in range(4):
+        breath = 0.5 + 0.5 * math.sin(2 * math.pi * f / 4)      # 잉걸의 들숨·날숨
+        for y in range(16):
+            row = []
+            for x in range(16):
+                v = 4.0 + wood_grain(x, y, 0x4D, amp=1.2)
+                char = smooth_octave(x, y, 4, 0x77, 1.0)
+                if char > 0.15:
+                    v -= 1.2 * min(1.0, (char - 0.15) * 1.8)
+                p = step(DARK_WOOD, v)
+                if h32(x, y, 0x95) % 4 == 0 and char > -0.15:
+                    hot = (h32(x, y, 0xB1) % 100) / 100.0 < 0.33 + 0.34 * breath
+                    p = ember_hi if hot else ember              # 숯 사이로 드나드는 붉은 기
+                row.append(p)
+            rows.append(row)
+    return rows
+
+
+def lily_pad_rows():
+    """연잎 — **틴트가 색을 강제하는 자리** (그러나 그것이 문제였던 적은 없다).
+
+    연잎의 틴트는 코드 상수 0x208030 = (32,128,48) 이다 (모델 tintindex 0 — jar 실측 확인).
+    ⇒ **R 의 천장이 32** 다. 화면의 연잎은 R 32 를 넘지 못한다: **저채도가 불가능한 자리**다
+      (무채색이 되려면 G·B 도 32 로 내려야 하는데 그러면 새까만 잎이 된다).
+
+    ★ 그런데 앞선 증분은 이 자리를 *"천장에 눌려 어쩔 수 없다"* 고 적어 두고 **밝기 52** 로 두었다.
+      실측해 보니 그 서술의 근거 수치가 틀렸다 (「바닐라 채도 75」라 적혀 있으나 jar 실측은 **30**).
+      그리고 우리의 새 방침에서 저채도는 **더 이상 목표가 아니다** — 연잎은 짙푸른 것이 정답이다.
+      천장은 우리를 **우리가 가려던 곳으로** 떠밀고 있었다. 그래서 천장 바로 아래까지 밝게 올린다."""
+    tint = (32, 128, 48)
+    shades = [untint(c, tint, "lily_pad") for c in
+              ramp((20, 66, 30, 255), (32, 122, 48, 255), 7)]    # 화면에 설 값 (전부 천장 이하)
+    g = [[T] * 16 for _ in range(16)]
+    for y in range(16):
+        for x in range(16):
+            d = math.hypot(x - 7.5, y - 7.5)
+            if d > 7.4:
+                continue
+            # 잎의 갈라진 틈 (연잎은 한쪽이 V 로 벌어진다) — 실루엣이 곧 정체다
+            ang = math.atan2(y - 7.5, x - 7.5)
+            if abs(ang - 1.05) < 0.30 and d > 1.5:
+                continue
+            v = 4.4 - d * 0.28 + octave(x, y, 1, 0x8B, 0.9)      # 잎맥이 도는 결
+            if abs(d - 7.0) < 0.9:
+                v -= 1.6                                          # 잎 가장자리 그늘
+            g[y][x] = step(shades, v)
+    return g
+
+
+# ─── ⑥ 하늘 — **닿는 데까지만** (엔진이 쥔 것과 팩이 쥔 것을 가른다) ───
+#
+# 팩이 못 쥐는 것 (등록해 둔다 — 못 하는 것도 등록제다):
+#   · 하늘색(sky_color) = **바이옴 데이터**. 물과 같은 자리다 — 팩 밖.
+#   · 구름 **색** = 엔진이 시각·날씨로 칠한다. clouds.png 는 1비트 **모양 마스크**일 뿐이다.
+#     (그래서 구름은 건드리지 않는다 — 모양만 바꾸면 '수묵 구름'이 아니라 그냥 다른 뭉게구름이다.)
+# 팩이 쥐는 것: **해와 달**. 하늘의 두 점은 텍스처다.
+def sun_rows():
+    """해 — 32x32. 무협의 해는 **이글거리지 않는다**: 엷은 안개 너머의 백금빛 원반."""
+    g = [[T] * 32 for _ in range(32)]
+    for y in range(32):
+        for x in range(32):
+            d = math.hypot(x - 15.5, y - 15.5)
+            if d > 15.0:
+                continue
+            t = min(1.0, d / 15.0)
+            a = int(round(255 * (1.0 - t ** 3)))                  # 가장자리로 갈수록 스러진다
+            c = mix((255, 248, 232, 255), (238, 206, 158, 255), t)  # 심(芯)은 희고 테는 누렇다
+            g[y][x] = (c[0], c[1], c[2], max(0, min(255, a)))
+    return g
+
+
+def moon_rows(phase):
+    """달 8상(相) — 32x32 낱장 (1.21.9+ 는 celestial/moon/<상>.png 로 갈렸다 — jar 실측).
+    phase 0 = 보름 … 4 = 삭. 그믐으로 갈수록 **오른쪽부터 먹이 든다**."""
+    g = [[T] * 32 for _ in range(32)]
+    lit = 1.0 - phase / 4.0 if phase <= 4 else (phase - 4) / 4.0    # 0..1 (차고 기울고)
+    for y in range(32):
+        for x in range(32):
+            d = math.hypot(x - 15.5, y - 15.5)
+            if d > 13.5:
+                continue
+            # 명암 경계 — 원반 위 세로선 (달은 옆에서 빛을 받는다)
+            edge = (1.0 - lit) * 2.0 - 1.0                          # -1(보름) … +1(삭)
+            u = (x - 15.5) / 13.5
+            if u < edge:
+                continue                                            # 그늘진 쪽 — 없다
+            t = min(1.0, d / 13.5)
+            v = 1.0 - 0.35 * t
+            base = mix((246, 244, 238, 255), (206, 204, 196, 255), t)
+            if h32(x, y, 0x6F) % 17 == 0:                           # 달의 얼룩 (계수나무 그림자)
+                base = mix(base, (176, 176, 170, 255), 0.55)
+            g[y][x] = (int(base[0] * v), int(base[1] * v), int(base[2] * v), 255)
+    return g
+
+
+MOON_PHASES = ["full_moon", "waning_gibbous", "third_quarter", "waning_crescent",
+               "new_moon", "waxing_crescent", "first_quarter", "waxing_gibbous"]
+
+
+def write_tint_assets() -> int:
+    """컬러맵 · 하늘 — 블록이 아닌 것들 (블록은 write_block_textures 가 굽는다)."""
+    write_png(COLORMAP_DIR / "grass.png", colormap_rows(GRASS_MAP))
+    write_png(COLORMAP_DIR / "foliage.png", colormap_rows(FOLIAGE_MAP))
+    # 마른 잎 컬러맵(1.21.5+) — 같은 문법. 없으면 마른 덤불이 바닐라 누런빛으로 튄다
+    write_png(COLORMAP_DIR / "dry_foliage.png",
+              colormap_rows({k: mix(v, (150, 132, 104, 255), 0.55) for k, v in FOLIAGE_MAP.items()}))
+    write_png(ENV_DIR / "celestial" / "sun.png", sun_rows())
+    for i, name in enumerate(MOON_PHASES):
+        write_png(ENV_DIR / "celestial" / "moon" / f"{name}.png", moon_rows(i))
+    return 3 + len(MOON_PHASES)
+
+
+# ─── 애니메이션 등록부 — 프레임 수는 **바닐라와 같아야 한다** (jar 실측치) ───
+# .mcmeta 를 함께 굽는다: 블록 애니메이션의 mcmeta 는 우리 것이다 (GUI 나인슬라이스와 달리
+# 바닐라 계약을 깨지 않는다). 프레임 수가 어긋나면 물이 늘어지거나 잘린다 — 그래서 표로 못 박는다.
+ANIMATED = {                    # 텍스처: (프레임 수, frametime[, 보간])
+    "water_still": (32, 2), "water_flow": (32, 1),
+    "lava_still": (20, 2), "lava_flow": (16, 2),
+    "campfire_fire": (8, 2), "soul_campfire_fire": (8, 2),
+    # 타는 장작 — 바닐라가 16x64(4프레임·보간)다. 팩은 여태 16x16 한 장이었다 (조용히 어긋난 자리)
+    "campfire_log_lit": (4, 20, True), "soul_campfire_log_lit": (4, 20, True),
+    "kelp": (20, 3), "kelp_plant": (20, 3),
+    "seagrass": (18, 3), "tall_seagrass_top": (19, 3), "tall_seagrass_bottom": (19, 3),
+}
+
+
 def write_block_textures() -> int:
     """징발 등록부 순회 — 바닐라 경로에 16x16 덮어쓰기 (blockstate/model JSON 불요)."""
     blocks = {
@@ -4239,7 +4799,7 @@ def write_block_textures() -> int:
         "moss_block": moss_rows(),
         "grass_block_snow": snow_rows(),
         "campfire_log": campfire_log_rows(),
-        "campfire_log_lit": campfire_log_rows(lit=True),
+        # campfire_log_lit 은 아래 틴트층 절에서 **4프레임**으로 굽는다 (바닐라가 애니메이션이다)
         # 세간 (LECTERN 5 · CRAFTING_TABLE 4) — 서안·목공대
         "lectern_top": lectern_rows("top"),
         "lectern_front": lectern_rows("front"),
@@ -4393,8 +4953,65 @@ def write_block_textures() -> int:
             fronds=2 + i, lean=0.3, top_bias=i * 0.2) for i in range(4)},
     })
 
+    # ── 틴트층 (2026-07) — 땅·물·풀·잎. **시야의 60~80%** (위 틴트층 절의 진단) ──
+    #   ① 무채색으로 굽고 컬러맵이 물들이는 것: 잔디·풀포기·고사리·덩굴·참나무잎·수수깡
+    #   ② 역틴트로 굽는 것: 물(바이옴) · 가문비잎·자작잎(코드 상수)
+    #   ③ 틴트가 아예 없어 우리 값이 그대로 서는 것: 잔디 옆면(흙)·수초·다시마·용암·불
+    SPRUCE_TINT = (97, 153, 97)     # FoliageColor 상수 0x619961 — 컬러맵이 아니다 (코드에 박혔다)
+    BIRCH_TINT = (128, 167, 85)     # FoliageColor 상수 0x80A755
+    blocks.update({
+        # 물 — 축 ⑪ 최대 구멍 (30,720). 애니메이션 프레임 시트 + 역틴트
+        "water_still": water_still_rows(),
+        "water_flow": water_flow_rows(),
+        # 잔디 (17,920) — 윗면·덧그림은 컬러맵이 물들이고, 옆면 바탕은 흙이다 (틴트 없음)
+        "grass_block_top": grass_block_top_rows(),
+        "grass_block_side": grass_block_side_rows(),
+        "grass_block_side_overlay": grass_block_overlay_rows(),
+        # 풀포기·고사리 (7,099) — 컬러맵 틴트. 풀과 고사리는 **실루엣으로** 갈린다 (색이 아니라)
+        "short_grass": blade_rows(0x21, tall=11, fronds=4),
+        "fern": blade_rows(0x27, tall=12, fronds=3, fern=True),
+        "tall_grass_bottom": blade_rows(0x2B, tall=15, fronds=4),
+        "tall_grass_top": blade_rows(0x2D, tall=9, fronds=4),
+        "large_fern_bottom": blade_rows(0x31, tall=15, fronds=3, fern=True),
+        "large_fern_top": blade_rows(0x35, tall=10, fronds=3, fern=True),
+        "sugar_cane": blade_rows(0x39, tall=15, fronds=3),
+        # 덩굴 (2,560) — foliage 컬러맵
+        "vine": vine_rows(),
+        # 나뭇잎 — 참나무는 컬러맵, 가문비·자작은 **코드 상수** ⇒ 역틴트 (매화는 무틴트라 이미 분홍이다)
+        "oak_leaves": leaf_rows(0x45),
+        "spruce_leaves": leaf_rows(0x49, [untint(c, SPRUCE_TINT, "spruce_leaves") for c in SPRUCE_TARGET]),
+        "birch_leaves": leaf_rows(0x4D, [untint(c, BIRCH_TINT, "birch_leaves") for c in BIRCH_TARGET]),
+        # 물속 식생 (12,422) — 틴트 없음 (모델에 tintindex 가 없다). 물살에 흔들린다
+        "kelp": weed_rows(20, 0x51, 14, tip=True),
+        "kelp_plant": weed_rows(20, 0x55, 15, tip=True),
+        "seagrass": weed_rows(18, 0x59, 9),
+        "tall_seagrass_bottom": weed_rows(19, 0x5D, 15),
+        "tall_seagrass_top": weed_rows(19, 0x61, 11),
+        # 연잎 — 역틴트의 천장에 부딪히는 자리 (R ≤ 32. 저채도로는 못 만든다 — lily_pad_rows 주석)
+        "lily_pad": lily_pad_rows(),
+        # 불·용암 — **채색이 허락된 자리** (불은 의미다)
+        "lava_still": lava_still_rows(),
+        "lava_flow": lava_flow_rows(),
+        "campfire_fire": campfire_fire_rows(),
+        "soul_campfire_fire": campfire_fire_rows(SOUL_FIRE_SHADES),     # 혼불 — 찬 불 (폐사당)
+        "campfire_log_lit": campfire_log_lit_rows(),                    # 4프레임 — 잉걸이 숨 쉰다
+        "soul_campfire_log_lit": campfire_log_lit_rows(soul=True),
+    })
+
     for name, rows in blocks.items():
         write_png(BLOCK_DIR / f"{name}.png", rows)
+    # 애니메이션 mcmeta — 프레임 시트는 **높이가 프레임 수의 배수**여야 한다. 여기서 강제한다
+    # (어긋나면 클라이언트가 텍스처를 늘려 버린다 — 물이 흐물거리고 아무도 이유를 모른다).
+    for name, spec in ANIMATED.items():
+        frames, ft = spec[0], spec[1]
+        rows = blocks[name]
+        w, h = len(rows[0]), len(rows)
+        if h != w * frames:
+            raise ValueError(f"{name}: {w}x{h} — {frames}프레임이면 높이가 {w * frames} 여야 한다")
+        anim = {"frametime": ft}
+        if len(spec) > 2 and spec[2]:
+            anim["interpolate"] = True      # 잉걸의 숨 — 프레임 사이를 잇는다 (바닐라와 같은 문법)
+        write_json(BLOCK_DIR / f"{name}.png.mcmeta", {"animation": anim})
     for name in SCROLL_MOTIFS:
         write_png(PAINTING_DIR / f"{name}.png", scroll_rows(name))
     # 현판·주기 — 블록이되 텍스처는 entity/signs/ 아래 산다 (궤·항아리와 같은 문법).
@@ -6890,6 +7507,7 @@ def main():
     # ─── 아이템·블록 텍스처 레이어 (texture_layer_design.md — 1차) ───
     items = write_item_assets()
     blocks = write_block_textures()
+    tints = write_tint_assets()     # 컬러맵·해·달 — **세계의 초록은 컬러맵에서 나온다**
     parts = write_particle_textures()
     props = write_prop_textures()
     ents = write_entity_textures(sheet)
@@ -6910,7 +7528,7 @@ def main():
                  "supported_formats": {"min_inclusive": 46, "max_inclusive": PACK_FORMAT},
                  "min_format": 46,
                  "max_format": PACK_FORMAT,
-                 "description": "혼천(渾天) — 수묵 무협 팩 · 3D 병기 45 · 무공 획 9 · 짐승 형체 8 · 블록 215 · 메뉴 (1.21.11)"}
+                 "description": "혼천(渾天) — 수묵 무협 팩 · 3D 병기 45 · 무공 획 9 · 짐승 형체 8 · 블록 242 · 컬러맵·물·풀·잎 · 메뉴 (1.21.11)"}
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     total = 1 + 9 + len(REALM_CRESTS) + 1 + 1
@@ -6924,6 +7542,14 @@ def main():
     print(f"  짐승의 형체 {mobs}종 (MobDisplay 가 본체를 감추고 태운다. 코가 +Z · 발이 원점)")
     print(f"  메뉴·버튼 {ui}장 (GUI 스프라이트 — mcmeta 미포함 = 바닐라 나인슬라이스·좌표 계약 그대로)")
     print(f"  블록 징발 {blocks}장 (전역 치환 — block_channels.징발 등록분만)")
+    print(f"  틴트층 {tints}장 (컬러맵 3 + 해·달 9) — ★ **세계의 초록은 컬러맵이 곱한다**. "
+          f"텍스처만 칠하고 컬러맵을 두면 틴트가 도로 초록으로 물들인다")
+    print(f"  ├ 애니메이션 {len(ANIMATED)}종 (물·용암·불·수초 — 프레임 시트 + mcmeta. 프레임 수는 바닐라 실측치)")
+    if UNTINT_CLIP:
+        # 역틴트 천장에 부딪힌 자리 — **조용히 어긋나지 않는다** (물의 R 은 63 을 넘을 수 없다)
+        seen = sorted({(w, c, t) for w, c, _, t, _ in UNTINT_CLIP})
+        print(f"  ├ ⚠ 역틴트 클램프 {len(seen)}건 — 틴트가 천장이다 (화면색은 틴트값을 못 넘는다): "
+              + ", ".join(f"{w}.{c}(틴트 {t})" for w, c, t in seen[:6]))
     print(f"  획층(파티클) {parts}장 (무공 모션 — 엔진 불변. 팩 없으면 바닐라 파티클로 폴백)")
     print(f"  기물(블록 엔티티) {props}장 (항아리·궤 — 블록이되 텍스처는 entity/ 아래 산다)")
     print(f"  엔티티 징발 {ents}장 (전역 치환 — 사람 2 + 늑대 변종 27 + 고양잇과 2 + 곰·멧돼지·호랑이 3"

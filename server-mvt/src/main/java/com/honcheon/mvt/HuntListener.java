@@ -73,8 +73,30 @@ public final class HuntListener implements Listener {
         if (gap == null) {
             return;
         }
+        // 부산물은 접합과 무관하다 — 가죽은 몸이 벗기는 것이지 장부가 주는 것이 아니다
+        if (event.getEntityType() == EntityType.WOLF || event.getEntityType() == EntityType.FOX) {
+            event.getDrops().add(pelt(event.getEntityType() == EntityType.WOLF ? "늑대 가죽" : "여우 가죽"));
+        }
+        accrue(killer, event, gap);
+    }
+
+    /**
+     * 벤 것이 손에 남는가 — <b>실전 화후.</b> 다섯 과목 중 실전으로 자라는 것은 초식뿐이다.
+     *
+     * <p><b>시계는 봇의 세계일이다</b> (현실 하루 = 세계 1일). 예전에는 {@code getFullTime()/24000} —
+     * <b>마크의 하루는 현실 20분</b>이었다. 일일 상한(cappedGrant)과 반복 감쇠가 20분마다 풀렸다는 뜻이고,
+     * 그것은 상한이 아니다. 달력은 하나여야 한다.
+     *
+     * <p><b>접합되지 않은 몸에는 쌓이지 않는다.</b> 장부는 봇의 것이다 — 강호에 이름이 없는 자의 화후를
+     * 마크가 혼자 적으면 그것은 장부가 아니라 위조다. (그 사실은 {@code SkillListener.nag} 가 말해 준다.)
+     */
+    private void accrue(Player killer, EntityDeathEvent event, String gap) {
         PlayerLedger ledger = plugin.ledger(killer.getUniqueId());
-        ledger.rollDay(killer.getWorld().getFullTime() / 24000L);
+        long worldDay = WorldBridge.worldDay();
+        if (worldDay <= 0 || !ledger.linked()) {
+            return;
+        }
+        ledger.rollDay(worldDay);
 
         // 목숨 무게: 결과가 아니라 상황 — MVT 근사: 처치 시점 체력 절반 미만 = 생사
         boolean deadly = killer.getHealth() < killer.getMaxHealth() * 0.5;
@@ -92,14 +114,18 @@ public final class HuntListener implements Listener {
 
         int levelBefore = ledger.levelOf(HUNT_SKILL, plugin.progression());
         ledger.grant(HUNT_SKILL, granted);
+        ledger.pendSkill(HUNT_SKILL, granted);   // 다리로 — 시트를 적는 것은 봇이다
         int levelAfter = ledger.levelOf(HUNT_SKILL, plugin.progression());
 
-        // 마크 — 격상 상대 + 생사 = 사선
+        // 마크 — 격상 상대 + 생사 = 사선. ★ 이것이 봇의 승급 요건('실전 마크 N')을 채우는 값이다
         if (deadly && "상수".equals(gap)) {
             ledger.mark사선();
+            ledger.pend사선();
         } else {
             ledger.mark실전();
+            ledger.pend실전();
         }
+        plugin.skills().pushLedger(killer, ledger, plugin.skills().state(killer));
 
         // 처치 즉시 같은 틱 피드백 — 수련 일수가 경험치 숫자의 자리를 맡는다
         actionBar(killer, ChatColor.AQUA + String.format("사냥이 손에 익는다 (+%.2f일)", granted));
@@ -109,11 +135,6 @@ public final class HuntListener implements Listener {
             killer.sendTitle(ChatColor.GOLD + "오늘따라 손이 가볍다",
                     ChatColor.YELLOW + "사냥 숙련 " + levelBefore + " → " + levelAfter, 10, 50, 20);
             killer.playSound(killer.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
-        }
-
-        // 부산물 — 경제 루프의 입구 (판매는 /혼천 팔기)
-        if (event.getEntityType() == EntityType.WOLF || event.getEntityType() == EntityType.FOX) {
-            event.getDrops().add(pelt(event.getEntityType() == EntityType.WOLF ? "늑대 가죽" : "여우 가죽"));
         }
     }
 

@@ -156,8 +156,65 @@ public final class SkillListener implements Listener {
         return previous;
     }
 
+    /**
+     * 이 몸의 무공 상태 — <b>경지는 원장에서 온다</b> (원장의 경지는 봇의 시트에서 왔다).
+     *
+     * <p>여기가 {@code "이류"} 하드코딩이 살아 있던 자리다. 이제 태어나는 상태는 몸에 실린 원장을 보고,
+     * 원장이 비었으면(접합 전) 등록부의 첫 단으로 선다 — <b>코드가 경지를 지어내지 않는다.</b>
+     */
     public SkillEngine.State state(Player player) {
-        return states.computeIfAbsent(player.getUniqueId(), id -> new SkillEngine.State());
+        return states.computeIfAbsent(player.getUniqueId(), id -> {
+            SkillEngine.State fresh = new SkillEngine.State();
+            PlayerLedger ledger = plugin.ledger(id);
+            fresh.realm = ledger.realm(engine.baseRealm());
+            fresh.naegong = ledger.naegong();
+            fresh.energy = engine.pool(fresh.naegong);
+            return fresh;
+        });
+    }
+
+    // ══════════ 시트 접합 — 봇의 장부가 마크의 몸에 실린다 ══════════
+
+    /**
+     * <b>봇의 시트를 이 몸에 싣는다.</b> 스냅숏이 올 때마다(20초) · 접속할 때마다 부른다.
+     *
+     * <p><b>정본은 봇이다.</b> 내려오는 값은 <b>절대값</b>(덮어쓰기)이지 증분이 아니다 — 그래서
+     * 마크가 수련으로 먼저 더해 둔 값이 있어도 <b>영구히 갈라질 수 없다</b>: 다음 스냅숏이 진실로 되돌린다.
+     * 마크가 쌓은 것은 {@code cultivation_logged} 로 올라가 봇의 시트를 바꾸고, 바뀐 시트가 여기로 온다.
+     *
+     * <p>접합되지 않은 몸에는 시트가 없다. 그 몸은 <b>강호에 없는 사람</b>이다 — 등록부의 첫 단(범인)으로
+     * 서고, 화후는 쌓이지 않는다 (쌓을 장부가 없다). {@link #nag} 가 그 사실을 본인에게 말한다.
+     *
+     * @return 시트가 실렸는가 (false = 접합 전이거나 봇이 꺼져 있다)
+     */
+    public boolean syncSheet(Player player) {
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        WorldBridge.Sheet sheet = WorldBridge.state().sheet(player.getUniqueId());
+        if (sheet == null) {
+            ledger.setLinked(false);
+            return false;
+        }
+        ledger.applySheet(sheet);
+        SkillEngine.State state = state(player);
+        String before = state.realm;
+        state.realm = ledger.realm(engine.baseRealm());
+        state.naegong = ledger.naegong();
+        state.energy = Math.min(state.energy < 0 ? 0 : state.energy, engine.pool(state.naegong));
+        if (!java.util.Objects.equals(before, state.realm)) {
+            // 승급은 강호가 인정하는 것이다 — 마크는 그것을 전해 듣는다
+            state.armed = null;
+            state.energy = engine.pool(state.naegong);
+            player.sendTitle(ChatColor.GOLD + Glyphs.realmCrest(state.realm) + " " + state.realm,
+                    ChatColor.GRAY + "강호가 너를 그렇게 부른다", 10, 60, 20);
+        }
+        return true;
+    }
+
+    /** 접속한 모든 몸에 시트를 다시 싣는다 — 스냅숏이 바뀔 때마다 (메인 스레드에서 부를 것) */
+    public void syncAllSheets() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            syncSheet(player);
+        }
     }
 
     // ══════════ 중앙 티커 ══════════
@@ -891,8 +948,12 @@ public final class SkillListener implements Listener {
                 PlayerLedger led = plugin.ledger(player.getUniqueId());
                 int mastery = led.levelOf(engine.skillName(cast.skillId()), plugin.progression());
                 Growth growth = Growth.get();
+                // ★ 시트가 없는 몸은 **그 경지의 표준 무인**이다 — 갓 접속한 자가 능력치 0.0 이라
+                //   +0 으로 싸우는데 같은 경지의 산적은 realmAttr 로 표준치를 받고 있었다.
+                //   (Vitality.cheOf 가 이미 같은 답을 갖고 있다 — 원장이 비면 경지 대체값)
                 int attrBonus = growth == null ? 0 : growth.attackBonus(led,
-                        engine.weaponClassOf(player.getInventory().getItemInMainHand(), null));
+                        engine.weaponClassOf(player.getInventory().getItemInMainHand(), null),
+                        engine.realmAttr(state.realm));
                 int execBase = attrBonus + mastery + engine.weaponJudgmentBonus(weaponGrade(player))
                         + engine.realmGapBonus(state.realm, foeRealm(target, hostile))
                         + (engine.isDepleted(state.energy) ? -2 : 0);   // 내공 고갈 = 판정 -2
@@ -2153,14 +2214,93 @@ public final class SkillListener implements Listener {
 
     // ══════════ 정리 (performance.yml effects.cleanup_on) ══════════
 
+    /**
+     * <b>첫 접속의 목소리.</b> 여기 아무것도 없었다 — {@code PlayerJoinEvent} 처리기는 팩과 형체 둘뿐이었고,
+     * 아무것도 모르는 사람이 들어와 <b>아무 말도 듣지 못하고</b> 빈 세계에 섰다.
+     *
+     * <p>세 가지를 한다:
+     * <ol>
+     *   <li><b>시트를 싣는다</b> — 봇의 장부가 이 몸의 경지·능력치·심법·내공이 된다.</li>
+     *   <li><b>접합 안 됐으면 말한다</b> — "너는 아직 강호에 없다". 조용히 반쪽 세계에서 놀게 두지 않는다.</li>
+     *   <li><b>첫 배분을 깔고 목표를 준다</b> — 빈 {@code curriculum} 은 {@code Growth.train} 이
+     *       즉시 0 을 돌려준다. 그 침묵이 첫 함정이었다 ({@code player_creation.yml mvt_onboarding}).</li>
+     * </ol>
+     */
+    @EventHandler
+    public void onJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        boolean carried = syncSheet(player);   // 스냅숏에 이 몸이 있으면 시트가 실린다
+        state(player);                         // 상태를 세운다 (경지는 원장에서 — 하드코딩 없음)
+        Onboarding on = Onboarding.get();
+        if (on == null) {
+            return;
+        }
+        // 첫 배분 — 아직 한 번도 수련을 고르지 않은 몸에만 (플레이어의 선택을 덮지 않는다)
+        boolean empty = ledger.curriculum().isEmpty();
+        if (empty && !on.defaultCurriculum().isEmpty()) {
+            Growth growth = Growth.get();
+            on.defaultCurriculum().forEach((subject, segments) -> {
+                if (growth != null && growth.subjects().containsKey(subject)) {
+                    ledger.setSegments(subject, segments);
+                }
+            });
+        }
+        final boolean seeded = empty && !ledger.curriculum().isEmpty();
+        final boolean linkedNow = carried || ledger.linked();
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
+            if (!linkedNow) {
+                nag(player, on);
+                return;
+            }
+            String goal = on.goalFor(player.getUniqueId());
+            if (goal != null) {
+                player.sendMessage(on.goalPrefix() + ChatColor.WHITE + " — " + goal);
+            }
+            on.linkedLines().forEach(player::sendMessage);
+            if (!ledger.curriculum().isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                ledger.curriculum().forEach((subject, segments) ->
+                        sb.append(sb.isEmpty() ? "" : " · ").append(subject).append(' ')
+                                .append(segments).append("구간"));
+                player.sendMessage((seeded ? ChatColor.DARK_GRAY + "  기본 배분 — " : ChatColor.DARK_GRAY
+                        + "  오늘의 배분 — ") + ChatColor.GRAY + sb);
+            }
+        }, 40L);   // 접속 직후의 폭포(팩·타이틀) 뒤에 말한다 — 안 그러면 아무도 못 읽는다
+    }
+
+    /**
+     * <b>"너는 아직 강호에 없다."</b> — 접합되지 않은 몸에게.
+     *
+     * <p>지금까지 미접합자는 <b>조용히 반쪽 세계에서 놀았다.</b> 그것이 가장 나쁘다: 아무리 베고 익혀도
+     * 어디에도 적히지 않는데 본인은 그것을 모른다. 이제는 말한다 — 그리고 화후도 쌓이지 않는다
+     * (쌓을 장부가 없다. {@link #settleTraining} 이 접합을 요구한다).
+     */
+    private void nag(Player player, Onboarding on) {
+        if (!on.shouldNag(player.getUniqueId(), System.currentTimeMillis())) {
+            return;
+        }
+        player.sendTitle(ChatColor.RED + on.unlinkedTitle(),
+                ChatColor.YELLOW + on.unlinkedSubtitle(), 10, 70, 20);
+        on.unlinkedLines().forEach(player::sendMessage);
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
+        // ★ 떠나기 전에 원장을 굽는다 — 재기동이 아니라 로그아웃 하나로도 소멸했다
+        plugin.saveLedger(id);
         states.remove(id);
         clashCounts.remove(id);
         stanceNow.remove(id);   // 지정 태세(stancePin)는 남긴다 — 몸에 밴 것은 로그아웃으로 안 풀린다
         hud.forget(id);
         display.clear(id);      // 떠난 몸의 형체는 남지 않는다
+        if (Onboarding.get() != null) {
+            Onboarding.get().forget(id);
+        }
     }
 
     /** 죽은 몸의 내력은 남지 않는다 (F-P2 cleanup_on death) */
@@ -2255,16 +2395,43 @@ public final class SkillListener implements Listener {
             return;
         }
         PlayerLedger ledger = plugin.ledger(player.getUniqueId());
-        long day = player.getWorld().getFullTime() / 24000L;
+
+        // ★ 시계는 하나다 — 봇의 세계일. 예전에는 getFullTime()/24000 (마크의 20분 하루)이었고,
+        //   그래서 `Growth.attrCostDays`(능력치 +1 = 360일)가 봇의 360일과 **72배 다른 시계** 위에서 돌았다.
+        //   마크에 닷새 앉아 있으면 봇에서 1년 걸릴 능력치가 올랐다. 이제 달력은 봇이 굴리고 마크가 읽는다.
+        long day = WorldBridge.worldDay();
+        if (day <= 0) {
+            return;   // 스냅숏이 없다 = 봇이 꺼져 있다. 장부는 봇의 것이므로 움직이지 않는다
+        }
+        if (!ledger.linked()) {
+            return;   // 강호에 없는 몸에는 쌓을 장부가 없다 (onJoin 의 nag 가 그 이유를 말했다)
+        }
         if (!ledger.isNewDay(day)) {
             return;
         }
         double wasted = growth.train(ledger, state.realm, 1.0);
         ledger.addWasted(wasted);
+        // 몸에 실제로 들어간 일치 — 봇의 `화후_원장` 으로 간다 (범인 → 삼류의 관문: 기초 단련 3개월)
+        ledger.pendTrain(Math.max(0.0, 1.0 - wasted));
         ledger.rollDay(day);
         if (wasted > 0.0) {
             player.sendMessage(org.bukkit.ChatColor.DARK_GRAY + "수련 "
                     + String.format("%.1f", wasted) + "일치가 흩어졌다 — 천장에 닿았다 (/혼천 수련)");
         }
+        pushLedger(player, ledger, state);
+    }
+
+    /**
+     * <b>몸에서 쌓인 것을 장부로 올린다.</b> 시트를 적는 손은 봇 하나뿐이다 — 마크는 규칙의 계산기다.
+     *
+     * <p>마크는 낙관적으로 제 거울에 먼저 더해 두었다(그래야 같은 틱에 몸이 반응한다). 그 값은 곧
+     * 스냅숏이 <b>절대값으로 덮어쓴다</b> — 더하는 것이 아니라 덮는 것이므로 <b>이중 계상이 원리적으로 불가능</b>하다.
+     */
+    void pushLedger(Player player, PlayerLedger ledger, SkillEngine.State state) {
+        if (!ledger.hasPending() || !ledger.linked()) {
+            return;
+        }
+        WorldBridge.cultivationLogged(player.getUniqueId(), player.getName(),
+                state == null ? ledger.realm(engine.baseRealm()) : state.realm, ledger.takePending());
     }
 }

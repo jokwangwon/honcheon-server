@@ -146,6 +146,20 @@ final class Injections {
         Set<String> deadKeys = dead.keySet();
         for (Map.Entry<String, Map<String, Object>> e : dead.entrySet()) {
             String npcKey = e.getKey();
+            if (rules.npcByKey(npcKey) == null) {
+                // ★ 무명(無名)은 게시판에 오르지 않는다. 등록부가 그렇게 정했다:
+                //   populace.yml layer.quest_source: false · death.quest_source: false
+                //   ("무명의 죽음은 의뢰를 낳지 않는다 — npc_death quest_injection 미주입")
+                //   그리고 death.revenge: civil_debt — "가장 약한 자를 죽인 대가는 복수가 아니라
+                //   지역의 냉기다". 유족이 있으면 그들은 게시판이 아니라 **소매를 붙잡는다**
+                //   (MVT Incidents 의 무명 의뢰층 — populace.yml quests.rules).
+                //
+                // 이 한 줄이 없으면 다리가 실어 온 키("무명:guja" · "region:...")가 그대로
+                // 게시판 제목이 된다 — rules.npcName 은 못 찾은 키를 그대로 돌려주기 때문이다
+                // ("장례: 무명:guja 의 상(喪)"). 등록부에 없는 사람의 이름을 발명하느니,
+                // 등록부에 없는 사람의 의뢰를 내지 않는 것이 이 저장소의 규약이다.
+                continue;
+            }
             Map<String, Object> state = e.getValue();
             int deathDay = ((Number) state.getOrDefault("사망일", 0)).intValue();
             int elapsed = today - deathDay;

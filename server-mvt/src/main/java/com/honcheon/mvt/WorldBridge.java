@@ -357,6 +357,51 @@ public final class WorldBridge {
         return current.linkedName(player);
     }
 
+    /**
+     * <b>몸에서 쌓인 것을 장부로 올린다</b> — {@code cultivation_logged}.
+     *
+     * <p>이것이 <b>정본의 방향</b>이다. 시트를 적는 손은 <b>봇 하나뿐</b>이고, 마크는 계산기다:
+     * 규칙({@link Growth})은 마크에 한 벌만 있고, 그 결과인 <b>증분</b>만 다리를 건넌다. 봇은 그것을
+     * 시트에 더하고 경지 캡으로 조인 뒤({@code player_creation.yml attribute_cap_by_realm})
+     * {@code promoteIfDue} 를 굴리고, 확정된 시트를 스냅숏으로 되내려보낸다.
+     *
+     * <p>왜 반대가 아닌가 — 봇이 규칙을 다시 구현하면 <b>규칙의 정본이 둘</b>이 되고, 마크가 시트를
+     * 쓰면 <b>장부의 정본이 둘</b>이 된다. 이 프로젝트가 반복해서 데인 병이 그것이다.
+     * 그래서 <b>규칙은 마크에 하나 · 장부는 봇에 하나</b>로 잘라 두었다.
+     *
+     * <p>유실·중복 걱정은 없다: 큐는 append-only 디스크이고(봇이 꺼져 있으면 쌓였다가 켤 때 따라잡는다)
+     * 봇의 {@code bridge_inbox}(PK=event_id)가 재생을 무해하게 만든다 — <b>정확히 한 번</b> 적용된다.
+     */
+    public static void cultivationLogged(UUID player, String name, String realm,
+                                         PlayerLedger.Pending pending) {
+        if (player == null || pending == null || !KINDS.contains("cultivation_logged")) {
+            return;
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("player_uuid", player.toString());
+        data.put("player_name", name);
+        data.put("realm", realm);
+        if (!pending.attrs().isEmpty()) {
+            data.put("attr_days", new LinkedHashMap<>(pending.attrs()));
+        }
+        if (!pending.skills().isEmpty()) {
+            data.put("skill_days", new LinkedHashMap<>(pending.skills()));
+        }
+        if (pending.naegong() > 0) {
+            data.put("naegong", pending.naegong());
+        }
+        if (pending.trainDays() > 0) {
+            data.put("train_days", pending.trainDays());
+        }
+        if (pending.marks실전() > 0) {
+            data.put("marks_실전", pending.marks실전());
+        }
+        if (pending.marks사선() > 0) {
+            data.put("marks_사선", pending.marks사선());
+        }
+        emit("cultivation_logged", data);
+    }
+
     /** 비무 — 죽이지 않는 싸움. 장터에서 하면 이야깃거리가 된다 */
     public static void sparring(UUID winnerUuid, String winnerName, UUID loserUuid, String loserName,
                                 String reason, String place, int witnesses) {
@@ -391,11 +436,17 @@ public final class WorldBridge {
      */
     public record State(int day, Set<String> tags, Set<String> reactions, Map<String, Integer> region,
                         Map<String, Integer> wanted, Map<String, Map<String, Integer>> favor,
-                        Map<String, String> links, Map<String, Integer> bounty, int wantedMin) {
+                        Map<String, String> links, Map<String, Integer> bounty, int wantedMin,
+                        Map<String, Sheet> sheets) {
 
         static State empty() {
             return new State(0, Set.of(), Set.of(), Map.of(), Map.of(), Map.of(), Map.of(),
-                    Map.of(), 8);
+                    Map.of(), 8, Map.of());
+        }
+
+        /** 이 몸에 실린 시트 — 봇의 확정값. 접합되지 않았으면 null (강호에 없는 사람이다) */
+        public Sheet sheet(UUID player) {
+            return player == null ? null : sheets.get(player.toString());
         }
 
         /** 접합된 몸인가 — 그의 장부 이름 (아니면 null. 이름 없는 자의 일은 세계의 배경음이다) */
@@ -434,9 +485,39 @@ public final class WorldBridge {
         }
     }
 
+    /**
+     * 봇이 내려보낸 시트 한 장 — {@code world_state.json} 의 {@code sheet.<mc_uuid>} 블록.
+     *
+     * <p><b>이것이 캐릭터다.</b> 마크에는 캐릭터 시트가 없었다 — {@code SkillEngine.State.realm} 은
+     * {@code "이류"} 로 <b>박혀 있었고</b>(<i>"MVT 는 캐릭터 시트가 없다"</i>) 능력치는 전부 0.0 이었다.
+     * 그래서 갓 접속한 플레이어는 {@code Growth.attackBonus} = +0 인데 같은 경지의 산적은
+     * {@code realmAttr} 로 표준치를 받았다 — <b>플레이어가 제 급의 적보다 구조적으로 약했다.</b>
+     *
+     * <p>음수·null 은 <b>"봇이 모르는 값"</b>이다 (덮어쓰지 않는다). {@code simbeop} 만은 null 도
+     * 진실이다 — 개화 전이면 개화 전인 것이고, 그것이 내공 과목의 게이트다.
+     */
+    public record Sheet(String realm, Map<String, Double> attrs, double naegong, String simbeop,
+                        String primaryArt, Map<String, Double> skillDays,
+                        int marks실전, int marks사선, int money) {
+    }
+
     /** 지금 읽힌 세계 상태 (아직 스냅숏이 없으면 빈 상태 — 세계는 조용하다) */
     public static State state() {
         return current;
+    }
+
+    /**
+     * <b>세계일 — 하나뿐인 달력.</b> 봇이 굴리고(자정 스케줄러: 현실 하루 = 세계 1일) 마크가 읽는다.
+     *
+     * <p>0 이면 <b>스냅숏이 아직 없다</b> = 봇이 꺼져 있거나 다리가 안 섰다. 그때 장부는 <b>움직이지 않는다</b> —
+     * 장부는 봇의 것이므로, 봇이 죽어 있는 동안 화후가 쌓이면 그것은 장부가 아니라 위조다.
+     *
+     * <p>마크의 하루(현실 20분)를 여기 쓰지 말 것. {@code Growth.attrCostDays}(능력치 +1 = 360일)와
+     * 봇의 승급 요건은 <b>같은 {@code days} 단위</b>를 쓴다 — 두 시계를 섞으면 72배가 벌어진다.
+     * 그 대조를 {@code tools/clock_audit.py} 가 지킨다.
+     */
+    public static long worldDay() {
+        return current.day();
     }
 
     /**
@@ -563,9 +644,12 @@ public final class WorldBridge {
             Map<String, Integer> bounty = new LinkedHashMap<>();
             map(root.get("bounty")).forEach((who, v) -> bounty.put(who, num(v, 0)));
             int wantedMin = num(map(root.get("thresholds")).get("wanted"), 8);
+            // ★ 시트 — 몸에 실릴 캐릭터. 여기가 비면 마크는 다시 "경지 이류·능력치 0"의 세계가 된다
+            Map<String, Sheet> sheets = new LinkedHashMap<>();
+            map(root.get("sheet")).forEach((who, raw) -> sheets.put(who, sheet(map(raw))));
 
             State next = new State(num(root.get("world_day"), 0), tags, reactions, region,
-                    wanted, favor, links, bounty, wantedMin);
+                    wanted, favor, links, bounty, wantedMin, sheets);
             current = next;
             for (Consumer<State> listener : LISTENERS) {
                 try {
@@ -795,5 +879,25 @@ public final class WorldBridge {
 
     private static int num(Object value, int fallback) {
         return value instanceof Number n ? n.intValue() : fallback;
+    }
+
+    private static double dec(Object value, double fallback) {
+        return value instanceof Number n ? n.doubleValue() : fallback;
+    }
+
+    private static String text(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    /** 시트 한 장 판독 — 없는 칸은 "봇이 모르는 값"(음수·null)으로 남긴다. 몸의 것을 덮지 않는다 */
+    private static Sheet sheet(Map<String, Object> raw) {
+        Map<String, Double> attrs = new LinkedHashMap<>();
+        map(raw.get("attrs")).forEach((k, v) -> attrs.put(k, dec(v, 0)));
+        Map<String, Double> skills = new LinkedHashMap<>();
+        map(raw.get("skill_days")).forEach((k, v) -> skills.put(k, dec(v, 0)));
+        return new Sheet(text(raw.get("realm")), attrs, dec(raw.get("naegong"), -1),
+                text(raw.get("simbeop")), text(raw.get("primary_art")), skills,
+                num(raw.get("marks_실전"), -1), num(raw.get("marks_사선"), -1),
+                num(raw.get("money"), -1));
     }
 }

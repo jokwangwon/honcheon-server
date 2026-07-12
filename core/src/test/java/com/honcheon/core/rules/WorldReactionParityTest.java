@@ -27,7 +27,10 @@ class WorldReactionParityTest {
     void 경로B_폭력루트_D7_상태가_파이썬_시뮬레이터와_일치한다() {
         RumorEngine rumorEngine = new RumorEngine(RulesConfig.load(cfg("rumor.yml")));
         FactionReactionEngine factions = new FactionReactionEngine(RulesConfig.load(cfg("faction_reaction.yml")));
-        RegionStateEngine region = new RegionStateEngine(RulesConfig.load(cfg("region_state.yml")),
+        RegionStateEngine region = new RegionStateEngine(RulesConfig.load(cfg("region_state.yml")));
+        // ★ 장부는 부르는 쪽이 든다 (RegionStateEngine 은 규칙일 뿐 — 프로덕션의 장부는 봇의 regions 표다).
+        //   여기서는 시뮬레이터가 그 장부다.
+        Map<String, Integer> state = new java.util.LinkedHashMap<>(
                 Map.of("치안", 50, "경제", 48, "민심", 55));   // 청하현 초기값
 
         List<RumorEngine.Rumor> rumors = new ArrayList<>();
@@ -42,7 +45,7 @@ class WorldReactionParityTest {
                 r1 = rumorEngine.create("R1", 0, "inn_net", 2, 70,
                         Set.of("폭력", "사파", "무인", "치안", "조직원"), null);
                 rumors.add(r1);
-                region.applyEvent("증거_없는_폭행");
+                region.applyTo(state, "증거_없는_폭행");
                 factions.apply("haomun", "미상의 낭인", "연락책_연락두절");
             }
             if (day == 2) {
@@ -51,7 +54,7 @@ class WorldReactionParityTest {
             }
             if (day == 3) {
                 // 해질녘: 상단 습격 발생
-                region.applyEvent("상단_습격_성공");
+                region.applyTo(state, "상단_습격_성공");
                 r2 = rumorEngine.create("R2", 3, "sangdan_net", 3, 90,
                         Set.of("도적", "물류", "금전", "치안", "폭력"), "sangdan");
                 rumors.add(r2);
@@ -73,9 +76,9 @@ class WorldReactionParityTest {
 
         // ── D+7 종료 상태 — 파이썬 시뮬레이터 출력과 대조 ──
         // 지역: 치안 43 / 경제 45 / 민심 52
-        assertEquals(43, region.get("치안"));
-        assertEquals(45, region.get("경제"));
-        assertEquals(52, region.get("민심"));
+        assertEquals(43, state.get("치안"));
+        assertEquals(45, state.get("경제"));
+        assertEquals(52, state.get("민심"));
 
         // 세력 반응: 하오문 5 [2단계 정보 수집] / 상단 6 [2단계] / 정파 1 [1단계] /
         //           관군 (미상 3, 습격 3) / 녹림 1

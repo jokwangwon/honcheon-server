@@ -191,11 +191,14 @@ final class Bridge {
         int today = db.worldDay();
         switch (kind) {
             case "npc_death" -> npcDeath(data, today);
+            case "surrender" -> surrender(data, today);
+            case "populace_quest" -> populaceQuest(data, today);
             case "bandit_slain" -> slain(data, today, true);
             case "beast_slain" -> slain(data, today, false);
             case "qi_manifested" -> qiManifested(data, today);
             case "sparring" -> sparring(data, today);
             case "link_request" -> linkRequest(envelope, data);
+            case "cultivation_logged" -> cultivationLogged(data, today);
             default -> System.err.println("다리 — 처리기 없음: " + kind);
         }
         return true;
@@ -229,6 +232,54 @@ final class Bridge {
         System.out.println("다리 — 접합 코드 대기: " + name + " (" + ttl + "초)");
     }
 
+    // ─── cultivation_logged — 몸에서 쌓인 것이 장부로 온다 ───
+
+    /**
+     * <b>마크의 수련·실전이 시트를 바꾼다.</b> 시트를 적는 손은 여기 하나뿐이다.
+     *
+     * <p>규칙(curriculum → 능력치·내공·숙련)은 마크의 {@code Growth} 에 <b>한 벌만</b> 있고, 봇은 그
+     * <b>결과인 증분</b>만 받는다. 봇이 환산을 다시 구현하면 규칙의 정본이 둘이 되고, 마크가 시트를 쓰면
+     * 장부의 정본이 둘이 된다 — 이 저장소가 반복해서 데인 병이다. 그래서 이렇게 잘라 뒀다:
+     * <b>규칙은 마크에 하나 · 장부는 봇에 하나.</b>
+     *
+     * <p>접합되지 않은 몸은 여기 오지 않는다 (마크가 애초에 안 보낸다). 와도 캐릭터가 없으면 버린다 —
+     * 강호에 이름이 없는 자의 화후는 적을 곳이 없다.
+     *
+     * <p>재생은 무해하다: {@code bridge_inbox}(PK=event_id)가 이미 못을 박았다. 여기 오는 줄은
+     * <b>처음 오는 줄</b>이다.
+     */
+    @SuppressWarnings("unchecked")
+    private void cultivationLogged(Map<String, Object> data, int today) throws Exception {
+        String uuid = str(data.get("player_uuid"), "");
+        if (uuid.isBlank()) {
+            return;
+        }
+        var linked = db.characterOfMc(uuid);
+        if (linked.isEmpty()) {
+            System.err.println("다리 — 접합되지 않은 몸의 화후 (버린다): " + str(data.get("player_name"), uuid));
+            return;
+        }
+        long chId = linked.get();
+        var found = db.findCharacterById(chId);
+        if (found.isEmpty()) {
+            return;
+        }
+        Map<String, Object> ch = found.get();
+        Map<String, Object> sheet = new java.util.LinkedHashMap<>(
+                (Map<String, Object>) ch.get("sheet"));
+        String before = String.valueOf(ch.get("realm"));
+        String after = game.applyCultivation(sheet, before, data, today);
+
+        db.updateCharacter(chId, sheet, ((Number) ch.get("wallet")).intValue(), after,
+                String.valueOf(ch.get("status")), String.valueOf(ch.get("location")));
+        if (!before.equals(after)) {
+            // 승급은 강호가 인정하는 것이다 — 장부에 남고, 다음 스냅숏으로 몸에 내려간다
+            db.logEvent("승급", "character", String.valueOf(chId),
+                    Map.of("경지", after, "출처", "mvt"));
+            System.out.println("다리 — 승급: " + ch.get("name") + " " + before + " → " + after);
+        }
+    }
+
     // ─── npc_death — 사람이 죽었다 ───
 
     /**
@@ -243,6 +294,60 @@ final class Bridge {
      * <p>★ 소문의 <b>주체는 가해자</b>다 (목격자가 있을 때만). 그래야 세력이 그를 주목하기 시작한다 —
      * GameListener.factionAwareness 가 소문의 주체_id 를 보고 움직인다. 아무도 못 봤으면 이름은 남지 않는다.
      */
+    /**
+     * <b>자수</b> — 관(官)의 법만 움직인다.
+     *
+     * <p>★ <b>혈채는 삭제되지 않는다</b> ({@code blood_debt atonement.principle}). 법정이 둘이다 —
+     * 관의 법(법명분)은 자수로 덜 수 있지만, <b>피는 관이 사면하지 못한다.</b>
+     * 둘 다 지워 주겠다고 약속하면 그것이 거짓말이다.
+     */
+    private void surrender(Map<String, Object> data, int today) throws Exception {
+        Killer who = killer(data, "player_uuid", "player_name");
+        Map<String, Object> effects = effects("surrender");
+        db.logEvent("자수", who.actorType(), who.actorId(), "gwan_gun", "자수",
+                Map.of("벌금", num(data.get("fine"), 0), "출처", "mvt"));
+        db.nudgeRegion(deltas(effects.get("region")));
+        if (!who.linked()) {
+            return;   // 이름 없는 몸의 자수는 관의 장부에 오르지 못한다
+        }
+        Integer drain = rules.politics.mandateDrain(str(effects.get("mandate_drain"), "자수"));
+        if (drain != null) {
+            int mandate = db.addMandate(who.characterId(), drain, today, rules.politics);
+            db.logEvent("법명분", "character", String.valueOf(who.characterId()), "gwan_gun", "자수",
+                    Map.of("가산", drain, "법명분", mandate, "출처", "mvt",
+                            "구간", String.valueOf(rules.politics.mandateEffect(mandate))));
+        }
+    }
+
+    /** 무명의 의뢰 — <b>결말의 이름만 온다.</b> 값은 봇이 등록부에서 읽는다 (등록부는 하나다) */
+    private void populaceQuest(Map<String, Object> data, int today) throws Exception {
+        String rule = str(data.get("rule"), "");
+        String outcome = str(data.get("outcome"), "");
+        Killer who = killer(data, "player_uuid", "player_name");
+        db.logEvent("무명의뢰", who.actorType(), who.actorId(), "populace", rule,
+                Map.of("사건", str(data.get("event"), "발생"), "결말", outcome,
+                        "발주", str(data.get("issuer"), ""), "대상", str(data.get("victim"), ""),
+                        "출처", "mvt"));
+        if (outcome.isBlank()) {
+            return;   // 발생만 했다 — 세계는 아직 아무것도 갚지 않았다
+        }
+        Map<String, Integer> region = rules.populaceQuestRegion(rule, outcome);
+        if (!region.isEmpty()) {
+            db.nudgeRegion(region);
+        }
+        // ★ 살해자가 유족의 의뢰를 완수했다 — 혈교는 그것을 자격으로 읽는다
+        if (Boolean.TRUE.equals(data.get("irony")) && who.linked()) {
+            int blood = rules.populaceQuestIrony(rule);
+            if (blood != 0) {
+                int favor = db.addFavor("hyeolgyo", who.characterId(), blood,
+                        rules.factions.favorMax(), today, rules.factions);
+                db.logEvent("혈채_세력", "character", String.valueOf(who.characterId()),
+                        "faction", "hyeolgyo",
+                        Map.of("입력", "무명_유족_기만", "가산", blood, "우호", favor, "출처", "mvt"));
+            }
+        }
+    }
+
     private void npcDeath(Map<String, Object> data, int today) throws Exception {
         Map<String, Object> effects = effects("npc_death");
         String registry = str(data.get("registry"), "populace");
@@ -298,6 +403,15 @@ final class Bridge {
 
         // 지역의 냉기 — 복수자 없는 죽음의 유일한 대가 (populace.yml death.region_delta)
         db.nudgeRegion(deltas(effects.get("region")));
+
+        // ★ 민심 부채 — 무명의 죽음이 깎은 민심은 **자연 회복에서 제외된다**
+        //   (npc_death populace_layer.civil_debt: "대가는 복수가 아니라 지역의 냉기다").
+        //   회복이 이것마저 되돌리면, 사람을 죽여도 열흘만 기다리면 없던 일이 된다.
+        if (nameless) {
+            int debt = Integer.parseInt(db.getMeta("지역:민심부채").orElse("0"));
+            db.setMeta("지역:민심부채", String.valueOf(debt
+                    + Math.abs(deltas(effects.get("region")).getOrDefault("민심", 0))));
+        }
 
         // 관(官)을 죽였는가 — 법명분은 npc_death.yml succession 등록부만이 정한다
         Integer mandateDelta = nameless ? null : rules.deaths.authorityMandateOf(npcId);
@@ -516,6 +630,7 @@ final class Bridge {
         Map<String, Object> favor = new LinkedHashMap<>();
         Map<String, Object> links = new LinkedHashMap<>();
         Map<String, Object> bounty = new LinkedHashMap<>();
+        Map<String, Object> sheets = new LinkedHashMap<>();   // ★ 시트 — 마크의 몸에 실릴 캐릭터
         int bountyAmount = rules.price("의뢰_보수", rules.bloodDebt.bountyRef());
         for (Map.Entry<String, Long> body : db.linkedBodies().entrySet()) {
             long chId = body.getValue();
@@ -533,9 +648,15 @@ final class Bridge {
                 favor.put(body.getKey(), mine);
             }
             // ★ 신원 — 마크가 "나는 누구인가"를 읽는 곳 (접합된 몸만 여기 있다)
-            db.findCharacterById(chId).ifPresent(ch -> links.put(body.getKey(),
-                    Map.of("character_id", chId, "name", String.valueOf(ch.get("name")),
-                            "realm", String.valueOf(ch.get("realm")))));
+            db.findCharacterById(chId).ifPresent(ch -> {
+                links.put(body.getKey(),
+                        Map.of("character_id", chId, "name", String.valueOf(ch.get("name")),
+                                "realm", String.valueOf(ch.get("realm"))));
+                // ★★ 시트 — 경지·능력치·심법·내공·주무공·숙련·마크·소지금.
+                //    이것이 없어서 마크에는 캐릭터가 없었다 (realm 은 "이류"로 박혀 있었고 능력치는 0.0).
+                //    갓 접속한 몸이 제 급의 산적보다 약했던 이유가 이 한 칸의 부재다.
+                sheets.put(body.getKey(), game.mvtSheet(ch));
+            });
             // ★ 현상금 — 혈채가 문턱을 넘으면 관이 방을 붙인다.
             //   ★★ 혈채 수치 자체는 절대 안 내려간다 (visibility: 내부) — 내려가는 것은 세계의 반응뿐이다
             Db.Debt debt = db.bloodDebtOf(chId);
@@ -556,6 +677,7 @@ final class Bridge {
         snapshot.put("favor", favor);
         snapshot.put("links", links);
         snapshot.put("bounty", bounty);
+        snapshot.put("sheet", sheets);   // ★ 마크의 몸에 실릴 캐릭터 (절대값 — 마크는 이것으로 덮어쓴다)
         snapshot.put("thresholds", Map.of(
                 "wanted", num(wantedCfg.get("gauge_min"), 8),
                 "disavowal", num(wantedCfg.get("disavowal_min"), 10)));

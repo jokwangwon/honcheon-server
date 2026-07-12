@@ -38,6 +38,13 @@ public final class Rules {
     public final Legacy legacy;
     /** 기연 등록부 (fortune_encounters.yml) — ★ 관문 수치를 코드가 짓지 않는다 (방문 30·의뢰 15·사흘) */
     public final Fortunes fortunes;
+    /**
+     * 지역 상태 <b>규칙</b> (region_state.yml) — 사건 델타 + ★ 자연 회복.
+     *
+     * <p><b>장부가 아니다.</b> 장부는 {@code regions} 표 하나뿐이다 ({@code Db.region()}/{@code nudgeRegion}).
+     * 이 엔진은 상태를 들고 있지 않으므로 두 세계로 갈라질 수가 없다 — 그것이 이 축의 요점이다.
+     */
+    public final com.honcheon.core.rules.RegionStateEngine regions;
     private final Map<String, Object> judgmentCfg;
     private final Map<String, Object> economyCfg;
     private final Map<String, Object> llmCfg;
@@ -52,6 +59,8 @@ public final class Rules {
     private final Map<String, Object> sectLifeCfg;
     /** 심법 — ★ 은폐 가능 여부가 두 어둠의 운명을 가른다 (simbeop.yml simbeop.&lt;id&gt;.stealth_option) */
     private final Map<String, Object> simbeopCfg;
+    /** 무명(無名) 등록부 (npcs/populace.yml) — 행인의 이름·관계, 그리고 무명 의뢰의 결말표 */
+    private final Map<String, Object> populaceCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -85,9 +94,66 @@ public final class Rules {
         this.politics = new Politics(RulesConfig.load(configDir.resolve("faction_politics.yml")));
         this.legacy = new Legacy(RulesConfig.load(configDir.resolve("death_and_legacy.yml")));
         this.regionCfg = RulesConfig.load(configDir.resolve("regions/cheongha_hyeon.yml"));
+        this.regions = new com.honcheon.core.rules.RegionStateEngine(
+                RulesConfig.load(configDir.resolve("region_state.yml")));
+        this.populaceCfg = RulesConfig.load(configDir.resolve("npcs/populace.yml"));
         this.innateQiCfg = RulesConfig.load(configDir.resolve("internal_energy.yml"));
         this.factionsCfg = RulesConfig.load(configDir.resolve("factions.yml"));
         this.sectLifeCfg = RulesConfig.load(configDir.resolve("sect_life.yml"));
+    }
+
+    // ─── 무명(無名) 등록부 (npcs/populace.yml) — 마크의 마을이 봇의 장부에 닿는 곳 ───
+    //
+    // ★ 왜 봇이 이 파일을 읽는가: MVT 는 무명 의뢰가 **어떻게 끝났는지**(rule · outcome)만 다리에 싣는다.
+    //   그 결말이 지역에 얼마를 얹는지(민심 ±1 · 치안 ±1 · 경제 -1)는 등록부가 정하고, 그것을 제 표에
+    //   적는 것은 장부의 주인인 봇이다. 같은 표를 양쪽이 계산해 각자 더하면 — 세계가 둘이 된다.
+
+    /** 무명의 이름 — 등록부에 있는 사람만. 없으면 null (코드는 이름을 지어내지 않는다) */
+    @SuppressWarnings("unchecked")
+    public String populaceName(String id) {
+        Map<String, Object> people = RulesConfig.section(populaceCfg, "people");
+        Object person = people.get(id);
+        return person instanceof Map<?, ?> p
+                ? String.valueOf(((Map<String, Object>) p).getOrDefault("name", id)) : null;
+    }
+
+    /**
+     * 무명 의뢰의 결말이 지역에 얹는 값 — {@code quests.rules.<rule>.<outcome>.region}.
+     * outcome ∈ {@code success · fail_body · on_expire}. 등록부에 없으면 빈 맵 (아무 일도 없다).
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Integer> populaceQuestRegion(String rule, String outcome) {
+        Map<String, Object> block = populaceQuestBlock(rule, outcome);
+        Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        if (block.get("region") instanceof Map<?, ?> region) {
+            ((Map<String, Object>) region).forEach((stat, value) -> {
+                if (value instanceof Number n) {
+                    out.put(stat, n.intValue());
+                }
+            });
+        }
+        return out;
+    }
+
+    /**
+     * ★ 살해자가 유족의 의뢰를 완수했을 때 혈교가 얹는 우호 —
+     * {@code quests.rules.<rule>.killer_irony.blood_favor}.
+     *
+     * <p>"어미가 당신이 가리킨 자리를 본다. 당신의 손을 본다. 그리고 다시 시신을 본다 —
+     * 아무것도 묻지 않는다. 삯을 쥐여 준다." <b>혈교는 그것을 자격으로 읽는다.</b>
+     */
+    public int populaceQuestIrony(String rule) {
+        Object v = populaceQuestBlock(rule, "killer_irony").get("blood_favor");
+        return v instanceof Number n ? n.intValue() : 0;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> populaceQuestBlock(String rule, String outcome) {
+        Map<String, Object> quests = RulesConfig.section(populaceCfg, "quests");
+        Object rules = quests.get("rules");
+        Object one = rules instanceof Map<?, ?> m ? ((Map<String, Object>) m).get(rule) : null;
+        Object block = one instanceof Map<?, ?> r ? ((Map<String, Object>) r).get(outcome) : null;
+        return block instanceof Map<?, ?> b ? (Map<String, Object>) b : Map.of();
     }
 
     // ─── 문파 상태 (sect_life.yml sect_state.internal_burden) — 연합의 브레이크 ───
