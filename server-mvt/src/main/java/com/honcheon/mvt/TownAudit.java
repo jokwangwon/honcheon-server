@@ -47,7 +47,20 @@ public final class TownAudit {
     private static final int PROP_MAX_PER_WALL = 3;  // 실내 벽면당 장식 상한 (초과 = 과밀)
     private static final double FLOOR_FREE_MIN = 0.55;   // 바닥 여백률 하한 (55% 미만이면 발 디딜 곳이 없다)
     private static final double INK_MAX_PCT = 2.0;   // 채색 블록 허용 비율 (수묵 3색 지배)
-    private static final double DARK_MAX_PCT = 15.0; // 길 위 암흑(빛<7) 허용 비율
+    /**
+     * 길 위 암흑 허용 비율 — <b>15% → 40%</b> (사용자 피드백).
+     *
+     * <p>"조명이 너무 다닥다닥 붙어 있다. 조명이 없는 부분도 존재해도 되니 적당히 유지해 달라."
+     * 밤길이 무서운 것이 무협이다. 등불로 도배된 마을은 안전하지만 무협이 아니다.
+     * 다만 <b>주 동선(대로·광장)</b>은 밝아야 한다 — 밤에 사람이 다니는 길은 밝다.
+     */
+    private static final double DARK_MAX_PCT = 40.0;
+    /** 주 동선(대로 ±5·광장 반경 10) 암흑 허용 — 여기는 밝아야 한다 */
+    private static final double MAIN_DARK_MAX_PCT = 15.0;
+    /** 광원 과밀 — 길 표본 대비 광원 비율 상한 (등불 도배 금지) */
+    private static final double LAMP_DENSITY_MAX = 0.06;
+    /** <b>어둠의 하한</b> — 골목에 어둠이 이만큼은 남아야 한다. 밤이 밤다워야 무협이다 */
+    private static final double DARK_MIN_PCT = 12.0;
     private static final int SCAN_R = 65;            // 마을 스캔 반경
     private static final int SHRINE_DX = -75;        // 폐사당 중심 (마을 중심 기준)
     private static final int SHRINE_DZ = -75;
@@ -928,6 +941,58 @@ public final class TownAudit {
         double pct = 100.0 * dark / samples;
         out.add(INFO + String.format("  샘플 %d칸 · 평균 광원 %.1f · 암흑 %d칸 (%.1f%%)",
                 samples, (double) sum / samples, dark, pct));
+        // 주 동선(대로 ±5 · 광장 반경 10) — 여기는 밝아야 한다
+        int mainSamples = 0, mainDark = 0, lamps = 0;
+        for (int dx = -SCAN_R; dx <= SCAN_R; dx += 2) {
+            for (int dz = -SCAN_R; dz <= SCAN_R; dz += 2) {
+                if (!g[dx + SCAN_R][dz + SCAN_R]) {
+                    continue;
+                }
+                boolean main = Math.abs(dx) <= 5 || Math.abs(dz) <= 5
+                        || Math.sqrt((double) dx * dx + (double) dz * dz) <= 10;
+                for (int y = cy + 1; y <= cy + 5; y++) {   // 등롱은 기둥 위에 있다 (cy+3) — 열을 훑는다
+                    Material at = world.getBlockAt(cx + dx, y, cz + dz).getType();
+                    if (at == Material.LANTERN || at == Material.TORCH || at == Material.WALL_TORCH
+                            || at == Material.CAMPFIRE || at == Material.SOUL_LANTERN) {
+                        lamps++;
+                        break;
+                    }
+                }
+                if (!main) {
+                    continue;
+                }
+                mainSamples++;
+                if (world.getBlockAt(cx + dx, cy + 1, cz + dz).getLightFromBlocks() < 7) {
+                    mainDark++;
+                }
+            }
+        }
+        double mainPct = mainSamples == 0 ? 0 : 100.0 * mainDark / mainSamples;
+        double lampDensity = (double) lamps / samples;
+        out.add(INFO + String.format("  주 동선(대로·광장) 표본 %d칸 · 암흑 %d칸 (%.1f%%) · 광원 밀도 %.1f%%",
+                mainSamples, mainDark, mainPct, lampDensity * 100));
+        if (mainPct > MAIN_DARK_MAX_PCT) {
+            out.add(BAD + String.format("주 동선 암흑 %.1f%% > %.0f%% — 밤에 다니는 길이 어둡다",
+                    mainPct, MAIN_DARK_MAX_PCT));
+            violations.add(String.format("주동선암흑 %.0f%%", mainPct));
+        } else {
+            out.add(OK + String.format("주 동선 암흑 %.1f%% ≤ %.0f%%", mainPct, MAIN_DARK_MAX_PCT));
+        }
+        // **어둠의 하한** — 밤이 밤다워야 한다 (사용자: "조명이 없는 부분도 존재해도 된다").
+        //   암흑이 3.5% 였다: 마을 어디를 걸어도 환했다. 그건 안전한 마을이지 무협의 마을이 아니다.
+        if (pct < DARK_MIN_PCT) {
+            out.add(BAD + String.format("암흑 구간 %.1f%% < %.0f%% — 등불이 마을을 도배했다 (밤이 밤이 아니다)",
+                    pct, DARK_MIN_PCT));
+            violations.add(String.format("과밝음 %.0f%%", pct));
+        }
+        if (lampDensity > LAMP_DENSITY_MAX) {
+            out.add(BAD + String.format("광원 과밀 %.1f%% > %.0f%% — 등불이 다닥다닥 붙었다 (마을이 등롱밭이다)",
+                    lampDensity * 100, LAMP_DENSITY_MAX * 100));
+            violations.add(String.format("광원과밀 %.0f%%", lampDensity * 100));
+        } else {
+            out.add(OK + String.format("광원 밀도 %.1f%% ≤ %.0f%% — 등롱이 리듬이다",
+                    lampDensity * 100, LAMP_DENSITY_MAX * 100));
+        }
         if (!darkSpots.isEmpty()) {
             out.add(INFO + "    어두운 자리: " + String.join(" ", darkSpots));
         }
