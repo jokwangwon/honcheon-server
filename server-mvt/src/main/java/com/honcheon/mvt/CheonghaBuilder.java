@@ -2038,17 +2038,19 @@ final class CheonghaBuilder {
             }
             // ── 민가: 작고 적다. 유리는 비싸다 — 정면 한 짝, 측면 한 짝(어느 쪽인지는 집마다 다르다), 뒷벽 봉창.
             case COTTAGE, LOFT -> {
-                int fw = 1 + v % 2;                       // 정면 창 폭 2 또는 3 (집마다 다르다)
-                int fa = doorX + (v < 2 ? -4 : 2);        // 문 왼쪽이냐 오른쪽이냐도 갈린다
+                int fw = 1 + v % 2;                                    // 정면 창 폭 2 또는 3 (집마다 다르다)
+                int fa = doorX + (v < 2 ? -(3 + fw) : 3);              // 문 왼쪽이냐 오른쪽이냐도 갈린다
+                fa = Math.max(x0 + 1, Math.min(fa, x1 - 1 - fw));      // 좁은 벽(다락형 9칸)에서도 창이 산다
                 windowUnit(world, x0, y0, z0, x1, z1, front, fa, fa + fw, yb, yt, Pane.SASH);
-                int side = (v % 2 == 0) ? 2 : 3;          // 측면은 한쪽만 (양쪽에 다 내는 살림집은 없다)
-                int sa = z0 + 2 + (v % 3);
+                int side = (v % 2 == 0) ? 2 : 3;                       // 측면은 한쪽만 (양쪽에 다 내는 살림집은 없다)
+                int sa = Math.min(z0 + 2 + (v % 3), z1 - 2);
                 windowUnit(world, x0, y0, z0, x1, z1, side, sa, sa + 1, yb, yt, Pane.SASH);
                 windowUnit(world, x0, y0, z0, x1, z1, back, doorX - 1 + (v % 2), doorX - 1 + (v % 2),
-                        y0 + 2, y0 + 2, Pane.PAPER);      // 봉창 — 뒷벽엔 이것 하나 (y0+2 = probeY 아님)
-                if (st == WindowStyle.LOFT) {             // 다락 — 박공 아래 한 칸 더 높은 창
-                    windowUnit(world, x0, y0, z0, x1, z1, front, doorX - 1, doorX + 1,
-                            y0 + 1, y0 + 1, Pane.SASH);
+                        y0 + 2, y0 + 2, Pane.PAPER);                   // 봉창 — 뒷벽엔 이것 하나 (probeY 아님)
+                if (st == WindowStyle.LOFT) {                          // 다락 — 반대쪽 측면에 봉창 하나 더
+                    int other = side == 2 ? 3 : 2;
+                    windowUnit(world, x0, y0, z0, x1, z1, other, z1 - 3, z1 - 3,
+                            y0 + 2, y0 + 2, Pane.PAPER);
                 }
             }
             default -> { }
@@ -4739,8 +4741,9 @@ final class CheonghaBuilder {
                 }
                 int h = r + 1 - (int) Math.round(Math.sqrt(d2)) + hash(x, z, 2);
                 for (int k = 1; k <= h; k++) {
-                    if (!outsideVacant(world, x, g + k, z)) {
-                        break;
+                    Material at = world.getBlockAt(x, g + k, z).getType();
+                    if (!at.isAir() && !softPlant(at)) {
+                        break;   // 나무·소품 — 바위가 밀어내지 않는다
                     }
                     world.getBlockAt(x, g + k, z).setType(rockMat(x, z + k));
                 }
@@ -4789,18 +4792,35 @@ final class CheonghaBuilder {
         }
     }
 
-    /** 나무 심을 자리 — 밑동 위 8칸 · 사방 2칸이 다 비어 있는가 (겹친 나무·허공의 잎 금지) */
+    /**
+     * 나무 심을 자리 — 밑동 위 8칸 · 사방 2칸(잎이 덮을 범위)에 **단단한 것**이 없는가.
+     * 풀·고사리·꽃·눈은 비켜 준다 — 자연 지형의 지표는 거의 다 풀로 덮여 있어서, 공기만 '빈 칸'으로
+     * 치면 숲이 한 그루도 안 선다 (v6.7 outsideTree 가 들녘에서 심기를 자주 놓친 것도 같은 이유다).
+     * 통나무·잎·바위·소품은 거절 — 겹친 나무와 허공에 뜬 잎이 0 인 것은 그대로다.
+     */
     private static boolean huntClear(World world, int x, int g, int z) {
         for (int px = x - 2; px <= x + 2; px++) {
             for (int pz = z - 2; pz <= z + 2; pz++) {
                 for (int y = g + 1; y <= g + 8; y++) {
-                    if (!world.getBlockAt(px, y, pz).getType().isAir()) {
+                    Material m = world.getBlockAt(px, y, pz).getType();
+                    if (!m.isAir() && !softPlant(m)) {
                         return false;
                     }
                 }
             }
         }
         return true;
+    }
+
+    /** 나무·소품이 밀어내도 되는 것 — 지표의 잔풀 (자연 지형은 거의 다 이것으로 덮여 있다) */
+    private static boolean softPlant(Material m) {
+        return m == Material.SHORT_GRASS || m == Material.TALL_GRASS
+                || m == Material.FERN || m == Material.LARGE_FERN
+                || m == Material.DEAD_BUSH || m == Material.SNOW || m == Material.MOSS_CARPET
+                || m == Material.BROWN_MUSHROOM || m == Material.RED_MUSHROOM
+                || m == Material.SWEET_BERRY_BUSH || m == Material.VINE || m == Material.GLOW_LICHEN
+                || m == Material.POPPY || m == Material.DANDELION || m == Material.CORNFLOWER
+                || m == Material.AZURE_BLUET || m == Material.OXEYE_DAISY;
     }
 
     /** 가문비나무 — 밑동 5~7단 + 원뿔 잎 (아래가 넓고 위로 좁아진다). 잎이 하늘빛을 끊는다 = 어둠 */
@@ -5205,10 +5225,14 @@ final class CheonghaBuilder {
         }
     }
 
-    /** 사냥터 소품 한 칸 — 지형 위 빈 칸에만 (풀·고사리는 밀어내도 된다) */
+    /** 사냥터 소품 한 칸 — 지형 위 빈 칸에만 (잔풀은 밀어내도 된다. 나무·바위는 못 밀어낸다) */
     private static void huntPut(World world, int x, int z, Material mat) {
         int g = outsideGroundY(world, x, z);
-        if (g != Integer.MIN_VALUE && outsideVacant(world, x, g + 1, z)) {
+        if (g == Integer.MIN_VALUE) {
+            return;
+        }
+        Material at = world.getBlockAt(x, g + 1, z).getType();
+        if (at.isAir() || softPlant(at)) {
             world.getBlockAt(x, g + 1, z).setType(mat);
         }
     }
@@ -5427,17 +5451,34 @@ final class CheonghaBuilder {
 
     /** 뱃사공 오두막 — 7x6 가문비 판벽·흑와 맞배. NPC 없음 (NPC 7인 계약 불변). 모닥불·랜턴 = 온색 */
     private static void ferryHut(World world, int shx, int shz, int waterY, int[] dir) {
-        int hx = shx - dir[0] * 8 - dir[1] * 5;   // 잔교 축에서 옆·뒤로 물러난 뭍
-        int hz = shz - dir[1] * 8 + dir[0] * 5;
-        int base = Integer.MIN_VALUE;
-        for (int dx = -3; dx <= 3; dx++) {
-            for (int dz = -3; dz <= 3; dz++) {
-                int g = naturalGroundY(world, hx + dx, hz + dz);
-                if (g == Integer.MIN_VALUE) {
-                    return;   // 물·절벽 — 오두막은 접는다 (잔교·난파선은 그대로 산다)
+        // 자리 후보 넷 — 잔교 축에서 좌우·앞뒤로 물러난 뭍. 첫 번째로 **7x7 이 다 마른 땅**인 곳에 짓는다
+        // (한 자리만 보고 물이면 접던 것이 v6.9 초안의 구멍이었다 — 나루에 오두막이 없는 나루가 됐다).
+        int[][] cands = {{8, 5}, {8, -5}, {12, 6}, {12, -6}};
+        int hx = 0, hz = 0, base = Integer.MIN_VALUE;
+        for (int[] c : cands) {
+            int px = shx - dir[0] * c[0] - dir[1] * c[1];
+            int pz = shz - dir[1] * c[0] + dir[0] * c[1];
+            int hi = Integer.MIN_VALUE;
+            boolean dry = true;
+            for (int dx = -3; dx <= 3 && dry; dx++) {
+                for (int dz = -3; dz <= 3; dz++) {
+                    int g = naturalGroundY(world, px + dx, pz + dz);
+                    if (g == Integer.MIN_VALUE) {
+                        dry = false;
+                        break;
+                    }
+                    hi = Math.max(hi, g);
                 }
-                base = Math.max(base, g);
             }
+            if (dry) {
+                hx = px;
+                hz = pz;
+                base = hi;
+                break;
+            }
+        }
+        if (base == Integer.MIN_VALUE) {
+            return;   // 물가가 온통 절벽·늪 — 오두막만 접는다 (잔교·난파선·제단은 그대로 산다)
         }
         for (int dx = -3; dx <= 3; dx++) {
             for (int dz = -3; dz <= 3; dz++) {
@@ -5462,7 +5503,15 @@ final class CheonghaBuilder {
         }
         world.getBlockAt(hx, base + 1, hz - 2).setType(Material.AIR);   // 문
         world.getBlockAt(hx, base + 2, hz - 2).setType(Material.AIR);
-        for (int dx = -4; dx <= 4; dx++) {          // 흑와 맞배 — 두 켜
+        for (int dx = -3; dx <= 3; dx += 6) {       // 합각(박공) — 벽 위 삼각면을 판벽으로 막는다
+            for (int dz = -2; dz <= 2; dz++) {
+                int top = base + 3 + (2 - Math.min(2, Math.abs(dz)));
+                for (int y = base + 4; y <= top; y++) {
+                    world.getBlockAt(hx + dx, y, hz + dz).setType(Material.SPRUCE_PLANKS);
+                }
+            }
+        }
+        for (int dx = -4; dx <= 4; dx++) {          // 흑와 맞배 — 처마 한 칸 내밀고 두 물매
             for (int dz = -3; dz <= 3; dz++) {
                 int y = base + 4 + (2 - Math.min(2, Math.abs(dz)));
                 world.getBlockAt(hx + dx, y, hz + dz).setType(Math.abs(dz) == 3
@@ -5558,23 +5607,26 @@ final class CheonghaBuilder {
                 }
             }
         }
-        // 갈비뼈처럼 드러난 늑재 + 부러진 돛대
+        // 갈비뼈처럼 드러난 늑재
         for (int a = -5; a <= 5; a += 3) {
             int x = bx + (alongX ? a : 3);
             int z = bz + (alongX ? 3 : a);
             putWet(world, x, floor + Math.max(0, (a + 2) / 3) + 1, z, Material.DARK_OAK_LOG);
         }
-        for (int k = 1; k <= 4; k++) {
-            putWet(world, bx, floor + 3 + k, bz, Material.STRIPPED_SPRUCE_LOG);   // 기울어진 돛대
+        // 부러진 돛대 — 선실 바닥(floor)에서 곧게 오른다. 수면 위로 한두 칸 삐져나오면 그것이
+        // 나루에서 보이는 **표식**이다 ("저기 물 밑에 배가 있다" — 괴담의 물증).
+        int mastTop = Math.min(6, waterY - floor + 2);
+        for (int k = 1; k <= mastTop; k++) {
+            putWet(world, bx, floor + k, bz, Material.STRIPPED_SPRUCE_LOG);
         }
-        putWet(world, bx, floor + 8, bz, Material.WHITE_WOOL);                    // 삭은 돛 조각
-        // 비급이 봉인된 방수 유통 — 선실 한복판. 그 옆에 뱃사람의 유해
-        int wy = floor + Math.max(0, 2 / 3) + 1;
-        world.getBlockAt(bx, wy, bz + (alongX ? 1 : 0) + (alongX ? 0 : 1)).setType(Material.BARREL);
-        int cx2 = bx + (alongX ? 1 : 0);
-        int cz2 = bz + (alongX ? 0 : 1);
-        world.getBlockAt(cx2, wy, cz2).setType(Material.BARREL);
-        putWet(world, cx2 + (alongX ? 1 : 0), wy, cz2 + (alongX ? 0 : 1), Material.BONE_BLOCK);
+        putWet(world, bx, floor + mastTop + 1, bz, Material.WHITE_WOOL);   // 삭은 돛 조각
+        // 비급이 봉인된 방수 유통 — 선실 안. 그 곁에 뱃사람의 유해 (잠수해 들어가면 만난다)
+        int wy = floor + 1;
+        int cx2 = bx + (alongX ? 2 : 0);
+        int cz2 = bz + (alongX ? 0 : 2);
+        world.getBlockAt(cx2, wy, cz2).setType(Material.BARREL);                          // ★ 침몰선 비급
+        world.getBlockAt(bx + (alongX ? -2 : 0), wy, bz + (alongX ? 0 : -2)).setType(Material.CHEST);
+        putWet(world, bx + (alongX ? 1 : 1), wy, bz + (alongX ? 1 : 1), Material.BONE_BLOCK);
         for (int a = -6; a <= 6; a += 4) {   // 선체를 삼킨 다시마
             int x = bx + (alongX ? a : -3);
             int z = bz + (alongX ? -3 : a);

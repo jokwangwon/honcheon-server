@@ -994,6 +994,14 @@ public final class Weapons {
                             : "이 이상은 사람의 손이 아니라 세월의 몫이다 (애병)."));
         }
 
+        // 명공은 각인이다 — 앉을 칸이 없으면 재련이 성립하지 않는다 (파사가 그 칸을 쓰고 있다면)
+        if (target.isInscription() && propertiesOf(item).size() >= grade.slots) {
+            return new ReforgeResult(Reforge.불가, item,
+                    "명공의 각인이 앉을 칸이 없다 — " + propertiesOf(item) + "이(가) "
+                            + grade.name() + "의 " + grade.slots + "칸을 이미 쓰고 있다. "
+                            + "각인을 지우지 않는 한 이 병기는 정품이 천장이다.");
+        }
+
         int difficulty = reforgeDifficulty(target);
         if (difficulty > 0) {
             int d1 = random.nextInt(6) + 1;

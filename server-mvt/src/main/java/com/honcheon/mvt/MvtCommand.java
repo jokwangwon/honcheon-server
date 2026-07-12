@@ -40,7 +40,10 @@ public final class MvtCommand implements CommandExecutor {
                 case "협공" -> coop(sender, args);
                 case "경지" -> realm(sender, args);
                 case "병기" -> giveWeapon(sender, args);   // 관리자 지급 — 검증용
-                case "병기상" -> weaponShop(sender);        // 장쇠 좌판   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
+                case "병기상" -> weaponShop(sender);        // 장쇠 좌판
+                case "재련" -> reforgeWeapon(sender);        // 야철수 — 품 1단 상승
+                case "각인" -> inscribeWeapon(sender, args); // 각인 — 슬롯 안에서만
+                case "격돌" -> recordClash(sender);          // 애병 카운터 (검증용)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "운기" -> meditate(sender);
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
@@ -195,12 +198,98 @@ public final class MvtCommand implements CommandExecutor {
                     + "/혼천 병기 <검|도|창|권갑|단검|부|겸|월아산|구> <범철|정련|보병|신병|마병> [속성…]");
             return true;
         }
-        java.util.List<String> properties = args.length > 3
-                ? java.util.List.of(java.util.Arrays.copyOfRange(args, 3, args.length))
+        int i = 3;
+        Weapons.Bias bias = Weapons.Bias.균;
+        Weapons.Craft craft = Weapons.Craft.보통;
+        try {   // 위치 인자 — 파싱되면 소비, 아니면 속성으로 넘긴다 (하위 호환)
+            if (i < args.length) {
+                bias = Weapons.Bias.of(args[i]);
+                i++;
+            }
+        } catch (IllegalArgumentException notABias) {
+            // 속성이다 — 그대로 둔다
+        }
+        try {
+            if (i < args.length) {
+                craft = Weapons.Craft.of(args[i]);
+                i++;
+            }
+        } catch (IllegalArgumentException notACraft) {
+            // 속성이다
+        }
+        java.util.List<String> properties = i < args.length
+                ? java.util.List.of(java.util.Arrays.copyOfRange(args, i, args.length))
                 : java.util.List.of();
-        player.getInventory().addItem(Weapons.make(
-                Weapons.Series.of(args[1]), Weapons.Grade.of(args[2]), properties));
-        player.sendMessage(ChatColor.GOLD + "병기를 손에 쥐었다 — " + args[2] + " " + args[1]);
+        try {
+            player.getInventory().addItem(Weapons.make(
+                    Weapons.Series.of(args[1]), Weapons.Grade.of(args[2]), bias, craft, properties));
+        } catch (IllegalArgumentException rejected) {   // 명공 범철·슬롯 초과 등
+            player.sendMessage(ChatColor.RED + rejected.getMessage());
+            return true;
+        }
+        player.sendMessage(ChatColor.GOLD + "병기를 손에 쥐었다 — " + args[2] + " " + args[1]
+                + " · " + bias.name() + " · " + craft.name());
+        return true;
+    }
+
+    /** /혼천 재련 — 손에 든 병기의 품을 한 단계 올린다 (야철수 대역, 검증용) */
+    private boolean reforgeWeapon(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        Weapons.ReforgeResult result = Weapons.reforge(player.getInventory().getItemInMainHand(), 2,
+                java.util.concurrent.ThreadLocalRandom.current());   // config 등록 대기: 야철수 솜씨 2
+        switch (result.outcome()) {
+            case 성공 -> {
+                player.getInventory().setItemInMainHand(result.item());
+                player.sendMessage(ChatColor.GOLD + result.message());
+            }
+            case 손상 -> {
+                player.getInventory().setItemInMainHand(result.item());
+                player.sendMessage(ChatColor.YELLOW + result.message());
+            }
+            case 파손 -> {
+                player.getInventory().setItemInMainHand(null);   // 쇠가 갈라졌다
+                player.sendMessage(ChatColor.RED + result.message());
+            }
+            default -> player.sendMessage(ChatColor.GRAY + result.message());
+        }
+        return true;
+    }
+
+    /** /혼천 각인 <파사|한철|경명|음양쌍인|탈혼> — 슬롯 안에서만 */
+    private boolean inscribeWeapon(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GRAY + "/혼천 각인 <파사|한철|경명|음양쌍인|탈혼>");
+            return true;
+        }
+        Weapons.ReforgeResult result =
+                Weapons.inscribe(player.getInventory().getItemInMainHand(), args[1]);
+        if (result.outcome() == Weapons.Reforge.성공) {
+            player.getInventory().setItemInMainHand(result.item());
+            player.sendMessage(ChatColor.LIGHT_PURPLE + result.message());
+        } else {
+            player.sendMessage(ChatColor.GRAY + result.message());
+        }
+        return true;
+    }
+
+    /** /혼천 격돌 — 애병 카운터 +1 (전투 훅이 설 때까지의 검증 수단) */
+    private boolean recordClash(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        org.bukkit.inventory.ItemStack hand = player.getInventory().getItemInMainHand();
+        if (!Weapons.isWeapon(hand)) {
+            player.sendMessage(ChatColor.GRAY + "손에 병기가 없다.");
+            return true;
+        }
+        player.getInventory().setItemInMainHand(Weapons.recordClash(hand, player.getUniqueId()));
+        player.sendMessage(ChatColor.GRAY + "격돌 "
+                + Weapons.clashesOf(player.getInventory().getItemInMainHand()) + "회");
         return true;
     }
 
