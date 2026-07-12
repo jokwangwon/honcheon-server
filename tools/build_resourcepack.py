@@ -10,7 +10,7 @@
   U+E080        경락도 GUI 배경 (먹색 패널 + 전각 도장풍 모서리 + 제목 구분선 + 여백 가이드,
                 인벤토리 제목 음수 공백 기법용)
   U+E0A0~E0A5   음수 공백 (space 프로바이더: -8/-16/-32/-64/-128/+1 — E080 제목 오프셋용)
-바닐라 텍스처 교체 (1.21.4 / pack_format 46 — 화면 HUD·인벤토리 수묵 재해석):
+바닐라 텍스처 교체 (1.21.11 / pack_format 75 — 화면 HUD·인벤토리 수묵 재해석):
   hud/heart/    container·full·half (+_blinking) 9x9 — 하트 대신 기혈 구슬 (주사+먹)
   hud/          hotbar 182x22 (먹 반투명+화선지 테두리), hotbar_selection 24x23 (주사 프레임)
   gui/container inventory·generic_54 256x256 — 화선지 재채색 (슬롯 18x18 좌표는 바닐라 계약 불변)
@@ -40,7 +40,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PACK = ROOT / "resourcepack"
 FONT_DIR = PACK / "assets" / "honcheon" / "textures" / "font"
 GUI_DIR = PACK / "assets" / "minecraft" / "textures" / "gui"
-HUD_DIR = GUI_DIR / "sprites" / "hud"        # 1.21.4 스프라이트 아틀라스 경로 (pack_format 46)
+HUD_DIR = GUI_DIR / "sprites" / "hud"        # 스프라이트 아틀라스 경로 (1.21.4~1.21.11 동일)
+PACK_FORMAT = 75                            # 1.21.11 (client version.json · pack_version.resource_major)
 CONTAINER_DIR = GUI_DIR / "container"        # 컨테이너 GUI는 스프라이트 분리 대상이 아님 — 기존 경로
 # ─── 아이템·블록 텍스처 레이어 디렉터리 계약 (texture_layer_design.md §5.1) ───
 ITEM_DEF_DIR = PACK / "assets" / "honcheon" / "items"                     # 아이템 정의 (1.21.4)
@@ -2947,8 +2948,12 @@ def main():
     blocks = write_block_textures()
     ents = write_entity_textures(sheet)
 
+    # pack_format 은 클라이언트 버전이 정한다 — 서버 jar 의 version.json(pack_version.resource_major)이 진실.
+    #   1.21.4 = 46 · 1.21.11 = 75. 숫자가 어긋나면 클라이언트가 "낡은 팩" 경고를 띄운다(적용은 되지만
+    #   경고가 뜨는 팩은 사용자가 끈다). supported_formats 로 46~75 를 함께 받아 구 클라이언트도 살린다.
     (PACK / "pack.mcmeta").write_text(json.dumps({
-        "pack": {"pack_format": 46,
+        "pack": {"pack_format": PACK_FORMAT,
+                 "supported_formats": {"min_inclusive": 46, "max_inclusive": PACK_FORMAT},
                  "description": "혼천 — 글리프 + HUD + 아이템·블록 + 엔티티 텍스처 (M3)"}
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

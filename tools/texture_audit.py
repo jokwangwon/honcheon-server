@@ -128,10 +128,21 @@ def lint(path, name):
     chroma = max(avg) - min(avg)
     seam = seam_score(rows, w, h) if w == h == 16 else 0
 
-    if colors < MIN_COLORS:
+    # 폰트 글리프(font/)는 **단색이 정답**이다 — 인게임에서 §색으로 물들여 쓰는 문자다.
+    #   여기에 "4색·명암차 24" 를 들이대면 린트가 18건을 거짓으로 외친다 (검수의 눈이 거짓말하면
+    #   루프가 헛돈다). 글리프는 모양(불투명 픽셀 비율)으로 본다: 다 채우면 뭉개지고, 너무 비면 안 보인다.
+    is_glyph = "/font/" in str(path).replace("\\", "/")
+    if is_glyph:
+        # 게이지(gauge_*)는 차오르는 그림이라 100% 채움이 정답이고, 장부 배경(gui_*)도 면이다.
+        # 획으로 보는 것은 문장·글자 글리프뿐이다.
+        fill = len(pxs) / (w * h)
+        if not name.startswith(("gauge_", "gui_")) and not 0.03 <= fill <= 0.75:
+            notes.append(f"획 채움 {fill:.0%} (권장 3~75% — 뭉개짐/실종)")
+            bad = True
+    elif colors < MIN_COLORS:
         notes.append(f"색 {colors} < {MIN_COLORS} (평면)")
         bad = True
-    if contrast < MIN_CONTRAST:
+    if not is_glyph and contrast < MIN_CONTRAST:
         notes.append(f"명암차 {contrast:.0f} < {MIN_CONTRAST} (밋밋)")
         bad = True
     if seam > SEAM_MAX:
