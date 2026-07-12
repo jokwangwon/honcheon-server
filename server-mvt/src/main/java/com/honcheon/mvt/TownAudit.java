@@ -905,11 +905,11 @@ public final class TownAudit {
     // ─── ⑨ 계약 검증 ───
 
     private static final String[] ANCHOR_KEYS = {
-            "장터", "청하객잔", "의뢰소", "의방", "전장", "표국", "북쪽_산길"};
+            "장터", "청하객잔", "의뢰소", "의방", "전장", "표국", "관아", "북쪽_산길"};
 
     private static void contracts(List<String> out, List<String> violations, World world,
                                   Map<String, Location> anchors, int cx, int cy, int cz) {
-        out.add(HEAD + "⑨ 계약 검증 (앵커 7 · NPC 7 · 붉은 차양)");
+        out.add(HEAD + "⑨ 계약 검증 (앵커 8 · NPC 9 · 붉은 차양)");
         List<String> missing = new ArrayList<>();
         for (String k : ANCHOR_KEYS) {
             if (anchors == null || !anchors.containsKey(k) || anchors.get(k) == null) {
@@ -917,7 +917,7 @@ public final class TownAudit {
             }
         }
         if (missing.isEmpty()) {
-            out.add(OK + "앵커 7키 존재 (" + String.join(", ", ANCHOR_KEYS) + ")");
+            out.add(OK + "앵커 " + ANCHOR_KEYS.length + "키 존재 (" + String.join(", ", ANCHOR_KEYS) + ")");
         } else {
             out.add(BAD + "앵커 누락: " + String.join(", ", missing));
             violations.add("앵커누락 " + missing.size());
@@ -931,11 +931,11 @@ public final class TownAudit {
             }
         }
         npcs.sort(String::compareTo);
-        if (npcs.size() == 7) {
-            out.add(OK + "NPC 7인 스폰: " + String.join(", ", npcs));
+        if (npcs.size() == 9) {
+            out.add(OK + "NPC 9인 스폰: " + String.join(", ", npcs));
         } else {
-            out.add(BAD + "NPC " + npcs.size() + "인 (기대 7): " + String.join(", ", npcs));
-            violations.add("NPC " + npcs.size() + "/7");
+            out.add(BAD + "NPC " + npcs.size() + "인 (기대 9): " + String.join(", ", npcs));
+            violations.add("NPC " + npcs.size() + "/9");
         }
 
         Location market = anchors == null ? null : anchors.get("장터");
