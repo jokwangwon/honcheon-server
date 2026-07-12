@@ -1989,7 +1989,7 @@ def pane_top_rows():
 #     ① 쪽마다 밝기가 다르다 — 대는 한 그루에서 잘라도 쪽마다 볕을 달리 먹었다
 #     ② 쪽마다 마디 높이가 다르다 — 마디가 한 줄로 가지런한 발은 없다 (그게 골판지다)
 #   쪽 폭 4px(=16의 약수)은 지킨다: 좌우 랩의 위상이 어긋나면 이음매가 터진다.
-BAMBOO_SHADES = ramp((116, 106, 88, 255), (184, 172, 150, 255), 12)   # 12단 — 한 단 ≈ 5.8
+BAMBOO_SHADES = ramp((134, 123, 102, 255), (204, 191, 167, 255), 12)   # 12단 — 한 단 ≈ 5.8
 # 쪽 단면 (x % 4) — 볼록한 대쪽. 좌측이 빛을 받고 우측이 그늘, 쪽과 쪽 사이가 골이다.
 BAMBOO_CURVE = [1.3, 0.5, -0.4, -1.4]
 # 쪽 4개의 밝기 — 넷이 다 다르다. 값은 이음매 축과 함께 풀어 고른 것이다: 톤을 아무렇게나
@@ -2051,7 +2051,7 @@ def lantern_rows(shades, cap, cap_hi):
 
 # ─── 한약장 — chiseled_bookshelf 재해석 ('꽂힌 책 = 채운 서랍').
 #     6칸(3열 × 2단)은 바닐라 슬롯 배치 계약. occupied = 앞판 + 놋 손잡이 / empty = 열린 칸의 어둠.
-SHELF_WOOD = ramp((44, 34, 24, 255), (168, 138, 100, 255), 7)
+SHELF_WOOD = ramp((70, 56, 41, 255), (190, 160, 120, 255), 7)
 SHELF_VOID = (18, 16, 14, 255)      # 빈 칸 깊은 어둠
 SHELF_VOID_HI = (44, 38, 32, 255)   # 빈 칸 안쪽 바닥 — 위에서 든 빛이 겨우 닿는 곳
 BRASS_HI = (204, 184, 132, 255)     # 놋 손잡이 광
@@ -2134,7 +2134,7 @@ def shelf_grain_rows(vertical):
 SCROLL_PAPER = (222, 214, 196, 255)       # 화선지 몸
 SCROLL_PAPER_LIT = (238, 232, 216, 255)   # 화선지 결 — 빛을 되쏘는 섬유
 SCROLL_INK = (30, 28, 26, 255)            # 진한 먹 (농담의 끝)
-SCROLL_ROD = ramp((36, 28, 20, 255), (116, 92, 64, 255), 5)   # 축(軸) — 나무 봉
+SCROLL_ROD = ramp((56, 45, 33, 255), (146, 118, 86, 255), 5)   # 축(軸) — 나무 봉
 SCROLL_SEAL = (156, 58, 46, 255)          # 주사(朱砂) 인장
 SCROLL_SEAL_HI = (194, 86, 68, 255)
 # 획의 농도 — '.' 여백 / '-' 엷은 먹 / '+' 중간 / '*' 진한 / '#' 가장 진한 먹
@@ -2308,11 +2308,11 @@ def dash(x, mask):
 
 # ─── 흙 계열 — 사람이 다닌 자리 ────────────────────────────────────────────
 # 흙은 '갈색'이 아니다. 먹에 흙기를 아주 옅게 섞은 값이다 (채도 ≤ 34 — 수묵 규약).
-DIRT_SHADES = ramp((52, 46, 40, 255), (124, 112, 98, 255), 9)      # 흙 — 습한 먹빛 흙
-PATH_SHADES = ramp((72, 66, 58, 255), (152, 142, 128, 255), 10)    # 다져진 길 — 밟혀 마른 흙
-COARSE_SHADES = ramp((58, 52, 45, 255), (136, 125, 110, 255), 10)  # 다진 흙 — 자갈이 섞인 마당
-PODZOL_SHADES = ramp((38, 34, 30, 255), (96, 86, 74, 255), 9)      # 부엽토 — 삭은 잎이 덮인 땅
-GRAVEL_SHADES = ramp((60, 59, 57, 255), (166, 164, 159, 255), 11)  # 자갈 — 무채색 조약돌
+DIRT_SHADES = ramp((78, 70, 60, 255), (162, 147, 128, 255), 9)      # 흙 — 습한 먹빛 흙
+PATH_SHADES = ramp((100, 92, 81, 255), (188, 176, 158, 255), 10)    # 다져진 길 — 밟혀 마른 흙
+COARSE_SHADES = ramp((84, 76, 66, 255), (172, 159, 140, 255), 10)  # 다진 흙 — 자갈이 섞인 마당
+PODZOL_SHADES = ramp((54, 48, 42, 255), (126, 113, 98, 255), 9)      # 부엽토 — 삭은 잎이 덮인 땅
+GRAVEL_SHADES = ramp((84, 82, 79, 255), (194, 192, 186, 255), 11)  # 자갈 — 무채색 조약돌
 
 
 def earth_base(x, y, salt, clump=1.15, grit=0.75):
@@ -2471,7 +2471,7 @@ def gravel_rows():
 
 def farmland_rows(moist=False):
     """밭 — 갈아 놓은 이랑. 이랑은 **끊어 판다** (이어진 골은 밭이 아니라 골함석이다)."""
-    shades = ramp((44, 38, 32, 255), (110, 100, 88, 255), 9) if moist else DIRT_SHADES
+    shades = ramp((62, 54, 46, 255), (138, 126, 110, 255), 9) if moist else DIRT_SHADES
     furrows = {2: -1.9, 3: 0.7, 8: -2.1, 9: 0.8, 13: -1.7, 14: 0.6}   # 골 셋 (간격 6·5·5 — 등간격 금지)
     rows = []
     for y in range(16):
@@ -2487,12 +2487,12 @@ def farmland_rows(moist=False):
 
 
 # ─── 돌 계열 — 막돌·전돌·다듬은 돌 ────────────────────────────────────────
-STONE_SHADES = ramp((74, 73, 71, 255), (154, 153, 150, 255), 10)      # 자연석 — 무채색
-COBBLE_SHADES = ramp((56, 55, 53, 255), (160, 159, 155, 255), 11)     # 막돌 — 명암 폭이 넓다
-BRICK_SHADES = ramp((66, 64, 61, 255), (150, 147, 142, 255), 11)      # 전돌(塼) — 구운 회벽돌
+STONE_SHADES = ramp((100, 99, 96, 255), (186, 185, 181, 255), 10)      # 자연석 — 무채색
+COBBLE_SHADES = ramp((78, 77, 74, 255), (190, 189, 184, 255), 11)     # 막돌 — 명암 폭이 넓다
+BRICK_SHADES = ramp((92, 90, 86, 255), (182, 179, 173, 255), 11)      # 전돌(塼) — 구운 회벽돌
 DEEP_SHADES = ramp((36, 35, 36, 255), (96, 95, 96, 255), 9)           # 심층암 — 검은 돌
-POLISH_SHADES = ramp((92, 91, 89, 255), (168, 167, 163, 255), 9)      # 다듬은 안산암 — 좁은 폭(매끈)
-IRON_SHADES = ramp((34, 33, 32, 255), (128, 126, 122, 255), 9)        # 무쇠 — 솥·테
+POLISH_SHADES = ramp((116, 115, 112, 255), (196, 195, 190, 255), 9)      # 다듬은 안산암 — 좁은 폭(매끈)
+IRON_SHADES = ramp((50, 49, 47, 255), (152, 150, 145, 255), 9)        # 무쇠 — 솥·테
 
 
 def rubble_rows(shades, cell=4, salt=0x31, mid=6.2, damp=False, mortar=3.4):
@@ -2646,7 +2646,7 @@ def polished_andesite_rows():
     return rows
 
 
-SMOOTH_SHADES = ramp((88, 87, 85, 255), (172, 171, 167, 255), 9)   # 켠 돌 — 매끈하되 죽지 않게
+SMOOTH_SHADES = ramp((114, 113, 110, 255), (198, 197, 192, 255), 9)   # 켠 돌 — 매끈하되 죽지 않게
 
 
 def smooth_stone_rows(band=False):
@@ -2684,11 +2684,11 @@ def smooth_stone_rows(band=False):
 # 목재는 조성 팔레트의 최대 면적이다 (DARK_OAK_PLANKS 33 + SPRUCE_FENCE 39 + SPRUCE_PLANKS 18 …).
 # 울타리·계단·반블록·문·다락이 전부 **판자 텍스처 한 장**을 쓴다 — 여기가 세계를 가장 크게 바꾼다.
 # 색: 채도 ≤ 40 (수묵 규약). '갈색 나무'가 아니라 **먹에 흙기를 옅게 섞은 나무**다.
-DARK_WOOD = ramp((38, 33, 28, 255), (104, 92, 78, 255), 9)       # 짙은 목재 (다크오크) — 관아·객잔 기둥
-SPRUCE_WOOD = ramp((58, 50, 41, 255), (140, 124, 104, 255), 9)   # 가문비 — 산채 목책·서민 판자
-OAK_WOOD = ramp((72, 63, 51, 255), (158, 141, 118, 255), 9)      # 참나무 — 밝은 판자
-STRIPPED_WOOD = ramp((80, 70, 57, 255), (172, 154, 130, 255), 9)  # 벗긴 원목 — 노출 기둥
-CHERRY_WOOD = ramp((62, 50, 48, 255), (146, 122, 118, 255), 9)   # 매화나무 — 아주 옅은 붉은 기
+DARK_WOOD = ramp((60, 52, 43, 255), (152, 135, 113, 255), 9)       # 짙은 목재 (다크오크) — 관아·객잔 기둥
+SPRUCE_WOOD = ramp((76, 66, 54, 255), (172, 154, 129, 255), 9)   # 가문비 — 산채 목책·서민 판자
+OAK_WOOD = ramp((94, 82, 67, 255), (188, 169, 142, 255), 9)      # 참나무 — 밝은 판자
+STRIPPED_WOOD = ramp((102, 90, 74, 255), (200, 180, 152, 255), 9)  # 벗긴 원목 — 노출 기둥
+CHERRY_WOOD = ramp((84, 66, 64, 255), (180, 148, 144, 255), 9)   # 매화나무 — 아주 옅은 붉은 기
 
 # 판자 넉 장 — 폭이 다 다르다 (5·4·3·4). 등폭 4는 곧 주기 4의 줄무늬다.
 PLANK_BOARDS = [(0, 4, 0x21, 0.55), (5, 8, 0x4D, -0.45), (9, 11, 0x6B, 0.30), (12, 15, 0x8F, -0.25)]
@@ -2800,7 +2800,7 @@ def stripped_rows(shades, salt=0x19):
 
 
 # ─── 초가(草家) — 성글게 이은 짚 ──────────────────────────────────────────
-STRAW_SHADES = ramp((78, 70, 54, 255), (176, 162, 130, 255), 11)   # 마른 짚 — 저채도 볏빛
+STRAW_SHADES = ramp((106, 96, 75, 255), (206, 191, 155, 255), 11)   # 마른 짚 — 저채도 볏빛
 # 짚단 — 층마다 두께가 다르다 (4·3·5·4). 이엉은 자로 재어 잇지 않는다.
 STRAW_LAYERS = [(0, 3, 0x23, 0.5), (4, 6, 0x47, -0.4), (7, 11, 0x6D, 0.25), (12, 15, 0x91, -0.3)]
 
@@ -3041,48 +3041,111 @@ def bone_block_rows(top=False):
 
 # ─── 매화(梅) — 채색이 허락된 유일한 자리 ─────────────────────────────────
 # 수묵의 세계에서 매화만 붉다. 그래서 매화는 **아껴 써야 하고**, 쓰는 자리에서는 확실히 붉어야 한다.
-# 잎(꽃잎)은 성글다 — 매화는 잎보다 가지가 그림이다.
-PLUM_BLOSSOM = (206, 152, 164, 255)      # 매화 꽃잎 — 바랜 분홍 (형광 금지)
-PLUM_BLOSSOM_HI = (232, 194, 202, 255)   # 꽃잎 광
-PLUM_CORE = (150, 96, 108, 255)          # 꽃 술 — 짙은 분홍
-PLUM_BRANCH = (52, 44, 42, 255)          # 가지 — 먹
-PLUM_BRANCH_HI = (84, 72, 68, 255)
+#
+# ★★ 이 자리에서 팩이 규약을 배반했다 (2026-07 · 사용자 보고: "벚꽃나무도 분홍빛에서 검은 빛이
+#    더 많이 드는 느낌"). 실측: cherry_leaves 평균 RGB (84,68,68) · 밝기 73 — **먹빛 갈색**이었다.
+#    규약이 채색을 허락한 유일한 자리가 정작 먹빛이면 **규약이 자기모순**이다.
+#
+#    원인은 아트 솜씨가 아니라 **자리를 잘못 안 것**이다. 이전 판은 잎 텍스처에 "먹으로 친 가지 위에
+#    꽃이 성글게 앉는" 그림을 그렸다 — 불투명 픽셀의 3/4가 먹 가지였다. 그러나 `cherry_leaves` 는
+#    **나뭇잎 블록**이고, 나뭇잎 블록은 **수관(樹冠) 전체를 도배한다.** 가지는 `cherry_log` 가
+#    이미 그린다. 화폭 하나에 **가지를 두 번 그리고 꽃을 한 번 찍은** 셈이고, 그 결과 매화나무는
+#    **검은 구름에 분홍 점이 박힌 것**이 됐다.
+#
+#    【고침】 잎의 본체는 **꽃**이다. 먹은 꽃 사이의 그늘(깊이)로만 든다.
+#    그리고 그것이 오히려 수묵이다 — **먹빛 가지 위의 밝은 분홍 꽃**, 그 대비가 곧 그림이다.
+#    빈 자리는 여전히 투명하다: 하늘이 비쳐야 매화지, 빽빽한 분홍 덩어리는 벚꽃 사탕이다.
+PLUM_BLOSSOM = (234, 158, 174, 255)      # 매화 꽃잎 — 분홍 (바랬으되 죽지 않았다)
+PLUM_BLOSSOM_HI = (250, 204, 212, 255)   # 꽃잎 광 — 빛을 받은 잎
+PLUM_BLOSSOM_LO = (198, 118, 140, 255)   # 꽃잎 그늘 — 겹친 잎 아래
+PLUM_CORE = (164, 80, 104, 255)          # 꽃 술 — 짙은 분홍 (꽃의 중심)
+PLUM_SHADE = (104, 68, 76, 255)          # 꽃 사이 그늘 — 먹에 분홍이 스민 값 (순먹 금지)
+PLUM_BRANCH = (58, 48, 46, 255)          # 잔가지 — 먹 (수관 안에서 언뜻 비치는 것뿐)
 
 
 def cherry_leaves_rows():
-    """매화 가지 — 먹으로 친 가지 위에 꽃이 성글게 앉는다. 잎사귀 덩어리가 아니라 **가지와 꽃**이다.
-    빈 자리는 투명 — 매화는 하늘이 비쳐야 매화다 (빽빽한 분홍 덩어리는 벚꽃 사탕이다)."""
+    """매화 수관 — **꽃이 본체다.** 먹은 꽃 사이의 그늘로만 든다 (가지는 cherry_log 의 몫).
+
+    '@' 꽃 (분홍 3단) · '%' 겹친 꽃 아래 그늘 · '#' 언뜻 비치는 잔가지 (아껴 쓴다) · '.' 투명(하늘).
+    불투명 픽셀의 8할이 꽃이라야 나무 **한 그루**가 분홍으로 선다 (한 장이 수관 전체를 도배하므로)."""
     art = [
-        "...#....#.......",
-        "..o#...#o.......",
-        "...##.##...#....",
-        "....###...#o....",
-        "o#..#o#..##.....",
-        ".##..##.##...#..",
-        "..####o##...#o..",
-        "...#o####..##...",
-        "..##..###.##....",
-        ".#o....####..#..",
-        "#o......##..#o..",
-        ".........#.##...",
-        "..#o.....###....",
-        "..##....#o.#....",
-        ".#.......#..#o..",
-        "..o.........##..",
+        "..@@@.%@@@..@@%.",
+        ".@@@@@@@@%.@@@@@",
+        "@@%@@@#@@@@@@%@@",
+        "@@@@%@@@@%@@@@@@",
+        ".@@@@@@@%@@@@@@.",
+        "@@%@@@@@@@@#@@@@",
+        "@@@@@#@@%@@@@@@@",
+        "%@@@@@@@@@@@%@@@",
+        "@@@@%@@@@@@@@@@%",
+        "@@@#@@@@%@@@@@@@",
+        ".@@@@@@%@@@@#@@.",
+        "@@@@%@@@@@@@@@@@",
+        "@%@@@@@@#@@@@%@@",
+        "@@@@@@%@@@@@@@@@",
+        ".@@@%@@@@@%@@@@.",
+        "..@@@.@@%@..@@@.",
     ]
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
             c = art[y][x]
-            if c == "#":
-                v = smooth_octave(x, y, 4, 0x77, 1.0)
-                row.append(PLUM_BRANCH_HI if v > 0.35 else PLUM_BRANCH)
-            elif c == "o":
-                k = h32(x, y, 0x8D) % 3
-                row.append(PLUM_CORE if k == 0 else (PLUM_BLOSSOM_HI if k == 1 else PLUM_BLOSSOM))
+            if c == "@":
+                # 꽃잎의 명암 — 뭉치지 않게 결정론 잡음으로 흩는다 (평면 분홍은 사탕이다)
+                v = smooth_octave(x, y, 4, 0x77, 1.0) + octave(x, y, 2, 0x31, 0.35)
+                if v > 0.42:
+                    row.append(PLUM_BLOSSOM_HI)
+                elif v < -0.45:
+                    row.append(PLUM_CORE if h32(x, y, 0x8D) % 4 == 0 else PLUM_BLOSSOM_LO)
+                else:
+                    row.append(PLUM_BLOSSOM)
+            elif c == "%":
+                row.append(PLUM_SHADE)                          # 겹친 꽃 아래 — 깊이
+            elif c == "#":
+                row.append(PLUM_BRANCH)                         # 잔가지 — 언뜻만
             else:
                 row.append(T)                                   # 빈 하늘 — 매화의 여백
+        rows.append(row)
+    return rows
+
+
+def cherry_sapling_rows():
+    """매화 묘목 — 어린 나무 한 그루. **꽃이 피어 있어야 매화 묘목이다** (먹빛 잔가지 = 죽은 가지).
+    이전 판은 sprig_rows(CHERRY_WOOD) 로 구워 밝기 82의 먹빛 삭정이였다."""
+    art = [
+        "................",
+        ".......@@.......",
+        "......@@@@......",
+        ".....@@%@@@.....",
+        "....@@@@@@@@....",
+        "...@@%@@@@%@....",
+        "....@@@@#@@@@...",
+        "...@@@@#@@@@....",
+        "....@%@#@@%@....",
+        ".....@@#@@@.....",
+        "......@#@@......",
+        ".......#........",
+        ".......#........",
+        "......##........",
+        ".......#........",
+        "................",
+    ]
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(16):
+            c = art[y][x]
+            if c == "@":
+                v = smooth_octave(x, y, 4, 0x53, 1.0)
+                row.append(PLUM_BLOSSOM_HI if v > 0.4 else
+                           (PLUM_BLOSSOM_LO if v < -0.45 else PLUM_BLOSSOM))
+            elif c == "%":
+                row.append(PLUM_CORE)
+            elif c == "#":
+                row.append(PLUM_BRANCH)                         # 어린 줄기 — 먹 (대비의 짝)
+            else:
+                row.append(T)
         rows.append(row)
     return rows
 
@@ -3508,8 +3571,8 @@ def snow_rows():
 # ★ UV 를 모르는 면에는 **무늬를 그리지 않는다.** 모델이 어느 조각을 잡을지 모르는 채로 문양을 얹으면
 #   문양이 뚜껑 뒤나 바닥에 가서 앉는다. 그래서 이 둘은 '어느 조각을 잘라 내도 옳은 면'으로 그린다:
 #   도기는 **물레 자국이 도는 유약면**, 궤는 **결이 흐르는 낡은 나무**. 어디를 잘라도 도기이고 나무다.
-POT_GLAZE = ramp((40, 37, 35, 255), (132, 124, 118, 255), 10)   # 먹빛 유약 (청화 아님 — 수묵 규약)
-CHEST_WOOD = ramp((46, 40, 33, 255), (122, 106, 86, 255), 9)    # 궤 — 오래 쓴 나무
+POT_GLAZE = ramp((58, 54, 51, 255), (158, 149, 141, 255), 10)   # 먹빛 유약 (청화 아님 — 수묵 규약)
+CHEST_WOOD = ramp((68, 59, 48, 255), (158, 138, 113, 255), 9)    # 궤 — 오래 쓴 나무
 
 
 def pottery_rows(w, h):
@@ -3790,7 +3853,7 @@ def hearth_front_rows(lit=False):
 
 def composter_rows(part):
     """퇴비통 — 널 세운 통 + 삭는 거름. 마을의 뒤꼍 (조성기 3회, 면적은 큰 편)."""
-    wood = ramp((54, 46, 36, 255), (128, 112, 88, 255), 7)
+    wood = ramp((84, 72, 57, 255), (176, 155, 122, 255), 7)
     if part == "side":
         g = [[step(wood, 3.4 + octave(x, y, 1, 0x71, 0.8)) for x in range(16)] for y in range(16)]
         for x in range(16):
@@ -3830,7 +3893,7 @@ def composter_rows(part):
 
 def loom_rows(part):
     """베틀 — 나무 틀 + 걸린 날실. 저잣거리의 옷감집."""
-    wood = ramp((62, 52, 40, 255), (146, 126, 98, 255), 7)
+    wood = ramp((90, 76, 59, 255), (182, 158, 124, 255), 7)
     if part == "top":
         return plank_rows(wood, 0x83)
     if part == "bottom":
@@ -3957,7 +4020,7 @@ def pot_rows():
 
 def scaffold_rows(part):
     """비계(飛階) — 대나무를 엮어 세운 발판. 목수·미장이 쓰는 임시 구조."""
-    bam = ramp((98, 90, 72, 255), (188, 176, 148, 255), 8)
+    bam = ramp((122, 112, 90, 255), (208, 195, 165, 255), 8)
     if part == "top":                             # 위에서 본 발 — 격자
         g = [[step(bam, 3.4 + octave(x, y, 1, 0x35, 0.7)) for x in range(16)] for y in range(16)]
         for i in range(16):
@@ -4067,7 +4130,7 @@ def write_block_textures() -> int:
         "cracked_deepslate_bricks": rotate90(roof_rows(cracked=True)),
         # 회벽 — 차가운 회백(R≈G≈B). 서민 벽(light_gray)은 같은 계열 한 톤 아래.
         "white_terracotta": plaster_rows((172, 174, 177, 255), (232, 233, 235, 255)),
-        "light_gray_terracotta": plaster_rows((130, 132, 135, 255), (186, 187, 189, 255)),
+        "light_gray_terracotta": plaster_rows((146, 148, 151, 255), (204, 205, 207, 255)),
         "glass": lattice_window_rows(),
         "glass_pane_top": pane_top_rows(),
         "bamboo_planks": bamboo_rows(),
@@ -4109,14 +4172,14 @@ def write_block_textures() -> int:
         "smooth_stone_slab_side": smooth_stone_rows(band=True),
         "andesite": stone_rows(STONE_SHADES, 0x4F, amp=1.25),     # 자연 안산암 — 얼룩이 굵다
         "polished_andesite": polished_andesite_rows(),            # 다듬은 안산암 — 정 자국이 있다
-        "tuff": stone_rows(ramp((62, 61, 58, 255), (132, 130, 124, 255), 9), 0x8D, amp=1.35),
+        "tuff": stone_rows(ramp((88, 87, 83, 255), (172, 170, 163, 255), 9), 0x8D, amp=1.35),
         "deepslate": stone_rows(DEEP_SHADES, 0xB3, amp=0.9),
         # 심층암 마구리 — amp 0.75·speck 없음으로는 색 3개·명암차 15 였다 (평면·밋밋 이중 위반).
         # 검은 돌이라고 해서 얼룩이 없는 것은 아니다 — 검은 것은 밝기이지 균질함이 아니다.
         "deepslate_top": stone_rows(DEEP_SHADES, 0xC7, amp=1.3),
         "cobbled_deepslate": rubble_rows(DEEP_SHADES, 4, 0x75, mid=5.4),   # 소금은 이음매로 골랐다 (gravel 주석)
-        "bricks": brick_rows(ramp((72, 66, 60, 255), (146, 138, 128, 255), 11), 0x6D),
-        "mud_bricks": brick_rows(ramp((70, 64, 55, 255), (140, 130, 114, 255), 10), 0x9F),
+        "bricks": brick_rows(ramp((98, 90, 82, 255), (182, 172, 159, 255), 11), 0x6D),
+        "mud_bricks": brick_rows(ramp((96, 88, 76, 255), (178, 165, 145, 255), 10), 0x9F),
         "packed_mud": stone_rows(ramp((66, 60, 52, 255), (136, 126, 110, 255), 9), 0xD1, amp=1.2),
         "clay": stone_rows(ramp((88, 86, 84, 255), (156, 154, 150, 255), 8), 0xE9, amp=0.8),
         "terracotta": plaster_rows((124, 118, 112, 255), (176, 169, 161, 255), hairlines=False),
@@ -4148,7 +4211,7 @@ def write_block_textures() -> int:
         # 자리·차양 (WHITE_CARPET 11 · BROWN_CARPET 9 · LIGHT_GRAY_CARPET 8 · RED_CARPET 4)
         #   깔개는 제 텍스처가 없다 — **양털 텍스처**를 쓴다. 그래서 양털을 자리로 그린다.
         "white_wool": cloth_rows(ramp((176, 172, 164, 255), (238, 235, 228, 255), 9), 0x2B),
-        "light_gray_wool": cloth_rows(ramp((118, 116, 112, 255), (182, 180, 175, 255), 9), 0x4D),
+        "light_gray_wool": cloth_rows(ramp((136, 134, 130, 255), (202, 200, 195, 255), 9), 0x4D),
         "brown_wool": cloth_rows(ramp((78, 68, 54, 255), (146, 130, 106, 255), 9), 0x6F),
         "red_wool": cloth_rows(ramp((96, 40, 36, 255), (176, 86, 72, 255), 9), 0x91),   # 붉은 차양 (채색 허용)
         # 기물 (BARREL 39 · DECORATED_POT 21 · CAULDRON 12 · *_SHELF 5)
@@ -4193,7 +4256,7 @@ def write_block_textures() -> int:
     RSAND = ramp((108, 88, 74, 255), (186, 158, 136, 255), 9)
     SNOW = ramp((168, 170, 174, 255), (246, 247, 250, 255), 8)
     ICE = ramp((132, 142, 148, 255), (212, 222, 228, 255), 8)      # 얼음 — 푸른 기 최소 (수묵)
-    MUD = ramp((44, 40, 34, 255), (98, 90, 78, 255), 8)
+    MUD = ramp((60, 55, 47, 255), (124, 114, 99, 255), 8)
     GRANITE = ramp((92, 78, 72, 255), (168, 148, 138, 255), 9)     # 화강 — 붉은 기 옅게
     DIORITE = ramp((140, 138, 136, 255), (226, 225, 223, 255), 9)  # 섬록 — 흰 돌
     CALCITE = ramp((160, 158, 152, 255), (232, 230, 224, 255), 8)
@@ -4271,13 +4334,13 @@ def write_block_textures() -> int:
         # 널문·대울타리 3,360
         "spruce_trapdoor": trapdoor_rows(SPRUCE_WOOD, 0x5F),
         "oak_trapdoor": trapdoor_rows(OAK_WOOD, 0x61),
-        "bamboo_fence": fence_rows(ramp((104, 96, 78, 255), (176, 164, 142, 255), 9), 0x63),
+        "bamboo_fence": fence_rows(ramp((128, 118, 96, 255), (198, 185, 160, 255), 9), 0x63),
         # 사다리·야광이끼 1,836
         "ladder": ladder_rows(),
         "glow_lichen": lichen_rows(),
         # 들꽃 5,405 — 꽃은 **컬러맵 틴트 대상이 아니다** (틴트되는 것은 풀·잎·물).
         #   그래서 회색조가 초록으로 물들지 않는다 → 보류 대상이 아니고, 그릴 수 있다.
-        "poppy": flower_rows(ramp((104, 40, 32, 255), (186, 84, 68, 255), 5), heart=(38, 34, 30, 255)),
+        "poppy": flower_rows(ramp((126, 52, 42, 255), (208, 102, 84, 255), 5), heart=(52, 46, 40, 255)),
         "cornflower": flower_rows(ramp((66, 78, 112, 255), (132, 148, 186, 255), 5), r=2.4),
         "oxeye_daisy": flower_rows(ramp((176, 172, 158, 255), (240, 238, 228, 255), 5),
                                    heart=(168, 146, 74, 255)),
@@ -4299,7 +4362,8 @@ def write_block_textures() -> int:
         "scaffolding_side": scaffold_rows("side"),
         "scaffolding_bottom": scaffold_rows("bottom"),
         "dead_bush": sprig_rows(DRY, 0x55, fronds=3, lean=0.5),
-        "cherry_sapling": sprig_rows(CHERRY_WOOD, 0x57, fronds=2, lean=0.3, top_bias=0.4),
+        # 매화 묘목 — 꽃이 핀 어린 나무 (sprig_rows(CHERRY_WOOD) 는 밝기 82의 먹빛 삭정이였다)
+        "cherry_sapling": cherry_sapling_rows(),
         "bamboo_stalk": sprig_rows(BAMBOO, 0x59, fronds=1, lean=0.0),
         "bamboo_singleleaf": sprig_rows(BAMBOO, 0x5B, fronds=2, lean=0.45),
         "mycelium_side": side_rows(grain_rows(ramp((58, 50, 56, 255), (118, 106, 116, 255), 8),
@@ -6624,8 +6688,13 @@ def main():
     #   경고가 뜨는 팩은 사용자가 끈다). supported_formats 로 46~75 를 함께 받아 구 클라이언트도 살린다.
     (PACK / "pack.mcmeta").write_text(json.dumps({
         "pack": {"pack_format": PACK_FORMAT,
+                 # 신·구 스키마를 **함께** 선언한다 — 1.21.9+ 클라이언트는 min_format/max_format 를 요구하고
+                 # (없으면 "지원 버전 누락" 경고), 구 클라이언트는 supported_formats 를 읽는다.
+                 # 데이터팩에서 이 필드가 없어 팩이 통째로 로드되지 않은 적이 있다 (조용히 꺼졌다).
                  "supported_formats": {"min_inclusive": 46, "max_inclusive": PACK_FORMAT},
-                 "description": "혼천 — 글리프 + HUD + 아이템·블록 + 엔티티 텍스처 (M3)"}
+                 "min_format": 46,
+                 "max_format": PACK_FORMAT,
+                 "description": "혼천(渾天) — 수묵 무협 팩 · 3D 병기 45 · 무공 획 9 · 짐승 형체 8 · 블록 215 · 메뉴 (1.21.11)"}
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     total = 1 + 9 + len(REALM_CRESTS) + 1 + 1

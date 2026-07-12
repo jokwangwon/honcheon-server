@@ -542,6 +542,182 @@ class Vanilla:
         return out
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑫. 밝기 대역 — 「수묵은 어두운 것이 아니라 **농담(濃淡)** 이다」 (2026-07)
+#
+# ── 왜 이 축이 생겼나 (실패의 기록) ──
+# 사용자 보고: *"전체적으로 어둡고 칙칙한 분위기, 심지어 벚꽃나무도 분홍빛에서 검은 빛이 더 많이 드는 느낌"*
+# 실측이 그를 뒷받침했다: 블록 209장 평균 밝기 **113** · 매화 잎 **73**(먹빛 갈색).
+#
+# 우리는 "채색 금지"를 **"전부 어둡게"** 로 번역했다. 그것은 오역이다.
+#   수묵의 본질은 **여백(밝은 종이)과 먹(짙은 획)의 대비**다. 종이까지 잿빛으로 칠하면
+#   먹은 더 이상 먹이 아니다 — 대비가 없으면 농담도 없고, 남는 것은 그을음뿐이다.
+#
+# 그리고 이 실패가 **왜 여기까지 왔는가**: 아무도 밝기를 재지 않았다.
+#   색 수·명암차·채도·이음매·자기복제·외곽선·양배경·자카드·등급변별·커버리지는 재면서
+#   **"전체가 너무 어두운가"** 는 아무도 묻지 않았다. 등롱 때와 똑같은 실패다
+#   (그때도 검수가 어둠을 못 잡아 조성기가 등을 계속 꽂았다).
+#   **재지 않는 축은 조용히 무너진다.** 그래서 잰다.
+#
+# ── 무엇을 재는가 (셋) ──
+#   ⑫-a 자재별 밝기 계약 — 자재마다 **다른 대역**이다. 일괄 보정은 또 다른 거짓말이다:
+#        기와까지 밝히면 검은 기와가 아니고, 회벽을 어둡히면 회벽이 아니다.
+#        **분류되지 않은 텍스처 = 위반** (구멍이 있으면 그 구멍으로 어둠이 새어든다).
+#   ⑫-b 전역 밝기 — 블록 텍스처 평균이 대역 안인가 (세계의 인상은 평균이 만든다).
+#   ⑫-c 허락된 채색의 **채도 하한** — 규약이 채색을 허락한 자리(매화·등롱·차양·불)에서
+#        색이 죽으면 **규약이 자기모순**이다. 매화가 먹빛 갈색이면 "채색은 매화뿐"이 무슨 말인가.
+#
+# ── 대역의 근거 ──
+# 마을을 걷는 눈에 가장 크게 닿는 면은 **목재 52장 · 돌 24 · 땅 12** 다. 그것들이 **종이** 노릇을
+# 해야 지붕의 먹(54)과 처마 그림자가 산다. 그래서 그 셋의 대역이 가장 높고, 기와·심층암은 낮다.
+# 밝기 계약은 **면(面)의 규율**이다 — 세계를 덮는 것은 면이다. 유리·거미줄·철창 같은
+# **획(劃)·투명 요소**는 어두운 선이 정답이므로 대역에서 제외하되, **제외도 등록제**로 적는다.
+LUMA_BANDS = [
+    # (자재, 하한, 상한, 패턴들, 근거)
+    ("먹_기와·심층암", 42, 88, ["deepslate*", "cracked_deepslate*", "cobbled_deepslate"],
+     "검은 기와는 **검어야 한다**. 이것이 이 세계의 먹이다 — 밝히면 그것이 거짓말이다"),
+    ("무쇠·화로", 55, 130,
+     ["anvil*", "iron_bars", "iron_chain", "cauldron_*", "hopper_*", "blast_furnace_*",
+      "smoker_*", "brewing_stand*", "tripwire*", "campfire_log"],
+     "쇠와 아궁이는 어둡다. 다만 순먹은 구멍으로 보인다 (하한 55)"),
+    ("매화_꽃", 150, 215, ["cherry_leaves", "cherry_sapling"],
+     "★ 채색이 허락된 유일한 자리. 수관 전체를 도배하는 면이므로 **나무 한 그루가 분홍으로 서야** 한다"),
+    ("매화_가지", 95, 165, ["cherry_log", "cherry_log_top", "cherry_shelf"],
+     "먹빛 가지 — **꽃의 짝**이다. 어두워야 분홍이 산다 (대비가 곧 수묵)"),
+    ("등불·불", 105, 235, ["lantern", "soul_lantern", "candle", "candle_lit", "torch",
+                          "campfire_log_lit"],
+     "불은 **빛나는 것**이다. 어두운 등롱은 등롱이 아니다"),
+    ("천_깃발·차양", 85, 200,
+     ["red_wool", "orange_wool", "yellow_wool", "green_wool", "lime_wool", "cyan_wool",
+      "light_blue_wool", "brown_wool"],
+     "차양·깃발 — 채색 허용. 밝기보다 **채도**가 본체다 (⑫-c 가 그것을 잰다)"),
+    ("여백_회벽·눈·얼음", 160, 240,
+     ["white_terracotta", "light_gray_terracotta", "calcite", "snow", "powder_snow",
+      "grass_block_snow", "*ice*", "white_wool", "light_gray_wool", "bone_block_*"],
+     "★ 이것이 **종이**다. 여백이 밝지 않으면 먹이 먹으로 읽히지 않는다"),
+    ("짚·죽", 125, 195,
+     ["hay_block_*", "bamboo_planks", "bamboo_shelf", "bamboo_singleleaf", "bamboo_stalk",
+      "bamboo_fence", "scaffolding_*"],
+     "마른 짚은 햇빛에 바랜다. 초가지붕이 밝아야 **기와(54)와 갈린다** — 두 지붕은 다른 계층이다"),
+    ("목재", 105, 175,
+     ["*_planks", "*_log", "*_log_top", "stripped_*", "*_trapdoor", "*_shelf", "barrel_*",
+      "lectern_*", "crafting_table_*", "loom_*", "composter_*", "smithing_table_*",
+      "chiseled_bookshelf_*", "flower_pot"],
+     "★ 조성 팔레트 **최대 면적(52장)** — 벽·바닥·계단·울타리가 전부 이 몇 장을 쓴다. "
+     "여기가 어두우면 마을 전체가 그을음이다"),
+    ("돌", 115, 195,
+     ["stone", "stone_bricks", "cracked_stone_bricks", "chiseled_stone_bricks",
+      "mossy_stone_bricks", "cobblestone", "mossy_cobblestone", "andesite", "polished_andesite",
+      "diorite", "granite", "smooth_stone*", "bricks", "mud_bricks", "tuff", "sandstone*",
+      "red_sandstone*", "terracotta", "clay"],
+     "사람이 깎은 돌 — 계단·단·담장. 무채색이되 **밝은 회색**이다 (돌은 먹이 아니다)"),
+    ("땅", 100, 170,
+     ["dirt", "coarse_dirt", "rooted_dirt", "dirt_path_*", "farmland*", "gravel", "sand",
+      "red_sand", "packed_mud", "mud"],
+     "밟혀 **마른** 흙은 밝다. 젖은 먹빛 흙이 마을을 그을음으로 만들었다"),
+    ("삭은땅_부엽토·이끼", 72, 130, ["podzol_*", "mycelium_*", "moss_block"],
+     "부엽토는 **어두운 것이 정체다** (삭은 잎이 덮은 땅) — 밝히면 그것도 거짓말. 다만 60은 과했다"),
+    ("초목_작물·꽃", 85, 200,
+     ["wheat_*", "carrots_*", "potatoes_*", "beetroots_*", "sweet_berry_*", "*mushroom",
+      "poppy", "dandelion", "cornflower", "azure_bluet", "oxeye_daisy", "white_tulip"],
+     "작물과 꽃 — 폭이 넓다 (익은 밀은 밝고 어린 싹은 어둡다)"),
+]
+# 대역 제외 — **획(劃)·투명 요소**. 세계를 덮는 '면'이 아니라 배경 위에 긋는 '선'이라
+# 어두운 것이 정답이다. 제외도 등록제다 (여기 없는 텍스처는 반드시 대역을 갖는다).
+LUMA_EXEMPT = ["glass", "glass_pane_top", "cobweb", "dead_bush", "ladder", "glow_lichen",
+               "sea_pickle", "torch"]
+BLOCK_LUMA_MEAN = (128, 172)   # 전역 평균 밝기 대역 — 세계의 인상은 평균이 만든다
+# ⑫-c 허락된 채색의 **채도 하한** — 색이 죽으면 규약이 자기모순이다
+CHROMA_FLOOR = {
+    "cherry_leaves": ("R-G", 42, "매화 — 채색이 허락된 유일한 자리. 붉은 기가 이 아래면 **색이 죽었다**"),
+    "cherry_sapling": ("R-G", 30, "매화 묘목 — 꽃이 핀 어린 나무 (먹빛 삭정이가 아니다)"),
+    "cherry_log": ("R-G", 12, "매화 가지 — 먹빛이되 붉은 기가 남는다"),
+    "red_wool": ("chroma", 60, "차양(붉은 천) — 붉어야 차양이다"),
+    "lantern": ("chroma", 32, "등롱 — 유등의 난색"),
+    "campfire_log_lit": ("chroma", 30, "타는 장작 — 불은 의미다"),
+}
+
+
+def _tex_stats(f):
+    w, h, rows = read_png(f)
+    ps = [px(rows, x, y) for y in range(h) for x in range(w) if px(rows, x, y)[3] > 8]
+    if not ps:
+        return None
+    n = len(ps)
+    avg = [sum(p[i] for p in ps) / n for i in range(3)]
+    return (sum(luma(p) for p in ps) / n, max(avg) - min(avg), avg[0] - avg[1])
+
+
+def brightness_bands():
+    """축 ⑫ — 밝기 대역 · 자재별 계약 · 허락된 채색의 채도 하한. 위반 수를 돌려준다."""
+    import fnmatch
+    print("\n── 축 ⑫ 밝기 대역 (수묵 = 여백과 먹의 대비. '전부 어둡게'가 아니다) ──")
+    B = PACK / "minecraft" / "textures" / "block"
+    files = sorted(B.glob("*.png"))
+    violations = 0
+    by_class, unclassified, lumas = {}, [], []
+
+    for f in files:
+        st = _tex_stats(f)
+        if st is None:
+            continue
+        L, chroma, rg = st
+        if any(fnmatch.fnmatch(f.stem, p) for p in LUMA_EXEMPT):
+            continue                                     # 획·투명 요소 — 등록된 제외
+        for cls, lo, hi, pats, why in LUMA_BANDS:
+            if any(fnmatch.fnmatch(f.stem, p) for p in pats):
+                by_class.setdefault(cls, (lo, hi, why, []))[3].append((f.stem, L))
+                lumas.append(L)
+                break
+        else:
+            unclassified.append(f.stem)
+
+    # ⑫-a 자재별 밝기 계약
+    for cls, lo, hi, pats, why in LUMA_BANDS:
+        if cls not in by_class:
+            continue
+        _, _, _, items = by_class[cls]
+        out = [(n, L) for n, L in items if not (lo <= L <= hi)]
+        mean = sum(L for _, L in items) / len(items)
+        mark = "❌" if out else "✅"
+        print(f"  {mark} {cls:18s} [{lo:3d}–{hi:3d}]  n={len(items):3d} 평균 {mean:5.0f}")
+        if out:
+            violations += len(out)
+            for n, L in sorted(out, key=lambda t: t[1])[:6]:
+                side = "어둡다" if L < lo else "밝다"
+                print(f"       ❌ {n:28s} 밝기 {L:5.0f} — 대역 밖({side}) · {why}")
+
+    # 미분류 = 위반 (구멍이 있으면 그 구멍으로 어둠이 새어든다)
+    if unclassified:
+        violations += len(unclassified)
+        print(f"  ❌ 미분류 {len(unclassified)}장 — **밝기 계약이 없는 텍스처** (등록되지 않은 것은 "
+              f"재어지지 않고, 재어지지 않는 것은 조용히 무너진다): {unclassified[:8]}")
+    else:
+        print(f"  ✅ 분류 커버리지 {len(lumas)}/{len(lumas)} = 100% (제외 등록 {len(LUMA_EXEMPT)}종 — 획·투명 요소)")
+
+    # ⑫-b 전역 평균
+    gmean = sum(lumas) / len(lumas)
+    lo, hi = BLOCK_LUMA_MEAN
+    ok = lo <= gmean <= hi
+    violations += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 전역 평균 밝기 {gmean:.0f} — 대역 [{lo}–{hi}]"
+          + ("" if ok else "  ← 세계가 통째로 어둡다 (사용자가 본 것이 이것이다)"))
+
+    # ⑫-c 허락된 채색의 채도 하한
+    print("  ── ⑫-c 허락된 채색 (매화·차양·등롱·불) — 색이 죽으면 규약이 자기모순이다 ──")
+    for name, (kind, floor, why) in CHROMA_FLOOR.items():
+        f = B / f"{name}.png"
+        if not f.exists():
+            continue
+        L, chroma, rg = _tex_stats(f)
+        v = rg if kind == "R-G" else chroma
+        ok = v >= floor
+        violations += 0 if ok else 1
+        print(f"     {'✅' if ok else '❌'} {name:18s} {kind} {v:+5.0f} ≥ {floor:3d} · 밝기 {L:5.0f}"
+              + ("" if ok else f"  ← **색이 죽었다** · {why}"))
+    return violations
+
+
 def palette_coverage():
     """축 ⑪ — 조성 팔레트 커버리지. (커버리지, 위반수) 반환."""
     print("\n── 축 ⑪ 조성 팔레트 커버리지 (빈도 × 면적 × 불투명도) ──")
@@ -817,6 +993,7 @@ def main():
                       f" · 채도 {m['chroma']:.0f} · 이음매 {m['seam']:.2f} · 평균 {m['avg']}{tail}")
 
     violations += cross_checks()
+    violations += brightness_bands()          # 축 ⑫ — 재지 않는 축은 조용히 무너진다
     _, cov_violations = palette_coverage()
     violations += cov_violations
 

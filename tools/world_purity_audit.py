@@ -294,6 +294,18 @@ def audit(reg: dict) -> int:
             fail(f"placed_feature/{f.name}: count 0 이 없다 — 이 피처는 **놓인다**")
     print(f"{OK if not bad else BAD} 피처 — 등록 {len(feat_listed)}종 / 파일 {len(feat_disk)}종")
 
+    # ── 용암 — 「필드에 용암이 없다」를 지키는 관문 ──────────────────────────
+    #   오버월드에서 y ≥ -54 에 용암을 놓는 피처는 이 다섯뿐이다. 하나라도 빠지면 필드가 더러워진다.
+    #   (spring_lava_frozen 을 특히 조심하라 — 우리가 `grove` 를 **남겼기** 때문에 살아 있다.)
+    LAVA = {"lake_lava_surface", "lake_lava_underground",
+            "spring_lava", "spring_lava_frozen", "underwater_magma"}
+    for leak in sorted(LAVA - feat_listed):
+        fail(f"★ 용암을 놓는 피처인데 등록부에 없다 — **필드에 용암이 남는다**: {leak}")
+    if not (LAVA - feat_listed):
+        print(f"{OK} 용암 — 지표 용암 5종 전부 등록·차단. "
+              f"y ≥ -54 에 용암을 놓을 수 있는 피처가 **없다**")
+        print(f"     (y < -54 의 용암 바다는 남는다 — 아쿠아퍼 하드코딩. 데이터팩의 손이 안 닿고, 끌 이유도 없다)")
+
     # ── ③ 바이옴 ──────────────────────────────────────────────────────────
     preset_path = data / "world_preset" / "normal.json"
     forbidden = {r["from"] for r in reg["biomes"]["remap"]}
@@ -499,6 +511,100 @@ def emit_rcon(reg: dict) -> int:
         for z in range(-half, half + 1, step):
             print(f"execute positioned {x} 96 {z} if biome ~ ~ ~ minecraft:desert")
     print("#   통과: **passed 0 / 441**. desert 를 savanna 로 바꿔 다시 돌리면 여럿 passed 여야 한다")
+
+    print("\n# ── ⑦ 지표 용암 — 여기서는 못 센다 ──")
+    print("#   `/locate` 로는 블록을 셀 수 없고 표본 격자로도 안 된다")
+    print("#   (지표 용암 호수는 200청크에 하나 — 격자 점이 그 위에 떨어질 확률이 사실상 0 이다).")
+    print("#   전수 조사는 **파괴적**이라 따로 뺐다. 위를 전부 끝낸 **뒤에** 마지막으로:")
+    print("#       python3 tools/world_purity_audit.py --emit-lava-census --radius 256")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# --emit-lava-census : 지표 용암 0블록을 **세어서** 증명한다
+#
+#   왜 따로인가 — `/locate` 로는 블록을 못 센다. 표본 격자로도 안 된다:
+#   지표 용암 호수는 200청크에 하나라 격자 점이 그 위에 떨어질 확률이 사실상 0 이다.
+#   블록을 **전수 조사**하는 유일한 명령이 `/fill … replace` 다 —
+#   바꾼 블록 수를 돌려주기 때문이다.
+#
+#   ⚠ **파괴적이다.** 용암을 공기로 바꾼다. 반드시 **버려도 되는 시험 월드**에서 돌려라.
+#      (어차피 새 월드를 깔아 실측하므로 문제가 없다. 다른 검사를 **먼저** 끝내고 이걸 마지막에.)
+# ══════════════════════════════════════════════════════════════════════════
+FILL_VOLUME_CAP = 32768        # 바닐라 FillCommand: 부피가 이보다 크면 거부한다
+TILE = 128                     # 수평 타일 한 변 → 128×128×2 = 32,768 (상한에 딱 맞다)
+YSTEP = FILL_VOLUME_CAP // (TILE * TILE)
+
+
+def emit_lava_census(reg: dict, radius: int) -> int:
+    """`/fill … replace` 만이 블록을 **센다**.
+
+    `/locate` 는 블록을 못 세고, 표본 격자도 안 된다 — 지표 용암 호수는 200청크에 하나라
+    격자 점이 그 위에 떨어질 확률이 사실상 0 이다. 전수 조사만이 「0」을 증명한다.
+    """
+    tiles = [(x, z)
+             for x in range(-radius, radius, TILE)
+             for z in range(-radius, radius, TILE)]
+
+    def sweep(y0: int, y1: int, block: str, area: list[tuple[int, int]]) -> int:
+        n = 0
+        for (x, z) in area:
+            for y in range(y0, y1 + 1, YSTEP):
+                top = min(y + YSTEP - 1, y1)
+                print(f"fill {x} {y} {z} {x + TILE - 1} {top} {z + TILE - 1} "
+                      f"minecraft:air replace {block}")
+                n += 1
+        return n
+
+    span = radius * 2
+    print("# ═══════════════════════════════════════════════════════════════════")
+    print("# 혼천 — 지표 용암 전수 조사 (RCON)")
+    print("#")
+    print(f"#   구역: X/Z −{radius}‥{radius - 1}  ({span}×{span} 블록 = {(span // 16) ** 2} 청크)")
+    print("#   각 명령이 \"Successfully filled N blocks\" / \"No blocks were filled\" 를 뱉는다.")
+    print("#   **N 을 전부 더한 것이 그 구간의 블록 수다.**")
+    print("#")
+    print("#   ⚠ **파괴적이다** — 용암을 공기로 바꾼다. **버려도 되는 시험 월드**에서,")
+    print("#      다른 검사(--emit-rcon)를 전부 끝낸 **뒤에** 마지막으로 돌려라.")
+    print("#   ⚠ 청크를 생성하며 돈다. 느리다.")
+    print("# ═══════════════════════════════════════════════════════════════════")
+
+    print("\n# ── ⓪ 양성 대조: **철광석** — 이것부터 돌려라 ──")
+    print("#   우리는 광맥을 **남겼다**. 그러니 N > 0 이 나와야 한다.")
+    print("#   0 이면 순도가 아니라 **고장**이다 — 피처 시스템이 죽었거나 이 측정법이 틀렸다.")
+    print("#   **이게 0 이면 아래의 「용암 0」은 아무것도 증명하지 못한다.** (타일 하나면 충분하다)")
+    c = sweep(0, 319, "minecraft:iron_ore", tiles[:1])
+    c += sweep(-64, -1, "minecraft:deepslate_iron_ore", tiles[:1])
+    print(f"#   → {c} 개 명령. 통과: 합계 **N > 0**")
+
+    print("\n# ── ① 지표·상층 (y 0‥319) — **여기가 「필드」다** ──")
+    print("#   lake_lava_surface · spring_lava · spring_lava_frozen · underwater_magma 가 놓이던 층.")
+    c = sweep(0, 319, "minecraft:lava", tiles)
+    print(f"#   → {c} 개 명령. ★ 통과: 합계 **0**. 한 블록이라도 나오면 순도가 깨진 것이다")
+
+    print("\n# ── ② 지하 (y −54‥−1) — 여기도 0 이어야 한다 ──")
+    print("#   아쿠아퍼 규칙상 −54 위의 유체는 **물**이다. 용암을 놓던 것은 lake_lava_underground 뿐인데")
+    print("#   그걸 껐다. 그러니 0.")
+    c = sweep(-54, -1, "minecraft:lava", tiles)
+    print(f"#   → {c} 개 명령. 통과: 합계 **0**")
+
+    print("\n# ── ③ 지심 (y −64‥−55) — **관측만 한다. 통과/실패가 아니다** ──")
+    print("#   바닐라가 아쿠아퍼에 용암을 채우는 층. NoiseBasedChunkGenerator 에 **하드코딩**되어 있어")
+    print("#   데이터팩으로 끌 수 없고, 끌 이유도 없다 — 거기까지 판 자는 지심을 만날 자격이 있다.")
+    print("#")
+    print("#   ⚠ 그런데 **0 에 가깝게 나올 것이다.** 예측을 먼저 적어 둔다 (맞든 틀리든 정직하게):")
+    print("#     용암 바다는 「액체로 찬 **공동**」이지 「돌을 녹인 것」이 아니다.")
+    print("#     우리는 자연 동굴을 껐다(10.08% → 0.04%) — **용암이 들어앉을 자리 자체가 없다.**")
+    print("#     여기서 0 이 나와도 결함이 아니라 no_caves 의 당연한 귀결이다.")
+    print("#     수치를 알려주면 문서에 확정하겠다.")
+    c = sweep(-64, -55, "minecraft:lava", tiles)
+    print(f"#   → {c} 개 명령. **관측값을 보고하라** (0 이든 아니든 정상)")
+
+    print("\n# ── ④ 대조군 (권장) ──")
+    print("#   **같은 시드**로 `honcheon_no_caves` **만** 건 월드를 하나 더 깔고 위를 그대로 돌려라.")
+    print("#   (바닐라 생짜와 비교하면 동굴 용암이 섞여 **교란된다** — 동굴은 이미 no_caves 가 껐다.")
+    print("#    두 월드의 차이가 정확히 `honcheon_purity` 가 지운 용암이어야 한다.)")
+    print("#   → 「대조 N / 우리 0」이 나오면 「전부 0」이 순도의 증거지 측정 실패가 아님이 확정된다.")
     return 0
 
 
@@ -508,6 +614,10 @@ def main() -> int:
     ap.add_argument("--load-test", action="store_true",
                     help="★ 바닐라 코덱으로 데이터팩을 파싱한다 — 레지스트리 실패 = 서버 사망")
     ap.add_argument("--emit-rcon", action="store_true", help="인게임 실측 명령을 뱉는다")
+    ap.add_argument("--emit-lava-census", action="store_true",
+                    help="지표 용암 전수 조사 명령을 뱉는다 (파괴적 — 시험 월드 전용)")
+    ap.add_argument("--radius", type=int, default=128,
+                    help="용암 조사 반경(블록). 기본 128 → 256×256 = 256청크")
     args = ap.parse_args()
 
     reg = registry()
@@ -515,6 +625,8 @@ def main() -> int:
         return build(reg) or load_test(reg)   # 빚었으면 곧바로 코덱에 먹여 본다
     if args.load_test:
         return load_test(reg)
+    if args.emit_lava_census:
+        return emit_lava_census(reg, args.radius)
     if args.emit_rcon:
         return emit_rcon(reg)
     return audit(reg)
