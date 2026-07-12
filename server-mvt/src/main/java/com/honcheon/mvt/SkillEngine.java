@@ -83,6 +83,19 @@ public final class SkillEngine {
     private final int combatWindowTicks;
     private final int meditationFloor;                     // internal_energy.yml: recovery.meditation_floor
 
+    // ─── 조식(調息) — 전투 중 내력 회복 (internal_energy.yml recovery.in_combat.조식) ───
+    private final int combatRegen;
+    private final boolean regenOnlyIfUnspent;
+
+    // ─── 포위 — 슬롯·협공·피포위 방어·강제 태세 (combat.yml attack) ───
+    private final int engageSlots;
+    private final int gangPer;
+    private final int gangCap;
+    private final int outnumberedPer;
+    private final int outnumberedCap;
+    private final int forcedGuardFrom;
+    private final int forcedGuardSoak;
+
     // 격 위력 — 【엔진 정본】 combat.yml damage.qi_power (qi_manifestation grades[].power 와 동일 값)
     private final Map<String, Integer> qiPower;
     /** 형태별 위력 — 발출형은 더 아프다 (검기_참격 3 > 검기 두름 2). forms[].power 가 격 기본값보다 우선 */
@@ -166,6 +179,32 @@ public final class SkillEngine {
         Map<String, Object> recovery = (Map<String, Object>) RulesConfig
                 .section(ie, "internal_energy").get("recovery");
         this.meditationFloor = RulesConfig.intValue(recovery.get("meditation_floor"));
+
+        // ─── 조식 — 전투 중의 숨. config 에 없으면 0 (회복 없음). 코드가 수치를 지어내지 않는다 ───
+        Map<String, Object> breath = recovery.get("in_combat") instanceof Map<?, ?> ic
+                && ((Map<String, Object>) ic).get("조식") instanceof Map<?, ?> b
+                ? (Map<String, Object>) b : Map.of();
+        this.combatRegen = breath.get("per_round") instanceof Number n3 ? n3.intValue() : 0;
+        this.regenOnlyIfUnspent = Boolean.TRUE.equals(breath.get("only_if_unspent"));
+
+        // ─── 포위 — 한 사람을 에워싸면 서로 걸리적거린다 (combat.yml attack) ───
+        Map<String, Object> attack = RulesConfig.section(cb, "attack");
+        Map<String, Object> gang = RulesConfig.section(attack, "gang_up");
+        this.gangPer = RulesConfig.intValue(gang.get("per_extra_attacker"));
+        this.gangCap = RulesConfig.intValue(gang.get("max"));
+        this.engageSlots = RulesConfig.intValue(gang.get("engage_slots"));
+        Map<String, Object> outnumbered = RulesConfig.section(attack, "outnumbered_defense");
+        this.outnumberedPer = RulesConfig.intValue(outnumbered.get("per_extra_attacker"));
+        this.outnumberedCap = RulesConfig.intValue(outnumbered.get("max"));
+        Map<String, Object> forced = outnumbered.get("forced_guard") instanceof Map<?, ?> fg
+                ? (Map<String, Object>) fg : Map.of();
+        this.forcedGuardFrom = forced.get("trigger_extra_attackers") instanceof Number n4 ? n4.intValue() : 1;
+        // 경감치는 forced_guard 가 가리키는 태세(흘리기)의 defender_choice 값이 정본 — 단일 진실 원천
+        String stance = String.valueOf(forced.getOrDefault("defense", "흘리기"));
+        Object soak = forced.isEmpty() ? null
+                : RulesConfig.section(RulesConfig.section(attack, "defender_choice"), stance)
+                        .get("damage_reduction");
+        this.forcedGuardSoak = soak instanceof Number n5 ? n5.intValue() : 0;
 
         Object realtime = cb.get("realtime");
         this.roundTicks = realtime instanceof Map<?, ?> m && m.get("round_ticks") instanceof Number n
@@ -487,6 +526,10 @@ public final class SkillEngine {
         public long busyUntil = -1;
         public long lastCastTick = -1;
         public long nextSustainTick = -1;
+        /** 이 합이 시작될 때의 내력 — 합이 끝날 때 줄어 있으면 '쓴 것'이다 (조식이 돌지 않는다) */
+        public int energyAtRoundStart = -1;
+        /** 다음 조식 정산 틱 — 한 라운드에 한 번만 돈다 */
+        public long nextRegenTick = -1;
         public final Map<String, Long> cooldownUntil = new HashMap<>();
         /** 자기 무기가 자기 격을 못 견딜 때의 시전 카운터 (n회마다 손상 1) */
         public int selfStrainCount;
@@ -665,6 +708,63 @@ public final class SkillEngine {
      */
     public int meditationRecover(double naegong, double purity) {
         return (int) Math.max(Math.round(naegong * purity), meditationFloor);
+    }
+
+    // ══════════ 조식(調息) — 전투 중의 숨 (internal_energy.yml recovery.in_combat.조식) ══════════
+
+    /**
+     * 라운드당 회복량. <b>운기조식(앉는 것)이 아니다</b> — 격을 싣지 않은 합의 호흡이다.
+     *
+     * <p>이것이 없던 시절, 개화 직후(내공 0.33 → 내력 풀 1)의 발경은 <b>전투당 한 번</b>이었다.
+     * 전투는 5~9합인데 '개화의 보상'을 첫 합에 다 쓰고 나머지를 빈손으로 쳤다 — 형벌이었다.
+     * 그리고 규칙이 비대칭이었다: NPC 만 라운드당 1씩 회복하고 있었다(하드코딩) —
+     * npc_combat.yml symmetry 가 거짓이었다. 이제 둘 다 config 를 읽는다.
+     */
+    public int combatRegen() {
+        return combatRegen;
+    }
+
+    /** 【조건】 그 합에 내력을 한 점도 쓰지 않았을 때만 돈다. 이 조건이 규칙의 전부다 — 없으면 발경은 공짜다 */
+    public boolean regenOnlyIfUnspent() {
+        return regenOnlyIfUnspent;
+    }
+
+    // ══════════ 포위 — 다구리의 규칙 (combat.yml attack) ══════════
+
+    /**
+     * 포위 슬롯 — 한 표적을 <b>동시에</b> 칠 수 있는 손의 수. 그 밖은 대기(포위)다.
+     * 다구리에도 몸이 들어갈 자리가 필요하다 — 머릿수는 '교대'가 되지 '동시타'가 되지 않는다.
+     */
+    public int engageSlots() {
+        return engageSlots;
+    }
+
+    /** 협공 보정 — 추가 공격자당 +1 (캡 2) */
+    public int gangUpBonus(int attackers) {
+        return Math.min(Math.max(0, attackers - 1) * gangPer, gangCap);
+    }
+
+    /** 피포위 방어 이점 — 사방에서 오는 것은 서로의 검로를 막는다 (추가 적당 +1, 캡 2) */
+    public int outnumberedDefense(int attackers) {
+        return Math.min(Math.max(0, attackers - 1) * outnumberedPer, outnumberedCap);
+    }
+
+    /**
+     * 공격 측 순보정 = 협공 − 피포위 방어. 같은 눈금이므로 <b>0</b> 이다 (의도된 것 — combat.yml 정본).
+     * 보정을 남겨두면 명중률 절벽 위에서 곱셈으로 터진다 (이류 4인의 절정 상대 명중 2.8% → 16.7%).
+     */
+    public int gangNetModifier(int attackers) {
+        return gangUpBonus(attackers) - outnumberedDefense(attackers);
+    }
+
+    /**
+     * 포위된 자의 강제 태세 경감 — 회피(몸을 빼는 것)를 잃고 받아넘긴다(흘리기 −1).
+     *
+     * <p>경감은 <b>협공 1인분보다 반드시 작아야 한다</b>. 막기(−3)로 잡으면 규칙이 뒤집힌다:
+     * 둘이 덤비는 것이 하나보다 덜 아파진다 (총 피해 3.28 → 3.06).
+     */
+    public int forcedGuardSoak(int attackers) {
+        return Math.max(0, attackers - 1) >= forcedGuardFrom ? forcedGuardSoak : 0;
     }
 
     // ══════════ 무기 ══════════

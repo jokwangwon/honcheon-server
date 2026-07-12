@@ -41,6 +41,9 @@ combat_coop:
     engage_slots: 3                # combat.yml attack.gang_up.engage_slots 와 동일 정본
     slot_note: "슬롯 밖 인원은 대기 — 앞선 자가 무력화·후퇴해야 들어간다. 그 대신 도주를 막는다"
   피포위_방어_이점: { per_extra_attacker: 1, cap: 2, applies_to: [회피, 막기, 흘리기] }
+  # 【정본은 combat.yml attack.outnumbered_defense】 — 협공 보정과 같은 눈금이라 판정 순보정은 0 이다.
+  #   포위된 자는 회피를 잃는다(forced_guard) — 몸을 뺄 자리가 없다. 받아넘기거나(흘리기 -1) 검으로 받는다(막기 -3, 검이 상한다).
+  #   그래서 협공의 값은 판정이 아니라 ① 슬롯(동시타 3) ② 도주 봉쇄(-2) ③ 상대 무기의 마모다.
   합격진:                          # 훈련된 협공 — 등록제 무공 (카탈로그 규칙 전부 적용)
     rule: "같은 진법 숙련자끼리만 — 습득(문파 비전 사사)·숙련·경지 게이트"
     example_maehwa_geomjin:

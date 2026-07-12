@@ -65,8 +65,8 @@ public final class SkillListener implements Listener {
     private static final double NPC_REACH = 3.5;
     /** 응집이 끝난 뒤 격이 실려 있는 창 — 바닐라 근접 AI 의 스윙 타이밍을 우리가 못 정한다 (근사) */
     private static final int NPC_HOT_TICKS = 20;
-    /** 전투 밖 NPC 내력 회복 — 라운드당 1 (config 등록 대기: internal_energy 자연 회복은 '구간'(일) 단위다) */
-    private static final int NPC_REGEN_PER_ROUND = 1;
+    // NPC 내력 회복의 하드코딩(라운드당 1)은 제거됐다 — 이제 조식(internal_energy.yml
+    // recovery.in_combat.조식)을 플레이어와 **같은 함수**로 탄다 (regulateBreath).
 
     private final HoncheonMvt plugin;
     private final SkillEngine engine;
@@ -139,11 +139,46 @@ public final class SkillListener implements Listener {
                 endCombat(player, state);   // 전투가 끝났다 — 흐름은 흩어지고 오의 횟수는 돌아온다
             }
             sustain(player, state);
+            regulateBreath(state, engine.pool(state.naegong));   // 조식 — 격을 싣지 않은 합에 단전이 돈다
             hud.energyBar(player, state);
             if (state.armed != null || engine.pool(state.naegong) > 0) {
                 hud.statusBar(player, state, tick);
             }
         }
+    }
+
+    /**
+     * 조식(調息) — 전투 중의 숨. {@code internal_energy.yml recovery.in_combat.조식} 의 배선.
+     *
+     * <p><b>운기조식(앉는 것)이 아니다.</b> 격을 싣지 않은 합에는 단전이 돈다 — 초식은 외공이니까
+     * (cost_bands 외공기). 태우기와 고르기는 같은 합에 못 한다({@code only_if_unspent}).
+     *
+     * <p>이것이 없던 시절 개화 직후(내공 0.33 → 내력 풀 1)의 발경은 <b>전투당 한 번</b>이었다 —
+     * 자원 관리가 아니라 형벌이었다. 이제 '한 합 태우고 한 합 고른다'(7합 전투에 발경 4회).
+     * 축기가 사는 것은 총량이 아니라 <b>몰아 쓸 수 있는 합</b>이다 (내력 풀 3 = 3합 연발).
+     *
+     * <p>플레이어와 NPC 가 같은 함수를 탄다 — npc_combat.yml symmetry("NPC 자원 = 동일")의 이행이다.
+     * 그전엔 NPC 만 하드코딩된 라운드당 1을 받고 있었고, 그 대칭은 거짓이었다.
+     */
+    private void regulateBreath(SkillEngine.State state, int pool) {
+        int regen = engine.combatRegen();
+        if (regen <= 0 || pool <= 0) {
+            return;   // config 가 조식을 등록하지 않았다 — 코드가 수치를 지어내지 않는다
+        }
+        if (state.energyAtRoundStart < 0 || state.nextRegenTick < 0) {
+            state.energyAtRoundStart = state.energy;
+            state.nextRegenTick = tick + engine.roundTicks();
+            return;
+        }
+        if (tick < state.nextRegenTick) {
+            return;
+        }
+        boolean spent = state.energy < state.energyAtRoundStart;   // 시전·발출·두름 유지비 — 전부 '쓴 것'이다
+        if (!(engine.regenOnlyIfUnspent() && spent) && state.energy < pool) {
+            state.energy = Math.min(pool, state.energy + regen);
+        }
+        state.energyAtRoundStart = state.energy;
+        state.nextRegenTick = tick + engine.roundTicks();
     }
 
     /** 전투의 끝 — 흐름(발동권)은 그 전투의 것이다. 다음 싸움은 처음부터 읽어내야 한다 */
@@ -218,11 +253,11 @@ public final class SkillListener implements Listener {
         Location hand = mob.getEyeLocation();
         boolean fighting = mob.getTarget() instanceof Player;
 
+        // 조식 — 플레이어와 같은 함수, 같은 config (npc_combat.yml symmetry).
+        //   전투 중이든 밖이든 같은 규칙이다: 내력을 쓴 합에는 돌지 않고, 쉰 합에는 돈다.
+        regulateBreath(state, npc.pool());
+
         if (!fighting) {
-            if (tick >= state.nextSustainTick && state.energy < npc.pool()) {
-                state.energy = Math.min(npc.pool(), state.energy + NPC_REGEN_PER_ROUND);
-                state.nextSustainTick = tick + engine.roundTicks();
-            }
             if (state.armed == null && state.energy >= engine.sustainCost(npc.grade())
                     && engine.sustainCost(npc.grade()) > 0) {
                 state.armed = npc.grade();   // 숨을 고르고 다시 두른다 (다운캐스트는 영구형이 아니다)

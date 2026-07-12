@@ -23,6 +23,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityBreedEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTameEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
@@ -221,6 +222,13 @@ public final class HuntingGrounds implements Listener {
     private static List<String> realmLadder = List.of("범인", "삼류", "이류", "일류", "절정", "초절정", "화경");
     private static double 중상_ratio = 0.25;   // combat.yml durability.wound_thresholds.중상.below_ratio
 
+    // ─── 포위 (combat.yml attack) — 다구리에도 몸이 들어갈 자리가 필요하다 ───
+    private static int engageSlots = 3;        // gang_up.engage_slots — 동시에 칠 수 있는 손
+    private static int forcedGuardFrom = 1;    // outnumbered_defense.forced_guard.trigger_extra_attackers
+    private static int forcedGuardSoak;        // 강제 태세(흘리기)의 피해 경감 — defender_choice 가 정본
+    /** 근접 교전 거리 — 이 안에 든 몸만 슬롯을 차지한다 (활·암기는 슬롯 밖에서 쏜다) */
+    private static final double ENGAGE_REACH = 4.0;
+
     private final HoncheonMvt plugin;
     private final Sparring sparring;
     private final Map<String, Long> lastSpawnTick = new HashMap<>();
@@ -247,6 +255,25 @@ public final class HuntingGrounds implements Listener {
         if (중상 instanceof Map<?, ?> m && m.get("below_ratio") instanceof Number n) {
             중상_ratio = n.doubleValue();
         }
+        // ─── 포위 — 한 사람을 에워싸면 서로 걸리적거린다 (combat.yml attack) ───
+        Map<String, Object> attack = RulesConfig.section(combat, "attack");
+        Map<String, Object> gang = RulesConfig.section(attack, "gang_up");
+        if (gang.get("engage_slots") instanceof Number n) {
+            engageSlots = n.intValue();
+        }
+        Map<String, Object> outnumbered = RulesConfig.section(attack, "outnumbered_defense");
+        if (outnumbered.get("forced_guard") instanceof Map<?, ?> raw) {
+            Map<String, Object> forced = (Map<String, Object>) raw;
+            if (forced.get("trigger_extra_attackers") instanceof Number t) {
+                forcedGuardFrom = t.intValue();
+            }
+            // 경감치는 forced_guard 가 가리키는 태세(흘리기)의 defender_choice 값이 정본 — 단일 진실 원천
+            String stance = String.valueOf(forced.getOrDefault("defense", "흘리기"));
+            Object soak = RulesConfig.section(RulesConfig.section(attack, "defender_choice"), stance)
+                    .get("damage_reduction");
+            forcedGuardSoak = soak instanceof Number s ? s.intValue() : 0;
+        }
+
         Map<String, Object> npcCombat = RulesConfig.load(cfg.resolve("npc_combat.yml"));
         moraleWeights = (Map<String, Object>) RulesConfig.section(npcCombat, "morale").get("weights");
 
@@ -851,6 +878,70 @@ public final class HuntingGrounds implements Listener {
         mob.getPersistentDataContainer().set(KEY_SWING, PersistentDataType.LONG, cycle + SPIRIT_SWING_TICKS);
         player.damage(foe.attack(), mob);
         mob.getWorld().spawnParticle(Particle.SWEEP_ATTACK, player.getLocation().add(0, 1, 0), 3, 0.3, 0.3, 0.3, 0);
+    }
+
+    // ══════════════ 포위(包圍) — 다구리에도 몸이 들어갈 자리가 필요하다 ══════════════
+
+    /**
+     * 한 표적을 지금 붙잡고 있는 몸들 — 가까운 순. 앞의 {@link #engageSlots} 명만 <b>손이 들어간다</b>.
+     *
+     * <p>정렬은 거리 → UUID 로 안정적이다 (같은 거리에서 슬롯이 매 틱 뒤바뀌면 규칙이 아니라 난수다).
+     */
+    private List<Mob> engagedOn(Player player) {
+        List<Mob> foes = new ArrayList<>();
+        for (Entity entity : player.getNearbyEntities(ENGAGE_REACH, ENGAGE_REACH, ENGAGE_REACH)) {
+            if (entity instanceof Mob mob && mob.isValid() && tag(mob, KEY_ID) != null
+                    && !sparring.isSparring(mob) && player.equals(mob.getTarget())) {
+                foes.add(mob);
+            }
+        }
+        Location at = player.getLocation();
+        foes.sort(java.util.Comparator
+                .comparingDouble((Mob m) -> m.getLocation().distanceSquared(at))
+                .thenComparing(m -> m.getUniqueId()));
+        return foes;
+    }
+
+    /**
+     * 포위의 규칙 — {@code combat.yml attack.gang_up.engage_slots} · {@code outnumbered_defense} 의 배선.
+     *
+     * <p>이 배선이 없던 시절, 등록부는 거짓말이었다: config 는 "동시에 칠 수 있는 손은 셋"이라 적어 두고
+     * 코드는 <b>여섯이든 열이든 전부 때리게</b> 두었다. 도적 5인 매복이 이류 무인을 1.1합에 눕혔다.
+     *
+     * <p>둘로 나뉜다:
+     * <ul>
+     *   <li><b>슬롯</b> — 앞의 3인만 손이 들어간다. 4인째의 타격은 취소된다 (그 자리에 몸이 없다).
+     *       머릿수는 '교대'가 되지 '동시타'가 되지 않는다 — 대신 도주를 막는다(party.yml 포위 -2).</li>
+     *   <li><b>강제 태세</b> — 포위된 자는 회피(몸을 빼는 것)를 잃는다. 남는 것은 받아넘기기(흘리기 −1).
+     *       경감은 협공 1인분보다 작다 — 그래야 '둘이 덤비는 것이 하나보다 덜 아픈' 뒤집힘이 안 난다.</li>
+     * </ul>
+     *
+     * <p>판정 순보정(협공 +2 − 피포위 방어 +2 = 0)은 여기서 계산할 것이 없다 — 상쇄가 정본이다.
+     * 그래서 고수는 산다: 명중률 절벽이 머릿수로 무너지지 않는다.
+     */
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
+    public void onSurround(EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof Player player) || !(event.getDamager() instanceof Mob mob)) {
+            return;
+        }
+        if (tag(mob, KEY_ID) == null || sparring.isSparring(mob)) {
+            return;   // 등록부의 몸이 아니거나 비무 중 — 여기의 규칙이 아니다
+        }
+        List<Mob> foes = engagedOn(player);
+        if (!foes.contains(mob)) {
+            foes.add(mob);   // 방금 친 몸은 붙잡고 있는 몸이다 (표적 스윕과의 한 틱 어긋남 보정)
+        }
+        if (foes.size() <= 1) {
+            return;   // 포위가 아니다 — 일대일에는 이 규칙이 없다
+        }
+        if (foes.indexOf(mob) >= engageSlots) {
+            event.setCancelled(true);   // 대기 — 앞선 자가 무력화·후퇴해야 슬롯이 열린다
+            return;
+        }
+        int soak = Math.max(0, foes.size() - 1) >= forcedGuardFrom ? forcedGuardSoak : 0;
+        if (soak > 0) {
+            event.setDamage(Math.max(0.0, event.getDamage() - soak));
+        }
     }
 
     // ══════════════ 바닐라 행동의 봉인 ══════════════

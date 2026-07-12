@@ -161,6 +161,69 @@ def cost_band_of(cfg, cost, category):
     return "발경"
 
 
+def combat_regen(cfg):
+    """조식(調息) — 전투 중 내력 회복. internal_energy.yml recovery.in_combat.조식 (없으면 0 = 회복 없음)."""
+    spec = dig(cfg, "internal_energy.yml", "internal_energy", "recovery", "in_combat", "조식", default=None)
+    if not isinstance(spec, dict):
+        return 0, False
+    return int(num(spec.get("per_round"), 0)), bool(spec.get("only_if_unspent"))
+
+
+def qi_casts(pool, cost, regen, rounds):
+    """조식 규칙 아래 N합 전투에서 그 격을 몇 번 싣는가 — 탐욕(낼 수 있으면 태우고, 없으면 숨을 고른다).
+
+    조건('격을 태운 합에는 돌지 않는다')이 규칙의 전부다: 조건이 없으면 코스트 1짜리 발경은 공짜가 된다.
+    """
+    if cost <= 0:
+        return rounds
+    energy, casts = pool, 0
+    for _ in range(rounds):
+        if energy >= cost:
+            energy -= cost
+            casts += 1
+        else:
+            energy = min(pool, energy + regen)   # 숨을 고른 합 — 내력을 안 썼으니 단전이 돈다
+    return casts
+
+
+# ── 포위 규칙 (combat.yml attack) — 협공·슬롯·피포위 방어·강제 막기 ─────────────────
+def gang_rules(cfg):
+    """한 표적을 둘러싼 판의 규칙 전부를 config 에서 읽는다 (하드코딩 금지)."""
+    g = dig(cfg, "combat.yml", "attack", "gang_up", default={}) or {}
+    o = dig(cfg, "combat.yml", "attack", "outnumbered_defense", default={}) or {}
+    fg = o.get("forced_guard") or {}
+    # 【검산 규약】 강제 태세 중 **경감이 가장 낮은 것**으로 잰다 (audit_floor) — 방어자에게 인색해야 눈이 산다
+    guard_name = str(fg.get("audit_floor") or fg.get("defense") or "흘리기")
+    soak = num(dig(cfg, "combat.yml", "attack", "defender_choice", guard_name, "damage_reduction"), 0)
+    return {
+        "per": int(num(g.get("per_extra_attacker"), 1)),
+        "cap": int(num(g.get("max"), 2)),
+        "slots": int(num(g.get("engage_slots"), 3)),
+        "def_per": int(num(o.get("per_extra_attacker"), 1)),
+        "def_cap": int(num(o.get("max"), 2)),
+        "guard_from": int(num(fg.get("trigger_extra_attackers"), 0)) if fg else 0,
+        "guard_soak": int(soak) if fg else 0,
+    }
+
+
+def engaged(rules, attackers, slots_override=None):
+    """동시 교전 인원 — 한 표적을 동시에 칠 수 있는 손의 수 (engage_slots). 나머지는 대기(포위)."""
+    return min(attackers, slots_override or rules["slots"])
+
+
+def net_mod(rules, n_engaged):
+    """공격 측 순보정 = 협공 보정 − 피포위 방어 이점. 같은 눈금이므로 0 이다 (combat.yml 정본 주석)."""
+    extra = max(0, n_engaged - 1)
+    return min(extra * rules["per"], rules["cap"]) - min(extra * rules["def_per"], rules["def_cap"])
+
+
+def guard_soak(rules, n_engaged):
+    """포위된 자는 막는다 — 회피할 자리가 없다 (forced_guard). 피해 −3, 대가는 무기(weapon_break)."""
+    if not rules["guard_soak"]:
+        return 0
+    return rules["guard_soak"] if max(0, n_engaged - 1) >= rules["guard_from"] else 0
+
+
 def gate_realm(cfg, band, names):
     """internal_energy.yml realm_gates — 그 밴드가 처음 열리는 경지."""
     gates = dig(cfg, "internal_energy.yml", "realm_gates", default={}) or {}
@@ -631,8 +694,8 @@ def margin_dist(att, dfn, att_pen=0, dfn_pen=0, mod=0):
     return out
 
 
-def strike(att, dfn, att_pen=0, dfn_pen=0, mod=0, qi_power=0.0):
-    """기대 피해·명중률·대성공률 (해석적)."""
+def strike(att, dfn, att_pen=0, dfn_pen=0, mod=0, qi_power=0.0, soak=0.0):
+    """기대 피해·명중률·대성공률 (해석적). soak = 방어측 경감(막기 -3 등) — 피해에서 곧장 뺀다."""
     dist = margin_dist(att, dfn, att_pen, dfn_pen, mod)
     hit = Fraction(0)
     crit = Fraction(0)
@@ -640,7 +703,7 @@ def strike(att, dfn, att_pen=0, dfn_pen=0, mod=0, qi_power=0.0):
     for m, p in dist.items():
         if m >= 0:
             hit += p
-            base = att.wpower + att.tpower + qi_power + (m // 2)
+            base = max(0.0, att.wpower + att.tpower + qi_power + (m // 2) - soak)
             dmg += p * Fraction(int(base * 2), 2)
             if m >= 4:
                 crit += p
@@ -648,19 +711,22 @@ def strike(att, dfn, att_pen=0, dfn_pen=0, mod=0, qi_power=0.0):
 
 
 def duel(att, dfn, max_rounds=25, a_mod=0, d_mod=0, a_qi=0.0, d_qi=0.0,
-         a_attacks=1, d_attacks=1, d_immune=False):
-    """기대값 결정론 진행 — 라운드마다 양측 기대 피해를 서로 깎는다."""
+         a_attacks=1, d_attacks=1, d_immune=False, a_soak=0.0, d_soak=0.0):
+    """기대값 결정론 진행 — 라운드마다 양측 기대 피해를 서로 깎는다.
+
+    a_soak = 방어측(dfn)이 att 의 타격을 경감하는 값 · d_soak = 그 반대.
+    """
     hp_a, hp_b = float(att.dur), float(dfn.dur)
     log = []
     for r in range(1, max_rounds + 1):
         # 선공(att)이 먼저 친다 — combat.yml initiative. 눕은 자는 반격하지 않는다
         pa, pb = att.wound_pen(hp_a), dfn.wound_pen(hp_b)
-        _, da, _ = strike(att, dfn, pa, pb, a_mod, a_qi)
+        _, da, _ = strike(att, dfn, pa, pb, a_mod, a_qi, a_soak)
         if d_immune:
             da = 0.0
         hp_b -= da * a_attacks
         if hp_b > 0:
-            _, db, _ = strike(dfn, att, dfn.wound_pen(hp_b), pa, d_mod, d_qi)
+            _, db, _ = strike(dfn, att, dfn.wound_pen(hp_b), pa, d_mod, d_qi, d_soak)
             hp_a -= db * d_attacks
         log.append((r, max(hp_a, 0), max(hp_b, 0)))
         if hp_b <= 0 or hp_a <= 0:
@@ -668,6 +734,108 @@ def duel(att, dfn, max_rounds=25, a_mod=0, d_mod=0, a_qi=0.0, d_qi=0.0,
     ttk = next((r for r, _, hb in log if hb <= 0), None)
     ttd = next((r for r, ha, _ in log if ha <= 0), None)
     return ttk, ttd, log
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  다대일 난전 — 슬롯·피포위 방어·강제 막기·전의(戰意)를 전부 굴린다
+#  구판은 'a_attacks = n' 이 전부였다: 머릿수를 피해에 선형으로 곱하고, 등록된 규칙
+#  (engage_slots · outnumbered_defense · morale)을 하나도 모델링하지 않았다. 눈이 얕았다.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def morale_gauge(cfg, foe, hp_ratio, allies_alive, enemies_alive, boss_dead, seen_grade=None):
+    """전의 = npc_combat.yml morale.weights 를 그대로 판독해 매 라운드 재계산 (누적 아님 — 엔진과 동일)."""
+    w = dig(cfg, "npc_combat.yml", "morale", "weights", default={}) or {}
+    start = foe["morale_start"]
+    gauge = start
+
+    dur_w = w.get("내구_비율") or {}
+    if hp_ratio <= 0.25:
+        gauge += num(dur_w.get("25%_이하"), -4)
+    elif hp_ratio <= 0.50:
+        gauge += num(dur_w.get("50%_이하"), -2)
+
+    ally_w = w.get("아군_수") or {}
+    if allies_alive == 0:
+        gauge += num(ally_w.get("혼자_남음"), -3)
+    elif allies_alive > enemies_alive:
+        gauge += num(ally_w.get("수적_우세"), 2)
+    elif allies_alive < enemies_alive:
+        gauge += num(ally_w.get("수적_열세"), -2)
+
+    if boss_dead:
+        gauge += num(dig(w, "두목_생사", "두목_사망"), -5)
+
+    if seen_grade:
+        gauge += num(dig(w, "상대_위세", "격_목격", seen_grade), 0)
+    return gauge
+
+
+def melee(cfg, hero, foes, max_rounds=25, seen_grade=None, focus_boss=True):
+    """1(플레이어) 대 다(NPC) 난전 — config 의 규칙 전부를 굴린다.
+
+    반환: dict(생존 합수 · 소탕 합수 · 이탈 인원 · 결말)
+    """
+    rules = gang_rules(cfg)
+    hp_hero = float(hero.dur)
+    state = [{"f": f["fighter"], "hp": float(f["fighter"].dur), "boss": f.get("boss", False),
+              "morale_start": f.get("morale_start", 5), "morale_break": f.get("morale_break", 3),
+              "out": None} for f in foes]
+    total = len(state)
+    down, ttk_hero, rounds = None, None, 0
+
+    for r in range(1, max_rounds + 1):
+        rounds = r
+        alive = [s for s in state if s["out"] is None]
+        if not alive:
+            ttk_hero = r - 1
+            break
+
+        # ① 영웅의 한 합 — 두목 우선(전의를 무너뜨리는 수), 아니면 가장 약해진 자
+        target = next((s for s in alive if s["boss"]), None) if focus_boss else None
+        if target is None:
+            target = min(alive, key=lambda s: s["hp"])
+        _, dh, _ = strike(hero, target["f"], att_pen=hero.wound_pen(hp_hero))
+        target["hp"] -= dh
+        if target["hp"] <= 0:
+            target["out"] = "사망"
+
+        alive = [s for s in state if s["out"] is None]
+        if not alive:
+            ttk_hero = r
+            break
+
+        # ② 적의 한 합 — 슬롯이 찬 만큼만 손이 들어온다 (engage_slots)
+        n_eng = engaged(rules, len(alive))
+        mod = net_mod(rules, n_eng)
+        soak = guard_soak(rules, n_eng)
+        for s in alive[:n_eng]:
+            _, db, _ = strike(s["f"], hero, att_pen=s["f"].wound_pen(s["hp"]),
+                              dfn_pen=hero.wound_pen(hp_hero), mod=mod, soak=soak)
+            hp_hero -= db
+        if hp_hero <= 0 and down is None:
+            down = r
+            break
+
+        # ③ 전의 — 무너진 자는 물러난다 (npc_combat morale.break_check)
+        boss_dead = any(s["boss"] and s["out"] == "사망" for s in state)
+        for s in alive:
+            others = len([x for x in state if x["out"] is None and x is not s])
+            g = morale_gauge(cfg, s, s["hp"] / s["f"].dur, others, 1, boss_dead, seen_grade)
+            if g <= s["morale_break"]:
+                s["out"] = "이탈"
+
+    killed = len([s for s in state if s["out"] == "사망"])
+    routed = len([s for s in state if s["out"] == "이탈"])
+    if down is not None:
+        outcome = "패배"
+    elif killed + routed >= total:
+        outcome = "소탕"
+    else:
+        outcome = "미결"
+    return {"outcome": outcome, "down_at": down, "clear_at": ttk_hero, "rounds": rounds,
+            "killed": killed, "routed": routed, "total": total, "hp_left": max(hp_hero, 0.0),
+            "slots": engaged(rules, total), "net_mod": net_mod(rules, engaged(rules, total)),
+            "soak": guard_soak(rules, engaged(rules, total))}
 
 
 def simulate(cfg, rep, max_rounds):
@@ -773,31 +941,51 @@ def sim_energy_curve(cfg, rep, max_rounds):
     bal = mid(dig(bands, "발경", "cost"), 1)
     depleted = str(dig(cfg, "internal_energy.yml", "internal_energy", "depleted", "state", default="내공 고갈"))
     dep_pen = num(dig(cfg, "judgment.yml", "situation_modifiers", "condition", "내공_고갈"), -2)
+    regen, conditional = combat_regen(cfg)
+    fight = 7           # 표준 전투 = 5~9합의 중앙값 (본 도구의 기준 전투)
     rep.say(f"     발경 = 내력 {bal:g}/합 · 고갈 = '{depleted}'(판정 {dep_pen:g}) + 다운캐스트('맨 기술')")
-    rep.say(f"     전투 중 회복 = {dig(cfg, 'internal_energy.yml', 'internal_energy', 'recovery', 'in_combat', default='불가')}")
+    rep.say(f"     전투 중 회복(조식) = {regen:g}/합"
+            f"{' · 조건: 내력을 안 쓴 합에만' if conditional else ' · 무조건'}"
+            f" · 운기조식(앉기) = {dig(cfg, 'internal_energy.yml', 'internal_energy', 'recovery', 'in_combat', '운기조식', default='불가')}")
+    rep.say(f"     표준 전투 {fight}합 기준 — '지속 합수'가 아니라 '{fight}합 동안 몇 번 싣는가'를 잰다")
     rep.say("")
-    rep.say("       내공  내력풀   발경 지속 합수    검기_참격(3)   호신강기(전개2+유지2)")
+    rep.say("       내공  내력풀   발경 연발(버스트)   발경/7합   검기_참격(3)/7합   호신강기(전개2+유지2)")
     for ng in (0.33, 1.0, 2.0, 3.0, 5.0, 7.0):
         p = pool_of(ng)
-        b = int(p // bal) if bal else 0
-        gi = int(p // 3)
+        burst = int(p // bal) if bal else 0
+        b = qi_casts(p, bal, regen, fight)
+        gi = qi_casts(p, 3, regen, fight)
         hosin = int((p - 2) // 2) if p >= 2 else 0
-        rep.say(f"       {ng:>4.2f}  {p:>5}   {b:>10}합   {gi:>10}회   {hosin:>12}합")
+        rep.say(f"       {ng:>4.2f}  {p:>5}   {burst:>13}합   {b:>7}회   {gi:>13}회   {hosin:>16}합")
 
-    p_first = pool_of(1.0)
-    rounds = int(p_first // bal) if bal else 0
     rep.say("")
-    if rounds < 3:
-        rep.fail(f"일류(축기 1년, 내공 1.0 → 내력 {p_first})가 발경만 써도 {rounds}합에 고갈된다 — "
-                 f"전투는 평균 5~9합인데 내력은 3합을 못 간다. 고갈 후 판정 {dep_pen:g} + 다운캐스트 = "
-                 f"발경을 쓴 대가로 나머지 전투를 페널티로 치른다")
-    else:
-        rep.say(f"     일류(내공 1.0 → 내력 {p_first}): 발경 {rounds}합 지속 후 고갈")
-
+    # ① 개화의 보상 — 한 번은 형벌이다. 그러나 매 합이면 격은 공짜다. 그 사이가 '자원 관리'다
     p_bloom = pool_of(1.0 / 3.0)
-    if p_bloom <= bal:
-        rep.fail(f"개화 직후(내공 0.33 → 내력 {p_bloom}) = 발경 {int(p_bloom // bal)}회. "
-                 f"'개화의 보상'인 발경이 전투당 한 번이다 — 자원 관리가 아니라 형벌")
+    bloom_casts = qi_casts(p_bloom, bal, regen, fight)
+    if bloom_casts < 3:
+        rep.fail(f"개화 직후(내공 0.33 → 내력 {p_bloom}) = 표준 전투 {fight}합에서 발경 {bloom_casts}회. "
+                 f"'개화의 보상'인 발경이 전투당 {bloom_casts}회다 — 자원 관리가 아니라 형벌 "
+                 f"(조식 회복 {regen:g}/합)")
+    elif bloom_casts >= fight:
+        rep.fail(f"개화 직후(내력 {p_bloom})가 {fight}합 내내 발경을 싣는다 ({bloom_casts}회) — 격이 공짜다. "
+                 f"조식 회복 {regen:g}/합이 발경 코스트 {bal:g} 이상인데 조건"
+                 f"('내력을 안 쓴 합에만')이 {'없다' if not conditional else '있는데도 물지 않았다'}")
+    else:
+        rep.ok(f"개화 직후(내력 {p_bloom}): {fight}합에서 발경 {bloom_casts}회 — 한 합 태우고 한 합 고른다. "
+               f"자원의 리듬이 있다 (전소도 무한도 아니다)")
+
+    # ② 축기의 값 — 총량이 아니라 '연발'이다
+    p_first = pool_of(1.0)
+    burst_bloom = int(p_bloom // bal) if bal else 0
+    burst_first = int(p_first // bal) if bal else 0
+    first_casts = qi_casts(p_first, bal, regen, fight)
+    if burst_first <= burst_bloom:
+        rep.fail(f"축기 1년(내공 1.0 → 내력 {p_first})의 연발이 개화 직후({p_bloom})와 같다 ({burst_first}합) — "
+                 f"축기가 아무것도 사지 않는다")
+    else:
+        rep.ok(f"축기 1년(내력 {p_first}): 발경 {burst_first}합 연발 · {fight}합에 {first_casts}회 "
+               f"(개화 직후 연발 {burst_bloom}합 · {bloom_casts}회) — 축기가 사는 것은 총량이 아니라 "
+               f"**몰아 쓸 수 있는 합**이다")
 
     # 다운캐스트로 계속 싸울 수 있는가 (고갈 후 능력)
     p1 = Fighter(cfg, "일류(고갈)", "일류", weapon="검", naegong=1.0)
@@ -981,106 +1169,181 @@ def sim_weapon_grades(cfg, rep, max_rounds):
 
 
 def sim_gangup(cfg, rep, max_rounds):
-    rep.head("협공 보정 — 3인 협공은 1인의 몇 배인가 (캡 +3)")
-    per = int(num(dig(cfg, "combat.yml", "attack", "gang_up", "per_extra_attacker"), 1))
-    cap = int(num(dig(cfg, "combat.yml", "attack", "gang_up", "max"), 3))
-    party_cap = int(num(dig(cfg, "party.yml", "combat_coop", "협공_보정", "cap"), 3))
-    jin_cap = int(num(dig(cfg, "party.yml", "combat_coop", "합격진", "example_maehwa_geomjin", "effect", "협공_상한"), 5))
+    rep.head("포위 — 다구리는 어떻게 계산되는가 (슬롯 · 피포위 방어 · 강제 태세 · 전의)")
+    rules = gang_rules(cfg)
+    per, cap, slots = rules["per"], rules["cap"], rules["slots"]
+    party_cap = int(num(dig(cfg, "party.yml", "combat_coop", "협공_보정", "cap"), 2))
+    jin_cap = int(num(dig(cfg, "party.yml", "combat_coop", "합격진", "example_maehwa_geomjin",
+                          "effect", "협공_상한"), 4))
+    jin_slots = int(num(dig(cfg, "party.yml", "combat_coop", "합격진", "example_maehwa_geomjin",
+                           "effect", "포위_슬롯"), 5))
 
     p = Fighter(cfg, "이류 무인", "이류", weapon="검")
     e = Fighter(cfg, "이류 무인", "이류", weapon="검", is_npc=True)      # 동수
     hi = Fighter(cfg, "절정 고수", "절정", weapon="검", is_npc=True)     # 격상
-    rep.say(f"     보정 {per:+d}/추가 인원 · 캡 {cap} (party.yml 캡 {party_cap} · 매화검진 상한 {jin_cap})")
+    rep.say(f"     협공 보정 {per:+d}/추가 인원(캡 {cap}) · 포위 슬롯 {slots} · "
+            f"피포위 방어 {rules['def_per']:+d}/추가 인원(캡 {rules['def_cap']}) · "
+            f"강제 태세(회피 상실 → 흘리기) 경감 −{rules['guard_soak']:g}")
+    rep.say(f"     → 순보정 = 협공 − 피포위 방어 = 0 (같은 눈금). 머릿수의 값은 '더 잘 맞히는 것'이 아니라")
+    rep.say(f"       '더 많은 손이 동시에 들어가는 것'이다 — 그리고 그 손은 {slots}개가 상한이다")
     rep.say(f"     기준: 동수 표적(이류 NPC, 내구 {e.dur}) — 공격자 이류 무인 N인")
     rep.say("")
-    rep.say("       인원  보정   1인 명중률  1인 피해/합  총 피해/합   1인 대비   TTK")
-    base_total = None
+    rep.say("       인원  슬롯  순보정  경감   1인 명중률  1인 피해/합  총 피해/합   1인 대비   표적 TTK")
+    totals = {}
     for n in (1, 2, 3, 4, 5, 6):
-        mod = min((n - 1) * per, cap)
-        h, d, _ = strike(p, e, mod=mod)
-        total = d * n
-        if base_total is None:
-            base_total = total
-        t, td, _ = duel(p, e, max_rounds, a_mod=mod, a_attacks=n)
-        ratio = total / base_total if base_total else 0
-        rep.say(f"       {n:>3}인  {mod:>+3}   {h * 100:8.1f}%  {d:>10.2f}  {total:>10.2f}   "
-                f"{ratio:>6.2f}배   {str(t) + '합' if t else '>' + str(max_rounds) + '합':>5}")
+        k = engaged(rules, n)
+        mod, soak = net_mod(rules, k), guard_soak(rules, k)
+        h, d, _ = strike(p, e, mod=mod, soak=soak)
+        total = d * k
+        totals[n] = total
+        t, _, _ = duel(p, e, max_rounds, a_mod=mod, a_attacks=k, a_soak=soak)
+        ratio = total / totals[1] if totals[1] else 0
+        rep.say(f"       {n:>3}인  {k:>3}   {mod:>+5}  {-soak:>+4}   {h * 100:8.1f}%  {d:>10.2f}  "
+                f"{total:>10.2f}   {ratio:>6.2f}배   {str(t) + '합' if t else '>' + str(max_rounds) + '합':>7}")
 
-    mod3 = min(2 * per, cap)
-    _, d1, _ = strike(p, e, mod=0)
-    _, d3, _ = strike(p, e, mod=mod3)
-    ratio3 = (d3 * 3) / d1 if d1 else 0
+    # ① 초선형 금지 — 협공의 이득이 머릿수를 넘어서면 안 된다
     rep.say("")
-    rep.say(f"     3인 협공 = 1인의 {ratio3:.2f}배 (인원 3배 × 개인 피해 {(d3 / d1 - 1) * 100:+.0f}%) "
-            f"— 1인당 효율 {ratio3 / 3:.2f}배")
-    if ratio3 > 4.5:
-        rep.warn(f"3인 협공이 동수 상대에게 1인의 {ratio3:.2f}배 — 초선형(3배 초과)")
+    ratio3 = totals[3] / totals[1] if totals[1] else 0
+    if ratio3 > 3.3:
+        rep.fail(f"3인 협공이 동수 상대에게 1인의 {ratio3:.2f}배 — 초선형(머릿수 3배를 넘는다). "
+                 f"협공 보정이 판정 위에서 곱셈으로 터진다")
     else:
-        rep.ok(f"3인 협공 {ratio3:.2f}배 — 인원수(3배) 근방. 동수 상대에서는 캡 {cap} 이 제 몫을 한다")
+        rep.ok(f"3인 협공 = 1인의 {ratio3:.2f}배 — 선형 이하. 보정(+{min(2 * per, cap)})이 "
+               f"피포위 방어(+{min(2 * rules['def_per'], rules['def_cap'])})와 상쇄되고, 남는 것은 손의 수뿐이다")
 
-    # 격상 표적 — 명중률 절벽에서 보정이 폭발한다
-    _, dh1, _ = strike(p, hi, mod=0)
-    _, dh3, _ = strike(p, hi, mod=mod3)
-    _, dh4, _ = strike(p, hi, mod=cap)
-    ratio_hi3 = (dh3 * 3) / dh1 if dh1 else float("inf")
+    # ①-b 단조성 — 둘이 덤비는 것이 하나보다 덜 아프면 규칙이 뒤집힌 것이다
+    #      (이 검사가 '포위 강제 태세 = 막기(-3)' 안을 잡아냈다: 총 피해 3.28 → 3.06)
+    dips = [n for n in range(2, 7) if totals[n] < totals[n - 1] - 1e-9]
+    if dips:
+        rep.fail(f"협공의 총 피해가 인원에 대해 단조가 아니다 — {dips[0]}인({totals[dips[0]]:.2f}/합)이 "
+                 f"{dips[0] - 1}인({totals[dips[0] - 1]:.2f}/합)보다 약하다. 덤비면 손해인 규칙이다 "
+                 f"(피포위 경감 −{rules['guard_soak']:g}이 협공 1인분보다 크다 — 경감은 1인분보다 작아야 한다)")
+    else:
+        rep.ok(f"협공 총 피해가 인원에 단조 증가 — 덤비면 언제나 이득이다 "
+               f"(1인 {totals[1]:.2f} → 2인 {totals[2]:.2f} → 3인 {totals[3]:.2f}/합)")
+
+    # ② 슬롯 상한 — 6인이 6배가 되지 않는다
+    if totals[6] > totals[slots] * 1.001:
+        rep.fail(f"슬롯({slots})이 물지 않는다 — 6인 총 피해 {totals[6]:.2f} > {slots}인 {totals[slots]:.2f}. "
+                 f"머릿수가 피해에 선형으로 쌓인다 (한 사람을 동시에 칠 수 있는 자리는 한정돼 있어야 한다)")
+    else:
+        rep.ok(f"포위 슬롯 {slots} 이 물린다 — {slots}인({totals[slots]:.2f}/합)과 6인({totals[6]:.2f}/합)이 같다. "
+               f"{slots + 1}인째부터는 대기(포위) — 값은 피해가 아니라 도주 봉쇄에 있다")
+
+    # ③ 포위된 자에게 창이 남는가 — 3합은 있어야 도주 판정도, 두목 격파도, 전의 붕괴도 시도한다
+    k3 = engaged(rules, 3)
+    t3, _, _ = duel(p, e, max_rounds, a_mod=net_mod(rules, k3), a_attacks=k3,
+                    a_soak=guard_soak(rules, k3))
+    if t3 is not None and t3 < 3:
+        rep.fail(f"3인 협공이 동수 표적을 {t3}합에 눕힌다 — TTK 3합 미만 = 전투가 없다. "
+                 f"포위된 자에게 한 합의 창도 남지 않는다 (도주·두목 격파·전의 붕괴를 시도할 시간이 없다)")
+    else:
+        rep.ok(f"3인 협공 동수 표적 TTK {t3}합 — 포위된 자에게 창이 남는다 "
+               f"(피포위 방어 +{min(2 * rules['def_per'], rules['def_cap'])} · 강제 흘리기 −{rules['guard_soak']:g})")
+
+    # ④ 격상 표적 — 명중률 절벽 위에서 보정이 곱셈으로 터지는가
     rep.say("")
-    rep.say(f"     [격상 표적] 이류 → 절정 고수(내구 {hi.dur}): "
-            f"1인 명중 {strike(p, hi)[0] * 100:.1f}% · 피해/합 {dh1:.2f}")
-    rep.say(f"       3인 협공(보정 {mod3:+d}) → 총 {dh3 * 3:.2f}/합 = 1인의 {ratio_hi3:.1f}배 · "
-            f"4인(캡 {cap:+d}) → 총 {dh4 * 4:.2f}/합")
-    h_solo = strike(p, hi)[0] * 100
-    h_cap = strike(p, hi, mod=cap)[0] * 100
-    rep.warn(f"협공 보정이 '명중률 절벽' 위에서 초선형으로 터진다 — 이류 1인의 절정 상대 명중률은 "
-             f"{h_solo:.1f}%(마진 ≥0 이 2d6 최대치에서만)인데 캡 {cap:+d} 이 붙으면 {h_cap:.1f}% — "
-             f"{h_cap / h_solo:.0f}배다. 4인 협공의 총 피해는 1인의 {(dh4 * 4) / dh1:.0f}배 "
-             f"({dh1:.2f} → {dh4 * 4:.2f}/합). 캡 {cap} 은 '보정 총량'을 막을 뿐, 그 보정이 절벽 위에서 갖는 "
-             f"**곱셈 효과**를 막지 못한다 (경지 격차의 벽은 머릿수 앞에서 얇다)")
+    rep.say(f"     [격상 표적] 이류 → 절정 고수(내구 {hi.dur}) — '고수가 다수를 상대로 사는 이유'")
+    rep.say("       인원  슬롯  순보정   1인 명중률   총 피해/합   1인 대비")
+    hi_solo = None
+    hi_mod_max = 0
+    for n in (1, 3, 4, 5):
+        k = engaged(rules, n)
+        mod, soak = net_mod(rules, k), guard_soak(rules, k)
+        hi_mod_max = max(hi_mod_max, mod)
+        h, d, _ = strike(p, hi, mod=mod, soak=soak)
+        if hi_solo is None:
+            hi_solo = d * k
+        rep.say(f"       {n:>3}인  {k:>3}   {mod:>+5}   {h * 100:9.1f}%   {d * k:>10.2f}   "
+                f"{(d * k) / hi_solo if hi_solo else 0:>6.2f}배")
+    if hi_mod_max > 0:
+        rep.fail(f"격상 표적에 순보정 {hi_mod_max:+d} 가 남는다 — 이류의 절정 상대 명중률은 "
+                 f"{strike(p, hi)[0] * 100:.1f}%(2d6 최대치에서만 마진 ≥0)인 절벽 위다. 그 위의 +1 은 "
+                 f"명중률을 배로 만든다 (선형이 아니라 곱셈)")
+    else:
+        rep.ok(f"격상 표적의 순보정 0 — 명중률 절벽이 머릿수로 무너지지 않는다 "
+               f"({strike(p, hi)[0] * 100:.1f}% 그대로). 다수의 이득은 슬롯({slots}배)까지다 — "
+               f"고수는 등을 내주지 않는 한 산다")
 
-    # 동수 상대 다인 협공의 TTK — 전투가 남아 있는가
-    for n in (3, 4):
-        mod = min((n - 1) * per, cap)
-        t, _, _ = duel(p, e, max_rounds, a_mod=mod, a_attacks=n)
-        if t is not None and t < 3:
-            rep.fail(f"{n}인 협공(보정 {mod:+d})이 동수 표적을 {t}합에 눕힌다 — TTK 3합 미만 = 전투가 없다. "
-                     f"동행 최대 5인(party.yml)인데 {n}인만 모여도 동급 상대와의 전투가 사라진다 "
-                     f"(4인이면 1합)")
-            break
-
-    # 캡의 실제 물림 지점
-    saturate = cap // per + 1 if per else 0
-    rep.say(f"     보정 캡({cap})은 {saturate}인째에 포화 — 그 이상은 순수 인원수 선형 증가뿐이다 "
-            f"(6인이 5인보다 강한 이유는 보정이 아니라 머릿수)")
-    # 실제 조우 — 산길 도적 매복 (count_hint: 4~6명)
+    # ⑤ 실전 — 산길 도적 매복 (전의를 굴린다: 붕괴한 졸개는 물러난다)
     npcs = dig(cfg, "npcs/cheongha_npcs.yml", "npcs", default={}) or {}
     bs = (npcs.get("north_road_bandit") or {}).get("stats") or {}
-    bandit = Fighter(cfg, "산길 도적", "삼류", weapon="도", is_npc=True,
-                     skill=num(bs.get("도법"), 1), stats=bs)
-    hero = Fighter(cfg, "이류 무인", "이류", weapon="검")
-    rep.say("")
-    rep.say("     [실전] 산길 도적 매복 (npcs count_hint 4~6명) vs 이류 무인 1인")
-    rep.say("       도적 수  협공 보정  도적 총 피해/합   이류 피해/합   이류 생존 합수")
-    for n in (1, 4, 5, 6):
-        mod = min((n - 1) * per, cap)
-        _, db, _ = strike(bandit, hero, mod=mod)
-        _, dh, _ = strike(hero, bandit)
-        rounds_alive = hero.dur / (db * n) if db * n else 99
-        rep.say(f"       {n:>5}인  {mod:>+7}   {db * n:>12.2f}   {dh:>11.2f}   {rounds_alive:>10.1f}합")
-    _, db5, _ = strike(bandit, hero, mod=min(4 * per, cap))
-    alive5 = hero.dur / (db5 * 5) if db5 else 99
-    need5 = 5 * bandit.dur / strike(hero, bandit)[1] if strike(hero, bandit)[1] else 99
-    if alive5 < need5:
-        rep.fail(f"도적 5인 매복은 이류 무인을 {alive5:.1f}합에 눕힌다 — 5인을 다 베는 데는 {need5:.1f}합이 필요하다. "
-                 f"졸개 5인 = 이류 확살. 협공 캡 {cap} 은 개별 보정만 막을 뿐, 머릿수의 선형 누적을 막지 않는다 "
-                 f"(전의 붕괴 규칙이 수치를 갖지 않으므로 도적은 죽을 때까지 물러나지도 않는다)")
-    else:
-        rep.ok(f"도적 5인 매복: 이류 무인이 {need5:.1f}합에 소탕 (생존 여유 {alive5:.1f}합)")
+    prof = dig(cfg, "npc_combat.yml", "morale", "gauge", "start_by_tier", default={}) or {}
+    grunt_start = int(num(prof.get("졸개"), 5))
 
-    if jin_cap > cap:
-        _, d_jin, _ = strike(p, e, mod=jin_cap)
-        rep.say(f"     매화검진(협공 상한 {jin_cap}): 5인 피해/합 {d_jin * 5:.2f} = "
-                f"평협공 5인({strike(p, e, mod=cap)[1] * 5:.2f}) 대비 "
-                f"{(d_jin * 5) / (strike(p, e, mod=cap)[1] * 5) * 100 - 100:+.0f}% — "
-                f"문파 비전 진법의 값이 이만큼이다")
+    def bandits(n):
+        return [{"fighter": Fighter(cfg, "산길 도적", "삼류", weapon="도", is_npc=True,
+                                    skill=num(bs.get("도법"), 1), stats=bs),
+                 "morale_start": grunt_start, "morale_break": 3} for _ in range(n)]
+
+    hero2 = Fighter(cfg, "이류 무인", "이류", weapon="검")
+    hero1 = Fighter(cfg, "일류 무인", "일류", weapon="검", naegong=1.0)
+    b1 = bandits(1)[0]["fighter"]
+    rep.say("")
+    rep.say("     [실전] 산길 도적 매복 (npcs count_hint 4~6명) — 전의(戰意)를 굴린다")
+    rep.say(f"       졸개 전의 {grunt_start} 시작 · 붕괴 문턱 3 · 매 합 재계산 (내구·아군 수·두목 생사)")
+    rep.say("")
+    rep.say("       상대            인원  슬롯  순보정  경감   피격/합   결말      합수   사망/이탈")
+    outs = {}
+    for who, hero in (("이류 무인", hero2), ("일류 무인", hero1)):
+        for n in (1, 5):
+            r = melee(cfg, hero, bandits(n), max_rounds)
+            k = engaged(rules, n)
+            _, db, _ = strike(b1, hero, mod=net_mod(rules, k), soak=guard_soak(rules, k))
+            outs[(who, n)] = r
+            end = r["down_at"] or r["clear_at"] or r["rounds"]
+            rep.say(f"       {who:<14} {n:>3}인  {k:>3}   {r["net_mod"]:>+5}  {-r["soak"]:>+4}   "
+                    f"{db * k:>7.2f}   {r['outcome']:<8} {end:>4}합   {r['killed']}/{r['routed']}")
+
+    m2 = outs[("이류 무인", 5)]
+    m1 = outs[("일류 무인", 5)]
+    solo = strike(b1, hero2, mod=net_mod(rules, 1), soak=guard_soak(rules, 1))[1]
+    five = strike(b1, hero2, mod=m2["net_mod"], soak=m2["soak"])[1] * m2["slots"]
+    survive2 = m2["down_at"] or m2["rounds"]
+
+    rep.say("")
+    # ⓐ 포위된 자에게 창이 있는가 (도주·두목 격파·전의 붕괴)
+    if survive2 < 3:
+        rep.fail(f"도적 5인 매복이 이류 무인을 {survive2}합에 눕힌다 — 3합 미만. 도주 판정도, 두목을 베는 수도, "
+                 f"전의를 꺾을 시간도 없다. 매복은 전투가 아니라 처형이다")
+    else:
+        rep.ok(f"도적 5인 매복 — 이류 무인은 {survive2}합을 버틴다({m2['outcome']}, {m2['killed']}명 사살). "
+               f"슬롯 {m2['slots']} · 순보정 {m2['net_mod']:+d}(상쇄) · 강제 흘리기 −{m2['soak']:g}. "
+               f"도주(민첩+도주, 포위 -2)와 두목 격파(전의 -5 → 전원 붕괴)의 창이 있다")
+
+    # ⓑ 머릿수가 무의미해도 안 된다 — 졸개 다섯은 여전히 무섭다 (비율이 아니라 결말로 잰다)
+    if m2["outcome"] == "소탕":
+        rep.fail(f"이류 무인 단신이 졸개 5인 매복을 소탕한다 — 머릿수가 무의미하다. "
+                 f"슬롯·피포위 방어·경감이 과하다 (5인 {five:.2f}/합 = 1인 {solo:.2f}/합의 {five / solo:.1f}배뿐). "
+                 f"졸개 다섯은 무서워야 한다")
+    else:
+        rep.ok(f"졸개 다섯은 여전히 무섭다 — 이류 무인 단신은 {m2['outcome']}한다 "
+               f"({m2['killed']}명을 베고 {survive2}합에 무너진다). 5인 {five:.2f}/합 = "
+               f"1인({solo:.2f}/합)의 {five / solo:.1f}배 — 슬롯이 물려도 머릿수는 무겁다")
+
+    # ⓒ 경지가 머릿수의 답이다 — 고수가 다수를 상대로 사는 이유가 규칙 안에 있는가
+    if m1["outcome"] != "소탕":
+        rep.fail(f"일류 무인(개화한 몸)조차 졸개 5인 매복을 소탕하지 못한다({m1['outcome']}) — "
+                 f"'고수가 다수를 상대로 사는 이유'가 규칙 안에 없다. 경지가 머릿수에 아무 답도 주지 못한다")
+    else:
+        end1 = m1["clear_at"] or m1["rounds"]
+        rep.ok(f"경지가 머릿수의 답이다 — 일류 무인은 같은 5인 매복을 {end1}합에 소탕한다"
+               f"(사살 {m1['killed']} · 이탈 {m1['routed']}, 내구 {m1['hp_left']:.0f}/{hero1.dur} 잔존). "
+               f"이류는 무너지고 일류는 벤다: 한 경지가 다섯 자루의 값이다")
+
+    # ⑥ 합격진 — 진법의 값은 보정이 아니라 슬롯이다
+    if jin_slots > slots:
+        k_plain = engaged(rules, 5)
+        k_jin = engaged(rules, 5, jin_slots)
+        _, d_plain, _ = strike(p, e, mod=net_mod(rules, k_plain), soak=guard_soak(rules, k_plain))
+        mod_jin = min(4 * per, jin_cap) - min(4 * rules["def_per"], rules["def_cap"])
+        _, d_jin, _ = strike(p, e, mod=mod_jin, soak=guard_soak(rules, k_jin))
+        rep.say("")
+        rep.say(f"     매화검진(협공 상한 {jin_cap} · 포위 슬롯 {jin_slots}): 5인 총 피해 "
+                f"{d_jin * k_jin:.2f}/합 vs 평협공 5인({d_plain * k_plain:.2f}/합) = "
+                f"{(d_jin * k_jin) / (d_plain * k_plain) * 100 - 100:+.0f}%")
+        rep.say(f"       → 진법이 사는 것은 보정이 아니라 **다섯이 동시에 벤다**는 것이다 "
+                f"(슬롯 {slots} → {jin_slots}, 순보정 {mod_jin:+d}). 오합지졸은 셋까지다")
 
 
 def sim_dead_options(cfg, rep):
