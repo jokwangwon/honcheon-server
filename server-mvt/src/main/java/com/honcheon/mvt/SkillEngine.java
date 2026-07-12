@@ -1265,6 +1265,18 @@ public final class SkillEngine {
 
     // ══════════ NPC — 대칭 원칙 (npc_combat.yml symmetry) ══════════
 
+    /** 무공 카탈로그 — id → 이름 (연무장의 무공대가 목록을 그린다) */
+    public Map<String, String> artNames() {
+        Map<String, String> out = new LinkedHashMap<>();
+        catalog.forEach((id, raw) -> {
+            if (raw instanceof Map<?, ?> m) {
+                Object name = m.get("name");
+                out.put(id, name == null ? id : String.valueOf(name));
+            }
+        });
+        return out;
+    }
+
     /** 경지의 내력 풀 — 그 경지의 내공 하한으로 세운다 (연무장이 경지를 바꿀 때 쓴다) */
     public int poolOf(String realm) {
         return internal.pool(naegongFloor.getOrDefault(realm, 0.0));

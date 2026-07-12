@@ -591,6 +591,11 @@ public final class HuntingGrounds implements Listener {
      * 등록부의 한 줄이 인게임의 한 마리가 되는 자리.
      * 내구 → 최대 체력 · 무기 위력(+무공 위력) → 공격력 · 격 → 명패 색 · 전의 → PDC.
      */
+    /** 등록부의 적 id 전부 — 연무장의 적수대가 목록을 그린다 */
+    public static java.util.List<String> foeIds() {
+        return new java.util.ArrayList<>(FOES.keySet());
+    }
+
     /** 등록부 id 로 부른다 — 연무장의 몹 시험 (없으면 null) */
     public LivingEntity spawnById(String foeId, Location at) {
         Foe foe = FOES.get(foeId);

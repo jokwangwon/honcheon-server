@@ -98,6 +98,17 @@ public final class SkillListener implements Listener {
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
     }
 
+    /** 무공 상태를 갈아 끼운다 — 연무장의 경지·내력은 세계의 것이 아니다 */
+    public SkillEngine.State swapState(java.util.UUID playerId, SkillEngine.State replacement) {
+        SkillEngine.State previous = states.get(playerId);
+        if (replacement == null) {
+            states.remove(playerId);
+        } else {
+            states.put(playerId, replacement);
+        }
+        return previous;
+    }
+
     public SkillEngine.State state(Player player) {
         return states.computeIfAbsent(player.getUniqueId(), id -> new SkillEngine.State());
     }

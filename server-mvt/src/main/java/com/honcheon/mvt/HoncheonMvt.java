@@ -36,6 +36,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private Populace populace;   // 무명(無名) — 세계에 사는 사람들 (config/npcs/populace.yml)
     private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
     private Dojang dojang;   // 연무장 — 따로 두들겨 보는 자리 (별도 월드 · 세계에 자국을 남기지 않는다)
+    private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
 
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
@@ -71,6 +72,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.populace = new Populace(this);
         this.incidents = new Incidents(this);   // 순서 중요 — 생성자가 populace 에 스스로 접합한다
         this.dojang = new Dojang(this);
+        this.dojangGui = new DojangGui(this);
         // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾼다 (워커 스레드 → 메인 스레드로 태워 준다)
         WorldBridge.onState(state -> getServer().getScheduler().runTask(this, () -> {
             for (String tag : WorldBridge.reactionTags()) {
@@ -89,6 +91,7 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(populace, this);
         getServer().getPluginManager().registerEvents(incidents, this);
         getServer().getPluginManager().registerEvents(dojang, this);
+        getServer().getPluginManager().registerEvents(dojangGui, this);
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
@@ -113,6 +116,22 @@ public final class HoncheonMvt extends JavaPlugin {
     @Override
     public void onDisable() {
         WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
+    }
+
+    /**
+     * 장부를 갈아 끼운다 — <b>연무장의 수련은 세계로 새지 않는다</b> (사용자 규정).
+     *
+     * <p>연무장에 들어갈 때 현실의 장부를 떼어 두고 시험용 장부를 끼운다. 나올 때 되돌린다.
+     * 시험장에서 얻은 30일 수련이 강호의 경지가 되면, 그건 시험이 아니라 치트다.
+     */
+    public PlayerLedger swapLedger(UUID playerId, PlayerLedger replacement) {
+        PlayerLedger previous = ledgers.get(playerId);
+        if (replacement == null) {
+            ledgers.remove(playerId);
+        } else {
+            ledgers.put(playerId, replacement);
+        }
+        return previous;
     }
 
     public PlayerLedger ledger(UUID playerId) {
@@ -164,8 +183,10 @@ public final class HoncheonMvt extends JavaPlugin {
                 "honcheon", org.bukkit.scoreboard.Criteria.DUMMY, "§6§l혼 천");
         obj.setDisplaySlot(org.bukkit.scoreboard.DisplaySlot.SIDEBAR);
         Zone zone = zoneAt(player.getLocation());
+        boolean dojang = Dojang.isDojang(player.getWorld());
         PlayerLedger ledger = ledger(player.getUniqueId());
-        obj.getScore("§7위치: §f" + (zone == null ? "야외" : zone.name())).setScore(3);
+        obj.getScore("§7위치: §f" + (dojang ? "연무장 §8(시험)" : zone == null ? "야외" : zone.name()))
+                .setScore(3);
         obj.getScore("§e소지금 " + ledger.money() + "문").setScore(2);
         obj.getScore(String.format("§f오늘 수련 +%.1f일", ledger.grantedToday())).setScore(1);
         player.setScoreboard(board);
@@ -304,6 +325,11 @@ public final class HoncheonMvt extends JavaPlugin {
     /** 연무장 — 시험은 세계에 자국을 남기면 안 된다 */
     public Dojang dojang() {
         return dojang;
+    }
+
+    /** 연무장의 시험대 — 클릭으로 병기·무공·경지·적수를 고른다 */
+    public DojangGui dojangGui() {
+        return dojangGui;
     }
 
     /** 무명(無名) — 행인·주민. 세계가 사람이 사는 곳으로 보이려면 이들이 있어야 한다 */

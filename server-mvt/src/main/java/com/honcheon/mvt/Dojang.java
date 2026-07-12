@@ -54,6 +54,20 @@ final class Dojang implements Listener {
     /** 허수아비 장부 — 누적 피해·합수 */
     private final Map<UUID, double[]> tally = new HashMap<>();   // [누적, 합수, 최근]
 
+    // ─── 두 세계의 장부는 섞이지 않는다 (사용자 규정) ───
+    //
+    // "여기서 얻은 수련이나 모든 것들은 기존 월드와 분리."
+    // 시험장에서 얻은 30일 수련과 신병(神兵)이 강호의 것이 되면, 그건 시험이 아니라 치트다.
+    // 들어갈 때 현실의 장부·무공 상태·짐을 **떼어 두고**, 시험용 벌을 끼운다. 나올 때 되돌린다.
+    // 연무장의 장부는 그것대로 남는다 — 다시 들어오면 어제 시험하던 자리에서 이어진다.
+
+    private final Map<UUID, PlayerLedger> realLedger = new HashMap<>();
+    private final Map<UUID, SkillEngine.State> realState = new HashMap<>();
+    private final Map<UUID, org.bukkit.inventory.ItemStack[]> realInventory = new HashMap<>();
+    private final Map<UUID, PlayerLedger> testLedger = new HashMap<>();
+    private final Map<UUID, SkillEngine.State> testState = new HashMap<>();
+    private final Map<UUID, org.bukkit.inventory.ItemStack[]> testInventory = new HashMap<>();
+
     Dojang(HoncheonMvt plugin) {
         this.plugin = plugin;
     }
@@ -98,8 +112,17 @@ final class Dojang implements Listener {
             player.sendMessage(ChatColor.RED + "연무장을 열 수 없다.");
             return;
         }
+        UUID id = player.getUniqueId();
         if (!isDojang(player.getWorld())) {
-            origins.put(player.getUniqueId(), player.getLocation());   // 돌아갈 자리를 기억한다
+            origins.put(id, player.getLocation());   // 돌아갈 자리를 기억한다
+            // 현실의 장부·무공·짐을 떼어 둔다 — 시험은 세계에 자국을 남기지 않는다
+            realLedger.put(id, plugin.swapLedger(id,
+                    testLedger.computeIfAbsent(id, k -> new PlayerLedger())));
+            realState.put(id, plugin.skills().swapState(id,
+                    testState.computeIfAbsent(id, k -> new SkillEngine.State())));
+            realInventory.put(id, player.getInventory().getContents().clone());
+            player.getInventory().setContents(testInventory.computeIfAbsent(id,
+                    k -> new org.bukkit.inventory.ItemStack[player.getInventory().getSize()]));
         }
         // 평면 월드의 지면은 y5 가 아니다 — 층이 월드 최저(-64)부터 쌓이므로 지표는 y-61 언저리다.
         // 구판은 y5 에 떨어뜨렸고 사람이 **낙사**했다. 지면은 월드에게 묻는다.
@@ -131,17 +154,78 @@ final class Dojang implements Listener {
             w.getBlockAt(i, groundY, 0).setType(Material.DARK_OAK_PLANKS);
             w.getBlockAt(0, groundY, i).setType(Material.DARK_OAK_PLANKS);
         }
+        // 시험대 넷 — **클릭으로 고른다** (명령을 외워 치는 시험은 시험 준비다)
+        stand(w, -5, groundY, -5, Material.SMITHING_TABLE, "병기대", "9계열 × 5등급 — 집으면 손에 온다");
+        stand(w, 5, groundY, -5, Material.LECTERN, "무공대", "등록부의 무공 — 고르면 수련 30일");
+        stand(w, -5, groundY, 5, Material.ENCHANTING_TABLE, "경지대", "삼류~화경 — 내력 풀이 그 경지의 것으로");
+        stand(w, 5, groundY, 5, Material.TARGET, "적수대", "허수아비 · 등록부의 적");
+    }
+
+    /** 시험대 한 자리 — 블록 + 그 위 명패 */
+    private void stand(World w, int x, int y, int z, Material block, String title, String note) {
+        w.getBlockAt(x, y + 1, z).setType(block);
+        org.bukkit.block.Block sign = w.getBlockAt(x, y + 2, z);
+        sign.setType(Material.OAK_SIGN);
+        if (sign.getState() instanceof org.bukkit.block.Sign s) {
+            s.getSide(org.bukkit.block.sign.Side.FRONT).setLine(0, ChatColor.GOLD + title);
+            s.getSide(org.bukkit.block.sign.Side.FRONT).setLine(1, ChatColor.GRAY + "우클릭");
+            s.getSide(org.bukkit.block.sign.Side.FRONT).setLine(2, ChatColor.DARK_GRAY + note.substring(0,
+                    Math.min(15, note.length())));
+            s.update();
+        }
+    }
+
+    /** 시험대를 우클릭하면 그 자리의 목록이 열린다 */
+    @EventHandler
+    public void onInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        if (event.getClickedBlock() == null || !isDojang(event.getPlayer().getWorld())
+                || event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        Material m = event.getClickedBlock().getType();
+        DojangGui gui = plugin.dojangGui();
+        Player p = event.getPlayer();
+        switch (m) {
+            case SMITHING_TABLE -> {
+                event.setCancelled(true);
+                gui.openWeapons(p, 0);
+            }
+            case LECTERN -> {
+                event.setCancelled(true);
+                gui.openArts(p, 0);
+            }
+            case ENCHANTING_TABLE -> {
+                event.setCancelled(true);
+                gui.openRealms(p);
+            }
+            case TARGET -> {
+                event.setCancelled(true);
+                gui.openFoes(p);
+            }
+            default -> { }
+        }
     }
 
     void leave(Player player) {
+        UUID id = player.getUniqueId();
+        if (isDojang(player.getWorld())) {
+            // 시험의 장부는 시험장에 두고 간다 (다시 들어오면 그 자리에서 이어진다)
+            testInventory.put(id, player.getInventory().getContents().clone());
+            testLedger.put(id, plugin.swapLedger(id, realLedger.remove(id)));
+            testState.put(id, plugin.skills().swapState(id, realState.remove(id)));
+            org.bukkit.inventory.ItemStack[] back = realInventory.remove(id);
+            player.getInventory().setContents(back != null ? back
+                    : new org.bukkit.inventory.ItemStack[player.getInventory().getSize()]);
+        }
         player.setGameMode(org.bukkit.GameMode.SURVIVAL);
-        Location back = origins.remove(player.getUniqueId());
+        Location back2 = origins.remove(id);
+        Location back = back2;
         if (back == null || back.getWorld() == null) {
             Location market = plugin.anchor("장터");
             back = market != null ? market : Bukkit.getWorlds().get(0).getSpawnLocation();
         }
         player.teleport(back);
-        player.sendMessage(ChatColor.GRAY + "연무장을 나선다.");
+        player.sendMessage(ChatColor.GRAY + "연무장을 나선다 — 시험의 수련·병기는 시험장에 두고 간다.");
     }
 
     // ─── 능력치 조정 ───
