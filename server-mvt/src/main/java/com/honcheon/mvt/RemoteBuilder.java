@@ -529,10 +529,18 @@ final class RemoteBuilder {
                 //   ② 능선이 방위마다 다르고(좌표 해시 ±5), ③ 발치가 자연 지면에 스며든다.
                 double t = Math.max(0, (d - flatR) / (double) (radius - flatR));   // 0 = 정상, 1 = 발치
                 int crest = topY + 1;
-                int ridge = Math.floorMod(x * 11 + z * 7, 11) - 5;        // 능선의 요철 (방위마다 다른 산줄기)
-                int drop = (int) Math.round(Math.pow(t, 1.4) * 48);        // 볼록한 비탈 (아래로 갈수록 완만)
-                int y = crest - drop + (int) Math.round(ridge * (1 - t) * 0.6);
-                y = y - Math.floorMod(y, 2);                                // 두 칸 단 — 험산의 결
+                // v3 — 조감이 **등고선**을 보여줬다: 동심원 층이 나이테처럼 뚜렷해 산이 아니라 지형도가 됐다.
+                //   원인은 ① 높이가 거리 d 의 함수뿐이라 등고가 완전한 원이고, ② 두 칸 단이 그 원을 그렸다.
+                //   답: 능선을 **방위의 함수**로 흔들어 등고를 깨고(골과 날), 단은 자리마다 어긋나게 놓는다.
+                double ang = Math.atan2(z - cz, x - cx);
+                double lobes = Math.sin(ang * 3 + 0.7) * 5 + Math.sin(ang * 5 - 1.3) * 3;   // 산줄기 셋·다섯
+                int ridge = Math.floorMod(x * 11 + z * 7, 7) - 3;           // 바위의 요철
+                double dEff = d - lobes * (1 - t) - lobes * 0.4;            // 골과 날 — 등고가 원이 아니다
+                double tEff = Math.max(0, Math.min(1, (dEff - flatR) / (double) (radius - flatR)));
+                int drop = (int) Math.round(Math.pow(tEff, 1.4) * 48);      // 볼록한 비탈 (아래로 갈수록 완만)
+                int y = crest - drop + (int) Math.round(ridge * (1 - tEff) * 0.8);
+                int stepPhase = Math.floorMod(x * 3 + z * 5, 3);            // 단의 위상을 자리마다 어긋낸다
+                y = y - Math.floorMod(y + stepPhase, 2);
                 int ground = naturalGround(world, x, z, topY + 40);
                 if (y <= ground) {
                     continue;   // 발치가 자연 지면에 닿았다 — 그 아래는 산의 몫이다 (파내지 않는다)
