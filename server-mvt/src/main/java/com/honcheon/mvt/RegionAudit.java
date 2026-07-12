@@ -93,7 +93,7 @@ final class RegionAudit {
             for (int dx = 0; dx <= 12; dx++) {
                 for (int sx : new int[]{startX - dx, startX + dx}) {
                     int sz = zone.z2() - dz;
-                    int sy = standY(world, sx, sz, zone);
+                    int sy = groundStandY(world, sx, sz, zone);   // 지붕이 아니라 땅에서 출발한다
                     if (sy != Integer.MIN_VALUE) {
                         startX = sx;
                         startZ = sz;
@@ -184,6 +184,30 @@ final class RegionAudit {
         for (int y = zone.y2(); y >= zone.y1(); y--) {
             if (canStand(world, x, y, z)) {
                 return y;
+            }
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /**
+     * <b>땅</b> 위의 설 자리 — 지붕·인방은 땅이 아니다.
+     *
+     * <p>도달성 검사가 화산파를 "오를 수 없다"고 했다(24칸만 걷고 갇힘). 계단은 멀쩡했다 —
+     * <b>사람이 산문 기와 위에서 태어났을 뿐이다.</b> 구역 남쪽 가장자리 열에 하필 패방이 서 있었고,
+     * 그 열의 "가장 높은 설 자리"가 지붕이었다. 걷는 검사가 지붕에서 출발하면 무엇을 재든 거짓이다.
+     */
+    private static int groundStandY(World world, int x, int z, Zone zone) {
+        for (int y = zone.y2(); y >= zone.y1(); y--) {
+            if (!canStand(world, x, y, z)) {
+                continue;
+            }
+            Material floor = world.getBlockAt(x, y - 1, z).getType();
+            String n = floor.name();
+            boolean roof = n.endsWith("_TILES") || n.endsWith("_SLAB") || n.endsWith("_STAIRS")
+                    || n.endsWith("_PLANKS") || n.endsWith("_LOG") || floor == Material.HAY_BLOCK
+                    || n.endsWith("_TERRACOTTA") || n.endsWith("_BRICKS") || n.endsWith("_FENCE");
+            if (!roof) {
+                return y;   // 흙·돌·노면 — 사람이 걷는 땅이다
             }
         }
         return Integer.MIN_VALUE;

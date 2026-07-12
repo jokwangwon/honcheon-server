@@ -297,16 +297,30 @@ final class RemoteBuilder {
         wallTorch(world, fw.x(cx, R - 1, -3), cy + 3, fw.z(cz, R - 1, -3), fw.in());
         wallTorch(world, fw.x(cx, R - 1, 3), cy + 3, fw.z(cz, R - 1, 3), fw.in());
 
-        // 문 밖 길 — 걸어 올라오는 자의 마지막 스무 칸. 표고는 전이대의 것을 따른다.
-        int prev = cy;
-        for (int f = R + 1; f <= R + 20; f++) {
-            int y = spec.inside(fw.x(cx, f, 0), fw.z(cz, f, 0))
-                    ? spec.groundAt(fw.x(cx, f, 0), fw.z(cz, f, 0))
-                    : surfaceProbe(world, fw.x(cx, f, 0), fw.z(cz, f, 0), prev);
+        // 문 밖 길 — 걸어 올라오는 자의 마지막 스무 칸
+        approachPath(world, spec, cx, cz, fw, R + 1, R + 20, cy, 1, Material.DIRT_PATH);
+    }
+
+    /**
+     * <b>문 밖 진입로</b> — 문 앞 표고에서 출발해 <b>한 걸음에 ±1칸</b>만 오르내리며 자연으로 나간다.
+     * 한 칸짜리 단을 지형 계층에 요청한다 (깎기·축대·봉인이 함께 온다).
+     *
+     * <p><b>★ 여기에 지붕을 얹지 마라.</b> 지역 검수 ①(도달성)의 BFS 는 구역 <b>남쪽 가장자리 열의
+     * 가장 높은 설 자리</b>에서 출발한다({@code RegionAudit.standY} 는 {@code zone.y2()} 에서 아래로 훑는다).
+     * 그 열에 문루·산문 지붕이 있으면 <b>사람이 지붕 위에서 출발해 갇힌다</b> —
+     * 화산파가 그렇게 못 올랐다 (걸어 닿은 칸 24 · 오른 최고 y78 = 산문 기와 위). 계단은 멀쩡했다.
+     * 그러니 <b>가장자리 두 칸은 반드시 맨 진입로</b>여야 한다.
+     */
+    private static void approachPath(World world, TerrainForge.SiteSpec spec, int cx, int cz, Facing fw,
+                                     int fFrom, int fTo, int y0, int half, Material floor) {
+        int prev = y0;
+        for (int f = fFrom; f <= fTo; f++) {
+            int ax = fw.x(cx, f, 0);
+            int az = fw.z(cz, f, 0);
+            int y = spec.inside(ax, az) ? spec.groundAt(ax, az) : surfaceProbe(world, ax, az, prev);
             y = Math.max(prev - 1, Math.min(prev + 1, y));   // 한 걸음 ±1 — 길에 계단은 없다
-            for (int l = -1; l <= 1; l++) {
-                TerrainForge.terrace(world, spec, fw.x(cx, f, l), fw.z(cz, f, l), y, 0, 0,
-                        Material.DIRT_PATH);   // 땅은 요청한다 — 깎기·축대·봉인은 지형 계층의 손
+            for (int l = -half; l <= half; l++) {
+                TerrainForge.terrace(world, spec, fw.x(cx, f, l), fw.z(cz, f, l), y, 0, 0, floor);
             }
             prev = y;
         }
@@ -539,9 +553,14 @@ final class RemoteBuilder {
         // 봉우리가 축 위에서 얼마나 뒤(-f)에 있는가 — 문전·산문은 부지 중심 기준으로 잡아야 반경 안에 든다
         int peakF = (px - cx) * fw.fx() + (pz - cz) * fw.fz();
 
+        // 【배치의 못 — 구역 가장자리 두 칸은 비워 둔다】
+        //   지역 검수의 도달성 BFS 는 구역 남쪽 가장자리(z2-2)의 **가장 높은 설 자리**에서 출발한다.
+        //   구 배치는 산문(gateF = rad-2)을 하필 그 열에 세워 사람이 **기와 위에서 출발**했고,
+        //   지붕 24칸을 돌다 갇혔다 (검수: 걸어 닿은 칸 24 · 오른 최고 y78 = 산문 기와). 계단은 멀쩡했다.
+        //   이제 마당·산문을 안으로 물리고, 가장자리에는 **맨 진입로**만 깐다.
         int rad = spec.radius();
-        int courtF = rad - 8;                 // 문전 마당 중심 (부지 중심 기준 전방) — 반경 안에 든다
-        int gateF = courtF + 6;               // 산문 — 문전 마당의 앞턱 (단 위에 선다)
+        int courtF = rad - 14;                // 문전 마당 중심 — 가장자리에서 열넷 안쪽
+        int gateF = courtF + 6;               // 산문 — 문전 마당의 앞턱 (rad-8: 가장자리 두 칸에서 물러섰다)
         int stepFrom = peakF + UPPER_HALF_D + 1;   // 계단 시작 (본전 단의 앞턱)
         int stepTo = courtF - 6;                   // 계단 끝 (문전 마당의 뒷턱)
         int run = stepTo - stepFrom;
@@ -559,6 +578,9 @@ final class RemoteBuilder {
         TerrainForge.terrace(world, spec, fw.x(cx, courtF, 0), fw.z(cz, courtF, 0), lower,
                 fw.swapped() ? 6 : 8, fw.swapped() ? 8 : 6, Material.POLISHED_ANDESITE);
 
+        // 산문 앞 진입로 — 마당 앞턱(gateF+1)에서 구역 밖까지. **지붕 없는 맨 길**이라
+        //   검수의 걸음이 여기서 출발해 문전으로 걸어 들어온다 (도달성 ①의 첫 걸음).
+        approachPath(world, spec, cx, cz, fw, gateF + 1, rad + 16, lower, 2, Material.POLISHED_ANDESITE);
         mountainGate(world, cx, lower, cz, fw, gateF);                     // 산문(山門) — 패방
         if (upper > lower) {
             thousandSteps(world, spec, cx, cz, fw, stepFrom, stepTo, upper, lower);
@@ -622,8 +644,9 @@ final class RemoteBuilder {
             }
             // 석등은 **길 안쪽 가장자리**에 세운다. 길 밖(바위 쪽)에 세우면 등이 바위에 박혀 빛이 길로
             //   못 나온다 — 눈에 보이는 등과 밝은 길은 다른 것이다.
-            //   간격 2 → 6: 등롱은 리듬이지 도배가 아니다 (사용자 피드백).
-            if (Math.floorMod(i, 6) == 0) {
+            //   간격 2 → 4: 등롱은 리듬이지 도배가 아니다 (사용자 피드백). 다만 **오르는 길은 밝아야 한다** —
+            //   등롱(y+2)에서 계단 한복판까지 측거 half(≤5) + 세로 ≤2 + 높이 1 = 8 → 광원 7 (밝음의 문턱).
+            if (Math.floorMod(i, 4) == 0) {
                 for (int l : new int[]{-half, half}) {
                     world.getBlockAt(fw.x(cx, f, l), y + 1, fw.z(cz, f, l)).setType(Material.COBBLESTONE_WALL);
                     world.getBlockAt(fw.x(cx, f, l), y + 2, fw.z(cz, f, l)).setType(Material.LANTERN);

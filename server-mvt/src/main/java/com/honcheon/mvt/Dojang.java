@@ -101,8 +101,14 @@ final class Dojang implements Listener {
         if (!isDojang(player.getWorld())) {
             origins.put(player.getUniqueId(), player.getLocation());   // 돌아갈 자리를 기억한다
         }
-        Location at = new Location(w, 0.5, 5, 0.5, 0f, 0f);
+        // 평면 월드의 지면은 y5 가 아니다 — 층이 월드 최저(-64)부터 쌓이므로 지표는 y-61 언저리다.
+        // 구판은 y5 에 떨어뜨렸고 사람이 **낙사**했다. 지면은 월드에게 묻는다.
+        int groundY = w.getHighestBlockYAt(0, 0);
+        Location at = new Location(w, 0.5, groundY + 1.0, 0.5, 0f, 0f);
+        pad(w, groundY);   // 딛는 자리 — 첫 걸음이 허공이면 시험이고 뭐고 없다
         player.teleport(at);
+        player.setFallDistance(0f);
+        player.setGameMode(org.bukkit.GameMode.CREATIVE);   // 시험은 죽음의 자리가 아니다
         player.sendMessage(ChatColor.GOLD + "── 연무장 ──");
         player.sendMessage(ChatColor.GRAY + "여기서 벤 것은 소문이 되지 않는다. 마음껏 두들겨라.");
         player.sendMessage(ChatColor.GRAY + "/혼천 시험 경지 <삼류|이류|일류|절정|초절정|화경> · "
@@ -110,7 +116,25 @@ final class Dojang implements Listener {
         player.sendMessage(ChatColor.GRAY + "/혼천 허수아비 [내구] · /혼천 시험 몹 <id> · /혼천 귀환");
     }
 
+    /** 연무장 바닥 — 32×32 돌바닥과 표식. 허공에 떨구지 않는다 */
+    private void pad(World w, int groundY) {
+        for (int x = -16; x <= 16; x++) {
+            for (int z = -16; z <= 16; z++) {
+                w.getBlockAt(x, groundY, z).setType(Math.floorMod(x + z, 8) == 0
+                        ? Material.ANDESITE : Material.POLISHED_ANDESITE);
+                for (int y = groundY + 1; y <= groundY + 4; y++) {
+                    w.getBlockAt(x, y, z).setType(Material.AIR);
+                }
+            }
+        }
+        for (int i = -16; i <= 16; i += 8) {   // 열 자(尺) — 거리를 눈으로 잰다 (사거리 시험)
+            w.getBlockAt(i, groundY, 0).setType(Material.DARK_OAK_PLANKS);
+            w.getBlockAt(0, groundY, i).setType(Material.DARK_OAK_PLANKS);
+        }
+    }
+
     void leave(Player player) {
+        player.setGameMode(org.bukkit.GameMode.SURVIVAL);
         Location back = origins.remove(player.getUniqueId());
         if (back == null || back.getWorld() == null) {
             Location market = plugin.anchor("장터");
