@@ -44,6 +44,18 @@ vanilla_texture_channels:
     sprites: { inventory: "256x256 (유효 176x166)", generic_54: "256x256 (유효 176x222, y=125 심 행)" }
     design: "화선지 몸체+먹 외곽+슬롯 인셋 3톤(음영·내부·광) — 바닐라 입체 문법을 수묵 톤으로만 재채색"
     invariant: "슬롯 18x18 격자 좌표 = 바닐라 메뉴 계약(아이템 좌표-1) 불변 — 위치·크기 변경 금지, 색만"
+  container_작업:                    # 2026-07 신설 — 인벤토리·궤만 덮고 화덕을 두면 열 때마다 바닐라가 튀어나온다
+    path: "minecraft/textures/gui/container/"
+    sprites: { furnace: "256x256 (유효 176x166)", smoker: 동일, blast_furnace: 동일, crafting_table: "256x256 (유효 176x166)" }
+    design: "인벤토리와 같은 화선지 문법. 아궁이 불꽃 게이지는 꺼진 상태(먹빛 마름모) — 타는 그림은 코드가 blit 한다"
+    invariant: |
+      슬롯 박스 좌표 = 바닐라 메뉴 계약 (아이템 좌표-1) 불변:
+        화로(FurnaceMenu·SmokerMenu·BlastFurnaceMenu — 셋이 같은 배치): 재료 (55,16) · 연료 (55,52) · 결과 (111,29)
+        목공대(CraftingMenu): 3x3 (29+18c, 16+18r) · 결과 (123,34)
+        공통 아래 절반: 플레이어 인벤 (7+18c, 83+18r) · 핫바열 (7+18c, 141)
+    note: "화덕 3종은 배치가 같으니 **같은 그림 한 장**을 세 경로에 쓴다 (바닐라도 같은 배치다)"
+    out_of_scope: "모루·양조대·베틀·대장간 GUI = 바닐라 유지 (블록 텍스처는 덮었으나 GUI 는 미등록 — 등록 없이 교체 금지)"
+    거래_GUI_불요: "서버는 바닐라 상인 GUI(container/villager.png)를 쓰지 않는다 — 거래는 LedgerGui 의 커스텀 인벤토리다 (Merchant API 미사용 확인). 그래서 그 채널은 등록하지 않는다"
   xp_bar_불가침: "XP 바 기능·위치는 내력 표시용 예약 — 텍스처 톤 변경만 허용, 숨기기 금지 (이번 교체 범위 밖, 바닐라 유지)"
   registration: "교체 추가 = 본 채널 등록 + build_resourcepack.py 반영 (glyph_slots와 같은 등록제 문법)"
 
@@ -246,20 +258,125 @@ block_channels:
       textures: ["entity/decorated_pot/decorated_pot_base.png (32x32)", "entity/decorated_pot/decorated_pot_side.png", "entity/chest/normal.png (64x64)", "entity/chest/normal_left.png", "entity/chest/normal_right.png"]
       무협_자산: "도기 항아리(물레 자국 도는 먹빛 유약)·궤(櫃)"
       note: "블록이되 블록 엔티티라 텍스처가 entity/ 아래 산다. **UV를 모르는 면에는 무늬를 그리지 않는다** — 어느 조각을 잘라 내도 도기이고 나무인 면으로 그렸다 (문양을 얹으면 뚜껑 뒤에 가서 앉는다)"
+    # ─── 자재층 2차 (2026-07) — **자가 고른 순서**로 메운 구멍 ───
+    # 1차는 사람이 '많이 쓰는 블록'을 손으로 골라 덮었다. 2차의 순서는 손이 아니라 자가 정했다:
+    # texture_audit 축 ⑪ 이 미커버 면적 순으로 세워 주고, 그 위에서부터 내려왔다.
+    거미줄: { blocks: [cobweb], 무협_자산: "거미줄 — 폐사당·산채의 구석", 팩없음_폴백: "거미줄" }
+    퇴비통: { blocks: [composter_side, composter_top, composter_bottom, composter_compost, composter_ready], 무협_자산: "퇴비통 — 마을 뒤꼍", 팩없음_폴백: "나무 통" }
+    모래_진흙: { blocks: [sand, red_sand, mud], 무협_자산: "강변 모래·개흙", 조건: "적사도 채도는 흙기(≤40)까지 — '붉은 모래'라고 붉게 칠하면 수묵이 깨진다", 팩없음_폴백: "모래·진흙" }
+    눈_얼음: { blocks: [snow, powder_snow, ice, packed_ice, blue_ice], 무협_자산: "설산의 눈·얼음", 조건: "눈은 매끈하되 평면이 아니다 — 좁은 흰 계단 위에서 결을 다 밟는다 (진폭을 죽이면 '평면·밋밋' 이중 위반)", 팩없음_폴백: "눈·얼음" }
+    돌_2차: { blocks: [granite, diorite, calcite, sandstone, sandstone_top, sandstone_bottom, red_sandstone, red_sandstone_top, red_sandstone_bottom], 무협_자산: "화강·섬록·방해석·사암 — 산과 벼랑의 돌", 조건: "돌은 무채색 (화강만 흙기 한 점)", 팩없음_폴백: "돌" }
+    자작나무: { blocks: [birch_log, birch_log_top], 무협_자산: "자작 — 흰 수피는 산길의 표식", 팩없음_폴백: "자작나무" }
+    염색천: { blocks: [yellow_wool, orange_wool, lime_wool, light_blue_wool, green_wool, cyan_wool], 무협_자산: "저잣거리의 차양·깃발 (초벌 염색 — 흐리다)", 조건: "채도는 '의미'까지만. 깔개(CARPET)가 이 PNG를 함께 쓴다", 팩없음_폴백: "염색 양털" }
+    세간_2차: { blocks: [loom_front, loom_side, loom_top, loom_bottom, hopper_outside, hopper_inside, hopper_top, anvil, anvil_top, smithing_table_front, smithing_table_side, smithing_table_top, smithing_table_bottom], 무협_자산: "베틀(옷감집)·깔때기·모루·대장간", 팩없음_폴백: "베틀·깔때기·모루" }
+    화덕: { blocks: [smoker_front, smoker_front_on, smoker_side, smoker_top, smoker_bottom, blast_furnace_front, blast_furnace_front_on, blast_furnace_side, blast_furnace_top], 무협_자산: "아궁이 — 돌 몸에 아치 아가리. 불 든 아궁이만 붉다", 조건: "채도는 의미에만 — **불은 의미다** (꺼진 아궁이는 먹빛)", 팩없음_폴백: "화로", note: "GUI(container/furnace·smoker·blast_furnace)와 짝을 이룬다 — 블록만 덮고 GUI를 두면 열 때마다 바닐라가 튀어나온다" }
+    널문_울: { blocks: [spruce_trapdoor, oak_trapdoor, bamboo_fence, ladder], 무협_자산: "널문(정첩 두 점)·대울타리·사다리", 팩없음_폴백: "나무 문·울타리·사다리" }
+    야광이끼: { blocks: [glow_lichen], 무협_자산: "야광이끼 — 동굴의 냉광 (엷은 백록)", 팩없음_폴백: "빛나는 이끼" }
+    들꽃:
+      blocks: [poppy, cornflower, oxeye_daisy, white_tulip, azure_bluet, dandelion]
+      무협_자산: "들꽃 — 줄기 한 획 + 잎 + 꽃송이 (수묵의 꽃은 색면이 아니라 획이다)"
+      틴트_판정: "꽃은 **컬러맵 틴트 대상이 아니다** — 틴트되는 것은 풀·잎·물뿐이다. 그래서 우리가 칠한 값이 그대로 선다 → 「풀_고사리」 보류의 사유가 꽃에는 적용되지 않는다 (보류에서 갈라 나온 항목)"
+      팩없음_폴백: "들꽃"
+    현판:
+      blocks: [oak_sign, oak_wall_sign, dark_oak_hanging_sign]
+      textures: ["entity/signs/oak.png (64x32)", "entity/signs/hanging/dark_oak.png"]
+      무협_자산: "현판(懸板)·주기(酒旗) — 옻칠한 판. 글씨 자리는 비운다 (글은 플러그인·플레이어가 쓴다)"
+      note: "본 파일이 dark_oak_hanging_sign 을 「징발」로 **등록해 두고도 팩에는 그 PNG 가 없었다** — 축 ⑪ 이 잡아냈다 (등록부가 팩을 앞질러 있었던 자리). 등록과 실물이 어긋나면 등록제가 거짓말을 한다"
+      팩없음_폴백: "나무 간판"
+
     커버리지:
-      지표: "조성 팔레트 커버리지 = 조성기가 쓰는 블록 중 팩이 덮는 비율 (사용 빈도 가중, 블록당 필요 텍스처 전부를 덮어야 1로 센다)"
-      이전: "11.4% (완전히 덮은 블록 14종 / 170종)"
-      현재: "84.7% (완전히 덮은 블록 94종 / 170종)"
-      남은_구멍: "풀·고사리(SHORT_GRASS·FERN — 바이옴 틴트라 회색조를 칠해도 초록으로 물든다) · 거미줄 · 사다리 · 화덕/베틀/대장간 세간 · grass_block (지형 틴트)"
+      축: "texture_audit.py 축 ⑪ — 「조성 팔레트 커버리지」. **이 수치는 이제 손계산이 아니라 자가 잰다**"
+      정의: "청하현에 선 플레이어의 눈에 닿는 픽셀 중 팩이 그린 것의 비율 = Σ(빈도 × 면적 × 불투명도) 중 팩 보유분"
+      가중:
+        빈도: "조성기(CheonghaBuilder·RemoteBuilder) 코드의 Material.XXX 출현 수 (주석·문자열 제거 후). 대리 지표 — 절대량은 틀리나 블록끼리의 상대 비중은 남는다"
+        면적: "**1.21.11 클라이언트 jar 의 모델 JSON 기하에서 낸다** (손 등급 금지 — 손 등급은 다음 사람이 못 재는 또 하나의 손계산이다). element 의 from/to 가 직육면체를, face 가 텍스처와 넓이를 준다. 온전한 큐브 = 6면 × 256 = 1536 / 울타리 기둥 = 288 / 화분은 더 작다 — 기하가 말한다"
+        불투명도: "컷아웃(풀·유리·창살·거미줄)은 제 사각형을 다 안 채운다 — 바닐라 PNG 의 불투명 픽셀 비율을 곱한다"
+      다중_텍스처: "블록 하나가 여러 장을 쓴다 (*_top/*_side/*_bottom). 면적 가중이 이것을 정확히 푼다: 큐브의 옆면(*_side)은 4면=1024, 윗면(*_top)은 1면=256 → *_side 를 덮는 것이 4배 값지고, 자가 그렇게 센다"
+      판정: "blockstate → (variants 평균 | multipart: 무조건부 1.0·조건부 0.5) → model → parent 사슬 → #참조 해소. 짐작 금지 — jar 를 실제로 푼다 (piston-meta 로 받아 run/client/ 에 캐시)"
+      분모_제외: "AIR(그림 없음) · 아이템(blockstate 없음: HONEY_BOTTLE·GLASS_BOTTLE·DRIED_KELP·GLOW_BERRIES) — 조용히 빠지는 것이 아니라 **이름과 함께 보고**된다"
+      특수_렌더러: "유체(WATER·LAVA)와 블록 엔티티(CHEST·DECORATED_POT·SIGN)는 모델에 element 가 없다 → 면적 0으로 조용히 사라진다. 명시 표(FLUIDS·BLOCK_ENTITIES)로 붙잡았다 — 자가 눈감는 자리를 만들지 않는다"
+      문턱: "≥ 80%"
+      이력:
+        - "11.4% — 자재층 이전 (지붕·회벽만)"
+        - "84.7% — 자재층 1차 (손계산. **자로 재니 맞았다**: 같은 조성기·같은 팩을 기하 가중으로 독립 측정해 84.7~85.5%)"
+        - "93.5% — 자재층 2차 (본 증분. 축 ⑪ 이 세워 준 면적 순으로 위에서부터 메웠다)"
+      남은_구멍: "미커버 6.5% (25장) — **전부 보류 등록분이다** (아래 보류 절): 물·용암 33.8k(유체+프레임 시트+틴트) · 풀·잎 계열 41.5k(컬러맵) · 수초 7.0k(프레임 시트) · 불 2.2k(프레임 시트). 즉 **사유 없이 비어 있는 칸은 0장**이다"
+      불변식: "미커버 텍스처는 전부 「보류」에 사유와 함께 있어야 한다. 사유 없이 빈 칸이 하나라도 생기면 등록부가 거짓말을 하는 것이다 (현판이 그랬다 — 축 ⑪ 이 잡았다)"
 
   보류:
     note_block: { 사유: "blockstate 트릭의 재료 — 지금 재텍스처하면 트릭 여지가 사라진다 (texture_rules.blockstate_trick.reserve)" }
-    풀_고사리: { blocks: [short_grass, fern, grass_block_top, grass_block_side], 사유: "바이옴 컬러맵이 초록으로 틴트한다 — 회색조를 칠해도 초록이 곱해진다. 수묵으로 만들려면 colormap/grass.png 까지 손대야 하고, 그것은 세계의 초록을 전부 죽인다 (별도 판정 사안)" }
+    풀_고사리:
+      blocks: [short_grass, fern, tall_grass, large_fern, grass_block_top, grass_block_side, grass_block_side_overlay, oak_leaves, birch_leaves, spruce_leaves, vine, lily_pad, sugar_cane]
+      사유: "바이옴 컬러맵이 초록으로 틴트한다 — 회색조를 칠해도 초록이 곱해진다. 수묵으로 만들려면 colormap/grass.png·foliage.png 까지 손대야 하고, 그것은 세계의 초록을 전부 죽인다 (별도 판정 사안)"
+      경계: "**꽃은 이 보류에 들지 않는다** — 틴트되는 것은 풀·잎·물뿐이다 (자재층.들꽃 참조). 보류의 사유를 사유 없이 이웃에 넓히지 않는다"
+    유체:
+      blocks: [water_still, water_flow, lava_still, lava_flow]
+      사유: "① 특수 렌더러 ② **애니메이션 프레임 시트** (water 16x512 = 32프레임 · lava 16x320 + 명시 프레임 목록) ③ 물은 바이옴 water_color 까지 곱한다. 세 겹이라 별도 증분 — 미커버 면적 1위(32k)임을 알고 남긴다"
+    애니메이션_불:
+      blocks: [campfire_fire, soul_campfire_fire, soul_campfire_log_lit]
+      사유: "프레임 시트 (16x128 = 8프레임 + .mcmeta). 팩이 16x16 을 얹으면 바닐라 .mcmeta 가 그대로 병합돼 프레임 수가 어긋난다 — PNG 만 갈아서는 안 되고 .mcmeta 도 함께 내야 한다. 검수 축의 16x16 규약도 함께 손봐야 한다 (별도 증분)"
+      note: "campfire_log·campfire_log_lit(장작)은 이미 징발했다 — 남은 것은 불꽃뿐이다"
+    애니메이션_수초:
+      blocks: [kelp, kelp_plant, seagrass, tall_seagrass_top, tall_seagrass_bottom]
+      사유: "**애니메이션 프레임 시트다** (kelp 16x320 = 20프레임 · seagrass 16x288 · tall_seagrass 16x304 — 물결에 흔들린다). 애니메이션_불 과 같은 사유이지 컬러맵 사유가 아니다"
+      틴트_판정: "수초는 컬러맵 틴트 대상이 **아니다** — 풀_고사리 보류의 사유를 여기 갖다 붙이면 틀린 이유로 남기는 것이 된다. 남기는 이유는 오직 프레임 시트다 (보류도 제 사유로 남아야 한다)"
+    좀비_주민:
+      blocks: [zombie_villager]
+      사유: "ZombieVillagerModel 의 팔 박스가 4x12x4 (인간형)로 VillagerModel 의 4x8x4 와 다르다 — 주민 페인터를 그대로 재사용하면 팔 아래가 투명(= 구멍)이 된다. 바이트코드로 UV를 복원하기 전엔 **틀린 UV를 내느니 바닐라를 둔다**"
+      노출도: "낮다 — 산적(ZOMBIE)이 무명을 죽여 감염시키는 경우에만 선다"
 
   잔존_금지:                          # 반전 뒤에도 남는 금지 — 이것들은 여전히 손대지 않는다
     구리: { blocks: [oxidized_cut_copper_stairs, oxidized_cut_copper_slab], 사유: "플레이어 건축·구리 사용처 광범위, 얻는 것 적음 (판정 불변)" }
     자연_광물: { blocks: ["*_ore", bedrock, obsidian], 사유: "채광의 기능 신호 — 광석이 광석으로 안 보이면 그것은 미학이 아니라 버그다" }
     잔여_오염_감시: "자연 생성 오염이 남는 것 — deepslate_tiles(고대 도시) / *_terracotta(배들랜드) / decorated_pot(흔적 폐허) / 그리고 이제 **자재층 전부**(동굴·숲·산). 자재_규약.정체_보존이 그 방벽이다 — 육안 확인 전엔 수용 판정도 가설이다"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # 사람층(人層) — 마을 사람 (VILLAGER). 2026-07 신설
+  #
+  # 왜: Populace.java 가 **무명 28인**을 VILLAGER 로 세우고 (config/npcs/populace.yml),
+  # 계약 NPC 9인도 VILLAGER 다. 플레이어가 마을에서 마주치는 사람은 전부 이 몹이다.
+  # 그 몸이 바닐라면 청하현은 무협 마을이 아니라 **바닐라 마을에 기와만 얹은 곳**이다.
+  # ═══════════════════════════════════════════════════════════════════════
+  사람층:
+    마을사람:
+      entity: VILLAGER
+      렌더_계약: |
+        VillagerRenderer 는 **네 층**을 겹친다 (네 장 전부 우리 파일 = 픽셀 하나까지 우리 것):
+          ① entity/villager/villager.png                 바탕 — 살결·상투·두건·속옷
+          ② entity/villager/type/<생물군계>.png (7종)     겉옷 — **늘 그려진다**
+          ③ entity/villager/profession/<생업>.png (14종)  생업 표식 — profession != NONE 일 때만
+          ④ entity/villager/profession_level/<등급>.png (5종)  가슴 패 — 생업이 있을 때만
+        populace.yml 생업 분포는 NONE 34 / FARMER 8 / 나머지 2씩 → **대다수는 ①+②만으로 선다**.
+        그래서 ①+②가 그 자체로 완성된 사람이어야 한다 (③④는 덤이지 필수가 아니다).
+      코_금지:
+        요구: "바닐라 주민 코 금지"
+        이행: |
+          리소스팩은 엔티티 **모델(기하)** 을 못 바꾼다 — 코 박스(2x4x2 @ texOffs 24,0)는 모델에 박혀 있다.
+          그러나 주민은 RenderType.entityCutoutNoCull 로 그려진다 → **알파 낮은 텍셀은 버려진다**.
+          근거(짐작 아님): 바닐라 profession/*.png·type/*.png 는 대부분이 투명한 오버레이인데
+          그 투명부가 검은 상자로 나오지 않는다. 같은 모델·같은 렌더타입이다 → 투명 = 안 그려짐.
+          ⇒ **코 박스 UV(x24..31, y0..5)를 전부 투명으로 두면 코가 통째로 컬링된다.**
+          네 층 전부 우리 것이므로 어느 층도 그 자리를 다시 칠하지 않는다 → 코는 돌아오지 않는다.
+          얼굴의 콧대는 머리 앞면에 **명암**으로 새긴다 (사람의 코는 튀어나온 상자가 아니라 빛과 그늘이다).
+      UV_규약: |
+        몹 모델 UV는 JSON이 아니라 자바에 박혀 있다 → **바닐라 오버레이의 불투명 마스크로 역산**해 검증했다
+        (type/plains.png 가 칠하는 자리 = 몸통·다리·팔·팔짱·겉옷 / profession/farmer.png = 모자 박스. 정확히 일치).
+          head 0,0 8x10x8 · nose 24,0 2x4x2 · hat 32,0 8x10x8 · hat_rim 30,47 16x16x1
+          body 16,20 8x12x6 · leg 0,22 4x12x4 · arm 44,22 4x8x4 · arms_cross 40,38 8x4x4
+          jacket 0,38 8x18x6
+      몸통_함정: |
+        **jacket 은 body 의 자식이고 12가 아니라 18 길이에 CubeDeformation(0.5) 로 부풀려 있다**
+        → 몸통 상자를 겉옷 상자가 통째로 감싼다 = 몸통에 그린 획은 영원히 안 보인다.
+        (1차 시안에서 교임 깃을 몸통에 새겼다가 종이인형 합성으로 사라진 것을 확인했다.)
+        ⇒ 가슴의 모든 획(동정·고름)은 **겉옷 앞면**에 새긴다. 앞치마도 마찬가지.
+      옷차림:
+        기조: "교임(交衽) 두루마기 — 어깨에서 명치로 모이는 흰 동정 두 사선 + 고름 매듭. 무협의 옷은 여기서 읽힌다"
+        채도: "수묵 규율 — 옷은 먹에 흙기를 옅게 섞은 값. **붉은 획은 고름 하나뿐**"
+        겉옷_7종: "생물군계가 정한다 (스폰 지점). 하나라도 비우면 그 군계에서 바닐라 갈옷이 튀어나온다 → 7종 전부 채운다"
+        생업_14종: "populace.yml 이 쓰는 8종(NONE·FARMER·TOOLSMITH·SHEPHERD·LIBRARIAN·LEATHERWORKER·CLERIC·CARTOGRAPHER·BUTCHER) + 바닐라 잔여 6종. 전역 치환이므로 **전부** 덮는다"
+        가슴패_5단: "바닐라의 돌·철·금·에메랄드·다이아 배지 자리(x10..13, y54..57) — 무협의 격은 보석이 아니라 **패**로 말한다: 목(木)·죽(竹)·동(銅)·은(銀)·옥(玉)"
+      팩없음_폴백: "바닐라 주민 (팩 게이트: 사람은 팩 없이도 사람이다 — 옷차림만 잃는다)"
+      registration: "층 추가 = 본 절 등록 + write_entity_textures 반영"
 
   # ─── 획층(劃層) — 무공의 모션 (파티클 텍스처). 2026-07 신설 ───
   # 요구: "스킬 모션도 리소스팩으로 적용되되, 팩이 없어도 바닐라 파티클로 무엇이 일어났는지 읽혀야 한다."

@@ -193,6 +193,11 @@ final class WorldMap {
     // 좌표
     // ═══════════════════════════════════════════════════════════════════
 
+    /** 등록된 지역 전부 — 출행 명령이 목록을 편다 */
+    Map<String, Place> places() {
+        return java.util.Collections.unmodifiableMap(places);
+    }
+
     Place place(String id) {
         return places.get(id);
     }

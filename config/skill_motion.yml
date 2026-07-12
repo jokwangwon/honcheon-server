@@ -409,6 +409,24 @@ skills:
     steps:
       - { trail: 진, count: 2, sound: { key: "block.beacon.activate", volume: 0.7, pitch: 1.5 } }
 
+  maehwa_cham:
+    name: "매화참"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.4 } }   # 쾌속 찌르기 — 높은 음
+
+  maehwa_naksu:
+    name: "매화낙수"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.1 } }   # 꽃이 진다 — 사방으로
+
+  maehwa_jeomjeom:
+    name: "매화점점"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.6 } }   # 점을 찍듯 — 가볍고 잦다
+
   # ── 소림사 ──
   nahan_kwon:
     name: "나한권"
@@ -418,6 +436,20 @@ skills:
       - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.8, pitch: 0.9 } }
       - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.7 } }
 
+  nahan_bokho:
+    name: "나한복호"
+    style: 맨손
+    steps:
+      - { trail: 돌, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.8 } }   # 엎드린 범 — 몸으로 덮친다 (선딜 8틱)
+
+  geumgang_bokma:
+    name: "금강복마권"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.5 } }   # 복마 — 선딜 10틱, 가장 낮은 주먹
+
   geumgang_budong:
     name: "금강부동신법"
     style: 무관
@@ -425,6 +457,12 @@ skills:
       - { trail: 태세, count: 4, sound: { key: "block.anvil.land", volume: 0.7, pitch: 0.5 } }   # 부동 — 쇠가 땅에 박히는 소리
 
   # ── 무당파 ──
+  saryang_balcheongeun:
+    name: "사량발천근"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "block.amethyst_block.chime", volume: 0.5, pitch: 1.5 } }   # 넉 냥으로 천 근을 — 힘이 아니라 결
+
   taegeuk_kwon:
     name: "태극권"
     style: 맨손
@@ -458,6 +496,12 @@ skills:
       - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
           sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.5 } }   # 검로 12틱 텔레그래프 — 가장 낮은 음
 
+  changgung_ilseom:
+    name: "창궁일섬"
+    style: 검
+    steps:
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.2 } }   # 한 줄기 섬광 — 창궁의 쾌검
+
   # ── 사천당가 ──
   dangmun_bisu:
     name: "당문비수술"
@@ -478,6 +522,12 @@ skills:
       - { trail: 시, count: 4, finisher: true, telegraph_boost: 2,
           sound: { key: "entity.arrow.shoot", volume: 1.0, pitch: 1.2 } }   # 손이 하늘로 — 16틱
 
+  bihong_chim:
+    name: "비홍침"
+    style: 암기
+    steps:
+      - { trail: 시, count: 1, sound: { key: "entity.arrow.shoot", volume: 0.5, pitch: 1.9 } }   # 침 한 대 — 가장 작고 가장 높은 소리
+
   # ── 개방 ──
   chwipalseon_bo:
     name: "취팔선보"
@@ -492,6 +542,12 @@ skills:
       - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 0.9 } }
       - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.8 } }
       - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.6 } }
+
+  chwiho_bunggyeok:
+    name: "취호붕격"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, particle: ash, sound: { key: "entity.generic.drink", volume: 0.7, pitch: 0.9 } }   # 취권 — 비틀거리며 친다 (취기가 흩날린다)
 
   # ── 관군 ──
   chamma_dobeop:
@@ -517,6 +573,13 @@ skills:
       - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
       - { trail: 선, particle: soul, count: 3, finisher: true,
           sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.8 } }   # 파격 — 가드·패링을 관통한다 (그림자가 낀다)
+
+  heuksal_dansu:
+    name: "흑살단수"
+    style: 도
+    steps:
+      - { trail: 선, particle: soul, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.9, pitch: 0.9 } }   # 흑살의 단수 — 그림자가 낀 한 칼
 
   eumpung_geom:
     name: "음풍검"
@@ -752,3 +815,265 @@ events:
     spread: 0.40
     extra: 0.02
     sounds: [{ key: "entity.generic.drink", volume: 0.7, pitch: 0.6 }]
+
+# ══════════════════════════════════════════════════════════════════════
+#  3D 모션 (디스플레이 엔티티) — 파티클 위에 얹는 층
+# ══════════════════════════════════════════════════════════════════════
+# 검기가 날아가면 그것은 점 무리가 아니라 **한 자루의 빛나는 획**이어야 한다.
+# 이 절은 그 획의 등록부다 (SkillDisplay 가 판독 · ItemDisplay 로 발행).
+#
+# ─── 불변식 5개 (파티클 층의 4개에 하나가 더 붙는다) ───
+#   ㅁ. 【디스플레이는 덧칠이다】 파티클 층은 언제나 그대로 돈다. 디스플레이가 못 뜨면
+#      (팩 없음 · 예산 초과 · 미등록) **아무 일도 일어나지 않는다** — 지금 보이던 것이 그대로 보인다.
+#      그러므로 require-resource-pack=false 는 이 층에도 불가침이다. 3D 는 특권이 아니라 사치다.
+#
+# ─── 팩 유무의 분기 (models[].base / models[].fallback) ───
+#   팩 수락 → base 아이템에 item_model 컴포넌트(key)를 얹는다. 팩이 그린 3D 획이 뜬다.
+#   팩 거절 → key 를 얹지 않는다. **fallback 바닐라 아이템**이 그대로 뜬다 —
+#            철검이 날아가고, 흰 막대가 몸을 두르고, 검이 손을 떠나 난다. 형체는 남는다.
+#   특수값 HELD = 시전자가 든 무기 그 자체 (팩 없이도 "그자의 검이 지나갔다"가 읽힌다)
+#   ※ item_model 키가 팩에 없으면 클라이언트는 '없는 모델'(보라·검정 큐브)을 그린다 —
+#     그래서 팩을 안 받은 눈에는 **키를 아예 얹지 않는다**. 이 분기가 이 절의 존재 이유다.
+display:
+
+  # ─── 예산 (performance.yml vfx_entities) ───
+  # 【근거】 20인 군집(load_test.combat_cluster_size)이 **쉬지 않고 치는** 정상 상태를 센다.
+  #   한 합에 한 사람이 띄우는 것은 최대 2개다 (병기의 궤적 1 + 기의 획 1). 그 둘이 곧 상한이다.
+  #   · 병기 휘두름 — 20인 × 1개, 수명 ≈ 8틱 / 스윙 간격 ≥ 9틱      ⇒ 동시 ≈ 18
+  #   · 기의 획     — 20인 × 1개, 수명 8틱 / 간격 9틱 (전원이 검기 이상이라는 최악) ⇒ 동시 ≈ 18
+  #   · 발출 투사   — 20인 × 1개, 수명 12틱 / 쿨 40틱                ⇒ 동시 ≈ 6
+  #   · 오의        — 예약분 16 (동시 2인 × 8개)
+  #   · 합 42 + 오의 예약 16 = 58 ≤ global_cap 120
+  #   · 호신강기 고리(4개/인)에 남는 여유 = degrade_at 90 − 42 = 48 ⇒ **12인분**
+  #     20인 전원이 강기를 두르면(80개가 필요한 비현실적 최악) 고리는 **가장 먼저 강등된다** —
+  #     새 요청이 거절되고 파티클 고리만 남는다 (performance.yml over_cap: "파티클 연출로 강등").
+  #     켜져 있다는 사실은 그래도 보인다. 그것이 강등이 실종이 아닌 이유다.
+  budget:
+    global_cap: 120               # = performance.yml vfx_entities.global_cap (audit ⑧이 대조한다)
+    max_lifetime_ticks: 60        # = performance.yml vfx_entities.max_lifetime_ticks
+    degrade_at: 90                # 살아 있는 디스플레이가 이 수를 넘으면 새 요청 거절 → 파티클로 강등
+    reserve_for_ultimate: 16      # 오의 몫 — 잡졸의 참격이 다 먹지 못한다 (오의는 깎이지 않는다)
+    per_cast_max: 6               # 한 시전이 띄우는 상한
+    per_player_max: 8             # 한 몸이 동시에 갖는 상한 (고리 4 + 병기 1 + 기의 획 1 + 여유 2)
+    view_range: 0.5               # setViewRange 배율 — 0.5 × 64m = 32m (파티클 cull_beyond 와 같은 눈금)
+    ring_heartbeat_ticks: 12      # 고리는 심장박동으로 산다 — 이만큼 갱신이 없으면 스스로 사라진다
+                                  # (죽음·퇴장·월드 변경·플러그인 정지에도 유령이 남지 않는다)
+    swing_min_ticks: 3            # 휘두름은 이보다 짧을 수 없다 (3틱 미만은 보간이 못 따라간다 = 순간이동)
+    swing_max_ticks: 18           # 이보다 길 수도 없다 (부·중병기의 무게도 여기서 끊긴다)
+    swing_fade_ticks: 2           # 획이 스러지는 데 드는 틱
+
+  # ─── 모델 등록부 【팩 담당에게 넘기는 목록】 ───
+  # key      = item_model 컴포넌트 키. 팩은 assets/honcheon/items/<경로>.json (아이템 정의) +
+  #            assets/honcheon/models/item/<경로>.json (모델) 두 장을 굽는다 (병기와 같은 문법).
+  # base     = 팩이 있을 때 실을 바닐라 아이템 (모델이 덮으므로 형체는 무의미 — 스택 가능한 것)
+  # fallback = 팩이 없을 때 실을 바닐라 아이템 (**이것만으로 읽혀야 한다**)
+  # size     = 팩 담당이 맞출 기준 치수 [x, y, z] (m). 모델은 이 치수의 형체로 굽는다.
+  # 【모델 규약】 획은 **+X 방향으로 눕힌다** (길이축 = X · 두께축 = Z). 디스플레이의 yaw·pitch 가
+  #   진행 방향을 잡으므로, 모델이 X 를 앞으로 보고 있어야 검기가 날아가는 방향으로 눕는다.
+  models:
+    기_획:
+      key: "honcheon:qi/blade_arc"
+      base: PAPER
+      fallback: IRON_SWORD        # 팩 없음 — 철검 한 자루가 벤 자리에 스쳐 지나간다
+      size: [2.0, 0.55, 0.04]
+      form: "초승달 한 획 — 안쪽이 두껍고 끝이 가늘다. 반투명 백색, 가장자리만 밝다 (수묵의 획)"
+
+    강_획:
+      key: "honcheon:qi/blade_heavy"
+      base: PAPER
+      fallback: IRON_SWORD
+      size: [2.6, 0.9, 0.06]
+      form: "기_획 과 같은 형태를 두껍고 무겁게 — 획이 뭉개지지 않고 **눌린다**. 강기·어검·심검이 크기로 갈린다"
+
+    검기_비:
+      key: "honcheon:qi/bolt_edge"
+      base: PAPER
+      fallback: IRON_SWORD        # 팩 없음 — 검 한 자루가 날아간다. 그것으로 충분하다
+      size: [1.6, 0.30, 0.04]
+      form: "날아가는 검기 — 앞이 뾰족하고 뒤로 꼬리가 늘어진 **한 자루의 빛나는 획**. 자전한다"
+
+    강기_포신:
+      key: "honcheon:qi/bolt_lance"
+      base: PAPER
+      fallback: AMETHYST_SHARD    # 팩 없음 — 빛 덩어리가 느리게 밀려온다 (검이 아니다: 뚫는 것이다)
+      size: [2.2, 0.7, 0.7]
+      form: "강기 포 — 검기보다 굵고 짧다. 창끝이 아니라 **말뚝**. 착탄에서 2.2배로 확장한다"
+
+    호신_조각:
+      key: "honcheon:qi/guard_shard"
+      base: PAPER
+      fallback: END_ROD           # 팩 없음 — 흰 막대 4개가 몸을 돈다 (end_rod 파티클과 같은 계열)
+      size: [0.5, 1.1, 0.05]
+      form: "몸을 두르는 판 조각 — 세로로 선 얇은 방패 한 장. 4장이 궤도에 서서 천천히 돈다"
+
+    # 【use_held】 실을 아이템 = 시전자의 병기 **그 자체**. 모델 키가 없다 — 필요가 없다.
+    #   팩이 켜진 눈에는 그 병기의 3D 모델(honcheon:weapon/… — Weapons.java 가 이미 item_model 을 박았다)이,
+    #   꺼진 눈에는 바닐라 모델이 돈다. **팩 게이트가 저절로 충족된다** (분기가 아예 없다).
+    #   그래서 이 두 모델은 팩 담당에게 아무것도 요구하지 않는다 — 병기 45자루가 이미 그 목록이다.
+    병기:
+      use_held: true
+      size: [1.0, 1.0, 1.0]       # 병기 모델의 제 크기 그대로 (늘이지 않는다 — 3.5m 검은 거짓말이다)
+      form: "손에 든 병기 그 자체. 팩이 구운 45자루가 그대로 돈다 (요구 없음)"
+
+    어검_검:
+      use_held: true              # 이기어검 — **그 검이** 손을 떠난다. 남의 검이 아니라 제 검이다
+      size: [1.0, 1.0, 1.0]
+      form: "손을 떠난 병기 그 자체 (부림의 뜻: 기의 획이 아니라 쇠가 난다). 요구 없음"
+
+    매화_꽃:
+      key: "honcheon:ult/plum_bloom"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.0, 1.0, 1.0]       # 개화가 range 만큼 확장한다 (scale 은 코드가 키운다)
+      form: "다섯 잎 매화 — 위에서 본 꽃. 응집에서 오므리고 개시에서 **활짝 편다**"
+
+    태극_원반:
+      key: "honcheon:ult/taegeuk_disc"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.6, 1.6, 0.05]
+      form: "태극 원반 — 몸 앞에 서서 천천히 자전한다. 벨 것을 찾지 않는 형체 (기다림의 얼굴)"
+
+    군림_획:
+      key: "honcheon:ult/emperor_edge"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.2, 4.0, 0.10]      # 세로가 길다 — **내려베기**다
+      form: "하늘에서 내려오는 한 획 — 세로로 선 거대한 칼. 개시에서 아래로 떨어진다"
+
+    혈해_파문:
+      key: "honcheon:ult/blood_tide"
+      base: PAPER
+      fallback: REDSTONE          # 【채색 예외】 팩 없어도 붉다 — 예외가 곧 정보다
+      size: [1.0, 0.08, 1.0]      # 납작한 고리 — 바닥을 훑는다
+      form: "붉은 파문 — 바닥에 깔린 고리가 사방으로 퍼진다 (마공: 사람의 기가 아니다)"
+
+  # ─── 모션 등록부 — 어떻게 움직이는가 (보간이 부드러움의 전부다) ───
+  # kind: 궤(제자리 전개·수축) · 투사(날아간다) · 고리(궤도 회전) · 개화(전개→폭발→수축)
+  #   scale         [x,y,z] 배율 (model.size 에 곱해진다)
+  #   lifetime      수명(틱) — budget.max_lifetime_ticks 이하
+  #   interpolation 보간 틱 — 이 값이 0 이면 형체가 **튄다**. 부드러움의 전부가 여기 있다
+  #   birth         전개 보간 (0 → scale). 0 이면 처음부터 다 자란 채 뜬다
+  #   fade          수축 보간 (scale → 0). 사라지는 것도 연출이다
+  #   spin          틱당 자전 (rad) — 투사체가 도는 것이 살아 있다는 표시
+  #   speed         투사: m/틱 (검기 0.8 = 16틱에 12m · 강기 0.5 = 느리고 무겁다)
+  #   impact_scale  투사: 착탄 확장 배율
+  #   billboard     FIXED(진행 방향을 본다) · CENTER(항상 눈을 본다 — 오의 개시)
+  #   brightness    [블록광, 하늘광] 0~15 — 기는 스스로 빛난다 (15,15). 쇠는 빛나지 않는다 (환경광)
+  motions:
+    # ── 근접 궤 (격) — 사다리는 크기로도 단조 증가한다 (불변식 ㄷ) ──
+    기_참:    { kind: 궤, model: 기_획,  scale: [1.0, 1.0, 1.0], lifetime: 8,  birth: 2, fade: 4, interpolation: 2, brightness: [15, 15] }
+    강_참:    { kind: 궤, model: 강_획,  scale: [1.15, 1.15, 1.0], lifetime: 10, birth: 2, fade: 5, interpolation: 2, brightness: [15, 15] }
+    어검_참:  { kind: 궤, model: 강_획,  scale: [1.35, 1.30, 1.0], lifetime: 12, birth: 3, fade: 5, interpolation: 3, brightness: [15, 15] }
+    심검_참:  { kind: 궤, model: 강_획,  scale: [1.60, 1.45, 1.0], lifetime: 14, birth: 4, fade: 6, interpolation: 4, brightness: [15, 15] }
+
+    # ── 발출 (쏨) — 기가 날아간다 ──
+    # 【정직에 관하여】 발출의 판정은 즉발이다 (선 히트박스 — 쏜 틱에 8m 안의 것이 다 맞는다).
+    #   그러므로 날아가는 획은 **판정을 따라가는 잔상**이 아니라 판정과 같은 틱에 태어나
+    #   5틱 안에 끝을 보는 것이어야 한다. 느리게 날면 "맞고 나서 검기가 온다" — 그것이 거짓말이다.
+    #   검기 1.6m/틱 = 8m 를 5틱. 강기는 무겁게 1.0 (8틱) — 무거움의 값은 **선딜이 아니라 착탄 확장**이 낸다.
+    검기_투사: { kind: 투사, model: 검기_비,   scale: [1.0, 1.0, 1.0], lifetime: 14, speed: 1.6, spin: 0.30,
+                birth: 1, fade: 3, interpolation: 2, impact_scale: 1.8, impact_ticks: 4, brightness: [15, 15] }
+    강기_투사: { kind: 투사, model: 강기_포신, scale: [1.0, 1.0, 1.0], lifetime: 20, speed: 1.0, spin: 0.10,
+                birth: 2, fade: 4, interpolation: 3, impact_scale: 2.2, impact_ticks: 6, brightness: [15, 15] }
+    어검_비행: { kind: 투사, model: 어검_검,   scale: [1.0, 1.0, 1.0], lifetime: 26, speed: 1.2, spin: 0.55,
+                birth: 1, fade: 3, interpolation: 2, impact_scale: 1.4, impact_ticks: 3, brightness: [15, 15] }
+
+    # ── 병기 휘두름 (握) — 손에 든 것 그 자체가 궤적을 훑는다. 상세는 아래 swings 절 ──
+    # 기울기·회전·거리·시간은 계열이 정하고(swings), 사거리·각도는 판정이 준다 (히트박스 그대로).
+    병기_휘두름: { kind: 휘두름, model: 병기, scale: [1.0, 1.0, 1.0], lifetime: 20, birth: 1, fade: 2,
+                  interpolation: 1, brightness: [0, 15] }
+                  # brightness [0,15] — 쇠는 스스로 빛나지 않는다. 하늘빛을 받을 뿐이다 (기와 갈리는 지점)
+
+    # ── 두름_몸 (호신강기) — 몸을 두르는 회전 고리 ──
+    호신_고리: { kind: 고리, model: 호신_조각, scale: [1.0, 1.0, 1.0], count: 4, radius: 0.85, height: 1.0,
+                orbit: 0.10, interpolation: 4, brightness: [15, 15] }
+                # 4장 × 틱당 0.10rad = 63틱에 한 바퀴 (천천히 — 급하면 방어가 아니라 공격으로 읽힌다)
+
+    # ── 오의 — 한 번 보면 잊지 못할 형체 ──
+    매화_개화: { kind: 개화, model: 매화_꽃,   scale: [1.0, 1.0, 1.0], lifetime: 30, birth: 0, fade: 8,
+                interpolation: 4, spin: 0.06, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+                # 응집 내내 오므린 채 자란다 → 개시에서 range(6m) 만큼 활짝 (burst_scale × range)
+    태극_대기: { kind: 개화, model: 태극_원반, scale: [1.0, 1.0, 1.0], lifetime: 40, birth: 4, fade: 6,
+                interpolation: 4, spin: 0.12, burst_scale: 0.5, billboard: FIXED, brightness: [15, 15] }
+    군림_강림: { kind: 개화, model: 군림_획,   scale: [1.0, 1.0, 1.0], lifetime: 24, birth: 0, fade: 5,
+                interpolation: 3, spin: 0.0, burst_scale: 0.8, billboard: FIXED, brightness: [15, 15] }
+    혈해_범람: { kind: 개화, model: 혈해_파문, scale: [1.0, 1.0, 1.0], lifetime: 30, birth: 0, fade: 8,
+                interpolation: 4, spin: 0.04, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+
+  # ══════════════════════════════════════════════════════════════════
+  #  병기 휘두름(握) — **손에 든 병기 그 자체가 궤적을 그린다**
+  # ══════════════════════════════════════════════════════════════════
+  # 바닐라의 손 흔들기는 무협의 검이 아니다. 검은 **베는 자리를 지나가야** 한다.
+  # 그래서 좌클릭 한 타마다 ItemDisplay 한 개가 뜨고, 거기에 **플레이어의 실제 ItemStack** 을 실어
+  # 히트박스를 따라 6~10틱에 걸쳐 훑는다 (보간 이동 + 자전).
+  #
+  # 【팩 게이트 자동 충족 — 이 층에는 분기가 없다】
+  #   실은 것이 '그 사람의 병기' 그 자체이므로, 팩이 켜진 눈에는 팩이 구운 3D 병기 모델이,
+  #   꺼진 눈에는 바닐라 모델이 **같은 엔티티 하나로** 돈다. 변주 2벌이 필요 없다 (비용도 절반이다).
+  #
+  # 【보이는 것 = 맞는 것】 사거리·각도는 이 등록부가 **정하지 못한다**. 코드는 판정이 쓴 값
+  #   (skill_mechanics 의 range · angle)을 그대로 받아 그린다. 등록부가 할 수 있는 것은 reach 로
+  #   **줄이는 것뿐**이다 (reach ≤ 1.0 — motion_audit ⑧이 1.0 초과를 위반으로 잡는다).
+  #   히트박스 3.5m 에 획 6m 를 그릴 방법이 등록부에 없다. 구조가 거짓말을 막는다.
+  #
+  # 【공속이 곧 리듬】 span_ratio 는 '자세가 돌아오는 시간'(프레임·계열 공속 중 긴 쪽)에 곱해진다.
+  #   단검(2.2/s = 9틱)의 획은 3틱에 끝나고, 부(0.9/s = 22틱)의 획은 18틱을 끈다. 무게가 눈에 보인다.
+  #
+  # 【휘두름은 두 가지가 겹쳐 만든다 — 착각하지 말 것】
+  #   ① 베는 궤적 그 자체는 **위치가 그린다** — 병기가 히트박스(호·선·원·돌) 위를 실제로 지나간다.
+  #      진행 방향은 코드가 잡는다 (등록부가 정할 수 없다 = 히트박스를 벗어날 수 없다).
+  #   ② roll 은 그 위에 얹는 **비틀림** — 병기가 제 **길이축(X)** 을 중심으로 도는 총 각(rad).
+  #      날이 눕고 서는 것이 이것이다. 음수면 반대로 비튼다 (겸은 **걸어 챈다** — 반대로 감아 당긴다).
+  #   tilt = 병기의 기울기(도). 【MC 규약: pitch 는 **양수가 아래**다】 그래서 내려찍는 것일수록 크다.
+  #   reach = 히트박스 사거리 대비 병기가 나가는 비율 (1.0 = 사거리 끝. **그 이상은 금지**)
+  swings:
+    검:     { span_ratio: 0.55, reach: 0.95, roll: 3.4, tilt: 25 }   # 벤다 — 눕혀 긋는다
+    도:     { span_ratio: 0.60, reach: 0.95, roll: 3.9, tilt: 45 }   # 내려벤다 — 위에서 아래로
+    창:     { span_ratio: 0.45, reach: 1.00, roll: 0.3, tilt: 0 }    # 찌른다 — 비틀지 않는다. **뻗는다**
+    봉:     { span_ratio: 0.65, reach: 0.90, roll: 4.4, tilt: 10 }   # 후려친다 — 크게 감는다
+    단검:   { span_ratio: 0.35, reach: 0.85, roll: 2.6, tilt: 15 }   # 짧고 빠르다 (2.2/s)
+    암기:   { span_ratio: 0.30, reach: 0.60, roll: 1.6, tilt: 0 }    # 던진다 — 손을 떠나기 전까지만
+    활:     { span_ratio: 0.00, reach: 0.00, roll: 0.0, tilt: 0 }    # 쏜다 — 활은 휘두르는 물건이 아니다
+    권갑:   { span_ratio: 0.35, reach: 0.70, roll: 1.2, tilt: 0 }    # 지른다 — 주먹은 짧다
+    겸:     { span_ratio: 0.55, reach: 0.95, roll: -3.4, tilt: 20 }  # 걸어벤다 — **반대로 감는다** (거는 것)
+    월아산: { span_ratio: 0.80, reach: 1.00, roll: 4.2, tilt: 55 }   # 휘두른다 — 길고 무겁다
+    구:     { span_ratio: 0.60, reach: 0.95, roll: 2.0, tilt: 50 }   # 찍는다
+    중병기: { span_ratio: 0.90, reach: 0.95, roll: 5.0, tilt: 60 }   # 짓뭉갠다 — 가장 느리고 가장 크다
+    부:     { span_ratio: 0.85, reach: 1.00, roll: 4.7, tilt: 70 }   # 찍어벤다 (0.9/s — 세계에서 가장 느린 손)
+    맨손:   null                                                     # 병기가 없다 — 휘두를 형체가 없다
+    무관:   null                                                     # 보법·심법 — 벨 것이 없다
+    짐승:   null                                                     # 발톱은 아이템이 아니다
+
+  # ─── 두 층의 조율 — 3D 획이 뜨면 파티클은 물러선다 ───
+  # 둘 다 온전히 뿌리면 지저분하고 비싸다. 그러나 파티클을 **0 으로 만들지는 않는다**:
+  #   · 디스플레이는 setViewRange 로 잘리고 예산으로 강등되지만, 파티클은 LOD 로 절반이 되어도 남는다
+  #   · 궤적 파티클이 0 이면 3D 가 강등된 순간 그 타는 **아무 자국도 남기지 않는다** — 그건 실종이다
+  # 그러므로 3D 획이 실제로 떴을 때만, 궤적 파티클을 비율로 깎는다 (타격 파티클은 건드리지 않는다 —
+  # 맞았다는 사실은 판정의 얼굴이다. performance.yml over_budget: "핵심 타격 표시만 유지").
+  blend:
+    trail_particle_ratio: 0.35    # 3D 획이 떴으면 궤적 파티클은 35% 만 (점당 개수에 곱한다)
+    trail_particle_min: 1         # 그래도 0 은 아니다 — 획이 지나간 자리는 언제나 남는다
+    keep_impact: true             # 타격 파티클은 깎지 않는다 (격의 사다리는 타격에서 읽힌다)
+
+  # ─── 배선 — 무엇이 어떤 모션을 타는가 (null = 3D 형체 없음. 파티클만으로 읽힌다) ───
+  bind:
+    grades:                       # 격이 실린 근접 타 — **병기의 궤적 위에 기의 획이 겹친다**
+      외공기: null                # 기가 없다 — 병기 그 자체의 궤적만 (swings 가 그린다)
+      발경:   null                # 기가 몸 안에서 터진다 — **밖으로 형체를 내지 않는다** (그것이 발경이다)
+      검기:   기_참
+      강기:   강_참
+      어검:   어검_참
+      심검:   심검_참
+    forms:                        # 형태 — 두름(손끝 잔광)은 형체가 없다. 쏨·두름_몸·부림만 뜬다
+      검기_두름: null
+      검강_두름: null
+      검기_참격: 검기_투사
+      강기_포:   강기_투사
+      호신강기:  호신_고리
+      이기어검:  어검_비행
+    ultimates:
+      maehwa_mangae:  매화_개화
+      taegeuk_hyegeom: 태극_대기
+      jewang_gunrim:  군림_강림
+      hyeolhae_malli: 혈해_범람

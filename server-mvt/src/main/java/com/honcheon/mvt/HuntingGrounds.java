@@ -231,16 +231,28 @@ public final class HuntingGrounds implements Listener {
 
     private final HoncheonMvt plugin;
     private final Sparring sparring;
+    private final MobDisplay mobDisplay;
     private final Map<String, Long> lastSpawnTick = new HashMap<>();
     private long cycle;
 
     public HuntingGrounds(HoncheonMvt plugin) {
         this.plugin = plugin;
         this.sparring = new Sparring(plugin, this);
+        this.mobDisplay = new MobDisplay(plugin);
     }
 
     public Sparring sparring() {
         return sparring;
+    }
+
+    /**
+     * 몹의 3D 형체 — 본체를 감추고 커스텀 모델을 태우는 층 ({@link MobDisplay}).
+     *
+     * <p>이 층이 통째로 실패해도 사냥터는 돈다 — 그 몸이 바닐라 모습(호랑이=라바저)으로 설 뿐이다.
+     * 배선: {@code HoncheonMvt} 가 이 객체를 리스너로 등록하고, 정지 시 {@code clearAll()} 을 부른다.
+     */
+    public MobDisplay mobDisplay() {
+        return mobDisplay;
     }
 
     /** config 판독 — 코드가 config 보다 앞서지 않는다 (Weapons.init 과 같은 자리에서 부른다) */
@@ -273,6 +285,8 @@ public final class HuntingGrounds implements Listener {
                     .get("damage_reduction");
             forcedGuardSoak = soak instanceof Number s ? s.intValue() : 0;
         }
+
+        MobDisplay.init(cfg);   // 몹 형체 등록부 — config/mob_models.yml (없어도 돈다: 바닐라 몸이 그대로 선다)
 
         Map<String, Object> npcCombat = RulesConfig.load(cfg.resolve("npc_combat.yml"));
         moraleWeights = (Map<String, Object>) RulesConfig.section(npcCombat, "morale").get("weights");
@@ -461,6 +475,7 @@ public final class HuntingGrounds implements Listener {
 
     public void start() {
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 100L, 20L);
+        mobDisplay.start();   // 형체 층 — 유령 청소 + 중앙 티커 1개 (1틱 추종)
     }
 
     private void tick() {
@@ -641,6 +656,10 @@ public final class HuntingGrounds implements Listener {
         }
 
         shape(entity, foe);
+        // 형체 — 바닐라 몸을 감추고 커스텀 3D 모델을 태운다 (config/mob_models.yml).
+        // 등록되지 않았거나 · 팩 없는 눈이 곁에 있거나 · 예산이 없으면 **아무 일도 일어나지 않는다** —
+        // 그 몸은 바닐라 모습(호랑이=라바저)으로 선다. 형체는 덧칠이다 (MobDisplay 불변식 ㄱ).
+        mobDisplay.attach(entity, foe.id());
         return entity;
     }
 

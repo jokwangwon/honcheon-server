@@ -644,3 +644,231 @@ martial_arts:
     side_effects: true           # 심마 누적, 흡성 의존
     public_use_rumor: true       # 손이 핏빛으로 — 즉시 금기 소문 강도 3
     faction_reaction: true
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 절기(絶技) — 이름 붙은 초식
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 무공(武功)은 '손에 익히는 결'이고, 절기는 그 결에서 **피어나는 한 수**다.
+  # 육합검·매화검법은 무공이다. 매화참·매화낙수는 절기다 — 매화검법을 치던 손에서만 핀다.
+  #
+  # 【위계】 기본 무공(입문·삼류) → 본산 무공(이류·일류) → **절기(전수받는 것)**
+  #   절기는 배우는 것이 아니라 **전수받는 것**이다 — 어미 무공의 숙련(requires_skill)이 문턱이고,
+  #   그 위에 문파의 판단(acquisition)이 또 하나의 문이다. 비급만으로는 열리지 않는 것이 있다.
+  #
+  # 【절기는 위력을 사지 않는다 — 상황을 산다】 (밸런스 정본)
+  #   combat.yml technique_power 는 **등급**이 정한다 (일류급 1 · 절정급 2). 절기라고 더 아프지 않다:
+  #   매화참의 무공 위력은 어미인 매화검법과 **같다**. 절기가 파는 것은 피해가 아니라
+  #   ① 히트박스의 모양·사거리 ② 프레임 ③ 경직 ④ 격 라이더 ⑤ 부수 효과 ⑥ **발동 조건**이다.
+  #   → 그래서 절기를 아무리 늘려도 TTK(3~20합)는 움직이지 않는다. 전투는 여전히 5~9합이다.
+  #
+  # 【시전 체계 — 삼문(三門)】 정본은 skill_mechanics.yml cast_gate. 설계는 docs/design/skill_catalog.md.
+  #   절기는 '쿨다운이 돌면 누르는 버튼'이 아니다. 세 문이 동시에 열려야 나간다:
+  #     承(승) — 어미 무공의 지정 타 직후 창(窓) 안 · 間(간) — 간격 · 虛(허) — 상대의 허
+  #   쿨다운과 내력은 **과금**이지 발동의 주역이 아니다.
+
+  # ─── 화산파 — 매화검법 계열 (매화만개 오의로 이어지는 사다리) ───
+  maehwa_cham:
+    name: "매화참"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "절기 (매화검법 파생)"
+    grade: "일류"
+    faction: hwasan
+    required_realm: "일류"
+    required_stats: { 민첩: 4, 지혜: 3 }
+    required_mastery: 3           # 매화검법 숙련 3
+    requires_skill: { id: maehwa_geombeop, mastery: 3 }
+    acquisition: "내문 제자 — 매화검법을 손에 익힌 뒤 사부가 '한 수'를 내준다 (비급 없음. 사람이 준다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true        # 매화 검영 — 화산의 지문
+    faction_reaction: true
+    # 수치: 선(線) 5.0 — 어미(호 3.2)보다 1.8 멀리 뻗는다. 간격을 벌린 자를 벤다
+
+  maehwa_naksu:
+    name: "매화낙수"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "절기 (매화검법 파생 — 공중)"
+    grade: "일류"
+    faction: hwasan
+    required_realm: "일류"
+    required_stats: { 민첩: 5 }
+    required_mastery: 3           # 매화검법 숙련 3 (+ 매화보를 함께 익힌 자의 수)
+    requires_skill: { id: maehwa_geombeop, mastery: 3 }
+    acquisition: "내문 제자 — 매화보로 몸을 띄울 줄 아는 자에게만 전수 (보법과 검이 한 몸이 된 뒤)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # 수치: 원(圓) 3.0 광역 · 24틱(느리다) · 강경직 — 단, **공중에서만** 핀다 (떨어지는 물)
+
+  maehwa_jeomjeom:
+    name: "매화점점"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "절기 (비전 — 검기를 품는다)"
+    grade: "절정"
+    faction: hwasan
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 지혜: 4 }
+    required_mastery: 6           # 매화검법 대성
+    requires_skill: { id: maehwa_geombeop, mastery: 6 }
+    acquisition: "장로 전수 — 매화만개(오의) 개안의 선행 초식. 문파 밖으로 나간 적이 없다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # 수치: 호 60° · 3연점(hit_count 3) · 검기(cost 3) — 단, **상대가 경직 중일 때만** 핀다 (허를 점으로 찍는다)
+
+  # ─── 무당파 — 태극 계열 (유(柔)의 극의: 되돌린다) ───
+  saryang_balcheongeun:
+    name: "사량발천근"
+    category: "금나술"
+    weapon_class: [맨손, 권갑]
+    sub_category: "절기 (태극권 파생 — 반격 전용)"
+    grade: "일류"
+    faction: mudang
+    required_realm: "일류"
+    required_stats: { 지혜: 5, 감각: 4 }
+    required_mastery: 4           # 태극권 숙련 4
+    requires_skill: { id: taegeuk_kwon, mastery: 4 }
+    acquisition: "본산 도관 전수 — 넉 냥으로 천 근을 물리치는 이치. 힘으로 배울 수 없다(지혜 5)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # 수치: 10틱(가장 빠르다) · 다운 — 단, **패링에 성공한 직후에만** 핀다. 조건이 가장 좁고 보상이 가장 크다
+
+  # ─── 소림사 — 나한 계열 ───
+  nahan_bokho:
+    name: "나한복호"
+    category: "박투"
+    weapon_class: [맨손, 권갑]
+    sub_category: "절기 (나한권 파생 — 돌진)"
+    grade: "일류"
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 5 }
+    required_mastery: 4           # 나한권 숙련 4
+    requires_skill: { id: nahan_kwon, mastery: 4 }
+    acquisition: "본산 승적 또는 속가 상급 전수 (호랑이를 엎는 수 — 맞으면서 들어간다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # 수치: 돌(突) 5.0 · 슈퍼아머(선딜~지속) · 다운 · 24틱 — 느리다. 대신 맞아도 안 멈춘다
+
+  geumgang_bokma:
+    name: "금강복마권"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "절기 (비전 — 파격)"
+    grade: "절정"
+    faction: sorimsa
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 6           # 나한권 대성
+    requires_skill: { id: nahan_kwon, mastery: 6 }
+    acquisition: "본산 승적 + 계율원 허가 (금강부동신법과 같은 문을 지난다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # 수치: 파격(가드·패링 관통 — 희귀 속성) · 28틱(가장 길다) — 텔레그래프가 곧 대가다
+
+  # ─── 남궁세가 — 창궁 계열 ───
+  changgung_ilseom:
+    name: "창궁일섬"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "절기 (창궁무애검 파생 — 장리)"
+    grade: "일류"
+    faction: namgung
+    required_realm: "일류"
+    required_stats: { 근력: 4, 지혜: 3 }
+    required_mastery: 4           # 창궁무애검 숙련 4
+    requires_skill: { id: changgung_geom, mastery: 4 }
+    acquisition: "세가 가신·방계 전수 (제왕검형으로 가는 길목 — 직계는 이 수를 밟고 올라간다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # 수치: 선 7.0 — 근접 최장 리치. 단 **간격 3.0 미만에서는 안 나간다** (긴 검의 대가)
+
+  # ─── 사천당가 — 암기 계열 (유일한 원거리 절기) ───
+  bihong_chim:
+    name: "비홍침"
+    category: "암기"
+    weapon_class: 암기
+    sub_category: "절기 (당문비수술 파생 — 원거리)"
+    grade: "일류"
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 민첩: 4, 감각: 5 }
+    required_mastery: 4           # 당문비수술 숙련 4
+    requires_skill: { id: dangmun_bisu, mastery: 4 }
+    acquisition: "당가 방계 전수 — 만천화우의 아래층 (직계가 아니어도 여기까지는 온다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # 수치: 시(矢) 20 · 3침 동시(hit_count 3) · 약독 — 단 **간격 4.0 미만에서는 못 던진다**
+
+  # ─── 개방 — 취보 계열 ───
+  chwiho_bunggyeok:
+    name: "취호붕격"
+    category: "박투"
+    weapon_class: [맨손, 권갑]
+    sub_category: "절기 (취팔선보 파생 — 회피 반격)"
+    grade: "일류"
+    faction: gaebang
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 체력: 3 }
+    required_mastery: 4           # 취팔선보 숙련 4
+    requires_skill: { id: chwipalseon_bo, mastery: 4 }
+    acquisition: "개방 5결 제자 이상 — 비틀거리다 치는 수. 술을 마셔 본 자만 안다(농이 아니다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # 수치: 호 120°(광각) · 13틱 — 단 **회피에 성공한 직후에만** 핀다 (사량발천근은 패링 반격, 이쪽은 회피 반격)
+
+  # ─── 녹림 — 흑살 계열 (살초) ───
+  heuksal_dansu:
+    name: "흑살단수"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "절기 (비전 — 살초. 파격)"
+    grade: "절정"
+    faction: noklim
+    required_realm: "절정"
+    required_stats: { 근력: 5, 감각: 4 }
+    required_mastery: 6           # 흑살도법 대성
+    requires_skill: { id: heuksal_dobeop, mastery: 6 }
+    acquisition: "채주급 전수 또는 흑도 최심부 비급 (암시장에도 값이 붙지 않는다 — 사람이 죽는다)"
+    bloodline_restricted: false
+    requires_master: false
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true        # 정파·관군: 흑도 살수 경보
+    # 수치: 파격 + 다운 + 검기(cost 3) — 단 **배후 또는 상대 경직 중에만** 핀다. 살초는 허가 없으면 안 나간다

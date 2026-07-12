@@ -147,6 +147,18 @@ public final class SkillEngine {
     private final Map<String, Style> weaponStyles;
     private final Budget budget;
 
+    // ─── 3D 모션 등록부 (skill_motion.yml display) — 파티클 위에 얹는 층 ───
+    // 【불변식 ㅁ】 디스플레이는 덧칠이다. 여기가 비어 있어도 파티클 층은 그대로 돈다.
+    private final DisplayBudget displayBudget;
+    private final Blend displayBlend;
+    private final Map<String, DisplayModel> displayModels;
+    private final Map<String, DisplayMotion> displayMotions;
+    private final Map<String, String> displayByGrade;        // 격 → 모션 id (null = 형체 없음)
+    private final Map<String, String> displayByForm;         // 형태 → 모션 id
+    private final Map<String, String> displayByUltimate;     // 오의 → 모션 id
+    private final Map<String, Swing> swings;                 // 무기 계열 → 휘두름 (병기 그 자체가 그린다)
+    private final DisplayMotion swingMotion;                 // kind: 휘두름 인 모션 (하나뿐이다)
+
     @SuppressWarnings("unchecked")
     public SkillEngine(Path cfg) {
         Map<String, Object> ie = RulesConfig.load(cfg.resolve("internal_energy.yml"));
@@ -459,6 +471,115 @@ public final class SkillEngine {
                     str(s.get("trail")), sfx(s.get("swing"))));
         });
         this.weaponStyles = Collections.unmodifiableMap(sts);
+
+        // ─── 3D 모션 등록부 (skill_motion.yml display) ───
+        // 예산은 performance.yml vfx_entities 와 **둘 중 작은 쪽**을 쓴다 — 등록부가 상위 예산을 못 넘는다
+        Map<String, Object> dp = RulesConfig.section(mo, "display");
+        Map<String, Object> db = asMap(dp.get("budget"));
+        Map<String, Object> vfx = RulesConfig.section(pf, "vfx_entities");
+        this.displayBudget = new DisplayBudget(
+                Math.min(intOr(db.get("global_cap"), 120), intOr(vfx.get("global_cap"), 120)),
+                Math.min(intOr(db.get("max_lifetime_ticks"), 60),
+                        intOr(vfx.get("max_lifetime_ticks"), 60)),
+                intOr(db.get("degrade_at"), 90),
+                intOr(db.get("reserve_for_ultimate"), 16),
+                intOr(db.get("per_cast_max"), 6),
+                intOr(db.get("per_player_max"), 8),
+                (float) dblOr(db.get("view_range"), 0.5),
+                intOr(db.get("ring_heartbeat_ticks"), 12),
+                intOr(db.get("swing_min_ticks"), 3),
+                intOr(db.get("swing_max_ticks"), 18),
+                intOr(db.get("swing_fade_ticks"), 2));
+
+        Map<String, Object> bl = asMap(dp.get("blend"));
+        this.displayBlend = new Blend(
+                dblOr(bl.get("trail_particle_ratio"), 1.0),
+                intOr(bl.get("trail_particle_min"), 1),
+                !Boolean.FALSE.equals(bl.get("keep_impact")));
+
+        Map<String, DisplayModel> dms = new LinkedHashMap<>();
+        asMap(dp.get("models")).forEach((id, raw) -> {
+            Map<String, Object> m = asMap(raw);
+            dms.put(id, new DisplayModel(id, str(m.get("key")),
+                    String.valueOf(m.getOrDefault("base", "PAPER")),
+                    String.valueOf(m.getOrDefault("fallback", "HELD")),
+                    vec3(m.get("size"), 1.0f),
+                    Boolean.TRUE.equals(m.get("use_held"))));
+        });
+        this.displayModels = Collections.unmodifiableMap(dms);
+
+        Map<String, DisplayMotion> dmo = new LinkedHashMap<>();
+        asMap(dp.get("motions")).forEach((id, raw) -> {
+            Map<String, Object> m = asMap(raw);
+            dmo.put(id, new DisplayMotion(id, str(m.get("kind")), str(m.get("model")),
+                    vec3(m.get("scale"), 1.0f),
+                    Math.min(intOr(m.get("lifetime"), 10), displayBudget.maxLifetimeTicks()),
+                    intOr(m.get("birth"), 0), intOr(m.get("fade"), 0),
+                    Math.max(1, intOr(m.get("interpolation"), 2)),
+                    (float) dblOr(m.get("spin"), 0.0), dblOr(m.get("speed"), 0.0),
+                    (float) dblOr(m.get("impact_scale"), 1.0),
+                    intOr(m.get("impact_ticks"), 3),
+                    intOr(m.get("count"), 1), dblOr(m.get("radius"), 0.85),
+                    dblOr(m.get("height"), 1.0), (float) dblOr(m.get("orbit"), 0.0),
+                    (float) dblOr(m.get("burst_scale"), 1.0),
+                    String.valueOf(m.getOrDefault("billboard", "FIXED")),
+                    intOr(idx(m.get("brightness"), 0), 15),
+                    intOr(idx(m.get("brightness"), 1), 15)));
+        });
+        this.displayMotions = Collections.unmodifiableMap(dmo);
+
+        Map<String, Object> bind = asMap(dp.get("bind"));
+        this.displayByGrade = bindMap(bind.get("grades"));
+        this.displayByForm = bindMap(bind.get("forms"));
+        this.displayByUltimate = bindMap(bind.get("ultimates"));
+
+        // 병기 휘두름 — 계열마다 다른 손짓. reach 는 **1.0 을 넘지 못한다** (히트박스보다 길게 그릴 수 없다)
+        Map<String, Swing> sws = new LinkedHashMap<>();
+        asMap(dp.get("swings")).forEach((cls, raw) -> {
+            if (!(raw instanceof Map<?, ?>)) {
+                return;   // null — 휘두를 병기가 없는 계열 (맨손·무관·짐승)
+            }
+            Map<String, Object> s = asMap(raw);
+            double ratio = dblOr(s.get("span_ratio"), 0.0);
+            if (ratio <= 0) {
+                return;   // 활 — 휘두르는 물건이 아니다
+            }
+            sws.put(cls, new Swing(cls, ratio,
+                    Math.min(1.0, dblOr(s.get("reach"), 1.0)),   // 【정직의 못】 등록부는 줄일 수만 있다
+                    (float) dblOr(s.get("roll"), 0.0), (float) dblOr(s.get("tilt"), 0.0)));
+        });
+        this.swings = Collections.unmodifiableMap(sws);
+        this.swingMotion = displayMotions.values().stream()
+                .filter(m -> "휘두름".equals(m.kind())).findFirst().orElse(null);
+    }
+
+    /** 배선표 — 값이 null(형체 없음)인 칸은 아예 담지 않는다 (없는 것과 같다) */
+    private static Map<String, String> bindMap(Object raw) {
+        Map<String, String> out = new LinkedHashMap<>();
+        asMap(raw).forEach((k, v) -> {
+            String id = str(v);
+            if (id != null && !"null".equals(id)) {
+                out.put(k, id);
+            }
+        });
+        return Collections.unmodifiableMap(out);
+    }
+
+    /** [x, y, z] → float 3 (등록부의 치수·배율). Bukkit·JOML 타입은 SkillDisplay 의 몫이다 */
+    private static float[] vec3(Object raw, float fallback) {
+        float[] out = {fallback, fallback, fallback};
+        if (raw instanceof List<?> list) {
+            for (int i = 0; i < 3 && i < list.size(); i++) {
+                if (list.get(i) instanceof Number n) {
+                    out[i] = n.floatValue();
+                }
+            }
+        }
+        return out;
+    }
+
+    private static Object idx(Object raw, int i) {
+        return raw instanceof List<?> list && i < list.size() ? list.get(i) : null;
     }
 
     // ─── 모션 등록부 판독 도우미 (전부 문자열·수치 — Bukkit 타입은 SkillListener 가 해석한다) ───
@@ -1508,5 +1629,117 @@ public final class SkillEngine {
     public Style weaponStyle(String weaponClass) {
         Style s = weaponStyles.get(weaponClass);
         return s != null ? s : weaponStyles.get("무관");
+    }
+
+    // ══════════ 3D 모션 등록부 (skill_motion.yml display) ══════════
+    // 【불변식 ㅁ】 여기가 전부 null 을 돌려줘도 무공은 보인다 — 파티클 층이 본체이기 때문이다.
+
+    public DisplayBudget displayBudget() {
+        return displayBudget;
+    }
+
+    /** 두 층의 조율 — 3D 획이 떴으면 궤적 파티클은 물러선다 (둘 다 뿌리면 지저분하고 비싸다) */
+    public Blend displayBlend() {
+        return displayBlend;
+    }
+
+    public DisplayModel displayModel(String id) {
+        return id == null ? null : displayModels.get(id);
+    }
+
+    public DisplayMotion displayMotion(String id) {
+        return id == null ? null : displayMotions.get(id);
+    }
+
+    /**
+     * 근접 한 타에 겹치는 <b>기의 획</b> — 격이 실렸을 때만 뜬다.
+     * 격이 없으면(외공기·발경) 형체는 병기 그 자체가 그린다 ({@link #swing}) — 쇠의 궤적은 쇠가 그린다.
+     */
+    public DisplayMotion displayForSwing(String grade) {
+        return displayMotion(displayByGrade.get(grade == null ? BARE : grade));
+    }
+
+    /** 병기 휘두름 — 계열의 손짓 (검은 벤다 · 창은 뻗는다 · 겸은 거꾸로 돈다). 없으면 형체가 없다 */
+    public Swing swing(String weaponClass) {
+        return weaponClass == null ? null : swings.get(weaponClass);
+    }
+
+    /** 휘두름의 모션 — 수명·보간·밝기 (등록부에 kind: 휘두름 은 하나뿐이다) */
+    public DisplayMotion swingMotion() {
+        return swingMotion;
+    }
+
+    /** 형태의 3D 형체 — 쏨(투사) · 두름_몸(고리) · 부림(어검). 두름(손끝 잔광)은 형체가 없다 */
+    public DisplayMotion displayForForm(String form) {
+        return displayMotion(displayByForm.get(form));
+    }
+
+    public DisplayMotion displayForUltimate(String ultimateId) {
+        return displayMotion(displayByUltimate.get(ultimateId));
+    }
+
+    /** 3D 예산 — performance.yml vfx_entities 와 등록부 중 작은 쪽 */
+    public record DisplayBudget(int globalCap, int maxLifetimeTicks, int degradeAt,
+                                int reserveForUltimate, int perCastMax, int perPlayerMax,
+                                float viewRange, int ringHeartbeatTicks,
+                                int swingMinTicks, int swingMaxTicks, int swingFadeTicks) {
+    }
+
+    /** 두 층의 조율 — 3D 획이 떴을 때 궤적 파티클을 깎는 비율 (타격 파티클은 건드리지 않는다) */
+    public record Blend(double trailParticleRatio, int trailParticleMin, boolean keepImpact) {
+        /** 3D 가 떴으면 점당 파티클을 깎는다. 0 이 되지는 않는다 — 지나간 자리는 언제나 남는다 */
+        public int damp(int perPoint) {
+            return Math.max(trailParticleMin, (int) Math.round(perPoint * trailParticleRatio));
+        }
+    }
+
+    /**
+     * 모델 한 장 — 팩과의 유일한 접점.
+     *
+     * @param key      item_model 컴포넌트 키 (honcheon:qi/blade_arc). 팩을 <b>받은 눈</b>에만 얹는다
+     * @param base     팩이 있을 때의 바탕 아이템 (모델이 덮으므로 형체는 무의미)
+     * @param fallback 팩이 없을 때의 바닐라 아이템 — 이것만으로 읽혀야 한다
+     * @param size     기준 치수 [x, y, z] (m) — 팩 담당이 맞출 값이자 코드가 스케일에 곱하는 값
+     * @param useHeld  실을 것이 <b>시전자의 병기 그 자체</b>다 (병기 휘두름 · 이기어검).
+     *                 팩 유무와 무관하게 같은 엔티티 하나가 돈다 — <b>팩 게이트가 저절로 충족된다</b>
+     */
+    public record DisplayModel(String id, String key, String base, String fallback, float[] size,
+                               boolean useHeld) {
+    }
+
+    /**
+     * 병기 휘두름 — 계열의 손짓.
+     *
+     * @param spanRatio 자세가 돌아오는 시간(프레임·계열 공속 중 긴 쪽)에 곱해진다 — <b>공속이 곧 리듬이다</b>
+     * @param reach     히트박스 사거리 대비 병기가 나가는 비율. <b>1.0 을 넘지 못한다</b> —
+     *                  등록부는 판정이 준 사거리를 <b>줄일 수만</b> 있다 (거짓말을 구조로 막는다)
+     * @param roll      휘두르는 동안 병기가 도는 총 각(rad). 음수 = 거꾸로 (겸은 걸어 챈다)
+     * @param tilt      병기의 기울기(도). 음수 = 날이 아래를 본다 (부는 내려찍는다)
+     */
+    public record Swing(String weaponClass, double spanRatio, double reach, float roll, float tilt) {
+    }
+
+    /** 모션 한 줄 — 궤(제자리) · 투사(날아간다) · 고리(궤도) · 개화(전개→폭발→수축) */
+    public record DisplayMotion(String id, String kind, String model, float[] scale,
+                                int lifetime, int birth, int fade, int interpolation,
+                                float spin, double speed, float impactScale, int impactTicks,
+                                int count, double radius, double height, float orbit,
+                                float burstScale, String billboard, int blockLight, int skyLight) {
+        public boolean isBolt() {
+            return "투사".equals(kind);
+        }
+
+        public boolean isRing() {
+            return "고리".equals(kind);
+        }
+
+        public boolean isBloom() {
+            return "개화".equals(kind);
+        }
+
+        /** 병기 휘두름 — 실은 것이 사람의 병기 그 자체다 (팩 게이트가 저절로 충족되는 유일한 kind) */
+        public boolean isSwing() {
+            return "휘두름".equals(kind);
+        }
     }
 }

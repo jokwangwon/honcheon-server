@@ -493,7 +493,8 @@ def audit_weapon_and_sound(cfg, mo, rep):
         rep.ok(f"검 {verbs.get('검')} ≠ 창 {verbs.get('창')} — 베기와 찌르기가 갈린다")
 
     # 소리 키 형식 (바닐라 사운드 키 — Sound 는 1.21 에서 인터페이스라 문자열로 재생한다)
-    keys = sorted(sounds_in(mo, set()))
+    # display 절은 뺀다 — 거기의 key 는 소리가 아니라 **모델 키**(honcheon:qi/…)다 (⑧이 따로 검사한다)
+    keys = sorted(sounds_in({k: v for k, v in mo.items() if k != "display"}, set()))
     malformed = [k for k in keys if not SOUND_KEY.match(k)]
     rep.verdict(not malformed,
                 f"바닐라 사운드 키 {len(keys)}종 형식 검사"
@@ -521,8 +522,9 @@ def audit_wiring(mo, rep):
     listener = os.path.join(MVT, "SkillListener.java")
     hud = os.path.join(MVT, "SkillHud.java")
     engine = os.path.join(MVT, "SkillEngine.java")
+    disp = os.path.join(MVT, "SkillDisplay.java")
     src = {}
-    for path in (listener, hud, engine):
+    for path in (listener, hud, engine, disp):
         try:
             with open(path, encoding="utf-8") as fh:
                 src[os.path.basename(path)] = fh.read()
@@ -531,15 +533,16 @@ def audit_wiring(mo, rep):
             return 1
 
     fails = 0
-    # 하드코딩 — Particle.X / Sound.X 리터럴. 이름→enum 해석기(SkillHud)만 예외다
-    for name in ("SkillListener.java", "SkillEngine.java"):
+    # 하드코딩 — Particle.X / Sound.X / Material.X 리터럴. 이름→enum 해석기(SkillHud·SkillDisplay)만 예외다
+    for name in ("SkillListener.java", "SkillEngine.java", "SkillDisplay.java"):
         body = src[name]
-        hard = re.findall(r"\bParticle\.[A-Z_]+", body) + re.findall(r"\bSound\.[A-Z_]+", body)
+        hard = re.findall(r"\bParticle\.[A-Z_]+", body) + re.findall(r"\bSound\.[A-Z_]+", body) \
+            + re.findall(r"\bMaterial\.[A-Z_]+", body)
         if hard:
             fails += 1
-            rep.fail(f"{name}: 파티클·소리 하드코딩 {len(hard)}건 — {sorted(set(hard))[:5]}")
+            rep.fail(f"{name}: 파티클·소리·아이템 하드코딩 {len(hard)}건 — {sorted(set(hard))[:5]}")
         else:
-            rep.ok(f"{name}: 파티클·소리 하드코딩 0건 (등록부만 읽는다)")
+            rep.ok(f"{name}: 파티클·소리·아이템 하드코딩 0건 (등록부만 읽는다)")
 
     body = src["SkillListener.java"]
     # 등록부의 사건이 코드에 배선됐는가 (등록만 하고 안 쓰면 그건 죽은 모션이다)
@@ -555,6 +558,221 @@ def audit_wiring(mo, rep):
         rep.fail("SkillEngine 이 skill_motion.yml 을 적재하지 않는다")
     else:
         rep.ok("SkillEngine 이 skill_motion.yml 을 적재한다 (단일 진실 원천)")
+
+    # 3D 층 — 판정이 준 사거리·각도를 그대로 받는가 (등록부가 사거리를 지어내면 거짓말이 된다)
+    body = src["SkillDisplay.java"]
+    if "range" not in body or "halfAngle" not in body:
+        fails += 1
+        rep.fail("SkillDisplay 가 히트박스(range·angle)를 받지 않는다 — 획이 제 사거리를 지어낸다")
+    else:
+        rep.ok("SkillDisplay 가 판정의 range·angle 을 받아 그린다 (등록부는 reach 로 줄일 수만 있다)")
+    return fails
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑧ 3D 모션 (디스플레이) — 형체가 있는가 · 팩에 모델이 있는가 · 예산을 지키는가
+# ══════════════════════════════════════════════════════════════════════════════
+
+# 폴백 아이템 허용 목록 — 팩이 없어도 **무채(수묵)로 읽혀야 한다**. 채색 예외는 마공의 혈점뿐이다
+ALLOWED_FALLBACK = {"IRON_SWORD", "AMETHYST_SHARD", "END_ROD", "REDSTONE"}
+ALLOWED_BASE = {"PAPER"}                     # 팩이 있을 때의 바탕 — 모델이 덮으므로 형체는 무의미
+SWEEP_SHAPES = {"arc", "line", "shot", "circle", "ring", "dash", "aura"}   # SkillDisplay 가 아는 모양
+PACK = os.path.join(ROOT, "resourcepack", "assets", "honcheon")
+
+
+def audit_display(cfg, mo, rep):
+    rep.head("⑧ 3D 모션 — 검기는 점 무리가 아니라 한 자루의 획이어야 한다")
+
+    dp = mo.get("display", {}) or {}
+    if not dp:
+        rep.fail("display 절이 없다 — 3D 층이 등록되지 않았다")
+        return 1
+    b = dp.get("budget", {}) or {}
+    models = dp.get("models", {}) or {}
+    motions = dp.get("motions", {}) or {}
+    swings = dp.get("swings", {}) or {}
+    blend = dp.get("blend", {}) or {}
+    bind = dp.get("bind", {}) or {}
+    fails = 0
+
+    # ── 커버리지 ──
+    grades = dig(cfg, "qi_manifestation.yml", "grades", default={}) or {}
+    forms = dig(cfg, "qi_manifestation.yml", "forms", default={}) or {}
+    ults = dig(cfg, "ultimate_arts.yml", "legacy_arts", default={}) or {}
+    registry = dig(cfg, "skills.yml", "weapon_classes", "registry", default=[]) or []
+
+    b_grades = bind.get("grades", {}) or {}
+    b_forms = bind.get("forms", {}) or {}
+    b_ults = bind.get("ultimates", {}) or {}
+
+    # 격 — 검기(rank 2) 이상은 3D 형체를 갖는다. 발경·외공기는 갖지 않는다 (기가 밖으로 형체를 내지 않는다)
+    for g, spec in grades.items():
+        rank = int(spec.get("rank", 0))
+        got = b_grades.get(g)
+        if rank >= 2 and not got:
+            fails += 1
+            rep.fail(f"격 3D 누락: {g} (rank {rank} — 검기 이상은 눈에 보이는 형체를 갖는다)")
+    manifest = [g for g, s in grades.items() if int(s.get("rank", 0)) >= 2]
+    rep.verdict(all(b_grades.get(g) for g in manifest),
+                f"격 3D — 검기 이상 {len(manifest)}종 전수 (발경·외공기는 형체 없음: 병기가 대신 그린다)")
+
+    # 형태 — 쏨·두름_몸·부림은 형체를 갖는다. 두름(손끝 잔광)은 갖지 않는다
+    need_form = []
+    for group, body in (forms or {}).items():
+        if group in ("쏨", "두름_몸", "부림") and isinstance(body, dict):
+            need_form += [n for n, s in body.items() if isinstance(s, dict)]
+    miss = [f for f in need_form if not b_forms.get(f)]
+    fails += len(miss)
+    rep.verdict(not miss,
+                f"형태 3D — 쏨·두름_몸·부림 {len(need_form)}종 전수"
+                + ("" if not miss else f" — 누락 {miss}"))
+
+    miss_u = [u for u in ults if not b_ults.get(u)]
+    fails += len(miss_u)
+    rep.verdict(not miss_u,
+                f"오의 3D — {len(ults)}종 전수 (한 번 보면 잊지 못할 형체)"
+                + ("" if not miss_u else f" — 누락 {miss_u}"))
+
+    # 병기 휘두름 — 계열마다 다른 손짓. null(맨손·무관·짐승·활)은 형체가 없는 것이 옳다
+    armed = [w for w in registry if isinstance(swings.get(w), dict)]
+    unregistered = [w for w in registry if w not in swings]
+    fails += len(unregistered)
+    rep.verdict(not unregistered,
+                f"병기 휘두름 — 계열 {len(registry)}종 등록 (형체 있음 {len(armed)} · 없음"
+                f" {len(registry) - len(armed)})"
+                + ("" if not unregistered else f" — 미등록 {unregistered}"))
+
+    # ── 배선 무결성 — 가리키는 모션·모델이 실재하는가 ──
+    dangling = []
+    for table, name in ((b_grades, "grades"), (b_forms, "forms"), (b_ults, "ultimates")):
+        for k, v in table.items():
+            if v and v not in motions:
+                dangling.append(f"{name}.{k} → {v}")
+    for mid, m in motions.items():
+        if str(m.get("model")) not in models:
+            dangling.append(f"motions.{mid} → model {m.get('model')}")
+    fails += len(dangling)
+    rep.verdict(not dangling,
+                f"배선 무결 — 모션 {len(motions)} · 모델 {len(models)}"
+                + ("" if not dangling else f" — 끊긴 배선 {dangling}"))
+
+    # ── 【보이는 것 = 맞는 것】 획은 히트박스보다 길 수 없다 ──
+    over = [(w, s.get("reach")) for w, s in swings.items()
+            if isinstance(s, dict) and float(s.get("reach", 0)) > 1.0]
+    fails += len(over)
+    rep.verdict(not over,
+                "휘두름 reach ≤ 1.0 — 등록부는 판정이 준 사거리를 **줄일 수만** 있다"
+                + ("" if not over else f" — 초과 {over}"))
+    long_span = [(w, s.get("span_ratio")) for w, s in swings.items()
+                 if isinstance(s, dict) and float(s.get("span_ratio", 0)) > 1.0]
+    fails += len(long_span)
+    rep.verdict(not long_span,
+                "휘두름 span_ratio ≤ 1.0 — 획이 제 스윙 간격보다 오래 살면 형체가 쌓인다"
+                + ("" if not long_span else f" — 초과 {long_span}"))
+
+    traj = mo.get("trajectories", {}) or {}
+    bad_shape = sorted({str(t.get("shape")) for t in traj.values()} - SWEEP_SHAPES)
+    fails += len(bad_shape)
+    rep.verdict(not bad_shape,
+                f"궤적 모양 {len(traj)}종 ⊆ SkillDisplay 가 아는 모양 {sorted(SWEEP_SHAPES)}"
+                + ("" if not bad_shape else f" — 모르는 모양 {bad_shape}"))
+
+    # ── 팩 대조 — 모델 키가 팩에 구워졌는가 ──
+    # 【위반이 아니라 경고다】 팩이 없어도 폴백으로 읽히는 것이 규약이다 (require-resource-pack=false).
+    #   그러므로 아래 목록은 **팩 담당에게 넘기는 청구서**이지 우리 쪽의 위반이 아니다.
+    pending, keyed = [], []
+    for mid, m in models.items():
+        if m.get("use_held"):
+            continue                       # 병기 그 자체 — 팩에 요구할 것이 없다 (45자루가 이미 있다)
+        key = str(m.get("key", ""))
+        keyed.append(mid)
+        if not key.startswith("honcheon:"):
+            fails += 1
+            rep.fail(f"모델 키 형식 오류: {mid} — '{key}' (honcheon:<경로> 여야 한다)")
+            continue
+        path = key.split(":", 1)[1]
+        item_def = os.path.join(PACK, "items", path + ".json")
+        model_js = os.path.join(PACK, "models", "item", path + ".json")
+        if not (os.path.exists(item_def) and os.path.exists(model_js)):
+            pending.append(f"{key}  [{'·'.join(str(x) for x in (m.get('size') or []))}m]")
+    if pending:
+        rep.warn(f"팩 미구움 모델 {len(pending)}/{len(keyed)}종 — 팩 담당 대기 (폴백으로는 이미 읽힌다):")
+        for k in pending:
+            rep.warn(f"    · {k}")
+    else:
+        rep.ok(f"모델 키 {len(keyed)}종 전부 팩에 존재 (assets/honcheon/items + models/item)")
+
+    # ── 폴백 — 팩이 없어도 무채로 읽히는가 ──
+    bad_fb = [(mid, m.get("fallback")) for mid, m in models.items()
+              if not m.get("use_held") and str(m.get("fallback")) not in ALLOWED_FALLBACK]
+    fails += len(bad_fb)
+    rep.verdict(not bad_fb,
+                f"폴백 아이템 ⊆ {sorted(ALLOWED_FALLBACK)} (수묵 — 채색 예외는 혈해만리의 REDSTONE 뿐)"
+                + ("" if not bad_fb else f" — 규약 밖 {bad_fb}"))
+    bad_base = [(mid, m.get("base")) for mid, m in models.items()
+                if not m.get("use_held") and str(m.get("base")) not in ALLOWED_BASE]
+    fails += len(bad_base)
+    rep.verdict(not bad_base, f"바탕 아이템 ⊆ {sorted(ALLOWED_BASE)}"
+                + ("" if not bad_base else f" — 규약 밖 {bad_base}"))
+
+    # ── 예산 (performance.yml vfx_entities) ──
+    vfx_cap = int(dig(cfg, "performance.yml", "vfx_entities", "global_cap", default=120))
+    vfx_life = int(dig(cfg, "performance.yml", "vfx_entities", "max_lifetime_ticks", default=60))
+    cluster = int(dig(cfg, "performance.yml", "load_test", "combat_cluster_size", default=20))
+    cap = int(b.get("global_cap", 120))
+    life = int(b.get("max_lifetime_ticks", 60))
+    degrade = int(b.get("degrade_at", 90))
+    reserve = int(b.get("reserve_for_ultimate", 16))
+    per_player = int(b.get("per_player_max", 8))
+
+    rep.verdict(cap <= vfx_cap and life <= vfx_life,
+                f"3D 예산 ≤ performance.yml vfx_entities — 상한 {cap}/{vfx_cap} · 수명 {life}/{vfx_life}")
+    fails += int(cap > vfx_cap or life > vfx_life)
+
+    over_life = [(mid, m.get("lifetime")) for mid, m in motions.items()
+                 if int(m.get("lifetime", 0)) > life]
+    fails += len(over_life)
+    rep.verdict(not over_life, f"모션 수명 ≤ {life}틱 (일회성 연출의 상한)"
+                + ("" if not over_life else f" — 초과 {over_life}"))
+
+    # 한 몸이 동시에 갖는 최대치 = 고리(count) + 병기 1 + 기의 획 1
+    ring = max([int(m.get("count", 1)) for m in motions.values()
+                if str(m.get("kind")) == "고리"] or [0])
+    need_player = ring + 2
+    rep.verdict(per_player >= need_player,
+                f"한 몸의 상한 {per_player} ≥ 고리 {ring} + 병기 1 + 기의 획 1 = {need_player}")
+    fails += int(per_player < need_player)
+
+    # 20인 군집 — 근접(병기+기의 획) 2개/인 + 발출 투사
+    melee = cluster * 2
+    bolt_life = max([int(m.get("lifetime", 0)) for m in motions.values()
+                     if str(m.get("kind")) == "투사"] or [0])
+    shot_cd = int(dig(cfg, "skill_motion.yml", "forms", "검기_참격", "cooldown_ticks", default=40))
+    bolts = cluster * bolt_life // max(1, shot_cd)
+    base_load = melee + bolts
+    rep.verdict(base_load + reserve <= degrade,
+                f"20인 군집 정상 상태: 근접 {melee}(2개/인) + 발출 {bolts}"
+                f" + 오의 예약 {reserve} = {base_load + reserve} ≤ 강등선 {degrade}")
+    fails += int(base_load + reserve > degrade)
+
+    room = degrade - base_load
+    ring_people = room // max(1, ring)
+    if ring_people < cluster:
+        rep.warn(f"호신강기 고리는 {ring_people}인분만 남는다 (군집 {cluster}인 전원이 두르면"
+                 f" {cluster - ring_people}인은 파티클 고리로 강등 — over_cap 규약대로다)")
+    else:
+        rep.ok(f"호신강기 고리 {ring_people}인분 여유 (군집 {cluster}인 전원 수용)")
+    rep.ok(f"최악 상한: {base_load} + 고리 {ring * cluster} = {base_load + ring * cluster}"
+           f" → 강등선 {degrade} 에서 잘린다 (전역 {cap} 은 넘지 않는다)")
+
+    # ── 두 층의 조율 — 3D 가 뜨면 파티클은 물러선다. 그러나 0 이 되지는 않는다 ──
+    ratio = float(blend.get("trail_particle_ratio", 1.0))
+    minimum = int(blend.get("trail_particle_min", 0))
+    ok_blend = 0.0 < ratio < 1.0 and minimum >= 1 and blend.get("keep_impact") is True
+    fails += int(not ok_blend)
+    rep.verdict(ok_blend,
+                f"파티클 조율 — 궤적 {int(ratio * 100)}% 로 감축 · 하한 {minimum} · 타격은 불가침"
+                f" ({blend.get('keep_impact')})")
     return fails
 
 
@@ -588,6 +806,7 @@ def main():
         audit_budget(cfg, mo, rep)
         audit_weapon_and_sound(cfg, mo, rep)
         audit_wiring(mo, rep)
+        audit_display(cfg, mo, rep)
 
     rep.say()
     rep.say("═" * 72)

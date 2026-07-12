@@ -35,6 +35,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private HuntingGrounds hunting;
     private Populace populace;   // 무명(無名) — 세계에 사는 사람들 (config/npcs/populace.yml)
     private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
+    private SkillCast skillCast;   // 절기(絶技) — 삼문(承·間·虛)이 열려야 나간다
     private Dojang dojang;   // 연무장 — 따로 두들겨 보는 자리 (별도 월드 · 세계에 자국을 남기지 않는다)
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
 
@@ -71,6 +72,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.hunting = new HuntingGrounds(this);
         this.populace = new Populace(this);
         this.incidents = new Incidents(this);   // 순서 중요 — 생성자가 populace 에 스스로 접합한다
+        this.skillCast = new SkillCast(this, skillEngine, skills, cfg);
         this.dojang = new Dojang(this);
         this.dojangGui = new DojangGui(this);
         // 되먹임 — 봇의 소문판이 마을 사람의 발길을 바꾼다 (워커 스레드 → 메인 스레드로 태워 준다)
@@ -87,13 +89,16 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new LedgerGui(this), this);
         getServer().getPluginManager().registerEvents(new WeaponShop(this), this);
         getServer().getPluginManager().registerEvents(skills, this);
+        getServer().getPluginManager().registerEvents(skillCast, this);
         getServer().getPluginManager().registerEvents(hunting, this);
+        getServer().getPluginManager().registerEvents(hunting.mobDisplay(), this);   // 3D 몹 형체
         getServer().getPluginManager().registerEvents(populace, this);
         getServer().getPluginManager().registerEvents(incidents, this);
         getServer().getPluginManager().registerEvents(dojang, this);
         getServer().getPluginManager().registerEvents(dojangGui, this);
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
+        skillCast.start();   // 절기의 삼문 — 창(窓)·간격·허를 매 틱 읽는다
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
         populace.start();   // 중앙 티커 — 행인의 일과·배회 (마을이 비어 있으면 세계가 아니다)
         incidents.start();   // 중앙 티커 — 시신 발견·은닉·포교의 추적·무명의 의뢰
@@ -116,6 +121,13 @@ public final class HoncheonMvt extends JavaPlugin {
     @Override
     public void onDisable() {
         WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
+        if (skills != null) {
+            skills.shutdown();   // 무공의 3D 형체를 세계에 남기지 않는다
+        }
+        if (hunting != null) {
+            // 형체를 걷고 **투명한 본체를 되돌린다** — 없으면 보이지 않는 호랑이가 세계에 남는다
+            hunting.mobDisplay().clearAll();
+        }
     }
 
     /**

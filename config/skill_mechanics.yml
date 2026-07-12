@@ -387,6 +387,176 @@ skills:
     cost: 0                       # 심법의 태세 — 운기는 코스트가 아니다
     cooldown_ticks: 50
 
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 절기(絶技) — 이름 붙은 초식의 기계 데이터
+  # ══════════════════════════════════════════════════════════════════════════════
+  # 카탈로그(습득·소문·문파)는 skills.yml. 설계 근거는 docs/design/skill_catalog.md.
+  #
+  # 【시전 체계 — 삼문(三門)】 cast_gate 가 정본이다. 절기는 '쿨다운이 돌면 누르는 버튼'이 아니다:
+  #   承(승) after/step/window_ticks — 어미 무공의 지정 타 직후 창(窓) 안에서만 핀다 (파생이지 버튼이 아니다)
+  #   間(간) min/max               — 간격. 너무 붙어도, 너무 멀어도 안 나간다
+  #   虛(허) 없음|경직|패링|회피|배후 — 상대의 허. '없음'인 절기는 대신 承이 좁다 (하나는 반드시 좁다)
+  #   airborne                     — 門2의 확장. 공중에서만 피는 수 (매화낙수)
+  # 쿨다운·내력은 **과금**이지 발동의 주역이 아니다. 이 셋이 안 맞으면 쿨다운이 돌아도 안 나간다.
+  #
+  # 【코스트 규약 준수】 일류 절기 = cost 0 + qi_rider(발경 1, gate 일류) — 어미 초식과 같은 규칙.
+  #   절정 절기 = cost 3 (검기 밴드 — 절정 내력 풀 9 → 3회). 그 사이는 없다.
+  # 【위력 규약 준수】 무공 위력은 등급이 정한다 (combat.yml technique_power: 일류급 1 · 절정급 2).
+  #   절기는 어미보다 아프지 않다 — 다른 것은 모양·간격·프레임·경직·조건이다.
+  #
+  # 【엔진 판독 칸】 SkillEngine.planCombo 는 combo[0] 의 range/angle 을 읽는다:
+  #   선(線) → range = 길이, angle = 폭(width)   ·   호(弧) → range = 사거리, angle = 각도(°)
+  #   원(圓) → range = 반경                        ·   돌·시 → range/angle = 착지 판정, distance/사거리는 SkillCast
+  #   width/length/radius 는 사람이 읽는 칸이다 — range/angle 과 같은 값을 적는다.
+
+  # ── 화산파 ──
+  maehwa_cham:                    # 매화참 — 뻗는 한 획 (간격을 벌린 자를 벤다)
+    art: true
+    weapon_class: 검
+    cast_gate:
+      승: { after: maehwa_geombeop, step: 2, window_ticks: 10 }
+      간: { min: 2.5, max: 5.5 }
+      허: 없음                    # 스스로 허를 연다 — 대신 承이 좁다 (2타 직후 10틱)
+    combo:
+      - { type: 선, width: 1.0, length: 5.0, range: 5.0, angle: 1.0, frames: [5, 2, 9], stagger: 중, cost: 0 }
+    cooldown_ticks: 100
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "검끝에서 한 점이 터진다 — 매화 한 송이" }
+    # 정체성: 사거리 5.0 (어미 매화검법 호 3.2 보다 +1.8). 16틱 — 빠르다. 도망가는 자를 벤다
+
+  maehwa_naksu:                   # 매화낙수 — 위에서 아래로, 여럿을 덮는다
+    art: true
+    weapon_class: 검
+    cast_gate:
+      승: { after: maehwa_geombeop, step: 3, window_ticks: 12, also_after: maehwa_bo }   # 매화보(보법)로 띄운 몸에서도 핀다
+      간: { min: 0.0, max: 3.5 }
+      허: 없음
+      airborne: true              # 【門2 확장】 발이 땅에 붙어 있으면 안 나간다 — 떨어지는 물이다
+    combo:
+      - { type: 원, radius: 3.0, range: 3.0, frames: [7, 3, 14], stagger: 강, cost: 0 }
+    cooldown_ticks: 150
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "떨어지며 흩어지는 꽃잎 — 원을 그린다" }
+    # 정체성: 원 3.0 광역 · 24틱(느리다) · 강경직. 매화참(선/5.0/16틱/중/단일)과 모든 칸이 다르다
+
+  maehwa_jeomjeom:                # 매화점점 — 허를 점으로 찍는다 (절정 비전)
+    art: true
+    weapon_class: 검
+    cast_gate:
+      승: { after: maehwa_geombeop, step: 1, window_ticks: 8 }
+      간: { min: 1.5, max: 3.2 }
+      허: 경직                    # 【門3】 상대가 경직·후딜 중일 때만 — 점은 빈틈에만 찍힌다
+    combo:
+      - { type: 호, angle: 60, range: 3.0, frames: [4, 2, 8], stagger: 약, cost: 3 }   # 절정 비전 — 검기를 품고 태어난다
+    hit_count: 3                  # 3연점 — 검기(위력 2) × 3
+    cooldown_ticks: 170
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "세 점이 연이어 핀다 — 점점(點點)" }
+    # 정체성: 14틱(가장 빠른 절정 절기) · 다단 3히트. 대가는 조건 — 상대가 굳어 있지 않으면 손이 나가지 않는다
+
+  # ── 무당파 ──
+  saryang_balcheongeun:           # 사량발천근 — 넉 냥으로 천 근을 물리친다 (반격 전용)
+    art: true
+    weapon_class: [맨손, 권갑]
+    cast_gate:
+      승: { after: taegeuk_kwon, step: 0, window_ticks: 12 }   # 태극권은 가드태세 — 콤보가 아니라 '패링 성공'이 승이다
+      간: { min: 0.0, max: 2.2 }
+      허: 패링                    # 【門3】 패링 성공 직후 counter_window 안에만. 그 밖에는 절대 안 나간다
+    combo:
+      - { type: 호, angle: 60, range: 2.0, frames: [3, 1, 6], stagger: 다운, cost: 0 }
+    cooldown_ticks: 130
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "원을 그리며 되돌린다 — 힘이 주인에게 돌아간다" }
+    redirect: "되돌림 — 상대가 그 합에 실었던 격 위력만큼 추가 피해 (제 힘에 제가 넘어진다)"
+    # 정체성: 10틱(전 절기 최속) · 다운(20틱). 조건이 가장 좁다(패링 성공) — 그래서 보상이 가장 크다
+
+  # ── 소림사 ──
+  nahan_bokho:                    # 나한복호 — 맞으면서 들어간다
+    art: true
+    weapon_class: [맨손, 권갑]
+    cast_gate:
+      승: { after: nahan_kwon, step: 2, window_ticks: 10 }
+      간: { min: 2.0, max: 6.0 }
+      허: 없음
+    combo:
+      - { type: 돌, distance: 5, range: 3.0, angle: 90, frames: [8, 3, 13], stagger: 다운, cost: 0 }
+    super_armor: "선딜~지속"      # 경직 무시 — 피해는 그대로 받는다 (defense_states 슈퍼아머)
+    cooldown_ticks: 180
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "어깨로 밀고 들어간다 — 흙먼지" }
+    # 정체성: 돌진 5.0 + 슈퍼아머 + 다운 · 24틱(느리다). 철산고(돌 4·강경직·쿨 120)의 윗층
+
+  geumgang_bokma:                 # 금강복마권 — 막아도 뚫린다 (절정 비전 · 파격)
+    art: true
+    weapon_class: [맨손, 권갑]
+    cast_gate:
+      승: { after: nahan_kwon, step: 3, window_ticks: 10 }
+      간: { min: 0.0, max: 3.0 }
+      허: 없음                    # 파격은 허를 기다리지 않는다 — 허를 만든다. 대가는 28틱의 텔레그래프
+    combo:
+      - { type: 선, width: 1.4, length: 3.5, range: 3.5, angle: 1.4, frames: [10, 3, 15], stagger: 강, cost: 3 }
+    property: 파격                # 가드·패링 관통 (무적·흘리기는 못 뚫는다 — defense_states 파격)
+    cooldown_ticks: 220
+    telegraph: "주먹에 금빛이 맺힌다 — 10틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "금강의 빛 — 막은 팔을 그대로 지난다" }
+    # 정체성: 파격(희귀 속성) · 28틱(전 절기 최장). 보인다. 그래도 막을 수 없다 — 피해야 한다
+
+  # ── 남궁세가 ──
+  changgung_ilseom:               # 창궁일섬 — 근접 최장 리치
+    art: true
+    weapon_class: 검
+    cast_gate:
+      승: { after: changgung_geom, step: 2, window_ticks: 12 }
+      간: { min: 3.0, max: 7.0 }  # 【門2】 붙으면 못 쓴다 — 긴 검의 대가 (min 3.0 은 전 절기 최고)
+      허: 없음
+    combo:
+      - { type: 선, width: 0.8, length: 7.0, range: 7.0, angle: 0.8, frames: [7, 2, 11], stagger: 중, cost: 0 }
+    cooldown_ticks: 120
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "푸른 획 하나 — 하늘이 갈린다" }
+    # 정체성: 사거리 7.0 (매화참 5.0 보다 +2.0 — 근접 최장). 대신 폭 0.8(가장 좁다) · 간격 3.0 미만 불가
+
+  # ── 사천당가 ──
+  bihong_chim:                    # 비홍침 — 유일한 원거리 절기
+    art: true
+    weapon_class: 암기
+    cast_gate:
+      승: { after: dangmun_bisu, step: 1, window_ticks: 12 }
+      간: { min: 4.0, max: 20.0 } # 【門2】 코앞에서는 못 던진다 (min 4.0)
+      허: 없음
+    combo:
+      - { type: 시, range: 20, angle: 20, frames: [5, 1, 7], stagger: 약, cost: 0 }
+    hit_count: 3                  # 세 침이 함께 난다
+    cooldown_ticks: 110
+    on_hit: { 중독: "3합간 판정 -1 (약독 — 칠보독장의 7합 누적독과 다르다. 해독 없이도 풀린다)" }
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "세 줄기 무지개 — 비홍(飛虹)" }
+    # 정체성: 사거리 20(전 절기 최장) · 3히트 · 약독 · 13틱. 대가는 암기 위력 2 (검 4 의 절반)
+
+  # ── 개방 ──
+  chwiho_bunggyeok:               # 취호붕격 — 비틀거리다 친다 (회피 반격)
+    art: true
+    weapon_class: [맨손, 권갑]
+    cast_gate:
+      승: { after: chwipalseon_bo, step: 0, window_ticks: 12 }   # 취팔선보는 보법 — '회피 성공'이 승이다
+      간: { min: 0.0, max: 3.0 }
+      허: 회피                    # 【門3】 회피에 성공한 직후에만. 사량발천근(패링 반격)과 짝을 이룬다
+    combo:
+      - { type: 호, angle: 120, range: 3.0, frames: [4, 2, 7], stagger: 중, cost: 0 }
+    cooldown_ticks: 120
+    irregular: "취보의 결 계승 — 상대 예측 판정 -2, 자기 명중 판정 -1 (취팔선보와 같은 값과 대가)"
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "휘청이는 몸에서 나온 주먹 — 궤가 읽히지 않는다" }
+    # 정체성: 호 120°(전 절기 최광각 — 포위당한 자의 답) · 13틱. 회피 반격이라 다운이 아니라 중경직
+
+  # ── 녹림 ──
+  heuksal_dansu:                  # 흑살단수 — 살초 (절정 비전 · 파격)
+    art: true
+    weapon_class: 도
+    cast_gate:
+      승: { after: heuksal_dobeop, step: 3, window_ticks: 8 }    # 창이 가장 좁다 (8틱)
+      간: { min: 0.0, max: 3.5 }
+      허: [배후, 경직]            # 【門3】 살초는 허가 없으면 안 나간다 — 등 뒤이거나, 굳어 있거나
+    combo:
+      - { type: 선, width: 1.0, length: 4.0, range: 4.0, angle: 1.0, frames: [6, 2, 12], stagger: 다운, cost: 3 }
+    property: 파격
+    counter_hit_bonus: 0.5        # 후딜 중인 자를 특히 노린다 (흑살도법과 같은 결)
+    cooldown_ticks: 200
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "검은 획 — 소리가 나지 않는다" }
+    # 정체성: 파격 + 다운 + 20틱. 금강복마권(파격·28틱·무조건)과 대비 — 이쪽은 빠르지만 허를 요구한다
+
   # ── NPC 전용 표본 ──
   galho_sando:                    # 갈호의 산도 — NPC 돌진 강공 표본
     type: 돌

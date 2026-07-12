@@ -73,6 +73,8 @@ public final class SkillListener implements Listener {
     private final HoncheonMvt plugin;
     private final SkillEngine engine;
     private final SkillHud hud;
+    /** 3D 모션 층 — 파티클 위에 얹는다. 이것이 통째로 실패해도 무공은 보인다 (불변식 ㅁ) */
+    private final SkillDisplay display;
     private final Map<UUID, SkillEngine.State> states = new HashMap<>();
     /** NPC 의 격 — 대칭 원칙. 같은 State 를 쓴다 (내력·두름·다운캐스트가 같은 규칙이라는 뜻이다) */
     private final Map<UUID, SkillEngine.State> npcStates = new HashMap<>();
@@ -91,11 +93,35 @@ public final class SkillListener implements Listener {
         this.plugin = plugin;
         this.engine = engine;
         this.hud = new SkillHud(engine);
+        this.display = new SkillDisplay(plugin, engine);
     }
 
     /** 중앙 티커 기동 — HoncheonMvt.onEnable 에서 1회 (효과별 개별 태스크 생성 금지, F-P2) */
     public void start() {
+        display.start();   // 지난 생의 유령(공중에 얼어붙은 획)을 걷는다
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+    }
+
+    /**
+     * 정지 — 세계에 형체를 남기지 않는다.
+     * <p><b>배선 필요</b>: {@code HoncheonMvt.onDisable()} 에서 {@code skillListener.shutdown()} 을 부른다.
+     * 안 불러도 다음 기동의 {@link SkillDisplay#start()} 가 표식(honcheon:vfx)을 보고 걷어낸다 —
+     * 이중 방벽이다 (크래시엔 onDisable 이 돌지 않으므로).
+     */
+    public void shutdown() {
+        display.clearAll();
+    }
+
+    /**
+     * 팩을 받았는가 — 3D 층의 유일한 분기점 ({@code require-resource-pack=false} 이므로 <b>물어볼 수밖에 없다</b>).
+     *
+     * <p>수락한 눈에는 팩이 구운 3D 획(item_model)을, 거절한 눈에는 <b>바닐라 아이템</b>을 실은 형체를 보인다
+     * (철검이 날아가고 · 흰 막대가 몸을 돈다). 어느 쪽이든 무엇이 일어났는지 읽힌다.
+     */
+    @EventHandler
+    public void onPackStatus(org.bukkit.event.player.PlayerResourcePackStatusEvent event) {
+        display.packStatus(event.getPlayer().getUniqueId(),
+                event.getStatus() == org.bukkit.event.player.PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED);
     }
 
     /** 무공 상태를 갈아 끼운다 — 연무장의 경지·내력은 세계의 것이 아니다 */
@@ -118,6 +144,7 @@ public final class SkillListener implements Listener {
     private void tick() {
         tick++;
         hud.newTick();
+        display.tick(tick);   // 3D 층 — 투사 전진 · 수축 · 회수 (중앙 티커 하나를 같이 쓴다, F-P2)
 
         if (!pending.isEmpty()) {
             List<Pending> due = new ArrayList<>();
@@ -289,7 +316,7 @@ public final class SkillListener implements Listener {
                 state.energy -= sustain;
                 state.nextSustainTick = tick + engine.roundTicks();
             }
-            aura(hand, mob.getLocation(), state.armed);   // 두름 잔광 — 플레이어와 같은 등록부를 탄다
+            aura(hand, mob, state.armed);   // 두름 잔광 — 플레이어와 같은 등록부를 탄다
             return;
         }
 
@@ -325,12 +352,12 @@ public final class SkillListener implements Listener {
         if (cost <= 0) {
             // 발경은 유지비가 없다 — 타격 순간에만 실린다. 그래도 <b>켜져 있다는 사실</b>은 보여야 한다
             // (등록부의 발경 잔광은 1개 — 검기 3, 강기 5 보다 흐리다. 격의 사다리는 잔광에서도 단조 증가한다)
-            aura(handLocation(player), player.getLocation(), state.armed);
+            aura(handLocation(player), player, state.armed);
             return;
         }
         if (tick < state.nextSustainTick) {
             // 두름은 잔광으로만 알린다 — 켜져 있다는 사실 자체가 상대에게 정보다 (소리는 응집의 몫)
-            aura(handLocation(player), player.getLocation(), state.armed);
+            aura(handLocation(player), player, state.armed);
             return;
         }
         if (state.energy < cost) {
@@ -339,7 +366,7 @@ public final class SkillListener implements Listener {
         }
         state.energy -= cost;
         state.nextSustainTick = tick + engine.roundTicks();
-        aura(handLocation(player), player.getLocation(), state.armed);
+        aura(handLocation(player), player, state.armed);
     }
 
     // ══════════ 입력 → 시전 ══════════
@@ -749,7 +776,7 @@ public final class SkillListener implements Listener {
         }
         EntityEquipment gear = defender.getEquipment();
         ItemStack held = gear == null ? null : gear.getItemInMainHand();
-        if (held == null || held.getType() == Material.AIR) {
+        if (held == null || held.getType().isAir()) {
             return;   // 맨손은 부러지지 않는다 (짐승도 여기서 빠진다 — 무기를 들지 않으니 격돌이 없다)
         }
         String weaponGrade = engine.weaponGradeOf(held, held.getType().name());
@@ -901,7 +928,7 @@ public final class SkillListener implements Listener {
         }
         EntityEquipment gear = player.getEquipment();
         ItemStack item = gear.getItemInMainHand();
-        if (item.getType() == Material.AIR) {
+        if (item.getType().isAir()) {
             return;
         }
         // 【고침】 바닐라는 '사용'해야 부러진다 — 내구를 넘긴 손상은 그대로 부러뜨린다 (after_break: 맨손)
@@ -942,7 +969,7 @@ public final class SkillListener implements Listener {
         // 태세 진입 — 두름은 손끝에, 호신강기는 몸에. 형태가 다르면 실루엣도 소리도 달라야 한다
         if (SkillEngine.GUARD.equals(next)) {
             SkillEngine.FormMotion form = engine.motionForm(SkillEngine.GUARD);
-            guardRing(player.getLocation());
+            guardRing(player);
             hud.emit(player.getLocation().add(0, 1, 0), form.aura(), false);
             sfx(player.getLocation(), form.deploySounds());
         } else {
@@ -1113,6 +1140,8 @@ public final class SkillListener implements Listener {
         sfx(player.getLocation(), m.chargeSounds());
         player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,
                 cast.frames().startup(), 3, false, false, false));
+        // 3D — 오의의 형체. 응집 내내 오므린 채 자라고, 개시의 순간 활짝 편다 (예약분을 쓴다: 깎이지 않는다)
+        display.bloom(player, art.id(), cast.frames().startup(), art.range());
 
         int points = Math.min(m.ringPoints(), b.ultimateRingPoints());
         for (int t = 0; t < cast.frames().startup(); t += b.telegraphStepTicks()) {
@@ -1233,7 +1262,7 @@ public final class SkillListener implements Listener {
     }
 
     /** 두름의 잔광 — 켜져 있다는 사실 자체가 정보다 (상대가 보고 판단한다). 호신강기는 몸을 두르는 고리 */
-    private void aura(Location hand, Location body, String stance) {
+    private void aura(Location hand, LivingEntity body, String stance) {
         if (SkillEngine.GUARD.equals(stance)) {
             guardRing(body);
             return;
@@ -1244,19 +1273,23 @@ public final class SkillListener implements Listener {
     /**
      * 호신강기 — <b>몸을 두르는 고리</b> (forms.두름_몸.ring). 손끝 잔광(두름)과 실루엣이 다르다.
      * 그 차이가 곧 정보다: "저 자는 검에 기를 실은 것이 아니라 몸에 둘렀다 — 하위 격은 닿지 않는다."
+     *
+     * <p>두 층으로 돈다: <b>파티클 고리</b>(언제나) 위에 <b>3D 판 4장</b>(디스플레이 — 예산이 허락하면).
+     * 3D 가 강등돼도 파티클 고리는 그대로 돈다 — 켜져 있다는 사실은 어떤 경우에도 보인다.
      */
-    private void guardRing(Location body) {
+    private void guardRing(LivingEntity body) {
         SkillEngine.FormMotion form = engine.motionForm(SkillEngine.GUARD);
         if (form == null || form.ringPoints() <= 0) {
             return;
         }
-        Location at = body.clone().add(0, form.ringHeight(), 0);
+        Location at = body.getLocation().add(0, form.ringHeight(), 0);
         for (int i = 0; i < form.ringPoints(); i++) {
             double angle = Math.PI * 2 * i / form.ringPoints() + tick * 0.05;   // 천천히 돈다
             hud.emit(at.clone().add(Math.cos(angle) * form.ringRadius(), 0,
                             Math.sin(angle) * form.ringRadius()),
                     form.ringParticle(), form.ringPerPoint(), 0.02, 0.0);
         }
+        display.ring(body, SkillEngine.GUARD);   // 그 위에 3D 판이 돈다 (심장박동 — 갱신이 끊기면 사라진다)
     }
 
     /**
@@ -1333,6 +1366,21 @@ public final class SkillListener implements Listener {
         // 【발출이 두름·응집과 헷갈리지 않는 이유】 기가 **날아간다**: 8m 직선 광선 + 큰 발사음 + 끝의 작렬
         SkillEngine.FormMotion shot = SkillEngine.SHOT.equals(cast.skillId()) ? engine.shotForm(cast.grade()) : null;
 
+        // ─── 3D 층 (파티클 위에 얹는다) ───
+        // ① 병기 휘두름 — 손에 든 것 그 자체가 히트박스를 훑는다 (팩 게이트 자동 충족)
+        // ② 기의 획 — 격이 실렸을 때만 그 위에 겹친다 (검기 이상)
+        // ③ 발출 — 기가 날아간다 (한 자루의 빛나는 획)
+        // 셋 다 실패해도(예산·팩·미등록) 아래 파티클 층이 그대로 돈다 — 강등이지 실종이 아니다
+        boolean solid;
+        if (shot != null) {
+            solid = display.bolt(player, shot.name(), cast.range());
+        } else {
+            int swingTicks = (int) Math.max(cast.frames().total(), swingInterval(player));
+            solid = display.sweep(player, cast.hitType(), weaponClass,
+                    cast.range(), cast.angle(), swingTicks);
+            solid |= display.streak(player, cast.hitType(), cast.grade(), cast.range(), cast.angle());
+        }
+
         // 점당 파티클: 초식이 정한 개수. 격이 실렸으면 격의 궤적 파티클이 무기의 것을 덮는다
         //   (검기를 두른 검은 '검의 획'이 아니라 '기의 획'을 남긴다 — 그것이 격이 보인다는 말이다)
         String particle = shot != null ? shot.beamParticle()
@@ -1340,6 +1388,11 @@ public final class SkillListener implements Listener {
                 : step != null && step.particle() != null ? step.particle()
                 : "선".equals(cast.hitType()) || "시".equals(cast.hitType()) ? style.thrust() : style.arc();
         int per = shot != null ? shot.beamPerPoint() : step == null ? 1 : step.count();
+        // 3D 획이 실제로 떴으면 궤적 파티클은 물러선다 (display.blend) — 둘 다 뿌리면 지저분하고 비싸다.
+        // 0 으로는 만들지 않는다: 획이 지나간 자리는 어떤 경우에도 남아야 한다 (강등 ≠ 실종)
+        if (solid) {
+            per = engine.displayBlend().damp(per);
+        }
         SkillEngine.Budget b = engine.motionBudget();
         int points = Math.min(traj.points(), Math.max(1, b.trailPool() / Math.max(1, per)));
 
@@ -1450,6 +1503,7 @@ public final class SkillListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         states.remove(event.getPlayer().getUniqueId());
         clashCounts.remove(event.getPlayer().getUniqueId());
+        display.clear(event.getPlayer().getUniqueId());   // 떠난 몸의 형체는 남지 않는다
     }
 
     /** 죽은 몸의 내력은 남지 않는다 (F-P2 cleanup_on death) */
@@ -1457,6 +1511,7 @@ public final class SkillListener implements Listener {
     public void onDeath(EntityDeathEvent event) {
         npcStates.remove(event.getEntity().getUniqueId());
         clashCounts.remove(event.getEntity().getUniqueId());
+        display.clear(event.getEntity().getUniqueId());   // 죽은 몸의 고리도 (심장박동이 멎기 전에)
     }
 
     @EventHandler
@@ -1466,6 +1521,7 @@ public final class SkillListener implements Listener {
             state.armed = null;
             state.comboIndex = 0;
         }
+        display.clear(event.getPlayer().getUniqueId());   // 세계를 건너간 몸의 형체는 저쪽에 남기지 않는다
     }
 
     // ══════════ 도우미 ══════════
@@ -1483,7 +1539,7 @@ public final class SkillListener implements Listener {
 
     private static String materialName(Player player) {
         Material m = player.getInventory().getItemInMainHand().getType();
-        return m == Material.AIR ? "AIR" : m.name();
+        return m.isAir() ? "AIR" : m.name();
     }
 
     private String weaponGrade(Player player) {
@@ -1501,7 +1557,7 @@ public final class SkillListener implements Listener {
 
     private void itemCooldown(Player player, int ticks) {
         Material m = player.getInventory().getItemInMainHand().getType();
-        if (m != Material.AIR && ticks > 0) {
+        if (!m.isAir() && ticks > 0) {
             player.setCooldown(m, ticks);   // 바닐라 아이템 쿨다운 스와이프 = 스킬 쿨다운 (mc_action_mapping 2장)
         }
     }

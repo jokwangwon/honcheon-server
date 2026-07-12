@@ -13,8 +13,12 @@
 외부 라이브러리 금지 (순수 파이썬) — build_resourcepack.py 와 같은 관행.
 """
 import argparse
+import json
+import re
 import struct
 import sys
+import urllib.request
+import zipfile
 import zlib
 from pathlib import Path
 
@@ -23,6 +27,13 @@ PACK = ROOT / "resourcepack" / "assets"
 OUT = ROOT / "run" / "texture-review"
 ITEM = PACK / "honcheon" / "textures" / "item"
 BLOCK = PACK / "minecraft" / "textures" / "block"
+
+# ─── 축 ⑪ 의 재료 — 조성기(읽기 전용)와 바닐라 클라이언트 jar ───
+BUILDERS = [ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt" / f
+            for f in ("CheonghaBuilder.java", "RemoteBuilder.java")]
+MC_VERSION = "1.21.11"                      # build_resourcepack.PACK_FORMAT 75 와 같은 클라이언트
+JAR_CACHE = ROOT / "run" / "client" / f"client-{MC_VERSION}.jar"   # run/ 은 gitignore 대상
+MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
 # ─── 판정 기준 (팩의 가이드라인) ───
 MIN_COLORS = 4            # 4색 미만 = 평면 채우기 (명암이 없다)
@@ -43,6 +54,36 @@ REPLICATION_MAX = 0.85    # 면 반복재의 자기 복제 상관 상한 — 넘
 UI_LEGIBLE_MIN = 8        # HUD 스프라이트가 흑/백 두 배경 각각에서 확보해야 할 '읽히는 픽셀' 수
 UI_LEGIBLE_DELTA = 55     # '읽히는 픽셀'의 정의 — 합성 후 배경과의 휘도차
 
+# ─── 3차 검수 축 (2026-07) — 축 ⑪ 조성 팔레트 커버리지 ───────────────────────
+# 앞선 열 축은 전부 **팩 안**만 본다: 팩이 그린 장을 잰다. 그래서 팩이 **그리지 않은 것**은
+# 영원히 안 보인다 — 위반 0건인 채로 세계의 절반이 바닐라일 수 있다 (실제로 그랬다: 11.4%).
+# 이 축만이 팩 밖을 본다: 조성기가 세우는 마을에서 **플레이어의 눈에 닿는 픽셀 중 몇 %가
+# 팩이 그린 것인가**. 검수가 못 재는 축은 다음 사이클에 조용히 무너지므로, 손계산으로
+# 굴러다니던 이 수치를 자로 만든다.
+COVERAGE_MIN = 0.80       # 가중 커버리지 하한 — 이보다 낮으면 '기와만 얹은 마인크래프트 마을'이다
+
+# ─── 모델 JSON 이 답하지 않는 두 부류 — 명시적으로 적는다 (조용히 분모에서 빠지면 자가 눈감는다) ───
+# ① 유체: blockstate → model 에 elements 가 없다 (특수 렌더러가 그린다). 그대로 두면 물(19회)이
+#    면적 0으로 사라진다. 큐브 1개(6면)로 친다.
+FLUIDS = {"water": "block/water_still", "lava": "block/lava_still",
+          "bubble_column": "block/water_still"}
+
+# ② 블록 엔티티: 궤·항아리·현판은 블록이되 **BlockEntityRenderer** 가 그린다 — 모델 JSON 에
+#    elements 가 없고 텍스처는 entity/ 아래 산다. 면적은 모델이 아니라 **바운딩 박스**에서 낸다
+#    (렌더러의 박스 치수는 자바 코드에 있어 JSON 으로 못 읽는다 — 아래 수치는 그 박스의 기하다).
+BLOCK_ENTITIES = {
+    "chest":         {"entity/chest/normal": 6 * 14 * 14},          # 14³ 궤 — 6면
+    "decorated_pot": {"entity/decorated_pot/decorated_pot_base": 2 * 14 * 14,   # 목·굽 (상·하면)
+                      "entity/decorated_pot/decorated_pot_side": 4 * 14 * 16},  # 배 4면 (무늬 없는 항아리도 이 텍스처)
+    "oak_sign":      {"entity/signs/oak": 2 * 16 * 8},              # 판 앞뒤 (2/3 축소 렌더 반영)
+    "oak_wall_sign": {"entity/signs/oak": 2 * 16 * 8},
+    "dark_oak_hanging_sign": {"entity/signs/hanging/dark_oak": 2 * 16 * 10},
+}
+
+# 면 → 그 면의 넓이를 재는 두 축 (모델 element 는 from/to 의 직육면체다)
+FACE_AXES = {"up": ("x", "z"), "down": ("x", "z"), "north": ("x", "y"),
+             "south": ("x", "y"), "east": ("z", "y"), "west": ("z", "y")}
+
 WEAPON_SERIES = ["sword", "dao", "spear", "gauntlet", "dagger", "bu", "gyeom", "wolasan", "gu"]
 WEAPON_GRADES = ["beomcheol", "jeongryeon", "bobyeong", "sinbyeong"]
 
@@ -59,6 +100,22 @@ TILING_BLOCKS = {
     "white_terracotta", "light_gray_terracotta", "bamboo_planks", "glass", "glass_pane_top",
     "chiseled_bookshelf_side", "chiseled_bookshelf_top",
 }
+
+# ─── 이음매(SEAM) 축의 적용 범위 — '면'인가 '스프라이트'인가 (2026-07) ───
+# 이음매는 "이어 붙였을 때 랩 경계가 배신하는가"를 묻는다. 그 물음은 **면 텍스처**에만 뜻이 있다.
+# 십자 모델에 매달려 홀로 서는 스프라이트(꽃·횃불·초·작물·버섯)는 **제 복사본과 이어 붙지 않는다.**
+#
+# 그리고 여기 함정이 있다 — 바닐라 UV 계약이 스프라이트를 **텍스처 가장자리에 붙여 놓는다**:
+#   candle.png 의 촛대는 x0..1, 즉 **왼쪽 변에 딱 붙어** 있다 (바닐라 실측).
+#   그 계약을 지키면 랩 경계 차이가 필연적으로 커진다 → **UV를 지키면 이음매 축이 반드시 운다.**
+#   축을 달래려고 촛대를 가운데로 옮기면? 모델이 x0..1 을 읽으므로 **초가 사라진다.**
+#   계약이 지표를 이긴다. 그러므로 우는 쪽은 축이다 — 축의 적용 범위를 좁힌다.
+# (이 팩의 규율: "축을 아무 데나 들이대면 거짓 위반이 뜨고, 거짓 위반은 루프를 헛돌린다".)
+#
+# 판정: 불투명 ≥ 50% = 면 / 그 아래 = 스프라이트.
+#       불투명은 낮으나 **실제로 이어 붙는 격자면**(창살·잎·사다리)은 명시 등록으로 되돌린다.
+SEAM_FACE_MIN_OPAQUE = 0.5
+SEAM_FACES = {"iron_bars", "cherry_leaves", "ladder"}
 
 
 def read_png(path):
@@ -270,6 +327,289 @@ def grade_delta():
     return out
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑪. 조성 팔레트 커버리지 — 「팩이 세계를 얼마나 덮는가」
+#
+# ── 무엇을 재는가 ──
+# 물음은 "팩이 몇 장을 그렸나"가 아니다 (그건 자화자찬이다). 물음은:
+#   **청하현에 선 플레이어의 눈에 닿는 픽셀 중 몇 %가 팩이 그린 것인가.**
+# 그래서 세 가지를 곱한다 — 빈도 × 면적 × 불투명도.
+#
+# ① 빈도(頻度): 조성기(CheonghaBuilder·RemoteBuilder)의 코드에서 `Material.XXX` 를 센다.
+#    주석·문자열을 걷어낸 뒤 세므로 죽은 코드가 표를 흔들지 않는다. 이것은 '설치 횟수'가
+#    아니라 '코드가 그 블록을 부르는 횟수'다 — 대리 지표다. 루프 안의 한 줄이 벽 하나를
+#    통째로 세우므로 절대량은 틀리지만, **블록끼리의 상대 비중**은 남는다 (자재층은 루프로,
+#    기물은 낱개로 놓이는 경향이 서로를 상쇄하지 않고 같은 방향으로 어긋나는 일이 없다).
+#
+# ② 면적(面積): **여기가 이 축의 핵심이다.** 벽·바닥·지붕은 크고 항아리는 작다 — 그 차이를
+#    손으로 등급 매기지 않는다 (손 등급은 다음 사람이 못 재는 또 하나의 손계산이다).
+#    1.21.11 클라이언트 jar 의 **모델 JSON 이 이미 그 답을 갖고 있다**: element 의 from/to 가
+#    직육면체를 주고, 각 face 가 어느 텍스처를 어느 넓이로 쓰는지 말한다.
+#      · 온전한 큐브 = 6면 × 256 = 1536 (16단위 공간)
+#      · 울타리 기둥 = 4×16×4 → 288  (벽의 1/5)
+#      · 화분 = 더 작다. 손으로 "항아리는 0.3" 이라 적을 필요가 없다 — 기하가 말한다.
+#    이 방식은 덤으로 **블록 하나가 텍스처 여러 장을 쓰는 문제**를 정확히 푼다: 온전한 큐브의
+#    옆면 텍스처(*_side)는 4면 = 1024 를 먹고 윗면(*_top)은 1면 = 256 이다. 즉 *_side 를
+#    덮는 것이 *_top 을 덮는 것보다 4배 값진 일이고, 자가 그렇게 센다.
+#
+# ③ 불투명도: 컷아웃 텍스처(풀·유리·창살·거미줄)는 제 사각형을 다 안 채운다. 바닐라 PNG 의
+#    불투명 픽셀 비율을 곱해, 뚫린 자리를 '덮어야 할 화면'으로 세지 않는다.
+#
+# ── 판정(무엇을 '덮었다'고 하는가) ──
+# blockstate → (variants | multipart) → model → parent 사슬 → textures 사전 → #참조 해소.
+# 짐작 금지: 1.21.11 jar 를 실제로 풀어 읽는다 (piston-meta 로 받아 run/client/ 에 캐시).
+#   · variants: 변종들의 **평균** (반블록 top/bottom/double 처럼 면적이 다른 변종이 있다)
+#   · multipart: 무조건부 부분(울타리 기둥)은 1.0, 조건부 부분(연결 팔)은 0.5
+#     — 담장 한 칸은 평균 두 방향으로 붙지 네 방향이 아니다
+# 덮었다 = resourcepack/…/textures/block/<이름>.png 가 실재한다.
+#
+# ── 이 축의 정직성 ──
+# 손계산 84.7% 가 맞았는지를 이 자가 심판한다. 아래 세 부류는 분모에서 **명시적으로** 뺀다
+# (조용히 빠지는 것이 아니라 이름과 함께 보고된다 — 눈감는 자리를 만들지 않는다):
+#   · AIR — 그림이 없다 (모델에 element 가 없어 면적 0. 자연히 빠진다)
+#   · 아이템(HONEY_BOTTLE 등) — blockstate 가 없다. 블록 축이 아니다
+#   · 모델 미해석 — 있으면 소리친다 (자의 고장을 침묵으로 넘기지 않는다)
+# ═══════════════════════════════════════════════════════════════════════════
+def builder_materials():
+    """조성기가 부르는 Material 과 그 빈도 — 주석·문자열을 걷어낸 뒤 센다."""
+    counts = {}
+    for f in BUILDERS:
+        if not f.exists():
+            continue
+        src = f.read_text(encoding="utf-8")
+        src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)     # 블록 주석
+        src = re.sub(r"//[^\n]*", "", src)                  # 줄 주석
+        src = re.sub(r'"(?:[^"\\]|\\.)*"', '""', src)       # 문자열 리터럴
+        for m in re.findall(r"Material\.([A-Z0-9_]+)", src):
+            counts[m] = counts.get(m, 0) + 1
+    return counts
+
+
+def client_jar():
+    """1.21.11 클라이언트 jar — run/client/ 에 캐시. 없으면 piston-meta 로 받는다."""
+    if JAR_CACHE.exists():
+        return zipfile.ZipFile(JAR_CACHE)
+    JAR_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    man = json.load(urllib.request.urlopen(MANIFEST, timeout=30))
+    entry = next(v for v in man["versions"] if v["id"] == MC_VERSION)
+    meta = json.load(urllib.request.urlopen(entry["url"], timeout=30))
+    url = meta["downloads"]["client"]["url"]
+    print(f"  클라이언트 jar 내려받는 중 ({MC_VERSION}) … {url}")
+    urllib.request.urlretrieve(url, JAR_CACHE)
+    return zipfile.ZipFile(JAR_CACHE)
+
+
+def png_opacity(data):
+    """PNG 의 불투명 픽셀 비율. 바닐라는 팔레트(ct3)·회색조(ct0)·RGB(ct2)가 섞여 있다 —
+    팩의 read_png(RGBA8 전용)로는 못 읽는다. 알파만 필요하므로 최소 해석기를 따로 둔다."""
+    pos, w, h, idat, ct, bd, trns = 8, 0, 0, b"", 6, 8, None
+    while pos < len(data):
+        ln = struct.unpack(">I", data[pos:pos + 4])[0]
+        typ = data[pos + 4:pos + 8]
+        d = data[pos + 8:pos + 8 + ln]
+        if typ == b"IHDR":
+            w, h, bd, ct = struct.unpack(">IIBB", d[:10])
+        elif typ == b"tRNS":
+            trns = d
+        elif typ == b"IDAT":
+            idat += d
+        pos += 12 + ln
+    if bd != 8 or ct in (0, 2) or (ct == 3 and not trns):
+        return 1.0                                   # 알파 채널이 없다 = 전면 불투명
+    ch = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ct]
+    raw = zlib.decompress(idat)
+    stride = w * ch
+    prev, i, op, tot = bytearray(stride), 0, 0, 0
+    for _ in range(h):
+        f = raw[i]; i += 1
+        line = bytearray(raw[i:i + stride]); i += stride
+        for x in range(stride):
+            a = line[x - ch] if x >= ch else 0
+            b = prev[x]
+            c = prev[x - ch] if x >= ch else 0
+            if f == 1:
+                line[x] = (line[x] + a) & 255
+            elif f == 2:
+                line[x] = (line[x] + b) & 255
+            elif f == 3:
+                line[x] = (line[x] + (a + b) // 2) & 255
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[x] = (line[x] + pr) & 255
+        for x in range(w):
+            tot += 1
+            al = trns[line[x]] if ct == 3 and line[x] < len(trns) else (
+                255 if ct == 3 else line[x * ch + ch - 1])
+            if al > 8:
+                op += 1
+        prev = line
+    return op / tot if tot else 1.0
+
+
+class Vanilla:
+    """클라이언트 jar 조회 — 모델·blockstate·텍스처 불투명도 (전부 캐시)."""
+
+    def __init__(self):
+        self.z = client_jar()
+        self.names = set(self.z.namelist())
+        self._model, self._opac = {}, {}
+
+    def load(self, path):
+        return json.loads(self.z.read(path)) if path in self.names else None
+
+    def model(self, ref):
+        ref = ref.split(":")[-1]
+        if ref not in self._model:
+            self._model[ref] = self.load(f"assets/minecraft/models/{ref}.json") or {}
+        return self._model[ref]
+
+    def opacity(self, tex):
+        tex = tex.split(":")[-1]
+        if tex not in self._opac:
+            path = f"assets/minecraft/textures/{tex}.png"
+            self._opac[tex] = png_opacity(self.z.read(path)) if path in self.names else 1.0
+        return self._opac[tex]
+
+    def textures(self, ref):
+        """부모 사슬을 타고 textures 사전을 합친다 (자식이 이긴다)."""
+        m = self.model(ref)
+        out = {}
+        if "parent" in m:
+            out.update(self.textures(m["parent"]))
+        out.update(m.get("textures", {}))
+        return out
+
+    def elements(self, ref):
+        m = self.model(ref)
+        if "elements" in m:
+            return m["elements"]
+        return self.elements(m["parent"]) if "parent" in m else []
+
+    def model_area(self, ref):
+        """모델 하나가 텍스처마다 그리는 면적 — 큐브 한 면 = 256 (16단위 공간)."""
+        tex, out = self.textures(ref), {}
+        for el in self.elements(ref):
+            f = el.get("from", [0, 0, 0])
+            t = el.get("to", [16, 16, 16])
+            dim = {"x": abs(t[0] - f[0]), "y": abs(t[1] - f[1]), "z": abs(t[2] - f[2])}
+            for face, fd in (el.get("faces") or {}).items():
+                ax = FACE_AXES.get(face)
+                if not ax:
+                    continue
+                area = dim[ax[0]] * dim[ax[1]]
+                if area <= 0:
+                    continue
+                name = fd.get("texture", "")
+                for _ in range(10):                      # #참조 해소 (#all → #texture → block/x)
+                    if not (isinstance(name, str) and name.startswith("#")):
+                        break
+                    name = tex.get(name[1:], "")
+                if not isinstance(name, str) or not name:
+                    continue
+                name = name.split(":")[-1]
+                out[name] = out.get(name, 0.0) + area * self.opacity(name)
+        return out
+
+    def block_area(self, block):
+        """blockstate → 텍스처별 면적. None = blockstate 없음(= 블록이 아니다)."""
+        bs = self.load(f"assets/minecraft/blockstates/{block}.json")
+        if bs is None:
+            return None
+        parts = []
+        if "variants" in bs:
+            vs = bs["variants"]
+            for v in vs.values():
+                if isinstance(v, list):
+                    v = v[0]                             # 랜덤 회전 목록 — 면적은 같다
+                if isinstance(v, dict) and v.get("model"):
+                    parts.append((v["model"], 1.0 / max(1, len(vs))))   # 변종 평균
+        for part in bs.get("multipart", []):
+            ap = part["apply"]
+            if isinstance(ap, list):
+                ap = ap[0]
+            if ap.get("model"):
+                # 무조건부(기둥)는 늘 서고, 조건부(연결 팔)는 평균 2/4 방향만 붙는다
+                parts.append((ap["model"], 1.0 if "when" not in part else 0.5))
+        out = {}
+        for ref, w in parts:
+            for tex, area in self.model_area(ref).items():
+                out[tex] = out.get(tex, 0.0) + area * w
+        return out
+
+
+def palette_coverage():
+    """축 ⑪ — 조성 팔레트 커버리지. (커버리지, 위반수) 반환."""
+    print("\n── 축 ⑪ 조성 팔레트 커버리지 (빈도 × 면적 × 불투명도) ──")
+    try:
+        mc = Vanilla()
+    except Exception as e:                               # 망 없음·jar 못 받음
+        print(f"  ⚠ 클라이언트 jar 를 열 수 없다 ({e}) — 축 ⑪ **미측정**.")
+        print(f"    이 축은 팩 밖(세계)을 보는 유일한 자다. 미측정은 통과가 아니다:")
+        print(f"    {JAR_CACHE} 를 놓거나 망을 열고 다시 돌려라.")
+        return None, 1                                   # 못 잰 것도 위반이다 (조용한 구멍 금지)
+
+    # 팩이 덮은 것 = assets/minecraft/textures/ 아래 실재하는 PNG 의 상대 경로
+    #   (block/ 만 보면 안 된다 — 궤·항아리·현판의 텍스처는 entity/ 아래 산다)
+    root = PACK / "minecraft" / "textures"
+    have = {str(p.relative_to(root).with_suffix("")).replace("\\", "/")
+            for p in root.rglob("*.png")}
+    mats = builder_materials()
+    tex_area, blocks, nonblock, unresolved = {}, [], [], []
+
+    for mat, freq in mats.items():
+        name = mat.lower()
+        if name == "air":
+            continue                                     # 그림이 없다
+        if name in FLUIDS:
+            areas = {FLUIDS[name]: 6 * 256.0}            # 특수 렌더러 — 큐브 1개로 친다
+        elif name in BLOCK_ENTITIES:
+            areas = dict(BLOCK_ENTITIES[name])           # BlockEntityRenderer — 바운딩 박스 기하
+        else:
+            areas = mc.block_area(name)
+            if areas is None:
+                nonblock.append(mat)                     # blockstate 없음 = 아이템
+                continue
+            if not areas:
+                unresolved.append(mat)
+                continue
+        tot = sum(areas.values())
+        cov = sum(a for t, a in areas.items() if t in have)
+        miss = sorted(t for t in areas if t not in have)
+        blocks.append((freq * (tot - cov), mat, freq, cov / tot if tot else 1.0, miss))
+        for t, a in areas.items():
+            tex_area[t] = tex_area.get(t, 0.0) + freq * a
+
+    total = sum(tex_area.values())
+    covered = sum(a for t, a in tex_area.items() if t in have)
+    ratio = covered / total if total else 0.0
+    full = sum(1 for _, _, _, r, _ in blocks if r >= 0.999)
+
+    print(f"  조성 팔레트: 블록 {len(blocks)}종 · 참조 텍스처 {len(tex_area)}장"
+          f" · 팩 보유 PNG {len(have)}장")
+    print(f"  가중 커버리지 = {ratio:.1%}  (덮은 면적 {covered:,.0f} / 총 {total:,.0f})")
+    print(f"  (참고) 블록 단위 완전커버 = {full}/{len(blocks)} = {full / len(blocks):.1%}"
+          f" — 가중치 없는 옛 셈법. 큰 면(벽·바닥)이 항아리와 같은 표를 갖는 셈이라 쓰지 않는다")
+
+    holes = sorted(blocks, reverse=True)[:12]
+    if holes and holes[0][0] > 0:
+        print("  ── 남은 구멍 (미커버 면적 상위) ──")
+        for gap, mat, freq, r, miss in holes:
+            if gap <= 0:
+                break
+            print(f"    {gap:9,.0f}  {mat:24s} ×{freq:<3d} 커버 {r:4.0%}  결손: {', '.join(miss[:4])}")
+    if nonblock:
+        print(f"  분모 제외 — 아이템(blockstate 없음) {len(nonblock)}종: {', '.join(sorted(nonblock))}")
+    if unresolved:
+        print(f"  ❌ 모델 미해석 {len(unresolved)}종: {', '.join(sorted(unresolved))} (자의 고장 — 고쳐라)")
+
+    if ratio < COVERAGE_MIN:
+        print(f"  ❌ 가중 커버리지 {ratio:.1%} < {COVERAGE_MIN:.0%} — 세계가 아직 바닐라다")
+        return ratio, 1 + len(unresolved)
+    print(f"  ✅ 가중 커버리지 {ratio:.1%} ≥ {COVERAGE_MIN:.0%}")
+    return ratio, len(unresolved)
+
+
 def cross_checks():
     """관계 축 3종 (계열 실루엣 · 등급 변별) — 파일 하나로는 볼 수 없는 결함."""
     violations = 0
@@ -326,7 +666,10 @@ def lint(path, name):
     if not is_glyph and contrast < MIN_CONTRAST:
         notes.append(f"명암차 {contrast:.0f} < {MIN_CONTRAST} (밋밋)")
         bad = True
-    if seam > SEAM_MAX:
+    # 이음매는 **면**에만 묻는다 (SEAM_FACES 주석 — 스프라이트는 제 복사본과 이어 붙지 않는다)
+    is_face = (name in TILING_BLOCKS or name in SEAM_FACES
+               or len(pxs) / (w * h) >= SEAM_FACE_MIN_OPAQUE)
+    if seam > SEAM_MAX and is_face:
         notes.append(f"이음매 {seam:.2f} > {SEAM_MAX}")
         bad = True
     if name in ("deepslate_tiles", "cracked_deepslate_tiles"):
@@ -468,6 +811,8 @@ def main():
                       f" · 채도 {m['chroma']:.0f} · 이음매 {m['seam']:.2f} · 평균 {m['avg']}{tail}")
 
     violations += cross_checks()
+    _, cov_violations = palette_coverage()
+    violations += cov_violations
 
     if not args.lint_only:
         roof = PACK / "minecraft" / "textures" / "block" / "deepslate_tiles.png"

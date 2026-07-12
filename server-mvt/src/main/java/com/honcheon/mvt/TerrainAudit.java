@@ -83,12 +83,16 @@ final class TerrainAudit {
     /** @param dugCave 이 지역에 <b>우리가 판 굴</b>이 있는가 (있으면 지하 공동에 여유를 준다) */
     static List<String> audit(World world, String name, int cx, int cy, int cz, int r, String terrain,
                               boolean dugCave) {
-        boolean mountain = "산".equals(terrain) || "험산".equals(terrain) || "고원".equals(terrain);
-        return auditInner(world, name, cx, cy, cz, r, mountain, dugCave);
+        // 물의 잣대 — 강가·섬·수향에 "네 방위에서 걸어 들어오라"고 요구할 수 없다.
+        //   수로채는 **찾아가지 않는다. 찾아온다** (등록부의 말). 배로 오는 집에 육로를 요구하면 그건 눈이 틀린 것이다.
+        boolean water = "강".equals(terrain) || "수향".equals(terrain) || "섬".equals(terrain)
+                || "물가".equals(terrain);
+        boolean loose = "산".equals(terrain) || "험산".equals(terrain) || "고원".equals(terrain) || water;
+        return auditInner(world, name, cx, cy, cz, r, loose, dugCave, water);
     }
 
     private static List<String> auditInner(World world, String name, int cx, int cy, int cz, int r,
-                                           boolean mountain, boolean dugCave) {
+                                           boolean mountain, boolean dugCave, boolean water) {
         List<String> out = new ArrayList<>();
         List<String> violations = new ArrayList<>();
         out.add(HEAD + "══ 환경 검수 — " + name + " (중심 " + cx + "," + cy + "," + cz + " · 반경 " + r + ") ══");
@@ -98,7 +102,7 @@ final class TerrainAudit {
         cliffs(out, violations, world, cx, cy, cz, r, mountain);
         connectivity(out, violations, world, cx, cy, cz, r, mountain);
         floating(out, violations, world, cx, cy, cz, r);
-        underground(out, violations, world, cx, cy, cz, r, dugCave);
+        underground(out, violations, world, cx, cy, cz, r, dugCave, water);
 
         out.add(HEAD + "── 총평 ──");
         out.add(violations.isEmpty() ? OK + "위반 0건 — 조성물이 자연에 앉아 있다"
@@ -381,7 +385,8 @@ final class TerrainAudit {
      * 우리가 판 동굴이 있다면 그만큼은 정직하게 잡힌다(그건 위반이 아니라 설계다).
      */
     private static void underground(List<String> out, List<String> violations,
-                                    World world, int cx, int cy, int cz, int r, boolean dugCave) {
+                                    World world, int cx, int cy, int cz, int r, boolean dugCave,
+                                    boolean water) {
         out.add(HEAD + "⑥ 지하 — 자연 동굴이 남아 있는가"
                 + (dugCave ? " (우리가 판 굴이 있는 지역 — 여유 8%)" : " (동굴은 우리가 판다)"));
         long air = 0;
@@ -394,7 +399,11 @@ final class TerrainAudit {
                     }
                     Material m = world.getBlockAt(x, y, z).getType();
                     total++;
-                    if (m.isAir() || m == Material.WATER || m == Material.LAVA) {
+                    // 강가에서는 **강바닥의 물이 동굴로 잡혔다**(수로채 "자연동굴 25%"). 물은 동굴이 아니다 —
+                    // 강이 세력인 곳에서 강을 결함이라 부르면, 눈이 세계를 못 읽는 것이다.
+                    boolean voidBlock = m.isAir() || m == Material.LAVA
+                            || (m == Material.WATER && !water);
+                    if (voidBlock) {
                         air++;
                     }
                 }

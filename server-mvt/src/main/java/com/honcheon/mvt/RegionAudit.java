@@ -58,7 +58,7 @@ final class RegionAudit {
 
         boolean sect = !"noklim".equals(place.faction());
         reachability(out, violations, world, zone, sect);
-        contract(out, violations, world, zone, sect);
+        contract(out, violations, world, zone, place);
         floating(out, violations, world, zone);
         light(out, violations, world, zone);
         ink(out, violations, world, zone);
@@ -219,21 +219,19 @@ final class RegionAudit {
 
     // ─── ② 구조 계약 — 그 원형이 반드시 가져야 할 것 ───
 
+    /**
+     * 구조 계약 — <b>원형마다 다르다.</b>
+     *
+     * <p>구판은 `sect = !noklim` 한 줄로 갈라 **마교 은신처에 매화 20장을 요구했다.** 은신처는
+     * 매화를 심지 않는다 — 그 집은 <b>없는 것으로 자기를 말하는</b> 집이다(담도 등불도 깃발도 없다).
+     * 계약표는 그 집을 지은 자(건축 계층)가 갖는다. 검수는 그 표를 읽을 뿐이다.
+     */
     private static void contract(List<String> out, List<String> violations,
-                                 World world, Zone zone, boolean sect) {
-        out.add(HEAD + "② 구조 계약 — 그 집이 그 집이려면");
+                                 World world, Zone zone, WorldMap.Place place) {
+        out.add(HEAD + "② 구조 계약 — 그 집이 그 집이려면 (" + RemoteBuilder.archetype(place) + ")");
         java.util.Map<Material, Integer> census = census(world, zone);
-        if (sect) {
-            need(out, violations, census, Material.DEEPSLATE_TILES, 40, "검은 기와(본전)");
-            need(out, violations, census, Material.WHITE_TERRACOTTA, 40, "회벽(본전)");
-            need(out, violations, census, Material.POLISHED_ANDESITE, 400, "돌바닥(계단·단)");
-            need(out, violations, census, Material.CHERRY_LEAVES, 20, "매화");
-            need(out, violations, census, Material.LANTERN, 4, "석등(오르는 길의 불)");
-        } else {
-            need(out, violations, census, Material.SPRUCE_LOG, 200, "목책·막사(통나무)");
-            need(out, violations, census, Material.CAMPFIRE, 1, "모닥불(마당의 중심)");
-            need(out, violations, census, Material.HAY_BLOCK, 10, "초가·짚");
-            need(out, violations, census, Material.TORCH, 2, "망루의 불");
+        for (RemoteBuilder.Need n : RemoteBuilder.contract(RemoteBuilder.archetype(place))) {
+            need(out, violations, census, n.material(), n.min(), n.what());
         }
     }
 

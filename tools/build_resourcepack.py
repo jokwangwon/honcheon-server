@@ -585,6 +585,73 @@ def generic_54_container():
     return grid
 
 
+# ─── 작업 컨테이너 GUI — 화로(火爐)·목공대. 인벤토리·궤와 같은 화선지 문법 ───
+# 왜 이제서야: 인벤토리와 궤는 덮었는데 **화덕을 열면 바닐라가 튀어나왔다**. GUI는 전역이고
+# 플레이어가 가장 오래 들여다보는 화면이다 — 한 장만 바닐라면 그 한 장이 팩 전체를 배신한다.
+# 좌표 계약(바닐라 메뉴): 슬롯 박스 = 아이템 좌표 - 1. 위치·크기 불변, 색만 수묵으로.
+#   화로(FurnaceMenu):  재료 (55,16) · 연료 (55,52) · 결과 (111,29)  [+ 불꽃 (56,36) · 화살 (79,34)]
+#   훈연기·용광로: 같은 좌표 (SmokerMenu·BlastFurnaceMenu 는 화로와 같은 메뉴 배치)
+#   목공대(CraftingMenu): 3x3 (29+18c, 16+18r) · 결과 (123,34) [+ 화살 (89,34)]
+# 공통: 플레이어 인벤 (7+18c, 83+18r) · 핫바열 (7+18c, 141) — 인벤토리와 같다
+FIRE_DARK = (58, 30, 22, 255)       # 불꽃 게이지 — 꺼진 자리 (파인 먹빛)
+FIRE_LIT = (186, 96, 52, 255)       # 불꽃 — 타는 자리 (주사 계열. 불은 의미다 → 채도 허용)
+ARROW_DIM = (150, 140, 122, 255)    # 진행 화살 — 빈 자리 (화선지보다 어둡게)
+
+
+def draw_player_rows(grid):
+    """플레이어 인벤 9x3 + 핫바열 — 모든 작업 GUI가 공유하는 아래 절반."""
+    for r in range(3):
+        for c in range(9):
+            draw_slot(grid, 7 + 18 * c, 83 + 18 * r)
+    for c in range(9):
+        draw_slot(grid, 7 + 18 * c, 141)
+
+
+def draw_arrow(grid, x0, y0, w=22):
+    """진행 화살 — 먹 획 (바닐라의 '채워지는 화살'의 빈 상태. 채움은 코드가 blit 한다)."""
+    for x in range(x0, x0 + w - 6):
+        grid[y0 + 6][x] = ARROW_DIM
+        grid[y0 + 7][x] = ARROW_DIM
+    for dy, span in ((-3, 0), (-2, 1), (-1, 2), (0, 3), (1, 3), (2, 2), (3, 1), (4, 0)):
+        for dx in range(span + 1):
+            grid[y0 + 6 + dy][x0 + w - 6 + dx] = ARROW_DIM     # 화살촉
+
+
+def furnace_container():
+    """256x256 (유효 176x166) — 화로/훈연기/용광로 (gui/container/furnace|smoker|blast_furnace.png).
+    세 화덕이 **같은 배치**를 쓴다 → 한 함수가 세 장을 굽는다 (바닐라도 같은 좌표다)."""
+    grid = blank_canvas()
+    draw_panel(grid, 176, 166)
+    draw_seal_corners(grid, 176, 166)
+    draw_slot(grid, 55, 16)                       # 재료 (약재·광석)
+    draw_slot(grid, 55, 52)                       # 연료 (숯)
+    draw_slot(grid, 111, 29)                      # 결과
+    # 불꽃 게이지 14x14 (56,36) — 바닐라는 아래에서 위로 차오른다. 텍스처는 '꺼진 아궁이'다
+    for dy in range(14):
+        for dx in range(14):
+            d = abs(dx - 6.5) + abs(dy - 10)      # 아궁이의 불 모양 (마름모 실루엣)
+            if d < 7:
+                grid[36 + dy][56 + dx] = FIRE_DARK
+    draw_arrow(grid, 79, 28)                      # 제련 진행 화살 (79,34) 근방
+    draw_player_rows(grid)
+    return grid
+
+
+def crafting_container():
+    """256x256 (유효 176x166) — 목공대 (gui/container/crafting_table.png).
+    슬롯 박스(CraftingMenu 계약): 3x3 (29+18c,16+18r) / 결과 (123,34)."""
+    grid = blank_canvas()
+    draw_panel(grid, 176, 166)
+    draw_seal_corners(grid, 176, 166)
+    for r in range(3):
+        for c in range(3):
+            draw_slot(grid, 29 + 18 * c, 16 + 18 * r)
+    draw_slot(grid, 123, 34)                      # 결과
+    draw_arrow(grid, 89, 28)
+    draw_player_rows(grid)
+    return grid
+
+
 # 경락도 배경 — 먹 바탕은 '평면 검정'이 아니다. 종이에 스민 먹은 고이고 번진다.
 # (린트가 색 3을 집은 이유: 테·구분선·가이드가 RGB는 같고 알파만 달랐다 — 세 획이 한 색이었다.)
 LEDGER_INK = ramp((15, 14, 13, 235), (48, 45, 41, 235), 5)   # 먹 바탕 5단 — 고인 먹 → 엷게 번진 먹
@@ -3517,6 +3584,453 @@ def write_particle_textures() -> int:
     return len(out)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 자재층 2차 — **축 ⑪ 이 짚어낸 구멍**을 메운다 (2026-07)
+#
+# 1차 자재층은 '조성기가 많이 쓰는 블록'을 손으로 골라 덮었다 (11.4% → 84.7%).
+# 그 다음 자리를 고르는 데는 자가 필요했다: texture_audit 축 ⑪ 이 빈도 × 면적 × 불투명도로
+# **남은 구멍을 면적 순으로 세워 준다**. 아래 순서가 그 순서다 — 손이 아니라 자가 골랐다.
+#
+# 그리지 않는 것과 그 이유 (등록제: 안 그리는 것도 등록한다):
+#   · 풀·잎·덩굴·수수깡 (short_grass·fern·*_leaves·vine·lily_pad·sugar_cane·tall_grass)
+#     → **바이옴 컬러맵이 초록을 곱한다**. 회색조를 칠해도 초록이 된다. 앞선 작업자의 보류 판정 유지.
+#   · 물·용암 (water_still·lava_still) → 유체는 특수 렌더러 + **애니메이션 프레임 시트**
+#     (16x512·16x320) + 물은 바이옴 틴트까지 곱한다. 별도 증분.
+#   · 불 (campfire_fire 등) → 애니메이션 프레임 시트 (16x128). 별도 증분.
+#   ※ 꽃은 컬러맵 대상이 **아니다** (틴트되는 것은 풀·잎·물뿐) → 그린다.
+# ═══════════════════════════════════════════════════════════════════════════
+def grain_rows(shades, salt, clump=1.1, grit=0.85, dune=0.0):
+    """고운 알갱이 면 — 모래·마른 흙·눈. 저주파 얼룩(뭉침) + 고주파 알갱이.
+
+    ※ 눈처럼 **원래 매끈한 면**도 명암은 있어야 한다: 진폭을 낮추면 색 3·명암차 22 로
+      '평면·밋밋' 이중 위반이 난다 (검수가 잡았다). 매끈함은 **좁은 팔레트**로 내는 것이지
+      진폭을 죽여서 내는 것이 아니다 — 눈의 램프는 168~246 이라 계단을 다 밟아도 여전히 희다.
+      dune = 저주파 물결 한 겹 (바람이 쓸어 놓은 결. 모래·눈이 평평한 적은 없다)."""
+    def v(x, y):
+        # 결의 물결은 **랩 안전**해야 한다: 파장이 16을 정수로 나눠야 이어 붙였을 때 이음매가 없다
+        # (sin((x + 0.6y)*0.5) 처럼 무리한 주기를 쓰면 이음매 2.25 로 튄다 — 검수가 잡았다).
+        # 위상만 smooth_octave 로 흔든다 (그것도 랩 안전이라 결이 규칙적 줄무늬가 되지 않는다).
+        phase = 2 * math.pi * (x + 2 * y) / 16 + smooth_octave(x, y, 8, salt + 2, 1.4)
+        return (4.0 + dune * math.sin(phase) + smooth_octave(x, y, 4, salt, clump)
+                + octave(x, y, 1, salt + 1, grit))
+    return [[step(shades, v(x, y)) for x in range(16)] for y in range(16)]
+
+
+def ice_rows(shades, salt, cracks=3):
+    """얼음 — 매끈한 면. 얼음의 정체는 얼룩이 아니라 **금**이다 (실금 몇 줄이 없으면 그냥 회색 판)."""
+    g = [[step(shades, 5.0 + smooth_octave(x, y, 8, salt, 1.3)) for x in range(16)]
+         for y in range(16)]
+    for i in range(cracks):                      # 실금 — 대각으로 흐르되 점선(직선 금지)
+        x, y = h32(i, salt, 0x1F) % 16, h32(i, salt, 0x2F) % 16
+        dx, dy = (1, 1) if i % 2 else (1, -1)
+        for t in range(10):
+            if h32(t, i, salt) % 5 == 0:
+                continue                         # 끊긴 금 (이어진 직선은 무늬가 된다)
+            g[(y + dy * t) % 16][(x + dx * t) % 16] = step(shades, 1.4 + octave(t, i, 1, salt, 0.6))
+    return g
+
+
+def flower_rows(petal, cy=5.0, r=2.7, heart=None):
+    """들꽃 — 줄기 한 획 + 잎 + 꽃. 수묵의 꽃은 **획**이지 색면이 아니다 (채도는 아주 옅게).
+    꽃은 컬러맵 틴트 대상이 아니므로 우리가 칠한 값이 그대로 선다 (풀·잎과 갈리는 지점)."""
+    g = [[T] * 16 for _ in range(16)]
+    stem = ramp((42, 50, 40, 255), (98, 110, 88, 255), 4)
+    for y in range(int(cy) + 1, 15):
+        x = 8 + (1 if y in (10, 13) else 0)      # 줄기의 흔들림 — 곧은 선은 사람이 그은 선이다
+        g[y][x] = step(stem, 2.6 - (y - cy) * 0.07)
+        g[y][x - 1] = step(stem, 0.7)            # 줄기 그늘 1px (한 획도 입체다)
+    for ly, sx in ((10, -1), (12, 1)):           # 잎 두 장 — 좌우로 뻗는다
+        for t in range(1, 4):
+            g[ly + (t // 3)][8 + sx * t] = step(stem, 2.2 - t * 0.35)
+    for y in range(16):                          # 꽃송이
+        for x in range(16):
+            d = (((x - 7.5) ** 2) + ((y - cy) ** 2) * 1.25) ** 0.5
+            if d <= r:
+                g[y][x] = step(petal, 3.3 - d * 0.75 + octave(x, y, 1, 0x5B, 0.4))
+    if heart:                                    # 꽃심 한 점
+        g[int(cy)][8] = heart
+        g[int(cy)][7] = heart
+    return g
+
+
+def cobweb_rows():
+    """거미줄 — 방사 실 + 나선. 폐사당·산채 구석. 대부분 투명(컷아웃)이라 실이 곧 그림이다."""
+    thread = ramp((92, 90, 86, 255), (228, 226, 220, 255), 5)
+    g = [[T] * 16 for _ in range(16)]
+    for a in range(8):                           # 방사 실 8줄 — 모서리와 변 중앙으로
+        dx, dy = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))[a]
+        for t in range(1, 9):
+            x, y = 7 + dx * t, 7 + dy * t
+            if 0 <= x < 16 and 0 <= y < 16:
+                g[y][x] = step(thread, 3.4 - t * 0.18 + octave(x, y, 1, 0x2B, 0.5))
+    for r in (3, 6):                             # 나선 두 겹 — 방사 실을 잇는다
+        for a in range(0, 360, 12):
+            x = 7 + round(r * math.cos(math.radians(a)))
+            y = 7 + round(r * math.sin(math.radians(a)))
+            if 0 <= x < 16 and 0 <= y < 16 and h32(x, y, 0x77) % 7:
+                g[y][x] = step(thread, 2.6 + octave(x, y, 1, 0x3D, 0.6))
+    g[7][7] = step(thread, 4.0)
+    return g
+
+
+def lichen_rows():
+    """야광이끼 — 바위에 번진 냉광 얼룩 (컷아웃). 빛나되 초록이 아니라 **엷은 백록**이다.
+    번짐의 가장자리는 어둡고 속은 빛난다 — 그 기울기가 없으면 색 3짜리 평면 얼룩이 된다."""
+    shades = ramp((70, 88, 80, 255), (208, 228, 216, 255), 6)
+    g = [[T] * 16 for _ in range(16)]
+    for y in range(16):
+        for x in range(16):
+            v = smooth_octave(x, y, 4, 0x8F, 1.7) + octave(x, y, 1, 0x91, 0.55)
+            if v > 0.3:
+                g[y][x] = step(shades, (v - 0.3) * 3.4)     # 가장자리 0 → 속 5 (계단을 다 밟는다)
+    return g
+
+
+def ladder_rows():
+    """사다리 — 두 기둥 + 가로장 (컷아웃). 실루엣이 곧 계약이다 (바닐라와 같은 자리에 발을 딛는다)."""
+    wood = ramp((58, 48, 38, 255), (140, 118, 92, 255), 5)
+    g = [[T] * 16 for _ in range(16)]
+    for y in range(16):
+        for x in (2, 3, 12, 13):                 # 두 기둥
+            g[y][x] = step(wood, 2.8 + octave(x, y, 1, 0x21, 0.7) - (x in (3, 13)) * 0.9)
+    for y in (2, 7, 12):                         # 가로장 셋
+        for x in range(3, 13):
+            g[y][x] = step(wood, 3.2 + octave(x, y, 1, 0x23, 0.6))
+            g[y + 1][x] = step(wood, 1.2)        # 가로장 그늘
+    return g
+
+
+def trapdoor_rows(shades, salt):
+    """널문 — 널 세 쪽 + 정첩 두 점 (컷아웃 아님: 꽉 찬 판)."""
+    g = plank_rows(shades, salt)
+    iron = ramp((44, 42, 40, 255), (128, 124, 118, 255), 4)
+    for y in range(16):                          # 널을 가르는 골 두 줄
+        for x in (5, 10):
+            g[y][x] = step(shades, 0.6)
+    for cy in (2, 12):                           # 정첩 — 쇠 띠
+        for x in range(1, 6):
+            g[cy][x] = step(iron, 2.6 + octave(x, cy, 1, salt, 0.5))
+            g[cy + 1][x] = step(iron, 1.0)
+    return g
+
+
+def fence_rows(shades, salt):
+    """대울타리 — 세로 쪽 (bamboo_fence 는 제 텍스처를 갖는 드문 울타리다)."""
+    g = [[step(shades, 3.0 + octave(x, y, 1, salt, 0.6)) for x in range(16)] for y in range(16)]
+    for x in range(16):
+        if x % 4 == 3:                           # 쪽과 쪽 사이 골
+            for y in range(16):
+                g[y][x] = step(shades, 0.8 + octave(x, y, 1, salt + 1, 0.4))
+    for y in (4, 11):                            # 가로로 엮은 끈
+        for x in range(16):
+            g[y][x] = step(shades, 1.6 + octave(x, y, 1, salt + 2, 0.5))
+    return g
+
+
+def metal_rows(shades, salt, rivets=()):
+    """쇠 면 — 모루·깔때기·화덕 앞판. 두들긴 쇠는 평면이 아니다 (망치 자국)."""
+    g = [[step(shades, 3.4 + smooth_octave(x, y, 4, salt, 1.1) + octave(x, y, 1, salt + 1, 0.5))
+          for x in range(16)] for y in range(16)]
+    for (rx, ry) in rivets:                      # 못머리 — 좌상 광, 우하 그늘
+        g[ry][rx] = step(shades, 5.6)
+        if ry + 1 < 16:
+            g[ry + 1][rx] = step(shades, 0.8)
+    return g
+
+
+def funnel_rows(shades, salt):
+    """깔때기 속 — 가장자리는 빛을 받고 가운데 아가리로 갈수록 어둠에 잠긴다.
+    '어두운 면'을 한 톤으로 채우면 그것은 어둠이 아니라 **구멍**이다 (경락도 창에서 배운 것)."""
+    def v(x, y):
+        rim = max(abs(x - 7.5), abs(y - 7.5))         # 0.5(가운데) ~ 7.5(가장자리)
+        return 5.6 - (7.5 - rim) * 0.72 + octave(x, y, 1, salt, 0.6)
+    return [[step(shades, v(x, y)) for x in range(16)] for y in range(16)]
+
+
+def hearth_front_rows(lit=False):
+    """화덕 앞판 — 아궁이 아가리. 불 든 아궁이만 붉다 (채도는 의미에만: 불은 의미다)."""
+    stone = ramp((60, 58, 55, 255), (146, 143, 137, 255), 8)
+    g = stone_rows(stone, 0x3B, amp=1.1)
+    mouth = ramp((18, 16, 15, 255), (58, 54, 50, 255), 4) if not lit else \
+        ramp((92, 36, 22, 255), (232, 152, 74, 255), 5)
+    for y in range(6, 13):                       # 아궁이 — 아치 아가리
+        half = 5 - abs(y - 9) // 2
+        for x in range(8 - half, 8 + half):
+            d = abs(x - 7.5) / max(1, half)
+            g[y][x] = step(mouth, (3.6 if lit else 2.2) - d * 1.4 - (y - 9) * 0.25
+                           + octave(x, y, 1, 0x5D, 0.6))
+    for x in range(3, 13):                       # 인방(引枋) — 아궁이 위 돌 한 줄
+        g[5][x] = step(stone, 1.4)
+    return g
+
+
+def composter_rows(part):
+    """퇴비통 — 널 세운 통 + 삭는 거름. 마을의 뒤꼍 (조성기 3회, 면적은 큰 편)."""
+    wood = ramp((54, 46, 36, 255), (128, 112, 88, 255), 7)
+    if part == "side":
+        g = [[step(wood, 3.4 + octave(x, y, 1, 0x71, 0.8)) for x in range(16)] for y in range(16)]
+        for x in range(16):
+            if x % 5 == 4:                       # 세운 널의 이음
+                for y in range(16):
+                    g[y][x] = step(wood, 0.9 + octave(x, y, 1, 0x73, 0.4))
+        for y in (1, 14):                        # 테 두 줄 (통을 조인다)
+            for x in range(16):
+                g[y][x] = step(wood, 1.6 + octave(x, y, 1, 0x75, 0.5))
+        return g
+    if part == "top":                            # 아가리 테 — 안은 비었다
+        # 테는 **두께가 있는 물건**이다: 바깥 모는 빛을 받고 안쪽 모는 아가리로 떨어진다.
+        # (잡티만 뿌리면 색 3·명암 22 로 '평면·밋밋' 이중 위반 — 검수가 잡아냈다.)
+        g = [[T] * 16 for _ in range(16)]
+        for y in range(16):
+            for x in range(16):
+                d = min(x, y, 15 - x, 15 - y)
+                if d >= 2:
+                    continue
+                lit = (x <= y and x <= 15 - y) or (y <= x and y <= 15 - x)   # 좌·상 = 빛
+                v = (5.2 if lit else 2.0) - d * 1.6 + octave(x, y, 1, 0x77, 0.8)
+                g[y][x] = step(wood, v)
+        return g
+    if part == "bottom":
+        return plank_rows(wood, 0x79)
+    # compost / ready — 삭는 거름. ready 는 다 삭아 검고 기름지다
+    dark = ramp((36, 32, 26, 255), (92, 82, 66, 255), 7) if part == "ready" else \
+        ramp((52, 46, 34, 255), (124, 110, 82, 255), 7)
+    g = [[step(dark, 3.6 + smooth_octave(x, y, 4, 0x7B, 1.4) + octave(x, y, 1, 0x7D, 0.9))
+          for x in range(16)] for y in range(16)]
+    if part == "ready":
+        for i in range(6):                       # 다 삭은 표식 — 하얗게 뜬 곰팡이 몇 점
+            x, y = h32(i, 0x7F) % 16, h32(i, 0x81) % 16
+            g[y][x] = (150, 148, 138, 255)
+    return g
+
+
+def loom_rows(part):
+    """베틀 — 나무 틀 + 걸린 날실. 저잣거리의 옷감집."""
+    wood = ramp((62, 52, 40, 255), (146, 126, 98, 255), 7)
+    if part == "top":
+        return plank_rows(wood, 0x83)
+    if part == "bottom":
+        return plank_rows(wood, 0x85)
+    g = [[step(wood, 3.2 + octave(x, y, 1, 0x87, 0.7)) for x in range(16)] for y in range(16)]
+    if part == "front":                          # 앞면 — 날실이 걸렸다
+        thread = ramp((150, 146, 136, 255), (226, 222, 210, 255), 4)
+        for x in range(3, 13):
+            if x % 2:
+                continue
+            for y in range(3, 13):
+                g[y][x] = step(thread, 2.4 + octave(x, y, 1, 0x89, 0.7))
+        for y in (2, 13):                        # 위·아래 도투마리
+            for x in range(16):
+                g[y][x] = step(wood, 1.2 + octave(x, y, 1, 0x8B, 0.5))
+    else:                                        # side — 틀의 옆면
+        for y in (3, 12):
+            for x in range(16):
+                g[y][x] = step(wood, 1.3 + octave(x, y, 1, 0x8D, 0.5))
+    return g
+
+
+def sign_rows(shades, salt, hanging=False):
+    """현판(懸板)·주기(酒旗) — 64x32 (entity/signs/). 판은 나무, 글씨 자리는 비워 둔다
+    (플러그인·플레이어가 글을 쓴다 — 팩이 글자를 그리면 그 위에 겹쳐 읽힌다).
+    바닐라 UV: 판 = (0,0) 24x12, 기둥/막대 = (0,14) 2x14 근처. 판 밖은 투명."""
+    g = [[T] * 64 for _ in range(32)]
+    for y in range(12):                          # 판 — 24x12
+        for x in range(24):
+            v = 3.2 + octave(x, y, 1, salt, 0.7) - (y - 6) * 0.05
+            if y in (0, 11) or x in (0, 23):
+                v -= 1.6                         # 판의 테 — 그늘 (물건에는 모서리가 있다)
+            g[y][x] = step(shades, v)
+    for i in range(3):                           # 옻칠 얼룩 몇 점 (현판은 칠한 판이다)
+        x, y = 3 + h32(i, salt) % 18, 2 + h32(i, salt + 1) % 8
+        g[y][x] = step(shades, 1.0)
+    if hanging:                                  # 매다는 사슬 두 줄 (0,14) 근방
+        iron = ramp((40, 38, 36, 255), (122, 118, 112, 255), 4)
+        for y in range(14, 28):
+            for x in (0, 1, 12, 13):
+                g[y][x] = step(iron, 2.6 - (x in (1, 13)) * 1.2 + octave(x, y, 1, salt + 2, 0.5))
+    else:                                        # 세우는 기둥
+        for y in range(14, 28):
+            for x in range(2):
+                g[y][x] = step(shades, 2.4 + octave(x, y, 1, salt + 3, 0.6))
+    return g
+
+
+def crop_rows(shades, stage, stages):
+    """밭작물 — 자랄수록 키가 크고 짙어진다 (컷아웃).
+
+    ※ 여기서 **빈도 대리 지표의 한계**가 보인다: 밭은 코드 한 줄이 수십 칸을 깐다.
+      축 ⑪ 의 면적 순위에서 작물은 작게 잡히지만(코드 출현 1회) 눈에는 밭 한 뙈기로 보인다.
+      그래서 순위와 무관하게 그린다 — 자는 순서를 정해 주는 것이지 눈을 대신하지 않는다."""
+    g = [[T] * 16 for _ in range(16)]
+    t = (stage + 1) / stages
+    tall = int(3 + 11 * t)
+    for col in (2, 7, 12):                        # 세 포기 — 이랑
+        for k in range(tall):
+            y, x = 15 - k, col + (1 if k % 5 == 3 else 0)
+            if not (0 <= x < 16):
+                continue
+            # 어린 싹도 평면이 아니다: 뿌리는 그늘에 잠기고 끝은 볕을 받는다 (세로 명암)
+            # + 오른쪽에 그늘 한 줄 (한 획도 입체다). 이것이 없으면 색 2·명암차 17 로 이중 위반.
+            v = 1.3 + 3.6 * (k / max(1, tall - 1)) + 0.8 * t + octave(x, y, 1, 0x11, 0.7)
+            g[y][x] = step(shades, v)
+            if x + 1 < 16:
+                g[y][x + 1] = step(shades, v - 2.4)                  # 줄기 그늘
+            if k >= tall - 2 and t > 0.6 and x - 1 >= 0:
+                g[y][x - 1] = step(shades, 5.8 - (tall - k) * 0.5)   # 여문 이삭 (고개를 숙인다)
+    return g
+
+
+def sprig_rows(shades, salt, fronds=3, lean=0.35, top_bias=0.0):
+    """줄기 초목 — 마른 덤불·묘목·대나무·수초 (컷아웃). 몇 획으로 서는 것들."""
+    g = [[T] * 16 for _ in range(16)]
+    for f in range(fronds):
+        x = 3 + f * (10 // max(1, fronds - 1) if fronds > 1 else 0)
+        sway = -1 if f % 2 else 1
+        for k in range(14):
+            y = 15 - k
+            xx = int(x + sway * lean * k)
+            if not (0 <= xx < 16):
+                continue
+            v = 1.2 + 2.8 * (k / 13) * (1 + top_bias) + octave(xx, y, 1, salt, 0.7)
+            g[y][xx] = step(shades, v)
+            if k in (5, 9, 12) and 0 <= xx + sway < 16:       # 곁가지
+                g[y][xx + sway] = step(shades, v - 1.2)
+    return g
+
+
+def mushroom_rows(cap, stem):
+    """버섯 — 갓 + 대 (컷아웃). 폐사당 그늘의 살림."""
+    g = [[T] * 16 for _ in range(16)]
+    for y in range(6, 11):                        # 대
+        for x in (7, 8):
+            g[y][x] = step(stem, 2.6 - (x == 8) * 1.0 + octave(x, y, 1, 0x2B, 0.4))
+    for y in range(2, 7):                         # 갓 — 반원
+        half = 4 - abs(y - 4)
+        for x in range(7 - half, 9 + half):
+            d = abs(x - 7.5) / max(1, half + 1)
+            g[y][x] = step(cap, 3.6 - d * 1.6 - (y - 4) * 0.35 + octave(x, y, 1, 0x2D, 0.5))
+    return g
+
+
+def pot_rows():
+    """화분 — 구운 흙.
+
+    ★ 화분은 **재질 텍스처**이지 그림이 아니다. flower_pot.json 을 열어 보면 모델이 읽는 uv는
+      x5..11 · y5..16 뿐이고 나머지는 안 쓴다 — 아가리 테를 y0..2 에 가로로 그으면 그 획은
+      **모델이 읽지도 않는 죽은 픽셀**이면서 랩 경계만 어긋나게 한다 (이음매 1.45 로 울었다).
+      화분의 생김새는 **모델**이 만든다. 텍스처가 할 일은 '구운 흙'으로 보이는 것뿐이다.
+      (팩의 규율 그대로: "UV를 모르는 면에는 무늬를 그리지 않는다".)
+    물레 자국(가로 결)만 옅게 — 도기는 돌려 빚은 것이라 결이 가로로 돈다."""
+    clay = ramp((82, 64, 52, 255), (172, 144, 120, 255), 8)
+
+    def v(x, y):
+        wheel = 0.55 * math.sin(2 * math.pi * y / 4)        # 랩 안전 (파장 4 가 16 을 나눈다)
+        return (4.0 + wheel + smooth_octave(x, y, 4, 0x31, 1.2)
+                + octave(x, y, 1, 0x33, 0.7))
+
+    return [[step(clay, v(x, y)) for x in range(16)] for y in range(16)]
+
+
+def scaffold_rows(part):
+    """비계(飛階) — 대나무를 엮어 세운 발판. 목수·미장이 쓰는 임시 구조."""
+    bam = ramp((98, 90, 72, 255), (188, 176, 148, 255), 8)
+    if part == "top":                             # 위에서 본 발 — 격자
+        g = [[step(bam, 3.4 + octave(x, y, 1, 0x35, 0.7)) for x in range(16)] for y in range(16)]
+        for i in range(16):
+            for j in (0, 5, 10, 15):
+                g[i][j] = step(bam, 1.2 + octave(j, i, 1, 0x37, 0.5))
+                g[j][i] = step(bam, 1.6 + octave(i, j, 1, 0x39, 0.5))
+        return g
+    g = [[T] * 16 for _ in range(16)]             # 옆·밑 — 기둥과 가로대 (컷아웃)
+    for x in (1, 2, 13, 14):
+        for y in range(16):
+            g[y][x] = step(bam, 3.0 - (x in (2, 14)) * 1.2 + octave(x, y, 1, 0x3B, 0.6))
+    for y in ((3, 11) if part == "side" else (7, 8)):
+        for x in range(16):
+            g[y][x] = step(bam, 3.4 + octave(x, y, 1, 0x3D, 0.6))
+    return g
+
+
+def brewing_rows(part):
+    """약탕기 — 약재를 달이는 자리 (의방). base = 받침 · stand = 세운 쇠대."""
+    iron = ramp((44, 42, 40, 255), (150, 146, 140, 255), 7)
+    if part == "base":
+        return stone_rows(ramp((66, 62, 58, 255), (142, 137, 130, 255), 8), 0x3F, amp=1.0)
+    g = [[T] * 16 for _ in range(16)]
+    for x in (7, 8):                              # 세운 대 — 위는 볕, 아래는 그늘 (세로 명암)
+        for y in range(2, 15):
+            v = 5.4 - (x == 8) * 2.2 - (y - 2) * 0.22 + octave(x, y, 1, 0x41, 0.6)
+            g[y][x] = step(iron, v)
+    for k, y in enumerate((2, 3)):                # 걸이 팔 — 마루(광)와 밑(그늘) 두 줄
+        for x in range(3, 13):
+            g[y][x] = step(iron, (5.0 if k == 0 else 1.6) + octave(x, y, 1, 0x43, 0.7))
+    for x in (3, 12):                             # 매단 고리 — 아래로 갈수록 어둡다
+        for y in range(4, 8):
+            g[y][x] = step(iron, 4.2 - (y - 4) * 0.9 + octave(x, y, 1, 0x45, 0.6))
+    return g
+
+
+def torch_rows(lit=True, candle=False):
+    """횃불·초 — 자루 + 불씨 (컷아웃). 불은 의미다 → 채도 허용 (자재_규약).
+
+    ★ UV 계약 (바닐라 실측 — 짐작 금지. 여기를 틀리면 모델이 빈 자리를 읽어 **물건이 사라진다**):
+        torch.png  : x7..8,  y6..15  (가운데 세로 두 칸)
+        candle.png : x0..1,  y5..15  (**왼쪽 변에 딱 붙어 있다** — 가운데가 아니다)
+      촛대가 변에 붙어 있으므로 랩 경계 차이가 필연적으로 커진다 → texture_audit 의 이음매 축은
+      이 계약을 지키는 한 반드시 운다. 그래서 우는 쪽을 고쳤다 (SEAM_FACES 주석): 계약이 지표를 이긴다."""
+    wood = ramp((54, 44, 35, 255), (150, 128, 98, 255), 6)
+    wax = ramp((150, 143, 126, 255), (242, 238, 224, 255), 6)
+    fire = ramp((104, 42, 22, 255), (246, 200, 116, 255), 5)
+    body, x0 = (wax, 0) if candle else (wood, 7)
+    top = 5 if candle else 6
+    g = [[T] * 16 for _ in range(16)]
+    for y in range(top, 16):
+        for x in (x0, x0 + 1):
+            # 자루도 입체다: 왼쪽이 빛, 오른쪽이 그늘. 아래로 갈수록 그늘에 잠긴다
+            v = 4.4 - (x == x0 + 1) * 2.0 - (y - top) * 0.12 + octave(x, y, 1, 0x47, 0.6)
+            g[y][x] = step(body, v)
+    if lit:                                       # 심지의 불씨 — 위로 갈수록 밝다
+        for k, y in enumerate(range(top, top + 2)):
+            for x in (x0, x0 + 1):
+                g[y][x] = step(fire, 3.8 - k * 1.4 - (x == x0 + 1) * 0.8
+                               + octave(x, y, 1, 0x49, 0.5))
+        g[top][x0] = step(fire, 4.6)
+    else:
+        g[top][x0] = step(body, 0.5)              # 그을린 심지 (안 켠 초)
+        g[top][x0 + 1] = step(body, 1.4)
+    return g
+
+
+def hook_rows(wire=False):
+    """덫줄 갈고리·덫줄 — 산채의 함정 (컷아웃). 한 획이라도 명암은 있어야 한다."""
+    iron = ramp((40, 38, 36, 255), (156, 152, 146, 255), 5)
+    g = [[T] * 16 for _ in range(16)]
+    if wire:
+        for x in range(16):                       # 팽팽한 줄 한 가닥
+            g[7][x] = step(iron, 3.6 + octave(x, 7, 1, 0x4B, 0.7))
+            g[8][x] = step(iron, 1.2 + octave(x, 8, 1, 0x4D, 0.5))
+        return g
+    for y in range(4, 12):                        # 갈고리 몸
+        for x in (7, 8):
+            g[y][x] = step(iron, 3.4 - (x == 8) * 1.4 + octave(x, y, 1, 0x4F, 0.5))
+    for x in range(5, 11):                        # 걸이 판
+        g[4][x] = step(iron, 4.0 + octave(x, 4, 1, 0x51, 0.6))
+        g[5][x] = step(iron, 1.4)
+    return g
+
+
+def pickle_rows():
+    """바다 나물 — 물가의 돌기 (컷아웃)."""
+    shades = ramp((78, 92, 74, 255), (176, 192, 152, 255), 6)
+    g = [[T] * 16 for _ in range(16)]
+    for (cx, cy, h) in ((4, 12, 4), (8, 13, 3), (11, 11, 5)):
+        for k in range(h):
+            for x in (cx, cx + 1):
+                g[cy - k][x] = step(shades, 1.4 + k * 0.9 - (x == cx + 1) * 0.8
+                                    + octave(x, cy - k, 1, 0x53, 0.5))
+    return g
+
+
 def write_block_textures() -> int:
     """징발 등록부 순회 — 바닐라 경로에 16x16 덮어쓰기 (blockstate/model JSON 불요)."""
     blocks = {
@@ -3649,11 +4163,160 @@ def write_block_textures() -> int:
         "crafting_table_side": crafting_table_rows("side"),
     })
 
+    # ── 자재층 2차 — 축 ⑪ 이 면적 순으로 세워 준 구멍 (옆 수는 미커버 면적) ──
+    SAND = ramp((122, 112, 92, 255), (206, 196, 172, 255), 9)
+    # 적사(赤沙) — '붉은 모래'라고 붉게 칠하면 수묵이 깨진다. 자재_규약: 채도는 흙기(≤40)까지만
+    RSAND = ramp((108, 88, 74, 255), (186, 158, 136, 255), 9)
+    SNOW = ramp((168, 170, 174, 255), (246, 247, 250, 255), 8)
+    ICE = ramp((132, 142, 148, 255), (212, 222, 228, 255), 8)      # 얼음 — 푸른 기 최소 (수묵)
+    MUD = ramp((44, 40, 34, 255), (98, 90, 78, 255), 8)
+    GRANITE = ramp((92, 78, 72, 255), (168, 148, 138, 255), 9)     # 화강 — 붉은 기 옅게
+    DIORITE = ramp((140, 138, 136, 255), (226, 225, 223, 255), 9)  # 섬록 — 흰 돌
+    CALCITE = ramp((160, 158, 152, 255), (232, 230, 224, 255), 8)
+    SANDSTONE = ramp((116, 106, 86, 255), (198, 187, 160, 255), 8)
+    RSANDSTONE = ramp((104, 84, 68, 255), (180, 152, 128, 255), 8)   # 적사암 — 채도 흙기까지만
+    BIRCH = ramp((146, 142, 132, 255), (226, 223, 214, 255), 9)    # 자작 — 흰 수피
+    IRON = ramp((48, 46, 44, 255), (152, 149, 144, 255), 8)
+    STONE_H = ramp((60, 58, 55, 255), (146, 143, 137, 255), 8)
+    blocks.update({
+        "cobweb": cobweb_rows(),                                   # 7,373 — 폐사당·산채의 구석
+        # 퇴비통 9,344 (조성기 3회 × 다섯 장)
+        "composter_side": composter_rows("side"),
+        "composter_top": composter_rows("top"),
+        "composter_bottom": composter_rows("bottom"),
+        "composter_compost": composter_rows("compost"),
+        "composter_ready": composter_rows("ready"),
+        # 모래·흙 6,144 + 1,536
+        "sand": grain_rows(SAND, 0x11),
+        "red_sand": grain_rows(RSAND, 0x13),
+        "mud": grain_rows(MUD, 0x15, clump=1.5, grit=0.6),         # 진흙 — 뭉치고 알갱이는 적다
+        # 눈·얼음 10,304 (POWDER_SNOW·SNOW·ICE·PACKED_ICE·BLUE_ICE·FROSTED_ICE)
+        #   눈은 매끈하되 평면이 아니다 — 좁은 흰 램프 위에서 결을 다 밟는다 (grain_rows 주석)
+        "powder_snow": grain_rows(SNOW, 0x17, clump=1.4, grit=0.7, dune=1.0),
+        "snow": grain_rows(SNOW, 0x19, clump=1.3, grit=0.6, dune=1.2),
+        "ice": ice_rows(ICE, 0x1B),
+        "packed_ice": ice_rows(ICE, 0x1D, cracks=2),
+        "blue_ice": ice_rows(ramp((112, 126, 138, 255), (196, 210, 220, 255), 8), 0x1F, cracks=1),
+        # 돌 4,608 (GRANITE·DIORITE·CALCITE — 자재_규약: 돌은 무채색, 화강만 흙기 한 점)
+        "granite": stone_rows(GRANITE, 0x21, amp=1.2),
+        "diorite": stone_rows(DIORITE, 0x23, amp=1.1),
+        "calcite": stone_rows(CALCITE, 0x25, amp=0.85),
+        # 사암 — 켜(層)가 보이는 돌. 마구리(top/bottom)는 켜가 없으니 결로 산다 (dune)
+        "sandstone": grain_rows(SANDSTONE, 0x27, clump=1.2, dune=1.1),
+        "sandstone_top": grain_rows(SANDSTONE, 0x29, clump=1.3, grit=0.9, dune=0.8),
+        "sandstone_bottom": grain_rows(SANDSTONE, 0x2B, clump=1.3, grit=0.9, dune=0.8),
+        "red_sandstone": grain_rows(RSANDSTONE, 0x2D, clump=1.2, dune=1.1),
+        "red_sandstone_top": grain_rows(RSANDSTONE, 0x2F, clump=1.3, grit=0.9, dune=0.8),
+        "red_sandstone_bottom": grain_rows(RSANDSTONE, 0x31, clump=1.3, grit=0.9, dune=0.8),
+        # 염색 천 9,216 — 저잣거리의 차양·깃발. 채도는 '의미'까지만 (수묵 규율: 흐린 초벌 염색)
+        "yellow_wool": cloth_rows(ramp((132, 116, 66, 255), (206, 190, 130, 255), 9), 0x33),
+        "orange_wool": cloth_rows(ramp((136, 92, 54, 255), (206, 156, 106, 255), 9), 0x35),
+        "lime_wool": cloth_rows(ramp((100, 118, 74, 255), (172, 190, 136, 255), 9), 0x37),
+        "light_blue_wool": cloth_rows(ramp((94, 116, 130, 255), (168, 190, 202, 255), 9), 0x39),
+        "green_wool": cloth_rows(ramp((72, 92, 62, 255), (136, 156, 120, 255), 9), 0x3B),
+        "cyan_wool": cloth_rows(ramp((72, 106, 108, 255), (140, 174, 176, 255), 9), 0x3D),
+        # 자작나무 1,536 (BIRCH_LOG — 흰 수피는 산길의 표식)
+        "birch_log": bark_rows(BIRCH, 0x3F, rough=0.6, knot=(6, 8)),
+        "birch_log_top": log_top_rows(BIRCH, 0x41, freq=1.68),
+        # 베틀 3,072 · 깔때기 1,580 · 모루 1,348
+        "loom_front": loom_rows("front"),
+        "loom_side": loom_rows("side"),
+        "loom_top": loom_rows("top"),
+        "loom_bottom": loom_rows("bottom"),
+        "hopper_outside": metal_rows(IRON, 0x43, rivets=((2, 2), (13, 2), (2, 13), (13, 13))),
+        # 깔때기 속 — 어두운 것이지 '없는' 것이 아니다. 아가리로 빨려드는 깔때기꼴 기울기를 준다
+        "hopper_inside": funnel_rows(ramp((26, 25, 24, 255), (114, 110, 104, 255), 7), 0x45),
+        "hopper_top": metal_rows(IRON, 0x47, rivets=((3, 3), (12, 12))),
+        "anvil": metal_rows(IRON, 0x49, rivets=((4, 5), (11, 5), (4, 11), (11, 11))),
+        "anvil_top": metal_rows(IRON, 0x4B, rivets=((7, 4), (8, 11))),
+        # 화덕 2,816 (SMOKER·BLAST_FURNACE — 아궁이. GUI 와 짝을 이룬다)
+        "smoker_front": hearth_front_rows(),
+        "smoker_front_on": hearth_front_rows(lit=True),
+        "smoker_side": stone_rows(STONE_H, 0x4D, amp=1.0),
+        "smoker_top": stone_rows(STONE_H, 0x4F, amp=0.9),
+        "smoker_bottom": stone_rows(STONE_H, 0x51, amp=0.9),
+        "blast_furnace_front": hearth_front_rows(),
+        "blast_furnace_front_on": hearth_front_rows(lit=True),
+        "blast_furnace_side": stone_rows(STONE_H, 0x53, amp=1.05),
+        "blast_furnace_top": stone_rows(STONE_H, 0x55, amp=0.95),
+        # 대장간 1,792 (SMITHING_TABLE)
+        "smithing_table_front": metal_rows(IRON, 0x57, rivets=((3, 4), (12, 4))),
+        "smithing_table_side": plank_rows(DARK_WOOD, 0x59),
+        "smithing_table_top": metal_rows(IRON, 0x5B, rivets=((5, 6), (10, 9))),
+        "smithing_table_bottom": plank_rows(DARK_WOOD, 0x5D),
+        # 널문·대울타리 3,360
+        "spruce_trapdoor": trapdoor_rows(SPRUCE_WOOD, 0x5F),
+        "oak_trapdoor": trapdoor_rows(OAK_WOOD, 0x61),
+        "bamboo_fence": fence_rows(ramp((104, 96, 78, 255), (176, 164, 142, 255), 9), 0x63),
+        # 사다리·야광이끼 1,836
+        "ladder": ladder_rows(),
+        "glow_lichen": lichen_rows(),
+        # 들꽃 5,405 — 꽃은 **컬러맵 틴트 대상이 아니다** (틴트되는 것은 풀·잎·물).
+        #   그래서 회색조가 초록으로 물들지 않는다 → 보류 대상이 아니고, 그릴 수 있다.
+        "poppy": flower_rows(ramp((104, 40, 32, 255), (186, 84, 68, 255), 5), heart=(38, 34, 30, 255)),
+        "cornflower": flower_rows(ramp((66, 78, 112, 255), (132, 148, 186, 255), 5), r=2.4),
+        "oxeye_daisy": flower_rows(ramp((176, 172, 158, 255), (240, 238, 228, 255), 5),
+                                   heart=(168, 146, 74, 255)),
+        "white_tulip": flower_rows(ramp((182, 178, 166, 255), (242, 240, 232, 255), 5), cy=4.0, r=2.2),
+        "azure_bluet": flower_rows(ramp((156, 166, 176, 255), (226, 232, 238, 255), 4), r=2.2,
+                                   heart=(178, 156, 82, 255)),
+        "dandelion": flower_rows(ramp((140, 122, 62, 255), (218, 200, 134, 255), 5), r=2.3),
+    })
+
+    # ── 자재층 2차-② — 축 ⑪ 이 남긴 잔여 구멍 (1.4%). 작지만 **미등록 구멍은 남기지 않는다** ──
+    # 등록제의 뜻: 안 그린 것은 사유와 함께 「보류」에 있어야 한다. 사유 없이 비어 있는 칸이
+    # 하나라도 남으면 등록부가 거짓말을 하는 것이다 (현판이 그랬다 — 축 ⑪ 이 잡았다).
+    CROP = ramp((66, 76, 52, 255), (186, 178, 112, 255), 7)      # 풋것 → 여문 것 (밭은 익는다)
+    BAMBOO = ramp((92, 100, 76, 255), (176, 182, 146, 255), 7)
+    DRY = ramp((72, 62, 48, 255), (152, 136, 108, 255), 6)
+    blocks.update({
+        "flower_pot": pot_rows(),
+        "scaffolding_top": scaffold_rows("top"),
+        "scaffolding_side": scaffold_rows("side"),
+        "scaffolding_bottom": scaffold_rows("bottom"),
+        "dead_bush": sprig_rows(DRY, 0x55, fronds=3, lean=0.5),
+        "cherry_sapling": sprig_rows(CHERRY_WOOD, 0x57, fronds=2, lean=0.3, top_bias=0.4),
+        "bamboo_stalk": sprig_rows(BAMBOO, 0x59, fronds=1, lean=0.0),
+        "bamboo_singleleaf": sprig_rows(BAMBOO, 0x5B, fronds=2, lean=0.45),
+        "mycelium_side": side_rows(grain_rows(ramp((58, 50, 56, 255), (118, 106, 116, 255), 8),
+                                              0x5D, clump=1.3), dirt, band=3),
+        "mycelium_top": grain_rows(ramp((58, 50, 56, 255), (124, 112, 122, 255), 8), 0x5F, clump=1.4),
+        "brewing_stand": brewing_rows("stand"),
+        "brewing_stand_base": brewing_rows("base"),
+        "brown_mushroom": mushroom_rows(ramp((72, 58, 44, 255), (152, 126, 96, 255), 6),
+                                        ramp((140, 132, 118, 255), (216, 210, 196, 255), 4)),
+        "red_mushroom": mushroom_rows(ramp((104, 46, 38, 255), (186, 96, 80, 255), 6),
+                                      ramp((146, 138, 124, 255), (222, 216, 202, 255), 4)),
+        "sea_pickle": pickle_rows(),
+        "torch": torch_rows(),
+        "candle": torch_rows(lit=False, candle=True),
+        "candle_lit": torch_rows(lit=True, candle=True),
+        "tripwire_hook": hook_rows(),
+        "tripwire": hook_rows(wire=True),
+        # 살얼음 4단 (FROSTED_ICE) — 얼었다 녹는 중. 금이 늘수록 깨지기 직전이다
+        **{f"frosted_ice_{i}": ice_rows(ICE, 0x61 + i, cracks=1 + i * 2) for i in range(4)},
+        # 밭작물 — wheat 8단 · carrots/potatoes/beetroots 4단 (crop_rows 주석: 빈도 지표의 한계)
+        **{f"wheat_stage{i}": crop_rows(CROP, i, 8) for i in range(8)},
+        **{f"carrots_stage{i}": crop_rows(CROP, i, 4) for i in range(4)},
+        **{f"potatoes_stage{i}": crop_rows(CROP, i, 4) for i in range(4)},
+        **{f"beetroots_stage{i}": crop_rows(CROP, i, 4) for i in range(4)},
+        **{f"sweet_berry_bush_stage{i}": sprig_rows(
+            ramp((58, 62, 46, 255), (150, 124, 96, 255), 6), 0x6B + i,
+            fronds=2 + i, lean=0.3, top_bias=i * 0.2) for i in range(4)},
+    })
+
     for name, rows in blocks.items():
         write_png(BLOCK_DIR / f"{name}.png", rows)
     for name in SCROLL_MOTIFS:
         write_png(PAINTING_DIR / f"{name}.png", scroll_rows(name))
-    return len(blocks) + len(SCROLL_MOTIFS)
+    # 현판·주기 — 블록이되 텍스처는 entity/signs/ 아래 산다 (궤·항아리와 같은 문법).
+    #   resourcepack_design.yml 이 dark_oak_hanging_sign 을 「징발」로 등록해 두고도 팩에는
+    #   그 PNG 가 없었다 — 축 ⑪ 이 잡아냈다 (등록부가 팩을 앞질러 있었다).
+    signs = {"signs/oak": sign_rows(OAK_WOOD, 0x65),
+             "signs/hanging/dark_oak": sign_rows(DARK_WOOD, 0x67, hanging=True)}
+    for name, rows in signs.items():
+        write_png(ENTITY_DIR / f"{name}.png", rows)
+    return len(blocks) + len(SCROLL_MOTIFS) + len(signs)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4433,6 +5096,308 @@ def ravager_rows():
     return g
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ─── ⑦ 마을 사람 — VILLAGER. 청하현의 얼굴 (가장 많이 보이는 몹) ───
+#
+# ── 왜 지금인가 ──
+# Populace.java 가 **무명(無名) 28인**을 VILLAGER 로 세운다 (config/npcs/populace.yml).
+# 계약 NPC 9인도 VILLAGER 다. 즉 플레이어가 마을에서 마주치는 사람은 **전부 주민 몹**이고,
+# 그 몸이 바닐라면 청하현은 무협 마을이 아니라 **바닐라 마을에 기와만 얹은 곳**이다.
+#
+# ── 렌더 계약 (VillagerRenderer — 네 층이 겹친다) ──
+#   ① entity/villager/villager.png                (바탕 — 살결·머리·속옷)
+#   ② entity/villager/type/<생물군계>.png          (겉옷 — 늘 그려진다)
+#   ③ entity/villager/profession/<생업>.png        (생업 표식 — profession != NONE 일 때만)
+#   ④ entity/villager/profession_level/<등급>.png  (가슴 패 — 생업이 있을 때만)
+# 네 장 **전부 우리 파일**이다 → 픽셀 하나까지 우리가 정한다. 특히 ①이 유일한 층인 경우가
+# 없다는 것이 중요하다: populace.yml 의 생업 분포는 NONE 34 / FARMER 8 / 나머지 2씩이므로
+# **대다수 주민은 ①+②만으로 선다**. ①+②가 그 자체로 완성된 사람이어야 한다.
+#
+# ── 코(鼻) — "바닐라 주민 코 금지" 를 실제로 이행하는 법 ──
+# 리소스팩은 엔티티 **모델(기하)** 을 못 바꾼다. 코 박스(2x4x2)는 모델에 박혀 있다.
+# 그러나 주민은 **RenderType.entityCutoutNoCull** 로 그려진다 — 알파가 낮은 텍셀은 **버려진다**.
+#   근거(짐작 아님): 바닐라 profession/*.png·type/*.png 는 대부분이 투명한 오버레이인데
+#   그 투명부가 검은 상자로 나오지 않는다. 같은 모델·같은 렌더타입이다 → 투명 = 안 그려짐.
+# 따라서 **코 박스의 UV를 전부 투명으로 두면 코가 통째로 컬링된다.** 네 층 전부 우리 것이므로
+# 어느 층도 그 자리를 다시 칠하지 않는다 → 코는 돌아오지 않는다. 얼굴의 콧대는 **머리 앞면에**
+# 명암으로 새긴다 (사람의 코는 튀어나온 상자가 아니라 빛과 그늘이다).
+#
+# ── UV 규약 (검증 방법) ──
+# 몹 모델 UV는 JSON이 아니라 자바에 박혀 있다. 그래서 **바닐라 오버레이의 불투명 마스크로 역산**했다:
+# type/plains.png 가 칠하는 자리 = 몸통·다리·팔·팔짱·겉옷 박스이고, profession/farmer.png 가
+# 칠하는 자리 = 모자 박스다. 아래 표는 그 마스크와 **정확히** 일치한다 (대조 검증 완료).
+VILLAGER_BOXES = {
+    "head":       ebox(0, 0, 8, 10, 8),      # x0..31  y0..17
+    "nose":       ebox(24, 0, 2, 4, 2),      # x24..31 y0..5   ← 전부 투명 (컬링)
+    "hat":        ebox(32, 0, 8, 10, 8),     # x32..63 y0..17  (머리 오버레이 — 두건)
+    "hat_rim":    ebox(30, 47, 16, 16, 1),   # x30..63 y47..63 (삿갓 챙 — 갓 쓰는 생업만 보인다)
+    "body":       ebox(16, 20, 8, 12, 6),    # x16..43 y20..37
+    "leg":        ebox(0, 22, 4, 12, 4),     # x0..15  y22..37 (좌우 거울 공유)
+    "arm":        ebox(44, 22, 4, 8, 4),     # x44..59 y22..33 (좌우 거울 공유)
+    "arms_cross": ebox(40, 38, 8, 4, 4),     # x40..63 y38..45 (앞으로 모은 두 손)
+    "jacket":     ebox(0, 38, 8, 18, 6),     # x0..27  y38..61 (겉옷 — 12가 아니라 **18** 이 길다: 두루마기)
+}
+
+VILLAGER_SKIN = {                            # 바탕 — 살결·머리칼·속옷 (모든 주민 공통)
+    "skin": ramp((110, 82, 60, 255), (212, 176, 144, 255), 5),
+    "hair": ramp((19, 18, 17, 255), (62, 56, 50, 255), 5),
+    "inner": ramp((88, 82, 71, 255), (186, 178, 158, 255), 5),    # 속저고리 — 무명(생목)
+    "trouser": ramp((46, 42, 37, 255), (106, 98, 86, 255), 5),
+    "band": ramp((56, 52, 46, 255), (130, 122, 106, 255), 5),     # 두건
+    "straw": ramp((104, 92, 64, 255), (202, 186, 142, 255), 5),   # 삿갓 — 짚
+    "eye": (28, 25, 22, 255),
+    "eye_w": (226, 219, 202, 255),
+    "lip": (122, 84, 70, 255),
+}
+
+# 겉옷 팔레트 — 생물군계 8종. 어느 군계에서 뽑혀도 무협의 옷이 되도록 **전부** 채운다
+# (주민 type 은 스폰 지점의 생물군계가 정한다. 하나라도 비우면 그 군계에서 갈옷이 튀어나온다).
+# 수묵 규율: 채도는 의미에만 — 옷은 먹에 흙기를 옅게 섞은 값이다. 붉은 고름 1획만 허락한다.
+VILLAGER_ROBES = {                           # 바닐라 생물군계 7종 (jar 확인 — forest 는 없다)
+    "plains":  ((78, 74, 66), (176, 170, 152), (150, 58, 46)),    # 무명(생목) — 청하 기본
+    "taiga":   ((62, 58, 52), (140, 132, 118), (128, 52, 42)),    # 갈옷 — 산골
+    "snow":    ((104, 102, 98), (214, 210, 202), (140, 56, 44)),  # 솜옷 — 두껍고 희다
+    "desert":  ((96, 88, 74), (196, 184, 158), (146, 60, 46)),    # 마의(麻衣) — 얇은 삼베
+    "savanna": ((84, 76, 62), (172, 158, 130), (138, 54, 42)),    # 흙빛 무명
+    "jungle":  ((66, 72, 68), (146, 156, 146), (132, 54, 44)),    # 죽청(竹靑) — 대숲 기운
+    "swamp":   ((60, 60, 56), (132, 132, 124), (124, 50, 40)),    # 잿빛 무명
+}
+
+# 생업 표식 — populace.yml 이 쓰는 8종 + 바닐라 잔여 6종. **전부** 덮는다 (전역 치환:
+# 하나라도 비우면 그 생업의 주민만 바닐라 로브를 입고 서 있다).
+#   hat: 갓(삿갓 챙까지) | 건(두건만) | None(맨머리)
+#   apron: 앞치마 색 (겉옷 앞자락 위에 덧입는다) | None
+#   accent: 앞치마 위의 표식 한 점 (그을음·핏자국·먹물 — 생업의 자국)
+VILLAGER_JOBS = {
+    "farmer":       {"hat": "갓", "apron": (118, 106, 74), "accent": (86, 78, 56)},   # 농부 — 삿갓·짚 앞치마
+    "fisherman":    {"hat": "갓", "apron": (92, 96, 94), "accent": (64, 70, 70)},     # 어부 — 도롱이
+    "shepherd":     {"hat": "건", "apron": (168, 162, 148), "accent": (198, 194, 184)},  # 목자 — 흰 털천
+    "butcher":      {"hat": "건", "apron": (176, 168, 152), "accent": (140, 52, 42)},  # 백정 — 흰 앞치마 + 핏자국
+    "leatherworker": {"hat": "건", "apron": (108, 84, 62), "accent": (74, 58, 44)},   # 갖바치 — 가죽 앞치마
+    "toolsmith":    {"hat": "건", "apron": (86, 74, 64), "accent": (40, 38, 36)},     # 야장 — 가죽 앞치마 + 그을음
+    "weaponsmith":  {"hat": "건", "apron": (80, 70, 62), "accent": (36, 34, 33)},     # 병장 — 더 짙은 그을음
+    "armorer":      {"hat": "건", "apron": (84, 80, 76), "accent": (44, 44, 44)},     # 갑장
+    "mason":        {"hat": "건", "apron": (128, 124, 116), "accent": (168, 166, 160)},  # 석공 — 돌가루
+    "librarian":    {"hat": "건", "apron": (96, 92, 84), "accent": (34, 32, 30)},     # 서생 — 유건 + 먹물
+    "cartographer": {"hat": "건", "apron": (172, 164, 144), "accent": (70, 66, 60)},  # 여도(輿圖) — 종이빛
+    "cleric":       {"hat": None, "apron": (110, 104, 96), "accent": (150, 58, 46)},  # 승(僧) — 맨머리 + 붉은 가사
+    "fletcher":     {"hat": "건", "apron": (104, 94, 74), "accent": (60, 54, 44)},    # 궁장 — 화살대
+    "nitwit":       {"hat": None, "apron": None, "accent": None},                     # 반편이 — 겉옷뿐
+}
+
+# 가슴 패(牌) 5단 — 바닐라의 돌·철·금·에메랄드·다이아 배지가 앉는 바로 그 자리(x10..13, y54..57).
+# 무협의 격은 보석이 아니라 **패**로 말한다: 목·죽·동·은·옥.
+VILLAGER_BADGES = {
+    "stone":   ((74, 62, 48), (132, 112, 86)),      # 목패(木)
+    "iron":    ((78, 84, 72), (140, 150, 132)),     # 죽패(竹)
+    "gold":    ((112, 86, 46), (196, 158, 92)),     # 동패(銅)
+    "emerald": ((118, 118, 112), (206, 206, 198)),  # 은패(銀)
+    "diamond": ((96, 122, 112), (176, 208, 196)),   # 옥패(玉)
+}
+
+
+def villager_base():
+    """바탕 64x64 — 살결·상투·두건·속옷. 코 박스는 **투명**(컬링)."""
+    p, g, B = VILLAGER_SKIN, eblank(64, 64), VILLAGER_BOXES
+    skin, hair, inner, trou, band = p["skin"], p["hair"], p["inner"], p["trouser"], p["band"]
+    salt = 41
+
+    def head(n, lx, ly, w, h):
+        if n == "top":                                       # 정수리 — 틀어올린 상투
+            d = max(abs(lx - 3.5), abs(ly - 3.5))
+            return step(hair, 3.4 - d * 0.9 + octave(lx, ly, 1, salt, 0.5))
+        if n == "back":
+            return step(hair, 2.2 + octave(lx, ly, 1, salt + 1, 0.9) - (ly - 5) * 0.10)
+        if n == "bottom":
+            return step(skin, 1.0 + octave(lx, ly, 1, salt + 2, 0.5))        # 턱 밑
+        if n in ("right", "left"):
+            if ly <= 2:
+                return step(hair, 2.4 + octave(lx, ly, 1, salt + 3, 0.8))    # 귀밑머리
+            return step(skin, 2.4 + octave(lx, ly, 1, salt + 4, 0.7) - (ly - 5) * 0.12)
+        # front — 얼굴 (8 x 10). 코는 상자가 아니라 **빛과 그늘**이다
+        if ly <= 1:
+            return step(hair, 2.6 + octave(lx, ly, 1, salt + 5, 0.8))        # 이마 위 머리칼
+        if ly == 3 and lx in (1, 2, 5, 6):
+            return step(hair, 1.2)                                           # 눈썹 — 먹 두 획
+        if ly == 4 and lx in (1, 6):
+            return p["eye_w"]
+        if ly == 4 and lx in (2, 5):
+            return p["eye"]
+        if 5 <= ly <= 7 and lx in (3, 4):
+            return step(skin, 4.2 - (ly - 5) * 0.3)                          # 콧대 — 융기(밝다)
+        if 6 <= ly <= 7 and lx in (2, 5):
+            return step(skin, 1.6)                                           # 콧방울 그늘
+        if ly == 8 and 3 <= lx <= 4:
+            return p["lip"]                                                  # 입
+        return step(skin, 3.0 + octave(lx, ly, 1, salt + 6, 0.6) - (ly - 5) * 0.08)
+
+    paint_box(g, B["head"], head)
+    paint_box(g, B["nose"], lambda n, lx, ly, w, h: T)       # ★ 코 컬링 — 바닐라의 그 코를 버린다
+
+    def hat(n, lx, ly, w, h):                                # 두건 — 이마를 감고 정수리를 덮는다
+        if n == "top":
+            return step(band, 2.8 + octave(lx, ly, 1, salt + 7, 0.7))
+        if n == "bottom":
+            return None
+        if n == "back" and ly <= 4 and lx in (3, 4) and ly >= 3:
+            return step(band, 1.8)                           # 뒤로 늘어뜨린 매듭 끈
+        if ly <= 3:
+            return step(band, 3.0 + octave(lx, ly, 1, salt + 8, 0.6) - ly * 0.3)
+        return None                                          # 아래는 투명 (상자 머리 방지)
+
+    paint_box(g, B["hat"], hat)
+
+    def rim(n, lx, ly, w, h):                                # 삿갓 챙 — 둥근 짚 판 (갓 쓰는 생업만 보인다)
+        if n not in ("front", "back"):
+            return None
+        d = ((lx - 7.5) ** 2 + (ly - 7.5) ** 2) ** 0.5
+        if d > 7.6:
+            return None                                      # 원 밖 — 투명 (네모 판이 아니라 갓이다)
+        return step(p["straw"], 3.4 - d * 0.22 + octave(lx, ly, 1, salt + 9, 0.5))
+
+    paint_box(g, B["hat_rim"], rim)
+
+    def body(n, lx, ly, w, h):                               # 속저고리
+        if n == "top":
+            return step(inner, 3.6 + octave(lx, ly, 1, salt + 10, 0.6))
+        if n == "bottom":
+            return step(inner, 1.4 + octave(lx, ly, 1, salt + 11, 0.5))
+        return step(inner, 2.8 + octave(lx, ly, 1, salt + 12, 0.7) - (ly - 6) * 0.07)
+
+    paint_box(g, B["body"], body)
+    paint_box(g, B["arm"], lambda n, lx, ly, w, h:
+              step(skin, 2.2 + octave(lx, ly, 1, salt + 13, 0.5)) if ly >= 6 or n == "bottom"
+              else step(inner, 2.9 + octave(lx, ly, 1, salt + 14, 0.6)))     # 소매 → 손
+    paint_box(g, B["arms_cross"], lambda n, lx, ly, w, h:
+              step(skin, 2.4 + octave(lx, ly, 1, salt + 15, 0.5)))           # 맞잡은 두 손
+    paint_box(g, B["leg"], lambda n, lx, ly, w, h:
+              step(trou, 0.8) if n == "bottom" else
+              step(trou, 1.0 + octave(lx, ly, 1, salt + 16, 0.4)) if ly >= 11 else   # 짚신
+              step(trou, 2.4 + octave(lx, ly, 1, salt + 17, 0.7) - ly * 0.04))
+    paint_box(g, B["jacket"], lambda n, lx, ly, w, h: None)  # 겉옷은 type 층의 몫 — 여기선 비운다
+    return g
+
+
+def villager_type(key):
+    """겉옷 64x64 — 두루마기. **늘 그려지는 층**이라 이 한 장이 주민의 인상을 정한다.
+    머리(head·hat)는 칠하지 않는다 (바탕이 이미 사람이다) — 바닐라 type 층과 같은 규약."""
+    dark, light, gomu = VILLAGER_ROBES[key]
+    cloth = ramp(dark + (255,), light + (255,), 5)
+    collar = mix(light + (255,), (255, 255, 255, 255), 0.55)   # 동정 — 흰 깃 (계단 밖 전용 획)
+    shadow = mix(dark + (255,), (0, 0, 0, 255), 0.35)          # 섶이 겹친 골
+    sash = gomu + (255,)                                       # 고름 — 수묵에 허락된 유일한 붉은 획
+    g, B = eblank(64, 64), VILLAGER_BOXES
+    salt = (zlib.crc32(key.encode()) & 0x3F) + 7
+
+    # ── 몸통(body) 은 **보이지 않는다** ──
+    # VillagerModel: jacket 은 body 의 자식이고 12 가 아니라 **18** 길이에 CubeDeformation(0.5)
+    # 로 부풀려 있다 → 몸통 상자(8x12x6)를 겉옷 상자(8x18x6 +0.5)가 통째로 감싼다.
+    # 즉 몸통에 그린 획은 겉옷 안에 갇혀 영원히 안 보인다 (종이인형으로 확인: 교임 깃이 사라졌다).
+    # 그래서 **가슴의 모든 획(깃·고름)은 겉옷 앞면에 새긴다.** 몸통은 민 옷감으로만 채운다
+    # (모델이 바뀌어 몸통이 드러나도 구멍이 나지 않게 하는 보험).
+    paint_box(g, B["body"], lambda n, lx, ly, w, h:
+              step(cloth, 2.8 + octave(lx, ly, 1, salt, 0.7)))
+
+    def jacket(n, lx, ly, w, h):                              # 두루마기 — 18 길이의 긴 자락
+        if n == "front":
+            if ly <= 5:                                       # 가슴 — 교임(交衽) 깃이 여기서 읽힌다
+                if lx == ly or lx == 7 - ly:
+                    return collar                             # 동정 — 흰 깃 두 사선 (계단 밖 전용 획)
+                if lx == ly + 1 or lx == 6 - ly:
+                    return shadow                             # 섶이 겹친 골
+            if ly in (6, 7) and 2 <= lx <= 5:
+                return sash if lx in (3, 4) else shadow       # 고름 매듭 — 허락된 유일한 붉은 획
+            if 8 <= ly <= 11 and lx == 4 and ly % 2 == 0:
+                return sash                                   # 늘어뜨린 고름 끈 (점선 — 직선 금지)
+            if 9 <= ly <= 16 and lx == 3 and ly % 3 != 0:
+                return shadow                                 # 앞자락이 갈라진 선
+        if n == "top":
+            return step(cloth, 3.6 + octave(lx, ly, 1, salt + 4, 0.5))       # 어깨
+        if n == "bottom":
+            return step(cloth, 1.2 + octave(lx, ly, 1, salt + 5, 0.5))       # 자락 밑단
+        v = 2.9 + octave(lx, ly, 1, salt + 6, 0.75) - (ly - 8) * 0.05
+        if ly >= 15:
+            v -= 0.7                                          # 밑단은 그늘에 잠긴다 (땅에 가깝다)
+        return step(cloth, v)
+
+    paint_box(g, B["jacket"], jacket)
+    paint_box(g, B["arm"], lambda n, lx, ly, w, h:
+              None if (ly >= 6 or n == "bottom") else         # 손은 바탕(살결)이 맡는다
+              step(cloth, 2.9 + octave(lx, ly, 1, salt + 7, 0.7)))           # 소매
+    paint_box(g, B["leg"], lambda n, lx, ly, w, h:
+              None if ly >= 9 else                            # 정강이 아래는 바탕(바지·짚신)
+              step(cloth, 2.5 + octave(lx, ly, 1, salt + 8, 0.6)))           # 두루마기가 덮은 넓적다리
+    return g
+
+
+def villager_job(key):
+    """생업 표식 64x64 — 앞치마·갓·자국. profession != NONE 일 때만 겹친다."""
+    j = VILLAGER_JOBS[key]
+    g, B = eblank(64, 64), VILLAGER_BOXES
+    p = VILLAGER_SKIN
+    salt = (zlib.crc32(key.encode()) & 0x3F) + 71
+
+    if j["hat"]:                                              # 갓·건 — 모자 박스 위쪽 띠
+        cloth = p["straw"] if j["hat"] == "갓" else ramp((40, 38, 34, 255), (104, 98, 88, 255), 5)
+
+        def hat(n, lx, ly, w, h):
+            if n == "top":
+                return step(cloth, 3.2 + octave(lx, ly, 1, salt, 0.6))
+            if n == "bottom":
+                return None
+            if ly <= 3:
+                return step(cloth, 3.0 + octave(lx, ly, 1, salt + 1, 0.6) - ly * 0.25)
+            return None
+
+        paint_box(g, B["hat"], hat)
+        if j["hat"] == "갓":                                  # 삿갓 — 챙까지 (hat_rim 이 보인다)
+            def rim(n, lx, ly, w, h):
+                if n not in ("front", "back"):
+                    return None
+                d = ((lx - 7.5) ** 2 + (ly - 7.5) ** 2) ** 0.5
+                if d > 7.6:
+                    return None
+                return step(p["straw"], 3.4 - d * 0.22 + octave(lx, ly, 1, salt + 2, 0.5))
+
+            paint_box(g, B["hat_rim"], rim)
+
+    if j["apron"]:                                            # 앞치마 — 겉옷 앞자락 위
+        ap = ramp(mix(j["apron"] + (255,), (0, 0, 0, 255), 0.42), j["apron"] + (255,), 5)
+        acc = j["accent"] + (255,)
+
+        # 앞치마도 **겉옷 앞면**에만 새긴다 (몸통은 겉옷에 갇혀 안 보인다 — villager_type 주석 참조).
+        # 가슴 위쪽(ly<=5)은 비운다: 교임 깃이 살아 있어야 무협의 옷으로 읽힌다 — 앞치마는 깃 아래로.
+        def jacket(n, lx, ly, w, h):
+            if n != "front" or not (6 <= ly <= 14):
+                return None
+            if lx in (0, 7):
+                return None                                   # 옆구리는 겉옷이 보인다 (앞치마는 좁다)
+            if h32(lx, ly, salt + 4) % 13 == 0:
+                return acc                                    # 자국 — 그을음·핏자국·먹물·돌가루
+            return step(ap, 3.0 + octave(lx, ly, 1, salt + 3, 0.7) - (ly - 10) * 0.05)
+
+        paint_box(g, B["jacket"], jacket)
+    return g
+
+
+def villager_badge(key):
+    """가슴 패 64x64 — 겉옷 앞면 x10..13 · y54..57 (바닐라 배지 좌표. 4x4 한 점)."""
+    dark, light = VILLAGER_BADGES[key]
+    shades = ramp(dark + (255,), light + (255,), 4)
+    edge = mix(dark + (255,), (0, 0, 0, 255), 0.5)            # 패의 테 — 먹 (외곽이 있어야 물건이다)
+    g = eblank(64, 64)
+    for dy in range(4):
+        for dx in range(4):
+            x, y = 10 + dx, 54 + dy
+            if dx in (0, 3) and dy in (0, 3):
+                continue                                      # 네 귀 깎음 — 둥근 패
+            if dx == 0 or dy == 0 or dx == 3 or dy == 3:
+                g[y][x] = edge
+            else:
+                g[y][x] = step(shades, 2.6 - dy * 0.5 + dx * 0.3)   # 빛은 좌상단
+    return g
+
+
 # ─── 엔티티 등록부 — 무엇을 무엇으로 바쳤는가 (한 곳에서 읽힌다) ───
 def write_entity_textures(sheet=False) -> int:
     """몹 징발 — 전역 치환. 오염 판정은 이 모듈 머리말에 기록했다."""
@@ -4447,6 +5412,14 @@ def write_entity_textures(sheet=False) -> int:
     out["bear/polarbear"] = bear_rows()                  # 반달곰
     out["hoglin/hoglin"] = hoglin_rows()                 # 멧돼지
     out["illager/ravager"] = ravager_rows()              # 호랑이 (현재 채택)
+    # ─── 마을 사람 — 네 층 전부 (하나라도 비우면 그 칸만 바닐라 로브가 튀어나온다) ───
+    out["villager/villager"] = villager_base()
+    for biome in VILLAGER_ROBES:
+        out[f"villager/type/{biome}"] = villager_type(biome)
+    for job in VILLAGER_JOBS:
+        out[f"villager/profession/{job}"] = villager_job(job)
+    for lv in VILLAGER_BADGES:
+        out[f"villager/profession_level/{lv}"] = villager_badge(lv)
     for name, rows in out.items():
         write_png(ENTITY_DIR / f"{name}.png", rows)
     if sheet:
@@ -4523,6 +5496,11 @@ def main():
     write_png(HUD_DIR / "hotbar_selection.png", hotbar_selection())
     write_png(CONTAINER_DIR / "inventory.png", inventory_container())
     write_png(CONTAINER_DIR / "generic_54.png", generic_54_container())
+    # 화덕 3종 — 배치가 같으니 같은 그림이다 (바닐라도 furnace/smoker/blast_furnace 가 동일 배치)
+    furnace = furnace_container()
+    for name in ("furnace", "smoker", "blast_furnace"):
+        write_png(CONTAINER_DIR / f"{name}.png", furnace)
+    write_png(CONTAINER_DIR / "crafting_table.png", crafting_container())
 
     write_png(FONT_DIR / "gui_ledger.png", gui_background())
     providers.append({
@@ -4562,14 +5540,15 @@ def main():
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     total = 1 + 9 + len(REALM_CRESTS) + 1 + 1
-    vanilla = len(HEART_SPRITES) + 2 + 2   # 하트 6 + 핫바 2 + 컨테이너 2
+    vanilla = len(HEART_SPRITES) + 2 + 6   # 하트 6 + 핫바 2 + 컨테이너 6 (인벤·궤·화덕3·목공대)
     print(f"팩 컴파일 완료: {PACK.relative_to(ROOT)} "
           f"(글리프 {total}종 + 음수공백 6폭 + 바닐라 교체 {vanilla}장 + 폰트 주입 + pack.mcmeta)")
     print(f"  아이템 채널 {items}종 (PNG {items} + 모델 {items} + 아이템 정의 {items}) — item_model, 전역 오염 0")
     print(f"  블록 징발 {blocks}장 (전역 치환 — block_channels.징발 등록분만)")
     print(f"  획층(파티클) {parts}장 (무공 모션 — 엔진 불변. 팩 없으면 바닐라 파티클로 폴백)")
     print(f"  기물(블록 엔티티) {props}장 (항아리·궤 — 블록이되 텍스처는 entity/ 아래 산다)")
-    print(f"  엔티티 징발 {ents}장 (전역 치환 — 사람 2 + 늑대 변종 27 + 고양잇과 2 + 곰·멧돼지·호랑이 3)")
+    print(f"  엔티티 징발 {ents}장 (전역 치환 — 사람 2 + 늑대 변종 27 + 고양잇과 2 + 곰·멧돼지·호랑이 3"
+          f" + 마을 사람 27: 바탕 1 + 겉옷 7 + 생업 14 + 가슴패 5)")
 
 
 if __name__ == "__main__":

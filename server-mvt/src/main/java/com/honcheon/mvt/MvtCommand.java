@@ -58,6 +58,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
                 case "조감" -> renderTown(sender, args);   // 조감도 PNG — 콘솔 가능 (인자 = 지역id)
+                case "출행" -> travel(sender, args);          // 지역으로 간다 (조성된 곳만)
                 case "연무장" -> dojangEnter(sender);        // 시험 월드로 (스킬·몹·허수아비)
                 case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
@@ -583,8 +584,9 @@ public final class MvtCommand implements CommandExecutor {
         TerrainForge.SiteSpec spec = TerrainForge.prepare(world, place, site.x(), baseY, site.z(), forgeRadius);
         plugin.getLogger().info("[지형] " + spec.summary());
         TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
+        TerrainForge.CaveSpec cave = null;
         if (kind != null) {
-            TerrainForge.CaveSpec cave = TerrainForge.digCave(world, spec, kind);
+            cave = TerrainForge.digCave(world, spec, kind);
             plugin.getLogger().info("[지형/동굴] " + place.id() + " — " + kind + " 입구 ("
                     + cave.mouthX() + "," + cave.mouthY() + "," + cave.mouthZ()
                     + ") · 파낸 칸 " + cave.carved());
@@ -592,8 +594,9 @@ public final class MvtCommand implements CommandExecutor {
                     + cave.mouthY() + " " + cave.mouthZ());
         }
 
-        // 건축 계층은 **부지 사양만** 받는다 (땅은 지형 계층이 이미 빚었다)
-        java.util.List<Zone> built = RemoteBuilder.build(world, place, spec);
+        // 건축 계층은 **부지 사양과 굴**을 받는다 (땅은 지형 계층이 이미 빚었다).
+        // 은신처는 굴이 본체라 굴 좌표 없이는 짓지 않는다 — 입구가 부지 밖 24칸까지 나간다.
+        java.util.List<Zone> built = RemoteBuilder.build(world, place, spec, cave);
         if (built.isEmpty()) {
             sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
             return;
@@ -909,7 +912,11 @@ public final class MvtCommand implements CommandExecutor {
             int cx = (zone.x1() + zone.x2()) / 2;
             int cz = (zone.z1() + zone.z2()) / 2;
             int radius = Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 8;
-            lines = TerrainAudit.audit(world, place.name(), cx, zone.y1() + 6, cz, radius,
+            // 조성 지면은 **원장**이 안다. 구역의 y1 을 쓰면 은신처처럼 굴까지 덮는 구역에서
+            // 기준면이 30켜 내려가고, 그러면 검수 ②가 **강물 전체를 "산 위의 웅덩이"** 로 센다.
+            Integer base = plugin.regionBase(place.id());
+            int auditY = base != null ? base : zone.y1() + 6;
+            lines = TerrainAudit.audit(world, place.name(), cx, auditY, cz, radius,
                     place.terrain() == null ? "평지" : place.terrain(),
                     TerrainForge.caveKind(place) != null);   // 우리가 판 굴이 있는 지역인가
         } else {
@@ -967,6 +974,76 @@ public final class MvtCommand implements CommandExecutor {
                     }
                     plugin.getLogger().info("[조감] " + id + " → " + dir.getAbsolutePath());
                 }));
+        return true;
+    }
+
+    /**
+     * /혼천 출행 [지역id] — <b>지역으로 간다</b>.
+     *
+     * <p>실지리 1:1 세계라 화산까지 146km 다 — 걸으면 닷새다(등록부의 여정 일수 그대로).
+     * 지금은 시험 중이니 관리자가 곧장 간다. 인자가 없으면 <b>갈 수 있는 곳의 목록</b>을 편다:
+     * 조성된 지역만 뜬다 (등록만 되고 서지 않은 곳은 목적지가 아니라 문서의 줄이다).
+     */
+    private boolean travel(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return true;
+        }
+        WorldMap map = plugin.worldMap();
+        if (map == null) {
+            sender.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
+            return true;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.GOLD + "── 갈 수 있는 곳 (조성된 지역) ──");
+            Location market = plugin.anchor("장터");
+            if (market != null) {
+                sender.sendMessage(ChatColor.WHITE + "  청하현" + ChatColor.GRAY
+                        + " — /혼천 출행 cheongha_hyeon");
+            }
+            for (Zone zone : plugin.zones()) {
+                WorldMap.Place place = map.places().values().stream()
+                        .filter(pl -> pl.name().equals(zone.name())).findFirst().orElse(null);
+                if (place == null) {
+                    continue;   // 마을 안 구역(객잔·의방…)은 지역이 아니다
+                }
+                int days = place.days();
+                sender.sendMessage(ChatColor.WHITE + "  " + place.name() + ChatColor.GRAY
+                        + " — /혼천 출행 " + place.id()
+                        + (days > 0 ? ChatColor.DARK_GRAY + " (걸어서 " + days + "일)" : ""));
+            }
+            sender.sendMessage(ChatColor.DARK_GRAY + "  /혼천 연무장 — 시험장 (별도 월드)");
+            return true;
+        }
+        String id = args[1];
+        if ("cheongha_hyeon".equals(id) || "청하현".equals(id)) {
+            Location market = plugin.anchor("장터");
+            if (market == null) {
+                sender.sendMessage(ChatColor.RED + "청하현이 아직 서지 않았다.");
+                return true;
+            }
+            player.teleport(market.clone().add(0, 1, 0));
+            player.sendMessage(ChatColor.GOLD + "청하현 장터");
+            return true;
+        }
+        WorldMap.Place place = map.place(id);
+        if (place == null) {
+            sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + id);
+            return true;
+        }
+        Zone zone = plugin.zones().stream().filter(z -> z.name().equals(place.name()))
+                .findFirst().orElse(null);
+        if (zone == null) {
+            sender.sendMessage(ChatColor.RED + place.name() + " 은 아직 서지 않았다 — /혼천 지역조성 " + id);
+            return true;
+        }
+        World world = org.bukkit.Bukkit.getWorld(zone.world());
+        // 문 앞에 내린다 — 구역 남쪽 가장자리의 **땅**(지붕이 아니라). 걸어 들어가는 맛을 남긴다.
+        int tx = (zone.x1() + zone.x2()) / 2;
+        int tz = zone.z2() - 4;
+        int ty = world.getHighestBlockYAt(tx, tz);
+        player.teleport(new Location(world, tx + 0.5, ty + 1.0, tz + 0.5, 180f, 0f));
+        player.sendMessage(ChatColor.GOLD + place.name() + ChatColor.GRAY + " — 문 앞이다"
+                + (place.days() > 0 ? " (걸어서라면 " + place.days() + "일)" : ""));
         return true;
     }
 
