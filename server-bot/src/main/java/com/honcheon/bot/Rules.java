@@ -44,6 +44,8 @@ public final class Rules {
     private final Map<String, Object> regionCfg;
     private final Map<String, Object> innateQiCfg;
     private final Map<String, Object> factionsCfg;
+    /** 문파 생활 — 계급 사다리·공적·문규, 그리고 ★ 문파 상태(sect_state.internal_burden) */
+    private final Map<String, Object> sectLifeCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -71,6 +73,53 @@ public final class Rules {
         this.regionCfg = RulesConfig.load(configDir.resolve("regions/cheongha_hyeon.yml"));
         this.innateQiCfg = RulesConfig.load(configDir.resolve("internal_energy.yml"));
         this.factionsCfg = RulesConfig.load(configDir.resolve("factions.yml"));
+        this.sectLifeCfg = RulesConfig.load(configDir.resolve("sect_life.yml"));
+    }
+
+    // ─── 문파 상태 (sect_life.yml sect_state.internal_burden) — 연합의 브레이크 ───
+    //
+    // "문파가 제 코가 석 자면 남의 싸움에 못 낀다."
+    // 이 축이 없어서 연합이 너무 쉽게 뭉쳤다 — 양(+) 보정이 통째로 빠져 있었다.
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> internalBurdenCfg() {
+        Map<String, Object> state = RulesConfig.section(sectLifeCfg, "sect_state");
+        return (Map<String, Object>) state.get("internal_burden");
+    }
+
+    /** sect_state.internal_burden.scale = [0, 6] — 상한 */
+    public int burdenMax() {
+        @SuppressWarnings("unchecked")
+        List<Object> scale = (List<Object>) internalBurdenCfg().get("scale");
+        return scale == null ? 6 : RulesConfig.intValue(scale.get(1));
+    }
+
+    /** sect_state.internal_burden.decay.every_days = 30 — 사정은 느리게 풀린다 (favor 와 같은 주기) */
+    @SuppressWarnings("unchecked")
+    public int burdenDecayEveryDays() {
+        Map<String, Object> decay = (Map<String, Object>) internalBurdenCfg().get("decay");
+        return decay == null ? 30 : RulesConfig.intValue(decay.get("every_days"));
+    }
+
+    /**
+     * sect_state.internal_burden.sources.&lt;키&gt;.burden — 사건이 얹는 부담.
+     * 장문_교체기 3 · 내분_알력 2 · 사상자_누적 2 · 재정_궁핍 1 · 폐관_은둔 2 · **다른_전쟁_중 4**
+     */
+    @SuppressWarnings("unchecked")
+    public int burdenSource(String key) {
+        Map<String, Object> sources = (Map<String, Object>) internalBurdenCfg().get("sources");
+        Object e = sources == null ? null : sources.get(key);
+        if (!(e instanceof Map<?, ?> m)) {
+            throw new IllegalArgumentException("등록되지 않은 문파 사정: " + key);
+        }
+        return RulesConfig.intValue(((Map<String, Object>) m).get("burden"));
+    }
+
+    /** 등록된 사정의 이름들 (관리자 명령의 선택지 원천 — 신규 사정 발명 금지) */
+    @SuppressWarnings("unchecked")
+    public java.util.Set<String> burdenSourceKeys() {
+        Map<String, Object> sources = (Map<String, Object>) internalBurdenCfg().get("sources");
+        return sources == null ? java.util.Set.of() : sources.keySet();
     }
 
     /** judgment.yml formula.npc_fixed_bonus — NPC는 주사위 대신 고정값 (+7) */
@@ -147,6 +196,23 @@ public final class Rules {
             }
         }
         return id;
+    }
+
+    /**
+     * 표시 이름·별칭 → 세력 id (factions.yml aliases 그대로. 화산파 → hwasan).
+     * 이미 id 인 것은 그대로 돌려준다. 등록부에 없으면 null — **세력을 발명하지 않는다.**
+     */
+    @SuppressWarnings("unchecked")
+    public String factionId(String nameOrId) {
+        if (nameOrId == null || nameOrId.isBlank()) {
+            return null;
+        }
+        String key = nameOrId.strip();
+        Object aliases = factionsCfg.get("aliases");
+        if (aliases instanceof Map<?, ?> m && ((Map<String, Object>) m).get(key) != null) {
+            return String.valueOf(((Map<String, Object>) m).get(key));
+        }
+        return key;   // id 로 온 것 — 등록 여부는 부르는 쪽이 coalitionOf 로 확인한다
     }
 
     /** quest_generation.yml grade_ladder — 등급 사다리 (낮은 것부터). 등급 상한 집행의 원천 */

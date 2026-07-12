@@ -68,6 +68,15 @@ life_simulation:
     causes: [노환_수명100년_대칭, 병_원기, 사건]
     rumor: "사망 = 소문 자동 생성"
     succession: "핵심 NPC 사망 = 후계 이벤트 등록 — 상속 분쟁, 유산(애병·비급), 조직 승계전"
+    sect_burden:                    # ★ 13차 — NPC 의 생애가 세력의 정치가 된다
+      ref: "sect_life.yml sect_state.internal_burden.sources"
+      장문_사망: { source: 장문_교체기, burden: 3, duration_days: 90,
+                   note: "★ 장문이 죽으면 그 문파는 전쟁을 결정하지 못한다 — 결정할 사람이 없다.
+                     연합 임계 +3 (faction_politics 자파_내부_사정). 후계가 서기 전까지" }
+      장로_사망: { source: 사상자_누적, burden: 2, duration_days: 60 }
+      후계_분쟁: { source: 내분_알력, burden: 2, ref: "fall_events.후계_분쟁 — 하락 판정 실패의 결과" }
+      design_intent: "★ NPC 한 사람의 죽음이 강호의 판을 바꾼다.
+        장문을 죽이면 그 문파는 다음 명분에 못 붙는다 — 마교가 장문부터 노리는 이유다"
 
   tier_mobility:
     promote: "배경 NPC가 사건으로 '이름'을 얻으면 등급 3 개체화 (시트 생성, 생애 시뮬 편입) — 관측이 개성을 만든다"

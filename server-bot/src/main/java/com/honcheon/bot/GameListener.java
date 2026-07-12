@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -74,6 +75,7 @@ public final class GameListener extends ListenerAdapter {
                 case "사망" -> adminKill(event);
                 case "사선" -> adminDeathLine(event);    // A — 죽음 검증용 (관리자)
                 case "명분" -> adminMyeongbun(event);    // 단계 5 — 정치 검증용 (관리자)
+                case "사정" -> adminSectBurden(event);   // ★ 연합의 브레이크 (관리자)
                 default -> event.replyEmbeds(help()).setEphemeral(true).queue();
             }
         } catch (Exception e) {
@@ -297,6 +299,8 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 탐방` 폐사당을 살핀다 — 발품에는 이유가 있다 (출도 후, 하루 한 번)\n"
                         + "`/혼천 운기` 심법으로 기를 돌린다 — 하루 한 번, 축기 (심법 보유자)\n"
                         + "`/혼천 출행 화산` 산문으로 직행한다 — 여비·기간을 치르고 문 앞에 선다 (조건 불문)\n"
+                        + "`/혼천 출행 관아` 청하현 관아 — 포쾌로 써 달라고 한다. **관은 그냥 적는다** "
+                        + "(문턱이 가장 낮은 문. 대가는 강호가 청구한다)\n"
                         + "`/혼천 소문` 저잣거리에 도는 말 — 퍼질수록 이야기가 달라진다\n"
                         + "`/혼천 의방` 부상을 다스리고 외상을 갚는다 (유문의 의방)\n"
                         + "`/혼천 구조 @상대` 빈사의 동행을 지혈한다 — 의술 판정 (사람을 살리는 유일한 손)\n"
@@ -340,6 +344,7 @@ public final class GameListener extends ListenerAdapter {
                 case "qp" -> onQuestPerform(event, id[1], Integer.parseInt(id[2]), id[3]);
                 case "gs" -> onMealChoice(event, "share".equals(id[1]), id[2]);
                 case "ex" -> onGateChoice(event, id[1], Integer.parseInt(id[2]), id[3]);
+                case "gw" -> onGwanaChoice(event, id[1], id[2]);            // ★ 관아 — 9번째 루트
                 case "ln" -> onLineageChoice(event, "kin".equals(id[1]));   // 새 삶 — 혈연 / 무관
                 default -> event.deferEdit().queue();
             }
@@ -1806,9 +1811,13 @@ public final class GameListener extends ListenerAdapter {
         }
         var destOpt = event.getOption("목적지");
         String dest = destOpt == null ? "화산" : destOpt.getAsString();
+        if ("관아".equals(dest)) {
+            gwanaWalkIn(event, found.get());   // ★ 9번째 루트 — 관아는 걸어서 간다 (여정 0일)
+            return;
+        }
         if (!"화산".equals(dest)) {
-            event.reply("그 방면의 길은 아직 열리지 않았다 — 지금 청하현에서 닿는 산문은 **화산**뿐이다.")
-                    .setEphemeral(true).queue();
+            event.reply("그 방면의 길은 아직 열리지 않았다 — 지금 청하현에서 닿는 산문은 **화산**뿐이고, "
+                    + "관아는 걸어서 반 시진이다.").setEphemeral(true).queue();
             return;
         }
         Map<String, Object> row = found.get();
@@ -1937,6 +1946,244 @@ public final class GameListener extends ListenerAdapter {
             reply.addComponents(ActionRow.of(buttons));
         }
         reply.queue();
+    }
+
+    // ─── ★ 9번째 루트 — 관아 직행 (gwangun_entry.direct_approach) ───
+    //
+    // 다른 여덟 루트는 강호 **안**의 문이다. 이 문만 강호 **밖**으로 난다.
+    //   ★ 세계에서 유일하게 **직행이 정공법보다 빠른** 문이다 — 관은 언제나 사람이 모자라다.
+    //     하오문조차 미끼를 던지는데, 관은 그냥 **적는다.** 이름과 출신을.
+    //   ★ 그리고 그것이 함정이다: 아무 대가 없이 얻은 것 같지만, **대가는 강호가 청구한다** (murim_gaze).
+    //
+    // 무대는 청하현 관아(county_office) — 조성기가 아직 짓지 않았다. 봇은 장소가 없어도 된다.
+    // 여정 0일 (걸어서 반 시진) — 화산과 달리 오프스크린 여정이 아니다.
+
+    private static final String GWANGUN = Routes.GWANGUN;
+
+    @SuppressWarnings("unchecked")
+    private void gwanaWalkIn(SlashCommandInteractionEvent event, Map<String, Object> row)
+            throws Exception {
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        if (blockedByWound(event, sheet)) {
+            return;
+        }
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+        int back = ((Number) sheet.getOrDefault("출행_복귀일", -1)).intValue();
+        if (today < back) {
+            event.reply("아직 화산 길 위다 — 청하현 관아는 **" + (back - today)
+                    + "일** 뒤에나 닿는다. (몸은 하나다)").setEphemeral(true).queue();
+            return;
+        }
+        String realm = String.valueOf(row.get("realm"));
+        Map<String, Object> tags = tagsOf(sheet);
+
+        int gwanFavor = db.favor("gwan_gun", chId, today, rules.factions);
+        int haomunFavor = db.favor("haomun", chId, today, rules.factions);
+        Routes.Infamy infamy = rules.routes.infamy(HWASAN);   // 악명의 기준은 하나다 (루트마다 다르지 않다)
+        boolean sapaKnown = haomunFavor >= infamy.haomunFavorMin()
+                || hasRumor(today, 2, List.of("사파", infamy.rumorTag()));
+        int poqwaeFavor = rules.routes.gwangunGateFavor("포쾌_등재", 4);
+
+        String branch;
+        String body;
+        List<Button> buttons = new ArrayList<>();
+
+        if (disavowed(chId, today)) {
+            // ★ 유일하게 세계가 '문'을 주지 않는 경우 — 관을 죽인 자가 관아에 걸어 들어왔다.
+            //   그러나 이것도 문이다. **자수**다 (authority_mandate.drains.자수 -10).
+            branch = "즉시_포박";
+            putTag(sheet, "절연", today);
+            body = "관아 마당에 들어서는 순간, 포쾌 넷이 동시에 일어섰다. 아무도 소리치지 않았다.\n"
+                    + "박호가 천천히 걸어 나온다. 그의 눈에 놀라움이 없다 — **기다리고 있었다.**\n"
+                    + "\"…제 발로 왔군.\"\n\n"
+                    + "포박은 조용했다. 관은 관을 죽인 자에게 화를 내지 않는다. **절차를 밟을 뿐이다.**\n"
+                    + "*(법명분 " + db.mandate(chId, today, rules.politics)
+                    + " · 강호의 절연 — 정파 토벌대가 오기 전에 관아에 든 것은, 어쩌면 운이었다)*\n"
+                    + "*걸어 들어온 자에게 관은 형(刑)을 주지 살(殺)을 주지 않는다. 자수 = 법명분 "
+                    + rules.politics.mandateDrain("자수") + ".*";
+        } else if (tags.containsKey("수배")) {
+            // ★ 관은 기록한다. 한 번 오른 이름은 안 지워진다 — 세계에서 가장 정직한 거절
+            branch = "즉시_거절";
+            body = "서리가 명부를 넘기다 손을 멈췄다. 그리고 당신의 얼굴을 다시 본다.\n"
+                    + "\"…이름이 여기 있소.\"\n"
+                    + "그것으로 끝이었다. 화도 내지 않고, 부르지도 않았다. **관은 기록한다.**\n"
+                    + "돌아서는 등 뒤로, 늙은 서리가 낮게 덧붙였다.\n"
+                    + "\"변경이라면 받아 주지. 거기선 이름을 안 묻네.\" — *유일하게 남은 관의 문이다.*\n\n"
+                    + "*(군진 입대 — 대동 25일 · 산해관 37일 · 가욕관 46일. 돌아오지 못한다)*";
+        } else if (sapaKnown) {
+            // ★ 관도 쓸모를 안다. 사파를 아는 자는 사파를 잡는 데 쓴다 — 다만 언제든 버릴 수 있는 패다
+            //   (하오문의 '위험한 일부터 준다'와 정확히 대칭이다. 세계는 양쪽에서 똑같이 정직하다)
+            branch = "시험적_고용";
+            Integer wall = rules.routes.gwangunBranchDifficulty("사파_소문");
+            putTag(sheet, "감시", today);
+            body = "박호가 팔짱을 낀 채 당신을 오래 보았다.\n"
+                    + "\"자네 이름, 저잣거리에서 들었네. 좋은 쪽으로는 아니고.\"\n"
+                    + "그런데 그가 웃는다. \"…그래서 쓸 만하겠군. 사파를 아는 자가 사파를 잡는 법이지.\"\n\n"
+                    + "*(시험적 고용 — 화술 판정의 벽 +" + (wall == null ? 4 : wall)
+                    + " · '감시' 태그. 관은 당신을 **언제든 버릴 수 있는 패**로 쓴다)*\n"
+                    + "*하오문이 신원 미상자에게 위험한 일부터 주는 것과 정확히 대칭이다 — 세계는 양쪽에서 똑같이 정직하다.*";
+            buttons.add(Button.danger("gw:enlist:" + event.getUser().getId(),
+                    "그래도 등재를 청한다 (감시 하)"));
+        } else if (gwanFavor >= poqwaeFavor || realmRankOf(realm) >= 0) {
+            // ★ 기본형 — 받아 준다. 관은 언제나 사람이 모자라다
+            branch = "즉석_등재";
+            body = "관아 문은 그냥 열려 있었다. 아무도 막지 않았다.\n"
+                    + "서리가 붓을 든 채 고개도 들지 않고 물었다. \"이름. 본관. 나이.\"\n"
+                    + "당신이 답하자 그는 그것을 **적었다.** 그게 전부였다.\n"
+                    + "\"내일 새벽 인시. 늦지 마시오.\"\n\n"
+                    + "산문에서는 심사를 받고, 객잔 2층에서는 미끼를 물고, 산채에서는 얻어맞는다.\n"
+                    + "**관은 그냥 적는다.** 세계에서 문턱이 가장 낮은 문이다.\n"
+                    + "*…그리고 세계에서 가장 비싼 문이기도 하다.*";
+            buttons.add(Button.primary("gw:enlist:" + event.getUser().getId(), "포쾌로 등재한다"));
+            buttons.add(Button.secondary("gw:leave:" + event.getUser().getId(),
+                    "생각해 보겠다고 하고 나온다"));
+        } else {
+            branch = "보증인_요구";
+            putTag(sheet, "눈여겨봄", today);
+            body = "\"보증인은.\"\n"
+                    + "없다고 하자 서리가 붓을 내려놓았다. \"…호적은.\"\n"
+                    + "그것도 없다. 서리가 처음으로 당신을 본다.\n"
+                    + "\"이 사람아, 관은 이름을 적는 곳이오. 적을 이름이 없는데 어쩌란 말이오.\"\n\n"
+                    + "돌아서려는데 마당을 쓸던 늙은 포쾌가 불렀다.\n"
+                    + "\"객잔 한백이나 의뢰소 소연이 서 주면 되네. …아니면 마당이나 쓸든가. 밥은 먹여 주지.\"\n"
+                    + "*— 문은 그렇게도 열린다 (관아 잡역 — 화산 문전 잡역의 관아판).*";
+            buttons.add(Button.secondary("gw:chore:" + event.getUser().getId(), "관아 잡역을 청한다"));
+        }
+
+        // 직행 시도 자체가 소문이 된다 — ★ 강호에서 이보다 빨리 도는 이야기는 없다
+        Routes.Attempt attempt = rules.routes.rumorOnAttempt(GWANGUN);
+        spread(rumorGroup("관아", chId, today), attempt.text(), String.valueOf(row.get("name")), chId,
+                List.of("관군", "무인"), attempt.intensityMin(), rules.initialAccuracy("직접_목격"),
+                attempt.networks().get(0), today);
+
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(), realm,
+                "강호", "청하현");
+        db.logEvent("출행", "character", String.valueOf(chId), "faction", "관군",
+                Map.of("목적지", "관아", "분기", branch, "관군_favor", gwanFavor));
+
+        var reply = event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                .setTitle("출행 — 청하현 관아")
+                .setDescription("장터를 가로질러 반 시진. 백벽에 청기와, 돌 기단. "
+                        + "마을에서 가장 단단한 집이다.\n\n" + body)
+                .setFooter("관에 드는 것은 세력을 고르는 일이 아니라 층위를 바꾸는 일이다 — "
+                        + "무림과 다른 편에 선다. 싸우지 않아도.")
+                .build());
+        if (!buttons.isEmpty()) {
+            reply.addComponents(ActionRow.of(buttons));
+        }
+        reply.queue();
+    }
+
+    /** 경지 등급 (범인 = 0) — 관은 무공을 보지 않는다. 다만 '몸 성한 양민'인지는 본다 */
+    private static int realmRankOf(String realm) {
+        return Quests.realmRank(realm) - Quests.realmRank("범인");
+    }
+
+    /** 관아 앞의 선택 — 등재 / 잡역 / 물러남 (제1원칙: 어느 쪽도 '진행 불가'가 아니다) */
+    @SuppressWarnings("unchecked")
+    private void onGwanaChoice(ButtonInteractionEvent event, String kind, String ownerId)
+            throws Exception {
+        if (!event.getUser().getId().equals(ownerId)) {
+            event.reply("남의 관아 마당이다 — `/혼천 출행 목적지:관아`로 직접 서라.").setEphemeral(true).queue();
+            return;
+        }
+        var found = db.findCharacter(ownerId);
+        if (found.isEmpty()) {
+            event.editMessage("기록이 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+        event.getMessage().editMessageComponents().queue();   // 선택은 한 번뿐이다
+
+        switch (kind) {
+            case "enlist" -> gwangunEnlist(event, row);
+            case "chore" -> {
+                // 관아 잡역 — 화산 문전 잡역의 관아판 (대칭). 관군 favor 를 벌어 게이트를 채운다
+                Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+                int cap = rules.routes.gwangunGateFavor("포쾌_등재", 4);
+                int favor = db.addFavor("gwan_gun", chId, 1, cap, today, rules.factions);
+                putTag(sheet, "눈여겨봄", today);
+                db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                        String.valueOf(row.get("realm")), "강호", "청하현");
+                db.logEvent("세력_잡역", "character", String.valueOf(chId), "faction", "gwan_gun",
+                        Map.of("favor", favor));
+                event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                        .setTitle("관아 잡역")
+                        .setDescription("마당을 쓸고, 문서를 나르고, 포쾌들의 밥을 지었다.\n"
+                                + "박호가 지나가다 한 번, 두 번 걸음을 늦췄다. 아무 말도 하지 않았다.\n\n"
+                                + "**관군 우호 " + favor + "** (등재 문턱 " + cap + ")\n"
+                                + "*보증인이 없는 자의 정공법이다 — 관은 시간을 들인 자를 기억한다.*")
+                        .build()).queue();
+            }
+            default -> event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                    .setTitle("관아를 나선다")
+                    .setDescription("서리가 붓을 들었다가, 다시 내려놓았다.\n"
+                            + "\"…마음이 바뀌면 오시오. 관은 언제나 사람이 모자라니.\"\n\n"
+                            + "*문은 닫히지 않았다. 관아의 문은 원래 닫히지 않는다.*")
+                    .build()).queue();
+        }
+    }
+
+    /**
+     * ★ 포쾌 등재 — 이 루트의 첫 걸음이자, 강호가 등을 돌리기 시작하는 지점.
+     *
+     * 관군 favor 를 얻는다. 그리고 **정파 -2 · 사파 -6** (murim_gaze.by_gate.포쾌_등재).
+     * 아무도 욕하지 않는다. 다만 묵삼이 말을 아끼고, 갈호는 이제 당신을 죽여도 되는 사람으로 본다.
+     *
+     * ★ 되돌릴 수 있다 — 포쾌·포두는 '관에 고용된 무림인'일 뿐이다 (관무불가침 예외 조항).
+     *   사직하면 favor 만 남고 문파의 문은 다시 열린다. 무과를 넘는 순간 닫힌다.
+     */
+    private void gwangunEnlist(ButtonInteractionEvent event, Map<String, Object> row)
+            throws Exception {
+        long chId = ((Number) row.get("id")).longValue();
+        int today = db.worldDay();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        int need = rules.routes.gwangunGateFavor("포쾌_등재", 4);
+        int gwan = db.favor("gwan_gun", chId, today, rules.factions);
+        int granted = db.addFavor("gwan_gun", chId, Math.max(0, need - gwan), rules.factions.favorMax(),
+                today, rules.factions);
+
+        Routes.Gaze gaze = rules.routes.gaze("포쾌_등재");
+        int orthodox = db.addFavor("orthodox", chId, gaze.orthodoxFavor(), rules.factions.favorMax(),
+                today, rules.factions);
+        int unorthodox = db.addFavor("unorthodox", chId, gaze.unorthodoxFavor(),
+                rules.factions.favorMax(), today, rules.factions);
+        db.addFavor("haomun", chId, gaze.unorthodoxFavor(), rules.factions.favorMax(), today,
+                rules.factions);
+        db.addFavor("noklim", chId, gaze.unorthodoxFavor(), rules.factions.favorMax(), today,
+                rules.factions);
+
+        putTag(sheet, "관_계급", "포쾌");
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                String.valueOf(row.get("realm")), "강호", "청하현");
+
+        // ★ 이 소문은 막을 수 없다 — 관아 명부는 공개 문서다
+        spread(rumorGroup("포쾌", chId, today), "그 아이, 관아에 들어갔다더군",
+                String.valueOf(row.get("name")), chId, List.of("관군", "무인"), 1,
+                rules.initialAccuracy("직접_목격"), rules.originNetwork("market"), today);
+
+        db.logEvent("포쾌_등재", "character", String.valueOf(chId), "faction", "gwan_gun",
+                Map.of("관군_favor", granted, "정파_favor", orthodox, "사파_favor", unorthodox));
+
+        event.replyEmbeds(new EmbedBuilder().setColor(INK)
+                .setTitle("포쾌 등재 — " + row.get("name"))
+                .setDescription("붓이 종이를 긁는 소리. 그리고 끝이었다.\n"
+                        + "포쾌 패(牌)와 월 봉록, 그리고 **수배 명단 열람권.**\n"
+                        + "문파의 비급각보다 값진 것일 수도 있다 — 강호의 모든 이름이 거기 있다.\n\n"
+                        + "그날 저녁 객잔에서 묵삼이 당신을 보았다. 그리고 **말을 걸지 않았다.**\n"
+                        + "아무도 욕하지 않는다. 아무 일도 일어나지 않는다.\n"
+                        + "다만 이제, 누구도 당신에게 등을 보이지 않는다.\n\n"
+                        + "*관군 우호 **" + granted + "** (포쾌_등재 게이트 충족)\n"
+                        + "정파 우호 " + gaze.orthodoxFavor() + " → **" + orthodox + "** · "
+                        + "사파 우호 " + gaze.unorthodoxFavor() + " → **" + unorthodox + "***\n"
+                        + "*" + (gaze.note() == null ? "" : gaze.note()) + "*")
+                .setFooter("★ 되돌릴 수 있다 — 포쾌는 '관에 고용된 무림인'일 뿐이다 (관무불가침 예외). "
+                        + "무과를 넘는 순간 닫힌다.")
+                .build()).queue();
     }
 
     /**
@@ -2235,6 +2482,23 @@ public final class GameListener extends ListenerAdapter {
         List<String> tags = rules.politics.inputTags(key);
         String issueKey = key + ":" + target;
 
+        // ★ 피해 세력 — **누가 당했는가.** 이것이 없으면 연합 계산의 절반이 죽는다:
+        //   피해_당사자(-8) 는 먼저 붙고, 동맹_피해(-6) 가 따라 붙고, **원한_세력_참여(+5) 는 빠진다.**
+        //   비워 두는 것도 옳다 — 백성이 죽은 사건에는 피해 '세력'이 없다. 그래서 아무도 급하지 않다.
+        List<String> victims = new ArrayList<>();
+        String victimOpt = optionOr(event, "피해", null);
+        if (victimOpt != null && !victimOpt.isBlank()) {
+            for (String v : victimOpt.split("[,·\\s]+")) {
+                String id = rules.factionId(v.strip());
+                if (id == null || rules.politics.coalitionOf(id) == null) {
+                    event.reply("등록부에 없는 피해 세력이다 — factions.yml 의 id 만 쓴다: " + v)
+                            .setEphemeral(true).queue();
+                    return;
+                }
+                victims.add(id);
+            }
+        }
+
         // 사건은 소문을 타고 온다 — 이 소문이 곧 명분의 진위이자, 세력별 참전 시차의 원천이다
         String group = rumorGroup("명분", issueKey, today);
         List<String> rumorTags = new ArrayList<>(tags);
@@ -2245,12 +2509,13 @@ public final class GameListener extends ListenerAdapter {
                 rules.factionName(target), null, rumorTags, intensity, accuracy,
                 rules.originNetwork("market"), today);
 
-        Db.Issue row = db.addMyeongbun(issueKey, target, tags, value, accuracy, group, null,
-                today, 30, rules.politics);
+        Db.Issue row = db.addMyeongbun(issueKey, target, victims, tags, value, accuracy, group,
+                null, today, 30, rules.politics);
         Issue issue = readIssue(row, today);
         db.logEvent("명분", "world", "gm", "faction", issueKey,
-                Map.of("사건", key, "대상", target, "사건점수", value, "정확도", accuracy,
-                        "밴드", band, "배수", rules.politics.accuracyMultiplier(band),
+                Map.of("사건", key, "대상", target, "피해", row.victims(), "사건점수", value,
+                        "정확도", accuracy, "밴드", band,
+                        "배수", rules.politics.accuracyMultiplier(band),
                         "명분", issue.gauge(), "태그", tags,
                         "참여", issue.coalition().participants()));
         coalitionWatch(today);
@@ -2260,12 +2525,25 @@ public final class GameListener extends ListenerAdapter {
                 .setDescription("사건 점수 **" + value + "** × 정확도 " + accuracy + " (**" + band
                         + "** ×" + rules.politics.accuracyMultiplier(band) + ") → 명분 **"
                         + issue.gauge() + "**\n태그: " + String.join(" · ", tags)
+                        + "\n대상(누가 했는가): **" + rules.factionName(target) + "**"
+                        + "\n피해(누가 당했는가): " + (row.victims().isEmpty()
+                                ? "*없음 — 백성이 죽었다. 세력이 당한 것이 아니다 (그래서 아무도 급하지 않다)*"
+                                : "**" + row.victims().stream().map(rules::factionName)
+                                        .collect(java.util.stream.Collectors.joining(" · "))
+                                        + "** — 당사자는 먼저 붙고, 그 원수는 빠진다")
                         + (rules.politics.targetSwap(band)
                                 ? "\n\n⚠️ **오해 밴드 — 명분이 엉뚱한 세력에게 붙었다.** "
                                         + "범인·동기·대상이 뒤바뀌었다. 진범 규명만이 이것을 되돌린다 "
                                         + "(`/혼천 명분 해소:진범_규명 대상:<진범>`)"
                                 : ""));
         eb.addField("정치판", coalitionLine(issue), false);
+        Map<String, Integer> burdened = db.sectBurdens(today, rules.burdenDecayEveryDays());
+        if (!burdened.isEmpty()) {
+            eb.addField("자파 사정 (남의 싸움에 낄 여력이 없는 자들)",
+                    burdened.entrySet().stream()
+                            .map(e -> rules.factionName(e.getKey()) + " +" + e.getValue())
+                            .collect(java.util.stream.Collectors.joining(" · ")), false);
+        }
         eb.addField("균형점", rules.politics.balancePoint()
                 + " — 관은 이 상태를 만들지 않는 데 전력을 쓴다", false);
         eb.setFooter("소문이 각 세력의 조직 채널에 닿아야 그들이 셈을 시작한다 "
@@ -2328,8 +2606,9 @@ public final class GameListener extends ListenerAdapter {
                     + String.join(" · ", rules.politics.drainKeys())).setEphemeral(true).queue();
             return;
         }
-        Db.Issue updated = db.addMyeongbun(row.issue(), row.target(), row.tags(), value,
-                row.originAccuracy(), row.originRumor(), row.trueTarget(), today, 30, rules.politics);
+        Db.Issue updated = db.addMyeongbun(row.issue(), row.target(), row.victims(), row.tags(),
+                value, row.originAccuracy(), row.originRumor(), row.trueTarget(), today, 30,
+                rules.politics);
         Issue after = readIssue(updated, today);
         db.logEvent("명분_해소", "world", "gm", "faction", row.issue(),
                 Map.of("수단", drain, "가산", value, "명분", after.gauge(),
@@ -2344,6 +2623,68 @@ public final class GameListener extends ListenerAdapter {
     private String optionOr(SlashCommandInteractionEvent event, String key, String fallback) {
         var opt = event.getOption(key);
         return opt == null ? fallback : opt.getAsString();
+    }
+
+    /**
+     * ★ 문파의 사정 (`/혼천 사정`) — 연합의 브레이크. 13차 검증의 손잡이.
+     *
+     * "문파가 제 코가 석 자면 남의 싸움에 못 낀다."
+     * 사정은 등록부에서만 온다 (sect_life.yml sect_state.internal_burden.sources — 신규 사정 발명 금지).
+     * ★ 가장 무거운 사정(다른_전쟁_중 +4)은 여기서 얹지 않는다 — **오늘의 연합에서 읽는다.**
+     *   저장할 이유가 없다: 이미 다른 판에 서 있는 자는 오늘의 판에서 보면 안다.
+     */
+    private void adminSectBurden(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        String faction = rules.factionId(optionOr(event, "세력", ""));
+        if (faction == null || rules.politics.coalitionOf(faction) == null) {
+            event.reply("등록부에 없는 세력이다 — factions.yml 의 id 나 한글명만 쓴다 "
+                    + "(화산파 · 소림사 · 남궁세가 …)").setEphemeral(true).queue();
+            return;
+        }
+        int today = db.worldDay();
+        int decayDays = rules.burdenDecayEveryDays();
+        boolean clear = event.getOption("해소") != null && event.getOption("해소").getAsBoolean();
+        String source = optionOr(event, "사정", null);
+
+        int now;
+        if (clear) {
+            now = db.addSectBurden(faction, -rules.burdenMax(), null, today, decayDays,
+                    rules.burdenMax());
+        } else {
+            if (source == null || !rules.burdenSourceKeys().contains(source)) {
+                event.reply("등록되지 않은 사정이다 — 등록된 것: "
+                        + String.join(" · ", rules.burdenSourceKeys())).setEphemeral(true).queue();
+                return;
+            }
+            now = db.addSectBurden(faction, rules.burdenSource(source), source, today, decayDays,
+                    rules.burdenMax());
+        }
+        int baseline = rules.politics.burdenBaseline(faction);
+        int total = Math.min(rules.burdenMax(), baseline + now);
+        db.logEvent("문파_사정", "world", "gm", "faction", faction,
+                Map.of("세력", faction, "사정", clear ? "해소" : source, "사건_부담", now,
+                        "기준선", baseline, "합계", total));
+
+        EmbedBuilder eb = new EmbedBuilder().setColor(INK)
+                .setTitle("[GM] 문파의 사정 — " + rules.factionName(faction))
+                .setDescription(clear
+                        ? "후계가 섰다. 곳간이 찼다. 사정이 풀렸다.\n\n**사건 부담 0** "
+                                + "(기준선 " + baseline + " 는 남는다 — 상시 부담은 문파의 성격이다)"
+                        : "**" + source.replace('_', ' ') + "** (+" + rules.burdenSource(source)
+                                + ") — 그 문파는 지금 제 앞가림이 급하다.\n\n"
+                                + "사건 부담 **" + now + "** + 기준선 **" + baseline
+                                + "** = 연합 임계 **+" + total + "**")
+                .addField("이것이 하는 일",
+                        "이 문파의 join_threshold 가 **+" + total + "** 된다.\n"
+                                + "명분이 아무리 커도, **낄 여력이 없는 문파는 안 낀다.**\n"
+                                + "*수치로 보이지 않는다 — '무당은 장문 자리가 비었다는데'로 보인다.*", false)
+                .setFooter("사정은 " + decayDays + "일마다 -1 로 풀린다 (느리다). "
+                        + "★ 다른 전쟁 중(+" + rules.burdenSource("다른_전쟁_중")
+                        + ")은 저장하지 않는다 — 오늘의 연합에서 읽는다");
+        event.replyEmbeds(eb.build()).queue();
     }
 
     // ═══ 단계 4 B — 소문망: 생성만 하던 소문을 '퍼지게' 한다 ═══
@@ -2478,8 +2819,16 @@ public final class GameListener extends ListenerAdapter {
     /**
      * 사안 하나를 오늘 기준으로 읽는다 — 감쇠 정산 + 정확도 배수 + 연합 계산.
      * 세계 게이지는 발원 정확도로, 각 세력의 게이지는 **그 세력의 조직 채널 정확도**로 잰다.
+     *
+     * ★ 13차 — 연합에는 브레이크가 둘 붙는다:
+     *   ① victims (누가 당했는가)      → 당사자(-8)·동맹(-6)이 먼저 붙고, **원수(+5)는 빠진다**
+     *   ② internal_burden (자파 사정)  → 제 코가 석 자면 못 낀다. **다른 전쟁 중(+4)이 그 심장이다**
      */
     Issue readIssue(Db.Issue row, int today) throws Exception {
+        return readIssue(row, today, burdens(today, row.issue()));
+    }
+
+    private Issue readIssue(Db.Issue row, int today, Map<String, Integer> burdens) throws Exception {
         int raw = rules.politics.decayed(row.rawGauge(), row.tags(), row.updatedDay(), today);
         int world = rules.politics.gaugeFrom(raw, rules.rumors.band(row.originAccuracy()));
 
@@ -2497,8 +2846,40 @@ public final class GameListener extends ListenerAdapter {
             }
             byFaction.put(faction, rules.politics.gaugeFrom(raw, rules.rumors.band(accuracy)));
         }
-        return new Issue(row, world,
-                rules.politics.form(byFaction, row.tags(), row.target(), REGION_SECT));
+        return new Issue(row, world, rules.politics.form(byFaction, row.tags(), row.target(),
+                row.victims(), REGION_SECT, burdens));
+    }
+
+    /**
+     * ★ 오늘 각 세력의 '사정' (자파_내부_사정 0~6) — 이 사안을 볼 때의 여력.
+     *
+     *   기준선 (roster.internal_burden)  — 개방 0 (지킬 게 없다) … 당가·녹림 4 (집안이 시끄럽다)
+     * + 사건이 얹은 것 (sect_state 표)    — 장문 교체기 +3 · 내분 +2 · 사상자 +2 …
+     * + ★ 다른 전쟁 중 (+4)              — **이미 다른 사안의 연합에 들어가 있다**
+     *
+     * 마지막 것이 이 축의 심장이다: **무림은 동시에 두 전쟁을 하지 못한다.**
+     * 관이 두 사안을 동시에 흘려도 무림은 하나만 든다 — 억지의 숨은 절반이다.
+     * 저장하지 않는다. 오늘의 판에서 읽는다 (연합에 표가 없는 것과 같은 이유).
+     */
+    private Map<String, Integer> burdens(int today, String exceptIssue) throws Exception {
+        int decayDays = rules.burdenDecayEveryDays();
+        Map<String, Integer> events = db.sectBurdens(today, decayDays);
+        Set<String> atWar = new java.util.LinkedHashSet<>();
+        for (Db.Issue other : db.issues()) {
+            if (other.issue().equals(exceptIssue)) {
+                continue;
+            }
+            // 무한 재귀 금지: 다른 사안의 연합은 **사정 없이**(기준선만으로) 셈한다.
+            // 이미 붙어 있는 자를 찾는 것이 목적이지, 그 판의 정확한 크기를 재는 것이 아니다.
+            atWar.addAll(readIssue(other, today, Map.of()).coalition().participants());
+        }
+        int otherWar = rules.burdenSource("다른_전쟁_중");
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (String faction : rules.politics.murim()) {
+            out.put(faction, rules.politics.burden(faction, events.getOrDefault(faction, 0),
+                    atWar.contains(faction), otherWar));
+        }
+        return out;
     }
 
     /**

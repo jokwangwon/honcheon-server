@@ -68,10 +68,12 @@ public final class HoncheonBot {
                                                 OptionType.STRING, "말", "하고 싶은 말 (자유 입력)", true)),
                         new SubcommandData("탐방", "폐사당을 살핀다 — 발품에는 이유가 있다 (하루 한 번)"),
                         new SubcommandData("운기", "심법으로 기를 돌린다 — 하루 한 번, 축기"),
-                        new SubcommandData("출행", "세력의 산문으로 직행한다 — 조건 불문, 세계가 대답한다")
+                        new SubcommandData("출행", "세력의 문으로 직행한다 — 조건 불문, 세계가 대답한다")
                                 .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                         OptionType.STRING, "목적지", "어디로 가는가", true)
-                                        .addChoice("화산 (화산파 산문)", "화산")),
+                                        .addChoice("화산 (화산파 산문 — 여정 3~7일)", "화산")
+                                        // ★ 9번째 루트 — 관은 걸어서 간다. 청하현 안에 있다 (여정 0일)
+                                        .addChoice("관아 (청하현 관아 — 포쾌로 써 달라고 한다)", "관아")),
                         new SubcommandData("소문", "저잣거리에 도는 말 — 퍼질수록 이야기가 달라진다"),
                         new SubcommandData("의방", "부상을 다스리고 외상을 갚는다 (유문의 의방)"),
                         new SubcommandData("구조", "빈사의 동행을 지혈한다 — 의술 판정 (사람을 살리는 손)")
@@ -152,7 +154,14 @@ public final class HoncheonBot {
                                                 .addChoice("문파 멸문 (+10 무림침해·존망)", "문파_멸문"),
                                         new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.STRING, "대상",
-                                                "명분이 겨누는 세력 id (기본: 관 → gwan_gun · 금기 → magyo)",
+                                                "누가 했는가 — 명분이 겨누는 세력 id "
+                                                        + "(기본: 관 → gwan_gun · 금기 → magyo)",
+                                                false),
+                                        // ★ 누가 당했는가 — 이것이 없으면 연합 계산의 절반이 죽는다
+                                        //   (피해_당사자 -8 · 동맹_피해 -6 · 원한_세력_참여 +5)
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "피해",
+                                                "누가 당했는가 — 피해 세력 id (쉼표로 여럿. 비우면 '백성이 죽었다')",
                                                 false),
                                         new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.INTEGER, "정확도",
@@ -169,6 +178,23 @@ public final class HoncheonBot {
                                                         "참여_세력_이익_배분")
                                                 .addChoice("진범 규명 (이전 — 대상에 진범을 댈 것)",
                                                         "진범_규명")),
+                        // ★ 문파 사정 — 연합의 브레이크 (sect_life sect_state.internal_burden)
+                        new SubcommandData("사정", "문파에 사정을 얹는다 — 연합 브레이크 검증용 (서버 관리자)")
+                                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "세력",
+                                                "어느 문파인가 (세력 id 또는 한글명 — 화산파·소림사 …)", true),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.STRING, "사정",
+                                                "무엇 때문인가 (sect_life sect_state.internal_burden.sources)",
+                                                false)
+                                                .addChoice("장문 교체기 (+3 — 결정할 사람이 없다)", "장문_교체기")
+                                                .addChoice("내분·알력 (+2)", "내분_알력")
+                                                .addChoice("사상자 누적 (+2 — 제자를 아낀다)", "사상자_누적")
+                                                .addChoice("재정 궁핍 (+1 — 봉록을 못 준다)", "재정_궁핍")
+                                                .addChoice("폐관·은둔 (+2 — 문을 닫아걸었다)", "폐관_은둔"),
+                                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                                OptionType.BOOLEAN, "해소",
+                                                "사정을 푼다 (후계가 섰다 / 곳간이 찼다)", false)),
                         new SubcommandData("도움말", "명령과 규칙 안내"));
         // 개발 중엔 길드 스코프 등록(즉시 반영) — HONCHEON_GUILD_ID 설정 시. 글로벌은 최대 1시간 지연
         String guildId = System.getenv("HONCHEON_GUILD_ID");

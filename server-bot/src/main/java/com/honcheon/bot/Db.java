@@ -417,15 +417,21 @@ public final class Db implements AutoCloseable {
     // raw_gauge 는 '장부에 적힌 사실'이고, 세계가 그것을 얼마나 믿는지는 **소문의 정확도**가 정한다.
     // 그래서 연합(참여 세력)은 저장하지 않는다 — 그것은 상태가 아니라 계산의 결과다 (Politics.form).
 
-    /** 사안 한 칸 — 무엇 때문에, 누구를 겨누는가 (raw_gauge = 배수 적용 전 사건 점수) */
-    record Issue(String issue, String target, List<String> tags, int rawGauge, int originAccuracy,
-                 String originRumor, String trueTarget, int createdDay, int updatedDay) {
+    /**
+     * 사안 한 칸 — 무엇 때문에, **누가 했고 누가 당했는가** (raw_gauge = 배수 적용 전 사건 점수).
+     * victims 가 명분의 두 번째 축이다: 이것이 있어야 당사자가 먼저 붙고(-8), 동맹이 따라 붙고(-6),
+     * **원수는 빠진다**(+5). 없으면 남는 것은 태그뿐이고, 태그만 남으면 무림은 언제나 뭉친다.
+     */
+    record Issue(String issue, String target, List<String> victims, List<String> tags, int rawGauge,
+                 int originAccuracy, String originRumor, String trueTarget, int createdDay,
+                 int updatedDay) {
     }
 
     @SuppressWarnings("unchecked")
     private Issue readIssue(ResultSet rs) throws Exception {
         List<String> tags = JSON.readValue(rs.getString("tags_json"), List.class);
-        return new Issue(rs.getString("issue"), rs.getString("target"), tags,
+        List<String> victims = JSON.readValue(rs.getString("victims_json"), List.class);
+        return new Issue(rs.getString("issue"), rs.getString("target"), victims, tags,
                 rs.getInt("raw_gauge"), rs.getInt("origin_accuracy"),
                 rs.getString("origin_rumor"), rs.getString("true_target"),
                 rs.getInt("created_day"), rs.getInt("updated_day"));
@@ -456,35 +462,121 @@ public final class Db implements AutoCloseable {
      * 명분 가산 — 정산 후 더한다 (사건이 쌓고 시간이 깎는다).
      * 사안이 없으면 만든다: 그때의 target·tags·발원 소문(정확도)이 이 명분의 정체가 된다.
      */
-    synchronized Issue addMyeongbun(String key, String target, List<String> tags, int delta,
-                                    int accuracy, String rumorGroup, String trueTarget,
-                                    int day, int max, Politics politics) throws Exception {
+    synchronized Issue addMyeongbun(String key, String target, List<String> victims,
+                                    List<String> tags, int delta, int accuracy, String rumorGroup,
+                                    String trueTarget, int day, int max, Politics politics)
+            throws Exception {
         Optional<Issue> found = issue(key);
         int base = found.map(i -> politics.decayed(i.rawGauge(), i.tags(), i.updatedDay(), day))
                 .orElse(0);
         int next = Math.max(0, Math.min(max, base + delta));
         List<String> mergedTags = found.map(Issue::tags).orElse(tags);
+        // 피해 세력은 **누적된다** — 관이 두 번째 문파를 치면 피해자가 둘이 된다 (그래서 연합이 커진다)
+        java.util.LinkedHashSet<String> mergedVictims = new java.util.LinkedHashSet<>(
+                found.map(Issue::victims).orElse(List.of()));
+        if (victims != null) {
+            mergedVictims.addAll(victims);
+        }
         try (PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO myeongbun(issue, target, tags_json, raw_gauge, origin_accuracy, "
-                        + "origin_rumor, true_target, created_day, updated_day) "
-                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "INSERT INTO myeongbun(issue, target, victims_json, tags_json, raw_gauge, "
+                        + "origin_accuracy, origin_rumor, true_target, created_day, updated_day) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                         + "ON CONFLICT(issue) DO UPDATE SET raw_gauge = excluded.raw_gauge, "
                         + "updated_day = excluded.updated_day, target = excluded.target, "
+                        + "victims_json = excluded.victims_json, "
                         + "origin_accuracy = excluded.origin_accuracy, "
                         + "origin_rumor = COALESCE(excluded.origin_rumor, myeongbun.origin_rumor), "
                         + "true_target = COALESCE(excluded.true_target, myeongbun.true_target)")) {
             ps.setString(1, key);
             ps.setString(2, target);
-            ps.setString(3, JSON.writeValueAsString(mergedTags));
-            ps.setInt(4, next);
-            ps.setInt(5, accuracy);
-            ps.setString(6, rumorGroup);
-            ps.setString(7, trueTarget);
-            ps.setInt(8, found.map(Issue::createdDay).orElse(day));
-            ps.setInt(9, day);
+            ps.setString(3, JSON.writeValueAsString(List.copyOf(mergedVictims)));
+            ps.setString(4, JSON.writeValueAsString(mergedTags));
+            ps.setInt(5, next);
+            ps.setInt(6, accuracy);
+            ps.setString(7, rumorGroup);
+            ps.setString(8, trueTarget);
+            ps.setInt(9, found.map(Issue::createdDay).orElse(day));
+            ps.setInt(10, day);
             ps.executeUpdate();
         }
         return issue(key).orElseThrow();
+    }
+
+    // ─── 문파 상태 (sect_state) — ★ 문파에게도 사정이 있다 (004) ───
+    //
+    // 제 코가 석 자면 남의 싸움에 못 낀다. 이 표가 연합의 브레이크다.
+    // 기준선은 config (roster.<세력>.internal_burden). 여기 든 것은 **사건이 얹은 것**뿐이다.
+    // '다른 전쟁 중(+4)' 은 저장하지 않는다 — 오늘의 연합에서 읽으면 되는 값이므로 (파생 상태 금지).
+
+    /** 사건이 얹은 부담 (감쇠 정산 후) — 30일마다 -1. 사정은 느리게 풀린다 */
+    synchronized int sectBurden(String faction, int today, int decayEveryDays) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT burden, updated_day FROM sect_state WHERE faction = ?")) {
+            ps.setString(1, faction);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return 0;
+                }
+                int burden = rs.getInt(1);
+                int ticks = decayEveryDays <= 0 ? 0
+                        : Math.max(0, (today - rs.getInt(2)) / decayEveryDays);
+                return Math.max(0, burden - ticks);
+            }
+        }
+    }
+
+    /** 사정을 얹거나(장문 사망 +3) 푼다(후계가 섰다 -3) — 0~6 clamp */
+    synchronized int addSectBurden(String faction, int delta, String source, int today,
+                                   int decayEveryDays, int max) throws Exception {
+        int now = sectBurden(faction, today, decayEveryDays);
+        int next = Math.max(0, Math.min(max, now + delta));
+        java.util.LinkedHashSet<String> sources = new java.util.LinkedHashSet<>();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT sources_json FROM sect_state WHERE faction = ?")) {
+            ps.setString(1, faction);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    @SuppressWarnings("unchecked")
+                    List<String> prior = JSON.readValue(rs.getString(1), List.class);
+                    sources.addAll(prior);
+                }
+            }
+        }
+        if (source != null && delta > 0) {
+            sources.add(source);
+        }
+        if (next == 0) {
+            sources.clear();   // 사정이 풀렸다
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO sect_state(faction, burden, sources_json, updated_day) "
+                        + "VALUES(?, ?, ?, ?) ON CONFLICT(faction) DO UPDATE SET "
+                        + "burden = excluded.burden, sources_json = excluded.sources_json, "
+                        + "updated_day = excluded.updated_day")) {
+            ps.setString(1, faction);
+            ps.setInt(2, next);
+            ps.setString(3, JSON.writeValueAsString(List.copyOf(sources)));
+            ps.setInt(4, today);
+            ps.executeUpdate();
+        }
+        return next;
+    }
+
+    /** 지금 사정이 있는 세력들 (진단·관측용) */
+    synchronized Map<String, Integer> sectBurdens(int today, int decayEveryDays) throws SQLException {
+        Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT faction, burden, updated_day FROM sect_state")) {
+            while (rs.next()) {
+                int ticks = decayEveryDays <= 0 ? 0
+                        : Math.max(0, (today - rs.getInt(3)) / decayEveryDays);
+                int burden = Math.max(0, rs.getInt(2) - ticks);
+                if (burden > 0) {
+                    out.put(rs.getString(1), burden);
+                }
+            }
+        }
+        return out;
     }
 
     /**

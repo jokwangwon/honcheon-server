@@ -190,4 +190,84 @@ final class Routes {
     /** inject = 의뢰 후보 키 · when = favor 문턱 또는 상태 태그 · channel = 게시 경로 */
     record Injection(String inject, Integer favorMin, String tag, String channel) {
     }
+
+    // ═══ 관군 루트 (9번째) — ★ 입문이 아니라 임용(任用). 무림이 아닌 층위로 건너간다 ═══
+    //
+    // 다른 여덟 루트는 강호 **안**의 문이다. 이 문만 강호 **밖**으로 난다.
+    // 그래서 이 루트의 대가는 favor 가 아니라 **눈빛**이다 — murim_gaze.
+    // "관에 붙었군." 아무도 욕하지 않는다. 다만 등 뒤로 '관의 개'라는 말이 돈다.
+
+    static final String GWANGUN = "gwangun_entry";
+
+    /** gates[gateId].condition(.favor.min) 또는 condition_any 의 최소 favor — 포쾌 4 · 포두 8 · 무과 13 */
+    @SuppressWarnings("unchecked")
+    int gwangunGateFavor(String gateId, int fallback) {
+        for (Object gate : (List<Object>) route(GWANGUN).get("gates")) {
+            Map<String, Object> g = (Map<String, Object>) gate;
+            if (!gateId.equals(g.get("id"))) {
+                continue;
+            }
+            Integer min = favorMin(g.get("condition"));
+            if (min != null) {
+                return min;
+            }
+            if (g.get("condition_any") instanceof List<?> any) {
+                for (Object c : any) {
+                    Integer m = favorMin(c);
+                    if (m != null) {
+                        return m;
+                    }
+                }
+            }
+        }
+        return fallback;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Integer favorMin(Object condition) {
+        if (condition instanceof Map<?, ?> m
+                && ((Map<String, Object>) m).get("favor") instanceof Map<?, ?> favor) {
+            Object min = ((Map<String, Object>) favor).get("min");
+            return min instanceof Number n ? n.intValue() : null;
+        }
+        return null;
+    }
+
+    /**
+     * ★ 강호가 관군 플레이어를 어떻게 보는가 — murim_gaze.by_gate.&lt;게이트&gt;.
+     * 포쾌 등재만으로 정파 -2 / 사파 -6. 포두는 -4 / -10. 무과를 넘으면 -8 + 사파 적대 고정.
+     * 이것이 이 루트의 값이다: **안전하되 외롭다.**
+     */
+    @SuppressWarnings("unchecked")
+    Gaze gaze(String gateId) {
+        Map<String, Object> gaze = (Map<String, Object>) route(GWANGUN).get("murim_gaze");
+        Map<String, Object> byGate = (Map<String, Object>) gaze.get("by_gate");
+        Object e = byGate.get(gateId);
+        if (!(e instanceof Map<?, ?> m)) {
+            return new Gaze(0, 0, null);
+        }
+        Map<String, Object> g = (Map<String, Object>) m;
+        return new Gaze(intOr(g.get("정파_favor")), intOr(g.get("사파_favor")),
+                g.get("note") == null ? null : String.valueOf(g.get("note")));
+    }
+
+    private static int intOr(Object v) {
+        return v instanceof Number n ? n.intValue() : 0;   // '적대_고정' 같은 산문은 수치가 아니다
+    }
+
+    /** 정파·사파가 그를 보는 눈 (favor 델타) + 세계가 하는 말 */
+    record Gaze(int orthodoxFavor, int unorthodoxFavor, String note) {
+    }
+
+    /** direct_approach.branches.&lt;분기&gt;.difficulty_modifier — 사파 소문이 도는 자의 벽 (+4) */
+    Integer gwangunBranchDifficulty(String branchKey) {
+        Object mod = branch(GWANGUN, branchKey).get("difficulty_modifier");
+        return mod instanceof Number n ? n.intValue() : null;
+    }
+
+    /** rank_ladder.현.포쾌/포두 … — 관의 사다리 (★ 자리가 비어야 오른다. 박호가 그 자리다) */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> gwangunLadder() {
+        return (Map<String, Object>) route(GWANGUN).get("rank_ladder");
+    }
 }

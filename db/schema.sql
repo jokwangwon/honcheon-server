@@ -87,7 +87,10 @@ CREATE TABLE IF NOT EXISTS faction_standing (    -- 세력 × 캐릭터 2축
 
 CREATE TABLE IF NOT EXISTS myeongbun (           -- 명분(名分) — 연합의 방아쇠. 사안(issue)마다 하나
     issue           TEXT PRIMARY KEY,            -- 사안 id ("<사건키>:<대상>")
-    target          TEXT NOT NULL,               -- 명분이 겨누는 세력 id (factions.yml 등록부)
+    target          TEXT NOT NULL,               -- 누가 했는가 — 명분이 겨누는 세력 id (factions.yml 등록부)
+    victims_json    TEXT NOT NULL DEFAULT '[]',  -- ★ 누가 당했는가 — 피해 세력 id 목록 (004)
+                                                 --   이 칸이 없으면 연합 계산의 절반이 죽는다:
+                                                 --   피해_당사자(-8) · 동맹_피해(-6) · 원한_세력_참여(+5)
     tags_json       TEXT NOT NULL DEFAULT '[]',  -- 무고/무림침해/존망/금기/법의배신/규약/생계
     raw_gauge       INTEGER NOT NULL DEFAULT 0,  -- 사건 점수 누적 (배수 적용 전 — '장부에 적힌 사실')
     origin_accuracy INTEGER NOT NULL DEFAULT 90, -- 발원 소문의 정확도 = 명분 배수의 원천
@@ -95,6 +98,18 @@ CREATE TABLE IF NOT EXISTS myeongbun (           -- 명분(名分) — 연합의
     true_target     TEXT,                        -- 오해 밴드의 진범 (진범_규명 시 명분이 이쪽으로 이전)
     created_day     INTEGER NOT NULL,
     updated_day     INTEGER NOT NULL             -- 감쇠 기산점 (7일마다 -1, 존망 태그는 4에서 멈춘다)
+);
+
+-- 문파 상태 (004) — ★ 문파에게도 '사정'이 있다. 제 코가 석 자면 남의 싸움에 못 낀다.
+-- 0~6 의 단일 축. 기준선은 config (faction_politics roster.<세력>.internal_burden),
+-- 이 표는 **사건이 얹은 것**만 든다. '다른 전쟁 중(+4)' 은 저장하지 않는다 —
+-- 오늘의 연합에서 읽으면 되는 값이다 (파생 상태 금지 — 연합이 표가 없는 것과 같은 이유).
+-- 규칙: config/sect_life.yml sect_state.internal_burden
+CREATE TABLE IF NOT EXISTS sect_state (
+    faction      TEXT PRIMARY KEY,               -- 세력 id (문파·세가·사파 조직 — 조직은 다 사정이 있다)
+    burden       INTEGER NOT NULL DEFAULT 0,     -- 사건이 얹은 부담 (장문 교체기 3 · 내분 2 · 사상자 2 …)
+    sources_json TEXT NOT NULL DEFAULT '[]',     -- 무엇 때문인가
+    updated_day  INTEGER NOT NULL                -- 감쇠 기산점 (30일마다 -1 — 사정은 느리게 풀린다)
 );
 
 CREATE TABLE IF NOT EXISTS authority_mandate (   -- 법명분(法名分) — 관 측의 게이지. 대상 = 개인

@@ -70,6 +70,29 @@ final class Politics {
         return e == null ? 0 : intOr(e.get("mandate_weight"), 0);
     }
 
+    /**
+     * ★ 자파 내부 사정의 **기준선** (roster.&lt;세력&gt;.internal_burden, 0~6).
+     * "문파가 제 코가 석 자면 남의 싸움에 못 낀다."
+     *
+     * 개방 0 (지킬 산문도 곳간도 없다) … 당가·녹림 4 (집안이 늘 시끄럽다).
+     * 사건이 그 위에 얹는다 — sect_life.yml sect_state.internal_burden.sources
+     * (장문 교체기 +3 · 내분 +2 · 사상자 +2 · 재정 궁핍 +1 · **다른 전쟁 중 +4**), 합산 후 0~6.
+     */
+    int burdenBaseline(String faction) {
+        Map<String, Object> e = entry(faction);
+        return e == null ? 0 : intOr(e.get("internal_burden"), 0);
+    }
+
+    /** 부담의 상한 — sect_life.yml sect_state.internal_burden.scale (0~6) */
+    static final int BURDEN_MAX = 6;
+
+    /** 기준선 + 사건이 얹은 것 + 오늘의 세계 상태(다른 전쟁 중) → 0~6 (읽는 순간 계산. 저장 없음) */
+    int burden(String faction, int eventBurden, boolean atWarElsewhere, int otherWarBurden) {
+        int sum = burdenBaseline(faction) + Math.max(0, eventBurden)
+                + (atWarElsewhere ? otherWarBurden : 0);
+        return Math.max(0, Math.min(BURDEN_MAX, sum));
+    }
+
     /** active: false (아미 — 확장 예약) 는 무대에 없다 */
     boolean active(String faction) {
         Map<String, Object> e = entry(faction);
@@ -308,24 +331,29 @@ final class Politics {
      *
      * gaugeByFaction: 세력 → **그 세력이 자기 조직 채널에서 읽은 명분**
      *   (없으면 = 아직 그 조직에 소식이 닿지 않았다 → 평가 자체가 없다. formation.channel_gate)
+     * victims:        ★ **누가 당했는가** — 이것이 있어야 당사자가 먼저 붙고, 원수가 빠진다
+     * burdenByFaction: ★ 자파 내부 사정 (0~6) — 제 코가 석 자인 문파는 못 낀다
      *
-     * 참여 = gauge >= join_threshold + Σ(태그 감응 · 동맹/원한/경쟁 참여 · anchor).
+     * 참여 = gauge >= join_threshold + Σ(태그 · 이해관계 · 내부 사정 · 관계 · anchor).
      * 관계 보정이 참여 여부에 되먹임되므로(앙숙이 끼면 안 들어간다) 안정될 때까지 재평가한다 —
      * 순서 의존을 없애기 위해 매 라운드 전체를 다시 계산한다 (결정론).
      */
     Coalition form(Map<String, Integer> gaugeByFaction, List<String> tags, String target,
-                   String regionSect) {
+                   List<String> victims, String regionSect, Map<String, Integer> burdenByFaction) {
         List<String> candidates = new ArrayList<>();
         for (String id : murim()) {
             if (!id.equals(target) && gaugeByFaction.containsKey(id)) {
                 candidates.add(id);
             }
         }
+        List<String> safeVictims = victims == null ? List.of() : victims;
+        Map<String, Integer> burdens = burdenByFaction == null ? Map.of() : burdenByFaction;
         Set<String> current = new LinkedHashSet<>();
         for (int round = 0; round < 5; round++) {   // 5회면 어떤 관계 그래프에서도 안정된다
             Set<String> next = new LinkedHashSet<>();
             for (String id : candidates) {
-                if (joins(id, gaugeByFaction.get(id), tags, current, regionSect)) {
+                if (joins(id, gaugeByFaction.get(id), tags, target, safeVictims, current,
+                        regionSect, burdens.getOrDefault(id, burdenBaseline(id)))) {
                     next.add(id);
                 }
             }
@@ -339,23 +367,51 @@ final class Politics {
     }
 
     /**
-     * 사건이 그 세력의 앞마당인가 — threshold_modifiers.인접_지역(-4) vs 거리_원거리(+2).
-     *   · seat 이 '없음' = 본거지가 없다 = **어디에나 있다** (개방·하오문) → 언제나 인접
-     *   · 사건이 난 지역권의 문파 (청하현 → 화산) → 인접
-     *   · 나머지 = 원거리. 곤륜·해남·점창이 늦는 것은 무관심이 아니라 **거리**다
+     * ★ 이해관계 보정 — 이 사건이 나와 무슨 상관인가 (하나만 걸린다. 중첩 금지).
+     *
+     *   동맹_피해(-6)    victims 에 내 동맹(+3)   — 동맹의 피해는 자파 피해에 준한다
+     *                    (관계표에 +3 은 소림-무당 하나뿐이다 — **무림에는 동맹이 거의 없다.** 그래서 안 뭉친다)
+     *   인접_지역(-4)    이 지역권의 문파         — 앞마당이다
+     *   편재(0)          seat 이 없다 (개방·하오문·살막) — ★ 인접도 원거리도 아니다.
+     *                    본거지가 없다는 것은 **어디에나 있다**는 뜻이지 **앞마당**이라는 뜻이 아니다
+     *   거리_원거리(+2)  나머지 — 곤륜·해남이 늦는 것은 무관심이 아니라 거리다
+     *
+     * 피해_당사자는 여기 없다 — 그것은 보정이 아니라 **면제**다 (joins 첫 줄).
      */
-    private boolean nearby(String id, String regionSect) {
+    private int stakeModifier(String id, List<String> victims, String regionSect) {
+        for (String v : victims) {
+            if (relation(id, v) >= 3) {
+                return modifier("동맹_피해");
+            }
+        }
         Map<String, Object> e = entry(id);
-        Object seat = e == null ? null : e.get("seat");
-        return "없음".equals(String.valueOf(seat)) || id.equals(regionSect);
+        String seat = e == null ? null : String.valueOf(e.get("seat"));
+        if ("없음".equals(seat) || "미상".equals(seat)) {
+            return modifier("편재");
+        }
+        return modifier(id.equals(regionSect) ? "인접_지역" : "거리_원거리");
     }
 
     /** 그 세력이 지금 이 판에 붙는가 — 임계와 보정의 계산 (숙적이 이미 끼어 있으면 불참) */
-    private boolean joins(String id, int gauge, List<String> tags, Set<String> participants,
-                          String regionSect) {
+    private boolean joins(String id, int gauge, List<String> tags, String target,
+                          List<String> victims, Set<String> participants, String regionSect,
+                          int burden) {
+        // ★ 피해 당사자는 임계가 없다 (threshold_modifiers.피해_당사자 = 즉시).
+        //   당사자는 연합에 '붙는' 것이 아니라 **이미 싸우고 있다.** 제 산문이 불탔는데
+        //   원수가 끼었다고 빠지지 않고, 곳간이 비었다고 빠지지 않고, 멀다고 빠지지 않는다.
+        //   해남파(임계 38)도 **제가 당하면 온다.** 당연한 일이고, 그래서 규칙에 예외가 필요하다.
+        if (victims.contains(id)) {
+            return gauge >= 1;
+        }
         boolean existential = tags.contains("존망");
-        int threshold = joinThreshold(id) + tagThresholdMod(tags, id)
-                + modifier(nearby(id, regionSect) ? "인접_지역" : "거리_원거리");
+        long threshold = (long) joinThreshold(id) + tagThresholdMod(tags, id)
+                + stakeModifier(id, victims, regionSect)
+                + Math.max(0, Math.min(BURDEN_MAX, burden));   // ★ 자파 내부 사정 (+0~+6)
+        // ★ 상대와_이익_관계(+3) — 그 관과 거래 중이고, 그 상단의 표행을 맡고 있다.
+        //   제갈 ↔ 현령_관청(+1): 관청이 명분의 대상이면 제갈은 늦는다. 관에 줄이 있으므로.
+        if (relation(id, target) >= 1) {
+            threshold += modifier("상대와_이익_관계");
+        }
         boolean anchor = false;
         for (String p : participants) {
             if (p.equals(id)) {
@@ -372,7 +428,7 @@ final class Politics {
             } else if (rel == -1) {
                 threshold += modifier("경쟁_세력_참여");
             } else if (rel == -2) {
-                threshold += modifier("원한_세력_참여");
+                threshold += modifier("원한_세력_참여");   // ★ 원수가 붙으면 나는 빠진다
             }
             anchor |= "sorimsa".equals(p) || "mudang".equals(p);
         }
@@ -380,7 +436,7 @@ final class Politics {
         if (anchor && !"sorimsa".equals(id) && !"mudang".equals(id)) {
             threshold += modifier("소림_또는_무당_참여");
         }
-        return gauge >= threshold;
+        return gauge >= threshold;   // 살막(임계 99)은 long 이라도 넘지 못한다 — 명분 상한이 30이므로
     }
 
     /** size_effect — 1~2 규탄 / 3~5 소연합 / 6~9 대연합 / 10+ 무림공적_선포 */

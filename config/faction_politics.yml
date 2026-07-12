@@ -33,34 +33,47 @@ meta:
 #           로스터 = factions.yml 의 sects/clans 명단에만 존재 → 1급 승격 제안 (문서 8장 YAML 조각)
 #           예약   = factions.yml 주석의 확장 예약 (아미) — 현 시점 비활성
 
+# internal_burden(자파 내부 사정) = **상시 부담의 기준선** 0~6.
+#   "문파가 제 코가 석 자면 남의 싸움에 못 낀다." — 이 값이 join_threshold 에 그대로 더해진다(+).
+#   기준선일 뿐이다: 사건이 얹는다 (sect_life.yml sect_state.internal_burden.sources —
+#   장문 교체기 +3 · 내분 +2 · 사상자 +2 · 재정 궁핍 +1 · **다른 전쟁 중 +4**), 합산 후 0~6 clamp.
+#   ★ 결정론: 세계일 기준. 저장값(sect_state) + 오늘의 세계 상태로 읽는 순간 계산한다 (주사위 없음).
+
 roster:
   # ── 구파일방 (9파 1방) — 각각이 단일 세력이다
-  sorimsa:          { name: 소림사,     registry: 1급,    coalition: orthodox, seat: 숭산,   martial: 10, mandate_weight: 3, temper: 신중 }
-  mudang:           { name: 무당파,     registry: 1급,    coalition: orthodox, seat: 무당산, martial: 9,  mandate_weight: 3, temper: 신중 }
-  hwasan:           { name: 화산파,     registry: 1급,    coalition: orthodox, seat: 화산,   martial: 8,  mandate_weight: 2, temper: 강경 }
-  gonryun:          { name: 곤륜파,     registry: 로스터, coalition: orthodox, seat: 곤륜산, martial: 6,  mandate_weight: 1, temper: 은둔 }
-  jongnam:          { name: 종남파,     registry: 로스터, coalition: orthodox, seat: 종남산, martial: 6,  mandate_weight: 1, temper: 강경 }
-  jeomchang:        { name: 점창파,     registry: 로스터, coalition: orthodox, seat: 운남,   martial: 5,  mandate_weight: 1, temper: 은둔 }
-  cheongseong:      { name: 청성파,     registry: 로스터, coalition: orthodox, seat: 청성산, martial: 6,  mandate_weight: 1, temper: 실리 }
-  haenam:           { name: 해남파,     registry: 로스터, coalition: orthodox, seat: 해남도, martial: 5,  mandate_weight: 1, temper: 은둔 }
-  ami:              { name: 아미파,     registry: 예약,   coalition: orthodox, seat: 아미산, martial: 5,  mandate_weight: 2, temper: 협의, active: false }
-  gaebang:          { name: 개방,       registry: 1급,    coalition: orthodox, seat: 없음,   martial: 6,  mandate_weight: 3, temper: 협의,
-                      note: "본거지가 없다 = 관이 칠 표적이 없다. 대신 어디에나 있다 — 명분의 최초 발화자" }
+  sorimsa:          { name: 소림사,     registry: 1급,    coalition: orthodox, seat: 숭산,   martial: 10, mandate_weight: 3, temper: 신중, internal_burden: 1 }
+  mudang:           { name: 무당파,     registry: 1급,    coalition: orthodox, seat: 무당산, martial: 9,  mandate_weight: 3, temper: 신중, internal_burden: 1 }
+  hwasan:           { name: 화산파,     registry: 1급,    coalition: orthodox, seat: 화산,   martial: 8,  mandate_weight: 2, temper: 강경, internal_burden: 2 }
+  gonryun:          { name: 곤륜파,     registry: 로스터, coalition: orthodox, seat: 곤륜산, martial: 6,  mandate_weight: 1, temper: 은둔, internal_burden: 2 }
+  jongnam:          { name: 종남파,     registry: 로스터, coalition: orthodox, seat: 종남산, martial: 6,  mandate_weight: 1, temper: 강경, internal_burden: 3,
+                      note: "화산과의 대대의 다툼이 곧 상시 부담이다 — 섬서 땅은 조용한 날이 없다" }
+  jeomchang:        { name: 점창파,     registry: 로스터, coalition: orthodox, seat: 운남,   martial: 5,  mandate_weight: 1, temper: 은둔, internal_burden: 2 }
+  cheongseong:      { name: 청성파,     registry: 로스터, coalition: orthodox, seat: 청성산, martial: 6,  mandate_weight: 1, temper: 실리, internal_burden: 2 }
+  haenam:           { name: 해남파,     registry: 로스터, coalition: orthodox, seat: 해남도, martial: 5,  mandate_weight: 1, temper: 은둔, internal_burden: 2 }
+  ami:              { name: 아미파,     registry: 예약,   coalition: orthodox, seat: 아미산, martial: 5,  mandate_weight: 2, temper: 협의, internal_burden: 2, active: false }
+  gaebang:          { name: 개방,       registry: 1급,    coalition: orthodox, seat: 없음,   martial: 6,  mandate_weight: 3, temper: 협의, internal_burden: 0,
+                      note: "본거지가 없다 = 관이 칠 표적이 없다. 대신 어디에나 있다 — 명분의 최초 발화자.
+                        ★ internal_burden 0 — 지킬 산문도 곳간도 없으므로 **제 코가 석 자일 일이 없다**" }
 
   # ── 오대세가
-  namgung:          { name: 남궁세가,   registry: 1급,    coalition: orthodox, seat: 안휘,   martial: 8, mandate_weight: 2, temper: 강경 }
-  moyong:           { name: 모용세가,   registry: 로스터, coalition: orthodox, seat: 요동,   martial: 6, mandate_weight: 1, temper: 실리 }
-  jegal:            { name: 제갈세가,   registry: 로스터, coalition: orthodox, seat: 형주,   martial: 5, mandate_weight: 2, temper: 실리,
-                      note: "무력은 낮으나 관에 줄이 있다 — 문사 계보. 연합 참여 시 관의 병력 배치 정보(전투 보정 +2)" }
-  paengga:          { name: 하북팽가,   registry: 로스터, coalition: orthodox, seat: 하북,   martial: 7, mandate_weight: 1, temper: 호전 }
-  dangga:           { name: 사천당가,   registry: 1급,    coalition: orthodox, seat: 사천,   martial: 7, mandate_weight: 1, temper: 폐쇄 }
+  namgung:          { name: 남궁세가,   registry: 1급,    coalition: orthodox, seat: 안휘,   martial: 8, mandate_weight: 2, temper: 강경, internal_burden: 2 }
+  moyong:           { name: 모용세가,   registry: 로스터, coalition: orthodox, seat: 요동,   martial: 6, mandate_weight: 1, temper: 실리, internal_burden: 3,
+                      note: "요동 — 새외와 맞닿아 있다. 제 국경을 비우고 중원의 싸움에 오지 않는다" }
+  jegal:            { name: 제갈세가,   registry: 로스터, coalition: orthodox, seat: 형주,   martial: 5, mandate_weight: 2, temper: 실리, internal_burden: 2,
+                      note: "무력은 낮으나 관에 줄이 있다 — 문사 계보. 연합 참여 시 관의 병력 배치 정보(전투 보정 +2).
+                        ★ 그 줄이 곧 브레이크다 — 명분의 대상이 현령_관청이면 상대와_이익_관계(+3)가 걸린다" }
+  paengga:          { name: 하북팽가,   registry: 로스터, coalition: orthodox, seat: 하북,   martial: 7, mandate_weight: 1, temper: 호전, internal_burden: 2 }
+  dangga:           { name: 사천당가,   registry: 1급,    coalition: orthodox, seat: 사천,   martial: 7, mandate_weight: 1, temper: 폐쇄, internal_burden: 4,
+                      note: "독문(방계의 배신)·아미와의 앙금 — 집안이 늘 시끄럽다. 사천 밖 일에 낼 여력이 없다" }
 
   # ── 사파 — 여기도 하나가 아니다
-  haomun:           { name: 하오문,       registry: 1급, coalition: unorthodox, seat: 없음, martial: 5, mandate_weight: 0, temper: 실리 }
-  noklim:           { name: 녹림,         registry: 1급, coalition: unorthodox, seat: 산채, martial: 8, mandate_weight: 0, temper: 호전 }
-  jangang_suroche:  { name: 장강수로채,   registry: 1급, coalition: unorthodox, seat: 장강, martial: 7, mandate_weight: 0, temper: 실리 }
-  salmak:           { name: 살막,         registry: 1급, coalition: unorthodox, seat: 미상, martial: 4, mandate_weight: 0, temper: 청부 }
-  dokmun:           { name: 독문,         registry: 1급, coalition: unorthodox, seat: 사천, martial: 4, mandate_weight: 0, temper: 폐쇄 }
+  haomun:           { name: 하오문,       registry: 1급, coalition: unorthodox, seat: 없음, martial: 5, mandate_weight: 0, temper: 실리, internal_burden: 3 }
+  noklim:           { name: 녹림,         registry: 1급, coalition: unorthodox, seat: 산채, martial: 8, mandate_weight: 0, temper: 호전, internal_burden: 4,
+                      note: "늘 쫓기고 늘 토벌당한다 — 산채 지키기가 곧 제 전쟁이다" }
+  jangang_suroche:  { name: 장강수로채,   registry: 1급, coalition: unorthodox, seat: 장강, martial: 7, mandate_weight: 0, temper: 실리, internal_burden: 3 }
+  salmak:           { name: 살막,         registry: 1급, coalition: unorthodox, seat: 미상, martial: 4, mandate_weight: 0, temper: 청부, internal_burden: 0,
+                      note: "★ 명분으로 움직이지 않는 유일한 세력 — join_threshold 99 (구조적 불참). 살막은 고용될 뿐이다" }
+  dokmun:           { name: 독문,         registry: 1급, coalition: unorthodox, seat: 사천, martial: 4, mandate_weight: 0, temper: 폐쇄, internal_burden: 4 }
 
   # ── 관 — 유일하게 찢어져 있지 않다
   gwan_gun:         { name: 관군,        registry: 1급, coalition: authority, martial: 3,  scope: 현,     note: "현 단위 상비 병력" }
@@ -140,12 +153,29 @@ myeongbun:
   scale: [0, 30]
   schema:
     id: "사안 ID"
-    target: "명분이 겨누는 세력 id (gwan_gun · magyo · noklim · <문파> …)"
+    target: "명분이 겨누는 세력 id — **누가 했는가** (gwan_gun · magyo · noklim · <문파> …)"
+    victims: "★ 피해 세력 id 목록 — **누가 당했는가.** 이 필드가 없으면 연합 계산의 절반이 죽는다 (아래)"
     tags: "명분 태그 — 세력별 감응 필터 (아래 tags 표)"
     gauge: "0~30"
     participants: "현재 연합 참여 세력 id 목록"
     origin_rumor: "이 명분을 실어 나른 소문 id (rumor.yml) — 정확도가 곧 명분의 진위다"
     created_day: "지역 누적 시간"
+
+  # ── ★ 피해 세력(victims) — 명분의 두 번째 축 ───────────────────────────────
+  # 명분은 '누가 했는가'(target)만으로는 굴러가지 않는다. **누가 당했는가**가 있어야
+  # 다음 셋이 작동한다 — 그리고 이 셋이 연합의 크기를 실제로 정한다:
+  #
+  #   피해_당사자(-8)      내 제자가, 내 산문이 당했다  → 당사자는 **먼저** 붙는다
+  #   동맹_피해(-6)        relation +3 상대가 당했다     → 동맹은 당사자에 준한다
+  #   원한_세력_참여(+5)   원수가 이미 붙어 있다         → ★ **원수가 붙으면 나는 빠진다**
+  #
+  # victims 가 비어 있으면(민간 피해·금기 준동) 이 셋은 전부 0 이다 — 그래서 아무도 급하지 않다.
+  # 그것이 옳다: **남의 일이기 때문이다.** 명분만으로 무림이 뭉치는 일은 사실상 없다.
+  victims_semantics:
+    kind: "factions.yml 등재 id 만 (mingan · sangdan 도 등재 세력이다 — 단 무림이 아니므로 연합 후보가 아니다)"
+    empty: "피해 세력 없음 — 백성이 죽었거나(민간), 아직 누구의 일도 아니다"
+    multiple: "복수 가능 — 관의 일제 검속처럼 여러 문파가 동시에 당한다 (그때 연합이 진짜로 커진다)"
+    rule: "피해_당사자와 동맹_피해는 중첩되지 않는다 — 당사자면 당사자다 (더 강한 쪽 하나)"
 
   # ── 명분은 소문을 타고 온다 — 정확도가 곧 명분의 힘이다 (rumor.yml accuracy_bands 재사용)
   accuracy_gate:
@@ -201,8 +231,10 @@ myeongbun:
   tags:
     무고:     { resonates: [sorimsa, ami, gaebang, hwasan, mudang], threshold_mod: -3, note: "협의(俠)의 핵심" }
     무림침해: { resonates: "전 정파 + 사파(존망일 때)", threshold_mod: -2 }
-    존망:     { resonates: "전 무림 (사파 포함)", threshold_mod: -10,
-                note: "★ '다음은 우리 차례다' — 사파조차 붙게 하는 유일한 태그" }
+    존망:     { resonates: "전 무림 (사파 포함)", threshold_mod: -8,
+                note: "★ '다음은 우리 차례다' — 사파조차 붙게 하는 유일한 태그.
+                  ☆ 재조정 -10 → -8 (13차): -10 은 명분 10 짜리 사건 하나로 20개 세력을 전부 붙였다.
+                    -8 에서도 사파(임계 31~35)는 명분 27+ 에서 붙는다 — 태그의 성격은 그대로다"}
     금기:     { resonates: [sorimsa, mudang, hwasan, ami, gonryun], threshold_mod: -4 }
     법의배신: { resonates: [gaebang, jegal, mingan], threshold_mod: -2, note: "제갈은 관을 알기에 관의 배신에 가장 민감하다" }
     규약:     { resonates: "정파 전반", threshold_mod: -1, note: "약한 명분 — 연합까지는 못 간다. 규탄·절교로 끝난다" }
@@ -213,45 +245,67 @@ myeongbun:
 # ═══════════════════════════════════════════════════════════════════
 coalition:
   # 각 세력의 기본 임계 (명분 게이지가 이 값 이상이면 참여를 검토한다)
+  #
+  # ★ 13차 재조정 — 이 표가 이 파일에서 가장 크게 바뀐 곳이다. 근거는 recalibration 절.
+  #   옛 표(8~26)는 **명분 스케일(0~30)에 비해 너무 낮았다.** 존망(-10) · anchor(-3) · 인접(-4) 이
+  #   겹치면 임계가 통째로 무너져, 명분 10 짜리 사건 하나에 20개 세력 중 17개가 붙었다
+  #   (설계는 명분 27 에 8~12 를 예상했다). **관이 아무것도 못 하는 세계**가 된다는 뜻이다.
+  #   순서(개방이 가장 빠르다 … 살막은 안 온다)는 그대로 두고 **간격을 벌렸다.**
+  #   읽는 법: "이 세력이 아무 이해관계 없이 남의 싸움에 끼려면 명분이 이만큼 필요하다."
   join_threshold:
     # 정파 — 낮을수록 빨리 나선다
-    gaebang:      8    # 가장 빠르다. 정보로 먼저 알고, 잃을 본거지가 없다
-    paengga:      10   # 호전적 — 명분이 조금만 있어도 도를 뽑는다
-    hwasan:       11
-    sorimsa:      12   # 무겁다. 그러나 소림이 나서면 그것 자체가 명분이 된다 (아래 anchor)
-    mudang:       13
-    namgung:      13
-    ami:          14
-    jongnam:      14
-    cheongseong:  15
-    jegal:        15   # 이길 판에만 낀다
-    moyong:       16
-    dangga:       17   # 폐쇄적 — 사천 밖 일에 관심 없다
-    jeomchang:    17   # 멀다 (운남)
-    gonryun:      18   # 멀다 (서역)
-    haenam:       20   # 가장 멀다 (섬)
-    # 사파 — 명분으로는 거의 안 움직인다. 존망 태그(-10)가 있어야 겨우
-    noklim:           20
-    jangang_suroche:  20
-    dokmun:           21
-    haomun:           22   # 장사꾼. 명분이 아니라 이익으로 움직인다
-    salmak:           26   # ★ 사실상 불참. 살막은 고용될 뿐이다
+    gaebang:      8    # 가장 빠르다. 정보로 먼저 알고, 잃을 본거지가 없다 (옛 8 — 유일하게 안 바뀌었다)
+    paengga:      14   # 호전적 — 명분이 조금만 있어도 도를 뽑는다 (옛 10)
+    hwasan:       16   # (옛 11) — 청하현의 앞마당 문파. 인접(-4)이 여기서 산다
+    sorimsa:      17   # 무겁다. 그러나 소림이 나서면 그것 자체가 명분이 된다 (아래 anchor) (옛 12)
+    mudang:       19   # (옛 13)
+    namgung:      21   # (옛 13)
+    ami:          23   # (옛 14 — 예약, 무대에 없다)
+    jongnam:      23   # (옛 14)
+    cheongseong:  25   # (옛 15)
+    jegal:        25   # 이길 판에만 낀다 (옛 15)
+    moyong:       29   # 요동 — 국경을 비울 수 없다 (옛 16)
+    dangga:       29   # 폐쇄적 — 사천 밖 일에 관심 없다 (옛 17)
+    jeomchang:    34   # 멀다 (운남) (옛 17)
+    gonryun:      36   # 멀다 (서역) (옛 18)
+    haenam:       38   # 가장 멀다 (섬) — ★ 천하가 뒤집혀야 배를 띄운다 (옛 20)
+    # 사파 — 명분으로는 거의 안 움직인다. 존망 태그(-8)가 있어야 겨우
+    noklim:           31   # (옛 20) — 사파 중 유일하게 대명분(27+)에 실제로 붙는다
+    jangang_suroche:  33   # (옛 20)
+    dokmun:           33   # (옛 21)
+    haomun:           35   # 장사꾼. 명분이 아니라 이익으로 움직인다 (옛 22)
+                           # ★ 게다가 개방과 원한(-2) — 개방은 언제나 먼저 붙는다 → 원한_세력_참여(+5)
+                           #   = 하오문은 사실상 어떤 연합에도 못 들어간다. 이것은 버그가 아니라 관계표의 귀결이다
+    salmak:           99   # ★ 구조적 불참 (명분 상한 30 < 99). 살막은 명분으로 움직이지 않는다 — 고용될 뿐이다
 
   # 임계 보정 — 이해가 걸린 세력은 낮고, 먼 세력은 높다
+  #
+  # ★ 음(−)만 있으면 무림은 언제나 뭉친다. 양(+)이 있어야 **안 뭉치는 것이 기본값**이 된다.
+  #   13차에서 배선된 양(+) 셋: 자파_내부_사정 · 상대와_이익_관계 · (원한_세력_참여의 실제 작동).
   threshold_modifiers:
-    피해_당사자:            -8    # 자파 제자·장문인·본산이 당했다 → 사실상 즉시 참여
-    동맹_피해:              -6    # relation +3 상대가 당했다
-    인접_지역:              -4    # 사건이 자파 세력권·인접 현
-    태그_감응:              { ref: myeongbun.tags.*.threshold_mod }   # -1 ~ -10
+    피해_당사자:            즉시  # ★ victims 에 내가 있다 — 자파 제자·장문인·본산이 당했다.
+                                  #   임계가 없다: **당사자는 연합에 '붙는' 것이 아니라 이미 싸우고 있다.**
+                                  #   원수가 끼든 숙적이 끼든 상관없다 — 제 목숨이 걸린 판에서 자리를 가리지 않는다.
+                                  #   (해남파처럼 임계 38 인 세력도 **제가 당하면 온다.** 당연한 일이다)
+    동맹_피해:              -6    # ★ victims 에 relation +3 상대가 있다 (당사자와 중첩 없음 — 강한 쪽 하나)
+                                  #   ☆ 관계표에 +3 은 소림-무당 하나뿐이다. 그래서 이 보정은 **거의 발화하지 않는다** —
+                                  #     그것이 정확한 세계다: **무림에는 동맹이 거의 없다** (그래서 안 뭉친다)
+    인접_지역:              -4    # 사건이 자파 세력권·인접 현 (지역권 문파에만)
+    태그_감응:              { ref: myeongbun.tags.*.threshold_mod }   # -1 ~ -8
     동맹_이미_참여:         -3
-    소림_또는_무당_참여:    -3    # ★ anchor — 종가가 나섰다는 것 자체가 명분의 보증이다
+    소림_또는_무당_참여:    -2    # ★ anchor — 종가가 나섰다는 것 자체가 명분의 보증이다
+                                  #   (옛 -3 → -2: anchor 가 연쇄를 만들어 연합을 한 번에 두 배로 부풀렸다)
     우호_참여:              -2
     경쟁_세력_참여:         +2    # 저쪽이 공을 세우는 판에 늦게 붙는다
-    원한_세력_참여:         +5    # 앙숙이 낀 연합엔 안 들어간다
+    원한_세력_참여:         +5    # ★ 앙숙이 낀 연합엔 안 들어간다 — victims 배선으로 비로소 자주 발화한다
     숙적_참여:              불참  # relation -3 — 존망 태그일 때만 예외
-    상대와_이익_관계:       +3    # 그 관과 거래 중, 그 상단의 표행을 맡는 중
-    자파_내부_사정:         +2..+6 # 장문 교체기·내분·경지 이탈 (sect_life / npc_lifecycle 상태에서 읽음)
+    상대와_이익_관계:       +3    # ★ relation(자파, target) >= +1 — 그 관과 거래 중, 그 상단의 표행을 맡는 중
+                                  #   (제갈 ↔ 현령_관청 +1 — 관청이 명분의 대상이면 제갈은 늦는다. 관에 줄이 있으므로)
+    자파_내부_사정:         0..+6 # ★ 제 코가 석 자다 — sect_life.yml sect_state.internal_burden
+                                  #   기준선 = roster.<세력>.internal_burden. 사건이 얹는다 (다른 전쟁 중 +4 …)
     거리_원거리:            +2    # seat 가 지역권 밖
+    편재:                   0     # ★ seat 가 '없음'·'미상' (개방·하오문·살막) — 인접도 원거리도 아니다.
+                                  #   (옛 배선은 이들을 '인접(-4)'으로 읽어 개방을 명분 1 에도 붙게 만들었다)
 
   formation:
     check: "참여 = (myeongbun.gauge >= join_threshold + Σ modifiers)"
@@ -268,6 +322,50 @@ coalition:
     참여_6_9:   { name: 대연합, effect: "지역권 전쟁 상태 (6단계). 관이 계산을 다시 한다", gwan_perception: 협상 }
     참여_10_이상: { name: 무림공적_선포, effect: "천하 소문(강도 5). 관은 물러서거나 국력을 태운다", gwan_perception: 후퇴_검토 }
     note: "연합의 크기 = 명분의 크기 × 각 세력의 이해관계. 하나의 사건이 15개를 다 붙이는 일은 사실상 없다"
+
+  # ═══════════════════════════════════════════════════════════════
+  # ★ 재검산 (13차) — 설계 시나리오가 실제로 재현되는가
+  # ═══════════════════════════════════════════════════════════════
+  # 기준 판: 명분 대상 = gwan_gun · 피해 세력 = [hwasan] · 지역권 문파 = hwasan · 내부 사정 = 기준선
+  #          무림 후보 19 (정파 14 + 사파 5. 아미는 예약이라 빠진다)
+  #
+  #   명분  사안                       설계 예상   전(前)  후(後)   재현
+  #   ────  ─────────────────────────  ─────────  ─────  ─────   ────
+  #     6   관리의 사적 폭거(백성)      1 (규탄)      2      1     ○  개방만. 화산은 아직 남의 일이다
+  #    10   관의 문파 토벌(존망) 단독   3~5          17      4     ○  화산(당사자)·개방·팽가·소림
+  #    17   은폐 발각 + 제자 살해       3~5 (소연합)  14      5     ○  + 무당 (소림의 동맹)
+  #    20   ★ 균형점                    6 이상       19      7     ○  무림 승리 경로의 문턱을 정확히 넘는다
+  #    27   문파 멸문(존망)             8~12         19     11     ○  녹림이 붙는다 — 사파가 처음으로
+  #    30   불가역(최대 명분)          10 이상       19     14     ○  곤륜·점창·모용까지. 그래도 19 는 아니다
+  #
+  # 전(前)이 무너진 이유 — **음(−) 보정만 배선돼 있었다:**
+  #   · 피해 세력 필드가 없어 피해_당사자(-8)·동맹_피해(-6)·원한_세력_참여(+5)가 전부 죽어 있었다
+  #   · 자파_내부_사정(+2~+6)은 문파 상태 축이 없어 읽을 수가 없었다
+  #   · 상대와_이익_관계(+3)도 미배선
+  #   · seat '없음'(개방·하오문)을 **인접(-4)** 으로 읽었다 → 개방이 명분 1 에도 붙었다
+  #   → 남은 것은 존망(-10) · anchor(-3) · 인접(-4) 뿐. 임계가 일방적으로 무너졌다.
+  #
+  # 후(後)의 세 축:
+  #   ① victims 배선     — 당사자와 동맹이 **먼저** 붙고, 원수는 **빠진다** (연합의 모양이 생긴다)
+  #   ② internal_burden  — 남의 싸움에 낄 여력이 있는가 (기본값이 '없다'가 된다)
+  #   ③ 임계 재조정      — 순서는 그대로, 간격을 벌렸다. 존망 -10→-8, anchor -3→-2
+  #
+  # ★ 검산의 결론: **무림은 잘 안 뭉친다.** 명분 20·참여 6 (무림 승리 경로)에 닿으려면
+  #   관이 두 번 쳐야 한다 — 그것이 관무불가침이 유지되는 이유이자, 관이 두 번째를 치지 않는 이유다.
+  recalibration:
+    baseline_participants: 19       # 정파 14 (아미 제외) + 사파 5
+    scenarios:
+      명분_6:  { design: 1,    before: 2,  after: 1 }
+      명분_10: { design: 3~5,  before: 17, after: 4 }
+      명분_17: { design: 3~5,  before: 14, after: 5 }
+      명분_20: { design: 6,    before: 19, after: 7 }    # "참여 6 이상" 조건 충족 (첫 초과 지점)
+      명분_27: { design: 8~12, before: 19, after: 11 }
+      명분_30: { design: 10,   before: 19, after: 14 }
+    method: "Politics.form() 순수 함수 — 무주사위. 같은 세계일·같은 사안이면 같은 연합"
+    emergent:
+      하오문: "개방(원한 -2)이 언제나 먼저 붙으므로 +5 — 사실상 어떤 연합에도 못 들어간다"
+      살막:   "임계 99 — 명분으로 움직이지 않는다 (구조적)"
+      팽가_녹림: "숙적(-3) — 존망 태그일 때만 같은 연합에 선다. 그 판은 이미 세상의 끝이다"
 
   # ── 붕괴 — 연합은 임시다
   collapse:
@@ -548,9 +646,16 @@ bindings:
   economy:
     - "현상금·배상액은 economy.yml 그대로 (고수_현상금 50000). murim_disavowal 시 ×2"
     - "관의 매수(collapse.관의_매수) 비용 = 그 세력 1년 수익 상당"
+  sect_life:
+    - "★ 자파_내부_사정(+0~+6) 의 원천 = sect_life.yml sect_state.internal_burden (13차 신설)"
+    - "문파의 사정이 곧 연합의 브레이크다 — 장문 교체기·내분·사상자·재정, 그리고 **다른 전쟁 중(+4)**"
+    - "다른 전쟁 중: 이미 다른 사안의 연합에 참여 중이면 +4 — ★ 무림은 동시에 두 전쟁을 하지 못한다.
+       이 하나가 '연쇄 연합'을 구조적으로 막는다 (관이 두 사안을 동시에 흘려도 무림은 하나만 붙는다)"
   faction_entry_routes:
     - "연합 참여 = favor 획득의 대량 경로 (참여 세력 전체 +2) → 입문 게이트 '안면(4)' 를 한 사건으로 넘길 수 있다"
     - "murim_disavowal = 전 정파·사파 루트 폐쇄. 마교 루트만 남는다 (누적 상태의 문턱)"
+    - "★ gwangun_entry (관군 루트, 9번째) — 관에 든 자는 **연합의 반대편에 선다.**
+       무림 명분이 20 을 넘고 참여 6 이상이면 그가 곧 그 연합의 표적이다 (faction_entry_routes 관군 루트 rupture_seat)"
 
 # 관측 가능성 — 플레이어는 수치를 못 본다. 이것만 본다
 observable:
