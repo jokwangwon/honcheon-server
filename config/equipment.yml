@@ -48,20 +48,43 @@ weapon_grades:
     note: "어검·심검의 그릇 — 마병을 부술 수 있는 유일한 것"
 
 # ─── 방어구 — "갑옷은 회피를 판다" (격 상성 원칙 2의 뒷면) ───
+# 【2026-07 생명 축 판단】 방어구는 **내구를 올리지 않는다. 경감한다.**
+#   근거: 무협에 판금 갑옷은 없다. 몸을 지키는 것은 호신강기이고 철판이 아니다 —
+#         철갑을 두른 관군 중장보가 절정 고수의 밥인 것이 이 장르의 결이다.
+#         그리고 규칙으로도 옳다: 갑옷이 내구를 올리면 '갑옷을 껴입는 무림인'이 최적해가 되고,
+#         경공·보법(회피)을 파는 dodge_penalty 축이 죽는다. 외갑의 값은 경감에 남긴다.
+#   예외는 **몸에 닿는 것**뿐이다 — 살에 감기는 내갑. 그것만 vitality 를 갖는다 (아래 vitality 등록부).
 armor:
-  무복: { mitigation: 0, dodge_penalty: 0, note: "무림인 표준 — 경공·보법 온전" }
-  피갑: { mitigation: 1, dodge_penalty: -1, wearers: [표사, 관군] }
-  철갑: { mitigation: 2, dodge_penalty: -2, restrictions: [경공_불가], wearers: [관군_중장보] }
+  무복: { mitigation: 0, dodge_penalty: 0, vitality: 0, note: "무림인 표준 — 경공·보법 온전" }
+  피갑: { mitigation: 1, dodge_penalty: -1, vitality: 0, wearers: [표사, 관군] }
+  철갑: { mitigation: 2, dodge_penalty: -2, vitality: 0, restrictions: [경공_불가], wearers: [관군_중장보] }
   내갑:
     mitigation: 1
     dodge_penalty: 0
+    vitality: 2                       # 살에 감기는 유일한 갑 — 몸의 일부가 된다 (천잠사는 몸을 상하게 두지 않는다)
     special: [암기_무효, "검기 1회/일 방어"]
     grade: 보물급
     examples: [금사갑]
   mitigation_rule: "부상 등급 1단 완화 (중상→경상). 격 상성은 못 이긴다 — 검강 앞 피갑은 종이"
+  vitality_rule: "외갑(무복·피갑·철갑) vitality 0 — 철판은 몸을 키우지 않는다. 내구를 올리는 것은 내갑·기물·영약뿐"
+
+# ─── 내구 가산 등록부 — 【정본 상한】 combat.yml durability.equipment_cap = 4 ───
+# 이 등록부 밖의 어떤 장비도 내구를 올리지 못한다 (코드가 config 보다 앞서지 않는다).
+# 총합이 캡을 넘으면 캡에서 잘린다 — 장비는 격차가 아니라 속성과 서사를 만든다 (대원칙).
+vitality:
+  cap: 4                              # combat.yml durability.equipment_cap 과 동일 (lint 대조 대상)
+  sources:
+    내갑: { grants: 2, slot: 내갑, note: "armor.내갑.vitality 와 동일 값 — 여기가 원장, 저기가 살" }
+    호심경: { grants: 2, slot: 기물, note: "護心鏡 — 심장을 덮는 청동 거울. 무협의 정통 기물 (trinkets 등록)" }
+  full_set: "내갑 + 호심경 = +4 (캡 도달). 그 이상은 없다 — 더 두르고 싶으면 몸을 바꿔라(영약)"
+  elixir_note: |
+    영약(대환단·소환단)은 **여기에 없다**. 장비가 아니기 때문이다 —
+    먹으면 체력 '실수치'가 오르고, 그것은 벗을 수 없다 (combat.yml durability.elixir · 기연 등록제).
+    장비는 +4 에서 멈추고, 몸은 멈추지 않는다. 그것이 이 세계가 내공을 갑옷보다 높이 두는 방식이다.
 
 # ─── 기물 카탈로그 (등록제 — 슬롯 2칸, 보정형은 캡 계상) ───
 trinkets:
+  호심경: { effect: "내구 +2 (vitality 등록부)", vitality: 2, note: "護心鏡 — 심장 위에 덮는 청동 거울. 판정 보정 0 (캡 무관) — 값은 오직 살아남는 것에 있다" }
   피독주: { effect: "독 저항 판정 +2" }
   야명주: { effect: "야간 시야 페널티 무효" }
   청낭: { effect: "의술 판정 +1, 지혈 도구 상시" }

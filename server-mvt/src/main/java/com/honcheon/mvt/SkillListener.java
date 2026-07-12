@@ -180,10 +180,11 @@ public final class SkillListener implements Listener {
             }
             sustain(player, state);
             regulateBreath(state, engine.pool(state.naegong));   // 조식 — 격을 싣지 않은 합에 단전이 돈다
+            // 생명 — 경지·장비가 바뀌면 다음 틱에 몸이 따라온다 (훅은 빠뜨리면 조용히 틀리고, 대조는 못 빠뜨린다)
+            hud.vitalityTick(player, state);
             hud.energyBar(player, state);
-            if (state.armed != null || engine.pool(state.naegong) > 0) {
-                hud.statusBar(player, state, tick);
-            }
+            // 내구·부상은 격이 없어도 보인다 — 게이트를 두면 **삼류가 제 목숨을 영영 못 본다**
+            hud.statusBar(player, state, tick);
         }
     }
 

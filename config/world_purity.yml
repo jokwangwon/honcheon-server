@@ -1,0 +1,340 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# 세계 순도(純度) 등록부 — 무엇을 끄고 무엇을 남기는가
+#
+#   이 파일이 정본이다. 데이터팩(worldgen/honcheon_purity/)은 여기서 **파생**된다.
+#     생성 : python3 tools/world_purity_audit.py --build
+#     검산 : python3 tools/world_purity_audit.py
+#     실측 : python3 tools/world_purity_audit.py --emit-rcon   → RCON 으로 돌릴 명령 목록
+#
+#   규약 — 레지스트리 실패 = 서버 사망.
+#     데이터팩 JSON 은 **바닐라 정본에서 최소 편집**한다. 스키마를 추측하지 않는다.
+#     구조물은 placement 의 한 필드만 건드리고(frequency → 0),
+#     바이옴은 기후 구획(parameters)을 **전혀 건드리지 않고** 붙은 이름표만 바꾼다.
+#     → 기후 공간에 구멍도 겹침도 생길 수 없다. 이것이 이 방식의 안전성 증명이다.
+#
+#   문서 : docs/design/world_purity.md
+#   형제 : worldgen/honcheon_no_caves/ (자연 동굴 — 이미 껐다. 굴은 우리가 판다)
+# ═══════════════════════════════════════════════════════════════════════════
+
+world_purity:
+  datapack: worldgen/honcheon_purity
+  pack_format: 81                      # honcheon_no_caves 와 같은 눈금 (1.21.11)
+  vanilla_jar: run/mvt/cache/mojang_1.21.11.jar
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # ① 구조물 — 바닐라 구조물은 **전부** 끈다 (20/20)
+  #
+  #   방법: structure_set 의 placement.frequency = 0.0 — **오직 이 한 필드만.**
+  #     StructurePlacement.isStructureChunk() 이 frequency < 1.0 이면 확률 감쇠기를 태우는데,
+  #     nextFloat() < 0.0 은 **항상 거짓**이다 → 한 청크도 안 선다.
+  #     이는 동굴 카버를 probability: 0 으로 끈 것과 정확히 같은 수법이다.
+  #     감쇠기는 배치 종류와 무관한 **상위 클래스**의 관문이라 concentric_rings(strongholds)에도 먹는다.
+  #
+  #   ⚠ 함정 — strongholds 에 count: 0 을 주지 마라.
+  #     「고리 좌표 자체를 없애자」는 그럴듯하지만 그 코덱은 Codec.intRange(1, 4095) 다.
+  #     0 은 **레지스트리 로딩을 깨뜨린다 = 서버 사망.**
+  #     이 함정에 실제로 빠졌고, `--load-test` 가 잡았다("Value 0 outside of range [1:4095]").
+  #     스키마를 추측하지 말라는 규약이 왜 있는지 보여주는 사례다. 반드시 --load-test 를 돌려라.
+  #
+  #   남기는 구조물: **없다.** 폐허가 필요하면 우리가 짓는다
+  #     (청하현 폐사당 · 마교 은신처 · 성문 · 수로채가 이미 그렇게 섰다).
+  # ═════════════════════════════════════════════════════════════════════════
+  structures:
+    disable:
+      # ── 사람이 사는 것 — 우리 마을과 정면 충돌한다 ────────────────────────
+      - id: minecraft:villages
+        holds: [village_plains, village_desert, village_savanna, village_snowy, village_taiga]
+        why: "주민 마을. 청하현 옆에 오크통 마을이 서면 세계가 두 개가 된다. 마을은 조성기가 짓는다"
+      - id: minecraft:pillager_outposts
+        holds: [pillager_outpost]
+        why: "약탈자 전초기지. 산적은 녹림·산채다 — 회색 피부의 일리저가 아니다"
+      - id: minecraft:woodland_mansions
+        holds: [mansion]
+        why: "산장(우드랜드 맨션). 대저택이 필요하면 세가(世家)를 짓는다"
+      - id: minecraft:swamp_huts
+        holds: [swamp_hut]
+        why: "마녀 오두막. 늪의 이인(異人)은 독문(毒門)이지 마녀가 아니다"
+      - id: minecraft:igloos
+        holds: [igloo]
+        why: "이글루. 애초에 눈 바이옴을 끈다(③) — 설 자리가 없지만 정합을 위해 함께 끈다"
+
+      # ── 신전·사원 — 보상 상자의 문법이 무협이 아니다 ─────────────────────
+      - id: minecraft:desert_pyramids
+        holds: [desert_pyramid]
+        why: "사막 사원. 사막을 끈다(③). 함정 상자와 TNT 는 무협의 기연이 아니다"
+      - id: minecraft:jungle_temples
+        holds: [jungle_pyramid]
+        why: "정글 사원. 화살 함정·레버 퍼즐 = 마크의 문법. 남만의 기연은 우리가 놓는다"
+      - id: minecraft:ocean_monuments
+        holds: [monument]
+        why: "해저 신전. 가디언·프리즈머린은 세계관 밖이다"
+      - id: minecraft:ancient_cities
+        holds: [ancient_city]
+        why: "고대 도시. 워든과 스컬크는 마크 그 자체다"
+      - id: minecraft:trial_chambers
+        holds: [trial_chambers]
+        why: "시련의 방. 스포너 러시 = 게임 시스템이 세계를 뚫고 나온 자리"
+
+      # ── 바다 ────────────────────────────────────────────────────────────
+      - id: minecraft:shipwrecks
+        holds: [shipwreck, shipwreck_beached]
+        why: "난파선. 갤리온·보물지도 = 대항해시대의 문법. 배가 필요하면 수로채의 배를 띄운다"
+      - id: minecraft:ocean_ruins
+        holds: [ocean_ruin_cold, ocean_ruin_warm]
+        why: "바다 유적. 드라운드와 보물지도의 씨앗"
+      - id: minecraft:buried_treasures
+        holds: [buried_treasure]
+        why: "보물지도 매장물. 보물지도가 사라지면 이것도 의미가 없다 — 함께 끈다"
+
+      # ── 땅속 ────────────────────────────────────────────────────────────
+      - id: minecraft:mineshafts
+        holds: [mineshaft, mineshaft_mesa]
+        why: "폐광. 레일·광산 수레·거미줄 = 마크의 지하. 광산이 필요하면 우리가 판다(cave_archetypes)"
+      - id: minecraft:strongholds
+        holds: [stronghold]
+        why: "요새. 엔드 포탈의 집. 엔드로 가는 문을 세계에서 지운다"
+      - id: minecraft:ruined_portals
+        holds: [ruined_portal, ruined_portal_desert, ruined_portal_jungle, ruined_portal_swamp,
+                ruined_portal_mountain, ruined_portal_ocean, ruined_portal_nether]
+        why: "★ 폐허 포탈 — 사용자가 말한 「지옥문」. 흑요석 틀이 산야에 박혀 있으면 세계가 즉시 마크가 된다"
+
+      # ── 유물 ────────────────────────────────────────────────────────────
+      - id: minecraft:trail_ruins
+        holds: [trail_ruins]
+        why: "흔적 유적. 고고학(솔·도자기 조각)은 통째로 마크의 신문법이다"
+
+      # ── 네더·엔드 — 플레이어가 갈 일이 없어도 **정합**을 위해 끈다 ───────
+      #   근거: 지옥문(폐허 포탈)을 껐고 요새를 껐다. 그러면 네더 요새의 블레이즈 →
+      #   엔더의 눈 → 엔드 포탈의 사슬이 이미 끊겼다. 그 끝에 매달린 것들도 함께 끊는다.
+      #   특히 end_cities: 겉날개(elytra)는 경공(輕功) 설계를 통째로 무너뜨린다.
+      - id: minecraft:nether_complexes
+        holds: [fortress, bastion_remnant]
+        why: "네더 요새·바스티온. 블레이즈 막대 → 엔더의 눈 사슬을 끊는다"
+      - id: minecraft:nether_fossils
+        holds: [nether_fossil]
+        why: "네더 화석. 정합"
+      - id: minecraft:end_cities
+        holds: [end_city]
+        why: "★ 엔드 도시. **겉날개**가 나온다 — 경공(輕功)의 설계가 통째로 무너진다. 반드시 끈다"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # ② 지형 피처 — structure_set 이 아닌 것들
+  #
+  #   지하 감옥(dungeon)과 화석(fossil)은 **구조물이 아니라 placed_feature** 다.
+  #   structure_set 을 아무리 꺼도 이것들은 남는다. 따로 끈다.
+  #   방법: placement 배열의 한 필드만 0 으로 (count → 0 / rarity_filter → 유지 불가하므로 count 0 삽입).
+  # ═════════════════════════════════════════════════════════════════════════
+  features:
+    disable:
+      - id: minecraft:monster_room
+        why: "지하 감옥. 이끼낀 돌벽 + 몹 스포너 + 상자 = 마크의 원형질. 몹은 우리가 놓는다"
+      - id: minecraft:monster_room_deep
+        why: "깊은 지하 감옥. 위와 같다"
+      - id: minecraft:fossil_upper
+        why: "화석(석탄). 뼈 블록 골격은 지형이 아니라 **이스터에그**다 — 마크의 장난기"
+      - id: minecraft:fossil_lower
+        why: "화석(다이아). 위와 같다"
+
+    # ── 남기는 것 — 이것이 「지형」과 「구조물」을 가르는 선이다 ──────────────
+    keep:
+      - id: 광맥 (ore_*)
+        why: "지형이다. 철·석탄·구리는 무기 제련과 경제의 바닥이다(economy.yml). 돌 속의 광물은 지질이지 건축이 아니다"
+      - id: 용암 호수 · 수원 (lake_lava · spring_*)
+        why: "지형이다. 지질 현상 — 마크의 서명이 없다"
+      - id: 자수정 정동 (amethyst_geode)
+        why: "남긴다 — **재해석**한다. 돌 속의 결정 공동 = 영맥(靈脈). 동굴이 없으니 우연히 마주칠 일도 없고, 우리가 판 기연굴의 벽면 소재로 쓸 수 있다"
+      - id: 사막 우물 (desert_well)
+        why: "사막을 껐으므로(③) **설 자리가 사라진다**. 따로 끄지 않는다 — 끌 것이 없다"
+      - id: 지하 바이옴 (dripstone_caves · lush_caves · deep_dark)
+        why: "남긴다. 자연 동굴이 0.04% 이므로 노출되지 않는다. 우리가 판 굴의 벽면 팔레트로 재해석할 여지가 있다(마기 서린 굴 = 스컬크)"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # ③ 바이옴 — 사막과 빙설을 세계에서 지운다
+  #
+  #   **바이옴을 삭제하지 않는다. 기후 구획에 붙은 이름표만 바꾼다.**
+  #     바닐라 데이터 생성기(--reports)가 뱉은 biome_parameters/overworld.json 은
+  #     7,593 개의 기후 상자(temperature·humidity·continentalness·erosion·depth·weirdness·offset)로
+  #     오버월드를 빈틈없이 덮는다. 우리는 `parameters` 를 **한 글자도 건드리지 않고**
+  #     `biome` 문자열만 갈아끼운다.
+  #     → 상자 수 불변, 기후 공간의 분할 불변. 구멍도 겹침도 원리적으로 불가능하다.
+  #     이 목록을 world_preset/normal.json 의 biome_source 에 직접 박는다
+  #     (multi_noise_biome_source_parameter_list 는 preset 이름만 담는 레지스트리라 덮어도 소용없다).
+  #
+  #   **더운 곳은 사라지지 않는다. 더운 곳이 사막이 아니게 될 뿐이다.**
+  #     desert 는 온도 T4(0.55~1.0) 전체를 차지한다 — 세계에서 가장 더운 띠다.
+  #     그 자리를 savanna(건조 초원)로 준다. 여전히 덥고, 여전히 마르고, 이제 풀이 있다.
+  #     남만의 밀림(jungle·bamboo_jungle)은 더운 **습한** 쪽이라 원래부터 손대지 않는다.
+  #
+  #   ⚠ 기존 월드는 안 바뀐다 — 이미 생성된 청크에는 사막이 남는다. **새 월드가 필요하다.**
+  # ═════════════════════════════════════════════════════════════════════════
+  biomes:
+    # 규칙은 **위에서부터 첫 일치**. when 이 없으면 무조건 일치.
+    # when 은 기후 축 이름 → 정확히 그 구간인 상자만 (바닐라 상수 그대로).
+    remap:
+      # ── 사막 ────────────────────────────────────────────────────────────
+      - from: minecraft:desert
+        when: { continentalness: [-0.19, -0.11] }     # 해안 기둥(COAST) — 176/708 상자
+        to: minecraft:beach
+        why: "가장 더운 해안. 바닐라는 여기에 desert 를 놓아 백사장을 만든다. beach 로 바꾸면 백사장은 그대로 남고 사막은 사라진다 — 해남(열대)의 등록 바이옴이 beach 다"
+      - from: minecraft:desert
+        to: minecraft:savanna
+        why: "★ 나머지 532 상자 — 내륙의 사막. 건조 초원으로. 덥고 마른 땅은 남되 모래바다가 아니다. 산서의 등록 바이옴이 savanna_plateau 다 — 이웃으로 자연스럽다"
+
+      # ── 빙설 ────────────────────────────────────────────────────────────
+      - from: minecraft:snowy_plains
+        to: minecraft:plains
+        why: "설원 → 평지. 가장 넓은 눈 바이옴(388 상자)"
+      - from: minecraft:ice_spikes
+        to: minecraft:plains
+        why: "얼음 가시. snowy_plains 의 weirdness 변종 — 같은 곳으로 보낸다. 파란 얼음탑은 마크의 서명이다"
+      - from: minecraft:snowy_taiga
+        to: minecraft:taiga
+        why: "눈 덮인 침엽수림 → 침엽수림. 하북의 등록 바이옴이 taiga 다"
+      - from: minecraft:snowy_slopes
+        to: minecraft:grove
+        why: "산비탈의 눈 → 고산 침엽수림(grove). **눈을 지우는 게 아니라 산으로 올린다** — 아래를 보라"
+      - from: minecraft:frozen_peaks
+        to: minecraft:jagged_peaks
+        why: "얼음 봉우리 → 험봉. jagged_peaks 는 관중·호북·사천·운남의 등록 바이옴이다"
+      - from: minecraft:snowy_beach
+        to: minecraft:beach
+        why: "눈 해변 → 해변"
+      - from: minecraft:frozen_river
+        to: minecraft:river
+        why: "언 강 → 강. 얼어붙은 수면은 배와 나루를 막는다"
+      - from: minecraft:frozen_ocean
+        to: minecraft:ocean
+        why: "언 바다 → 바다"
+      - from: minecraft:deep_frozen_ocean
+        to: minecraft:deep_ocean
+        why: "깊은 언 바다 → 깊은 바다"
+
+      # ── 「마크의 느낌」 — 사용자 목록엔 없으나 내가 판단해 끈다 (되돌리려면 이 두 줄을 지워라) ──
+      - from: minecraft:mushroom_fields
+        to: minecraft:plains
+        why: "판단. 균사체 + 거대버섯 + 무시룸 = 마크의 서명 중에서도 가장 진한 것. 먼바다의 외딴 섬을 풀섬으로 남긴다(섬 자체는 유지 — 세계가 비면 안 된다)"
+      - from: minecraft:pale_garden
+        to: minecraft:dark_forest
+        why: "판단. 창백한 정원 + 삐걱이는 존재(Creaking) = 최신 마크의 서명. 같은 과(科)인 dark_forest 로 보내면 음습한 고목림은 남고 밈은 사라진다"
+
+    # ── 남기는 것 ──────────────────────────────────────────────────────────
+    keep:
+      - id: minecraft:grove
+        why: "★ 판단: **남긴다.** 사용자가 「판단하라」고 지목한 바이옴. 관중·호북·사천의 등록 바이옴이며, 침엽수림 위에 눈이 얹힌 **고산 지대**다. 화산·무당의 봉우리에 눈이 있는 것은 무협 그 자체다. 우리가 끄는 것은 「얼음 **지역**」이지 「높은 데의 눈」이 아니다"
+      - id: minecraft:badlands (+ eroded · wooded)
+        why: "★ 남긴다 — 사용자가 「배드랜드?」라 물은 것. **황토고원(黃土高原)이다.** 산서와 청해_서역의 등록 바이옴이고, 붉은 층상 대지는 중원 서북의 실지리다. 사막을 끈 자리에 「덥고 마르고 척박한 땅」의 정체성이 하나는 필요하다"
+      - id: minecraft:savanna (+ plateau · windswept)
+        why: "★ 남긴다 — 사용자가 「사바나?」라 물은 것. 산서(savanna_plateau)·새외_북막(windswept_savanna)의 등록 바이옴이다. 게다가 사막의 **후임**이다(위 remap)"
+      - id: minecraft:cherry_grove
+        why: "남긴다. 안휘·강남의 등록 바이옴. 무협에 이보다 맞는 바이옴이 없다"
+      - id: minecraft:cold_ocean · deep_cold_ocean
+        why: "남긴다. 찬 것과 언 것은 다르다 — 얼음이 안 얼면 배가 다닌다"
+
+    # ── ⚠ 등록부 충돌 — 내가 고칠 수 없다 (config/world_map.yml 은 내 소유가 아니다) ──
+    conflicts_with_world_map:
+      note: |
+        config/world_map.yml 의 지역별 `biomes:` 목록에 **우리가 끄는 바이옴이 등록되어 있다.**
+        사용자의 지시("사막·얼음 필요없음")가 등록부보다 우선이므로 나는 끄는 쪽을 택했다.
+        world_map.yml 의 소유자가 아래를 정리해야 등록부가 다시 일관된다.
+      entries:
+        - region: 하북
+          listed: [snowy_plains]
+          resolution: "snowy_plains → plains 로 대체됨. 「겨울이 길다」는 서술은 유지 가능 (눈은 날씨·고도의 함수다)"
+        - region: 산서
+          listed: [badlands]
+          resolution: "충돌 없음 — badlands 는 남긴다(황토고원)"
+        - region: 청해_서역
+          listed: [snowy_slopes, frozen_peaks, desert, badlands]
+          resolution: |
+            곤륜(崑崙)의 설산이다. snowy_slopes → grove, frozen_peaks → jagged_peaks, desert → savanna 로 간다.
+            **그래도 설산은 만들 수 있다** — 눈은 **블록**이지 바이옴이 아니다. TerrainForge 가
+            산을 세우고 그 위에 눈을 얹으면 된다(고도가 높으면 바닐라도 알아서 눈을 얹는다:
+            Biome 의 온도는 y 로 보정된다). center [-1380000,-180000] = 1.38M 블록 밖 — 조성 대상도 아니다
+        - region: 새외_북막
+          listed: [snowy_plains, snowy_taiga, desert]
+          resolution: "hidden: true — 플레이어 지도에 없는 서사 지역. 위와 같이 대체. 마교의 땅이 필요해지면 그때 **짓는다**"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # ④ 야생 스폰 — 무협의 산야에 젖소가 뛰노는가?
+  #
+  #   답: **아니다.** 소·양·돼지·닭은 **가축(家畜)** 이다 — 사람이 기르는 것이다.
+  #   야생에 젖소가 무리 지어 서 있는 것은 마크의 느낌 중에서도 가장 조용하고 가장 끈질긴 것이다.
+  #   (구조물은 가끔 만나지만 젖소는 **매일** 만난다.)
+  #
+  #   그러나 「가축을 지우자」가 아니다. 가축은 **마을의 살림**이다 —
+  #   청하현 마당에 닭이 있고 외양간에 소가 있는 것은 옳다. 그건 조성기가 **놓는** 것이다
+  #   (SpawnReason.CUSTOM → HuntingGrounds 가 이미 통과시킨다). 번식·알로도 는다.
+  #
+  #   그래서 규칙은 **금지 목록이 아니라 허용 목록**이다 (등록제):
+  #     여기 적힌 것만 자연 스폰한다. 나머지는 전부 취소된다 — 가축도, 주민도, 떠돌이 상인도,
+  #     염소도, 판다도, 아홀로틀도.
+  #   산야의 짐승(산늑대·멧돼지·호랑이·반달곰)은 HuntingGrounds 가 정원제로 **심는다**.
+  #
+  #   배선: HuntingGrounds.onSpawn() — server-mvt/.../HuntingGrounds.java
+  # ═════════════════════════════════════════════════════════════════════════
+  wild_spawn:
+    allow:
+      # ── 산야 ──
+      - WOLF          # 이리 — 중원의 산에 이리가 있다. (산늑대는 우리가 따로 심는다 — 태그로 갈린다)
+      - FOX           # 여우
+      - RABBIT        # 산토끼
+      - BAT           # 박쥐 — 동굴이 없으니 거의 안 뜬다. 밤의 기척으로 남긴다
+      # ── 물 ──
+      - COD
+      - SALMON        # 물고기 — 강남·수로채의 밥이다. 낚시가 경제에 물린다(economy.yml)
+      - TROPICAL_FISH
+      - PUFFERFISH
+      - SQUID
+      - DOLPHIN
+      - TURTLE
+
+    deny_note: |
+      허용 목록에 없으면 전부 취소된다. 특히 지목해 둔다:
+        COW · SHEEP · PIG · CHICKEN  — 가축. 마을이 기른다(CUSTOM·번식·알). 야생엔 없다
+        HORSE · DONKEY · MULE · LLAMA · CAMEL — 탈것. 사람의 것이다. 마방(馬房)에서 나온다
+        VILLAGER · WANDERING_TRADER — 주민·떠돌이 상인. NPC 는 우리가 놓는다.
+                                       떠돌이 상인의 라마 두 마리는 마크의 서명이다
+        IRON_GOLEM (VILLAGE_DEFENSE)  — 마을에 철골렘이 서면 안 된다. 향촌은 무사가 지킨다
+        MOOSHROOM · PANDA · AXOLOTL · ALLAY · SNIFFER · ARMADILLO · FROG · PARROT · OCELOT
+                                      — 마크의 마스코트들
+        GOAT                          — 판단: 끈다. 야생 산양 자체는 중원에 맞으나
+                                        바닐라 염소의 들이받기·비명 염소는 밈이다.
+                                        고산 짐승이 필요하면 사냥터 등록부에 **산양**을 올려 우리가 심는다
+      좀비·스켈레톤·크리퍼·엔더맨 등 Enemy 는 이 목록 이전에 **이미 전역 취소**된다
+      (HuntingGrounds.onSpawn — `entity instanceof Enemy` → cancel). 확인 완료.
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # ⑤ 끈 자리를 무엇으로 채울 것인가 — 세계가 비면 안 된다
+  #   (구현은 다음 사이클이어도 좋다. 여기에 **약속**을 등록해 둔다)
+  # ═════════════════════════════════════════════════════════════════════════
+  refill_plan:
+    - killed: 주민 마을 (villages)
+      fill: "향촌·중촌·부촌 — village_tiers.yml 이 이미 등급을 정의한다. 청하현이 그 표준이다"
+      status: 조성기 가동 중 (청하현 완료)
+    - killed: 약탈자 전초기지 (pillager_outposts)
+      fill: "산채(山寨) — 녹림의 산적굴. HuntingGrounds 의 north_road_bandit·갈호·곽진이 이미 산다"
+      status: 부분 가동 (수로채 · 산채 조성됨)
+    - killed: 폐광 (mineshafts) · 지하 감옥 (monster_room)
+      fill: "우리가 판 굴 — cave_archetypes.md 의 4종(은신처·기연굴·산적굴·제단굴)"
+      status: 설계 완료 · 조성 대기
+    - killed: 사원·신전 (desert_pyramids · jungle_temples · ocean_monuments)
+      fill: "폐사당(廢祠堂) · 고묘(古墓) · 동천복지(洞天福地) — 기연(fortune_encounters.yml)의 무대"
+      status: 청하현 폐사당 조성됨. 나머지 설계 대기
+    - killed: 산장 (woodland_mansions)
+      fill: "세가(世家)의 장원 — 남궁세가 · 팽가 · 제갈세가. world_map.yml 에 좌표가 이미 있다"
+      status: "좌표만 (build: later)"
+    - killed: 난파선 · 바다 유적 (shipwrecks · ocean_ruins)
+      fill: "장강수로채의 배 — 나루터 · 선단. 강남이 가장 부유한 땅이다"
+      status: 수로채 조성됨
+    - killed: 고대 도시 · 시련의 방 (ancient_cities · trial_chambers)
+      fill: "마교의 지하 제단 · 혈교의 혈굴 — 후반 무대"
+      status: 설계 대기
+    - killed: 요새 (strongholds) · 폐허 포탈 (ruined_portals) · 네더 · 엔드
+      fill: "**채우지 않는다.** 이 세계에 다른 차원은 없다. 빈 자리가 아니라 **없는 자리**다"
+      status: 의도된 부재
+    - killed: 사막 (biome)
+      fill: "건조 초원(savanna) + 황토고원(badlands). 관중·산서의 서북 건조대"
+      status: 데이터팩 적용 시 즉시
+    - killed: 빙설 (biome)
+      fill: "평지·침엽수림·고산 침엽수림(grove)·험봉(jagged_peaks). **설산은 지형 계층이 짓는다** — 눈은 블록이다"
+      status: 데이터팩 적용 시 즉시 · 설산 조성은 TerrainForge 몫

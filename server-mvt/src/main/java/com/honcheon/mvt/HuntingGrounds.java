@@ -36,6 +36,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -193,10 +194,26 @@ public final class HuntingGrounds implements Listener {
             CreatureSpawnEvent.SpawnReason.BUILD_SNOWMAN,
             CreatureSpawnEvent.SpawnReason.CURED);
 
-    /** 마을이 품는 가축 — 마당의 닭은 마을 살림이다 (자연 스폰은 아니고, 번식·알로만 는다) */
-    private static final Set<EntityType> LIVESTOCK = EnumSet.of(
-            EntityType.CHICKEN, EntityType.COW, EntityType.SHEEP, EntityType.PIG, EntityType.HORSE,
-            EntityType.DONKEY, EntityType.CAT, EntityType.VILLAGER, EntityType.WANDERING_TRADER);
+    /**
+     * <b>야생 스폰 허용 목록</b> — 등록부 {@code config/world_purity.yml} 의 {@code wild_spawn.allow}.
+     *
+     * <p>이것은 <b>금지 목록이 아니라 허용 목록</b>이다. 여기 없는 것은 자연 스폰이 전부 취소된다.
+     *
+     * <p>근거 — 무협의 산야에 젖소가 뛰노는가? 아니다.
+     * 소·양·돼지·닭은 <b>가축(家畜)</b>이다. 사람이 기르는 것이지 산에 저절로 나는 것이 아니다.
+     * 그러나 가축을 세계에서 지우자는 것이 아니다 — 가축은 <b>마을의 살림</b>이다.
+     * 청하현 마당의 닭과 외양간의 소는 옳다. 그건 조성기가 {@code CUSTOM} 으로 <b>놓는</b> 것이고
+     * ({@link #ALLOWED_REASONS} 가 이미 통과시킨다) 번식·알로도 는다.
+     * 취소되는 것은 <b>야생에 저절로 솟는 것</b>뿐이다.
+     *
+     * <p>산야의 짐승(산늑대·멧돼지·호랑이·반달곰)은 이 파일이 정원제로 <b>심는다</b> — 바닐라가 뿌리는 게 아니라.
+     *
+     * <p>등록부가 없으면(config 유실) 이 폴백으로 돈다 — 서버는 떠야 한다.
+     */
+    private static Set<EntityType> wildAllow = EnumSet.of(
+            EntityType.WOLF, EntityType.FOX, EntityType.RABBIT, EntityType.BAT,
+            EntityType.COD, EntityType.SALMON, EntityType.TROPICAL_FISH, EntityType.PUFFERFISH,
+            EntityType.SQUID, EntityType.DOLPHIN, EntityType.TURTLE);
 
     // ══════════════ 등록부 (config 판독) ══════════════
 
@@ -255,9 +272,47 @@ public final class HuntingGrounds implements Listener {
         return mobDisplay;
     }
 
+    /**
+     * 야생 스폰 허용 목록 판독 — {@code config/world_purity.yml} 의 {@code wild_spawn.allow}.
+     *
+     * <p>등록제다: <b>코드가 아니라 데이터가 정본</b>이다. 이 목록을 늘리고 줄이는 것은 yml 을 고치는 일이지
+     * 자바를 고치는 일이 아니다. 검산은 {@code tools/world_purity_audit.py}.
+     *
+     * <p>등록부가 없거나 깨졌으면 <b>폴백으로 돈다</b> — 순도 하나 때문에 서버가 죽으면 안 된다.
+     * 알 수 없는 EntityType 이름은 건너뛴다(바닐라 버전이 올라 몹 이름이 바뀌어도 서버는 뜬다).
+     */
+    @SuppressWarnings("unchecked")
+    private static void loadWildAllow(Path cfg) {
+        Path file = cfg.resolve("world_purity.yml");
+        if (!Files.isRegularFile(file)) {
+            return;   // 폴백 유지 — 등록부가 없어도 젖소는 여전히 산에 안 뜬다
+        }
+        try {
+            Map<String, Object> purity = RulesConfig.section(RulesConfig.load(file), "world_purity");
+            Object allow = RulesConfig.section(purity, "wild_spawn").get("allow");
+            if (!(allow instanceof List<?> names) || names.isEmpty()) {
+                return;
+            }
+            Set<EntityType> parsed = EnumSet.noneOf(EntityType.class);
+            for (Object name : names) {
+                try {
+                    parsed.add(EntityType.valueOf(String.valueOf(name).toUpperCase(Locale.ROOT)));
+                } catch (IllegalArgumentException ignored) {
+                    // 등록부에 오타가 있거나 바닐라에서 사라진 몹 — 조용히 건너뛴다
+                }
+            }
+            if (!parsed.isEmpty()) {
+                wildAllow = parsed;
+            }
+        } catch (RuntimeException ignored) {
+            // 등록부가 깨졌다 — 폴백으로 돈다
+        }
+    }
+
     /** config 판독 — 코드가 config 보다 앞서지 않는다 (Weapons.init 과 같은 자리에서 부른다) */
     @SuppressWarnings("unchecked")
     public static void init(Path cfg) {
+        loadWildAllow(cfg);
         Map<String, Object> combat = RulesConfig.load(cfg.resolve("combat.yml"));
         Map<String, Object> damage = RulesConfig.section(combat, "damage");
         weaponPower = (Map<String, Integer>) damage.get("weapon_power");
@@ -333,8 +388,12 @@ public final class HuntingGrounds implements Listener {
                 ? (Map<String, Object>) m : Map.of();
 
         // 내구 — 짐승은 등록값, 사람은 config 공식 round(10 + 체력 × 2) (combat.yml durability.formula)
+        // 내구 — 짐승은 등록값, 사람은 config 공식 (combat.yml durability — **경지 보정 포함**).
+        // 【대칭】 플레이어와 같은 공식이어야 한다. 안 그러면 절정 플레이어(26)가 절정 NPC(22)보다 두껍다.
         int durability = e.get("durability") instanceof Number n ? n.intValue()
-                : (int) Math.round(10 + 2.0 * num(stats.get("체력"), 3));
+                : Vitality.get() == null
+                    ? (int) Math.round(10 + 2.0 * num(stats.get("체력"), 3))
+                    : Vitality.get().durability(realm, num(stats.get("체력"), 3), 0, beast);
 
         // 피해 — 짐승: 자연 무기 위력(이빨=맨손 1, 엄니·발톱=단검 3, 앞발=봉 3, 영물 발톱=검 4)
         //        사람: 무기 위력 + 무공 위력 (격 위력은 격을 두른 라운드에만 — 아래 arm() 주석 참조)
@@ -417,13 +476,17 @@ public final class HuntingGrounds implements Listener {
      * 자연 스폰 심판. 향촌에 좀비가 서지 않고, 사냥터의 짐승은 <b>우리가</b> 심는다.
      *
      * <ul>
-     *   <li>우리가 부른 것(CUSTOM·COMMAND·번식·알)은 통과 — 조성기의 NPC(Villager)와 이 파일의 짐승·산적.</li>
+     *   <li>우리가 부른 것(CUSTOM·COMMAND·번식·알)은 통과 — 조성기의 NPC(Villager)와 이 파일의 짐승·산적.
+     *       <b>마을의 가축은 여기로 들어온다</b>: 조성기가 놓고, 번식·알로 는다.</li>
      *   <li><b>적대 몹은 세계 전역에서 취소</b> — 무협 세계에 좀비·크리퍼·스켈레톤은 없다.
      *       (우리 멧돼지(HOGLIN)도 Enemy 지만 CUSTOM 이라 위에서 이미 통과했다.)</li>
-     *   <li><b>마을</b>(구역 「청하현」 + 담장 밖 8칸) — 적대·야생 가릴 것 없이 자연 스폰 전부 취소.
-     *       가축은 번식·알로만 는다(마당의 닭은 남는다).</li>
-     *   <li><b>사냥터</b> — 바닐라가 씨를 뿌리지 못하게 막는다. 정원(定員)이 census 로 관리되려면
-     *       그 땅의 짐승은 전부 우리 것이어야 한다.</li>
+     *   <li><b>허용 목록에 없는 것은 세계 전역에서 취소</b> ({@link #wildAllow} — world_purity.yml).
+     *       젖소·양·돼지·닭·말·주민·떠돌이 상인·철골렘·염소·판다… 야생에 <b>저절로</b> 솟지 않는다.
+     *       금지 목록이 아니라 허용 목록인 것이 핵심이다 — 바닐라가 몹을 새로 추가해도 새지 않는다.</li>
+     *   <li><b>마을</b>(구역 「청하현」 + 담장 밖 8칸) — 자연 스폰 전부 취소. 이리도 마당엔 안 선다.</li>
+     *   <li><b>사냥터</b> — 자연 스폰 전부 취소. 정원(定員)이 census 로 관리되려면
+     *       그 땅의 짐승은 <b>전부 우리 것</b>이어야 한다 — 바닐라가 뿌린 이리가 섞이면 정원이 깨진다.</li>
+     *   <li>그 밖의 산야 — 허용 목록의 것만 통과. 이리·여우·산토끼·박쥐와 물고기.</li>
      * </ul>
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -436,13 +499,13 @@ public final class HuntingGrounds implements Listener {
             event.setCancelled(true);   // 세계 무스폰 — 적은 사람과 짐승이지 언데드가 아니다
             return;
         }
-        Location at = event.getLocation();
-        if (inTown(at)) {
-            event.setCancelled(true);   // 가축이라도 마을에 저절로 솟지는 않는다 (번식·알은 위에서 통과)
+        if (!wildAllow.contains(entity.getType())) {
+            event.setCancelled(true);   // 가축·주민·마스코트 — 야생에 저절로 솟지 않는다 (마을이 기른다)
             return;
         }
-        if (huntZoneAt(at) != null && !LIVESTOCK.contains(entity.getType())) {
-            event.setCancelled(true);   // 사냥터의 개체군은 정원제다 — 바닐라가 끼어들면 census 가 깨진다
+        Location at = event.getLocation();
+        if (inTown(at) || huntZoneAt(at) != null) {
+            event.setCancelled(true);   // 마을과 사냥터의 개체군은 전부 우리 것이다
         }
     }
 

@@ -119,11 +119,31 @@ def weapon_power(cfg, weapon):
     return num(wp.get(weapon), 0) if weapon in wp else None
 
 
-def durability(cfg, che):
-    f = str(dig(cfg, "combat.yml", "durability", "formula", default=""))
-    if "체력" in f and "2" in f:
-        return int(round(10 + che * 2))
-    return int(round(10 + che * 2))
+def realm_vit_bonus(cfg, realm):
+    """combat.yml durability.realm_bonus — 경지가 몸에 얹는 기혈. 미등록 경지는 0."""
+    rb = dig(cfg, "combat.yml", "durability", "realm_bonus", default={}) or {}
+    return num(rb.get(realm), 0)
+
+
+def equip_vit_cap(cfg):
+    """장비 유래 내구 상한 — combat.yml durability.equipment_cap (정본)."""
+    return int(num(dig(cfg, "combat.yml", "durability", "equipment_cap", default=0), 0))
+
+
+def durability(cfg, che, realm=None, beast=False, equip=0):
+    """내구 = round(10 + 체력×2 + 경지 보정 + 장비 보정) — combat.yml durability 정본.
+
+    · 기본항(10 + 체력×2)은 등록부가 뭐라 하든 이 도구의 고정 모델이다 (기본항이 흔들리면
+      npcs 등록 내구·짐승이 전부 흔들린다 — 그때는 도구가 아니라 세계가 틀린 것이다).
+    · 경지 보정은 config 에서 **읽는다** — 도구가 수치를 갖지 않는다 (등록제).
+    · 짐승은 경지 보정을 받지 않는다: 개화(단전 개방)한 몸만 기혈이 두터워진다.
+      짐승의 내구는 npcs/*.yml 등록값이 정본이고, 여기 합성치는 '경지 상당' 대체치다.
+    · 장비 보정은 캡에서 잘린다.
+    """
+    base = 10 + che * 2
+    bonus = 0 if beast else realm_vit_bonus(cfg, realm)
+    eq = min(equip, equip_vit_cap(cfg))
+    return int(round(base + bonus + eq))
 
 
 def skill_cost(mech):
@@ -249,6 +269,84 @@ def lint(cfg, rep):
     lint_qi_ladder(cfg, rep)
     lint_weapon_break(cfg, rep)
     lint_npc_and_beasts(cfg, rep)
+    lint_vitality(cfg, rep)
+
+
+def lint_vitality(cfg, rep):
+    """생명 축 — 내구 등록부의 정합 (combat.yml durability ↔ equipment.yml vitality).
+
+    이 린트가 지키는 설계 규약은 둘이다:
+      ㄱ. 경지 보정은 **개화(일류)부터** — 삼류·이류가 맷집으로 이기지 않는다
+      ㄴ. 외갑(무복·피갑·철갑)은 내구를 **올리지 않는다** — 판금이 몸을 키우는 세계가 아니다
+    둘 다 주석이 아니라 기계가 지킨다. 주석은 지워지고 린트는 운다.
+    """
+    rep.head("생명 축 — 내구 등록부 (경지 보정 · 장비 가산)")
+
+    names = realm_names(cfg)
+    rb = dig(cfg, "combat.yml", "durability", "realm_bonus", default={}) or {}
+    if not rb:
+        rep.fail("combat.yml durability.realm_bonus 가 없다 — 경지가 몸을 바꾸지 않는다")
+        return
+
+    # ① 모든 경지가 등록되어 있는가 (빠뜨린 것과 0 은 다르다)
+    missing = [nm for nm in names if nm not in rb]
+    rep.verdict(not missing,
+                f"경지 보정 등록 완결 — {len(names)}단 전부"
+                if not missing else f"realm_bonus 미등록 경지: {missing} — 0 과 '빠뜨림'은 다르다")
+
+    # ② 단조 증가 — 경지가 오르는데 몸이 얇아질 수는 없다
+    seq = [(nm, num(rb.get(nm), 0)) for nm in names if nm in rb]
+    drops = [(a[0], b[0]) for a, b in zip(seq, seq[1:]) if b[1] < a[1]]
+    rep.verdict(not drops,
+                "경지 보정 단조 증가 — 오를수록 두터워진다"
+                if not drops else f"경지 보정이 역행한다: {drops}")
+
+    # ③ 개화 규약 — 삼류·이류는 0 이어야 한다 (cultivation.yml: 일류 = '개화한 몸')
+    pre = [nm for nm in ("범인", "삼류", "이류") if num(rb.get(nm), 0) != 0]
+    rep.verdict(not pre,
+                "개화 전(범인·삼류·이류) 보정 0 — 단전이 열린 몸만 기혈이 두터워진다"
+                if not pre else f"개화 전 경지에 내구 보정이 붙었다: {pre} — "
+                                "삼류가 맷집으로 이기면 '개화'가 무슨 뜻인가")
+
+    # ④ 장비 캡 — 두 파일이 같은 수를 말하는가 (combat.yml 이 정본)
+    cap_c = equip_vit_cap(cfg)
+    cap_e = num(dig(cfg, "equipment.yml", "vitality", "cap", default=None), None)
+    rep.verdict(cap_e is not None and int(cap_e) == cap_c,
+                f"장비 내구 캡 일치 — combat.yml({cap_c}) = equipment.yml({cap_e})"
+                if cap_e is not None and int(cap_e) == cap_c
+                else f"장비 내구 캡 불일치 — combat.yml({cap_c}) vs equipment.yml({cap_e})")
+
+    # ⑤ 등록된 가산원의 합이 캡을 넘지 않는가
+    srcs = dig(cfg, "equipment.yml", "vitality", "sources", default={}) or {}
+    total = sum(num((v or {}).get("grants"), 0) for v in srcs.values())
+    rep.verdict(total <= cap_c,
+                f"가산원 총합 {total} ≤ 캡 {cap_c} — 다 껴입어도 캡을 넘지 못한다"
+                if total <= cap_c else f"가산원 총합 {total} > 캡 {cap_c} — 캡이 거짓말이 된다")
+
+    # ⑥ 【무협의 결】 외갑은 내구를 올리지 않는다
+    armor = dig(cfg, "equipment.yml", "armor", default={}) or {}
+    outer = [nm for nm in ("무복", "피갑", "철갑")
+             if num((armor.get(nm) or {}).get("vitality"), 0) != 0]
+    rep.verdict(not outer,
+                "외갑(무복·피갑·철갑) 내구 가산 0 — 철판은 몸을 키우지 않는다. 갑옷의 값은 경감에 있다"
+                if not outer else f"외갑이 내구를 올린다: {outer} — 그러면 '갑옷을 껴입는 무림인'이 "
+                                  "최적해가 되고 경공(dodge_penalty)을 파는 축이 죽는다")
+
+    # ⑦ 가산원이 실재하는가 — 등록부가 유령을 가리키지 않는가
+    trinkets = dig(cfg, "equipment.yml", "trinkets", default={}) or {}
+    ghosts = [nm for nm in srcs if nm not in armor and nm not in trinkets]
+    rep.verdict(not ghosts,
+                "가산원 전부 실재 — armor/trinkets 에 등록된 것만 내구를 준다"
+                if not ghosts else f"등록되지 않은 가산원: {ghosts} — 존재하지 않는 장비가 몸을 키운다")
+
+    # ⑧ 내갑의 두 자리가 같은 수를 말하는가 (armor.내갑.vitality ↔ vitality.sources.내갑.grants)
+    a_in = num((armor.get("내갑") or {}).get("vitality"), None)
+    s_in = num((srcs.get("내갑") or {}).get("grants"), None)
+    if a_in is not None and s_in is not None:
+        rep.verdict(int(a_in) == int(s_in),
+                    f"내갑 내구 가산 동기 — armor({int(a_in)}) = vitality.sources({int(s_in)})"
+                    if int(a_in) == int(s_in)
+                    else f"내갑 값이 두 자리에서 다르다 — armor({a_in}) vs sources({s_in})")
 
 
 def lint_skill_refs(cfg, rep):
@@ -641,7 +739,8 @@ def lint_npc_and_beasts(cfg, rep):
 
 class Fighter:
     def __init__(self, cfg, name, realm, attr=None, skill=None, weapon="검",
-                 tech_grade=None, is_npc=False, naegong=None, stats=None):
+                 tech_grade=None, is_npc=False, naegong=None, stats=None,
+                 beast=False, equip=0):
         _, axis = realm_axis(cfg)
         a = axis.get(realm, {"attr": 3, "skill": 0, "naegong": 0.0})
         self.cfg = cfg
@@ -653,6 +752,7 @@ class Fighter:
         self.che = num(self.stats.get("체력"), attr if attr is not None else a["attr"])
         self.skill = skill if skill is not None else a["skill"]
         self.is_npc = is_npc
+        self.beast = beast
         self.naegong = naegong if naegong is not None else a["naegong"]
         self.weapon = weapon
         wp = weapon_power(cfg, weapon)
@@ -661,7 +761,10 @@ class Fighter:
         tp = tech_power(cfg, tg)
         self.tpower = tp if tp is not None else 2.0     # 일류급 구멍 — 도구의 대체값
         self.tpower_assumed = tp is None
-        self.dur = durability(cfg, self.che)
+        # 【대칭 원칙】 사람은 플레이어든 NPC든 같은 공식을 쓴다 — 경지 보정도 같이 받는다.
+        #   (엔진 배선 주의: HuntingGrounds 가 NPC 내구를 10+체력×2 로 하드코딩하고 있다면
+        #    이 모델과 어긋나고 플레이어만 두꺼워진다 — lint_vitality 가 그 규약을 못 보므로 사람이 봐야 한다)
+        self.dur = durability(cfg, self.che, realm, beast=beast, equip=equip)
         self.pool = pool_of(self.naegong)
 
     def wound_pen(self, hp):
@@ -844,6 +947,7 @@ def simulate(cfg, rep, max_rounds):
     rep.say("  ② 전투 시뮬 — 해석적(2d6 = 36가지). 몬테카를로 없음")
     rep.say("═" * 72)
     sim_ttk(cfg, rep, max_rounds)
+    sim_vitality_curve(cfg, rep, max_rounds)
     sim_energy_curve(cfg, rep, max_rounds)
     sim_qi_counters(cfg, rep, max_rounds)
     sim_weapon_grades(cfg, rep, max_rounds)
@@ -861,14 +965,14 @@ def standard_fighters(cfg):
     return [
         ("삼류 무인 vs 늑대(들짐승 = 삼류 상당)",
          Fighter(cfg, "삼류 무인", "삼류", weapon="검"),
-         Fighter(cfg, "늑대", "삼류", weapon="맨손", is_npc=True), True),
+         Fighter(cfg, "늑대", "삼류", weapon="맨손", is_npc=True, beast=True), True),
         ("이류 무인 vs 산길 도적(졸개 — npcs 실 데이터)",
          Fighter(cfg, "이류 무인", "이류", weapon="검"),
          Fighter(cfg, "산길 도적", bandit_realm, weapon="도", is_npc=True,
                  skill=bandit_skill, stats=bandit_stats), False),
         ("일류 무인 vs 맹수(호랑이 = 일류 상당)",
          Fighter(cfg, "일류 무인", "일류", weapon="검", naegong=1.0),
-         Fighter(cfg, "맹수", "일류", weapon="맨손", is_npc=True), True),
+         Fighter(cfg, "맹수", "일류", weapon="맨손", is_npc=True, beast=True), True),
         ("절정 무인 vs 절정 고수",
          Fighter(cfg, "절정 무인", "절정", weapon="검"),
          Fighter(cfg, "절정 고수", "절정", weapon="검", is_npc=True), False),
@@ -933,6 +1037,109 @@ def sim_ttk(cfg, rep, max_rounds):
         rep.warn("위 표의 일류 무인 피해에는 '일류급 무공 위력' 대체값 2 가 들어갔다 — "
                  "combat.yml technique_power 에 일류급이 없어서다 (① 린트 참조). "
                  "실제 수치가 정해지면 이 줄의 TTK 는 바뀐다")
+
+
+#: 경지가 실제로 쓰는 격 — internal_energy.yml realm_gates 의 '그 경지에서 가장 높은 공격 격'
+_ATTACK_BANDS = ["심검", "어검", "강기", "검기", "발경", "외공기"]
+
+
+def top_band(cfg, realm):
+    """그 경지가 쓸 수 있는 가장 높은 공격 격 (realm_gates 판독 — 도구가 고르지 않는다)."""
+    gates = dig(cfg, "internal_energy.yml", "realm_gates", default={}) or {}
+    have = gates.get(realm) or []
+    for band in _ATTACK_BANDS:
+        if band in have:
+            return band
+    return "외공기"
+
+
+def sim_vitality_curve(cfg, rep, max_rounds):
+    """체력 곡선 — 경지별 내구와 그 내구가 만드는 TTK.
+
+    핵심 질문: **내구를 올렸는데 전투가 늘어지지 않는가.**
+    답: 격 사다리(외공기 0 → 심검 5)가 흡수한다. 그래서 두 열을 나란히 잰다 —
+        '외공기 TTK'(격을 안 쓴 몸)와 '격 TTK'(그 경지가 실제로 쓰는 격).
+        전자는 길어져도 좋다 (내력을 태우라는 압력이다). 후자가 밴드를 벗어나면 그건 설계 실패다.
+    """
+    rep.head("체력 곡선 — 경지별 내구와 TTK (내구를 올리고도 전투가 늘어지지 않는가)")
+    rep.say("     내구 = round(10 + 체력×2 + 경지 보정) · 표준 무인(체력 = 경지 상한 −1) 동경지 대결")
+    rep.say("     격 TTK = 그 경지가 실제로 쓰는 격을 실었을 때 (internal_energy realm_gates)")
+    rep.say("     ※ 외공기 TTK 가 길어지는 것은 의도다 — 내력을 태우라는 압력. 격 TTK 가 정본이다")
+    rep.say("")
+    rep.say(f"     {'경지':<6} {'체력':>4} {'내구':>5} {'(기본)':>7} {'격':>5} "
+            f"{'피해/합':>8} {'외공TTK':>8} {'격TTK':>7}")
+
+    qi_powers = dig(cfg, "combat.yml", "damage", "qi_power", default={}) or {}
+    names = [nm for nm in realm_names(cfg) if nm != "범인"]
+    band_lo, band_hi = 5, 9          # 설계 목표 (경고)
+    hard_lo, hard_hi = 3, 12         # 불가침 (위반)
+    rows = []
+
+    for nm in names:
+        p = Fighter(cfg, "무인", nm, weapon="검")
+        e = Fighter(cfg, "고수", nm, weapon="검", is_npc=True)
+        band = top_band(cfg, nm)
+        qi = num(qi_powers.get(band), 0)
+        base = int(round(10 + p.che * 2))
+        ttk0, _, _ = duel(p, e, max_rounds)
+        ttkq, _, _ = duel(p, e, max_rounds, a_qi=qi, d_qi=qi)
+        _, dmg, _ = strike(p, e, qi_power=qi)
+        rep.say(f"     {nm:<6} {p.che:>4} {p.dur:>5} {'(' + str(base) + ')':>7} {band:>5} "
+                f"{dmg:>8.2f} {str(ttk0) + '합' if ttk0 else '>' + str(max_rounds):>8} "
+                f"{str(ttkq) + '합' if ttkq else '>' + str(max_rounds):>7}")
+        rows.append((nm, p.dur, base, band, ttk0, ttkq))
+
+    rep.say("")
+
+    # ① 격 TTK 가 불가침 밴드 안에 있는가 — 이것이 '내구를 올려도 되는가'의 답이다
+    bad = [(nm, t) for nm, _, _, _, _, t in rows
+           if t is None or t < hard_lo or t > hard_hi]
+    if bad:
+        rep.fail(f"격 TTK 가 밴드({hard_lo}~{hard_hi}합)를 벗어난다: {bad} — "
+                 "내구를 올렸는데 피해가 따라오지 않았다. 경지 보정을 낮추거나 격 위력을 올려라")
+    else:
+        rep.ok(f"격 TTK 전 경지 {hard_lo}~{hard_hi}합 이내 — 내구 상승을 격 사다리가 흡수한다")
+
+    # ② 설계 목표 5~9합 (경고 — 불가침은 아니다)
+    soft = [(nm, t) for nm, _, _, _, _, t in rows
+            if t is not None and not (band_lo <= t <= band_hi)]
+    if soft:
+        rep.warn(f"격 TTK 가 설계 목표({band_lo}~{band_hi}합) 밖: {soft}")
+    else:
+        rep.ok(f"격 TTK 전 경지 {band_lo}~{band_hi}합 — 삼류든 생사경이든 한 판의 길이가 같다")
+
+    # ③ 내구가 단조 증가하는가
+    durs = [d for _, d, _, _, _, _ in rows]
+    rep.verdict(all(b >= a for a, b in zip(durs, durs[1:])),
+                f"내구 단조 증가 — {durs[0]} → {durs[-1]} ({durs[-1] / durs[0]:.2f}배)")
+
+    # ④ 【핵심 검산】 내구는 늘었는데 격 TTK 는 평평한가 (= 피해가 함께 컸다는 증거)
+    qs = [t for _, _, _, _, _, t in rows if t is not None]
+    if qs:
+        spread = max(qs) - min(qs)
+        rep.verdict(spread <= 3,
+                    f"격 TTK 편차 {spread}합 (최소 {min(qs)} · 최대 {max(qs)}) — "
+                    f"내구가 {durs[-1] / durs[0]:.2f}배 되는 동안 한 판의 길이는 그대로다. "
+                    f"피해(격 사다리)가 내구를 정확히 따라왔다"
+                    if spread <= 3 else
+                    f"격 TTK 편차 {spread}합 — 경지에 따라 전투 길이가 달라진다 "
+                    f"(내구와 피해의 성장 속도가 어긋났다)")
+
+    # ⑤ 장비 캡을 다 두른 몸이 전투를 늘어뜨리는가
+    cap = equip_vit_cap(cfg)
+    if cap > 0:
+        worst = []
+        for nm in names:
+            p = Fighter(cfg, "무인", nm, weapon="검", equip=cap)
+            e = Fighter(cfg, "고수", nm, weapon="검", is_npc=True, equip=cap)
+            qi = num(qi_powers.get(top_band(cfg, nm)), 0)
+            t, _, _ = duel(p, e, max_rounds, a_qi=qi, d_qi=qi)
+            if t is None or t > hard_hi:
+                worst.append((nm, t))
+        rep.verdict(not worst,
+                    f"장비 캡(+{cap}) 완전 무장 양측 대결도 격 TTK ≤ {hard_hi}합 — "
+                    f"장비는 전투를 늘어뜨리지 않는다 (캡의 존재 이유)"
+                    if not worst else f"완전 무장 시 전투가 늘어진다: {worst} — 캡 {cap} 이 너무 헐겁다")
 
 
 def sim_energy_curve(cfg, rep, max_rounds):

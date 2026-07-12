@@ -31,8 +31,14 @@ version: 1
 #          전부 다시 짜야 한다. 지금 실제 크기로 잡으면 영원히 안 고쳐도 된다.
 #   근거 ③ **원거리는 걷지 않는다.** 봇의 `/혼천 출행`은 이미 오프스크린 여정이다 (기간·여비 소모).
 #          마인크래프트에서도 원거리는 여정(텔레포트 + 시간·여비)이 건넌다. 거리가 커도 게임은 안 죽는다.
-#   근거 ④ 마인크래프트 월드 한계는 ±29,999,984. 이 세계의 최대 범위는 x[-1.94M, +1.38M],
-#          z[-1.07M, +1.58M] — **한계의 11%**. 앞으로 얼마든지 넓힐 수 있다.
+#   근거 ④ 마인크래프트 월드 한계는 ±29,999,984. 앞으로 얼마든지 넓힐 수 있다.
+#
+#   ★ 새외(塞外) 편입 후 갱신 — 지도가 중원 밖으로 나갔다:
+#     · 등록 좌표 최대 범위: x[-2.42M(배화신교), +2.07M(동영)],  z[-1.42M(북막 한정), +1.58M(해남파)]
+#     · 지역권 extent 포함:   x[-2.65M, +2.40M],                z[-1.75M, +1.66M]
+#     · 최대 절대값 2.42M ÷ 29,999,984 = **한계의 8.1%**. 여유는 그대로다.
+#     ★ 그리고 이것이 근거 ①의 증명이다 — 새외를 넣어도 **디스크 비용은 0** 이다.
+#       방문한 청크만 생성되므로. 중원과 새외 사이의 2,000 km 빈 초원은 1바이트도 안 든다
 
 scale:
   meters_per_block: 1               # ★ 1블록 = 1미터. 단일 축척 — 세계는 하나다
@@ -94,7 +100,46 @@ travel:
     산길: 1.60                      # 고개를 넘는다
     험산: 1.80                      # 촉도난(蜀道難) — 사천으로 드는 길
     새외: 2.00                      # 사막·설선. 길이랄 것이 없다
+    # ── ★ 새외 편입에서 추가된 하나 — **바다는 강이 아니다**
+    해로: 1.10                      # ★ 원양(遠洋). 수로(0.85)·연안(0.90, 해남파)과 다르다:
+                                    #   계절풍을 기다리고, 침몰하고, 되돌아오지 못한다.
+                                    #   ★ 그런데도 1.10 이다 — **걷는 것보다 여전히 빠르다.**
+                                    #     그래서 왜구가 온다. 강남에서 동영까지 26일 (soju 25일과 하루 차이)
   note_factor: "각 장소의 travel.factor 는 '청하현에서 그곳까지의 주 경로'의 계수다 (routes 참조)"
+
+  # ─── ★ 탈것 (mounts) — 새외가 지도에 들어오면서 생긴 유일한 새 축 ───
+  #
+  #   ★ 왜 필요한가: **기마 민족은 걷지 않는다.**
+  #     blocks_per_walking_day(40 km)는 '도보 행군'의 하루다. 북막의 기병은 그 값으로 안 움직인다.
+  #     그들을 우리 계수로 재면 "북막이 오는 데 76일" 이 되고 — 그러면 변군이 왜 필요한지 설명이 안 된다.
+  #
+  #   ★★ 그래서 이 표의 진짜 내용은 이것이다: **그들은 우리보다 네 배 빨리 온다.**
+  #     그리고 그것이 세 가지를 한꺼번에 설명한다:
+  #       ① 왜 변군이 30,000 이나 필요한가 (막지 못하면 이미 늦었다)
+  #       ② 왜 무림이 언제나 늦는가 (소문을 듣고 출발하면 산문은 이미 탔다)
+  #       ③ 왜 관도(官道)에 역참(驛站)이 있는가 — **말을 갈아탄다.** 관만이 그 속도를 흉내 낸다
+  mounts:
+    도보:     { factor_mul: 1.00, access: 누구나, note: "기준. travel.formula 의 기본값" }
+    관마(官馬):
+      factor_mul: 0.70
+      access: "★ 관도 + 역참이 있어야 한다 (places_official.yeokcham_gwanjung). 관 favor 4+ 또는 표국·상단 동행"
+      note: "★ 관의 속도. 청하현→낙양 11일 → 8일. 이것이 관이 무림보다 **빨리 아는** 이유다"
+    상단_낙타:
+      factor_mul: 0.85
+      access: "서역 상로 한정 — 상단 동행 (sangdan 또는 seoyeok_sangmaeng favor 8+)"
+      note: "★ 사막에서는 낙타가 사람보다 빠른 게 아니라 **죽지 않는다.** 그것이 곧 속도다"
+    초원마(草原馬):
+      factor_mul: 0.25
+      access: "★ **북막 소속이거나 북막에서 얻어야 한다.** 중원인은 초원의 말을 다루지 못한다
+        (faction_entry_routes bukmak_entry 의 귀부 이후)"
+      note: |
+        ★★ 0.25 — 이 한 줄이 이 세계의 군사 지리 전부다.
+          북막 한정 → 대동 군진: 직선 1,265 km. 우리 계수(2.00)로 63일. **그들의 계수(0.50)로 16일.**
+          ★ 소문이 청하현에 닿기도 전에 그들은 이미 관내(關內)에 있다 (rumor speed_days).
+          ★ 이것이 faction_politics deterrence.frontier 가 존재하는 이유다
+      effective_factor: "새외(2.00) × 0.25 = **0.50** — 초원에서 그들에게 길은 필요 없다. 초원이 곧 길이다"
+  mounts_formula: "여정일 = max(1, round( 직선거리 × road_factor × mount.factor_mul / 40000 ))"
+  mounts_note: "★ 등록된 travel.days 는 전부 **도보 기준**이다 (factor_mul 1.00). 탈것은 그 위의 배수다"
 
   # ─── 이중 이동 수단 (★ 축척은 하나, 이동 수단은 둘) ───
   #
@@ -210,7 +255,7 @@ regions:
     center: [650000, -500000]
     extent: [500000, 400000]
     terrain: "대평야 — 숨을 데가 없다. 도(刀)와 말의 땅"
-    biomes: [plains, meadow, taiga, snowy_plains]
+    biomes: [plains, meadow, taiga]
     climate: "한랭. 겨울이 길다 — 북쪽 설원 접경"
     tier_bias: middle
     factions: [paengga, gwan_gun]
@@ -284,20 +329,125 @@ regions:
     center: [-1380000, -180000]
     extent: [700000, 500000]
     terrain: "설산과 사막 — 곤륜이 하늘을 받친다"
-    biomes: [snowy_slopes, frozen_peaks, jagged_peaks, desert, badlands]
+    biomes: [grove, jagged_peaks, savanna, badlands]
+    forge: [설산, 사막]             # ★ 곤륜(설산)·가욕관(사막) — 둘 다 바닐라 바이옴에 의존 중이다. §15 참조
     climate: "고산 한랭 + 사막"
     tier_bias: poor
     factions: [gonryun]
+    note: "★ **중원의 마지막 땅**이다. 여기까지가 관(官)이고, 가욕관 밖이 서역이다.
+      곤륜파는 '서역으로 나가는 마지막 문'(등록부 원문) — 문 안에 있다. 그래서 구파일방이다"
 
   새외_북막:
     center: [-1940000, -1070000]
     extent: [900000, 600000]
     terrain: "초원과 사막 — 지평선. 중원이 아니다"
-    biomes: [snowy_plains, snowy_taiga, desert, plains, windswept_savanna]
+    biomes: [plains, taiga, savanna, windswept_savanna]
+    forge: [초원, 사막]             # ★ 지형 요청 — §15 terrain_requests 참조 (바닐라 바이옴에 기대지 않는다)
     climate: "극한 대륙성 — 여름은 타고 겨울은 얼어붙는다"
     tier_bias: poor
-    hidden: true                    # ★ 플레이어 지도에 없다
-    factions: [magyo]
+    hidden: true                    # ★ 마교 본교가 여기 있으므로 hidden 이다 (지역이 숨은 게 아니라 흑성이 숨었다)
+    factions: [magyo, bukmak]
+    note: |
+      ★ 실지리로 읽으면 여기는 **준가르(신강 북부)** 다 — 몽골 초원이 아니라 그 서쪽 끝.
+        (역투영: x -1.94M → lon 88.0°, z -1.07M → lat 44.0°)
+      ★ 그래서 이렇게 읽는다: **북막 한국의 서쪽 변두리 — 대칸의 손이 가장 느슨한 곳.**
+        마교의 흑성이 하필 여기 선 이유다. 대칸이 땅을 빌려주었고, 마교는 조공한다
+        (faction_politics relations: bukmak ↔ magyo = +1 거래).
+      ★ 귀결: **마교가 남하하려면 북막의 땅을 지나야 한다.** 통행을 사야 한다.
+        기존 note("마교 본교 → 대동 → 경사가 최단 침공로")는 여전히 참이다 —
+        그 길이 **북막을 지날 뿐**이다. 그리고 그것이 마교가 대칸을 부추기는 이유다
+
+  # ─────────────────────────────────────────────────────────────────────
+  # ★ 새외(塞外) — 중원 밖. 아래 다섯은 **관문 너머**다
+  #
+  #   ★ 원칙: 새외는 hidden 이 아니다. **알려져 있다. 다만 멀다.**
+  #     (마교는 hidden = 모른다 / 새외는 안다 = 못 갈 뿐이다. 이 대비가 두 축의 정의다)
+  #   ★ 그래서 게이트는 '비밀'이 아니라 **거리·관문·통행증**이다 (§9 passports).
+  # ─────────────────────────────────────────────────────────────────────
+
+  막북_초원:
+    center: [-500000, -1400000]
+    extent: [2000000, 700000]       # x -1.5M~+0.5M, z -1.75M~-1.05M
+    terrain: "초원 — 지평선. 나무가 없다. **숨을 데도 없고 막을 것도 없다**"
+    biomes: [plains, meadow, windswept_savanna]
+    forge: [초원]
+    climate: "극한 대륙성 — 겨울에 가축이 얼어 죽는다. ★ 그 겨울이 곧 남하의 이유다"
+    tier_bias: poor                 # ★ 가난하다. 그런데 강하다 — 그 둘의 조합이 유목 제국이다
+    factions: [bukmak]
+    note: |
+      ★ 대동 군진(gunjin_daedong)이 마주 보는 것이 여기다.
+        "★ 마교 남하의 정면"이라고 적혀 있었는데 — **정확히는 북막의 정면**이고, 마교는 그 뒤에 얹혀 있다.
+      ★ 여기에는 성(城)이 없다. 한정(汗庭)조차 천막이다 — **칠 표적이 없다.**
+        그래서 정벌(征伐)은 언제나 실패한다: 군대를 몰고 가면 그들은 흩어지고, 돌아오면 다시 온다.
+        ★ 이것이 황실이 조공·화친을 택하는 진짜 이유다 (faction_politics deterrence.frontier.policies)
+
+  서역:
+    center: [-1900000, -800000]
+    extent: [1500000, 900000]       # x -2.65M~-1.15M, z -1.25M~-0.35M
+    terrain: "사막과 오아시스 — 길은 점(點)으로 이어진다. **오아시스를 놓치면 죽는다**"
+    biomes: [savanna, badlands, eroded_badlands, windswept_savanna]
+    forge: [사막, 오아시스]
+    climate: "극건조. 낮에 타고 밤에 언다"
+    tier_bias: poor                 # ★ 땅은 가난하다. 그러나 **길이 부유하다** — 비단길이 지난다
+    tier_note: "오아시스 도시(고창·돈황)는 rich — 상로의 목이다. 그 사이 사막은 tier none"
+    factions: [seoyeok_sangmaeng, baehwa_singyo]
+    note: |
+      ★ 가욕관(gunjin_gayokgwan)은 이 지역권 **밖**이다 (x -968,600 — 청해_서역).
+        즉 가욕관은 서역의 문이 아니라 **중원의 마지막 문**이다. 그 밖이 여기다.
+      ★ 곤륜파(x -1,373,600 · z -184,700)도 밖이다 — 곤륜은 "서역으로 나가는 마지막 **도관**"이지
+        서역이 아니다. 등록부가 이미 그렇게 적어 두었다
+
+  토번_고원:
+    center: [-1500000, 400000]
+    extent: [1000000, 700000]       # x -2.0M~-1.0M, z +0.05M~+0.75M
+    terrain: "고원과 설산 — 하늘에 가깝다. **공기가 얇다**"
+    biomes: [grove, plains, jagged_peaks, windswept_hills]
+    forge: [고원, 설원, 설산]
+    climate: "고산 한랭. 여름에도 밤에는 언다"
+    tier_bias: poor
+    factions: [seolyeok_milgyo]
+    note: |
+      ★ 여기로 드는 길은 **사천을 지난다** (차마고도 — routes.sangro_chama).
+        차(茶)와 말(馬)을 바꾸는 길이고, **그 길을 사천당가가 쥐고 있다**
+        (faction_politics relations: seolyeok_milgyo ↔ dangga = +1).
+      ★ 병력이 없다 (frontier.garrisons.토번_남만 troops: 0) — **설산이 곧 변군이다.**
+        그래서 이쪽은 침공로가 아니라 **상로**다. 밀교는 오지 않는다. 우리가 갈 뿐이다
+
+  남만:
+    center: [-780000, 1380000]
+    extent: [640000, 440000]        # x -1.1M~-0.46M, z +1.16M~+1.6M
+    terrain: "밀림 — 길이 아니라 짐승길. **지도가 소용없다**"
+    biomes: [jungle, bamboo_jungle, sparse_jungle, mangrove_swamp, swamp]
+    forge: [밀림]
+    climate: "열대 습윤. 장기(瘴氣) — 사람이 병들어 죽는다"
+    tier_bias: poor
+    factions: [odokgyo]
+    note: |
+      ★ 운남(중원 변경)과 남만(중원 밖)은 다르다 — 점창파가 그 경계에 서 있다
+        ("밀림 위 고산 — 남만과 중원의 경계에 선 문파").
+      ★ 혈교 은거지(hyeolgyo_eungeo, z 1,120,100)는 **운남**이다 — 이 지역권 바로 북쪽.
+        즉 혈교는 오독교의 문턱에 숨어 있다. 그리고 오독교는 그것을 알고 쫓고 있다
+        (relations: odokgyo ↔ hyeolgyo = -2). ★ 혈교 루트 플레이어가 남만으로 도망치면
+        **거기가 세상에서 가장 나쁜 곳이다**
+
+  동영:
+    center: [2100000, 250000]
+    extent: [600000, 800000]        # x +1.8M~+2.4M, z -0.15M~+0.65M
+    terrain: "섬 — 바다가 가른다. **관문이 없다**"
+    biomes: [forest, cherry_grove, jagged_peaks, beach, ocean]
+    forge: [섬]
+    climate: "온난 습윤. 태풍"
+    tier_bias: middle
+    factions: [dongyeong]
+    note: |
+      ★★ **지도에서 가장 먼 것이 실제로 가장 가깝다.**
+        청하현에서 57일. 그러나 **소주(강남)에서 26일**이다 — 소주가 25일이니 **하루 차이**다.
+      ★ 그리고 그것이 왜구(倭寇)의 전부다: 그들은 관문을 지나지 않는다. **바다에는 문이 없다.**
+        산해관도 가욕관도 대동도 무의미하다. 해방(海防)은 성이 아니라 배이고, 배는 뚫린다
+        (faction_politics deterrence.frontier.garrisons.해방).
+      ★ 그래서 남궁세가(안휘)와 해남파가 각각 첫 방벽이다 —
+        팽가가 북쪽 방벽이듯 (relations: dongyeong ↔ namgung/haenam = -2).
+        **오대세가와 구파가 왜 그 자리에 있는지가 지도에서 읽힌다**
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 5. 장소 등록부 (places) — 좌표·지형·성격·접근 조건
@@ -505,7 +655,7 @@ places:
     pos: [-1373600, -184700]
     region: 청해_서역
     terrain: 설산
-    biomes: [snowy_slopes, frozen_peaks, jagged_peaks]
+    biomes: [grove, jagged_peaks]
     tier: poor                      # 부유하지 않다 — 멀고 춥고 사람이 없다
     architecture: "설선(雪線) 위의 석조 도관. 서역으로 나가는 마지막 문"
     faction: gupailbang
@@ -640,7 +790,7 @@ places:
     pos: [1380200, -767400]
     region: 하북
     terrain: 평야
-    biomes: [taiga, snowy_plains, snowy_taiga]
+    biomes: [taiga, plains]
     tier: rich
     architecture: "요동의 북방 세가 — 두꺼운 벽, 온돌. 중원과 새외 사이에 선 집"
     faction: odaesega
@@ -828,7 +978,7 @@ places:
     pos: [-1940000, -1069300]
     region: 새외_북막
     terrain: 초원
-    biomes: [snowy_plains, desert, windswept_savanna]
+    biomes: [plains, savanna, windswept_savanna]
     tier: rich                      # 마교는 가난하지 않다
     architecture: "초원의 흑성(黑城) — 중원 건축이 아니다. 돌과 철, 불"
     faction: magyo
@@ -912,6 +1062,203 @@ places:
         cheongha_fever_rumor: "폐사당 근처에 찜찜한 소문이 있지만 확정할 수 없다"
       그 소문의 반대편 끝이 여기다. 청하현 폐사당 → 복우산 폐사 → 남만 은거지 — 3단 사슬.
 
+  # ─────────────────────────────────────────────────────────────────────
+  # 5.9 새외(塞外) — ★ 관문 너머. **아무나 못 간다는 것이 설계다**
+  # ─────────────────────────────────────────────────────────────────────
+  #
+  # ★ 금기(5.8)와 무엇이 다른가 — 이 한 줄이 전부다:
+  #     금기는 **hidden**  (player_map: false — 존재를 모른다)
+  #     새외는 **player_map: true** (안다. 지도에 있다. **못 갈 뿐이다**)
+  #   ★ 마교 본교(111일)는 '몰라서' 못 가고, 배화신교(128일)는 '알아도' 못 간다.
+  #     두 종류의 도달 불가능이 이 세계에 있다 — 그리고 후자가 더 정직하다.
+  #
+  # ★ 게이트는 셋이다 (§9 passports · §7 routes):
+  #     ① 거리   57~128일. 여정 비용만으로 대부분이 못 간다 (economy 하루치 노자 × 일수)
+  #     ② 관문   가욕관·대동·송반관·진남관 — 나가려면 통과해야 한다
+  #     ③ 통행증 노인(路引)·감합(勘合)·통관첩. **무림인은 원칙적으로 못 받는다**
+  #
+  # travel.factor 산출: 각 route 의 실경로 합산과 교차 검산했다 (routes 절의 cross_check 참조)
+
+  bukmak_hanjeong:
+    name: "한정 (汗庭)"
+    pos: [-542800, -1423100]        # 실지리: 47.2°N 102.8°E (막북 초원 중심 — 카라코룸 방면)
+    region: 막북_초원
+    terrain: 초원
+    biomes: [plains, meadow]
+    forge: [초원]
+    tier: poor                      # ★ 가난하다. 성도 곳간도 없다 — 그런데 만 명이 온다
+    architecture: "★ **성이 없다.** 대칸의 천막(게르)과 말 떼. 계절마다 옮긴다 —
+      **칠 표적이 없다는 것이 이들의 성벽이다**"
+    faction: bukmak
+    danger: 5
+    travel: { factor: 2.00, days: 76 }
+    travel_note: "★ **도보 76일.** 그들의 초원마로는 19일 (mounts.초원마 factor_mul 0.25).
+      ★ 우리가 그들에게 가는 데 76일, 그들이 우리에게 오는 데 19일. **이 비대칭이 국경의 전부다**"
+    access: 관문                     # ★ 대동을 지나야 한다 — 그리고 대동은 통행증을 안 준다 (국경이다)
+    access_detail: "★ 대동 군진(25일)이 문이다. 그런데 **여기는 상로가 아니라 국경이다** —
+      노인(路引)으로 못 나간다. 나가는 길은 셋: 사절 수행(감합) · 밀출국 · **군진 입대 후 탈영**"
+    entry_route: bukmak_entry
+    build: later
+    scale: 800
+    player_map: true                # ★ 지도에 있다. 못 갈 뿐이다
+    note: "★ 대동 군진(gunjin_daedong)이 마주 보는 것이 여기다. 직선 1,265 km — **그들의 말로 16일**"
+
+  seoyeok_gochang:
+    name: "고창 (高昌) — 서역 상맹"
+    pos: [-1828600, -953100]        # 실지리: 42.95°N 89.18°E (투르판 방면 오아시스)
+    region: 서역
+    terrain: 사막                    # ★ 오아시스는 사막 안의 예외다 — forge 가 그 예외를 판다
+    biomes: [savanna, badlands]
+    forge: [사막, 오아시스]
+    tier: rich                      # ★★ 서역에서 유일한 rich — **길이 부유하다** (비단길의 목)
+    architecture: "흙벽돌 성곽 도시. 포도 시렁과 지하 수로(카레즈). 시장이 도시보다 크다"
+    faction: seoyeok_sangmaeng
+    danger: 2                       # ★ 새외에서 가장 안전하다 — 상인은 손님을 죽이지 않는다
+    travel: { factor: 1.80, days: 93 }
+    access: 상로                     # ★ 새외에서 **유일하게 정상 통행이 되는 곳**
+    access_detail: "★ 가욕관(46일) → 돈황(62일) → 고창(93일). **노인(路引)만 있으면 간다.**
+      상단 동행이 정공법이다 (sangdan favor 8+). ★ 새외의 다섯 중 유일하게 '문이 열려 있다'"
+    entry_route: seoyeok_entry
+    build: later
+    scale: 1200
+    player_map: true
+    on_route: sangro_silk
+    note: "★ 서역 상맹은 **적이 아니다.** 팔러 오지 죽이러 오지 않는다 —
+      그래서 이곳이 새외로 드는 **가장 넓은 문**이다. 나머지 넷은 여기를 지나서 간다"
+
+  baehwa_seonghwadan:
+    name: "성화단 (聖火壇) — 배화신교 총단"
+    pos: [-2421500, -814900]        # 실지리: 41.7°N 82.9°E (천산 남록)
+    region: 서역
+    terrain: 사막
+    biomes: [savanna, badlands, eroded_badlands]
+    forge: [사막]
+    tier: middle
+    architecture: "★ 사막 한가운데 **꺼지지 않는 불**. 검은 현무암 제단, 계단식 탑. 중원 건축이 아니다"
+    faction: baehwa_singyo
+    danger: 5
+    travel: { factor: 2.00, days: 128 }
+    travel_note: "★ **128일 — 등록된 모든 좌표 중 가장 멀다.** 마교 본교(111일)보다 멀다"
+    access: hidden                   # ★ 좌표는 안다. 그러나 오아시스를 벗어난 사막은 길이 없다
+    access_detail: "★ 고창(93일)에서 더 들어간다. 상맹은 안내하지 않는다 —
+      '거기는 우리 길이 아니오.' 안내인은 배화 쪽에서 온다 (개종의 첫 단계)"
+    entry_route: baehwa_entry
+    build: later
+    scale: 600
+    player_map: true
+    note: |
+      ★★ **중원인은 이들을 마교라 부른다. 틀렸다.**
+        불을 섬긴다는 것 하나로 뭉뚱그린 것이다. 배화는 사람을 먹지도 수명을 태우지도 않는다 —
+        그들에게는 그들의 도(道)가 있다.
+      ★ 그리고 이 오해가 곧 기계가 된다: faction_politics accuracy_gate.오해_30_49 (target_swap) —
+        **배화의 사건이 마교에게 붙고, 마교의 사건이 배화에게 붙는다.**
+        ★ 마교는 이 오해를 **이용한다** (relations: baehwa_singyo ↔ magyo = -1 — 둘 다 싫어한다)
+
+  seolyeok_daesa:
+    name: "설역 대사 (雪域大寺)"
+    pos: [-1645500, 517500]         # 실지리: 29.65°N 91.12°E (토번 고원 중심)
+    region: 토번_고원
+    terrain: 설산
+    biomes: [grove, jagged_peaks, plains]
+    forge: [설원, 설산, 고원]
+    tier: rich                      # ★ 밀교는 가난하지 않다 — 고원 전체가 시주(施主)다
+    architecture: "★ 절벽에 박힌 백색 대사원. 붉은 승복, 금정(金頂), 마니차. **소림보다 크다**"
+    faction: seolyeok_milgyo
+    danger: 4
+    travel: { factor: 2.00, days: 86 }
+    travel_note: "★ 실경로 검산: 청하현 → 사천당가(26일) → 설역(61일) = 87일 ≈ 직선 86일 ✔
+      **토번으로 가는 길은 당가의 땅을 지난다** (차마고도)"
+    access: 유학                     # ★ 새외에서 유일하게 **돌아올 수 있는** 문이다
+    access_detail: "★ 송반관(23일)에서 통관첩(通關牒)을 받는다 — **승려·도사만** 받는 문서다.
+      혜각(탁발승)·소림·무당의 소개가 실제로 통한다. ★ 유학이지 배신이 아니다"
+    entry_route: milgyo_entry
+    build: later
+    scale: 900
+    player_map: true
+    on_route: sangro_chama
+    note: |
+      ★ 소림과 같은 뿌리, 다른 가지 — 그리고 **밀교가 더 세다** (martial 9 vs 소림 10, 계율 없음).
+        소림의 불가는 계율로 힘을 **묶는다**(불살). 밀교는 분노존(忿怒尊)을 쓴다 — **죽이는 것도 법이다.**
+      ★ 그것이 소림이 밀교를 미워하는 이유이고 (relations -2), 소림이 가장 말하기 싫어하는 사실이다
+
+  odokgyo_odokchae:
+    name: "오독채 (五毒寨)"
+    pos: [-731600, 1363400]         # 실지리: 22.0°N 100.8°E (남만 심밀림)
+    region: 남만
+    terrain: 밀림
+    biomes: [jungle, bamboo_jungle, sparse_jungle]
+    forge: [밀림]
+    tier: poor
+    architecture: "★ 나무 위의 채(寨) — 고상(高床) 가옥. 땅에는 벌레가 산다. 사람은 나무에서 잔다"
+    faction: odokgyo
+    danger: 5
+    travel: { factor: 1.90, days: 74 }
+    access: hidden                   # ★ 밀림은 지도가 소용없다 — 좌표를 알아도 못 찾는다
+    access_detail: "★ 진남관(55일)을 지나 밀림으로 든다. **길잡이 없이 들어가면 나오지 못한다** —
+      묘족 향도(嚮導)를 사야 하고, 향도는 오독교가 보낸다. **찾아가는 것이 아니라 이끌려 가는 것**이다"
+    entry_route: odokgyo_entry
+    build: later
+    scale: 400
+    player_map: true
+    note: |
+      ★ 당가와의 차이가 전부다: 당가의 독은 **물건**(암기에 바른다) — 씻으면 지워진다.
+        오독교의 독은 **생물**(사람 안에서 자란다) — 그래서 해독이 아니라 **구충(驅蟲)** 이다.
+        ★ 유문(의방)도 혜각(탁발승)도 못 고친다. **중원 의술의 바깥이다**
+      ★ 혈교 은거지가 이 북쪽 문턱(운남)에 있다 — **오독교의 땅이다.** 그들은 혈교를 쫓고 있다:
+        "고독은 벌레를 먹이지 사람을 먹이지 않는다" (relations: odokgyo ↔ hyeolgyo = -2)
+
+  dongyeong_do:
+    name: "동영도 (東瀛島)"
+    pos: [2072200, 147100]          # 실지리: 33.0°N 130.5°E (규슈 방면)
+    region: 동영
+    terrain: 섬
+    biomes: [forest, cherry_grove, jagged_peaks, beach]
+    forge: [섬]
+    tier: middle
+    architecture: "★ 목조. 흰 벽과 검은 기와, 종이문. 성(城)이 산 위에 있고 **천수각**이 솟는다"
+    faction: dongyeong
+    danger: 4
+    travel: { factor: 1.10, days: 57 }   # ★ 해로 — 새 road_factor
+    travel_note: |
+      ★★ **57일 — 새외 중 가장 가깝다.** 그리고 진짜 숫자는 이것이다:
+        **소주(강남)에서 26일.** 소주 자체가 청하현에서 25일이니 — **하루 차이**다.
+      ★ 그래서 왜구가 강남을 친다. 그리고 그래서 남궁세가가 거기 있다
+    access: 해로                     # ★ 관문이 없다 — **바다에는 문이 없다**
+    access_detail: |
+      ★ 시박사(명주, 28일)가 유일한 합법 창구다. 그런데 **해금(海禁)** 이 걸려 있다 —
+        관은 바다를 닫았다. 그래서 합법으로 가는 배가 거의 없다.
+      ★ 남은 길 둘: **상단의 감합선(勘合船)** (sangdan favor 13+ — 드물다) 또는
+        **수로채의 밀선(密船)** (jangang_suroche — 왜구와 밀무역 중이다. relations +1).
+        ★ 즉 동영에 가려면 **사파의 배를 타야 한다.** 그리고 그 배는 돌아올 때 왜구의 물건을 싣는다
+    entry_route: dongyeong_entry
+    build: later
+    scale: 1000
+    player_map: true
+    on_route: haero_dongyeong
+    note: "★ 새외 다섯 중 **유일하게 지금 오고 있다.** 나머지는 '언젠가'이고 동영은 '올해'다"
+
+  # ── 새외 상로의 중간 거점 (오아시스) — ★ 사막에서는 물이 곧 길이다
+  donhwang:
+    name: "돈황 (敦煌) — 오아시스"
+    pos: [-1311300, -642400]        # 실지리: 40.14°N 94.66°E
+    region: 서역
+    terrain: 사막
+    biomes: [savanna, badlands]
+    forge: [사막, 오아시스]
+    tier: rich                      # ★ 오아시스는 부유하다 — 물을 파는 자가 사막의 주인이다
+    architecture: "★ 사구(砂丘) 아래 초승달 샘. 석굴(石窟)과 벽화. 중원과 서역이 섞인 얼굴"
+    faction: seoyeok_sangmaeng
+    danger: 3
+    travel: { factor: 1.70, days: 62 }
+    travel_note: "★ 실경로 검산: 가욕관(46일) → 돈황(17일) = 63일 ≈ 직선 62일 ✔"
+    access: 상로
+    build: later
+    scale: 800
+    player_map: true
+    on_route: sangro_silk
+    note: "★ **가욕관 밖 첫 물.** 여기서 물을 못 채우면 고창에 못 닿는다 —
+      상로가 왜 점(點)으로 이어지는지가 지도에서 읽힌다. ★ 오아시스 하나가 곧 국가다"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. 사냥터 (hunting_grounds) — 성장·경제의 기둥. **등급별로 흩어져 있어야 한다**
 # ═══════════════════════════════════════════════════════════════════════════
@@ -978,7 +1325,7 @@ hunting_grounds:
     pos: [-74600, 42000]
     region: 섬서
     terrain: 험산
-    biomes: [jagged_peaks, snowy_slopes, grove]
+    biomes: [jagged_peaks, grove]
     grade: 일류
     beasts: [bandal_gom, horangi]
     realm_min: 이류
@@ -994,7 +1341,7 @@ hunting_grounds:
     pos: [561700, -792800]
     region: 하북
     terrain: 초원
-    biomes: [snowy_plains, plains, taiga]
+    biomes: [plains, taiga]
     grade: 일류
     beasts: [san_neukdae]           # ★ 무리로 온다 — 같은 짐승도 수가 다르면 다른 사냥이다
     beast_note: "설표(雪豹)가 앉을 자리 — 등록 예약 (cheongha_npcs 에 아직 없다)"
@@ -1007,9 +1354,11 @@ hunting_grounds:
   namman_milim:
     name: "남만 밀림"
     pos: [-665600, 1197500]
-    region: 운남
+    region: 남만                     # ★ 운남 → 남만 정정. z 1,197,500 은 남만 지역권 안이다 (z 1.16M~1.6M).
+                                    #   '남만 밀림'이 운남에 있었던 것이 처음부터 어색했다 — 이름이 지역을 말한다
     terrain: 밀림
     biomes: [jungle, bamboo_jungle, sparse_jungle]
+    forge: [밀림]
     grade: 일류
     beasts: [horangi]
     beast_note: "독충(毒蟲)이 앉을 자리 — 등록 예약. 독문·혈교와 지형이 겹친다"
@@ -1018,6 +1367,10 @@ hunting_grounds:
     access: 항상
     build: later
     danger: 4
+    faction: odokgyo                # ★ 주인이 생겼다 — 이 밀림은 오독교의 앞마당이다.
+                                    #   오독채(74일)로 가는 길목이고, 향도(嚮導)를 만나는 자리다
+    note: "★ 사냥터인데 **세력의 땅**이다 — 짐승을 잡으러 들어갔다가 사람을 만난다.
+      ★ 오독교 입문(odokgyo_entry)의 실질적 첫 접점이 여기다"
 
   ami_simsan:
     name: "아미 심산 영물지"
@@ -1040,7 +1393,7 @@ hunting_grounds:
     pos: [-1420800, -162500]
     region: 청해_서역
     terrain: 설산
-    biomes: [frozen_peaks, snowy_slopes, jagged_peaks]
+    biomes: [jagged_peaks, grove]
     grade: 절정
     beasts: [baegyeongmyo]
     realm_min: 절정
@@ -1123,6 +1476,108 @@ routes:
     waypoints: [[368200, -32100], [543800, -52000], [652300, -502000], [1380200, -767400]]
     danger: 2
     note: "하북팽가 → 모용세가. 새외와의 완충선"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # ★ 새외로 나가는 길 — **관문에서 끝나거나, 관문에서 시작한다**
+  #
+  #   ★ 중원의 길(위)과 새외의 길(아래)의 차이 한 줄:
+  #     중원의 길은 **위험하다** (녹림이 있다). 새외의 길은 **없다** (길 자체가 없다).
+  #     그래서 새외의 길에는 hazards 대신 **survival** 이 붙는다 — 적이 아니라 땅이 죽인다
+  # ─────────────────────────────────────────────────────────────────────
+
+  sangro_silk:
+    name: "비단길 (西域商路)"
+    kind: 상로
+    factor: 1.80                     # 가욕관까지 상로(1.20) / 그 밖은 사막(2.00) — 가중
+    waypoints: [[0, 0], [-108600, -21000], [-968600, -604800], [-1311300, -642400], [-1828600, -953100], [-2421500, -814900]]
+    #            청하현      봉상부           ★가욕관             돈황                 고창                  성화단
+    danger: 3
+    gate: gunjin_gayokgwan           # ★ 관문 — 노인(路引) 검문
+    survival: "★ 오아시스를 놓치면 죽는다. 돈황(62일) → 고창(93일) 사이 30일 구간에 물이 두 곳뿐 —
+      상단 동행이 아니면 여정 판정에 **갈증** 이 붙는다 (여비가 아니라 **물**이 자원이 된다)"
+    mounts: [상단_낙타]
+    note: |
+      ★★ **새외에서 유일하게 '길'이라 부를 수 있는 것.** 나머지 넷은 길이 아니라 방향이다.
+      ★ 그리고 이 길이 중원의 부(富)를 만든다: 비단·차·철이 나가고 옥·말·향료·약이 들어온다.
+        가욕관이 관세를 걷는다 → 그래서 관은 상맹과 우호(+1)다 (faction_politics relations).
+      ★ 훅: **이 길이 끊기면 상단연합이 흔들린다** (myeongbun.inputs.상단로_장기_봉쇄 — 생계 태그).
+        북막이 이 길을 끊는 것이 중원을 치는 가장 싼 방법이다. 대칸은 그것을 안다
+
+  sangro_chama:
+    name: "차마고도 (茶馬古道)"
+    kind: 험산
+    factor: 2.00
+    waypoints: [[0, 0], [-23600, 69700], [-422900, 405800], [-467300, 185800], [-1645500, 517500]]
+    #            청하현    진령 심산        ★사천당가          ★송반관             설역 대사
+    danger: 4
+    gate: gwanmun_songban            # ★ 관문 — 통관첩(通關牒). **승려·도사만 받는다**
+    survival: "★ 고산병(高山病). 고원에 오르면 원기 회복이 절반이 된다 —
+      **몸이 먼저 배운다**: 밀교의 호흡법이 왜 그렇게 발달했는지"
+    note: |
+      ★ 차(茶)와 말(馬)을 바꾸는 길. **그리고 그 길을 사천당가가 쥐고 있다**
+        (faction_politics relations: seolyeok_milgyo ↔ dangga = +1).
+      ★★ 귀결: **토번에 가려면 당가를 지나야 한다.** dangga_entry 의 '식객' 이 갑자기 값이 생긴다 —
+        당가 favor 는 무공만 여는 것이 아니라 **길을 연다**
+
+  sangro_namman:
+    name: "남만 상로 (밀림길)"
+    kind: 산길
+    factor: 1.60
+    waypoints: [[0, 0], [-300000, 330000], [-422900, 405800], [-174700, 1352300], [-665600, 1197500], [-731600, 1363400]]
+    #            청하현    (촉도 경유)        사천당가           ★진남관              남만 밀림           오독채
+    danger: 5
+    gate: gwanmun_jinnam             # ★ 관문 — 노인(路引). 다만 그 너머는 길이 아니다
+    survival: "★ 장기(瘴氣). 밀림에서는 **적보다 병이 먼저 죽인다** — 여정 판정에 질병 판정이 붙는다.
+      ★ 그리고 길잡이 없이 들어가면 **좌표를 알아도 못 찾는다** (밀림은 지도가 소용없다)"
+    note: "★ 향도(嚮導)를 사야 한다. 그리고 향도는 오독교가 보낸다 —
+      **길을 사는 순간 이미 그들의 손 안에 있다**"
+
+  haero_dongyeong:
+    name: "동영 해로 (東瀛海路)"
+    kind: 해로                       # ★ 새 road_factor (1.10)
+    factor: 1.10
+    waypoints: [[0, 0], [543800, 413500], [1096000, 451100], [1227300, 493200], [2072200, 147100]]
+    #            청하현    무한(장강)        강남 상로           ★시박사(명주)        동영도
+    danger: 4
+    gate: sibaksa_myeongju           # ★ 관문 — 해금(海禁). **합법으로 가는 배가 거의 없다**
+    survival: "★ 계절풍을 기다린다. 철이 아니면 배가 안 뜬다 —
+      **여정 대기 일수**가 붙는 유일한 길이다 (최대 +30일). 그리고 태풍이면 침몰한다"
+    note: |
+      ★★ **이 길은 양방향이 아니다.** 우리가 가기는 어렵고(해금), 그들이 오기는 쉽다(관문이 없다).
+      ★ 그래서 실질 경로는 수로채의 밀선(密船)이다 — jangang_suroche ↔ dongyeong = +1 (밀무역).
+        ★ 즉 **동영에 가려면 사파의 배를 타야 한다.** suroche_entry 가 갑자기 새외의 문이 된다
+      ★ 그리고 그 배는 돌아올 때 왜구의 물건을 싣는다 —
+        그것을 목격하면 myeongbun.inputs.새외와_결탁_증거(+9)를 쥔 것이다
+
+  chimgongro_bukmak:
+    name: "★ 북막 남하로 (침공로)"
+    kind: 새외
+    factor: 2.00                     # ★ 우리 기준. **그들 기준은 0.50** (mounts.초원마)
+    waypoints: [[-542800, -1423100], [448400, -636900], [741100, -615900]]
+    #            한정                  ★대동 군진           경사(황성)
+    danger: 5
+    direction: 남하                   # ★ 유일하게 **밖에서 안으로** 그려진 길이다
+    hazards: [gunjin_daedong]        # ★ 위험이 우리에게 있는 게 아니라 **그들에게** 있다 (변군 30,000)
+    note: |
+      ★★ 이 길만 방향이 반대다. 다른 모든 route 는 '청하현에서 어디로'인데, 이것은 '어디서 청하현으로'다.
+      ★ 우리 계수로 대동까지 63일. **그들의 초원마로 16일.**
+        → 소문이 청하현에 닿기도 전에 그들은 관내(關內)에 있다 (rumor speed_days).
+        ★ 이것이 faction_politics deterrence.frontier 가 존재하는 이유이고,
+          "무림이 언제나 늦는" 구조적 이유다 — **소식을 듣고 출발하면 산문은 이미 탔다**
+      ★ 마교 본교(x -1.94M)는 이 길의 **서쪽 곁**에 있다. 기존 note("마교 본교 → 대동 → 경사가
+        최단 침공로")는 여전히 참이다 — 다만 그 길이 **북막의 땅을 지난다.**
+        ★ 그래서 마교는 통행을 사야 하고, 그래서 대칸을 부추긴다
+          (faction_politics rupture_scenarios.saeoe_invasion.magyo_seat)
+
+  # ─── 새외 route 의 여정일 교차 검산 (실경로 합산 vs 직선×factor) ───
+  cross_check_saeoe:
+    고창:     "가욕관 46 + 돈황 17 + 고창 30 = 93일  vs  직선 2,062km × 1.80 ÷ 40 = 93일  ✔"
+    돈황:     "가욕관 46 + 17 = 63일               vs  직선 1,460km × 1.70 ÷ 40 = 62일  ✔"
+    설역대사: "당가 26 + 설역 61 = 87일            vs  직선 1,725km × 2.00 ÷ 40 = 86일  ✔"
+    한정:     "직선 1,523km × 2.00 ÷ 40 = 76일 (대동 25 + 63 = 88 — ★ 관도를 안 타므로 직선이 옳다)"
+    동영:     "직선 2,077km × 1.10 ÷ 40 = 57일  (소주 25 + 26 = 51 — 연안 우회 차이. 57 채택)"
+    오독채:   "직선 1,547km × 1.90 ÷ 40 = 74일  (진남관 55 + 19 = 74  ✔)"
+    verdict: "★ 전부 ±1일 안에서 일치한다. **좌표가 곧 거리이고, 거리가 곧 시간이다** (§2 원문)"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 8. 기연·폐허·산지 — 사건이 앉는 자리
@@ -1276,6 +1731,93 @@ officialdom:
       - "도적·마교·혈교는 불가침의 보호를 받지 않는다 (강호의 일원이 아니다) — 관군 토벌 대상"
       - "관이 무림인을 **개인 자격으로** 고용하는 것은 불가침 위반이 아니다 (포두 박호가 그렇다)"
       - "표국의 관물 호송 — 관과 무림이 합법적으로 만나는 유일한 접점 (pyoguk)"
+      - "★ **새외는 불가침의 밖이다.** 강호의 일원이 아닌 정도가 아니라 — **나라의 적**이다.
+        무림인이 왜구를 베는 것은 협(俠)이 아니라 **공(功)** 이고, 관이 그것을 포상한다.
+        ★ 새외에 관해서만 관과 무림이 서로를 경계하지 않는다 (faction_politics deterrence.frontier)"
+
+  # ─── ★★ 변경(邊境) — **관무불가침이 서 있는 진짜 땅** ───
+  #
+  #   §9 서두는 이렇게 시작한다: "관은 무림보다 강하다. 다만 그 힘을 쓰지 않기로 되어 있다."
+  #   ★ 그런데 **왜** 안 쓰는가에 대한 답이 지금까지 '값이 비싸서'였다. 그것은 절반이다.
+  #
+  #   ★★★ 나머지 절반: **손이 묶여 있다.**
+  #        faction_politics deterrence.authority_power.defense_burden = 0.75 —
+  #        황실 정규군의 **75%가 국경에 못 박혀 있다.** 그 못이 아래 다섯이다.
+  #        · 대동(30,000)   ← 북막
+  #        · 산해관(20,000) ← 북막·요동
+  #        · 가욕관(15,000) ← 서역 (★ 여기는 싸우는 곳이 아니라 **세금 걷는 곳**이다)
+  #        · 해방(15,000)   ← 동영 (★ 성이 아니라 **배**다. 그래서 뚫린다)
+  #        · 토번·남만(0)   ← ★ **병력이 없다. 설산과 밀림이 대신 지킨다** — 지형이 곧 변군이다
+  #
+  #   ★★★★ 그리고 그 귀결이 이 세계 전체를 다시 읽게 만든다:
+  #
+  #            **새외가 무림을 살리고 있다.**
+  #
+  #     새외가 없으면 burden 0 → 황실 원정력 30 → 무림 대연합도 결국 갈려 나간다.
+  #     관무불가침은 성립하지 않는다. **관이 무림을 외면한 것이 아니라, 손이 없었던 것이다.**
+  #   ★ 무림은 이것을 모른다. 관은 안다. **그리고 아무도 말하지 않는다.**
+  frontier:
+    ref: "faction_politics.yml deterrence.frontier — 수치·동적 변동·징집은 그쪽이 정본"
+    gates: [gunjin_daedong, gunjin_sanhaegwan, gunjin_gayokgwan, gwanmun_songban, gwanmun_jinnam, sibaksa_myeongju]
+    the_inversion: |
+      ★★ **국경이 조용해지는 것이, 국경이 무너지는 것보다 무림에게 위험하다.**
+        화친(和親)·조공(朝貢)이 성사되면 burden 0.75 → 0.60 → 관 원정력 7.5 → 12.0.
+        ★ 무림은 화친을 축하한다. 그리고 그것이 자기 목을 조이는 줄 모른다.
+        ★ 이 세계에서 가장 조용한 재앙이다
+    who_knows:
+      제갈세가: "★ 안다 (관에 줄이 있다 — relations: jegal ↔ hyeollyeong +1). **그리고 말하지 않는다**"
+      개방:     "★ 눈치챈다 (변경의 거지들이 장정 징발을 본다) — 그러나 산수를 못 한다"
+      마교:     "★ 정확히 안다. 그래서 대칸을 부추긴다 — **국경을 시끄럽게 하는 것이 마교에게 이익이다**"
+      무림:     "★ 모른다"
+
+  # ─── ★ 통행증 (passports) — **아무나 못 간다**를 등록부로 못박는다 ───
+  #
+  #   ★ 새외 게이트는 '비밀'이 아니다 (그것은 마교의 문법이다). 새외는 **행정**이다:
+  #     관문이 있고, 문서가 있고, **무림인은 원칙적으로 그 문서를 못 받는다.**
+  #   ★ 그리고 그것이 관무불가침의 조용한 귀결이다 —
+  #     관은 무림을 치지 않는다. 다만 **나가지 못하게 한다.** 그것으로 충분하다
+  passports:
+    노인(路引):
+      issuer: 관 (현·부)
+      grants: "상로 통행 — 가욕관·진남관. **서역·남만 방면**"
+      who_gets_it:
+        상단: "★ 자동 (sangdan) — 관세를 내는 자에게 관은 문을 연다"
+        표국: "★ 자동 (pyoguk) — 관물 호송의 연장"
+        관인: "★ 자동 (gwan_gun favor 4+)"
+        무림인: "★ **보증인이 필요하다.** 현령(조문원)·객잔주(한백)·이장(소연)이 서 줄 수 있다.
+          → 판정: 화술+매력 vs 보통(10). ★ 실패해도 문은 닫히지 않는다 — 다시 데려오면 된다"
+        수배자: "★ 즉시 거절. **관은 기록한다** (gwangun_entry.direct_approach.branches.수배_이력 그대로)"
+      note: "★ 가장 흔한 문서. 그래서 **새외로 드는 가장 넓은 문이 서역**이다"
+    감합(勘合):
+      issuer: 경사 (예부)
+      grants: "사절(使節) 왕래 — **북막·동영 방면.** 국경과 바다를 넘는 유일한 합법 문서"
+      who_gets_it: "★ 사절단뿐이다. 무림인은 **수행원**으로만 낄 수 있다
+        (world_map officialdom.imperial_access.세력_밀사 문법 재사용 — 문파가 보낸다)"
+      forgery: "★ 위조가 곧 사건이다 — 발각 시 authority_mandate +12 (관군_부대_습격에 준함).
+        ★ 하오문이 판다. 그리고 하오문이 파는 감합은 **반쯤 진짜다** (진짜 관인, 가짜 이름)"
+      note: "★ 이 문서 하나가 '왜 아무도 북막에 못 가는가'의 답이다"
+    통관첩(通關牒):
+      issuer: "관 (승록사) — 그리고 **사찰·도관의 소개장**이 실제 열쇠다"
+      grants: "승려·도사의 유행(遊行) — **토번 방면.** 송반관을 지난다"
+      who_gets_it: "★ bulga·도가 계보만 (혜각·소림·무당·화산의 소개).
+        ★ 세계에서 **가장 좁고 가장 정직한 문**이다 — 신분이 아니라 **계보**를 본다"
+      note: "★ 그래서 밀교 유학은 '배신'이 아니라 **유학**이다. 관이 허락한 길이므로"
+    없음_밀출국(密出國):
+      act: "관문을 넘지 않고 나간다 — 산으로, 사막으로, 배로"
+      cost: { authority_mandate: +6, note: "★ 법명분. 그리고 **돌아올 때 걸린다** (관은 기록한다)" }
+      effect: "★ 수배 이력 생성 → gwangun_entry 영구 차단 · 노인 영구 거절.
+        ★ 즉 **한 번 밀출국하면 다시는 합법으로 못 나간다**"
+      note: "★ 가능하다. 세계는 막지 않는다. 다만 **값을 청구한다** (제1원칙: 레일 금지)"
+    # ★ 이미 등록된 네 번째 문 — 발명하지 않았다
+    군진_입대:
+      ref: "faction_entry_routes.yml gwangun_entry.gates.군진_입대"
+      truth: |
+        ★★ **관군 루트의 군진 입대가 곧 새외의 문이다.** 이미 배선돼 있었다:
+          "★ 유일하게 **수배자를 받아 주는 관의 문**이다 — 변군은 묻지 않는다.
+           대신 돌아올 수 없다 (속죄의 길이자 유배의 다른 이름)"
+        → 대동(25일) · 산해관(37일) · 가욕관(46일). ★ **통행증이 필요 없다. 군적이 곧 통행증이다**
+      price: "★ 그리고 그 대가는 이미 적혀 있다: '강호의 소문망에서 이름이 지워진다 — 죽은 것과 다르지 않다'"
+      note: "★ 새외를 위해 새 문을 만들지 않았다. **있던 문이 새외를 향하고 있었을 뿐이다**"
 
   # ─── ★ 불가침이 깨지는 순간 — 이 세계에서 가장 큰 사건 ───
   breach:
@@ -1509,6 +2051,77 @@ places_official:                     # 관의 장소 — places 와 같은 문�
     note: "★ 서역으로 나가는 마지막 관문. 곤륜파로 가는 길이 여기를 지난다"
     registry: 등록_예약
 
+  # ─── ★ 새외의 관문 (새로 등록) — 기존 군진 3진의 짝. **나가는 문**이다 ───
+  #   군진(대동·산해관·가욕관)은 **막는 문**이다 (변군이 있다).
+  #   아래 셋은 **거르는 문**이다 (문서를 본다). 그 차이가 새외 다섯의 성격을 가른다:
+  #     · 막는 문 밖 = 적 (북막)          → 못 나간다. 사절이거나 밀출국이거나 군적이거나
+  #     · 거르는 문 밖 = 남 (서역·토번·남만) → 문서가 있으면 나간다
+  #     · 문이 없는 곳 = 동영             → ★ 그래서 그들이 온다
+  gwanmun_songban:
+    name: "송반관 (松潘關) — 토번 관문"
+    pos: [-467300, 185800]            # 실지리: 32.65°N 103.6°E (사천 서북 — 차마고도의 목)
+    region: 사천
+    rank: 부
+    terrain: 험산
+    faction: gwan_gun
+    force: "수졸 300. ★ 싸우는 곳이 아니다 — **문서를 보는 곳**이다"
+    travel: { factor: 1.80, days: 23 }
+    access: 항상
+    build: later
+    danger: 2
+    on_route: sangro_chama
+    passport: 통관첩                   # ★ 승려·도사만
+    note: "★ 차마고도의 목. **여기서 통관첩을 못 받으면 토번은 없다.**
+      ★ 그리고 이 관문은 사천에 있다 — 즉 **당가의 앞마당**이다 (relations: dangga ↔ 밀교 +1)"
+    registry: 등록_예약
+
+  gwanmun_jinnam:
+    name: "진남관 (鎭南關) — 남만 관문"
+    pos: [-174700, 1352300]           # 실지리: 22.1°N 106.7°E (영남 남단)
+    region: 해남
+    rank: 부
+    terrain: 밀림
+    faction: gwan_gun
+    force: "수졸 500 — ★ 병들어 죽는 자가 싸우다 죽는 자보다 많다 (장기瘴氣)"
+    travel: { factor: 1.60, days: 55 }
+    access: 항상
+    build: later
+    danger: 3
+    on_route: sangro_namman
+    passport: 노인
+    note: |
+      ★ 관문은 있는데 **그 너머에 길이 없다.** 문을 나서면 밀림이다 —
+        좌표를 알아도 못 찾는다. 향도(嚮導) 없이는 아무 데도 못 간다.
+      ★ 그래서 이 관문의 진짜 기능은 통제가 아니라 **경고**다: '나가면 안 돌아온다'
+    registry: 등록_예약
+
+  sibaksa_myeongju:
+    name: "시박사 (市舶司) — 명주 해관"
+    pos: [1227300, 493200]            # 실지리: 29.87°N 121.55°E (절강 연안)
+    region: 강남
+    rank: 부
+    terrain: 물가
+    tier: rich
+    faction: gwan_gun
+    force: "★ 수군(水軍) — 성이 아니라 **배**다. 그래서 뚫린다"
+    travel: { factor: 0.85, days: 28 }   # 대운하 + 연안
+    access: 항상
+    build: later
+    danger: 3
+    on_route: haero_dongyeong
+    passport: 감합
+    haegeum(海禁): true
+    note: |
+      ★★ **해금(海禁)** — 관이 바다를 닫았다. 합법으로 뜨는 배가 거의 없다.
+      ★ 그리고 그것이 정확히 역효과를 낸다:
+        · 합법이 막히니 **밀무역이 돈이 된다** → 수로채가 왜구의 물건을 나른다
+          (faction_politics relations: jangang_suroche ↔ dongyeong = +1)
+        · 해상 무역이 죽으니 **연안이 가난해진다** → 왜구에 가담하는 중원인이 생긴다
+        ★ **왜구의 절반은 중원 사람이다.** 이것이 해금의 진짜 값이다
+      ★ 훅: 이 밀무역의 증거가 myeongbun.inputs.새외와_결탁_증거(+9)다 —
+        **사파 전체의 존망**이 그 종이 한 장에 걸려 있다
+    registry: 등록_예약
+
   yubaeji_ryeongnam:
     name: "유배지 — 영남 변방"
     pos: [439000, 1308100]
@@ -1637,11 +2250,29 @@ reserved_nouns:
      화산, 종남산, 숭산, 무당산, 태산, 형산, 항산, 태백산, 진령, 태행산, 복우산, 아미산, 청성산,
      위수, 장강, 곤륜산, 동정호]
   지역권:                            # regions/cheongha_hyeon.yml 의 'parent_region: 섬서 지역권' 을 확장한 것
-    [섬서, 하남, 하북, 산서, 호북, 안휘, 강남, 사천, 운남, 해남, 청해_서역, 새외_북막]
+    [섬서, 하남, 하북, 산서, 호북, 안휘, 강남, 사천, 운남, 해남, 청해_서역, 새외_북막,
+     막북_초원, 서역, 토번_고원, 남만, 동영]        # ★ 새외 5 (신규)
   관_지명:                            # 관(官)의 층 — 실지명 + 실제 행정 명칭. 새 조직은 최소한으로
-    실지명: [경사, 북경, 남경, 봉상부, 서안부, 대동, 산해관, 가욕관, 영남]
-    조직: [지부, 순무, 총독, 절도사, 금군, 금의위, 육부, 무과, 변군, 부병, 성군]
+    실지명: [경사, 북경, 남경, 봉상부, 서안부, 대동, 산해관, 가욕관, 영남, 송반관, 진남관, 명주]
+    조직: [지부, 순무, 총독, 절도사, 금군, 금의위, 육부, 무과, 변군, 부병, 성군, 시박사, 예부, 승록사]
+    문서: [노인, 감합, 통관첩]        # ★ 통행증 — §9 passports
     note: "★ factions.yml gwan_gun·hyeollyeong 의 하위 위계다. 새 '세력'을 만들지 않았다 — 관군 안의 계급이다"
+
+  # ─── ★ 새외 — 신규 등록. 여기가 이 패스에서 **유일하게 세력을 늘린 자리**다 ───
+  #   등록제 원칙("새 지명 발명 최소화")을 지켰다: 아래 지명은 전부 **실제 지명**이거나
+  #   무협의 공용 자산이다. 발명한 것은 **조직 이름 여섯**뿐이고, 그마저 전부 factions.yml 에 등재했다.
+  새외_지명:
+    실지명: [막북, 한정, 고창, 돈황, 천산, 준가르, 토번, 남만, 동영, 카레즈, 차마고도, 비단길, 오독채]
+    note: "★ 전부 실지리 또는 무협 공용 명사. 좌표는 실제 위경도를 §1 projection 으로 투영한 값이다"
+  새외_세력:                          # ★ factions.yml faction_groups.saeoe.members 에 전부 등재됨
+    - { id: bukmak,            name: 북막_한국,  seat: bukmak_hanjeong,      why: "북방 초원의 기마 민족 — **무림이 아니라 나라**. 관의 정면" }
+    - { id: seoyeok_sangmaeng, name: 서역_상맹,  seat: seoyeok_gochang,      why: "비단길의 주인 — ★ 새외에서 유일하게 적이 아니다" }
+    - { id: baehwa_singyo,     name: 배화신교,   seat: baehwa_seonghwadan,   why: "서역의 이교 — 환술·산공독. ★ 중원이 마교와 혼동한다" }
+    - { id: seolyeok_milgyo,   name: 설역_밀교,  seat: seolyeok_daesa,       why: "토번 고원의 밀교 — ★ 소림과 같은 뿌리, 계율 없는 가지" }
+    - { id: odokgyo,           name: 오독교,     seat: odokgyo_odokchae,     why: "남만의 고독(蠱毒) — ★ 당가의 독은 물건, 오독의 독은 생물" }
+    - { id: dongyeong,         name: 동영,       seat: dongyeong_do,         why: "섬. 검도·인술 — ★ 유일하게 **지금** 오고 있다 (왜구)" }
+  새외_직책_예약:                     # ★ 신규 NPC 발명 없음 — 직책만 예약 (faction_entry_routes 문법 그대로)
+    [대칸, 상수(商首), 화주(火主), 법왕(法王), 고모(蠱母), 관령(館領), 향도(嚮導)]
   거점_이름:                          # 등록된 세력에 본거지 이름이 필요해 붙였다 (세력은 전부 factions.yml 등록제)
     - { name: "녹림 소채 / 중채 / 총채", faction: noklim, why: "faction_entry_routes noklim_entry 가 '산채'를 요구하는데 좌표가 없었다" }
     - { name: "장강수로채 총채", faction: jangang_suroche, why: "suroche_entry 의 '채_등재' 게이트가 갈 곳이 없었다" }
@@ -1694,4 +2325,234 @@ coverage:
     관군_입문루트: { status: 미설계, note: "★ faction_entry_routes 에 관군 루트가 없다 — docs/design/world_map.md 에 9번째 루트 제안" }
   unstaged:                         # ★ 무대 없는 등록 사건
     - { item: county_office, why: "등록부에 있으나 CheonghaBuilder 가 짓지 않는다 — 다음 과업" }
-    - { item: gwan_gun_entry_route, why: "faction_entry_routes 8루트에 관군이 없다 — 제안만 (파일 소유자가 다르다)" }
+    - { item: gwan_gun_entry_route, why: "★ 해소됨 — faction_entry_routes 에 gwangun_entry 가 등재됐다 (9번째 루트)" }
+    - { item: saeoe_terrain, why: "★ 새외 7 좌표에 지형 원형이 없다 — §15 terrain_requests (지형 담당에게 넘김)" }
+  faction_entry_routes_saeoe:       # ★ 새외 6 루트 — 전부 무대(좌표)를 갖는다
+    bukmak_entry:    { stage: [gunjin_daedong, bukmak_hanjeong], status: 무대_있음 }
+    seoyeok_entry:   { stage: [gunjin_gayokgwan, donhwang, seoyeok_gochang], status: 무대_있음 }
+    baehwa_entry:    { stage: [seoyeok_gochang, baehwa_seonghwadan], status: 무대_있음 }
+    milgyo_entry:    { stage: [gwanmun_songban, seolyeok_daesa], status: 무대_있음,
+                       note: "★ 경유: dangga (차마고도) — 당가 favor 가 길을 연다" }
+    odokgyo_entry:   { stage: [gwanmun_jinnam, namman_milim, odokgyo_odokchae], status: 무대_있음,
+                       note: "★ namman_milim 은 이미 등록된 사냥터다 — **새 무대를 만들지 않았다**" }
+    dongyeong_entry: { stage: [sibaksa_myeongju, dongyeong_do], status: 무대_있음,
+                       note: "★ 경유: jangang_suroche (밀선) — 수로채 루트가 새외의 문이 된다" }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 15. ★★ 지형 요청서 (terrain_requests) — **지형 담당(TerrainForge)에게 넘기는 주문서**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ★★★ 왜 이 절이 필요한가 — 사막·빙설 조율의 결론
+#
+#   사용자가 "사막 필드도 다 필요없음. 얼음 지역도 필요없음" 이라고 했다. 옳다.
+#   그런데 **끄는 것만으로는 새외가 성립하지 않는다.** 그 이유를 코드에서 확인했다:
+#
+#   ▸ TerrainForge.profile() (server-mvt/.../TerrainForge.java:592-621) 의 switch:
+#         case "평지","평야","분지","초원","폐허" → Profile.들
+#         mountainous(산·험산·설산·고원)          → Profile.봉우리 / 중턱단
+#         default                                  → Profile.그대로   ← ★ **아무것도 안 한다**
+#     → **사막·섬·밀림·강·수향은 전부 `그대로`** 다. 지형 계층은 그것들을 **빚지 않는다.**
+#
+#   ▸ 더 결정적인 것: TerrainForge.grassOrStone() (:493) 은
+#     주변 자연 표층이 SAND/SNOW_BLOCK 이면 **그것을 따라간다**.
+#     즉 지형 계층은 사막·설원을 **읽어서 흉내낼** 뿐, **만들 줄 모른다.**
+#
+#   ★★ 귀결: **바닐라 사막·빙설 바이옴을 끄면, 이 세계에서 모래와 눈의 유일한 출처가 사라진다.**
+#      · 곤륜파(설산) → 회색 돌산이 된다 (설산인데 눈이 없다)
+#      · 가욕관(사막) → 잔디밭이 된다
+#      · 서역·토번·막북 전체 → 지형이 없다
+#
+#   ★★★ 그래서 조율의 결론은 사용자의 제안 그대로이되, **한 줄이 더 붙는다**:
+#
+#        **끈다 — 통제 불가능한 무작위 배치는.**
+#        **만든다 — 등록 좌표의 의도된 지형은.**
+#        **★ 그리고 '만든다'는 아직 존재하지 않는다. 그것을 이 절이 주문한다.**
+#
+#     (자연 동굴을 끄고 우리가 굴을 판 것과 **정확히 같은 원칙**이다 —
+#      worldgen/honcheon_no_caves 가 동굴을 끄고, TerrainForge.digCave() 가 판다.
+#      ★ 다만 동굴은 파는 코드가 **있었고**, 사막은 **없다.** 그것이 이 요청서의 전부다)
+#
+#   ★ 시급하지 않다: 새외 7 좌표는 전부 build: later 다. **좌표가 먼저고 조성은 나중이다** (§1 원칙).
+#     다만 **곤륜·가욕관은 이미 등록된 중원의 장소**다 — 바이옴을 끄는 순간 저 둘이 먼저 깨진다.
+#     ★ 그래서 우선순위 0 이 곤륜·가욕관이다. 새외보다 먼저다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+terrain_requests:
+  owner: "지형 계층 (TerrainForge) — ★ 이 절은 **요청**이다. 구현은 지형 담당이 한다"
+  contract: "docs/design/terrain_layer.md §5 — '지도가 주문하고 TerrainForge 가 빚는다'. 그 문법 그대로"
+  new_field: "places.*.forge — ★ 이 패스에서 신설. `biomes:`(선호, 시드 점수 가산)와 다르다:
+    **biomes 는 바라는 것이고, forge 는 요구하는 것이다.** 바닐라를 끄면 biomes 는 죽고 forge 만 남는다"
+
+  # ─── 우선순위 0 — ★ 바이옴을 끄면 **지금 당장** 깨지는 것 (새외보다 먼저다) ───
+  priority_0_regression:
+    - place: gonryun
+      terrain: 설산
+      forge: [설산, 설원]
+      breaks_how: "★ 이미 등록된 구파일방 본산이다. 지금은 바닐라 snowy_slopes 에 의존한다.
+        바이옴을 끄면 **눈 없는 설산** — Profile.봉우리가 회색 돌산을 세운다 (팔레트 STONE/DEEPSLATE 하드코딩)"
+      need: "봉우리 위에 **설선(雪線)** — 일정 y 이상 표층을 SNOW_BLOCK/POWDER_SNOW 로. 팔레트 분기 하나면 된다"
+    - place: gunjin_gayokgwan
+      terrain: 사막
+      forge: [사막]
+      breaks_how: "★ terrain '사막'은 profile() switch 에 **없다** → default → Profile.그대로 →
+        바닐라가 준 땅을 그대로 쓴다. 바닐라 사막을 끄면 **잔디밭 위의 서북 관문**이 된다"
+      need: "사막 원형 — 아래 archetypes.사막"
+    - place: taebaeksan
+      terrain: 험산
+      forge: []
+      breaks_how: "biomes 에 snowy_slopes 가 있으나 **요구가 아니라 선호**다 — 눈이 없어도 험산은 성립한다. ✔ 안전"
+      need: 없음
+    - note: "★ 하북(taiga·snowy_plains)·산서(badlands)는 **지역권 biomes** 일 뿐 장소 요구가 아니다.
+      다만 worldgen 담당이 **전역으로** 끄면 하북의 '겨울이 길다'가 그림에서 사라진다 —
+      ★ **중원의 눈까지 끄지는 말 것.** 끌 것은 '무작위 배치'이지 '눈' 자체가 아니다"
+
+  # ─── 지형 원형 (archetypes) — ★ 지형 담당이 만들 것. Profile enum 확장 또는 shape() 분기 ───
+  #   현재 Profile: [봉우리, 중턱단, 들, 그대로] — 넷뿐이다.
+  #   아래 다섯이 더 필요하다. **셋은 표층 문제이고, 둘은 진짜 지형 문제다** (난이도가 다르다)
+  archetypes:
+
+    사막:
+      difficulty: 낮음               # ★ 표층 문제다 — 기복은 '들'과 거의 같다
+      terrain_type: { water_pct: [0, 3], relief: [0, 40] }   # §3 이미 등록돼 있다
+      base_profile: 들               # ★ levelField() 를 그대로 쓴다 — 발치를 메워 고른다
+      needs:
+        표층: "GRASS_BLOCK → SAND / RED_SAND. 그 아래 4~6칸 SANDSTONE. ★ grassOrStone() 에 팔레트 분기 하나"
+        기복: "사구(砂丘) — 저주파 사인파 2~3중첩으로 완만한 물결 (진폭 8~16, 파장 60~120).
+          ★ 봉우리처럼 세우지 않는다. **사막은 평평한 게 아니라 물결친다**"
+        식생: "없음. ★ TerrainForge 는 지금 식생을 **지우기만** 한다 (foliage()) — 그것이 여기서는 정답이다"
+        선택: "선인장·죽은 덤불은 있으면 좋고 없어도 된다 (분위기)"
+      places: [gunjin_gayokgwan, seoyeok_gochang, donhwang, baehwa_seonghwadan]
+      note: "★ 가장 쉽고 가장 급하다 (가욕관이 이미 등록돼 있으므로)"
+
+    오아시스:
+      difficulty: 중간               # ★ 물을 **만들어야** 한다 — 지금 TerrainForge 는 물을 안 만든다 (tidyWater 는 정리만)
+      terrain_type: "★ §3 에 없다 — 신규 제안: { water_pct: [5, 20], relief: [0, 25], surrounded_by: 사막 }"
+      base_profile: 들
+      needs:
+        물: "★ 중심에 얕은 못 (반경 20~40, 깊이 3~6). **사막 원형의 예외 패치**로 판다"
+        녹지: "못 주변 반경 +30 만 GRASS_BLOCK + 나무 (대추야자 대용: JUNGLE/ACACIA)"
+        경계: "★ 급격해야 한다. 오아시스는 그라데이션이 아니다 — **물이 있는 데까지가 초록이고 그 밖은 모래다**"
+      places: [seoyeok_gochang, donhwang]
+      note: |
+        ★ 이것이 서역 설계의 심장이다: **오아시스를 놓치면 죽는다** (routes.sangro_silk.survival).
+          그 서사가 지형에서 읽히려면 **모래 한가운데 진짜 물이 있어야** 한다.
+        ★ 우선순위는 사막 다음이다 — 사막 없이 오아시스는 의미가 없다
+
+    설원:
+      difficulty: 낮음               # ★ 표층 문제
+      base_profile: [들, 봉우리, 중턱단]   # ★ **프로필이 아니라 덧입힘(overlay)이다** — 어느 프로필 위에도 얹는다
+      needs:
+        표층: "★ y >= 설선(雪線) 인 열의 표층을 SNOW_BLOCK. 설선은 장소별 상수 (곤륜 y~120, 토번 y~110)"
+        얼음: "물이 있으면 ICE / PACKED_ICE"
+        팔레트: "봉우리 내부 STONE → 상부는 SNOW_BLOCK/PACKED_ICE 층. ★ raiseMassif() 팔레트 분기"
+      places: [gonryun, gonryun_seolseon, seolyeok_daesa]
+      note: "★ **가장 싼 수정이다.** raiseMassif() 의 하드코딩 팔레트(STONE/DEEPSLATE/ANDESITE)에
+        분기 하나를 더하면 곤륜이 살아난다. ★ 그리고 곤륜은 **이미 등록된 구파**다"
+
+    초원:
+      difficulty: 없음               # ★★ **이미 된다.** profile() switch 에 '초원' → Profile.들 이 있다
+      base_profile: 들
+      needs:
+        식생: "★ **나무를 지우기만 하면 된다** — foliage() 가 이미 그 일을 한다.
+          초원의 정의는 '풀이 있다'가 아니라 **'나무가 없다'** 이므로"
+        기복: "levelField() 그대로. relief [0,20] — 이미 §3 terrain_types 에 있다"
+      places: [bukmak_hanjeong, magyo_bonkyo, bukbang_choweon]
+      note: "★ 요청할 것이 거의 없다. ★ 다만 **바닐라 초원 바이옴(plains)은 끄지 말 것** —
+        사막·빙설과 달리 초원은 중원 한복판에 깔려도 아무 문제가 없다"
+
+    밀림:
+      difficulty: 낮음               # ★ 현재 Profile.그대로 (아무것도 안 함) — 그리고 **그것이 거의 정답이다**
+      base_profile: 그대로
+      needs:
+        판정: "★ 요청은 **'만들어 달라'가 아니라 '거부하지 말아 달라'** 다.
+          바닐라 jungle 바이옴이 살아 있으면 밀림은 저절로 성립한다"
+        건축_부지: "채(寨)가 설 평탄지만 benchTerrace() 로 (Profile.중턱단 문법)"
+      places: [odokgyo_odokchae, namman_milim, hyeolgyo_eungeo, dokmun, jeomchang]
+      note: "★ **jungle 바이옴은 끄지 말 것.** 사막·빙설과 달리 밀림은 남쪽에만 나므로 무작위 오염이 적다"
+
+    섬:
+      difficulty: 최고               # ★★ **유일하게 진짜 어려운 것** — 바다를 만들어야 한다
+      base_profile: 그대로
+      needs:
+        바다: "★ TerrainForge 는 **물을 만들지 않는다** (tidyWater 는 정리만 한다).
+          섬을 빚으려면 주변을 파고 물을 채워야 한다 — 이것은 지금의 계약(§5) 밖이다"
+        대안: "★★ **가장 정직한 답: 섬은 빚지 않는다.**
+          바닐라 바다 바이옴은 **끄지 않으므로**, 해안 지형은 자연이 준 대로 쓴다.
+          → 등록 좌표에서 search_ring(§3)이 물가를 찾아 이동한다 (max_shift 1024 — 여정일에 0.03일 영향).
+          ★ 해남파가 이미 그렇게 서 있다 (terrain: 섬, Profile.그대로). **선례가 있다**"
+      places: [dongyeong_do, haenam]
+      verdict: "★ **요청하지 않는다.** 섬은 자연에 맡긴다 — 그것이 '통제 불가능한 것은 끄고,
+        필요한 것은 우리가 만든다'의 반쪽이다: **자연이 이미 잘 하는 것은 건드리지 않는다**"
+
+    고원:
+      difficulty: 없음               # ★ 이미 된다 (mountainous → LIFT_PLATEAU 22)
+      base_profile: [봉우리, 중턱단]
+      needs: "★ 설원 덧입힘만 추가하면 토번이 성립한다 (고원 + 눈 = 토번)"
+      places: [seolyeok_daesa, taewon, gunjin_daedong]
+      note: "★ 사용자가 말한 '고원을 만든다'가 이미 되고 있다 — 확인했다 (LIFT_PLATEAU)"
+
+  # ─── ★ 지형 담당에게 넘기는 최소 작업 목록 (우선순위 순) ───
+  work_items:
+    - id: W1
+      what: "raiseMassif() 팔레트에 **설선 분기** — y >= snowline 이면 SNOW_BLOCK/PACKED_ICE"
+      why: "★ 곤륜(등록된 구파)이 바이옴을 끄는 순간 깨진다. **가장 급하고 가장 싸다**"
+      places: [gonryun, gonryun_seolseon]
+      effort: 낮음
+
+    - id: W2
+      what: "profile() switch 에 사막 케이스 추가 + 사막 원형 구현
+        (levelField + SAND/SANDSTONE 표층 + 저주파 사구)"
+      why: "★ 가욕관(등록된 군진)이 깨진다. 그리고 서역 전체의 전제다.
+        ★ 지금은 '사막'이 switch 에 없어 default → Profile.그대로 로 떨어진다 (아무것도 안 한다)"
+      places: [gunjin_gayokgwan, seoyeok_gochang, donhwang, baehwa_seonghwadan]
+      effort: 중간
+
+    - id: W3
+      what: "오아시스 패치 — 사막 원형 위에 얕은 못 + 국지 녹지 (경계는 급격하게)"
+      why: "★ '오아시스를 놓치면 죽는다'가 지형에서 읽혀야 한다 (routes.sangro_silk.survival)"
+      places: [seoyeok_gochang, donhwang]
+      effort: 중간
+
+    - id: W4
+      what: "설원 덧입힘을 고원(LIFT_PLATEAU)에도 적용"
+      why: "토번 = 고원 + 눈. W1 이 끝나면 거의 공짜다"
+      places: [seolyeok_daesa]
+      effort: 낮음
+
+    - id: W5
+      what: "config/terrain.yml shaping: 에 새외 장소 등재 (Profile 강제 지정)"
+      why: "★ TerrainForge.PEAK_FACTIONS 는 하드코딩이고 새외 세력이 **거기 없다** —
+        설역 대사(밀교)가 Profile.중턱단 으로 떨어진다. shaping: 이 그 우회로다 (등록부가 코드보다 세다)"
+      effort: 낮음
+      proposed_patch: |
+        # ★ config/terrain.yml 은 **소유자가 다르다** — 조각만 제안한다.
+        #   (world_map §2 proposed_time_yml 과 같은 문법 — 선례가 있다)
+        shaping:
+          seolyeok_daesa:      봉우리    # ★ 절벽에 박힌 대사원 — 소림보다 크다
+          baehwa_seonghwadan:  들        # 사막 제단 — 세우지 않는다
+          seoyeok_gochang:     들
+          donhwang:            들
+          bukmak_hanjeong:     들        # ★ 천막이다. 세울 것이 없다
+          odokgyo_odokchae:    그대로    # 밀림은 자연이 준 대로
+          dongyeong_do:        그대로    # ★ 섬은 빚지 않는다
+
+    - id: W6
+      what: "★ **하지 않을 것** — 섬 원형"
+      why: "물을 만드는 것은 현 계약(terrain_layer §5) 밖이다. 바다 바이옴은 안 끄므로 자연에 맡긴다.
+        ★ 해남파가 이미 그렇게 서 있다 (terrain: 섬 → Profile.그대로) — **선례를 따른다**"
+      effort: 없음
+
+  # ─── ★ worldgen 담당(세계 순도)에게 보내는 교차 확인 ───
+  cross_check_worldgen:
+    ref: "worldgen/honcheon_no_caves — ★ 건드리지 않았다. 읽기만 했다"
+    현재_상태: "동굴·협곡만 끈다 (configured_carver probability 0.0 + 동굴 밀도함수 상수화). **바이옴 파일은 아직 없다**"
+    요청_1: "★ **끌 것은 바이옴이 아니라 '무작위 배치'다.** desert/badlands/snowy_* 를
+      multi_noise 파라미터에서 **중원 위도대(z -700k ~ +700k)** 에서만 빼는 것이 이상적이다.
+      전역으로 제거하면 곤륜·가욕관·하북·산서가 함께 죽는다 (priority_0_regression 참조)"
+    요청_2: "★ 그것이 어려우면 **전역으로 끄고 TerrainForge 가 전부 빚는다** — 그래도 된다.
+      다만 그때는 W1·W2 가 **선행 조건**이다 (안 하면 곤륜·가욕관이 즉시 깨진다)"
+    요청_3: "★ **plains·jungle·ocean 은 끄지 말 것.** 초원·밀림·섬이 그 위에 서 있고,
+      이 셋은 무작위로 깔려도 중원을 해치지 않는다 (사막·빙설과 다른 점)"
+    verdict: "★ 어느 쪽이든 지도는 안 바뀐다 — **좌표는 바이옴에 의존하지 않는다.**
+      terrain_types(§3)는 water_pct·relief·mean_y 로만 정의돼 있다. **그것이 이 설계가 견디는 이유다**"

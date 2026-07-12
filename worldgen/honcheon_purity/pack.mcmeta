@@ -1,0 +1,12 @@
+{
+  "pack": {
+    "description": "혼천 — 세계 순도 (바닐라 구조물·사막·빙설 없음)",
+    "pack_format": 81,
+    "supported_formats": [
+      81,
+      99
+    ],
+    "min_format": 81,
+    "max_format": 99
+  }
+}

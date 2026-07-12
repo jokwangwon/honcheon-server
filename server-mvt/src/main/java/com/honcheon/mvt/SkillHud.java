@@ -167,6 +167,20 @@ final class SkillHud {
 
     // ─── HUD ───
 
+    /**
+     * 생명 틱 — 몸을 등록부와 맞춘다 (경지·장비가 바뀌면 다음 틱에 몸이 따라온다).
+     *
+     * <p>승급 훅·장비 훅을 심는 대신 <b>매 틱 대조</b>한다. 훅은 빠뜨리면 조용히 틀리고,
+     * 대조는 빠뜨릴 수가 없다. 어긋났을 때만 쓰므로 비용은 비교 한 번이다 (O(1)).
+     * {@link Vitality} 가 배선되지 않았으면 아무 일도 하지 않는다.
+     */
+    void vitalityTick(Player player, SkillEngine.State state) {
+        Vitality vitality = Vitality.get();
+        if (vitality != null) {
+            vitality.reconcile(player, state.realm);
+        }
+    }
+
     /** 경험치 바 = 내력. 레벨 숫자 = 내공 화후 단계 (소수 2자리 × 100 은 과하다 — 정수 단계만) */
     void energyBar(Player player, SkillEngine.State state) {
         int pool = engine.pool(state.naegong);
@@ -174,10 +188,28 @@ final class SkillHud {
         player.setExp(pool <= 0 ? 0f : (float) Math.max(0.0, Math.min(1.0, state.energy / (double) pool)));
     }
 
-    /** 액션바 — 격 태세 · 내력 · 쿨다운. 수치 비노출 원칙의 예외는 자원(내력)뿐이다 */
+    /**
+     * 액션바 — <b>내구(부상)</b> · 격 태세 · 내력 · 쿨다운. 수치 비노출 원칙의 예외는 자원(내력·내구)뿐이다.
+     *
+     * <p><b>왜 내구가 액션바인가</b> (docs/design/vitality.md): 전투 중에 눈은 <b>조준점</b>에 있다.
+     * 액션바는 조준점 바로 아래 — 눈이 이미 보고 있는 자리이고, 하트도 같은 자리에 있다.
+     * 보스바(화면 위)는 눈이 가지 않는 곳이고, 사이드바는 화면을 <b>가리는</b> 바로 그 짓이다.
+     * 그래서 생명은 이미 눈이 있는 곳에 그린다 — 새 채널을 열지 않는다.
+     *
+     * <p><b>부상이 보인다</b>: 이 세계는 HP 바가 아니라 부상으로 싸운다. 경상(−1)·중상(−2)·빈사(−3)는
+     * <b>색과 글자</b>로 동시에 나온다 (색 단독 금지 — resourcepack_design colorblind_rule).
+     * 팩이 없으면 게이지 글리프가 □ 로 보이지만 <b>숫자와 글자는 그대로 읽힌다</b>.
+     */
     void statusBar(Player player, SkillEngine.State state, long now) {
         int pool = engine.pool(state.naegong);
         StringBuilder line = new StringBuilder();
+
+        // ─── 생명 — 내구와 부상 (제일 앞. 목숨보다 앞에 오는 정보는 없다) ───
+        String vit = vitality(player);
+        if (vit != null) {
+            line.append(vit).append(ChatColor.DARK_GRAY).append(" │ ");
+        }
+
         String grade = state.armed == null ? SkillEngine.BARE : state.armed;
         line.append(gradeColor(grade)).append(gradeLabel(grade));
         if (pool > 0) {
@@ -208,6 +240,59 @@ final class SkillHud {
                             + flowDots(state.flow, engine.flowRequired()));
         }
         actionBar(player, line.toString());
+    }
+
+    /**
+     * 생명 — 내구 게이지 + 실수치 + 부상 단계.
+     *
+     * <p>게이지 글리프는 <b>내력의 것을 그대로 쓴다</b> (U+E010~E018) — 등록부가 그러라고 적어 뒀다:
+     * "내력·원기 = 같은 글리프를 색 틴트로 재사용 (슬롯 절약)" (resourcepack_design.yml glyph_slots).
+     * 가르는 것은 <b>색</b>이다: 내력은 청록(AQUA), 내구는 부상 단계의 색.
+     *
+     * <p>{@link Vitality} 가 배선되지 않았으면 null — 아무것도 그리지 않는다 (배선이 없다고 HUD가 죽지 않는다).
+     */
+    private String vitality(Player player) {
+        Vitality vitality = Vitality.get();
+        var attr = player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+        if (vitality == null || attr == null) {
+            return null;
+        }
+        double max = attr.getValue();
+        if (max <= 0) {
+            return null;
+        }
+        double ratio = Math.max(0.0, Math.min(1.0, player.getHealth() / max));
+        Vitality.Wound wound = vitality.woundOf(ratio);
+        ChatColor color = woundColor(wound);
+
+        StringBuilder out = new StringBuilder();
+        out.append(color).append(Glyphs.gauge(ratio))                       // 팩 없으면 □ — 숫자가 뜻을 진다
+                .append(' ').append((int) Math.ceil(player.getHealth()))
+                .append(ChatColor.DARK_GRAY).append('/').append(color).append((int) Math.round(max));
+        if (wound != Vitality.Wound.온전) {
+            // 부상은 색과 글자로 동시에 — 색맹 규약(색 단독 금지)이자 팩 없는 눈을 위한 보험
+            out.append(' ').append(wound.label()).append(' ')
+                    .append(signed(vitality.penaltyOf(wound)));
+        }
+        return out.toString();
+    }
+
+    /**
+     * 부상의 색 — 무채(수묵) 규약의 <b>예외</b>다. 격은 밝기로 가르지만 <b>부상은 색으로 가른다</b>:
+     * 목숨은 1초 안에 읽혀야 하고, 그것이 이 HUD가 채도를 쓰는 유일한 이유다
+     * (resourcepack_design: "채도는 의미(체력=주사)에만").
+     */
+    private static ChatColor woundColor(Vitality.Wound wound) {
+        return switch (wound) {
+            case 온전 -> ChatColor.WHITE;
+            case 경상 -> ChatColor.YELLOW;
+            case 중상 -> ChatColor.RED;
+            case 빈사 -> ChatColor.DARK_RED;
+        };
+    }
+
+    private static String signed(int penalty) {
+        return penalty <= 0 ? "−" + Math.abs(penalty) : "+" + penalty;
     }
 
     /** 흐름 — 아슬아슬한 성공 이상 공방 누적 (수치가 아니라 점으로 — 오의는 게이지가 아니다) */

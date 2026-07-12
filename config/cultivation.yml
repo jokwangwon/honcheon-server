@@ -127,6 +127,7 @@ cultivation_stages:
 # ─── 승급 효과 — 전부 원천 파일 참조 (본 파일은 관문만 갖는다) ───
 promotion_effects:
   능력치_캡: "player_creation.yml attribute_cap_by_realm"
+  내구: "combat.yml durability.realm_bonus (개화[일류]부터 +2/단계 — 단전이 열린 몸만 기혈이 두터워진다)"
   기_운용_게이트: "internal_energy.yml realm_gates (발경~심검)"
   노화_저항: "internal_energy.yml vitality.aging_and_realm"
   오의_단계: "ultimate_arts.yml realm_ladder (개안→완성→자재→창작)"

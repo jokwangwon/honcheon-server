@@ -1624,31 +1624,55 @@ def write_item_asset(key: str, rows, handheld: bool):
                {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
 
 
+def weapon_grid(series, rings, mabyeong=False):
+    """아이콘 격자 한 장 — PNG 와 3D 모델이 **같은 격자**를 쓴다.
+    (모델의 UV 가 이 격자에서 부위별 대표 픽셀을 문다 — 아이콘과 3D 가 같은 쇠로 보이는 이유다.)"""
+    return outline(WEAPON_SERIES[series](rings, mabyeong))
+
+
+def write_weapon_asset(series: str, grade: str):
+    """병기 한 자루 = 아이콘 PNG + **3D 모델** + 아이템 정의.
+
+    모델은 더 이상 평면 스프라이트(handheld)가 아니다 — 칼날·자루·코등이·물미·고리가
+    저마다 부피를 가진 elements 다 (weapon_model_3d). 텍스처는 **그 아이콘 PNG 그대로**이므로
+    검수 축 ⑥(외곽선)·⑨(계열 실루엣)·⑩(등급 변별)이 재던 진실은 하나도 흔들리지 않는다."""
+    rings, _, _, mab = _GRADE_FORM[grade]
+    grid = weapon_grid(series, rings, mab)
+    key = f"weapon/{series}_{grade}"
+    write_png(ITEM_TEX_DIR / f"{key}.png", paint_rows(grid, WPN_PALETTE))
+    write_json(ITEM_MODEL_DIR / f"{key}.json", weapon_model_3d(series, grade, grid))
+    write_json(ITEM_DEF_DIR / f"{key}.json",
+               {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
+
+
 def write_item_assets() -> int:
-    """무기 36(계열 9 × 등급 4) + 마병 1 + 지물·기물·재료 16 = 53종."""
+    """병기 45(계열 9 × 등급 5) + 지물·기물·재료 16 = 61종.
+
+    ★ 마병 8자루가 새로 구워졌다. Weapons.java 는 **계열 9 × 등급 5 = 45개의 item_model 키를
+      조건 없이 박는다** (Series.modelId 가 전부 non-null 이므로). 그런데 팩에는 dao_mabyeong
+      하나뿐이었다 — 즉 팩을 받은 눈에 나머지 마병 8자루는 **'없는 모델'(보라·검정 큐브)** 로 떴다.
+      팩 게이트는 "키를 안 붙이거나, 붙였으면 반드시 굽거나" 둘 중 하나다. 여기서 굽는다."""
     made = 0
     for series in WEAPON_SERIES:
-        for grade, rings in WEAPON_GRADES:
-            write_item_asset(f"weapon/{series}_{grade}", weapon_rows(series, rings), True)
+        for grade in _GRADE_FORM:                 # 범철 · 정련 · 보병 · 신병 · 마병
+            write_weapon_asset(series, grade)
             made += 1
-
-    # 혈음도(마병) — identification.default가 "감정 전엔 정체 불명"이므로 미감정은 평범한 도.
-    # 상태 분기는 custom_model_data.strings (§1.2 보조 채널) — 정수 CMD는 쓰지 않는다.
-    write_item_asset("weapon/dao_mabyeong", weapon_rows("dao", 0, mabyeong=True), True)
-    made += 1
-    write_json(ITEM_DEF_DIR / "weapon" / "dao_mabyeong.json", {
-        "model": {
-            "type": "minecraft:select",
-            "property": "minecraft:custom_model_data",
-            "index": 0,
-            "cases": [{
-                "when": "revealed",
-                "model": {"type": "minecraft:model", "model": "honcheon:item/weapon/dao_mabyeong"},
-            }],
-            # 미감정(기본) = 평범한 도 — 기연의 탈을 쓴 저주가 첫눈에 보이면 그건 저주가 아니다
-            "fallback": {"type": "minecraft:model", "model": "honcheon:item/weapon/dao_jeongryeon"},
-        },
-    })
+        # 마병은 **상태 변주**다 (custom_model_data.strings — 정수 CMD 는 쓰지 않는다).
+        # 미감정(기본)은 평범한 정련 병기로 보인다 — 기연의 탈을 쓴 저주가 첫눈에 보이면 저주가 아니다.
+        write_json(ITEM_DEF_DIR / "weapon" / f"{series}_mabyeong.json", {
+            "model": {
+                "type": "minecraft:select",
+                "property": "minecraft:custom_model_data",
+                "index": 0,
+                "cases": [{
+                    "when": "revealed",
+                    "model": {"type": "minecraft:model",
+                              "model": f"honcheon:item/weapon/{series}_mabyeong"},
+                }],
+                "fallback": {"type": "minecraft:model",
+                             "model": f"honcheon:item/weapon/{series}_jeongryeon"},
+            },
+        })
 
     for key in GOODS_ART:
         write_item_asset(key, goods_rows(key), False)
@@ -5460,6 +5484,1066 @@ def write_json(path: Path, data):
     path.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 3D 모델층 — 병기 45자루 · 무공 획 9종 · 짐승 형체 8종
+#
+# 【왜 이 층이 생겼나】 지금까지 병기는 **평면 스프라이트를 두께 1px 로 밀어낸 것**이었다
+# (minecraft:item/handheld 의 기본 동작). 칼날도 자루도 코등이도 같은 판때기의 일부라
+# 손에 들면 종잇장이 서 있고, SkillDisplay 의 궤적에 실리면 종잇장이 날아다녔다.
+#
+# 【세 층이 같은 규약을 쓴다】
+#   · 병기 — SkillDisplay 가 손에 든 ItemStack 을 그대로 실어 돌린다 (use_held).
+#   · 획   — item_model 키를 얹은 형체를 SkillDisplay 가 띄운다.
+#   · 짐승 — MobDisplay 가 본체를 감추고 조각을 태운다.
+#   셋 다 ItemDisplayTransform.NONE 으로 그린다 ⇒ **display 절이 적용되지 않는다.**
+#   그리는 것은 날것의 지오메트리다. 그러므로:
+#
+# 【모델 규약 — 불가침】
+#   ㄱ. 길이축 = +X.  SkillDisplay.roll() 이 X 축으로 자전하고(§3-D "획은 +X 로 눕힌다"),
+#      yaw·pitch 가 +X 를 진행 방향에 맞춘다. 병기도 같은 계약을 탄다 — 칼끝이 +X 다.
+#   ㄴ. 두께축 = +Z.  날의 넓은 면이 ±Z 를 본다 (획과 같다).
+#   ㄷ. 원점 = 모델의 (8,8,8).  ItemDisplay 는 모델을 **엔티티 자리에 중심을 두고** 그린다.
+#      그래서 병기는 제 bbox 중심을 (8,8,8) 에 맞춘다 (_center 가 강제한다).
+#   ㄹ. 짐승은 **코가 +Z** (MobDisplay 가 본체의 yaw 를 그대로 먹인다 — 이 계약이 깨지면
+#      짐승이 옆으로 걷는다) · 등이 +Y · 원점(8,8,8) 이 **발이 딛는 바닥의 정중앙**.
+#
+# 【텍스처 — 새 PNG 를 굽지 않는다 (병기)】
+#   병기의 여섯 면은 **이미 있는 16x16 아이콘 PNG 를 UV 로 찍어** 색을 얻는다.
+#   아이콘은 검수 축 ⑥(외곽선)·⑨(계열 실루엣)·⑩(등급 변별)이 재는 진실이므로 손대지 않는다.
+#   대신 그 격자(char grid)에서 **부위별 대표 픽셀 한 칸**을 뽑아 면마다 물린다 —
+#   격자는 빌더가 만든 것이라 어느 칸이 무슨 재질인지 우리가 안다 (구멍이 원천적으로 없다).
+#   면마다 다른 코드를 물리면(위=인, 아래=척) 마인크래프트의 면 음영과 겹쳐 입체가 산다.
+# ═══════════════════════════════════════════════════════════════════════════
+
+MODEL_DIR = PACK / "assets" / "honcheon" / "models"      # models/item/** (병기·획) · models/mob/** (짐승)
+QI_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "qi"     # 기의 획 (item/ 아래가 아니다 —
+ULT_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "ult"   #  축 ⑥ 외곽선 폐합은 아이콘의 규율이지
+MOB_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "mob"   #  반투명 획·짐승 가죽의 규율이 아니다)
+
+
+# ─── 회전 합성 — 손에 든 모습은 **바닐라에서 유도한다** (눈대중 금지) ───────────
+# 바닐라 item/handheld 의 display 는 **대각선으로 누운 스프라이트**를 전제로 맞춰진 값이다
+# (자루가 좌하, 칼끝이 우상 — 즉 병기의 길이축이 XY 평면의 +45°).
+# 우리 모델의 길이축은 +X (0°) 다. 그러므로 모델을 먼저 Z축으로 +45° 돌려 스프라이트와 같은
+# 자세로 만든 뒤 바닐라의 변환을 그대로 먹이면, **손·GUI·바닥에서 바닐라와 똑같은 자리에 놓인다.**
+#     R = R_바닐라 · Rz(45°)
+# 이 곱을 XYZ 오일러로 역산해 JSON 에 적는다. 검산(_check)이 재합성해 대조한다 —
+# 각도를 손으로 짐작하면 병기가 손등을 뚫고 나온다. 짐작하지 않는다.
+def _rot(axis, deg):
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    if axis == "x":
+        return [[1, 0, 0], [0, c, -s], [0, s, c]]
+    if axis == "y":
+        return [[c, 0, s], [0, 1, 0], [-s, 0, c]]
+    return [[c, -s, 0], [s, c, 0], [0, 0, 1]]
+
+
+def _mm(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def _euler_to_mat(r):
+    """MC 규약 — JOML rotationXYZ: 점은 X → Y → Z 순으로 돈다 ⇒ R = Rz·Ry·Rx."""
+    return _mm(_rot("z", r[2]), _mm(_rot("y", r[1]), _rot("x", r[0])))
+
+
+def _mat_to_euler(m):
+    """R = Rz(γ)·Ry(β)·Rx(α) 역산 → [α, β, γ] (도). 짐벌 락(β=±90°)도 유효한 한 쌍을 돌려준다."""
+    if abs(m[2][0]) > 0.999999:                       # β = ∓90° — α 와 γ 가 한 축으로 겹친다
+        beta = -90.0 if m[2][0] > 0 else 90.0
+        return [0.0, beta, math.degrees(math.atan2(-m[0][1], m[1][1]))]
+    return [math.degrees(math.atan2(m[2][1], m[2][2])),
+            math.degrees(math.asin(-m[2][0])),
+            math.degrees(math.atan2(m[1][0], m[0][0]))]
+
+
+def _check(r, m):
+    """역산 검산 — 오일러로 되돌린 행렬이 원본과 같은가 (다르면 병기가 엉뚱한 데를 본다)."""
+    back = _euler_to_mat(r)
+    err = max(abs(back[i][j] - m[i][j]) for i in range(3) for j in range(3))
+    if err > 1e-6:
+        raise ValueError(f"오일러 역산 불일치 (오차 {err:.2e}) — 회전 합성이 깨졌다")
+    return [round(v, 3) + 0.0 for v in r]
+
+
+# 바닐라 item/handheld + item/generated 의 display (1.21.11 client jar 에서 그대로 옮겼다).
+# gui 만 우리 값이다: 바닐라는 평면 스프라이트라 정면(회전 0)이 정답이지만, 3D 병기는
+# 정면에서 보면 두께가 사라져 **예전과 똑같은 아이콘**이 된다. 살짝 틀어 두께를 보인다.
+_VANILLA_DISPLAY = {
+    "thirdperson_righthand": ([0, -90, 55], [0, 4.0, 0.5], 0.85, "hand"),
+    "thirdperson_lefthand": ([0, 90, -55], [0, 4.0, 0.5], 0.85, "hand"),
+    "firstperson_righthand": ([0, -90, 25], [1.13, 3.2, 1.13], 0.68, "hand"),
+    "firstperson_lefthand": ([0, 90, -25], [1.13, 3.2, 1.13], 0.68, "hand"),
+    "ground": ([0, 0, 0], [0, 2, 0], 0.5, "gui"),
+    "head": ([0, 180, 0], [0, 13, 7], 1.0, "gui"),
+    "fixed": ([0, 180, 0], [0, 0, 0], 1.0, "gui"),
+    "gui": ([12, -28, 0], [0, 0, 0], 1.0, "gui"),   # 3/4 부감 — 날의 두께와 코등이가 보인다
+}
+_PRE_Z = 45.0        # 모델(+X) → 바닐라 스프라이트(+45°) 로 맞추는 선회전
+
+
+def _display(extent):
+    """병기 한 자루의 display 절. extent = 모델의 최대 변(px) — 긴 병기는 줄여서 담는다.
+    창(2.1m)을 손 크기 그대로 GUI 칸에 넣으면 칸을 뚫고 나간다. 줄이는 것은 **그림뿐**이다 —
+    궤적에 실리는 것은 NONE 변환의 날것이므로 창은 여전히 2.1m 다 (거짓말이 아니다)."""
+    k = {"gui": min(1.0, 15.0 / extent), "hand": min(1.0, 26.0 / extent)}
+    out = {}
+    for mode, (rv, tv, sv, kind) in _VANILLA_DISPLAY.items():
+        m = _mm(_euler_to_mat(rv), _rot("z", _PRE_Z))
+        s = round(sv * k[kind], 4)
+        out[mode] = {"rotation": _check(_mat_to_euler(m), m),
+                     "translation": [round(v, 3) for v in tv],
+                     "scale": [s, s, s]}
+    return out
+
+
+# ─── UV — 아이콘 격자에서 부위별 대표 픽셀을 뽑는다 ─────────────────────────
+# 대체 사슬: 그 등급의 아이콘에 없는 코드(범철엔 고리도 수실도 없다)는 이웃 재질로 떨어진다.
+# 마지막 보루는 K(먹 외곽선) — outline() 이 반드시 두르므로 **없을 수가 없다**.
+_UV_CHAIN = {
+    "H": "HLBSD", "L": "LHBSD", "B": "BLHSD", "S": "SBLDH", "D": "DSBLH",
+    "G": "Ggf", "g": "gGf", "f": "fgG",
+    "W": "WwxX", "w": "wWxX", "x": "xwWX", "X": "XxwW",
+    "R": "ReGg", "e": "eRgG", "t": "tTGg", "T": "TtGg",
+    "m": "mMHL", "M": "MmHL",
+}
+
+
+def _uv_index(grid):
+    pos = {}
+    for y in range(16):
+        for x in range(16):
+            c = grid[y][x]
+            if c != "." and c not in pos:
+                pos[c] = (x, y)
+    return pos
+
+
+def _uv(pos, code):
+    """한 칸의 안쪽 절반을 문다 — 면 가장자리에서 이웃 픽셀 색이 새어들지 않는다."""
+    for c in _UV_CHAIN.get(code, code) + "K":
+        if c in pos:
+            x, y = pos[c]
+            return [x + 0.25, y + 0.25, x + 0.75, y + 0.75]
+    raise ValueError(f"UV 없음: {code} (외곽선 K 조차 없는 격자다 — outline() 이 안 돌았다)")
+
+
+# 부위 → 여섯 면의 코드. 위/아래를 다르게 물리는 것이 요점이다:
+#   마인크래프트는 면 방향으로 음영을 준다(위 100% · 옆 80/60% · 아래 50%).
+#   그 위에 우리가 인(刃)=밝음 / 척(脊)=어둠을 얹으면 **한날과 양날이 3D 에서 갈린다.**
+_MAT = {
+    "edge2": {"up": "H", "down": "H", "north": "L", "south": "L", "east": "H", "west": "B"},
+    "edge1": {"up": "H", "down": "D", "north": "L", "south": "L", "east": "H", "west": "B"},
+    "core": {"up": "L", "down": "S", "north": "B", "south": "B", "east": "H", "west": "B"},
+    "spine": {"up": "D", "down": "D", "north": "D", "south": "S", "east": "D", "west": "D"},
+    "fit": {"up": "G", "down": "f", "north": "g", "south": "g", "east": "G", "west": "f"},
+    "grip": {"up": "W", "down": "X", "north": "w", "south": "w", "east": "x", "west": "x"},
+    "ring": {"up": "R", "down": "e", "north": "R", "south": "R", "east": "e", "west": "e"},
+    "tassel": {"up": "T", "down": "t", "north": "t", "south": "t", "east": "t", "west": "t"},
+    "blood": {"up": "M", "down": "m", "north": "m", "south": "m", "east": "M", "west": "m"},
+}
+
+
+def _bx(x0, y0, z0, x1, y1, z1, mat, rot=None):
+    """상자 하나. rot = (축, 각, 원점) — MC 는 원소당 한 축 · {0, ±22.5, ±45} 만 받는다."""
+    e = {"from": [x0, y0, z0], "to": [x1, y1, z1], "_mat": mat}
+    if rot:
+        axis, ang, org = rot
+        if ang not in (-45, -22.5, 0, 22.5, 45):
+            raise ValueError(f"허용되지 않는 원소 회전각 {ang} (MC 는 0·±22.5·±45 만 받는다)")
+        e["rotation"] = {"origin": list(org), "axis": axis, "angle": ang}
+    return e
+
+
+def _bake(elems, pos, mab=False):
+    """부위 코드를 UV 로 굳힌다. 마병은 날의 속(core)이 **혈조**가 된다 — 형태는 같고 피가 밴다."""
+    out = []
+    for e in elems:
+        mat = dict(_MAT[e.pop("_mat")])
+        if mab and mat is not None and mat.get("north") == "B":
+            mat["north"] = mat["south"] = "m"
+        e["faces"] = {f: {"texture": "#0", "uv": _uv(pos, c)} for f, c in mat.items()}
+        out.append(e)
+    return out
+
+
+def _center(elems):
+    """bbox 중심을 (8,8,8) 로 옮긴다 — ItemDisplay 는 모델의 중심을 엔티티 자리에 두고 그리고,
+    display 의 회전도 중심을 돈다. 중심이 어긋난 병기는 손에서 **궤도를 돈다**."""
+    def span(i):
+        lo = min(min(e["from"][i], e["to"][i]) for e in elems)
+        hi = max(max(e["from"][i], e["to"][i]) for e in elems)
+        return lo, hi
+
+    d, ext = [], 0.0
+    for i in range(3):
+        lo, hi = span(i)
+        d.append(8.0 - (lo + hi) / 2.0)
+        ext = max(ext, hi - lo)
+    for e in elems:
+        for k in ("from", "to"):
+            e[k] = [round(e[k][i] + d[i], 3) for i in range(3)]
+        if "rotation" in e:
+            e["rotation"]["origin"] = [round(e["rotation"]["origin"][i] + d[i], 3) for i in range(3)]
+        for i in range(3):                       # MC 하한/상한 (-16 … 32) — 넘으면 모델이 잘린다
+            if not (-16 <= e["from"][i] <= 32 and -16 <= e["to"][i] <= 32):
+                raise ValueError(f"원소가 모델 상자를 벗어났다: {e['from']} → {e['to']}")
+    return elems, ext
+
+
+# ═══ 등급은 **형체로도** 오른다 ═══════════════════════════════════════════════
+# 검수 축 ⑩(등급 회색조 변별)은 아이콘을 잰다. 그러나 3D 는 아이콘이 아니다 —
+# 손에 든 병기·궤적에 실린 병기는 **실루엣으로만** 읽힌다. 색은 거기서 아무 말도 못 한다.
+# 그래서 등급은 세 가지 형체로 갈린다 (아이콘의 문법을 3D 로 옮긴 것이다):
+#   ① 고리(鐶) — 자루에 감긴 금속 테. 0 / 1 / 2 / 3 개가 **튀어나온 덩이**로 보인다.
+#   ② 날의 길이·마름 — 범철은 뭉툭하고 짧다. 오를수록 길어지고 끝이 날카로워진다.
+#   ③ 물미·수실 — 신병만 자루 끝에 수실이 늘어진다 (움직이면 흔들리는 유일한 부위).
+# 마병은 **위가 아니라 밖**이다: 고리가 없고(계보가 다르다) · 날에 톱니가 돋고 ·
+#   혈조가 피로 찬다. 형체만 보고도 "저것은 정파의 쇠가 아니다"가 읽혀야 한다.
+_GRADE_FORM = {          # 등급 → (고리 수, 날 길이 가산 px, 수실, 마병)
+    "beomcheol": (0, 0.0, False, False),
+    "jeongryeon": (1, 1.0, False, False),
+    "bobyeong": (2, 2.0, False, False),
+    "sinbyeong": (3, 3.0, True, False),
+    "mabyeong": (0, 2.0, False, True),
+}
+
+
+def _grip(x0, x1, rings, tassel, mab, r=1.0):
+    """자루 한 벌 — 감기 + 등급 고리 + 물미 + (신병) 수실 + (마병) 혈적 낙인.
+    자루는 계열이 아니라 **등급이 말하는 부위**다 (아이콘의 _hilt 와 같은 판단)."""
+    e = [_bx(x0 + 1.0, 8 - r, 8 - r, x1, 8 + r, 8 + r, "grip"),
+         _bx(x0 - 0.2, 8 - r - 0.7, 8 - r - 0.7, x0 + 1.0, 8 + r + 0.7, 8 + r + 0.7, "fit")]  # 물미
+    if rings:                                   # 고리 — 자루를 감은 테가 도드라진다 (등급의 눈금)
+        gap = (x1 - x0 - 1.6) / (rings + 1)
+        for i in range(rings):
+            gx = x0 + 1.4 + gap * (i + 1)
+            e.append(_bx(gx, 8 - r - 0.45, 8 - r - 0.45, gx + 0.7, 8 + r + 0.45, 8 + r + 0.45, "ring"))
+    if tassel:                                  # 수실 — 신병만. 자루 끝에서 아래로 늘어진다
+        e += [_bx(x0 - 0.9, 8 - r - 1.6, 8 - 0.5, x0 + 0.3, 8 - r - 0.2, 8 + 0.5, "tassel"),
+              _bx(x0 - 0.9, 8 - r - 2.8, 8 - 0.3, x0 - 0.1, 8 - r - 1.4, 8 + 0.3, "tassel")]
+    if mab:                                     # 혈적 — 자루 끝에 밴 낙인
+        e.append(_bx(x0 - 0.35, 8 - 0.6, 8 - 0.6, x0 + 0.15, 8 + 0.6, 8 + 0.6, "blood"))
+    return e
+
+
+def _teeth(x0, x1, ylo, n=3):
+    """마병의 톱니 — 날 아래로 돋은 이빨. **실루엣이 달라진다**: 형체만으로 마병이 읽힌다."""
+    step = (x1 - x0) / (n + 1)
+    return [_bx(x0 + step * (i + 1), ylo - 1.0, 7.7, x0 + step * (i + 1) + 1.1, ylo + 0.2, 8.3, "blood")
+            for i in range(n)]
+
+
+def _blade(x0, x1, half, mab, single=False, thin=0.55, core=0.85, taper=2.0):
+    """날 — 세 겹으로 눕힌 단면(인 / 속 / 인). 속이 두껍고 인이 얇다 ⇒ 마름모 단면이 선다.
+    single=True 는 한날(도): 아래가 인이 아니라 **척(脊)** 이다 — 두껍고 어둡다.
+    끝(taper)은 좁혀서 마감한다. 뭉툭한 끝은 몽둥이지 칼이 아니다."""
+    xt = x1 - taper
+    e = [_bx(x0, 8 - 0.35, 8 - core, xt, 8 + 0.35, 8 + core, "core"),                 # 속(혈조 자리)
+         _bx(x0, 8 + 0.35, 8 - thin, xt, 8 + half, 8 + thin, "edge2" if not single else "edge1")]
+    if single:                                                                        # 척 — 도의 등
+        e.append(_bx(x0, 8 - half, 8 - core - 0.2, xt, 8 - 0.35, 8 + core + 0.2, "spine"))
+    else:
+        e.append(_bx(x0, 8 - half, 8 - thin, xt, 8 - 0.35, 8 + thin, "edge2"))
+    e.append(_bx(xt, 8 - half * 0.5, 8 - thin, x1, 8 + half * 0.55, 8 + thin, "edge2"))  # 칼끝
+    if mab:
+        e += _teeth(x0 + 1.5, xt - 1.0, 8 - half)
+    return e
+
+
+def sword_rig(rings, blen, tassel, mab):
+    """검(劍) — 곧은 양날. 코등이가 **날에 수직으로 길게 뻗은 십자**다 (도와 갈리는 지점)."""
+    e = _blade(6.5, 15.5 + blen, 1.6, mab)
+    e.append(_bx(5.4, 4.0, 6.7, 6.5, 12.0, 9.3, "fit"))            # 긴 가로대 코등이
+    return e + _grip(0.6, 5.4, rings, tassel, mab)
+
+
+def dao_rig(rings, blen, tassel, mab):
+    """도(刀) — 한날. 등이 두껍고 배가 부르며, 코등이는 **뭉툭한 원반**이다.
+    끝 두 마디를 22.5° 들어 올려 휨(反)을 만든다 — 곡률은 회전으로 얻는다."""
+    e = _blade(6.8, 13.2 + blen, 1.9, mab, single=True, core=1.05, taper=1.6)
+    e.append(_bx(13.2 + blen, 8 - 1.2, 8 - 0.55, 16.4 + blen, 8 + 1.5, 8 + 0.55, "edge1",
+                 rot=("z", 22.5, (13.2 + blen, 8, 8))))            # 휘어 오른 끝
+    e.append(_bx(5.8, 5.9, 6.5, 6.8, 10.1, 9.5, "fit"))            # 원반 호수
+    return e + _grip(0.9, 5.8, rings, tassel, mab, r=1.05)
+
+
+def dagger_rig(rings, blen, tassel, mab):
+    """비수(匕首) — **자루가 날보다 길다**. 그 비율이 곧 정체다 (작은 검이 아니다)."""
+    e = _blade(7.0, 12.6 + blen, 1.3, mab, thin=0.45, core=0.7, taper=1.8)
+    e.append(_bx(6.3, 6.1, 6.9, 7.0, 9.9, 9.1, "fit"))             # 짧은 코등이
+    return e + _grip(0.9, 6.3, rings, tassel, mab, r=0.9)
+
+
+def spear_rig(rings, blen, tassel, mab):
+    """창(槍) — 긴 자루 + 좁은 창날 + **홍영**(紅纓, 창날 밑 붉은 술 — 등급이 아니라 계열의 표식).
+    자루가 날보다 훨씬 가늘다: 그 비율이 검과 갈리는 지점이다 (아이콘 축 ⑨의 판단 그대로)."""
+    e = _blade(20.0, 26.0 + blen, 1.1, mab, thin=0.4, core=0.6, taper=2.2)
+    e += [_bx(-9.0, 8 - 0.75, 8 - 0.75, 19.2, 8 + 0.75, 8 + 0.75, "grip"),   # 얇고 긴 자루
+          _bx(18.6, 8 - 1.0, 8 - 1.0, 20.4, 8 + 1.0, 8 + 1.0, "fit"),        # 물미 (창날 목)
+          _bx(16.6, 8 - 1.7, 8 - 0.9, 18.6, 8 + 1.7, 8 + 0.9, "tassel")]     # 홍영
+    if rings:
+        for i in range(rings):
+            gx = -7.0 + i * 2.2
+            e.append(_bx(gx, 8 - 1.2, 8 - 1.2, gx + 0.7, 8 + 1.2, 8 + 1.2, "ring"))
+    e.append(_bx(-9.9, 8 - 1.15, 8 - 1.15, -9.0, 8 + 1.15, 8 + 1.15, "fit"))  # 자루 끝 물미
+    if tassel:
+        e.append(_bx(-11.4, 8 - 1.4, 8 - 0.5, -9.9, 8 + 0.2, 8 + 0.5, "tassel"))
+    if mab:
+        e.append(_bx(-9.6, 8 - 0.7, 8 - 0.7, -9.1, 8 + 0.7, 8 + 0.7, "blood"))
+    return e
+
+
+def gauntlet_rig(rings, blen, tassel, mab):
+    """권갑(拳甲) — 날이 없다. **손에 끼는 물건**으로 읽혀야 한다.
+    마디(관절)가 +X 로 돋는다 — 궤적에 실리면 그 마디가 앞장선다 (주먹이 나가는 방향).
+    마디 높이가 들쭉날쭉해야 손이다: 나란하면 성가퀴(망루)가 된다."""
+    e = [_bx(2.0, 5.6, 4.6, 10.5, 10.4, 11.4, "fit"),               # 손등 판
+         _bx(1.2, 6.2, 5.2, 2.0, 9.8, 10.8, "grip")]                # 손목 띠
+    for i, h in enumerate((1.3, 2.1, 1.7, 1.0)):                    # 마디 넷 — 가운데가 가장 높다
+        z = 5.1 + i * 1.6
+        e.append(_bx(10.5, 6.6, z, 10.5 + 1.4 + h, 9.6, z + 1.35, "fit" if not mab or i != 1 else "blood"))
+    e += [_bx(2.6, 10.4, 5.4, 9.6, 11.2, 10.6, "ring") for _ in range(1)] if rings else []
+    if rings >= 2:
+        e.append(_bx(3.0, 4.8, 5.6, 9.2, 5.6, 10.4, "ring"))
+    if rings >= 3:
+        e.append(_bx(2.4, 6.4, 3.6, 8.4, 9.6, 4.6, "ring"))         # 엄지 쪽 덧댐
+    if tassel:
+        e.append(_bx(0.4, 4.4, 7.0, 1.6, 6.2, 9.0, "tassel"))
+    if mab:
+        e.append(_bx(4.8, 10.4, 7.2, 7.2, 11.4, 8.8, "blood"))
+    return e
+
+
+def bu_rig(rings, blen, tassel, mab):
+    """부(斧) — 가장 느리고 한 방이 가장 무겁다. 자루 끝에 **넓은 날(bit)** 이 얹힌다.
+    날을 45° 로 눕힌 두 겹으로 세워 도끼의 부채꼴을 만든다."""
+    e = [_bx(-6.0, 8 - 0.85, 8 - 0.85, 9.0, 8 + 0.85, 8 + 0.85, "grip")]     # 두꺼운 자루
+    e += [_bx(8.4, 8 - 1.5, 8 - 1.2, 11.0, 8 + 3.4, 8 + 1.2, "fit"),         # 날 목
+          _bx(10.6, 8 + 0.4, 8 - 1.0, 13.2, 8 + 6.4, 8 + 1.0, "edge1"),      # 날 몸
+          _bx(12.4, 8 + 2.2, 8 - 0.75, 15.6 + blen, 8 + 6.2, 8 + 0.75, "edge1",
+              rot=("z", -22.5, (12.4, 8 + 4.0, 8))),                          # 부채꼴 위
+          _bx(10.6, 8 - 3.0, 8 - 1.0, 13.6, 8 + 0.6, 8 + 1.0, "edge1",
+              rot=("z", 22.5, (10.6, 8, 8)))]                                 # 부채꼴 아래
+    if mab:
+        e += _teeth(11.0, 14.2, 8 + 6.2, n=2)
+    for i in range(rings):
+        gx = -4.4 + i * 2.4
+        e.append(_bx(gx, 8 - 1.3, 8 - 1.3, gx + 0.75, 8 + 1.3, 8 + 1.3, "ring"))
+    e.append(_bx(-6.9, 8 - 1.2, 8 - 1.2, -6.0, 8 + 1.2, 8 + 1.2, "fit"))
+    if tassel:
+        e.append(_bx(-8.3, 8 - 1.5, 8 - 0.5, -6.9, 8 + 0.1, 8 + 0.5, "tassel"))
+    if mab:
+        e.append(_bx(-6.6, 8 - 0.7, 8 - 0.7, -6.1, 8 + 0.7, 8 + 0.7, "blood"))
+    return e
+
+
+def gyeom_rig(rings, blen, tassel, mab):
+    """겸(鎌) — 걸어 채는 날. 날이 자루에서 **직각으로 꺾여** 갈고리를 이룬다.
+    (SkillDisplay 는 겸의 roll 을 음수로 준다 — 걸어 당기는 병기이므로 거꾸로 감긴다.)"""
+    e = [_bx(-1.0, 8 - 0.8, 8 - 0.8, 7.0, 8 + 0.8, 8 + 0.8, "grip")]
+    e += [_bx(6.4, 8 - 1.0, 8 - 1.0, 8.2, 8 + 1.8, 8 + 1.0, "fit"),
+          _bx(7.4, 8 + 1.2, 8 - 0.5, 11.4 + blen, 8 + 2.9, 8 + 0.5, "edge1",
+              rot=("z", 22.5, (7.4, 8 + 1.2, 8))),                            # 꺾여 오르는 날
+          _bx(10.4 + blen, 8 + 2.2, 8 - 0.45, 14.0 + blen, 8 + 3.6, 8 + 0.45, "edge1",
+              rot=("z", -45, (10.4 + blen, 8 + 2.8, 8)))]                     # 걸어 채는 갈고리 끝
+    if mab:
+        e += _teeth(8.0, 11.0 + blen, 8 + 1.3, n=2)
+    for i in range(rings):
+        gx = 0.4 + i * 1.9
+        e.append(_bx(gx, 8 - 1.25, 8 - 1.25, gx + 0.7, 8 + 1.25, 8 + 1.25, "ring"))
+    e.append(_bx(-1.9, 8 - 1.15, 8 - 1.15, -1.0, 8 + 1.15, 8 + 1.15, "fit"))
+    if tassel:
+        e.append(_bx(-3.2, 8 - 1.4, 8 - 0.5, -1.9, 8 + 0.1, 8 + 0.5, "tassel"))
+    if mab:
+        e.append(_bx(-1.6, 8 - 0.7, 8 - 0.7, -1.1, 8 + 0.7, 8 + 0.7, "blood"))
+    return e
+
+
+def wolasan_rig(rings, blen, tassel, mab):
+    """월아산(月牙鏟) — 승려의 장병기. 한쪽 끝에 **초승달**(月牙), 반대 끝에 삽날.
+    양 끝이 다르다는 것이 이 병기의 전부다 (봉도 창도 아니다)."""
+    e = [_bx(-13.0, 8 - 0.8, 8 - 0.8, 15.0, 8 + 0.8, 8 + 0.8, "grip")]         # 긴 봉
+    e += [_bx(14.4, 8 - 1.2, 8 - 1.1, 16.4, 8 + 1.2, 8 + 1.1, "fit"),
+          _bx(16.0, 8 - 1.0, 8 - 0.5, 19.4 + blen, 8 + 1.0, 8 + 0.5, "edge2"),  # 달의 몸
+          _bx(18.2, 8 + 0.6, 8 - 0.45, 21.6 + blen, 8 + 4.6, 8 + 0.45, "edge2",
+              rot=("z", -45, (18.2, 8 + 0.6, 8))),                              # 초승달 위 뿔
+          _bx(18.2, 8 - 4.6, 8 - 0.45, 21.6 + blen, 8 - 0.6, 8 + 0.45, "edge2",
+              rot=("z", 45, (18.2, 8 - 0.6, 8)))]                               # 초승달 아래 뿔
+    e += [_bx(-15.4, 8 - 1.1, 8 - 1.05, -13.0, 8 + 1.1, 8 + 1.05, "fit"),
+          _bx(-15.6 - blen * 0.4, 8 - 2.6, 8 - 0.5, -15.4, 8 + 2.6, 8 + 0.5, "edge2")]  # 반대편 삽날
+    if mab:
+        e += _teeth(16.6, 19.0, 8 - 1.0, n=2)
+    for i in range(rings):
+        gx = -10.5 + i * 2.6
+        e.append(_bx(gx, 8 - 1.25, 8 - 1.25, gx + 0.75, 8 + 1.25, 8 + 1.25, "ring"))
+    if tassel:
+        e.append(_bx(-12.4, 8 - 2.4, 8 - 0.5, -11.0, 8 - 0.9, 8 + 0.5, "tassel"))
+    if mab:
+        e.append(_bx(-13.6, 8 - 0.7, 8 - 0.7, -13.1, 8 + 0.7, 8 + 0.7, "blood"))
+    return e
+
+
+def gu_rig(rings, blen, tassel, mab):
+    """구(鉤) — 걸고 당긴다. 곧은 날 **끝이 갈고리로 되꺾인다**.
+    코등이가 초승달(호수)이라 손을 지키면서 상대의 날을 건다 — 구의 정체."""
+    e = _blade(6.6, 14.4 + blen, 1.35, mab, thin=0.5, core=0.75, taper=1.4)
+    e += [_bx(13.6 + blen, 8 + 0.9, 8 - 0.5, 16.8 + blen, 8 + 2.3, 8 + 0.5, "edge2",
+              rot=("z", -45, (13.6 + blen, 8 + 0.9, 8)))]                        # 되꺾인 갈고리
+    e.append(_bx(5.4, 5.4, 6.6, 6.6, 10.6, 9.4, "fit",
+                 rot=("z", 22.5, (6.0, 8, 8))))                                  # 초승달 호수
+    return e + _grip(0.8, 5.4, rings, tassel, mab, r=0.95)
+
+
+WEAPON_RIG = {
+    "sword": sword_rig, "dao": dao_rig, "spear": spear_rig,
+    "gauntlet": gauntlet_rig, "dagger": dagger_rig,
+    "bu": bu_rig, "gyeom": gyeom_rig, "wolasan": wolasan_rig, "gu": gu_rig,
+}
+
+
+def weapon_model_3d(series, grade, grid):
+    """병기 한 자루의 3D 모델. 텍스처는 **그 자루의 아이콘 PNG 그대로** (새 PNG 를 굽지 않는다)."""
+    rings, blen, tassel, mab = _GRADE_FORM[grade]
+    elems, ext = _center(_bake(WEAPON_RIG[series](rings, blen, tassel, mab), _uv_index(grid), mab))
+    return {
+        "textures": {"0": f"honcheon:item/weapon/{series}_{grade}",
+                     "particle": f"honcheon:item/weapon/{series}_{grade}"},
+        "elements": elems,
+        "display": _display(ext),
+        "gui_light": "front",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 무공의 획 9종 — config/skill_motion.yml display.models 의 【청구서】
+#
+# 【치수 계약】 엔진이 size 를 Transformation.scale 로 **그대로** 곱한다 (SkillDisplay).
+#   ⇒ 모델은 1×1×1 단위 상자를 **가득 채워야** 한다. 원소가 z 를 1px 만 차지하면
+#     최종 두께는 0.04m × 1/16 = 0.0025m — 보이지 않는다. 그래서 획의 원소는 0..16 을 채우고,
+#     **모양은 텍스처의 알파가 판다** (두께 0.04m 짜리 판에 기하를 새기는 것은 낭비다).
+# 【채색】 수묵 — 흰 획의 4단(속이 밝고 끝이 스민다). 예외는 혈해만리의 혈조(血潮) 하나뿐이다.
+# ═══════════════════════════════════════════════════════════════════════════
+QI_CORE = (250, 250, 248, 235)   # 획의 속 — 가장 밝다
+QI_MID = (214, 214, 210, 205)
+QI_DIM = (150, 152, 158, 155)
+QI_EDGE = (92, 94, 102, 110)     # 스미는 끝 — 종이에 번진 먹
+BT_CORE = (216, 68, 56, 232)     # 혈조 — **유일한 채색 예외** (마공의 혈점: 예외 자체가 정보다)
+BT_MID = (170, 42, 34, 202)
+BT_DIM = (114, 27, 24, 158)
+BT_EDGE = (62, 16, 16, 112)
+QI_STEPS = (QI_EDGE, QI_DIM, QI_MID, QI_CORE)
+BT_STEPS = (BT_EDGE, BT_DIM, BT_MID, BT_CORE)
+
+QI_TEX = 32                      # 32x32 — 16x16 이 아니므로 검수의 이음매(축 ⑦) 대상이 아니다
+                                 # (획은 타일이 아니다. 제 복사본과 이어 붙을 일이 없다)
+
+
+def _qi_blank():
+    return [[T] * QI_TEX for _ in range(QI_TEX)]
+
+
+def _ink(g, x, y, depth, steps=QI_STEPS):
+    """depth 0(가장자리) … 1(속) → 4단 먹. 붓은 속이 진하고 끝이 스민다."""
+    if 0 <= x < QI_TEX and 0 <= y < QI_TEX:
+        g[y][x] = steps[max(0, min(3, int(depth * 4)))]
+
+
+def _stroke(g, thick, bow, ybase=None, x0=1, x1=QI_TEX - 2, steps=QI_STEPS):
+    """한 획 — 중심선을 따라 두께가 차오르고 끝에서 마른다.
+    thick(t) 은 걸음 t(0..1) 의 두께, bow 는 위로 휘는 깊이 (초승달의 배)."""
+    ybase = QI_TEX * 0.62 if ybase is None else ybase
+    for x in range(x0, x1 + 1):
+        t = (x - x0) / max(1, x1 - x0)
+        th = thick(t)
+        if th <= 0.4:
+            continue
+        yc = ybase - bow * math.sin(math.pi * t)
+        for y in range(int(yc - th), int(yc + th) + 1):
+            d = abs(y + 0.5 - yc) / th
+            if d <= 1.0:
+                _ink(g, x, y, 1.0 - d, steps)
+
+
+def _disc(g, cx, cy, r, steps=QI_STEPS, r_in=0.0):
+    for y in range(QI_TEX):
+        for x in range(QI_TEX):
+            d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+            if r_in <= d <= r:
+                edge = min(r - d, d - r_in) if r_in else (r - d)
+                _ink(g, x, y, min(1.0, edge / 3.0), steps)
+
+
+def qi_textures():
+    """획 9장 — 그림은 알파가 판다 (형체는 판때기, 모양은 이 PNG)."""
+    tex = {}
+
+    g = _qi_blank()                                   # 검기 — 초승달 한 획. 안쪽이 두껍고 끝이 가늘다
+    _stroke(g, lambda t: 5.5 * math.sin(math.pi * t) ** 0.7, bow=6.0)
+    tex["qi/blade_arc"] = g
+
+    g = _qi_blank()                                   # 강기 — 같은 형태를 **눌러** 두껍게 (뭉개지지 않는다)
+    _stroke(g, lambda t: 9.5 * math.sin(math.pi * t) ** 0.55, bow=5.0)
+    tex["qi/blade_heavy"] = g
+
+    g = _qi_blank()                                   # 검기 비(飛) — 앞이 뾰족하고 뒤로 꼬리가 늘어진다
+    _stroke(g, lambda t: 7.0 * (t ** 1.3) * ((1 - t) ** 0.55) / 0.30, bow=0.0, ybase=QI_TEX / 2)
+    tex["qi/bolt_edge"] = g
+
+    g = _qi_blank()                                   # 강기 포 — 말뚝의 속(기하가 형체를 만든다)
+    _disc(g, QI_TEX / 2, QI_TEX / 2, 15.0)
+    tex["qi/bolt_lance"] = g
+
+    g = _qi_blank()                                   # 호신 조각 — 세로로 선 얇은 방패 한 장
+    for y in range(2, QI_TEX - 2):
+        t = (y - 2) / (QI_TEX - 5)
+        w = 9.0 * math.sin(math.pi * t) ** 0.45
+        for x in range(int(QI_TEX / 2 - w), int(QI_TEX / 2 + w) + 1):
+            _ink(g, x, y, 1.0 - abs(x + 0.5 - QI_TEX / 2) / max(1.0, w))
+    tex["qi/guard_shard"] = g
+
+    g = _qi_blank()                                   # 매화 — 다섯 잎 (오의: 잊지 못할 형체)
+    for k in range(5):
+        a = -math.pi / 2 + k * 2 * math.pi / 5
+        px_, py_ = QI_TEX / 2 + 8.2 * math.cos(a), QI_TEX / 2 + 8.2 * math.sin(a)
+        _disc(g, px_, py_, 6.2)
+    _disc(g, QI_TEX / 2, QI_TEX / 2, 4.0)             # 꽃술
+    tex["ult/plum_bloom"] = g
+
+    g = _qi_blank()                                   # 태극 — 원반. 음양이 **밝기**로 갈린다 (색이 아니다)
+    _disc(g, QI_TEX / 2, QI_TEX / 2, 15.0, r_in=11.5)          # 바깥 테
+    for y in range(QI_TEX):
+        for x in range(QI_TEX):
+            dx, dy = x + 0.5 - QI_TEX / 2, y + 0.5 - QI_TEX / 2
+            if math.hypot(dx, dy) > 11.0:
+                continue
+            up = math.hypot(dx, dy + 5.5) < 5.5      # 위 물고기
+            dn = math.hypot(dx, dy - 5.5) < 5.5      # 아래 물고기
+            yin = (dy < 0) if not (up or dn) else up
+            _ink(g, x, y, 0.95 if yin else 0.28)
+    tex["ult/taegeuk_disc"] = g
+
+    g = _qi_blank()                                   # 제왕의 칼 — 하늘에서 **떨어진다** (길이축 Y)
+    for y in range(1, QI_TEX - 1):
+        t = (y - 1) / (QI_TEX - 3)
+        w = 6.5 * (1 - t) ** 0.65 if t > 0.18 else 3.0 + 20 * (0.18 - t)   # 위=자루 / 아래=칼끝
+        for x in range(int(QI_TEX / 2 - w), int(QI_TEX / 2 + w) + 1):
+            _ink(g, x, y, 1.0 - abs(x + 0.5 - QI_TEX / 2) / max(1.0, w))
+    tex["ult/emperor_edge"] = g
+
+    g = _qi_blank()                                   # 혈해만리 — 바닥을 훑는 붉은 파문 (채색 예외)
+    _disc(g, QI_TEX / 2, QI_TEX / 2, 15.5, steps=BT_STEPS, r_in=9.0)
+    _disc(g, QI_TEX / 2, QI_TEX / 2, 6.5, steps=BT_STEPS)
+    tex["ult/blood_tide"] = g
+    return tex
+
+
+_HIDE = [0.0, 0.0, 0.25, 0.25]     # 완전 투명한 구석 한 칸 — 안 보여야 할 면이 무는 자리
+
+
+def _plate(axis):
+    """단위 상자를 가득 채운 **판** 하나. 그림이 실리는 두 면만 텍스처를 물고 나머지는 투명을 문다.
+    (두께 0.04m 짜리 옆면에 그림을 넣는 것은 낭비다 — 어차피 종잇장의 옆구리다.)"""
+    show = {"z": ("north", "south"), "y": ("up", "down"), "x": ("east", "west")}[axis]
+    faces = {}
+    for f in ("north", "south", "east", "west", "up", "down"):
+        faces[f] = {"texture": "#0", "uv": [0, 0, 16, 16] if f in show else _HIDE}
+    return [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": faces}]
+
+
+def _cross():
+    """교차한 판 두 장 — 바닐라 화초의 문법. 어느 각도에서 보아도 꽃이 핀 것으로 보인다."""
+    out = []
+    for frm, to, show in (([0, 0, 7.4], [16, 16, 8.6], ("north", "south")),
+                          ([7.4, 0, 0], [8.6, 16, 16], ("east", "west"))):
+        faces = {f: {"texture": "#0", "uv": [0, 0, 16, 16] if f in show else _HIDE}
+                 for f in ("north", "south", "east", "west", "up", "down")}
+        out.append({"from": frm, "to": to, "faces": faces})
+    return out
+
+
+def _lance():
+    """강기 포 — **말뚝**이다. 판이 아니라 덩이라서 기하가 형체를 만든다 (2.2 × 0.7 × 0.7m).
+    뒤가 뭉툭하고 앞이 뾰족하다: 베는 것이 아니라 **뚫는 것**이라고 형체가 말한다."""
+    f = lambda: {c: {"texture": "#0", "uv": [0, 0, 16, 16]}
+                 for c in ("north", "south", "east", "west", "up", "down")}
+    return [{"from": [0, 3.5, 3.5], "to": [7, 12.5, 12.5], "faces": f()},       # 뒤 — 뭉툭한 밑동
+            {"from": [7, 2.0, 2.0], "to": [12, 14.0, 14.0], "faces": f()},      # 몸 — 가장 굵다
+            {"from": [12, 5.0, 5.0], "to": [16, 11.0, 11.0], "faces": f()}]     # 앞 — 뚫는 끝
+
+
+# 획 9종 = (키, 텍스처, 기하). '길이축 +X' 는 판의 가로(u)가 이미 X 다 (텍스처가 그렇게 그려졌다).
+QI_MODELS = {
+    "qi/blade_arc": _plate("z"), "qi/blade_heavy": _plate("z"), "qi/bolt_edge": _plate("z"),
+    "qi/bolt_lance": _lance(), "qi/guard_shard": _plate("z"),
+    "ult/plum_bloom": _cross(), "ult/taegeuk_disc": _plate("z"),
+    "ult/emperor_edge": _plate("z"),      # 길이축이 Y 다 (4.0m 짜리 칼이 떨어진다)
+    "ult/blood_tide": _plate("y"),        # 바닥을 훑는 파문 — 위/아래 면이 그림을 문다
+}
+
+
+def write_qi_assets() -> int:
+    """획 9종 — PNG + 모델 + 아이템 정의. motion_audit ⑧ 의 '팩 미구움' 경고가 여기서 꺼진다."""
+    tex = qi_textures()
+    for key, rows in tex.items():
+        write_png(PACK / "assets" / "honcheon" / "textures" / f"{key}.png", rows)
+    for key, elems in QI_MODELS.items():
+        write_json(MODEL_DIR / "item" / f"{key}.json", {
+            "textures": {"0": f"honcheon:{key}", "particle": f"honcheon:{key}"},
+            "elements": elems,
+            "gui_light": "front",
+        })
+        write_json(ITEM_DEF_DIR / f"{key}.json",
+                   {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
+    return len(QI_MODELS)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 짐승의 형체 8종 — config/mob_models.yml 의 【청구서】 (MobDisplay 가 태운다)
+#
+# 【방향 계약】 코가 +Z · 등이 +Y · 오른쪽이 +X.  ★ 이 계약은 등록부의 주석만이 아니라
+#   **엔진의 움직임이 증명한다**: MobDisplay.follow() 는 돌진을 rotateX(lean) 으로 그린다
+#   (X 축으로 기울면 ±Z 로 숙인다 ⇒ 앞 = Z) · 걷기 흔들림은 rotateZ(roll) 로 어깨를 번갈아
+#   내리고(⇒ 좌우 = X) · 죽음은 rotateZ(90°) 으로 옆으로 눕힌다. 셋이 모두 +Z 정면을 말한다.
+# 【치수 계약】 파츠는 1×1×1 단위 상자를 **가득 채운다** (bbox 가 세 축 모두 16px).
+#   엔진이 size 를 scale 로 곱하므로, 채우지 않으면 그만큼 작아진다. 얇은 꼬리조차
+#   **채운 뒤 size 가 눌러 만든다** — 모양은 여기서, 치수는 등록부에서.
+# 【원점】 몸통은 (8,8,8) 이 **발이 딛는 바닥의 정중앙** ⇒ 기하는 y 8..24 에 선다.
+#   머리·꼬리는 offset 이 그 **중심**을 잡아 주므로 (0.82m 높이 · 0.95m 앞) 중심 원점이다 (y 0..16).
+# ═══════════════════════════════════════════════════════════════════════════
+FUR_TEX = 32                     # 16x16 swatch 넷 (주·암·명·강조) — uv 8단위 격자
+SW = {"main": [0, 0, 8, 8], "dark": [8, 0, 16, 8], "light": [0, 8, 8, 16], "accent": [8, 8, 16, 16]}
+
+
+def _fur_swatch(g, ox, oy, base, lo, hi, stripe=0, salt=0):
+    """가죽 한 조각 — 털결(잡음)과 무늬(줄). 평면 채우기는 짐승이 아니라 판때기다."""
+    for y in range(16):
+        for x in range(16):
+            n = (octave(ox + x, oy + y, 3, salt, 26) + octave(ox + x, oy + y, 7, salt + 5, 16)) / 2
+            v = [max(0, min(255, base[i] + int(n))) for i in range(3)]
+            if stripe and (h32(salt, (x + int(3 * math.sin(y / 2.6))) // stripe) % 7) < 2:
+                v = [max(0, min(255, lo[i] + int(n * 0.5))) for i in range(3)]
+            elif (x + y) % 9 == 0:
+                v = [max(0, min(255, hi[i])) for i in range(3)]
+            g[oy + y][ox + x] = (v[0], v[1], v[2], 255)
+
+
+def fur_rows(main, dark, light, accent, stripe=0, salt=0):
+    g = [[T] * FUR_TEX for _ in range(FUR_TEX)]
+    _fur_swatch(g, 0, 0, main, dark, light, stripe, salt)          # 주 — 몸의 털
+    _fur_swatch(g, 16, 0, dark, dark, main, 0, salt + 11)          # 암 — 등선·발·주둥이
+    _fur_swatch(g, 0, 16, light, main, accent, 0, salt + 23)       # 명 — 배
+    _fur_swatch(g, 16, 16, accent, light, accent, 0, salt + 37)    # 강조 — 발톱·송곳니·반달
+    return g
+
+
+def _fb(x0, y0, z0, x1, y1, z1, sw, up=None, down=None):
+    """짐승의 상자 — 면마다 swatch 를 문다 (위는 등, 아래는 배)."""
+    f = {}
+    for c in ("north", "south", "east", "west", "up", "down"):
+        s = up if (c == "up" and up) else (down if (c == "down" and down) else sw)
+        f[c] = {"texture": "#0", "uv": list(SW[s])}
+    return {"from": [x0, y0, z0], "to": [x1, y1, z1], "faces": f}
+
+
+def horangi_body():
+    """호랑이 몸통 — **어깨가 엉덩이보다 높다** (포식자의 등선). 앞다리가 굵고 발톱이 보인다."""
+    e = [_fb(3, 15, 7, 13, 24, 15, "main", down="light"),        # 어깨·등 — 가장 높다 (y 24)
+         _fb(3.5, 15, 2, 12.5, 21.5, 7, "main", down="light"),   # 허리·엉덩이 — 낮게 흐른다
+         _fb(5, 17, 14, 11, 23, 16, "main"),                     # 목 (코 쪽 +Z 끝 — z 16)
+         _fb(6, 16, 0, 10, 20, 2, "dark")]                       # 꼬리 밑동 (z 0)
+    for x0, x1 in ((0, 4.5), (11.5, 16)):                        # 좌·우 (x 0 과 16 을 짚는다)
+        e += [_fb(x0 + 0.5, 9, 10, x1 - 0.5, 16, 13.5, "main"),  # 앞다리 — 굵다
+              _fb(x0 + 1.0, 9, 3.5, x1 - 1.0, 15.5, 6.8, "main"),  # 뒷다리
+              _fb(x0, 8, 9.5, x1, 9.5, 14, "dark", down="accent"),  # 앞발 — 발톱
+              _fb(x0 + 0.5, 8, 3, x1 - 0.5, 9.5, 7.3, "dark", down="accent")]
+    return e
+
+
+def horangi_head():
+    """정면을 노려보는 머리. 입이 반쯤 벌어져 송곳니가 보이고, 귀는 **뒤로 눕는다**(공격 직전)."""
+    return [_fb(3, 4, 0, 13, 13, 12, "main", down="light"),       # 두개골 (뒤통수 = z 0)
+            _fb(5, 4, 12, 11, 9.5, 16, "dark", down="light"),     # 주둥이 (코 = z 16)
+            _fb(5.5, 0, 11, 10.5, 4, 15, "dark", down="dark"),    # 아래턱 (y 0)
+            _fb(6, 4, 13.5, 6.9, 6, 15.5, "accent"),              # 송곳니
+            _fb(9.1, 4, 13.5, 10, 6, 15.5, "accent"),
+            _fb(0, 12, 4, 4, 16, 8, "dark"),                      # 귀 — 뒤로 누웠다 (x 0 · y 16)
+            _fb(12, 12, 4, 16, 16, 8, "dark")]
+
+
+def horangi_tail():
+    """굵고 긴 꼬리 — 검은 고리 무늬. 끝이 살짝 위로 감긴다 (등록부의 size 가 눌러 가늘게 만든다)."""
+    return [_fb(0, 3, 0, 16, 13, 5, "main"),                      # 밑동 — 가장 굵다 (x 0..16 · z 0)
+            _fb(2, 4, 5, 14, 12, 11, "main"),                     # 몸 — 가늘어진다
+            _fb(3, 5, 11, 13, 16, 16, "dark"),                    # 위로 감긴 끝 (y 16 · z 16)
+            _fb(4, 0, 0, 12, 3, 6, "dark")]                       # 아래 그늘 (y 0)
+
+
+def gom_body():
+    """반달곰 — **등이 둥글게 솟는다** (호랑이와 반대다: 곰은 어깨가 아니라 허리가 높다).
+    가슴에 흰 반달 — 이 짐승의 이름이 거기 있다."""
+    e = [_fb(2, 15, 4, 14, 24, 13, "main", down="main"),          # 둥근 등 (y 24 · 가운데가 높다)
+         _fb(3.5, 15, 0, 12.5, 21.5, 4, "main"),                  # 엉덩이 (z 0 — 곰은 꼬리가 없다)
+         _fb(4, 14, 13, 12, 22, 16, "main"),                      # 가슴·목 (z 16)
+         _fb(6, 16, 13.6, 10, 21, 16, "accent")]                  # 흰 반달 (가슴)
+    for x0, x1 in ((0, 5), (11, 16)):
+        e += [_fb(x0 + 0.5, 9, 9.5, x1 - 0.5, 16, 13, "main"),
+              _fb(x0 + 0.5, 9, 2.5, x1 - 0.5, 16, 6, "main"),
+              _fb(x0, 8, 9, x1, 9.5, 13.5, "dark", down="accent"),
+              _fb(x0, 8, 2, x1, 9.5, 6.5, "dark", down="accent")]
+    return e
+
+
+def gom_head():
+    """짧은 주둥이 · **둥근 귀 두 개가 크게 솟는다** · 눈이 작다 (호랑이의 누운 귀와 정반대)."""
+    return [_fb(3, 3, 0, 13, 12, 12, "main", down="light"),       # 두개골 (뒤통수 = z 0)
+            _fb(5, 3, 12, 11, 8.5, 16, "dark"),                   # 짧은 주둥이
+            _fb(5.5, 0, 11.5, 10.5, 3, 15, "dark"),
+            _fb(0, 12, 5, 5, 16, 10, "main"),                     # 크고 둥근 귀 (x 0 · y 16)
+            _fb(11, 12, 5, 16, 16, 10, "main")]
+
+
+def dwaeji_body():
+    """멧돼지 — 머리·어깨·몸통이 **한 덩어리**다 (파츠를 나누지 않는다).
+    어깨혹이 솟고 엉덩이로 갈수록 가늘어지는 **쐐기꼴** — 그것이 멧돼지의 정체다.
+    아래로 굽은 엄니 · 뻣뻣한 등털."""
+    e = [_fb(2, 14, 5, 14, 22, 12, "main", down="light"),         # 어깨혹 — 가장 굵고 높다
+         _fb(4.5, 14, 0, 11.5, 19, 5, "main", down="light"),      # 엉덩이 — 가늘다 (쐐기 · z 0)
+         _fb(4, 12, 12, 12, 20, 15, "main"),                      # 목 없는 머리 — 통째로 이어진다
+         _fb(5.5, 11, 15, 10.5, 16, 16, "dark"),                  # 주둥이 (z 16)
+         _fb(5.2, 10.5, 14.5, 6.4, 13, 16, "accent"),             # 엄니 — 아래로 굽었다
+         _fb(9.6, 10.5, 14.5, 10.8, 13, 16, "accent"),
+         _fb(6, 22, 3, 10, 24, 11, "dark")]                       # 등털 (y 24)
+    for x0, x1 in ((1.5, 5), (11, 14.5)):
+        e += [_fb(x0, 8.8, 9, x1, 15, 12, "dark"),
+              _fb(x0 + 0.4, 8.8, 2.5, x1 - 0.4, 15, 5.5, "dark"),
+              _fb(x0 - 1.5, 8, 8.5, x1 + 1.5, 8.8, 12.5, "dark")]  # 발굽 (x 0·16)
+    return e
+
+
+def myo_body():
+    """백영묘(白影猫) — 고양잇과의 유연한 몸. 호랑이보다 **낮고 길다**.
+    새하얗고 털끝이 은빛. **발톱은 늘 나와 있다** — 이 짐승은 무기를 감추지 않는다."""
+    e = [_fb(4, 16, 6, 12, 23, 14, "light", down="main"),         # 어깨뼈가 솟는다 (y 23)
+         _fb(4.5, 16, 2, 11.5, 22, 6, "light", down="main"),
+         _fb(5, 18, 14, 11, 24, 16, "light"),                     # 긴 목 (y 24 · z 16)
+         _fb(6, 17, 0, 10, 21, 2, "light")]                       # 꼬리 밑동
+    for x0, x1 in ((0, 4.5), (11.5, 16)):
+        e += [_fb(x0 + 0.8, 9.5, 9.5, x1 - 0.8, 17, 12.8, "light"),
+              _fb(x0 + 0.8, 9.5, 3.2, x1 - 0.8, 17, 6.5, "light"),
+              _fb(x0, 8, 9, x1, 9.5, 13.4, "main", down="accent"),   # 늘 나와 있는 발톱
+              _fb(x0, 8, 2.8, x1, 9.5, 7, "main", down="accent")]
+    return e
+
+
+def myo_tail():
+    """몸길이의 2/3 에 이르는 긴 꼬리. **끝이 위로 곧게 선다** — 영물의 표시다."""
+    return [_fb(0, 4, 0, 16, 12, 4, "light"),                     # 밑동 (x 0..16 · z 0)
+            _fb(3, 5, 4, 13, 11, 10, "light"),
+            _fb(5, 6, 10, 11, 16, 16, "accent"),                  # 곧게 선 끝 (y 16 · z 16 · 은빛)
+            _fb(4, 0, 0, 12, 4, 5, "main")]                       # 아래 (y 0)
+
+
+# 짐승 8종 — (경로, 기하, 가죽). 산늑대는 **일부러 굽지 않는다**:
+#   mob_models.yml 이 shape: vanilla 로 못 박았다 ("이미 늑대다 — 조각으로 만들면 더 나빠진다").
+#   구워 두면 언젠가 누군가 켤 것이고, 그러면 여섯 마리가 뻣뻣하게 미끄러진다. 등록부의 판단을 따른다.
+MOB_PARTS = {
+    "mob/horangi/body": (horangi_body, (128, 124, 116), (44, 42, 40), (206, 202, 192), (240, 238, 232), 3, 1),
+    "mob/horangi/head": (horangi_head, (128, 124, 116), (44, 42, 40), (206, 202, 192), (240, 238, 232), 3, 2),
+    "mob/horangi/tail": (horangi_tail, (128, 124, 116), (44, 42, 40), (206, 202, 192), (240, 238, 232), 3, 3),
+    "mob/bandal_gom/body": (gom_body, (62, 58, 54), (30, 28, 26), (96, 92, 86), (238, 236, 230), 0, 4),
+    "mob/bandal_gom/head": (gom_head, (62, 58, 54), (30, 28, 26), (96, 92, 86), (238, 236, 230), 0, 5),
+    "mob/metdwaeji/body": (dwaeji_body, (86, 80, 72), (40, 37, 34), (132, 126, 116), (226, 222, 212), 0, 6),
+    "mob/baegyeongmyo/body": (myo_body, (222, 222, 226), (150, 152, 158), (246, 246, 248), (252, 252, 254), 0, 7),
+    "mob/baegyeongmyo/tail": (myo_tail, (222, 222, 226), (150, 152, 158), (246, 246, 248), (252, 252, 254), 0, 8),
+}
+
+
+def _fill_check(elems, path):
+    """단위 상자를 **가득 채웠는가** — 채우지 않으면 등록부의 size 가 거짓이 된다.
+    몸통은 y 8..24 (발이 바닥) · 머리·꼬리는 y 0..16 (중심 원점). x·z 는 언제나 0..16."""
+    lo = [min(min(e["from"][i], e["to"][i]) for e in elems) for i in range(3)]
+    hi = [max(max(e["from"][i], e["to"][i]) for e in elems) for i in range(3)]
+    want_y = (8, 24) if path.endswith("/body") else (0, 16)
+    want = [(0, 16), want_y, (0, 16)]
+    for i, ax in enumerate("xyz"):
+        if abs(lo[i] - want[i][0]) > 0.01 or abs(hi[i] - want[i][1]) > 0.01:
+            raise ValueError(f"{path}: {ax} 축이 단위 상자를 못 채웠다 "
+                             f"({lo[i]}..{hi[i]}, 기대 {want[i][0]}..{want[i][1]})")
+
+
+def write_mob_assets() -> int:
+    """짐승 8종 — 가죽 PNG + 모델(models/mob/**) + 아이템 정의(items/mob/**).
+    mob_model_audit ③ 의 '팩에 없는 모델 키' 가 여기서 0 이 된다."""
+    for path, (rig, main, dark, light, accent, stripe, salt) in MOB_PARTS.items():
+        write_png(PACK / "assets" / "honcheon" / "textures" / f"{path}.png",
+                  fur_rows(main, dark, light, accent, stripe, salt))
+        elems = rig()
+        _fill_check(elems, path)
+        write_json(MODEL_DIR / f"{path}.json", {
+            "textures": {"0": f"honcheon:{path}", "particle": f"honcheon:{path}"},
+            "elements": elems,
+            "gui_light": "front",
+        })
+        write_json(ITEM_DEF_DIR / f"{path}.json",
+                   {"model": {"type": "minecraft:model", "model": f"honcheon:{path}"}})
+    return len(MOB_PARTS)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 메뉴·버튼 — 1.21 GUI 스프라이트 계약 (assets/minecraft/textures/gui/sprites/**)
+#
+# 【좌표 계약을 지키는 법 — .mcmeta 를 굽지 않는다】
+#   1.21 의 위젯은 **나인슬라이스**다: <스프라이트>.png.mcmeta 가 테두리 폭을 정하고,
+#   클라이언트는 그 테두리만 남기고 가운데를 늘리거나 깐다. 우리가 mcmeta 를 덮어쓰면
+#   그 순간 버튼의 늘어나는 법이 바뀐다 — **클릭 판정은 그대로인데 그림만 어긋난다.**
+#   리소스팩은 파일 단위로 겹친다: PNG 만 넣고 mcmeta 를 넣지 않으면 **바닐라의 mcmeta 가 그대로 산다.**
+#   그래서 우리는 (ㄱ) 바닐라와 **똑같은 치수**로 굽고 (ㄴ) mcmeta 를 굽지 않는다.
+#   ⇒ 테두리 폭·늘어나는 법·클릭 좌표가 한 픽셀도 움직이지 않는다. (치수는 1.21.11 jar 에서 실측했다.)
+#
+# 【늘어나는 자리는 균질해야 한다】 나인슬라이스가 가운데를 가로로 깔므로(버튼 폭은 98·150·200…),
+#   가운데는 **x 로 균질**해야 한다 (행마다 한 색). 좌·우 테두리 띠는 세로로 깔리므로 **y 로 균질**.
+#   이 규율을 어기면 좁은 버튼에서 무늬가 씹힌다. 그래서 결(fiber)은 가로줄로만 넣는다.
+# ═══════════════════════════════════════════════════════════════════════════
+SPRITE_DIR = GUI_DIR / "sprites"
+UI_INK = (28, 26, 23, 255)          # 먹 — 바깥 선
+UI_INK_SOFT = (58, 54, 49, 255)     # 먹 옅은 선 (안쪽 그늘)
+UI_HI = (238, 231, 214, 255)        # 화선지 — 빛 받는 마루 (위·왼쪽)
+UI_PAPER = (212, 203, 184, 255)     # 화선지 몸
+UI_DIM = (172, 163, 144, 255)       # 화선지 그늘 (아래·오른쪽)
+UI_DEEP = (138, 130, 113, 255)      # 눌린 자리
+UI_MUTE = (128, 123, 114, 255)      # 비활성 — 빛이 죽은 종이
+UI_MUTE_HI = (158, 152, 142, 255)
+UI_MUTE_DIM = (98, 94, 87, 255)
+UI_TRACK = (74, 69, 62, 255)        # 스크롤 홈
+UI_PANEL = (26, 24, 22, 238)        # 툴팁 바탕 — 먹 패널 (반투명)
+
+
+def _rows(w, h, c):
+    return [[c] * w for _ in range(h)]
+
+
+def _frame(g, w, h, line, hi, dim, deep=None):
+    """테를 두른다 — 바깥 1px 먹선 + 안쪽 1px 되비침(위·왼) / 그늘(아래·오른).
+    바깥 1px 만 쓰므로 **테두리 폭 1 짜리 스프라이트에도 그대로 통한다** (비활성·입력칸·스크롤).
+    좌·우 띠는 x 에만, 위·아래 띠는 y 에만 기대므로 나인슬라이스가 깔아도 균질하다."""
+    for x in range(w):
+        g[0][x] = line
+        g[h - 1][x] = line
+    for y in range(h):
+        g[y][0] = line
+        g[y][w - 1] = line
+    for x in range(1, w - 1):
+        g[1][x] = hi
+        g[h - 2][x] = deep or dim
+    for y in range(1, h - 1):
+        g[y][1] = hi if y < h - 1 else dim
+        g[y][w - 2] = deep or dim
+    g[1][1] = hi
+    g[h - 2][w - 2] = deep or dim
+
+
+def _grain(g, w, h, pad, base, salt):
+    """화선지 결 — **가로줄로만** 넣는다 (행마다 한 색). 세로 결은 나인슬라이스가 씹는다."""
+    for y in range(pad, h - pad):
+        n = (h32(salt, y) % 7) - 3
+        c = tuple(max(0, min(255, base[i] + n)) for i in range(3)) + (base[3],)
+        for x in range(pad, w - pad):
+            g[y][x] = c
+
+
+def _button(state):
+    """버튼 200x20 — 바닐라 치수. 테두리 폭은 바닐라 mcmeta 가 정한다 (기본·눌림 3 · 비활성 1).
+    격(格)은 색이 아니라 **밝기**로 오른다 (색맹 규약): 기본 → 눌림은 종이가 밝아지고,
+    비활성은 빛이 죽는다. 주사(朱砂)는 눌린 버튼의 밑줄 한 줄뿐 — 있고 없음이 곧 정보다."""
+    w, h = 200, 20
+    if state == "disabled":
+        g = _rows(w, h, UI_MUTE)
+        _grain(g, w, h, 1, UI_MUTE, 91)
+        _frame(g, w, h, UI_INK, UI_MUTE_HI, UI_MUTE_DIM)
+        return g
+    hot = state == "highlighted"
+    body = UI_HI if hot else UI_PAPER
+    g = _rows(w, h, body)
+    _grain(g, w, h, 2, body, 7 if hot else 3)
+    _frame(g, w, h, UI_INK, UI_HI if not hot else (248, 244, 232, 255), UI_DIM, UI_DEEP if hot else None)
+    for x in range(2, w - 2):                       # 안쪽 옅은 먹선 — 종이가 눌린 자국
+        g[2][x] = UI_INK_SOFT if hot else mix(body, UI_INK_SOFT, 0.35)
+        g[h - 3][x] = mix(body, UI_INK_SOFT, 0.55 if hot else 0.3)
+    if hot:                                         # 주사 밑줄 — 손이 얹힌 칸 (오직 여기에만)
+        for x in range(3, w - 3):
+            g[h - 4][x] = SEAL
+    return g
+
+
+def _tab(selected, hot):
+    """탭 130x24 — 아래가 열린 테(mcmeta border bottom=0). 고른 탭은 **종이가 앞으로 나온다**."""
+    w, h = 130, 24
+    body = UI_HI if selected else (UI_PAPER if hot else UI_DIM)
+    g = _rows(w, h, body)
+    _grain(g, w, h, 2, body, 13 if selected else 17)
+    for x in range(w):                              # 위·좌·우만 두른다 (아래는 창과 이어진다)
+        g[0][x] = UI_INK
+    for y in range(h):
+        g[y][0] = UI_INK
+        g[y][w - 1] = UI_INK
+    for x in range(1, w - 1):
+        g[1][x] = UI_HI if selected else UI_PAPER
+    for y in range(1, h):
+        g[y][1] = UI_HI if selected else UI_PAPER
+        g[y][w - 2] = UI_DEEP if selected else UI_DIM
+    if selected:                                    # 고른 탭에만 주사 인끈 — 색이 아니라 유무가 말한다
+        for x in range(4, w - 4):
+            g[2][x] = SEAL
+    else:
+        for x in range(1, w - 1):                   # 안 고른 탭은 아래로 그늘 (뒤에 물러나 있다)
+            g[h - 1][x] = UI_INK_SOFT
+    return g
+
+
+def _tooltip_bg():
+    """툴팁 바탕 100x100 (border 9) — 먹 패널. 가운데는 **완전 균질**이라야 큰 툴팁에서 안 씹힌다.
+
+    ★ 바깥 테만 먹으로 짙게 두면 명암차가 8밖에 안 난다 (검수 축: 밋밋). 종이 위에 얹힌 먹판이
+      배경에서 떠오르려면 **되비침 한 줄**이 있어야 한다 — 안쪽 8번째 고리에 화선지 선을 둔다."""
+    w = h = 100
+    g = _rows(w, h, UI_PANEL)
+    for i in range(9):                              # 모서리로 갈수록 옅어지는 테 (전각 도장의 여백)
+        a = 238 - i * 6
+        c = (UI_PANEL[0] + i * 2, UI_PANEL[1] + i * 2, UI_PANEL[2] + i * 2, a)
+        if i == 7:                                  # 되비침 — 먹판의 안쪽 립 (배경에서 떠오르는 이유)
+            c = (150, 142, 126, 210)
+        elif i == 8:
+            c = (92, 86, 76, 224)
+        for x in range(i, w - i):
+            g[i][x] = c
+            g[h - 1 - i][x] = c
+        for y in range(i, h - i):
+            g[y][i] = c
+            g[y][w - 1 - i] = c
+    return g
+
+
+def _tooltip_frame():
+    """툴팁 테 100x100 (border 10 · stretch_inner) — 화선지 선 + 네 귀의 주사 도장.
+    안쪽은 투명해야 바탕이 비친다. 선은 제 방향으로 균질하다 (늘어나도 굵기가 안 변한다).
+
+    ★ 선을 '같은 RGB 에 알파만 다르게' 두 줄 그으면 **색이 둘뿐인 텍스처**가 된다 (검수: 평면).
+      알파는 색이 아니다 — 종이의 두께를 알파로 흉내 내지 말고 **밝기 계단**으로 그어라."""
+    w = h = 100
+    g = _rows(w, h, T)
+    for x in range(2, w - 2):
+        g[1][x] = UI_HI                             # 바깥 — 빛 받는 마루
+        g[2][x] = UI_PAPER
+        g[h - 3][x] = UI_DIM
+        g[h - 2][x] = UI_DEEP                       # 아래 — 그늘 (테가 두께를 갖는다)
+    for y in range(2, h - 2):
+        g[y][1] = UI_HI
+        g[y][2] = UI_PAPER
+        g[y][w - 3] = UI_DIM
+        g[y][w - 2] = UI_DEEP
+    for cx, cy in ((3, 3), (w - 7, 3), (3, h - 7), (w - 7, h - 7)):    # 주사 도장 네 귀
+        for dy in range(4):
+            for dx in range(4):
+                if dx in (0, 3) or dy in (0, 3):
+                    g[cy + dy][cx + dx] = SEAL
+    return g
+
+
+def _scroller(track):
+    """스크롤 6x32 (border 1) — 손잡이는 종이, 홈은 먹. 테두리 1px 이라 안쪽은 균질해야 한다."""
+    w, h = 6, 32
+    g = _rows(w, h, UI_TRACK if track else UI_PAPER)
+    if track:
+        for y in range(h):
+            g[y][0] = UI_INK
+            g[y][w - 1] = UI_INK_SOFT
+        for x in range(w):
+            g[0][x] = UI_INK
+            g[h - 1][x] = UI_INK
+        for y in range(1, h - 1):
+            g[y][1] = (52, 48, 43, 255)
+        return g
+    _frame(g, w, h, UI_INK, UI_HI, UI_DIM)
+    for y in range(2, h - 2):                       # 손잡이 결 — 세로로 균질 (세로로 깔린다)
+        g[y][2] = UI_PAPER
+        g[y][3] = UI_DIM
+    return g
+
+
+def _bar(w, h, body, border=1):
+    """입력칸·슬라이더 몸통 (border 1) — 1px 먹 테 + 균질한 속."""
+    g = _rows(w, h, body)
+    _grain(g, w, h, border, body, 29)
+    for x in range(w):
+        g[0][x] = UI_INK
+        g[h - 1][x] = UI_INK
+    for y in range(h):
+        g[y][0] = UI_INK
+        g[y][w - 1] = UI_INK
+    return g
+
+
+def _slider_handle(hot):
+    """슬라이더 손잡이 8x20 (border l2 t2 r2 b3) — 잡는 물건이므로 **도드라져야** 한다."""
+    w, h = 8, 20
+    body = UI_HI if hot else UI_PAPER
+    g = _rows(w, h, body)
+    _frame(g, w, h, UI_INK, (248, 244, 232, 255) if hot else UI_HI, UI_DIM, UI_DEEP)
+    for y in range(4, h - 5):                       # 손가락이 걸리는 홈 — 세로로 균질
+        g[y][3] = UI_DEEP
+        g[y][4] = UI_HI
+    return g
+
+
+# 스프라이트 등록부 — **치수는 1.21.11 client jar 실측치다** (짐작 금지: 어긋나면 mcmeta 와 안 맞는다)
+UI_SPRITES = {
+    "widget/button": lambda: _button("normal"),                    # 200x20 · border 3
+    "widget/button_highlighted": lambda: _button("highlighted"),   # 200x20 · border 3
+    "widget/button_disabled": lambda: _button("disabled"),         # 200x20 · border 1
+    "widget/tab": lambda: _tab(False, False),                      # 130x24 · border l2 t2 r2 b0
+    "widget/tab_highlighted": lambda: _tab(False, True),
+    "widget/tab_selected": lambda: _tab(True, False),
+    "widget/tab_selected_highlighted": lambda: _tab(True, True),
+    "widget/scroller": lambda: _scroller(False),                   # 6x32 · border 1
+    "widget/scroller_background": lambda: _scroller(True),         # 6x32 · border 1
+    "widget/text_field": lambda: _bar(200, 20, UI_DEEP),           # 200x20 · border 1 (파인 자리)
+    "widget/text_field_highlighted": lambda: _bar(200, 20, UI_PAPER),
+    "widget/slider": lambda: _bar(200, 20, UI_TRACK),              # 200x20 · border 1
+    "widget/slider_highlighted": lambda: _bar(200, 20, (92, 86, 77, 255)),
+    "widget/slider_handle": lambda: _slider_handle(False),         # 8x20
+    "widget/slider_handle_highlighted": lambda: _slider_handle(True),
+    "tooltip/background": _tooltip_bg,                             # 100x100 · border 9
+    "tooltip/frame": _tooltip_frame,                               # 100x100 · border 10
+}
+
+# 바닐라 실측 치수 — 이 표와 산출 PNG 가 어긋나면 굽지 않는다 (mcmeta 는 바닐라 것을 그대로 쓰므로
+# 치수가 어긋나는 순간 나인슬라이스가 엉뚱한 데를 자른다 = 버튼이 찢어진다).
+UI_SIZE = {
+    "widget/button": (200, 20), "widget/button_highlighted": (200, 20),
+    "widget/button_disabled": (200, 20),
+    "widget/tab": (130, 24), "widget/tab_highlighted": (130, 24),
+    "widget/tab_selected": (130, 24), "widget/tab_selected_highlighted": (130, 24),
+    "widget/scroller": (6, 32), "widget/scroller_background": (6, 32),
+    "widget/text_field": (200, 20), "widget/text_field_highlighted": (200, 20),
+    "widget/slider": (200, 20), "widget/slider_highlighted": (200, 20),
+    "widget/slider_handle": (8, 20), "widget/slider_handle_highlighted": (8, 20),
+    "tooltip/background": (100, 100), "tooltip/frame": (100, 100),
+}
+
+
+def write_ui_sprites() -> int:
+    """메뉴·버튼 — PNG 만 굽는다 (mcmeta 는 바닐라 것이 그대로 산다 = 좌표 계약 불변)."""
+    for key, make in UI_SPRITES.items():
+        rows = make()
+        want = UI_SIZE[key]
+        got = (len(rows[0]), len(rows))
+        if got != want:
+            raise ValueError(f"{key}: 치수 {got} ≠ 바닐라 {want} — mcmeta 와 어긋난다 (버튼이 찢어진다)")
+        write_png(SPRITE_DIR / f"{key}.png", rows)
+    return len(UI_SPRITES)
+
+
 def main():
     # --sheet: 엔티티 확대 검수 시트도 함께 굽는다 (run/texture-review/ — 커밋 대상 아님)
     sheet = "--sheet" in sys.argv
@@ -5530,6 +6614,11 @@ def main():
     props = write_prop_textures()
     ents = write_entity_textures(sheet)
 
+    # ─── 3D 모델층 (§texture_layer_design.md §6) — 획·형체·메뉴 ───
+    qi = write_qi_assets()          # 무공의 획 9종 (skill_motion.yml display.models 의 청구서)
+    mobs = write_mob_assets()       # 짐승의 형체 8종 (mob_models.yml 의 청구서)
+    ui = write_ui_sprites()         # 메뉴·버튼 (바닐라 mcmeta 를 건드리지 않는다 = 좌표 계약 불변)
+
     # pack_format 은 클라이언트 버전이 정한다 — 서버 jar 의 version.json(pack_version.resource_major)이 진실.
     #   1.21.4 = 46 · 1.21.11 = 75. 숫자가 어긋나면 클라이언트가 "낡은 팩" 경고를 띄운다(적용은 되지만
     #   경고가 뜨는 팩은 사용자가 끈다). supported_formats 로 46~75 를 함께 받아 구 클라이언트도 살린다.
@@ -5544,6 +6633,11 @@ def main():
     print(f"팩 컴파일 완료: {PACK.relative_to(ROOT)} "
           f"(글리프 {total}종 + 음수공백 6폭 + 바닐라 교체 {vanilla}장 + 폰트 주입 + pack.mcmeta)")
     print(f"  아이템 채널 {items}종 (PNG {items} + 모델 {items} + 아이템 정의 {items}) — item_model, 전역 오염 0")
+    print(f"  ├ 병기 45자루 = **3D 모델** (elements — 평면 스프라이트가 아니다)"
+          f" · 등급이 형체로 갈린다 (고리 0~3 · 수실 · 마병 톱니)")
+    print(f"  무공의 획 {qi}종 (3D 모션 — SkillDisplay 가 item_model 로 태운다. 길이축 +X)")
+    print(f"  짐승의 형체 {mobs}종 (MobDisplay 가 본체를 감추고 태운다. 코가 +Z · 발이 원점)")
+    print(f"  메뉴·버튼 {ui}장 (GUI 스프라이트 — mcmeta 미포함 = 바닐라 나인슬라이스·좌표 계약 그대로)")
     print(f"  블록 징발 {blocks}장 (전역 치환 — block_channels.징발 등록분만)")
     print(f"  획층(파티클) {parts}장 (무공 모션 — 엔진 불변. 팩 없으면 바닐라 파티클로 폴백)")
     print(f"  기물(블록 엔티티) {props}장 (항아리·궤 — 블록이되 텍스처는 entity/ 아래 산다)")

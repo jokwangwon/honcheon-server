@@ -85,7 +85,11 @@ FACE_AXES = {"up": ("x", "z"), "down": ("x", "z"), "north": ("x", "y"),
              "south": ("x", "y"), "east": ("z", "y"), "west": ("z", "y")}
 
 WEAPON_SERIES = ["sword", "dao", "spear", "gauntlet", "dagger", "bu", "gyeom", "wolasan", "gu"]
-WEAPON_GRADES = ["beomcheol", "jeongryeon", "bobyeong", "sinbyeong"]
+# 마병(魔兵)이 이 목록에 들어왔다 (2026-07). 그전까지 축 ⑩은 **네 등급만** 재고 있었고,
+# 그 사이 팩은 마병을 도(刀) 한 자루만 굽고 있었다 — 즉 나머지 여덟 계열의 마병은
+# **재는 자도 굽는 자도 없었다**. Weapons.java 는 45개의 item_model 키를 전부 박는데도.
+# 이제 45자루를 다 굽고, 축 ⑩도 45자루를 다 잰다 (인접 쌍 27 → 36).
+WEAPON_GRADES = ["beomcheol", "jeongryeon", "bobyeong", "sinbyeong", "mabyeong"]
 
 # 면 반복재 — '벽·바닥·지붕처럼 여러 장이 이어 붙어 하나의 면이 되는' 블록만.
 # 제외 대상과 그 이유 (축을 아무 데나 들이대면 거짓 위반이 뜨고, 거짓 위반은 루프를 헛돌린다):
@@ -622,7 +626,9 @@ def cross_checks():
     print(f"  최대 {js[0][0]:.3f} ({js[0][1]}↔{js[0][2]}) · 중앙 {js[len(js) // 2][0]:.3f}"
           f" · 최소 {js[-1][0]:.3f} ({js[-1][1]}↔{js[-1][2]})")
 
-    print("\n── 등급 회색조 변별 (인접 등급 27쌍) ──")
+    # 쌍 수는 세어서 적는다 — 등급이 늘었는데 라벨이 27에 머물면 **검수가 거짓말을 한다**
+    print(f"\n── 등급 회색조 변별 (인접 등급 "
+          f"{len(WEAPON_SERIES) * (len(WEAPON_GRADES) - 1)}쌍) ──")
     gd = grade_delta()
     for d, s, g0, g1 in gd:
         if d < GRADE_DELTA_MIN:

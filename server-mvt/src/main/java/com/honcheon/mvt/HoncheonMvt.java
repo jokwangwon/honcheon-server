@@ -64,6 +64,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.worldMap = WorldMap.load(cfg);   // 세계 지도 — world_map.yml (없으면 null)
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
+        Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
         HuntingGrounds.init(cfg);   // 적 등록부 — 짐승·사람 스탯 (npcs·npc_combat·combat)
         Populace.init(cfg);   // 인구 등록부 — 행인·주민 28인 (npcs/populace.yml)
         WorldBridge.init(cfg, getLogger());   // 세계 다리 — 마크의 사건이 봇의 장부로 간다 (world_bridge.yml)

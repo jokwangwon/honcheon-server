@@ -1,0 +1,524 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""세계 순도(純度) 검산 — 바닐라의 흔적이 남아 있는가.
+
+  등록부 : config/world_purity.yml   ← **정본**
+  산출물 : worldgen/honcheon_purity/ ← 등록부에서 파생된 데이터팩
+  문서   : docs/design/world_purity.md
+
+세 가지 모드:
+
+    python3 tools/world_purity_audit.py --build
+        바닐라 정본(mojang jar + 데이터 생성기)에서 데이터팩을 **빚는다**.
+        스키마를 추측하지 않는다 — 정본을 읽어 필드 하나만 고친다.
+
+    python3 tools/world_purity_audit.py            (기본)
+        등록부 ↔ 데이터팩을 대조한다. 끄기로 한 것이 실제로 꺼져 있는가.
+        java 없이 돈다(바이옴 심층 대조는 캐시가 있을 때만).
+
+    python3 tools/world_purity_audit.py --emit-rcon
+        인게임 실측 명령을 뱉는다. 서버에 RCON 으로 붓고 응답을 보면 된다.
+
+────────────────────────────────────────────────────────────────────────────
+안전성 — 레지스트리 실패 = 서버 사망. 이 도구가 지키는 불변식:
+
+  구조물 : structure_set 의 placement 에서 **frequency 한 필드만** 0 으로 만든다.
+           (strongholds 는 concentric_rings 라 count 도 0 — 고리 좌표 자체를 안 만든다)
+  피처   : placed_feature 의 placement 배열에 **count: 0** 을 놓는다.
+  바이옴 : 기후 상자(parameters)는 **한 글자도 건드리지 않는다.** 붙은 이름표(biome)만 간다.
+           → 상자 수 불변 · 기후 공간의 분할 불변 → 구멍도 겹침도 원리적으로 불가능.
+             audit 이 이 등식을 매번 다시 증명한다(--build 시 쓴 정본과 바이트 비교).
+────────────────────────────────────────────────────────────────────────────
+"""
+from __future__ import annotations
+
+import argparse
+import io
+import json
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("pyyaml 이 필요하다: pip install pyyaml")
+
+ROOT = Path(__file__).resolve().parent.parent
+REGISTRY = ROOT / "config" / "world_purity.yml"
+CACHE = ROOT / "run" / "mvt" / "cache" / "datagen"          # run/ 은 gitignore — 캐시 자리
+JDK = ROOT / "run" / "jdk-21" / "bin" / "java"
+
+# 바닐라 기후 상자에서 「해안 기둥」의 대륙성 구간 (OverworldBiomeBuilder 의 COAST 상수)
+# 이 값은 우리가 정한 것이 아니라 바닐라가 뱉은 데이터에서 **읽은** 것이다.
+BIOME_SOURCE_KEY = "biomes"
+
+OK, BAD, WARN = "✔", "✘", "⚠"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 등록부 · 바닐라 정본
+# ══════════════════════════════════════════════════════════════════════════
+def registry() -> dict:
+    with REGISTRY.open(encoding="utf-8") as f:
+        return yaml.safe_load(f)["world_purity"]
+
+
+def pack_dir(reg: dict) -> Path:
+    return ROOT / reg["datapack"]
+
+
+def _nested_server_jar(bundler: Path) -> zipfile.ZipFile:
+    """mojang jar 은 번들러다 — 안에 든 진짜 server jar 를 연다."""
+    outer = zipfile.ZipFile(bundler)
+    inner = [n for n in outer.namelist()
+             if n.startswith("META-INF/versions/") and n.endswith(".jar")]
+    if not inner:
+        raise SystemExit(f"{BAD} {bundler} 안에서 server jar 를 못 찾았다")
+    return zipfile.ZipFile(io.BytesIO(outer.read(inner[0])))
+
+
+def vanilla_json(jar: zipfile.ZipFile, path: str) -> dict:
+    """바닐라 정본 한 조각. 없으면 죽는다 — 추측하지 않는다."""
+    try:
+        return json.loads(jar.read(f"data/minecraft/{path}"))
+    except KeyError:
+        raise SystemExit(f"{BAD} 바닐라 정본에 없다: {path} — 버전이 바뀌었는가?")
+
+
+def vanilla_biome_ids(jar: zipfile.ZipFile) -> set[str]:
+    return {
+        "minecraft:" + n.split("/")[-1][:-5]
+        for n in jar.namelist()
+        if n.startswith("data/minecraft/worldgen/biome/") and n.endswith(".json")
+    }
+
+
+def vanilla_climate(reg: dict, *, allow_datagen: bool = True) -> list[dict] | None:
+    """오버월드의 기후 상자 7,593 개 — **바닐라 데이터 생성기**가 뱉은 정본.
+
+    multi_noise_biome_source_parameter_list 레지스트리는 preset **이름만** 담는다(37 바이트).
+    덮어도 소용없다. 실제 구획은 Java 안(OverworldBiomeBuilder)에 있고,
+    그것을 밖으로 꺼내는 유일한 정공법이 `--reports` 다.
+    """
+    cached = CACHE / "biome_parameters_overworld.json"
+    if cached.is_file():
+        return json.loads(cached.read_text())["biomes"]
+    if not allow_datagen:
+        return None
+
+    jar = ROOT / reg["vanilla_jar"]
+    if not jar.is_file():
+        raise SystemExit(f"{BAD} 바닐라 jar 이 없다: {jar}")
+    if not JDK.is_file():
+        raise SystemExit(f"{BAD} JDK 21 이 없다: {JDK}")
+
+    print(f"   … 바닐라 데이터 생성기를 돌린다 (한 번만; {cached} 에 캐시)")
+    CACHE.mkdir(parents=True, exist_ok=True)
+    out = CACHE / "out"
+    subprocess.run(
+        [str(JDK), "-DbundlerMainClass=net.minecraft.data.Main", "-jar", str(jar),
+         "--server", "--reports", "--output", str(out)],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    src = out / "reports" / "biome_parameters" / "minecraft" / "overworld.json"
+    if not src.is_file():
+        raise SystemExit(f"{BAD} 데이터 생성기가 biome_parameters 를 안 뱉었다: {src}")
+    cached.write_bytes(src.read_bytes())
+    return json.loads(cached.read_text())["biomes"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 바이옴 이름표 갈아끼우기 — parameters 는 건드리지 않는다
+# ══════════════════════════════════════════════════════════════════════════
+def remap_biome(box: dict, rules: list[dict]) -> str:
+    """기후 상자 하나에 붙일 **이름표**를 고른다. 위에서부터 첫 일치."""
+    name = box["biome"]
+    for rule in rules:
+        if rule["from"] != name:
+            continue
+        when = rule.get("when")
+        if when and any(box["parameters"].get(axis) != bound for axis, bound in when.items()):
+            continue
+        return rule["to"]
+    return name
+
+
+def build_climate(reg: dict, vanilla: list[dict]) -> list[dict]:
+    rules = reg["biomes"]["remap"]
+    return [{"biome": remap_biome(b, rules), "parameters": b["parameters"]} for b in vanilla]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# --build : 등록부 → 데이터팩
+# ══════════════════════════════════════════════════════════════════════════
+def write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def build(reg: dict) -> int:
+    jar = _nested_server_jar(ROOT / reg["vanilla_jar"])
+    pack = pack_dir(reg)
+    data = pack / "data" / "minecraft" / "worldgen"
+
+    write_json(pack / "pack.mcmeta", {
+        "pack": {
+            "description": "혼천 — 세계 순도 (바닐라 구조물·사막·빙설 없음)",
+            "pack_format": reg["pack_format"],
+            "supported_formats": [reg["pack_format"], 99],
+            "min_format": reg["pack_format"],
+            "max_format": 99,
+        }
+    })
+
+    # ── ① 구조물 : placement.frequency = 0 (정본에서 한 필드만) ─────────────
+    for entry in reg["structures"]["disable"]:
+        name = entry["id"].split(":", 1)[1]
+        doc = vanilla_json(jar, f"worldgen/structure_set/{name}.json")
+        # 한 필드만 — frequency. 다른 것은 절대 건드리지 않는다.
+        #
+        #   ⚠ 여기서 「strongholds 는 concentric_rings 니까 count: 0 도 주자」는 유혹에 넘어가지 마라.
+        #     count 의 코덱은 Codec.intRange(1, 4095) 다 — **0 은 레지스트리 로딩을 깨뜨린다.**
+        #     (--load-test 가 실제로 이걸 잡았다: "Value 0 outside of range [1:4095]")
+        #     frequency 0 이면 concentric_rings 도 막힌다: StructurePlacement.isStructureChunk() 의
+        #     확률 감쇠는 배치 종류와 무관한 **상위 클래스**의 관문이고, nextFloat() < 0.0 은 항상 거짓이다.
+        doc["placement"]["frequency"] = 0.0
+        write_json(data / "structure_set" / f"{name}.json", doc)
+    print(f"{OK} structure_set {len(reg['structures']['disable'])} 종")
+
+    # ── ② 피처 : placement 에 count 0 ──────────────────────────────────────
+    for entry in reg["features"]["disable"]:
+        name = entry["id"].split(":", 1)[1]
+        doc = vanilla_json(jar, f"worldgen/placed_feature/{name}.json")
+        mods = doc["placement"]
+        existing = next((m for m in mods if m.get("type") == "minecraft:count"), None)
+        if existing:
+            existing["count"] = 0              # 있던 count 를 0 으로 (최소 편집)
+        else:
+            mods.insert(0, {"type": "minecraft:count", "count": 0})
+        write_json(data / "placed_feature" / f"{name}.json", doc)
+    print(f"{OK} placed_feature {len(reg['features']['disable'])} 종")
+
+    # ── ③ 바이옴 : world_preset 의 biome_source 를 명시 목록으로 ────────────
+    vanilla = vanilla_climate(reg)
+    preset = vanilla_json(jar, "worldgen/world_preset/normal.json")
+    overworld = preset["dimensions"]["minecraft:overworld"]["generator"]["biome_source"]
+    if overworld.get("preset") != "minecraft:overworld":
+        raise SystemExit(f"{BAD} world_preset/normal.json 의 모양이 예상과 다르다: {overworld}")
+    boxes = build_climate(reg, vanilla)
+    preset["dimensions"]["minecraft:overworld"]["generator"]["biome_source"] = {
+        "type": "minecraft:multi_noise",
+        BIOME_SOURCE_KEY: "@@BOXES@@",
+    }
+    # 기후 상자는 **한 줄에 하나** — 7,593줄. 예쁜 들여쓰기(5MB)와 한 줄 압축(diff 불가) 사이.
+    # 이름표 하나가 바뀌면 diff 도 한 줄만 바뀐다.
+    body = ",\n".join(
+        " " * 12 + json.dumps(b, ensure_ascii=False, separators=(",", ":")) for b in boxes
+    )
+    text = json.dumps(preset, indent=2, ensure_ascii=False)
+    text = text.replace('"@@BOXES@@"', "[\n" + body + "\n          ]")
+    out = data / "world_preset" / "normal.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text + "\n", encoding="utf-8")
+    json.loads(text)   # 우리가 손으로 이어붙인 텍스트다 — 파싱되는지 즉시 확인한다
+
+    changed = sum(1 for a, b in zip(vanilla, boxes) if a["biome"] != b["biome"])
+    print(f"{OK} world_preset/normal.json — 기후 상자 {len(boxes)}개 중 {changed}개 이름표 교체")
+    print(f"\n{OK} 데이터팩: {pack.relative_to(ROOT)}")
+    print("   → 새 월드의 datapacks/ 에 넣어라. **기존 월드의 청크는 안 바뀐다.**")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 기본 : 검산
+# ══════════════════════════════════════════════════════════════════════════
+def audit(reg: dict) -> int:
+    pack, data = pack_dir(reg), pack_dir(reg) / "data" / "minecraft" / "worldgen"
+    bad: list[str] = []
+    warn: list[str] = []
+
+    def fail(msg: str) -> None:
+        bad.append(msg)
+
+    if not (pack / "pack.mcmeta").is_file():
+        fail(f"데이터팩이 없다: {pack.relative_to(ROOT)} — `--build` 를 먼저 돌려라")
+        print(f"{BAD} " + bad[0])
+        return 1
+
+    # ── ① 구조물 : 등록부 ↔ override 파일 ──────────────────────────────────
+    listed = {e["id"].split(":", 1)[1] for e in reg["structures"]["disable"]}
+    on_disk = {p.stem for p in (data / "structure_set").glob("*.json")}
+    for missing in sorted(listed - on_disk):
+        fail(f"등록부에 있으나 override 파일이 없다: structure_set/{missing}")
+    for extra in sorted(on_disk - listed):
+        fail(f"override 파일이 있으나 등록부에 없다(무허가): structure_set/{extra}")
+
+    jar_path = ROOT / reg["vanilla_jar"]
+    jar = _nested_server_jar(jar_path) if jar_path.is_file() else None
+    if jar:
+        vanilla_sets = {
+            n.split("/")[-1][:-5]
+            for n in jar.namelist()
+            if n.startswith("data/minecraft/worldgen/structure_set/") and n.endswith(".json")
+        }
+        for forgotten in sorted(vanilla_sets - listed):
+            fail(f"★ 바닐라 구조물인데 등록부에 없다 — **켜져 있다**: {forgotten}")
+    else:
+        warn.append(f"바닐라 jar 이 없어 「빠뜨린 구조물」 검사를 못 했다: {jar_path}")
+
+    for f in sorted((data / "structure_set").glob("*.json")):
+        doc = json.loads(f.read_text())
+        pl = doc.get("placement", {})
+        if pl.get("frequency") != 0.0:
+            fail(f"structure_set/{f.name}: frequency 가 0 이 아니다 ({pl.get('frequency')!r}) — 이 구조물은 **선다**")
+        if pl.get("count") == 0:
+            fail(f"structure_set/{f.name}: count 가 0 이다 — concentric_rings 의 count 코덱은 [1:4095] 다. "
+                 "**레지스트리 로딩이 깨진다**(서버 사망). frequency 로만 끈다")
+        if not doc.get("structures"):
+            fail(f"structure_set/{f.name}: structures 목록이 비었다 — 정본에서 최소 편집하라")
+    print(f"{OK if not bad else BAD} 구조물 — 등록 {len(listed)}종 / 파일 {len(on_disk)}종")
+
+    # ── ② 피처 ────────────────────────────────────────────────────────────
+    feat_listed = {e["id"].split(":", 1)[1] for e in reg["features"]["disable"]}
+    feat_disk = {p.stem for p in (data / "placed_feature").glob("*.json")}
+    for missing in sorted(feat_listed - feat_disk):
+        fail(f"등록부에 있으나 override 파일이 없다: placed_feature/{missing}")
+    for extra in sorted(feat_disk - feat_listed):
+        fail(f"override 파일이 있으나 등록부에 없다(무허가): placed_feature/{extra}")
+    for f in sorted((data / "placed_feature").glob("*.json")):
+        doc = json.loads(f.read_text())
+        counts = [m.get("count") for m in doc.get("placement", []) if m.get("type") == "minecraft:count"]
+        if 0 not in counts:
+            fail(f"placed_feature/{f.name}: count 0 이 없다 — 이 피처는 **놓인다**")
+    print(f"{OK if not bad else BAD} 피처 — 등록 {len(feat_listed)}종 / 파일 {len(feat_disk)}종")
+
+    # ── ③ 바이옴 ──────────────────────────────────────────────────────────
+    preset_path = data / "world_preset" / "normal.json"
+    forbidden = {r["from"] for r in reg["biomes"]["remap"]}
+    if not preset_path.is_file():
+        fail("world_preset/normal.json 이 없다 — 사막·빙설이 그대로 있다")
+    else:
+        preset = json.loads(preset_path.read_text())
+        src = preset["dimensions"]["minecraft:overworld"]["generator"]["biome_source"]
+        if src.get("type") != "minecraft:multi_noise" or BIOME_SOURCE_KEY not in src:
+            fail("world_preset 의 오버월드 biome_source 가 명시 목록이 아니다 (preset 참조는 소용없다)")
+        else:
+            boxes = src[BIOME_SOURCE_KEY]
+            used = {b["biome"] for b in boxes}
+
+            for f in sorted(used & forbidden):
+                fail(f"★ 금지 바이옴이 기후 구획에 **남아 있다**: {f}")
+
+            if jar:
+                unknown = used - vanilla_biome_ids(jar)
+                for u in sorted(unknown):
+                    fail(f"★ 존재하지 않는 바이옴 id — **레지스트리 로딩이 실패한다**: {u}")
+
+            # 핵심 불변식 — 기후 상자를 건드리지 않았는가 (정본과 바이트 비교)
+            vanilla = vanilla_climate(reg, allow_datagen=False)
+            if vanilla is None:
+                warn.append("바닐라 기후 정본 캐시가 없어 「구획 불변」 심층 대조를 건너뛰었다 "
+                            "(`--build` 를 한 번 돌리면 캐시가 생긴다)")
+            elif len(vanilla) != len(boxes):
+                fail(f"★ 기후 상자 수가 다르다: 바닐라 {len(vanilla)} → 우리 {len(boxes)}. "
+                     "구획이 바뀌었다 = 기후 공간에 구멍이나 겹침이 생겼을 수 있다")
+            else:
+                drift = [i for i, (a, b) in enumerate(zip(vanilla, boxes))
+                         if a["parameters"] != b["parameters"]]
+                if drift:
+                    fail(f"★ 기후 상자 {len(drift)}개의 parameters 가 정본과 다르다 (첫 위치 #{drift[0]}). "
+                         "우리는 이름표만 갈기로 했다 — 구획을 건드리면 안 된다")
+                else:
+                    relabel = sum(1 for a, b in zip(vanilla, boxes) if a["biome"] != b["biome"])
+                    print(f"{OK} 바이옴 — 기후 상자 {len(boxes)}개 구획 **불변**, 이름표 {relabel}개 교체")
+                    print(f"     금지 {len(forbidden)}종이 구획에서 0회 등장 → 이 세계는 그것들을 "
+                          f"**생성할 수 없다**(확률이 아니라 불가능)")
+
+    # ── ④ 야생 스폰 : 등록부 ↔ 배선 ────────────────────────────────────────
+    hg = ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt" / "HuntingGrounds.java"
+    if hg.is_file():
+        src = hg.read_text(encoding="utf-8")
+        if "world_purity.yml" not in src:
+            fail("HuntingGrounds.java 가 world_purity.yml 을 읽지 않는다 — 야생 스폰 등록부가 배선되지 않았다")
+        else:
+            print(f"{OK} 야생 스폰 — 허용 {len(reg['wild_spawn']['allow'])}종이 "
+                  f"HuntingGrounds 에 배선됨 (나머지는 전부 취소)")
+    else:
+        warn.append("HuntingGrounds.java 를 못 찾았다")
+
+    # ── 결과 ──────────────────────────────────────────────────────────────
+    print()
+    for w in warn:
+        print(f"{WARN} {w}")
+    if bad:
+        print(f"\n{BAD} 순도 검산 실패 — {len(bad)}건")
+        for b in bad:
+            print(f"   {BAD} {b}")
+        return 1
+    print(f"{OK} 세계 순도 검산 통과. 바닐라의 흔적을 찾지 못했다.")
+    print(f"   실측은 `--emit-rcon` 으로. 정적 검사는 「생성될 수 없음」까지만 말한다.")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# --load-test : **레지스트리 로딩 시험** — 서버를 띄우지 않고 진짜 코덱에 먹인다
+#
+#   이 프로젝트의 첫째 규약이 「레지스트리 실패 = 서버 사망」이다.
+#   그런데 JSON 이 옳은지 아는 확실한 방법은 **바닐라 코덱에 먹여 보는 것**뿐이다.
+#   이 시험이 실제로 서버를 죽일 버그를 잡았다 (strongholds count: 0 → range [1:4095]).
+#
+#   Paper 의 jar 은 mojang 매핑이라 net.minecraft.* 를 이름 그대로 쓸 수 있다.
+# ══════════════════════════════════════════════════════════════════════════
+def _classpath(reg: dict) -> str:
+    """1.21.11 만 골라 담는다.
+
+    ⚠ run/mvt/libraries 에는 **1.21.4 잔재가 함께 산다.** 그냥 다 담으면
+      낡은 DataFixerUpper·paper-api 가 앞서 잡혀서 엉뚱한 데서 죽는다
+      (NoSuchFieldError: RegistryKey.GAME_RULE — 이 함정에 실제로 빠졌다).
+      바닐라 번들러 안의 라이브러리를 **먼저** 놓아 버전을 못 박는다.
+    """
+    ver = "1.21.11"
+    paper = ROOT / "run" / "mvt" / "versions" / ver / f"paper-{ver}.jar"
+    if not paper.is_file():
+        raise SystemExit(f"{BAD} Paper jar 이 없다: {paper}")
+
+    libs = CACHE / "libs"
+    if not libs.is_dir():
+        with zipfile.ZipFile(ROOT / reg["vanilla_jar"]) as z:
+            for n in z.namelist():
+                if n.startswith("META-INF/libraries/") and n.endswith(".jar"):
+                    tgt = libs / Path(n).name
+                    tgt.parent.mkdir(parents=True, exist_ok=True)
+                    tgt.write_bytes(z.read(n))
+
+    jars = [str(paper)]
+    jars += sorted(str(p) for p in libs.glob("*.jar"))                       # 바닐라 정본 라이브러리 우선
+    jars += sorted(str(p) for p in (ROOT / "run" / "mvt" / "libraries").rglob("*.jar")
+                   if "1.21.4" not in str(p))                                # Paper 것(adventure 등) — 낡은 건 뺀다
+    return ":".join(jars)
+
+
+def load_test(reg: dict) -> int:
+    src = ROOT / "worldgen" / "loadtest" / "PurityLoadTest.java"
+    if not src.is_file():
+        raise SystemExit(f"{BAD} 시험 코드가 없다: {src}")
+    javac = JDK.parent / "javac"
+    if not javac.is_file():
+        raise SystemExit(f"{BAD} JDK 21 이 없다: {javac}")
+
+    cp = _classpath(reg)
+    classes = CACHE / "loadtest"
+    classes.mkdir(parents=True, exist_ok=True)
+    subprocess.run([str(javac), "-nowarn", "-cp", cp, "-d", str(classes), str(src)], check=True)
+
+    print(f"   … 바닐라 코덱으로 데이터팩을 파싱한다 (서버는 안 띄운다)\n")
+    proc = subprocess.run(
+        [str(JDK), "-cp", f"{classes}:{cp}", "PurityLoadTest", str(pack_dir(reg))],
+        capture_output=True, text=True,
+    )
+    for line in (proc.stdout + proc.stderr).splitlines():
+        if "[STDOUT]:" in line:
+            print("  " + line.split("[STDOUT]:", 1)[1].strip())
+        elif "PASS —" in line or "FAIL —" in line:
+            print("  " + line.strip())
+    if proc.returncode == 0:
+        print(f"\n{OK} 레지스트리 로딩 시험 통과 — 이 데이터팩으로 서버는 뜬다.")
+    else:
+        print(f"\n{BAD} 레지스트리 로딩 시험 **실패** — 이대로 월드를 깔면 서버가 안 뜬다.")
+    return proc.returncode
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# --emit-rcon : 인게임 실측
+# ══════════════════════════════════════════════════════════════════════════
+def emit_rcon(reg: dict) -> int:
+    NETHER = {"fortress", "bastion_remnant", "nether_fossil"}
+    END = {"end_city"}
+
+    print("# ═══════════════════════════════════════════════════════════════════")
+    print("# 혼천 — 세계 순도 실측 (RCON)")
+    print("#")
+    print("#   **새 월드에서 돌려라.** 기존 월드의 이미 생성된 청크는 안 바뀐다.")
+    print("#   전제: worldgen/honcheon_purity 와 worldgen/honcheon_no_caves 를")
+    print("#         <world>/datapacks/ 에 넣고 **월드를 새로 만든 뒤** 접속.")
+    print("#")
+    print("#   통과 기준을 각 줄 옆에 적었다. 하나라도 어긋나면 순도가 깨진 것이다.")
+    print("# ═══════════════════════════════════════════════════════════════════")
+
+    print("\n# ── ⓪ 데이터팩이 실제로 물렸는가 (이게 아니면 아래는 전부 무의미) ──")
+    print("datapack list")
+    print("#   통과: honcheon_purity · honcheon_no_caves 가 **enabled** 목록에 보인다")
+    print("#   실패: disabled 에 있거나 안 보이면 → 서버 로그에서 레지스트리 오류를 찾아라")
+
+    print("\n# ── ① 구조물: 전부 「찾을 수 없음」이어야 한다 ──")
+    print("#   통과: \"Could not find a structure of type ... within reasonable distance\"")
+    print("#   실패: 좌표가 나오면 그 구조물은 **살아 있다**")
+    for entry in reg["structures"]["disable"]:
+        for s in entry["holds"]:
+            if s in NETHER:
+                print(f"execute in minecraft:the_nether run locate structure minecraft:{s}")
+            elif s in END:
+                print(f"execute in minecraft:the_end run locate structure minecraft:{s}")
+            else:
+                print(f"locate structure minecraft:{s}")
+
+    print("\n# ── ② 바이옴(금지): 전부 「찾을 수 없음」이어야 한다 ──")
+    print("#   통과: \"Could not find a biome of type ... within reasonable distance\"")
+    print("#   실패: 좌표가 나오면 기후 구획에 그 이름표가 남아 있다는 뜻이다 — 정적 검사부터 다시")
+    for r in reg["biomes"]["remap"]:
+        print(f"locate biome {r['from']}")
+
+    print("\n# ── ③ 바이옴(양성 대조): 전부 **좌표가 나와야** 한다 ──")
+    print("#   이게 없으면 「전부 못 찾음」이 순도가 아니라 **고장**이라는 뜻이다.")
+    print("#   특히 savanna — 사막이 갔던 자리다. 이게 나와야 「더운 곳이 살아 있다」는 증거다.")
+    for b in ["savanna", "badlands", "plains", "forest", "taiga", "grove",
+              "jagged_peaks", "beach", "river", "cherry_grove", "jungle", "bamboo_jungle"]:
+        print(f"locate biome minecraft:{b}")
+
+    print("\n# ── ④ 야생의 가축: 산야를 2000블록쯤 돌아다닌 **뒤에** 세어라 ──")
+    print("#   (셀렉터는 **로드된 청크**만 본다 — 날아다니며 청크를 열고 나서 돌려야 뜻이 있다)")
+    print("#   통과: 전부 \"Test failed\" (count 0). 마을 안에서 돌리면 소·닭이 나오는 게 **정상**이다")
+    print("#         — 가축은 마을의 살림이고, 우리가 CUSTOM 으로 놓은 것이다.")
+    for m in ["cow", "sheep", "pig", "chicken", "horse", "villager",
+              "wandering_trader", "goat", "iron_golem", "zombie", "skeleton",
+              "creeper", "enderman", "spider"]:
+        print(f"execute if entity @e[type=minecraft:{m}]")
+
+    print("\n# ── ⑤ 야생의 짐승(양성 대조): 우리가 허용한 것은 **있어야** 한다 ──")
+    for m in reg["wild_spawn"]["allow"]:
+        print(f"execute if entity @e[type=minecraft:{m.lower()}]")
+    print("#   통과: 최소한 몇은 \"Test passed\". 전부 0 이면 산야가 **죽은 것**이다 — 허용 목록이 안 먹었다")
+
+    print("\n# ── ⑥ 바이옴 분포 표본 (선택) — 스폰 둘레 4,000블록을 400점 격자로 뜬다 ──")
+    print("#   각 줄은 Test passed / Test failed 를 뱉는다. passed 수를 세면 분포다.")
+    print("#   ⚠ 청크를 로드한다 — 무겁다. 먼저 `forceload` 하거나 view-distance 를 줄이고 돌려라.")
+    step, half = 200, 2000
+    for x in range(-half, half + 1, step):
+        for z in range(-half, half + 1, step):
+            print(f"execute positioned {x} 96 {z} if biome ~ ~ ~ minecraft:desert")
+    print("#   통과: **passed 0 / 441**. desert 를 savanna 로 바꿔 다시 돌리면 여럿 passed 여야 한다")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="세계 순도 검산 — 바닐라의 흔적이 남아 있는가")
+    ap.add_argument("--build", action="store_true", help="등록부에서 데이터팩을 빚는다 (바닐라 정본 필요)")
+    ap.add_argument("--load-test", action="store_true",
+                    help="★ 바닐라 코덱으로 데이터팩을 파싱한다 — 레지스트리 실패 = 서버 사망")
+    ap.add_argument("--emit-rcon", action="store_true", help="인게임 실측 명령을 뱉는다")
+    args = ap.parse_args()
+
+    reg = registry()
+    if args.build:
+        return build(reg) or load_test(reg)   # 빚었으면 곧바로 코덱에 먹여 본다
+    if args.load_test:
+        return load_test(reg)
+    if args.emit_rcon:
+        return emit_rcon(reg)
+    return audit(reg)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

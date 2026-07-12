@@ -56,6 +56,42 @@ vanilla_texture_channels:
     note: "화덕 3종은 배치가 같으니 **같은 그림 한 장**을 세 경로에 쓴다 (바닐라도 같은 배치다)"
     out_of_scope: "모루·양조대·베틀·대장간 GUI = 바닐라 유지 (블록 텍스처는 덮었으나 GUI 는 미등록 — 등록 없이 교체 금지)"
     거래_GUI_불요: "서버는 바닐라 상인 GUI(container/villager.png)를 쓰지 않는다 — 거래는 LedgerGui 의 커스텀 인벤토리다 (Merchant API 미사용 확인). 그래서 그 채널은 등록하지 않는다"
+  widget_메뉴:                       # 2026-07 신설 — 버튼·탭·툴팁·스크롤바 (1.21 GUI 스프라이트 계약)
+    path: "minecraft/textures/gui/sprites/widget/ · minecraft/textures/gui/sprites/tooltip/"
+    sprites:
+      button: "200x20 (border 3)"
+      button_highlighted: "200x20 (border 3)"
+      button_disabled: "200x20 (border 1)"
+      tab: "130x24 (border l2 t2 r2 b0)"
+      tab_highlighted: 동일
+      tab_selected: 동일
+      tab_selected_highlighted: 동일
+      scroller: "6x32 (border 1)"
+      scroller_background: "6x32 (border 1)"
+      text_field: "200x20 (border 1)"
+      text_field_highlighted: 동일
+      slider: "200x20 (border 1)"
+      slider_highlighted: 동일
+      slider_handle: "8x20 (border l2 t2 r2 b3)"
+      slider_handle_highlighted: 동일
+      tooltip/background: "100x100 (border 9)"
+      tooltip/frame: "100x100 (border 10 · stretch_inner)"
+    design: |
+      화선지 몸 + 먹 테 + 되비침/그늘 1px (바닐라의 입체 문법을 수묵 톤으로만 재해석).
+      상태는 **색이 아니라 밝기**로 오른다 (colorblind_rule): 기본 → 눌림은 종이가 밝아지고,
+      비활성은 빛이 죽는다. 주사(朱砂)는 눌린 버튼의 밑줄·고른 탭의 인끈 한 줄뿐 —
+      **있고 없음**이 곧 정보다 (색조 구분에 기대지 않는다).
+    invariant: |
+      ★ **.mcmeta 를 굽지 않는다.** 1.21 위젯은 나인슬라이스이고 테두리 폭은 <스프라이트>.png.mcmeta 가
+      정한다. 리소스팩은 **파일 단위로** 겹치므로, PNG 만 넣고 mcmeta 를 넣지 않으면 바닐라의 mcmeta 가
+      그대로 산다 ⇒ 테두리 폭·늘어나는 법·클릭 좌표가 한 픽셀도 움직이지 않는다.
+      대신 두 가지가 강제된다:
+        ① 치수가 바닐라와 **똑같아야** 한다 (위 표는 1.21.11 client jar 실측치. 어긋나면 나인슬라이스가
+           엉뚱한 데를 자른다 = 버튼이 찢어진다. write_ui_sprites 가 굽기 전에 대조하고 막는다).
+        ② 늘어나는 자리는 **균질해야** 한다 — 가운데는 가로로 깔리므로(버튼 폭 98·150·200…) 행마다
+           한 색이어야 하고, 좌·우 띠는 세로로 깔리므로 열마다 한 색이어야 한다.
+           그래서 화선지 결(fiber)은 **가로줄로만** 넣는다 (세로 결은 좁은 버튼에서 씹힌다).
+    out_of_scope: "checkbox·cross_button·page_forward/backward·locked_button·slot_frame·toast = 바닐라 유지 (미등록 = 교체 금지)"
   xp_bar_불가침: "XP 바 기능·위치는 내력 표시용 예약 — 텍스처 톤 변경만 허용, 숨기기 금지 (이번 교체 범위 밖, 바닐라 유지)"
   registration: "교체 추가 = 본 채널 등록 + build_resourcepack.py 반영 (glyph_slots와 같은 등록제 문법)"
 
@@ -173,6 +209,98 @@ item_channels:
     해독약: { base_item: potion, method: "minecraft:potion_contents.custom_color — 컴포넌트가 칠한다 (팩 불필요)", note: "바닐라 효과는 비워 지급 — 효과는 판정층이 준다" }
     호골: { base_item: bone, note: "바닐라 뼈가 이미 호골 — 이름만" }
     화폐_문_냥_금: { note: "아이템 없음 — economy.yml mc.ledger_based (복제·인플레 원천 차단). 전표만 아이템인 이유" }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3D 모델 채널 등록부 — 【2026-07 신설】 (build_resourcepack.py: weapon_model_3d ·
+#   write_qi_assets · write_mob_assets · 검산: texture_audit ⑨⑩ · motion_audit ⑧ · mob_model_audit ③)
+#
+# 【왜】 사용자 요구: "마인크래프트 아이템처럼 생긴 게 아닌 **3D 리소스팩 형태로 디자인 강화**".
+#   그전까지 병기는 minecraft:item/handheld — **평면 스프라이트를 1px 두께로 밀어낸 판때기**였다.
+#   손에 들면 종잇장이 서 있고, SkillDisplay 의 궤적에 실리면 종잇장이 날아다녔다.
+#
+# 【세 층이 한 규약을 쓴다 — 전부 ItemDisplayTransform.NONE 으로 그려진다】
+#   ⇒ display 절이 **적용되지 않는다**. 엔진이 그리는 것은 날것의 지오메트리다. 그러므로:
+#     ㄱ. 길이축 = +X  (SkillDisplay.roll() 이 X 로 자전한다 — skill_motion.md §3-D "획은 +X 로 눕힌다")
+#     ㄴ. 두께축 = +Z  (날의 넓은 면이 ±Z 를 본다)
+#     ㄷ. 원점 = 모델 (8,8,8)  (ItemDisplay 는 모델의 **중심**을 엔티티 자리에 둔다)
+#     ㄹ. 짐승만 예외 — **코가 +Z** (MobDisplay 가 본체 yaw 를 그대로 먹인다) · 발이 원점
+model_channels:
+  병기:
+    count: 45                       # 계열 9 × 등급 5 (범철·정련·보병·신병·마병)
+    path: "assets/honcheon/models/item/weapon/<series>_<grade>.json"
+    geometry: "elements — 칼날(3겹 마름모 단면) · 코등이 · 자루 · 물미 · 고리 · 수실이 저마다 부피를 갖는다"
+    texture: |
+      **새 PNG 를 굽지 않는다.** 여섯 면이 이미 있는 16x16 아이콘 PNG 를 UV 로 문다
+      (빌더가 만든 char grid 에서 부위별 대표 픽셀 한 칸을 뽑아 면마다 물린다 — 구멍이 원천적으로 없다).
+      ⇒ 검수 축 ⑥(외곽선 폐합)·⑨(계열 실루엣)·⑩(등급 변별)이 재던 진실이 하나도 흔들리지 않는다.
+      면마다 다른 코드를 물리는 것이 요점이다 (위=인刃 / 아래=척脊): MC 의 면 음영과 겹쳐
+      **한날(도)과 양날(검)이 3D 에서 갈린다.**
+    등급_변별: |
+      ★ 색으로 갈리지 않는다 (colorblind_rule). 손에 든 병기·궤적에 실린 병기는 **실루엣으로만** 읽힌다.
+        ① 고리(鐶) 0/1/2/3 — 자루에 감긴 금속 테가 **튀어나온 덩이**로 보인다
+        ② 날의 길이·마름 — 범철은 뭉툭하고 짧다. 오를수록 길어지고 끝이 날카로워진다 (+0/1/2/3px)
+        ③ 수실 — 신병만 자루 끝에 늘어진다
+        ④ 마병은 **위가 아니라 밖**이다: 고리 0 · 날에 **톱니**가 돋고 · 혈조가 피로 찬다.
+           형체만 보고도 "저것은 정파의 쇠가 아니다"가 읽힌다.
+    display_변환: |
+      손·GUI·바닥의 자세는 **바닐라에서 유도한다** (눈대중 금지 — 각도를 짐작하면 병기가 손등을 뚫는다).
+      바닐라 item/handheld 의 display 는 대각선으로 누운 스프라이트(길이축 +45°)를 전제한 값이다.
+      우리 모델은 +X (0°) 이므로  R = R_바닐라 · Rz(45°)  를 XYZ 오일러로 역산해 적는다
+      (_display() 가 합성하고 _check() 가 재합성해 대조한다). ⇒ 손·GUI·바닥에서 바닐라와 같은 자리에 놓인다.
+      긴 병기(창 2.1m · 월아산)는 gui/ground 에서만 줄인다 — **궤적에 실리는 날것은 줄이지 않는다**
+      (NONE 변환이므로 창은 여전히 2.1m 다. 그림만 줄이고 사거리는 판정이 정한다 — 거짓말이 아니다).
+    미감정_마병: "custom_model_data.strings 의 'revealed' 케이스 (정수 CMD 금지). 미감정 기본값 = 그 계열의 정련 모델 — 기연의 탈을 쓴 저주가 첫눈에 보이면 저주가 아니다"
+    ★버그_수정: |
+      Weapons.java 는 계열 9 × 등급 5 = **45개의 item_model 키를 조건 없이 박는다**
+      (Series.modelId 가 전부 non-null 이 된 뒤로). 그런데 팩에는 마병이 dao 하나뿐이었다 —
+      즉 팩을 받은 눈에 나머지 **마병 8자루는 '없는 모델'(보라·검정 큐브)** 로 떴다.
+      팩 게이트는 "키를 안 붙이거나, 붙였으면 반드시 굽거나" 둘 중 하나다. 45자루를 전부 굽는다.
+      (검수 축 ⑩도 4등급 27쌍 → 5등급 36쌍으로 넓혔다 — 재는 자가 없으면 규약은 장식이다.)
+
+  무공의_획:
+    count: 9                        # config/skill_motion.yml display.models 의 청구서 (use_held 2종은 요구 없음)
+    path: "assets/honcheon/models/item/qi|ult/<key>.json + assets/honcheon/textures/qi|ult/<key>.png (32x32)"
+    keys: [qi/blade_arc, qi/blade_heavy, qi/bolt_edge, qi/bolt_lance, qi/guard_shard,
+           ult/plum_bloom, ult/taegeuk_disc, ult/emperor_edge, ult/blood_tide]
+    치수_계약: |
+      엔진이 size 를 Transformation.scale 로 **그대로** 곱한다 ⇒ 모델은 1×1×1 단위 상자를 **가득 채운다**.
+      원소가 z 를 1px 만 차지하면 최종 두께 = 0.04m × 1/16 = 0.0025m — 보이지 않는다.
+      그래서 획의 원소는 0..16 을 채우고 **모양은 텍스처의 알파가 판다**
+      (두께 0.04m 짜리 판에 기하를 새기는 것은 낭비다 — 어차피 종잇장의 옆구리다).
+      예외 둘: bolt_lance 는 **말뚝**(2.2×0.7×0.7 — 덩이라서 기하가 형체를 만든다) ·
+               plum_bloom 은 **교차한 판 두 장**(바닐라 화초의 문법 — 어느 각도에서도 꽃이 핀다).
+    채색: "수묵 4단(속이 밝고 끝이 스민다). **유일한 예외는 혈해만리의 혈조(血潮)** — 예외 자체가 정보다"
+    texture_경로_주의: "textures/item/ **아래가 아니다**. 축 ⑥(외곽선 폐합)은 아이콘의 규율이지 반투명 획의 규율이 아니다 — 스민 끝을 먹으로 두르면 그건 획이 아니라 스티커다"
+
+  짐승의_형체:
+    count: 8                        # config/mob_models.yml 의 청구서 (호랑이 3 · 반달곰 2 · 멧돼지 1 · 백영묘 2)
+    path: "assets/honcheon/models/mob/<name>/<part>.json + assets/honcheon/textures/mob/<name>/<part>.png (32x32)"
+    방향_계약: |
+      코가 +Z · 등이 +Y · 오른쪽이 +X.  ★ 이것은 주석이 아니라 **엔진의 움직임이 증명한다**:
+      MobDisplay.follow() 는 돌진을 rotateX(lean) 으로 그리고(X 로 기울면 ±Z 로 숙인다 ⇒ 앞 = Z) ·
+      걷기 흔들림을 rotateZ(roll) 로 어깨를 번갈아 내리고(⇒ 좌우 = X) · 죽음을 rotateZ(90°) 으로
+      옆으로 눕힌다. 셋이 모두 +Z 정면을 말한다.
+    원점: "몸통은 (8,8,8) 이 **발이 딛는 바닥의 정중앙** ⇒ 기하가 y 8..24 에 선다. 머리·꼬리는 offset 이 그 중심을 잡으므로 중심 원점(y 0..16)"
+    치수_계약: "파츠는 단위 상자를 **가득 채운다** (bbox 가 세 축 모두 16px). 얇은 꼬리조차 채운 뒤 size 가 눌러 만든다 — 모양은 모델에서, 치수는 등록부에서. _fill_check() 가 굽기 전에 강제한다"
+    산늑대_미구움: "일부러 굽지 않았다 — mob_models.yml 이 shape: vanilla 로 못 박았다('이미 늑대다. 조각으로 만들면 더 나빠진다'). 구워 두면 언젠가 누군가 켤 것이고, 그러면 여섯 마리가 뻣뻣하게 미끄러진다. 등록부의 판단을 따른다"
+    ★엔진에_넘기는_결함: |
+      **mob_models.yml 의 size 축 순서가 방향 계약과 어긋난다** (팩이 고칠 수 없는 자리 —
+      config/mob_models.yml · MobDisplay.java 는 형체 담당의 것이다).
+        · 등록부: size: [길이, 높이, 폭]  (예: 호랑이 몸통 [2.2, 1.0, 0.7])
+        · 엔진:   scale = Vector3f(size[0], size[1], size[2])  → X 를 2.2 로 늘린다
+        · 그런데 방향 계약상 **X 는 좌우(폭)** 이고 **길이는 Z(코~꼬리)** 다.
+        ⇒ 지금 호랑이는 **2.2m 넓고 0.7m 짧은** 슬래브가 된다.
+      팩이 기하로 상쇄하는 것은 **불가능하다**: 상쇄하려면 꼬리를 Z 로 7.5단위(120px) 늘려야 하는데
+      MC 모델 좌표의 한계는 -16..32 (48px) 다. 애초에 그 방향이 옳지도 않다 —
+      엔진 버그를 취소하려고 기하를 비틀면, 버그를 고치는 날 팩이 무너진다.
+      【고칠 곳 — config 한 줄씩, 코드 수정 없음】 size 를 [폭, 높이, 길이] 로 뒤집는다:
+        호랑이 몸통 [2.2,1.0,0.7] → [0.7,1.0,2.2] · 머리 [0.55,0.5,0.5] → [0.5,0.5,0.55]
+        꼬리 [0.9,0.12,0.12] → [0.12,0.12,0.9] · 반달곰 몸통 [1.6,1.0,0.8] → [0.8,1.0,1.6]
+        머리 [0.45,0.45,0.42] → [0.42,0.45,0.45] · 멧돼지 [1.5,0.9,0.55] → [0.55,0.9,1.5]
+        백영묘 몸통 [1.5,0.75,0.42] → [0.42,0.75,1.5] · 꼬리 [1.1,0.09,0.09] → [0.09,0.09,1.1]
+        (mob_model_audit 의 '크기(길이·높이·폭)' 라벨도 함께 뒤집어야 검수가 거짓말하지 않는다)
+      팩의 모델은 **문서화된 계약대로** 구워져 있다 (코 +Z · 단위 상자 가득 · size = 실제 미터).
+      위 한 줄이 뒤집히는 순간 짐승이 제 치수로 선다 — 팩은 손댈 것이 없다.
 
 # ─── 블록 희생 등록부 — 전역 치환 (징발 12 / 보류 4 / 금지 6계열) ───
 # 입력: docs/design/building_style_guide.md 팔레트. 판정: 세계 오염 검사 + 팩 게이트.
@@ -398,10 +526,15 @@ block_channels:
 texture_pipeline:
   dirs:
     아이템_정의: "assets/honcheon/items/<key>.json — item_model 컴포넌트가 가리키는 곳 (1.21.4 신규)"
-    아이템_모델: "assets/honcheon/models/item/<key>.json — parent: handheld(무기) | generated(그 외)"
-    아이템_텍스처: "assets/honcheon/textures/item/<key>.png — 16x16"
+    아이템_모델: "assets/honcheon/models/item/<key>.json — **병기 45자루는 elements(3D)** · 그 외는 generated(평면)"
+    아이템_텍스처: "assets/honcheon/textures/item/<key>.png — 16x16 (병기는 이 한 장이 아이콘이자 3D 의 재질이다)"
+    획_모델: "assets/honcheon/models/item/qi|ult/<key>.json (3D) + assets/honcheon/textures/qi|ult/<key>.png (32x32)"
+    짐승_모델: "assets/honcheon/models/mob/<name>/<part>.json (3D) + assets/honcheon/textures/mob/<name>/<part>.png (32x32)"
+    메뉴_스프라이트: "assets/minecraft/textures/gui/sprites/widget|tooltip/<name>.png — **.mcmeta 는 굽지 않는다** (바닐라 나인슬라이스가 그대로 산다 = 좌표 계약 불변)"
     블록_텍스처: "assets/minecraft/textures/block|entity|painting/<vanilla>.png — 전역 치환 (blockstate/model JSON 불요)"
-  builder_hooks: [ITEM_ART_등록표, write_item_assets, BLOCK_ART_등록부, write_block_textures, "main() 산출 집계", "pack.mcmeta description 갱신 (pack_format 46 불변)"]
+  builder_hooks: [ITEM_ART_등록표, write_item_assets, weapon_model_3d, write_qi_assets, write_mob_assets,
+                  write_ui_sprites, BLOCK_ART_등록부, write_block_textures, "main() 산출 집계",
+                  "pack.mcmeta description 갱신 (pack_format 75 불변)"]
   promotion: "플레이스홀더 → 정식 PNG 교체 시 ITEM_ART의 art 자리를 PNG 경로로 교체 (load_png 1개 추가) — 키·코드 불변"
   distribution: "server.properties resource-pack + sha1. require-resource-pack=false 유지 — 팩 게이트의 서버 측 표현"
 
