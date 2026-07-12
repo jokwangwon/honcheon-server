@@ -41,8 +41,13 @@ final class RegionAudit {
 
     /** 수묵 상한 — 청하현과 같은 잣대 (채색은 깃발·매화·등롱에만) */
     private static final double COLOR_MAX = 0.02;
-    /** 야간 암흑 상한 — 길 위 광원 7 미만이 이 비율을 넘으면 밤에 못 다닌다 */
-    private static final double DARK_MAX = 0.25;
+    /**
+     * 야간 암흑 상한 — <b>0.25 → 0.45</b>.
+     *
+     * <p>사용자 피드백("조명이 없는 부분도 존재해도 된다")을 지역에도 적용한다. 더구나 산채는
+     * <b>도적의 소굴</b>이다 — 등불로 환한 산채는 산채가 아니다. 마당과 채문만 밝으면 된다.
+     */
+    private static final double DARK_MAX = 0.45;
 
     static List<String> audit(World world, WorldMap.Place place, Zone zone) {
         List<String> out = new ArrayList<>();

@@ -232,15 +232,36 @@ public final class TownAudit {
 
     // ─── ① 길 폭 ───
 
+    /**
+     * 노면 격자 — <b>마을에 기복이 생겼으니 눈도 따라가야 한다</b>.
+     *
+     * <p>구판은 노면을 <b>cy 한 켜</b>로만 읽었다. 마을이 완전한 평면이던 시절의 눈이다.
+     * 사용자가 "평지의 획일감을 깨 달라"고 해서 땅이 ±2칸 물결치고 필지가 한 켜씩 오르내리자,
+     * 기단 위(관아·표국)의 문 앞 소로가 <b>통째로 사라졌다</b> — "소로 없음" 위반이 났다.
+     * 길이 없어진 게 아니라 <b>눈이 한 켜만 봤다.</b> 이제 cy±2 를 훑어 노면을 찾는다.
+     */
     private static boolean[][] pathGrid(World world, int cx, int cy, int cz) {
         boolean[][] g = new boolean[2 * SCAN_R + 1][2 * SCAN_R + 1];
         for (int dx = -SCAN_R; dx <= SCAN_R; dx++) {
             for (int dz = -SCAN_R; dz <= SCAN_R; dz++) {
-                Material m = world.getBlockAt(cx + dx, cy, cz + dz).getType();
-                g[dx + SCAN_R][dz + SCAN_R] = PATH.contains(m);
+                boolean road = false;
+                for (int y = cy + 2; y >= cy - 2 && !road; y--) {
+                    road = PATH.contains(world.getBlockAt(cx + dx, y, cz + dz).getType());
+                }
+                g[dx + SCAN_R][dz + SCAN_R] = road;
             }
         }
         return g;
+    }
+
+    /** 그 칸의 노면 높이 (cy±2 안에서 찾은 첫 노면) — 야간·소품 검사가 함께 쓴다 */
+    private static int roadY(World world, int x, int cy, int z) {
+        for (int y = cy + 2; y >= cy - 2; y--) {
+            if (PATH.contains(world.getBlockAt(x, y, z).getType())) {
+                return y;
+            }
+        }
+        return cy;
     }
 
     /** (dx,dz)를 지나는 x축 방향 연속 스팬 길이. */
@@ -920,7 +941,8 @@ public final class TownAudit {
                 if (!g[dx + SCAN_R][dz + SCAN_R]) {
                     continue;
                 }
-                Block above = world.getBlockAt(cx + dx, cy + 1, cz + dz);
+                int ry = roadY(world, cx + dx, cy, cz + dz);   // 노면이 오르내린다 — 그 위를 잰다
+                Block above = world.getBlockAt(cx + dx, ry + 1, cz + dz);
                 int light = above.getLightFromBlocks();
                 samples++;
                 sum += light;
@@ -962,7 +984,8 @@ public final class TownAudit {
                     continue;
                 }
                 mainSamples++;
-                if (world.getBlockAt(cx + dx, cy + 1, cz + dz).getLightFromBlocks() < 7) {
+                if (world.getBlockAt(cx + dx, roadY(world, cx + dx, cy, cz + dz) + 1, cz + dz)
+                        .getLightFromBlocks() < 7) {
                     mainDark++;
                 }
             }

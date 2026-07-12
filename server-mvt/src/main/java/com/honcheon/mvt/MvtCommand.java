@@ -910,7 +910,8 @@ public final class MvtCommand implements CommandExecutor {
             int cz = (zone.z1() + zone.z2()) / 2;
             int radius = Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 8;
             lines = TerrainAudit.audit(world, place.name(), cx, zone.y1() + 6, cz, radius,
-                    place.terrain() == null ? "평지" : place.terrain());
+                    place.terrain() == null ? "평지" : place.terrain(),
+                    TerrainForge.caveKind(place) != null);   // 우리가 판 굴이 있는 지역인가
         } else {
             Location center = plugin.anchor("장터");
             if (center == null) {
