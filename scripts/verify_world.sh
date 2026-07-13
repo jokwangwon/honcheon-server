@@ -125,7 +125,7 @@ if [ "$TOWN_ONLY" = "0" ]; then
 fi
 
 echo "══ [6/6] 정적 검산 (config·팩·전투)"
-for tool in game_audit combat_audit texture_audit motion_audit; do
+for tool in game_audit combat_audit texture_audit motion_audit model_key_audit; do
   [ -f "$ROOT/tools/$tool.py" ] || continue
   line=$(python3 "$ROOT/tools/$tool.py" 2>&1 | grep -E "총평" | tail -1)
   printf "  %-16s %s\n" "$tool" "${line:-(총평 없음)}"

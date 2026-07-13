@@ -177,18 +177,32 @@ final class SkillDisplay {
             return true;
         }));
         persistent.entrySet().removeIf(e -> e.getValue().isEmpty());
+        // 팩 상태는 **접속이 끊긴 사람만** 잊는다 (1초마다). 죽음·월드 이동은 팩을 벗기지 않는다 —
+        // 그것까지 잊으면 그 사람은 재접속 전까지 3D 를 못 본다 (조용한 강등). 여기가 유일한 망각처다.
+        if (now % 20 == 0 && !packed.isEmpty()) {
+            packed.removeIf(id -> plugin.getServer().getPlayer(id) == null);
+        }
         if (log.size() > 400) {
             log.subList(0, log.size() - 400).clear();
         }
     }
 
-    /** 정리 (performance.yml effects.cleanup_on: death · quit · world_change) */
+    /**
+     * 정리 (performance.yml effects.cleanup_on: death · quit · world_change).
+     *
+     * <p><b>형체를 거둔다. 팩 상태는 건드리지 않는다.</b> 예전엔 여기서 {@code packed.remove(body)} 를
+     * 했다 — 그런데 이 부름은 <b>죽음</b>과 <b>월드 이동</b>에도 온다 (SkillListener). 그 사람은 여전히
+     * 접속해 있고 팩도 여전히 켜져 있는데, {@link org.bukkit.event.player.PlayerResourcePackStatusEvent}
+     * 는 <b>다시 오지 않는다</b>. 그래서 한 번 죽거나 세계를 건너간 사람은 <b>재접속 전까지 3D 를 영영
+     * 못 봤다</b> — 아무 로그도 없이. 조용한 강등이다.
+     *
+     * <p>이제 팩 상태는 {@link #tick} 이 <b>접속이 끊긴 사람만</b> 걷어낸다 (아래). 죽음은 팩을 벗기지 않는다.
+     */
     void clear(UUID body) {
         Map<String, Persist> slots = persistent.remove(body);
         if (slots != null) {
             slots.values().forEach(p -> despawn(p.parts));
         }
-        packed.remove(body);
         pieces.removeIf(p -> {
             if (!body.equals(p.owner)) {
                 return false;
