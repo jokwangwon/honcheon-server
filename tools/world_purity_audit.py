@@ -635,6 +635,14 @@ def audit_hunt(fail, warn) -> None:
                   f"산야 {total_planted} + 마을 {total_herd} = "
                   f"**{total_planted + total_herd} 마리분이 등록되어 있다** (두 축 모두 살아 있다)")
 
+    # ── ⑤-g ★★ 승계와 소탕 — **세계가 굳지 않는가 (포화 검사)** ──────────────
+    #
+    #   병의 뿌리는 **두 시계가 어긋난 것**이었다. 세계의 시계는 **세계일**인데
+    #   (봇 자정 스케줄러 — "실제 하루 = 세계 1일"), 두목의 시계는 **실시간 300초**였다.
+    #   300초 = 하루 288번. 세계는 갈호가 하나라고 믿는데 다리는 288번 죽였다고 보고했다.
+    #   그래서 이 눈은 **실시간 초로 된 두목 시계를 금지한다.**
+    audit_saturation(gr, npcs, src, fail, warn)
+
     # ⑤-f 치안의 이음매 — region_state.yml threshold_effects.치안_저하 가 약속한 것
     #
     #   ★ 이 검사는 처음에 **거짓말했다.** 이렇게 썼었다:  if "securityBands" not in src
@@ -665,6 +673,169 @@ def audit_hunt(fail, warn) -> None:
             bands = sec.get("bands") or []
             print(f"{OK} 치안의 이음매 — {len(bands)}개 구간이 도적 정원에 배선됨 "
                   f"(region_state.yml threshold_effects → quotaFor)")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 눈 ⑤-g — **세계가 굳는가.** 포화 검사.
+#
+#   세계는 등록부가 적은 대로 살아야 한다. 그런데 등록부가 스스로 모순이면 세계가 굳는다:
+#     galho: { day: 1 }  "두목 — 한 명뿐이다"        ← 세계는 갈호가 하나라고 믿는다
+#     boss_respawn_seconds: 300                      ← 그런데 **하루 288번** 되살아난다
+#   그 결과 다리는 "도적 두목이 제거되었다"를 5분마다 날랐다. **사실이 아니었다.**
+#
+#   ★ 병의 뿌리는 **두 시계가 어긋난 것**이다.
+#     세계의 시계 = **세계일** (봇 자정 스케줄러 — "실제 하루 = 세계 1일")
+#     두목의 시계 = **실시간 초**  ← 이것이 틀렸다
+#   그래서 이 눈은 실시간 초로 된 두목 시계를 **금지**하고, 포화 일수를 **계산해서** 잰다.
+# ══════════════════════════════════════════════════════════════════════════
+def audit_saturation(gr: dict, npcs: dict, src: str, fail, warn) -> None:
+    rs_file = ROOT / "config" / "region_state.yml"
+    wb_file = ROOT / "config" / "world_bridge.yml"
+    if not rs_file.is_file() or not wb_file.is_file():
+        warn.append("region_state.yml / world_bridge.yml 이 없어 포화 검사를 건너뛰었다")
+        return
+    with rs_file.open(encoding="utf-8") as f:
+        rs = yaml.safe_load(f)
+    with wb_file.open(encoding="utf-8") as f:
+        wb = yaml.safe_load(f)
+    deltas = rs.get("event_deltas") or {}
+    rec = rs.get("recovery") or {}
+
+    # ── ㉠ 실시간 초로 된 두목 시계 금지 — **이것이 병의 뿌리였다** ──
+    if "boss_respawn_seconds" in (gr.get("spawn") or {}):
+        secs = gr["spawn"]["boss_respawn_seconds"]
+        fail(f"★★★ 두목의 시계가 **실시간 초**다 (boss_respawn_seconds: {secs}) — "
+             f"하루 {round(86400 / max(1, secs))}번 되살아난다. 세계는 그가 **하나**라고 믿는데 "
+             f"다리는 그만큼 「두목 제거」를 나른다. **세계일로 옮겨라** (succession.days)")
+
+    # ── ㉡ 승계 — 두목은 되살아나지 않고, 다른 사람이 잇는다 ──
+    suc = gr.get("succession") or {}
+    days = int(suc.get("days", 0))
+    heirs = suc.get("heirs") or {}
+    if not suc or days <= 0 or not heirs:
+        fail("★★ 승계(succession)가 등록되지 않았다 — 두목이 죽으면 **그 산길은 영원히 목이 없다**. "
+             "산채는 죽지 않는다: 누군가가 그 자리를 잇는다")
+    else:
+        roster_path = ROOT / "config" / str(suc.get("roster", ""))
+        roster = {}
+        if roster_path.is_file():
+            with roster_path.open(encoding="utf-8") as f:
+                roster = (yaml.safe_load(f) or {}).get("people") or {}
+        else:
+            fail(f"★ 후계자 명부가 없다: {suc.get('roster')} — 후계가 서지 못한다")
+        for boss, chain in heirs.items():
+            if boss not in npcs:
+                fail(f"★ 승계의 두목 「{boss}」이 NPC 등록부에 없다")
+            for heir in chain:
+                if heir not in roster and heir not in npcs:
+                    fail(f"★ 후계자 「{heir}」의 정의가 **어느 등록부에도 없다** — "
+                         f"그 자리는 영영 빈다")
+                elif heir in roster and not (roster[heir].get("body") or {}).get("entity"):
+                    fail(f"★ 후계자 「{heir}」에게 몸(body.entity)이 없다 — 서지 못한다")
+
+    # ── ㉢ 세계일 시계 + 재기동을 넘어 사는 기억 ──
+    if "WorldBridge.state().day()" not in src:
+        fail("★★ HuntingGrounds 가 **세계일**을 안 읽는다 — 두목의 시계가 세계의 시계와 다르다")
+    if "getFullTime()" in src:
+        fail("★ HuntingGrounds 가 getFullTime() 을 쓴다 — 마크의 20분 하루는 세계의 하루가 아니다")
+    for needle, why in [
+        ("saveState(", "상태를 **굽지 않는다** — 재기동하면 두목이 되살아난다. 그러면 고친 것이 아니다"),
+        ("loadState(", "상태를 **안 읽는다** — 껐다 켜면 죽은 두목이 다시 산다"),
+    ]:
+        if needle not in src:
+            fail(f"★★ 승계가 재기동을 못 넘는다 — {why}")
+    try:
+        if "loadState()" not in _java_block(src, "public void start()", "{"):
+            fail("★★ start() 가 loadState() 를 안 부른다 — **재기동하면 갈호가 되살아난다**")
+    except (ValueError, SystemExit):
+        pass
+
+    # ── ㉣ 졸개 — 시체 하나가 지역의 치안을 흔드는가 ──
+    #   ★ 등록부의 **이름이 답이다: 「부분 소탕」**. 소탕은 시체 하나가 아니라 **무리가 비었다**는 사실이다.
+    by_role = (((wb.get("events") or {}).get("bandit_slain") or {})
+               .get("effects") or {}).get("region_event_by_role") or {}
+    per_kill = by_role.get("졸개")
+    clr = gr.get("clearance") or {}
+    if per_kill:
+        d = (deltas.get(per_kill) or {}).get("치안", 0)
+        fail(f"★★★ 졸개를 **벨 때마다** 지역 사건이 난다 (world_bridge.yml region_event_by_role.졸개 "
+             f"= {per_kill} · 치안 {d:+}). 졸개는 10초에 한 마리가 되살아난다 — **농장이다.** "
+             f"「부분 소탕」은 시체 하나가 아니라 **무리가 비었다**는 사실이다. "
+             f"그 줄을 지워라 (HuntingGrounds.checkClearance 가 이미 정원이 빌 때 한 번 낸다)")
+    if not clr.get("cooldown_days"):
+        fail("★ 소탕(clearance) 쿨다운이 없다 — 정원이 40초면 다시 차는데 그때마다 「소탕」이면 농장이다")
+    # ★ **부분 문자열로 재지 말 것.** `"checkClearance(" in src` 는 메서드의 **정의**에도 걸린다 —
+    #   호출을 지워도 정의가 남아 통과한다 (눈 시험이 이 실수를 잡았다. 이 파일에서 세 번째다).
+    #   재야 할 것은 **onDeath 가 실제로 그것을 부르는가**다.
+    try:
+        if "checkClearance(" not in _java_block(src, "public void onDeath(EntityDeathEvent event)", "{"):
+            fail("★★ onDeath 가 checkClearance 를 안 부른다 — 「부분 소탕」을 **아무도 내지 않는다**. "
+                 "도적을 쓸어내도 세계가 모른다")
+    except (ValueError, SystemExit):
+        fail("★★ onDeath 를 못 찾았다 — 「부분 소탕」을 아무도 내지 않는다")
+    try:
+        if "bossSlain(" not in _java_block(src, "public void onDeath(EntityDeathEvent event)", "{"):
+            fail("★★★ onDeath 가 bossSlain 을 안 부른다 — 두목을 죽여도 **죽은 것으로 적히지 않는다.** "
+                 "그는 다음 주기에 되살아난다")
+    except (ValueError, SystemExit):
+        pass
+
+    # ── ㉤ ★ 포화 계산 — **며칠이면 치안이 100 인가** ──
+    #   몇 분이면 농장이고, 몇 달이면 세계가 사는 것이다.
+    boss_ev = by_role.get("두목", "도적_두목_제거")
+    boss_gain = (deltas.get(boss_ev) or {}).get("치안", 0)
+    succ_ev = next((k for k in deltas if "승계" in k), None)
+    succ_cost = (deltas.get(succ_ev) or {}).get("치안", 0) if succ_ev else 0
+    clr_ev = per_kill or "도적_부분_소탕"
+    clr_gain = (deltas.get(clr_ev) or {}).get("치안", 0)
+    every = int(rec.get("every_days", 10)) or 10
+    amount = int(rec.get("amount", 1))
+
+    heal = amount / every
+    cycle_s = int((gr.get("spawn") or {}).get("cycle_seconds", 10) or 10)
+    boss_rate = (boss_gain + succ_cost) / days if days else 0.0   # succ_cost 는 음수다
+
+    def verdict(net: float) -> tuple[float, str]:
+        if net <= 0:
+            return (float("inf"), "★ **포화하지 않는다** — 치안은 오르내리는 **맥박**이다")
+        d = 50 / net
+        if d >= 60:
+            return (d, "★ 세계가 산다")
+        return (d, "⚠ 빠르다" if d >= 30 else "✘ **농장이다**")
+
+    print(f"{OK} 포화 검사 — 치안 50 → 100 (세계일 = 실제 하루)")
+    print(f"     회복 -{amount}/{every}일 = {heal:.3f}/일 (기준 50 으로) — 이것이 세계의 기억력이다")
+
+    # ── 지금 (world_bridge 가 졸개를 벨 때마다 지역 사건을 낸다면) ──
+    #    ★ 이 자리를 「고친 뒤」의 수치로 재면 **눈이 병을 5자리나 축소해서 보고한다.**
+    #      실패를 뱉으면서 바로 옆에 「세계가 산다」를 찍는 눈은 스스로와 모순이다.
+    if per_kill:
+        kills = 86400 / cycle_s          # 정원이 한 주기에 한 마리씩 다시 찬다 → 그만큼 벨 수 있다
+        now_rate = clr_gain * kills
+        d, _ = verdict(now_rate + boss_rate - heal)
+        mins = d * 24 * 60
+        print(f"     ✘ **지금** — 졸개를 벨 때마다 {clr_gain:+} · {cycle_s}초에 한 마리 재생 "
+              f"= 하루 {kills:.0f}회 → {now_rate:+.0f}/일")
+        print(f"       → 포화까지 **{mins:.0f}분**. 세계가 한 시간이면 굳는다. **농장이다**")
+
+    # ── 고친 뒤 (「부분 소탕」이 정원이 빌 때만 난다) ──
+    gate_days = int(clr.get("cooldown_days", 5) or 5)
+    clr_rate = clr_gain / gate_days
+    net = boss_rate + clr_rate - heal
+    d, mark = verdict(net)
+    print(f"     {OK if not per_kill else '→'} **소탕 게이트 적용 시** (checkClearance — 정원이 실제로 빌 때 한 번)")
+    print(f"       두목 {boss_gain:+}/{days}일"
+          + (f" · 승계 {succ_cost:+} ({succ_ev})" if succ_ev else " · 승계 사건 **미등록** (0으로 셈)")
+          + f" = {boss_rate:+.3f}/일")
+    print(f"       소탕 {clr_gain:+}/{gate_days}일 = {clr_rate:+.3f}/일")
+    print(f"       → 순증 {net:+.3f}/일 · 포화까지 "
+          + ("**없다**" if d == float("inf") else f"**{d:.0f} 세계일** ({d / 30:.1f}개월)")
+          + f"  {mark}")
+    if d < 30:
+        fail(f"★★★ 고친 뒤에도 치안이 **{d:.1f}일**이면 100 이 된다 — 세계가 굳는다")
+    if not succ_ev:
+        warn.append("승계 사건이 region_state.yml 에 없다 — 새 두목이 서도 치안이 안 내려간다 "
+                    "(산채가 다시 머리를 얻은 것은 사실인데 세계가 모른다). 도메인 담당에게 넘겼다")
 
 
 # ══════════════════════════════════════════════════════════════════════════

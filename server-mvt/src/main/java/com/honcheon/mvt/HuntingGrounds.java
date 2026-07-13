@@ -175,7 +175,6 @@ public final class HuntingGrounds implements Listener {
     /** 스폰 조건 — 등록부: hunting_grounds.yml spawn (아래는 전부 폴백값) */
     private static int spawnCycleTicks = 200;    // 재생 주기 10초 — 한 구역에 최대 1마리/주기
     private static int moraleCycleTicks = 40;    // 전의·표적 스윕 2초
-    private static int bossRespawnTicks = 6000;  // 두목은 5분 뒤에야 다시 선다 (양산 금지)
     private static int nearPlayer = 96;          // 구역에 사람이 이 안에 없으면 아무것도 돌지 않는다
     private static int spawnMinDist = 20;        // 눈앞에 튀어나오지 않는다
     private static int spawnMaxDist = 64;
@@ -270,6 +269,43 @@ public final class HuntingGrounds implements Listener {
             Material.PODZOL, Material.FARMLAND, Material.DIRT_PATH, Material.MOSS_BLOCK,
             Material.SAND, Material.GRAVEL);
 
+    // ══════════════ 승계(承繼) — 두목은 되살아나지 않는다. 다른 사람이 잇는다 ══════════════
+
+    /**
+     * <b>두목의 시계는 세계일이다 — 실시간이 아니었던 것이 병의 뿌리였다.</b>
+     *
+     * <p>{@code boss_respawn_seconds: 300} 은 <b>하루 288번</b>이다. 세계는 갈호가 하나라고 믿는데
+     * MVT 는 "도적 두목이 제거되었다"를 5분마다 봇에 보고했다 — 같은 사람을 288번 죽였다고.
+     * 다리가 나른 것은 사실이 아니라 <b>거짓</b>이었다. 치안이 50분이면 100 에 닿았다.
+     *
+     * <p>이제 <b>갈호는 되살아나지 않는다.</b> 죽으면 끝이다. 대신 며칠 뒤 <b>도백(채주)이 새 사람을
+     * 산길로 내려보낸다</b> — {@code nokrim_sochae.yml relations} 가 갈호를 도백의 사람이라 적었다.
+     * 그 새 사람은 <b>다른 사람</b>이고, 그를 죽이는 것은 <b>다른 사실</b>이다.
+     * 수치를 깎은 것이 아니라 <b>사실을 바로잡은 것</b>이다.
+     *
+     * <p>수치는 전부 등록부에서 왔다 ({@code hunting_grounds.yml succession}):
+     * 30 세계일 = {@code region_populace.yml death.boss_respawn_days} ·
+     * 후계자 곰치 = {@code nokrim_sochae.yml people.sochae_budu} (부두목 · <b>갈호와 같은 이류</b>).
+     */
+    private static int successionDays = 30;
+    private static String successionRoster = "npcs/regions/nokrim_sochae.yml";
+    /** 두목 → 후계 사슬 (순서대로). 사슬이 다하면 <b>산길에 두목이 없다</b> — 녹림이 그 길을 포기한 것이다 */
+    private static Map<String, List<String>> heirs = Map.of();
+
+    /** 소탕 — 「부분 소탕」은 시체 하나가 아니라 <b>무리가 비었다</b>는 사실이다 */
+    private static int clearanceCooldownDays = 5;
+    private static String clearanceRole = "졸개";
+
+    // ─── 재기동을 넘어 사는 상태 (plugins/HoncheonMVT/hunting_state.yml) ───
+    //   ★ 메모리에만 두면 **서버를 껐다 켤 때마다 갈호가 되살아난다.** 그러면 고친 것이 아니다.
+    //     원장(ledgers.yml)·구역(zones.yml)이 이미 그 전례다.
+    /** 죽은 두목 → 죽은 세계일. <b>여기 든 이름은 다시 서지 않는다.</b> */
+    private final Map<String, Integer> bossSlainDay = new LinkedHashMap<>();
+    /** 구역 → 마지막으로 도적이 비었던 세계일 (부분 소탕의 쿨다운) */
+    private final Map<String, Integer> lastClearDay = new LinkedHashMap<>();
+    /** 이미 「승계」를 세계에 알린 두목 (같은 승계를 두 번 보고하지 않는다) */
+    private final Set<String> announcedHeirs = new java.util.LinkedHashSet<>();
+
     /** 치안의 이음매 — hunting_grounds.yml security (아래는 전부 폴백). 구간이 비면 치안은 산길을 안 움직인다 */
     private static String securityStat = "치안";
     private static int securityFallback = 50;
@@ -293,7 +329,6 @@ public final class HuntingGrounds implements Listener {
     private final HoncheonMvt plugin;
     private final Sparring sparring;
     private final MobDisplay mobDisplay;
-    private final Map<String, Long> lastSpawnTick = new HashMap<>();
     private long cycle;
 
     public HuntingGrounds(HoncheonMvt plugin) {
@@ -443,12 +478,31 @@ public final class HuntingGrounds implements Listener {
             Map<String, Object> s = (Map<String, Object>) raw;
             spawnCycleTicks = ticks(s.get("cycle_seconds"), spawnCycleTicks);
             moraleCycleTicks = ticks(s.get("morale_cycle_seconds"), moraleCycleTicks);
-            bossRespawnTicks = ticks(s.get("boss_respawn_seconds"), bossRespawnTicks);
             nearPlayer = intOr(s.get("player_near"), nearPlayer);
             spawnMinDist = intOr(s.get("min_distance"), spawnMinDist);
             spawnMaxDist = intOr(s.get("max_distance"), spawnMaxDist);
             spawnMaxLight = intOr(s.get("max_block_light"), spawnMaxLight);
             zoneEntityCap = intOr(s.get("zone_entity_cap"), zoneEntityCap);
+        }
+        if (root.get("succession") instanceof Map<?, ?> raw) {
+            Map<String, Object> s = (Map<String, Object>) raw;
+            successionDays = intOr(s.get("days"), successionDays);
+            successionRoster = String.valueOf(s.getOrDefault("roster", successionRoster));
+            Map<String, List<String>> chain = new LinkedHashMap<>();
+            if (s.get("heirs") instanceof Map<?, ?> h) {
+                ((Map<String, Object>) h).forEach((boss, list) -> {
+                    if (list instanceof List<?> ids) {
+                        chain.put(boss, ids.stream().map(String::valueOf).toList());
+                    }
+                });
+            }
+            heirs = Map.copyOf(chain);
+            loadHeirRoster(cfg.resolve(successionRoster));   // 후계자의 정의는 저 파일 하나뿐이다
+        }
+        if (root.get("clearance") instanceof Map<?, ?> raw) {
+            Map<String, Object> c = (Map<String, Object>) raw;
+            clearanceCooldownDays = intOr(c.get("cooldown_days"), clearanceCooldownDays);
+            clearanceRole = String.valueOf(c.getOrDefault("role", clearanceRole));
         }
         if (root.get("town") instanceof Map<?, ?> raw) {
             Map<String, Object> t = (Map<String, Object>) raw;
@@ -529,6 +583,68 @@ public final class HuntingGrounds implements Listener {
             if (!parsed.isEmpty()) {
                 weaponDropChance = Map.copyOf(parsed);
             }
+        }
+    }
+
+    /**
+     * 후계자의 정의를 <b>지역 인구 등록부에서 읽는다</b> ({@code npcs/regions/nokrim_sochae.yml}).
+     *
+     * <p><b>왜 베끼지 않는가.</b> 곰치(부두목)는 이미 저기에 온전히 적혀 있다 —
+     * 이름·나이·경지·몸·무장·전의·대사까지. 그를 {@code cheongha_npcs.yml} 에 <b>다시 적으면</b>
+     * 같은 사람이 두 등록부에 살게 되고, 그 둘은 언젠가 갈라진다. 그것이 두 번째 정본이다.
+     * <b>정의는 한 곳에만 있다.</b> 우리는 읽는다.
+     *
+     * <p>저 파일의 스키마는 우리 것과 다르다 ({@code body: {entity, durability}} ·
+     * {@code combat: {loadout, morale}}). 그래서 여기서 <b>옮겨 담는다</b> — 발명이 아니라 번역이다.
+     * 산길의 두목 자리를 잇는 것이므로 배역은 {@code 두목}이다.
+     */
+    @SuppressWarnings("unchecked")
+    private static void loadHeirRoster(Path file) {
+        if (!Files.isRegularFile(file) || heirs.isEmpty()) {
+            return;   // 후계 사슬이 없으면 명부도 필요 없다
+        }
+        Set<String> wanted = new java.util.LinkedHashSet<>();
+        heirs.values().forEach(wanted::addAll);
+        try {
+            Map<String, Object> people = RulesConfig.section(RulesConfig.load(file), "people");
+            people.forEach((id, raw) -> {
+                if (!wanted.contains(id) || !(raw instanceof Map<?, ?> m)) {
+                    return;
+                }
+                Map<String, Object> p = (Map<String, Object>) m;
+                Map<String, Object> body = p.get("body") instanceof Map<?, ?> b
+                        ? (Map<String, Object>) b : Map.of();
+                Map<String, Object> combat = p.get("combat") instanceof Map<?, ?> c
+                        ? (Map<String, Object>) c : Map.of();
+
+                EntityType type;
+                try {
+                    type = EntityType.valueOf(
+                            String.valueOf(body.getOrDefault("entity", "ZOMBIE")).toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException unknown) {
+                    return;   // 몸을 못 얻으면 서지 못한다 (audit 이 잡는다)
+                }
+                String realm = String.valueOf(p.getOrDefault("realm", "이류"));
+                String[] loadout = combat.get("loadout") instanceof Map<?, ?> l
+                        ? new String[]{String.valueOf(((Map<String, Object>) l).getOrDefault("계열", "도")),
+                                       String.valueOf(((Map<String, Object>) l).getOrDefault("등급", "범철"))}
+                        : new String[]{"도", "범철"};
+                int start = 9;
+                int breakAt = 2;
+                if (combat.get("morale") instanceof Map<?, ?> mo) {
+                    Map<String, Object> morale = (Map<String, Object>) mo;
+                    start = (int) num(morale.get("start"), start);
+                    breakAt = (int) num(morale.get("break"), breakAt);
+                }
+                int attack = weaponPower.getOrDefault(loadout[0], 1)
+                        + techniquePower.getOrDefault(realm + "급", 0);
+                FOES.put(id, new Foe(id, String.valueOf(p.getOrDefault("name", id)), "사람", null,
+                        realm, "두목",   // 산길의 두목 자리를 잇는다 — 그것이 그의 새 배역이다
+                        (int) num(body.get("durability"), 22), attack, start, breakAt,
+                        List.of(), type, loadout));
+            });
+        } catch (RuntimeException ignored) {
+            // 지역 등록부가 깨졌다 — 후계는 서지 않는다. 서버는 뜬다 (audit 이 고발한다)
         }
     }
 
@@ -704,6 +820,7 @@ public final class HuntingGrounds implements Listener {
     // ══════════════ ② 구역 스포너 — 중앙 티커 하나 ══════════════
 
     public void start() {
+        loadState();   // ★ 죽은 두목은 재기동해도 죽어 있다 (안 그러면 껐다 켤 때마다 갈호가 산다)
         plugin.getServer().getScheduler().runTaskTimer(plugin, Metrics.wrap("hunting", this::tick), 100L, 20L);
         mobDisplay.start();   // 형체 층 — 유령 청소 + 중앙 티커 1개 (1틱 추종)
     }
@@ -825,21 +942,177 @@ public final class HuntingGrounds implements Listener {
         boolean night = isNight(world);
         for (Quota quota : populations.get(zone.name())) {
             Foe foe = FOES.get(quota.id());
-            if (foe == null || census.getOrDefault(quota.id(), 0) >= quotaFor(foe, quota, night)) {
+            if (foe == null) {
                 continue;
             }
-            String cooldownKey = zone.name() + "/" + quota.id();
-            long wait = "두목".equals(foe.role()) ? bossRespawnTicks : 0;
-            if (cycle - lastSpawnTick.getOrDefault(cooldownKey, -wait) < wait) {
+            // ★ 두목 자리는 **사람이 아니라 자리**다. 등록부의 galho 는 「그 자리의 첫 사람」일 뿐이고,
+            //   그가 죽으면 그 자리를 **다른 사람**이 잇는다 (승계). 아무도 없으면 그 자리는 빈다.
+            String standing = quota.id();
+            if ("두목".equals(foe.role())) {
+                standing = currentBoss(quota.id());
+                if (standing == null) {
+                    continue;   // 산길에 두목이 없다 — 잡은 값이다. 그 길은 조용하다
+                }
+                foe = FOES.get(standing);
+                if (foe == null) {
+                    continue;   // 후계자의 정의를 못 읽었다 (audit 이 고발한다)
+                }
+            }
+            if (census.getOrDefault(standing, 0) >= quotaFor(foe, quota, night)) {
                 continue;
             }
             Location at = pickSpawn(world, zone, near, foe);
             if (at != null) {
                 spawn(foe, at, zone.name());
-                lastSpawnTick.put(cooldownKey, cycle);
+                // 새 두목이 처음 섰다 — **그것도 사건이다.** 산채가 다시 머리를 얻었다
+                if (!standing.equals(quota.id()) && announcedHeirs.add(standing)) {
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("zone", zone.name());
+                    data.put("predecessor", quota.id());
+                    data.put("successor", standing);
+                    data.put("successor_name", foe.name());
+                    data.put("world_day", worldDay());
+                    WorldBridge.emit("bandit_boss_succeeded", data);
+                    saveState();
+                    plugin.getLogger().info("승계 — 「" + zone.name() + "」의 두목 자리를 "
+                            + foe.name() + "(" + standing + ") 가 이었다");
+                }
                 return;   // 한 주기에 한 마리 — 짐승은 쏟아지지 않는다
             }
         }
+    }
+
+    // ══════════════ 승계 — 세계일의 시계, 재기동을 넘어 사는 기억 ══════════════
+
+    /** 세계의 시계 — 봇의 자정 스케줄러가 정본이다 ("실제 하루 = 세계 1일"). 마크의 20분 하루가 아니다 */
+    private static int worldDay() {
+        return WorldBridge.state().day();
+    }
+
+    /**
+     * <b>지금 이 산길의 두목은 누구인가.</b>
+     *
+     * <ul>
+     *   <li>아직 안 죽었으면 — 그 사람 (갈호).</li>
+     *   <li>죽었고 <b>승계일이 안 찼으면 — 아무도 없다.</b> 잡으면 그 산길은 <b>한동안 조용해진다.</b>
+     *       그것이 두목을 벤 값이다.</li>
+     *   <li>승계일이 찼으면 — <b>다음 사람</b> (곰치). 그는 <b>다른 사람</b>이다.</li>
+     *   <li>사슬이 다했으면 — <b>영영 없다.</b> 녹림이 그 산길을 포기했다.</li>
+     * </ul>
+     *
+     * <p>죽은 자는 {@link #bossSlainDay} 에 있고, 그 표는 <b>디스크에 굽힌다</b> — 재기동해도 죽어 있다.
+     */
+    private String currentBoss(String rootBossId) {
+        if (!bossSlainDay.containsKey(rootBossId)) {
+            return rootBossId;   // 살아 있다
+        }
+        int today = worldDay();
+        String previous = rootBossId;
+        for (String heir : heirs.getOrDefault(rootBossId, List.of())) {
+            Integer slain = bossSlainDay.get(previous);
+            if (slain == null) {
+                return previous;
+            }
+            if (today - slain < successionDays) {
+                return null;   // 산채가 아직 사람을 못 보냈다 — 산길에 두목이 없다
+            }
+            if (!bossSlainDay.containsKey(heir)) {
+                return heir;   // 그가 지금의 두목이다
+            }
+            previous = heir;
+        }
+        return null;   // 사슬이 다했다
+    }
+
+    /** 두목이 죽었다 — <b>그 이름은 다시 서지 않는다.</b> 세계일을 적고 디스크에 굽는다 */
+    private void bossSlain(String foeId) {
+        bossSlainDay.put(foeId, worldDay());
+        saveState();
+    }
+
+    /** 상태를 굽는다 — 재기동을 넘어 살아야 두목이 진짜로 죽은 것이다 */
+    private void saveState() {
+        org.bukkit.configuration.file.YamlConfiguration yml =
+                new org.bukkit.configuration.file.YamlConfiguration();
+        bossSlainDay.forEach((id, day) -> yml.set("boss_slain_day." + id, day));
+        lastClearDay.forEach((zone, day) -> yml.set("last_clear_day." + zone, day));
+        yml.set("announced_heirs", new ArrayList<>(announcedHeirs));
+        try {
+            java.io.File file = new java.io.File(plugin.getDataFolder(), "hunting_state.yml");
+            file.getParentFile().mkdirs();
+            yml.save(file);
+        } catch (java.io.IOException e) {
+            plugin.getLogger().warning("사냥터 상태 저장 실패 — 재기동하면 두목이 되살아난다: " + e.getMessage());
+        }
+    }
+
+    private void loadState() {
+        java.io.File file = new java.io.File(plugin.getDataFolder(), "hunting_state.yml");
+        if (!file.isFile()) {
+            return;
+        }
+        org.bukkit.configuration.file.YamlConfiguration yml =
+                org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file);
+        if (yml.getConfigurationSection("boss_slain_day") != null) {
+            for (String id : yml.getConfigurationSection("boss_slain_day").getKeys(false)) {
+                bossSlainDay.put(id, yml.getInt("boss_slain_day." + id));
+            }
+        }
+        if (yml.getConfigurationSection("last_clear_day") != null) {
+            for (String zone : yml.getConfigurationSection("last_clear_day").getKeys(false)) {
+                lastClearDay.put(zone, yml.getInt("last_clear_day." + zone));
+            }
+        }
+        announcedHeirs.addAll(yml.getStringList("announced_heirs"));
+        if (!bossSlainDay.isEmpty()) {
+            plugin.getLogger().info("사냥터 기억 — 죽은 두목 " + bossSlainDay.size()
+                    + "인 (되살아나지 않는다): " + bossSlainDay.keySet());
+        }
+    }
+
+    /**
+     * <b>부분 소탕</b> — 그 산길의 도적이 <b>실제로 비었을 때</b> 한 번.
+     *
+     * <p>병: 졸개를 벨 때마다 다리가 {@code 도적_부분_소탕}(치안 +2)을 보냈다. 10초에 한 마리가
+     * 되살아나니 <b>4분이면 치안이 100</b> 이었다. 농장이었다.
+     *
+     * <p>등록부의 <b>이름이 이미 답을 말하고 있었다 — 「부분 소탕」</b>. 소탕은 <b>시체 하나</b>가 아니라
+     * <b>무리가 비었다</b>는 사실이다. 졸개는 계속 되살아난다(산길에 도적이 없으면 산길이 아니다).
+     * 우리가 고친 것은 되살아남이 아니라 <b>보고</b>다.
+     */
+    private void checkClearance(Zone zone, Entity dying) {
+        if (zone == null) {
+            return;
+        }
+        World world = plugin.getServer().getWorld(zone.world());
+        if (world == null) {
+            return;
+        }
+        BoundingBox box = new BoundingBox(zone.x1(), zone.y1(), zone.z1(),
+                zone.x2() + 1, zone.y2() + 1, zone.z2() + 1);
+        for (Entity e : world.getNearbyEntities(box)) {
+            if (e.equals(dying) || e.isDead()) {
+                continue;   // 지금 쓰러지는 자는 이미 없는 자다
+            }
+            Foe foe = foeOf(e);
+            if (foe != null && clearanceRole.equals(foe.role())
+                    && zone.name().equals(tag(e, KEY_ZONE))) {
+                return;   // 아직 남았다 — 소탕이 아니다
+            }
+        }
+        int today = worldDay();
+        Integer last = lastClearDay.get(zone.name());
+        if (last != null && today - last < clearanceCooldownDays) {
+            return;   // 산채가 아직 사람을 못 모았다 — 그 길을 「비웠다」고 두 번 말할 수 없다
+        }
+        lastClearDay.put(zone.name(), today);
+        saveState();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("zone", zone.name());
+        data.put("world_day", today);
+        WorldBridge.emit("bandit_camp_cleared", data);
+        // ⚠ 이 kind 가 world_bridge.yml 에 아직 없다 — 등록 전까지 다리가 **버린다**(경고 로그).
+        //   서버는 안 죽는다. 등록 코드는 보고서에 넘겼다.
     }
 
     // ══════════════ 치안(治安) — 정원을 움직이는 유일한 힘 ══════════════
@@ -1402,8 +1675,22 @@ public final class HuntingGrounds implements Listener {
         // 세계 다리 — **벤 자의 이름이 강호에 돈다** (도적 토벌 → 치안·소문·세력 주목).
         // 지금까지 마크에서 벤 도적은 봇의 장부에 한 줄도 남지 않았다: 세계가 둘로 쪼개져 있었다.
         org.bukkit.entity.Player slayer = event.getEntity().getKiller();
-        if (slayer != null && !"비무상대".equals(foe.role())
-                && !Dojang.suppressWorldEvents(event.getEntity().getWorld())) {   // 연무장의 일은 강호의 일이 아니다
+        boolean realWorld = !Dojang.suppressWorldEvents(event.getEntity().getWorld());
+
+        // ★ 두목이 죽었다 — **그 이름은 다시 서지 않는다.** 세계일을 적고 디스크에 굽는다.
+        //   (연무장의 허수아비는 세계의 일이 아니다 — 거기서 죽인 갈호는 죽은 것이 아니다)
+        if (realWorld && "두목".equals(foe.role())) {
+            bossSlain(foe.id());
+            plugin.getLogger().info("두목 사망 — " + foe.name() + "(" + foe.id()
+                    + ") · 세계일 " + worldDay() + ". 되살아나지 않는다 (승계 "
+                    + successionDays + "일)");
+        }
+        // ★ 「부분 소탕」 — 무리가 실제로 비었을 때 한 번 (시체 하나마다가 아니라)
+        if (realWorld && clearanceRole.equals(foe.role())) {
+            checkClearance(huntZoneAt(event.getEntity().getLocation()), event.getEntity());
+        }
+
+        if (slayer != null && !"비무상대".equals(foe.role()) && realWorld) {
             org.bukkit.Location at = event.getEntity().getLocation();
             int seen = (int) at.getWorld().getNearbyEntities(at, 24, 12, 24).stream()
                     .filter(e -> (e instanceof org.bukkit.entity.Player p && !p.equals(slayer))
@@ -1593,6 +1880,30 @@ public final class HuntingGrounds implements Listener {
                     // 등록부가 심으라 한 것에 몸이 없다 — 이 자리는 **영원히 빈다.** 숨기지 않는다
                     lines.add(org.bukkit.ChatColor.RED + quota.id()
                             + org.bukkit.ChatColor.GRAY + "  ✘ 미등록 — NPC 등록부에 없다 (안 난다)");
+                    continue;
+                }
+                // ★ 두목 자리 — 사람이 아니라 **자리**다. 누가 앉아 있는지(또는 비었는지) 말한다
+                if ("두목".equals(foe.role())) {
+                    String standing = currentBoss(quota.id());
+                    if (standing == null) {
+                        Integer slain = bossSlainDay.get(quota.id());
+                        boolean exhausted = heirs.getOrDefault(quota.id(), List.of()).stream()
+                                .allMatch(bossSlainDay::containsKey);
+                        String why = exhausted && slain != null
+                                ? "사슬이 다했다 — 녹림이 이 산길을 포기했다"
+                                : "승계 대기 — 세계일 " + (slain == null ? "?"
+                                    : (slain + successionDays - worldDay())) + "일 남음";
+                        lines.add(org.bukkit.ChatColor.DARK_GRAY + "두목 자리  "
+                                + org.bukkit.ChatColor.GRAY + "비어 있다 (" + why + ")");
+                        continue;
+                    }
+                    Foe seated = FOES.get(standing);
+                    String tail = standing.equals(quota.id()) ? ""
+                            : org.bukkit.ChatColor.YELLOW + " (승계 — " + quota.id() + " 의 자리를 이었다)";
+                    lines.add(org.bukkit.ChatColor.WHITE
+                            + (seated == null ? standing : seated.name())
+                            + org.bukkit.ChatColor.GRAY + "  " + census.getOrDefault(standing, 0)
+                            + " / 정원 " + quota.target(night) + tail);
                     continue;
                 }
                 // 등록 정원과 **실효 정원**을 함께 보인다 — 치안이 움직였으면 그 자리에서 보여야 한다.

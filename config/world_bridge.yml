@@ -199,8 +199,27 @@ events:
       # ★ 배역(role)이 **사건의 이름**을 가른다. 값은 등록부가 매긴다 (여기서 곱하지 않는다 —
       #   예전의 scale_by_role 은 값을 여기서 ×2 하던 장치였고, 그것이 곧 두 번째 정본이었다).
       region_event_by_role:
-        졸개: 도적_부분_소탕          # region_state.yml — 치안 +2
+        # ★ 졸개는 **여기서 사건을 내지 않는다.** 시체 하나는 「소탕」이 아니다.
+        #   전에는 졸개 하나를 벨 때마다 치안이 올랐고 — **4분이면 치안이 100 이 됐다.**
+        #   「부분 소탕」이라는 **이름이 이미 답이었다**: 소탕은 시체가 아니라 **무리가 빈 사실**이다.
+        #   그래서 `HuntingGrounds.checkClearance()` 가 **정원이 실제로 0 이 됐을 때** 한 번 낸다
+        #   (bandit_camp_cleared · 5 세계일에 한 번).
         두목: 도적_두목_제거          # region_state.yml — 치안 +5 · 민심 +3
+
+  # ★ 무리가 비었다 — 「소탕」의 진짜 사실 (시체 하나가 아니다)
+  bandit_camp_cleared:
+    desc: "그 산길의 도적 무리가 비었다 — 「부분 소탕」은 시체 하나가 아니라 무리가 빈 사실이다"
+    payload: { zone: "구역명", world_day: "세계일" }
+    effects: { region_event: 도적_부분_소탕 }
+
+  # ★ 갈호는 죽으면 끝이다. 그러나 **산채는 죽지 않는다** — 누군가가 그 자리를 잇는다.
+  #   되살아남이 아니라 **승계**다. 새 두목은 **새 사람**이고, 그를 죽이는 것은 **다른 사실**이다.
+  #   (30 세계일 — region_populace.yml death.boss_respawn_days: "채주·장문은 다시 서지 않는다 — 후계가 선다")
+  bandit_boss_succeeded:
+    desc: "산채가 새 두목을 산길로 내려보냈다 — 갈호는 죽었고 곰치가 그 자리를 이었다"
+    payload: { zone: "구역명", predecessor: galho, successor: sochae_budu,
+               successor_name: "곰치", world_day: "세계일" }
+    effects: { region_event: 도적_두목_승계 }
 
   beast_slain:
     desc: "짐승을 잡았다 — 사냥 (생계와 수련)"
