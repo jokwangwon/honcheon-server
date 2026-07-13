@@ -12,6 +12,9 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.text.TextInput;
+import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
+import net.dv8tion.jda.api.interactions.modals.Modal;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -34,6 +37,9 @@ public final class GameListener extends ListenerAdapter {
     private static final Color INK = new Color(0x2B2B2B);
     private static final Color BLOOD = new Color(0x8B2E2E);
     private static final String REGION_KEY = "지역채널:청하현";
+    /** 접속의 문이 선 자리 (world_meta) — 마크의 [혼천 접속] 클릭이 여기로 온다. 등록부가 키를 정한다 */
+    private static final String GATE_CHANNEL_KEY = "접합:채널";
+    private static final String GATE_GUILD_KEY = "접합:길드";
 
     private final Rules rules;
     private final Db db;
@@ -54,6 +60,12 @@ public final class GameListener extends ListenerAdapter {
     @Override
     public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
         try {
+            // ★ /접합문 은 **최상위 명령**이다 (/혼천 의 서브커맨드가 아니다 — 25칸 상한).
+            //   그래서 서브커맨드 이름이 null 이다. 이름으로 먼저 가른다.
+            if ("접합문".equals(event.getName())) {
+                postLinkGate(event);
+                return;
+            }
             switch (String.valueOf(event.getSubcommandName())) {
                 case "시작" -> startCreation(event);
                 case "원장", "정보" -> showSheet(event);   // 원장 = 하위호환 (terminology)
@@ -72,6 +84,7 @@ public final class GameListener extends ListenerAdapter {
                 case "전장" -> bank(event);              // A — 예치·상속인 지정 (죽어서 남기는 것)
                 case "접속" -> linkAccount(event);        // ★ 신원 접합 — 마크의 몸을 이 이름에 잇는다
                 case "접속해제" -> unlinkAccount(event);  // 스스로 끊는다 (혈채는 남는다)
+                case "접합문" -> postLinkGate(event);     // ★ 접속의 문 — 명령 대신 버튼 (서버 관리자)
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 case "사망" -> adminKill(event);
@@ -307,6 +320,8 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 의방` 부상을 다스리고 외상을 갚는다 (유문의 의방)\n"
                         + "`/혼천 구조 @상대` 빈사의 동행을 지혈한다 — 의술 판정 (사람을 살리는 유일한 손)\n"
                         + "`/혼천 전장 [예치] [인출] [상속인]` 금서방의 전장 — 죽어서 남길 수 있는 유일한 재산\n"
+                        + "`/혼천 접합문` 이 채널에 **접속의 문**을 세운다 — 마크의 [혼천 접속] 클릭이 여기로 온다 "
+                        + "(버튼 하나 + 붙여넣기. 서버 관리자)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "`/혼천 사망 <NPC> [살해자]` NPC를 죽인다 — 연쇄 검증용 (서버 관리자)\n"
@@ -331,6 +346,45 @@ public final class GameListener extends ListenerAdapter {
         event.reply("이 채널이 **청하현**으로 등록됐다 — 출도한 이들은 여기서 `/혼천 사냥` `/혼천 비무`를 쓴다.").queue();
     }
 
+    /**
+     * 봇이 떴다 — <b>접속의 문이 어디에 서 있는지 확인한다.</b>
+     *
+     * <p>길드 id 를 config 에 적지 않는 이유: <b>코드도 config 도 채널 id 를 지어내면 안 된다.</b>
+     * 봇은 제가 붙어 있는 길드를 <b>실제로 안다</b> — 그래서 여기서 채널을 되찾아 길드를 적어 둔다.
+     * 그 둘로 {@link Bridge#publish} 가 마크에 내려보낼 URL 을 만든다 (스냅숏 {@code discord}).
+     *
+     * <p>문(/혼천 접합문)이 아직 안 섰으면 지역 채널(/혼천 지역등록)로 떨어진다 — 거기라도 데려다 놓는 것이
+     * 아무 데도 못 가는 것보다 낫다. 둘 다 없으면 마크는 <b>[코드 복사]만</b> 띄운다 (없는 URL 을 짓지 않는다).
+     */
+    @Override
+    public void onReady(net.dv8tion.jda.api.events.session.ReadyEvent event) {
+        try {
+            String chKey = rules.gateMetaKey("channel_meta", GATE_CHANNEL_KEY);
+            String channelId = db.getMeta(chKey).or(() -> {
+                try {
+                    return db.getMeta(REGION_KEY);
+                } catch (Exception e) {
+                    return java.util.Optional.empty();
+                }
+            }).orElse(null);
+            if (channelId == null) {
+                System.out.println("접속의 문 — 아직 안 섰다 (/혼천 접합문). 마크는 [코드 복사]만 띄운다");
+                return;
+            }
+            var channel = event.getJDA().getTextChannelById(channelId);
+            if (channel == null) {
+                System.err.println("접속의 문 — 채널을 찾을 수 없다: " + channelId);
+                return;
+            }
+            db.setMeta(chKey, channelId);
+            db.setMeta(rules.gateMetaKey("guild_meta", GATE_GUILD_KEY), channel.getGuild().getId());
+            System.out.println("접속의 문 — " + channel.getGuild().getName() + " #" + channel.getName()
+                    + " (마크의 [혼천 접속] 클릭이 여기로 온다)");
+        } catch (Exception e) {
+            System.err.println("접속의 문 확인 실패: " + e.getMessage());
+        }
+    }
+
     // ─── 버튼 라우팅 ───
 
     @Override
@@ -348,6 +402,7 @@ public final class GameListener extends ListenerAdapter {
                 case "ex" -> onGateChoice(event, id[1], Integer.parseInt(id[2]), id[3]);
                 case "gw" -> onGwanaChoice(event, id[1], id[2]);            // ★ 관아 — 9번째 루트
                 case "ln" -> onLineageChoice(event, "kin".equals(id[1]));   // 새 삶 — 혈연 / 무관
+                case "lk" -> openLinkModal(event);   // ★ 접속의 문 — 코드 창을 연다 (확정은 모달에서)
                 default -> event.deferEdit().queue();
             }
         } catch (Exception e) {
@@ -4451,15 +4506,100 @@ public final class GameListener extends ListenerAdapter {
     //   코드가 새어 나가도 도둑이 할 수 있는 최악은 '제 캐릭터에 남의 몸을 붙이는 것' — 자해다.
 
     private void linkAccount(SlashCommandInteractionEvent event) throws Exception {
-        var found = requireDebuted(event, event.getUser());
+        String raw = event.getOption("코드") == null ? "" : event.getOption("코드").getAsString();
+        linkWithCode(event, event.getUser(), raw);
+    }
+
+    // ─── 접합의 문 — 명령을 외우지 않고 잇는다 (world_bridge.yml identity.gate) ───
+    //
+    // 【무엇을 바꿨고 무엇을 안 바꿨나】 바꾼 것은 **입력 수단**뿐이다:
+    //   외운다 → [코드 복사] (마크가 클립보드에 담는다) · 찾아간다 → [혼천 접속] (마크가 URL 을 연다)
+    //   문법을 친다 → 버튼 + 모달 (붙여넣기 한 번).
+    // 【★ 안 바꾼 것 = 자물쇠】 버튼에는 **코드가 들어 있지 않다** (customId 는 "lk:open" 뿐).
+    //   확정에는 여전히 둘이 필요하다: ① 그 몸의 주인 화면에만 뜬 **코드** ② **디스코드가 서명한 신원**
+    //   (ModalInteractionEvent.getUser() — 위조 불가. 아무나 눌러도 제 계정으로만 이어진다).
+    //   TTL·1회성·1:1·감사 로그는 linkWithCode 하나를 슬래시와 모달이 함께 지난다 — 두 벌이 아니다.
+
+    /** 접속의 문을 세운다 (관리자) — 이 채널이 마크의 [혼천 접속] 클릭이 닿을 자리가 된다 */
+    private void postLinkGate(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        if (!(event.getChannel() instanceof TextChannel channel)) {
+            event.reply("일반 텍스트 채널에서 세워라.").setEphemeral(true).queue();
+            return;
+        }
+        db.setMeta(rules.gateMetaKey("channel_meta", GATE_CHANNEL_KEY), channel.getId());
+        db.setMeta(rules.gateMetaKey("guild_meta", GATE_GUILD_KEY), channel.getGuild().getId());
+        channel.sendMessageEmbeds(new EmbedBuilder().setColor(INK)
+                        .setTitle(rules.gateText("title", "접합의 문"))
+                        .setDescription(rules.gateText("body", "마크에서 `/혼천 접속` 을 쳐서 코드를 받아라."))
+                        .build())
+                .addComponents(ActionRow.of(Button.primary("lk:open",
+                        rules.gateText("button_label", "마크의 몸을 잇는다"))))
+                .queue();
+        event.reply(rules.gateText("gate_posted", "이 채널이 접속의 문으로 섰다."))
+                .setEphemeral(true).queue();
+    }
+
+    /**
+     * 문을 눌렀다 — 코드 한 칸짜리 창을 연다. <b>여기서는 아무것도 확정하지 않는다</b>
+     * (버튼은 공개다. 누가 눌러도 좋다 — 코드가 없으면 아무 일도 일어나지 않는다).
+     */
+    private void openLinkModal(ButtonInteractionEvent event) {
+        TextInput code = TextInput.create("코드", rules.gateText("modal_field", "접합 코드"),
+                        TextInputStyle.SHORT)
+                .setPlaceholder(rules.gateText("modal_hint", "마크에서 받은 코드"))
+                .setMinLength(3)
+                .setMaxLength(16)
+                .setRequired(true)
+                .build();
+        event.replyModal(Modal.create("lk:submit", rules.gateText("modal_title", "접합"))
+                .addComponents(ActionRow.of(code)).build()).queue();
+    }
+
+    /**
+     * 창에 붙여넣은 코드가 왔다 — <b>여기가 결속의 순간이다.</b>
+     * 누가 눌렀는가는 디스코드가 안다 ({@code event.getUser()}) — 슬래시 명령과 <b>같은 신원</b>이고,
+     * 같은 {@link #linkWithCode} 를 지난다. 문은 손잡이만 바꿨지 자물쇠를 바꾸지 않았다.
+     */
+    @Override
+    public void onModalInteraction(net.dv8tion.jda.api.events.interaction.ModalInteractionEvent event) {
+        try {
+            if (!"lk:submit".equals(event.getModalId())) {
+                return;
+            }
+            var value = event.getValue("코드");
+            linkWithCode(event, event.getUser(), value == null ? "" : value.getAsString());
+        } catch (Exception e) {
+            event.reply("오류: " + e.getMessage()).setEphemeral(true).queue();
+        }
+    }
+
+    /**
+     * 접합의 유일한 손 — 슬래시({@code /혼천 접속})와 모달(문의 버튼)이 <b>둘 다 여기로 온다.</b>
+     * 자물쇠를 두 벌 두지 않는다: TTL · 1회성 · 몸당 대기 1 · 1:1 재접합 거부 · 감사 로그가 여기 하나에 있다.
+     *
+     * @param user <b>디스코드가 서명한 신원</b> — 인터랙션의 주인. 대신 눌러 줄 수 없는 값이다
+     */
+    private void linkWithCode(net.dv8tion.jda.api.interactions.callbacks.IReplyCallback event,
+                             User user, String raw) throws Exception {
+        var found = db.findCharacter(user.getId());
         if (found.isEmpty()) {
+            event.reply(user.getEffectiveName() + " — 캐릭터가 없다. `/혼천 시작`부터.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        if (!"강호".equals(found.get().get("status"))) {
+            event.reply(user.getEffectiveName() + " — 아직 서장 중이다. 서장 스레드를 끝내야 출도한다.")
+                    .setEphemeral(true).queue();
             return;
         }
         Map<String, Object> row = found.get();
         long chId = ((Number) row.get("id")).longValue();
         String name = String.valueOf(row.get("name"));
         int today = db.worldDay();
-        String raw = event.getOption("코드") == null ? "" : event.getOption("코드").getAsString();
         String code = raw.strip().toUpperCase(java.util.Locale.ROOT).replace(" ", "");
 
         var pending = db.linkCode(code);

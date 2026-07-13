@@ -49,6 +49,12 @@ public final class HoncheonBot {
                 .build()
                 .awaitReady();
 
+        // ★ 「접합문」은 /혼천 의 서브커맨드가 아니라 **별도 명령**이다 —
+        //   디스코드는 한 명령에 서브커맨드를 **25개**까지만 허용하고, /혼천 은 이미 꽉 찼다.
+        //   (26번째를 넣자 봇이 기동조차 못 했다: "Cannot have more than 25 subcommands".)
+        //   관리자 명령이므로 밖으로 빼는 것이 오히려 옳다 — 플레이어의 /혼천 목록을 어지럽히지 않는다.
+        var gate = Commands.slash("접합문", "이 채널에 접속의 문을 세운다 — 버튼 하나로 잇는다 (서버 관리자)");
+
         var honcheon = Commands.slash("혼천", "무협 텍스트 RPG 혼천")
                 .addSubcommands(
                         new SubcommandData("시작", "새 캐릭터를 만든다 — 유년의 기억 다섯 문항"),
@@ -98,6 +104,8 @@ public final class HoncheonBot {
                                         OptionType.STRING, "코드",
                                         "마크에서 `/혼천 접속` 을 쳐서 받은 6자리 코드 (10분간 유효)", true)),
                         new SubcommandData("접속해제", "마크의 몸과 이 이름을 끊는다 (혈채는 남는다)"),
+                        // ★ 접속의 문 — 이 채널에 상시 버튼을 세운다. 마크의 [혼천 접속] 클릭이 여기로 온다.
+                        //   버튼에는 코드가 없다 (customId "lk:open") — 확정은 여전히 코드 + 디스코드 신원이다.
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                         new SubcommandData("사선", "플레이어에게 사선을 긋는다 — 죽음 검증용 (서버 관리자)")
@@ -213,10 +221,10 @@ public final class HoncheonBot {
         String guildId = System.getenv("HONCHEON_GUILD_ID");
         var guild = guildId == null || guildId.isBlank() ? null : jda.getGuildById(guildId);
         if (guild != null) {
-            guild.updateCommands().addCommands(honcheon).queue();
+            guild.updateCommands().addCommands(honcheon, gate).queue();
             System.out.println("명령 등록: 길드 스코프 (" + guild.getName() + ") — 즉시 반영");
         } else {
-            jda.updateCommands().addCommands(honcheon).queue();
+            jda.updateCommands().addCommands(honcheon, gate).queue();
             System.out.println("명령 등록: 글로벌 — 첫 반영에 최대 1시간"
                     + (guildId == null || guildId.isBlank() ? " (개발 중엔 HONCHEON_GUILD_ID 권장)"
                             : " (경고: HONCHEON_GUILD_ID=" + guildId + " 길드를 찾지 못함)"));

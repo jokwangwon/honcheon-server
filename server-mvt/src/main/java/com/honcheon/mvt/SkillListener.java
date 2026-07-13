@@ -2299,6 +2299,7 @@ public final class SkillListener implements Listener {
         player.sendTitle(ChatColor.RED + on.unlinkedTitle(),
                 ChatColor.YELLOW + on.unlinkedSubtitle(), 10, 70, 20);
         on.unlinkedLines().forEach(player::sendMessage);
+        player.sendMessage(LinkGate.callToAction());   // 클릭 = /혼천 접속 (칠 것이 없다)
     }
 
     @EventHandler

@@ -1313,12 +1313,12 @@ public final class MvtCommand implements CommandExecutor {
         }
         String linked = WorldBridge.linkedName(player.getUniqueId());
         if (linked != null) {
-            player.sendMessage(ChatColor.GRAY + "이미 " + ChatColor.WHITE + linked
-                    + ChatColor.GRAY + " 으로 이어져 있다 (디스코드 /혼천 접속해제)");
+            player.sendMessage(LinkGate.already(linked));
         }
-        player.sendMessage(ChatColor.YELLOW + "접합 코드 " + ChatColor.WHITE + ChatColor.BOLD + code);
-        player.sendMessage(ChatColor.GRAY + "디스코드에서 " + ChatColor.WHITE + "/혼천 접속 코드:" + code
-                + ChatColor.GRAY + " (유효 " + (WorldBridge.linkTtlSeconds() / 60) + "분)");
+        // ★ 코드를 **외우게 하지 않는다.** [코드 복사] = 클립보드 · [혼천 접속] = 디스코드 채널을 연다.
+        //   마크의 손은 **URL 을 여는 데서 끝난다** — 디스코드 앱을 열어 명령을 대신 칠 수는 없다.
+        //   그래서 진짜 답은 디스코드 쪽이었다: 거기엔 **버튼과 모달**이 있고, 붙여넣기 한 번이면 끝난다.
+        player.sendMessage(LinkGate.gate(code));
         return true;
     }
 

@@ -681,6 +681,7 @@ final class Bridge {
         snapshot.put("thresholds", Map.of(
                 "wanted", num(wantedCfg.get("gauge_min"), 8),
                 "disavowal", num(wantedCfg.get("disavowal_min"), 10)));
+        discord().ifPresent(d -> snapshot.put("discord", d));
 
         Files.createDirectories(bridgeDir);
         Path tmp = snapshotFile.resolveSibling(snapshotFile.getFileName() + ".tmp");
@@ -689,6 +690,34 @@ final class Bridge {
         Files.move(tmp, snapshotFile, StandardCopyOption.REPLACE_EXISTING,
                 StandardCopyOption.ATOMIC_MOVE);
         return snapshotFile;
+    }
+
+    /**
+     * <b>접속의 문이 어디 있는가</b> — 마크가 {@code [혼천 접속]} 클릭에 걸 URL.
+     *
+     * <p>이 값은 <b>코드에도 config 에도 적혀 있지 않다.</b> 봇이 <b>제가 실제로 붙어 있는 채널</b>
+     * (world_meta 접합:채널 · 접합:길드 — {@code /혼천 접합문} 이 적고, 봇이 뜰 때 {@code onReady} 가 확인한다)
+     * 로부터 만든다. 그래야 등록제가 지켜진다 — 아무도 id 를 지어내지 않는다.
+     *
+     * <p>문이 안 섰으면 <b>아무것도 내려보내지 않는다</b>. 마크는 그때 [코드 복사]만 띄운다 —
+     * 없는 문을 가리키는 클릭은 없는 것만 못하다.
+     *
+     * <p>★ 스킴은 https 다 (마크 클라이언트가 여는 URL 은 http/https 만 허용된다 — discord:// 는 거부된다).
+     */
+    private Optional<Map<String, Object>> discord() throws Exception {
+        Map<String, Object> gate = map(RulesConfig.section(cfg, "identity").get("gate"));
+        String channelId = db.getMeta(String.valueOf(
+                gate.getOrDefault("channel_meta", "접합:채널"))).orElse(null);
+        String guildId = db.getMeta(String.valueOf(
+                gate.getOrDefault("guild_meta", "접합:길드"))).orElse(null);
+        if (channelId == null || guildId == null || channelId.isBlank() || guildId.isBlank()) {
+            return Optional.empty();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("url", "https://discord.com/channels/" + guildId + "/" + channelId);
+        out.put("guild_id", guildId);
+        out.put("channel_id", channelId);
+        return Optional.of(out);
     }
 
     // ══════════════ 등록부 판독 ══════════════

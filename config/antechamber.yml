@@ -80,6 +80,16 @@ antechamber:
     depth: 1               # 수심 1 — 빠져도 죽지 않는다. 기어오르면 된다
     reed_hash: 11          # 갈대 — floorMod 해시 (난수 아님)
 
+  # ★ 장벽 — 늪 밖으로 나갈 수 없다 (사용자: "외부로 나갈수도 있으니 투명블록으로 늪을 제외한 곳 다 막아서")
+  #   물안개(mist)는 **되돌림**이었다 — 나간 사람을 데려온다. 그러나 되돌리기 전에 **평지가 보인다.**
+  #   보이는 순간 그곳은 "갈 수 있는 곳"이 되고, 길이 하나라는 약속이 깨진다.
+  #   BARRIER 는 **보이지도 않고 나갈 수도 없다** — 세계의 끝이 아니라 **세계의 없음**이다.
+  barrier:
+    enabled: true
+    margin: 1              # 늪 경계 바깥 이 칸부터 벽이 선다
+    height: 24             # 경공으로도 못 넘는다 (전 경지 도약 최대 3.2m)
+    cap: true              # 천장도 막는다 (창의(創意)를 막는 게 아니라 **길을 지킨다**)
+
   mist:
     leash_blocks: 96
     line: "§8물안개가 길을 지운다 — 잔교로 돌아왔다."
@@ -302,10 +312,10 @@ antechamber:
   #   판과 관문이 어긋날 수가 없다). 문장도 과제의 것을 그대로 쓴다.
   text_display:
     max_panels: 16
-    scale: 1.6
+    scale: 1.0            # ★ 1.6 → 1.0 (사용자: "글이 조금 큼 — 보기가 힘들다")
     view_range: 2.0
     line_width: 240
-    y_offset: 2.6
+    y_offset: 1.4        # ★ 2.6 → 1.4 (사용자: "텍스트가 너무 위에 있음" — 눈높이로 내린다)
     billboard: CENTER
     alignment: CENTER
     see_through: false

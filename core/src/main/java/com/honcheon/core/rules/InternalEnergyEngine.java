@@ -66,7 +66,13 @@ public final class InternalEnergyEngine {
     public boolean canUse(String realm, String costBand) {
         List<String> allowed = realmGates.get(realm);
         if (allowed == null) {
-            throw new IllegalArgumentException("정의되지 않은 경지: " + realm);
+            // ★ 던지지 않는다. 등록부에 없는 경지는 **격이 없는 것**이지 오류가 아니다.
+            //   전에는 던졌고, 그래서 나루의 첫 손 한 번에 서버가 예외를 뱉었다 —
+            //   접합 전 몸의 경지(범인)가 이 표에 없었기 때문이다.
+            //   ★ 전투 한복판에서 던지는 게이트는 **게이트가 아니라 지뢰**다.
+            //   등록부는 config 가 고친다 (그리고 고쳤다: internal_energy.yml 범인: []).
+            //   엔진은 모르는 경지를 만나면 **아무 격도 허락하지 않는다** — 가장 안전한 답이다.
+            return false;
         }
         return allowed.contains(costBand);
     }

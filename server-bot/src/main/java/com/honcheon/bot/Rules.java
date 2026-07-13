@@ -61,6 +61,8 @@ public final class Rules {
     private final Map<String, Object> simbeopCfg;
     /** 무명(無名) 등록부 (npcs/populace.yml) — 행인의 이름·관계, 그리고 무명 의뢰의 결말표 */
     private final Map<String, Object> populaceCfg;
+    /** 접합의 문 (world_bridge.yml identity.gate) — 버튼·모달의 문장. 코드는 문장을 지어내지 않는다 */
+    private final Map<String, Object> gateCfg;
 
     @SuppressWarnings("unchecked")
     public Rules(Path configDir) {
@@ -100,6 +102,25 @@ public final class Rules {
         this.innateQiCfg = RulesConfig.load(configDir.resolve("internal_energy.yml"));
         this.factionsCfg = RulesConfig.load(configDir.resolve("factions.yml"));
         this.sectLifeCfg = RulesConfig.load(configDir.resolve("sect_life.yml"));
+        this.gateCfg = RulesConfig.section(RulesConfig.section(
+                RulesConfig.load(configDir.resolve("world_bridge.yml")), "identity"), "gate");
+    }
+
+    // ─── 접합의 문 (world_bridge.yml identity.gate) ───
+
+    /**
+     * 문의 문장 하나 — {@code gate.discord.<key>}. 등록부에 없으면 fallback (코드가 지어내지 않는다).
+     * 여기 오는 값은 전부 사람이 읽는 문장이다. 자물쇠는 이 표에 없다 (그것은 identity 본문이다).
+     */
+    public String gateText(String key, String fallback) {
+        Object v = RulesConfig.section(gateCfg, "discord").get(key);
+        return v == null ? fallback : String.valueOf(v).strip();
+    }
+
+    /** world_meta 키 — 접속의 문이 선 채널·길드 (등록부가 이름을 정한다) */
+    public String gateMetaKey(String which, String fallback) {
+        Object v = gateCfg.get(which);
+        return v == null ? fallback : String.valueOf(v);
     }
 
     // ─── 무명(無名) 등록부 (npcs/populace.yml) — 마크의 마을이 봇의 장부에 닿는 곳 ───

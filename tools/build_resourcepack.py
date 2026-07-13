@@ -4642,7 +4642,7 @@ WATER_SHADES = [untint(c, WATER_BIOME_TINT, "water") for c in WATER_TARGET]
 #   ★ 획의 밝기는 **레벨 번호**가 정한다 (경계의 부호가 아니다 — 위 level_set 의 버그 기록).
 WATER_CALM = 3.30       # 잔잔한 수면 — 램프의 가운데 (여백)
 WATER_WASH = 0.50       # 바탕의 농담 — 아주 얕게 (고요는 조용하다)
-WATER_ARC = 1.5         # 파문 — 조용한 획 (+1.5단 ≈ 7루마. 남의 팩이 가르쳐 준 진폭)
+WATER_ARC = 2.2         # 파문 — 조용한 획 (+2.2단 ≈ 10루마). 1.5 는 눈에 안 읽혔다 (육안 확인)
 WATER_GLINT = 8.0       # 마루에 얹힌 빛 — **성기게**. 대비(밝기 계약 문턱 24)는 이 몇 점이 진다
 WATER_RIPPLE_K = 0.62   # 등고선 밀도 — 클수록 파문이 촘촘하다 (여백과 맞바꾼다)
 

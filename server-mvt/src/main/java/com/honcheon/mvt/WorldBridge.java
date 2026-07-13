@@ -115,6 +115,10 @@ public final class WorldBridge {
         codeAlphabet = String.valueOf(identity.getOrDefault("code_alphabet", codeAlphabet));
         codeLength = Math.max(4, num(identity.get("code_length"), codeLength));
         codeTtlSeconds = Math.max(30, num(identity.get("ttl_seconds"), codeTtlSeconds));
+        // 접합의 문 — 채팅에 뜰 문장 (identity.gate.mc_chat). 코드는 문장을 지어내지 않는다
+        GATE.clear();
+        map(map(identity.get("gate")).get("mc_chat"))
+                .forEach((k, v) -> GATE.put(k, String.valueOf(v)));
 
         Map<String, Object> feedback = map(root.get("feedback"));
         map(feedback.get("reaction_map")).forEach((tag, tags) -> {
@@ -350,6 +354,29 @@ public final class WorldBridge {
     /** 코드의 수명 (초) — 안내 문구에 쓴다 */
     public static int linkTtlSeconds() {
         return codeTtlSeconds;
+    }
+
+    // ─── 접속의 문 — 마크가 클릭에 걸 것들 (등록부 + 스냅숏) ───
+
+    /** 채팅 문장 등록부 (identity.gate.mc_chat) — 없으면 fallback. 코드가 세계의 말을 짓지 않는다 */
+    private static final Map<String, String> GATE = new LinkedHashMap<>();
+
+    /** 접속 채널의 URL — <b>봇이 내려보낸 것</b> (스냅숏 discord.url). 문이 안 섰으면 null */
+    private static volatile String discordUrl;
+
+    public static String gateText(String key, String fallback) {
+        String v = GATE.get(key);
+        return v == null || v.isBlank() ? fallback : v;
+    }
+
+    /**
+     * <b>디스코드 접속 채널의 주소.</b> 스냅숏이 실어 온다 — 여기서 짓지 않는다.
+     *
+     * <p>null 이면 문이 아직 안 섰다는 뜻이다 (디스코드에서 관리자가 {@code /혼천 접합문} 을 쳐야 한다).
+     * 그때 마크는 <b>[코드 복사]만</b> 띄운다 — 없는 문을 가리키는 클릭은 없는 것만 못하다.
+     */
+    public static String discordUrl() {
+        return discordUrl;
     }
 
     /** 지금 이 몸은 누구인가 — 접합됐으면 장부의 이름, 아니면 null (되먹임 스냅숏이 정본이다) */
@@ -644,6 +671,9 @@ public final class WorldBridge {
             Map<String, Integer> bounty = new LinkedHashMap<>();
             map(root.get("bounty")).forEach((who, v) -> bounty.put(who, num(v, 0)));
             int wantedMin = num(map(root.get("thresholds")).get("wanted"), 8);
+            // ★ 접속의 문 — 봇이 제가 붙어 있는 채널로 만든 URL. 없으면 없는 것이다 (짓지 않는다)
+            Object url = map(root.get("discord")).get("url");
+            discordUrl = url == null || String.valueOf(url).isBlank() ? null : String.valueOf(url);
             // ★ 시트 — 몸에 실릴 캐릭터. 여기가 비면 마크는 다시 "경지 이류·능력치 0"의 세계가 된다
             Map<String, Sheet> sheets = new LinkedHashMap<>();
             map(root.get("sheet")).forEach((who, raw) -> sheets.put(who, sheet(map(raw))));

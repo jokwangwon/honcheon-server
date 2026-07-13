@@ -89,6 +89,9 @@ import java.util.UUID;
 public final class Antechamber implements Listener {
 
     private static final NamespacedKey KEY_PANEL = new NamespacedKey("honcheon", "ipdo_panel");
+    /** 허수아비의 체력 — Paper 의 특성값 상한은 <b>1024</b> 다. 넘으면 조성이 통째로 죽는다. */
+    private static final double DUMMY_HEALTH = 1024.0;
+
     private static final NamespacedKey KEY_DUMMY = new NamespacedKey("honcheon", "ipdo_dummy");
 
     private static String worldName = "honcheon_ipdo";
@@ -104,6 +107,10 @@ public final class Antechamber implements Listener {
     private final int[] spawn;
     private final List<Station> stations = new ArrayList<>();
     private final Marsh marsh;
+    private final boolean barrierOn;
+    private final int barrierMargin;
+    private final int barrierHeight;
+    private final boolean barrierCap;
     private final Lighting light;
     private final Hut hut;
     private final int[] bell;
@@ -214,6 +221,11 @@ public final class Antechamber implements Listener {
             }
         }
 
+        Map<String, Object> ba = RulesConfig.section(a, "barrier");
+        this.barrierOn = !Boolean.FALSE.equals(ba.get("enabled"));
+        this.barrierMargin = Math.max(0, num(ba.get("margin"), 1));
+        this.barrierHeight = Math.max(4, num(ba.get("height"), 24));
+        this.barrierCap = !Boolean.FALSE.equals(ba.get("cap"));
         Map<String, Object> ma = RulesConfig.section(a, "marsh");
         int[] mx = pair(ma.get("x"), -38, 34);
         int[] mz = pair(ma.get("z"), -22, 22);
@@ -417,7 +429,9 @@ public final class Antechamber implements Listener {
      * "어느 방향을 봐야 하는지 모르겠다"는 말이 나온 데에는 이 한 글자도 있었다.
      */
     Location spawnAt(World w) {
-        return new Location(w, cx + spawn[0] + 0.5, groundY(w) + road.deckY() + 1.0,
+        // ★ +3 — 사용자 보고: "시작 스폰 위치가 살짝 아래임, 2칸만 위로."
+        //   널 위에 서는 것이 아니라 **널 속에 반쯤 묻혀** 있었다.
+        return new Location(w, cx + spawn[0] + 0.5, groundY(w) + road.deckY() + 3.0,
                 cz + spawn[1] + 0.5, -90f, 0f);
     }
 
@@ -568,6 +582,8 @@ public final class Antechamber implements Listener {
     private List<Place> plan(int gy) {
         List<Place> out = new ArrayList<>();
         int deck = gy + road.deckY();
+
+        barrier(out, gy, deck);
 
         // ① 습지 — 잔교 밖은 전부 물이다. ★ **이것이 '길이 하나'의 진짜 이유다** (벽을 안 세웠다)
         for (int x = marsh.x1(); x <= marsh.x2(); x++) {
@@ -923,10 +939,15 @@ public final class Antechamber implements Listener {
                 e.setPersistent(true);
                 e.getPersistentDataContainer().set(KEY_DUMMY, PersistentDataType.INTEGER,
                         dummyDurability);
+                // ★ 2048 은 **Paper 의 상한(1024)을 넘는다.** 여기서 예외가 나면서 조성이 통째로 죽었고,
+                //   허수아비도 그 뒤의 글판도 발판도 **아예 안 지어졌다.**
+                //   사용자가 겪은 것: "허수아비가 없음 · 앞으로 가도 뭐가 없어서 잘 모르겠음."
+                //   허수아비는 체력으로 버티는 것이 아니다 — **내구는 PDC 가 들고, 피해는 리스너가 먹는다.**
                 if (e.getAttribute(Attribute.MAX_HEALTH) != null) {
-                    e.getAttribute(Attribute.MAX_HEALTH).setBaseValue(2048);   // 죽지 않는다
+                    e.getAttribute(Attribute.MAX_HEALTH).setBaseValue(DUMMY_HEALTH);
                 }
-                e.setHealth(2048);
+                e.setHealth(DUMMY_HEALTH);
+                e.setInvulnerable(false);   // 맞는 것은 보여야 한다 (다만 죽지 않는다 — 리스너가 되돌린다)
                 e.setCustomNameVisible(true);
                 e.setCustomName(dummyName);
             });
@@ -1467,4 +1488,41 @@ public final class Antechamber implements Listener {
         }
         return new int[]{a, b};
     }
+
+    /**
+     * <b>세계의 없음</b> — 늪 밖으로는 나갈 수 없다.
+     *
+     * <p>사용자 보고: <i>"외부로 나갈수도 있으니 투명블록으로 늪을 제외한 곳 다 막아서 평지로 못나가게."</i>
+     *
+     * <p>물안개(mist)는 <b>되돌림</b>이었다 — 나간 사람을 데려온다. 그러나 <b>되돌리기 전에 평지가 보인다.</b>
+     * 보이는 순간 그곳은 "갈 수 있는 곳"이 되고, <b>길이 하나라는 약속이 깨진다.</b>
+     * 습지가 길을 만드는 것은 "물이라서"가 아니라 <b>물 너머에 아무것도 없어서</b>다.
+     *
+     * <p>{@code BARRIER} 는 보이지도 않고 나갈 수도 없다. 세계의 <b>끝</b>이 아니라 세계의 <b>없음</b>이다.
+     * 높이는 경공으로도 못 넘는다 (전 경지 도약 최대 3.2m). 천장도 덮는다 — 창의를 막는 것이 아니라
+     * <b>길을 지키는 것</b>이다. 나루는 놀이터가 아니라 <b>문지방</b>이다.
+     */
+    private void barrier(List<Place> out, int gy, int deck) {
+        if (!barrierOn) {
+            return;
+        }
+        int x1 = marsh.x1() - barrierMargin;
+        int x2 = marsh.x2() + barrierMargin;
+        int z1 = marsh.z1() - barrierMargin;
+        int z2 = marsh.z2() + barrierMargin;
+        int base = gy - 1;
+        for (int x = x1; x <= x2; x++) {
+            for (int z = z1; z <= z2; z++) {
+                boolean edge = x == x1 || x == x2 || z == z1 || z == z2;
+                if (edge) {
+                    for (int y = base; y <= deck + barrierHeight; y++) {
+                        out.add(new Place(cx + x, y, cz + z, Material.BARRIER, null));
+                    }
+                } else if (barrierCap) {
+                    out.add(new Place(cx + x, deck + barrierHeight, cz + z, Material.BARRIER, null));
+                }
+            }
+        }
+    }
+
 }
