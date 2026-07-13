@@ -107,9 +107,65 @@ public final class Weapons {
     public static final NamespacedKey KEY_BOND_DAYS = key("weapon_bond_days");
     /** 애병 단계 — 값: 손에_익다 | 명병 | 통령 (없으면 0단) */
     public static final NamespacedKey KEY_BELOVED = key("weapon_beloved_stage");
+    /** 명병의 문파 — factions.yml member id (hwasan·jeomchang·…). 명병 단계에서만 붙는다 */
+    public static final NamespacedKey KEY_SECT = key("weapon_myeong_sect");
 
     public static final String STATE_UNIDENTIFIED = "unidentified";
     public static final String STATE_REVEALED = "revealed";
+
+    // ══════════ 팩과의 유일한 접점 — custom_model_data.strings ══════════
+    //
+    // ★ item_model 을 쓰지 않는다. 1.21.4+ 는 item_model 이 가리키는 정의가 **없으면 바탕
+    //   아이템으로 폴백하지 않는다** — 없는 모델(보라 큐브)을 그린다. ItemStack 은 모두에게
+    //   **같은 바이트**라 팩 있는 눈과 없는 눈을 가를 수 없으므로, item_model 을 실물 아이템에
+    //   박는 순간 **팩을 거절한 사람의 손에 보라 큐브가 쥐어진다.** 팩 게이트 불가침의 위반이다.
+    //
+    //   그래서 키는 custom_model_data.strings 로 나간다. 팩이 없으면 이 컴포넌트는 **불활성**이고
+    //   (바닐라는 select 분기를 모른다) 플레이어는 **바탕 바닐라 아이템 그대로** 본다 —
+    //   등급은 재질 색이 말하고(돌·철·다이아·금·네더라이트), 이름·설명은 툴팁이 말한다.
+    //   팩이 있으면 assets/minecraft/items/<base>.json 의 select 가 strings[0] 을 읽어 3D 를 문다.
+    //
+    //   strings[0] = 모델 키 (honcheon:weapon/sword_bobyeong · honcheon:weapon/myeong/hwasan)
+    //   strings[1] = 상태 (마병만: unidentified | revealed) — 미감정은 평범한 도로 보인다
+
+    /** 명병(名兵)의 문파 → 그 문파의 병기 계열. 계열이 맞을 때만 명병 실루엣을 문다. */
+    private static final Map<String, Series> MYEONG_SERIES = Map.of(
+            "hwasan", Series.검,        // 매화검 — 자루에 매화 (사용자 직접 요청)
+            "jeomchang", Series.검,     // 쾌검
+            "jongnam", Series.검,       // 중검
+            "namgung", Series.검,       // 장검
+            "mudang", Series.검,        // 태극검
+            "paengga", Series.도,       // 오호단문도
+            "dangga", Series.단검,      // 비수 — 암기·독
+            "sorimsa", Series.권갑);    // 권·장
+
+    /**
+     * 이 병기가 팩에 요구하는 모델 키. {@code null} = 키를 얹지 않는다 (바닐라 그대로).
+     *
+     * <p>명병은 <b>문파의 계열이 맞을 때만</b> 문파 실루엣을 얻는다 — 매화검은 검이다.
+     * 화산의 명병이 도(刀)라면 그것은 매화검이 아니므로 계열 모델을 그대로 쓴다
+     * (팩의 myeong/hwasan 은 검의 지오메트리라, 도에 물리면 도가 검으로 보인다).
+     */
+    static String modelKey(Series series, Grade grade, String sect) {
+        if (sect != null && MYEONG_SERIES.get(sect) == series) {
+            return "honcheon:weapon/myeong/" + sect;
+        }
+        if (series == null || series.modelId == null) {
+            return null;   // 팩에 안 구워진 계열 — 키를 얹지 않는다 (바닐라 폴백)
+        }
+        return "honcheon:weapon/" + series.modelId + "_" + grade.slug;
+    }
+
+    /** 모델 키를 아이템에 얹는다 — <b>팩 없는 눈에는 불활성</b>인 컴포넌트로. */
+    private static void applyModel(ItemMeta meta, Series series, Grade grade, String sect, String state) {
+        String model = modelKey(series, grade, sect);
+        if (model == null) {
+            return;
+        }
+        var cmd = meta.getCustomModelDataComponent();
+        cmd.setStrings(state == null ? List.of(model) : List.of(model, state));
+        meta.setCustomModelDataComponent(cmd);
+    }
 
     private static NamespacedKey key(String value) {
         // 플러그인 이름이 아니라 고정 네임스페이스 — 판정층이 리터럴로 재구성할 수 있어야 한다
@@ -599,17 +655,10 @@ public final class Weapons {
         ItemStack item = new ItemStack(series.base.of(grade));
         ItemMeta meta = item.getItemMeta();
 
-        // ─── 모델 (팩과의 유일한 접점) ───
-        if (series.modelId != null) {
-            meta.setItemModel(new NamespacedKey("honcheon", "weapon/" + series.modelId + "_" + grade.slug));
-        }
-        // 마병 = 상태 변주 (custom_model_data.strings) — 미감정은 평범한 도로 보인다
+        // ─── 모델 (팩과의 유일한 접점) — custom_model_data.strings. 팩 없는 눈엔 불활성이다 ───
+        // 마병 = 상태 변주 (strings[1]) — 미감정은 평범한 도로 보인다
         boolean demonic = grade == Grade.마병;
-        if (demonic) {
-            var cmd = meta.getCustomModelDataComponent();
-            cmd.setStrings(List.of(STATE_UNIDENTIFIED));
-            meta.setCustomModelDataComponent(cmd);
-        }
+        applyModel(meta, series, grade, null, demonic ? STATE_UNIDENTIFIED : null);
 
         // ─── PDC — 판정층의 진실 (재질 근사를 대체한다) ───
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
@@ -1162,10 +1211,16 @@ public final class Weapons {
         PersistentDataContainer dst = to.getPersistentDataContainer();
         copy(src, dst, KEY_OWNER, PersistentDataType.STRING);
         copy(src, dst, KEY_BELOVED, PersistentDataType.STRING);
+        copy(src, dst, KEY_SECT, PersistentDataType.STRING);
         copy(src, dst, KEY_STATE, PersistentDataType.STRING);
         copy(src, dst, KEY_CLASH, PersistentDataType.INTEGER);
         copy(src, dst, KEY_BOND_DAYS, PersistentDataType.INTEGER);
         copy(src, dst, KEY_REFORGE, PersistentDataType.INTEGER);
+        // make() 는 문파를 모른 채 계열 키를 얹었다 — 이력을 되찾았으니 실루엣도 되찾는다
+        // (이 줄이 없으면 명병을 재련하는 순간 매화가 진다)
+        applyModel(to, series, grade,
+                src.get(KEY_SECT, PersistentDataType.STRING),
+                src.get(KEY_STATE, PersistentDataType.STRING));
         // 상한 재계산 — 품이 오르면 최대 내구가 오른다. 이미 닳은 만큼은 그대로 가져간다 (새것이 되지 않는다)
         if (from instanceof Damageable was && to instanceof Damageable now && grade.durability > 0) {
             now.setDamage(Math.min(was.getDamage(), durability(grade, craft) - 1));
@@ -1206,9 +1261,8 @@ public final class Weapons {
             return item;
         }
         ItemMeta meta = item.getItemMeta();
-        var cmd = meta.getCustomModelDataComponent();
-        cmd.setStrings(List.of(STATE_REVEALED));
-        meta.setCustomModelDataComponent(cmd);
+        // strings[0] (모델 키) 를 뭉개지 않는다 — 상태만 갈아 끼운다 (strings[1])
+        applyModel(meta, seriesOf(item), Grade.마병, sectOf(item), STATE_REVEALED);
         meta.getPersistentDataContainer().set(KEY_STATE, PersistentDataType.STRING, STATE_REVEALED);
         item.setItemMeta(meta);
         return refresh(item);
@@ -1263,6 +1317,51 @@ public final class Weapons {
     }
 
     /** 애병 단계 — 0단이면 null */
+    /** 명병의 문파 — 명병이 아니거나 계열이 문파와 어긋나면 null */
+    public static String sectOf(ItemStack item) {
+        return tag(item, KEY_SECT);
+    }
+
+    /** 명병으로 명명될 수 있는 문파인가 (factions.yml member id) */
+    public static boolean isMyeongSect(String sect) {
+        return MYEONG_SERIES.containsKey(sect);
+    }
+
+    /**
+     * 명명(命名) — 애병을 <b>문파의 명병(名兵)</b>으로 세운다. 여기서 병기가 문파를 얻고,
+     * <b>그때 비로소 팩이 문파의 실루엣을 문다</b> (화산의 검이면 자루에 매화가 핀다).
+     *
+     * <p>계열이 문파의 병기와 어긋나면 <b>단계만 오르고 실루엣은 계열 그대로다</b> — 매화검은
+     * 검이지 도가 아니다. 명명 자체는 막지 않는다 (화산 제자가 도를 명병으로 삼을 수는 있다).
+     *
+     * <p>승급 조건(생사 고비 3회 + 명성 사건)은 MVT 에 축이 없다 — 이 문은 <b>그 축이 서면
+     * 부를 자리</b>이고, 지금은 MvtCommand 가 부른다.
+     *
+     * @param sect factions.yml member id (hwasan·jeomchang·jongnam·namgung·mudang·paengga·dangga·sorimsa)
+     */
+    public static ItemStack enshrine(ItemStack item, String sect) {
+        if (!isWeapon(item)) {
+            return item;
+        }
+        Series canon = MYEONG_SERIES.get(sect);
+        if (canon == null) {
+            throw new IllegalArgumentException("명병 등록부에 없는 문파: " + sect
+                    + " (hwasan·jeomchang·jongnam·namgung·mudang·paengga·dangga·sorimsa)");
+        }
+        Series series = seriesOf(item);
+        boolean fits = canon == series;   // 매화검은 검이다 — 계열이 맞을 때만 문파 실루엣
+
+        ItemMeta meta = item.getItemMeta();
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        pdc.set(KEY_BELOVED, PersistentDataType.STRING, Beloved.명병.name());
+        if (fits) {
+            pdc.set(KEY_SECT, PersistentDataType.STRING, sect);
+        }
+        applyModel(meta, series, gradeOf(item), fits ? sect : null, stateOf(item));
+        item.setItemMeta(meta);
+        return refresh(item);
+    }
+
     public static Beloved belovedOf(ItemStack item) {
         String value = tag(item, KEY_BELOVED);
         return value == null ? null : Beloved.of(value);

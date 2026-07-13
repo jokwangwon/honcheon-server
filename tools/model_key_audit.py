@@ -56,12 +56,17 @@ NS = "honcheon"
 ANCHORS = [
     (
         "server-mvt/src/main/java/com/honcheon/mvt/Weapons.java",
-        'new NamespacedKey("honcheon", "weapon/" + series.modelId + "_" + grade.slug)',
+        'return "honcheon:weapon/" + series.modelId + "_" + grade.slug;',
         "병기 = weapon/<계열 modelId>_<등급 slug>",
     ),
     (
+        "server-mvt/src/main/java/com/honcheon/mvt/Weapons.java",
+        'return "honcheon:weapon/myeong/" + sect;',
+        "명병 = weapon/myeong/<sect> (계열이 문파와 맞을 때만)",
+    ),
+    (
         "server-mvt/src/main/java/com/honcheon/mvt/Goods.java",
-        'meta.setItemModel(new NamespacedKey("honcheon", modelPath));',
+        'cmd.setStrings(List.of("honcheon:" + modelPath));',
         "지물 = build(...) 의 modelPath 리터럴",
     ),
     (
@@ -93,53 +98,121 @@ def check_anchors() -> list[str]:
 #  요구되는 키 — ① 코드가 **조립**하는 것  ② 등록부의 **리터럴**
 # ═════════════════════════════════════════════════════════════════════════════
 
-def weapon_keys() -> dict[str, str]:
-    """Weapons.java 의 Series × Grade 를 **실제로 조립**한다 (접두사가 아니다)."""
-    src = (ROOT / "server-mvt/src/main/java/com/honcheon/mvt/Weapons.java").read_text("utf-8")
+WEAPONS_SRC = ROOT / "server-mvt/src/main/java/com/honcheon/mvt/Weapons.java"
+GOODS_SRC = ROOT / "server-mvt/src/main/java/com/honcheon/mvt/Goods.java"
 
-    # enum Grade { 범철("beomcheol", ...), ... }
+
+def weapon_table() -> tuple[list[str], list[tuple[str, str, str]], dict[str, list[str]], dict[str, str]]:
+    """Weapons.java 의 표를 **그대로** 읽는다 — 등급 slug · 계열(한글·modelId·Base) · Base→재질 · 명병 문파.
+
+    ★ 이것이 이 눈의 심장이다. 베이스(바닐라 아이템)를 코드에서 직접 읽어야
+      '팩 없는 눈이 무엇을 보는가' 를 **짐작하지 않고 잴 수 있다.**
+    """
+    src = WEAPONS_SRC.read_text("utf-8")
+
     grade_block = re.search(r"public enum Grade \{(.*?)\n    \}", src, re.S)
     grades = re.findall(r'^\s*\S+\("([a-z]+)"', grade_block.group(1), re.M) if grade_block else []
 
-    # enum Series { 검("sword", Base.SWORD, ...), ... }  — modelId 가 null 이면 키를 안 얹는다
+    # enum Series { 검("sword", Base.SWORD, ...) }  — modelId 가 null 이면 키를 안 얹는다
     series_block = re.search(r"public enum Series \{(.*?)\n\n", src, re.S)
-    series = []
+    series: list[tuple[str, str, str]] = []      # (한글, modelId, BASE)
     if series_block:
-        for name, model in re.findall(r"^\s*(\S+?)\((\"[a-z]+\"|null),", series_block.group(1), re.M):
-            if model != "null":
-                series.append(model.strip('"'))
+        for kor, model, base in re.findall(
+                r'^\s*(\S+?)\("([a-z]+)",\s*Base\.(\w+),', series_block.group(1), re.M):
+            series.append((kor, model, base))
 
-    if not grades or not series:
-        raise SystemExit("!! Weapons.java 의 Grade/Series 표를 못 읽었다 — 눈을 고쳐라")
+    # private enum Base { SWORD(Material.STONE_SWORD, Material.IRON_SWORD, ...) }  — 등급 순
+    base_block = re.search(r"private enum Base \{(.*?)\n    \}", src, re.S)
+    bases: dict[str, list[str]] = {}
+    if base_block:
+        for name, mats in re.findall(r"(\w+)\(((?:Material\.\w+,?\s*)+)\)", base_block.group(1)):
+            bases[name] = [m.lower() for m in re.findall(r"Material\.(\w+)", mats)]
 
+    # Map<String, Series> MYEONG_SERIES = Map.of("hwasan", Series.검, ...)
+    myeong_block = re.search(r"MYEONG_SERIES = Map\.of\((.*?)\);", src, re.S)
+    myeong: dict[str, str] = {}
+    if myeong_block:
+        # ★ 종결자([,)])를 요구하지 말 것 — Map.of 의 **마지막 항목**은 블록 끝이라 뒤가 없다.
+        #   그렇게 쓴 첫 판이 sorimsa 를 통째로 놓쳤다 (그리고 그것을 '죽은 자산'이라 불렀다).
+        myeong = dict(re.findall(r'"(\w+)",\s*Series\.(\w+)', myeong_block.group(1)))
+
+    if not grades or not series or not bases or not myeong:
+        raise SystemExit("!! Weapons.java 의 Grade/Series/Base/MYEONG_SERIES 표를 못 읽었다 — 눈을 고쳐라")
+    for _, _, b in series:
+        if b not in bases:
+            raise SystemExit(f"!! Series 가 가리키는 Base.{b} 를 못 읽었다 — 눈을 고쳐라")
+        if len(bases[b]) != len(grades):
+            raise SystemExit(f"!! Base.{b} 의 재질 {len(bases[b])}개 ≠ 등급 {len(grades)}개 — 눈을 고쳐라")
+    return grades, series, bases, myeong
+
+
+def weapon_keys() -> dict[str, str]:
+    """Weapons.java 의 Series × Grade + 명병 8자루를 **실제로 조립**한다 (접두사가 아니다)."""
+    grades, series, _, myeong = weapon_table()
     keys = {}
-    for s in series:
+    for _, model, _ in series:
         for g in grades:
-            keys[f"{NS}:weapon/{s}_{g}"] = f"Weapons.java (계열 {s} × 등급 {g})"
+            keys[f"{NS}:weapon/{model}_{g}"] = f"Weapons.java (계열 {model} × 등급 {g})"
+    for sect in myeong:
+        keys[f"{NS}:weapon/myeong/{sect}"] = f"Weapons.java enshrine() (명병 — {sect})"
     return keys
 
 
-def goods_keys() -> dict[str, str]:
-    """Goods.java 가 build(...) 에 넘기는 modelPath — 리터럴과 '조각 + 변수' 둘 다."""
-    src = (ROOT / "server-mvt/src/main/java/com/honcheon/mvt/Goods.java").read_text("utf-8")
-    keys = {}
+def weapon_bases() -> dict[str, set[str]]:
+    """병기 키 → 그 키가 얹힐 수 있는 **바닐라 베이스 아이템**들 (팩 없는 눈이 보는 것)."""
+    grades, series, bases, myeong = weapon_table()
+    out: dict[str, set[str]] = {}
+    kor_to = {kor: (model, base) for kor, model, base in series}
+    for _, model, base in series:
+        for i, g in enumerate(grades):
+            out.setdefault(f"{NS}:weapon/{model}_{g}", set()).add(bases[base][i])
+    # 명병은 등급을 가리지 않는다 (범철 매화검도 매화검이다) → 그 계열의 5재질 전부
+    for sect, kor in myeong.items():
+        if kor not in kor_to:
+            raise SystemExit(f"!! MYEONG_SERIES 의 Series.{kor} 가 Series enum 에 없다 — 눈을 고쳐라")
+        _, base = kor_to[kor]
+        out[f"{NS}:weapon/myeong/{sect}"] = set(bases[base])
+    return out
 
-    # build(Material.X, "tome/gugyeol", ...) — 리터럴.
+
+def _goods_pairs() -> list[tuple[str, str]]:
+    """Goods.java 의 build(Material.X, "<키>", ...) — (바닐라 베이스, 키) 쌍."""
+    src = GOODS_SRC.read_text("utf-8")
+    pairs = []
+    # build(Material.PAPER, "coin/jeonpyo", ...) — 리터럴.
     # ★ 뒤에 반드시 ',' 가 와야 한다. '"pelt/" + model' 처럼 **조각**인 것을 최종 키로 세면
     #   거짓 양성이다 (honcheon:pelt/ 라는 키는 존재하지 않는다 — 이 눈이 처음 그렇게 거짓말했다).
-    for path in re.findall(r'build\(\s*Material\.\w+,\s*"([^"]+)"\s*,', src):
-        keys[f"{NS}:{path}"] = "Goods.java (리터럴)"
-
+    for mat, path in re.findall(r'build\(\s*Material\.(\w+),\s*"([^"]+)"\s*,', src):
+        pairs.append((mat.lower(), path))
     # build(Material.LEATHER, "pelt/" + model, ...) — 조립. model 은 바로 위 switch 가 낸다.
-    for prefix in re.findall(r'build\(\s*Material\.\w+,\s*"([^"]+)"\s*\+\s*(\w+)', src):
-        pre, var = prefix
-        # switch (beast) { case "늑대" -> "wolf"; ... }  의 오른쪽 값들
+    for mat, pre, var in re.findall(r'build\(\s*Material\.(\w+),\s*"([^"]+)"\s*\+\s*(\w+)', src):
         sw = re.search(rf"String {var} = switch \(.*?\) \{{(.*?)\}};", src, re.S)
         if not sw:
             raise SystemExit(f"!! Goods.java: '{pre}' + {var} 의 switch 를 못 찾았다 — 눈을 고쳐라")
         for val in re.findall(r'->\s*"([^"]+)"', sw.group(1)):
-            keys[f"{NS}:{pre}{val}"] = f"Goods.java (조립 {pre}<{var}>)"
-    return keys
+            pairs.append((mat.lower(), f"{pre}{val}"))
+    if not pairs:
+        raise SystemExit("!! Goods.java 의 build(...) 를 하나도 못 읽었다 — 눈을 고쳐라")
+    return pairs
+
+
+def goods_keys() -> dict[str, str]:
+    return {f"{NS}:{path}": "Goods.java" for _, path in _goods_pairs()}
+
+
+def goods_bases() -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for mat, path in _goods_pairs():
+        out.setdefault(f"{NS}:{path}", set()).add(mat)
+    return out
+
+
+def inventory_bases() -> dict[str, set[str]]:
+    """**실물 아이템** 키 → 바닐라 베이스. 이 키들은 팩 없는 눈에도 나가므로 폴백이 있어야 한다.
+    (무공 획·짐승 형체는 여기 없다 — 그건 팩 수락자에게만 나가는 ItemDisplay 다.)"""
+    out = weapon_bases()
+    out.update(goods_bases())
+    return out
 
 
 def _yaml_literal_keys(path: Path, field: str) -> dict[str, str]:
@@ -179,12 +252,7 @@ def reserved_keys() -> dict[str, str]:
             if "<" in key:          # honcheon:weapon/sword_<등급> — 접두사다. 최종 키가 아니다.
                 continue            # (조립은 weapon_keys() 가 한다 — 여기서 통과시키면 거짓 양성이다)
             res[key] = f"resourcepack_design.yml:{n} (등록·미배선)"
-
-    # 명병 — resourcepack_design.yml 은 honcheon:weapon/myeong/<sect> 로만 적는다 (접두사).
-    # 팩은 8자루를 구웠고 Weapons.java 는 아직 그 키를 안 박는다 → 배선 대기 (죽은 자산 아님).
-    for sect in ("hwasan", "mudang", "sorimsa", "namgung", "paengga",
-                 "jeomchang", "jongnam", "dangga"):
-        res[f"{NS}:weapon/myeong/{sect}"] = "resourcepack_design.yml (명병 — Weapons.java 배선 대기)"
+    # 명병 8자루는 더 이상 예약이 아니다 — Weapons.enshrine() 이 키를 박는다 (weapon_keys() 가 센다).
     return res
 
 
@@ -219,7 +287,15 @@ class Pack:
     def chain(self) -> list[str]:
         """③ 사슬 — items → models → textures. 한 고리만 끊겨도 그 키는 보라 큐브다."""
         bad = []
-        for key, path in self.keys().items():
+        # ★ 바닐라 베이스 분기(minecraft/items/**)도 **똑같이** 건넌다. 여기서 모델 경로를 한 번
+        #   틀리면(honcheon:item/weapon/weapon/… 처럼) 팩 있는 눈에 보라 큐브가 뜬다 — 실제로
+        #   이 배선의 첫 판이 그렇게 틀렸고, 그때 이 눈은 honcheon/items 만 보느라 **놓쳤다.**
+        defs = dict(self.keys())
+        vdir = self.root / "assets" / "minecraft" / "items"
+        for p in sorted(vdir.rglob("*.json")) if vdir.is_dir() else []:
+            defs[f"minecraft:{p.relative_to(vdir).with_suffix('').as_posix()}"] = p
+
+        for key, path in defs.items():
             try:
                 doc = json.loads(path.read_text("utf-8"))
             except json.JSONDecodeError as e:
@@ -279,28 +355,106 @@ def _collect_models(node, out: list[str]) -> None:
 #  GATED   — 팩 수락자에게만 키가 나간다 (SkillDisplay: withPack · MobDisplay: pack_gate)
 #  UNGATED — 인벤토리의 실물 아이템. ItemStack 은 **모두에게 같은 바이트**라 사람마다 가를 수 없다.
 #            팩을 거절한 사람은 그 아이템을 **보라 큐브로 본다.** 구조적 위반이다 (아래 보고 참조).
-GATES = {
-    "SkillDisplay.java": ("GATED",
-                          "packed(SUCCESSFULLY_LOADED) 인 눈에만 — spawn() 이 관람석을 가른다"),
-    "MobDisplay.java": ("GATED",
-                        "mob_models.yml pack_gate: adaptive — 관중 전원이 수락일 때만 형체를 띄운다"),
-    "Weapons.java": ("UNGATED",
-                     "인벤토리 실물 — 팩 없는 눈에 **보라 큐브**로 보인다 (병기 45자루 전부)"),
-    "Goods.java": ("UNGATED",
-                   "인벤토리 실물 — 팩 없는 눈에 **보라 큐브**로 보인다 (지물·재료·기물 전부)"),
+#  ★ 이 표는 더 이상 '판정'이 아니라 '기대'다. 판정은 아래 gate_audit() 이 **소스를 읽어서** 낸다.
+#     (전임자의 눈은 여기 적힌 UNGATED 를 그대로 출력했다 — 표를 읽는 눈은 눈이 아니라 메아리다.)
+GATED = {
+    "SkillDisplay.java": "packed(SUCCESSFULLY_LOADED) 인 눈에만 — spawn() 이 관람석을 가른다",
+    "MobDisplay.java": "mob_models.yml pack_gate: adaptive — 관중 전원이 수락일 때만 형체를 띄운다",
+}
+#  실물 ItemStack 을 만드는 손. ItemStack 은 **모두에게 같은 바이트**라 사람마다 가를 수 없다 —
+#  그러므로 이 손들은 item_model 을 **쓰면 안 된다** (팩 거절자에게 보라 큐브가 간다).
+#  대신 custom_model_data 로 키를 담고, 팩이 바닐라 베이스에서 분기한다 (팩 없으면 컴포넌트가 불활성).
+INVENTORY = {
+    "Weapons.java": "병기 45 + 명병 8 — 인벤토리 실물",
+    "Goods.java": "지물·재료·기물 — 인벤토리 실물",
 }
 
 
-def gate_audit() -> tuple[list[str], list[str]]:
+def gate_audit(jdir: Path | None = None) -> tuple[list[str], list[str]]:
+    """④ 키를 얹는 손이 팩 상태를 보는가 — **소스를 읽어서** 판정한다.
+
+    (jdir 은 눈 시험용이다 — 사본에 상처를 내고 이 눈이 정말 잡는지 본다.)"""
     ok, violations = [], []
-    jdir = ROOT / "server-mvt/src/main/java/com/honcheon/mvt"
+    jdir = jdir or ROOT / "server-mvt/src/main/java/com/honcheon/mvt"
     for src in sorted(jdir.glob("*.java")):
-        if "setItemModel(" not in src.read_text("utf-8"):
+        text = src.read_text("utf-8")
+        uses_item_model = "setItemModel(" in text
+        uses_cmd = "setCustomModelDataComponent(" in text
+        name = src.name
+
+        if name in INVENTORY:
+            what = INVENTORY[name]
+            if uses_item_model:
+                violations.append(
+                    f"{name:20s} UNGATED  {what} — item_model 을 실물에 박는다.\n"
+                    f"   {'':20s}          팩 없는 눈엔 **보라 큐브**다 (1.21.4+ 는 바탕으로 폴백하지 않는다)")
+            elif not uses_cmd:
+                violations.append(f"{name:20s} ?        {what} — 모델 키를 얹는 손이 사라졌다. 눈을 고쳐라")
+            else:
+                ok.append(f"{name:20s} FALLBACK {what} — custom_model_data (팩 없으면 불활성 → 바닐라 그대로)")
             continue
-        kind, why = GATES.get(src.name, ("UNKNOWN", "게이트를 모르는 새 경로다 — 눈에 등록하라"))
-        line = f"{src.name:20s} {kind:8s} {why}"
-        (ok if kind == "GATED" else violations).append(line)
+
+        if not uses_item_model:
+            continue
+        if name in GATED:
+            ok.append(f"{name:20s} GATED    {GATED[name]}")
+        else:
+            violations.append(f"{name:20s} UNKNOWN  item_model 을 얹는데 게이트를 모르는 새 경로다 — 눈에 등록하라")
     return ok, violations
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  ⑤ 바닐라 폴백 — 팩 없는 눈이 **무엇을 보는가**
+# ═════════════════════════════════════════════════════════════════════════════
+#  실물 아이템 키는 custom_model_data.strings[0] 으로 나간다. 팩이 그 키를 바닐라 베이스에서
+#  분기해야(assets/minecraft/items/<base>.json) 팩 있는 눈이 3D 를 본다. 그리고 그 분기에는
+#  **fallback 이 있어야** 팩 있는 눈의 '평범한 철검'이 멀쩡하다 (전역 오염 0).
+#
+#  ★ 이 눈은 **베이스까지 대조한다.** 키가 엉뚱한 베이스에 구워지면 (예: 정련검 키를 stone_sword 에)
+#    클라이언트는 조용히 바닐라 철검을 그린다 — 크래시도 보라 큐브도 없이 **3D 가 그냥 안 나온다.**
+#    소리 없는 실패라서, 재지 않으면 아무도 모른다.
+
+def dispatch_audit(pack: "Pack") -> list[str]:
+    bad = []
+    want = inventory_bases()
+    have: dict[str, set[str]] = {}          # 키 → 그 키를 무는 베이스 파일들
+
+    vdir = pack.root / "assets" / "minecraft" / "items"
+    for p in sorted(vdir.rglob("*.json")) if vdir.is_dir() else []:
+        base = p.relative_to(vdir).with_suffix("").as_posix()
+        try:
+            doc = json.loads(p.read_text("utf-8"))
+        except json.JSONDecodeError as e:
+            bad.append(f"minecraft/items/{base}.json — 깨진 JSON ({e})")
+            continue
+        model = doc.get("model") or {}
+        if model.get("type") != "minecraft:select" \
+                or model.get("property") != "minecraft:custom_model_data":
+            bad.append(f"minecraft/items/{base}.json — custom_model_data select 가 아니다"
+                       f" (팩 없는 눈은 몰라도, 팩 있는 눈이 이 베이스의 혼천 아이템을 못 본다)")
+            continue
+        if "fallback" not in model:
+            bad.append(f"minecraft/items/{base}.json — **fallback 이 없다**. 컴포넌트 없는 바닐라"
+                       f" {base} 가 보라 큐브가 된다 (전역 오염)")
+        for case in model.get("cases") or []:
+            whens = case.get("when")
+            for w in (whens if isinstance(whens, list) else [whens]):
+                if isinstance(w, str) and w.startswith(f"{NS}:"):
+                    have.setdefault(w, set()).add(base)
+
+    for key, bases in sorted(want.items()):
+        got = have.get(key, set())
+        if not got:
+            bad.append(f"{key} — 어떤 바닐라 베이스도 이 키를 안 문다. 팩 있는 눈에 **3D 가 안 뜬다**"
+                       f" (기대: {', '.join(sorted(bases))})")
+            continue
+        if missing := bases - got:
+            bad.append(f"{key} — 베이스 {', '.join(sorted(missing))} 에 분기가 없다."
+                       f" 그 등급을 들면 **바닐라 아이템이 그대로 보인다** (조용한 실패)")
+        if extra := got - bases:
+            bad.append(f"{key} — 코드가 안 쓰는 베이스 {', '.join(sorted(extra))} 에 분기가 있다"
+                       f" (죽은 분기 — 코드는 {', '.join(sorted(bases))} 만 만든다)")
+    return bad
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -357,7 +511,7 @@ def audit(pack_root: Path) -> int:
     else:
         print(f"   온전하다 ({len(have)}개 키 전부 모델·텍스처까지 닿는다)")
 
-    print("\n④ 팩 게이트 — item_model 을 얹는 손이 팩 상태를 보는가")
+    print("\n④ 팩 게이트 — 키를 얹는 손이 팩 상태를 보는가")
     gated, ungated = gate_audit()
     for g in gated:
         print("   ✓ " + g)
@@ -367,14 +521,26 @@ def audit(pack_root: Path) -> int:
         fail = 1
         print("   → 팩 게이트 불가침: 팩이 없어도 플레이는 된다. 팩 없는 사람에게 보라 큐브를")
         print("     보이는 것은 게이트를 세운 것보다 나쁘다 (게임이 고장난 것처럼 보인다).")
-        print("     ItemStack 은 사람마다 가를 수 없으므로 — 팩이 보편이 아니라면 키를 얹지 말라.")
-        print("   ★ 이 눈은 이것을 **통과시키지 않는다.** 깨진 불변식 위에서 초록불을 켜는 눈은")
-        print("     눈이 아니다. 고치거나(키를 안 얹는다), 규약을 바꾸거나(팩을 필수로 한다) —")
-        print("     둘 중 하나를 사람이 정해야 한다. 눈이 대신 정하지 않는다.")
+        print("     ItemStack 은 사람마다 가를 수 없으므로 — 실물에 item_model 을 박지 말라.")
+        print("     실물의 길은 custom_model_data + 바닐라 베이스 분기다 (팩 없으면 불활성).")
+
+    print("\n⑤ 바닐라 폴백 — 팩 없는 눈이 무엇을 보는가 (실물 아이템 키의 베이스 대조)")
+    disp = dispatch_audit(pack)
+    if disp:
+        fail = 1
+        for d in disp:
+            print(f"   !! {d}")
+    else:
+        inv = inventory_bases()
+        vdir = pack_root / "assets" / "minecraft" / "items"
+        n = len(list(vdir.rglob("*.json"))) if vdir.is_dir() else 0
+        print(f"   온전하다 — 실물 {len(inv)}키가 전부 바닐라 베이스 {n}종에서 분기한다 (fallback 포함).")
+        print("   팩 없는 눈 = 바닐라 아이템 그대로 (돌·철·다이아·금 검 / 종이 / 가죽) — **보라 큐브 아님**")
+        print("   팩 있는 눈 = 3D 병기·명병·지물. 컴포넌트 없는 바닐라 아이템 = fallback (전역 오염 0)")
 
     print()
     print(f"총평: 요구 {len(want)}키 · 없는 키 {len(missing)} · 미등록 죽은 자산 {len(unregistered)}"
-          f" · 끊긴 사슬 {len(chain)} · 게이트 위반 {len(ungated)}"
+          f" · 끊긴 사슬 {len(chain)} · 게이트 위반 {len(ungated)} · 폴백 위반 {len(disp)}"
           + ("  → 위반" if fail else "  → 통과"))
     print("판정: " + ("위반 — 위의 !! 를 보라" if fail else "통과"))
     return fail
@@ -395,22 +561,17 @@ def _findings(pack: Path) -> set[str]:
 def selftest() -> int:
     """★ 눈을 시험한다 — 일부러 부러뜨리고 눈이 **정말로** 잡는지 본다.
 
-    종료 코드에 기대지 않는다: 팩 게이트 위반(④) 때문에 이 눈은 지금 언제나 1 을 낸다.
-    그러므로 **차이**를 본다 — 상처가 **새 지적을 낳는가.** 그것만이 눈이 보고 있다는 증거다.
-    (오늘 이 프로젝트에서 눈이 열일곱 번 거짓말했다. 종료 코드만 본 눈이 그 중 여럿이었다.)
+    **차이**를 본다 — 상처가 **새 지적을 낳는가.** 그것만이 눈이 보고 있다는 증거다.
+    (이 프로젝트에서 눈이 스무 번 넘게 거짓말했다. 종료 코드만 본 눈이 그 중 여럿이었다.)
     """
     src = ROOT / "resourcepack"
-    print("── 눈을 시험한다 (팩 사본에 상처를 내고 눈이 잡는지 본다) ──")
-    print("   ※ resourcepack/ 원본은 건드리지 않는다 — 사본에만 상처를 낸다 (팩 담당의 것이다)\n")
+    print("── 눈을 시험한다 (사본에 상처를 내고 눈이 잡는지 본다) ──")
+    print("   ※ resourcepack/ · 소스 원본은 건드리지 않는다 — 사본에만 상처를 낸다\n")
 
     baseline = _findings(src)
-    print(f"멀쩡한 팩의 지적 {len(baseline)}건 (전부 ④ 팩 게이트 — 키·사슬은 온전하다):")
+    clean_ok = not baseline
+    print(f"  [{'통과' if clean_ok else '거짓 양성!'}] 멀쩡한 팩에 지적이 없다 ({len(baseline)}건)")
     for b in sorted(baseline):
-        print("   " + b)
-    key_or_chain = [b for b in baseline if "UNGATED" not in b]
-    clean_ok = not key_or_chain
-    print(f"\n  [{'통과' if clean_ok else '거짓 양성!'}] 멀쩡한 팩에 키·사슬 지적이 없다")
-    for b in key_or_chain:
         print("      거짓 양성: " + b)
 
     cases = [
@@ -430,6 +591,21 @@ def selftest() -> int:
         ("모델을 [-16,32] 밖으로 민다 (클라이언트가 모델을 버린다)",
          lambda r: _push_out_of_range(r / f"assets/{NS}/models/item/qi/slash_arc.json"),
          "밖이다"),
+        # ─── ⑤ 바닐라 폴백 — 새 눈 ───
+        ("바닐라 분기를 통째로 지운다 (items/iron_sword.json) — 팩 있는 눈에 3D 가 안 뜬다",
+         lambda r: (r / "assets/minecraft/items/iron_sword.json").unlink(),
+         "안 문다"),
+        ("fallback 을 뽑는다 (iron_sword.json) — 세상의 모든 철검이 보라 큐브가 된다",
+         lambda r: _drop_fallback(r / "assets/minecraft/items/iron_sword.json"),
+         "fallback 이 없다"),
+        ("분기의 모델 경로를 틀린다 (honcheon:item/weapon/weapon/…) — 이 배선의 첫 판이 낸 진짜 상처",
+         lambda r: _double_prefix(r / "assets/minecraft/items/iron_sword.json"),
+         "없는 모델"),
+        ("키를 엉뚱한 베이스에 굽는다 (정련검을 stone_sword 로) — **소리 없는** 실패",
+         lambda r: _move_case(r / "assets/minecraft/items/iron_sword.json",
+                              r / "assets/minecraft/items/stone_sword.json",
+                              f"{NS}:weapon/sword_jeongryeon"),
+         "분기가 없다"),
     ]
     passed = 0
     for name, wound, expect in cases:
@@ -448,8 +624,32 @@ def selftest() -> int:
             else:
                 print(f"      기대한 새 지적: '{expect}' · 실제로 새로 난 지적: {sorted(new) or '없음'}")
 
-    total = len(cases) + 1
-    got = passed + (1 if clean_ok else 0)
+    # ─── ④ 팩 게이트 — 소스에 상처를 낸다 (팩이 아니라 **손**을 시험한다) ───
+    #  이것이 오늘의 핵심 위반이었다. 눈이 이것을 못 잡으면 되돌아가도 아무도 모른다.
+    _, live_viol = gate_audit()
+    gate_clean = not live_viol
+    print(f"  [{'통과' if gate_clean else '거짓 양성!'}] 멀쩡한 소스에 게이트 지적이 없다")
+    for v in live_viol:
+        print("      거짓 양성: " + v.splitlines()[0])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        jsrc = ROOT / "server-mvt/src/main/java/com/honcheon/mvt"
+        jcopy = Path(tmp) / "mvt"
+        shutil.copytree(jsrc, jcopy)
+        w = jcopy / "Weapons.java"
+        # 되돌린다: 실물 ItemStack 에 item_model 을 다시 박는다 (= 오늘 고친 바로 그 병)
+        w.write_text(w.read_text("utf-8").replace(
+            "        applyModel(meta, series, grade, null, demonic ? STATE_UNIDENTIFIED : null);",
+            '        meta.setItemModel(new NamespacedKey("honcheon", "x"));'), encoding="utf-8")
+        _, viol = gate_audit(jcopy)
+        regressed = any("UNGATED" in v and "Weapons.java" in v for v in viol)
+        print(f"  [{'잡았다' if regressed else '놓쳤다'}] "
+              "실물에 item_model 을 되돌려 박는다 (오늘 고친 그 병) — 게이트가 다시 깨지는가")
+        for v in viol:
+            print("      → " + v.splitlines()[0])
+
+    total = len(cases) + 3
+    got = passed + (1 if clean_ok else 0) + (1 if gate_clean else 0) + (1 if regressed else 0)
     print(f"\n눈 시험: {got}/{total}" + ("  — 눈이 본다" if got == total else "  — 눈이 멀었다"))
     return 0 if got == total else 1
 
@@ -458,6 +658,30 @@ def _push_out_of_range(model: Path) -> None:
     doc = json.loads(model.read_text("utf-8"))
     doc["elements"][0]["from"][0] = -40.0      # [-16, 32] 밖 — 클라이언트가 모델을 버린다
     model.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def _drop_fallback(item_def: Path) -> None:
+    doc = json.loads(item_def.read_text("utf-8"))
+    doc["model"].pop("fallback", None)
+    item_def.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def _double_prefix(item_def: Path) -> None:
+    doc = json.loads(item_def.read_text("utf-8"))
+    c = doc["model"]["cases"][0]["model"]
+    c["model"] = c["model"].replace("honcheon:item/", "honcheon:item/weapon/")
+    item_def.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def _move_case(frm: Path, to: Path, key: str) -> None:
+    """키를 엉뚱한 베이스로 옮긴다 — 클라이언트는 조용히 바닐라를 그린다 (보라 큐브도 아니다)."""
+    a = json.loads(frm.read_text("utf-8"))
+    b = json.loads(to.read_text("utf-8"))
+    moved = [c for c in a["model"]["cases"] if c["when"] == key]
+    a["model"]["cases"] = [c for c in a["model"]["cases"] if c["when"] != key]
+    b["model"]["cases"].extend(moved)
+    frm.write_text(json.dumps(a), encoding="utf-8")
+    to.write_text(json.dumps(b), encoding="utf-8")
 
 
 def main() -> int:

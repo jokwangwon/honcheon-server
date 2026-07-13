@@ -1,0 +1,20 @@
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "cases": [
+      {
+        "when": "honcheon:cargo/pyomul",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/cargo/pyomul"
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/chest_minecart"
+    }
+  }
+}

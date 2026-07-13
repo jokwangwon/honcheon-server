@@ -1,0 +1,104 @@
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "cases": [
+      {
+        "when": "honcheon:weapon/dagger_bobyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/dagger_bobyeong"
+        }
+      },
+      {
+        "when": "honcheon:weapon/dao_bobyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/dao_bobyeong"
+        }
+      },
+      {
+        "when": "honcheon:weapon/gauntlet_bobyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/gauntlet_bobyeong"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/dangga",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/dangga"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/hwasan",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/hwasan"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/jeomchang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/jeomchang"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/jongnam",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/jongnam"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/mudang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/mudang"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/namgung",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/namgung"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/paengga",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/paengga"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/sorimsa",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/sorimsa"
+        }
+      },
+      {
+        "when": "honcheon:weapon/spear_bobyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/spear_bobyeong"
+        }
+      },
+      {
+        "when": "honcheon:weapon/sword_bobyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/sword_bobyeong"
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/diamond_sword"
+    }
+  }
+}

@@ -156,14 +156,37 @@ texture_rules:
 
 # ─── 아이템 채널 등록부 — 개별 지정 (컴포넌트 단위, 전역 오염 0) ───
 # base_item = 팩 미적용 폴백의 실체. model_key = 코드와 아트의 유일한 접점.
+#
+# ★★ 전달 문법 【2026-07 교체 — 팩 게이트 불가침 위반을 고치며】 ★★
+#   model_key 는 **minecraft:custom_model_data.strings[0]** 으로 나간다. item_model 이 아니다.
+#
+#   【왜】 1.21.4+ 는 item_model 이 가리키는 정의가 없으면 바탕 아이템으로 **폴백하지 않는다** —
+#     없는 모델(보라 큐브)을 그린다. 그런데 ItemStack 은 **모두에게 같은 바이트**다: 서버는 팩을
+#     받은 눈과 거절한 눈에게 다른 아이템을 보낼 수 없다. 그러므로 실물 아이템에 item_model 을
+#     박으면 **팩을 거절한 사람의 손에 보라 큐브가 쥐어진다.** require-resource-pack=false 인
+#     이 서버에서 그것은 게이트를 세운 것보다 나쁘다 (게임이 고장난 것처럼 보인다).
+#     ⇒ 그 시절, 아래 '팩없음' 열은 **전부 거짓말이었다.** 이제 참이다.
+#
+#   【어떻게】 팩은 assets/minecraft/items/<base_item>.json 에서 select(custom_model_data) 로
+#     분기한다 (build_resourcepack.py: write_vanilla_dispatch — 베이스 36종).
+#       · 팩 없는 눈 — 컴포넌트가 **불활성**이다. base_item 을 그대로 본다 (아래 '팩없음' 열).
+#       · 팩 있는 눈 — select 가 strings[0] 을 읽어 3D 를 문다. 잃는 것이 없다.
+#       · 컴포넌트 없는 바닐라 철검·종이·가죽 — fallback 이 바닐라 모델이라 그대로다 (전역 오염 0).
+#     검산: tools/model_key_audit.py ④(게이트) ⑤(바닐라 폴백 — 베이스까지 대조한다)
+#
+#   ★ base_item 을 새로 고를 때의 금기: **바닐라 아이템 정의가 단순 모델이 아닌 것**을 베이스로
+#     삼지 말라. bundle 은 열림/닫힘 + 선택 아이템 분기를 담은 합성 정의다 — flat select 로 덮으면
+#     세계의 모든 번들이 고장난다. (보류 기물 3종이 지금 그 상태다 — 아래 blocker 참조.)
 item_channels:
   무기:
     grade_base_items:               # 등급 = 베이스 아이템 (팩 없이도 재질 색이 등급이다)
-      범철: { base_item: stone_sword, tint: gray }
-      정련: { base_item: iron_sword, tint: white }
-      보병: { base_item: diamond_sword, tint: aqua }
-      신병: { base_item: golden_sword, tint: gold }
-      마병: { base_item: netherite_sword, tint: dark_red }
+      범철: { base_item: stone_sword, tint: gray, 팩없음: "돌 검" }
+      정련: { base_item: iron_sword, tint: white, 팩없음: "철 검" }
+      보병: { base_item: diamond_sword, tint: aqua, 팩없음: "다이아 검" }
+      신병: { base_item: golden_sword, tint: gold, 팩없음: "금 검" }
+      마병: { base_item: netherite_sword, tint: dark_red, 팩없음: "네더라이트 검" }
+    # 18반 병기(부·겸·월아산·구)는 도구를 징발했으므로 베이스가 <등급>_axe/_hoe/_shovel/_pickaxe 다
+    # (Weapons.java Series.base × Base.byGrade — 총 25종. 팩 없는 눈은 그 바닐라 도구를 그대로 본다).
     grade_mark: "자루 끝 고리 0/1/2/3개 (범철~신병) + 신병 수실 / 마병 = 고리 없음 + 혈적 1점 (위가 아니라 밖)"
     series:                         # 계열 = item_model (같은 베이스에 다른 실루엣)
       검: { model_key: "honcheon:weapon/sword_<등급>", note: "곧은 양날 + 원형 호수 + 자루 술" }
@@ -183,6 +206,28 @@ item_channels:
       note: "발현 시 날 중앙 1px 혈적 세로선 + 검붉은 자루 술 — 혈향의 시각 신호"
     vanilla_stat_warning: "재질 티어가 공격력·내구를 딸고 온다 — 판정 기반 전투와 무관하나 지급 시 Unbreakable·attribute 정리는 접합 조건"
 
+    # ─── 명병(名兵) — 문파의 얼굴. 【2026-07 배선 완료】 ───
+    #   사용자가 문장으로 직접 청한 유일한 시각 항목:
+    #     *"매화검인 경우 매화검처럼 생겨야함. 손잡이에 매화 무늬가 있다던가 특색이 있어야 함"*
+    #   Weapons.enshrine(item, sect) 이 애병을 명병으로 세우고 **그때 문파의 실루엣을 문다.**
+    #   ★ 계열이 문파의 병기와 맞을 때만 문파 모델을 얹는다 — 매화검은 **검**이지 도가 아니다.
+    #     (팩의 myeong/hwasan 은 검의 지오메트리다. 도에 물리면 도가 검으로 보인다.)
+    #     어긋나면 단계만 오르고 실루엣은 계열 그대로 — 명명 자체는 막지 않는다.
+    #   등급은 가리지 않는다 (범철 매화검도 매화검이다) → 그 계열의 5재질 전부에 분기가 있다.
+    명병:
+      model_key_pattern: "honcheon:weapon/myeong/<sect>"     # sect = factions.yml member id
+      pdc: "honcheon:weapon_myeong_sect (계열이 맞을 때만 붙는다)"
+      stage: "beloved_weapon.stages.명병 — 승급 조건(생사 고비 3회 + 명성 사건)은 MVT에 축이 없다 (MvtCommand 가 부른다)"
+      sects:                        # ★ Weapons.java MYEONG_SERIES 와 **같은 표** (model_key_audit 이 대조한다)
+        hwasan: { 계열: 검, note: "매화검 — 자루에 매화 (사용자 직접 요청)" }
+        jeomchang: { 계열: 검, note: "쾌검 — 최속·최박" }
+        jongnam: { 계열: 검, note: "중검 — 최중·최후" }
+        namgung: { 계열: 검, note: "장검 — 최장 리치" }
+        mudang: { 계열: 검, note: "태극검 — 원으로 되돌린다" }
+        paengga: { 계열: 도, note: "오호단문도 — 최광폭" }
+        dangga: { 계열: 단검, note: "비수 — 암기·독" }
+        sorimsa: { 계열: 권갑, note: "권·장 — 손등의 옥 한 점" }
+
   지물:                              # 소모품·서물·증서·화물
     비급_진본: { base_item: written_book, model_key: "honcheon:tome/manual_original", 팩없음: "글 쓰인 책", note: "죽간 말이 + 봉인 끈 + 주사 인장 1점" }
     비급_필사본: { base_item: book, model_key: "honcheon:tome/manual_copy", 팩없음: "맨 책", note: "얇은 철(綴), 인장 없음 — 진본과의 차이가 인장" }
@@ -194,9 +239,10 @@ item_channels:
   기물:                              # equipment.yml trinkets 5종 (등록제 — 발명 금지)
     피독주: { base_item: heart_of_the_sea, model_key: "honcheon:trinket/pidokju", 팩없음: "청록 구슬", note: "구슬 + 표면 균열 2획", status: 징발 }
     야명주: { base_item: nether_star, model_key: "honcheon:trinket/yamyeongju", 팩없음: "빛나는 별(glint)", note: "구슬 + 방사 광선 4방 1px — 유일하게 밝은 값 허용", status: 징발 }
-    청낭: { base_item: bundle, model_key: "honcheon:trinket/cheongnang", 팩없음: "주머니", note: "아가리 묶은 주머니 + 침 3개", status: 보류, blocker: "바닐라 수납 GUI 차단 접합 필요" }
+    청낭: { base_item: bundle, model_key: "honcheon:trinket/cheongnang", 팩없음: "주머니", note: "아가리 묶은 주머니 + 침 3개", status: 보류, blocker: "바닐라 수납 GUI 차단 접합 필요 ★ + base_item 재선정 필수 — bundle 의 바닐라 아이템 정의는 열림/닫힘·선택아이템 분기를 담은 **합성 정의**다. select 로 덮으면 세계의 모든 번들이 고장난다 (그래서 팩이 이 3종의 바닐라 분기를 굽지 않는다)" }
     호신부: { base_item: name_tag, model_key: "honcheon:trinket/hosinbu", 팩없음: "매다는 패", note: "세로 부적 + 주사 부문 3획 + 끈 고리", status: 보류, blocker: "개체 명명 동작 차단 필요" }
     천잠사_요대: { base_item: lead, model_key: "honcheon:trinket/yodae", 팩없음: "끈 뭉치", note: "감긴 띠 + 매듭 1 + 은사 광택 1px", status: 보류, blocker: "개체 매기 동작 차단 필요" }
+    보류_3종_공통: "텍스처는 구워져 있으나 Goods.java 가 만들지 않는다 → custom_model_data 키가 안 나가므로 바닐라 분기도 굽지 않는다 (model_key_audit ② 가 '예약'으로 통과시킨다). 지급 접합 시 base_item 을 다시 고르고 write_vanilla_dispatch 의 GOODS_BASE 에 등록하라"
 
   재료:                              # economy.yml price_table.사냥_부산물
     늑대_가죽: { base_item: leather, model_key: "honcheon:pelt/wolf", note: "펼친 가죽 + 네 발 외곽 — 가죽 3종은 윤곽으로 구별" }

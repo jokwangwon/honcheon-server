@@ -59,7 +59,14 @@ final class RiverPlan {
     record Spec(String placeId, String name, int ux, int uz,
                 int halfWidth, int depth, int gradient, int axisOffset,
                 int surfaceBelowGround, int valley, int margin,
-                int meanderAmp, int meanderLen, String bankMaterial) {
+                int meanderAmp, int meanderLen, String bankMaterial,
+                int wetland) {
+
+        /** 축만 뒤집은 사본 — 물길은 물리적으로 <b>같은 쪽</b>에 남는다 (offset 부호도 함께 뒤집는다) */
+        Spec reversed() {
+            return new Spec(placeId, name, -ux, -uz, halfWidth, depth, gradient, -axisOffset,
+                    surfaceBelowGround, valley, margin, meanderAmp, meanderLen, bankMaterial, wetland);
+        }
     }
 
     /** 하상을 파 내려갈 수 있는 최대 깊이 (조성 지면 기준) — 골짜기가 무한정 깊어지지 않게 */
@@ -194,10 +201,52 @@ final class RiverPlan {
             return spec;   // 등록된 방향이 이미 내리막이다 — 지리가 옳았다
         }
         // 하류가 더 높다 — 땅이 등록부를 반박한다. 뒤집는다 (물은 지리를 모른다. 중력만 안다)
-        return new Spec(spec.placeId(), spec.name(), -spec.ux(), -spec.uz(),
-                spec.halfWidth(), spec.depth(), spec.gradient(), -spec.axisOffset(),
-                spec.surfaceBelowGround(), spec.valley(), spec.margin(),
-                spec.meanderAmp(), spec.meanderLen(), spec.bankMaterial());
+        return spec.reversed();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 범람원(氾濫原) — <b>강가의 땅은 들판이 아니다</b>
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * <b>젖은 땅인가</b> — 물가에서 {@code wetland} 칸까지. 여기는 풀밭이 아니라 <b>진창</b>이다.
+     *
+     * <p>강을 파 놓고 그 옆을 잔디로 두면 <b>물길만 난 잔디밭</b>이다. 강은 제 옆의 땅을 바꾼다 —
+     * 물이 드나들고, 흙이 젖고, 갈대가 선다. <b>그것까지가 강이다.</b>
+     *
+     * <p>등록부가 폭을 정한다 ({@code wetland: 0} 이면 범람원이 없다 — 협곡의 강은 둔치가 없다).
+     */
+    boolean inWetland(int x, int z) {
+        if (spec.wetland() <= 0 || !inBank(x, z)) {
+            return false;
+        }
+        int s = downstream(x, z);
+        return distanceFromCenterline(x, z) <= halfWidthAt(s) + spec.wetland();
+    }
+
+    /**
+     * 범람원의 <b>결</b> — 물가에 가까울수록 진창이다. 0(마른 땅) ~ 3(물가의 진흙).
+     *
+     * <p>결정론: 저주파 사인 둘. <b>좌표 해시(파장 1칸)는 쓰지 않는다</b> —
+     * 그건 결이 아니라 노이즈이고, 산을 '점무늬'로 만든 병이 바로 그것이었다.
+     */
+    int wetness(int x, int z) {
+        if (!inWetland(x, z)) {
+            return 0;
+        }
+        int s = downstream(x, z);
+        double d = distanceFromCenterline(x, z) - halfWidthAt(s);
+        double t = 1 - Math.min(1, d / Math.max(1, spec.wetland()));   // 1 = 물가, 0 = 범람원 끝
+        // 결 — 물가선이 자로 그은 듯 곧지 않다 (파장 23·37칸)
+        double grain = 0.18 * Math.sin(2 * Math.PI * s / 23.0) + 0.12 * Math.sin(2 * Math.PI * s / 37.0 + 1.7);
+        double v = t + grain;
+        if (v > 0.72) {
+            return 3;   // 진창 — 물이 드나드는 자리
+        }
+        if (v > 0.42) {
+            return 2;   // 젖은 흙
+        }
+        return v > 0.15 ? 1 : 0;
     }
 
     Spec spec() {

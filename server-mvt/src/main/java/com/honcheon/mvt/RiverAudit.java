@@ -46,6 +46,11 @@ final class RiverAudit {
     private static final String INFO = ChatColor.GRAY + "  ";
     private static final String HEAD = ChatColor.AQUA + "";
 
+    /** 젖은 땅의 자재 — 강가는 이런 것으로 되어 있다 */
+    private static final java.util.Set<Material> WET_SOIL = java.util.EnumSet.of(
+            Material.MUD, Material.COARSE_DIRT, Material.ROOTED_DIRT, Material.GRAVEL,
+            Material.SAND, Material.CLAY, Material.MUDDY_MANGROVE_ROOTS, Material.PODZOL);
+
     /** 세계를 읽는 창 — 진짜 세계도, 시험용 가짜 세계도 이 창으로 들어온다 */
     interface Probe {
 
@@ -53,6 +58,9 @@ final class RiverAudit {
 
         /** 단단한가 (공기도 물도 아닌 것) */
         boolean solid(int x, int y, int z);
+
+        /** <b>젖은 땅</b>인가 — 진흙·자갈·모래·거친흙. <b>잔디는 아니다</b> (강가가 잔디면 그건 강가가 아니다) */
+        boolean wetland(int x, int y, int z);
     }
 
     static Probe of(World world) {
@@ -66,6 +74,11 @@ final class RiverAudit {
             public boolean solid(int x, int y, int z) {
                 Material m = world.getBlockAt(x, y, z).getType();
                 return !m.isAir() && m != Material.WATER;
+            }
+
+            @Override
+            public boolean wetland(int x, int y, int z) {
+                return WET_SOIL.contains(world.getBlockAt(x, y, z).getType());
             }
         };
     }
@@ -113,6 +126,7 @@ final class RiverAudit {
         continuity(out, violations, river, probe);
         watertight(out, violations, river, probe);
         navigable(out, violations, river, probe);
+        floodplain(out, violations, river, probe);
 
         out.add(HEAD + "── 총평 ──");
         out.add(violations.isEmpty()
@@ -329,6 +343,62 @@ final class RiverAudit {
         } else {
             out.add(OK + "  배가 다닌다");
         }
+    }
+
+    // ─── ⑥ 범람원 — **강가의 땅은 들판이 아니다** ───
+
+    private static void floodplain(List<String> out, List<String> violations,
+                                   RiverPlan river, Probe probe) {
+        if (river.spec().wetland() <= 0) {
+            return;   // 등록부가 범람원을 주문하지 않았다 (협곡의 강은 둔치가 없다) — 요구하지 않는다
+        }
+        out.add(HEAD + "⑥ 범람원 — 강가가 젖은 땅인가 (풀밭이 아니라)");
+        int want = 0;
+        int wet = 0;
+        for (int s = 0; s <= river.length(); s += 2) {
+            int hw = river.halfWidthAt(s);
+            int mid = (int) Math.round(river.centerline(s));
+            for (int side = -1; side <= 1; side += 2) {
+                for (int k = 1; k <= 3; k++) {
+                    int[] b = at(river, s, mid + side * (hw + k));
+                    if (!river.inWetland(b[0], b[1])) {
+                        continue;
+                    }
+                    int top = groundTop(probe, river, b[0], b[1]);
+                    if (top == Integer.MIN_VALUE) {
+                        continue;
+                    }
+                    want++;
+                    if (probe.wetland(b[0], top, b[1])) {
+                        wet++;
+                    }
+                }
+            }
+        }
+        int pct = want == 0 ? 0 : wet * 100 / want;
+        out.add(INFO + "  물가의 젖은 땅 " + wet + "/" + want + " (" + pct + "%)");
+        if (want == 0) {
+            out.add(BAD + "  범람원이 없다 — 등록부가 주문했는데 물가에 둔치가 한 칸도 없다");
+            violations.add("범람원 없음");
+        } else if (pct < 80) {
+            out.add(BAD + "  강가가 풀밭이다 — 젖은 땅이 " + pct
+                    + "% 뿐이다. 강을 파 놓고 옆을 잔디로 두면 그건 **물길만 난 잔디밭**이다");
+            violations.add("강가 풀밭(" + pct + "%)");
+        } else {
+            out.add(OK + "  강가가 젖어 있다 (진창 → 젖은 흙 → 마른 들)");
+        }
+    }
+
+    /** 그 열의 지면 꼭대기 (물이 아닌 단단한 것의 최상단) */
+    private static int groundTop(Probe probe, RiverPlan river, int x, int z) {
+        int hi = river.groundY() + 20;
+        int lo = river.groundY() - RiverPlan.MAX_CUT - 12;
+        for (int y = hi; y >= lo; y--) {
+            if (probe.solid(x, y, z)) {
+                return y;
+            }
+        }
+        return Integer.MIN_VALUE;
     }
 
     // ─── 물길 좌표계 → 세계 좌표 ───

@@ -119,7 +119,8 @@ final class RiverForge {
                     Math.max(0, num(m, def, "margin", 20)),
                     num(m, def, "meander_amp", 16),
                     Math.max(8, num(m, def, "meander_len", 170)),
-                    str(m, def, "bank_material", "자갈")));
+                    str(m, def, "bank_material", "자갈"),
+                    Math.max(0, num(m, def, "wetland", 10))));
             // axis_offset 은 비율이라 별도 표에 담는다 (반경은 조성 때 정해진다)
             offsets.put(id, dbl(m, def, "axis_offset", 0.45));
         }
@@ -168,6 +169,11 @@ final class RiverForge {
         };
     }
 
+    /** 물길이 등록된 장소 전부 — 지도 검수가 읽는다 (이들은 윤곽이 '그대로'여도 강이 판다) */
+    static Set<String> registeredIds() {
+        return java.util.Set.copyOf(registry.keySet());
+    }
+
     /** 이 장소에 등록된 물길이 있는가 */
     static boolean has(WorldMap.Place place) {
         return place != null && registry.containsKey(place.id());
@@ -188,7 +194,7 @@ final class RiverForge {
         int off = (int) Math.round(offsets.getOrDefault(place.id(), 0.45) * radius);
         return new RiverPlan.Spec(s.placeId(), s.name(), s.ux(), s.uz(),
                 s.halfWidth(), s.depth(), s.gradient(), off, s.surfaceBelowGround(),
-                s.valley(), s.margin(), s.meanderAmp(), s.meanderLen(), s.bankMaterial());
+                s.valley(), s.margin(), s.meanderAmp(), s.meanderLen(), s.bankMaterial(), s.wetland());
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -217,7 +223,8 @@ final class RiverForge {
         }
         RiverPlan.Spec actual = new RiverPlan.Spec(base.placeId(), base.name(), d[4], d[5],
                 base.halfWidth(), base.depth(), base.gradient(), d[6], base.surfaceBelowGround(),
-                base.valley(), base.margin(), base.meanderAmp(), base.meanderLen(), base.bankMaterial());
+                base.valley(), base.margin(), base.meanderAmp(), base.meanderLen(),
+                base.bankMaterial(), base.wetland());
         return new RiverPlan(actual, d[0], d[1], d[2], d[3]);   // 기하만 — 검수는 **거기 있는 물을 잰다**
     }
 
@@ -352,6 +359,28 @@ final class RiverForge {
                 fresh.slope(), fresh.relief());
     }
 
+    /**
+     * <b>수변 방위를 강이 답한다.</b> 강을 판 적이 없으면 넘어온 사양을 그대로 돌려준다.
+     *
+     * <p>{@code TerrainForge.waterSides()} 는 물을 <b>사분면으로</b> 센다 — 호수·바다(한쪽에 있는 물) 전제다.
+     * 강은 부지를 <b>관통</b>하므로 상·하류 방위에서도 물이 잡혀 <b>세 방위가 수변</b>이 된다.
+     * 그러면 {@code waterStockade} 가 <b>뭍을 향해 뗏목을 편다</b>. 강이 아는 답은 하나다:
+     * <b>물은 흐름의 옆에 있다.</b>
+     */
+    static TerrainForge.SiteSpec describe(TerrainForge.SiteSpec spec, WorldMap.Place place) {
+        RiverPlan river = dugPlan(place);
+        if (river == null) {
+            return spec;   // 강을 판 적이 없다 — 바닷가·호숫가는 사분면표가 맞다
+        }
+        return new TerrainForge.SiteSpec(
+                spec.placeId(), spec.name(), spec.terrain(), spec.world(),
+                spec.cx(), spec.cz(), spec.radius(), spec.groundY(),
+                spec.peakX(), spec.peakZ(), spec.peakY(),
+                spec.surface(), spec.buildable(), spec.approaches(),
+                true, List.of(bankFace(river)),
+                spec.slope(), spec.relief());
+    }
+
     /** 물이 있는 쪽 — 흐름의 오른쪽({@code v = (-uz, ux)}) 또는 왼쪽 (axis_offset 의 부호) */
     static BlockFace bankFace(RiverPlan river) {
         int vx = -river.spec().uz();
@@ -421,36 +450,120 @@ final class RiverForge {
      * <p><b>자연이 이미 물이면 손대지 않는다</b> — 거기가 이 강의 하구다.
      */
     private static void bankColumn(World world, RiverPlan river, int x, int z, int natural, Material bed) {
-        int target = river.bankTargetY(x, z, natural);
-        if (target == RiverPlan.WET) {
-            return;   // 바닐라의 물 — 강이 여기서 그것을 만난다. 메우면 하구가 막힌다
-        }
         int s = river.downstream(x, z);
+        int ws = river.waterY(s);
+
+        // ─── ★ 합류인가, 구멍인가 ────────────────────────────────────────────
+        //   구판은 **"자연이 물이면 무조건 손대지 않는다"** 였다. 하구를 지키려던 규칙인데, 너무 넓었다.
+        //   인게임 검수가 **물가 누수 1곳**을 잡았고, 그 1곳이 정확히 이것이었다:
+        //   우리 수면보다 **낮은** 바닐라 물웅덩이. 그건 하구가 아니라 **둑에 뚫린 구멍**이다.
+        //   손대지 않으면 강이 거기로 **샌다**.
+        //
+        //   ★ 합류는 자연 수면이 **우리 수면 이상**일 때만이다. 그때만 손대지 않는다.
+        int effective = natural;
+        if (natural == RiverPlan.WET) {
+            int ys = waterSurface(world, x, z, river.groundY() + 10);
+            if (ys == Integer.MIN_VALUE || ys >= ws) {
+                return;   // 합류(하구) — 강이 여기서 바다·호수를 만난다. 메우면 하구가 막힌다
+            }
+            effective = ys;   // 우리보다 낮은 못 — 둑을 쌓는다. 안 쌓으면 강이 이리로 샌다
+        }
+
+        int target = river.bankTargetY(x, z, effective);
+        if (target == RiverPlan.WET) {
+            return;
+        }
         double d = river.distanceFromCenterline(x, z);
         int hw = river.halfWidthAt(s);
 
         // 깎는다 — 목표 위의 것은 걷어낸다 (물 위에 얹힌 언덕이 강가 절벽이 된다)
-        int from = Math.max(natural == RiverPlan.WET ? target : natural, river.clearanceTop(s));
+        int from = Math.max(effective, river.clearanceTop(s));
         for (int y = from; y > target; y--) {
             Block b = world.getBlockAt(x, y, z);
             if (!b.getType().isAir()) {
                 b.setType(Material.AIR);
             }
         }
-        // 메운다 — 목표 아래가 비었으면 채운다 (둑)
-        for (int y = target; y > target - RiverPlan.SEAL_DEPTH; y--) {
+        // 메운다 — 목표 아래가 비었으면 채운다 (둑).
+        //   ★ 봉인 깊이(6칸)만 채우면 안 된다 — 낮은 못을 막을 때는 그보다 깊을 수 있다.
+        //   단단한 땅에 닿을 때까지 채우되, 봉인 깊이는 반드시 넘긴다
+        for (int y = target; y > target - 24; y--) {
             Block b = world.getBlockAt(x, y, z);
             if (b.getType().isAir() || b.isLiquid()) {
                 b.setType(y == target ? Material.DIRT : Material.STONE);
+            } else if (y <= target - RiverPlan.SEAL_DEPTH) {
+                break;   // 단단한 땅에 닿았고 봉인 깊이도 넘겼다
             }
         }
-        // 표층 — 물가 두 칸은 자갈·모래·진흙이다 (풀이 물에 잠기면 그건 물가가 아니다)
-        Material top = d <= hw + 2 ? bed : Material.GRASS_BLOCK;
+
+        // ─── 범람원 — **강가의 땅은 들판이 아니다** ─────────────────────────
         Block t = world.getBlockAt(x, target, z);
         if (SOLID_NATURAL.contains(t.getType()) || t.getType() == Material.DIRT) {
-            t.setType(top);
+            t.setType(bankSurface(river, x, z, d, hw, bed));
         }
         TerrainForge.sealBelow(world, x, target, z);   // 계약 ①
+        reeds(world, river, x, z, target, ws);
+    }
+
+    /**
+     * 물가의 표층 — <b>물에서 멀어질수록 마른다</b>.
+     *
+     * <p>강을 파 놓고 그 옆을 잔디로 두면 <b>물길만 난 잔디밭</b>이다. 강은 제 옆의 땅을 바꾼다.
+     */
+    private static Material bankSurface(RiverPlan river, int x, int z, double d, int hw, Material bed) {
+        if (d <= hw + 2) {
+            return bed;   // 물가 — 자갈·모래·진흙 (풀이 물에 잠기면 그건 물가가 아니다)
+        }
+        return switch (river.wetness(x, z)) {
+            case 3 -> Material.MUD;            // 진창 — 물이 드나드는 자리
+            case 2 -> Material.COARSE_DIRT;    // 젖은 흙
+            case 1 -> Material.ROOTED_DIRT;    // 물이 닿았던 흔적
+            default -> Material.GRASS_BLOCK;   // 마른 들
+        };
+    }
+
+    /**
+     * 갈대 — <b>물가에 서는 것</b>. (위수 갈대밭이 등록부에 그렇게 적혀 있다)
+     *
+     * <p><b>물에 닿는 자리에만 심는다</b> — 마인크래프트의 갈대는 곁에 물이 없으면 <b>떨어진다</b>.
+     * 떨어진 갈대는 아이템이 되어 굴러다니고, 그것은 조성이 아니라 <b>쓰레기</b>다.
+     * 결정론: 좌표 해시({@code Math.floorMod}) — 심는 자리는 흔들려도 되고, 지형은 흔들리면 안 된다.
+     */
+    private static void reeds(World world, RiverPlan river, int x, int z, int target, int ws) {
+        if (river.spec().wetland() <= 0 || river.wetness(x, z) < 3 || target != ws + 1) {
+            return;   // 진창이 아니거나, 수면 바로 옆이 아니다
+        }
+        if (Math.floorMod(x * 31 + z * 17, 7) != 0) {
+            return;   // 갈대는 듬성하다 (빽빽하면 그건 갈대밭이 아니라 담장이다)
+        }
+        boolean beside = false;   // 곁에 물이 있는가 — 없으면 갈대가 떨어진다
+        for (int[] n : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            if (world.getBlockAt(x + n[0], target, z + n[1]).getType() == Material.WATER) {
+                beside = true;
+                break;
+            }
+        }
+        if (!beside) {
+            return;
+        }
+        int h = 1 + Math.floorMod(x * 13 + z * 7, 3);
+        for (int i = 1; i <= h; i++) {
+            Block b = world.getBlockAt(x, target + i, z);
+            if (b.getType().isAir()) {
+                b.setType(Material.SUGAR_CANE);
+            }
+        }
+    }
+
+    /** 그 열의 자연 수면 y — 물이 아니면 {@link Integer#MIN_VALUE} */
+    private static int waterSurface(World world, int x, int z, int from) {
+        int top = Math.min(from, world.getMaxHeight() - 1);
+        for (int y = top; y >= top - 40; y--) {
+            if (world.getBlockAt(x, y, z).getType() == Material.WATER) {
+                return y;
+            }
+        }
+        return Integer.MIN_VALUE;
     }
 
     private static Material bedMaterial(String name) {

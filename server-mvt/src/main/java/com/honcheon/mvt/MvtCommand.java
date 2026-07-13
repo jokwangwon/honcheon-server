@@ -53,6 +53,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "지역조성" -> buildRegion(sender, args);   // 원거리 등록지 하나를 짓는다 (관리자·콘솔 가능)
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
+                case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "운기" -> meditate(sender);
                 case "태세" -> stance(sender, args);         // 맞는 쪽의 선택 — 회피·막기·흘리기 (기본은 자동)
@@ -456,6 +457,20 @@ public final class MvtCommand implements CommandExecutor {
         World world = sender instanceof Player p2 ? p2.getWorld() : org.bukkit.Bukkit.getWorlds().get(0);
         // 부지 탐색이 먼저 서버를 멈춘다 — 후보마다 지형을 표본하며 **청크를 동기 생성**하기 때문이다
         // (20km 밖의 땅은 아직 존재하지 않는다). 시드검사와 같은 병이고 같은 처방이다: 틱을 나눠 먹는다.
+        // ★ 기억된 자리가 있으면 **다시 찾지 않는다.**
+        //   부지 탐색은 지형을 표본한다 — 그런데 **우리가 지난번에 만든 것이 그 지형이다.**
+        //   강을 파면 물이 늘고, 산을 세우면 기복이 는다. 그러면 탐색이 **다른 답**을 낸다:
+        //   장강수로채가 재조성 한 번에 128칸을 옮겨 앉았고, 하지(河誌)는 옛 자리를 가리켰다.
+        //   **우리가 만든 것이 다음 탐색을 흔든다.** 그러므로 첫 답을 원장에 굽고, 그 뒤로는 그것을 쓴다.
+        int[] at = plugin.regionSite(place.id());
+        if (at != null) {
+            sender.sendMessage(ChatColor.GRAY + place.name() + " 부지 (원장 · 다시 찾지 않는다) — ("
+                    + at[0] + ", " + at[2] + ") · 지면 y" + at[1]);
+            preloadThenBuild(sender, world, place,
+                    new WorldMap.Site(at[0], at[2], at[1], 0,
+                            map.fit(world, at[0], at[2], place.terrain(), place.biomes())));
+            return true;
+        }
         sender.sendMessage(ChatColor.GRAY + place.name() + " 부지를 찾는다 — 지형을 표본한다 "
                 + ChatColor.DARK_GRAY + "(틱을 나눠 먹는다 · 서버는 계속 돈다)");
         new SiteProbe(plugin, map, place, world,
@@ -590,7 +605,7 @@ public final class MvtCommand implements CommandExecutor {
         Integer remembered = plugin.regionBase(place.id());
         int baseY = remembered == null ? site.groundY() : remembered;
         if (remembered == null) {
-            plugin.setRegionBase(place.id(), baseY);
+            plugin.setRegionBase(place.id(), site.x(), baseY, site.z());   // 자리를 굽는다 — 좌표까지
         }
         // 문파 부지 110 — 산이 72켜로 서면 계단이 그만큼 길어야 오른다 (반경 44 는 17켜에서 멎는다).
         int forgeRadius = "noklim".equals(place.faction()) ? 24 : 110;
@@ -1422,6 +1437,26 @@ public final class MvtCommand implements CommandExecutor {
             return true;
         }
         plugin.antechamber().cross(player);
+        return true;
+    }
+
+    /**
+     * <b>/혼천 지도검수</b> — 등록부의 모든 장소가 그 지형답게 서 있는가.
+     *
+     * <p>★ 이 눈이 없어서 **60곳이 조용히 통과하고 있었다.** 안 지어진 땅은 `Zone` 이 없고,
+     * `Zone` 이 없으면 지역 검수가 **아예 안 불린다** → 위반 0건. <b>짓지 않으면 위반이 없다.</b>
+     * 침묵이 성공으로 읽혔다.
+     *
+     * <p>그래서 이 눈은 <b>안 지은 곳을 말한다</b>. 그리고 <b>대조군이 0건이 아니다</b> —
+     * 섬(해남파·동영도)이 아직 반도에 앉을 수 있고, 그것은 실재하는 문제다.
+     * <b>0건이면 그게 거짓말이다.</b> 이 눈은 조용해지기를 거부한다.
+     */
+    private boolean auditMap(CommandSender sender) {
+        java.util.Set<String> built = new java.util.HashSet<>(plugin.regionBaseIds());
+        built.add("cheongha_hyeon");   // 청하현은 원장이 아니라 앵커가 안다
+        for (String line : MapAudit.audit(plugin.worldMap(), built)) {
+            sender.sendMessage(line);
+        }
         return true;
     }
 }

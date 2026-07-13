@@ -1,0 +1,174 @@
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "cases": [
+      {
+        "when": "honcheon:weapon/dagger_mabyeong",
+        "model": {
+          "type": "minecraft:select",
+          "property": "minecraft:custom_model_data",
+          "index": 1,
+          "cases": [
+            {
+              "when": "revealed",
+              "model": {
+                "type": "minecraft:model",
+                "model": "honcheon:item/weapon/dagger_mabyeong"
+              }
+            }
+          ],
+          "fallback": {
+            "type": "minecraft:model",
+            "model": "honcheon:item/weapon/dagger_jeongryeon"
+          }
+        }
+      },
+      {
+        "when": "honcheon:weapon/dao_mabyeong",
+        "model": {
+          "type": "minecraft:select",
+          "property": "minecraft:custom_model_data",
+          "index": 1,
+          "cases": [
+            {
+              "when": "revealed",
+              "model": {
+                "type": "minecraft:model",
+                "model": "honcheon:item/weapon/dao_mabyeong"
+              }
+            }
+          ],
+          "fallback": {
+            "type": "minecraft:model",
+            "model": "honcheon:item/weapon/dao_jeongryeon"
+          }
+        }
+      },
+      {
+        "when": "honcheon:weapon/gauntlet_mabyeong",
+        "model": {
+          "type": "minecraft:select",
+          "property": "minecraft:custom_model_data",
+          "index": 1,
+          "cases": [
+            {
+              "when": "revealed",
+              "model": {
+                "type": "minecraft:model",
+                "model": "honcheon:item/weapon/gauntlet_mabyeong"
+              }
+            }
+          ],
+          "fallback": {
+            "type": "minecraft:model",
+            "model": "honcheon:item/weapon/gauntlet_jeongryeon"
+          }
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/dangga",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/dangga"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/hwasan",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/hwasan"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/jeomchang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/jeomchang"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/jongnam",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/jongnam"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/mudang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/mudang"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/namgung",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/namgung"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/paengga",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/paengga"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/sorimsa",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/sorimsa"
+        }
+      },
+      {
+        "when": "honcheon:weapon/spear_mabyeong",
+        "model": {
+          "type": "minecraft:select",
+          "property": "minecraft:custom_model_data",
+          "index": 1,
+          "cases": [
+            {
+              "when": "revealed",
+              "model": {
+                "type": "minecraft:model",
+                "model": "honcheon:item/weapon/spear_mabyeong"
+              }
+            }
+          ],
+          "fallback": {
+            "type": "minecraft:model",
+            "model": "honcheon:item/weapon/spear_jeongryeon"
+          }
+        }
+      },
+      {
+        "when": "honcheon:weapon/sword_mabyeong",
+        "model": {
+          "type": "minecraft:select",
+          "property": "minecraft:custom_model_data",
+          "index": 1,
+          "cases": [
+            {
+              "when": "revealed",
+              "model": {
+                "type": "minecraft:model",
+                "model": "honcheon:item/weapon/sword_mabyeong"
+              }
+            }
+          ],
+          "fallback": {
+            "type": "minecraft:model",
+            "model": "honcheon:item/weapon/sword_jeongryeon"
+          }
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/netherite_sword"
+    }
+  }
+}

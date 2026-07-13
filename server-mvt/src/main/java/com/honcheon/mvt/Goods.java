@@ -148,12 +148,26 @@ public final class Goods {
 
     // ══════════ 공통 ══════════
 
+    /**
+     * ★ item_model 을 쓰지 않는다 — <b>팩 게이트 불가침</b>.
+     *
+     * <p>1.21.4+ 는 item_model 이 가리키는 정의가 없으면 바탕 아이템으로 <b>폴백하지 않는다</b>
+     * (없는 모델 = 보라 큐브). ItemStack 은 모두에게 같은 바이트라 팩 있는 눈과 없는 눈을 가를 수
+     * 없으므로, 실물 아이템에 item_model 을 박으면 <b>팩을 거절한 사람의 인벤토리가 보라 큐브로 찬다.</b>
+     *
+     * <p>그래서 키는 {@code custom_model_data.strings[0]} 으로 나간다. 팩이 없으면 이 컴포넌트는
+     * <b>불활성</b>이고 플레이어는 바탕 바닐라 아이템 그대로 본다 — 전표는 <b>종이 한 장</b>,
+     * 영약은 붉은 구슬, 가죽은 가죽. (resourcepack_design.yml 의 '팩없음' 열이 그제야 참이 된다.)
+     * 팩이 있으면 {@code assets/minecraft/items/<base>.json} 의 select 가 이 문자열을 읽어 실루엣을 문다.
+     */
     @SuppressWarnings("deprecation")
     private static ItemStack build(Material base, String modelPath, String displayName,
                                    String goodsTag, List<String> lore) {
         ItemStack item = new ItemStack(base);
         ItemMeta meta = item.getItemMeta();
-        meta.setItemModel(new NamespacedKey("honcheon", modelPath));
+        var cmd = meta.getCustomModelDataComponent();
+        cmd.setStrings(List.of("honcheon:" + modelPath));
+        meta.setCustomModelDataComponent(cmd);
         meta.setDisplayName(displayName);
         meta.setLore(lore);
         meta.getPersistentDataContainer().set(KEY_GOODS, PersistentDataType.STRING, goodsTag);

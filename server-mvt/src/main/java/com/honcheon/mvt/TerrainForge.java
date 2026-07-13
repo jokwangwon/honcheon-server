@@ -412,6 +412,18 @@ final class TerrainForge {
         }
     }
 
+    /**
+     * 지형을 빚지 않고 <b>재기만</b> 한다 — 봉우리를 <b>원장이 준 값으로</b> 고정한다.
+     *
+     * <p>왜 필요한가: 6-인자 {@link #survey} 는 봉우리를 {@code naturalTop} 으로 <b>다시 읽는다</b>.
+     * 그런데 이미 조성된 땅에서 그것을 부르면 <b>건축이 세운 지붕·성벽을 정상으로 읽는다</b>.
+     * 땅의 자리는 <b>땅이 정한 그 순간 굳는다</b> ({@link TerrainLedger}).
+     */
+    static SiteSpec surveyAt(World world, WorldMap.Place place, int cx, int cy, int cz, int radius,
+                             int peakX, int peakZ, int peakY) {
+        return survey(world, place, cx, cy, cz, radius, peakX, peakZ, peakY);
+    }
+
     /** 지형을 빚지 않고 <b>재기만</b> 한다 — 검수·조회용 (땅을 건드리지 않는다) */
     static SiteSpec survey(World world, WorldMap.Place place, int cx, int cy, int cz, int radius) {
         return survey(world, place, cx, cy, cz, radius, cx, cz, naturalTop(world, cx, cz, cy + 60, cy));

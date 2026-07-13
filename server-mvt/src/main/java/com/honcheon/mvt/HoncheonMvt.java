@@ -70,6 +70,7 @@ public final class HoncheonMvt extends JavaPlugin {
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
+        MapAudit.load(cfg);   // 지도의 눈 — ★ 안 지어진 60곳은 검수를 통과하는 게 아니라 **검수를 안 받는다**
         RiverForge.load(cfg); // 강 — 물길 등록부 (config/rivers.yml · 없어도 돈다).
                               // ★ 이 세계엔 **강이 없었다.** 지도가 물을 일곱 곳 주문했는데 지형 계층이 안 빚었다.
         Gyeonggong.init(cfg); // 경공 — 경지 천장·신법 성장·경신 소모·문파 보법 (config/gyeonggong.yml).
@@ -392,16 +393,37 @@ public final class HoncheonMvt extends JavaPlugin {
     // 자연이 놓은 돌과 우리가 놓은 돌은 자재로는 구별되지 않는다 — 그러니 **기억해 둔다.**
     // 첫 조성이 잰 값이 그 지역의 지면이다. 그 뒤로는 몇 번을 다시 지어도 같은 자리에 선다.
 
-    private final Map<String, Integer> regionBase = new HashMap<>();
+    /**
+     * 지역 원장 — <b>첫 조성이 정한 자리를 기억한다.</b>
+     *
+     * <p>★ 전에는 <b>지면 높이만</b> 적었다. 그래서 재조성할 때마다 <b>부지를 다시 찾았고</b> —
+     * 지난번에 우리가 판 강이 땅을 바꿔 놓았으므로 <b>탐색이 다른 답을 냈다.</b>
+     * 장강수로채가 재조성 한 번에 128칸을 옮겨 앉았고, 하지(河誌)는 옛 자리를 가리켰다.
+     * <b>우리가 만든 것이 다음 탐색을 흔든다.</b>
+     *
+     * <p>주석은 <i>"몇 번을 다시 지어도 같은 자리에 선다"</i> 고 적혀 있었다 — <b>주석이 거짓말이었다.</b>
+     * 좌표를 안 적으면 같은 자리에 안 선다. 이제 <b>x·y·z 를 함께</b> 적는다.
+     */
+    private final Map<String, int[]> regionBase = new HashMap<>();
 
     public Integer regionBase(String placeId) {
+        int[] at = regionBase.get(placeId);
+        return at == null ? null : at[1];
+    }
+
+    /** 기억된 자리 (x, y, z) — 없으면 null */
+    public int[] regionSite(String placeId) {
         return regionBase.get(placeId);
     }
 
-    public void setRegionBase(String placeId, int groundY) {
-        regionBase.put(placeId, groundY);
+    public void setRegionBase(String placeId, int x, int groundY, int z) {
+        regionBase.put(placeId, new int[]{x, groundY, z});
         YamlConfiguration yml = new YamlConfiguration();
-        regionBase.forEach(yml::set);
+        regionBase.forEach((id, at) -> {
+            yml.set(id + ".x", at[0]);
+            yml.set(id + ".y", at[1]);
+            yml.set(id + ".z", at[2]);
+        });
         try {
             yml.save(new File(getDataFolder(), "regions.yml"));
         } catch (IOException e) {
@@ -416,7 +438,15 @@ public final class HoncheonMvt extends JavaPlugin {
         }
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
         for (String key : yml.getKeys(false)) {
-            regionBase.put(key, yml.getInt(key));
+            if (yml.isConfigurationSection(key)) {
+                regionBase.put(key, new int[]{
+                        yml.getInt(key + ".x"), yml.getInt(key + ".y"), yml.getInt(key + ".z")});
+            } else {
+                // 옛 형식(지면 높이만) — 좌표를 모른다. 다시 지으면 자리가 흔들릴 수 있으므로 **버린다.**
+                //   조용히 y 만 받아 두면 그것이 곧 "기억한 척"이다.
+                getLogger().warning("[지역 원장] " + key + " — 옛 형식(높이만)이라 버린다. "
+                        + "다시 조성하면 자리를 새로 정하고, 그 뒤로는 그 자리에 선다");
+            }
         }
     }
 
@@ -453,6 +483,11 @@ public final class HoncheonMvt extends JavaPlugin {
     }
 
     /** 세계 지도 — 등록 좌표·지형 적합성·여정 일수 (world_map.yml 이 없으면 null) */
+    /** 원장이 아는 곳 — 한 번이라도 조성된 지역 */
+    public java.util.Set<String> regionBaseIds() {
+        return regionBase.keySet();
+    }
+
     public WorldMap worldMap() {
         return worldMap;
     }

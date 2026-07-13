@@ -323,6 +323,98 @@ HEART_SPRITES = [
     ("half_blinking", ORB_HALF_ART, BLINK_PALETTE),
 ]
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 허기 — 만두(饅頭). 【2026-07】 닭다리를 강호에서 몰아낸다.
+#
+# 【왜 지우지 않고 바꾸는가 — 전임의 판단을 뒤집는다】
+#   전임은 "코드에 setFoodLevel 이 한 줄도 없다 = 아무도 안 쓴다 = 게이지가 거짓말"이라 했다.
+#   그건 **덮어쓰기가 없다**는 뜻이지 **기능이 없다**는 뜻이 아니다. 바닐라 허기는 **살아 있다**:
+#   줄어들고, 6 이하에서 달리기를 막고, 0 에서 굶겨 죽인다. 아무도 그걸 끄지 않았다.
+#   ⇒ 그러므로 아이콘을 **투명하게 지우면** 플레이어는 **보이지 않는 굶주림**으로 죽는다.
+#     (그리고 서버 배선은 내 소유가 아니다 — 남의 손을 전제한 팩 변경은 덫이다.)
+#   ⇒ 만두는 **거짓말이 아니다.** 허기는 실재하는 규칙이고, 만두는 그 규칙의 강호식 얼굴이다.
+#   ★ '허기를 강호의 축으로 삼을 것인가, 아니면 FoodLevelChangeEvent 로 20 에 고정해
+#     무의미하게 만들 것인가' 는 **게임 설계 결정**이다 — 청구서로 넘긴다 (사람이 정한다).
+#     고정하기로 정하면 이 만두는 '항상 가득'이 되어 조용해진다. 그때도 거짓말은 아니다.
+BUN_OUT = (26, 24, 22, 255)        # 만두 먹 테두리
+BUN_BODY = (222, 214, 196, 255)    # 반죽 — 화선지 계열 (저채도)
+BUN_LIGHT = (246, 240, 226, 255)   # 김 오른 윗면 광
+BUN_DARK = (168, 158, 140, 255)    # 아랫면 그늘 · 반 칸 절단면
+BUN_PLEAT = (140, 128, 110, 255)   # 주름 꼭지 — 만두를 만두로 만드는 한 점
+# 허기(Hunger) 효과 변형 — 쉰 만두. 색이 아니라 **때깔**이 상한다 (저채도 유지)
+BUN_H_BODY = (176, 184, 158, 255)
+BUN_H_LIGHT = (208, 214, 190, 255)
+BUN_H_DARK = (126, 134, 112, 255)
+BUN_H_PLEAT = (102, 110, 90, 255)
+
+FOOD_EMPTY_ART = [       # 빈 자리 — 소켓 (하트와 같은 문법: 파인 그늘 + 되비친 립)
+    "....#....",
+    "...#s#...",
+    "..#ss~#..",
+    ".#ss~~v#.",
+    "#ss~~~vv#",
+    "#s~~~vvv#",
+    "#~~~vvvv#",
+    ".#vvvvv#.",
+    "..#####..",
+]
+FOOD_FULL_ART = [        # 만두 — 꼭지(주름) + 부푼 몸 + 앉은 바닥
+    "....#....",
+    "...#p#...",
+    "..#LBB#..",
+    ".#LBBBB#.",
+    "#LBBBBBB#",
+    "#BBBBBBD#",
+    "#BBBBBDD#",
+    ".#DDDDD#.",
+    "..#####..",
+]
+FOOD_HALF_ART = [        # 좌반만 — 절단면(D 열)으로 반 칸이 1초에 읽힌다 (빈 자리가 비쳐 나온다)
+    "....#....",
+    "...#D....",
+    "..#LD....",
+    ".#LBD....",
+    "#LBBD....",
+    "#BBBD....",
+    "#BBBD....",
+    ".#DDD....",
+    "..###....",
+]
+BUN_PALETTE = {"#": BUN_OUT, "B": BUN_BODY, "L": BUN_LIGHT, "D": BUN_DARK, "p": BUN_PLEAT,
+               "s": ORB_SOCK_DARK, "~": ORB_EMPTY, "v": ORB_SOCK_LIT}
+BUN_H_PALETTE = {"#": BUN_OUT, "B": BUN_H_BODY, "L": BUN_H_LIGHT, "D": BUN_H_DARK,
+                 "p": BUN_H_PLEAT, "s": ORB_SOCK_DARK, "~": ORB_EMPTY, "v": ORB_SOCK_LIT}
+
+FOOD_SPRITES = [
+    ("food_empty", FOOD_EMPTY_ART, BUN_PALETTE),
+    ("food_full", FOOD_FULL_ART, BUN_PALETTE),
+    ("food_half", FOOD_HALF_ART, BUN_PALETTE),
+    ("food_empty_hunger", FOOD_EMPTY_ART, BUN_H_PALETTE),
+    ("food_full_hunger", FOOD_FULL_ART, BUN_H_PALETTE),
+    ("food_half_hunger", FOOD_HALF_ART, BUN_H_PALETTE),
+]
+
+# ─── 내공(內功) 막대 — 초록 XP 바를 옥(玉)으로 갈아 끼운다 ───
+#   알맹이는 이미 내공이다 (SkillHud:197-198 이 setLevel(내공)·setExp(원기/최대) 를 한다).
+#   껍데기만 마인크래프트 초록이었다 — **화면이 세계에 대해 거짓말하던 자리**다.
+#   182x5 (client-1.21.11.jar 실측 — 이름·치수를 짐작하지 않았다).
+XP_RIM = (24, 26, 28, 255)          # 먹 테두리
+XP_HOLLOW_DK = (38, 42, 44, 255)    # 빈 홈 윗속 — 가장 깊은 그늘 (파인 것으로 읽히는 근거)
+XP_HOLLOW_MID = (52, 57, 58, 255)   # 빈 홈 바닥
+XP_HOLLOW_LT = (72, 78, 78, 255)    # 빈 홈 아랫속 — 바닥에서 되비친 빛 (립)
+XP_FILL = (122, 176, 168, 255)      # 옥(玉) — 청량 포인트. 명병의 JADE 와 같은 색
+XP_FILL_HI = (170, 214, 206, 255)   # 윗줄 광
+XP_FILL_DK = (78, 124, 118, 255)    # 아랫줄 그늘
+
+
+def xp_bar(fill: bool):
+    """182x5 — 위아래 먹 테두리 사이에 3px 홈(또는 옥)이 흐른다."""
+    if fill:
+        band_rows = [XP_FILL_HI, XP_FILL, XP_FILL_DK]
+    else:
+        band_rows = [XP_HOLLOW_DK, XP_HOLLOW_MID, XP_HOLLOW_LT]
+    return [[XP_RIM] * 182] + [[c] * 182 for c in band_rows] + [[XP_RIM] * 182]
+
 
 def gise_icon():
     """8x8 기세 아이콘 — 솟는 기운 (불꽃형).
@@ -1442,8 +1534,7 @@ MYEONGBYEONG = {           # 명병 등록부 — **등록된 문파만** (facti
 def write_myeongbyeong_assets() -> int:
     """명병 — 아이콘 PNG + 3D 모델 + 아이템 정의. 계열 모델을 **그대로** 재사용한다
     (같은 문법으로 굽는다 — 3D 지오메트리는 계열이 정하고, 문파는 **문양과 실루엣**이 정한다)."""
-    base = {"hwasan": "sword", "jeomchang": "sword", "jongnam": "sword", "namgung": "sword",
-            "mudang": "sword", "paengga": "dao", "dangga": "dagger", "sorimsa": "gauntlet"}
+    base = MYEONG_BASE            # 표는 하나다 — 바닐라 분기(write_vanilla_dispatch)와 같은 것을 쓴다
     for sect, fn in MYEONGBYEONG.items():
         grid = outline(fn())
         key = f"weapon/myeong/{sect}"
@@ -1939,6 +2030,190 @@ def write_item_assets() -> int:
         write_item_asset(key, goods_rows(key), False)
         made += 1
     return made
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 팩 게이트 — 바닐라 베이스 분기 (assets/minecraft/items/<base>.json)
+#
+# 【왜 item_model 을 버렸나】
+#   1.21.4+ 는 minecraft:item_model 이 가리키는 정의가 **없으면 바탕 아이템으로 폴백하지 않는다** —
+#   없는 모델(보라 큐브)을 그린다. 그런데 ItemStack 은 **모두에게 같은 바이트**다: 서버는 팩을 받은
+#   눈과 거절한 눈에게 다른 아이템을 보낼 수 없다. 그러므로 실물 아이템에 item_model 을 박는 순간
+#   **팩을 거절한 사람의 손에 보라 큐브가 쥐어진다.** 팩 게이트 불가침(require-resource-pack=false)의
+#   위반이고, 등록부의 '팩없음' 열(전표 = "종이 한 장")은 거짓말이 된다.
+#
+# 【그래서 custom_model_data 로 옮긴다】
+#   Weapons/Goods 는 minecraft:custom_model_data.strings[0] 에 키를 담는다 (예: honcheon:coin/jeonpyo).
+#   · 팩 없는 눈 — 이 컴포넌트는 **불활성**이다. 바닐라는 select 분기를 모른다. 플레이어는 바탕
+#     바닐라 아이템을 그대로 본다: 전표 = 종이, 영약 = 마그마 크림, 정련검 = 철검.
+#     **등급은 재질 색이 말한다** (돌·철·다이아·금·네더라이트) — 등록부가 처음부터 그렇게 설계했다.
+#   · 팩 있는 눈 — 이 파일의 select 가 strings[0] 을 읽어 3D 를 문다. 잃는 것이 없다.
+#   · 컴포넌트 없는 바닐라 철검·종이·가죽 — **fallback 이 바닐라 모델이므로 그대로다** (전역 오염 0).
+#
+# 【마병만 2단】 strings[1] = unidentified | revealed. 미감정은 평범한 정련 병기로 보인다.
+#
+# ★ 보류 기물 3종(청낭·호신부·천잠사_요대)은 여기 **없다.** 베이스가 bundle·name_tag·lead 인데
+#   bundle 의 바닐라 아이템 정의는 평범한 모델이 아니다 (열림/닫힘 + 선택 아이템 분기를 담은
+#   합성 정의다). 그것을 flat select 로 덮으면 **세계의 모든 번들이 고장난다.** 지급 접합 때
+#   베이스를 다시 고르라 — 이것은 팩이 아니라 등록부가 풀 문제다 (resourcepack_design.yml 에 적었다).
+# ═══════════════════════════════════════════════════════════════════════════
+VANILLA_ITEM_DIR = PACK / "assets" / "minecraft" / "items"
+
+# 계열 → 바닐라 도구 (Weapons.java Series.base — 18반 병기는 바닐라 도구를 징발했다)
+SERIES_TOOL = {
+    "sword": "sword", "dao": "sword", "spear": "sword", "gauntlet": "sword", "dagger": "sword",
+    "bu": "axe", "gyeom": "hoe", "wolasan": "shovel", "gu": "pickaxe",
+}
+# 등급 → 바닐라 재질 (Weapons.java Base.byGrade — **팩 없이도 이 색이 등급이다**)
+GRADE_MATERIAL = {
+    "beomcheol": "stone", "jeongryeon": "iron", "bobyeong": "diamond",
+    "sinbyeong": "golden", "mabyeong": "netherite",
+}
+# 명병 → 그 문파의 병기 계열 (Weapons.java MYEONG_SERIES 와 **같은 표**여야 한다 — 눈이 대조한다)
+MYEONG_BASE = {
+    "hwasan": "sword", "jeomchang": "sword", "jongnam": "sword", "namgung": "sword",
+    "mudang": "sword", "paengga": "dao", "dangga": "dagger", "sorimsa": "gauntlet",
+}
+# 지물·기물·재료 → 바닐라 베이스 (Goods.java build(Material.X, ...) 와 **같은 표** — 눈이 대조한다)
+GOODS_BASE = {
+    "tome/manual_original": "written_book",
+    "tome/manual_copy": "book",
+    "tome/gugyeol": "writable_book",
+    "coin/jeonpyo": "paper",
+    "pill/yeongyak": "magma_cream",
+    "cargo/pyomul": "chest_minecart",
+    "trinket/pidokju": "heart_of_the_sea",
+    "trinket/yamyeongju": "nether_star",
+    "pelt/wolf": "leather",
+    "pelt/fox": "leather",
+    "pelt/tiger": "leather",
+    "spoil/ungdam": "slime_ball",
+    "herb/yakjae": "wheat",
+}
+
+
+def _model_ref(ref: str):
+    return {"type": "minecraft:model", "model": ref}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 소리 — 침묵 채널. 【2026-07 신설】 0/470 의 첫 삽.
+#
+# 【정직한 벽】 .ogg 는 파이썬으로 만들 수 없다. 그러므로 **혼천의 소리는 아직 없다.**
+#   그러나 **없애는 것은 지금 할 수 있고, 그것만으로도 세계가 조용해진다.**
+#   조용한 강호가 마인크래프트 강호보다 낫다 — C418 이 흐르는 무당산은 무당산이 아니다.
+#
+# 【무엇을 끄는가】 sounds.json 에 "replace": true + 빈 sounds 목록 → 그 사건은 **소리를 잃는다.**
+#   ① 배경음악 전부 (music.* — 95종, 1.21.11 서버 jar 레지스트리 실측).
+#      ★ music_disc.* 는 **건드리지 않는다** — 축음기(주크박스)는 플레이어가 **스스로 켜는** 것이다.
+#        세계가 멋대로 트는 소리와, 사람이 틀기로 한 소리는 다르다.
+#   ② 동굴 앰비언스 (ambient.cave) — 동혈(洞穴)에서 나는 그 유명한 '누가 있다' 소리.
+#
+# 【무엇을 끄지 않는가 — 그리고 왜】
+#   · 발소리·물소리·짐승 소리 — 끄면 세계가 **죽는다.** 이건 마인크래프트다워서가 아니라
+#     **정보**다 (뒤에서 오는 발소리는 강호에서도 발소리다). 바꿀 것은 지우는 게 아니라 **굽는 것**이다.
+#   · 무공의 소리 (block.conduit.activate 등) — 바닐라 키를 **다른 바닐라 키로 바꾸는 것**은
+#     귀 없이 할 수 없다. 나는 소리를 들을 수 없다. 짐작으로 고르면 그건 검수가 아니라 도박이다.
+#     ★ 진짜 답은 .ogg 를 굽는 것이다 — 청구서로 넘긴다 (resourcepack_design.yml sound_channels).
+MUTED_MUSIC = [   # music.* — 1.21.11 server jar 레지스트리에서 실측 (짐작 아님)
+    "music.creative", "music.credits", "music.dragon", "music.end", "music.game",
+    "music.menu", "music.under_water",
+    "music.game.a_familiar_room", "music.game.an_ordinary_day", "music.game.ancestry",
+    "music.game.below_and_above", "music.game.broken_clocks", "music.game.bromeliad",
+    "music.game.clark", "music.game.comforting_memories", "music.game.crescent_dunes",
+    "music.game.danny", "music.game.deeper", "music.game.dry_hands",
+    "music.game.echo_in_the_wind", "music.game.eld_unknown", "music.game.endless",
+    "music.game.featherfall", "music.game.fireflies", "music.game.floating_dream",
+    "music.game.haggstrom", "music.game.infinite_amethyst", "music.game.key",
+    "music.game.komorebi", "music.game.left_to_bloom", "music.game.lilypad",
+    "music.game.living_mice", "music.game.mice_on_venus", "music.game.minecraft",
+    "music.game.one_more_day", "music.game.os_piano", "music.game.oxygene",
+    "music.game.pokopoko", "music.game.puzzlebox", "music.game.stand_tall",
+    "music.game.subwoofer_lullaby", "music.game.sweden", "music.game.watcher",
+    "music.game.wending", "music.game.wet_hands", "music.game.yakusoku",
+    "music.game.creative.aria_math", "music.game.creative.biome_fest",
+    "music.game.creative.blind_spots", "music.game.creative.dreiton",
+    "music.game.creative.haunt_muskie", "music.game.creative.taswell",
+    "music.game.end.alpha", "music.game.end.boss", "music.game.end.the_end",
+    "music.game.nether.ballad_of_the_cats", "music.game.nether.concrete_halls",
+    "music.game.nether.crimson_forest.chrysopoeia", "music.game.nether.dead_voxel",
+    "music.game.nether.nether_wastes.rubedo", "music.game.nether.soulsand_valley.so_below",
+    "music.game.nether.warmth",
+    "music.game.swamp.aerie", "music.game.swamp.firebugs", "music.game.swamp.labyrinthine",
+    "music.game.water.axolotl", "music.game.water.dragon_fish", "music.game.water.shuniji",
+    "music.menu.beginning_2", "music.menu.floating_trees", "music.menu.moog_city_2",
+    "music.menu.mutation",
+    "music.nether.basalt_deltas", "music.nether.crimson_forest", "music.nether.nether_wastes",
+    "music.nether.soul_sand_valley", "music.nether.warped_forest",
+    "music.overworld.badlands", "music.overworld.bamboo_jungle", "music.overworld.cherry_grove",
+    "music.overworld.deep_dark", "music.overworld.desert", "music.overworld.dripstone_caves",
+    "music.overworld.flower_forest", "music.overworld.forest", "music.overworld.frozen_peaks",
+    "music.overworld.grove", "music.overworld.jagged_peaks", "music.overworld.jungle",
+    "music.overworld.lush_caves", "music.overworld.meadow", "music.overworld.old_growth_taiga",
+    "music.overworld.snowy_slopes", "music.overworld.sparse_jungle",
+    "music.overworld.stony_peaks", "music.overworld.swamp",
+]
+MUTED_AMBIENT = ["ambient.cave"]   # 동혈의 '누가 있다' 소리 — 강호에 그 소리는 없다
+
+
+def write_sounds() -> int:
+    """assets/minecraft/sounds.json — 끄는 것만으로 세계가 조용해진다 (굽는 것은 아직 못 한다)."""
+    muted = MUTED_MUSIC + MUTED_AMBIENT
+    doc = {event: {"replace": True, "sounds": []} for event in sorted(muted)}
+    write_json(PACK / "assets" / "minecraft" / "sounds.json", doc)
+    return len(doc)
+
+
+def write_vanilla_dispatch() -> int:
+    """바닐라 베이스마다 select 분기 1장 — 팩 없는 눈은 fallback(바닐라)을 본다."""
+    cases: dict[str, list] = {}
+
+    def add(base_item: str, key: str, node):
+        cases.setdefault(base_item, []).append({"when": f"honcheon:{key}", "model": node})
+
+    # ─── 병기 45 (계열 9 × 등급 5) ───
+    for series in WEAPON_SERIES:
+        tool = SERIES_TOOL[series]
+        for grade in _GRADE_FORM:
+            key = f"weapon/{series}_{grade}"
+            if grade == "mabyeong":
+                # 마병 = 상태 변주 (strings[1]). 감정 전엔 정체가 보이면 안 된다 —
+                # 기연의 탈을 쓴 저주가 첫눈에 보이면 저주가 아니다.
+                node = {
+                    "type": "minecraft:select",
+                    "property": "minecraft:custom_model_data",
+                    "index": 1,
+                    "cases": [{"when": "revealed",
+                               "model": _model_ref(f"honcheon:item/weapon/{series}_mabyeong")}],
+                    "fallback": _model_ref(f"honcheon:item/weapon/{series}_jeongryeon"),
+                }
+            else:
+                node = _model_ref(f"honcheon:item/{key}")   # key 가 이미 'weapon/…' 을 물고 있다
+            add(f"{GRADE_MATERIAL[grade]}_{tool}", key, node)
+
+    # ─── 명병 8 — 등급은 무엇이든 될 수 있다 (범철 매화검도 매화검이다) → 5재질 전부에 얹는다 ───
+    for sect, series in MYEONG_BASE.items():
+        tool = SERIES_TOOL[series]
+        for grade in _GRADE_FORM:
+            add(f"{GRADE_MATERIAL[grade]}_{tool}", f"weapon/myeong/{sect}",
+                _model_ref(f"honcheon:item/weapon/myeong/{sect}"))
+
+    # ─── 지물·기물·재료 ───
+    for key, base in GOODS_BASE.items():
+        add(base, key, _model_ref(f"honcheon:item/{key}"))
+
+    for base, cs in sorted(cases.items()):
+        write_json(VANILLA_ITEM_DIR / f"{base}.json", {
+            "model": {
+                "type": "minecraft:select",
+                "property": "minecraft:custom_model_data",
+                "index": 0,
+                # 결정론 — 같은 입력에 같은 바이트 (사전순 고정)
+                "cases": sorted(cs, key=lambda c: c["when"]),
+                "fallback": _model_ref(f"minecraft:item/{base}"),
+            },
+        })
+    return len(cases)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7901,6 +8176,10 @@ def main():
     # ─── 바닐라 HUD 텍스처 교체 (폰트 아님 — 스프라이트 직접 교체, 9x9 치수 계약) ───
     for name, art, palette in HEART_SPRITES:
         write_png(HUD_DIR / "heart" / f"{name}.png", paint_rows(art, palette))
+    for name, art, palette in FOOD_SPRITES:      # 허기 — 닭다리를 만두로 (바닐라 허기는 살아 있다)
+        write_png(HUD_DIR / f"{name}.png", paint_rows(art, palette))
+    write_png(HUD_DIR / "experience_bar_background.png", xp_bar(False))
+    write_png(HUD_DIR / "experience_bar_progress.png", xp_bar(True))   # 내공 — 초록을 옥으로
     write_png(HUD_DIR / "hotbar.png", hotbar())
     write_png(HUD_DIR / "hotbar_selection.png", hotbar_selection())
     write_png(CONTAINER_DIR / "inventory.png", inventory_container())
@@ -7935,6 +8214,8 @@ def main():
     # ─── 아이템·블록 텍스처 레이어 (texture_layer_design.md — 1차) ───
     items = write_item_assets()
     myeong = write_myeongbyeong_assets()      # 명병 — 문파의 얼굴 (등록된 8문파)
+    gate = write_vanilla_dispatch()           # ★ 팩 게이트 — 팩 없는 눈은 바닐라를 본다 (보라 큐브 아님)
+    muted = write_sounds()                    # 소리 — 배경음악·동굴 앰비언스를 끈다 (굽는 것은 청구서)
     blocks = write_block_textures()
     tints = write_tint_assets()     # 컬러맵·해·달 — **세계의 초록은 컬러맵에서 나온다**
     parts = write_particle_textures()
@@ -7961,10 +8242,13 @@ def main():
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     total = 1 + 9 + len(REALM_CRESTS) + 1 + 1
-    vanilla = len(HEART_SPRITES) + 2 + 6   # 하트 6 + 핫바 2 + 컨테이너 6 (인벤·궤·화덕3·목공대)
+    vanilla = len(HEART_SPRITES) + len(FOOD_SPRITES) + 2 + 2 + 6   # 하트 6 + 만두 6 + 내공바 2 + 핫바 2 + 컨테이너 6
     print(f"팩 컴파일 완료: {PACK.relative_to(ROOT)} "
           f"(글리프 {total}종 + 음수공백 6폭 + 바닐라 교체 {vanilla}장 + 폰트 주입 + pack.mcmeta)")
-    print(f"  아이템 채널 {items}종 (PNG {items} + 모델 {items} + 아이템 정의 {items}) — item_model, 전역 오염 0")
+    print(f"  아이템 채널 {items}종 (PNG {items} + 모델 {items} + 아이템 정의 {items}) — 전역 오염 0")
+    print(f"  ★ 팩 게이트 {gate}장 (assets/minecraft/items/<base>.json — custom_model_data select 분기)")
+    print(f"  │  팩 없는 눈 = fallback(바닐라 아이템 그대로). **보라 큐브가 아니다.**"
+          f" 팩 있는 눈 = 3D. 잃는 것 없음")
     print(f"  ├ 병기 45자루 = **3D 모델** (elements — 평면 스프라이트가 아니다)"
           f" · 등급이 형체로 갈린다 (고리 0~3 · 수실 · 마병 톱니)")
     print(f"  ├ 명병(名兵) {myeong}자루 — **문파의 얼굴** (실루엣이 지문에서 나온다: 점창=최박 ·"
@@ -7972,6 +8256,8 @@ def main():
     print(f"  무공의 획 {qi}종 (3D 모션 — SkillDisplay 가 item_model 로 태운다. 길이축 +X)")
     print(f"  짐승의 형체 {mobs}종 (MobDisplay 가 본체를 감추고 태운다. 코가 +Z · 발이 원점)")
     print(f"  메뉴·버튼 {ui}장 (GUI 스프라이트 — mcmeta 미포함 = 바닐라 나인슬라이스·좌표 계약 그대로)")
+    print(f"  소리 침묵 {muted}건 (배경음악 {len(MUTED_MUSIC)} + 동굴 앰비언스 {len(MUTED_AMBIENT)})"
+          f" — 축음기(music_disc)는 남긴다. **혼천의 소리(.ogg)는 아직 0종** (청구서 참조)")
     print(f"  블록 징발 {blocks}장 (전역 치환 — block_channels.징발 등록분만)")
     print(f"  틴트층 {tints}장 (컬러맵 3 + 해·달 9) — ★ **세계의 초록은 컬러맵이 곱한다**. "
           f"텍스처만 칠하고 컬러맵을 두면 틴트가 도로 초록으로 물들인다")
