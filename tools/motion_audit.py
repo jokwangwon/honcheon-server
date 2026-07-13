@@ -29,6 +29,7 @@ config 를 고치지 않는다 — 재기만 한다.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -681,25 +682,109 @@ def audit_display(cfg, mo, rep):
     limits = body.get("limits", {}) or {}
     max_lunge = float(limits.get("max_lunge", 0.45))
     max_pose = int(limits.get("max_pose_ticks", 8))
+    kick_max = float(limits.get("kick_max", 12))
     rows = {**(body.get("by_class") or {}), **(body.get("by_trail") or {})}
+    rows = {k: v for k, v in rows.items() if isinstance(v, dict)}
+
+    def beats_of(spec):
+        """한 계열의 몸이 지나는 칸들 — 예비(windup) + 줄기(script)"""
+        out = []
+        if isinstance(spec.get("windup"), dict):
+            out.append(("windup", spec["windup"]))
+        for i, b in enumerate(spec.get("script") or []):
+            if isinstance(b, dict):
+                out.append((f"script[{i}]", b))
+        return out
+
     bad_pose = [(k, v.get("pose")) for k, v in rows.items()
-                if isinstance(v, dict) and str(v.get("pose", "없음")) not in ALLOWED_POSE]
+                if str(v.get("pose", "없음")) not in ALLOWED_POSE]
+    bad_pose += [(f"{k}.{w}", b.get("pose")) for k, v in rows.items() for w, b in beats_of(v)
+                 if b.get("pose") is not None and str(b["pose"]) not in ALLOWED_POSE]
     fails += len(bad_pose)
     rep.verdict(not bad_pose,
                 f"자세 ⊆ 바닐라가 가진 자세 {sorted(ALLOWED_POSE)}"
                 " (**팔다리 각도는 서버가 못 준다** — 없는 것을 등록하면 거짓말이다)"
                 + ("" if not bad_pose else f" — 규약 밖 {bad_pose}"))
     over_body = [(k, v.get("lunge")) for k, v in rows.items()
-                 if isinstance(v, dict) and abs(float(v.get("lunge", 0))) > max_lunge]
+                 if abs(float(v.get("lunge", 0))) > max_lunge]
     over_body += [(k, v.get("pose_ticks")) for k, v in rows.items()
-                  if isinstance(v, dict) and int(v.get("pose_ticks", 0)) > max_pose]
+                  if int(v.get("pose_ticks", 0)) > max_pose]
+    over_body += [(f"{k}.{w}", b.get("lunge")) for k, v in rows.items() for w, b in beats_of(v)
+                  if abs(float(b.get("lunge", 0) or 0)) > max_lunge]
     fails += len(over_body)
     rep.verdict(not over_body,
                 f"전진 ≤ {max_lunge} · 자세 강제 ≤ {max_pose}틱 (미끄러지면 조준이 깨지고, 길면 몸이 굳는다)"
                 + ("" if not over_body else f" — 초과 {over_body}"))
-    rep.verdict(limits.get("yaw_kick_enabled") is False,
-                "시야 회전 기본 꺼짐 — 조준을 직접 해치는 유일한 수단이다 (켜려면 사용자가 켠다)")
-    fails += int(limits.get("yaw_kick_enabled") is not False)
+
+    # ── 【불변식 — 몸은 돌아온다】 회전은 반동이지 **조준 훼손이 아니다** ──
+    #   예전 규약은 "시야 회전 전부 0" 이었다 (조준을 해치므로). 그러나 그것은 **공짜 축을 버리는 것**이었다.
+    #   축을 켜되 못을 박는다: ① 마지막 칸은 반드시 원점 (0,0) — 회전이 **순증하지 않는다**
+    #                        ② 어떤 칸도 kick_max 를 넘지 않는다 — 반동이지 멀미가 아니다
+    #                        ③ 엔진이 **차분만** 더한다 (그 사이의 마우스 입력은 보존된다)
+    scripted = {k: v for k, v in rows.items() if v.get("script")}
+    no_home = []
+    for k, v in scripted.items():
+        last = [b for b in v["script"] if isinstance(b, dict)][-1]
+        if float(last.get("at", 0)) < 1.0 or float(last.get("yaw", 0) or 0) != 0.0 \
+                or float(last.get("pitch", 0) or 0) != 0.0:
+            no_home.append((k, last))
+    fails += len(no_home)
+    rep.verdict(not no_home,
+                f"**몸은 돌아온다** — 자세 줄기 {len(scripted)}종 전수, 마지막 칸이 at 1.0 · 회전 원점(0,0)"
+                " (회전은 순증하지 않는다 = 조준 훼손이 아니라 반동이다)"
+                + ("" if not no_home else f" — 안 돌아오는 몸 {no_home}"))
+    over_kick = [(f"{k}.{w}", b.get("yaw"), b.get("pitch")) for k, v in rows.items()
+                 for w, b in beats_of(v)
+                 if abs(float(b.get("yaw", 0) or 0)) > kick_max
+                 or abs(float(b.get("pitch", 0) or 0)) > kick_max]
+    fails += len(over_kick)
+    rep.verdict(not over_kick, f"회전 ≤ {kick_max}도 (반동이지 멀미가 아니다)"
+                + ("" if not over_kick else f" — 초과 {over_kick}"))
+    fails += int(limits.get("kick_recover") is not True)
+    rep.verdict(limits.get("kick_recover") is True,
+                "kick_recover — 엔진이 **차분만** 더하고 마지막에 정확히 되돌린다 (마우스 입력은 보존된다)")
+
+    # ── 【눈을 시험한다】 11계열이 **정말로 다른 몸으로 서는가** ──
+    #   전엔 by_class 14칸 중 자세가 바뀌는 건 3칸뿐이었고 나머지는 lunge 숫자 하나만 달랐다
+    #   (= 몸이 앞으로 조금 미끄러질 뿐, 전부 같은 자세로 서 있었다). 그것을 다시 못 하게 못을 박는다.
+    cls_rows = {k: v for k, v in (body.get("by_class") or {}).items()
+                if isinstance(v, dict) and v.get("script")}
+    sigs = {}
+    for k, v in cls_rows.items():
+        sigs.setdefault(json.dumps(v["script"], sort_keys=True, ensure_ascii=False), []).append(k)
+    twins = [g for g in sigs.values() if len(g) > 1]
+    fails += len(twins)
+    rep.verdict(not twins,
+                f"**계열마다 다른 몸** — 자세 줄기를 가진 {len(cls_rows)}계열이 전부 서로 다르다"
+                " (전에는 lunge 숫자 하나만 달랐다: 몸은 전부 같은 자세로 서 있었다)"
+                + ("" if not twins else f" — 같은 몸을 쓰는 계열 {twins}"))
+    # 자세(pose)·회전·팔 — 셋 중 하나도 안 쓰는 계열은 '뻣뻣한 몸'이다 (활은 예외: 바닐라가 이미 그린다)
+    stiff = [k for k, v in cls_rows.items()
+             if not any(b.get("pose") or b.get("yaw") or b.get("pitch") or b.get("hand")
+                        for _, b in beats_of(v))]
+    fails += len(stiff)
+    rep.verdict(not stiff, "뻣뻣한 몸 0 — 모든 계열이 자세·회전·팔 중 적어도 하나를 쓴다"
+                + ("" if not stiff else f" — 전진만 하는 계열 {stiff}"))
+
+    # ── ★ 암기는 **던진다** (사용자가 이름을 대어 청구한 자리) ──
+    dart = (body.get("by_class") or {}).get("암기") or {}
+    dbeats = [b for _, b in beats_of(dart)] if isinstance(dart, dict) else []
+    release = next((b for b in dbeats if float(b.get("at", -1)) == 0.0), None)
+    throws = bool(release) and float(release.get("pitch", 0) or 0) > 0 \
+        and float(release.get("lunge", 0) or 0) > 0 and release.get("hand") is not None
+    recock = any(float(b.get("at", 0)) > 0.4 and float(b.get("pitch", 0) or 0) < 0 for b in dbeats)
+    fails += int(not (throws and recock))
+    rep.verdict(throws and recock,
+                "★ 암기가 **던진다** — 사출(at 0.0: 상체가 앞으로 꺾이고 pitch+ · 체중이 실리고 lunge+ · 팔이 나간다)"
+                " → 따라 나감 → **다시 벼른다**(pitch−: 뒤로 젖히며 뽑는다 = 다음 던짐의 예비)"
+                + ("" if throws and recock else f" — 손목만 쓴다 {dbeats}"))
+    # '시'(던지고 쏨)가 by_trail 에 있으면 **계열의 몸을 먹는다** — 암기의 던짐이 영영 안 나온다
+    trail_shot = (body.get("by_trail") or {}).get("시")
+    fails += int(trail_shot is not None)
+    rep.verdict(trail_shot is None,
+                "by_trail.'시' 없음 — 던지는 몸은 **계열이 안다** (암기는 던지고 활은 선다)."
+                " 궤적이 계열을 이기는 것은 몸을 통째로 던지는 궤적(돌·원)뿐이다"
+                + ("" if trail_shot is None else f" — 시가 계열을 먹고 있다 {trail_shot}"))
 
     # ── 배선 무결 — 가리키는 모션·모델이 실재하는가 ──
     dangling = []
@@ -854,6 +939,11 @@ def audit_common_path(rep):
         ("display.sheath", "날의 기를 발행한다 (격을 두르면 병기에 서린다)"),
         ("display.thrown", "던진 암기가 날아간다"),
         ("posture", "몸의 자세를 얹는다 (전진·pose — 되는 것만)"),
+        ("body.script()", "자세가 **한 줄기로 흐른다** — 획이 그려지는 동안 몸이 beat 를 지난다"),
+        ("windup(", "축세(蓄勢) — 선딜이 있는 초식은 몸이 **먼저 벼른다**"),
+        ("setRotation", "허리가 돈다 — 몸의 회전 축 (**차분만** 더한다)"),
+        ("swingOffHand", "왼팔이 나간다 — 서버가 줄 수 있는 유일한 사지 애니메이션 (권갑의 원-투)"),
+        ("turn(player, st, 0.0f, 0.0f)", "몸이 **원점으로 돌아온다** — 조준을 빌리고 그대로 갚는다"),
     ]
     for token, why in checks:
         if token in src:
@@ -891,6 +981,70 @@ def audit_common_path(rep):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ⑩ 판정의 눈 — **눈이 판정을 속일 수 있는가**
+#
+# 이 눈의 값어치는 오직 하나에 달렸다: **그리는 코드와 맞히는 코드가 하나인가.**
+# 눈이 제 히트박스를 따로 그리는 순간, 그 그림은 판정에 대해 거짓말할 수 있고 —
+# 거짓말할 수 있는 눈은 **없느니만 못하다** (틀린 그림을 믿고 판정을 고치게 되므로).
+# 그래서 구조로 못을 박는다: 판정도·눈도·절기도 **같은 함수**를 부른다.
+
+def audit_eye(rep):
+    rep.head("⑩ 판정의 눈 — 그리는 코드와 맞히는 코드가 하나인가")
+    fails = 0
+    src = {}
+    for name in ("SkillListener.java", "SkillCast.java"):
+        try:
+            with open(os.path.join(MVT, name), encoding="utf-8") as fh:
+                src[name] = fh.read()
+        except OSError:
+            rep.fail(f"소스 없음: {name}")
+            return 1
+
+    lis, cast = src["SkillListener.java"], src["SkillCast.java"]
+
+    # ① 기하는 한 벌뿐인가 — 판정의 세 함수가 존재하는가
+    geom = ["inArc", "inLine", "inCircle", "inCone"]
+    missing = [g for g in geom if f"static boolean {g}(" not in lis]
+    fails += len(missing)
+    rep.verdict(not missing, f"히트박스의 기하 한 벌 — {geom} (판정·눈·절기가 함께 쓴다)"
+                + ("" if not missing else f" — 없는 함수 {missing}"))
+
+    # ② 판정이 그 함수를 부르는가 (제 손으로 각도를 다시 재면 두 개의 진실이 생긴다)
+    for fn, caller in (("inArc", "arcTargets"), ("inLine", "lineTargets"), ("inCircle", "circleTargets")):
+        m = re.search(r"private List<LivingEntity> " + caller + r"\([\s\S]*?\n    \}", lis)
+        ok = bool(m) and fn + "(" in m.group(0)
+        fails += int(not ok)
+        rep.verdict(ok, f"판정({caller})이 {fn}() 을 부른다 — 각도를 제 손으로 다시 재지 않는다")
+
+    # ③ ★ 눈이 **판정의 함수에 물어보는가** — 이것이 이 감사의 심장이다
+    m = re.search(r"private void eyeHitbox\([\s\S]*?\n    \}", lis)
+    eye_asks = bool(m) and all(f + "(" in m.group(0) for f in ("inArc", "inLine", "inCircle"))
+    fails += int(not eye_asks)
+    rep.verdict(eye_asks,
+                "★ **눈이 판정에게 물어본다** — eyeHitbox 가 표본 점을 inArc·inLine·inCircle 에 넣고,"
+                " '맞는 자리'라고 답한 점만 찍는다 (눈이 제 기하를 가지면 그림이 판정에 대해 거짓말한다)")
+
+    # ④ 절기(SkillCast)도 같은 기하를 쓰는가 — 두 개의 히트박스는 곧 하나의 거짓말이다
+    own_geom = re.search(r"Math\.toDegrees\(.*angle\(|Math\.tan\(Math\.toRadians", cast)
+    shares = "SkillListener.inArc(" in cast and "SkillListener.inCone(" in cast
+    fails += int(not shares or bool(own_geom))
+    rep.verdict(shares and not own_geom,
+                "절기(SkillCast)도 같은 기하를 쓴다 — 제 원뿔을 따로 갖지 않는다"
+                + ("" if shares and not own_geom else " — 【두 개의 히트박스가 살아 있다】"))
+
+    # ⑤ 꺼져 있을 때 공짜인가 — 눈은 판정 경로에 if 한 줄 이상을 요구하면 안 된다
+    off_free = "eyes.contains(player.getUniqueId())" in lis and "boolean eye =" in lis
+    fails += int(not off_free)
+    rep.verdict(off_free, "꺼져 있으면 비용 0 — 판정 경로의 눈은 if 한 줄이다 (디버그가 전투를 느리게 하면 안 된다)")
+
+    # ⑥ 예산 — 눈이 서버를 죽이지 않는가 (등록부가 상한을 쥔다)
+    has_cap = "eye.maxPoints()" in lis and "drawn < eye.maxPoints()" in lis
+    fails += int(not has_cap)
+    rep.verdict(has_cap, "표본 점 상한(max_points)을 등록부가 쥔다 — 눈이 파티클로 서버를 죽이면 안 된다")
+    return fails
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 
 def main():
     ap = argparse.ArgumentParser(description="혼천 무공 모션 감사")
@@ -922,6 +1076,7 @@ def main():
         audit_wiring(mo, rep)
         audit_display(cfg, mo, rep)
         audit_common_path(rep)
+        audit_eye(rep)
 
     rep.say()
     rep.say("═" * 72)

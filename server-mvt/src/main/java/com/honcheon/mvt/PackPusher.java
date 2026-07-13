@@ -121,7 +121,16 @@ final class PackPusher implements Listener {
         String url;
         if (absoluteUrl != null) {
             // 외부 호스팅 — 어디서 들어왔든 같은 주소로 받는다. 추측할 것이 없다.
-            url = absoluteUrl;
+            //
+            // ★ **주소에 팩의 지문을 붙인다.** 안 붙이면 주소가 매번 똑같고(`…/pack/honcheon_pack.zip`),
+            //   그러면 **CDN 이나 클라이언트가 옛 바이트를 재사용**할 수 있다 —
+            //   서버·GitHub·플러그인의 sha1 이 전부 일치하는데도 **사람은 낡은 팩을 본다.**
+            //   (사용자 보고: "팩이 자꾸 최신 버전으로 적용 안 되는 문제 — 과거 팩을 자꾸 사용하는 느낌")
+            //   그리고 그 실패는 **조용하다**: 낡은 팩도 켜지긴 하므로 로그엔 "켜졌다"가 찍힌다.
+            //
+            //   `?v=<sha1>` 은 서버가 무시하는 질의 문자열이지만 **캐시에게는 다른 주소**다.
+            //   팩이 바뀌면 주소가 바뀌고, 주소가 바뀌면 **어떤 캐시도 옛것을 줄 수 없다.**
+            url = absoluteUrl + (absoluteUrl.indexOf('?') >= 0 ? "&" : "?") + "v=" + hash;
         } else {
             String host = resolveHost(player);
             if (host == null) {

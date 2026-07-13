@@ -64,6 +64,7 @@ palette:
   crimson_spore:  { ink: 혈점, 뜻: "【채색 예외】 마공의 붉은 점 — 흡성·약탈. 예외가 곧 정보다" }
   soul:           { ink: 그림자, 뜻: "은신·암살 — 귀식술·무영비수. 기가 아니라 없음" }
   ash:            { ink: 재,   뜻: "독·취기 — 칠보독장·취팔선보" }
+  happy_villager: { ink: 자,   뜻: "【디버그 예외 — 세계의 먹이 아니다】 판정의 눈이 히트박스를 재는 자(尺). 켠 사람에게만 보인다" }
 
 # ══════════════════════════════════════════════════════════════════════
 #  격(格)의 사다리 — 팩 없이 읽히는 첫 번째 축
@@ -1639,25 +1640,43 @@ display:
     짐승:   null                                                           # 발톱은 병기가 아니다
 
   # ══════════════════════════════════════════════════════════════════
-  #  몸의 자세(體勢) — 되는 것만 한다
+  #  몸의 자세(體勢) — 되는 것만 한다. 그러나 **되는 것을 다 한다**
   # ══════════════════════════════════════════════════════════════════
   # 【조사 결과 — 안 되는 것】 바닐라 클라이언트에서 **플레이어의 팔다리 각도는 서버가 줄 수 없다.**
   #   애니메이션은 클라이언트가 돌리고, 리소스팩으로 플레이어 지오메트리를 바꿀 수 없다.
   #   "다리를 뒤로 보내고 허리를 쓰는" 골격 애니메이션은 **바닐라 프로토콜에 자리가 없다.**
   #   (플레이어를 감추고 커스텀 형체를 태우는 길은 자기 시점·손·판정이 전부 깨진다 — 하지 않는다.)
   #
-  # 【되는 것 — 셋】 그리고 이 셋만으로도 체중은 실린다:
-  #   ① 전진(lunge)   — setVelocity 로 몸을 앞으로 민다. **창의 5m 는 몸이 나가야 5m 다**
+  # 【되는 것 — 다섯】 그리고 이 다섯이면 체중이 실린다:
+  #   ① 전진(lunge)   — setVelocity 로 몸을 민다. **창의 5m 는 몸이 나가야 5m 다** (음수 = 뺀다)
   #   ② 자세(pose)    — Entity.setPose(Pose, fixed) 로 몸통 각도를 바꾼다 (바닐라가 가진 자세만):
   #        SWIMMING    몸을 수평으로 눕힌다 → **찌르기·돌진**의 몸 (창·돌)
-  #        SNEAKING    몸을 낮춘다 → **웅크렸다 올려치기**의 예비 동작 (부·중병기의 들어올림)
+  #        SNEAKING    몸을 낮춘다 → 웅크려 들어올리고, 내려찍은 뒤 가라앉는다 (부·중병기·월아산·도)
   #        SPIN_ATTACK 몸을 회전시킨다 (트라이던트 급류) → **회전 베기** (원 궤적)
-  #      pose 는 **관중의 눈에 보이는 자세**다. 제 클라이언트는 제 자세를 스스로 그리므로
-  #      1인칭 조작감을 해치지 않는다 (그것이 이 수단을 고른 이유다).
-  #   ③ 정지(hitstop) — 프레임(선딜·후딜)이 이미 발을 묶는다 (SLOWNESS). 관성 뒤의 **멈춤**이 무게다.
+  #   ③ 몸의 회전(yaw·pitch) — **허리가 도는 축**. Player.setRotation 으로 몸을 틀고 젖힌다.
+  #      여기가 "다리를 뒤로 보내고 몸을 쓴다"에 가장 가까운 축이다 (어깨가 뒤로 갔다 앞으로 나온다).
+  #   ④ 팔의 휘두름(hand) — swingMainHand/swingOffHand. **서버가 줄 수 있는 유일한 사지 애니메이션**.
+  #      권갑의 원-투(부→주)가 여기서 나온다. 암기의 사출도 이 손이 친다.
+  #   ⑤ 정지(hitstop) — 프레임(선딜·후딜)이 이미 발을 묶는다 (SLOWNESS). 관성 뒤의 **멈춤**이 무게다.
+  #
+  # 【자세는 한 칸이 아니라 한 줄기다 — script】 예전엔 자세가 한 번 찍히고 끝났다 (그래서 몸이 뻣뻣했다).
+  #   이제 획이 그려지는 동안 몸이 **beat 를 따라 흐른다**. at 은 스윙 시간(swingTicks)의 비율이다:
+  #     at 0.0  사출/베기의 순간 (판정과 같은 틱 — 여기를 늦추면 "맞고 나서 검이 온다" = 거짓말)
+  #     at 0.3~0.4  획이 끝을 향해 흐르는 중 (체중이 실린다)
+  #     at 0.6~0.7  따라 나감(follow-through) · 또는 **다음 수를 벼르는 자세**
+  #     at 1.0  **반드시 원점** (yaw 0 · pitch 0) — 몸이 돌아온다
+  #   windup 은 **선딜이 있는 초식에만** 붙는다 (초식은 commit 에서 startup 틱을 기다린다).
+  #   기본 타격(basic_strike)은 선딜을 기다리지 않고 즉발이므로 **windup 이 없다** —
+  #   있는 척하면 "암기가 날아간 뒤에 몸이 뒤로 젖혀지는" 거짓말이 된다. 그래서 안 넣었다.
+  #
+  # 【회전의 규약】 · yaw + = 오른쪽으로 튼다 (어깨를 뒤로 빼는 쪽) · pitch + = 아래 (MC 규약)
+  #   · **회전은 반드시 원점으로 돌아온다**(kick_recover). 매 beat 는 원점 기준의 목표각이고,
+  #     엔진은 언제나 **차분(delta)만** 더한다 — 그 사이 플레이어가 마우스를 움직인 것은 보존된다.
+  #     마지막 beat 가 (0,0) 이므로 **조준은 순증하지 않는다** (반동이지 조준 훼손이 아니다).
+  #   · kick_max 를 넘는 각은 등록부가 적어도 엔진이 깎는다 (조작감이 등록부보다 높다).
+  #   · yaw_kick_enabled: false 로 두면 **회전 축만 통째로 꺼진다** (전진·자세·팔은 그대로 돈다).
   #
   # 【안전 규칙 — 조작감을 해치는 것이 최악이다】
-  #   · 시야 회전(yaw/pitch kick)은 **조준을 직접 망가뜨린다**. 칸은 두되 **전부 0 이다** (켤 사람이 켠다).
   #   · 공중·물속·기어가기 중에는 자세를 강제하지 않는다 (낙하·수영 자세와 싸우면 몸이 굳는다).
   #   · 전진은 지면에서만. 상한 max_lunge — 전투 중 미끄러지면 조준이 깨진다.
   #   · pose 강제는 max_pose_ticks 를 넘지 못한다. 길면 몸이 굳고, 굳으면 그것은 버그로 읽힌다.
@@ -1669,30 +1688,190 @@ display:
       max_pose_ticks: 8           # 자세 강제 상한 — 넘으면 몸이 굳는다
       require_ground: true        # 공중에서는 전진·자세 없음 (낙하와 싸우지 않는다)
       skip_when: [수영, 기어가기, 활강]   # 이 상태에서는 손대지 않는다 (바닐라 자세가 이긴다)
-      yaw_kick_enabled: false     # 【기본 꺼짐】 시야 회전은 조준을 해친다 — 켜려면 사용자가 켠다
-    # by_class — lunge(전진 세기) · pose(자세) · pose_ticks · yaw_kick · pitch_kick
+      yaw_kick_enabled: true      # 몸의 회전 축 — **켠다**. 조준은 반드시 원점으로 돌아온다(아래)
+      kick_max: 12                # 원점에서 벗어날 수 있는 최대 각(도) — 이 이상은 조준이 아니라 멀미다
+      kick_recover: true          # **불변식**: 마지막 beat 는 (0,0). 회전은 순증하지 않는다
+    # by_class — 계열의 몸. lunge/pose/pose_ticks 는 script 가 없을 때의 대비책(fallback)이고,
+    #            **script 가 있으면 script 가 몸이다.** beat: { at, lunge, pose, yaw, pitch, hand }
+    #            hand: 주(main) · 부(off) — 팔이 실제로 휘둘러진다 (관중도 보고 제 손도 본다)
     by_class:
-      검:     { lunge: 0.16, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }   # 허리로 벤다 — 발은 거의 안 나간다
-      도:     { lunge: 0.20, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }   # 체중을 실어 내려친다
-      창:     { lunge: 0.42, pose: SWIMMING,    pose_ticks: 5, yaw_kick: 0, pitch_kick: 0 }   # **몸이 나간다** — 전진이 곧 사거리다
-      봉:     { lunge: 0.18, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }
-      단검:   { lunge: 0.08, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }   # 몸을 거의 안 쓴다 — 그것이 속검이다
-      암기:   { lunge: 0.05, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }   # 팔이 아니라 손목이다
-      활:     { lunge: 0.00, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }
-      권갑:   { lunge: 0.22, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }   # 다리→허리→어깨의 사슬
-      맨손:   { lunge: 0.22, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }
-      겸:     { lunge: -0.10, pose: 없음,       pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }   # **당긴다** — 뒤로 빠지며 건다 (음수 전진)
-      월아산: { lunge: 0.26, pose: SNEAKING,    pose_ticks: 4, yaw_kick: 0, pitch_kick: 0 }   # 크게 들었다 내린다
-      구:     { lunge: 0.24, pose: 없음,        pose_ticks: 0, yaw_kick: 0, pitch_kick: 0 }
-      중병기: { lunge: 0.30, pose: SNEAKING,    pose_ticks: 6, yaw_kick: 0, pitch_kick: 0 }   # 웅크렸다 짓뭉갠다
-      부:     { lunge: 0.34, pose: SNEAKING,    pose_ticks: 6, yaw_kick: 0, pitch_kick: 0 }   # 들어올렸다 내려찍는다 (가장 무겁다)
+      # 검 — 벤다. 발은 거의 안 나가고 **허리가 돈다** (어깨를 뒤로 벼렸다 눕혀 긋는다)
+      검:
+        lunge: 0.16
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.04, yaw: 9, pitch: -3 }
+        script:
+          - { at: 0.00, yaw: 6, pitch: -2 }                          # 어깨가 뒤에 있다
+          - { at: 0.30, yaw: -7, pitch: 4, lunge: 0.16, hand: 주 }   # 허리가 돌며 벤다 (13도의 횡전)
+          - { at: 0.65, yaw: -3, pitch: 1 }                          # 끝을 흘린다
+          - { at: 1.00 }                                             # 돌아온다
+      # 도 — 내려벤다. **체중이 위에서 아래로** 떨어지고, 끝에 몸이 가라앉는다
+      도:
+        lunge: 0.20
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.05, yaw: 6, pitch: -8 }
+        script:
+          - { at: 0.00, yaw: 5, pitch: -6 }                          # 치켜든다
+          - { at: 0.30, yaw: -3, pitch: 10, lunge: 0.20, hand: 주 }  # 내리친다 (16도의 낙차)
+          - { at: 0.60, yaw: -1, pitch: 6, pose: SNEAKING }          # 벤 자리로 몸이 **가라앉는다**
+          - { at: 1.00 }
+      # 창 — 찌른다. **몸이 나간다** (전진이 곧 사거리다). SWIMMING = 몸을 수평으로 던진 자세
+      창:
+        lunge: 0.42
+        pose: SWIMMING
+        pose_ticks: 5
+        windup: { lunge: -0.06, pitch: -3, yaw: 3 }
+        script:
+          - { at: 0.00, pose: SWIMMING, lunge: 0.42, pitch: 2, hand: 주 }   # 몸을 던져 꿴다
+          - { at: 0.45, pitch: -2 }                                   # 창을 거둔다 (상체가 선다)
+          - { at: 1.00 }
+      # 봉 — 후려친다. 날이 없으니 **크게 돈다** (가장 넓은 횡전 21도)
+      봉:
+        lunge: 0.18
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.04, yaw: 11, pitch: -2 }
+        script:
+          - { at: 0.00, yaw: 10, pitch: -3 }
+          - { at: 0.35, yaw: -11, pitch: 4, lunge: 0.18, hand: 주 }   # 몸통째 후려친다
+          - { at: 0.70, yaw: -6, pitch: 1 }
+          - { at: 1.00 }
+      # 단검 — 속검. 몸을 거의 안 쓴다(그것이 속검이다). 대신 **두 손이 두 번 번쩍인다**
+      단검:
+        lunge: 0.08
+        pose: 없음
+        pose_ticks: 0
+        windup: { yaw: 4, pitch: -2 }
+        script:
+          - { at: 0.00, yaw: 4, pitch: 2, lunge: 0.08, hand: 주 }     # 찌른다
+          - { at: 0.30, yaw: -5, pitch: -2, hand: 부 }                # 되받아 긋는다 (왼손)
+          - { at: 0.55, yaw: 2, pitch: 1 }
+          - { at: 1.00 }
+      # ★ 암기 — **던진다**. 여기가 사용자가 이름을 대어 청구한 자리다.
+      #   손목이 아니라 **몸이 던진다**: 어깨가 앞으로 나가고(yaw −), 상체가 채찍처럼 꺾이고(pitch +11),
+      #   체중이 앞으로 실린다(lunge 0.18 — 예전 0.05 의 세 배 반). 그리고 **따라 나간 뒤 다시 벼른다**:
+      #   0.60 에서 몸이 뒤로 젖혀지며(pitch −7) 어깨가 뒤로 돌아간다(yaw +9) — 다음 암기를 뽑아 쥐는 자세다.
+      #   연속으로 던지면 이 끝자세가 곧 다음 던짐의 **예비 동작**이 된다 (거짓말 없이 얻은 windup).
+      암기:
+        lunge: 0.18
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.08, yaw: 10, pitch: -11 }                 # 초식에서만: 몸을 빼고 팔을 뒤로 젖힌다
+        script:
+          - { at: 0.00, yaw: -6, pitch: 11, lunge: 0.18, hand: 주 }   # **사출** — 상체가 앞으로 꺾인다
+          - { at: 0.30, yaw: -3, pitch: 5 }                           # 팔이 따라 나간다 (follow-through)
+          - { at: 0.60, yaw: 9, pitch: -7, lunge: -0.05 }             # **다시 벼른다** — 뒤로 젖히며 뽑는다
+          - { at: 1.00 }
+      # 활 — 몸을 주지 않는다. 바닐라가 이미 시위를 당기는 자세를 그린다 (겹치면 그것이 거짓말이다)
+      활:
+        lunge: 0.00
+        pose: 없음
+        pose_ticks: 0
+        script: null
+      # 권갑 — 다리→허리→어깨의 사슬. **원-투**: 왼손 잽(부) 뒤에 오른손 크로스(주)가 허리를 끌고 나온다
+      권갑:
+        lunge: 0.22
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.03, yaw: 5, pitch: -1 }
+        script:
+          - { at: 0.00, yaw: 3, pitch: 1, lunge: 0.10, hand: 부 }     # 잽 — 앞손이 먼저 간다
+          - { at: 0.35, yaw: -8, pitch: 2, lunge: 0.22, hand: 주 }    # 크로스 — **허리가 돌며** 지른다
+          - { at: 0.65, yaw: -3 }
+          - { at: 1.00 }
+      # 맨손 — 권풍. 권갑과 같은 사슬이나 얕다 (실린 것이 없다)
+      맨손:
+        lunge: 0.22
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.03, yaw: 4 }
+        script:
+          - { at: 0.00, yaw: 3, hand: 부 }
+          - { at: 0.35, yaw: -7, pitch: 2, lunge: 0.22, hand: 주 }
+          - { at: 0.70, yaw: -2 }
+          - { at: 1.00 }
+      # 겸 — **건다, 그리고 당긴다**. 예전엔 음수 전진 하나였다 (그래서 그냥 뒤로 미끄러졌다).
+      #   이제 순서가 있다: 한 발 들어가 걸고(0.06) → **몸이 빠지며 끌어온다**(−0.10)
+      겸:
+        lunge: -0.10
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: 0.06, yaw: -6 }
+        script:
+          - { at: 0.00, yaw: -8, pitch: 3, lunge: 0.06, hand: 주 }    # 안으로 넣어 **건다**
+          - { at: 0.35, yaw: 9, pitch: -2, lunge: -0.10 }             # **당긴다** — 몸이 뒤로 빠진다
+          - { at: 0.70, yaw: 4 }
+          - { at: 1.00 }
+      # 월아산 — 크게 들었다 내린다. 웅크림(SNEAKING)이 **예비**고, 낙차(pitch 18도)가 **본편**이다
+      월아산:
+        lunge: 0.26
+        pose: SNEAKING
+        pose_ticks: 4
+        windup: { lunge: -0.05, yaw: 8, pitch: -9, pose: SNEAKING }
+        script:
+          - { at: 0.00, yaw: 7, pitch: -7, pose: SNEAKING }           # 웅크려 **든다**
+          - { at: 0.35, yaw: -6, pitch: 11, lunge: 0.26, pose: 없음, hand: 주 }   # 일어서며 **내린다**
+          - { at: 0.70, yaw: -2, pitch: 5 }
+          - { at: 1.00 }
+      # 구 — 찍고 **끈다** (갈고리다). 찍은 뒤 몸이 뒤로 빠지며 건 것을 끌어온다
+      구:
+        lunge: 0.24
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.04, yaw: 5, pitch: -8 }
+        script:
+          - { at: 0.00, yaw: 4, pitch: -6 }
+          - { at: 0.35, yaw: -4, pitch: 10, lunge: 0.24, hand: 주 }   # 찍는다
+          - { at: 0.65, yaw: -2, pitch: 4, lunge: -0.06 }             # **끈다** (걸린 것을 당긴다)
+          - { at: 1.00 }
+      # 중병기 — 짓뭉갠다. 웅크렸다(SNEAKING) 위에서 아래로 20도를 떨군 뒤 **다시 가라앉는다**
+      중병기:
+        lunge: 0.30
+        pose: SNEAKING
+        pose_ticks: 6
+        windup: { lunge: -0.06, yaw: 9, pitch: -10, pose: SNEAKING }
+        script:
+          - { at: 0.00, yaw: 8, pitch: -8, pose: SNEAKING }
+          - { at: 0.40, yaw: -7, pitch: 12, lunge: 0.30, pose: 없음, hand: 주 }
+          - { at: 0.70, yaw: -3, pitch: 6, pose: SNEAKING }           # 짓눌러 **가라앉는다**
+          - { at: 1.00 }
+      # 부 — 가장 무거운 손 (0.9/s). 가장 크게 들고(pitch −10) **가장 크게 떨군다**(pitch +12, 22도)
+      부:
+        lunge: 0.34
+        pose: SNEAKING
+        pose_ticks: 6
+        windup: { lunge: -0.07, yaw: 10, pitch: -12, pose: SNEAKING }
+        script:
+          - { at: 0.00, yaw: 9, pitch: -10, pose: SNEAKING }          # 머리 위로 든다
+          - { at: 0.40, yaw: -8, pitch: 12, lunge: 0.34, pose: 없음, hand: 주 }   # 찍어벤다
+          - { at: 0.70, yaw: -3, pitch: 7, pose: SNEAKING }           # 도끼를 뽑는 몸
+          - { at: 1.00 }
       무관:   null
       짐승:   null
-    # by_trail — 궤적이 자세를 이긴다 (돌진은 어떤 병기를 들었든 몸을 던지는 것이다)
+    # by_trail — **몸을 통째로 던지는 궤적만** 계열을 이긴다 (돌진은 어떤 병기를 들었든 몸을 던지는 것이다).
+    #   ★ '시'(던지고 쏨)는 **여기서 뺐다.** 예전엔 시가 계열을 이겨서 **암기의 몸이 영영 안 나왔다** —
+    #     암기의 던짐도, 활의 정지도 전부 시의 밋밋한 한 줄(lunge 0.05)에 먹혔다.
+    #     던지는 몸은 계열이 안다: **암기는 던지고 활은 선다.** 그래서 시는 계열에게 돌려줬다.
     by_trail:
-      돌:  { lunge: 0.55, pose: SWIMMING,    pose_ticks: 6 }   # 돌진 — 몸을 앞으로 던진다 (철산고·보법)
-      원:  { lunge: 0.10, pose: SPIN_ATTACK, pose_ticks: 5 }   # 회전 베기 — 몸이 돈다 (매화만개·태극검)
-      시:  { lunge: 0.05, pose: 없음,        pose_ticks: 0 }   # 던지고 쏘는 것 — 발은 멈춘다
+      돌:                                                  # 돌진 — 몸을 앞으로 던진다 (철산고·보법)
+        lunge: 0.55
+        pose: SWIMMING
+        pose_ticks: 6
+        script:
+          - { at: 0.00, pose: SWIMMING, lunge: 0.55, pitch: 3, hand: 주 }
+          - { at: 0.50, pitch: -2 }                        # 부딪히고 상체가 선다
+          - { at: 1.00 }
+      원:                                                  # 회전 베기 — 몸이 **돈다** (매화만개·태극혜검)
+        lunge: 0.10
+        pose: SPIN_ATTACK
+        pose_ticks: 5
+        script:
+          - { at: 0.00, pose: SPIN_ATTACK, yaw: -10, lunge: 0.10, hand: 주 }
+          - { at: 0.35, yaw: 10, hand: 부 }                # 한 바퀴 — 좌우로 크게 쓸며 돈다
+          - { at: 0.70, yaw: -4 }
+          - { at: 1.00 }
 
   # ─── 암기 투척 — 던진 물건은 **실제로 날아간다** (복제가 아니다) ───
   throw:
@@ -1769,3 +1948,27 @@ basic_strike:
     활:     null                  # 바닐라 활이 제 일을 한다 — 우리가 얹을 것이 없다
     무관:   null
     짐승:   null
+
+# ══════════════════════════════════════════════════════════════════════
+#  판정의 눈(判定の眼) — 【디버그】 보이는 것이 정말 맞는 것인가
+# ══════════════════════════════════════════════════════════════════════
+# 【왜 있는가】 이 프로젝트의 규칙은 **"보이는 것 = 맞는 것"** 이다. 그런데 그것을 **확인할 방법이
+#   없었다.** 성능은 Metrics 가 재고, 등록부는 감사가 재는데, **판정만은 아무도 못 봤다** —
+#   히트박스가 정말 그 각도인지, 2d6 이 무엇을 굴렸는지, 피해가 어느 층에서 깎였는지.
+#   오늘 이 프로젝트에서 눈이 스무 번 넘게 거짓말했다. **눈을 시험할 눈이 필요하다.**
+#
+# 【정직의 못】 이 눈은 히트박스를 **다시 그리지 않는다.** 판정이 쓰는 그 함수(inArc·inLine·inCircle)에
+#   점을 물어본다 — "이 자리는 맞는 자리인가?" **그리는 코드와 맞히는 코드가 하나여야** 그림이
+#   판정에 대해 거짓말할 수 없다. (감사가 이 사실을 지킨다: 눈이 제 기하학을 따로 갖는 순간 위반이다.)
+#
+# 【켠 사람에게만 보인다】 파티클은 시전자 한 명에게만 간다 (관중의 화면을 더럽히지 않는다).
+#   꺼져 있으면 **비용이 0 이다** (판정 경로에 if 한 줄).
+eye:
+  hitbox:
+    particle: happy_villager     # 맞는 자리 — 판정 함수가 "그렇다"고 답한 점만 찍힌다
+    step: 0.6                    # 표본 간격(m) — 촘촘할수록 정확하지만 비싸다
+    height: 0.3                  # 발치에서 띄우는 높이 (지면에 묻히지 않게)
+    max_points: 140              # 【예산】 한 번의 판정에 찍는 점의 상한 — 눈이 서버를 죽이면 안 된다
+  targets:
+    particle: crit               # 실제로 목록에 오른 몸 — 히트박스가 고른 자 (그 머리 위에 찍는다)
+  log: true                      # 판정의 산수를 채팅으로 (2d6 · 실행력 내역 · 저항 · 피해가 깎인 층)

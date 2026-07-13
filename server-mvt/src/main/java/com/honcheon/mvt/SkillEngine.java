@@ -9,6 +9,7 @@ import com.honcheon.core.rules.RulesConfig;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -184,6 +185,8 @@ public final class SkillEngine {
     private final List<String> throwClasses;
     private final Map<String, Basic> basicStrike;            // 【무공 없는 손】 계열 → 기본 히트박스
     private final int basicCooldownTicks;
+    /** 판정의 눈 — 【디버그】 히트박스를 재는 자(尺). 켠 사람에게만 보인다 */
+    private final Eye eye;
     private final Map<String, List<String>> artsByClass;     // 계열 → 그 계열로 나가는 무공 (원장 해석용)
 
     @SuppressWarnings("unchecked")
@@ -665,7 +668,8 @@ public final class SkillEngine {
                 dblOr(lim.get("max_lunge"), 0.45),
                 intOr(lim.get("max_pose_ticks"), 8),
                 !Boolean.FALSE.equals(lim.get("require_ground")),
-                Boolean.TRUE.equals(lim.get("yaw_kick_enabled")));
+                Boolean.TRUE.equals(lim.get("yaw_kick_enabled")),
+                (float) dblOr(lim.get("kick_max"), 12.0));
         this.bodyByClass = bodyMap(body.get("by_class"), bodyLimits);
         this.bodyByTrail = bodyMap(body.get("by_trail"), bodyLimits);
 
@@ -688,6 +692,15 @@ public final class SkillEngine {
                     b2.get("frames") instanceof List<?> ? frames(b2.get("frames")) : new Frames(2, 2, 4)));
         });
         this.basicStrike = Collections.unmodifiableMap(bsc);
+
+        // 판정의 눈 — 【디버그】 등록부가 자(尺)의 촘촘함과 예산을 정한다 (코드가 정하지 않는다)
+        Map<String, Object> ey = RulesConfig.section(mo, "eye");
+        Map<String, Object> hb = asMap(ey.get("hitbox"));
+        this.eye = new Eye(
+                str(hb.get("particle")), dblOr(hb.get("step"), 0.6), dblOr(hb.get("height"), 0.3),
+                intOr(hb.get("max_points"), 140),
+                str(asMap(ey.get("targets")).get("particle")),
+                !Boolean.FALSE.equals(ey.get("log")));
 
         // 계열 → 무공 (원장 해석용) — 하드코딩된 무공표를 지운 자리다
         Map<String, List<String>> abc = new LinkedHashMap<>();
@@ -718,9 +731,53 @@ public final class SkillEngine {
             int poseTicks = Math.min(limits.maxPoseTicks(), intOr(b.get("pose_ticks"), 0));
             float yaw = limits.yawKickEnabled() ? (float) dblOr(b.get("yaw_kick"), 0.0) : 0.0f;
             float pitch = limits.yawKickEnabled() ? (float) dblOr(b.get("pitch_kick"), 0.0) : 0.0f;
-            out.put(key, new Body(key, lunge, pose, poseTicks, yaw, pitch));
+            out.put(key, new Body(key, lunge, pose, poseTicks, yaw, pitch,
+                    beats(b.get("script"), limits), beat(b.get("windup"), 0.0, limits)));
         });
         return Collections.unmodifiableMap(out);
+    }
+
+    /**
+     * 자세의 줄기 — <b>획이 그려지는 동안 몸이 흐른다</b>. 마지막 beat 는 등록부가 무엇을 적었든
+     * <b>원점(0,0)</b> 이다 (불변식: 회전은 순증하지 않는다 — 반동이지 조준 훼손이 아니다).
+     */
+    private static List<Beat> beats(Object raw, BodyLimits limits) {
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        List<Beat> out = new ArrayList<>();
+        for (Object o : list) {
+            Beat b = beat(o, 0.0, limits);
+            if (b != null) {
+                out.add(b);
+            }
+        }
+        out.sort(Comparator.comparingDouble(Beat::at));
+        if (out.isEmpty()) {
+            return List.of();
+        }
+        // 【못】 몸은 반드시 돌아온다 — 마지막 칸의 회전을 강제로 0 으로 못박는다
+        Beat last = out.get(out.size() - 1);
+        out.set(out.size() - 1, new Beat(1.0, last.lunge(), last.pose(), 0.0f, 0.0f, last.hand()));
+        return List.copyOf(out);
+    }
+
+    private static Beat beat(Object raw, double defaultAt, BodyLimits limits) {
+        if (!(raw instanceof Map<?, ?>)) {
+            return null;
+        }
+        Map<String, Object> b = asMap(raw);
+        double at = Math.max(0.0, Math.min(1.0, dblOr(b.get("at"), defaultAt)));
+        double lunge = dblOr(b.get("lunge"), 0.0);
+        lunge = Math.max(-limits.maxLunge(), Math.min(limits.maxLunge(), lunge));
+        float kick = Math.abs(limits.kickMax());
+        float yaw = limits.yawKickEnabled() ? (float) dblOr(b.get("yaw"), 0.0) : 0.0f;
+        float pitch = limits.yawKickEnabled() ? (float) dblOr(b.get("pitch"), 0.0) : 0.0f;
+        yaw = Math.max(-kick, Math.min(kick, yaw));       // 조작감이 등록부보다 높다 — 여기서 깎는다
+        pitch = Math.max(-kick, Math.min(kick, pitch));
+        String pose = b.get("pose") == null ? null : String.valueOf(b.get("pose"));
+        String hand = b.get("hand") == null ? null : String.valueOf(b.get("hand"));
+        return new Beat(at, lunge, pose, yaw, pitch, hand);
     }
 
     /** 배선표 — 값이 null(형체 없음)인 칸은 아예 담지 않는다 (없는 것과 같다) */
@@ -2087,6 +2144,21 @@ public final class SkillEngine {
         return basicCooldownTicks;
     }
 
+    /** 판정의 눈 — 【디버그】 히트박스의 자·목표 표시·산수 로그 (등록부가 예산을 정한다) */
+    public Eye eye() {
+        return eye;
+    }
+
+    /**
+     * 【디버그】 판정의 눈 — <b>보이는 것이 정말 맞는 것인가</b>.
+     *
+     * <p>이 눈은 히트박스를 <b>다시 그리지 않는다</b>. 판정이 쓰는 그 함수에 점을 물어본다 —
+     * "이 자리는 맞는 자리인가?" 그리는 코드와 맞히는 코드가 하나여야 그림이 판정에 대해 거짓말할 수 없다.
+     */
+    public record Eye(String hitboxParticle, double step, double height, int maxPoints,
+                      String targetParticle, boolean log) {
+    }
+
     /**
      * 이 계열로 나가는 무공들 — <b>원장이 고른다</b> (하드코딩된 무공표를 지운 자리).
      * {@code skills.yml martial_arts[].weapon_class} 정본. 액션 데이터가 없는 무공은 손에 실리지 않는다.
@@ -2128,17 +2200,43 @@ public final class SkillEngine {
      *
      * @param pose SWIMMING(몸을 눕힌다 — 찌르기·돌진) · SNEAKING(웅크린다 — 들어올림) ·
      *             SPIN_ATTACK(몸이 돈다 — 회전 베기) · 없음
+     * @param script <b>자세의 줄기</b> — 획이 그려지는 동안 몸이 지나는 칸들 (비면 위의 한 칸만 쓴다)
+     * @param windup <b>선딜이 있는 초식에만</b> 붙는 예비 동작 (기본 타격은 즉발이라 예비가 없다 —
+     *               있는 척하면 "암기가 날아간 뒤에 몸이 젖혀지는" 거짓말이 된다)
      */
     public record Body(String key, double lunge, String pose, int poseTicks,
-                       float yawKick, float pitchKick) {
+                       float yawKick, float pitchKick, List<Beat> script, Beat windup) {
         public boolean hasPose() {
             return pose != null && !"없음".equals(pose) && poseTicks > 0;
+        }
+
+        /** script 가 있으면 script 가 몸이다 — 없으면 한 칸짜리 옛 몸 (활·미등록 계열) */
+        public boolean scripted() {
+            return script != null && !script.isEmpty();
+        }
+    }
+
+    /**
+     * 자세의 한 칸 — <b>at</b> 은 스윙 시간의 비율이다 (0.0 = 판정과 같은 틱, 1.0 = 몸이 돌아온 자리).
+     *
+     * @param yaw   원점 기준 목표각(도). + = 오른쪽으로 튼다. 엔진은 <b>차분만</b> 더한다
+     * @param pitch 원점 기준 목표각(도). + = 아래 (MC 규약)
+     * @param pose  null = 유지 · "없음" = 해제 · 그 외 = 바닐라 Pose
+     * @param hand  주(main) · 부(off) — <b>서버가 줄 수 있는 유일한 사지 애니메이션</b>
+     */
+    public record Beat(double at, double lunge, String pose, float yaw, float pitch, String hand) {
+        public boolean setsPose() {
+            return pose != null;
+        }
+
+        public boolean clearsPose() {
+            return "없음".equals(pose);
         }
     }
 
     /** 자세의 상한 — 등록부가 조작감을 해치지 못하게 하는 못 */
     public record BodyLimits(double maxLunge, int maxPoseTicks, boolean requireGround,
-                             boolean yawKickEnabled) {
+                             boolean yawKickEnabled, float kickMax) {
     }
 
     /** 【무공 없는 손】 병기를 든 것만으로 성립하는 한 타 — 히트박스·프레임 (지금은 연출 전용) */

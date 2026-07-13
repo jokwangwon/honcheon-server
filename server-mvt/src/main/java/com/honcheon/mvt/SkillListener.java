@@ -26,8 +26,10 @@ import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -91,6 +93,8 @@ public final class SkillListener implements Listener {
     private final Map<UUID, String> stancePin = new HashMap<>();
     /** 지금 이 몸이 서 있는 태세 — HUD 가 그린다 (화면이 판정에 대해 거짓말하지 않게) */
     private final Map<UUID, String> stanceNow = new HashMap<>();
+    /** 몸이 지금 원점에서 얼마나 벗어나 있는가 — 회전은 <b>정확히 이만큼만</b> 되돌린다 (순증 금지) */
+    private final Map<UUID, Posture> postures = new HashMap<>();
     private final List<Pending> pending = new ArrayList<>();
 
     private long tick;
@@ -719,54 +723,194 @@ public final class SkillListener implements Listener {
             // 던진 물건은 **실제로 날아간다** (암기) — 복제가 아니다. 손을 떠났으므로
             solid |= display.thrown(player, weaponClass, range);
         }
-        posture(player, weaponClass, hitType);
+        posture(player, weaponClass, hitType, swingTicks);
         return solid;
     }
 
+    // ══════════ 몸의 자세(體勢) — 획을 그리는 몸 ══════════
+
     /**
-     * 몸의 자세(體勢) — <b>되는 것만</b>.
+     * <b>못 하는 것</b>: 바닐라 클라이언트에서 플레이어의 <b>팔다리 각도는 서버가 줄 수 없다</b>
+     * (애니메이션은 클라이언트가 돌리고, 팩으로 플레이어 지오메트리를 바꿀 수 없다). 무릎·팔꿈치를 꺾는
+     * 골격 애니메이션은 바닐라 프로토콜에 자리가 없다.
      *
-     * <p><b>못 하는 것</b>: 바닐라 클라이언트에서 플레이어의 <b>팔다리 각도는 서버가 줄 수 없다</b>
-     * (애니메이션은 클라이언트가 돌리고, 팩으로 플레이어 지오메트리를 바꿀 수 없다). "다리를 뒤로 보내고
-     * 허리를 쓰는" 골격 애니메이션은 바닐라 프로토콜에 자리가 없다. 억지로 흉내 내면 조작감만 죽는다.
+     * <p><b>하는 것 — 다섯 축</b>: 전진(lunge — <b>창의 5m 는 몸이 나가야 5m 다</b>) · 자세(pose —
+     * SWIMMING 은 눕히고 · SNEAKING 은 낮추고 · SPIN_ATTACK 은 돈다) · <b>몸의 회전</b>(yaw·pitch —
+     * 허리가 돌고 상체가 젖혀진다) · <b>팔의 휘두름</b>(swingMainHand/OffHand — 서버가 줄 수 있는 유일한
+     * 사지 애니메이션) · 정지(프레임이 이미 발을 묶는다).
      *
-     * <p><b>하는 것</b>: 전진(lunge — <b>창의 5m 는 몸이 나가야 5m 다</b>) · 자세(pose — 바닐라가 가진
-     * 자세만: SWIMMING 은 몸을 눕히고 · SNEAKING 은 낮추고 · SPIN_ATTACK 은 돈다) · 정지(프레임이 이미
-     * 발을 묶는다). 자세는 <b>관중의 눈</b>에 보이는 것이고, 제 클라이언트는 제 자세를 스스로 그리므로
-     * 1인칭 조작감을 해치지 않는다 — 그것이 이 수단을 고른 이유다.
-     *
-     * <p>공중·물속·활강 중에는 손대지 않는다 (바닐라 자세와 싸우면 몸이 굳는다).
+     * <p><b>한 칸이 아니라 한 줄기다</b>: 획이 그려지는 동안 몸이 {@code script} 의 beat 를 따라 흐른다
+     * (어깨가 뒤에 있다 → 허리가 돌며 벤다 → 흘린다 → 돌아온다). 예전엔 자세가 한 번 찍히고 끝나서
+     * <b>획만 춤추고 몸은 서 있었다.</b>
      */
-    private void posture(Player player, String weaponClass, String hitType) {
+    private static final class Posture {
+        int epoch;      // 새 수가 들어오면 옛 beat 는 죽는다 (겹쳐도 몸이 꼬이지 않게)
+        int poseSeq;    // 자세 강제의 세대 — max_pose_ticks 를 넘기면 스스로 풀린다
+        float yaw;      // 원점 대비 **실제로 먹인** 각 — 되돌릴 때 이만큼만 뺀다 (순증 금지)
+        float pitch;
+    }
+
+    /**
+     * 자세의 줄기를 태운다 — {@code swingTicks} 동안 몸이 beat 를 지난다.
+     * 회전은 <b>반드시 원점으로 돌아온다</b> (마지막 beat 가 (0,0) 이고, 그 뒤 못질(restore)이 한 번 더 있다).
+     */
+    private void posture(Player player, String weaponClass, String hitType, int swingTicks) {
         SkillEngine.Body body = engine.body(weaponClass, hitType);
-        SkillEngine.BodyLimits limits = engine.bodyLimits();
-        if (body == null || player.isSwimming() || player.isGliding() || player.isInsideVehicle()) {
+        if (body == null || skipBody(player)) {
             return;
         }
-        if (limits.requireGround() && !player.isOnGround()) {
-            return;   // 공중에서 밀면 낙하와 싸운다 — 그것은 무공이 아니라 버그로 읽힌다
+        Posture st = postures.computeIfAbsent(player.getUniqueId(), k -> new Posture());
+        final int epoch = ++st.epoch;
+        if (!body.scripted()) {
+            // 옛 한 칸 (script 없는 계열) — 있던 것을 잃지 않는다
+            applyBeat(player, st, epoch, new SkillEngine.Beat(0.0, body.lunge(),
+                    body.hasPose() ? body.pose() : null, body.yawKick(), body.pitchKick(), null));
+            pending.add(new Pending(tick + Math.max(1, swingTicks), () -> restore(player, st, epoch)));
+            return;
         }
-        if (body.lunge() != 0.0) {
+        int span = Math.max(1, swingTicks);
+        for (SkillEngine.Beat b : body.script()) {
+            long due = tick + Math.round(b.at() * span);
+            if (due <= tick) {
+                applyBeat(player, st, epoch, b);   // 사출/베기의 순간 — 판정과 **같은 틱**이다
+            } else {
+                pending.add(new Pending(due, () -> applyBeat(player, st, epoch, b)));
+            }
+        }
+        // 못 — 어떤 경우에도 몸은 돌아온다 (beat 가 잘렸든 겹쳤든 · 회전은 순증하지 않는다)
+        pending.add(new Pending(tick + span + 1, () -> restore(player, st, epoch)));
+    }
+
+    /**
+     * 예비 동작(蓄勢) — <b>선딜이 있는 초식에만</b>. 몸을 빼고, 어깨를 뒤로 틀고, 팔을 젖힌다.
+     *
+     * <p>기본 타격(basic_strike)은 클릭과 같은 틱에 판정이 끝나므로 <b>예비가 없다</b>.
+     * 있는 척하면 "암기가 날아간 뒤에 몸이 뒤로 젖혀지는" 거짓말이 된다 — 그래서 안 넣었다.
+     * (대신 암기의 끝자세가 다음 던짐의 예비가 된다 — {@code script} 의 0.60 칸.)
+     */
+    private void windup(Player player, String weaponClass, String hitType, int startupTicks) {
+        if (startupTicks < 2) {
+            return;
+        }
+        SkillEngine.Body body = engine.body(weaponClass, hitType);
+        if (body == null || body.windup() == null || skipBody(player)) {
+            return;
+        }
+        Posture st = postures.computeIfAbsent(player.getUniqueId(), k -> new Posture());
+        final int epoch = ++st.epoch;
+        applyBeat(player, st, epoch, body.windup());
+        // 판정이 오지 않아도(취소·사망) 몸은 돌아온다. 판정이 오면 epoch 가 바뀌어 이 못은 스스로 물러선다
+        pending.add(new Pending(tick + startupTicks + 2L, () -> restore(player, st, epoch)));
+    }
+
+    /** 물속·활강·탈것 — 바닐라 자세가 이긴다 (싸우면 몸이 굳고, 굳으면 그것은 버그로 읽힌다) */
+    private static boolean skipBody(Player player) {
+        return player.isSwimming() || player.isGliding() || player.isInsideVehicle();
+    }
+
+    private void applyBeat(Player player, Posture st, int epoch, SkillEngine.Beat b) {
+        if (!player.isOnline() || st.epoch != epoch) {
+            return;   // 다음 수가 이미 들어왔다 — 이 몸은 그 수의 것이다
+        }
+        if (skipBody(player)) {
+            restore(player, st, epoch);   // 물에 들어갔다 — 돌려주고 손을 뗀다
+            return;
+        }
+        SkillEngine.BodyLimits limits = engine.bodyLimits();
+        if (b.lunge() != 0.0 && (!limits.requireGround() || player.isOnGround())) {
             Vector push = player.getLocation().getDirection().setY(0);
             if (push.lengthSquared() > 1.0e-6) {
                 // 체중이 실린다 — 창은 나가고(0.42), 겸은 당긴다(−0.10). 상한은 등록부가 이미 물렸다
-                player.setVelocity(player.getVelocity().add(
-                        push.normalize().multiply(body.lunge())));
+                player.setVelocity(player.getVelocity().add(push.normalize().multiply(b.lunge())));
             }
         }
-        if (!body.hasPose()) {
+        if (b.setsPose()) {
+            pose(player, st, epoch, b);
+        }
+        turn(player, st, b.yaw(), b.pitch());
+        if (b.hand() != null) {
+            // **서버가 줄 수 있는 유일한 사지 애니메이션** — 권갑의 원-투, 암기의 사출, 단검의 되받아치기
+            if ("부".equals(b.hand())) {
+                player.swingOffHand();
+            } else {
+                player.swingMainHand();
+            }
+        }
+    }
+
+    private void pose(Player player, Posture st, int epoch, SkillEngine.Beat b) {
+        if (b.clearsPose()) {
+            clearPose(player);
+            st.poseSeq++;
             return;
         }
         try {
-            player.setPose(org.bukkit.entity.Pose.valueOf(body.pose()), true);
+            player.setPose(org.bukkit.entity.Pose.valueOf(b.pose()), true);
         } catch (IllegalArgumentException e) {
             return;   // 등록부가 모르는 자세를 적었다 — 조용히 지나간다 (연출이 판정을 멈추지 않는다)
         }
-        pending.add(new Pending(tick + body.poseTicks(), () -> {
-            if (player.isOnline() && player.hasFixedPose()) {
-                player.setPose(org.bukkit.entity.Pose.STANDING, false);   // 몸을 돌려준다 (굳지 않게)
+        final int seq = ++st.poseSeq;
+        // 【못】 자세 강제는 max_pose_ticks 를 넘지 못한다 — 스윙이 그보다 길어도(부 22틱) 몸은 먼저 풀린다
+        pending.add(new Pending(tick + engine.bodyLimits().maxPoseTicks(), () -> {
+            if (st.poseSeq == seq && st.epoch == epoch) {
+                clearPose(player);
             }
         }));
+    }
+
+    /**
+     * 몸을 튼다 — <b>원점 기준 목표각</b>을 받아 <b>차분만</b> 더한다.
+     * 그 사이 플레이어가 마우스로 돌린 것은 그대로 보존되고, 마지막 칸(0,0)에서 <b>원점으로</b> 돌아온다
+     * (반동이지 조준 훼손이 아니다).
+     *
+     * <p><b>【눈이 거짓말한 자리】</b> 처음엔 "차분만 더하면 언제나 정확히 되돌아온다"고 적었다.
+     * <b>거짓이었다.</b> pitch 는 ±90 에서 잘린다(clamp). 하늘/발밑을 보고 있으면 우리가 먹인 각이
+     * 벽에 잘리고, 되돌릴 때는 안 잘려서 <b>조준이 그만큼 어긋난 채로 남는다</b> (시뮬레이션에서 최대 4도).
+     * 벽이 있으면 덧셈은 교환법칙을 잃는다.
+     *
+     * <p>그래서 <b>벽에서 손을 뗀다</b>: 제 시선이 안전대(±{@value #PITCH_SAFE}도) 밖이면 pitch 를
+     * <b>키우지 않는다</b> (줄이는 것 — 되돌리는 것 — 은 언제나 허용된다). 안전대 안에서는
+     * 65 + 12 = 77 &lt; 90 이라 <b>벽에 닿지 않으므로</b> 먹인 만큼 정확히 돌아온다.
+     * yaw 는 벽이 없다 (360도로 감긴다) — 언제나 정확하다.
+     */
+    private static final float PITCH_SAFE = 65.0f;
+
+    private void turn(Player player, Posture st, float yaw, float pitch) {
+        if (!player.isOnline() || !engine.bodyLimits().yawKickEnabled()) {
+            return;   // 회전 축만 통째로 꺼졌다 — 전진·자세·팔은 그대로 돈다
+        }
+        Location at = player.getLocation();
+        if (Math.abs(at.getPitch()) >= 89.9f) {
+            st.pitch = 0.0f;   // 벽이 먹었다 — **돌려주지 않는다**. 돌려주면 제가 겨눈 발밑에서 끌어내리는 셈이다
+        }
+        float mine = at.getPitch() - st.pitch;   // 우리 것을 뺀, **플레이어 제 시선**
+        if (Math.abs(mine) > PITCH_SAFE) {
+            pitch = 0.0f;   // 하늘/발밑으로 가고 있다 — **손을 뗀다** (벽에 잘리면 못 돌려주므로)
+        }
+        float dYaw = yaw - st.yaw;
+        float dPitch = pitch - st.pitch;
+        if (Math.abs(dYaw) < 0.01f && Math.abs(dPitch) < 0.01f) {
+            return;
+        }
+        float wanted = Math.max(-90.0f, Math.min(90.0f, at.getPitch() + dPitch));
+        player.setRotation(at.getYaw() + dYaw, wanted);
+        st.yaw = yaw;
+        st.pitch += wanted - at.getPitch();   // **실제로 먹은 만큼만** 기록 (그래도 벽에 잘렸으면 그만큼만)
+    }
+
+    private void clearPose(Player player) {
+        if (player.isOnline() && player.hasFixedPose()) {
+            player.setPose(org.bukkit.entity.Pose.STANDING, false);   // 몸을 돌려준다 (굳지 않게)
+        }
+    }
+
+    /** 몸을 원점으로 — 자세를 풀고 회전을 되돌린다. 이것이 마지막 못이다 */
+    private void restore(Player player, Posture st, int epoch) {
+        if (st.epoch != epoch) {
+            return;
+        }
+        clearPose(player);
+        turn(player, st, 0.0f, 0.0f);
     }
 
     /**
@@ -912,6 +1056,10 @@ public final class SkillListener implements Listener {
                     soundScale(step));
         }
         player.swingMainHand();
+        // 축세(蓄勢) — 선딜이 있는 초식은 **몸이 먼저 벼른다** (몸을 빼고, 어깨를 뒤로 틀고, 팔을 젖힌다).
+        // 암기의 "뒤로 젖혔다 던진다"가 온전히 서는 자리다 (기본 타격은 즉발이라 예비가 없다)
+        windup(player, engine.weaponClassOf(player.getInventory().getItemInMainHand(),
+                materialName(player)), cast.hitType(), f.startup());
         pending.add(new Pending(tick + f.startup(),
                 () -> resolve(player, state, cast, primary, label, stepIndex)));
     }
@@ -936,6 +1084,10 @@ public final class SkillListener implements Listener {
             case "원" -> circleTargets(player, cast);
             default -> arcTargets(player, cast, primary);
         };
+        boolean eye = eyes.contains(player.getUniqueId());   // 【디버그】 꺼져 있으면 여기서 끝 (비용 0)
+        if (eye) {
+            eyeHitbox(player, cast, targets);
+        }
         int swings = art == null ? 1 : Math.max(1, art.multiHit());
 
         Location origin = swingLocation(player, cast);
@@ -981,6 +1133,11 @@ public final class SkillListener implements Listener {
                 int roll = roll2d6();   // 전투는 주사위를 쓴다
 
                 SkillEngine.Strike strike = engine.strike(cast, execBase, roll, resist);
+                if (eye) {
+                    // 【판정의 눈】 2d6 이 무엇을 굴렸고, 실행력이 무엇으로 이루어졌고, 저항이 어디서 왔는가
+                    eyeRoll(player, target, cast, attrBonus, mastery, execBase, roll, resist,
+                            foeLine, strike);
+                }
                 touchCombat(state);
                 if (engine.isFlowTier(strike.tierId())) {
                     gainFlow(player, state);   // 발동권 — 읽어낸 순간이 쌓인다 (오의 충전의 실체)
@@ -993,15 +1150,21 @@ public final class SkillListener implements Listener {
                 }
                 // 상대의 경감 — 태세는 맞아도 값을 한다 (막기 −3 · 흘리기 −1). 갑옷은 그 뒤에 든다
                 double raw = strike.damage();
+                int stanceSoak = foeLine == null ? 0 : foeLine.soak();
                 if (foeLine != null) {
                     raw -= foeLine.soak();
                     if (foeLine.clashes()) {
                         clashWeapon(target, cast.grade());   // 막기 — 그 몸의 무기가 내 격을 먹는다
                     }
                 }
-                raw -= armorSoak(target, cast.grade());
+                int armor = armorSoak(target, cast.grade());
+                raw -= armor;
                 // 상대의 기 방어·무기가 같은 규칙으로 판정된다 (대칭)
                 Defense defense = defend(target, player, cast.grade(), Math.max(0.0, raw));
+                if (eye) {
+                    // 【판정의 눈】 피해가 **어느 층에서** 깎였는가 (태세 → 갑옷 → 기 방어)
+                    eyeDamage(player, strike.damage(), stanceSoak, armor, defense);
+                }
                 if (defense.blocked() || defense.damage() <= 0.0) {
                     continue;   // 기 방어·태세·갑옷이 먹었다 — 검이 닿지 않았으니 격돌도 없다
                 }
@@ -1540,16 +1703,168 @@ public final class SkillListener implements Listener {
             if (!(e instanceof LivingEntity le) || le.equals(player) || out.contains(le) || !le.isValid()) {
                 continue;
             }
-            Vector to = le.getLocation().toVector().subtract(eye.toVector()).setY(0);
-            if (to.lengthSquared() < 1e-6 || to.length() > range) {
-                continue;
-            }
-            double angle = Math.toDegrees(facing.angle(to.normalize()));
-            if (angle <= cast.angle() / 2.0) {
+            if (inArc(eye, facing, range, cast.angle(), le.getLocation())) {
                 out.add(le);
             }
         }
         return out;
+    }
+
+    // ══════════ 히트박스의 기하 — 【판정의 눈이 물어보는 그 함수】 ══════════
+    //
+    // ★ 이 셋이 **맞는 자리를 아는 유일한 코드**다. 판정도 이것을 부르고, 판정의 눈(eye)도 이것을 부른다.
+    //   눈이 제 기하학을 따로 가지면 **그림이 판정에 대해 거짓말할 수 있다** — 그래서 하나로 묶었다.
+    //   (감사 ⑩이 이 사실을 지킨다: 눈과 판정이 같은 함수를 부르지 않으면 위반이다.)
+
+    /** 호(弧) — 시선의 수평 성분에서 잰 각. 【MC 규약】 높이는 안 본다 (베는 것은 땅 위의 일이다) */
+    static boolean inArc(Location eye, Vector facing, double range, double angle, Location at) {
+        Vector to = at.toVector().subtract(eye.toVector()).setY(0);
+        if (to.lengthSquared() < 1e-6 || to.length() > range) {
+            return false;
+        }
+        return Math.toDegrees(facing.angle(to.normalize())) <= angle / 2.0;
+    }
+
+    /** 선(線) — 시선 축을 따라 길이만큼, 축에서 halfWidth 안. 【3D】 발출은 하늘도 쏜다 */
+    static boolean inLine(Location eye, Vector dir, double length, double halfWidth, Location at) {
+        Vector to = at.toVector().subtract(eye.toVector());
+        double along = to.dot(dir);
+        if (along < 0 || along > length) {
+            return false;
+        }
+        return to.clone().subtract(dir.clone().multiply(along)).length() <= halfWidth;
+    }
+
+    /** 원(圓) — 제자리에서 몸을 도는 것. 방향이 없다 (뒤도 벤다) */
+    static boolean inCircle(Location origin, double range, Location at) {
+        return at.getWorld() == origin.getWorld() && at.distance(origin) <= range;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  판정의 눈(判定의 眼) — 【디버그】 <b>보이는 것이 정말 맞는 것인가</b>
+    //
+    //  이 프로젝트의 규칙은 "보이는 것 = 맞는 것"이다. 그런데 그것을 **확인할 방법이 없었다**:
+    //  성능은 Metrics 가 재고 등록부는 감사가 재는데, **판정만은 아무도 못 봤다.**
+    //  히트박스가 정말 그 각도인지 · 2d6 이 무엇을 굴렸는지 · 피해가 어느 층에서 깎였는지 —
+    //  전부 코드를 읽어서 상상해야 했다. **오늘 이 프로젝트에서 눈이 스무 번 넘게 거짓말했다.**
+    //
+    //  ★ 【정직의 못】 이 눈은 히트박스를 **다시 그리지 않는다.** 판정이 쓰는 그 함수(inArc·inLine·
+    //    inCircle)에 점을 하나씩 물어본다 — "이 자리는 맞는 자리인가?" 그렇다고 답한 점만 찍는다.
+    //    **그리는 코드와 맞히는 코드가 하나이므로, 그림은 판정에 대해 거짓말할 수 없다.**
+    //    (다른 길 — 눈이 제 원뿔을 따로 그리는 것 — 은 거짓말할 수 있는 눈이다. 그것은 눈이 아니다.)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** 판정의 눈을 켠 몸들 — 비어 있으면 판정 경로의 비용은 {@code if} 한 줄이다 */
+    private final Set<UUID> eyes = new HashSet<>();
+
+    /** {@code /혼천 판정보기} — MvtCommand 가 부른다. @return 켜졌는가 */
+    boolean toggleEye(Player player) {
+        UUID id = player.getUniqueId();
+        if (eyes.remove(id)) {
+            return false;
+        }
+        eyes.add(id);
+        return true;
+    }
+
+    /**
+     * 히트박스를 <b>판정에게 물어서</b> 그린다 — 표본 점을 하나씩 판정 함수에 넣고, "맞는 자리"라고
+     * 답한 점만 찍는다. 상한(max_points)은 등록부의 것이다 — <b>눈이 서버를 죽이면 안 된다</b>.
+     */
+    private void eyeHitbox(Player player, SkillEngine.Cast cast, List<LivingEntity> targets) {
+        SkillEngine.Eye eye = engine.eye();
+        if (eye == null || eye.hitboxParticle() == null) {
+            return;
+        }
+        Location origin = player.getLocation();
+        Location at = player.getEyeLocation();
+        Vector dir = origin.getDirection().normalize();
+        Vector flat = dir.clone().setY(0);
+        if (flat.lengthSquared() < 1e-6) {
+            flat = new Vector(0, 0, 1);
+        }
+        flat.normalize();
+        double range = cast.range();
+        double half = Math.max(0.5, cast.angle() / 2.0);   // 선의 angle 칸은 폭이다 (lineTargets 와 같은 규약)
+        double step = Math.max(0.2, eye.step());
+        int drawn = 0;
+
+        for (double x = -range; x <= range && drawn < eye.maxPoints(); x += step) {
+            for (double z = -range; z <= range && drawn < eye.maxPoints(); z += step) {
+                Location p = origin.clone().add(x, eye.height(), z);
+                boolean inside = switch (cast.hitType()) {
+                    case "선" -> inLine(at, dir, range, half, p.clone().add(0, 1.0, 0));
+                    case "원" -> inCircle(origin, range, p);
+                    default -> inArc(at, flat, range, cast.angle(), p);
+                };
+                if (inside) {
+                    hud.emit(p, eye.hitboxParticle(), 1, 0.0, 0.0);
+                    drawn++;
+                }
+            }
+        }
+        // 실제로 목록에 오른 몸 — 히트박스가 **고른 자**의 머리 위에 찍는다 (그림과 목록이 어긋나면 그것이 버그다)
+        if (eye.targetParticle() != null) {
+            for (LivingEntity t : targets) {
+                hud.emit(t.getEyeLocation().add(0, 0.6, 0), eye.targetParticle(), 4, 0.15, 0.0);
+            }
+        }
+        if (eye.log()) {
+            player.sendMessage(ChatColor.DARK_AQUA + "▍판정 " + ChatColor.WHITE + cast.hitType()
+                    + ChatColor.GRAY + " 사거리 " + String.format("%.1f", range) + "m · "
+                    + ("선".equals(cast.hitType()) ? "폭 " + String.format("%.1f", half * 2) : "각 " + (int) cast.angle() + "°")
+                    + " · 표본 " + drawn + "점" + (drawn >= eye.maxPoints() ? " (상한)" : "")
+                    + ChatColor.DARK_GRAY + " │ " + ChatColor.WHITE + "고른 몸 " + targets.size()
+                    + ChatColor.DARK_GRAY + "/" + cast.maxTargets());
+        }
+    }
+
+    /** 2d6 이 무엇을 굴렸는가 — 실행력의 내역과 저항의 출처 (숫자가 어디서 왔는지 못 대면 그것은 마법이다) */
+    private void eyeRoll(Player player, LivingEntity target, SkillEngine.Cast cast,
+                         int attrBonus, int mastery, int execBase, int roll, int resist,
+                         Guardline foeLine, SkillEngine.Strike strike) {
+        if (!engine.eye().log()) {
+            return;
+        }
+        String who = target.getName();
+        player.sendMessage(ChatColor.DARK_AQUA + "  ├ " + ChatColor.WHITE + who
+                + ChatColor.GRAY + " · 실행력 " + ChatColor.WHITE + execBase
+                + ChatColor.DARK_GRAY + "(능력치 " + attrBonus + " + 숙련 " + mastery
+                + " + 병기 " + engine.weaponJudgmentBonus(weaponGrade(player))
+                + " + 경지차 " + engine.realmGapBonus(state(player).realm,
+                        foeRealm(target, target instanceof Monster)) + ")"
+                + ChatColor.GRAY + " + 2d6 " + ChatColor.WHITE + roll
+                + ChatColor.GRAY + " vs 저항 " + ChatColor.WHITE + resist
+                + ChatColor.DARK_GRAY + (foeLine == null ? "(고정 난이도)"
+                        : "(" + foeLine.stance() + " " + foeLine.score() + " + NPC " + NPC_JUDGMENT + ")")
+                + ChatColor.GRAY + " → " + (strike.hit() ? ChatColor.GREEN : ChatColor.RED)
+                + strike.tierName() + ChatColor.GRAY + " (여유 " + strike.margin() + ")");
+    }
+
+    /** 피해가 <b>어느 층에서</b> 깎였는가 — 태세 → 갑옷 → 기 방어. 0 이 됐으면 어디서 0 이 됐는지 보인다 */
+    private void eyeDamage(Player player, int base, int stanceSoak, int armor, Defense defense) {
+        if (!engine.eye().log()) {
+            return;
+        }
+        player.sendMessage(ChatColor.DARK_AQUA + "  └ " + ChatColor.GRAY + "피해 "
+                + ChatColor.WHITE + base
+                + ChatColor.GRAY + " − 태세 " + stanceSoak + " − 갑옷 " + armor
+                + " − 기방어 " + String.format("%.1f", Math.max(0.0, base - stanceSoak - armor)
+                        - defense.damage())
+                + ChatColor.GRAY + " = " + (defense.blocked() || defense.damage() <= 0
+                        ? ChatColor.RED + "0 (막혔다)"
+                        : ChatColor.YELLOW + String.format("%.1f", defense.damage())));
+    }
+
+    /** 시(矢) — 날아가는 것. 거리에 따라 벌어지는 원뿔 (선과 달리 멀수록 넓다) */
+    static boolean inCone(Location eye, Vector dir, double range, double angle, Location at) {
+        Vector to = at.toVector().subtract(eye.toVector());
+        double along = to.dot(dir);
+        if (along < 0 || along > range) {
+            return false;
+        }
+        double half = Math.max(0.8, along * Math.tan(Math.toRadians(angle / 2.0)));
+        return to.clone().subtract(dir.clone().multiply(along)).length() <= half;
     }
 
     /** 선(線) 히트박스 — 참격·포. 시선 방향으로 길이만큼, 폭 안의 것을 벤다 */
@@ -1566,13 +1881,7 @@ public final class SkillListener implements Listener {
             if (!(e instanceof LivingEntity le) || le.equals(player) || !le.isValid()) {
                 continue;
             }
-            Vector to = le.getEyeLocation().toVector().subtract(eye.toVector());
-            double along = to.dot(dir);
-            if (along < 0 || along > length) {
-                continue;
-            }
-            double perp = to.clone().subtract(dir.clone().multiply(along)).length();
-            if (perp <= halfWidth) {
+            if (inLine(eye, dir, length, halfWidth, le.getEyeLocation())) {
                 out.add(le);
             }
         }
@@ -1900,7 +2209,7 @@ public final class SkillListener implements Listener {
                 break;
             }
             if (e instanceof LivingEntity le && !le.equals(player) && le.isValid()
-                    && le.getLocation().distance(player.getLocation()) <= range) {
+                    && inCircle(player.getLocation(), range, le.getLocation())) {
                 out.add(le);
             }
         }

@@ -568,36 +568,19 @@ public final class SkillCast implements Listener {
             if (!(e instanceof LivingEntity foe) || foe.equals(player) || !foe.isValid()) {
                 continue;
             }
-            Vector to = foe.getLocation().toVector().subtract(eye.toVector());
-            switch (plan.hitType()) {
-                case "원" -> {
-                    if (to.length() <= range) {
-                        out.add(foe);
-                    }
-                }
-                case "선", "시" -> {
-                    // 선: angle 칸이 폭(width)이다 (SkillEngine.planCombo 규약). 시: 좁은 원뿔
-                    double along = to.dot(dir);
-                    if (along < 0 || along > range) {
-                        continue;
-                    }
-                    double perp = to.clone().subtract(dir.clone().multiply(along)).length();
-                    double half = "시".equals(plan.hitType())
-                            ? Math.max(0.8, along * Math.tan(Math.toRadians(plan.angle() / 2.0)))
-                            : Math.max(0.5, plan.angle() / 2.0);
-                    if (perp <= half) {
-                        out.add(foe);
-                    }
-                }
-                default -> {   // 호 · 돌
-                    Vector toFlat = to.clone().setY(0);
-                    if (toFlat.lengthSquared() < 1e-6 || toFlat.length() > range) {
-                        continue;
-                    }
-                    if (Math.toDegrees(flat.angle(toFlat.normalize())) <= plan.angle() / 2.0) {
-                        out.add(foe);
-                    }
-                }
+            // ★ 히트박스의 기하는 **한 벌뿐이다** (SkillListener.inArc·inLine·inCone·inCircle).
+            //   이 파일과 SkillListener 가 각자 제 원뿔을 갖고 있었다 — 두 개의 진실은 곧 하나의 거짓말이다.
+            //   판정도 이 함수를 부르고, **판정의 눈도 이 함수를 부른다** (그래서 눈이 판정을 못 속인다).
+            Location where = foe.getLocation();
+            boolean inside = switch (plan.hitType()) {
+                case "원" -> SkillListener.inCircle(eye, range, where);
+                case "시" -> SkillListener.inCone(eye, dir, range, plan.angle(), where);
+                case "선" -> SkillListener.inLine(eye, dir, range,
+                        Math.max(0.5, plan.angle() / 2.0), where);   // 선: angle 칸이 폭(width)이다
+                default -> SkillListener.inArc(eye, flat, range, plan.angle(), where);   // 호 · 돌
+            };
+            if (inside) {
+                out.add(foe);
             }
         }
         return out;

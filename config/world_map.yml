@@ -20,6 +20,114 @@
 version: 1
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 0. ★★ 스키마 (schema) — **한 장소가 서려면 무엇을 반드시 알아야 하는가**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# 왜 이 절이 생겼나 — **필드가 들쭉날쭉해서 코드가 추측하기 시작했다**
+#
+#   68곳이 등록돼 있는데 필드가 제각각이었다 (조성 전 실측):
+#     pos 68 · terrain 65 · faction 57 · tier 48 · biomes 39 · architecture 26 · scale 24
+#     + 한 곳에만 있는 일회성 키 20여 개 (kind · nodes · builder · yields · gateway · region_file …)
+#
+#   ★ 그래서 코드가 **없는 필드를 지어내기 시작했다.** 실제로 코드에 박혀 있는 것:
+#     · WorldMap.readSection  : tier 없으면 → **"poor"**        (17곳이 조용히 가난해진다)
+#     · WorldMap.readSection  : build 없으면 → "later"
+#     · WorldMap.fit          : terrain 없으면 → **100점 "지형 요구 없음"** (검사를 통과한 게 아니라 안 받았다)
+#     · TerrainForge.caveKind : architecture **산문(散文)에 "동굴"·"석실"이 있으면** 굴을 판다 (문자열 검색!)
+#     · TerrainForge.profile  : PEAK_FACTIONS — **코드에 박힌 문파 이름 목록** (등록제 위반)
+#     · RemoteBuilder.SECTS   : 같은 목록이 **한 벌 더** 있다 (두 벌이면 갈라진다)
+#     · RemoteBuilder.archetype: 세력+구역으로 **원형을 추측한다** — 지도가 원형을 말하지 않으므로
+#     · RemoteBuilder.siteRadius: `noklim ? 24 : 64` — ★ **scale: 을 아무도 안 읽는다** (아래 unread 참조)
+#
+#   ★★ 이 절은 그 추측을 없애기 위해 있다. **필수 필드가 무엇이고 누가 읽는지**를 못박는다.
+#      린트(tools/map_lint.py)가 이 절을 읽어 검사한다 — **스키마가 코드에 있으면 그것도 추측이다.**
+# ─────────────────────────────────────────────────────────────────────────────
+
+schema:
+  version: 1
+  lint: tools/map_lint.py           # ★ 이 절을 읽는 눈. 스키마는 도구가 아니라 등록부가 갖는다
+
+  # ─── 필드 사전 — **누가 읽는가**가 곧 그 필드가 필수인 이유다 ───
+  #   readers: 코드 (없으면 코드가 무엇으로 폴백하는가 = fallback)
+  #   readers: [] 이면 **지금은 아무도 안 읽는다** — 사람과 문서를 위한 필드다 (그것도 정직하게 적는다)
+  fields:
+    name:         { readers: [WorldMap.Place, Populace(zone 대조)], fallback: "id 문자열" }
+    pos:          { readers: [WorldMap.readSection], fallback: "★ 없으면 장소가 아니다 — 망(網)으로 친다" }
+    region:       { readers: [], note: "지역권 소속. 코드는 안 읽는다 — 사람과 봇이 읽는다" }
+    terrain:      { readers: [WorldMap.fit, TerrainForge.profile/surface/lift/caveKind, MapAudit],
+                    fallback: "★ null → fit 100점('지형 요구 없음') — 검사를 안 받는다" }
+    build:        { readers: [WorldMap.Place.buildableNow, build_plan], fallback: later }
+    faction:      { readers: [RemoteBuilder.archetype, TerrainForge.profile, MvtCommand.forgeRadius],
+                    fallback: "★ null → 원형 없음 → 집이 안 선다" }
+    archetype:    { readers: ["★ 아직 없다 — 청구서 §16"], since: "이 패스에서 신설",
+                    note: "★ **기계가 읽는 원형**. 지금 RemoteBuilder 는 faction+section 으로 **추측한다**" }
+    tier:         { readers: [RemoteBuilder.sectSubtitle], fallback: "★ poor — 17곳이 조용히 가난해진다" }
+    scale:        { readers: [], fallback: "★ 코드는 scale 을 **안 읽는다**. siteRadius=noklim?24:64 · forgeRadius=noklim?24:110" }
+    architecture: { readers: [TerrainForge.profile(서술), TerrainForge.caveKind(문자열 검색), WorldMap.Place.note],
+                    note: "★ **산문(散文)이다.** 코드가 여기서 '동굴'·'산문'·'본전' 같은 낱말을 찾는다 — 그것이 추측의 자리다" }
+    biomes:       { readers: [WorldMap.fit(가점)], fallback: "빈 목록 — 감점 없음. **선호이지 요구가 아니다**" }
+    travel:       { readers: [WorldMap.travelDays], fallback: "직선거리 ÷ 40,000" }
+    access:       { readers: [], note: "접근 조건. 봇·서사가 읽는다" }
+    danger:       { readers: [], note: "1~5" }
+    stage_local:  { readers: [WorldMap.Place.stageLocal, probeCandidates], fallback: false }
+    hidden:       { readers: [], note: "플레이어 지도 비표시" }
+    population:   { readers: [Populace.REGIONS(파일명 규약)], since: "이 패스에서 신설",
+                    note: "★ config/npcs/regions/<id>.yml — **파일 이름이 곧 연결**이다. 필드는 그 사실을 지도에 적을 뿐" }
+
+  # ─── ★ 필수 (required) — 없으면 코드가 추측한다 ───
+  required:
+    all:          [name, pos, region, terrain, build, access]
+    # 집이 서는 곳 — 아래 절에 있고 build != never 인 것
+    buildable_sections: [places, places_official]
+    buildable:    [faction, archetype, tier, scale]
+    exempt_if:    builder             # ★ 전용 조성기가 짓는 곳 (청하현·산길 도적) — 원형으로 짓지 않는다
+    hunting_grounds: [grade, beasts, realm_min, danger]
+    resources:    [yields, consumer]
+  note_required: |
+    ★ `archetype` 과 `scale` 은 **지금 비어 있는 곳이 더 많다.** 그것이 이 스키마의 요점이다 —
+      **비어 있다는 사실을 린트가 매번 짖게 한다.** 채우는 것은 사람의 결정이지 코드의 추측이 아니다.
+
+  # ─── 값의 어휘 (enums) — 등록부 밖의 값은 오타이거나 발명이다 ───
+  enums:
+    build:     [now, later, never]
+    tier:      [rich, middle, poor, none]         # village_tiers.yml
+    terrain:   "§3 terrain_types 의 키 (이 파일 안)"
+    faction:   "config/factions.yml faction_groups.*.members 의 키"
+    region:    "§4 regions 의 키 (이 파일 안)"
+    archetype: "§16 archetypes 의 키 (이 파일 안)"
+
+  # ─── 미결 표식 (pending) — ★ **침묵 금지.** 모르면 모른다고 적는다 ───
+  pending_marker:
+    syntax: "필드값을 `pending` 으로 두고, `pending_why: \"...\"` 에 **왜 못 정하는지**를 적는다"
+    rule: "★ 사유 없는 pending 은 **위반이다** (린트가 짖는다). 침묵과 미결은 다르다 —
+      침묵은 '몰랐다'이고 미결은 '알고 있고 아직 못 정했다'이다 (terrain.yml pending: 의 문법 그대로)"
+    who_decides: "★ pending 은 **사람이 정한다.** 코드도 나도 채우지 않는다"
+
+  # ─── ★ 코드가 읽는데 지도가 안 주는 것 (unread / unfed) — **추측이 일어나는 자리** ───
+  guessing_sites:
+    scale_unread:
+      what: "지도는 scale 을 24곳에 적어 두었는데 **코드가 한 번도 안 읽는다**"
+      code: "RemoteBuilder.siteRadius = noklim ? 24 : 64  ·  MvtCommand.forgeRadius = noklim ? 24 : 110"
+      means: "★ **마을 크기를 코드가 정하고 있다.** 장안(scale 3000)과 종남(600)이 **같은 크기로 선다**"
+      fix: "배선 청구 — §16 wiring.W-A"
+    archetype_guessed:
+      what: "지도에 archetype 이 없어서 RemoteBuilder 가 faction+section 으로 **골라낸다**"
+      code: "RemoteBuilder.archetype(place) — noklim→산채 · SECTS→도관 · magyo/hyeolgyo+굴→은신처 · gwan_gun+places→성문"
+      means: "★ 세력 하나에 집이 둘이면 갈리지 않는다 (gwan_gun = 성시·역참·군진·황성)"
+      fix: "배선 청구 — §16 wiring.W-B"
+    prose_scanned:
+      what: "TerrainForge.caveKind 가 architecture **산문에서 '동굴'·'석실' 낱말을 찾는다**"
+      means: "★ 산문을 고치면 굴이 사라진다. **글이 기계를 움직이면 그것은 등록부가 아니다**"
+      fix: "★ 이미 우회로가 있다 — config/terrain.yml caves: (등록부가 먼저다). 산문 검색은 폴백으로만 남긴다"
+    hardcoded_factions:
+      what: "★ **코드에 문파 이름 목록이 두 벌 박혀 있다** (등록제 위반)"
+      code: "TerrainForge.PEAK_FACTIONS (:651)  ·  RemoteBuilder.SECTS (:379)"
+      means: "★ 두 목록이 **다르다**: RemoteBuilder.SECTS 에는 **오대세가가 한 집도 없다** —
+        그래서 팽가·남궁·제갈·모용·당가는 **원형이 없고 집이 안 선다**"
+      fix: "배선 청구 — §16 wiring.W-C (factions.yml 을 읽어라)"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 1. 축척 (scale) — 1블록 = 1미터. 실지리(實地理)를 그대로 옮긴다
 # ═══════════════════════════════════════════════════════════════════════════
 #
@@ -557,9 +665,12 @@ places:
   # ─────────────────────────────────────────────────────────────────────
   jangan:
     name: "장안"
+    build_radius: 64                # ← region_archetypes.md §2.2: 성벽 **l = ±62** — 64 가 그것을 감싼다
     pos: [37800, 6600]
     region: 섬서
     terrain: 평지
+    archetype: 성문                  # ← config/npcs/regions/jangan.yml `archetype: 성문` (등록부가 적어 두었다)
+    population: config/npcs/regions/jangan.yml   # 13인 — ★ 전부 **성벽 바깥**에 산다 (성 안은 짓지 않는다)
     biomes: [plains, sunflower_plains]
     tier: rich
     faction: gwan_gun
@@ -572,9 +683,11 @@ places:
 
   nakyang:
     name: "낙양"
+    build_radius: 64                # ← 성문 원형 (성벽 l = ±62)
     pos: [368200, -32100]
     region: 하남
     terrain: 평지
+    archetype: 성문                  # ← region_archetypes.md §2 제목: "성문(城門) — 성시의 관문 (장안 · **낙양** · 개봉)"
     tier: rich
     faction: gwan_gun
     travel: { factor: 1.15, days: 11 }
@@ -585,9 +698,11 @@ places:
 
   gaebong:
     name: "개봉"
+    build_radius: 64                # ← 성문 원형 (성벽 l = ±62)
     pos: [543800, -52000]
     region: 하남
     terrain: 평지
+    archetype: 성문                  # ← region_archetypes.md §2 제목: "성문(城門) — 성시의 관문 (장안 · 낙양 · **개봉**)"
     tier: rich
     faction: gwan_gun
     travel: { factor: 1.15, days: 16 }
@@ -598,6 +713,11 @@ places:
 
   taewon:
     name: "태원"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **상단(商團)의 원형이 없다** — 상단(sangdan)의 도시.
+      region_archetypes.md §5 가 이미 고발했다: '상단의 도시(태원·무한·소주) — 상단의 원형이 아직 없다'.
+      성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 (Q-D)"
     pos: [377600, -391400]
     region: 산서
     terrain: 고원
@@ -611,6 +731,11 @@ places:
 
   muhan:
     name: "무한"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **상단(商團)의 원형이 없다** — 상단의 도시 — 장강 최대 나루.
+      region_archetypes.md §5 가 이미 고발했다: '상단의 도시(태원·무한·소주) — 상단의 원형이 아직 없다'.
+      성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 (Q-D)"
     pos: [543800, 413500]
     region: 호북
     terrain: 강
@@ -624,6 +749,11 @@ places:
 
   soju:
     name: "소주"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **상단(商團)의 원형이 없다** — 상단의 도시.
+      region_archetypes.md §5 가 이미 고발했다: '상단의 도시(태원·무한·소주) — 상단의 원형이 아직 없다'.
+      성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 (Q-D)"
     pos: [1139500, 335000]
     region: 강남
     terrain: 수향
@@ -636,6 +766,11 @@ places:
 
   gangnam_sangro:
     name: "강남 상로"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **상단(商團)의 원형이 없다** — 상단의 도시.
+      region_archetypes.md §5 가 이미 고발했다: '상단의 도시(태원·무한·소주) — 상단의 원형이 아직 없다'.
+      성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 (Q-D)"
     pos: [1096000, 451100]
     region: 강남
     terrain: 수향
@@ -653,14 +788,45 @@ places:
   # ─────────────────────────────────────────────────────────────────────
   # 5.3 문파 본산 — 각 본거지가 그 세력을 말한다
   # ─────────────────────────────────────────────────────────────────────
+  #
+  # ★★ 2026-07 지도 확정 패스 — 이 절에서 **바꾼 것**과 **일부러 안 채운 것**
+  #
+  #   바꾼 것 ① **faction 을 연합 id 에서 문파 id 로.**
+  #     여섯 곳이 `faction: gupailbang`(구파일방 — **연합**)이었다. 그런데 factions.yml 은
+  #     종남·곤륜·점창·청성·해남·아미를 **1급 id 로 등재**해 두었다
+  #     (`orthodox.members.jongnam` … — "sects 명단에 이미 있던 이름에 id 를 붙였을 뿐이다").
+  #     → **등록된 id 가 있는데 연합 이름을 적는 것은 등록제의 낭비다.** 문파 id 로 못박는다.
+  #     ★ 회귀 없음: TerrainForge.PEAK_FACTIONS · RemoteBuilder.SECTS 가 **여섯 id 를 전부 갖고 있다**.
+  #
+  #   바꾼 것 ② **archetype 신설** — 그러나 **채운 것은 화산 하나뿐이다.**
+  #     ★ 근거가 있는 곳만 채웠다: config/npcs/regions/hwasan.yml 이 `archetype: 도관` 이라 **적어 두었다**.
+  #     나머지 여덟은 `pending` 이다. **왜 못 채우는지가 pending_why 에 적혀 있다.**
+  #
+  #   ★★★ 안 채운 이유 — **원형 하나에 집이 아홉이 아니다**
+  #     RemoteBuilder 는 지금 구파 아홉을 전부 **도관(道觀)** 으로 짓는다 (SECTS → Archetype.도관).
+  #     도관의 계약은 이렇다: **검은 기와 · 회벽 · 돌바닥 · 매화(CHERRY_LEAVES) · 석등.**
+  #     그런데 등록부가 말하는 집은 아홉이 다 다르다:
+  #       · 소림사  = **불가 사찰**이다 (factions.yml: "불가 무학의 종가"). 도관에 **매화를 요구한다** —
+  #                   사찰에 매화가 서면 그것은 소림이 아니다
+  #       · 아미파  = **비구니 문파**다 (factions.yml: "사천의 여승 문파"). 도관이 아니다
+  #       · 해남파  = architecture: "바닷가 검문 — **소금기에 삭은 목조**" · terrain: 섬.
+  #                   **산문도 천 계단도 없다.** 도관 계약이 성립하지 않는다
+  #       · 종남파  = "봉우리에 흩어진 **암자**" — 본전 하나가 아니라 흩어진 집이다
+  #     ★ 그래서 **지어내지 않는다.** 이 넷(그리고 나머지)은 **사람이 정해야 한다** — 질문 목록에 올렸다.
+  #     ★ 지금 코드가 도관으로 짓는다는 사실은 지우지 않는다. 다만 **지도가 그것을 확정하지는 않는다.**
+  #
   hwasan:
     name: "화산파"
+    build_radius: 64                # 현행 조성값 (RemoteBuilder.siteRadius) — **이미 이 반경으로 서 있다**
     pos: [145400, -16600]
     region: 섬서
     terrain: 험산
     biomes: [jagged_peaks, stony_peaks, grove, cherry_grove]   # cherry_grove = 매화
     tier: rich                      # 도관(道觀) — 관아급 건축. 백벽·청기와
     architecture: "험준한 봉우리 위 도관. 매화. 산문(山門)에서 본전까지 천 계단"
+    archetype: 도관                  # ← config/npcs/regions/hwasan.yml `archetype: 도관` (등록부가 적어 두었다)
+                                    #   ★ 지도에서 archetype 이 **근거를 갖는 유일한 문파**다
+    population: config/npcs/regions/hwasan.yml   # 16인 (장문·장로·제자·잡역 — 등록부가 이름을 갖는다)
     faction: hwasan
     travel: { factor: 1.50, days: 5 }   # ★ 산길 — 봇 time.yml 지역권_이동 3~7일 범위 한가운데
     approach: "★ 오르는 길이 시험이다 — 산문 → 계단 → 문전. 잡역은 문전에서 시작한다"
@@ -672,13 +838,15 @@ places:
 
   jongnam:
     name: "종남파"
+    archetype: 암자                  # ★ 신설 — 등록부 산문: "봉우리에 흩어진 **암자**". **본전 하나인 도관이 아니다**
+    build_radius: 48                # ← 영향력 7 (§17). ★ 화산(10 → 64)보다 작다 — 등록부가 "화산보다 가난하고 조용하다"
     pos: [26400, 37600]
     region: 섬서
     terrain: 험산
     biomes: [jagged_peaks, grove, forest]
     tier: middle
     architecture: "도가 은거 — 봉우리에 흩어진 암자. 화산보다 가난하고 조용하다"
-    faction: gupailbang
+    faction: jongnam                 # ← factions.yml orthodox.members.jongnam (parent: gupailbang)
     travel: { factor: 1.70, days: 2 }
     access: 항상
     build: later
@@ -687,6 +855,8 @@ places:
 
   sorimsa:
     name: "소림사"
+    archetype: 사찰                  # ★ 신설 (사용자 결정) — **매화가 아니라 보리수다**
+    build_radius: 80                # ← 영향력 13 (§17) — **등록된 무림 최대**. 소림이 큰 것은 대찰이어서가 아니라 영향력이 커서다
     pos: [422900, -18800]
     region: 하남
     terrain: 산
@@ -702,6 +872,8 @@ places:
 
   mudang:
     name: "무당파"
+    archetype: 전각                  # ★ 신설 — 등록부 산문: "구름 위 **전각**. 금정(金頂)이 안개 위로 솟는다"
+    build_radius: 80                # ← 영향력 12 (§17)
     pos: [231300, 213400]
     region: 호북
     terrain: 험산
@@ -716,13 +888,15 @@ places:
 
   gonryun:
     name: "곤륜파"
+    archetype: 석조도관              # ★ 신설 — 등록부 산문: "설선 위의 **석조 도관**". 회벽·매화가 아니라 **돌**이다
+    build_radius: 48                # ← 영향력 7 (§17)
     pos: [-1373600, -184700]
     region: 청해_서역
     terrain: 설산
     biomes: [grove, jagged_peaks]
     tier: poor                      # 부유하지 않다 — 멀고 춥고 사람이 없다
     architecture: "설선(雪線) 위의 석조 도관. 서역으로 나가는 마지막 문"
-    faction: gupailbang
+    faction: gonryun                 # ← factions.yml orthodox.members.gonryun (parent: gupailbang)
     travel: { factor: 2.00, days: 69 }
     access: 항상
     build: later
@@ -731,52 +905,70 @@ places:
 
   jeomchang:
     name: "점창파"
+    archetype: pending
+    build_radius: 40                # ← 영향력 6 (§17)
+    pending_why: "★ **등록부가 집을 말하지 않는다.** architecture 는 '밀림 위 고산 — 경계에 선 문파'인데
+      그것은 **땅**이지 집이 아니다. 무엇이 서는지 아무도 안 적었다 — 물어야 한다 (Q-A)"
     pos: [-792100, 965300]
     region: 운남
     terrain: 험산
     biomes: [jungle, jagged_peaks, sparse_jungle]
     tier: poor
     architecture: "밀림 위 고산 — 남만과 중원의 경계에 선 문파"
-    faction: gupailbang
+    faction: jeomchang               # ← factions.yml orthodox.members.jeomchang (parent: gupailbang)
     travel: { factor: 1.90, days: 59 }
     access: 항상
     build: later
 
   cheongseong:
     name: "청성파"
+    archetype: pending
+    build_radius: 48                # ← 영향력 7 (§17)
+    pending_why: "★ **등록부가 집을 말하지 않는다.** '대나무와 안개'는 풍경이다.
+      factions.yml 은 '청성산 검맥'이라 할 뿐이다 — 도가 도관인지 다른 집인지 물어야 한다 (Q-A)"
     pos: [-470100, 379300]
     region: 사천
     terrain: 험산
     biomes: [bamboo_jungle, jagged_peaks, grove]
     tier: middle
     architecture: "청성산 — 대나무와 안개. 사천 분지의 지붕"
-    faction: gupailbang
+    faction: cheongseong             # ← factions.yml orthodox.members.cheongseong (parent: gupailbang)
     travel: { factor: 1.80, days: 27 }
     access: 항상
     build: later
 
   ami:
     name: "아미파"
+    archetype: pending
+    build_radius: 48                # ← 영향력 7 (§17 — martial 5 + mandate 2. ★ 무력은 낮고 명분이 높다)
+    pending_why: "★ **architecture 가 아예 없다** — 아홉 문파 중 유일하다. 그리고 **여승(女僧) 문파**다
+      (factions.yml). 도관도 사찰도 아니다. ★ registry: 예약 · active: false — **미설계가 의도다**.
+      여기를 채우는 것은 세계관 결정이다 (Q-A)"
     pos: [-492800, 531900]
     region: 사천
     terrain: 험산
     biomes: [jagged_peaks, jungle, grove]
     tier: middle
-    faction: gupailbang
+    architecture: pending
+    faction: ami                     # ← factions.yml orthodox.members.ami (★ parent 가 없다 — '추후 확장' 존중)
     travel: { factor: 1.80, days: 33 }
     access: 항상
     build: later
-    note: "factions.yml: '개방·아미파는 추후 확장'. fortune_encounters 의 routes 에는 이미 등장한다 — 좌표만 잡는다"
+    note: "factions.yml: '개방·아미파는 추후 확장'. fortune_encounters 의 routes 에는 이미 등장한다 — 좌표만 잡는다.
+      ★ 주의: ami 는 factions.yml 에서 **parent 가 없다** (일부러). 그래서 TerrainForge.PEAK_FACTIONS 가
+      factions.yml 을 읽게 되면(§16 W-C) **아미가 그 집합에서 빠진다** — terrain.yml shaping: ami: 봉우리 가 그것을 막고 있다"
 
   haenam:
     name: "해남파"
+    archetype: 목조검문              # ★ 신설 — 등록부 산문: "바닷가 **검문** — 소금기에 삭은 **목조**"
+    build_radius: 40                # ← 영향력 6 (§17) — 등록된 구파 중 최소 (점창과 같다)
     pos: [167100, 1580100]
     region: 해남
     terrain: 섬
     biomes: [jungle, beach, warm_ocean]
     tier: poor
     architecture: "바닷가 검문 — 소금기에 삭은 목조"
-    faction: gupailbang
+    faction: haenam                  # ← factions.yml orthodox.members.haenam (parent: gupailbang)
     travel: { factor: 0.90, days: 36 }   # 배로 간다
     access: 항상
     build: later
@@ -785,8 +977,30 @@ places:
   # ─────────────────────────────────────────────────────────────────────
   # 5.4 세가 본가 — 가문이 지도에서 말해야 한다
   # ─────────────────────────────────────────────────────────────────────
+  #
+  # ★★★ **다섯 다 집이 안 선다.** 이 절이 지도에서 가장 큰 구멍이다 — 그리고 아무도 그것을 안 쟀다.
+  #
+  #   region_archetypes.md 는 도관 원형이 "**구파·오대세가**"를 덮는다고 적었다.
+  #   그런데 코드는 그렇게 하지 않는다:
+  #     RemoteBuilder.SECTS = {hwasan, gupailbang, jongnam, sorimsa, mudang, gonryun,
+  #                            jeomchang, cheongseong, ami, haenam, gaebang}
+  #     → ★ **오대세가가 한 집도 없다.** namgung·dangga·paengga·jegal·moyong·odaesega 전부 없다.
+  #     → archetype(place) == null → RemoteBuilder.build() 가 **빈 목록을 돌려준다** → 땅만 서고 집이 없다.
+  #   ★ 문서와 코드가 갈라졌고, **지도는 그 사이에서 침묵했다.**
+  #
+  # ★★ 그리고 도관을 억지로 씌우면 안 된다 — **등록부가 다섯 다 다른 집이라고 적어 두었다**:
+  #     당가 = 분지의 **폐쇄적 대저택** (높은 담, 좁은 문, 약재 마당)
+  #     팽가 = 평야의 **개방적 군사 저택** (넓은 연무장, 낮은 담 — 숨기지 않는다)
+  #     남궁 = 물과 정원, **회랑이 연못을 낀다** (검각이 정원 가운데)
+  #     제갈 = **저택 자체가 미로다** (기관·진법 — 마당의 돌이 자리를 바꾼다)
+  #     모용 = 요동의 **두꺼운 벽과 온돌**
+  #   ★ 산문도 천 계단도 본전도 없다. **다섯 다 '장원(莊園)'이지 도관이 아니다.**
+  #     → 새 원형이 필요하다. **그러나 그것은 내가 발명할 것이 아니다** — §16 청구서에 올렸다
+  #
   dangga:
     name: "사천당가"
+    archetype: 폐쇄대저택            # ★ 신설 — 등록부 산문: "분지의 **폐쇄적 대저택**"
+    build_radius: 48                # ← 영향력 8 (§17)
     pos: [-422900, 405800]
     region: 사천
     terrain: 분지
@@ -808,6 +1022,8 @@ places:
 
   paengga:
     name: "하북팽가"
+    archetype: 군사저택              # ★ 신설 — 등록부 산문: "평야의 **개방적 군사 저택**"
+    build_radius: 48                # ← 영향력 8 (§17). ★ 당가와 **같은 크기, 정반대의 집** — 담의 높이가 곧 그 가문이다
     pos: [652300, -502000]
     region: 하북
     terrain: 평야
@@ -815,7 +1031,7 @@ places:
     tier: rich
     architecture: "평야의 개방적 군사 저택 — 넓은 연무장, 낮은 담. 숨기지 않는다 (도(刀)의 가문)"
     approach: "문이 열려 있다. 다만 연무장에서 맞아야 한다"
-    faction: odaesega
+    faction: paengga                 # ← factions.yml orthodox.members.paengga (parent: odaesega)
     travel: { factor: 1.15, days: 24 }   # 관도 — 평야를 가른다
     access: 항상
     build: later
@@ -824,6 +1040,8 @@ places:
 
   namgung:
     name: "남궁세가"
+    archetype: 정원저택              # ★ 신설 — 등록부 산문: "물과 **정원**. 회랑이 **연못**을 끼고 돈다. **검각**이 정원 가운데"
+    build_radius: 64                # ← 영향력 10 (§17) — **화산과 같다.** 세가 중 최대
     pos: [819400, 277500]
     region: 안휘
     terrain: 수향
@@ -838,26 +1056,34 @@ places:
 
   jegal:
     name: "제갈세가"
+    archetype: 기관저택              # ★ 신설 — 등록부 산문: "**기관(機關)과 진법(陣法)의 집** — 저택 자체가 미로다"
+    build_radius: 48                # ← 영향력 7 (§17)
+    pending_why: "★ 원형 **이름은 있는데 계약이 없다** — *무엇이 있어야 제갈이 제갈인가?*
+      '저택 자체가 미로'·'마당의 돌이 자리를 바꾼다'는 그림이지 계약이 아니다. 물어야 한다 (Q-B)"
     pos: [337000, 256500]
     region: 호북
     terrain: 평지
     biomes: [plains, forest, bamboo_jungle]
     tier: rich
     architecture: "기관(機關)과 진법(陣法)의 집 — 저택 자체가 미로다. 마당의 돌이 자리를 바꾼다"
-    faction: odaesega
+    faction: jegal                   # ← factions.yml orthodox.members.jegal (parent: odaesega)
     travel: { factor: 1.25, days: 13 }
     access: 항상
     build: later
 
   moyong:
     name: "모용세가"
+    archetype: 북방저택              # ★ 신설 — 등록부 산문: "요동의 북방 세가 — **두꺼운 벽, 온돌**"
+    build_radius: 48                # ← 영향력 7 (§17)
+    pending_why: "★ 원형은 정해졌으나 **어디까지 지을지가 미결이다** — sect_lineage.md 5장: **입문 불가**.
+      들어갈 수 없는 집의 담 안을 지을 것인가? (Q-C)"
     pos: [1380200, -767400]
     region: 하북
     terrain: 평야
     biomes: [taiga, plains]
     tier: rich
     architecture: "요동의 북방 세가 — 두꺼운 벽, 온돌. 중원과 새외 사이에 선 집"
-    faction: odaesega
+    faction: moyong                  # ← factions.yml orthodox.members.moyong (parent: odaesega)
     travel: { factor: 1.30, days: 51 }
     access: 항상
     build: later
@@ -900,16 +1126,20 @@ places:
     access: 항상                     # north_road_bandits 사건의 무대
     incident: north_road_bandits
     build: now                       # ★ CheonghaBuilder v6.9 huntingGrounds 가 짓는 산길 안
+    builder: "CheonghaBuilder.huntingGrounds"   # ★ 원형이 아니라 **전용 조성기**가 짓는다 (무대 안이다)
     note: "★ 녹림 입문의 첫 문. faction_entry_routes noklim_entry 의 진입점"
 
   nokrim_sochae:
     name: "녹림 소채 (북산)"
+    build_radius: 24            # ← RemoteBuilder 목책 R=22 · siteRadius(noklim)=24. **이미 이 반경으로 서 있다**
     pos: [-5700, -19900]
     region: 섬서
     terrain: 산
     biomes: [windswept_hills, forest, grove]
     tier: poor
     architecture: "목책과 통나무 막사. 도적의 집은 언제든 버릴 수 있어야 한다"
+    archetype: 산채                  # ← config/npcs/regions/nokrim_sochae.yml `archetype: 산채`
+    population: config/npcs/regions/nokrim_sochae.yml   # 14인 (채주 도백 — 갈호는 그 아래다)
     faction: noklim
     danger: 2
     travel: { factor: 1.60, days: 1 }
@@ -922,9 +1152,11 @@ places:
 
   nokrim_jungchae:
     name: "녹림 중채 (진령 관도)"
+    build_radius: 24            # ← 산채 원형 (목책 R=22)
     pos: [127400, 31000]
     region: 섬서
     terrain: 산
+    archetype: 산채                  # ← region_archetypes.md 원형표: "산채 | **녹림** | 통나무 — 버리고 떠날 집"
     biomes: [jagged_peaks, forest, windswept_hills]
     tier: poor
     faction: noklim
@@ -944,6 +1176,11 @@ places:
     biomes: [windswept_hills, jagged_peaks, forest]
     tier: middle                    # 총채는 부유하다 — 훔친 것이 쌓인다
     architecture: "산을 통째로 쓴 채(寨) — 목책 아닌 석성. 약탈물 창고와 시장이 있다"
+    archetype: pending
+    build_radius: pending           # ★ 원형이 안 정해지면 반경도 못 정한다 (석성은 목책 R=22 에 안 들어간다)
+    pending_why: "★ **지도가 스스로 산채를 부정한다** — '목책 아닌 **석성**'이라 적었는데
+      산채 계약은 통나무 200·짚 10(목책과 초가)이다. 코드는 지금 이곳을 산채로 짓는다 (faction: noklim).
+      총채를 석성으로 지을 것인지(새 원형), 산채의 부유한 변주로 볼 것인지 **사람이 정해야 한다**"
     faction: noklim
     danger: 5
     travel: { factor: 1.60, days: 20 }
@@ -958,12 +1195,15 @@ places:
   # ─────────────────────────────────────────────────────────────────────
   jangang_suroche:
     name: "장강수로채 총채"
+    build_radius: 64            # 현행 조성값 (siteRadius 64)
     pos: [415400, 550700]
     region: 호북
     terrain: 강
     biomes: [river, swamp, mangrove_swamp]
     tier: middle
     architecture: "물 위의 채 — 뗏목과 배를 엮어 만든 마을. 뭍에 집이 없다"
+    archetype: 수로채                # ← config/npcs/regions/jangang_suroche.yml `archetype: 수로채`
+    population: config/npcs/regions/jangang_suroche.yml   # 10인 — 뭍에 선 자는 하나뿐이다
     faction: jangang_suroche
     danger: 4
     travel: { factor: 0.85, days: 15 }   # 배로 간다
@@ -1014,6 +1254,9 @@ places:
 
   dokmun:
     name: "독문"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ 등록부에 **architecture 가 없다.** 당가 방계(simbeop.yml)라는 것 말고는 집을 말한 데가 없다 (Q-A)"
     pos: [-505100, 490000]
     region: 사천
     terrain: 밀림
@@ -1039,6 +1282,10 @@ places:
 
   magyo_bonkyo:
     name: "마교 본교"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **흑성(黑城) 원형이 없다** — '초원의 흑성 — **중원 건축이 아니다.** 돌과 철, 불'.
+      region_archetypes.md §5 가 이미 적었다: '굴이 없다 → 은신처가 아니다'. ★ 111일 거리다 — **지을 것인가?** (Q-F)"
     pos: [-1940000, -1069300]
     region: 새외_북막
     terrain: 초원
@@ -1056,12 +1303,16 @@ places:
 
   magyo_jinryeong:
     name: "마교 전초 (진령 심산)"
+    build_radius: 64            # 현행 조성값 (siteRadius 64) — ★ 굴 입구는 부지 밖 24칸까지 나간다
     pos: [33000, 86200]
     region: 섬서
     terrain: 험산
     biomes: [jagged_peaks, grove, forest]
     tier: none
     architecture: "동굴과 석실 — 사람이 사는 흔적을 지운다"
+    archetype: 은신처                # ← config/npcs/regions/magyo_jinryeong.yml `archetype: 은신처`
+                                    #   ★ 굴이 본체다 — terrain.yml caves.magyo_jinryeong: 은신처 (등록부가 굴을 판다)
+    population: config/npcs/regions/magyo_jinryeong.yml   # 3인 — ★ **지상 인구 0.** 전부 굴 안에 있다
     faction: magyo
     danger: 5
     travel: { factor: 1.90, days: 4 }
@@ -1078,6 +1329,10 @@ places:
 
   magyo_nakyang:
     name: "마교 잠복지 (낙양 뒷골목)"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **도시가 서야 잠복지가 선다** (region_archetypes.md §5). 낙양은 성문 원형(문 앞 한 구획)만
+      짓는데 잠복지는 '**도시 안**'에 있다 — 짓지 않는 곳 안에 있는 집이다 (Q-F)"
     pos: [363500, -35400]
     region: 하남
     terrain: 평지
@@ -1093,9 +1348,12 @@ places:
 
   hyeolgyo_eungeo:
     name: "혈교 은거지 (남만 심산)"
+    build_radius: 64            # 현행 조성값 (siteRadius 64)
     pos: [-542800, 1120100]
     region: 운남
     terrain: 밀림
+    archetype: 은신처                # ← region_archetypes.md §1.2 위장표: 밀림 → **나무꾼 오두막** (이름을 대고 있다)
+                                    #   terrain.yml caves.hyeolgyo_eungeo: 은신처 — 굴이 본체다
     biomes: [jungle, sparse_jungle, jagged_peaks]
     tier: none
     faction: hyeolgyo
@@ -1108,9 +1366,12 @@ places:
 
   hyeolgyo_jedan:
     name: "혈교 옛 제단 (복우산 폐사)"
+    build_radius: 64            # 현행 조성값 (siteRadius 64)
     pos: [297400, 80700]
     region: 하남
     terrain: 폐허
+    archetype: 은신처                # ← region_archetypes.md §1.2 위장표: 폐허 → **무너진 사당** (이름을 대고 있다)
+                                    #   terrain.yml caves.hyeolgyo_jedan: 제단굴
     tier: none
     faction: hyeolgyo
     danger: 4
@@ -1145,6 +1406,10 @@ places:
 
   bukmak_hanjeong:
     name: "한정 (汗庭)"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **성이 없다.** 등록부: '대칸의 천막(게르)과 말 떼. 계절마다 옮긴다 — **칠 표적이 없다**'.
+      옮겨 다니는 집을 고정 좌표에 짓는 것이 옳은가? (Q-F)"
     pos: [-542800, -1423100]        # 실지리: 47.2°N 102.8°E (막북 초원 중심 — 카라코룸 방면)
     region: 막북_초원
     terrain: 초원
@@ -1169,6 +1434,11 @@ places:
 
   seoyeok_gochang:
     name: "고창 (高昌) — 서역 상맹"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **상단(商團)의 원형이 없다** — 서역 상맹의 오아시스 성곽 도시 (흙벽돌 성곽 · 시장이 도시보다 크다).
+      region_archetypes.md §5 가 이미 고발했다: '상단의 도시(태원·무한·소주) — 상단의 원형이 아직 없다'.
+      성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 (Q-D)"
     pos: [-1828600, -953100]        # 실지리: 42.95°N 89.18°E (투르판 방면 오아시스)
     region: 서역
     terrain: 사막                    # ★ 오아시스는 사막 안의 예외다 — forge 가 그 예외를 판다
@@ -1192,6 +1462,9 @@ places:
 
   baehwa_seonghwadan:
     name: "성화단 (聖火壇) — 배화신교 총단"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ 새외 원형 없음 — '검은 현무암 제단, 계단식 탑. **중원 건축이 아니다**' (Q-F)"
     pos: [-2421500, -814900]        # 실지리: 41.7°N 82.9°E (천산 남록)
     region: 서역
     terrain: 사막
@@ -1220,6 +1493,10 @@ places:
 
   seolyeok_daesa:
     name: "설역 대사 (雪域大寺)"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ 새외 원형 없음 — '절벽에 박힌 백색 대사원. **소림보다 크다**'.
+      ★ 영향력 9 (§17)인데 소림(13)보다 크다고 적혀 있다 — **영향력과 크기가 어긋나는 유일한 곳이다** (Q-G)"
     pos: [-1645500, 517500]         # 실지리: 29.65°N 91.12°E (토번 고원 중심)
     region: 토번_고원
     terrain: 설산
@@ -1247,6 +1524,9 @@ places:
 
   odokgyo_odokchae:
     name: "오독채 (五毒寨)"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ 새외 원형 없음 — '**나무 위의 채** — 고상(高床) 가옥. 사람은 나무에서 잔다' (Q-F)"
     pos: [-731600, 1363400]         # 실지리: 22.0°N 100.8°E (남만 심밀림)
     region: 남만
     terrain: 밀림
@@ -1273,6 +1553,10 @@ places:
 
   dongyeong_do:
     name: "동영도 (東瀛島)"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ 새외 원형 없음 — '목조 · 흰 벽과 검은 기와, 종이문 · **천수각**'.
+      ★ 그리고 terrain.yml pending.섬: '바다를 파야 섬이다' — **땅부터 미결이다** (Q-F)"
     pos: [2072200, 147100]          # 실지리: 33.0°N 130.5°E (규슈 방면)
     region: 동영
     terrain: 섬
@@ -1304,6 +1588,11 @@ places:
   # ── 새외 상로의 중간 거점 (오아시스) — ★ 사막에서는 물이 곧 길이다
   donhwang:
     name: "돈황 (敦煌) — 오아시스"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **상단(商團)의 원형이 없다** — 서역 상맹의 오아시스 (사구 아래 초승달 샘 · 석굴).
+      region_archetypes.md §5 가 이미 고발했다: '상단의 도시(태원·무한·소주) — 상단의 원형이 아직 없다'.
+      성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 (Q-D)"
     pos: [-1311300, -642400]        # 실지리: 40.14°N 94.66°E
     region: 서역
     terrain: 사막
@@ -1984,6 +2273,9 @@ officialdom:
 places_official:                     # 관의 장소 — places 와 같은 문법
   cheongha_gwana:
     name: "청하현 관아"
+    archetype: 관아                  # ★ 신설 (사용자 결정) — officialdom.hierarchy.현: `architecture: 관아급`
+    build_radius: 32                # ★ 현(縣)의 관아 — 청하현 무대 **안**에 선다 (담장 안). 아래 note 의 경계 판단 참조
+    scale: 200
     pos: [20, 20]                    # ★ 무대 좌표 (등록부 county_office — 아직 CheonghaBuilder 미조성)
     stage_local: true
     region: 섬서
@@ -2000,6 +2292,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   yeokcham_gwanjung:
     name: "관중 역참 (관도 검문소)"
+    archetype: 관아                  # ★ 역참 — 관도의 검문소. 문이 아니라 **집**이다 (길을 막지 않는다)
+    build_radius: 32
+    scale: 150
+    tier: none                      # ★ 마을이 아니다 — village_tiers 는 마을의 눈금이다 (Q-E)
     pos: [18900, 3300]
     region: 섬서
     rank: 현
@@ -2015,6 +2311,9 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   jangan_bugwana:
     name: "서안부 관아"
+    archetype: 관아                  # ← officialdom.hierarchy.부: `architecture: 관아급`
+    build_radius: 48                # 부(府) — 현보다 크다 (force: 부병 500 vs 포쾌 12)
+    scale: 400
     pos: [37800, 6600]                # 장안과 같은 자리 (부치 = 성도)
     region: 섬서
     rank: 부
@@ -2029,6 +2328,9 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   bongsangbu:
     name: "봉상부"
+    archetype: 관아
+    build_radius: 48                # 부(府)
+    scale: 400
     pos: [-108600, -21000]
     region: 섬서
     rank: 부
@@ -2062,6 +2364,7 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   nangyeong:
     name: "남경 (부도)"
+    archetype: 관아                  # 부도(副都) — ★ build: never (짓지 않는다. 좌표만)
     pos: [967600, 251000]
     region: 안휘
     rank: 경사
@@ -2076,6 +2379,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   gunjin_daedong:
     name: "군진 — 대동 (북방 변경)"
+    archetype: 관문                  # ★ 신설 — 등록부: "군진은 **막는 문**이다 (변군이 있다)"
+    build_radius: 64                # 성벽이 길을 가로지른다 (성문 ±62 와 같은 기하)
+    scale: 800
+    tier: none                      # ★ 마을이 아니다 (Q-E)
     pos: [448400, -636900]
     region: 산서
     rank: 군진
@@ -2091,6 +2398,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   gunjin_sanhaegwan:
     name: "군진 — 산해관 (동북 관문)"
+    archetype: 관문
+    build_radius: 64
+    scale: 800
+    tier: none
     pos: [1057300, -628100]
     region: 하북
     rank: 군진
@@ -2104,6 +2415,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   gunjin_gayokgwan:
     name: "군진 — 가욕관 (서북 관문)"
+    archetype: 관문
+    build_radius: 64
+    scale: 600
+    tier: none
     pos: [-968600, -604800]
     region: 청해_서역
     terrain: 사막
@@ -2123,6 +2438,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
   #     · 문이 없는 곳 = 동영             → ★ 그래서 그들이 온다
   gwanmun_songban:
     name: "송반관 (松潘關) — 토번 관문"
+    archetype: 관문                  # ★ "**거르는 문** — 문서를 보는 곳"(등록부). 싸우지 않는다
+    build_radius: 48                # 수졸 300 — 군진(변군 30,000)보다 작다
+    scale: 300
+    tier: none
     pos: [-467300, 185800]            # 실지리: 32.65°N 103.6°E (사천 서북 — 차마고도의 목)
     region: 사천
     rank: 부
@@ -2141,6 +2460,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   gwanmun_jinnam:
     name: "진남관 (鎭南關) — 남만 관문"
+    archetype: 관문
+    build_radius: 48                # 수졸 500
+    scale: 300
+    tier: none
     pos: [-174700, 1352300]           # 실지리: 22.1°N 106.7°E (영남 남단)
     region: 해남
     rank: 부
@@ -2161,6 +2484,12 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   sibaksa_myeongju:
     name: "시박사 (市舶司) — 명주 해관"
+    archetype: pending
+    build_radius: pending
+    scale: 400
+    pending_why: "★ **관문이되 바다의 문이다** — force: '성이 아니라 **배**다'.
+      성벽으로 길을 막는 관문 원형이 여기 성립하는가? 그리고 terrain.yml pending.sibaksa_myeongju:
+      '바다에 서야 하는 해관 — 바다는 만들지 않는다(보장 없음)'. **땅부터 미결이다** (Q-D)"
     pos: [1227300, 493200]            # 실지리: 29.87°N 121.55°E (절강 연안)
     region: 강남
     rank: 부
@@ -2188,6 +2517,10 @@ places_official:                     # 관의 장소 — places 와 같은 문�
 
   yubaeji_ryeongnam:
     name: "유배지 — 영남 변방"
+    archetype: pending
+    build_radius: pending
+    pending_why: "★ **유배지는 문이 아니다.** 조율자가 관문으로 분류했으나 등록부 산문은
+      '**감옥이 아니라 유배다**' 라고 적었다 — 막는 것도 거르는 것도 없다. 관아인가, 아무것도 아닌가? (Q-D)"
     pos: [439000, 1308100]
     region: 해남
     terrain: 밀림
@@ -2647,3 +2980,147 @@ terrain_requests:
         → W1(설선 팔레트) · W2(사막 원형)가 **곤륜·가욕관을 위해 필요하다.** 새외보다 먼저다
     verdict: "★ 순도 담당의 판단에 이견 없다. 오히려 **그 판단이 이 요청서를 필요하게 만들었다** —
       그리고 그것이 옳은 순서다: **먼저 통제 불가능한 것을 끄고, 그다음 필요한 것을 만든다**"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 16. ★★ 건축 원형 (archetypes) + 청구서 — **집이 무엇인지 지도가 말한다**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ★★★ 왜 이 절이 필요한가 — **원형이 다섯뿐이라 45곳에 집이 없다**
+#
+#   좌표를 가진 장소는 65곳이다. 그중 RemoteBuilder.archetype() 이 원형을 골라 주는 곳은 **20곳**이고,
+#   나머지 **45곳은 archetype == null** → build() 가 **빈 목록을 돌려준다** → 땅만 서고 집이 없다.
+#
+#   ★ 그중 일부는 **집이 없는 것이 옳다** (사냥터 8 · 산지 2 · 폐허 2 · 망 3 — 산과 약초밭에 집은 없다).
+#   ★ 그러나 나머지는 **집이 있어야 하는데 없다**:
+#       · 세가 5 (당가·팽가·남궁·제갈·모용)   ← ★ region_archetypes.md 는 도관이 덮는다고 적었는데 코드엔 없다
+#       · 관 13 (관아·역참·부아·황성·군진 3·관문 2·시박사·유배지·남경)
+#       · 도시·상단 4 (태원·무한·소주·강남 상로)
+#       · 새외 7 (한정·고창·성화단·설역 대사·오독채·동영도·돈황)
+#       · 마교 2 (본교 흑성 · 낙양 잠복지) · 독문 1
+#
+#   ★★ **지도가 무엇을 요구하는지 여기서 확정한다. 그러면 건축 담당이 무엇을 지을지 안다.**
+#      나는 지도를 적는 사람이지 집을 짓는 사람이 아니다 — **계약(무엇이 있어야 그 집이 그 집인가)만 청구한다.**
+# ─────────────────────────────────────────────────────────────────────────────
+
+archetypes:
+  owner: "건축 계층 (RemoteBuilder) — ★ 이 절의 registered 는 **사실**이고, requested 는 **청구**다"
+  contract_source: "docs/design/region_archetypes.md §4 — '원형이 다섯이면 계약도 다섯이다'"
+
+  # ─── 있는 것 (registered) — RemoteBuilder.Archetype enum 그대로. **발명하지 않았다** ───
+  registered:
+    산채:   { faction: noklim,           계약: "통나무 200 · 모닥불 1 · 짚 10 · 망루 불 2",
+              places: [nokrim_sochae, nokrim_jungchae, nokrim_chongchae, nokrim_sangil] }
+    도관:   { faction: "구파 (RemoteBuilder.SECTS)", 계약: "검은 기와 40 · 회벽 40 · 돌바닥 400 · 매화 20 · 석등 4",
+              places: [hwasan],
+              note: "★ **화산만 확정이다.** 나머지 여덟 구파는 archetype: pending — 소림(사찰)·아미(여승)·
+                해남(목조)·종남(암자)에 이 계약이 성립하지 않는다 (§5.3 주석)" }
+    은신처: { faction: "magyo · hyeolgyo (★ 굴이 있어야 한다)", 계약: "심층암 벽돌 18 · 촛불 2 · 궤 1 · 거미줄 4",
+              places: [magyo_jinryeong, hyeolgyo_eungeo, hyeolgyo_jedan] }
+    성문:   { faction: "gwan_gun (★ section: places 인 것만 — 성시)",
+              계약: "돌벽돌 1500 · 여장 40 · 성루 기와 40 · 관도 150 · 등롱 8",
+              places: [jangan, nakyang, gaebong] }
+    수로채: { faction: jangang_suroche,  계약: "판자 300 · 통나무 60 · 통행세 궤 4 · 등롱 4",
+              places: [jangang_suroche] }
+
+  # ─── ★★ 없는 것 (requested) — **청구서.** 지도가 요구하고, 건축 담당이 계약을 채운다 ───
+  #   ★ 계약(무엇이 있어야 그 집이 그 집인가)은 **등록부의 산문에서 뽑았다.** 지어낸 것은 없다.
+  #     자재·수량은 **비워 두었다** — 그것은 짓는 자가 정한다 (region_archetypes.md: "짓는 자가 안다")
+  requested:
+
+    장원(莊園):
+      why: "★ **오대세가 다섯이 이것 때문에 집이 없다.** region_archetypes.md 는 도관이 세가를 덮는다고
+        적었는데 RemoteBuilder.SECTS 에 세가 id 가 **하나도 없다** — 문서와 코드가 갈라졌다"
+      places: [dangga, paengga, namgung, jegal, moyong]
+      정체: "★ 담이 있는 집. 도관은 **오르는 길**이 중심이고 장원은 **담 안의 마당**이 중심이다"
+      계약_초안:                    # ← 전부 등록부 architecture 산문에서 뽑았다
+        담: "★ 이 원형의 전부다 — 도관에는 담이 없고 장원에는 담이 있다"
+        대문: "★ 문이 하나다 (도관은 산문이 열려 있다)"
+        마당: "연무장 또는 약재 마당 — **가문마다 다르다** (아래 변주)"
+      변주:                          # ★ 같은 원형인데 **담의 높이가 곧 그 가문이다**
+        dangga:  "높은 담 · 좁은 문 · 약재 마당 — **외부인이 못 들어온다** (등록부 원문)"
+        paengga: "낮은 담 · 열린 문 · **넓은 연무장** — 숨기지 않는다 (등록부 원문)"
+        namgung: "회랑 + **연못** · 검각이 정원 가운데 — ★ 물이 필요하다 (land_requests.yml 어휘)"
+        jegal:   "★ **저택 자체가 미로** — 기관·진법. 계약을 아무도 안 적었다 (무엇이 있어야 제갈인가?)"
+        moyong:  "두꺼운 벽 · 온돌 — ★ sect_lineage.md: **입문 불가**. 담 너머를 지을 것인가?"
+      pending_why: "★ 계약의 **자재와 수량**이 없다. 그리고 변주 다섯이 정말 한 원형인지도 미결이다 — 질문 목록 Q3·Q4"
+
+    사찰(寺刹):
+      why: "★ 소림사에 **매화가 선다** (도관 계약 CHERRY_LEAVES 20). factions.yml: '불가 무학의 종가'"
+      places: [sorimsa]
+      후보: "아미파(여승 문파)도 여기 앉을 수 있다 — ★ 그러나 **아미는 registry: 예약** (상세 미설계가 의도다)"
+      pending_why: "★ 사찰이 도관과 **다른 원형인지**, 아니면 도관의 **자재 변주**인지가 미결이다 — 질문 목록 Q2"
+
+    관아(官衙):
+      why: "★ 관의 장소 13곳에 원형이 없다. 성문 원형은 **성시(장안·낙양·개봉)만** 덮는다
+        (RemoteBuilder: `gwan_gun && section == places`) — 역참·군진·관문·관아·황성은 덮지 않는다"
+      places: [cheongha_gwana, jangan_bugwana, bongsangbu, yeokcham_gwanjung, nangyeong, yubaeji_ryeongnam]
+      근거: "officialdom.hierarchy.현/부: `architecture: 관아급` — ★ **등록부가 이미 이름을 갖고 있다**"
+      pending_why: "★ 계약이 없다. 그리고 청하현 관아는 **CheonghaBuilder 의 것인지 RemoteBuilder 의 것인지**부터 미결이다 (Q6)"
+
+    관문(關門):
+      why: "★ 군진 3(대동·산해관·가욕관) + 관문 2(송반관·진남관) + 시박사 1 — **여섯이 다 원형이 없다**"
+      places: [gunjin_daedong, gunjin_sanhaegwan, gunjin_gayokgwan, gwanmun_songban, gwanmun_jinnam, sibaksa_myeongju]
+      정체: "★ 성문과 무엇이 다른가 — **성문은 도시를 두르고, 관문은 길을 가로막는다.**
+        등록부가 그 차이를 이미 적었다: '군진은 **막는 문**(변군이 있다) · 관문은 **거르는 문**(문서를 본다)'"
+      pending_why: "★ 성문 원형을 재사용할지, 새 원형(성벽이 **길을 가로지르는** 집)을 낼지 미결 — Q5"
+
+    황성(皇城):
+      why: "gyeongsa — officialdom.hierarchy.경사: `architecture: 황성급` · scale 5000"
+      places: [gyeongsa]
+      pending_why: "★ **build: never 다** (등록부가 그렇게 적었다). 안 짓기로 한 곳에 원형이 필요한가? — Q7"
+
+    상단(商團):
+      why: "★ region_archetypes.md §5 가 이미 고발했다: '상단의 도시 (태원·무한·소주) — 상단의 원형이 아직 없다'"
+      places: [taewon, muhan, soju, gangnam_sangro, seoyeok_gochang, donhwang]
+      pending_why: "★ 이들은 **도시**다. 성문 원형(문 앞 한 구획)으로 족한가, 상단만의 집이 필요한가 — Q5"
+
+    흑성(黑城):
+      why: "magyo_bonkyo — architecture: '초원의 흑성 — **중원 건축이 아니다.** 돌과 철, 불'.
+        ★ region_archetypes.md §5 가 '굴이 없다 → 은신처가 아니다'라고 이미 적었다"
+      places: [magyo_bonkyo]
+      pending_why: "★ 111일 거리다 (등록부: '이곳에 닿는다는 것은 이미 중원을 버렸다는 뜻'). **지을 것인가?** — Q8"
+
+    새외_나머지:
+      why: "★ 새외 다섯은 **전부 중원 건축이 아니다** — 등록부가 그렇게 적었다"
+      places_and_note:
+        bukmak_hanjeong:    "★ '**성이 없다.** 대칸의 천막(게르)과 말 떼' — 지을 집이 천막이다"
+        baehwa_seonghwadan: "'검은 현무암 제단, 계단식 탑 — 중원 건축이 아니다'"
+        seolyeok_daesa:     "'절벽에 박힌 백색 대사원 — **소림보다 크다**' (★ terrain.yml shaping: 봉우리)"
+        odokgyo_odokchae:   "'**나무 위의 채** — 고상(高床) 가옥. 사람은 나무에서 잔다'"
+        dongyeong_do:       "'목조 · 흰 벽과 검은 기와, 종이문 · **천수각**'"
+      pending_why: "★ 전부 build: later 다 — **급하지 않다.** 그러나 원형이 없다는 사실은 적어 둔다 (Q9)"
+
+    없음_의도적:                    # ★ 집이 없는 것이 **옳은** 곳 — 이것도 적는다 (침묵 금지)
+      사냥터: "산과 숲이다. 집이 없다 — terrain.yml natural: 이 이미 '자연이 준 산이 사냥터다'라 적었다"
+      산지:   "약초밭·광맥. 집이 없다 (natural:)"
+      폐허:   "★ 폐사당·고국 폐허 — 굴은 있다 (terrain.yml caves: 기연굴). **집은 폐허다**"
+      망:     "개방·하오문·살막 — 좌표조차 없다. **그것이 설계다**"
+
+  # ─── ★ 배선 청구 (wiring) — **자바를 고쳐야 하는 것.** 나는 코드를 안 건드린다 ───
+  wiring:
+    W-A:
+      what: "★ **scale: 을 읽어라.** RemoteBuilder.siteRadius / MvtCommand.forgeRadius 가 지금 코드 상수다"
+      code: "siteRadius = noklim ? 24 : 64  ·  forgeRadius = noklim ? 24 : 110"
+      why: "★★ **마을 크기를 코드가 정하고 있다.** 지도가 24곳에 scale 을 적어 두었는데 아무도 안 읽는다 —
+        장안(scale 3000)과 종남(600)이 **같은 크기로 선다.** 사용자가 물은 것이 정확히 이것이다:
+        '마을은 얼마나 생성할 것인지'"
+      blocked_by: "★ 먼저 scale 의 **뜻**을 정해야 한다 (무대 반경? 조성 반경? 둘은 24배 차이다) — Q1"
+    W-B:
+      what: "★ **archetype: 을 읽어라.** RemoteBuilder.archetype(place) 이 faction+section 으로 **추측한다**"
+      why: "세력 하나에 집이 여럿이면 안 갈린다 (gwan_gun = 성시·역참·군진·황성).
+        ★ 지도가 이 패스에서 archetype 을 신설했다 — **읽기만 하면 추측이 사라진다**"
+      contract: "지도가 archetype 을 주면 그대로 짓는다. `pending` 이면 **짓지 않고 그렇게 말한다**
+        (unbuildableReasons — 지금도 그렇게 하고 있다. 이유만 정확해진다)"
+    W-C:
+      what: "★ **코드에 박힌 문파 목록 두 벌을 지워라** — TerrainForge.PEAK_FACTIONS(:651) · RemoteBuilder.SECTS(:379)"
+      why: "★★ **등록제 위반이다.** 그리고 두 벌이라 이미 갈라졌다 —
+        SECTS 에는 **오대세가가 없어서** 세가 다섯의 집이 안 선다 (§5.4).
+        factions.yml faction_groups.orthodox.members 의 `parent: gupailbang|odaesega` 가 정본이다"
+      caution: "★ **아미(ami)는 parent 가 없다** (factions.yml — '추후 확장' 존중이 의도다).
+        factions.yml 을 그대로 읽으면 **아미가 봉우리를 못 받는다.**
+        지금은 terrain.yml `shaping: ami: 봉우리` 가 그것을 막고 있다 — **등록부가 코드보다 세다**"
+    W-D:
+      what: "★ architecture **산문에서 낱말을 찾는 것을 그만두라** (TerrainForge.caveKind: '동굴'·'석실' 문자열 검색)"
+      why: "★ 산문을 고치면 굴이 사라진다. **글이 기계를 움직이면 그것은 등록부가 아니다.**
+        이미 우회로가 있다 — config/terrain.yml `caves:` 가 먼저 읽힌다 (8곳 등재됨). 산문 검색은 폴백으로만"

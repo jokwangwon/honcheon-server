@@ -1057,10 +1057,18 @@ MARK_LUMA = 8.0            # 획의 절대 문턱 — "눈에 보이는 자국" 
 CALM_MIN = 0.35            # 여백비 하한 — 쉬는 면이 이보다 좁으면 수묵이 아니다
 COHESION_MIN = 1.15        # 획 응집도 하한 (난수 = 1.00). 이 아래 = 획이 아니라 잡티
 COHESION_SKIP_DENSITY = 0.03   # 획이 이보다 드물면 응집도는 뜻이 없다 (거의 순수 여백 — 그것은 정답이다)
+# ★ 래칫 — 축 ⑬ 이 **강제하는 화면 면적**의 하한. 2026-07: 12.1% → 28.3%(판자) → **41.6%**(석재).
+#   이 수는 **오직 올라가야 한다.** 내려가면 축이 화면을 놓친 것이고, 그것은 조용한 후퇴다.
+STROKE_COVERAGE_MIN = 0.43
 
-STROKE_CONVERTED = {       # 이 증분에서 **문법을 갈아입은 '면'** — 여기는 강제한다
+STROKE_CONVERTED = {       # **문법을 갈아입은 '면'** — 여기는 강제한다
     "water_still", "water_flow", "grass_block_top", "grass_block_side",
     "dirt", "dirt_path_top", "stone", "deepslate_tiles",
+    # 2026-07 판자 셋 (화면의 **16.2%**. 이 팩에서 가장 넓은 면이다)
+    "oak_planks", "spruce_planks", "dark_oak_planks",
+    # 2026-07 전돌 다섯 — 담·바닥·계단이 이 몇 장이다 (화면의 **8.4%**)
+    #   (막돌은 여기가 아니라 **⑬-d 세포면**이 다스린다 — 응집도가 구조적으로 못 재는 면이다)
+    "stone_bricks", "mossy_stone_bricks", "cracked_stone_bricks", "bricks", "mud_bricks",
 }
 # ★★ 【이 눈이 두 번째로 거짓말했다 — 잎에 '면'의 자를 들이댔다】
 #   나뭇잎을 STROKE_CONVERTED 에 넣었더니 여백 32% · 응집도 0.84 로 위반이 떴다. 그런데 **범주 착오**다:
@@ -1073,14 +1081,54 @@ STROKE_CONVERTED = {       # 이 증분에서 **문법을 갈아입은 '면'** �
 #   구멍이 없으면 수관이 **속이 꽉 찬 덩어리**(이끼)이고, 너무 많으면 앙상한 가지다.
 LEAF_HOLE_BAND = (0.18, 0.36)      # 수관의 성김 — [하한, 상한]
 LEAF_TEXTURES = ["oak_leaves", "spruce_leaves", "birch_leaves", "cherry_leaves"]
+
+# ═══ ⑬-d 세포면(細胞面) — 【이 자가 세 번째로 거짓말했다. 그리고 이번엔 **그림에 상을 잘못 줬다**】
+#
+#   막돌(cobblestone)에 응집도를 들이대면 **영원히 통과할 수 없다.** 기하가 금지한다:
+#     16px 장에 돌이 N 개면 줄눈의 총 길이는 L ≈ 2√(N·256) 이다 (N=16 ⇒ **128px**).
+#     응집도가 요구하는 **2px 두께**를 주면 줄눈만으로 L×2 = **256px = 장의 100%** 다.
+#     ⇒ **막돌의 줄눈은 두꺼워질 수가 없다.** 얇은 그물은 응집도가 정의상 ≈1.0 이다
+#       (밀도로 정규화하므로 — 얇고 촘촘한 그물은 난수와 같은 이웃 수를 갖는다).
+#     바닐라 막돌 0.99 · 바닐라 자갈 0.94 — **바닐라도 같은 이유로 못 넘는다.**
+#
+#   ★★★ 그리고 이것이 증거다: 나는 응집도를 만족시키려고 **줄눈을 문턱 아래로 지웠다.**
+#     응집도 **1.02 → 1.83**, 여백 70%. **검수는 만족했다.** 확대해 보니 돌의 윤곽이 사라진
+#     잿빛 콘크리트였고, 이끼 낀 막돌은 맨 막돌과 **구별조차 되지 않았다.**
+#     **자가 나쁜 그림에 1.83 을, 좋은 그림에 1.05 를 주었다.** 자가 순위를 뒤집은 것이다.
+#     ⇒ 응집도는 **획이 성긴 면**의 자다 (판자의 틈 넷 · 전돌의 켜 셋). **세포면의 자가 아니다.**
+#
+#   ⇒ 세포면은 **제 자**로 잰다 — 「줄눈이 줄눈인가」:
+#     ① 여백 ≥ 35%              — 돌의 몸이 쉰다      (바닐라 막돌 29% · 자갈 25% 가 여기서 걸린다)
+#     ② 어두운 획이 **얇다** — 2회 침식 생존 ≤ 3%     (줄눈은 **그물**이지 **덩이**가 아니다)
+#     ③ 줄눈의 깊이 ≥ 12루마    — **윤곽이 눈에 보인다** (문턱 아래로 숨기면 여기서 걸린다)
+#
+#   ★★★★ 【그리고 **이 자도 처음엔 틀렸다.** 시험하지 않았으면 그대로 실었다】
+#     첫 판의 ②는 "여백이 돌 [6,28]개로 갈라지는가" 였다. 아는 답 넷으로 시험했더니:
+#       · **좋은 막돌을 떨어뜨렸다** (돌 4개 — 줄눈에 뚫린 자리가 있어 돌이 붙는다. 눈엔 멀쩡하다)
+#       · **나쁜 시안을 통과시켰다** (돌 7개 · 깊이 15.9 — '씻긴 돌'이 어두워서 **줄눈 행세를 했다**)
+#     ⇒ 내 '줄눈 깊이'는 줄눈이 아니라 **검은 얼룩**을 재고 있었다. 자가 또 거짓말한 것이다.
+#     ⇒ 진짜 차이는 **두께**였다: 줄눈은 1~2px 그물이라 침식하면 사라지고(생존 **0.0%**),
+#       씻긴 돌은 4×4 덩이라 **살아남는다(8.8%)**. 실측이 다섯 시안을 전부 갈랐다.
+#     **자를 만들면 아는 답으로 시험하라. 나는 이 프로젝트에서 자에 두 번 속았다.**
+CELLULAR = ["cobblestone", "mossy_cobblestone", "cobbled_deepslate"]   # 세포면 — 돌 하나하나가 세포다
+CELL_THICK_MAX = 0.03              # 2회 침식 생존률 상한 — 이 위는 그물이 아니라 덩이다
+CELL_JOINT_DEPTH = 12.0            # 줄눈의 평균 깊이 (루마) — 이보다 얕으면 윤곽이 안 보인다
 STROKE_BACKLOG = {         # 아직 못 갈아입은 장 — **사유와 함께** 등록한다 (청구서)
-    "oak_planks": "널의 몸은 잠재웠으나 결·마구리·못이 아직 잡티에 가깝다 (여백 25%)",
-    "spruce_planks": "동일 — plank_rows 를 공유한다",
-    "cobblestone": "조약돌 보로노이 위에 잔노이즈가 남아 있다 (응집도 1.02)",
-    "gravel": "자갈은 본디 점의 집합이라 '획'의 문법이 그대로 안 맞는다 — 별도 판정 필요",
-    "oak_log": "수피의 터진 골은 bark_rows 소관 — 결은 갈았으나 거스러미 octave 가 남았다",
+    "barrel_side": "독의 테가 골함석이다 (여백 16% · 응집 1.00) — 판자 처방(잔 램프 + 획 한 줄 + 여백)을 "
+                   "그대로 옮기면 된다. **다음 순번** · 화면 3.85%",
+    "oak_log": "수피(bark_rows)는 아직 골함석이다 — 판자와 **같은 병**(골+어깨가 면을 덮는다). "
+               "처방도 같다. 원목 3종 화면 3.4% (수피 램프는 이번에 갈라 뒀다: OAK/SPRUCE/DARK_BARK)",
+    "gravel": "자갈은 본디 점의 집합이라 '획'의 문법이 그대로 안 맞는다 — 별도 판정 필요. "
+              "화면 1.56% · 여백 25% (바닐라 53% — **바닐라가 우리보다 조용하다**). "
+              "세포면(⑬-d)도 아니다: 줄눈이 없다. **제 자를 새로 지어야 한다**",
+    "andesite": "★ 2026-07: **고치려다 망가뜨려서 되돌렸다.** amp 가 바탕을 획의 문턱 위로 밀어 "
+                "바탕 전체가 획이다 (여백 36% · 응집 1.09) — 진단은 옳다. 그러나 바탕을 여백에 가두자 "
+                "**돌이 사라졌다** (σ 15.9 → 6.9. 확대 시트에서 백지였다). "
+                "얼룩을 줄이는 것으로는 안 된다 — **준법(皴法)의 획을 새로 지어야 한다.** "
+                "tuff·packed_mud·deepslate 가 같은 병 (stone_rows 공유) · 넷 합쳐 화면 1.6%",
+    "chiseled_stone_bricks": "회(回)자 무늬가 장의 93% 를 덮는다 (여백 7%). 무늬 자체를 다시 물어야 한다 — "
+                             "파낸 홈을 가늘게 해 여백을 내라. 화면 0.96%",
     "sand": "모래알은 점이 정체다 — 획으로 옮길 대상인지 자체가 미결 (판정 보류)",
-    "stone_bricks": "전돌 줄눈은 이미 선이나 벽돌 몸에 잔노이즈가 남았다",
 }
 
 
@@ -1113,6 +1161,140 @@ def stroke_grammar(path, name):
                  if (i, j) != (0, 0) and ((x + i) % w, (y + j) % h) in mark) for x, y in mark)
     cohesion = (nb / len(mark)) / (8 * dens)
     return sigma, calm, cohesion, dens
+
+
+def cellular_grammar(path, name):
+    """(여백비, 어두운획 비율, 2회 침식 생존률, 줄눈 깊이) — 축 ⑬-d 의 자. 세포면 전용.
+
+    **침식(erosion)이 이 자의 핵심이다.** 줄눈은 1~2px 그물이라 두 번 깎으면 **사라진다**.
+    검은 얼룩(씻긴 돌·이끼 덩이)은 4×4 덩이라 **살아남는다.** 그 차이가 '줄눈인가 얼룩인가'다.
+    랩(모듈러)으로 잇는다 — 이어 붙여도 같은 그물이다."""
+    w, h, rows = read_block(path, name)
+    h = min(h, 16)
+    L = {(x, y): luma(px(rows, x, y)) for y in range(h) for x in range(w)}
+    med = sorted(L.values())[len(L) // 2]
+    calm = sum(1 for v in L.values() if abs(v - med) <= 6) / (w * h)
+    dark = {p for p, v in L.items() if v < med - MARK_LUMA}       # 줄눈 후보 = 어두운 획
+    if not dark:
+        return calm, 0.0, 0.0, 0.0
+    depth = sum(med - L[p] for p in dark) / len(dark)
+
+    def erode(s):
+        return {(x, y) for (x, y) in s
+                if all(((x + dx) % w, (y + dy) % h) in s
+                       for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))}
+
+    thick = len(erode(erode(dark))) / len(dark)                   # 두 번 깎고도 남는 몫 = 덩이의 증거
+    return calm, len(dark) / (w * h), thick, depth
+
+
+def cellular_axis():
+    """축 ⑬-d — 세포면(막돌). 「줄눈이 줄눈인가」. 위반 수를 돌려준다."""
+    print("\n  ── ⑬-d 세포면(細胞面) — 응집도가 **구조적으로 못 재는** 면 (위 주석의 증명) ──")
+    bad = 0
+    bdir = PACK / "minecraft" / "textures" / "block"
+    for name in CELLULAR:
+        f = bdir / f"{name}.png"
+        if not f.exists():
+            print(f"     ❌ {name}: 등록됐으나 팩에 없다")
+            bad += 1
+            continue
+        calm, dens, thick, depth = cellular_grammar(f, name)
+        notes = []
+        if calm < CALM_MIN:
+            notes.append(f"여백 {calm:.0%} < {CALM_MIN:.0%} (돌의 몸이 안 쉰다)")
+        if thick > CELL_THICK_MAX:
+            notes.append(f"침식 생존 {thick:.1%} > {CELL_THICK_MAX:.0%} "
+                         f"(**줄눈이 아니라 검은 덩이다** — 얼룩을 줄눈이라 우기고 있다)")
+        if depth < CELL_JOINT_DEPTH:
+            notes.append(f"줄눈 깊이 {depth:.1f} < {CELL_JOINT_DEPTH} 루마 (**윤곽이 눈에 안 보인다**)")
+        if notes:
+            bad += 1
+            print(f"     ❌ {name}: {', '.join(notes)}")
+        else:
+            print(f"     ✅ {name}: 여백 {calm:4.0%} · 줄눈 {dens:4.0%} (침식 생존 {thick:.1%} — 그물이다) "
+                  f"· 깊이 {depth:4.1f}루마")
+    return bad
+
+
+_SCREEN_AREA = {}
+
+
+def screen_area():
+    """텍스처별 **화면 면적 점유율** — 조성 팔레트의 빈도 × 모델 면적.
+    「무엇이 눈에 가장 많이 닿는가」. 축 ⑬-c 가 이것으로 제 사각지대를 잰다."""
+    if _SCREEN_AREA:
+        return _SCREEN_AREA
+    try:
+        mc = Vanilla()
+    except Exception:
+        return _SCREEN_AREA                              # jar 없음 — 축 ⑪ 가 이미 위반으로 외친다
+    for mat, freq in builder_materials().items():
+        name = mat.lower()
+        if name == "air":
+            continue
+        if name in FLUIDS:
+            areas = {FLUIDS[name]: 6 * 256.0}
+        elif name in BLOCK_ENTITIES:
+            areas = dict(BLOCK_ENTITIES[name])
+        else:
+            areas = mc.block_area(name)
+            if not areas:
+                continue
+        for t, a in areas.items():
+            _SCREEN_AREA[t] = _SCREEN_AREA.get(t, 0.0) + freq * a
+    tot = sum(_SCREEN_AREA.values()) or 1.0
+    for t in _SCREEN_AREA:
+        _SCREEN_AREA[t] /= tot
+    return _SCREEN_AREA
+
+
+def stroke_coverage():
+    """축 ⑬-c — **이 축이 화면의 몇 %를 실제로 다스리는가.**
+
+    ★★★ 【이 축이 스스로에 대해 거짓말하고 있었다 — 2026-07 의 발견】
+      축 ⑬ 은 STROKE_CONVERTED **8장만** 재고 "위반 0건"을 외쳤다. 그런데 그 8장은
+      **화면의 12.1%** 였다. 나머지 87.9% 중 축이 **묻지도 않은** 면이 64.4% 였고,
+      그 사각지대에 계약을 들이대 보니 **168장 · 화면의 44.4% 가 즉시 깨졌다.**
+      **검수는 계약을 지켰지만, 계약이 걸린 곳이 화면의 8분의 1이었다.**
+
+      ⇒ 이제 이 축은 **제가 다스리는 면적을 스스로 보고한다.** 커버리지가 떨어지면 검수가 운다.
+        "위반 0건"이 "화면의 12%에서 위반 0건"이라는 뜻이었다는 것을, 다음 사람은 **한 줄로 안다.**
+    ⇒ 청구서는 이름이 아니라 **면적**으로 갚는다. 넓은 면부터."""
+    area = screen_area()
+    if not area:
+        return 0
+    bdir = PACK / "minecraft" / "textures" / "block"
+    # 강제하는 면 = ⑬(획) 이 다스리는 면 **+ ⑬-d(세포면) 이 다스리는 면.**
+    #   자가 다르다고 다스리지 않는 것이 아니다 — 막돌에는 **제 계약**이 걸려 있다.
+    governed = set(STROKE_CONVERTED) | set(CELLULAR)
+    gov = sum(a for t, a in area.items() if t.split("/")[-1] in governed)
+    bill = sum(a for t, a in area.items() if t.split("/")[-1] in STROKE_BACKLOG)
+    blind = []
+    for t, a in area.items():
+        name = t.split("/")[-1]
+        if name in governed or name in STROKE_BACKLOG or name in LEAF_TEXTURES:
+            continue
+        f = bdir / f"{name}.png"
+        if not f.exists():
+            continue
+        sigma, calm, coh, dens = stroke_grammar(f, name)
+        if calm < CALM_MIN or (dens >= COHESION_SKIP_DENSITY and coh < COHESION_MIN):
+            blind.append((a, name, calm, coh))
+    lost = sum(a for a, _, _, _ in blind)
+    print(f"\n  ── ⑬-c 이 축이 다스리는 화면 (면적 가중) ──")
+    print(f"     강제하는 면      {gov:6.1%}  ({len(governed)}장 — 계약이 걸려 있다: 획 {len(STROKE_CONVERTED)} + 세포면 {len(CELLULAR)})")
+    print(f"     청구서           {bill:6.1%}  ({len(STROKE_BACKLOG)}장 — 이름과 사유가 등록돼 있다)")
+    print(f"     ★ 사각지대       {lost:6.1%}  ({len(blind)}장 — **계약을 걸면 즉시 깨질 면.** 축이 묻지도 않는다)")
+    if blind:
+        print(f"     사각지대 상위 (면적) — **다음 증분은 여기서 고른다**:")
+        for a, n, calm, coh in sorted(blind, reverse=True)[:8]:
+            print(f"       {a:6.2%}  {n:26s} 여백 {calm:4.0%} · 응집 {coh:.2f}")
+    if gov < STROKE_COVERAGE_MIN:
+        print(f"     ❌ 강제 면적 {gov:.1%} < {STROKE_COVERAGE_MIN:.0%} — **축이 화면을 놓치고 있다**")
+        return 1
+    print(f"     ✅ 강제 면적 {gov:.1%} ≥ {STROKE_COVERAGE_MIN:.0%} (래칫 — 내려가면 검수가 운다)")
+    return 0
 
 
 def stroke_axis():
@@ -1164,9 +1346,11 @@ def stroke_axis():
             print(f"  ❌ {name}: 구멍 {holes:.0%} — 대역 [{lo:.0%}–{hi:.0%}] 밖 · {why}")
         else:
             print(f"  ✅ {name}: 구멍 {holes:4.0%} (수관이 성글다 — 잎덩이 사이로 하늘이 비친다)")
-    print(f"  ── 청구서: 아직 문법을 못 갈아입은 장 {len(STROKE_BACKLOG)}종 (사유와 함께 등록됨)")
+    bad += cellular_axis()                               # ⑬-d — 세포면은 제 자로 잰다 (막돌)
+    print(f"\n  ── 청구서: 아직 문법을 못 갈아입은 장 {len(STROKE_BACKLOG)}종 (사유와 함께 등록됨)")
     for k, why in sorted(STROKE_BACKLOG.items()):
         print(f"     · {k} — {why}")
+    bad += stroke_coverage()                             # ⑬-c — 축이 제 사각지대를 스스로 잰다
     return bad
 
 
