@@ -73,6 +73,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "수련" -> training(sender, args);       // 하루 5구간을 무엇에 쓸 것인가 (성장 축)
                 case "시트" -> sheetInfo(sender);            // 나는 누구인가 — 강호의 장부가 답한다
                 case "접속" -> link(sender);                 // 마크의 몸 ↔ 디스코드의 이름 (코드 발급)
+                case "판정보기" -> judgeEye(sender);         // 【디버그】 판정의 눈 — 히트박스·2d6·피해의 층
                 case "모션진단" -> motionDiag(sender, args);   // 3D 층이 실제로 떴는가 (팩 유무 포함)
                 case "문장" -> crests(sender);
                 default -> help(sender);
@@ -1558,6 +1559,30 @@ public final class MvtCommand implements CommandExecutor {
                 + (sect.equals(Weapons.sectOf(named))
                 ? ChatColor.GRAY + " 병기가 문파의 얼굴을 띤다."
                 : ChatColor.DARK_GRAY + " (계열이 달라 실루엣은 그대로다)"));
+        return true;
+    }
+
+    /**
+     * <b>/혼천 판정보기</b> — 판정의 눈. <b>켠 사람에게만 보인다.</b>
+     *
+     * <p>성능은 {@code Metrics} 가, 등록부는 검산이, 3D 는 {@code /혼천 모션진단} 이 재는데 —
+     * <b>판정만은 아무도 못 봤다.</b> 히트박스가 어디까지 닿는지, 2d6 이 무엇과 겨뤘는지,
+     * 피해가 어느 층에서 깎였는지를 눈으로 본다.
+     *
+     * <p>★ <b>이 눈이 거짓말할 수 없는 이유</b>: 눈은 히트박스를 <b>다시 그리지 않는다.</b>
+     * <b>판정이 쓰는 그 함수에 점을 물어본다</b> — "이 자리는 맞는 자리인가?"
+     * 그리는 코드와 맞히는 코드가 <b>하나</b>이므로 <b>그림은 판정에 대해 거짓말할 수 없다.</b>
+     * (제 원뿔을 따로 그리는 눈은 <b>없느니만 못하다</b> — 틀린 그림을 믿고 판정을 고치게 되므로.)
+     */
+    private boolean judgeEye(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "몸이 있어야 본다.");
+            return true;
+        }
+        boolean on = plugin.skills().toggleEye(player);
+        player.sendMessage(on
+                ? ChatColor.DARK_AQUA + "판정의 눈 — 켰다 (히트박스 · 2d6 · 피해의 층이 보인다)"
+                : ChatColor.GRAY + "판정의 눈 — 껐다");
         return true;
     }
 }

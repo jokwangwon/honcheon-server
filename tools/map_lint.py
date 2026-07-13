@@ -45,7 +45,8 @@ FALLBACKS = {
     "build": 'WorldMap.readSection → "later"',
     "faction": "RemoteBuilder.archetype → null (집이 안 선다)",
     "archetype": "RemoteBuilder.archetype → 세력+구역으로 **추측한다**",
-    "scale": "★ 아무도 안 읽는다 — siteRadius = noklim ? 24 : 64 (코드가 마을 크기를 정한다)",
+    "scale": "★ 서사적 크기 (봇·LLM 이 읽는다)",
+    "build_radius": "★ 아무도 안 읽는다 — siteRadius = noklim ? 24 : 64 (**코드가 마을 크기를 정한다**)",
 }
 MOUNTAINOUS = {"산", "험산", "설산", "고원"}
 
@@ -92,7 +93,10 @@ class Lint:
         fac_ids = self.faction_ids()
         terrains = set((self.wm.get("terrain_types") or {}).keys())
         regions = set((self.wm.get("regions") or {}).keys())
-        archs = set((self.wm.get("archetypes", {}).get("registered") or {}).keys())
+        # ★ 어휘 = 이미 지어지는 원형(registered) ∪ 청구된 원형(requested).
+        #   requested 는 **아직 코드에 없다** — 그러나 지도가 요구하는 것은 어휘다 (그것이 청구서의 뜻이다)
+        arch_reg = self.wm.get("archetypes", {}) or {}
+        archs = set((arch_reg.get("registered") or {}).keys()) | set((arch_reg.get("requested") or {}).keys())
         shaping = self.terrain.get("shaping") or {}
         natural = self.terrain.get("natural") or {}
         pending_t = self.terrain.get("pending") or {}
