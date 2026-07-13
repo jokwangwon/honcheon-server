@@ -512,6 +512,93 @@ def audit_coverage(rep: Report, engines, tools) -> None:
 
 # ══════════════════════════════════════════════════════════════════════════════
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑤ 다리 ↔ 등록부 — 다리가 부르는 사건 이름이 등록부에 **실제로 있는가**
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# ★ 왜 이 눈이 필요한가.
+#   world_bridge.yml 은 이제 값이 아니라 **사건의 이름**을 나른다 (region_event / region_event_by_role).
+#   이름이 등록부(region_state.yml event_deltas)에 없으면 — 그 사건은 **세계에 아무 영향도 못 준다.**
+#   RegionStateEngine.deltas() 가 던지긴 하지만, 그것은 **그 사건이 실제로 일어난 뒤**의 일이다.
+#   플레이어가 도적 두목을 벤 그 순간에야 예외가 터진다. 그때는 이미 늦다.
+#   이 눈은 **아무도 죽기 전에** 그것을 잡는다.
+
+def load_yaml(path: str):
+    """config 한 장을 읽는다 — 이 눈만은 정규식이 아니라 **진짜 파서**로 본다
+    (사건 이름의 오타 한 글자가 세계를 조용히 멈추기 때문이다)."""
+    try:
+        import yaml
+    except ImportError:
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return None
+
+
+def audit_bridge_registry(rep: Report) -> None:
+    rep.head("⑤ 다리 ↔ 등록부 — 다리가 부르는 사건 이름이 등록부에 있는가")
+
+    bridge = load_yaml(os.path.join(CONFIG, "world_bridge.yml"))
+    region = load_yaml(os.path.join(CONFIG, "region_state.yml"))
+    if not bridge or not region:
+        rep.say(f"  {WARN} config 를 읽지 못했다")
+        return
+
+    registered = set((region.get("event_deltas") or {}).keys())
+
+    # 다리가 부르는 이름들 — effects.region_event (문자열 또는 맵) · region_event_by_role (맵)
+    called: list[tuple[str, str]] = []          # (사건 이름, 어느 다리 사건에서)
+    for ev, spec in (bridge.get("events") or {}).items():
+        effects = (spec or {}).get("effects") or {}
+        for field in ("region_event", "region_event_by_role"):
+            raw = effects.get(field)
+            if raw is None:
+                continue
+            if isinstance(raw, dict):
+                for k, name in raw.items():
+                    called.append((str(name), f"{ev}.{field}.{k}"))
+            else:
+                called.append((str(raw), f"{ev}.{field}"))
+
+    if not called:
+        rep.say(f"  {WARN} 다리가 부르는 지역 사건이 하나도 없다 — 배선이 끊겼는가?")
+        rep.warn("다리가 등록부의 지역 사건을 하나도 부르지 않는다")
+        return
+
+    missing = [(n, w) for n, w in called if n not in registered]
+    for name, where in sorted(called):
+        mark = DEAD if name not in registered else OK
+        rep.say(f"    {mark} {name:<20} ← world_bridge.yml {where}")
+
+    if missing:
+        rep.say()
+        for name, where in missing:
+            rep.say(f"  {DEAD} '{name}' 은 region_state.yml event_deltas 에 **없다** ({where})")
+        rep.violation(
+            f"다리가 등록부에 없는 지역 사건 {len(missing)}개를 부른다 — "
+            f"그 사건은 세계에 아무 영향도 못 준다 (플레이어가 겪는 순간 예외가 터진다): "
+            + ", ".join(sorted({n for n, _ in missing}))
+        )
+    else:
+        rep.say()
+        rep.say(f"  {OK} 다리가 부르는 지역 사건 {len(called)}개가 전부 등록부에 있다")
+
+    # 값이 다리로 돌아왔는가 — effects.region 에 **숫자**가 다시 적히면 정본이 또 둘이 된다
+    regressed = []
+    for ev, spec in (bridge.get("events") or {}).items():
+        raw = ((spec or {}).get("effects") or {}).get("region")
+        if isinstance(raw, dict) and any(isinstance(v, (int, float)) for v in raw.values()):
+            regressed.append(ev)
+    if regressed:
+        rep.violation(
+            f"world_bridge.yml 이 지역 델타 **값**을 다시 들고 있다 ({', '.join(regressed)}) — "
+            f"등록부가 또 둘이 됐다. 다리는 이름만 나른다."
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="공백 감사 — 설계와 구현 사이의 틈")
     ap.add_argument("--graph", action="store_true", help="① 참조 그래프만")
@@ -543,6 +630,8 @@ def main() -> int:
         audit_docs(rep, graph)
     if not picked or args.coverage:
         audit_coverage(rep, engines, tools)
+    if not picked:
+        audit_bridge_registry(rep)
 
     rep.say()
     rep.say("═" * 72)

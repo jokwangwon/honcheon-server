@@ -313,7 +313,7 @@ final class Bridge {
         Map<String, Object> effects = effects("surrender");
         db.logEvent("자수", who.actorType(), who.actorId(), "gwan_gun", "자수",
                 Map.of("벌금", num(data.get("fine"), 0), "출처", "mvt"));
-        regions.nudge(deltas(effects.get("region")));
+        regions.applyEvent(str(effects.get("region_event"), "자수"));
         if (!who.linked()) {
             return;   // 이름 없는 몸의 자수는 관의 장부에 오르지 못한다
         }
@@ -408,8 +408,10 @@ final class Bridge {
                             "발화일", today + rules.deaths.missingPersonDays()));
         }
 
-        // 지역의 냉기 — 복수자 없는 죽음의 유일한 대가 (populace.yml death.region_delta)
-        regions.nudge(deltas(effects.get("region")));
+        // 지역의 냉기 — 복수자 없는 죽음의 유일한 대가.
+        // ★ 다리는 **사건의 이름**만 안다 (무명_사망 / 등록_npc_사망). 얼마나 식는지는 등록부가 정한다.
+        String regionEvent = regionEventOf(effects, registry);
+        regions.applyEvent(regionEvent);
 
         // ★ 민심 부채 — 무명의 죽음이 깎은 민심은 **자연 회복에서 제외된다**
         //   (npc_death populace_layer.civil_debt: "대가는 복수가 아니라 지역의 냉기다").
@@ -417,7 +419,7 @@ final class Bridge {
         if (nameless) {
             int debt = Integer.parseInt(db.getMeta("지역:민심부채").orElse("0"));
             db.setMeta("지역:민심부채", String.valueOf(debt
-                    + Math.abs(deltas(effects.get("region")).getOrDefault("민심", 0))));
+                    + Math.abs(regions.deltasOf(regionEvent).getOrDefault("민심", 0))));
         }
 
         // 관(官)을 죽였는가 — 법명분은 npc_death.yml succession 등록부만이 정한다
@@ -527,13 +529,11 @@ final class Bridge {
                     rules.initialAccuracy(str(rumor.get("accuracy_kind"), "직접_목격")),
                     network(place), today);
         }
-        // 도적이 줄면 길이 안전해진다 (두목이면 두 배 — 등록부가 정한다)
-        Map<String, Integer> region = deltas(effects.get("region"));
-        if (!region.isEmpty()) {
-            int scale = bandit ? num(map(effects.get("scale_by_role")).get(role), 1) : 1;
-            Map<String, Integer> scaled = new LinkedHashMap<>();
-            region.forEach((k, v) -> scaled.put(k, v * scale));
-            regions.nudge(scaled);
+        // 도적이 줄면 길이 안전해진다 — **배역이 사건의 이름을 가르고, 값은 등록부가 매긴다.**
+        // (짐승 사냥은 region_event_by_role 이 없다 — 세계는 늑대 한 마리를 세지 않는다.)
+        Object byRole = map(effects.get("region_event_by_role")).get(role);
+        if (byRole != null) {
+            regions.applyEvent(String.valueOf(byRole));
         }
     }
 
@@ -758,14 +758,20 @@ final class Bridge {
         return witnesses >= many ? 2 : 1;
     }
 
-    private Map<String, Integer> deltas(Object raw) {
-        Map<String, Integer> out = new LinkedHashMap<>();
-        map(raw).forEach((k, v) -> {
-            if (v instanceof Number n) {
-                out.put(k, n.intValue());
-            }
-        });
-        return out;
+    // ★ deltas(Object) 는 죽었다 — 그것이 **두 번째 등록부를 읽던 손**이었다.
+    //   다리가 값을 나르지 않으므로 값을 파싱할 일도 없다. 손을 남겨 두면 값도 돌아온다.
+
+    /**
+     * 어느 등록부의 사람이 죽었는가 → <b>어느 사건 이름인가</b> (world_bridge effects.region_event).
+     * 이름이 없으면 세계는 흔들리지 않는다 — <b>코드가 이름을 지어내지 않는다.</b>
+     */
+    private String regionEventOf(Map<String, Object> effects, String registry) {
+        Object named = map(effects.get("region_event")).get(registry);
+        if (named == null) {
+            throw new IllegalStateException(
+                    "world_bridge.yml npc_death.effects.region_event 에 등록부가 없다: " + registry);
+        }
+        return String.valueOf(named);
     }
 
     /** 소문군 키 — 같은 사건의 망별 도달을 묶는다 (세력 중복 가산 금지의 기준) */

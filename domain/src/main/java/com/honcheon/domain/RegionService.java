@@ -45,16 +45,17 @@ public final class RegionService {
      */
     public Map<String, Integer> nudge(Map<String, Integer> deltas) throws Exception {
         Map<String, Integer> now = new LinkedHashMap<>(ledger.region());
+
+        // ★ 산수는 규칙이 한다 — 클램프도, 등록되지 않은 눈금을 무시하는 것도.
+        //   서비스가 하는 일은 '무엇이 바뀌었는지'를 장부에 옮겨 적는 것뿐이다.
+        rules.applyDeltas(now, deltas);
+
         Map<String, Integer> changed = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> e : deltas.entrySet()) {
-            Integer current = now.get(e.getKey());
-            if (current == null || e.getValue() == 0) {
-                continue;   // 세계에 없는 눈금이거나, 아무것도 안 한 것이다
+        deltas.forEach((stat, delta) -> {
+            if (delta != 0 && now.containsKey(stat)) {
+                changed.put(stat, now.get(stat));
             }
-            int next = rules.clamp(current + e.getValue());
-            now.put(e.getKey(), next);
-            changed.put(e.getKey(), next);
-        }
+        });
         if (!changed.isEmpty()) {
             ledger.writeRegion(changed);
         }
@@ -62,14 +63,24 @@ public final class RegionService {
     }
 
     /**
-     * 등록된 사건 하나로 지역을 흔든다 — {@code region_state.yml event_deltas} 의 이름을 넘긴다.
-     * (등록되지 않은 사건은 세계에 없다 — 규칙이 던진다.)
+     * 등록된 사건 하나로 지역을 흔든다 — {@code region_state.yml event_deltas} 의 <b>이름</b>을 넘긴다.
      *
-     * <p>★ 위 클래스 주석의 청구서를 보라: 프로덕션은 아직 이 문으로 들어오지 않는다.
-     * 다리(world_bridge.yml)가 제 인라인 숫자를 쓰기 때문이다.
+     * <p>★ <b>이것이 정문이다.</b> 다리는 사실(사건의 이름)을 나르고, <b>값은 등록부가 매긴다.</b>
+     * 예전에는 {@code world_bridge.yml} 이 제 인라인 숫자를 실어 왔고 — 그래서 지역 사건의 정본이
+     * 둘이었다. 도적 건에서는 실제로 갈라져 있었다 (다리 치안 +2 vs 등록부 치안 +5·민심 +3).
+     *
+     * <p>등록되지 않은 사건은 <b>세계에 없다</b> — 규칙이 던진다. 조용히 0 을 얹지 않는다.
      */
     public Map<String, Integer> applyEvent(String eventKey) throws Exception {
         return nudge(rules.deltas(eventKey));
+    }
+
+    /**
+     * 등록된 사건의 델타 — 장부를 건드리지 않고 <b>값만</b> 묻는다.
+     * (민심 부채처럼 "얼마나 깎였는지"를 따로 적어야 하는 쪽이 쓴다.)
+     */
+    public Map<String, Integer> deltasOf(String eventKey) {
+        return rules.deltas(eventKey);
     }
 
     /**

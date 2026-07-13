@@ -64,10 +64,10 @@ public final class RegionStateEngine {
         return deltas;
     }
 
-    /** 사건을 <b>부르는 쪽의 장부에</b> 적용한다 (0~100 clamp). 이 클래스는 그 장부를 기억하지 않는다 */
-    public Map<String, Integer> applyTo(Map<String, Integer> ledger, String eventKey) {
-        return applyDeltas(ledger, deltas(eventKey));
-    }
+    // ★ applyTo(ledger, eventKey) 는 죽었다.
+    //   deltas(eventKey) + applyDeltas(ledger, …) 두 조각이면 충분하고, 프로덕션의 장부는
+    //   메모리 맵이 아니라 SQLite 다 (domain.RegionService 가 그 둘을 잇는다).
+    //   편의 메서드 하나를 살려 두려고 테스트에만 호출자를 두는 것은 — 그것이 곧 죽은 쌍둥이다.
 
     /**
      * 이미 값이 정해진 델타를 <b>부르는 쪽의 장부에</b> 적용한다 (scale.min~max clamp).

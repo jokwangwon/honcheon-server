@@ -123,6 +123,21 @@ final class RiverForge {
             // axis_offset 은 비율이라 별도 표에 담는다 (반경은 조성 때 정해진다)
             offsets.put(id, dbl(m, def, "axis_offset", 0.45));
         }
+        // 하지(河誌) — 조성기가 판 강의 자리. 플러그인 자료방에 둔다 (config 가 아니다 — 이것은 기록이다)
+        ledgerFile = configDir.getParent() == null
+                ? null : configDir.getParent().resolve("rivers_built.yml");
+        loadLedger();
+    }
+
+    /** 방위 이름 (로그용) */
+    private static String faceName(int ux, int uz) {
+        if (ux > 0) {
+            return "동";
+        }
+        if (ux < 0) {
+            return "서";
+        }
+        return uz > 0 ? "남" : "북";
     }
 
     private static final Map<String, Double> offsets = new LinkedHashMap<>();
@@ -164,21 +179,85 @@ final class RiverForge {
      * <p>{@code axis_offset} 은 <b>반경의 배수</b>로 등록된다 — 부지 반경은 조성 때 정해지므로
      * 여기서 비로소 칸으로 환산한다.
      */
-    static RiverPlan plan(WorldMap.Place place, TerrainForge.SiteSpec spec) {
-        return plan(place, spec.cx(), spec.cz(), spec.radius(), spec.groundY());
-    }
-
-    /** 같은 산술 — 부지 사양 없이도 부른다 (검수는 조성이 끝난 뒤에 오므로 사양을 안 들고 온다) */
-    static RiverPlan plan(WorldMap.Place place, int cx, int cz, int radius, int groundY) {
+    /** 등록부가 적은 그대로의 Spec (아직 땅에게 묻기 전) */
+    private static RiverPlan.Spec registered(WorldMap.Place place, int radius) {
         RiverPlan.Spec s = place == null ? null : registry.get(place.id());
         if (s == null) {
             return null;
         }
         int off = (int) Math.round(offsets.getOrDefault(place.id(), 0.45) * radius);
-        RiverPlan.Spec withOffset = new RiverPlan.Spec(s.placeId(), s.name(), s.ux(), s.uz(),
+        return new RiverPlan.Spec(s.placeId(), s.name(), s.ux(), s.uz(),
                 s.halfWidth(), s.depth(), s.gradient(), off, s.surfaceBelowGround(),
                 s.valley(), s.margin(), s.meanderAmp(), s.meanderLen(), s.bankMaterial());
-        return new RiverPlan(withOffset, cx, cz, radius, groundY);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 하지(河誌) — ★ 조성기가 **어디를 팠는지 적어 둔다**
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // 왜 필요한가 — 인게임 1차 조성이 가르쳐 준 것:
+    //   검수는 **구역(Zone) 한가운데**를 부지 중심으로 알고 강을 찾았다. 그런데 수로채의 구역 중심은
+    //   **뗏목**이다 (RemoteBuilder: rc = shore + 17) — 부지 중심에서 물 쪽으로 31칸 밀려 있다.
+    //   검수는 그 밀린 중심에 다시 axis_offset(50칸)을 얹어 **엉뚱한 자리**를 팠다고 믿었고,
+    //   거기엔 당연히 물이 없었다:
+    //       ③ 물길 한가운데 7/261칸이 물이다   ← 강은 멀쩡히 흐르고 있었다. **눈이 딴 데를 봤다**
+    //
+    //   ★ 정본이 둘이었다. 조성기가 판 강과 검수가 상상한 강이 서로 달랐다.
+    //   그래서 **조성기가 적는다. 검수는 그 기록을 읽는다.** 강이 어디 있는지는 판 사람이 안다.
+
+    private static Path ledgerFile;
+    private static final Map<String, int[]> dug = new LinkedHashMap<>();   // id → {x, z, radius, groundY, ux, uz, offset}
+
+    /** 검수가 읽는다 — 조성기가 실제로 판 강. 없으면 null */
+    static RiverPlan dugPlan(WorldMap.Place place) {
+        RiverPlan.Spec base = place == null ? null : registry.get(place.id());
+        int[] d = place == null ? null : dug.get(place.id());
+        if (base == null || d == null) {
+            return null;
+        }
+        RiverPlan.Spec actual = new RiverPlan.Spec(base.placeId(), base.name(), d[4], d[5],
+                base.halfWidth(), base.depth(), base.gradient(), d[6], base.surfaceBelowGround(),
+                base.valley(), base.margin(), base.meanderAmp(), base.meanderLen(), base.bankMaterial());
+        return new RiverPlan(actual, d[0], d[1], d[2], d[3]);   // 기하만 — 검수는 **거기 있는 물을 잰다**
+    }
+
+    private static void remember(String id, RiverPlan river, int radius, int groundY) {
+        RiverPlan.Spec s = river.spec();
+        dug.put(id, new int[]{river.centerX(), river.centerZ(), radius, groundY,
+                s.ux(), s.uz(), s.axisOffset()});
+        if (ledgerFile == null) {
+            return;
+        }
+        try {
+            List<String> lines = new java.util.ArrayList<>();
+            lines.add("# 하지(河誌) — 조성기가 판 강의 자리. **검수가 이것을 읽는다** (손으로 고치지 말 것)");
+            for (Map.Entry<String, int[]> e : dug.entrySet()) {
+                int[] v = e.getValue();
+                lines.add(e.getKey() + ": [" + v[0] + ", " + v[1] + ", " + v[2] + ", " + v[3]
+                        + ", " + v[4] + ", " + v[5] + ", " + v[6] + "]");
+            }
+            Files.write(ledgerFile, lines);
+        } catch (java.io.IOException ignored) {
+            // 적지 못해도 조성은 끝났다 — 다만 검수가 눈을 감을 뿐이다 (그것은 거짓말이 아니라 침묵이다)
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void loadLedger() {
+        dug.clear();
+        if (ledgerFile == null || !Files.isRegularFile(ledgerFile)) {
+            return;
+        }
+        Map<String, Object> root = RulesConfig.load(ledgerFile);
+        for (Map.Entry<String, Object> e : root.entrySet()) {
+            if (e.getValue() instanceof List<?> v && v.size() >= 7) {
+                int[] a = new int[7];
+                for (int i = 0; i < 7; i++) {
+                    a[i] = ((Number) v.get(i)).intValue();
+                }
+                dug.put(e.getKey(), a);
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -199,10 +278,24 @@ final class RiverForge {
      */
     static TerrainForge.SiteSpec carve(World world, WorldMap.Place place, TerrainForge.SiteSpec spec) {
         lastRefusal = null;
-        RiverPlan river = plan(place, spec);
-        if (river == null) {
+        RiverPlan.Spec asRegistered = registered(place, spec.radius());
+        if (asRegistered == null) {
             return spec;   // 등록되지 않은 곳 — 강을 발명하지 않는다
         }
+
+        // ★ 땅에게 묻는다 — 어느 쪽이 내리막인가. 등록부는 지리를 알고, 땅은 중력을 안다.
+        //   등록된 방향이 오르막이면 축을 뒤집는다 (물은 지리를 모른다).
+        RiverPlan.Ground ground = (x, z) -> naturalGround(world, x, z, spec.groundY() + 80);
+        RiverPlan.Spec asLandWants = RiverPlan.faceDownhill(
+                asRegistered, spec.cx(), spec.cz(), spec.radius(), spec.groundY(), ground);
+        if (asLandWants.ux() != asRegistered.ux() || asLandWants.uz() != asRegistered.uz()) {
+            org.bukkit.Bukkit.getLogger().info("[지형/강] " + asLandWants.name()
+                    + " — 등록된 방향이 오르막이다. 땅을 따라 축을 뒤집었다 ("
+                    + faceName(asRegistered.ux(), asRegistered.uz()) + " → "
+                    + faceName(asLandWants.ux(), asLandWants.uz()) + " 쪽으로 흐른다)");
+        }
+        RiverPlan river = new RiverPlan(asLandWants, spec.cx(), spec.cz(),
+                spec.radius(), spec.groundY(), ground);   // ★ 땅이 수면을 정한다
 
         // ─── 거절 ① 이미 물이다 ────────────────────────────────────────────
         //   부지가 바다·큰 호수 한복판이면 강을 팔 수 없다. 우리 수면(지면-2)보다 높은 자연 수면이
@@ -226,12 +319,15 @@ final class RiverForge {
                 }
                 int natural = naturalGround(world, x, z, spec.groundY() + 80);
                 if (river.inChannel(x, z)) {
-                    channelColumn(world, river, x, z, bed);
+                    channelColumn(world, river, x, z, natural, bed);
                 } else {
                     bankColumn(world, river, x, z, natural, bed);
                 }
             }
         }
+
+        // ★ 판 자리를 **적는다** — 검수가 이것을 읽는다 (구역 중심으로 강을 찾으면 딴 데를 본다)
+        remember(place.id(), river, spec.radius(), spec.groundY());
 
         // ─── 땅이 바뀌었으니 **다시 잰다** ────────────────────────────────────
         //   surface[]·buildable[]·waterfront 를 손으로 고치지 않는다 — 지형 계층의 자[尺]로 다시 잰다.
@@ -281,7 +377,8 @@ final class RiverForge {
      * <p>물 위에 천장이 있으면 그것은 강이 아니라 <b>굴</b>이다. 그리고 하상 아래가 비면
      * 그것은 강이 아니라 <b>새는 통</b>이다 (계약 ①).
      */
-    private static void channelColumn(World world, RiverPlan river, int x, int z, Material bed) {
+    private static void channelColumn(World world, RiverPlan river, int x, int z,
+                                      int natural, Material bed) {
         int s = river.downstream(x, z);
         double d = river.distanceFromCenterline(x, z);
         int waterY = river.waterY(s);
@@ -299,8 +396,13 @@ final class RiverForge {
             }
         }
 
-        // 하늘 — 수면 위를 비운다 (풀·나무·언덕이 물 위에 얹혀 있으면 걷어낸다)
-        for (int y = waterY + 1; y <= river.clearanceTop(s); y++) {
+        // ─── 하늘 — 수면 위를 비운다 ───────────────────────────────────────
+        //   ★ 구판은 여기를 **clearanceTop(수면+8)까지만** 걷었다. 평지에서는 그게 하늘이었다.
+        //   그런데 실제 부지는 기복 32칸이었다 — 물길이 언덕을 지나는 자리에서는 지면이 수면보다
+        //   20~30칸 높았고, 그 **덮개를 안 걷었다.** 강이 굴 속으로 들어간 것이다.
+        //   **덮은 흙 전부를 걷는다** — 자연 지면까지. 강 위에 천장이 있으면 그건 강이 아니라 굴이다.
+        int top = Math.max(natural == RiverPlan.WET ? waterY : natural, river.clearanceTop(s));
+        for (int y = waterY + 1; y <= top; y++) {
             Block b = world.getBlockAt(x, y, z);
             if (!b.getType().isAir()) {
                 b.setType(Material.AIR);

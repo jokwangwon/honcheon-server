@@ -65,7 +65,7 @@ class WorldReactionParityTest {
                 r1 = rumorEngine.create("R1", 0, "inn_net", 2, 70,
                         Set.of("폭력", "사파", "무인", "치안", "조직원"), null);
                 rumors.add(r1);
-                region.applyTo(state, "증거_없는_폭행");
+                region.applyDeltas(state, region.deltas("증거_없는_폭행"));
                 apply(rules, attention, "haomun", "미상의 낭인", rules.attentionInput("연락책_연락두절"));
             }
             if (day == 2) {
@@ -74,7 +74,7 @@ class WorldReactionParityTest {
             }
             if (day == 3) {
                 // 해질녘: 상단 습격 발생
-                region.applyTo(state, "상단_습격_성공");
+                region.applyDeltas(state, region.deltas("상단_습격_성공"));
                 r2 = rumorEngine.create("R2", 3, "sangdan_net", 3, 90,
                         Set.of("도적", "물류", "금전", "치안", "폭력"), "sangdan");
                 rumors.add(r2);

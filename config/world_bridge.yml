@@ -172,8 +172,11 @@ events:
         matrix: npc_death.killer_response.rumor_matrix
         subject_is_killer: true    # 목격자가 있으면 소문의 주체는 가해자다 → 세력이 그를 주목한다
         subject_needs_witness: true # 아무도 못 봤으면 이름이 남지 않는다 (은밀형의 보상)
-      region:
-        민심: -1                   # populace.yml death.region_delta (무명). 등록 NPC 는 npc_death.yml 이 정한다
+      # ★ 다리는 **사건의 이름**만 나른다 — 얼마나 흔들리는지는 등록부(region_state.yml)가 정한다.
+      #   전에는 여기에 "민심: -1" 이라고 **값이** 적혀 있었다. 그래서 지역 사건의 정본이 둘이 됐다.
+      region_event:
+        populace: 무명_사망            # region_state.yml event_deltas.무명_사망
+        cheongha_npcs: 등록_npc_사망   # region_state.yml event_deltas.등록_npc_사망
       succession: registry_only     # 무명에게는 후계도 복수자도 없다 (populace.yml death.revenge: civil_debt)
       mandate: npc_death.succession  # 관(官)을 죽였는가 — 법명분은 그 등록부만이 정한다
 
@@ -193,9 +196,11 @@ events:
         intensity_by_role: { 졸개: 1, 두목: 2 }
         accuracy_kind: 직접_목격      # rumor.yml generation.initial_accuracy (90)
         subject_is_killer: true
-      region:
-        치안: 1                      # 도적이 줄면 길이 안전해진다 (두목이면 ×2 — scale_by_role)
-      scale_by_role: { 졸개: 1, 두목: 2 }
+      # ★ 배역(role)이 **사건의 이름**을 가른다. 값은 등록부가 매긴다 (여기서 곱하지 않는다 —
+      #   예전의 scale_by_role 은 값을 여기서 ×2 하던 장치였고, 그것이 곧 두 번째 정본이었다).
+      region_event_by_role:
+        졸개: 도적_부분_소탕          # region_state.yml — 치안 +2
+        두목: 도적_두목_제거          # region_state.yml — 치안 +5 · 민심 +3
 
   beast_slain:
     desc: "짐승을 잡았다 — 사냥 (생계와 수련)"
@@ -299,11 +304,10 @@ events:
       # 관의 법 — 수치의 원천은 등록부다 (여기서 발명하지 않는다. 아래는 그 표를 옮겨 적은 배선값):
       #   mandate → faction_politics.yml authority_mandate.drains.자수 (-10)
       #             ★ 코드는 Politics.mandateDrain("자수") 로 **등록부에서 직접** 읽는다
-      #   region  → npc_death.yml responses.자수.effect.민심 (+2)
-      #             (npc_death.effects.region 이 민심 -1 을 여기 적어 둔 것과 같은 관행)
+      #   region  → ★ 이제 **등록부가 정한다**: region_state.yml event_deltas.자수 (민심 +2).
+      #             그 값의 출처는 npc_death.yml responses.자수.effect.민심 이다 (승격됨).
       mandate_drain: 자수          # faction_politics.yml authority_mandate.drains 의 키
-      region:
-        민심: 2
+      region_event: 자수           # region_state.yml event_deltas.자수 (민심 +2)
       # ★ 혈채는 **삭제되지 않는다** (faction_reaction.yml blood_debt.atonement.principle:
       #   "혈채는 삭제되지 않는다. 성격이 바뀔 뿐이다"). 자수는 현혈채의 **감쇠를 개시**할 뿐이다.
       #   그래서 목에 걸린 값(feedback.bounty)은 자수 한 번으로 내려가지 않는다 —

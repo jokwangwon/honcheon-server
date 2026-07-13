@@ -62,24 +62,142 @@ final class RiverPlan {
                 int meanderAmp, int meanderLen, String bankMaterial) {
     }
 
+    /** 하상을 파 내려갈 수 있는 최대 깊이 (조성 지면 기준) — 골짜기가 무한정 깊어지지 않게 */
+    static final int MAX_CUT = 24;
+
     private final Spec spec;
     private final int cx;
     private final int cz;
     private final int radius;
+    private final int groundY;
 
     /** 물길 전체 길이 — 부지 지름 + 양쪽 여유. s 는 0(상류 끝)에서 length(하류 끝)까지 */
     private final int length;
 
-    /** 부지 중심에서의 수면 y — 여기서부터 상류는 높고 하류는 낮다 */
-    private final int anchorY;
+    /**
+     * <b>수면의 세로 단면</b> — {@code surface[s]} 가 그 지점의 수면 y 다.
+     *
+     * <p>★ 구판은 이것이 <b>상수 하나</b>였다 ({@code groundY - 2} 에서 gradient 만큼 계단으로 내려감).
+     * 평지에서는 맞았다. 그런데 인게임의 실제 부지는 <b>기복 32칸</b>이었고,
+     * 상수 수면은 어떤 데서는 땅속 30칸에 있고 어떤 데서는 <b>언덕 위 공중</b>에 있었다.
+     * <b>강은 땅을 무시하고 그을 수 있는 선이 아니다.</b>
+     *
+     * <p>지금은 <b>땅이 정한다</b> (아래 {@link #profile}).
+     */
+    private final int[] surface;
 
-    RiverPlan(Spec spec, int cx, int cz, int radius, int groundY) {
+    /**
+     * 산술을 짓는다. <b>{@code ground} 를 주면 땅이 수면을 정한다</b> (조성기가 부른다).
+     * 주지 않으면 기하(幾何)만 쓴다 — 중심선·폭·물길 마스크는 땅과 무관하고,
+     * <b>검수는 그 기하만 쓴다</b> (검수는 계획의 수면을 믿지 않는다. <b>거기 있는 물을 잰다</b>).
+     */
+    RiverPlan(Spec spec, int cx, int cz, int radius, int groundY, Ground ground) {
         this.spec = spec;
         this.cx = cx;
         this.cz = cz;
         this.radius = radius;
+        this.groundY = groundY;
         this.length = 2 * (radius + spec.margin());
-        this.anchorY = groundY - spec.surfaceBelowGround();
+        this.surface = ground == null ? null : profile(ground);
+    }
+
+    /** 기하만 — 검수용 (땅을 다시 재지 않는다. 조성이 이미 땅을 바꿔 놓았으므로 재면 <b>딴 답</b>이 나온다) */
+    RiverPlan(Spec spec, int cx, int cz, int radius, int groundY) {
+        this(spec, cx, cz, radius, groundY, null);
+    }
+
+    /**
+     * <b>수면을 땅에게 묻는다</b> — §19-F: <i>"강이 높은 곳에서 낮은 곳으로 흐르는가?"</i>
+     *
+     * <p>중심선을 따라 땅을 훑고, 그 위에 <b>단조 비증가</b>인 수면을 얹는다:
+     * <pre>
+     *   h[s]  = 그 자리의 땅 − 여유(freeboard)          ← 강은 땅보다 낮다
+     *   ws[s] = min( ws[s-1],           ← 절대 올라가지 않는다 (그것이 '흐른다'의 정의다)
+     *                h[s],              ← 땅 위로 뜨지 않는다
+     *                ws[0] − s/기울기 ) ← 반드시 떨어진다 (안 떨어지면 그건 못이다)
+     * </pre>
+     * 셋 다 s 에 대해 비증가이므로 <b>그 최소도 비증가다</b> — 역류는 <b>산술적으로 불가능</b>하다.
+     * 땅이 하류에서 솟으면 그만큼 <b>더 깊이 판다</b> (협곡이 된다). 그것이 강이 하는 일이다.
+     */
+    private int[] profile(Ground ground) {
+        int[] ws = new int[length + 1];
+        int floor = groundY - MAX_CUT;
+        int head = reference(ground, 0);
+        ws[0] = head;
+        for (int s = 1; s <= length; s++) {
+            int cap = head - Math.floorDiv(s, spec.gradient());   // 반드시 떨어진다
+            int here = reference(ground, s);
+            ws[s] = Math.max(floor, Math.min(Math.min(ws[s - 1], here), cap));
+        }
+        return ws;
+    }
+
+    /** 그 지점에서 수면이 넘볼 수 있는 <b>최고 높이</b> — 땅보다 {@code surfaceBelowGround} 만큼 낮다 */
+    private int reference(Ground ground, int s) {
+        int[] p = pointOnCenterline(s);
+        int g = ground.y(p[0], p[1]);
+        if (g == WET) {
+            g = groundY;   // 자연의 물 — 그 높이는 조성기가 따로 본다 (거절 검사)
+        }
+        return g - spec.surfaceBelowGround();
+    }
+
+    /** 중심선 위의 세계 좌표 (하류 거리 s 에서) */
+    int[] pointOnCenterline(int s) {
+        int along = s - length / 2;
+        int l = (int) Math.round(centerline(s));
+        return new int[]{
+                cx + spec.ux() * along + (-spec.uz()) * l,
+                cz + spec.uz() * along + spec.ux() * l};
+    }
+
+    /**
+     * <b>땅이 어느 쪽으로 낮아지는가</b> — 흐름의 방향을 여기서 정한다.
+     *
+     * <p>등록부는 "장강은 서에서 동으로 흐른다"고 적는다. 그것은 <b>실지리</b>다.
+     * 그러나 바닐라가 그 좌표에 놓아 준 땅은 <b>동쪽이 높을 수도 있다</b>.
+     * 등록부를 따라 오르막으로 강을 내면 그것은 강이 아니라 <b>수로교</b>다.
+     *
+     * <p>그래서 <b>땅에게 묻는다</b>: 등록된 방향의 상류 1/4 과 하류 1/4 의 평균 지면을 재서,
+     * 하류가 더 높으면 <b>축을 뒤집는다</b>. 이때 {@code axisOffset} 의 부호도 함께 뒤집어
+     * <b>물길이 물리적으로 같은 쪽에 남게</b> 한다 (마을이 앉을 뭍이 반대편으로 튀지 않도록).
+     *
+     * @return 땅이 요구하는 Spec (뒤집혔거나, 그대로거나)
+     */
+    static Spec faceDownhill(Spec spec, int cx, int cz, int radius, int groundY, Ground ground) {
+        RiverPlan probe = new RiverPlan(spec, cx, cz, radius, groundY);
+        int n = probe.length() / 4;
+        long up = 0;
+        long down = 0;
+        int cu = 0;
+        int cd = 0;
+        for (int s = 0; s <= probe.length(); s += 2) {
+            int[] p = probe.pointOnCenterline(s);
+            int g = ground.y(p[0], p[1]);
+            if (g == WET) {
+                g = groundY;
+            }
+            if (s <= n) {
+                up += g;
+                cu++;
+            } else if (s >= probe.length() - n) {
+                down += g;
+                cd++;
+            }
+        }
+        if (cu == 0 || cd == 0) {
+            return spec;
+        }
+        int headY = (int) (up / cu);
+        int footY = (int) (down / cd);
+        if (footY <= headY + 1) {
+            return spec;   // 등록된 방향이 이미 내리막이다 — 지리가 옳았다
+        }
+        // 하류가 더 높다 — 땅이 등록부를 반박한다. 뒤집는다 (물은 지리를 모른다. 중력만 안다)
+        return new Spec(spec.placeId(), spec.name(), -spec.ux(), -spec.uz(),
+                spec.halfWidth(), spec.depth(), spec.gradient(), -spec.axisOffset(),
+                spec.surfaceBelowGround(), spec.valley(), spec.margin(),
+                spec.meanderAmp(), spec.meanderLen(), spec.bankMaterial());
     }
 
     Spec spec() {
@@ -88,6 +206,10 @@ final class RiverPlan {
 
     int length() {
         return length;
+    }
+
+    int groundY() {
+        return groundY;
     }
 
     int radius() {
@@ -160,7 +282,11 @@ final class RiverPlan {
      * <b>평평하다</b> — 수면을 비스듬히 놓을 수는 없다. 그러니 강은 <b>층계로</b> 흐른다.
      */
     int waterY(int s) {
-        return anchorY + Math.floorDiv(length / 2 - s, spec.gradient());
+        if (surface == null) {
+            // 기하 전용 (검수) — 계획 수면이 없다. 검수는 이 값을 쓰지 않고 <b>거기 있는 물을 잰다</b>
+            return groundY - spec.surfaceBelowGround();
+        }
+        return surface[Math.max(0, Math.min(length, s))];
     }
 
     /** 한 굽이에서 수면이 떨어지는 총 낙차 — 0 이면 그것은 강이 아니라 못이다 (검수가 잰다) */
