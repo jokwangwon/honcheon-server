@@ -42,6 +42,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "경지" -> realm(sender, args);
                 case "병기" -> giveWeapon(sender, args);   // 관리자 지급 — 검증용
                 case "병기상" -> weaponShop(sender);        // 장쇠 좌판
+                case "명명" -> enshrine(sender, args);       // 애병을 문파의 명병으로 (매화검은 매화검처럼 생긴다)
                 case "재련" -> reforgeWeapon(sender);        // 야철수 — 품 1단 상승
                 case "각인" -> inscribeWeapon(sender, args); // 각인 — 슬롯 안에서만
                 case "격돌" -> recordClash(sender);          // 애병 카운터 (검증용)
@@ -53,6 +54,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "지역조성" -> buildRegion(sender, args);   // 원거리 등록지 하나를 짓는다 (관리자·콘솔 가능)
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
+                case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "운기" -> meditate(sender);
@@ -624,18 +626,38 @@ public final class MvtCommand implements CommandExecutor {
             org.bukkit.Bukkit.getScheduler().runTask(plugin, () ->
         TickBudget.build(plugin, "조성:" + place.id(), world,
                 w -> {   // ★ 워커 스레드 — Bukkit API 직접 호출 금지 (대역 월드를 통하는 것만 안전하다)
-                    TerrainForge.SiteSpec spec =
-                            TerrainForge.prepare(w, place, site.x(), baseY, site.z(), forgeRadius);
-                    // ★ 강 — 순서가 계약이다: prepare() **다음**, digCave() **앞**.
-                    //   앞에서 파면 prepare 의 tidyWater 가 **우리가 판 강을 지운다.**
-                    //   등록된 물길이 없는 부지면 그대로 통과한다.
-                    spec = RiverForge.carve(w, place, spec);
-                    TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
-                    TerrainForge.CaveSpec cave = kind == null ? null : TerrainForge.digCave(w, spec, kind);
-                    return new RegionResult(spec, cave, RemoteBuilder.build(w, place, spec, cave));
+                    // ★★ **땅에 맞게 건물이 올라가는 것이지, 건축에 맞게 지형이 생기는 게 아니다.** (사용자)
+                    //   그래서 땅은 **한 번만** 선다 — `Terraform` 이 그 문이다:
+                    //     땅이 없다 → 빚는다 (prepare → 강 → 요청 → 굴) → **원장에 적는다**
+                    //     땅이 있다 → **측량만 한다. 블록을 하나도 안 건드린다.**
+                    //   그러므로 `/혼천 지역조성` 을 두 번 치면 **두 번째는 건물만 다시 선다.**
+                    Terraform.Land land =
+                            Terraform.land(w, place, site.x(), baseY, site.z(), forgeRadius);
+                    // ★ 봉인 — **건축이 땅을 바꿨는가**를 기계가 증명한다 (자재가 아니라 **형상**을 잰다)
+                    TerrainSeal.Probe probe = TerrainSeal.of(w);
+                    TerrainSeal.Seal before = TerrainSeal.seal(probe, land.spec());
+                    java.util.List<Zone> built = RemoteBuilder.build(w, place, land.spec(), land.cave());
+                    TerrainSeal.Seal after = TerrainSeal.seal(probe, land.spec());
+                    return new RegionResult(land, before, after, built);
                 },
                 r -> {   // ★ 메인 스레드 — 여기서 말한다
-                    plugin.getLogger().info("[지형] " + r.spec().summary());
+                    plugin.getLogger().info("[지형] " + (r.land().forged()
+                            ? "새로 빚었다" : "★ 원장에서 읽었다 (땅을 안 건드렸다)")
+                            + " · 요청 " + r.land().requests() + "건 — " + r.spec().summary());
+                    if (!r.land().forged() && r.land().requests() > 0) {
+                        sender.sendMessage(ChatColor.GOLD + "땅에 " + r.land().requests()
+                                + "가지 일을 **더했다** (나머지는 그대로다)");
+                    }
+                    for (String no : Terraform.refusals) {
+                        sender.sendMessage(ChatColor.RED + "거절: " + no);
+                    }
+                    for (String no : LandRequest.refusals) {
+                        // 거절은 소리내어 말한다 — 조용히 넘어가면 그것이 곧 거짓말이다
+                        sender.sendMessage(ChatColor.RED + "요청 거절: " + no);
+                    }
+                    for (String line : TerrainSeal.compare(r.before(), r.after())) {
+                        sender.sendMessage(line);
+                    }
                     if (RiverForge.lastRefusal != null) {
                         // 조용히 넘어가지 않는다 — **짓지 않으면 위반이 없다**는 침묵이 이 사고의 정체였다
                         plugin.getLogger().warning("[지형/강] " + RiverForge.lastRefusal);
@@ -669,9 +691,17 @@ public final class MvtCommand implements CommandExecutor {
                 sender::sendMessage)));
     }
 
-    /** 지형·굴·건축을 한 세션으로 묶은 결과 */
-    private record RegionResult(TerrainForge.SiteSpec spec, TerrainForge.CaveSpec cave,
-                                java.util.List<Zone> built) { }
+    /** 지형·굴·건축을 한 세션으로 묶은 결과 (봉인 전/후 포함) */
+    private record RegionResult(Terraform.Land land, TerrainSeal.Seal before, TerrainSeal.Seal after,
+                                java.util.List<Zone> built) {
+        TerrainForge.SiteSpec spec() {
+            return land.spec();
+        }
+
+        TerrainForge.CaveSpec cave() {
+            return land.cave();
+        }
+    }
 
 
     /** /혼천 세계조성 — 등록된 지역을 제 좌표에 짓는다 (관리자). 지금은 청하현 일대 */
@@ -1457,6 +1487,77 @@ public final class MvtCommand implements CommandExecutor {
         for (String line : MapAudit.audit(plugin.worldMap(), built)) {
             sender.sendMessage(line);
         }
+        return true;
+    }
+
+    /**
+     * <b>/혼천 땅갈아엎기 &lt;id&gt;</b> — 그 땅의 기억을 지운다. <b>다음 조성이 땅을 다시 빚는다.</b>
+     *
+     * <p>★ 이것이 <b>명시적 선언</b>이어야 하는 이유: 땅을 다시 빚는 것은
+     * <b>지난번에 우리가 만든 것 위에 또 만드는 것</b>이다 (재조성이 산 위에 산을 쌓던 그 병).
+     * 그리고 부지 탐색이 <b>우리가 바꾼 지형을 표본해</b> 다른 답을 낸다 —
+     * 장강수로채가 재조성 한 번에 128칸을 옮겨 앉았다.
+     *
+     * <p>그러므로 <b>조용히 일어나면 안 된다.</b> 땅을 갈아엎겠다면 그렇게 말해야 한다.
+     */
+    private boolean forgetLand(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 땅갈아엎기 <지역id>");
+            return true;
+        }
+        World world = sender instanceof Player p ? p.getWorld() : org.bukkit.Bukkit.getWorlds().get(0);
+        // ★ **원지(原地)로 되돌린다.** 장부만 지우는 것은 **반쪽**이고, 반쪽 명령은 사용자를 속인다 —
+        //   그러면 다음 조성이 **이미 만든 산 위에 또 산을 쌓는다.**
+        int n = Terraform.razeLand(world, args[1]);
+        if (n < 0) {
+            sender.sendMessage(ChatColor.RED + "되돌릴 수 없다 — 이 땅의 원지를 적어 두지 않았다.");
+            sender.sendMessage(ChatColor.GRAY + "  원지 기록 이전에 조성된 땅이다. 장부를 지우면 "
+                    + "이미 만든 산 위에 또 산을 쌓는다.");
+            sender.sendMessage(ChatColor.GRAY + "  처음부터 원하면 세계 재조성이다 "
+                    + ChatColor.WHITE + "(scripts/fresh_start.sh)");
+            return true;   // ★ 장부를 지우지 않는다 — 반쪽으로 두느니 거절한다
+        }
+        sender.sendMessage(ChatColor.GOLD + args[1] + " 의 땅을 원지로 되돌렸다 (" + n
+                + "열). 다음 조성이 처음부터 빚는다.");
+        sender.sendMessage(ChatColor.DARK_GRAY
+                + "  (높이는 되돌아오나 광석·초목의 결은 못 되살린다 — 우리는 그것을 안 적었다)");
+        return true;
+    }
+
+    /**
+     * <b>/혼천 명명 &lt;문파&gt;</b> — 애병에 문파의 얼굴을 준다.
+     *
+     * <p>사용자 요구: <i>"매화검인 경우 매화검처럼 생겨야 함. 손잡이에 매화 무늬가 있다던가."</i>
+     *
+     * <p>★ <b>계열이 문파와 맞을 때만</b> 실루엣이 바뀐다. 매화검은 <b>검</b>이다 —
+     * 도(刀)에 매화를 물리면 <b>도가 검으로 보인다.</b> 어긋나면 단계만 오르고 실루엣은 계열 그대로다.
+     */
+    private boolean enshrine(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "/혼천 명명 <hwasan|jeomchang|jongnam|namgung"
+                    + "|mudang|paengga|dangga|sorimsa>");
+            return true;
+        }
+        String sect = args[1].toLowerCase(java.util.Locale.ROOT);
+        if (!Weapons.isMyeongSect(sect)) {
+            player.sendMessage(ChatColor.RED + "등록되지 않은 문파: " + sect);
+            return true;
+        }
+        ItemStack held = player.getInventory().getItemInMainHand();
+        if (!Weapons.isWeapon(held)) {
+            player.sendMessage(ChatColor.RED + "손에 병기가 없다.");
+            return true;
+        }
+        ItemStack named = Weapons.enshrine(held, sect);
+        player.getInventory().setItemInMainHand(named);
+        player.sendMessage(ChatColor.GOLD + "명병(名兵) — " + sect + " 의 이름을 얻었다."
+                + (sect.equals(Weapons.sectOf(named))
+                ? ChatColor.GRAY + " 병기가 문파의 얼굴을 띤다."
+                : ChatColor.DARK_GRAY + " (계열이 달라 실루엣은 그대로다)"));
         return true;
     }
 }

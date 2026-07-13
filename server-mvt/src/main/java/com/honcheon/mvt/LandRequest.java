@@ -179,6 +179,96 @@ final class LandRequest {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // 신원(身元) — ★ 무엇이 "이미 한 요청"이고 무엇이 "새 요청"인가
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // 사용자: "이미 완성된 조성에 **강 하나 더 만들어줘, 산 하나 더 세워줘**"
+    //   → 등록부의 요청 목록과 원장의 **적용된 목록**을 대조해 **차집합만** 집행한다.
+    //   그러려면 요청에 **안정된 신원**이 있어야 한다. 목록의 순서가 바뀌었다고 산을 또 세우면 안 된다.
+    //
+    // ★ 신원 = **이름**(누구인가) + **내용 지문**(무엇인가). 둘 다 필요하다:
+    //   · 이름만이면 — 등록부에서 depth 를 2→9 로 고쳐도 "이미 했다"며 넘어간다 (땅이 등록부와 어긋난다)
+    //   · 지문만이면 — 이름을 그대로 두고 값만 고치면 **새 요청**이 되어 옛 것 위에 덧판다
+    //
+    //   그래서 **이름이 같은데 내용이 다르면 거절하고 말한다.**
+    //   땅은 **되돌릴 수 없기 때문이다** — 이미 판 개울을 "덜 깊게" 만들 수는 없다.
+    //   (덮으면 그건 개울을 메운 것이고, 메운 자리는 원래 땅이 아니다.)
+
+    /** 이 요청의 <b>신원</b> — 이름이 누구인지 말하고, 지문이 무엇인지 말한다 */
+    static String fingerprint(Req r) {
+        return r.name() + "@" + Integer.toHexString(content(r));
+    }
+
+    /** 내용 지문 — <b>결정론</b>. 같은 요청이면 언제나 같은 값 */
+    private static int content(Req r) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(r.op()).append('|').append(r.shape()).append('|')
+                .append(r.at()[0]).append(',').append(r.at()[1]).append('|')
+                .append(r.r()).append('|').append(r.half()[0]).append(',').append(r.half()[1]).append('|')
+                .append(r.width()).append('|').append(r.y()).append('|').append(r.depth())
+                .append('|').append(r.material());
+        for (int[] p : r.path()) {
+            sb.append('|').append(p[0]).append(',').append(p[1]);
+        }
+        return sb.toString().hashCode();
+    }
+
+    /** 이름만 (지문 앞부분) — 이름 충돌을 찾는 데 쓴다 */
+    static String nameOf(String fingerprint) {
+        int at = fingerprint.lastIndexOf('@');
+        return at < 0 ? fingerprint : fingerprint.substring(0, at);
+    }
+
+    /**
+     * <b>차집합만 집행한다</b> — 등록부에는 있는데 원장에 없는 요청.
+     *
+     * <p>사용자가 등록부에 요청을 하나 더 적으면 <b>그것만</b> 땅에 선다.
+     * 나머지 땅은 <b>한 블록도 안 움직인다</b> ({@link TerrainSeal} 이 그것을 증명한다).
+     *
+     * @param done 원장이 기억하는, <b>이미 적용된</b> 요청의 신원
+     * @return 이번에 <b>새로</b> 적용한 요청의 신원
+     */
+    static List<String> applyPending(World world, TerrainForge.SiteSpec spec, java.util.Set<String> done) {
+        refusals.clear();
+        List<String> applied = new ArrayList<>();
+        List<Req> reqs = of(spec.placeId());
+        if (reqs.isEmpty()) {
+            return applied;
+        }
+        int maxCount = limit("max_requests", 12);
+        if (reqs.size() > maxCount) {
+            refusals.add(spec.name() + " — 요청이 " + reqs.size() + "개다 (상한 " + maxCount
+                    + "). 땅은 건축의 도화지가 아니다");
+            return applied;
+        }
+        java.util.Set<String> knownNames = new java.util.HashSet<>();
+        for (String f : done) {
+            knownNames.add(nameOf(f));
+        }
+        for (Req r : reqs) {
+            String fp = fingerprint(r);
+            if (done.contains(fp)) {
+                continue;   // 이미 이 땅에 있다 — 다시 파지 않는다
+            }
+            if (knownNames.contains(r.name())) {
+                // ★ 이름은 같은데 내용이 다르다 — 땅은 되돌릴 수 없다. 조용히 덧파지 않는다
+                refusals.add(spec.name() + " / " + r.name()
+                        + " — 같은 이름의 요청이 **이미 이 땅에 집행됐는데 내용이 바뀌었다**. "
+                        + "땅은 되돌릴 수 없다: 새 이름으로 등록하든지, /혼천 땅갈아엎기 로 처음부터 빚어라");
+                continue;
+            }
+            String no = check(r, spec);
+            if (no != null) {
+                refusals.add(spec.name() + " / " + r.name() + " — " + no);
+                continue;
+            }
+            execute(world, spec, r);
+            applied.add(fp);
+        }
+        return applied;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // 집행 — <b>땅이 한다</b>
     // ═══════════════════════════════════════════════════════════════════
 
@@ -256,7 +346,27 @@ final class LandRequest {
                 return "부지 밖으로 나간다 (" + p[0] + "," + p[1] + ") — 요청은 부지 안이다";
             }
         }
+        if (r.name() == null || r.name().isBlank() || r.name().startsWith("(이름")) {
+            return "이름이 없다 — 이름이 요청의 신원이다 (원장이 그것으로 '이미 했는가'를 안다)";
+        }
         int y = anchor(r.y(), spec);
+
+        // ★★ 기준면 함정 — 부지 한복판의 높이를 바꾸면 **마을이 묻히거나 뜬다**
+        //   기준면(groundY)은 **원장이 정본**이고 요청이 못 바꾼다. 그것이 굳었기에 재조성이 안전한 것이다.
+        //   중심 언저리를 들었다 놨다 하는 요청은 그 정본을 거짓으로 만든다 → 거절한다.
+        //   ("산 하나 더"가 부지 한복판이면 그건 요청이 아니라 **다른 땅**이다 — 땅갈아엎기다.)
+        if (r.op() != Op.표층 && y != spec.groundY()) {
+            boolean hitsCenter = switch (r.shape()) {
+                case 원 -> Math.hypot(r.at()[0], r.at()[1]) <= r.r() + 12;
+                case 상자 -> Math.abs(r.at()[0]) <= r.half()[0] + 12 && Math.abs(r.at()[1]) <= r.half()[1] + 12;
+                case 길 -> r.path().stream().anyMatch(p -> Math.hypot(p[0], p[1]) <= r.width() + 12);
+            };
+            if (hitsCenter) {
+                return "부지 한복판(반경 12)의 높이를 바꾼다 — 기준면 y" + spec.groundY()
+                        + " 은 원장의 정본이다. 이걸 흔들면 **이미 선 마을이 묻히거나 뜬다**. "
+                        + "자리를 비켜 등록하든지, 새 땅이라면 /혼천 땅갈아엎기 하라";
+            }
+        }
         if (r.op() == Op.물 && y > spec.groundY() + 3) {
             // ★ TerrainAudit ②가 이것을 '산 위의 웅덩이'로 센다. 검수를 깨는 요청은 거절한다
             return "수면 y" + y + " 이 조성 지면 +3 보다 높다 — 환경 검수 ②가 '산 위의 웅덩이'로 센다";

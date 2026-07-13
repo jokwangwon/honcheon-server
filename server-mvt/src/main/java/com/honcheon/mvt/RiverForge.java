@@ -174,6 +174,25 @@ final class RiverForge {
         return java.util.Set.copyOf(registry.keySet());
     }
 
+    /**
+     * 강의 <b>신원</b> — 장부가 "이 강은 이미 팠다"를 아는 법.
+     *
+     * <p>등록부의 물길이 바뀌면 지문도 바뀐다. 그러면 장부에 없는 일이 되고 —
+     * <b>이미 강이 있는 땅에 또 강을 판다.</b> 그건 안 된다.
+     * 그래서 {@link Terraform} 이 <b>이름이 같고 지문이 다르면 거절한다</b> (땅은 되돌릴 수 없다).
+     */
+    static String fingerprint(WorldMap.Place place) {
+        RiverPlan.Spec s = registry.get(place.id());
+        if (s == null) {
+            return null;
+        }
+        String body = s.ux() + "," + s.uz() + "|" + s.halfWidth() + "|" + s.depth() + "|"
+                + s.gradient() + "|" + s.surfaceBelowGround() + "|" + s.valley() + "|"
+                + s.margin() + "|" + s.meanderAmp() + "|" + s.meanderLen() + "|"
+                + s.bankMaterial() + "|" + s.wetland() + "|" + offsets.get(place.id());
+        return "강:" + s.name() + "@" + Integer.toHexString(body.hashCode());
+    }
+
     /** 이 장소에 등록된 물길이 있는가 */
     static boolean has(WorldMap.Place place) {
         return place != null && registry.containsKey(place.id());
@@ -226,6 +245,24 @@ final class RiverForge {
                 base.valley(), base.margin(), base.meanderAmp(), base.meanderLen(),
                 base.bankMaterial(), base.wetland());
         return new RiverPlan(actual, d[0], d[1], d[2], d[3]);   // 기하만 — 검수는 **거기 있는 물을 잰다**
+    }
+
+    /** 이 땅의 강을 잊는다 (땅갈아엎기) — 되돌린 땅엔 강이 없다 */
+    static void forget(String placeId) {
+        if (dug.remove(placeId) != null && ledgerFile != null) {
+            try {
+                java.util.List<String> lines = new java.util.ArrayList<>();
+                lines.add("# 하지(河誌) — 조성기가 판 강의 자리");
+                for (Map.Entry<String, int[]> e : dug.entrySet()) {
+                    int[] v = e.getValue();
+                    lines.add(e.getKey() + ": [" + v[0] + ", " + v[1] + ", " + v[2] + ", " + v[3]
+                            + ", " + v[4] + ", " + v[5] + ", " + v[6] + "]");
+                }
+                Files.write(ledgerFile, lines);
+            } catch (java.io.IOException ignored) {
+                // 못 적었다 — 다음 검수가 옛 강을 찾다가 못 찾고 **말한다**
+            }
+        }
     }
 
     private static void remember(String id, RiverPlan river, int radius, int groundY) {

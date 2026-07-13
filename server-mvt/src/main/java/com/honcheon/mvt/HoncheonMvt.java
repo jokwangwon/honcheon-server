@@ -70,6 +70,9 @@ public final class HoncheonMvt extends JavaPlugin {
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
+        TerrainBaseline.load(getDataFolder().toPath());   // 원지(原地) — 빚기 전의 높이. **되돌릴 수 있는 유일한 근거**
+        TerrainLedger.load(getDataFolder().toPath());   // ★ 땅은 **한 번만** 선다 (건축을 다시 지어도 땅은 그대로)
+        LandRequest.load(cfg);  // 건축이 땅에 하는 **요청**의 어휘 (연산 5 × 모양 3 × 앵커)
         MapAudit.load(cfg);   // 지도의 눈 — ★ 안 지어진 60곳은 검수를 통과하는 게 아니라 **검수를 안 받는다**
         RiverForge.load(cfg); // 강 — 물길 등록부 (config/rivers.yml · 없어도 돈다).
                               // ★ 이 세계엔 **강이 없었다.** 지도가 물을 일곱 곳 주문했는데 지형 계층이 안 빚었다.

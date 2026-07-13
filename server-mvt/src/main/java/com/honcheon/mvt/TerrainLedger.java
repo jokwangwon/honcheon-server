@@ -47,10 +47,16 @@ final class TerrainLedger {
     record Land(String placeId, int cx, int cz, int radius, int groundY,
                 int peakX, int peakZ, int peakY,
                 String caveKind, int caveMouthX, int caveMouthY, int caveMouthZ, String caveInto,
-                int caveRoomX, int caveRoomY, int caveRoomZ, int caveCarved) {
+                int caveRoomX, int caveRoomY, int caveRoomZ, int caveCarved,
+                List<String> works) {
 
         boolean hasCave() {
             return caveKind != null && !caveKind.isBlank() && caveMouthY != Integer.MIN_VALUE;
+        }
+
+        /** <b>이 땅에 이미 집행된 일들</b> — 강·요청의 신원 */
+        java.util.Set<String> done() {
+            return new java.util.LinkedHashSet<>(works);
         }
     }
 
@@ -75,12 +81,23 @@ final class TerrainLedger {
                     m.get("cave_kind") == null ? null : String.valueOf(m.get("cave_kind")),
                     i(m, "cave_x"), m.get("cave_y") == null ? Integer.MIN_VALUE : i(m, "cave_y"), i(m, "cave_z"),
                     m.get("cave_into") == null ? "NORTH" : String.valueOf(m.get("cave_into")),
-                    i(m, "cave_room_x"), i(m, "cave_room_y"), i(m, "cave_room_z"), i(m, "cave_carved")));
+                    i(m, "cave_room_x"), i(m, "cave_room_y"), i(m, "cave_room_z"), i(m, "cave_carved"),
+                    strings(m.get("works"))));
         }
     }
 
     private static int i(Map<?, ?> m, String k) {
         return m.get(k) instanceof Number n ? n.intValue() : 0;
+    }
+
+    private static List<String> strings(Object o) {
+        List<String> out = new ArrayList<>();
+        if (o instanceof List<?> l) {
+            for (Object e : l) {
+                out.add(String.valueOf(e));
+            }
+        }
+        return out;
     }
 
     /** <b>이 땅은 이미 빚어졌는가.</b> 참이면 다시 빚지 않는다 */
@@ -92,8 +109,32 @@ final class TerrainLedger {
         return lands.get(placeId);
     }
 
+    /**
+     * <b>이 땅에 일이 더해졌다고 적는다</b> — 장부는 <b>더하기만 한다(append-only)</b>.
+     *
+     * <p>땅의 역사는 되돌리기가 아니라 <b>쌓기</b>다. 그래서 장부가 그 문법을 갖는다.
+     * 이미 적힌 일은 다시 하지 않고, 새 일만 더해진다.
+     */
+    static void append(String placeId, List<String> newWorks) {
+        Land l = lands.get(placeId);
+        if (l == null || newWorks.isEmpty()) {
+            return;
+        }
+        List<String> w = new ArrayList<>(l.works());
+        for (String n : newWorks) {
+            if (!w.contains(n)) {
+                w.add(n);
+            }
+        }
+        lands.put(placeId, new Land(l.placeId(), l.cx(), l.cz(), l.radius(), l.groundY(),
+                l.peakX(), l.peakZ(), l.peakY(), l.caveKind(), l.caveMouthX(), l.caveMouthY(),
+                l.caveMouthZ(), l.caveInto(), l.caveRoomX(), l.caveRoomY(), l.caveRoomZ(),
+                l.caveCarved(), w));
+        save();
+    }
+
     /** 땅을 빚었다고 적는다 — <b>이 줄이 적히는 순간 그 땅은 굳는다</b> */
-    static void remember(TerrainForge.SiteSpec spec, TerrainForge.CaveSpec cave) {
+    static void remember(TerrainForge.SiteSpec spec, TerrainForge.CaveSpec cave, List<String> works) {
         lands.put(spec.placeId(), new Land(spec.placeId(),
                 spec.cx(), spec.cz(), spec.radius(), spec.groundY(),
                 spec.peakX(), spec.peakZ(), spec.peakY(),
@@ -105,7 +146,8 @@ final class TerrainLedger {
                 cave == null ? 0 : cave.roomX(),
                 cave == null ? 0 : cave.roomY(),
                 cave == null ? 0 : cave.roomZ(),
-                cave == null ? 0 : cave.carved()));
+                cave == null ? 0 : cave.carved(),
+                new ArrayList<>(works)));
         save();
     }
 
@@ -144,6 +186,12 @@ final class TerrainLedger {
                 out.add("  x: " + l.cx() + "\n  z: " + l.cz() + "\n  radius: " + l.radius()
                         + "\n  ground_y: " + l.groundY()
                         + "\n  peak_x: " + l.peakX() + "\n  peak_z: " + l.peakZ() + "\n  peak_y: " + l.peakY());
+                if (!l.works().isEmpty()) {
+                    out.add("  works:");
+                    for (String w : l.works()) {
+                        out.add("    - \"" + w.replace("\"", "'") + "\"");
+                    }
+                }
                 if (l.hasCave()) {
                     out.add("  cave_kind: " + l.caveKind() + "\n  cave_x: " + l.caveMouthX()
                             + "\n  cave_y: " + l.caveMouthY() + "\n  cave_z: " + l.caveMouthZ()

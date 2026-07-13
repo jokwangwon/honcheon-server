@@ -104,6 +104,19 @@ final class PackPusher implements Listener {
         if (!enabled) {
             return;
         }
+        // ★ sha1 을 **접속할 때마다 다시 잰다.** 기동 때 한 번만 재면,
+        //   팩을 새로 굽고 서버를 안 올린 사이에 들어온 사람은 **낡은 해시로 요청해 낡은 팩을 받는다.**
+        //   그리고 그것은 조용하다 — 로그엔 "켜졌다"가 찍힌다. **낡은 팩도 켜지긴 하니까.**
+        //   (사용자 보고: "새 팩이 똑바로 온 거 같지 않습니다." 정확했다.)
+        //   파일을 한 번 읽는 값이니 접속마다 재도 싸다. **사람이 서버를 올리는 것을 잊지 않아도 된다.**
+        String fresh = sha1(localPath);
+        if (fresh != null && !fresh.equals(hash)) {
+            plugin.getLogger().info("[팩] 팩이 바뀌었다 — sha1 " + hash.substring(0, 12)
+                    + "… → " + fresh.substring(0, 12) + "… (다시 굽힌 팩을 배급한다)");
+            hash = fresh;
+            hashBytes = hexBytes(fresh);
+            packId = UUID.nameUUIDFromBytes(fresh.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
         Player player = event.getPlayer();
         String url;
         if (absoluteUrl != null) {
