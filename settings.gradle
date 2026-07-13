@@ -1,6 +1,8 @@
 rootProject.name = 'honcheon-server'
 
 include 'core'
+// 도메인 — 규칙(core)과 장부(포트)가 만나는 곳. 어댑터(디스코드/마크)는 이 밑을 모른다.
+include 'domain'
 include 'server-bot'
 include 'server-main'
 include 'server-mvt'

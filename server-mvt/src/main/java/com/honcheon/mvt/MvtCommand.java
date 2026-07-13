@@ -611,12 +611,21 @@ public final class MvtCommand implements CommandExecutor {
                 w -> {   // ★ 워커 스레드 — Bukkit API 직접 호출 금지 (대역 월드를 통하는 것만 안전하다)
                     TerrainForge.SiteSpec spec =
                             TerrainForge.prepare(w, place, site.x(), baseY, site.z(), forgeRadius);
+                    // ★ 강 — 순서가 계약이다: prepare() **다음**, digCave() **앞**.
+                    //   앞에서 파면 prepare 의 tidyWater 가 **우리가 판 강을 지운다.**
+                    //   등록된 물길이 없는 부지면 그대로 통과한다.
+                    spec = RiverForge.carve(w, place, spec);
                     TerrainForge.CaveKind kind = TerrainForge.caveKind(place);
                     TerrainForge.CaveSpec cave = kind == null ? null : TerrainForge.digCave(w, spec, kind);
                     return new RegionResult(spec, cave, RemoteBuilder.build(w, place, spec, cave));
                 },
                 r -> {   // ★ 메인 스레드 — 여기서 말한다
                     plugin.getLogger().info("[지형] " + r.spec().summary());
+                    if (RiverForge.lastRefusal != null) {
+                        // 조용히 넘어가지 않는다 — **짓지 않으면 위반이 없다**는 침묵이 이 사고의 정체였다
+                        plugin.getLogger().warning("[지형/강] " + RiverForge.lastRefusal);
+                        sender.sendMessage(ChatColor.RED + "강을 파지 못했다 — " + RiverForge.lastRefusal);
+                    }
                     if (r.cave() != null) {
                         plugin.getLogger().info("[지형/동굴] " + place.id() + " — 입구 ("
                                 + r.cave().mouthX() + "," + r.cave().mouthY() + "," + r.cave().mouthZ()
@@ -969,9 +978,13 @@ public final class MvtCommand implements CommandExecutor {
             // 기준면이 30켜 내려가고, 그러면 검수 ②가 **강물 전체를 "산 위의 웅덩이"** 로 센다.
             Integer base = plugin.regionBase(place.id());
             int auditY = base != null ? base : zone.y1() + 6;
-            lines = TerrainAudit.audit(world, place.name(), cx, auditY, cz, radius,
-                    place.terrain() == null ? "평지" : place.terrain(),
-                    TerrainForge.caveKind(place) != null);   // 우리가 판 굴이 있는 지역인가
+            java.util.List<String> t = new java.util.ArrayList<>(
+                    TerrainAudit.audit(world, place.name(), cx, auditY, cz, radius,
+                            place.terrain() == null ? "평지" : place.terrain(),
+                            TerrainForge.caveKind(place) != null));   // 우리가 판 굴이 있는 지역인가
+            // ★ 강의 눈 — 강 없는 곳이면 빈 목록이다. 있는 곳이면 역류·단절·누수·수심을 잰다.
+            t.addAll(RiverAudit.audit(world, place, cx, cz, radius, auditY));
+            lines = t;
         } else {
             Location center = plugin.anchor("장터");
             if (center == null) {

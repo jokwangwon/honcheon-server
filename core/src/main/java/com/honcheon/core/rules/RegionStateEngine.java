@@ -66,9 +66,31 @@ public final class RegionStateEngine {
 
     /** 사건을 <b>부르는 쪽의 장부에</b> 적용한다 (0~100 clamp). 이 클래스는 그 장부를 기억하지 않는다 */
     public Map<String, Integer> applyTo(Map<String, Integer> ledger, String eventKey) {
-        deltas(eventKey).forEach((stat, delta) -> ledger.merge(stat, delta,
-                (now, d) -> Math.max(min, Math.min(max, now + d))));
+        return applyDeltas(ledger, deltas(eventKey));
+    }
+
+    /**
+     * 이미 값이 정해진 델타를 <b>부르는 쪽의 장부에</b> 적용한다 (scale.min~max clamp).
+     *
+     * <p>★ 눈금(0~100)은 <b>여기에만</b> 산다. 예전에는 봇의 {@code Db.nudgeRegion} 이
+     * {@code Math.max(0, Math.min(100, …))} 라고 <b>숫자를 코드에 박아</b> 두었다 — region_state.yml
+     * 의 {@code scale} 을 아무도 안 읽었으므로, config 에서 상한을 고쳐도 세계는 꿈쩍하지 않았다.
+     * 등록제의 구멍이었다. 이제 눈금을 바꾸려면 config 를 고치면 된다.
+     *
+     * <p>0 인 델타는 건너뛴다 (장부에 헛발자국을 남기지 않는다).
+     */
+    public Map<String, Integer> applyDeltas(Map<String, Integer> ledger, Map<String, Integer> deltas) {
+        deltas.forEach((stat, delta) -> {
+            if (delta != 0 && ledger.containsKey(stat)) {
+                ledger.put(stat, clamp(ledger.get(stat) + delta));
+            }
+        });
         return ledger;
+    }
+
+    /** scale.min~max 로 자른다 — 세계의 눈금은 config 가 정한다 */
+    public int clamp(int value) {
+        return Math.max(min, Math.min(max, value));
     }
 
     /** region_state.yml recovery.every_days — 이 날수마다 한 걸음 (10일) */

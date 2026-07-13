@@ -70,6 +70,8 @@ public final class HoncheonMvt extends JavaPlugin {
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
         Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
+        RiverForge.load(cfg); // 강 — 물길 등록부 (config/rivers.yml · 없어도 돈다).
+                              // ★ 이 세계엔 **강이 없었다.** 지도가 물을 일곱 곳 주문했는데 지형 계층이 안 빚었다.
         Gyeonggong.init(cfg); // 경공 — 경지 천장·신법 성장·경신 소모·문파 보법 (config/gyeonggong.yml).
                               // ★ 이것이 없으면 절정 고수도 삼류도 **바닐라처럼 똑같이 걷는다**
         Growth.init(cfg);     // 성장 축 — training.yml curriculum · combat.yml attacker_attribute.

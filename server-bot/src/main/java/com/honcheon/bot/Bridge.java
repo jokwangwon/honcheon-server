@@ -2,6 +2,8 @@ package com.honcheon.bot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.honcheon.core.rules.RulesConfig;
+import com.honcheon.domain.FactionService;
+import com.honcheon.domain.RegionService;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -45,6 +47,9 @@ final class Bridge {
 
     private final Rules rules;
     private final Db db;
+    /** ★ 마크발 사건도 <b>같은 도메인</b>을 지난다 — 다리는 어댑터이지 두 번째 규칙이 아니다 */
+    private final FactionService factions;
+    private final RegionService regions;
     private final GameListener game;
     private final Map<String, Object> cfg;
 
@@ -60,6 +65,8 @@ final class Bridge {
     Bridge(Rules rules, Db db, GameListener game, Path configDir) {
         this.rules = rules;
         this.db = db;
+        this.factions = new FactionService(rules.factions, db);
+        this.regions = new RegionService(rules.regions, db);
         this.game = game;
         this.cfg = RulesConfig.load(configDir.resolve("world_bridge.yml"));
 
@@ -306,7 +313,7 @@ final class Bridge {
         Map<String, Object> effects = effects("surrender");
         db.logEvent("자수", who.actorType(), who.actorId(), "gwan_gun", "자수",
                 Map.of("벌금", num(data.get("fine"), 0), "출처", "mvt"));
-        db.nudgeRegion(deltas(effects.get("region")));
+        regions.nudge(deltas(effects.get("region")));
         if (!who.linked()) {
             return;   // 이름 없는 몸의 자수는 관의 장부에 오르지 못한다
         }
@@ -333,14 +340,14 @@ final class Bridge {
         }
         Map<String, Integer> region = rules.populaceQuestRegion(rule, outcome);
         if (!region.isEmpty()) {
-            db.nudgeRegion(region);
+            regions.nudge(region);
         }
         // ★ 살해자가 유족의 의뢰를 완수했다 — 혈교는 그것을 자격으로 읽는다
         if (Boolean.TRUE.equals(data.get("irony")) && who.linked()) {
             int blood = rules.populaceQuestIrony(rule);
             if (blood != 0) {
-                int favor = db.addFavor("hyeolgyo", who.characterId(), blood,
-                        rules.factions.favorMax(), today, rules.factions);
+                int favor = factions.addFavor("hyeolgyo", who.characterId(), blood,
+                        rules.factions.favorMax(), today);
                 db.logEvent("혈채_세력", "character", String.valueOf(who.characterId()),
                         "faction", "hyeolgyo",
                         Map.of("입력", "무명_유족_기만", "가산", blood, "우호", favor, "출처", "mvt"));
@@ -402,7 +409,7 @@ final class Bridge {
         }
 
         // 지역의 냉기 — 복수자 없는 죽음의 유일한 대가 (populace.yml death.region_delta)
-        db.nudgeRegion(deltas(effects.get("region")));
+        regions.nudge(deltas(effects.get("region")));
 
         // ★ 민심 부채 — 무명의 죽음이 깎은 민심은 **자연 회복에서 제외된다**
         //   (npc_death populace_layer.civil_debt: "대가는 복수가 아니라 지역의 냉기다").
@@ -526,7 +533,7 @@ final class Bridge {
             int scale = bandit ? num(map(effects.get("scale_by_role")).get(role), 1) : 1;
             Map<String, Integer> scaled = new LinkedHashMap<>();
             region.forEach((k, v) -> scaled.put(k, v * scale));
-            db.nudgeRegion(scaled);
+            regions.nudge(scaled);
         }
     }
 
@@ -639,7 +646,7 @@ final class Bridge {
                 wanted.put(body.getKey(), mandate);
             }
             Map<String, Object> mine = new LinkedHashMap<>();
-            for (Db.Standing s : db.standings(chId, today, rules.factions)) {
+            for (FactionService.Standing s : factions.standings(chId, today)) {
                 if (s.favor() != 0) {
                     mine.put(s.faction(), s.favor());
                 }
@@ -672,7 +679,7 @@ final class Bridge {
         snapshot.put("generated_at", System.currentTimeMillis());
         snapshot.put("rumor_tags", List.copyOf(tags));
         snapshot.put("populace_reactions", List.copyOf(reactions));
-        snapshot.put("region", db.region());
+        snapshot.put("region", regions.region());
         snapshot.put("wanted", wanted);
         snapshot.put("favor", favor);
         snapshot.put("links", links);

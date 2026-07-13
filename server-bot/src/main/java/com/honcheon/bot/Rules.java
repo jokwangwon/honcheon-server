@@ -28,8 +28,14 @@ public final class Rules {
     public final Deaths deaths;
     /** 소문망 (단계 4 B) — 전파(망별 속도·왜곡)·감쇠·세력 인지의 단일 원천 */
     public final Rumors rumors;
-    /** 세력 반응 (단계 4 C) — 주목·우호 2축, 반응 사다리·감쇠의 단일 원천 */
-    public final Factions factions;
+    /**
+     * 세력 반응 <b>규칙</b> (단계 4 C) — 주목·우호 2축, 반응 사다리·감쇠의 단일 원천.
+     *
+     * <p><b>장부가 아니다.</b> 장부는 {@code faction_standing} 표 하나뿐이고, 그 문은
+     * {@code domain.FactionService} 다. 전에는 여기에 봇의 {@code Factions} 클래스가 있었고
+     * core 엔진과 <b>같은 산수를 두 번</b> 구현했다 — 그 쌍둥이는 죽었다.
+     */
+    public final com.honcheon.core.rules.FactionReactionEngine factions;
     /** 세력 정치 (단계 5) — 명분·연합·관무불가침의 단일 원천 (세력 대 세력) */
     public final Politics politics;
     /** 혈채 — ★ 감쇠하지 않는 유일한 축 (faction_reaction.yml blood_debt) */
@@ -87,7 +93,7 @@ public final class Rules {
         this.rumors = new Rumors(rumorCfg);
         Map<String, Object> factionReactionCfg = RulesConfig.load(
                 configDir.resolve("faction_reaction.yml"));
-        this.factions = new Factions(factionReactionCfg);
+        this.factions = new com.honcheon.core.rules.FactionReactionEngine(factionReactionCfg);
         this.bloodDebt = new BloodDebt(factionReactionCfg);
         this.simbeopCfg = RulesConfig.load(configDir.resolve("simbeop.yml"));
         this.fortunes = new Fortunes(

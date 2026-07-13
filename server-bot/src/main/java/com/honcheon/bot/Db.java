@@ -1,6 +1,8 @@
 package com.honcheon.bot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.honcheon.domain.FactionLedger;
+import com.honcheon.domain.RegionLedger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,8 +19,13 @@ import java.util.Optional;
 /**
  * SQLite 영속화 — persistence.md: 단일 파일·단일 작성자·WAL.
  * 스키마는 db/schema.sql이 원천 (여기서 실행만 한다).
+ *
+ * <p>★ <b>장부이지 규칙이 아니다.</b> 세력({@link FactionLedger})·지역({@link RegionLedger}) 두 축은
+ * 도메인이 정의한 <b>포트</b>를 구현한다 — 이 클래스는 행을 읽고 쓸 뿐, 클램프도 감쇠도 하지 않는다.
+ * 그 산수는 {@code domain.FactionService}/{@code domain.RegionService} 가
+ * {@code core} 룰 엔진에게 시킨다. <b>정본은 하나다.</b>
  */
-public final class Db implements AutoCloseable {
+public final class Db implements AutoCloseable, FactionLedger, RegionLedger {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -299,22 +306,19 @@ public final class Db implements AutoCloseable {
         }
     }
 
-    // ─── 세력 반응 (faction_standing) — 주목 × 우호 2축 (faction_reaction.yml 통화) ───
+    // ─── 세력 반응 (faction_standing) — 주목 × 우호 2축 · **장부 포트 구현** ───
     //
-    // 감쇠는 배치 잡이 아니라 **읽는 순간 정산**한다 (decayedAttention/decayedFavor).
-    // 같은 세계일에 몇 번을 읽어도 같은 값 — 결정론. 잡 중복 실행으로 두 번 깎이는 사고가 없다.
-    // 쓰는 쪽(addAttention/addFavor)은 먼저 정산해 앉히고, 그 위에 더한 뒤 오늘로 스탬프한다.
+    // ★ 여기에 규칙이 있었다. 이제 없다.
+    //   전에는 이 자리에서 Db 가 클램프하고(min(cap, favorMax)), 감쇠를 정산하고(Factions.decayedX),
+    //   단계를 판정했다 — 그리고 core.FactionReactionEngine 이 **같은 산수를 제 메모리 맵에 대고
+    //   다시** 하고 있었다 (테스트만 그것을 불렀다). 정본이 둘이었다.
+    //
+    //   지금 이 클래스가 아는 것은 **행을 읽고 쓴다**는 것뿐이다 (FactionLedger 포트).
+    //   산수는 domain.FactionService → core.FactionReactionEngine 하나뿐이다.
 
-    /** 세력 × 캐릭터 관계 한 칸 — attention/favor 는 오늘 기준 정산값 (저장값이 아니다) */
-    record Standing(String faction, int attention, int favor, int peakStage, int peakFavor) {
-    }
-
-    /** 저장된 원시 행 (정산 전) — 내부용 */
-    private record RawStanding(int attention, int favor, int attentionDay, int favorDay,
-                               int peakStage, int peakFavor) {
-    }
-
-    private RawStanding rawStanding(String factionId, long characterId) throws SQLException {
+    @Override
+    public synchronized FactionLedger.Row standingRow(String factionId, long characterId)
+            throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT attention, favor, attention_day, favor_day, peak_stage, peak_favor "
                         + "FROM faction_standing WHERE faction_id = ? AND character_id = ?")) {
@@ -322,26 +326,17 @@ public final class Db implements AutoCloseable {
             ps.setLong(2, characterId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
-                    return new RawStanding(0, 0, 0, 0, 0, 0);
+                    return FactionLedger.Row.NONE;
                 }
-                return new RawStanding(rs.getInt(1), rs.getInt(2), rs.getInt(3),
+                return new FactionLedger.Row(rs.getInt(1), rs.getInt(2), rs.getInt(3),
                         rs.getInt(4), rs.getInt(5), rs.getInt(6));
             }
         }
     }
 
-    /** 오늘 기준 세력 관계 — 감쇠 정산 후의 값 (세계는 잊는다, 단 이력의 하한은 남는다) */
-    synchronized Standing standing(String factionId, long characterId, int today, Factions f)
-            throws SQLException {
-        RawStanding raw = rawStanding(factionId, characterId);
-        int favor = f.decayedFavor(raw.favor(), raw.peakFavor(), raw.favorDay(), today);
-        int attention = f.decayedAttention(raw.attention(), raw.peakStage(), favor,
-                raw.attentionDay(), today);
-        return new Standing(factionId, attention, favor, raw.peakStage(), raw.peakFavor());
-    }
-
-    /** 등록된 모든 세력 관계 (0인 것은 행이 없다 — 무관심은 기록되지 않는다) */
-    synchronized List<Standing> standings(long characterId, int today, Factions f) throws SQLException {
+    /** 이 캐릭터를 아는 세력들 (0 인 것은 행이 없다 — 무관심은 기록되지 않는다) */
+    @Override
+    public synchronized List<String> standingFactions(long characterId) throws SQLException {
         List<String> factions = new java.util.ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT faction_id FROM faction_standing WHERE character_id = ? ORDER BY faction_id")) {
@@ -352,39 +347,14 @@ public final class Db implements AutoCloseable {
                 }
             }
         }
-        List<Standing> out = new java.util.ArrayList<>();
-        for (String faction : factions) {
-            out.add(standing(faction, characterId, today, f));
-        }
-        return out;
+        return factions;
     }
 
-    /** 주목 가산 — 정산 후 더하고 [0, cap] 클램프. peak_stage(감쇠 하한의 근거)를 갱신한다 */
-    synchronized int addAttention(String factionId, long characterId, int delta, int today, Factions f)
+    @Override
+    public synchronized void writeStanding(String factionId, long characterId, FactionLedger.Row row)
             throws SQLException {
-        Standing now = standing(factionId, characterId, today, f);
-        int next = Math.max(0, Math.min(f.scoreMax(), now.attention() + delta));
-        int peakStage = Math.max(now.peakStage(), f.stageOf(next).stage());
-        upsert(factionId, characterId, next, now.favor(), today, today, peakStage,
-                Math.max(now.peakFavor(), now.favor()));
-        return next;
-    }
-
-    /** 우호 가산 — 정산 후 더하고 [0, cap] 클램프. peak_favor(공신 이력)를 갱신한다 */
-    synchronized int addFavor(String factionId, long characterId, int delta, int cap, int today,
-                              Factions f) throws SQLException {
-        Standing now = standing(factionId, characterId, today, f);
-        int next = Math.max(0, Math.min(Math.min(cap, f.favorMax()), now.favor() + delta));
-        upsert(factionId, characterId, now.attention(), next, today, today,
-                Math.max(now.peakStage(), f.stageOf(now.attention()).stage()),
-                Math.max(now.peakFavor(), next));
-        return next;
-    }
-
-    /** 우호 조회 (오늘 기준 정산값) — 직행 루트·게시판 게이트의 입력 */
-    synchronized int favor(String factionId, long characterId, int today, Factions f)
-            throws SQLException {
-        return standing(factionId, characterId, today, f).favor();
+        upsert(factionId, characterId, row.attention(), row.favor(), row.attentionDay(),
+                row.favorDay(), row.peakStage(), row.peakFavor());
     }
 
     private void upsert(String factionId, long characterId, int attention, int favor,
@@ -665,19 +635,7 @@ public final class Db implements AutoCloseable {
         }
     }
 
-    /**
-     * ★ 절연의 집행 — 우호를 깎고 **공신 이력(peak_favor)까지 무효화**한다.
-     * faction_reaction 의 favor.decay.floor_after_공신(8) 을 무너뜨리는 유일한 예외 (politics_hook.disavowal):
-     * peak_favor 를 새 값으로 재스탬프하면 하한의 근거 자체가 사라진다 —
-     * **어느 문파도 관 앞에서 그를 감싸지 않는다.**
-     */
-    synchronized int breakFavor(String factionId, long characterId, int delta, int today, Factions f)
-            throws SQLException {
-        Standing now = standing(factionId, characterId, today, f);
-        int next = Math.max(0, Math.min(f.favorMax(), now.favor() + delta));
-        upsert(factionId, characterId, now.attention(), next, today, today, now.peakStage(), next);
-        return next;
-    }
+    // ★ 절연의 집행(breakFavor)은 domain.FactionService 로 갔다 — 그것은 SQL 이 아니라 규칙이다.
 
     // ─── NPC 생사 (npcs.status) — 죽은 자와는 말할 수 없다 ───
 
@@ -1173,31 +1131,32 @@ public final class Db implements AutoCloseable {
     }
 
     /**
-     * 지역 상태를 흔든다 — 치안·경제·민심 (0~100 clamp). 무명이 죽으면 민심이 식고,
-     * 도적을 베면 길이 안전해진다. 값은 config 가 정한다 (여기서 발명하지 않는다).
+     * 지역 장부에 적는다 — <b>바뀐 눈금만</b> (이미 클램프된 값). {@link RegionLedger} 포트 구현.
+     *
+     * <p>★ 여기에 {@code Math.max(0, Math.min(100, …))} 가 있었다 — <b>코드가 눈금을 지어냈다.</b>
+     * region_state.yml 의 {@code scale} 을 아무도 안 읽었으므로 config 로 상한을 고쳐도 세계는
+     * 꿈쩍하지 않았다. 이제 클램프는 {@code core.RegionStateEngine.clamp} 하나다 (등록제).
      */
-    public synchronized Map<String, Integer> nudgeRegion(Map<String, Integer> deltas) throws SQLException {
-        Map<String, Integer> now = region();
+    @Override
+    public synchronized void writeRegion(Map<String, Integer> values) throws SQLException {
         Map<String, String> column = Map.of("치안", "security", "경제", "economy", "민심", "sentiment");
-        for (Map.Entry<String, Integer> e : deltas.entrySet()) {
+        for (Map.Entry<String, Integer> e : values.entrySet()) {
             String col = column.get(e.getKey());
-            if (col == null || e.getValue() == 0) {
-                continue;
+            if (col == null) {
+                continue;   // 세계에 없는 눈금은 장부에 없다
             }
-            int next = Math.max(0, Math.min(100, now.get(e.getKey()) + e.getValue()));
             try (PreparedStatement ps = conn.prepareStatement(
                     "UPDATE regions SET " + col + " = ?, updated_day = ? WHERE id = ?")) {
-                ps.setInt(1, next);
+                ps.setInt(1, e.getValue());
                 ps.setInt(2, worldDay());
                 ps.setString(3, REGION);
                 ps.executeUpdate();
             }
-            now.put(e.getKey(), next);
         }
-        return now;
     }
 
-    /** 청하현의 오늘 — 치안·경제·민심 */
+    /** 청하현의 오늘 — 치안·경제·민심 ({@link RegionLedger} 포트 구현) */
+    @Override
     public synchronized Map<String, Integer> region() throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT security, economy, sentiment FROM regions WHERE id = ?")) {

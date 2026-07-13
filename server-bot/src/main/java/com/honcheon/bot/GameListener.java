@@ -1,6 +1,8 @@
 package com.honcheon.bot;
 
 import com.honcheon.core.rules.JudgmentEngine;
+import com.honcheon.domain.FactionService;
+import com.honcheon.domain.RegionService;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.MessageEmbed;
@@ -46,6 +48,16 @@ public final class GameListener extends ListenerAdapter {
     private final LlmRenderer renderer;
     private final Random dice = new Random();
 
+    /**
+     * ★ 세력·지역의 <b>도메인 서비스</b> — 이 어댑터가 규칙을 아는 유일한 방법.
+     *
+     * <p>전에는 이 자리에서 {@code db.addFavor(…, rules.factions)} 라고 불렀다 — 장부가 규칙을
+     * 인자로 받아 제 안에서 산수를 했다. 그래서 <b>디스코드가 도메인을 들고 있었다.</b>
+     * 이제 이 클래스는 <b>묻고 렌더할 뿐</b>이다: 얼마가 되었는지는 도메인이 안다.
+     */
+    private final FactionService factions;
+    private final RegionService regions;
+
     private final Map<String, Creation> creations = new ConcurrentHashMap<>();
     private final Map<Long, Seojang> seojangs = new ConcurrentHashMap<>();
 
@@ -53,6 +65,8 @@ public final class GameListener extends ListenerAdapter {
         this.rules = rules;
         this.db = db;
         this.renderer = renderer;
+        this.factions = new FactionService(rules.factions, db);
+        this.regions = new RegionService(rules.regions, db);
     }
 
     // ─── 슬래시 명령 ───
@@ -247,10 +261,10 @@ public final class GameListener extends ListenerAdapter {
             eb.addField("선천진기", "수명 **" + (rules.innateQiTotal() - burned) + "/"
                     + rules.innateQiTotal() + "년** (태운 것은 돌아오지 않는다)", true);
         }
-        List<Db.Standing> standings = db.standings(chId, today, rules.factions);
+        List<FactionService.Standing> standings = factions.standings(chId, today);
         if (!standings.isEmpty()) {
             StringBuilder rel = new StringBuilder();
-            for (Db.Standing s : standings) {
+            for (FactionService.Standing s : standings) {
                 rel.append(standingLine(s)).append('\n');
             }
             eb.addField("세력 관계", rel.toString(), false);
@@ -1040,7 +1054,7 @@ public final class GameListener extends ListenerAdapter {
         // C — 사파 악명은 정파의 문을 닫는다: 축객당한 자에게 정파 경유 의뢰는 오지 않는다
         //     (faction_entry_routes 악명_보유 분기·npc_death 수배 effects "민간·정파 발주 지명 제외")
         List<Quests.Quest> out = new ArrayList<>(isNotorious(chId, today) ? List.of()
-                : Injections.routeQuests(rules, db.favor("orthodox", chId, today, rules.factions),
+                : Injections.routeQuests(rules, factions.favor("orthodox", chId, today),
                         tagsOf(sheet).keySet()));
         out.addAll(Injections.deathQuests(rules, db.deadNpcs(), today));
         // 단계 5 — 강호의 판이 게시판에 비친다 (명분 조사 · 토벌령).
@@ -1160,7 +1174,7 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> done = (Map<String, Object>) sheet.getOrDefault("의뢰_완료", Map.of());
         String clerk = clerkName(office);
         // C — 세력 반응이 창구의 태도가 된다 (stage_actions: 소문 인지 → 정보 수집 → 접촉·경고)
-        Db.Standing orthodox = db.standing("orthodox", chId, today, rules.factions);
+        FactionService.Standing orthodox = factions.standing("orthodox", chId, today);
         var stage = rules.factions.stageOf(orthodox.attention());
         var level = rules.factions.favorLevelOf(orthodox.favor());
         String reaction = "";
@@ -1321,8 +1335,8 @@ public final class GameListener extends ListenerAdapter {
 
             // C — 의뢰 완수는 발주 세력의 장부에 적힌다 (favor.inputs.공적_소)
             String faction = q.issuer() == null ? "orthodox" : orthodoxOrOwn(q.issuer());
-            int favor = db.addFavor(faction, chId, rules.factions.favorInput("공적_소"),
-                    rules.factions.favorMax(), today, rules.factions);
+            int favor = factions.addFavor(faction, chId, rules.factions.favorInput("공적_소"),
+                    rules.factions.favorMax(), today);
             db.logEvent("세력_반응", "character", String.valueOf(chId), "faction", faction,
                     Map.of("입력", "공적_소", "우호", favor, "사유", "의뢰_완수:" + q.key()));
             gains.append("\n🏮 **").append(rules.factionName(faction)).append(" 우호 ").append(favor)
@@ -1940,9 +1954,9 @@ public final class GameListener extends ListenerAdapter {
         sheet.put("출행_여정일", days);
 
         // ② 상태 조회 — favor · 단서 · 소문 · 악명
-        int favor = db.favor("orthodox", chId, today, rules.factions);
+        int favor = factions.favor("orthodox", chId, today);
         Routes.Infamy infamy = rules.routes.infamy(HWASAN);
-        int haomunFavor = db.favor("haomun", chId, today, rules.factions);
+        int haomunFavor = factions.favor("haomun", chId, today);
         List<String> clues = rules.routes.clueItems(HWASAN);
         List<Object> items = sheet.get("소지품") instanceof List<?> l ? new ArrayList<>((List<Object>) l)
                 : new ArrayList<>();
@@ -2062,8 +2076,8 @@ public final class GameListener extends ListenerAdapter {
         String realm = String.valueOf(row.get("realm"));
         Map<String, Object> tags = tagsOf(sheet);
 
-        int gwanFavor = db.favor("gwan_gun", chId, today, rules.factions);
-        int haomunFavor = db.favor("haomun", chId, today, rules.factions);
+        int gwanFavor = factions.favor("gwan_gun", chId, today);
+        int haomunFavor = factions.favor("haomun", chId, today);
         Routes.Infamy infamy = rules.routes.infamy(HWASAN);   // 악명의 기준은 하나다 (루트마다 다르지 않다)
         boolean sapaKnown = haomunFavor >= infamy.haomunFavorMin()
                 || hasRumor(today, 2, List.of("사파", infamy.rumorTag()));
@@ -2188,7 +2202,7 @@ public final class GameListener extends ListenerAdapter {
                 // 관아 잡역 — 화산 문전 잡역의 관아판 (대칭). 관군 favor 를 벌어 게이트를 채운다
                 Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
                 int cap = rules.routes.gwangunGateFavor("포쾌_등재", 4);
-                int favor = db.addFavor("gwan_gun", chId, 1, cap, today, rules.factions);
+                int favor = factions.addFavor("gwan_gun", chId, 1, cap, today);
                 putTag(sheet, "눈여겨봄", today);
                 db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                         String.valueOf(row.get("realm")), "강호", "청하현");
@@ -2227,19 +2241,17 @@ public final class GameListener extends ListenerAdapter {
         @SuppressWarnings("unchecked")
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
         int need = rules.routes.gwangunGateFavor("포쾌_등재", 4);
-        int gwan = db.favor("gwan_gun", chId, today, rules.factions);
-        int granted = db.addFavor("gwan_gun", chId, Math.max(0, need - gwan), rules.factions.favorMax(),
-                today, rules.factions);
+        int gwan = factions.favor("gwan_gun", chId, today);
+        int granted = factions.addFavor("gwan_gun", chId, Math.max(0, need - gwan), rules.factions.favorMax(),
+                today);
 
         Routes.Gaze gaze = rules.routes.gaze("포쾌_등재");
-        int orthodox = db.addFavor("orthodox", chId, gaze.orthodoxFavor(), rules.factions.favorMax(),
-                today, rules.factions);
-        int unorthodox = db.addFavor("unorthodox", chId, gaze.unorthodoxFavor(),
-                rules.factions.favorMax(), today, rules.factions);
-        db.addFavor("haomun", chId, gaze.unorthodoxFavor(), rules.factions.favorMax(), today,
-                rules.factions);
-        db.addFavor("noklim", chId, gaze.unorthodoxFavor(), rules.factions.favorMax(), today,
-                rules.factions);
+        int orthodox = factions.addFavor("orthodox", chId, gaze.orthodoxFavor(), rules.factions.favorMax(),
+                today);
+        int unorthodox = factions.addFavor("unorthodox", chId, gaze.unorthodoxFavor(),
+                rules.factions.favorMax(), today);
+        factions.addFavor("haomun", chId, gaze.unorthodoxFavor(), rules.factions.favorMax(), today);
+        factions.addFavor("noklim", chId, gaze.unorthodoxFavor(), rules.factions.favorMax(), today);
 
         putTag(sheet, "관_계급", "포쾌");
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
@@ -2307,7 +2319,7 @@ public final class GameListener extends ListenerAdapter {
             // 일수당 favor +1 (상한 8) — 잡역 = 사실상의 안면 단계 진입. 누적 30일이면 심사 자격 자동
             int stay = Math.max(1, ((Number) sheet.getOrDefault("출행_여정일", 1)).intValue());
             int cap = rules.routes.choreFavorCap(HWASAN);
-            int favor = db.addFavor("orthodox", chId, stay, cap, today, rules.factions);
+            int favor = factions.addFavor("orthodox", chId, stay, cap, today);
             int chore = ((Number) tags.getOrDefault("문전_잡역", 0)).intValue() + stay;
             putTag(sheet, "문전_잡역", chore);
             putTag(sheet, rules.routes.choreTag(HWASAN), today);   // 눈여겨봄 — 이탈해도 남는다
@@ -2351,8 +2363,8 @@ public final class GameListener extends ListenerAdapter {
         EmbedBuilder scene = new EmbedBuilder();
         if (margin >= 0) {
             putTag(sheet, "화산_심사_통과", today);
-            int favor = db.addFavor("orthodox", chId, rules.routes.gateFavorMin(HWASAN, "안면"),
-                    rules.routes.choreFavorCap(HWASAN), today, rules.factions);
+            int favor = factions.addFavor("orthodox", chId, rules.routes.gateFavorMin(HWASAN, "안면"),
+                    rules.routes.choreFavorCap(HWASAN), today);
             if ("대성공".equals(tier.name())) {
                 // judgment_link — 재목 소문이 정파망을 탄다 (다음 직행은 즉시 접견)
                 spread(rumorGroup("심사", chId, today), "산문에서 아이 하나가 눈에 띄었다더군",
@@ -2866,7 +2878,7 @@ public final class GameListener extends ListenerAdapter {
                     continue;
                 }
                 int delta = rules.factions.rumorInput(accuracy);
-                int score = db.addAttention(faction, chId, delta, day, rules.factions);
+                int score = factions.addAttention(faction, chId, delta, day);
                 db.logEvent("세력_인지", "world", faction, "rumor", group,
                         Map.of("세력", faction, "대상", chId, "망", network,
                                 "정확도", accuracy, "가산", delta, "주목", score,
@@ -2876,7 +2888,7 @@ public final class GameListener extends ListenerAdapter {
     }
 
     /** 세력 반응 한 줄 — 주목 단계와 우호 등급을 함께 읽는다 (두 축은 독립이다) */
-    private String standingLine(Db.Standing s) {
+    private String standingLine(FactionService.Standing s) {
         var stage = rules.factions.stageOf(s.attention());
         var level = rules.factions.favorLevelOf(s.favor());
         return "**" + rules.factionName(s.faction()) + "** — 주목 " + s.attention()
@@ -3019,16 +3031,16 @@ public final class GameListener extends ListenerAdapter {
         int unorthodoxFavor = rules.politics.disavowalUnorthodoxFavor();
         for (String faction : rules.politics.murim()) {
             if ("orthodox".equals(rules.politics.coalitionOf(faction))) {
-                db.addAttention(faction, chId, attention, today, rules.factions);
-                db.breakFavor(faction, chId, orthodoxFavor, today, rules.factions);
+                factions.addAttention(faction, chId, attention, today);
+                factions.breakFavor(faction, chId, orthodoxFavor, today);
             } else {
-                db.breakFavor(faction, chId, unorthodoxFavor, today, rules.factions);
+                factions.breakFavor(faction, chId, unorthodoxFavor, today);
             }
         }
         // 계열 id — 입문 게이트(Routes)·게시판이 읽는 축. 여기가 닫혀야 '전 루트 폐쇄'가 참이 된다
-        db.addAttention("orthodox", chId, attention, today, rules.factions);
-        db.breakFavor("orthodox", chId, orthodoxFavor, today, rules.factions);
-        db.breakFavor("unorthodox", chId, unorthodoxFavor, today, rules.factions);
+        factions.addAttention("orthodox", chId, attention, today);
+        factions.breakFavor("orthodox", chId, orthodoxFavor, today);
+        factions.breakFavor("unorthodox", chId, unorthodoxFavor, today);
         db.logEvent("절연", "character", String.valueOf(chId), "faction", cause,
                 Map.of("법명분", db.mandate(chId, today, rules.politics),
                         "정파_주목", attention, "정파_우호", orthodoxFavor,
@@ -3109,7 +3121,7 @@ public final class GameListener extends ListenerAdapter {
      */
     private boolean isNotorious(long chId, int today) throws Exception {
         Routes.Infamy infamy = rules.routes.infamy(HWASAN);
-        return db.favor("haomun", chId, today, rules.factions) >= infamy.haomunFavorMin()
+        return factions.favor("haomun", chId, today) >= infamy.haomunFavorMin()
                 || hasRumor(today, infamy.rumorIntensityMin(), List.of(infamy.rumorTag()));
     }
 
@@ -3490,8 +3502,8 @@ public final class GameListener extends ListenerAdapter {
                     String.valueOf(row.get("realm")), "강호", "청하현");
             // 구명은 세력이 가장 크게 세는 공적이다 (favor.공적_대 / 주목 큰_공적_또는_구명)
             String faction = "orthodox";
-            int favor = db.addFavor(faction, medicId, rules.factions.favorInput("공적_대"),
-                    rules.factions.favorMax(), db.worldDay(), rules.factions);
+            int favor = factions.addFavor(faction, medicId, rules.factions.favorInput("공적_대"),
+                    rules.factions.favorMax(), db.worldDay());
             db.logEvent("세력_반응", "character", String.valueOf(medicId), "faction", faction,
                     Map.of("입력", "공적_대", "우호", favor, "사유", "구명"));
             scene.setColor(BLOOD).setTitle("구조 — 피가 멎었다")
@@ -3814,9 +3826,9 @@ public final class GameListener extends ListenerAdapter {
         int lastRecovery = Integer.parseInt(db.getMeta("지역:회복일").orElse("0"));
         if (day - lastRecovery >= rules.regions.recoveryEveryDays()) {
             int debt = Integer.parseInt(db.getMeta("지역:민심부채").orElse("0"));
-            Map<String, Integer> step = rules.regions.recoveryDeltas(db.region(), Map.of("민심", debt));
-            if (!step.isEmpty()) {
-                Map<String, Integer> now = db.nudgeRegion(step);
+            // 회복할 것이 없으면 빈 맵 — 도메인이 장부를 건드리지 않았다는 뜻이다
+            Map<String, Integer> now = regions.recover(Map.of("민심", debt));
+            if (!now.isEmpty()) {
                 report.append("🏞️ **지역이 조금 되돌아왔다** — 치안 ").append(now.get("치안"))
                         .append(" · 경제 ").append(now.get("경제"))
                         .append(" · 민심 ").append(now.get("민심"))
@@ -4731,9 +4743,9 @@ public final class GameListener extends ListenerAdapter {
             if (known < step.min() || db.eventExists("혈채_세력", actor, key)) {
                 continue;
             }
-            int score = db.addAttention(step.faction(), chId, step.score(), today, rules.factions);
-            int favor = db.addFavor(step.faction(), chId, step.favor(), rules.factions.favorMax(),
-                    today, rules.factions);
+            int score = factions.addAttention(step.faction(), chId, step.score(), today);
+            int favor = factions.addFavor(step.faction(), chId, step.favor(), rules.factions.favorMax(),
+                    today);
             db.logEvent("혈채_세력", "character", actor, "faction", key,
                     Map.of("세력", step.faction(), "주목", score, "우호", favor,
                             "혈채", known, "칸", rung.name()));

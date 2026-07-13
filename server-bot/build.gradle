@@ -14,6 +14,8 @@ repositories {
 
 dependencies {
     implementation project(':core')
+    // ★ 봇은 이제 **어댑터**다 — 세력·지역의 규칙은 여기가 아니라 도메인이 안다.
+    implementation project(':domain')
     implementation 'net.dv8tion:JDA:5.2.1'
     implementation 'org.xerial:sqlite-jdbc:3.47.1.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
@@ -33,6 +35,8 @@ application {
 jar {
     manifest { attributes 'Main-Class': 'com.honcheon.bot.HoncheonBot' }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // 뚱보 jar 는 런타임 클래스패스를 통째로 삼킨다 — :domain:jar 가 먼저 서야 한다
+    dependsOn configurations.runtimeClasspath
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }

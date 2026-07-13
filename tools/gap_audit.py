@@ -40,10 +40,17 @@ TOOLS = os.path.join(ROOT, "tools")
 # 엔진 = 플레이어에게 닿는 코드. tools/ 는 엔진이 아니다 (재기만 한다).
 ENGINE_ROOTS = {
     "core": os.path.join(ROOT, "core", "src", "main", "java"),
+    # domain = 규칙(core)과 장부(포트)가 만나는 곳. **엔진이다** — 플레이어에게 닿는다.
+    # ★ 이 줄이 없으면 눈이 거짓말한다: 도메인만이 부르는 core 메서드가 '죽었다'고 나온다.
+    #   (어댑터가 도메인 뒤로 물러난 순간 호출자가 여기로 옮겨왔기 때문이다.)
+    "domain": os.path.join(ROOT, "domain", "src", "main", "java"),
     "mvt": os.path.join(ROOT, "server-mvt", "src", "main", "java"),
     "bot": os.path.join(ROOT, "server-bot", "src", "main", "java"),
 }
-TEST_ROOTS = [os.path.join(ROOT, "core", "src", "test", "java")]
+TEST_ROOTS = [
+    os.path.join(ROOT, "core", "src", "test", "java"),
+    os.path.join(ROOT, "domain", "src", "test", "java"),
+]
 
 OK, WARN, FAIL, DEAD = "✅", "⚠️", "❌", "🕳"
 
@@ -238,7 +245,7 @@ def audit_graph(rep: Report, engines, tools) -> dict[str, dict]:
         info = graph[base]
         tag = " ".join(
             f"{layer}:{len(info['readers'][layer])}"
-            for layer in ("core", "mvt", "bot") if info["readers"][layer]
+            for layer in ("core", "domain", "mvt", "bot") if info["readers"][layer]
         )
         rep.say(f"    {OK} {base:<32} {tag}")
 
@@ -278,6 +285,12 @@ def audit_graph(rep: Report, engines, tools) -> dict[str, dict]:
 #  ② 죽은 코드 — 아무도 안 부르는 public 메서드
 # ══════════════════════════════════════════════════════════════════════════════
 
+# 선언 줄의 표식 — 수식어로 시작한다 (호출 줄에는 수식어가 없다)
+DECL_MODIFIER_RE = re.compile(
+    r"^[ \t]+(?:@\w+[ \t]+)*"
+    r"(?:public|private|protected|static|final|synchronized|abstract|default)[ \t]"
+)
+
 # public <반환형> 이름( — 생성자·class/record/enum 선언은 제외
 METHOD_RE = re.compile(
     r"^\s+public\s+(?:static\s+|final\s+|synchronized\s+)*"
@@ -309,7 +322,21 @@ def audit_dead_code(rep: Report, engines, tests) -> None:
                 if p2 != path and call in b2
             )
             # 자기 파일 안에서 스스로 부르는 것도 산다 (내부 재사용)
+            #
+            # ★ 예전에는 ".이름(" 만 셌다 — **점 없는 내부 호출을 놓쳤다.**
+            #   rumorInput() 이 attentionInput(...) 을 그냥 부르면 (this. 없이) 눈은 그것을 못 보고
+            #   attentionInput 을 '테스트만 부르는 죽은 메서드'라고 **거짓 사망 선고**했다.
+            #   플레이어는 매일 그 규칙을 겪는데도.
+            #
+            #   선언 줄은 호출이 아니다. 선언은 **수식어(public/private/…)를 달고 있다**는 것으로
+            #   가른다 — `return foo(...)` 같은 줄에는 수식어가 없다. 애매하면 '호출이 아니다' 쪽으로
+            #   센다 (덜 세는 쪽이 안전하다: 죽음을 숨기지 않고 드러내는 방향이다).
             self_calls = body.count(call)
+            for mm in re.finditer(rf"(?<![\w.]){re.escape(name)}\s*\(", body):
+                line = body[body.rfind("\n", 0, mm.start()) + 1: mm.start()]
+                if not DECL_MODIFIER_RE.match(line):
+                    self_calls += 1
+
             if callers == 0 and self_calls == 0:
                 t = test_blob.count(call)
                 dead_rows.append((cls, name, layer_of(path), t))

@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+    // java-library — 도메인을 쓰는 어댑터는 core 룰 타입(StageDef·FavorLevel …)도 함께 본다
+    id 'java-library'
+}
+
+group = 'com.honcheon'
+version = '1.0.0'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// domain = 규칙과 장부가 만나는 곳. **어댑터가 아니다.**
+//
+// ★ 이 모듈의 의존성 목록이 곧 경계의 증명이다:
+//   - :core 만 본다 (순수 룰 엔진).
+//   - JDA 없음      → 도메인은 디스코드를 모른다. 임베드도, 슬래시 명령도, 25칸 한도도 모른다.
+//   - SQLite 없음   → 도메인은 SQL 을 모른다. 장부는 포트(FactionLedger/RegionLedger) 뒤에 있다.
+//   - Bukkit 없음   → 도메인은 마크를 모른다.
+//
+// 여기에 net.dv8tion 을 한 줄이라도 적으면 **컴파일이 아니라 설계가 깨진 것이다.**
+// 그때 되돌려야 할 것은 이 파일이지 도메인 코드가 아니다.
+// ─────────────────────────────────────────────────────────────────────────────
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api project(':core')
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.9.2'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+test {
+    useJUnitPlatform()
+    // 행동 불변 테스트가 저장소 루트의 config/*.yml (단일 진실 원천)을 읽는다
+    systemProperty 'honcheon.config.dir', rootProject.projectDir.toPath().resolve('config').toString()
+}
