@@ -214,10 +214,7 @@ public final class HuntingGrounds implements Listener {
      *
      * <p>등록부가 없으면(config 유실) 이 폴백으로 돈다 — 서버는 떠야 한다.
      */
-    private static Set<EntityType> wildAllow = EnumSet.of(
-            EntityType.WOLF, EntityType.FOX, EntityType.RABBIT, EntityType.BAT,
-            EntityType.COD, EntityType.SALMON, EntityType.TROPICAL_FISH, EntityType.PUFFERFISH,
-            EntityType.SQUID, EntityType.DOLPHIN, EntityType.TURTLE);
+    private static Set<EntityType> wildAllow = EnumSet.noneOf(EntityType.class);
 
     // ══════════════ 등록부 (config 판독) ══════════════
 
@@ -249,6 +246,29 @@ public final class HuntingGrounds implements Listener {
             return night ? this.night : this.day;
         }
     }
+
+    /**
+     * 마을 가축 정원 — <b>등록부: {@code hunting_grounds.yml} livestock</b>.
+     *
+     * <p><b>왜 사냥터 엔진이 가축을 놓는가.</b> 자연 스폰이 0 이 된 뒤
+     * ({@code world_purity.yml wild_spawn.allow: []}) 가축은 <b>아무도 놓지 않으면 세계에 0마리</b>다.
+     * 등록부는 오래전부터 "가축은 조성기가 CUSTOM 으로 놓는다"고 적어 두었는데 — <b>아무도 안 놓고 있었다.</b>
+     *
+     * <p>그리고 조성기의 일도 아니다: 조성기는 건물을 <b>한 번</b> 짓지만 가축은 <b>죽는다</b>(잡아먹고,
+     * 늑대가 물고, 떨어진다). 한 번 놓고 끝나면 사흘 뒤 마당은 다시 빈다.
+     * 가축은 <b>건축이 아니라 정원(定員)</b>이다 — 그리고 정원을 지키는 기계는 이미 여기 있다.
+     */
+    private static String livestockZone = "청하현";
+    private static String livestockAnchor = "장터";
+    private static int livestockRadius = 28;
+    private static int livestockCycleTicks = 600;   // 가축은 급하지 않다 (30초)
+    private static List<Quota> livestock = List.of();
+
+    /** 가축이 설 땅 — 마당·밭·길. <b>지붕과 물 위에는 안 선다</b> (최고 블록이 지붕일 수 있다) */
+    private static final Set<Material> YARD_GROUND = EnumSet.of(
+            Material.GRASS_BLOCK, Material.DIRT, Material.COARSE_DIRT, Material.ROOTED_DIRT,
+            Material.PODZOL, Material.FARMLAND, Material.DIRT_PATH, Material.MOSS_BLOCK,
+            Material.SAND, Material.GRAVEL);
 
     /** 치안의 이음매 — hunting_grounds.yml security (아래는 전부 폴백). 구간이 비면 치안은 산길을 안 움직인다 */
     private static String securityStat = "치안";
@@ -314,8 +334,14 @@ public final class HuntingGrounds implements Listener {
         try {
             Map<String, Object> purity = RulesConfig.section(RulesConfig.load(file), "world_purity");
             Object allow = RulesConfig.section(purity, "wild_spawn").get("allow");
-            if (!(allow instanceof List<?> names) || names.isEmpty()) {
-                return;
+            // ★ **빈 목록은 정당한 값이다** — "아무것도 자연 스폰하지 않는다"는 뜻이다.
+            //   예전 코드는 `names.isEmpty()` 를 「등록부가 없다」로 읽고 **폴백을 살렸다.**
+            //   그 시절엔 폴백에 이리·박쥐·물고기가 들어 있었으니 —
+            //   등록부를 통째로 비워도 세계엔 여전히 이리가 뛰었을 것이다. **등록제가 아니었다.**
+            //   (이 버그를 audit 의 「폴백 표류」 검사가 잡았다.)
+            //   이제 목록이 **있기만 하면** 그 내용이 정본이다. 비어 있으면 비어 있는 대로 정본이다.
+            if (!(allow instanceof List<?> names)) {
+                return;   // 키 자체가 없다 — 그때만 폴백
             }
             Set<EntityType> parsed = EnumSet.noneOf(EntityType.class);
             for (Object name : names) {
@@ -323,11 +349,10 @@ public final class HuntingGrounds implements Listener {
                     parsed.add(EntityType.valueOf(String.valueOf(name).toUpperCase(Locale.ROOT)));
                 } catch (IllegalArgumentException ignored) {
                     // 등록부에 오타가 있거나 바닐라에서 사라진 몹 — 조용히 건너뛴다
+                    // (오타는 tools/world_purity_audit.py §④-a 가 잡는다 — 여기서 죽지는 않는다)
                 }
             }
-            if (!parsed.isEmpty()) {
-                wildAllow = parsed;
-            }
+            wildAllow = parsed;
         } catch (RuntimeException ignored) {
             // 등록부가 깨졌다 — 폴백으로 돈다
         }
@@ -455,6 +480,23 @@ public final class HuntingGrounds implements Listener {
             if (!parsed.isEmpty()) {
                 populations = Map.copyOf(parsed);
             }
+        }
+        if (root.get("livestock") instanceof Map<?, ?> raw) {
+            Map<String, Object> l = (Map<String, Object>) raw;
+            livestockZone = String.valueOf(l.getOrDefault("zone", livestockZone));
+            livestockAnchor = String.valueOf(l.getOrDefault("anchor", livestockAnchor));
+            livestockRadius = intOr(l.get("radius"), livestockRadius);
+            livestockCycleTicks = ticks(l.get("cycle_seconds"), livestockCycleTicks);
+            List<Quota> herd = new ArrayList<>();
+            if (l.get("population") instanceof Map<?, ?> pop) {
+                ((Map<String, Object>) pop).forEach((id, q) -> {
+                    if (q instanceof Map<?, ?> qm) {
+                        Map<String, Object> quota = (Map<String, Object>) qm;
+                        herd.add(new Quota(id, intOr(quota.get("day"), 0), intOr(quota.get("night"), 0)));
+                    }
+                });
+            }
+            livestock = List.copyOf(herd);
         }
         if (root.get("security") instanceof Map<?, ?> raw) {
             Map<String, Object> s = (Map<String, Object>) raw;
@@ -682,6 +724,78 @@ public final class HuntingGrounds implements Listener {
             }
             partnerUpkeep();   // 비무 상대(곽진) — 표국 마당에 한 사람은 늘 서 있다
         }
+        if (livestockCycleTicks > 0 && cycle % livestockCycleTicks == 0) {
+            repopulateLivestock();   // 마당의 닭 — 세계가 텅 비지 않는 두 축 중 하나
+        }
+    }
+
+    /**
+     * 마을 가축 정원 — 마당에 닭이 있고 외양간에 소가 있다.
+     *
+     * <p>사냥터의 {@link #repopulate} 와 같은 기계다: census 로 세고, 모자란 만큼, 한 주기에 한 마리.
+     * 다른 것은 <b>자리의 규칙</b>뿐이다 —
+     * <ul>
+     *   <li>사냥터는 <b>어둠</b>에서 나고 사람에게서 20칸 떨어져야 하지만, 가축은 <b>마당</b>에 선다.
+     *       광원도 거리도 안 본다 (등롱 밑의 닭은 옳다).</li>
+     *   <li>사냥터는 마을을 <b>피하고</b>({@code inTown → continue}), 가축은 마을 <b>안에서만</b> 난다.
+     *       그래서 {@link #pickSpawn} 을 쓸 수 없다 — 그 함수는 원리적으로 마을에 못 놓는다.</li>
+     *   <li>땅을 가린다({@link #YARD_GROUND}) — 지붕 위의 소와 물 위의 닭을 막는다.
+     *       {@code getHighestBlockYAt} 은 <b>지붕도 최고점으로 돌려주기 때문이다.</b></li>
+     * </ul>
+     */
+    private void repopulateLivestock() {
+        if (livestock.isEmpty()) {
+            return;
+        }
+        Location yard = plugin.anchor(livestockAnchor);
+        if (yard == null || yard.getWorld() == null) {
+            return;   // 마당이 아직 없다 (조성 전) — 가축도 없다
+        }
+        World world = yard.getWorld();
+        if (!world.isChunkLoaded(yard.getBlockX() >> 4, yard.getBlockZ() >> 4)) {
+            return;   // 청크를 강제로 올리지 않는다 (성능)
+        }
+        Map<String, Integer> census = new HashMap<>();
+        for (Entity e : world.getNearbyEntities(yard, livestockRadius, 24, livestockRadius)) {
+            String id = tag(e, KEY_ID);
+            if (id != null && !e.isDead()) {
+                census.merge(id, 1, Integer::sum);
+            }
+        }
+        boolean night = isNight(world);
+        for (Quota quota : livestock) {
+            Foe foe = FOES.get(quota.id());
+            if (foe == null || census.getOrDefault(quota.id(), 0) >= quota.target(night)) {
+                continue;
+            }
+            Location at = pickYardSpot(world, yard);
+            if (at != null) {
+                spawn(foe, at, livestockZone);   // SpawnReason.CUSTOM — 마을 무스폰을 통과한다
+                return;   // 한 주기에 한 마리
+            }
+        }
+    }
+
+    /** 마당의 자리 — 앵커 둘레, 하늘이 보이는 흙·풀·길 위. 담장 밖으로는 안 샌다 */
+    private Location pickYardSpot(World world, Location yard) {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        for (int attempt = 0; attempt < 16; attempt++) {
+            int x = yard.getBlockX() + rng.nextInt(-livestockRadius, livestockRadius + 1);
+            int z = yard.getBlockZ() + rng.nextInt(-livestockRadius, livestockRadius + 1);
+            if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+                continue;
+            }
+            int y = world.getHighestBlockYAt(x, z);
+            if (!YARD_GROUND.contains(world.getBlockAt(x, y, z).getType())
+                    || !standable(world, x, y, z)) {
+                continue;   // 지붕·물·돌바닥 — 가축의 자리가 아니다
+            }
+            Location at = new Location(world, x + 0.5, y + 1, z + 0.5);
+            if (inTown(at)) {
+                return at;
+            }
+        }
+        return null;
     }
 
     /** 정원 채우기 — 사냥해서 줄면 시간이 지나 다시 찬다. 한 주기에 한 마리 (고갈되지 않되 무한하지도 않게) */
@@ -990,6 +1104,9 @@ public final class HuntingGrounds implements Listener {
             Foe foe = FOES.get(tag(mob, KEY_ID));
             if (foe == null || sparring.isSparring(mob)) {
                 continue;   // 비무 중인 몸은 Sparring 이 조종한다
+            }
+            if ("가축".equals(foe.rank())) {
+                continue;   // 마당의 닭은 그냥 마당에 있다 — 전의도 도주도 표적도 없다
             }
             long fleeingUntil = pdcLong(mob, KEY_FLEEING);
             if (fleeingUntil > cycle) {
@@ -1312,6 +1429,16 @@ public final class HuntingGrounds implements Listener {
             case "호피" -> Goods.pelt("호랑이");
             case "웅담" -> Goods.ungdam();
             case "늑대_고기", "멧돼지_고기", "고기" -> new ItemStack(Material.PORKCHOP);
+            // ─── 마을 가축 (npcs 등록부 dak·so·yang·dwaeji) ───
+            //   가축의 살림은 부산물 채널(Goods)이 아니라 **바닐라 식재료**다 — 마을에서 먹는 것이지
+            //   장터에 내다 파는 사냥 전리품이 아니다 (economy.yml price_table.사냥_부산물 밖).
+            case "닭고기" -> new ItemStack(Material.CHICKEN);
+            case "달걀" -> new ItemStack(Material.EGG);
+            case "소고기" -> new ItemStack(Material.BEEF);
+            case "소_가죽" -> new ItemStack(Material.LEATHER);
+            case "양고기" -> new ItemStack(Material.MUTTON);
+            case "양털" -> new ItemStack(Material.WHITE_WOOL);
+            case "돼지고기" -> new ItemStack(Material.PORKCHOP);
             default -> null;   // 등록 대기
         };
     }
@@ -1480,6 +1607,27 @@ public final class HuntingGrounds implements Listener {
                         + " / 정원 " + effective + shift);
             }
         }
+        // ── 마을 가축 — 세계가 텅 비지 않는 두 축 중 하나. 여기서도 보여야 한다 ──
+        Location yard = plugin.anchor(livestockAnchor);
+        if (!livestock.isEmpty() && yard != null && yard.getWorld() != null) {
+            Map<String, Integer> herd = new HashMap<>();
+            for (Entity e : yard.getWorld().getNearbyEntities(yard, livestockRadius, 24, livestockRadius)) {
+                String id = tag(e, KEY_ID);
+                if (id != null && !e.isDead()) {
+                    herd.merge(id, 1, Integer::sum);
+                }
+            }
+            boolean night = isNight(yard.getWorld());
+            lines.add(org.bukkit.ChatColor.GOLD + "── " + livestockZone + " · 가축 (「"
+                    + livestockAnchor + "」 둘레 " + livestockRadius + "칸) ──");
+            for (Quota quota : livestock) {
+                Foe foe = FOES.get(quota.id());
+                lines.add(org.bukkit.ChatColor.WHITE + (foe == null ? quota.id() : foe.name())
+                        + org.bukkit.ChatColor.GRAY + "  " + herd.getOrDefault(quota.id(), 0)
+                        + " / 정원 " + quota.target(night));
+            }
+        }
+
         if (lines.isEmpty()) {
             lines.add(org.bukkit.ChatColor.GRAY + "등록된 사냥터가 없다 — 먼저 /혼천 조성");
         }

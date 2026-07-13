@@ -513,3 +513,75 @@ npcs:
       - "죽이면 산이 기억한다 (강도 2 소문 + 곰보영감 경유 전승)"
     drops: [백영묘_가죽, 영단_재료]
     incident_links: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 마을 가축(家畜) — 무협 마을에 닭 한 마리 없으면 그것도 이상하다
+  #
+  #   자연 스폰이 **0** 이 된 뒤(world_purity.yml wild_spawn.allow: []) 가축은
+  #   **아무도 놓지 않으면 세계에 0마리**다. 마당에 닭이 없고 외양간에 소가 없다.
+  #   그래서 등록한다 — 야생이 아니라 **마을의 살림**으로.
+  #
+  #   심는 곳: hunting_grounds.yml `livestock` (마을 가축 정원)
+  #            → HuntingGrounds.repopulateLivestock() 이 청하현 안에 정원만큼 놓는다.
+  #   ★ 이들은 **사냥감이 아니다.** 전의도 없고(가축은 스윕에서 빠진다) 먼저 치지도 않는다.
+  #     명패는 회색(무해) — cultivation.yml mc_perception 이 이미 「회 = 압도적 하수」라 적어 두었다.
+  #
+  #   ⚠ cultivation.yml beast_ranks 에 `가축` 이 없다 (들짐승·맹수·영물 셋뿐).
+  #     그 파일은 내 소유가 아니다 — 소유자가 한 줄 넣어야 등록부가 일관된다:
+  #         가축: { examples: [닭, 소, 양, 돼지], rank: 범인_상당, policy: "사냥감 아님 — 마을 살림" }
+  # ═══════════════════════════════════════════════════════════════════════════
+  dak:
+    name: "닭"
+    tier: 0
+    template: true
+    role: "가축 — 마당의 닭"
+    location: cheongha
+    beast_rank: 가축
+    realm: "범인"
+    mc_entity: CHICKEN
+    stats: { 근력: 1, 민첩: 2, 체력: 1, 감각: 2 }
+    durability: 4
+    morale: { start: 0, 도주_문턱: 0, note: "전의가 없다 — 스윕에서 빠진다" }
+    drops: [닭고기, 달걀]
+
+  so:
+    name: "소"
+    tier: 0
+    template: true
+    role: "가축 — 외양간의 소 (밭을 간다)"
+    location: cheongha
+    beast_rank: 가축
+    realm: "범인"
+    mc_entity: COW
+    stats: { 근력: 5, 민첩: 1, 체력: 5, 감각: 2 }
+    durability: 20
+    morale: { start: 0, 도주_문턱: 0 }
+    drops: [소고기, 소_가죽]
+
+  yang:
+    name: "양"
+    tier: 0
+    template: true
+    role: "가축 — 울타리의 양 (털을 낸다)"
+    location: cheongha
+    beast_rank: 가축
+    realm: "범인"
+    mc_entity: SHEEP
+    stats: { 근력: 2, 민첩: 2, 체력: 3, 감각: 2 }
+    durability: 16
+    morale: { start: 0, 도주_문턱: 0 }
+    drops: [양고기, 양털]
+
+  dwaeji:
+    name: "돼지"
+    tier: 0
+    template: true
+    role: "가축 — 우리의 돼지"
+    location: cheongha
+    beast_rank: 가축
+    realm: "범인"
+    mc_entity: PIG
+    stats: { 근력: 3, 민첩: 2, 체력: 4, 감각: 2 }
+    durability: 18
+    morale: { start: 0, 도주_문턱: 0 }
+    drops: [돼지고기]

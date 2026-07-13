@@ -206,8 +206,8 @@ antechamber:
     hint: "§8(강호에서는 이것을 손으로 친다)"
     cooldown_ticks: 40
     list:
-      - { id: 수련_외공, pos: [15, -2], command: "혼천 수련 외공 2" }
-      - { id: 수련_초식, pos: [15,  2], command: "혼천 수련 초식 3" }
+      - { id: 수련_외공, pos: [16, -2], command: "혼천 수련 외공 2" }
+      - { id: 수련_초식, pos: [16,  2], command: "혼천 수련 초식 3" }
       - { id: 시트,      pos: [19, -2], command: "혼천 시트" }
       - { id: 태세_자동, pos: [19,  2], command: "혼천 태세 자동" }
       - { id: 접속,      pos: [23,  0], command: "혼천 접속" }

@@ -1022,6 +1022,207 @@ def palette_coverage():
     return ratio, len(unresolved)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑬. 획(劃)과 여백(餘白) — 「그림이 바닐라인가」  【2026-07 신설】
+#
+# ── 왜 이 축이 필요한가 ──
+# 사용자: *"일본/동양풍 리소스팩 기준으로 블럭 및 물 등 **디자인**을 수정."*
+# 앞 증분이 **색**(채도·색상)을 고쳤고 축 ⑫가 그것을 지킨다. 그런데 색이 맞아도 **그림이 바닐라면**
+# 눈은 마인크래프트를 본다 — 그리고 **그것을 재는 자가 없었다.**
+#
+# 실측이 그 공백을 폭로했다 (눈에 가장 많이 닿는 16장, 화면색 기준):
+#     지표                  바닐라   우리(이전)
+#     σ (소리 크기)          18.2     13.2  ← 그나마 나았으나
+#     여백비                  41%      35%  ← **바닐라보다 좁았다**
+#     획 응집도 (난수=1.0)    1.13     1.13  ← **같다.** 획이 없다 = 점을 흩뿌리고 있었다
+#   grass_block_top 은 응집도 0.97 (바닐라 0.98) — **바닐라와 같은 그림**이었다.
+#
+# ── 무엇을 재는가 (남의 팩 실측에서 나온 세 잣대) ──
+# 조사: Mizuno's 16 Craft · Ōkami · 중국신화 팩의 PNG 를 직접 재서 얻은 문법 (docs 참조).
+#   ① σ (화면 루마 표준편차) — **소리의 크기**. 오리엔탈 팩은 바닐라보다 조용하다
+#      (고임물: 바닐라 8.3 · 미즈노 4.6 · 오오카미 0.3). ★ 그리고 셋 다 바닐라의 한 가지를 뒤집었다:
+#      **고요(고임물)가 움직임(흐름)보다 조용하다.** 바닐라는 거꾸로다.
+#   ② 여백비 — 잔잔한 바탕이 차지하는 몫. 수묵은 **쉬는 면**이 그림의 절반이다.
+#   ③ 획 응집도 — **획인가 점인가.** 획(mark)은 눈에 보이는 것만 센다(절대 문턱 8루마 —
+#      종이결 ±1.5루마는 획이 아니다). 그 획들이 서로 **이어져** 있는가를 밀도로 정규화해 잰다:
+#        응집도 = (획의 평균 이웃 획 수) / (8 × 획 밀도).   난수로 흩뿌리면 **정확히 1.0** 이다.
+#        이어진 곡선이면 1보다 크다. ⇒ **1.0 = 바닐라의 잡티. 그 위가 그림이다.**
+#      ★ 이 잣대는 σ 를 대신하지 못한다: 매끈한 플라스마 얼룩은 조용하지만(σ 낮음) 그림이 아니다.
+#        둘을 함께 재야 '조용한 무구조'와 '조용한 획'이 갈린다.
+#
+# ── 재는 범위는 등록제다 ──
+# 아직 문법을 갈아입지 못한 장(판자·자갈·조약돌…)은 **STROKE_BACKLOG 에 사유와 함께** 적는다.
+# 조용히 빠지는 것이 아니라 **이름과 함께 청구서에 오른다** (등록되지 않은 미완은 다음 사람이 못 본다).
+MARK_LUMA = 8.0            # 획의 절대 문턱 — "눈에 보이는 자국" (종이결 ±1.5 는 획이 아니다)
+CALM_MIN = 0.35            # 여백비 하한 — 쉬는 면이 이보다 좁으면 수묵이 아니다
+COHESION_MIN = 1.15        # 획 응집도 하한 (난수 = 1.00). 이 아래 = 획이 아니라 잡티
+COHESION_SKIP_DENSITY = 0.03   # 획이 이보다 드물면 응집도는 뜻이 없다 (거의 순수 여백 — 그것은 정답이다)
+
+STROKE_CONVERTED = {       # 이 증분에서 **문법을 갈아입은 '면'** — 여기는 강제한다
+    "water_still", "water_flow", "grass_block_top", "grass_block_side",
+    "dirt", "dirt_path_top", "stone", "deepslate_tiles",
+}
+# ★★ 【이 눈이 두 번째로 거짓말했다 — 잎에 '면'의 자를 들이댔다】
+#   나뭇잎을 STROKE_CONVERTED 에 넣었더니 여백 32% · 응집도 0.84 로 위반이 떴다. 그런데 **범주 착오**다:
+#   축 ⑬ 은 '칠해진 면(surface)'의 문법을 묻는 자다 (물·땅·돌·기와 — 꽉 찬 면).
+#   수관(樹冠)은 면이 아니라 **컷아웃**이고, 그 여백은 **투명한 구멍(하늘)** 이다.
+#   그런데 stroke_grammar 는 (옳게) 투명을 제외한다 ⇒ 잎에게는 **잴 여백이 애초에 남지 않는다.**
+#   면의 자로 구멍 뚫린 것을 재면 언제나 "여백이 없다"가 나온다 — 자가 틀린 것이지 그림이 틀린 게 아니다.
+#   ⇒ 잎은 **제 자**로 잰다: **구멍 비율**. 그것이 수관을 수관으로 만드는 값이다.
+#   근거(실측): 바닐라 참나무 잎 구멍 33% · 조사한 오리엔탈 팩들 20~34%.
+#   구멍이 없으면 수관이 **속이 꽉 찬 덩어리**(이끼)이고, 너무 많으면 앙상한 가지다.
+LEAF_HOLE_BAND = (0.18, 0.36)      # 수관의 성김 — [하한, 상한]
+LEAF_TEXTURES = ["oak_leaves", "spruce_leaves", "birch_leaves", "cherry_leaves"]
+STROKE_BACKLOG = {         # 아직 못 갈아입은 장 — **사유와 함께** 등록한다 (청구서)
+    "oak_planks": "널의 몸은 잠재웠으나 결·마구리·못이 아직 잡티에 가깝다 (여백 25%)",
+    "spruce_planks": "동일 — plank_rows 를 공유한다",
+    "cobblestone": "조약돌 보로노이 위에 잔노이즈가 남아 있다 (응집도 1.02)",
+    "gravel": "자갈은 본디 점의 집합이라 '획'의 문법이 그대로 안 맞는다 — 별도 판정 필요",
+    "oak_log": "수피의 터진 골은 bark_rows 소관 — 결은 갈았으나 거스러미 octave 가 남았다",
+    "sand": "모래알은 점이 정체다 — 획으로 옮길 대상인지 자체가 미결 (판정 보류)",
+    "stone_bricks": "전돌 줄눈은 이미 선이나 벽돌 몸에 잔노이즈가 남았다",
+}
+
+
+def stroke_grammar(path, name):
+    """(σ, 여백비, 획 응집도, 획 밀도) — 축 ⑬ 의 세 잣대. 화면색(틴트 곱셈)으로 잰다.
+
+    ★★ 【이 눈이 처음에 거짓말했다 — 투명을 '시끄럽다'고 셌다】
+      첫 판은 컷아웃(잎)의 **투명 픽셀**(RGB 0,0,0)을 그대로 통계에 넣었다.
+      ⇒ 나뭇잎의 여백이 20~27% 로 찍혀 '쉬는 면이 없다'는 위반이 떴다.
+      그러나 **수관의 구멍은 하늘이다** — 그것이야말로 가장 순수한 여백이다.
+      면(surface)을 재는 축이 면이 아닌 것을 재고 있었다. 투명은 **제외한다** (이 축은 '칠해진 면'의 문법을 묻는다).
+      ⇒ 잎의 구멍은 축 ⑬ 의 관심사가 아니다. 그것은 leaf_rows 의 구멍 비율(20~34%)이 따로 진다."""
+    w, h, rows = read_block(path, name)
+    h = min(h, 32 if name in ("water_flow", "lava_flow") else 16)   # 프레임 시트는 첫 장만
+    op = [(x, y) for y in range(h) for x in range(w) if px(rows, x, y)[3] > 8]   # 불투명만
+    if not op:
+        return 0.0, 1.0, 0.0, 0.0
+    Lm = {(x, y): luma(px(rows, x, y)) for x, y in op}
+    flat = list(Lm.values())
+    n = len(flat)
+    mu = sum(flat) / n
+    sigma = (sum((v - mu) ** 2 for v in flat) / n) ** 0.5
+    med = sorted(flat)[n // 2]
+    calm = sum(1 for v in flat if abs(v - med) <= 6) / n
+    mark = {p for p in op if abs(Lm[p] - med) > MARK_LUMA}
+    dens = len(mark) / n
+    if not mark or dens >= 0.999:
+        return sigma, calm, 0.0, dens
+    nb = sum(sum(1 for j in (-1, 0, 1) for i in (-1, 0, 1)
+                 if (i, j) != (0, 0) and ((x + i) % w, (y + j) % h) in mark) for x, y in mark)
+    cohesion = (nb / len(mark)) / (8 * dens)
+    return sigma, calm, cohesion, dens
+
+
+def stroke_axis():
+    """축 ⑬ — 획과 여백. 위반 수를 돌려준다."""
+    print("\n── 축 ⑬ 획(劃)과 여백(餘白) — 「그림이 바닐라인가」 ──")
+    print(f"  획 응집도: 난수로 흩뿌리면 1.00 (= 바닐라의 잡티). 그 **위**가 그림이다 (하한 {COHESION_MIN})")
+    bad = 0
+    bdir = PACK / "minecraft" / "textures" / "block"
+    for name in sorted(STROKE_CONVERTED):
+        f = bdir / f"{name}.png"
+        if not f.exists():
+            print(f"  ❌ {name}: 등록됐으나 팩에 없다 (등록부가 팩을 앞지른다)")
+            bad += 1
+            continue
+        sigma, calm, coh, dens = stroke_grammar(f, name)
+        notes = []
+        if calm < CALM_MIN:
+            notes.append(f"여백 {calm:.0%} < {CALM_MIN:.0%} (쉬는 면이 없다)")
+        if dens >= COHESION_SKIP_DENSITY and coh < COHESION_MIN:
+            notes.append(f"응집도 {coh:.2f} < {COHESION_MIN} (획이 아니라 잡티 — 난수와 구별되지 않는다)")
+        if notes:
+            bad += 1
+            print(f"  ❌ {name}: {', '.join(notes)}")
+        else:
+            tail = "여백뿐" if dens < COHESION_SKIP_DENSITY else f"응집 {coh:.2f}"
+            print(f"  ✅ {name}: σ {sigma:5.1f} · 여백 {calm:4.0%} · {tail}")
+    # 고요는 움직임보다 조용해야 한다 — 바닐라가 거꾸로 가진 것 (남의 팩 셋이 모두 뒤집었다)
+    ws, wf = bdir / "water_still.png", bdir / "water_flow.png"
+    if ws.exists() and wf.exists():
+        s_still = stroke_grammar(ws, "water_still")[0]
+        s_flow = stroke_grammar(wf, "water_flow")[0]
+        if s_still >= s_flow:
+            bad += 1
+            print(f"  ❌ 물: 고임 σ {s_still:.1f} ≥ 흐름 σ {s_flow:.1f} — "
+                  f"**고요가 움직임보다 시끄럽다** (바닐라의 거꾸로를 그대로 물려받았다)")
+        else:
+            print(f"  ✅ 물: 고임 σ {s_still:.1f} < 흐름 σ {s_flow:.1f} (고요가 더 조용하다 — 바닐라는 거꾸로다)")
+    # ⑬-b 수관의 성김 — 잎은 '면'이 아니라 컷아웃이다 (제 자로 잰다)
+    lo, hi = LEAF_HOLE_BAND
+    for name in LEAF_TEXTURES:
+        f = bdir / f"{name}.png"
+        if not f.exists():
+            continue
+        w, h, rows = read_png(f)
+        holes = sum(1 for y in range(h) for x in range(w) if px(rows, x, y)[3] <= 8) / (w * h)
+        if not lo <= holes <= hi:
+            bad += 1
+            why = "속이 꽉 찼다 (수관이 아니라 이끼 덩이)" if holes < lo else "앙상하다 (가지만 남았다)"
+            print(f"  ❌ {name}: 구멍 {holes:.0%} — 대역 [{lo:.0%}–{hi:.0%}] 밖 · {why}")
+        else:
+            print(f"  ✅ {name}: 구멍 {holes:4.0%} (수관이 성글다 — 잎덩이 사이로 하늘이 비친다)")
+    print(f"  ── 청구서: 아직 문법을 못 갈아입은 장 {len(STROKE_BACKLOG)}종 (사유와 함께 등록됨)")
+    for k, why in sorted(STROKE_BACKLOG.items()):
+        print(f"     · {k} — {why}")
+    return bad
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑭. 명병(名兵) 문파 변별 — 「흑백으로 보아도 문파가 갈리는가」 【2026-07 신설】
+#
+# 가져온 기획 프롬프트의 제1원칙을 계량화한다:
+#   *"아이템 아이콘을 **흑백으로 보더라도** 문파가 구분되어야 한다."*
+#   그리고 그 프롬프트가 스스로 금지한 것: *"색만 바꾸고 같은 모델을 재사용하는 방식은 피하라."*
+#
+# ★★ 【첫 판의 잣대가 틀렸다 — 자카드는 이 물음의 자가 아니다】
+#   처음엔 축 ⑨(계열 실루엣)를 그대로 베껴 **마스크 자카드 ≤ 0.65** 를 걸었다. 아홉 쌍이 걸렸다
+#   (화산↔남궁 0.929). 그런데 그 잣대를 통과하려면 **검이 검처럼 생기기를 그만두어야 한다**:
+#   화산·남궁·점창·종남·무당·청성·해남·곤륜은 **전부 검(劍)이다.** 계열이 같다.
+#   축 ⑨ 는 "도(刀)와 비수를 가르는가"를 묻는 자다 — **서로 다른 계열**의 실루엣을 견주라고 만든 것이다.
+#   같은 계열 안에서 자카드 0.65 를 요구하는 것은 "검 여덟 자루가 서로 안 닮게 생겨라"는 말이고,
+#   그 요구를 따르면 문파색은 생기되 **병기 체계가 무너진다** (등록부: 화산도 남궁도 무기는 검이다).
+#
+#   프롬프트가 실제로 요구한 것은 **"구분된다"** 이지 **"윤곽이 다르다"** 가 아니다.
+#   그리고 흑백에서 구분을 만드는 것은 윤곽만이 아니다 — **명암(문양·코등이·물미)** 도 흑백에 남는다.
+#   ⇒ 그래서 축 ⑩(등급 회색조 변별)의 문법을 쓴다: 두 장을 겹쳐
+#     **(ㄱ) 실루엣이 다르거나 (ㄴ) 휘도가 16 이상 다른** 픽셀 수를 센다. 색상(色相)은 세지 않는다.
+#     그 수가 곧 "색맹 플레이어와 회색조 스크린샷이 보는 차이"다 — 프롬프트가 물은 바로 그것.
+#   자카드는 **버리지 않고 참고로 출력한다** (계열이 다른 쌍 — 팽가의 도·당가의 비수·소림의 권갑 —
+#   은 여전히 윤곽으로 갈려야 하고, 그것은 눈으로 확인할 값이다).
+MYEONG_DELTA_MIN = 16     # 흑백에서 달라야 하는 픽셀 수 하한 (아이템은 16x16에서 60~90px 이다)
+
+
+def myeong_pairs():
+    """(회색조 변별 픽셀 수, 자카드, a, b) — 모든 명병 쌍."""
+    from build_resourcepack import MYEONGBYEONG          # 등록부는 하나다 (빌더가 원천)
+    grids, out = {}, []
+    for sect in MYEONGBYEONG:
+        f = ITEM / "weapon" / "myeong" / f"{sect}.png"
+        w, h, rows = read_png(f)
+        grids[sect] = rows
+    names = list(MYEONGBYEONG)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            ra, rb = grids[a], grids[b]
+            delta = inter = uni = 0
+            for y in range(16):
+                for x in range(16):
+                    pa, pb = px(ra, x, y), px(rb, x, y)
+                    va, vb = pa[3] > 8, pb[3] > 8
+                    if va != vb or (va and abs(luma(pa) - luma(pb)) >= 16):
+                        delta += 1
+                    if va and vb:
+                        inter += 1
+                    if va or vb:
+                        uni += 1
+            out.append((delta, inter / uni if uni else 0.0, a, b))
+    out.sort()
+    return out
+
+
 def cross_checks():
     """관계 축 3종 (계열 실루엣 · 등급 변별) — 파일 하나로는 볼 수 없는 결함."""
     violations = 0
@@ -1237,6 +1438,20 @@ def main():
 
     violations += cross_checks()
     violations += brightness_bands()          # 축 ⑫ — 재지 않는 축은 조용히 무너진다
+    violations += stroke_axis()               # 축 ⑬ — 색이 맞아도 **그림**이 바닐라면 마인크래프트다
+
+    print("\n── 축 ⑭ 명병 문파 변별 (흑백으로 보아도 문파가 갈리는가) ──")
+    mp = myeong_pairs()
+    for d, j, a, b in mp:
+        if d < MYEONG_DELTA_MIN:
+            violations += 1
+            print(f"  ❌ {a} ↔ {b}: 회색조 변별 {d}px < {MYEONG_DELTA_MIN} "
+                  f"(색을 빼면 같은 검이다 — 프롬프트가 금한 '색만 바꾼 재탕')")
+    print(f"  회색조 변별 — 최소 {mp[0][0]}px ({mp[0][2]} ↔ {mp[0][3]}) · "
+          f"중앙 {mp[len(mp) // 2][0]}px · 최대 {mp[-1][0]}px  (하한 {MYEONG_DELTA_MIN})")
+    worst_j = max(mp, key=lambda t: t[1])
+    print(f"  (참고) 실루엣 자카드 최대 {worst_j[1]:.3f} — {worst_j[2]} ↔ {worst_j[3]}. "
+          f"검 계열끼리는 윤곽을 공유하는 것이 **옳다** (등록부: 화산·남궁·점창·종남·무당 모두 무기가 검이다).")
     _, cov_violations = palette_coverage()
     violations += cov_violations
 

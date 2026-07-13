@@ -101,47 +101,14 @@
   "has_precipitation": true,
   "spawn_costs": {},
   "spawners": {
-    "ambient": [
-      {
-        "type": "minecraft:bat",
-        "maxCount": 8,
-        "minCount": 8,
-        "weight": 10
-      }
-    ],
+    "ambient": [],
     "axolotls": [],
     "creature": [],
     "misc": [],
     "monster": [],
     "underground_water_creature": [],
-    "water_ambient": [
-      {
-        "type": "minecraft:pufferfish",
-        "maxCount": 3,
-        "minCount": 1,
-        "weight": 15
-      },
-      {
-        "type": "minecraft:tropical_fish",
-        "maxCount": 8,
-        "minCount": 8,
-        "weight": 25
-      }
-    ],
-    "water_creature": [
-      {
-        "type": "minecraft:squid",
-        "maxCount": 4,
-        "minCount": 4,
-        "weight": 10
-      },
-      {
-        "type": "minecraft:dolphin",
-        "maxCount": 2,
-        "minCount": 1,
-        "weight": 2
-      }
-    ]
+    "water_ambient": [],
+    "water_creature": []
   },
   "temperature": 0.5
 }

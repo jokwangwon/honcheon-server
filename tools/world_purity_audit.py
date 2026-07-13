@@ -366,8 +366,13 @@ def audit_spawn(reg: dict, data: Path, jar, fail, warn) -> None:
     src = HG.read_text(encoding="utf-8")
     if "world_purity.yml" not in src or "loadWildAllow" not in src:
         fail("HuntingGrounds 가 world_purity.yml 을 읽지 않는다 — 야생 스폰 등록부가 배선되지 않았다")
+    # 폴백 선언은 `EnumSet.of(...)` 일 수도 `EnumSet.noneOf(EntityType.class)` 일 수도 있다.
+    # (`EntityType.class` 를 몹 이름으로 읽지 않도록 `class` 를 뺀다 — 이걸 놓치면 「class 라는 몹이
+    #  폴백에만 있다」는 헛소리를 뱉는다.)
+    decl = re.search(r"wildAllow\s*=\s*EnumSet\.\w+\(([^;]*)\);", src, re.S)
     fallback = {"minecraft:" + m.lower()
-                for m in re.findall(r"EntityType\.(\w+)", _java_block(src, "wildAllow = EnumSet.of"))}
+                for m in re.findall(r"EntityType\.(\w+)", decl.group(1) if decl else "")
+                if m != "class"}
     #   폴백은 **등록부의 사본**이지 다른 정본이 아니다 (loadGrounds 의 규약 그대로).
     #   표류하면 config 가 유실된 서버는 **다른 세계**가 된다. 그런 폴백은 안전망이 아니라 두 번째 진실이다.
     for drift in sorted(fallback ^ allow):
@@ -420,18 +425,29 @@ def audit_spawn(reg: dict, data: Path, jar, fail, warn) -> None:
         fail(f"바닐라에 없는 바이옴 override (무허가): biome/{extra}")
 
     if not leaks:
-        print(f"{OK} 야생 스폰 — 바이옴 {len(on_disk)}종의 spawners 를 허용 {len(allow)}종으로 거름. "
-              f"금지 몹은 **후보 목록에 없다**(확률이 아니라 불가능)")
+        if allow:
+            print(f"{OK} 야생 스폰 — 바이옴 {len(on_disk)}종의 spawners 를 허용 {len(allow)}종으로 거름")
+        else:
+            print(f"{OK} 야생 스폰 — 바이옴 {len(on_disk)}종의 spawners 가 **전 범주 빈 목록**이다. "
+                  f"자연 스폰 0. 뿌릴 후보가 **없다**(확률이 아니라 불가능)")
 
-    # ④-g ★ 양성 대조 — **끄기만 하고 켜는 걸 잊으면 세계가 텅 빈다.** 이게 가장 흔한 실패다.
-    dead = sorted(allow - set(survivors))
-    if not survivors:
-        fail("★★ 야생에 **아무것도 남지 않았다** — 산야가 죽었다. 거르기가 아니라 전멸이다")
-    else:
-        alive = ", ".join(f"{t.split(':')[1]}×{n}" for t, n in sorted(survivors.items()))
-        print(f"{OK} 산야는 살아 있다 (양성 대조) — {alive}  ← 바이옴 수")
-    for d in dead:
-        warn.append(f"허용했으나 어느 바이옴도 뿌리지 않는다: {d} (바닐라가 원래 안 뿌리는 곳일 수 있다)")
+    # ④-g 허용 목록이 **비었다** — 그러면 여기엔 양성 대조가 없다.
+    #
+    #   ★★ 이것이 이 검사의 가장 중요한 변화다. 예전엔 여기서 「산야는 살아 있다」를 증명했다
+    #      (이리 9 · 박쥐 53 …). 이제 그 증명이 **원리적으로 불가능하다** — 야생은 0 이 정답이니까.
+    #      즉 **「바닐라 스폰 0건」은 이제 텅 빈 세계와 구별되지 않는다.**
+    #      세계가 살아 있다는 증거는 통째로 §⑤ 로 옮겨갔다 — **우리가 놓은 것이 서는가.**
+    #      §⑤ 가 이 눈의 유일한 생명선이다. 거기서 실패하면 세계는 진짜로 텅 빈다.
+    # (「허용 목록이 비었는데 아직 뿌린다」는 따로 안 잰다 — 그건 **위의 누수 검사가 이미 잡는다**.
+    #  allow 가 비면 survivors 는 원리적으로 빌 수밖에 없고, 뿌리는 것은 전부 leaks 로 떨어진다.
+    #  그런 분기를 두면 **영원히 안 도는 죽은 검사**가 된다 — 죽은 검사는 눈이 거짓말을 시작하는 자리다.)
+    if allow and not survivors:
+        fail("★★ 허용 목록이 있는데 야생에 **아무것도 남지 않았다** — 거르기가 아니라 전멸이다")
+    elif not allow:
+        print(f"{WARN} 야생 양성 대조 **없음** — 자연 스폰 0 이 곧 뜻이다. "
+              f"「세계가 살아 있는가」는 이제 §⑤ 만이 답한다")
+    for d in sorted(allow - set(survivors)):
+        warn.append(f"허용했으나 어느 바이옴도 뿌리지 않는다: {d}")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -475,6 +491,33 @@ def audit_hunt(fail, warn) -> None:
     if "SpawnReason.CUSTOM" not in reasons:
         fail("★★ ALLOWED_REASONS 에 CUSTOM 이 없다 — HuntingGrounds.spawn() 의 짐승·산적이 "
              "**전부 취소된다.** 세계가 텅 빈다")
+
+    # ⑤-a2 ★★ **심는 사슬** — 이 세계의 유일한 생명선.
+    #
+    #   자연 스폰이 0 이 된 뒤, 세계에 짐승이 서는 경로는 **오직 이 사슬 하나**다:
+    #       start() → 티커 등록 → tick() → repopulate()/repopulateLivestock() → spawn() → spawnEntity()
+    #   전에는 야생이 완충했다 — repopulate 가 죽어도 산에 이리는 있었다. **이제 없다.**
+    #   이 사슬의 고리 하나만 끊겨도 **세계가 통째로 텅 빈다.** 그리고 「끄는 눈」은 전부 만점을 준다.
+    #   그래서 여기를 가장 세게 문다.
+    CHAIN = [
+        ("start", "runTaskTimer", "티커가 등록되지 않는다 — 아무것도 돌지 않는다"),
+        ("tick", "repopulate(", "티커가 사냥터 정원을 안 채운다 — 산야가 텅 빈다"),
+        ("tick", "repopulateLivestock(", "티커가 마을 가축을 안 채운다 — 마당이 텅 빈다"),
+        ("repopulate", "spawn(", "정원을 세기만 하고 **심지 않는다**"),
+        ("repopulateLivestock", "spawn(", "가축을 세기만 하고 **심지 않는다**"),
+        ("spawn", "spawnEntity(", "spawn() 이 실제로 개체를 만들지 않는다"),
+    ]
+    for method, needle, why in CHAIN:
+        sig = next((m for m in
+                    (f"public void {method}()", f"private void {method}()",
+                     f"private void {method}(Zone zone)", f"public LivingEntity {method}(")
+                    if m in src), None)
+        if sig is None:
+            fail(f"★★ 심는 사슬이 끊겼다 — 메서드 `{method}()` 가 **없다**. {why}")
+            continue
+        if needle not in _java_block(src, sig, "{"):
+            fail(f"★★ 심는 사슬이 끊겼다 — `{method}()` 안에 `{needle}` 이 없다. {why} "
+                 f"(자연 스폰이 0 이므로 **야생이 더는 완충하지 않는다**)")
 
     spawn = gr.get("spawn", {})
     cap = spawn.get("zone_entity_cap", 0)
@@ -539,9 +582,58 @@ def audit_hunt(fail, warn) -> None:
             extra = f"  (치안 최악 {peak})" if peak != tot else ""
             print(f"   {mark} {zone} · {label} 정원 합 {tot} / 구역 상한 {cap}{extra}")
 
-    # ⑤-e ★ 양성 대조 — 정원이 전부 0이면 「위반 0건」인데 세계는 비어 있다
-    if total_planted == 0:
-        fail("★★ 등록된 정원이 **전부 0** 이다 — 사냥터가 텅 빈다. 끄기만 하고 켜는 걸 잊었다")
+    # ── 마을 가축 정원 — 세계가 텅 비지 않는 **두 축 중 하나** ────────────────
+    herd = gr.get("livestock") or {}
+    total_herd = 0
+    if not herd:
+        warn.append("마을 가축 정원이 없다 — 자연 스폰이 0 이므로 **세계에 가축이 0마리**다 "
+                    "(마당에 닭이 없고 외양간에 소가 없다)")
+    else:
+        anchor = herd.get("anchor")
+        print(f"{OK} 마을 가축 정원 — 「{herd.get('zone')}」 · 앵커 「{anchor}」")
+        for foe_id, quota in (herd.get("population") or {}).items():
+            d, n = int(quota.get("day", 0)), int(quota.get("night", 0))
+            total_herd += d + n
+            if foe_id not in npcs:
+                fail(f"★ 가축 「{foe_id}」이 NPC 등록부에 없다 — **영원히 안 난다**")
+                continue
+            mc = npcs[foe_id].get("mc_entity")
+            mc = f"minecraft:{str(mc).lower()}" if mc else body.get(foe_id)
+            if not mc:
+                fail(f"★ 가축 「{foe_id}」에 몸(mc_entity)이 없다 — **안 난다**")
+            elif known and mc not in known:
+                fail(f"★ 가축 「{foe_id}」의 몸이 실재하지 않는 엔티티다: {mc}")
+            print(f"   {OK} {npcs[foe_id].get('name', foe_id)} · 정원 {d}"
+                  + (f" (밤 {n})" if n != d else ""))
+        # 가축이 설 자리 — 앵커는 **조성기가 등록한 이름**이어야 한다. 오타면 마당이 영영 빈다
+        live = ROOT / "run" / "mvt" / "plugins" / "HoncheonMVT" / "anchors.yml"
+        if live.is_file():
+            with live.open(encoding="utf-8") as f:
+                names = set((yaml.safe_load(f) or {}).keys())
+            if anchor not in names:
+                fail(f"★ 가축 앵커 「{anchor}」가 등록된 앵커에 없다 ({', '.join(sorted(names))}) — "
+                     f"anchor() 가 null 을 뱉고 **가축이 한 마리도 안 난다**")
+
+    # ⑤-e ★★ **세계가 텅 비지 않는가** — 이제 이것이 세계의 유일한 양성 대조다.
+    #
+    #   ★ **두 축을 따로 잰다.** 합쳐서 재면 한쪽이 죽어도 다른 쪽이 가려 준다 —
+    #     실제로 이 눈은 처음에 합계만 봤고, 그래서 「사냥터 정원을 전부 0 으로」 를 **놓쳤다**
+    #     (가축 30 이 남아 합계가 0 이 아니었으니까). 산야가 통째로 죽었는데 「위반 0건」이었다.
+    #     세계가 비는 방식은 하나가 아니다. 축마다 물어야 한다.
+    if total_planted + total_herd == 0:
+        fail("★★★ 등록된 정원이 **전부 0** 이다 (사냥터 0 + 가축 0) — "
+             "자연 스폰도 0 이므로 **세계에 짐승이 한 마리도 없다.** 끄기만 하고 켜는 걸 잊었다")
+    else:
+        if total_planted == 0:
+            fail("★★ 사냥터 정원이 **전부 0** 이다 — 자연 스폰도 0 이므로 "
+                 "**산야에 짐승이 한 마리도 없다.** (마을에 가축은 있다 — 그것이 가려 주지 않는다)")
+        if herd and total_herd == 0:
+            fail("★★ 마을 가축 정원이 **전부 0** 이다 — 자연 스폰도 0 이므로 "
+                 "**마당에 닭 한 마리 없다.**")
+        if total_planted and total_herd:
+            print(f"{OK} ★ 세계는 텅 비지 않았다 (유일한 양성 대조) — "
+                  f"산야 {total_planted} + 마을 {total_herd} = "
+                  f"**{total_planted + total_herd} 마리분이 등록되어 있다** (두 축 모두 살아 있다)")
 
     # ⑤-f 치안의 이음매 — region_state.yml threshold_effects.치안_저하 가 약속한 것
     #
@@ -847,23 +939,45 @@ def emit_rcon(reg: dict) -> int:
     print("#     건강한 세계에서 zombie 수는 **0이 아니다**. 그 경보를 믿고 「고치면」 산적이 사라진다.")
     print("#     좀비를 세는 옳은 방법은 ⑥ 이다 — 태그로 가른다.")
 
-    print("\n# ── ⑤ 야생의 짐승(양성 대조): 우리가 허용한 것은 **있어야** 한다 ──")
-    for m in reg["wild_spawn"]["allow"]:
-        print(f"execute if entity @e[type=minecraft:{m.lower()}]")
-    print("#   통과: 최소한 몇은 \"Test passed\". 전부 0 이면 산야가 **죽은 것**이다 — 허용 목록이 안 먹었다")
+    allow = reg["wild_spawn"]["allow"]
+    if allow:
+        print("\n# ── ⑤ 야생의 짐승(양성 대조): 우리가 허용한 것은 **있어야** 한다 ──")
+        for m in allow:
+            print(f"execute if entity @e[type=minecraft:{m.lower()}]")
+        print("#   통과: 최소한 몇은 \"Test passed\". 전부 0 이면 산야가 **죽은 것**이다")
+    else:
+        print("\n# ── ⑤ 야생: **허용 목록이 비었다. 자연 스폰은 0 이다** ──")
+        print("#   아래도 전부 \"Test failed\" (count 0) 여야 한다 — 이리도, 박쥐도, 물고기도 없다.")
+        print("#   ★ 그런데 **여기엔 양성 대조가 없다.** 0 이 정답이니까.")
+        print("#     즉 ①~⑤ 를 전부 통과해도 그것은 **텅 빈 세계와 구별되지 않는다.**")
+        print("#     세계가 살아 있다는 증거는 오직 ⑥ 에 있다. **⑥ 을 반드시 돌려라.**")
+        for m in ["wolf", "fox", "rabbit", "bat", "cod", "salmon", "squid", "dolphin", "turtle"]:
+            print(f"execute if entity @e[type=minecraft:{m}]")
 
-    print("\n# ── ⑥ ★ 우리가 부른 것은 나오는가 — **가장 중요한 검사** ──")
+    print("\n# ── ⑥ ★★★ 우리가 놓은 것이 서는가 — **세계의 유일한 생명선** ──")
     print("#")
-    print("#   끄기만 하고 켜는 걸 잊으면 세계가 텅 빈다. 위의 ①~⑤ 는 전부 「없음」을 재는 눈이라,")
-    print("#   **세계가 완전히 비어도 만점을 준다.** 이 검사만이 그것과 순도를 가른다.")
+    print("#   자연 스폰이 0 이 된 뒤, 세계에 짐승이 서는 경로는 **오직 하나**다:")
+    print("#     start() → 티커 → tick() → repopulate()/repopulateLivestock() → spawn() → CUSTOM")
+    print("#   전에는 야생이 완충했다 — 이 사슬이 죽어도 산에 이리는 있었다. **이제 없다.**")
+    print("#   위의 ①~⑤ 는 전부 「없음」을 재는 눈이라 **텅 빈 세계에 만점을 준다.**")
+    print("#   이 검사만이 「통제」와 「전멸」을 가른다. ★ 하나라도 0 이면 **세계가 죽은 것이다.**")
     print("#")
-    print("#   ㉠ 사냥터 census — 등록부의 정원이 인게임에 서 있는가 (태그로 센다. 몸이 아니라)")
-    print("#      ★ 북쪽 산길 안에 서서 돌려라 (구역 밖이면 스포너가 안 돈다 — player_near 96)")
-    print("#      통과: 각 줄이 `n / 정원 m` 이고 **n > 0** (밤이면 맹수도). 전부 0/… 이면 산이 죽었다")
+    print("#   ㉠ 사냥터 census — 등록된 정원이 인게임에 서 있는가 (몸이 아니라 **태그**로 센다)")
+    print("#      ★ 사냥터 **안에** 서서 돌려라 (구역 밖이면 스포너가 안 돈다 — player_near 96).")
+    print("#        사냥터: 북쪽 산길 · 녹림 소채 (북산) · 마교 전초 (진령 심산)")
+    print("#      통과: 각 줄이 `n / 정원 m` 이고 **n > 0**. 전부 `0 / …` 이면 산이 죽었다")
     print("혼천 사냥터")
     print("#")
-    print("#   ㉡ 징발한 몸 — 이것들이 보이는 것이 **정상**이다 (우리가 CUSTOM 으로 심은 것)")
+    print("#   ㉡ 마을 가축 — 마당에 닭이, 외양간에 소가 (같은 census 의 아래쪽)")
+    print("#      ★ 청하현 장터에 서서 돌려라. 통과: 닭·소·양·돼지가 **전부 n > 0**")
+    print("#      실패하면: 앵커가 없거나(anchors.yml), 마당에 흙·풀 바닥이 없다(YARD_GROUND)")
+    for m in ["chicken", "cow", "sheep", "pig"]:
+        print(f"execute if entity @e[type=minecraft:{m}]")
+    print("#")
+    print("#   ㉢ 징발한 몸 — 이것들이 보이는 것이 **정상**이다 (우리가 CUSTOM 으로 심은 것)")
     print("#      통과: **\"Test passed\"** — 여기서 0 이 나오면 리스너가 우리 것까지 취소하고 있다")
+    print("#      (특히 zombie=산적 · wolf=산늑대 — 바닐라 이리는 이제 **한 마리도 없다**.")
+    print("#       즉 보이는 이리는 **전부 우리가 심은 산늑대**다. 태그가 그것을 보증한다)")
     for m in ["zombie", "wolf", "hoglin", "ravager", "polar_bear"]:
         print(f"execute if entity @e[type=minecraft:{m}]")
     print("#")

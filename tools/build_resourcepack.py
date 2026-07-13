@@ -838,12 +838,21 @@ BLOOD = (150, 32, 28, 255)        # 마병 혈적 — 다른 계보임을 형태
 BLOOD_HI = (196, 56, 46, 255)
 WPN_OUT = (24, 22, 20, 255)       # 먹 외곽선
 
+# ─── 명병(名兵)의 포인트 색 — 「묵청(墨靑)」의 청량(淸涼) 축 ───
+# 묵풍(墨風)이 세계의 기반이고, 청량은 **희귀함과 신비의 강조**다 (주조색이 아니라 포인트).
+# 그래서 이 세 색은 **한두 픽셀**만 쓴다 — 코등이·물미·날끝. 면을 칠하면 그건 포인트가 아니라 도배다.
+PLUM = (176, 92, 108, 255)        # 매화(梅花) — 화산. 주사에 분홍기 (저채도 — 형광 금지)
+PLUM_HI = (214, 138, 152, 255)    # 꽃술
+JADE = (122, 176, 168, 255)       # 옥(玉) — 청량 포인트 (무당 태극 · 소림 반야)
+POISON = (126, 158, 118, 255)     # 독(毒) — 당가. 옥과 갈려야 한다 (푸른 옥 ↔ 누런 독)
+
 WPN_PALETTE = {
     "H": BLADE_HI, "L": BLADE_LIT, "B": BLADE_MID, "S": BLADE_DIM, "D": BLADE_SPINE,
     "G": FIT_HI, "g": FIT_MID, "f": FIT_DIM,
     "W": GRIP_HI, "w": GRIP_MID, "x": GRIP_DIM, "X": GRIP_DARK,
     "R": RING_HI, "e": RING_MID,
     "t": TASSEL, "T": TASSEL_HI, "m": BLOOD, "M": BLOOD_HI, "K": WPN_OUT,
+    "p": PLUM, "P": PLUM_HI, "j": JADE, "d": POISON,      # 명병 — 문파의 포인트 색
 }
 
 # 무기는 대각선으로 눕는다 (좌하 자루 → 우상 칼끝, 바닐라 아이템 관례).
@@ -1276,6 +1285,174 @@ WEAPON_SERIES = {          # 계열 = model_key 앞자리 (config item_channels.
     # 18반 병기 — 바닐라 도구 4종을 병기화한 계열 (axe=부 / hoe=겸 / shovel=월아산 / pickaxe=구)
     "bu": bu_grid, "gyeom": gyeom_grid, "wolasan": wolasan_grid, "gu": gu_grid,
 }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 명병(名兵) — 문파의 얼굴. 【2026-07 신설】
+#
+# 【사용자가 문장으로 직접 청한 유일한 시각 항목】
+#   *"매화검인 경우 매화검처럼 생겨야함. 손잡이에 매화 무늬가 있다던가 특색이 있어야 함"*
+#   그전까지 병기는 계열 9 × 등급 5 = 45장이 전부였다 — 십 년을 함께한 애병이 방금 대장간에서
+#   산 정련검과 **픽셀 하나까지 똑같았다.** equipment.yml 이 스스로 쓴 *"검이 소문의 주체가 된다"* 와
+#   정면으로 어긋난다. 소문의 주체가 될 검에 **얼굴이 없었다.**
+#
+# 【문파는 지어내지 않는다 — 등록부에서 나온다】
+#   가져온 기획 프롬프트는 청운검문·철혈도문·벽옥궁 따위 **여덟 문파를 예시로 들었다. 전부 없는 것이다.**
+#   우리 세계의 문파는 docs/design/sect_lineage.md 의 **15문파**이고, 그 문파들은 이미
+#   **수치의 지문(fingerprint)** 을 갖고 있다 (skills.yml 이 굴리는 실제 값이다).
+#   ⇒ 실루엣을 **지문에서 도출한다.** 억지로 대응시키지 않는다 — 기계가 이미 말한 것을 그림이 옮긴다:
+#
+#     점창파  [2,1,3] 최속 · 5다단(최다) · 입력창 6(최단)  →  **가장 얇은 날** (바늘 같은 쾌검)
+#     종남파  [13,4,16] = 33틱 최중 · 슈퍼아머             →  **가장 두꺼운 날** (중검)
+#     남궁세가 선 7.5 — 근접 최장 리치                     →  **가장 긴 날** (장검)
+#     하북팽가 폭 1.8 최광폭 · 파격 · armor_pierce         →  **가장 넓은 도** (오호단문도)
+#     소림사  리치 2.4 최단 · 4타 · 슈퍼아머               →  **권갑** (무기 = 권·장)
+#     사천당가 사거리 18 · 4다단 · max_targets 3 · 독      →  **비수** (암기) + 독빛 한 점
+#     화산파  8다단 오의(최다단) · 매화                    →  **매화 코등이** (사용자의 요청)
+#     무당파  패링 창 5 + 반격 (원으로 되돌린다)           →  **둥근 코등이 + 태극 물미**
+#
+# 【기획 프롬프트에서 **살려서** 가져온 4순위 원칙 — 그대로 지킨다】
+#   ① 실루엣 — *"흑백으로 보더라도 문파가 구분되어야 한다"*  ⇒ **축 ⑬ 이 그것을 잰다** (자카드).
+#   ② 재질   — 금속의 밝기·마모
+#   ③ 문양   — 작은 픽셀에서도 읽히게 **단순화**. **아이템 전체를 덮지 말고 시선이 모이는 한두 곳에만**
+#              ⇒ 문양은 **코등이와 물미에만** 앉는다 (날에는 안 앉는다 — 날은 날이어야 한다)
+#   ④ 포인트 색 — **색은 보조다.** 색만 바꾼 같은 모델의 재탕은 금지 (그래서 실루엣부터 갈랐다)
+# ═══════════════════════════════════════════════════════════════════════════
+def hwasan_grid():
+    """화산 매화검(梅花劍) — **사용자가 직접 청한 검.** 코등이에 매화 다섯 잎.
+
+    날은 표준 검이다 (화산의 지문은 '8다단'이지 '이상한 날'이 아니다 — 지문에 없는 것은 짓지 않는다).
+    화산을 화산으로 만드는 것은 **매화**다. 그리고 매화는 **날이 아니라 코등이**에 핀다:
+    문양이 날을 덮으면 그것은 검이 아니라 장식품이다 (기획 원칙 ③ — 시선이 모이는 한두 곳에만)."""
+    g = blank16()
+    for i in range(7):
+        band(g, 6 + i, 9 - i, 1, ["L", "H", "L"], vertical=True)
+    band(g, 13, 3, 1, ["H", "L"], vertical=True)
+    band(g, 14, 3, 1, ["H"], vertical=True)
+    _hilt(g, 3, False, 6, 9, (4, 7), (1, 2, 3))
+    # ★ 첫 시안의 매화는 **너무 수줍었다** — 넉 잎이 코등이 안에 숨어 축 ⑭ 가 잡았다
+    #   (화산 ↔ 남궁 회색조 변별 **15px < 16** — 색을 빼면 같은 검이었다. 사용자가 청한 바로 그 검이).
+    #   매화는 **꽃**이다. 코등이 밖으로 피어야 꽃이다 — 다섯 잎이 호수를 두르고 밖으로 벌어진다.
+    for px_, py_ in ((5, 5), (6, 6), (6, 8), (5, 9), (3, 7), (4, 5), (4, 9)):
+        g[py_][px_] = "p"                                  # 다섯 잎 + 벌어진 곁잎 (코등이 **밖**으로)
+    for px_, py_ in ((4, 6), (5, 6), (4, 8), (5, 8)):
+        g[py_][px_] = "P"                                  # 꽃잎의 빛 받는 면
+    g[7][4] = "P"                                          # 꽃술 — 한복판
+    return g
+
+
+def jeomchang_grid():
+    """점창 쾌검(快劍) — **가장 얇은 날**. 지문: [2,1,3] 최속 · 입력창 6틱(최단) · 5다단(최다).
+    빠른 검은 **가볍다** — 폭 1의 바늘. 코등이도 최소다 (걸리는 것이 없어야 빠르다)."""
+    g = blank16()
+    for i in range(8):                                     # 폭 1 — 계보에서 가장 얇다
+        band(g, 6 + i, 9 - i, 1, ["H"], vertical=True)
+    band(g, 14, 2, 1, ["H"], vertical=True)                # 칼끝
+    # ★ 자루 기준선은 **9행**이다 (_hilt 의 계약). 10행에 두면 물미가 14행, 수실이 15행 —
+    #   캔버스 테두리 — 으로 밀려 outline() 이 먹으로 두를 자리를 잃는다 (축 ⑥ 이 4px 끊김으로 잡았다).
+    #   주석이 이미 경고하던 함정에 그대로 빠졌다. 등록된 계약은 읽으라고 있는 것이다.
+    _hilt(g, 3, False, 6, 9, (4, 7), (1, 2, 3), guard_steps=3)   # 코등이 3걸음 (짧다 — 걸리는 것이 없다)
+    return g
+
+
+def jongnam_grid():
+    """종남 중검(重劍) — **가장 두꺼운 날**. 지문: [13,4,16] = 33틱(최중) · 슈퍼아머.
+    무거운 검은 **두껍다** — 폭 5에 등줄기가 굵다. 느린 대신 맞으면 밀리지 않는다."""
+    g = blank16()
+    for i in range(6):                                     # 폭 5 — 계보에서 가장 두껍다
+        band(g, 7 + i, 9 - i, 1, ["L", "B", "H", "B", "L"], vertical=True)
+    band(g, 13, 4, 1, ["L", "H", "L"], vertical=True)
+    band(g, 14, 4, 1, ["H"], vertical=True)
+    _hilt(g, 3, False, 7, 9, (5, 7), (1, 2, 3))            # 자루 기준선 9행 (_hilt 의 계약)
+    return g
+
+
+def namgung_grid():
+    """남궁 장검(長劍) — **가장 긴 날**. 지문: 선 7.5 — 근접 최장 리치 (제왕검형).
+    긴 검은 자루를 아래로 당겨 날을 벌 수 있는 데까지 번다 (16px 에서 리치는 곧 길이다)."""
+    g = blank16()
+    # ★ 길이는 **칼끝에서** 번다 (자루에서 벌면 물미가 캔버스 왼쪽 끝(x=0)에 닿아 외곽선이 끊긴다 —
+    #   축 ⑥ 이 2px 끊김으로 잡았다). 자루는 표준 자리에 두고 날만 한 칸 더 뻗는다:
+    #   표준 검의 칼끝은 y=3, 남궁의 칼끝은 **y=1** 이다 (같은 자루에서 더 멀리 닿는다 = 리치 7.5).
+    for i in range(8):                                     # 날 8걸음 — 계보에서 가장 길다
+        band(g, 6 + i, 9 - i, 1, ["L", "H", "L"], vertical=True)
+    band(g, 14, 1, 1, ["H", "L"], vertical=True)           # 칼끝 — 가장 멀리 닿는 자리
+    _hilt(g, 3, False, 6, 9, (4, 7), (1, 2, 3))            # 자루 기준선 9행 (_hilt 의 계약)
+    return g
+
+
+def mudang_grid():
+    """무당 태극검(太極劍) — 지문: 패링 창 5 + 반격 (**원으로 되돌린다**).
+    그래서 코등이가 **둥글다** (가로대가 아니라 원반 — 받아 흘리는 손). 물미에 태극 한 점."""
+    g = blank16()
+    for i in range(7):
+        band(g, 6 + i, 9 - i, 1, ["L", "H", "L"], vertical=True)
+    band(g, 13, 3, 1, ["H", "L"], vertical=True)
+    band(g, 14, 3, 1, ["H"], vertical=True)
+    _hilt(g, 3, False, 6, 9, (5, 7), (1, 2, 3), guard_steps=2)   # 원반 호수 (가로대가 아니다)
+    for px_, py_ in ((4, 6), (5, 6), (4, 7), (5, 8), (4, 8)):    # 둥글게 두른 원반
+        g[py_][px_] = "g"
+    g[7][4] = "j"                                          # 태극 — 옥빛 한 점 (청량 포인트)
+    return g
+
+
+def paengga_grid():
+    """하북팽가 오호단문도(五虎斷門刀) — **가장 넓은 도**. 지문: 폭 1.8(최광폭) · 파격 · armor_pierce.
+    넓은 도는 **등이 두껍다** (무거워 보이는 것은 등 때문이지 날 때문이 아니다 — 한날 병기의 문법)."""
+    g = dao_grid(3, False)
+    for py_ in range(4, 8):                                # 등을 한 가닥 더 불린다 (최광폭)
+        if g[py_][9] == ".":
+            g[py_][9] = "D"
+    g[9][5] = "t"                                          # 자루 끝 붉은 수실 (호랑이의 문파)
+    return g
+
+
+def dangga_grid():
+    """사천당가 비수(匕首) — 지문: 사거리 18 · 4다단 · max_targets 3 (흩어진다) · **무형지독**.
+    던지는 것은 짧고 가볍다. 그리고 당가의 표식은 **독**이다 — 날 끝에 푸른 기 한 점.
+    (독은 **한 점**이다. 날 전체를 물들이면 그것은 독이 아니라 색칠이다.)"""
+    g = dagger_grid(3, False)
+    for py_ in range(16):
+        for px_ in range(16):
+            if g[py_][px_] == "H" and py_ <= 5:
+                g[py_][px_] = "d"                          # 날 끝에 밴 독 (끝에만)
+    return g
+
+
+def sorimsa_grid():
+    """소림 권갑(拳甲) — 지문: 리치 2.4(최단) · 4타 · 슈퍼아머. 무기는 **권·장**이다 (검이 아니다).
+    ★ 등록부가 그렇게 적혀 있다 — '소림의 계도' 같은 것은 우리 세계에 없다 (짓지 않는다)."""
+    g = gauntlet_grid(3, False)
+    g[4][7] = "j"                                          # 손등의 옥 — 반야(般若)의 한 점
+    return g
+
+
+MYEONGBYEONG = {           # 명병 등록부 — **등록된 문파만** (factions.yml · sect_lineage.md)
+    "hwasan": hwasan_grid,        # 화산파 — 매화검 ★ 사용자 직접 요청
+    "jeomchang": jeomchang_grid,  # 점창파 — 쾌검 (최속·최박)
+    "jongnam": jongnam_grid,      # 종남파 — 중검 (최중·최후)
+    "namgung": namgung_grid,      # 남궁세가 — 장검 (최장 리치)
+    "mudang": mudang_grid,        # 무당파 — 태극검 (원으로 되돌린다)
+    "paengga": paengga_grid,      # 하북팽가 — 오호단문도 (최광폭)
+    "dangga": dangga_grid,        # 사천당가 — 비수 (암기·독)
+    "sorimsa": sorimsa_grid,          # 소림사 — 권갑 (권·장)
+}
+
+
+def write_myeongbyeong_assets() -> int:
+    """명병 — 아이콘 PNG + 3D 모델 + 아이템 정의. 계열 모델을 **그대로** 재사용한다
+    (같은 문법으로 굽는다 — 3D 지오메트리는 계열이 정하고, 문파는 **문양과 실루엣**이 정한다)."""
+    base = {"hwasan": "sword", "jeomchang": "sword", "jongnam": "sword", "namgung": "sword",
+            "mudang": "sword", "paengga": "dao", "dangga": "dagger", "sorimsa": "gauntlet"}
+    for sect, fn in MYEONGBYEONG.items():
+        grid = outline(fn())
+        key = f"weapon/myeong/{sect}"
+        write_png(ITEM_TEX_DIR / f"{key}.png", paint_rows(grid, WPN_PALETTE))
+        write_json(ITEM_MODEL_DIR / f"{key}.json",
+                   weapon_model_3d(base[sect], "sinbyeong", grid))
+        write_json(ITEM_DEF_DIR / f"{key}.json",
+                   {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
+    return len(MYEONGBYEONG)
 # 등급 = 베이스 바닐라 아이템(팩 게이트). 여기서는 고리 수만 쥔다 — 색은 바닐라 재질의 몫.
 WEAPON_GRADES = [("beomcheol", 0), ("jeongryeon", 1), ("bobyeong", 2), ("sinbyeong", 3)]
 
@@ -2616,23 +2793,28 @@ def stone_rows(shades, salt=0x77, mid=4.8, amp=1.0, speck=True):
       점(광물 알갱이)은 남기되 **드물게** — 뜻이 있는 점만 (19 에 하나 → 37 에 하나)."""
     fld = [[wash(x, y, salt, 1.05 * amp) + smooth_octave(x, y, 4, salt ^ 0x35, 0.55 * amp)
             for x in range(16)] for y in range(16)]
-    line = level_set(fld, 16, 16, 1.05)
-    rows = []
+    bound, lv = level_set(fld, 16, 16, 1.05)
+    # 획(결·알갱이)을 먼저 **따로** 쌓는다 — 그리고 그 평균을 뺀다.
+    # ★ 나뭇결에서 배운 규율: **획은 분포이지 밝기가 아니다.** 획의 평균이 0 이 아니면
+    #   그 텍스처의 밝기가 통째로 밀린다 (첫 시안에서 diorite 가 196 → 199 로 대역을 넘었다).
+    #   평균을 빼 두면 결을 어떻게 그리든 **밝기 계약(축 ⑫)이 구조적으로 흔들리지 않는다.**
+    mark = [[0.0] * 16 for _ in range(16)]
     for y in range(16):
-        row = []
         for x in range(16):
-            v = mid + fld[y][x]
-            if line[y][x] < 0:
-                v -= 1.35 * amp                                 # 결(石理) — 파인 획 (이어진 선)
+            if bound[y][x]:
+                # 결(石理) — 이어진 획. **골과 어깨가 함께 선다** (골만 파면 대비가 죽는다:
+                # deepslate 명암차 22 < 24 로 걸렸던 자리다)
+                mark[y][x] += (-1.45 * amp) if lv[y][x] < 0 else (0.95 * amp)
             if speck:
                 k = h32(x, y, salt ^ 0x8F) % 37                 # 점은 드물게 — 여백을 지킨다
                 if k == 0:
-                    v -= 1.4                                    # 검은 점 — 광물 알갱이
+                    mark[y][x] -= 1.4                           # 검은 점 — 광물 알갱이
                 elif k == 1:
-                    v += 1.1
-            row.append(step(shades, v))
-        rows.append(row)
-    return rows
+                    mark[y][x] += 1.1
+    mu = sum(sum(r) for r in mark) / 256.0
+    return [[step(shades, mid + fld[y][x] + tooth(x, y, salt ^ 0xC5, 0.30 * amp)
+                  + mark[y][x] - mu)                            # 종이의 결 + 평균 0 의 획
+             for x in range(16)] for y in range(16)]
 
 
 # 전돌(塼) 켜 — 높이 5·3·4·4. **등간격 4는 곧 주기 4의 격자다** (벽에 눈금이 뜬다).
@@ -2792,7 +2974,19 @@ PLANK_BOARDS = [(0, 4, 0x21, 0.55), (5, 8, 0x4D, -0.45), (9, 11, 0x6B, 0.30), (1
 PLANK_BUTTS = {0: 11, 5: 4, 9: 13, 12: 6}    # 널마다 이음매(마구리)가 다른 자리에 온다
 
 
+def tooth(x, y, salt, amp=0.32):
+    """종이의 결(paper tooth) — **인지 문턱 아래의** 잔결 (±0.3단 ≈ ±1.5루마).
+
+    ★ 남의 팩이 가르쳐 준 것: 미즈노는 잡티를 **없애지 않았다** — 오히려 픽셀 변화율은 바닐라보다
+      높다(돌 0.96 vs 0.61). 대신 **진폭을 으깼다** (루마 σ 10.8 → 6.6). 눈은 평면으로 읽되
+      표면에 **숨결**이 남는다. 완전한 평면은 종이가 아니라 플라스틱이다.
+    ⇒ 그래서 여백에도 이 잔결을 깐다. 획(mark)의 문턱(0.6σ) 아래라 '획'으로 세어지지 않는다 —
+      여백은 여백으로 남고, 면은 죽지 않는다."""
+    return octave(x, y, 1, salt, amp)
+
+
 _GRAIN_CACHE = {}
+_GRAIN_MEAN = {}
 
 
 def _grain_centers(salt):
@@ -2800,7 +2994,7 @@ def _grain_centers(salt):
     결이 4줄로 고르게 서면 시프트 (0,4) 에서 제 몸과 겹친다 = 널에 눈금이 뜬다).
     그래서 자리를 해시로 흔든다 — 목수의 널은 결이 고르지 않다."""
     if salt not in _GRAIN_CACHE:
-        n = 4 + h32(salt, 0x3C, 0x91) % 3                     # 4~6 줄 (널마다 다르다)
+        n = 3 + h32(salt, 0x3C, 0x91) % 2                     # 3~4 줄 (간격 4.0~5.3px)
         cs = []
         for i in range(n):
             base = (i + 0.5) * 16.0 / n
@@ -2810,6 +3004,23 @@ def _grain_centers(salt):
     return _GRAIN_CACHE[salt]
 
 
+def _grain_raw(x, y, salt, vertical, amp):
+    """결의 날값 — 골(파인 획) + 어깨(빛 받는 등성이) + 조용한 살."""
+    cs = _grain_centers(salt)
+    ph = (h32(salt, 0x5E, 0x27) % 16) / 16.0 * 2 * math.pi
+    along, across = (y, x) if vertical else (x, y)            # 결이 흐르는 축 / 그 직각축
+    u = (across + 1.15 * math.sin(2 * math.pi * along / 16 + ph)) % 16.0
+    d = min(min(abs(u - c), 16.0 - abs(u - c)) for c in cs)   # 가장 가까운 결까지 (랩 거리)
+    if d < 0.60:
+        return -amp * 1.35 * (1.0 - d / 0.60)                 # 골 — 파인 결 (가는 획)
+    if d < 1.40:
+        return amp * 0.52                                     # 어깨 — 골 옆의 빛 받는 등성이
+    # 살 — 넓고 조용한 면 (여백) + 종이의 결 (문턱 아래. 없으면 널이 플라스틱처럼 죽는다:
+    #   stripped_dark_oak_log 가 색 3 < 4 · 명암차 18 < 24 로 걸렸던 자리다)
+    return (smooth_octave(x, y, 8, salt ^ 0x99, amp * 0.30)
+            + tooth(x, y, salt ^ 0xB7, amp * 0.26))
+
+
 def wood_grain(x, y, salt, vertical=False, amp=1.3):
     """나뭇결 — 결은 **한 방향으로 흐르는 긴 획**이다 (잡티가 아니다).
 
@@ -2817,17 +3028,20 @@ def wood_grain(x, y, salt, vertical=False, amp=1.3):
       실측: 판자 인접상관 0.31 · 고주파 0.72 (바닐라 0.29 · 0.80) — **같은 잡티, 다른 색**.
       목재는 조성 팔레트 **최대 면적(44장)** 이다. 거기가 잡티면 마을 전체가 잡티다.
 
-    이제: 결 직각축 u 를 따라 **이어진 물결 획**을 긋는다 —
-      u = (직각축) + 굽이(결 방향축의 사인) ⇒ 획이 널을 따라 흐르며 완만히 굽는다 (주기 16 ⇒ 랩 안전).
-      골(파인 결)은 **가늘고**, 살(나무의 몸)은 **넓고 조용하다** — 그것이 여백이다."""
-    cs = _grain_centers(salt)
-    ph = (h32(salt, 0x5E, 0x27) % 16) / 16.0 * 2 * math.pi
-    along, across = (y, x) if vertical else (x, y)            # 결이 흐르는 축 / 그 직각축
-    u = (across + 1.15 * math.sin(2 * math.pi * along / 16 + ph)) % 16.0
-    d = min(min(abs(u - c), 16.0 - abs(u - c)) for c in cs)   # 가장 가까운 결까지 (랩 거리)
-    if d < 1.2:
-        return -amp * 1.30 * (1.0 - d / 1.2)                  # 골 — 파인 결 (가는 획)
-    return smooth_octave(x, y, 8, salt ^ 0x99, amp * 0.30)    # 살 — 넓고 조용한 면 (여백)
+    ★★ 【첫 시안의 버그 — 결이 아니라 어둠이었다】 골의 임계(1.2px)가 결의 간격(2.7~4.0px)에
+      맞먹었다 ⇒ 골이 널의 **78~94%** 를 덮었다. 결을 그린 것이 아니라 널을 **깎아 어둡게** 만든 것이다.
+      평균이 -0.5 ~ -0.77 로 내려앉았고, 목재 44장이 그만큼 어두워져 **자재 평균 밝기가 127** 이 됐다
+      (계약 [128,172] 위반 — 축 ⑫ 가 잡았다. 눈이 있어서 살았다).
+    ⇒ 고침 둘:
+      ① 골을 **가늘게** (임계 0.60px · 결 3~4줄) 하고 곁에 **어깨**(빛 받는 등성이)를 세운다 —
+         실제 나뭇결이 그렇다: 파인 골 옆의 살이 도드라져 빛을 받는다.
+      ② **결은 평균 0 이다** — 타일 평균을 빼서 돌려준다. 결은 **분포**이지 **밝기**가 아니다.
+         ⇒ 결을 어떻게 그리든 **밝기 계약이 구조적으로 흔들리지 않는다** (같은 병을 두 번 앓지 않는다)."""
+    key = (salt, vertical, round(amp, 4))
+    if key not in _GRAIN_MEAN:
+        _GRAIN_MEAN[key] = sum(_grain_raw(i, j, salt, vertical, amp)
+                               for j in range(16) for i in range(16)) / 256.0
+    return _grain_raw(x, y, salt, vertical, amp) - _GRAIN_MEAN[key]
 
 
 def plank_rows(shades, salt=0x11):
@@ -2839,12 +3053,14 @@ def plank_rows(shades, salt=0x11):
         for x in range(16):
             y0, y1, seed, tone = next(b for b in PLANK_BOARDS if b[0] <= y <= b[1])
             v = 5.0 + tone + wood_grain(x, y, seed ^ salt, amp=1.15)
+            # ★ 널 넉 장 각각이 **제 4줄 중 3줄**을 건드리고 있었다 (틈·윗모·아랫모) ⇒ 널의 몸이 없다
+            #   (여백 25% · 바닐라 39% — 우리가 바닐라보다 시끄러웠다). 널은 **틈이 선이고 몸은 면**이다.
             if y == y0:
-                v -= 2.5                                        # 널 사이 틈 (그늘)
+                v -= 2.5                                        # 널 사이 틈 (그늘) — 이 한 줄이 선이다
             elif y == y0 + 1:
-                v += 0.8                                        # 틈 아래 — 빛 받는 널의 윗모
+                v += 0.35                                       # 틈 아래 — 빛 받는 윗모 (아주 옅게)
             elif y == y1:
-                v -= 0.9                                        # 널의 아랫모 — 살짝 어둡다
+                v -= 0.30                                       # 널의 아랫모 (숨결 정도)
             if x == PLANK_BUTTS[y0]:
                 v -= 1.9                                        # 마구리 이음 (널이 끝나는 자리)
             if (x, y) in ((PLANK_BUTTS[y0] - 2, y0 + 1), (PLANK_BUTTS[y0] + 2, y1 - 1)):
@@ -2915,12 +3131,15 @@ def octane_grain(x, y, salt):
 
 
 def stripped_rows(shades, salt=0x19):
-    """벗긴 원목 — 노출 기둥(관아·문파 본전). 수피를 벗겨 결이 곧게 드러났다."""
+    """벗긴 원목 — 노출 기둥(관아·문파 본전). 수피를 벗겨 결이 곧게 드러났다.
+
+    ★ 이 장은 **결이 전부**다 (수피도 옹이도 없다). 그래서 결의 진폭이 곧 이 장의 명암이다 —
+      amp 1.0 으로는 색 3 · 명암차 18 이 나왔다 (평면·밋밋 이중 위반). 벗긴 결은 **또렷하다**."""
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
-            v = 5.4 + wood_grain(x, y, salt, vertical=True, amp=1.0)
+            v = 5.4 + wood_grain(x, y, salt, vertical=True, amp=1.65)
             if x in (3, 10) and dash(y + x, "1011101101110110"):
                 v -= 1.3                                        # 자귀 자국 (깎아 낸 결)
             row.append(step(shades, v))
@@ -3215,12 +3434,22 @@ def cherry_leaves_rows():
         ".@@@%@@@@@%@@@@.",
         "..@@@.@@%@..@@@.",
     ]
+    # ★★ 【축 ⑬-b 가 잡은 것 — 이 장은 **내가 건드리지도 않은** 자리였다】
+    #   매화 수관의 구멍이 **8%** 였다 (바닐라 잎 33% · 조사한 팩들 20~34%).
+    #   위 아트는 네 귀퉁이만 비워 두었다 ⇒ 수관이 **속이 꽉 찬 분홍 덩이**다. 나무가 아니라 솜사탕이다.
+    #   "꽃이 본체"는 옳다 — 그러나 그것은 **불투명 픽셀의 8할이 꽃**이라는 뜻이지
+    #   **수관에 하늘이 없다**는 뜻이 아니다. 만개한 매화나무는 꽃 사이로 하늘이 비친다.
+    #   ⇒ 다른 잎과 **같은 문법**으로 연다: 꽃덩이와 꽃덩이 **사이**에 하늘 (wrapped_cells 의 rim).
+    #     꽃의 색·명암은 한 톨도 안 건드린다 (축 ⑫ 의 매화 채도·밝기 계약 불변).
     rows = []
     for y in range(16):
         row = []
         for x in range(16):
             c = art[y][x]
-            if c == "@":
+            d1, d2, _ident, _c = wrapped_cells(x, y, 4, 0x5B)
+            if c == "." or d2 - d1 < CHERRY_HOLE_RIM:
+                row.append(T)                                   # 빈 하늘 — 매화의 여백
+            elif c == "@":
                 # 꽃잎의 명암 — 뭉치지 않게 결정론 잡음으로 흩는다 (평면 분홍은 사탕이다)
                 v = smooth_octave(x, y, 4, 0x77, 1.0) + octave(x, y, 2, 0x31, 0.35)
                 if v > 0.42:
@@ -3231,10 +3460,8 @@ def cherry_leaves_rows():
                     row.append(PLUM_BLOSSOM)
             elif c == "%":
                 row.append(PLUM_SHADE)                          # 겹친 꽃 아래 — 깊이
-            elif c == "#":
-                row.append(PLUM_BRANCH)                         # 잔가지 — 언뜻만
             else:
-                row.append(T)                                   # 빈 하늘 — 매화의 여백
+                row.append(PLUM_BRANCH)                         # 잔가지 — 언뜻만
         rows.append(row)
     return rows
 
@@ -4401,16 +4628,23 @@ WATER_SHADES = [untint(c, WATER_BIOME_TINT, "water") for c in WATER_TARGET]
 # 【구조】 잔잔한 바탕(농담 ±1단) + 등고선 파문 (level_set 이 이어진 곡선을 보증한다).
 #   ★ 파수는 **정수**만 쓴다 — 랩 안전(좌우상하로 이어 붙어도 파문이 끊기지 않는다)이자
 #     프레임 루프 완결(32프레임 뒤 제자리)이다. 둘이 같은 조건에서 나온다.
-# 【첫 시안의 버그 — 획이 소금·후추가 됐다】 등고선 위에서 장(field)의 값은 **거의 0** 이다.
-#   그런데 첫 판은 그 자리에서 `field >= 0` 의 **부호**로 마루(밝음)/골(어두움)을 갈랐다.
-#   ⇒ 같은 곡선 위의 이웃 픽셀들이 7.7 과 0.8 사이를 **제멋대로 오갔다** (실측: 고주파 0.29 → 0.63).
-#   획을 그으려다 **소금·후추**를 뿌린 것이다. 부호는 경계에서 결정하면 안 된다.
-# 【고침】 파문은 **한 극성**만 쓴다 — 물결의 **마루에만** 빛이 얹힌다 (골은 바탕이 어둡게 받는다).
-#   그리고 경계에서 멀찍이(장 > WATER_LIT) 떨어진 자리에만 획을 긋는다 ⇒ 획의 밝기가 흔들리지 않는다.
-WATER_CALM = 3.6        # 잔잔한 수면 — 램프의 가운데 (여백)
-WATER_CREST = 7.8       # 마루 — 빛이 얹힌 파문 (밝은 획. **유일한 획**)
-WATER_LIT = 0.45        # 이 값보다 높은 마루에만 빛이 얹힌다 (경계의 부호 흔들림을 피한다)
-WATER_RIPPLE_K = 1.15   # 등고선 밀도 — 클수록 파문이 촘촘하다 (여백과 맞바꾼다)
+# 【남의 팩을 재서 배운 것 — 색이 아니라 **소리의 크기**다】 (2026-07 조사 · 픽셀 실측)
+#   화면 루마 표준편차 σ (= 텍스처가 얼마나 시끄러운가):
+#     고임물  바닐라 8.27 · 미즈노 4.6 · 중국신화 9.1 · **오오카미 0.32**(단일 평면 — 프레임조차 1장)
+#   ★ 그리고 세 팩이 **모두** 바닐라의 한 가지를 뒤집었다:
+#       바닐라는 **고임물(8.27)이 흐르는 물(6.32)보다 시끄럽다.** 거꾸로다.
+#       고요는 움직임보다 **조용해야** 한다 — 그것이 물이 잔잔하다는 뜻이다.
+#   ⇒ 우리도 뒤집는다: 고임 σ 4.74 < 흐름 σ 6.49 (바닐라의 0.57배 · 미즈노 대역).
+#
+# 【파문(波紋)은 우리가 **발명한다**】 조사한 어느 팩도 물에 파문 선을 그리지 않았다 (전부 면이다).
+#   그러나 무협의 물에 파문은 옳다 — 다만 **낮은 진폭의 이어진 호(弧)** 여야 한다 (잡티도, 밝은 줄도 아니다).
+#   구조: 잔잔한 바탕(여백) + 조용한 파문 호(+1.5단) + 마루에 얹힌 성긴 빛(글린트 1.6%).
+#   ★ 획의 밝기는 **레벨 번호**가 정한다 (경계의 부호가 아니다 — 위 level_set 의 버그 기록).
+WATER_CALM = 3.30       # 잔잔한 수면 — 램프의 가운데 (여백)
+WATER_WASH = 0.50       # 바탕의 농담 — 아주 얕게 (고요는 조용하다)
+WATER_ARC = 1.5         # 파문 — 조용한 획 (+1.5단 ≈ 7루마. 남의 팩이 가르쳐 준 진폭)
+WATER_GLINT = 8.0       # 마루에 얹힌 빛 — **성기게**. 대비(밝기 계약 문턱 24)는 이 몇 점이 진다
+WATER_RIPPLE_K = 0.62   # 등고선 밀도 — 클수록 파문이 촘촘하다 (여백과 맞바꾼다)
 
 
 def water_field(x, y, ph, w=16):
@@ -4427,13 +4661,13 @@ def water_still_rows():
     for f in range(32):
         ph = 2 * math.pi * f / 32
         fld = [[water_field(x, y, ph) for x in range(16)] for y in range(16)]
-        line = level_set(fld, 16, 16, WATER_RIPPLE_K, thresh=WATER_LIT)
+        bound, lv = level_set(fld, 16, 16, WATER_RIPPLE_K)
         for y in range(16):
             row = []
             for x in range(16):
-                v = WATER_CALM + 0.62 * fld[y][x]           # 잔잔한 바탕 — 농담뿐 (여백)
-                if line[y][x] > 0:                          # 마루의 등고선에만 빛이 얹힌다
-                    v = WATER_CREST
+                v = WATER_CALM + WATER_WASH * fld[y][x]     # 잔잔한 바탕 — 농담뿐 (여백)
+                if bound[y][x]:
+                    v = WATER_GLINT if lv[y][x] >= 1 else v + WATER_ARC
                 row.append(step(WATER_SHADES, v))
             rows.append(row)
     return rows
@@ -4454,13 +4688,14 @@ def water_flow_rows():
                 fld[y][x] = (1.00 * math.sin(2 * math.pi * (x * 3 + yy) / 32)
                              + 0.55 * math.sin(2 * math.pi * (x * 5 - yy * 2) / 32)
                              + 0.28 * math.sin(2 * math.pi * (x * 2 + yy * 3) / 32))
-        line = level_set(fld, 32, 32, 1.30, thresh=WATER_LIT)
+        bound, lv = level_set(fld, 32, 32, 0.80)
         for y in range(32):
             row = []
             for x in range(32):
-                v = WATER_CALM + 0.62 * fld[y][x]
-                if line[y][x] > 0:                          # 물살에 끌린 파문 — 마루에만
-                    v = WATER_CREST
+                # 흐르는 물은 **고임물보다 시끄럽다** (농담 0.70 · 획 1.9 — 고요 < 움직임)
+                v = WATER_CALM + 0.70 * fld[y][x]
+                if bound[y][x]:
+                    v = WATER_GLINT if lv[y][x] >= 1 else v + 1.9
                 row.append(step(WATER_SHADES, v))
             rows.append(row)
     return rows
@@ -4469,6 +4704,12 @@ def water_flow_rows():
 # ─── ③ 풀·잎 — 텍스처는 **무채색**, 색은 컬러맵이 준다 ───
 # 여기에 초록을 칠하면 컬러맵의 초록과 **두 번 곱해진다** (형광이 되는 지름길).
 # 그래서 이 텍스처들의 채도는 0 에 가깝다 — 우리가 칠하는 것은 **농담(濃淡)** 뿐이다.
+# 수관의 성김 — 잎덩이 경계에서 얼마나 벌어지면 하늘이 되는가 (실측으로 고른 값:
+#   구멍 23~27% = 바닐라(33%)·조사 팩(20~34%) 대역 · 이음매 1.05~1.14 ≤ 1.25)
+CHERRY_HOLE_RIM = 0.30    # 매화 수관의 성김 — 꽃덩이 사이의 하늘 (구멍 8% → 대역 안)
+LEAF_HOLE_RIM = 0.45     # 이보다 좁게 만나면 하늘 (덩이와 덩이 사이)
+LEAF_SHADE_RIM = 0.70    # 이보다 좁게 만나면 그늘 획 (수관의 윤곽)
+
 TURF_SHADES = ramp((132, 134, 128, 255), (198, 200, 192, 255), 9)    # 잔디 윗면 — 밝은 회색조
 BLADE_SHADES = ramp((118, 120, 114, 255), (206, 208, 200, 255), 8)   # 풀포기·고사리 — 획
 LEAF_SHADES = ramp((104, 106, 100, 255), (188, 190, 182, 255), 8)    # 나뭇잎 — 무채색 (컬러맵이 물들인다)
@@ -4599,13 +4840,17 @@ def leaf_rows(salt, shades=None, holes=True):
             d1, d2, ident, _ = wrapped_cells(x, y, 4, salt)          # 잎은 덩이로 뭉친다
             v = 4.7 + cell_rand(ident, salt ^ 0x2D) * 1.6            # 덩이마다 다른 톤 (조용한 면)
             v += wash(x, y, salt ^ 0x61, 0.60, cell=4)               # 덩이 안의 농담 — 저주파만
+            v += tooth(x, y, salt ^ 0xA3, 0.42)                      # 잎의 결 — 문턱 아래의 숨결
             rim = d2 - d1                                            # 덩이 경계까지의 거리
-            if rim < 0.42:
+            # ★ 구멍은 **덩이와 덩이 사이**에 뚫린다 (잎 한복판의 구멍은 벌레 먹은 것이다).
+            #   첫 시안은 구멍을 5% 밖에 안 뚫어 수관이 **속이 꽉 찬 덩어리**였다 — 잎이 아니라 이끼다.
+            #   바닐라 참나무 잎은 33% 가 하늘이고, 조사한 팩들도 20~34% 를 지킨다. 수관은 **성글다**.
+            if holes and rim < LEAF_HOLE_RIM:
+                continue                                             # 덩이 사이로 하늘이 비친다
+            if rim < LEAF_SHADE_RIM:
                 v -= 2.7                                             # 덩이 사이 — 그늘 획 (수관의 윤곽)
             elif rim < 0.95:
                 v -= 0.9                                             # 그늘의 번짐
-            if holes and rim < 0.30 and h32(ident[0], ident[1], salt ^ 0x7F) % 3 == 0:
-                continue                                             # 덩이 **사이로** 하늘이 비친다
             g[y][x] = step(shades, v)
     return g
 
@@ -4912,7 +5157,9 @@ def write_block_textures() -> int:
         "andesite": stone_rows(STONE_SHADES, 0x4F, amp=1.25),     # 자연 안산암 — 얼룩이 굵다
         "polished_andesite": polished_andesite_rows(),            # 다듬은 안산암 — 정 자국이 있다
         "tuff": stone_rows(ramp((88, 87, 83, 255), (172, 170, 163, 255), 9), 0x8D, amp=1.35),
-        "deepslate": stone_rows(DEEP_SHADES, 0xB3, amp=0.9),
+        # amp 0.9 → 1.25: 결을 조용히 그렸더니 명암차 22 로 '밋밋' 문턱(24) 아래로 떨어졌다.
+        # 조용한 것과 죽은 것은 다르다 — 심층암도 결은 또렷해야 한다.
+        "deepslate": stone_rows(DEEP_SHADES, 0xB3, amp=1.25),
         # 심층암 마구리 — amp 0.75·speck 없음으로는 색 3개·명암차 15 였다 (평면·밋밋 이중 위반).
         # 검은 돌이라고 해서 얼룩이 없는 것은 아니다 — 검은 것은 밝기이지 균질함이 아니다.
         "deepslate_top": stone_rows(DEEP_SHADES, 0xC7, amp=1.3),
@@ -5025,7 +5272,9 @@ def write_block_textures() -> int:
         "blue_ice": ice_rows(ramp((112, 126, 138, 255), (196, 210, 220, 255), 8), 0x1F, cracks=1),
         # 돌 4,608 (GRANITE·DIORITE·CALCITE — 자재_규약: 돌은 무채색, 화강만 흙기 한 점)
         "granite": stone_rows(GRANITE, 0x21, amp=1.2),
-        "diorite": stone_rows(DIORITE, 0x23, amp=1.1),
+        # mid 4.8 → 4.15: 결에 어깨(빛 받는 등성이)를 세우자 섬록이 밝기 197 로 대역[115,195]을 넘었다.
+        # 흰 돌이되 **종이는 아니다** — 여백(회벽 160~240)과 갈려야 돌이 돌로 읽힌다.
+        "diorite": stone_rows(DIORITE, 0x23, amp=1.1, mid=4.15),
         "calcite": stone_rows(CALCITE, 0x25, amp=0.85),
         # 사암 — 켜(層)가 보이는 돌. 마구리(top/bottom)는 켜가 없으니 결로 산다 (dune)
         "sandstone": grain_rows(SANDSTONE, 0x27, clump=1.2, dune=1.1),
@@ -7685,6 +7934,7 @@ def main():
 
     # ─── 아이템·블록 텍스처 레이어 (texture_layer_design.md — 1차) ───
     items = write_item_assets()
+    myeong = write_myeongbyeong_assets()      # 명병 — 문파의 얼굴 (등록된 8문파)
     blocks = write_block_textures()
     tints = write_tint_assets()     # 컬러맵·해·달 — **세계의 초록은 컬러맵에서 나온다**
     parts = write_particle_textures()
@@ -7717,6 +7967,8 @@ def main():
     print(f"  아이템 채널 {items}종 (PNG {items} + 모델 {items} + 아이템 정의 {items}) — item_model, 전역 오염 0")
     print(f"  ├ 병기 45자루 = **3D 모델** (elements — 평면 스프라이트가 아니다)"
           f" · 등급이 형체로 갈린다 (고리 0~3 · 수실 · 마병 톱니)")
+    print(f"  ├ 명병(名兵) {myeong}자루 — **문파의 얼굴** (실루엣이 지문에서 나온다: 점창=최박 ·"
+          f" 종남=최중 · 남궁=최장 · 팽가=최광폭 · 화산=매화). 문양은 코등이·물미에만")
     print(f"  무공의 획 {qi}종 (3D 모션 — SkillDisplay 가 item_model 로 태운다. 길이축 +X)")
     print(f"  짐승의 형체 {mobs}종 (MobDisplay 가 본체를 감추고 태운다. 코가 +Z · 발이 원점)")
     print(f"  메뉴·버튼 {ui}장 (GUI 스프라이트 — mcmeta 미포함 = 바닐라 나인슬라이스·좌표 계약 그대로)")

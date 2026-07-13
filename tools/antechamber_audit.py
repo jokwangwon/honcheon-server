@@ -459,16 +459,11 @@ def audit_panels(rep: Report, ante: dict, code: str) -> None:
     rep.say()
     rep.say("  ④ 글판 — TextDisplay (표지판이 아니다)")
     td = ante.get("text_display") or {}
-    panels = ante.get("panels") or []
     lessons = {l["id"]: l for l in ((ante.get("lessons") or {}).get("list") or []) if "id" in l}
 
     cap = td.get("max_panels")
     if not cap:
         rep.bad("text_display.max_panels 가 없다 — 상주 엔티티에 상한이 없다")
-    elif len(panels) > cap:
-        rep.bad(f"글판 {len(panels)}개 > 상한 {cap} — 상주 엔티티가 예산을 넘는다")
-    else:
-        rep.good(f"글판 {len(panels)}개 ≤ 상한 {cap}")
 
     # 표지판을 쓰지 않는다 (사용자 판정)
     if re.search(r"Material\.(OAK|SPRUCE|BIRCH|DARK_OAK|ACACIA|JUNGLE)_SIGN", code):
@@ -520,38 +515,46 @@ def audit_panels(rep: Report, ante: dict, code: str) -> None:
     else:
         rep.good("글판에 표식(KEY_PANEL)이 있다 — 우리 것만 걷는다")
 
-    # ★ 판이 과제와 **같은 말**을 하는가
-    seen_pos: dict[tuple, list] = {}
-    for p in panels:
-        pid = p.get("id", "?")
-        if p.get("from_lesson") and p.get("lines"):
-            rep.bad(f"글판 '{pid}' 이 from_lesson 과 lines 를 둘 다 가진다 — "
-                    "판과 과제가 서로 다른 말을 할 수 있다")
-        if p.get("from_lesson") and p["from_lesson"] not in lessons:
-            rep.bad(f"글판 '{pid}' 이 없는 과제를 가리킨다: {p['from_lesson']}")
-        if not p.get("from_lesson") and not p.get("lines"):
-            rep.bad(f"글판 '{pid}' 에 문장이 없다")
-        seen_pos.setdefault(tuple(p.get("pos") or []), []).append(p)
-
-    if not re.search(r"text\s*=\s*List\.of\(panelSpec\.titlePrefix\(\)\s*\+\s*l\.title\(\)", code):
-        rep.bad("from_lesson 판이 과제의 문장을 그대로 세우지 않는다 — 판이 딴말을 할 수 있다")
+    # ★ 판이 과제와 **같은 말**을 하는가.
+    #   v2 에서 판은 config 에 따로 배치하지 않는다 — **관문(stations)이 곧 판의 자리**다.
+    #   그래서 "판이 관문과 다른 자리에 있다"는 사고가 원천적으로 불가능하다. 대신 두 가지를 조인다:
+    #     ① 판의 문장은 과제의 title/how 에서 **그대로** 나온다 (panelText 가 유일한 출처)
+    #     ② 관문이 가리키는 과제가 실재한다
+    pt = body_of(code, r"private List<String> panelText\(Station s, boolean unavailableVariant\)")
+    if pt is None:
+        rep.bad("panelText() 를 못 찾았다 — 판의 문장이 어디서 오는지 알 수 없다")
+    elif not (re.search(r"l\.title\(\)", pt) and re.search(r"l\.how\(\)", pt)
+              and re.search(r"l\.unavailable\(\)", pt)):
+        rep.bad("판의 문장이 과제의 title/how/unavailable 에서 나오지 않는다 — 판이 딴말을 할 수 있다")
     else:
-        rep.good("from_lesson 판 = 과제의 title/how 그대로 (딴말이 불가능하다)")
+        rep.good("판의 문장 = 과제의 title/how 그대로 (panelText 가 유일한 출처 — 딴말이 불가능하다)")
 
-    # 같은 자리에 두 판이 있으면 반드시 서로 배타적(armable / not_armable)이어야 한다
-    for pos, ps in seen_pos.items():
-        if len(ps) < 2:
-            continue
-        flags = sorted((p.get("only_if") or "always") for p in ps)
-        if flags != ["armable", "not_armable"]:
-            rep.bad(f"글판이 같은 자리 {list(pos)} 에 겹친다 ({[p.get('id') for p in ps]}, only_if={flags}) "
-                    "— 글이 두 겹으로 보인다")
-        else:
-            rep.good(f"자리 {list(pos)} — armable/not_armable 로 배타적이다 (겹치지 않는다)")
-    if not re.search(r"hideEntity\(plugin", code) or not re.search(r"showEntity\(plugin", code):
-        rep.bad("only_if 판을 사람마다 숨기지 않는다 — 범인에게 '격을 둘러라'가 보인다 (거짓말)")
+    for st in (ante.get("stations") or []):
+        lid = st.get("lesson") or ""
+        if lid and lid not in lessons:
+            rep.bad(f"관문 '{st.get('id')}' 이 없는 과제를 가리킨다: {lid}")
+
+    # 같은 자리(관문)에 판이 둘인 경우는 격뿐이고, 둘은 **서로 배타적**이어야 한다
+    # (범인에게 "격을 둘러라"가 보이면 그것이 거짓말이다)
+    rp = body_of(code, r"void refreshPanels\(Player player\)")
+    sh = body_of(code, r"private void show\(Player player, String panelId, boolean visible\)")
+    if sh is None or "hideEntity(plugin" not in sh or "showEntity(plugin" not in sh:
+        rep.bad("판을 사람마다 감추고 보이는 손(show/hideEntity)이 없다")
+    elif rp is None or "show(player" not in rp:
+        rep.bad("refreshPanels() 가 판을 사람마다 가르지 않는다")
+    elif "_없음" not in rp or "armable" not in rp:
+        rep.bad("격의 두 판(가능/불가)을 사람마다 갈라 주지 않는다 — "
+                "범인에게 '격을 둘러라'가 보인다 (거짓말)")
     else:
-        rep.good("only_if 판은 사람마다 보이고 안 보인다 (hideEntity/showEntity)")
+        rep.good("판은 사람마다 보이고 안 보인다 (격: 두를 수 있는 몸에게만 · 없는 몸에겐 대체 판)")
+
+    expected = len(ante.get("stations") or []) + sum(
+        1 for st in (ante.get("stations") or [])
+        if (lessons.get(st.get("lesson") or "") or {}).get("requires_armable_grade"))
+    if cap and expected > cap:
+        rep.bad(f"글판 {expected}개 > 상한 {cap}")
+    else:
+        rep.good(f"글판 {expected}개 (관문 {len(ante.get('stations') or [])} + 격 대체 1) ≤ 상한 {cap}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -587,6 +590,529 @@ def audit_conventions(rep: Report, code: str, raw_cfg: str) -> None:
         rep.good("지면을 월드에게 묻는다 (getHighestBlockYAt)")
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  기하 — config 에서 나루의 몸을 다시 세운다 (감사가 걸어 볼 수 있게)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ★ 손으로 답을 쓰지 않는다. 좌표는 **config 가 정본**이고(등록제), 이 클래스는 그 정본에서
+#   마른 땅·막힌 칸·광원을 **다시 계산한다**. 그리고 Antechamber.java 가 같은 규칙으로 짓는지는
+#   audit_road 의 코드 검사(isDeck 의 구성)가 따로 지킨다.
+
+class Geo:
+    def __init__(self, ante: dict) -> None:
+        r = ante.get("road") or {}
+        self.rz = r.get("z", 0)
+        self.half = r.get("half_width", 1)
+        self.x0 = r.get("from", -30)
+        self.x1 = r.get("to", 26)
+        self.deck = r.get("deck_y", 1)          # 지면 기준 — 발은 deck+1 에 선다
+        self.gaps = r.get("gaps") or []
+        self.spawn = tuple(ante.get("spawn") or [self.x0, self.rz])
+        self.stations = ante.get("stations") or []
+        m = ante.get("marsh") or {}
+        self.mx = m.get("x", [-38, 34])
+        self.mz = m.get("z", [-22, 22])
+        h = ante.get("hut") or {}
+        self.hx = h.get("x", [19, 24])
+        self.hz = h.get("z", [5, 10])
+        self.wall_h = h.get("wall_h", 3)
+        li = ante.get("lighting") or {}
+        self.post_every = li.get("post_every", 9)
+        self.post_alt = li.get("post_alternate", True)
+        self.post_z = li.get("post_z", 2)
+        self.brazier_st = set(li.get("brazier_stations") or [])
+        self.hut_lantern = li.get("hut_lantern", True)
+        d = ante.get("dock") or {}
+        self.bell = tuple(d.get("bell") or [26, 0])
+        self.plates = ((ante.get("plates") or {}).get("list")) or []
+
+    # ── 마른 땅 ──
+    def on_bypass(self, x, z):
+        for g in self.gaps:
+            bz = g.get("bypass_z") or []
+            if len(bz) == 2 and g["from"] <= x <= g["to"] and min(bz) <= z <= max(bz):
+                return True
+        return False
+
+    def in_gap(self, x, z):
+        for g in self.gaps:
+            if g["from"] <= x <= g["to"] and not self.on_bypass(x, z):
+                return True
+        return False
+
+    def on_road(self, x, z):
+        return self.x0 <= x <= self.x1 and abs(z - self.rz) <= self.half
+
+    def station_at(self, x, z):
+        for s in self.stations:
+            if abs(x - s["x"]) <= s["half"] and abs(z - self.rz) <= s["half"]:
+                return s
+        return None
+
+    def on_hut(self, x, z):
+        return self.hx[0] <= x <= self.hx[1] and self.hz[0] <= z <= self.hz[1]
+
+    def abuts_hut(self, x, z):
+        return self.on_hut(x, z + 1) or self.on_hut(x, z - 1)
+
+    def lamp_side(self, x):
+        if not (self.x0 <= x <= self.x1):
+            return None
+        n = x - self.x0
+        if n % self.post_every != 0:
+            return None
+        if not self.post_alt:
+            return self.post_z
+        return self.post_z if (n // self.post_every) % 2 == 0 else -self.post_z
+
+    def on_lamp_bracket(self, x, z):
+        side = self.lamp_side(x)
+        return side is not None and z == self.rz + side
+
+    def is_deck(self, x, z):
+        if self.in_gap(x, z):
+            return False
+        return (self.on_road(x, z) or self.station_at(x, z) is not None
+                or self.on_bypass(x, z) or self.on_hut(x, z) or self.on_lamp_bracket(x, z))
+
+    def deck_cells(self):
+        return {(x, z)
+                for x in range(self.mx[0], self.mx[1] + 1)
+                for z in range(self.mz[0], self.mz[1] + 1)
+                if self.is_deck(x, z)}
+
+    def brazier_at(self, s):
+        return (s["x"] + s["half"] - 1, self.rz - (s["half"] - 1))
+
+    # ── 딛을 수 없는 칸 (deck+1 에 뭔가 서 있다) ──
+    def blocked(self):
+        out = set()
+        for s in self.stations:                     # 난간
+            for x in range(s["x"] - s["half"], s["x"] + s["half"] + 1):
+                for side in (-s["half"], s["half"]):
+                    z = self.rz + side
+                    if (self.on_hut(x, z) or self.on_lamp_bracket(x, z)
+                            or self.abuts_hut(x, z) or self.in_gap(x, z)):
+                        continue
+                    out.add((x, z))
+        for x in range(self.x0, self.x1 + 1):       # 등롱 기둥
+            side = self.lamp_side(x)
+            if side is not None:
+                out.add((x, self.rz + side))
+        for s in self.stations:                     # 화톳불
+            if s["id"] in self.brazier_st:
+                out.add(self.brazier_at(s))
+        mid = (self.hx[0] + self.hx[1]) // 2
+        for x in range(self.hx[0], self.hx[1] + 1):   # 집의 벽 (문만 뚫려 있다)
+            for z in range(self.hz[0], self.hz[1] + 1):
+                edge = x in (self.hx[0], self.hx[1]) or z in (self.hz[0], self.hz[1])
+                door = z == self.hz[0] and mid <= x <= mid + 1
+                if edge and not door:
+                    out.add((x, z))
+        out.add(self.bell)                          # 종도 블록이다
+        return out
+
+    def walkable(self):
+        return self.deck_cells() - self.blocked()
+
+    # ── 빛 (해석 모형: 밝기 = 15 − 맨해튼거리, 7 미만이면 암흑) ──
+    def sources(self):
+        out = []
+        for x in range(self.x0, self.x1 + 1):
+            side = self.lamp_side(x)
+            if side is not None:
+                out.append((x, self.deck + 2, self.rz + side))
+        for s in self.stations:
+            if s["id"] in self.brazier_st:
+                bx, bz = self.brazier_at(s)
+                out.append((bx, self.deck + 1, bz))
+        if self.hut_lantern:
+            out.append(((self.hx[0] + self.hx[1]) // 2, self.deck + self.wall_h,
+                        (self.hz[0] + self.hz[1]) // 2))
+        return out
+
+    def light_at(self, x, z, srcs):
+        foot = self.deck + 1
+        best = 0
+        for sx, sy, sz in srcs:
+            lvl = 15 - (abs(sx - x) + abs(sy - foot) + abs(sz - z))
+            if lvl > best:
+                best = lvl
+        return best
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑥ 길 — 하나인가 · 걸어서 끝까지 가는가 · 갈림길은 없는가
+# ═══════════════════════════════════════════════════════════════════════════
+
+def audit_road(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑥ 길 — 한 길인가 (도달성 BFS · 갈림길 · 관문 순서)")
+    g = Geo(ante)
+
+    if not g.stations:
+        rep.bad("관문이 없다 — 길에 아무것도 없다")
+        return
+
+    # 관문은 길 위에 있고, x 는 오름차순이어야 한다 (순서가 곧 길이다)
+    xs = [s["x"] for s in g.stations]
+    if xs != sorted(xs):
+        rep.bad(f"관문의 x 가 오름차순이 아니다 {xs} — 길을 걸으면 순서가 뒤엉킨다")
+    else:
+        rep.good(f"관문 순서 = 길 순서 {[s['id'] for s in g.stations]}")
+    for s in g.stations:
+        if not (g.x0 <= s["x"] <= g.x1):
+            rep.bad(f"관문 '{s['id']}' (x={s['x']}) 가 길 밖에 있다 [{g.x0}..{g.x1}] — 아무도 못 간다")
+
+    # 첫 관문이 스폰이어야 한다 (눈을 뜬 자리가 곧 첫 관문)
+    if g.stations[0]["x"] != g.spawn[0]:
+        rep.warn(f"눈 뜨는 자리(x={g.spawn[0]}) 와 첫 관문(x={g.stations[0]['x']}) 이 다르다")
+
+    # ★ 걸어서 끝까지 가는가 — BFS. 뛰지 않고, 물에 안 빠지고
+    #   (RegionAudit.groundStandY 의 교훈: 걷는 검사가 지붕에서 출발하면 무엇을 재든 거짓이다.
+    #    여기서는 출발점이 **잔교 널판** 임을 먼저 확인한다.)
+    walk = g.walkable()
+    start = tuple(g.spawn)
+    if start not in walk:
+        rep.bad(f"눈 뜨는 자리 {list(start)} 가 딛을 수 있는 땅이 아니다 — 물에 떨어뜨리거나 벽에 끼워 넣는다")
+        return
+    rep.good(f"출발점 {list(start)} 은 잔교 널판 위다 (지붕에서 출발하지 않는다)")
+
+    seen = {start}
+    queue = [start]
+    while queue:
+        x, z = queue.pop()
+        for nx, nz in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
+            if (nx, nz) in walk and (nx, nz) not in seen:
+                seen.add((nx, nz))
+                queue.append((nx, nz))
+
+    bx, bz = g.bell
+    at_bell = [c for c in ((bx - 1, bz), (bx + 1, bz), (bx, bz - 1), (bx, bz + 1)) if c in walk]
+    if not at_bell:
+        rep.bad(f"종 {list(g.bell)} 옆에 설 자리가 없다 — 문에 손이 안 닿는다")
+    elif not any(c in seen for c in at_bell):
+        rep.bad(f"걸어서 종에 닿을 수 없다 — 잔교가 끊겼는데 우회로가 없다 (★ 갇힌다). "
+                f"도달 {len(seen)}칸 / 전체 {len(walk)}칸")
+    else:
+        rep.good(f"걸어서 종까지 간다 — 뛰지 않고 (도달 {len(seen)}칸 / 마른 땅 {len(walk)}칸)")
+
+    # 끊긴 자리마다 우회로가 있어야 한다 (없으면 못 뛰는 사람이 갇힌다)
+    for gap in g.gaps:
+        bz2 = gap.get("bypass_z") or []
+        if len(bz2) != 2:
+            rep.bad(f"끊긴 자리 x{gap['from']}~{gap['to']} 에 우회로가 없다 — "
+                    "점프를 못 하는 사람은 여기서 영영 못 간다 (★ 함정)")
+            continue
+        width = gap["to"] - gap["from"] + 1
+        if width > 4:
+            rep.bad(f"끊긴 폭 {width} 칸 — 달리며 점프로 못 건넌다 (바닐라 한계 ~4)")
+        else:
+            rep.good(f"끊긴 폭 {width} 칸 (달리며 점프로 건넌다) + 우회로 z{bz2}")
+
+    # ★ 갈림길 — 마른 땅이 **한 덩어리**여야 한다. 섬이 있으면 그건 길이 아니라 파편이다
+    islands = len(walk) - len(seen)
+    if islands > 0:
+        rep.bad(f"마른 땅에 닿을 수 없는 섬이 {islands}칸 있다 — 길이 한 덩어리가 아니다")
+    else:
+        rep.good("마른 땅이 한 덩어리다 (떠 있는 섬이 없다)")
+
+    # 길 밖으로 새는 마른 땅이 없는가 — **물이 길을 하나로 만든다**는 전제의 검산
+    deck = g.deck_cells()
+    stray = [(x, z) for (x, z) in deck
+             if not (g.on_road(x, z) or g.station_at(x, z) or g.on_bypass(x, z)
+                     or g.on_hut(x, z) or g.on_lamp_bracket(x, z))]
+    if stray:
+        rep.bad(f"등록되지 않은 마른 땅 {len(stray)}칸 — 갈림길이다 (예: {stray[:3]})")
+    else:
+        rep.good(f"마른 땅은 전부 등록된 것뿐 — 잔교·마당·우회로·집·등롱 ({len(deck)}칸). "
+                 "나머지는 물이다 (★ 벽 없이 길이 하나다)")
+
+    # 코드가 정말 이 규칙으로 짓는가 — isDeck 이 다섯 술어 + 끊긴 자리로 이뤄져야 한다
+    body = body_of(code, r"private boolean isDeck\(int x, int z\)")
+    if body is None:
+        rep.bad("isDeck() 를 못 찾았다 — 마른 땅의 정의가 코드에 없다")
+    else:
+        if "inGap" not in body:
+            rep.bad("isDeck() 가 끊긴 자리를 먼저 빼지 않는다 — "
+                    "경공 관문의 마당이 구멍을 도로 메운다 (잔교가 안 끊긴다)")
+        for need in ("onRoad", "onStation", "onBypass", "onHut", "onLampBracket"):
+            if need not in body:
+                rep.bad(f"isDeck() 가 {need} 를 안 본다 — 마른 땅의 정의가 config 와 다르다")
+        if all(n in body for n in ("inGap", "onRoad", "onStation", "onBypass", "onHut")):
+            rep.good("isDeck() = 끊긴 자리 제외 + 등록된 다섯 (config 와 같은 규칙으로 짓는다)")
+
+    # ★★ 코드가 좌표를 **몰래 지어내지 않는가.**
+    #    이 감사는 config 에서 나루의 몸을 다시 세워 BFS 를 돈다. 그러니 코드가 config 에 없는 마른 땅을
+    #    한 칸이라도 만들면 **눈이 그것을 영영 못 본다** (자기 시험이 이 구멍을 잡아냈다).
+    #    그래서 기하 술어에는 **박힌 숫자가 없어야 한다** — 전부 등록부에서 온 값이어야 한다.
+    for fn, sig, allowed in (
+            ("isDeck", r"private boolean isDeck\(int x, int z\)", {0, 1}),
+            ("inGap", r"private boolean inGap\(int x, int z\)", {0, 1}),
+            ("onRoad", r"private boolean onRoad\(int x, int z\)", {0, 1}),
+            ("onStation", r"private boolean onStation\(int x, int z\)", {0, 1}),
+            ("onBypass", r"private boolean onBypass\(int x, int z\)", {0, 1}),
+            ("onHut", r"private boolean onHut\(int x, int z\)", {0, 1}),
+            ("lampSide", r"private Integer lampSide\(int x\)", {0, 1, 2}),
+    ):
+        b = body_of(strip_comments(code), sig)
+        if b is None:
+            rep.bad(f"{fn}() 를 못 찾았다 — 기하 규칙이 코드에 없다")
+            continue
+        lits = {int(n) for n in re.findall(r"(?<![\w.])(-?\d+)(?![\w.])", b)}
+        stray = sorted(lits - allowed)
+        if stray:
+            rep.bad(f"{fn}() 에 박힌 숫자가 있다: {stray} — 코드가 좌표/간격을 지어낸다 "
+                    "(config 가 정본이어야 하고, 안 그러면 감사가 그 땅을 못 본다)")
+        else:
+            rep.good(f"{fn}() 에 박힌 숫자가 없다 — 전부 등록부에서 온다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑦ 흐름 — 한 번에 하나만 보이는가
+# ═══════════════════════════════════════════════════════════════════════════
+
+def audit_flow(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑦ 흐름 — 한 번에 하나만 (과제 여섯이 동시에 보이면 그것은 안내가 아니라 선택지다)")
+    les = ante.get("lessons") or {}
+    if not les.get("one_at_a_time"):
+        rep.bad("lessons.one_at_a_time 이 참이 아니다 — 관문이 전부 한꺼번에 보인다 (1차판의 병)")
+    else:
+        rep.good("lessons.one_at_a_time: true")
+
+    body = body_of(code, r"void refreshPanels\(Player player\)")
+    if body is None:
+        rep.bad("refreshPanels() 를 못 찾았다")
+    else:
+        if "currentStation" not in body or "<= current" not in body:
+            rep.bad("refreshPanels() 가 관문 번호로 가리지 않는다 — 앞 관문이 안 닫혀도 다음이 보인다")
+        else:
+            rep.good("refreshPanels() — 지금 관문까지만 보인다 (i <= current)")
+        # 감추는 손은 show() 안에 있다 — **이름만 보지 말고 속을 보자** (그 병으로 두 번 데였다)
+        sh = body_of(code, r"private void show\(Player player, String panelId, boolean visible\)")
+        if sh is None or "hideEntity" not in sh:
+            rep.bad("앞 관문의 판을 감추지 않는다 — 과제가 전부 한꺼번에 보인다")
+        else:
+            rep.good("앞 관문의 판은 감춘다 (hideEntity)")
+
+    cur = body_of(code, r"private int currentStation\(Player player\)")
+    if cur is None or "passed(" not in (cur or ""):
+        rep.bad("currentStation() 이 '지나온 관문'을 안 본다")
+    else:
+        rep.good("currentStation() = 아직 안 닫힌 첫 관문")
+
+    # ★ 못 하는 관문(범인의 격)에서 길이 막히면 안 된다 — 그것이 바로 '갇힘'이다
+    ps = body_of(code, r"private boolean passed\(Player player, Station s\)")
+    if ps is None:
+        rep.bad("passed() 를 못 찾았다")
+    elif "requiresArmable" not in ps or "armable(player)" not in ps:
+        rep.bad("passed() 가 '못 하는 관문'을 지나가게 하지 않는다 — "
+                "범인이 격 관문에서 막히면 그 뒤 관문을 영영 못 본다")
+    else:
+        rep.good("못 하는 관문(범인의 격)은 '지나간 것'으로 친다 — 길이 안 막힌다")
+
+    # ★★ 글판이 안 보이는 것과 **문이 잠기는 것**은 다른 것이다. 종은 언제나 울려야 한다
+    cross = body_of(code, r"public void cross\(Player player\)")
+    if cross is None:
+        rep.bad("cross() 를 못 찾았다")
+    elif any(w in cross for w in ("currentStation", "refreshPanels", "passed(", "shownThrough",
+                                  "progress")):
+        rep.bad("cross() 가 과제 진척을 본다 — ★ 과제가 문을 잠근다. "
+                "글판은 안내이지 자물쇠가 아니다 (과제 하나가 깨진 날 사람이 갇힌다)")
+    else:
+        rep.good("cross() 는 과제를 보지 않는다 — 글판이 하나도 안 열려도 종은 울린다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑧ 빛 — 길을 만드는가 (야간 3축 + 균일 금지)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def audit_light(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑧ 빛 — 길을 만드는가 (TownAudit 야간 3축과 같은 눈금 · 균일 금지)")
+    li = ante.get("lighting") or {}
+
+    # ★ 눈금을 손으로 쓰지 않는다 — TownAudit.java 의 상수에서 읽어 대조한다
+    ta = source("TownAudit.java")
+    truth = {}
+    for name, key in (("DARK_MIN_PCT", "dark_min_pct"), ("DARK_MAX_PCT", "dark_max_pct"),
+                      ("MAIN_DARK_MAX_PCT", "main_dark_max_pct"),
+                      ("LAMP_DENSITY_MAX", "lamp_density_max_pct")):
+        m = re.search(r"double\s+" + name + r"\s*=\s*([0-9.]+)", ta)
+        if m:
+            v = float(m.group(1))
+            if name == "LAMP_DENSITY_MAX":
+                v *= 100.0        # TownAudit 는 비율(0.06), config 는 퍼센트(6)
+            truth[key] = v
+    if not truth:
+        rep.warn("TownAudit.java 에서 야간 3축 상수를 못 읽었다 — 눈금 대조를 못 했다")
+    for key, want in truth.items():
+        got = li.get(key)
+        if got is None:
+            rep.bad(f"lighting.{key} 가 없다 (TownAudit 는 {want} 라고 적어 뒀다)")
+        elif abs(float(got) - want) > 1e-6:
+            rep.bad(f"lighting.{key} = {got} ≠ TownAudit 의 {want} — "
+                    "두 등록부가 서로 다른 밤을 말한다")
+        else:
+            rep.good(f"lighting.{key} = {got} (TownAudit 와 같은 눈금)")
+
+    g = Geo(ante)
+    srcs = g.sources()
+    walk = g.walkable()
+    if not walk or not srcs:
+        rep.bad("빛을 잴 표본이 없다")
+        return
+
+    # ① 주 동선(잔교·마당) — 밝아야 한다
+    main_lv = [g.light_at(x, z, srcs) for (x, z) in walk]
+    main_dark = 100.0 * sum(1 for v in main_lv if v < 7) / len(main_lv)
+    lim = float(li.get("main_dark_max_pct", 15))
+    if main_dark > lim:
+        rep.bad(f"주 동선 암흑 {main_dark:.1f}% > {lim:.0f}% — 걸어야 할 길이 어둡다 "
+                "(빛이 길을 안 가리킨다)")
+    else:
+        rep.good(f"주 동선 암흑 {main_dark:.1f}% ≤ {lim:.0f}% — 길은 밝다")
+
+    # ② 어둠의 하한 — ★ 어두운 곳이 **없으면 그것도 실패다** (등롱 도배)
+    allc = [(x, z) for x in range(g.mx[0], g.mx[1] + 1) for z in range(g.mz[0], g.mz[1] + 1)]
+    all_lv = [g.light_at(x, z, srcs) for (x, z) in allc]
+    all_dark = 100.0 * sum(1 for v in all_lv if v < 7) / len(all_lv)
+    lo = float(li.get("dark_min_pct", 12))
+    if all_dark < lo:
+        rep.bad(f"암흑 {all_dark:.1f}% < {lo:.0f}% — 등롱이 습지를 도배했다 (밤이 밤이 아니다). "
+                "어두운 곳이 있어야 밝은 곳이 길로 읽힌다")
+    else:
+        rep.good(f"습지 암흑 {all_dark:.1f}% ≥ {lo:.0f}% — 갈대밭은 어둡다 (그래서 잔교가 길로 읽힌다)")
+
+    # ③ 광원 밀도 — 등불 도배 금지
+    dens = 100.0 * len(srcs) / len(walk)
+    dlim = float(li.get("lamp_density_max_pct", 6))
+    if dens > dlim:
+        rep.bad(f"광원 밀도 {dens:.1f}% > {dlim:.0f}% — 등롱이 다닥다닥 붙었다")
+    else:
+        rep.good(f"광원 밀도 {dens:.1f}% ≤ {dlim:.0f}% (광원 {len(srcs)}개 / 마른 땅 {len(walk)}칸) "
+                 "— 등롱이 리듬이다")
+
+    # ④ ★ 균일 금지 — 사용자가 정확히 이것을 말했다: "조명도 너무 균일"
+    line = [g.light_at(x, g.rz, srcs) for x in range(g.x0, g.x1 + 1) if (x, g.rz) in walk]
+    span = max(line) - min(line) if line else 0
+    need = int(li.get("main_light_span_min", 3))
+    if span < need:
+        rep.bad(f"길 위 광량이 {min(line)}~{max(line)} (편차 {span}) < {need} — "
+                "조명이 **균일하다**. 격자는 아무것도 안 가리킨다")
+    else:
+        rep.good(f"길 위 광량 {min(line)}~{max(line)} (편차 {span} ≥ {need}) — "
+                 "밝은 웅덩이와 어둑한 구간이 번갈아 온다 (등롱이 화살표다)")
+
+    # 격자 금지 — 코드가 등롱을 격자로 깔면 안 된다 (1차판이 6칸 격자였다)
+    body = body_of(code, r"private Integer lampSide\(int x\)")
+    if body is None:
+        rep.bad("lampSide() 가 없다 — 등롱 배치 규칙이 코드에 없다")
+    elif "postEvery" not in body:
+        rep.bad("lampSide() 가 config 의 post_every 를 안 쓴다 — 코드가 간격을 지어낸다")
+    else:
+        rep.good("등롱 간격은 config(post_every) 가 정한다 (코드가 안 지어낸다)")
+    if re.search(r"lantern_every|floorMod\(z - yardZ", code):
+        rep.bad("아직 격자 등롱(lantern_every)을 깐다 — 격자는 아무것도 안 가리킨다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑨ 발판 — 밟으면 그 명령이 정말 쳐지는가
+# ═══════════════════════════════════════════════════════════════════════════
+
+def audit_plates(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑨ 발판 — 화면에 뜬 명령과 실제로 쳐진 명령이 같은가")
+    pl = ante.get("plates") or {}
+    plates = pl.get("list") or []
+    if not plates:
+        rep.bad("발판이 하나도 없다 — 명령어 문법을 손으로 외우게 한다 (진입 장벽)")
+        return
+
+    # ★★ 화면 = 세계. echo 에 뜨는 글자와 performCommand 에 넘기는 글자가 **같은 변수**여야 한다.
+    #    (이 프로젝트는 `/혼천 협공` 이 "캡 +3"이라 찍는데 config 는 2였던 적이 있다.)
+    body = body_of(code, r"private void stepPlate\(Player player, Plate plate\)")
+    if body is None:
+        rep.bad("stepPlate() 를 못 찾았다 — 발판이 코드에 없다")
+    else:
+        if not re.search(r"String cmd = plate\.command\(\);", body):
+            rep.bad("stepPlate() 가 명령을 한 변수에 담지 않는다")
+        echoes = re.search(r'sendMessage\(plateEcho\.replace\("\{command\}", (\w+)\)\)', body)
+        runs = re.search(r"performCommand\((\w+)\)", body)
+        if not echoes or not runs:
+            rep.bad("stepPlate() 가 명령을 보여주거나(echo) 실행(performCommand)하지 않는다")
+        elif echoes.group(1) != runs.group(1):
+            rep.bad(f"★ 화면에 뜨는 것({echoes.group(1)})과 실행되는 것({runs.group(1)})이 "
+                    "다른 변수다 — 화면이 세계에 대해 거짓말할 수 있다")
+        else:
+            rep.good(f"보여주는 것 = 치는 것 (같은 변수 '{echoes.group(1)}') — 거짓말할 수가 없다")
+        if re.search(r'performCommand\(\s*"', body):
+            rep.bad("performCommand 에 문자열이 직접 박혀 있다 — config 가 정본이 아니게 된다")
+        # ★ 주석에 "Action.PHYSICAL 이다" 라고 적어 놓은 것으로 통과시키면 안 된다.
+        #   **주석을 벗기고, onInteract 의 속을 본다.**
+        oi = body_of(strip_comments(code), r"public void onInteract\(PlayerInteractEvent event\)")
+        if oi is None or "Action.PHYSICAL" not in oi:
+            rep.bad("발판을 **밟는** 것(Action.PHYSICAL)으로 안 본다 — 밟아도 아무 일도 안 일어난다")
+        else:
+            rep.good("발판은 밟는 것이다 (Action.PHYSICAL)")
+
+    # 손으로 친 것과 발판으로 친 것이 같은 문을 지나야 한다
+    if not re.search(r"creditCommand\(player, parts\[1\], parts\.length - 2\)", code):
+        rep.warn("손/발판 두 경로가 같은 기입 함수를 안 쓴다 — 언젠가 둘이 어긋난다")
+    else:
+        rep.good("손으로 친 것과 발판으로 친 것이 같은 함수(creditCommand)를 지난다")
+
+    # 발판이 없는 명령을 치면 안 된다 (MvtCommand 가 정본)
+    mvt = strip_comments(source("MvtCommand.java"))
+    cases = set(re.findall(r'case\s+"([^"]+)"', mvt))
+    for p in plates:
+        cmd = (p.get("command") or "").split()
+        if len(cmd) < 2:
+            rep.bad(f"발판 '{p.get('id')}' 의 명령이 비었다")
+            continue
+        if cmd[0] != "혼천":
+            rep.bad(f"발판 '{p.get('id')}' 이 혼천 명령이 아니다: {p.get('command')}")
+        if cmd[1] not in cases:
+            rep.bad(f"발판 '{p.get('id')}' 이 없는 명령을 친다: /혼천 {cmd[1]} (MvtCommand 에 없다) "
+                    "— 밟아도 아무 일도 안 일어난다")
+        else:
+            rep.good(f"발판 '{p.get('id')}' → /{p.get('command')} (MvtCommand 에 실재한다)")
+
+    # ★ 발판을 밟을 수 있는 자리에 놨는가 (물 위나 등롱 기둥 속에 놓으면 영영 못 밟는다)
+    g = Geo(ante)
+    walk = g.walkable()
+    for p in plates:
+        pos = tuple(p.get("pos") or [])
+        if len(pos) != 2:
+            rep.bad(f"발판 '{p.get('id')}' 에 자리가 없다")
+        elif pos not in walk:
+            reason = "물 위다" if not g.is_deck(*pos) else "등롱·난간·화톳불이 이미 서 있다"
+            rep.bad(f"발판 '{p.get('id')}' {list(pos)} 을 밟을 수 없다 — {reason}")
+        else:
+            rep.good(f"발판 '{p.get('id')}' {list(pos)} — 딛는 자리에 있다")
+
+    # ★ 배분값은 지어낸 것이 아니다 — player_creation.yml 이 정본
+    pc = load_yaml("player_creation.yml")
+    cur = ((pc.get("mvt_onboarding") or {}).get("default_curriculum")) or {}
+    taught = {}
+    for p in plates:
+        parts = (p.get("command") or "").split()
+        if len(parts) == 4 and parts[1] == "수련":
+            try:
+                taught[parts[2]] = int(parts[3])
+            except ValueError:
+                rep.bad(f"발판 '{p.get('id')}' 의 구간이 숫자가 아니다: {parts[3]}")
+    if not cur:
+        rep.warn("player_creation.yml 의 default_curriculum 을 못 읽었다 — 배분 대조를 못 했다")
+    elif taught and taught != {k: v for k, v in cur.items() if k in taught}:
+        rep.bad(f"발판이 가르치는 배분 {taught} ≠ player_creation.yml default_curriculum "
+                f"{dict(cur)} — 발판이 config 와 다른 빌드를 깐다")
+    elif taught:
+        rep.good(f"발판의 배분 {taught} = player_creation.yml default_curriculum (지어내지 않았다)")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--verbose", "-v", action="store_true", help="통과 항목도 보인다")
@@ -617,6 +1143,10 @@ def main() -> int:
     audit_trap(rep, ante, code)
     audit_truth(rep, ante, code)
     audit_panels(rep, ante, code)
+    audit_road(rep, ante, code)
+    audit_flow(rep, ante, code)
+    audit_light(rep, ante, code)
+    audit_plates(rep, ante, code)
     audit_conventions(rep, code, raw_cfg)
 
     rep.say()
