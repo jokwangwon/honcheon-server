@@ -87,12 +87,17 @@ schema:
     all:          [name, pos, region, terrain, build, access]
     # 집이 서는 곳 — 아래 절에 있고 build != never 인 것
     buildable_sections: [places, places_official]
-    buildable:    [faction, archetype, build_radius, tier, scale]
+    buildable:    [faction, archetype, build_radius, tier]
+    # ★ scale 은 **필수가 아니다.** 판단과 이유:
+    #   필수의 정의는 "**없으면 코드가 추측하는 것**"이다. 그런데 scale 은 **아무도 안 읽는다** (서사다).
+    #   그리고 서사적 크기는 **등록부에 원천이 없다** — 필수로 걸면 **지어내야 한다.**
+    #   ★ 그것이 이 프로젝트가 고치고 있는 병이다. 그러므로 빼고, **비었다는 사실만 짖게 한다** (info).
+    advisory:     [scale]
     exempt_if:    builder             # ★ 전용 조성기가 짓는 곳 (청하현·산길 도적) — 원형으로 짓지 않는다
     hunting_grounds: [grade, beasts, realm_min, danger]
     resources:    [yields, consumer]
   note_required: |
-    ★ `archetype` 과 `scale` 은 **지금 비어 있는 곳이 더 많다.** 그것이 이 스키마의 요점이다 —
+    ★ `archetype` 과 `build_radius` 는 **지금 비어 있는 곳이 더 많다.** 그것이 이 스키마의 요점이다 —
       **비어 있다는 사실을 린트가 매번 짖게 한다.** 채우는 것은 사람의 결정이지 코드의 추측이 아니다.
 
   # ─── 값의 어휘 (enums) — 등록부 밖의 값은 오타이거나 발명이다 ───
@@ -2281,8 +2286,22 @@ places_official:                     # 관의 장소 — places 와 같은 문�
   cheongha_gwana:
     name: "청하현 관아"
     archetype: 관아                  # ★ 신설 (사용자 결정) — officialdom.hierarchy.현: `architecture: 관아급`
-    build_radius: 32                # ★ 현(縣)의 관아 — 청하현 무대 **안**에 선다 (담장 안). 아래 note 의 경계 판단 참조
+    build_radius: 32                # ★ 현(縣)의 관아 — 포쾌 12인. 부(48)보다 작다
     scale: 200
+    builder: "CheonghaBuilder — ★ 계약은 RemoteBuilder 의 관아, **손은 CheonghaBuilder** (아래 판단)"
+    builder_why: |
+      ★★ **경계 판단 (조율자가 물었다: 청하현 관아를 누가 짓는가)**
+        답: **원형(계약)은 RemoteBuilder 의 것, 손은 CheonghaBuilder 의 것이다.**
+
+        이유 — **RemoteBuilder 로 지으면 마을이 갈아엎어진다.**
+          RemoteBuilder 의 진입은 언제나 지형 계층을 **먼저** 부른다 (TerrainForge.prepare — 땅을 빚고,
+          봉인하고, 전이대를 놓는다). 그런데 청하현 관아의 좌표는 (20, 20) — **장터에서 28칸**이다.
+          거기서 지형 계층을 돌리면 **이미 선 마을 한복판의 땅을 다시 빚는다.**
+          ★ 그리고 그것은 이 프로젝트의 헌법 위반이다: **땅은 한 번만 선다** (TerrainLedger · TerrainSeal).
+
+        ★ 그러므로 갈라라 — **"무엇을 짓는가"는 원형이 정하고(관아 계약: 정청·마당·방 붙이는 벽·옥),
+          "누가 짓는가"는 무대가 정한다.** 무대 안이면 CheonghaBuilder, 무대 밖이면 RemoteBuilder.
+        ★ 이 규칙은 이미 선례가 있다: 산길 도적(nokrim_sangil)도 무대 안이라 CheonghaBuilder 가 짓는다
     pos: [20, 20]                    # ★ 무대 좌표 (등록부 county_office — 아직 CheonghaBuilder 미조성)
     stage_local: true
     region: 섬서

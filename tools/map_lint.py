@@ -125,6 +125,12 @@ class Lint:
                     why = FALLBACKS.get(f, "지도가 말하지 않는다")
                     self.bad.append(f"[필수누락] {pid}.{f} — 폴백: {why}")
 
+            # ①-b 권고 필드 — 없어도 코드는 안 흔들린다. 다만 **비었다는 사실은 말한다**
+            if buildable:
+                for f in (req.get("advisory") or []):
+                    if pl.get(f) is None:
+                        self.info.append(f"[서사없음] {pid}.{f} — 봇·LLM 이 이곳의 크기를 모른다 (코드는 안 흔들린다)")
+
             # ② 어휘 -------------------------------------------------------
             def vocab(field, allowed, src):
                 v = pl.get(field)
@@ -255,8 +261,10 @@ def selftest():
           lambda w: w["places"]["hwasan"].update(tier="대단히부자"), "[어휘위반]")
     probe("등록되지 않은 세력 (hwasan.faction = 매화신교)",
           lambda w: w["places"]["hwasan"].update(faction="매화신교"), "[어휘위반] hwasan.faction")
+    # ★ 처음엔 jongnam 을 썼는데, 이번 바퀴에 종남이 archetype(암자)을 얻어 pending_why 가 사라졌다 —
+    #   **시험이 지도를 따라와야 한다.** (그 KeyError 가 곧 눈이 살아 있다는 증거다.)
     probe("사유 없는 pending (침묵)",
-          lambda w: w["places"]["jongnam"].pop("pending_why"), "[침묵] jongnam")
+          lambda w: w["places"]["jeomchang"].pop("pending_why"), "[침묵] jeomchang")
     # ★ 여기서 한 번 속았다: 기대값이 "[일회성키]" 였더니 **원래 있던** 일회성 키('haegeum(海禁)')에
     #   맞고 통과했다 — 심은 병이 아니라 남의 병을 보고 짖은 것이다. 기대값은 **심은 것을 정확히** 가리켜야 한다.
     probe("스키마 드리프트 (일회성 키)",
@@ -266,6 +274,10 @@ def selftest():
     probe("없는 인구 파일 (hwasan.population)",
           lambda w: w["places"]["mudang"].update(population="config/npcs/regions/mudang.yml"),
           "[근거없음] mudang.population")
+    probe("★ 새 필수 필드를 지운다 (hwasan.build_radius — 코드가 마을 크기를 정하게 된다)",
+          lambda w: w["places"]["hwasan"].pop("build_radius"), "[필수누락] hwasan.build_radius")
+    probe("청구된 원형 밖의 이름 (sorimsa.archetype = 대웅전)",
+          lambda w: w["places"]["sorimsa"].update(archetype="대웅전"), "[어휘위반] sorimsa.archetype")
     probe("산악인데 terrain.yml 이 침묵 (새 장소)",
           lambda w: w["places"].update(시험봉={"name": "시험봉", "pos": [1, 1], "region": "섬서",
                                               "terrain": "험산", "build": "never", "access": "항상"}),
@@ -276,7 +288,7 @@ def selftest():
     for name, caught, evidence in cases:
         print(("✓ " if caught else "✗ ") + f"{name}\n    → {evidence}")
         ok &= caught
-    print("── " + ("✓ 눈이 여덟 번 다 짖었다" if ok else "✗ ★ 눈이 놓쳤다 — 눈을 고쳐라"))
+    print("── " + (f"✓ 눈이 {len(cases)}번 다 짖었다" if ok else "✗ ★ 눈이 놓쳤다 — 눈을 고쳐라"))
     return 0 if ok else 1
 
 
