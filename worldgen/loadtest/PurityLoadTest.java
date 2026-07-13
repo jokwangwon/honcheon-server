@@ -8,6 +8,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
@@ -52,6 +53,10 @@ public class PurityLoadTest {
         each(pack.resolve("structure_set"), ops, StructureSet.DIRECT_CODEC, "structure_set");
         each(pack.resolve("placed_feature"), ops, PlacedFeature.DIRECT_CODEC, "placed_feature");
         each(pack.resolve("world_preset"), ops, WorldPreset.DIRECT_CODEC, "world_preset");
+        // 바이옴 — spawners 를 허용 목록으로 거른 65종. **빈 목록이 코덱을 통과하는가**가 여기서 갈린다.
+        //   (strongholds 의 count: 0 이 [1:4095] 에 걸려 서버를 죽일 뻔한 그 자리다 —
+        //    「빈 값은 당연히 되겠지」는 추측이다. 추측하지 말고 먹여 본다.)
+        each(pack.resolve("biome"), ops, Biome.DIRECT_CODEC, "biome");
 
         System.out.println();
         System.out.println(fail == 0

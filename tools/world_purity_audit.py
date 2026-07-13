@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import re
 import subprocess
 import sys
 import zipfile
@@ -311,6 +312,270 @@ def build(reg: dict) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 눈 ④ — 야생 스폰. **필드에 등록 안 된 것이 나는가.**
+#
+#   이 검사는 예전에 **거짓말이었다.** 하는 일이 이것뿐이었다:
+#       if "world_purity.yml" not in HuntingGrounds.java: fail()
+#   즉 자바 파일 안에 그 **문자열이 있는지**만 봤다. 허용 목록을 통째로 비워도,
+#   이름을 전부 오타내도, 데이터팩이 스폰을 하나도 안 껐어도 — **「위반 0건」이었다.**
+#   이름만 보고 속을 안 본 눈이다. 아래는 속을 본다.
+# ══════════════════════════════════════════════════════════════════════════
+HG = ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt" / "HuntingGrounds.java"
+
+# biome json 에서 우리가 손대도 되는 유일한 두 필드. 나머지는 바닐라 정본과 **바이트가 같아야** 한다.
+SPAWN_FIELDS = {"spawners", "spawn_costs"}
+
+
+def _java_block(src: str, anchor: str, opener: str = "(") -> str:
+    """자바 소스에서 `anchor` 뒤의 괄호 블록 한 덩이 (중첩 괄호까지 센다)."""
+    i = src.index(anchor) + len(anchor)
+    i = src.index(opener, i)
+    depth, j = 0, i
+    close = {"(": ")", "{": "}"}[opener]
+    while j < len(src):
+        if src[j] == opener:
+            depth += 1
+        elif src[j] == close:
+            depth -= 1
+            if depth == 0:
+                return src[i + 1:j]
+        j += 1
+    raise SystemExit(f"{BAD} 자바 블록을 못 닫았다: {anchor}")
+
+
+def audit_spawn(reg: dict, data: Path, jar, fail, warn) -> None:
+    allow = allow_ids(reg)
+    if jar is None:
+        warn.append("바닐라 jar 이 없어 야생 스폰의 **데이터팩 층**을 검사하지 못했다 "
+                    "(리스너 층만 봤다 — 원천이 켜져 있어도 모른다)")
+
+    # ④-a 허용 목록의 이름이 **실재하는가.** 오타는 양쪽에서 조용히 죽는다:
+    #     자바는 모르는 이름을 건너뛰고(catch IllegalArgumentException ignored),
+    #     데이터팩은 그냥 아무것도 통과시키지 않는다. WOFL 이라 적으면 이리가 사라지는데 아무도 모른다.
+    known = vanilla_entity_ids()
+    if known is None:
+        warn.append("registries.json 캐시가 없어 허용 목록의 **오타 검사**를 못 했다 (`--build` 한 번)")
+    else:
+        for typo in sorted(allow - known):
+            fail(f"★ 허용 목록에 **존재하지 않는 엔티티**: {typo} — 자바도 데이터팩도 조용히 무시한다")
+
+    # ④-b 자바가 등록부를 읽는가 · ④-c 폴백이 등록부와 표류하는가
+    if not HG.is_file():
+        warn.append("HuntingGrounds.java 를 못 찾았다 — 리스너 층을 검사하지 못했다")
+        return
+    src = HG.read_text(encoding="utf-8")
+    if "world_purity.yml" not in src or "loadWildAllow" not in src:
+        fail("HuntingGrounds 가 world_purity.yml 을 읽지 않는다 — 야생 스폰 등록부가 배선되지 않았다")
+    fallback = {"minecraft:" + m.lower()
+                for m in re.findall(r"EntityType\.(\w+)", _java_block(src, "wildAllow = EnumSet.of"))}
+    #   폴백은 **등록부의 사본**이지 다른 정본이 아니다 (loadGrounds 의 규약 그대로).
+    #   표류하면 config 가 유실된 서버는 **다른 세계**가 된다. 그런 폴백은 안전망이 아니라 두 번째 진실이다.
+    for drift in sorted(fallback ^ allow):
+        side = "코드 폴백에만" if drift in fallback else "등록부에만"
+        fail(f"★ 야생 허용 목록 표류 — {drift} 가 {side} 있다. 폴백은 등록부의 사본이어야 한다")
+
+    # ④-d/e/f 데이터팩 — **원천이 꺼졌는가.** 리스너는 「막는」 층이고 여기는 「나지 않는」 층이다.
+    if jar is None:
+        return
+    biome_dir = data / "biome"
+    if not biome_dir.is_dir():
+        fail("★ 데이터팩에 biome override 가 하나도 없다 — 바닐라가 **여전히 뿌린다**. "
+             "리스너가 취소해 주지만 원천은 켜져 있다 (`--build`)")
+        return
+    on_disk = {p.stem for p in biome_dir.glob("*.json")}
+    survivors: dict[str, int] = {}
+    leaks = 0
+    for name in sorted(vanilla_biome_names(jar)):
+        van = vanilla_json(jar, f"worldgen/biome/{name}.json")
+        dirty = any(e["type"] not in allow
+                    for lst in van.get("spawners", {}).values() for e in lst) \
+            or any(t not in allow for t in van.get("spawn_costs", {}))
+        if name not in on_disk:
+            if dirty:
+                fail(f"★ 바닐라가 금지 몹을 뿌리는데 override 가 없다 — 이 바이옴에선 **난다**: biome/{name}")
+            continue
+        doc = json.loads((biome_dir / f"{name}.json").read_text())
+        for category, entries in doc.get("spawners", {}).items():
+            for e in entries:
+                if e["type"] not in allow:
+                    leaks += 1
+                    fail(f"★ 허용 목록 밖인데 override 에 남아 있다 — **샌다**: "
+                         f"biome/{name} · {category} · {e['type']}")
+                else:
+                    survivors[e["type"]] = survivors.get(e["type"], 0) + 1
+        for t in doc.get("spawn_costs", {}):
+            if t not in allow:
+                fail(f"★ spawn_costs 에 금지 몹이 남아 있다: biome/{name} · {t}")
+        # 최소 편집 불변식 — spawners/spawn_costs 말고는 정본과 **같아야** 한다.
+        #   (구조물은 frequency 한 필드, 바이옴 이름표는 라벨만 — 같은 규약. 이걸 안 재면
+        #    「스폰 끄기」가 몰래 features 나 carvers 를 갈아엎어도 통과한다)
+        for field in set(van) | set(doc):
+            if field in SPAWN_FIELDS:
+                continue
+            if van.get(field) != doc.get(field):
+                fail(f"★ 최소 편집 위반 — biome/{name} 의 `{field}` 가 바닐라 정본과 다르다. "
+                     f"스폰만 건드리기로 했다")
+
+    for extra in sorted(on_disk - vanilla_biome_names(jar)):
+        fail(f"바닐라에 없는 바이옴 override (무허가): biome/{extra}")
+
+    if not leaks:
+        print(f"{OK} 야생 스폰 — 바이옴 {len(on_disk)}종의 spawners 를 허용 {len(allow)}종으로 거름. "
+              f"금지 몹은 **후보 목록에 없다**(확률이 아니라 불가능)")
+
+    # ④-g ★ 양성 대조 — **끄기만 하고 켜는 걸 잊으면 세계가 텅 빈다.** 이게 가장 흔한 실패다.
+    dead = sorted(allow - set(survivors))
+    if not survivors:
+        fail("★★ 야생에 **아무것도 남지 않았다** — 산야가 죽었다. 거르기가 아니라 전멸이다")
+    else:
+        alive = ", ".join(f"{t.split(':')[1]}×{n}" for t, n in sorted(survivors.items()))
+        print(f"{OK} 산야는 살아 있다 (양성 대조) — {alive}  ← 바이옴 수")
+    for d in dead:
+        warn.append(f"허용했으나 어느 바이옴도 뿌리지 않는다: {d} (바닐라가 원래 안 뿌리는 곳일 수 있다)")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 눈 ⑤ — 사냥터. **정원이 지켜지는가 · 우리가 부른 것은 나오는가.**
+#
+#   ★ 끄는 눈만 있으면 「위반 0건」은 **텅 빈 세계**와 구별되지 않는다.
+#     이 눈은 반대쪽을 본다: 등록부가 심기로 한 것이 **인게임에 설 수 있는가.**
+# ══════════════════════════════════════════════════════════════════════════
+def audit_hunt(fail, warn) -> None:
+    gy = ROOT / "config" / "hunting_grounds.yml"
+    ny = ROOT / "config" / "npcs" / "cheongha_npcs.yml"
+    if not gy.is_file() or not ny.is_file() or not HG.is_file():
+        warn.append("사냥터 등록부나 HuntingGrounds.java 가 없어 ⑤ 를 건너뛰었다")
+        return
+    with gy.open(encoding="utf-8") as f:
+        gr = yaml.safe_load(f)
+    with ny.open(encoding="utf-8") as f:
+        npcs = yaml.safe_load(f)["npcs"]
+    src = HG.read_text(encoding="utf-8")
+    known = vanilla_entity_ids()
+
+    # 코드 폴백의 몸 매핑 (npcs 에 mc_entity 가 서면 이쪽이 죽는다 — 지금은 둘 다 본다)
+    body = {k: "minecraft:" + v.lower() for k, v in
+            re.findall(r'"(\w+)",\s*EntityType\.(\w+)', _java_block(src, "DEFAULT_ENTITY = Map.of"))}
+
+    # ⑤-a ★ **가장 흔한 실패** — 우리가 심는 몸이 우리 손에 취소당하는가.
+    #   산적·갈호의 몸은 ZOMBIE 다 (`mob_models.yml` 이 좀비를 산적의 몸으로 징발했다).
+    #   그런데 onSpawn 은 `entity instanceof Enemy` 를 **전역 취소**한다 — 좀비는 Enemy 다.
+    #   둘이 공존하는 유일한 이유는 **순서**다: ALLOWED_REASONS(CUSTOM) 관문이 Enemy 취소보다
+    #   **먼저** 있다. 이 두 줄의 순서가 뒤집히면 — 컴파일도 되고, 검사도 통과하고,
+    #   좀비도 안 나오고 — **산적이 세계에서 사라진다.** 그래서 순서를 잰다.
+    on_spawn = _java_block(src, "public void onSpawn(CreatureSpawnEvent event)", "{")
+    gate = on_spawn.find("ALLOWED_REASONS.contains")
+    enemy = on_spawn.find("instanceof Enemy")
+    if gate < 0:
+        fail("★ onSpawn 에 ALLOWED_REASONS 관문이 없다 — **우리가 부른 것까지 취소된다**")
+    elif 0 <= enemy < gate:
+        fail("★★ onSpawn 이 Enemy 취소를 CUSTOM 관문보다 **먼저** 한다 — "
+             "우리가 심은 산적(ZOMBIE)이 스폰 즉시 취소된다. 산길이 텅 빈다")
+    reasons = _java_block(src, "ALLOWED_REASONS = EnumSet.of")
+    if "SpawnReason.CUSTOM" not in reasons:
+        fail("★★ ALLOWED_REASONS 에 CUSTOM 이 없다 — HuntingGrounds.spawn() 의 짐승·산적이 "
+             "**전부 취소된다.** 세계가 텅 빈다")
+
+    spawn = gr.get("spawn", {})
+    cap = spawn.get("zone_entity_cap", 0)
+    town = gr.get("town", {}).get("zone")
+    total_planted = 0
+
+    # ★ 치안이 정원을 **올린다**. 그러니 상한과 겨룰 것은 등록 정원이 아니라 **최악의 정원**이다.
+    #   (이 눈은 처음에 등록 정원만 쟀다 — 그래서 내가 방금 넣은 진짜 버그를 놓쳤다:
+    #    치안_붕괴 × 밤이면 북쪽 산길이 19마리가 되는데 상한이 18이라 repopulate 가 상한에서
+    #    돌아서 버린다. 등록된 정원이 **영원히 안 채워진다** — 세계가 가장 위험해야 할 바로 그때.
+    #    「위반 0건」이었다. 눈이 재는 자리가 틀리면 눈은 조용히 거짓말한다.)
+    sec_cfg = gr.get("security") or {}
+    sec_role = sec_cfg.get("applies_to", "졸개")
+    worst = {"day": 0, "night": 0}
+    for band in (sec_cfg.get("bands") or []):
+        for k in worst:
+            worst[k] = max(worst[k], int(band.get(k, 0)))   # 최악 = 가장 크게 **올리는** 구간
+
+    print(f"{OK} 사냥터 정원 — 등록부 {gy.relative_to(ROOT)}")
+    for key, ground in (gr.get("grounds") or {}).items():
+        zone = ground.get("zone")
+        if zone == town:
+            fail(f"★ 사냥터 「{key}」의 구역이 마을 구역과 같다 ({zone}) — "
+                 f"마을은 무스폰이다. 여긴 **아무것도 안 난다**")
+        pop = ground.get("population") or {}
+        day = night = peak_day = peak_night = 0
+        for foe_id, quota in pop.items():
+            d, n = int(quota.get("day", 0)), int(quota.get("night", 0))
+            day, night = day + d, night + n
+            total_planted += d + n
+            # 치안이 움직이는 것은 등록 정원 > 0 인 `applies_to` 배역뿐 (quotaFor 와 같은 규칙)
+            role = str(npcs.get(foe_id, {}).get("role", ""))
+            if role == sec_role or (foe_id in npcs and sec_role == "졸개"
+                                    and not npcs[foe_id].get("beast_rank")
+                                    and foe_id not in ("galho", "gwakjin")):
+                peak_day += d + (worst["day"] if d > 0 else 0)
+                peak_night += n + (worst["night"] if n > 0 else 0)
+            else:
+                peak_day, peak_night = peak_day + d, peak_night + n
+            # ⑤-b 심기로 한 것이 등록부에 있는가
+            if foe_id not in npcs:
+                fail(f"★ 사냥터가 심으려는 개체가 NPC 등록부에 없다 — **영원히 안 난다**: {foe_id}")
+                continue
+            # ⑤-c 몸(EntityType)을 얻는가
+            mc = npcs[foe_id].get("mc_entity")
+            mc = f"minecraft:{str(mc).lower()}" if mc else body.get(foe_id)
+            if not mc:
+                fail(f"★ 개체 「{foe_id}」에 몸이 없다 (mc_entity 도 없고 코드 폴백에도 없다) — "
+                     f"HuntingGrounds.parse 가 null 을 뱉는다. **안 난다**")
+            elif known and mc not in known:
+                fail(f"★ 개체 「{foe_id}」의 몸이 실재하지 않는 엔티티다: {mc}")
+        # ⑤-d 정원 합 ≤ 구역 상한 — 안 그러면 상한이 정원을 **잘라먹는다** (등록부가 거짓말이 된다).
+        #      ★ 겨루는 것은 **치안 최악의 정원**이다. 평시에 여유가 있어도 치안이 무너진 밤에
+        #        상한을 넘으면, 하필 그때 도적이 안 찬다.
+        for label, tot, peak in (("낮", day, peak_day), ("밤", night, peak_night)):
+            mark = OK
+            if cap and peak > cap:
+                fail(f"★ 「{zone}」{label} — 치안 최악 정원 {peak} > zone_entity_cap {cap} "
+                     f"(등록 {tot} + 치안 {peak - tot}). 상한이 먼저 걸려 "
+                     f"**치안이 무너진 바로 그때 도적이 안 찬다**")
+                mark = BAD
+            extra = f"  (치안 최악 {peak})" if peak != tot else ""
+            print(f"   {mark} {zone} · {label} 정원 합 {tot} / 구역 상한 {cap}{extra}")
+
+    # ⑤-e ★ 양성 대조 — 정원이 전부 0이면 「위반 0건」인데 세계는 비어 있다
+    if total_planted == 0:
+        fail("★★ 등록된 정원이 **전부 0** 이다 — 사냥터가 텅 빈다. 끄기만 하고 켜는 걸 잊었다")
+
+    # ⑤-f 치안의 이음매 — region_state.yml threshold_effects.치안_저하 가 약속한 것
+    #
+    #   ★ 이 검사는 처음에 **거짓말했다.** 이렇게 썼었다:  if "securityBands" not in src
+    #     그런데 필드를 `securityBandsRenamed` 로 갈고 **읽은 값을 버리게** 만들어도
+    #     그 문자열은 여전히 소스 안에 있었다 — 부분 문자열에 속은 것이다. (눈 시험이 잡았다.)
+    #   그래서 이제 **이름이 아니라 배선의 세 마디**를 잰다. 하나라도 끊기면 등록부는 거짓말이 된다:
+    #     ① 절을 **읽는가**  ② 읽은 구간을 **간직하는가**(버리지 않는가)  ③ 그것이 **정원에 닿는가**
+    sec = gr.get("security")
+    if not sec:
+        warn.append("hunting_grounds.yml 에 security 절이 없다 — "
+                    "region_state.yml 의 「치안<30 → 도적 자동 발생」이 인게임에 안 닿는다")
+    else:
+        reads = re.search(r'root\.get\("security"\)', src)
+        keeps = re.search(r"\bsecurityBands\s*=\s*List\.copyOf", src)
+        try:
+            applies = "securityDelta(" in _java_block(src, "private static int quotaFor", "{")
+        except (ValueError, SystemExit):
+            applies = False
+        if not reads:
+            fail("★ hunting_grounds.yml 에 security 를 적어 두고 HuntingGrounds 가 **안 읽는다**")
+        elif not keeps:
+            fail("★ HuntingGrounds 가 security.bands 를 읽고 **버린다** (구간이 필드에 안 남는다) — "
+                 "치안이 아무리 무너져도 도적은 늘지 않는다. 등록부가 거짓말이 된다")
+        elif not applies:
+            fail("★ 치안 구간을 읽어 두고 **정원에 안 쓴다** (quotaFor 가 securityDelta 를 안 부른다) — "
+                 "region_state.yml 의 약속이 인게임에 안 닿는다")
+        else:
+            bands = sec.get("bands") or []
+            print(f"{OK} 치안의 이음매 — {len(bands)}개 구간이 도적 정원에 배선됨 "
+                  f"(region_state.yml threshold_effects → quotaFor)")
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # 기본 : 검산
 # ══════════════════════════════════════════════════════════════════════════
 def audit(reg: dict) -> int:
@@ -562,19 +827,50 @@ def emit_rcon(reg: dict) -> int:
               "jagged_peaks", "beach", "river", "cherry_grove", "jungle", "bamboo_jungle"]:
         print(f"locate biome minecraft:{b}")
 
-    print("\n# ── ④ 야생의 가축: 산야를 2000블록쯤 돌아다닌 **뒤에** 세어라 ──")
+    print("\n# ── ④ 야생의 가축·마스코트: 산야를 2000블록쯤 돌아다닌 **뒤에** 세어라 ──")
     print("#   (셀렉터는 **로드된 청크**만 본다 — 날아다니며 청크를 열고 나서 돌려야 뜻이 있다)")
-    print("#   통과: 전부 \"Test failed\" (count 0). 마을 안에서 돌리면 소·닭이 나오는 게 **정상**이다")
-    print("#         — 가축은 마을의 살림이고, 우리가 CUSTOM 으로 놓은 것이다.")
-    for m in ["cow", "sheep", "pig", "chicken", "horse", "villager",
-              "wandering_trader", "goat", "iron_golem", "zombie", "skeleton",
-              "creeper", "enderman", "spider"]:
+    print("#   ★ **사냥터와 마을 밖**에서 돌려라. 마을 안에서 소·닭이 나오는 것은 **정상**이다")
+    print("#     — 가축은 마을의 살림이고, 조성기가 CUSTOM 으로 놓은 것이다(번식·알로도 는다).")
+    print("#   통과: 전부 \"Test failed\" (count 0)")
+    for m in ["cow", "sheep", "pig", "chicken", "horse", "donkey", "llama", "villager",
+              "wandering_trader", "goat", "iron_golem", "mooshroom", "panda", "frog"]:
         print(f"execute if entity @e[type=minecraft:{m}]")
+
+    print("\n# ── ④-b 적대 몹: 무협에 언데드는 없다 ──")
+    print("#   통과: 전부 \"Test failed\" (count 0)")
+    for m in ["skeleton", "creeper", "enderman", "spider", "witch", "slime", "phantom"]:
+        print(f"execute if entity @e[type=minecraft:{m}]")
+    print("#")
+    print("#   ⚠ **zombie 는 여기 없다 — 일부러 뺐다.** 예전 이 목록은 zombie 를 「0이어야 한다」고 적었는데")
+    print("#     그것은 **틀린 눈**이었다: 산적·갈호·곽진의 몸이 바로 ZOMBIE 다")
+    print("#     (mob_models.yml 이 좀비를 산적의 몸으로 징발했다 — 「사람은 조각이 될 수 없다」).")
+    print("#     건강한 세계에서 zombie 수는 **0이 아니다**. 그 경보를 믿고 「고치면」 산적이 사라진다.")
+    print("#     좀비를 세는 옳은 방법은 ⑥ 이다 — 태그로 가른다.")
 
     print("\n# ── ⑤ 야생의 짐승(양성 대조): 우리가 허용한 것은 **있어야** 한다 ──")
     for m in reg["wild_spawn"]["allow"]:
         print(f"execute if entity @e[type=minecraft:{m.lower()}]")
     print("#   통과: 최소한 몇은 \"Test passed\". 전부 0 이면 산야가 **죽은 것**이다 — 허용 목록이 안 먹었다")
+
+    print("\n# ── ⑥ ★ 우리가 부른 것은 나오는가 — **가장 중요한 검사** ──")
+    print("#")
+    print("#   끄기만 하고 켜는 걸 잊으면 세계가 텅 빈다. 위의 ①~⑤ 는 전부 「없음」을 재는 눈이라,")
+    print("#   **세계가 완전히 비어도 만점을 준다.** 이 검사만이 그것과 순도를 가른다.")
+    print("#")
+    print("#   ㉠ 사냥터 census — 등록부의 정원이 인게임에 서 있는가 (태그로 센다. 몸이 아니라)")
+    print("#      ★ 북쪽 산길 안에 서서 돌려라 (구역 밖이면 스포너가 안 돈다 — player_near 96)")
+    print("#      통과: 각 줄이 `n / 정원 m` 이고 **n > 0** (밤이면 맹수도). 전부 0/… 이면 산이 죽었다")
+    print("혼천 사냥터")
+    print("#")
+    print("#   ㉡ 징발한 몸 — 이것들이 보이는 것이 **정상**이다 (우리가 CUSTOM 으로 심은 것)")
+    print("#      통과: **\"Test passed\"** — 여기서 0 이 나오면 리스너가 우리 것까지 취소하고 있다")
+    for m in ["zombie", "wolf", "hoglin", "ravager", "polar_bear"]:
+        print(f"execute if entity @e[type=minecraft:{m}]")
+    print("#")
+    print("#   ㉢ 치안의 이음매 — region_state threshold_effects 가 인게임에 닿는가")
+    print("#      치안을 30 아래로 떨어뜨린 뒤 `혼천 사냥터` 를 다시 보라.")
+    print("#      통과: 도적 줄에 `(등록 3 · 치안 nn ↑)` 이 붙고 **정원이 늘어 있다**")
+    print("#      (봇의 장부가 정본이다 — MVT 는 읽기만 한다)")
 
     print("\n# ── ⑥ 바이옴 분포 표본 (선택) — 스폰 둘레 4,000블록을 400점 격자로 뜬다 ──")
     print("#   각 줄은 Test passed / Test failed 를 뱉는다. passed 수를 세면 분포다.")

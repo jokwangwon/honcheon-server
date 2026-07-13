@@ -236,6 +236,26 @@ public final class HuntingGrounds implements Listener {
         }
     }
 
+    /**
+     * 치안 구간 — <b>등록부: {@code hunting_grounds.yml} security.bands</b>. 코드가 짓지 않는다.
+     * {@code min}/{@code max} 는 포함. 위에서부터 첫 일치.
+     */
+    private record Band(String id, int min, int max, int day, int night) {
+        boolean holds(int value) {
+            return value >= min && value <= max;
+        }
+
+        int delta(boolean night) {
+            return night ? this.night : this.day;
+        }
+    }
+
+    /** 치안의 이음매 — hunting_grounds.yml security (아래는 전부 폴백). 구간이 비면 치안은 산길을 안 움직인다 */
+    private static String securityStat = "치안";
+    private static int securityFallback = 50;
+    private static String securityRole = "졸개";
+    private static List<Band> securityBands = List.of();
+
     private static final Map<String, Foe> FOES = new LinkedHashMap<>();
     private static Map<String, Integer> weaponPower = Map.of();
     private static Map<String, Integer> techniquePower = Map.of();
@@ -435,6 +455,26 @@ public final class HuntingGrounds implements Listener {
             if (!parsed.isEmpty()) {
                 populations = Map.copyOf(parsed);
             }
+        }
+        if (root.get("security") instanceof Map<?, ?> raw) {
+            Map<String, Object> s = (Map<String, Object>) raw;
+            securityStat = String.valueOf(s.getOrDefault("stat", securityStat));
+            securityFallback = intOr(s.get("fallback"), securityFallback);
+            securityRole = String.valueOf(s.getOrDefault("applies_to", securityRole));
+            List<Band> bands = new ArrayList<>();
+            if (s.get("bands") instanceof List<?> list) {
+                for (Object row : list) {
+                    if (!(row instanceof Map<?, ?> b)) {
+                        continue;
+                    }
+                    Map<String, Object> band = (Map<String, Object>) b;
+                    bands.add(new Band(String.valueOf(band.getOrDefault("id", "?")),
+                            intOr(band.get("min"), Integer.MIN_VALUE),
+                            intOr(band.get("max"), Integer.MAX_VALUE),
+                            intOr(band.get("day"), 0), intOr(band.get("night"), 0)));
+                }
+            }
+            securityBands = List.copyOf(bands);
         }
         if (root.get("loot") instanceof Map<?, ?> raw
                 && ((Map<String, Object>) raw).get("weapon_drop_chance") instanceof Map<?, ?> chance) {
@@ -671,7 +711,7 @@ public final class HuntingGrounds implements Listener {
         boolean night = isNight(world);
         for (Quota quota : populations.get(zone.name())) {
             Foe foe = FOES.get(quota.id());
-            if (foe == null || census.getOrDefault(quota.id(), 0) >= quota.target(night)) {
+            if (foe == null || census.getOrDefault(quota.id(), 0) >= quotaFor(foe, quota, night)) {
                 continue;
             }
             String cooldownKey = zone.name() + "/" + quota.id();
@@ -686,6 +726,56 @@ public final class HuntingGrounds implements Listener {
                 return;   // 한 주기에 한 마리 — 짐승은 쏟아지지 않는다
             }
         }
+    }
+
+    // ══════════════ 치안(治安) — 정원을 움직이는 유일한 힘 ══════════════
+
+    /**
+     * <b>치안이 곧 도적의 정원이다.</b> 등록부 {@code region_state.yml threshold_effects} 의 배선.
+     *
+     * <p><b>왜 이것이 생겼나.</b> {@code region_state.yml} 은 오래전부터 이렇게 <b>약속</b>했다 —
+     * <i>「치안 &lt; 30 → 도적/절도 사건 자동 발생률 증가 · 야간 이동에 위험 조우 판정 추가」</i>.
+     * 그런데 <b>아무도 그 줄을 읽지 않았다.</b> 청하현의 치안이 12로 무너져도 북쪽 산길의 도적은
+     * 정확히 3명이었다. 등록부가 거짓말을 하고 있었던 것이다.
+     *
+     * <p>이제 정원이 그 줄을 읽는다. 치안이 무너지면 산길에 도적이 늘고(밤에 두 배),
+     * 치안이 넘치면 관군이 순찰해 도적이 밀려난다 ({@code hunting_grounds.yml security.bands}).
+     *
+     * <p><b>세 가지를 지킨다.</b>
+     * <ul>
+     *   <li><b>배역</b> — {@code security.applies_to}(졸개)에만 듣는다. 호랑이는 관군을 두려워하지 않고,
+     *       두목은 하나뿐이다({@code cultivation.yml} 양산 금지). 치안이 갈호를 다섯으로 만들지 않는다.</li>
+     *   <li><b>등록제</b> — <b>정원 0 인 자리는 움직이지 않는다.</b> "이 산길엔 낮에 도적이 없다"고
+     *       등록했으면 치안이 무너져도 없다. 없던 것을 치안이 <b>만들지는</b> 않는다.</li>
+     *   <li><b>결정론</b> — 난수가 없다. 치안 값 → 첫 일치 구간 → 가감. 같은 치안이면 같은 산길이다.</li>
+     * </ul>
+     *
+     * <p>정본은 <b>봇의 장부</b>다({@link WorldBridge#state}). MVT 는 읽기만 한다 —
+     * 계산을 둘이 하면 세계가 둘이 된다 ({@code Incidents} 와 같은 규약).
+     */
+    private static int quotaFor(Foe foe, Quota quota, boolean night) {
+        int target = quota.target(night);
+        if (target <= 0 || !securityRole.equals(foe.role())) {
+            return target;
+        }
+        return Math.max(0, target + securityDelta(night));
+    }
+
+    /** 치안 → 정원 가감. 등록부의 첫 일치 구간 (없으면 0 — 치안은 산길을 안 움직인다) */
+    private static int securityDelta(boolean night) {
+        int value = security();
+        for (Band band : securityBands) {
+            if (band.holds(value)) {
+                return band.delta(night);
+            }
+        }
+        return 0;
+    }
+
+    /** 지역 치안 — 봇의 regions 표 (스냅숏). 아직 없으면 등록부의 기준값에 선다 */
+    private static int security() {
+        Integer value = WorldBridge.state().region().get(securityStat);
+        return value == null ? securityFallback : value;
     }
 
     /** 스폰 자리 — 구역 안, 지면 위, 어두운 곳, 사람에게서 20~64칸. 마을 쪽으로는 새지 않는다 */
@@ -1372,9 +1462,22 @@ public final class HuntingGrounds implements Listener {
                     + (night ? "밤 — 맹수가 나온다" : "낮 — 들짐승과 도적") + ") ──");
             for (Quota quota : populations.get(zone.name())) {
                 Foe foe = FOES.get(quota.id());
-                lines.add(org.bukkit.ChatColor.WHITE + (foe == null ? quota.id() : foe.name())
+                if (foe == null) {
+                    // 등록부가 심으라 한 것에 몸이 없다 — 이 자리는 **영원히 빈다.** 숨기지 않는다
+                    lines.add(org.bukkit.ChatColor.RED + quota.id()
+                            + org.bukkit.ChatColor.GRAY + "  ✘ 미등록 — NPC 등록부에 없다 (안 난다)");
+                    continue;
+                }
+                // 등록 정원과 **실효 정원**을 함께 보인다 — 치안이 움직였으면 그 자리에서 보여야 한다.
+                // (실효만 보이면 "왜 4명이지?" 를 알 수 없고, 등록만 보이면 census 가 거짓말이 된다)
+                int listed = quota.target(night);
+                int effective = quotaFor(foe, quota, night);
+                String shift = effective == listed ? ""
+                        : org.bukkit.ChatColor.YELLOW + " (등록 " + listed + " · 치안 "
+                          + security() + (effective > listed ? " ↑" : " ↓") + ")";
+                lines.add(org.bukkit.ChatColor.WHITE + foe.name()
                         + org.bukkit.ChatColor.GRAY + "  " + census.getOrDefault(quota.id(), 0)
-                        + " / 정원 " + quota.target(night));
+                        + " / 정원 " + effective + shift);
             }
         }
         if (lines.isEmpty()) {
