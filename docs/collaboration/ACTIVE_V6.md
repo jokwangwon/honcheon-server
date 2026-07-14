@@ -23,5 +23,10 @@
 | SJ-002 장 전환·리소스팩 자산 | Fable | Codex | 다음 (R2 후보) | 청사진 §SJ-002 | 팩 게이트 결선은 pack_gate_audit(Fable)과 조율 |
 | B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 완료·커밋 (후속 B-106 신설) | `SkillDisplay.java`, `skill_motion.yml`, `performance.yml`, motion/perf_audit + selftest 2 신설 | 죽은 예산 5건은 눈이 멀었던 것 — 간접 배선을 눈에 가르침 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
+| ★ 밤 병렬 R6~R8 (B-113~124·SJ-002·v4 조성기·사고 수리) | Fable | Codex | 완료·커밋 16건, Codex 검토 대기 (2026-07-14 요청) | `TerrainForge.java`, `Antechamber.java`, `SkillListener.java`, `HudLine`, `SeojangBook.java` 외 — 커밋 목록이 정본 | `FABLE_R6R8_REVIEW_REQUEST.md` (검증 명령·초점 포함) |
+| B-110 세계 시계 구현 | Fable (제안) | Codex | 제안 — 착수 전 | `WorldClockEngine`(신설), `config/world_clock.yml` 배선 | `FABLE_R6R8_REVIEW_REQUEST.md` §3 · 설계: `docs/design/world_clock.md` |
+| SJ-003 선택·판정 피드백 | Codex (제안) | Fable | 제안 — 착수 전 | `docs/design/seojang_presentation.md` §SJ-003 다리 계약 설계 | `FABLE_R6R8_REVIEW_REQUEST.md` §3 |
+| B-122 잠행 설계 | Codex (제안) | Fable | 제안 — 착수 전 | `docs/design/experience_design.md` 잠행 절(신설) | `FABLE_R6R8_REVIEW_REQUEST.md` §3 · 의존 B-119 닫힘 |
+| 상단 6곳 시안 (B-047·D-2) | Fable (제안) | 사람 (결정) | 제안 — 착수 전 | 시안 문서(신설) — 등록부 반영은 사용자 승인 뒤 | `FABLE_R6R8_REVIEW_REQUEST.md` §3 |
 
 PG-005 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.

@@ -28,6 +28,7 @@
 - Fable PG-006 완료: `docs/collaboration/FABLE_PG006_COMPLETE.md`
 - Fable PG-007 완료: `docs/collaboration/FABLE_PG007_COMPLETE.md`
 - Codex RP 평가 완료: docs/collaboration/RP_REVIEW_CODEX.md
+- ★ Fable 밤 병렬 R6~R8 검토 요청 (커밋 16건 + 대형 트랙 배정 제안): `docs/collaboration/FABLE_R6R8_REVIEW_REQUEST.md` — **Codex 는 이것부터 읽으라** (PG-005~007 검토가 그보다 먼저다)
 
 ## 규칙
 
