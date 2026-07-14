@@ -10,6 +10,10 @@
   U+E080        경락도 GUI 배경 (먹색 패널 + 전각 도장풍 모서리 + 제목 구분선 + 여백 가이드,
                 인벤토리 제목 음수 공백 기법용)
   U+E0A0~E0A5   음수 공백 (space 프로바이더: -8/-16/-32/-64/-128/+1 — E080 제목 오프셋용)
+  U+E0B0~E0BF   서장 기억첩 대역 — 예약 (SJ-002 등록 · 비트맵 0장. glyph_slots.E0B0_E0BF 참조)
+소리 (assets/honcheon/sounds.json — SJ-002): seojang.open/choose/result/debut 4채널.
+  .ogg 가 없는 채널은 바닐라 이벤트로 재지향(type: event) — 종이·책·종 계열 폴백.
+  실물이 오면 assets/honcheon/sounds/seojang/<채널>.ogg 를 놓기만 하면 된다 (등록·코드 변경 0).
 바닐라 텍스처 교체 (1.21.11 / pack_format 75 — 화면 HUD·인벤토리 수묵 재해석):
   hud/heart/    container·full·half (+_blinking) 9x9 — 하트 대신 기혈 구슬 (주사+먹)
   hud/          hotbar 182x22 (먹 반투명+화선지 테두리), hotbar_selection 24x23 (주사 프레임)
@@ -2227,6 +2231,39 @@ def write_sounds() -> int:
     muted = MUTED_MUSIC + MUTED_AMBIENT
     doc = {event: {"replace": True, "sounds": []} for event in sorted(muted)}
     write_json(PACK / "assets" / "minecraft" / "sounds.json", doc)
+    return len(doc)
+
+
+# ─── 서장 사건음 4채널 【SJ-002】 — 등록부: config/resourcepack_design.yml sound_channels.seojang ───
+#
+# 【.ogg 없이 어떻게 사는가】 sounds.json 은 한 이벤트를 **다른 바닐라 이벤트로 재지향**할 수 있다
+#   ({"type": "event"} — 파일 경로 짐작이 아니라 이벤트 이름이라 낡을 수 없다). 그래서
+#   honcheon:seojang.* 는 지금도 난다: 등록된 바닐라 종이·책·종 계열로
+#   (seojang_presentation.md §4.2 "음원 파일이 없을 때는 등록된 바닐라 종이·책·종 계열 소리로 폴백").
+# 【실물이 오면】 assets/honcheon/sounds/seojang/<채널>.ogg 를 놓기만 하면 이 빌더가 재지향 대신
+#   실물을 등록한다 — 등록부도 서버 코드도 안 바뀐다 (config/seojang.yml presentation.sounds 의
+#   key 는 이벤트 이름이지 파일이 아니므로).
+# ★ 이 표의 폴백은 config/seojang.yml presentation.sounds 의 fallback,
+#   resourcepack_design.yml sound_channels.seojang 의 fallback_event 와 **같아야 한다**
+#   (한 사건 = 한 소리 — 팩 있는 귀와 없는 귀가 같은 것을 듣는다).
+SEOJANG_SOUND_FALLBACK = {   # 채널 → 바닐라 폴백 이벤트 (전부 1.21 실존 이벤트 — 종이·책·종 계열)
+    "open": "item.book.page_turn",      # 장 도착 — 책장 넘김 (종이와 붓의 시작)
+    "choose": "item.book.put",          # 입력 접수 — 책을 놓는 마른 소리 (낙관)
+    "result": "block.note_block.bell",  # 판정 확정 — 등급별 음높이는 서버가 pitch 로 변주한다
+    "debut": "block.bell.use",          # 출도 — 짧은 종
+}
+
+
+def write_seojang_sounds() -> int:
+    """assets/honcheon/sounds.json — 서장 사건음 4채널 (실물 .ogg 우선, 없으면 바닐라 재지향)."""
+    doc = {}
+    for channel, vanilla in SEOJANG_SOUND_FALLBACK.items():
+        ogg = PACK / "assets" / "honcheon" / "sounds" / "seojang" / f"{channel}.ogg"
+        doc[f"seojang.{channel}"] = {"sounds": (
+            [f"honcheon:seojang/{channel}"] if ogg.is_file()
+            else [{"name": vanilla, "type": "event"}]
+        )}
+    write_json(PACK / "assets" / "honcheon" / "sounds.json", doc)
     return len(doc)
 
 
@@ -8585,6 +8622,34 @@ def write_ui_sprites() -> int:
     return len(UI_SPRITES)
 
 
+def assert_unique_codepoints(providers):
+    """중복 codepoint 검사 【SJ-002 · RP 합의 7】 — 같은 자리에 두 글리프면 **뒤가 앞을 조용히 덮는다.**
+
+    슬롯은 등록제(resourcepack_design.yml glyph_slots)지만 등록부는 사람이 읽는 표라서,
+    빌더에 새 프로바이더를 더할 때 이미 쓰인 자리를 다시 쓰면 아무도 소리내지 않았다 —
+    화면에서는 한쪽 글리프가 **말없이 사라진다** (E0B0 서장 대역을 열며 이 눈을 세운다).
+    bitmap 의 chars 와 space 의 advances 키를 한 자리씩 센다. 겹치면 굽지 않는다.
+    """
+    seen = {}
+    clashes = []
+    for i, p in enumerate(providers):
+        chars = []
+        if p.get("type") == "bitmap":
+            for row in p.get("chars", []):
+                chars.extend(row)
+        elif p.get("type") == "space":
+            chars.extend(p.get("advances", {}).keys())
+        for ch in chars:
+            if ch in (" ", "\u0000"):
+                continue   # 바닐라 문법의 빈 칸 — 자리가 아니다
+            if ch in seen:
+                clashes.append(f"U+{ord(ch):04X} (프로바이더 #{seen[ch]} ↔ #{i})")
+            else:
+                seen[ch] = i
+    if clashes:
+        raise ValueError("중복 codepoint — 뒤의 프로바이더가 앞을 조용히 덮는다: " + ", ".join(clashes))
+
+
 def main():
     # --sheet: 엔티티 확대 검수 시트도 함께 굽는다 (run/texture-review/ — 커밋 대상 아님)
     sheet = "--sheet" in sys.argv
@@ -8647,6 +8712,9 @@ def main():
         },
     })
 
+    # 중복 codepoint 검사 — 겹치면 굽지 않는다 (RP 합의 7: 뒤의 프로바이더가 앞을 조용히 덮는다)
+    assert_unique_codepoints(providers)
+
     font = PACK / "assets" / "minecraft" / "font" / "default.json"
     font.parent.mkdir(parents=True, exist_ok=True)
     # ensure_ascii=True — 산출 JSON에서도 PUA가 \uXXXX 이스케이프로 남는다 (F26: 리터럴 유실 방지)
@@ -8657,6 +8725,7 @@ def main():
     myeong = write_myeongbyeong_assets()      # 명병 — 문파의 얼굴 (등록된 8문파)
     gate = write_vanilla_dispatch()           # ★ 팩 게이트 — 팩 없는 눈은 바닐라를 본다 (보라 큐브 아님)
     muted = write_sounds()                    # 소리 — 배경음악·동굴 앰비언스를 끈다 (굽는 것은 청구서)
+    seojang_snd = write_seojang_sounds()      # 서장 사건음 4채널 — .ogg 없으면 바닐라 재지향 (SJ-002)
     blocks = write_block_textures()
     tints = write_tint_assets()     # 컬러맵·해·달 — **세계의 초록은 컬러맵에서 나온다**
     parts = write_particle_textures()
@@ -8699,6 +8768,8 @@ def main():
     print(f"  메뉴·버튼 {ui}장 (GUI 스프라이트 — mcmeta 미포함 = 바닐라 나인슬라이스·좌표 계약 그대로)")
     print(f"  소리 침묵 {muted}건 (배경음악 {len(MUTED_MUSIC)} + 동굴 앰비언스 {len(MUTED_AMBIENT)})"
           f" — 축음기(music_disc)는 남긴다. **혼천의 소리(.ogg)는 아직 0종** (청구서 참조)")
+    print(f"  ├ 서장 사건음 {seojang_snd}채널 (honcheon:seojang.open/choose/result/debut —"
+          f" .ogg 없는 채널은 바닐라 종이·책·종 계열로 재지향. SJ-002 · sound_channels.seojang)")
     print(f"  블록 징발 {blocks}장 (전역 치환 — block_channels.징발 등록분만)")
     print(f"  틴트층 {tints}장 (컬러맵 3 + 해·달 9) — ★ **세계의 초록은 컬러맵이 곱한다**. "
           f"텍스처만 칠하고 컬러맵을 두면 틴트가 도로 초록으로 물들인다")

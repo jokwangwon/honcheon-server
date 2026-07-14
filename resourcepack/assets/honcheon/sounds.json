@@ -1,0 +1,34 @@
+{
+  "seojang.open": {
+    "sounds": [
+      {
+        "name": "item.book.page_turn",
+        "type": "event"
+      }
+    ]
+  },
+  "seojang.choose": {
+    "sounds": [
+      {
+        "name": "item.book.put",
+        "type": "event"
+      }
+    ]
+  },
+  "seojang.result": {
+    "sounds": [
+      {
+        "name": "block.note_block.bell",
+        "type": "event"
+      }
+    ]
+  },
+  "seojang.debut": {
+    "sounds": [
+      {
+        "name": "block.bell.use",
+        "type": "event"
+      }
+    ]
+  }
+}

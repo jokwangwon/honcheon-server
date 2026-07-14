@@ -23,6 +23,7 @@ glyph_slots:
   E060_E07F: { band: 세력_문장 }
   E080_E09F: { band: GUI_배경, used: { E080: "경락도 배경 패널 176x110 (먹색+화선지 테두리+전각 도장풍 주사색 4귀 ㄱ자획+제목 구분선 y=17+5px 인셋 점선 여백 가이드)" }, note: "전낭 탭·상점은 E081+ — 음수 공백 기법, ascent 인게임 튜닝" }
   E0A0_E0AF: { band: 음수_공백, used: { E0A0_E0A5: "space 프로바이더 advances — -8/-16/-32/-64/-128/+1 (2^n 음수 폭 + 미세조정 +1, E080 제목 음수 공백 기법용)" }, note: "비트맵 아님 — 폭만 갖는 space 프로바이더. F26 동일 적용: advances 키도 chr()로만" }
+  E0B0_E0BF: { band: 서장_기억첩, used: {}, note: "【SJ-002 · 2026-07-14 등록 — RP 합의 7】 서장 전용 장식 대역 (docs/design/seojang_presentation.md §3.2·§4.1): 장 구분선·붓점·인장·선택 표식은 여기서만. 아직 비트맵 0장 (used 빈 표 = 대역 예약) — 글리프를 구우면 used 등록 + build_resourcepack.py 프로바이더 반영이 한 몸이다. ★ 청사진 §SJ-002: 등록부와 빌드를 대조하기 전에는 코드에 코드포인트를 박지 않는다. 빌더의 중복 codepoint 검사(assert_unique_codepoints)가 이 대역의 충돌을 기동 전에 문다" }
   registration: "슬롯 추가 = 본 파일 등록 + build_resourcepack.py 반영 (등록제 문법)"
   pua_rule: "F26 — 소스·데이터 어디에도 PUA 문자 리터럴 직접 삽입 금지: 코드 chr()/\\uXXXX, JSON ensure_ascii. 편집·전송 중 조용히 유실되며 빈 chars 하나가 팩 전체를 무효화한다"
 
@@ -970,6 +971,27 @@ sound_channels:
     기타: [발소리_흙, 발소리_돌, 발소리_나무, 만두_먹기]           # 4 — 바닐라 대체 (선택)
     총: 30
   note: "채널을 열어 두었다 — .ogg 가 생기면 sounds.json 등록 + skill_motion.yml 의 key 를 honcheon:* 로 바꾸기만 하면 된다 (코드 변경 0)"
+
+  # ─── 서장 사건음 4채널 【SJ-002 · 2026-07-14 신설】 — 첫 살아 있는 honcheon:* 소리 ───
+  #
+  # 【위의 벽을 어떻게 지나는가】 .ogg 는 여전히 못 굽는다 — 그러나 sounds.json 은 한 이벤트를
+  #   **다른 바닐라 이벤트로 재지향**할 수 있다 ({"type": "event"}). 그래서 honcheon:seojang.* 는
+  #   .ogg 없이도 **지금 난다** — 등록된 바닐라 종이·책·종 계열로 (청사진 §4.2: "음원 파일이 없을
+  #   때는 등록된 바닐라 종이·책·종 계열 소리로 폴백"). 짐작 도박이 아니다: 폴백은 이미 그 뜻으로
+  #   쓰이는 바닐라 소리다 (책장 넘김·책 놓기·종).
+  # 【두 겹의 강등】 ① 팩은 있는데 .ogg 가 없다 → 팩 안 재지향이 바닐라 소리를 낸다 (침묵 아님)
+  #                ② 팩 자체가 안 켜졌다 → 서버(SeojangBook.chime)가 fallback_event 키로 직접 낸다
+  # 【소비자】 config/seojang.yml presentation.sounds — 그 표의 fallback 과 아래 fallback_event 는
+  #   같아야 한다 (어긋나면 팩 있는 귀와 없는 귀가 다른 사건을 듣는다).
+  seojang:
+    status: 바닐라_재지향_가동      # .ogg 0장 — 그러나 채널은 산다
+    builder: "build_resourcepack.py write_seojang_sounds → assets/honcheon/sounds.json"
+    ogg_slot: "resourcepack/assets/honcheon/sounds/seojang/<채널>.ogg — 파일이 생기면 빌더가 저절로 재지향을 실물로 갈아 끼운다 (등록·코드 변경 0)"
+    events:
+      open:   { key: "honcheon:seojang.open",   fallback_event: "item.book.page_turn",   max_s: 1.2, 용처: "장 도착 — 종이와 붓의 시작 (SeojangBook.deliver)" }
+      choose: { key: "honcheon:seojang.choose", fallback_event: "item.book.put",         max_s: 0.8, 용처: "입력 접수 — 마른 낙관 (발성 배선은 SJ-003)" }
+      result: { key: "honcheon:seojang.result", fallback_event: "block.note_block.bell", max_s: 1.2, 용처: "판정 확정 — 등급별 음높이는 서버 pitch 변주 (발성 배선은 SJ-003)" }
+      debut:  { key: "honcheon:seojang.debut",  fallback_event: "block.bell.use",        max_s: 1.8, 용처: "출도 — 짧은 종과 책 덮는 소리 (발성 배선은 SJ-004)" }
 
 # ─── HUD 채널 — 【2026-07】 화면이 세계에 대해 거짓말하던 자리들 ───
 hud_channels:
