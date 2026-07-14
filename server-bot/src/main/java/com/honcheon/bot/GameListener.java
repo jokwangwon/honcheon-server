@@ -16,6 +16,7 @@ import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.text.TextInput;
 import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
+import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import net.dv8tion.jda.api.interactions.modals.Modal;
 
 import java.awt.Color;
@@ -44,7 +45,7 @@ public final class GameListener extends ListenerAdapter {
     private static final String GATE_GUILD_KEY = "접합:길드";
 
     private final Rules rules;
-    private final Db db;
+    private final GameStore db;
     private final LlmRenderer renderer;
     private final Random dice = new Random();
 
@@ -59,14 +60,109 @@ public final class GameListener extends ListenerAdapter {
     private final RegionService regions;
 
     private final Map<String, Creation> creations = new ConcurrentHashMap<>();
-    private final Map<Long, Seojang> seojangs = new ConcurrentHashMap<>();
 
-    public GameListener(Rules rules, Db db, LlmRenderer renderer) {
+    /**
+     * ★★ <b>붓 — 서사를 그리는 단 하나의 차선</b> (「배는 한 명씩 탄다」).
+     *
+     * <p>전에는 {@link LlmRenderer} 를 <b>곧장</b> 불렀다 — 즉 넷이 동시에 서장에 들면 넷을
+     * <b>동시에 던졌다.</b> 그런데 GPU 는 하나다: 실측 4건 동시 = <b>89.5초</b> (1건은 22.4초).
+     * 옛 타임아웃 25초에 <b>전원이 걸려 아무도 글을 못 받았다.</b> 이제 {@link Scribe} 가 줄을 세운다.
+     */
+    private final Scribe scribe;
+
+    /** 접합의 수락은 <b>다른 스레드·몇 초 뒤</b>에 온다 — 그때 사람에게 말을 걸 손 (onReady 가 쥔다) */
+    private volatile net.dv8tion.jda.api.JDA jda;
+
+    /** 되돌리는 손 — 시험을 위해 장부를 지운다 (HoncheonBot 이 쥐여 준다. 없으면 명령이 잠긴다) */
+    private volatile Reset reset;
+
+    public GameListener(Rules rules, GameStore db, LlmRenderer renderer, Scribe scribe) {
         this.rules = rules;
         this.db = db;
         this.renderer = renderer;
+        this.scribe = scribe;
         this.factions = new FactionService(rules.factions, db);
         this.regions = new RegionService(rules.regions, db);
+    }
+
+    void setReset(Reset reset) {
+        this.reset = reset;
+    }
+
+    // ─── 초기화 — 되돌린다 (시험용). **두 번 묻는다: 명령 한 번, 버튼 한 번** ───
+    //
+    // ★ 되돌릴 수 없는 일이다. 그래서 명령은 **아무것도 지우지 않는다** — 무엇을 지울지 말하고 묻기만 한다.
+    //   지우는 손은 [되돌린다] 버튼 하나뿐이고, 그 버튼은 **명령을 친 사람에게만** 듣는다.
+
+    private void resetAsk(SlashCommandInteractionEvent event) throws Exception {
+        Reset r = this.reset;
+        if (r == null || r.locked()) {
+            event.reply("초기화가 잠겨 있다 — 등록부(config/reset.yml)를 못 읽었다."
+                            + (r == null ? "" : "\n> " + r.fault()))
+                    .setEphemeral(true).queue();
+            return;
+        }
+        String scope = event.getOption("범위") == null ? "" : event.getOption("범위").getAsString();
+        if (r.say(scope).isEmpty()) {
+            event.reply("모르는 범위: " + scope).setEphemeral(true).queue();
+            return;
+        }
+        // ★ 남의 것은 못 지운다 — 대상을 대려면 서버 관리자여야 한다
+        User target = event.getOption("대상") == null ? null : event.getOption("대상").getAsUser();
+        if (target != null && !target.getId().equals(event.getUser().getId())) {
+            if (event.getMember() == null
+                    || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+                event.reply("남의 것은 못 지운다 — 대상을 대려면 **서버 관리자**여야 한다.")
+                        .setEphemeral(true).queue();
+                return;
+            }
+        }
+        resetConfirm(event, scope, target == null ? event.getUser() : target, event.getUser());
+    }
+
+    /**
+     * <b>두 번째 물음</b> — 여기서도 아무것도 안 지운다. 지우는 손은 [되돌린다] 버튼 하나뿐이다.
+     *
+     * <p>슬래시({@code /초기화})와 안내판의 [처음부터 다시] 가 <b>둘 다 여기로 온다</b> —
+     * 되돌릴 수 없는 일에 문이 둘이면, 언젠가 한쪽만 고쳐진다.
+     */
+    private void resetConfirm(IReplyCallback event, String scope, User who, User asker)
+            throws Exception {
+        Reset r = this.reset;
+        String key = "rs:" + scope + ":" + who.getId() + ":" + asker.getId();
+        event.reply("**되돌리려는가 — " + scope + "**\n> " + r.say(scope)
+                        + "\n\n대상: " + who.getAsMention()
+                        + "\n\n*백업은 항상 뜬다 (`run/backup-<시각>/`). 백업이 실패하면 아무것도 안 지운다.*"
+                        + "\n*세계(청하현·사람·소문·원장·달력)는 건드리지 않는다.*"
+                        + "\n**되돌릴 수 없다.**")
+                .addComponents(ActionRow.of(
+                        Button.danger(key, "되돌린다"),
+                        Button.secondary("rx:-:-:-", "그만둔다")))
+                .setEphemeral(true).queue();
+    }
+
+    private void onResetConfirm(ButtonInteractionEvent event, String scope, String targetId,
+            String askerId) throws Exception {
+        Reset r = this.reset;
+        if (r == null || r.locked()) {
+            event.editMessage("초기화가 잠겨 있다.").setComponents().queue();
+            return;
+        }
+        // 버튼은 **물은 사람에게만** 듣는다 (남의 확인 창을 눌러 남을 지울 수 없다)
+        if (!event.getUser().getId().equals(askerId)) {
+            event.reply("이 물음은 당신에게 온 것이 아니다.").setEphemeral(true).queue();
+            return;
+        }
+        event.deferEdit().queue();
+        try {
+            Reset.Report report = r.reset(scope, targetId, null,
+                    "discord:" + event.getUser().getName(), null);
+            event.getHook().editOriginal(Reset.render(report)).setComponents().queue();
+        } catch (Exception e) {
+            // ★ 백업 실패도 여기로 온다 — 그때는 **한 행도 안 지워졌다**. 그대로 말한다.
+            event.getHook().editOriginal("초기화 실패 — **아무것도 지우지 않았다.**\n> " + e.getMessage())
+                    .setComponents().queue();
+        }
     }
 
     // ─── 슬래시 명령 ───
@@ -78,6 +174,18 @@ public final class GameListener extends ListenerAdapter {
             //   그래서 서브커맨드 이름이 null 이다. 이름으로 먼저 가른다.
             if ("접합문".equals(event.getName())) {
                 postLinkGate(event);
+                return;
+            }
+            // ★ /초기화 도 **최상위 명령**이다 — /혼천 은 서브커맨드 25칸이 이미 꽉 찼다.
+            //   (26번째를 넣으면 봇이 기동조차 못 한다: "Cannot have more than 25 subcommands")
+            if ("초기화".equals(event.getName())) {
+                resetAsk(event);
+                return;
+            }
+            // ★★ /안내판 — **사람이 칠 마지막 명령**이다. 한 번 세우면 그 뒤로는 아무도 안 친다
+            //   (/접합문 과 같은 문법. 그리고 최상위이므로 25칸을 **먹지 않는다**)
+            if ("안내판".equals(event.getName())) {
+                postPanel(event);
                 return;
             }
             switch (String.valueOf(event.getSubcommandName())) {
@@ -98,7 +206,9 @@ public final class GameListener extends ListenerAdapter {
                 case "전장" -> bank(event);              // A — 예치·상속인 지정 (죽어서 남기는 것)
                 case "접속" -> linkAccount(event);        // ★ 신원 접합 — 마크의 몸을 이 이름에 잇는다
                 case "접속해제" -> unlinkAccount(event);  // 스스로 끊는다 (혈채는 남는다)
-                case "접합문" -> postLinkGate(event);     // ★ 접속의 문 — 명령 대신 버튼 (서버 관리자)
+                // ★ 여기 `case "접합문"` 이 있었다 — **닿을 수 없는 줄이다.** 접합문은 25칸 상한 때문에
+                //   최상위 명령으로 빠졌고(HoncheonBot:76), 그래서 위의 이름 검사가 먼저 가로챈다.
+                //   /혼천 에는 그런 서브커맨드가 **등록조차 되지 않는다.** 죽은 줄은 남기지 않는다.
                 case "지역등록" -> registerRegion(event);
                 case "정산" -> settleDay(event);
                 case "사망" -> adminKill(event);
@@ -112,9 +222,21 @@ public final class GameListener extends ListenerAdapter {
         }
     }
 
-    private void startCreation(SlashCommandInteractionEvent event) throws Exception {
-        if (db.findCharacter(event.getUser().getId()).isPresent()) {
-            event.reply("이미 살아 있는 캐릭터가 있다 — `/혼천 정보`로 확인하라. (계정당 하나, 죽음만이 끝낸다)")
+    /**
+     * 캐릭터 생성 — <b>슬래시({@code /혼천 시작})와 안내판의 [강호에 들다] 가 둘 다 여기로 온다.</b>
+     *
+     * <p>★ 그래서 인자가 {@code SlashCommandInteractionEvent} 가 아니라 {@link IReplyCallback} 이다:
+     * <b>길은 둘이어도 문은 하나여야 한다.</b> 두 벌을 만들면 하나가 낡는다 (이 저장소가 반복해서 데인 병).
+     * 이 함수의 <b>로직은 한 줄도 바뀌지 않았다</b> — 문의 손잡이가 넓어졌을 뿐이다.
+     */
+    private void startCreation(IReplyCallback event) throws Exception {
+        var existing = db.findCharacter(event.getUser().getId());
+        if (existing.isPresent()) {
+            // ★★ 안내판의 [강호에 들다] 는 **누구에게나 보인다** (공용 메시지라 가릴 수가 없다).
+            //   그러므로 **이미 태어난 사람이 누를 수 있고**, 그때 **침묵하면 위반**이다 — 그렇다고 말한다.
+            //   이 대답은 그 사람에게만 간다 (ephemeral). 문장은 등록부에 있다 — 코드가 짓지 않는다.
+            event.reply(rules.panelBoard("already", "이미 캐릭터가 있다 — [내 자리] 를 눌러라.")
+                            .replace("{name}", String.valueOf(existing.get().get("name"))))
                     .setEphemeral(true).queue();
             return;
         }
@@ -154,9 +276,59 @@ public final class GameListener extends ListenerAdapter {
                     .setEphemeral(true).queue();
             return;
         }
+        if (rules.genderAsk()) {
+            event.replyEmbeds(genderEmbed())
+                    .addComponents(ActionRow.of(genderButtons()))
+                    .setEphemeral(true).queue();
+            return;
+        }
         event.replyEmbeds(questionEmbed(0))
                 .addComponents(ActionRow.of(questionButtons(0)))
                 .setEphemeral(true).queue();
+    }
+
+    // ─── 성별 — 생성의 첫 물음 (player_creation.yml gender) ───
+    //
+    // ★ 왜 생겼나: 사용자가 겪었다 — "성별 선택이 없어 강제로 루트가 제한됨."
+    //   생성 문답에는 성별이 없었고, 그래서 캐릭터는 성별 없이 태어났다. 이제 묻는다.
+    //
+    // ★★ 여기는 **묻고 기록하는 것까지만** 한다. 성별이 무엇을 여닫는지(입문 가능 문파·호칭·무공 계열·
+    //   NPC 반응)는 **아직 등록부에 없다** (player_creation.yml gender.gates 는 비어 있다).
+    //   그 빈 칸을 코드가 채우지 않는다 — 사용자가 정한다. 지금은 아무것도 막지 않는다.
+
+    private MessageEmbed genderEmbed() {
+        StringBuilder body = new StringBuilder();
+        rules.genderOptions().forEach((key, v) ->
+                body.append("**").append(rules.genderLabel(key)).append("**  "));
+        return new EmbedBuilder().setColor(INK)
+                .setTitle("태어남 — 성별")
+                .setDescription(rules.genderText("prompt", "너는 사내로 태어났는가, 계집으로 태어났는가.")
+                        + "\n\n" + body)
+                .setFooter(rules.genderText("footer", "성별은 바꿀 수 없다 — 이 몸으로 강호에 선다."))
+                .build();
+    }
+
+    /** 등록부에 있는 성별만 버튼이 된다 (등록제 — 여기 없는 성별은 세계에 존재하지 않는다) */
+    private List<Button> genderButtons() {
+        List<Button> buttons = new ArrayList<>();
+        rules.genderOptions().keySet().forEach(key ->
+                buttons.add(Button.secondary("gd:" + key, rules.genderLabel(key))));
+        return buttons;
+    }
+
+    private void onGenderChoice(ButtonInteractionEvent event, String key) throws Exception {
+        Creation c = creations.get(event.getUser().getId());
+        if (c == null) {
+            event.editMessage("세션이 만료됐다 — `/혼천 시작`으로 다시.").setComponents().queue();
+            return;
+        }
+        if (!rules.genderOptions().containsKey(key)) {
+            event.deferEdit().queue();   // 등록부에 없는 성별 — 세계에 존재하지 않는다
+            return;
+        }
+        c.gender = key;
+        event.editMessageEmbeds(questionEmbed(0))
+                .setComponents(ActionRow.of(questionButtons(0))).queue();
     }
 
     /** 혈연/무관 2택 — 전생의 유산과 원한을 짊어질 것인가 (death_and_legacy lineage_choice) */
@@ -183,11 +355,18 @@ public final class GameListener extends ListenerAdapter {
                 }
             });
         }
+        // 혈연/무관을 고른 다음에도 성별은 묻는다 — 전생이 있어도 이 몸은 새로 태어난다
+        if (rules.genderAsk()) {
+            event.editMessageEmbeds(genderEmbed())
+                    .setComponents(ActionRow.of(genderButtons())).queue();
+            return;
+        }
         event.editMessageEmbeds(questionEmbed(0))
                 .setComponents(ActionRow.of(questionButtons(0))).queue();
     }
 
-    private void showSheet(SlashCommandInteractionEvent event) throws Exception {
+    /** 시트 — 슬래시({@code /혼천 정보})와 안내판의 [내 시트] 가 둘 다 여기로 온다 (문은 하나다) */
+    private void showSheet(IReplyCallback event) throws Exception {
         var found = db.findCharacter(event.getUser().getId());
         if (found.isEmpty()) {
             event.reply("캐릭터가 없다 — `/혼천 시작`으로 만들어라.").setEphemeral(true).queue();
@@ -196,9 +375,12 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> ch = found.get();
         @SuppressWarnings("unchecked")
         Map<String, Object> sheet = (Map<String, Object>) ch.get("sheet");
+        Object gender = sheet.get(rules.genderSheetKey());   // ★ 성별 (옛 캐릭터에는 없다 — 그러면 안 뜬다)
         EmbedBuilder eb = new EmbedBuilder().setColor(INK)
                 .setTitle("정보 — " + ch.get("name"))
-                .setDescription(sheet.get("나이") + "세 " + sheet.get("연령대") + " · " + ch.get("realm")
+                .setDescription((gender == null ? ""
+                        : rules.genderLabel(String.valueOf(gender)) + " · ")
+                        + sheet.get("나이") + "세 " + sheet.get("연령대") + " · " + ch.get("realm")
                         + " · " + sheet.get("집안") + " · 성향 " + sheet.get("성향")
                         + "\n" + ch.get("status") + " · " + ch.get("location"));
         StringBuilder stats = new StringBuilder();
@@ -208,6 +390,35 @@ public final class GameListener extends ListenerAdapter {
         eb.addField("능력치", stats.toString(), false);
         eb.addField("소지금", ch.get("wallet") + "문", true);
         eb.addField("발단", String.valueOf(sheet.get("발단")), true);
+
+        // ═══ ★★ 가문과 형제 — **지금**의 것이다 (서장은 과거, 시트는 현재) ═══
+        //
+        // 【시간의 비대칭】 형의 서장은 동생이 나기 전에 쓰였다 — 그 글은 "나는 혼자였다"고 말한다.
+        //   **그것은 거짓말이 아니다.** 그때는 정말 혼자였다.
+        //   그러나 **지금** 그에게는 아우가 있다. 그 사실이 사는 곳이 **여기**다.
+        try {
+            long chId = ((Number) ch.get("id")).longValue();
+            Long houseId = db.houseOfCharacter(chId);
+            if (houseId != null) {
+                var h = db.house(houseId);
+                if (h.isPresent()) {
+                    String st = h.get().state() == null ? "" : " · " + h.get().state();
+                    Object rank = sheet.get(rules.birthRankSheetKey());
+                    eb.addField("가문", h.get().name() + st
+                            + (rank == null ? "" : " · " + rank), false);
+                }
+            }
+            List<Map<String, Object>> kin = kinOf(chId);
+            if (!kin.isEmpty()) {
+                StringBuilder ks = new StringBuilder();
+                for (Map<String, Object> k : kin) {
+                    ks.append(k.get("title")).append(' ').append(k.get("name")).append("   ");
+                }
+                eb.addField("형제", ks.toString().strip(), false);
+            }
+        } catch (Exception e) {
+            System.err.println("가문·형제를 읽지 못했다: " + e.getMessage());
+        }
         double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
         eb.addField("수련 누적", String.format("%.2f일치", hwahu), true);
         if (sheet.get("가문_대여") != null) {
@@ -317,7 +528,11 @@ public final class GameListener extends ListenerAdapter {
 
     private MessageEmbed help() {
         return new EmbedBuilder().setColor(INK).setTitle("혼천 — 무협 텍스트 RPG")
-                .setDescription("`/혼천 시작` 캐릭터 생성 (유년의 기억 5문항 → 운명이 나머지를 정한다)\n"
+                // ★ 주된 길은 **버튼**이다. 아래 명령들은 **뒷문**이다 (버튼이 안 뜨거나 모바일에서 막힐 때).
+                //   지우지 않는 이유가 그것이다 — 그러나 처음 온 사람이 외울 것은 안내판 하나다.
+                .setDescription("**▸ 명령을 칠 일이 없다 — 채널의 안내판에서 [내 자리] 를 눌러라.**\n"
+                        + "*(안내판이 안 보이면 관리자에게 `/안내판` 을 청하라. 아래는 **뒷문**이다)*\n\n"
+                        + "`/혼천 시작` 캐릭터 생성 (유년의 기억 5문항 → 운명이 나머지를 정한다)\n"
                         + "`/혼천 정보` 내 캐릭터 정보 (`원장`도 동작)\n"
                         + "`/혼천 사냥` 청하현 뒷산 사냥 — 수련과 생계 (출도 후, 지역 채널에서)\n"
                         + "`/혼천 비무 @상대` 비무 신청 — 양측 2d6 대립 판정 (출도 후)\n"
@@ -334,8 +549,12 @@ public final class GameListener extends ListenerAdapter {
                         + "`/혼천 의방` 부상을 다스리고 외상을 갚는다 (유문의 의방)\n"
                         + "`/혼천 구조 @상대` 빈사의 동행을 지혈한다 — 의술 판정 (사람을 살리는 유일한 손)\n"
                         + "`/혼천 전장 [예치] [인출] [상속인]` 금서방의 전장 — 죽어서 남길 수 있는 유일한 재산\n"
-                        + "`/혼천 접합문` 이 채널에 **접속의 문**을 세운다 — 마크의 [혼천 접속] 클릭이 여기로 온다 "
-                        + "(버튼 하나 + 붙여넣기. 서버 관리자)\n"
+                        // ★ 2026-07-14 고침: 여기에 `/혼천 접합문` 이라 적혀 있었다 — **없는 명령이다.**
+                        //   접합문은 25칸 상한 때문에 **최상위**로 빠졌는데(HoncheonBot:76) 도움말만 옛말이었다.
+                        //   도움말이 없는 명령을 가리키는 것은 죽은 버튼과 같은 병이다.
+                        + "`/안내판` 이 채널에 **안내판**을 세운다 — **명령을 안 쳐도 되게** 한다 (서버 관리자)\n"
+                        + "`/접합문` 이 채널에 **접속의 문**을 세운다 — 마크의 [혼천 접속] 클릭이 여기로 온다 "
+                        + "(서버 관리자)\n"
                         + "`/혼천 지역등록` 이 채널을 청하현으로 등록 (서버 관리자)\n"
                         + "`/혼천 정산` 세계일 +1 (서버 관리자 — 자정에는 자동)\n"
                         + "`/혼천 사망 <NPC> [살해자]` NPC를 죽인다 — 연쇄 검증용 (서버 관리자)\n"
@@ -372,6 +591,9 @@ public final class GameListener extends ListenerAdapter {
      */
     @Override
     public void onReady(net.dv8tion.jda.api.events.session.ReadyEvent event) {
+        // ★ 수락은 **몇 초 뒤 다른 스레드**로 온다 (다리 폴러). 그때 청한 사람에게 말을 걸려면
+        //   JDA 를 쥐고 있어야 한다 (인터랙션 훅이 죽었으면 DM 으로 간다 — GameListener.dm)
+        this.jda = event.getJDA();
         try {
             String chKey = rules.gateMetaKey("channel_meta", GATE_CHANNEL_KEY);
             String channelId = db.getMeta(chKey).or(() -> {
@@ -382,7 +604,7 @@ public final class GameListener extends ListenerAdapter {
                 }
             }).orElse(null);
             if (channelId == null) {
-                System.out.println("접속의 문 — 아직 안 섰다 (/혼천 접합문). 마크는 [코드 복사]만 띄운다");
+                System.out.println("접속의 문 — 아직 안 섰다 (/접합문). 사람은 /혼천 접속 닉네임:… 으로도 청할 수 있다");
                 return;
             }
             var channel = event.getJDA().getTextChannelById(channelId);
@@ -394,9 +616,38 @@ public final class GameListener extends ListenerAdapter {
             db.setMeta(rules.gateMetaKey("guild_meta", GATE_GUILD_KEY), channel.getGuild().getId());
             System.out.println("접속의 문 — " + channel.getGuild().getName() + " #" + channel.getName()
                     + " (마크의 [혼천 접속] 클릭이 여기로 온다)");
+            warnIfNoInvite();
         } catch (Exception e) {
             System.err.println("접속의 문 확인 실패: " + e.getMessage());
         }
+    }
+
+    /**
+     * <b>★ 초대 링크가 비었으면 소리내어 알린다</b> — 이 디스코드는 <b>공개가 아니다.</b>
+     *
+     * <p>이제 마크가 채팅에 거는 것은 <b>초대 링크 하나뿐</b>이다 (코드도, 채널 URL 도 걸지 않는다).
+     * 그러므로 이 칸이 비면 <b>마크에서 디스코드로 가는 길이 아예 없다</b> — 문이 없는 담이다.
+     * 그 담을 여는 것은 <b>관리자</b>뿐이다 (실제 링크는 저장소에 커밋되지 않는다).
+     */
+    private void warnIfNoInvite() {
+        if (rules.gateInviteUrl() != null) {
+            System.out.println("초대 링크 — 등록됨 (마크의 /혼천 접속 이 [초대 링크] 를 띄운다)");
+            return;
+        }
+        System.err.println("""
+
+                ════════════════════════════════════════════════════════════════
+                ★ 초대 링크가 비어 있다 — 마크에서 디스코드로 가는 길이 **아예 없다.**
+                  이 디스코드는 공개가 아니다. 그리고 이제 마크가 거는 것은 초대 링크 하나뿐이다.
+
+                  넣는 곳:  config/world_bridge.yml  →  identity.gate.invite_url
+                  만드는 법: 디스코드 접속 채널 우클릭 → 「초대 링크 만들기」
+                            → 만료 기한 **없음** · 최대 사용 횟수 **무제한** 으로 고칠 것
+                            → 나온 https://discord.gg/XXXXXX 를 그 칸에 붙여넣고 봇을 다시 띄운다
+
+                  (비어 있는 동안 마크는 [초대 링크] 버튼을 띄우지 않는다 — 없는 문을 걸지 않는다)
+                ════════════════════════════════════════════════════════════════
+                """);
     }
 
     // ─── 버튼 라우팅 ───
@@ -407,7 +658,9 @@ public final class GameListener extends ListenerAdapter {
             String[] id = event.getComponentId().split(":");
             switch (id[0]) {
                 case "ct" -> onTestAnswer(event, Integer.parseInt(id[1]), id[2]);
-                case "tn" -> onTurnChoice(event, Integer.parseInt(id[1]), Integer.parseInt(id[2]));
+                // ★ "tn" (서장 턴 버튼) 은 **없앴다** — 서장은 이제 강호의 책에서 흐른다.
+                //   두 벌을 남기지 않는다: 옛 버튼이 살아 있으면 디스코드로도 진행할 수 있고,
+                //   그러면 **정본이 둘**이 된다 (그리고 하나가 낡는다).
                 case "ht" -> onHuntChoice(event, Integer.parseInt(id[1]), Integer.parseInt(id[2]), id[3]);
                 case "bm" -> onDuelAnswer(event, "ok".equals(id[1]), id[2], id[3]);
                 case "qa" -> onQuestAccept(event, id[1], id[2]);
@@ -415,8 +668,14 @@ public final class GameListener extends ListenerAdapter {
                 case "gs" -> onMealChoice(event, "share".equals(id[1]), id[2]);
                 case "ex" -> onGateChoice(event, id[1], Integer.parseInt(id[2]), id[3]);
                 case "gw" -> onGwanaChoice(event, id[1], id[2]);            // ★ 관아 — 9번째 루트
+                case "gd" -> onGenderChoice(event, id[1]);                  // ★ 성별 — 생성의 첫 물음
+                case "hs" -> onHouseChoice(event, "stay".equals(id[1]));    // ★ 세가 — 남는가, 나오는가
                 case "ln" -> onLineageChoice(event, "kin".equals(id[1]));   // 새 삶 — 혈연 / 무관
                 case "lk" -> openLinkModal(event);   // ★ 접속의 문 — 코드 창을 연다 (확정은 모달에서)
+                case "np" -> onPanel(event, id);     // ★★ 안내판 — 명령을 치지 않게 하는 판
+                case "rs" -> onResetConfirm(event, id[1], id[2], id[3]);   // 되돌린다 — 확인의 손
+                case "rx" -> event.editMessage("초기화를 그만두었다. **아무것도 지우지 않았다.**")
+                        .setComponents().queue();
                 default -> event.deferEdit().queue();
             }
         } catch (Exception e) {
@@ -440,11 +699,110 @@ public final class GameListener extends ListenerAdapter {
                     .setComponents(ActionRow.of(questionButtons(next))).queue();
             return;
         }
-        // 문답 종료 — 나머지는 운명이 정한다 (F15 opt-out)
+        // ═══ 문답 종료 — ★ **이제 답이 집안을 정한다** (옛 길: 전체 집안에서 통째로 주사위) ═══
+        //
+        //   결(結)  = 테스트   — 어느 갈래인가 (내 선택이 세계에 자국을 남긴다)
+        //   무늬    = 주사위   — 그 갈래 안에서 누구인가 (같은 답이 같은 사람이 되지 않는다)
+        c.family = rollFamily(c);
+
+        // ★ 세가가 걸렸다 — **거절할 수 있다** (사용자: "세가가 걸렸을 경우 ... 거절할 수도 있다")
+        if (rules.canRefuseHouse(c.family)) {
+            event.editMessageEmbeds(houseEmbed(c.family))
+                    .setComponents(ActionRow.of(
+                            Button.primary("hs:stay", rules.refuseText("accept_label", "가문의 아이로 남는다")),
+                            Button.secondary("hs:leave", rules.refuseText("refuse_label", "집을 나온다"))))
+                    .queue();
+            return;
+        }
+        finishCreation(event, c);
+    }
+
+    /**
+     * ★★ <b>결과 무늬</b> — 유년의 기억이 <b>갈래</b>를 좁히고, 주사위가 그 안에서 <b>한 집</b>을 고른다.
+     *
+     * <p><b>옛 길의 병:</b> {@code familyKeys.get(dice.nextInt(familyKeys.size()))} — 집안을 <b>전체에서</b>
+     * 뽑았다. 그래서 장터에서 뛰어들어 막아선 아이와 문틈에 귀를 댄 아이가 <b>같은 확률로 같은 집</b>에서
+     * 태어났다. 아홉 문항이 집안에 아무 자국도 남기지 않았다.
+     *
+     * <p><b>그러나 주사위를 없애지도 않는다</b> (사용자: "같은 선택지에선 주사위로 특색을 부과한다") —
+     * 테스트만이면 <b>같은 답 = 같은 캐릭터</b>가 되고, 최적해가 발견되는 순간 모두가 같아진다.
+     *
+     * <p>동점(아직 정해지지 않은 아이)이면 <b>후보를 합친다</b> — 좁히지 않는다
+     * (disposition_test.yml scoring.wide_tie 의 정신 그대로).
+     */
+    private String rollFamily(Creation c) {
+        // 혈연 시작은 집안을 고르지 않는다 — 몰락한 무가의 자식 문법이 곧 '물려받은 것'의 문법이다
+        if (c.lineage) {
+            return rules.legacy.lineageFamilyTemplate();
+        }
+        int max = c.scores.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        List<String> pool = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : c.scores.entrySet()) {
+            if (e.getValue() == max) {
+                for (String f : rules.familyCandidates(e.getKey())) {
+                    if (!pool.contains(f)) {
+                        pool.add(f);   // ★ 동점이면 합집합 (on_tie: 후보_합집합)
+                    }
+                }
+            }
+        }
+        if (pool.isEmpty()) {
+            // 등록부에 그 성향의 후보가 없다 — ★ 코드가 짝을 지어내지 않는다. 운명에 맡긴다
+            System.err.println("생성 — family_affinity 에 후보가 없다 (등록부를 보라). 전체에서 뽑는다");
+            List<String> all = new ArrayList<>(rules.families().keySet());
+            return all.get(dice.nextInt(all.size()));
+        }
+        return pool.get(dice.nextInt(pool.size()));   // ★ 무늬 — 갈래 **안에서만** 구른다
+    }
+
+    /** 세가의 문 — 남을 것인가, 나올 것인가 (문장은 등록부의 것이다) */
+    private MessageEmbed houseEmbed(String family) {
+        return new EmbedBuilder().setColor(BLOOD)
+                .setTitle("가문 — " + family.replace('_', ' '))
+                .setDescription("**" + rules.refuseText("prompt",
+                        "가문이 너를 부른다 — 검을 쥐여 주고, 이름을 지우지 말라 한다.") + "**\n\n"
+                        + "**남는다** — " + rules.refuseText("accept_note", "검법과 예법, 월례 전표.") + "\n"
+                        + "**나온다** — " + rules.refuseText("refuse_note", "남는 것은 이름 하나."))
+                .build();
+    }
+
+    /** 세가의 문 앞에서 답했다 — 집을 나오면 **몰락무가 루트에 합류한다** (등록부: 절연 = 그 길) */
+    private void onHouseChoice(ButtonInteractionEvent event, boolean stay) throws Exception {
+        Creation c = creations.get(event.getUser().getId());
+        if (c == null) {
+            event.editMessage("세션이 만료됐다 — `/혼천 시작`으로 다시.").setComponents().queue();
+            return;
+        }
+        if (!stay) {
+            c.family = rules.refusedFamily();
+            c.leftHouse = true;
+        }
+        finishCreation(event, c);
+    }
+
+    /** 태어난다 — 그리고 디스코드는 **이정표만 세우고 입을 다문다** */
+    private void finishCreation(ButtonInteractionEvent event, Creation c) throws Exception {
         creations.remove(event.getUser().getId());
         Born born = birth(event.getUser().getId(), event.getUser().getEffectiveName(), c);
-        event.editMessageEmbeds(birthEmbed(born.ch)).setComponents().queue();
-        openSeojang(event, born);
+        // ★★ 스레드를 열지 않는다. **이야기는 강호에서 흐른다**
+        //   (사용자: "디스코드에서 채팅을 치고 진행하는 것이 아닌 마크로 넘어가는 걸로 표현하자")
+        event.editMessageEmbeds(birthEmbed(born), signpostEmbed(born)).setComponents().queue();
+        startSeojang(born);   // ★ 그리고 **지금부터 서장을 미리 쓴다** (사람이 마크로 걸어오는 동안)
+    }
+
+    /**
+     * ★ 이정표 — <b>디스코드가 마지막으로 하는 말.</b> "여기가 아니라 강호에서 이어진다."
+     *
+     * <p>스레드를 지우지 않고 <b>애초에 열지 않는다.</b> 지울 것이 없어야 낡을 것도 없다.
+     * 문장은 {@code seojang.yml signpost} 가 정한다 — 코드가 짓지 않는다.
+     */
+    private MessageEmbed signpostEmbed(Born born) {
+        return new EmbedBuilder().setColor(INK)
+                .setTitle(rules.seojang.signpost("title", "태어났다 — 그러나 이야기는 여기서 흐르지 않는다"))
+                .setDescription(rules.seojang.signpost("body", "서장은 강호에서 열린다.")
+                        .replace("{name}", born.ch().name()))
+                .setFooter(rules.seojang.signpost("footer", "디스코드는 이름을 지키고, 이야기는 몸이 겪는다."))
+                .build();
     }
 
     @SuppressWarnings("unchecked")
@@ -490,11 +848,11 @@ public final class GameListener extends ListenerAdapter {
                 .filter(e -> e.getValue() == max).map(Map.Entry::getKey).toList();
         String disposition = String.join("·", top);   // wide_tie: 다면성은 오류가 아니라 결과다
 
-        // A — 혈연 시작은 집안을 고르지 않는다: 몰락한 무가의 자식 문법이 곧 '물려받은 것'의 문법이다
+        // ★★ 집안은 **이미 정해져 왔다** — 유년의 기억이 갈래를 좁혔고(결), 주사위가 그 안에서 골랐다(무늬).
+        //   {@link #rollFamily} 를 보라. 여기서 **다시 뽑지 않는다** (세가 거절도 이미 반영돼 있다).
         List<String> familyKeys = new ArrayList<>(rules.families().keySet());
-        String family = c.lineage ? rules.legacy.lineageFamilyTemplate()
-                : familyKeys.get(dice.nextInt(familyKeys.size()));
-        if (!familyKeys.contains(family)) {
+        String family = c.family;
+        if (family == null || !familyKeys.contains(family)) {
             family = familyKeys.get(dice.nextInt(familyKeys.size()));   // 등록부에 없으면 운명에 맡긴다
         }
         // 집안별 발단 풀 — 건재한 집에 재난형 발단은 모순 (incident_pool 명시 시 그 안에서만)
@@ -517,8 +875,26 @@ public final class GameListener extends ListenerAdapter {
         int wallet = rules.startingMoney(bracket, family, dice);
 
         Map<String, Object> sheet = new LinkedHashMap<>();
+        // ★ 성별 — 시트의 첫 칸 (DB 스키마는 건드리지 않았다: sheet_json 은 원래 자유 서식이다.
+        //   마이그레이션도 봇 정지도 필요 없었다). 등록부가 ask:false 면 아예 적히지 않는다.
+        if (c.gender != null) {
+            sheet.put(rules.genderSheetKey(), c.gender);
+        }
         sheet.put("성향", disposition);
         sheet.put("집안", family.replace('_', ' '));
+        // ★★ 적서(嫡庶) — **무늬**다. 결(집안)은 심리 테스트가 정했고, 이 칸은 **주사위**가 정한다.
+        //   같은 집에 태어났는데 **세상이 아는 무게가 다르다** (적자 5 = 천하 · 서자 3 = 인접 현).
+        //   ★ 탄생에 한 번 구르고 시트에 **박힌다** — 재굴림 없다 (미리 쓰기와 부딪치지 않는다).
+        //   ★ 능력치는 주지 않는다 (birth_rank.grants_attributes: false — 집안 헌법과 같다).
+        String rank = rules.hasBirthRank(family) ? rules.rollBirthRank(dice) : null;
+        if (rank != null) {
+            sheet.put(rules.birthRankSheetKey(), rank);
+        }
+        // ★ 집을 나온 아이 — 세가를 거절했다. 검도 전표도 없고, 남은 것은 이름 하나다.
+        //   (등록부: refuse_house — "절연 = 사실상 몰락_무가 루트 합류. 흔적 '이름'만 남는다")
+        if (c.leftHouse) {
+            sheet.put("집안_이탈", true);
+        }
         if ("무가의_자식".equals(family)) {
             // armory 시작 대여 — 판정 보정 0 (equipment.yml), 팔거나 잃으면 support 단계 입력
             sheet.put("가문_대여", "정련급 가문 검 (가문 소유 — 잃으면 문책)");
@@ -535,6 +911,13 @@ public final class GameListener extends ListenerAdapter {
         sheet.put("유년의_기억", c.answers);
 
         long id = db.createCharacter(discordId, name, sheet, wallet);
+        // ★★ 가문 — **한 채의 집**에 앉힌다 (주사위: 기존 집인가 새 집인가)
+        assignHouse(id, family);
+        // ★★ **시간의 비대칭** — 이 아이가 태어난 **그 순간**의 형제를 시트에 박제한다.
+        //   형의 서장은 동생이 나기 전에 쓰였다. 그때 형은 **정말로 혼자였다.**
+        //   그 글을 소급해서 고치지 않는다 — 대신 **형에게 소식을 보낸다** (아래).
+        snapshotKinAtBirth(id, sheet);
+        db.updateCharacter(id, sheet, wallet, "범인", "서장", "서장");
 
         // A — 전생의 흔적: 유산(예치분) · 피의 장부(원한) · 명성(이름)은 세계에 남아 있다
         if (c.lineage) {
@@ -565,10 +948,266 @@ public final class GameListener extends ListenerAdapter {
                                 "피의_장부", grudges, "물려받은_것", rules.legacy.lineageGrants()));
             }
         }
-        db.logEvent("생성", "character", String.valueOf(id),
-                Map.of("성향", disposition, "집안", family, "발단", incident, "나이", age,
-                        "혈연", c.lineage));
+        // ★★ 탄생은 **세계의 사건**이다 (사용자: "플레이어가 소환되는 것도 사건화. 세상이 누가
+        //   태어났는지 알아야 하며"). 장부에 남고 — **마을이 안다** (아래 소문).
+        Map<String, Object> bornLog = new LinkedHashMap<>(Map.of(
+                "성향", disposition, "집안", family, "발단", incident, "나이", age,
+                "혈연", c.lineage, "성별", c.gender == null ? "미상" : c.gender,
+                "집안_이탈", c.leftHouse));
+        if (rank != null) {
+            bornLog.put("적서", rank);
+        }
+        db.logEvent("탄생", "character", String.valueOf(id), bornLog);
+        birthRumor(id, name, family, rank);
+        tellElders(id, name);   // ★ 아우가 났다 — **형은 언제나 안다** (소문의 범위와 무관하다)
         return new Born(new Character(id, name, disposition, family, incident, bracket, age, attrs, wallet), sheet);
+    }
+
+    /**
+     * ★★ <b>마을이 안다 — 누가 태어났는지.</b> (사용자: "세상이 누가 태어났는지 알아야 하며")
+     *
+     * <p><b>얼마나 멀리 퍼지는가</b> (사용자 2026-07-14):
+     * <i>"<b>세가를 제외하곤 지역까지만 퍼짐 (해당 마을)</b>"</i>
+     *
+     * <p><b>★ 범위의 어휘를 지어내지 않았다</b> — {@code rumor.yml propagation.reach_by_intensity}
+     * 가 이미 갖고 있었다: <b>강도 2 = "현 내 관심 일치 망 전체"</b> — 사용자의 "해당 마을"이
+     * 정확히 이것이다. 세가만 더 멀리 간다 ({@code birth_rumor.house_intensity} —
+     * <b>그 값은 담당자의 제안이고 승인 대기다</b>).
+     *
+     * <p><b>소문이 아니면 NPC 도 모른다</b> — 장부(events.탄생)는 <b>봇의 기억</b>일 뿐이고,
+     * NPC 가 "자네가 그 무가의 아이인가" 라고 말하려면 <b>소문망에 실려야</b> 한다.
+     */
+    private void birthRumor(long id, String name, String family, String rank) {
+        try {
+            Map<String, Object> cfg = rules.birthRumor();
+            if (!Boolean.TRUE.equals(cfg.get("enabled"))) {
+                return;
+            }
+            // ★ 적서가 무게를 가른다 (사용자 확정): 적자 5 = 「천하」 · 서자 3 = 「현 + 인접 현」
+            //   적서가 없는 집이면 default_intensity 2 = 「현 내」 (해당 마을)
+            int intensity = rules.birthRumorIntensity(family, rank);
+            if (intensity <= 0) {
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            List<String> tags = cfg.get("tags") instanceof List<?> l
+                    ? l.stream().map(String::valueOf).toList() : List.of("생활");
+            String house = family.replace('_', ' ');
+            // ★ 문장은 사실만 — 소문이 왜곡하는 것은 소문망이 한다 (accuracy_bands).
+            //   적서가 있으면 **그것이 소문의 핵심**이다 (사용자: "어느 세가의 둘째아들이 태어났다")
+            String truth = rank == null
+                    ? house + "에 아이가 하나 났다 — " + name + "이라 한다."
+                    : house + "에 " + rules.birthRankOption(rank).getOrDefault("label", rank)
+                    + "가 났다 — " + name + "이라 한다.";
+            int accuracy = rules.initialAccuracy(String.valueOf(
+                    cfg.getOrDefault("accuracy_kind", "직접_목격")));
+            // 발원 망 — 아이가 난 것은 **장터가 먼저 안다** (rumor.yml origin_network_by_location)
+            spread("탄생:" + id, truth, name, id, tags, intensity, accuracy,
+                    rules.originNetwork("market"), db.worldDay());
+        } catch (Exception e) {
+            // ★ 소문을 못 심어도 아이는 태어난다 — 생성이 소문 때문에 죽으면 안 된다
+            System.err.println("탄생 소문을 심지 못했다 (아이는 태어났다): " + e.getMessage());
+        }
+    }
+
+    /**
+     * ★★ <b>가문 배정 — 기존 집에 태어나는가, 새 집이 서는가</b> (사용자 확정: <b>(다) 주사위</b>).
+     *
+     * <p><b>★ 이것이 형제의 존재 조건이다.</b> 아무도 기존 집에 안 들어가면 형제는 영원히 안 생긴다.
+     * 그래서 이 함수의 수는 <b>형제가 실제로 몇 %나 생기는지</b>로 검산한다
+     * ({@code tools/house_audit.py} — 몬테카를로).
+     *
+     * <p><b>★ 대가족은 「자식 수 상한」이 막는다 — 그리고 그 상한이 곧 새 집의 방아쇠다:</b>
+     * <ul>
+     *   <li>빈자리가 0 인 집은 <b>후보에서 빠진다</b> (스무 명이 한 집에 몰리지 않는다)</li>
+     *   <li>남은 집 중에서는 <b>빈자리가 많을수록</b> 잘 뽑힌다 (한 집만 꽉 차는 것을 막는다)</li>
+     *   <li>후보가 <b>하나도 없으면 새 집이 선다</b> — 상한 하나가 두 일을 한다</li>
+     * </ul>
+     *
+     * <p><b>★ 지역</b>은 <b>사람이 실제로 설 수 있는 고을</b>에서만 뽑는다 (mvt_start.playable).
+     * 블록도 앵커도 없는 고을에 집을 두면 <b>갈 수 없는 집</b>이 되고 사람은 허공에 떨어진다.
+     */
+    private void assignHouse(long characterId, String family) {
+        if (!rules.houseSystemEnabled()) {
+            return;
+        }
+        try {
+            // ═══ ★★ 집을 나온 아이는 **자기가 태어난 집**에 앉는다 ═══
+            //
+            // 【담당자가 만들 뻔한 병】 세가를 거절하면 집안이 `가출한_무가의_자식` 이 된다.
+            //   그 키로 집을 찾으면 **「가출한 무가」라는 새 집**이 서고 —
+            //   **제 형과 남남이 된다.** 그것은 사용자가 확정한 것과 정반대다:
+            //   *"절연은 관계를 끊는 것이 아니라 **관계를 무겁게** 만든다. 호적에서 지워도 **형은 형이다.**"*
+            //
+            // 【고침】 그 아이는 **무가의_자식의 집에서 태어났다.** 나온 것은 그 **뒤**의 일이다.
+            //   등록부가 어느 집을 나왔는지 알고 있다 (families.가출한_무가의_자식.from: 무가의_자식).
+            //   ★ 그래서 **집을 찾을 때만** 원래 집안을 쓴다 (시트의 집안·성향·발단은 그대로 '가출한' 이다).
+            String houseFamily = rules.birthFamilyOf(family);
+
+            int cap = rules.houseAssign("children_cap", 4);
+            int joinPct = rules.houseAssign("join_existing", 60);
+            int today = db.worldDay();
+
+            // ★ 빈자리가 있는 집만 후보다 (상한이 곧 새 집의 방아쇠)
+            List<HouseEntry> room = new ArrayList<>();
+            for (HouseEntry h : db.housesOf(houseFamily)) {
+                if (h.born() < cap) {
+                    room.add(h);
+                }
+            }
+            Long houseId = null;
+            if (!room.isEmpty() && dice.nextInt(100) < joinPct) {
+                // 빈자리가 많은 집일수록 잘 뽑힌다 (가중 추첨)
+                int total = 0;
+                for (HouseEntry h : room) {
+                    total += cap - h.born();
+                }
+                int roll = dice.nextInt(total);
+                for (HouseEntry h : room) {
+                    roll -= cap - h.born();
+                    if (roll < 0) {
+                        houseId = h.id();
+                        break;
+                    }
+                }
+            }
+            if (houseId == null) {
+                // ★ 새 집이 선다 — 세계에 없던 가문 하나가 생긴다
+                List<String> regions = rules.playableRegions();
+                String region = regions.get(dice.nextInt(regions.size()));
+                houseId = db.createHouse(houseFamily,
+                        houseName(houseFamily, region), region,
+                        rules.houseState(houseFamily, dice), today);
+                db.logEvent("가문_창건", "house", String.valueOf(houseId),
+                        Map.of("집안", houseFamily, "지역", region));
+            }
+            if (houseId != null && houseId > 0) {
+                db.setHouse(characterId, houseId);
+            }
+        } catch (Exception e) {
+            // ★ 집을 못 지어도 아이는 태어난다 (생성이 가문 때문에 죽으면 안 된다)
+            System.err.println("가문을 세우지 못했다 (아이는 태어났다): " + e.getMessage());
+        }
+    }
+
+    /**
+     * 집의 이름 — ★ <b>성(姓)은 무가 계열에만 붙는다.</b>
+     *
+     * <p>이 세계의 등록 NPC 는 <b>32명 전원 성이 없고</b>(한백·묵삼·곽진 — 두 자 이름),
+     * <b>세가만 성으로 불린다</b>(남궁세가·팽가·당가). 즉 <b>성을 가진다는 것이 곧 가문을 가진다는 뜻</b>이다.
+     * 그러므로 농가의 집은 「청하현 농가의 자식」 이지 「이(李)씨 농가」가 아니다.
+     */
+    private String houseName(String family, String region) {
+        String regionName = rules.regionName(region);
+        if (!rules.isMartialHouse(family)) {
+            return rules.houseNameFormat(false)
+                    .replace("{region}", regionName)
+                    .replace("{family}", family.replace('_', ' '));
+        }
+        String surname = rules.rollSurname(dice);
+        if (surname == null) {
+            return regionName + " " + family.replace('_', ' ');
+        }
+        return rules.houseNameFormat(true)
+                .replace("{region}", regionName)
+                .replace("{surname}", surname);
+    }
+
+    /**
+     * ★★ <b>탄생 순간의 형제를 시트에 박제한다</b> ({@code 서장_형제}).
+     *
+     * <p><b>이것이 시간의 비대칭을 푸는 못이다.</b> 사용자가 짚었다:
+     * <i>"형이 먼저 태어남 (동생이 있는지는 모름), 동생이 태어남 (형이 있는 줄 앎)."</i>
+     *
+     * <p>서장은 <b>미리 쓴다.</b> 형의 1장은 탄생에 굳는다 — 그때는 <b>정말로 혼자였다.</b>
+     * 그런데 2장·3장은 <b>나중에</b> 그려진다. 그때 형제를 <b>산 채로</b> 읽으면
+     * <b>없던 동생이 2장에서 튀어나온다</b> — 1장과 어긋난다.
+     *
+     * <p>그래서 <b>탄생의 형제를 못 박는다.</b> 서장의 모든 장면이 이 스냅숏만 읽는다:
+     * <ul>
+     *   <li><b>형</b> — 빈 목록. 그의 서장은 <b>영원히</b> "나는 혼자였다"고 말한다. <b>거짓말이 아니다</b></li>
+     *   <li><b>동생</b> — 형이 든다. 그의 서장은 형이 있는 세계에서 쓰였다</li>
+     * </ul>
+     *
+     * <p><b>★ 지금의 형제는 다른 곳에 산다</b> — {@code mvtSheet.kin} 과 {@code /혼천 정보} 는
+     * <b>산 것</b>을 읽는다 (houseMembers). <b>서장은 과거고, 시트는 현재다.</b>
+     */
+    private void snapshotKinAtBirth(long characterId, Map<String, Object> sheet) {
+        try {
+            List<Map<String, Object>> kin = kinOf(characterId);
+            List<String> frozen = new ArrayList<>();
+            for (Map<String, Object> k : kin) {
+                frozen.add(k.get("title") + " " + k.get("name"));
+            }
+            // ★ 빈 목록도 **적는다** — "형제가 없었다" 는 것도 사실이다 (없는 칸과 다르다)
+            sheet.put(Seojang.SHEET_KIN, frozen);
+        } catch (Exception e) {
+            System.err.println("탄생의 형제를 박제하지 못했다: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ★★ <b>아우가 났다 — 형에게 소식이 간다.</b>
+     *
+     * <p><b>형은 「어느 날 형이 되는 것」을 겪는다.</b> 처음부터 형제였던 것이 아니다.
+     *
+     * <p><b>★ 소문의 범위와 무관하다</b> ({@code birth_rumor.kin_always_know}).
+     * 세상은 강도만큼만 안다 (서자면 인접 현까지). 그러나 <b>형은 언제나 안다</b> —
+     * 소문의 문제가 아니라 <b>제 집의 일</b>이다.
+     *
+     * <p>어디로 가는가: <b>디스코드 DM</b> (등록부가 정한다). 형은 <b>접속해 있지 않을 수 있고</b>,
+     * DM 은 언제 봐도 거기 있다. ★ 게임 안 통로는 <b>아직 없다</b> (B-091).
+     */
+    private void tellElders(long newbornId, String newbornName) {
+        try {
+            Map<String, Object> news = rules.siblingNews();
+            if (!Boolean.TRUE.equals(news.get("enabled"))) {
+                return;
+            }
+            Long houseId = db.houseOfCharacter(newbornId);
+            if (houseId == null) {
+                return;
+            }
+            String houseName = db.house(houseId).map(HouseEntry::name).orElse("그 집");
+            Object gRaw = db.findCharacterById(newbornId)
+                    .map(r -> ((Map<?, ?>) r.get("sheet")).get(rules.genderSheetKey()))
+                    .orElse(null);
+            String newbornGender = gRaw == null ? null : String.valueOf(gRaw);
+
+            for (Map<String, Object> elder : db.houseMembers(houseId)) {
+                long elderId = ((Number) elder.get("id")).longValue();
+                if (elderId == newbornId) {
+                    continue;   // 나 자신에게는 안 보낸다
+                }
+                // ★ 손위만? — 아니다. **집의 모든 식구**가 안다 (누나도 아우가 난 것을 안다).
+                //   호칭은 **불리는 자(갓난아이)의 성별**로 정해진다 — 아우/누이
+                String title = rules.kinTitle(false, newbornGender);
+                var row = db.findCharacterById(elderId);
+                if (row.isEmpty()) {
+                    continue;
+                }
+                String discordId = String.valueOf(row.get().get("discord_id"));
+                db.logEvent(String.valueOf(news.getOrDefault("ledger", "형제_탄생")),
+                        "character", String.valueOf(elderId), "character", String.valueOf(newbornId),
+                        Map.of("아이", newbornName, "호칭", title, "집", houseName));
+                if (discordId == null || discordId.isBlank() || "null".equals(discordId)) {
+                    continue;
+                }
+                String body = String.valueOf(news.getOrDefault("body", "{house}에 아이가 하나 더 났다."))
+                        .replace("{house}", houseName)
+                        .replace("{name}", newbornName)
+                        .replace("{title}", title);
+                dm(discordId, null, new EmbedBuilder().setColor(BLOOD)
+                        .setTitle(String.valueOf(news.getOrDefault("title", "네 아우가 났다")))
+                        .setDescription(body)
+                        // ★ 형의 서장은 그대로다 — 그 사실을 **말해 준다** (거짓말이 아니었다)
+                        .setFooter(String.valueOf(news.getOrDefault("footer",
+                                "네 서장은 그때의 것이다 — 그때는 정말 혼자였다.")))
+                        .build());
+            }
+        } catch (Exception e) {
+            System.err.println("형에게 소식을 전하지 못했다: " + e.getMessage());
+        }
     }
 
     /** F27 — 기본 발단 풀: family_only가 없거나 이 집안을 가리키는 발단만 */
@@ -618,125 +1257,441 @@ public final class GameListener extends ListenerAdapter {
         return attrs;
     }
 
-    private MessageEmbed birthEmbed(Character ch) {
+    private MessageEmbed birthEmbed(Born born) {
+        Character ch = born.ch();
+        // ★ 성별은 시트에서 읽는다 (Character 레코드가 아니라 — 시트가 사실의 원본이다)
+        Object gender = born.sheet().get(rules.genderSheetKey());
+        String head = gender == null ? "" : "**" + rules.genderLabel(String.valueOf(gender)) + "** · ";
         return new EmbedBuilder().setColor(BLOOD)
                 .setTitle("한 아이가 태어났다 — " + ch.name)
-                .setDescription("성향 **" + ch.disposition + "** · " + ch.bracket + " " + ch.age + "세 · **"
-                        + ch.family.replace('_', ' ') + "**\n발단: **" + ch.incident.replace('_', ' ')
-                        + "** — 나머지는 운명이 정했다.\n서장 스레드가 열렸다 — 그곳에서 이야기가 시작된다.")
+                .setDescription(head + "성향 **" + ch.disposition + "** · " + ch.bracket + " " + ch.age
+                        + "세 · **" + ch.family.replace('_', ' ') + "**\n발단: **"
+                        + ch.incident.replace('_', ' ')
+                        + "** — 나머지는 운명이 정했다.")
                 .build();
     }
 
-    // ─── 서장 — 프라이빗 스레드 + 발단 3장면 턴 루프 (scenes 테이블로 재시작 생존) ───
+    // ═══════════════ 서장(序章) — ★ **책 한 권으로 강호에서 흐른다** ═══════════════
+    //
+    // 【★ 옛 길은 죽었다 (2026-07-13)】 서장은 **디스코드의 프라이빗 스레드**에서 흘렀다:
+    //   임베드가 뜨고, 버튼 셋(customId "tn:<장면>:<선택>")이 붙고, 눌렀다.
+    //   사용자: *"이제 봇도 스토리 마크로 진행화 합시다. **디스코드에서 채팅을 치고 진행하는 것이
+    //           아닌 마크로 넘어가는 걸로** 표현하자."*
+    //
+    //   그래서 **스레드는 더 이상 열리지 않고, tn 버튼은 없앴다.** 두 벌을 남기지 않는다 —
+    //   "두 벌이면 하나가 낡는다." 디스코드에 남은 것은 **생성 문답**과 **이정표 하나**뿐이다.
+    //
+    // 【★ 그런데 그리는 것은 여전히 봇이다】 마크는 **서책**이고 봇이 **저자**다:
+    //   · LLM(LlmRenderer)도 · 판정 엔진(2d6·성별 보정)도 · 시트도 — **봇에만 있다**
+    //   · 마크는 **DB 를 열지 않는다** (단일 작성자 규약)
+    //   → 마크가 문장을 지으면 **정본이 둘**이 된다. 그래서 마크에는 문장이 한 줄도 없다.
+    //
+    // 【진행은 시트에 산다 — DB 스키마를 건드리지 않았다】 (sheet_json 은 원래 자유 서식이다.
+    //   마이그레이션도, **봇 정지도** 필요 없었다):
+    //     서장_장면 (0..N, N = 에필로그) · 서장_직전등급 · 서장_본문 · 서장_토큰 · 서장_본문_지문
+    //   ★ 옛 길의 `scenes` 표(스레드 잠금)는 서장에서 **더 이상 쓰지 않는다** — 스레드가 없으니까.
+    //
+    // 【흐름】 birth → (미리 쓰기) → 접합 → 다리가 책을 내려보냄 → 클릭 → seojang_choice →
+    //         판정 → 다음 장 (미리 쓰기) → … → 에필로그 → [강호로 나선다] → 출도
 
-    private void openSeojang(ButtonInteractionEvent event, Born born) {
-        TextChannel channel = event.getChannel().asTextChannel();
-        channel.createThreadChannel("서장 — " + born.ch.name(), true).queue(thread -> {
-            thread.addThreadMember(event.getUser()).queue();
-            try {
-                db.openScene(channel.getId(), thread.getId(), born.ch.id());
-            } catch (Exception e) {
-                thread.sendMessage("장면 기록 실패: " + e.getMessage()).queue();
+    /** 태어난 직후 — 서장 0장을 **미리 쓴다** (사람은 아직 마크로 걸어오는 중이다) */
+    private void startSeojang(Born born) throws Exception {
+        Map<String, Object> sheet = born.sheet();
+        sheet.put(Seojang.SHEET_SCENE, 0);
+        db.updateCharacter(born.ch().id(), sheet, born.ch().wallet(), "범인", "서장", "서장");
+        if (rules.seojang.prerender()) {
+            // ★ 미리 쓰기 — 접합도 하기 전이다. 사람이 디스코드를 떠나 마크를 켜고 나루를 걷는
+            //   그 몇 분이 22.4초를 삼킨다. 책이 손에 올 때 **이미 쓰여 있다.**
+            writeScene(born.ch().id(), 0, null);
+        }
+    }
+
+    /**
+     * ★★ <b>한 장을 그린다</b> — 붓은 하나다 ({@link Scribe} — 「배는 한 명씩 탄다」).
+     *
+     * <p>글은 <b>장면이 넘어가는 순간 한 번만</b> 그리고 시트에 못 박는다. 다리는 2초마다
+     * {@code seojang.json} 을 찍는데, 그때마다 LLM 을 부르면 <b>2초마다 새 소설이 쓰인다</b> —
+     * 사람이 읽던 문장이 눈앞에서 바뀐다. 다리는 <b>적힌 것을 옮길 뿐</b>이다.
+     *
+     * @param idx 장면 번호. {@code sceneCount} 와 같으면 <b>에필로그</b>다
+     */
+    /**
+     * ★★ <b>지금 붓이 들려 있는 서장</b> — 같은 장을 두 번 그리지 않게 막는 빗장.
+     *
+     * <p><b>이것이 없으면 무한 재렌더다:</b> 다리는 2초마다 {@code seojang.json} 을 찍고, 그때
+     * 글이 아직 없으면 다시 그리라고 시킨다 — <b>그런데 붓은 아직 그리는 중이다.</b> 2초마다
+     * 새 요청이 줄에 서고, 줄은 영영 안 줄어든다.
+     */
+    private final java.util.Set<Long> painting = ConcurrentHashMap.newKeySet();
+
+    private void writeScene(long chId, int idx, String prevTier) throws Exception {
+        if (!painting.add(chId)) {
+            return;   // 이미 이 사람의 붓이 들려 있다 — 두 번 그리지 않는다
+        }
+        boolean handed = false;
+        try {
+            handed = writeScene0(chId, idx, prevTier);
+        } finally {
+            if (!handed) {
+                painting.remove(chId);   // 붓을 못 들었다 (죽었거나 출도했다) — 빗장을 푼다
             }
-            seojangs.put(thread.getIdLong(), new Seojang(born.ch, born.sheet));
-            postScene(thread, born.ch, 0, null);
-        });
+        }
     }
 
-    /** 재시작 후 첫 버튼 — scenes 테이블에서 서장을 복원한다 (알파 한계 1 해소) */
-    @SuppressWarnings("unchecked")
-    private Seojang restoreSeojang(long threadId) throws Exception {
-        Optional<Long> chId = db.sceneCharacter(String.valueOf(threadId));
-        if (chId.isEmpty()) {
-            return null;
-        }
-        var row = db.findCharacterById(chId.get());
+    /** @return 붓을 실제로 들었는가 (들었으면 {@link #persistScene} 이 빗장을 푼다) */
+    private boolean writeScene0(long chId, int idx, String prevTier) throws Exception {
+        var row = db.findCharacterById(chId);
         if (row.isEmpty() || !"서장".equals(row.get().get("status"))) {
-            return null;
+            return false;
         }
-        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get().get("sheet"));
-        Seojang s = new Seojang(fromDb(row.get()), sheet);
-        seojangs.put(threadId, s);
-        return s;
+        Character ch = fromDb(row.get());
+        int total = rules.seojang.sceneCount(ch.incident());
+        boolean epilogue = idx >= total;
+
+        // ★ 적서 — 적자의 유년과 서자의 유년은 **같은 글일 수 없다** (시트가 정본이다)
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sh = (Map<String, Object>) row.get().get("sheet");
+        Object rk = sh.get(rules.birthRankSheetKey());
+        String rank = rk == null ? null : String.valueOf(rk);
+
+        // ★★ 가문 — **흥한 집과 기우는 집의 유년은 같지 않다.** 그리고 고을도 다르다.
+        //   ★ 형태는 **탄생에 고정**이므로 (사용자 확정) 미리 쓴 글이 거짓말이 될 일이 없다.
+        String hState = null;
+        String hRegion = null;
+        try {
+            Long hid = db.houseOfCharacter(chId);
+            if (hid != null) {
+                var h = db.house(hid);
+                if (h.isPresent()) {
+                    hState = h.get().state();
+                    hRegion = h.get().region();
+                }
+            }
+        } catch (Exception ignored) {
+            // 가문을 못 읽어도 서장은 흐른다 (색이 하나 빠질 뿐이다)
+        }
+
+        String regionName = hRegion == null ? null : rules.regionName(hRegion);
+        // ★★ **탄생 순간의** 형제를 읽는다 (산 것이 아니라 **박제된 것**).
+        //   형의 서장은 동생이 나기 전에 쓰였다 — 2장·3장이 나중에 그려져도 **없던 동생이 안 튀어나온다.**
+        @SuppressWarnings("unchecked")
+        List<String> kinAtBirth = sh.get(Seojang.SHEET_KIN) instanceof List<?> kl
+                ? kl.stream().map(String::valueOf).toList() : List.of();
+
+        String base = epilogue ? rules.seojang.epilogue(ch, prevTier, regionName)
+                : rules.seojang.sceneBody(ch, idx, prevTier, rank, hState, hRegion, kinAtBirth);
+        String title = epilogue ? rules.seojang.book("epilogue_header", "서장의 끝")
+                : rules.seojang.title(ch.incident(), idx, regionName);
+        String facts = epilogue ? epilogueFacts(ch, prevTier, base)
+                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion);
+
+        // ★ 지문 — 이 글이 **어느 캐릭터의 어느 장면의 어느 이음새**를 위해 쓰였는가.
+        //   내려보낼 때 지금과 다르면 그 글은 낡았다 (seojang.yml prerender.invalidate).
+        String print = Seojang.fingerprint(chId, idx, prevTier);
+        String token = print + ":" + Long.toHexString(dice.nextLong() & 0xffffffffL);
+
+        scribe.write(facts, base, ahead -> ferryTell(chId, ahead))
+                .thenAccept(written -> persistScene(chId, idx, token, print, written));
+        return true;
     }
 
-    private void onTurnChoice(ButtonInteractionEvent event, int scene, int option) throws Exception {
-        Seojang s = seojangs.get(event.getChannel().getIdLong());
-        if (s == null) {
-            s = restoreSeojang(event.getChannel().getIdLong());
+    /** 그려진 글을 시트에 못 박고, 다리에 내려보내라고 이른다 (붓 스레드에서 불린다) */
+    private void persistScene(long chId, int idx, String token, String print, Scribe.Written written) {
+        try {
+            var row = db.findCharacterById(chId);
+            if (row.isEmpty() || !"서장".equals(row.get().get("status"))) {
+                return;   // 그 사이에 초기화됐거나 죽었다 — 낡은 글은 버린다
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get().get("sheet"));
+            // ★ 지금 이 캐릭터가 서 있는 장면이 아니면 **버린다** (그 사이 사람이 앞서 갔다)
+            if (sceneIdx(sheet.get(Seojang.SHEET_SCENE)) != idx) {
+                return;
+            }
+            sheet.put(Seojang.SHEET_BODY, written.text());
+            sheet.put(Seojang.SHEET_TOKEN, token);
+            sheet.put(Seojang.SHEET_PRINT, print);
+            sheet.put(Seojang.SHEET_FALLBACK, written.fallback());
+            db.updateCharacter(chId, sheet, ((Number) row.get().get("wallet")).intValue(),
+                    "범인", "서장", "서장");
+            if (written.fallback()) {
+                // ★ 폴백은 침묵하지 않는다 — 장부에 남는다 (사람에겐 책의 간기 한 줄)
+                db.logEvent("서사_폴백", "character", String.valueOf(chId),
+                        Map.of("장면", idx, "사유", written.reason() == null ? "미상" : written.reason()));
+            }
+            if (bridge != null) {
+                bridge.publishSeojang();   // ★ 사람이 책을 펴 놓고 기다린다 — 다음 바퀴를 기다리지 않는다
+            }
+        } catch (Exception e) {
+            System.err.println("서장 — 글을 장부에 못 박지 못했다: " + e.getMessage());
+        } finally {
+            painting.remove(chId);   // ★ 붓을 내려놓는다 — 실패해도 반드시 (안 그러면 영영 못 그린다)
         }
-        if (s == null) {
-            event.editMessage("이 서장은 이미 끝났거나 기록이 없다 — `/혼천 정보`로 상태를 확인하라.")
-                    .setComponents().queue();
+    }
+
+    /** 나루의 사공 — <b>차례를 말해 준다</b> (침묵 금지). 앞에 아무도 없으면 굳이 말하지 않는다 */
+    private void ferryTell(long chId, int ahead) {
+        if (ahead <= 0 || bridge == null) {
             return;
         }
-        Scene sc = scenes(s.ch)[scene];
-        Choice pick = sc.choices[option];
+        bridge.ferryNotice(chId, rules.seojang.ferry("queued",
+                "나루의 사공은 한 번에 한 사람만 태운다 — 앞에 {ahead}인.")
+                .replace("{ahead}", String.valueOf(ahead)));
+    }
 
-        int stat = s.ch.attrs().getOrDefault(pick.stat, 2);
+    /**
+     * ★★ <b>그 손이 책의 글자를 눌렀다</b> — 서장의 유일한 진행 신호 (다리의 {@code seojang_choice}).
+     *
+     * <p><b>★ 다리를 믿지 않는다.</b> jsonl 은 파일이다 — 손으로 한 줄 끼워 넣을 수 있다. 그래서:
+     * <ol>
+     *   <li>그 몸이 <b>정말 그 캐릭터인가</b> (mvt_link 대조 — 남의 서장은 못 넘긴다)</li>
+     *   <li>토큰이 <b>지금 그 장면의 것인가</b> (낡은 책·연타는 여기서 죽는다)</li>
+     *   <li>고른 번호가 <b>등록부에 있는 선택지인가</b> (없는 길은 못 간다)</li>
+     * </ol>
+     *
+     * @param choice 선택지 번호. <b>-1 = 출도</b> (마지막 책의 [강호로 나선다])
+     */
+    void seojangChoice(String mcUuid, String token, int choice, int today) throws Exception {
+        Optional<Long> owner = db.characterOfMc(mcUuid);
+        if (owner.isEmpty()) {
+            return;   // 접합되지 않은 몸 — 서장이 갈 곳이 없다
+        }
+        long chId = owner.get();
+        var row = db.findCharacterById(chId);
+        if (row.isEmpty() || !"서장".equals(row.get().get("status"))) {
+            return;   // 이미 출도했거나 죽었다 — 낡은 책의 클릭이다
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get().get("sheet"));
+
+        // ★ 토큰 대조 — **낡은 책의 클릭은 아무것도 하지 않는다** (연타도 여기서 죽는다)
+        String want = String.valueOf(sheet.get(Seojang.SHEET_TOKEN));
+        if (token == null || !token.equals(want)) {
+            System.err.println("서장 — 낡은/남의 토큰 (버린다): " + token + " ≠ " + want);
+            return;
+        }
+        Character ch = fromDb(row.get());
+        int idx = sceneIdx(sheet.get(Seojang.SHEET_SCENE));
+        int total = rules.seojang.sceneCount(ch.incident());
+        int wallet = ((Number) row.get().get("wallet")).intValue();
+
+        // ─── 에필로그의 단 하나의 선택 = 출도(出道) ───
+        if (idx >= total || choice < 0) {
+            // ★ 토큰을 이미 태웠다 — 두 번 눌러도 두 번 출도하지 않는다 (위의 대조가 막는다)
+            sheet.remove(Seojang.SHEET_SCENE);
+            sheet.remove(Seojang.SHEET_TIER);
+            sheet.remove(Seojang.SHEET_BODY);
+            sheet.remove(Seojang.SHEET_TOKEN);
+            sheet.remove(Seojang.SHEET_PRINT);
+            sheet.remove(Seojang.SHEET_FALLBACK);
+            db.updateCharacter(chId, sheet, wallet, "범인", "강호", "청하현");
+            db.logEvent("출도", "character", String.valueOf(chId), "mvt", mcUuid,
+                    Map.of("지역", "청하현", "경로", "게임내_책"));
+            if (bridge != null) {
+                bridge.publishSeojang();   // 목록에서 사라진다 — 책은 회수된다
+            }
+            return;
+        }
+
+        List<Seojang.Scene> list = rules.seojang.scenesOf(ch.incident());
+        Seojang.Scene sc = list.get(idx);
+        if (choice >= sc.choices().size()) {
+            return;   // 등록부에 없는 길 (다리가 지어낸 번호) — 버린다
+        }
+        Seojang.Choice pick = sc.choices().get(choice);
+
+        int stat = rules.genderStat(sheet, pick.stat(), 2);   // ★ 성별 보정(히든)이 여기서 든다
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
-        JudgmentEngine.Tier tier = rules.judgment.resolve(stat + pick.bonus, roll, sc.resist);
-        int margin = stat + pick.bonus + roll - sc.resist;
-        db.logEvent("판정", "character", String.valueOf(s.ch.id()),
-                Map.of("장면", sc.title, "선택", pick.label, "굴림", roll, "마진", margin, "등급", tier.name()));
+        JudgmentEngine.Tier tier = rules.judgment.resolve(stat + pick.bonus(), roll, sc.resist());
+        int margin = stat + pick.bonus() + roll - sc.resist();
+        db.logEvent("판정", "character", String.valueOf(chId), "mvt", mcUuid,
+                Map.of("장면", sc.title(), "선택", pick.label(), "굴림", roll,
+                        "마진", margin, "등급", tier.name(), "출처", "서장_책"));
 
-        EmbedBuilder result = new EmbedBuilder().setColor(INK)
-                .setTitle("판정 — " + pick.label)
-                .setDescription("**" + pick.stat + " " + stat + "** + 2d6 = **" + (stat + pick.bonus + roll)
-                        + "** vs " + sc.resist + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin
-                        + "** → **" + tier.name() + "**");
-        event.editMessageEmbeds(event.getMessage().getEmbeds().get(0), result.build()).setComponents().queue();
-
-        ThreadChannel thread = event.getChannel().asThreadChannel();
-        int next = scene + 1;
-        if (next < scenes(s.ch).length) {
-            // 진행 영속화 — 재시작해도 직전 등급의 이음새가 유지된다
-            s.sheet.put("서장_직전등급", tier.name());
-            db.updateCharacter(s.ch.id(), s.sheet, s.ch.wallet(), "범인", "서장", "서장");
-            postScene(thread, s.ch, next, tier.name());
-        } else {
-            closeSeojang(thread, s, tier.name());
+        // 다음 장으로 — 본문·토큰은 **새로 그릴 때까지 비운다** (낡은 글이 책이 되면 안 된다)
+        int next = idx + 1;
+        sheet.put(Seojang.SHEET_SCENE, next);
+        sheet.put(Seojang.SHEET_TIER, tier.name());
+        sheet.remove(Seojang.SHEET_BODY);
+        sheet.remove(Seojang.SHEET_TOKEN);
+        sheet.remove(Seojang.SHEET_PRINT);
+        db.updateCharacter(chId, sheet, wallet, "범인", "서장", "서장");
+        if (bridge != null) {
+            bridge.publishSeojang();   // ★ "붓이 다음 장을 적고 있다" — 침묵하지 않는다
         }
+        writeScene(chId, next, tier.name());
     }
 
-    /** 서장 종료 = 출도 — 신분 강호·위치 청하현, 지역 채널이 열린다 */
-    private void closeSeojang(ThreadChannel thread, Seojang s, String lastTier) throws Exception {
-        s.sheet.remove("서장_직전등급");
-        db.updateCharacter(s.ch.id(), s.sheet, s.ch.wallet(), "범인", "강호", "청하현");
-        db.closeScene(thread.getId());
-        db.logEvent("출도", "character", String.valueOf(s.ch.id()), Map.of("지역", "청하현", "등급", lastTier));
-        seojangs.remove(thread.getIdLong());
+    /**
+     * 다리가 내려보낼 <b>지금 서장 중인 몸들</b> — 접합된 산 자만 (Bridge.publishSeojang 이 부른다).
+     *
+     * <p>글이 아직 안 그려졌으면 {@code narration} 이 null 이다 — 그때 마크는 <b>책을 주지 않고</b>
+     * 사공의 말만 한다. 그리고 <b>지문이 어긋나면 다시 그린다</b> (미리 쓴 글이 낡았을 수 있다).
+     */
+    List<Map<String, Object>> seojangEntries() throws Exception {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map.Entry<String, Long> body : db.linkedBodies().entrySet()) {
+            var row = db.findCharacterById(body.getValue());
+            if (row.isEmpty() || !"서장".equals(row.get().get("status"))) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> sheet = (Map<String, Object>) row.get().get("sheet");
+            Character ch = fromDb(row.get());
+            int idx = sceneIdx(sheet.get(Seojang.SHEET_SCENE));
+            int total = rules.seojang.sceneCount(ch.incident());
+            boolean epilogue = idx >= total;
+            String prevTier = sheet.get(Seojang.SHEET_TIER) == null
+                    ? null : String.valueOf(sheet.get(Seojang.SHEET_TIER));
 
-        Character ch = s.ch;
-        String fallback = Narration.epilogue(ch, lastTier);
-        renderer.render(epilogueFacts(ch, lastTier, fallback), fallback)
-                .thenAccept(text -> thread.sendMessageEmbeds(new EmbedBuilder().setColor(BLOOD)
-                        .setTitle("서장의 첫 밤이 저물었다")
-                        .setDescription(text + "\n\n" + Narration.debut(ch)).build()).queue());
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("mc_uuid", body.getKey());
+            e.put("character", ch.name());
+            e.put("scene", idx);
+            e.put("total", total);
+            e.put("final", epilogue);
+            // ★ 책의 제목에도 고을이 든다 (「낯선 고을 청하현」 — 강남의 아이는 「강남 상로」다)
+            String rn = null;
+            try {
+                Long hid2 = db.houseOfCharacter(ch.id());
+                if (hid2 != null) {
+                    var h2 = db.house(hid2);
+                    if (h2.isPresent()) {
+                        rn = rules.regionName(h2.get().region());
+                    }
+                }
+            } catch (Exception ignored) {
+                // 가문을 못 읽어도 책은 온다
+            }
+            e.put("title", epilogue ? rules.seojang.book("epilogue_header", "서장의 끝")
+                    : rules.seojang.title(ch.incident(), idx, rn));
+
+            Object body0 = sheet.get(Seojang.SHEET_BODY);
+            String print = String.valueOf(sheet.get(Seojang.SHEET_PRINT));
+            String now = Seojang.fingerprint(ch.id(), idx, prevTier);
+            if (body0 == null) {
+                e.put("state", "쓰는_중");   // 붓이 아직 들려 있다 — 마크는 사공의 말만 한다
+                // ★★ **막다른 곳을 막는다.** 글이 없는데 붓도 안 들려 있다면 그 서장은 **버려진 것**이다
+                //   (봇이 그리는 도중에 꺼졌다 — 미리 쓰기가 날아갔다). 그대로 두면 사람은
+                //   "쓰는 중" 이라는 말만 보며 **영영 책을 못 받는다.** 다시 든다.
+                //   (painting 이 빗장이라 2초마다 중복으로 그리지는 않는다)
+                if (!painting.contains(ch.id())) {
+                    System.out.println("서장 — 버려진 붓을 다시 든다: " + ch.name() + " (장면 " + idx + ")");
+                    writeScene(ch.id(), idx, prevTier);
+                }
+            } else if (!now.equals(print)) {
+                // ★ 미리 쓴 글이 **낡았다** — 지문이 어긋난다. 버리고 다시 쓴다
+                e.put("state", "쓰는_중");
+                writeScene(ch.id(), idx, prevTier);
+            } else {
+                e.put("state", "펼침");
+                e.put("narration", String.valueOf(body0));
+                e.put("token", String.valueOf(sheet.get(Seojang.SHEET_TOKEN)));
+                e.put("fallback", Boolean.TRUE.equals(sheet.get(Seojang.SHEET_FALLBACK))
+                        && rules.fallbackVisible());
+                List<Map<String, Object>> choices = new ArrayList<>();
+                if (!epilogue) {
+                    List<Seojang.Choice> cs = rules.seojang.scenesOf(ch.incident()).get(idx).choices();
+                    for (int i = 0; i < cs.size(); i++) {
+                        choices.add(Map.of("n", i, "label", cs.get(i).label()));
+                    }
+                }
+                e.put("choices", choices);   // 에필로그는 빈 목록 — 마크가 [강호로 나선다] 를 붙인다
+            }
+            out.add(e);
+        }
+        return out;
     }
 
-    private void postScene(ThreadChannel thread, Character ch, int idx, String prevTier) {
-        Scene sc = scenes(ch)[idx];
-        String fallback = Narration.scene(ch, idx, prevTier);
-        List<Button> buttons = new ArrayList<>();
-        for (int i = 0; i < sc.choices.length; i++) {
-            buttons.add(Button.primary("tn:" + idx + ":" + i, sc.choices[i].label));
+    /** 시트의 장면 번호 — 없으면 0 (서장의 첫 장). ★ 이미 있는 num(Object):double 과 다른 축이다 */
+    private static int sceneIdx(Object v) {
+        return v instanceof Number n ? n.intValue() : 0;
+    }
+
+    /**
+     * ★★ <b>형제자매</b> — 같은 집에 태어난 아이들, <b>태어난 순서대로</b>.
+     *
+     * <p>사용자: <i>"같은 세가에 같이 태어나게 되었다면 <b>순서대로 형, 누나</b>가 되어야 함."</i>
+     *
+     * <p><b>★ 문파의 호칭과 다르다 — 섞지 않는다.</b> 문파는 <b>입문 순</b>의 사형·사저·사제·사매고
+     * (sect_life.yml brotherhood.order), 혈연은 <b>태어난 순</b>의 형·누나·동생이다.
+     * 어휘는 {@code player_creation.yml gender.gates.honorifics.kin} 이 정한다 —
+     * <b>코드가 말을 지어내지 않는다.</b>
+     *
+     * <p><b>★ 호칭은 불리는 자의 성별로 정해진다</b> ({@code resolve_by: 대상의_성별}) —
+     * 내가 사내든 계집이든, 먼저 난 사내는 '형'이다.
+     *
+     * <p><b>표를 만들지 않았다 (마이그레이션 없음).</b> 서열은 {@code characters.id} 순의 <b>파생값</b>이다 —
+     * 파생값은 낡을 수가 없다. 별도 표를 두면 그 표가 진실과 갈라진다.
+     */
+    private List<Map<String, Object>> kinOf(long me) throws Exception {
+        List<Map<String, Object>> out = new ArrayList<>();
+        // ═══ ★★ 형제는 **한 채의 집**으로만 잡는다 (유형이 아니라) — B-077 ═══
+        //
+        // 【담당자가 만들었던 병】 형제를 **집안 유형**으로 묶었다. 그래서 **농가의 아이 둘이 남매**가 됐다 —
+        //   서로 다른 농가인데. 이제 **같은 house_id 를 가진 산 자만** 남매다.
+        //
+        // 【★ 이것은 「지금」의 형제다 — 서장의 형제가 아니다】
+        //   서장은 **탄생 순간의 형제**를 박제해 읽는다 (Seojang.SHEET_KIN). 형의 서장은 동생이
+        //   나기 전에 쓰였고, 그때 그는 **정말로 혼자였다.** 그 글은 고치지 않는다.
+        //   **서장은 과거고, 이 함수는 현재다.** 둘을 섞지 마라.
+        if (!rules.houseSystemEnabled()) {
+            return out;   // 가문이 아직 없다 — 형제도 아직 없다
         }
-        renderer.render(sceneFacts(ch, sc.title, prevTier, fallback), fallback)
-                .thenAccept(text -> thread.sendMessageEmbeds(new EmbedBuilder().setColor(INK)
-                                .setTitle(sc.title).setDescription(text).build())
-                        .setComponents(ActionRow.of(buttons)).queue());
+        // ★★ 여기서부터는 **가문 실체(house_id) 기준**이다. 유형으로 묶지 않는다.
+        Long houseId = db.houseOfCharacter(me);
+        if (houseId == null) {
+            return out;   // 이 사람은 아직 집이 없다 (마이그레이션 전에 태어났다)
+        }
+        List<Map<String, Object>> born = db.houseMembers(houseId);   // 태어난 순 (id 오름차순)
+        boolean before = true;   // 나를 만나기 전까지는 전부 손위다
+        for (Map<String, Object> k : born) {
+            long id = ((Number) k.get("id")).longValue();
+            if (id == me) {
+                before = false;
+                continue;
+            }
+            String theirGender = k.get("성별") == null ? null : String.valueOf(k.get("성별"));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", k.get("name"));
+            row.put("elder", before);
+            // ★ 등록부의 말 (형/누나/동생) — 없으면 성별 담당의 unknown ('무인')
+            row.put("title", rules.kinTitle(before, theirGender));
+            out.add(row);
+        }
+        return out;
     }
 
     // ─── LLM 렌더 사실 묶음 — 엔진이 계산한 것만 넘긴다 (7계: 엔진 불가침) ───
 
+    /**
+     * ★ 인물 한 줄 — LLM 에게 주는 <b>사실</b>. <b>적서가 여기 실린다</b>:
+     * 적자의 유년과 서자의 유년은 <b>같은 글일 수 없다</b> (담장 안에서부터 무게가 다르다).
+     */
     private String personLine(Character ch) {
-        return ch.name() + " (" + ch.bracket() + " " + ch.age() + "세, 성향 " + ch.disposition()
-                + ", 집안 " + ch.family().replace('_', ' ') + ", 발단 " + ch.incident().replace('_', ' ') + ")";
+        return personLine(ch, null);
     }
 
-    private String sceneFacts(Character ch, String title, String prevTier, String base) {
-        return "장면: " + title + "\n인물: " + personLine(ch) + "\n"
+    private String personLine(Character ch, String rank) {
+        return ch.name() + " (" + ch.bracket() + " " + ch.age() + "세, 성향 " + ch.disposition()
+                + ", 집안 " + ch.family().replace('_', ' ')
+                + (rank == null ? "" : ", **" + rank + "**")
+                + ", 발단 " + ch.incident().replace('_', ' ') + ")";
+    }
+
+    /**
+     * ★ 장면의 사실 — <b>집안이 여기 실린다.</b>
+     *
+     * <p>사용자: <i>"모든 사람이 모두 똑같은 시작이 아니라는 뜻."</i> 무가의 자식과 객잔집 자식의
+     * 서장이 <b>같은 문장이면 안 된다.</b> {@link #personLine} 이 이미 집안·발단·성향·나이를 싣고,
+     * 폴백 문장도 집안별로 갈린다 (seojang.yml prose.family_color — LLM 이 죽어도 글이 갈린다).
+     */
+    private String sceneFacts(Character ch, String title, String prevTier, String base, String rank,
+                             String houseState, String region) {
+        String houseLine = houseState == null && region == null ? ""
+                : "가문: " + (region == null ? "" : rules.regionName(region) + " ")
+                + (houseState == null ? "" : "(" + houseState + "한 집)") + "\n";
+        return "장면: " + title + "\n인물: " + personLine(ch, rank) + "\n" + houseLine
                 + (prevTier == null ? "" : "직전 판정 결과: " + prevTier + "\n")
                 + "기준 서사(이 사실 범위 안에서만 확장하라):\n" + base;
     }
@@ -745,41 +1700,6 @@ public final class GameListener extends ListenerAdapter {
         return "장면: 서장 에필로그 — 청하현 정착의 첫 밤\n인물: " + personLine(ch)
                 + "\n마지막 판정 결과: " + lastTier
                 + "\n기준 서사(이 사실 범위 안에서만 확장하라):\n" + base;
-    }
-
-    /** 발단 3장면 — 엔진 골격 (서사는 렌더러/템플릿, 수치는 여기) */
-    private Scene[] scenes(Character ch) {
-        if ("수행_파견".equals(ch.incident())) {
-            // 무가의 자식 전용 서장 — 재난이 아니라 명령: 도주극이 아닌 첫 출문의 이야기
-            return new Scene[]{
-                    new Scene("출문(出門)", 9, new Choice[]{
-                            new Choice("예를 다해 하직한다", "화술", 2),
-                            new Choice("무기고에서 손에 맞는 검을 고른다", "감각", 2),
-                            new Choice("밤새 가전 검형을 다잡는다", "근력", 2)}),
-                    new Scene("이름 없는 길", 11, new Choice[]{
-                            new Choice("상단 행렬에 동행을 청한다", "화술", 2),
-                            new Choice("산길 지름길로 접어든다", "감각", 2),
-                            new Choice("대로를 당당히 걷는다", "체력", 2)}),
-                    new Scene("청하현 — 전표와 이름", 10, new Choice[]{
-                            new Choice("전장에서 전표부터 수령한다", "지혜", 2),
-                            new Choice("객잔에 들어 소문부터 듣는다", "화술", 2),
-                            new Choice("저잣거리와 뒷골목을 눈에 익힌다", "민첩", 2)})
-            };
-        }
-        return new Scene[]{
-                new Scene("그날 밤", 10, new Choice[]{
-                        new Choice("숨을 죽이고 숨는다", "민첩", 2),
-                        new Choice("소리 나는 쪽을 살핀다", "감각", 2),
-                        new Choice("식구들부터 깨운다", "체력", 2)}),
-                new Scene("길 위에서", 12, new Choice[]{
-                        new Choice("밤새 걸음을 서두른다", "체력", 2),
-                        new Choice("흔적을 지우며 간다", "감각", 2),
-                        new Choice("행인 무리에 섞여든다", "화술", 2)}),
-                new Scene("낯선 고을 청하현", 10, new Choice[]{
-                        new Choice("객잔 일손을 구걸한다", "화술", 2),
-                        new Choice("장터에서 잔심부름을 찾는다", "민첩", 2),
-                        new Choice("의방 앞에서 허드렛일을 청한다", "지혜", 2)})
-        };
     }
 
     // ─── 사냥 — 청하현 뒷산: 화후 적립 + 생계 (combat_hwahu·economy 배선) ───
@@ -805,7 +1725,29 @@ public final class GameListener extends ListenerAdapter {
         return false;
     }
 
-    /** 출도 여부 검사 — 서장 중이면 거절 */
+    /**
+     * 출도 여부 검사 — 서장 중이면 거절.
+     *
+     * <p>★ <b>이 문은 그대로 잠겨 있다.</b> 접합은 서장 중에도 되지만(몸과 이름을 잇는 일이다),
+     * 사냥·비무·의뢰·대화는 <b>출도한 자의 것</b>이다. 옛 안내문은 "서장 <b>스레드</b>를 끝내라"고
+     * 했는데 — <b>그 스레드는 이제 없다.</b> 서장은 강호의 책에서 끝난다.
+     */
+    /**
+     * <b>이름이 있는가</b> — 그것만 본다 (출도는 안 본다).
+     *
+     * <p>접합·해제·시트는 <b>서장 중에도</b> 되어야 하는 일이다. 그 문에 출도를 요구하면 순환 교착이 된다
+     * ({@link #askLink} 의 주석 참조 — 같은 병을 {@link #unlinkAccount} 에서 한 번 더 잡았다).
+     */
+    private Optional<Map<String, Object>> requireCharacter(IReplyCallback event, User user)
+            throws Exception {
+        var found = db.findCharacter(user.getId());
+        if (found.isEmpty()) {
+            event.reply(user.getEffectiveName() + " — 캐릭터가 없다. `/혼천 시작`부터.")
+                    .setEphemeral(true).queue();
+        }
+        return found;
+    }
+
     private Optional<Map<String, Object>> requireDebuted(SlashCommandInteractionEvent event, User user)
             throws Exception {
         var found = db.findCharacter(user.getId());
@@ -814,7 +1756,8 @@ public final class GameListener extends ListenerAdapter {
             return Optional.empty();
         }
         if (!"강호".equals(found.get().get("status"))) {
-            event.reply(user.getEffectiveName() + " — 아직 서장 중이다. 서장 스레드를 끝내야 출도한다.")
+            event.reply(user.getEffectiveName() + " — 아직 **서장** 중이다. 강호에서 **서책**을 끝내야 출도한다"
+                            + " (마크에 접속해 `/혼천 접속` 으로 몸을 잇고, 품에 온 책을 펼쳐라).")
                     .setEphemeral(true).queue();
             return Optional.empty();
         }
@@ -869,8 +1812,7 @@ public final class GameListener extends ListenerAdapter {
         Beast beast = BEASTS.get(beastIdx);
         String[] approach = HUNT_APPROACHES[opt];
 
-        Map<String, Object> attrsRaw = (Map<String, Object>) sheet.get("능력치");
-        int stat = ((Number) attrsRaw.getOrDefault(approach[1], 2)).intValue();
+        int stat = rules.genderStat(sheet, approach[1], 2);   // ★ 성별 보정(히든)
         // 발경 — 개화자는 타격에 기를 싣는다 (내력 1 → +1, 부족하면 맨 기술)
         int balgyeong = canBalgyeong(sheet, String.valueOf(row.get("realm"))) ? 1 : 0;
         if (balgyeong > 0) {
@@ -1291,8 +2233,7 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         Quests.Approach approach = q.approaches().get(opt);
-        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
-        int stat = ((Number) attrs.getOrDefault(approach.stat(), 2)).intValue();
+        int stat = rules.genderStat(sheet, approach.stat(), 2);   // ★ 성별 보정(히든)
         // 격상 도전 — 금지가 아니라 사선: 저항 +2 (gate 느슨)
         boolean above = Quests.realmRank(q.realmReq()) > Quests.realmRank(String.valueOf(row.get("realm")));
         int resist = q.resist() + (above ? 2 : 0);
@@ -1407,7 +2348,7 @@ public final class GameListener extends ListenerAdapter {
     private Rumors.Heard npcClue(String npcKey, int today) throws Exception {
         String network = rules.originNetwork(String.valueOf(rules.npcLocation(npcKey)));
         List<Rumors.Heard> heard = db.heard(today, network, rules.rumors.decayEveryDays());
-        // 가장 센 이야기부터 (Db.heard 가 유효강도·최신순으로 준다) — 사람은 큰 소문부터 옮긴다
+        // 가장 센 이야기부터 (PoliticsStore.heard 가 유효강도·최신순으로 준다) — 사람은 큰 소문부터 옮긴다
         return heard.isEmpty() ? null : heard.get(0);
     }
 
@@ -1483,7 +2424,7 @@ public final class GameListener extends ListenerAdapter {
 
         Map<String, Object> row = found.get();
         long chId = ((Number) row.get("id")).longValue();
-        String persona = personaPrompt(npcName, npc);
+        String persona = personaPrompt(npcName, npc, (Map<String, Object>) row.get("sheet"));
         String fallback = fallbackLine(npcName, npc);
         event.deferReply().queue();   // 로컬 LLM 1~3초 — 3초 응답 제한 회피
         // F36 — 키워드 게이트가 먼저: 정보 질문은 결정론으로 판정층 (LLM 호출도 절약)
@@ -1525,8 +2466,7 @@ public final class GameListener extends ListenerAdapter {
     private void resolveInfoCheck(SlashCommandInteractionEvent event, Map<String, Object> row,
                                   long chId, String npcName, String say) throws Exception {
         Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
-        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
-        int stat = ((Number) attrs.getOrDefault("화술", 2)).intValue();
+        int stat = rules.genderStat(sheet, "화술", 2);   // ★ 성별 보정(히든) — 등록부가 화술을 안 가르면 0
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int resist = 11;
         int power = stat + woundMod(sheet);   // 부상은 입도 무겁게 한다 (condition 보정)
@@ -1568,17 +2508,48 @@ public final class GameListener extends ListenerAdapter {
                 reply.build()).queue();
     }
 
-    /** 페르소나 시스템 프롬프트 — 등록부(역할·성향)가 원천, 지식 경계·판정 라우팅 포함 */
+    /**
+     * 페르소나 시스템 프롬프트 — 등록부(역할·성향)가 원천, 지식 경계·판정 라우팅 포함.
+     *
+     * <p>★ 호칭(v4): NPC 가 플레이어를 <b>성별에 맞게</b> 부른다 — 소협(사내) / 여협(계집).
+     * 그 말은 <b>등록부가 정한다</b> (player_creation gender.gates.honorifics.jianghu).
+     * 성별을 모르는 옛 캐릭터는 {@code unknown}(무인) 으로 부른다 — <b>LLM 이 성별을 추측하지 못하게</b>
+     * 못을 박는다 (그러지 않으면 모델이 멋대로 '소협'이라 부른다).
+     */
     @SuppressWarnings("unchecked")
-    private String personaPrompt(String name, Map<String, Object> npc) {
+    private String personaPrompt(String name, Map<String, Object> npc, Map<String, Object> sheet) {
         Object disp = npc.get("disposition");
         String dispositions = disp instanceof List<?> list
                 ? String.join(", ", list.stream().map(String::valueOf).toList()) : "";
+        Object g = sheet == null ? null : sheet.get(rules.genderSheetKey());
+        String honorific = rules.genderEngine.jianghuHonorific(g == null ? null : String.valueOf(g));
         // v3 — 8차-② 채집물 반영: 소문 발명(금서방 철공소·소연 청하정)이 판정 게이트를 우회 →
         //      질문 예시 명시 + 소문·사건 발명을 별도 금지 조항으로 (서버측 F36 키워드 게이트와 이중 방어)
+        // ═══ ★★ NPC 가 **내가 누구의 자식인지** 안다 (2026-07-13 사용자 지시) ═══
+        //
+        // 사용자: *"**NPC와의 대화에서도 적용**되어야 함"* — "자네가 그 무가의 아이인가."
+        //
+        // 【★ 그러나 **모르는 것을 아는 척하면 안 된다**】 청하현의 객잔 주인이 사천 무가의 아이를
+        //   **첫눈에** 알아보면 그것은 세계가 깨진 것이다. 그래서 경계를 이렇게 긋는다:
+        //     · NPC 는 **집안의 결**을 안다 (말씨·옷차림·예법은 몸에 밴다 — 숨길 수 없다)
+        //     · NPC 는 **가문의 이름**은 모른다 (그것은 소문이 닿아야 안다 — 아직 미배선)
+        //   ★ 즉 "무가의 아이 같군" 은 되고, "네가 아무개 가문의 셋째지" 는 **안 된다.**
+        //   그 경계를 프롬프트에 못 박는다. **소문 축과의 접합은 청구서로 남겼다** (보고서 참조).
+        String house = sheet == null || sheet.get("집안") == null ? null
+                : String.valueOf(sheet.get("집안"));
+        boolean left = sheet != null && Boolean.TRUE.equals(sheet.get("집안_이탈"));
+        String houseLine = house == null ? ""
+                : "상대의 집안: **" + house + "**" + (left ? " (집을 나온 아이 — 가문의 뒷배가 없다)" : "")
+                + ". 너는 그 **결**만 알아본다 (말씨·옷차림·몸에 밴 예법). "
+                + "가문의 **이름**은 모른다 — 소문이 닿지 않았다. "
+                + "'무가의 아이 같군' 은 되고, 가문 이름을 대는 것은 금지다.\n";
+
         return "너는 무협 세계 청하현의 NPC 「" + name + "」이다. 너의 역할: " + npc.get("role")
                 + ". 너의 성향: " + dispositions + ".\n"
                 + "말을 거는 상대는 강호에 갓 나온 손님이다 — 상대에게 너의 직업을 투사하지 마라.\n"
+                + houseLine
+                + "0. 상대를 부를 때는 반드시 **「" + honorific + "」** 이라 불러라 —"
+                + " 다른 호칭을 지어내지 마라. 상대의 성별을 네가 추측하지 마라.\n"
                 + "규칙 (가장 중요한 것부터):\n"
                 + "1. 상대의 말이 정보 요구·부탁·설득·흥정·위협이면 **다른 글자 없이 [판정] 넉 자만** 출력하라."
                 + " \"요즘 소문 있소?\" \"무슨 소식 없나?\" \"들리는 얘기 좀\" 이 대표 예다 —"
@@ -1898,6 +2869,29 @@ public final class GameListener extends ListenerAdapter {
         sheet.put(TAG_KEY, tags);
     }
 
+    /**
+     * ★ 성별의 산문 — 이 문이 이 성별을 받는가 (player_creation gender.gates.faction_entry).
+     *
+     * <p><b>이 관문은 「문파에 들어갈 때」 선다 — 「캐릭터를 만들 때」가 아니다.</b>
+     * 캐릭터는 무엇이든 만들 수 있다. 다만 <b>비구니원의 문</b>은 사내를 들이지 않는다 (세계관).
+     *
+     * <p>등록부가 그 문파를 안 가리면 <b>아무나 들어간다</b> — 지금 등록부가 가리는 것은
+     * 아미 하나뿐이다 (근거: factions.yml "여승 문파"). 화산은 가리지 않으므로 이 문은 늘 열려 있다.
+     * <b>코드는 등록부에 없는 문을 스스로 닫지 않는다.</b>
+     *
+     * @return 막혔으면 true (호출부는 즉시 return)
+     */
+    private boolean genderBarred(SlashCommandInteractionEvent event,
+                                 Map<String, Object> sheet, String factionId) {
+        Object g = sheet.get(rules.genderSheetKey());
+        String gender = g == null ? null : String.valueOf(g);   // 옛 캐릭터는 성별이 없다 — 막지 않는다
+        if (rules.genderEngine.factionAllowed(gender, factionId)) {
+            return false;
+        }
+        event.reply(rules.genderEngine.refusal()).setEphemeral(true).queue();
+        return true;
+    }
+
     @SuppressWarnings("unchecked")
     private void travel(SlashCommandInteractionEvent event) throws Exception {
         if (notInRegion(event)) {
@@ -1920,6 +2914,9 @@ public final class GameListener extends ListenerAdapter {
         }
         Map<String, Object> row = found.get();
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        if (genderBarred(event, sheet, HWASAN)) {
+            return;   // ★ 성별의 산문 — 등록부가 화산을 안 가리므로 지금은 늘 통과한다 (아미가 열리면 여기서 선다)
+        }
         if (blockedByWound(event, sheet)) {
             return;
         }
@@ -2284,7 +3281,7 @@ public final class GameListener extends ListenerAdapter {
 
     /**
      * 소문 조회 — 지금 **살아 있는** 도달 중에 강도 하한 + 태그 일치가 있는가.
-     * 감쇠가 반영된 유효강도로 본다 (Db.heard): 시든 소문은 문을 열지도, 닫지도 못한다.
+     * 감쇠가 반영된 유효강도로 본다 (PoliticsStore.heard): 시든 소문은 문을 열지도, 닫지도 못한다.
      */
     private boolean hasRumor(int today, int minIntensity, List<String> anyTag) throws Exception {
         for (Rumors.Heard h : db.heard(today, null, rules.rumors.decayEveryDays())) {
@@ -2348,16 +3345,16 @@ public final class GameListener extends ListenerAdapter {
         int discount = tags.containsKey(rules.routes.choreTag(HWASAN))
                 ? rules.routes.watchedTagDiscount(HWASAN) : 0;
         int resist = rules.difficulty("보통") + mod - discount;
-        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
-        int talent = Math.max(((Number) attrs.getOrDefault("근력", 2)).intValue(),
-                ((Number) attrs.getOrDefault("민첩", 2)).intValue());
+        // ★ 성별 보정(히든) — 남녀 모두 한 축씩 받으므로 '무재'의 기대값은 같다 (유리한 성별 없음)
+        int talent = Math.max(rules.genderStat(sheet, "근력", 2),
+                rules.genderStat(sheet, "민첩", 2));
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         JudgmentEngine.Tier tier = rules.judgment.resolve(talent, roll, resist);
         int margin = talent + roll - resist;
 
         EmbedBuilder judge = new EmbedBuilder().setColor(INK)
                 .setTitle("판정 — 화산파 입문 심사" + (mod > 0 ? " (보증인 없음 +" + mod + ")" : ""))
-                .setDescription("**무재 " + talent + "** + 2d6 = **" + (talent + roll) + "** vs " + resist
+                .setDescription("**실행력 " + talent + "** (무재) + 2d6 = **" + (talent + roll) + "** vs " + resist
                         + (discount > 0 ? " *(눈여겨봄 -" + discount + ")*" : "")
                         + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **" + tier.name() + "**");
         EmbedBuilder scene = new EmbedBuilder();
@@ -2605,7 +3602,7 @@ public final class GameListener extends ListenerAdapter {
                 rules.factionName(target), null, rumorTags, intensity, accuracy,
                 rules.originNetwork("market"), today);
 
-        Db.Issue row = db.addMyeongbun(issueKey, target, victims, tags, value, accuracy, group,
+        MyeongbunIssue row = db.addMyeongbun(issueKey, target, victims, tags, value, accuracy, group,
                 null, today, 30, rules.politics);
         Issue issue = readIssue(row, today);
         db.logEvent("명분", "world", "gm", "faction", issueKey,
@@ -2665,8 +3662,8 @@ public final class GameListener extends ListenerAdapter {
      */
     private void resolveMyeongbun(SlashCommandInteractionEvent event, String drain, String key,
                                   String target, int today) throws Exception {
-        Db.Issue row = null;
-        for (Db.Issue candidate : db.issues()) {
+        MyeongbunIssue row = null;
+        for (MyeongbunIssue candidate : db.issues()) {
             if (key.isBlank() || candidate.issue().startsWith(key + ":")) {
                 row = candidate;
                 break;
@@ -2702,7 +3699,7 @@ public final class GameListener extends ListenerAdapter {
                     + String.join(" · ", rules.politics.drainKeys())).setEphemeral(true).queue();
             return;
         }
-        Db.Issue updated = db.addMyeongbun(row.issue(), row.target(), row.victims(), row.tags(),
+        MyeongbunIssue updated = db.addMyeongbun(row.issue(), row.target(), row.victims(), row.tags(),
                 value, row.originAccuracy(), row.originRumor(), row.trueTarget(), today, 30,
                 rules.politics);
         Issue after = readIssue(updated, today);
@@ -2787,7 +3784,7 @@ public final class GameListener extends ListenerAdapter {
     //
     // 소문 하나를 심으면 rumors 에 여러 행이 생긴다 — 망마다 도달일과 정확도가 다르다.
     // 발원망은 오늘, 관심 일치 망은 speed_days 뒤에, 그 망의 distortion 만큼 부정확하게.
-    // 감쇠는 읽을 때 계산한다 (Db.heard). 전 과정 무주사위 — 같은 날이면 같은 소문판이다.
+    // 감쇠는 읽을 때 계산한다 (PoliticsStore.heard). 전 과정 무주사위 — 같은 날이면 같은 소문판이다.
 
     /** 소문 파종 — 반환: 몇 개의 망에 닿게 되었는가 (0 = 소문 없음) */
     int spread(String group, String truth, String subject, Long subjectId, List<String> tags,
@@ -2795,17 +3792,17 @@ public final class GameListener extends ListenerAdapter {
         if (intensity <= 0) {
             return 0;
         }
-        List<Db.Arrival> arrivals = new ArrayList<>();
+        List<RumorArrival> arrivals = new ArrayList<>();
         rules.rumors.arrivals(group, day, originNet, intensity, accuracy,
                         new java.util.LinkedHashSet<>(tags))
                 .forEach((net, arrival) ->
-                        arrivals.add(new Db.Arrival(net, arrival.day(), arrival.accuracy())));
+                        arrivals.add(new RumorArrival(net, arrival.day(), arrival.accuracy())));
         int planted = db.spreadRumor(group, truth, subject, subjectId, tags, intensity,
-                arrivals, Db.REGION);
+                arrivals, WorldStore.PRIMARY_REGION);
         db.logEvent("소문", subjectId == null ? "world" : "character",
                 subjectId == null ? "world" : String.valueOf(subjectId), "rumor", group,
                 Map.of("내용", truth, "강도", intensity, "정확도", accuracy,
-                        "발원망", originNet, "도달망", arrivals.stream().map(Db.Arrival::network).toList()));
+                        "발원망", originNet, "도달망", arrivals.stream().map(RumorArrival::network).toList()));
         // 오늘 곧장 조직 채널에 꽂힌 것(심사 대성공 → 정파망)은 지금 세어 준다 —
         // 다음 정산은 '오늘 이전'을 다시 훑지만, 그때까지 기다릴 이유가 없다 (멱등이라 안전하다)
         factionAwareness(day);
@@ -2909,7 +3906,7 @@ public final class GameListener extends ListenerAdapter {
     //   → 망별 속도가 곧 참전 시차이고, 오해 밴드는 명분이 엉뚱한 세력에게 붙는 통로다.
 
     /** 한 사안의 오늘 모습 — 게이지(정산·배수 반영)와 지금 붙어 있는 자들 */
-    record Issue(Db.Issue row, int gauge, Politics.Coalition coalition) {
+    record Issue(MyeongbunIssue row, int gauge, Politics.Coalition coalition) {
     }
 
     /**
@@ -2920,11 +3917,11 @@ public final class GameListener extends ListenerAdapter {
      *   ① victims (누가 당했는가)      → 당사자(-8)·동맹(-6)이 먼저 붙고, **원수(+5)는 빠진다**
      *   ② internal_burden (자파 사정)  → 제 코가 석 자면 못 낀다. **다른 전쟁 중(+4)이 그 심장이다**
      */
-    Issue readIssue(Db.Issue row, int today) throws Exception {
+    Issue readIssue(MyeongbunIssue row, int today) throws Exception {
         return readIssue(row, today, burdens(today, row.issue()));
     }
 
-    private Issue readIssue(Db.Issue row, int today, Map<String, Integer> burdens) throws Exception {
+    private Issue readIssue(MyeongbunIssue row, int today, Map<String, Integer> burdens) throws Exception {
         int raw = rules.politics.decayed(row.rawGauge(), row.tags(), row.updatedDay(), today);
         int world = rules.politics.gaugeFrom(raw, rules.rumors.band(row.originAccuracy()));
 
@@ -2961,7 +3958,7 @@ public final class GameListener extends ListenerAdapter {
         int decayDays = rules.burdenDecayEveryDays();
         Map<String, Integer> events = db.sectBurdens(today, decayDays);
         Set<String> atWar = new java.util.LinkedHashSet<>();
-        for (Db.Issue other : db.issues()) {
+        for (MyeongbunIssue other : db.issues()) {
             if (other.issue().equals(exceptIssue)) {
                 continue;
             }
@@ -2987,7 +3984,7 @@ public final class GameListener extends ListenerAdapter {
     /** 오늘의 정치판 — 게이지가 살아 있는 사안들 (같은 세계일이면 같은 판) */
     List<Issue> politics(int today) throws Exception {
         List<Issue> out = new ArrayList<>();
-        for (Db.Issue row : db.issues()) {
+        for (MyeongbunIssue row : db.issues()) {
             Issue issue = readIssue(row, today);
             if (issue.gauge() > 0 || issue.coalition().count() > 0) {
                 out.add(issue);
@@ -3247,9 +4244,7 @@ public final class GameListener extends ListenerAdapter {
         int today = db.worldDay();
         sheet.put("빈사일", today);
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
-        int con = ((Number) attrs.getOrDefault("체력", 2)).intValue();
+        int con = rules.genderStat(sheet, "체력", 2);   // ★ 성별 보정(히든) — 등록부가 체력을 안 가르면 0
         int resist = rules.legacy.dyingCheckDifficulty(rules.difficulty("보통"));
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int power = con + rules.conditionModifier("빈사");   // 빈사 페널티는 자기 자신에게도 물린다
@@ -3475,10 +4470,9 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         Map<String, Object> mine = (Map<String, Object>) medic.get().get("sheet");
-        Map<String, Object> attrs = (Map<String, Object>) mine.get("능력치");
         Map<String, Object> skills = mine.get("기술") instanceof Map<?, ?> m
                 ? (Map<String, Object>) m : Map.of();
-        int wis = ((Number) attrs.getOrDefault("지혜", 2)).intValue();
+        int wis = rules.genderStat(mine, "지혜", 2);   // ★ 성별 보정(히든) — 등록부가 지혜를 안 가르면 0
         int medicine = ((Number) skills.getOrDefault("의술", 0)).intValue();
         int resist = rules.difficulty(rules.legacy.rescueDifficultyBand());
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
@@ -4083,12 +5077,18 @@ public final class GameListener extends ListenerAdapter {
         return canBalgyeong((Map<String, Object>) row.get("sheet"), String.valueOf(row.get("realm")));
     }
 
-    /** 비무 실행력 = 근력·민첩 중 높은 쪽 (베타 단순화 — 무공 숙련은 후속) */
+    /**
+     * 비무 실행력 = 근력·민첩 중 높은 쪽 (베타 단순화 — 무공 숙련은 후속).
+     *
+     * <p>★ 성별 보정(히든)이 여기서 든다 — 사내는 근력으로, 계집은 민첩으로 민다.
+     * 총합이 같으므로 <b>유리한 성별은 없다</b>: 둘 중 높은 쪽을 쓰는 이 식에서 남녀 모두 +1 을 받는다.
+     * 결이 다를 뿐이다 (사내는 힘의 축이, 계집은 빠름의 축이 선다).
+     */
     @SuppressWarnings("unchecked")
     private int duelExec(Map<String, Object> row) {
-        Map<String, Object> attrs = (Map<String, Object>) ((Map<String, Object>) row.get("sheet")).get("능력치");
-        int str = ((Number) attrs.getOrDefault("근력", 2)).intValue();
-        int agi = ((Number) attrs.getOrDefault("민첩", 2)).intValue();
+        Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+        int str = rules.genderStat(sheet, "근력", 2);
+        int agi = rules.genderStat(sheet, "민첩", 2);
         return Math.max(str, agi);
     }
 
@@ -4151,6 +5151,10 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
+        // ★★ 요건 관문은 **시트 원본**을 읽는다 — 성별 보정을 태우지 않는다 (genderStat 을 지나지 않는다).
+        //   태우면 사내는 근력 1 로도 통과하고 계집은 못 통과한다 = **성별이 무공을 여닫는다.**
+        //   그것은 사용자가 아직 답하지 않은 질문이다 (player_creation open_questions ③ 무공 계열).
+        //   보정은 **판정에만** 든다 — 문을 여닫지 않는다.
         if (((Number) attrs.getOrDefault("근력", 2)).intValue() < 2) {
             // 태조장권 required_stats { 근력: 2 }
             event.reply("곽진이 어깨를 짚어 보더니 고개를 저었다. \"아직 몸이 여물지 않았다 — 밥부터 먹여라.\"")
@@ -4182,7 +5186,8 @@ public final class GameListener extends ListenerAdapter {
         }
 
         // 문답 — 곽진 앞에서 권형을 밟는다 (근력 판정, 공개)
-        int str = ((Number) attrs.getOrDefault("근력", 2)).intValue();
+        // ★ 여기는 **판정**이다 — 요건 관문과 달리 성별 보정(히든)이 든다
+        int str = rules.genderStat(sheet, "근력", 2);
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int resist = 10;
         JudgmentEngine.Tier tier = rules.judgment.resolve(str + 2, roll, resist);
@@ -4192,7 +5197,7 @@ public final class GameListener extends ListenerAdapter {
 
         EmbedBuilder result = new EmbedBuilder().setColor(INK)
                 .setTitle("시험 — 곽진 앞에서 권형을 밟는다")
-                .setDescription("**근력 " + str + "** + 2d6 = **" + (str + 2 + roll) + "** vs " + resist
+                .setDescription("**실행력 " + (str + 2) + "** (근력) + 2d6 = **" + (str + 2 + roll) + "** vs " + resist
                         + " │ 마진 **" + (margin >= 0 ? "+" : "") + margin + "** → **" + tier.name() + "**");
         if (margin >= 0) {
             Map<String, Object> newSkills = skills == null ? new LinkedHashMap<>() : new LinkedHashMap<>(skills);
@@ -4415,6 +5420,54 @@ public final class GameListener extends ListenerAdapter {
         out.put("realm", String.valueOf(character.get("realm")));
         out.put("money", ((Number) character.getOrDefault("wallet", 0)).intValue());
 
+        // ═══ ★★ 신분 — **마크가 내가 누구의 자식인지 알아야 한다** (2026-07-13) ═══
+        //
+        // 사용자: *"**마인크래프트에서도 신분이 적용**되어야 합니다",
+        //          "**모든 사람이 똑같은 위치에서 똑같이 소환되는 것도 아니고**"*
+        //
+        // 전에는 마크가 **집안을 몰랐다** — 시트에 realm/attrs/naegong 만 실렸다. 그래서
+        // 무가의 자식과 객잔집 자식이 **같은 자리에 내려 같은 대접을 받았다.**
+        String house = sheet.get("집안") == null ? null
+                : String.valueOf(sheet.get("집안")).replace(' ', '_');
+        out.put("house", house);
+        out.put("gender", sheet.get(rules.genderSheetKey()));
+        out.put("left_house", Boolean.TRUE.equals(sheet.get("집안_이탈")));
+        // ★ 적서 — 같은 집인데 세상이 아는 무게가 다르다 (null = 적서가 없는 집)
+        out.put("birth_rank", sheet.get(rules.birthRankSheetKey()));
+        // ★ 첫 자리 — 집안이 정한다 (player_creation.yml mvt_start). 앵커 **이름**만 내려보낸다:
+        //   좌표는 마크가 안다 (anchors.yml — CheonghaBuilder 가 심는다). 봇이 좌표를 지어내지 않는다.
+        // ★★ 첫 자리는 이제 **지역 × 집안**의 함수다 (사용자: "각 지역 분지마다 시작 위치가 정해져
+        //   실제 여러 세상에서 시작하는 것처럼"). 무가는 **그 고을의** 전장, 객잔집은 **그 고을의** 객잔.
+        String hRegion = null;
+        String hName = null;
+        String hState = null;
+        try {
+            Long hid = db.houseOfCharacter(((Number) character.get("id")).longValue());
+            if (hid != null) {
+                var h = db.house(hid);
+                if (h.isPresent()) {
+                    hRegion = h.get().region();
+                    hName = h.get().name();
+                    hState = h.get().state();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("가문을 읽지 못했다: " + e.getMessage());
+        }
+        out.put("house_name", hName);     // ★ 「청하현 이가(李家)」 — 마크가 내 집의 이름을 안다
+        out.put("house_region", hRegion);
+        out.put("house_state", hState);   // 흥·쇠·멸 (탄생에 고정 — 변하지 않는다)
+        out.put("start_anchor", house == null ? null : rules.startAnchor(hRegion, house));
+
+        // ★ 형제자매 — 같은 집에 태어난 아이들. **순서는 태어난 순**이다 (사용자 지시).
+        //   파생값이다 (표를 만들지 않았다 — 마이그레이션 없음). 어휘는 문파와 다르다: 형/누나/동생.
+        try {
+            long me = ((Number) character.get("id")).longValue();
+            out.put("kin", kinOf(me));
+        } catch (Exception e) {
+            System.err.println("형제 서열을 세우지 못했다: " + e.getMessage());
+        }
+
         // 능력치 — 실수 원장이 있으면 그것이 정본, 없으면 판정치가 곧 화후다 (아직 마크에서 안 자랐다)
         Map<String, Object> hwahu = (Map<String, Object>) sheet.get("능력치_화후");
         Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
@@ -4479,6 +5532,15 @@ public final class GameListener extends ListenerAdapter {
         final List<String> answers = new ArrayList<>();
         /** 혈연 시작 — 전생의 유산·피의 장부를 짊어진다 (전생이 없으면 무의미) */
         boolean lineage;
+        /**
+         * ★ 성별 — player_creation.yml gender.options 의 키 (남·여). 등록부가 ask:false 면 null.
+         * <b>무엇을 가르는지는 아직 세계가 모른다</b> — 지금은 기록될 뿐이다 (gender.gates 는 비어 있다).
+         */
+        String gender;
+        /** ★ 결(結) — 유년의 기억이 좁힌 갈래 안에서 주사위가 고른 집 ({@link #rollFamily}) */
+        String family;
+        /** ★ 세가를 거절했는가 — 집을 나온 아이 (검도 전표도 없다. 이름 하나만 남는다) */
+        boolean leftHouse;
     }
 
     record Character(long id, String name, String disposition, String family, String incident,
@@ -4489,48 +5551,275 @@ public final class GameListener extends ListenerAdapter {
     record Born(Character ch, Map<String, Object> sheet) {
     }
 
-    static final class Seojang {
-        final Character ch;
-        final Map<String, Object> sheet;
-
-        Seojang(Character ch, Map<String, Object> sheet) {
-            this.ch = ch;
-            this.sheet = sheet;
-        }
-    }
-
-    record Scene(String title, int resist, Choice[] choices) {
-    }
-
-    record Choice(String label, String stat, int bonus) {
-    }
+    // ★ 옛 서장의 상태 객체(Seojang·Scene·Choice)는 **여기서 죽었다.**
+    //   · Seojang(스레드별 메모리 상태) — 스레드가 없다. 진행은 **시트**에 산다 (재시작을 그냥 견딘다)
+    //   · Scene·Choice(자바에 박힌 장면 뼈대) — **등록부로 갔다** (config/seojang.yml → Seojang.java)
+    //   코드는 이제 이야기를 지지 않는다.
 
     record Beast(String name, String gap, int resist, String peltKey, String peltLabel) {
     }
 
-    // ═══════════════ 신원 접합(身元接合) — 다리를 건너는 것은 사건이 아니라 사람이다 ═══════════════
+    // ═══════════════ 신원 접합(身元接合) — **디스코드가 청하고, 그 몸이 게임에서 수락한다** ═══════════════
     //
-    // 다리는 놓였는데(WorldBridge·Bridge) 사람이 안 건넜다. mvt_link.character_id 를 채우는 명령이
-    // 없었으므로 — 마크에서 사람을 죽여도 소문에 **주체가 안 붙었고**, 어느 세력도 그를 보지 않았다.
+    // 【옛 길 — 폐기됐다】 마크가 6자 코드를 내고, 사람이 그것을 날라 디스코드에 붙여넣었다.
+    //   자물쇠는 튼튼했으나 **사람이 코드를 날랐다.** 사용자의 판정: "코드 복사는 없어져도 된다."
     //
-    // ★ 방향: 마크가 코드를 내고, **디스코드가 확정한다** (world_bridge.yml identity).
-    //   최종 결속이 인증된 자리(디스코드)에 있으므로, 남의 캐릭터를 뺏으려면 남의 계정이 필요하다.
-    //   코드가 새어 나가도 도둑이 할 수 있는 최악은 '제 캐릭터에 남의 몸을 붙이는 것' — 자해다.
+    // 【새 길 — 두 손】 코드가 없어도 **두 신원**은 그대로 필요하다:
+    //   ① 디스코드에서 청한다 (/혼천 접속 닉네임:…)  ← 디스코드가 **서명한** 신원 (위조 불가)
+    //   ② 그 몸이 게임 화면에서 [잇는다] 를 누른다   ← **그 몸에 로그인한 사람** (위조 불가)
+    //
+    // 【★ 왜 닉네임을 아무나 대도 되는가】 닉네임은 **열쇠가 아니라 수신인**이다. 남의 닉을 대면
+    //   그 사람의 화면에 물음이 뜰 뿐이고, 그가 [아니다] 를 누르거나 그냥 두면 2분 뒤 죽는다.
+    //   도둑이 얻는 것은 **남의 화면에 뜬 물음 하나**뿐이다 (그리고 연타는 쿨다운이 막는다).
+    //
+    // 【★ 이 클래스는 절대 잇지 않는다】 여기서 하는 일은 **청을 앉히는 것**뿐이다.
+    //   mvt_link.character_id 를 채우는 손은 이 파일에 **하나뿐**이고 ({@link #completeLink}),
+    //   그것은 오직 Bridge 의 link_confirm(= 게임 안의 수락)만이 부른다. 그것이 이 설계의 전부다.
 
-    private void linkAccount(SlashCommandInteractionEvent event) throws Exception {
-        String raw = event.getOption("코드") == null ? "" : event.getOption("코드").getAsString();
-        linkWithCode(event, event.getUser(), raw);
+    /**
+     * <b>청(請)을 보관하는 자리</b> — 토큰 → 그 청을 낸 인터랙션.
+     *
+     * <p>수락은 <b>몇 초 뒤 다른 스레드</b>(다리 폴러)로 온다. 그때 사람에게 "이어졌다"고 말해 주려면
+     * 그가 청했던 그 자리를 기억하고 있어야 한다 (인터랙션 훅은 15분간 유효하다 — 청은 2분이므로 넉넉하다).
+     * 훅이 없으면 DM 으로 떨어진다 ({@link #tellRequester}).
+     */
+    private final Map<String, net.dv8tion.jda.api.interactions.InteractionHook> linkHooks =
+            new ConcurrentHashMap<>();
+
+    /** ★ 연타 방지 — 디스코드 사용자별 마지막 청의 시각 (DB 의 쿨다운과 겹으로 건다) */
+    private final Map<String, Long> linkCooldown = new ConcurrentHashMap<>();
+
+    /** 다리 — 명부를 읽고(누가 접속해 있는가) 청을 즉시 내려보낸다. HoncheonBot 이 꽂아 준다 */
+    private Bridge bridge;
+
+    void bridge(Bridge bridge) {
+        this.bridge = bridge;
     }
 
-    // ─── 접합의 문 — 명령을 외우지 않고 잇는다 (world_bridge.yml identity.gate) ───
+    private void linkAccount(SlashCommandInteractionEvent event) throws Exception {
+        var opt = event.getOption("닉네임");
+        askLink(event, event.getUser(), opt == null ? "" : opt.getAsString());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 안내판(案內板) — ★ **디스코드에서 명령을 치지 않게 하는 판** (discord_panel.yml)
+    // ══════════════════════════════════════════════════════════════════════════
     //
-    // 【무엇을 바꿨고 무엇을 안 바꿨나】 바꾼 것은 **입력 수단**뿐이다:
-    //   외운다 → [코드 복사] (마크가 클립보드에 담는다) · 찾아간다 → [혼천 접속] (마크가 URL 을 연다)
-    //   문법을 친다 → 버튼 + 모달 (붙여넣기 한 번).
-    // 【★ 안 바꾼 것 = 자물쇠】 버튼에는 **코드가 들어 있지 않다** (customId 는 "lk:open" 뿐).
-    //   확정에는 여전히 둘이 필요하다: ① 그 몸의 주인 화면에만 뜬 **코드** ② **디스코드가 서명한 신원**
-    //   (ModalInteractionEvent.getUser() — 위조 불가. 아무나 눌러도 제 계정으로만 이어진다).
-    //   TTL·1회성·1:1·감사 로그는 linkWithCode 하나를 슬래시와 모달이 함께 지난다 — 두 벌이 아니다.
+    // 【왜】 사용자의 말: *"디스코드 명령을 치는 게 이상하다 생각함."* 그리고 이 프로젝트의 축:
+    //   *"디스코드를 인증 서비스와 소셜로 두고, 다른 로직을 백엔드로."*
+    //   **명령을 외워 치는 것은 로직의 문법이지 소셜의 문법이 아니다.**
+    //
+    // 【문법】 `/접합문` 과 **똑같다** — 관리자가 한 번 치면 채널에 상시 버튼이 박히고, 그 뒤로는
+    //   아무도 명령을 안 친다. 새 문법을 발명하지 않았다. 이미 서 있는 선례를 **넓혔다.**
+    //
+    // 【★ 길은 하나】 판에 박히는 버튼은 **하나**다 (「내 자리」). 누르면 그 사람의 **상태**에 맞는
+    //   버튼만 뜬다 (ephemeral — 남에게 안 보인다). 캐릭터가 없으면 [강호에 들다] 하나뿐이다.
+    //
+    // 【★★ 죽은 버튼 금지 · 침묵 금지】 여기 뜨는 버튼은 **지금 누를 수 있는 것뿐**이고, 못 누르는 것은
+    //   **왜 못 누르는지 그 자리에서 말한다.** 버튼을 조용히 없애면 사람은 "왜 나만 안 보이지"를
+    //   혼자 추측한다 — 그것이 이 저장소가 반복해서 데인 병이다 (`tools/panel_audit.py` 가 잰다).
+
+    /** 안내판을 세운다 (관리자) — {@code /접합문} 과 같은 문법: 한 번 치면 **상시** 박힌다 */
+    private void postPanel(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        if (!(event.getChannel() instanceof TextChannel channel)) {
+            event.reply("일반 텍스트 채널에서 세워라.").setEphemeral(true).queue();
+            return;
+        }
+        // ★ 등록부가 깨졌으면 **판을 세우지 않는다** (코드가 문장을 지어내지 않는다). 그리고 그렇게 말한다.
+        if (rules.panelLocked()) {
+            event.reply("안내판이 잠겨 있다 — 등록부(`config/discord_panel.yml`)를 못 읽었다. "
+                    + "봇 로그를 보라.").setEphemeral(true).queue();
+            return;
+        }
+        String metaKey = rules.panelChannelMeta();
+        Optional<String> old = db.getMeta(metaKey);
+        db.setMeta(metaKey, channel.getId());
+        channel.sendMessageEmbeds(new EmbedBuilder().setColor(INK)
+                        .setTitle(rules.panelBoard("title", "혼천"))
+                        .setDescription(rules.panelBoard("body", ""))
+                        .build())
+                // ★★ 버튼이 **둘**이다. 첫 버튼이 곧 첫 걸음이다 — **처음 온 사람은 한 번만 누른다.**
+                //   옛 판은 [내 자리] 하나였고, 그것을 눌러야 그 **안에서** [강호에 들다] 가 보였다.
+                //   판은 공용 메시지라 사람마다 다르게 못 보인다 — 그래서 [강호에 들다] 는 **누구에게나**
+                //   보이고, **이미 태어난 사람이 누르면 그렇다고 말해 준다** (startCreation — 침묵 금지).
+                .addComponents(ActionRow.of(
+                        Button.primary("np:start", rules.panelBoard("start_label", "강호에 들다")),
+                        Button.secondary("np:me", rules.panelBoard("button_label", "내 자리"))))
+                .queue();
+        String say = rules.panelBoard("posted", "안내판이 섰다.");
+        // ★ 판이 둘이면 하나가 낡는다 — 옛 자리를 **말해 준다** (조용히 옮기지 않는다)
+        if (old.isPresent() && !old.get().equals(channel.getId())) {
+            say += "\n\n" + rules.panelBoard("moved", "옛 판은 {old} 에 남아 있다 — 지워라.")
+                    .replace("{old}", "<#" + old.get() + ">");
+        }
+        event.reply(say).setEphemeral(true).queue();
+    }
+
+    /** 안내판의 버튼 — {@code np:<무엇>[:<인자>]} */
+    private void onPanel(ButtonInteractionEvent event, String[] id) throws Exception {
+        switch (id.length > 1 ? id[1] : "me") {
+            case "me" -> myPlace(event);
+            case "start" -> startCreation(event);      // ← /혼천 시작 과 **같은 문**
+            case "sheet" -> showSheet(event);          // ← /혼천 정보 와 같은 문
+            case "link" -> openLinkModal(event);       // ← 접합문의 버튼과 **같은 창** (자물쇠는 게임 안)
+            case "unlink" -> unlinkAccount(event);     // ← /혼천 접속해제 와 같은 문
+            case "reset" -> resetPick(event);
+            case "rs" -> resetConfirm(event, id[2], event.getUser(), event.getUser());
+            // ★ 모르는 버튼에 **침묵하지 않는다** — 낡은 판을 누른 사람에게 그렇다고 말한다
+            default -> event.reply("이 버튼은 이 봇이 모르는 것이다 (낡은 안내판일 수 있다). "
+                    + "관리자에게 `/안내판` 을 다시 세워 달라고 하라.").setEphemeral(true).queue();
+        }
+    }
+
+    /**
+     * <b>내 자리</b> — 누른 사람에게만 보이는 판. <b>지금 누를 수 있는 것만</b> 뜬다.
+     *
+     * <p>상태는 다섯이다 (등록부 {@code panel.me.states} 가 이름을 정한다):
+     * {@code 없음 · 서장_미접합 · 서장_접합 · 강호_미접합 · 강호_접합}.
+     *
+     * <p><b>★ 등록부가 모르는 상태를 코드가 지어내지 않는다.</b> 그런 상태에 닿으면 <b>그렇다고 말한다</b>
+     * (빈 판을 내밀지 않는다 — 침묵이 가장 나쁜 대답이다).
+     */
+    private void myPlace(ButtonInteractionEvent event) throws Exception {
+        if (rules.panelLocked()) {
+            event.reply("안내판이 잠겨 있다 — 등록부(`config/discord_panel.yml`)를 못 읽었다.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        var found = db.findCharacter(event.getUser().getId());
+        boolean has = found.isPresent();
+        String name = has ? String.valueOf(found.get().get("name")) : "";
+        Optional<String> mc = has
+                ? db.mcOfCharacter(((Number) found.get().get("id")).longValue())
+                : Optional.empty();
+        // ★ 사람에게 uuid 를 보여 주지 않는다 — 그 몸이 마크에서 쓰는 **이름**을 보여 준다
+        String body = mc.isPresent() ? db.mcName(mc.get()).orElse(mc.get()) : "";
+        boolean debuted = has && "강호".equals(found.get().get("status"));
+        String state = !has ? "없음"
+                : (debuted ? "강호" : "서장") + (mc.isPresent() ? "_접합" : "_미접합");
+
+        if (rules.panelStateSay(state).isEmpty()) {
+            event.reply("안내판의 등록부에 이 상태가 없다: **" + state + "**\n"
+                            + "`config/discord_panel.yml` → `panel.me.states` 를 보라. "
+                            + "*(코드는 말을 지어내지 않는다 — 그래서 여기서 멈춘다)*")
+                    .setEphemeral(true).queue();
+            return;
+        }
+
+        // ★ 지금의 세계 — 마크가 살아 있는가 · 초기화가 열려 있는가. **버튼은 사실을 따라간다**
+        boolean worldUp = bridge != null && bridge.worldOnline();
+        boolean resetUp = reset != null && !reset.locked();
+
+        List<String> want = rules.panelStateButtons(state);
+        List<Button> live = new ArrayList<>();
+        StringBuilder locked = new StringBuilder();
+        for (String key : rules.panelButtonKeys()) {
+            String why = whyLocked(key, want, has, mc.isPresent(), worldUp, resetUp);
+            if (why == null) {
+                live.add(panelButton(key));
+            } else {
+                locked.append("· **").append(rules.panelButtonLabel(key)).append("** — ")
+                        .append(fill(why, name, body)).append('\n');
+            }
+        }
+
+        String desc = fill(rules.panelStateSay(state), name, body);
+        // ★ 옛 길을 **숨기지 않는다** — 아직 디스코드에도 남아 있다는 사실을 그대로 말한다 (B-079)
+        if (debuted) {
+            desc += "\n\n" + rules.panelMe("legacy_note", "");
+        }
+        if (event.getMember() != null && event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            desc += "\n\n" + rules.panelAdminNote();
+        }
+        EmbedBuilder eb = new EmbedBuilder().setColor(INK)
+                .setTitle(rules.panelMe("title", "내 자리"))
+                .setDescription(desc);
+        if (!locked.isEmpty()) {
+            eb.addField(rules.panelLock("header", "지금 못 누르는 것"), locked.toString(), false);
+        }
+        var reply = event.replyEmbeds(eb.build()).setEphemeral(true);
+        if (!live.isEmpty()) {
+            reply = reply.addComponents(ActionRow.of(live));
+        }
+        reply.queue();
+    }
+
+    /**
+     * <b>왜 못 누르는가</b> — 누를 수 있으면 {@code null}.
+     *
+     * <p>등록부는 상태마다 <b>뜰 버튼</b>을 적어 둔다. 그 목록에 없는 버튼은 <b>이유가 있어서</b> 없는 것이고,
+     * 그 이유를 여기서 고른다 (문장 자체는 등록부 {@code panel.locks} 에 있다 — 코드가 짓지 않는다).
+     * 목록에 <b>있어도</b> 세계가 지금 못 받는 것이 있다: 마크가 꺼졌으면 청을 보낼 화면이 없고,
+     * 등록부가 깨졌으면 되돌릴 수 없다.
+     */
+    private String whyLocked(String key, List<String> want, boolean hasCharacter, boolean linked,
+                             boolean worldUp, boolean resetUp) {
+        if (!want.contains(key)) {
+            return switch (key) {
+                case "start" -> rules.panelLock("이미_있다", "이미 캐릭터가 있다.");
+                case "link" -> linked ? rules.panelLock("이미_이어짐", "이미 이어져 있다.")
+                        : rules.panelLock("캐릭터_없음", "캐릭터가 없다.");
+                case "unlink" -> hasCharacter ? rules.panelLock("몸이_없다", "이어진 몸이 없다.")
+                        : rules.panelLock("캐릭터_없음", "캐릭터가 없다.");
+                default -> rules.panelLock("캐릭터_없음", "캐릭터가 없다.");
+            };
+        }
+        if ("link".equals(key) && !worldUp) {
+            return rules.panelLock("마크_꺼짐", "마크 서버가 꺼져 있다.");
+        }
+        if ("reset".equals(key) && !resetUp) {
+            return rules.panelLock("초기화_잠김", "초기화가 잠겨 있다.");
+        }
+        return null;
+    }
+
+    /** 버튼 하나 — 이름도 결(style)도 등록부가 정한다 */
+    private Button panelButton(String key) {
+        String label = rules.panelButtonLabel(key);
+        return switch (rules.panelButtonStyle(key)) {
+            case "primary" -> Button.primary("np:" + key, label);
+            case "danger" -> Button.danger("np:" + key, label);
+            default -> Button.secondary("np:" + key, label);
+        };
+    }
+
+    private static String fill(String text, String name, String body) {
+        return text.replace("{name}", name).replace("{body}", body);
+    }
+
+    /**
+     * 되돌리기 — 범위를 고른다. <b>범위도 그 뜻도 {@code config/reset.yml} 이 정한다</b>
+     * (코드가 "접합·캐릭터·전부"를 알고 있지 않다 — 그러면 등록부가 둘이 된다).
+     *
+     * <p>여기서도 <b>아무것도 안 지운다.</b> 고르면 {@link #resetConfirm} 이 한 번 더 묻고,
+     * 지우는 손은 그 다음의 [되돌린다] 하나뿐이다 — 슬래시({@code /초기화})와 <b>같은 문</b>이다.
+     */
+    private void resetPick(ButtonInteractionEvent event) throws Exception {
+        Reset r = this.reset;
+        if (r == null || r.locked()) {
+            event.reply(rules.panelLock("초기화_잠김", "초기화가 잠겨 있다.")
+                    + (r == null ? "" : "\n> " + r.fault())).setEphemeral(true).queue();
+            return;
+        }
+        List<Button> picks = new ArrayList<>();
+        StringBuilder says = new StringBuilder();
+        for (String scope : r.scopeNames()) {
+            picks.add(Button.danger("np:rs:" + scope, scope));
+            says.append("· **").append(scope).append("** — ").append(r.say(scope)).append('\n');
+        }
+        picks.add(Button.secondary("rx:-:-:-", rules.panelReset("cancel_label", "그만둔다")));
+        event.replyEmbeds(new EmbedBuilder().setColor(BLOOD)
+                        .setTitle(rules.panelReset("title", "처음부터 다시"))
+                        .setDescription(rules.panelReset("body", "되돌릴 수 없다.")
+                                + "\n\n" + says)
+                        .build())
+                .addComponents(ActionRow.of(picks))
+                .setEphemeral(true).queue();
+    }
 
     /** 접속의 문을 세운다 (관리자) — 이 채널이 마크의 [혼천 접속] 클릭이 닿을 자리가 된다 */
     private void postLinkGate(SlashCommandInteractionEvent event) throws Exception {
@@ -4551,30 +5840,36 @@ public final class GameListener extends ListenerAdapter {
                 .addComponents(ActionRow.of(Button.primary("lk:open",
                         rules.gateText("button_label", "마크의 몸을 잇는다"))))
                 .queue();
-        event.reply(rules.gateText("gate_posted", "이 채널이 접속의 문으로 섰다."))
-                .setEphemeral(true).queue();
+        // ★ 초대 링크가 없으면 관리자에게 그 자리에서 알린다 — 문은 섰지만 담이 없다
+        String posted = rules.gateText("gate_posted", "이 채널이 접속의 문으로 섰다.");
+        if (rules.gateInviteUrl() == null) {
+            posted += "\n\n⚠ **초대 링크가 비어 있다.** 이 디스코드는 공개가 아니다 — 서버 밖의 사람은"
+                    + " 마크에서 [혼천 접속] 을 눌러도 **아무 데도 못 간다.**\n"
+                    + "`config/world_bridge.yml` → `identity.gate.invite_url` 에"
+                    + " **만료 없음 · 무제한** 초대(`https://discord.gg/...`)를 넣고 봇을 다시 띄워라.";
+        }
+        event.reply(posted).setEphemeral(true).queue();
     }
 
     /**
-     * 문을 눌렀다 — 코드 한 칸짜리 창을 연다. <b>여기서는 아무것도 확정하지 않는다</b>
-     * (버튼은 공개다. 누가 눌러도 좋다 — 코드가 없으면 아무 일도 일어나지 않는다).
+     * 문을 눌렀다 — <b>닉네임</b> 한 칸짜리 창을 연다. <b>여기서는 아무것도 확정하지 않는다</b>
+     * (버튼은 공개다. 누가 눌러도 좋다 — 버튼은 아무것도 담고 있지 않다).
      */
     private void openLinkModal(ButtonInteractionEvent event) {
-        TextInput code = TextInput.create("코드", rules.gateText("modal_field", "접합 코드"),
+        TextInput nick = TextInput.create("닉네임", rules.gateText("modal_field", "마크 닉네임"),
                         TextInputStyle.SHORT)
-                .setPlaceholder(rules.gateText("modal_hint", "마크에서 받은 코드"))
+                .setPlaceholder(rules.gateText("modal_hint", "지금 마크에 접속해 있는 그대의 이름"))
                 .setMinLength(3)
                 .setMaxLength(16)
                 .setRequired(true)
                 .build();
         event.replyModal(Modal.create("lk:submit", rules.gateText("modal_title", "접합"))
-                .addComponents(ActionRow.of(code)).build()).queue();
+                .addComponents(ActionRow.of(nick)).build()).queue();
     }
 
     /**
-     * 창에 붙여넣은 코드가 왔다 — <b>여기가 결속의 순간이다.</b>
-     * 누가 눌렀는가는 디스코드가 안다 ({@code event.getUser()}) — 슬래시 명령과 <b>같은 신원</b>이고,
-     * 같은 {@link #linkWithCode} 를 지난다. 문은 손잡이만 바꿨지 자물쇠를 바꾸지 않았다.
+     * 창에 적은 닉네임이 왔다 — 슬래시 명령과 <b>같은 신원</b>이고 같은 {@link #askLink} 를 지난다.
+     * 문은 손잡이일 뿐이다. <b>자물쇠는 게임 안에 있다.</b>
      */
     @Override
     public void onModalInteraction(net.dv8tion.jda.api.events.interaction.ModalInteractionEvent event) {
@@ -4582,29 +5877,55 @@ public final class GameListener extends ListenerAdapter {
             if (!"lk:submit".equals(event.getModalId())) {
                 return;
             }
-            var value = event.getValue("코드");
-            linkWithCode(event, event.getUser(), value == null ? "" : value.getAsString());
+            var value = event.getValue("닉네임");
+            askLink(event, event.getUser(), value == null ? "" : value.getAsString());
         } catch (Exception e) {
             event.reply("오류: " + e.getMessage()).setEphemeral(true).queue();
         }
     }
 
     /**
-     * 접합의 유일한 손 — 슬래시({@code /혼천 접속})와 모달(문의 버튼)이 <b>둘 다 여기로 온다.</b>
-     * 자물쇠를 두 벌 두지 않는다: TTL · 1회성 · 몸당 대기 1 · 1:1 재접합 거부 · 감사 로그가 여기 하나에 있다.
+     * <b>청(請)을 보낸다 — 그리고 그것이 전부다.</b> 슬래시({@code /혼천 접속 닉네임:…})와 모달이
+     * 둘 다 여기로 온다. <b>이 함수는 아무것도 잇지 않는다</b> (잇는 손은 {@link #completeLink} 하나뿐이고,
+     * 그것은 게임 안의 수락만이 부른다).
      *
-     * @param user <b>디스코드가 서명한 신원</b> — 인터랙션의 주인. 대신 눌러 줄 수 없는 값이다
+     * <p>문지기는 넷이다:
+     * <ol>
+     *   <li><b>신원</b>  캐릭터가 있고 출도했는가 (디스코드가 서명한 {@code user} — 대신 못 눌러 준다)</li>
+     *   <li><b>연타</b>  쿨다운 (한 사람이, 그리고 한 몸에게 — 화면에 물음을 도배할 수 없다)</li>
+     *   <li><b>재적</b>  그 이름이 <b>지금 마크에 있는가</b> — 없으면 물어볼 화면이 없다.
+     *       ★ 없는 이름과 오프라인은 <b>같은 말</b>로 거절한다 ({@code reveal_roster: false} —
+     *       이 문이 "누가 접속했나"를 캐는 도구가 되면 안 된다)</li>
+     *   <li><b>1:1</b>   그 몸/그 이름이 이미 이어져 있지 않은가 (수락 시점에 <b>다시</b> 본다)</li>
+     * </ol>
+     *
+     * @param user <b>디스코드가 서명한 신원</b> — 인터랙션의 주인. 위조할 수 없는 값이다
      */
-    private void linkWithCode(net.dv8tion.jda.api.interactions.callbacks.IReplyCallback event,
-                             User user, String raw) throws Exception {
+    private void askLink(net.dv8tion.jda.api.interactions.callbacks.IReplyCallback event,
+                         User user, String raw) throws Exception {
         var found = db.findCharacter(user.getId());
         if (found.isEmpty()) {
             event.reply(user.getEffectiveName() + " — 캐릭터가 없다. `/혼천 시작`부터.")
                     .setEphemeral(true).queue();
             return;
         }
-        if (!"강호".equals(found.get().get("status"))) {
-            event.reply(user.getEffectiveName() + " — 아직 서장 중이다. 서장 스레드를 끝내야 출도한다.")
+        // ═══ ★★ 여기가 **자물쇠가 제 문을 잠그고 있던 자리**다 (2026-07-13) ═══
+        //
+        // 【옛 빗장】 `if (!"강호".equals(status))` — **출도한 자만 접합할 수 있다.**
+        //   그때는 옳았다: 서장이 디스코드에서 끝나야 마크로 나왔으니까.
+        //
+        // 【그런데 서장이 마크로 갔다】 그러면 이 빗장은 **순환 교착**이 된다:
+        //     서장을 하려면 → 마크에 접합해야 하고
+        //     접합하려면   → 출도해야 하고
+        //     출도하려면   → 서장을 끝내야 한다   ← ★ 시작할 방법이 없다
+        //
+        // 그래서 **서장 중에도 접합을 허락한다.** 접합은 「몸과 이름을 잇는 일」이지
+        // 「강호에 나서는 일」이 아니다 — 둘은 다른 문이다.
+        //
+        // ★ **출도의 문은 그대로 잠겨 있다**: 사냥·비무·의뢰·대화는 여전히 requireDebuted 가 막는다
+        //   (아래 1152줄과 같은 검사). 서장 중인 몸은 **접합해서 책을 받을 수 있을 뿐**이다.
+        if ("사망".equals(found.get().get("status"))) {
+            event.reply(user.getEffectiveName() + " — 그 이름은 이제 강호에 없다.")
                     .setEphemeral(true).queue();
             return;
         }
@@ -4612,64 +5933,213 @@ public final class GameListener extends ListenerAdapter {
         long chId = ((Number) row.get("id")).longValue();
         String name = String.valueOf(row.get("name"));
         int today = db.worldDay();
-        String code = raw.strip().toUpperCase(java.util.Locale.ROOT).replace(" ", "");
+        long now = System.currentTimeMillis();
+        String nick = raw.strip();
 
-        var pending = db.linkCode(code);
-        if (pending.isEmpty()) {
-            event.reply("그런 코드는 없다. 마크에서 `/혼천 접속` 을 쳐서 코드를 받아라.")
+        if (bridge == null) {
+            event.reply("세계 다리가 서지 않았다 — 관리자에게 알려라.").setEphemeral(true).queue();
+            return;
+        }
+        // ① 이 이름에 이미 몸이 붙어 있는가 (1:1 — 먼저 끊어야 다시 잇는다. 도난 방지의 반쪽)
+        var mine = db.mcOfCharacter(chId);
+        if (mine.isPresent()) {
+            event.reply("이 이름에는 이미 몸이 붙어 있다. 먼저 `/혼천 접속해제` 를 하라.")
                     .setEphemeral(true).queue();
             return;
         }
-        Db.LinkCode c = pending.get();
-        if (!"대기".equals(c.state())) {
-            event.reply("이미 쓰였거나 폐기된 코드다 (1회용). 마크에서 새로 받아라.")
-                    .setEphemeral(true).queue();
+        // ② 연타 — 한 사람이 1분에 한 번 (남의 화면에 물음을 도배하지 못하게)
+        int cooldown = rules.linkCooldownSeconds();
+        Long last = linkCooldown.get(user.getId());
+        if (last != null && now - last < cooldown * 1000L) {
+            long wait = (cooldown * 1000L - (now - last) + 999) / 1000;
+            event.reply("조금 전에 청했다 — " + wait + "초 뒤에 다시 청하라.").setEphemeral(true).queue();
             return;
         }
-        if (c.expired(System.currentTimeMillis())) {
-            event.reply("코드가 만료됐다 (10분). 마크에서 `/혼천 접속` 을 다시 쳐라.")
-                    .setEphemeral(true).queue();
+        // ③ 이름 꼴 — 마크의 이름은 3~16자 영숫자·밑줄이다. 그 밖의 것은 **볼 것도 없이** 같은 말로 거절한다
+        //   (이 클래스의 Character 는 **캐릭터 레코드**다 — java.lang.Character 가 아니다. 그래서 정규식)
+        boolean shaped = nick.matches("[A-Za-z0-9_]{3,16}");
+        var who = shaped ? bridge.online(nick) : Optional.<Bridge.Online>empty();
+        if (who.isEmpty()) {
+            // ★★ 없는 이름 · 오프라인 · 오타 — **전부 같은 말이다.** 여기서 갈라 말하면
+            //    이 문이 '누가 접속해 있는지' 캐는 도구가 된다 (identity.reveal_roster: false).
+            //    다만 **마크 서버 자체가 꺼진 것**은 다른 말이다 — 그것은 그 사람의 잘못이 아니다.
+            String why = bridge.worldOnline()
+                    ? "**" + nick + "** — 그 이름은 지금 강호에 없다. 마크에 접속한 뒤 다시 청하라."
+                    : "지금 강호의 문이 닫혀 있다 (마크 서버가 꺼져 있다). 서버가 열리면 다시 청하라.";
+            event.reply(why).setEphemeral(true).queue();
             return;
         }
-        // 도난 방지 — 이미 이어진 몸/캐릭터는 **해제 후에만** 다시 잇는다 (one_body_one_character)
-        var owner = db.rawCharacterOfMc(c.mcUuid());
+        Bridge.Online body = who.get();
+        // ④ 그 몸이 이미 남에게 이어져 있는가 — 산 사람의 몸은 뺏지 못한다
+        //    (죽은 자의 몸은 놓아준다 — 새 삶은 같은 몸으로 시작한다. identity.on_character_death)
+        var owner = db.rawCharacterOfMc(body.uuid());
         if (owner.isPresent() && owner.get() != chId) {
             var other = db.findCharacterById(owner.get());
-            boolean alive = other.isPresent() && !"사망".equals(other.get().get("status"));
-            if (alive) {
-                event.reply("그 몸은 이미 **" + other.get().get("name") + "** 에게 이어져 있다. "
-                        + "그쪽에서 `/혼천 접속해제` 를 해야 한다.").setEphemeral(true).queue();
+            if (other.isPresent() && !"사망".equals(other.get().get("status"))) {
+                event.reply("그 몸은 이미 다른 이름에 이어져 있다. 그쪽에서 `/혼천 접속해제` 를 해야 한다.")
+                        .setEphemeral(true).queue();
                 return;
             }
-            // 죽은 자의 몸은 놓아준다 — 새 삶은 같은 몸으로 시작한다 (identity.on_character_death)
         }
-        var mine = db.mcOfCharacter(chId);
-        if (mine.isPresent() && !mine.get().equals(c.mcUuid())) {
-            event.reply("이 이름에는 이미 다른 몸이 붙어 있다. 먼저 `/혼천 접속해제` 를 하라.")
+        // ⑤ 그 몸이 방금 다른 청을 받았는가 — 받는 쪽의 연타 방지 (한 화면을 물음으로 덮지 못하게)
+        var recent = db.lastLinkRequestTo(body.uuid());
+        if (recent.isPresent() && !recent.get().pending()
+                && now - recent.get().issuedAt() < cooldown * 1000L
+                && recent.get().characterId() != chId) {
+            event.reply("그 몸은 방금 다른 청을 받았다 — 잠시 뒤에 다시 청하라.")
                     .setEphemeral(true).queue();
             return;
         }
 
-        db.linkMvt(c.mcUuid(), c.mcName(), chId);
-        db.burnLinkCode(code, chId, today);
-        // ★ 병합 — 이름 없이 쌓인 장부가 한 사람의 이름으로 합산된다.
-        //   그 전까지 세계는 열 개의 사고를 보았고, 그 후로 세계는 한 마리의 짐승을 본다.
-        Db.Debt merged = db.mergeBloodDebt("mc:" + c.mcUuid(), chId, today);
-        db.logEvent("접합", "character", String.valueOf(chId), "mvt", c.mcUuid(),
-                Map.of("마크이름", c.mcName(), "코드", code, "병합_혈채_건수", merged.kills()));
-        bloodDebtLadder(chId, name, null, today);   // 병합으로 칸을 넘었을 수 있다 — 세계가 이제 그를 본다
+        // ★ 청을 앉힌다 — **여기서는 아무것도 이어지지 않는다.** 물음은 그 몸의 화면으로 간다.
+        //   같은 몸/같은 캐릭터의 옛 청은 여기서 함께 폐기된다 (one_pending_per_body).
+        String token = token();
+        int ttl = rules.linkTtlSeconds();
+        db.pendLinkRequest(token, body.uuid(), body.name(), chId, user.getId(),
+                user.getEffectiveName(), now, now + ttl * 1000L);
+        db.logEvent("접합_청", "character", String.valueOf(chId), "mvt", body.uuid(),
+                Map.of("마크이름", body.name(), "디스코드", user.getEffectiveName(), "토큰", token));
+        linkCooldown.put(user.getId(), now);
+        bridge.publishLinkRequests();   // ★ 즉시 — 사람이 화면 앞에서 기다리고 있다 (스냅숏 20초를 기다리지 않는다)
 
         event.replyEmbeds(new EmbedBuilder().setColor(INK)
-                .setTitle("접합 — 몸과 이름이 이어졌다")
-                .setDescription("마크의 **" + c.mcName() + "** 이(가) 이제 **" + name + "** 이다.\n"
-                        + "이제부터 그 손이 하는 일은 전부 이 이름의 장부에 적힌다 — "
-                        + "벤 것도, 뿜은 것도, **죽인 것도.**\n"
-                        + "*(끊으려면 `/혼천 접속해제`. 다만 이미 적힌 것은 지워지지 않는다)*")
-                .build()).setEphemeral(true).queue();
+                        .setTitle("청을 강호로 보냈다 — 아직 이어지지 않았다")
+                        .setDescription("**" + body.name() + "** 의 게임 화면에 물음이 떴다.\n"
+                                + "그 몸의 주인이 **[잇는다]** 를 눌러야 이어진다 — "
+                                + "**닉네임만으로는 아무것도 이어지지 않는다.**\n\n"
+                                + "*(그대가 그 몸의 주인이라면 마크 창으로 돌아가 눌러라. "
+                                + ttl + "초 뒤에 이 청은 죽는다)*")
+                        .build()).setEphemeral(true)
+                .queue(hook -> linkHooks.put(token, hook), err -> { });
     }
 
-    private void unlinkAccount(SlashCommandInteractionEvent event) throws Exception {
-        var found = requireDebuted(event, event.getUser());
+    /** 청의 토큰 — <b>열쇠가 아니다</b> (지목일 뿐. 수락할 수 있는 손은 그 몸 하나뿐이다) */
+    private String token() {
+        String alphabet = rules.linkTokenAlphabet();
+        var rnd = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < rules.linkTokenLength(); i++) {
+            sb.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
+        }
+        return sb.toString();
+    }
+
+    /** 장부의 이름 — 마크 화면에 "이 몸을 **누구**에게 잇는가" 를 보여 주려면 필요하다 */
+    String characterNameOf(long chId) throws Exception {
+        return db.findCharacterById(chId).map(c -> String.valueOf(c.get("name"))).orElse("?");
+    }
+
+    /**
+     * ★★ <b>접합 — 몸과 이름이 이어진다. 이 함수가 이 파일에서 {@code linkMvt} 를 부르는 유일한 손이다.</b>
+     *
+     * <p>부르는 자는 하나뿐이다: {@link Bridge}의 {@code link_confirm} — 즉 <b>그 몸의 게임 화면에서
+     * 누른 [잇는다]</b>. 디스코드의 어떤 명령도, 어떤 버튼도 여기로 곧장 올 수 없다.
+     * <b>그것이 도용을 막는 전부다.</b>
+     *
+     * <p>TTL·1회성·1:1·감사·혈채 병합은 여기까지 오는 길(Bridge.linkConfirm)과 이 함수가 나눠 진다.
+     */
+    void completeLink(LinkRequest req, String mcName, int today) throws Exception {
+        long chId = req.characterId();
+        var found = db.findCharacterById(chId);
+        if (found.isEmpty() || "사망".equals(found.get().get("status"))) {
+            tellRequester(req, "그 이름은 이제 강호에 없다 — 접합하지 못했다.");
+            return;
+        }
+        String name = String.valueOf(found.get().get("name"));
+
+        // ★ 마지막 문지기 — 청이 뜬 2분 사이에 세상이 바뀌었을 수 있다 (그 사이 남이 그 몸을 이었을 수도)
+        var owner = db.rawCharacterOfMc(req.mcUuid());
+        if (owner.isPresent() && owner.get() != chId) {
+            var other = db.findCharacterById(owner.get());
+            if (other.isPresent() && !"사망".equals(other.get().get("status"))) {
+                tellRequester(req, "그 몸은 이미 다른 이름에 이어져 있다 — 접합하지 못했다.");
+                return;
+            }
+        }
+        var mine = db.mcOfCharacter(chId);
+        if (mine.isPresent() && !mine.get().equals(req.mcUuid())) {
+            tellRequester(req, "이 이름에는 이미 다른 몸이 붙어 있다 — 접합하지 못했다.");
+            return;
+        }
+
+        db.linkMvt(req.mcUuid(), mcName, chId);
+        // ★ 병합 — 이름 없이 쌓인 장부가 한 사람의 이름으로 합산된다.
+        //   그 전까지 세계는 열 개의 사고를 보았고, 그 후로 세계는 한 마리의 짐승을 본다.
+        BloodDebtEntry merged = db.mergeBloodDebt("mc:" + req.mcUuid(), chId, today);
+        db.logEvent("접합", "character", String.valueOf(chId), "mvt", req.mcUuid(),
+                Map.of("마크이름", mcName, "디스코드", req.discordName(), "경로", "게임내_수락",
+                        "토큰", req.token(), "병합_혈채_건수", merged.kills()));
+        bloodDebtLadder(chId, name, null, today);   // 병합으로 칸을 넘었을 수 있다 — 세계가 이제 그를 본다
+
+        // ★ 서장 중이었다면 **바로 지금** 책이 손에 간다 (다음 바퀴를 기다리지 않는다 —
+        //   사람은 방금 [잇는다] 를 누르고 화면을 보고 있다)
+        boolean inSeojang = "서장".equals(found.get().get("status"));
+        if (inSeojang && bridge != null) {
+            bridge.publishSeojang();
+        }
+
+        tellRequester(req, null, new EmbedBuilder().setColor(INK)
+                .setTitle("접합 — 몸과 이름이 이어졌다")
+                .setDescription("마크의 **" + mcName + "** 이(가) 이제 **" + name + "** 이다.\n"
+                        + "이제부터 그 손이 하는 일은 전부 이 이름의 장부에 적힌다 — "
+                        + "벤 것도, 뿜은 것도, **죽인 것도.**\n"
+                        + (inSeojang
+                        ? "\n★ **품 안에 서책 한 권이 들어왔다** — 펼치면 서장이 시작된다."
+                        + " 이야기는 **강호에서** 흐른다.\n"
+                        : "")
+                        + "*(끊으려면 `/혼천 접속해제`. 다만 이미 적힌 것은 지워지지 않는다)*")
+                .build());
+    }
+
+    /** 그 몸이 [아니다] 를 눌렀다 — 청한 사람에게 말해 준다 (누가 거절했는지는 이미 그가 안다) */
+    void linkRejected(LinkRequest req) {
+        tellRequester(req, "**" + req.mcName() + "** 이(가) 청을 물렸다. 그 몸의 주인이 아니라면 그것이 옳다.");
+    }
+
+    /** 그 몸이 마크에서 `/혼천 접속` 을 다시 불렀다 — 낡은 청은 죽는다 (초기화) */
+    void linkRequestCancelled(LinkRequest req) {
+        tellRequester(req, "**" + req.mcName() + "** 이(가) 게임에서 접합을 다시 시작했다 — 이 청은 죽었다.");
+    }
+
+    /** 청한 자리로 돌아가 말해 준다 (훅이 죽었으면 DM 으로) — 그는 2분 전 그 창을 보고 있다 */
+    private void tellRequester(LinkRequest req, String text, MessageEmbed... embeds) {
+        var hook = linkHooks.remove(req.token());
+        if (hook != null) {
+            var action = embeds.length > 0 ? hook.editOriginalEmbeds(embeds).setContent(null)
+                    : hook.editOriginal(text == null ? "—" : text).setEmbeds();
+            action.queue(ok -> { }, err -> dm(req.discordId(), text, embeds));
+            return;
+        }
+        dm(req.discordId(), text, embeds);
+    }
+
+    private void dm(String discordId, String text, MessageEmbed... embeds) {
+        var jda = this.jda;
+        if (jda == null) {
+            return;
+        }
+        jda.retrieveUserById(discordId).queue(user -> user.openPrivateChannel().queue(ch -> {
+            var msg = embeds.length > 0 ? ch.sendMessageEmbeds(embeds[0])
+                    : ch.sendMessage(text == null ? "—" : text);
+            msg.queue(ok -> { }, err -> { });
+        }, err -> { }), err -> { });
+    }
+
+    /**
+     * 접합을 끊는다 — 슬래시({@code /혼천 접속해제})와 안내판의 [몸을 끊는다] 가 둘 다 여기로 온다.
+     *
+     * <p>★★ <b>여기에 「자물쇠가 제 문을 잠그던」 자리가 하나 더 있었다</b> (2026-07-14, 안내판을 세우다 발견).
+     * 옛 코드는 {@code requireDebuted} 를 불렀다 — <b>출도한 자만 끊을 수 있다.</b> 그런데 {@link #askLink}
+     * 는 이미 <b>서장 중에도 잇는 것을 허락한다</b> (그래야 서장이 시작되니까). 그래서 문이 <b>비대칭</b>이었다:
+     *
+     * <pre>  서장 중에 잘못된 몸을 이었다 → 끊을 수 없다 ("아직 서장 중이다") → 다시 이을 수도 없다 (relink 거부)</pre>
+     *
+     * <p>사람은 거기서 막힌다. 그래서 이 문의 검사를 <b>접합의 문과 같은 것</b>으로 맞춘다:
+     * <b>캐릭터가 있으면 끊을 수 있다.</b> 접합은 「몸과 이름을 잇는 일」이지 「강호에 나서는 일」이 아니다 —
+     * 잇는 문과 끊는 문이 다른 열쇠를 요구하면 그것은 문이 아니라 덫이다.
+     */
+    private void unlinkAccount(IReplyCallback event) throws Exception {
+        var found = requireCharacter(event, event.getUser());
         if (found.isEmpty()) {
             return;
         }
@@ -4695,7 +6165,7 @@ public final class GameListener extends ListenerAdapter {
 
     /** 오늘의 현혈채 — 세계가 아는 몫 (읽는 순간 정산. 암혈채는 여기 없다. 세계는 그것을 모른다) */
     int knownBloodDebt(long chId, int today) throws Exception {
-        Db.Debt d = db.bloodDebtOf(chId);
+        BloodDebtEntry d = db.bloodDebtOf(chId);
         return rules.bloodDebt.decayedKnown(d.knownRaw(), d.publicCount(), d.knownDay(), today);
     }
 
@@ -4798,7 +6268,7 @@ public final class GameListener extends ListenerAdapter {
                                String rumorGroup, int today) throws Exception {
         int value = rules.politics.inputValue(input);
         List<String> tags = rules.politics.inputTags(input);
-        Db.Issue issue = db.addMyeongbun("혈채:" + chId, name, victims, tags, value,
+        MyeongbunIssue issue = db.addMyeongbun("혈채:" + chId, name, victims, tags, value,
                 rules.initialAccuracy("직접_목격"), rumorGroup, null, today,
                 rules.politics.gaugeMax(), rules.politics);
         db.logEvent("명분", "character", String.valueOf(chId), "myeongbun", issue.issue(),

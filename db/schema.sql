@@ -190,7 +190,7 @@ CREATE INDEX IF NOT EXISTS idx_bridge_inbox_kind ON bridge_inbox(kind, world_day
 -- ─── 신원 접합 + 혈채 (마이그레이션 006) — 다리를 건너는 것은 사건이 아니라 사람이다 ───
 -- 규칙: config/world_bridge.yml identity · config/faction_reaction.yml blood_debt.engine
 
-CREATE TABLE IF NOT EXISTS mvt_link_code (       -- 마크가 낸 일회용 코드. 디스코드가 확정한다
+CREATE TABLE IF NOT EXISTS mvt_link_code (       -- ☠ 옛 코드 방식 (006). 더 이상 쓰지 않는다 — 감사로만 남긴다
     code         TEXT PRIMARY KEY,
     mc_uuid      TEXT NOT NULL,
     mc_name      TEXT NOT NULL,
@@ -201,6 +201,26 @@ CREATE TABLE IF NOT EXISTS mvt_link_code (       -- 마크가 낸 일회용 코�
     used_day     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_mvt_link_code_body ON mvt_link_code(mc_uuid, state);
+
+-- ★★ 007 — 접합의 두 손. **디스코드가 청하고, 그 몸이 게임 안에서 수락한다.**
+--   닉네임은 *누구에게 물을지*를 정할 뿐 아무것도 열지 않는다. 이 표는 그 **사이의 2분**이다.
+--   수락할 수 있는 손은 하나뿐이다: mc_uuid 로 로그인한 그 몸 (MvtCommand 가 대조한다).
+CREATE TABLE IF NOT EXISTS mvt_link_request (
+    token        TEXT PRIMARY KEY,               -- 지목일 뿐 열쇠가 아니다 (새어도 남의 몸은 못 받는다)
+    mc_uuid      TEXT NOT NULL,                  -- ★ 청을 받은 몸 — 이 몸만 수락할 수 있다
+    mc_name      TEXT NOT NULL,
+    character_id INTEGER NOT NULL REFERENCES characters(id),   -- 청한 캐릭터 (디스코드가 서명한 신원)
+    discord_id   TEXT NOT NULL,
+    discord_name TEXT NOT NULL,
+    issued_at    INTEGER NOT NULL,               -- epoch millis
+    expires_at   INTEGER NOT NULL,               -- 120초 (identity.ttl_seconds)
+    state        TEXT NOT NULL DEFAULT '대기',   -- 대기 | 수락 | 거절 | 만료 | 폐기
+    decided_at   INTEGER,
+    decided_day  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mvt_link_request_body ON mvt_link_request(mc_uuid, state);
+CREATE INDEX IF NOT EXISTS idx_mvt_link_request_char ON mvt_link_request(character_id, state);
+CREATE INDEX IF NOT EXISTS idx_mvt_link_request_live ON mvt_link_request(state, expires_at);
 
 CREATE TABLE IF NOT EXISTS blood_debt (          -- ★ 감쇠하지 않는 유일한 값 (암혈채)
     subject       TEXT PRIMARY KEY,              -- character:<id> | mc:<uuid> | 미상의_살인마

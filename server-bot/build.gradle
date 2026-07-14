@@ -19,6 +19,7 @@ dependencies {
     implementation 'net.dv8tion:JDA:5.2.1'
     implementation 'org.xerial:sqlite-jdbc:3.47.1.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    implementation 'org.postgresql:postgresql:42.6.0'
     implementation 'org.yaml:snakeyaml:2.2'
     runtimeOnly 'org.slf4j:slf4j-simple:2.0.16'   // JDA 로그 출력 (없으면 NOP 침묵)
 }

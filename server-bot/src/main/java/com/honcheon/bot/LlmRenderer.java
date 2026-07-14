@@ -29,7 +29,9 @@ final class LlmRenderer {
             1. 주어진 사실(판정 결과·상황)을 절대 바꾸지 않는다 — 성공을 정하는 것은 엔진이고, 너는 들었을 뿐이다.
             2. 서사에 숫자를 쓰지 않는다 — 마진·주사위·가격 언급 금지, 결과의 무게는 문장으로.
             3. 새 인명·지명·무공명·소지품을 지어내지 않는다 — 주어진 이름만 쓴다. 필요하면 무명으로 서술.
-            4. 길이는 300~500자, 한 문단 산문. 500자를 넘기지 마라. 선택지·목록·머리말 없이 서사 본문만.
+            4. 길이는 350자 안팎 (300~400자), 한 문단 산문. 400자를 넘기지 마라.
+               ★ 여백을 남겨라 — 다 말하지 말고 그친다. 짧은 글이 무협의 결이다.
+               선택지·목록·머리말 없이 서사 본문만.
             5. 문체는 한국어 무협 — 건조하고 즉물적으로, 형용사보다 사물과 동작으로. 한국어만 쓴다 (영문·로마자 금지).
             6. 선택을 대신 하지 마라 — 곧 플레이어가 고른다. 서사는 갈림길 직전에서 멈춘다.
                "결국 ~를 선택했다" 류의 문장 금지.
@@ -49,12 +51,29 @@ final class LlmRenderer {
     private final AtomicLong lastWarnAt = new AtomicLong();
     private final AtomicLong suppressed = new AtomicLong();
 
-    LlmRenderer(String model) {
+    /**
+     * ★★ 시간과 길이 — <b>등록부가 정한다</b> (llm.yml runtime). 전에는 <b>코드에 박혀 있었다.</b>
+     *
+     * <p><b>그 박힌 값이 결함이었다:</b> 로컬 타임아웃이 <b>25초</b>였는데 2026-07-13 실측으로
+     * 실제 서장 한 건이 <b>22.4초</b>다 — <b>2.6초 차이로 겨우 통과</b>하고 있었다. 조금만 길어지면
+     * 타임아웃이고, 그러면 <b>조용히 폴백</b>이었다. 정상 응답을 코드가 죽이고 있었던 것이다.
+     * 게다가 넷이 동시에 들면 89.5초 — <b>전원이 25초 벽에 걸렸다.</b>
+     * (동시성은 {@link Scribe} 가 1로 조인다. 여기는 <b>한 건의 상한</b>만 본다.)
+     */
+    private final int localTimeout;
+    private final int cloudTimeout;
+    private final int maxTokens;
+
+    LlmRenderer(String model, int localTimeout, int cloudTimeout, int connectTimeout, int maxTokens) {
         this.apiKey = System.getenv("ANTHROPIC_API_KEY");
         this.model = model;
         this.localUrl = System.getenv("HONCHEON_LLM_URL");
         this.localModel = System.getenv().getOrDefault("HONCHEON_LLM_MODEL", "exaone3.5:7.8b");
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).build();
+        this.localTimeout = localTimeout;
+        this.cloudTimeout = cloudTimeout;
+        this.maxTokens = maxTokens;
+        this.http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(connectTimeout)).build();
     }
 
     private boolean localEnabled() {
@@ -92,7 +111,7 @@ final class LlmRenderer {
         try {
             ObjectNode body = JSON.createObjectNode();
             body.put("model", model);
-            body.put("max_tokens", 700);
+            body.put("max_tokens", maxTokens);
             body.put("system", system);
             body.putArray("messages").addObject()
                     .put("role", "user")
@@ -102,7 +121,8 @@ final class LlmRenderer {
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
                     .header("content-type", "application/json")
-                    .timeout(Duration.ofSeconds(8))
+                    // 옛 값 8초 — 529·재시도에 취약했다. 등록부(runtime.cloud_timeout_seconds)가 정한다
+                    .timeout(Duration.ofSeconds(cloudTimeout))
                     .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
                     .build();
             return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -119,7 +139,7 @@ final class LlmRenderer {
         try {
             ObjectNode body = JSON.createObjectNode();
             body.put("model", localModel);
-            body.put("max_tokens", 700);
+            body.put("max_tokens", maxTokens);
             // F33 — 유휴 언로드로 콜드 로드(38~52초) > 타임아웃 방지: Ollama 는 keep_alive 를 존중,
             // 다른 OpenAI 호환 서버는 미지 필드로 무시한다
             body.put("keep_alive", "30m");
@@ -129,7 +149,10 @@ final class LlmRenderer {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(localUrl.replaceAll("/+$", "") + "/chat/completions"))
                     .header("content-type", "application/json")
-                    .timeout(Duration.ofSeconds(25))   // 로컬은 하드웨어 편차가 크다 (llm.yml hardware_note)
+                    // ★★ 옛 값 25초 — **실측 22.4초보다 짧아서 정상 응답을 죽이고 있었다.**
+                    //   이제 등록부가 정한다 (llm.yml runtime.local_timeout_seconds — 60초).
+                    //   동시 실행은 Scribe 가 1로 조이므로 경합(4건 89.5초)을 볼 일이 없다.
+                    .timeout(Duration.ofSeconds(localTimeout))
                     .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
                     .build();
             return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())

@@ -8,7 +8,8 @@
 | PG-002B 브리지 포트 | Codex | Fable | 완료, 검토 가능 | `BridgeStore.java`, 브리지 계약 타입과 포트 | `CODEX_PG002B_COMPLETE.md` |
 | PG-002C 게임 원장 포트 | Codex | Fable | 완료, 검토 가능 | `GameStore.java`, 업무별 저장소 포트와 DTO | `CODEX_PG002C_COMPLETE.md` |
 | PG-003 트랜잭션·SQL 방언 경계 | Codex | Fable | 완료, 검토 가능 | `TransactionRunner.java`, `SqlDialect.java`, 계약 시험 | `CODEX_PG003_COMPLETE.md` |
-| PG-004 PostgreSQL 구현 | Codex | Fable | 다음 작업, 착수 전 | PostgreSQL 스키마, 저장소 구현, 계약 시험 | 실행 환경·의존성 확인부터 시작 |
+| PG-004 PostgreSQL 구현 | Codex | Fable | 완료, 검토 가능 | PostgreSQL 스키마, 방언, 런타임 선택, 계약 시험 | `CODEX_PG004_COMPLETE.md` |
+| PG-005 SQLite export/import·검산 | Codex | Fable | 다음 작업, 착수 전 | 이관 도구, 검산 보고서, 복원 시험 | PG-004 완료 문서와 설계부터 인수 |
 | 브리지 전달 원자성 | Codex | Fable | 수정 완료, 검토 가능 | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 
-PG-004 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.
+PG-005 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.

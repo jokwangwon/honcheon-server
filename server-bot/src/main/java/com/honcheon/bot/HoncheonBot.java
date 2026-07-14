@@ -17,7 +17,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * 혼천 봇 베타 (단계 Ⅱ~Ⅲ) — 생성 문답 → 서장(영속) → 출도 → 청하현 사냥·비무.
  * 환경 변수: DISCORD_TOKEN(필수), ANTHROPIC_API_KEY(선택 — 없으면 폴백 템플릿),
- *           HONCHEON_CONFIG(기본 config), HONCHEON_DB(기본 run/bot/honcheon.db)
+ *           HONCHEON_CONFIG(기본 config), HONCHEON_DB_BACKEND(sqlite/postgresql),
+ *           HONCHEON_DB(SQLite 경로), HONCHEON_DATABASE_URL(PostgreSQL JDBC URL),
+ *           HONCHEON_DATABASE_USER, HONCHEON_DATABASE_PASSWORD
  * 원칙: 수치는 config/*.yml — 봇은 배선만 한다. LLM 은 서사만 렌더한다 (llm.yml).
  */
 public final class HoncheonBot {
@@ -29,20 +31,38 @@ public final class HoncheonBot {
             System.exit(1);
         }
         Path configDir = Path.of(System.getenv().getOrDefault("HONCHEON_CONFIG", "config"));
-        Path dbPath = Path.of(System.getenv().getOrDefault("HONCHEON_DB", "run/bot/honcheon.db"));
-        Path schemaPath = Path.of(System.getenv().getOrDefault("HONCHEON_SCHEMA", "db/schema.sql"));
 
         Rules rules = new Rules(configDir);
-        Db db = new Db(dbPath, schemaPath);
-        LlmRenderer renderer = new LlmRenderer(rules.turnRendererModel());
-        GameListener listener = new GameListener(rules, db, renderer);
+        Db db = Db.open(System.getenv());
+        // ★ 시간·길이는 등록부가 정한다 (llm.yml runtime) — 옛 코드는 25초를 박아 뒀고, 그것이
+        //   실측 22.4초짜리 **정상 응답을 죽이고 있었다** (2026-07-13 실측. LlmRenderer 주석 참조)
+        LlmRenderer renderer = new LlmRenderer(rules.turnRendererModel(),
+                rules.llmRuntime("local_timeout_seconds", 60),
+                rules.llmRuntime("cloud_timeout_seconds", 20),
+                rules.llmRuntime("connect_timeout_seconds", 4),
+                rules.llmRuntime("max_tokens", 700));
+        // ★★ 붓은 하나다 — 「배는 한 명씩 탄다」. GPU 가 하나이므로 동시에 던지면 서로를 밀어낸다
+        //   (4건 동시 = 89.5초, 전원 타임아웃). 줄을 세우면 첫 사람은 22초에 받는다.
+        Scribe scribe = new Scribe(renderer, rules.llmRuntime("queue_max", 12));
+        GameListener listener = new GameListener(rules, db, renderer, scribe);
         // 세계 개막 소문 — 등록 사건 3건은 첫날부터 이미 돌고 있다 (1회성, 멱등)
         listener.seedWorldRumors();
 
         // 세계 다리 — 마크(MVT)에서 벌어진 일이 이 장부로 흘러 들어온다 (config/world_bridge.yml).
         // 봇이 꺼져 있던 동안의 사건도 파일에 그대로 남아 있다 — 켜는 순간 전부 따라잡는다.
         Bridge bridge = new Bridge(rules, db, listener, configDir);
+        // ★ 접합은 **양방향**이다: 봇이 명부를 읽어(누가 지금 마크에 있는가) 청을 내려보내고,
+        //   그 몸이 게임에서 수락한 것만 다리를 건너 돌아온다. 그래서 둘이 서로를 알아야 한다.
+        listener.bridge(bridge);
         bridge.start();
+
+        // 되돌리는 손 — 시험할 때마다 손으로 지우던 것을 명령으로 만든다.
+        // 봇은 **제 장부(SQLite)만** 지운다. 마크의 몸(playerdata·원장·금고)은 다리로 **청한다**
+        // (단일 작성자 규약 — MVT 가 sqlite 를 열지 않듯, 봇도 마크의 파일을 열지 않는다).
+        // ★ 등록부(config/reset.yml)가 깨져도 봇은 죽지 않는다 — 초기화만 잠긴다.
+        Reset reset = new Reset(db, configDir);
+        listener.setReset(reset);
+        reset.start();
 
         JDA jda = JDABuilder.createLight(token)
                 .addEventListeners(listener)
@@ -54,6 +74,33 @@ public final class HoncheonBot {
         //   (26번째를 넣자 봇이 기동조차 못 했다: "Cannot have more than 25 subcommands".)
         //   관리자 명령이므로 밖으로 빼는 것이 오히려 옳다 — 플레이어의 /혼천 목록을 어지럽히지 않는다.
         var gate = Commands.slash("접합문", "이 채널에 접속의 문을 세운다 — 버튼 하나로 잇는다 (서버 관리자)");
+
+        // ★★ 「안내판」 — **사람이 칠 마지막 명령이다.**
+        //
+        //   사용자의 말: *"디스코드 명령을 치는 게 이상하다 생각함."* 그리고 이 프로젝트의 축:
+        //   *"디스코드를 인증 서비스와 소셜로."* — **명령을 외워 치는 것은 소셜의 문법이 아니다.**
+        //
+        //   관리자가 이것을 **한 번** 치면 채널에 버튼 하나가 박히고, 그 뒤로는 아무도 명령을 치지 않는다:
+        //   [내 자리] → 그 사람의 상태에 맞는 버튼만 뜬다 (캐릭터가 없으면 [강호에 들다] 하나뿐).
+        //   문법은 /접합문 과 **똑같다** — 새 문법을 발명하지 않았다. 선례를 넓혔다.
+        //
+        //   ★ 그리고 이것은 **최상위 명령**이므로 /혼천 의 25칸을 **먹지 않는다** (B-020 의 탈출구가 이것이다).
+        var panel = Commands.slash("안내판",
+                "이 채널에 안내판을 세운다 — 버튼 하나로 시작한다 (서버 관리자, 한 번만)");
+
+        // ★ 「초기화」도 같은 이유로 **별도 명령**이다 — /혼천 의 25칸은 이미 꽉 찼다 (위 주석 참조).
+        //   되돌릴 수 없는 명령이므로 **두 번 묻는다**: 이 명령은 아무것도 지우지 않고, 무엇을 지울지
+        //   말하고 [되돌린다] 버튼을 내민다. 지우는 손은 그 버튼 하나뿐이다.
+        var wipe = Commands.slash("초기화", "시험을 위해 되돌린다 — 백업은 항상 뜬다 (세계는 안 건드린다)")
+                .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                OptionType.STRING, "범위", "어디까지 되돌리나", true)
+                                .addChoice("접합 — 마크의 몸과 이 이름을 끊는다 (캐릭터·혈채는 남는다)", "접합")
+                                .addChoice("캐릭터 — 유년의 기억부터 다시 (마크의 몸·짐은 그대로)", "캐릭터")
+                                .addChoice("전부 — 나루(입도진)부터 다시 (마크 플레이어 데이터까지)", "전부"),
+                        // ★ 남의 것은 못 지운다 — 이 칸을 채우려면 **서버 관리자**여야 한다 (GameListener 가 검사)
+                        new net.dv8tion.jda.api.interactions.commands.build.OptionData(
+                                OptionType.USER, "대상", "남을 되돌린다 (서버 관리자만 — 비우면 자기 자신)",
+                                false));
 
         var honcheon = Commands.slash("혼천", "무협 텍스트 RPG 혼천")
                 .addSubcommands(
@@ -96,16 +143,18 @@ public final class HoncheonBot {
                                                 OptionType.INTEGER, "인출", "찾을 금액 (문 — 수수료 별도)", false),
                                         new net.dv8tion.jda.api.interactions.commands.build.OptionData(
                                                 OptionType.USER, "상속인", "내가 죽으면 예치금을 받을 사람", false)),
-                        // ★ 신원 접합 — 마크에서 `/혼천 접속` 으로 받은 코드를 여기서 확정한다.
-                        //   확정이 **인증된 자리**(디스코드)에 있어야 남의 캐릭터를 훔칠 수 없다
-                        //   (world_bridge.yml identity.direction: mvt_issues_discord_confirms)
-                        new SubcommandData("접속", "마크의 몸을 이 이름에 잇는다 — 마크에서 받은 코드로")
+                        // ★★ 신원 접합 — **여기서는 청할 뿐, 아무것도 이어지지 않는다.**
+                        //   닉네임은 열쇠가 아니라 **수신인**이다: 물음은 그 몸의 게임 화면으로 가고,
+                        //   이을 수 있는 손은 **그 몸에 로그인한 사람의 [잇는다] 클릭** 하나뿐이다.
+                        //   (world_bridge.yml identity.direction: discord_asks_body_accepts)
+                        new SubcommandData("접속", "마크의 몸을 이 이름에 잇는다 — 게임 안에서 수락해야 이어진다")
                                 .addOptions(new net.dv8tion.jda.api.interactions.commands.build.OptionData(
-                                        OptionType.STRING, "코드",
-                                        "마크에서 `/혼천 접속` 을 쳐서 받은 6자리 코드 (10분간 유효)", true)),
+                                        OptionType.STRING, "닉네임",
+                                        "지금 마크에 접속해 있는 그대의 닉네임 (그 화면에 물음이 뜬다)", true)),
                         new SubcommandData("접속해제", "마크의 몸과 이 이름을 끊는다 (혈채는 남는다)"),
-                        // ★ 접속의 문 — 이 채널에 상시 버튼을 세운다. 마크의 [혼천 접속] 클릭이 여기로 온다.
-                        //   버튼에는 코드가 없다 (customId "lk:open") — 확정은 여전히 코드 + 디스코드 신원이다.
+                        // ★ 접속의 문(/접합문) — 이 채널에 상시 버튼을 세운다. 누르면 **닉네임** 한 칸짜리 창이 뜬다.
+                        //   버튼은 아무것도 담지 않는다 (customId "lk:open" — 누가 눌러도 좋다):
+                        //   자물쇠는 이 자리가 아니라 **게임 안의 [잇는다]** 에 있다.
                         new SubcommandData("지역등록", "이 채널을 청하현으로 등록 (서버 관리자)"),
                         new SubcommandData("정산", "세계일 +1 (서버 관리자 — 자정에는 자동)"),
                         new SubcommandData("사선", "플레이어에게 사선을 긋는다 — 죽음 검증용 (서버 관리자)")
@@ -221,17 +270,18 @@ public final class HoncheonBot {
         String guildId = System.getenv("HONCHEON_GUILD_ID");
         var guild = guildId == null || guildId.isBlank() ? null : jda.getGuildById(guildId);
         if (guild != null) {
-            guild.updateCommands().addCommands(honcheon, gate).queue();
+            guild.updateCommands().addCommands(honcheon, gate, wipe, panel).queue();
             System.out.println("명령 등록: 길드 스코프 (" + guild.getName() + ") — 즉시 반영");
         } else {
-            jda.updateCommands().addCommands(honcheon, gate).queue();
+            jda.updateCommands().addCommands(honcheon, gate, wipe, panel).queue();
             System.out.println("명령 등록: 글로벌 — 첫 반영에 최대 1시간"
                     + (guildId == null || guildId.isBlank() ? " (개발 중엔 HONCHEON_GUILD_ID 권장)"
                             : " (경고: HONCHEON_GUILD_ID=" + guildId + " 길드를 찾지 못함)"));
         }
 
         scheduleMidnight(jda, db, listener);
-        System.out.println("혼천 봇 기동 — 룰 로드: " + configDir + " / DB: " + dbPath
+        System.out.println("혼천 봇 기동 — 룰 로드: " + configDir + " / DB: "
+                + System.getenv().getOrDefault("HONCHEON_DB_BACKEND", "sqlite")
                 + " / LLM 렌더러: " + renderer.providerLabel());
     }
 
@@ -239,7 +289,7 @@ public final class HoncheonBot {
      * 자정(Asia/Seoul)마다 세계일 +1 — 실제 하루 = 세계 1일.
      * 세계일이 넘어가면 세계가 산다: 소문이 새 망에 닿고, 세력이 인지하고, 빈사의 창구가 닫힌다.
      */
-    private static void scheduleMidnight(JDA jda, Db db, GameListener listener) {
+    private static void scheduleMidnight(JDA jda, WorldMetaReader db, GameListener listener) {
         ScheduledExecutorService sched = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "honcheon-day");
             t.setDaemon(true);

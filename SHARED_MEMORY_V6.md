@@ -5,8 +5,8 @@
 ## 현재 방향
 
 - 목표 저장소: PostgreSQL
-- 완료 단계: PG-001 기준선, PG-002A 초기화·메타 읽기 포트, PG-002B 브리지 저장소 포트, PG-002C 게임 원장 업무 포트, PG-003 트랜잭션·SQL 방언 경계
-- 다음 단계: PG-004 PostgreSQL 스키마·저장소 구현
+- 완료 단계: PG-001 기준선, PG-002A 초기화·메타 읽기 포트, PG-002B 브리지 저장소 포트, PG-002C 게임 원장 업무 포트, PG-003 트랜잭션·SQL 방언 경계, PG-004 PostgreSQL 구현
+- 다음 단계: PG-005 SQLite export/import와 검산
 - 작업 장부: `docs/collaboration/ACTIVE_V6.md`
 - 전환 설계: `docs/design/postgresql_migration.md`
 - Codex 브리지 완료: `docs/collaboration/CODEX_BRIDGE_ATOMIC_COMPLETE.md`
@@ -16,6 +16,7 @@
 - Fable 병렬 작업: B-004 리소스팩 실물 게이트 감사
 - Codex PG-002C 완료: `docs/collaboration/CODEX_PG002C_COMPLETE.md`
 - Codex PG-003 완료: `docs/collaboration/CODEX_PG003_COMPLETE.md`
+- Codex PG-004 완료: `docs/collaboration/CODEX_PG004_COMPLETE.md`
 - Fable B-004 완료: `docs/collaboration/FABLE_B004_COMPLETE.md`
 
 ## 규칙

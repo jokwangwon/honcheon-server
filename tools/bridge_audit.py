@@ -62,7 +62,9 @@ def mvt_emitters(kinds):
     bridge_src = src_of(MVT_DIR / "WorldBridge.java")
     handles = {"npc_death": "WorldBridge.npcDeath", "bandit_slain": "WorldBridge.banditSlain",
                "beast_slain": "WorldBridge.beastSlain", "qi_manifested": "WorldBridge.qiManifested",
-               "sparring": "WorldBridge.sparring", "link_request": "WorldBridge.requestLink",
+               "sparring": "WorldBridge.sparring",
+               # ★ 코드는 죽었다 (2026-07-13) — 접합의 발신은 이제 **그 몸의 수락**이다
+               "link_confirm": "WorldBridge.linkDecision",
                "cultivation_logged": "WorldBridge.cultivationLogged"}
     emits, callers = {}, {}
     for kind in kinds:
@@ -84,9 +86,22 @@ def mvt_emitters(kinds):
 
 
 def bot_handlers(kinds):
-    src = (ROOT / "server-bot" / "src" / "main" / "java" / "com" / "honcheon" / "bot"
-           / "Bridge.java").read_text(encoding="utf-8")
+    src = src_of(BOT_DIR / "Bridge.java")
     return {kind: f'case "{kind}"' in src for kind in kinds}
+
+
+def bridge_delivery_atomic():
+    """inbox 선점, 세계 변경, JSONL 커서가 한 트랜잭션인지 정적으로 확인한다."""
+    bridge = src_of(BOT_DIR / "Bridge.java")
+    db = src_of(BOT_DIR / "Db.java")
+    checks = (
+        "apply(line, checkpoint)" in bridge,
+        "db.applyBridgeEvent(id, kind, cursorKey, checkpoint" in bridge,
+        "setMeta(cursorKey, checkpoint)" in db,
+        "conn.commit()" in db,
+        "conn.rollback()" in db,
+    )
+    return all(checks), "handler 실패가 inbox·세계 상태·커서 중 일부만 남길 수 있다"
 
 
 # ─── ⑤ 사슬(鎖) — 살인이 세계에 남긴 자국을 끝까지 따라간다 ────────────────────
@@ -101,6 +116,7 @@ def bot_handlers(kinds):
 
 MVT_DIR = ROOT / "server-mvt" / "src" / "main" / "java" / "com" / "honcheon" / "mvt"
 BOT_DIR = ROOT / "server-bot" / "src" / "main" / "java" / "com" / "honcheon" / "bot"
+DOMAIN_DIR = ROOT / "domain" / "src" / "main" / "java" / "com" / "honcheon" / "domain"
 
 
 def src_of(path: Path) -> str:
@@ -112,6 +128,7 @@ def code_links():
     incidents = src_of(MVT_DIR / "Incidents.java")
     injections = src_of(BOT_DIR / "Injections.java")
     bot_all = "\n".join(src_of(p) for p in BOT_DIR.glob("*.java"))
+    domain_all = "\n".join(src_of(p) for p in DOMAIN_DIR.glob("*.java"))
     mvt_all = "\n".join(src_of(p) for p in MVT_DIR.glob("*.java") if p.name != "WorldBridge.java")
 
     return {
@@ -137,8 +154,9 @@ def code_links():
 
         # ★ 지역 자연 회복이 배선됐는가 (region_state.yml recovery — 10일마다 50을 향해)
         "지역이 회복한다": (
-            "recoveryDeltas(" in bot_all,
-            "RegionStateEngine.recoveryDeltas 호출자 0 — 한 번 내려간 치안은 영원히 내려가 있다"),
+            "regions.recover(" in bot_all and "recoveryDeltas(" in domain_all,
+            "GameListener → RegionService.recover → RegionStateEngine.recoveryDeltas 사슬이 끊겼다"
+            " — 한 번 내려간 치안은 영원히 내려가 있다"),
     }
 
 
@@ -170,6 +188,10 @@ def section(title):
     print(f"\n{'═' * 78}\n{title}\n{'═' * 78}")
 
 
+def result_code(verdicts):
+    return 1 if any(v.startswith(NO) for v in verdicts) else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("db", nargs="?", default=str(DEFAULT_DB))
@@ -196,7 +218,9 @@ def main():
     inbox = dict(q(conn, "SELECT kind, COUNT(*) FROM bridge_inbox GROUP BY kind"))
     # 세계가 실제로 바뀐 흔적 (kind → 그 사건이 남기는 events.type)
     world_marks = {"npc_death": ("사망", "소문"), "bandit_slain": ("토벌",), "beast_slain": ("사냥",),
-                   "qi_manifested": ("격_목격",), "sparring": ("비무",), "link_request": ("접합",)}
+                   "bandit_camp_cleared": ("도적_부분_소탕",),
+                   "bandit_boss_succeeded": ("도적_두목_승계",),
+                   "qi_manifested": ("격_목격",), "sparring": ("비무",), "link_confirm": ("접합",)}
     print(f"{'이벤트':<14} {'등록':<5} {'MVT 발신':<22} {'봇 수신':<8} {'수신 건수':<9} 세계 변화")
     for kind in events:
         registered = OK
@@ -215,6 +239,11 @@ def main():
         elif not callers.get(kind):
             verdicts.append(f"{WARN} {kind} — 발신 손잡이는 있으나 **부르는 자가 없다** "
                             f"(마크에서 이 사건은 일어나지 않는다)")
+
+    atomic, atomic_why = bridge_delivery_atomic()
+    print(f"\n전달 원자성: {OK if atomic else NO} inbox · 세계 변경 · JSONL 커서")
+    verdicts.append(f"{OK} 전달 원자성 — 실패한 사건은 같은 줄에서 재시도된다" if atomic
+                    else f"{NO} 전달 원자성 — {atomic_why}")
 
     # ═══ ② 신원 — 주체 없는 사건의 비율 ═══
     section("② 신원 — 세계가 못 읽는 사건은 얼마나 되는가 (★ 이 작업의 본체)")
@@ -251,10 +280,18 @@ def main():
           f"({100.0 * with_subject / len(rumors) if rumors else 0:.1f}%) "
           f"— 세력이 주목할 수 있는 소문")
 
-    # 대기 코드
+    # 접합의 청 (007) — 코드는 죽었다. 이제 장부에 남는 것은 **청과 그 답**이다
+    has_req = one(conn, "SELECT COUNT(*) FROM sqlite_master "
+                        "WHERE type='table' AND name='mvt_link_request'")
+    if has_req:
+        reqs = q(conn, "SELECT state, COUNT(*) c FROM mvt_link_request GROUP BY state")
+        if reqs:
+            print("접합 청: " + " · ".join(f"{r['state']} {r['c']}건" for r in reqs)
+                  + "   (수락 = 그 몸이 게임 안에서 눌렀다 — 그것만이 잇는다)")
     codes = q(conn, "SELECT state, COUNT(*) c FROM mvt_link_code GROUP BY state")
     if codes:
-        print("접합 코드: " + " · ".join(f"{r['state']} {r['c']}건" for r in codes))
+        print("☠ 옛 접합 코드 (폐기된 방식): "
+              + " · ".join(f"{r['state']} {r['c']}건" for r in codes))
 
     # ═══ ③ 혈채 — 두 원장의 정합 ═══
     section("③ 혈채 — 감쇠하지 않는 유일한 값 (그리고 0이어야 하는 것들)")
@@ -429,7 +466,8 @@ def main():
     else:
         print(f"{OK} 몸에서 벌어진 일이 장부에 닿고, 장부의 세계가 몸으로 돌아온다. 세계는 하나다.")
     conn.close()
+    return result_code(verdicts)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

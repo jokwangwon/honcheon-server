@@ -137,15 +137,11 @@ missing_gates = [s for s in stages if s != "범인" and s not in gate_realms]
 if missing_gates:
     issues.append(f"기 운용 게이트 누락 경지: {missing_gates}")
 
-# 8. 오의 문파 실재 (문파명 — 세력 정의의 sects/clans/멤버명과 대조)
-known_names = set()
-for grp in factions["faction_groups"].values():
-    for mid, m in grp.get("members", {}).items():
-        known_names.add(m.get("name", mid))
-        for lst in ("sects", "clans"):
-            known_names.update(m.get(lst, []))
+# 8. 오의 문파 실재 — factions.yml id_policy에 따라 group/member id만 참조값이다.
+known_faction_ids = set(faction_ids)
+known_faction_ids.update(factions.get("id_policy", {}).get("exempt", []))
 for aid, art in ultimate["legacy_arts"].items():
-    if art["faction"] not in known_names and art["faction"] not in ("무당파",):
+    if art["faction"] not in known_faction_ids:
         issues.append(f"오의 '{aid}' 문파 '{art['faction']}' 가 세력 정의에 없음")
 
 # 9. 지역 초기값 ↔ 시뮬레이터/테스트 가정 (치안 50/경제 48/민심 55)
