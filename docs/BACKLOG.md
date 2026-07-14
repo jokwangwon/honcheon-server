@@ -1216,6 +1216,24 @@ if (!blockers.isEmpty()) {
 
 # 닫힌 것 (지우지 않는다 — 왜 닫혔는지가 증거다)
 
+### B-102 · ★ 세계 상태 발행이 **계속 실패한다** — 봇→마크 되먹임이 끊겼다
+- **상태**: 닫힘
+- **분류**: 결함
+- **단계**: P3
+- **위치**: `server-bot/src/main/java/com/honcheon/bot/Bridge.java:869` (publishQuietly → publish)
+- **의존**: —
+- **닫는 조건**: `publish()` 가 ClassCastException 없이 `world_state.json` 을 갱신한다 · 실패가 재발하면 **원인 문자열**(어느 키가 String 인데 Map 로 읽었는가)이 로그에 남는다
+- **검증**: `run/bot/bot.log` 에 「세계 상태 발행 실패」가 더 안 찍힌다 · `run/bridge/world_state.json` mtime 이 주기적으로 갱신된다
+- **닫힘**: 2026-07-14 · 원인은 `Rules.defaultRegion()` — 스칼라(`mvt_start.default_region: cheongha_hyeon`)를 Map 전용 `RulesConfig.section()` 으로 읽어 ClassCastException (재현 하네스 스택: `Rules.java:862` ← `startAnchor` ← `mvtSheet` ← `publish`). `get()` 으로 교정. 아울러 `publishQuietly` 가 이제 예외의 낯과 첫 발자국(파일:줄)을 말한다 — getMessage 만 찍던 침묵이 이 병을 15시간 키웠다 (`world_state.json` 01:43 동결 → 16:26 부활). 실측: 수리 배포 후 발행 실패 0건 · 16:26:20 → 16:26:40 주기 갱신 재개 (world_day 24 · sheet 2명 · rumor_tags 13)
+
+PG-007 훈련(2026-07-14)이 발견했다 — 훈련이 만든 병이 **아니다**: 훈련 전(구 jar·SQLite)에도,
+훈련 중(신 jar·PostgreSQL)에도, 복귀 후(신 jar·SQLite)에도 똑같이 찍힌다. 백엔드 무관.
+
+`세계 상태 발행 실패: class java.lang.String cannot be cast to class java.util.Map` —
+`publish()` 가 어떤 JSON 값을 Map 로 기대하는데 String 이 온다 (state_json 안의 어느 키일 것이다).
+`publishQuietly` 가 조용히 삼키므로 **되먹임(봇→마크 스냅숏)이 끊긴 채 세계가 돈다** —
+마크는 낡은 `world_state.json` 을 본다. ★ **운영 컷오버 전에 고쳐야 한다** (PG-007 완료 문서 §남은 위험).
+
 ### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
 - **상태**: 닫힘
 - **분류**: 빚
@@ -1899,24 +1917,6 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
   ★ B-099 덕에 이제 **중단은 소리를 낸다** (`[틱예산] … 중단`) — 조용히 죽지는 않는다
 - **검증**: `grep -n "max_seconds" config/performance.yml` · 조성 뒤 `[틱예산]` 초 수를 로그에서 확인
 - **닫힘**: —
-
-### B-102 · ★ 세계 상태 발행이 **계속 실패한다** — 봇→마크 되먹임이 끊겼다
-- **상태**: 열림
-- **분류**: 결함
-- **단계**: P3
-- **위치**: `server-bot/src/main/java/com/honcheon/bot/Bridge.java:869` (publishQuietly → publish)
-- **의존**: —
-- **닫는 조건**: `publish()` 가 ClassCastException 없이 `world_state.json` 을 갱신한다 · 실패가 재발하면 **원인 문자열**(어느 키가 String 인데 Map 로 읽었는가)이 로그에 남는다
-- **검증**: `run/bot/bot.log` 에 「세계 상태 발행 실패」가 더 안 찍힌다 · `run/bridge/world_state.json` mtime 이 주기적으로 갱신된다
-- **닫힘**: —
-
-PG-007 훈련(2026-07-14)이 발견했다 — 훈련이 만든 병이 **아니다**: 훈련 전(구 jar·SQLite)에도,
-훈련 중(신 jar·PostgreSQL)에도, 복귀 후(신 jar·SQLite)에도 똑같이 찍힌다. 백엔드 무관.
-
-`세계 상태 발행 실패: class java.lang.String cannot be cast to class java.util.Map` —
-`publish()` 가 어떤 JSON 값을 Map 로 기대하는데 String 이 온다 (state_json 안의 어느 키일 것이다).
-`publishQuietly` 가 조용히 삼키므로 **되먹임(봇→마크 스냅숏)이 끊긴 채 세계가 돈다** —
-마크는 낡은 `world_state.json` 을 본다. ★ **운영 컷오버 전에 고쳐야 한다** (PG-007 완료 문서 §남은 위험).
 
 ### B-101 · 신규 SQLite 가 **없는 표를 가진 척** 버전 8 로 스탬프된다
 - **상태**: 열림

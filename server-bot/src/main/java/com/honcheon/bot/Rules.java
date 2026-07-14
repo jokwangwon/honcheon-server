@@ -859,7 +859,10 @@ public final class Rules {
     }
 
     public String defaultRegion() {
-        Object v = RulesConfig.section(lifepath("mvt_start"), "default_region");
+        // ★ 【B-102】 여기가 section() 이었다 — section 은 Map 전용이라 스칼라("cheongha_hyeon")를
+        //   만나면 ClassCastException 을 던졌고, 세계 상태 발행이 통째로 죽었다 (되먹임 단절).
+        //   스칼라는 get 으로 읽는다. (section 은 null 이면 던지므로 아래 null 분기도 그때는 죽은 코드였다.)
+        Object v = lifepath("mvt_start").get("default_region");
         return v == null ? "cheongha_hyeon" : String.valueOf(v);
     }
 

@@ -866,7 +866,9 @@ final class Bridge {
         try {
             publish();
         } catch (Exception e) {
-            System.err.println("세계 상태 발행 실패: " + e.getMessage());
+            // ★ 【B-102】 getMessage 만 찍었더니 **어디가** 병인지 몇 시간을 몰랐다 —
+            //   예외의 낯(클래스)과 첫 발자국(파일:줄)까지 말한다. 조용한 실패는 병을 키운다.
+            System.err.println("세계 상태 발행 실패: " + e + at(e));
         }
     }
 
@@ -875,8 +877,14 @@ final class Bridge {
         try {
             publishLinkRequests();
         } catch (Exception e) {
-            System.err.println("접합 청 발행 실패: " + e.getMessage());
+            System.err.println("접합 청 발행 실패: " + e + at(e));
         }
+    }
+
+    /** 예외의 첫 발자국 — 「어디가」를 한 줄로. (스택 전체는 소음, 없음은 침묵 — 한 발자국이 맞다) */
+    private static String at(Exception e) {
+        StackTraceElement[] trace = e.getStackTrace();
+        return trace.length == 0 ? "" : " — " + trace[0];
     }
 
     /**
