@@ -1,62 +1,113 @@
 package com.honcheon.bot;
 
+import com.honcheon.core.rules.RulesConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * 서사 폴백 템플릿 — <b>사냥과 비무</b>의 결과를 산문으로 (llm.yml failure_handling: LLM 없이도 게임은 돈다).
+ * 서사 폴백의 <b>읽는 손</b> — 사냥·비무 결과 산문의 정본은 {@code config/narration.yml} 이다
+ * (llm.yml failure_handling: LLM 없이도 게임은 돈다).
  *
- * <p>7계 준수: 수치 은닉(마진·굴림값 언급 금지 — 판정 embed 가 따로 공개한다),
- * 등록제 명사, 길이 예산.
+ * <p><b>★ 이 클래스는 이야기를 짓지 않는다.</b> 전에는 지었다 — 사냥 7문장과 비무 2문장이
+ * 자바 문자열로 여기 박혀 있었다 (BACKLOG B-074). 등록제 위반이다: 코드가 이야기를 지고 있었다.
+ * 서장의 글이 {@code config/seojang.yml} 로 나간 것(2026-07-13)과 같은 처방으로 전부
+ * <b>{@code config/narration.yml}</b> 로 옮겼다. <b>여기에 문장을 다시 적지 마라</b> —
+ * 두 벌이 되면 하나가 낡는다.
  *
- * <p><b>★ 서장(序章)의 글은 여기서 나갔다 (2026-07-13).</b> 이 파일에는
- * {@code INCIDENT_OPENING} · {@code FAMILY_COLOR} · {@code scene()} · {@code epilogue()} ·
- * {@code debut()} 가 있었다 — <b>발단 8종의 첫 문장과 집안 7종의 감각과 에필로그 10종이
- * 자바 코드 안에 박혀 있었다.</b> 등록제 위반이다: 코드가 이야기를 지고 있었다.
+ * <p><b>치환 자리 규약</b>(등록부에도 적혀 있다): {@code {짐승}} · {@code {승자}} · {@code {패자}}.
+ * 코드는 이 자리만 채운다 — 문장을 잇지 않는다.
  *
- * <p>전부 <b>{@code config/seojang.yml}</b> 로 옮겼고, 읽는 손은 {@link Seojang} 이다.
- * <b>여기에 서장의 문장을 다시 적지 마라</b> — 두 벌이 되면 하나가 낡는다.
+ * <p><b>왜 스스로 등록부를 여는가.</b> 호출부({@code GameListener})가 정적으로 부르는 시그니처를
+ * 지키기로 했다 — {@link Rules} 를 꿰어 넣으면 호출부가 전부 흔들린다. 그래서 {@code HoncheonBot}
+ * 과 같은 규약({@code HONCHEON_CONFIG}, 기본 {@code config})으로 첫 호출에 한 번만 읽는다.
  *
- * <p><b>★ 남은 청구서:</b> 아래 {@link #hunt}·{@link #duel} 의 문장은 <b>아직 자바에 있다.</b>
- * 같은 병이다. 이번 바퀴의 범위가 「서장」이라 손대지 않았다 — 다음 바퀴에 등록부로 보내야 한다.
+ * <p><b>등록부가 없거나 깨지면</b> 봇은 죽지 않는다 — 산문 없는 생존 한 줄로 버티되,
+ * severe 로그로 소리낸다 (조용한 실패 금지).
  */
 final class Narration {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Narration.class);
+
+    // ★ 생존 한 줄 — 등록부가 죽었을 때의 최소한. 산문이 아니다 (여기가 이야기를 지면 B-074 재발이다)
+    private static final String SURVIVE_HUNT = "사냥이 끝났다.";
+    private static final String SURVIVE_DUEL = "비무가 끝났다.";
+
+    /** 등록부의 평면 사본 ("hunt.대성공" → 문장). 첫 호출에 한 번만 읽는다 — null 이면 아직 안 읽었다 */
+    private static volatile Map<String, String> lines;
 
     private Narration() {
     }
 
-    /** 사냥 결과 폴백 — 등급 5분류로 온도를 정한다 (수치는 embed 몫) */
+    /** 사냥 결과 폴백 — 등급 5분류로 온도를 정한다 (수치는 embed 몫). 문장은 narration.yml hunt.* */
     static String hunt(String beast, String tierName, boolean pelt) {
-        return switch (grade(tierName)) {
-            case CRIT_GOOD -> "몸이 먼저 움직였다 — 스스로도 놀랄 만큼 깨끗한 일수. " + beast
-                    + "은(는) 소리도 없이 무너졌다. 오늘의 감각은 오래 기억날 것이다.";
-            case GOOD -> pelt
-                    ? "한 호흡에 끝났다. " + beast + "은(는) 미처 방향을 틀기도 전에 무너졌고, 가죽은 흠집 하나 없이 벗겨졌다."
-                    : "한 호흡에 끝났다. " + beast + "은(는) 미처 방향을 틀기도 전에 무너졌다.";
-            case MIXED -> "엎치락뒤치락 끝에 겨우 숨통을 끊었다. 몸 여기저기 생채기가 남았고, "
-                    + (pelt ? "가죽도 성한 곳이 많지 않다." : "가죽은 못 쓰게 됐다 — 그래도 손에 익은 것이 남았다.");
-            case BAD -> beast + "이(가) 더 빨랐다. 덤불 사이로 놓치고 나서야 옆구리가 쓰라린 것을 알았다 — 오늘은 여기까지다.";
-            case CRIT_BAD -> "발을 헛디딘 순간 " + beast + "의 이빨이 코앞까지 왔다. 구른 끝에 간신히 빠져나왔다 — "
-                    + "찢긴 옷자락이 산비탈에 남았다. 산이 오늘은 나를 거부한다.";
+        // ★ 환산점은 Seojang.grade 하나다 — 전에는 여기 사설 enum 이 같은 일을 두 벌로 했다
+        String grade = Seojang.grade(tierName);
+        String key = switch (grade) {
+            // 성공·중간만 가죽의 유무가 문장을 가른다 (등록부의 가지와 일치)
+            case "성공", "중간" -> "hunt." + grade + (pelt ? ".가죽_있음" : ".가죽_없음");
+            default -> "hunt." + grade;
         };
+        return line(key, SURVIVE_HUNT).replace("{짐승}", beast);
     }
 
-    /** 비무 결과 폴백 — 승/무/패는 엔진이 정했고, 여기는 예의만 */
+    /** 비무 결과 폴백 — 승/무/패는 엔진이 정했고, 여기는 예의만. 문장은 narration.yml duel.* */
     static String duel(String winner, String loser, boolean draw) {
         if (draw) {
-            return "수십 합이 오갔지만 승부는 갈리지 않았다. 두 사람은 동시에 물러나 포권했다 — 오늘의 합은 여기까지.";
+            return line("duel.무승부", SURVIVE_DUEL);
         }
-        return "합이 갈렸다. " + winner + "의 마지막 일수가 반 박자 빨랐고, " + loser
-                + "은(는) 깨끗이 패배를 인정하며 포권했다. 구경꾼들 사이에서 낮은 탄성이 새어 나왔다.";
+        return line("duel.승패", SURVIVE_DUEL)
+                .replace("{승자}", winner)
+                .replace("{패자}", loser);
     }
 
-    private enum Grade { CRIT_GOOD, GOOD, MIXED, BAD, CRIT_BAD }
+    /** 등록부의 문장 하나 — 없으면 생존 한 줄로 버티고 **소리낸다** (조용한 실패 금지) */
+    private static String line(String key, String survive) {
+        String v = registry().get(key);
+        if (v == null || v.isBlank()) {
+            LOG.error("서사 등록부에 문장이 없다 — config/narration.yml {} (생존 한 줄로 버틴다)", key);
+            return survive;
+        }
+        return v;
+    }
 
-    /** judgment.yml result_tiers의 name 기준 5분류 — 수치가 아니라 결의 문제 */
-    private static Grade grade(String tierName) {
-        return switch (tierName) {
-            case "대성공" -> Grade.CRIT_GOOD;
-            case "성공" -> Grade.GOOD;
-            case "아슬아슬한 성공", "부분 성공" -> Grade.MIXED;
-            case "실패" -> Grade.BAD;
-            default -> Grade.CRIT_BAD;
-        };
+    /** 첫 호출에 한 번만 읽는다 — 등록부가 깨져도 봇은 죽지 않는다 (빈 사본으로 버틴다) */
+    private static Map<String, String> registry() {
+        Map<String, String> l = lines;
+        if (l == null) {
+            synchronized (Narration.class) {
+                l = lines;
+                if (l == null) {
+                    l = load();
+                    lines = l;
+                }
+            }
+        }
+        return l;
+    }
+
+    private static Map<String, String> load() {
+        Map<String, String> flat = new LinkedHashMap<>();
+        try {
+            // HoncheonBot 과 같은 규약 — 봇의 설정 디렉터리는 이 env 하나로 정해진다
+            Path dir = Path.of(System.getenv().getOrDefault("HONCHEON_CONFIG", "config"));
+            flatten("", RulesConfig.load(dir.resolve("narration.yml")), flat);
+        } catch (RuntimeException broken) {
+            // ★ 깨진 채로 산다 — 빈 사본이면 모든 조회가 생존 한 줄로 떨어지고, line() 이 건마다 소리낸다
+            LOG.error("서사 등록부를 못 읽었다 — config/narration.yml (생존 한 줄로 버틴다)", broken);
+        }
+        return Map.copyOf(flat);
+    }
+
+    /** 중첩 맵을 "hunt.성공.가죽_있음" 꼴의 평면 키로 — 등록부의 가지 모양을 코드가 외우지 않기 위해 */
+    private static void flatten(String prefix, Object node, Map<String, String> out) {
+        if (node instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> flatten(prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, v, out));
+        } else if (node != null) {
+            out.put(prefix, String.valueOf(node));
+        }
     }
 }
