@@ -27,6 +27,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -1426,6 +1427,10 @@ public final class Antechamber implements Listener {
                 player.sendMessage(hut.line());
             }
         }
+        // ★ 나루의 몸은 배부르다 — 이미 바닥(6)까지 닳아 들어온 몸도 달릴 수 있어야 한다.
+        //   {@link #onHunger} 는 줄지 않게만 하므로, 채우는 것은 문이 한다 (들어올 때 한 번).
+        player.setFoodLevel(20);
+        player.setSaturation(20f);
         refreshPanels(player);
     }
 
@@ -1825,6 +1830,26 @@ public final class Antechamber implements Listener {
             return;
         }
         event.setCancelled(true);
+    }
+
+    /**
+     * <b>나루에서는 배가 고프지 않다</b> — "죽지 않는다"({@link #onPlayerDamage})와 같은 결.
+     *
+     * <p>사용자 실측 (2026-07-15): <i>"배가 고프면 달림 과제를 깰 수가 없네요."</i> 기전:
+     * 전역 허기 규칙(world_purity.yml hunger)의 {@code floor: 6}은 굶어 죽지 않게 하는
+     * 바닥인데, <b>바닐라 달리기는 허기 6 초과라야 된다</b> — 나루의 새 몸이 6까지 닳으면
+     * 회피(달림) 과제가 정확히 그 바닥에 막힌다. 배우는 자리의 계기는 몸이 아니라 손이어야
+     * 한다 — 나루에서는 허기가 줄지 않는다 (먹는 것은 막지 않는다. 강호에 나가면 배는
+     * 강호의 규칙대로 고파진다).
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onHunger(FoodLevelChangeEvent event) {
+        if (!(event.getEntity() instanceof Player p) || !isAntechamber(p.getWorld())) {
+            return;
+        }
+        if (event.getFoodLevel() < p.getFoodLevel()) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
