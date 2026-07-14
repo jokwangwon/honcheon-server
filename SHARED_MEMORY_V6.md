@@ -5,8 +5,9 @@
 ## 현재 방향
 
 - 목표 저장소: PostgreSQL
-- 완료 단계: PG-001 기준선, PG-002A 초기화·메타 읽기 포트, PG-002B 브리지 저장소 포트, PG-002C 게임 원장 업무 포트, PG-003 트랜잭션·SQL 방언 경계, PG-004 PostgreSQL 구현, PG-005 export/import·검산, PG-006 연결 풀·동시성 제어
-- 다음 단계: PG-007 스테이징 전환·복귀 훈련
+- 완료 단계: PG-001 기준선, PG-002A 초기화·메타 읽기 포트, PG-002B 브리지 저장소 포트, PG-002C 게임 원장 업무 포트, PG-003 트랜잭션·SQL 방언 경계, PG-004 PostgreSQL 구현, PG-005 export/import·검산, PG-006 연결 풀·동시성 제어, PG-007 전환·복귀 훈련
+- 다음 단계: 운영 컷오버는 **사람이 정한다** (전제: B-102 치유 · 영속 PG · 런북 §전제) → 그 뒤 PG-008
+- 컷오버 절차: `docs/bot/pg_cutover_runbook.md` (2026-07-14 훈련으로 재현됨)
 - 주 담당 인계 (2026-07-14): PG-005부터 Fable 이 설계·구현·검증·커밋, Codex 는 diff 검토·독립 재시험
 - 작업 장부: `docs/collaboration/ACTIVE_V6.md`
 - 전환 설계: `docs/design/postgresql_migration.md`
@@ -21,6 +22,7 @@
 - Fable B-004 완료: `docs/collaboration/FABLE_B004_COMPLETE.md`
 - Fable PG-005 완료: `docs/collaboration/FABLE_PG005_COMPLETE.md`
 - Fable PG-006 완료: `docs/collaboration/FABLE_PG006_COMPLETE.md`
+- Fable PG-007 완료: `docs/collaboration/FABLE_PG007_COMPLETE.md`
 
 ## 규칙
 

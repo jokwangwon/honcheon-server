@@ -1900,6 +1900,24 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
 - **검증**: `grep -n "max_seconds" config/performance.yml` · 조성 뒤 `[틱예산]` 초 수를 로그에서 확인
 - **닫힘**: —
 
+### B-102 · ★ 세계 상태 발행이 **계속 실패한다** — 봇→마크 되먹임이 끊겼다
+- **상태**: 열림
+- **분류**: 결함
+- **단계**: P3
+- **위치**: `server-bot/src/main/java/com/honcheon/bot/Bridge.java:869` (publishQuietly → publish)
+- **의존**: —
+- **닫는 조건**: `publish()` 가 ClassCastException 없이 `world_state.json` 을 갱신한다 · 실패가 재발하면 **원인 문자열**(어느 키가 String 인데 Map 로 읽었는가)이 로그에 남는다
+- **검증**: `run/bot/bot.log` 에 「세계 상태 발행 실패」가 더 안 찍힌다 · `run/bridge/world_state.json` mtime 이 주기적으로 갱신된다
+- **닫힘**: —
+
+PG-007 훈련(2026-07-14)이 발견했다 — 훈련이 만든 병이 **아니다**: 훈련 전(구 jar·SQLite)에도,
+훈련 중(신 jar·PostgreSQL)에도, 복귀 후(신 jar·SQLite)에도 똑같이 찍힌다. 백엔드 무관.
+
+`세계 상태 발행 실패: class java.lang.String cannot be cast to class java.util.Map` —
+`publish()` 가 어떤 JSON 값을 Map 로 기대하는데 String 이 온다 (state_json 안의 어느 키일 것이다).
+`publishQuietly` 가 조용히 삼키므로 **되먹임(봇→마크 스냅숏)이 끊긴 채 세계가 돈다** —
+마크는 낡은 `world_state.json` 을 본다. ★ **운영 컷오버 전에 고쳐야 한다** (PG-007 완료 문서 §남은 위험).
+
 ### B-101 · 신규 SQLite 가 **없는 표를 가진 척** 버전 8 로 스탬프된다
 - **상태**: 열림
 - **분류**: 빚
