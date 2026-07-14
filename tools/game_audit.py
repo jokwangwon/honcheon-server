@@ -588,6 +588,40 @@ def registries(cfg):
     return reg
 
 
+def schema_columns():
+    """db/schema.sql 의 컬럼명 등록부 — CREATE TABLE 블록 안의 컬럼 정의만 줍는다.
+
+    왜 필요한가: 'by:' 는 두 문맥을 산다.
+      · NPC 시행자 (simbeop.yml purification.해주.by: hyegak — 사람이 한다)
+      · DB 행의 축 (reset.yml tables.<t>.by: character_id — WHERE 절의 컬럼이다)
+    reset.yml 자신이 22행에 적어 두었다: "by: character_id | id | mc_uuid | discord_id".
+    그 어휘의 정본은 db/schema.sql 이다 — 파일 예외(하드코딩)가 아니라 등록부 대조로 푼다:
+    스키마에 실재하는 컬럼명만 DB 축으로 인정하고, 실재하지 않으면 여전히 NPC 오탈자로 짖는다.
+    """
+    path = os.path.join(ROOT, "db", "schema.sql")
+    cols = set()
+    if not os.path.exists(path):
+        return cols   # 스키마가 없으면 면제도 없다 — 눈은 이전처럼 (더 많이) 짖는다
+    # 컬럼 정의 행이 아닌 SQL 예약어 시작 행 (제약·인덱스 정의)
+    keywords = {"primary", "foreign", "unique", "check", "constraint", "create", "pragma"}
+    in_table = False
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            stripped = line.split("--")[0].rstrip()
+            if re.match(r"\s*CREATE TABLE", stripped, re.IGNORECASE):
+                in_table = True
+                continue
+            if not in_table:
+                continue
+            if stripped.strip().startswith(")"):
+                in_table = False
+                continue
+            m = re.match(r"\s+([a-z_][a-z0-9_]*)\s+\S", stripped)
+            if m and m.group(1) not in keywords:
+                cols.add(m.group(1))
+    return cols
+
+
 # 필드 이름 → 어느 등록부를 가리키는가
 NPC_FIELDS = {"npc", "npc_ref", "heir", "standin", "standin_secondary", "issuer",
               "via", "by", "related_npcs", "linked_npcs", "npcs", "members"}
@@ -607,6 +641,7 @@ def lint_registries(cfg, rep):
 
     bad_npc, bad_loc, bad_fac = {}, {}, {}
     reaction_inputs = set(dig(cfg, "faction_reaction.yml", "inputs", default={}) or {})
+    db_cols = schema_columns()   # 'by:' 의 두 번째 문맥 — DB 행의 축 (schema_columns 주석 참조)
 
     for rel, doc in sorted(cfg.items()):
         # schema 절은 필드 설명서지 데이터가 아니다
@@ -624,6 +659,10 @@ def lint_registries(cfg, rep):
                     if key == "members" and "npc" not in rel:
                         continue
                     if key in ("target", "via", "by") and c in reg["장소"] | reg["기연"]:
+                        continue
+                    # 'by:' 가 스키마에 실재하는 컬럼명이면 DB 축이다 (reset.yml tables.<t>.by)
+                    # — 실재하지 않는 값은 이 줄을 지나쳐 그대로 미등록 NPC 로 짖는다
+                    if key == "by" and c in db_cols:
                         continue
                     bad_npc.setdefault(c, []).append(f"{rel} {path}")
 

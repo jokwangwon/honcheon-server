@@ -220,25 +220,6 @@ P0 네 항목(B-001 ~ B-004)은 **전부 닫혔다** (2026-07-14) — 「닫힌 
 > ★ **그리고 등록부가 낡은 사실을 말한다**: `mob_models.yml:64` — "지금 서버는 팩을 배포하지 않는다 … 형체 0개".
 > **거짓이다.** `config/resource_pack.yml` 에 `url:` 과 `required: true` 가 있다. `SkillDisplay.java:891` 도 같은 거짓말을 한다.
 
-### B-008 · game_audit 위반 4건 — 미등록 장소 `cheongha` · 미등록 NPC 3
-- **상태**: 열림
-- **분류**: 결함
-- **단계**: P1
-- **위치**: `config/reset.yml`
-- **의존**: —
-- **닫는 조건**: `game_audit` 위반 0건
-- **검증**: `python3 tools/game_audit.py`
-- **닫힘**: —
-
-실측 (2026-07-14) — 위반 4 · 경고 6:
-1. 미등록 NPC `character_id` — `reset.yml tables.character_bank.by` 외 3곳
-2. 미등록 NPC `mc_uuid` — `reset.yml tables.mvt_link.by` 외 2곳
-3. 미등록 NPC `owner_id` — `reset.yml tables.registry.by`
-4. **미등록 장소 `cheongha`** — `npcs/cheongha_npcs.yml npcs.dak.location` 외 3곳
-
-1~3 은 **감사의 오독으로 보인다** (`by:` 는 NPC 가 아니라 **DB 컬럼명**이다) — 그렇다면 이것도 P0 의 병이다. **미확인.**
-4 는 진짜로 보인다 (`cheongha` 가 장소 등록부에 없다).
-
 ### B-010 · ★ 아미의 성별 문이 **없는 문**을 지킨다
 - **상태**: 열림
 - **분류**: ★세계
@@ -1200,6 +1181,25 @@ if (!blockers.isEmpty()) {
 
 # 닫힌 것 (지우지 않는다 — 왜 닫혔는지가 증거다)
 
+### B-008 · game_audit 위반 4건 — 미등록 장소 `cheongha` · 미등록 NPC 3
+- **상태**: 닫힘
+- **분류**: 결함
+- **단계**: P1
+- **위치**: `config/reset.yml`
+- **의존**: —
+- **닫는 조건**: `game_audit` 위반 0건
+- **검증**: `python3 tools/game_audit.py`
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 병. 위반 1~3은 **감사의 오독이 맞았다** — `by:` 는 reset.yml 에선 DB 컬럼(WHERE 축)인데 눈이 NPC 로 읽었다. 하드코딩 예외 대신 **등록부 대조**로 풀었다: `tools/game_audit.py` 의 `schema_columns()` 가 `db/schema.sql` 에서 컬럼 어휘를 파싱해, 실재하는 컬럼명만 DB 축으로 인정한다 (실재하지 않으면 여전히 짖는다 — simbeop.yml 의 `by: hyegak` 같은 진짜 NPC 참조는 탐지 유지, 변이 3종으로 확인). 위반 4는 진짜였다: 가축 4종의 `location: cheongha` 는 지역 id 의 준말 오기 → `cheongha_hyeon` 정정 (`config/npcs/cheongha_npcs.yml:538·552·566·580` — 실제 배치는 hunting_grounds 정원제가 정하므로 등록부용 메타만 바로잡음). 실측: `python3 tools/game_audit.py` → 위반 0건·exit 0 (Fable 재실행 확인)
+
+실측 (2026-07-14) — 위반 4 · 경고 6:
+1. 미등록 NPC `character_id` — `reset.yml tables.character_bank.by` 외 3곳
+2. 미등록 NPC `mc_uuid` — `reset.yml tables.mvt_link.by` 외 2곳
+3. 미등록 NPC `owner_id` — `reset.yml tables.registry.by`
+4. **미등록 장소 `cheongha`** — `npcs/cheongha_npcs.yml npcs.dak.location` 외 3곳
+
+1~3 은 **감사의 오독으로 보인다** (`by:` 는 NPC 가 아니라 **DB 컬럼명**이다) — 그렇다면 이것도 P0 의 병이다. **미확인.**
+4 는 진짜로 보인다 (`cheongha` 가 장소 등록부에 없다).
+
 ### B-009 · 다리가 끊겼다 — `bandit_camp_cleared` · `bandit_boss_succeeded` 를 봇이 안 받는다
 - **상태**: 닫힘
 - **분류**: ★세계
@@ -1931,6 +1931,20 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
   ★ B-099 덕에 이제 **중단은 소리를 낸다** (`[틱예산] … 중단`) — 조용히 죽지는 않는다
 - **검증**: `grep -n "max_seconds" config/performance.yml` · 조성 뒤 `[틱예산]` 초 수를 로그에서 확인
 - **닫힘**: —
+
+### B-104 · game_audit 에 **눈의 시험이 없다** — 오독 교정을 지킬 자동 눈이 없다
+- **상태**: 열림
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `tools/game_audit.py`
+- **의존**: —
+- **닫는 조건**: game_audit 의 selftest 가 선다 — 최소 세 변이(스키마에 없는 `by:` 값 · 미등록 NPC · 미등록 장소)를 잡는다 (닫을 때 검증란을 그 selftest 로 바꾼다)
+- **검증**: `python3 tools/game_audit.py` (본체 — 눈의 시험은 닫는 조건이 세운다)
+- **닫힘**: —
+
+B-008 을 닫으며 드러났다 (2026-07-14). 모든 감사에 눈의 시험이 있는데 game_audit 만 없다 —
+B-008 의 오독 교정(schema_columns 대조)을 지킬 회귀 방어가 없다. 트랙 병이 변이 3종을
+수동으로 확인하고 원복했으나, 그 변이들이 selftest 로 박제돼야 한다.
 
 ### B-101 · 신규 SQLite 가 **없는 표를 가진 척** 버전 8 로 스탬프된다
 - **상태**: 열림

@@ -535,7 +535,7 @@ npcs:
     tier: 0
     template: true
     role: "가축 — 마당의 닭"
-    location: cheongha
+    location: cheongha_hyeon           # 마을 전역 — 실제 자리는 hunting_grounds.yml livestock 앵커(장터)·반경이 정한다 (특정 건물이 아니다)
     beast_rank: 가축
     realm: "범인"
     mc_entity: CHICKEN
@@ -549,7 +549,7 @@ npcs:
     tier: 0
     template: true
     role: "가축 — 외양간의 소 (밭을 간다)"
-    location: cheongha
+    location: cheongha_hyeon           # 마을 전역 — 실제 자리는 hunting_grounds.yml livestock 앵커(장터)·반경이 정한다 (특정 건물이 아니다)
     beast_rank: 가축
     realm: "범인"
     mc_entity: COW
@@ -563,7 +563,7 @@ npcs:
     tier: 0
     template: true
     role: "가축 — 울타리의 양 (털을 낸다)"
-    location: cheongha
+    location: cheongha_hyeon           # 마을 전역 — 실제 자리는 hunting_grounds.yml livestock 앵커(장터)·반경이 정한다 (특정 건물이 아니다)
     beast_rank: 가축
     realm: "범인"
     mc_entity: SHEEP
@@ -577,7 +577,7 @@ npcs:
     tier: 0
     template: true
     role: "가축 — 우리의 돼지"
-    location: cheongha
+    location: cheongha_hyeon           # 마을 전역 — 실제 자리는 hunting_grounds.yml livestock 앵커(장터)·반경이 정한다 (특정 건물이 아니다)
     beast_rank: 가축
     realm: "범인"
     mc_entity: PIG
