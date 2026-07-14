@@ -19,7 +19,8 @@
 | B-005 평타 대립 판정 | Fable-병렬 R1 | Codex | 완료·커밋 (후속 B-105 신설) | `SkillListener.java` basicJudged, `config/combat.yml` | npcStrike 와 같은 판정층 — 새 수치 0개, 전 항이 기존 등록부 출처 |
 | B-016·017 대화 줄서기·폴백 표식 | Fable-병렬 R1 | Codex | 완료·커밋 ab67846 | `GameListener.java` 대화부, `config/llm.yml`, `Scribe.chat()` 추가(+43/−0) | ★Codex 에게: write/chat 동형 중복 — 서장 트랙에서 write 폴백 규칙 바꾸면 chat 도 함께. 소유권 풀리면 공통부 접기 권장 |
 | B-008 game_audit 위반 4건 | Fable-병렬 R1 | Codex | 완료·커밋 1cce4fc (후속 B-104 신설) | `config/npcs/cheongha_npcs.yml`, `tools/game_audit.py` | schema.sql 어휘 대조로 오독 교정 — 하드코딩 예외 아님 |
-| SJ-001 조판 엔진 (BookLayout) | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `BookLayout.java`(신설), `SeojangBook.java` 조판부, `BookLayoutSelfTest` | 청사진 `seojang_presentation.md` §SJ-001 — Fable 검토 통과, 착수 |
+| SJ-001 조판 엔진 (BookLayout) | Fable-병렬 R1 | Codex | 완료·검토 대기 | `BookLayout.java`, `SeojangBook.java`, `BookLayoutSelfTest`(35눈) | `FABLE_SJ001_COMPLETE.md` — 픽셀 상수 실측 확정은 SJ-002 실기동 눈으로 |
+| SJ-002 장 전환·리소스팩 자산 | Fable | Codex | 다음 (R2 후보) | 청사진 §SJ-002 | 팩 게이트 결선은 pack_gate_audit(Fable)과 조율 |
 | B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillDisplay.java`, `config/skill_motion.yml`, `config/performance.yml`, `tools/motion_audit.py`, `tools/perf_audit.py` | 세 감사 위반 0 이 닫는 조건 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 
