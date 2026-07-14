@@ -459,8 +459,8 @@ B-028 정리 중 발견 (2026-07-14, 트랙 정). 같은 값 8 이 두 곳에 �
 - **의존**: —
 - **닫는 조건**: 새로 만든 SQLite DB 에 `houses` 가 실제로 선다 (schema.sql 이 008 을 포함하거나,
   신규 스탬프가 버전이 아니라 **실제 표의 존재**를 확인한다)
-- **검증**: 임시 경로에 `new Db(...)` 뒤 `SELECT 1 FROM houses` 성공 (PG-005 자기 시험의 fixture 단계가 겪는 길)
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 정'. 길 (a) — `db/schema.sql` 에 008 최종 상태 편입 (+34/-2): houses 표를 characters **앞에**(FK 순서·PG 스키마와 동순), house_id 열·인덱스, 그리고 **조건부** 버전 스탬프 (버전 행도 캐릭터도 없을 때만 — 구 DB 의 진짜 버전을 안 덮고 v0 구 DB 를 거짓 스탬프하지 않음, 실증). migrate_db.py 는 순수 버전 판정이라 (b)로는 못 고친다는 근거 포함. 실증: 신규 SQLite 에서 houses SELECT·house_id INSERT OK · 스키마_버전 8 · 재기동 멱등 · migrate --status "대기 없음" · ResetSelfTest 41 · 계약 7 · boundary 0 · **이관 21눈**(fixture 의 낡은 수동 008 을 검토자가 걷은 뒤) 전부 통과 (Fable 재실행)
+- **검증**: `tools/PgMigrateSelfTest.java` (fixture 가 신규 schema.sql 만으로 houses 를 얻는다) · `python3 tools/persistence_boundary_audit.py`
+- **닫힘**: 2026-07-14 · 병렬 R2 트랙 정'. 길 (a) — `db/schema.sql` (경로 실재: `server-bot/src/main/java/com/honcheon/bot/Db.java` 가 읽는 그 파일) 에 008 최종 상태 편입 (+34/-2): houses 표를 characters **앞에**(FK 순서·PG 스키마와 동순), house_id 열·인덱스, 그리고 **조건부** 버전 스탬프 (버전 행도 캐릭터도 없을 때만 — 구 DB 의 진짜 버전을 안 덮고 v0 구 DB 를 거짓 스탬프하지 않음, 실증). migrate_db.py 는 순수 버전 판정이라 (b)로는 못 고친다는 근거 포함. 실증: 신규 SQLite 에서 houses SELECT·house_id INSERT OK · 스키마_버전 8 · 재기동 멱등 · migrate --status "대기 없음" · ResetSelfTest 41 · 계약 7 · boundary 0 · **이관 21눈**(fixture 의 낡은 수동 008 을 검토자가 걷은 뒤) 전부 통과 (Fable 재실행)
 
 PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db/schema.sql` 은 **19표**다 —
 `houses` 는 마이그레이션 008 에만 있다. 그런데 `Db.schemaVersionGate` 는 캐릭터가 0명인 신규 DB 를
@@ -2035,10 +2035,10 @@ B-015 를 닫으며 남긴 것 (2026-07-14, 트랙 갑'). 플레이어만 선언
 - **상태**: 열림
 - **분류**: 미완
 - **단계**: P1
-- **위치**: `docs/design/story_summary.md`
+- **위치**: `docs/story_summary.md`
 - **의존**: —
 - **닫는 조건**: story_summary 의 단계(마교 암류→삼파전)가 등록부로 서고, 아무도 사건을 안 일으키면 세계가 그 시계로 진행하며, 플레이어 행동이 속도를 가감한다
-- **검증**: `docs/design/story_summary.md` · 등록부 (신설 시 그 파일)
+- **검증**: `docs/story_summary.md` · 등록부 (신설 시 그 파일)
 - **닫힘**: —
 
 사용자 확정 (2026-07-14, D-0 Q1): 세상의 흐름은 story_summary 로 진행된다 — 복권.
