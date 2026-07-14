@@ -682,7 +682,9 @@ def lint_registries(cfg, rep):
                 for c in cand:
                     if not is_name_like(c):
                         continue
-                    if c in reg["세력"] or c in ("무소속", "미상", "없음", "해당_문파"):
+                    # "any" 는 엔진의 어휘다 — PersonalStory.java 조건식이 "어느 세력군이든
+                    # favor≥min" 으로 명시 처리한다 (threshold_gate · 사용자 정정 "정파만이 아니다")
+                    if c in reg["세력"] or c in ("무소속", "미상", "없음", "해당_문파", "any"):
                         continue
                     if c in reaction_inputs:
                         rep.fail(f"{rel} {path} = '{c}' — 'faction:' 키에 세력 id 가 아니라 "

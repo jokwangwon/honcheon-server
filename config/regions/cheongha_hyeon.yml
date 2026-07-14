@@ -63,9 +63,9 @@ locations:
 
   heuksu_ferry:
     name: "흑수나루"
-    description: "수로 물류 거점"
+    description: "수로 물류 거점. 나루(입도진)를 건넌 몸이 내리는 자리 — 뱃사공 섭구가 갓 내린 자를 맞는다 (B-121)"
     linked_incidents: []
-    linked_npcs: []
+    linked_npcs: [seopgu]
 
   north_alley_warehouse:
     name: "북쪽 골목 창고"
