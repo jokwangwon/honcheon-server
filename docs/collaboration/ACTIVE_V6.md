@@ -12,8 +12,9 @@
 | PG-005 SQLite export/import·검산 | Fable | Codex | 완료, Codex 검토 대기 (2026-07-14) | `tools/PgMigrate.java`, `PgMigrateSelfTest.java`, `pg_migration_audit*.py` | `FABLE_PG005_COMPLETE.md` (재현 명령 포함 · 리허설 컨테이너 살아 있음) |
 | PG-006 연결 풀·동시성 제어 | Fable | Codex | 완료, Codex 검토 대기 (2026-07-14) | `ConnectionSource*` 5파일, `Db.java` 직렬화 제거, `PgConcurrencySelfTest.java`, `pg_concurrency_audit*.py` | `FABLE_PG006_COMPLETE.md` |
 | PG-007 스테이징 전환·복귀 훈련 | Fable | Codex | 완료, Codex 검토 대기 (2026-07-14) | `docs/bot/pg_cutover_runbook.md`, 훈련 기록 | `FABLE_PG007_COMPLETE.md` · 기록: `FABLE_PG007_DRILL.md` |
-| 운영 컷오버 결정 | 사람 | — | 대기 (전제: B-102 치유 · 영속 PG) | — | 런북 §전제 · PG-007 완료 문서 §남은 위험 |
-| PG-008 SQLite 경로 제거 | Fable | Codex | 운영 전환 뒤 + 보존 기간 종료 후 | SQLite 경로, 문서 갱신 | 설계 문서 표 |
+| B-102 세계 상태 발행 수리 | Fable | Codex | 완료, Codex 검토 대기 (커밋 75b5cfd) | `Rules.java`, `Bridge.java` | BACKLOG B-102 닫힘 · 재현 하네스로 진단 |
+| ★ 운영 컷오버 | Fable (결정: 사람) | Codex | **전환 완료 (2026-07-14 16:38)** | `scripts/run_bot_pg.sh`, `run/bot/pg.env`(git 밖) | `FABLE_CUTOVER_20260714.md` — 운영 DB 는 이제 PostgreSQL |
+| PG-008 SQLite 경로 제거 | Fable | Codex | 보존 기간 종료 대기 (기간은 사람이 정한다) | SQLite 경로, 문서 갱신 | 설계 문서 표 · 컷오버 기록 §남은 일 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 
 PG-005 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.

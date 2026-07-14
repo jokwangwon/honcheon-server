@@ -35,7 +35,9 @@ export DISCORD_TOKEN='발급받은 토큰'
 - 빌드 → 기동까지 자동. `혼천 봇 기동 — …` 로그가 뜨면 준비 완료
 - 슬래시 명령은 **글로벌 등록**이라 첫 반영에 최대 1시간 걸릴 수 있다
   (급하면 봇을 서버에서 내보냈다 재초대하면 보통 즉시 뜬다)
-- 기본 DB는 `run/bot/honcheon.db` SQLite 단일 파일이다. PostgreSQL은 아래 환경 변수로 명시적으로 선택한다.
+- ★ **운영 DB 는 PostgreSQL 이다** (2026-07-14 컷오버 — `docs/collaboration/FABLE_CUTOVER_20260714.md`).
+  기동은 `./scripts/run_bot_pg.sh` (접속 정보는 `run/bot/pg.env` 가 정본). 아래 환경 변수를 직접
+  줘도 된다. `run_bot.sh` 단독 실행은 SQLite 복귀 경로다 (`run/bot/honcheon.db` — 복귀 보존본).
 
 | 환경 변수 | 기본값 | 뜻 |
 |---|---|---|

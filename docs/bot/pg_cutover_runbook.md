@@ -1,6 +1,9 @@
 # PostgreSQL 컷오버·롤백 런북 (PG-007)
 
-> 이 절차는 2026-07-14 훈련으로 실제 재현됐다 — 기록: `docs/collaboration/FABLE_PG007_DRILL.md`
+> 이 절차는 2026-07-14 훈련으로 재현됐고(기록: `docs/collaboration/FABLE_PG007_DRILL.md`),
+> **같은 날 16:38 운영 컷오버에 실전 사용됐다** (기록: `docs/collaboration/FABLE_CUTOVER_20260714.md`).
+> 운영 인스턴스: 컨테이너 `honcheon-postgres` · 볼륨 `honcheon-pgdata` · `127.0.0.1:5435` ·
+> 열쇠 정본 `run/bot/pg.env` · 기동 `scripts/run_bot_pg.sh`.
 > 원칙: **정지 → 백업 → 이관 → 검산 → 전환.** dual-write 없음. 어느 단계든 실패하면 §롤백으로 간다.
 
 ## 전제 (하나라도 어긋나면 시작하지 않는다)
