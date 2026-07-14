@@ -1004,12 +1004,17 @@ public final class GameListener extends ListenerAdapter {
             int accuracy = rules.initialAccuracy(String.valueOf(
                     cfg.getOrDefault("accuracy_kind", "직접_목격")));
             // 발원 망 — 아이가 난 것은 **장터가 먼저 안다** (rumor.yml origin_network_by_location)
-            spread("탄생:" + id, truth, name, id, tags, intensity, accuracy,
+            spread(birthGroup(id), truth, name, id, tags, intensity, accuracy,
                     rules.originNetwork("market"), db.worldDay());
         } catch (Exception e) {
             // ★ 소문을 못 심어도 아이는 태어난다 — 생성이 소문 때문에 죽으면 안 된다
             System.err.println("탄생 소문을 심지 못했다 (아이는 태어났다): " + e.getMessage());
         }
+    }
+
+    /** 탄생 소문의 군(群) 키 — 심는 쪽(birthRumor)과 읽는 쪽(houseNews, B-073)이 같은 열쇠를 쥔다 */
+    private static String birthGroup(long characterId) {
+        return "탄생:" + characterId;
     }
 
     /**
@@ -2403,6 +2408,24 @@ public final class GameListener extends ListenerAdapter {
         return v instanceof String s && !s.isBlank() ? s : fallback;
     }
 
+    /**
+     * npc_dialogue.yml {@code house_name_by_rumor} — <b>가문 이름의 빗장</b> (B-073).
+     * 문턱(known_min_accuracy)과 프롬프트 문구는 등록부가 정본 — 코드가 짓지 않는다.
+     * {@code llmRuntimeCfg} 와 같은 관행 (Rules 는 다른 트랙 소유 — 못 넓힌다).
+     * 못 읽으면 빈 맵 = <b>빗장은 닫힌 쪽으로 진다</b> (이름을 대지 않는다).
+     */
+    private final Map<String, Object> houseNameCfg = loadHouseNameCfg();
+
+    private static Map<String, Object> loadHouseNameCfg() {
+        try {
+            return RulesConfig.section(RulesConfig.load(
+                    Path.of(System.getenv().getOrDefault("HONCHEON_CONFIG", "config"))
+                            .resolve("npc_dialogue.yml")), "house_name_by_rumor");
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
     private void talkToNpc(SlashCommandInteractionEvent event) throws Exception {
         if (notInRegion(event)) {
             return;
@@ -2451,7 +2474,9 @@ public final class GameListener extends ListenerAdapter {
 
         Map<String, Object> row = found.get();
         long chId = ((Number) row.get("id")).longValue();
-        String persona = personaPrompt(npcName, npc, (Map<String, Object>) row.get("sheet"));
+        // ★ B-073 — 이 NPC 의 망에 탄생 소문이 닿았으면 가문 이름의 빗장이 풀린다 (닿기 전엔 잠김)
+        String persona = personaPrompt(npcName, npc, (Map<String, Object>) row.get("sheet"),
+                houseNews(npcKey, chId, day));
         String fallback = fallbackLine(npcName, npc);
         event.deferReply().queue();   // 로컬 LLM 1~3초 — 3초 응답 제한 회피
         // F36 — 키워드 게이트가 먼저: 정보 질문은 결정론으로 판정층 (LLM 호출도 절약)
@@ -2576,7 +2601,8 @@ public final class GameListener extends ListenerAdapter {
      * 못을 박는다 (그러지 않으면 모델이 멋대로 '소협'이라 부른다).
      */
     @SuppressWarnings("unchecked")
-    private String personaPrompt(String name, Map<String, Object> npc, Map<String, Object> sheet) {
+    private String personaPrompt(String name, Map<String, Object> npc, Map<String, Object> sheet,
+                                 HouseNews news) {
         Object disp = npc.get("disposition");
         String dispositions = disp instanceof List<?> list
                 ? String.join(", ", list.stream().map(String::valueOf).toList()) : "";
@@ -2591,17 +2617,15 @@ public final class GameListener extends ListenerAdapter {
         // 【★ 그러나 **모르는 것을 아는 척하면 안 된다**】 청하현의 객잔 주인이 사천 무가의 아이를
         //   **첫눈에** 알아보면 그것은 세계가 깨진 것이다. 그래서 경계를 이렇게 긋는다:
         //     · NPC 는 **집안의 결**을 안다 (말씨·옷차림·예법은 몸에 밴다 — 숨길 수 없다)
-        //     · NPC 는 **가문의 이름**은 모른다 (그것은 소문이 닿아야 안다 — 아직 미배선)
-        //   ★ 즉 "무가의 아이 같군" 은 되고, "네가 아무개 가문의 셋째지" 는 **안 된다.**
-        //   그 경계를 프롬프트에 못 박는다. **소문 축과의 접합은 청구서로 남겼다** (보고서 참조).
+        //     · NPC 는 **가문의 이름**은 소문이 닿아야 안다 — ★ B-073 배선 완료: 탄생 소문
+        //       (birthRumor, 군 탄생:<id>)이 이 NPC 의 망에 도달했으면 news 가 이름을 든다.
+        //   ★ 즉 소문 전엔 "무가의 아이 같군" 까지, 소문 후엔 "자네가 그 집 아이인가" 가 된다.
+        //   정확도가 낮으면(오해·괴담 밴드) **확신 없는 언급**만 — rumor.yml accuracy_bands 문법.
         String house = sheet == null || sheet.get("집안") == null ? null
                 : String.valueOf(sheet.get("집안"));
         boolean left = sheet != null && Boolean.TRUE.equals(sheet.get("집안_이탈"));
-        String houseLine = house == null ? ""
-                : "상대의 집안: **" + house + "**" + (left ? " (집을 나온 아이 — 가문의 뒷배가 없다)" : "")
-                + ". 너는 그 **결**만 알아본다 (말씨·옷차림·몸에 밴 예법). "
-                + "가문의 **이름**은 모른다 — 소문이 닿지 않았다. "
-                + "'무가의 아이 같군' 은 되고, 가문 이름을 대는 것은 금지다.\n";
+        String houseLine = houseLine(houseNameCfg, house, left,
+                news == null ? null : news.name(), news == null ? -1 : news.accuracy());
 
         return "너는 무협 세계 청하현의 NPC 「" + name + "」이다. 너의 역할: " + npc.get("role")
                 + ". 너의 성향: " + dispositions + ".\n"
@@ -2620,6 +2644,80 @@ public final class GameListener extends ListenerAdapter {
                 + " 너의 이름과 직함은 위에 주어진 것이 전부다. 숫자 금지.\n"
                 + "5. 말투는 처음부터 끝까지 하나로 — 하게체(장사꾼·무인) 또는 하오체. 존댓말로 바꾸지 마라.\n"
                 + "6. 직업의 어휘를 써라 — 의원이면 맥·약재, 상인이면 값·물건, 무인이면 손속·길.";
+    }
+
+    /** NPC 가 아는 가문의 「이름」 — 탄생 소문(B-069)이 그 NPC 의 망에 닿았을 때만 존재한다 (B-073) */
+    record HouseNews(String name, int accuracy) {
+    }
+
+    /**
+     * ★ B-073 — <b>이 NPC 는 이 아이의 가문 이름을 아는가.</b>
+     *
+     * <p>장부(events.탄생)가 아니라 <b>소문망</b>에 묻는다: 탄생 소문(군 {@link #birthGroup})이
+     * 그 NPC 가 사는 장소의 망(rumor.yml origin_network_by_location — {@code npcClue} 와 같은
+     * 배선)에 <b>도달했는가</b> ({@code Db.rumorAccuracyIn}, -1 = 아직). 도달했으면 그 망의
+     * 정확도가 곧 앎의 질이다 — 같은 아이라도 객잔망과 상단망이 다른 크기로 안다.
+     *
+     * <p><b>감쇠 후에도 잊지 않는다</b> — 강도 감쇠는 소문의 '옮겨짐'을 죽이지, 들은 사람의
+     * 기억을 지우지 않는다 (rumor.yml npc_memory_tags: "소문 소멸 후에도 개인의 기억은 남는다").
+     * 그래서 유효강도(heard)가 아니라 <b>도달</b>(rumorAccuracyIn)로 묻는다.
+     */
+    private HouseNews houseNews(String npcKey, long chId, int today) {
+        try {
+            if (npcKey == null) {
+                return null;
+            }
+            Long houseId = db.houseOfCharacter(chId);
+            if (houseId == null) {
+                return null;   // 집이 없는 아이 (옛 캐릭터·가문 배정 실패) — 알 이름 자체가 없다
+            }
+            String houseName = db.house(houseId).map(HouseEntry::name).orElse(null);
+            if (houseName == null || houseName.isBlank()) {
+                return null;
+            }
+            String network = rules.originNetwork(String.valueOf(rules.npcLocation(npcKey)));
+            int accuracy = db.rumorAccuracyIn(birthGroup(chId), network, today);
+            return accuracy < 0 ? null : new HouseNews(houseName, accuracy);
+        } catch (Exception e) {
+            // 소문을 못 읽으면 모르는 쪽으로 — 대화가 소문 때문에 죽으면 안 된다
+            return null;
+        }
+    }
+
+    /** 등록부가 없을 때의 빗장 — 닫힌 쪽으로 진다 (이름을 대지 않는다). 문구 정본은 npc_dialogue.yml */
+    private static final String HOUSE_UNKNOWN_FALLBACK =
+            "너는 그 **결**만 알아본다 (말씨·옷차림·몸에 밴 예법). "
+                    + "가문의 **이름**은 모른다 — 소문이 닿지 않았다. "
+                    + "'무가의 아이 같군' 은 되고, 가문 이름을 대는 것은 금지다.";
+
+    /**
+     * 집안 줄 — <b>빗장의 세 상태</b> (B-073):
+     * 소문이 안 닿았다(unknown — 이름 금지) / 뒤틀려 닿았다(distorted — 확신 없는 언급만) /
+     * 제대로 닿았다(known — 이름을 안다, 정확도 N).
+     *
+     * <p>문턱({@code known_min_accuracy})과 문구는 <b>npc_dialogue.yml house_name_by_rumor 가
+     * 정본</b> — 코드가 짓지 않는다. 등록부가 비거나 문구가 빠지면 <b>unknown 으로 진다</b>
+     * (열리는 실수보다 잠기는 실수가 싸다).
+     *
+     * <p>static 인 이유: 프롬프트 조립의 단위 검증(하네스)이 DB 없이 이 함수를 직접 친다.
+     */
+    static String houseLine(Map<String, Object> cfg, String house, boolean left,
+                            String houseName, int accuracy) {
+        if (house == null) {
+            return "";
+        }
+        // 문턱이 등록부에 없으면 어떤 정확도도 known 에 못 미친다 (닫힌 빗장)
+        int knownMin = cfg.get("known_min_accuracy") instanceof Number n
+                ? n.intValue() : Integer.MAX_VALUE;
+        String key = houseName == null || accuracy < 0 ? "unknown"
+                : accuracy >= knownMin ? "known" : "distorted";
+        Object raw = cfg.get(key);
+        String text = raw instanceof String s && !s.isBlank() ? s : HOUSE_UNKNOWN_FALLBACK;
+        return "상대의 집안: **" + house + "**"
+                + (left ? " (집을 나온 아이 — 가문의 뒷배가 없다)" : "") + ". "
+                + text.replace("{house_name}", houseName == null ? "" : houseName)
+                        .replace("{accuracy}", String.valueOf(accuracy))
+                + "\n";
     }
 
     /** LLM 비활성·실패 시 폴백 — 역할 기반 한 줄 (대화가 죽지 않는다) */
