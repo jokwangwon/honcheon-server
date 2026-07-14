@@ -152,26 +152,6 @@ P0 네 항목(B-001 ~ B-004)은 **전부 닫혔다** (2026-07-14) — 「닫힌 
 
 # P1 — 세계를 깨뜨리는 것
 
-### B-005 · ★ 기본 초식에 **대립 판정이 없다** — 피해가 바닐라 그대로
-- **상태**: 열림
-- **분류**: ★세계
-- **단계**: P1
-- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java:1076`
-- **의존**: —
-- **닫는 조건**: 평타가 판정층을 통과한다 — 태세(회피·막기·흘리기)·마진·격 위력이 피해에 실린다
-- **검증**: `python3 tools/combat_audit.py` · `python3 tools/defense_audit.py`
-- **닫힘**: —
-
-**다음 바퀴의 1순위였다.** `basicMelee` (`SkillListener.java:1063-1116`) 에서
-`double raw = event.getDamage()` (`:1076`) 가 **그대로** `target.damage(raw, player)` (`:1109`) 로 간다.
-`guardline()` 도 `roll2d6()` 도 `margin` 도 없다. `grade` 는 계산하지만 **FX 에만** 먹인다 —
-`engine.qiPower(grade)` 는 피해에 **안 더해진다**.
-
-**결과: 방어자의 태세가 통째로 무시된다.** 플레이어가 평타를 치는 순간 막기도 흘리기도 회피도 없다.
-
-> 범위 정정 (실측): 대립 판정은 **다른 두 길에는 있다** — `npcStrike` (`:861-889`) 와 무공 `resolve` (`:1736-1768`).
-> 구멍은 **플레이어 평타 하나**다.
-
 ### B-006 · ★ **안전 지역이 없다** — 관아 앞마당에서도 사람을 벤다
 - **상태**: 열림
 - **분류**: ★세계
@@ -1152,6 +1132,26 @@ if (!blockers.isEmpty()) {
 
 # 닫힌 것 (지우지 않는다 — 왜 닫혔는지가 증거다)
 
+### B-005 · ★ 기본 초식에 **대립 판정이 없다** — 피해가 바닐라 그대로
+- **상태**: 닫힘
+- **분류**: ★세계
+- **단계**: P1
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java:1076`
+- **의존**: —
+- **닫는 조건**: 평타가 판정층을 통과한다 — 태세(회피·막기·흘리기)·마진·격 위력이 피해에 실린다
+- **검증**: `python3 tools/combat_audit.py` · `python3 tools/defense_audit.py`
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 갑. 평타가 드디어 판정층을 지난다 — `SkillListener.java` 신설 `basicJudged()` 가 npcStrike(:861-889)와 같은 층 순서(격 지불 → 태세·마진 → 갑옷 → 기 방어)로 즉발·선딜 두 경로를 태운다. 격 위력은 지불한 타격에만 실리고(qiPower — "FX에만 먹인다" 병 종결), 마진은 resolve 의 PvP 근사(+7) 규약 그대로, 막기만 무기를 태운다(soak_rule 두 줄). impact 토글이 판정층을 못 끄게 분리. 새 수치 0개 — `config/combat.yml` attack.basic_strike_judgment 는 각 항의 출처를 적은 등록부 문서다. 실측: 컴파일 0 · `python3 tools/combat_audit.py` 위반 0 · `python3 tools/defense_audit.py` 위반 0 (Fable 재실행 확인 · 잔여 경고 6건은 전부 기존 — B-033 등). 남은 것은 B-105(판정의 눈에 평타 미배선)로 올림
+
+**다음 바퀴의 1순위였다.** `basicMelee` (`SkillListener.java:1063-1116`) 에서
+`double raw = event.getDamage()` (`:1076`) 가 **그대로** `target.damage(raw, player)` (`:1109`) 로 간다.
+`guardline()` 도 `roll2d6()` 도 `margin` 도 없다. `grade` 는 계산하지만 **FX 에만** 먹인다 —
+`engine.qiPower(grade)` 는 피해에 **안 더해진다**.
+
+**결과: 방어자의 태세가 통째로 무시된다.** 플레이어가 평타를 치는 순간 막기도 흘리기도 회피도 없다.
+
+> 범위 정정 (실측): 대립 판정은 **다른 두 길에는 있다** — `npcStrike` (`:861-889`) 와 무공 `resolve` (`:1736-1768`).
+> 구멍은 **플레이어 평타 하나**다.
+
 ### B-008 · game_audit 위반 4건 — 미등록 장소 `cheongha` · 미등록 NPC 3
 - **상태**: 닫힘
 - **분류**: 결함
@@ -1933,6 +1933,20 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
   ★ B-099 덕에 이제 **중단은 소리를 낸다** (`[틱예산] … 중단`) — 조용히 죽지는 않는다
 - **검증**: `grep -n "max_seconds" config/performance.yml` · 조성 뒤 `[틱예산]` 초 수를 로그에서 확인
 - **닫힘**: —
+
+### B-105 · 판정의 눈이 **평타를 못 본다** — eyeRoll/eyeDamage 는 Cast 만 안다
+- **상태**: 열림
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java`
+- **의존**: —
+- **닫는 조건**: B-005 의 평타 판정(basicJudged)이 판정의 눈(eyeRoll·eyeDamage 계열)에 뜬다 — 무공과 같은 가시성
+- **검증**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java` (basicJudged 에 눈 배선 존재)
+- **닫힘**: —
+
+B-005 를 닫으며 드러났다 (2026-07-14). 판정의 눈은 `Cast` 를 요구해 평타의 마진·태세·격이
+디버그 화면에 안 뜬다. 판정이 보이지 않으면 밸런스 조정(저경지 평타 DPS 하락 체감)을 잴 수 없다.
+연무장 허수아비가 태세로 평타를 회피하는 것(기존 대칭)의 TTK 영향 계측도 이 눈이 있어야 한다.
 
 ### B-104 · game_audit 에 **눈의 시험이 없다** — 오독 교정을 지킬 자동 눈이 없다
 - **상태**: 열림

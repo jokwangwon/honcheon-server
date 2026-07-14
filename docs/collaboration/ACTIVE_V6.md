@@ -16,8 +16,8 @@
 | B-102 세계 상태 발행 수리 | Fable | Codex | 완료, Codex 검토 대기 (커밋 75b5cfd) | `Rules.java`, `Bridge.java` | BACKLOG B-102 닫힘 · 재현 하네스로 진단 |
 | ★ 운영 컷오버 | Fable (결정: 사람) | Codex | **전환 완료 (2026-07-14 16:38)** | `scripts/run_bot_pg.sh`, `run/bot/pg.env`(git 밖) | `FABLE_CUTOVER_20260714.md` — 운영 DB 는 이제 PostgreSQL |
 | PG-008 SQLite 경로 제거 | Fable | Codex | 보존 기간 종료 대기 (기간은 사람이 정한다) | SQLite 경로, 문서 갱신 | 설계 문서 표 · 컷오버 기록 §남은 일 |
-| B-005 평타 대립 판정 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillListener.java`, `config/combat.yml` | ★ SkillListener 는 이 트랙 소유 — 다른 손 금지 |
-| B-016·017 대화 줄서기·폴백 표식 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `GameListener.java` 대화부, `config/llm.yml` (Scribe 는 추가만) | SJ 트랙과 조율: Scribe/Seojang 기존 동작 불변 |
+| B-005 평타 대립 판정 | Fable-병렬 R1 | Codex | 완료·커밋 (후속 B-105 신설) | `SkillListener.java` basicJudged, `config/combat.yml` | npcStrike 와 같은 판정층 — 새 수치 0개, 전 항이 기존 등록부 출처 |
+| B-016·017 대화 줄서기·폴백 표식 | Fable-병렬 R1 | Codex | 완료·커밋 ab67846 | `GameListener.java` 대화부, `config/llm.yml`, `Scribe.chat()` 추가(+43/−0) | ★Codex 에게: write/chat 동형 중복 — 서장 트랙에서 write 폴백 규칙 바꾸면 chat 도 함께. 소유권 풀리면 공통부 접기 권장 |
 | B-008 game_audit 위반 4건 | Fable-병렬 R1 | Codex | 완료·커밋 1cce4fc (후속 B-104 신설) | `config/npcs/cheongha_npcs.yml`, `tools/game_audit.py` | schema.sql 어휘 대조로 오독 교정 — 하드코딩 예외 아님 |
 | SJ-001 조판 엔진 (BookLayout) | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `BookLayout.java`(신설), `SeojangBook.java` 조판부, `BookLayoutSelfTest` | 청사진 `seojang_presentation.md` §SJ-001 — Fable 검토 통과, 착수 |
 | B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillDisplay.java`, `config/skill_motion.yml`, `config/performance.yml`, `tools/motion_audit.py`, `tools/perf_audit.py` | 세 감사 위반 0 이 닫는 조건 |
