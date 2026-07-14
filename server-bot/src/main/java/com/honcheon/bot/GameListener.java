@@ -68,6 +68,13 @@ public final class GameListener extends ListenerAdapter {
      */
     private final PersonalStory story;
 
+    /**
+     * ★ B-110 — 세계 시계: 막(幕)이 박(拍)을 발화하고, 유효일이 차면 다음 막으로.
+     * 등록부는 {@code config/world_clock.yml} — 깨져도 봇은 죽지 않는다, 시계만 잠긴다
+     * (PersonalStory 와 같은 문법). 자정 정산 {@link #advanceWorld} 의 한 단계로 돈다.
+     */
+    private final WorldClockEngine worldClock;
+
     private final Map<String, Creation> creations = new ConcurrentHashMap<>();
 
     /**
@@ -93,6 +100,8 @@ public final class GameListener extends ListenerAdapter {
         this.factions = new FactionService(rules.factions, db);
         this.regions = new RegionService(rules.regions, db);
         this.story = PersonalStory.load();   // HONCHEON_CONFIG 규약 — 깨지면 severe 내고 잠긴다
+        // ★ B-110 — 세계 시계. 소문은 spread(전파·세력 인지 배선)로, 지역은 도메인 서비스로 심는다
+        this.worldClock = new WorldClockEngine(rules, db, this.regions, this::spread);
     }
 
     /**
@@ -224,6 +233,12 @@ public final class GameListener extends ListenerAdapter {
             //   (/접합문 과 같은 문법. 그리고 최상위이므로 25칸을 **먹지 않는다**)
             if ("안내판".equals(event.getName())) {
                 postPanel(event);
+                return;
+            }
+            // ★ /막개전 — 세계 시계 human gate 의 승인 (B-110 설계 §4). /혼천 의 25칸은 꽉 찼으므로
+            //   최상위 명령이다 (/안내판·/접합문의 선례 — B-020 탈출구 ①)
+            if ("막개전".equals(event.getName())) {
+                approveActGate(event);
                 return;
             }
             switch (String.valueOf(event.getSubcommandName())) {
@@ -5019,6 +5034,22 @@ public final class GameListener extends ListenerAdapter {
                 .build()).queue();
     }
 
+    /**
+     * ★ B-110 — 막 관문 승인 ({@code /막개전}). settleDay 와 같은 권한 문법(MANAGE_SERVER).
+     * '관문_대기'(human gate 성숙)일 때만 연다 — 삼파전 진입은 살상 PvP 개방과 맞물리므로
+     * 자동 진입이 금지돼 있고(설계 §4), 이 명령이 그 유일한 손이다. 되돌림 명령은 없다 (§6).
+     */
+    private void approveActGate(SlashCommandInteractionEvent event) throws Exception {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+            event.reply("서버 관리 권한이 필요하다.").setEphemeral(true).queue();
+            return;
+        }
+        WorldClockEngine.Approval answer = worldClock.approve(db.worldDay());
+        event.replyEmbeds(new EmbedBuilder().setColor(answer.ok() ? BLOOD : INK)
+                .setTitle(answer.ok() ? "막개전 — 관문이 열렸다" : "막개전 — 열 관문이 없다")
+                .setDescription(answer.body()).build()).queue();
+    }
+
     /** 세계일 정산의 결과 — 지역 채널에 방송할 아침 소식 */
     record Dawn(int day, String report) {
     }
@@ -5035,6 +5066,13 @@ public final class GameListener extends ListenerAdapter {
         StringBuilder report = new StringBuilder();
 
         factionAwareness(day);
+
+        // ★ B-110 — 세계 시계: 박 발화(소문·명분·지역 델타) → 전조 → 막 진입 판정.
+        //   지역 회복·세력 인지와 나란한 자정 정산의 한 단계다 (설계 §8 ①). 등록부: world_clock.yml
+        String clockReport = worldClock.tick(day);
+        if (!clockReport.isEmpty()) {
+            report.append(clockReport);
+        }
 
         // ★ 지역 자연 회복 — region_state.yml recovery (10일마다 기준값 50 을 향해 1).
         //   이것이 없어서 **마을을 구해도 치안이 제자리로 안 돌아왔다.** 눈금은 한 번 내려가면 영원히 내려가 있었다.

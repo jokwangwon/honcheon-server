@@ -6,28 +6,22 @@
 #       아무도 사건을 안 일으키면 세계가 스스로 이 시계로 진행한다 (모든 박에 자동 해소).
 #       수치(막·유효일·박자보정)는 절대 노출 금지 — 소문·NPC·의뢰·지역 상태로만 드러난다.
 #
-# ╔══════════════════════════════════════════════════════════════════════════╗
-# ║ ★ 아직 아무도 이 파일을 읽지 않는다 (아래 unwired 절). 세계에 막(幕)은 없다.  ║
-# ║   설계 초안이다 — WorldClockEngine 이 서면 이 등록부가 세계의 달력이 된다.    ║
-# ╚══════════════════════════════════════════════════════════════════════════╝
-
-# ─── ★ 미배선 표식 (chapter_events.yml 의 관례를 따른다) ───
-unwired:
-  reason: >-
-    WorldClockEngine 이 없다. 세계일(world_meta '현재일')·자정 정산(advanceWorld)·소문·명분·
-    원장은 전부 배선돼 있으므로 기본 시계 경로(막 진입·박 발화·전조)는 순수 조립이지만,
-    아직 아무 코드도 이 파일을 열지 않는다. 또한 tempo 입력 중 장(chapter_events) 결과에
-    기대는 키는 장 엔진 미배선(그 파일의 unwired 절) 동안 발화하지 않는다.
-  condition: >-
-    ① advanceWorld() 에 WorldClockEngine 단계가 편입되어 막 진입·박 발화·전조가 자정에 돌고,
-    ② world_meta 에 세계막·막진입일·박자보정 키가 살고, ③ human gate 승인 명령(/막개전)이
-    서면 — 이 등록부가 산다. tempo 의 장 결과 키는 chapter_events 배선(P2)이 선행 축.
-  doc: docs/design/world_clock.md
+# ─── 배선 (2026-07-15, B-110) — 이 등록부는 살아 있다 ───
+# 읽는 코드: server-bot WorldClockEngine (자정 정산 advanceWorld 의 한 단계 — 막 진입·박 발화·전조),
+# 승인 명령 /막개전 (human gate, MANAGE_SERVER — HoncheonBot 최상위 등록).
+# ★ 단 tempo 절(박자보정 **입력**)만은 아직 미배선이다 (설계 §8 ④ — 장 엔진 P2 와 함께):
+#   지금은 world_meta '박자보정:<막id>' 를 읽기만 한다 (기본 0 · ±tempo_clamp). 아무도 쓰지 않으므로
+#   세계는 기본 시계로만 흐른다 — 그것만으로 "아무도 안 일으키면 스스로 진행"은 선다 (설계 §5 주의).
+# ★ 문안키의 산문(문안)은 아직 등재 전이다 — 그동안 소문 내용은 키의 밑줄을 빈칸으로 편 것이다.
+# 대조하는 눈: tools/world_clock_audit.py (자기 시험: tools/world_clock_audit_selftest.py)
 
 meta:
   canon: docs/story_summary.md                 # 이야기 정본 — 수정 금지, 옮겨 적기만
   day_source: "world_meta '현재일' — 현실 1일 = 세계 1일 (자정 Asia/Seoul, advanceWorld)"
   state_keys: [세계막, 막진입일, "박자보정:<막id>"]   # 전부 world_meta 키밸류 — 스키마 변경 없음
+  # 구현 장부 (설계 §8 ② 의 3종 밖 — 멱등 표식. 역시 world_meta 키밸류, 스키마 변경 없음):
+  #   박발화:<막id>.<박key> = 발화 세계일 (박은 한 번만 터진다) · 전조발화:<막id> = 전조를 심은 세계일
+  bookkeeping_keys: ["박발화:<막id>.<박key>", "전조발화:<막id>"]
   event_types: [막전환, 막관문]                  # events 원장 append 타입 (되돌림 불가의 감사 흔적)
   visibility: "막·유효일·박자보정은 내부 상태 — 노출 금지 (world_reaction_system 총원칙)"
   registry: "factions.yml 등재 세력 id 만. 소문 태그·장 키·명분 태그는 기존 등록부의 것만 쓴다"

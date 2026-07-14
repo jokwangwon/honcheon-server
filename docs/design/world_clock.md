@@ -5,7 +5,8 @@
 > "아무도 사건을 안 일으키면 세계가 스스로 그 이야기로 진행하고, 플레이어 행동이
 > 속도를 가감한다"를 기계 계산 가능하게 만든다.
 >
-> 기계 판독용: `config/world_clock.yml` (막 등록부 — 신설, 미배선)
+> 기계 판독용: `config/world_clock.yml` (막 등록부 — 배선됨 2026-07-15: `WorldClockEngine`
+> 이 읽고 `advanceWorld` 가 매일 부른다 · 눈 `tools/world_clock_audit.py`)
 > 접합: `config/time.yml`(하루 5구간·데드라인 문법) · `config/rumor.yml`(강도·망·태그)
 > · `config/faction_politics.yml`(명분·연합) · `config/chapter_events.yml`(장 사건 풀)
 > · `docs/design/npc_lifecycle.md`(전향 파이프 — 혈교화)

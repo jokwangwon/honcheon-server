@@ -88,6 +88,12 @@ public final class HoncheonBot {
         var panel = Commands.slash("안내판",
                 "이 채널에 안내판을 세운다 — 버튼 하나로 시작한다 (서버 관리자, 한 번만)");
 
+        // ★ 「막개전」 — 세계 시계(B-110)의 human gate 승인. 클라이맥스(삼파전)·에필로그 진입은
+        //   살상 PvP 개방·시즌 마감과 맞물리므로 **사람의 승인 없이는 넘어가지 않는다** (설계 §4).
+        //   /혼천 의 서브커맨드 25칸은 꽉 찼다 — /안내판·/접합문의 선례대로 **최상위**로 세운다 (B-020 ①).
+        var actGate = Commands.slash("막개전",
+                "다음 막의 관문을 연다 — 조건이 차 '개전 전야'일 때만 (서버 관리자)");
+
         // ★ 「초기화」도 같은 이유로 **별도 명령**이다 — /혼천 의 25칸은 이미 꽉 찼다 (위 주석 참조).
         //   되돌릴 수 없는 명령이므로 **두 번 묻는다**: 이 명령은 아무것도 지우지 않고, 무엇을 지울지
         //   말하고 [되돌린다] 버튼을 내민다. 지우는 손은 그 버튼 하나뿐이다.
@@ -270,10 +276,10 @@ public final class HoncheonBot {
         String guildId = System.getenv("HONCHEON_GUILD_ID");
         var guild = guildId == null || guildId.isBlank() ? null : jda.getGuildById(guildId);
         if (guild != null) {
-            guild.updateCommands().addCommands(honcheon, gate, wipe, panel).queue();
+            guild.updateCommands().addCommands(honcheon, gate, wipe, panel, actGate).queue();
             System.out.println("명령 등록: 길드 스코프 (" + guild.getName() + ") — 즉시 반영");
         } else {
-            jda.updateCommands().addCommands(honcheon, gate, wipe, panel).queue();
+            jda.updateCommands().addCommands(honcheon, gate, wipe, panel, actGate).queue();
             System.out.println("명령 등록: 글로벌 — 첫 반영에 최대 1시간"
                     + (guildId == null || guildId.isBlank() ? " (개발 중엔 HONCHEON_GUILD_ID 권장)"
                             : " (경고: HONCHEON_GUILD_ID=" + guildId + " 길드를 찾지 못함)"));
