@@ -224,7 +224,8 @@ def audit_trap(rep: Report, ante: dict, code: str) -> None:
                 rep.good("월드가 안 열리면 enter() 는 아무것도 하지 않는다 (원래 자리에 그대로 선다)")
 
     # 접합이 오프라인에서 확정된 경우: 나루에 서 있는 linked 는 그대로 건너야 한다
-    if not re.search(r"onJoin[\s\S]{0,700}?isAntechamber\(player\.getWorld\(\)\)[\s\S]{0,120}?depart\(", code):
+    # (창 120→900: B-118 이 isAntechamber 와 depart 사이에 서장 붙듦 분기를 넣었다 — 경로는 그대로다)
+    if not re.search(r"onJoin[\s\S]{0,700}?isAntechamber\(player\.getWorld\(\)\)[\s\S]{0,900}?depart\(", code):
         rep.bad("onJoin 에서 '나루에 서 있는 접합자'를 건네주는 경로가 없다 — "
                 "디스코드에서 확정하고 로그아웃한 사람이 나루에 남는다")
     else:

@@ -157,6 +157,10 @@ public final class Antechamber implements Listener {
     private final String openedSubtitle;
     private final List<String> openedLines;
     private final int autoCrossSeconds;
+    /** B-120 — 자동 출발이 태우는 관문(마당)의 id. 빈 값이면 어디서든 태운다 (옛 동작) */
+    private final String autoCrossFrom;
+    /** B-120 — 자동 출발이 사람을 기다리기로 한 순간의 한 줄 (침묵 금지) */
+    private final String dockWaitLine;
     private final List<String> crossedLines;
     private final List<String> destinations;
     private final String seojangWaitLine;
@@ -194,6 +198,8 @@ public final class Antechamber implements Listener {
     private final Map<UUID, String> lastArmed = new HashMap<>();
     private final Map<UUID, ItemStack[]> stowed = new HashMap<>();
     private final Set<UUID> boarding = new LinkedHashSet<>();
+    /** B-120 — 부두를 기다린다는 말을 이미 들은 사람 (자동 출발 대기 안내는 한 번만) */
+    private final Set<UUID> dockWaitSaid = new LinkedHashSet<>();
     /** 발판 연타 방지 — (사람/발판) → 다시 밟을 수 있는 틱 */
     private final Map<String, Long> plateCooldowns = new HashMap<>();
     /** 세운 글판 — 관문 id(+변형) → 엔티티 */
@@ -342,6 +348,9 @@ public final class Antechamber implements Listener {
         this.openedSubtitle = str(opened.get("subtitle"), "");
         this.openedLines = lines(opened.get("lines"));
         this.autoCrossSeconds = num(opened.get("auto_cross_seconds"), 0);
+        // ★ B-120 — 배는 부두에서 뜬다. 값은 stations 의 id (등록제 — 모르는 이름이면 붙들지 않는다)
+        this.autoCrossFrom = str(opened.get("auto_cross_from"), "");
+        this.dockWaitLine = str(opened.get("dock_wait_line"), "");
         this.crossedLines = lines(RulesConfig.section(gate, "crossed").get("lines"));
         this.destinations = lines(gate.get("destinations"));
         // ★ B-118 — 서장이 남은 몸은 배가 기다린다. 문구는 등록부의 것이다 (침묵 금지 — 기본값은 대타)
@@ -1401,6 +1410,7 @@ public final class Antechamber implements Listener {
         player.teleport(destination(player));
         player.setFallDistance(0f);
         boarding.remove(id);
+        dockWaitSaid.remove(id);
         shownThrough.remove(id);
         crossedLines.forEach(player::sendMessage);
         extra.forEach(player::sendMessage);
@@ -1550,11 +1560,15 @@ public final class Antechamber implements Listener {
             }
             if (plugin.ledger(player.getUniqueId()).linked()) {
                 if (isAntechamber(player.getWorld())
-                        && !WorldBridge.seojangHolds(player.getUniqueId())) {
+                        && !WorldBridge.seojangHolds(player.getUniqueId())
+                        && atDock(player)) {
                     // 없는 사이에 이름이 올랐다 — 문은 이미 열려 있었다.
                     // ★ B-118 — 단, 서장이 남은 몸은 여기서도 끌고 가지 않는다 (서장 도중 나갔다
                     //   돌아온 몸): watchGate(5틱)가 배를 세워 두고, 책은 다리가 다시 배달하며,
                     //   서장이 끝나면 그 시계가 반드시 건넨다.
+                    // ★ B-120 — 마당(부두 밖)에서 나갔다 돌아온 몸도 즉시 끌고 가지 않는다 (atDock):
+                    //   재접속 순간의 텔레포트가 걸어온 길의 글판을 통째로 지웠다. watchGate 의
+                    //   시계가 부두에 서는 순간 반드시 건넨다 — 갇힘은 없다.
                     depart(player, List.of());
                 }
                 return;   // 강호에 든 자는 나루를 다시 안 거친다
@@ -1764,6 +1778,7 @@ public final class Antechamber implements Listener {
         gesturesSeen.remove(id);
         lastArmed.remove(id);
         boarding.remove(id);
+        dockWaitSaid.remove(id);
         shownThrough.remove(id);
         plateCooldowns.keySet().removeIf(k -> k.startsWith(id.toString()));
     }
@@ -1915,10 +1930,41 @@ public final class Antechamber implements Listener {
                 if (WorldBridge.seojangHolds(id)) {
                     return;   // 서장이 남았다 — 붓이 먼저다
                 }
+                // ★ B-120 【실사용 2026-07-14 · 부계정】 — **배는 부두에서 뜬다.**
+                //   접합 6초 뒤 자동 출발이 마당에서 몸짓(태세 셋)을 배우던 사람을 끌고 갔다 —
+                //   세계가 바뀌는 순간 걸어온 길의 글판이 전부 사라진다 (글판은 이 세계의 것이다).
+                //   그래서 부두 마당(auto_cross_from 관문) 밖에 선 몸은 태우지 않고 기다린다.
+                //   문은 잠기지 않는다: 종(cross)은 어디서든 울리고, 부두에 서면 배는 반드시 뜬다.
+                if (!atDock(player)) {
+                    if (dockWaitSaid.add(id) && !dockWaitLine.isEmpty()) {
+                        player.sendMessage(dockWaitLine);   // 침묵 금지 — 왜 안 뜨는지 한 번 말한다
+                    }
+                    return;
+                }
                 task.cancel();
                 depart(player, List.of());
             }, autoCrossSeconds * 20L, 40L);
         }
+    }
+
+    /**
+     * B-120 — 이 몸이 <b>부두 마당</b>({@code gate.opened.auto_cross_from} 관문)에 서 있는가.
+     * 자동 출발은 여기 선 몸만 태운다 — 서쪽 마당에서 배우는 사람을 끌고 가지 않는다.
+     *
+     * <p><b>갇힘 금지가 먼저다:</b> 등록부가 비었거나 stations 에 없는 이름을 불렀으면
+     * <b>어디서든 태운다</b>(옛 동작) — 오탈자 하나가 사람을 나루에 가두면 안 된다.
+     * 관문 x 는 등록부 좌표(마을 중심 기준)이므로 사람의 세계 x 에서 {@code cx} 를 빼고 잰다.
+     */
+    private boolean atDock(Player player) {
+        if (autoCrossFrom.isEmpty()) {
+            return true;
+        }
+        for (Station s : stations) {
+            if (s.id().equals(autoCrossFrom)) {
+                return player.getLocation().getX() - cx >= s.x() - s.half();
+            }
+        }
+        return true;   // 등록부가 모르는 이름 — 붙들지 않는다 (갇힘 금지)
     }
 
     // ══════════════════════════════════════════════════════════════════════
