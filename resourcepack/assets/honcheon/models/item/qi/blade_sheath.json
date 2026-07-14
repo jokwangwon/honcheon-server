@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:qi/blade_sheath",
-    "particle": "honcheon:qi/blade_sheath"
+    "0": "honcheon:item/qi/blade_sheath",
+    "particle": "honcheon:item/qi/blade_sheath"
   },
   "elements": [
     {
@@ -22,7 +22,7 @@
             0,
             0,
             16,
-            16
+            4.0
           ]
         },
         "south": {
@@ -31,7 +31,7 @@
             0,
             0,
             16,
-            16
+            4.0
           ]
         },
         "east": {
@@ -126,7 +126,7 @@
             0,
             0,
             16,
-            16
+            4.0
           ]
         },
         "down": {
@@ -135,7 +135,7 @@
             0,
             0,
             16,
-            16
+            4.0
           ]
         }
       }

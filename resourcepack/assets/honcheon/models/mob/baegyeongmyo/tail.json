@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:mob/baegyeongmyo/tail",
-    "particle": "honcheon:mob/baegyeongmyo/tail"
+    "0": "honcheon:item/mob/baegyeongmyo/tail",
+    "particle": "honcheon:item/mob/baegyeongmyo/tail"
   },
   "elements": [
     {

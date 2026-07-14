@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:ult/toxin_veil",
-    "particle": "honcheon:ult/toxin_veil"
+    "0": "honcheon:item/ult/toxin_veil",
+    "particle": "honcheon:item/ult/toxin_veil"
   },
   "elements": [
     {

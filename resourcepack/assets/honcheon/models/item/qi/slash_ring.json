@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:qi/slash_ring",
-    "particle": "honcheon:qi/slash_ring"
+    "0": "honcheon:item/qi/slash_ring",
+    "particle": "honcheon:item/qi/slash_ring"
   },
   "elements": [
     {

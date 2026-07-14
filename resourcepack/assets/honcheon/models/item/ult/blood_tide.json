@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:ult/blood_tide",
-    "particle": "honcheon:ult/blood_tide"
+    "0": "honcheon:item/ult/blood_tide",
+    "particle": "honcheon:item/ult/blood_tide"
   },
   "elements": [
     {

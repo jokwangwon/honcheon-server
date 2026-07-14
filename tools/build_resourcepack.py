@@ -486,28 +486,57 @@ def bimu_icon():
     ], BIMU_SHADES)
 
 
+# ─── 화후 게이지 (E010~E018) — 고정 폭 붓홈 + 좌→우 먹 채움 【2026-07-14 RP-2 재도트】 ───
+# RP_REVIEW_BOARD §합의 2: 시안 A(docs/collaboration/rp_review/A_gauge_ink_proposal.png)는
+# **언어로만** 채택 — 단계마다 외형 길이가 자라는 자유 붓획을 그대로 자산화하면
+# 20x6 고정 폭 · 동일 advance · 틴트 재사용(SkillHud 부상 사다리 백/황/적/암적 + 내력 옥청)
+# 계약을 잃는다. 그래서 붓홈(홈틀)은 아홉 단이 **한 획으로 같고**, 차오르는 것은 내부 먹뿐이다:
+#   ① 외곽 = 가는 붓홈 테. 결정론 지터(h32)로 붓이 지나간 홈이 되, filled 와 무관 —
+#      아홉 단에서 **바이트까지 동일**하다 (texture_audit 축 ㉒가 대조한다: advance·실루엣 불변의 증거)
+#   ② 빈 홈 바닥 = 옅은 먹 (α 120 < 128 — '불투명 단조' 계수 밖). 이것이 없으면 암적 틴트가
+#      먹 배경에서, 황·옥청 틴트가 화선지에서 **채움과 빈 홈을 못 가른다** (합성 실측 ΔY 11)
+#   ③ 채움 = 젖은 먹, 좌→우. 위가 밝고 아래가 가라앉는 농담 4단 — 이미 찬 몸에는 구멍을 내지 않는다
+#   ④ 마른 붓 = 채움 **선두 2열만** 갈라진다. 열마다 갈라짐 최대 2점 (h32 결정론) —
+#      그래서 9단 불투명 픽셀의 엄격 단조 증가가 산수로 보장된다 (한 단의 몸 증가 ≥8 > 갈라짐 ≤4).
+#      만충(8)은 갈라짐 없이 오른쪽 붓홈에 밀착 — 완충은 젖은 먹이다.
+GAUGE_W, GAUGE_H = 20, 6
+GAUGE_RIM_LIT, GAUGE_RIM_DIM = 188, 150      # 붓홈 테 — 위·왼쪽 빛, 아래·오른쪽 그늘
+GAUGE_RIM_A = 235
+GAUGE_FLOOR = (40, 40, 40, 120)              # 빈 홈 바닥 — 옅은 먹 (α<128: 불투명 계수 밖)
+GAUGE_BODY_V = (255, 246, 238, 224)          # 채움 농담 — y=1(빛) … y=4(그늘)
+GAUGE_DRY_V, GAUGE_DRY_A = 232, 208          # 마른 붓 선두 열 — 몸보다 옅다
+
+
+def _gauge_rim(x, y):
+    """붓홈 테 한 점 — filled 와 무관 (아홉 단이 같은 홈이다). 지터는 결정론 해시뿐."""
+    v = GAUGE_RIM_LIT if (y == 0 or x == 0) else GAUGE_RIM_DIM
+    v += h32(x, y, 0xA7) % 17 - 8            # 붓의 홈 — 자 대고 그은 금이 아니다
+    return (v, v, v, GAUGE_RIM_A)
+
+
 def gauge(filled: int):
-    """20x6 화후 게이지 — 테두리 + 채움 (filled/8).
-    눈금: 2단위 간격 상단 틱 3개 (x=5·9·14) — 빈 구간에만 보이고 채움에 흡수된다.
-    끝단: 부분 채움(1~7)의 선두 열은 상하 1px 깎은 테이퍼 — 진행 끝이 한눈에 읽힌다.
-          8칸 만충은 테이퍼 없이 우측 테두리 밀착 (완충 = 꽉 참)."""
-    width, height, inner = 20, 6, 18
-
-    def unit_px(k):
-        return (inner * k + 4) // 8   # 반올림(half-up) — 단조 증가 보장
-
-    fill_px = unit_px(filled)
-    ticks = {unit_px(k) for k in (2, 4, 6)}
+    """20x6 화후 게이지 (filled/8) — 위 머리말의 네 계약을 그린다."""
+    inner = GAUGE_W - 2                          # 18
+    fill_px = (inner * filled + 4) // 8          # 반올림(half-up) — 0·2·5·7·9·11·14·16·18
+    dry = () if filled in (0, 8) else tuple(x for x in (fill_px - 1, fill_px) if x >= 1)
     rows = []
-    for y in range(height):
+    for y in range(GAUGE_H):
         row = []
-        for x in range(width):
-            border = y in (0, height - 1) or x in (0, width - 1)
-            in_fill = 1 <= y <= height - 2 and 1 <= x <= fill_px
-            if in_fill and x == fill_px and 1 <= filled <= 7 and y in (1, height - 2):
-                in_fill = False   # 끝단 테이퍼
-            tick = y == 1 and x in ticks and x > fill_px
-            row.append(W if border or in_fill or tick else T)
+        for x in range(GAUGE_W):
+            if y in (0, GAUGE_H - 1) or x in (0, GAUGE_W - 1):
+                corner = x in (0, GAUGE_W - 1) and y in (0, GAUGE_H - 1)
+                row.append(T if corner else _gauge_rim(x, y))   # 네 귀는 붓이 돌며 뜬 자리
+            elif 1 <= x <= fill_px and x not in dry:
+                v = GAUGE_BODY_V[y - 1]                          # 젖은 먹 몸 — 농담 4단
+                row.append((v, v, v, 255))
+            elif x in dry:
+                cracks = {h32(x, 0x11) % 4, h32(x, 0x37) % 4}    # 열마다 최대 2점
+                if (y - 1) in cracks:
+                    row.append(GAUGE_FLOOR)                      # 갈라진 자리로 홈 바닥이 비친다
+                else:
+                    row.append((GAUGE_DRY_V, GAUGE_DRY_V, GAUGE_DRY_V, GAUGE_DRY_A))
+            else:
+                row.append(GAUGE_FLOOR)
         rows.append(row)
     return rows
 
@@ -569,15 +598,19 @@ REALM_CRESTS = {
         "...#....",
         "..###...",
     ],
+    # 화경 【2026-07-14 RP-1 재도트】 — 옛 판은 초절정과 윗줄 광점 2px 만 달랐다 (XOR 2:
+    # 8x8 실크기에서 안 갈린다 — RP_REVIEW_BOARD §합의 1). 검 계열은 지키고 **외곽 실루엣**으로
+    # 벌린다: 검기가 칼끝 밖으로 비산(윗줄 세 점이 몸에서 떨어져 뜬다) + 코등이가 활짝 벌고(6행
+    # 전폭) + 자루받침이 넓어진다. 초절정↔화경 XOR 10 · 화경↔현경 XOR 32 (축 ㉑ 하한 8).
     "화경": [
+        "#..#..#.",
         ".#.#.#..",
         "..###...",
         "..###...",
-        "..###...",
+        "#######.",
+        "...#....",
+        "...#....",
         ".#####..",
-        "...#....",
-        "...#....",
-        "..###...",
     ],
     "현경": [
         "..####..",
@@ -7101,9 +7134,32 @@ def write_json(path: Path, data):
 # ═══════════════════════════════════════════════════════════════════════════
 
 MODEL_DIR = PACK / "assets" / "honcheon" / "models"      # models/item/** (병기·획) · models/mob/** (짐승)
-QI_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "qi"     # 기의 획 (item/ 아래가 아니다 —
-ULT_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "ult"   #  축 ⑥ 외곽선 폐합은 아이콘의 규율이지
-MOB_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "mob"   #  반투명 획·짐승 가죽의 규율이 아니다)
+
+# ═══ 텍스처는 **아틀라스 안에** 살아야 한다 (2026-07 — 보라 큐브의 진짜 원인) ═══
+# 【무엇이 틀렸었나】 획·오의·짐승 가죽을 textures/qi|ult|mob/ 아래 두었다. 이유는
+#   "축 ⑥ 외곽선 폐합은 아이콘의 규율이지 반투명 획의 규율이 아니다" — 즉 **검수를 피하려고**
+#   텍스처를 item/ 밖으로 옮긴 것이다. 그런데 그 자리는 **클라이언트가 안 훑는 자리**였다.
+#
+# 【클라이언트가 실제로 훑는 곳 — 1.21.11 jar 의 atlases/ 가 답이다 (짐작 아님)】
+#   assets/minecraft/atlases/blocks.json → directory source "block" (prefix "block/")
+#   assets/minecraft/atlases/items.json  → directory source "item"  (prefix "item/")
+#   그 둘뿐이다. directory source 는 **모든 네임스페이스**의 assets/<ns>/textures/<source>/** 를
+#   훑어 <ns>:<prefix><상대경로> 라는 스프라이트 이름을 만든다. 그래서 병기
+#   (textures/item/weapon/*.png → honcheon:item/weapon/*) 는 꿰매지고 **보였다**.
+#   반면 textures/qi/** 는 어느 아틀라스의 원천도 아니다 ⇒ 스프라이트가 없다 ⇒ **보라 큐브**.
+#
+# 【그래서 item/ 아래로 되돌린다 (방법 A)】 아틀라스 선언(atlases/*.json)을 새로 굽는 길(방법 B)도
+#   있으나 택하지 않았다: 그 길은 "리소스팩의 atlases 는 덮어쓰기가 아니라 **누적**된다"는
+#   런타임 가정에 기대는데, 이 프로젝트는 서버를 못 띄우므로 그 가정을 **시험할 수 없다.**
+#   item/ 아래는 다르다 — 사용자의 게임에서 병기 45자루가 이미 그것으로 **보이고 있다**(대조군).
+#   검증된 길을 두고 미검증 길을 가지 않는다.
+#
+# 【검수를 피해 도망가지 않는다】 item/ 아래로 오면 아이콘 축(⑥ 외곽선 등)의 사정거리에 든다.
+#   그것은 **텍스처를 옮겨서** 풀 문제가 아니라 **축의 적용 범위를 등록제로 적어서** 풀 문제다
+#   (texture_audit 이 이미 그 관행을 쓴다: SEAM_FACES · 대역 제외 등록).
+QI_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "item" / "qi"     # 기의 획
+ULT_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "item" / "ult"   # 오의
+MOB_TEX_DIR = PACK / "assets" / "honcheon" / "textures" / "item" / "mob"   # 짐승 가죽
 
 
 # ─── 회전 합성 — 손에 든 모습은 **바닐라에서 유도한다** (눈대중 금지) ───────────
@@ -7520,6 +7576,53 @@ BT_EDGE = (62, 16, 16, 112)
 QI_STEPS = (QI_EDGE, QI_DIM, QI_MID, QI_CORE)
 BT_STEPS = (BT_EDGE, BT_DIM, BT_MID, BT_CORE)
 
+# ═══ 오의의 색 【2026-07 — 사용자 지시】 ══════════════════════════════════════
+# 사용자: *"최상위(어검/심검)는 가장 화려하게. 단, 형광 네온·보라/핑크 금지 —
+#          반드시 먹선 + 청록 + 옥색 + 백색 범위 안에서만."*
+#
+# 【왜 오의의 판만 물들이는가】 참격선 판(qi/*)은 **여섯 격이 한 장을 나눠 쓴다** —
+#   거기 색을 넣으면 외공기의 주먹이 심검처럼 빛난다 (사다리가 무너진다).
+#   ult/* 8종은 **오의 전용**이므로 판이 색을 가져도 사다리가 안 흔들린다.
+#   ⇒ "기본은 수묵, 최상위만 화려" 라는 1차 MVP 의 못이 판에서도 그대로 선다.
+#
+# 【색의 출처】 아래 두 값은 **config/skill_motion.yml 의 inks 와 같은 수**다 (옥 · 청백).
+#   빌더가 색을 지어낸 것이 아니라 등록부의 색을 굽는 것이다 —
+#   그리고 **texture_audit 축 ⑰ 이 등록부와 구워진 PNG 를 대조한다** (어긋나면 위반).
+ULT_JADE = (166, 214, 199)       # 옥 — 획의 몸 (skill_motion.yml inks.옥)
+ULT_PALE = (226, 240, 238)       # 청백 — 획의 속 (skill_motion.yml inks.청백)
+
+
+def _tint(px, dim, core):
+    """먹의 농담(濃淡)은 **그대로 두고** 색만 입힌다.
+
+    획의 4단(속이 밝고 끝이 스민다)이 이 팩의 골격이다. 색을 칠하며 그 골격을 뭉개면
+    그것은 수묵이 아니라 그냥 색칠이다.
+
+    【첫 판이 틀렸고, 눈이 그것을 잡았다】 처음엔 밝기를 **색상 보간의 축**으로만 썼다
+    (어두운 끝 → 옥 · 밝은 속 → 청백). 그랬더니 획의 명암이 옥(밝기 200)~청백(236) 사이로
+    **압착됐다** — 명암차 158 → 22. 축 ⑬(명암차 ≥ 24)이 여섯 장 전부를 잡았다.
+    "농담을 그대로 둔다"고 주석에 적어 놓고 정확히 그 반대를 한 것이다.
+
+    ⇒ 그래서 **곱한다**: 원래 회색이 밝기를 쥐고, 틴트는 **색상만** 얹는다.
+        새 값 = 원래회색 × (틴트 ÷ 255)
+      스미는 끝(92)은 어두운 옥이 되고, 획의 속(250)은 밝은 청백이 된다 — 명암차가 그대로 산다.
+    알파는 손대지 않는다 (사라지는 인상의 절반이 알파다).
+    """
+    r, g, b, a = px
+    if a == 0:
+        return px
+    v = max(r, g, b)
+    t = v / 255.0                                  # 0(스미는 끝) … 1(획의 속)
+    tint = [dim[i] + (core[i] - dim[i]) * t for i in range(3)]
+    return (min(255, int(v * tint[0] / 255)),
+            min(255, int(v * tint[1] / 255)),
+            min(255, int(v * tint[2] / 255)),
+            a)
+
+
+def tint_rows(rows, dim, core):
+    return [[_tint(p, dim, core) for p in row] for row in rows]
+
 QI_TEX = 32                      # 32x32 — 16x16 이 아니므로 검수의 이음매(축 ⑦) 대상이 아니다
                                  # (획은 타일이 아니다. 제 복사본과 이어 붙을 일이 없다)
 
@@ -7581,6 +7684,25 @@ def _disc(g, cx, cy, r, steps=QI_STEPS, r_in=0.0):
 #   "굽어 사라지는" 인상을 만든다. 사라지는 인상의 절반은 그 그라데이션이 만든다.
 SLASH_W, SLASH_H = 64, 16          # 가로로 긴 획 — 꼬리의 테이퍼에 해상도를 준다 (좌=꼬리 · 우=머리)
 
+# ═══ **가로로 긴 텍스처는 구울 수 없다** (2026-07 — 보라 큐브의 두 번째 원인) ═══
+# 마인크래프트의 스프라이트 계약은 **정사각 또는 세로 스트립(h = n·w, .mcmeta 동반)** 이다.
+# 64x16 은 둘 다 아니다 — 아틀라스에 넣어도 그림이 서지 않는다 (프레임 계산이 64x16 을
+# 16x16 짜리 네 프레임으로 읽어 **꼬리 16px 만** 남긴다 · 최악의 경우 스프라이트가 통째로 버려진다).
+#
+# 【고치는 법 — 그림은 한 픽셀도 안 바뀐다】 캔버스를 64x64 로 키우고 그림을 **맨 위 16행**에 둔다.
+#   모델 UV 는 언제나 0~16 정규화이므로, 캔버스가 4배 높아졌으면 v 를 1/4 로 줄여야 같은 그림이다:
+#       v_max = 16 × (SLASH_H / SLASH_CANVAS) = 16 × 16/64 = 4
+#   ⇒ uv [0, 0, 16, 4] 가 64x64 의 위쪽 64x16 영역, 곧 **예전 그림 그대로**를 가리킨다.
+#   이것은 버그 수정이지 디자인 변경이 아니다 — 획의 모양·굵기·알파가 전부 보존된다.
+SLASH_CANVAS = 64                       # 정사각 캔버스 (아래 48행은 투명 여백)
+SLASH_UV_V = 16.0 * SLASH_H / SLASH_CANVAS      # = 4.0 — 캔버스를 키운 만큼 UV 를 줄인다
+
+
+def _square_pad(g, canvas=SLASH_CANVAS):
+    """가로로 긴 그림을 **정사각 캔버스의 맨 위**에 얹는다 (아래는 투명). 그림은 그대로다."""
+    w = len(g[0])
+    return [row[:] for row in g] + [[T] * w for _ in range(canvas - len(g))]
+
 
 def _slash_blank(w, h):
     return [[T] * w for _ in range(h)]
@@ -7593,9 +7715,33 @@ def _qi_px(v, a):
     return (c, c, c, max(0, min(255, int(a))))
 
 
+# ─── 참격 3종의 먹 — 어두운 번짐 테 【2026-07-14 RP-3 보강】 ────────────────────
+# 옛 4단(170·206·232·255)은 화선지(#EEE7D6 · Y≈231) 위에서 **죽는 값**이었다: 232 는 배경과
+# ΔY 1 이라 알파가 255 여도 안 보이고, 실측 가시율이 참격 3종에서 15~31% 였다 (RP_REVIEW_CODEX §RP-3).
+# 새 4단은 축 ⑲(양배경 합성 대비: 화선지·먹 p25≥16 · 가시≥70%)의 산수에서 역산했다:
+#   합성 ΔY = (α/255)·|V − Y_bg| 이므로, 표본 하한 α=64 인 픽셀이 **양쪽** 배경에서 보이려면
+#   V ∈ [92, 167] (중회색 — 화선지보다 어둡고 먹보다 밝다) 이어야 하고,
+#   백(255)은 α ≥ 176 에서만 화선지 ΔY ≥ 16 이 선다 (255−231.3 = 23.7 · 23.7×176/255 = 16.4).
+# ⇒ 가장자리 0단이 곧 **어두운 번짐 테**(92)가 되고, 획의 속(255)은 알파가 진한 머리쪽에만 선다.
+#   무색 계약(resourcepack_design.yml qi_무색 — 채도 0)은 그대로다: 만진 것은 **명도**뿐이다.
+SLASH_STEPS = (92, 124, 160, 255)   # 번짐 테(어두운 먹) … 획의 속 (흰빛)
+SLASH_CORE_MIN_A = 176              # 속의 백(255)을 허락하는 알파 하한 — 위 산수의 못
+
+
+def _slash_px(v, a):
+    """참격선의 먹 한 점 — 무색 4단 + 알파. α<176 인 자리의 속은 한 단 가라앉는다(160)."""
+    a = max(0, min(255, int(a)))
+    i = max(0, min(3, int(v * 4)))
+    if i == 3 and a < SLASH_CORE_MIN_A:
+        i = 2                                    # 옅은 백은 화선지에서 죽는다 — 중회색으로
+    c = SLASH_STEPS[i]
+    return (c, c, c, a)
+
+
 def slash_rows(w, h, thick, bow, head_soft=1.0):
     """참격선 한 장 — **오른쪽이 머리(원점)**, 왼쪽이 꼬리.
-    thick(t): 걸음 t(0=꼬리 … 1=머리)의 반두께 · bow: 중심선이 휘는 깊이 (호는 굽고 선은 곧다)."""
+    thick(t): 걸음 t(0=꼬리 … 1=머리)의 반두께 · bow: 중심선이 휘는 깊이 (호는 굽고 선은 곧다).
+    획 밖 0.4 반두께에 **어두운 번짐 테**를 두른다 (RP-3) — 밝은 배경에서 형태를 지키는 먹이다."""
     g = _slash_blank(w, h)
     for x in range(w):
         t = x / (w - 1)
@@ -7605,12 +7751,16 @@ def slash_rows(w, h, thick, bow, head_soft=1.0):
         yc = h / 2 - bow * math.sin(math.pi * t) * head_soft
         for y in range(h):
             d = abs(y + 0.5 - yc) / th
-            if d > 1.0:
-                continue
-            core = 1.0 - d ** 1.4                       # 속이 밝고 가장자리가 스민다
-            # 꼬리로 갈수록 **알파가 죽는다** — 굽어 사라지는 인상의 절반이 여기서 난다
-            a = 236 * (t ** 0.75) * (0.30 + 0.70 * core)
-            g[y][x] = _qi_px(core, a)
+            if d <= 1.0:
+                core = 1.0 - d ** 1.4                   # 속이 밝고 가장자리가 스민다
+                # 꼬리로 갈수록 **알파가 죽는다** — 굽어 사라지는 인상의 절반이 여기서 난다
+                a = 236 * (t ** 0.75) * (0.30 + 0.70 * core)
+                g[y][x] = _slash_px(core, a)
+            elif d <= 1.4:                              # 번짐 테 — 종이에 스민 어두운 먹
+                fall = (1.0 - (d - 1.0) / 0.4) ** 1.3
+                a = 132 * (t ** 0.6) * fall
+                if a >= 10:
+                    g[y][x] = _slash_px(0.0, a)
     return g
 
 
@@ -7632,18 +7782,25 @@ def sheath_rows():
 
 
 def slash_ring_rows():
-    """참격선(원) — 몸을 훑고 지나간 고리. XZ 평면에 눕는다 (위·아래 면이 그림을 문다)."""
+    """참격선(원) — 몸을 훑고 지나간 고리. XZ 평면에 눕는다 (위·아래 면이 그림을 문다).
+    고리 안팎 1.4px 에 어두운 번짐 테 (RP-3 — slash_rows 와 같은 먹). 바깥 테는 d ≤ 15.4 로
+    물린다 — 옛 판과 같은 캔버스 여백 위생 (고리가 캔버스 모서리를 물면 아틀라스에서 번진다)."""
     n = 32
     g = [[T] * n for _ in range(n)]
     for y in range(n):
         for x in range(n):
             d = math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2)
-            band = 1.0 - abs(d - 12.5) / 3.2                    # 반지름 12.5 · 두께 ±3.2
-            if band <= 0:
-                continue
             # 한쪽이 짙고 반대쪽이 옅다 — 고리도 **지나간 자리**다 (시작과 끝이 있다)
             ang = (math.atan2(y + 0.5 - n / 2, x + 0.5 - n / 2) + math.pi) / (2 * math.pi)
-            g[y][x] = _qi_px(band, 232 * min(1.0, band * 1.3) * (0.35 + 0.65 * ang))
+            band = 1.0 - abs(d - 12.5) / 3.2                    # 반지름 12.5 · 두께 ±3.2
+            if band > 0:
+                g[y][x] = _slash_px(band, 232 * min(1.0, band * 1.3) * (0.35 + 0.65 * ang))
+            elif d <= 15.4:                                     # 번짐 테 — 고리 안팎으로 스민다
+                spill = 1.0 - (abs(d - 12.5) - 3.2) / 1.4
+                if spill > 0:
+                    a = 128 * (0.45 + 0.55 * ang) * spill ** 1.3
+                    if a >= 10:
+                        g[y][x] = _slash_px(0.0, a)
     return g
 
 
@@ -7652,12 +7809,14 @@ def qi_textures():
     tex = {}
 
     # 참격선 3종 — 오른쪽이 머리(굵다) · 왼쪽이 꼬리(가늘고 옅다)
-    tex["qi/slash_arc"] = slash_rows(SLASH_W, SLASH_H,
-                                     lambda t: 6.4 * (t ** 0.85), bow=3.4)   # 호 — 굽는다
-    tex["qi/slash_line"] = slash_rows(SLASH_W, SLASH_H,
-                                      lambda t: 4.2 * (t ** 0.75), bow=0.0)  # 선 — 곧다
+    # ★ _square_pad: 64x16 그림을 64x64 정사각에 얹는다 (아래 48행 투명). 모델이 uv v 를
+    #   0..SLASH_UV_V(=4) 로 물어 **예전과 똑같은 그림**을 가리킨다 — 위 주석 참조.
+    tex["qi/slash_arc"] = _square_pad(slash_rows(SLASH_W, SLASH_H,
+                                     lambda t: 6.4 * (t ** 0.85), bow=3.4))  # 호 — 굽는다
+    tex["qi/slash_line"] = _square_pad(slash_rows(SLASH_W, SLASH_H,
+                                      lambda t: 4.2 * (t ** 0.75), bow=0.0))  # 선 — 곧다
     tex["qi/slash_ring"] = slash_ring_rows()
-    tex["qi/blade_sheath"] = sheath_rows()
+    tex["qi/blade_sheath"] = _square_pad(sheath_rows())
 
     g = _qi_blank()                                   # 검기 비(飛) — 앞이 뾰족하고 뒤로 꼬리가 늘어진다
     _stroke(g, lambda t: 7.0 * (t ** 1.3) * ((1 - t) ** 0.55) / 0.30, bow=0.0, ybase=QI_TEX / 2)
@@ -7819,20 +7978,41 @@ def _lance():
 
 
 def _slash(length_m, width_m, thick_m=0.04):
-    """참격선 한 자루 — **머리가 원점(8,8,8)** 이고 몸이 −X 로 늘어진다.
+    """참격선 한 자루 — **기하 중심이 원점(8,8,8)** 이고 몸이 ±X 로 반씩 뻗는다.
+       (머리는 +X 끝 · 꼬리는 −X 끝. 그림·굵기·테이퍼는 예전 그대로다 — 자리만 옮겼다)
 
-    scale 이 원점을 중심으로 먹으므로, 머리를 그 점에 두어야 꼬리부터 지워진다 (만화의 검격).
-    참격선은 scale 에 size 가 곱해지지 않는다 ⇒ **모델이 제 미터 치수로 구워져야** 한다
-    (모델 X(m) == 등록부 size[0]). 1px = 1/16 m."""
+    ═══ 왜 '머리=원점' 을 버렸나 (2026-07 — 획이 몸 왼쪽에서 나오던 병) ═══
+    옛 계약은 **머리를 원점에 두고 몸을 전부 −X 로** 늘어뜨렸다 (x −16..8). 이유는 있었다:
+    scale 이 원점을 중심으로 먹으므로 머리를 그 점에 두어야 **꼬리부터 지워진다**.
+    그런데 그 계약에는 대가가 있었고, 아무도 그 대가를 재지 않았다 —
+      **모델의 기하 중심이 원점에서 x −12 만큼 치우친다.**
+    ItemDisplay 는 모델을 **엔티티 자리에 중심을 두고** 그린다. 그리고 모델의 +X 는
+    (SkillDisplay.pose 의 좌표계 주석대로) **앞이 아니라 좌우 축**이다. 그래서 획은
+    시전자의 **정면이 아니라 옆구리 한쪽**에 통째로 걸렸다 — 사용자가 본 그것이다.
+
+    ═══ 그러면 '꼬리부터 지워진다' 는 어쩌나 — **코드가 진다** ═══
+    옳은 계약은 이것이다: **모델은 중심에 서고, 위치·방향·성장은 코드가 정한다.**
+    모델에 오프셋을 박아 두면 그 편향을 **모든 모션이 물려받는다** (실제로 그랬다).
+    그래서 머리 고정은 모델이 아니라 **코드의 translation** 이 한다:
+        translation.x = halfLen × (1 − scale.x)        (SkillDisplay.transform · anchor: head)
+      · scale.x = 1 → translation 0  ⇒ 획이 **시전자의 정면에 좌우 대칭으로** 걸린다 (고친 것)
+      · scale.x → 0 → translation → halfLen ⇒ 획이 **머리 쪽으로 수축한다** = 꼬리부터 지워진다
+    ⇒ 옛 그림(만화의 검격)은 **한 틱도 안 잃고** 살아남고, 편향만 사라진다.
+    (등록부 models.<키>.anchor: head 가 이 계약을 청구한다 — 코드가 지어내지 않는다)"""
     lx = length_m * 16.0
-    if 8.0 - lx < -16.0:                     # MC 원소 좌표 한계 — 짐작하지 말고 굽기 전에 막는다
-        raise ValueError(f"참격선 {length_m}m: 꼬리가 x={8 - lx:.0f} — 한계 -16 을 넘는다 "
-                         f"(원점=머리 계약에서 최대는 1.5m). 등록부의 size[0] 을 낮춰야 한다")
+    # 중심 정렬이라 한계는 **양쪽**으로 절반씩이다: 8 ± lx/2 가 [-16, 32] 안에 들어야 한다.
+    if 8.0 - lx / 2.0 < -16.0 or 8.0 + lx / 2.0 > 32.0:
+        raise ValueError(f"참격선 {length_m}m: x {8 - lx / 2:.0f}..{8 + lx / 2:.0f} — "
+                         f"MC 원소 좌표 한계 [-16, 32] 를 넘는다. 등록부의 size[0] 을 낮춰야 한다")
     hy, hz = width_m * 8.0, thick_m * 8.0
-    faces = {f: {"texture": "#0", "uv": [0, 0, 16, 16] if f in ("north", "south") else _HIDE}
+    # ★ v 는 0..SLASH_UV_V(=4) — 텍스처가 64x64 정사각이고 그림은 **맨 위 64x16** 에 있다.
+    #   (예전 64x16 시절의 uv [0,0,16,16] 과 화면상 **똑같은 그림**이다 — SLASH_CANVAS 주석 참조)
+    faces = {f: {"texture": "#0",
+                 "uv": [0, 0, 16, SLASH_UV_V] if f in ("north", "south") else _HIDE}
              for f in ("north", "south", "east", "west", "up", "down")}
-    return [{"from": [8.0 - lx, 8.0 - hy, 8.0 - hz],   # 꼬리 (−X) … 머리(원점)
-             "to": [8.0, 8.0 + hy, 8.0 + hz], "faces": faces}]
+    return [{"from": [8.0 - lx / 2.0, 8.0 - hy, 8.0 - hz],   # 꼬리 (−X 끝)
+             "to": [8.0 + lx / 2.0, 8.0 + hy, 8.0 + hz],     # … 머리 (+X 끝) — 중심이 원점이다
+             "faces": faces}]
 
 
 def _slash_ring(dia_m, width_m):
@@ -7852,9 +8032,10 @@ def _sheath():
     out = []
     for frm, to, show in (([0, 0, 7.4], [16, 16, 8.6], ("north", "south")),
                           ([0, 7.4, 0], [16, 8.6, 16], ("up", "down"))):
+        # ★ blade_sheath 도 64x64 정사각 · 그림은 맨 위 16행 ⇒ v 는 0..SLASH_UV_V
         out.append({"from": frm, "to": to,
                     "faces": {f: {"texture": "#0",
-                                  "uv": [0, 0, 16, 16] if f in show else _HIDE}
+                                  "uv": [0, 0, 16, SLASH_UV_V] if f in show else _HIDE}
                               for f in ("north", "south", "east", "west", "up", "down")}})
     return out
 
@@ -7884,13 +8065,31 @@ QI_MODELS = {
 
 
 def write_qi_assets() -> int:
-    """획 9종 — PNG + 모델 + 아이템 정의. motion_audit ⑧ 의 '팩 미구움' 경고가 여기서 꺼진다."""
+    """획 9종 — PNG + 모델 + 아이템 정의. motion_audit ⑧ 의 '팩 미구움' 경고가 여기서 꺼진다.
+
+    ★ 텍스처는 textures/**item**/qi|ult/ 에 굽고 모델은 honcheon:**item**/<키> 를 문다 —
+      그 자리만이 아틀라스(items)에 꿰매진다 (위 QI_TEX_DIR 주석 참조).
+      **모델·아이템정의의 키(honcheon:qi/slash_arc)는 한 글자도 안 바뀐다** — 등록부
+      (skill_motion.yml display.models)가 그 이름을 부르므로 여기서 이름을 바꾸면 배선이 끊긴다.
+      바뀌는 것은 **텍스처가 사는 자리**뿐이다."""
     tex = qi_textures()
+    # ★ 오의의 판만 물든다 (옥 → 청백). qi/* 는 무색 그대로 — 여섯 격이 그 한 장을 나눠 쓰기 때문이다.
+    # 【물들이지 않는 둘 — 둘 다 "빛나지 않는 것이 정보"인 자리다】
+    #   · ult/blood_tide  (혈해만리) — 이미 혈조(BT_STEPS)로 구워졌다. 【채색 예외】를 청백으로 덮으면
+    #     "저것은 사람의 기가 아니다" 라는 정보가 사라진다.
+    #   · ult/toxin_veil  (무형지독·만천화우) — **무형(無形)은 빛나지 않는다.**
+    #     등록부가 이미 그렇게 적어 두었다: 독무_범람 brightness [4, 15] — "다른 오의는 빛나고,
+    #     이것은 빛나지 않는다 — 그것이 무형이다" (skill_motion.yml display.motions).
+    #     여기에 옥빛을 칠하면 **등록부와 팩이 서로 다른 말을 한다.**
+    ULT_UNTINTED = ("ult/blood_tide", "ult/toxin_veil")
+    for key in list(tex):
+        if key.startswith("ult/") and key not in ULT_UNTINTED:
+            tex[key] = tint_rows(tex[key], ULT_JADE, ULT_PALE)
     for key, rows in tex.items():
-        write_png(PACK / "assets" / "honcheon" / "textures" / f"{key}.png", rows)
+        write_png(PACK / "assets" / "honcheon" / "textures" / "item" / f"{key}.png", rows)
     for key, elems in QI_MODELS.items():
         write_json(MODEL_DIR / "item" / f"{key}.json", {
-            "textures": {"0": f"honcheon:{key}", "particle": f"honcheon:{key}"},
+            "textures": {"0": f"honcheon:item/{key}", "particle": f"honcheon:item/{key}"},
             "elements": elems,
             "gui_light": "front",
         })
@@ -8077,12 +8276,14 @@ def write_mob_assets() -> int:
     """짐승 8종 — 가죽 PNG + 모델(models/mob/**) + 아이템 정의(items/mob/**).
     mob_model_audit ③ 의 '팩에 없는 모델 키' 가 여기서 0 이 된다."""
     for path, (rig, main, dark, light, accent, stripe, salt) in MOB_PARTS.items():
-        write_png(PACK / "assets" / "honcheon" / "textures" / f"{path}.png",
+        # ★ 가죽도 아틀라스 안(textures/item/mob/**)에 굽는다 — 모델 키(honcheon:mob/…)는 불변.
+        #   mob_models.yml 이 그 이름을 부르므로 키를 바꾸면 짐승이 통째로 끊긴다.
+        write_png(PACK / "assets" / "honcheon" / "textures" / "item" / f"{path}.png",
                   fur_rows(main, dark, light, accent, stripe, salt))
         elems = rig()
         _fill_check(elems, path)
         write_json(MODEL_DIR / f"{path}.json", {
-            "textures": {"0": f"honcheon:{path}", "particle": f"honcheon:{path}"},
+            "textures": {"0": f"honcheon:item/{path}", "particle": f"honcheon:item/{path}"},
             "elements": elems,
             "gui_light": "front",
         })

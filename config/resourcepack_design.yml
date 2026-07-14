@@ -17,7 +17,7 @@ semantic_colors:
 # ─── 슬롯 등록제 — 사설 영역 대역 선할당 (코드포인트는 계약) ───
 glyph_slots:
   E000_E00F: { band: 기세_전투_아이콘, used: { E000: "기세 — 상승 화염 실루엣 + 우상단 분리 불티 1px (솟는 기운)" } }
-  E010_E01F: { band: 게이지, used: { E010_E018: "화후_9단 — 2단위 간격 상단 틱 3개(x=5·9·14, 빈 구간만) + 부분 채움 선두 열 상하 테이퍼 끝단" }, note: "내력·원기 = 같은 글리프를 색 틴트로 재사용 (슬롯 절약)" }
+  E010_E01F: { band: 게이지, used: { E010_E018: "화후_9단 — 고정 붓홈(9단 바이트 동일) + 빈 홈 옅은 먹 바닥 + 좌→우 농담 4단 채움 + 선두 2열 마른 붓 (RP-2 합의 2026-07-14 — 틱·테이퍼 폐기)" }, note: "내력·원기 = 같은 글리프를 색 틴트로 재사용 (슬롯 절약) · 눈: texture_audit 축 ㉒" }
   E020_E03F: { band: 경지_칭호_문장, used: { E020_E027: "경지 문장 8단 (삼류~생사경) — 하위 획 수 一二三 / 중위 봉우리·검·검기 / 상위 원환·원환+만월핵 3계열 플레이스홀더" }, note: "별호 장식은 E028+" }
   E040_E05F: { band: 장비_등급_아이콘, note: "범철~신병 + 마병 혈향" }
   E060_E07F: { band: 세력_문장 }
@@ -993,3 +993,37 @@ hud_channels:
     측정: "코드 전역에 갑옷 수치를 주는 곳이 **0건** (setArmor·GENERIC_ARMOR·Attribute.ARMOR 전무). 바닐라 갑옷 바는 armor > 0 일 때만 그려진다 ⇒ **판금 아이콘은 실제로 화면에 뜨지 않는다.**"
     note: "전임 보고('equipment.yml 은 판금 갑옷이 없다는데 HUD 엔 뜬다')는 **틀렸다** — 뜨지 않는다. 갑옷을 주는 축이 생기면 그때 굽는다"
   남은_것: [crosshair, "air(물속 거품)", "boss_bar(보라색)"]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 의미 적색 등록부 — 【2026-07-14 신설 · RP-5】 검산: tools/texture_audit.py 축 ⑳
+# (RP_REVIEW_BOARD §합의 5: "예외를 숨기지 않고 예외 자체를 잰다")
+#
+# 【왜】 이 팩에서 주사(朱砂)·혈적(血赤)은 장식이 아니라 **의미 채널**이다 — 체력(기혈 구슬),
+#   선택(핫바 프레임), 확정(인장), 마병(혈조), 혈계 오의(혈해만리). 의미는 희소해야 산다:
+#   기본 GUI·아이템의 적색이 1% 를 넘는 순간 주사는 더 이상 신호가 아니다.
+# 【자】 적색 판정 = 알파 ≥16 · HSV hue 335°~20° · 채도(sat) ≥0.35. 비율 = 적색 픽셀 / 보이는 픽셀.
+#   기본 상한 1% (default_max_ratio). 그보다 큰 적색은 **여기 등록된 경로만** 허용 —
+#   미등록 초과·등록 상한 초과만 위반이다. 표가 곧 예외의 전부다 (조용한 예외 금지).
+# 【사정거리】 honcheon/textures/** + minecraft/textures/gui/** (GUI·아이템의 규율이다 —
+#   블록·엔티티·파티클은 세계층: 채도는 축 ⑫·⑱ 이 따로 잰다).
+# 【문법】 entries 는 위에서 아래로 첫 일치가 이긴다 (fnmatch 글롭). max_ratio 는 실측 + 여유.
+semantic_red_registry:
+  default_max_ratio: 0.01
+  judge: { alpha_min: 16, sat_min: 0.35, hue_deg: [335, 20] }
+  entries:
+    - { path: "honcheon/textures/font/gui_ledger.png", max_ratio: 0.01, reason: "인장/확정 — 경락도 네 귀 전각 도장 (실측 0.41%)" }
+    - { path: "honcheon/textures/item/ult/blood_tide.png", max_ratio: 1.00, reason: "혈계 오의 전용 — 혈해만리 (색의 계약 【채색 예외】: 예외가 곧 정보)" }
+    - { path: "minecraft/textures/gui/sprites/hud/heart/*.png", max_ratio: 0.70, reason: "기혈 구슬 — 체력의 주사 (vanilla_texture_channels.hud_체력, 실측 최대 57.7%)" }
+    - { path: "minecraft/textures/gui/sprites/hud/hotbar_selection.png", max_ratio: 1.00, reason: "선택 프레임 — 주사 이중 테 + 투명 내부 (hud_핫바: 보이는 픽셀 전부가 주사다)" }
+    - { path: "minecraft/textures/gui/sprites/widget/button_highlighted.png", max_ratio: 0.07, reason: "눌린 버튼의 주사 밑줄 (widget_메뉴.design: 있고 없음이 곧 정보, 실측 4.9%)" }
+    - { path: "minecraft/textures/gui/sprites/widget/tab_selected*.png", max_ratio: 0.06, reason: "고른 탭의 주사 인끈 한 줄 (widget_메뉴.design, 실측 3.9%)" }
+    - { path: "minecraft/textures/gui/sprites/tooltip/frame.png", max_ratio: 0.08, reason: "툴팁 표구 네 귀의 주사 도장 (_tooltip_frame, 실측 5.9%)" }
+    - { path: "honcheon/textures/item/weapon/spear_*.png", max_ratio: 0.11, reason: "창 홍영(紅纓) 1점 — series.창 등록 문법 (전 등급, 실측 최대 8.6%)" }
+    - { path: "honcheon/textures/item/weapon/*_mabyeong.png", max_ratio: 0.16, reason: "마병 혈조·혈적 — '저것은 정파의 쇠가 아니다' (등급_변별 ④, 실측 최대 12.5%)" }
+    - { path: "honcheon/textures/item/weapon/*_sinbyeong.png", max_ratio: 0.06, reason: "신병 수실(붉은 술) — grade_mark 등록 문법 (실측 최대 4.3%)" }
+    - { path: "honcheon/textures/item/weapon/myeong/*.png", max_ratio: 0.18, reason: "명병 — 문파 문양·인끈 (화산 매화 등, 실측 최대 14.6%)" }
+    - { path: "honcheon/textures/item/pill/yeongyak.png", max_ratio: 0.85, reason: "단약 — 붉은 구슬 (HUD 기혈 구슬과 같은 문법: 먹는 것과 채워지는 것이 같은 그림, 실측 74.8%)" }
+    - { path: "honcheon/textures/item/tome/manual_original.png", max_ratio: 0.07, reason: "진본의 주사 인장 — 인장이 곧 진위 (필사본과의 차이가 인장이다, 실측 4.7%)" }
+    - { path: "honcheon/textures/item/coin/jeonpyo.png", max_ratio: 0.05, reason: "전표의 전장 인장(주사) — 실측 2.6%" }
+    - { path: "honcheon/textures/item/trinket/hosinbu.png", max_ratio: 0.15, reason: "호신부의 주사 부문 3획 — 실측 11.6%" }
+    - { path: "honcheon/textures/item/pelt/fox.png", max_ratio: 0.02, reason: "여우 가죽의 붉은 기 한 점 — 시세 3배의 표식 (실측 0.93%: 기본 상한 언저리라 소리내어 등록)" }

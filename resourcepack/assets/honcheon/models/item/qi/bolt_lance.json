@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:qi/bolt_lance",
-    "particle": "honcheon:qi/bolt_lance"
+    "0": "honcheon:item/qi/bolt_lance",
+    "particle": "honcheon:item/qi/bolt_lance"
   },
   "elements": [
     {

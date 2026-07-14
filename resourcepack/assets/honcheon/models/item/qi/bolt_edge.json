@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:qi/bolt_edge",
-    "particle": "honcheon:qi/bolt_edge"
+    "0": "honcheon:item/qi/bolt_edge",
+    "particle": "honcheon:item/qi/bolt_edge"
   },
   "elements": [
     {

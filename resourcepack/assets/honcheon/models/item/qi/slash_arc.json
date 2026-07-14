@@ -1,17 +1,17 @@
 {
   "textures": {
-    "0": "honcheon:qi/slash_arc",
-    "particle": "honcheon:qi/slash_arc"
+    "0": "honcheon:item/qi/slash_arc",
+    "particle": "honcheon:item/qi/slash_arc"
   },
   "elements": [
     {
       "from": [
-        -16.0,
+        -4.0,
         3.5999999999999996,
         7.68
       ],
       "to": [
-        8.0,
+        20.0,
         12.4,
         8.32
       ],
@@ -22,7 +22,7 @@
             0,
             0,
             16,
-            16
+            4.0
           ]
         },
         "south": {
@@ -31,7 +31,7 @@
             0,
             0,
             16,
-            16
+            4.0
           ]
         },
         "east": {

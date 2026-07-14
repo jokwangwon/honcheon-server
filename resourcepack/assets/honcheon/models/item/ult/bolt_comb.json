@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:ult/bolt_comb",
-    "particle": "honcheon:ult/bolt_comb"
+    "0": "honcheon:item/ult/bolt_comb",
+    "particle": "honcheon:item/ult/bolt_comb"
   },
   "elements": [
     {

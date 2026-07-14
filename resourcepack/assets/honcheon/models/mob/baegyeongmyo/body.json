@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:mob/baegyeongmyo/body",
-    "particle": "honcheon:mob/baegyeongmyo/body"
+    "0": "honcheon:item/mob/baegyeongmyo/body",
+    "particle": "honcheon:item/mob/baegyeongmyo/body"
   },
   "elements": [
     {

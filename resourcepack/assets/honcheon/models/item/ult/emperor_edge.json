@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:ult/emperor_edge",
-    "particle": "honcheon:ult/emperor_edge"
+    "0": "honcheon:item/ult/emperor_edge",
+    "particle": "honcheon:item/ult/emperor_edge"
   },
   "elements": [
     {

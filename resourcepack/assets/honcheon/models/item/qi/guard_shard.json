@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:qi/guard_shard",
-    "particle": "honcheon:qi/guard_shard"
+    "0": "honcheon:item/qi/guard_shard",
+    "particle": "honcheon:item/qi/guard_shard"
   },
   "elements": [
     {

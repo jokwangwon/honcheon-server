@@ -1432,6 +1432,896 @@ def cross_checks():
     return violations
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑮ 아틀라스 · 축 ⑯ 비율 — 「그린 것이 **화면에 서는가**」  【2026-07 신설】
+#
+# ── 이 눈이 왜 생겼나 (검수가 거짓말한 기록) ──
+# 사용자가 게임에서 무공을 썼다. 획 15종이 **전부 보라 큐브**였다. 짐승도 같았다.
+# 그동안 이 검수는 **위반 0건**을 외치고 있었다. 열네 축이 전부 통과였다.
+#
+# 잡을 수가 없었다 — 열네 축은 전부 **PNG 한 장 안의 그림**을 묻는 자들이다:
+#   색이 몇인가 · 명암이 있는가 · 이음매가 뜨는가 · 외곽선이 폐합인가 · 획과 여백이 있는가.
+# 그림은 **완벽했다.** 완벽한 그림이 **화면에 서지 못하는 자리**에 있었을 뿐이다.
+#   ⇒ 검수는 「그림이 좋은가」만 물었고 「그림이 **보이는가**」는 **아무도 안 물었다.**
+#   ★ 재지 않는 축은 조용히 무너진다 — 그리고 이 축은 **아예 없었다.** 그래서 못을 박는다.
+#
+# ── 무엇을 묻는가 (둘) ──
+#   ⑮ 아틀라스: 모델이 부르는 텍스처가 **클라이언트가 훑는 자리**에 있는가.
+#      클라이언트는 아무 데나 훑지 않는다. 1.21.11 jar 의 atlases/*.json 이 훑을 자리를 못 박는다:
+#          blocks.json → directory "block" (prefix "block/")
+#          items.json  → directory "item"  (prefix "item/")
+#      directory 원천은 **모든 네임스페이스**의 assets/<ns>/textures/<source>/** 를 훑어
+#      <ns>:<prefix><상대경로> 라는 스프라이트를 만든다. 그 바깥의 PNG 는 **스프라이트가 없다** —
+#      모델은 뜨는데 그릴 그림이 없으니 클라이언트가 결번 텍스처(보라-검정)를 대신 그린다.
+#      ★ 짐작하지 않는다: 원천 목록을 **jar 에서 읽는다** (팩이 atlases 를 선언했으면 그것도 더한다).
+#
+#   ⑯ 비율: 아틀라스 스프라이트는 **정사각** 또는 **세로 스트립(h = n·w, .mcmeta 동반)** 이어야 한다.
+#      가로로 긴 64x16 은 둘 다 아니다 — 아틀라스에 넣어도 그림이 서지 않는다.
+#      (font/* 는 예외다: 비트맵 폰트는 아틀라스가 아니라 **폰트 프로바이더**가 읽는다.
+#       gui/·painting/·entity/ 도 이 축의 밖이다 — 모델이 안 쓰고, 아틀라스 계약도 다르다.
+#       ⑯ 의 사정거리는 **⑮ 가 훑는 그 자리**와 정확히 같다: block/ 과 item/.)
+#
+# ── 눈을 세웠으면 눈을 시험하라 ──
+#   --selftest 가 일부러 어긴다: ① 텍스처를 아틀라스 밖으로 옮기고 ② 64x16 을 굽는다.
+#   눈이 그 둘을 **실제로 잡는지** 확인하고, 못 잡으면 1을 돌려준다 (눈이 또 거짓말한 것이다).
+# ═══════════════════════════════════════════════════════════════════════════
+MODEL_ATLASES = ("blocks", "items")     # 모델 렌더러가 쓰는 아틀라스는 이 둘뿐이다
+                                        # (gui·painting·particle·entity 는 모델이 안 쓴다)
+
+# ═══ 아이콘 축의 사정거리 — 「textures/item/ 아래가 전부 아이콘은 아니다」 【2026-07】 ═══
+# 축 ①(16x16 치수)·축 ⑥(외곽선 폐합)은 **핫바에 뜨는 아이콘**의 규율이다:
+#   "손에 든 물건이 어떤 배경 위에서도 어두운 테로 떠올라야 한다."
+# 그런데 item/ 아래에는 아이콘이 **아닌** 것도 산다 — 아틀라스에 꿰매지는 자리가 거기뿐이기 때문이다:
+#   · item/qi/·item/ult/ — 무공의 **획**. ItemDisplay 가 3D 모델에 입혀 공중에 띄운다.
+#     **반투명이 본체**이고 꼬리로 갈수록 옅어지는 것이 그림의 뜻이다 — 어두운 테를 두르면 획이 아니다.
+#     32x32·64x64 로 굽는 것도 형체를 위해서다. 핫바에 뜨는 일이 **없다**.
+#   · item/mob/ — 짐승의 **가죽**. MobDisplay 가 3D 형체에 입힌다. 면(面)이지 아이콘이 아니다.
+#
+# ★★ 이 등록이 **왜** 여기 있는가 (보라 큐브의 진짜 뿌리) ★★
+#   이것들은 원래 textures/qi|ult|mob/ 에 있었다. 그렇게 둔 **이유가 주석에 적혀 있었다**:
+#       "item/ 아래가 아니다 — 축 ⑥ 외곽선 폐합은 아이콘의 규율이지 반투명 획의 규율이 아니다"
+#   즉 **축을 피하려고 파일을 축의 사정거리 밖으로 옮긴 것**이다. 그 자리는 하필
+#   **클라이언트도 안 훑는 자리**였고, 그래서 게임에서 획 15종과 짐승 8종이 전부 **보라 큐브**가 됐다.
+#   ⇒ 교훈: **축이 시끄럽다고 파일을 숨기면, 축은 조용해지고 세계가 깨진다.**
+#      옳은 길은 파일을 제자리(아틀라스 안)에 두고 **면제를 등록제로 적는 것**이다 —
+#      이 팩이 이미 쓰는 관행 그대로 (SEAM_FACES · 밝기 대역 제외 등록).
+#   면제된 것은 **숨은 것이 아니다**: 축 ⑮·⑯ 이 이것들을 계속 잰다 (자리와 비율).
+NON_ICON = ("/textures/item/qi/", "/textures/item/ult/", "/textures/item/mob/")
+
+
+def is_icon(path):
+    """핫바에 뜨는 **아이콘**인가 — 축 ①·⑥ 의 사정거리. (획·가죽은 3D 모델의 면이지 아이콘이 아니다)"""
+    p = str(path).replace("\\", "/")
+    return "/textures/item/" in p and not any(k in p for k in NON_ICON)
+
+
+def png_size(path):
+    """PNG 의 (w, h) — IHDR 만 읽는다. read_png 은 RGBA8 만 받으므로 축 ⑯ 은 따로 잰다."""
+    d = path.read_bytes()
+    return struct.unpack(">II", d[16:24])
+
+
+def atlas_sources():
+    """클라이언트가 **실제로 훑는 자리** — jar 의 atlases/{blocks,items}.json 이 진실이다.
+    팩이 같은 이름의 아틀라스를 선언했다면 그 원천도 더한다 (나중에 그 길을 택해도 눈이 산다).
+    돌려주는 것: (directory 원천 [(source, prefix)…], single 원천 {"ns:path"…})."""
+    dirs, singles, z = [], set(), client_jar()
+    names = set(z.namelist())
+    for atlas in MODEL_ATLASES:
+        docs = []
+        jar_path = f"assets/minecraft/atlases/{atlas}.json"
+        if jar_path in names:
+            docs.append(json.loads(z.read(jar_path)))
+        for ns_dir in sorted(p for p in PACK.iterdir() if p.is_dir()):
+            f = ns_dir / "atlases" / f"{atlas}.json"
+            if f.exists():
+                docs.append(json.loads(f.read_text(encoding="utf-8")))
+        for doc in docs:
+            for s in doc.get("sources", []):
+                t = str(s.get("type", "")).split(":")[-1]
+                if t == "directory":
+                    dirs.append((s["source"], s.get("prefix", "")))
+                elif t == "single":
+                    r = s["resource"]
+                    singles.add(r if ":" in r else f"minecraft:{r}")
+                # paletted_permutations 등은 이 축의 대상이 아니다 (우리 모델이 안 쓴다)
+    return dirs, singles
+
+
+def model_texture_refs():
+    """팩의 모든 모델 JSON 이 부르는 텍스처 — [(모델파일, 슬롯, 참조)…]. #참조는 뺀다(다른 슬롯을 가리킨다)."""
+    out = []
+    for ns_dir in sorted(p for p in PACK.iterdir() if p.is_dir()):
+        mdir = ns_dir / "models"
+        if not mdir.is_dir():
+            continue
+        for f in sorted(mdir.rglob("*.json")):
+            doc = json.loads(f.read_text(encoding="utf-8"))
+            for slot, ref in (doc.get("textures") or {}).items():
+                if isinstance(ref, str) and not ref.startswith("#"):
+                    out.append((f, slot, ref))
+    return out
+
+
+def _stitched(ref, dirs, singles):
+    """이 텍스처 참조가 아틀라스에 꿰매지는가 → 꿰매지면 그 PNG 경로, 아니면 None."""
+    ns, path = ref.split(":", 1) if ":" in ref else ("minecraft", ref)
+    if f"{ns}:{path}" in singles:
+        return PACK / ns / "textures" / f"{path}.png"
+    for src, prefix in dirs:
+        if not path.startswith(prefix):
+            continue
+        cand = PACK / ns / "textures" / src / f"{path[len(prefix):]}.png"
+        if cand.exists():
+            return cand
+    return None
+
+
+def atlas_axis():
+    """축 ⑮ — 모델이 부르는 텍스처가 전부 아틀라스 안에 있는가. 위반 수를 돌려준다."""
+    dirs, singles = atlas_sources()
+    print("\n── 축 ⑮ 아틀라스 — 「모델이 부르는 그림이 클라이언트가 훑는 자리에 있는가」 ──")
+    print(f"  원천(jar+팩): " + " · ".join(f"textures/{s}/** → {p}*" for s, p in dirs))
+
+    violations, bad_refs = 0, {}
+    for f, slot, ref in model_texture_refs():
+        if _stitched(ref, dirs, singles):
+            continue
+        bad_refs.setdefault(ref, []).append(f"{f.parent.name}/{f.stem}")
+    for ref in sorted(bad_refs):
+        ns, path = ref.split(":", 1) if ":" in ref else ("minecraft", ref)
+        tdir = PACK / ns / "textures"
+        # 파일이 **어디에** 있는지 찾아서 말한다 — "없다"와 "엉뚱한 데 있다"는 다른 병이고
+        # 고치는 손도 다르다 (전자는 굽고, 후자는 옮긴다). 눈이 병명을 틀리면 손이 헤맨다.
+        stray = next((p for p in sorted(tdir.rglob(f"{path.rsplit('/', 1)[-1]}.png"))
+                      if p.parts[-2] == path.rsplit("/", 2)[-2:][0] or "/" not in path), None) \
+            if tdir.is_dir() else None
+        if (tdir / f"{path}.png").exists():
+            stray = tdir / f"{path}.png"
+        why = (f"아틀라스 **밖**에 있다 → {stray.relative_to(PACK)} "
+               f"(스프라이트가 안 만들어진다 ⇒ 보라 큐브)"
+               if stray else "텍스처 파일 자체가 없다 (아무도 굽지 않았다)")
+        violations += 1
+        users = bad_refs[ref]
+        print(f"  ❌ {ref}: {why}"
+              f"\n       ← 모델 {len(users)}개 ({', '.join(users[:3])}{' …' if len(users) > 3 else ''})")
+    total = len({r for _, _, r in model_texture_refs()})
+    print(f"  모델 텍스처 참조 {total}종 · 아틀라스 밖 {violations}종")
+    return violations
+
+
+def aspect_axis():
+    """축 ⑯ — 아틀라스에 꿰매지는 모든 텍스처가 정사각 또는 (세로 스트립 + .mcmeta) 인가.
+
+    .mcmeta 는 **팩에 없어도 된다**: 팩이 PNG 만 얹으면 바닐라 jar 의 .mcmeta 가 그대로 산다
+    (리소스팩은 파일 단위로 겹친다). 그래서 jar 도 함께 본다 — 안 그러면 물(16x512)이 거짓 위반이 된다."""
+    dirs, _ = atlas_sources()
+    z, names = client_jar(), None
+    names = set(z.namelist())
+    print("\n── 축 ⑯ 비율 — 「정사각인가 · 세로 스트립(+mcmeta)인가」 ──")
+
+    violations, checked = 0, 0
+    for ns_dir in sorted(p for p in PACK.iterdir() if p.is_dir()):
+        for src, _prefix in dirs:
+            root = ns_dir / "textures" / src
+            if not root.is_dir():
+                continue
+            for f in sorted(root.rglob("*.png")):
+                checked += 1
+                w, h = png_size(f)
+                if w == h:
+                    continue
+                rel = f.relative_to(ns_dir / "textures")
+                has_meta = (f.with_name(f.name + ".mcmeta").exists()
+                            or f"assets/{ns_dir.name}/textures/{rel}.mcmeta" in names)
+                if h > w and h % w == 0 and has_meta:
+                    continue                      # 세로 스트림 + 프레임 선언 = 애니메이션 (합법)
+                violations += 1
+                if h > w and h % w == 0:
+                    why = f"세로 스트립이나 .mcmeta 가 없다 (프레임 수를 아무도 안 말했다)"
+                else:
+                    why = ("**가로로 길다** — 마인크래프트가 안 받는다 (정사각도 세로 스트립도 아니다)"
+                           if w > h else "정사각도 세로 스트립(h=n·w)도 아니다")
+                print(f"  ❌ {ns_dir.name}:{rel}: {w}x{h} — {why}")
+    print(f"  아틀라스 텍스처 {checked}장 검사 · 비율 위반 {violations}장 "
+          f"(font/·gui/·entity/ 는 아틀라스 밖이라 이 축의 대상이 아니다)")
+    return violations
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑰ 중심 — 「획이 **시전자의 정면**에 서는가」  【2026-07 신설】
+#
+# ── 이 눈이 왜 생겼나 (축 ⑮ 가 획을 보이게 하자마자 드러난 병) ──
+# 획이 보이기 시작하니 사용자가 바로 말했다: *"주먹 휘두를 때 모션이 캐릭터의 **정면이 아닌 왼쪽**에서 나온다."*
+# 재어 보니 참격선 두 모델의 기하 중심이 원점에서 **x −12** 만큼 치우쳐 있었다 (x −16..8).
+#
+# 【왜 치우침이 곧 병인가】 ItemDisplay 는 모델을 **엔티티 자리에 중심을 두고** 그린다.
+#   그리고 모델의 +X 는 (SkillDisplay.pose 좌표계) **앞이 아니라 좌우 축**이다.
+#   ⇒ 모델의 중심이 x 로 치우치면 그 획은 시전자의 **옆구리**에 걸린다. 정면에 안 선다.
+#   ⇒ **모델에 박힌 오프셋은 모든 모션이 물려받는다.** 그래서 모델은 중심에 서야 하고,
+#     위치·성장은 코드가 정해야 한다 (머리 고정은 등록부의 anchor + 코드의 translation 이 한다).
+#
+# 【무엇을 재는가】 획 모델(models/item/qi|ult/**)의 elements 바운딩박스 중심이 (8,8,8) 인가.
+#   · x(좌우) — **가장 엄격히**. 좌우 치우침은 곧 "옆구리에서 나온다"다. 허용 오차 0.01px.
+#   · y·z — 같은 잣대. 다만 **등록부가 뜻을 밝힌 비대칭은 면제**한다 (아래 CENTER_EXEMPT).
+#     지금은 면제가 **하나도 없다** — 15종 전부 중심에 서야 한다. 앞으로 뻗는 창(z 비대칭)처럼
+#     의도된 비대칭이 생기면 **이유와 함께 여기에 등록**한다 (조용히 눈감는 자리를 만들지 않는다).
+# ═══════════════════════════════════════════════════════════════════════════
+CENTER_TOL = 0.01          # px — 기하 중심이 원점(8,8,8)에서 벗어나도 되는 한계
+CENTER_EXEMPT = {}         # 키 → 이유. **등록제** — 의도된 비대칭만, 반드시 이유와 함께.
+                           # (비어 있다 = 획 15종 전부 중심에 서야 한다)
+
+
+def stroke_models():
+    """획 모델 — models/item/qi/** · models/item/ult/** (참격선·오의·투사체의 형체)."""
+    root = PACK / "honcheon" / "models" / "item"
+    return [f for f in sorted(root.rglob("*.json"))
+            if str(f.relative_to(root)).replace("\\", "/").split("/")[0] in ("qi", "ult")]
+
+
+def model_center(f):
+    """모델의 기하 중심 — elements 바운딩박스의 한가운데. (없으면 None)"""
+    els = json.loads(f.read_text(encoding="utf-8")).get("elements") or []
+    if not els:
+        return None
+    lo = [min(min(e["from"][i], e["to"][i]) for e in els) for i in range(3)]
+    hi = [max(max(e["from"][i], e["to"][i]) for e in els) for i in range(3)]
+    return [(lo[i] + hi[i]) / 2.0 for i in range(3)]
+
+
+def center_axis():
+    """축 ⑰ — 획 모델의 기하 중심이 원점(8,8,8) 에 서는가. 위반 수를 돌려준다."""
+    root = PACK / "honcheon" / "models" / "item"
+    print("\n── 축 ⑰ 중심 — 「획이 시전자의 정면에 서는가 (기하 중심 = 원점)」 ──")
+    violations = 0
+    for f in stroke_models():
+        key = str(f.relative_to(root)).replace("\\", "/")[:-5]
+        c = model_center(f)
+        if c is None:
+            continue
+        if key in CENTER_EXEMPT:
+            print(f"  ⊖ {key}: 면제 — {CENTER_EXEMPT[key]}")
+            continue
+        dev = [c[i] - 8.0 for i in range(3)]
+        off = [ax for i, ax in enumerate("xyz") if abs(dev[i]) > CENTER_TOL]
+        if off:
+            violations += 1
+            side = ("시전자의 **옆구리**에 걸린다 (정면에 안 선다)"
+                    if "x" in off else "원점에서 치우쳤다")
+            print(f"  ❌ {key}: 중심 ({c[0]:.1f}, {c[1]:.1f}, {c[2]:.1f}) — "
+                  f"원점 편차 ({dev[0]:+.1f}, {dev[1]:+.1f}, {dev[2]:+.1f}) · {'·'.join(off)} 축 — {side}")
+    print(f"  획 모델 {len(stroke_models())}종 · 중심 이탈 {violations}종 "
+          f"(면제 {len(CENTER_EXEMPT)}종 — 등록된 비대칭만)")
+    return violations
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑱ — 【획의 색】 (2026-07 · 사용자 지시)
+#
+# ── 축 ⑫ 의 면제를 **소리내어 청구하는 자리** ────────────────────────────────
+#   축 ⑫(밝기 대역 · 자재 채도 ≤25)는 `minecraft/textures/block/*.png` 만 훑는다.
+#   획은 `honcheon/textures/item/qi|ult/` 에 산다 ⇒ **애초에 ⑫ 의 사정거리 밖**이었다.
+#   그런데 그 사실이 **어디에도 적혀 있지 않았다.** 사정거리 밖이라 조용히 통과하던 것은
+#   면제가 아니라 **구멍**이다 — NON_ICON 이 가르쳐 준 그 교훈 그대로다:
+#       "축이 시끄럽다고 파일을 숨기면 축은 조용해지고 세계가 깨진다."
+#   ⇒ 그래서 **면제를 등록하고, 다른 자로 잰다.** 획은 자재가 아니라 기(氣)다:
+#      세계를 덮는 '면'이 아니라 공중에 뜨는 '빛'이므로 저채도 밴드가 잘못된 잣대다.
+#      대신 이 축이 **금지색**과 **등록부와의 일치**를 잰다.
+#      면제는 "재지 않는다"가 아니라 **"다른 자로 잰다"** 는 뜻이다.
+#
+# ── 무엇을 재는가 ────────────────────────────────────────────────────────────
+#   ① qi/* 7종 — **무색**이어야 한다. 여섯 격이 이 판 한 장을 나눠 쓰므로 (참격선은 격마다
+#      다른 모델이 아니다) 판에 색을 넣으면 **외공기의 주먹이 심검처럼 빛난다** — 사다리가 무너진다.
+#   ② ult/* — 색이 있어야 한다 (사용자: "최상위는 가장 화려하게"). 그러나 **등록부의 색**이어야 한다:
+#      config/skill_motion.yml 의 inks.옥 / inks.청백 과 구워진 PNG 가 어긋나면 위반이다.
+#      (빌더가 색을 지어내면 등록제가 무너진다 — 그 어긋남을 잡는 것이 이 축의 본업이다.)
+#   ③ 금지색 — 형광 핑크 · 네온 보라 · 과도한 노랑. **어느 획에도 없어야 한다.**
+#      예외: ult/blood_tide (혈해만리) — 【채색 예외】. 소리내어 등록한다.
+# ═══════════════════════════════════════════════════════════════════════════
+QI_TEX_DIRS = ("qi", "ult")
+QI_ACHROMATIC_MAX = 12        # qi/* 의 평균 채도 상한 — 이보다 크면 '무색'이 아니다
+QI_HUE_TOLERANCE = 20         # 구워진 색상 ↔ 등록부 색상(옥·청백)의 허용 오차(도). 넘으면 빌더가 색을 지어낸 것이다
+QI_CHROMA_FLOOR = 8           # ult/* 의 채도 하한 — 색이 죽으면 "최상위는 화려하다"가 거짓말이 된다
+# 【면제 — 소리내어 청구한다】 둘 다 "빛나지 않는 것이 곧 정보"인 자리다. 은닉이 아니라 등록이다.
+QI_COLOR_EXEMPT = {
+    "ult/blood_tide": ("혈", "【채색 예외】 마공의 혈조 — '저것은 사람의 기가 아니다'"),
+    "ult/toxin_veil": ("무색", "【무형(無形)】 무형지독은 **빛나지 않는다** — "
+                               "등록부가 이미 그렇게 적었다 (독무_범람 brightness 4)"),
+}
+
+
+def _ink_registry():
+    """config/skill_motion.yml 의 inks — **색의 단일 진실 원천**. 파서 없이 필요한 줄만 읽는다."""
+    src = (ROOT / "config" / "skill_motion.yml").read_text(encoding="utf-8")
+    body = src.split("\ninks:", 1)
+    if len(body) < 2:
+        return {}
+    out = {}
+    for line in body[1].splitlines():
+        if line and not line[0].isspace():
+            break                                  # 다음 최상위 절 — inks 는 끝났다
+        m = re.match(r"\s+(\S+):\s*\{\s*rgb:\s*\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]", line)
+        if m:
+            out[m.group(1)] = (int(m.group(2)), int(m.group(3)), int(m.group(4)))
+    return out
+
+
+def _forbidden_hue(h, c):
+    """사용자의 금지 규칙 — motion_audit 축 ⑪ 과 **같은 잣대**여야 한다 (두 자가 다르면 둘 다 거짓말이다)."""
+    if c <= 20:
+        return None                                # 회색에 색상은 없다
+    if 265 <= h <= 345:
+        return "네온 보라 · 형광 핑크"
+    if 38 <= h <= 68:
+        return "과도한 노랑"
+    if c > 130:
+        return f"형광 (채도 {c})"
+    return None
+
+
+def _hue(r, g, b):
+    mx, mn = max(r, g, b), min(r, g, b)
+    c = mx - mn
+    if c == 0:
+        return 0.0, 0
+    if mx == r:
+        h = 60 * (((g - b) / c) % 6)
+    elif mx == g:
+        h = 60 * (((b - r) / c) + 2)
+    else:
+        h = 60 * (((r - g) / c) + 4)
+    return h % 360, c
+
+
+def stroke_color_axis():
+    """축 ⑱ — 획의 색. (위반 수)"""
+    print("\n── 축 ⑱ 획의 색 — 【축 ⑫ 면제를 소리내어 청구하는 자리】 ──")
+    print("     획은 자재가 아니라 **기(氣)** 다 (세계를 덮는 면이 아니라 공중에 뜨는 빛).")
+    print("     ⇒ ⑫(저채도 밴드 · 자재 채도 ≤25 · 밝기 [128,172])는 **면제**한다 —")
+    print("       그러나 **면제는 재지 않는다는 뜻이 아니다**: 아래 자로 잰다 (금지색 · 등록부 일치).")
+
+    inks = _ink_registry()
+    if not inks:
+        print("  ❌ config/skill_motion.yml 의 inks 를 못 읽었다 — **색의 원천이 없으면 대조가 불가능**하다")
+        return 1
+    violations = 0
+    base = PACK / "honcheon" / "textures" / "item"
+    for sub in QI_TEX_DIRS:
+        d = base / sub
+        if not d.is_dir():
+            print(f"  ⚠ {d} 없음 — 팩이 아직 안 구워졌다 (축 미측정)")
+            continue
+        for f in sorted(d.glob("*.png")):
+            key = f"{sub}/{f.stem}"
+            w, h, rows = read_png(f)
+            ps = [px(rows, x, y) for y in range(h) for x in range(w) if px(rows, x, y)[3] > 8]
+            if not ps:
+                continue
+            n = len(ps)
+            avg = tuple(int(sum(p[i] for p in ps) / n) for i in range(3))
+            hue, chroma = _hue(*avg)
+
+            bad = _forbidden_hue(hue, chroma)
+            if bad and key not in QI_COLOR_EXEMPT:
+                violations += 1
+                print(f"  ❌ {key:20s} rgb{avg} hue {hue:5.0f}° 채도 {chroma:3d} — **금지색**: {bad}")
+                continue
+
+            if key in QI_COLOR_EXEMPT:
+                ink, why = QI_COLOR_EXEMPT[key]
+                # 면제도 **잰다** — 무색을 청구했으면 정말 무색인지 본다 (면제는 백지수표가 아니다)
+                ok = chroma <= QI_ACHROMATIC_MAX if ink == "무색" else True
+                violations += 0 if ok else 1
+                print(f"  {'✅' if ok else '❌'} {key:20s} rgb{avg} hue {hue:5.0f}° 채도 {chroma:3d}"
+                      f" — {why}"
+                      + ("" if ok else f"  ← **무색을 청구해 놓고 색을 칠했다** (채도 {chroma} > "
+                                       f"{QI_ACHROMATIC_MAX})"))
+                continue
+
+            if sub == "qi":
+                # 무색이어야 한다 — 여섯 격이 한 장을 나눠 쓴다 (색을 넣으면 외공기가 심검처럼 빛난다)
+                ok = chroma <= QI_ACHROMATIC_MAX
+                violations += 0 if ok else 1
+                print(f"  {'✅' if ok else '❌'} {key:20s} rgb{avg} 채도 {chroma:3d} ≤ {QI_ACHROMATIC_MAX}"
+                      f" — 무색 (격의 사다리가 이 판 한 장을 나눠 쓴다)"
+                      + ("" if ok else "  ← **색이 들었다**: 외공기의 주먹이 심검처럼 빛난다"))
+                continue
+
+            # ult/* — 등록부의 옥·청백 **색상(hue)** 이어야 한다.
+            #
+            # 【잣대를 왜 hue 로 잡는가 — 첫 판이 틀렸다】 처음엔 평균 RGB 가 옥~청백 사이에 있는지를
+            #   쟀다. 그런데 그 자는 **축 ⑬(명암차 ≥ 24)과 싸운다**: 획은 스미는 끝(어둡다)과 속(밝다)이
+            #   있어야 하므로 평균은 필연적으로 그 둘 사이에서 **내려간다**. 두 축이 서로를 위반하게
+            #   만드는 자는 자가 아니라 함정이다.
+            #   ⇒ **밝기는 ⑬ 이 재고, 이 축은 색상만 잰다.** 획의 색이 옥·청록의 자리에 있는가,
+            #     그리고 색이 죽지 않았는가(채도 하한). 창(窓)은 **등록부에서 유도한다** —
+            #     여기 숫자를 박으면 등록부가 색을 바꿔도 눈이 옛 색을 고집한다.
+            jade, pale = inks.get("옥"), inks.get("청백")
+            if not jade or not pale:
+                violations += 1
+                print(f"  ❌ {key:20s} — 등록부에 옥·청백이 없다 (inks 를 지웠는가?)")
+                continue
+            hj, _ = _hue(*jade)
+            hp, _ = _hue(*pale)
+            lo, hi = min(hj, hp) - QI_HUE_TOLERANCE, max(hj, hp) + QI_HUE_TOLERANCE
+            ok = lo <= hue <= hi and chroma >= QI_CHROMA_FLOOR
+            violations += 0 if ok else 1
+            why = ("" if ok
+                   else ("  ← **색이 죽었다** (채도 %d < %d — 물들이지 않았거나 틴트가 씻겼다)"
+                         % (chroma, QI_CHROMA_FLOOR) if chroma < QI_CHROMA_FLOOR
+                         else "  ← **등록부의 색이 아니다** (빌더가 색을 지어냈다 —"
+                              " config/skill_motion.yml inks 가 정본이다)"))
+            print(f"  {'✅' if ok else '❌'} {key:20s} rgb{avg} hue {hue:5.0f}° 채도 {chroma:3d}"
+                  f" — 색상 ∈ [{lo:.0f}°,{hi:.0f}°] (옥 {hj:.0f}° · 청백 {hp:.0f}°) · 채도 ≥ {QI_CHROMA_FLOOR}"
+                  + why)
+    print(f"  ⇒ 획의 색: 위반 {violations}건 · 채색 예외 {len(QI_COLOR_EXEMPT)}종 (등록됨)")
+    return violations
+
+
+def _paint(path, rgb):
+    """PNG 의 **불투명 픽셀만** 한 색으로 덮는다 (알파는 보존 — 형체는 그대로 두고 색만 어긴다)."""
+    w, h, rows = read_png(path)
+    out = []
+    for y in range(h):
+        line = bytearray(rows[y])
+        for x in range(w):
+            if line[x * 4 + 3] > 8:
+                line[x * 4], line[x * 4 + 1], line[x * 4 + 2] = rgb
+        out.append(bytes(line))
+    write_png(path, w, h, out)
+
+
+def stroke_color_selftest():
+    """★ 눈을 시험한다 — 축 ⑱ 에 **금지색을 먹여** 잡는지 본다. 반드시 되돌린다."""
+    print("\n══ 축 ⑱ 눈 시험 (일부러 어긴다) ══")
+    base = stroke_color_axis()
+    if base:
+        print(f"  ⚠ 기준선이 이미 위반 {base}건 — 시험의 뜻이 흐려진다")
+    target = PACK / "honcheon" / "textures" / "item" / "ult" / "plum_bloom.png"
+    if not target.exists():
+        print("  ⚠ ult/plum_bloom.png 없음 — 시험 못 함")
+        return 1
+    keep = target.read_bytes()
+    ok = True
+    try:
+        # ① 네온 보라를 굽는다 (사용자가 이름을 대어 금지한 바로 그 색)
+        _paint(target, (190, 40, 230))
+        n = stroke_color_axis()
+        caught = n > base
+        ok = ok and caught
+        print(f"  {'✅' if caught else '❌'} 네온 보라를 구웠다 — {'잡았다' if caught else '**못 잡았다**'}")
+
+        # ② 참격선(qi/*)에 색을 넣는다 — 사다리가 무너지는 자리
+        arc = PACK / "honcheon" / "textures" / "item" / "qi" / "slash_arc.png"
+        keep_arc = arc.read_bytes()
+        try:
+            _paint(arc, (60, 200, 170))
+            n2 = stroke_color_axis()
+            caught2 = n2 > n
+            ok = ok and caught2
+            print(f"  {'✅' if caught2 else '❌'} 참격선에 청록을 칠했다 (외공기가 심검처럼 빛난다)"
+                  f" — {'잡았다' if caught2 else '**못 잡았다**'}")
+        finally:
+            arc.write_bytes(keep_arc)
+    finally:
+        target.write_bytes(keep)
+    after = stroke_color_axis()
+    restored = after == base
+    print(f"  {'✅' if restored else '❌'} 팩을 되돌렸다 (위반 {after} == 기준선 {base})")
+    print(f"  ⇒ 눈의 시험: {'통과' if ok and restored else '**실패**'}")
+    return 0 if (ok and restored) else 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ⑲·⑳·㉑·㉒ — 【2026-07-14 신설 · RP 합의】 (docs/collaboration/RP_REVIEW_BOARD.md §합의)
+#
+# 넷의 공통 뿌리: 앞선 축들은 텍스처를 **파일로** 봤다. 그런데 화면에서 그림은 혼자 서지 않는다 —
+#   획은 배경 **위에** 합성되고(⑲), 주사는 다른 색 **사이에서** 신호가 되고(⑳),
+#   문장은 옆 단계와 **나란히** 읽히고(㉑), 게이지는 틴트가 **곱해진 채** 읽힌다(㉒).
+# 네 축 모두 관계를 잰다. 그리고 예외는 전부 등록제다 (조용한 예외 금지 — NON_ICON 의 교훈).
+# ═══════════════════════════════════════════════════════════════════════════
+FONT = PACK / "honcheon" / "textures" / "font"
+
+# ── 축 ⑲ 획 배경 합성 대비 — 「참격이 화선지에서도 먹에서도 보이는가」 ──
+# 실측의 기록 (RP_REVIEW_CODEX §RP-3 · 보정 전): 참격 3종은 화선지 합성 가시 15~31% 였다 —
+# 옛 4단의 232 가 화선지(Y≈231)와 ΔY 1 이라 **알파 255 여도 안 보였다.** 어두운 번짐 테(RP-3)가
+# 그것을 고쳤고, 이 축이 회귀를 막는다. 형태를 죽이고 테만 칠하는 편법은 기존 기하·알파 감사
+# (⑮ 아틀라스 · ⑯ 비율 · ⑰ 중심 · ⑱ 무색)와의 **병행 통과**가 막는다.
+SLASH_BG = (("화선지", (238, 231, 214)), ("먹", (26, 24, 22)))   # #EEE7D6 · #1A1816
+SLASH_ALPHA_MIN = 64          # 표본 — 이보다 옅은 픽셀은 '형태'가 아니라 여운이다
+SLASH_P25_MIN = 16.0          # 합성 ΔY 의 1사분위 하한
+SLASH_COVER_MIN = 0.70        # 가시(ΔY≥16) 픽셀 비율 하한
+# 강제 대상 — 합의가 못 박은 참격 3종 (등록제: 넓히려면 여기 더하라. 나머지 qi/* 는 측정만 —
+# blade_sheath 는 보정 전 실측 60.9% 로 미달이나 합의 범위 밖이다: 관측으로 소리내어 남긴다).
+SLASH_CONTRAST_TARGETS = ("qi/slash_arc", "qi/slash_line", "qi/slash_ring")
+
+
+def _luma(r, g, b):
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _bg_deltas(path, bg):
+    """배경 위 알파 합성 후 |ΔY| 목록 (알파 ≥ SLASH_ALPHA_MIN 표본만) — 오름차순."""
+    w, h, rows = read_png(path)
+    bg_y = _luma(*bg)
+    out = []
+    for y in range(h):
+        for x in range(w):
+            p = px(rows, x, y)
+            if p[3] < SLASH_ALPHA_MIN:
+                continue
+            f = p[3] / 255.0
+            out.append(abs(_luma(*(p[i] * f + bg[i] * (1 - f) for i in range(3))) - bg_y))
+    return sorted(out)
+
+
+def slash_contrast_axis():
+    """축 ⑲ — 획 배경 합성 대비. 위반 수를 돌려준다."""
+    print("\n── 축 ⑲ 획 배경 합성 대비 — 「참격이 화선지에서도 먹에서도 보이는가」 (RP-3) ──")
+    d = PACK / "honcheon" / "textures" / "item" / "qi"
+    if not d.is_dir():
+        print("  ❌ item/qi/ 없음 — 팩이 안 구워졌다 (미측정은 통과가 아니다)")
+        return 1
+    violations = 0
+    for f in sorted(d.glob("*.png")):
+        key = f"qi/{f.stem}"
+        enforced = key in SLASH_CONTRAST_TARGETS
+        fails, cells = [], []
+        for bg_name, bg in SLASH_BG:
+            ds = _bg_deltas(f, bg)
+            if not ds:
+                fails.append(f"{bg_name} 표본 0")
+                cells.append(f"{bg_name} 표본 0")
+                continue
+            p25 = ds[len(ds) // 4]
+            cover = sum(1 for v in ds if v >= SLASH_P25_MIN) / len(ds)
+            cells.append(f"{bg_name} p25 {p25:5.1f} 가시 {cover:5.1%}")
+            if p25 < SLASH_P25_MIN or cover < SLASH_COVER_MIN:
+                fails.append(f"{bg_name}: p25 {p25:.1f} (≥{SLASH_P25_MIN:.0f}) · 가시 {cover:.1%} (≥{SLASH_COVER_MIN:.0%})")
+        mark = ("❌" if fails else "✅") if enforced else "⊖"
+        tail = "" if enforced else "  (관측 — 합의 범위 밖: 강제하려면 SLASH_CONTRAST_TARGETS 에 등록)"
+        if enforced and fails:
+            violations += 1
+            print(f"  {mark} {key:16s} " + " | ".join(cells) + " — **밝은 배경에서 획이 죽는다**: " + " · ".join(fails))
+        else:
+            print(f"  {mark} {key:16s} " + " | ".join(cells) + tail)
+    print(f"  ⇒ 참격 3종 강제 · 위반 {violations}건 (표본 α≥{SLASH_ALPHA_MIN} · 양배경 각각 p25≥{SLASH_P25_MIN:.0f}·가시≥{SLASH_COVER_MIN:.0%})")
+    return violations
+
+
+# ── 축 ⑳ 의미 적색 면적 — 「주사(朱砂)가 신호로 남는가」 ──
+# 등록부: config/resourcepack_design.yml semantic_red_registry — **표가 예외의 전부다.**
+# 기본 GUI·아이템은 보이는 면적 ≤1%. 그보다 큰 적색은 등록된 경로만, 등록된 상한까지만.
+# 미등록 초과·등록 상한 초과만 위반 (예외를 면제로 숨기지 않고 예외 자체를 잰다 — RP-5).
+RED_DEFAULT_MAX = 0.01
+RED_ALPHA_MIN, RED_SAT_MIN = 16, 0.35
+RED_HUE = (335.0, 20.0)       # hue 335°~360° ∪ 0°~20°
+
+
+def _red_registry():
+    """semantic_red_registry.entries — [(글롭, max_ratio, 이유)…] 등록 순서대로 (첫 일치가 이긴다)."""
+    src = (ROOT / "config" / "resourcepack_design.yml").read_text(encoding="utf-8")
+    body = src.split("\nsemantic_red_registry:", 1)
+    if len(body) < 2:
+        return None
+    out = []
+    for line in body[1].splitlines():
+        if line and not line[0].isspace():
+            break                                  # 다음 최상위 절
+        m = re.match(r'\s*-\s*\{\s*path:\s*"([^"]+)"\s*,\s*max_ratio:\s*([\d.]+)\s*,\s*reason:\s*"([^"]+)"', line)
+        if m:
+            out.append((m.group(1), float(m.group(2)), m.group(3)))
+    return out
+
+
+def _red_ratio(path):
+    """(보이는 픽셀, 적색 픽셀) — 알파 ≥16 · HSV hue 335°~20° · 채도 ≥0.35."""
+    w, h, rows = read_png(path)
+    vis = red = 0
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px(rows, x, y)
+            if a < RED_ALPHA_MIN:
+                continue
+            vis += 1
+            mx = max(r, g, b)
+            if mx == 0 or (mx - min(r, g, b)) / mx < RED_SAT_MIN:
+                continue
+            hue, _c = _hue(r, g, b)
+            if hue >= RED_HUE[0] or hue <= RED_HUE[1]:
+                red += 1
+    return vis, red
+
+
+def red_axis():
+    """축 ⑳ — 의미 적색 면적. 위반 수를 돌려준다."""
+    import fnmatch
+    print("\n── 축 ⑳ 의미 적색 면적 — 「주사가 신호로 남는가」 (RP-5 · 등록부: semantic_red_registry) ──")
+    reg = _red_registry()
+    if reg is None:
+        print("  ❌ config/resourcepack_design.yml 에 semantic_red_registry 가 없다 — 등록부 없는 예외는 잴 수 없다")
+        return 1
+    files = sorted((PACK / "honcheon" / "textures").rglob("*.png")) \
+        + sorted((PACK / "minecraft" / "textures" / "gui").rglob("*.png"))
+    violations = shown = 0
+    for f in files:
+        rel = str(f.relative_to(PACK)).replace("\\", "/")
+        vis, red = _red_ratio(f)
+        if not vis:
+            continue
+        ratio = red / vis
+        hit = next(((pat, cap, why) for pat, cap, why in reg if fnmatch.fnmatch(rel, pat)), None)
+        cap = hit[1] if hit else RED_DEFAULT_MAX
+        if ratio > cap:
+            violations += 1
+            why = (f"등록 상한 초과 ({hit[2]})" if hit
+                   else f"**미등록 적색** — 의미 없는 주사다 (기본 ≤{RED_DEFAULT_MAX:.0%}: 넘으려면 등록부에 이유와 함께)")
+            print(f"  ❌ {rel}: 적색 {red}/{vis} = {ratio:.2%} > {cap:.0%} — {why}")
+        elif hit and ratio > RED_DEFAULT_MAX:
+            shown += 1
+            print(f"  ✅ {rel}: {ratio:6.2%} ≤ {hit[1]:.0%} — {hit[2]}")
+    print(f"  검사 {len(files)}장 (honcheon/** + minecraft gui/**) · 등록 {len(reg)}행 · "
+          f"등록 예외 가동 {shown}건 · 위반 {violations}건")
+    return violations
+
+
+# ── 축 ㉑ 경지 인접 XOR — 「옆 단계와 나란히 놓아도 갈리는가」 ──
+# 실측의 기록 (보정 전): 초절정↔화경이 **XOR 2px** — 윗줄 광점 둘뿐이라 8x8 실크기에서 같은
+# 문장이었다 (RP-1). 하한 8px. 8단 문장의 인접쌍 7 을 전부 잰다 (grade_delta 와 같은 문법 —
+# 문장은 2값이라 회색조 대신 알파 실루엣 XOR 로 충분하다).
+CREST_XOR_MIN = 8
+CREST_NAMES = ("삼류", "이류", "일류", "절정", "초절정", "화경", "현경", "생사경")
+
+
+def crest_axis():
+    """축 ㉑ — 경지 문장 인접 변별. 위반 수를 돌려준다."""
+    print("\n── 축 ㉑ 경지 인접 XOR — 「옆 단계와 나란히 놓아도 갈리는가」 (RP-1 · 하한 8px) ──")
+    masks = []
+    for i in range(len(CREST_NAMES)):
+        f = FONT / f"crest_{i}.png"
+        if not f.exists():
+            print(f"  ❌ {f.name} 없음 — 문장 8단이 다 구워져야 잰다")
+            return 1
+        w, h, rows = read_png(f)
+        masks.append({(x, y) for y in range(h) for x in range(w) if px(rows, x, y)[3] >= 128})
+    violations = 0
+    for i in range(len(CREST_NAMES) - 1):
+        xor = len(masks[i] ^ masks[i + 1])
+        ok = xor >= CREST_XOR_MIN
+        violations += 0 if ok else 1
+        print(f"  {'✅' if ok else '❌'} {CREST_NAMES[i]}↔{CREST_NAMES[i + 1]}: XOR {xor:2d}px"
+              + ("" if ok else f" < {CREST_XOR_MIN} — **옆에 두면 같은 문장이다** (실크기 8x8 에서 안 갈린다)"))
+    print(f"  ⇒ 인접쌍 {len(CREST_NAMES) - 1} 전부 · 위반 {violations}건")
+    return violations
+
+
+# ── 축 ㉒ 게이지 계약 — 「붓홈은 같고 먹만 차오르는가 · 틴트가 곱해져도 읽히는가」 ──
+# RP-2 의 네 못: ① 20x6 고정 ② 외곽 붓홈이 9단에서 **바이트까지 동일** (advance·실루엣 불변)
+# ③ 불투명(α≥128) 픽셀 엄격 단조 증가 ④ 4틴트(SkillHud 부상 사다리 백/황/적/암적 — woundColor)
+#   + 내력 옥청 을 곱해 화선지·먹 두 배경에 합성해도 만충↔공허가 갈린다 (내부 평균 ΔY ≥ 12).
+#   ④가 없으면 "게이지가 있다"와 "게이지가 읽힌다"가 또 갈라선다 (실측: 옛 판은 황·옥청 틴트가
+#   화선지에서 ΔY 11 — **찼는지 비었는지 안 보였다**).
+GAUGE_SIZE = (20, 6)
+GAUGE_TINT_MIN = 12.0
+GAUGE_TINTS = (("백", (255, 255, 255)), ("황", (255, 255, 85)), ("적", (255, 85, 85)),
+               ("암적", (170, 0, 0)), ("옥청", (85, 255, 255)))
+
+
+def _gauge_pixels(n):
+    f = FONT / f"gauge_{n}.png"
+    if not f.exists():
+        return None
+    w, h, rows = read_png(f)
+    return w, h, [[px(rows, x, y) for x in range(w)] for y in range(h)]
+
+
+def _tinted_y(p, tint, bg):
+    """글리프 픽셀에 틴트를 곱하고 배경에 알파 합성한 휘도 — 인게임 렌더 경로 그대로."""
+    f = p[3] / 255.0
+    return _luma(*(p[i] * tint[i] / 255 * f + bg[i] * (1 - f) for i in range(3)))
+
+
+def gauge_axis():
+    """축 ㉒ — 게이지 계약 (20x6 · 붓홈 고정 · 9단 단조 · 틴트 합성 시인성). 위반 수를 돌려준다."""
+    print("\n── 축 ㉒ 게이지 계약 — 「붓홈은 같고 먹만 차오르는가」 (RP-2) ──")
+    gs = []
+    for n in range(9):
+        g = _gauge_pixels(n)
+        if g is None:
+            print(f"  ❌ gauge_{n}.png 없음 — 9단이 다 구워져야 잰다")
+            return 1
+        gs.append(g)
+    violations = 0
+    # ① 치수
+    bad = [n for n, (w, h, _p) in enumerate(gs) if (w, h) != GAUGE_SIZE]
+    if bad:
+        violations += 1
+        print(f"  ❌ 치수: gauge_{bad} 가 {GAUGE_SIZE[0]}x{GAUGE_SIZE[1]} 이 아니다 — advance 가 흔들린다")
+    else:
+        print(f"  ✅ 치수: 9단 전부 {GAUGE_SIZE[0]}x{GAUGE_SIZE[1]}")
+    w, h = GAUGE_SIZE
+    # ② 붓홈(외곽 1px 고리) — 9단 동일
+    rim = [(x, y) for y in range(h) for x in range(w) if y in (0, h - 1) or x in (0, w - 1)]
+    diff = [n for n in range(1, 9) if any(gs[n][2][y][x] != gs[0][2][y][x] for x, y in rim)]
+    if diff:
+        violations += 1
+        print(f"  ❌ 붓홈: gauge_{diff} 의 외곽이 gauge_0 과 다르다 — 홈틀이 흔들리면 실루엣·advance 계약이 깨진다")
+    else:
+        print("  ✅ 붓홈: 외곽 1px 고리가 9단에서 바이트까지 동일")
+    # ③ 불투명(α≥128) 엄격 단조
+    counts = [sum(1 for y in range(h) for x in range(w) if g[2][y][x][3] >= 128) for g in gs]
+    mono = all(counts[i] < counts[i + 1] for i in range(8))
+    violations += 0 if mono else 1
+    print(f"  {'✅' if mono else '❌'} 단조: 불투명 픽셀 {counts}"
+          + ("" if mono else " — **차오르지 않는 단이 있다** (엄격 증가가 아니다)"))
+    # ④ 틴트 합성 시인성 — 만충(8) ↔ 공허(0) 내부 평균 ΔY
+    worst, worst_key = 1e9, ""
+    for t_name, tint in GAUGE_TINTS:
+        for bg_name, bg in SLASH_BG:
+            ds = [abs(_tinted_y(gs[8][2][y][x], tint, bg) - _tinted_y(gs[0][2][y][x], tint, bg))
+                  for y in range(1, h - 1) for x in range(1, w - 1)]
+            mean = sum(ds) / len(ds)
+            if mean < worst:
+                worst, worst_key = mean, f"{t_name}·{bg_name}"
+            if mean < GAUGE_TINT_MIN:
+                violations += 1
+                print(f"  ❌ 틴트 {t_name} · {bg_name}: 만충↔공허 평균 ΔY {mean:.1f} < {GAUGE_TINT_MIN:.0f}"
+                      f" — **찼는지 비었는지 안 보인다**")
+    print(f"  ✅ 틴트 합성: {len(GAUGE_TINTS)}틴트 × 양배경 최악 {worst:.1f} ({worst_key}) ≥ {GAUGE_TINT_MIN:.0f}"
+          if worst >= GAUGE_TINT_MIN else f"  ⇒ 틴트 최악 {worst:.1f} ({worst_key})")
+    print(f"  ⇒ 게이지 계약: 위반 {violations}건")
+    return violations
+
+
+def rp_axes_selftest():
+    """★ 축 ⑲·⑳·㉑·㉒ 의 눈 시험 — 일부러 어겨서 실제로 잡는지 본다. 반드시 되돌린다."""
+    print("\n══ 축 ⑲·⑳·㉑·㉒ 눈 시험 (일부러 어긴다) ══")
+    ok = True
+
+    # ⑲ — 참격의 먹을 화선지색으로 바랜다 (밝은 배경에서 죽는 값 236,231,214)
+    arc = PACK / "honcheon" / "textures" / "item" / "qi" / "slash_arc.png"
+    base = base19 = slash_contrast_axis()
+    keep = arc.read_bytes()
+    try:
+        _paint(arc, (236, 231, 214))
+        n = slash_contrast_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [⑲] 참격을 화선지색으로 바랬다 — {'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+    finally:
+        arc.write_bytes(keep)
+
+    # ⑳ — ① 등록 자산의 상한 초과 (gui_ledger 를 통째로 주사로) ② 미등록 자산의 적색
+    base = base20 = red_axis()
+    ledger = FONT / "gui_ledger.png"
+    crest0 = FONT / "crest_0.png"
+    keep_l, keep_c = ledger.read_bytes(), crest0.read_bytes()
+    try:
+        _paint(ledger, (200, 40, 44))
+        n = red_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [⑳] 등록 자산(gui_ledger)을 상한 너머로 붉혔다 — {'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+        ledger.write_bytes(keep_l)
+        _paint(crest0, (200, 40, 44))
+        n = red_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [⑳] 미등록 자산(crest_0)을 붉혔다 — {'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+    finally:
+        ledger.write_bytes(keep_l)
+        crest0.write_bytes(keep_c)
+
+    # ㉑ — 화경을 초절정으로 덮는다 (XOR 0 — 옆에 두면 같은 문장)
+    base = base21 = crest_axis()
+    c4, c5 = FONT / "crest_4.png", FONT / "crest_5.png"
+    keep5 = c5.read_bytes()
+    try:
+        c5.write_bytes(c4.read_bytes())
+        n = crest_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉑] 화경을 초절정 사본으로 덮었다 — {'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+    finally:
+        c5.write_bytes(keep5)
+
+    # ㉒ — ① 만충을 공허 사본으로 (단조·틴트 동시 위반) ② 5단을 4단 사본으로 (단조만)
+    base = base22 = gauge_axis()
+    g8, g0, g5, g4 = FONT / "gauge_8.png", FONT / "gauge_0.png", FONT / "gauge_5.png", FONT / "gauge_4.png"
+    keep8, keep5g = g8.read_bytes(), g5.read_bytes()
+    try:
+        g8.write_bytes(g0.read_bytes())
+        n = gauge_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉒] 만충을 공허 사본으로 덮었다 — {'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+        g8.write_bytes(keep8)
+        g5.write_bytes(g4.read_bytes())
+        n = gauge_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉒] 5단을 4단 사본으로 덮었다 (단조 위반) — {'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+    finally:
+        g8.write_bytes(keep8)
+        g5.write_bytes(keep5g)
+
+    expect = base19 + base20 + base21 + base22
+    after = slash_contrast_axis() + red_axis() + crest_axis() + gauge_axis()
+    restored = after == expect
+    ok &= restored
+    print(f"  {'✅' if restored else '❌'} 팩을 되돌렸다 (위반 {after} == 기준선 {expect})")
+    print(f"  ⇒ 눈의 시험 (⑲·⑳·㉑·㉒): {'통과' if ok else '**실패**'}")
+    return 0 if ok else 1
+
+
+def selftest():
+    """★ 눈을 만들면 눈을 시험하라 — 일부러 어겨서 축 ⑮·⑯·⑰ 이 **실제로 잡는지** 본다.
+    팩을 임시로 더럽히고 반드시 되돌린다 (try/finally)."""
+    print("══ 축 ⑮·⑯·⑰ 눈 시험 (일부러 어긴다) ══")
+    base_15, base_16, base_17 = atlas_axis(), aspect_axis(), center_axis()
+    print(f"\n[기준] 고친 팩: ⑮ {base_15}건 · ⑯ {base_16}건 · ⑰ {base_17}건")
+    if base_15 or base_16 or base_17:
+        print("  ⚠ 기준이 0이 아니다 — 시험 이전에 팩이 이미 위반이다")
+
+    ok = True
+    # ── 시험 ③ 획 모델을 **옆으로 민다** (옛 '머리=원점' 계약을 되살린다: x −12 편향) ──
+    mf = PACK / "honcheon" / "models" / "item" / "qi" / "slash_arc.json"
+    orig = mf.read_text(encoding="utf-8")
+    print("\n[시험 ③] qi/slash_arc 의 기하를 x −12 만큼 민다 (옛 '머리=원점' 편향을 되살린다)")
+    doc = json.loads(orig)
+    for e in doc["elements"]:
+        e["from"][0] -= 12.0
+        e["to"][0] -= 12.0
+    mf.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        n = center_axis()
+        caught = n > base_17
+        ok &= caught
+        print(f"  {'✅ 잡았다' if caught else '❌ 못 잡았다 — 눈이 거짓말했다'}"
+              f" (⑰ {base_17} → {n})")
+    finally:
+        mf.write_text(orig, encoding="utf-8")
+
+    # ── 시험 ① 텍스처를 아틀라스 밖으로 옮긴다 (item/qi/slash_arc → qi/slash_arc) ──
+    src = PACK / "honcheon" / "textures" / "item" / "qi" / "slash_arc.png"
+    out = PACK / "honcheon" / "textures" / "qi" / "slash_arc.png"
+    print("\n[시험 ①] textures/item/qi/slash_arc.png → textures/qi/slash_arc.png (아틀라스 밖으로)")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    src.rename(out)
+    try:
+        n = atlas_axis()
+        caught = n > base_15
+        ok &= caught
+        print(f"  {'✅ 잡았다' if caught else '❌ 못 잡았다 — 눈이 거짓말했다'}"
+              f" (⑮ {base_15} → {n})")
+    finally:
+        out.rename(src)
+        try:
+            out.parent.rmdir()
+        except OSError:
+            pass
+
+    # ── 시험 ② 64x16 짜리 가로로 긴 텍스처를 아틀라스 안에 심는다 ──
+    wide = PACK / "honcheon" / "textures" / "item" / "qi" / "_selftest_wide.png"
+    print("\n[시험 ②] textures/item/qi/_selftest_wide.png 를 64x16 으로 굽는다 (비율 위반)")
+    write_png(wide, 64, 16, [bytes(64 * 4) for _ in range(16)])
+    try:
+        n = aspect_axis()
+        caught = n > base_16
+        ok &= caught
+        print(f"  {'✅ 잡았다' if caught else '❌ 못 잡았다 — 눈이 거짓말했다'}"
+              f" (⑯ {base_16} → {n})")
+    finally:
+        wide.unlink()
+
+    print(f"\n눈 시험: {'통과 — 눈이 실제로 잡는다' if ok else '실패 — 눈이 거짓말한다'}")
+    return 0 if ok else 1
+
+
+def _axis_15_16_17():
+    return atlas_axis() + aspect_axis() + center_axis()
+
+
 def lint(path, name):
     is_block = "/textures/block/" in str(path).replace("\\", "/")
     # 블록은 **눈에 닿는 모습**으로 읽는다 (프레임 첫 장 + 틴트 곱셈) — 위 「틴트 인지」 절
@@ -1439,7 +2329,9 @@ def lint(path, name):
     notes, bad = [], False
     # 흐르는 유체는 바닐라가 **32x32** 다 (물길·용암길). 치수는 바닐라 계약이라 우리가 못 고른다
     want = (32, 32) if name in ("water_flow", "lava_flow") else (16, 16)
-    if (w, h) != want and "block" in str(path) or (w, h) != (16, 16) and "/item/" in str(path):
+    # 16x16 은 **아이콘**의 계약이다 — 획(item/qi·ult)·가죽(item/mob)은 3D 모델의 면이라 열외다
+    # (is_icon 의 등록 주석 참조: 축을 피해 파일을 숨긴 것이 보라 큐브의 뿌리였다)
+    if (w, h) != want and "block" in str(path) or (w, h) != (16, 16) and is_icon(path):
         notes.append(f"크기 {w}x{h} ({want[0]}x{want[1]} 아님)")
         bad = True
     pxs = opaque(rows, w, h)
@@ -1489,7 +2381,7 @@ def lint(path, name):
 
     sp = str(path).replace("\\", "/")
     extra = {}
-    if "/textures/item/" in sp:                       # 축 6 — 외곽선 폐합
+    if is_icon(path):                                # 축 6 — 외곽선 폐합 (**아이콘**의 규율)
         brk, tot = outline_break(rows, w, h)
         extra["외곽"] = f"{brk}/{tot}"
         if brk:
@@ -1588,7 +2480,19 @@ def roof_mock(tex_path, out_path, scale=6):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lint-only", action="store_true")
+    ap.add_argument("--selftest", action="store_true",
+                    help="축 ⑮·⑯ 의 눈 시험 — 일부러 어겨서 눈이 실제로 잡는지 본다")
+    ap.add_argument("--atlas-only", action="store_true",
+                    help="축 ⑮·⑯ 만 — 낡은 팩에 새 눈을 대 볼 때 쓴다")
     args = ap.parse_args()
+
+    if args.selftest:
+        # 축 ⑮·⑯·⑰ + ⑱(획의 색) + **⑲·⑳·㉑·㉒ (RP 합의 축)**
+        return selftest() + stroke_color_selftest() + rp_axes_selftest()
+    if args.atlas_only:
+        v = _axis_15_16_17()
+        print(f"\n총평: 위반 {v}건 (축 ⑮·⑯·⑰)")
+        return 1 if v else 0
 
     groups = {
         "blocks": sorted((PACK / "minecraft" / "textures" / "block").glob("*.png")),
@@ -1638,6 +2542,20 @@ def main():
           f"검 계열끼리는 윤곽을 공유하는 것이 **옳다** (등록부: 화산·남궁·점창·종남·무당 모두 무기가 검이다).")
     _, cov_violations = palette_coverage()
     violations += cov_violations
+
+    # ★ 축 ⑮·⑯ — 「그림이 좋은가」를 묻는 열네 축 뒤에 「그림이 **보이는가**」를 묻는다.
+    #   이 둘이 없어서 검수가 위반 0건을 외치는 동안 사용자는 보라 큐브를 보고 있었다.
+    violations += atlas_axis()
+    violations += aspect_axis()
+    violations += center_axis()      # 축 ⑰ — 보이기 시작하니 **엉뚱한 자리**에 서 있었다
+    violations += stroke_color_axis()  # 축 ⑱ — 획의 **색** (⑫ 면제를 소리내어 청구하는 자리)
+
+    # ★ RP 합의 축 (2026-07-14 · RP_REVIEW_BOARD §합의) — 관계를 잰다:
+    #   획 대 배경(⑲) · 주사 대 등록부(⑳) · 문장 대 옆 단계(㉑) · 게이지 대 틴트(㉒)
+    violations += slash_contrast_axis()   # 축 ⑲ — RP-3 (참격이 화선지에서 사라지던 자리)
+    violations += red_axis()              # 축 ⑳ — RP-5 (예외를 숨기지 않고 예외 자체를 잰다)
+    violations += crest_axis()            # 축 ㉑ — RP-1 (초절정↔화경 XOR 2px 이던 자리)
+    violations += gauge_axis()            # 축 ㉒ — RP-2 (붓홈 고정·9단 단조·틴트 시인성)
 
     if not args.lint_only:
         roof = PACK / "minecraft" / "textures" / "block" / "deepslate_tiles.png"

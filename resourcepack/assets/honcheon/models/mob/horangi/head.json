@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:mob/horangi/head",
-    "particle": "honcheon:mob/horangi/head"
+    "0": "honcheon:item/mob/horangi/head",
+    "particle": "honcheon:item/mob/horangi/head"
   },
   "elements": [
     {

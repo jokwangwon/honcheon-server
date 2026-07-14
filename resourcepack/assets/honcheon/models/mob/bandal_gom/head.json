@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:mob/bandal_gom/head",
-    "particle": "honcheon:mob/bandal_gom/head"
+    "0": "honcheon:item/mob/bandal_gom/head",
+    "particle": "honcheon:item/mob/bandal_gom/head"
   },
   "elements": [
     {

@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:mob/metdwaeji/body",
-    "particle": "honcheon:mob/metdwaeji/body"
+    "0": "honcheon:item/mob/metdwaeji/body",
+    "particle": "honcheon:item/mob/metdwaeji/body"
   },
   "elements": [
     {

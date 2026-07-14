@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:ult/palm_bloom",
-    "particle": "honcheon:ult/palm_bloom"
+    "0": "honcheon:item/ult/palm_bloom",
+    "particle": "honcheon:item/ult/palm_bloom"
   },
   "elements": [
     {
