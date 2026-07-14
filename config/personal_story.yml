@@ -74,6 +74,9 @@ condition_vocab: [event, item, item_any, favor, realm_min, fortune, any]
 #   가리킨다 — 시작마을 간 목적 차이의 원천. 마을이 늘면 여기 한 줄씩 는다.
 default_route_by_region:
   cheongha_hyeon: hwasan_entry     # 청하현의 흐름은 화산으로 이어진다 (매화 목패·진운의 결)
+# ★ 세가의 자식 예외 (사용자 정교화): 시작 = 자기 가문의 지역/집 (house.region 이 시작을 정한다 —
+#   mvt_start 의 "가문이 사는 고을" 확정의 연장). 기본 루트도 마을이 아니라 **자기 가문** —
+#   무가의_자식·가출한_무가의_자식 사슬은 입문이 아니라 가문 안의 인정·자기 몫을 겨눈다.
 
 threshold_gate:
   any:
