@@ -294,8 +294,17 @@ final class SkillHud {
         //   그리고 몸짓을 바꾸면 그 자리에서 글자가 바뀐다 — 무엇을 하고 있는지 화면이 안다.
         String stanceSeg = stance == null ? null : ChatColor.GREEN + stance;
 
-        String grade = state.armed == null ? SkillEngine.BARE : state.armed;
-        String gradeSeg = gradeColor(grade) + gradeLabel(grade);
+        // ─── 격 두름·경공 — ★ 입도진에서는 그리지 않는다 ───
+        //   입도진의 몸에는 경지가 없다 — 없는 것의 표시가 과제 안내와 한 줄을 다퉜다 (사용자 실측 2026-07-15).
+        //   입도진의 겹침 실측은 격 두름과 나는발 둘이었다 — 사용자 2026-07-15.
+        String gradeSeg;
+        if (Antechamber.isAntechamber(player.getWorld())) {
+            gradeSeg = null;
+            rider = null;
+        } else {
+            String grade = state.armed == null ? SkillEngine.BARE : state.armed;
+            gradeSeg = gradeColor(grade) + gradeLabel(grade);
+        }
 
         String energySeg;
         if (pool > 0) {

@@ -278,6 +278,9 @@ final class TerrainAudit {
         int steep = 0;
         int sampled = 0;
         int worst = 0;
+        // ★ B-127 — 수리는 가장자리만 다듬는다. **좌표 없는 위반은 수리할 수 없는 위반이다.**
+        //   판정·문턱·표본 방식은 한 줄도 안 바뀐다 — 급단차가 난 자리만 줍는다. {단차, x, 이쪽 y, 저쪽 y, z}
+        List<int[]> steepSpots = new ArrayList<>();
         for (int i = 0; i < 360; i += 3) {
             double a = Math.toRadians(i);
             int prev = Integer.MIN_VALUE;
@@ -299,6 +302,7 @@ final class TerrainAudit {
                         if (jump >= 3) {   // 한 칸 걸음에 세 칸 이상 = 사람이 못 넘는다
                             steep++;
                             worst = Math.max(worst, jump);
+                            steepSpots.add(new int[]{jump, x, prev, y, z});
                         }
                     }
                     prevMade = here;
@@ -315,6 +319,17 @@ final class TerrainAudit {
             out.add(BAD + "  경계 급단차 " + String.format("%.1f%%", pct * 100) + " > "
                     + String.format("%.0f%%", limit * 100) + " — 조성물이 섬처럼 끊겼다");
             violations.add("경계절벽" + Math.round(pct * 100) + "%");
+            // ★ 어디가 끊겼는가 — 단차 큰 순으로 최대 8곳. 상한을 두면 그 사실을 말한다 (침묵 절단 금지)
+            steepSpots.sort((a, b) -> Integer.compare(b[0], a[0]));
+            int show = Math.min(8, steepSpots.size());
+            for (int k = 0; k < show; k++) {
+                int[] s = steepSpots.get(k);
+                out.add(INFO + "    · 턱 (" + s[1] + ", " + s[2] + "→" + s[3] + ", " + s[4]
+                        + ") 단차 " + s[0] + "칸");
+            }
+            if (steepSpots.size() > show) {
+                out.add(INFO + "    · 외 " + (steepSpots.size() - show) + "곳 — 단차 큰 순 8곳만 보였다");
+            }
         } else {
             out.add(OK + "  경계가 자연으로 이어진다 (" + String.format("%.1f%%", pct * 100) + ")");
         }
@@ -333,22 +348,32 @@ final class TerrainAudit {
         int arrived = 0;
         int tried = 0;
         List<String> failed = new ArrayList<>();
+        // ★ B-127 — 실패 방위의 **최근접 도달점** {방위, x, y, z}. 판정은 아래 walkBlocked == null 그대로다
+        List<int[]> blockedAt = new ArrayList<>();
         String[] names = {"북", "동", "남", "서"};
         int[][] dirs = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
         for (int i = 0; i < 4; i++) {
             int sx = cx + dirs[i][0] * (r + 24);
             int sz = cz + dirs[i][1] * (r + 24);
             tried++;
-            if (walkable(world, sx, sz, cx, cz, cy, r + 32)) {
+            int[] stop = walkBlocked(world, sx, sz, cx, cz, cy, r + 32);
+            if (stop == null) {
                 arrived++;
             } else {
                 failed.add(names[i]);
+                blockedAt.add(new int[]{i, stop[0], stop[1], stop[2]});
             }
         }
         out.add(INFO + "  네 방위에서 걸어 들어오기 — 성공 " + arrived + "/" + tried);
         int need = mountain ? 1 : tried;   // 산채는 한 길로 있는 것이 정상이다 (사방이 열리면 산채가 아니다)
         if (arrived < need) {
             out.add(BAD + "  어느 쪽에서도 걸어 들어올 수 없다 — 절벽·물·구멍이 길을 끊었다");
+            // ★ 어디서 끊겼는가 — 방위마다 최근접 도달점과 그 앞의 벽 (통과일 때는 좌표를 내지 않는다)
+            for (int[] b : blockedAt) {
+                String yTxt = b[2] == Integer.MIN_VALUE ? "?" : String.valueOf(b[2]);
+                out.add(INFO + "    · " + names[b[0]] + " — (" + b[1] + "," + yTxt + "," + b[3]
+                        + ") 까지 오고 끊김: " + stopReason(world, b[1], b[2], b[3], cx, cz, cy));
+            }
             violations.add("진입불가");
         } else if (arrived < tried) {
             out.add(OK + "  " + arrived + "방위에서 걸어 들어온다 (" + String.join("·", failed)
@@ -359,20 +384,40 @@ final class TerrainAudit {
     }
 
     private static boolean walkable(World world, int sx, int sz, int gx, int gz, int cy, int limit) {
+        return walkBlocked(world, sx, sz, gx, gz, cy, limit) == null;
+    }
+
+    /**
+     * ④ 의 걷는 손 + <b>어디서 끊겼는지 아는 눈</b> (B-127).
+     *
+     * <p>구판 {@link #walkable} 과 <b>같은 BFS 를 같은 순서로</b> 걷는다 — 판정은 이 답이
+     * {@code null} 인가로만 갈리므로 눈금은 한 치도 안 바뀐다. 다만 못 닿았을 때
+     * <b>중심에 가장 가까이 간 발자리</b> {x, y, z} 를 돌려준다 — 수리는 거기서부터 다듬는다.
+     *
+     * @return 닿았으면 {@code null}. 못 닿았으면 최근접 도달점 (출발부터 설 땅이 없으면 y = {@code MIN_VALUE})
+     */
+    private static int[] walkBlocked(World world, int sx, int sz, int gx, int gz, int cy, int limit) {
         int sy = surfaceY(world, sx, sz, cy);
         if (sy == Integer.MIN_VALUE) {
-            return false;
+            return new int[]{sx, Integer.MIN_VALUE, sz};
         }
         Set<Long> seen = new HashSet<>();
         Deque<int[]> queue = new ArrayDeque<>();
         queue.add(new int[]{sx, sy + 1, sz});
         seen.add(key(sx, sy + 1, sz));
         int visited = 0;
+        int[] best = {sx, sy + 1, sz};
+        int bestDist = Math.abs(sx - gx) + Math.abs(sz - gz);
         while (!queue.isEmpty() && visited < 120_000) {
             int[] cur = queue.poll();
             visited++;
             if (Math.abs(cur[0] - gx) <= 3 && Math.abs(cur[2] - gz) <= 3) {
-                return true;
+                return null;
+            }
+            int dist = Math.abs(cur[0] - gx) + Math.abs(cur[2] - gz);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = cur;
             }
             for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
                 int nx = cur[0] + d[0];
@@ -392,7 +437,43 @@ final class TerrainAudit {
                 }
             }
         }
-        return false;
+        return best;
+    }
+
+    /**
+     * ④ 진단 — 최근접 도달점에서 <b>중심 쪽 다음 한 걸음</b>이 왜 막히는지 짚는다.
+     * 판정에는 손대지 않는다 — 위반이 난 뒤에만 불려서 이유를 <b>말</b>로 바꾼다 (단차인가, 물인가).
+     */
+    private static String stopReason(World world, int bx, int by, int bz, int gx, int gz, int cy) {
+        if (by == Integer.MIN_VALUE) {
+            return "출발점에 설 땅이 없다 (허공 또는 깊은 물)";
+        }
+        // 남은 거리가 큰 축으로 한 걸음 — BFS 와 같은 4방위 걸음이다
+        int dx = gx - bx;
+        int dz = gz - bz;
+        int nx = bx;
+        int nz = bz;
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            nx += Integer.signum(dx);
+        } else {
+            nz += Integer.signum(dz);
+        }
+        int stand = surfaceY(world, nx, nz, cy);
+        if (stand == Integer.MIN_VALUE) {
+            return "허공 — (" + nx + ",?," + nz + ") 에 설 땅이 없다";
+        }
+        if (world.getBlockAt(nx, stand, nz).getType() == Material.WATER
+                || world.getBlockAt(nx, stand + 1, nz).getType() == Material.WATER) {
+            return "물 — (" + nx + "," + stand + "," + nz + ") 이 물속이다";
+        }
+        int diff = stand - by;
+        if (diff > 1) {
+            return "단차 +" + diff + "칸 — (" + nx + "," + stand + "," + nz + ") 을 못 오른다";
+        }
+        if (diff < -4) {
+            return "단차 " + diff + "칸 — (" + nx + "," + stand + "," + nz + ") 은 낭떠러지다";
+        }
+        return "통로 막힘 — (" + nx + "," + stand + "," + nz + ") 머리 위가 막혔다";
     }
 
     // ─── ④-나루 — ★★ ④ 의 자리에 서는 축. **배가 닿는 자리가 있는가** ───
