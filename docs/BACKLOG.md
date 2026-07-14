@@ -2028,7 +2028,7 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
 - **의존**: —
 - **닫는 조건**: 새로 생성한 월드에서 환경검수 ⑥(지하 공동)이 통과한다 — density_function 덮개에 `caves/cheese`(와 필요 시 underground 관련 잔여)가 포함된다. ★수정 후 스크래치 월드에서 레지스트리 로딩+실측 검증 필수 (noise 수술은 서버 사망 위험 — purity 규약: 필드 하나만)
 - **검증**: `python3 tools/world_purity_audit.py` · 새 월드 환경검수 ⑥
-- **닫힘**: —
+- **닫힘**: —  ※수리 완료·실측 대기 (2026-07-14, R4 을³): cheese 는 noise_settings 인라인이나 `noise/cave_cheese` amplitudes 전 0.0 잠재움으로 봉인 (noise_settings 무수술 — 양수=돌 부호 근거). no_caves 가 등록제로 편입(`config/world_purity.yml` no_caves 절 신설 · `cave_contributors()` 공용 눈 — 빌드와 감사가 같은 함수, 버전 갈이 감지 · 감사 ⑥ 신설 + 사보타주 5종 확인 · 시험기 태그 구멍 봉합으로 카버가 진짜 한 필드 편집으로 복귀). 로딩 시험 102파일 PASS. ★트랙의 의심: 정적 분석상 기존 팩으로도 cheese 는 죽었어야 한다 — 3.8% 는 물(검수가 물도 공동으로 셈 + 시드 원점 수역)일 수 있다. **닫힘은 재생성 실측(환경검수 ⑥)** — 시드 교체와 함께
 
 기립 실측 (2026-07-14, 시드 20260710 처녀지): no_caves 가 **로드된 상태에서도** 지하 공동 3.8%.
 팩 내용: carver 3종 + density_function 5종(spaghetti_2d·entrances·noodle·pillars·roughness) —

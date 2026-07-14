@@ -156,6 +156,65 @@ def vanilla_climate(reg: dict, *, allow_datagen: bool = True) -> list[dict] | No
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 자연 동굴 — 기여자를 바닐라 정본에서 **읽는다** (그리는 눈과 맞히는 눈이 같은 코드다)
+# ══════════════════════════════════════════════════════════════════════════
+#
+#   1.21.x 의 동굴은 세 갈래다 (등록부 no_caves 절의 ㉮㉯㉰ 와 같은 지도):
+#     ㉮ carver           — configured_carver. 바이옴 json 의 carvers 가 참조한다
+#     ㉯ density_function — noise_settings/overworld.json 의 final_density 가 id 로 참조한다
+#     ㉰ cheese           — ★ 밀도함수 id 가 **없다.** final_density 에 인라인으로 박혀 있고
+#                            noise `minecraft:cave_cheese` 만 id 로 참조된다 (B-113 실측)
+#
+#   그래서 이 함수는 목록을 **외우지 않고** 바닐라 정본을 걸어서 셋을 전부 캔다.
+#   버전이 바뀌어 새 기여자가 생기면 --build 와 audit ⑥ 이 **같은 자리에서** 짖는다.
+
+# final_density 안의 인라인 noise 중 동굴을 **못 여는** 것 — 면제는 이유와 함께.
+CAVE_NOISE_EXEMPT = {
+    "minecraft:cave_layer": "4·noise² 로 **더해진다** — 돌을 두껍게 할 뿐 뚫지 못한다. "
+                            "0 으로 잠재우면 오히려 봉인이 얇아진다",
+}
+
+# 바이옴이 참조하는 카버 중 이 세계에 **닿지 않는** 것 — 면제는 이유와 함께.
+CAVE_CARVER_EXEMPT = {
+    "minecraft:nether_cave": "네더 바이옴만 참조한다 — 이 세계에 다른 차원은 없다 "
+                             "(네더/엔드 구조물·포탈 재료가 이미 꺼졌다. refill_plan 「의도된 부재」)",
+}
+
+
+def cave_contributors(jar: zipfile.ZipFile) -> tuple[set[str], set[str], set[str]]:
+    """바닐라 정본의 동굴 기여자: (density_function 참조, 인라인 noise 참조, 바이옴의 carver 참조)."""
+    ns = vanilla_json(jar, "worldgen/noise_settings/overworld.json")
+    dfs: set[str] = set()
+    noises: set[str] = set()
+
+    def walk(node) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "minecraft:noise" and isinstance(node.get("noise"), str):
+                noises.add(node["noise"])
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+        elif isinstance(node, str) and node.startswith("minecraft:overworld/caves/"):
+            dfs.add(node)
+
+    walk(ns["noise_router"]["final_density"])
+
+    carvers: set[str] = set()
+    for name in vanilla_biome_names(jar):
+        c = vanilla_json(jar, f"worldgen/biome/{name}.json").get("carvers", [])
+        if isinstance(c, str):
+            carvers.add(c)
+        elif isinstance(c, list):
+            carvers.update(c)
+        elif isinstance(c, dict):                      # 옛 스키마 ({"air": [...]}) — 혹시 몰라 받는다
+            for v in c.values():
+                carvers.update([v] if isinstance(v, str) else v)
+    return dfs, noises, carvers
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # 바이옴 이름표 갈아끼우기 — parameters 는 건드리지 않는다
 # ══════════════════════════════════════════════════════════════════════════
 def remap_biome(box: dict, rules: list[dict]) -> str:
@@ -306,9 +365,82 @@ def build(reg: dict) -> int:
         print(f"{WARN} 허용했으나 어느 바이옴도 뿌리지 않는다: {d} "
               f"(바닐라가 애초에 안 뿌리거나 — **오타다**)")
 
-    print(f"\n{OK} 데이터팩: {pack.relative_to(ROOT)}")
+    # ── ⑥ 형제 데이터팩 — 자연 동굴 없음 ────────────────────────────────────
+    build_no_caves(reg, jar)
+
+    print(f"\n{OK} 데이터팩: {pack.relative_to(ROOT)} · {reg['no_caves']['datapack']}")
     print("   → 새 월드의 datapacks/ 에 넣어라. **기존 월드의 청크는 안 바뀐다.**")
     return 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# --build ⑥ : 등록부 no_caves 절 → 형제 데이터팩 honcheon_no_caves
+#
+#   처음엔 손으로 빚어진 팩이었다(f7f8d3f) — 등록부 없이. B-113 에서 등록제로 편입했다.
+#   문법은 갈래마다 다르다 (등록부의 ㉮㉯㉰ 그대로):
+#     carver  : 정본에서 probability **한 필드만** 0.0 (첫 판은 replaceable 까지 갈았다 — 규약 위반)
+#     density : 파일 전체를 constant **64.0(돌)** 로. 부호가 생명 — 양수=돌, 음수=공기.
+#               ⚠ min 계열(spaghetti·entrances·noodle)은 큰 양수 = 안 뚫는다.
+#                 pillars 는 **max 계열** — 큰 양수 = 전부 돌 (치즈까지 봉하는 이중 안전).
+#     noise   : cheese 는 밀도함수 id 가 없어(인라인) noise 의 amplitudes 를 전부 0.0 으로.
+#               옥타브 **개수는 보존**한다 (firstOctave 와 배열 길이가 정본과 같아야 최소 편집이다).
+# ══════════════════════════════════════════════════════════════════════════
+STONE = 64.0        # 밀도 봉인 상수 — 공기(음수)가 아니라 돌(양수)
+
+
+def build_no_caves(reg: dict, jar: zipfile.ZipFile) -> None:
+    nc = reg["no_caves"]
+    pack = ROOT / nc["datapack"]
+    data = pack / "data" / "minecraft" / "worldgen"
+
+    # ── 덮개 목록이 정본의 기여자를 **전부** 덮는가 — 빚기 전에 잰다 ─────────
+    dfs, noises, carvers = cave_contributors(jar)
+    sealed = {e["id"] for e in nc["density"]["seal"]}
+    silenced = {e["id"] for e in nc["noise"]["silence"]}
+    disabled = {e["id"] for e in nc["carvers"]["disable"]}
+    holes = [f"density_function {d}" for d in sorted(dfs - sealed)]
+    holes += [f"noise {n}" for n in sorted(noises - silenced - set(CAVE_NOISE_EXEMPT))]
+    holes += [f"carver {c}" for c in sorted(carvers - disabled - set(CAVE_CARVER_EXEMPT))]
+    if holes:
+        raise SystemExit(f"{BAD} 바닐라 동굴 기여자가 등록부(no_caves)에 없다 — 버전이 바뀌었는가?\n"
+                         + "\n".join(f"   {BAD} {h}" for h in holes))
+
+    write_json(pack / "pack.mcmeta", {
+        "pack": {
+            "description": "혼천 — 자연 동굴 없음 (동굴은 우리가 판다)",
+            "pack_format": reg["pack_format"],
+            "supported_formats": [reg["pack_format"], 99],
+            "min_format": reg["pack_format"],
+            "max_format": 99,
+        }
+    })
+
+    # ㉮ 카버 : 정본에서 probability 한 필드만
+    for entry in nc["carvers"]["disable"]:
+        name = entry["id"].split(":", 1)[1]
+        doc = vanilla_json(jar, f"worldgen/configured_carver/{name}.json")
+        doc["config"]["probability"] = 0.0
+        write_json(data / "configured_carver" / f"{name}.json", doc)
+    print(f"{OK} configured_carver {len(nc['carvers']['disable'])} 종 — probability 0.0 (한 필드)")
+
+    # ㉯ 밀도함수 : 정본에 실재하는지 확인하고 constant 64(돌)로 덮는다
+    for entry in nc["density"]["seal"]:
+        name = entry["id"].split(":", 1)[1]
+        vanilla_json(jar, f"worldgen/density_function/{name}.json")   # 실재 확인 — 없으면 죽는다
+        write_json(data / "density_function" / f"{name}.json",
+                   {"type": "minecraft:constant", "argument": STONE})
+    print(f"{OK} density_function {len(nc['density']['seal'])} 종 — constant {STONE} (돌)")
+
+    # ㉰ 노이즈 : 정본에서 amplitudes 만 전부 0.0 (개수 보존 — cheese 인라인의 유일한 손잡이)
+    for entry in nc["noise"]["silence"]:
+        name = entry["id"].split(":", 1)[1]
+        doc = vanilla_json(jar, f"worldgen/noise/{name}.json")
+        doc["amplitudes"] = [0.0] * len(doc["amplitudes"])
+        write_json(data / "noise" / f"{name}.json", doc)
+    print(f"{OK} noise {len(nc['noise']['silence'])} 종 — amplitudes 전부 0.0 "
+          f"(cheese 는 인라인이라 이 길뿐이다)")
+    print(f"{OK} 동굴 기여자 대조 — density {len(dfs)} · noise {len(noises)} · carver {len(carvers)} "
+          f"전부 덮임 (면제 {len(CAVE_NOISE_EXEMPT)}: cave_layer — 더하기만 한다)")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -841,6 +973,123 @@ def audit_saturation(gr: dict, npcs: dict, src: str, fail, warn) -> None:
 # ══════════════════════════════════════════════════════════════════════════
 # 기본 : 검산
 # ══════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════
+# 눈 ⑥ — 자연 동굴. **기여자가 전부 덮였는가 · 부호가 옳은가.**
+#
+#   B-113 의 병: 팩이 손으로 빚어져 등록부가 없었고, cheese 는 밀도함수 id 가 없어
+#   (noise_settings 인라인) 파일 목록만 보는 눈에는 덮개의 구멍이 안 보였다.
+#   이 눈은 목록을 외우지 않는다 — --build 와 **같은 함수**(cave_contributors)로
+#   바닐라 정본을 걸어 기여자를 캐고, 하나하나 덮개와 대조한다.
+#
+#   ★ 부호 검사가 핵심이다: 밀도 봉인 상수가 **음수면 세계 전체가 공기**가 된다.
+#     (양수 = 돌, 음수 = 공기 — 부호 하나가 세계와 허공을 가른다)
+# ══════════════════════════════════════════════════════════════════════════
+def audit_caves(reg: dict, jar, fail, warn) -> None:
+    nc = reg.get("no_caves")
+    if not nc:
+        fail("★ 등록부에 no_caves 절이 없다 — 형제 데이터팩이 등록제 밖에 있다")
+        return
+    pack = ROOT / nc["datapack"]
+    data = pack / "data" / "minecraft" / "worldgen"
+    if not (pack / "pack.mcmeta").is_file():
+        fail(f"no_caves 데이터팩이 없다: {nc['datapack']} — `--build` 를 먼저 돌려라")
+        return
+
+    sealed = {e["id"] for e in nc["density"]["seal"]}
+    silenced = {e["id"] for e in nc["noise"]["silence"]}
+    disabled = {e["id"] for e in nc["carvers"]["disable"]}
+
+    # ── 등록부 ↔ 파일 (양방향 — 무허가 파일도 잡는다) ────────────────────────
+    want = {("configured_carver", i.split(":", 1)[1]) for i in disabled} \
+         | {("density_function", i.split(":", 1)[1]) for i in sealed} \
+         | {("noise", i.split(":", 1)[1]) for i in silenced}
+    have = set()
+    if data.is_dir():
+        for p in data.rglob("*.json"):
+            rel = p.relative_to(data)
+            have.add((rel.parts[0], "/".join(rel.parts[1:])[:-len(".json")]))
+    for kind, name in sorted(want - have):
+        fail(f"등록부에 있으나 override 파일이 없다: no_caves/{kind}/{name} (`--build`)")
+    for kind, name in sorted(have - want):
+        fail(f"override 파일이 있으나 등록부에 없다(무허가): no_caves/{kind}/{name}")
+
+    # ── 부호와 내용 ──────────────────────────────────────────────────────────
+    for entry in nc["density"]["seal"]:
+        f = data / "density_function" / (entry["id"].split(":", 1)[1] + ".json")
+        if not f.is_file():
+            continue                                   # 위에서 이미 짖었다
+        doc = json.loads(f.read_text())
+        if doc.get("type") != "minecraft:constant":
+            fail(f"★ no_caves 밀도 덮개가 상수가 아니다: {f.name} · {doc.get('type')}")
+        elif not (isinstance(doc.get("argument"), (int, float)) and doc["argument"] > 0):
+            fail(f"★★ no_caves 밀도 봉인의 **부호가 틀렸다**: {f.name} · {doc.get('argument')!r} — "
+                 f"양수(돌)여야 한다. 음수면 **세계가 공기가 된다**")
+    for entry in nc["noise"]["silence"]:
+        f = data / "noise" / (entry["id"].split(":", 1)[1] + ".json")
+        if not f.is_file():
+            continue
+        doc = json.loads(f.read_text())
+        if any(a != 0.0 for a in doc.get("amplitudes", [1])):
+            fail(f"★ no_caves noise 가 잠들지 않았다: {f.name} · amplitudes {doc.get('amplitudes')} — "
+                 f"전부 0.0 이어야 cheese 가 죽는다")
+    for entry in nc["carvers"]["disable"]:
+        f = data / "configured_carver" / (entry["id"].split(":", 1)[1] + ".json")
+        if not f.is_file():
+            continue
+        doc = json.loads(f.read_text())
+        if doc.get("config", {}).get("probability") != 0.0:
+            fail(f"★ no_caves 카버가 켜져 있다: {f.name} · probability "
+                 f"{doc.get('config', {}).get('probability')!r}")
+
+    if jar is None:
+        warn.append("바닐라 jar 이 없어 no_caves 의 **기여자 대조·최소 편집**을 검사하지 못했다 "
+                    "(새 버전이 새 동굴을 들여와도 모른다)")
+        print(f"{OK} 자연 동굴 — 등록부 ↔ 파일 대조만 (정본 대조는 jar 필요)")
+        return
+
+    # ── 기여자 대조 — 그리는 눈(--build)과 같은 함수로 캔다 ──────────────────
+    dfs, noises, carvers = cave_contributors(jar)
+    for d in sorted(dfs - sealed):
+        fail(f"★ 바닐라 final_density 가 참조하는 동굴 밀도함수가 안 덮였다 — **뚫린다**: {d}")
+    for n in sorted(noises - silenced - set(CAVE_NOISE_EXEMPT)):
+        fail(f"★ final_density 인라인의 noise 가 등록부 밖이다 — 새 동굴 기여자인가: {n} "
+             f"(덮거나, 못 여는 이유와 함께 CAVE_NOISE_EXEMPT 에 올려라)")
+    for c in sorted(carvers - disabled - set(CAVE_CARVER_EXEMPT)):
+        fail(f"★ 바이옴이 참조하는 카버가 안 꺼졌다 — **판다**: {c} "
+             f"(끄거나, 닿지 않는 이유와 함께 CAVE_CARVER_EXEMPT 에 올려라)")
+
+    # ── 최소 편집 — 정본과 다른 필드는 약속한 그 하나뿐인가 ──────────────────
+    for entry in nc["carvers"]["disable"]:
+        name = entry["id"].split(":", 1)[1]
+        f = data / "configured_carver" / f"{name}.json"
+        if not f.is_file():
+            continue
+        van = vanilla_json(jar, f"worldgen/configured_carver/{name}.json")
+        ours = json.loads(f.read_text())
+        van.get("config", {}).pop("probability", None)
+        ours.get("config", {}).pop("probability", None)
+        if van != ours:
+            fail(f"★ 최소 편집 위반 — configured_carver/{name} 이 probability 밖에서도 정본과 다르다 "
+                 f"(첫 판이 replaceable 까지 갈았던 그 병이다 — `--build` 로 다시 빚어라)")
+    for entry in nc["noise"]["silence"]:
+        name = entry["id"].split(":", 1)[1]
+        f = data / "noise" / f"{name}.json"
+        if not f.is_file():
+            continue
+        van = vanilla_json(jar, f"worldgen/noise/{name}.json")
+        ours = json.loads(f.read_text())
+        if len(ours.get("amplitudes", [])) != len(van["amplitudes"]) \
+                or ours.get("firstOctave") != van["firstOctave"]:
+            fail(f"★ 최소 편집 위반 — noise/{name} 의 옥타브 구조가 정본과 다르다 "
+                 f"(amplitudes 값만 0.0 으로, 개수·firstOctave 는 보존)")
+
+    print(f"{OK} 자연 동굴 — 기여자 전부 덮임: density {len(dfs)}(봉인) · "
+          f"noise {len(noises)}(잠재움 {len(silenced)} + 면제 {len(CAVE_NOISE_EXEMPT)}) · "
+          f"carver {len(carvers)}(꺼짐)")
+    print(f"     ★ cheese 는 밀도함수 id 가 없다(인라인) — noise cave_cheese 를 잠재웠고, "
+          f"pillars 의 max() 봉인이 이중으로 막는다")
+
+
 def audit(reg: dict) -> int:
     pack, data = pack_dir(reg), pack_dir(reg) / "data" / "minecraft" / "worldgen"
     bad: list[str] = []
@@ -961,6 +1210,9 @@ def audit(reg: dict) -> int:
     # ── ⑤ 사냥터 — **우리가 부른 것은 나오는가** ──────────────────────────
     audit_hunt(fail, warn)
 
+    # ── ⑥ 자연 동굴 — 형제 데이터팩이 기여자를 전부 덮는가 ─────────────────
+    audit_caves(reg, jar, fail, warn)
+
     # ── 결과 ──────────────────────────────────────────────────────────────
     print()
     for w in warn:
@@ -1027,8 +1279,11 @@ def load_test(reg: dict) -> int:
     subprocess.run([str(javac), "-nowarn", "-cp", cp, "-d", str(classes), str(src)], check=True)
 
     print(f"   … 바닐라 코덱으로 데이터팩을 파싱한다 (서버는 안 띄운다)\n")
+    packs = [str(pack_dir(reg))]
+    if "no_caves" in reg:                                   # 형제 데이터팩도 같은 코덱에 먹인다
+        packs.append(str(ROOT / reg["no_caves"]["datapack"]))
     proc = subprocess.run(
-        [str(JDK), "-cp", f"{classes}:{cp}", "PurityLoadTest", str(pack_dir(reg))],
+        [str(JDK), "-cp", f"{classes}:{cp}", "PurityLoadTest", *packs],
         capture_output=True, text=True,
     )
     for line in (proc.stdout + proc.stderr).splitlines():

@@ -453,3 +453,88 @@ world_purity:
     - killed: 빙설 (biome)
       fill: "평지·침엽수림·고산 침엽수림(grove)·험봉(jagged_peaks). **설산은 지형 계층이 짓는다** — 눈은 블록이다"
       status: 데이터팩 적용 시 즉시 · 설산 조성은 TerrainForge 몫
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # ⑥ 자연 동굴 — 형제 데이터팩 honcheon_no_caves (B-113 로 등록제에 편입)
+  #
+  #   사용자 판정: "자연동굴 제거 및 필요하면 그때 동굴의 형태로 생성하기 (통제가 힘들기 때문)".
+  #   **세계는 동굴 없이 태어나고, 굴은 우리가 판다** (TerrainForge.digCave · cave_archetypes).
+  #
+  #   이 팩은 처음에 손으로 빚어졌다(f7f8d3f·8c9fce9) — 등록부 없이. B-113 조사에서
+  #   등록제로 편입한다: 이 절이 정본이고, `--build` 가 여기서 데이터팩을 빚는다.
+  #
+  #   ── 1.21.x 의 동굴은 세 갈래다. 갈래마다 **끄는 문법이 다르다**: ──────────
+  #
+  #   ㉮ 카버(carver) — 1.17 이전의 굴착기. configured_carver 의 **probability 한 필드만** 0.0.
+  #      (구조물의 frequency 0 과 같은 수법 — nextFloat() < 0.0 은 항상 거짓.)
+  #      ⚠ 첫 시도는 replaceable 까지 갈아서 두 필드를 건드렸다 — 규약 위반이었다.
+  #        --build 가 이제 정본에서 probability 만 고친다.
+  #
+  #   ㉯ 밀도함수(density_function) — 1.18+ 의 국수·입구 동굴. 파일 전체를
+  #      **constant 64.0(돌)** 로 덮는다. 부호가 생명이다: 최종 밀도 **양수 = 돌, 음수 = 공기.**
+  #      spaghetti·entrances·noodle 은 min() 으로 합쳐진다 → 큰 양수 = "여긴 뚫지 않는다".
+  #      pillars 는 max() 으로 합쳐진다 → 큰 양수 = "전부 돌" (지하 전체를 봉하는 부수 효과 —
+  #      치즈 공동까지 이 max 가 이미 막는다. 아래 ㉰ 는 그 위의 이중 봉인이다).
+  #
+  #   ㉰ 치즈(cheese) — **밀도함수 id 가 없다.** 바닐라 1.21.11 은 cheese 를
+  #      noise_settings/overworld.json 의 final_density 에 **인라인**으로 박아 두고
+  #      noise `minecraft:cave_cheese` 만 id 로 참조한다 (B-113 조사 실측).
+  #      → noise_settings 수술 없이 **noise 의 amplitudes 를 전부 0.0** 으로 잠재운다.
+  #        치즈 항은 clamp(0.27 + cave_cheese, -1, 1) + (0 이상 두 항) 이라
+  #        noise ≡ 0 이면 밀도가 0.27 밑으로 **내려갈 수 없다** — 양수 = 돌.
+  #      ⚠ cave_layer 는 잠재우지 않는다 — 그 항은 4·noise² 로 **더해진다**(돌을 더 두껍게).
+  #        0 으로 만들면 오히려 봉인이 얇아진다.
+  #
+  #   검산: --build 와 audit ⑥ 이 **같은 눈**으로 바닐라 noise_settings 를 걸어
+  #   동굴 기여자(caves/* 참조·cave_cheese)와 바이옴의 카버 참조가 전부 이 절에
+  #   덮여 있는지 잰다 — 버전이 바뀌어 새 기여자가 생기면 그 눈이 짖는다.
+  #
+  #   남는 것(데이터팩의 손이 안 닿는 곳 — 결함이 아니라 귀결):
+  #     · y < -54 아쿠아퍼 용암 바다 — NoiseBasedChunkGenerator 하드코딩. 공동이 없어 희박
+  #     · 아쿠아퍼 물/공기 — 밀도 ≤ 0 인 곳에만 작동한다. 밀도가 전부 양수면 **원리적으로 무력**
+  # ═════════════════════════════════════════════════════════════════════════
+  no_caves:
+    datapack: worldgen/honcheon_no_caves
+    carvers:                             # ㉮ probability → 0.0 (정본에서 한 필드)
+      disable:
+        - id: minecraft:cave
+          why: "둥근 굴 카버 (1.17 이전 계보). 바닐라 확률 0.15/청크"
+        - id: minecraft:cave_extra_underground
+          why: "심층 추가 굴 카버. 바닐라 확률 0.07/청크"
+        - id: minecraft:canyon
+          why: "협곡 카버. 마을 밑을 지나는 협곡이 조성의 최악 사고다. 바닐라 확률 0.01/청크"
+    density:                             # ㉯ 파일 전체 → constant 64.0 (돌)
+      seal:
+        - id: minecraft:overworld/caves/entrances
+          why: "지표에서 지하로 뚫리는 입구. min() 계열 — 64 = 안 뚫는다"
+        - id: minecraft:overworld/caves/noodle
+          why: "국수 동굴 (가늘고 긴 관). final_density 의 마지막 min() — 64 = 안 뚫는다"
+        - id: minecraft:overworld/caves/spaghetti_2d
+          why: "수평 스파게티 동굴. min() 계열 — 64 = 안 뚫는다"
+        - id: minecraft:overworld/caves/spaghetti_roughness_function
+          why: "스파게티 벽면 요철. spaghetti_2d 에 더해진다 — 64 = 요철 없음"
+        - id: minecraft:overworld/caves/pillars
+          why: "치즈 공동 안의 돌기둥. **max() 계열** — 64 = 전부 돌 (지하 통봉인의 축)"
+    noise:                               # ㉰ amplitudes → 전부 0.0 (옥타브 수는 보존 — 최소 편집)
+      silence:
+        - id: minecraft:cave_cheese
+          why: "치즈 공동의 노이즈. 밀도함수 id 가 없어(인라인) 여기서 잠재운다 — 0 이면 0.27 밑으로 못 내려간다"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 허기(虛飢) — 무협은 배고픔의 이야기가 아니다
+#
+#   ★ 사용자 보고 (2026-07-13): "배고픔이 너무 빨리 닳는다."
+#
+#   맞다. 그리고 **우리가 그렇게 만들었다.** 바닐라의 허기는 **달리기와 점프**로 닳는데,
+#   이 세계는 **경공이 달리기·점프를 쓰고** 전투가 몸을 굴린다. 무협을 할수록 배가 고파진다.
+#   바닐라의 규칙과 우리의 문법이 정면으로 부딪친 자리다. 그러므로 우리가 다스린다.
+#
+#   **없애지는 않았다.** 굶주림은 강호의 일부다 — 다만 **수련하다 굶어 죽는 것**은
+#   이 세계의 이야기가 아니다. 그래서 배는 고파지되, 허기가 사람을 죽이지는 않는다.
+# ═══════════════════════════════════════════════════════════════════════════
+hunger:
+  enabled: true
+  rate: 0.25     # 바닐라의 몇 배로 닳는가. 0.25 = 네 배 느리게. (0 = 아예 안 닳는다)
+                 #   ★ 확률로 굴리지 않는다 — 빚으로 쌓았다가 한 칸이 차면 그때 깎는다 (결정론)
+  floor: 6       # 이 아래로는 안 내려간다. 6 = 달릴 수는 있고(>6), 자연 회복은 멈춘다(<18)
+                 #   → **허기가 사람을 죽이지 않는다.** 다만 배고픔은 느낀다

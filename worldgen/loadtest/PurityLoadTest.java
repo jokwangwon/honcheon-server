@@ -45,18 +45,35 @@ public class PurityLoadTest {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
 
-        HolderLookup.Provider lookup = VanillaRegistries.createLookup();
+        HolderLookup.Provider lookup = tagTolerant(VanillaRegistries.createLookup());
         RegistryOps<JsonElement> ops = lookup.createSerializationContext(JsonOps.INSTANCE);
 
-        Path pack = Paths.get(args[0], "data/minecraft/worldgen");
+        // 인자마다 데이터팩 하나 — honcheon_purity 와 형제 honcheon_no_caves 를 **같은 코덱**에 먹인다.
+        for (String root : args) {
+            Path pack = Paths.get(root, "data/minecraft/worldgen");
+            System.out.println("── " + Paths.get(root).getFileName());
 
-        each(pack.resolve("structure_set"), ops, StructureSet.DIRECT_CODEC, "structure_set");
-        each(pack.resolve("placed_feature"), ops, PlacedFeature.DIRECT_CODEC, "placed_feature");
-        each(pack.resolve("world_preset"), ops, WorldPreset.DIRECT_CODEC, "world_preset");
-        // 바이옴 — spawners 를 허용 목록으로 거른 65종. **빈 목록이 코덱을 통과하는가**가 여기서 갈린다.
-        //   (strongholds 의 count: 0 이 [1:4095] 에 걸려 서버를 죽일 뻔한 그 자리다 —
-        //    「빈 값은 당연히 되겠지」는 추측이다. 추측하지 말고 먹여 본다.)
-        each(pack.resolve("biome"), ops, Biome.DIRECT_CODEC, "biome");
+            each(pack.resolve("structure_set"), ops, StructureSet.DIRECT_CODEC, "structure_set");
+            each(pack.resolve("placed_feature"), ops, PlacedFeature.DIRECT_CODEC, "placed_feature");
+            each(pack.resolve("world_preset"), ops, WorldPreset.DIRECT_CODEC, "world_preset");
+            // 바이옴 — spawners 를 허용 목록으로 거른 65종. **빈 목록이 코덱을 통과하는가**가 여기서 갈린다.
+            //   (strongholds 의 count: 0 이 [1:4095] 에 걸려 서버를 죽일 뻔한 그 자리다 —
+            //    「빈 값은 당연히 되겠지」는 추측이다. 추측하지 말고 먹여 본다.)
+            each(pack.resolve("biome"), ops, Biome.DIRECT_CODEC, "biome");
+
+            // no_caves 의 세 갈래 (B-113) — 카버·밀도함수·노이즈.
+            //   density_function 은 중첩 폴더(overworld/caves/…)라 each() 가 재귀로 걷는다.
+            //   noise 의 amplitudes 전부 0.0 — 「0 은 당연히 되겠지」도 추측이다. 먹여 본다.
+            each(pack.resolve("configured_carver"), ops,
+                    net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver.DIRECT_CODEC,
+                    "configured_carver");
+            each(pack.resolve("density_function"), ops,
+                    net.minecraft.world.level.levelgen.DensityFunction.DIRECT_CODEC,
+                    "density_function");
+            each(pack.resolve("noise"), ops,
+                    net.minecraft.world.level.levelgen.synth.NormalNoise.NoiseParameters.DIRECT_CODEC,
+                    "noise");
+        }
 
         System.out.println();
         System.out.println(fail == 0
@@ -65,11 +82,49 @@ public class PurityLoadTest {
         System.exit(fail == 0 ? 0 : 1);
     }
 
+    /**
+     * 태그를 <b>전방 참조</b>로 받아 주는 조회 — 실서버의 레지스트리 로딩과 같은 관용이다.
+     *
+     * <p>실서버는 worldgen 레지스트리를 파싱할 때 태그를 아직 안 묶었다 — 모르는 태그는
+     * 빈 자리로 만들어 두고 나중에 채운다(전방 참조). 그런데 {@link VanillaRegistries#createLookup()}
+     * 은 태그가 하나도 안 묶인 조회라, 바닐라 <b>자기 자신의</b> 카버 파일
+     * ({@code replaceable: "#minecraft:overworld_carver_replaceables"})조차 퇴짜를 놓는다.
+     * 그 어긋남 때문에 첫 판의 no_caves 카버가 {@code replaceable} 까지 갈아 끼웠다 —
+     * <b>시험기의 구멍이 정본 편집을 왜곡한 것이다.</b> 여기서 구멍을 막는다:
+     * 없는 태그는 실서버처럼 빈 이름표로 받아 준다.
+     * (이 시험이 태그의 <b>실재</b>까지 보증하지는 않는다 — 우리가 쓰는 태그는 바닐라 자신의
+     * 것뿐이라, 실재는 바닐라가 보증한다.)
+     */
+    static HolderLookup.Provider tagTolerant(HolderLookup.Provider base) {
+        return new HolderLookup.Provider() {
+            @Override
+            public Stream<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> listRegistryKeys() {
+                return base.listRegistryKeys();
+            }
+
+            @Override
+            public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(
+                    net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<? extends T>> key) {
+                return base.lookup(key).map(l -> new HolderLookup.RegistryLookup.Delegate<T>() {
+                    @Override
+                    public HolderLookup.RegistryLookup<T> parent() {
+                        return l;
+                    }
+
+                    @Override
+                    public Optional<net.minecraft.core.HolderSet.Named<T>> get(net.minecraft.tags.TagKey<T> tag) {
+                        return l.get(tag).or(() -> Optional.of(net.minecraft.core.HolderSet.emptyNamed(l, tag)));
+                    }
+                });
+            }
+        };
+    }
+
     static <T> void each(Path dir, RegistryOps<JsonElement> ops,
                          com.mojang.serialization.Codec<T> codec, String label) throws Exception {
-        if (!Files.isDirectory(dir)) { System.out.println("(없음) " + label); return; }
+        if (!Files.isDirectory(dir)) { System.out.println("  (없음) " + label); return; }
         List<Path> files;
-        try (Stream<Path> s = Files.list(dir)) {
+        try (Stream<Path> s = Files.walk(dir)) {          // 재귀 — density_function 은 중첩 폴더다
             files = s.filter(p -> p.toString().endsWith(".json")).sorted().toList();
         }
         for (Path f : files) {
@@ -78,7 +133,7 @@ public class PurityLoadTest {
             DataResult<T> res = codec.parse(ops, json);
             if (res.error().isPresent()) {
                 fail++;
-                System.out.println("  X  " + label + "/" + f.getFileName() + "  →  " + res.error().get().message());
+                System.out.println("  X  " + label + "/" + dir.relativize(f) + "  →  " + res.error().get().message());
             } else {
                 ok++;
             }

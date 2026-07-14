@@ -1,1 +1,4 @@
-{"type":"minecraft:constant","argument":64.0}
+{
+  "type": "minecraft:constant",
+  "argument": 64.0
+}
