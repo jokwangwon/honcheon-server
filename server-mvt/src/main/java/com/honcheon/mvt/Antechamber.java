@@ -31,6 +31,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Transformation;
@@ -89,10 +90,27 @@ import java.util.UUID;
 public final class Antechamber implements Listener {
 
     private static final NamespacedKey KEY_PANEL = new NamespacedKey("honcheon", "ipdo_panel");
-    /** 허수아비의 체력 — Paper 의 특성값 상한은 <b>1024</b> 다. 넘으면 조성이 통째로 죽는다. */
+    /**
+     * 허수아비가 바라는 체력. <b>이 숫자를 그대로 {@code setHealth} 에 넣지 않는다.</b>
+     *
+     * <p>Paper 의 {@code MAX_HEALTH} 특성에는 <b>제 범위(0~1024)</b>가 있다. 기준값에 2048 을 적으면
+     * 기준값은 2048 로 들어가지만 <b>실효값은 1024 로 깎이고</b>, 그 뒤 {@code setHealth(2048)} 이
+     * "0..1024 사이여야 한다"며 터진다. 2026-07-13 오전에 그 예외 하나가 <b>대기실 조성 전체</b>를 죽였다.
+     *
+     * <p>그래서 체력은 <b>특성에게 물어서</b> 넣는다 ({@code attr.getValue()} — 이미 깎인 값이다).
+     * 상한이 몇이든 이 코드는 안 터진다. <b>같은 병이 다시 날 수가 없다.</b>
+     */
+    /**
+     * 발판의 몸 — <b>한 곳에만 적는다.</b> {@link #plan} 이 까는 것과 {@link #countPlates} 가 세는 것이
+     * 같은 물건이어야 한다 (두 곳에 적으면 언젠가 갈라지고, 그러면 "깔았다"고 세면서 안 깐다).
+     */
+    private static final Material PLATE = Material.POLISHED_BLACKSTONE_PRESSURE_PLATE;
+
     private static final double DUMMY_HEALTH = 1024.0;
 
     private static final NamespacedKey KEY_DUMMY = new NamespacedKey("honcheon", "ipdo_dummy");
+    /** 허수아비의 등급표(이름·내구) — 명패가 이것을 말한다 */
+    private static final NamespacedKey KEY_DUMMY_LABEL = new NamespacedKey("honcheon", "ipdo_dummy_label");
 
     private static String worldName = "honcheon_ipdo";
 
@@ -102,6 +120,12 @@ public final class Antechamber implements Listener {
     private final String displayName;
     private final int cx;
     private final int cz;
+    private final Difficulty difficulty;
+    private final boolean damagePlayers;
+    /** 조성 완결성 — 판을 이 간격으로 훑어 세계에게 묻는다 (결정론: 난수 표본이 아니다) */
+    private final int verifySample;
+    /** 표본이 이보다 덜 맞으면 **반쯤 선 것이다** — 다시 짓는다 */
+    private final int verifyMinPct;
 
     private final Road road;
     private final int[] spawn;
@@ -117,9 +141,9 @@ public final class Antechamber implements Listener {
     private final int[] boat;
     private final boolean mooring;
 
-    private final List<int[]> dummySpots = new ArrayList<>();
-    private final int dummyDurability;
-    private final String dummyName;
+    private final List<Dummy> dummies = new ArrayList<>();
+    private final String dummyIdle;
+    private final String dummyHit;
 
     private final int leash;
     private final String mistLine;
@@ -171,6 +195,8 @@ public final class Antechamber implements Listener {
     private final Map<String, Long> plateCooldowns = new HashMap<>();
     /** 세운 글판 — 관문 id(+변형) → 엔티티 */
     private final Map<String, UUID> panelEntities = new LinkedHashMap<>();
+    /** 허수아비 장부 — 엔티티 → [누적, 합수, 최근] (Dojang 의 명패와 같은 눈금) */
+    private final Map<UUID, double[]> tally = new HashMap<>();
     /** 이 사람에게 지금 열려 있는 관문 번호 */
     private final Map<UUID, Integer> shownThrough = new HashMap<>();
 
@@ -191,6 +217,28 @@ public final class Antechamber implements Listener {
         int[] center = pair(a.get("center"), 0, 0);
         this.cx = center[0];
         this.cz = center[1];
+        // ★ 난이도는 등록부가 정한다 — 그리고 PEACEFUL 은 **거절한다.**
+        //   평화는 몬스터(=허수아비의 몸)를 매 틱 조용히 지운다. 그것이 오늘의 병이었다.
+        Difficulty want;
+        try {
+            want = Difficulty.valueOf(str(a.get("difficulty"), "EASY").toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            want = Difficulty.EASY;
+            plugin.getLogger().warning("[입도진] 등록부의 난이도를 모른다: " + a.get("difficulty")
+                    + " — EASY 로 선다");
+        }
+        if (want == Difficulty.PEACEFUL) {
+            want = Difficulty.EASY;
+            plugin.getLogger().severe("[입도진] 난이도 PEACEFUL 은 허수아비(좀비)를 조용히 지운다 "
+                    + "— EASY 로 올린다. 사람은 damage_players 가 지킨다");
+        }
+        this.difficulty = want;
+        this.damagePlayers = a.get("damage_players") instanceof Boolean dp && dp;
+
+        // ── 조성이 **끝났는가** — 반쯤 선 것을 "서 있다"고 하지 않는다 (config: build)
+        Map<String, Object> bld = RulesConfig.section(a, "build");
+        this.verifySample = Math.max(1, num(bld.get("verify_sample"), 61));
+        this.verifyMinPct = Math.min(100, Math.max(0, num(bld.get("verify_min_pct"), 97)));
 
         // ── 길 (하나뿐이다)
         Map<String, Object> r = RulesConfig.section(a, "road");
@@ -256,11 +304,23 @@ public final class Antechamber implements Listener {
         this.mooring = !(d.get("mooring") instanceof Boolean mo) || mo;
 
         Map<String, Object> du = RulesConfig.section(a, "dummies");
-        if (du.get("spots") instanceof List<?> ds) {
-            ds.forEach(s -> dummySpots.add(pair(s, 0, 0)));
+        this.dummyIdle = str(du.get("idle"), "§7{label} §8· 내구 {durability}");
+        this.dummyHit = str(du.get("hit"), "§7{label} §f최근 {last} §7· 누적 {total} · {hits}합 "
+                + "· 평균 {avg}§e → 내구 {durability} 상대 TTK {ttk}합");
+        if (du.get("list") instanceof List<?> ds) {
+            for (Object o : ds) {
+                if (o instanceof Map<?, ?> m) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dm = (Map<String, Object>) m;
+                    int[] pos = pair(dm.get("pos"), 0, 0);
+                    Dummy dummy = new Dummy(str(dm.get("id"), ""), str(dm.get("label"), "허수아비"),
+                            pos[0], pos[1], Math.max(1, num(dm.get("durability"), 20)));
+                    if (!dummy.id().isEmpty()) {
+                        dummies.add(dummy);
+                    }
+                }
+            }
         }
-        this.dummyDurability = num(du.get("durability"), 20);
-        this.dummyName = str(du.get("name"), "§7허수아비");
 
         Map<String, Object> mist = RulesConfig.section(a, "mist");
         this.leash = Math.max(24, num(mist.get("leash_blocks"), 96));
@@ -331,7 +391,7 @@ public final class Antechamber implements Listener {
                         new LinkedHashSet<>(lines(l.get("gestures"))),
                         str(l.get("command"), ""),
                         l.get("needs_args") instanceof Boolean na && na,
-                        l.get("requires_armable_grade") instanceof Boolean ra && ra,
+                        str(l.get("requires"), ""),
                         str(l.get("unavailable"), ""));
                 if (!lesson.id().isEmpty()) {
                     lessons.put(lesson.id(), lesson);
@@ -380,7 +440,7 @@ public final class Antechamber implements Listener {
     World world() {
         World w = Bukkit.getWorld(worldName);
         if (w != null) {
-            return w;
+            return configure(w);   // ★ 이미 열려 있어도 매번 다시 세운다 (아래 주석을 보라)
         }
         try {
             w = new WorldCreator(worldName)
@@ -398,6 +458,23 @@ public final class Antechamber implements Listener {
         if (w == null) {
             return null;
         }
+        return configure(w);
+    }
+
+    /**
+     * 나루의 규칙 — <b>월드를 열 때만이 아니라 볼 때마다 다시 세운다.</b>
+     *
+     * <p>왜 매번인가: 이 값들은 {@code level.dat} 에 <b>저장된다</b>. 한 번 잘못 적은 값은
+     * 서버를 껐다 켜도 그대로 살아 있고, {@code world()} 가 "이미 열려 있으니 그대로 쓴다"고
+     * 돌려주는 순간 <b>고친 코드가 세계에 닿지 못한다</b>. (오늘 PEACEFUL 이 정확히 그랬다 —
+     * 코드를 고쳐도 이미 만들어진 나루는 영영 평화였을 것이다.)
+     *
+     * <p>★ <b>난이도는 PEACEFUL 이 아니다.</b> 평화는 몬스터를 매 틱 지운다 — 허수아비의 몸이
+     * 좀비이므로 평화는 곧 <b>허수아비의 부재</b>다. 그리고 그것을 아무도 말해 주지 않는다
+     * (예외도 로그도 없다. 그저 없다). "나루에서는 죽지 않는다"는 약속은 난이도가 아니라
+     * {@link #onPlayerDamage} 가 지킨다 — <b>약속을 지키느라 허수아비를 죽이지 않는다.</b>
+     */
+    private World configure(World w) {
         // 나루에서는 죽지 않는다. 강호에 들지 않은 자가 대기실에서 죽으면 그것은 초대가 아니다
         w.setGameRule(GameRule.DO_MOB_SPAWNING, false);
         w.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
@@ -409,7 +486,11 @@ public final class Antechamber implements Listener {
         w.setGameRule(GameRule.DROWNING_DAMAGE, false);   // ★ 물에 빠져도 안 죽는다 (막지 않는다. 젖을 뿐이다)
         w.setGameRule(GameRule.FIRE_DAMAGE, false);       // 화톳불 옆을 지나도 안 탄다
         w.setGameRule(GameRule.NATURAL_REGENERATION, true);
-        w.setDifficulty(Difficulty.PEACEFUL);
+        if (w.getDifficulty() != difficulty) {
+            plugin.getLogger().info("[입도진] 난이도 " + w.getDifficulty() + " → " + difficulty
+                    + " (평화는 허수아비를 지운다)");
+            w.setDifficulty(difficulty);
+        }
         w.setTime(15000);   // ★ 초저녁 — 등롱이 길을 그린다. 대낮이면 빛이 아무것도 안 가리킨다
         w.setStorm(false);
         return w;
@@ -435,10 +516,89 @@ public final class Antechamber implements Listener {
                 cz + spawn[1] + 0.5, -90f, 0f);
     }
 
-    private boolean built(World w) {
+    /**
+     * <b>★★ 나루가 정말로 서 있는가 — 반쯤 선 것을 "서 있다"고 하면 안 된다.</b>
+     *
+     * <p><b>옛 코드는 블록 하나를 봤다:</b>
+     * <pre>return w.getBlockAt(bell...).getType() == Material.BELL;</pre>
+     *
+     * <p>그리고 오늘 크래시가 나루를 <b>반쯤 지어 놓고</b> 죽였다. 다음 기동에서 조성기는
+     * <i>"이미 서 있다"</i> 며 건너뛰었다 — <b>종 하나가 놓였다는 것은 종 하나가 놓였다는 뜻이지
+     * 나루가 섰다는 뜻이 아니다.</b> 수만 칸짜리 판을 한 칸으로 판단했다. <b>한 칸은 표본이 아니다.</b>
+     *
+     * <p>이제 <b>세계에게 묻는다</b>: {@link #plan} 을 {@code verify_sample} 간격으로 훑어,
+     * 세계의 블록이 판과 <b>실제로 같은지</b> 센다. 점수가 {@code verify_min_pct} 에 못 미치면
+     * 그것은 반쯤 선 나루이고, {@link #build} 가 처음부터 다시 짓는다.
+     *
+     * <p>★ <b>결정론</b> — 난수 표본이 아니다. plan 은 등록부에서 매번 같은 순서로 나오고, 표본은 그
+     * 인덱스를 고정 간격으로 집는다. 같은 세계는 언제나 같은 점수를 받는다.
+     *
+     * <p>★ 100% 를 요구하지 않는 이유: 사람이 널판 하나 부순 것으로 나루를 다시 짓지 않는다.
+     * 크래시는 표본을 <b>통째로</b> 무너뜨린다 — 두 사건은 점수가 다르다.
+     *
+     * @return 완결성 백분율 (0..100). 판이 비면 0
+     */
+    private int completeness(World w) {
+        List<Place> plan = plan(groundY(w));
+        if (plan.isEmpty()) {
+            return 0;
+        }
+        int seen = 0;
+        int match = 0;
+        for (int i = 0; i < plan.size(); i += verifySample) {
+            Place p = plan.get(i);
+            seen++;
+            if (w.getBlockAt(p.x(), p.y(), p.z()).getType() == p.m()) {
+                match++;
+            }
+        }
+        return seen == 0 ? 0 : (int) Math.round(100.0 * match / seen);
+    }
+
+    /**
+     * <b>★★ 세계에 실제로 깔린 발판 — 등록부의 개수가 아니라 <i>깔린</i> 개수.</b>
+     *
+     * <p><b>2026-07-13 · 사용자: "발판 밟아도 메시지가 안 뜬다."</b> 재 보니 나루에 압력판이
+     * <b>하나도 없었다.</b> 그런데 조성 로그는 <b>"발판 6"</b> 이라 찍고 있었다 — 그것은
+     * {@code plates.size()}, 즉 <b>등록부의 개수</b>였다. 글판·허수아비는 세계에게 물어 세는데
+     * (<i>N/M</i> 꼴) <b>발판만 안 물었다.</b> 오늘 세 번째로 잡는 같은 병이다:
+     * <b>침묵이(그리고 등록부가) 성공으로 읽힌다.</b>
+     */
+    private int countPlates(World w) {
+        int y = groundY(w) + road.deckY() + 1;
+        int n = 0;
+        for (Plate p : plates) {
+            if (w.getBlockAt(cx + p.x(), y, cz + p.z()).getType() == PLATE) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 종이 서 있는가 — <b>종은 문이다.</b> 없으면 나루가 아니라 갇힌 섬이다 */
+    private boolean bellStands(World w) {
         return w.getBlockAt(cx + bell[0], groundY(w) + road.deckY() + 1, cz + bell[1])
                 .getType() == Material.BELL;
     }
+
+    /**
+     * <b>★★ 표본이 못 보는 것 — 「이정표」는 전수 검사한다.</b>
+     *
+     * <p><b>오늘의 병</b>: {@link #completeness} 는 조성 판을 {@code verify_sample} 간격으로 훑는다.
+     * 그런데 그 판은 <b>늪(물·자갈·허공)이 99% 를 차지한다</b> — 발판 6칸은 4만 칸 중 6칸,
+     * 즉 <b>0.015%</b> 다. 표본이 그것을 집을 확률은 거의 0 이다.
+     *
+     * <p>그래서 <b>발판이 하나도 없는데 완결도는 97% 였다.</b> 문턱을 넘었으니 조성기는
+     * <i>"이미 서 있다"</i> 며 건너뛰었고, 발판은 <b>영영 안 깔렸다.</b>
+     * <b>표본은 부피를 재지 의미를 재지 않는다.</b>
+     *
+     * <p>이정표(발판·종)는 <b>드물고, 없으면 튜토리얼이 통째로 죽는다.</b> 그러므로 세지 않고
+     * <b>전수 검사</b>한다 — 하나라도 없으면 나루는 <b>안 선 것이다.</b>
+     */
+    private boolean landmarksStand(World w) {
+        return countPlates(w) == plates.size() && bellStands(w);
+    }
+
 
     // ══════════════════════════════════════════════════════════════════════
     //  조성 — 틱 슬라이싱
@@ -448,13 +608,28 @@ public final class Antechamber implements Listener {
         if (building) {
             return;
         }
-        if (built(w) && !force) {
-            ensurePanels(w);
-            ensureDummies(w);
+        // ★★ 반쯤 선 나루를 "서 있다"고 하지 않는다 — 세계에게 물어 점수를 받는다.
+        //   두 눈으로 본다: **부피**(표본)와 **이정표**(전수). 하나만 봐서 오늘 발판을 놓쳤다.
+        int score = force ? -1 : completeness(w);
+        boolean marks = !force && landmarksStand(w);
+        if (score >= verifyMinPct && marks) {
+            stage(w, "글판", this::ensurePanels);
+            stage(w, "허수아비", this::ensureDummies);
+            // ★ **침묵을 없앤다.** 이 갈래(이미 서 있다)는 여태 아무 말도 안 했다 —
+            //   그래서 로그에 입도진이 한 줄도 없었고, 그 침묵이 "잘 지어졌다"로 읽혔다.
+            census(w, "나루는 이미 서 있다 (완결 " + score + "% ≥ " + verifyMinPct + "%)");
             if (onDone != null) {
                 onDone.run();
             }
             return;
+        }
+        if (score >= 0) {
+            // ★ 이 줄이 없어서 반쯤 선 나루가 조용히 살아남았다. 이제 **소리를 내고 다시 짓는다**
+            plugin.getLogger().warning("[입도진] 나루가 **반쯤 서 있다** — 완결 " + score
+                    + "% (문턱 " + verifyMinPct + "% · 표본 1/" + verifySample + ")"
+                    + " · 발판 " + countPlates(w) + "/" + plates.size()
+                    + " · 종 " + (bellStands(w) ? "섬" : "★ 없음")
+                    + ". 처음부터 다시 짓는다");
         }
         building = true;
         final List<Place> plan = plan(groundY(w));
@@ -476,15 +651,120 @@ public final class Antechamber implements Listener {
             return true;
         }, () -> {
             building = false;
-            clearPanels(w);       // ★ 다시 지으면 글이 두 겹으로 겹치면 안 된다
-            clearDummies(w);
-            spawnPanels(w);
-            ensureDummies(w);
-            plugin.getLogger().info("[입도진] 나루가 섰다 — 블록 " + plan.size()
-                    + " · 관문 " + stations.size() + " · 글판 " + panelEntities.size()
-                    + " · 발판 " + plates.size() + " · 허수아비 " + dummySpots.size());
+            // ★★ 하나가 죽어도 나머지는 선다.
+            //
+            //   과거의 병: 허수아비 하나가 던진 예외가 **onDone 전체**를 끊었다. onDone 은
+            //   TickBudget.slice 의 try 블록 **안에서** 불린다 — 그래서 예외는 "[틱예산] 입도진 중단"
+            //   한 줄로 삼켜졌고, 그 뒤의 글판도 발판도 완성 로그도 **전부 안 나왔다.**
+            //   이제 각 단계는 제 울타리 안에서 죽는다. 죽으면 소리를 낸다. 나머지는 선다.
+            stage(w, "글판 걷기", this::clearPanels);
+            stage(w, "허수아비 걷기", this::clearDummies);
+            stage(w, "글판 세우기", this::spawnPanels);
+            stage(w, "허수아비 세우기", this::ensureDummies);
+            census(w, "나루가 섰다 — 블록 " + plan.size());
             if (onDone != null) {
                 onDone.run();
+            }
+        });
+    }
+
+    /** 조성의 한 단위 — <b>제 울타리 안에서 죽는다.</b> 하나가 터져도 나머지는 선다 */
+    private void stage(World w, String what, java.util.function.Consumer<World> unit) {
+        try {
+            unit.accept(w);
+        } catch (Throwable t) {
+            plugin.getLogger().severe("[입도진] " + what + " 실패 — " + t
+                    + " (나머지는 계속 세운다)");
+            t.printStackTrace();
+        }
+    }
+
+    /**
+     * <b>세어서 말한다 — 침묵이 성공으로 읽히면 안 된다.</b>
+     *
+     * <p>여태 조성 로그는 {@code dummySpots.size()} 를 찍었다. 그것은 <b>등록부의 개수</b>이지
+     * <b>선 것의 개수</b>가 아니다. 허수아비가 태어나자마자 지워져도 로그는 "허수아비 3"이라 말했다.
+     * <b>로그가 거짓말을 한 것이다.</b> 이제 세계에게 묻는다 — 지금 실제로 몇이 서 있는가.
+     */
+    private void census(World w, String head) {
+        int liveDummies = countDummies(w);
+        int livePanels = countPanels(w);
+        // ★ 블록도 센다 — 글판·허수아비만 세던 시절, **반쯤 선 잔교**는 아무도 안 세고 있었다
+        int score = completeness(w);
+        // ★★ 발판도 **세계에게 묻는다.** 여태 이 자리는 plates.size() — **등록부의 개수**를 찍었다.
+        //   세계에 0개가 깔려 있어도 로그는 "발판 6" 이라 말했고, 사용자는 밟을 것이 없었다.
+        int livePlates = countPlates(w);
+        String line = "[입도진] " + head
+                + " · 완결 " + score + "%"
+                + " · 관문 " + stations.size()
+                + " · 글판 " + livePanels + "/" + expectedPanels()
+                + " · 발판 " + livePlates + "/" + plates.size()
+                + " · 종 " + (bellStands(w) ? "섬" : "★ 없음")
+                + " · 허수아비 " + liveDummies + "/" + dummies.size()
+                + " · 난이도 " + w.getDifficulty();
+        if (liveDummies < dummies.size() || livePanels < expectedPanels()
+                || livePlates < plates.size() || !bellStands(w)
+                || score < verifyMinPct) {
+            plugin.getLogger().severe(line + "  ← ★ 등록부보다 적다. 무엇인가 조용히 죽었다");
+        } else {
+            plugin.getLogger().info(line);
+        }
+        // ★ 그리고 **한 번 더 본다.** 오늘의 병은 "세울 때는 있었는데 다음 틱에 사라진" 것이었다
+        //   (평화 난이도가 몬스터를 지웠다). 세운 직후의 개수만 세면 그 병을 영영 못 본다.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            int after = countDummies(w);
+            if (after < dummies.size()) {
+                plugin.getLogger().severe("[입도진] ★ 허수아비가 세운 뒤에 사라졌다 — "
+                        + after + "/" + dummies.size() + " (난이도 " + w.getDifficulty()
+                        + " · PEACEFUL 이면 좀비는 매 틱 지워진다)");
+            }
+        }, 40L);
+    }
+
+    private int countDummies(World w) {
+        int n = 0;
+        for (Entity e : w.getEntities()) {
+            if (e.isValid() && e.getPersistentDataContainer().has(KEY_DUMMY)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private int countPanels(World w) {
+        int n = 0;
+        for (Entity e : w.getEntities()) {
+            if (e instanceof TextDisplay && e.isValid()
+                    && e.getPersistentDataContainer().has(KEY_PANEL)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * <b>/혼천 입도 재조성</b> — 나루를 다시 세운다 (재접속 없이).
+     * 땅을 다시 깔고, 글판을 다시 걸고, <b>허수아비를 다시 세운다.</b>
+     */
+    public void rebuild(Player player) {
+        World w = world();
+        if (w == null) {
+            player.sendMessage(ChatColor.RED + displayName + "을(를) 열 수 없다.");
+            return;
+        }
+        player.sendMessage(ChatColor.GRAY + "나루를 다시 세운다 — 잠시 걸린다.");
+        build(w, true, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
+            // ★ 사람이 **즉시 확인**할 수 있게 — 세계에게 물어서 말한다 (등록부의 개수가 아니다)
+            player.sendMessage(ChatColor.GOLD + "나루가 다시 섰다 "
+                    + ChatColor.GRAY + "— 허수아비 " + countDummies(w) + "/" + dummies.size()
+                    + " · 글판 " + countPanels(w) + "/" + expectedPanels()
+                    + " · 발판 " + countPlates(w) + "/" + plates.size()
+                    + " · 종 " + (bellStands(w) ? "섬" : ChatColor.RED + "없음"));
+            if (isAntechamber(player.getWorld())) {
+                refreshPanels(player);
             }
         });
     }
@@ -668,8 +948,7 @@ public final class Antechamber implements Listener {
 
         // ⑦ 발판 — 밟으면 명령이 대신 쳐진다
         for (Plate p : plates) {
-            out.add(new Place(cx + p.x(), deck + 1, cz + p.z(),
-                    Material.POLISHED_BLACKSTONE_PRESSURE_PLATE, null));
+            out.add(new Place(cx + p.x(), deck + 1, cz + p.z(), PLATE, null));
         }
 
         // ⑧ 종 — ★ 길의 끝. 문이다
@@ -777,8 +1056,8 @@ public final class Antechamber implements Listener {
         for (Station s : stations) {
             n++;
             Lesson l = lessons.get(s.lesson());
-            if (l != null && l.requiresArmable()) {
-                n++;   // 격은 판이 둘 — 두를 수 있는 몸 / 없는 몸 (사람마다 하나만 보인다)
+            if (l != null && l.gated()) {
+                n++;   // 판이 둘 — 할 수 있는 몸 / 없는 몸(예고). 사람마다 하나만 보인다
             }
         }
         return n;
@@ -801,7 +1080,7 @@ public final class Antechamber implements Listener {
             Lesson l = lessons.get(s.lesson());
             boolean isGate = s.x() >= bell[0] - s.half();   // 문의 관문 — 주사 바탕
             spawnPanel(w, gy, s.id(), s, panelText(s, false), isGate);
-            if (l != null && l.requiresArmable()) {
+            if (l != null && l.gated()) {
                 spawnPanel(w, gy, s.id() + "_없음", s, panelText(s, true), false);
             }
         }
@@ -840,8 +1119,8 @@ public final class Antechamber implements Listener {
         if (l == null) {
             return true;   // 맞이 — 아무것도 요구하지 않는다 (첫 화면이 시험이면 그것은 초대가 아니다)
         }
-        if (l.requiresArmable() && !armable(player)) {
-            return true;   // ★ 못 하는 것 때문에 길이 막히지 않는다. 그냥 지나간다
+        if (lacks(player, l)) {
+            return true;   // ★ 못 하는 것 때문에 길이 막히지 않는다. 그냥 지나간다 (판은 예고로 바뀐다)
         }
         return complete(player, l);
     }
@@ -867,16 +1146,17 @@ public final class Antechamber implements Listener {
      * ({@code lessons.gating: false}). 글판은 안내이지 자물쇠가 아니다.
      */
     void refreshPanels(Player player) {
-        boolean armable = armable(player);
         int current = oneAtATime ? currentStation(player) : stations.size() - 1;
         for (int i = 0; i < stations.size(); i++) {
             Station s = stations.get(i);
             Lesson l = lessons.get(s.lesson());
             boolean reached = i <= current;
-            boolean armGated = l != null && l.requiresArmable();
-            show(player, s.id(), reached && (!armGated || armable));
-            if (armGated) {
-                show(player, s.id() + "_없음", reached && !armable);
+            boolean gated = l != null && l.gated();
+            boolean lacking = lacks(player, l);
+            // 판이 둘이면 **하나만** 보인다: 할 수 있는 몸에게는 how, 없는 몸에게는 unavailable(예고)
+            show(player, s.id(), reached && (!gated || !lacking));
+            if (gated) {
+                show(player, s.id() + "_없음", reached && lacking);
             }
         }
         shownThrough.put(player.getUniqueId(), current);
@@ -894,13 +1174,46 @@ public final class Antechamber implements Listener {
         }
     }
 
-    private boolean armable(Player player) {
+    /**
+     * <b>★★ 이 몸이 이 조작을 할 수 있는가</b> — <b>못 하는 것을 시키지 않는다.</b>
+     *
+     * <p>능(能)의 이름은 <b>등록부</b>가 적는다 ({@code lessons.list[].requires}). 코드는 그 이름의
+     * <b>술어</b>만 갖는다 — 그리고 그 술어는 <b>지어내지 않고 제 주인에게 묻는다</b>:
+     *
+     * <table>
+     *   <tr><td>{@code 두를_격}</td><td>{@link SkillEngine#armableGrades}(경지) 가 비지 않았는가</td></tr>
+     *   <tr><td>{@code 허공_딛기}</td><td>{@link Gyeonggong#ceiling}(경지).airJumps() &gt; 0 인가
+     *       ({@code gyeonggong.yml realm_ceiling} — <b>개화 전은 0 이다</b>)</td></tr>
+     * </table>
+     *
+     * <p><b>모르는 이름은 "못 한다"로 답한다.</b> 없는 조작을 가르치는 것보다 안 가르치는 것이 낫고,
+     * 감사({@code antechamber_audit.py} ③)가 그 이름을 잡아 준다.
+     */
+    private boolean capable(Player player, Lesson l) {
+        if (!l.gated()) {
+            return true;
+        }
         try {
             String realm = plugin.skills().state(player).realm;
-            return realm != null && !plugin.skillEngine().armableGrades(realm).isEmpty();
+            if (realm == null) {
+                return false;
+            }
+            return switch (l.requires()) {
+                case "두를_격" -> !plugin.skillEngine().armableGrades(realm).isEmpty();
+                case "허공_딛기" -> {
+                    Gyeonggong gg = Gyeonggong.get();
+                    yield gg != null && gg.open(realm) && gg.ceiling(realm).airJumps() > 0;
+                }
+                default -> false;   // 등록부가 지어낸 이름 — 코드는 흉내내지 않는다 (감사가 잡는다)
+            };
         } catch (Throwable t) {
             return false;   // 모르면 "못 한다" 쪽으로 — 없는 조작을 가르치는 것보다 안 가르치는 게 낫다
         }
+    }
+
+    /** 이 사람에게 이 관문의 판이 <b>예고(unavailable)</b>로 떠야 하는가 */
+    private boolean lacks(Player player, Lesson l) {
+        return l != null && l.gated() && !capable(player, l);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -910,48 +1223,94 @@ public final class Antechamber implements Listener {
     private void clearDummies(World w) {
         for (Entity e : w.getEntities()) {
             if (e.getPersistentDataContainer().has(KEY_DUMMY)) {
+                tally.remove(e.getUniqueId());
                 e.remove();
             }
         }
     }
 
+    /**
+     * 허수아비를 세운다 — <b>하나가 죽어도 나머지는 선다.</b>
+     *
+     * <p>과거 병: 허수아비 하나가 던진 예외가 대기실 조성 <b>전체</b>를 죽였다 (허수아비도 글판도
+     * 발판도 안 지어졌다). 이제 <b>한 몸이 제 울타리 안에서 죽는다</b> — 그리고 <b>죽으면 소리를 낸다.</b>
+     */
     private void ensureDummies(World w) {
-        int alive = 0;
-        for (Entity e : w.getEntities()) {
-            if (e.getPersistentDataContainer().has(KEY_DUMMY) && e.isValid()) {
-                alive++;
-            }
-        }
-        if (alive >= dummySpots.size()) {
+        // ★★ {@code >=} 가 아니라 {@code !=} 다. 옛 코드는 "등록부보다 많으면 됐다"고 넘어갔다 —
+        //   그래서 재조성이 허수아비를 **쌓았다**: 등록부 6인데 세계에 24 가 서 있었다
+        //   (조성이 네 번 돌 때마다 6씩 늘고, 늘어난 뒤로는 `24 >= 6` 이라 **영영 안 치웠다**).
+        //   많은 것도 틀린 것이다. 겹쳐 선 허수아비는 히트박스가 겹쳐 타격 계측을 망친다.
+        if (countDummies(w) == dummies.size()) {
             return;
         }
         clearDummies(w);
         int y = groundY(w) + road.deckY() + 1;
-        for (int[] spot : dummySpots) {
-            Location at = new Location(w, cx + spot[0] + 0.5, y, cz + spot[1] + 0.5);
-            w.spawn(at, Zombie.class, e -> {
-                e.setAI(false);
-                e.setSilent(true);
-                e.setCollidable(true);
-                e.setRemoveWhenFarAway(false);
-                e.setShouldBurnInDay(false);
-                e.setAdult();
-                e.setPersistent(true);
-                e.getPersistentDataContainer().set(KEY_DUMMY, PersistentDataType.INTEGER,
-                        dummyDurability);
-                // ★ 2048 은 **Paper 의 상한(1024)을 넘는다.** 여기서 예외가 나면서 조성이 통째로 죽었고,
-                //   허수아비도 그 뒤의 글판도 발판도 **아예 안 지어졌다.**
-                //   사용자가 겪은 것: "허수아비가 없음 · 앞으로 가도 뭐가 없어서 잘 모르겠음."
-                //   허수아비는 체력으로 버티는 것이 아니다 — **내구는 PDC 가 들고, 피해는 리스너가 먹는다.**
-                if (e.getAttribute(Attribute.MAX_HEALTH) != null) {
-                    e.getAttribute(Attribute.MAX_HEALTH).setBaseValue(DUMMY_HEALTH);
-                }
-                e.setHealth(DUMMY_HEALTH);
-                e.setInvulnerable(false);   // 맞는 것은 보여야 한다 (다만 죽지 않는다 — 리스너가 되돌린다)
-                e.setCustomNameVisible(true);
-                e.setCustomName(dummyName);
-            });
+        int stood = 0;
+        for (Dummy d : dummies) {
+            try {
+                spawnDummy(w, d, y);
+                stood++;
+            } catch (Throwable t) {
+                // ★ 조용히 죽지 않는다. 이 몸 하나만 못 섰다고 말하고, 다음 몸을 세운다
+                plugin.getLogger().severe("[입도진] 허수아비 '" + d.id() + "' 를 못 세웠다 — " + t);
+                t.printStackTrace();
+            }
         }
+        if (stood < dummies.size()) {
+            plugin.getLogger().severe("[입도진] 허수아비 " + stood + "/" + dummies.size()
+                    + " 만 섰다 — 나머지는 위 예외를 보라");
+        }
+    }
+
+    private void spawnDummy(World w, Dummy d, int y) {
+        Location at = new Location(w, cx + d.x() + 0.5, y, cz + d.z() + 0.5, 90f, 0f);
+        w.spawn(at, Zombie.class, e -> {
+            e.setAI(false);              // 반격하지 않는다 (때리지도, 걷지도 않는다)
+            e.setSilent(true);
+            e.setCollidable(true);
+            e.setRemoveWhenFarAway(false);
+            e.setShouldBurnInDay(false);
+            e.setAdult();
+            e.setPersistent(true);
+            e.getPersistentDataContainer().set(KEY_DUMMY, PersistentDataType.INTEGER,
+                    d.durability());
+            e.getPersistentDataContainer().set(KEY_DUMMY_LABEL, PersistentDataType.STRING,
+                    d.label());
+            // ★★ 체력은 **특성에게 물어서** 넣는다 — 숫자를 손으로 넣지 않는다.
+            //   MAX_HEALTH 특성에는 제 범위(…1024)가 있어서, 기준값에 2048 을 적으면
+            //   실효값은 1024 로 깎이는데 setHealth(2048) 은 "0..1024 여야 한다"며 터진다.
+            //   그 예외 하나가 오늘 아침 대기실 조성 전체를 죽였다 (로그 09:00·09:43·09:47).
+            //   getValue() 는 **이미 깎인 값**이다 — 상한이 몇이든 이 줄은 안 터진다.
+            var attr = e.getAttribute(Attribute.MAX_HEALTH);
+            if (attr != null) {
+                attr.setBaseValue(DUMMY_HEALTH);
+                e.setHealth(attr.getValue());
+            }
+            e.setInvulnerable(false);   // 맞는 것은 보여야 한다 (다만 죽지 않는다 — 리스너가 되돌린다)
+            e.setCustomNameVisible(true);
+            e.setCustomName(idleName(d.label(), d.durability()));
+        });
+    }
+
+    private String idleName(String label, int durability) {
+        return dummyIdle.replace("{label}", label)
+                .replace("{durability}", String.valueOf(durability));
+    }
+
+    /**
+     * 맞은 것을 말한다 — <b>명패가 장부다</b> (최근 · 누적 · 합수 · 평균 · TTK).
+     * 눈금은 {@link Dojang} 의 명패와 같다. 서식은 등록부({@code dummies.hit})가 정한다.
+     */
+    private String hitName(String label, int durability, double[] t) {
+        double avg = t[1] == 0 ? 0 : t[0] / t[1];
+        int ttk = avg <= 0 ? 0 : (int) Math.ceil(durability / avg);
+        return dummyHit.replace("{label}", label)
+                .replace("{durability}", String.valueOf(durability))
+                .replace("{last}", String.format("%.1f", t[2]))
+                .replace("{total}", String.format("%.0f", t[0]))
+                .replace("{hits}", String.valueOf((int) t[1]))
+                .replace("{avg}", String.format("%.2f", avg))
+                .replace("{ttk}", String.valueOf(ttk));
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1003,6 +1362,11 @@ public final class Antechamber implements Listener {
             return;
         }
         if (plugin.ledger(player.getUniqueId()).linked()) {
+            // ★ 서장을 읽는 중이면 종도 말린다 — 문은 서장이 닫는다 (강제 이동 = 서사 절단)
+            if (SeojangBook.get() != null && SeojangBook.get().tokenOf(player.getUniqueId()) != null) {
+                player.sendMessage(ChatColor.GRAY + "서장이 아직 끝나지 않았다 — 책의 마지막 장에서 [강호로 나선다]를 누르라.");
+                return;
+            }
             depart(player, List.of());
             return;
         }
@@ -1018,7 +1382,7 @@ public final class Antechamber implements Listener {
         UUID id = player.getUniqueId();
         restore(player);
         player.setGameMode(GameMode.SURVIVAL);
-        player.teleport(destination());
+        player.teleport(destination(player));
         player.setFallDistance(0f);
         boarding.remove(id);
         shownThrough.remove(id);
@@ -1038,22 +1402,123 @@ public final class Antechamber implements Listener {
     }
 
     /**
-     * 내리는 자리 — 등록부의 순서대로. <b>하나도 못 찾으면 세계의 스폰.</b>
-     * 여기서 null 을 돌려주는 경로는 없다 — 그것이 "절대 갇히지 않는다"의 마지막 보루다.
+     * <b>내리는 자리 — 등록부의 순서대로, 그러나 <u>재고 나서</u> 쓴다.</b>
+     *
+     * <p>★ <b>여기가 오늘의 병이 살던 자리다.</b> 옛 주석은 이렇게 적혀 있었다:
+     * <i>"여기서 null 을 돌려주는 경로는 없다 — 그것이 '절대 갇히지 않는다'의 마지막 보루다."</i>
+     * 그 보루가 사람을 <b>우물에 가뒀다</b>. {@code 장터} 앵커는 마을 <b>원점 표식</b>이고, 원점에는
+     * 광장 <b>우물</b>이 서 있다 ({@code CheonghaBuilder.plazaAndWell}). 아무도 <b>"거기 설 수 있는가"</b>를
+     * 재지 않았으므로, 이 함수는 <b>성공적으로</b> 사람을 우물 바닥에 내려놓았다.
+     *
+     * <p><b>고친 규칙</b> (사용자: <i>"모르는 장소를 작은 장소로 간주하는 것도 하나의 창작이다"</i>):
+     * <ol>
+     *   <li><b>1차</b> — 등록부 순서대로. 단 <b>{@link Standing#measure(Location) 설 수 있는 앵커}만</b> 쓴다.
+     *       못 서는 앵커는 <b>건너뛴다</b> (다음 후보로).</li>
+     *   <li><b>2차</b> — 다 못 서면, 그 앵커들 <b>근처에서 설 자리를 실제로 찾는다</b>. 그리고
+     *       <b>짖는다</b> (SEVERE) — 관리자가 알아야 한다. <b>사람에게도 말한다</b>.</li>
+     *   <li><b>3차</b> — 등록부가 통째로 죽었으면 세계 스폰 <b>근처를</b> 뒤진다.
+     *       <b>스폰 좌표 그 자체를 믿지 않는다</b> — 그것을 믿은 것이 오늘의 창작이었다.</li>
+     *   <li><b>4차</b> — 그마저 실패. 그때만 스폰에 떨군다. <b>조용히는 아니다</b> (SEVERE + 사람에게 고지).</li>
+     * </ol>
      */
-    private Location destination() {
+    private Location destination(Player who) {
+        List<String> notes = new ArrayList<>();
+        List<Location> fallbacks = new ArrayList<>();
+
+        // ═══ ★★ 집안이 자리를 정한다 — **전원이 같은 곳에 내리지 않는다** (2026-07-13) ═══
+        //
+        // 사용자: *"**모든 사람이 똑같은 위치에서 똑같이 소환되는 것도 아니고**",
+        //          "**마인크래프트에서도 신분이 적용**되어야 합니다."*
+        //
+        // 【전에는】 destinations(= [흑수나루, 장터])의 첫 유효 앵커로 **전원이** 갔다.
+        //   그리고 player_creation.yml 의 start_location 11군데는 **읽는 코드가 0줄**이었다.
+        //
+        // 【이제는】 봇이 시트에 **start_anchor**(집안이 정한 앵커 이름)를 실어 내려보낸다
+        //   (player_creation.yml mvt_start.by_family — 근거는 각 집안의 world_link·grants).
+        //   무가의 자식은 **전장**(월례 전표가 오는 곳)에, 객잔집 자식은 **청하객잔**에,
+        //   의원집 자식은 **의방**에 선다.
+        //
+        // ★ 앵커 그 자체를 믿지 않는다 — 장터 앵커는 **우물 한가운데**다.
+        //   Standing 이 재고, 못 서면 아래의 옛 길(destinations)로 조용히 떨어진다.
+        WorldBridge.Sheet sheet = WorldBridge.state().sheet(who.getUniqueId());
+        String home = sheet == null ? null : sheet.startAnchor();
+        if (home != null && !home.isBlank()) {
+            Location at = plugin.anchor(home);
+            if (at == null || at.getWorld() == null || isAntechamber(at.getWorld())) {
+                notes.add("집안의 자리 「" + home + "」 — 세계에 그 앵커가 없다 (조성 전인가)");
+            } else {
+                Standing.Verdict v = Standing.measure(at);
+                if (v.ok()) {
+                    return at;
+                }
+                Location spot = Standing.landing(at);
+                if (spot != null) {
+                    return spot;   // 앵커 곁에 내린다 (우물에 빠뜨리지 않는다)
+                }
+                notes.add("집안의 자리 「" + home + "」 에 설 곳이 없다 — " + v.why());
+            }
+        }
+
         for (String name : destinations) {
             Location at = plugin.anchor(name);
-            if (at != null && at.getWorld() != null && !isAntechamber(at.getWorld())) {
-                return at;
+            if (at == null || at.getWorld() == null || isAntechamber(at.getWorld())) {
+                notes.add("등록부는 「" + name + "」 를 부르는데 세계에 그 앵커가 없다");
+                continue;
+            }
+            Standing.Verdict v = Standing.measure(at);
+            if (v.ok()) {
+                return at;   // 재 보고 통과했다 — 여기 내린다
+            }
+            notes.add("「" + name + "」 " + Standing.describe(at) + " — " + v.why());
+            fallbacks.add(at);
+        }
+
+        for (Location at : fallbacks) {
+            Location spot = Standing.landing(at);
+            if (spot != null) {
+                bark(who, notes, "앵커 곁에서 설 자리를 찾았다", spot);
+                return spot;
             }
         }
+
         for (World w : Bukkit.getWorlds()) {
-            if (!isAntechamber(w) && !Dojang.isDojang(w)) {
-                return w.getSpawnLocation();
+            if (isAntechamber(w) || Dojang.isDojang(w)) {
+                continue;
+            }
+            Location spot = Standing.landing(w.getSpawnLocation(), 32);
+            if (spot != null) {
+                notes.add("등록부의 앵커를 하나도 못 썼다 — 세계 스폰 근처를 뒤졌다");
+                bark(who, notes, "세계 스폰 곁에서 설 자리를 찾았다", spot);
+                return spot;
             }
         }
-        return Bukkit.getWorlds().get(0).getSpawnLocation();
+
+        Location last = Bukkit.getWorlds().get(0).getSpawnLocation();
+        notes.add("세계 스폰 근처 32칸에도 설 자리가 없다 — 세계가 통째로 이상하다");
+        bark(who, notes, "설 자리를 못 찾았다 · 세계 스폰에 떨군다 (갇힐 수 있다)", last);
+        return last;
+    }
+
+    /**
+     * <b>짖는다.</b> 내리는 자리가 등록부대로가 아니었으면 <b>관리자에게 SEVERE 로</b>, 그리고
+     * <b>사람에게도</b> 왜 여기 내렸는지 말한다. ★ 조용한 기본값을 금한다.
+     */
+    private void bark(Player who, List<String> notes, String what, Location spot) {
+        java.util.logging.Logger log = plugin.getLogger();
+        log.severe("[나루/착지] ★ 등록부의 앵커에 사람을 내릴 수 없었다 — " + what
+                + " " + Standing.describe(spot));
+        for (String n : notes) {
+            log.severe("[나루/착지]   · " + n);
+        }
+        log.severe("[나루/착지]   → 고치려면: /혼천 앵커검사 (무엇이 썩었는지) · /혼천 앵커재측 (고친다)");
+        if (who != null) {
+            who.sendMessage(ChatColor.RED + "── 사공이 뱃머리를 돌렸다 ──");
+            for (String n : notes) {
+                who.sendMessage(ChatColor.GRAY + "  " + n);
+            }
+            who.sendMessage(ChatColor.YELLOW + "그래서 " + Standing.describe(spot)
+                    + ChatColor.GRAY + " 에 내렸다 — " + what + ".");
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1074,6 +1539,49 @@ public final class Antechamber implements Listener {
                 return;   // 강호에 든 자는 나루를 다시 안 거친다
             }
             enter(player);
+        }, 2L);
+    }
+
+    /**
+     * ★ <b>죽어서 돌아오는 자리도 「내리는 자리」다.</b>
+     *
+     * <p>침대가 없으면 바닐라는 <b>월드 스폰</b>에 떨군다 — 그리고 이 세계의 월드 스폰은 마을 원점,
+     * 곧 <b>광장 우물</b>의 기둥이다. 도강만 고치고 여기를 두면 <b>죽을 때마다 우물에 빠진다</b>.
+     *
+     * <p><b>침대·리스폰 앵커는 건드리지 않는다</b> ({@code isBedSpawn}/{@code isAnchorSpawn}) — 그건
+     * 사람이 <b>제 손으로 고른 자리</b>다. 제가 담을 쌓고 그 안에서 자는 것은 그 사람의 자유다.
+     * 우리가 고치는 것은 <b>아무도 고르지 않은 자리</b>, 곧 월드 스폰뿐이다.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onRespawn(PlayerRespawnEvent event) {
+        if (event.isBedSpawn() || event.isAnchorSpawn()) {
+            return;   // 사람이 고른 자리 — 남의 집에 손대지 않는다
+        }
+        Location at = event.getRespawnLocation();
+        if (at == null || at.getWorld() == null
+                || isAntechamber(at.getWorld()) || Dojang.isDojang(at.getWorld())) {
+            return;
+        }
+        Standing.Verdict v = Standing.measure(at);
+        if (v.ok()) {
+            return;
+        }
+        Location spot = Standing.landing(at, 32);
+        if (spot == null) {
+            plugin.getLogger().severe("[부활] ★ 월드 스폰 " + Standing.describe(at) + " — " + v.why()
+                    + " · 둘레 32칸에도 설 자리가 없다. 사람이 갇힌다 — /혼천 앵커검사");
+            return;
+        }
+        event.setRespawnLocation(spot);
+        plugin.getLogger().severe("[부활] ★ 월드 스폰 " + Standing.describe(at) + " 에 사람을 세울 수 없다 — "
+                + v.why() + " · " + Standing.describe(spot) + " 로 옮겨 내렸다.");
+        Player player = event.getPlayer();
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                player.sendMessage(ChatColor.YELLOW + "세계의 스폰 자리에는 설 수 없다 ("
+                        + ChatColor.GRAY + v.why() + ChatColor.YELLOW + ") — "
+                        + Standing.describe(spot) + " 에 내렸다.");
+            }
         }, 2L);
     }
 
@@ -1169,7 +1677,12 @@ public final class Antechamber implements Listener {
         }
     }
 
-    /** 과제: 손 — 허수아비를 <b>실제로 쳤을 때만</b> */
+    /**
+     * 과제: 손 — 허수아비를 <b>실제로 쳤을 때만</b>. 그리고 <b>명패가 맞은 것을 말한다.</b>
+     *
+     * <p>피해는 <b>다음 틱에</b> 읽는다 — 우리 무공 리스너가 피해를 고쳐 쓴 <b>뒤</b>의 값이 진실이다
+     * ({@link Dojang#onDamage} 와 같은 이유·같은 눈금).
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player player)
@@ -1178,12 +1691,45 @@ public final class Antechamber implements Listener {
                 || !dummy.getPersistentDataContainer().has(KEY_DUMMY)) {
             return;
         }
+        double[] t = tally.computeIfAbsent(dummy.getUniqueId(), k -> new double[]{0, 0, 0});
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (dummy.isValid() && dummy.getAttribute(Attribute.MAX_HEALTH) != null) {
-                dummy.setHealth(dummy.getAttribute(Attribute.MAX_HEALTH).getValue());
+            if (!dummy.isValid()) {
+                return;
             }
+            double dealt = event.getFinalDamage();
+            t[0] += dealt;
+            t[1] += 1;
+            t[2] = dealt;
+            var attr = dummy.getAttribute(Attribute.MAX_HEALTH);
+            if (attr != null) {
+                dummy.setHealth(attr.getValue());   // 죽지 않는다 (장부를 위해 산다)
+            }
+            int durability = dummy.getPersistentDataContainer()
+                    .getOrDefault(KEY_DUMMY, PersistentDataType.INTEGER, 20);
+            String label = dummy.getPersistentDataContainer()
+                    .getOrDefault(KEY_DUMMY_LABEL, PersistentDataType.STRING, "허수아비");
+            dummy.setCustomName(hitName(label, durability, t));
         });
         bump(player, "손");
+    }
+
+    /**
+     * <b>나루에서 사람은 죽지 않는다</b> — 그리고 그 약속을 <b>난이도가 아니라 이 손이</b> 지킨다.
+     *
+     * <p>여태는 난이도 PEACEFUL 이 지켰다. 그런데 평화는 <b>몬스터를 지운다</b> — 허수아비의 몸이
+     * 좀비이므로, 그 약속이 곧 <b>때릴 상대의 부재</b>였다. 사용자가 본 것이 그것이다:
+     * <i>"인증 전까지 때릴 상대가 없습니다."</i>
+     *
+     * <p>이제 나루는 EASY 다 (허수아비가 산다). 대신 <b>사람에게 오는 모든 피해를 여기서 끊는다</b> —
+     * 굶주림도, 선인장도, 있지도 않은 몹도. 약속은 그대로이고, 허수아비만 살아났다.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onPlayerDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+        if (damagePlayers || !(event.getEntity() instanceof Player p)
+                || !isAntechamber(p.getWorld())) {
+            return;
+        }
+        event.setCancelled(true);
     }
 
     @EventHandler
@@ -1275,7 +1821,7 @@ public final class Antechamber implements Listener {
     /** 과제: 격 — Shift+우클릭으로 두름이 바뀌는 순간 */
     private void watchArmed(Player player) {
         Lesson l = lessons.get("격");
-        if (l == null || complete(player, l) || (l.requiresArmable() && !armable(player))) {
+        if (l == null || complete(player, l) || !capable(player, l)) {
             return;
         }
         String armed;
@@ -1291,13 +1837,25 @@ public final class Antechamber implements Listener {
         }
     }
 
-    /** 과제: 경공 — {@code gyeonggong.yml activate}: "달리며 점프" */
+    /**
+     * 과제: 경공 — {@code gyeonggong.yml activate}: <b>"공중에서 점프 키 한 번 더"</b> (더블 점프).
+     *
+     * <p>구판은 {@code isSprinting() && !isOnGround()} 를 봤다 — 그것은 <b>달리며 점프</b>의 눈이었고,
+     * 발동이 손가락으로 옮겨간 지금은 <b>그냥 달리다 뛴 몸</b>까지 통과시킨다. 그래서 이제
+     * <b>경공이 실제로 켜졌는가</b>를 그 주인({@link GyeonggongListener#riding})에게 직접 묻는다 —
+     * 과제는 <b>흉내</b>가 아니라 <b>발동</b>을 봐야 한다.
+     *
+     * <p>★ 그리고 <b>못 하는 몸은 아예 안 본다</b> ({@code requires: 허공_딛기}). 나루에 서는 몸은
+     * <b>범인</b>이고 ({@code player_creation.yml starting_realm}), {@code gyeonggong.yml realm_ceiling}
+     * 이 범인·삼류·이류의 {@code air_jumps} 를 <b>0</b> 으로 적어 뒀다 — <b>개화 전에는 안 켜진다.</b>
+     */
     private void watchGyeonggong(Player player) {
         Lesson l = lessons.get("경공");
-        if (l == null || complete(player, l)) {
+        if (l == null || complete(player, l) || !capable(player, l)) {
             return;
         }
-        if (player.isSprinting() && !player.isOnGround() && player.getFallDistance() <= 0.1f) {
+        GyeonggongListener gg = plugin.gyeonggong();
+        if (gg != null && gg.riding(player) && !player.isOnGround()) {
             bump(player, l.id());
         }
     }
@@ -1315,12 +1873,22 @@ public final class Antechamber implements Listener {
         openedLines.forEach(line ->
                 player.sendMessage(line.replace("{name}", who == null ? player.getName() : who)));
         if (autoCrossSeconds > 0) {
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (player.isOnline() && isAntechamber(player.getWorld())
-                        && plugin.ledger(id).linked()) {
-                    depart(player, List.of());
+            // ★ 【실사용 2026-07-14】 접합 6초 뒤 자동 출발이 **서장을 읽는 사람을 책째로 끌고 갔다** —
+            //   장면 도중 청하현으로 이동돼 서사가 끊겼다. 서장의 문은 서장이 닫는다(에필로그 [강호로
+            //   나선다]) — 그러므로 **책이 살아 있는 동안은 기다린다.** 반복 검사: 서장 토큰이 사라진
+            //   뒤(출도했거나 애초에 서장이 없거나) 자동 출발이 선다. 갇힘은 없다 — 끝나면 반드시 건넌다.
+            Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+                if (!player.isOnline() || !isAntechamber(player.getWorld())
+                        || !plugin.ledger(id).linked()) {
+                    task.cancel();
+                    return;
                 }
-            }, autoCrossSeconds * 20L);
+                if (SeojangBook.get() != null && SeojangBook.get().tokenOf(id) != null) {
+                    return;   // 서장이 살아 있다 — 붓이 먼저다
+                }
+                task.cancel();
+                depart(player, List.of());
+            }, autoCrossSeconds * 20L, 40L);
         }
     }
 
@@ -1364,12 +1932,17 @@ public final class Antechamber implements Listener {
         }
     }
 
-    /** 이 사람이 <b>실제로 할 수 있는</b> 과제만. 못 하는 것을 못 했다고 세지 않는다 */
+    /**
+     * 이 사람이 <b>실제로 할 수 있는</b> 과제만. <b>못 하는 것을 못 했다고 세지 않는다.</b>
+     *
+     * <p>★ 이것이 없어서 <b>'몸이 알았다'(all_done)가 영영 안 떴다</b>: 경공 과제에 {@code requires} 가
+     * 없던 시절, 나루에 오는 모든 몸(범인 — {@code air_jumps} 0)이 그 과제를 <b>영원히</b> 못 닫았고,
+     * {@code allMatch(complete)} 는 언제나 거짓이었다. <b>아무도 다 끝낼 수 없는 튜토리얼이었다.</b>
+     */
     private List<Lesson> applicable(Player player) {
         List<Lesson> out = new ArrayList<>();
-        boolean armable = armable(player);
         for (Lesson l : lessons.values()) {
-            if (l.requiresArmable() && !armable) {
+            if (lacks(player, l)) {
                 continue;
             }
             out.add(l);
@@ -1396,6 +1969,7 @@ public final class Antechamber implements Listener {
             clearPanels(w);
         }
         stowed.clear();
+        tally.clear();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1416,14 +1990,30 @@ public final class Antechamber implements Listener {
 
     private record Plate(String id, int x, int z, String command) { }
 
+    /** 허수아비 한 몸 — 이름도 내구도 <b>등록부가 짓는다</b> (코드가 지어내지 않는다) */
+    private record Dummy(String id, String label, int x, int z, int durability) { }
+
     private record Lighting(int postEvery, boolean postAlternate, int postZ,
                             Set<String> brazierStations, boolean hutLantern,
                             double darkMinPct, double darkMaxPct, double mainDarkMaxPct,
                             double lampDensityMaxPct, int mainLightSpanMin) { }
 
+    /**
+     * 과제 하나. {@code requires} 는 <b>이 조작을 할 수 있는 몸</b>의 이름이다 (빈 문자열 = 누구나).
+     *
+     * <p>등록부가 능(能)의 이름을 적고, 코드가 그 이름의 <b>술어</b>를 갖는다
+     * ({@link #capable}). 등록부에 없는 이름을 코드가 지어내지 않고, 코드에 없는 이름을 등록부가
+     * 적으면 {@code tools/antechamber_audit.py} 가 잡는다.
+     */
     private record Lesson(String id, String title, String how, String detect, int count, String done,
                           Set<String> gestures, String command, boolean needsArgs,
-                          boolean requiresArmable, String unavailable) { }
+                          String requires, String unavailable) {
+
+        /** 이 과제가 <b>경지에 따라 없을 수도 있는</b> 것인가 (판이 둘 — 할 수 있는 몸 / 없는 몸) */
+        boolean gated() {
+            return !requires.isEmpty();
+        }
+    }
 
     private record Panels(int maxPanels, float scale, float viewRange, int lineWidth, double yOffset,
                           String billboard, String alignment, boolean seeThrough, boolean shadowed,
