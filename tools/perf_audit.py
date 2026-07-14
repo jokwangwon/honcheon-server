@@ -8,6 +8,10 @@
   ① 등록제  — performance.yml 의 예산 항목을 **읽는 코드가 있는가**.
               읽는 자가 없으면 그 예산은 예산이 아니라 주석이다. 그리고 그 값이 다른 yml 이나
               코드 리터럴에 **한 번 더** 적혀 있다면, 두 수치는 언젠가 갈라진다 (정본이 둘이므로).
+              판정에는 파일 차원이 있다 (B-107): 한 파일이 yml 을 여럿 연다 — leaf 이름이
+              파일 어딘가에 있다는 것은 보증이 아니고, **performance.yml 에서 온 값이 흐르는
+              문장 안**에 있어야 산다 (B-106: skill_mechanics 를 파는 줄이 같은 이름의
+              performance.yml 키를 살려 줬다 — 그 ✓ 는 거짓이었다).
   ② 매 틱 도는 것 — runTaskTimer 로 등록된 티커와 주기, @EventHandler 리스너 수.
               "함께 돌 때 무슨 일이 나는지 아무도 모른다"의 **목록**을 먼저 만든다.
   ③ 한 틱 폭탄 — 한 호출 안에서 상한 없이 세계를 쓰는 자리. 중첩 루프의 경계를 상수까지 풀어
@@ -248,6 +252,57 @@ def ticker_scan(path, src, consts):
 
 # ─── ① 등록제 ───
 
+# 【파일 차원 판정 — B-107】 "leaf 이름이 그 파일 어딘가에 있다"는 보증이 아니다.
+# SkillEngine 은 performance.yml 도 열고 skill_mechanics.yml 도 연다 — 딴 yml 을 파는 줄의
+# 같은 leaf 가 performance.yml 키를 살려 준 것이 B-106 의 병이다 (max_targets_default).
+# 그래서 문장(;) 단위로 오염을 흘린다: 씨앗 = resolve("performance.yml") 문장.
+# 오염된 문장의 대입 대상·instanceof 패턴 변수·for-each 변수·람다 인자가 오염되고,
+# 오염된 이름이 나오는 문장이 다시 오염된다 — 고정점까지. leaf 는 오염된 문장 안에서만 산다.
+# (raw 가 아니라 주석 벗긴 소스로 재야 한다 — 실제로 Metrics 의 javadoc 예제 한 줄이
+#  subsystem 키 하나를 '읽힌다'고 보증해 왔다. 주석은 독자가 아니다.)
+TAINT_ASSIGN = re.compile(r"(?<![.\w])(\w+)\s*=(?![=])")            # x = …  (o.x = 는 필드 — 제외)
+TAINT_PATTERN = re.compile(r"instanceof\s+[\w.$]+(?:\s*<[^;()]*?>)?(?:\[\s*\])*\s+(\w+)")
+TAINT_FOREACH = re.compile(r"for\s*\([^;:()]*?(\w+)\s*:")           # for (Map.Entry<…> e : …)
+TAINT_LAMBDA = re.compile(r"\(([\w\s,]*)\)\s*->|(?<![\w.])(\w+)\s*->")
+
+
+def perf_read_context(src):
+    """performance.yml 에서 온 값이 흐르는 문장들만 이어 붙여 돌려준다 (주석 벗긴 소스 기준).
+
+    이름 기반·흐름 무시(flow-insensitive) 근사다: 같은 이름이면 메서드를 건너도 흐른 것으로
+    본다 (과대 근사 — 틀려도 '살았다' 쪽으로 틀린다. 종전의 '파일 전체' 판정보다는 훨씬 좁다)."""
+    segs = src.split(";")
+    # 전파용 낱말은 문자열 리터럴을 벗기고 센다 — "vfx" 같은 문자열 속 낱말이 오염 변수
+    # vfx 와 겹치면 엉뚱한 문장이 오염되고, 거기서 태어난 람다 인자(raw·m)가 파일을 덮는다.
+    born = []
+    words = []
+    for s in segs:
+        bare = strip_strings(s)
+        words.append(frozenset(re.findall(r"[A-Za-z_]\w*", bare)))
+        b = set(TAINT_ASSIGN.findall(bare)) | set(TAINT_PATTERN.findall(bare)) \
+            | set(TAINT_FOREACH.findall(bare))
+        for params, single in TAINT_LAMBDA.findall(bare):
+            b |= {w.strip() for w in params.split(",") if w.strip()}
+            if single:
+                b.add(single)
+        born.append(b)
+    tainted = [bool(OPENS_PERF_YML.search(s)) for s in segs]
+    names, changed = set(), True
+    while changed:
+        changed = False
+        for i in range(len(segs)):
+            if not tainted[i]:
+                if not (names & words[i]):
+                    continue
+                tainted[i] = True
+                changed = True
+            new = born[i] - names
+            if new:
+                names |= new
+                changed = True
+    return ";".join(s for i, s in enumerate(segs) if tainted[i])
+
+
 def flatten(node, prefix=""):
     if isinstance(node, dict):
         for k, v in node.items():
@@ -299,8 +354,11 @@ def tool_sources():
     return out
 
 
-def registry_audit(perf, code, stripped, tools_src=None):
+def registry_audit(perf, stripped, tools_src=None):
     readers_of_perf = [p for p, s in stripped.items() if OPENS_PERF_YML.search(s)]
+    # 파일 차원 (B-107): 이 파일들 중에도 딴 yml 을 같이 여는 것이 있다 (SkillEngine·Gyeonggong).
+    # 판정은 파일 전체가 아니라 performance.yml 의 값이 흐르는 문장(ctx)에 대고 한다.
+    ctx = {p: perf_read_context(stripped[p]) for p in readers_of_perf}
     dup = other_yml_defs()
     tools_src = tools_src if tools_src is not None else {}
 
@@ -315,14 +373,15 @@ def registry_audit(perf, code, stripped, tools_src=None):
         for ticker, item in pm.items():
             probe_targets.setdefault(str(item), []).append(str(ticker))
     probe_loaders = [p for p in readers_of_perf
-                     if '"probes"' in code[p] and '"subsystem_budget_ms"' in code[p]]
+                     if '"probes"' in ctx[p] and '"subsystem_budget_ms"' in ctx[p]]
 
     rows = []
     for key, value in flatten(perf):
         leaf = key.split(".")[-1]
-        # 읽는 자 = performance.yml 을 실제로 여는 파일 중, 이 키를 문자열로 조회하는 것
+        # 읽는 자 = performance.yml 을 여는 파일 중, **그 파일의 performance.yml 문맥(ctx)
+        # 안에서** 이 키를 문자열로 조회하는 것 — 딴 yml 을 파는 줄의 같은 leaf 는 못 살린다
         readers = [os.path.relpath(p, ROOT) for p in readers_of_perf
-                   if f'"{leaf}"' in code[p]]
+                   if f'"{leaf}"' in ctx[p]]
         # probes 가 이 예산 항목을 가리키고, 그 맵을 통째로 적재하는 자가 있으면 — 읽힌다
         if not readers and key.startswith("tick_budget.subsystem_budget_ms.") \
                 and leaf in probe_targets and probe_loaders:
@@ -369,16 +428,15 @@ def main():
     with open(os.path.join(CONFIG_DIR, "performance.yml"), encoding="utf-8") as f:
         perf = yaml.safe_load(f)
 
-    code, stripped, consts = {}, {}, {}
+    stripped, consts = {}, {}
     for p in java_files():
         with open(p, encoding="utf-8") as f:
             raw = f.read()
-        code[p] = raw
         stripped[p] = strip_comments(raw)
         consts[p] = constants(strip_strings(stripped[p]))
 
     bombs, tickers, listeners = [], [], {}
-    for p in code:
+    for p in stripped:
         s = strip_strings(stripped[p])
         bombs += bomb_scan(p, s, consts[p])
         tickers += ticker_scan(p, stripped[p], consts[p])
@@ -386,7 +444,7 @@ def main():
         if n:
             listeners[os.path.relpath(p, ROOT)] = n
 
-    rows, perf_readers = registry_audit(perf, code, stripped, tool_sources())
+    rows, perf_readers = registry_audit(perf, stripped, tool_sources())
     bombs.sort(key=lambda b: (b["kind"] != "폭탄", -b["rollup"]))
     tickers.sort(key=lambda t: (t["period_ticks"] if isinstance(t["period_ticks"], int) else 9999))
 
