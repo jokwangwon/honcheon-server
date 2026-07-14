@@ -61,6 +61,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
+                case "경계다듬기" -> featherEdge(sender, args);   // ★ 끊긴 경계 띠를 자연으로 다시 잇는다 — 부지 안은 안 건드린다 (B-127)
                 case "운기" -> meditate(sender);
                 case "태세" -> stance(sender, args);         // 맞는 쪽의 선택 — 회피·막기·흘리기 (기본은 자동)
                 case "조성" -> buildTown(sender, args);
@@ -1415,6 +1416,53 @@ public final class MvtCommand implements CommandExecutor {
      * 그리고 <b>안전핀</b>: 채우기 전에 해석된 표적을 한 줄로 말하고, 기준면이 상식 밖이면
      * ({@link TerrainForge#sweepTargetSane} — cy&lt;0 · 실지면 40칸 이상 괴리) <b>채우지 않고 거부</b>한다.
      */
+    /**
+     * /혼천 경계다듬기 [지역id] — <b>경계 띠만 다시 잇는다</b> (B-127).
+     *
+     * <p>영수증을 잃은 재조성은 이음 띠를 잃는다 — 마을 단(y94~96)과 자연면(y89~90) 사이가
+     * 벽이 됐다 (환경검수 ③ 8.2% · 46곳 · ④ 0/4, 2026-07-15 실측). 재조성은 같은 땅을 또
+     * 깎으므로 금지다 — 이 명령은 <b>부지 안을 한 칸도 건드리지 않고</b>
+     * {@link TerrainForge#feather} 계약(땅에게 묻는 결정론 이음 · 물 불가침 · 올린 밑 채움)을
+     * 경계 띠(r .. r+{@link TerrainForge#FEATHER_WIDTH})에 재적용한다.
+     *
+     * <p>관례는 지하정리와 같다: 표적 해석은 {@link #resolveTerrainTarget} <b>한 함수</b> ·
+     * 표적을 먼저 소리내어 말한다 · 상식 밖이면 거부({@link TerrainForge#sweepTargetSane}) ·
+     * 좌표가 등록부(앵커·구역)에서 오므로 콘솔 가능.
+     */
+    private boolean featherEdge(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            return true;
+        }
+        TerrainTarget at = resolveTerrainTarget(sender, args);
+        if (at == null) {
+            return true;
+        }
+        World world = at.world();
+        int cx = at.cx();
+        int cy = at.cy();
+        int cz = at.cz();
+        int rOuter = at.r() + TerrainForge.FEATHER_WIDTH;
+        world.getChunkAt(cx >> 4, cz >> 4).load(true);
+        int centerStand = TerrainAudit.surfaceY(world, cx, cz, cy);
+        Announce.say(plugin, sender, ChatColor.GRAY + "[경계다듬기] 표적 — " + at.name()
+                + " · 세계 " + world.getName()
+                + " · 중심 (" + cx + "," + cy + "," + cz + ") · 띠 r" + at.r() + "~" + rOuter
+                + " · 중심 기둥 실지면 "
+                + (centerStand == Integer.MIN_VALUE ? "못 찾음(±40 밖)" : "y" + (centerStand - 1)));
+        if (!TerrainForge.sweepTargetSane(cy, centerStand)) {
+            Announce.fail(plugin, sender, "★ 표적이 이상하다: " + world.getName()
+                    + " (" + cx + "," + cy + "," + cz + ") — 기준면이 상식 밖이다. **다듬지 않는다** "
+                    + "(지하정리와 같은 핀 — 등록부를 확인하라)");
+            return true;
+        }
+        TerrainForge.preload(world, cx, cz, rOuter + 4);
+        TerrainForge.feather(world, cx, cz, at.r(), rOuter, cy);
+        Announce.say(plugin, sender, ChatColor.GOLD + "[경계다듬기] 이었다 — " + at.name()
+                + " 경계 띠 r" + at.r() + "~" + rOuter
+                + ". 눈으로 재라: /혼천 환경검수" + (at.place() == null ? "" : " " + at.place().id()));
+        return true;
+    }
+
     private boolean sweepUnderground(CommandSender sender, String[] args) {
         if (sender instanceof Player p && !p.isOp()) {
             return true;
