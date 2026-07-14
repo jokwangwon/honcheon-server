@@ -107,6 +107,8 @@ public final class SkillEngine {
     private final Map<String, Integer> qiPower;
     /** 타격의 순간 — 멈춤·밀림·흔들림 (combat.yml impact). 맞는 쪽의 몸이 말하는 자리 */
     private final Impact impact;
+    /** 타격 허용 — 누가 맞을 수 있는가의 문 (combat.yml strike_admission · B-119). 기본: 전부 허용 */
+    private final StrikeAdmission admission;
     /** 형태별 위력 — 발출형은 더 아프다 (검기_참격 3 > 검기 두름 2). forms[].power 가 격 기본값보다 우선 */
     private final Map<String, Integer> formPower;
     /** 소모 밴드의 스칼라 코스트 — internal_energy.yml cost_bands (발경 1). 범위형([1,3])은 형태가 정한다 */
@@ -341,6 +343,9 @@ public final class SkillEngine {
 
         // ─── 타격의 순간 (combat.yml impact) — 등록부가 없으면 통째로 꺼진다 (옛 동작 보존) ───
         this.impact = loadImpact(RulesConfig.section(cb, "impact"));
+
+        // ─── 타격 허용 (combat.yml strike_admission · B-119) — 절이 없으면 전부 허용 (기본 자세가 열림) ───
+        this.admission = StrikeAdmission.load(RulesConfig.section(cb, "strike_admission"));
         Map<String, Integer> powers = new LinkedHashMap<>();
         Map<String, Integer> sustains = new LinkedHashMap<>();
         RulesConfig.section(qm, "forms").forEach((category, raw) -> {
@@ -2525,6 +2530,11 @@ public final class SkillEngine {
     /** 맞는 쪽의 몸이 말하는 규칙 한 벌. 등록부가 없으면 {@code enabled=false} — 옛 동작 그대로 */
     public Impact impact() {
         return impact;
+    }
+
+    /** 타격 허용의 문 (combat.yml strike_admission · B-119) — 누가 맞을 수 있는가. 기본: 전부 허용 */
+    public StrikeAdmission admission() {
+        return admission;
     }
 
     @SuppressWarnings("unchecked")

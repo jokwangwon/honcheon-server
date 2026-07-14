@@ -149,6 +149,10 @@ public final class SkillListener implements Listener {
     /** 안전 지역 등록부 (B-006) — training.yml {@code location_safety}. 적힌 순서 = 판정 우선순위 */
     private final List<SafetyRule> safetyRules;
 
+    /** 인구층의 표식 (Populace 스폰 규약과 같은 키) — 행인·지역 사람의 신원. 읽기 전용 */
+    private final org.bukkit.NamespacedKey keyPopulace;
+    private final org.bukkit.NamespacedKey keyRegionNpc;
+
     public SkillListener(HoncheonMvt plugin, SkillEngine engine) {
         this.plugin = plugin;
         this.engine = engine;
@@ -156,6 +160,8 @@ public final class SkillListener implements Listener {
         this.display = new SkillDisplay(plugin, engine);
         this.activeGuard = loadActiveGuard(plugin);
         this.safetyRules = loadSafetyRules(plugin);
+        this.keyPopulace = new org.bukkit.NamespacedKey(plugin, "populace");
+        this.keyRegionNpc = new org.bukkit.NamespacedKey(plugin, "region_npc");
     }
 
     /**
@@ -307,6 +313,42 @@ public final class SkillListener implements Listener {
         }
         return SAFE_LEVEL.equals(safetyLevel(victim.getLocation()))
                 || SAFE_LEVEL.equals(safetyLevel(attacker.getLocation()));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  타격 허용 (B-119) — 【누가 맞을 수 있는가】 combat.yml strike_admission
+    //
+    //  사용자 실측: "npc와 동물등 안때려짐" + 정정: "마을 npc도 때려져야합니다. 몰래 죽일수도".
+    //  → 기본은 전부 허용 — 문이 닫는 것은 등록부의 예외 표식뿐 (기본: 빈 목록).
+    //  판정은 순수 함수다 (StrikeAdmission — Bukkit 을 모른다. tools/StrikeAdmissionSelfTest 가 시험).
+    //  여기는 몸에서 표식(PDC)을 읽어 그 함수에 건네는 배선일 뿐이다.
+    //
+    //  ★ 사람 대 사람은 이 문 밖이다 — 안전 지역(B-006)·비무(Sparring)의 기존 계약이 그대로 선다.
+    //  ★ 이 문은 "누가 맞나"만 정한다 — 격 지불·태세 마진·피해 산술은 한 줄도 안 바뀌었다.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** 이 몸의 표식 — 신원(PDC)을 낱말로. 판정 자체는 {@link StrikeAdmission#mark} (순수) */
+    private String strikeMark(LivingEntity target) {
+        org.bukkit.persistence.PersistentDataContainer pdc = target.getPersistentDataContainer();
+        return StrikeAdmission.mark(
+                target instanceof Player,
+                pdc.has(CheonghaBuilder.KEY_NPC, org.bukkit.persistence.PersistentDataType.STRING),
+                HuntingGrounds.tag(target, HuntingGrounds.KEY_KIND),
+                HuntingGrounds.tag(target, HuntingGrounds.KEY_RANK),
+                HuntingGrounds.tag(target, HuntingGrounds.KEY_ROLE),
+                pdc.has(keyPopulace, org.bukkit.persistence.PersistentDataType.STRING),
+                pdc.has(keyRegionNpc, org.bukkit.persistence.PersistentDataType.STRING));
+    }
+
+    /** 타격 허용의 문 — 비플레이어의 몸에만 선다 (사람 대 사람은 안전 지역·비무 계약이 정본) */
+    private boolean admissionBars(LivingEntity target) {
+        return !(target instanceof Player) && !engine.admission().allowed(strikeMark(target));
+    }
+
+    /** 문의 말 — 왜 칼이 서지 않았는지 (침묵하는 게이트는 버그로 보인다 — safetyDenied 와 같은 원칙) */
+    private void admissionDenied(Player attacker, LivingEntity target) {
+        String why = engine.admission().refusal(strikeMark(target));
+        flash(attacker, ChatColor.GRAY + (why == null ? "칼이 서지 않는다" : why));
     }
 
     /** 게이트의 말 — 왜 칼이 서지 않았는지 화면이 말한다 (침묵하는 게이트는 버그로 보인다) */
@@ -1019,6 +1061,12 @@ public final class SkillListener implements Listener {
             safetyDenied(assailant, target);
             return;
         }
+        // ★ 【타격 허용 · B-119】 비플레이어의 몸 — 등록부의 예외 표식만 문을 닫는다 (기본: 전부 허용)
+        if (assailant != null && admissionBars(target)) {
+            event.setCancelled(true);
+            admissionDenied(assailant, target);
+            return;
+        }
         if (event.getDamager() instanceof Player player) {
             breakGuard(player);   // 행동 소모 — 때리는 손은 방어 전념을 버린 것이다 (active_guard)
             String skillId = skillInHand(player);
@@ -1377,6 +1425,12 @@ public final class SkillListener implements Listener {
         //   넘었을 수 있다 (onMelee 의 문은 클릭 순간의 자리만 본다). 내력 지불보다 먼저 선다.
         if (safetyBlocks(player, target)) {
             safetyDenied(player, target);
+            return new BasicHit(false, SkillEngine.BARE, 0.0);
+        }
+        // 【타격 허용 · B-119】 베는 순간의 문 — 선딜 사이에 표식이 바뀌지는 않지만, 세 판정길이
+        //   같은 문을 지나야 문이 하나다 (onMelee · 여기 · admit — 안전 게이트와 같은 세 길목)
+        if (admissionBars(target)) {
+            admissionDenied(player, target);
             return new BasicHit(false, SkillEngine.BARE, 0.0);
         }
         SkillEngine.State state = state(player);
@@ -2857,6 +2911,11 @@ public final class SkillListener implements Listener {
             if (t instanceof Player && safetyBlocks(player, t)) {
                 // 【안전 지역 · B-006】 벨 수 없는 몸은 손의 몫(max_targets)도 먹지 않는다
                 vetoes.add(new String[]{name(t), "안전 지역 — 사람에게 칼이 서지 않는다 (training.yml location_safety)"});
+                continue;
+            }
+            if (admissionBars(t)) {
+                // 【타격 허용 · B-119】 등록부의 예외 표식 — 이 몸도 손의 몫을 먹지 않는다
+                vetoes.add(new String[]{name(t), "칼이 서지 않는다 (combat.yml strike_admission)"});
                 continue;
             }
             if (out.size() >= cast.maxTargets()) {

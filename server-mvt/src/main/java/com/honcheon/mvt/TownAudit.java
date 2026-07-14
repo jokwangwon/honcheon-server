@@ -1095,7 +1095,11 @@ public final class TownAudit {
         BoundingBox box = new BoundingBox(cx - SCAN_R, cy - 8, cz - SCAN_R, cx + SCAN_R, cy + 24, cz + SCAN_R);
         List<String> npcs = new ArrayList<>();
         for (Entity e : world.getNearbyEntities(box)) {
-            if (e instanceof Villager v && v.getCustomName() != null && v.isInvulnerable()) {
+            // 계약 NPC 의 신원 = PDC 표식 (B-119 — 무적은 걷혔다: 마을 NPC 도 맞고, 죽을 수 있다).
+            // 명패+무적은 옛 규약의 잔존 몸 — 이행 스윕(TradeListener) 전에도 검수가 세도록 남겨 둔다.
+            boolean marked = e.getPersistentDataContainer().has(CheonghaBuilder.KEY_NPC,
+                    org.bukkit.persistence.PersistentDataType.STRING);
+            if (e instanceof Villager v && v.getCustomName() != null && (marked || v.isInvulnerable())) {
                 npcs.add(v.getCustomName());
             }
         }

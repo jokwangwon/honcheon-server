@@ -522,7 +522,10 @@ final class CheonghaBuilder {
         BoundingBox box = new BoundingBox(cx - 63, cy - 8, cz - 63, cx + 64, cy + 20, cz + 64);
         int removed = 0;
         for (Entity e : world.getNearbyEntities(box)) {
-            if (e instanceof Villager v && v.getCustomName() != null && v.isInvulnerable()) {
+            // 표식(PDC — 새 규약) 또는 명패+무적(옛 규약의 잔존 몸) — 둘 다 우리 NPC 다 (B-119 이행기)
+            boolean marked = e.getPersistentDataContainer()
+                    .has(KEY_NPC, org.bukkit.persistence.PersistentDataType.STRING);
+            if (e instanceof Villager v && (marked || (v.getCustomName() != null && v.isInvulnerable()))) {
                 v.remove();
                 removed++;
             }
@@ -6313,6 +6316,31 @@ final class CheonghaBuilder {
         }
     }
 
+    /**
+     * 계약 NPC 의 표식 — <b>신원은 PDC 가 말한다</b> (값 = cheongha_npcs.yml 등록부 id).
+     *
+     * <p>★ 【B-119】 예전 규약은 「명패 + 무적」이었다 — 그리고 그 <b>무적이 바로
+     * "npc 안때려짐"의 기전</b>이었다 (무적의 몸에는 피해 이벤트 자체가 서지 않는다).
+     * 사용자 정정: <i>"마을 npc도 때려져야합니다. 몰래 죽일수도 있어야 해요."</i>
+     * → 무적은 걷고, 신원(TownAudit ⑨ · TradeListener · SkillListener 표식)은 이 키가 잇는다.
+     * 살아 있는 몸(옛 규약으로 선 것)은 TradeListener 의 이행 스윕이 표식으로 바꾼다.
+     */
+    public static final org.bukkit.NamespacedKey KEY_NPC =
+            new org.bukkit.NamespacedKey("honcheon", "town_npc");
+
+    /** 명패(조성기 스폰명) → 등록부 id (cheongha_npcs.yml npcs.&lt;id&gt;) — 발명 금지: 등록된 10인뿐 */
+    public static final Map<String, String> NPC_IDS = Map.ofEntries(
+            Map.entry("객잔 주인 한백", "hanbaek"),
+            Map.entry("의뢰소 관리인 소연", "soyeon"),
+            Map.entry("의원 유문", "yumun"),
+            Map.entry("전장 지점주 금서방", "geumseobang"),
+            Map.entry("표사 곽진", "gwakjin"),
+            Map.entry("장터 잡화상 장쇠", "market_peddler"),
+            Map.entry("표국주 진철산", "jincheolsan"),
+            Map.entry("현령 조문원", "jomunwon"),
+            Map.entry("포두 박호", "bakho"),
+            Map.entry("뱃사공 섭구", "seopgu"));   // B-121 — 입도 안내인 (흑수나루 잔교 어귀)
+
     /** F30 — yaw: 몸·시선 방향 (0=남, 90=서, 180=북, 270=동). AI off 라 스폰 방향이 곧 시선이다 */
     private static void npc(World world, Location at, float yaw, String name) {
         Location spawn = at.clone();
@@ -6321,7 +6349,12 @@ final class CheonghaBuilder {
         v.setCustomName(name);
         v.setCustomNameVisible(true);
         v.setAI(false);            // MVT — 일과 스케줄 배선 전까지 제자리 (npc_lifecycle는 후속)
-        v.setInvulnerable(true);
+        // ★ 【B-119】 무적을 세우지 않는다 — 마을 NPC 도 맞고, 죽을 수 있다 (죽음은 다리가 나른다:
+        //   TradeListener.onNpcDeath → WorldBridge.npcDeath). 신원은 아래 PDC 표식이 말한다.
+        v.setInvulnerable(false);
+        v.getPersistentDataContainer().set(KEY_NPC,
+                org.bukkit.persistence.PersistentDataType.STRING,
+                NPC_IDS.getOrDefault(name, name));
         v.setPersistent(true);
         v.setSilent(true);
     }
@@ -7271,6 +7304,28 @@ final class CheonghaBuilder {
                 shore[0] - dir[0] * 3, waterY + 1, shore[1] - dir[1] * 3, 8);
         Location anchor = spot == null ? null
                 : new Location(world, spot[0] + 0.5, spot[1], spot[2] + 0.5);
+        // ★ B-121 — 입도 안내인. 나루를 건넌 몸이 내리는 자리(위 앵커)가 이 잔교 어귀다 —
+        //   갓 내린 사람이 처음 보는 얼굴이 있어야 한다 ("여기는 어디인가"를 말해 줄 자).
+        //   등록부: npcs/cheongha_npcs.yml seopgu (문구 포함) · regions heuksu_ferry.linked_npcs.
+        //   자리: 잔교 첫 칸의 갓길(폭 3 의 가장자리) — 물러선 앵커 쪽(뭍)을 본다. 길은 막지 않는다.
+        //   검수 불간섭: 나루는 마을 중심에서 d≥100 — TownAudit 계약(⑨) 스캔 창(±65) 밖이다.
+        //   재조성 = 같은 나루, 사공도 한 벌 (F29 원칙 — 마을 스윕 clearNpcs(±63)는 여기까지 안 온다).
+        for (int chunkX = (sx - FR_R - 4) >> 4; chunkX <= (sx + FR_R + 4) >> 4; chunkX++) {
+            for (int chunkZ = (sz - FR_R - 4) >> 4; chunkZ <= (sz + FR_R + 4) >> 4; chunkZ++) {
+                world.getChunkAt(chunkX, chunkZ).load(true);   // 언로드 청크의 스윕은 조용히 빈다 (F29 회귀)
+            }
+        }
+        for (Entity e : world.getNearbyEntities(new BoundingBox(
+                sx - FR_R - 4, waterY - 8, sz - FR_R - 4, sx + FR_R + 4, waterY + 24, sz + FR_R + 4))) {
+            if (e instanceof Villager v && v.getPersistentDataContainer()
+                    .has(KEY_NPC, org.bukkit.persistence.PersistentDataType.STRING)) {
+                v.remove();
+            }
+        }
+        npc(world, new Location(world,
+                        shore[0] - dir[1] + 0.5, waterY + 2, shore[1] + dir[0] + 0.5),
+                dir[0] == 1 ? 90f : dir[0] == -1 ? 270f : dir[1] == 1 ? 180f : 0f,
+                "뱃사공 섭구");
         if (anchor == null) {
             Bukkit.getLogger().severe("[혼천/조성] ★ 흑수나루 나루터 곁에 **사람이 설 자리가 없다** — "
                     + "앵커를 못 박는다. 등록부(antechamber destinations)가 이 이름을 부르면 다음 후보로 넘어간다.");
