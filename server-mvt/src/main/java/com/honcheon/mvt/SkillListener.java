@@ -1,5 +1,7 @@
 package com.honcheon.mvt;
 
+import com.honcheon.core.rules.RulesConfig;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -7,6 +9,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -40,6 +43,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>조작 매핑 (docs/design/mc_action_mapping.md 1·3-B장 + skill_motion.md):
  * <table>
  *   <tr><td>좌클릭 (검·도)</td><td>기본 무공 콤보 — 육합검 1·2타(외공기 0) → 3타(발경 1)</td></tr>
+ *   <tr><td>우클릭 (Shift 없이)</td><td>방어 선언 — 방어_전념(+2)의 MC 환산. 앞머리는 패링 창 (B-015 · active_guard)</td></tr>
  *   <tr><td>Shift + 우클릭</td><td>격 태세 순환 — 외공 → 발경 → 검기 → 강기 → 외공 (경지 게이트 통과분만)</td></tr>
  *   <tr><td>Shift + 좌클릭 (검기+ 태세)</td><td>기 발출(쏨) — 검기 참격 3 / 강기 포 6</td></tr>
  * </table>
@@ -94,6 +98,16 @@ public final class SkillListener implements Listener {
     private final Map<UUID, String> stancePin = new HashMap<>();
     /** 지금 이 몸이 서 있는 태세 — HUD 가 그린다 (화면이 판정에 대해 거짓말하지 않게) */
     private final Map<UUID, String> stanceNow = new HashMap<>();
+    /**
+     * <b>능동 태세 선언</b> — 맨 우클릭 (B-015). {@code [선언 틱, 만료 틱]}.
+     * 재선언은 만료만 늘린다 — <b>패링의 시계([0])는 첫 선언의 것</b>이다: 손이 이미 올라가 있으면
+     * 다시 잴 수 없다. 그래서 연타가 정답이 되지 못한다 (등록부 active_guard 의 왜 참조).
+     */
+    private final Map<UUID, long[]> guardDeclare = new HashMap<>();
+    /** 虛 의 기록 — 이 몸의 방어가 마지막으로 연 허 (SkillCast 의 관문이 {@link #opening} 으로 읽는다) */
+    private final Map<UUID, Long> lastParry = new HashMap<>();
+    private final Map<UUID, Long> lastDodge = new HashMap<>();
+    private final Map<UUID, Long> lastStanceWin = new HashMap<>();
     /** 몸이 지금 원점에서 얼마나 벗어나 있는가 — 회전은 <b>정확히 이만큼만</b> 되돌린다 (순증 금지) */
     private final Map<UUID, Posture> postures = new HashMap<>();
     private final List<Pending> pending = new ArrayList<>();
@@ -120,11 +134,45 @@ public final class SkillListener implements Listener {
     private record Pending(long due, Runnable action) {
     }
 
+    /**
+     * 능동 태세 등록부 — {@code combat.yml attack.defender_stance_mc.active_guard} (B-015).
+     * 지속시간은 여기 없다: '이번 라운드' = {@link SkillEngine#roundTicks} — realtime 절이 정본이다
+     * (같은 값을 두 등록부에 적으면 언젠가 갈라진다 — B-106 의 병).
+     */
+    private record ActiveGuard(boolean enabled, String stance, int commitBonus,
+                               int parryTicks, int openingTicks, boolean breakOnAttack) {
+    }
+
+    private final ActiveGuard activeGuard;
+
     public SkillListener(HoncheonMvt plugin, SkillEngine engine) {
         this.plugin = plugin;
         this.engine = engine;
         this.hud = new SkillHud(engine);
         this.display = new SkillDisplay(plugin, engine);
+        this.activeGuard = loadActiveGuard(plugin);
+    }
+
+    /**
+     * 등록부 판독 — SkillEngine 은 이번 라운드 동결이라 이 층이 직접 읽는다
+     * (SkillCast 가 skill_mechanics 를 직접 읽는 것과 같은 전례). 섹션이 없으면 <b>조용히 꺼진다</b> —
+     * 등록부가 앞서고 코드가 따른다: 등록되지 않은 능동 태세는 존재하지 않는 것이다.
+     */
+    private static ActiveGuard loadActiveGuard(HoncheonMvt plugin) {
+        try {
+            Map<String, Object> ag = RulesConfig.section(RulesConfig.section(RulesConfig.section(
+                    RulesConfig.load(plugin.getDataFolder().toPath()
+                            .resolve("config").resolve("combat.yml")),
+                    "attack"), "defender_stance_mc"), "active_guard");
+            return new ActiveGuard(true,
+                    String.valueOf(ag.getOrDefault("stance", "막기")),
+                    RulesConfig.intValue(ag.getOrDefault("commit_bonus", 2)),
+                    RulesConfig.intValue(ag.getOrDefault("parry_window_ticks", 6)),
+                    RulesConfig.intValue(ag.getOrDefault("opening_window_ticks", 12)),
+                    !Boolean.FALSE.equals(ag.get("break_on_attack")));
+        } catch (RuntimeException missing) {
+            return new ActiveGuard(false, "막기", 0, 0, 0, true);
+        }
     }
 
     /** 중앙 티커 기동 — HoncheonMvt.onEnable 에서 1회 (효과별 개별 태스크 생성 금지, F-P2) */
@@ -804,6 +852,7 @@ public final class SkillListener implements Listener {
             return;
         }
         if (event.getDamager() instanceof Player player) {
+            breakGuard(player);   // 행동 소모 — 때리는 손은 방어 전념을 버린 것이다 (active_guard)
             String skillId = skillInHand(player);
             // ★★ 【고침 — 사용자의 "공격해도 전혀 바뀌는 게 없다"의 가장 큰 몫이 여기 있었다】
             //   옛 코드는 무공이 손에 있으면 **먼저 바닐라 피해를 취소하고** swing() 을 불렀다.
@@ -870,6 +919,10 @@ public final class SkillListener implements Listener {
             int atk = foeAttackScore(attacker, target, attackers);
             int roll = target instanceof Player ? roll2d6() : NPC_JUDGMENT;
             int margin = atk - (line.score() + roll);
+            if (target instanceof Player prey && eyes.contains(prey.getUniqueId())) {
+                // 【판정의 눈 · 맞는 쪽】 우클릭 선언(B-015)을 시험하는 자리 — NPC 의 손을 받는 판정 (B-105)
+                eyeStance(prey, attacker, line, atk, roll, margin);
+            }
             if (margin < 0) {
                 // 태세가 이겼다 — 안 맞는다. 회피면 GyeonggongListener(MONITOR)가 몸을 뒤로 뺀다
                 event.setCancelled(true);
@@ -958,12 +1011,14 @@ public final class SkillListener implements Listener {
      * 몸을 <b>실제로 뒤로 뺀다</b> — 경공 담당이 깔아 둔 이음매다.
      */
     private void stanceSucceeded(LivingEntity body, Guardline line, int margin, String note) {
+        boolean parried = stanceWon(body, line.stance());   // 虛 의 기록 — 절기의 관문이 읽는다 (B-015)
         stanceFx(body, line.stance());
         if (!(body instanceof Player player)) {
             return;
         }
         stanceNow.put(player.getUniqueId(), line.stance());
         hud.flash(player, ChatColor.AQUA + stanceLabel(line.stance())
+                + (parried ? ChatColor.LIGHT_PURPLE + " · " + stanceLabel("패링") : "")
                 + ChatColor.DARK_GRAY + " │ 방어 " + line.score() + " (마진 " + margin + ")" + note,
                 tick + STANCE_READ_TICKS);
     }
@@ -994,7 +1049,10 @@ public final class SkillListener implements Listener {
 
         if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
             if (!player.isSneaking()) {
-                return;   // 평범한 우클릭 — 상호작용은 세계의 몫 (가드·패링은 후속 배선)
+                // ★ 【B-015】 맨 우클릭 = **방어 선언** (방어_전념의 MC 환산 — active_guard).
+                //   취소하지 않는다: 문·상자·음식은 그대로 세계의 몫이다 (선언은 그 위에 얹힐 뿐)
+                declareGuard(player, event);
+                return;
             }
             event.setCancelled(true);
             cycleArmed(player);
@@ -1003,6 +1061,7 @@ public final class SkillListener implements Listener {
         if (action != Action.LEFT_CLICK_AIR) {
             return;   // LEFT_CLICK_BLOCK 은 건드리지 않는다 — 채굴을 무공이 잡아먹으면 안 된다
         }
+        breakGuard(player);   // 행동 소모 — 공격하는 손은 방어 전념을 버린 것이다 (active_guard.break_on_attack)
         SkillEngine.State state = state(player);
         if (player.isSneaking() && engine.gradeRank(offense(state)) >= 2) {
             shoot(player, state);
@@ -1168,10 +1227,32 @@ public final class SkillListener implements Listener {
         String stance = chooseStance(target, surrounded);
         Guardline line = stance == null ? null : guardline(target, stance, surrounded);
         String note = stanceNote(target, stance, surrounded);
+        // 【판정의 눈 · B-105】 평타도 무공과 같은 가시성 — 꺼져 있으면 비용은 if 한 줄이다
+        boolean eye = eyes.contains(player.getUniqueId());
+        boolean preyEye = target instanceof Player && eyes.contains(target.getUniqueId());
         if (line != null) {
             // 대립 판정 — 공격 총합 + 2d6(공격자가 굴린다) vs 태세 판정치 + 7
-            int atk = basicAttackScore(player, target) + roll2d6();
-            int margin = atk - (line.score() + NPC_JUDGMENT);
+            int atkScore = basicAttackScore(player, target);
+            int roll = roll2d6();
+            int resist = line.score() + NPC_JUDGMENT;
+            int margin = atkScore + roll - resist;
+            if (eye) {
+                // 눈은 판정이 쓴 값을 그대로 본다 — 평타의 눈이 따로 셈하면 그 눈은 거짓말할 수 있다.
+                //   문법은 resolve 와 한 벌(eyeRoll): 격/등급(tier)이 없는 손이라 명중/빗나감 두 칸이다
+                Growth growth = Growth.get();
+                int attrBonus = growth == null ? 0 : growth.attackBonus(
+                        plugin.ledger(player.getUniqueId()),
+                        engine.weaponClassOf(player.getInventory().getItemInMainHand(), null),
+                        engine.realmAttr(state.realm));
+                eyeRoll(player, target, attrBonus, weaponSkill(player), atkScore, roll, resist,
+                        line, new SkillEngine.Strike(roll, margin,
+                                margin < 0 ? "miss" : "basic", margin < 0 ? "빗나감" : "명중",
+                                margin >= 0, (int) Math.round(raw)));
+            }
+            if (preyEye) {
+                // 【맞는 쪽】 우클릭 선언(B-015)의 판정이 시험대에 선다 — 태세·선언·패링이 숫자로 보인다
+                eyeStance((Player) target, player, line, atkScore + roll, NPC_JUDGMENT, margin);
+            }
             if (margin < 0) {
                 stanceSucceeded(target, line, margin, note);
                 SkillHud.actionBar(player, ChatColor.GRAY + "헛손질 " + ChatColor.DARK_GRAY
@@ -1180,16 +1261,22 @@ public final class SkillListener implements Listener {
             }
             // 피해 = 무기(바닐라) + 무공(0) + 격 + floor(마진/2) − 경감 (combat.yml soak_rule)
             raw += Math.floorDiv(margin, 2);
-            raw -= line.soak();
             stanceFailed(target, line, margin, note);
             if (line.clashes()) {
                 clashWeapon(target, grade);   // 막기는 무기를 태워 목숨을 산다 (회피·흘리기는 접촉이 없다)
             }
         }
-        raw -= armorSoak(target, grade);   // 갑옷 — 태세와 무관하게 언제나. 단 강기 앞에서는 0
+        // 경감 두 층을 기준선(base)에서 갈라 둔다 — 눈이 "어느 층에서 깎였는가"를 셈과 같은 값으로 본다
+        double base = raw;
+        int stanceSoak = line == null ? 0 : line.soak();
+        int armor = armorSoak(target, grade);   // 갑옷 — 태세와 무관하게 언제나. 단 강기 앞에서는 0
 
         // 상대의 기 방어(호신강기)·반격 오의가 같은 규칙으로 판정된다 (대칭)
-        Defense defense = defend(target, player, grade, Math.max(0.0, raw));
+        Defense defense = defend(target, player, grade, Math.max(0.0, base - stanceSoak - armor));
+        if (eye) {
+            // 【판정의 눈】 피해가 어느 층에서 깎였는가 — resolve 와 같은 눈, 같은 문법 (B-105)
+            eyeDamage(player, (int) Math.round(base), stanceSoak, armor, defense);
+        }
         if (defense.blocked() || defense.damage() <= 0.0) {
             return new BasicHit(false, grade, 0.0);
         }
@@ -1824,8 +1911,13 @@ public final class SkillListener implements Listener {
                 SkillEngine.Strike strike = engine.strike(cast, execBase, roll, resist);
                 if (eye) {
                     // 【판정의 눈】 2d6 이 무엇을 굴렸고, 실행력이 무엇으로 이루어졌고, 저항이 어디서 왔는가
-                    eyeRoll(player, target, cast, attrBonus, mastery, execBase, roll, resist,
+                    eyeRoll(player, target, attrBonus, mastery, execBase, roll, resist,
                             foeLine, strike);
+                }
+                if (foeLine != null && target instanceof Player prey
+                        && eyes.contains(prey.getUniqueId())) {
+                    // 【판정의 눈 · 맞는 쪽】 내 태세(선언 포함)가 초식을 무엇으로 받았는가 (B-105)
+                    eyeStance(prey, player, foeLine, execBase + roll, NPC_JUDGMENT, strike.margin());
                 }
                 touchCombat(state);
                 if (engine.isFlowTier(strike.tierId())) {
@@ -1834,6 +1926,7 @@ public final class SkillListener implements Listener {
                 if (!strike.hit()) {
                     if (foeLine != null) {
                         stanceFx(target, foeLine.stance());   // 상대가 무엇으로 살아났는지 보인다
+                        stanceWon(target, foeLine.stance());  // 초식을 받아 낸 것도 방어다 — 虛 가 열린다
                     }
                     continue;
                 }
@@ -1985,6 +2078,116 @@ public final class SkillListener implements Listener {
         return now != null ? now : chooseStance(player, false);
     }
 
+    // ══════════ 능동 태세 — 우클릭이 방어를 선언한다 (B-015 · active_guard) ══════════
+
+    /**
+     * <b>방어 선언</b> — 맨 우클릭. 넷째 태세가 아니라 <b>방어_전념(actions)의 MC 환산</b>이다:
+     * 1합({@link SkillEngine#roundTicks}) 동안 태세 판정 +2, 태세는 막기로 선다. 대가는 행동이다 —
+     * 공격하면 깨진다 ({@link #breakGuard}).
+     *
+     * <p><b>재선언은 지속만 늘린다</b> — 패링의 시계는 첫 선언의 것이다. 손이 이미 올라가 있으면
+     * 다시 잴 수 없다 (연타 = 그냥 가드, 읽고 세운 한 번 = 패링 기회). 쿨다운이 아니다:
+     * 선언을 막는 것은 타이머가 아니라 <b>손</b>이다 ({@code no_cooldown} 은 그대로 참이다).
+     */
+    private void declareGuard(Player player, PlayerInteractEvent event) {
+        if (!activeGuard.enabled() || Growth.get() == null) {
+            return;   // 등록부가 없거나 태세 층이 미배선 — 옛 동작 그대로 (우클릭은 세계의 몫)
+        }
+        if (event.useItemInHand() == Event.Result.DENY) {
+            return;   // SkillCast 가 이미 이 우클릭으로 절기를 냈다 (겨눔이 선언보다 앞선다)
+        }
+        ItemStack held = player.getInventory().getItemInMainHand();
+        if (held.getType().isEdible()) {
+            return;   // 먹는 손 — 세계의 몫. 밥을 먹으며 방어에 전념할 수는 없다
+        }
+        // basic_strike 등록 계열만 — 활·미등록 계열은 우클릭에 제 일이 있다 (활은 시위를 당긴다)
+        if (engine.basicStrike(engine.weaponClassOf(held, materialName(player))) == null) {
+            return;
+        }
+        long until = tick + engine.roundTicks();   // '이번 라운드' — realtime.round_ticks 가 정본
+        long[] g = guardDeclare.get(player.getUniqueId());
+        if (g != null && tick < g[1]) {
+            g[1] = until;   // 손은 이미 올라가 있다 — 지속만 는다. 패링의 시계(g[0])는 그대로
+            return;
+        }
+        guardDeclare.put(player.getUniqueId(), new long[]{tick, until});
+        stanceFx(player, "선언");   // 선언은 남의 눈에도 보인다 — 보이는 것 = 맞는 것 (상대가 읽고 수를 고른다)
+        hud.flash(player, ChatColor.AQUA + stanceLabel("선언") + ChatColor.DARK_GRAY
+                + " │ 태세 +" + activeGuard.commitBonus() + " (" + activeGuard.stance() + ")",
+                tick + STANCE_READ_TICKS);
+    }
+
+    /** 선언이 지금 서 있는가 — 판정층({@link #chooseStance}·{@link #guardline})이 읽는다 */
+    private boolean guardDeclared(Player player) {
+        long[] g = guardDeclare.get(player.getUniqueId());
+        return g != null && tick < g[1];
+    }
+
+    /** 이 순간이 선언의 <b>앞머리</b>(패링 창) 안인가 — 읽고 세운 손만 패링이다 */
+    private boolean parryTiming(LivingEntity body) {
+        if (!(body instanceof Player player)) {
+            return false;
+        }
+        long[] g = guardDeclare.get(player.getUniqueId());
+        return g != null && tick < g[1] && tick - g[0] <= activeGuard.parryTicks();
+    }
+
+    /**
+     * 행동 소모 — 공격하는 순간 선언이 깨진다 ({@code active_guard.break_on_attack}).
+     * <b>SkillCast 도 부른다</b>: 절기도 공격이다 (+2 와 살초를 동시에 가질 수 없다).
+     */
+    public void breakGuard(Player player) {
+        if (activeGuard.breakOnAttack()) {
+            guardDeclare.remove(player.getUniqueId());
+        }
+    }
+
+    /**
+     * <b>방어가 이겼다 — 虛 의 기록.</b> 세 판정길(npcStrike · basicJudged · resolve)이 전부 지나는
+     * 한 자리다. 여기서 남긴 기록을 {@link #opening} 이 절기의 관문에 판다.
+     *
+     * @return 패링이었는가 — 선언의 앞머리({@code parry_window_ticks}) 안에서 받아 냈다
+     */
+    private boolean stanceWon(LivingEntity body, String stance) {
+        if (!(body instanceof Player player)) {
+            return false;   // NPC 는 절기의 虛 를 사지 않는다 — 기록할 것이 없다
+        }
+        UUID id = player.getUniqueId();
+        lastStanceWin.put(id, tick);
+        Growth growth = Growth.get();
+        if (growth != null && growth.lostWhenSurrounded(stance)) {
+            lastDodge.put(id, tick);   // 몸을 뺀 태세(forced_guard.loses) = 회피 — 등록부가 이름을 댄다
+        }
+        boolean parried = parryTiming(player);
+        if (parried) {
+            lastParry.put(id, tick);
+            event(player.getLocation().add(0, 1.2, 0), "패링_성공");   // defend 의 방패 패링과 같은 이음매
+        }
+        return parried;
+    }
+
+    /**
+     * <b>절기 虛 관문의 눈</b> — SkillCast 가 부른다 (B-015 의 닫는 조건 후반부).
+     *
+     * <p>그전까지 "패링·회피·반격"은 전부 <b>피격 후 창</b>(lastHurt + COUNTER_WINDOW)으로 근사됐다 —
+     * 막는 행위가 아니라 <b>맞은 뒤의 보상</b>이었다. 이제 <b>방어 성공의 기록</b>을 읽는다:
+     * 패링(선언 앞머리에서 받아 냄) · 회피(몸을 뺌) · 반격(어느 태세든 이긴 직후).
+     * 창은 등록부의 것이다 ({@code active_guard.opening_window_ticks}).
+     */
+    public boolean opening(Player player, String heo) {
+        if (!activeGuard.enabled()) {
+            return false;   // 등록부가 없으면 허는 닫혀 있다 — 근사로 되돌아가지 않는다
+        }
+        UUID id = player.getUniqueId();
+        Long at = switch (heo) {
+            case "패링" -> lastParry.get(id);
+            case "회피" -> lastDodge.get(id);
+            case "반격" -> lastStanceWin.get(id);
+            default -> null;
+        };
+        return at != null && tick - at <= activeGuard.openingTicks();
+    }
+
     /**
      * <b>태세를 고른다</b> — 몸짓 → 지정 → 자동 (combat.yml defender_stance_mc.precedence).
      *
@@ -1998,13 +2201,19 @@ public final class SkillListener implements Listener {
         }
         String picked = null;
         if (body instanceof Player player) {
+            // ⓪ 선언 — 행동으로 세운 태세가 자세보다 앞선다 (precedence: [선언, 몸짓, …] · active_guard)
+            if (guardDeclared(player)) {
+                picked = activeGuard.stance();
+            }
             // ① 몸짓 — 손과 발이 이미 말하고 있다 (등록부가 술어 이름을 준다. 코드가 몸짓을 짓지 않는다)
-            if (player.isBlocking()) {
-                picked = engine.stanceOfGesture("isBlocking");
-            } else if (player.isSneaking()) {
-                picked = engine.stanceOfGesture("isSneaking");
-            } else if (player.isSprinting()) {
-                picked = engine.stanceOfGesture("isSprinting");
+            if (picked == null) {
+                if (player.isBlocking()) {
+                    picked = engine.stanceOfGesture("isBlocking");
+                } else if (player.isSneaking()) {
+                    picked = engine.stanceOfGesture("isSneaking");
+                } else if (player.isSprinting()) {
+                    picked = engine.stanceOfGesture("isSprinting");
+                }
             }
             // ② 몸에 밴 태세
             if (picked == null) {
@@ -2105,7 +2314,9 @@ public final class SkillListener implements Listener {
         int score;
         if (body instanceof Player player) {
             score = growth.defenseScore(plugin.ledger(player.getUniqueId()), stance,
-                    weaponSkill(player), gyeonggongSkill(player), armorDodge(player), surrounded);
+                    weaponSkill(player), gyeonggongSkill(player), armorDodge(player), surrounded)
+                    // 선언(방어_전념)의 +2 — 행동을 판 값이다 (active_guard.commit_bonus, 정본은 action_notes)
+                    + (guardDeclared(player) ? activeGuard.commitBonus() : 0);
         } else {
             score = npcDefenseScore(body, st, surrounded);
         }
@@ -2613,8 +2824,11 @@ public final class SkillListener implements Listener {
         }
     }
 
-    /** 2d6 이 무엇을 굴렸는가 — 실행력의 내역과 저항의 출처 (숫자가 어디서 왔는지 못 대면 그것은 마법이다) */
-    private void eyeRoll(Player player, LivingEntity target, SkillEngine.Cast cast,
+    /**
+     * 2d6 이 무엇을 굴렸는가 — 실행력의 내역과 저항의 출처 (숫자가 어디서 왔는지 못 대면 그것은 마법이다).
+     * <b>Cast 를 받지 않는다</b> (B-105) — 무공도 평타도 같은 눈에 뜬다. 문법은 한 벌뿐이다.
+     */
+    private void eyeRoll(Player player, LivingEntity target,
                          int attrBonus, int mastery, int execBase, int roll, int resist,
                          Guardline foeLine, SkillEngine.Strike strike) {
         if (!engine.eye().log()) {
@@ -2648,6 +2862,30 @@ public final class SkillListener implements Listener {
                 + ChatColor.GRAY + " = " + (defense.blocked() || defense.damage() <= 0
                         ? ChatColor.RED + "0 (막혔다)"
                         : ChatColor.YELLOW + String.format("%.1f", defense.damage())));
+    }
+
+    /**
+     * 【판정의 눈 · 맞는 쪽】 <b>내 태세가 무엇을 굴렸는가</b> — {@link #eyeRoll} 의 거울상 (B-105).
+     * 우클릭 선언(B-015)의 +{@code commit_bonus} 는 판정치(score)에 <b>이미 들어 있다</b> —
+     * 태그는 그 사실만 밝힌다 (같은 값을 두 번 더해 보이면 눈이 거짓말한다).
+     * 세 판정길(npcStrike · basicJudged · resolve)이 전부 이 한 줄을 쓴다 — 문법은 한 벌뿐이다.
+     */
+    private void eyeStance(Player viewer, LivingEntity attacker, Guardline line,
+                           int atkTotal, int defRoll, int margin) {
+        if (!engine.eye().log()) {
+            return;
+        }
+        viewer.sendMessage(ChatColor.DARK_AQUA + "▍태세 " + ChatColor.WHITE + line.stance()
+                + " " + line.score()
+                + (guardDeclared(viewer)
+                        ? ChatColor.LIGHT_PURPLE + " · 선언(+" + activeGuard.commitBonus() + " 포함)" : "")
+                + ChatColor.GRAY + " + " + defRoll
+                + " vs " + attacker.getName() + " 공격 " + ChatColor.WHITE + atkTotal
+                + ChatColor.GRAY + " → " + (margin < 0
+                        ? ChatColor.GREEN + "받아냈다" + (parryTiming(viewer)
+                                ? ChatColor.LIGHT_PURPLE + " · 패링" : "")
+                        : ChatColor.RED + "뚫렸다")
+                + ChatColor.GRAY + " (마진 " + margin + ")");
     }
 
     /** 시(矢) — 날아가는 것. 거리에 따라 벌어지는 원뿔 (선과 달리 멀수록 넓다) */
@@ -3763,6 +4001,10 @@ public final class SkillListener implements Listener {
         states.remove(id);
         clashCounts.remove(id);
         stanceNow.remove(id);   // 지정 태세(stancePin)는 남긴다 — 몸에 밴 것은 로그아웃으로 안 풀린다
+        guardDeclare.remove(id);   // 선언·허의 기록은 순간의 것 — 접속을 건너 살아남지 않는다
+        lastParry.remove(id);
+        lastDodge.remove(id);
+        lastStanceWin.remove(id);
         hud.forget(id);
         display.clear(id);      // 떠난 몸의 형체는 남지 않는다
         if (Onboarding.get() != null) {

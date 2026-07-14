@@ -59,7 +59,9 @@ import java.util.concurrent.ThreadLocalRandom;
  *       (검법 절기는 검을 든 손에서 나간다 — 손에서 검이 떠나면 그것은 이미 검법이 아니다).</li>
  *   <li><b>같은 칸 두 번</b> (10틱 내, 비전투·정지) — 경락도(GUI) 개방. 편성은 전투 중에 못 바꾼다
  *       (skill_lifecycle.yml swap_rule).</li>
- *   <li><b>우클릭</b> (Shift 없이) — 겨눈 절기 시전. SkillListener 가 비워 둔 자리다
+ *   <li><b>우클릭</b> (Shift 없이) — 겨눈 절기 시전. 겨눈 것이 없으면 SkillListener 의
+ *       <b>방어 선언</b>(B-015 active_guard)이 그 손을 받는다 — 겨눔이 선언보다 앞선다 (이 리스너가
+ *       NORMAL 로 먼저 굴러 취소하면 선언 층은 물러선다).
  *       (좌클릭=콤보 / Shift+좌클릭=발출 / Shift+우클릭=격 태세 / F=오의 와 충돌하지 않는다).</li>
  * </ul>
  *
@@ -83,8 +85,8 @@ public final class SkillCast implements Listener {
     /** 병장기 칸 — 겨눔에서 손이 돌아갈 자리 (핫바 1~2 = 무기, mc_action_mapping) */
     private static final int WEAPON_SLOT = 0;
     private static final int DOUBLE_TAP_TICKS = 10;
-    /** 피격 직후 창 — 【배선 대기】 가드·패링·회피가 SkillListener 에 오기 전까지 '반격'의 대체 정의 */
-    private static final int COUNTER_WINDOW = 12;
+    // COUNTER_WINDOW(피격 직후 창)는 폐지됐다 (B-015) — 虛(패링·회피·반격)는 이제 SkillListener 의
+    // 방어 성공 기록(opening)을 읽는다. 창의 값은 combat.yml active_guard.opening_window_ticks 가 정본.
     /** SkillListener.stagger 가 심는 경직의 지문 (SLOWNESS amplifier 4) — 이것으로 '허'를 읽는다 */
     private static final int STAGGER_AMPLIFIER = 4;
     private static final String GUI_TITLE = "경락도 — 절기 편성";
@@ -304,7 +306,8 @@ public final class SkillCast implements Listener {
             lastCombo.put(p.getUniqueId(), tick);
         }
         if (event.getEntity() instanceof Player victim && !event.isCancelled()) {
-            lastHurt.put(victim.getUniqueId(), tick);   // 虛(반격)의 창 — 받은 직후에만 되돌린다
+            // '전투 중' 판정(openMeridian)의 시계 — 虛 의 출처는 더 이상 아니다 (B-015: opening 이 정본)
+            lastHurt.put(victim.getUniqueId(), tick);
         }
     }
 
@@ -396,11 +399,11 @@ public final class SkillCast implements Listener {
                         return true;   // 등 뒤에 섰다
                     }
                 }
-                // 【배선 대기】 가드·패링·회피는 SkillListener 에 아직 없다 ("후속 배선").
-                //   그때까지 '반격'은 피격 직후 창으로 읽는다 — 받은 수를 되돌린다는 결은 같다.
+                // 【B-015 · 배선 완료】 근사를 그만뒀다 — 옛 코드는 피격 직후 창(lastHurt)으로 읽었다:
+                //   막는 행위가 아니라 **맞은 뒤의 보상**이었다. 이제 SkillListener 의 방어 성공 기록을
+                //   읽는다: 패링(우클릭 선언의 앞머리에서 받아 냄) · 회피(몸을 뺌) · 반격(어느 태세든 이긴 직후).
                 case "패링", "회피", "반격" -> {
-                    long hurt = lastHurt.getOrDefault(player.getUniqueId(), -999L);
-                    if (tick - hurt <= COUNTER_WINDOW) {
+                    if (skills.opening(player, heo)) {
                         return true;
                     }
                 }
@@ -421,6 +424,7 @@ public final class SkillCast implements Listener {
             sound(player, "block.note_block.bass", 0.3f, 0.6f);
             return;
         }
+        skills.breakGuard(player);   // 절기도 공격이다 — 방어 전념(+2)과 살초를 동시에 가질 수 없다 (B-015)
         SkillEngine.State state = skills.state(player);
         String weaponClass = engine.weaponClassOf(
                 player.getInventory().getItemInMainHand(), materialName(player));
@@ -472,7 +476,12 @@ public final class SkillCast implements Listener {
             return;
         }
         SkillEngine.State state = skills.state(player);
-        List<LivingEntity> targets = targets(player, art, plan);
+        // ★ 절기도 **같은 손으로 가려낸다** — 아군을 안 베고, 벽 너머를 안 벤다, 가까운 것부터.
+        //   그전엔 이 경로만 규칙 밖에 있었다 (히트박스에 든 모든 몸을 그대로 벴다).
+        //   가려내는 규칙이 두 벌이면 그중 하나는 반드시 낡는다 — 그래서 SkillListener 의 것을 부른다.
+        List<String[]> vetoes = new ArrayList<>();
+        List<LivingEntity> targets = skills.admit(player, plan, null,
+                targets(player, art, plan), vetoes);
         int hits = 0;
 
         for (LivingEntity foe : targets) {
@@ -561,10 +570,9 @@ public final class SkillCast implements Listener {
         }
         flat.normalize();
 
+        // 【상한은 여기서 물리지 않는다】 admit() 이 **가까운 것부터** 골라 max_targets 만큼 담는다
+        //   (여기서 자르면 청크 순회 순서대로 "아무 8" 이 된다 — 그것이 바로 그 버그였다)
         for (org.bukkit.entity.Entity e : player.getNearbyEntities(range, range, range)) {
-            if (out.size() >= plan.maxTargets()) {
-                break;
-            }
             if (!(e instanceof LivingEntity foe) || foe.equals(player) || !foe.isValid()) {
                 continue;
             }
