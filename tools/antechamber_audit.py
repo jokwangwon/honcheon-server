@@ -1701,6 +1701,21 @@ def audit_dummies(rep: Report, ante: dict, code: str) -> None:
 # ★ 한계는 정직하게: 이것은 **마지막 저장 시점**의 세계다. 서버가 돌고 있고 아직 저장이
 #   안 됐으면 낡은 값을 본다. 그래도 "등록부가 그렇다더라"보다는 언제나 세계에 가깝다.
 
+def marker_census(data: bytes) -> dict:
+    """청크 NBT 바이트에서 PDC 표식을 센다.
+
+    ★★ 'ipdo_dummy' 는 'ipdo_dummy_label' **안에도 산다** (부분 문자열).
+    몸 하나가 키 둘(ipdo_dummy + ipdo_dummy_label)을 지니므로, 그냥 세면
+    **몸 하나가 두 번 세어진다** — 등록부 6 이 세계 12 로 읽혔다 (2026-07-14 실증:
+    갓 지은 월드 · 조성 1회 · 라이브 계수 6 인데 이 눈만 12 라 했다. 쌓인 몸이 아니라
+    **눈의 오독**이었다). 긴 키를 먼저 세어 짧은 키에서 뺀다."""
+    label = data.count(b"ipdo_dummy_label")
+    return {
+        "dummy": data.count(b"ipdo_dummy") - label,
+        "panel": data.count(b"ipdo_panel"),
+    }
+
+
 def audit_world(rep: Report, ante: dict) -> None:
     import struct
     import zlib
@@ -1721,7 +1736,7 @@ def audit_world(rep: Report, ante: dict) -> None:
         1 for st in stations
         if (lessons.get(st.get("lesson") or "") or {}).get("requires"))
 
-    found = {b"ipdo_dummy": 0, b"ipdo_panel": 0}
+    found = {"dummy": 0, "panel": 0}
     chunks = 0
     for fn in sorted(os.listdir(ent)):
         if not fn.endswith(".mca"):
@@ -1751,11 +1766,11 @@ def audit_world(rep: Report, ante: dict) -> None:
                 rep.warn(f"{fn} 청크 {i}: 풀지 못했다 ({e})")
                 continue
             chunks += 1
-            for key in found:
-                found[key] += data.count(key)
+            for key, n in marker_census(data).items():
+                found[key] += n
 
-    dummies_in_world = found[b"ipdo_dummy"]
-    panels_in_world = found[b"ipdo_panel"]
+    dummies_in_world = found["dummy"]
+    panels_in_world = found["panel"]
     rep.say(f"    · 저장된 엔티티 청크 {chunks} — 허수아비 {dummies_in_world} · 글판 {panels_in_world}")
 
     if dummies_in_world < want_dummies:
@@ -1764,12 +1779,13 @@ def audit_world(rep: Report, ante: dict) -> None:
                 "(마지막 저장 시점 기준. 서버를 다시 돌리고 /혼천 입도 재조성 뒤 다시 재라)")
     elif dummies_in_world > want_dummies:
         # ★★ **많은 것도 틀린 것이다.** 이 눈은 여태 '모자람'만 봤다 — 그래서 등록부 6인데
-        #   세계에 24 가 서 있어도 ✅ 였다. 겹쳐 선 몸은 히트박스가 겹쳐 **타격 계측을 망친다**
-        #   (허수아비는 계기다). 원인은 ensureDummies() 의 `>=` 였다 — 넘치면 영영 안 치웠다.
+        #   세계에 12 가 서 있어도 ✅ 였다. 겹쳐 선 몸은 히트박스가 겹쳐 **타격 계측을 망친다**
+        #   (허수아비는 계기다). ensureDummies() 의 `==` 와 marker_census() 의 부분 문자열
+        #   차감이 둘 다 선 지금, 이 갈래가 우는 것은 **진짜 쌓인 몸**이다.
         rep.bad(f"★ 세계에 허수아비가 {dummies_in_world}몸이다 — 등록부는 {want_dummies}몸. "
-                "**많은 것도 틀린 것이다**: 재조성이 몸을 쌓았다. 겹쳐 선 허수아비는 히트박스가 겹쳐 "
-                "타격 계측을 망친다 (허수아비는 계기다). ensureDummies() 가 `==` 로 판단해야 한다 "
-                "— 서버를 다시 돌리고 /혼천 입도 재조성 하면 걷힌다")
+                "**많은 것도 틀린 것이다**: 몸이 쌓였다. 겹쳐 선 허수아비는 히트박스가 겹쳐 "
+                "타격 계측을 망친다 (허수아비는 계기다). "
+                "서버가 도는 상태에서 /혼천 입도 재조성 하면 걷힌다 (마지막 저장 기준임에 유의)")
     else:
         rep.good(f"세계에 허수아비 {dummies_in_world}몸이 서 있다 (등록부 {want_dummies}) — 때릴 상대가 있다")
 

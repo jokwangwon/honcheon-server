@@ -282,6 +282,36 @@ def run_audit():
     return p.returncode, p.stdout + p.stderr
 
 
+def test_marker_census():
+    """⑪ 세계 축의 계수기를 잰다 — ★ 몸 하나가 키 둘(ipdo_dummy + ipdo_dummy_label)을
+    지니므로, 부분 문자열을 그냥 세면 **한 몸이 두 번** 세어진다 (2026-07-14 실증:
+    갓 지은 나루 · 실제 6몸을 눈이 12라 했다). 세계 축은 저장된 월드가 있어야 돌므로
+    뮤테이션이 아니라 **합성 바이트**로 계수기만 직접 잰다."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("ante_audit", AUDIT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    # 좀비 한 몸의 저장 꼴 근사 — PDC 키 둘 + 무관한 이웃 글판 하나
+    one_body = (b"\x00\x13honcheon:ipdo_dummy\x03\x00\x00\x00\x05"
+                b"\x00\x19honcheon:ipdo_dummy_label\x00\x04\xea\xb2\x80\xea")
+    one_panel = b"\x00\x13honcheon:ipdo_panel\x00\x05gate1"
+    checks = [
+        ("몸 하나(키 둘)는 1로 센다", one_body, 1, 0),
+        ("몸 둘 + 글판 하나", one_body * 2 + one_panel, 2, 1),
+        ("빈 청크는 0", b"", 0, 0),
+    ]
+    bad = 0
+    for name, blob, want_d, want_p in checks:
+        got = mod.marker_census(blob)
+        ok = got["dummy"] == want_d and got["panel"] == want_p
+        detail = "" if ok else " — dummy {}≠{} · panel {}≠{}".format(
+            got["dummy"], want_d, got["panel"], want_p)
+        print(f"  {'✅' if ok else '❌'}  (계수기) {name}{detail}")
+        if not ok:
+            bad += 1
+    return bad
+
+
 def main():
     import re
     shutil.copy(CFG, CFG + ".bak")
@@ -319,8 +349,13 @@ def main():
 
     rc, out = run_audit()
     print(f"\n되돌린 뒤: 종료코드 {rc}")
-    print(f"\n═══ 눈의 시험: 잡음 {caught} · 놓침 {missed} / {len(MUTATIONS)} ═══")
-    return 0 if missed == 0 and rc == 0 else 1
+
+    print("\n─── ⑪ 세계 축 계수기 (합성 바이트) ───")
+    census_bad = test_marker_census()
+
+    print(f"\n═══ 눈의 시험: 잡음 {caught} · 놓침 {missed} / {len(MUTATIONS)}"
+          f" · 계수기 실패 {census_bad} ═══")
+    return 0 if missed == 0 and census_bad == 0 and rc == 0 else 1
 
 
 if __name__ == "__main__":

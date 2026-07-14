@@ -101,15 +101,34 @@ WOUNDS = [
      HONEST.replace("- **검증**: `python3 tools/backlog_audit.py`\n", ""),
      "빠짐", False),
 
+    # ★ 2026-07-14 실사고의 지문 — 일괄 치환이 닫힘 근거 45곳을 한 문장으로 덮고
+    #   상태 20건을 뒤집었다. 증거의 꼴은 멀쩡해서 ①~⑩ 이 전부 통과했다.
+    #   같은 증거가 두 항목에 살면 그것은 복제다 — 한 증거는 한 항목의 것이다.
+    ("⑫ 닫힘 근거가 **복제**됐다 (두 항목이 같은 문장 — 일괄 치환의 지문)",
+     HONEST + """
+### B-003 · 남의 증거로 닫힌 항목
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P1
+- **위치**: `tools/game_audit.py:1`
+- **의존**: —
+- **닫는 조건**: 아무것도 아니다 (시험용)
+- **검증**: `python3 tools/pack_gate_audit.py`
+- **닫힘**: 2026-07-14 · `python3 tools/pack_gate_audit.py` → 위반 0건
+""",
+     "복제됐다", False),
+
     # ★★ 이것이 이 눈의 심장이다 — 장부가 「닫힘」이라 말하는데, 감사를 돌리면 짖는다.
     #    ①~⑩ 은 장부의 *모양*만 보면 잡히지만, 이것은 **감사를 실제로 돌려야만** 잡힌다.
-    #    lint_config 는 지금 21건을 짖는다 (2026-07-14 실측) — 그런데 「닫힘」이라 적는다.
+    #    ★ 표본은 남의 감사를 빌리지 않는다 — lint_config 를 빌렸다가 B-001 이 그 감사를
+    #    고치자 표본이 조용해져 이 시험이 낡았다 (2026-07-14). always_barks 는 설계상
+    #    언제나 「위반 1건」을 말하고, 종료 코드는 일부러 0 이다 (저장소의 함정 재현).
     ("★⑪ 「닫힘」인데 그 감사가 **실제로는 짖는다** (--run 이라야 잡힌다)",
      HONEST.replace(
          "- **검증**: `python3 tools/pack_gate_audit.py`\n"
          "- **닫힘**: 2026-07-14 · `python3 tools/pack_gate_audit.py` → 위반 0건",
-         "- **검증**: `python3 tools/lint_config.py`\n"
-         "- **닫힘**: 2026-07-14 · `python3 tools/lint_config.py` → 위반 0건"),
+         "- **검증**: `python3 tools/selftest_fixtures/always_barks.py`\n"
+         "- **닫힘**: 2026-07-14 · `python3 tools/selftest_fixtures/always_barks.py` → 위반 0건"),
      "감사가 짖는다", True),
 ]
 

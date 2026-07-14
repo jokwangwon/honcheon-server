@@ -480,7 +480,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: 인게임에서 나루의 **길 · 조명 · 글판**을 눈으로 본다
 - **검증**: ★ 인게임 — `tools/antechamber_audit.py` 는 **블록을 안 읽는다**
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `antechamber_audit.py` 의 11개 축 중 **①~⑩ 은 전부 정적**이다 — 자기 입으로 말한다 (`:1693`):
 > *"위의 눈은 전부 **정적**이다 — config 와 소스만 읽는다."*
@@ -503,10 +503,12 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: `ensureDummies()` 가 `==` 로 판단한다 (`>=` 가 아니라) → 감사 위반 0건
 - **검증**: `python3 tools/antechamber_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: 2026-07-14 밤 (재닫힘 — 진범은 눈이었다). ① `ensureDummies()` 의 `==` 판단은 이미 서 있었다. ② 입도진 월드 재생성(사용자 지시 · 오발 조성 잔해 정리 겸) 뒤 **갓 지은 나루 · 조성 1회 · 조성 로그 6/6** 인데 감사가 또 12 를 셌다 → 실증: 몸 하나가 PDC 키 둘(`ipdo_dummy` + `ipdo_dummy_label`)을 지녀 부분 문자열 계수가 **한 몸을 두 번** 셌다 (엔티티 청크 직접 해부: dummy 12 · label 6 → 실몸 6). **12몸은 쌓인 몸이 아니라 눈의 오독이었다.** ③ 수리: `marker_census()` 차감 계수 + 초과 갈래 처방문 갱신. ④ 눈의 시험: 계수기 합성 바이트 3종 신설 (옛 계수법이면 실패한다) — selftest 70/70 + 계수기 0실패. 실측: `antechamber_audit` **위반 0건 · exit 0** (허수아비 6 · 글판 9)
 
-실측 (2026-07-14): **세계에 12몸.** 재조성이 몸을 **쌓았다**.
-겹쳐 선 허수아비는 히트박스가 겹쳐 **타격 계측을 망친다** — 허수아비는 **계기**다.
+실측 (2026-07-14): 처음 보고는 **세계에 12몸 — 재조성이 쌓았다**였다. 재수사 결과 그날의
+12 는 이중 계수였을 가능성이 크다 (당시 실몸 수는 이제 알 수 없다 — 월드가 재생성됐다).
+겹쳐 선 허수아비가 타격 계측을 망친다는 원칙은 그대로다 — 허수아비는 **계기**다.
+초과 갈래는 이제 진짜 쌓임에만 운다.
 
 > **많은 것도 틀린 것이다.** (감사의 말)
 
@@ -518,7 +520,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: ★ 사람이 정해야 한다 — 서브커맨드 **그룹**으로 갈 것인가, 명령을 쪼갤 것인가
 - **검증**: `server-bot/src/main/java/com/honcheon/bot/HoncheonBot.java:93` 의 `SubcommandData` 개수 < 25
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 정확히 **25개**다 (시작·정보·원장·사냥·비무·수련·사사·의뢰·대화·탐방·운기·출행·소문·의방·구조·전장·접속·접속해제·지역등록·정산·사선·사망·명분·사정·도움말).
 디스코드의 **하드 상한이 25**다. **다음 기능은 들어갈 자리가 없다.**
@@ -549,7 +551,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: ★ 바닐라로는 못 닫는다 — 클라 모드 없이는 근사가 최선이다
 - **검증**: ★ 인게임 — 감각의 문제다
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `freezeTick()` (`:2680-2694`) 이 매 틱 `setVelocity(new Vector())` 로 **속도를 못질**한다.
 코드가 한계를 안다 (`:2673`): *"서버는 클라이언트의 애니메이션 프레임을 멈출 수 없다. 그러나 몸의 속도는 서버의 것이다."*
@@ -564,19 +566,19 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: ★ 못 닫는다 — `setRotation` 이 곧 카메라라 **멀미**가 된다
 - **검증**: ★ 사람이 정해야 한다 — 이 감각을 포기할 것인가, 클라 모드로 갈 것인가
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **기록해 두는 이유**: 누군가 다시 시도하기 전에 **왜 안 되는지** 알라고.
 
 ### B-023 · 레이캐스트 — 캡은 **admit** 에 걸리지 raycast **호출**에 안 걸린다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P3
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java:2368`
 - **의존**: —
 - **닫는 조건**: 후보 목록 자체가 유한하다 — 또는 이것이 문제가 아님을 계측으로 보인다
 - **검증**: `python3 tools/perf_audit.py` · `Metrics.record("판정_가려내기")` 의 실측
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 > ★ **씨앗이 틀렸다.** "레이캐스트 상한 없음" 은 **거짓**이다 — 캡이 있다:
 > `SkillListener.java:2368` → `if (out.size() >= cast.maxTargets())` (`max_targets_default: 8`).
@@ -591,14 +593,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 # P3 — 빚
 
 ### B-024 · `recovery()` 를 **규칙이 안 읽는다** — `total()` 에 접혀 있다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillEngine.java:1147`
 - **의존**: —
 - **닫는 조건**: 후딜이 **독립된 뜻**을 갖는다 (캔슬 창을 열려면 분리해야 한다)
 - **검증**: `python3 tools/combat_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `record Frames(int startup, int active, int recovery)` — `total() = startup + active + recovery`.
 **규칙 중 `recovery()` 를 읽는 것은 하나도 없다.** 전부 `total()` 을 쓴다 (`busyUntil`, 콤보 마감).
@@ -614,7 +616,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: `impact.enabled` 가 굳으면 옛 길을 지운다
 - **검증**: `python3 tools/combat_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `:2592` — `if (ticks >= 10 && target instanceof Mob)` → `setVelocity(...)`.
 **의도적으로 남겼다** (`:2581`): *"impact.enabled: false 로 되돌렸을 때 이 세계가 정확히 옛 동작으로 돌아가야 하므로."*
@@ -622,14 +624,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 ★ 다만: `impact.enabled` 가 참일 때 **속도를 두 번 쓴다** (히트스톱 해제 전 창에서). 무해한지 **미확인.**
 
 ### B-029 · `perf_audit` — **한 틱 폭탄** · 상한 미상 2건
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/CheonghaBuilder.java:300`
 - **의존**: —
 - **닫는 조건**: `perf_audit` 위반 0건 — 조성이 틱을 나눠 쓴다
 - **검증**: `python3 tools/perf_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `[폭탄] CheonghaBuilder.build()` (`:300`) · `[상한 미상] SectBuilder.pagoda()` (`SectBuilder.java:118`) ·
 `[상한 미상] CheonghaBuilder.generalStore()` (`:6012`).
@@ -637,14 +639,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 > 전례: `9fdf956 [perf] 한 틱 폭탄을 해체했다 — MSPT 625ms → 13.9ms`. **같은 종류가 아직 남았다.**
 
 ### B-030 · `gap_audit` — **유령 절 112개** · 테스트만 부르는 메서드 39 · 호출자 없는 메서드 60
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `docs/design/gap_audit.md`
 - **의존**: —
 - **닫는 조건**: 유령 절이 준다 — 배선하거나, 지우거나, **미배선이라고 적거나**
 - **검증**: `python3 tools/gap_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 > **유령 절 112개** — *"규칙으로 적혀 있고, 굴러가지 않고, 아무도 그 사실을 재지 않는다."*
 > **테스트만 부르는 메서드 39개** — *"파리티 테스트가 초록이어도 플레이어는 그 규칙을 겪지 않는다."*
@@ -653,14 +655,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 줄일 때는 `gap_audit` 의 수를 **떨어뜨려** 증명하라.
 
 ### B-031 · 동행(party) — 엔진은 있으나 **명부가 없다**. 아군을 **의도**로 가른다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java:2335`
 - **의존**: —
 - **닫는 조건**: 동행 명부(초대·가입·탈퇴)가 선다 → 아군이 **사실**로 갈린다
 - **검증**: `python3 tools/game_audit.py` (party.yml 미참조 절 `time_sync` 가 사라지는가)
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 > 씨앗 정정: "party 시스템이 없다 · 자바 독자 없다" 의 **뒷절반은 거짓**이다 —
 > `core/src/main/java/com/honcheon/core/rules/PartyEngine.java` 가 `party.yml` 을 읽는다.
@@ -672,14 +674,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 > *"【무엇으로 아군을 가르는가 — 파티 시스템이 없다】 동행(party)은 아직 코드에 없다… 대신 **의도(意)**로 가른다"*
 
 ### B-032 · `장터` 앵커 = **마을 원점** — 옮기면 마을이 이사한다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/CheonghaBuilder.java:429`
 - **의존**: —
 - **닫는 조건**: **원점이 별도 앵커로 분리된다** (그것이 정답인데 안 했다)
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `CheonghaBuilder.java:330` — `anchors.put("장터", loc(world, cx, cy + 1, cz))`. 원점에는 **우물**이 있다 — 발밑은 물.
 코드가 병과 **고치지 않기로 한 이유**를 함께 적었다 (`:429-435`):
@@ -690,14 +692,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 지금의 우회는 `Standing.landing()` (`:437`). **정답은 원점을 쪼개는 것**이고, 안 했다.
 
 ### B-033 · `combat_audit` 경고 3건 — 숙련 스케일 · 심법의 관문 · **대칭 대결의 선공**
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `config/skills.yml`
 - **의존**: —
 - **닫는 조건**: `combat_audit` 경고 0건
 - **검증**: `python3 tools/combat_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 1. **숙련 스케일 불일치** — `skills.yml` 은 `0~10`, `mastery_ladder` 는 극성 **8** 이 상한, `judgment.yml` 은 `max: 10`.
    **8~10 구간의 뜻이 정의되지 않았다.**
@@ -707,14 +709,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
    그리고 **선공은 전부다**: *"대칭 대결의 승패가 판정이 아니라 선공 결정에서 이미 끝난다 (선공자 내구 20% 잔존)."*
 
 ### B-034 · `gap_audit` — 문서가 약속한 키가 등록부에 **없다** (3건)
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 빚
 - **단계**: P4
 - **위치**: `docs/design/gap_audit.md`
 - **의존**: —
 - **닫는 조건**: `gap_audit` 의 이 세 경고가 사라진다
 - **검증**: `python3 tools/gap_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 - `blood_debt.md` 가 `blood_debt.exposure_floor` 를 약속 — `faction_reaction.yml` 에 **그 키가 없다**
 - `gyeonggong.md` 가 `messages.on` 을 약속 — `gyeonggong.yml` 에 **없다**
@@ -736,7 +738,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: `.ogg` 가 생긴다 (약 30종) — **사람의 손 또는 외부 도구가 필요하다**
 - **검증**: `bash -c "find resourcepack -name '*.ogg' | wc -l"` → 0 이 아니다
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **실측 (2026-07-14): `.ogg` 파일 0개.** 등록부가 자기 입으로 적어 뒀다 (`:929`):
 > *"【현황】 혼천의 소리 = **0종.** assets/*/sounds/ 에 .ogg 가 한 장도 없다."*
@@ -745,27 +747,27 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 **배경음악 96종 전부 침묵.** ★ **이것은 코드로 못 닫는다.** 정직한 미완이다.
 
 ### B-036 · HUD 잔여 — `crosshair` · `air` · `boss_bar`
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/resourcepack_design.yml:995`
 - **의존**: —
 - **닫는 조건**: 세 스프라이트가 선다
 - **검증**: `python3 tools/texture_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 등록부가 남은 것을 안다 (`:995`): `남은_것: [crosshair, "air(물속 거품)", "boss_bar(보라색)"]`.
 실측: `resourcepack/assets/minecraft/textures/gui/sprites/hud/` 에 hotbar·experience_bar·food·heart 만 있다.
 
 ### B-037 · **명병 4문파 미제작** (곤륜·청성·해남·개방)
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/resourcepack_design.yml:878`
 - **의존**: —
 - **닫는 조건**: `MYEONGBYEONG` 이 12문파를 갖는다
 - **검증**: `python3 tools/build_resourcepack.py` · `python3 tools/model_key_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `tools/build_resourcepack.py:1555` 의 `MYEONGBYEONG` 에 **8문파**뿐 (hwasan·jeomchang·jongnam·namgung·mudang·paengga·dangga·sorimsa).
 등록부가 이유까지 적었다 (`:878`):
@@ -774,26 +776,26 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 ★ **개방은 병기 계열부터 새로 만들어야 한다** — 다른 셋과 무게가 다르다.
 
 ### B-038 · 획(참격선) **2차 확장** — 반월형 궤적 · 문파 색 · 어검/심검
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/skill_motion.yml`
 - **의존**: —
 - **닫는 조건**: 검기 단계 반월형 파티클 궤적 · 문파별 색 분화 · 어검/심검 전용 형체가 선다
 - **검증**: `python3 tools/motion_audit.py` · `python3 tools/texture_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 ★ **`ult` 판의 채도는 인게임에서 정할 값이다** (기계로 못 정한다 → **B-062**).
 
 ### B-039 · **조성 16곳이 조용히 아무것도 안 세운다** (53곳 중 32곳만 선다)
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/world_map.yml:841`
 - **의존**: B-047, B-048, B-049, B-050
 - **닫는 조건**: `map_lint` 의 「선다」가 53곳에 닿는다 (또는 「안 짓기로 함」으로 정직하게 닫힌다)
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `map_lint` 검산 (2026-07-14):
 ```
@@ -808,14 +810,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 **32 + 15 + 1 + 2 + 3 = 53.** ★ **15곳은 코드가 없어서가 아니라 원형(archetype)을 사람이 안 정해서 안 선다.**
 
 ### B-040 · `jegal` — 원형은 **청구됐는데 그것을 지을 손이 없다**
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/world_map.yml:1275`
 - **의존**: B-050
 - **닫는 조건**: `RemoteBuilder.Archetype` 에 `기관저택` 이 선다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 > ★ **씨앗이 이것을 잘못 분류했다.** `jegal` 은 `pending` 이 **아니다** — `world_map.yml:1275` 에 `archetype: 기관저택` 이 **있다**.
 > 병이 다르다: **원형은 정해졌는데 그 원형을 아는 빌더가 없다** (`RemoteBuilder` 의 21개 원형에 `기관저택` 이 없다).
@@ -823,14 +825,14 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 그러나 **먼저 물어야 한다**: *"무엇이 있어야 제갈이 제갈인가"* (**B-050**). 그것 없이는 지어도 제갈이 아니다.
 
 ### B-041 · **바다를 파는 손이 없다** — 섬 둘과 해관이 바닐라 해안에 앉는다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/terrain.yml:192`
 - **의존**: —
 - **닫는 조건**: `TerrainForge` 가 물을 만든다 — 섬이 **섬**이 된다
 - **검증**: `python3 tools/map_lint.py` · `server-mvt/src/main/java/com/honcheon/mvt/TerrainAudit.java:416`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 등록부가 빚이라고 적었다 (`terrain.yml:192`):
 > *"★ **바다를 파는 손이 없다.** TerrainForge 는 물을 만들지 않는다 (tidyWater 는 정리만).
@@ -847,7 +849,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: B-041
 - **닫는 조건**: 배가 생긴다 — 또는 섬에 닿는 다른 길이 생긴다
 - **검증**: ★ 인게임 — 섬에 **닿을 수 있는가**
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `TerrainAudit.java:416` 이 사용자의 말을 인용한다:
 > *"★ **배는 아직 없다** (사용자: '배는 아직 없다. 땅이 배를 기다리며 선다'). 그래서 이 축은 **땅만 잰다** — '배가 닿을 수 있는 땅인가'"*
@@ -862,7 +864,7 @@ PG-005 이관 자기 시험이 fixture 를 만들다 밟았다 (2026-07-14). `db
 - **의존**: —
 - **닫는 조건**: **땅이 건축의 미결과 무관하게 선다** — 사용자가 `/혼천 지형조성` 을 쳐서 확인
 - **검증**: `tools/TerrainGateSelfTest.java` (서버 없이 돈다 · 눈 13개) · 인게임 `/혼천 지형조성 gangnam_sangro`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 ★ **2026-07-14 (지형 담당) — 게이트를 갈랐다.** 계약(`docs/design/gate_and_watertown.md`)의 순서 그대로다:
 `① 지형 게이트 → ② 조성 → ③ 영수증 → ④ 건축 게이트 → ⑤ 건축 / ⑥ 땅만 남기고 사유 출력`.
@@ -902,14 +904,14 @@ if (!blockers.isEmpty()) {
 **미결 16곳 전부**가 땅을 갖게 된다 — 그것은 되돌리기 어려운 변경이라 **묻지 않고 하지 않았다.**
 
 ### B-084 · **수향(水鄕)을 빚는 손이 없다** — 「물의 고장」이 코드에선 **강 하나 옆의 마을**과 같다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/TerrainForge.java:691`
 - **의존**: B-043 (요청 어휘가 문이다) · B-052 (반경이 없으면 땅이 안 선다)
 - **닫는 조건**: `수향` 이 `강` 과 **다르게 빚어진다** — 물이 골목이 된다
 - **검증**: `python3 tools/map_lint.py` · ★ 인게임 — 청하현과 **한눈에 다른가**
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **등록부는 세 곳을 `terrain: 수향` 이라 적었다** — `gangnam_sangro`(`:949`) · `soju`(`:921`) · `namgung`(`:1263`).
 그런데 **코드에는 수향이 없다.** `TerrainForge.profile()` 의 switch 에 `수향` 이 **없어서** `default` 로 떨어진다:
@@ -932,14 +934,14 @@ if (!blockers.isEmpty()) {
 **의도인지 누락인지 모른다. 지어내지 않고 묻는다.**
 
 ### B-043 · `land_requests.yml` 의 `requests:` 가 **비어 있다** → 조성이 제 단 안을 팠다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/land_requests.yml:127`
 - **의존**: —
 - **닫는 조건**: 남궁이 **물을 청구**한다 · 지형 계층이 판다 (조성이 아니라)
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `land_requests.yml:127` (마지막 줄): **`requests: {}`** — 비었다. 위는 전부 주석 처리된 예시다.
 등록부는 남궁이 물이 필요한 걸 안다 (`world_map.yml:3446`): *"★ **물이 필요하다** — 지형 계층에 청구해야 한다 (Q-J)"*
@@ -957,7 +959,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 각 파일이 문서에 적은 **신설 조건**이 충족되면 배선한다
 - **검증**: `python3 tools/gap_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **셋 다 「★ 명시적 미배선」이다** — *"아무도 안 읽는다. **그리고 그렇다고 적혀 있다.**"*
 **거짓말이 아니라 계획된 약속**이므로 위반이 아니다. 조건은 각 문서 머리에 있다.
@@ -965,27 +967,27 @@ if (!blockers.isEmpty()) {
 ★ **이 항목은 "지금 하라"가 아니라 "잊지 마라"다.**
 
 ### B-045 · `design_review` 의 **G7 · G8** 이 남았다
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `docs/design/design_review.md`
 - **의존**: B-005
 - **닫는 조건**: G7(전투 상세)이 `combat_system.md` 로 닫힌다 · G8 은 MMO 단계로 미룬다
 - **검증**: `python3 tools/combat_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `design_review.md` 의 공백 목록 G1~G8 중 **G1~G6 은 닫혔다** (문서가 증거와 함께 적어 뒀다 — **좋은 선례다**).
 **남은 것**: **G7** (전투 상세 규칙) · **G8** (공유 세계 동시성 — *"MMO 단계 과제로 미뤄도 됨"*).
 
 ### B-046 · `game_audit` 경고 6건 — **엔진이 읽는 파일인데 미참조 절**
-- **상태**: 닫힘
+- **상태**: 열림
 - **분류**: 미완
 - **단계**: P5
 - **위치**: `config/economy.yml`
 - **의존**: —
 - **닫는 조건**: `game_audit` 경고 0건
 - **검증**: `python3 tools/game_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `economy.yml`(unpurchasable, tolls) · `judgment.yml`(npc_modifiers, side_risks, retry) ·
 `npc_lifecycle.yml`(emergent_interactions) · `party.yml`(time_sync → **B-031**) ·
@@ -1008,7 +1010,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 6곳에 `archetype` 이 정해진다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `archetype: pending` — 태원(`:841`) · 무한(`:872`) · 소주(`:905`) · 강남상로(`:931`) · 고창(`:1719`) · 돈황(`:1902`).
 
@@ -1020,7 +1022,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 4곳에 `archetype` 이 정해진다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 성화단(`:1763`) · 설역대사(`:1795`) · 오독채(`:1836`) · 동영도(`:1866`).
 
@@ -1032,7 +1034,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 사용자가 두 문파의 형태를 정한다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 점창(`:1086`) · 청성(`:1108`). ★ **다른 사람이 대신 정하면 안 된다** — 사용자가 직접 하기로 한 것이다.
 
@@ -1044,7 +1046,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 기관저택의 **뜻**이 정해진다 → 그 다음에 빌더를 만든다 (**B-040**)
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **원형 이름은 있다** (`기관저택`). **뜻이 없다.** 기관(機關)이 무엇을 하는가 — 함정인가, 자물쇠인가, 미로인가.
 **답이 없으면 지어도 제갈이 아니다.**
@@ -1057,7 +1059,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 3곳에 `archetype` 이 정해진다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 독문(`:1521`) · 마교 낙양분타(`:1602`) · 시박사(`:2831` — ★ 그리고 **바다가 필요하다**, B-041).
 
@@ -1069,7 +1071,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 10개 값이 정해진다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `commercial_class` **4곳**: donhwang · gangnam_sangro · soju · taewon.
 `wealth_tier` **6곳**: 위 넷 + muhan + seoyeok_gochang.
@@ -1087,7 +1089,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 사용자가 답한다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `world_map.yml:1295` — *"★ 원형은 정해졌으나 어디까지 지을지가 미결이다 — sect_lineage.md 5장: **입문 불가**.
 **들어갈 수 없는 집의 담 안을 지을 것인가?** (Q-C)"*
@@ -1103,7 +1105,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 「전성기 영향력」이 등록부에 선다 → `build_radius` 를 다시 매긴다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 계약은 명확하다 (`world_map.yml:3918`):
 > *"★ 그러므로 `build_radius` 는 **전성기(peak) 값**이다. 지금의 영향력이 아니라 **그 세력이 가장 컸을 때**다"*
@@ -1122,7 +1124,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 사용자가 110 을 승인하거나 고친다
 - **검증**: `python3 tools/map_lint.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 등록부가 **정직하다** (`:288`):
 > *"★ 110 은 **이미 서 있던 값이다** (옛 코드의 비-녹림 상수). ★★ **지어낸 수가 아니다** — 예외(24)를 지웠을 뿐 값을 새로 만들지 않았다."*
@@ -1137,7 +1139,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 사용자가 승인하거나 고친다
 - **검증**: `core/src/test/java/com/honcheon/core/rules/GenderGateTest.java`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **살아 있다**: `player_creation.yml:80-84` — `남: {근력: 1}` · `여: {민첩: 1}` · `hidden: true` · `applies_to: judgment` · `cap: 1`.
 `GenderEngine.attrModifier` 가 먹이고, **유일한 프로덕션 호출처**는 `GameListener.java:1109` (서장 판정).
@@ -1152,7 +1154,7 @@ if (!blockers.isEmpty()) {
 - **의존**: B-056
 - **닫는 조건**: 사용자가 정한다 → 정하면 경공 담당이 배선한다
 - **검증**: `server-mvt/src/main/java/com/honcheon/mvt/GyeonggongListener.java:585`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 **지금은 안 탄다.** 이속은 `Gyeonggong.java:325` 가 **날 민첩**에서 뽑는다. 성별 +1 은 `judgmentStat` 안에만 있고,
 **MVT 플러그인은 `GenderEngine` 을 아예 참조하지 않는다.**
@@ -1170,7 +1172,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 사용자가 정한다
 - **검증**: `core/src/test/java/com/honcheon/core/rules/GenderGateTest.java`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 지금 성별이 가르는 것은 **문파 입문 하나뿐** (`ami: [여]`) — 그리고 그 문은 **도달 불가능하다** (**B-010**).
 무공 계열은 **안 가른다.**
@@ -1183,7 +1185,7 @@ if (!blockers.isEmpty()) {
 - **의존**: B-038
 - **닫는 조건**: 사용자가 인게임에서 보고 정한다
 - **검증**: ★ 인게임 — 화면에서만 판단할 수 있다
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 > 전례: `5e7a844 [fix] 팩이 어두웠다 — 수묵을 "어둡다"로 오역했다 (매화 밝기 73 → 170)`
 > **화면 밖에서 고른 색은 화면 안에서 틀린다.**
@@ -1196,7 +1198,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 상한이 8 인가 10 인가 — 사람이 정한다
 - **검증**: `python3 tools/combat_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `skills.yml` = `0~10` · `mastery_ladder` = 극성 **8** 이 상한 · `judgment.yml scales.skill.max` = **10**.
 **세 등록부가 서로 다른 말을 한다.** (→ B-033 의 경고 ①)
@@ -1209,7 +1211,7 @@ if (!blockers.isEmpty()) {
 - **의존**: B-005
 - **닫는 조건**: 완전 동률의 **다음 규칙**이 정해진다 (그리고 선공의 무게를 정한다)
 - **검증**: `python3 tools/combat_audit.py`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 `combat_audit` 경고 ③ (실측):
 > *"완전 대칭 대결(같은 경지·같은 능력치)에서 **선공 규칙이 승자를 정하지 못한다** — '민첩+감각 동률 → 경지 높은 쪽'인데
@@ -1227,7 +1229,7 @@ if (!blockers.isEmpty()) {
 - **의존**: —
 - **닫는 조건**: 사용자가 정한다 (그리고 등록부가 그것을 적는다)
 - **검증**: `core/src/test/java/com/honcheon/core/rules/GenderGateTest.java`
-- **닫힘**: 2026-07-14 · 병렬 R2 트랙 갑'. 우클릭이 손을 세운다 — 넷째 태세의 발명 없이 탁상 규칙의 **방어_전념(+2·행동 소모)**을 MC 로 환산했다 (`config/combat.yml` attack.defender_stance_mc.active_guard 신설 · 지속은 realtime.round_ticks 를 그대로 읽어 이중 등록 회피). 선언은 남의 눈에도 보이고(vfx 등록부), 공격하면 깨지며(break_on_attack), 쿨다운 없음 불변식 유지. **패링 = 선언 앞머리 6틱 안에서 태세가 이긴 것** — 재선언은 패링 시계를 안 늘려 연타가 정답이 못 된다. 虛 관문(패링·회피·반격)은 피격 후 창(lastHurt+COUNTER_WINDOW, 코드 상수) 근사를 폐지하고 세 판정길이 전부 지나는 stanceWon 기록(lastParry·lastDodge·lastStanceWin)을 읽는다 — 창은 opening_window_ticks 로 등록부 승계. 실측: 컴파일 0 · defense/combat/motion_audit 위반 0 (Fable 재실행). NPC 쪽 선언 대칭과 감사의 active_guard 층은 B-108 로 올림
+- **닫힘**: —
 
 > ★ **씨앗이 틀렸다.** "등록부에 근거 없음" 이 아니라 — **등록부가 일부러 비워 뒀다.**
 
@@ -2125,7 +2127,7 @@ B-119 는 "죽는다 + 죽음이 다리 사건으로 남는다"까지 — 그 �
 - **단계**: P2
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java`
 - **의존**: —
-- **닫는 조건**: 살아 있는 것은 다 맞는다(사냥감·가축·마을 NPC — ★사용자 확정: "몰래 죽일수도 있어야") — 예외는 등록부의 빈 목록으로 시작. NPC 죽음은 다리 사건으로 봇에 남는다. 사냥터 짐승이 실제로 맞는다
+- **닫는 조건**: 살아 있는 것은 다 맞는다(사냥감·가축·마을 NPC — ★사용자 확정: "몰래 죽일수도 있어야") — 예외는 등록부의 빈 목록으로 시작. NPC 죽음은 다리 사건으로 봇에 남는다. 사냥터 짐승이 실제로 맞는다. ★Codex 검토(2026-07-15, R6~R8 조건부 승인 · P1): `TradeListener.onEntitiesLoad` 만으로는 **리스너 등록 전에 이미 적재된 청크의 옛 무적(invulnerable=true) NPC 가 이행되지 않는다** — onEnable 시 이미 적재된 청크를 한 번 순회해 같은 이행 함수에 태워야 닫힌다. 이행 범위는 등록 ID/정해진 NPC 이름 집합으로 제한하라 (임의 무적 주민 오인 방지)
 - **검증**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java` · 사람 눈 (산길 짐승 타격)
 - **닫힘**: —
 
@@ -2164,7 +2166,7 @@ B-119 는 "죽는다 + 죽음이 다리 사건으로 남는다"까지 — 그 �
 - **단계**: P3
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillHud.java`
 - **의존**: —
-- **닫는 조건**: 액션바를 쓰는 손들이 한 줄을 두고 싸우지 않는다 — 우선순위/합성 규칙이 서고, 격 두름과 경공 표시가 동시에 읽힌다
+- **닫는 조건**: 액션바를 쓰는 손들이 한 줄을 두고 싸우지 않는다 — 우선순위/합성 규칙이 서고, 격 두름과 경공 표시가 동시에 읽힌다. ★Codex 검토(2026-07-15, R6~R8 조건부 승인): HudLine 은 SkillHud **내부**만 중재한다 — SkillListener 등급 사다리 · HuntListener · Sparring · Incidents · SeojangBook 대기 표시가 여전히 직접 sendActionBar 를 불러 4틱 HUD 와 덮어쓴다. 전부 공용 중재기(채널·우선순위·TTL)로 보내거나 우선순위 계약을 명시해야 닫힌다. 남은 직접 작성자를 찾는 정적 감사도 추가하라
 - **검증**: `server-mvt/src/main/java/com/honcheon/mvt/SkillHud.java` · 실기동 (격 두름 + 나는발 동시)
 - **닫힘**: —
 
@@ -2331,3 +2333,40 @@ B-015 를 닫으며 남긴 것 (2026-07-14, 트랙 갑'). 플레이어만 선언
 death_and_legacy 의 "부활 없음" 조항 폐기 — 유산·계승 중 영구 죽음 전제 부분은 최종장 보류함에.
 
 
+### B-128 · ★ 일괄 치환이 **장부를 독살했다** — 닫힘 근거 45곳 복제 · 상태 20건 전복
+- **상태**: 닫힘
+- **분류**: 결함
+- **단계**: P1
+- **위치**: `docs/BACKLOG.md`
+- **의존**: —
+- **닫는 조건**: 오염 전부 복원 (가짜 닫힘은 열림으로 · 남의 증거는 —로) + 같은 병을 잡는 눈이 선다
+- **검증**: `python3 tools/backlog_audit_selftest.py` (③-b 복제 눈 포함 12상처 — ★ 여기에 backlog_audit --run 을 적으면 감사가 저 자신을 되부른다. 재귀는 시간 초과로 죽는다)
+- **닫힘**: 2026-07-14 밤. 원인: 커밋 8a50548 (B-015 닫기)의 일괄 치환이 `- **닫힘**: —` 45곳을 **B-015 의 닫힘 문구로 전부 덮고**, 상태 20건을 열림→닫힘으로 뒤집었다. 장부가 6시간 동안 가짜 닫힘 18건을 품었고 감사는 조용했다 (증거의 꼴만 봤다). 발견 경로: B-019 닫힘 문구가 허수아비가 아니라 패링을 말하고 있었다. 복원: 열림·보류·진행 25건의 닫힘 필드 → `—` · 가짜 닫힘 18건 (B-023·024·029·030·031·032·033·034·036·037·038·039·040·041·043·045·046·084) → 8a50548 직전 상태(전부 열림)로. 눈 신설: backlog_audit ③-b (닫힘 근거 복제 = 위반 — 한 증거는 한 항목의 것이다) + selftest ⑫ (복제 심기). 낡은 표본도 수리: ★⑪ 이 lint_config(그새 완치)에 기대다 죽어 있었다 → `tools/selftest_fixtures/always_barks.py` (설계상 언제나 짖는 표본 · 종료 코드 0 함정 재현). 실측: backlog_audit --run 위반 0건 (열림 49 · 닫힘 40 — 진실 복원) · selftest 12/12
+
+계율: **일괄 치환을 장부에 대지 마라** — 닫힘 필드는 그 항목의 것이다. 그리고
+**눈의 시험이 남의 병(고쳐질 감사)에 기대면 병이 나을 때 시험도 같이 죽는다** — 표본은 설계상 불변이어야 한다.
+### B-129 · 지하정리 안전핀의 문턱이 **코드 발명**이다 — `cy<0` · 괴리 40칸
+- **상태**: 열림
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/MvtCommand.java`
+- **의존**: —
+- **닫는 조건**: 안전핀 문턱(`cy < 0` · `abs(surface−cy) < 40`)이 등록부(`config/terrain.yml` 또는 세계 경계 등록값)에서 유도되고, 감사가 같은 값을 검증한다. fail-closed 방어 자체는 유지한다. 추가 보강(Codex 조언 3): 중앙 한 열만이 아니라 대상 영역의 대표 경계점도 같은 범위 검사에 태운다
+- **검증**: `python3 tools/backlog_audit.py` · `server-mvt/src/main/java/com/honcheon/mvt/MvtCommand.java`
+- **닫힘**: —
+
+기원: Codex R6~R8 검토 (2026-07-15, `485082a` 통과(조언)). 40 은 `TerrainAudit.surfaceY` 의
+고정 탐색 폭과 우연히 같을 뿐 설정 계약이 아니고, `cy<0` 도 암묵 불변식이다.
+사고를 막는 핀은 옳다 — 그 핀의 치수가 등록부에 살아야 한다 (§2.1 등록제).
+
+### B-130 · `bridge_audit --no-backup` 이 **거짓 경고**를 낸다 — seojang_choice 발신자를 못 본다
+- **상태**: 열림
+- **분류**: 결함
+- **단계**: P4
+- **위치**: `tools/bridge_audit.py`
+- **의존**: —
+- **닫는 조건**: 감사의 소스 탐색 범위가 `MvtCommand.java` 의 실제 발신 지점을 보고, seojang_choice 경고가 사라진다 (거짓 경고는 진짜 경고를 안 읽게 만든다)
+- **검증**: `python3 tools/bridge_audit.py --no-backup` · `python3 tools/bridge_audit_selftest.py`
+- **닫힘**: —
+
+기원: Codex R6~R8 검토 (2026-07-15, 독립 검증 절). 실제 호출은 있는데 눈이 좁아서 없다고 말한다.

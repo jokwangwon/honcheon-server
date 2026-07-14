@@ -200,6 +200,25 @@ def main(argv):
         kind = "감사 명령" if has_cmd else ("파일" if has_path else "★ 사람이 본 것 (기계가 못 잰다)")
         rep.ok(f"{idt} — 증거: {kind}")
 
+    # ── ③-b 복제 ★ ──────────────────────────────────────────────────────────
+    #   ★ 2026-07-14 실사고: 커밋 8a50548 의 일괄 치환이 `- **닫힘**: —` 45곳을
+    #   **한 항목의 닫힘 문구로 전부 덮고**, 상태 20건을 열림→닫힘으로 뒤집었다.
+    #   장부가 6시간 동안 가짜 닫힘 18건을 품었고 이 감사는 조용했다 — 증거의 꼴만
+    #   봤지 **같은 증거가 여러 항목에 사는지** 안 봤다. 한 증거는 한 항목의 것이다.
+    rep.head("③-b ★ 복제 — 같은 닫힘 근거가 여러 항목에 사는가 (일괄 치환의 지문)")
+    by_ev = {}
+    for it in closed:
+        ev = (it["fields"].get("닫힘") or "").strip()
+        if ev and ev not in ("—", "-"):
+            by_ev.setdefault(ev, []).append(it["id"])
+    cloned = {ev: ids for ev, ids in by_ev.items() if len(ids) > 1}
+    if cloned:
+        for ev, ids in cloned.items():
+            rep.fail(f"닫힘 근거가 **복제됐다** — {' · '.join(ids)} ({len(ids)}항목이 같은 문장): "
+                     f"“{ev[:44]}…” — 일괄 치환 사고를 의심하라 (한 증거는 한 항목의 것이다)")
+    else:
+        rep.ok(f"닫힘 근거 {len(by_ev)}건이 전부 서로 다르다 — 복제 없음")
+
     # ── ④ 실재 ★ ─────────────────────────────────────────────────────────────
     rep.head("④ ★ 실재 — 그 검증 수단이 저장소에 있는가")
     for it in items:
