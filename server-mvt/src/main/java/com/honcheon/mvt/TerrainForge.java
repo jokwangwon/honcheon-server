@@ -420,10 +420,12 @@ final class TerrainForge {
                         b.setType(Material.AIR);
                     }
                 }
+                int ground = naturalTop(world, x, z, y - 1, yHint - 60);   // ★ 놓기 전에 잰다 — 옛 지면
                 Block top = world.getBlockAt(x, y, z);          // 딛는 자리를 놓는다
-                if (top.getType().isAir() || top.isLiquid()) {
+                if (top.isLiquid() || sweepFillable(top.getType())) {
                     top.setType(grassOrStone(world, x, y, z));
                 }
+                fillBelowRaised(world, x, y, z, ground);        // ★ 계약 ①-b — 램프 밑도 옛 지면까지
                 sealBelow(world, x, y, z);                      // 계약 ① — 길 밑도 단단하다
             }
         }
@@ -458,12 +460,81 @@ final class TerrainForge {
      * 조성 지면 아래 <b>여섯 칸</b>은 반드시 단단해야 한다.
      *
      * <p>물도 채운다 — 대수층(aquifer)은 동굴을 껐어도 남는다. 물 위의 길도 껍데기다.
+     *
+     * <p>★ B-114 7차 — <b>잎도 채운다.</b> 구판은 공기·액체만 채웠다: 서 있던 나무 위로 땅을 올리면
+     * 수관(잎)이 "단단한 것"으로 통과돼 지면 밑에 <b>산 채로 묻혔다</b>. 잎은 단단한 땅이 아니다.
      */
     static void sealBelow(World world, int x, int y, int z) {
         for (int i = 1; i <= SEAL_DEPTH; i++) {
             Block b = world.getBlockAt(x, y - i, z);
-            if (b.getType().isAir() || b.isLiquid()) {
+            if (b.isLiquid() || sweepFillable(b.getType())) {
                 b.setType(i <= 2 ? Material.DIRT : Material.STONE);
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 계약 ①-b — 올린 땅 밑은 채운다 (fill_below_raised · B-114 7차)
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // 【병】 조성기가 서 있던 나무 위로 땅을 올려 **나무를 산 채로 묻었다** — RCON 기둥 단면 실측
+    //   (-61,81~89,359): 옛 지면 y79 → 공기 81-82 → 잎 83-86 → 새 흙·잔디 87-89.
+    //   sealBelow(6칸)는 잎(솔리드)에 막혔고, 채움 고리들은 잎을 만나면 break 했다 —
+    //   수관과 옛 지면 사이 공기가 「지하 공동」(환경검수 ⑥ 3.86% · 1,513칸)의 정체다.
+    //   묻힌 잎은 서서히 삭아 공동이 자라고, 밭을 파면 잎이 나온다 — 세계 품질 실결함.
+    //
+    // 【계약】 새 표면이 옛 표면보다 높아지는 손(feather·benchTerrace·levelField·duneField·
+    //   raiseMassif·carveRamp·carveTrail·terrace)은 새 표면 밑을 **옛 지면까지 빈틈없이** 채운다.
+    //   공기·잎·통나무·버섯·초목은 채움 재질로 치환하고, 돌·흙·광석·사람이 지은 것은 남긴다.
+    //   등록부: config/terrain.yml forge.fill_below_raised (기본 true).
+    //   결정론 유지 — 채움 재질은 깊이의 순수 함수다 ({@link #sweepFill} = sealBelow 관례).
+
+    /** 계약 ①-b 의 스위치 — 등록부(terrain.yml forge.fill_below_raised)가 정한다. 기본 켜짐 */
+    private static boolean fillBelowRaisedEnabled = true;
+
+    /**
+     * <b>채워도 되는 것인가</b> — 스윕·채움이 치환하는 부류. ★ 순수 함수(하네스가 시험한다):
+     * 공기 세 종(레지스트리 위임 {@code isAir()} 를 안 쓴다 — classifyDeep 의 전례)과
+     * 나무의 몸({@link TerrainAudit#isTreeish} — ⑥의 눈과 같은 자)·초목({@link #foliage}).
+     * 돌·흙·광석·물·용암·사람이 지은 것은 <b>거짓</b> — 남긴다.
+     */
+    static boolean sweepFillable(Material m) {
+        if (m == Material.AIR || m == Material.CAVE_AIR || m == Material.VOID_AIR) {
+            return true;
+        }
+        return foliage(m) || TerrainAudit.isTreeish(m.name());
+    }
+
+    /**
+     * 채움 재질 — <b>깊이의 순수 함수</b> ({@link #sealBelow} 와 같은 관례: 표면 밑 두 칸은 흙, 그 아래는 돌).
+     * 난수가 없다 — 같은 깊이면 같은 재질이다.
+     */
+    static Material sweepFill(int depthBelowSurface) {
+        return depthBelowSurface <= 2 ? Material.DIRT : Material.STONE;
+    }
+
+    /**
+     * 스윕 한 칸의 판정 — <b>손(지하정리)과 하네스가 같은 자를 쓴다</b>.
+     * 채울 것({@link #sweepFillable})이되 <b>원장의 판 굴 상자 안이면 남긴다</b>
+     * ({@link TerrainAudit#inCaveBox} — 우리가 판 굴은 설계다, 결함이 아니다).
+     */
+    static boolean sweepShouldFill(Material m, List<Zone> dugCaveBoxes, int x, int y, int z) {
+        return sweepFillable(m) && !TerrainAudit.inCaveBox(dugCaveBoxes, x, y, z);
+    }
+
+    /**
+     * 계약 ①-b 의 손 — 새 표면({@code newY}) 밑을 옛 지면({@code oldGroundY})까지 채운다.
+     * 공기·잎·통나무·초목·액체를 치환하고, 광석·사람이 지은 것은 지나친다(break 가 아니라 continue —
+     * break 가 바로 나무를 묻은 병이었다). 등록부 스위치가 꺼져 있으면 아무것도 하지 않는다.
+     */
+    static void fillBelowRaised(World world, int x, int newY, int z, int oldGroundY) {
+        if (!fillBelowRaisedEnabled) {
+            return;
+        }
+        for (int y = newY - 1; y > oldGroundY; y--) {
+            Block b = world.getBlockAt(x, y, z);
+            if (b.isLiquid() || sweepFillable(b.getType())) {
+                b.setType(sweepFill(newY - y), false);
             }
         }
     }
@@ -524,9 +595,12 @@ final class TerrainForge {
                     }
                 }
                 Block top = world.getBlockAt(x, target, z);
-                if (top.getType().isAir() || top.isLiquid()) {
+                if (top.isLiquid() || sweepFillable(top.getType())) {
                     top.setType(grassOrStone(world, x, target, z));
                 }
+                // ★ 계약 ①-b — 올린 자리 밑은 **옛 지면까지** 채운다. sealBelow(6칸)만으로는
+                //   수관(잎)에 막혀 나무가 산 채로 묻혔다 (B-114 7차 — 이 손이 그 병의 첫 범인이다)
+                fillBelowRaised(world, x, target, z, natural);
                 sealBelow(world, x, target, z);   // 메운 자리 밑도 단단해야 한다
             }
         }
@@ -838,7 +912,8 @@ final class TerrainForge {
                 if (d > radius) {
                     continue;
                 }
-                if (naturalGround(world, x, z, cy + 70) == WET_COLUMN) {
+                int natural = naturalGround(world, x, z, cy + 70);
+                if (natural == WET_COLUMN) {
                     continue;   // 사막의 물 — 오아시스다. 메우지 않는다
                 }
                 double flat = radius * 0.45;
@@ -853,11 +928,12 @@ final class TerrainForge {
                 }
                 for (int y = target; y >= target - SEAL_DEPTH; y--) {   // 메우기
                     Block b = world.getBlockAt(x, y, z);
-                    if (!b.getType().isAir() && !b.isLiquid()) {
-                        break;
+                    if (!b.isLiquid() && !sweepFillable(b.getType())) {
+                        continue;   // ★ break 금지 — 잎 한 장이 그 밑을 비워 뒀다 (B-114 7차)
                     }
                     b.setType(y == target ? Material.SAND : Material.SANDSTONE, false);
                 }
+                fillBelowRaised(world, x, target, z, natural);   // ★ 계약 ①-b — 옛 지면까지 빈틈없이
                 sealBelow(world, x, target, z);
             }
         }
@@ -901,9 +977,10 @@ final class TerrainForge {
                     }
                 }
                 Block top = world.getBlockAt(x, target, z);   // 메우기
-                if (top.getType().isAir() || top.isLiquid()) {
+                if (top.isLiquid() || sweepFillable(top.getType())) {
                     top.setType(grassOrStone(world, x, target, z));
                 }
+                fillBelowRaised(world, x, target, z, natural);   // ★ 계약 ①-b — 올린 땅 밑은 채운다
                 sealBelow(world, x, target, z);
             }
         }
@@ -992,8 +1069,10 @@ final class TerrainForge {
                 for (int yy = y; yy > ground; yy--) {
                     Block b = world.getBlockAt(x, yy, z);
                     Material here = b.getType();
-                    if (here.isSolid() && !NATURAL.contains(here)) {
-                        continue;   // 사람이 지은 것 — 지나친다 (그건 건축 계층의 것이다)
+                    if (here.isSolid() && !NATURAL.contains(here) && !sweepFillable(here)) {
+                        // 사람이 지은 것 — 지나친다 (그건 건축 계층의 것이다).
+                        //   ★ 잎·통나무는 사람 것이 아니다 — 지나치면 산속에 나무가 산 채로 묻힌다 (B-114 7차)
+                        continue;
                     }
                     b.setType(yy == y ? skin
                             : yy > y - 4 ? Material.STONE
@@ -1148,10 +1227,12 @@ final class TerrainForge {
                             b.setType(Material.AIR, false);
                         }
                     }
+                    int ground = naturalTop(world, x + dx, z + dz, y - 1, baseY - 40);   // 옛 지면
                     Block floor = world.getBlockAt(x + dx, y, z + dz);   // 딛는 턱
-                    if (floor.getType().isAir() || floor.isLiquid()) {
+                    if (floor.isLiquid() || sweepFillable(floor.getType())) {
                         floor.setType(Material.STONE, false);
                     }
+                    fillBelowRaised(world, x + dx, y, z + dz, ground);   // ★ 계약 ①-b — 턱 밑도 옛 지면까지
                     sealBelow(world, x + dx, y, z + dz);                 // 계약 ① — 길 밑도 단단하다
                 }
             }
@@ -1176,7 +1257,8 @@ final class TerrainForge {
                 if (d > radius) {
                     continue;
                 }
-                if (naturalGround(world, x, z, topY + 40) == WET_COLUMN) {
+                int natural = naturalGround(world, x, z, topY + 40);
+                if (natural == WET_COLUMN) {
                     continue;   // 강·호수 — 들을 고른다고 물을 메우지 않는다
                 }
                 // 가장자리는 자연으로 풀어 준다 — ★ 덩어리로 (구판 floorMod(x*5+z*3,3) 은 칸마다 튀었다)
@@ -1191,11 +1273,15 @@ final class TerrainForge {
                 }
                 for (int y = target; y >= target - SEAL_DEPTH; y--) {
                     Block b = world.getBlockAt(x, y, z);
-                    if (!b.getType().isAir() && !b.isLiquid()) {
-                        break;
+                    Material m = b.getType();
+                    if (!b.isLiquid() && !sweepFillable(m)) {
+                        // ★ break 가 아니다 — break 는 잎 한 장에 막혀 그 밑을 비워 뒀다 (B-114 7차).
+                        //   광석·이미 단단한 땅은 남기고 **지나쳐 계속 내려간다**
+                        continue;
                     }
                     b.setType(y == target ? grassOrStone(world, x, target, z) : Material.DIRT);
                 }
+                fillBelowRaised(world, x, target, z, natural);   // ★ 계약 ①-b — 옛 지면까지 빈틈없이
             }
         }
     }
@@ -1469,10 +1555,10 @@ final class TerrainForge {
                 }
                 world.getBlockAt(x, y, z).setType(floor);
                 boolean edge = x == cx - halfW || x == cx + halfW || z == cz - halfD || z == cz + halfD;
-                for (int yy = y - 1; yy >= y - 16; yy--) {   // 축대 — 허공·물이면 돌로 받친다
+                for (int yy = y - 1; yy >= y - 16; yy--) {   // 축대 — 허공·물·초목이면 돌로 받친다
                     Block b = world.getBlockAt(x, yy, z);
-                    if (!b.getType().isAir() && !b.isLiquid()) {
-                        break;
+                    if (!b.isLiquid() && !sweepFillable(b.getType())) {
+                        break;   // 단단한 땅에 닿았다 (★ 잎은 땅이 아니다 — sweepFillable 이 가른다)
                     }
                     b.setType(edge ? Material.STONE_BRICKS : Material.COBBLESTONE);
                 }
@@ -2104,12 +2190,23 @@ final class TerrainForge {
         surfaceRegistry = new LinkedHashMap<>();
         snowlineRegistry = new LinkedHashMap<>();
         oasisRegistry = new java.util.LinkedHashSet<>();
+        fillBelowRaisedEnabled = true;   // 계약 ①-b 기본값 — 파일이 없어도 나무를 묻지 않는다
         loadGrain(configDir);   // ★ 지형의 결 — 점묘를 막는 덩어리 크기 (terrain_grain.yml)
         Path file = configDir.resolve("terrain.yml");
         if (!Files.isRegularFile(file)) {
             return;
         }
         Map<String, Object> root = RulesConfig.load(file);
+
+        // 계약 ①-b — forge: { fill_below_raised: true } (B-114 7차 · 끄면 그 사실을 소리내어 말한다)
+        if (root.get("forge") instanceof Map<?, ?> forge
+                && forge.get("fill_below_raised") instanceof Boolean flag) {
+            fillBelowRaisedEnabled = flag;
+            if (!flag) {
+                LOG.warning("[지형] forge.fill_below_raised: false — 올린 땅 밑을 채우지 않는다. "
+                        + "나무가 산 채로 묻힐 수 있다 (B-114 7차의 병으로 되돌아간다)");
+            }
+        }
 
         // 표층 — surfacing: { <id>: 사막|설원 }  (없으면 지형이 말한다: 설산 → 설원 · 사막 → 사막)
         if (root.get("surfacing") instanceof Map<?, ?> surfacing) {

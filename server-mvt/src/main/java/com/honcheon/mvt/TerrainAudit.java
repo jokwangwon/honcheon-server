@@ -773,8 +773,14 @@ final class TerrainAudit {
         return Integer.MIN_VALUE;
     }
 
-    /** 그 열의 지표면 y (물·잎·풀·나무는 지나친다 — 딛는 자리를 찾는다) */
-    private static int surfaceY(World world, int x, int z, int cy) {
+    /**
+     * 그 열의 지표면 y (물·잎·풀·나무는 지나친다 — 딛는 자리를 찾는다).
+     *
+     * <p>★ package-private — <b>눈과 손이 같은 자를 쓴다</b>: ⑥(지하 공동)이 이 판정으로 지면을 잡고,
+     * 치유 스윕({@code /혼천 지하정리})도 <b>같은 판정</b>으로 지면을 잡는다. 자가 둘이면
+     * 눈이 짖는 곳과 손이 걷는 곳이 어긋난다 (B-114 7차).
+     */
+    static int surfaceY(World world, int x, int z, int cy) {
         for (int y = cy + 40; y >= cy - 40; y--) {
             Material m = world.getBlockAt(x, y, z).getType();
             if (isGround(m)) {

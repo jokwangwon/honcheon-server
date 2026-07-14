@@ -3,6 +3,7 @@ package com.honcheon.mvt;
 import com.honcheon.core.rules.JudgmentEngine;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -59,6 +60,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
+                case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
                 case "운기" -> meditate(sender);
                 case "태세" -> stance(sender, args);         // 맞는 쪽의 선택 — 회피·막기·흘리기 (기본은 자동)
                 case "조성" -> buildTown(sender, args);
@@ -1300,6 +1302,118 @@ public final class MvtCommand implements CommandExecutor {
             sender.sendMessage(line);
             plugin.getLogger().info("[환경검수] " + ChatColor.stripColor(line));
         }
+        return true;
+    }
+
+    /**
+     * /혼천 지하정리 [지역id] — <b>산 채로 묻힌 나무를 걷는다</b> (B-114 7차의 치유).
+     *
+     * <p>조성기가 서 있던 나무 위로 땅을 올려, 지면 밑에 「공기 + 잎 + 통나무」가 묻혔다
+     * (실측 단면 -61,81~89,359: 옛 지면 y79 → 공기 81-82 → 잎 83-86 → 새 흙·잔디 87-89).
+     * 원인은 TerrainForge 계약 ①-b(fill_below_raised)로 막았고, <b>이미 묻힌 것</b>은 이 손이 걷는다:
+     * 기둥마다 <b>그 기둥의 지면</b>({@link TerrainAudit#surfaceY} — 환경검수 ⑥과 <b>같은 자</b>) 아래
+     * 공기·잎·통나무·버섯·초목을 채움 재질(깊이의 순수 함수 — sealBelow 관례)로 치환한다.
+     * ★ 원장(terrain_built.yml)의 <b>판 굴 상자 안은 건드리지 않는다</b> ({@link TerrainAudit#dugCaveBoxes}).
+     *
+     * <p><b>왜 콘솔이 되는가</b> — 조성 명령들의 "마크에서 쳐라"(플레이어 전용)는 부지가
+     * <b>플레이어의 자리</b>에서 오기 때문이다. 치유는 좌표가 <b>등록부</b>(앵커·원장·구역)에서 오므로
+     * 지역조성·환경검수와 같은 관례를 따른다: {@code Player 면 op 요구 · 콘솔 허용} ({@link #region} 과 동일).
+     */
+    private boolean sweepUnderground(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            return true;
+        }
+        World world;
+        String name;
+        int cx;
+        int cy;
+        int cz;
+        int r;
+        if (args.length >= 2) {
+            // 지역 — 환경검수와 **같은 자**로 중심·반경·기준면을 잡는다 (auditTerrain 의 관례 그대로)
+            WorldMap map = plugin.worldMap();
+            WorldMap.Place place = map == null ? null : map.place(args[1]);
+            Zone zone = place == null ? null : plugin.zones().stream()
+                    .filter(z -> z.name().equals(place.name())).findFirst().orElse(null);
+            if (zone == null) {
+                sender.sendMessage(ChatColor.RED + "서지 않은 지역이다: " + args[1]);
+                return true;
+            }
+            world = org.bukkit.Bukkit.getWorld(zone.world());
+            cx = (zone.x1() + zone.x2()) / 2;
+            cz = (zone.z1() + zone.z2()) / 2;
+            r = Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 8;
+            Integer base = plugin.regionBase(place.id());
+            cy = base != null ? base : zone.y1() + 6;
+            name = place.name();
+        } else {
+            // 청하현 — 환경검수(auditTown)와 같은 중심(장터 앵커)·반경(61). 눈이 재는 곳을 손이 걷는다
+            Location center = plugin.anchor("장터");
+            if (center == null) {
+                sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 세계조성");
+                return true;
+            }
+            world = center.getWorld();
+            cx = center.getBlockX();
+            cy = center.getBlockY() - 1;
+            cz = center.getBlockZ();
+            r = 61;
+            name = "청하현";
+        }
+        java.util.List<Zone> dug = TerrainAudit.dugCaveBoxes(world.getName(), cx, cz, r);
+        TerrainForge.preload(world, cx, cz, r);
+        Announce.say(plugin, sender, ChatColor.GOLD + "── 지하정리 — " + name
+                + " (중심 " + cx + "," + cy + "," + cz + " · 반경 " + r
+                + " · 판 굴 상자 " + dug.size() + "곳 보존) ──");
+        long air = 0;
+        long leaf = 0;
+        long log = 0;
+        long mush = 0;
+        long plant = 0;
+        long kept = 0;
+        int columns = 0;
+        int bottom = Math.max(world.getMinHeight() + 5, cy - 45);   // 환경검수 ⑥과 같은 대역 바닥
+        for (int x = cx - r; x <= cx + r; x++) {
+            for (int z = cz - r; z <= cz + r; z++) {
+                int stand = TerrainAudit.surfaceY(world, x, z, cy);   // ⑥과 같은 지면 판정
+                if (stand == Integer.MIN_VALUE) {
+                    continue;   // 지면을 못 찾은 기둥 — ⑥도 세지 않는다. 같은 자다
+                }
+                columns++;
+                int ground = stand - 1;   // 지면 블록 y — 그 **아래**만 걷는다 (표면은 손대지 않는다)
+                for (int y = ground - 1; y >= bottom; y--) {
+                    Material m = world.getBlockAt(x, y, z).getType();
+                    if (!TerrainForge.sweepFillable(m)) {
+                        continue;   // 돌·흙·광석·물·용암·사람 것 — 남긴다
+                    }
+                    if (!TerrainForge.sweepShouldFill(m, dug, x, y, z)) {
+                        kept++;     // ★ 원장의 판 굴 — 설계다. 건드리지 않는다
+                        continue;
+                    }
+                    String n = m.name();
+                    if (m == Material.AIR || m == Material.CAVE_AIR || m == Material.VOID_AIR) {
+                        air++;
+                    } else if (n.endsWith("_LEAVES")) {
+                        leaf++;
+                    } else if (n.endsWith("_LOG") || n.endsWith("_WOOD")) {
+                        log++;
+                    } else if (n.contains("MUSHROOM") || n.equals("BAMBOO")) {
+                        mush++;
+                    } else {
+                        plant++;
+                    }
+                    world.getBlockAt(x, y, z).setType(TerrainForge.sweepFill(ground - y), false);
+                }
+            }
+        }
+        long total = air + leaf + log + mush + plant;
+        Announce.say(plugin, sender, ChatColor.WHITE + "기둥 " + columns + " · 채움 " + total + "칸 — "
+                + "공기 " + air + " · 잎 " + leaf + " · 통나무 " + log
+                + " · 버섯·대나무 " + mush + " · 초목 " + plant);
+        Announce.say(plugin, sender, ChatColor.GRAY + "판 굴 보존 " + kept + "칸 (원장 "
+                + dug.size() + "곳 — 우리가 판 굴은 설계다)");
+        Announce.say(plugin, sender, ChatColor.GRAY
+                + "다음: /혼천 환경검수 — ⑥ 지하 공동이 2% 아래로 내려가야 닫힌다 (B-114)");
         return true;
     }
 
