@@ -61,6 +61,13 @@ public final class GameListener extends ListenerAdapter {
     private final FactionService factions;
     private final RegionService regions;
 
+    /**
+     * 개인 메인스토리 (B-109) — 발단별 사슬의 평가기. <b>렌즈이지 콘텐츠가 아니다</b>:
+     * 원장에 새 사건이 적힌 직후 {@link #storyTick} 가 열린 마디를 재평가한다 (폴링 없음).
+     * 등록부(config/personal_story.yml)가 깨져도 봇은 죽지 않는다 — 사슬만 잠긴다.
+     */
+    private final PersonalStory story;
+
     private final Map<String, Creation> creations = new ConcurrentHashMap<>();
 
     /**
@@ -85,6 +92,35 @@ public final class GameListener extends ListenerAdapter {
         this.scribe = scribe;
         this.factions = new FactionService(rules.factions, db);
         this.regions = new RegionService(rules.regions, db);
+        this.story = PersonalStory.load();   // HONCHEON_CONFIG 규약 — 깨지면 severe 내고 잠긴다
+    }
+
+    /**
+     * ★ B-109 — <b>logEvent 훅</b>: 원장에 사슬이 세는 사건(의뢰_완수·사냥·비무·대화·탐방·기연·
+     * 승급·favor)이 적힌 직후 이 손이 돈다. 마디 전이는 {@link PersonalStory#tick} 이
+     * {@code 사슬_마디} 사건으로 (멱등하게) 적는다 — 원장이 곧 상태다.
+     *
+     * <p>실패는 삼킨다 — 사슬은 렌즈일 뿐, 사냥·의뢰의 본 흐름을 막을 무게가 아니다.
+     *
+     * @param realmOverride 방금 승급했으면 그 경지 (DB 반영 전일 수 있다). 모르면 null — 행에서 읽는다
+     */
+    private void storyTick(long chId, String realmOverride) {
+        if (story.disabled()) {
+            return;
+        }
+        try {
+            var found = db.findCharacterById(chId);
+            if (found.isEmpty()) {
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> sheet = (Map<String, Object>) found.get().get("sheet");
+            String realm = realmOverride != null
+                    ? realmOverride : String.valueOf(found.get().get("realm"));
+            story.tick(db, factions, chId, db.worldDay(), realm, sheet);
+        } catch (Exception e) {
+            System.err.println("개인 사슬 평가 실패 (chId=" + chId + "): " + e.getMessage());
+        }
     }
 
     void setReset(Reset reset) {
@@ -392,6 +428,23 @@ public final class GameListener extends ListenerAdapter {
         eb.addField("능력치", stats.toString(), false);
         eb.addField("소지금", ch.get("wallet") + "문", true);
         eb.addField("발단", String.valueOf(sheet.get("발단")), true);
+
+        // ★ B-109 — 심중(心中): 현재 열린 마디의 heart 한 줄. 목표 창이 아니라 속마음이다 —
+        //   수치·단계("2/4") 표기는 등록부에도 코드에도 없다 (설계 §3 수치 은닉).
+        //   시트를 여는 김에 tick 을 한 번 돈다 — 훅이 못 본 전이(favor 감쇠 회복 등)의 안전망(소급 인정).
+        if (!story.disabled()) {
+            try {
+                long storyChId = ((Number) ch.get("id")).longValue();
+                story.tick(db, factions, storyChId, db.worldDay(),
+                        String.valueOf(ch.get("realm")), sheet);
+                String heart = story.heart(db, storyChId, sheet);
+                if (heart != null && !heart.isBlank()) {
+                    eb.addField(story.sheetField(), "*" + heart + "*", false);
+                }
+            } catch (Exception e) {
+                System.err.println("심중을 읽지 못했다: " + e.getMessage());
+            }
+        }
 
         // ═══ ★★ 가문과 형제 — **지금**의 것이다 (서장은 과거, 시트는 현재) ═══
         //
@@ -1885,6 +1938,7 @@ public final class GameListener extends ListenerAdapter {
         db.logEvent("사냥", "character", String.valueOf(chId),
                 Map.of("짐승", beast.name(), "접근", approach[0], "굴림", roll, "마진", margin,
                         "등급", tier.name()));
+        storyTick(chId, realm);   // B-109 — 사냥·승급이 마디를 닫을 수 있다
 
         // A — 사선: 짐승에게는 살의가 있다. 치명적 실패는 이빨로 돌아온다.
         //     상수(곰)의 급소 일격은 두 칸 (combat.critical). 뒷산은 야외다 — 아무도 옮겨 주지 않는다.
@@ -2306,6 +2360,7 @@ public final class GameListener extends ListenerAdapter {
             result.setColor(BLOOD).appendDescription("\n" + gains);
             db.logEvent("의뢰_완수", "character", String.valueOf(chId), "quest", q.key(),
                     Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward));
+            storyTick(chId, realm);   // B-109 — 의뢰_완수·favor·승급이 마디를 닫을 수 있다
         } else {
             result.setColor(INK).appendDescription(
                     "\n일이 어그러졌다 — 창구: \"빈손이면 보수도 없네. 게시판은 내일 다시 열리네.\"");
@@ -2515,6 +2570,7 @@ public final class GameListener extends ListenerAdapter {
                 // 잡담층 + 세계층 기록 (대화 요지 — NPC 기억의 재료)
                 db.logEvent("대화", "character", String.valueOf(chId), npcName,
                         Map.of("말", say.substring(0, Math.min(80, say.length()))));
+                storyTick(chId, null);   // B-109 — 대화(target=NPC)가 마디를 닫을 수 있다
                 event.getHook().sendMessageEmbeds(new EmbedBuilder().setColor(INK)
                         .setTitle("「" + npcName + "」")
                         .setDescription(clean).build()).queue();
@@ -2564,6 +2620,7 @@ public final class GameListener extends ListenerAdapter {
                 Map.of("말", say.substring(0, Math.min(80, say.length())),
                         "굴림", roll, "마진", margin, "등급", tier.name(),
                         "단서", clue == null ? "없음" : clue.group()));
+        storyTick(chId, null);   // B-109 — 판정 대화도 대화다 (NPC 에게 물은 것)
 
         String outcome;
         String footer = null;
@@ -2801,6 +2858,7 @@ public final class GameListener extends ListenerAdapter {
         Fortunes.Gate gate = rules.fortunes.gate(FORTUNE_ID);
         db.logEvent("탐방", "character", String.valueOf(chId), "place", gate.place(),
                 Map.of("장소", gate.place()));
+        storyTick(chId, null);   // B-109 — 탐방(target=장소)이 마디를 닫을 수 있다
 
         // 1회성 — 획득 즉시 세계에서 소모 (공유 세계 선착순, fortune rules)
         boolean consumed = db.getMeta(rules.fortunes.metaKey(FORTUNE_ID)).isPresent();
@@ -2921,6 +2979,7 @@ public final class GameListener extends ListenerAdapter {
                     db.logEvent("기연", "character", String.valueOf(chId), "fortune", FORTUNE_ID,
                             Map.of("기연", FORTUNE_ID, "보상", simbeop,
                                     "대가", List.of("발설_금지", "원수_상속")));
+                    storyTick(chId, null);   // B-109 — 기연 획득이 마디를 닫을 수 있다
                     body = "사흘째 밥을 나누자, 걸인이 문득 자세를 고쳐 앉았다 — 등이 산처럼 펴진다.\n"
                             + "\"사흘을 나눴으면 됐다. 숨 쉬는 법부터 가르쳐 주지.\"\n"
                             + "그날 밤, 당신은 **" + simbeop + "**의 구결을 받았다. (`/혼천 운기`)\n"
@@ -2999,6 +3058,7 @@ public final class GameListener extends ListenerAdapter {
         if (!realm.equals(row.get("realm"))) {
             body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (개화한 몸 — 정식 무인이다)");
             db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+            storyTick(chId, realm);   // B-109 — 승급(realm_min)이 마디를 닫을 수 있다
         }
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                 realm, "강호", "청하현");
@@ -3362,6 +3422,7 @@ public final class GameListener extends ListenerAdapter {
                         String.valueOf(row.get("realm")), "강호", "청하현");
                 db.logEvent("세력_잡역", "character", String.valueOf(chId), "faction", "gwan_gun",
                         Map.of("favor", favor));
+                storyTick(chId, null);   // B-109 — favor(any_entry 문턱)가 마디를 닫을 수 있다
                 event.replyEmbeds(new EmbedBuilder().setColor(INK)
                         .setTitle("관아 잡역")
                         .setDescription("마당을 쓸고, 문서를 나르고, 포쾌들의 밥을 지었다.\n"
@@ -3485,6 +3546,7 @@ public final class GameListener extends ListenerAdapter {
             db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(), realm, "강호", "청하현");
             db.logEvent("세력_잡역", "character", String.valueOf(chId), "faction", "화산파",
                     Map.of("일수", stay, "누적", chore, "favor", favor));
+            storyTick(chId, null);   // B-109 — favor(any_entry 문턱)가 마디를 닫을 수 있다
             event.editMessageEmbeds(new EmbedBuilder().setColor(INK)
                     .setTitle("문전 잡역 — " + stay + "일")
                     .setDescription("물을 긷고, 마당을 쓸고, 장작을 팼다. 아무도 이름을 묻지 않았다.\n"
@@ -4932,6 +4994,7 @@ public final class GameListener extends ListenerAdapter {
         if (!realm.equals(row.get("realm"))) {
             body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (기초가 몸에 뱄다)");
             db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+            storyTick(chId, realm);   // B-109 — 승급(realm_min)이 마디를 닫을 수 있다
         }
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                 realm, "강호", "청하현");
@@ -5180,6 +5243,10 @@ public final class GameListener extends ListenerAdapter {
                 "character", String.valueOf(((Number) targetRow.get().get("id")).longValue()),
                 Map.of("상대", nameB, "굴림A", rollA, "굴림B", rollB, "마진", opposed.margin(),
                         "등급", opposed.tier().name(), "무승부", opposed.draw()));
+        // B-109 — 비무·(duelGrant 의) 승급이 마디를 닫을 수 있다. ★ 원장은 도전자만 actor 로 적으므로
+        //   비무 계수는 도전자에게만 쌓인다 — 상대는 승급 등 다른 축만 재평가된다 (Db 원장 API 한계).
+        storyTick(((Number) challengerRow.get().get("id")).longValue(), null);
+        storyTick(((Number) targetRow.get().get("id")).longValue(), null);
 
         // A — 비무에는 살의가 없다 (death_pipeline.default_defeat): 크게 져도 중상에서 멈춘다.
         //     대성공으로 이긴다는 것은 상대를 크게 상하게 했다는 뜻이다 — 그래도 죽이지는 않는다.
@@ -5368,6 +5435,7 @@ public final class GameListener extends ListenerAdapter {
             if (!realm.equals(row.get("realm"))) {
                 body.append("\n💥 **돌파 — ").append(realm).append("에 올랐다** (쌓아 둔 기초가 문을 밀었다)");
                 db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", realm));
+                storyTick(chId, realm);   // B-109 — 승급(realm_min)이 마디를 닫을 수 있다
             }
             db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
                     realm, "강호", "청하현");
