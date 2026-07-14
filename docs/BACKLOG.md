@@ -239,22 +239,6 @@ P0 네 항목(B-001 ~ B-004)은 **전부 닫혔다** (2026-07-14) — 「닫힌 
 1~3 은 **감사의 오독으로 보인다** (`by:` 는 NPC 가 아니라 **DB 컬럼명**이다) — 그렇다면 이것도 P0 의 병이다. **미확인.**
 4 는 진짜로 보인다 (`cheongha` 가 장소 등록부에 없다).
 
-### B-009 · 다리가 끊겼다 — `bandit_camp_cleared` · `bandit_boss_succeeded` 를 봇이 안 받는다
-- **상태**: 열림
-- **분류**: ★세계
-- **단계**: P1
-- **위치**: `server-bot/src/main/java/com/honcheon/bot/Bridge.java:278`
-- **의존**: B-002
-- **닫는 조건**: `bridge_audit` 위반 0건 — 두 사건이 봇 원장에 닿는다
-- **검증**: `python3 tools/bridge_audit.py`
-- **닫힘**: —
-
-플러그인은 **보낸다** (`HuntingGrounds.java:975` · `:1113`). 등록부에도 **있다** (`world_bridge.yml:308` · `:316`).
-`Bridge.java:278-289` 의 switch 에는 **case 가 없다** — 10개만 받는다.
-사실은 그보다 앞서 죽는다: `Bridge.java:268-271` 의 `kinds()` 등록부 검사에서 "미등록 이벤트 무시"로 버려진다.
-
-**산채를 밀어도 세계가 모른다.**
-
 ### B-010 · ★ 아미의 성별 문이 **없는 문**을 지킨다
 - **상태**: 열림
 - **분류**: ★세계
@@ -1215,6 +1199,22 @@ if (!blockers.isEmpty()) {
 ---
 
 # 닫힌 것 (지우지 않는다 — 왜 닫혔는지가 증거다)
+
+### B-009 · 다리가 끊겼다 — `bandit_camp_cleared` · `bandit_boss_succeeded` 를 봇이 안 받는다
+- **상태**: 닫힘
+- **분류**: ★세계
+- **단계**: P1
+- **위치**: `server-bot/src/main/java/com/honcheon/bot/Bridge.java:278`
+- **의존**: B-002
+- **닫는 조건**: `bridge_audit` 위반 0건 — 두 사건이 봇 원장에 닿는다
+- **검증**: `python3 tools/bridge_audit.py`
+- **닫힘**: 2026-07-14 · Codex 가 두 처리기를 이었다 — `server-bot/src/main/java/com/honcheon/bot/Bridge.java:279` (`bandit_camp_cleared`) · `:280` (`bandit_boss_succeeded`), 공통 처리기는 `world_bridge.yml` 의 `effects.region_event` 이름만 읽는다 (수치 하드코딩 없음). 실측: `python3 tools/bridge_audit.py --no-backup` → 두 사건 배선 전부 ✅ · 위반 0건. 완료 문서 `docs/collaboration/CODEX_B009_COMPLETE.md` · Fable 재검증 후 장부 병합 (오버레이 v2). ★ 다만 **인게임 실발생은 아직 0건**이다 — 실제 소탕·승계가 일어나면 events·regions·bridge_inbox 를 대조하라 (완료 문서 §인계 지점)
+
+플러그인은 **보낸다** (`HuntingGrounds.java:975` · `:1113`). 등록부에도 **있다** (`world_bridge.yml:308` · `:316`).
+`Bridge.java:278-289` 의 switch 에는 **case 가 없다** — 10개만 받는다.
+사실은 그보다 앞서 죽는다: `Bridge.java:268-271` 의 `kinds()` 등록부 검사에서 "미등록 이벤트 무시"로 버려진다.
+
+**산채를 밀어도 세계가 모른다.**
 
 ### B-103 · 소문의 지역이 **표시명**이었다 — PostgreSQL 이 잡은 첫 물고기
 - **상태**: 닫힘

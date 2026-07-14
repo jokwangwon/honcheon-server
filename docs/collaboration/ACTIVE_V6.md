@@ -3,6 +3,7 @@
 | 작업 | 소유자 | 검토자 | 상태 | 소유 파일 | 인계 지점 |
 |---|---|---|---|---|---|
 | B-004 팩 실물 게이트 감사 | Fable | Codex | 완료, 검토 가능 (2026-07-14) | `tools/pack_gate_audit.py`, self-test | `FABLE_B004_COMPLETE.md` |
+| SJ-000 서장 시네마틱 서책 청사진 | Codex | Fable | 설계 완료, 구현 착수 전 | `docs/design/seojang_presentation.md`, 디자인 로드맵 포인터 | 다음: SJ-001 조판 엔진 |
 | PG-001 영속화 기준선 | Codex | Fable | 검토 통과, 커밋 a2c482a | `tools/persistence_inventory*.py`, PostgreSQL 설계 문서 | `CODEX_PG001_COMPLETE.md` |
 | PG-002A 초기화·메타 읽기 포트 | Codex | Fable | 검토 통과, 커밋 a2c482a | `ResetStore.java`, `WorldMetaReader.java`, 포트 감사 | `CODEX_PG002A_COMPLETE.md` |
 | PG-002B 브리지 포트 | Codex | Fable | 검토 통과, 커밋 a2c482a | `BridgeStore.java`, 브리지 계약 타입과 포트 | `CODEX_PG002B_COMPLETE.md` |
@@ -15,6 +16,10 @@
 | B-102 세계 상태 발행 수리 | Fable | Codex | 완료, Codex 검토 대기 (커밋 75b5cfd) | `Rules.java`, `Bridge.java` | BACKLOG B-102 닫힘 · 재현 하네스로 진단 |
 | ★ 운영 컷오버 | Fable (결정: 사람) | Codex | **전환 완료 (2026-07-14 16:38)** | `scripts/run_bot_pg.sh`, `run/bot/pg.env`(git 밖) | `FABLE_CUTOVER_20260714.md` — 운영 DB 는 이제 PostgreSQL |
 | PG-008 SQLite 경로 제거 | Fable | Codex | 보존 기간 종료 대기 (기간은 사람이 정한다) | SQLite 경로, 문서 갱신 | 설계 문서 표 · 컷오버 기록 §남은 일 |
+| B-005 평타 대립 판정 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillListener.java`, `config/combat.yml` | ★ SkillListener 는 이 트랙 소유 — 다른 손 금지 |
+| B-016·017 대화 줄서기·폴백 표식 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `GameListener.java` 대화부, `config/llm.yml` (Scribe 는 추가만) | SJ 트랙과 조율: Scribe/Seojang 기존 동작 불변 |
+| B-008 game_audit 위반 4건 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `config/reset.yml`, `config/npcs/cheongha_npcs.yml`, `tools/game_audit*.py` | 오독이면 눈을 고친다 |
+| B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillDisplay.java`, `config/skill_motion.yml`, `config/performance.yml`, `tools/motion_audit.py`, `tools/perf_audit.py` | 세 감사 위반 0 이 닫는 조건 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 
 PG-005 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.
