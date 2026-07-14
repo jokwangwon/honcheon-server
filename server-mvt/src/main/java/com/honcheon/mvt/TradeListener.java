@@ -158,6 +158,11 @@ final class TradeListener implements Listener {
      *
      * <p>나루(Antechamber)는 남의 트랙이라 손대지 않는다 — 다만 그 세계에 명패+무적 주민은 없다
      * (허수아비는 좀비·무적 아님, 시체 표지는 ArmorStand). 그래도 세계 게이트를 세워 둔다.
+     *
+     * <p>★ 이 이벤트만으로는 안 된다 (Codex R6~R8 검토, 2026-07-15): <b>리스너 등록 전에 이미
+     * 적재된 청크</b>에는 이 이벤트가 재생되지 않는다 — 스폰 청크의 옛 몸은 영영 무적인 채였다.
+     * 그래서 기동 때 {@link #sweepLoadedWorlds()} 가 이미 적재된 몸을 한 번 순회한다.
+     * 두 길이 <b>같은 이행 함수</b>를 탄다 (눈이 재는 곳을 손이 걷는다 — 두 벌이면 갈라진다).
      */
     @EventHandler
     public void onEntitiesLoad(EntitiesLoadEvent event) {
@@ -165,13 +170,55 @@ final class TradeListener implements Listener {
             return;
         }
         for (Entity e : event.getEntities()) {
-            if (e instanceof Villager v && v.getCustomName() != null && v.isInvulnerable()) {
-                String plain = ChatColor.stripColor(v.getCustomName());
-                v.getPersistentDataContainer().set(CheonghaBuilder.KEY_NPC, PersistentDataType.STRING,
-                        CheonghaBuilder.NPC_IDS.getOrDefault(plain, plain));
-                v.setInvulnerable(false);
+            migrateOldCovenant(e);
+        }
+    }
+
+    /**
+     * <b>기동 스윕</b> — 리스너 등록 전에 이미 적재된 청크의 옛 몸을 이행한다 (B-119 보완).
+     * {@link #onEntitiesLoad} 는 등록 <b>이후</b>에 올라오는 청크만 본다 — 이 스윕이 그 이전을 맡는다.
+     * 등록 직후에 불러야 틈이 없다 (스윕이 이전을, 이벤트가 이후를).
+     */
+    void sweepLoadedWorlds() {
+        int migrated = 0;
+        int seen = 0;
+        for (org.bukkit.World w : plugin.getServer().getWorlds()) {
+            if (Antechamber.isAntechamber(w)) {
+                continue;
+            }
+            for (Entity e : w.getEntities()) {
+                seen++;
+                if (migrateOldCovenant(e)) {
+                    migrated++;
+                }
             }
         }
+        // 침묵은 결함이다 — 0몸이어도 스윕이 돌았다는 사실은 로그에 남는다
+        plugin.getLogger().info("[규약이행] 기동 스윕 — 적재된 몸 " + seen
+                + " 중 옛 무적 NPC " + migrated + "몸 이행 (이후는 청크 적재 이벤트가 맡는다)");
+    }
+
+    /**
+     * 옛 규약(명패+무적)의 몸 하나를 새 규약(표식·가격 가능)으로.
+     *
+     * <p>★ 범위는 <b>등록부의 명패 집합</b>({@link CheonghaBuilder#NPC_IDS})뿐이다 — 이름만 있는
+     * 임의의 무적 주민을 청하 NPC 로 오인해 표식을 찍고 무적을 걷으면 그것이 곧 발명이다
+     * (Codex R6~R8 조언 2 · §2.1 등록제). 등록에 없는 명패는 손대지 않는다.
+     *
+     * @return 이행했으면 true
+     */
+    private static boolean migrateOldCovenant(Entity e) {
+        if (!(e instanceof Villager v) || v.getCustomName() == null || !v.isInvulnerable()) {
+            return false;
+        }
+        String plain = ChatColor.stripColor(v.getCustomName());
+        String id = CheonghaBuilder.NPC_IDS.get(plain);
+        if (id == null) {
+            return false;   // 등록에 없는 명패 — 남의 몸이다. 지어내지 않는다
+        }
+        v.getPersistentDataContainer().set(CheonghaBuilder.KEY_NPC, PersistentDataType.STRING, id);
+        v.setInvulnerable(false);
+        return true;
     }
 
     /**

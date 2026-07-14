@@ -489,6 +489,9 @@ public final class MvtCommand implements CommandExecutor {
             return true;
         }
         String cmd = terrainOnly ? "지형조성" : "지역조성";
+        if (forgeWorldBarred(sender, cmd)) {
+            return true;   // ★ 원거리 조성도 세계는 발밑에서 얻는다 — 나루에서 치면 나루에 선다 (B-126)
+        }
         WorldMap map = plugin.worldMap();
         if (map == null || args.length < 2) {
             sender.sendMessage(ChatColor.GRAY + "/혼천 " + cmd + " <지역id>  (예: nokrim_sochae)");
@@ -840,6 +843,9 @@ public final class MvtCommand implements CommandExecutor {
         if (sender instanceof Player p && !p.isOp()) {
             return true;
         }
+        if (forgeWorldBarred(sender, "세계조성")) {
+            return true;
+        }
         WorldMap map = plugin.worldMap();
         if (map == null) {
             sender.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
@@ -1012,8 +1018,41 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * ★ 조성의 세계 가드 (B-126) — <b>서 있는 자리가 곧 표적이 되는 명령은, 자리부터 묻는다.</b>
+     *
+     * <p>실사고 (2026-07-14 밤): 나루 세계에서 {@code /혼천 조성} → 마을이 나루 심부(y≈−56)에
+     * 재조성됐고 <b>앵커 9종·구역·지형 영수증까지 덮였다.</b> 조성·갈아엎기는 플레이어의 세계를
+     * 표적으로 삼는다 — 나루·연무장·그 밖의 부속 세계에서는 거부하고 <b>이유를 말한다.</b>
+     * 콘솔은 제 세계가 없으므로 각 명령의 기본(본세계·앵커의 세계)이 정한다 — 여기서 안 막는다.
+     *
+     * @return 막았으면 true (명령은 그대로 돌아선다)
+     */
+    private static boolean forgeWorldBarred(CommandSender sender, String cmd) {
+        if (!(sender instanceof Player p)) {
+            return false;
+        }
+        org.bukkit.World w = p.getWorld();
+        String why;
+        if (Antechamber.isAntechamber(w)) {
+            why = "여기는 나루다";
+        } else if (Dojang.isDojang(w)) {
+            why = "여기는 연무장이다";
+        } else if (!w.equals(org.bukkit.Bukkit.getWorlds().get(0))) {
+            why = "여기는 강호의 본세계가 아니다 (" + w.getName() + ")";
+        } else {
+            return false;
+        }
+        p.sendMessage(ChatColor.RED + "[" + cmd + "] " + why + " — 조성은 강호의 땅에서 쳐라.");
+        p.sendMessage(ChatColor.GRAY + "  (나루에서 친 조성이 나루 심부에 마을을 세운 적 있다 — 그래서 이 문이 섰다)");
+        return true;
+    }
+
     /** 청하현 조성 (M2b) — 관리자 전용, 재조성 = 같은 마을 (결정론 생성) */
     private boolean buildTown(CommandSender sender, String[] args) {
+        if (forgeWorldBarred(sender, "조성")) {
+            return true;
+        }
         java.util.List<Zone> zones = new java.util.ArrayList<>();
         Map<String, Location> anchors;
         // 좌표 지정: /혼천 조성 <x> <y> <z> — 마을을 특정 자리에 못박는다.
@@ -1024,6 +1063,13 @@ public final class MvtCommand implements CommandExecutor {
             int bx = Integer.parseInt(args[1]);
             int by = Integer.parseInt(args[2]);
             int bz = Integer.parseInt(args[3]);
+            // ★ 기준면 안전핀 (B-126 · sweepTargetSane 결) — 조성 표면은 심부가 아니다.
+            //   앵커를 덮어쓰기 전의 마지막 문이다 (실사고의 y 는 −56 이었다).
+            if (by < 0) {
+                sender.sendMessage(ChatColor.RED + "[조성] 기준면이 심부다 (y" + by
+                        + " < 0) — 조성 표면이 아니다. 표적을 다시 재라.");
+                return true;
+            }
             anchors = CheonghaBuilder.build(world, bx, by, bz, zones);
             plugin.setAnchors(anchors);
             plugin.setZones(zones);
@@ -1034,6 +1080,12 @@ public final class MvtCommand implements CommandExecutor {
         if (sender instanceof Player player) {
             if (!player.isOp()) {
                 player.sendMessage(ChatColor.RED + "조성은 관리자의 몫이다.");
+                return true;
+            }
+            if (player.getLocation().getBlockY() < 0) {
+                // ★ 기준면 안전핀 — 강호의 동굴 심부에 서서 쳐도 마을이 묻힌다 (B-126)
+                player.sendMessage(ChatColor.RED + "[조성] 발밑이 심부다 (y"
+                        + player.getLocation().getBlockY() + " < 0) — 지면에 서서 쳐라.");
                 return true;
             }
             anchors = CheonghaBuilder.build(player, zones);
@@ -2180,6 +2232,9 @@ public final class MvtCommand implements CommandExecutor {
         if (args.length < 2) {
             sender.sendMessage(ChatColor.GRAY + "/혼천 땅갈아엎기 <지역id>");
             return true;
+        }
+        if (forgeWorldBarred(sender, "땅갈아엎기")) {
+            return true;   // ★ 되돌리기도 세계를 발밑에서 얻는다 — 엉뚱한 세계를 갈면 그것도 사고다 (B-126)
         }
         World world = sender instanceof Player p ? p.getWorld() : org.bukkit.Bukkit.getWorlds().get(0);
         // ★ **원지(原地)로 되돌린다.** 장부만 지우는 것은 **반쪽**이고, 반쪽 명령은 사용자를 속인다 —

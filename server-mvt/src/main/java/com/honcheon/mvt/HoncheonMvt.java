@@ -172,7 +172,9 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
-        getServer().getPluginManager().registerEvents(new TradeListener(this), this);
+        TradeListener trade = new TradeListener(this);
+        getServer().getPluginManager().registerEvents(trade, this);
+        trade.sweepLoadedWorlds();   // 등록 이전에 적재된 청크의 옛 무적 NPC — 이벤트가 못 보는 몸 (B-119)
         getServer().getPluginManager().registerEvents(new LedgerGui(this), this);
         getServer().getPluginManager().registerEvents(new WeaponShop(this), this);
         getServer().getPluginManager().registerEvents(skills, this);
