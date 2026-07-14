@@ -5,7 +5,7 @@
 > 접합 자산: `character_creation.md`(발단·목표) · `config/player_creation.yml`(inciting_incidents ·
 > initial_goal) · `text_rpg_design.md` §15·§16·§18 · `config/regions/cheongha_hyeon.yml`(사건 3) ·
 > `config/fortune_encounters.yml`(기연 3) · `config/hunting_grounds.yml`(북쪽 산길) ·
-> `config/faction_entry_routes.yml`(hwasan_entry) · `config/seojang.yml`(책 파이프·prose 문법)
+> `config/faction_entry_routes.yml`(any_entry(13루트 불문)) · `config/seojang.yml`(책 파이프·prose 문법)
 
 ---
 
@@ -50,7 +50,7 @@
 ① 뿌리내림   생계와 지리 — "오늘 밤 잠잘 곳과 한 끼" (서장 에필로그가 정확히 여기서 끝난다)
 ② 실마리     발단의 long_hook 이 청하현의 기존 사건·기연·NPC 에 닿는다 — 발단별로 가장 다른 마디
 ③ 벽         한계의 체감 — 아이의 돈·이름·힘으로는 그 실마리의 안쪽에 못 들어간다
-④ 문턱       "힘과 이름이 있는 자리" = 문파 입문의 문턱 — hwasan_entry 안면 게이트와 같은 통화 (§5)
+④ 문턱       "힘과 이름이 있는 자리" = 문파 입문의 문턱 — any_entry(13루트 불문) 안면 게이트와 같은 통화 (§5)
 ```
 
 ### 2.2 완료 판정 — 퀘스트 마커가 아니라 원장이다
@@ -62,7 +62,7 @@ faction_entry_routes 의 원칙 상속):
 event   이벤트 원장 누적 — 의뢰_완수 · 사냥 · 비무 · 대화(target=NPC) · 탐방(target=장소)
          (GameListener 가 이미 logEvent 로 적고, Fortunes 가 이미 countEvents 로 읽는 그 원장)
 item    소지품 — 매화_목패 · 화산_고식_검결_절편 (기존 단서 아이템만)
-favor   세력 우호 (faction_reaction) — hwasan_entry 게이트와 같은 눈금
+favor   세력 우호 (faction_reaction) — any_entry(13루트 불문) 게이트와 같은 눈금
 realm   경지 (cultivation 사다리)
 fortune 기연 획득 (기연 이벤트, fortune id)
 ```
@@ -149,7 +149,7 @@ NPC 가 사슬을 아는 게 아니라, 플레이어의 물음에 결이 생기�
 
 ## 5. 완료·전환 — 사슬의 끝은 입문이 아니라 문턱이다
 
-- ④문턱 마디의 `done_when` 은 **hwasan_entry 안면 게이트와 같은 통화**로 짠다:
+- ④문턱 마디의 `done_when` 은 **any_entry(13루트 불문) 안면 게이트와 같은 통화**로 짠다:
   `any: [favor(orthodox)≥4, item(매화_목패 | 화산_고식_검결_절편)]`.
   즉 **개인 사슬 완주 = 화산의 문이 보이는 자리에 서는 것** — 경험 정본 §8 "1차 기립의 끝 =
   입문의 문턱" 과 기계적으로 일치한다.

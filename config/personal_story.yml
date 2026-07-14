@@ -62,13 +62,16 @@ condition_vocab: [event, item, item_any, favor, realm_min, fortune, any]
 # ① 뿌리내림: 생계와 지리 (서장 에필로그가 정확히 여기서 끝난다)
 # ② 실마리:   발단의 long_hook 이 기존 사건·기연·NPC 에 닿는다 — 발단별로 가장 다른 마디
 # ③ 벽:       아이의 돈·이름·힘으로는 실마리의 안쪽에 못 들어간다는 체감
-# ④ 문턱:     힘과 이름이 있는 자리 — hwasan_entry 안면 게이트와 같은 통화 (아래 threshold_gate)
+# ④ 문턱:     힘과 이름이 있는 자리 — **어느 세력이든** 입문 루트의 안면 게이트와 같은 통화
+#   【★사용자 정정 2026-07-14】 시작마을 다음은 화산이 아니다 — "어느 세력에 속하는 것"이
+#   목표다 (개방·녹림·하오문·관군… faction_entry_routes 의 13루트 전부 유효). 사슬은 문까지만
+#   데려간다 — 어느 문인지는 플레이어가 고른다.
 #
 # ★ 문턱 조건은 전 사슬 공통 — 사슬 완주 = "화산의 문이 보이는 자리" (경험 정본 §8:
 #   1차 기립의 끝 = 입문의 문턱). 입문 심사 자체는 faction_entry_routes.yml 이 정본이다.
 threshold_gate:
   any:
-    - { favor: { faction: orthodox, min: 4 } }              # hwasan_entry 안면 게이트와 같은 눈금
+    - { favor: { faction: any, min: 4 } }                   # ★어느 세력군이든 — 정파만이 아니다 (사용자 정정)
     - { item_any: [매화_목패, 화산_고식_검결_절편] }        # 기존 단서 소지품 (발명 없음)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -120,10 +123,10 @@ chains:
         recall: "비무장에서 이름이 불렸다 — 성(姓)이 빠진 이름이. 그 반쪽을 되찾으려면, 반쪽짜리 힘으로는 안 된다."
       - id: 문턱
         heart: "누명은 아이의 울음으로 벗겨지지 않는다. 이름 있는 문파의 담장 안에서라면 — 얘기가 다르다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "화산이라는 이름이 귀에 들어오기 시작했다. 물음은 아직 닫히지 않았다 — 다만 이제, 들고 갈 곳이 생겼다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   습격:
     kind: 재난
@@ -152,10 +155,10 @@ chains:
         recall: "관아의 수배장을 훑었다. 그 문양은 없었다 — 현(縣) 하나의 그물로는 안 잡히는 것이라는 뜻이다."
       - id: 문턱
         heart: "천하의 소식이 모이는 곳은 문파다. 그 문양을 아는 눈도, 거기에 있을 것이다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "문양을 그려 품에 넣었다. 언젠가 이것을 알아볼 눈 앞에 설 것이다 — 그때까지, 강해진다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   역병:
     kind: 재난
@@ -188,10 +191,10 @@ chains:
         recall: "가짜 약을 쥐고 생각했다. 병보다 사람이 먼저 썩는다 — 근원은 몸이 아니라 세상에 있을지도 모른다."
       - id: 문턱
         heart: "화산의 속가에도 의술이 있다 했다. 병의 근원을 물을 자리는, 더 높은 곳에 있다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "노인이 읊던 검결이 문득 떠올랐다. 의(醫)와 무(武)는 다른 길이 아닐지도 모른다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   목격:
     kind: 재난
@@ -221,10 +224,10 @@ chains:
         recall: "비무에서 처음으로 무인의 눈을 정면으로 봤다. 달빛 아래 그 사람의 눈은, 이보다 깊었다."
       - id: 문턱
         heart: "그 사람의 정체를 알려면 무림의 안쪽으로 들어가야 한다 — 담장 밖에서는 담장 안이 안 보인다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "무거운 비밀은 여전히 품 안에 있다. 다만 이제 그것은 목줄이 아니라 — 나침반이다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   맡겨짐:
     kind: 재난
@@ -253,10 +256,10 @@ chains:
         recall: "백석이 대필한 서찰이 상단 짐수레에 실려 떠났다. 답장이 올지는 — 하늘의 일이다."
       - id: 문턱
         heart: "이름 있는 자리에 서면 소식이 먼저 찾아온다. 흩어진 가족이 나를 찾을 수 있는 이름이 필요하다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "몸값은 아직 남았다. 하지만 이제 안다 — 갚는 날은 오고, 그날 나는 팔린 아이가 아닐 것이다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   핏줄의_비밀:
     kind: 재난
@@ -287,10 +290,10 @@ chains:
         recall: "걸인은 오늘도 조는 척했다. 하지만 지나칠 때, 감긴 눈이 품 쪽을 향한 것 같았다 — 착각일까."
       - id: 문턱
         heart: "부모의 과거가 무림에 있다면, 답도 무림 안에 있다. 담장 안으로 들어갈 자격부터 만든다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "물려받은 것의 의미는 아직 모른다. 다만 이제 그것은 짐이 아니라 — 열쇠라는 예감이 든다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   아이_거두기:
     kind: 재난
@@ -319,10 +322,10 @@ chains:
         recall: "몸 안의 기운이 처음으로 응답했다. 그들이 그날 봤다던 것이 이것이라면 — 이제 나도 보인다."
       - id: 문턱
         heart: "그들을 기다리지 않는다. 문파의 눈에 먼저 들면 — 만남은 기다림이 아니라 재회가 된다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "그때 데려가려던 자들이 누구였든, 이제 아쉬운 쪽은 내가 아니다. 그 생각에 웃음이 났다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   # ─── 명령 — 명받은 아이. 판돈은 목숨이 아니라 이름과 체면이다 (seojang 수행_파견 갈래와 정합) ───
 
@@ -357,10 +360,10 @@ chains:
         recall: "서찰에 적을 것이 생겼다 — 이름 없이 세운 작은 공적들. 보내고 나니, 답장이 두려워졌다."
       - id: 문턱
         heart: "가주가 하필 이 고을로 보낸 이유 — 화산이 가깝다. 과제의 참뜻은 어쩌면, 저 산문 안에 있다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "구파의 문턱에 서 보고서야 짐작이 갔다. 아버지는 강호를 보고 오라 하신 것이 아니라 — 강호에 서 보라 하신 것이다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   # ─── 출분 — 택한 아이들. long_hook 이 "누가 그랬는가"가 아니라 "돌아갈 것인가"다 ───
 
@@ -392,10 +395,10 @@ chains:
         recall: "비무의 첫 합에서 가전의 보법이 저절로 나왔다. 버리고 온 집이, 발끝에 남아 있었다."
       - id: 문턱
         heart: "가문이 틀렸음을 증명하는 법은 하나다 — 가문 없이, 가문보다 높은 곳에 서는 것."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "화산의 담장은 집의 담장보다 높았다. 이번에는 넘는 것이 아니라 — 문으로 들어갈 것이다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   아버지의_검:
     kind: 출분
@@ -425,10 +428,10 @@ chains:
         recall: "세 번째 비무에서 결국 가전의 초식이 나왔다. 박수 소리 사이에서 생각했다 — 방금, 문이 조금 열렸다."
       - id: 문턱
         heart: "검을 돌려주러 가든, 끝내 지니든 — 먼저 이 검이 부끄럽지 않은 팔이 되어야 한다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "화산은 검의 산이라 했다. 이 검에 값하는 법을 배울 곳으로, 그보다 나은 데가 없다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   파혼:
     kind: 출분
@@ -458,10 +461,10 @@ chains:
         recall: "비무에서 이기고 내려오며 생각했다. 그 집 사람이 지금 나를 봤다면 — 모욕이 아니라 손해를 셈하기 시작했을 것이다."
       - id: 문턱
         heart: "내 혼사를 내가 정하려면, 두 가문의 체면보다 무거운 것을 가져야 한다 — 이름을, 스스로 만든 이름을."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "산문 앞에서 웃음이 났다. 혼례 전날 밤 넘은 담이, 나를 여기까지 데려왔다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
 
   # ─── 안전판 — 등록 외 발단 (미래의 신규 발단이 사슬 없이 태어나는 사고 대비. 미결 #4) ───
   default:
@@ -491,7 +494,7 @@ chains:
         recall: "몸이 자랐다. 그리고 자란 몸이 먼저 안다 — 여기가 끝이 아니라는 것을."
       - id: 문턱
         heart: "강호는 이제부터다."
-        uses: [hwasan_entry]
+        uses: [faction_entry_routes]   # 특정 루트가 아니라 루트 전부
         done_when: [gate: threshold_gate]
         recall: "자리는 잡았다. 이제, 길을 고를 차례다."
-    threshold: hwasan_entry
+    threshold: any_entry   # 13루트 중 어느 것이든 (사용자 정정)
