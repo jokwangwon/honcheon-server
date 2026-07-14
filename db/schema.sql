@@ -1,11 +1,30 @@
--- 혼천 영속화 스키마 v1 — SQLite (WAL, 단일 작성자 = 봇 프로세스)
+-- 혼천 영속화 스키마 — SQLite (WAL, 단일 작성자 = 봇 프로세스)
 -- 기준 문서: docs/design/persistence.md
 -- 원칙: 상태 테이블(조회) + 이벤트 로그(진실) 이중 기록. JSON 컬럼은 v1 단순화.
+-- ★ 이 파일은 **신규 설치의 완결 상태**다 (마이그레이션 008 최종 상태 포함, 버전 8).
+--   구 DB 의 소급은 db/migrations/ 가 맡는다 — 새 마이그레이션을 더할 때는
+--   반드시 이 파일에도 최종 상태를 편입하고 말미의 버전 스탬프를 올려라 (B-101 의 병:
+--   schema.sql 이 뒤처진 채 Db.schemaVersionGate 가 신규 DB 를 최신으로 스탬프하면,
+--   migrate_db.py 가 버전만 보고 건너뛰어 **없는 표가 영영 서지 않는다**).
 
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 -- ─── 캐릭터군 ───
+
+-- 가문(家門) — 집안이 「유형」에서 「한 채의 집」이 된 이유 (008 · B-077):
+-- 같은 유형(농가의_자식)의 아이 둘은 남매가 아니다 — 서로 다른 농가다. 형제는 이 표의 id 로만 잡는다.
+-- characters 가 house_id 로 참조하므로 먼저 선다 (db/postgresql/schema.sql 과 같은 순서).
+CREATE TABLE IF NOT EXISTS houses (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    family      TEXT NOT NULL,                   -- 집의 유형 — player_creation.yml families 키 (유형은 죽지 않았다. 그 위에 실체가 선 것)
+    name        TEXT,                            -- NULL 허용 — 성씨 규칙 미정 (house_system.open_questions ②)
+    region      TEXT,                            -- NULL 허용 — 완비된 지역이 청하현 하나뿐 (스텁에 두면 갈 수 없는 집)
+    state       TEXT,                            -- NULL 허용 — 흥/쇠/멸 어휘 미정 (open_questions ⑤)
+    created_day INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_houses_family ON houses(family);
+
 CREATE TABLE IF NOT EXISTS characters (
     id            INTEGER PRIMARY KEY,
     discord_id    TEXT NOT NULL,              -- 계정 (캐릭터 귀속 원칙 — 계정당 활성 1)
@@ -19,10 +38,12 @@ CREATE TABLE IF NOT EXISTS characters (
     marks_json    TEXT NOT NULL DEFAULT '{}',  -- 실전·사선 마크
     created_day   INTEGER NOT NULL,            -- 세계 달력일
     died_day      INTEGER,
-    lineage_of    INTEGER REFERENCES characters(id)  -- 혈연 시작 (죽음 규칙)
+    lineage_of    INTEGER REFERENCES characters(id),  -- 혈연 시작 (죽음 규칙)
+    house_id      INTEGER REFERENCES houses(id)   -- 어느 집에 태어났는가 (008) — NULL = 가문이 아직 없다 (그때 형제는 비어 있다)
 );
 CREATE INDEX IF NOT EXISTS idx_characters_account ON characters(discord_id, status);
 CREATE INDEX IF NOT EXISTS idx_characters_location ON characters(location) WHERE status = '활성';
+CREATE INDEX IF NOT EXISTS idx_characters_house ON characters(house_id, status);
 
 CREATE TABLE IF NOT EXISTS character_bank (      -- 전장 예치 (상속 대상)
     character_id  INTEGER NOT NULL REFERENCES characters(id),
@@ -234,3 +255,14 @@ CREATE TABLE IF NOT EXISTS blood_debt (          -- ★ 감쇠하지 않는 유�
     updated_day   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_blood_debt_char ON blood_debt(character_id);
+
+-- ─── 스키마 버전 스탬프 (db_migration.md 7절 · B-101) ───
+-- ★ 이 값 = **이 파일이 실제로 담고 있는** 최종 마이그레이션 번호. 표를 편입했으면 반드시 같이 올려라 —
+--   Db.schemaVersionGate 의 "신규 DB = 최신" 추정 대신, 파일 스스로 제 버전을 말하게 한다.
+-- ★ 신규 DB 에만 찍는다: 버전 행이 이미 있으면 불변(구 DB 의 진짜 버전을 덮지 않는다),
+--   버전 표기 이전의 구 DB(캐릭터 있음)도 건드리지 않는다 — 0 으로 남아 소급 대상이 되어야 한다.
+--   (이 파일은 Db 생성자가 기동 때마다 다시 돌린다 — 그래서 조건 없는 INSERT 는 금물이다)
+INSERT INTO world_meta(key, value)
+SELECT '스키마_버전', '8'
+WHERE NOT EXISTS (SELECT 1 FROM world_meta WHERE key = '스키마_버전')
+  AND NOT EXISTS (SELECT 1 FROM characters);

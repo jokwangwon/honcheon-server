@@ -173,12 +173,8 @@ public final class PgMigrateSelfTest {
         }
         try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + sqlite);
              Statement st = c.createStatement()) {
-            // 기본 schema.sql 은 19표다 — 운영 DB 는 마이그레이션 008(가문)까지 맞은 20표.
-            // 이관의 원본은 운영 DB 이므로 fixture 도 같은 모양이어야 한다 (008 과 같은 DDL).
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS houses ("
-                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, family TEXT NOT NULL, "
-                    + "name TEXT, region TEXT, state TEXT, created_day INTEGER NOT NULL DEFAULT 0)");
-            st.executeUpdate("ALTER TABLE characters ADD COLUMN house_id INTEGER REFERENCES houses(id)");
+            // 【B-101 닫힘 후】 schema.sql 이 이제 008(가문)까지 품은 20표 완결 상태다 —
+            // fixture 가 손수 얹던 houses/house_id DDL 은 중복이 되어 걷었다 (2026-07-14).
             st.executeUpdate("INSERT INTO world_meta(key, value) VALUES('시즌', '봄')");
             st.executeUpdate("INSERT INTO houses(family, name, region, state, created_day) "
                     + "VALUES('남궁', '남궁세가', 'cheongha_hyeon', '활성', 1)");
