@@ -69,6 +69,12 @@ condition_vocab: [event, item, item_any, favor, realm_min, fortune, any]
 #
 # ★ 문턱 조건은 전 사슬 공통 — 사슬 완주 = "화산의 문이 보이는 자리" (경험 정본 §8:
 #   1차 기립의 끝 = 입문의 문턱). 입문 심사 자체는 faction_entry_routes.yml 이 정본이다.
+# ★ 시작마을별 기본 루트 (사용자 정교화 2026-07-14) — 흐름만 따라가면 닿는 문.
+#   threshold(any_entry)는 어느 문이든 인정하지만, 사슬의 서사·단서는 **그 마을의 기본 루트**를
+#   가리킨다 — 시작마을 간 목적 차이의 원천. 마을이 늘면 여기 한 줄씩 는다.
+default_route_by_region:
+  cheongha_hyeon: hwasan_entry     # 청하현의 흐름은 화산으로 이어진다 (매화 목패·진운의 결)
+
 threshold_gate:
   any:
     - { favor: { faction: any, min: 4 } }                   # ★어느 세력군이든 — 정파만이 아니다 (사용자 정정)
