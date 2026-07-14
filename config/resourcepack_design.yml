@@ -305,7 +305,11 @@ model_channels:
 
   무공의_획:
     count: 11                       # config/skill_motion.yml display.models 의 청구서 (use_held 2종은 요구 없음)
-    path: "assets/honcheon/models/item/qi|ult/<key>.json + assets/honcheon/textures/qi|ult/<key>.png"
+    # ★ 텍스처는 반드시 textures/**item**/ 아래 (2026-07) — 클라이언트는 atlases/{blocks,items}.json 이
+    #   못 박은 자리(textures/block/** · textures/item/**)만 훑는다. 그 밖의 PNG 는 스프라이트가
+    #   안 만들어져 **보라 큐브**가 된다. 예전 자리(textures/qi|ult/)가 정확히 그 병이었다.
+    #   모델 키(honcheon:qi/slash_arc)는 불변 — 바뀐 것은 텍스처가 사는 자리뿐이다.
+    path: "assets/honcheon/models/item/qi|ult/<key>.json + assets/honcheon/textures/item/qi|ult/<key>.png"
     keys: [qi/slash_arc, qi/slash_line, qi/slash_ring, qi/blade_sheath,
            qi/bolt_edge, qi/bolt_lance, qi/guard_shard,
            ult/plum_bloom, ult/taegeuk_disc, ult/emperor_edge, ult/blood_tide]
@@ -320,7 +324,31 @@ model_channels:
       **원점 = 머리(칼끝)**, 몸은 −X 로 늘어진다. Transformation.scale 은 모델 (8,8,8) 을 중심으로
       먹으므로, 머리를 그 점에 두어야 scale.x 0→1 에서 **칼끝 뒤로 꼬리가 자라고**, 1→0 에서
       **꼬리부터 지워진다.** 머리가 먼저 지워지면 거꾸로 보인다 (만화 검격의 핵심 — 사용자 지적).
-    무색: "색을 넣지 않는다 (채도 0 실측). 격의 사다리는 **코드가** 밝기(setBrightness)·굵기(thick 0.55→2.10)로 올린다. 텍스처가 하는 일은 형태와 **알파**뿐 — 꼬리로 갈수록 옅어져 '굽어 사라지는' 인상을 만든다"
+    # ═══ 색의 계약 【2026-07 개정 — 사용자 지시】 ═══════════════════════════════
+    # 사용자: *"공격 궤적과 파티클은 경지와 기술 등급이 올라갈수록 RPG 스타일로 더 화려해지는 구조."*
+    #   그런데 **참격선의 판 한 장이 여섯 격을 전부 그린다** (qi/slash_arc 하나를 외공기도 심검도 쓴다).
+    #   ⇒ 판에 색을 넣으면 **외공기의 주먹도 청백으로 빛난다.** 그것은 사다리를 무너뜨린다.
+    #   그래서 색은 **두 곳에서만** 온다:
+    #     ① 파티클 — 격마다 다르다 (config/skill_motion.yml inks: 먹→회백→청회→청록→옥→청백)
+    #     ② 오의의 판 — ult/* 8종은 **오의 전용**이므로 판이 색을 가져도 사다리가 안 무너진다
+    #   qi/* 7종은 여전히 **무색**이다. 이것은 타협이 아니라 **사다리의 요구**다.
+    qi_무색: "qi/* 7종 — 색을 넣지 않는다 (채도 0 실측). 여섯 격이 이 판 한 장을 나눠 쓰므로 색을 넣으면 외공기가 심검처럼 빛난다. 격의 사다리는 **코드가** 밝기(setBrightness)·굵기(thick 0.55→2.10)로 올리고, **색은 파티클(inks)이 올린다**. 텍스처가 하는 일은 형태와 **알파**뿐 — 꼬리로 갈수록 옅어져 '굽어 사라지는' 인상을 만든다"
+    ult_채색: |
+      ult/* 8종 — **옥(166,214,199) · 청백(226,240,238)** 으로 물든다 (사용자의 상급 팔레트 그대로).
+      오의 전용 판이므로 격의 사다리를 해치지 않는다 — 오히려 **최상위만 화려하다**를 판에서 완성한다.
+      먹빛 4단(농담)은 그대로 살아 있다: 색은 **곱해질 뿐** 농담을 지우지 않는다 (수묵의 골격 유지).
+      금지: 형광 핑크 · 네온 보라 · 과도한 노랑 · SF 발광 — texture_audit 축 ⑰ 이 이것을 잰다.
+      예외: ult/blood_tide (혈해만리) — 혈(138,38,42). 【채색 예외】 예외가 곧 정보다.
+    ★밝기_대역_⑫_면제: |
+      **획은 자재가 아니라 기(氣)다.** texture_audit 축 ⑫(자재 채도 ≤25 · 밝기 [128,172])는
+      `minecraft/textures/block/*.png` 만 훑는다 — 획은 `honcheon/textures/item/qi|ult/` 에 살므로
+      **애초에 그 축의 사정거리 밖**이다.
+      ⇒ 그런데 그 면제가 **어디에도 적혀 있지 않았다.** 사정거리 밖이라 조용히 통과하던 것은
+        면제가 아니라 **구멍**이다 (팩 담당이 NON_ICON 에서 배운 그 교훈: "축이 시끄럽다고 파일을
+        숨기면 축은 조용해지고 세계가 깨진다"). 그래서 여기에 **소리내어 청구한다**:
+          · ⑫(밝기·채도 대역) — 면제. 획은 세계를 덮는 '면'이 아니라 공중에 뜨는 '빛'이다
+          · **그 대신 축 ⑰(획의 색)이 획을 잰다** — 금지색(네온·형광)·허용 팔레트·격 사다리.
+        면제는 **재지 않는다는 뜻이 아니라 다른 자로 잰다는 뜻**이다. 은닉과 명시의 차이가 그것이다.
     ★엔진에_넘기는_청구: |
       **slash_arc · slash_line 의 size[0] 을 3.0 → 1.5 로** (config/skill_motion.yml — 모션 담당의 것).
       근거: 머리가 원점(x=8)이고 몸이 −X 로 3.0m(48px) 뻗으면 꼬리는 x=−40 인데,
@@ -779,8 +807,12 @@ texture_pipeline:
     아이템_정의: "assets/honcheon/items/<key>.json — item_model 컴포넌트가 가리키는 곳 (1.21.4 신규)"
     아이템_모델: "assets/honcheon/models/item/<key>.json — **병기 45자루는 elements(3D)** · 그 외는 generated(평면)"
     아이템_텍스처: "assets/honcheon/textures/item/<key>.png — 16x16 (병기는 이 한 장이 아이콘이자 3D 의 재질이다)"
-    획_모델: "assets/honcheon/models/item/qi|ult/<key>.json (3D) + assets/honcheon/textures/qi|ult/<key>.png (32x32)"
-    짐승_모델: "assets/honcheon/models/mob/<name>/<part>.json (3D) + assets/honcheon/textures/mob/<name>/<part>.png (32x32)"
+    # ★ 획·가죽의 텍스처도 **아틀라스 안**(textures/item/**) 에 산다 — 밖에 두면 보라 큐브다 (축 ⑮).
+    #   참격선 3종은 **64x64 정사각**이다: 그림은 위 64x16 이고 모델이 uv v 를 0~4 로 물어 같은 그림을
+    #   가리킨다. 가로로 긴 텍스처(64x16)는 마인크래프트가 받지 않는다 (축 ⑯).
+    #   아이콘 축(16x16 치수·외곽선 폐합)은 이것들에 **적용되지 않는다** — texture_audit 의 NON_ICON 등록.
+    획_모델: "assets/honcheon/models/item/qi|ult/<key>.json (3D) + assets/honcheon/textures/item/qi|ult/<key>.png (32x32 · 참격선 3종은 64x64)"
+    짐승_모델: "assets/honcheon/models/mob/<name>/<part>.json (3D) + assets/honcheon/textures/item/mob/<name>/<part>.png (32x32)"
     메뉴_스프라이트: "assets/minecraft/textures/gui/sprites/widget|tooltip/<name>.png — **.mcmeta 는 굽지 않는다** (바닐라 나인슬라이스가 그대로 산다 = 좌표 계약 불변)"
     블록_텍스처: "assets/minecraft/textures/block|entity|painting/<vanilla>.png — 전역 치환 (blockstate/model JSON 불요)"
   builder_hooks: [ITEM_ART_등록표, write_item_assets, weapon_model_3d, write_qi_assets, write_mob_assets,
