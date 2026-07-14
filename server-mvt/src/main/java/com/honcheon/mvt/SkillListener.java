@@ -1339,6 +1339,14 @@ public final class SkillListener implements Listener {
      * 지어내면 밸런스를 조용히 뒤엎게 된다 (combat.yml {@code basic_strike_judgment}).
      */
     private void basicMelee(EntityDamageByEntityEvent event, Player player, LivingEntity target) {
+        // ★ 허수아비는 계기다 — **계기와는 대립하지 않는다** (등록부: "안 죽고, 안 움직이고,
+        //   맞은 것을 말한다"). B-005 의 대립 판정이 여기까지 번져 배우는 손의 타격 대부분이
+        //   **조용히** 기각됐다 (실측 2026-07-15: 여러 타 중 누적 1 — 나루의 손 과제가 안 늘었다).
+        //   획은 그리고, 취소하지 않는다 — 바닐라 피해가 그대로 실리고 나루의 눈(onDamage)이 센다 (B-132)
+        if (Antechamber.dummy(target)) {
+            basicSwing(player);
+            return;
+        }
         basicSwing(player);   // 획 · 몸의 자세 (있던 그대로 — CD_BASIC 이 겹침만 막는다)
 
         SkillEngine.Impact im = engine.impact();

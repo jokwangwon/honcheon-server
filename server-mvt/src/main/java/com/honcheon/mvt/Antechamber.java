@@ -1286,6 +1286,15 @@ public final class Antechamber implements Listener {
     //  허수아비
     // ══════════════════════════════════════════════════════════════════════
 
+    /**
+     * 이 몸이 허수아비인가 — <b>계기(計器)는 대립하지 않는다</b>는 판정 예외의 신원.
+     * 등록부(antechamber.yml)가 못박았다: "안 죽고, 안 움직이고, 맞은 것을 말한다."
+     * {@link SkillListener} 가 대립 판정에 앞서 이것을 묻는다 (B-132).
+     */
+    static boolean dummy(Entity e) {
+        return e.getPersistentDataContainer().has(KEY_DUMMY);
+    }
+
     private void clearDummies(World w) {
         for (Entity e : w.getEntities()) {
             if (e.getPersistentDataContainer().has(KEY_DUMMY)) {
