@@ -92,7 +92,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 청하현 지역 행 — 소문·NPC 의 외래키 대상 (region_state 기본값 50/50/50). 스키마 변경 아님 */
-    public static final String REGION = "cheongha_hyeon";
+    public static final String REGION = WorldStore.PRIMARY_REGION;   // 한 몸 — 다시 갈라지면 컴파일이 막는다... 는 못 하지만 적어도 원천이 하나다 (B-103)
 
     private void ensureRegion() throws Exception {
         dialect.ensureRegion(conn, REGION);

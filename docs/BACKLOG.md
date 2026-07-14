@@ -1216,6 +1216,20 @@ if (!blockers.isEmpty()) {
 
 # 닫힌 것 (지우지 않는다 — 왜 닫혔는지가 증거다)
 
+### B-103 · 소문의 지역이 **표시명**이었다 — PostgreSQL 이 잡은 첫 물고기
+- **상태**: 닫힘
+- **분류**: 결함
+- **단계**: P1
+- **위치**: `server-bot/src/main/java/com/honcheon/bot/WorldStore.java:7` (`PRIMARY_REGION`)
+- **의존**: —
+- **닫는 조건**: 소문 파종이 regions.id(`cheongha_hyeon`)로 참조한다 — FK 아래서 심긴다
+- **검증**: `server-bot/src/main/java/com/honcheon/bot/WorldStore.java:15` (id 로 참조) · `server-bot/src/main/java/com/honcheon/bot/Db.java:95` (원천 단일화)
+- **닫힘**: 2026-07-14 · `server-bot/src/main/java/com/honcheon/bot/WorldStore.java:15` 의 `PRIMARY_REGION` 이 표시명 "청하현"으로 박혀 있었다 (포트 추출 때 갈라진 값 — 기존 소문 42건은 전부 id `cheongha_hyeon`). id 로 교정하고 `Db.java:95` 의 `REGION` 을 이 상수에 묶어 원천을 하나로 만들었다. 실증(본 것): 스테이징 PG 하네스에서 `spread()` → 1망 파종, `region=cheongha_hyeon` FK 통과 · 수리 jar 운영 배포(16:50) 후 기동 로그 `DB: postgresql` 정상. ★ 이 병은 **컷오버 직후 PostgreSQL 이 잡았다** — SQLite 는 FK 를 안 지켜서(꺼짐) 고아 소문을 조용히 만들었을 자리다. **전환의 첫 배당금이다.** 발견 로그(`run/bot/bot.log`): "탄생 소문을 심지 못했다 (아이는 태어났다): … violates foreign key constraint rumors_region_fkey" (아이 = 캐릭터 7 디돈 — 무사히 태어났다)
+
+병이 보이던 방식: 탄생·의뢰·개화·출행 — **모든** 소문 파종이 PostgreSQL 에서 FK 위반으로 죽는다
+(다행히 파종 실패는 생성을 죽이지 않게 돼 있었다). SQLite 였다면 위반 없이 심기되,
+읽는 쪽은 id 로 거르므로 **아무에게도 들리지 않는 유령 소문**이 됐을 것이다.
+
 ### B-102 · ★ 세계 상태 발행이 **계속 실패한다** — 봇→마크 되먹임이 끊겼다
 - **상태**: 닫힘
 - **분류**: 결함
