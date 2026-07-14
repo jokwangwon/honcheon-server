@@ -62,9 +62,20 @@ final class SkillDisplay {
     /** 지속 형체 — 몸 → (자리 → 형체). 심장박동으로 산다 (갱신이 끊기면 스스로 사라진다) */
     private final Map<UUID, Map<String, Persist>> persistent = new HashMap<>();
     private final Map<String, Material> materials = new HashMap<>();
+    /**
+     * <b>인게임 임시 조정</b> — {@code /혼천 획위치} 가 민 값 (모션 → [앞, 높이, 옆]).
+     *
+     * <p>이 자리는 <b>눈으로 봐야 정해진다</b>. 서버를 세우고 등록부를 고치고 다시 세우는 왕복으로는
+     * 한 값도 못 맞춘다 — 그래서 살아 있는 서버에서 밀고 당긴다. <b>등록부를 덮어쓰지 않는다</b>:
+     * 재기동하면 사라진다. 맞춘 값은 {@code /혼천 획위치 적기} 로 뽑아 등록부에 <b>사람이 적는다</b>
+     * (코드가 등록부를 고치면 등록제가 무너진다).
+     */
+    private final Map<String, double[]> originOverride = new HashMap<>();
 
     /** 진단 — 최근 발행 기록 ({@code /혼천 모션진단}). 인게임에 못 들어가는 눈을 위한 창구 */
     private final List<Log> log = new ArrayList<>();
+    /** 이미 로그로 말한 (형체 × 팩유무) 조합 — 같은 말을 두 번 하지 않는다 (로그가 진실을 덮지 않게) */
+    private final Set<String> witnessed = new HashSet<>();
     private int denied;
     private long tick;
 
@@ -88,6 +99,8 @@ final class SkillDisplay {
         // 참격선 — 그렸다가 꼬리부터 지운다
         float[] full;
         long fadeAt = -1;
+        Quaternionf rot;        // ★ 스윙이 끝난 각 — 지울 때 여기서 지운다 (되돌리면 검이 도로 튄다)
+        float rise;             // ★ 스윙이 끝난 높이 (올려베기·내려베기)
         // 투사 — 날아간다
         Vector dir;
         Location head;
@@ -247,6 +260,15 @@ final class SkillDisplay {
      */
     boolean slash(Player caster, String hitType, String grade, String weaponClass,
                   double range, double angle, int swingTicks) {
+        return slash(caster, hitType, grade, weaponClass, range, angle, swingTicks, null);
+    }
+
+    /**
+     * @param strokeId ★ <b>이 획이 도는 각</b> ({@code display.swing_arcs.strokes}) — null 이면
+     *                 옛 그림(안 도는 획). 도는 것은 <b>검</b>이지 사람의 카메라가 아니다
+     */
+    boolean slash(Player caster, String hitType, String grade, String weaponClass,
+                  double range, double angle, int swingTicks, String strokeId) {
         SkillEngine.DisplayMotion m = engine.slashFor(hitType);
         SkillEngine.Swing sw = engine.swing(weaponClass);
         SkillEngine.Ink ink = engine.ink(grade);
@@ -265,18 +287,27 @@ final class SkillDisplay {
 
         // 【불변식 ㅂ】 길이는 판정이 준 사거리에서 나온다 (reach ≤ 1.0 — 등록부는 줄일 수만 있다)
         double length = range * sw.reach();
-        Location at = ring
-                ? caster.getLocation().add(0, 1.0, 0)
-                : caster.getEyeLocation().subtract(0, 0.25, 0);
+        // ★ 자리는 **등록부**가 준다 (display.stroke_origin) — 팔이 지나가는 자리에 세운다
+        Location at = origin(caster, m, length, flat);
         at.setDirection(back ? flat.clone().multiply(-1) : flat);
         if (!ring) {
             at.setPitch(at.getPitch() + sw.tilt());   // MC 규약: pitch 양수 = 아래 (부는 내려찍는다)
         }
 
-        Piece p = spawn(m, at, caster, 1, false);
+        // ★★ 스윙 — 시작 각과 끝 각. 클라이언트가 그 사이를 slerp 한다 = **획이 호를 그리며 쓴다**
+        SkillEngine.SwingArc arc = ring ? null : arcOf(strokeId, angle);
+        SkillEngine.SwingTuning tune = tuning();
+        Quaternionf qStart = arc == null ? pose(m, 0.0f)
+                : pose(m, 0.0f).mul(arc.quat(0, tune.arc()));
+        Quaternionf qEnd = arc == null ? pose(m, 0.0f)
+                : pose(m, 0.0f).mul(arc.quat(1, tune.arc()));
+
+        Piece p = spawn(m, at, caster, 1, false, caster.getUniqueId(), qStart);
         if (p == null) {
             return false;   // 강등 — 파티클이 그 자리를 지킨다 (강등이지 실종이 아니다)
         }
+        p.rot = qEnd;
+        p.rise = arc == null ? 0.0f : (float) (arc.rise()[1] * tune.rise());
         // 굵기 = 격의 먹(ink) × 계열의 손 — 속도가 곧 두께다 (단검 가늘게 · 부 굵게)
         float thick = ink.thickness() * sw.thickness();
         float[] size = model.size();
@@ -291,12 +322,49 @@ final class SkillDisplay {
         p.dieAt = p.fadeAt + m.fade();
         for (Display d : p.parts) {
             d.setBrightness(new Display.Brightness(ink.blockLight(), ink.skyLight()));
-            transform(d, m, p.full, 0.0f, draw);      // 그린다 — 칼끝 뒤로 꼬리가 자란다
+            // 그린다 — 칼끝 뒤로 꼬리가 자라고, **동시에 획이 호를 그리며 쓸고 지나간다**
+            transform(d, m, p.full, qEnd, p.rise, draw);
         }
         note("참격선", hitType + "·" + grade + "·" + weaponClass
+                + (arc == null ? "" : "·" + arc.id()
+                        + String.format(" 호각%.0f도", arc.arcDeg(tune.arc())))
                 + " 길이" + String.format("%.1f", length) + "m 굵기" + String.format("%.2f", thick)
                 + " 그리기" + draw + "틱");
         return true;
+    }
+
+    /**
+     * <b>이 획이 도는 각</b> — 등록부가 준다. 그리고 <b>못</b>: yaw 는 히트박스 부채꼴 밖으로 못 나간다.
+     *
+     * <p><b>【불변식 ㅂ】</b> "획은 히트박스를 벗어나지 못한다." pitch·roll 은 <b>자유다</b> —
+     * 호(弧) 히트박스는 {@code arcTargets} 가 <b>수평각만</b> 재고 높이를 안 본다. 그래서 위아래로 크게
+     * 휘둘러도 그림이 판정에 대해 거짓말하지 않는다. 그러나 <b>yaw 는 그 부채꼴 자체다</b> — 등록부가
+     * 밖을 청구하면 <b>깎고, 소리내어 짖는다</b> (조용히 깎는 것은 거짓말이다).
+     */
+    private SkillEngine.SwingArc arcOf(String strokeId, double angle) {
+        SkillEngine.SwingArcs arcs = engine.swingArcs();
+        SkillEngine.SwingArc a = arcs.stroke(strokeId);
+        if (a == null || !arcs.enabled()) {
+            return null;
+        }
+        double half = Math.max(1.0, angle / 2.0);
+        double[] yaw = {clamp(a.yaw()[0], -half, half), clamp(a.yaw()[1], -half, half)};
+        if ((Math.abs(yaw[0] - a.yaw()[0]) > 0.01 || Math.abs(yaw[1] - a.yaw()[1]) > 0.01)
+                && barked.add("호밖|" + strokeId + "|" + (int) angle)) {
+            plugin.getLogger().warning(String.format(
+                    "[획·위반] 스윙 '%s' 의 yaw [%.0f, %.0f] 가 히트박스 부채꼴 ±%.0f도 밖이다 —"
+                            + " 깎아서 그린다 (불변식 ㅂ: 획은 히트박스를 벗어나지 못한다)."
+                            + " config/skill_motion.yml display.swing_arcs.strokes.%s",
+                    strokeId, a.yaw()[0], a.yaw()[1], half, strokeId));
+        }
+        double maxArc = arcs.maxArcDeg();
+        double deg = a.arcDeg(tuning().arc());
+        if (deg > maxArc && barked.add("호과다|" + strokeId)) {
+            plugin.getLogger().warning(String.format(
+                    "[획·위반] 스윙 '%s' 의 호각 %.0f도 > 상한 %.0f도 — 팔이 아니라 프로펠러다"
+                            + " (display.swing_arcs.limits.max_arc_deg)", strokeId, deg, maxArc));
+        }
+        return new SkillEngine.SwingArc(a.id(), yaw, a.pitch(), a.roll(), a.rise(), a.fan(), a.bow());
     }
 
     /** 지워진다 — <b>꼬리부터</b>. 획이 살짝 퍼지며(spread) 사라진다 (연기처럼) */
@@ -304,9 +372,108 @@ final class SkillDisplay {
         p.fading = true;
         float s = p.m.spread();
         for (Display d : p.parts) {
-            // scale.x → 0 : 머리(원점)로 수축한다 = 꼬리가 먼저 사라진다
-            transform(d, p.m, new float[]{0.001f, p.full[1] * s, p.full[2] * s}, 0.0f, p.m.fade());
+            // scale.x → 0 : 머리(원점)로 수축한다 = 꼬리가 먼저 사라진다.
+            // 각은 **스윙이 끝난 그 각 그대로다** — 여기서 되돌리면 다 벤 검이 도로 튄다
+            transform(d, p.m, new float[]{0.001f, p.full[1] * s, p.full[2] * s},
+                    p.rot == null ? pose(p.m, 0.0f) : p.rot, p.rise, p.m.fade());
         }
+    }
+
+    // ══════════ ★ 획이 서는 자리 — 팔이 지나가는 자리에 세운다 ══════════
+
+    /**
+     * <b>획의 원점</b> — 시전자의 <b>발</b>에서 등록부가 적은 만큼 밀어낸 자리.
+     *
+     * <p><b>【2026-07 — 획이 몸 안에서 나오던 병】</b> 예전 계약은 이랬다:
+     * <pre>  at = caster.getEyeLocation().subtract(0, 0.25, 0)   // 앞으로 미는 값이 **없었다**</pre>
+     * 눈(1.62m)에서 0.25 내린 자리는 <b>시전자의 가슴 한복판</b>이다 (수평으로는 몸의 축 그대로).
+     * 그래서 3인칭에서는 획이 얼굴·몸을 <b>관통</b>했고, 1인칭에서는 카메라가 획의 <b>안쪽</b>에 있어
+     * <b>제 검의 궤적이 제 눈에 안 보였다</b>. 사용자가 인게임에서 본 그것이다.
+     *
+     * <p>이제 자리는 <b>등록부가 쥔다</b> ({@code display.stroke_origin}) — 앞·높이·옆 세 칸.
+     * 코드가 하는 일은 <b>못을 박는 것</b>뿐이다:
+     * <ul>
+     *   <li><b>아래 못</b> — 어떤 값을 적어도 획은 <b>몸 밖</b>에 선다 ({@code body_radius + clearance}).
+     *       이 못이 위 못보다 <b>세다</b>: 짧은 획(맨손)도 몸 안으로 후퇴하지 않는다</li>
+     *   <li><b>위 못</b> — 획의 길이에 매인다 ({@code 길이 × forward_max_ratio}). 너무 밀면
+     *       <b>허공에 뜬 판자</b>가 된다 (사거리와의 관계)</li>
+     * </ul>
+     * {@code centered: true} 인 자리(고리)는 <b>몸에 겹치는 것이 옳다</b> — 등록부가 그렇게 청구했다.
+     *
+     * @param flat 시선의 수평 성분 (이미 정규화되어 있다 — 부르는 쪽이 한 번만 잰다)
+     */
+    private Location origin(Player caster, SkillEngine.DisplayMotion m, double length, Vector flat) {
+        SkillEngine.StrokeOrigin o = originOf(m.id());
+        Vector right = new Vector(-flat.getZ(), 0, flat.getX());   // 주로 쓰는 손 쪽 (바닐라는 오른손잡이)
+        double push = forwardOf(o, length);
+        Location feet = caster.getLocation();
+        Location at = feet.clone()
+                .add(flat.clone().multiply(push))
+                .add(right.multiply(o.lateral()));
+        at.setY(feet.getY() + o.height());
+        eyeOrigin(m, o);   // 【눈】 등록부가 몸 안을 청구했으면 소리내어 잡는다
+        return at;
+    }
+
+    /**
+     * <b>실효 앞거리</b> — 등록값을 두 못 사이로 조인다.
+     *
+     * <p>아래 못이 <b>이긴다</b>: {@code max(최소, min(등록값, 상한))} 이므로 상한이 최소보다 작아도
+     * (아주 짧은 획) 원점은 <b>몸 밖</b>에 남는다. 몸 안으로 후퇴하느니 조금 뜨는 편이 낫다 —
+     * 몸 안의 획은 <b>안 보인다</b>(1인칭)는 것을 우리는 이미 봤다.
+     */
+    double forwardOf(SkillEngine.StrokeOrigin o, double length) {
+        if (o.centered()) {
+            return o.forward();   // 고리 — 몸을 두르는 것이 옳다 (등록부가 청구했다)
+        }
+        SkillEngine.StrokeLimits lim = engine.strokeLimits();
+        double cap = length * lim.forwardMaxRatio();
+        return Math.max(lim.minForward(), Math.min(o.forward(), Math.max(lim.minForward(), cap)));
+    }
+
+    /**
+     * <b>【눈】 획의 원점이 시전자의 몸 안인가.</b> 위반이면 사유를, 아니면 null.
+     *
+     * <p>몸 = 반지름 {@code body_radius} · 높이 0~{@code max_height} 의 기둥 (발~키). 그 안에 원점이
+     * 있으면 획은 몸을 뚫고, 1인칭에서는 카메라 안쪽이라 <b>안 보인다</b> — 그것이 우리가 고친 병이다.
+     *
+     * <p><b>재는 것은 등록값이지 실효값이 아니다.</b> {@link #forwardOf} 가 이미 몸 밖으로 밀어내므로
+     * 실효값을 재면 이 눈은 <b>영영 안 울린다</b> (제 손으로 고쳐 놓고 "문제 없음"이라 말하는 눈 =
+     * 없느니만 못한 눈). 그래서 <b>등록부가 무엇을 청구했는지</b>를 본다: 몸 안을 청구했으면 위반이다.
+     *
+     * <p>{@code /혼천 획위치} 와 이 눈은 <b>같은 함수</b>에 물어본다 — 두 개의 진실을 만들지 않는다.
+     */
+    String originFault(SkillEngine.StrokeOrigin o) {
+        if (o.centered()) {
+            return null;   // 몸에 겹치는 것이 옳다 — 등록부가 소리내어 청구한 면제다
+        }
+        SkillEngine.StrokeLimits lim = engine.strokeLimits();
+        double flatDist = Math.hypot(o.forward(), o.lateral());
+        boolean inColumn = flatDist < lim.bodyRadius();
+        boolean inHeight = o.height() >= 0.0 && o.height() <= lim.maxHeight();
+        if (!inColumn || !inHeight) {
+            return null;
+        }
+        return String.format(
+                "원점이 몸 안이다 — 앞 %.2f · 옆 %.2f ⇒ 수평 %.2fm < 몸 반지름 %.2fm"
+                        + " (높이 %.2f ∈ 발~키 0~%.2f). 획이 몸을 뚫고, 1인칭에서 안 보인다",
+                o.forward(), o.lateral(), flatDist, lim.bodyRadius(), o.height(), lim.maxHeight());
+    }
+
+    /** 같은 위반을 두 번 짖지 않는다 (획은 초당 여러 번 그려진다 — 로그가 진실을 덮지 않게) */
+    private final Set<String> barked = new HashSet<>();
+
+    private void eyeOrigin(SkillEngine.DisplayMotion m, SkillEngine.StrokeOrigin o) {
+        String fault = originFault(o);
+        if (fault == null) {
+            barked.remove(m.id());   // 고쳐졌다 — 다시 어기면 다시 짖는다
+            return;
+        }
+        if (barked.add(m.id())) {
+            plugin.getLogger().warning("[획·위반] " + m.id() + " — " + fault
+                    + " (config/skill_motion.yml display.stroke_origin)");
+        }
+        note("획·위반", m.id() + " — " + fault);
     }
 
     /** 시선의 수평 성분 — 획은 하늘을 보지 않는다 (베는 것은 땅 위의 일이다) */
@@ -352,10 +519,34 @@ final class SkillDisplay {
         }
     }
 
-    /** 병기의 날이 있는 자리 — 눈에서 앞으로. 1인칭 시야에도 들어온다 */
-    private static Location hand(LivingEntity body) {
+    /**
+     * 【실측】 플레이어 눈높이 (m) — {@code stroke_origin.limits} 의 실측(키 1.8 · 눈 1.62)과 같은 자.
+     * 값이 아니라 <b>단위 환산</b>이다: 등록부의 height(발에서 잰 높이)를 눈에서 내리는 값으로 바꾼다.
+     * ({@code getEyeHeight()} 를 안 쓰는 이유 — 몹은 눈높이가 제각각인데, 날의 기는 어떤 몸에서든
+     * 눈 아래 같은 거리에 서야 한다. 등록부의 자는 플레이어 실측 하나다.)
+     */
+    private static final double PLAYER_EYE_LEVEL = 1.62;
+
+    /**
+     * 병기의 날이 있는 자리 — 눈에서 앞으로. 1인칭 시야에도 들어온다.
+     *
+     * <p>자리는 <b>등록부가 쥔다</b> ({@code display.stroke_origin.날의_기} — 획의 stroke_origin 과
+     * 같은 문법). 획과 달리 <b>시선(피치 포함)을 따라</b> 민다: 날의 기는 손에 든 병기 위에 겹쳐
+     * 살므로, 고개를 숙이면 날도 내려간다. {@code height} 는 수평 시선 기준 발에서 잰 높이라
+     * 눈높이에서 내리는 값으로 환산한다 (1.62 − 1.47 = 0.15 — 옛 리터럴 그대로, 행동 불변).
+     */
+    private Location hand(LivingEntity body) {
+        SkillEngine.StrokeOrigin seat = engine.strokeOrigin("날의_기");
         Vector dir = body.getEyeLocation().getDirection().normalize();
-        Location at = body.getEyeLocation().add(dir.clone().multiply(0.55)).subtract(0, 0.15, 0);
+        Location at = body.getEyeLocation().add(dir.clone().multiply(seat.forward()))
+                .subtract(0, PLAYER_EYE_LEVEL - seat.height(), 0);
+        if (seat.lateral() != 0.0) {
+            // 시선의 오른쪽 — strikeTest 와 같은 축 (왼손 좌표계 기준). 등록값 0 이면 이 길은 안 탄다
+            Vector flat = dir.clone().setY(0);
+            if (flat.lengthSquared() > 1.0e-6) {
+                at.add(new Vector(-flat.getZ(), 0, flat.getX()).normalize().multiply(seat.lateral()));
+            }
+        }
         at.setDirection(dir);
         return at;
     }
@@ -612,6 +803,11 @@ final class SkillDisplay {
         return spawn(m, at, owner, units, ultimate, owner == null ? null : owner.getUniqueId());
     }
 
+    private Piece spawn(SkillEngine.DisplayMotion m, Location at, Player owner,
+                        int units, boolean ultimate, UUID ownerId) {
+        return spawn(m, at, owner, units, ultimate, ownerId, null);
+    }
+
     /**
      * 한 발을 띄운다.
      *
@@ -625,7 +821,7 @@ final class SkillDisplay {
      * @return 예산이 없거나 볼 사람이 없으면 null
      */
     private Piece spawn(SkillEngine.DisplayMotion m, Location at, Player owner,
-                        int units, boolean ultimate, UUID ownerId) {
+                        int units, boolean ultimate, UUID ownerId, Quaternionf seed) {
         SkillEngine.DisplayModel model = engine.displayModel(m.model());
         if (model == null || at.getWorld() == null) {
             return null;
@@ -642,7 +838,7 @@ final class SkillDisplay {
                 return null;
             }
             Piece p = new Piece(m, ownerId);
-            p.parts.add(create(at, m, stack, null));   // 모두의 눈에 — 팩 분기가 없다
+            p.parts.add(create(at, m, stack, null, seed));   // 모두의 눈에 — 팩 분기가 없다
             p.dieAt = tick + m.lifetime();
             pieces.add(p);
             return p;
@@ -665,13 +861,13 @@ final class SkillDisplay {
         if (!withPack.isEmpty()) {
             ItemStack packedItem = item(model, true, held);
             if (packedItem != null) {
-                p.parts.add(create(at, m, packedItem, withPack));
+                p.parts.add(create(at, m, packedItem, withPack, seed));
             }
         }
         if (!without.isEmpty() && plainOk) {
             ItemStack plainItem = item(model, false, held);
             if (plainItem != null) {
-                p.parts.add(create(at, m, plainItem, without));
+                p.parts.add(create(at, m, plainItem, without, seed));
             }
         }
         if (p.parts.isEmpty()) {
@@ -682,9 +878,13 @@ final class SkillDisplay {
         return p;
     }
 
-    /** @param viewers null 이면 32m 안의 모두에게 보인다 (use_held — 팩 분기가 없는 형체) */
+    /**
+     * @param viewers null 이면 32m 안의 모두에게 보인다 (use_held — 팩 분기가 없는 형체)
+     * @param seed    ★ <b>스윙의 시작 각</b> — 여기서 띄우고 {@link #transform} 이 끝 각을 준다.
+     *                그 사이를 클라이언트가 slerp 한다 = <b>획이 쓸고 지나간다</b>. null 이면 등록된 각 그대로
+     */
     private Display create(Location at, SkillEngine.DisplayMotion m, ItemStack stack,
-                           List<Player> viewers) {
+                           List<Player> viewers, Quaternionf seed) {
         SkillEngine.DisplayBudget b = engine.displayBudget();
         ItemDisplay d = at.getWorld().spawn(at, ItemDisplay.class, e -> {
             e.setItemStack(stack);
@@ -698,7 +898,8 @@ final class SkillDisplay {
             e.setVisibleByDefault(viewers == null);
             e.getPersistentDataContainer().set(KEY_VFX, PersistentDataType.BYTE, (byte) 1);
             // 씨앗에서 자란다 — 다만 <b>선 각은 처음부터 제 각</b>이다 (뒤에 돌리면 형체가 튄다)
-            e.setTransformation(new Transformation(new Vector3f(), pose(m, 0.0f),
+            e.setTransformation(new Transformation(new Vector3f(),
+                    seed == null ? pose(m, 0.0f) : new Quaternionf(seed),
                     new Vector3f(0.001f, 0.001f, 0.001f), new Quaternionf()));
         });
         if (viewers != null) {
@@ -756,7 +957,22 @@ final class SkillDisplay {
             if (meta != null && key != null) {
                 meta.setItemModel(key);
                 stack.setItemMeta(meta);
+            } else if (key == null) {
+                // 등록부의 키가 legal 하지 않다 — 대문자·한글·공백. 그러면 item_model 이 **안 얹히고**
+                // 맨 종이가 뜬다. 조용하다. 소리내어 말한다 (등록제: 이름은 등록부가 짓지만 검사는 코드가 한다)
+                plugin.getLogger().warning("[혼천] 모션 등록부의 키가 legal 하지 않다: " + model.key()
+                        + " (" + model.id() + ") — item_model 을 못 얹는다");
             }
+        }
+        // ★ **얹은 것을 말한다.** 정적 검산(등록부 ↔ 팩)이 전부 통과했는데도 보라 큐브가 보였다 —
+        //   그렇다면 우리가 얹었다고 **믿는 것**과 실제로 얹힌 것이 다를 수 있다. 실물을 읽어 찍는다.
+        //   (조합마다 한 번만 — 획은 초당 여러 번 그려지므로 매번 찍으면 로그가 진실을 덮는다)
+        String seen = model.id() + (withPack ? "|팩" : "|폴백");
+        if (witnessed.add(seen)) {
+            plugin.getLogger().info(String.format(
+                    "[획] %s — withPack %s · 밑감 %s · item_model %s",
+                    model.id(), withPack ? "예" : "아니오", stack.getType(),
+                    itemModelOf(stack) == null ? "(없음)" : itemModelOf(stack)));
         }
         return stack;
     }
@@ -824,15 +1040,74 @@ final class SkillDisplay {
         return new float[]{s[0], s[1], s[2]};
     }
 
+    /**
+     * <b>모델은 중심에 서고, 고정점은 여기서 옮긴다.</b>
+     *
+     * <p><b>【2026-07 — 획이 시전자의 옆구리에서 나오던 병】</b> 참격선 모델은 예전에
+     * <b>머리를 원점에 두고 몸을 전부 −X 로</b> 늘어뜨렸다. {@code scale} 이 원점을 중심으로 먹으니
+     * 그래야 "꼬리부터 지워진다"를 얻기 때문이다. 그런데 그 대가로 <b>모델의 기하 중심이 x −12 만큼
+     * 치우쳤고</b>, ItemDisplay 는 모델을 엔티티 자리에 <b>중심을 두고</b> 그린다. 게다가 모델의 +X 는
+     * ({@link #pose} 의 좌표계 주석대로) <b>앞이 아니라 좌우 축</b>이다 ⇒ 획이 시전자의
+     * <b>정면이 아니라 옆구리 한쪽에 통째로</b> 걸렸다. 사용자가 본 그것이다.
+     *
+     * <p><b>그래서 모델을 중심에 세우고, 머리 고정을 translation 으로 옮겼다:</b>
+     * <pre>  translation.x = halfLen × (1 − scale.x)      (halfLen = size[0] / 2, 미터)</pre>
+     * <ul>
+     *   <li>{@code scale.x = 1} → translation 0 ⇒ 획이 <b>정면에 좌우 대칭</b>으로 걸린다 (고친 것)
+     *   <li>{@code scale.x → 0} → translation → halfLen ⇒ 획이 <b>머리 쪽으로 수축</b>한다
+     *       = 그리면 머리에서 꼬리로 자라고, 지우면 <b>꼬리부터 지워진다</b> (옛 그림 그대로)
+     * </ul>
+     * 즉 <b>보이는 그림은 한 틱도 안 잃고</b> 편향만 사라진다.
+     *
+     * <p>고정점은 <b>등록부가 청구한다</b> ({@code models.<키>.anchor: head}) — 코드가 지어내지 않는다.
+     * anchor 가 없으면 translation 0 (원점=중심에서 대칭으로 자란다: 고리·판·덩이).
+     *
+     * <p><b>주의</b>: Transformation 은 {@code T · LR · S · RR} 이라 translation 은 <b>회전 뒤</b>,
+     * 엔티티 국소축에서 먹는다. 참격선의 {@code orient} 는 항등이므로 모델 X == 엔티티 X 다.
+     * 머리 고정을 쓰는 모션에 orient 를 달게 되면 이 가정을 다시 재야 한다.
+     */
     private void transform(Display d, SkillEngine.DisplayMotion m, float[] scale, float spin,
                            int ticks) {
+        transform(d, m, scale, pose(m, spin), 0.0f, ticks);
+    }
+
+    /**
+     * ★ <b>각을 주는 손</b> — 회전을 명시한다. {@code Display} 의 Transformation 은 <b>회전도 보간된다</b>
+     * (클라이언트가 slerp 한다). 시작 각으로 띄우고 여기서 끝 각을 주면 <b>획이 호를 그리며 쓸고 지나간다</b>.
+     *
+     * <p>이것이 "찌르기 → 베기"의 전부다. <b>엔티티는 하나 그대로다</b> (예산 0 증가).
+     *
+     * @param rise 획이 오르내리는 높이 (m) — 엔티티 국소축의 위(+Y). 올려베기·내려베기가 쓴다
+     */
+    private void transform(Display d, SkillEngine.DisplayMotion m, float[] scale, Quaternionf rot,
+                           float rise, int ticks) {
         if (!d.isValid()) {
             return;
         }
         d.setInterpolationDelay(0);
         d.setInterpolationDuration(Math.max(1, ticks));
-        d.setTransformation(new Transformation(new Vector3f(), pose(m, spin),
+        d.setTransformation(new Transformation(headAnchor(m, scale[0], rot, rise), rot,
                 new Vector3f(scale[0], scale[1], scale[2]), new Quaternionf()));
+    }
+
+    /**
+     * 머리 고정 오프셋 — 등록부가 {@code anchor: head} 를 청구한 모델만. 그 밖은 영(零)이다.
+     *
+     * <p><b>【회전과 함께 돌아야 한다】</b> Transformation 은 {@code T · LR · S · RR} 이라
+     * translation 은 <b>회전 뒤</b>에 먹는다. 그러므로 "모델의 +X 끝을 붙들어 둔다"는 청구를 지키려면
+     * 그 오프셋도 <b>같은 각으로 돌려야</b> 한다 — 안 돌리면 획이 회전할수록 머리가 <b>제자리에서 미끄러진다</b>.
+     * (예전엔 참격선의 orient 가 항등이라 이 사실이 드러나지 않았다. 스윙이 그것을 드러냈다.)
+     */
+    private Vector3f headAnchor(SkillEngine.DisplayMotion m, float scaleX, Quaternionf rot,
+                                float rise) {
+        SkillEngine.DisplayModel model = engine.displayModel(m.model());
+        Vector3f t = new Vector3f(0.0f, rise, 0.0f);   // 오르내림은 **몸의 위**다 (회전을 안 탄다)
+        if (model == null || !model.headAnchored()) {
+            return t;
+        }
+        float halfLen = model.size()[0] * 0.5f;              // 미터 — 머리는 +X 끝에 있다
+        Vector3f head = new Vector3f(halfLen * (1.0f - scaleX), 0.0f, 0.0f);
+        return t.add(rot.transform(head));                   // ★ 머리도 획과 함께 돈다
     }
 
     private void scale(Display d, float factor, int ticks) {
@@ -906,6 +1181,410 @@ final class SkillDisplay {
 
     private static double clamp(double v, double lo, double hi) {
         return Math.max(lo, Math.min(hi, v));
+    }
+
+    // ══════════ 획시험 — 획의 눈 (/혼천 획시험) ══════════
+
+    /**
+     * <b>없는 키.</b> 이 대조군이 이번 진단의 심장이다.
+     *
+     * <p>팩에 <b>없는 것이 확실한</b> 키를 얹는다. 1.21.4+ 는 {@code item_model} 이 가리키는 정의가 없으면
+     * <b>바탕 아이템으로 폴백하지 않고 '없는 모델'(보라-검정 큐브)을 그린다</b> (Weapons.java 가 바로 이
+     * 이유로 item_model 을 피하고 custom_model_data 를 쓴다). 그러므로:
+     * <ul>
+     *   <li>이 칸이 <b>보라 큐브</b>다 → {@code setItemModel} 은 살아서 클라이언트에 닿고 있다.
+     *       그렇다면 다른 칸의 보라는 <b>그 키가 팩에 없다</b>는 뜻이다 (팩의 문제).</li>
+     *   <li>이 칸이 <b>보라가 아니다</b>(맨 종이로 보인다) → {@code item_model} 이 아예 안 실리고 있다.
+     *       그렇다면 원인은 팩이 아니라 <b>코드/서버</b>다.</li>
+     * </ul>
+     *
+     * <p><b>키는 반드시 legal 해야 한다.</b> {@link NamespacedKey#fromString} 은 대문자·한글·공백을 거절하고
+     * {@code null} 을 돌려준다 — 그러면 {@code setItemModel} 이 <b>불려지지도 않아</b> 맨 종이가 뜨고,
+     * 시험은 "코드가 문제다"라고 <b>거짓 자백</b>을 한다. 그래서 소문자·밑줄만 쓴다.
+     */
+    private static final String GHOST_KEY = "honcheon:qi/no_such_stroke_control";
+
+    /** 팩이 확실히 가진 다른 키 — 획(qi/ult)이 아닌 곳도 뚫리는가 (경로 문제와 팩 문제를 가른다) */
+    private static final String WEAPON_KEY = "honcheon:weapon/sword_beomcheol";
+
+    /** 시험대가 스스로 사라지는 시각 */
+    private static final int TEST_TICKS = 15 * 20;
+
+    /**
+     * <b>/혼천 획시험</b> — 획 15종을 플레이어 앞에 한 줄로 세우고, 각각 머리 위에 <b>키 이름</b>을 단다.
+     *
+     * <p>정적 검산은 전부 통과했다 (배급 중인 zip = 최신 · 15개 키 전부 팩에 있음 · items→models→textures
+     * 사슬 안 끊김 · 배치본 = 저장소). 그런데 사용자는 보라 큐브를 본다. <b>검산이 볼 수 없는 곳에서
+     * 무언가 어긋나 있다</b> — 그러면 눈을 게임 안에 세우는 수밖에 없다.
+     *
+     * <p>대조군 셋을 <b>같은 줄에</b> 세운다 (따로 세우면 눈이 또 거짓말한다):
+     * <ol>
+     *   <li><b>맨 종이</b> — {@code item_model} 없음. 팩과 무관하게 종이로 보여야 한다 (엔티티가 뜨는가)</li>
+     *   <li><b>없는 키</b> ({@link #GHOST_KEY}) — 위 주석 참조. <b>이 칸이 판결을 내린다</b></li>
+     *   <li><b>병기 키</b> ({@link #WEAPON_KEY}) — 팩이 확실히 가진 키를 <b>item_model 경로로</b>.
+     *       (실물 병기는 custom_model_data 로 가므로, 이건 그 길이 아니라 <b>획과 같은 길</b>이다)</li>
+     * </ol>
+     *
+     * <p>획은 {@link #item(SkillEngine.DisplayModel, boolean, ItemStack) item(model, true, null)} 이
+     * 만든다 — <b>실전과 같은 손</b>이다. 시험용으로 따로 만들면 시험이 실전을 대변하지 못한다.
+     *
+     * @return 채팅에 뿌릴 줄 (왼쪽부터 몇 번째가 보라인지 셀 수 있게 번호를 붙인다)
+     */
+    List<String> strokeTest(Player player) {
+        List<String> out = new ArrayList<>();
+        Location eye = player.getEyeLocation();
+        if (eye.getWorld() == null) {
+            out.add("§c세계가 없다 — 시험대를 못 세운다");
+            return out;
+        }
+        // 시선 앞 4m, 시선과 직교하는 축을 따라 오른쪽으로 늘어놓는다 (수평만 — 고개를 들어도 줄은 눕지 않는다)
+        Vector forward = eye.getDirection().setY(0);
+        if (forward.lengthSquared() < 1.0e-6) {
+            forward = new Vector(0, 0, 1);   // 바로 위/아래를 보고 있었다
+        }
+        forward.normalize();
+        Vector right = new Vector(-forward.getZ(), 0, forward.getX());   // 왼손 좌표계 기준 오른쪽
+        Location origin = eye.clone().add(forward.clone().multiply(4.0));
+
+        // ── 시험대에 오를 것들: 대조군 3 + 등록부의 모든 형체 ──
+        record Row(String label, ItemStack stack, String note) {
+        }
+        List<Row> rows = new ArrayList<>();
+
+        // ★ 대조군은 일부러 등록부를 안 탄다 — 등록부가 병들면 대조군도 같이 병들어 '대조'가 죽는다.
+        //   그래서 이 세 줄만은 리터럴이 옳고, motion_audit 에는 [대조] 주석으로 소리내어 청구한다
+        //   (stroke_origin 의 centered: true 와 같은 문법 — 면제는 코드가 지어내지 않는다).
+        rows.add(new Row("[대조] 맨 종이", new ItemStack(Material.PAPER),   // [대조] 진단 대조군
+                "item_model 없음 — 종이로 보여야 정상"));
+        rows.add(new Row("[대조] 없는 키", modelled(Material.PAPER, GHOST_KEY),   // [대조] 진단 대조군
+                GHOST_KEY + " — ★ 판결의 칸"));
+        rows.add(new Row("[대조] 병기 키", modelled(Material.PAPER, WEAPON_KEY),   // [대조] 진단 대조군
+                WEAPON_KEY + " — 팩이 가진 키 (item_model 경로)"));
+
+        for (SkillEngine.DisplayModel model : engine.displayModels()) {
+            if (model.useHeld()) {
+                continue;   // 실을 것이 사람의 손이다 — 팩에 요구하는 것이 없다 (시험할 것도 없다)
+            }
+            ItemStack stack = item(model, true, null);   // ★ 실전과 같은 손
+            if (stack == null) {
+                out.add("§c" + model.id() + " — 실을 아이템을 못 만들었다 (base: " + model.base()
+                        + " 가 등록부에 없는 이름인가?)");
+                continue;
+            }
+            rows.add(new Row(model.id(), stack, String.valueOf(model.key())));
+        }
+
+        // ── 세운다 ──
+        double span = 1.6;
+        double start = -(rows.size() - 1) / 2.0;
+        List<Entity> stand = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            Location at = origin.clone().add(right.clone().multiply((start + i) * span));
+            stand.add(testItem(at, row.stack()));
+            stand.add(testLabel(at.clone().add(0, 0.9, 0), (i + 1) + ". " + row.label()));
+            plugin.getLogger().info(String.format(
+                    "[획시험] %2d. %-14s 밑감 %-16s item_model %s",
+                    i + 1, row.label(), row.stack().getType(),
+                    itemModelOf(row.stack()) == null ? "(없음)" : itemModelOf(row.stack())));
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            for (Entity e : stand) {
+                if (e.isValid()) {
+                    e.remove();
+                }
+            }
+        }, TEST_TICKS);
+
+        // ── 채팅: 왼쪽부터 세라 ──
+        boolean iAmPacked = packed.contains(player.getUniqueId());
+        out.add("§6── 획시험 — 왼쪽부터 " + rows.size() + "칸 (15초 뒤 사라진다) ──");
+        out.add("§7이 몸은 팩을 §f" + (iAmPacked ? "받은 눈" : "못 받은 눈")
+                + "§7 이다 (SkillDisplay.packed). 팩을 못 받은 눈이라면 §c획은 전부 보라일 것이고, "
+                + "그것은 팩이 아니라 배급/수락의 문제다");
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            out.add("§f" + (i + 1) + ". §e" + row.label() + " §8— " + row.note());
+        }
+        out.add("§7② 없는 키가 §d보라§7 면 setItemModel 은 살아 있다 → 보라인 획은 §f그 키가 팩에 없다");
+        out.add("§7② 없는 키가 §f맨 종이§7 면 item_model 이 안 실린다 → 원인은 §f팩이 아니라 코드/서버");
+        return out;
+    }
+
+    /** 시험대의 한 칸 — 실전과 같은 ItemDisplay (NONE 변형 · 팩의 접점은 아이템이 이미 들고 있다) */
+    private ItemDisplay testItem(Location at, ItemStack stack) {
+        return at.getWorld().spawn(at, ItemDisplay.class, e -> {
+            e.setItemStack(stack);
+            e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);   // 실전과 같은 변형
+            e.setBillboard(Display.Billboard.CENTER);   // 돌아가며 봐도 같은 얼굴 (실전과 다른 유일한 점)
+            e.setBrightness(new Display.Brightness(15, 15));   // 밤에도 보인다 — 어둠은 시험의 적이다
+            e.setViewRange(4.0f);
+            e.setPersistent(false);
+            e.getPersistentDataContainer().set(KEY_VFX, PersistentDataType.BYTE, (byte) 1);
+            e.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
+                    new Vector3f(1.0f, 1.0f, 1.0f), new Quaternionf()));
+        });
+    }
+
+    /**
+     * <b>말뚝</b> — 자리에 이름을 박는다 ({@code /혼천 사다리} 가 격마다 하나씩 세운다).
+     * {@code ticks} 뒤에 스스로 사라진다 (유령이 남지 않는다 — KEY_VFX 표식도 단다).
+     */
+    void post(Location at, String text, int ticks) {
+        org.bukkit.entity.TextDisplay label = testLabel(at, text);
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (label.isValid()) {
+                label.remove();
+            }
+        }, ticks);
+    }
+
+    /** 이름표 — 이것이 없으면 사용자가 "몇 번째"라고만 말할 수 있고, 우리는 그 번호를 못 읽는다 */
+    private org.bukkit.entity.TextDisplay testLabel(Location at, String text) {
+        return at.getWorld().spawn(at, org.bukkit.entity.TextDisplay.class, e -> {
+            e.text(net.kyori.adventure.text.Component.text(text));
+            e.setBillboard(Display.Billboard.CENTER);
+            e.setSeeThrough(true);
+            e.setBrightness(new Display.Brightness(15, 15));
+            e.setViewRange(4.0f);
+            e.setPersistent(false);
+            e.getPersistentDataContainer().set(KEY_VFX, PersistentDataType.BYTE, (byte) 1);
+        });
+    }
+
+    /**
+     * 대조군용 — 바탕 아이템에 {@code item_model} 을 직접 얹는다.
+     *
+     * <p>키가 <b>legal 하지 않으면</b> {@code fromString} 이 null 을 주고 아무것도 안 얹힌다.
+     * 그러면 대조군이 조용히 무력해지므로 — <b>소리내어 경고한다</b> (조용한 실패 금지).
+     */
+    @SuppressWarnings("deprecation")
+    private ItemStack modelled(Material base, String key) {
+        ItemStack stack = new ItemStack(base);
+        NamespacedKey ns = NamespacedKey.fromString(key);
+        if (ns == null) {
+            plugin.getLogger().warning("[획시험] 키가 legal 하지 않다: " + key
+                    + " — item_model 을 못 얹는다. 이 칸은 대조군 구실을 못 한다");
+            return stack;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null) {
+            meta.setItemModel(ns);
+            stack.setItemMeta(meta);
+        }
+        return stack;
+    }
+
+    /** 이 아이템이 실제로 들고 있는 item_model — 로그가 짐작하지 않고 <b>실물을 읽는다</b> */
+    @SuppressWarnings("deprecation")
+    private static NamespacedKey itemModelOf(ItemStack stack) {
+        ItemMeta meta = stack.getItemMeta();
+        return meta == null ? null : meta.getItemModel();
+    }
+
+    // ══════════ 획위치 — 인게임에서 맞춘다 (/혼천 획위치) ══════════
+
+    /** 등록부 + 인게임 임시 조정 — <b>그리는 코드가 보는 것과 정확히 같은 값</b> */
+    SkillEngine.StrokeOrigin originOf(String motionId) {
+        SkillEngine.StrokeOrigin base = engine.strokeOrigin(motionId);
+        double[] ov = originOverride.get(motionId);
+        return ov == null ? base
+                : new SkillEngine.StrokeOrigin(motionId, ov[0], ov[1], ov[2], base.centered());
+    }
+
+    /** 한 칸을 민다 — {@code 앞} · {@code 높이} · {@code 옆}. 모르는 칸이면 false */
+    boolean setOrigin(String motionId, String field, double value) {
+        SkillEngine.StrokeOrigin cur = originOf(motionId);
+        double[] v = {cur.forward(), cur.height(), cur.lateral()};
+        switch (field) {
+            case "앞" -> v[0] = value;
+            case "높이" -> v[1] = value;
+            case "옆" -> v[2] = value;
+            default -> {
+                return false;
+            }
+        }
+        originOverride.put(motionId, v);
+        barked.remove(motionId);   // 새 값은 새로 심판받는다
+        return true;
+    }
+
+    /** 등록부로 되돌린다 — 인게임에서 민 것을 전부 버린다 */
+    void resetOrigins() {
+        originOverride.clear();
+        barked.clear();
+    }
+
+    boolean packed(UUID viewer) {
+        return packed.contains(viewer);
+    }
+
+    /**
+     * 지금 값 — 모션마다 <b>등록값 · 실효값 · 몸 안 검사</b>.
+     *
+     * @param length 이 사람이 지금 든 병기의 획 길이 (m) — 실효 앞거리가 여기에 매인다
+     */
+    List<String> originReport(double length, String weaponClass) {
+        SkillEngine.StrokeLimits lim = engine.strokeLimits();
+        List<String> out = new ArrayList<>();
+        out.add("§6── 획이 서는 자리 (/혼천 획위치) ──");
+        out.add(String.format("§7몸 반지름 §f%.2f§7m + 여유 §f%.2f§7 ⇒ 앞으로 최소 §f%.2f§7m"
+                        + " · 앞 상한 = 획 길이 × §f%.2f",
+                lim.bodyRadius(), lim.clearance(), lim.minForward(), lim.forwardMaxRatio()));
+        out.add(String.format("§7지금 든 손: §f%s§7 — 획 길이 §f%.2f§7m ⇒ 앞 상한 §f%.2f§7m",
+                weaponClass, length, length * lim.forwardMaxRatio()));
+        for (SkillEngine.DisplayMotion m : engine.slashMotions()) {
+            SkillEngine.StrokeOrigin o = originOf(m.id());
+            double eff = forwardOf(o, length);
+            String fault = originFault(o);
+            boolean moved = originOverride.containsKey(m.id());
+            out.add(String.format("§f%s §7앞 §e%.2f§7 · 높이 §e%.2f§7 · 옆 §e%.2f%s%s",
+                    m.id(), o.forward(), o.height(), o.lateral(),
+                    o.centered() ? " §8[centered — 몸에 겹치는 것이 옳다]" : "",
+                    moved ? " §b(인게임에서 민 값)" : ""));
+            if (!o.centered() && Math.abs(eff - o.forward()) > 1.0e-6) {
+                out.add(String.format("   §8→ 실효 앞 §f%.2f§8m (못에 걸렸다)", eff));
+            }
+            if (fault != null) {
+                out.add("   §c✖ 위반: " + fault);
+            }
+        }
+        out.add("§7밀고 당기기: §f/혼천 획위치 <호|선|원> <앞|높이|옆> <값>§7 — 밀면 §f즉시 획을 한 번 긋는다");
+        out.add("§7그냥 그려 보기: §f/혼천 획위치 그려 [호|선|원]§7 · 되돌리기: §f/혼천 획위치 되돌려");
+        out.add("§7등록부에 적기: §f/혼천 획위치 적기§7 — 뽑은 줄을 "
+                + "§fconfig/skill_motion.yml §7의 §fdisplay.stroke_origin §7에 그대로 붙인다");
+        return out;
+    }
+
+    // ══════════ ★ 스윙 — 인게임에서 밀고 당긴다 (/혼천 스윙) ══════════
+
+    /**
+     * <b>인게임 임시 조정</b> — 호 각도·오르내림·활·전진의 배율.
+     *
+     * <p><b>왜 명령인가</b>: 사용자의 못 — <i>"이런 값은 눈으로 봐야 정해진다."</i> 스윙의 크기·각도는
+     * 계산으로 못 맞춘다. {@code /혼천 획위치} 와 같은 문법이다: <b>밀면 즉시 한 획을 긋는다</b>.
+     * 재기동하면 사라지고, {@code /혼천 스윙 적기} 가 등록부에 붙일 줄을 뽑는다 —
+     * <b>코드가 등록부를 고치면 등록제가 무너진다</b>.
+     */
+    private SkillEngine.SwingTuning tuneOverride;
+
+    SkillEngine.SwingTuning tuning() {
+        return tuneOverride != null ? tuneOverride : engine.swingArcs().tuning();
+    }
+
+    /** 한 칸을 민다 — {@code 호} · {@code 높이} · {@code 활} · {@code 전진}. 모르는 칸이면 false */
+    boolean setSwing(String field, double value) {
+        SkillEngine.SwingTuning t = tuning();
+        double arc = t.arc();
+        double rise = t.rise();
+        double bow = t.bow();
+        double lunge = t.lunge();
+        switch (field) {
+            case "호" -> arc = value;
+            case "높이" -> rise = value;
+            case "활" -> bow = value;
+            case "전진" -> lunge = value;
+            default -> {
+                return false;
+            }
+        }
+        tuneOverride = new SkillEngine.SwingTuning(arc, rise, bow, lunge);
+        barked.clear();   // 새 값은 새로 심판받는다 (호각 상한·부채꼴 밖은 다시 짖는다)
+        return true;
+    }
+
+    void resetSwings() {
+        tuneOverride = null;
+        barked.clear();
+    }
+
+    /** 지금 값 + <b>눈</b> (호각 · 전진 · 참격비) — 계열마다 한 줄 */
+    List<String> swingReport(String weaponClass) {
+        SkillEngine.SwingArcs arcs = engine.swingArcs();
+        SkillEngine.SwingTuning t = tuning();
+        SkillEngine.SlashEye eye = engine.slashEye();
+        List<String> out = new ArrayList<>();
+        out.add("§6── 스윙 (/혼천 스윙) ──" + (arcs.enabled() ? "" : " §c[꺼져 있다]"));
+        out.add(String.format("§7배율: 호 §e%.2f§7 · 높이 §e%.2f§7 · 활 §e%.2f§7 · 전진 §e%.2f%s",
+                t.arc(), t.rise(), t.bow(), t.lunge(),
+                tuneOverride != null ? " §b(인게임에서 민 값)" : ""));
+        out.add(String.format("§7눈: 호각 ≥ §f%.0f§7도 · 전진 ≤ §f%.2f§7m (무거운 손 §f%.2f§7m)"
+                + " · 참격비 ≥ §f%.0f§7 도/m §8(찌르기는 전진이 크고 호가 작다)",
+                eye.minArcDeg(), eye.maxLungeM(), eye.maxLungeHeavyM(), eye.minRatio()));
+        for (String id : arcs.strokes().keySet()) {
+            SkillEngine.SwingArc a = arcs.stroke(id);
+            out.add(String.format("§f%-8s §7호각 §e%3.0f§7도 · 오르내림 §e%+.2f§7→§e%+.2f§7m"
+                            + " · 부채꼴 §e%.0f%%§7 · 활 §e%+.2f§7m",
+                    id, a.arcDeg(t.arc()), a.rise()[0] * t.rise(), a.rise()[1] * t.rise(),
+                    a.fan() * 100, a.bow() * t.bow()));
+        }
+        out.add("§7── 눈: 계열마다 참격인가 찌르기인가 ──");
+        for (String line : engine.slashEyeReport()) {
+            out.add((line.contains("✖") ? "§c" : line.contains("면제") ? "§8" : "§a") + line);
+        }
+        out.add("§7지금 든 손: §f" + weaponClass + "§7 — 순번은 연타할 때마다 돈다 "
+                + "§8(입력 버퍼 없음 · 우클릭·웅크림·달림의 뜻은 그대로다)");
+        out.add("§7밀고 당기기: §f/혼천 스윙 <호|높이|활|전진> <값>§7 — 밀면 §f즉시 획을 한 번 긋는다");
+        out.add("§7그냥 그려 보기: §f/혼천 스윙 그려 [횡_좌우|횡_우좌|올려베기|내려베기]");
+        out.add("§7되돌리기: §f/혼천 스윙 되돌려§7 · 등록부에 적기: §f/혼천 스윙 적기");
+        return out;
+    }
+
+    List<String> swingYaml() {
+        SkillEngine.SwingTuning t = tuning();
+        List<String> out = new ArrayList<>();
+        out.add("§6── config/skill_motion.yml · display.swing_arcs.tuning 에 붙일 줄 ──");
+        out.add(String.format("§f    tuning:"));
+        out.add(String.format("§f      arc_scale: %.2f", t.arc()));
+        out.add(String.format("§f      rise_scale: %.2f", t.rise()));
+        out.add(String.format("§f      bow_scale: %.2f", t.bow()));
+        out.add(String.format("§f      lunge_scale: %.2f", t.lunge()));
+        out.add("§7(적고 나서 §fpython3 tools/motion_audit.py§7 — 축 ⑬ 이 참격/찌르기를 다시 잰다)");
+        return out;
+    }
+
+    /**
+     * <b>파티클이 훑는 길</b> — 획과 <b>같은 등록부</b>를 읽는다 (두 층이 갈라지면 그림이 거짓말한다).
+     *
+     * <p><b>【보이는 것 = 맞는 것】</b> 수평각은 <b>히트박스 부채꼴 안</b>에 있다 ({@code fan ≤ 1}) —
+     * 그리는 각이 맞는 각이다. 높이는 자유다: 호 히트박스는 {@code arcTargets} 가 <b>수평각만</b> 재고
+     * 높이를 안 보기 때문이다 (기둥이다). 그래서 <b>오르내림·활</b>은 판정에 대해 거짓말하지 않는다.
+     *
+     * @return 시전자의 <b>발</b>을 원점으로 한 상대 좌표들 — 훑는 <b>순서대로</b>
+     */
+    List<Vector> sweepPath(String strokeId, Vector flat, double radius, double angle, int points) {
+        SkillEngine.SwingArc a = arcOf(strokeId, angle);
+        SkillEngine.SwingTuning t = tuning();
+        SkillEngine.StrokeOrigin o = originOf("참격_호");
+        double half = Math.max(1.0, angle / 2.0) * (a == null ? 1.0 : a.fan());
+        double from = a == null ? -half : Math.signum(a.yaw()[1] - a.yaw()[0]) >= 0 ? -half : half;
+        double to = -from;
+        List<Vector> path = new ArrayList<>(points);
+        for (int i = 0; i < points; i++) {
+            double u = points == 1 ? 0.5 : i / (double) (points - 1);
+            double deg = from + (to - from) * u;
+            double bow = a == null ? 0.0 : a.bow() * t.bow() * 4.0 * u * (1.0 - u);   // 중간이 부푼다 = 호
+            double rise = a == null ? 0.0
+                    : (a.rise()[0] + (a.rise()[1] - a.rise()[0]) * u) * t.rise();
+            // rotateAroundY(+θ) 는 앞(+Z)을 왼쪽(+X)으로 돌린다 — 획의 국소 yaw 와 **같은 부호**다
+            Vector v = flat.clone().rotateAroundY(Math.toRadians(deg)).multiply(radius);
+            path.add(v.setY(o.height() + rise + bow));   // y = 발에서 잰 절대 높이
+        }
+        return path;
+    }
+
+    /** 맞춘 값을 등록부에 <b>사람이 적을</b> 수 있게 뽑는다 (코드가 등록부를 고치지 않는다) */
+    List<String> originYaml() {
+        List<String> out = new ArrayList<>();
+        out.add("§6── config/skill_motion.yml · display.stroke_origin 에 붙일 줄 ──");
+        for (SkillEngine.DisplayMotion m : engine.slashMotions()) {
+            SkillEngine.StrokeOrigin o = originOf(m.id());
+            out.add(String.format("§f    %s:  { forward: %.2f, height: %.2f, lateral: %.2f%s }",
+                    m.id(), o.forward(), o.height(), o.lateral(),
+                    o.centered() ? ", centered: true" : ""));
+        }
+        out.add("§7(적고 나서 §fpython3 tools/motion_audit.py§7 를 돌려라 — 몸 안이면 ⑧이 잡는다)");
+        return out;
     }
 
     // ══════════ 진단 — 인게임에 못 들어가는 눈을 위한 창구 ══════════

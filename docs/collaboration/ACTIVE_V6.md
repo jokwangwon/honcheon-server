@@ -21,7 +21,7 @@
 | B-008 game_audit 위반 4건 | Fable-병렬 R1 | Codex | 완료·커밋 1cce4fc (후속 B-104 신설) | `config/npcs/cheongha_npcs.yml`, `tools/game_audit.py` | schema.sql 어휘 대조로 오독 교정 — 하드코딩 예외 아님 |
 | SJ-001 조판 엔진 (BookLayout) | Fable-병렬 R1 | Codex | 완료·검토 대기 | `BookLayout.java`, `SeojangBook.java`, `BookLayoutSelfTest`(35눈) | `FABLE_SJ001_COMPLETE.md` — 픽셀 상수 실측 확정은 SJ-002 실기동 눈으로 |
 | SJ-002 장 전환·리소스팩 자산 | Fable | Codex | 다음 (R2 후보) | 청사진 §SJ-002 | 팩 게이트 결선은 pack_gate_audit(Fable)과 조율 |
-| B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillDisplay.java`, `config/skill_motion.yml`, `config/performance.yml`, `tools/motion_audit.py`, `tools/perf_audit.py` | 세 감사 위반 0 이 닫는 조건 |
+| B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 완료·커밋 (후속 B-106 신설) | `SkillDisplay.java`, `skill_motion.yml`, `performance.yml`, motion/perf_audit + selftest 2 신설 | 죽은 예산 5건은 눈이 멀었던 것 — 간접 배선을 눈에 가르침 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 
 PG-005 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.

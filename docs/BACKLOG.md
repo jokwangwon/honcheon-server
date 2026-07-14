@@ -459,57 +459,6 @@ before.realItems = "REAL:칠성검,비급,은자7971";   // (진짜 서버에서
 
 ★ 다만: `impact.enabled` 가 참일 때 **속도를 두 번 쓴다** (히트스톱 해제 전 창에서). 무해한지 **미확인.**
 
-### B-026 · `SkillDisplay` 의 `Material.PAPER` 3건 — 감사가 짖는다
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P4
-- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillDisplay.java:1230`
-- **의존**: —
-- **닫는 조건**: `motion_audit` 위반 0건 — 등록하거나, 감사가 `[대조]` 를 이해하거나
-- **검증**: `python3 tools/motion_audit.py`
-- **닫힘**: —
-
-**motion_audit 의 유일한 위반**이다 (실측 2026-07-14).
-
-★ 그러나 **셋 다 `strikeTest(Player)` 안의 `[대조]`(대조군)** 이다 — 진단용 시험대의 **맨 종이 · 유령 키 · 병기 키** 세 줄.
-진짜 렌더는 `engine.displayModels()` 에서 온다 (`:1237`).
-
-**둘 중 하나를 골라야 한다**: ① 감사가 `[대조]` 를 알아보게 하거나, ② 대조군도 등록부를 타게 하거나.
-**지금은 감사가 옳지도 그르지도 않다** — 그리고 그것이 위반 1건으로 남아 **다른 진짜 위반을 가린다.**
-
-### B-027 · `hand()` (날의 기) 가 **하드코딩** — 획과 같은 병
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P4
-- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillDisplay.java:523`
-- **의존**: —
-- **닫는 조건**: 손의 원점이 **등록부에서** 온다 (획의 `stroke_origin` 처럼)
-- **검증**: `python3 tools/motion_audit.py`
-- **닫힘**: —
-
-`:525` — `body.getEyeLocation().add(dir.clone().multiply(0.55)).subtract(0, 0.15, 0)`.
-**`0.55` 도 `0.15` 도 리터럴**이다.
-
-획은 **고쳐졌다** (**B-053 닫힘**) — `config/skill_motion.yml:1499` 의 `stroke_origin` 을 읽는다.
-그런데 `skill_motion.yml:1909` 의 `sheaths:` 는 `scale`·`brightness` 만 등록한다 — **원점 키가 없다.**
-**칼집(날의 기)의 원점은 등록부에 자리가 없다.**
-
-### B-028 · `perf_audit` — **죽은 예산 19건** (아무도 안 읽는 수치)
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P4
-- **위치**: `config/performance.yml`
-- **의존**: —
-- **닫는 조건**: `perf_audit` 위반 0건 — 읽거나, 지우거나
-- **검증**: `python3 tools/perf_audit.py`
-- **닫힘**: —
-
-19건이 **읽는 자가 없다**: `tick_budget.server_target_mspt` · `subsystem_budget_ms.*` (5) ·
-`tick_slicing.preload_radius.*` (3) · `skills.*` (4) · `netcode.counter_window_grace_ticks` · `load_test.*` (5).
-
-**등록부가 규칙을 적어 놓고 아무도 안 지킨다.** 그리고 그 사실을 **아무도 안 잰다** — 이 감사가 잰다.
-★ `skills.max_range_default: 24` 는 `skill_mechanics.yml` 에도 **같은 값이 적혀 있다** — *"지금은 같다. 언젠가 갈라진다."*
-
 ### B-029 · `perf_audit` — **한 틱 폭탄** · 상한 미상 2건
 - **상태**: 열림
 - **분류**: 빚
@@ -1250,6 +1199,60 @@ PG-007 훈련(2026-07-14)이 발견했다 — 훈련이 만든 병이 **아니�
 대화(`GameListener.java:1976-1987`)는 **조용히** 폴백으로 갈아탄다. 표식이 없다.
 
 
+### B-026 · `SkillDisplay` 의 `Material.PAPER` 3건 — 감사가 짖는다
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillDisplay.java:1230`
+- **의존**: —
+- **닫는 조건**: `motion_audit` 위반 0건 — 등록하거나, 감사가 `[대조]` 를 이해하거나
+- **검증**: `python3 tools/motion_audit.py`
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 정. 길 ①: 감사가 [대조]를 알아본다 — 예외 목록이 아니라 **줄 단위 청구제**다 (`tools/motion_audit.py` hardcoded_enums: 그 줄 주석에 `[대조]` 를 적어 청구한 줄만 면제, 면제 수를 세어 보고. 문자열 리터럴 속 표식은 안 쳐준다). 대조군이 등록부를 타면 등록부가 병들 때 대조의 뜻이 죽는다 — 그래서 ①이 옳다. 눈의 시험 신설: `tools/motion_audit_selftest.py` 6/6 ("표식 없는 하드코딩은 여전히 잡는다" 변이 포함). 실측: motion_audit 위반 0·exit 0 (Fable 재실행)
+
+**motion_audit 의 유일한 위반**이다 (실측 2026-07-14).
+
+★ 그러나 **셋 다 `strikeTest(Player)` 안의 `[대조]`(대조군)** 이다 — 진단용 시험대의 **맨 종이 · 유령 키 · 병기 키** 세 줄.
+진짜 렌더는 `engine.displayModels()` 에서 온다 (`:1237`).
+
+**둘 중 하나를 골라야 한다**: ① 감사가 `[대조]` 를 알아보게 하거나, ② 대조군도 등록부를 타게 하거나.
+**지금은 감사가 옳지도 그르지도 않다** — 그리고 그것이 위반 1건으로 남아 **다른 진짜 위반을 가린다.**
+
+
+### B-027 · `hand()` (날의 기) 가 **하드코딩** — 획과 같은 병
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillDisplay.java:523`
+- **의존**: —
+- **닫는 조건**: 손의 원점이 **등록부에서** 온다 (획의 `stroke_origin` 처럼)
+- **검증**: `python3 tools/motion_audit.py`
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 정. 손의 원점이 등록부에서 온다 — `config/skill_motion.yml:1550` `display.stroke_origin.날의_기` (forward 0.55 · height 1.47 · lateral 0) 를 `SkillDisplay.java` hand() 가 획과 **완전히 같은 문법**(engine.strokeOrigin)으로 읽는다. sheaths 레코드는 고정 필드라 새 키를 못 실어 stroke_origin 칸으로 세운 것 — SkillEngine 무수정. 1.62−1.47=0.15, 옛 리터럴과 수치 동일(행동 불변, 단위 환산 근거 주석). 실측: motion_audit 위반 0 (Fable 재실행)
+
+`:525` — `body.getEyeLocation().add(dir.clone().multiply(0.55)).subtract(0, 0.15, 0)`.
+**`0.55` 도 `0.15` 도 리터럴**이다.
+
+획은 **고쳐졌다** (**B-053 닫힘**) — `config/skill_motion.yml:1499` 의 `stroke_origin` 을 읽는다.
+그런데 `skill_motion.yml:1909` 의 `sheaths:` 는 `scale`·`brightness` 만 등록한다 — **원점 키가 없다.**
+**칼집(날의 기)의 원점은 등록부에 자리가 없다.**
+
+
+### B-028 · `perf_audit` — **죽은 예산 19건** (아무도 안 읽는 수치)
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `config/performance.yml`
+- **의존**: —
+- **닫는 조건**: `perf_audit` 위반 0건 — 읽거나, 지우거나
+- **검증**: `python3 tools/perf_audit.py`
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 정. 19건 중 **5건은 죽은 게 아니라 눈이 멀었던 것** — subsystem_budget_ms 4키는 Metrics.java:79-105 의 metrics.probes 간접 배선이 소비하고, load_test.combat_cluster_size 는 motion/mob_model_audit 이 읽는다 → `tools/perf_audit.py` 에 두 간접 배선을 가르쳤다 (B-001·B-002 와 같은 "리팩터가 진실을 옮겼는데 눈이 안 따라간" 병의 세 번째 사례). 나머지 **14건 삭제** — 원값은 `config/performance.yml` 상단 묘비 주석에 보존 ("다시 살릴 때는 읽는 코드와 함께"). max_range_default 갈라짐은 삭제로 해소 (정본 `config/skill_mechanics.yml:18` — 단 그것도 지금은 감사만 읽는다). 눈의 시험 신설: `tools/perf_audit_selftest.py` 10/10. 실측: perf_audit 예산 21/21 읽힘·죽은 예산 0·exit 0 (Fable 재실행)
+
+19건이 **읽는 자가 없다**: `tick_budget.server_target_mspt` · `subsystem_budget_ms.*` (5) ·
+`tick_slicing.preload_radius.*` (3) · `skills.*` (4) · `netcode.counter_window_grace_ticks` · `load_test.*` (5).
+
+**등록부가 규칙을 적어 놓고 아무도 안 지킨다.** 그리고 그 사실을 **아무도 안 잰다** — 이 감사가 잰다.
+★ `skills.max_range_default: 24` 는 `skill_mechanics.yml` 에도 **같은 값이 적혀 있다** — *"지금은 같다. 언젠가 갈라진다."*
+
+
 ### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
 - **상태**: 닫힘
 - **분류**: 빚
@@ -1947,6 +1950,20 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
 B-005 를 닫으며 드러났다 (2026-07-14). 판정의 눈은 `Cast` 를 요구해 평타의 마진·태세·격이
 디버그 화면에 안 뜬다. 판정이 보이지 않으면 밸런스 조정(저경지 평타 DPS 하락 체감)을 잴 수 없다.
 연무장 허수아비가 태세로 평타를 회피하는 것(기존 대칭)의 TTK 영향 계측도 이 눈이 있어야 한다.
+
+### B-106 · **max_targets_default 가 두 등록부에 산다** — 지금은 같다, 언젠가 갈라진다
+- **상태**: 열림
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `config/performance.yml` → `skills.max_targets_default` · `config/skill_mechanics.yml` → `global_rules.max_targets_default`
+- **의존**: —
+- **닫는 조건**: 정본이 하나가 된다 (읽히는 쪽만 남기고, 다른 쪽은 지우거나 참조 표기)
+- **검증**: `python3 tools/perf_audit.py` · `config/skill_mechanics.yml`
+- **닫힘**: —
+
+B-028 정리 중 발견 (2026-07-14, 트랙 정). 같은 값 8 이 두 곳에 적혀 있고, SkillEngine 이 읽는
+산 키는 performance.yml 쪽이다. max_range_default 는 같은 병으로 이미 한 번 갈라질 뻔했다 —
+이번에 삭제로 풀었지만, 이 쌍이 하나 더 남아 있다. perf_audit 은 읽히는 키의 중복은 안 잰다.
 
 ### B-104 · game_audit 에 **눈의 시험이 없다** — 오독 교정을 지킬 자동 눈이 없다
 - **상태**: 열림

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -379,14 +380,18 @@ def audit_budget(cfg, mo, rep):
     events = mo.get("events", {}) or {}
     crit = int((events.get("대성공") or {}).get("count", 0))
 
-    # 가장 비싼 한 지점 = 최상위 격의 타격 + 강조 + 대성공
+    # 가장 비싼 한 지점 = 최상위 격의 타격 + 강조 + **폭발** + 대성공
+    #   ★ 2026-07 — burst(타격 순간의 폭발형 입자)가 여기 들어왔다. 예전엔 impact+accent+crit 만 셌다.
+    #     그 셈이 남아 있었다면 폭발은 **예산 밖에서** 자랐을 것이고, 그러면 이 축은 눈이 아니라 장식이다.
     worst_g, worst_n = None, 0
     for g, s in grades.items():
-        n = int((s.get("impact") or {}).get("count", 0)) + int((s.get("accent") or {}).get("count", 0)) + crit
+        n = (int((s.get("impact") or {}).get("count", 0))
+             + int((s.get("accent") or {}).get("count", 0))
+             + int((s.get("burst") or {}).get("count", 0)) + crit)
         if n > worst_n:
             worst_g, worst_n = g, n
     rep.verdict(worst_n <= point_max,
-                f"가장 비싼 타격 지점: {worst_g} {worst_n}개 (타격+강조+대성공) ≤ {point_max}")
+                f"가장 비싼 타격 지점: {worst_g} {worst_n}개 (타격+강조+폭발+대성공) ≤ {point_max}")
 
     # 응집 한 발 (격 응집 + telegraph_boost 최대치)
     boost = max([int(s.get("telegraph_boost", 0))
@@ -517,6 +522,32 @@ def audit_weapon_and_sound(cfg, mo, rep):
     return bad + len(malformed)
 
 
+# 파티클·소리·아이템 enum 리터럴 — 등록제 규약이 금하는 것
+HARDCODE_ENUM = re.compile(r"\b(?:Particle|Sound|Material)\.[A-Z_]+")
+
+
+def hardcoded_enums(body):
+    """행 단위 하드코딩 검사 → (위반 목록, [대조] 청구 면제 수).
+
+    【[대조] 면제 — 소리내어 청구】 진단 시험대(strikeTest)의 대조군은 일부러 등록부를 안 탄다 —
+    등록부가 병들면 대조군도 같이 병들어 '대조'의 뜻이 죽기 때문이다. 그래서 그 줄만은 리터럴이
+    옳고, 면제는 **그 줄의 주석에 [대조] 를 적어 청구**해야 한다 (stroke_origin 의 centered: true
+    와 같은 문법 — 코드가 예외를 지어내지 않는다). 문자열 리터럴 속 [대조] 는 안 쳐준다:
+    면제는 주석의 것이다. 청구된 면제는 세어서 보고한다 — 예외 자체가 정보다.
+    검출 표면은 종전(파일 전체 정규식)과 같다 — 청구 없는 줄은 주석이든 코드든 그대로 잡는다."""
+    hard, claimed = [], 0
+    for line in body.splitlines():
+        found = HARDCODE_ENUM.findall(line)
+        if not found:
+            continue
+        comment = line.partition("//")[2]
+        if "[대조]" in comment:
+            claimed += len(found)
+        else:
+            hard += found
+    return hard, claimed
+
+
 def audit_wiring(mo, rep):
     rep.head("⑦ 배선 — 등록제 규약 (코드에 파티클·소리를 하드코딩하지 않는다)")
 
@@ -536,14 +567,13 @@ def audit_wiring(mo, rep):
     fails = 0
     # 하드코딩 — Particle.X / Sound.X / Material.X 리터럴. 이름→enum 해석기(SkillHud·SkillDisplay)만 예외다
     for name in ("SkillListener.java", "SkillEngine.java", "SkillDisplay.java"):
-        body = src[name]
-        hard = re.findall(r"\bParticle\.[A-Z_]+", body) + re.findall(r"\bSound\.[A-Z_]+", body) \
-            + re.findall(r"\bMaterial\.[A-Z_]+", body)
+        hard, claimed = hardcoded_enums(src[name])
         if hard:
             fails += 1
             rep.fail(f"{name}: 파티클·소리·아이템 하드코딩 {len(hard)}건 — {sorted(set(hard))[:5]}")
         else:
-            rep.ok(f"{name}: 파티클·소리·아이템 하드코딩 0건 (등록부만 읽는다)")
+            note = f" · [대조] 청구 면제 {claimed}건 — 진단 대조군 (면제 자체가 정보다)" if claimed else ""
+            rep.ok(f"{name}: 파티클·소리·아이템 하드코딩 0건 (등록부만 읽는다){note}")
 
     body = src["SkillListener.java"]
     # 등록부의 사건이 코드에 배선됐는가 (등록만 하고 안 쓰면 그건 죽은 모션이다)
@@ -677,6 +707,100 @@ def audit_display(cfg, mo, rep):
     fails += len(long_span)
     rep.verdict(not long_span, "span_ratio ≤ 1.0 — 획이 제 스윙 간격보다 오래 살면 형체가 쌓인다"
                 + ("" if not long_span else f" — 초과 {long_span}"))
+
+    # ── ★ 【획이 서는 자리】 원점이 시전자의 **몸 안**이면 위반이다 ──
+    #   사용자가 인게임에서 본 것: "획은 몸 안에서 나오는 느낌입니다. **1인칭 시점에선 보이지도 않아요.**"
+    #   원인은 코드가 획을 **시전자의 눈**에 세운 것이었다 (eyeLocation − 0.25 · 앞으로 미는 값 없음).
+    #   몸(반지름 body_radius · 높이 0~max_height 의 기둥) 안에 원점이 있으면:
+    #     · 3인칭 — 획이 얼굴·가슴을 관통한다   · 1인칭 — 카메라가 획의 안쪽이라 **안 보인다**
+    #   이 축이 그 자리다. centered: true 로 **소리내어 청구한** 자리(고리)만 면제된다.
+    so = dp.get("stroke_origin", {}) or {}
+    if not so:
+        fails += 1
+        rep.fail("display.stroke_origin 절이 없다 — 획의 자리를 **코드가 지어낸다**"
+                 " (그러면 획이 몸 안에서 나오고 1인칭에서 안 보인다)")
+    else:
+        so_lim = so.get("limits", {}) or {}
+        body_r = float(so_lim.get("body_radius", 0.30))
+        clear = float(so_lim.get("clearance", 0.10))
+        max_h = float(so_lim.get("max_height", 1.80))
+        fwd_ratio = float(so_lim.get("forward_max_ratio", 0.45))
+        seats = {k: v for k, v in so.items() if k != "limits" and isinstance(v, dict)}
+
+        # ① 참격 모션 전수 — 자리가 없으면 default 로 서지만, 그 사실이 **눈에 보여야** 한다
+        slash_ids = [mid for mid, m in motions.items() if str(m.get("kind")) == "참격"]
+        miss_seat = [mid for mid in slash_ids if mid not in seats]
+        has_default = "default" in seats
+        fails += int(bool(miss_seat) and not has_default)
+        rep.verdict(not miss_seat or has_default,
+                    f"획의 자리 — 참격 모션 {len(slash_ids)}종"
+                    + (" 전수 등록" if not miss_seat
+                       else f" 중 {miss_seat} 는 default 칸으로 선다"))
+
+        # ② ★ **몸 안 금지** — 이 감사의 심장이다
+        inside = []
+        for mid, seat in seats.items():
+            if mid == "default" and not slash_ids:
+                continue
+            if seat.get("centered") is True:
+                continue                      # 몸에 겹치는 것이 옳다 — 등록부가 소리내어 청구했다
+            f = float(seat.get("forward", 0.0))
+            lat = float(seat.get("lateral", 0.0))
+            h = float(seat.get("height", 1.35))
+            flat = math.hypot(f, lat)
+            if flat < body_r and 0.0 <= h <= max_h:
+                inside.append(f"{mid}(앞 {f} · 옆 {lat} ⇒ 수평 {flat:.2f} < 몸 {body_r} · 높이 {h})")
+        fails += len(inside)
+        rep.verdict(not inside,
+                    f"★ **획의 원점이 몸 밖에 선다** — 수평거리 ≥ 몸 반지름 {body_r}m"
+                    " (몸 안이면 획이 몸을 뚫고, **1인칭에서 제 검의 궤적이 안 보인다**)"
+                    + ("" if not inside else f" — 【몸 안에서 나오는 획】 {inside}"))
+
+        # ③ 여유까지 두고 서는가 — 몸에 딱 붙은 획은 모델의 팔·망토를 스친다 (위반이 아니라 경고)
+        graze = [mid for mid, seat in seats.items()
+                 if seat.get("centered") is not True
+                 and body_r <= math.hypot(float(seat.get("forward", 0.0)),
+                                          float(seat.get("lateral", 0.0))) < body_r + clear]
+        if graze:
+            rep.warn(f"몸에 스치는 획 {graze} — 몸 밖이긴 하나 여유({clear}m) 안이다."
+                     " 코드가 밀어내지만(minForward) 등록값 자체를 고치는 편이 정직하다")
+
+        # ④ 높이가 **팔이 지나가는 자리**인가 — 눈(1.62)이 아니라 어깨(≈1.35) 근처여야 한다
+        bad_h = [(mid, seat.get("height")) for mid, seat in seats.items()
+                 if not 0.0 < float(seat.get("height", 1.35)) <= max_h]
+        fails += len(bad_h)
+        rep.verdict(not bad_h, f"획의 높이 ∈ (0, {max_h}] — 발~키 사이 (팔이 지나가는 자리)"
+                    + ("" if not bad_h else f" — 몸 밖의 높이 {bad_h}"))
+
+        # ⑤ ★ **코드가 자리를 지어내지 않는가** — 등록제의 못 (재발 방지)
+        #    옛 코드: at = caster.getEyeLocation().subtract(0, 0.25, 0)  ← 이것이 병이었다
+        try:
+            with open(os.path.join(MVT, "SkillDisplay.java"), encoding="utf-8") as fh:
+                disp = fh.read()
+        except OSError:
+            disp = ""
+        # ★ **획을 실제로 띄우는** slash 를 본다 — 위임 오버로드(한 줄짜리)를 보면 눈이 먼다.
+        #   (스윙을 넣으며 slash 가 둘로 갈렸다. 이 눈이 그것을 잡았다 — 그래서 여기를 고쳤다.)
+        segs = [m.group(0) for m in re.finditer(r"boolean slash\([\s\S]*?\n    \}", disp)]
+        seg = next((x for x in segs if "spawn(" in x), "")
+        from_registry = "origin(caster" in seg and "getEyeLocation" not in seg
+        fails += int(not from_registry)
+        rep.verdict(from_registry,
+                    "★ **코드가 획의 자리를 지어내지 않는다** — slash() 가 등록부(origin/stroke_origin)에"
+                    " 물어보고, eyeLocation 을 원점으로 쓰지 않는다 (그것이 몸 안에서 나오던 병이다)"
+                    + ("" if from_registry else " — 【slash() 가 아직 눈에 획을 세운다】"))
+        # 아래 못이 위 못보다 세다 — 짧은 획(맨손)도 몸 안으로 후퇴하지 않는다
+        nailed = "Math.max(lim.minForward()" in disp
+        fails += int(not nailed)
+        rep.verdict(nailed,
+                    f"몸 밖 최소({body_r}+{clear})가 길이 상한(×{fwd_ratio})을 **이긴다** —"
+                    " 획이 짧아도 원점은 몸 밖에 남는다 (몸 안의 획은 1인칭에서 안 보인다)")
+        # 눈이 살아 있는가 — 런타임에서도 몸 안을 청구하면 짖는가 (인게임 조정 /혼천 획위치 의 안전망)
+        live_eye = "originFault(" in disp and "eyeOrigin(" in disp
+        fails += int(not live_eye)
+        rep.verdict(live_eye,
+                    "런타임의 눈 — /혼천 획위치 로 민 값이 몸 안이면 **살아 있는 서버가 짖는다**"
+                    " (정적 감사와 **같은 규칙**을 본다: originFault)")
 
     # ── 몸의 자세 — 되는 것만. 조작감을 해치는 값이 등록부에 없는가 ──
     limits = body.get("limits", {}) or {}
@@ -1041,15 +1165,458 @@ def audit_eye(rep):
     has_cap = "eye.maxPoints()" in lis and "drawn < eye.maxPoints()" in lis
     fails += int(not has_cap)
     rep.verdict(has_cap, "표본 점 상한(max_points)을 등록부가 쥔다 — 눈이 파티클로 서버를 죽이면 안 된다")
+
+    # ⑦ ★ 눈이 **이유를 말하는가** — "안 맞았다"만 말하는 눈은 반쪽 눈이다
+    #    (이유가 없으면 버그와 규칙을 구별할 수 없다: 아군이라 안 맞은 건지, 히트박스가 틀린 건지)
+    m = re.search(r"private void eyeHitbox\([\s\S]*?\n    \}", lis)
+    reasons = bool(m) and "vetoes" in m.group(0)
+    fails += int(not reasons)
+    rep.verdict(reasons, "★ 눈이 **왜 안 맞았는지**를 말한다 (벽·아군·손이 모자람) — 반쪽 눈이 아니다")
+
+    # ⑧ 손이 가려내는가 — 아군·벽·가까운 순 (셋 다 admit() 한 곳에 있어야 눈과 판정이 안 어긋난다)
+    m = re.search(r"List<LivingEntity> admit\([\s\S]*?\n    \}", lis)
+    gate = m.group(0) if m else ""
+    for token, why in (
+            ("aimedAt(", "아군을 안 벤다 — **겨눈 것**과 **나를 노리는 것**만 담는다 (party.yml friendly_fire)"),
+            ("hasLineOfSight(", "벽 너머를 안 벤다 — 문 뒤에 숨는 것이 값을 한다"),
+            ("sort(Comparator", "**가장 가까운** N 을 담는다 (청크 순회 순서대로 '아무 8' 이 아니다)"),
+            ("Metrics.record(", "레이캐스트 비용을 **잰다** (문서가 경고한 그 비용이다 — 안 재면 모른다)")):
+        ok = token in gate
+        fails += int(not ok)
+        rep.verdict(ok, why)
+
+    # ⑨ 두 경로가 **같은 손**을 쓰는가 — 가려내는 규칙이 두 벌이면 그중 하나는 반드시 낡는다
+    shares = "skills.admit(" in cast
+    own_cap = "out.size() >= plan.maxTargets()" in cast
+    fails += int(not shares or own_cap)
+    rep.verdict(shares and not own_cap,
+                "절기(SkillCast)도 **같은 손**으로 가려낸다 (제 상한을 따로 물리지 않는다)"
+                + ("" if shares and not own_cap else " — 【절기만 규칙 밖에 있다】"))
+
+    # ⑩ 등록부가 규칙을 쥐는가 — 코드가 '아군'을 지어내지 않는다
+    eng_path = os.path.join(MVT, "SkillEngine.java")
+    with open(eng_path, encoding="utf-8") as fh:
+        eng = fh.read()
+    from_registry = 'RulesConfig.load(cfg.resolve("party.yml"))' in eng \
+        and '"면제".equals(' in eng and '"예외".equals(' in eng
+    fails += int(not from_registry)
+    rep.verdict(from_registry,
+                "친선 피해 규칙을 **등록부에서 읽는다** (party.yml mc.friendly_fire) —"
+                " 코드가 '아군'을 지어내지 않는다. 등록부가 말을 바꾸면 코드가 따라간다")
     return fails
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑪ 먹빛 — 【금지색】 형광 핑크 · 네온 보라 · 과도한 노랑 · SF 발광
+#
+#  사용자가 방향을 다시 세웠다 (2026-07): 색은 이제 **금지**가 아니라 **격의 사다리를 따라 오른다.**
+#  그러나 못 하나는 그대로다:
+#      *"형광 네온·보라/핑크 위주의 서양 판타지 느낌 금지. 반드시 먹선+청록+옥색+백색 안에서만."*
+#  그 못을 재는 자가 이 축이다. **등록부가 색을 짓고, 이 축이 그 색을 심판한다.**
+#  (런타임은 색을 검열하지 않는다 — 검열이 두 겹이면 어느 쪽이 정본인지 아무도 모른다.)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _hsv(r, g, b):
+    """(hue 도, chroma 0~255) — 채도는 max−min 으로 잰다 (texture_audit 과 같은 잣대)."""
+    mx, mn = max(r, g, b), min(r, g, b)
+    c = mx - mn
+    if c == 0:
+        return 0.0, 0
+    if mx == r:
+        h = 60 * (((g - b) / c) % 6)
+    elif mx == g:
+        h = 60 * (((b - r) / c) + 2)
+    else:
+        h = 60 * (((r - g) / c) + 4)
+    return h % 360, c
+
+
+def audit_ink(mo, rep):
+    rep.head("⑪ 먹빛 — 금지색 (형광 핑크·네온 보라·과도한 노랑은 이 세계의 것이 아니다)")
+
+    inks = mo.get("inks", {}) or {}
+    rule = mo.get("inks_forbidden", {}) or {}
+    hues = rule.get("hues") or []
+    chroma_max = int(rule.get("chroma_max", 130))
+    exempt = set(rule.get("exempt") or [])
+
+    if not inks:
+        rep.fail("inks 등록부가 없다 — 색이 등록되지 않으면 코드가 색을 지어낸다 (등록제 위반)")
+        return 1
+    if not hues:
+        rep.fail("inks_forbidden.hues 가 없다 — **금지 규칙이 없는 색 등록부는 감사가 아니라 허가다**")
+        return 1
+
+    fails = 0
+    for name, spec in inks.items():
+        rgb = (spec or {}).get("rgb")
+        if not isinstance(rgb, list) or len(rgb) < 3:
+            fails += 1
+            rep.fail(f"먹빛 {name} — rgb 세 칸이 아니다 (반만 적힌 색은 색이 아니다): {rgb}")
+            continue
+        r, g, b = (int(v) for v in rgb[:3])
+        h, c = _hsv(r, g, b)
+        bad = []
+        for band in hues:
+            lo, hi = float(band.get("from", 0)), float(band.get("to", 0))
+            if lo <= h <= hi and c > 20:      # 채도가 없으면 색상은 뜻이 없다 (회색에 hue 는 없다)
+                bad.append(str(band.get("name", f"{lo}~{hi}°")))
+        if c > chroma_max:
+            bad.append(f"형광 (채도 {c} > {chroma_max})")
+        if bad and name in exempt:
+            rep.ok(f"{name:3s} rgb({r:3d},{g:3d},{b:3d}) hue {h:5.0f}° 채도 {c:3d}"
+                   f" — 【면제】 등록부가 소리내어 청구한 예외 ({', '.join(bad)})")
+        elif bad:
+            fails += 1
+            rep.fail(f"먹빛 {name} rgb({r},{g},{b}) hue {h:.0f}° 채도 {c} — **금지색**: {', '.join(bad)}"
+                     f" (config/skill_motion.yml inks — 사용자 지시: 서양 판타지의 발광 금지)")
+        else:
+            rep.ok(f"{name:3s} rgb({r:3d},{g:3d},{b:3d}) hue {h:5.0f}° 채도 {c:3d} — 규칙 안")
+
+    # 등록되지 않은 먹빛을 쓰는 칸이 있는가 (코드는 모르는 이름을 조용히 버린다 — 여기서 잡는다)
+    used = set()
+
+    def inks_used(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("ink"), str):
+                used.add(node["ink"])
+            for v in node.values():
+                inks_used(v)
+        elif isinstance(node, list):
+            for v in node:
+                inks_used(v)
+
+    # ★ palette 는 뺀다 — 거기 적힌 `ink:` 는 **참조가 아니라 뜻풀이**다 (담묵·농묵·비백…: 팔레트가
+    #   팩 담당에게 "이 파티클은 무슨 먹인가"를 설명하는 칸). 그것을 색 참조로 세면 눈이 헛것을 짖는다.
+    #   (등록부의 같은 단어가 두 뜻으로 쓰이고 있다는 사실 자체가 이 축이 알아낸 것이다.)
+    inks_used({k: v for k, v in mo.items() if k not in ("inks", "palette")})
+    unknown = sorted(u for u in used if u not in inks)
+    rep.verdict(not unknown, f"먹빛 참조 {len(used)}종 ⊆ 등록부 {len(inks)}종"
+                + ("" if not unknown else f" — 등록되지 않은 색: {unknown}"))
+    fails += len(unknown)
+
+    # dust 는 색이 없으면 발행되지 않는다 (바닐라가 데이터를 요구한다) — 색 없는 dust 는 **실종**이다
+    naked = []
+
+    def naked_dust(path, node):
+        if isinstance(node, dict):
+            if node.get("particle") == "dust" and not node.get("ink") and int(node.get("count", 0)) > 0:
+                naked.append(path)
+            for k, v in node.items():
+                naked_dust(f"{path}.{k}", v)
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                naked_dust(f"{path}[{i}]", v)
+
+    naked_dust("skill_motion", {k: v for k, v in mo.items() if k != "palette"})
+    rep.verdict(not naked, "색 없는 dust 없음 (dust 는 ink 가 없으면 **아예 안 뜬다** — 조용한 실종)"
+                + ("" if not naked else f" — {naked}"))
+    return fails + len(naked)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑫ 화려함의 사다리 — 【격이 오를수록 화려해진다】
+#
+#  사용자의 요구를 그대로 재는 축이다: *"경지와 기술 등급이 올라갈수록 더 화려해지는 구조."*
+#  그리고 그 역(逆)이 위반이다: **외공기가 강기보다 화려하면 격은 장식이다.**
+#
+#  이 축은 등록부의 숫자를 세지 않는다 — **엔진이 실제로 뿌리는 수**를 센다 (SkillListener.impact 의
+#  산수를 그대로 재현한다). 등록부가 11 을 적어도 예산이 3 만 허락하면 화면에 뜨는 것은 3 이다.
+#  **화면에 뜨는 것을 재지 않는 눈은 눈이 아니다.**
+# ══════════════════════════════════════════════════════════════════════════════
+
+def audit_flourish(cfg, mo, rep):
+    rep.head("⑫ 화려함의 사다리 — 격이 오를수록 화려해지는가 (등록이 아니라 **발행량**을 잰다)")
+
+    grades = mo.get("grades", {}) or {}
+    b = mo.get("budget", {}) or {}
+    point_max = int(b.get("per_point_tick_max", 30))
+    crit_reserve = int(b.get("crit_reserve", 4))
+    trail_pool = int(b.get("trail_pool", 24))
+    crit = int(((mo.get("events") or {}).get("대성공") or {}).get("count", 0))
+
+    # 예약분은 실제 대성공 파티클과 같아야 한다 — 다르면 자리를 잘못 비운 것이다
+    rep.verdict(crit_reserve == crit,
+                f"대성공 예약분 {crit_reserve} == events.대성공.count {crit}"
+                + ("" if crit_reserve == crit else " — **자리를 잘못 비웠다** (급소가 조용히 잘린다)"))
+
+    order = sorted(grades.items(), key=lambda kv: int(kv[1].get("rank", 0)))
+    fails = 0 if crit_reserve == crit else 1
+
+    def cnt(spec, slot):
+        return int((spec.get(slot) or {}).get("count", 0))
+
+    # 【SkillListener.impact 의 산수를 그대로】 room = 상한 − 먹점 − 강조 − 예약분 · 폭발 = min(등록, room)
+    rows = []
+    for g, s in order:
+        plain, accent, want = cnt(s, "impact"), cnt(s, "accent"), cnt(s, "burst")
+        room = point_max - plain - accent - crit_reserve
+        got = max(0, min(want, room))
+        rows.append((g, int(s.get("rank", 0)), plain, accent, want, got,
+                     plain + accent + got, cnt(s, "echo"), cnt(s, "haze")))
+
+    for g, rank, plain, accent, want, got, seen, echo, haze in rows:
+        mark = "" if got == want else f"  ← **강등** (등록 {want} → 발행 {got})"
+        rep.say(f"     {rank}. {g:4s} 먹점 {plain:2d} + 강조 {accent} + 폭발 {got:2d}"
+                f" = 보이는 {seen:2d}  · 잔상 {echo} · 안개 {haze}"
+                f"  [타격점 {seen + crit_reserve:2d}/{point_max}]{mark}")
+
+    # ★ 발행량이 강등된 격이 있으면 위반이다 — 등록부가 예산을 초과했다는 뜻이므로
+    cut = [g for g, _, _, _, want, got, _, _, _ in rows if got < want]
+    rep.verdict(not cut,
+                f"등록한 폭발이 그대로 발행되는가 (예산 안에서) — 강등 {len(cut)}건"
+                + ("" if not cut else f": {cut} · 등록부가 한 지점 상한 {point_max} 을 넘게 적었다"))
+    fails += len(cut)
+
+    axes = [
+        ("폭발(burst)", lambda r: r[5]),          # 실제 발행량
+        ("잔상(echo)", lambda r: r[7]),
+        ("안개(haze)", lambda r: r[8]),
+        ("보이는 타격 총량", lambda r: r[6]),
+    ]
+    for label, get in axes:
+        seq = [(r[0], get(r)) for r in rows]
+        # 안개(haze)만은 **같아도 된다** — 먼지는 격이 아니라 세계의 것이다 (단조 비감소)
+        mono = (all(seq[i][1] <= seq[i + 1][1] for i in range(len(seq) - 1))
+                if label.startswith("안개")
+                else all(seq[i][1] < seq[i + 1][1] for i in range(len(seq) - 1)))
+        line = " < ".join(f"{g} {v}" for g, v in seq)
+        if mono:
+            rep.ok(f"{label}: {line}")
+        else:
+            fails += 1
+            rep.fail(f"{label} 단조 증가 위반: {line}"
+                     f" — **아래 격이 위 격보다 화려하면 격은 장식이다**")
+
+    # 잔상·먹번짐은 궤적 풀 **안에서** 뽑는다 (밖에서 뽑으면 그것은 예산이 아니다)
+    worst = max(r[7] + r[8] for r in rows)
+    rep.verdict(worst < trail_pool,
+                f"잔상+안개 최악치 {worst} < 궤적풀 {trail_pool}"
+                f" (궤적이 설 자리가 남아야 한다 — 잔상만 남고 획이 사라지면 그것은 강등이 아니라 실종이다)")
+    fails += int(worst >= trail_pool)
+
+    # 오의의 화려함 — 개시 틱이 오의 예산을 넘지 않는가
+    ult_tick = int(b.get("ultimate_per_tick_max", 48))
+    uf = mo.get("ultimate_flourish", {}) or {}
+    default = uf.get("default") or {}
+    ubad = 0
+    for uid, u in (mo.get("ultimates") or {}).items():
+        f = (uf.get("by_id") or {}).get(uid) or default
+        bloom = int((f.get("bloom") or {}).get("count", 0))
+        release = (int((u.get("burst") or {}).get("count", 0))
+                   + int((u.get("accent") or {}).get("count", 0)) + bloom)
+        ly = f.get("layers") or {}
+        after = int(ly.get("points", 0)) * int(ly.get("per_point", 0)) \
+            + int((f.get("mist") or {}).get("count", 0))
+        if release > ult_tick or after > ult_tick:
+            ubad += 1
+            rep.fail(f"오의 화려함 예산 초과: {uid} — 개시 {release} / 개시 뒤 한 틱 {after} > {ult_tick}")
+    rep.verdict(ubad == 0,
+                f"오의 {len(mo.get('ultimates') or {})}종 — 개시(burst+강조+개화폭발)와"
+                f" 개시 뒤 한 틱(다층궤적+운무)이 각각 ≤ {ult_tick}")
+    fails += ubad
+    return fails
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  눈을 세웠으면 눈을 시험하라 — --selftest 가 **일부러 어긴다**
+#
+#  검수가 통과했다는 말은 "어긴 것이 없다"가 아니라 "어긴 것을 잡을 수 있다"여야 뜻이 있다.
+#  세 가지를 일부러 심고, 축 ⑪·⑫ 가 **실제로 잡는지** 본다. 못 잡으면 1 을 돌려준다.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⑬ 참격인가 찌르기인가 — 【사용자 지시 · 2026-07-13】
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _quat(yaw, pitch, roll):
+    """등록부의 각(도) → 쿼터니언. SkillEngine.SwingArc.quat 와 **같은 차례**(Y→X→Z)다."""
+    def q_axis(axis, deg):
+        h = math.radians(deg) / 2.0
+        s, c = math.sin(h), math.cos(h)
+        v = [0.0, 0.0, 0.0]
+        v[axis] = s
+        return (c, v[0], v[1], v[2])
+
+    def mul(a, b):
+        w1, x1, y1, z1 = a
+        w2, x2, y2, z2 = b
+        return (w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2)
+
+    return mul(mul(q_axis(1, yaw), q_axis(0, pitch)), q_axis(2, roll))
+
+
+def _arc_deg(stroke, scale=1.0):
+    """이 획이 **실제로 돌아간 각** (도) — 세 축의 합이 아니라 합성 회전의 각이다."""
+    def pair(k):
+        v = stroke.get(k) or [0, 0]
+        return (float(v[0]) * scale, float(v[1]) * scale)
+
+    y0, y1 = pair("yaw")
+    p0, p1 = pair("pitch")
+    r0, r1 = pair("roll")
+    a = _quat(y0, p0, r0)
+    b = _quat(y1, p1, r1)
+    dot = sum(x * y for x, y in zip(a, b))
+    return math.degrees(2.0 * math.acos(min(1.0, abs(dot))))
+
+
+def audit_slash(mo, rep):
+    """일반 공격이 **찌르기가 아니라 참격인가.**
+
+    사용자 원문: *"지금은 앞으로 툭 치는 공격 같다. 원하는 건 검을 크게 휘둘러 시원하게 베는 공격이다."*
+
+    축은 셋 — 획이 쓸고 지나간 **각**, 몸이 나간 **거리**, 그 **비**.
+      · 찌르기 = 전진이 크고 호가 작다
+      · 참격   = 호가 크고 전진이 작다
+    호(弧) 궤적을 청구한 계열만 잰다. 창·암기는 **원래 찌르고 던진다** — 면제는 등록부가 청구한다.
+
+    이 축은 SkillEngine.slashFault 와 **같은 세 수**를 잰다 (두 개의 진실을 만들지 않는다).
+    """
+    rep.head("⑬ 참격인가 찌르기인가 — 호각 vs 전진 (사용자: \"크게 휘둘러 시원하게 베는 공격\")")
+
+    disp = mo.get("display", {}) or {}
+    sa = disp.get("swing_arcs", {}) or {}
+    eye = disp.get("slash_eye", {}) or {}
+    strokes = sa.get("strokes", {}) or {}
+    cycle = sa.get("cycle", []) or []
+    limits = sa.get("limits", {}) or {}
+    tuning = sa.get("tuning", {}) or {}
+    heavy = sa.get("heavy")
+    heavy_classes = sa.get("heavy_classes", []) or []
+    basic = dig(mo, "basic_strike", "by_class", default={}) or {}
+    by_cls = dig(mo, "display", "body", "by_class", default={}) or {}
+
+    if not strokes:
+        rep.fail("display.swing_arcs.strokes 가 비었다 — **획이 돌지 않는다** (제자리에서 길어지는 판자)")
+        return
+    if not cycle:
+        rep.fail("display.swing_arcs.cycle 이 비었다 — 연타해도 획의 방향이 안 바뀐다")
+        return
+
+    arc_scale = float(tuning.get("arc_scale", 1.0))
+    max_arc = float(limits.get("max_arc_deg", 150))
+    to_m = float(limits.get("lunge_to_meters", 2.5))
+    min_arc = float(eye.get("min_arc_deg", 60))
+    max_lunge = float(eye.get("max_lunge_m", 0.40))
+    max_lunge_heavy = float(eye.get("max_lunge_m_heavy", max_lunge))
+    min_ratio = float(eye.get("min_ratio", 150))
+    exempt = eye.get("exempt_trails", []) or []
+
+    # ─ 획 자체 — 호각 상한 · 부채꼴 몫
+    for sid, st in strokes.items():
+        deg = _arc_deg(st, arc_scale)
+        fan = float(st.get("fan", 1.0))
+        rep.verdict(deg <= max_arc,
+                    f"{sid} 호각 {deg:.0f}도 ≤ 상한 {max_arc:.0f}도"
+                    + ("" if deg <= max_arc else " — 팔이 아니라 **프로펠러**다"))
+        if fan > 1.0:
+            rep.fail(f"{sid} 의 fan {fan} > 1.0 — **획이 히트박스 부채꼴을 벗어난다** (불변식 ㅂ)")
+
+    # ─ 계열 — 참격인가 찌르기인가
+    def lunge_m(cls):
+        body = by_cls.get(cls) or {}
+        script = body.get("script")
+        if isinstance(script, list) and script:
+            return sum(max(0.0, float((b or {}).get("lunge", 0))) for b in script) * to_m
+        return max(0.0, float(body.get("lunge", 0))) * to_m
+
+    for cls, spec in sorted(basic.items()):
+        if not spec:
+            continue                                   # 활·무관·짐승 — 그을 획이 없다 (등록부대로)
+        trail = spec.get("trail")
+        if trail in exempt:
+            continue                                   # 찌르는 것은 찌른다 (면제는 등록부가 청구했다)
+        n = 0
+        sid = heavy if (heavy and cls in heavy_classes) else cycle[n % len(cycle)]
+        st = strokes.get(sid)
+        if st is None:
+            rep.fail(f"{cls}: 획 '{sid}' 이 strokes 에 없다 — 그릴 각이 없다")
+            continue
+        deg = _arc_deg(st, arc_scale)
+        m = lunge_m(cls)
+        # 무거운 손은 몸을 싣는다 (도끼는 들이받는 것이 아니다) — 상한이 갈린다
+        cap = max_lunge_heavy if cls in heavy_classes else max_lunge
+        ratio = float("inf") if m <= 1e-9 else deg / m
+        bad = []
+        if deg < min_arc:
+            bad.append(f"호각 {deg:.0f}도 < {min_arc:.0f}도 (쓸지 않았다 — 자라기만 한다)")
+        if m > cap:
+            bad.append(f"전진 {m:.2f}m > {cap:.2f}m (베는 것이 아니라 **들이받는다**)")
+        if ratio < min_ratio:
+            bad.append(f"참격비 {ratio:.0f}도/m < {min_ratio:.0f} (**찌르기 쪽이다**)")
+        shown = "∞" if math.isinf(ratio) else f"{ratio:.0f}"
+        rep.verdict(not bad,
+                    f"{cls:<4} {sid:<8} 호각 {deg:3.0f}도 · 전진 {m:.2f}m · 참격비 {shown} 도/m"
+                    + ("" if not bad else "  — " + " · ".join(bad)))
+
+
+def selftest():
+    import copy
+    ok = True
+    base = load_all()
+    mo0 = base.get("skill_motion.yml")
+
+    cases = [
+        ("네온 보라를 등록한다 (inks.요괴 = 보라)",
+         lambda m: m.setdefault("inks", {}).update({"요괴": {"rgb": [170, 40, 220], "size": 1.0}}),
+         audit_ink),
+        ("외공기의 폭발을 심검보다 크게 (사다리를 뒤집는다)",
+         lambda m: m["grades"]["외공기"]["burst"].update({"count": 20}),
+         lambda cfg, m, r: audit_flourish(cfg, m, r)),
+        ("dust 에서 색을 뗀다 (조용히 실종되는 파티클)",
+         lambda m: m["grades"]["심검"]["burst"].pop("ink", None),
+         audit_ink),
+        # ★ 축 ⑬ — 사용자가 오늘 지적한 그 병을 **되살려서** 눈이 잡는지 본다
+        ("획을 안 돌린다 (호각 0도 — 옛 참격선: 제자리에서 길어지는 판자)",
+         lambda m: dig(m, "display", "swing_arcs", "strokes").update(
+             {"횡_좌우": {"yaw": [0, 0], "pitch": [0, 0], "roll": [0, 0],
+                          "rise": [0, 0], "fan": 1.0, "bow": 0.0}}),
+         lambda cfg, m, r: audit_slash(m, r)),
+        ("검의 전진을 옛 값(0.16)으로 되돌린다 (앞으로 툭 치는 공격)",
+         lambda m: dig(m, "display", "body", "by_class", "검").update(
+             {"script": [{"at": 0.30, "lunge": 0.16}]}),
+         lambda cfg, m, r: audit_slash(m, r)),
+        ("호를 히트박스 부채꼴 밖으로 벌린다 (fan 1.6 — 획이 안 맞는 자리를 벤다)",
+         lambda m: dig(m, "display", "swing_arcs", "strokes", "횡_좌우").update({"fan": 1.6}),
+         lambda cfg, m, r: audit_slash(m, r)),
+    ]
+    print("\n══ 눈의 시험 (--selftest) — 일부러 어겨서 잡히는지 본다 ══")
+    for i, (what, break_it, axis) in enumerate(cases, 1):
+        mo = copy.deepcopy(mo0)
+        break_it(mo)
+        rep = Report()
+        try:
+            if axis is audit_ink:
+                axis(mo, rep)
+            else:
+                axis(base, mo, rep)
+        except Exception as e:                       # 눈이 예외로 죽으면 그것도 실패다
+            print(f"  ❌ {i}. {what} — 눈이 예외로 죽었다: {e}")
+            ok = False
+            continue
+        caught = len(rep.violations) > 0
+        print(f"  {'✅' if caught else '❌'} {i}. {what} — {'잡았다' if caught else '**못 잡았다**'}")
+        if caught:
+            print(f"       └ {rep.violations[0]}")
+        ok = ok and caught
+    print(f"  ⇒ 눈의 시험: {'통과 — 이 눈은 거짓말하지 않는다' if ok else '**실패 — 눈이 못 잡는다**'}")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description="혼천 무공 모션 감사")
     ap.add_argument("--coverage-only", action="store_true")
+    ap.add_argument("--selftest", action="store_true",
+                    help="눈을 시험한다 — 일부러 어겨서 축 ⑪·⑫ 가 잡는지 본다")
     args = ap.parse_args()
+    if args.selftest:
+        return selftest()
 
     rep = Report()
     rep.say("══ 무공 모션 감사 ══")
@@ -1077,6 +1644,9 @@ def main():
         audit_display(cfg, mo, rep)
         audit_common_path(rep)
         audit_eye(rep)
+        audit_ink(mo, rep)
+        audit_flourish(cfg, mo, rep)
+        audit_slash(mo, rep)
 
     rep.say()
     rep.say("═" * 72)

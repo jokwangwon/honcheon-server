@@ -280,15 +280,61 @@ def other_yml_defs():
     return defs
 
 
-def registry_audit(perf, code, stripped):
+def tool_sources():
+    """파이썬 도구도 읽는 자다 — 감사가 performance.yml 의 값을 검산 기준으로 읽는다
+    (예: motion_audit 이 load_test.combat_cluster_size 로 군집 예산을 잰다).
+    perf_audit 자신과 selftest 는 뺀다 — 눈이 저를 읽는 자로 세면 안 되고,
+    시험용 언급이 키를 살려 주면 안 된다."""
+    tdir = os.path.join(ROOT, "tools")
+    out = {}
+    for n in sorted(os.listdir(tdir)):
+        if not n.endswith(".py") or n == "perf_audit.py" or n.endswith("_selftest.py"):
+            continue
+        p = os.path.join(tdir, n)
+        try:
+            with open(p, encoding="utf-8") as f:
+                out[p] = f.read()
+        except OSError:
+            continue
+    return out
+
+
+def registry_audit(perf, code, stripped, tools_src=None):
     readers_of_perf = [p for p, s in stripped.items() if OPENS_PERF_YML.search(s)]
     dup = other_yml_defs()
+    tools_src = tools_src if tools_src is not None else {}
+
+    # 【간접 배선 — metrics.probes】 Metrics 는 subsystem_budget_ms **맵 전체**를 적재하고
+    # probes(티커→예산항목)의 **값**으로 꺼내 쓴다. 키 이름이 Java 리터럴로 안 박히는 것이
+    # 설계다 (등록제: 코드는 수치를 모른다). 눈이 이 간접 참조를 모르면 살아 있는 예산을
+    # 죽었다고 말한다 — B-028 에서 실제로 그랬다 (effect_ticker 등 4키를 죽은 예산으로 몰았다).
+    probe_targets = {}
+    mm = perf.get("metrics") if isinstance(perf, dict) else None
+    pm = mm.get("probes") if isinstance(mm, dict) else None
+    if isinstance(pm, dict):
+        for ticker, item in pm.items():
+            probe_targets.setdefault(str(item), []).append(str(ticker))
+    probe_loaders = [p for p in readers_of_perf
+                     if '"probes"' in code[p] and '"subsystem_budget_ms"' in code[p]]
+
     rows = []
     for key, value in flatten(perf):
         leaf = key.split(".")[-1]
         # 읽는 자 = performance.yml 을 실제로 여는 파일 중, 이 키를 문자열로 조회하는 것
         readers = [os.path.relpath(p, ROOT) for p in readers_of_perf
                    if f'"{leaf}"' in code[p]]
+        # probes 가 이 예산 항목을 가리키고, 그 맵을 통째로 적재하는 자가 있으면 — 읽힌다
+        if not readers and key.startswith("tick_budget.subsystem_budget_ms.") \
+                and leaf in probe_targets and probe_loaders:
+            readers = ["%s (metrics.probes: %s)" % (os.path.relpath(p, ROOT),
+                                                    ", ".join(probe_targets[leaf]))
+                       for p in probe_loaders]
+        # 파이썬 도구 — **같은 줄**에서 performance.yml 을 파고 이 키를 집는 것만 센다
+        # (주석 속 언급이나 딴 yml 을 파는 코드가 키를 살려 주면 그것이 곧 거짓말이다)
+        if not readers:
+            readers = [os.path.relpath(p, ROOT) for p, s in tools_src.items()
+                       if any("performance.yml" in ln and f'"{leaf}"' in ln
+                              for ln in s.splitlines())]
         # 같은 이름을 다른 yml 이 또 정의하는가 (값이 다르면 그게 곧 불일치다)
         others = [(f, k, v) for f, k, v in dup.get(leaf, []) if v != value]
         same = [(f, k, v) for f, k, v in dup.get(leaf, []) if v == value]
@@ -340,7 +386,7 @@ def main():
         if n:
             listeners[os.path.relpath(p, ROOT)] = n
 
-    rows, perf_readers = registry_audit(perf, code, stripped)
+    rows, perf_readers = registry_audit(perf, code, stripped, tool_sources())
     bombs.sort(key=lambda b: (b["kind"] != "폭탄", -b["rollup"]))
     tickers.sort(key=lambda t: (t["period_ticks"] if isinstance(t["period_ticks"], int) else 9999))
 
