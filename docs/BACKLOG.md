@@ -110,7 +110,7 @@ python3 tools/backlog_audit_selftest.py   # 눈을 시험하는 눈 (거짓말 1
 
 ```
 P0  눈을 고친다 ─────────────► 감사가 거짓말하는 동안엔 아무것도 "닫혔다"고 말할 수 없다
-     │                          (B-001 ~ B-004)                      ★ 전부를 막고 있다
+     │                          (B-001 ~ B-004)                      ★ 전부 닫힘 (2026-07-14)
      ▼
 P1  세계를 깨뜨리는 것 ───────► 전투의 심장 · 헌법의 이중성 · 데이터 손실
      │                          (B-005 ~ B-014)
@@ -136,68 +136,17 @@ P5  미완 — 자산·조성 ─────────► 손과 시간의 �
 > **말과 번호가 모순이었다.** `backlog_audit` 의 축 ⑥ (단계 역행) 이 그것을 잡았다:
 > `❌ 역행: B-039(P4) → B-047(P5)`. **장부가 자기 자신에 대해 거짓말한 첫 사례이고, 눈이 첫 끼니를 먹었다.**
 
-**★ 그리고 P0 는 전부를 막고 있다.** 지금 **두 감사가 거짓말하고 있다** (B-001 · B-002 — 합쳐서 **22건의 거짓 위반**).
-눈이 거짓말하는 동안 "닫혔다"는 말은 전부 무의미하다.
+**★ 그리고 P0 는 전부를 막고 있었다 — 이제 닫혔다 (2026-07-14).** 두 감사의 거짓말(B-001 · B-002,
+합쳐서 22건의 거짓 위반)은 교정됐고, 종료 코드(B-003)와 팩 실물의 눈(B-004)도 섰다.
 
 ---
 
-# P0 — 눈을 고친다 (감사가 거짓말한다)
+# P0 — 눈을 고친다 (감사가 거짓말한다) — **전부 닫힘**
 
 > 이 단계가 먼저인 이유: **이 장부의 「닫힘」은 감사가 증명한다.** 감사가 거짓말하면 장부도 거짓말한다.
-> 그리고 지금 **두 감사가 실제로 거짓말하고 있다** — 둘 다 리팩터가 진실을 옮겼는데 **눈이 따라가지 않아서**다.
+> 두 감사가 실제로 거짓말하고 있었다 — 둘 다 리팩터가 진실을 옮겼는데 **눈이 따라가지 않아서**였다.
 
-### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P0
-- **위치**: `tools/lint_config.py:141`
-- **의존**: —
-- **닫는 조건**: `lint_config` 가 **id 로** 대조한다 → 위반 0건 (또는 진짜 위반만 남는다)
-- **검증**: `python3 tools/lint_config.py`
-- **닫힘**: —
-
-`config/factions.yml` 의 `id_policy` 가 **헌법**이다: `reference_key` = **id** (소문자 스네이크), `display_only` = `name`.
-그러므로 `ultimate_arts.yml` 이 `faction: hwasan` 이라 적는 것은 **옳다.**
-
-그런데 `lint_config.py:141-146` 은 `known_names` 를 **display name** (`m.get("name")` · `sects` · `clans` — 즉 `화산파`) 로
-쌓아 놓고, 거기에 `hwasan` 이 없다고 짖는다. **린터가 낡았다. config 는 옳다.**
-
-> 씨앗은 "3건"이라 했으나 **실측 21건**이다 (2026-07-14). 그리고 **21건 전부가 거짓**이다.
-> 하드코딩된 예외 `("무당파",)` 가 같은 병의 화석이다.
-
-### B-002 · bridge_audit 이 「지역이 회복 안 한다」고 짖는데 — **회복한다**
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P0
-- **위치**: `tools/bridge_audit.py:142`
-- **의존**: —
-- **닫는 조건**: `bridge_audit` 이 `domain/` 까지 본다 → 이 축이 조용해진다 (남는 위반은 B-010 둘뿐)
-- **검증**: `python3 tools/bridge_audit.py`
-- **닫힘**: —
-
-`bridge_audit.py:142` 는 **봇 소스**(`bot_all`)에서 `recoveryDeltas(` 를 찾는다. 없다. 그래서 짖는다.
-
-그러나 **사슬은 이어져 있다**: 봇은 `recover()` 를 부르고 (`server-bot/src/main/java/com/honcheon/bot/GameListener.java:4365`),
-그것이 `domain` 에서 `recoveryDeltas()` 로 내려간다 (`domain/src/main/java/com/honcheon/domain/RegionService.java:96`).
-
-`12c19e5 [refactor] 디스코드를 어댑터로 — 도메인을 꺼냈다` 가 진실을 `domain/` 으로 옮겼는데 **눈은 봇 트리만 본다.**
-치안은 회복한다. 감사가 틀렸다.
-
-### B-003 · 감사가 **짖으면서 종료 코드 0** 을 낸다 — CI 가 못 막는다
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P0
-- **의존**: —
-- **위치**: `tools/bridge_audit.py:142`
-- **닫는 조건**: 위반이 있으면 **반드시 종료 코드 1** — 모든 감사가 그렇다
-- **검증**: `python3 tools/bridge_audit.py; echo "exit=$?"` → 위반이 있는데 0 이면 안 된다
-- **닫힘**: —
-
-실측 (2026-07-14): `bridge_audit` 은 「끊긴 데가 3군데」라 말하고 **exit 0**. `map_lint` 도 exit 0.
-`game_audit`·`lint_config`·`motion_audit` 은 제대로 exit 1.
-
-**종료 코드가 거짓말하면 자동화가 이 감사를 통과시킨다.** `tools/backlog_audit.py` 는 이 함정을 알고 있어
-종료 코드를 안 믿고 「위반 N건」을 읽는다 — 그러나 그것은 **우회이지 치료가 아니다.**
+P0 네 항목(B-001 ~ B-004)은 **전부 닫혔다** (2026-07-14) — 「닫힌 것」 절에 있다. 눈이 다시 볼 수 있다.
 
 ---
 
@@ -1266,6 +1215,44 @@ if (!blockers.isEmpty()) {
 ---
 
 # 닫힌 것 (지우지 않는다 — 왜 닫혔는지가 증거다)
+
+### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P0
+- **위치**: `tools/lint_config.py:141`
+- **의존**: —
+- **닫는 조건**: `lint_config` 가 **id 로** 대조한다 → 위반 0건 (또는 진짜 위반만 남는다)
+- **검증**: `python3 tools/lint_config.py` · `python3 tools/lint_config_selftest.py`
+- **닫힘**: 2026-07-14 · Codex 가 `lint_config.py` 를 **id 대조**로 교정했다 — `factions.yml` 의 `id_policy` (`reference_key` = id) 를 헌법대로 따르고, 하드코딩 예외 `("무당파",)` 화석도 걷혔다. 실측: `python3 tools/lint_config.py` → **오류 0건·경고 0건** (21건의 거짓 위반이 사라졌다). 눈의 시험: `lint_config_selftest.py` 3/3 (정상 id 허용 · 미등록 id 거부 · 표시명 거부 — 탐지력은 남았다). 완료 문서 `docs/collaboration/CODEX_B001_B003_COMPLETE.md` · Fable 재검증 후 커밋 a2c482a
+
+병이었던 것: `lint_config.py:141-146` 이 `known_names` 를 display name(`화산파`)으로 쌓아 놓고
+id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 — 실측 21건 전부 거짓 양성.
+
+### B-002 · bridge_audit 이 「지역이 회복 안 한다」고 짖는데 — **회복한다**
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P0
+- **위치**: `tools/bridge_audit.py:142`
+- **의존**: —
+- **닫는 조건**: `bridge_audit` 이 `domain/` 까지 본다 → 이 축이 조용해진다 (남는 위반은 B-010 둘뿐)
+- **검증**: `python3 tools/bridge_audit.py` · `python3 tools/bridge_audit_selftest.py`
+- **닫힘**: 2026-07-14 · `bridge_audit.py` 가 이제 `domain/` 트리를 읽는다 (`:119` `DOMAIN_DIR`, `:131` `domain_all`) — 지역 회복은 `regions.recover(`(bot) **와** `recoveryDeltas(`(domain) 의 **두 단계 사슬**로 판정한다 (`:157`). 실측: `python3 tools/bridge_audit.py --no-backup` → 이 축 조용 (지역 회복 ✅ · 위반 0건, 남은 것은 경고뿐). 눈의 시험: `bridge_audit_selftest.py` 8/8 (끊긴 domain 주입 탐지 포함). 완료 문서 `docs/collaboration/CODEX_B001_B003_COMPLETE.md` · Fable 재검증 후 커밋 a2c482a. (B-010 의 두 위반은 B-009 처리기 구현으로 함께 사라졌다)
+
+병이었던 것: 리팩터 `12c19e5` 가 진실을 `domain/` 으로 옮겼는데 눈은 봇 트리만 봤다. 치안은 회복하고 있었다.
+
+### B-003 · 감사가 **짖으면서 종료 코드 0** 을 낸다 — CI 가 못 막는다
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P0
+- **의존**: —
+- **위치**: `tools/bridge_audit.py:142`
+- **닫는 조건**: 위반이 있으면 **반드시 종료 코드 1** — 모든 감사가 그렇다
+- **검증**: `python3 tools/bridge_audit_selftest.py` (종료 계약 시험 포함)
+- **닫힘**: 2026-07-14 · `bridge_audit` 이 실제 위반 verdict 가 있으면 **exit 1**, 경고만이면 exit 0 을 낸다 — 그 계약을 `bridge_audit_selftest.py` 가 시험한다 (위반 주입 → exit 1 · 경고만 → exit 0, 8/8). `map_lint` 는 재실측 결과 원래 정상이었다 (자체 종료 계약 + 56 self-test — 당시 exit 0 은 위반이 아니라 경고였다). 실측 2026-07-14: `bridge_audit --no-backup` 경고만 → exit 0 (계약대로). 완료 문서 `docs/collaboration/CODEX_B001_B003_COMPLETE.md` · Fable 재검증 후 커밋 a2c482a
+
+병이었던 것: 짖으면서 exit 0 — 자동화가 그 감사를 통과시켰다. `backlog_audit` 은 종료 코드 대신
+「위반 N건」을 읽는 우회를 갖고 있었는데, 이제 그 우회 없이도 종료 코드를 믿을 수 있다.
 
 ### B-004 · pack_gate_audit 이 **게이트를 실제로 여는 유일한 조건**을 못 본다
 - **상태**: 닫힘
