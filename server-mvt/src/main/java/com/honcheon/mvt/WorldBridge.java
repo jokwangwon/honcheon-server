@@ -144,6 +144,9 @@ public final class WorldBridge {
         seojangFile = bridgeDir.resolve(String.valueOf(
                 transport.getOrDefault("seojang", "seojang.json")));
         seojangPollSeconds = Math.max(1, num(transport.get("seojang_poll_seconds"), seojangPollSeconds));
+        // ★ B-118 — 서장 책의 심장 소리가 이보다 낡으면 봇이 죽은 것이다 (그때는 문이 사람을 붙들지 않는다)
+        seojangStaleSeconds = Math.max(seojangPollSeconds,
+                num(transport.get("seojang_stale_seconds"), seojangStaleSeconds));
         try {
             Files.createDirectories(outboxDir);
         } catch (IOException e) {
@@ -177,6 +180,25 @@ public final class WorldBridge {
     private static volatile long seojangStamp;
     private static final CopyOnWriteArrayList<Consumer<List<SeojangScene>>> SEOJANG_LISTENERS =
             new CopyOnWriteArrayList<>();
+
+    // ─── ★ B-118 — 서장의 **상태** (책이 아니라 명단이다) ───
+    //
+    // 【실사용 2026-07-14 · 부계정】 접합 직후 자동 출도가 서장 없이 사람을 청하현으로 보냈다.
+    //   대기소의 게이트가 SeojangBook 토큰(**이미 배달된 책**)만 봤는데, 새 몸은 붓(LLM)이
+    //   서장을 짓는 수십 초 동안 토큰이 없다 — 게이트가 경주에서 이겨 버렸다.
+    //
+    // 【정본】 봇은 서장이 끝나지 않은 접합된 몸을 **전부** seojang.json 에 싣는다 — 글이 아직
+    //   안 그려진 몸도 state=쓰는_중 으로 실린다 (GameListener.seojangEntries). 그리고 에필로그의
+    //   [강호로 나선다] 가 눌리는 순간 status 가 "강호"가 되어 명단에서 **사라진다**. 그러므로
+    //   「이 명단에 있다 = 서장이 아직 끝나지 않았다」 — 이것이 게이트가 봐야 할 판정이다.
+    //
+    // 【무한 대기 함정 금지】 봇은 명단이 비어도 seojang.json 을 계속 다시 굽는다 (poll 주기) —
+    //   `at` 이 심장 소리다. 그 소리가 seojang_stale_seconds 보다 낡으면 봇이 죽은 것이고,
+    //   죽은 다리가 사람을 대기소에 가둬서는 안 된다 (gate.bridge_down 과 같은 원칙).
+
+    private static int seojangStaleSeconds = 60;
+    private static volatile long seojangPublishedAt;
+    private static volatile Set<String> seojangBodies = Set.of();
 
     /**
      * 봇이 내려보낸 <b>서장의 한 장.</b> 마크는 이것을 <b>책으로 그릴 뿐</b>이다.
@@ -229,9 +251,33 @@ public final class WorldBridge {
                 return;
             }
             seojangStamp = stamp;
-            Map<String, Object> root = map(Json.parse(
-                    Files.readString(seojangFile, StandardCharsets.UTF_8)));
+            ingestSeojang(Files.readString(seojangFile, StandardCharsets.UTF_8), stamp);
+        } catch (IOException | RuntimeException e) {
+            log.warning("서장의 책을 읽지 못했다: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 서장 책 한 장을 들인다 — <b>파일과 스레드를 걷어 낸 자리</b> ({@code ingest} 와 같은 무늬).
+     * 눈({@code SeojangGateSelfTest})이 이 문으로 들어온다.
+     *
+     * @param mtime 파일의 시각 — 봇이 {@code at} 을 안 실었을 때의 대타 (심장 소리의 정본은 봇의 {@code at})
+     */
+    static void ingestSeojang(String jsonText, long mtime) {
+        try {
+            Map<String, Object> root = map(Json.parse(jsonText));
+            // ★ 깨진 책은 **버린다** — scenes 조차 없는 것은 빈 명단이 아니라 깨진 파일이다.
+            //   (빈 명단도 봇은 "scenes": [] 를 싣는다.) 여기서 빈 명단으로 읽으면 서장 중인
+            //   몸을 게이트가 놓아 버린다 — 눈(SeojangGateSelfTest)이 이것을 잡았다.
+            if (!(root.get("scenes") instanceof List<?>)) {
+                log.warning("서장의 책이 깨졌다 — 버린다 (마지막 성한 명단이 남는다)");
+                return;
+            }
+            // ★ B-118 — 심장 소리. 명단이 비어도 봇은 이 파일을 계속 굽는다 (poll 주기) —
+            //   이 시각이 낡으면 봇이 죽은 것이고, 그때 게이트는 사람을 붙들지 않는다.
+            long at = millis(root.get("at"));
             List<SeojangScene> out = new ArrayList<>();
+            Set<String> pending = new LinkedHashSet<>();
             for (Object o : list(root.get("scenes"))) {
                 Map<String, Object> s = map(o);
                 String uuid = String.valueOf(s.getOrDefault("mc_uuid", "")).strip();
@@ -255,16 +301,37 @@ public final class WorldBridge {
                             Boolean.TRUE.equals(s.get("final")),
                             Boolean.TRUE.equals(s.get("fallback")),
                             s.get("ferry") == null ? null : String.valueOf(s.get("ferry"))));
+                    pending.add(uuid);   // ★ B-118 — 명단에 있다 = 서장이 아직 끝나지 않았다 (쓰는_중 포함)
                 } catch (IllegalArgumentException e) {
                     log.warning("서장 — 몸의 이름이 아니다: " + uuid);
                 }
             }
+            seojangPublishedAt = at > 0 ? at : mtime;
+            seojangBodies = Set.copyOf(pending);
             for (Consumer<List<SeojangScene>> l : SEOJANG_LISTENERS) {
                 l.accept(out);
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             log.warning("서장의 책을 읽지 못했다: " + e.getMessage());
         }
+    }
+
+    /**
+     * ★ B-118 — <b>이 몸의 서장이 아직 끝나지 않았는가.</b> 대기소({@link Antechamber})의 게이트가
+     * 보는 눈이다. 판정은 「책이 지금 손에 있나」(토큰)가 아니라 <b>「서장이 끝났나」</b>(봇의 서장
+     * 명단)다 — 붓(LLM)이 글을 짓는 동안에도 몸은 명단에 실려 있으므로 경주가 없다.
+     *
+     * <p>다리가 죽어 심장 소리({@code at})가 {@code seojang_stale_seconds} 보다 낡으면 <b>붙들지
+     * 않는다</b> — 죽은 다리는 사람을 가두지 못한다 (antechamber.yml gate.bridge_down 과 같은 원칙).
+     */
+    public static boolean seojangHolds(UUID body) {
+        return body != null && seojangHolds(seojangBodies.contains(body.toString()),
+                seojangPublishedAt, System.currentTimeMillis(), seojangStaleSeconds * 1000L);
+    }
+
+    /** 순수 판정 — 하네스({@code SeojangGateSelfTest})가 이 문으로 들어온다 (그리는 코드와 같은 눈) */
+    static boolean seojangHolds(boolean listed, long publishedAt, long now, long staleMillis) {
+        return listed && publishedAt > 0 && now - publishedAt <= staleMillis;
     }
 
     /**

@@ -159,6 +159,9 @@ public final class Antechamber implements Listener {
     private final int autoCrossSeconds;
     private final List<String> crossedLines;
     private final List<String> destinations;
+    private final String seojangWaitLine;
+    private final String seojangWritingLine;
+    private final String seojangReadingLine;
 
     private final String arrivalTitle;
     private final String arrivalSubtitle;
@@ -341,6 +344,14 @@ public final class Antechamber implements Listener {
         this.autoCrossSeconds = num(opened.get("auto_cross_seconds"), 0);
         this.crossedLines = lines(RulesConfig.section(gate, "crossed").get("lines"));
         this.destinations = lines(gate.get("destinations"));
+        // ★ B-118 — 서장이 남은 몸은 배가 기다린다. 문구는 등록부의 것이다 (침묵 금지 — 기본값은 대타)
+        Map<String, Object> seojang = RulesConfig.section(gate, "seojang");
+        this.seojangWaitLine = str(seojang.get("wait_line"),
+                "§8사공이 삿대를 세운다. §7\"붓이 네 서장을 짓고 있다 — 이야기가 먼저다.\"");
+        this.seojangWritingLine = str(seojang.get("writing_line"),
+                "§7붓이 서장을 짓고 있다 — 책이 오면 품에서 저절로 펼쳐진다. 이야기가 끝나야 배가 뜬다.");
+        this.seojangReadingLine = str(seojang.get("reading_line"),
+                "§7서장이 아직 끝나지 않았다 — 책의 마지막 장에서 §f[강호로 나선다]§7 를 누르라.");
 
         Map<String, Object> arrival = RulesConfig.section(a, "arrival");
         this.arrivalTitle = str(arrival.get("title"), displayName);
@@ -1362,9 +1373,14 @@ public final class Antechamber implements Listener {
             return;
         }
         if (plugin.ledger(player.getUniqueId()).linked()) {
-            // ★ 서장을 읽는 중이면 종도 말린다 — 문은 서장이 닫는다 (강제 이동 = 서사 절단)
-            if (SeojangBook.get() != null && SeojangBook.get().tokenOf(player.getUniqueId()) != null) {
-                player.sendMessage(ChatColor.GRAY + "서장이 아직 끝나지 않았다 — 책의 마지막 장에서 [강호로 나선다]를 누르라.");
+            // ★ B-118 — 서장이 남았으면 종도 말린다. 판정은 「책이 지금 손에 있나」(토큰)가 아니라
+            //   **「서장이 끝났나」**(다리의 서장 명단 — WorldBridge.seojangHolds)다: 새 몸은 붓(LLM)이
+            //   서장을 짓는 수십 초 동안 토큰이 없어서, 토큰만 보면 문이 경주에서 이겨 서사를 통째로
+            //   건너뛴다. 다리가 죽어 명단이 낡으면 붙들지 않는다 (아래 bridge_down 과 같은 원칙).
+            if (WorldBridge.seojangHolds(player.getUniqueId())) {
+                boolean bookInHand = SeojangBook.get() != null
+                        && SeojangBook.get().tokenOf(player.getUniqueId()) != null;
+                player.sendMessage(bookInHand ? seojangReadingLine : seojangWritingLine);
                 return;
             }
             depart(player, List.of());
@@ -1533,8 +1549,13 @@ public final class Antechamber implements Listener {
                 return;
             }
             if (plugin.ledger(player.getUniqueId()).linked()) {
-                if (isAntechamber(player.getWorld())) {
-                    depart(player, List.of());   // 없는 사이에 이름이 올랐다 — 문은 이미 열려 있었다
+                if (isAntechamber(player.getWorld())
+                        && !WorldBridge.seojangHolds(player.getUniqueId())) {
+                    // 없는 사이에 이름이 올랐다 — 문은 이미 열려 있었다.
+                    // ★ B-118 — 단, 서장이 남은 몸은 여기서도 끌고 가지 않는다 (서장 도중 나갔다
+                    //   돌아온 몸): watchGate(5틱)가 배를 세워 두고, 책은 다리가 다시 배달하며,
+                    //   서장이 끝나면 그 시계가 반드시 건넨다.
+                    depart(player, List.of());
                 }
                 return;   // 강호에 든 자는 나루를 다시 안 거친다
             }
@@ -1875,16 +1896,24 @@ public final class Antechamber implements Listener {
         if (autoCrossSeconds > 0) {
             // ★ 【실사용 2026-07-14】 접합 6초 뒤 자동 출발이 **서장을 읽는 사람을 책째로 끌고 갔다** —
             //   장면 도중 청하현으로 이동돼 서사가 끊겼다. 서장의 문은 서장이 닫는다(에필로그 [강호로
-            //   나선다]) — 그러므로 **책이 살아 있는 동안은 기다린다.** 반복 검사: 서장 토큰이 사라진
-            //   뒤(출도했거나 애초에 서장이 없거나) 자동 출발이 선다. 갇힘은 없다 — 끝나면 반드시 건넌다.
+            //   나선다]) — 그러므로 **서장이 끝날 때까지 기다린다.**
+            //
+            // ★ B-118 【실사용 2026-07-14 · 부계정】 그 판정이 토큰(이미 배달된 책)이었을 때는 여전히
+            //   경주에서 졌다 — 새 몸은 붓(LLM)이 서장을 짓는 수십 초 동안 토큰이 없다. 그래서 이제
+            //   **다리의 서장 명단**(WorldBridge.seojangHolds — 쓰는_중 포함)을 본다: 접합 즉시 실리고,
+            //   에필로그 [강호로 나선다] 가 눌려야 사라진다. 갇힘은 없다 — 끝나면 반드시 건너고,
+            //   다리가 죽어 명단이 낡아도 붙들지 않는다 (gate.bridge_down 과 같은 원칙).
+            if (WorldBridge.seojangHolds(id) && !seojangWaitLine.isEmpty()) {
+                player.sendMessage(seojangWaitLine);   // 배는 붓을 기다린다 — 침묵 금지
+            }
             Bukkit.getScheduler().runTaskTimer(plugin, task -> {
                 if (!player.isOnline() || !isAntechamber(player.getWorld())
                         || !plugin.ledger(id).linked()) {
                     task.cancel();
                     return;
                 }
-                if (SeojangBook.get() != null && SeojangBook.get().tokenOf(id) != null) {
-                    return;   // 서장이 살아 있다 — 붓이 먼저다
+                if (WorldBridge.seojangHolds(id)) {
+                    return;   // 서장이 남았다 — 붓이 먼저다
                 }
                 task.cancel();
                 depart(player, List.of());
