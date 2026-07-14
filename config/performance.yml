@@ -98,8 +98,8 @@ skills:
   duplicate_request_window_ticks: 1    # F-R1 동일 틱 중복 시전 폐기
   atomic_check_and_deduct: true        # 검사·차감 분리 금지
   revalidate_before_execute: true      # F-R2 실행 직전 재검증
-  max_targets_default: 8               # F-P3 AoE 대상 상한
-  # (max_range_default 는 묘비로 — 정본은 skill_mechanics.yml global_rules. 정본이 둘이면 갈라진다)
+  # (max_targets_default(F-P3)·max_range_default 는 묘비로 — 정본은 skill_mechanics.yml global_rules.
+  #  SkillEngine·motion_audit 모두 그쪽을 읽는다. 정본이 둘이면 갈라진다 — B-106)
 
 netcode:
   client_timing_authority: false       # 클라이언트 타이밍 불신뢰

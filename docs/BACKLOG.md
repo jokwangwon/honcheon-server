@@ -1261,8 +1261,38 @@ PG-007 훈련(2026-07-14)이 발견했다 — 훈련이 만든 병이 **아니�
 - **의존**: —
 - **닫는 조건**: 사냥·비무의 폴백 산문이 등록부로 나간다 (서장이 `config/seojang.yml` 로 나간 것과 같은 방식).
   **코드가 이야기를 지고 있으면 안 된다** — 서장의 8종 도입부·7종 집안 감각·10종 에필로그가 그랬다
-- **검증**: `grep -cE '"[가-힣]{10,}' server-bot/.../Narration.java` 가 0
+- **검증**: `server-bot/src/main/java/com/honcheon/bot/Narration.java` (한글 10자+ 산문 grep 0) · `config/narration.yml`
 - **닫힘**: 2026-07-14 · 병렬 R2 트랙 을'. 사냥 7종·비무 2종 산문이 `config/narration.yml`(신설)로 나갔다 — 한 글자도 바꾸지 않은 이관 (리플렉션 9케이스 옛 출력과 **바이트 동일** 검증). 치환 자리 규약({짐승}·{승자}·{패자})은 등록부 머리 주석에 문서화. 등록부 부재 시 severe 로 소리내고 짧은 생존 문장으로 버틴다 (침묵 금지·불사 — 빈 config 구동 실증). 사설 Grade enum 을 걷고 환산점을 Seojang.grade 하나로 통일 (Seojang 무수정). 실측: `grep -cE '"[가-힣]{10,}' server-bot/src/main/java/com/honcheon/bot/Narration.java` → **0** (닫는 조건 그대로) · 컴파일 0 · lint 0 (Fable 재실행)
+
+
+### B-104 · game_audit 에 **눈의 시험이 없다** — 오독 교정을 지킬 자동 눈이 없다
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `tools/game_audit.py`
+- **의존**: —
+- **닫는 조건**: game_audit 의 selftest 가 선다 — 최소 세 변이(스키마에 없는 `by:` 값 · 미등록 NPC · 미등록 장소)를 잡는다 (닫을 때 검증란을 그 selftest 로 바꾼다)
+- **검증**: `python3 tools/game_audit_selftest.py`
+- **닫힘**: 2026-07-14 · 병렬 R2 트랙 병'. `tools/game_audit_selftest.py` 신설 — pack_gate 문법 그대로 (변이 → ❌ 확인 → finally 원복 → 재감사). 변이 3종 3/3: 스키마에 없는 `by:` 오탈자 · 유령 NPC · 없는 장소. 원복 재감사 위반 0 · 잔여 .bak 없음. 실측 exit 0 (Fable 재실행). 시뮬 축은 무시험으로 남음 (후속 후보)
+
+B-008 을 닫으며 드러났다 (2026-07-14). 모든 감사에 눈의 시험이 있는데 game_audit 만 없다 —
+B-008 의 오독 교정(schema_columns 대조)을 지킬 회귀 방어가 없다. 트랙 병이 변이 3종을
+수동으로 확인하고 원복했으나, 그 변이들이 selftest 로 박제돼야 한다.
+
+
+### B-106 · **max_targets_default 가 두 등록부에 산다** — 지금은 같다, 언젠가 갈라진다
+- **상태**: 닫힘
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `config/performance.yml` → `skills.max_targets_default` · `config/skill_mechanics.yml` → `global_rules.max_targets_default`
+- **의존**: —
+- **닫는 조건**: 정본이 하나가 된다 (읽히는 쪽만 남기고, 다른 쪽은 지우거나 참조 표기)
+- **검증**: `python3 tools/perf_audit.py` · `config/skill_mechanics.yml`
+- **닫힘**: 2026-07-14 · 병렬 R2 트랙 병'. ★ 브리핑이 뒤집혔다 — 산 키는 `config/skill_mechanics.yml` `global_rules.max_targets_default` 다 (`SkillEngine.java:231` 이 읽는다 · motion_audit.py:410 동일). performance.yml 쪽이 죽은 사본이었고, perf_audit 의 ✓ 는 leaf 이름만 대조한 **허위 매칭**이었다 (→ B-107 신설). performance.yml 한 줄 삭제 + 묘비 (max_range_default 전례 그대로) · skill_mechanics 쪽 주석을 「★ 정본」으로. 실측: perf/combat/motion/game_audit 전부 exit 0 (Fable 재실행)
+
+B-028 정리 중 발견 (2026-07-14, 트랙 정). 같은 값 8 이 두 곳에 적혀 있고, SkillEngine 이 읽는
+산 키는 performance.yml 쪽이다. max_range_default 는 같은 병으로 이미 한 번 갈라질 뻔했다 —
+이번에 삭제로 풀었지만, 이 쌍이 하나 더 남아 있다. perf_audit 은 읽히는 키의 중복은 안 잰다.
 
 
 ### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
@@ -1938,6 +1968,20 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
 - **검증**: `grep -n "max_seconds" config/performance.yml` · 조성 뒤 `[틱예산]` 초 수를 로그에서 확인
 - **닫힘**: —
 
+### B-107 · perf_audit 의 ✓ 가 **허위 매칭**일 수 있다 — leaf 이름만 대조한다
+- **상태**: 열림
+- **분류**: 빚
+- **단계**: P4
+- **위치**: `tools/perf_audit.py`
+- **의존**: —
+- **닫는 조건**: "읽힌다" 판정이 **어느 파일을 열어 읽는지**까지 본다 — 다른 yml 을 읽는 코드가 performance.yml 키를 보증하지 못한다
+- **검증**: `python3 tools/perf_audit.py` · `python3 tools/perf_audit_selftest.py`
+- **닫힘**: —
+
+B-106 을 닫으며 드러났다 (2026-07-14, 트랙 병'). max_targets_default 의 ✓ 는 SkillEngine 이
+**skill_mechanics.yml 을** 읽는 코드였는데 leaf 이름이 같아 performance.yml 키가 "살아 있다"고
+보증됐다. 같은 거짓말이 다른 키에도 있을 수 있다 — 눈이 파일 차원을 봐야 한다.
+
 ### B-105 · 판정의 눈이 **평타를 못 본다** — eyeRoll/eyeDamage 는 Cast 만 안다
 - **상태**: 열림
 - **분류**: 빚
@@ -1951,34 +1995,6 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
 B-005 를 닫으며 드러났다 (2026-07-14). 판정의 눈은 `Cast` 를 요구해 평타의 마진·태세·격이
 디버그 화면에 안 뜬다. 판정이 보이지 않으면 밸런스 조정(저경지 평타 DPS 하락 체감)을 잴 수 없다.
 연무장 허수아비가 태세로 평타를 회피하는 것(기존 대칭)의 TTK 영향 계측도 이 눈이 있어야 한다.
-
-### B-106 · **max_targets_default 가 두 등록부에 산다** — 지금은 같다, 언젠가 갈라진다
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P4
-- **위치**: `config/performance.yml` → `skills.max_targets_default` · `config/skill_mechanics.yml` → `global_rules.max_targets_default`
-- **의존**: —
-- **닫는 조건**: 정본이 하나가 된다 (읽히는 쪽만 남기고, 다른 쪽은 지우거나 참조 표기)
-- **검증**: `python3 tools/perf_audit.py` · `config/skill_mechanics.yml`
-- **닫힘**: —
-
-B-028 정리 중 발견 (2026-07-14, 트랙 정). 같은 값 8 이 두 곳에 적혀 있고, SkillEngine 이 읽는
-산 키는 performance.yml 쪽이다. max_range_default 는 같은 병으로 이미 한 번 갈라질 뻔했다 —
-이번에 삭제로 풀었지만, 이 쌍이 하나 더 남아 있다. perf_audit 은 읽히는 키의 중복은 안 잰다.
-
-### B-104 · game_audit 에 **눈의 시험이 없다** — 오독 교정을 지킬 자동 눈이 없다
-- **상태**: 열림
-- **분류**: 빚
-- **단계**: P4
-- **위치**: `tools/game_audit.py`
-- **의존**: —
-- **닫는 조건**: game_audit 의 selftest 가 선다 — 최소 세 변이(스키마에 없는 `by:` 값 · 미등록 NPC · 미등록 장소)를 잡는다 (닫을 때 검증란을 그 selftest 로 바꾼다)
-- **검증**: `python3 tools/game_audit.py` (본체 — 눈의 시험은 닫는 조건이 세운다)
-- **닫힘**: —
-
-B-008 을 닫으며 드러났다 (2026-07-14). 모든 감사에 눈의 시험이 있는데 game_audit 만 없다 —
-B-008 의 오독 교정(schema_columns 대조)을 지킬 회귀 방어가 없다. 트랙 병이 변이 3종을
-수동으로 확인하고 원복했으나, 그 변이들이 selftest 로 박제돼야 한다.
 
 ### B-101 · 신규 SQLite 가 **없는 표를 가진 척** 버전 8 로 스탬프된다
 - **상태**: 열림

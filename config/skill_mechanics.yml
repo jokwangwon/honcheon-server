@@ -14,7 +14,7 @@
 
 global_rules:
   hitbox_types: [호, 선, 원, 시, 돌, 진]
-  max_targets_default: 8          # performance.yml F-P3와 동일
+  max_targets_default: 8          # ★ 정본 (F-P3 AoE 대상 상한 — SkillEngine·motion_audit 이 여기를 읽는다)
   max_range_default: 24
   hits_per_target_per_active: 1   # 다단히트는 hit_count 명시로만
   counter_hit_bonus: 0.25         # 후딜 중 피격 +25%
