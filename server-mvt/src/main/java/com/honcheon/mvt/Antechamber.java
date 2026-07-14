@@ -28,6 +28,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -1195,12 +1196,47 @@ public final class Antechamber implements Listener {
     private void show(Player player, String panelId, boolean visible) {
         UUID id = panelEntities.get(panelId);
         if (id == null || !(Bukkit.getEntity(id) instanceof TextDisplay d)) {
-            return;
+            return;   // 아직 안 실린 글판 — {@link #onPanelsLoad} 가 실리는 순간 다시 가린다
         }
         if (visible) {
             player.showEntity(plugin, d);
         } else {
             player.hideEntity(plugin, d);
+        }
+    }
+
+    /**
+     * ★ <b>숨김이 적재보다 먼저 달리면 두 장이 다 보인다</b> (사용자 실측 2026-07-15 — 격·경공
+     * 관문의 본문 판과 예고 판이 겹쳐 보였다).
+     *
+     * <p>관문 글판은 한 자리에 <b>두 장</b>(how + unavailable)이고 {@link #refreshPanels} 가
+     * 사람마다 한 장을 가린다. 그런데 그 가림은 <b>엔티티가 실려 있어야</b> 걸린다 —
+     * 진입 직후의 refresh 는 엔티티 청크 비동기 적재보다 빠를 수 있고, {@link #show} 는
+     * 못 찾으면 조용히 지나갔다. 기본값은 「보임」이므로 <b>침묵의 값이 곧 겹침</b>이었다.
+     *
+     * <p>그래서: 나루의 엔티티가 실리는 순간 글판 명부를 다시 채우고(재기동 뒤의 빈 명부도
+     * 여기서 되살아난다), 그 세계에 서 있는 사람들의 가림을 재적용한다. 이 둘은 멱등이다.
+     */
+    @EventHandler
+    public void onPanelsLoad(EntitiesLoadEvent event) {
+        if (!isAntechamber(event.getWorld())) {
+            return;
+        }
+        boolean panels = false;
+        for (Entity e : event.getEntities()) {
+            if (e instanceof TextDisplay && e.getPersistentDataContainer().has(KEY_PANEL)) {
+                String id = e.getPersistentDataContainer().get(KEY_PANEL, PersistentDataType.STRING);
+                if (id != null) {
+                    panelEntities.putIfAbsent(id, e.getUniqueId());
+                    panels = true;
+                }
+            }
+        }
+        if (!panels) {
+            return;
+        }
+        for (Player p : event.getWorld().getPlayers()) {
+            refreshPanels(p);
         }
     }
 
