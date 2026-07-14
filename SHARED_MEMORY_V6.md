@@ -8,7 +8,9 @@
 - 봇 기동: `scripts/run_bot_pg.sh` (접속 정보 정본: `run/bot/pg.env` · git 밖) · SQLite 는 복귀 보존 (PG-008 전 삭제 금지)
 - 완료 단계: PG-001 기준선, PG-002A 초기화·메타 읽기 포트, PG-002B 브리지 저장소 포트, PG-002C 게임 원장 업무 포트, PG-003 트랜잭션·SQL 방언 경계, PG-004 PostgreSQL 구현, PG-005 export/import·검산, PG-006 연결 풀·동시성 제어, PG-007 전환·복귀 훈련
 - 다음 단계: PG-008 (SQLite 경로 제거 — 복귀 보존 기간 종료 후, 기간은 사람이 정한다)
+- 병렬 디자인 트랙: SJ-000 서장 시네마틱 서책 청사진 완료, 다음 SJ-001 조판 엔진 (`docs/design/seojang_presentation.md`)
 - 컷오버 절차: `docs/bot/pg_cutover_runbook.md` (2026-07-14 훈련으로 재현됨)
+- ★ 마크 세우기 순서: `docs/design/world_standup_order.md` (7막 — 0막 결정 D-1~4 는 사람 몫, 대기 중)
 - 주 담당 인계 (2026-07-14): PG-005부터 Fable 이 설계·구현·검증·커밋, Codex 는 diff 검토·독립 재시험
 - 작업 장부: `docs/collaboration/ACTIVE_V6.md`
 - 전환 설계: `docs/design/postgresql_migration.md`
