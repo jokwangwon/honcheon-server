@@ -1,0 +1,497 @@
+# 개인 메인스토리 — 발단별 목표 사슬 등록부 (기계 판독용 — GM·봇 전용, 플레이어 비노출)
+# 기준 문서: docs/design/personal_story.md (B-109 · 경험 정본 experience_design.md §4)
+#
+# ═══ 배선 상태 (2026-07-14 초안 — 아직 아무도 안 읽는다) ═══
+# 엔진: 미배선. 읽는 코드가 서야 할 자리는 봇이다 (마크가 본체, 봇이 저자 — 경험 정본 §6):
+#   Rules.java 로더 → PersonalStory.java 평가기(신설) → GameListener logEvent 훅 · showSheet(심중).
+#   구현 청구서: docs/design/personal_story.md §7 (권장 순서 1→2→3→4 가 최소선).
+#
+# ★★ 이 등록부가 하는 일 — **의미의 렌즈**다. 새 콘텐츠가 아니다.
+#   개인 메인스토리는 청하현의 기존 사건 3·기연 3·산길 사냥·비무·의뢰 위에 씌우는 렌즈다:
+#   같은 산길 사냥도 습격의 아이에게는 "그 문양을 다시 볼지도 모르는 곳"이다.
+#   그래서 beats 의 done_when 은 전부 **이미 있는 원장**(logEvent/countEvents)만 센다 —
+#   신규 통화 발명 없음 (faction_entry_routes.yml 의 원칙 상속).
+#
+# ★★ 다섯 규칙 (문서 §2·§6 의 기계적 표현):
+#   ① 읽기 전용: 사슬은 세계에 아무것도 쓰지 않는다 — 사건·기연·favor 는 각자의 정본이 굴린다
+#   ② 레일 금지: beats 의 순서는 표기의 편의. 평가는 독립 조건식 — 뒤 마디가 먼저 차면
+#      앞 마디는 함께 닫힌다 (소급 인정 — 사슬을 모르고 논 시간도 사슬의 시간이었다)
+#   ③ 시계 없음: 기한·만료·방치 페널티 없음 (이탈 무벌 — 솔로·자유 원칙)
+#   ④ 보상 없음: 마디가 주는 것은 회상 한 장과 심중 한 줄뿐 — 완주자와 무시자 사이에
+#      힘의 격차가 없다 (돈·경험은 기존 콘텐츠의 것)
+#   ⑤ 수치 은닉: "2/4단계" 류 표기 금지 — 표현 채널은 echo·심중·회상·NPC 결뿐 (문서 §3)
+#
+# ★ 소문에 태우지 않는다: 개인 사슬은 개인의 것 (서장 seojang_choice 의 rumor: none 과 같은 이유).
+
+version: 1
+
+meta:
+  registry_rule: "등록제 — 여기 없는 발단은 default 사슬로 떨어진다 (seojang incident_opening.default 와 같은 안전판)"
+  incident_source: "player_creation.yml age_and_lifepath.inciting_incidents — 사슬 키는 그 키와 같은 철자여야 조인된다"
+  goal_source: "goal_candidates — goal_ref 는 그 배열의 원소와 같은 철자여야 한다 (지어내지 않는다)"
+  write_policy: 읽기_전용          # 사슬은 세계 상태를 판정할 뿐, 바꾸지 않는다 (단일 작성자)
+  rumor: none                      # 개인 사슬은 소문망에 오르지 않는다
+  deadline: none                   # 시계 없음 — 이탈 무벌
+
+# ─── 표현 — 안내선이 보이는 자리 (수치는 한 자도 새지 않는다) ───
+presentation:
+  # 서장 에필로그 closing 뒤에 봇이 이어 붙이는 한 줄 — chains.<발단>.echo
+  # (seojang.yml 은 수정하지 않는다 — 사슬의 글은 사슬의 등록부에 산다)
+  echo_join: "\n\n"
+  # /혼천 정보 의 한 줄 — 현재 열린 마디의 heart. 목표 창이 아니라 속마음이다
+  sheet_field: "심중(心中)"
+  # 마디가 닫힐 때 오는 한 장짜리 책 — recall 이 기준 서사 (LLM 은 확장만, seojang prose 문법)
+  recall_book:
+    title: "회상(回想)"
+    header: "문득, 떠오른다"
+    no_choices: true               # 읽고 덮는 책 — seojang_choice 를 보내지 않는다
+  # 사슬이 끝난 뒤의 심중 — 회향 (문서 §5). 이후는 문파·세계 시계의 이야기다
+  epilogue_heart: "발단의 물음은 아직 닫히지 않았다. 다만 이제, 그 물음을 들고 갈 곳이 생겼다."
+
+# ─── done_when 조건 어휘 — 전부 기존 원장이다 (신규 통화 발명 없음) ───
+# event  : 이벤트 원장 누적 (Db.countEvents) — 의뢰_완수·사냥·비무·대화(target=NPC키)·탐방(target=장소)
+#          ★ 대화 원장은 현재 표시 이름으로 적힌다 (GameListener:2516) — 평가기가 키로 정규화한다 (청구서 #2)
+# item   : 소지품 (item / item_any) — 기존 단서 아이템만 (매화_목패·화산_고식_검결_절편)
+# favor  : 세력 우호 — faction_entry_routes 게이트와 같은 눈금
+# realm  : 경지 (realm_min) — cultivation 사다리
+# fortune: 기연 획득 (기연 이벤트의 fortune id)
+# any    : OR 블록 (faction_entry_routes condition_any 와 같은 문법). 목록 최상위는 AND
+condition_vocab: [event, item, item_any, favor, realm_min, fortune, any]
+
+# ─── 마디 뼈대 — 모든 사슬이 공유한다 (문서 §2.1) ───
+# ① 뿌리내림: 생계와 지리 (서장 에필로그가 정확히 여기서 끝난다)
+# ② 실마리:   발단의 long_hook 이 기존 사건·기연·NPC 에 닿는다 — 발단별로 가장 다른 마디
+# ③ 벽:       아이의 돈·이름·힘으로는 실마리의 안쪽에 못 들어간다는 체감
+# ④ 문턱:     힘과 이름이 있는 자리 — hwasan_entry 안면 게이트와 같은 통화 (아래 threshold_gate)
+#
+# ★ 문턱 조건은 전 사슬 공통 — 사슬 완주 = "화산의 문이 보이는 자리" (경험 정본 §8:
+#   1차 기립의 끝 = 입문의 문턱). 입문 심사 자체는 faction_entry_routes.yml 이 정본이다.
+threshold_gate:
+  any:
+    - { favor: { faction: orthodox, min: 4 } }              # hwasan_entry 안면 게이트와 같은 눈금
+    - { item_any: [매화_목패, 화산_고식_검결_절편] }        # 기존 단서 소지품 (발명 없음)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 사슬 등록부 — 키 = player_creation.yml inciting_incidents 의 키 (등록제)
+#
+# 칸의 뜻:
+#   kind      : 발단의 결 (재난/명령/출분) — player_creation 과 같은 값이어야 한다 (눈이 대조)
+#   family_only: 전용 발단의 집안 (player_creation 과 동일 — 여기서 두 번 정하지 않고 대조만)
+#   goal_ref  : goal_candidates 중 사슬이 잇는 대표 목표 (철자 일치 — 미결 #2: 둘째 목표 분기)
+#   echo      : 서장 에필로그 뒤에 붙는 여운 한 줄 (사슬의 첫 페이지)
+#   beats[4]  : 마디 — id / heart(심중 한 줄) / uses(재사용 자산 — 문서용 주석, 엔진 비판독) /
+#               done_when(완료 조건식) / recall(닫힐 때의 회상 — 기준 서사, LLM 확장용)
+#   threshold : 사슬 끝이 만나는 문 (faction_entry_routes 의 루트 id)
+#
+# ★ 셋째 기연(sunken_ship_manual)은 어느 사슬에도 없다 — 흑수나루 미배선 (죽은 안내선 금지).
+#   나루가 서면 습격·목격의 ② uses 에 추가 후보다.
+# ═══════════════════════════════════════════════════════════════════════════════
+chains:
+
+  # ─── 재난 — 당한 아이들. 사슬은 "살아남기"에서 "물음을 들고 갈 곳"으로 간다 ───
+
+  가문의_몰락:
+    kind: 재난
+    goal_ref: "가문의 누명 벗기기"
+    echo: "장부 넘기는 소리가 환청처럼 들렸다. 숫자는 거짓말을 못 한다 — 사람이 시킬 뿐이다."
+    beats:
+      - id: 뿌리내림
+        heart: "먼저 오늘을 산다. 장부를 다시 볼 눈은, 굶는 몸에는 깃들지 않는다."
+        uses: [의뢰소, geumseobang]
+        done_when:
+          - { event: 의뢰_완수, count: 2 }
+          - { event: 대화, target: geumseobang, count: 1 }   # 전장 — 장부의 세계에 다시 발을 딛는다
+        recall: "전장의 주판알 소리에 손이 먼저 움직였다. 아버지의 장부를 넘겨보던 그 손버릇이, 아직 살아 있었다."
+      - id: 실마리
+        heart: "객잔 이층의 그 손님 — 정보를 흘려 상단을 무는 수법이, 가문을 문 수법과 닮았다."
+        uses: [inn_unorthodox_contact, hanbaek, muksam]      # 사건 1 재사용 — 새 사건 발명 없음
+        done_when:
+          - { event: 의뢰_완수, count: 5 }
+          - any:
+              - { event: 대화, target: hanbaek, count: 1 }
+              - { event: 대화, target: muksam, count: 1 }
+        recall: "수법에는 손버릇이 있다 — 장부가 그랬듯이. 그날 가문을 문 것도, 어쩌면 이런 그물이었다."
+      - id: 벽
+        heart: "하오문의 정보에는 값이 있다. 아이의 돈과 지워진 이름으로는, 가문의 장부에 못 닿는다."
+        uses: [비무, 경지]
+        done_when:
+          - { event: 비무, count: 1 }
+          - { realm_min: 삼류 }
+        recall: "비무장에서 이름이 불렸다 — 성(姓)이 빠진 이름이. 그 반쪽을 되찾으려면, 반쪽짜리 힘으로는 안 된다."
+      - id: 문턱
+        heart: "누명은 아이의 울음으로 벗겨지지 않는다. 이름 있는 문파의 담장 안에서라면 — 얘기가 다르다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "화산이라는 이름이 귀에 들어오기 시작했다. 물음은 아직 닫히지 않았다 — 다만 이제, 들고 갈 곳이 생겼다."
+    threshold: hwasan_entry
+
+  습격:
+    kind: 재난
+    goal_ref: "그 문양의 주인 찾기"
+    echo: "눈을 감으면 아직 그 문양이 보인다. 북쪽 산길에 도적이 늘었다는 말을, 너는 그냥 흘려듣지 못했다."
+    beats:
+      - id: 뿌리내림
+        heart: "산이 무서운 동안은 아무것도 찾지 못한다. 먼저, 산을 무섭지 않게 만든다."
+        uses: [north_road_사냥터]                            # hunting_grounds north_road 재사용
+        done_when:
+          - { event: 사냥, count: 5 }
+        recall: "짐승의 숨이 끊기는 순간에도 손이 떨리지 않게 됐다. 그날 밤의 손떨림과는, 이제 다른 손이다."
+      - id: 실마리
+        heart: "도적이 늘었다 — 도적이 모이는 곳이라면, 그 문양도 언젠가 지나간다."
+        uses: [north_road_bandits, gwakjin]                  # 사건 2 재사용
+        done_when:
+          - { event: 사냥, count: 15 }
+          - { event: 대화, target: gwakjin, count: 1 }       # 상단 호위무사 — 산길의 눈
+        recall: "곽진은 도적들의 흉터와 무기 이야기를 했다. 너는 문양 이야기는 하지 않았다 — 아직은."
+      - id: 벽
+        heart: "산길의 좀도적 위에는 녹림이 있다. 지금의 팔로는, 그 위까지 못 올라간다."
+        uses: [bakho_관아, 경지]                             # 수배 기록 — 관아 재사용
+        done_when:
+          - { event: 대화, target: bakho, count: 1 }         # 포두 — 수배장에 문양은 없었다
+          - { realm_min: 삼류 }
+        recall: "관아의 수배장을 훑었다. 그 문양은 없었다 — 현(縣) 하나의 그물로는 안 잡히는 것이라는 뜻이다."
+      - id: 문턱
+        heart: "천하의 소식이 모이는 곳은 문파다. 그 문양을 아는 눈도, 거기에 있을 것이다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "문양을 그려 품에 넣었다. 언젠가 이것을 알아볼 눈 앞에 설 것이다 — 그때까지, 강해진다."
+    threshold: hwasan_entry
+
+  역병:
+    kind: 재난
+    goal_ref: "병의 근원 알아내기"
+    echo: "이 고을에도 약냄새가 있었다. 열병 환자가 늘고 있다는 말에, 너는 그 곡소리를 다시 들었다."
+    beats:
+      - id: 뿌리내림
+        heart: "죽음을 아는 아이는 산 사람의 일부터 배운다 — 밥과 잠, 그리고 이 고을의 약냄새."
+        uses: [yumun_의방, 의뢰소]
+        done_when:
+          - { event: 의뢰_완수, count: 2 }
+          - { event: 대화, target: yumun, count: 1 }          # 의원 — 열병 사건의 중심
+        recall: "유문의 의방에서 나던 약냄새는 고향의 그것과 같았다. 병은 어디서나 같은 냄새로 온다."
+      - id: 실마리
+        heart: "환자의 곁을 지키는 자만이 병의 얼굴을 본다 — 고향에서는 그러지 못했다."
+        uses: [cheongha_fever_rumor, fever_elder_legacy]      # 사건 3 + 기연 3 재사용
+        done_when:
+          - any:
+              - { fortune: fever_elder_legacy }               # 간호 루트의 자연 회수 (기연 규칙이 연다)
+              - { event: 대화, target: yumun, count: 3 }      # 기연 미배선 대비 근사 조건 (청구서 #2 비고)
+        recall: "환자의 이마를 짚으며 알았다 — 고향의 병과 같은 병인지 아닌지, 지금의 눈으로는 모른다는 것을."
+      - id: 벽
+        heart: "약재값이 오르고 가짜 약이 돈다. 병의 근원은 의술만으로 닿는 깊이가 아니다."
+        uses: [market_저잣거리, hyegak_사찰]
+        done_when:
+          - any:
+              - { event: 대화, target: hyegak, count: 1 }     # 해독·왕진의 민간 창구
+              - { event: 대화, target: market_peddler, count: 1 }
+          - { event: 의뢰_완수, count: 5 }
+        recall: "가짜 약을 쥐고 생각했다. 병보다 사람이 먼저 썩는다 — 근원은 몸이 아니라 세상에 있을지도 모른다."
+      - id: 문턱
+        heart: "화산의 속가에도 의술이 있다 했다. 병의 근원을 물을 자리는, 더 높은 곳에 있다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "노인이 읊던 검결이 문득 떠올랐다. 의(醫)와 무(武)는 다른 길이 아닐지도 모른다."
+    threshold: hwasan_entry
+
+  목격:
+    kind: 재난
+    goal_ref: "그 사람의 정체 알기"
+    echo: "군중 속이 가장 안전하다 — 그날 밤 이후로 몸이 먼저 아는 사실이다. 그런데 이 고을에도, 숨어 사는 자가 있다."
+    beats:
+      - id: 뿌리내림
+        heart: "낯을 익힌다. 낯이 익은 고을에서는, 낯선 자가 먼저 보인다."
+        uses: [cheongha_inn, hanbaek, 의뢰소]
+        done_when:
+          - { event: 의뢰_완수, count: 2 }
+          - { event: 대화, target: hanbaek, count: 1 }        # 객잔 — 사람이 모이고 스치는 곳
+        recall: "객잔 구석 자리에서는 문이 다 보인다. 그 자리를 고르는 버릇이, 그날 밤의 유산이다."
+      - id: 실마리
+        heart: "이층의 그 손님은 뭔가를 숨기고 있다. 숨어 본 자는, 숨은 자를 알아본다."
+        uses: [inn_unorthodox_contact, muksam]                # 사건 1 재사용
+        done_when:
+          - { event: 의뢰_완수, count: 4 }
+          - { event: 대화, target: muksam, count: 1 }
+        recall: "묵삼의 눈은 너를 스치고 지나갔다 — 아이라서. 그날 밤의 그 사람도, 너를 아이라서 놓아준 것일까."
+      - id: 벽
+        heart: "비밀은 팔 수도, 팔릴 수도 있다. 지킬 힘이 없는 비밀은 목줄이다."
+        uses: [비무, 경지]
+        done_when:
+          - { event: 비무, count: 1 }
+          - { realm_min: 삼류 }
+        recall: "비무에서 처음으로 무인의 눈을 정면으로 봤다. 달빛 아래 그 사람의 눈은, 이보다 깊었다."
+      - id: 문턱
+        heart: "그 사람의 정체를 알려면 무림의 안쪽으로 들어가야 한다 — 담장 밖에서는 담장 안이 안 보인다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "무거운 비밀은 여전히 품 안에 있다. 다만 이제 그것은 목줄이 아니라 — 나침반이다."
+    threshold: hwasan_entry
+
+  맡겨짐:
+    kind: 재난
+    goal_ref: "몸값 갚기"
+    echo: "팔린 아이의 눈치는 셈보다 빠르다. 이 고을의 품삯 시세를, 너는 첫날에 다 외웠다."
+    beats:
+      - id: 뿌리내림
+        heart: "하루 벌어 하루 살면 몸값은 평생 그대로다. 처음으로, 남는 돈을 만든다."
+        uses: [의뢰소, 의뢰_경제]
+        done_when:
+          - { event: 의뢰_완수, count: 3 }
+        recall: "품삯에서 밥값을 빼고 처음으로 동전이 남았다. 그 무게가, 세상 어떤 검보다 든든했다."
+      - id: 실마리
+        heart: "전장 사람들은 셈이 빠르다. 몸값도 셈이 되는 순간, 갚을 수 있는 것이 된다."
+        uses: [geumseobang_전장]
+        done_when:
+          - { event: 대화, target: geumseobang, count: 1 }    # 예치 — 몸값을 '갚아지는 수'로 만든다
+          - { event: 의뢰_완수, count: 6 }
+        recall: "전장에 첫 예치를 했다. 장부에 적힌 내 이름 — 팔린 아이가 아니라, 맡긴 사람의 이름이었다."
+      - id: 벽
+        heart: "돈이 모여도 부칠 곳을 모른다. 가족이 어디로 흩어졌는지부터가, 돈으로 못 사는 소식이다."
+        uses: [baekseok_서당, gwakjin_상단]
+        done_when:
+          - { event: 대화, target: baekseok, count: 1 }       # 서찰 대필 — 글이 발보다 멀리 간다
+          - { event: 대화, target: gwakjin, count: 1 }        # 상단 편 — 소식은 물류를 탄다
+        recall: "백석이 대필한 서찰이 상단 짐수레에 실려 떠났다. 답장이 올지는 — 하늘의 일이다."
+      - id: 문턱
+        heart: "이름 있는 자리에 서면 소식이 먼저 찾아온다. 흩어진 가족이 나를 찾을 수 있는 이름이 필요하다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "몸값은 아직 남았다. 하지만 이제 안다 — 갚는 날은 오고, 그날 나는 팔린 아이가 아닐 것이다."
+    threshold: hwasan_entry
+
+  핏줄의_비밀:
+    kind: 재난
+    goal_ref: "물려받은 것의 의미 찾기"
+    echo: "품 안의 그것은 낯선 고을에서도 무겁다. 이것이 무엇인지 아는 눈이, 어딘가에는 있을 것이다."
+    beats:
+      - id: 뿌리내림
+        heart: "낯선 고을의 눈부터 익힌다. 물려받은 것을 함부로 꺼내 보일 곳과 아닐 곳을, 먼저 가려야 한다."
+        uses: [의뢰소, north_road_사냥터]
+        done_when:
+          - { event: 의뢰_완수, count: 2 }
+          - { event: 사냥, count: 3 }
+        recall: "산길에서 혼자일 때만 그것을 꺼내 본다. 달빛에 비춰 봐도, 그것은 아직 아무 말이 없다."
+      - id: 실마리
+        heart: "물건에는 내력이 있고, 내력을 읽는 눈이 있다 — 대장간의 눈, 서당의 눈."
+        uses: [yacheolsu_대장간, baekseok_서당]
+        done_when:
+          - any:
+              - { event: 대화, target: yacheolsu, count: 1 }  # 병기라면 — 야철수가 태를 안다
+              - { event: 대화, target: baekseok, count: 1 }   # 글·구결이라면 — 백석이 판독한다
+        recall: "\"이건 여기서 만든 물건이 아니오.\" 그 한마디가 수확이었다 — 아닌 곳을 알면, 인 곳이 좁혀진다."
+      - id: 벽
+        heart: "폐사당의 그 걸인 — 은거한 자는 은거한 자의 물건을 알아본다던데. 하지만 그는 아무에게나 입을 열지 않는다."
+        uses: [chuigeolgae_master, abandoned_shrine]          # 기연 1 재사용 — ★ 문은 기연 관문이 연다 (사슬은 가리킬 뿐)
+        done_when:
+          - { event: 탐방, target: 폐사당, count: 5 }         # 기연 관문 30회의 초입 — 관문을 낮추지 않는다
+          - { realm_min: 삼류 }
+        recall: "걸인은 오늘도 조는 척했다. 하지만 지나칠 때, 감긴 눈이 품 쪽을 향한 것 같았다 — 착각일까."
+      - id: 문턱
+        heart: "부모의 과거가 무림에 있다면, 답도 무림 안에 있다. 담장 안으로 들어갈 자격부터 만든다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "물려받은 것의 의미는 아직 모른다. 다만 이제 그것은 짐이 아니라 — 열쇠라는 예감이 든다."
+    threshold: hwasan_entry
+
+  아이_거두기:
+    kind: 재난
+    goal_ref: "그들을 다시 만나기"
+    echo: "\"재목이다.\" 그 말은 표식처럼 남았다. 그들이 다시 온다면 — 그때는 어긋나지 않을 것이다."
+    beats:
+      - id: 뿌리내림
+        heart: "재목이라는 말의 값을 스스로 확인한다 — 산에서, 몸으로."
+        uses: [north_road_사냥터, 비무]
+        done_when:
+          - { event: 사냥, count: 5 }
+          - { event: 비무, count: 1 }
+        recall: "첫 비무의 상대가 물었다. \"어디서 배웠나?\" 배운 적 없다. 그게 그들이 본 것이었을까."
+      - id: 실마리
+        heart: "보는 눈들 앞에서 겨룬다. 소문은 발이 없어도 산을 넘는다 — 그들의 귀에도 닿을 것이다."
+        uses: [비무]                                          # 비무 소문은 기존 배선 (rumorGroup 비무)
+        done_when:
+          - { event: 비무, count: 3 }
+        recall: "장터에서 낯선 이가 네 비무 얘기를 했다. 이름은 틀렸지만 — 이야기는 돌기 시작했다."
+      - id: 벽
+        heart: "그들이 왔을 때 아직 범인(凡人)이라면, 그때도 어긋난다. 표식에 값하는 몸을 만든다."
+        uses: [경지, 비무]
+        done_when:
+          - { realm_min: 삼류 }
+          - { event: 비무, count: 5 }
+        recall: "몸 안의 기운이 처음으로 응답했다. 그들이 그날 봤다던 것이 이것이라면 — 이제 나도 보인다."
+      - id: 문턱
+        heart: "그들을 기다리지 않는다. 문파의 눈에 먼저 들면 — 만남은 기다림이 아니라 재회가 된다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "그때 데려가려던 자들이 누구였든, 이제 아쉬운 쪽은 내가 아니다. 그 생각에 웃음이 났다."
+    threshold: hwasan_entry
+
+  # ─── 명령 — 명받은 아이. 판돈은 목숨이 아니라 이름과 체면이다 (seojang 수행_파견 갈래와 정합) ───
+
+  수행_파견:
+    kind: 명령
+    family_only: 무가의_자식          # player_creation 과 동일 — 대조용 (정본은 저쪽)
+    goal_ref: "가문이 정한 과제 해내기"
+    echo: "전장에 전표가 와 있을 것이다. 굶을 걱정이 없는 수행 — 그래서 더, 무엇을 해 오라는 것인지 물을 수 없었다."
+    beats:
+      - id: 뿌리내림
+        heart: "전표부터 수령한다. 그리고 이 고을에서 '아무개'로 사는 법을 익힌다 — 이름 없이."
+        uses: [geumseobang_전장, 의뢰소]                      # 서장 3장("전표와 이름")이 정확히 여기로 이어진다
+        done_when:
+          - { event: 대화, target: geumseobang, count: 1 }
+          - { event: 의뢰_완수, count: 1 }
+        recall: "전표를 받으며 전장 주인이 흘깃 봤다 — 가문의 인장을 아는 눈이다. 그는 아무 말도 하지 않았다. 그것이 전장의 법도다."
+      - id: 실마리
+        heart: "강호를 눈으로 보라 하셨다. 이 고을의 소란들 — 객잔의 손님, 산길의 도적, 열병 — 이것이 강호다."
+        uses: [사건_3_임의, gwakjin, soyeon]                  # 사건 3 중 무엇이든 — 명령은 대상을 고르지 않았다
+        done_when:
+          - { event: 의뢰_완수, count: 5 }
+          - any:
+              - { event: 대화, target: gwakjin, count: 1 }
+              - { event: 대화, target: soyeon, count: 1 }
+        recall: "담장 안에서 배운 강호와 눈으로 본 강호는 다른 것이었다. 아버지는 이것을 보라 하신 것인가."
+      - id: 벽
+        heart: "가문에 보낼 글이 써지지 않는다. '보았습니다'만으로는 부족하다 — 무엇을 이루었는가."
+        uses: [baekseok_서당, 경지]
+        done_when:
+          - { event: 대화, target: baekseok, count: 1 }       # 수행 보고 서찰 — 대필이 아니라 먹을 빌린다
+          - { realm_min: 삼류 }
+        recall: "서찰에 적을 것이 생겼다 — 이름 없이 세운 작은 공적들. 보내고 나니, 답장이 두려워졌다."
+      - id: 문턱
+        heart: "가주가 하필 이 고을로 보낸 이유 — 화산이 가깝다. 과제의 참뜻은 어쩌면, 저 산문 안에 있다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "구파의 문턱에 서 보고서야 짐작이 갔다. 아버지는 강호를 보고 오라 하신 것이 아니라 — 강호에 서 보라 하신 것이다."
+    threshold: hwasan_entry
+
+  # ─── 출분 — 택한 아이들. long_hook 이 "누가 그랬는가"가 아니라 "돌아갈 것인가"다 ───
+
+  담을_넘다:
+    kind: 출분
+    family_only: 가출한_무가의_자식
+    goal_ref: "내 이름으로 서기"
+    echo: "돌아가면 따뜻한 밥이 있다 — 그 사실을 아는 채로, 너는 이 고을의 찬 아침을 골랐다."
+    beats:
+      - id: 뿌리내림
+        heart: "집 밥이 아니라 제 손으로 번 밥을 먹는다. 그것이 담을 넘은 값의 첫 줄이다."
+        uses: [의뢰소]
+        done_when:
+          - { event: 의뢰_완수, count: 3 }
+        recall: "제 손으로 번 돈으로 먹는 첫 국밥은 식어 있었고, 그런데도 담장 안의 어떤 밥보다 뜨거웠다."
+      - id: 실마리
+        heart: "이름을 대면 편해진다 — 대는 순간 진다. 의뢰소가 이름이 아니라 일솜씨를 기억하게 만든다."
+        uses: [soyeon_의뢰소, 비무]
+        done_when:
+          - { event: 의뢰_완수, count: 6 }
+          - { event: 대화, target: soyeon, count: 1 }
+        recall: "소연이 처음으로 얼굴을 보고 일을 줬다. 명부의 이름이 아니라 — 지난번 일솜씨를 보고."
+      - id: 벽
+        heart: "몸에 밴 예법은 숨겨도 태가 난다. 가문이 사람을 보냈을까 — 아니, 그보다: 찾고는 있을까."
+        uses: [비무, 경지]
+        done_when:
+          - { event: 비무, count: 1 }
+          - { realm_min: 삼류 }
+        recall: "비무의 첫 합에서 가전의 보법이 저절로 나왔다. 버리고 온 집이, 발끝에 남아 있었다."
+      - id: 문턱
+        heart: "가문이 틀렸음을 증명하는 법은 하나다 — 가문 없이, 가문보다 높은 곳에 서는 것."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "화산의 담장은 집의 담장보다 높았다. 이번에는 넘는 것이 아니라 — 문으로 들어갈 것이다."
+    threshold: hwasan_entry
+
+  아버지의_검:
+    kind: 출분
+    family_only: 가출한_무가의_자식
+    goal_ref: "이 검에 값하는 자가 되기"
+    echo: "봇짐 속의 검이 걸음마다 등을 두드린다. 팔 수도, 보일 수도 없는 것 — 오직 값할 수만 있는 것."
+    beats:
+      - id: 뿌리내림
+        heart: "산길에서는 아무도 검의 태를 묻지 않는다. 사람 없는 곳에서, 검과 손을 다시 잇는다."
+        uses: [north_road_사냥터]
+        done_when:
+          - { event: 사냥, count: 5 }
+        recall: "짐승 앞에서 처음 그 검을 뽑았다. 손에 감기는 무게 — 훔친 것이 아니라 물려받은 것 같은, 그 착각이 미웠다."
+      - id: 실마리
+        heart: "정련급 검은 관리가 필요하다. 대장간에 보이는 순간 내력을 물을 텐데 — 물음에 견딜 답을 준비한다."
+        uses: [yacheolsu_대장간]
+        done_when:
+          - { event: 대화, target: yacheolsu, count: 1 }
+          - { event: 의뢰_완수, count: 3 }
+        recall: "야철수는 검을 보자 눈썹을 올렸고, 아무것도 묻지 않았다. 대장간의 침묵은 공짜가 아니다 — 다음에도 살 수 있을지는 모른다."
+      - id: 벽
+        heart: "사람 앞에서 뽑을 것인가. 비무장의 검은 눈이 백 개다 — 가전 검형은 보는 눈이 보면 이름이 새는 문이다."
+        uses: [비무, 경지]
+        done_when:
+          - { event: 비무, count: 3 }
+          - { realm_min: 삼류 }
+        recall: "세 번째 비무에서 결국 가전의 초식이 나왔다. 박수 소리 사이에서 생각했다 — 방금, 문이 조금 열렸다."
+      - id: 문턱
+        heart: "검을 돌려주러 가든, 끝내 지니든 — 먼저 이 검이 부끄럽지 않은 팔이 되어야 한다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "화산은 검의 산이라 했다. 이 검에 값하는 법을 배울 곳으로, 그보다 나은 데가 없다."
+    threshold: hwasan_entry
+
+  파혼:
+    kind: 출분
+    family_only: 가출한_무가의_자식
+    goal_ref: "내 혼사는 내가 정하기"
+    echo: "여기서는 아무도 네가 누구의 배필이었는지 모른다. 그 홀가분함에는 — 값이 있을 것이다."
+    beats:
+      - id: 뿌리내림
+        heart: "아무도 모르는 고을에서, 아무의 딸도 아들도 아닌 채로 먹고산다. 우선은 그것이 전부다."
+        uses: [의뢰소]
+        done_when:
+          - { event: 의뢰_완수, count: 3 }
+        recall: "품삯을 셈해 주며 아무도 성씨를 묻지 않았다. 이 고을에서 나는 그냥 일 잘하는 아이다 — 그거면 됐다."
+      - id: 실마리
+        heart: "두 집안의 셈에서 빠지려면 셈 바깥의 값이 필요하다 — 의뢰소의 명부에 솜씨로 적힌다."
+        uses: [soyeon_의뢰소]
+        done_when:
+          - { event: 의뢰_완수, count: 6 }
+          - { event: 대화, target: soyeon, count: 1 }
+        recall: "\"다음에도 부탁하지.\" 소연의 그 말이, 혼서(婚書)의 어떤 문장보다 나를 정확히 적고 있었다."
+      - id: 벽
+        heart: "파혼당한 집의 원한은 발이 길다. 언제 닿아도 이상하지 않다 — 닿았을 때 접히지 않을 만큼은 서야 한다."
+        uses: [비무, 경지]
+        done_when:
+          - { event: 비무, count: 1 }
+          - { realm_min: 삼류 }
+        recall: "비무에서 이기고 내려오며 생각했다. 그 집 사람이 지금 나를 봤다면 — 모욕이 아니라 손해를 셈하기 시작했을 것이다."
+      - id: 문턱
+        heart: "내 혼사를 내가 정하려면, 두 가문의 체면보다 무거운 것을 가져야 한다 — 이름을, 스스로 만든 이름을."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "산문 앞에서 웃음이 났다. 혼례 전날 밤 넘은 담이, 나를 여기까지 데려왔다."
+    threshold: hwasan_entry
+
+  # ─── 안전판 — 등록 외 발단 (미래의 신규 발단이 사슬 없이 태어나는 사고 대비. 미결 #4) ───
+  default:
+    kind: 재난
+    goal_ref: "청하현에서 자리 잡기"                          # initial_goal.examples 의 실재 예시
+    echo: "낯선 고을의 아침이다. 우선, 오늘을 산다."
+    beats:
+      - id: 뿌리내림
+        heart: "잠잘 곳과 한 끼 — 강호의 첫 싸움은 언제나 이것이다."
+        uses: [의뢰소]
+        done_when:
+          - { event: 의뢰_완수, count: 3 }
+        recall: "이 고을에도 내 하루가 생겼다. 하루가 쌓이면 — 자리가 된다."
+      - id: 실마리
+        heart: "고을이 술렁인다 — 객잔의 손님, 산길의 도적, 번지는 열병. 남의 일들이, 언제까지 남의 일일까."
+        uses: [사건_3_임의]
+        done_when:
+          - { event: 의뢰_완수, count: 5 }
+          - { event: 사냥, count: 5 }
+        recall: "고을의 소란에 손을 보태고 나니, 사람들이 얼굴을 기억하기 시작했다."
+      - id: 벽
+        heart: "이 고을에서 배울 수 있는 것의 바닥이 보이기 시작한다. 그 위는 — 담장 안의 것이다."
+        uses: [비무, 경지]
+        done_when:
+          - { event: 비무, count: 1 }
+          - { realm_min: 삼류 }
+        recall: "몸이 자랐다. 그리고 자란 몸이 먼저 안다 — 여기가 끝이 아니라는 것을."
+      - id: 문턱
+        heart: "강호는 이제부터다."
+        uses: [hwasan_entry]
+        done_when: [gate: threshold_gate]
+        recall: "자리는 잡았다. 이제, 길을 고를 차례다."
+    threshold: hwasan_entry
