@@ -1,6 +1,5 @@
 package com.honcheon.mvt;
 
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 
@@ -822,9 +821,7 @@ final class TerrainAudit {
         return ((long) (x & 0x3FFFFF) << 42) | ((long) (y & 0xFFF) << 30) | (z & 0x3FFFFFF);
     }
 
-    /** 앵커에서 중심을 잡는 편의 진입점 (청하현) */
-    static List<String> auditTown(World world, Location center, int radius) {
-        return audit(world, "청하현", center.getBlockX(), center.getBlockY() - 1,
-                center.getBlockZ(), radius);
-    }
+    // ★ auditTown(앵커 편의 진입점)은 지웠다 — 청하현 중심의 해석은 이제 **한 곳**에만 있다:
+    //   MvtCommand.resolveTerrainTarget (환경검수와 지하정리가 같은 해석기를 쓴다 — 해석기가
+    //   둘이라 손이 표적을 놓친 것이 2026-07-14 실사격 미발의 뿌리였다).
 }

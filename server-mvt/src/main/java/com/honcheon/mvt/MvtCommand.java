@@ -1263,9 +1263,30 @@ public final class MvtCommand implements CommandExecutor {
      * 바닥 밑에서 잘린 동굴, 산 위에 남은 웅덩이, 뚝 끊긴 부지 경계. 조성기는 자연 위에 상자를
      * 찍어 넣었고, <b>그것을 볼 눈이 없었다.</b>
      */
-    private boolean auditTerrain(CommandSender sender, String[] args) {
-        World world;
-        java.util.List<String> lines;
+    /**
+     * 환경검수·지하정리의 <b>표적</b> — 세계·중심·기준면·반경.
+     * {@code place} 는 지역 경로에서만 있다 (청하현 무인자 경로는 null — 앵커가 곧 등록부다).
+     */
+    private record TerrainTarget(World world, WorldMap.Place place, String name,
+                                 int cx, int cy, int cz, int r) {
+    }
+
+    /**
+     * 표적 해석기 — <b>눈(환경검수)과 손(지하정리)이 글자 그대로 같은 해석기를 쓴다.</b>
+     *
+     * <p>★ 검토(2026-07-14)가 잡은 미발: 지하정리가 해석을 <b>복제</b>했더니 눈이 재는 곳과 손이 걷는 곳이
+     * 어긋났다 — 무인자는 표적을 못 잡았고, {@code cheongha_hyeon} 은 원점 심부(-2,-56,-1 · y −96..−16)로
+     * 풀려 85,052칸을 헛채웠다. <b>해석기가 둘이면 하나가 낡는다.</b> 그래서 함수로 추출해
+     * {@link #auditTerrain} 과 {@link #sweepUnderground} 가 <b>이 하나</b>를 부른다.
+     *
+     * <ul>
+     *   <li><b>무인자</b> — 청하현: 장터 앵커 중심 · cy = 앵커 y−1 · 반경 61 (auditTown 의 자 그대로)</li>
+     *   <li><b>지역id</b> — 구역 중심 · 반경 = 구역 절반+8 · 기준면 = 원장(regionBase), 없으면 구역 y1+6</li>
+     * </ul>
+     *
+     * @return null 이면 해석 실패 — 사유는 sender 에게 이미 말했다
+     */
+    private TerrainTarget resolveTerrainTarget(CommandSender sender, String[] args) {
         if (args.length >= 2) {
             WorldMap map = plugin.worldMap();
             WorldMap.Place place = map == null ? null : map.place(args[1]);
@@ -1273,9 +1294,13 @@ public final class MvtCommand implements CommandExecutor {
                     .filter(z -> z.name().equals(place.name())).findFirst().orElse(null);
             if (zone == null) {
                 sender.sendMessage(ChatColor.RED + "서지 않은 지역이다: " + args[1]);
-                return true;
+                return null;
             }
-            world = org.bukkit.Bukkit.getWorld(zone.world());
+            World world = org.bukkit.Bukkit.getWorld(zone.world());
+            if (world == null) {
+                sender.sendMessage(ChatColor.RED + "구역의 세계가 실려 있지 않다: " + zone.world());
+                return null;
+            }
             int cx = (zone.x1() + zone.x2()) / 2;
             int cz = (zone.z1() + zone.z2()) / 2;
             int radius = Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 8;
@@ -1283,20 +1308,34 @@ public final class MvtCommand implements CommandExecutor {
             // 기준면이 30켜 내려가고, 그러면 검수 ②가 **강물 전체를 "산 위의 웅덩이"** 로 센다.
             Integer base = plugin.regionBase(place.id());
             int auditY = base != null ? base : zone.y1() + 6;
+            return new TerrainTarget(world, place, place.name(), cx, auditY, cz, radius);
+        }
+        Location center = plugin.anchor("장터");
+        if (center == null) {
+            sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 세계조성");
+            return null;
+        }
+        // auditTown 의 자 그대로: 중심 = 장터 앵커 · cy = 앵커 y−1 · 반경 61
+        return new TerrainTarget(center.getWorld(), null, "청하현",
+                center.getBlockX(), center.getBlockY() - 1, center.getBlockZ(), 61);
+    }
+
+    private boolean auditTerrain(CommandSender sender, String[] args) {
+        TerrainTarget at = resolveTerrainTarget(sender, args);
+        if (at == null) {
+            return true;
+        }
+        java.util.List<String> lines;
+        if (at.place() != null) {
             java.util.List<String> t = new java.util.ArrayList<>(
-                    TerrainAudit.audit(world, place.name(), cx, auditY, cz, radius,
-                            place.terrain() == null ? "평지" : place.terrain(),
-                            TerrainForge.caveKind(place) != null));   // 우리가 판 굴이 있는 지역인가
+                    TerrainAudit.audit(at.world(), at.name(), at.cx(), at.cy(), at.cz(), at.r(),
+                            at.place().terrain() == null ? "평지" : at.place().terrain(),
+                            TerrainForge.caveKind(at.place()) != null));   // 우리가 판 굴이 있는 지역인가
             // ★ 강의 눈 — 강 없는 곳이면 빈 목록이다. 있는 곳이면 역류·단절·누수·수심을 잰다.
-            t.addAll(RiverAudit.audit(world, place, cx, cz, radius, auditY));
+            t.addAll(RiverAudit.audit(at.world(), at.place(), at.cx(), at.cz(), at.r(), at.cy()));
             lines = t;
         } else {
-            Location center = plugin.anchor("장터");
-            if (center == null) {
-                sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 세계조성");
-                return true;
-            }
-            lines = TerrainAudit.auditTown(center.getWorld(), center, 61);
+            lines = TerrainAudit.audit(at.world(), at.name(), at.cx(), at.cy(), at.cz(), at.r());
         }
         for (String line : lines) {
             sender.sendMessage(line);
@@ -1318,52 +1357,48 @@ public final class MvtCommand implements CommandExecutor {
      * <p><b>왜 콘솔이 되는가</b> — 조성 명령들의 "마크에서 쳐라"(플레이어 전용)는 부지가
      * <b>플레이어의 자리</b>에서 오기 때문이다. 치유는 좌표가 <b>등록부</b>(앵커·원장·구역)에서 오므로
      * 지역조성·환경검수와 같은 관례를 따른다: {@code Player 면 op 요구 · 콘솔 허용} ({@link #region} 과 동일).
+     *
+     * <p>★ <b>표적 해석은 환경검수와 한 함수다</b> ({@link #resolveTerrainTarget}) — 1차 구현이 해석을
+     * <b>복제</b>했더니 실사격에서 두 경로 다 미발했다 (무인자 표적 상실 · cheongha_hyeon 원점 심부 오폭).
+     * 그리고 <b>안전핀</b>: 채우기 전에 해석된 표적을 한 줄로 말하고, 기준면이 상식 밖이면
+     * ({@link TerrainForge#sweepTargetSane} — cy&lt;0 · 실지면 40칸 이상 괴리) <b>채우지 않고 거부</b>한다.
      */
     private boolean sweepUnderground(CommandSender sender, String[] args) {
         if (sender instanceof Player p && !p.isOp()) {
             return true;
         }
-        World world;
-        String name;
-        int cx;
-        int cy;
-        int cz;
-        int r;
-        if (args.length >= 2) {
-            // 지역 — 환경검수와 **같은 자**로 중심·반경·기준면을 잡는다 (auditTerrain 의 관례 그대로)
-            WorldMap map = plugin.worldMap();
-            WorldMap.Place place = map == null ? null : map.place(args[1]);
-            Zone zone = place == null ? null : plugin.zones().stream()
-                    .filter(z -> z.name().equals(place.name())).findFirst().orElse(null);
-            if (zone == null) {
-                sender.sendMessage(ChatColor.RED + "서지 않은 지역이다: " + args[1]);
-                return true;
-            }
-            world = org.bukkit.Bukkit.getWorld(zone.world());
-            cx = (zone.x1() + zone.x2()) / 2;
-            cz = (zone.z1() + zone.z2()) / 2;
-            r = Math.max(zone.x2() - zone.x1(), zone.z2() - zone.z1()) / 2 + 8;
-            Integer base = plugin.regionBase(place.id());
-            cy = base != null ? base : zone.y1() + 6;
-            name = place.name();
-        } else {
-            // 청하현 — 환경검수(auditTown)와 같은 중심(장터 앵커)·반경(61). 눈이 재는 곳을 손이 걷는다
-            Location center = plugin.anchor("장터");
-            if (center == null) {
-                sender.sendMessage(ChatColor.RED + "조성된 마을이 없다 — 먼저 /혼천 세계조성");
-                return true;
-            }
-            world = center.getWorld();
-            cx = center.getBlockX();
-            cy = center.getBlockY() - 1;
-            cz = center.getBlockZ();
-            r = 61;
-            name = "청하현";
+        // ★ 표적 해석은 환경검수와 **한 함수**다 ({@link #resolveTerrainTarget}) — 복제했다가 미발했다
+        TerrainTarget at = resolveTerrainTarget(sender, args);
+        if (at == null) {
+            return true;
+        }
+        World world = at.world();
+        String name = at.name();
+        int cx = at.cx();
+        int cy = at.cy();
+        int cz = at.cz();
+        int r = at.r();
+        // ── 안전핀 — **채우기 전에** 해석된 표적을 소리내어 말하고, 상식 밖이면 거부한다 ──
+        //   검토 실사격: cheongha_hyeon 이 낡은 구역으로 원점 심부(-2,-56,-1 · y −96..−16)에 풀려
+        //   85,052칸을 헛채웠다. 오탈자·낡은 원장이 세계를 파게 두지 않는다 (갇힘 금지와 같은 결).
+        world.getChunkAt(cx >> 4, cz >> 4).load(true);   // 중심 기둥만 먼저 — 실지면을 재기 위해
+        int centerStand = TerrainAudit.surfaceY(world, cx, cz, cy);
+        Announce.say(plugin, sender, ChatColor.GRAY + "[지하정리] 표적 — " + name
+                + " · 세계 " + world.getName()
+                + " · 중심 (" + cx + "," + cy + "," + cz + ") · 반경 " + r
+                + " · 중심 기둥 실지면 "
+                + (centerStand == Integer.MIN_VALUE ? "못 찾음(±40 밖)" : "y" + (centerStand - 1)));
+        if (!TerrainForge.sweepTargetSane(cy, centerStand)) {
+            Announce.fail(plugin, sender, "★ 표적이 이상하다: " + world.getName()
+                    + " (" + cx + "," + cy + "," + cz + ") — 기준면이 상식 밖이다 (cy<0 이거나 "
+                    + "중심 기둥의 실지면과 40칸 이상 괴리). **채우지 않는다** — "
+                    + "등록부(앵커·원장 terrain_built·구역)를 확인하라");
+            return true;
         }
         java.util.List<Zone> dug = TerrainAudit.dugCaveBoxes(world.getName(), cx, cz, r);
         TerrainForge.preload(world, cx, cz, r);
         Announce.say(plugin, sender, ChatColor.GOLD + "── 지하정리 — " + name
-                + " (중심 " + cx + "," + cy + "," + cz + " · 반경 " + r
+                + " (세계 " + world.getName() + " · 중심 " + cx + "," + cy + "," + cz + " · 반경 " + r
                 + " · 판 굴 상자 " + dug.size() + "곳 보존) ──");
         long air = 0;
         long leaf = 0;
@@ -1372,6 +1407,8 @@ public final class MvtCommand implements CommandExecutor {
         long plant = 0;
         long kept = 0;
         int columns = 0;
+        int filledLo = Integer.MAX_VALUE;   // ★ 실제로 채운 y 대역 — 다음 미발이 즉시 보이게 (검토 지시 ③)
+        int filledHi = Integer.MIN_VALUE;
         int bottom = Math.max(world.getMinHeight() + 5, cy - 45);   // 환경검수 ⑥과 같은 대역 바닥
         for (int x = cx - r; x <= cx + r; x++) {
             for (int z = cz - r; z <= cz + r; z++) {
@@ -1403,6 +1440,8 @@ public final class MvtCommand implements CommandExecutor {
                         plant++;
                     }
                     world.getBlockAt(x, y, z).setType(TerrainForge.sweepFill(ground - y), false);
+                    filledLo = Math.min(filledLo, y);
+                    filledHi = Math.max(filledHi, y);
                 }
             }
         }
@@ -1410,6 +1449,10 @@ public final class MvtCommand implements CommandExecutor {
         Announce.say(plugin, sender, ChatColor.WHITE + "기둥 " + columns + " · 채움 " + total + "칸 — "
                 + "공기 " + air + " · 잎 " + leaf + " · 통나무 " + log
                 + " · 버섯·대나무 " + mush + " · 초목 " + plant);
+        // ★ 어느 세계 어느 대역을 채웠는가 — 표적이 어긋났으면 이 줄이 즉시 말한다
+        Announce.say(plugin, sender, ChatColor.GRAY + "채운 자리: 세계 " + world.getName()
+                + (total == 0 ? " · 채운 칸 없음" : " · 대역 y" + filledLo + "~y" + filledHi)
+                + " (표본 대역 y" + bottom + "~지면−1)");
         Announce.say(plugin, sender, ChatColor.GRAY + "판 굴 보존 " + kept + "칸 (원장 "
                 + dug.size() + "곳 — 우리가 판 굴은 설계다)");
         Announce.say(plugin, sender, ChatColor.GRAY

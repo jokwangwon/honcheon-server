@@ -523,6 +523,29 @@ final class TerrainForge {
     }
 
     /**
+     * 스윕 안전핀 — <b>표적이 상식 밖이면 채우지 않는다</b>. ★ 순수 함수(하네스가 경계를 시험한다).
+     *
+     * <p>검토 실사격(2026-07-14)이 잡은 미발: {@code /혼천 지하정리 cheongha_hyeon} 이 낡은 구역으로
+     * 원점 심부(중심 -2,-56,-1 · y −96..−16)에 풀려 85,052칸을 헛채웠다. 오탈자·낡은 원장이
+     * 세계를 파게 두지 않는다 — 갇힘 금지와 같은 결이다.
+     *
+     * <p>거부 조건 (하나라도 걸리면 거부):
+     * <ul>
+     *   <li>{@code cy < 0} — 조성 기준면이 심부다 (이 세계의 조성은 전부 지표에 선다)</li>
+     *   <li>중심 기둥의 지면을 못 찾았다 ({@code standY == MIN_VALUE} — surfaceY 는 cy±40 을 훑는다)</li>
+     *   <li>실지면({@code standY-1})과 기준면의 괴리가 <b>40칸 이상</b> — 등록부가 낡았다</li>
+     * </ul>
+     *
+     * @param standY {@link TerrainAudit#surfaceY} 의 답 (지면+1). 못 찾으면 {@code MIN_VALUE}
+     */
+    static boolean sweepTargetSane(int cy, int standY) {
+        if (cy < 0 || standY == Integer.MIN_VALUE) {
+            return false;
+        }
+        return Math.abs((standY - 1) - cy) < 40;
+    }
+
+    /**
      * 계약 ①-b 의 손 — 새 표면({@code newY}) 밑을 옛 지면({@code oldGroundY})까지 채운다.
      * 공기·잎·통나무·초목·액체를 치환하고, 광석·사람이 지은 것은 지나친다(break 가 아니라 continue —
      * break 가 바로 나무를 묻은 병이었다). 등록부 스위치가 꺼져 있으면 아무것도 하지 않는다.

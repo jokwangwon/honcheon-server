@@ -190,6 +190,19 @@ public final class TerrainAuditSelfTest {
         sweep("굴 상자 한 칸 밖 — 채운다", Material.AIR, boxes, 85, 45, 186, true);
         sweep("원장이 비면 전부 스윕 대상", Material.AIR, List.of(), 110, 58, 200, true);
 
+        // ═══ 6. 스윕 안전핀 — 표적이 상식 밖이면 채우지 않는다 (검토 실사격의 미발) ═══
+        // 실사격: cheongha_hyeon 이 낡은 구역으로 원점 심부(중심 y −56)에 풀려 85,052칸을 헛채웠다.
+        // sweepTargetSane(cy, standY) — standY = surfaceY 의 답(지면+1). 거부: cy<0 · 지면 못 찾음 ·
+        // |실지면−cy| ≥ 40. (surfaceY 는 cy±40 을 훑으므로 40이 곧 눈의 시야 경계다)
+        sane("청하현 정상 표적 (cy89 · 지면 89)", 89, 90, true);
+        sane("실사격의 미발 표적 (cy −56)", -56, -15, false);          // cy<0 — 원점 심부
+        sane("cy 0 은 경계 안 (지표 세계의 바닥)", 0, 1, true);
+        sane("지면 못 찾음 (±40 밖)", 89, Integer.MIN_VALUE, false);
+        sane("괴리 39칸 — 마지막 허용", 100, 140, true);               // 실지면 139
+        sane("괴리 40칸 — 거부 (경계)", 100, 141, false);              // 실지면 140
+        sane("아래로 괴리 39칸 — 허용", 100, 62, true);                // 실지면 61
+        sane("아래로 괴리 40칸 — 거부", 100, 61, false);               // 실지면 60
+
         System.out.println("── 총평 ──");
         System.out.println(pass + "/" + (pass + fail) + " PASS" + (fail == 0 ? "" : " · ❌ FAIL " + fail));
         if (fail != 0) {
@@ -259,6 +272,12 @@ public final class TerrainAuditSelfTest {
         boolean got = TerrainForge.sweepShouldFill(m, boxes, x, y, z);
         check(got == want, String.format("[스윕] %s: (%d,%d,%d) %s -> %s (want %s)",
                 name, x, y, z, m, got ? "채운다" : "남긴다", want ? "채운다" : "남긴다"));
+    }
+
+    private static void sane(String name, int cy, int standY, boolean want) {
+        boolean got = TerrainForge.sweepTargetSane(cy, standY);
+        check(got == want, String.format("[안전핀] %s: sweepTargetSane(%d, %s) = %s (want %s)",
+                name, cy, str(standY), got ? "실행" : "거부", want ? "실행" : "거부"));
     }
 
     private static String str(int y) {
