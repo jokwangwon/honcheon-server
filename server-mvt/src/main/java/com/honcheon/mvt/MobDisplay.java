@@ -75,14 +75,30 @@ import java.util.UUID;
  * 부드러움은 {@code setTeleportDuration}(이동 보간)과 {@code setInterpolationDuration}(형체 보간)이
  * 낸다. 이 둘이 0이면 형체가 <b>튄다</b>.
  *
- * <p><b>움직임의 표정</b> — 조각은 걷지 않는다. 그래서 흉내 낸다:
+ * <p><b>움직임의 표정</b> — 조각은 걷지 않는다. 그래서 흉내 낸다 (v2: 다리 관절이 실제로 걷는다):
  * <ul>
- *   <li><b>걷기</b> — 상하 흔들림({@code walk_bob}) · 좌우 기울기({@code walk_roll}) · 꼬리 흔들림.
- *       위상은 <b>시간이 아니라 이동거리</b>로 돈다 — 멈추면 흔들림도 멈춘다. 그것이 걷기다.</li>
- *   <li><b>공격</b> — 앞으로 기운다({@code attack_lean}). 달릴수록 더 기운다({@code charge_lean}).</li>
+ *   <li><b>대기</b> — 숨({@code idle_breath} — 가슴이 오르내린다) · 꼬리 표류({@code idle_rate}).
+ *       숨은 걷기와 달리 <b>시간으로 돈다</b> — 서 있을 때의 생명이다. 걸으면 걷기 흔들림에 묻힌다.</li>
+ *   <li><b>걷기</b> — 상하 흔들림({@code walk_bob}) · 좌우 기울기({@code walk_roll}) · 꼬리 흔들림 ·
+ *       <b>다리 관절 스윙</b>({@code role: leg} 의 {@code sway_deg}, {@code phase_deg} 가 대각 보행을
+ *       만든다: 앞왼=뒷오). 위상은 <b>시간이 아니라 이동거리</b>로 돈다 — 멈추면 다리도 멈춘다. 그것이 걷기다.</li>
+ *   <li><b>공격</b> — 앞으로 기운다({@code attack_lean}). 달릴수록 더 기운다({@code charge_lean}).
+ *       앞다리를 들어 올린다({@code attack_raise_deg} — 덮치는 짐승의 앞발).</li>
+ *   <li><b>피격</b> — 움찔하며 뒤로 젖힌다({@code hurt_recoil_deg} · {@code hurt_ticks}).</li>
  *   <li><b>사망</b> — 옆으로 넘어지며 가라앉는다({@code death_topple} · {@code death_sink}).</li>
  *   <li><b>머리</b> — 몸이 안 돌아도 <b>고개가 먼저 표적을 본다</b>({@code head_yaw_max}).</li>
  * </ul>
+ *
+ * <p><b>강등 사다리 (v2)</b> — {@code full(관절 7파트) → low(lod_parts 병합 실루엣) → vanilla(본체)}.
+ * 파트 수가 늘면 예산이 곱절로 든다(호랑이 20마리 × 7파트 = 140). 그래서 두 단계로 접는다:
+ * <ol>
+ *   <li><b>원거리 병합</b> — 가장 가까운 눈이 {@code budget.lod.full_distance} 보다 멀면 관절 대신
+ *       병합 실루엣({@code lod_parts})을 태운다. 멀리서 다리 관절은 안 보인다 — 실루엣이면 족하다.
+ *       승격·강등 경계에 히스테리시스를 둬서 경계에서 형체가 깜빡이지 않는다.</li>
+ *   <li><b>예산 병합</b> — 살아 있는 형체가 {@code full_at} 을 넘으면 새 형체는 관절을 못 받고
+ *       병합 실루엣으로 선다. {@code degrade_at} 을 넘어야 비로소 바닐라 본체로 강등된다 —
+ *       강등의 종착지는 언제나 '보이는 몹'이다 (불변식 ㄱ).</li>
+ * </ol>
  *
  * <p><b>팩 게이트</b> ({@link #gate}) — 팩 있는 눈과 없는 눈이 섞이면 <b>한쪽은 진다</b>. 본체의
  * 투명은 엔티티 단위 플래그라 플레이어별로 갈 수 없고({@code hideEntity} 로 숨긴 몸은 <b>그
@@ -96,30 +112,35 @@ final class MobDisplay implements Listener {
 
     // ══════════════ 등록부 (config/mob_models.yml 판독 — 코드가 config 보다 앞서지 않는다) ══════════════
 
-    /** 한 조각 — 몸통·머리·꼬리. 파츠를 나누면 살아나지만 엔티티 수가 곱절이 된다 */
+    /** 한 조각 — 몸통·머리·꼬리·다리. 파츠를 나누면 살아나지만 엔티티 수가 곱절이 된다 */
     record Part(String id, String role, String key, Material base,
                 Vector3f size, Vector3f offset,
-                float headYawMax, float headPitchMax, float swayDeg) {
+                float headYawMax, float headPitchMax, float swayDeg,
+                float phaseDeg, float attackRaiseDeg) {
     }
 
     /** 움직임의 표정 — 조각이 살아 있는 척하는 법 */
     record Motion(float walkBob, float walkBobRate, float walkRoll,
                   float attackLean, int attackLeanTicks,
                   float chargeLean, double chargeSpeedFull,
+                  float hurtRecoil, int hurtTicks,
+                  float idleBreath, float idleRate,
                   float deathTopple, float deathSink, int deathTicks) {
     }
 
-    /** 등록부의 한 줄 — 적 하나의 형체 */
+    /** 등록부의 한 줄 — 적 하나의 형체. lodParts 는 원거리·예산 압박의 병합 실루엣 (비면 v1 문법) */
     record Model(String id, String name, EntityType body, boolean replace, String reason,
                  boolean hideEquipment, boolean glowToDisplay,
-                 List<Part> parts, Motion motion, float viewRange) {
+                 List<Part> parts, List<Part> lodParts, Motion motion, float viewRange) {
     }
 
-    /** 예산 (performance.yml npc_logic 6ms 중 1ms · vfx_entities 와는 다른 풀) */
-    record Budget(int globalCap, int degradeAt, int perMobMax, float viewRange,
+    /** 예산 (performance.yml npc_logic 6ms 중 1ms · vfx_entities 와는 다른 풀).
+     *  fullAt 는 관절→병합 실루엣 강등선 · lodNear/lodFar 는 거리 강등의 히스테리시스 짝(승격선/강등선, m) */
+    record Budget(int globalCap, int degradeAt, int fullAt, int perMobMax, float viewRange,
                   int attachScanTicks, int attachScanRange,
                   int followInterval, int teleportDuration, int interpolation,
-                  double moveEpsilon, double yawEpsilon) {
+                  double moveEpsilon, double yawEpsilon,
+                  double lodNear, double lodFar) {
     }
 
     /** 팩 게이트 — adaptive | forced | off */
@@ -127,7 +148,7 @@ final class MobDisplay implements Listener {
     }
 
     private static final Map<String, Model> MODELS = new LinkedHashMap<>();
-    private static Budget budget = new Budget(64, 48, 4, 0.75f, 20, 48, 1, 2, 3, 0.02, 2.0);
+    private static Budget budget = new Budget(64, 48, 48, 4, 0.75f, 20, 48, 1, 2, 3, 0.02, 2.0, 0, 0);
     private static Gate gate = new Gate("adaptive", 20, 200);
 
     /** 형체 게이트의 세 답 — 짓는다 · 거둔다 · 그대로 둔다 */
@@ -150,9 +171,13 @@ final class MobDisplay implements Listener {
         }
         Map<String, Object> b = sub(root, "budget");
         Map<String, Object> f = sub(b, "follow");
+        Map<String, Object> lod = sub(b, "lod");
+        int degradeAt = (int) num(b.get("degrade_at"), 48);
+        double lodNear = num(lod.get("full_distance"), 0);   // 0 = 거리 강등 없음 (v1 문법)
         budget = new Budget(
                 (int) num(b.get("global_cap"), 64),
-                (int) num(b.get("degrade_at"), 48),
+                degradeAt,
+                (int) num(b.get("full_at"), degradeAt),      // 없으면 degrade_at — 관절/실루엣 이단 강등 없음
                 (int) num(b.get("per_mob_max"), 4),
                 (float) num(b.get("view_range"), 0.75),
                 (int) num(b.get("attach_scan_ticks"), 20),
@@ -161,7 +186,9 @@ final class MobDisplay implements Listener {
                 (int) num(f.get("teleport_duration"), 2),
                 (int) num(f.get("interpolation"), 3),
                 num(f.get("move_epsilon"), 0.02),
-                num(f.get("yaw_epsilon"), 2.0));
+                num(f.get("yaw_epsilon"), 2.0),
+                lodNear,
+                lodNear <= 0 ? 0 : lodNear + num(lod.get("hysteresis"), 8));
 
         Map<String, Object> g = sub(root, "pack_gate");
         gate = new Gate(String.valueOf(g.getOrDefault("mode", "adaptive")),
@@ -197,8 +224,36 @@ final class MobDisplay implements Listener {
         String name = String.valueOf(e.getOrDefault("name", id));
         String reason = e.get("reason") == null ? null : String.valueOf(e.get("reason"));
 
+        List<Part> parts = partList(e.get("parts"));
+        List<Part> lodParts = partList(e.get("lod_parts"));   // 병합 실루엣 — 없으면 빈 목록 (v1 문법)
+        Map<String, Object> mo = sub(e, "motion");
+        Motion motion = new Motion(
+                (float) num(mo.get("walk_bob"), 0),
+                (float) num(mo.get("walk_bob_rate"), 2.5),
+                (float) num(mo.get("walk_roll_deg"), 0),
+                (float) num(mo.get("attack_lean_deg"), 0),
+                (int) num(mo.get("attack_lean_ticks"), 6),
+                (float) num(mo.get("charge_lean_deg"), 0),
+                num(mo.get("charge_speed_full"), 0.3),
+                (float) num(mo.get("hurt_recoil_deg"), 0),
+                (int) num(mo.get("hurt_ticks"), 4),
+                (float) num(mo.get("idle_breath"), 0),
+                (float) num(mo.get("idle_rate"), 0),
+                (float) num(mo.get("death_topple_deg"), 90),
+                (float) num(mo.get("death_sink"), 0.3),
+                (int) num(mo.get("death_ticks"), 24));
+
+        return new Model(id, name, body, replace && !parts.isEmpty(), reason,
+                bool(e.get("hide_equipment")), bool(e.get("body_glow_to_display")),
+                List.copyOf(parts), List.copyOf(lodParts), motion,
+                (float) num(e.get("view_range"), budget.viewRange()));
+    }
+
+    /** 조각 목록 판독 — parts 와 lod_parts 가 같은 문법을 쓴다 (한 파서가 두 등급을 읽는다) */
+    @SuppressWarnings("unchecked")
+    private static List<Part> partList(Object raw) {
         List<Part> parts = new ArrayList<>();
-        if (e.get("parts") instanceof List<?> list) {
+        if (raw instanceof List<?> list) {
             for (Object row : list) {
                 if (!(row instanceof Map<?, ?> m)) {
                     continue;
@@ -217,26 +272,12 @@ final class MobDisplay implements Listener {
                         vec(p.get("offset"), 0, 0, 0),
                         (float) num(p.get("head_yaw_max"), 0),
                         (float) num(p.get("head_pitch_max"), 0),
-                        (float) num(p.get("sway_deg"), 0)));
+                        (float) num(p.get("sway_deg"), 0),
+                        (float) num(p.get("phase_deg"), 0),
+                        (float) num(p.get("attack_raise_deg"), 0)));
             }
         }
-        Map<String, Object> mo = sub(e, "motion");
-        Motion motion = new Motion(
-                (float) num(mo.get("walk_bob"), 0),
-                (float) num(mo.get("walk_bob_rate"), 2.5),
-                (float) num(mo.get("walk_roll_deg"), 0),
-                (float) num(mo.get("attack_lean_deg"), 0),
-                (int) num(mo.get("attack_lean_ticks"), 6),
-                (float) num(mo.get("charge_lean_deg"), 0),
-                num(mo.get("charge_speed_full"), 0.3),
-                (float) num(mo.get("death_topple_deg"), 90),
-                (float) num(mo.get("death_sink"), 0.3),
-                (int) num(mo.get("death_ticks"), 24));
-
-        return new Model(id, name, body, replace && !parts.isEmpty(), reason,
-                bool(e.get("hide_equipment")), bool(e.get("body_glow_to_display")),
-                List.copyOf(parts), motion,
-                (float) num(e.get("view_range"), budget.viewRange()));
+        return parts;
     }
 
     private static double num(Object v, double fallback) {
@@ -265,11 +306,14 @@ final class MobDisplay implements Listener {
     private static final class Rig {
         final Model model;
         final LivingEntity body;
-        final List<ItemDisplay> parts = new ArrayList<>(3);
+        final List<ItemDisplay> parts = new ArrayList<>(7);
+        List<Part> specs = List.of();   // parts 와 나란한 조각 명세 — 관절(full) 또는 병합(lod_parts) 등급
+        boolean low;         // 병합 실루엣 등급인가 (원거리·예산 압박의 강등 사다리 둘째 단)
         Location last;
         double phase;        // 걷기 위상 — 이동거리로 돈다 (시간이 아니다)
         double speed;        // 직전 틱의 이동거리 (m/틱)
         long leanUntil;      // 공격 기울기가 끝나는 틱
+        long hurtUntil;      // 피격 움찔이 끝나는 틱
         boolean bodyGlow;    // 본체가 원래 빛나고 있었나 (백영묘의 검기)
 
         Rig(Model model, LivingEntity body) {
@@ -482,17 +526,60 @@ final class MobDisplay implements Listener {
         } else if (v == Verdict.TEAR && !rig.parts.isEmpty()) {
             tear(rig);
         } else if (!rig.parts.isEmpty()) {
+            retier(rig);     // 거리·예산이 바뀌었을 수 있다 — 관절/실루엣 등급을 다시 잰다
             audience(rig);   // 관중이 바뀌었을 수 있다 — 팩 받은 눈에만 보여 준다
         }
     }
 
     // ══════════════ 짓기 · 걷기 ══════════════
 
+    /**
+     * 파트 등급 — 강등 사다리의 첫 판단. 가까운 눈에는 관절 형체(parts), 먼 눈에는 병합
+     * 실루엣(lod_parts)을 준다 — 멀리서 다리 관절은 안 보인다. 실루엣이면 족하다.
+     * 예산이 눌려도(full_at) 관절을 접는다: 군집 전원이 관절을 받으면 상한이 터지므로,
+     * full_at 을 넘는 몫은 병합 실루엣으로 서고 아무도 바닐라로 떨어지지 않는다.
+     * 승격(low→full)은 lodNear, 강등(full→low)은 lodFar 에서 — 경계에서 형체가 깜빡이지 않는다.
+     */
+    private List<Part> tier(Rig rig) {
+        List<Part> full = rig.model.parts();
+        List<Part> low = rig.model.lodParts();
+        if (low.isEmpty()) {
+            return full;   // 병합 실루엣이 등록되지 않은 짐승 — v1 문법 그대로
+        }
+        if (live() - rig.parts.size() + Math.min(full.size(), budget.perMobMax()) > budget.fullAt()) {
+            return low;    // 예산 병합 — 관절을 접는다
+        }
+        double edge = rig.low ? budget.lodNear() : budget.lodFar();
+        if (edge > 0 && nearestEyeSq(rig) > edge * edge) {
+            return low;    // 원거리 병합
+        }
+        return full;
+    }
+
+    /** 가장 가까운 눈까지의 거리² — 눈이 없으면 무한대 (그때 verdict 는 어차피 HOLD 다) */
+    private double nearestEyeSq(Rig rig) {
+        double best = Double.MAX_VALUE;
+        Location at = rig.body.getLocation();
+        for (Player viewer : rig.body.getWorld().getPlayers()) {
+            best = Math.min(best, viewer.getLocation().distanceSquared(at));
+        }
+        return best;
+    }
+
+    /** 이 등급이 degrade_at 예산에 들어가는가 (자기 몫은 빼고 센다 — 갈아타기도 같은 저울을 쓴다) */
+    private boolean fits(Rig rig, List<Part> spec) {
+        return !spec.isEmpty()
+                && live() - rig.parts.size() + Math.min(spec.size(), budget.perMobMax()) <= budget.degradeAt();
+    }
+
     /** 본체를 감추고 형체를 태운다. 예산이 없으면 <b>아무것도 하지 않는다</b> — 그 몸은 라바저로 보인다 */
     private void build(Rig rig) {
-        int need = Math.min(rig.model.parts().size(), budget.perMobMax());
-        if (need == 0 || live() + need > budget.degradeAt()) {
-            return;   // over_cap → 바닐라 몹으로 강등. 강등의 종착지는 '보이지 않는 몹'이 아니다
+        List<Part> spec = tier(rig);
+        if (!fits(rig, spec)) {
+            spec = rig.model.lodParts();   // 강등 사다리 둘째 단 — 관절을 접고 병합 실루엣으로
+            if (!fits(rig, spec)) {
+                return;   // 셋째 단 = 바닐라 본체. 강등의 종착지는 '보이지 않는 몹'이 아니다
+            }
         }
         LivingEntity body = rig.body;
         Location at = body.getLocation();
@@ -514,13 +601,7 @@ final class MobDisplay implements Listener {
             body.setGlowing(false);
         }
 
-        for (int i = 0; i < need; i++) {
-            Part part = rig.model.parts().get(i);
-            ItemDisplay d = spawnPart(at, rig, part);
-            if (d != null) {
-                rig.parts.add(d);
-            }
-        }
+        mount(rig, spec, at);
         if (rig.parts.isEmpty()) {
             tear(rig);   // 한 조각도 못 띄웠다 — 감춘 몸을 되돌린다 (투명한 유령을 만들지 않는다)
             return;
@@ -528,6 +609,38 @@ final class MobDisplay implements Listener {
         rig.last = at.clone();
         audience(rig);
         follow(rig);
+    }
+
+    /** 조각을 실는다 — parts 와 specs 는 나란히 자란다 (한 조각이 실패하면 그 명세도 버린다) */
+    private void mount(Rig rig, List<Part> spec, Location at) {
+        int need = Math.min(spec.size(), budget.perMobMax());
+        List<Part> mounted = new ArrayList<>(need);
+        for (int i = 0; i < need; i++) {
+            Part part = spec.get(i);
+            ItemDisplay d = spawnPart(at, rig, part);
+            if (d != null) {
+                rig.parts.add(d);
+                mounted.add(part);
+            }
+        }
+        rig.specs = List.copyOf(mounted);
+        rig.low = spec == rig.model.lodParts();
+    }
+
+    /** 등급 갈아타기 — 본체의 투명은 건드리지 않는다 (형체가 끊기는 한 틱을 만들지 않는다) */
+    private void retier(Rig rig) {
+        List<Part> want = tier(rig);
+        boolean wantLow = want == rig.model.lodParts();
+        if (wantLow == rig.low || !fits(rig, want)) {
+            return;   // 지금 등급 그대로 — 또는 새 등급이 예산에 안 든다 (있는 형체를 지키는 쪽이 낫다)
+        }
+        despawn(rig.parts);
+        rig.parts.clear();
+        mount(rig, want, rig.body.getLocation());
+        if (rig.parts.isEmpty()) {
+            tear(rig);   // 갈아타다 전부 실패 — 본체를 되돌린다 (투명한 유령을 만들지 않는다)
+        }
+        // 새 조각은 setVisibleByDefault(false) — reevaluate 의 audience() 가 곧바로 관중에게 보여 준다
     }
 
     private ItemDisplay spawnPart(Location at, Rig rig, Part part) {
@@ -562,6 +675,8 @@ final class MobDisplay implements Listener {
     private void tear(Rig rig) {
         despawn(rig.parts);
         rig.parts.clear();
+        rig.specs = List.of();
+        rig.low = false;
         if (rig.body.isValid()) {
             rig.body.setInvisible(false);
             if (rig.bodyGlow) {
@@ -609,11 +724,19 @@ final class MobDisplay implements Listener {
         if (rig.leanUntil > tick && m.attackLean() != 0) {
             lean += m.attackLean();
         }
+        if (rig.hurtUntil > tick && m.hurtRecoil() != 0) {
+            lean -= m.hurtRecoil();   // 피격 — 움찔하며 뒤로 젖힌다 (hurt 동작)
+        }
         if (m.chargeLean() != 0 && m.chargeSpeedFull() > 0) {
             lean += (float) (m.chargeLean() * Math.min(1.0, rig.speed / m.chargeSpeedFull()));
         }
         float roll = (float) (m.walkRoll() * Math.sin(rig.phase));
         float bob = (float) (m.walkBob() * Math.abs(Math.sin(rig.phase)));
+        if (m.idleBreath() > 0 && m.idleRate() > 0) {
+            // 숨 — 시간으로 돈다 (걷기와 달리 숨은 서 있을 때의 생명이다). 걸으면 걷기 흔들림에 묻힌다
+            double calm = Math.max(0.0, 1.0 - rig.speed / Math.max(1e-6, budget.moveEpsilon() * 4));
+            bob += (float) (m.idleBreath() * calm * Math.sin(tick * m.idleRate()));
+        }
 
         Quaternionf pose = new Quaternionf()
                 .rotateX((float) Math.toRadians(lean))    // 앞으로 기운다 (공격·돌진)
@@ -630,7 +753,7 @@ final class MobDisplay implements Listener {
             if (move) {
                 d.teleport(stand);   // 위치·yaw 를 몸에서 그대로 가져온다 (보간이 끊김을 메운다)
             }
-            apply(d, rig, rig.model.parts().get(i), pose, bob, budget.interpolation());
+            apply(d, rig, rig.specs.get(i), pose, bob, budget.interpolation());
         }
         rig.last = at.clone();
     }
@@ -653,7 +776,20 @@ final class MobDisplay implements Listener {
                 q.rotateY((float) Math.toRadians(look[0]));    // 고개가 먼저 표적을 본다
                 q.rotateX((float) Math.toRadians(look[1]));
             }
-            case "tail" -> q.rotateY((float) Math.toRadians(part.swayDeg() * Math.sin(rig.phase)));
+            // 꼬리 — 걷기 위상에 얹어 시간으로 천천히 표류한다 (idle_rate 0 이면 v1 그대로: 위상만)
+            case "tail" -> q.rotateY((float) Math.toRadians(
+                    part.swayDeg() * Math.sin(rig.phase + tick * rig.model.motion().idleRate())));
+            case "leg" -> {
+                // 다리 관절 — 엉덩관절(모델 중심)을 축으로 흔든다. phase_deg 가 대각 보행을 만든다
+                // (앞왼=뒷오 0° · 앞오=뒷왼 180°). 위상은 이동거리로 돈다 — 멈추면 다리도 멈춘다.
+                if (rig.leanUntil > tick && part.attackRaiseDeg() != 0) {
+                    // 덮치기 — 앞다리를 들어 올린다 (음의 X 회전이 발끝을 앞·위로 보낸다)
+                    q.rotateX((float) Math.toRadians(-part.attackRaiseDeg()));
+                } else {
+                    q.rotateX((float) Math.toRadians(
+                            part.swayDeg() * Math.sin(rig.phase + Math.toRadians(part.phaseDeg()))));
+                }
+            }
             default -> {
                 // body · limb — 몸통의 자세 그대로
             }
@@ -703,12 +839,16 @@ final class MobDisplay implements Listener {
 
     // ══════════════ 사건 — 공격 · 죽음 · 팩 ══════════════
 
-    /** 칠 때 앞으로 기운다 — 덮치는 짐승의 무게 (형체가 없으면 아무 일도 없다) */
+    /** 칠 때 앞으로 기울고(공격), 맞을 때 움찔한다(피격) — 형체가 없으면 아무 일도 없다 */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onStrike(EntityDamageByEntityEvent event) {
         Rig rig = rigs.get(event.getDamager().getUniqueId());
         if (rig != null && !rig.parts.isEmpty()) {
             rig.leanUntil = tick + rig.model.motion().attackLeanTicks();
+        }
+        Rig victim = rigs.get(event.getEntity().getUniqueId());
+        if (victim != null && !victim.parts.isEmpty()) {
+            victim.hurtUntil = tick + victim.model.motion().hurtTicks();
         }
     }
 
@@ -734,7 +874,7 @@ final class MobDisplay implements Listener {
             if (!d.isValid()) {
                 continue;
             }
-            Part part = rig.model.parts().get(i);
+            Part part = rig.specs.get(i);
             Vector3f t = new Vector3f(part.offset());
             topple.transform(t);
             t.y -= m.deathSink();   // 쓰러지며 가라앉는다 — 땅에 눕는다

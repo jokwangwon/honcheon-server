@@ -114,6 +114,12 @@ async:
 load_test:                             # 배포 전 의무 시나리오
   combat_cluster_size: 20              # 한 시야의 동시 전투 인원 — motion_audit·mob_model_audit 가
                                        # 파티클·형체 예산 검산의 군집 크기로 읽는다 (살아 있는 키)
+  # ── 몹 파트 예산 (RP-4 개정 2026-07-14) — **정본은 config/mob_models.yml budget 절이다** ──
+  #   MobDisplay 가 그쪽을 읽는다. 여기에 키를 두지 않는다 — 읽는 자 없는 예산은 예산이 아니라
+  #   주석이다 (위 묘비 참조). 개정 내용: 호랑이 v2 관절 형체 7파트(몸통+머리+꼬리+다리4) 도입으로
+  #   per_mob_max 4→7 · global_cap 64→160 · degrade_at 48→144 · full_at 112(신설) ·
+  #   lod.full_distance 24 + hysteresis 8(신설 — 원거리 몹은 lod_parts 병합 실루엣으로 강등).
+  #   산술: 위 combat_cluster_size 20 × 7파트 = 140 이 옛 global_cap 64 를 두 배 넘었다.
 
   # ─── 플레이어 없이 되는 것 / 안 되는 것 (RCON 으로 돌리는 범위) ───
   # 플레이어가 있어야만 서는 층이 셋이다 — 이건 콘솔로 못 만든다:

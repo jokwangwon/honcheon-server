@@ -73,25 +73,35 @@ pack_gate:
 # ══════════════════════════════════════════════════════════════════════════════
 #  예산 (performance.yml — tick_budget.npc_logic 6ms · vfx_entities 와는 **다른 풀**)
 # ══════════════════════════════════════════════════════════════════════════════
-# 【근거 — 사냥터에 몹 20마리면 디스플레이가 몇 개인가】
-#   북쪽 산길 정원 (HuntingGrounds.POPULATIONS · ZONE_ENTITY_CAP 18):
-#     밤 — 산늑대 6(vanilla:0) · 멧돼지 2(×1) · 호랑이 1(×3) · 반달곰 1(×2) · 산적 4(vanilla:0) · 갈호 1(vanilla:0)
-#          = 몸 15마리 → **형체 7개**
-#     낮 — 산늑대 4(0) · 멧돼지 3(×1) · 산적 3(0) · 갈호 1(0)   = 몸 11마리 → **형체 3개**
-#     최악(구역 상한 18마리가 전부 replace 짐승) → 18 × 3 = 54
-#   load_test.combat_cluster_size 20 을 전부 호랑이로 채우면(관리자 소환) 20 × 3 = 60.
-#   ⇒ global_cap 64. degrade_at 48 을 넘으면 **새 형체를 붙이지 않는다** — 그 몸은 라바저로 보인다.
-#     (강등의 종착지가 '보이지 않는 몹'이 아니라 '바닐라 몹'이다. 불변식 ㄱ 그대로다.)
+# 【근거 — 사냥터에 몹 20마리면 디스플레이가 몇 개인가 · RP-4 개정 2026-07-14】
+#   호랑이가 v2 관절 형체(7파트: 몸통+머리+꼬리+다리4)가 되면서 산술이 바뀌었다:
+#     북쪽 산길 정원 (HuntingGrounds.POPULATIONS · ZONE_ENTITY_CAP 18):
+#       밤 — 산늑대 6(vanilla:0) · 멧돼지 2(×1) · 호랑이 1(×7) · 반달곰 1(×2) · 산적 4(0) · 갈호 1(0)
+#            = 몸 15마리 → **형체 11개** (전부 관절 등급이어도)
+#       낮 — 산늑대 4(0) · 멧돼지 3(×1) · 산적 3(0) · 갈호 1(0)   = 몸 11마리 → **형체 3개**
+#       최악(구역 상한 18마리가 전부 호랑이) → 18 × 7 = **126** — 옛 global_cap 64 의 두 배다.
+#     load_test.combat_cluster_size 20 을 전부 호랑이로 채우면(관리자 소환) 20 × 7 = **140**.
+#   상한만 올리면 예산이 곱절로 새므로 **강등 사다리를 두 단으로 깐다** (MobDisplay.tier):
+#     full(관절 parts) → low(lod_parts 병합 실루엣) → vanilla(본체 그대로).
+#     ① 원거리 병합 — 가장 가까운 눈이 lod.full_distance 보다 멀면 병합 실루엣.
+#        멀리서 다리 관절은 안 보인다 — 실루엣이면 족하다 (파티클 LOD half_distance 와 같은 문법).
+#     ② 예산 병합 — 살아 있는 형체가 full_at 을 넘으면 새 형체는 관절을 못 받는다.
+#        16마리(16×7=112)까지 관절, 그 뒤는 실루엣: 20마리 군집도 16×7+4×3=124 로 전원이 **보인다**.
+#     ③ degrade_at 을 넘어야 비로소 바닐라 본체 — 강등의 종착지는 '보이지 않는 몹'이 아니다 (불변식 ㄱ).
 #
 # 【틱 비용】 추종은 살아 있는 형체 수만큼의 teleport + Transformation 이다.
-#   64개 × (거리·회전 비교 + 벡터 3회 + teleport 1회) ≈ 산술 수천 연산 ⇒ **0.1ms 미만**.
+#   160개 × (거리·회전 비교 + 벡터 3회 + teleport 1회) ≈ 산술 수천 연산 ⇒ **0.3ms 미만**.
 #   npc_logic 6ms 중 이 층의 몫은 **1ms** 로 못 박는다 (budget_ms). 넘으면 audit ④가 잡는다.
 #   ※ 형체 티커는 **중앙 티커 1개**다 (1틱 주기). 개체별 태스크 생성 금지 (performance.yml F-P2).
 budget:
-  global_cap: 64              # 세계 전체 동시 형체 상한
-  degrade_at: 48              # 이 수를 넘으면 새 부착 거절 → 본체 그대로 (바닐라 몹으로 강등)
-  per_mob_max: 4              # 한 몸이 갖는 파츠 상한 (몸통 + 머리 + 꼬리 + 여유 1)
+  global_cap: 160             # 세계 전체 동시 형체 상한 【왜 64→160】 20×7=140 + 주검(death_ticks 동안 남는 형체) 여유
+  degrade_at: 144             # 이 수를 넘으면 새 부착 거절 → 본체 그대로 (의미 불변 — 눈금만 140+여유로 개정)
+  full_at: 112                # 【신설】 이 수를 넘으면 새 형체는 관절(parts)을 못 받고 병합 실루엣(lod_parts)으로 선다
+  per_mob_max: 7              # 한 몸이 갖는 파츠 상한 【왜 4→7】 호랑이 v2 = 몸통+머리+꼬리+다리4
   budget_ms: 1                # npc_logic 6ms 중 형체 층의 몫
+  lod:                        # 【신설】 원거리 파트 병합 (RP-4 합의: 파트 예산 선설계 — 원거리 몹은 저파트 폴백)
+    full_distance: 24         # 가장 가까운 눈이 이보다 멀면 병합 실루엣 (파티클 LOD full 16 · half 32 사이 눈금)
+    hysteresis: 8             # 강등은 24+8=32m 에서, 승격은 24m 에서 — 경계에서 형체가 깜빡이지 않는다
   view_range: 0.75            # setViewRange 배율 — 0.75 × 64m = **48m**
   # 【근거】 무공 획(32m = 파티클 cull_beyond)보다 멀다. 호랑이는 40m 밖에서 **발견되어야** 한다 —
   #   그것이 사냥이다. 본체의 FOLLOW_RANGE(32)·SPAWN_MAX_DIST(64) 사이의 눈금이 48m 다.
@@ -134,14 +144,18 @@ foes:
     shape: replace
     reason: "라바저다. 뿔 달린 회색 소가 북산의 주인 행세를 하고 있었다 — 팩으로는 못 고친다"
     hide_equipment: true
+    # 【v2 · RP-4 파일럿】 관절 형체 7파트 — 몸통에서 다리 4개가 떨어져 나와 실제로 걷는다.
+    #   다리 모델의 원점(중심)이 엉덩관절이다: 엔진이 rotateX 로 관절을 돌리면 발끝이 호를 그린다.
+    #   보행은 대각이다(phase_deg — 앞왼+뒷오 0° · 앞오+뒷왼 180°). 원거리·예산 압박 시에는
+    #   아래 lod_parts(v1 병합 실루엣 3파트)로 접힌다 — 강등 사다리는 budget 절의 근거를 보라.
     parts:
-      - id: body
+      - id: torso
         role: body
-        key: "honcheon:mob/horangi/body"
+        key: "honcheon:mob/horangi/torso"
         base: LEATHER
-        size: [0.7, 1.0, 2.2]     # 코끝~꼬리밑 2.2m · 어깨높이 1.0m · 어깨너비 0.7m (시베리아호랑이 실치수)
-        offset: [0.0, 0.0, 0.0]
-        pose: "네 발로 선 자세. 어깨가 엉덩이보다 높다(포식자의 등선). 앞다리 굵고 발톱이 보인다"
+        size: [0.7, 0.6, 2.2]     # 몸통만 — 다리를 뺀 높이 0.6m (배 0.42m ~ 어깨 1.02m)
+        offset: [0.0, 0.72, 0.0]  # 중심 원점 파트 — 0.72m 가 몸통 중심 높이다
+        pose: "다리 없는 몸통. 어깨가 엉덩이보다 높다(포식자의 등선). 가슴이 깊고 허리로 갈수록 낮아진다"
       - id: head
         role: head
         key: "honcheon:mob/horangi/head"
@@ -159,14 +173,86 @@ foes:
         offset: [0.0, 0.75, -1.05]  # 몸통 뒤 1.05m — 등선 높이에서 뻗어 나온다
         sway_deg: 22.0              # 걷기 위상에 맞춰 좌우로 22° — 꼬리가 살아 있음의 표시다
         pose: "굵고 긴 꼬리. 검은 고리 무늬. 끝이 살짝 위로 감긴다"
+      # ── 다리 4 — sway_deg 가 스윙 진폭, phase_deg 가 보행 위상, attack_raise_deg 가 덮치기 앞발 ──
+      #    발바닥이 지면(0)에 닿도록 offset.y = size.y 의 절반. 관절(중심 y=0.5m)이 엉덩이 높이다.
+      #    다리 위 절반(관골)은 몸통 옆구리에 파묻힌다 — 회전해도 이음매가 벌어지지 않는 살이다.
+      - id: leg_fl
+        role: leg
+        key: "honcheon:mob/horangi/leg_fl"
+        base: LEATHER
+        size: [0.24, 1.0, 0.30]
+        offset: [-0.25, 0.5, 0.52]  # 왼앞 — v1 몸통의 앞다리 자리 그대로
+        sway_deg: 26.0              # 앞다리 스윙 ±26° — 발끝이 앞뒤로 0.22m 호를 그린다
+        phase_deg: 0.0
+        attack_raise_deg: 45.0      # 덮치기 — 앞발을 들어 올린다
+        pose: "굵은 앞다리. 위 절반은 어깨 근육(몸통에 묻힘), 아래는 곧은 정강이와 발톱 보이는 발"
+      - id: leg_fr
+        role: leg
+        key: "honcheon:mob/horangi/leg_fr"
+        base: LEATHER
+        size: [0.24, 1.0, 0.30]
+        offset: [0.25, 0.5, 0.52]
+        sway_deg: 26.0
+        phase_deg: 180.0            # 대각 보행 — 왼앞과 반대 위상
+        attack_raise_deg: 45.0
+        pose: "굵은 앞다리 (오른쪽). leg_fl 과 거울상"
+      - id: leg_hl
+        role: leg
+        key: "honcheon:mob/horangi/leg_hl"
+        base: LEATHER
+        size: [0.26, 1.0, 0.36]
+        offset: [-0.25, 0.5, -0.40] # 왼뒤 — v1 몸통의 뒷다리 자리 그대로
+        sway_deg: 22.0              # 뒷다리는 짧게 민다
+        phase_deg: 180.0            # 대각 보행 — 앞왼(0°)과 반대, 앞오(180°)와 같다
+        pose: "허벅지가 두꺼운 뒷다리. 위 절반은 엉덩이 근육(몸통에 묻힘)"
+      - id: leg_hr
+        role: leg
+        key: "honcheon:mob/horangi/leg_hr"
+        base: LEATHER
+        size: [0.26, 1.0, 0.36]
+        offset: [0.25, 0.5, -0.40]
+        sway_deg: 22.0
+        phase_deg: 0.0              # 앞왼과 같은 위상 — 대각의 짝
+        pose: "허벅지가 두꺼운 뒷다리 (오른쪽). leg_hl 과 거울상"
+    # 병합 실루엣 (v1 3파트 그대로) — 원거리(lod.full_distance 밖)·예산 압박(full_at 초과) 시의 저파트 폴백.
+    #   멀리서 다리 관절은 안 보인다. 실루엣과 걷기 흔들림이면 호랑이는 호랑이다.
+    lod_parts:
+      - id: body
+        role: body
+        key: "honcheon:mob/horangi/body"
+        base: LEATHER
+        size: [0.7, 1.0, 2.2]     # 코끝~꼬리밑 2.2m · 어깨높이 1.0m · 어깨너비 0.7m (시베리아호랑이 실치수)
+        offset: [0.0, 0.0, 0.0]
+        pose: "네 발로 선 자세(다리 포함 병합). 어깨가 엉덩이보다 높다(포식자의 등선)"
+      - id: head
+        role: head
+        key: "honcheon:mob/horangi/head"
+        base: LEATHER
+        size: [0.5, 0.5, 0.55]
+        offset: [0.0, 0.82, 0.95]
+        head_yaw_max: 55.0
+        head_pitch_max: 30.0
+        pose: "정면을 노려보는 머리 (관절 등급과 같은 모델)"
+      - id: tail
+        role: tail
+        key: "honcheon:mob/horangi/tail"
+        base: LEATHER
+        size: [0.12, 0.12, 0.9]
+        offset: [0.0, 0.75, -1.05]
+        sway_deg: 22.0
+        pose: "굵고 긴 꼬리 (관절 등급과 같은 모델)"
     motion:
-      walk_bob: 0.09              # 상하 흔들림 진폭(m) — 무거운 짐승은 크게 출렁인다
+      walk_bob: 0.07              # 상하 흔들림 진폭(m) 【왜 0.09→0.07】 v2 는 다리가 실제로 걷는다 — 몸통 출렁임이 다리 몫을 나눠 가졌다
       walk_bob_rate: 2.4          # 위상/이동거리(m) — 시간이 아니라 **이동거리**로 돈다 (멈추면 흔들림도 멈춘다)
       walk_roll_deg: 4.0          # 좌우 몸통 기울기 — 어깨가 번갈아 내려간다
       attack_lean_deg: 25.0       # 칠 때 앞으로 기운다 — 덮치는 짐승의 무게
       attack_lean_ticks: 6
       charge_lean_deg: 18.0       # 달릴수록 더 기운다 (속도 비례, 이 값이 상한)
       charge_speed_full: 0.30     # 이 속도(m/틱)에서 charge_lean 최대
+      hurt_recoil_deg: 12.0       # 【v2 · hurt】 맞으면 움찔 — 뒤로 젖힌다
+      hurt_ticks: 5
+      idle_breath: 0.02           # 【v2 · idle】 서 있을 때 숨 — 가슴이 2cm 오르내린다 (시간으로 돈다 — 서 있을 때의 생명)
+      idle_rate: 0.09             # 숨·꼬리 표류 각속도 (rad/틱 · 주기 ≈ 3.5초)
       death_topple_deg: 90.0      # 옆으로 쓰러진다
       death_sink: 0.35            # 쓰러지며 가라앉는다(m) — 땅에 눕는다
       death_ticks: 24             # 쓰러짐 보간 24틱(1.2초) 뒤 사라진다
