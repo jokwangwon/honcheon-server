@@ -152,22 +152,6 @@ P0 네 항목(B-001 ~ B-004)은 **전부 닫혔다** (2026-07-14) — 「닫힌 
 
 # P1 — 세계를 깨뜨리는 것
 
-### B-006 · ★ **안전 지역이 없다** — 관아 앞마당에서도 사람을 벤다
-- **상태**: 열림
-- **분류**: ★세계
-- **단계**: P1
-- **위치**: `config/training.yml:180`
-- **의존**: —
-- **닫는 조건**: 자바가 `location_safety` 를 읽는다 · 안전 지역에서 PvP 가 막힌다
-- **검증**: `python3 tools/game_audit.py` (안전 지역 축이 생기면) — ★ 지금은 **재는 눈이 없다**
-- **닫힘**: —
-
-`location_safety` 는 **config 에만 있다** (`config/training.yml:180` — `문파_내부_관아: {level: 안전}`).
-`party.yml:82` · `sect_life.yml:43` · `faction_entry_routes.yml:120` 이 산문으로 인용한다.
-
-**자바 독자 0.** `location_safety|안전지역|safe_?zone|isSafe` 로 `server-mvt`·`core`·`server-main` 을 훑어 **한 건도 없다.**
-지금 PvP 를 막는 유일한 코드는 `Sparring.java:201` — **합의**(비무)이지 장소가 아니다.
-
 ### B-007 · ★ **헌법이 둘이다** — 팩 게이트의 옛 조항이 14곳에 살아 있다
 - **상태**: 열림
 - **분류**: ★세계
@@ -1343,6 +1327,23 @@ B-005 를 닫으며 드러났다 (2026-07-14). 판정의 눈은 `Cast` 를 요�
 - **닫힘**: 2026-07-14 · 병렬 R3 트랙 병''. NPC 가 **소문이 닿았을 때만** 가문 이름을 안다 — `houseNews()` 가 탄생 소문 군(`탄생:<id>`, 심는 쪽과 같은 열쇠)의 도달·정확도를 NPC 의 망으로 묻고, `houseLine()` 이 빗장을 조립한다. 문턱은 등록부(`config/npc_dialogue.yml` house_name_by_rumor · known_min_accuracy 50 = accuracy_bands.과장.min 정렬): 미도달=기존 금지 그대로 · 뒤틀림(정확도<50)=확신 없는 언급만(**문구에 이름 자리 자체가 없다** — LLM 이 흘릴 수 없다) · 도달=아는 체 허용(들은 것 너머 지어내기 금지). 등록부 소실 시 **닫히는 쪽으로 실패**. 하네스 4케이스 PASS · 컴파일 0 · lint 0 · disposition/house_audit 0 (Fable 재실행). 사람 눈(실서버 대화)은 기립 후 확인
 
 
+### B-006 · ★ **안전 지역이 없다** — 관아 앞마당에서도 사람을 벤다
+- **상태**: 닫힘
+- **분류**: ★세계
+- **단계**: P1
+- **위치**: `config/training.yml:180`
+- **의존**: —
+- **닫는 조건**: 자바가 `location_safety` 를 읽는다 · 안전 지역에서 PvP 가 막힌다
+- **검증**: `python3 tools/safety_audit.py` · `python3 tools/safety_audit_selftest.py`
+- **닫힘**: 2026-07-14 · 병렬 R3 트랙 갑''. 자바가 드디어 `location_safety` 를 읽는다 — 새 좌표 체계 없이 존(zoneAt)과 등록 원형(world_map §16)을 재사용하고, 분류는 등록부가 쥔다 (training.yml zone_keywords·archetypes — 코드에 지명 0개). 게이트는 세 길목: `SkillListener.java:1004`(onMelee 맨 앞 — 화살 사수까지) · `:1365`(선딜 뒤 베는 순간) · `:2844`(초식 히트박스 admit — veto 기록·정원 몫 제외). 어휘: 안전=칼이 안 선다 · 보통=PvP+소문 · 위험=PvP+습격. 한쪽이라도 안전이면 막는다 (저격 진지 방지). **합의 비무는 예외** (문파 서열전이 문파 안에서 서는 설계 근거 — 단 명시 조항은 미결로 표기). 눈 신설: safety_audit 4축 + selftest 변이 7종 전부 잡음. 실측: 컴파일 0 · safety/combat/defense 전부 0 (Fable 재실행). 교차 비무 칼 구멍은 B-112 로. 인게임 실측("정말 안 베인다")은 기립 후
+
+`location_safety` 는 **config 에만 있다** (`config/training.yml:180` — `문파_내부_관아: {level: 안전}`).
+`party.yml:82` · `sect_life.yml:43` · `faction_entry_routes.yml:120` 이 산문으로 인용한다.
+
+**자바 독자 0.** `location_safety|안전지역|safe_?zone|isSafe` 로 `server-mvt`·`core`·`server-main` 을 훑어 **한 건도 없다.**
+지금 PvP 를 막는 유일한 코드는 `Sparring.java:201` — **합의**(비무)이지 장소가 아니다.
+
+
 ### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
 - **상태**: 닫힘
 - **분류**: 빚
@@ -2003,6 +2004,21 @@ id(`hwasan`)가 없다고 짖었다. 린터가 낡았고 config 는 옳았다 �
   ★ B-099 덕에 이제 **중단은 소리를 낸다** (`[틱예산] … 중단`) — 조용히 죽지는 않는다
 - **검증**: `grep -n "max_seconds" config/performance.yml` · 조성 뒤 `[틱예산]` 초 수를 로그에서 확인
 - **닫힘**: —
+
+### B-112 · 안전 지역의 **교차 비무 칼**이 게이트를 지난다 — Sparring 이 짝을 안 알려준다
+- **상태**: 열림
+- **분류**: 결함
+- **단계**: P3
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/Sparring.java`
+- **의존**: —
+- **닫는 조건**: 안전 지역 게이트가 "같은 판의 비무인가"를 묻는다 — Sparring 에 `partnerOf` 류 공개 API 가 서고, A-B·C-D 두 판이 동시일 때 A→C 의 칼이 막힌다
+- **검증**: `python3 tools/safety_audit.py`
+- **닫힘**: —
+
+B-006 을 닫으며 남긴 것 (2026-07-14, 트랙 갑''). isSparring 만 공개라 "둘 다 어느 비무 중"이면
+게이트를 통과한다 — 안전 지역에서 두 판이 동시에 설 때 다른 판의 상대를 벨 수 있다
+(Sparring 이 실피해로 처리). 함께: 안전 지역에서의 비무 허용은 설계 문서에 명시 조항이 없다
+(문파 서열전 근거의 추론) — 명문화 한 줄이 필요하다. 간접 살해(독물·낙사 유도)도 게이트 밖.
 
 ### B-108 · 선언 태세의 **대칭이 미완**이다 — NPC 는 손을 못 세우고, 눈은 그 층을 모른다
 - **상태**: 열림

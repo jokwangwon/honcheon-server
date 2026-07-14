@@ -9,6 +9,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -145,12 +146,16 @@ public final class SkillListener implements Listener {
 
     private final ActiveGuard activeGuard;
 
+    /** 안전 지역 등록부 (B-006) — training.yml {@code location_safety}. 적힌 순서 = 판정 우선순위 */
+    private final List<SafetyRule> safetyRules;
+
     public SkillListener(HoncheonMvt plugin, SkillEngine engine) {
         this.plugin = plugin;
         this.engine = engine;
         this.hud = new SkillHud(engine);
         this.display = new SkillDisplay(plugin, engine);
         this.activeGuard = loadActiveGuard(plugin);
+        this.safetyRules = loadSafetyRules(plugin);
     }
 
     /**
@@ -173,6 +178,145 @@ public final class SkillListener implements Listener {
         } catch (RuntimeException missing) {
             return new ActiveGuard(false, "막기", 0, 0, 0, true);
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  안전 지역 (B-006) — 【관아 앞마당에서는 사람을 벨 수 없다】
+    //
+    //  training.yml location_safety 는 오래 적혀 있었는데 읽는 자바가 0줄이었다 — 등록부는
+    //  "관아는 안전"이라 말하는데 세계에선 관아 앞마당에서 사람이 베였다. 설계는 명시적이다:
+    //  "PvP는 상시 가능(공유 세계) — 단 안전 지역(관아·문파 내부)은 예외 (location_safety)"
+    //  (docs/design/party_and_cooperation.md §6).
+    //
+    //  장소 판정은 **존/앵커 체계 그대로**다 (조성이 만들고 zones.yml 이 기억하고 zoneAt 이 답한다 —
+    //  새 좌표 체계를 발명하지 않았다). 어느 구역이 어느 분류인지는 등록부(location_safety 의
+    //  zone_keywords · archetypes)가 말한다 — 이 코드에는 지명이 없다 (등록제).
+    //
+    //  ★ 비무(합의)는 **별개 층**이다 — 게이트는 서로 선언한 두 사람의 칼을 막지 않는다.
+    //    문파 내부(안전)의 비무 서열전·장문 비무 도전이 설계에 있다 (sect_life.md) — 안전 지역이
+    //    합의된 겨룸까지 막으면 그 설계가 죽는다. 합의의 규칙(중상 상한·제3자의 칼)은 Sparring 의 것.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** 분류 하나 — {@code level} 은 training.yml 의 어휘 그대로 (안전 · 보통 · 위험) */
+    private record SafetyRule(String category, String level,
+                              List<String> zoneKeywords, Set<String> archetypes) {
+    }
+
+    /** 사람에게 칼이 서지 않는 등급 — training.yml location_safety 의 level 어휘 (정본) */
+    private static final String SAFE_LEVEL = "안전";
+
+    /** 장소 이름 → 원형 — world_map.yml §16. 지도는 onEnable 뒤에 서므로 첫 물음에서 굳힌다 */
+    private Map<String, String> archetypeByPlaceName;
+
+    /** 등록부 판독 — 섹션이 없으면 조용히 꺼진다 (등록부가 앞서고 코드가 따른다. safety_audit 이 짖는다) */
+    private static List<SafetyRule> loadSafetyRules(HoncheonMvt plugin) {
+        try {
+            Map<String, Object> table = RulesConfig.section(RulesConfig.load(
+                            plugin.getDataFolder().toPath().resolve("config").resolve("training.yml")),
+                    "location_safety");
+            List<SafetyRule> out = new ArrayList<>();
+            for (Map.Entry<String, Object> e : table.entrySet()) {
+                if (!(e.getValue() instanceof Map<?, ?> m)) {
+                    continue;
+                }
+                out.add(new SafetyRule(e.getKey(), String.valueOf(m.get("level")),
+                        strings(m.get("zone_keywords")), Set.copyOf(strings(m.get("archetypes")))));
+            }
+            return List.copyOf(out);
+        } catch (RuntimeException missing) {
+            return List.of();
+        }
+    }
+
+    private static List<String> strings(Object v) {
+        if (!(v instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object o : list) {
+            out.add(String.valueOf(o));
+        }
+        return out;
+    }
+
+    /**
+     * 이 자리의 안전도 — training.yml {@code location_safety} 의 level (안전·보통·위험).
+     * 구역 밖(들판·산야)이면 {@code null} — 강호의 자유 지대다.
+     *
+     * <p>장소 판정은 존 체계 그대로다: {@link HoncheonMvt#zoneAt} (중첩 시 부피가 작은 쪽 —
+     * 건물 > 마을). 분류는 등록부에 <b>적힌 순서대로</b> 먼저 맞는 것이 이긴다 (안전이 맨 위 —
+     * "청하현 관아"는 「관아」로 안전이지, 「청하현」으로 보통이 아니다).
+     */
+    String safetyLevel(Location at) {
+        if (safetyRules.isEmpty()) {
+            return null;
+        }
+        Zone zone = plugin.zoneAt(at);
+        if (zone == null) {
+            return null;
+        }
+        String archetype = placeArchetype(zone.name());
+        for (SafetyRule rule : safetyRules) {
+            for (String kw : rule.zoneKeywords()) {
+                if (!kw.isBlank() && zone.name().contains(kw)) {
+                    return rule.level();
+                }
+            }
+            if (archetype != null && rule.archetypes().contains(archetype)) {
+                return rule.level();
+            }
+        }
+        return null;
+    }
+
+    /** 구역 이름 = 원거리 등록지의 장소 이름 (RemoteBuilder 가 place.name() 으로 존을 판다) — 그 원형 */
+    private String placeArchetype(String zoneName) {
+        if (archetypeByPlaceName == null) {
+            WorldMap map = plugin.worldMap();
+            if (map == null) {
+                return null;
+            }
+            Map<String, String> out = new HashMap<>();
+            for (WorldMap.Place p : map.all()) {
+                if (p.archetype() != null && !p.archetypePending()) {
+                    out.put(p.name(), p.archetype());
+                }
+            }
+            archetypeByPlaceName = out;
+        }
+        return archetypeByPlaceName.get(zoneName);
+    }
+
+    /**
+     * <b>안전 지역 게이트 (B-006)</b> — 안전(安全) 지역에서는 사람에게 칼이 서지 않는다.
+     * 세 판정길이 전부 이 문을 지난다: {@code onMelee}(길목의 맨 앞 — 바닐라·화살 포함) ·
+     * {@link #basicJudged}(벼른 뒤 베는 순간) · {@link #admit}(초식의 히트박스가 가려낼 때).
+     *
+     * <p>어느 <b>한쪽이라도</b> 안전 지역에 서 있으면 막는다 — 담 밖에서 담 안을 쏘는 것도,
+     * 담 안에서 담 밖을 쏘는 것도 (안전 지역이 저격 진지가 되면 그것은 안전이 아니라 무기다).
+     *
+     * <p>비무 선언 중의 두 사람은 예외 (합의는 {@link Sparring} 의 별개 층 — 위 절의 사연).
+     */
+    private boolean safetyBlocks(Player attacker, LivingEntity target) {
+        if (safetyRules.isEmpty() || !(target instanceof Player victim) || attacker.equals(victim)) {
+            return false;
+        }
+        Sparring bouts = plugin.hunting() == null ? null : plugin.hunting().sparring();
+        if (bouts != null && bouts.isSparring(attacker) && bouts.isSparring(victim)) {
+            return false;   // 서로 선언했다 — 비무는 안전 지역의 예외다 (죽지는 않는다. Sparring 이 막는다)
+        }
+        return SAFE_LEVEL.equals(safetyLevel(victim.getLocation()))
+                || SAFE_LEVEL.equals(safetyLevel(attacker.getLocation()));
+    }
+
+    /** 게이트의 말 — 왜 칼이 서지 않았는지 화면이 말한다 (침묵하는 게이트는 버그로 보인다) */
+    private void safetyDenied(Player attacker, LivingEntity target) {
+        Location at = SAFE_LEVEL.equals(safetyLevel(target.getLocation()))
+                ? target.getLocation() : attacker.getLocation();
+        Zone zone = plugin.zoneAt(at);
+        String where = zone == null ? "안전 지역" : zone.name();
+        SkillHud.actionBar(attacker, ChatColor.GRAY + where
+                + " — 여기서는 법이 이긴다 (사람에게 칼이 서지 않는다)");
     }
 
     /** 중앙 티커 기동 — HoncheonMvt.onEnable 에서 1회 (효과별 개별 태스크 생성 금지, F-P2) */
@@ -851,6 +995,17 @@ public final class SkillListener implements Listener {
         if (applying || !(event.getEntity() instanceof LivingEntity target)) {
             return;
         }
+        // ★ 【안전 지역 · B-006】 길목의 맨 앞 — 판정도 내력 지불도 이 문을 지나야 시작된다.
+        //   화살(발사체)의 손도 여기서 잡는다: 아래 분기들은 발사체를 사람의 일로 치지 않아서,
+        //   이 문이 없으면 바닐라 화살이 안전 지역의 사람에게 그대로 실린다.
+        Player assailant = event.getDamager() instanceof Player p ? p
+                : event.getDamager() instanceof Projectile pr
+                        && pr.getShooter() instanceof Player shooter ? shooter : null;
+        if (assailant != null && safetyBlocks(assailant, target)) {
+            event.setCancelled(true);
+            safetyDenied(assailant, target);
+            return;
+        }
         if (event.getDamager() instanceof Player player) {
             breakGuard(player);   // 행동 소모 — 때리는 손은 방어 전념을 버린 것이다 (active_guard)
             String skillId = skillInHand(player);
@@ -1205,6 +1360,12 @@ public final class SkillListener implements Listener {
      * 도구({@code defense_audit})와 엔진이 같은 셈을 해야 도구가 안 거짓말한다.
      */
     private BasicHit basicJudged(Player player, LivingEntity target, double raw) {
+        // 【안전 지역 · B-006】 벼른 뒤 **베는 순간**의 문 — 선딜 사이에 상대가 관아 문턱을
+        //   넘었을 수 있다 (onMelee 의 문은 클릭 순간의 자리만 본다). 내력 지불보다 먼저 선다.
+        if (safetyBlocks(player, target)) {
+            safetyDenied(player, target);
+            return new BasicHit(false, SkillEngine.BARE, 0.0);
+        }
         SkillEngine.State state = state(player);
         touchCombat(state);
         // 격은 두른 것을 그대로 싣는다 — 검기를 두르고 그냥 휘둘러도 **기의 타격**이 난다.
@@ -2680,6 +2841,11 @@ public final class SkillListener implements Listener {
         List<LivingEntity> out = new ArrayList<>();
         long t0 = System.nanoTime();
         for (LivingEntity t : caught) {
+            if (t instanceof Player && safetyBlocks(player, t)) {
+                // 【안전 지역 · B-006】 벨 수 없는 몸은 손의 몫(max_targets)도 먹지 않는다
+                vetoes.add(new String[]{name(t), "안전 지역 — 사람에게 칼이 서지 않는다 (training.yml location_safety)"});
+                continue;
+            }
             if (out.size() >= cast.maxTargets()) {
                 vetoes.add(new String[]{name(t), "손이 모자라다 (max_targets " + cast.maxTargets() + ")"});
                 continue;

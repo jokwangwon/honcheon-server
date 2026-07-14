@@ -176,11 +176,34 @@ bottlenecks:
   combat_requirement: "경지 승급의 실전 경험·깨달음은 수련 상태로 채울 수 없음"
   diminishing: "같은 기술 연속 수련 게임 1년 초과 시 효율 -25%씩"
 
-# 수련 장소 안전도 — 수련 중에도 세계는 흐른다
+# 수련 장소 안전도 — 수련 중에도 세계는 흐른다.
+# ★ B-006: 이 표는 수련만의 것이 아니다 — **안전 지역(PvP 게이트)의 정본**이기도 하다
+#   (SkillListener.safetyLevel — party_and_cooperation.md §6 "PvP는 상시 가능 — 단 안전 지역은 예외").
+#   level 어휘 (이 파일이 정본):
+#     안전 = 사람에게 칼이 서지 않는다 (PvP 차단 — 관아·문파 내부. 비무 선언 중의 두 사람은 예외,
+#            합의는 Sparring 의 별개 층이다) · 보통 = PvP 가능 (소문 노출) · 위험 = PvP 가능 + 습격
+#   장소 판정은 존/앵커 체계다 (조성이 만들고 zones.yml 이 기억하고 zoneAt 이 답한다 — 새 좌표 체계 없음):
+#     zone_keywords: Zone 이름에 이 조각이 들어 있으면 이 분류다 (부분 일치 — "청하현 관아" ∋ "관아")
+#     archetypes:   Zone 이름 = world_map 장소 이름일 때, 그 장소의 archetype 이 이 목록에 있으면
+#                   이 분류다 (world_map.yml §16 — RemoteBuilder.Archetype 의 이름 그대로)
+#   구역 밖(들판·산야)은 어느 분류에도 안 든다 — 강호의 자유 지대다 (PvP 가능).
 location_safety:
-  문파_내부_관아: { level: 안전, events: "개입 불가" }
-  민가_객잔: { level: 보통, events: "소문 노출 (두문불출 소문)" }
-  야산_동굴_폐가: { level: 위험, events: "세력 반응 5단계(직접 개입)의 습격 이벤트 가능 — NPC 약식 전투 규칙 적용" }
+  문파_내부_관아:
+    level: 안전
+    events: "개입 불가"
+    zone_keywords: [관아]
+    # 관(관아·관문·성문 — "관은 무림이 아니다. 여기서는 법이 이긴다") · 구파(문파 내부) · 세가(가문의 담 안)
+    archetypes: [관아, 관문, 성문, 도관, 사찰, 전각, 암자, 석조도관, 목조검문, 비구니원, 폐쇄대저택, 군사저택, 정원저택, 북방저택]
+  민가_객잔:
+    level: 보통
+    events: "소문 노출 (두문불출 소문)"
+    zone_keywords: [객잔, 의방, 의뢰소, 전장, 장터, 표국, 민가, 청하현]
+    archetypes: []
+  야산_동굴_폐가:
+    level: 위험
+    events: "세력 반응 5단계(직접 개입)의 습격 이벤트 가능 — NPC 약식 전투 규칙 적용"
+    zone_keywords: [폐사당, 산길, 나루, 동굴]
+    archetypes: [산채, 녹림석채, 은신처, 수로채, 흑성, 천막, 유배지]   # 무법의 집 — 법이 닿지 않는다
 
 # 귀환 리포트 — 장 재개/접속 시
 return_report:
