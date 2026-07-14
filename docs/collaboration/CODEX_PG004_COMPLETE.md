@@ -16,6 +16,7 @@
 - 업무 성공은 커밋되고 실패는 롤백되며 브리지 inbox·세계 변경·커서 원자성을 유지한다.
 - 스냅숏은 `REPEATABLE READ` 읽기 전용 트랜잭션에서 모든 표를 CSV ZIP으로 묶는다.
 - PG-005 importer 전에는 PostgreSQL `/초기화` 스냅숏의 자동 복원을 지원하지 않는다.
+- 단일 연결과 전역 직렬화는 PG-006에서 제거하며, PG-007 전까지 운영 전환하지 않는다.
 
 ## 검증
 
@@ -31,8 +32,37 @@
 - `python3 tools/persistence_port_audit.py` - 15축 통과
 - `python3 tools/persistence_port_audit_selftest.py` - 5/5
 
+재현 명령:
+
+```bash
+JAVA_HOME="$PWD/run/jdk-21" ./gradlew :server-bot:jar
+
+run/jdk-21/bin/javac \
+  -cp server-bot/build/libs/server-bot-0.1.0.jar \
+  -d /tmp/honcheon-pg004-sqlite-test \
+  tools/PersistenceContractSelfTest.java tools/ResetSelfTest.java tools/BridgeDeliverySelfTest.java
+for test in PersistenceContractSelfTest ResetSelfTest BridgeDeliverySelfTest; do
+  run/jdk-21/bin/java \
+    -cp /tmp/honcheon-pg004-sqlite-test:server-bot/build/libs/server-bot-0.1.0.jar \
+    "com.honcheon.bot.$test"
+done
+
+docker run --rm -d --name honcheon-pg004-test \
+  -e POSTGRES_USER=honcheon -e POSTGRES_PASSWORD=contract -e POSTGRES_DB=honcheon \
+  -p 127.0.0.1:55432:5432 postgres:16-alpine
+until docker exec honcheon-pg004-test pg_isready -U honcheon -d honcheon; do sleep 1; done
+run/jdk-21/bin/javac -cp server-bot/build/libs/server-bot-0.1.0.jar \
+  -d /tmp/honcheon-pg004-test tools/PostgresqlContractSelfTest.java
+run/jdk-21/bin/java -cp /tmp/honcheon-pg004-test:server-bot/build/libs/server-bot-0.1.0.jar \
+  com.honcheon.bot.PostgresqlContractSelfTest \
+  jdbc:postgresql://127.0.0.1:55432/honcheon honcheon contract
+docker rm -f honcheon-pg004-test
+```
+
+
 ## 다음 작업 PG-005
 
 SQLite 원본을 읽어 PostgreSQL로 적재하는 일회성 export/import 도구를 만든다. 표별 행 수,
 외래키, 캐릭터 전낭·은행 합계, 세계 메타, 브리지 멱등 키를 양쪽에서 검산하고 실패 시
-PostgreSQL 변경을 롤백한다. PG-005가 닫히기 전에는 운영 전환이나 SQLite 제거를 하지 않는다.
+PostgreSQL 변경을 롤백한다. PG-005 이관, PG-006 동시성 제어, PG-007 전환·복귀 훈련이
+모두 닫히기 전에는 운영 전환이나 SQLite 제거를 하지 않는다.

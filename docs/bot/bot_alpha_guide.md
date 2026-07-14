@@ -35,14 +35,35 @@ export DISCORD_TOKEN='발급받은 토큰'
 - 빌드 → 기동까지 자동. `혼천 봇 기동 — …` 로그가 뜨면 준비 완료
 - 슬래시 명령은 **글로벌 등록**이라 첫 반영에 최대 1시간 걸릴 수 있다
   (급하면 봇을 서버에서 내보냈다 재초대하면 보통 즉시 뜬다)
-- DB: `run/bot/honcheon.db` (SQLite 단일 파일). 초기화하려면 봇을 끄고 파일 삭제
+- 기본 DB는 `run/bot/honcheon.db` SQLite 단일 파일이다. PostgreSQL은 아래 환경 변수로 명시적으로 선택한다.
 
 | 환경 변수 | 기본값 | 뜻 |
 |---|---|---|
 | `DISCORD_TOKEN` | (필수) | 봇 토큰 |
 | `HONCHEON_CONFIG` | `config` | 룰 config 디렉터리 — 단일 진실 원천 |
+| `HONCHEON_DB_BACKEND` | `sqlite` | `sqlite`, `postgresql` 또는 `postgres` |
 | `HONCHEON_DB` | `run/bot/honcheon.db` | SQLite 경로 |
-| `HONCHEON_SCHEMA` | `db/schema.sql` | 스키마 원천 |
+| `HONCHEON_DATABASE_URL` | (PostgreSQL 필수) | `jdbc:postgresql://호스트:포트/DB` 형식 JDBC URL |
+| `HONCHEON_DATABASE_USER` | `honcheon` | PostgreSQL 사용자 |
+| `HONCHEON_DATABASE_PASSWORD` | 빈 문자열 | PostgreSQL 비밀번호 |
+| `HONCHEON_SCHEMA` | 백엔드별 자동 선택 | SQLite는 `db/schema.sql`, PostgreSQL은 `db/postgresql/schema.sql` |
+
+PostgreSQL 기동 예시:
+
+```bash
+export DISCORD_TOKEN='발급받은 토큰'
+export HONCHEON_DB_BACKEND='postgresql'
+export HONCHEON_DATABASE_URL='jdbc:postgresql://127.0.0.1:5432/honcheon'
+export HONCHEON_DATABASE_USER='honcheon'
+export HONCHEON_DATABASE_PASSWORD='비밀번호'
+./scripts/run_bot.sh
+```
+
+PG-004 시점의 PostgreSQL 초기화 백업은 반복 읽기 트랜잭션에서 표별 CSV를 담은
+`honcheon-postgresql.zip`을 만든다. PG-005 import 도구가 완성되기 전에는 자동 복원이
+지원되지 않으므로 운영 PostgreSQL에서 `/초기화`를 실행하지 않는다.
+또한 단일 연결과 전역 직렬화는 PG-006까지 유지되므로 아직 동시성 확장 효과가 없다.
+PG-007 전환·복귀 훈련이 끝나기 전에는 PostgreSQL 경로를 개발·검증 용도로만 사용한다.
 
 ## 4. 검증 시나리오 (알파 체크리스트)
 
