@@ -83,6 +83,7 @@ final class TerrainAudit {
     // ─── ⑥ 의 문턱 — config/terrain.yml audit.underground_* 와 <b>같은 수여야 한다</b> ───
     private static final double UNDERGROUND_VOID_MAX = 0.02;   // audit.underground_void_max — 공기만 센다
     private static final double UNDERGROUND_DUG_MAX = 0.08;    // audit.underground_dug_cave_max — 우리가 판 굴의 여유
+    private static final int UNDERGROUND_MARGIN = 5;           // audit.underground_surface_margin — 지면 아래 5칸부터가 지하다
 
     /**
      * <b>사람이 깐 바닥</b> — 이 검수의 기준선.
@@ -616,6 +617,28 @@ final class TerrainAudit {
         return boxes;
     }
 
+    /**
+     * ⑥ <b>기둥별 표본 상한</b> — 지하는 <b>지면 밑</b>에서만 센다.
+     *
+     * <p>★ B-114 5차 — 액체를 가르고 판 굴을 가르고도 3.84% 가 남았다. 진범은 <b>하늘</b>이었다:
+     * 구판은 중심 y 기준 고정 대역 [cy-45, cy-5] 를 훑어, 지면이 낮은 기둥(저지·수변, 지면 62~85 vs
+     * cy≈90)에서 <b>열린 하늘의 공기를 지하 공동으로</b> 셌다. 산술이 정합한다:
+     * 저지 ~80기둥 × ~19칸 ≈ 1,520 ≈ 실측 1,513 — 물 0 · 무변동 · 판굴 없음을 동시에 설명한다.
+     *
+     * <p>상한 = min(cy, 그 기둥의 지면) − margin. 지면은 이 파일의 기존 손 {@link #surfaceY} 로 찾는다
+     * ({@code getHighestBlockYAt} 은 물을 땅으로, 옛 지붕을 지면으로 읽는다 — TerrainForge 가 두 번
+     * 무너진 그 버그라 쓰지 않는다). margin 등록부: {@code config/terrain.yml audit.underground_surface_margin}.
+     *
+     * @param standY {@link #surfaceY} 의 답 (딛는 자리 = 지면 + 1). 못 찾으면 {@code MIN_VALUE}
+     * @return 이 기둥에서 표본할 최고 y. 지면을 못 찾으면 {@code MIN_VALUE} — 그 기둥은 세지 않는다
+     */
+    static int columnTop(int cy, int standY) {
+        if (standY == Integer.MIN_VALUE) {
+            return Integer.MIN_VALUE;
+        }
+        return Math.min(cy, standY - 1) - UNDERGROUND_MARGIN;
+    }
+
     /** 표본 칸이 판 굴의 상자 안에 있는가 — 순수 함수 (하네스가 시험한다) */
     static boolean inCaveBox(List<Zone> boxes, int x, int y, int z) {
         for (Zone zn : boxes) {
@@ -631,7 +654,8 @@ final class TerrainAudit {
      * 지하의 빈 곳 — <b>자연 동굴은 통제할 수 없다</b>는 판단(사용자)에 따라, 세계는 <b>동굴 없이</b> 생성되고
      * 동굴이 필요하면 <b>우리가 판다</b>. 그 약속이 지켜졌는지 재는 눈이다.
      *
-     * <p>지면 아래 5~45칸을 표본한다. 카버(동굴)가 파는 것은 <b>공기</b>다 — 그래서 판정은
+     * <p><b>기둥마다 그 기둥의 지면</b> 아래 {@value #UNDERGROUND_MARGIN}칸부터(중심 y−45 까지) 표본한다.
+     * 카버(동굴)가 파는 것은 <b>공기</b>다 — 그래서 판정은
      * <b>공기만</b>으로 한다. 물·용암은 생성기의 구조층(대수층·용암 바다)이라 <b>분리 계수해 보고만</b> 한다
      * ({@link #classifyDeep} · B-114). 자연 동굴이 살아 있으면 공기 비율이 5~15% 나온다.
      * 데이터팩(honcheon_no_caves)이 제대로 걸렸다면 <b>1% 미만</b>이어야 한다 —
@@ -644,6 +668,9 @@ final class TerrainAudit {
      * <p>그리고 <b>우리가 판 굴도 자연 동굴이 아니다</b> — 원장(terrain_built.yml)이 기억하는
      * 굴 상자 안의 공기는 「판 굴」로 분리 계수한다 ({@link #dugCaveBoxes} · B-114 후속).
      * 등록 <b>안 된</b> 공기는 여전히 짖는다 — 검출력은 그대로다.
+     *
+     * <p>그리고 <b>하늘도 지하가 아니다</b> — 기둥별 상한을 지면에 물린다 ({@link #columnTop} · B-114 5차).
+     * 지면이 낮은 기둥의 열린 하늘을 고정 대역이 지하로 세던 병을 여기서 고쳤다.
      */
     private static void underground(List<String> out, List<String> violations,
                                     World world, int cx, int cy, int cz, int r, boolean dugCave) {
@@ -655,9 +682,17 @@ final class TerrainAudit {
         long waterCnt = 0;
         long lavaCnt = 0;
         long total = 0;
+        int blindColumns = 0;   // 지면을 못 찾은 기둥 — 세지 않되, 침묵하지 않는다
+        List<String> spots = new ArrayList<>();
         for (int x = cx - r; x <= cx + r; x += 4) {
             for (int z = cz - r; z <= cz + r; z += 4) {
-                for (int y = cy - 45; y <= cy - 5; y++) {
+                // ★ 기둥별 상한 — "지하"는 **그 기둥의 지면 밑**에서만 (하늘은 지하가 아니다)
+                int top = columnTop(cy, surfaceY(world, x, z, cy));
+                if (top == Integer.MIN_VALUE) {
+                    blindColumns++;
+                    continue;
+                }
+                for (int y = cy - 45; y <= top; y++) {   // top ≤ cy − margin (columnTop 이 보장한다)
                     if (y < world.getMinHeight() + 5) {
                         continue;
                     }
@@ -668,6 +703,9 @@ final class TerrainAudit {
                                 dugAir++;   // 원장이 아는 굴 — 우리 것이다
                             } else {
                                 air++;      // 등록 안 된 공기 — 이것만 짖는다
+                                if (spots.size() < 5) {
+                                    spots.add("(" + x + "," + y + "," + z + ")");
+                                }
                             }
                         }
                         case WATER -> waterCnt++;
@@ -679,8 +717,12 @@ final class TerrainAudit {
         }
         double pct = total == 0 ? 0 : (double) air / total;
         double liquidPct = total == 0 ? 0 : (double) (waterCnt + lavaCnt) / total;
-        out.add(INFO + "  지하 표본 " + total + "칸 · 공동(공기) " + air + "칸 ("
-                + String.format("%.2f%%", pct * 100) + ")");
+        out.add(INFO + "  지하 표본 " + total + "칸 (기둥별 지면−" + UNDERGROUND_MARGIN + " 상한"
+                + (blindColumns > 0 ? " · 지면 못 찾은 기둥 " + blindColumns + " 제외" : "")
+                + ") · 공동(공기) " + air + "칸 (" + String.format("%.2f%%", pct * 100) + ")");
+        if (!spots.isEmpty()) {
+            out.add(INFO + "    자리(등록 안 된 공기 — 다음 수사는 여기서): " + String.join(" ", spots));
+        }
         out.add(INFO + "    액체(분리 계수 — 동굴이 아니라 구조층이다): 물 " + waterCnt + " · 용암 " + lavaCnt
                 + " (" + String.format("%.2f%%", liquidPct * 100) + ") — 판정에 넣지 않는다");
         if (!dug.isEmpty()) {

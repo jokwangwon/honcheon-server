@@ -316,6 +316,13 @@ caves:
 audit:
   underground_void_max: 0.02      # 환경 검수 ⑥ — 지하 공동(★공기만) 2% 문턱 (TerrainAudit UNDERGROUND_VOID_MAX 거울)
   underground_dug_cave_max: 0.08  # 우리가 판 굴이 있는 지역의 여유 (TerrainAudit UNDERGROUND_DUG_MAX 거울)
+  underground_surface_margin: 5   # ⑥ 기둥별 표본 상한 = min(중심y, 그 기둥의 지면) − margin (TerrainAudit UNDERGROUND_MARGIN 거울)
+    # ★★ B-114 5차 (2026-07-14) — **하늘은 지하가 아니다.** 구판은 중심 y 기준 고정 대역
+    #   [cy−45, cy−5] 를 훑어, 지면이 낮은 기둥(저지·수변 62~85 vs 청하현 cy≈90)의 **열린 하늘**을
+    #   지하 공동으로 셌다. 산술 정합: 저지 ~80기둥 × ~19칸 ≈ 1,520 ≈ 실측 1,513 —
+    #   물 0 · 봉인 무변동 · 판굴 없음 세 관측을 동시에 설명한다.
+    #   지면 판정은 getHighestBlockYAt 이 아니라 하향 고체 탐색(TerrainAudit.surfaceY — 물·잎을
+    #   지나친다)을 쓴다: getHighestBlockYAt 은 물을 땅으로, 옛 지붕을 지면으로 읽는다 (두 번 무너진 버그).
 
   # ═════════════════════════════════════════════════════════════════════════
   # ★★ ⑥ 액체 분리 계수 (underground_liquids) — **액체는 동굴이 아니다** (B-114)
