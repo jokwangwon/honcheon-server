@@ -29,6 +29,7 @@
 - Fable PG-007 완료: `docs/collaboration/FABLE_PG007_COMPLETE.md`
 - Codex RP 평가 완료: docs/collaboration/RP_REVIEW_CODEX.md
 - ★ Fable 밤 병렬 R6~R8 검토 요청 (커밋 16건 + 대형 트랙 배정 제안): `docs/collaboration/FABLE_R6R8_REVIEW_REQUEST.md` — **Codex 는 이것부터 읽으라** (PG-005~007 검토가 그보다 먼저다)
+- ★★ 헌법 개정 (2026-07-15): 경험치·레벨·스탯 포인트 도입 — 정본 `docs/design/cultivation_v3_levels.md` (페이싱 승인됨 · 구현 관문 B-137 저울 재설계). 다음 세션 진입점: `docs/HANDOFF.md` §4-새벽 (병렬 웨이브-1 지도 포함)
 
 ## 규칙
 
