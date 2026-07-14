@@ -109,6 +109,49 @@ final class Scribe {
         }
     }
 
+    /**
+     * ★ 대화도 같은 배를 탄다 (B-016) — {@code /혼천 대화} 가 렌더러를 직접 부르면 서장 lane 과
+     * <b>같은 GPU 를 다툰다</b> (위 실측: 동시에 던지면 각자 4배 느려진다 — 배는 한 명씩 탄다).
+     *
+     * <p>규칙은 {@link #write} 와 <b>동형</b>이고, 다른 것은 시스템 프롬프트뿐이다
+     * (서장 = 렌더러의 고정 SYSTEM, 대화 = NPC 페르소나 — {@link LlmRenderer#chat}).
+     * 폴백 수렴·줄 넘침·차례 알림·<b>반환 future 는 절대 예외로 완료되지 않는다</b> — 전부 같다.
+     */
+    CompletableFuture<Written> chat(String system, String user, String fallback,
+                                    java.util.function.IntConsumer onQueued) {
+        if (!renderer.enabled()) {
+            return CompletableFuture.completedFuture(new Written(fallback, true, "LLM 비활성"));
+        }
+        int ahead = queued.getAndIncrement();
+        if (ahead >= queueMax) {
+            // 줄이 넘쳤다 — 세우지 않는다. 기다리게 하느니 지금 준다 (write 와 같은 규칙)
+            queued.decrementAndGet();
+            return CompletableFuture.completedFuture(
+                    new Written(fallback, true, "줄이 넘쳤다 (" + ahead + "명 대기)"));
+        }
+        if (onQueued != null) {
+            onQueued.accept(ahead);   // ★ 앞에 몇 사람인가 — 대화에서도 침묵 금지
+        }
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    // ★ join — 서장과 **같은 스레드**가 차선이다. 대화가 그리는 동안 서장의 배도
+                    //   뜨지 못한다 (그것이 요점이다 — GPU 는 하나니까)
+                    String text = renderer.chat(system, user, fallback).join();
+                    boolean fell = text == null || text.equals(fallback);
+                    return new Written(fell ? fallback : text, fell, fell ? "렌더 폴백" : null);
+                } catch (Exception e) {
+                    return new Written(fallback, true, "붓이 부러졌다: " + e.getClass().getSimpleName());
+                } finally {
+                    queued.decrementAndGet();
+                }
+            }, lane);
+        } catch (RejectedExecutionException e) {
+            queued.decrementAndGet();
+            return CompletableFuture.completedFuture(new Written(fallback, true, "붓이 닫혔다"));
+        }
+    }
+
     void stop() {
         lane.shutdownNow();
     }

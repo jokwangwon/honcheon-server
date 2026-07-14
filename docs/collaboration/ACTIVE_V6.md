@@ -18,7 +18,8 @@
 | PG-008 SQLite 경로 제거 | Fable | Codex | 보존 기간 종료 대기 (기간은 사람이 정한다) | SQLite 경로, 문서 갱신 | 설계 문서 표 · 컷오버 기록 §남은 일 |
 | B-005 평타 대립 판정 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillListener.java`, `config/combat.yml` | ★ SkillListener 는 이 트랙 소유 — 다른 손 금지 |
 | B-016·017 대화 줄서기·폴백 표식 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `GameListener.java` 대화부, `config/llm.yml` (Scribe 는 추가만) | SJ 트랙과 조율: Scribe/Seojang 기존 동작 불변 |
-| B-008 game_audit 위반 4건 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `config/reset.yml`, `config/npcs/cheongha_npcs.yml`, `tools/game_audit*.py` | 오독이면 눈을 고친다 |
+| B-008 game_audit 위반 4건 | Fable-병렬 R1 | Codex | 완료·커밋 1cce4fc (후속 B-104 신설) | `config/npcs/cheongha_npcs.yml`, `tools/game_audit.py` | schema.sql 어휘 대조로 오독 교정 — 하드코딩 예외 아님 |
+| SJ-001 조판 엔진 (BookLayout) | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `BookLayout.java`(신설), `SeojangBook.java` 조판부, `BookLayoutSelfTest` | 청사진 `seojang_presentation.md` §SJ-001 — Fable 검토 통과, 착수 |
 | B-026·027·028 등록부·감사 정합 | Fable-병렬 R1 | Codex | 진행 중 (2026-07-14) | `SkillDisplay.java`, `config/skill_motion.yml`, `config/performance.yml`, `tools/motion_audit.py`, `tools/perf_audit.py` | 세 감사 위반 0 이 닫는 조건 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 

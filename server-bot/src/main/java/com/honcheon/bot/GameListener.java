@@ -1,6 +1,7 @@
 package com.honcheon.bot;
 
 import com.honcheon.core.rules.JudgmentEngine;
+import com.honcheon.core.rules.RulesConfig;
 import com.honcheon.domain.FactionService;
 import com.honcheon.domain.RegionService;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -20,6 +21,7 @@ import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import net.dv8tion.jda.api.interactions.modals.Modal;
 
 import java.awt.Color;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -2376,6 +2378,31 @@ public final class GameListener extends ListenerAdapter {
 
     private final Map<String, Long> talkCooldown = new ConcurrentHashMap<>();
 
+    /**
+     * llm.yml runtime 의 <b>문장</b> 키 (chat_queue_notice·chat_fallback_mark — B-016·B-017).
+     *
+     * <p>{@link Rules#llmRuntime} 은 숫자만 내주는 손잡이라 (Rules 는 다른 트랙 소유 — 못 넓힌다)
+     * 같은 등록부를 여기서 한 번 더 읽는다. 원칙은 같다 — <b>문구는 코드가 짓지 않는다.</b>
+     * 파일을 못 읽어도 봇은 죽지 않는다 (아래 기본 문장으로 흐른다).
+     */
+    private final Map<String, Object> llmRuntimeCfg = loadLlmRuntime();
+
+    private static Map<String, Object> loadLlmRuntime() {
+        try {
+            // HONCHEON_CONFIG 규약은 HoncheonBot.main 과 같다 (기본 config) — 다른 파일을 읽으면 거짓말이 된다
+            return RulesConfig.section(RulesConfig.load(
+                    Path.of(System.getenv().getOrDefault("HONCHEON_CONFIG", "config")).resolve("llm.yml")),
+                    "runtime");
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private String llmRuntimeText(String key, String fallback) {
+        Object v = llmRuntimeCfg.get(key);
+        return v instanceof String s && !s.isBlank() ? s : fallback;
+    }
+
     private void talkToNpc(SlashCommandInteractionEvent event) throws Exception {
         if (notInRegion(event)) {
             return;
@@ -2432,8 +2459,13 @@ public final class GameListener extends ListenerAdapter {
             resolveInfoCheck(event, row, chId, npcName, say);
             return;
         }
-        renderer.chat(persona, say, fallback).thenAccept(reply -> {
+        // ★ B-016 — 대화도 **같은 배**를 탄다: 전에는 여기서 렌더러를 직접 불렀다 — 서장 lane 과
+        //   GPU 를 다퉜다 (Scribe 실측: 동시에 던지면 각자 4배). 이제 줄(단일 차선)을 지나므로
+        //   llm.yml runtime.serialize 가 대화에도 걸린다. 줄이 길면 차례를 말해 준다 (침묵 금지).
+        scribe.chat(persona, say, fallback, ahead -> chatFerryTell(event, npcName, ahead))
+                .thenAccept(written -> {
             try {
+                String reply = written.text();
                 // F35 — 소형 모델이 잡담과 [판정]을 섞어 낸다: 관용 매칭 + 앞 텍스트 폐기
                 if (reply.contains("[판정]")) {
                     resolveInfoCheck(event, row, chId, npcName, say);
@@ -2443,6 +2475,17 @@ public final class GameListener extends ListenerAdapter {
                 String clean = reply.replace("[판정]", "").strip();
                 if (clean.isBlank()) {
                     clean = fallback;
+                }
+                // ★ B-017 — 폴백은 침묵하지 않는다 (서장의 간기 fallback_mark 와 동형):
+                //   사람에게는 등록부의 표식 한 줄, 장부에는 events '서사_폴백' 한 건.
+                if (written.fallback()) {
+                    if (rules.fallbackVisible()) {
+                        clean = clean + "\n" + llmRuntimeText("chat_fallback_mark",
+                                "*(붓이 더디어 몸짓만 돌아왔다)*");
+                    }
+                    db.logEvent("서사_폴백", "character", String.valueOf(chId),
+                            Map.of("경로", "대화", "상대", npcName,
+                                    "사유", written.reason() == null ? "미상" : written.reason()));
                 }
                 // 잡담층 + 세계층 기록 (대화 요지 — NPC 기억의 재료)
                 db.logEvent("대화", "character", String.valueOf(chId), npcName,
@@ -2454,6 +2497,22 @@ public final class GameListener extends ListenerAdapter {
                 event.getHook().sendMessage("오류: " + e.getMessage()).queue();
             }
         });
+    }
+
+    /**
+     * 나루의 사공 — <b>대화의 줄에도 차례를 말해 준다</b> (침묵 금지 — 서장 {@code ferryTell} 과 동형,
+     * 단 문(門)이 다르다: 서장은 마크의 화면, 대화는 디스코드의 hook).
+     *
+     * <p>서장과 달리 문턱이 있다 (llm.yml runtime.queue_warn_depth) — 대화는 짧고 디스코드가
+     * "생각 중…" 을 이미 보여 주므로, 줄이 정말 길 때만 세계의 말로 이유를 댄다.
+     */
+    private void chatFerryTell(SlashCommandInteractionEvent event, String npcName, int ahead) {
+        if (ahead < rules.llmRuntime("queue_warn_depth", 3)) {
+            return;
+        }
+        event.getHook().sendMessage(llmRuntimeText("chat_queue_notice",
+                "…{npc}은(는) 다른 손님을 상대하고 있다 — 조금만. (앞에 {ahead}인)")
+                .replace("{npc}", npcName).replace("{ahead}", String.valueOf(ahead))).queue();
     }
 
     /**

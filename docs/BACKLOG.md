@@ -330,35 +330,6 @@ before.realItems = "REAL:칠성검,비급,은자7971";   // (진짜 서버에서
 `SkillCast` 의 `"패링"·"회피"·"반격"` 관문은 전부 **피격 후 창**(`lastHurt` + `COUNTER_WINDOW`)으로 **근사**된다 —
 즉 **막는 행위가 아니라 맞은 뒤의 보상**이다.
 
-### B-016 · `/혼천 대화` 가 **줄을 안 선다** (Scribe 를 우회한다)
-- **상태**: 열림
-- **분류**: 결함
-- **단계**: P3
-- **위치**: `server-bot/src/main/java/com/honcheon/bot/GameListener.java:1976`
-- **의존**: —
-- **닫는 조건**: 대화도 `Scribe` 의 한 줄(lane)을 탄다 — GPU 를 두 길이 다투지 않는다
-- **검증**: `config/llm.yml:44` 의 `serialize: true` 가 대화 경로에도 걸리는가
-- **닫힘**: —
-
-서장은 **고쳐졌다** (**B-054 닫힘**): `Scribe.java:42` 가 단일 스레드 lane 을 세웠다.
-그런데 `/혼천 대화` 는 `Scribe` 를 **건너뛰고** `renderer.chat(...)` 을 직접 부른다 (`GameListener.java:1976`) →
-`LlmRenderer.java:158` 의 `sendAsync` 가 **직렬화 없이** 발사된다.
-
-**같은 GPU 를 서장 lane 과 대화가 다툰다.** 씨앗의 절반이 살아 있다.
-
-### B-017 · `/혼천 대화` 의 **폴백이 사람에게 안 보인다**
-- **상태**: 열림
-- **분류**: 결함
-- **단계**: P3
-- **위치**: `server-bot/src/main/java/com/honcheon/bot/GameListener.java:1976`
-- **의존**: B-016
-- **닫는 조건**: 대화가 폴백으로 떨어지면 **사람이 안다** (서장의 `fallback_mark` 처럼)
-- **검증**: `config/seojang.yml` 의 `fallback_mark` 에 해당하는 것이 대화에도 있는가
-- **닫힘**: —
-
-서장은 **고쳐졌다** (**B-055 닫힘**) — `SeojangBook.java:213` 이 `§8(붓이 더디어 옛 필사본이 왔다)` 를 찍는다.
-대화(`GameListener.java:1976-1987`)는 **조용히** 폴백으로 갈아탄다. 표식이 없다.
-
 ### B-018 · 나루(입도진)를 **아무도 눈으로 못 봤다**
 - **상태**: 미확인
 - **분류**: 결함
@@ -1247,6 +1218,37 @@ PG-007 훈련(2026-07-14)이 발견했다 — 훈련이 만든 병이 **아니�
 `publish()` 가 어떤 JSON 값을 Map 로 기대하는데 String 이 온다 (state_json 안의 어느 키일 것이다).
 `publishQuietly` 가 조용히 삼키므로 **되먹임(봇→마크 스냅숏)이 끊긴 채 세계가 돈다** —
 마크는 낡은 `world_state.json` 을 본다. ★ **운영 컷오버 전에 고쳐야 한다** (PG-007 완료 문서 §남은 위험).
+
+### B-016 · `/혼천 대화` 가 **줄을 안 선다** (Scribe 를 우회한다)
+- **상태**: 닫힘
+- **분류**: 결함
+- **단계**: P3
+- **위치**: `server-bot/src/main/java/com/honcheon/bot/GameListener.java:1976`
+- **의존**: —
+- **닫는 조건**: 대화도 `Scribe` 의 한 줄(lane)을 탄다 — GPU 를 두 길이 다투지 않는다
+- **검증**: `config/llm.yml:44` 의 `serialize: true` 가 대화 경로에도 걸리는가
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 을. 대화가 서장과 **같은 배**를 탄다 — `GameListener.java:2465` 가 `renderer.chat` 직접 호출 대신 `scribe.chat(...)` 을 부르고, `Scribe.java:108-150` 의 신설 `chat()` 이 기존 단일 스레드 lane(`Scribe.java:42`) 위에서 돈다 (Scribe 는 **순수 추가만**, +43/−0 — 서장 트랙 소유권 존중). 스레드가 하나이므로 대화·서장의 동시 GPU 호출은 구조적으로 1건이다. 줄이 밀리면 등록부 문장(`llm.yml` runtime.chat_queue_notice)으로 차례를 알린다. 컴파일 exit 0 · lint_config 0건 (Fable 재실행 확인)
+
+서장은 **고쳐졌다** (**B-054 닫힘**): `Scribe.java:42` 가 단일 스레드 lane 을 세웠다.
+그런데 `/혼천 대화` 는 `Scribe` 를 **건너뛰고** `renderer.chat(...)` 을 직접 부른다 (`GameListener.java:1976`) →
+`LlmRenderer.java:158` 의 `sendAsync` 가 **직렬화 없이** 발사된다.
+
+**같은 GPU 를 서장 lane 과 대화가 다툰다.** 씨앗의 절반이 살아 있다.
+
+
+### B-017 · `/혼천 대화` 의 **폴백이 사람에게 안 보인다**
+- **상태**: 닫힘
+- **분류**: 결함
+- **단계**: P3
+- **위치**: `server-bot/src/main/java/com/honcheon/bot/GameListener.java:1976`
+- **의존**: B-016
+- **닫는 조건**: 대화가 폴백으로 떨어지면 **사람이 안다** (서장의 `fallback_mark` 처럼)
+- **검증**: `config/seojang.yml` 의 `fallback_mark` 에 해당하는 것이 대화에도 있는가
+- **닫힘**: 2026-07-14 · 병렬 R1 트랙 을. 대화 폴백에 표식이 생겼다 — `llm.yml` runtime.chat_fallback_mark ("*(붓이 더디어 몸짓만 돌아왔다)*" — 서장 fallback_mark 문법 차용, 디스코드라 마크다운) 를 `GameListener.java:2480-2489` 가 답변에 덧붙이고, 장부에 `서사_폴백` 사건(경로:대화·상대·사유)을 적는다 — 서장의 persistScene 과 대칭. 문구는 등록부가 정본이다 (코드가 말을 지어내지 않는다)
+
+서장은 **고쳐졌다** (**B-055 닫힘**) — `SeojangBook.java:213` 이 `§8(붓이 더디어 옛 필사본이 왔다)` 를 찍는다.
+대화(`GameListener.java:1976-1987`)는 **조용히** 폴백으로 갈아탄다. 표식이 없다.
+
 
 ### B-001 · lint_config 가 21건을 짖는데 **전부 거짓 양성**이다
 - **상태**: 닫힘
