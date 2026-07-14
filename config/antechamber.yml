@@ -308,7 +308,10 @@ antechamber:
       # ★ 계기(計器)의 발판 — 손 관문 마당. 허수아비가 **맞은 것을 숫자로 말하게** 한다
       #   (/혼천 타격보기 = 선딜·지속·후딜 · 히트스톱 · 넉백 · 흔들림. MvtCommand.hitEye — op 아님)
       - { id: 타격,      pos: [-18, -3], command: "혼천 타격보기" }
-      - { id: 수련_외공, pos: [16, -2], command: "혼천 수련 외공 5" }
+      # ★ 배분 값은 player_creation.yml mvt_onboarding.default_curriculum 과 글자 그대로 같아야 한다
+      #   (antechamber_audit 가 대조한다). 그리고 합은 하루 5구간(time.yml)을 못 넘는다 —
+      #   외공 5 로 올렸던 손이 있었다: 초식 3 과 합해 8구간이 되어 하루가 넘쳤다 (되돌림).
+      - { id: 수련_외공, pos: [16, -2], command: "혼천 수련 외공 2" }
       - { id: 수련_초식, pos: [16,  2], command: "혼천 수련 초식 3" }
       - { id: 시트,      pos: [19, -2], command: "혼천 시트" }
       - { id: 태세_자동, pos: [19,  2], command: "혼천 태세 자동" }
