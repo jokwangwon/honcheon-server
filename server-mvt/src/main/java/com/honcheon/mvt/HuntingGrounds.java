@@ -1663,7 +1663,10 @@ public final class HuntingGrounds implements Listener {
                 event.getDrops().add(item);
             }
         }
-        if (foe.loadout() != null && !"비무상대".equals(foe.role())) {
+        // ★ 맨손은 떨굴 병기가 없다 (B-144) — 폴백 무장(:729)과 짐승의 이빨이 다 "맨손"인데,
+        //   Weapons.Series 에는 맨손이 없어 make 가 던졌고 **onDeath 나머지(다리 사건)까지 죽었다**
+        if (foe.loadout() != null && !"비무상대".equals(foe.role())
+                && !"맨손".equals(foe.loadout()[0])) {
             // 병기 전리품 — 역할별 확률은 등록부가 준다 (hunting_grounds.yml loot.weapon_drop_chance)
             double chance = weaponDropChance.getOrDefault(String.valueOf(foe.role()),
                     weaponDropChance.getOrDefault("default", 0.5));

@@ -2134,18 +2134,22 @@ public final class MvtCommand implements CommandExecutor {
         }
         int n;
         try {
-            n = Integer.parseInt(args[2]);
+            n = Integer.parseInt(args[args.length - 1]);
         } catch (NumberFormatException e) {
             return true;   // 책이 내는 값은 언제나 수다 — 아니면 사람이 손으로 친 것이다
         }
+        // ★ 토큰은 args[1..끝-1] 을 도로 잇는다 (B-142) — 판정어의 공백('부분 성공' ·
+        //   '아슬아슬한 성공')이 명령 인자를 갈라, 책이 낸 클릭이 위의 침묵 반환으로 죽었다.
+        //   책은 토큰을 통짜로 내지만 명령 인자는 공백을 모른다 — 잇는 것은 받는 쪽의 몫이다.
+        String token = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length - 1));
         // ★ 낡은 책의 클릭 — 그 자리에서 말해 준다 (봇도 거르지만, 사람은 **지금** 알아야 한다)
         String live = SeojangBook.get() == null ? null : SeojangBook.get().tokenOf(player.getUniqueId());
-        if (live != null && !live.equals(args[1])) {
+        if (live != null && !live.equals(token)) {
             player.sendMessage(SeojangBook.legacy(
                     SeojangBook.get().stale()));
             return true;
         }
-        WorldBridge.seojangChoice(player.getUniqueId(), player.getName(), args[1], n);
+        WorldBridge.seojangChoice(player.getUniqueId(), player.getName(), token, n);
         player.sendMessage(SeojangBook.legacy(SeojangBook.get().waiting()));
         player.closeInventory();   // 책을 덮는다 — 다음 장이 오면 저절로 펼쳐진다
         return true;
