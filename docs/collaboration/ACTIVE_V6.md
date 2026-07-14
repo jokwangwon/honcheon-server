@@ -10,7 +10,8 @@
 | PG-003 트랜잭션·SQL 방언 경계 | Codex | Fable | 검토 통과, 커밋 a2c482a | `TransactionRunner.java`, `SqlDialect.java`, 계약 시험 | `CODEX_PG003_COMPLETE.md` |
 | PG-004 PostgreSQL 구현 | Codex | Fable | 검토 통과, 커밋 a2c482a | PostgreSQL 스키마, 방언, 런타임 선택, 계약 시험 | `CODEX_PG004_COMPLETE.md` · 검토: `FABLE_PG004_REVIEW.md` |
 | PG-005 SQLite export/import·검산 | Fable | Codex | 완료, Codex 검토 대기 (2026-07-14) | `tools/PgMigrate.java`, `PgMigrateSelfTest.java`, `pg_migration_audit*.py` | `FABLE_PG005_COMPLETE.md` (재현 명령 포함 · 리허설 컨테이너 살아 있음) |
-| PG-006 연결 풀·동시성 제어 | Fable | Codex | 다음 작업, 착수 전 | 연결 풀, 충돌 제어, 관측 지표 | 설계 문서 표 · PG-005 완료 문서 §다음 작업 |
+| PG-006 연결 풀·동시성 제어 | Fable | Codex | 완료, Codex 검토 대기 (2026-07-14) | `ConnectionSource*` 5파일, `Db.java` 직렬화 제거, `PgConcurrencySelfTest.java`, `pg_concurrency_audit*.py` | `FABLE_PG006_COMPLETE.md` |
+| PG-007 스테이징 전환·복귀 훈련 | Fable | Codex | 다음 작업, 착수 전 | 컷오버·롤백 절차, 훈련 기록 | PG-005·PG-006 완료 문서 §다음 작업 |
 | 브리지 전달 원자성 | Codex | Fable | 검토 통과, 커밋 a2c482a | `Bridge.java`, `Db.java`, bridge 감사 | `CODEX_BRIDGE_ATOMIC_COMPLETE.md` |
 
 PG-005 이후 작업과 전체 의존성은 `docs/design/postgresql_migration.md`를 따른다. 한 번에 PostgreSQL 전환 작업 하나만 활성화한다.

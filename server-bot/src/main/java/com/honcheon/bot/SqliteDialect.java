@@ -13,6 +13,21 @@ final class SqliteDialect implements SqlDialect {
     }
 
     @Override
+    public boolean pooled() {
+        return false;   // 파일 하나에 한 손 — 직렬화가 곧 SQLite 의 사실이다
+    }
+
+    @Override
+    public int connectionIsolation() {
+        return -1;   // 드라이버 기본 그대로 (직렬이므로 충돌 자체가 없다)
+    }
+
+    @Override
+    public boolean isRetryableConflict(java.sql.SQLException failure) {
+        return false;   // 한 손에는 겨룰 상대가 없다
+    }
+
+    @Override
     public void ensureRegion(Connection connection, String region) throws Exception {
         try (PreparedStatement ps = connection.prepareStatement(
                 "INSERT OR IGNORE INTO regions(id, security, economy, sentiment, updated_day) "

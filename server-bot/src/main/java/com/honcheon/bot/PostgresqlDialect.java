@@ -43,6 +43,24 @@ final class PostgresqlDialect implements SqlDialect {
     }
 
     @Override
+    public boolean pooled() {
+        return true;   // PG-006 — 여기서부터 전역 직렬화가 없다
+    }
+
+    @Override
+    public int connectionIsolation() {
+        // 같은 뭉치를 두 손이 고치면 버전 충돌(40001)이 난다 — 그것이 순서의 판정이다.
+        return Connection.TRANSACTION_SERIALIZABLE;
+    }
+
+    @Override
+    public boolean isRetryableConflict(SQLException failure) {
+        // 40001 = 직렬화 실패 · 40P01 = 교착 — 둘 다 "잠시 물러나 다시 재라"는 뜻이다
+        String state = failure.getSQLState();
+        return "40001".equals(state) || "40P01".equals(state);
+    }
+
+    @Override
     public void ensureRegion(Connection connection, String region) throws Exception {
         try (PreparedStatement ps = connection.prepareStatement(
                 "INSERT INTO regions(id, security, economy, sentiment, updated_day) "

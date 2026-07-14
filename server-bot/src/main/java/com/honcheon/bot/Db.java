@@ -29,7 +29,8 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    private final Connection conn;
+    private final ConnectionSource source;   // 연결의 샘 — SQLite 한 손 · PostgreSQL 풀 (PG-006)
+    private final Connection conn;           // 샘 위의 가면(RoutingConnection) — 87곳의 conn. 이 그대로 산다
     private final SqlDialect dialect;
 
     public static Db open(Map<String, String> environment) throws Exception {
@@ -44,7 +45,8 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
             String password = environment.getOrDefault("HONCHEON_DATABASE_PASSWORD", "");
             Path schema = Path.of(environment.getOrDefault(
                     "HONCHEON_SCHEMA", "db/postgresql/schema.sql"));
-            return new Db(Path.of("."), schema, new PostgresqlDialect(url, user, password));
+            int poolSize = Integer.parseInt(environment.getOrDefault("HONCHEON_DB_POOL", "4"));
+            return new Db(Path.of("."), schema, new PostgresqlDialect(url, user, password), poolSize);
         }
         if (!"sqlite".equals(backend)) {
             throw new IllegalArgumentException("모르는 HONCHEON_DB_BACKEND: " + backend);
@@ -60,9 +62,19 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     Db(Path dbPath, Path schemaPath, SqlDialect dialect) throws Exception {
+        this(dbPath, schemaPath, dialect, 4);
+    }
+
+    Db(Path dbPath, Path schemaPath, SqlDialect dialect, int poolSize) throws Exception {
         Files.createDirectories(dbPath.toAbsolutePath().getParent());
         this.dialect = dialect;
-        this.conn = dialect.open(dbPath);
+        // PG-006 — 직렬화가 메서드의 synchronized 에서 연결의 샘으로 내려왔다:
+        // SQLite 는 한 손(오늘의 직렬화 그대로), PostgreSQL 은 풀(전역 직렬화 없음).
+        this.source = dialect.pooled()
+                ? new PooledConnectionSource(() -> dialect.open(dbPath), poolSize,
+                        dialect.connectionIsolation())
+                : new SingleConnectionSource(dialect.open(dbPath));
+        this.conn = RoutingConnection.wrap(source);
         try (Statement st = conn.createStatement()) {
             for (String sql : Files.readString(schemaPath).split(";")) {
                 String trimmed = sql.strip();
@@ -130,7 +142,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         dialect.ensureWorldDay(conn);
     }
 
-    public synchronized int worldDay() throws SQLException {
+    public int worldDay() throws SQLException {
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT value FROM world_meta WHERE key='현재일'")) {
             return rs.next() ? Integer.parseInt(rs.getString(1)) : 1;
@@ -138,14 +150,17 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 세계일 +1 — 자정 스케줄러·관리자 정산의 공용 지점. 새 날을 돌려준다 */
-    public synchronized int advanceDay() throws SQLException {
-        int next = worldDay() + 1;
-        setMeta("현재일", String.valueOf(next));
-        return next;
+    public int advanceDay() throws SQLException {
+        // 읽고(오늘) 계산하고(내일) 쓴다 — 두 손이 겹치면 하루가 증발한다. 그래서 원자다.
+        return atomicallySql(() -> {
+            int next = worldDay() + 1;
+            setMeta("현재일", String.valueOf(next));
+            return next;
+        });
     }
 
     /** 활성/서장 캐릭터 조회 — 계정당 1 (죽음 규칙 정합) */
-    public synchronized Optional<Map<String, Object>> findCharacter(String discordId) throws Exception {
+    public Optional<Map<String, Object>> findCharacter(String discordId) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT id, name, status, realm, location, sheet_json, wallet FROM characters "
                         + "WHERE discord_id = ? AND status != '사망' ORDER BY id DESC LIMIT 1")) {
@@ -166,7 +181,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 강호에 나와 있는 모든 캐릭터 — 세계일 정산(빈사 마감·감쇠)의 순회 대상 */
     @SuppressWarnings("unchecked")
-    public synchronized List<Map<String, Object>> activeCharacters() throws Exception {
+    public List<Map<String, Object>> activeCharacters() throws Exception {
         List<Map<String, Object>> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(
@@ -184,7 +199,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         return out;
     }
 
-    public synchronized long createCharacter(String discordId, String name, Map<String, Object> sheet, int wallet)
+    public long createCharacter(String discordId, String name, Map<String, Object> sheet, int wallet)
             throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO characters(discord_id, name, status, realm, location, sheet_json, wallet, created_day) "
@@ -201,7 +216,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         }
     }
 
-    public synchronized Optional<Map<String, Object>> findCharacterById(long id) throws Exception {
+    public Optional<Map<String, Object>> findCharacterById(long id) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT id, name, status, realm, location, sheet_json, wallet FROM characters WHERE id = ?")) {
             ps.setLong(1, id);
@@ -220,7 +235,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 시트·전낭·경지·신분·위치 갱신 — 서장 진행·출도·사냥·비무·수련·승급의 영속화 지점 */
-    public synchronized void updateCharacter(long id, Map<String, Object> sheet, int wallet,
+    public void updateCharacter(long id, Map<String, Object> sheet, int wallet,
                                 String realm, String status, String location) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE characters SET sheet_json = ?, wallet = ?, realm = ?, status = ?, location = ? "
@@ -237,7 +252,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     // ─── 장면 영속화 (scenes) — 봇 재시작 생존의 핵심 (알파 한계 1 해소) ───
 
-    public synchronized void openScene(String channel, String thread, long characterId) throws Exception {
+    public void openScene(String channel, String thread, long characterId) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO scenes(channel, thread, state, participants, opened_day) "
                         + "VALUES(?, ?, '진행', ?, ?)")) {
@@ -249,7 +264,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         }
     }
 
-    public synchronized void closeScene(String thread) throws Exception {
+    public void closeScene(String thread) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE scenes SET state = '종결', closed_day = ? WHERE thread = ? AND state = '진행'")) {
             ps.setInt(1, worldDay());
@@ -260,7 +275,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 진행 중 장면의 첫 참가자 캐릭터 ID — 서장은 1인 장면 */
     @SuppressWarnings("unchecked")
-    public synchronized Optional<Long> sceneCharacter(String thread) throws Exception {
+    public Optional<Long> sceneCharacter(String thread) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT participants FROM scenes WHERE thread = ? AND state = '진행' LIMIT 1")) {
             ps.setString(1, thread);
@@ -276,7 +291,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     // ─── world_meta 범용 키 — 지역 채널 바인딩 등 ───
 
-    public synchronized void setMeta(String key, String value) throws SQLException {
+    public void setMeta(String key, String value) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO world_meta(key, value) VALUES(?, ?) "
                         + "ON CONFLICT(key) DO UPDATE SET value = excluded.value")) {
@@ -286,7 +301,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         }
     }
 
-    public synchronized Optional<String> getMeta(String key) throws SQLException {
+    public Optional<String> getMeta(String key) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT value FROM world_meta WHERE key = ?")) {
             ps.setString(1, key);
@@ -302,18 +317,18 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * npc(대화)·quest(의뢰)·character(비무)·fortune(기연)·simbeop(개화·운기)·place(탐방).
      * 새 이벤트 타입을 추가할 때 대상이 있으면 6-인자 오버로드를 쓰라.
      */
-    public synchronized void logEvent(String type, String actorType, String actorId, Map<String, Object> data)
+    public void logEvent(String type, String actorType, String actorId, Map<String, Object> data)
             throws Exception {
         logEvent(type, actorType, actorId, null, data);
     }
 
     /** F32 — 대상 있는 이벤트: target_type/target_id 를 채워 추적 가능하게 (8차 보완: type 동반) */
-    public synchronized void logEvent(String type, String actorType, String actorId, String targetId,
+    public void logEvent(String type, String actorType, String actorId, String targetId,
                                       Map<String, Object> data) throws Exception {
         logEvent(type, actorType, actorId, null, targetId, data);
     }
 
-    public synchronized void logEvent(String type, String actorType, String actorId, String targetType,
+    public void logEvent(String type, String actorType, String actorId, String targetType,
                                       String targetId, Map<String, Object> data) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO events(day, type, actor_type, actor_id, target_type, target_id, data_json) "
@@ -340,7 +355,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     //   산수는 domain.FactionService → core.FactionReactionEngine 하나뿐이다.
 
     @Override
-    public synchronized FactionLedger.Row standingRow(String factionId, long characterId)
+    public FactionLedger.Row standingRow(String factionId, long characterId)
             throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT attention, favor, attention_day, favor_day, peak_stage, peak_favor "
@@ -359,7 +374,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 이 캐릭터를 아는 세력들 (0 인 것은 행이 없다 — 무관심은 기록되지 않는다) */
     @Override
-    public synchronized List<String> standingFactions(long characterId) throws SQLException {
+    public List<String> standingFactions(long characterId) throws SQLException {
         List<String> factions = new java.util.ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT faction_id FROM faction_standing WHERE character_id = ? ORDER BY faction_id")) {
@@ -374,7 +389,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     @Override
-    public synchronized void writeStanding(String factionId, long characterId, FactionLedger.Row row)
+    public void writeStanding(String factionId, long characterId, FactionLedger.Row row)
             throws SQLException {
         upsert(factionId, characterId, row.attention(), row.favor(), row.attentionDay(),
                 row.favorDay(), row.peakStage(), row.peakFavor());
@@ -426,7 +441,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 지금 세계에 걸린 모든 사안 (저장값 — 감쇠 정산은 Politics.decayed 가 읽는 순간 한다) */
-    public synchronized List<MyeongbunIssue> issues() throws Exception {
+    public List<MyeongbunIssue> issues() throws Exception {
         List<MyeongbunIssue> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT * FROM myeongbun ORDER BY created_day, issue")) {
@@ -437,7 +452,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         return out;
     }
 
-    public synchronized Optional<MyeongbunIssue> issue(String key) throws Exception {
+    public Optional<MyeongbunIssue> issue(String key) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM myeongbun WHERE issue = ?")) {
             ps.setString(1, key);
             try (ResultSet rs = ps.executeQuery()) {
@@ -450,7 +465,15 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 명분 가산 — 정산 후 더한다 (사건이 쌓고 시간이 깎는다).
      * 사안이 없으면 만든다: 그때의 target·tags·발원 소문(정확도)이 이 명분의 정체가 된다.
      */
-    public synchronized MyeongbunIssue addMyeongbun(String key, String target, List<String> victims,
+    public MyeongbunIssue addMyeongbun(String key, String target, List<String> victims,
+                                    List<String> tags, int delta, int accuracy, String rumorGroup,
+                                    String trueTarget, int day, int max, Politics politics)
+            throws Exception {
+        return atomically(() -> addMyeongbunInTx(key, target, victims, tags, delta, accuracy,
+                rumorGroup, trueTarget, day, max, politics));
+    }
+
+    private MyeongbunIssue addMyeongbunInTx(String key, String target, List<String> victims,
                                     List<String> tags, int delta, int accuracy, String rumorGroup,
                                     String trueTarget, int day, int max, Politics politics)
             throws Exception {
@@ -507,7 +530,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     // '다른 전쟁 중(+4)' 은 저장하지 않는다 — 오늘의 연합에서 읽으면 되는 값이므로 (파생 상태 금지).
 
     /** 사건이 얹은 부담 (감쇠 정산 후) — 30일마다 -1. 사정은 느리게 풀린다 */
-    synchronized int sectBurden(String faction, int today, int decayEveryDays) throws SQLException {
+    int sectBurden(String faction, int today, int decayEveryDays) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT burden, updated_day FROM sect_state WHERE faction = ?")) {
             ps.setString(1, faction);
@@ -524,8 +547,13 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 사정을 얹거나(장문 사망 +3) 푼다(후계가 섰다 -3) — 0~6 clamp */
-    public synchronized int addSectBurden(String faction, int delta, String source, int today,
+    public int addSectBurden(String faction, int delta, String source, int today,
                                    int decayEveryDays, int max) throws Exception {
+        return atomically(() -> addSectBurdenInTx(faction, delta, source, today, decayEveryDays, max));
+    }
+
+    private int addSectBurdenInTx(String faction, int delta, String source, int today,
+                                  int decayEveryDays, int max) throws Exception {
         int now = sectBurden(faction, today, decayEveryDays);
         int next = Math.max(0, Math.min(max, now + delta));
         java.util.LinkedHashSet<String> sources = new java.util.LinkedHashSet<>();
@@ -561,7 +589,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 지금 사정이 있는 세력들 (진단·관측용) */
-    public synchronized Map<String, Integer> sectBurdens(int today, int decayEveryDays) throws SQLException {
+    public Map<String, Integer> sectBurdens(int today, int decayEveryDays) throws SQLException {
         Map<String, Integer> out = new java.util.LinkedHashMap<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT faction, burden, updated_day FROM sect_state")) {
@@ -581,7 +609,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 진범 규명 — 명분은 **소멸하지 않고 이전된다** (myeongbun.drains.진범_규명 = transfer).
      * 이간(오해 밴드)을 푸는 유일한 문: 엉뚱한 세력에게 붙었던 명분이 진짜 가해자에게 옮겨 간다.
      */
-    public synchronized void transferMyeongbun(String key, String newTarget, int accuracy, int day)
+    public void transferMyeongbun(String key, String newTarget, int accuracy, int day)
             throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE myeongbun SET target = ?, true_target = NULL, origin_accuracy = ?, "
@@ -610,13 +638,18 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 오늘 기준 법명분 — 정산값 (7일마다 -1. 단 15 이력이면 8에서 멈춘다) */
-    public synchronized int mandate(long characterId, int today, Politics politics) throws SQLException {
+    public int mandate(long characterId, int today, Politics politics) throws SQLException {
         Mandate raw = rawMandate(characterId);
         return politics.decayedMandate(raw.gauge(), raw.peak(), raw.updatedDay(), today);
     }
 
     /** 법명분 가산 — 포두 +8 · 현령 +14 / 자수 -10 · 배상 -6. peak 는 감쇠 하한의 근거로 남는다 */
-    public synchronized int addMandate(long characterId, int delta, int today, Politics politics)
+    public int addMandate(long characterId, int delta, int today, Politics politics)
+            throws SQLException {
+        return atomicallySql(() -> addMandateInTx(characterId, delta, today, politics));
+    }
+
+    private int addMandateInTx(long characterId, int delta, int today, Politics politics)
             throws SQLException {
         int now = mandate(characterId, today, politics);
         int next = Math.max(0, Math.min(politics.mandateMax(), now + delta));
@@ -640,7 +673,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * -1 = 아직 닿지 않았다 (formation.channel_gate: 소식이 없으면 평가 자체가 없다).
      * ★ 같은 사건이 망마다 다른 정확도로 도착한다 = 세력마다 다른 크기의 명분이 된다.
      */
-    public synchronized int rumorAccuracyIn(String group, String network, int day) throws SQLException {
+    public int rumorAccuracyIn(String group, String network, int day) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT accuracy FROM rumors WHERE content_json LIKE ? AND network = ? "
                         + "AND born_day <= ? ORDER BY accuracy DESC LIMIT 1")) {
@@ -658,7 +691,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     // ─── NPC 생사 (npcs.status) — 죽은 자와는 말할 수 없다 ───
 
     /** NPC 사망 기록 — state_json 에 사망일·사인·목격·시신 (연쇄의 전체 입력) */
-    public synchronized void killNpc(String npcKey, int tier, Map<String, Object> state) throws Exception {
+    public void killNpc(String npcKey, int tier, Map<String, Object> state) throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO npcs(id, region, tier, status, state_json, updated_day) "
                         + "VALUES(?, '" + REGION + "', ?, '사망', ?, ?) "
@@ -674,7 +707,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 사망 NPC 등록부 — 키 → state_json (사망일·사인·목격·시신). 서비스 공백·게시판 주입의 입력 */
     @SuppressWarnings("unchecked")
-    public synchronized Map<String, Map<String, Object>> deadNpcs() throws Exception {
+    public Map<String, Map<String, Object>> deadNpcs() throws Exception {
         Map<String, Map<String, Object>> out = new java.util.LinkedHashMap<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(
@@ -701,7 +734,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 소문 전파 — 도달 스케줄 하나하나를 한 행으로 심는다.
      * 강도 0 이면 아무것도 심지 않는다 (소문 없음 = 은밀형의 보상). 반환: 심어진 도달 수.
      */
-    public synchronized int spreadRumor(String group, String truth, String subject, Long subjectId,
+    public int spreadRumor(String group, String truth, String subject, Long subjectId,
                                  List<String> tags, int strength, List<RumorArrival> arrivals,
                                  String region) throws Exception {
         if (strength <= 0 || arrivals.isEmpty()) {
@@ -740,7 +773,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * network 가 null 이면 전 망. 강한 것·최근 것부터.
      */
     @SuppressWarnings("unchecked")
-    public synchronized List<Rumors.Heard> heard(int day, String network, int decayEveryDays)
+    public List<Rumors.Heard> heard(int day, String network, int decayEveryDays)
             throws Exception {
         int every = Math.max(1, decayEveryDays);
         String sql = "SELECT id, content_json, strength, accuracy, network, born_day, "
@@ -775,7 +808,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 오늘 막 도달한 것들 (born_day == 오늘) — 아침 방송의 "몇 건이 새로 닿았는가" */
-    public synchronized int arrivalCountOn(int day) throws SQLException {
+    public int arrivalCountOn(int day) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT COUNT(*) FROM rumors WHERE state = '전파중' AND born_day = ?")) {
             ps.setInt(1, day);
@@ -794,7 +827,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 중복은 이벤트 원장이 막는다 (세력_인지 = 세력 × 소문군 1회) — 그래서 몇 번을 돌려도 멱등이다.
      */
     @SuppressWarnings("unchecked")
-    public synchronized List<Map<String, Object>> arrivalsThrough(int day, int lookbackDays)
+    public List<Map<String, Object>> arrivalsThrough(int day, int lookbackDays)
             throws Exception {
         List<Map<String, Object>> out = new java.util.ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
@@ -814,7 +847,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 특정 소문군이 이미 심어져 있는가 — 세계 개막 소문의 1회성 보장 */
-    public synchronized boolean rumorGroupExists(String group) throws SQLException {
+    public boolean rumorGroupExists(String group) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT 1 FROM rumors WHERE content_json LIKE ? LIMIT 1")) {
             ps.setString(1, "%\"군\":\"" + group + "\"%");
@@ -827,7 +860,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     // ─── 플레이어의 죽음 (단계 4 A) — 비가역. 계정당 한 삶 ───
 
     /** 사망 확정 — status '사망' + died_day. 이 행은 findCharacter 에서 영영 사라진다 */
-    public synchronized void killCharacter(long id, int day) throws SQLException {
+    public void killCharacter(long id, int day) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE characters SET status = '사망', died_day = ? WHERE id = ?")) {
             ps.setInt(1, day);
@@ -838,7 +871,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 이 계정의 마지막 죽은 캐릭터 — 새 삶의 '혈연 시작'이 무엇을 물려받는지의 원천 */
     @SuppressWarnings("unchecked")
-    public synchronized Optional<Map<String, Object>> lastDeadCharacter(String discordId)
+    public Optional<Map<String, Object>> lastDeadCharacter(String discordId)
             throws Exception {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT id, name, realm, sheet_json, died_day FROM characters "
@@ -857,7 +890,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 혈연 시작 — 새 캐릭터를 전생에 잇는다 (characters.lineage_of) */
-    public synchronized void setLineage(long id, long ancestorId) throws SQLException {
+    public void setLineage(long id, long ancestorId) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE characters SET lineage_of = ? WHERE id = ?")) {
             ps.setLong(1, ancestorId);
@@ -868,7 +901,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     // ─── 전장 예치 (character_bank) — 죽음이 건드리는 유일한 재산 (현장의 것은 흩어진다) ───
 
-    public synchronized int bankBalance(long characterId, String branch) throws SQLException {
+    public int bankBalance(long characterId, String branch) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT balance FROM character_bank WHERE character_id = ? AND branch = ?")) {
             ps.setLong(1, characterId);
@@ -880,7 +913,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 예치·인출 (음수 = 인출). 새 잔액을 돌려준다 */
-    public synchronized int bankMove(long characterId, String branch, int delta) throws SQLException {
+    public int bankMove(long characterId, String branch, int delta) throws SQLException {
         int next = Math.max(0, bankBalance(characterId, branch) + delta);
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO character_bank(character_id, branch, balance) VALUES(?, ?, ?) "
@@ -894,7 +927,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 생전 지정 상속인 (legacy.예치.order 1순위) — 선언은 이벤트로도 남는다 */
-    public synchronized void setHeir(long characterId, String branch, String heir) throws SQLException {
+    public void setHeir(long characterId, String branch, String heir) throws SQLException {
         bankMove(characterId, branch, 0);   // 행 보장
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE character_bank SET heir_hint = ? WHERE character_id = ? AND branch = ?")) {
@@ -905,7 +938,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         }
     }
 
-    public synchronized Optional<String> heirHint(long characterId, String branch) throws SQLException {
+    public Optional<String> heirHint(long characterId, String branch) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT heir_hint FROM character_bank WHERE character_id = ? AND branch = ?")) {
             ps.setLong(1, characterId);
@@ -918,7 +951,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이벤트 존재 여부 — 중복 가산 금지(세력당 소문 1회)·1회성 사건의 게이트 */
-    public synchronized boolean eventExists(String type, String actorId, String targetId)
+    public boolean eventExists(String type, String actorId, String targetId)
             throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT 1 FROM events WHERE type = ? AND actor_id = ? AND target_id = ? LIMIT 1")) {
@@ -933,7 +966,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 한 행위자의 특정 유형 이벤트 — 피의 장부 상속(전생의 원한 → 이 아이의 짐)의 조회 지점 */
     @SuppressWarnings("unchecked")
-    public synchronized List<Map<String, Object>> eventsOf(String type, String actorId)
+    public List<Map<String, Object>> eventsOf(String type, String actorId)
             throws Exception {
         List<Map<String, Object>> out = new java.util.ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
@@ -954,7 +987,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 한 캐릭터의 이벤트 유형별 건수 — 명성 동결(세계 연표)의 재료 */
-    public synchronized Map<String, Integer> eventTally(String actorType, String actorId)
+    public Map<String, Integer> eventTally(String actorType, String actorId)
             throws SQLException {
         Map<String, Integer> out = new java.util.LinkedHashMap<>();
         try (PreparedStatement ps = conn.prepareStatement(
@@ -972,7 +1005,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 특정 행위자의 이벤트 유형 합계 — 기연 트리거(선행 기억 등)의 조회 지점 */
-    public synchronized int countEvents(String actorType, String actorId, List<String> types)
+    public int countEvents(String actorType, String actorId, List<String> types)
             throws SQLException {
         String in = String.join(",", types.stream().map(t -> "?").toList());
         try (PreparedStatement ps = conn.prepareStatement(
@@ -1001,7 +1034,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 브리지 사건 한 건을 원자적으로 적용한다.
      * inbox 선점, 세계 상태 변경, JSONL 커서 기록은 반드시 함께 성공하거나 함께 되돌아간다.
      */
-    public synchronized boolean applyBridgeEvent(String eventId, String kind, String cursorKey,
+    public boolean applyBridgeEvent(String eventId, String kind, String cursorKey,
                                                  String checkpoint, BridgeStore.Work work) throws Exception {
         return inTransaction(() -> {
             boolean first = claimBridgeEvent(eventId, kind);
@@ -1017,12 +1050,12 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 이 사건을 지금 처음 보는가 — 처음이면 못을 박고 true. 이미 박혀 있으면 false (건너뛴다).
      * 커서를 못 쓰고 죽어도, 파일을 통째로 재생해도 세계는 같은 자리에 선다.
      */
-    public synchronized boolean claimBridgeEvent(String eventId, String kind) throws Exception {
+    public boolean claimBridgeEvent(String eventId, String kind) throws Exception {
         return dialect.claimBridgeEvent(conn, eventId, kind, worldDay());
     }
 
     /** 마크 플레이어 ↔ 캐릭터 접합 (character_id 가 null 이면 '아직 안 이어진 몸'으로만 등록된다) */
-    public synchronized void linkMvt(String mcUuid, String mcName, Long characterId) throws SQLException {
+    public void linkMvt(String mcUuid, String mcName, Long characterId) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO mvt_link(mc_uuid, mc_name, character_id, linked_day) VALUES(?, ?, ?, ?) "
                         + "ON CONFLICT(mc_uuid) DO UPDATE SET mc_name = excluded.mc_name, "
@@ -1056,9 +1089,19 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * <p>같은 몸에게 살아 있던 옛 청과, <b>같은 캐릭터가 낸 옛 청</b>은 함께 폐기된다
      * (one_pending_per_body — 한 화면에 물음이 쌓이지 않게. 그리고 한 사람이 여러 몸에 동시에 청하지 못하게).
      */
-    public synchronized void pendLinkRequest(String token, String mcUuid, String mcName,
+    public void pendLinkRequest(String token, String mcUuid, String mcName,
                                              long characterId, String discordId, String discordName,
                                              long issuedAt, long expiresAt) throws SQLException {
+        atomicallySql(() -> {
+            pendLinkRequestInTx(token, mcUuid, mcName, characterId, discordId, discordName,
+                    issuedAt, expiresAt);
+            return null;
+        });
+    }
+
+    private void pendLinkRequestInTx(String token, String mcUuid, String mcName,
+                                     long characterId, String discordId, String discordName,
+                                     long issuedAt, long expiresAt) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE mvt_link_request SET state = '폐기' "
                         + "WHERE state = '대기' AND (mc_uuid = ? OR character_id = ?)")) {
@@ -1082,7 +1125,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         }
     }
 
-    public synchronized Optional<LinkRequest> linkRequest(String token) throws SQLException {
+    public Optional<LinkRequest> linkRequest(String token) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT token, mc_uuid, mc_name, character_id, discord_id, discord_name, "
                         + "issued_at, expires_at, state FROM mvt_link_request WHERE token = ?")) {
@@ -1097,7 +1140,11 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 지금 살아 있는 청 전부 — <b>마크로 내려보낼 목록</b> (link_requests.json).
      * 만료된 것은 먼저 죽이고(상태 '만료') 남은 것만 돌려준다 — <b>죽은 청은 화면에 뜨지 않는다.</b>
      */
-    public synchronized List<LinkRequest> livingLinkRequests(long now) throws SQLException {
+    public List<LinkRequest> livingLinkRequests(long now) throws SQLException {
+        return atomicallySql(() -> livingLinkRequestsInTx(now));
+    }
+
+    private List<LinkRequest> livingLinkRequestsInTx(long now) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE mvt_link_request SET state = '만료' WHERE state = '대기' AND expires_at < ?")) {
             ps.setLong(1, now);
@@ -1118,7 +1165,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 캐릭터가 마지막으로 낸 청 (연타 판정 — 상태 불문. 거절당하고 또 조르는 것도 연타다) */
-    public synchronized Optional<LinkRequest> lastLinkRequestOf(long characterId) throws SQLException {
+    public Optional<LinkRequest> lastLinkRequestOf(long characterId) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT token, mc_uuid, mc_name, character_id, discord_id, discord_name, "
                         + "issued_at, expires_at, state FROM mvt_link_request "
@@ -1131,7 +1178,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 몸이 마지막으로 받은 청 (한 화면에 물음을 도배할 수 없다 — 받는 쪽의 연타 방지) */
-    public synchronized Optional<LinkRequest> lastLinkRequestTo(String mcUuid) throws SQLException {
+    public Optional<LinkRequest> lastLinkRequestTo(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT token, mc_uuid, mc_name, character_id, discord_id, discord_name, "
                         + "issued_at, expires_at, state FROM mvt_link_request "
@@ -1149,7 +1196,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * <p>★ {@code WHERE state = '대기'} 가 이 표의 자물쇠다: 같은 토큰이 두 번 와도(다리의 재생·연타 클릭)
      * 두 번째는 <b>0행</b>이 바뀐다. 그래서 부르는 쪽은 반환값으로 <b>이번이 처음인가</b>를 안다.
      */
-    public synchronized boolean burnLinkRequest(String token, String state, long now, int day)
+    public boolean burnLinkRequest(String token, String state, long now, int day)
             throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE mvt_link_request SET state = ?, decided_at = ?, decided_day = ? "
@@ -1168,7 +1215,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 캐릭터에게 이미 몸이 있는가 (one_body_one_character — 양쪽 다 1:1) */
-    public synchronized Optional<String> mcOfCharacter(long characterId) throws SQLException {
+    public Optional<String> mcOfCharacter(long characterId) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT mc_uuid FROM mvt_link WHERE character_id = ?")) {
             ps.setLong(1, characterId);
@@ -1184,7 +1231,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * <p>안내판이 "몸은 이어졌다 (`Lindydone`)" 라고 말할 때 쓴다. 이름이 없으면 {@code empty}
      * (그러면 부르는 쪽이 uuid 로 떨어진다 — <b>이름을 지어내지 않는다</b>).
      */
-    public synchronized Optional<String> mcName(String mcUuid) throws SQLException {
+    public Optional<String> mcName(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT mc_name FROM mvt_link WHERE mc_uuid = ?")) {
             ps.setString(1, mcUuid);
@@ -1195,7 +1242,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 몸에 붙어 있는 캐릭터 (죽은 캐릭터도 본다 — 재접합 판정은 산 자만 막는다) */
-    public synchronized Optional<Long> rawCharacterOfMc(String mcUuid) throws SQLException {
+    public Optional<Long> rawCharacterOfMc(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT character_id FROM mvt_link WHERE mc_uuid = ? AND character_id IS NOT NULL")) {
             ps.setString(1, mcUuid);
@@ -1206,7 +1253,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 접합 해제 — 몸은 남고 이름만 떨어진다 (혈채는 캐릭터 원장에 그대로 남는다. 빚은 안 없어진다) */
-    public synchronized void unlinkMc(String mcUuid) throws SQLException {
+    public void unlinkMc(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE mvt_link SET character_id = NULL, linked_day = ? WHERE mc_uuid = ?")) {
             ps.setInt(1, worldDay());
@@ -1216,7 +1263,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 몸은 누구인가 — 살아 있는 캐릭터만 (죽은 자의 이름으로는 소문이 붙지 않는다) */
-    public synchronized Optional<Long> characterOfMc(String mcUuid) throws SQLException {
+    public Optional<Long> characterOfMc(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT l.character_id FROM mvt_link l JOIN characters c ON c.id = l.character_id "
                         + "WHERE l.mc_uuid = ? AND c.status != '사망'")) {
@@ -1238,7 +1285,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     //   그래서 두 함수 다 **표가 없으면 조용히 빈손**으로 돌아온다. 세계는 계속 돈다.
 
     /** 이 표가 세계에 있는가 (마이그레이션 008 을 돌렸는가) */
-    private synchronized boolean hasHouses() {
+    private boolean hasHouses() {
         try {
             return dialect.tableExists(conn, "houses");
         } catch (Exception e) {
@@ -1253,7 +1300,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 죽음이 자리를 비우면 '죽은 형이 있는 집' 이 성립하지 않는다 (자리가 다시 채워지니까).
      * 그래서 상한은 <b>태어난 수</b>로 센다 (형제 목록은 산 자만 보이지만).
      */
-    public synchronized List<HouseEntry> housesOf(String family) throws Exception {
+    public List<HouseEntry> housesOf(String family) throws Exception {
         List<HouseEntry> out = new java.util.ArrayList<>();
         if (!hasHouses()) {
             return out;
@@ -1274,7 +1321,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 새 집이 선다 — 세계에 없던 가문 하나가 생긴다 */
-    public synchronized long createHouse(String family, String name, String region,
+    public long createHouse(String family, String name, String region,
                                          String state, int day) throws Exception {
         if (!hasHouses()) {
             return 0L;
@@ -1295,7 +1342,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 아이를 그 집에 앉힌다 */
-    public synchronized void setHouse(long characterId, long houseId) throws Exception {
+    public void setHouse(long characterId, long houseId) throws Exception {
         if (!hasHouses()) {
             return;
         }
@@ -1307,7 +1354,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         }
     }
 
-    public synchronized Optional<HouseEntry> house(long houseId) throws Exception {
+    public Optional<HouseEntry> house(long houseId) throws Exception {
         if (!hasHouses()) {
             return Optional.empty();
         }
@@ -1326,7 +1373,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 사람이 태어난 집 — null = 아직 집이 없다 (마이그레이션 전에 태어났거나 배정 규칙이 없다) */
-    public synchronized Long houseOfCharacter(long characterId) throws Exception {
+    public Long houseOfCharacter(long characterId) throws Exception {
         if (!hasHouses()) {
             return null;
         }
@@ -1353,7 +1400,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 파생값은 <b>낡을 수가 없다</b> (별도 표를 두면 그 표가 진실과 갈라진다).
      */
     @SuppressWarnings("unchecked")
-    public synchronized List<Map<String, Object>> houseMembers(long houseId) throws Exception {
+    public List<Map<String, Object>> houseMembers(long houseId) throws Exception {
         List<Map<String, Object>> out = new java.util.ArrayList<>();
         if (!hasHouses()) {
             return out;
@@ -1376,7 +1423,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         return out;
     }
 
-    public synchronized Map<String, Long> linkedBodies() throws SQLException {
+    public Map<String, Long> linkedBodies() throws SQLException {
         Map<String, Long> out = new java.util.LinkedHashMap<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(
@@ -1398,7 +1445,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 꿈쩍하지 않았다. 이제 클램프는 {@code core.RegionStateEngine.clamp} 하나다 (등록제).
      */
     @Override
-    public synchronized void writeRegion(Map<String, Integer> values) throws SQLException {
+    public void writeRegion(Map<String, Integer> values) throws SQLException {
         Map<String, String> column = Map.of("치안", "security", "경제", "economy", "민심", "sentiment");
         for (Map.Entry<String, Integer> e : values.entrySet()) {
             String col = column.get(e.getKey());
@@ -1417,7 +1464,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
 
     /** 청하현의 오늘 — 치안·경제·민심 ({@link RegionLedger} 포트 구현) */
     @Override
-    public synchronized Map<String, Integer> region() throws SQLException {
+    public Map<String, Integer> region() throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT security, economy, sentiment FROM regions WHERE id = ?")) {
             ps.setString(1, REGION);
@@ -1443,7 +1490,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 감쇠는 여기서도 읽는 순간 정산한다 (heard 와 같은 공식 — 같은 날이면 같은 소문판).
      */
     @SuppressWarnings("unchecked")
-    public synchronized java.util.Set<String> liveRumorTags(int day, int decayEveryDays) throws Exception {
+    public java.util.Set<String> liveRumorTags(int day, int decayEveryDays) throws Exception {
         int every = Math.max(1, decayEveryDays);
         java.util.Set<String> out = new java.util.LinkedHashSet<>();
         try (PreparedStatement ps = conn.prepareStatement(
@@ -1471,7 +1518,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     //   그 전까지 세계는 열 개의 사고를 보았고, 그 후로 세계는 한 마리의 짐승을 본다.
 
 
-    public synchronized BloodDebtEntry bloodDebt(String subject) throws SQLException {
+    public BloodDebtEntry bloodDebt(String subject) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT subject, character_id, hidden, known_raw, known_day, public_count, kills, "
                         + "exposure_floor FROM blood_debt WHERE subject = ?")) {
@@ -1488,7 +1535,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 캐릭터의 장부 (subject = character:<id>) */
-    public synchronized BloodDebtEntry bloodDebtOf(long characterId) throws SQLException {
+    public BloodDebtEntry bloodDebtOf(long characterId) throws SQLException {
         return bloodDebt("character:" + characterId);
     }
 
@@ -1496,8 +1543,14 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 한 건을 적는다. <b>암혈채는 노출과 무관하게 자란다</b> (몸이 장부다) —
      * 현혈채만 노출·정확도 배수를 먹는다. 공개(witness 2) 건은 감쇠 하한(×2)의 근거로 따로 센다.
      */
-    public synchronized BloodDebtEntry addBloodDebt(String subject, Long characterId, double hidden,
+    public BloodDebtEntry addBloodDebt(String subject, Long characterId, double hidden,
                                                     double known, boolean publicKill, int day)
+            throws SQLException {
+        return atomicallySql(() -> addBloodDebtInTx(subject, characterId, hidden, known, publicKill, day));
+    }
+
+    private BloodDebtEntry addBloodDebtInTx(String subject, Long characterId, double hidden,
+                                            double known, boolean publicKill, int day)
             throws SQLException {
         BloodDebtEntry now = bloodDebt(subject);
         double nextHidden = now.hidden() + hidden;
@@ -1534,7 +1587,11 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * ★ 병합 — 접합의 순간, 이름 없이 쌓인 장부가 한 사람의 이름으로 합산된다.
      * 그 전까지 세계는 열 개의 사고를 보았다. 그 후로 세계는 한 마리의 짐승을 본다.
      */
-    public synchronized BloodDebtEntry mergeBloodDebt(String from, long characterId, int day) throws SQLException {
+    public BloodDebtEntry mergeBloodDebt(String from, long characterId, int day) throws SQLException {
+        return atomicallySql(() -> mergeBloodDebtInTx(from, characterId, day));
+    }
+
+    private BloodDebtEntry mergeBloodDebtInTx(String from, long characterId, int day) throws SQLException {
         BloodDebtEntry src = bloodDebt(from);
         if (src.hidden() <= 0 && src.knownRaw() <= 0 && src.exposureFloor() <= 0) {
             return bloodDebtOf(characterId);
@@ -1560,7 +1617,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** ★ B6 — 마공 운기를 목격당했다. 이 몸에 '은밀'은 이제 없다 (노출 배수 하한 1.0) */
-    public synchronized void setExposureFloor(String subject, Long characterId, double floor, int day)
+    public void setExposureFloor(String subject, Long characterId, double floor, int day)
             throws SQLException {
         BloodDebtEntry now = bloodDebt(subject);
         try (PreparedStatement ps = conn.prepareStatement(
@@ -1581,7 +1638,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 모든 장부 (검산·되먹임 순회용) */
-    public synchronized List<BloodDebtEntry> bloodDebts() throws SQLException {
+    public List<BloodDebtEntry> bloodDebts() throws SQLException {
         List<BloodDebtEntry> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT subject FROM blood_debt ORDER BY subject")) {
@@ -1601,7 +1658,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     // ★★ 봇은 단일 작성자다. MVT 는 이 파일을 열지 않는다 — 마크 쪽 몫은 다리로 **청한다**.
 
     /** 그 표가 이 DB 에 실재하는가 — {@code mvt_link_code} 는 곧 사라지고, {@code mvt_link_request} 는 아직 없을 수 있다 */
-    public synchronized boolean hasTable(String table) throws Exception {
+    public boolean hasTable(String table) throws Exception {
         return dialect.tableExists(conn, table);
     }
 
@@ -1609,7 +1666,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * 지우기 <b>전에</b> 읽는다 — <b>무엇을 지웠는지 소리내어 말하기 위해서다</b> (조용한 삭제 금지).
      * 읽은 것은 백업 폴더의 {@code deleted.json} 에 그대로 적힌다.
      */
-    public synchronized List<Map<String, Object>> rowsOf(String table, String column, Object value,
+    public List<Map<String, Object>> rowsOf(String table, String column, Object value,
             String extraWhere) throws SQLException {
         String sql = "SELECT * FROM \"" + table + "\" WHERE \"" + column + "\" = ?"
                 + (extraWhere == null || extraWhere.isBlank() ? "" : " AND (" + extraWhere + ")");
@@ -1631,7 +1688,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 사람의 행만 지운다 — 표·축은 등록부(reset.yml)가 고른 것이고, 값은 이 사람의 것이다 */
-    public synchronized int deleteRows(String table, String column, Object value, String extraWhere)
+    public int deleteRows(String table, String column, Object value, String extraWhere)
             throws SQLException {
         String sql = "DELETE FROM \"" + table + "\" WHERE \"" + column + "\" = ?"
                 + (extraWhere == null || extraWhere.isBlank() ? "" : " AND (" + extraWhere + ")");
@@ -1642,7 +1699,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 계정의 캐릭터 전부 — <b>죽은 것도</b> (남겨 두면 다음 삶이 혈연으로 이어져 버린다) */
-    public synchronized List<Long> characterIdsOf(String discordId) throws SQLException {
+    public List<Long> characterIdsOf(String discordId) throws SQLException {
         List<Long> out = new java.util.ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT id FROM characters WHERE discord_id = ? ORDER BY id")) {
@@ -1657,7 +1714,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 캐릭터에 매달린 몸들 — 접합을 끊으려면 uuid 를 알아야 한다 (끊고 나면 못 찾는다) */
-    public synchronized List<String> mcUuidsOf(long characterId) throws SQLException {
+    public List<String> mcUuidsOf(long characterId) throws SQLException {
         List<String> out = new java.util.ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT mc_uuid FROM mvt_link WHERE character_id = ?")) {
@@ -1672,7 +1729,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
     }
 
     /** 이 몸의 계정 — 마크에서 친 초기화가 봇의 캐릭터를 찾는 유일한 길 (죽은 캐릭터도 본다) */
-    public synchronized Optional<String> discordOfMc(String mcUuid) throws SQLException {
+    public Optional<String> discordOfMc(String mcUuid) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT c.discord_id FROM mvt_link l JOIN characters c ON c.id = l.character_id "
                         + "WHERE l.mc_uuid = ?")) {
@@ -1691,21 +1748,75 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
      * <p>★ 되돌리기: 봇을 끄고 이 파일을 {@code run/bot/honcheon.db} 로 덮은 뒤
      * {@code honcheon.db-wal}·{@code honcheon.db-shm} 을 <b>지운다</b> (옛 WAL 이 새 본체를 덮어쓴다).
      */
-    public synchronized String snapshotFileName() {
+    public String snapshotFileName() {
         return dialect.snapshotFileName();
     }
 
-    public synchronized String restoreInstructions(Path snapshot) {
+    public String restoreInstructions(Path snapshot) {
         return dialect.restoreInstructions(snapshot);
     }
 
-    public synchronized void snapshotTo(Path target) throws Exception {
-        dialect.snapshot(conn, target);
+    public void snapshotTo(Path target) throws Exception {
+        // ★ 스냅숏은 연결 상태(격리·읽기 전용·unwrap)를 직접 만진다 — 가면(RoutingConnection)
+        //   너머로는 못 한다. 실제 연결을 빌려 주고, 무슨 일이 있어도 돌려받는다.
+        Connection raw = source.borrow();
+        try {
+            dialect.snapshot(raw, target);
+        } finally {
+            source.release(raw);
+        }
+    }
+
+    /** 샘의 지표 — 풀이 어떻게 살았는지 사람이 묻는 자리 (관측: PG-006). */
+    public String storageStats() {
+        return source.describe();
+    }
+
+    /**
+     * 같은 뭉치(aggregate)를 놓고 겨루는 읽기-계산-쓰기 — 트랜잭션에 <b>합류</b>하거나, 새로 열고
+     * <b>충돌하면 물러나 다시 잰다</b>.
+     *
+     * <p>PG-005 까지는 메서드 전체가 {@code synchronized} 라 이런 겨룸이 아예 없었다. PG-006 이
+     * 그 자물쇠를 걷었으므로, 읽고-계산하고-쓰는 메서드는 이제 스스로 원자여야 한다:
+     * PostgreSQL 은 SERIALIZABLE 이 충돌(40001)로 순서를 판정하고, 진 쪽이 여기서 다시 잰다.
+     * SQLite 는 한 손(SingleConnectionSource)이라 트랜잭션이 곧 직렬이다.
+     *
+     * <p>이미 업무 트랜잭션 안이면 <b>합류</b>한다 — 중첩을 만들지 않고, 재시도는 바깥 주인의 몫이다.
+     * (그래서 이 안의 일은 DB 밖 부수효과가 없어야 한다 — 재시도가 그것을 두 번 하게 된다.)
+     */
+    private <T> T atomically(TransactionRunner.Work<T> work) throws Exception {
+        if (source.inTransaction()) {
+            return work.run();
+        }
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return inTransaction(work);
+            } catch (SQLException failure) {
+                if (!dialect.isRetryableConflict(failure) || attempt >= 8) {
+                    throw failure;
+                }
+                // 충돌은 순서의 판정이다 — 지수로 물러나되, 지터로 발걸음을 흩는다
+                // (같은 박자로 물러나면 같은 박자로 다시 부딪힌다)
+                long base = 5L << Math.min(attempt - 1, 6);
+                Thread.sleep(base + java.util.concurrent.ThreadLocalRandom.current().nextLong(base));
+            }
+        }
+    }
+
+    /** {@link #atomically} 의 SQLException 낯 — 계약이 SQLException 인 포트 구현용. */
+    private <T> T atomicallySql(TransactionRunner.Work<T> work) throws SQLException {
+        try {
+            return atomically(work);
+        } catch (SQLException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new SQLException(failure);
+        }
     }
 
     /** 한 벌로 지운다 — 중간에 죽으면 되돌린다 (반쯤 지워진 사람이 세계에 남지 않는다) */
     @Override
-    public synchronized <T> T inTransaction(TransactionRunner.Work<T> work) throws Exception {
+    public <T> T inTransaction(TransactionRunner.Work<T> work) throws Exception {
         if (!conn.getAutoCommit()) {
             throw new SQLException("중첩 트랜잭션은 지원하지 않는다");
         }
