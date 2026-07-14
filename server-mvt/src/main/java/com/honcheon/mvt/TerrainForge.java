@@ -42,12 +42,29 @@ import java.util.Set;
  * 동굴이 필요하면 <b>우리가 판다</b> ({@link #digCave}). 등록부가 요구하는 자리에, 우리가 정한 형태로.
  *
  * <h2>결정론</h2>
- * 난수가 없다. 모든 흔들림은 좌표 해시({@code Math.floorMod})다. 같은 좌표 = 같은 땅 = 같은 동굴.
+ * 난수가 없다. 모든 흔들림은 <b>좌표의 순수 함수</b>다. 같은 좌표 = 같은 땅 = 같은 동굴.
+ *
+ * <h2>★ 결정론은 점묘가 아니다 (2026-07-14)</h2>
+ * 사용자: <i>"지형을 빚을 때 점처럼 찍어버려서 깔끔한 필드가 아닌 <b>한 칸 한 칸 다른 필드</b>가 되어
+ * 버리는 경우가 있어요."</i>
+ *
+ * <p><b>뿌리는 결정론이 아니라 파장이었다.</b> 흔들림을 전부 {@code Math.floorMod(x*7 + z*11, 3)} 같은
+ * 좌표 해시로 냈는데, <b>좌표 해시는 파장이 한 칸이다</b> — 이웃 칸과 아무 상관이 없다. 그래서 칸마다
+ * 독립으로 뽑힌 값이 <b>점묘(點描)</b>가 됐다: 모래밭에 자갈 한 점, 설선에 눈 한 점, 지면이 ±1로 우글우글.
+ *
+ * <p><b>고침 — 격자에 깔고 보간한다</b> ({@link #grain}). 해시는 <b>격자점에서만</b> 뽑고 그 사이는
+ * 부드럽게 잇는다(값 잡음). 그러면 값이 <b>이웃과 상관을 갖는다</b> = 덩어리가 선다.
+ * 난수는 다시 들이지 않았다 — 여전히 좌표의 순수 함수다. <b>자연스러움과 결정론은 양립한다.</b>
+ * 수치(덩어리 크기·자재 문턱)는 {@code config/terrain_grain.yml} 에 있다.
  */
 final class TerrainForge {
 
     private TerrainForge() {
     }
+
+    /** 등록부 판독의 목소리 — <b>서버 없이도 말한다</b> (Bukkit.getLogger() 는 서버가 없으면 터진다) */
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger("HoncheonMVT");
 
     // ═══════════════════════════════════════════════════════════════════
     // 계약 상수
@@ -490,7 +507,9 @@ final class TerrainForge {
                 int innerY = rayHeight(world, cx, cz, ux, uz, rInner, yHint);
                 int outerY = rayHeight(world, cx, cz, ux, uz, rOuter, yHint);
                 double t = (d - rInner) / (double) Math.max(1, rOuter - rInner);   // 0 = 안, 1 = 바깥
-                int jitter = Math.floorMod(x * 7 + z * 11, 3) - 1;
+                // ★ 구판: floorMod(x*7 + z*11, 3) - 1 — **파장이 한 칸**이라 전이대가 우글우글했다
+                //   (한 칸 한 칸 다른 높이 = 점묘). 이제 덩어리로 오르내린다 ({@link #undulation}).
+                int jitter = undulation(x, z);
                 int target = (int) Math.round(innerY * (1 - t) + outerY * t) + jitter;
                 if (Math.abs(target - natural) <= 1) {
                     continue;   // 이미 자연과 같다 — 손대지 않는다
@@ -647,16 +666,26 @@ final class TerrainForge {
         설원
     }
 
-    /** 봉우리를 요구하는 세력 — 구파일방·오대세가. <b>산문에서 본전까지 오르는 집</b>들이다 */
-    private static final Set<String> PEAK_FACTIONS = Set.of(
-            "hwasan", "gupailbang", "jongnam", "sorimsa", "mudang", "gonryun",
-            "jeomchang", "cheongseong", "ami", "haenam", "gaebang");
+    // ★ 여기 `PEAK_FACTIONS` 가 있었다 — 봉우리를 받는 문파 이름 11개.
+    //   RemoteBuilder.SECTS 에 **똑같은 목록이 한 벌 더** 있었다. **두 벌이면 하나가 낡는다** —
+    //   실제로 갈라져 있었다(SECTS 에는 오대세가가 없었다). **둘 다 지웠다.**
+    //   봉우리는 이제 `config/terrain.yml` 의 `shaping:` 만이 세운다 — 아홉 문파가 이미 거기 등재돼 있다.
 
     /**
-     * 이 자리를 어떤 윤곽으로 빚는가 — <b>등록부(terrain.yml)가 먼저, 없으면 지도에서 읽어 낸다</b>.
+     * 이 자리를 어떤 윤곽으로 빚는가 — <b>★ 등록부(terrain.yml {@code shaping:})가 말한다.</b>
      *
-     * <p>읽는 순서: ① terrain.yml 의 명시 지정 → ② 세력(녹림은 중턱단 · 구파·세가는 봉우리)
-     * → ③ architecture 서술("산문"·"본전"·"계단"이 적혀 있으면 봉우리다) → ④ 지형.
+     * <p>읽는 순서는 <b>둘뿐이다</b>: ① {@code terrain.yml shaping:} → ② {@code terrain:} 유형.
+     *
+     * <p><b>예전엔 넷이었다.</b> 세력 목록(PEAK_FACTIONS)과 <b>architecture 산문 검색</b>이 그 사이에 있었다:
+     * <pre>
+     *   if (arch.contains("산문") || arch.contains("본전") || arch.contains("계단") …) → 봉우리
+     * </pre>
+     * ★ <b>글이 기계를 움직이면 그것은 등록부가 아니다.</b> 누가 지도의 산문에서 "산문(山門)"이라는
+     * 낱말을 지우면 <b>산이 사라진다</b> — 아무도 그럴 의도가 없었는데도. 둘 다 지웠다.
+     *
+     * <p>★ <b>봉우리는 등록부만이 세운다.</b> 산악 지형인데 {@code shaping:} 에 없으면 <b>봉우리를 안 세운다</b> —
+     * 모르면 <b>덜 하는 쪽이 안전하다</b>(산을 잘못 세우면 사방이 벼랑이 되어 진입 0방위가 된다. 겪었다).
+     * 그리고 <b>조용히 넘어가지 않는다</b> — 로그가 말하고, {@code tools/map_lint.py} 가 짖는다(§⑤ 추측자리).
      */
     static Profile profile(WorldMap.Place place) {
         Profile registered = shapeRegistry.get(place.id());
@@ -664,32 +693,22 @@ final class TerrainForge {
             return registered;
         }
         String terrain = place.terrain() == null ? "" : place.terrain();
-        String faction = place.faction() == null ? "" : place.faction().toLowerCase(Locale.ROOT);
-        String arch = place.note() == null ? "" : place.note();
         boolean mountainous = "산".equals(terrain) || "험산".equals(terrain)
                 || "설산".equals(terrain) || "고원".equals(terrain);
-
-        if (!mountainous) {
-            return switch (terrain) {
-                case "평지", "평야", "분지", "초원", "폐허", "구릉" -> Profile.들;
-                // ★ 사막이 switch 에 **없어서** default(그대로) 로 떨어졌다 — 지형 계층이 사막을 빚지 않았다.
-                //   바닐라 사막 바이옴이 살아 있을 때는 티가 안 났고, 그것이 꺼지자 가욕관이 잔디밭이 됐다.
-                case "사막" -> Profile.사막;
-                default -> Profile.그대로;   // 강·수향·섬·밀림 — 빚지 않는다 (★ 섬은 자연에 맡긴다)
-            };
+        if (mountainous) {
+            // ★ 침묵하지 않는다. 등록부가 말하지 않은 산이다 — 우리는 세우지 않았고, 그 사실을 알린다.
+            org.bukkit.Bukkit.getLogger().warning("[지형] " + place.id() + " — terrain '" + terrain
+                    + "'(산악)인데 terrain.yml shaping: 에 없다. **봉우리를 세우지 않는다**(중턱단). "
+                    + "봉우리가 필요하면 등록하라 — 코드는 세력으로 추측하지 않는다");
+            return Profile.중턱단;
         }
-        if ("noklim".equals(faction)) {
-            return Profile.중턱단;   // ★ 산채는 봉우리가 아니다 — 중턱에 걸터앉는다
-        }
-        if (PEAK_FACTIONS.contains(faction)) {
-            return Profile.봉우리;   // 도관 — 오르는 길이 시험이다
-        }
-        // 세력이 없거나 모르는 세력이면 **등록부의 말**을 듣는다 (지도가 관리한다)
-        if (arch.contains("산문") || arch.contains("본전") || arch.contains("계단")
-                || arch.contains("도관") || arch.contains("석성")) {
-            return Profile.봉우리;
-        }
-        return Profile.중턱단;   // 모르면 산을 세우지 않는다 — **덜 하는 쪽이 안전하다**
+        return switch (terrain) {
+            case "평지", "평야", "분지", "초원", "폐허", "구릉" -> Profile.들;
+            // ★ 사막이 switch 에 **없어서** default(그대로) 로 떨어졌다 — 지형 계층이 사막을 빚지 않았다.
+            //   바닐라 사막 바이옴이 살아 있을 때는 티가 안 났고, 그것이 꺼지자 가욕관이 잔디밭이 됐다.
+            case "사막" -> Profile.사막;
+            default -> Profile.그대로;   // 강·수향·섬·밀림 — 빚지 않는다 (★ 섬은 자연에 맡긴다)
+        };
     }
 
     /**
@@ -872,7 +891,7 @@ final class TerrainForge {
                 //   부지 안에서 이미 전이가 시작되므로 목책 밖에 벼랑이 생기지 않는다.
                 double inner = radius * 0.6;
                 double t = d <= inner ? 0 : (d - inner) / (radius - inner);
-                int jitter = Math.floorMod(x * 7 + z * 11, 3) - 1;
+                int jitter = undulation(x, z);   // ★ 덩어리로 오르내린다 (구판은 칸마다 제각각이었다)
                 int target = (int) Math.round(cy * (1 - t) + natural * t) + (t > 0 ? jitter : 0);
                 for (int y = target + 1; y <= target + 18; y++) {   // 깎기
                     Block b = world.getBlockAt(x, y, z);
@@ -1160,7 +1179,8 @@ final class TerrainForge {
                 if (naturalGround(world, x, z, topY + 40) == WET_COLUMN) {
                     continue;   // 강·호수 — 들을 고른다고 물을 메우지 않는다
                 }
-                int edge = Math.floorMod(x * 5 + z * 3, 3);      // 가장자리는 자연으로 풀어 준다
+                // 가장자리는 자연으로 풀어 준다 — ★ 덩어리로 (구판 floorMod(x*5+z*3,3) 은 칸마다 튀었다)
+                int edge = edgeDrop(x, z);
                 int target = topY - (d > radius - 6 ? edge : 0);
                 for (int y = target + 1; y <= target + 10; y++) {
                     Block b = world.getBlockAt(x, y, z);
@@ -1230,10 +1250,9 @@ final class TerrainForge {
         if (!SOLID_NATURAL.contains(top.getType())) {
             return;   // 사람이 지은 것 — 덮지 않는다 (건축 계층의 바닥을 모래로 만들지 않는다)
         }
-        // 자갈의 결 — 30칸에 하나꼴. 사막은 모래만이 아니다
-        Material surface = Math.floorMod(x * 31 + z * 17, 29) == 0 ? Material.GRAVEL
-                : Math.floorMod(x * 13 + z * 7, 11) == 0 ? Material.RED_SAND : Material.SAND;
-        top.setType(surface, false);   // 물리 갱신 없이 — 모래가 우수수 떨어지면 안 된다
+        // 자갈의 결 — ★ **덩어리로** 눕는다. 구판은 floorMod(...,29)==0 으로 **점을 찍었다**:
+        //   29칸에 하나씩 홀로 선 자갈, 11칸에 하나씩 홀로 선 붉은 모래 — 그것이 점묘였다.
+        top.setType(sandSkin(x, z), false);   // 물리 갱신 없이 — 모래가 우수수 떨어지면 안 된다
         for (int i = 1; i <= 5; i++) {
             Block b = world.getBlockAt(x, g - i, z);
             if (SOLID_NATURAL.contains(b.getType())) {
@@ -1249,7 +1268,9 @@ final class TerrainForge {
      * 좌표 해시로 설선 자체를 ±3 흔든다 — <b>자로 그은 설선은 설선이 아니다</b>.
      */
     private static void snowColumn(World world, int x, int g, int z, int snowline) {
-        int wobble = Math.floorMod(x * 7 + z * 11, 7) - 3;   // 설선의 들쭉날쭉 (±3)
+        // ★ 설선은 **굽이친다**. 구판(floorMod(x*7+z*11,7)-3)은 칸마다 ±3 튀어 설선 언저리가
+        //   눈·돌·눈·돌의 **소금·후추**가 됐다 — 선이 아니라 얼룩이었다.
+        int wobble = snowWobble(x, z);
         if (g < snowline + wobble) {
             return;   // 설선 아래 — 돌과 흙 그대로. **돌과 눈이 갈라지는 선이 설산이다**
         }
@@ -1266,7 +1287,7 @@ final class TerrainForge {
             }
             // 아주 높은 데는 만년빙 — 다만 **표층에는 얼음을 쓰지 않는다**
             //   (ICE/PACKED_ICE 는 '젖은 열'로 읽혀 건축 마스크에서 빠진다. 정상에 집을 못 짓게 된다)
-            boolean glacier = g >= snowline + 30 && i >= 2 && Math.floorMod(x * 5 + z * 3, 4) == 0;
+            boolean glacier = g >= snowline + 30 && i >= 2 && glacier(x, z);   // ★ 얼음도 덩어리로 언다
             b.setType(glacier ? Material.PACKED_ICE : Material.SNOW_BLOCK, false);
         }
     }
@@ -1885,8 +1906,9 @@ final class TerrainForge {
                 below.setType(Material.STONE);
                 continue;
             }
-            // 딛는 자리 — 돌 사이에 자갈을 섞는다 (사람이 다닌 굴의 바닥은 부슬부슬하다)
-            if (Math.floorMod(x * 13 + z * 7, 6) == 0) {
+            // 딛는 자리 — 돌 사이에 자갈이 **깔린다** (사람이 다닌 굴의 바닥은 부슬부슬하다).
+            // ★ 구판(floorMod(...,6)==0)은 여섯 칸에 하나씩 **점을 찍었다**.
+            if (caveGravel(x, z)) {
                 below.setType(Material.GRAVEL);
             }
         }
@@ -1975,6 +1997,15 @@ final class TerrainForge {
     /** 조성 윤곽 등록부 — <b>지도가 관리한다</b>. 코드의 추론보다 이 표가 우선이다 */
     private static Map<String, Profile> shapeRegistry = new LinkedHashMap<>();
 
+    /**
+     * 지도가 <b>요구한 윤곽의 이름</b> — 그것이 {@link Profile} 에 <b>없는 이름이어도 적어 둔다</b>.
+     *
+     * <p>★ 여태 모르는 윤곽은 <b>조용히 버려졌다</b> ("모르는 윤곽 — 조용히 넘긴다"). 그러면 지도에
+     * {@code 수향} 이라 적힌 강남이 <b>말없이 들판으로</b> 선다 — 그것은 판정이 아니라 침묵이다.
+     * 이제 {@link TerrainGate} 가 이 표를 보고 <b>"그 프로파일은 아직 구현되지 않았다"</b> 고 말한다.
+     */
+    private static Map<String, String> requestedRegistry = new LinkedHashMap<>();
+
     /** 표층 등록부 — 눈·모래를 어디에 얹는가 (고원+눈=토번처럼 지형만으로 못 읽는 것) */
     private static Map<String, Surface> surfaceRegistry = new LinkedHashMap<>();
 
@@ -1987,14 +2018,93 @@ final class TerrainForge {
     /** 산 높이 등록부 — 장소마다 다르다 (험산 72 · 산 44 · 고원 24 가 기본) */
     private static Map<String, Integer> liftRegistry = new LinkedHashMap<>();
 
+    // ─── 결(結) 등록부 — config/terrain_grain.yml (덩어리 크기·자재 문턱) ───
+    //   ★ terrain.yml 은 지도 담당의 것이다. 지형의 결은 **여기**에 적는다 (두 벌을 만들지 않는다).
+    //   기본값은 아래 그대로 — 파일이 없어도 돈다 (점묘로 되돌아가지는 않는다).
+
+    private static int undulationCell = 9;
+    private static int undulationAmp = 1;
+    private static int edgeCell = 7;
+    private static int edgeDrop = 2;
+    private static int desertCell = 13;
+    private static double desertGravel = 0.55;
+    private static double desertRedSand = 0.40;
+    private static int snowCell = 11;
+    private static int snowWobble = 3;
+    private static int glacierCell = 8;
+    private static double glacierThreshold = 0.35;
+    private static int caveFloorCell = 5;
+    private static double caveFloorGravel = 0.25;
+    private static double speckleMax = 0.30;
+    private static double isolatedMax = 0.03;
+
+    /** 눈의 문턱 — 인접쌍 불일치율이 이보다 크면 <b>점묘다</b> ({@code terrain_grain.yml eye.speckle_max}) */
+    static double speckleMax() {
+        return speckleMax;
+    }
+
+    /** 눈의 문턱 — 이웃 넷과 모두 다른 <b>외톨이 칸</b>의 비율 상한 */
+    static double isolatedMax() {
+        return isolatedMax;
+    }
+
+    /** {@code config/terrain_grain.yml} 판독 — 없어도 돈다 (위의 기본값이 곧 등록부다) */
+    static void loadGrain(Path configDir) {
+        Path file = configDir.resolve("terrain_grain.yml");
+        if (!Files.isRegularFile(file)) {
+            return;
+        }
+        Map<String, Object> root = RulesConfig.load(file);
+        if (root == null) {
+            return;
+        }
+        Map<String, Object> und = sub(root, "undulation");
+        undulationCell = num(und.get("cell"), undulationCell);
+        undulationAmp = num(und.get("amplitude"), undulationAmp);
+        Map<String, Object> edge = sub(root, "field_edge");
+        edgeCell = num(edge.get("cell"), edgeCell);
+        edgeDrop = num(edge.get("drop"), edgeDrop);
+        Map<String, Object> desert = sub(root, "desert");
+        desertCell = num(desert.get("cell"), desertCell);
+        desertGravel = dec(desert.get("gravel"), desertGravel);
+        desertRedSand = dec(desert.get("red_sand"), desertRedSand);
+        Map<String, Object> snow = sub(root, "snow");
+        snowCell = num(snow.get("cell"), snowCell);
+        snowWobble = num(snow.get("wobble"), snowWobble);
+        glacierCell = num(snow.get("glacier_cell"), glacierCell);
+        glacierThreshold = dec(snow.get("glacier"), glacierThreshold);
+        Map<String, Object> cave = sub(root, "cave_floor");
+        caveFloorCell = num(cave.get("cell"), caveFloorCell);
+        caveFloorGravel = dec(cave.get("gravel"), caveFloorGravel);
+        Map<String, Object> eye = sub(root, "eye");
+        speckleMax = dec(eye.get("speckle_max"), speckleMax);
+        isolatedMax = dec(eye.get("isolated_max"), isolatedMax);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> sub(Map<String, Object> root, String key) {
+        Object v = root.get(key);
+        return v instanceof Map ? (Map<String, Object>) v : Map.of();
+    }
+
+    private static int num(Object o, int fallback) {
+        return o instanceof Number n ? n.intValue() : fallback;
+    }
+
+    private static double dec(Object o, double fallback) {
+        return o instanceof Number n ? n.doubleValue() : fallback;
+    }
+
     /** {@code config/terrain.yml} 판독 — 없어도 돈다 (그때는 등록부에서 <b>읽어 낸다</b>) */
     @SuppressWarnings("unchecked")
     static void load(Path configDir) {
         caveRegistry = new LinkedHashMap<>();
         shapeRegistry = new LinkedHashMap<>();
+        requestedRegistry = new LinkedHashMap<>();
         surfaceRegistry = new LinkedHashMap<>();
         snowlineRegistry = new LinkedHashMap<>();
         oasisRegistry = new java.util.LinkedHashSet<>();
+        loadGrain(configDir);   // ★ 지형의 결 — 점묘를 막는 덩어리 크기 (terrain_grain.yml)
         Path file = configDir.resolve("terrain.yml");
         if (!Files.isRegularFile(file)) {
             return;
@@ -2063,47 +2173,67 @@ final class TerrainForge {
                 String name = v instanceof Map
                         ? String.valueOf(((Map<String, Object>) v).get("profile"))
                         : String.valueOf(v);
+                String id = String.valueOf(e.getKey());
+                requestedRegistry.put(id, name.trim());   // ★ 모르는 이름도 **적어 둔다**
                 try {
-                    shapeRegistry.put(String.valueOf(e.getKey()), Profile.valueOf(name.trim()));
-                } catch (IllegalArgumentException ignored) {
-                    // 모르는 윤곽 — 조용히 넘긴다
+                    shapeRegistry.put(id, Profile.valueOf(name.trim()));
+                } catch (IllegalArgumentException notImplemented) {
+                    // ★ 조용히 넘어가지 않는다 — 지도가 요구한 땅이 **말없이 딴 땅으로** 서면 안 된다.
+                    //   관문(TerrainGate)이 이 자리를 pending 으로 잡는다: terrain_profile_unresolved
+                    // ★ Bukkit.getLogger() 를 안 쓴다 — **서버 없이 도는 눈**에서 그 줄이 NPE 를 냈다
+                    //   (Bukkit.server == null). 등록부 판독은 서버를 요구하지 않아야 한다.
+                    LOG.warning("[지형] " + id + " — 지도가 요구한 윤곽 「"
+                            + name.trim() + "」 은 아직 **구현되지 않았다**. 이 땅은 빚지 않는다 "
+                            + "(config/terrain_gate.yml profiles_implemented)");
                 }
             }
         }
     }
 
     /**
-     * 이 자리에 동굴을 파는가 — 등록부(terrain.yml)가 먼저, 없으면 <b>지도에서 읽어 낸다</b>.
+     * 지도가 <b>요구한</b> 윤곽의 이름 — 구현 여부와 무관하다 ({@link TerrainGate} 가 그것을 묻는다).
      *
-     * <p>지도는 이미 말하고 있다: 마교 전초의 architecture 는 "동굴과 석실"이고, 녹림은 굴에 짐을 쟁이고,
-     * 폐허(폐사당·옛 문파 터)는 기연이 앉는 자리다. <b>등록부를 다시 쓰지 않고 읽는다.</b>
-     *
-     * @return 팔 동굴의 원형. 없으면 null (여기엔 굴이 없다)
+     * <p>등록부({@code terrain.yml shaping:})가 먼저다. 없으면 {@code terrain:} 유형에서 읽는다 —
+     * {@link #profile} 과 <b>같은 규칙</b>이다 (두 개의 진실을 만들지 않는다). 다만 여기서는
+     * <b>로그를 찍지 않는다</b>: 관문은 하루에도 여러 번 묻는다.
      */
-    static CaveKind caveKind(WorldMap.Place place) {
-        CaveKind registered = caveRegistry.get(place.id());
-        if (registered != null) {
+    static String requestedProfile(WorldMap.Place place) {
+        String registered = requestedRegistry.get(place.id());
+        if (registered != null && !registered.isBlank() && !"null".equals(registered)) {
             return registered;
         }
-        String note = place.note() == null ? "" : place.note();
-        String faction = place.faction() == null ? "" : place.faction().toLowerCase(Locale.ROOT);
         String terrain = place.terrain() == null ? "" : place.terrain();
-        if ("hyeolgyo".equals(faction) && "폐허".equals(terrain)) {
-            return CaveKind.제단굴;                  // 혈교 옛 제단 — 내려가는 굴
+        boolean mountainous = "산".equals(terrain) || "험산".equals(terrain)
+                || "설산".equals(terrain) || "고원".equals(terrain);
+        if (mountainous) {
+            return Profile.중턱단.name();   // 봉우리는 등록부만이 세운다 (모르면 덜 하는 쪽이 안전하다)
         }
-        if ("magyo".equals(faction) || "hyeolgyo".equals(faction)) {
-            if (note.contains("동굴") || note.contains("석실") || "험산".equals(terrain)
-                    || "밀림".equals(terrain)) {
-                return CaveKind.은신처;              // 마교 전초 — "동굴과 석실"
-            }
-        }
-        if ("noklim".equals(faction) && !"nokrim_sangil".equals(place.id())) {
-            return CaveKind.산적굴;                  // 산채의 굴 — 짐을 쟁인다
-        }
-        if ("폐허".equals(terrain)) {
-            return CaveKind.기연굴;                  // 폐사당·옛 문파 터 — 기연이 앉는 자리
-        }
-        return null;
+        return switch (terrain) {
+            case "평지", "평야", "분지", "초원", "폐허", "구릉" -> Profile.들.name();
+            case "사막" -> Profile.사막.name();
+            default -> Profile.그대로.name();
+        };
+    }
+
+    /**
+     * 이 자리에 동굴을 파는가 — <b>★ 등록부({@code config/terrain.yml} 의 {@code caves:})만이 판다.</b>
+     *
+     * <p><b>예전엔 산문(散文)을 뒤졌다</b> — 그리고 그것이 이 세계에서 가장 위험한 줄이었다:
+     * <pre>
+     *   if (note.contains("동굴") || note.contains("석실")) → 은신처 굴을 판다
+     * </pre>
+     * {@code note} 는 지도의 {@code architecture:} <b>서술문</b>이다. 사람이 읽으라고 적은 글이다.
+     * ★ <b>누가 그 문장을 다듬어 "동굴" 이라는 낱말을 빼면 — 굴이 사라진다.</b> 마교 은신처는
+     * <b>굴이 본체인 집</b>이라, 굴이 사라지면 제단도 살림도 갈 곳을 잃는다. 아무도 그럴 의도가 없었는데도.
+     * <b>글이 기계를 움직이면 그것은 등록부가 아니다.</b>
+     *
+     * <p>세력 추측({@code noklim → 산적굴}, {@code 폐허 → 기연굴})도 함께 지웠다 — 같은 병이다.
+     * 굴 여덟은 이미 {@code terrain.yml caves:} 에 <b>이름과 원형으로</b> 등재돼 있다. 우리는 읽는다.
+     *
+     * @return 팔 동굴의 원형. <b>등록부에 없으면 null</b> — 여기엔 굴이 없다. (굴이 필요하면 등록하라)
+     */
+    static CaveKind caveKind(WorldMap.Place place) {
+        return caveRegistry.get(place.id());
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -2144,6 +2274,99 @@ final class TerrainForge {
 
     private static double dist(int dx, int dz) {
         return Math.sqrt((double) dx * dx + (double) dz * dz);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 결(結) — 덩어리를 만드는 잡음. ★ 난수가 아니다: 좌표의 순수 함수다
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // 【왜 이것이 있는가】 조성기에 난수는 금지다 (같은 좌표는 언제나 같은 땅이어야 한다). 그래서 여태
+    //   흔들림을 **좌표 해시**로 냈다: floorMod(x*7 + z*11, 3) - 1. 그런데 그 값은 **파장이 한 칸**이다 —
+    //   (x,z) 와 (x+1,z) 사이에 아무 상관이 없다. 칸마다 독립으로 뽑히니 **점묘**가 된다.
+    //
+    // 【고침】 해시를 **격자점에서만** 뽑고 그 사이를 부드럽게 보간한다 (값 잡음, value noise).
+    //   그러면 한 덩어리(cell 칸) 안의 값들이 서로 가깝다 = **덩어리로 읽힌다.**
+    //   결정론은 그대로다 — 격자점의 해시가 좌표의 순수 함수이므로, 보간값도 좌표의 순수 함수다.
+
+    /** 격자점 하나의 값 [-1,1] — <b>정수 해시</b> (splitmix64 계열 섞기). 난수 씨앗이 없다 */
+    private static double lattice(int gx, int gz) {
+        long h = gx * 0x9E3779B97F4A7C15L ^ gz * 0xC2B2AE3D27D4EB4FL;
+        h ^= h >>> 30;
+        h *= 0xBF58476D1CE4E5B9L;
+        h ^= h >>> 27;
+        h *= 0x94D049BB133111EBL;
+        h ^= h >>> 31;
+        return ((h >>> 11) / (double) (1L << 53)) * 2.0 - 1.0;
+    }
+
+    /** 매끄러운 이음 (smoothstep) — 선형 보간만 하면 격자 선이 다이아몬드 무늬로 드러난다 */
+    private static double ease(double t) {
+        return t * t * (3 - 2 * t);
+    }
+
+    /**
+     * 결의 값 [-1,1] — <b>{@code cell} 칸짜리 격자</b>에 해시를 깔고 보간한다.
+     *
+     * <p>이것이 점묘와 덩어리를 가르는 한 줄이다. {@code cell = 1} 이면 옛날의 좌표 해시로 되돌아간다
+     * (그래서 눈이 그것을 <b>일부러 되살려</b> 잡는지 본다 — {@code TerrainGrainSelfTest}).
+     */
+    static double grain(int x, int z, int cell) {
+        int c = Math.max(1, cell);
+        double fx = x / (double) c;
+        double fz = z / (double) c;
+        int x0 = (int) Math.floor(fx);
+        int z0 = (int) Math.floor(fz);
+        double tx = ease(fx - x0);
+        double tz = ease(fz - z0);
+        double a = lattice(x0, z0);
+        double b = lattice(x0 + 1, z0);
+        double c0 = lattice(x0, z0 + 1);
+        double d = lattice(x0 + 1, z0 + 1);
+        return (a * (1 - tx) + b * tx) * (1 - tz) + (c0 * (1 - tx) + d * tx) * tz;
+    }
+
+    /** 두 겹의 결 — 큰 덩어리 위에 작은 결 (2옥타브). 덩어리의 <b>가장자리가 반듯해지지 않는다</b> */
+    static double grain2(int x, int z, int cell) {
+        return grain(x, z, cell) * 0.72
+                + grain(x + 8191, z + 4703, Math.max(2, cell / 2)) * 0.28;
+    }
+
+    /** 지면의 요철 — ±{@code undulation.amplitude} 칸. <b>덩어리로</b> 오르내린다 (구판: 칸마다 제각각) */
+    static int undulation(int x, int z) {
+        return (int) Math.round(grain2(x, z, undulationCell) * undulationAmp);
+    }
+
+    /** 들의 가장자리가 자연으로 풀리는 내림 — 0 … {@code field_edge.drop} */
+    static int edgeDrop(int x, int z) {
+        double v = (grain2(x, z, edgeCell) + 1) * 0.5;   // 0 … 1
+        return (int) Math.round(v * edgeDrop);
+    }
+
+    /** 사막 표층의 자재 — 자갈밭과 붉은 모래가 <b>덩어리로</b> 눕는다 (구판: 29칸에 한 점씩 흩뿌림) */
+    static Material sandSkin(int x, int z) {
+        double g = grain2(x, z, desertCell);
+        if (g > desertGravel) {
+            return Material.GRAVEL;
+        }
+        if (g < -desertRedSand) {
+            return Material.RED_SAND;
+        }
+        return Material.SAND;
+    }
+
+    /** 설선의 들쭉날쭉 — ±{@code snow.wobble} 칸. <b>선이 굽이친다</b> (구판: 칸마다 튀어 소금·후추가 됐다) */
+    static int snowWobble(int x, int z) {
+        return (int) Math.round(grain2(x, z, snowCell) * snowWobble);
+    }
+
+    /** 만년빙인가 — 얼음도 <b>덩어리로</b> 언다 (구판: 네 칸에 하나꼴로 점점이) */
+    static boolean glacier(int x, int z) {
+        return grain(x, z, glacierCell) > glacierThreshold;
+    }
+
+    /** 굴 바닥의 자갈 — <b>깔린다</b>. 뿌려지지 않는다 */
+    static boolean caveGravel(int x, int z) {
+        return grain2(x, z, caveFloorCell) > caveFloorGravel;
     }
 
     private static long key(int x, int y, int z) {
