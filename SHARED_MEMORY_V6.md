@@ -10,7 +10,8 @@
 - 다음 단계: PG-008 (SQLite 경로 제거 — 복귀 보존 기간 종료 후, 기간은 사람이 정한다)
 - 병렬 디자인 트랙: SJ-000 서장 시네마틱 서책 청사진 완료, 다음 SJ-001 조판 엔진 (`docs/design/seojang_presentation.md`)
 - 컷오버 절차: `docs/bot/pg_cutover_runbook.md` (2026-07-14 훈련으로 재현됨)
-- ★ 마크 세우기 순서: `docs/design/world_standup_order.md` (7막 — 0막 결정 D-1~4 는 사람 몫, 대기 중)
+- ★ 마크 세우기 순서: `docs/design/world_standup_order.md` — D-0 경험 정본 확정됨 (`docs/design/experience_design.md`), 청하현 기립 실행 대기
+- ★ RP 공동 평가 개설: `docs/collaboration/RP_REVIEW_BOARD.md` — Fable 평가 완료(`RP_REVIEW_FABLE.md` + 시안 2), **Codex 는 `RP_REVIEW_CODEX.md` 로 평가를 적으라** (몹·스킬: MythicMobs 사용/모방 허용 — 사용자 방향)
 - 주 담당 인계 (2026-07-14): PG-005부터 Fable 이 설계·구현·검증·커밋, Codex 는 diff 검토·독립 재시험
 - 작업 장부: `docs/collaboration/ACTIVE_V6.md`
 - 전환 설계: `docs/design/postgresql_migration.md`
