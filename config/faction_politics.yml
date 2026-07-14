@@ -50,7 +50,12 @@ roster:
   jeomchang:        { name: 점창파,     registry: 로스터, coalition: orthodox, seat: 운남,   martial: 5,  mandate_weight: 1, temper: 은둔, internal_burden: 2 }
   cheongseong:      { name: 청성파,     registry: 로스터, coalition: orthodox, seat: 청성산, martial: 6,  mandate_weight: 1, temper: 실리, internal_burden: 2 }
   haenam:           { name: 해남파,     registry: 로스터, coalition: orthodox, seat: 해남도, martial: 5,  mandate_weight: 1, temper: 은둔, internal_burden: 2 }
-  ami:              { name: 아미파,     registry: 예약,   coalition: orthodox, seat: 아미산, martial: 5,  mandate_weight: 2, temper: 협의, internal_burden: 2, active: false }
+  # ★★ 2026-07-13 사용자 결정 — 아미의 **미설계가 끝났다.** 집이 생겼다: 「운해 비구니원」
+  #   (docs/design/ami_architecture.md · world_map.yml places.ami · RemoteBuilder.Archetype.비구니원)
+  #   ★ 영향력 7 (martial 5 + mandate 2) → §17 띠 "7~8" = 반경 48. **무력은 낮고 명분이 높다** — 그 결이 집에도 있다:
+  #     '화려하지 않고 정갈하다 · 외부에는 닫혀 있고 내부에는 넓은 수련 마당이 숨어 있다'
+  #   ★ `registry: 예약` 은 **그대로 둔다** — 사용자가 등록 등급까지 정하지는 않았다 (물어야 한다)
+  ami:              { name: 아미파,     registry: 예약,   coalition: orthodox, seat: 아미산, martial: 5,  mandate_weight: 2, temper: 협의, internal_burden: 2, active: true }
   gaebang:          { name: 개방,       registry: 1급,    coalition: orthodox, seat: 없음,   martial: 6,  mandate_weight: 3, temper: 협의, internal_burden: 0,
                       note: "본거지가 없다 = 관이 칠 표적이 없다. 대신 어디에나 있다 — 명분의 최초 발화자.
                         ★ internal_burden 0 — 지킬 산문도 곳간도 없으므로 **제 코가 석 자일 일이 없다**" }

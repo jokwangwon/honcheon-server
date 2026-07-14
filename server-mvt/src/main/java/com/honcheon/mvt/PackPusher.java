@@ -34,8 +34,13 @@ import java.util.UUID;
  * 클라이언트가 조용히 거절한다 — 배급자는 200 을 주고, 파일도 멀쩡하고, 아무 로그도 안 남는다.
  * 이 실패는 눈에 안 보이므로, <b>사람이 옮겨 적는 일을 없앤다.</b>
  *
- * <p><b>팩 게이트 불가침</b> — {@code required: false}. 팩이 없어도, 팩을 거절해도 플레이는 된다.
- * 팩은 위에 얹는 것이지 들어오는 조건이 아니다.
+ * <p><b>팩 게이트</b> (2026-07-13 헌법 개정 — 옛 「불가침」 조항 폐지) — {@code required: true}.
+ * 팩이 없으면 무공도 글자도 눈에 보이지 않는다. 그러므로 <b>팩은 들어오는 조건</b>이다.
+ * 이 클래스는 등록부의 {@code required} 를 <b>되돌리지 않는다</b> — 적힌 대로 나간다.
+ *
+ * <p><b>다만 친절하게 닫는다.</b> 못 들어온 사람에게 <b>왜</b> 못 들어왔는지, <b>무엇을 하면</b>
+ * 들어올 수 있는지 한국어로 말한다. 거절과 다운로드 실패는 사람이 할 일이 다르므로 <b>말도 다르다</b>.
+ * 문구는 등록부(resource_pack.yml → {@code gate})에 산다 — 코드가 말을 지어내지 않는다.
  */
 final class PackPusher implements Listener {
 
@@ -50,6 +55,25 @@ final class PackPusher implements Listener {
     private String forcedHost;    // 비워 두면 접속한 주소를 따라간다 (권장)
     private String fallbackHost;  // 공인 주소로 들어온 사람에게 줄 사설 주소 (8123 은 밖으로 안 연다)
     private String absoluteUrl;   // 외부 호스팅 — 이게 있으면 주소를 추측할 일이 없다
+
+    private boolean gateEnabled;      // 못 받은 사람을 내보내는가 (등록부: gate.enabled)
+    private String msgDeclined;       // 거절 — 그 사람이 수락하면 된다
+    private String msgFailedDownload; // 다운로드 실패 — 그 사람이 재시도하면 된다
+    private String msgFailedOther;    // 그 밖 — 관리자를 불러야 한다
+    private String msgSilent;         // ★ 침묵 — 아무 말도 안 했다
+    private int silenceSeconds;       // ★ 이만큼 기다려도 "켜졌다"가 안 오면 내보낸다
+
+    /**
+     * <b>켜졌다고 답한 사람들.</b>
+     *
+     * <p>★ 【2026-07-13 · 실사건】 부계정 둘이 <b>팩 응답을 하나도 안 하고</b> 들어와 놀았다 —
+     * 거절도 실패도 성공도 아닌 <b>침묵</b>이었다. 그런데 문은 거절과 실패에만 반응했다.
+     * <b>대답하지 않으면 통과하는 문</b>이었던 것이다. 우리가 "닫혔다"고 믿는 동안.
+     *
+     * <p>그래서 침묵도 답으로 친다: 보낸 뒤 {@code gate.silence_seconds} 안에 여기 이름이 안 오르면 내보낸다.
+     * <b>원인이 무엇이든(비바닐라 클라이언트·프록시·패킷 누락) 문은 닫혀야 한다.</b>
+     */
+    private final java.util.Set<UUID> loaded = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private String hash;          // 실물에서 잰 sha1 (사람이 옮겨 적지 않는다)
     private byte[] hashBytes;     // API 가 원하는 형태 — 같은 값이다
@@ -66,7 +90,16 @@ final class PackPusher implements Listener {
         port = s.get("port") == null ? 8123 : RulesConfig.intValue(s.get("port"));
         file = String.valueOf(s.getOrDefault("file", "honcheon_pack.zip"));
         prompt = String.valueOf(s.getOrDefault("prompt", "혼천 리소스팩"));
-        required = Boolean.TRUE.equals(s.get("required"));   // ★ 기본 false — 팩 게이트 불가침
+        // ★ 등록부가 정본이다. 코드가 되돌리지 않는다 (옛 「팩 게이트 불가침」 강제는 폐지됐다).
+        required = Boolean.TRUE.equals(s.get("required"));
+        Map<String, Object> gate = RulesConfig.section(s, "gate");
+        gateEnabled = required && !Boolean.FALSE.equals(gate.get("enabled"));
+        msgSilent = gate.get("silent") == null ? null : String.valueOf(gate.get("silent"));
+        silenceSeconds = gate.get("silence_seconds") == null ? 0
+                : ((Number) gate.get("silence_seconds")).intValue();
+        msgDeclined = text(gate, "declined");
+        msgFailedDownload = text(gate, "failed_download");
+        msgFailedOther = text(gate, "failed_other");
         Object host = s.get("host");
         forcedHost = host == null || String.valueOf(host).isBlank() ? null : String.valueOf(host);
         Object direct = s.get("url");
@@ -76,17 +109,20 @@ final class PackPusher implements Listener {
         Object path = s.get("local_path");
         localPath = Path.of(path == null ? "../pack-http/" + file : String.valueOf(path));
 
-        if (required) {
-            // 이 계약은 config 가 뒤집을 수 없다. 뒤집으려 하면 소리내어 거절한다.
-            plugin.getLogger().warning("[팩] required: true 는 팩 게이트 불가침을 어긴다 — false 로 되돌린다");
-            required = false;
-        }
         hash = sha1(localPath);
         hashBytes = hash == null ? null : hexBytes(hash);
         if (hash == null) {
             plugin.getLogger().warning("[팩] 실물을 못 찾았다 (" + localPath.toAbsolutePath()
                     + ") — 팩을 배급하지 않는다");
             enabled = false;
+            if (required) {
+                // ★ 문은 닫혔는데 열쇠를 잃었다. 이대로면 **아무도 팩을 못 받고, 그래서 아무도 못 막힌다** —
+                //   게이트가 조용히 열린 채로 돈다. 그것이 가장 나쁜 실패다. 그러므로 소리내어 말한다.
+                //   (사람을 다 튕기지는 않는다 — 그러면 관리자도 못 들어와 고칠 수 없다.)
+                plugin.getLogger().severe("[팩] ★ 게이트가 required 인데 팩 실물이 없다 —"
+                        + " 배급이 꺼졌으므로 **게이트도 사실상 열려 있다.** 팩을 구워 두라: "
+                        + localPath.toAbsolutePath());
+            }
             return;
         }
         // 팩 id 는 sha1 에서 뽑는다 — 팩이 바뀌면 id 도 바뀌어 클라이언트가 캐시를 버린다
@@ -96,7 +132,16 @@ final class PackPusher implements Listener {
                     + "… · " + (absoluteUrl != null ? "외부 호스팅 " + absoluteUrl
                     : "포트 " + port + " · 주소는 " + (forcedHost == null
                     ? "접속한 주소를 따라간다" : "고정 " + forcedHost)));
+            plugin.getLogger().info("[팩] 게이트 — " + (required
+                    ? "닫혔다 (팩이 있어야 들어온다)" + (gateEnabled ? " · 못 받은 자는 내보낸다" : "")
+                    : "★ 열렸다 (required: false — 팩 없이도 들어온다)"));
         }
+    }
+
+    /** 등록부의 문구 — 코드가 말을 지어내지 않는다. 없으면 null(그러면 못 내보낸다고 소리낸다). */
+    private static String text(Map<String, Object> gate, String key) {
+        Object raw = gate.get(key);
+        return raw == null || String.valueOf(raw).isBlank() ? null : String.valueOf(raw);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -141,41 +186,114 @@ final class PackPusher implements Listener {
             url = "http://" + host + ":" + port + "/" + file;
         }
         try {
+            loaded.remove(player.getUniqueId());   // 새로 보냈다 — 옛 대답은 이제 대답이 아니다
             player.setResourcePack(packId, url, hashBytes,
                     net.kyori.adventure.text.Component.text(prompt), required);
             plugin.getLogger().info("[팩] " + player.getName() + " 에게 보냈다 — " + url);
+            awaitAnswer(player);
         } catch (RuntimeException refused) {
             plugin.getLogger().warning("[팩] " + player.getName() + " 에게 못 보냈다 — " + refused.getMessage());
         }
     }
 
     /**
-     * <b>손잡이를 보는 눈.</b> 클라이언트가 뭐라고 답했는지 적는다.
+     * <b>침묵을 기다린다.</b> 보낸 뒤 정해진 시간 안에 「켜졌다」가 안 오면 <b>내보낸다</b>.
      *
-     * <p>이것이 없어서 오래 헤맸다 — 팩이 안 떠도 <b>서버 로그엔 아무것도 안 남았다.</b>
-     * 배급자는 200 을 주고, 파일도 멀쩡하고, 우리는 "다운로드 실패"라는 말만 들었다.
-     * 실패의 이유는 넷이고 처방이 전부 다르다:
+     * <p>거절·실패는 클라이언트가 <b>말을 해 주는</b> 실패다. 그런데 <b>아무 말도 안 하는</b> 실패가 있다 —
+     * 그 사람은 팩 없이 그냥 논다. 문이 열려 있는 줄도 모르고. 이 손이 그 구멍을 막는다.
+     */
+    private void awaitAnswer(Player player) {
+        if (!gateEnabled || silenceSeconds <= 0) {
+            return;
+        }
+        UUID id = player.getUniqueId();
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            Player still = plugin.getServer().getPlayer(id);
+            if (still == null || !still.isOnline() || loaded.contains(id)) {
+                return;   // 나갔거나, 켰다 — 문을 닫을 일이 없다
+            }
+            plugin.getLogger().warning("[팩] " + still.getName() + " — ★ 무응답 " + silenceSeconds
+                    + "초 (거절도 실패도 아니다 — 클라이언트가 팩 요청 자체를 무시했다."
+                    + " 비바닐라 클라이언트·프록시·구버전일 수 있다)");
+            close(still, msgSilent, "무응답");
+        }, Math.max(1L, silenceSeconds * 20L));
+    }
+
+    /**
+     * <b>손잡이를 보는 눈이자, 문(門)이다.</b> 클라이언트가 뭐라고 답했는지 적고 — 못 받았으면 <b>내보낸다</b>.
+     *
+     * <p>Paper 의 {@code required} 플래그도 못 받은 자를 끊는다. 그러나 그 말은 바닐라의 말이고,
+     * <b>왜</b> 못 들어왔는지·<b>무엇을 하면</b> 들어오는지 말해 주지 않는다. 그래서 우리가 먼저 말한다.
+     * 두 겹이므로 새지 않는다: 우리 말이 늦으면 바닐라가 닫고, 우리 말이 이르면 우리가 닫는다.
+     *
+     * <p>실패의 이유마다 <b>사람이 할 일이 다르다</b> — 그러므로 말도 다르다:
      * <ul>
-     *   <li>{@code DECLINED} — 클라이언트가 <b>받으러 오지도 않았다.</b> 대개 그 사람 설정이
-     *       "서버 리소스팩: 사용 안 함" 이다. 서버가 고칠 수 있는 것이 아니다</li>
-     *   <li>{@code FAILED_DOWNLOAD} — 주소에 못 닿았거나 sha1 이 안 맞다</li>
-     *   <li>{@code ACCEPTED} → {@code SUCCESSFULLY_LOADED} — 정상</li>
-     *   <li>{@code INVALID_URL}·{@code FAILED_RELOAD}·{@code DISCARDED} — 그대로 적는다</li>
+     *   <li>{@code DECLINED} — <b>받으러 오지도 않았다.</b> 그 사람이 <b>수락</b>하면 된다
+     *       (또는 "서버 리소스팩: 사용 안 함" 설정을 켜면)</li>
+     *   <li>{@code FAILED_DOWNLOAD} — 수락은 했다. 길이 끊겼다. 그 사람이 할 일은 <b>재시도</b>다</li>
+     *   <li>{@code INVALID_URL}·{@code FAILED_RELOAD} — 그 사람 잘못이 아니다. <b>관리자</b>를 불러야 한다</li>
+     *   <li>{@code ACCEPTED} → {@code SUCCESSFULLY_LOADED} — 정상. 문을 지난다</li>
+     *   <li>{@code DISCARDED} — 서버가 팩을 거둔 것이다. <b>내보내지 않는다</b> (그 사람 탓이 아니다)</li>
      * </ul>
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onStatus(PlayerResourcePackStatusEvent event) {
         PlayerResourcePackStatusEvent.Status status = event.getStatus();
-        String who = event.getPlayer().getName();
+        Player player = event.getPlayer();
+        String who = player.getName();
         switch (status) {
-            case SUCCESSFULLY_LOADED -> plugin.getLogger().info("[팩] " + who + " — 켜졌다");
+            case SUCCESSFULLY_LOADED -> {
+                loaded.add(player.getUniqueId());   // 답했다 — 침묵의 문이 이 사람을 안 친다
+                plugin.getLogger().info("[팩] " + who + " — 켜졌다");
+            }
             case ACCEPTED -> plugin.getLogger().info("[팩] " + who + " — 받는 중");
-            case DECLINED -> plugin.getLogger().warning("[팩] " + who
-                    + " — 거절했다 (받으러 오지도 않았다). 클라이언트 설정 '서버 리소스팩'이"
-                    + " 꺼져 있을 수 있다: 멀티플레이 → 서버 편집 → 서버 리소스팩: 사용");
-            case FAILED_DOWNLOAD -> plugin.getLogger().warning("[팩] " + who
-                    + " — 다운로드 실패 (주소에 못 닿았거나 sha1 불일치)");
+            case DECLINED -> {
+                plugin.getLogger().warning("[팩] " + who
+                        + " — 거절했다 (받으러 오지도 않았다). 클라이언트 설정 '서버 리소스팩'이"
+                        + " 꺼져 있을 수 있다: 멀티플레이 → 서버 편집 → 서버 리소스팩: 사용");
+                close(player, msgDeclined, "거절");
+            }
+            case FAILED_DOWNLOAD -> {
+                plugin.getLogger().warning("[팩] " + who
+                        + " — 다운로드 실패 (주소에 못 닿았거나 sha1 불일치)");
+                close(player, msgFailedDownload, "다운로드 실패");
+            }
+            case INVALID_URL, FAILED_RELOAD -> {
+                plugin.getLogger().warning("[팩] " + who + " — " + status + " (서버 쪽 탈이다)");
+                close(player, msgFailedOther, String.valueOf(status));
+            }
             default -> plugin.getLogger().warning("[팩] " + who + " — " + status);
+        }
+    }
+
+    /**
+     * <b>문을 닫는다 — 다만 말을 하고 닫는다.</b>
+     *
+     * <p>{@code gate.enabled} 가 꺼져 있거나 {@code required} 가 false 면 닫지 않는다 (등록부가 정본이다).
+     * 문구가 등록부에 없으면 <b>말없이 튕기지 않는다</b> — 그건 벽이지 문이 아니다. 대신 소리내어 적고 들여보낸다.
+     */
+    private void close(Player player, String message, String why) {
+        if (!gateEnabled) {
+            return;
+        }
+        if (message == null) {
+            plugin.getLogger().severe("[팩] ★ " + player.getName() + " 을(를) 내보내야 하는데(" + why
+                    + ") 등록부에 할 말이 없다 (resource_pack.yml → gate) —"
+                    + " 말없이 튕기지 않는다. 들여보낸다. 문구를 적어 두라");
+            return;
+        }
+        // 운영자의 눈 — 누가 왜 못 들어왔는지 한 줄로 남는다
+        plugin.getLogger().warning("[팩] ★ 문 닫힘 — " + player.getName() + " (" + why
+                + ") · 팩을 받지 못했으므로 들이지 않았다");
+        net.kyori.adventure.text.Component said =
+                net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(message);
+        // ★ 내보내는 손은 **하나**다. 두 벌로 적으면 하나만 뜯겨도 눈이 못 본다 (자기 시험이 그걸 잡았다).
+        //   Paper 의 required 플래그가 먼저 끊을 수도 있다 — 그때 이 호출은 무해한 no-op 다.
+        Runnable door = () -> player.kick(said);
+        if (plugin.getServer().isPrimaryThread()) {
+            door.run();
+        } else {
+            plugin.getServer().getScheduler().runTask(plugin, door);
         }
     }
 

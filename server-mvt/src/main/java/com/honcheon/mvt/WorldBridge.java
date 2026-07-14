@@ -110,11 +110,9 @@ public final class WorldBridge {
         dedupeMillis = 1000L * num(map(map(events.get("qi_manifested")).get("effects"))
                 .get("dedupe_seconds"), 600);
 
-        // 신원 접합 — 코드의 알파벳·길이·수명 (등록부가 정한다. 0·O·1·I 가 없는 것은 옮겨 적는 값이기 때문)
+        // 신원 접합 — 청의 수명 (안내 문구용. 진짜 만료 판정은 봇의 장부가 한다 — 정본은 하나다)
         Map<String, Object> identity = map(root.get("identity"));
-        codeAlphabet = String.valueOf(identity.getOrDefault("code_alphabet", codeAlphabet));
-        codeLength = Math.max(4, num(identity.get("code_length"), codeLength));
-        codeTtlSeconds = Math.max(30, num(identity.get("ttl_seconds"), codeTtlSeconds));
+        linkTtlSeconds = Math.max(15, num(identity.get("ttl_seconds"), linkTtlSeconds));
         // 접합의 문 — 채팅에 뜰 문장 (identity.gate.mc_chat). 코드는 문장을 지어내지 않는다
         GATE.clear();
         map(map(identity.get("gate")).get("mc_chat"))
@@ -134,6 +132,18 @@ public final class WorldBridge {
         outboxDir = bridgeDir.resolve(String.valueOf(transport.getOrDefault("outbox", "mvt")));
         snapshotFile = bridgeDir.resolve(String.valueOf(
                 transport.getOrDefault("snapshot", "world_state.json")));
+        // ★ 접합의 두 파일 — 청(봇 → 여기)과 명부(여기 → 봇). 스냅숏(20초)과 별도다:
+        //   사람이 화면 앞에서 **기다리는** 값이라 20초는 설계가 아니라 사고다.
+        linkRequestsFile = bridgeDir.resolve(String.valueOf(
+                transport.getOrDefault("link_requests", "link_requests.json")));
+        rosterFile = bridgeDir.resolve(String.valueOf(
+                transport.getOrDefault("roster", "roster.json")));
+        linkPollSeconds = Math.max(1, num(transport.get("link_poll_seconds"), linkPollSeconds));
+        rosterSeconds = Math.max(1, num(transport.get("roster_seconds"), rosterSeconds));
+        // ★ 서장의 책 — 접합과 **같은 이유로 같은 시계**다: 사람이 책을 펴 놓고 글자를 누르며 기다린다
+        seojangFile = bridgeDir.resolve(String.valueOf(
+                transport.getOrDefault("seojang", "seojang.json")));
+        seojangPollSeconds = Math.max(1, num(transport.get("seojang_poll_seconds"), seojangPollSeconds));
         try {
             Files.createDirectories(outboxDir);
         } catch (IOException e) {
@@ -142,7 +152,119 @@ public final class WorldBridge {
             return;
         }
         log.info("세계 다리 — 발신 " + outboxDir + " · 수신(되먹임) " + snapshotFile
+                + " · 청 " + linkRequestsFile + " (" + linkPollSeconds + "초) · 명부 " + rosterFile
+                + " (" + rosterSeconds + "초) · 서장 " + seojangFile + " (" + seojangPollSeconds + "초)"
                 + " · 등록 이벤트 " + KINDS.size() + "종 " + KINDS);
+    }
+
+    // ══════════════ 서장(序章) — ★ **마크는 서책이다. 저자는 봇이다** ══════════════
+    //
+    // 【★ 여기에는 문장이 한 줄도 없다】 글도, 선택지도, 판정도 **전부 봇이 낸다.**
+    //   LLM(로컬 qwen3 또는 Claude)도 · 판정 엔진(2d6·성별 보정)도 · 시트도 봇에만 있고,
+    //   **마크는 DB 를 열지 않는다** (단일 작성자 규약). 마크가 문장을 지으면 **정본이 둘**이 된다 —
+    //   이 저장소가 반복해서 데인 바로 그 병이다.
+    //
+    //   그래서 이 절이 하는 일은 둘뿐이다:
+    //     ① 봇이 내려보낸 **현재 장면 한 장**을 읽는다 (seojang.json)
+    //     ② 그 손이 누른 **선택지 번호**를 되돌린다 (seojang_choice)
+    //
+    // 【★ 나루의 사공 — 「배는 한 명씩 탄다」】 봇의 붓은 하나다 (GPU 도 하나다: 4건 동시 = 89.5초).
+    //   글이 아직 안 왔으면 state 가 "쓰는_중" 이고, 그때 마크는 **책을 주지 않고** 사공의 말만 한다.
+    //   ★ 침묵 금지 — 앞에 몇 사람인지 봇이 `ferry` 에 실어 보낸다.
+
+    private static Path seojangFile;
+    private static int seojangPollSeconds = 2;
+    private static volatile long seojangStamp;
+    private static final CopyOnWriteArrayList<Consumer<List<SeojangScene>>> SEOJANG_LISTENERS =
+            new CopyOnWriteArrayList<>();
+
+    /**
+     * 봇이 내려보낸 <b>서장의 한 장.</b> 마크는 이것을 <b>책으로 그릴 뿐</b>이다.
+     *
+     * @param writing   붓이 아직 들려 있다 (글이 안 왔다) — 책을 주지 않는다. 사공의 말만 한다
+     * @param ferry     사공의 말 (줄이 밀렸을 때만. 없으면 null) — <b>침묵 금지</b>
+     * @param fallback  이 글이 <b>옛 필사본</b>(폴백)인가 — 책의 간기 한 줄로 남는다
+     * @param token     이 장면의 지목. 낡은 책의 클릭은 봇이 여기서 거른다 (열쇠가 아니다)
+     * @param last      에필로그인가 — 선택지 대신 [강호로 나선다] 가 붙는다
+     */
+    public record SeojangScene(UUID body, String character, int scene, int total, String title,
+                               String narration, List<String> choices, String token,
+                               boolean writing, boolean last, boolean fallback, String ferry) {
+    }
+
+    /** 책이 왔다 — 그리는 손을 등록한다 (워커 스레드에서 불린다. 받는 쪽이 메인으로 넘겨야 한다) */
+    public static void onSeojang(Consumer<List<SeojangScene>> listener) {
+        SEOJANG_LISTENERS.add(listener);
+    }
+
+    /**
+     * ★ <b>그 손이 책의 글자를 눌렀다</b> — 서장의 유일한 진행 신호.
+     *
+     * <p>마크는 <b>아무것도 판정하지 않는다.</b> 번호 하나를 다리에 얹을 뿐이고, 옳고 그름은
+     * 봇이 정한다 (토큰이 지금 그 장면인가 · 그 몸이 그 캐릭터인가 · 등록부에 있는 선택지인가).
+     *
+     * @param choice 선택지 번호 (0부터). <b>-1 = 출도</b> ([강호로 나선다])
+     */
+    public static void seojangChoice(UUID player, String name, String token, int choice) {
+        if (bridgeDir == null || !KINDS.contains("seojang_choice")) {
+            return;
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("player_uuid", player.toString());
+        data.put("player_name", name);
+        data.put("token", token);
+        data.put("choice", choice);
+        emit("seojang_choice", data);
+        flush();   // ★ 사람이 책을 덮고 다음 장을 기다린다 — 워커의 다음 바퀴(0.5초)도 아깝다
+    }
+
+    /** 봇이 내려보낸 책을 읽는다 (파일이 바뀌었을 때만) */
+    private static void readSeojang() {
+        if (seojangFile == null || !Files.isRegularFile(seojangFile)) {
+            return;
+        }
+        try {
+            long stamp = Files.getLastModifiedTime(seojangFile).toMillis();
+            if (stamp == seojangStamp) {
+                return;
+            }
+            seojangStamp = stamp;
+            Map<String, Object> root = map(Json.parse(
+                    Files.readString(seojangFile, StandardCharsets.UTF_8)));
+            List<SeojangScene> out = new ArrayList<>();
+            for (Object o : list(root.get("scenes"))) {
+                Map<String, Object> s = map(o);
+                String uuid = String.valueOf(s.getOrDefault("mc_uuid", "")).strip();
+                if (uuid.isEmpty()) {
+                    continue;
+                }
+                List<String> choices = new ArrayList<>();
+                for (Object c : list(s.get("choices"))) {
+                    choices.add(String.valueOf(map(c).getOrDefault("label", "")));
+                }
+                Object narration = s.get("narration");
+                try {
+                    out.add(new SeojangScene(UUID.fromString(uuid),
+                            String.valueOf(s.getOrDefault("character", "")),
+                            num(s.get("scene"), 0), num(s.get("total"), 0),
+                            String.valueOf(s.getOrDefault("title", "")),
+                            narration == null ? null : String.valueOf(narration),
+                            List.copyOf(choices),
+                            s.get("token") == null ? null : String.valueOf(s.get("token")),
+                            "쓰는_중".equals(String.valueOf(s.get("state"))),
+                            Boolean.TRUE.equals(s.get("final")),
+                            Boolean.TRUE.equals(s.get("fallback")),
+                            s.get("ferry") == null ? null : String.valueOf(s.get("ferry"))));
+                } catch (IllegalArgumentException e) {
+                    log.warning("서장 — 몸의 이름이 아니다: " + uuid);
+                }
+            }
+            for (Consumer<List<SeojangScene>> l : SEOJANG_LISTENERS) {
+                l.accept(out);
+            }
+        } catch (IOException | RuntimeException e) {
+            log.warning("서장의 책을 읽지 못했다: " + e.getMessage());
+        }
     }
 
     /**
@@ -313,47 +435,138 @@ public final class WorldBridge {
         emit("qi_manifested", data);
     }
 
-    // ─── 신원 접합 — 다리를 건너는 것은 사건이 아니라 사람이다 ───
+    // ═══════════ 신원 접합 — ★ **디스코드가 청하고, 이 몸이 수락한다** ═══════════
+    //
+    // 【코드는 죽었다】 옛 길은 마크가 6자를 내고 사람이 그것을 날라 디스코드에 붙여넣는 것이었다.
+    //   사용자의 판정: "코드 복사는 없어져도 된다." 그래서 requestLink 는 **삭제됐다** (이 자리에 있었다).
+    //
+    // 【남은 것은 두 손】 ① 디스코드가 청한다 (그쪽이 신원을 서명한다)
+    //                    ② **이 화면의 손이 [잇는다] 를 누른다** ← 여기가 이 파일의 몫이다
+    //
+    // 【★ 이 파일이 지키는 자물쇠 — 단 한 줄이다】 {@link #linkDecision} 은 **요청에 적힌 그 몸(uuid)** 만
+    //   수락할 수 있게 한다. 토큰이 새어도, 남이 그 명령을 쳐도, 몸이 다르면 **아무 일도 일어나지 않는다.**
+    //   (그리고 봇이 다리 건너에서 **한 번 더** 같은 대조를 한다 — Bridge.linkConfirm. 다리는 파일이므로.)
 
-    /** 접합 코드의 알파벳·길이·수명 (config/world_bridge.yml identity) — 여기서 발명하지 않는다 */
-    private static String codeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    private static int codeLength = 6;
-    private static int codeTtlSeconds = 600;
-    private static final java.security.SecureRandom RNG = new java.security.SecureRandom();
+    /** 청의 수명 (초) — 안내 문구용. 진짜 만료 판정은 **봇의 장부**가 한다 (정본은 하나다) */
+    private static int linkTtlSeconds = 120;
 
-    /**
-     * 접합 코드를 낸다 — <b>이 몸이 누구인지 봇에게 물어보는 손짓</b>. 여기서는 아직 아무것도 안 이어진다.
-     *
-     * <p><b>왜 마크가 코드를 내고 디스코드가 확정하는가.</b> 지켜야 할 것은 캐릭터(장부·혈채·세력)이고,
-     * 훔칠 수 있는 것은 코드뿐이다. 최종 결속을 <b>인증된 자리</b>(디스코드)에 두면 남의 캐릭터를
-     * 뺏으려면 남의 디스코드 계정이 필요해진다. 반대 방향(봇이 코드 발급 → 마크에서 입력)이면
-     * 코드 한 줄이 곧 캐릭터의 열쇠가 된다 — 어깨너머로 본 사람이 남의 삶을 가져간다.
-     *
-     * <p>코드는 <b>부르는 쪽이 그 플레이어에게만</b> 보여 줘야 한다 (귓속말·액션바 — 공개 채팅 금지).
-     *
-     * @return 그 자리에서 보여 줄 코드 (다리가 안 섰으면 null — 세계의 절반이 꺼져 있다)
-     */
-    public static String requestLink(UUID player, String name) {
-        if (bridgeDir == null || !KINDS.contains("link_request")) {
-            return null;
-        }
-        StringBuilder sb = new StringBuilder(codeLength);
-        for (int i = 0; i < codeLength; i++) {
-            sb.append(codeAlphabet.charAt(RNG.nextInt(codeAlphabet.length())));
-        }
-        String code = sb.toString();
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("code", code);
-        data.put("mc_uuid", player.toString());
-        data.put("mc_name", name);
-        data.put("ttl_seconds", codeTtlSeconds);
-        emit("link_request", data);
-        return code;
+    /** 지금 이 서버에 내려온 청들 (token → 청). 봇이 link_requests.json 으로 내려보낸 것 */
+    private static final Map<String, Request> REQUESTS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final CopyOnWriteArrayList<Consumer<Request>> ASK_LISTENERS =
+            new CopyOnWriteArrayList<>();
+    /** 이미 화면에 띄운 청 — 2초마다 같은 물음을 다시 던지지 않는다 */
+    private static final Set<String> ASKED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private static Path linkRequestsFile;
+    private static Path rosterFile;
+    private static int linkPollSeconds = 2;
+    private static int rosterSeconds = 5;
+    private static volatile long requestsStamp;
+    private static volatile Map<String, String> roster = Map.of();   // mc_name → uuid (주 스레드가 채운다)
+    private static volatile long rosterWritten;
+
+    /** 디스코드에서 온 청 하나 — <b>아직 아무것도 이어지지 않았다</b> */
+    public record Request(String token, UUID body, String mcName, String discordName,
+                          String character, long expiresAt) {
     }
 
-    /** 코드의 수명 (초) — 안내 문구에 쓴다 */
     public static int linkTtlSeconds() {
-        return codeTtlSeconds;
+        return linkTtlSeconds;
+    }
+
+    /** 이 몸에게 지금 살아 있는 청 (없으면 null) — 화면에 다시 띄우거나 초기화할 때 본다 */
+    public static Request pendingFor(UUID player) {
+        long now = System.currentTimeMillis();
+        for (Request r : REQUESTS.values()) {
+            if (r.body().equals(player) && r.expiresAt() > now) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 청이 내려왔다 — <b>그 몸의 화면에 물음을 띄우는 손</b>을 등록한다 (배선은 HoncheonMvt 가 한다).
+     * 워커 스레드에서 불리므로 <b>받는 쪽이 메인 스레드로 넘겨야 한다</b> (Bukkit API 는 그렇게 산다).
+     */
+    public static void onLinkRequest(Consumer<Request> listener) {
+        ASK_LISTENERS.add(listener);
+    }
+
+    /**
+     * ★★ <b>이 몸이 답한다 — 접합의 유일한 결속 신호.</b>
+     *
+     * <p><b>자물쇠는 여기 한 줄이다:</b> {@code req.body().equals(player)}. 청은 <b>그 몸</b>에게 간 것이고,
+     * <b>그 몸만</b> 답할 수 있다. 토큰을 어깨너머로 본 자가 제 화면에서 같은 명령을 쳐도 — 몸이 다르므로
+     * 아무 일도 일어나지 않는다. 토큰은 <b>열쇠가 아니라 지목</b>이다.
+     *
+     * @param player 이 명령을 실제로 친 몸 (Bukkit 이 서명한다 — 위조 불가)
+     * @return 사람에게 보여 줄 결과 (GONE · NOT_YOURS · EXPIRED · OK)
+     */
+    public static Decision linkDecision(UUID player, String token, boolean accept, String name) {
+        Request req = token == null ? null : REQUESTS.get(token.strip().toUpperCase(Locale.ROOT));
+        if (req == null) {
+            return Decision.GONE;
+        }
+        if (!req.body().equals(player)) {
+            // ★ 남의 청 — 여기서 죽는다. (봇도 다리 건너에서 같은 대조를 한 번 더 한다)
+            log.warning("접합 — 남의 청에 답하려 했다: 청은 " + req.mcName() + " 에게 갔는데 "
+                    + name + " 이(가) 눌렀다");
+            return Decision.NOT_YOURS;
+        }
+        if (req.expiresAt() <= System.currentTimeMillis()) {
+            REQUESTS.remove(req.token());
+            return Decision.EXPIRED;
+        }
+        REQUESTS.remove(req.token());
+        ASKED.remove(req.token());
+        emitDecision(req.token(), player, name, accept ? "수락" : "거절");
+        return accept ? Decision.ACCEPTED : Decision.REJECTED;
+    }
+
+    public enum Decision { GONE, NOT_YOURS, EXPIRED, ACCEPTED, REJECTED }
+
+    /**
+     * <b>초기화</b> — {@code /혼천 접속} 을 다시 불렀다 (발판이든 손이든).
+     *
+     * <p>사용자의 말: <i>"발판 밟을 때마다 코드 초기화를 시켜야 할 듯."</i> 코드는 없어졌지만 원리는 남는다 —
+     * <b>다시 부르면 낡은 청은 죽는다.</b> 사람이 발판을 다시 밟는 것은 "처음부터 다시 하겠다"는 뜻이고,
+     * 그때 낡은 청이 살아 있으면 ① 죽은 줄 알았던 창을 나중에 실수로 수락하거나 ② 두 청이 경쟁한다.
+     *
+     * <p>토큰을 안 싣는다 — <b>몸으로</b> 지운다. 그래야 이 서버가 아직 못 본 청(방금 앉은 것)까지 쓸린다.
+     */
+    public static void linkReset(UUID player, String name) {
+        REQUESTS.values().removeIf(r -> {
+            if (r.body().equals(player)) {
+                ASKED.remove(r.token());
+                return true;
+            }
+            return false;
+        });
+        emitDecision("", player, name, "취소");
+    }
+
+    private static void emitDecision(String token, UUID player, String name, String decision) {
+        if (bridgeDir == null || !KINDS.contains("link_confirm")) {
+            return;
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("token", token);
+        data.put("mc_uuid", player.toString());
+        data.put("mc_name", name);
+        data.put("decision", decision);
+        emit("link_confirm", data);
+        flush();   // ★ 사람이 화면 앞에서 기다린다 — 워커의 다음 바퀴(0.5초)를 기다리지 않는다
+    }
+
+    /**
+     * <b>명부(名簿)</b> — 지금 이 서버에 누가 있는가. 주 스레드가 채우고, 워커가 파일로 찍는다.
+     *
+     * <p>봇은 이것으로 <b>단 하나</b>를 판정한다: "그 이름이 지금 강호에 있는가." 없으면 청 자체가 서지 않는다
+     * (물어볼 화면이 없으니까). 좌표도 시트도 담지 않는다 — <b>접속 여부만</b>이다.
+     */
+    public static void setRoster(Map<String, String> nameToUuid) {
+        roster = Map.copyOf(nameToUuid);
     }
 
     // ─── 접속의 문 — 마크가 클릭에 걸 것들 (등록부 + 스냅숏) ───
@@ -363,6 +576,12 @@ public final class WorldBridge {
 
     /** 접속 채널의 URL — <b>봇이 내려보낸 것</b> (스냅숏 discord.url). 문이 안 섰으면 null */
     private static volatile String discordUrl;
+
+    /**
+     * <b>초대 링크</b> — 봇이 내려보낸 것 (스냅숏 {@code discord.invite} ← {@code identity.gate.invite_url}).
+     * 관리자가 등록부에 넣지 않았으면 <b>null</b> — 그때 마크는 초대 버튼을 띄우지 않는다.
+     */
+    private static volatile String discordInvite;
 
     public static String gateText(String key, String fallback) {
         String v = GATE.get(key);
@@ -377,6 +596,19 @@ public final class WorldBridge {
      */
     public static String discordUrl() {
         return discordUrl;
+    }
+
+    /**
+     * <b>혼천 디스코드로 들어오는 초대.</b> 스냅숏이 실어 온다 — 여기서 짓지 않는다.
+     *
+     * <p><b>왜 채널 URL 로 부족한가:</b> 이 디스코드는 <b>공개가 아니다.</b> {@link #discordUrl()} 은
+     * <b>이미 서버 안에 있는 사람</b>에게만 쓸모가 있다 — 밖에 있는 사람이 그것을 눌러 봐야 아무 데도 못 간다.
+     *
+     * <p>null 이면 관리자가 아직 {@code config/world_bridge.yml identity.gate.invite_url} 을 채우지
+     * 않았다는 뜻이다 (봇이 뜰 때 콘솔에 소리내어 경고한다). 그때 마크는 초대 버튼을 <b>띄우지 않는다</b>.
+     */
+    public static String discordInvite() {
+        return discordInvite;
     }
 
     /** 지금 이 몸은 누구인가 — 접합됐으면 장부의 이름, 아니면 null (되먹임 스냅숏이 정본이다) */
@@ -461,6 +693,129 @@ public final class WorldBridge {
      * @param wanted    mc_uuid → 법명분 게이지 (관졸이 적대할 값)
      * @param favor     mc_uuid → (세력 → 우호)
      */
+    // ══════════════ ★★ 묘비(墓碑) — 지운 사람은 되살아나지 않는다 ══════════════
+    //
+    // 【겪은 일 · 2026-07-14 01:46】 사용자가 디스코드에서 「전부」 초기화를 쳤다. 봇은 제 장부를 지웠고
+    //   (mvt_link·characters 에서 사라진 것을 확인했다), 마크는 playerdata 를 지웠고 ledgers.yml 의
+    //   그 절(節)도 지웠다. 로그는 "지웠다"고 적었고 — **실제로 지워져 있었다.**
+    //
+    //   그런데 3분 뒤 재접속하자 그 사람은 **나루가 아니라 청하현에 떨어졌고**, ledgers.yml 에는
+    //   `linked: true` 인 그의 절이 **되살아나 있었다** (money 228 · 흥정 90 — 지우기 전 그대로).
+    //
+    // 【범인】 **이 스냅숏 파일이다.** `run/bridge/world_state.json` 은 봇이 굽는 캐시인데,
+    //   그때 그 파일은 **01:43 에 구워진 것**이었다 (초기화보다 3분 **먼저**). 그 안에는 지워진 사람의
+    //   `sheet` 와 `links` 가 그대로 살아 있었다. 재접속 → `SkillListener.syncSheet` 가 그 낡은 시트를
+    //   읽어 `applySheet` → **linked = true** → 5분 타이머(`saveLedgers`)가 그것을 파일에 구웠다.
+    //   `Antechamber.onJoin`(MONITOR) 은 그 되살아난 `linked()` 를 보고 "강호에 든 자"로 판정했다.
+    //
+    //   ★ **마크가 지운 것을, 마크가 캐시에서 되살렸다.** 봇은 죄가 없다 (봇의 장부는 깨끗했다).
+    //
+    // 【고침 — 시간을 본다】 스냅숏에는 `generated_at` 이 실려 있다. 초기화는 여기에 **묘비**를 세운다:
+    //   *"이 몸은 T 에 지워졌다."* 그 뒤로는 **T 보다 낡은 스냅숏의 시트·접합은 없는 것으로 읽는다.**
+    //   봇이 새 스냅숏을 구우면(= generated_at > T) 묘비는 스스로 물러난다 — 그때는 **봇이 정본이다.**
+    //
+    //   ★ 이것은 영구 추방이 아니다. 같은 몸이 새 캐릭터로 다시 접합하면 새 스냅숏이 그것을 싣고,
+    //     묘비는 그 순간 걷힌다 ({@link #sweepGraves}). **정본은 언제나 봇이다.**
+
+    /** mc_uuid → 지워진 시각(ms). 이보다 낡은 스냅숏은 이 몸에 대해 <b>거짓말</b>이다 */
+    private static final Map<String, Long> GRAVES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 지금 읽고 있는 스냅숏이 <b>언제 구워졌는가</b> (봇의 generated_at · 없으면 파일 시각) */
+    private static volatile long snapshotGeneratedAt;
+
+    /** 묘비를 적어 두는 곳 — 재기동을 넘어 살아남는다 (봇이 새로 굽기 전에 서버가 내려갈 수 있다) */
+    private static Path gravesFile;
+
+    /**
+     * 묘비 파일을 정하고 <b>읽어 들인다</b> — {@link HoncheonMvt} 가 데이터 폴더를 알려 준다.
+     * 파일이 없으면 없는 대로 (묘비가 없는 것은 정상이다).
+     */
+    public static void gravesStore(Path file) {
+        gravesFile = file;
+        if (file == null || !Files.isRegularFile(file)) {
+            return;
+        }
+        try {
+            map(Json.parse(Files.readString(file, StandardCharsets.UTF_8))).forEach((who, at) -> {
+                long ms = millis(at);
+                if (ms > 0) {
+                    GRAVES.put(who, ms);
+                }
+            });
+            log.info("묘비 " + GRAVES.size() + "기 — 지운 몸은 낡은 스냅숏으로 되살아나지 않는다");
+        } catch (IOException | RuntimeException e) {
+            log.warning("묘비를 못 읽었다 (지운 몸이 낡은 스냅숏으로 되살아날 수 있다): " + e.getMessage());
+        }
+    }
+
+    /**
+     * <b>묘비를 세운다</b> — 초기화가 이 몸을 지웠다 ({@link Reset#wipe}).
+     *
+     * <p>이 순간부터, <b>{@code at} 보다 낡은 스냅숏</b>이 이 몸에 대해 무슨 말을 하든 마크는 듣지 않는다.
+     * 되살아나는 길(낡은 캐시 → syncSheet → linked → saveLedgers)이 여기서 끊긴다.
+     */
+    public static void forget(UUID player, long at) {
+        if (player == null) {
+            return;
+        }
+        GRAVES.put(player.toString(), at);
+        // ★ 지금 손에 든 스냅숏이 낡았으면, 그 안의 이 몸은 **이미 죽은 말**이다. 그 사실을 즉시 적용한다
+        //   (다음 스냅숏을 기다리지 않는다 — 그 사이에 재접속하면 그때 되살아난다).
+        saveGraves();
+        log.info("묘비 — " + player + " 는 " + at + " 에 지워졌다. 그보다 낡은 스냅숏은 믿지 않는다");
+    }
+
+    /**
+     * 이 몸은 <b>지금 읽고 있는 스냅숏보다 나중에 지워졌는가</b> — 그렇다면 그 스냅숏은 거짓말이다.
+     *
+     * <p>봇이 새 스냅숏을 구우면 {@code snapshotGeneratedAt > 묘비} 가 되어 <b>저절로 false</b> 가 된다.
+     */
+    public static boolean forgotten(UUID player) {
+        if (player == null) {
+            return false;
+        }
+        Long at = GRAVES.get(player.toString());
+        return at != null && snapshotGeneratedAt <= at;
+    }
+
+    /** 새 스냅숏이 왔다 — 그보다 낡은 묘비는 할 일을 다했다 (봇이 정본이다) */
+    private static void sweepGraves() {
+        if (GRAVES.isEmpty()) {
+            return;
+        }
+        long gen = snapshotGeneratedAt;
+        if (GRAVES.values().removeIf(at -> at < gen)) {
+            saveGraves();
+        }
+    }
+
+    private static void saveGraves() {
+        if (gravesFile == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(gravesFile.getParent());
+            Files.writeString(gravesFile, json(new LinkedHashMap<String, Object>(GRAVES)),
+                    StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warning("묘비를 못 적었다 (재기동하면 지운 몸이 되살아날 수 있다): " + e.getMessage());
+        }
+    }
+
+    /** 눈이 쓰는 문 — 스냅숏이 구워진 시각 */
+    static long snapshotGeneratedAt() {
+        return snapshotGeneratedAt;
+    }
+
+    /** ★ 눈이 <b>일부러 어길</b> 때 쓰는 문 — 묘비를 걷어 낸다 (그러면 죽은 자가 걸어 나온다) */
+    static void razeGraves() {
+        GRAVES.clear();
+    }
+
+    private static long millis(Object o) {
+        return o instanceof Number n ? n.longValue() : 0L;
+    }
+
     public record State(int day, Set<String> tags, Set<String> reactions, Map<String, Integer> region,
                         Map<String, Integer> wanted, Map<String, Map<String, Integer>> favor,
                         Map<String, String> links, Map<String, Integer> bounty, int wantedMin,
@@ -471,14 +826,24 @@ public final class WorldBridge {
                     Map.of(), 8, Map.of());
         }
 
-        /** 이 몸에 실린 시트 — 봇의 확정값. 접합되지 않았으면 null (강호에 없는 사람이다) */
+        /**
+         * 이 몸에 실린 시트 — 봇의 확정값. 접합되지 않았으면 null (강호에 없는 사람이다).
+         *
+         * <p>★ <b>묘비를 먼저 본다.</b> 지운 뒤에 구워진 스냅숏이 아니면, 그 안의 시트는 <b>유령</b>이다.
+         */
         public Sheet sheet(UUID player) {
-            return player == null ? null : sheets.get(player.toString());
+            if (player == null || forgotten(player)) {
+                return null;
+            }
+            return sheets.get(player.toString());
         }
 
         /** 접합된 몸인가 — 그의 장부 이름 (아니면 null. 이름 없는 자의 일은 세계의 배경음이다) */
         public String linkedName(UUID player) {
-            return player == null ? null : links.get(player.toString());
+            if (player == null || forgotten(player)) {
+                return null;   // ★ 지운 사람이다 — 낡은 스냅숏이 뭐라 하든
+            }
+            return links.get(player.toString());
         }
 
         public boolean linked(UUID player) {
@@ -523,9 +888,32 @@ public final class WorldBridge {
      * <p>음수·null 은 <b>"봇이 모르는 값"</b>이다 (덮어쓰지 않는다). {@code simbeop} 만은 null 도
      * 진실이다 — 개화 전이면 개화 전인 것이고, 그것이 내공 과목의 게이트다.
      */
+    /**
+     * 봇이 내려보낸 시트 한 장.
+     *
+     * <p>★ <b>house · startAnchor · kin 은 2026-07-13 에 붙었다</b> — 그전까지 마크는
+     * <b>내가 누구의 자식인지 몰랐다</b> (realm·attrs·naegong 만 왔다). 그래서 무가의 자식과
+     * 객잔집 자식이 <b>같은 자리에 내려 같은 대접을 받았다.</b>
+     *
+     * @param house       집안 (무가의_자식 · 객잔집_자식 …). null = 옛 캐릭터
+     * @param startAnchor ★ <b>이 집안이 설 자리</b> — 마크의 <b>앵커 이름</b>(한글). 좌표는 마크가 안다
+     * @param leftHouse   세가를 <b>거절했는가</b> (집을 나온 아이 — 검도 전표도 없다)
+     * @param birthRank   ★ <b>적서</b> — 적자/서자. 같은 집인데 세상이 아는 무게가 다르다 (null = 없는 집)
+     * @param houseName   ★ <b>가문의 이름</b> — 「청하현 이가(李家)」. 성은 무가 계열에만 붙는다
+     * @param houseRegion ★ 가문이 사는 고을 — <b>시작 위치가 여기서 나온다</b> (지역 × 집안)
+     * @param houseState  ★ 가문의 형태 (흥·쇠·멸) — <b>탄생에 고정</b>. 변하지 않는다
+     * @param kin         ★ 같은 집에 태어난 아이들 — <b>태어난 순서대로</b> (형·누나·동생)
+     */
     public record Sheet(String realm, Map<String, Double> attrs, double naegong, String simbeop,
                         String primaryArt, Map<String, Double> skillDays,
-                        int marks실전, int marks사선, int money) {
+                        int marks실전, int marks사선, int money,
+                        String house, String gender, String startAnchor, boolean leftHouse,
+                        String birthRank, String houseName, String houseRegion, String houseState,
+                        List<Kin> kin) {
+    }
+
+    /** 피붙이 하나 — <b>형·누나·동생</b> (문파의 사형·사저와 **다른 어휘**다. 축이 다르다: 태어난 순) */
+    public record Kin(String name, boolean elder, String title) {
     }
 
     /** 지금 읽힌 세계 상태 (아직 스냅숏이 없으면 빈 상태 — 세계는 조용하다) */
@@ -568,6 +956,8 @@ public final class WorldBridge {
         }
         worker = new Thread(() -> {
             long lastPoll = 0;
+            long lastAsk = 0;
+            long lastBook = 0;
             while (RUNNING.get()) {
                 try {
                     flush();
@@ -575,6 +965,19 @@ public final class WorldBridge {
                     if (now - lastPoll >= pollSeconds * 1000L) {
                         lastPoll = now;
                         readSnapshot();
+                    }
+                    // ★ 접합은 사람이 **기다리는** 값이다 — 스냅숏(20초)과 다른 시계로 돈다 (2초)
+                    if (now - lastAsk >= linkPollSeconds * 1000L) {
+                        lastAsk = now;
+                        readLinkRequests();
+                    }
+                    // ★ 서장도 사람이 **책을 펴 놓고** 기다리는 값이다 — 같은 시계 (2초)
+                    if (now - lastBook >= seojangPollSeconds * 1000L) {
+                        lastBook = now;
+                        readSeojang();
+                    }
+                    if (now - rosterWritten >= rosterSeconds * 1000L) {
+                        writeRoster(now);
                     }
                     Thread.sleep(500L);
                 } catch (InterruptedException e) {
@@ -621,6 +1024,103 @@ public final class WorldBridge {
         }
     }
 
+    /**
+     * <b>명부를 찍는다</b> — 지금 이 서버에 누가 있는가 (mc_name → uuid) + 찍은 시각.
+     *
+     * <p>봇은 이 파일로 <b>단 하나</b>를 판정한다: "그 이름이 지금 강호에 있는가."
+     * {@code at} 이 낡으면 봇은 <b>마크가 꺼졌다</b>고 읽는다 (그래서 사람에게 다른 말을 해 준다) —
+     * 그러므로 사람이 없어도 <b>계속 찍어야 한다.</b> 빈 명부와 낡은 명부는 다른 사실이다.
+     *
+     * <p>목록은 {@link #setRoster} 가 주 스레드에서 채운다 (Bukkit API 는 그 스레드에서만 산다).
+     */
+    private static void writeRoster(long now) {
+        if (bridgeDir == null || rosterFile == null) {
+            return;
+        }
+        rosterWritten = now;
+        Map<String, Object> players = new LinkedHashMap<>();
+        roster.forEach((name, uuid) -> players.put(name,
+                new LinkedHashMap<>(Map.of("uuid", uuid, "name", name))));
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("at", now);
+        root.put("players", players);
+        try {
+            Files.createDirectories(bridgeDir);
+            Path tmp = rosterFile.resolveSibling(rosterFile.getFileName() + ".tmp");
+            Files.writeString(tmp, json(root), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+            Files.move(tmp, rosterFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            log.warning("명부를 찍지 못했다 — 봇이 '마크가 꺼졌다'고 읽는다: " + e.getMessage());
+        }
+    }
+
+    /**
+     * <b>청을 읽는다</b> — 봇이 내려보낸 수락 요청 (link_requests.json).
+     *
+     * <p>새로 온 청은 <b>한 번만</b> 화면에 띄운다 ({@code ASKED} — 2초마다 같은 물음을 던지면 그것은 도배다).
+     * 봇이 지운 청(수락·거절·만료·초기화)은 여기서도 사라진다 — <b>죽은 청의 [잇는다] 는 아무것도 하지 않는다</b>
+     * (그리고 눌러도 봇이 다시 거른다. 자물쇠는 두 겹이다).
+     */
+    private static void readLinkRequests() {
+        if (linkRequestsFile == null || !Files.isRegularFile(linkRequestsFile)) {
+            return;
+        }
+        try {
+            long stamp = Files.getLastModifiedTime(linkRequestsFile).toMillis();
+            if (stamp == requestsStamp) {
+                return;
+            }
+            requestsStamp = stamp;
+            Map<String, Object> root = map(Json.parse(
+                    Files.readString(linkRequestsFile, StandardCharsets.UTF_8)));
+            Set<String> live = new LinkedHashSet<>();
+            List<Request> fresh = new ArrayList<>();
+            long now = System.currentTimeMillis();
+            for (Object o : list(root.get("requests"))) {
+                Map<String, Object> r = map(o);
+                String token = String.valueOf(r.getOrDefault("token", "")).strip();
+                String uuid = String.valueOf(r.getOrDefault("mc_uuid", "")).strip();
+                if (token.isEmpty() || uuid.isEmpty()) {
+                    continue;
+                }
+                long expires = r.get("expires_at") instanceof Number n ? n.longValue() : 0L;
+                if (expires <= now) {
+                    continue;   // 죽은 청은 화면에 뜨지 않는다
+                }
+                UUID body;
+                try {
+                    body = UUID.fromString(uuid);
+                } catch (IllegalArgumentException e) {
+                    continue;
+                }
+                Request req = new Request(token, body,
+                        String.valueOf(r.getOrDefault("mc_name", "?")),
+                        String.valueOf(r.getOrDefault("discord_name", "?")),
+                        String.valueOf(r.getOrDefault("character", "?")), expires);
+                live.add(token);
+                if (REQUESTS.put(token, req) == null && ASKED.add(token)) {
+                    fresh.add(req);   // 처음 보는 청 — 이 몸의 화면에 물음을 띄운다
+                }
+            }
+            REQUESTS.keySet().retainAll(live);   // 봇이 지운 것은 여기서도 죽는다
+            ASKED.retainAll(live);
+            for (Request req : fresh) {
+                for (Consumer<Request> listener : ASK_LISTENERS) {
+                    try {
+                        listener.accept(req);
+                    } catch (RuntimeException e) {
+                        log.warning("접합 청 전달 실패: " + e.getMessage());
+                    }
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+            log.warning("접합 청 판독 실패: " + e.getMessage());
+        }
+    }
+
     /** 스냅숏 판독 — 안 바뀌었으면 아무것도 하지 않는다 (mtime 비교) */
     private static void readSnapshot() {
         try {
@@ -632,8 +1132,25 @@ public final class WorldBridge {
                 return;
             }
             snapshotStamp = stamp;
-            Map<String, Object> root = map(Json.parse(
-                    Files.readString(snapshotFile, StandardCharsets.UTF_8)));
+            ingest(Files.readString(snapshotFile, StandardCharsets.UTF_8), stamp);
+        } catch (IOException | RuntimeException e) {
+            log.warning("세계 상태 판독 실패: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 스냅숏 한 장을 들인다 — <b>파일과 스레드를 걷어 낸 자리</b>. 눈({@code ResetTombstoneSelfTest})이
+     * 이 문으로 들어온다: 실제 코드가 실제 JSON 을 읽는 그 길을 시험해야 시험이다.
+     *
+     * @param mtime 파일의 시각 — 봇이 {@code generated_at} 을 안 실었을 때의 대타
+     */
+    static void ingest(String jsonText, long mtime) {
+        try {
+            Map<String, Object> root = map(Json.parse(jsonText));
+            // ★★ 스냅숏이 **언제 구워졌는가** — 이것이 없어서 지운 사람이 되살아났다 (§묘비).
+            //   봇이 안 실어 주면 파일의 시각을 쓴다 (그것도 없으면 0 — 그때는 묘비가 계속 지킨다).
+            long gen = millis(root.get("generated_at"));
+            snapshotGeneratedAt = gen > 0 ? gen : mtime;
 
             Set<String> tags = new LinkedHashSet<>();
             for (Object t : list(root.get("rumor_tags"))) {
@@ -674,6 +1191,9 @@ public final class WorldBridge {
             // ★ 접속의 문 — 봇이 제가 붙어 있는 채널로 만든 URL. 없으면 없는 것이다 (짓지 않는다)
             Object url = map(root.get("discord")).get("url");
             discordUrl = url == null || String.valueOf(url).isBlank() ? null : String.valueOf(url);
+            // ★ 초대 — 서버 밖의 사람이 들어오는 유일한 길. 등록부가 비었으면 봇이 아예 안 싣는다
+            Object inv = map(root.get("discord")).get("invite");
+            discordInvite = inv == null || String.valueOf(inv).isBlank() ? null : String.valueOf(inv);
             // ★ 시트 — 몸에 실릴 캐릭터. 여기가 비면 마크는 다시 "경지 이류·능력치 0"의 세계가 된다
             Map<String, Sheet> sheets = new LinkedHashMap<>();
             map(root.get("sheet")).forEach((who, raw) -> sheets.put(who, sheet(map(raw))));
@@ -681,6 +1201,7 @@ public final class WorldBridge {
             State next = new State(num(root.get("world_day"), 0), tags, reactions, region,
                     wanted, favor, links, bounty, wantedMin, sheets);
             current = next;
+            sweepGraves();   // ★ 이 스냅숏이 묘비보다 새것이면, 그 묘비는 할 일을 다했다
             for (Consumer<State> listener : LISTENERS) {
                 try {
                     listener.accept(next);
@@ -688,7 +1209,7 @@ public final class WorldBridge {
                     log.warning("되먹임 적용 실패: " + e.getMessage());
                 }
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             log.warning("세계 상태 판독 실패: " + e.getMessage());
         }
     }
@@ -925,9 +1446,21 @@ public final class WorldBridge {
         map(raw.get("attrs")).forEach((k, v) -> attrs.put(k, dec(v, 0)));
         Map<String, Double> skills = new LinkedHashMap<>();
         map(raw.get("skill_days")).forEach((k, v) -> skills.put(k, dec(v, 0)));
+        List<Kin> kin = new ArrayList<>();
+        for (Object k : list(raw.get("kin"))) {
+            Map<String, Object> m = map(k);
+            kin.add(new Kin(text(m.get("name")), Boolean.TRUE.equals(m.get("elder")),
+                    text(m.get("title"))));
+        }
         return new Sheet(text(raw.get("realm")), attrs, dec(raw.get("naegong"), -1),
                 text(raw.get("simbeop")), text(raw.get("primary_art")), skills,
                 num(raw.get("marks_실전"), -1), num(raw.get("marks_사선"), -1),
-                num(raw.get("money"), -1));
+                num(raw.get("money"), -1),
+                text(raw.get("house")), text(raw.get("gender")), text(raw.get("start_anchor")),
+                Boolean.TRUE.equals(raw.get("left_house")),
+                text(raw.get("birth_rank")),   // ★ 적서 — 적자/서자 (null = 적서가 없는 집)
+                // ★★ 가문 — **한 채의 집**. 「청하현 이가(李家)」 · 지역 · 형태(흥·쇠·멸)
+                text(raw.get("house_name")), text(raw.get("house_region")), text(raw.get("house_state")),
+                List.copyOf(kin));
     }
 }

@@ -105,6 +105,8 @@ public final class SkillEngine {
 
     // 격 위력 — 【엔진 정본】 combat.yml damage.qi_power (qi_manifestation grades[].power 와 동일 값)
     private final Map<String, Integer> qiPower;
+    /** 타격의 순간 — 멈춤·밀림·흔들림 (combat.yml impact). 맞는 쪽의 몸이 말하는 자리 */
+    private final Impact impact;
     /** 형태별 위력 — 발출형은 더 아프다 (검기_참격 3 > 검기 두름 2). forms[].power 가 격 기본값보다 우선 */
     private final Map<String, Integer> formPower;
     /** 소모 밴드의 스칼라 코스트 — internal_energy.yml cost_bands (발경 1). 범위형([1,3])은 형태가 정한다 */
@@ -165,6 +167,13 @@ public final class SkillEngine {
     private final Map<String, Traj> trajectories;
     private final Map<String, Style> weaponStyles;
     private final Budget budget;
+    /** HUD flash 읽을 시간 (skill_motion.yml hud.flash_read_ticks) — 순간 사건이 액션바 줄을 갖는 틱 수 (B-116) */
+    private final int hudFlashTicks;
+    /** 색의 등록부 (inks) — 코드는 이름을 옮길 뿐 색을 고르지 않는다 */
+    private final Map<String, InkColor> inks;
+    /** 오의의 화려함 — default 가 21종을 덮고, by_id 가 정체를 가진 것만 덮어쓴다 */
+    private final UltFlourish ultFlourishDefault;
+    private final Map<String, UltFlourish> ultFlourish;
 
     // ─── 3D 모션 등록부 (skill_motion.yml display) — 파티클 위에 얹는 층 ───
     // 【불변식 ㅁ】 디스플레이는 덧칠이다. 여기가 비어 있어도 파티클 층은 그대로 돈다.
@@ -172,6 +181,10 @@ public final class SkillEngine {
     private final Blend displayBlend;
     private final Map<String, DisplayModel> displayModels;
     private final Map<String, DisplayMotion> displayMotions;
+    private final Map<String, StrokeOrigin> strokeOrigins;   // 모션 → 획이 서는 자리 (앞·높이·옆)
+    private final StrokeLimits strokeLimits;                 // 몸 안 금지 · 사거리 대비 상한
+    private final SwingArcs swingArcs;                       // ★ 스윙 넷 — 획이 도는 각 (찌르기 → 베기)
+    private final SlashEye slashEye;                         // 【눈】 이것은 참격인가 찌르기인가
     private final Map<String, String> slashByTrail;          // 히트박스 모양 → 참격선 모션
     private final Map<String, Ink> gradeInk;                 // 격 → 획의 굵기·밝기 (외공기도 있다)
     private final Map<String, Sheath> sheathByGrade;         // 격 → 날에 서리는 기 (지속)
@@ -187,6 +200,10 @@ public final class SkillEngine {
     private final int basicCooldownTicks;
     /** 판정의 눈 — 【디버그】 히트박스를 재는 자(尺). 켠 사람에게만 보인다 */
     private final Eye eye;
+    /** party.yml — 무공은 아군을 베지 않는다 (friendly_fire.스킬 = 면제) */
+    private final boolean spareAllies;
+    /** party.yml — <b>오의의 광역만은 예외다</b> ("매화만개 앞에서는 아군도 물러선다") */
+    private final boolean ultimateSweepsAllies;
     private final Map<String, List<String>> artsByClass;     // 계열 → 그 계열로 나가는 무공 (원장 해석용)
 
     @SuppressWarnings("unchecked")
@@ -199,6 +216,7 @@ public final class SkillEngine {
         Map<String, Object> sk = RulesConfig.load(cfg.resolve("skills.yml"));
         Map<String, Object> cb = RulesConfig.load(cfg.resolve("combat.yml"));
         Map<String, Object> pf = RulesConfig.load(cfg.resolve("performance.yml"));
+        Map<String, Object> pt = RulesConfig.load(cfg.resolve("party.yml"));
 
         this.internal = new InternalEnergyEngine(ie);
         this.qi = new QiManifestationEngine(qm);
@@ -320,6 +338,9 @@ public final class SkillEngine {
 
         // ─── 격 위력 (엔진 정본 = combat.yml) · 형태 위력 (발출은 더 아프다) ───
         this.qiPower = intMap((Map<String, Object>) damage.get("qi_power"));
+
+        // ─── 타격의 순간 (combat.yml impact) — 등록부가 없으면 통째로 꺼진다 (옛 동작 보존) ───
+        this.impact = loadImpact(RulesConfig.section(cb, "impact"));
         Map<String, Integer> powers = new LinkedHashMap<>();
         Map<String, Integer> sustains = new LinkedHashMap<>();
         RulesConfig.section(qm, "forms").forEach((category, raw) -> {
@@ -462,7 +483,23 @@ public final class SkillEngine {
                 intOr(bd.get("ultimate_per_tick_max"), 48),
                 intOr(bd.get("telegraph_step_ticks"), 2),
                 intOr(bd.get("trail_max_points"), 12),
-                intOr(bd.get("ultimate_ring_points"), 8));
+                intOr(bd.get("ultimate_ring_points"), 8),
+                intOr(bd.get("crit_reserve"), 4));
+
+        // ─── HUD — 액션바 한 줄의 주인 (B-116): 순간 사건이 줄을 갖는 읽을 시간 ───
+        this.hudFlashTicks = intOr(asMap(mo.get("hud")).get("flash_read_ticks"), 15);
+
+        // ─── 먹빛 (inks) — 색의 등록부. 코드는 이름을 옮길 뿐 색을 고르지 않는다 ───
+        Map<String, InkColor> inkMap = new LinkedHashMap<>();
+        RulesConfig.section(mo, "inks").forEach((name, raw) -> {
+            Map<String, Object> i = asMap(raw);
+            int[] rgb = rgb(i.get("rgb"));
+            if (rgb != null) {
+                inkMap.put(name, new InkColor(name, rgb[0], rgb[1], rgb[2],
+                        (float) dblOr(i.get("size"), 1.0)));
+            }
+        });
+        this.inks = Collections.unmodifiableMap(inkMap);
 
         Map<String, GradeMotion> gms = new LinkedHashMap<>();
         RulesConfig.section(mo, "grades").forEach((grade, raw) -> {
@@ -473,9 +510,17 @@ public final class SkillEngine {
                     String.valueOf(g.getOrDefault("color", "GRAY")),
                     fx(g.get("charge")), fx(g.get("aura")), fx(g.get("impact")), fx(g.get("accent")),
                     str(asMap(g.get("trail")).get("particle")), intOr(asMap(g.get("trail")).get("per_point"), 1),
+                    fx(g.get("echo")), fx(g.get("haze")), fx(g.get("burst")),
                     sfxList(sounds.get("charge")), sfxList(sounds.get("arm")), sfxList(sounds.get("impact"))));
         });
         this.gradeMotion = Collections.unmodifiableMap(gms);
+
+        // ─── 오의의 화려함 — default 한 줄이 21종을 덮고, by_id 가 정체를 가진 것만 덮어쓴다 ───
+        Map<String, Object> uf = RulesConfig.section(mo, "ultimate_flourish");
+        this.ultFlourishDefault = ultFlourish("default", asMap(uf.get("default")));
+        Map<String, UltFlourish> ufs = new LinkedHashMap<>();
+        asMap(uf.get("by_id")).forEach((id, raw) -> ufs.put(id, ultFlourish(id, asMap(raw))));
+        this.ultFlourish = Collections.unmodifiableMap(ufs);
 
         Map<String, FormMotion> fms = new LinkedHashMap<>();
         RulesConfig.section(mo, "forms").forEach((name, raw) -> {
@@ -590,7 +635,8 @@ public final class SkillEngine {
                     String.valueOf(m.getOrDefault("base", "PAPER")),
                     String.valueOf(m.getOrDefault("fallback", "HELD")),
                     vec3(m.get("size"), 1.0f),
-                    Boolean.TRUE.equals(m.get("use_held"))));
+                    Boolean.TRUE.equals(m.get("use_held")),
+                    str(m.get("anchor"))));     // 등록부가 고정점을 청구한다 (코드가 지어내지 않는다)
         });
         this.displayModels = Collections.unmodifiableMap(dms);
 
@@ -616,6 +662,75 @@ public final class SkillEngine {
                     intOr(idx(m.get("brightness"), 1), 15)));
         });
         this.displayMotions = Collections.unmodifiableMap(dmo);
+
+        // ─── 획이 서는 자리 — **코드가 자리를 지어내지 않는다** (등록제 규약) ───
+        Map<String, Object> so = asMap(dp.get("stroke_origin"));
+        Map<String, Object> sl = asMap(so.get("limits"));
+        this.strokeLimits = new StrokeLimits(
+                dblOr(sl.get("body_radius"), 0.30),
+                dblOr(sl.get("clearance"), 0.10),
+                dblOr(sl.get("max_height"), 1.80),
+                dblOr(sl.get("forward_max_ratio"), 0.45));
+        Map<String, StrokeOrigin> sos = new LinkedHashMap<>();
+        so.forEach((id, raw) -> {
+            if ("limits".equals(id)) {
+                return;
+            }
+            Map<String, Object> m = asMap(raw);
+            sos.put(id, new StrokeOrigin(id,
+                    dblOr(m.get("forward"), 0.0),
+                    dblOr(m.get("height"), 1.35),
+                    dblOr(m.get("lateral"), 0.0),
+                    Boolean.TRUE.equals(m.get("centered"))));
+        });
+        this.strokeOrigins = Collections.unmodifiableMap(sos);
+
+        // ─── ★ 스윙 넷 — **획이 도는 각** (코드가 각을 지어내지 않는다) ───
+        Map<String, Object> sa = asMap(dp.get("swing_arcs"));
+        Map<String, Object> sal = asMap(sa.get("limits"));
+        Map<String, SwingArc> arcs = new LinkedHashMap<>();
+        asMap(sa.get("strokes")).forEach((id, raw) -> {
+            Map<String, Object> a = asMap(raw);
+            arcs.put(id, new SwingArc(id,
+                    pair(a.get("yaw")), pair(a.get("pitch")), pair(a.get("roll")),
+                    pair(a.get("rise")),
+                    Math.max(0.0, Math.min(1.0, dblOr(a.get("fan"), 1.0))),
+                    dblOr(a.get("bow"), 0.0)));
+        });
+        List<String> cyc = new ArrayList<>();
+        if (sa.get("cycle") instanceof List<?> l) {
+            for (Object o : l) {
+                if (o != null && arcs.containsKey(String.valueOf(o))) {
+                    cyc.add(String.valueOf(o));
+                }
+            }
+        }
+        List<String> heavyCls = new ArrayList<>();
+        if (sa.get("heavy_classes") instanceof List<?> l) {
+            l.forEach(o -> heavyCls.add(String.valueOf(o)));
+        }
+        this.swingArcs = new SwingArcs(
+                !Boolean.FALSE.equals(sal.get("enabled")),
+                dblOr(sal.get("max_arc_deg"), 150.0),
+                intOr(sal.get("reset_ticks"), 24),
+                dblOr(sal.get("lunge_to_meters"), 2.5),
+                Collections.unmodifiableList(cyc),
+                str(sa.get("heavy")),
+                Collections.unmodifiableList(heavyCls),
+                Collections.unmodifiableMap(arcs),
+                new SwingTuning(1.0, 1.0, 1.0, 1.0).from(asMap(sa.get("tuning"))));
+
+        Map<String, Object> se = asMap(dp.get("slash_eye"));
+        List<String> exempt = new ArrayList<>();
+        if (se.get("exempt_trails") instanceof List<?> l) {
+            l.forEach(o -> exempt.add(String.valueOf(o)));
+        }
+        this.slashEye = new SlashEye(
+                dblOr(se.get("min_arc_deg"), 60.0),
+                dblOr(se.get("max_lunge_m"), 0.30),
+                dblOr(se.get("max_lunge_m_heavy"), dblOr(se.get("max_lunge_m"), 0.40)),
+                dblOr(se.get("min_ratio"), 150.0),
+                Collections.unmodifiableList(exempt));
 
         Map<String, Object> bind = asMap(dp.get("bind"));
         this.displayByForm = bindMap(bind.get("forms"));
@@ -692,6 +807,14 @@ public final class SkillEngine {
                     b2.get("frames") instanceof List<?> ? frames(b2.get("frames")) : new Frames(2, 2, 4)));
         });
         this.basicStrike = Collections.unmodifiableMap(bsc);
+
+        // ─── 손이 가려야 할 것 — 【등록부가 이미 답을 갖고 있었다】 (party.yml mc.friendly_fire) ───
+        //   "friendly_fire: { 스킬: 면제, 오의_광역: 예외 }" — 무공은 아군을 베지 않는다.
+        //   **다만 오의의 광역은 예외다** ("매화만개 앞에서는 아군도 물러선다").
+        //   코드가 이 규칙을 지어내지 않는다 — 등록부에서 읽어 온다. 등록부가 말을 바꾸면 코드가 따라간다.
+        Map<String, Object> ff = asMap(RulesConfig.section(pt, "mc").get("friendly_fire"));
+        this.spareAllies = "면제".equals(str(ff.get("스킬")));
+        this.ultimateSweepsAllies = "예외".equals(str(ff.get("오의_광역")));
 
         // 판정의 눈 — 【디버그】 등록부가 자(尺)의 촘촘함과 예산을 정한다 (코드가 정하지 않는다)
         Map<String, Object> ey = RulesConfig.section(mo, "eye");
@@ -822,6 +945,11 @@ public final class SkillEngine {
         return raw instanceof List<?> list && i < list.size() ? list.get(i) : null;
     }
 
+    /** [시작, 끝] 두 칸 — 스윙의 각·높이가 쓰는 문법. 없으면 [0, 0] (안 도는 획 = 옛 그림) */
+    private static double[] pair(Object raw) {
+        return new double[]{dblOr(idx(raw, 0), 0.0), dblOr(idx(raw, 1), 0.0)};
+    }
+
     // ─── 모션 등록부 판독 도우미 (전부 문자열·수치 — Bukkit 타입은 SkillListener 가 해석한다) ───
 
     @SuppressWarnings("unchecked")
@@ -844,7 +972,35 @@ public final class SkillEngine {
     private static Fx fx(Object raw) {
         Map<String, Object> m = asMap(raw);
         return new Fx(str(m.get("particle")), intOr(m.get("count"), 0),
-                dblOr(m.get("spread"), 0.1), dblOr(m.get("extra"), 0.0));
+                dblOr(m.get("spread"), 0.1), dblOr(m.get("extra"), 0.0), str(m.get("ink")));
+    }
+
+    /** {@code rgb: [r, g, b]} — 세 칸이 아니면 null (등록부가 색을 반만 적었으면 색이 아니다) */
+    private static int[] rgb(Object raw) {
+        if (!(raw instanceof List<?> list) || list.size() < 3) {
+            return null;
+        }
+        int[] v = new int[3];
+        for (int i = 0; i < 3; i++) {
+            v[i] = list.get(i) instanceof Number n ? Math.max(0, Math.min(255, n.intValue())) : 0;
+        }
+        return v;
+    }
+
+    /** 오의의 화려함 한 벌 — 등록되지 않은 칸은 {@code present() == false} 로 조용히 비어 있다 */
+    private static UltFlourish ultFlourish(String id, Map<String, Object> m) {
+        Map<String, Object> ly = asMap(m.get("layers"));
+        Map<String, Object> mi = asMap(m.get("mist"));
+        return new UltFlourish(id,
+                fx(m.get("bloom")),
+                new Layers(str(ly.get("particle")), str(ly.get("ink")),
+                        intOr(ly.get("arcs"), 0), intOr(ly.get("points"), 0),
+                        intOr(ly.get("per_point"), 0), dblOr(ly.get("spread"), 0.1),
+                        dblOr(ly.get("extra"), 0.0), dblOr(ly.get("radius_ratio"), 0.55)),
+                new Mist(str(mi.get("particle")), intOr(mi.get("count"), 0),
+                        dblOr(mi.get("spread"), 0.5), dblOr(mi.get("extra"), 0.0),
+                        intOr(mi.get("ticks"), 0), dblOr(mi.get("height"), 0.4)),
+                fx(m.get("hit")));
     }
 
     private static Sfx sfx(Object raw) {
@@ -1072,28 +1228,83 @@ public final class SkillEngine {
     // 【등록제 규약】 여기 담기는 것은 전부 문자열·수치다. Bukkit 의 Particle·Sound 로 바꾸는 것은
     // SkillListener 의 몫이다 (이 클래스의 Bukkit 의존 0 불변식을 지킨다).
 
-    /** 파티클 한 발 — 팔레트 이름(smoke·crit·end_rod…) · 개수 · 퍼짐 · 속도 */
-    public record Fx(String particle, int count, double spread, double extra) {
+    /**
+     * 파티클 한 발 — 팔레트 이름(smoke·crit·end_rod·dust…) · 개수 · 퍼짐 · 속도 · <b>먹빛</b>.
+     *
+     * @param ink 등록부 {@code inks} 의 이름(회백·청회·청록·옥·청백·먹·혈). {@code dust} 파티클만 쓴다 —
+     *            <b>코드가 색을 지어내지 않는다</b>: 이름을 받아 {@link InkColor} 로 옮길 뿐이다
+     *            (SkillHud 가 그 자리다). 색이 없으면 {@code null} 이고, 그러면 바닐라 색 그대로다
+     */
+    public record Fx(String particle, int count, double spread, double extra, String ink) {
         public boolean present() {
             return particle != null && count > 0;
         }
+    }
+
+    /**
+     * 먹빛 한 칸 — {@code inks} 등록부의 색 (config/skill_motion.yml).
+     *
+     * <p><b>사용자 지시(2026-07)</b>: 기본=먹·회백 / 중급=청회 / 상급=청록·옥·백.
+     * <b>금지=형광 핑크·네온 보라·과도한 노랑</b>. 그 금지는 {@code inks_forbidden} 이 적고
+     * {@code motion_audit.py} 축 ⑦ 이 잰다 — 코드는 색을 <b>고르지 않고 옮긴다</b>.
+     */
+    public record InkColor(String name, int r, int g, int b, float size) {
     }
 
     /** 소리 한 발 — 바닐라 사운드 키("block.anvil.land"). 1.21 의 Sound 는 열거형이 아니다 (문자열 재생) */
     public record Sfx(String key, float volume, float pitch) {
     }
 
-    /** 파티클 예산 — 한 지점·한 틱 상한과 세 개의 풀(응집·궤적·타격) */
+    /**
+     * 파티클 예산 — 한 지점·한 틱 상한과 세 개의 풀(응집·궤적·타격).
+     *
+     * @param critReserve 대성공(급소)이 <b>타격점 위에 겹칠 자리</b> — 미리 비워 둔다.
+     *                    이것이 없으면 폭발이 자리를 다 먹고 대성공이 <b>조용히 잘린다</b>
+     */
     public record Budget(int perPointTickMax, int perCastMax, int telegraphPool, int trailPool,
                          int impactPool, int minImpactPerTarget, int ultimateTickMax,
-                         int telegraphStepTicks, int trailMaxPoints, int ultimateRingPoints) {
+                         int telegraphStepTicks, int trailMaxPoints, int ultimateRingPoints,
+                         int critReserve) {
     }
 
-    /** 격의 모션 — 사다리의 한 칸. rank 가 오르면 charge·impact·aura 가 반드시 커진다 (motion_audit ③) */
+    /**
+     * 격의 모션 — 사다리의 한 칸. rank 가 오르면 charge·impact·aura 가 반드시 커진다 (motion_audit ③).
+     *
+     * @param echo  <b>잔상</b> — 획이 지나간 자리 (회백 → 청회 → 청록 → 옥 → 청백)
+     * @param haze  <b>먼지 · 바람결 · 먹번짐</b> — 초급의 "발광 거의 없음"을 지키는 자
+     * @param burst <b>타격 순간의 작은 폭발형 입자</b> — 먹점(impact)에서 <b>갈라 온</b> 몫이다
+     *              (예산은 한 톨도 안 늘었다 — skill_motion.yml budget 절의 표)
+     */
     public record GradeMotion(String grade, int rank, int brightness, String color,
                               Fx charge, Fx aura, Fx impact, Fx accent,
                               String trailParticle, int trailPerPoint,
+                              Fx echo, Fx haze, Fx burst,
                               List<Sfx> chargeSounds, List<Sfx> armSounds, List<Sfx> impactSounds) {
+    }
+
+    /**
+     * 오의의 화려함 — 사용자가 이름을 댄 셋 (다층 궤적 · 운무 · 청백색 폭발감) + 타격.
+     *
+     * @param layers 다층 궤적 — {@code arcs} 겹의 호가 개시 다음 틱부터 차례로 벌어진다
+     * @param mist   운무 — {@code ticks} 틱 동안 몸 둘레에 낮게 깔린다
+     */
+    public record UltFlourish(String id, Fx bloom, Layers layers, Mist mist, Fx hit) {
+    }
+
+    /** 다층 궤적 한 벌 — 겹(arcs) × 점(points) × 점당(per_point). 한 틱에 한 겹씩 벌어진다 */
+    public record Layers(String particle, String ink, int arcs, int points, int perPoint,
+                         double spread, double extra, double radiusRatio) {
+        public boolean present() {
+            return particle != null && arcs > 0 && points > 0 && perPoint > 0;
+        }
+    }
+
+    /** 운무 — 개화가 사는 동안 낮게 깔린다 */
+    public record Mist(String particle, int count, double spread, double extra, int ticks,
+                       double height) {
+        public boolean present() {
+            return particle != null && count > 0 && ticks > 0;
+        }
     }
 
     /** 형태의 모션 — 두름(잔광) · 쏨(발출: 응집→광선→작렬) · 두름_몸(호신강기 고리) · 부림(어검) */
@@ -2029,6 +2240,14 @@ public final class SkillEngine {
     }
 
     /**
+     * 순간 사건(판정·격 태세 전환·경공)의 한 줄이 statusBar 에 덮이지 않고 머무는 시간 —
+     * 등록부({@code skill_motion.yml hud.flash_read_ticks})가 정본이다 (B-116: 0.2초는 못 읽는다).
+     */
+    public int hudFlashTicks() {
+        return hudFlashTicks;
+    }
+
+    /**
      * 격의 모션. 호신강기는 격이 아니라 형태이므로 그 방어 격(강기)의 모션으로 선다 —
      * 그러나 <b>몸을 두르는 고리</b>는 형태(두름_몸)가 따로 갖는다 (실루엣이 달라야 읽힌다).
      */
@@ -2036,6 +2255,32 @@ public final class SkillEngine {
         String key = grade == null ? BARE : GUARD.equals(grade) ? guardGrade : grade;
         GradeMotion m = gradeMotion.get(key);
         return m != null ? m : gradeMotion.get(BARE);
+    }
+
+    /** 격의 사다리 — rank 순 (사다리를 나란히 보여 주는 자리: {@code /혼천 사다리}) */
+    public List<GradeMotion> gradeLadder() {
+        List<GradeMotion> out = new ArrayList<>(gradeMotion.values());
+        out.sort(java.util.Comparator.comparingInt(GradeMotion::rank));
+        return out;
+    }
+
+    /**
+     * 먹빛 — 등록부의 이름({@code 회백·청회·청록·옥·청백·먹·혈})을 색으로.
+     * <b>등록되지 않은 이름은 null</b> — 그러면 바닐라 색이 그대로 나간다 (조용한 색 발명 금지).
+     */
+    public InkColor inkColor(String name) {
+        return name == null ? null : inks.get(name);
+    }
+
+    /** 등록된 먹빛 전부 — 눈({@code /혼천 사다리})과 감사가 나란히 세운다 */
+    public java.util.Collection<InkColor> inkColors() {
+        return inks.values();
+    }
+
+    /** 오의의 화려함 — by_id 가 있으면 그것, 없으면 default (등록되지 않은 오의는 default 를 쓴다) */
+    public UltFlourish ultimateFlourish(String id) {
+        UltFlourish f = ultFlourish.get(id);
+        return f != null ? f : ultFlourishDefault;
     }
 
     /** 형태의 모션 — 검기_두름 · 검강_두름 · 검기_참격 · 강기_포 · 호신강기 · 이기어검 */
@@ -2092,8 +2337,139 @@ public final class SkillEngine {
         return id == null ? null : displayModels.get(id);
     }
 
+    /**
+     * 등록부가 아는 <b>모든</b> 형체 — 등록 순서 그대로 (LinkedHashMap).
+     *
+     * <p>{@code /혼천 획시험} 이 이것을 한 줄로 세운다. <b>코드가 목록을 짓지 않는다</b> —
+     * 시험대에 서는 것은 등록부가 부르는 것과 정확히 같은 집합이어야 하고, 그래야 시험이 거짓말을 안 한다.
+     */
+    public java.util.Collection<DisplayModel> displayModels() {
+        return displayModels.values();
+    }
+
     public DisplayMotion displayMotion(String id) {
         return id == null ? null : displayMotions.get(id);
+    }
+
+    /** 참격선 모션 전수 — {@code /혼천 획위치} 가 이것을 나열한다 (코드가 목록을 짓지 않는다) */
+    public java.util.List<DisplayMotion> slashMotions() {
+        return displayMotions.values().stream().filter(DisplayMotion::isSlash).toList();
+    }
+
+    /**
+     * <b>획이 서는 자리</b> — 등록부({@code display.stroke_origin})가 정한다.
+     *
+     * <p>등록되지 않은 모션은 {@code default} 칸으로 선다. {@code default} 조차 없으면
+     * <b>몸 밖으로 밀어낸 최소값</b>을 돌려준다 — 등록부가 비어도 획이 <b>몸 안에서는 안 나온다</b>
+     * (폴백이 병을 되살리지 않게).
+     */
+    public StrokeOrigin strokeOrigin(String motionId) {
+        StrokeOrigin o = motionId == null ? null : strokeOrigins.get(motionId);
+        if (o != null) {
+            return o;
+        }
+        StrokeOrigin def = strokeOrigins.get("default");
+        return def != null ? def
+                : new StrokeOrigin("default", strokeLimits.bodyRadius() + strokeLimits.clearance(),
+                        1.35, 0.0, false);
+    }
+
+    public Map<String, StrokeOrigin> strokeOrigins() {
+        return strokeOrigins;
+    }
+
+    public StrokeLimits strokeLimits() {
+        return strokeLimits;
+    }
+
+    /** ★ 스윙 넷 — 획이 도는 각 (등록부가 쥔다. 코드가 각을 지어내지 않는다) */
+    public SwingArcs swingArcs() {
+        return swingArcs;
+    }
+
+    public SlashEye slashEye() {
+        return slashEye;
+    }
+
+    /**
+     * <b>이 계열의 몸이 앞으로 가는 거리</b> (m) — script 의 양수 lunge 합 × {@code lunge_to_meters}.
+     *
+     * <p>{@code lunge} 는 <b>틱당 속도</b>(블록)다. 지면 마찰(≈0.6/틱)이 먹으면 총 이동 ≈ 2.5 × v
+     * (환산 상수는 등록부가 쥔다 — 코드가 지어내지 않는다). 음수 beat(되돌아옴)는 <b>안 센다</b>:
+     * 이 눈이 재는 것은 "앞으로 얼마나 <b>나갔나</b>"이지 순 변위가 아니다.
+     */
+    public double lungeMeters(String weaponClass) {
+        Body b = bodyByClass.get(weaponClass);
+        if (b == null) {
+            return 0.0;
+        }
+        double sum = 0.0;
+        if (b.scripted()) {
+            for (Beat beat : b.script()) {
+                sum += Math.max(0.0, beat.lunge());
+            }
+        } else {
+            sum = Math.max(0.0, b.lunge());
+        }
+        return sum * swingArcs.lungeToMeters();
+    }
+
+    /**
+     * <b>【눈】 이 계열의 기본 타격은 참격인가 찌르기인가.</b> 어긋나면 사유를, 아니면 null.
+     *
+     * <p>기동 때 한 번 짖는다(아래 {@link #slashEyeReport}). 정적으로도 같은 축이 선다 —
+     * {@code tools/motion_audit.py} 축 ⑬ 가 <b>같은 세 수</b>를 잰다 (두 개의 진실을 만들지 않는다).
+     */
+    public String slashFault(String weaponClass) {
+        Basic basic = basicStrike.get(weaponClass);
+        if (basic == null || slashEye.exemptTrails().contains(basic.trail())) {
+            return null;   // 활·무관·짐승 / 찌르는 것은 찌른다 (면제는 등록부가 소리내어 청구했다)
+        }
+        String id = swingArcs.strokeAt(weaponClass, 0);
+        SwingArc arc = swingArcs.stroke(id);
+        double deg = arc == null ? 0.0 : arc.arcDeg(swingArcs.tuning().arc());
+        double m = lungeMeters(weaponClass);
+        // 무거운 손은 몸을 싣는다 (도끼는 들이받는 것이 아니다) — 상한이 갈린다.
+        // 상한을 한 칸으로 두면 그 칸이 **옛 검의 전진과 같아져** 눈이 아무것도 못 잡았다 (눈의 시험 ⑤)
+        double cap = swingArcs.heavyClasses().contains(weaponClass)
+                ? slashEye.maxLungeHeavyM() : slashEye.maxLungeM();
+        double ratio = m <= 1.0e-6 ? Double.POSITIVE_INFINITY : deg / m;
+        List<String> bad = new ArrayList<>();
+        if (deg < slashEye.minArcDeg()) {
+            bad.add(String.format("호각 %.0f도 < %.0f도 (쓸지 않았다 — 자라기만 한다)",
+                    deg, slashEye.minArcDeg()));
+        }
+        if (m > cap) {
+            bad.add(String.format("전진 %.2fm > %.2fm (베는 것이 아니라 들이받는다)", m, cap));
+        }
+        if (ratio < slashEye.minRatio()) {
+            bad.add(String.format("참격비 %.0f도/m < %.0f (찌르기 쪽이다)", ratio, slashEye.minRatio()));
+        }
+        return bad.isEmpty() ? null : String.join(" · ", bad);
+    }
+
+    /** 기동 때의 한 줄 — 계열마다 호각·전진·참격비. <b>안 짖으면 없느니만 못한 눈이다</b> */
+    public List<String> slashEyeReport() {
+        List<String> out = new ArrayList<>();
+        for (String cls : basicStrike.keySet()) {
+            Basic basic = basicStrike.get(cls);
+            String id = swingArcs.strokeAt(cls, 0);
+            SwingArc arc = swingArcs.stroke(id);
+            double deg = arc == null ? 0.0 : arc.arcDeg(swingArcs.tuning().arc());
+            double m = lungeMeters(cls);
+            double ratio = m <= 1.0e-6 ? Double.POSITIVE_INFINITY : deg / m;
+            String fault = slashFault(cls);
+            boolean exempt = slashEye.exemptTrails().contains(basic.trail());
+            out.add(String.format("%-4s %s  호각 %3.0f도 · 전진 %.2fm · 참격비 %s%s",
+                    cls, basic.trail(),
+                    // ★ (long) 캐스트가 여기 있었다 — %f 에 long 을 먹이면 IllegalFormatConversionException 이
+                    //   터지고, 이 눈이 onEnable 에서 불리므로 **플러그인 전체가 안 켜졌다** (팩·나루·HUD 전부 죽었다).
+                    //   눈 하나가 세계를 죽였다. 서식 문자와 인자의 짝은 컴파일러가 안 봐 준다.
+                    deg, m, Double.isInfinite(ratio) ? "∞" : String.format("%.0f", ratio),
+                    exempt ? "  [면제 — 찌르는 것은 찌른다]"
+                            : fault == null ? "  ✔ 참격" : "  ✖ " + fault));
+        }
+        return out;
     }
 
     /**
@@ -2144,9 +2520,101 @@ public final class SkillEngine {
         return basicCooldownTicks;
     }
 
+    // ══════════ 타격의 순간 — 멈춤 · 밀림 · 흔들림 (combat.yml impact) ══════════
+
+    /** 맞는 쪽의 몸이 말하는 규칙 한 벌. 등록부가 없으면 {@code enabled=false} — 옛 동작 그대로 */
+    public Impact impact() {
+        return impact;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Impact loadImpact(Map<String, Object> im) {
+        if (im.isEmpty() || !Boolean.TRUE.equals(im.getOrDefault("enabled", Boolean.TRUE))) {
+            return Impact.OFF;
+        }
+        Map<String, Object> hs = RulesConfig.section(im, "hitstop");
+        Map<String, Integer> byGrade = new LinkedHashMap<>();
+        if (hs.get("by_grade") instanceof Map<?, ?> bg) {
+            ((Map<String, Object>) bg).forEach((k, v) -> byGrade.put(k, RulesConfig.intValue(v)));
+        }
+        Map<String, Object> kb = RulesConfig.section(im, "knockback");
+        Map<String, Object> sh = RulesConfig.section(im, "shake");
+        Map<String, Object> bt = RulesConfig.section(im, "basic_startup");
+        return new Impact(true,
+                !hs.isEmpty() && Boolean.TRUE.equals(hs.getOrDefault("enabled", Boolean.TRUE)),
+                Collections.unmodifiableMap(byGrade),
+                Boolean.TRUE.equals(hs.get("freeze_target")),
+                Boolean.TRUE.equals(hs.get("attacker_hold")),
+                intOr(hs.get("max_ticks"), 8),
+                !kb.isEmpty() && Boolean.TRUE.equals(kb.getOrDefault("enabled", Boolean.TRUE)),
+                dblOr(kb.get("base"), 0.0), dblOr(kb.get("per_qi"), 0.0),
+                dblOr(kb.get("per_damage"), 0.0), dblOr(kb.get("lift"), 0.0),
+                dblOr(kb.get("max"), 1.0), Boolean.TRUE.equals(kb.get("applies_to_players")),
+                !sh.isEmpty() && Boolean.TRUE.equals(sh.getOrDefault("enabled", Boolean.TRUE)),
+                dblOr(sh.get("base_degrees"), 0.0), dblOr(sh.get("per_qi"), 0.0),
+                dblOr(sh.get("per_damage"), 0.0), dblOr(sh.get("max_degrees"), 0.0),
+                intOr(sh.get("ticks"), 3),
+                !bt.isEmpty() && Boolean.TRUE.equals(bt.getOrDefault("enabled", Boolean.TRUE)),
+                dblOr(bt.get("reach_grace"), 0.0), Boolean.TRUE.equals(bt.get("fx")));
+    }
+
+    /**
+     * <b>타격의 순간</b> — 맞는 쪽의 몸이 말하는 세 축(멈춤 · 밀림 · 흔들림) + 무공 없는 손의 시간 구조.
+     *
+     * <p>수치는 한 칸도 코드에 없다 ({@code combat.yml impact}). 등록부가 통째로 없으면 {@link #OFF} —
+     * 그러면 이 세계는 <b>이 패스 이전의 동작으로 정확히 돌아간다</b> (되돌릴 수 있는 변경이라는 뜻이다).
+     */
+    public record Impact(
+            boolean enabled,
+            boolean hitstopEnabled, Map<String, Integer> hitstopByGrade,
+            boolean freezeTarget, boolean attackerHold, int hitstopMax,
+            boolean knockEnabled, double knockBase, double knockPerQi, double knockPerDamage,
+            double knockLift, double knockMax, boolean knockPlayers,
+            boolean shakeEnabled, double shakeBase, double shakePerQi, double shakePerDamage,
+            double shakeMax, int shakeTicks,
+            boolean basicStartup, double reachGrace, boolean basicFx) {
+
+        static final Impact OFF = new Impact(false, false, Map.of(), false, false, 0,
+                false, 0, 0, 0, 0, 0, false, false, 0, 0, 0, 0, 0, false, 0, false);
+
+        /** 이 격에 맞으면 몇 틱이 얼어붙는가. 등록되지 않은 격은 0 (얼지 않는다 — 지어내지 않는다) */
+        public int hitstopTicks(String grade) {
+            if (!enabled || !hitstopEnabled) {
+                return 0;
+            }
+            return Math.min(hitstopMax, hitstopByGrade.getOrDefault(grade, 0));
+        }
+
+        /** 밀림의 크기 — 격과 피해가 함께 민다. {@code max} 가 못이다 (연출이 위치를 훔치지 못하게) */
+        public double knockback(int qiPower, double damage) {
+            if (!enabled || !knockEnabled) {
+                return 0.0;
+            }
+            return Math.min(knockMax, knockBase + knockPerQi * qiPower + knockPerDamage * damage);
+        }
+
+        /** 흔들림의 각(도) — 맞은 쪽의 시야. {@code max_degrees} 가 pitch 벽(±90)에서 멀리 떨어뜨린다 */
+        public double shakeDegrees(int qiPower, double damage) {
+            if (!enabled || !shakeEnabled) {
+                return 0.0;
+            }
+            return Math.min(shakeMax, shakeBase + shakePerQi * qiPower + shakePerDamage * damage);
+        }
+    }
+
     /** 판정의 눈 — 【디버그】 히트박스의 자·목표 표시·산수 로그 (등록부가 예산을 정한다) */
     public Eye eye() {
         return eye;
+    }
+
+    /** party.yml {@code mc.friendly_fire.스킬 = 면제} — 무공의 <b>휩쓸림</b>은 아군을 베지 않는다 */
+    public boolean spareAllies() {
+        return spareAllies;
+    }
+
+    /** party.yml {@code mc.friendly_fire.오의_광역 = 예외} — <b>오의의 광역은 아군도 담는다</b> */
+    public boolean ultimateSweepsAllies() {
+        return ultimateSweepsAllies;
     }
 
     /**
@@ -2261,8 +2729,136 @@ public final class SkillEngine {
      * @param useHeld  실을 것이 <b>시전자의 병기 그 자체</b>다 (병기 휘두름 · 이기어검).
      *                 팩 유무와 무관하게 같은 엔티티 하나가 돈다 — <b>팩 게이트가 저절로 충족된다</b>
      */
+    /**
+     * @param anchor 성장·소멸의 <b>고정점</b>. {@code "head"} = 머리(+X 끝)를 붙박고 꼬리가 자란다/지워진다.
+     *               null = 원점(=모델의 기하 중심)에서 대칭으로 자란다 (고리·판·덩이).
+     *               <p><b>모델은 중심에 서고, 고정점은 코드가 옮긴다</b> — 모델에 오프셋을 박으면
+     *               그 편향을 모든 모션이 물려받는다 (2026-07: 획이 시전자 옆구리에서 나오던 병).
+     */
     public record DisplayModel(String id, String key, String base, String fallback, float[] size,
-                               boolean useHeld) {
+                               boolean useHeld, String anchor) {
+        /** 머리 고정인가 — 참격선이 그렇다 (그리면 머리에서 자라고, 지우면 꼬리부터 사라진다) */
+        public boolean headAnchored() {
+            return "head".equals(anchor);
+        }
+    }
+
+    /**
+     * <b>획이 서는 자리</b> — 시전자의 <b>발</b>을 원점으로, 그 몸을 기준으로 잰다.
+     *
+     * <p><b>왜 등록부인가</b>: 예전엔 코드가 획을 <b>시전자의 눈</b>에 세웠다
+     * ({@code eyeLocation − 0.25}, 앞으로 미는 값 없음). 그래서 획이 몸을 관통했고, 1인칭에서는
+     * 카메라가 획의 안쪽에 있어 <b>제 검의 궤적이 제 눈에 안 보였다</b>. 자리는 눈으로 맞출 값이므로
+     * 코드가 아니라 등록부가 쥔다 ({@code /혼천 획위치} 가 인게임에서 밀고 당긴다).
+     *
+     * @param forward  시선(수평)으로 앞으로 미는 거리 (m) — 몸을 뚫지 않게. <b>1인칭의 값이 여기 있다</b>
+     * @param height   발바닥에서 잰 <b>절대</b> 높이 (m) — 눈(1.62)이 아니라 어깨(1.35)가 팔이 지나는 자리다
+     * @param lateral  <b>오른쪽</b>으로 미는 거리 (m) — 바닐라 플레이어는 오른손잡이다 (음수 = 왼쪽)
+     * @param centered <b>몸에 겹치는 것이 옳다</b>는 선언 (고리). 몸 안 검사에서 면제된다 —
+     *                 면제는 <b>등록부가 소리내어 청구</b>해야 한다 (코드가 예외를 지어내지 않는다)
+     */
+    public record StrokeOrigin(String motion, double forward, double height, double lateral,
+                               boolean centered) {
+    }
+
+    /**
+     * 자리의 못 — <b>어떤 값을 적어도 획은 몸 밖에 선다.</b>
+     *
+     * @param bodyRadius      【실측】 플레이어 히트박스 폭 0.6m ÷ 2 — 이 안은 몸이다
+     * @param clearance       몸 밖으로 더 밀어내는 여유
+     * @param maxHeight       【실측】 플레이어의 키 1.8m — 발~키 사이가 '몸의 높이'다
+     * @param forwardMaxRatio 앞으로 미는 거리 ≤ 획 길이 × 이 값 (너무 밀면 <b>허공에 뜬 판자</b>다)
+     */
+    public record StrokeLimits(double bodyRadius, double clearance, double maxHeight,
+                               double forwardMaxRatio) {
+        /** 몸 밖의 첫 자리 — 이 아래로는 어떤 등록값도 내려가지 못한다 */
+        public double minForward() {
+            return bodyRadius + clearance;
+        }
+    }
+
+    // ══════════ ★ 스윙 넷 — 획이 **도는** 각 (찌르기 → 베기) ══════════
+
+    /**
+     * <b>한 획의 스윙</b> — 시작 각에서 끝 각으로 <b>쓸고 지나간다</b>.
+     *
+     * <p><b>【왜 이것이 생겼나】</b> 예전 참격선은 각을 한 번 세우고 {@code scale.x} 만 키웠다 —
+     * 즉 <b>제자리에서 길어지는 판자</b>였다 (각이동 0도). 사람은 그것을 <b>찌르기</b>라고 읽는다.
+     * ItemDisplay 의 Transformation 은 <b>회전도 보간된다</b>(client slerp) — 시작 각과 끝 각만 주면
+     * 클라이언트가 그 사이를 <b>호로 이어 준다</b>. 엔티티는 하나 그대로다 (예산 0 증가).
+     *
+     * <p><b>도는 것은 검이지 카메라가 아니다</b> — {@code setRotation}(사람의 시야)은 손대지 않았다.
+     *
+     * @param yaw   [시작, 끝] (도) 좌우로 쓴다. <b>히트박스 부채꼴 밖으로 못 나간다</b> (불변식 ㅂ —
+     *              {@code SkillDisplay} 가 깎고 소리내어 짖는다)
+     * @param pitch [시작, 끝] (도) 위아래로 쓴다. <b>자유다</b> — 호 히트박스는 높이를 안 본다
+     * @param roll  [시작, 끝] (도) 정면에서 <b>시계바늘처럼</b> 도는 각 — 참격의 인상은 대부분 여기서 나온다
+     * @param rise  [시작, 끝] (m) 획이 오르내리는 높이 (올려베기 −→+ · 내려베기 +→−)
+     * @param fan   파티클이 훑는 부채꼴의 몫 (0~1). <b>1 을 넘지 못한다</b>
+     * @param bow   파티클 궤적의 활(m) — 중간이 부푸는 정도. 직선이 아니라 <b>호</b>로 보이게 하는 값
+     */
+    public record SwingArc(String id, double[] yaw, double[] pitch, double[] roll, double[] rise,
+                           double fan, double bow) {
+        /** 이 획이 <b>실제로 돌아간 각</b> (도) — 세 축의 합이 아니라 합성 회전의 각이다 */
+        public double arcDeg(double scale) {
+            org.joml.Quaternionf a = quat(0, scale);
+            org.joml.Quaternionf b = quat(1, scale);
+            return Math.toDegrees(a.difference(b, new org.joml.Quaternionf()).angle());
+        }
+
+        /** @param end 0 = 시작 각 · 1 = 끝 각 */
+        public org.joml.Quaternionf quat(int end, double scale) {
+            return new org.joml.Quaternionf()
+                    .rotateY((float) Math.toRadians(yaw[end] * scale))
+                    .rotateX((float) Math.toRadians(pitch[end] * scale))
+                    .rotateZ((float) Math.toRadians(roll[end] * scale));
+        }
+    }
+
+    /** 인게임에서 미는 손잡이 ({@code /혼천 스윙}) — <b>이런 값은 눈으로 봐야 정해진다</b> */
+    public record SwingTuning(double arc, double rise, double bow, double lunge) {
+        SwingTuning from(Map<String, Object> t) {
+            return new SwingTuning(dblOr(t.get("arc_scale"), 1.0), dblOr(t.get("rise_scale"), 1.0),
+                    dblOr(t.get("bow_scale"), 1.0), dblOr(t.get("lunge_scale"), 1.0));
+        }
+    }
+
+    /**
+     * 스윙 등록부 — 넷과 그 리듬.
+     *
+     * <p><b>【함정 ②】 cycle 은 콤보가 아니다.</b> 입력 창도 버퍼도 없고, 우클릭·웅크림·달림의 뜻을
+     * 하나도 안 바꾼다. 연타하면 <b>획의 방향만</b> 번갈아 바뀐다 — 그림의 리듬이지 입력의 문법이 아니다.
+     *
+     * @param heavyClasses 내려베는 계열 — 이 손의 1타는 {@code heavy} 획으로 시작한다.
+     *                     ('강공격' 입력 수단이 이 서버에 <b>없다</b> — 지어내지 않았다)
+     */
+    public record SwingArcs(boolean enabled, double maxArcDeg, int resetTicks, double lungeToMeters,
+                            List<String> cycle, String heavy, List<String> heavyClasses,
+                            Map<String, SwingArc> strokes, SwingTuning tuning) {
+        /** 이 계열의 {@code n} 번째 타가 쓰는 획 — <b>그림만의 순번이다</b> */
+        public String strokeAt(String weaponClass, int n) {
+            if (!enabled || cycle.isEmpty()) {
+                return null;
+            }
+            if (heavy != null && heavyClasses.contains(weaponClass) && Math.floorMod(n, 3) == 0) {
+                return heavy;   // 내려베는 손은 1타를 위에서 아래로 시작한다 (swings.tilt 45~70 의 몸)
+            }
+            return cycle.get(Math.floorMod(n, cycle.size()));
+        }
+
+        public SwingArc stroke(String id) {
+            return id == null ? null : strokes.get(id);
+        }
+    }
+
+    /**
+     * <b>【눈】 이것은 참격인가 찌르기인가.</b>
+     *
+     * <p>찌르기 = 전진이 크고 각이 작다 · 참격 = 각이 크고 전진이 작다. 두 수를 재고 그 비를 본다.
+     * <b>호(弧) 궤적을 청구한 계열만</b> 잰다 — 창·암기는 원래 찌르고 던진다 (면제는 등록부가 청구한다).
+     */
+    public record SlashEye(double minArcDeg, double maxLungeM, double maxLungeHeavyM,
+                           double minRatio, List<String> exemptTrails) {
     }
 
     /**

@@ -15,7 +15,17 @@ mode:
   name: 답설무흔                  # 踏雪無痕 — 이 '이동 모드'의 이름. ★지어냄 (일반 무협 용어. 문파 무공 아님)
   band: 경신                      # internal_energy.yml cost_bands.경신 — 이 모드가 무는 격(格)
   gate_realm_from: 일류           # internal_energy.yml realm_gates 에서 '경신'이 열리는 첫 경지 (린트 대조)
-  activate: "달리며 점프 (mc_action_mapping.md:24 — '점프(달리며 연속) = 경공 모드')"
+  # ★★ 발동은 **손가락**이다 — 공중에서 점프 키를 한 번 더 (더블 점프).
+  #    구판은 '달리며 점프'였다: 조건이 맞으면 **알아서** 켜졌다 — 즉 내가 쓰는 것이 아니라
+  #    나에게 **일어나는** 것이었다. 그것은 무공이 아니다.
+  #    이 세계의 문법 그대로다: 방패=막기 · 웅크림=흘리기 · 달림=회피 · **점프 두 번=경공**.
+  activate: "공중에서 점프 키 한 번 더 (더블 점프) — PlayerToggleFlightEvent 가로채기. ★ 자동 발동 없음"
+  activate_event: PlayerToggleFlightEvent   # ★ 눈이 이것을 코드에서 찾는다 (audit lint ⑧)
+  # 바닐라에는 '공중에서 점프를 눌렀다'는 이벤트가 없다. setAllowFlight(true) 로 클라이언트의
+  # 더블탭을 켜 두고, 날기 토글 이벤트를 **취소하며 훔친다** (날게 두지 않고 이벤트만 가져온다).
+  grant_refresh_ticks: 10         # 날개를 다시 물려 주는 주기 — 땅을 밟거나 경지가 바뀌면 다시 뛸 수 있다
+  creative_untouched: true        # ★ 크리에이티브·스펙테이터는 건드리지 않는다 (연무장이 크리에이티브다 — 거기선 진짜로 난다)
+  ground_double_tap: false        # 땅에서 두 번 눌러도 안 나간다 — 경공은 **공중에서** 딛는 것이다
   deactivate:
     - "내력이 유지비를 못 내는 순간 (★ 이 게임의 극적인 자리 — 공중이었다면 떨어진다)"
     - "멈춰 선 채 idle_off_ticks 경과 (경공은 '달리는 몸'이다)"
@@ -32,18 +42,25 @@ mode:
 #   fall_grace_m  낙법(落法)이 지워 주는 낙하 높이 (m). ★ 내력이 도는 몸에만 듣는다 (fall.requires_energy)
 #   wall_climb_m  벽 딛기로 한 번의 체공에 오를 수 있는 총 높이 (0 = 못 딛는다)
 #   water_run     수상비 — 물 위를 달린다
-#   그리고 이 다섯은 전부 **경지 천장**이다. 실제 값은 아래 growth 가 민첩으로 산다 (min(천장, 성장)).
+#   air_jumps     ★ 한 번의 체공에 **공중에서 발을 딛을 수 있는 횟수** (더블 점프의 '몇 번')
+#                 0 = 공중에서 딛을 곳이 없다 (개화 전 — 바닐라 점프뿐이다)
+#                 ★ 정직하게 적는다: 이 열은 **새로 열었다.** 구판 등록부에는 '도약 횟수'라는 눈금이
+#                   없었다 (발동이 자동이었으니 셀 필요가 없었다). 발동이 손가락이 된 순간 '몇 번'이
+#                   질문이 되었고, 그 답은 경지가 해야 한다 — 그래서 다른 천장들과 같은 줄에 세운다.
+#                   높이·거리·값은 **한 톨도 새로 만들지 않았다** (jump_bonus · 보법 distance · qi.leap 재사용).
+#   그리고 이 여섯은 전부 **경지 천장**이다. 실제 값은 아래 growth 가 민첩으로 산다 (min(천장, 성장)).
+#   ★ air_jumps 만은 민첩이 못 늘린다 — **몇 번 딛는가는 경지가, 얼마나 높이·멀리는 신법과 보법이** 정한다.
 realm_ceiling:
-  범인:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false }
-  삼류:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false }
-  이류:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false }
+  범인:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false, air_jumps: 0 }
+  삼류:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false, air_jumps: 0 }
+  이류:   { speed_bonus: 0,    jump_bonus: 0,    fall_grace_m: 0,  wall_climb_m: 0,  water_run: false, air_jumps: 0 }
   # ─── 개화 — 단전이 열린 몸. 여기서부터 땅이 다르게 밟힌다 ───
-  일류:   { speed_bonus: 0.12, jump_bonus: 0.30, fall_grace_m: 10, wall_climb_m: 0,  water_run: false }
-  절정:   { speed_bonus: 0.15, jump_bonus: 0.36, fall_grace_m: 12, wall_climb_m: 4,  water_run: false }
-  초절정: { speed_bonus: 0.17, jump_bonus: 0.42, fall_grace_m: 14, wall_climb_m: 6,  water_run: true }
-  화경:   { speed_bonus: 0.20, jump_bonus: 0.48, fall_grace_m: 16, wall_climb_m: 8,  water_run: true }
-  현경:   { speed_bonus: 0.22, jump_bonus: 0.54, fall_grace_m: 18, wall_climb_m: 9,  water_run: true }
-  생사경: { speed_bonus: 0.25, jump_bonus: 0.60, fall_grace_m: 20, wall_climb_m: 10, water_run: true }
+  일류:   { speed_bonus: 0.12, jump_bonus: 0.30, fall_grace_m: 10, wall_climb_m: 0,  water_run: false, air_jumps: 1 }
+  절정:   { speed_bonus: 0.15, jump_bonus: 0.36, fall_grace_m: 12, wall_climb_m: 4,  water_run: false, air_jumps: 1 }
+  초절정: { speed_bonus: 0.17, jump_bonus: 0.42, fall_grace_m: 14, wall_climb_m: 6,  water_run: true,  air_jumps: 2 }
+  화경:   { speed_bonus: 0.20, jump_bonus: 0.48, fall_grace_m: 16, wall_climb_m: 8,  water_run: true,  air_jumps: 2 }
+  현경:   { speed_bonus: 0.22, jump_bonus: 0.54, fall_grace_m: 18, wall_climb_m: 9,  water_run: true,  air_jumps: 3 }
+  생사경: { speed_bonus: 0.25, jump_bonus: 0.60, fall_grace_m: 20, wall_climb_m: 10, water_run: true,  air_jumps: 3 }
   # ★ 검산이 첫 판에 잡아낸 것: 처음엔 낙법 천장을 8→48m 로 크게 잡았다. 그런데 신법을 **캡까지 몰아도**
   #   그 천장에 못 닿았다 (화경 캡 9 × 1.6 = 14.4 < 24) — 즉 그 천장은 **장식**이었고,
   #   "경지가 천장을 열고 수련이 그 천장까지 자란다"는 말이 거짓이 되어 있었다 (lint ③).
@@ -82,7 +99,9 @@ qi:
     note: "달리는 동안 단전이 돈다. 조식(internal_energy recovery.in_combat.조식)은 내력을 쓴 합에는 안 돈다 —
       즉 **경공을 켜 둔 자는 숨을 고르지 못한다.** 이 한 줄이 경공의 진짜 값이다"
   water_upkeep_multiplier: 2      # 수상비 — 물은 딛을 것이 없다 (유지비 2/합 = 밴드 상단)
-  leap: 1                         # 경공 도약 1회
+  leap: 1                         # 경공 도약 1회 — ★ 공중에서 발을 딛을 때마다 이만큼 탄다 (더블 점프 1회 = 1)
+                                  #   내력이 이만큼도 없으면 **안 나간다.** 그리고 화면이 왜 안 나갔는지 말한다
+                                  #   (messages.depleted — 침묵은 규칙이 아니다)
   wall_kick: 1                    # 벽 딛기 1회
   retreat: 1                      # 회피 성공 시 몸을 빼는 값 (combat.yml defender_choice.회피 — "몸을 뺀다")
   close_in: 1                     # 선공을 잡고 먼저 붙는 값 (combat.yml initiative.frontal)
@@ -175,10 +194,13 @@ water:                            # 수상비(水上飛) — 초절정부터 (re
   lift: 0.10                      # 수면을 딛는 부양 초속
   note: "물 위를 걷는 게 아니라 **달린다**. 서는 순간 발이 빠진다 (min_speed)"
 
-dash:                             # 회피 물러남 · 선공 파고들기 — 거리를 초속으로 바꾼다
+dash:                             # 회피 물러남 · 선공 파고들기 · ★ 공중 도약의 전진 — 거리를 초속으로 바꾼다
   velocity_per_meter: 0.09
   max_velocity: 1.2
   upward: 0.18                    # 몸을 살짝 띄운다 (지면 마찰을 벗어나야 실제로 물러난다)
+  note: "★ 공중 도약(더블 점프)의 **'얼마나 멀리'** 도 이 표가 판다 — 보법의 distance(매화보 5 · 제운종 8 ·
+    취팔선보 4 · 답운종 10)를 같은 눈금으로 초속에 바꾼다. 새 눈금을 만들지 않았다.
+    수직은 jump_bonus(경지 천장 × 신법)가, 수평은 보법이 판다. 발이 다르면 나는 거리가 다르다"
 
 # ══════════════════════════════════════════════════════════════════════
 #  ⑥ 보이게 하라 — 팩 게이트 불가침 (파티클만으로 선다)
@@ -211,12 +233,16 @@ messages:
   #   SnakeYAML(엔진)도 똑같이 읽어 message("on") 조회가 조용히 실패한다. game_audit 이 이걸 잡았다.
   "on": "몸이 가벼워진다"
   "off": "기가 흩어진다"
+  # ★ 왜 안 나갔는지 반드시 말한다 — 침묵은 규칙이 아니다 (손가락이 눌렀는데 아무 일도 없으면 그건 버그로 읽힌다)
+  air_spent: "발 디딜 허공이 없다"          # 그 체공의 air_jumps 를 다 썼다
+  air_left: "허공을 딛는다"                # 공중 도약 성공 — 남은 횟수를 함께 보인다
   depleted: "내력이 끊긴다 — 몸이 무겁다"
   fall_soft: "낙법 — 무릎을 접는다"
   fall_hard: "기가 없는 몸은 돌처럼 떨어진다"
   armor_blocked: "철갑이 몸을 땅에 붙든다"
   no_realm: "개화하지 않은 몸은 땅을 딛을 뿐이다"
   wall_no_bobeop: "벽을 딛는 법을 모른다"
+  riding: "경공 · 허공"                    # HUD 지속 조각 (B-116) — 켜져 있는 동안 statusBar 에 "경공 · 허공 n/m" 로 병기
 
 # ══════════════════════════════════════════════════════════════════════
 #  ⑦ 검산 기준선 — tools/gyeonggong_audit.py 가 재는 자리 (도구가 수치를 갖지 않게)
@@ -227,8 +253,14 @@ audit:
     지붕: 5                             # 민가의 지붕 — 벽을 딛어야 오른다 (뛰어서는 못 오른다)
     절벽: 20                            # 죽는 높이 — 낙법이 사는 자리
   contracts:
-    jump_never_reaches_roof: true       # ★ 도약만으로 지붕(5m)에 닿는 경지가 있으면 위반 — 지붕은 딛고 오르는 것이다
+    jump_never_reaches_roof: true       # ★ **지상 도약**만으로 지붕(5m)에 닿는 경지가 있으면 위반 — 지붕은 딛고 오르는 것이다
     pre_flowering_is_zero: true         # ★ 삼류·이류의 경공 실효값이 0 이 아니면 위반
+    # ─── 발동은 손가락이다 (새 축 — GyeonggongListener.java 소스를 읽어서 잰다) ───
+    finger_activated: true              # ★ 손가락이 켜지 않으면 위반 — mode.activate_event 핸들러가 코드에 있어야 한다
+    no_auto_activation: true            # ★★ 조건이 맞았다고 **알아서** 켜지면 위반.
+                                        #    PlayerJumpEvent 가 riding 을 새로 만들거나 isSprinting 으로 켜면 그것이 자동 발동이다
+    creative_untouched: true            # ★ 크리에이티브·스펙테이터에서 날개를 뺏으면 위반 (연무장이 죽는다)
+    air_jumps_gated_by_realm: true      # ★ 개화 전 경지에 air_jumps 가 있으면 위반
     no_free_flight: true                # ★ 어떤 심법·보법도 유지 코스트를 0 으로 만들면 위반
     # ★ 고갈 상태로 **자기가 다니던 높이**(max(절벽 20m, 그 경지의 낙법 천장))에서 떨어지면
     #   내구의 50% 이상이 날아가야 한다 — 높이 나는 자가 더 크게 떨어진다

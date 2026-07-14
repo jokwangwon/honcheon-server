@@ -38,6 +38,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private SkillCast skillCast;   // 절기(絶技) — 삼문(承·間·虛)이 열려야 나간다
     private Dojang dojang;
     private Antechamber antechamber;   // 입도진 — 강호에 들지 않은 자를 세계에 떨구지 않는다
+    private Reset reset;   // 되돌리는 손 — 시험을 위해 이 몸을 지운다 (백업은 항상 뜬다)
     private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
 
@@ -72,6 +73,8 @@ public final class HoncheonMvt extends JavaPlugin {
         Vitality.init(cfg);   // 생명 — 내구 등록부. **HuntingGrounds 보다 먼저** (FOES 를 init 때 파싱한다)
         TerrainBaseline.load(getDataFolder().toPath());   // 원지(原地) — 빚기 전의 높이. **되돌릴 수 있는 유일한 근거**
         TerrainLedger.load(getDataFolder().toPath());   // ★ 땅은 **한 번만** 선다 (건축을 다시 지어도 땅은 그대로)
+        TerrainGate.load(cfg, getDataFolder().toPath());   // ★ 지형의 관문 — **땅은 건축의 허락을 받고 서지 않는다**
+                              // (docs/design/gate_and_watertown.md · 승인 안 된 판으로는 월드에 안 쓴다)
         LandRequest.load(cfg);  // 건축이 땅에 하는 **요청**의 어휘 (연산 5 × 모양 3 × 앵커)
         MapAudit.load(cfg);   // 지도의 눈 — ★ 안 지어진 60곳은 검수를 통과하는 게 아니라 **검수를 안 받는다**
         RiverForge.load(cfg); // 강 — 물길 등록부 (config/rivers.yml · 없어도 돈다).
@@ -83,6 +86,9 @@ public final class HoncheonMvt extends JavaPlugin {
         HuntingGrounds.init(cfg);   // 적 등록부 — 짐승·사람 스탯 (npcs·npc_combat·combat)
         Populace.init(cfg);   // 인구 등록부 — 행인·주민 28인 (npcs/populace.yml)
         WorldBridge.init(cfg, getLogger());   // 세계 다리 — 마크의 사건이 봇의 장부로 간다 (world_bridge.yml)
+        // ★★ 묘비 — **초기화가 지운 몸이 낡은 스냅숏으로 되살아나지 않게** 한다 (WorldBridge §묘비).
+        //   재기동을 넘어 살아남아야 한다: 봇이 새 스냅숏을 굽기 전에 서버가 내려갈 수 있다.
+        WorldBridge.gravesStore(getDataFolder().toPath().resolve("graves.json"));
         Incidents.init(cfg);   // 사건 등록부 — 살해 연쇄·시신·수사·무명의 의뢰 (npc_death.populace_layer)
         this.skills = new SkillListener(this, skillEngine);
         this.hunting = new HuntingGrounds(this);
@@ -103,11 +109,65 @@ public final class HoncheonMvt extends JavaPlugin {
             }
             skills.syncAllSheets();   // ★ 경지·능력치·심법·내공 — 정본은 봇이다
         }));
+        // ★★ 접합의 청(請) — 디스코드의 누군가가 **이 몸의 이름**을 댔다. 그 물음을 **그 몸의 화면**에 띄운다.
+        //   이것이 도용을 막는 화면이다: 닉네임만으로는 아무것도 이어지지 않고, [잇는다] 를 누를 수 있는 손은
+        //   **그 몸에 로그인한 사람**뿐이다 (WorldBridge.linkDecision 이 uuid 를 대조한다).
+        //   ★ 오프라인이면 아무 일도 없다 — 청은 2분 뒤 저절로 죽는다 (봇이 장부에서 만료시킨다).
+        WorldBridge.onLinkRequest(req -> getServer().getScheduler().runTask(this, () -> {
+            org.bukkit.entity.Player body = getServer().getPlayer(req.body());
+            if (body == null || !body.isOnline()) {
+                return;
+            }
+            body.sendMessage(LinkGate.ask(req));   // 본인에게만 — 공개 채팅 금지 (남의 청을 남이 볼 일이 없다)
+            body.playSound(body.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1.4f);
+        }));
+        // ═══ ★★ 서장(序章) — **책이 손에 온다.** 이야기가 강호에서 흐른다 ═══
+        //
+        // 【무엇이 바뀌었나】 서장은 **디스코드의 프라이빗 스레드**에서 임베드 + 버튼으로 흘렀다.
+        //   사용자: *"디스코드에서 채팅을 치고 진행하는 것이 아닌 **마크로 넘어가는 걸로** 표현하자."*
+        //   이제 접합을 마치면 **품에 서책 한 권**이 들어오고, 펼치면 그날 밤이 떠오른다.
+        //
+        // 【★ 그러나 마크는 저자가 아니다】 글도 선택지도 판정도 **전부 봇**이 낸다 (LLM·판정 엔진·
+        //   시트가 거기에만 있다. 마크는 DB 를 안 연다). 마크는 **서책**이다 — 종이와 손.
+        //
+        // 【★ 나루의 사공】 봇의 붓은 **하나**다 (GPU 도 하나: 서장 4건 동시 = 89.5초, 1건 = 22.4초).
+        //   글이 아직 안 왔으면 책을 주지 않고 **사공의 말**만 한다 ("앞에 두 사람") — 침묵 금지.
+        SeojangBook.init(this, cfg);
+        WorldBridge.onSeojang(scenes -> getServer().getScheduler().runTask(this, () -> {
+            java.util.Set<java.util.UUID> inSeojang = new java.util.HashSet<>();
+            for (WorldBridge.SeojangScene sc : scenes) {
+                inSeojang.add(sc.body());
+                org.bukkit.entity.Player body = getServer().getPlayer(sc.body());
+                if (body != null && body.isOnline()) {
+                    SeojangBook.get().deliver(body, sc);
+                }
+            }
+            // ★ 목록에서 사라진 몸 = **출도했다.** 책을 거둔다 (끝난 이야기를 품에 두지 않는다)
+            for (org.bukkit.entity.Player p : getServer().getOnlinePlayers()) {
+                if (!inSeojang.contains(p.getUniqueId())) {
+                    SeojangBook.get().close(p);
+                }
+            }
+        }));
+
+        // ★ 명부(名簿) — "그 이름이 지금 강호에 있는가". 봇은 이것으로 청을 세울지 말지 정한다.
+        //   ★★ 사람이 없어도 계속 찍어야 한다: **빈 명부와 낡은 명부는 다른 사실이다**
+        //     (낡으면 봇은 "마크가 꺼졌다"고 읽고 사람에게 다른 말을 해 준다).
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            java.util.Map<String, String> here = new java.util.LinkedHashMap<>();
+            for (org.bukkit.entity.Player p : getServer().getOnlinePlayers()) {
+                here.put(p.getName(), p.getUniqueId().toString());
+            }
+            WorldBridge.setRoster(here);
+        }, 40L, 40L);   // 2초 — 사람이 접속하자마자 청할 수 있어야 한다
         WorldBridge.start();
 
         PackPusher packPusher = new PackPusher(this);
         packPusher.load(cfg);                    // 팩은 **접속한 주소**로 나간다 (박힌 URL 은 LAN 밖에서 죽는다)
         getServer().getPluginManager().registerEvents(packPusher, this);
+        Hunger hunger = new Hunger(this);         // 허기 — 경공이 달리기를 쓰므로 바닐라 허기가 너무 빨리 닳는다
+        hunger.load(cfg);
+        getServer().getPluginManager().registerEvents(hunger, this);
         getServer().getPluginManager().registerEvents(antechamber, this);
         getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
@@ -131,13 +191,22 @@ public final class HoncheonMvt extends JavaPlugin {
         hunting.start();  // 중앙 티커 — 구역 스포너·전의·비무 판정
         populace.start();   // 중앙 티커 — 행인의 일과·배회 (마을이 비어 있으면 세계가 아니다)
         incidents.start();   // 중앙 티커 — 시신 발견·은닉·포교의 추적·무명의 의뢰
+        // 되돌리는 손 — 시험할 때마다 손으로 지우던 것을 명령으로. MVT 는 **제 파일만** 지우고
+        // (playerdata·원장·금고), 봇의 장부는 다리로 **청한다** (단일 작성자 규약).
+        // ★ 등록부(config/reset.yml)가 깨져도 플러그인은 죽지 않는다 — 초기화만 잠긴다.
+        this.reset = new Reset(this, cfg);
+        this.reset.start();
         getCommand("honcheon").setExecutor(new MvtCommand(this));
         loadAnchors();
         loadZones();
         loadRegionBases();
         loadLedgers();   // ★ 원장 — 재기동을 넘어 살아남는다 (여태 순수 HashMap 이었다)
-        // 원장 굽기 — 주기 저장. 크래시는 예고하지 않는다 (onDisable 이 안 불리는 죽음이 있다)
-        getServer().getScheduler().runTaskTimer(this, this::saveLedgers, 6000L, 6000L);   // 5분
+        dojang.loadVault();   // ★ 연무장 금고 — 맡긴 것이 남아 있으면 짖는다 (접속하면 돌려준다)
+        // 원장·금고 굽기 — 주기 저장. 크래시는 예고하지 않는다 (onDisable 이 안 불리는 죽음이 있다)
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            saveLedgers();
+            dojang.saveVault();
+        }, 6000L, 6000L);   // 5분
         // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
         getServer().getScheduler().runTaskTimer(this,
                 Metrics.wrap("sidebar", () -> getServer().getOnlinePlayers().forEach(this::updateSidebar)),
@@ -147,6 +216,18 @@ public final class HoncheonMvt extends JavaPlugin {
         java.util.List<String> fighters = skillEngine.manifestingNpcs();
         getLogger().info("격을 쓰는 NPC " + fighters.size() + "인: "
                 + (fighters.isEmpty() ? "없음 — 등록부에 realm 이 없다" : String.join(", ", fighters)));
+        // ★★ 【눈】 일반 공격은 참격인가 찌르기인가 — 기동 때 소리내어 잰다.
+        //   호(弧)를 청구한 계열이 실은 찌르고 있으면 **조용히 넘어가지 않는다**. 재는 축 셋:
+        //     호각(획이 실제로 돌아간 각) · 전진(몸이 나간 거리) · 참격비(호각 ÷ 전진)
+        //   같은 축이 정적으로도 선다 — tools/motion_audit.py 축 ⑬ (두 개의 진실을 만들지 않는다)
+        for (String line : skillEngine.slashEyeReport()) {
+            if (line.contains("✖")) {
+                getLogger().warning("[획·눈] " + line
+                        + "  (config/skill_motion.yml display.swing_arcs · body.by_class)");
+            } else {
+                getLogger().info("[획·눈] " + line);
+            }
+        }
         getLogger().info("혼천 MVT 기동 — 룰 엔진 5종 로드 완료 (/혼천 도움말)"
                 + (anchors.isEmpty() ? " — 청하현 미조성 (/혼천 조성)" : " — 청하현 앵커 " + anchors.size() + "곳"));
     }
@@ -154,6 +235,10 @@ public final class HoncheonMvt extends JavaPlugin {
     @Override
     public void onDisable() {
         saveLedgers();        // ★ 원장을 먼저 굽는다 — 재기동 = 능력치·내공·숙련·소지금 전멸이었다
+        if (dojang != null) {
+            // ★ 연무장 금고 — 맡긴 진짜 짐·장부는 **메모리에만** 있었다. 여기서 안 구우면 그대로 소멸이다
+            dojang.saveVault();
+        }
         WorldBridge.stop();   // 큐에 남은 사건을 마저 쓴다 — 하나도 버리지 않는다
         if (skills != null) {
             skills.shutdown();   // 무공의 3D 형체를 세계에 남기지 않는다
@@ -192,6 +277,16 @@ public final class HoncheonMvt extends JavaPlugin {
         return ledgers.computeIfAbsent(playerId, id -> new PlayerLedger());
     }
 
+    /**
+     * <b>있으면 준다. 없으면 만들지 않는다.</b>
+     *
+     * <p>★ {@link #ledger} 는 {@code computeIfAbsent} 다 — <b>물어보는 것만으로 원장이 생긴다.</b>
+     * 초기화가 "정말 지워졌나" 를 그것으로 물으면 <b>묻는 순간 되살아난다.</b> 그래서 이 문이 따로 있다.
+     */
+    public PlayerLedger peekLedger(UUID playerId) {
+        return ledgers.get(playerId);
+    }
+
     // ─── 원장 영속 — **재기동을 넘어 살아남는다** ───
     //
     // 여기 저장·적재 코드가 **없었다**. `ledgers` 는 순수 HashMap 이었고 (`new HashMap<>()`),
@@ -206,9 +301,21 @@ public final class HoncheonMvt extends JavaPlugin {
 
     private static final String LEDGER_FILE = "ledgers.yml";
 
+    /**
+     * ★ <b>이 사람의 세계 장부</b> — 연무장에 들어간 사람은 {@code ledgers} 맵에 <b>시험용 장부</b>가
+     * 들어 있다 ({@link #swapLedger}). 그것을 그대로 구우면 <b>디스크의 진짜 장부가 시험용 빈 장부로
+     * 덮인다</b> — 리붓조차 필요 없다. 5분마다 도는 이 저장이 곧 손실이었다.
+     *
+     * <p>그래서 굽기 직전에 <b>연무장 금고에 묻는다</b>: 이 사람의 진짜 장부를 네가 맡고 있느냐.
+     */
+    private PlayerLedger worldLedger(UUID playerId) {
+        PlayerLedger live = ledgers.get(playerId);
+        return dojang == null ? live : dojang.worldLedger(playerId, live);
+    }
+
     /** 한 사람의 원장을 굽는다 — 로그아웃 (SkillListener.onQuit) */
     public void saveLedger(UUID playerId) {
-        PlayerLedger led = ledgers.get(playerId);
+        PlayerLedger led = worldLedger(playerId);
         if (led == null) {
             return;
         }
@@ -229,7 +336,12 @@ public final class HoncheonMvt extends JavaPlugin {
             return;
         }
         YamlConfiguration yml = new YamlConfiguration();
-        ledgers.forEach((id, led) -> led.save(yml.createSection(id.toString())));
+        ledgers.keySet().forEach(id -> {
+            PlayerLedger led = worldLedger(id);   // ★ 연무장 안이면 **맡긴 진짜 장부**를 굽는다
+            if (led != null) {
+                led.save(yml.createSection(id.toString()));
+            }
+        });
         try {
             yml.save(new File(getDataFolder(), LEDGER_FILE));
         } catch (IOException e) {
@@ -461,6 +573,11 @@ public final class HoncheonMvt extends JavaPlugin {
         return progression;
     }
 
+    /** 경공의 몸 — 대기실 과제가 '경공이 켜졌는가'를 여기에 묻는다 (발동은 더블 점프다) */
+    public GyeonggongListener gyeonggong() {
+        return gyeonggong;
+    }
+
     public EconomyEngine economy() {
         return economy;
     }
@@ -475,6 +592,11 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public SkillEngine skillEngine() {
         return skillEngine;
+    }
+
+    /** 되돌리는 손 — {@code /혼천 초기화} 가 쥔다 */
+    public Reset reset() {
+        return reset;
     }
 
     public Antechamber antechamber() {

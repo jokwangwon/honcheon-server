@@ -1,0 +1,97 @@
+# 초기화(初期化) — 되돌리는 명령의 **등록부**.
+#
+# ★★ 등록제: **이 파일에 없는 것은 지워지지 않는다.** 코드는 배선만 한다.
+#    지울 표를 코드에 박으면, 언젠가 누군가 한 줄을 더 박고 그것이 세계를 지운다.
+#    그래서 지울 수 있는 것의 목록은 **여기 하나**이고, 코드는 이 목록 밖으로 못 나간다.
+#
+# ★★ protected_tables 에 있는 표는 **어떤 범위로도** 열리지 않는다. 코드가 기동 때 한 번,
+#    지우기 직전에 또 한 번 검사한다 (scopes 에 실수로 적어 넣어도 그 자리에서 멈춘다).
+#
+# 몸이 둘이므로 손도 둘이다 (규약: 단일 작성자):
+#   봇(SQLite)  — characters·mvt_link·blood_debt … **봇만** 쓴다. MVT 는 이 파일을 열지 않는다.
+#   MVT(마크)   — playerdata·ledgers.yml·dojang.yml … **MVT 만** 쓴다. 봇은 이 파일을 열지 않는다.
+# 서로의 몫은 다리(run/bridge/reset)로 **청한다**. 남의 창고에 손을 넣지 않는다.
+
+backup:
+  dir: run/backup            # 실제 폴더는 <dir>-<시각>/ — 그 아래 bot/ · mvt/
+  # ★★ 백업 실패 = 초기화 중단. 이 값은 껐다 켜는 스위치가 아니다 (코드가 false 를 거부한다).
+  #    적어 두는 이유는 하나다 — "백업은 선택이 아니다" 를 파일이 말하게 하려고.
+  required: true
+
+# 지울 수 있는 표 — 축(軸)까지 여기서 정한다. 코드는 WHERE 절을 짓지 않는다.
+#   by: character_id | id | mc_uuid | discord_id   (무엇에 매달린 행인가)
+#   where: 추가 조건 (등록부 소유자 구분처럼 축이 둘일 때만)
+tables:
+  mvt_link:          {by: mc_uuid}
+  mvt_link_code:     {by: mc_uuid}      # ☠ 옛 코드 방식(006) — 곧 사라진다. 없으면 없는 대로 지나간다
+  mvt_link_request:  {by: mc_uuid}      # 새 방식(007) — 아직 없는 DB 도 있다. 마찬가지로 지나간다
+  character_bank:    {by: character_id}
+  faction_standing:  {by: character_id}
+  authority_mandate: {by: character_id}
+  blood_debt:        {by: character_id}
+  # ★ 등록부 — 이 사람이 **claim 해 둔** 기연·신병·별호. 풀어 주지 않으면 (kind,key) 가 UNIQUE 라
+  #   다음 캐릭터가 **그 기연을 영영 못 만난다** (취걸개 기연 → 심법 전수 축이 그대로 막힌다).
+  #   그래서 이 사람 것만 푼다. 세계가 claim 한 것(owner_type=world)·NPC 것은 손대지 않는다.
+  registry:          {by: owner_id, where: "owner_type = 'character'"}
+  characters:        {by: id}           # ★ 맨 뒤 — 남들이 이 행을 참조한다 (FK)
+
+# ★★ 세계 — **절대 안 건드린다.** 어떤 범위도 이 표를 못 연다.
+#    여기 적힌 이름이 scopes 의 bot 목록에 나타나면 코드는 **지우지 않고 멈춘다.**
+protected_tables:
+  - regions          # 청하현·지역
+  - npcs             # 사람
+  - rumors           # 소문
+  - events           # 진실의 원장 (append-only — 지운 사실조차 여기 남는다)
+  - world_meta       # 세계 달력
+  - price_events     # 물가
+  - sect_state       # 문파 사정
+  - myeongbun        # 명분
+  - scenes           # 장면
+  - bridge_inbox     # 다리의 멱등 못
+
+scopes:
+  접합:
+    말: "마크의 몸과 이 이름을 끊는다 — 캐릭터도 혈채도 남는다"
+    bot: [mvt_link, mvt_link_code, mvt_link_request]
+    mc: false
+  캐릭터:
+    말: "캐릭터를 지운다 — 유년의 기억부터 다시 (마크의 몸·짐은 그대로)"
+    bot: [mvt_link, mvt_link_code, mvt_link_request, character_bank, faction_standing,
+          authority_mandate, blood_debt, registry, characters]
+    mc: false
+  전부:
+    말: "나루(입도진)부터 다시 — 마크의 플레이어 데이터까지"
+    bot: [mvt_link, mvt_link_code, mvt_link_request, character_bank, faction_standing,
+          authority_mandate, blood_debt, registry, characters]
+    mc: true
+
+# ─── 마크 쪽 — MVT 만 지운다 ───
+mc:
+  world: honcheon              # server.properties level-name. ★ 여기를 고치면 지우는 곳이 바뀐다
+  # 이 사람의 몸 — {world}·{uuid} 를 끼운다. 저장소 루트 기준 상대 경로.
+  per_player:
+    - "run/mvt/{world}/playerdata/{uuid}.dat"
+    - "run/mvt/{world}/playerdata/{uuid}.dat_old"
+    - "run/mvt/{world}/stats/{uuid}.json"
+    - "run/mvt/{world}/advancements/{uuid}.json"
+  # 플러그인 데이터 폴더의 yml — **파일을 지우지 않는다. 그 사람의 절(節)만 지운다** (남의 것이 같이 산다)
+  ledgers: ledgers.yml         # 원장 — 경지·내공·소지금·수련 배분
+  vault: dojang.yml            # 연무장 금고 — 맡긴 진짜 장부·짐 (없을 수도 있다)
+
+# ★★ 마크에서 **절대 안 건드리는 것** — 경로에 이 이름이 들어가면 코드가 멈춘다.
+#    세계·화이트리스트·ops 는 초기화의 대상이 아니다. 사람은 지워도 세계는 안 지운다.
+protected_paths:
+  - whitelist.json
+  - ops.json
+  - banned-players.json
+  - banned-ips.json
+  - server.properties
+  - region                     # 지형 (청크)
+  - level.dat
+  - honcheon.db                # 봇의 장부 — MVT 는 이 이름을 입에 담지도 않는다
+
+# 다리 — 서로의 몫을 **청하는** 곳 (run/bridge/reset)
+bridge:
+  dir: run/bridge/reset
+  poll_seconds: 2              # 사람이 기다리는 값이다
+  ttl_seconds: 120             # 이보다 오래된 청은 버린다 (꺼져 있던 동안 쌓인 것을 뒤늦게 실행하지 않는다)

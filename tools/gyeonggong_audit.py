@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from game_audit import (  # noqa: E402  — 문법·출력 형식 계승 (읽기 전용 재사용)
     FAIL,
+    ROOT,
     Report,
     YamlError,
     dig,
@@ -207,6 +208,7 @@ def lint(cfg, rep):
     lint_simbeop(cfg, rep)
     lint_armor(cfg, rep)
     lint_budget(cfg, rep)
+    lint_activation(cfg, rep)
 
 
 def lint_gate(cfg, rep):
@@ -435,6 +437,160 @@ def lint_budget(cfg, rep):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  ⑧ 발동 — **손가락이 켜는가, 아니면 나에게 일어나는가**
+# ══════════════════════════════════════════════════════════════════════════════
+# 이 축은 config 로 못 잰다. 발동은 **코드에 있다.** 그래서 이 눈은 소스를 읽는다.
+#   "조건이 맞으면 알아서 발동한다"면 그것은 내가 쓰는 것이 아니라 **나에게 일어나는 것**이다.
+#   경공은 무공이다. 무공은 손가락이 낸다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+LISTENER = os.path.join(
+    ROOT, "server-mvt/src/main/java/com/honcheon/mvt/GyeonggongListener.java")
+
+#  '경공을 켠다'의 정의 — Ride 를 새로 만드는 것. 이 짓은 발동점 하나에서만 일어나야 한다
+IGNITE = (r"riding\.put\s*\(", r"riding\.computeIfAbsent\s*\(")
+
+
+def method_body(src, signature_fragment):
+    """`signature_fragment` 로 시작하는 메서드의 본문을 중괄호 균형으로 잘라 온다 (없으면 None)."""
+    i = src.find(signature_fragment)
+    if i < 0:
+        return None
+    j = src.find("{", i)
+    if j < 0:
+        return None
+    depth, k = 0, j
+    while k < len(src):
+        if src[k] == "{":
+            depth += 1
+        elif src[k] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[j:k + 1]
+        k += 1
+    return None
+
+
+def strip_comments(src):
+    """주석은 코드가 아니다 — 주석에 적힌 'isSprinting' 이 눈을 속이면 안 된다."""
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    return re.sub(r"//[^\n]*", "", src)
+
+
+def lint_activation(cfg, rep):
+    rep.head("⑧ 발동 — **내 손가락이 켜는가** (자동이면 그것은 무공이 아니다)")
+    if not os.path.isfile(LISTENER):
+        rep.verdict(False, f"{os.path.basename(LISTENER)} 가 없다 — 발동을 잴 곳이 없다")
+        return
+    with open(LISTENER, encoding="utf-8") as f:
+        raw = f.read()
+    src = strip_comments(raw)
+
+    event = str(gg(cfg, "mode", "activate_event", default=""))
+    rep.say(f"     gyeonggong.yml mode.activate = {gg(cfg, 'mode', 'activate', default='?')}")
+    rep.say(f"     mode.activate_event = {event or '(등록 없음)'}")
+    rep.say("")
+
+    # ── ① 손가락이 켠다 — 등록부가 말한 이벤트의 핸들러가 실제로 있는가
+    if contract(cfg, "finger_activated"):
+        handler = re.search(r"@EventHandler[^)]*\)?\s*public\s+void\s+(\w+)\s*\(\s*"
+                            + re.escape(event) + r"\s+\w+\s*\)", src) if event else None
+        rep.verdict(bool(handler),
+                    f"{event} 핸들러가 코드에 있다 ({handler.group(1) if handler else '-'}) — "
+                    f"**공중에서 점프 키를 한 번 더 눌러야** 경공이 나간다"
+                    if handler else
+                    f"mode.activate_event({event or '미등록'}) 의 핸들러가 "
+                    f"GyeonggongListener 에 없다 — 손가락이 켤 자리가 없다")
+        if not handler:
+            return
+        body = method_body(src, f"void {handler.group(1)}(") or ""
+
+        # 그 핸들러가 **정말로 이벤트를 훔치는가** (날게 두면 그것은 경공이 아니라 크리에이티브다)
+        steals = "setCancelled(true)" in body
+        rep.verdict(steals,
+                    "그 핸들러가 비행 이벤트를 **취소하며 훔친다** — 날게 두지 않고 신호만 가져온다"
+                    if steals else
+                    "발동 핸들러가 event.setCancelled(true) 를 안 한다 — **진짜로 난다** (경공이 아니다)")
+
+        # 값이 든다 — 내력을 확인하고 깎는가 (공짜로 나는 몸은 없다)
+        pays = "leapCost()" in body and re.search(r"energy\s*-=", body) is not None
+        rep.verdict(pays,
+                    "허공을 딛을 때마다 qi.leap 을 태운다 — **내력이 없으면 안 나간다**"
+                    if pays else
+                    "발동 핸들러가 qi.leap(leapCost) 을 확인·차감하지 않는다 — 공짜로 나는 몸이다")
+
+        # 침묵 금지 — 왜 안 나갔는지 말하는가
+        talks = all(k in body for k in ('message("air_spent")', 'message("depleted")')) \
+            and "blockedBy()" in body
+        rep.verdict(talks,
+                    "안 나가면 **왜 안 나갔는지 말한다** (허공 소진 · 내력 고갈 · 개화 전/철갑)"
+                    if talks else
+                    "발동 실패가 침묵한다 — air_spent · depleted · blockedBy 중 화면에 안 뜨는 것이 있다")
+
+        # 그리고 **켜는 곳은 여기 하나뿐**이어야 한다
+        elsewhere = [m for pat in IGNITE for m in re.finditer(pat, src)
+                     if not (src.find(body) <= m.start() < src.find(body) + len(body))]
+        rep.verdict(not elsewhere,
+                    "경공을 켜는 자리(riding.put)는 **발동 핸들러 하나뿐**이다 — 다른 문이 없다"
+                    if not elsewhere else
+                    f"발동 핸들러 밖에서 경공이 켜진다 ({len(elsewhere)}곳) — 뒷문이 있으면 그것이 자동 발동이다")
+
+    # ── ② 자동 발동 금지 — 지상 점프가 켜면 그것은 '나에게 일어나는 것'이다
+    if contract(cfg, "no_auto_activation"):
+        jump = method_body(src, "void onJump(") or ""
+        auto = [w for w in ("isSprinting()", "computeIfAbsent") if w in jump] \
+            + (["riding.put"] if "riding.put" in jump else [])
+        rep.verdict(not auto,
+                    "지상 점프(PlayerJumpEvent)는 **켜지 않는다** — 이미 켜진 몸에만 신법을 싣는다. "
+                    "구판의 '달리며 점프하면 알아서 발동'은 죽었다"
+                    if not auto else
+                    f"PlayerJumpEvent 가 경공을 **자동으로 켠다** ({', '.join(auto)}) — "
+                    f"조건이 맞으면 저절로 발동한다면 그것은 내가 쓰는 것이 아니다")
+
+    # ── ③ 크리에이티브 불가침 — 연무장(Dojang.enter)이 크리에이티브다. 거기선 날 수 있어야 한다
+    if contract(cfg, "creative_untouched"):
+        guard = method_body(src, "boolean creativeFlight(") or ""
+        both = "GameMode.CREATIVE" in guard and "GameMode.SPECTATOR" in guard
+        wings = method_body(src, "void wings(") or ""
+        # setAllowFlight 를 부르는 모든 메서드가 creativeFlight 가드를 통과했는가
+        calls = [m for m in re.finditer(r"setAllowFlight\s*\(", src)]
+        guarded = "creativeFlight(" in wings and "setAllowFlight" in wings \
+            and len(calls) == len(re.findall(r"setAllowFlight\s*\(", wings))
+        rep.verdict(both and guarded,
+                    "setAllowFlight 는 오직 wings() 안에서만 불리고, wings() 는 "
+                    "**크리에이티브·스펙테이터에서 즉시 돌아선다** — 연무장에서는 진짜로 난다"
+                    if both and guarded else
+                    "크리에이티브/스펙테이터 가드가 없거나 setAllowFlight 가 가드 밖에서 불린다 — "
+                    "연무장(Dojang.enter = CREATIVE)의 비행이 깨진다")
+
+        handler_body = method_body(src, "void onAirJump(") or ""
+        early = "creativeFlight(player)" in handler_body
+        rep.verdict(early,
+                    "발동 핸들러도 크리에이티브면 **이벤트를 훔치지 않고 돌아선다** (그 비행은 우리 것이 아니다)"
+                    if early else
+                    "발동 핸들러가 크리에이티브의 비행 토글까지 취소한다 — 연무장에서 못 난다")
+
+    # ── ④ 몇 번 딛는가는 경지가 정한다 (등록부 축)
+    if contract(cfg, "air_jumps_gated_by_realm"):
+        gated = gated_realms(cfg)
+        bad = [r for r in realm_names(cfg)
+               if r not in gated and num(ceiling(cfg, r).get("air_jumps"), 0) > 0]
+        table = " · ".join(f"{r} {int(num(ceiling(cfg, r).get('air_jumps'), 0))}회"
+                           for r in realm_names(cfg) if r in gated)
+        rep.say(f"     realm_ceiling.air_jumps — {table}")
+        rep.verdict(not bad,
+                    "개화 전(범인·삼류·이류)은 허공에 발 디딜 곳이 없다 — "
+                    "**같은 허공에서 삼류와 절정이 다른 사람이 된다**"
+                    if not bad else f"개화 전 경지가 허공을 딛는다: {bad}")
+        rising = [int(num(ceiling(cfg, r).get("air_jumps"), 0))
+                  for r in realm_names(cfg) if r in gated]
+        rep.verdict(rising == sorted(rising),
+                    "경지가 오를수록 허공을 더 딛는다 (횟수는 승급이 판다 — 신법이 못 산다)"
+                    if rising == sorted(rising) else
+                    f"경지가 올랐는데 도약 횟수가 줄어드는 자리가 있다: {rising}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  ② 몸 시뮬 — 무엇을 할 수 있고, 무엇을 못 하는가
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -459,18 +615,23 @@ def sim_reach(cfg, rep):
         cap = attr_cap(cfg, realm)
         p = profile(cfg, realm, cap, bobeop={"vertical": True})   # 최대치: 캡 민첩 + 수직 보법
         h = jump_height(cfg, p["jump"]) if p["open"] else jump_height(cfg, 0)
-        total = h + p["wall"]
+        air = int(num(ceiling(cfg, realm).get("air_jumps"), 0)) if p["open"] else 0
+        # ★ 더블 점프의 체공 — 지상 점프(바닐라 높이) 위에 **허공을 딛은 만큼** 더 오른다
+        chain = jump_height(cfg, 0) + air * h if p["open"] else h
+        total = chain + p["wall"]
         if p["open"] and h >= roof_h:
             jumped_roof.append(realm)
-        rep.say(f"     {realm:<4} 도약 {h:>4.1f}m {'(담 넘음)' if h >= wall_h else '        '} "
+        rep.say(f"     {realm:<4} 지상도약 {h:>4.1f}m {'(담 넘음)' if h >= wall_h else '        '} "
+                f"· 허공 {air}회 → 체공 {chain:>5.1f}m "
                 f"+ 벽 딛기 {p['wall']:>4.1f}m = {total:>5.1f}m "
                 f"{'← 지붕에 오른다' if total >= roof_h else ''}")
 
     rep.say("")
     if contract(cfg, "jump_never_reaches_roof"):
         rep.verdict(not jumped_roof,
-                    "★ **어떤 경지도 도약만으로는 지붕(5m)에 못 닿는다** — "
-                    "지붕은 뛰어오르는 것이 아니라 **벽을 딛고 오르는 것**이다 (경공의 문법)"
+                    "★ **어떤 경지도 (지상) 도약 한 번으로는 지붕(5m)에 못 닿는다** — "
+                    "지붕은 그냥 뛰어오르는 것이 아니라 **허공을 딛거나 벽을 딛고** 오르는 것이다. "
+                    "그 둘은 **내력을 태우고, 손가락이 눌러야** 나간다"
                     if not jumped_roof else
                     f"도약만으로 지붕에 닿는 경지: {jumped_roof} — 벽 딛기가 무의미해진다")
 

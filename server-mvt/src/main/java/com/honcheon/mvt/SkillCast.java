@@ -217,7 +217,7 @@ public final class SkillCast implements Listener {
             }
             announced.put(player.getUniqueId(), key);
             if (why == null) {
-                SkillHud.actionBar(player, ChatColor.GOLD + "❖ " + art.name()
+                skills.flash(player, ChatColor.GOLD + "❖ " + art.name()
                         + ChatColor.WHITE + " — 지금");
                 sound(player, "block.note_block.pling", 0.6f, 1.9f);
             }
@@ -255,13 +255,13 @@ public final class SkillCast implements Listener {
         Art art = art(lo.slot[idx]);
         if (art == null) {
             lo.aimed = -1;
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + String.valueOf(SLOT_FIRST + idx + 1)
+            skills.flash(player, ChatColor.DARK_GRAY + String.valueOf(SLOT_FIRST + idx + 1)
                     + "번 자리 — 비어 있다 " + ChatColor.GRAY + "(한 번 더 눌러 경락도)");
             return;
         }
         lo.aimed = idx;
         announced.remove(player.getUniqueId());
-        SkillHud.actionBar(player, ChatColor.YELLOW + "겨눔 ─ " + art.name()
+        skills.flash(player, ChatColor.YELLOW + "겨눔 ─ " + art.name()
                 + ChatColor.DARK_GRAY + " │ " + gateHint(art));
         sound(player, "item.flintandsteel.use", 0.4f, 1.6f);
     }
@@ -420,7 +420,7 @@ public final class SkillCast implements Listener {
     private void cast(Player player, Art art) {
         String shut = gate(player, art);
         if (shut != null) {
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + art.name() + " — " + reason(shut));
+            skills.flash(player, ChatColor.DARK_GRAY + art.name() + " — " + reason(shut));
             sound(player, "block.note_block.bass", 0.3f, 0.6f);
             return;
         }
@@ -455,7 +455,7 @@ public final class SkillCast implements Listener {
                     f.total(), 1, false, false, false));   // 근사: 맞으면서 들어간다
         }
         if (plan.downcast()) {
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "기가 실리지 않는다 — 맨 기술");
+            skills.flash(player, ChatColor.DARK_GRAY + "기가 실리지 않는다 — 맨 기술");
         }
 
         player.swingMainHand();
@@ -505,7 +505,7 @@ public final class SkillCast implements Listener {
                     player.getUniqueId(), player.getName());
         }
 
-        SkillHud.actionBar(player, ChatColor.GOLD + "❖ " + art.name()
+        skills.flash(player, ChatColor.GOLD + "❖ " + art.name()
                 + ChatColor.DARK_GRAY + " │ " + SkillHud.gradeLabel(plan.grade())
                 + (hits > 0 ? ChatColor.WHITE + " · " + hits + "타"
                             : ChatColor.GRAY + " · 헛손질"));
@@ -664,7 +664,7 @@ public final class SkillCast implements Listener {
     private void openMeridian(Player player) {
         if (tick - lastCombo.getOrDefault(player.getUniqueId(), -999L) < 200
                 || tick - lastHurt.getOrDefault(player.getUniqueId(), -999L) < 200) {
-            SkillHud.actionBar(player, ChatColor.RED
+            skills.flash(player, ChatColor.RED
                     + "전투 중에는 경락을 바꾸지 않는다");   // skill_lifecycle swap_rule
             return;
         }
@@ -739,19 +739,19 @@ public final class SkillCast implements Listener {
         }
         Art art = list.get(raw);
         if (!known(player, skills.state(player), art)) {
-            SkillHud.actionBar(player, ChatColor.RED + art.name() + " — 아직 전수받지 못했다");
+            skills.flash(player, ChatColor.RED + art.name() + " — 아직 전수받지 못했다");
             return;
         }
         for (int s = 0; s < SLOTS; s++) {
             if (lo.slot[s] == null) {
                 lo.slot[s] = art.id();
-                SkillHud.actionBar(player, ChatColor.GOLD + art.name()
+                skills.flash(player, ChatColor.GOLD + art.name()
                         + ChatColor.WHITE + " — " + (SLOT_FIRST + s + 1) + "번 자리에 걸었다");
                 openMeridian(player);
                 return;
             }
         }
-        SkillHud.actionBar(player, ChatColor.RED + "겨눔 네 자리가 모두 찼다");
+        skills.flash(player, ChatColor.RED + "겨눔 네 자리가 모두 찼다");
     }
 
     /** 전수 조건 — 경지 + 어미 무공의 숙련 (skills.yml requires_skill 이 정본) */

@@ -46,6 +46,9 @@ final class WorldMap {
     private final int sampleRadius;
     private final int sampleStep;
     private final int blocksPerDay;
+    private final int forgeRadius;
+    private final int preloadMargin;
+    private final int probeMargin;
     private final Map<String, Place> places = new LinkedHashMap<>();
     private final Map<String, Map<String, Object>> terrainTypes = new LinkedHashMap<>();
     private final List<int[]> bearings = new ArrayList<>();
@@ -79,13 +82,42 @@ final class WorldMap {
      * 사실상 월드 좌표와 같다 (world_map.yml scale.origin_world).
      *
      * @param stageLocal true = 청하현 무대(1:1 도보권) 안의 좌표. CheonghaBuilder 가 이미 짓는다
+     * @param archetype   <b>★ 무엇을 짓는가 — 지도가 말한다</b> (world_map.yml §16). {@code "pending"} 이면
+     *                    <b>사람이 아직 안 정했다</b>. null 이면 지도가 침묵한 것이다.
+     *                    <b>코드는 이것을 추측하지 않는다</b> — 예전엔 {@code faction+section} 으로 골라냈고,
+     *                    그래서 소림·무당·곤륜·해남이 전부 <b>화산의 도관</b>으로 섰다 (매화 20장까지 똑같이).
+     * @param buildRadius <b>★ 부지 반경 — 지도가 말한다</b> (world_map.yml §17 influence:
+     *                    {@code martial + mandate_weight} 의 함수다). null 이면 미등록·pending.
+     *                    <b>전성기 값이고 변하지 않는다</b> — 땅은 한 번만 서기 때문이다 (TerrainLedger).
+     *                    예전엔 {@code noklim ? 24 : 64} 였다 — <b>코드가 마을 크기를 정하고 있었다</b>.
+     * @param pendingWhy  pending 인 필드의 사유. <b>침묵과 미결은 다르다</b> — 조성이 거절할 때 이 말을 그대로 전한다
+     * @param note        {@code architecture} <b>산문(散文)</b>. ★ <b>기계는 이것을 읽지 않는다</b> —
+     *                    사람과 봇이 읽는다. (한때 TerrainForge 가 여기서 '동굴'·'산문' 낱말을 찾았다.
+     *                    글을 고치면 굴이 사라졌다 — 그것은 등록부가 아니다)
      */
     record Place(String id, String name, int x, int z, String terrain, List<String> biomes,
                  String build, boolean stageLocal, int days, String section,
-                 String faction, String tier, String note) {
+                 String faction, String tier, String note,
+                 String archetype, Integer buildRadius, String buildRadiusMark, String pendingWhy) {
 
         boolean buildableNow() {
             return "now".equals(build);
+        }
+
+        /**
+         * 반경이 <b>수가 아닌 말</b>로 적혀 있는가 — {@code "unresolved"} · {@code "pending"} · null(침묵).
+         *
+         * <p><b>★ 셋은 다른 것이다</b>: {@code pending} 은 "알고 있고 아직 못 정했다"이고,
+         * {@code unresolved} 는 <b>"근거가 없어서 모른다 — 그리고 모른다고 적었다"</b>이며,
+         * null 은 <b>침묵</b>이다. 조성이 거절할 때 <b>셋을 갈라서 말한다</b>.
+         */
+        boolean radiusUnresolved() {
+            return "unresolved".equals(buildRadiusMark);
+        }
+
+        /** 지도가 "아직 못 정했다"고 적었는가 — <b>침묵(null)이 아니라 미결이다</b> */
+        boolean archetypePending() {
+            return "pending".equals(archetype);
         }
     }
 
@@ -119,6 +151,14 @@ final class WorldMap {
         Map<String, Object> sampling = RulesConfig.section(root, "terrain_sampling");
         this.sampleRadius = ((Number) sampling.get("sample_radius")).intValue();
         this.sampleStep = ((Number) sampling.get("sample_step")).intValue();
+
+        // ★★★ 땅의 반경 — <b>어디나 같은 값</b> (world_map.yml §1-b land).
+        //   예전엔 MvtCommand 가 `noklim ? 24 : 110` 이라 적었다 — **땅이 세력을 알고 있었다.**
+        //   사용자: *"땅은 세력을 모른다. 산은 문파가 흥하든 망하든 그 자리에 그만큼 있다."*
+        Map<String, Object> land = RulesConfig.section(root, "land");
+        this.forgeRadius = mustBeNumber(land, "forge_radius");
+        this.preloadMargin = mustBeNumber(land, "preload_margin");
+        this.probeMargin = mustBeNumber(land, "probe_margin");
 
         for (Map.Entry<String, Object> e : RulesConfig.section(root, "terrain_types").entrySet()) {
             terrainTypes.put(e.getKey(), (Map<String, Object>) e.getValue());
@@ -173,11 +213,82 @@ final class WorldMap {
                     String.valueOf(m.getOrDefault("build", "later")),
                     Boolean.TRUE.equals(m.get("stage_local")),
                     days, label,
-                    // 원거리 조성기(RemoteBuilder)가 읽는다 — 세력이 원형을 고르고, 등급이 살림의 두께를 정한다
+                    // 등급(tier)이 살림의 두께를 정한다. ★ 세력은 더 이상 **원형을 고르지 않는다** —
+                    //   원형은 아래 archetype 이 말한다 (§16). 세력은 소속일 뿐이다.
                     m.get("faction") == null ? null : String.valueOf(m.get("faction")),
                     String.valueOf(m.getOrDefault("tier", "poor")),
-                    m.get("architecture") == null ? "" : String.valueOf(m.get("architecture"))));
+                    m.get("architecture") == null ? "" : String.valueOf(m.get("architecture")),
+                    // ★★ 등록제의 접합 — **지도가 무엇을·얼마나 크게 짓는지 말한다** (§16 wiring W-A·W-B)
+                    m.get("archetype") == null ? null : String.valueOf(m.get("archetype")).trim(),
+                    radius(m.get("build_radius")),
+                    radiusMark(m.get("build_radius")),
+                    m.get("pending_why") == null ? null : String.valueOf(m.get("pending_why"))));
         }
+    }
+
+    /**
+     * {@code build_radius} 판독 — <b>숫자만 받는다</b>.
+     *
+     * <p>{@code pending} 은 <b>수가 아니다.</b> "아직 못 정했다"는 말이고, 그러면 <b>null 이 옳다</b> —
+     * 여기서 아무 수나 넣으면 그 순간 <b>코드가 마을 크기를 정한 것</b>이 되고, 그것이 이 배선이 고치는 병이다.
+     * 조성은 {@link RemoteBuilder#unbuildableReasons} 에서 <b>거절하고 그렇게 말한다</b>.
+     */
+    private static Integer radius(Object raw) {
+        return raw instanceof Number n ? n.intValue() : null;
+    }
+
+    /**
+     * 수가 아닌 반경의 <b>이름</b> — {@code "unresolved"} · {@code "pending"} · null(침묵).
+     *
+     * <p>★★★ <b>여기서 아무 수도 넣지 않는다.</b> 사용자 (2026-07-13):
+     * <i>"{@code commercial_class} 가 없으면 outpost / 잘못되면 radius 40 — <b>이 구현을 금지한다.</b>
+     * <b>모르는 장소를 작은 장소로 간주하는 것도 하나의 창작이기 때문이다.</b>"</i>
+     */
+    private static String radiusMark(Object raw) {
+        return raw instanceof Number || raw == null ? null : String.valueOf(raw).trim();
+    }
+
+    /**
+     * 등록부의 수를 <b>받아 적는다 — 없으면 지어내지 않고 죽는다</b>.
+     *
+     * <p>여기서 조용히 기본값을 넣으면 그 순간 <b>코드가 다시 땅의 크기를 정한 것</b>이고,
+     * 그것이 이 배선이 고친 병이다. 등록부가 말하지 않으면 <b>서버가 뜨지 않는 것이 옳다</b>.
+     */
+    private static int mustBeNumber(Map<String, Object> section, String key) {
+        Object v = section.get(key);
+        if (!(v instanceof Number n)) {
+            throw new IllegalArgumentException(
+                    "world_map.yml land." + key + " 가 없다(또는 수가 아니다) — "
+                    + "★ 코드는 땅의 크기를 지어내지 않는다. 등록부에 적어라 (§1-b land)");
+        }
+        return n.intValue();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 땅의 반경 — ★★ **어디나 같은 값.** 세력을 묻지 않는다 (§1-b land)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 지형 계층이 빚는 반경. <b>★ 어디나 같다</b> — 도적의 산이라고 작게 서지 않는다.
+     *
+     * <p><b>예전엔 {@code noklim ? 24 : 110} 이었다</b> — 세력이 땅의 크기를 정했다.
+     * 사용자: <i>"땅은 세력을 모른다. 산은 문파가 흥하든 망하든 그 자리에 그만큼 있다."</i>
+     *
+     * <p><b>2계층 계약</b>: 집({@code build_radius})은 이 반경 <b>안에</b> 있어야 한다.
+     * 지금 최대 집이 80 이고 땅이 110 이다 — {@code map_lint.two_layers} 가 그 여유를 매번 잰다.
+     */
+    int forgeRadius() {
+        return forgeRadius;
+    }
+
+    /** 조성 직전 청크 선적 여유 — <b>땅의 크기가 아니라 스케줄러의 수</b>다 (§1-b land.preload_margin) */
+    int preloadMargin() {
+        return preloadMargin;
+    }
+
+    /** 부지 탐색 단계의 선적 여유 (§1-b land.probe_margin). ★ 여기에도 세력이 박혀 있었다 — 지웠다 */
+    int probeMargin() {
+        return probeMargin;
     }
 
     /** {@code config/world_map.yml} 판독. 파일이 없으면 null (세계 지도 없이도 MVT 는 돈다) */

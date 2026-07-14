@@ -407,13 +407,49 @@ final class CheonghaBuilder {
         // 12종 수치를 한 톨도 건드리지 않는다. 앵커는 늘리지 않는다 (검수가 앵커를 '건물'로 실측하므로
         // 야외 앵커 한 개가 "지붕없음" 위반이 된다 — 계약도 7키 그대로).
         huntingGrounds(world, cx, cy, cz, zonesOut);   // v6.9 ① 북쪽 산길 — 사냥터 (등록부 north_road)
-        heuksuFerry(world, cx, cy, cz, zonesOut);      // v6.9 ② 흑수나루 (등록부 heuksu_ferry — 침몰선 비급)
+        // v7.3 ★ — 나루의 앵커를 **박는다**. 여태 나루를 다 지어 놓고 앵커를 안 박아서,
+        //   antechamber destinations 의 첫 이름 「흑수나루」 가 늘 빈 이름이었다 (아래 보고 참조).
+        Location ferry = heuksuFerry(world, cx, cy, cz, zonesOut);   // v6.9 ② 흑수나루 (등록부 heuksu_ferry)
+        if (ferry != null) {
+            anchors.put("흑수나루", ferry);
+        }
 
         // v7.1 ④ 마감 봉인 — **맨 마지막**이어야 한다. 접근로·소품·폐사당·사냥터·나루가 자연 지형 위에
         //   놓은 바닥까지 남김없이 훑어, 그 밑 5칸의 공기를 자연 자재로 메운다 (검수 ① 바닥 밑 공동 = 0).
         //   물 위의 널다리는 밑이 물이므로 건드리지 않는다 (강을 막지 않는다).
         sealLaidFloors(world, terrain);
+
+        surveyAnchors(anchors);   // v7.3 ★ — 눈: 박아 놓은 앵커에 **사람이 설 수 있는가**
         return anchors;
+    }
+
+    /**
+     * ★ <b>박을 때 잰다</b> — 조성이 끝난 뒤 모든 앵커를 {@link Standing} 으로 훑는다.
+     *
+     * <p>오늘의 병이 여기서 났다: {@code 장터} 앵커는 <b>마을 원점</b>(cx, cy+1, cz)이고, 원점에는
+     * {@link #plazaAndWell} 가 세운 <b>우물</b>이 있다 — 발밑은 물, 사방은 조약돌 담, 머리 위는 두레박
+     * 사슬과 흑와 지붕. <b>아무 눈도 이것을 못 봤다.</b> 이제는 본다.
+     *
+     * <p><b>앵커를 옮기지는 않는다.</b> {@code 장터} 앵커는 14곳에서 <b>마을 원점 표식</b>으로 쓰인다
+     * (콘솔 재조성은 {@code anchor("장터").getBlockY() - 1} 을 원점으로 삼는다 — 옮기면 <b>마을이 이사한다</b>).
+     * 표식은 표식으로 두고, <b>내릴 때 {@link Standing#landing 잰다}</b>. 여기서는 <b>짖는다</b>.
+     */
+    private static void surveyAnchors(Map<String, Location> anchors) {
+        for (Map.Entry<String, Location> e : anchors.entrySet()) {
+            Location at = e.getValue();
+            if (at == null) {
+                continue;
+            }
+            Standing.Verdict v = Standing.measure(at);
+            if (v.ok()) {
+                continue;
+            }
+            Location spot = Standing.landing(at);
+            Bukkit.getLogger().severe("[혼천/조성] ★ 앵커 「" + e.getKey() + "」 "
+                    + Standing.describe(at) + " — " + v.why()
+                    + " · 착지는 " + Standing.describe(spot) + " 로 보정된다"
+                    + (spot == null ? " (보정도 실패 — 둘레에 설 자리가 없다!)" : ""));
+        }
     }
 
     // ─── 구역 — 입장 타이틀의 단위 (마을 전체 → 건물·장터 순으로 좁아진다) ───
@@ -7172,8 +7208,19 @@ final class CheonghaBuilder {
                 (int) (wxSum / wet), (int) (wzSum / wet), (int) (lxSum / dry), (int) (lzSum / dry)};
     }
 
-    /** 흑수나루 — 부지 선정 → 못 파기(필요 시) → 나루터·낡은 배·난파선·오두막·괴담 → 구역 */
-    private static void heuksuFerry(World world, int cx, int cy, int cz, List<Zone> out) {
+    /**
+     * 흑수나루 — 부지 선정 → 못 파기(필요 시) → 나루터·낡은 배·난파선·오두막·괴담 → 구역 → <b>앵커</b>.
+     *
+     * <p>★ <b>v7.3 — 앵커를 돌려준다.</b> 여기까지 나루를 <b>다 지어 놓고 앵커를 안 박았다</b>.
+     * 그래서 {@code config/antechamber.yml} 의 {@code destinations: [흑수나루, 장터]} 가 <b>없는 이름을
+     * 불렀고</b>, 나루를 건넌 사람은 전부 두 번째 후보인 {@code 장터}(= 마을 원점 = <b>광장 우물</b>)에
+     * 떨어졌다. 등록부가 부르는 이름은 <b>세계에 있어야 한다</b> (등록제).
+     *
+     * <p>앵커 자리는 <b>{@link Standing} 이 잰다</b> — 물가에 표식만 박으면 물속에 박힌다.
+     *
+     * @return 나루의 <b>설 수 있는</b> 앵커, 나루를 못 세웠으면 {@code null}
+     */
+    private static Location heuksuFerry(World world, int cx, int cy, int cz, List<Zone> out) {
         int sx = cx + FERRY_SITES[0][0], sz = cz + FERRY_SITES[0][1];
         int[] best = null;
         int bestScore = Integer.MIN_VALUE;
@@ -7198,7 +7245,7 @@ final class CheonghaBuilder {
             ferryDig(world, sx, sz);
             best = ferryProbe(world, sx, sz);
             if (best[0] < 0) {
-                return;   // 못 파기까지 실패 — 나루를 접는다 (마을은 그대로 선다)
+                return null;   // 못 파기까지 실패 — 나루를 접는다 (마을은 그대로 선다)
             }
         }
         int waterY = best[1];
@@ -7207,7 +7254,7 @@ final class CheonghaBuilder {
         int[] dir = ferryBearing(lx, lz, wx, wz);   // 뭍 → 물 방향 (선착장이 뻗는 쪽)
         int[] shore = ferryShore(world, sx, sz, dir);
         if (shore == null) {
-            return;
+            return null;
         }
         ferryPier(world, shore[0], shore[1], waterY, dir);
         ferryHut(world, shore[0], shore[1], waterY, dir);
@@ -7219,9 +7266,20 @@ final class CheonghaBuilder {
         out.add(new Zone("흑수나루", "물귀신 이야기는 여기서 시작된다", world.getName(),
                 sx - FR_R - 4, waterY - 26, sz - FR_R - 4,
                 sx + FR_R + 4, waterY + 24, sz + FR_R + 4));
+        // ★ 앵커 — 뭍으로 세 칸 물러선 자리에서 **설 수 있는 자리를 찾아** 박는다 (물가에 그냥 박으면 물속이다).
+        int[] spot = Standing.search(Standing.of(world),
+                shore[0] - dir[0] * 3, waterY + 1, shore[1] - dir[1] * 3, 8);
+        Location anchor = spot == null ? null
+                : new Location(world, spot[0] + 0.5, spot[1], spot[2] + 0.5);
+        if (anchor == null) {
+            Bukkit.getLogger().severe("[혼천/조성] ★ 흑수나루 나루터 곁에 **사람이 설 자리가 없다** — "
+                    + "앵커를 못 박는다. 등록부(antechamber destinations)가 이 이름을 부르면 다음 후보로 넘어간다.");
+        }
         Bukkit.getLogger().info("[혼천/조성] 흑수나루 (" + sx + "," + waterY + "," + sz
                 + ") · 수심 " + best[2] + " · 침몰선 비급 궤짝 "
-                + (wreck == null ? "미배치" : "(" + wreck[0] + "," + wreck[1] + "," + wreck[2] + ")"));
+                + (wreck == null ? "미배치" : "(" + wreck[0] + "," + wreck[1] + "," + wreck[2] + ")")
+                + " · 앵커 " + Standing.describe(anchor));
+        return anchor;
     }
 
     /** 뭍 → 물 방향을 축 하나로 접는다 (선착장은 대각으로 뻗지 않는다) */

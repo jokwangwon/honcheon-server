@@ -33,14 +33,16 @@ final class SkillHud {
     private int globalThisTick;
     private final Map<UUID, Integer> viewThisTick = new HashMap<>();
     /**
-     * <b>판정의 한 줄</b> — 방어 태세의 결과가 액션바에 잠깐 머문다.
+     * <b>한 줄의 주인</b> — 순간 사건(판정·격 태세 전환·경공)의 flash 가 잠깐 이기고,
+     * 그 밖에는 {@link #statusBar}(지속 상태 합성)가 주인이다.
      *
-     * <p>이 채널이 없으면 {@link #statusBar}(4틱마다)가 그 글자를 0.2초 만에 덮어 버린다 —
-     * 즉 <b>화면이 판정을 못 말한다</b>. 새 채널(보스바·사이드바)을 열지 않고, 있던 액션바에
-     * <b>우선권</b>을 준다: 잠깐(0.75초) 이 줄이 이긴다.
+     * <p>flash 채널이 없으면 statusBar(4틱마다)가 그 글자를 0.2초 만에 덮어 버린다 —
+     * 즉 <b>화면이 판정을 못 말한다</b> (B-116 이 실사용에서 그 겹침을 봤다). 새 채널(보스바·
+     * 사이드바)을 열지 않고, 있던 액션바에 <b>우선권</b>을 준다: 읽을 시간
+     * ({@code skill_motion.yml hud.flash_read_ticks}) 동안 이 줄이 이긴다.
+     * 주인 규칙 자체는 {@link HudLine} — 순수해서 하네스가 시험할 수 있다.
      */
-    private final Map<UUID, String> flashText = new HashMap<>();
-    private final Map<UUID, Long> flashUntil = new HashMap<>();
+    private final HudLine line = new HudLine();
     /** 팔레트 이름(smoke·end_rod…) → 바닐라 파티클. 등록부의 문자열이 Bukkit 타입이 되는 <b>유일한 자리</b> */
     private final Map<String, Particle> resolved = new HashMap<>();
     private final java.util.Set<String> unknownReported = new java.util.HashSet<>();
@@ -82,16 +84,73 @@ final class SkillHud {
         }
     }
 
+    // ─── 먹빛 (inks) — 등록부의 색 이름이 Bukkit 의 색이 되는 **유일한 자리** ───
+
+    /**
+     * 등록부의 먹빛 이름 → {@link Particle.DustOptions}.
+     *
+     * <p><b>코드가 색을 고르지 않는다.</b> {@code config/skill_motion.yml inks} 가 RGB 를 대고,
+     * 이 함수는 그것을 옮길 뿐이다. 등록되지 않은 이름은 <b>소리내어</b> 경고하고 null 을 준다 —
+     * 그러면 DUST 는 발행되지 않는다 (색 없는 dust 는 바닐라가 거절한다: 조용히 예외를 던진다).
+     *
+     * <p>금지색(형광 핑크·네온 보라·과도한 노랑)은 여기서 재지 않는다. 그것은 <b>등록부의 죄</b>이므로
+     * {@code motion_audit.py} 축 ⑦ 이 배포 전에 잡는다 — 런타임에 색을 검열하면 등록제가 두 겹이 된다.
+     */
+    private Object dust(String inkName) {
+        if (inkName == null) {
+            return null;
+        }
+        Particle.DustOptions cached = dusts.get(inkName);
+        if (cached != null) {
+            return cached;
+        }
+        SkillEngine.InkColor ink = engine.inkColor(inkName);
+        if (ink == null) {
+            if (unknownReported.add("ink:" + inkName)) {
+                org.bukkit.Bukkit.getLogger().warning(
+                        "[혼천] 모션 등록부에 없는 먹빛: " + inkName + " (config/skill_motion.yml inks)");
+            }
+            return null;
+        }
+        Particle.DustOptions opts = new Particle.DustOptions(
+                org.bukkit.Color.fromRGB(ink.r(), ink.g(), ink.b()), ink.size());
+        dusts.put(inkName, opts);
+        return opts;
+    }
+
+    private final Map<String, Particle.DustOptions> dusts = new HashMap<>();
+
+    /**
+     * 색이 필요한 파티클인가 — DUST 는 데이터 없이 발행하면 바닐라가 예외를 던진다.
+     * 등록부가 색을 안 적었으면 <b>발행하지 않는다</b> (조용한 예외보다 조용한 생략이 낫다 — 판정은 불변).
+     */
+    private boolean needsInk(Particle p) {
+        return p.getDataType() == Particle.DustOptions.class;
+    }
+
     // ─── 파티클 (등록부 이름으로 발행 — 이 이름 오버로드가 SkillListener 의 유일한 창구다) ───
 
     int emit(Location at, String particle, int count, double spread, double extra) {
-        Particle p = particle(particle);
-        return p == null ? 0 : emit(at, p, count, spread, spread, spread, extra, null, false);
+        return emit(at, particle, null, count, spread, extra, false);
     }
 
     int emit(Location at, String particle, int count, double spread, double extra, Object data) {
         Particle p = particle(particle);
         return p == null ? 0 : emit(at, p, count, spread, spread, spread, extra, data, false);
+    }
+
+    /** 먹빛을 실은 발행 — 등록부의 색 이름을 그대로 받는다 (오의의 다층 궤적·운무가 이 길로 온다) */
+    int emit(Location at, String particle, String ink, int count, double spread, double extra,
+             boolean priority) {
+        Particle p = particle(particle);
+        if (p == null || count <= 0) {
+            return 0;
+        }
+        Object data = dust(ink);
+        if (data == null && needsInk(p)) {
+            return 0;   // 색이 없는 dust — 등록부가 색을 안 적었다 (dust() 가 이미 소리냈다)
+        }
+        return emit(at, p, count, spread, spread, spread, extra, data, priority);
     }
 
     /** 오의 — 예산 내 최우선권 (생략되지 않고 깎인다) */
@@ -100,14 +159,9 @@ final class SkillHud {
         return p == null ? 0 : emit(at, p, count, spread, spread, spread, extra, null, true);
     }
 
-    /** 한 발 = 등록부의 Fx 한 줄 (파티클·개수·퍼짐·속도) */
+    /** 한 발 = 등록부의 Fx 한 줄 (파티클·개수·퍼짐·속도·<b>먹빛</b>) */
     int emit(Location at, SkillEngine.Fx fx, boolean priority) {
-        if (fx == null || !fx.present()) {
-            return 0;
-        }
-        Particle p = particle(fx.particle());
-        return p == null ? 0
-                : emit(at, p, fx.count(), fx.spread(), fx.spread(), fx.spread(), fx.extra(), null, priority);
+        return fx == null || !fx.present() ? 0 : emit(at, fx, fx.count(), priority);
     }
 
     /** 개수만 등록부에서 떼어 낸 발행 (타격 풀을 대상 수로 나눌 때 — budget.impact_pool) */
@@ -115,9 +169,7 @@ final class SkillHud {
         if (fx == null || fx.particle() == null || count <= 0) {
             return 0;
         }
-        Particle p = particle(fx.particle());
-        return p == null ? 0
-                : emit(at, p, count, fx.spread(), fx.spread(), fx.spread(), fx.extra(), null, priority);
+        return emit(at, fx.particle(), fx.ink(), count, fx.spread(), fx.extra(), priority);
     }
 
     // ─── 파티클 (내부 — 예산 게이트) ───
@@ -215,82 +267,65 @@ final class SkillHud {
      * <b>막았으면 막았다고, 흘렸으면 흘렸다고, 피했으면 피했다고</b> 화면이 말해야 한다.
      */
     void flash(Player player, String text, long until) {
-        flashText.put(player.getUniqueId(), text);
-        flashUntil.put(player.getUniqueId(), until);
+        line.flash(player.getUniqueId(), text, until);
         actionBar(player, text);   // 지금 당장 — 다음 statusBar 틱을 기다리지 않는다
     }
 
-    /** 지금 이 몸의 액션바를 판정 한 줄이 갖고 있는가 */
-    private boolean flashing(Player player, long now) {
-        Long until = flashUntil.get(player.getUniqueId());
-        if (until == null) {
-            return false;
-        }
-        if (now > until) {
-            flashUntil.remove(player.getUniqueId());
-            flashText.remove(player.getUniqueId());
-            return false;
-        }
-        return true;
-    }
-
     void forget(UUID id) {
-        flashUntil.remove(id);
-        flashText.remove(id);
+        line.forget(id);
     }
 
-    void statusBar(Player player, SkillEngine.State state, long now, String stance) {
-        if (flashing(player, now)) {
-            actionBar(player, flashText.get(player.getUniqueId()));
+    /**
+     * 지속 상태 합성 한 줄 — flash(순간 사건)가 살아 있으면 그것이 이긴다 ({@link HudLine} 주인 규칙).
+     *
+     * @param rider 경공 유지 조각 (B-116) — 켜져 있는 동안 상시 병기된다. null 이면 그리지 않는다.
+     *              문구는 등록부(gyeonggong.yml messages.riding)의 것 — 만드는 손은 GyeonggongListener.
+     */
+    void statusBar(Player player, SkillEngine.State state, long now, String stance, String rider) {
+        String owned = line.owner(player.getUniqueId(), now);
+        if (owned != null) {
+            actionBar(player, owned);
             return;   // 판정이 이긴다 — 상태 표시가 판정의 한 줄을 덮지 않는다
         }
         int pool = engine.pool(state.naegong);
-        StringBuilder line = new StringBuilder();
-
-        // ─── 생명 — 내구와 부상 (제일 앞. 목숨보다 앞에 오는 정보는 없다) ───
-        String vit = vitality(player);
-        if (vit != null) {
-            line.append(vit).append(ChatColor.DARK_GRAY).append(" │ ");
-        }
 
         // ─── 방어 태세 — <b>내가 키운 것이 화면에 뜬다</b> (growth_axes.md §6-②) ───
         //   민첩을 키운 자는 '회피', 근력을 키운 자는 '막기', 감각을 키운 자는 '흘리기'가 뜬다.
         //   그리고 몸짓을 바꾸면 그 자리에서 글자가 바뀐다 — 무엇을 하고 있는지 화면이 안다.
-        if (stance != null) {
-            line.append(ChatColor.GREEN).append(stance)
-                    .append(ChatColor.DARK_GRAY).append(" │ ");
-        }
+        String stanceSeg = stance == null ? null : ChatColor.GREEN + stance;
 
         String grade = state.armed == null ? SkillEngine.BARE : state.armed;
-        line.append(gradeColor(grade)).append(gradeLabel(grade));
+        String gradeSeg = gradeColor(grade) + gradeLabel(grade);
+
+        String energySeg;
         if (pool > 0) {
-            line.append(ChatColor.DARK_GRAY).append(" │ ")
-                    .append(ChatColor.AQUA).append(Glyphs.gauge(state.energy / (double) pool))
-                    .append(ChatColor.WHITE).append(' ').append(state.energy).append('/').append(pool);
+            energySeg = ChatColor.AQUA + Glyphs.gauge(state.energy / (double) pool)
+                    + ChatColor.WHITE + ' ' + state.energy + '/' + pool
+                    + (engine.isDepleted(state.energy) ? ChatColor.RED + " (고갈 −2)" : "");
         } else {
-            line.append(ChatColor.DARK_GRAY).append(" │ ").append(ChatColor.GRAY).append("내력 없음");
+            energySeg = ChatColor.GRAY + "내력 없음";
         }
-        if (engine.isDepleted(state.energy) && pool > 0) {
-            line.append(ChatColor.RED).append(" (고갈 −2)");
-        }
+
         int shot = state.cooldownLeft("발출", now);
-        if (shot > 0) {
-            line.append(ChatColor.DARK_GRAY).append(" │ ").append(ChatColor.YELLOW)
-                    .append("발출 ").append(String.format("%.1f초", shot / 20.0));
-        }
+        String shotSeg = shot <= 0 ? null
+                : ChatColor.YELLOW + "발출 " + String.format("%.1f초", shot / 20.0);
+
         // 오의 — 발동권('흐름')은 게이지가 아니라 '읽어낸 순간'이다. 찼다는 사실만 보여 준다
+        String ultSeg = null;
         String stage = engine.ultimateStage(state.realm);
         if (stage != null && state.ultimateId != null) {
             SkillEngine.Ultimate art = engine.ultimate(state.ultimateId);
             boolean ready = state.flow >= engine.flowRequired()
                     && state.ultimateUses < engine.ultimateLimit(state.realm);
-            line.append(ChatColor.DARK_GRAY).append(" │ ")
-                    .append(ready ? ChatColor.LIGHT_PURPLE : ChatColor.DARK_GRAY)
-                    .append(art == null ? "오의" : art.name())
-                    .append(ready ? ChatColor.WHITE + " ▶F" : ChatColor.DARK_GRAY + " "
+            ultSeg = (ready ? ChatColor.LIGHT_PURPLE : ChatColor.DARK_GRAY)
+                    + (art == null ? "오의" : art.name())
+                    + (ready ? ChatColor.WHITE + " ▶F" : ChatColor.DARK_GRAY + " "
                             + flowDots(state.flow, engine.flowRequired()));
         }
-        actionBar(player, line.toString());
+
+        // ─── 합성 — 생명(제일 앞. 목숨보다 앞에 오는 정보는 없다) │ 태세 │ 격 │ 내력 │ 경공 │ 발출 │ 오의 ───
+        actionBar(player, HudLine.compose(ChatColor.DARK_GRAY + " │ ",
+                vitality(player), stanceSeg, gradeSeg, energySeg, rider, shotSeg, ultSeg));
     }
 
     /**

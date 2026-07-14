@@ -27,6 +27,7 @@
 - Fable PG-005 완료: `docs/collaboration/FABLE_PG005_COMPLETE.md`
 - Fable PG-006 완료: `docs/collaboration/FABLE_PG006_COMPLETE.md`
 - Fable PG-007 완료: `docs/collaboration/FABLE_PG007_COMPLETE.md`
+- Codex RP 평가 완료: docs/collaboration/RP_REVIEW_CODEX.md
 
 ## 규칙
 

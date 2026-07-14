@@ -585,8 +585,10 @@ def selftest() -> int:
         ("사슬을 끊는다 (models/item/qi/slash_arc.json 을 지운다)",
          lambda r: (r / f"assets/{NS}/models/item/qi/slash_arc.json").unlink(),
          "없는 모델"),
-        ("텍스처를 지운다 (textures/qi/slash_arc.png)",
-         lambda r: (r / f"assets/{NS}/textures/qi/slash_arc.png").unlink(),
+        # 획 텍스처는 **아틀라스 안**(textures/item/qi/) 에 산다 — 그 밖은 클라이언트가 안 훑는다
+        # (2026-07 보라 큐브의 원인. texture_audit 축 ⑮ 가 그 자리를 지킨다)
+        ("텍스처를 지운다 (textures/item/qi/slash_arc.png)",
+         lambda r: (r / f"assets/{NS}/textures/item/qi/slash_arc.png").unlink(),
          "없는 텍스처"),
         ("모델을 [-16,32] 밖으로 민다 (클라이언트가 모델을 버린다)",
          lambda r: _push_out_of_range(r / f"assets/{NS}/models/item/qi/slash_arc.json"),

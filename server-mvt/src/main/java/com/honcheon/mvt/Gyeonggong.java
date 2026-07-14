@@ -32,6 +32,13 @@ import java.util.Set;
  *
  * <p><b>쿨다운은 하나도 없다.</b> 이 프로젝트는 시계로 막지 않는다 — 막는 것은 <b>단전·경지·갑옷</b>이다.
  *
+ * <p><b>★ 발동은 손가락이다</b> ({@code mode.activate} — 공중에서 점프 키 한 번 더).
+ * 구판은 <i>달리며 점프</i>였다: 조건이 맞으면 <b>알아서</b> 켜졌다 — 즉 <b>내가 쓰는 것이 아니라
+ * 나에게 일어나는 것</b>이었다. 그것은 무공이 아니다. 이 세계의 문법과도 어긋났다
+ * (방패=막기 · 웅크림=흘리기 · 달림=회피 — 전부 <b>몸짓이 곧 선택</b>이다).
+ * <b>몇 번 딛는가</b>는 경지({@code realm_ceiling.air_jumps})가, <b>얼마나 높이</b>는 신법(jump_bonus)이,
+ * <b>얼마나 멀리</b>는 보법(distance)이, <b>값</b>은 단전({@code qi.leap})이 낸다.
+ *
  * <p>보법은 지어내지 않았다: {@code skills.yml} 의 {@code category: 경공} 넷(매화보·제운종·취팔선보·답운종)을
  * 그대로 읽고, 거리·수직·변칙은 {@code skill_mechanics.yml} 에서 읽는다. 검산: {@code tools/gyeonggong_audit.py}.
  */
@@ -39,10 +46,17 @@ public final class Gyeonggong {
 
     private static Gyeonggong instance;
 
-    /** 경지 천장 — 다섯 값 전부 '여기까지'다 (수련이 그 안에서 자란다) */
-    public record Ceiling(double speed, double jump, double fallGrace, double wallClimb, boolean waterRun) {
+    /**
+     * 경지 천장 — 여섯 값 전부 '여기까지'다 (수련이 그 안에서 자란다).
+     *
+     * @param airJumps <b>한 체공에 허공을 딛는 횟수</b> — 더블 점프의 '몇 번'. ★ 이것만은
+     *                 <b>신법이 못 늘린다</b>: 몇 번 딛는가는 <b>경지</b>가, 얼마나 높이·멀리는
+     *                 신법(jump_bonus)과 보법(distance)이 정한다
+     */
+    public record Ceiling(double speed, double jump, double fallGrace, double wallClimb,
+                          boolean waterRun, int airJumps) {
 
-        static final Ceiling ZERO = new Ceiling(0, 0, 0, 0, false);
+        static final Ceiling ZERO = new Ceiling(0, 0, 0, 0, false, 0);
     }
 
     /** 문파 보법 — skills.yml(카탈로그) + skill_mechanics.yml(거리·수직·변칙) 이 정본 */
@@ -64,15 +78,20 @@ public final class Gyeonggong {
     public record Profile(boolean open, double speed, double jump, double fallGrace,
                           double wallClimb, boolean waterRun, double dash,
                           int upkeepInterval, boolean fallImmune, double dodgeBiasDeg,
-                          String blockedBy) {
+                          int airJumps, String blockedBy) {
 
         /** 경공이 아예 안 열리는 몸 (개화 전 · 철갑) — 유지비를 물 일이 없다 */
         static Profile closed(String why) {
-            return new Profile(false, 0, 0, 0, 0, false, 0, Integer.MAX_VALUE, false, 0, why);
+            return new Profile(false, 0, 0, 0, 0, false, 0, Integer.MAX_VALUE, false, 0, 0, why);
         }
 
         public boolean canWallClimb() {
             return open && wallClimb > 0;
+        }
+
+        /** 허공을 딛을 수 있는 몸인가 — 더블 점프가 나가는 조건의 절반 (나머지 절반은 내력) */
+        public boolean canAirJump() {
+            return open && airJumps > 0;
         }
     }
 
@@ -98,6 +117,7 @@ public final class Gyeonggong {
     private final double depletedGrace;
     private final int depletedWindow;
     private final int idleOffTicks;
+    private final int grantRefreshTicks;
     private final int bandLow;
     private final int bandHigh;
 
@@ -129,6 +149,7 @@ public final class Gyeonggong {
         Map<String, Object> mode = RulesConfig.section(root, "mode");
         this.band = String.valueOf(mode.getOrDefault("band", "경신"));
         this.idleOffTicks = (int) num(mode.get("idle_off_ticks"), 40);
+        this.grantRefreshTicks = (int) num(mode.get("grant_refresh_ticks"), 10);
 
         // ── 경지 게이트 — 【정본은 internal_energy.yml】. 경공은 '경신'이 열린 경지부터다
         Map<String, Object> ie = RulesConfig.load(cfg.resolve("internal_energy.yml"));
@@ -157,7 +178,8 @@ public final class Gyeonggong {
                 ceilings.put(realm, new Ceiling(
                         num(c.get("speed_bonus"), 0), num(c.get("jump_bonus"), 0),
                         num(c.get("fall_grace_m"), 0), num(c.get("wall_climb_m"), 0),
-                        Boolean.TRUE.equals(c.get("water_run"))));
+                        Boolean.TRUE.equals(c.get("water_run")),
+                        (int) num(c.get("air_jumps"), 0)));   // ★ 몇 번 딛는가 — 경지가 정한다
             }
         });
 
@@ -316,7 +338,8 @@ public final class Gyeonggong {
 
         return new Profile(true, speed, jump, grace, wall, c.waterRun(), dist,
                 interval, se.fallImmune(),
-                bobeop != null && bobeop.irregular() ? irregularBias : 0, null);
+                bobeop != null && bobeop.irregular() ? irregularBias : 0,
+                c.airJumps(), null);   // ★ 갑옷도 신법도 횟수를 못 바꾼다 — 경지의 몫이다
     }
 
     /** 천장 안에서 자란다 — {@code min(천장, 민첩 × 눈금)} */
@@ -389,6 +412,11 @@ public final class Gyeonggong {
 
     public int idleOffTicks() {
         return idleOffTicks;
+    }
+
+    /** 날개(setAllowFlight)를 다시 물려 주는 주기 — {@code mode.grant_refresh_ticks} */
+    public int grantRefreshTicks() {
+        return grantRefreshTicks;
     }
 
     public double cullBeyond() {

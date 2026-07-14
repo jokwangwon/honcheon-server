@@ -73,7 +73,7 @@ final class RemoteBuilder {
      * <p>원형의 좌표표는 전부 <b>국소 좌표</b>다: {@code f} 가 커지면 문 쪽(밖), {@code l} 은 좌우.
      * 남쪽 진입이면 (f, l) = (+z, +x) 라 옛 상수표와 정확히 같다 — 회귀 없이 회전만 얻는다.
      */
-    private record Facing(BlockFace face, int fx, int fz, int lx, int lz) {
+    record Facing(BlockFace face, int fx, int fz, int lx, int lz) {
 
         static Facing of(BlockFace f) {
             return switch (f) {
@@ -127,7 +127,7 @@ final class RemoteBuilder {
      * <p>선호 순서는 남·동·서·북(옛 배치의 회귀를 막는다: 남이 열려 있으면 옛 마을과 같은 그림이 선다).
      * 어느 방위도 안 열렸으면(사방이 벼랑·물) 남으로 낸다 — 그 부지는 지형 계층이 이미 고발했다.
      */
-    private static Facing entry(TerrainForge.SiteSpec spec) {
+    static Facing entry(TerrainForge.SiteSpec spec) {
         BlockFace[] pref = {BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH};
         for (BlockFace f : pref) {
             if (spec.approaches().contains(f)) {
@@ -153,38 +153,69 @@ final class RemoteBuilder {
      * </ul>
      */
     enum Archetype {
-        산채, 도관, 은신처, 성문, 수로채
+        // ── 먼저 있던 다섯 ──
+        산채, 도관, 은신처, 성문, 수로채,
+
+        // ── 문파 여덟 (§16 requested) — <b>「도관」이 여덟을 덮던 거짓말의 자리에 들어선다</b> ──
+        //   ★ 아홉 문파가 같은 집으로 서는 일은 없다 (Q2·Q3·Q8 — 세력 하나 = 원형 하나)
+        사찰,       // 소림 — 숭산 대찰. 축선 · 탑 · 보리수 (매화가 아니다)
+        전각,       // 무당 — 구름 위의 다층 누각. 금정(金頂)이 안개 위로 솟는다
+        암자,       // 종남 — ★ 본전이 없다. 봉우리에 흩어진 작은 집 여럿
+        석조도관,   // 곤륜 — 설선 위. 돌만으로 선다 (회벽도 매화도 없다)
+        목조검문,   // 해남 — 바닷가. 소금기에 삭은 목조. 산문도 천 계단도 없다
+        비구니원,   // 아미 — 「운해 비구니원」 (docs/design/ami_architecture.md · 사용자 설계)
+
+        // ── 오대세가 (§16 requested — 사용자가 「장원 하나 + 변주」를 거부했다) ──
+        //   ★ 기관저택(제갈)은 **없다** — 지도의 계약이 pending 이다 (Q-B). 지어내지 않는다
+        폐쇄대저택, // 당가 — 높은 담 · 좁은 문 하나. 안이 안 보인다
+        군사저택,   // 팽가 — 낮은 담 · 열린 문 · 넓은 연무장. 숨기지 않는다
+        정원저택,   // 남궁 — 연못 · 회랑 · 정원 가운데의 검각
+        북방저택,   // 모용 — 두꺼운 벽 · 온돌(굴뚝의 연기)
+
+        // ── 관(官) 둘 (§16 requested) ──
+        관아,       // 도시 안의 집 — 정청 · 방(榜) 붙이는 벽 · 옥 · 문 앞의 북
+        관문,       // ★ 성벽이 **길을 가로지른다** (성문은 도시를 두른다 — 그 한 줄이 둘을 가른다)
+
+        // ── 사용자가 직접 설계한 새 원형 넷 ──
+        녹림석채,   // 녹림 총채 (docs/design/noklim_seokchae.md) — ★ 석축 예외. 다른 산채에 전파 금지
+        흑성,       // 마교 본교 — 초원의 흑성. 돌과 철, 불. 중원 건축이 아니다
+        천막,       // 북막 한정 — ★ 성이 없다. 담도 성벽도 없다. 게르와 말 떼
+        유배지       // ★ 감옥이 아니라 유배다 — 초가 몇 채와 감시 초소. 담이 없다
     }
 
     /**
-     * 이 자리에 어떤 원형이 서는가 — <b>등록부를 읽는다</b>.
+     * 이 자리에 어떤 원형이 서는가 — <b>★ 지도가 말한다. 우리는 읽기만 한다</b>
+     * ({@code world_map.yml} 의 {@code archetype:} · §16).
      *
-     * <p>세력만으로는 갈리지 않는다: {@code gwan_gun} 에는 성시(장안)도 있고 역참·군진·황성도 있다.
-     * 그래서 <b>구역(section)</b> 을 같이 본다 — {@code places} 의 관(官)은 성시고,
-     * {@code places_official} 의 관은 역참·군진이다(그 원형은 아직 없다).
+     * <p><b>예전엔 골라냈다</b> — {@code faction} 과 {@code section} 으로:
+     * <pre>
+     *   noklim → 산채  ·  SECTS(문파 11개 하드코딩) → 도관  ·  magyo|hyeolgyo+굴 → 은신처  ·  …
+     * </pre>
+     * <b>그것이 거짓말을 만들었다.</b> 문파 목록 한 줄이 소림·무당·곤륜·종남·점창·청성·아미·해남
+     * <b>여덟 곳을 전부 「화산의 도관」으로 세웠다</b> — 숭산의 대찰에 매화 20장을 심고, 설선 위 곤륜에
+     * 회벽을 발랐다. 지도는 그 여덟을 <b>사찰·전각·석조도관·암자·목조검문</b>이라 적어 두었는데
+     * 코드가 안 읽었을 뿐이다. 그리고 <b>목록에 오대세가가 한 집도 없어서</b> 세가 다섯은 집이 안 섰다.
      *
-     * <p>마·혈은 <b>굴이 있어야</b> 은신처다 ({@code TerrainForge.caveKind} 가 답한다).
-     * 마교 본교("초원의 흑성")·낙양 잠복지에는 굴이 없다 — 그 원형은 아직 없고, 있는 척하지 않는다.
+     * <p>이제 고르지 않는다. 그래서 <b>여덟이 도관으로 서는 일은 두 번 다시 없다</b> —
+     * 대신 <b>안 선다</b>({@link #unbuildableReasons} 가 왜 못 서는지 말한다).
+     * ★ <b>그것이 옳다.</b> 잘못 선 집은 안 선 집보다 지우기 어렵다.
+     *
+     * @return 지도가 적은 원형. 다음이면 <b>null</b> —
+     *         ① 지도가 침묵(archetype 없음) ② {@code pending} (사람이 아직 안 정했다)
+     *         ③ <b>지도가 청구했으나 아직 안 지어진 원형</b> (§16 requested — 사찰·전각·관아·관문 …)
      */
     static Archetype archetype(WorldMap.Place place) {
-        String faction = place.faction() == null ? "" : place.faction();
-        if ("noklim".equals(faction)) {
-            return Archetype.산채;
+        String name = place.archetype();
+        if (name == null || name.isBlank() || place.archetypePending()) {
+            return null;
         }
-        if (SECTS.contains(faction)) {
-            return Archetype.도관;
+        try {
+            return Archetype.valueOf(name);
+        } catch (IllegalArgumentException notBuiltYet) {
+            // ★ 지도가 앞서 간다 — 청구된 원형(§16 requested)은 아직 손이 없다.
+            //   **있는 척하지 않는다.** 비슷한 원형으로 대신 짓는 것이 곧 거짓말이다.
+            return null;
         }
-        if (("magyo".equals(faction) || "hyeolgyo".equals(faction))
-                && TerrainForge.caveKind(place) != null) {
-            return Archetype.은신처;   // 굴이 본체다 — 굴이 없으면 은신처가 아니다
-        }
-        if ("gwan_gun".equals(faction) && "places".equals(place.section())) {
-            return Archetype.성문;     // 5.2 현성·도시 — 성시의 관문
-        }
-        if ("jangang_suroche".equals(faction)) {
-            return Archetype.수로채;
-        }
-        return null;
     }
 
     /**
@@ -219,6 +250,11 @@ final class RemoteBuilder {
             case 은신처 -> hideout(world, place, spec, cave);
             case 성문 -> cityGate(world, place, spec);
             case 수로채 -> waterStockade(world, place, spec);
+            // ── 문파 여섯 · 세가 넷 · 관 둘 · 새 원형 넷 — 손은 딴 파일에 있다 (한 파일이 4천 줄이 된다) ──
+            case 사찰, 전각, 암자, 석조도관, 목조검문, 비구니원 -> SectBuilder.build(world, place, spec, kind);
+            case 폐쇄대저택, 군사저택, 정원저택, 북방저택 -> EstateBuilder.build(world, place, spec, kind);
+            case 관아, 관문 -> OfficeBuilder.build(world, place, spec, kind);
+            case 녹림석채, 흑성, 천막, 유배지 -> OutlandBuilder.build(world, place, spec, kind);
         };
         zones.forEach(zone -> sweepOrphans(world, zone, kind));   // 처마에서 떨어져 나온 기와를 거둔다
         return zones;
@@ -306,9 +342,30 @@ final class RemoteBuilder {
                 && world.getBlockAt(x, y, z - 1).getType().isAir();
     }
 
-    /** 부지 반경 — 산채는 좁고(목책 R=22), 나머지는 넓다. <b>MvtCommand 의 forgeRadius 와 같은 값이다</b> */
+    /**
+     * 부지 반경 — <b>★ 지도가 말한다</b> ({@code world_map.yml} 의 {@code build_radius:} · §17 influence).
+     *
+     * <p><b>예전엔 코드가 정했다</b>: {@code noklim ? 24 : 64}. 그래서 <b>소림(영향력 13)과 해남(6)이
+     * 같은 크기로 섰다.</b> 크기는 취향이 아니라 <b>영향력의 함수</b>이고, 그 눈금은 이미 재고 있었다 —
+     * {@code faction_politics.yml} 의 {@code martial + mandate_weight}. 지도가 그것으로 값을 뽑아
+     * 적어 두었다(§17 ladder). 우리는 <b>읽는다</b>.
+     *
+     * <p><b>이 값은 전성기 값이고 변하지 않는다</b> — 땅은 한 번만 서기 때문이다({@link TerrainLedger}).
+     * 세력이 쇠락하면 <b>부지가 줄지 않고 집이 준다</b> (넓은 터에 빈 건물이 남는다 — §17 mutability).
+     *
+     * <p>화산 = 64 다. <b>그것이 사다리를 못박은 앵커고</b>, 옛 상수와 같은 값이다 — 즉 이미 선 땅은 안 흔들린다.
+     */
     static int siteRadius(WorldMap.Place place) {
-        return "noklim".equals(place.faction()) ? 24 : 64;
+        Integer registered = place.buildRadius();
+        if (registered != null) {
+            return registered;
+        }
+        // ★ 여기 오면 안 된다 — unbuildableReasons 가 앞서 거절했어야 한다.
+        //   조용히 수를 지어내면 **그것이 바로 이 배선이 고친 병**이므로, 지어내되 소리쳐 알린다.
+        org.bukkit.Bukkit.getLogger().warning("[건축] " + place.id()
+                + " — ★ 지도에 build_radius 가 없다. 코드가 크기를 정하고 있다 (64) — "
+                + "world_map.yml 에 등록하라 (§17 influence)");
+        return 64;
     }
 
     /**
@@ -330,7 +387,8 @@ final class RemoteBuilder {
                     new Need(Material.SPRUCE_LOG, 200, "목책·막사(통나무)"),
                     new Need(Material.CAMPFIRE, 1, "모닥불(마당의 중심)"),
                     new Need(Material.HAY_BLOCK, 10, "초가·짚"),
-                    new Need(Material.TORCH, 2, "망루의 불"));
+                    new Need(Material.TORCH, 2, "망루의 불"),
+                    new Need(Material.GREEN_WOOL, 1, "★ 채기(寨旗) — 녹림(綠林), 푸른 숲. 이 집의 표식이다"));
             case 도관 -> List.of(
                     new Need(Material.DEEPSLATE_TILES, 40, "검은 기와(본전)"),
                     new Need(Material.WHITE_TERRACOTTA, 40, "회벽(본전)"),
@@ -350,13 +408,127 @@ final class RemoteBuilder {
                     new Need(Material.STONE_BRICK_WALL, 40, "여장(女墻)"),
                     new Need(Material.DEEPSLATE_TILES, 40, "성루의 기와"),
                     new Need(Material.DIRT_PATH, 150, "관도(성문으로 드는 길)"),
-                    new Need(Material.LANTERN, 8, "관도의 등롱"));
+                    new Need(Material.LANTERN, 8, "관도의 등롱"),
+                    // ★ 눈이 잡았다: 성문과 관문의 계약이 **100% 같았다** (ArchetypeAudit ①).
+                    //   둘을 가르는 것은 **저잣거리**다 — 성문 밖에는 장이 서고(문세 때문에), 관문은 지나가는 곳이라 장이 없다
+                    new Need(Material.SCAFFOLDING, 6, "★ 저잣거리의 차양 골조 — **성문 밖에만 장이 선다**"));
             // 수로채 — 뭍에 집이 없다. 뗏목(판자)과 말뚝(통나무)이 이 집의 전부다
             case 수로채 -> List.of(
                     new Need(Material.SPRUCE_PLANKS, 300, "뗏목 마루"),
                     new Need(Material.SPRUCE_LOG, 60, "물에 박은 말뚝"),
                     new Need(Material.BARREL, 4, "통행세 궤짝"),
-                    new Need(Material.LANTERN, 4, "물 위의 불"));
+                    new Need(Material.LANTERN, 4, "물 위의 불"),
+                    new Need(Material.IRON_CHAIN, 20, "★ 쇠사슬 관문 — 강을 가로지른다 (통행세가 형태가 된 것)"));
+
+            // ══ 문파 여섯 — ★ 계약이 **서로 겹치지 않는 자재**를 하나씩 갖는다.
+            //    그 자재가 곧 "이 집이 그 집이 아니라는 증거"다 (ArchetypeAudit 이 그것으로 구별을 잰다)
+            case 사찰 -> List.of(
+                    new Need(Material.BRICKS, 200, "★ 전탑(塼塔) — 벽돌은 소림에만 있다"),
+                    new Need(Material.OAK_LEAVES, 60, "★ 보리수 — **매화가 아니다**"),
+                    new Need(Material.STONE_BRICKS, 300, "월대(月臺) — 대웅보전을 들어올리는 기단"),
+                    new Need(Material.DEEPSLATE_TILES, 200, "검은 기와 (축선의 세 전각)"),
+                    new Need(Material.LANTERN, 8, "축선의 불"));
+            case 전각 -> List.of(
+                    new Need(Material.GOLD_BLOCK, 20, "★ 금정(金頂) — **등록부가 부른 이름**. 금은 여기뿐이다"),
+                    new Need(Material.WHITE_TERRACOTTA, 120, "회벽 (3층 누각)"),
+                    new Need(Material.DEEPSLATE_TILES, 100, "층마다의 처마"),
+                    new Need(Material.POLISHED_ANDESITE, 300, "팔각의 단(壇) — 도가의 기하"),
+                    new Need(Material.LANTERN, 6, "단의 여덟 귀"));
+            case 암자 -> List.of(
+                    new Need(Material.HAY_BLOCK, 40, "초가 — ★ **기와가 없다** (화산보다 가난하다)"),
+                    new Need(Material.COBBLESTONE, 80, "거친 돌 기초"),
+                    new Need(Material.DIRT_PATH, 120, "★ 산길 — 흩어진 암자를 잇는다 (**길이 여럿이다**)"),
+                    new Need(Material.SPRUCE_LOG, 40, "통나무 기둥"),
+                    new Need(Material.TORCH, 5, "★ 횃불 — **등롱이 없다** (가난하다)"));
+            case 석조도관 -> List.of(
+                    new Need(Material.STONE_BRICKS, 500, "★ 돌만으로 선 벽 (두께 3)"),
+                    new Need(Material.POLISHED_DEEPSLATE, 150, "마당 — 설선 위의 돌"),
+                    new Need(Material.STONE_BRICK_STAIRS, 60, "★ 돌 지붕 — **기와가 한 장도 없다**"),
+                    new Need(Material.CHISELED_STONE_BRICKS, 4, "새김 돌 — 서역으로 가는 자의 이름"),
+                    new Need(Material.LANTERN, 4, "닫힌 집의 불"));
+            case 목조검문 -> List.of(
+                    new Need(Material.BAMBOO_PLANKS, 250, "★ 남방의 목재 (회벽도 기와도 없다)"),
+                    new Need(Material.STRIPPED_OAK_LOG, 60, "★ 소금기에 삭은 나무 — 고상(高床) 기둥"),
+                    new Need(Material.BAMBOO_FENCE, 40, "★ 난간 — **벽이 아니다** (사방이 트였다)"),
+                    new Need(Material.SPRUCE_SHELF, 3, "검 시렁 — 이 집이 무엇을 하는 집인가"),
+                    new Need(Material.LANTERN, 4, "바닷가의 불"));
+            case 비구니원 -> List.of(
+                    new Need(Material.WHITE_TERRACOTTA, 200, "백벽 (사용자 설계: 회백색 회벽)"),
+                    new Need(Material.DEEPSLATE_TILES, 150, "짙은 회색 기와"),
+                    new Need(Material.COBBLESTONE, 200, "★ 회색 석축 — 산비탈 여섯 단의 기단"),
+                    new Need(Material.BAMBOO, 20, "대나무 (★ **벚나무가 아니다**)"),
+                    new Need(Material.BELL, 1, "작은 범종각 (대형 종루가 아니다)"),
+                    new Need(Material.LANTERN, 6, "처마의 풍경"));
+
+            // ══ 세가 넷 — ★ **담의 높이가 곧 그 가문이다** (제갈은 없다: 계약이 pending · Q-B)
+            case 폐쇄대저택 -> List.of(
+                    new Need(Material.STONE_BRICKS, 600, "★ 높은 담 (여섯 켜) — 안이 안 보인다"),
+                    new Need(Material.FARMLAND, 60, "★ 약재 마당 — 당가가 무엇으로 사는가"),
+                    new Need(Material.WHITE_TERRACOTTA, 80, "회벽 (안채와 가림벽)"),
+                    new Need(Material.DEEPSLATE_TILES, 80, "검은 기와"),
+                    new Need(Material.LANTERN, 4, "담 안의 불"));
+            case 군사저택 -> List.of(
+                    new Need(Material.STONE_BRICK_WALL, 100, "★ 낮은 담 (담장 블록 — 너머가 보인다)"),
+                    new Need(Material.POLISHED_ANDESITE, 600, "★ 넓은 연무장 — **집의 중심이다**"),
+                    new Need(Material.SPRUCE_SHELF, 3, "병기 시렁 — 도(刀)의 가문"),
+                    new Need(Material.STRIPPED_DARK_OAK_LOG, 8, "목인장 — 줄지어 선다 (군대의 열)"),
+                    new Need(Material.LANTERN, 6, "연무장의 불"));
+            case 정원저택 -> List.of(
+                    new Need(Material.WATER, 300, "★ 연못 — **기하의 중심이 건물이 아니다**"),
+                    new Need(Material.DARK_OAK_PLANKS, 200, "★ 회랑 — 연못을 끼고 돈다"),
+                    new Need(Material.DEEPSLATE_TILES, 150, "회랑과 검각의 기와"),
+                    new Need(Material.WHITE_TERRACOTTA, 80, "검각(劍閣) — 정원 가운데"),
+                    new Need(Material.LANTERN, 8, "물에 비치는 불"));
+            case 북방저택 -> List.of(
+                    new Need(Material.STONE_BRICKS, 500, "★ 두꺼운 벽 (세 칸 — 중원의 집은 한 칸이다)"),
+                    new Need(Material.BRICKS, 30, "★ 굴뚝"),
+                    new Need(Material.CAMPFIRE, 3, "★ 온돌의 연기 — **연기 나는 굴뚝은 여기뿐이다**"),
+                    new Need(Material.DEEPSLATE_TILES, 100, "검은 기와"),
+                    new Need(Material.LANTERN, 3, "담 안의 불"));
+
+            // ══ 관 둘 — 성문과 자재가 겹친다. ★ **없는 물건**이 둘을 가른다
+            case 관아 -> List.of(
+                    new Need(Material.NOTE_BLOCK, 1, "★ 문 앞의 북 — **이 세계에서 북은 여기뿐이다**"),
+                    new Need(Material.IRON_BARS, 12, "★ 옥(獄) — 쇠창살"),
+                    new Need(Material.LECTERN, 1, "판결이 적히는 자리"),
+                    new Need(Material.WHITE_TERRACOTTA, 60, "정청의 회벽"),
+                    new Need(Material.DEEPSLATE_TILES, 60, "정청의 기와"),
+                    new Need(Material.LANTERN, 4, "관의 불"));
+            case 관문 -> List.of(
+                    new Need(Material.STONE_BRICKS, 700, "★ 길을 가로지르는 성벽 (도시를 두르지 않는다)"),
+                    new Need(Material.STONE_BRICK_WALL, 30, "여장(女墻)"),
+                    new Need(Material.DIRT_PATH, 100, "★ 관도 — **문 양쪽으로** 이어진다"),
+                    new Need(Material.DEEPSLATE_TILES, 40, "문루의 기와"),
+                    new Need(Material.LANTERN, 6, "관도의 등롱"),
+                    // ★ 성문과 갈리는 한 물건 — 관문은 **적는 곳**이다 (거르는 문: 문서 · 막는 문: 병적부)
+                    new Need(Material.LECTERN, 1, "★ 적는 자리 — 성문에는 **한 대도 없다** (여기는 사람을 거른다)"));
+
+            // ══ 사용자 설계 넷 ══
+            case 녹림석채 -> List.of(
+                    new Need(Material.COBBLESTONE, 600, "★ 석축 — **목책이 한 줄도 없다** (석축 예외)"),
+                    new Need(Material.IRON_BARS, 8, "★ 철문 — 목책 대신 석벽과 철문"),
+                    new Need(Material.CHEST, 8, "대창고 — 총채의 핵심"),
+                    new Need(Material.BARREL, 10, "약탈품 — 시장과 창고"),
+                    new Need(Material.SPRUCE_PLANKS, 200, "★ 생활 건물은 **목조**다 (석축이라고 다 돌이 아니다)"),
+                    new Need(Material.CAMPFIRE, 2, "시장과 취의당의 불"));
+            case 흑성 -> List.of(
+                    new Need(Material.POLISHED_BLACKSTONE_BRICKS, 800, "★ 검은 돌 — 중원 건축이 아니다"),
+                    new Need(Material.OBSIDIAN, 40, "흑요석 — 돌과 철"),
+                    new Need(Material.IRON_BARS, 30, "★ 철문 (열두 켜)"),
+                    new Need(Material.SOUL_CAMPFIRE, 8, "★ 불 — **냉색이다**. 사람을 부르지 않는다"),
+                    new Need(Material.SOUL_LANTERN, 6, "길가의 냉색 불 — ★ **등롱이 한 기도 없다**"));
+            case 천막 -> List.of(
+                    new Need(Material.WHITE_WOOL, 250, "★ 게르 — **이 세계에서 둥근 집은 여기뿐이다**"),
+                    new Need(Material.SPRUCE_FENCE, 60, "★ 말 떼를 매는 줄 — 이것이 이 세력의 부(富)다"),
+                    new Need(Material.HAY_BLOCK, 8, "말 먹이"),
+                    new Need(Material.CAMPFIRE, 4, "게르의 화덕 — ★ **등롱이 없다** (들고 다닐 수 없다)"),
+                    new Need(Material.TORCH, 3, "야영지의 불"));
+            case 유배지 -> List.of(
+                    new Need(Material.HAY_BLOCK, 3, "짚자리 — 살림이 가장 얇다"),
+                    new Need(Material.SPRUCE_PLANKS, 100, "초가 넷의 벽"),
+                    new Need(Material.FARMLAND, 60, "★ 밭 — 먹을 것을 **스스로** 지어야 한다"),
+                    new Need(Material.LECTERN, 1, "★ 몇이 살아 있는가를 적는 자리 (가두지 않는다. **센다**)"),
+                    new Need(Material.TORCH, 3, "초소의 불"));
         };
     }
 
@@ -375,10 +547,10 @@ final class RemoteBuilder {
                 TerrainForge.survey(world, place, cx, cy, cz, siteRadius(place)));
     }
 
-    /** 문파 원형을 쓰는 세력 — 구파일방·오대세가는 <b>같은 문법</b>을 쓴다 (산문 → 계단 → 문전 → 본전) */
-    private static final java.util.Set<String> SECTS = java.util.Set.of(
-            "hwasan", "gupailbang", "jongnam", "sorimsa", "mudang", "gonryun",
-            "jeomchang", "cheongseong", "ami", "haenam", "gaebang");
+    // ★ 여기 `SECTS` 가 있었다 — 문파 이름 11개가 코드에 박힌 목록.
+    //   TerrainForge.PEAK_FACTIONS 에 **똑같은 목록이 한 벌 더** 있었고, 두 벌이라 이미 갈라져 있었다.
+    //   **둘 다 지웠다.** 원형은 지도(world_map.yml archetype)가, 산의 윤곽은 terrain.yml shaping 이 말한다.
+    //   ★ 등록제의 뜻이 이것이다 — **이름과 수치는 등록부에만 산다.**
 
     /** 원형을 가진 세력인가 — 명령이 미리 물어 "아직 못 짓는다"고 말할 수 있게 */
     static boolean canBuild(WorldMap.Place place) {
@@ -513,7 +685,7 @@ final class RemoteBuilder {
      * 화산파가 그렇게 못 올랐다 (걸어 닿은 칸 24 · 오른 최고 y78 = 산문 기와 위). 계단은 멀쩡했다.
      * 그러니 <b>가장자리 두 칸은 반드시 맨 진입로</b>여야 한다.
      */
-    private static void approachPath(World world, TerrainForge.SiteSpec spec, int cx, int cz, Facing fw,
+    static void approachPath(World world, TerrainForge.SiteSpec spec, int cx, int cz, Facing fw,
                                      int fFrom, int fTo, int y0, int half, Material floor) {
         int prev = y0;
         for (int f = fFrom; f <= fTo; f++) {
@@ -563,7 +735,7 @@ final class RemoteBuilder {
     }
 
     /** 국소 사각형 → 세계 사각형의 최소 모서리 {x0, z0} */
-    private static int[] localBox(int cx, int cz, Facing fw, int f0, int f1, int l0, int l1) {
+    static int[] localBox(int cx, int cz, Facing fw, int f0, int f1, int l0, int l1) {
         int minX = Integer.MAX_VALUE;
         int minZ = Integer.MAX_VALUE;
         for (int f : new int[]{f0, f1}) {
@@ -576,7 +748,7 @@ final class RemoteBuilder {
     }
 
     /** 통나무 막사 — 널벽·초가지붕·짚 잠자리. 살림은 얇다 (tier: poor) */
-    private static void barrack(World world, int x0, int cy, int z0, int w, int d, BlockFace door) {
+    static void barrack(World world, int x0, int cy, int z0, int w, int d, BlockFace door) {
         int x1 = x0 + w - 1;
         int z1 = z0 + d - 1;
         for (int x = x0; x <= x1; x++) {
@@ -983,7 +1155,7 @@ final class RemoteBuilder {
     }
 
     /** 석등 — 돌기둥 + 등롱. 이미 뭔가 선 자리에는 서지 않는다 (등이 벽에 박히면 빛이 길로 안 나온다) */
-    private static void lanternPost(World world, int x, int cy, int z) {
+    static void lanternPost(World world, int x, int cy, int z) {
         for (int y = cy + 1; y <= cy + 3; y++) {
             if (!world.getBlockAt(x, y, z).getType().isAir()) {
                 return;
@@ -994,7 +1166,7 @@ final class RemoteBuilder {
         world.getBlockAt(x, cy + 3, z).setType(Material.LANTERN);
     }
 
-    private static void candlesAt(World world, int x, int y, int z) {
+    static void candlesAt(World world, int x, int y, int z) {
         org.bukkit.block.data.type.Candle data =
                 (org.bukkit.block.data.type.Candle) Material.CANDLE.createBlockData();
         data.setCandles(2);
@@ -1933,7 +2105,7 @@ final class RemoteBuilder {
     }
 
     /** 망루 — 통나무 네 주 + 마루 + 불. 산채의 것과 같은 물건이다 (도적의 눈은 어디서나 같다) */
-    private static void watchtowerAt(World world, int x0, int cy, int z0) {
+    static void watchtowerAt(World world, int x0, int cy, int z0) {
         for (int y = cy + 1; y <= cy + 6; y++) {
             for (int dx = 0; dx <= 1; dx++) {
                 for (int dz = 0; dz <= 1; dz++) {
@@ -2008,7 +2180,7 @@ final class RemoteBuilder {
      * <b>그 열의 땅 높이</b> — 부지 안이면 사양이 답하고, 밖이면 세계를 읽는다.
      * (굴 입구는 부지 밖 24칸까지 나간다 — 그래서 이 물음이 필요하다. 읽을 뿐 놓지 않는다.)
      */
-    private static int groundOf(World world, TerrainForge.SiteSpec spec, int x, int z, int hint) {
+    static int groundOf(World world, TerrainForge.SiteSpec spec, int x, int z, int hint) {
         if (spec.inside(x, z) && !spec.wet(x, z)) {
             return spec.groundAt(x, z);
         }
@@ -2016,7 +2188,7 @@ final class RemoteBuilder {
     }
 
     /** 무너진 돌 — 굴을 파다 터진 살. 자로 잰 돌무더기는 돌무더기가 아니다 (좌표 해시) */
-    private static Material rubble(int x, int y, int z) {
+    static Material rubble(int x, int y, int z) {
         return switch (Math.floorMod(x * 7 + y * 3 + z * 11, 5)) {
             case 0 -> Material.COBBLESTONE;
             case 1 -> Material.MOSSY_COBBLESTONE;
@@ -2027,7 +2199,7 @@ final class RemoteBuilder {
     }
 
     /** 풍화한 돌 — 폐허의 자재 (청하현 폐사당의 어휘. 세계는 하나다) */
-    private static Material weathered(int x, int y, int z) {
+    static Material weathered(int x, int y, int z) {
         return switch (Math.floorMod(x * 5 + y * 7 + z * 3, 4)) {
             case 0 -> Material.CRACKED_STONE_BRICKS;
             case 1 -> Material.MOSSY_STONE_BRICKS;
@@ -2037,7 +2209,7 @@ final class RemoteBuilder {
     }
 
     /** 누운 통나무 — 결이 눕는다 (선 나무와 쓰러진 나무는 다른 물건이다) */
-    private static void logAxis(World world, int x, int y, int z, Material m, org.bukkit.Axis axis) {
+    static void logAxis(World world, int x, int y, int z, Material m, org.bukkit.Axis axis) {
         if (!world.getBlockAt(x, y, z).getType().isAir()) {
             return;
         }
@@ -2047,7 +2219,7 @@ final class RemoteBuilder {
     }
 
     /** 냉색 — 폐사의 불. 마을의 온색과 정반대다 (금기의 조명 온도) */
-    private static void soulLantern(World world, int x, int y, int z) {
+    static void soulLantern(World world, int x, int y, int z) {
         if (!world.getBlockAt(x, y, z).getType().isAir()) {
             return;
         }
@@ -2055,7 +2227,7 @@ final class RemoteBuilder {
     }
 
     /** 딛는 자리에만 놓는다 — 발밑이 단단하고 그 자리가 비었을 때만 (굴 안의 요철에 물건이 뜨지 않게) */
-    private static void putOn(World world, int x, int y, int z, Material m) {
+    static void putOn(World world, int x, int y, int z, Material m) {
         if (!world.getBlockAt(x, y, z).getType().isAir()) {
             return;
         }
@@ -2065,7 +2237,7 @@ final class RemoteBuilder {
         world.getBlockAt(x, y, z).setType(m);
     }
 
-    private static double dist(int dx, int dz) {
+    static double dist(int dx, int dz) {
         return Math.sqrt((double) dx * dx + (double) dz * dz);
     }
 
@@ -2075,7 +2247,7 @@ final class RemoteBuilder {
      * <p>이것은 지형을 <b>빚는</b> 것이 아니라 <b>읽는</b> 것이다 — 블록 하나 놓지 않는다.
      * 부지 안이라면 물어볼 것도 없다: {@code spec.groundAt()} 이 답한다 (땅은 이미 지형 계층의 것이다).
      */
-    private static int surfaceProbe(World world, int x, int z, int from) {
+    static int surfaceProbe(World world, int x, int z, int from) {
         for (int y = from + 12; y >= from - 12; y--) {
             Material m = world.getBlockAt(x, y, z).getType();
             if (!m.isAir() && !world.getBlockAt(x, y, z).isLiquid()) {
@@ -2104,7 +2276,7 @@ final class RemoteBuilder {
     }
 
     /** 초가 한 칸 — 계단(너와) 위에 좌표 해시 40% 로 짚을 얹는다. 결정론: 같은 자리 = 같은 이엉 */
-    private static void thatchStair(World world, int x, int y, int z, BlockFace facing) {
+    static void thatchStair(World world, int x, int y, int z, BlockFace facing) {
         if (!world.getBlockAt(x, y, z).getType().isAir()) {
             return;
         }
@@ -2116,13 +2288,13 @@ final class RemoteBuilder {
         }
     }
 
-    private static void put(World world, int x, int y, int z, Material m) {
+    static void put(World world, int x, int y, int z, Material m) {
         if (world.getBlockAt(x, y, z).getType().isAir()) {
             world.getBlockAt(x, y, z).setType(m);
         }
     }
 
-    private static void stair(World world, int x, int y, int z, Material m, BlockFace facing, boolean top) {
+    static void stair(World world, int x, int y, int z, Material m, BlockFace facing, boolean top) {
         Stairs data = (Stairs) m.createBlockData();
         data.setFacing(facing);
         data.setHalf(top ? org.bukkit.block.data.Bisected.Half.TOP
@@ -2130,26 +2302,26 @@ final class RemoteBuilder {
         world.getBlockAt(x, y, z).setBlockData(data);
     }
 
-    private static void wallTorch(World world, int x, int y, int z, BlockFace facing) {
+    static void wallTorch(World world, int x, int y, int z, BlockFace facing) {
         Directional data = (Directional) Material.WALL_TORCH.createBlockData();
         data.setFacing(facing);
         world.getBlockAt(x, y, z).setBlockData(data);
     }
 
-    private static void ladder(World world, int x, int y, int z, BlockFace facing) {
+    static void ladder(World world, int x, int y, int z, BlockFace facing) {
         Directional data = (Directional) Material.LADDER.createBlockData();
         data.setFacing(facing);
         world.getBlockAt(x, y, z).setBlockData(data);
     }
 
-    private static void lantern(World world, int x, int y, int z) {
+    static void lantern(World world, int x, int y, int z) {
         org.bukkit.block.data.type.Lantern data =
                 (org.bukkit.block.data.type.Lantern) Material.LANTERN.createBlockData();
         data.setHanging(true);
         world.getBlockAt(x, y, z).setBlockData(data);
     }
 
-    private static void shelf(World world, int x, int y, int z, BlockFace facing,
+    static void shelf(World world, int x, int y, int z, BlockFace facing,
                               org.bukkit.inventory.ItemStack... items) {
         org.bukkit.block.data.type.Shelf data =
                 (org.bukkit.block.data.type.Shelf) Material.SPRUCE_SHELF.createBlockData();
@@ -2165,20 +2337,62 @@ final class RemoteBuilder {
         }
     }
 
+    /**
+     * <b>왜 여기에 집이 안 서는가 — 정확히 말한다.</b>
+     *
+     * <p>★ 이 프로젝트가 이미 앓은 병: <b>"짓지 않으면 위반이 없다."</b> 원형이 없으면 {@link #build} 가
+     * 빈 목록을 돌려주고, 구역이 없으니 검수가 안 불리고, <b>위반 0건</b>이 찍히고, <b>침묵이 성공으로 읽힌다.</b>
+     * 그러므로 <b>못 짓는 이유는 반드시 소리내어 말한다.</b> 셋은 서로 다른 병이고 처방도 다르다:
+     *
+     * <ol>
+     *   <li><b>지도가 침묵</b> — {@code archetype} 이 없다. → <b>지도를 적어라</b> (린트가 짖는다)</li>
+     *   <li><b>미결(pending)</b> — 지도가 "아직 못 정했다"고 적었다. → <b>사람이 정해야 한다</b>
+     *       (지도에 적힌 {@code pending_why} 를 그대로 전한다 — 침묵과 미결은 다르다)</li>
+     *   <li><b>청구됐으나 손이 없다</b> — 지도는 「사찰」을 주문했는데 {@link Archetype} 에 사찰이 없다.
+     *       → <b>건축 계층의 일이다</b> (§16 archetypes.requested). ★ 비슷한 원형으로 대신 짓지 않는다</li>
+     * </ol>
+     */
     static List<String> unbuildableReasons(WorldMap.Place place) {
         List<String> out = new ArrayList<>();
-        if (place.faction() == null) {
-            out.add("세력 미등록 — 원형을 고를 수 없다");
-        } else if (!canBuild(place)) {
-            String faction = place.faction();
-            if (("magyo".equals(faction) || "hyeolgyo".equals(faction))) {
-                // 굴이 없는 마·혈 — 마교 본교("초원의 흑성")·낙양 잠복지(도시 뒷골목).
-                //   은신처 원형은 **굴이 본체다**. 굴이 없으면 그것은 다른 집이고, 그 원형은 아직 없다.
-                out.add("원형 없음 — 굴이 없는 " + faction + " 거점이다 (등록부: \""
-                        + place.note() + "\"). 은신처 원형은 굴이 본체다");
+        String name = place.archetype();
+
+        if (name == null || name.isBlank()) {
+            // ★ 집이 **없는 것이 옳은** 곳이 있다 (§16 없음_의도적) — 사냥터·폐허·산지.
+            //   산과 약초밭에 집은 없다. 그것은 지도의 흠이 아니라 **지도의 뜻**이므로 그렇게 말한다.
+            boolean lodging = "places".equals(place.section()) || "관".equals(place.section());
+            out.add(lodging
+                    ? "★ 지도가 archetype 을 안 적었다 — **무엇을 지을지 등록부가 말하지 않는다** "
+                      + "(world_map.yml §0 required.buildable). 코드는 추측하지 않는다"
+                    : "여기엔 집이 없다 — " + place.section() + "다 (§16 없음_의도적: 산과 약초밭에 집은 없다)");
+        } else if (place.archetypePending()) {
+            out.add("원형 미결(pending) — ★ **사람이 정해야 한다**: "
+                    + (place.pendingWhy() == null ? "(사유 미기재 — 지도의 침묵이다)" : place.pendingWhy()));
+        } else if (archetype(place) == null) {
+            out.add("원형 「" + name + "」 — 지도가 청구했으나 **아직 안 지어졌다** "
+                    + "(건축이 아는 것: " + java.util.Arrays.toString(Archetype.values())
+                    + "). world_map.yml §16 archetypes.requested — 건축 계층의 일이다");
+        } else if (archetype(place) == Archetype.은신처 && TerrainForge.caveKind(place) == null) {
+            // 은신처는 **굴이 본체다** — 지상은 위장이고 살림은 굴 안에 있다.
+            //   굴이 없으면 그것은 다른 집이고, 그 원형은 아직 없다.
+            out.add("원형은 「은신처」인데 **굴이 없다** — terrain.yml caves: 에 " + place.id()
+                    + " 를 등록하라 (은신처는 굴이 본체다)");
+        }
+
+        // 원형이 있어도 **크기를 모르면 못 짓는다** — 그 순간 코드가 크기를 정하게 되기 때문이다.
+        // ★★★ 그리고 **왜 모르는지를 갈라서 말한다** (사용자 2026-07-13: "집이 안 선다. 그리고 왜 안 서는지 말한다")
+        if (out.isEmpty() && place.buildRadius() == null) {
+            if (place.radiusUnresolved()) {
+                out.add("★★ 부지 반경이 **미결(unresolved)** 이다 — 근거가 없어서 **모른다고 적어 둔 것**이다. "
+                        + "★★★ **작은 값으로 대신 넣지 않는다**: "
+                        + "*모르는 장소를 작은 장소로 간주하는 것도 하나의 창작이기 때문이다* (사용자). "
+                        + "상업 거점이면 world_map.yml 의 `commercial_class` 를 먼저 판정하라 "
+                        + "(§17-b — 그러면 radius_ladder 가 반경을 준다)");
+            } else if (place.buildRadiusMark() != null) {
+                out.add("★ 부지 반경이 **미결(" + place.buildRadiusMark() + ")** — **사람이 정해야 한다**: "
+                        + (place.pendingWhy() == null ? "(사유 미기재 — 지도의 침묵이다)" : place.pendingWhy()));
             } else {
-                out.add("원형 없음 — '" + faction + "' 의 건축 원형이 아직 없다 "
-                        + "(지금은 산채·도관·은신처·성문·수로채)");
+                out.add("★ 지도가 build_radius 를 안 적었다 — **부지 크기를 등록부가 말하지 않는다** "
+                        + "(어느 자로 재는가는 world_map.yml `scale_system` 이 정한다 — §17-a)");
             }
         }
         return out;

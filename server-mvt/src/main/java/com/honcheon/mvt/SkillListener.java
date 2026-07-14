@@ -77,8 +77,8 @@ public final class SkillListener implements Listener {
      * ({@code tools/combat_audit.py margin_dist} 가 쓰는 것과 같은 규약이다 — 도구와 엔진은 같은 셈을 한다)
      */
     private static final int NPC_JUDGMENT = 7;
-    /** 태세의 글자가 액션바에 머무는 시간 — statusBar 가 다시 덮기 전 (0.75초. 읽을 수는 있어야 한다) */
-    private static final int STANCE_READ_TICKS = 15;
+    // 태세의 글자가 액션바에 머무는 시간(옛 STANCE_READ_TICKS 15)은 등록부로 갔다 —
+    // skill_motion.yml hud.flash_read_ticks (B-116: 하드코딩 금지 · engine.hudFlashTicks()).
     // NPC 내력 회복의 하드코딩(라운드당 1)은 제거됐다 — 이제 조식(internal_energy.yml
     // recovery.in_combat.조식)을 플레이어와 **같은 함수**로 탄다 (regulateBreath).
 
@@ -315,7 +315,7 @@ public final class SkillListener implements Listener {
                 ? target.getLocation() : attacker.getLocation();
         Zone zone = plugin.zoneAt(at);
         String where = zone == null ? "안전 지역" : zone.name();
-        SkillHud.actionBar(attacker, ChatColor.GRAY + where
+        flash(attacker, ChatColor.GRAY + where
                 + " — 여기서는 법이 이긴다 (사람에게 칼이 서지 않는다)");
     }
 
@@ -678,6 +678,16 @@ public final class SkillListener implements Listener {
      * <p>여기가 {@code "이류"} 하드코딩이 살아 있던 자리다. 이제 태어나는 상태는 몸에 실린 원장을 보고,
      * 원장이 비었으면(접합 전) 등록부의 첫 단으로 선다 — <b>코드가 경지를 지어내지 않는다.</b>
      */
+    /**
+     * 순간 사건의 한 줄 (B-116) — 읽을 시간({@code skill_motion.yml hud.flash_read_ticks})만큼
+     * 액션바 줄을 갖고, 지나면 statusBar(지속 상태 합성)가 돌아온다. 맨 {@code SkillHud.actionBar} 는
+     * 다음 statusBar 틱(≤0.2초)에 덮인다 — 사람이 읽어야 하는 문구는 <b>반드시 이 길로 온다</b>
+     * (경공 등 바깥 손의 창구이기도 하다).
+     */
+    void flash(Player player, String text) {
+        hud.flash(player, text, tick + engine.hudFlashTicks());
+    }
+
     public SkillEngine.State state(Player player) {
         return states.computeIfAbsent(player.getUniqueId(), id -> {
             SkillEngine.State fresh = new SkillEngine.State();
@@ -781,7 +791,10 @@ public final class SkillListener implements Listener {
             hud.vitalityTick(player, state, plugin.ledger(player.getUniqueId()));
             hud.energyBar(player, state);
             // 내구·부상·태세는 격이 없어도 보인다 — 게이트를 두면 **삼류가 제 목숨을 영영 못 본다**
-            hud.statusBar(player, state, tick, stanceOf(player));
+            // 경공 유지는 지속 상태다 — 순간 문구가 아니라 합성 한 줄의 상시 조각으로 병기한다 (B-116)
+            GyeonggongListener gg = plugin.gyeonggong();
+            hud.statusBar(player, state, tick, stanceOf(player),
+                    gg == null ? null : gg.hudStatus(player));
         }
     }
 
@@ -834,7 +847,7 @@ public final class SkillListener implements Listener {
         state.ultimateUses = 0;
         if (state.flow > 0) {
             state.flow = 0;
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "숨을 고른다 — 흐름이 흩어졌다");
+            flash(player, ChatColor.DARK_GRAY + "숨을 고른다 — 흐름이 흩어졌다");
         }
     }
 
@@ -1175,7 +1188,7 @@ public final class SkillListener implements Listener {
         hud.flash(player, ChatColor.AQUA + stanceLabel(line.stance())
                 + (parried ? ChatColor.LIGHT_PURPLE + " · " + stanceLabel("패링") : "")
                 + ChatColor.DARK_GRAY + " │ 방어 " + line.score() + " (마진 " + margin + ")" + note,
-                tick + STANCE_READ_TICKS);
+                tick + engine.hudFlashTicks());
     }
 
     /** <b>태세가 무너졌다</b> — 그래도 경감은 든다 (막는 것은 판정이 아니라 몸이다) */
@@ -1190,7 +1203,7 @@ public final class SkillListener implements Listener {
                         + ChatColor.DARK_GRAY + " (경감 −" + line.soak() + ")"
                 : ChatColor.RED + stanceLabel("실패");
         hud.flash(player, head + ChatColor.DARK_GRAY + " │ 마진 " + margin + note,
-                tick + STANCE_READ_TICKS);
+                tick + engine.hudFlashTicks());
     }
 
     /** 허공 좌클릭 = 헛손질(콤보는 진행된다) / Shift+좌클릭 = 발출 / Shift+우클릭 = 격 태세 */
@@ -1321,7 +1334,7 @@ public final class SkillListener implements Listener {
                     || me.distanceSquared(target.getLocation()) > reach * reach) {
                 // 【선딜의 값】 그 0.1초에 몸을 뺐다. 무게에는 대가가 있다 — 그것이 정직한 대가다
                 event(me, "헛손질");
-                SkillHud.actionBar(player, ChatColor.GRAY + "헛손질 " + ChatColor.DARK_GRAY
+                flash(player, ChatColor.GRAY + "헛손질 " + ChatColor.DARK_GRAY
                         + "│ 몸을 뺐다");
                 return;
             }
@@ -1416,7 +1429,7 @@ public final class SkillListener implements Listener {
             }
             if (margin < 0) {
                 stanceSucceeded(target, line, margin, note);
-                SkillHud.actionBar(player, ChatColor.GRAY + "헛손질 " + ChatColor.DARK_GRAY
+                flash(player, ChatColor.GRAY + "헛손질 " + ChatColor.DARK_GRAY
                         + "│ " + stanceLabel(line.stance()));
                 return new BasicHit(false, grade, 0.0);
             }
@@ -1898,7 +1911,7 @@ public final class SkillListener implements Listener {
             return;   // F-R1 — 같은 틱 중복 시전 폐기
         }
         if (tick < state.busyUntil) {
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
+            flash(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
             return;   // 경직·후딜 — 연타 방지
         }
         if (state.onCooldown(skillId, tick)) {
@@ -1932,7 +1945,7 @@ public final class SkillListener implements Listener {
 
     private void shoot(Player player, SkillEngine.State state) {
         if (tick < state.busyUntil) {
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
+            flash(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
             return;
         }
         if (state.onCooldown(CD_SHOT, tick)) {
@@ -1942,7 +1955,7 @@ public final class SkillListener implements Listener {
         SkillEngine.Cast cast = engine.planShot(offense(state), state.realm, state.energy, weaponClass);
         if (cast.downcast() || engine.gradeRank(cast.grade()) < 2) {
             // 발출만은 다운캐스트가 없다 — 프레임이 아니라 기 그 자체가 본체다 (skill_motion.md 4장)
-            SkillHud.actionBar(player, ChatColor.RED + "기가 흩어진다 — 쏠 것이 없다");
+            flash(player, ChatColor.RED + "기가 흩어진다 — 쏠 것이 없다");
             event(handLocation(player), "발출_불발");
             state.cooldownUntil.put(CD_SHOT, tick + 10L);
             return;
@@ -1962,12 +1975,12 @@ public final class SkillListener implements Listener {
     private void commit(Player player, SkillEngine.State state, SkillEngine.Cast cast,
                         LivingEntity primary, String label, int stepIndex) {
         if (cast.gated()) {
-            SkillHud.actionBar(player, ChatColor.GRAY + "그 격은 아직 이 몸의 것이 아니다 ("
+            flash(player, ChatColor.GRAY + "그 격은 아직 이 몸의 것이 아니다 ("
                     + engine.gradeGate(offense(state) == null ? "발경" : offense(state)) + "부터)");
         }
         if (cast.downcast()) {
             // 【빈약함이 곧 정보다】 격이 외공기로 떨어지면 연출도 회색으로 떨어진다 — 상대가 그것을 읽는다
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "기가 실리지 않는다 — 맨 기술");
+            flash(player, ChatColor.DARK_GRAY + "기가 실리지 않는다 — 맨 기술");
             event(handLocation(player), "다운캐스트");
         }
 
@@ -2007,7 +2020,7 @@ public final class SkillListener implements Listener {
         if (art != null && art.isCounter()) {
             // 반격 오의 — 벨 것을 찾지 않는다. 상대가 오기를 기다린다 (지속 창 = window_ticks)
             state.counterUntil = tick + cast.frames().active() + art.counterWindow();
-            SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + art.name()
+            flash(player, ChatColor.LIGHT_PURPLE + art.name()
                     + ChatColor.WHITE + " — 기다린다 (" + art.counterWindow() + "틱)");
             return;
         }
@@ -2151,7 +2164,7 @@ public final class SkillListener implements Listener {
         }
         strain(player, state, cast);
 
-        SkillHud.actionBar(player, hud.gradeColor(cast.grade()) + label + " "
+        flash(player, hud.gradeColor(cast.grade()) + label + " "
                 + ChatColor.DARK_GRAY + "│ " + SkillHud.gradeLabel(cast.grade())
                 + (hits > 0 ? ChatColor.WHITE + " · " + hits + "타" : ChatColor.GRAY + " · 헛손질"));
         hud.energyBar(player, state);
@@ -2177,7 +2190,7 @@ public final class SkillListener implements Listener {
         state.flow++;
         if (state.flow >= engine.flowRequired()) {
             event(player.getLocation().add(0, 1, 0), "흐름_충전");
-            SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + "흐름을 읽었다 — 오의 (F)");
+            flash(player, ChatColor.LIGHT_PURPLE + "흐름을 읽었다 — 오의 (F)");
         }
     }
 
@@ -2210,7 +2223,7 @@ public final class SkillListener implements Listener {
         Growth growth = Growth.get();
         String auto = engine.stanceDefault();
         if (growth == null) {
-            SkillHud.actionBar(player, ChatColor.GRAY + "성장 축이 배선되지 않았다");
+            flash(player, ChatColor.GRAY + "성장 축이 배선되지 않았다");
             return;
         }
         if (auto.equals(stance)) {
@@ -2275,7 +2288,7 @@ public final class SkillListener implements Listener {
         stanceFx(player, "선언");   // 선언은 남의 눈에도 보인다 — 보이는 것 = 맞는 것 (상대가 읽고 수를 고른다)
         hud.flash(player, ChatColor.AQUA + stanceLabel("선언") + ChatColor.DARK_GRAY
                 + " │ 태세 +" + activeGuard.commitBonus() + " (" + activeGuard.stance() + ")",
-                tick + STANCE_READ_TICKS);
+                tick + engine.hudFlashTicks());
     }
 
     /** 선언이 지금 서 있는가 — 판정층({@link #chooseStance}·{@link #guardline})이 읽는다 */
@@ -2642,7 +2655,7 @@ public final class SkillListener implements Listener {
                 applying = false;
             }
             if (target instanceof Player player) {
-                SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + "태극 — 그대의 힘이 그대에게 돌아간다");
+                flash(player, ChatColor.LIGHT_PURPLE + "태극 — 그대의 힘이 그대에게 돌아간다");
             }
             return new Defense(true, 0);
         }
@@ -2656,7 +2669,7 @@ public final class SkillListener implements Listener {
             state.nextSustainTick = -1;
             event(target.getLocation().add(0, 1, 0), "호신강기_붕괴");
             if (target instanceof Player player) {
-                SkillHud.actionBar(player, ChatColor.RED + "호신강기가 깨진다 — 상쇄할 내력이 없다");
+                flash(player, ChatColor.RED + "호신강기가 깨진다 — 상쇄할 내력이 없다");
             }
             return new Defense(false, incoming);
         }
@@ -2664,7 +2677,7 @@ public final class SkillListener implements Listener {
         Location at = target.getLocation().add(0, 1, 0);
         event(at, guard.blocked() ? "호신강기_무효" : "호신강기_관통");
         if (target instanceof Player player) {
-            SkillHud.actionBar(player, guard.blocked()
+            flash(player, guard.blocked()
                     ? ChatColor.YELLOW + "호신강기 — 튕겨 낸다 " + ChatColor.DARK_GRAY + "(상쇄 −" + guard.drain() + ")"
                     : ChatColor.RED + "관통 — " + grade + "가 강기를 갈랐다 " + ChatColor.DARK_GRAY
                             + "(피해 " + guard.pierce() + " · 상쇄 −" + guard.drain() + ")");
@@ -3380,7 +3393,7 @@ public final class SkillListener implements Listener {
         SkillEngine.State state = state(player);
         List<String> armable = engine.armableGrades(state.realm);
         if (armable.isEmpty()) {
-            SkillHud.actionBar(player, ChatColor.GRAY + "단전이 열리지 않았다 — 몸과 무기가 전부다");
+            flash(player, ChatColor.GRAY + "단전이 열리지 않았다 — 몸과 무기가 전부다");
             return;
         }
         String next = engine.cycleArmed(state.realm, state.armed);
@@ -3390,7 +3403,7 @@ public final class SkillListener implements Listener {
         }
         int deploy = engine.deployCost(next);   // 호신강기는 전개비 4 를 따로 낸다 (두름은 유지비 선납)
         if (deploy > 0 && state.energy < deploy) {
-            SkillHud.actionBar(player, ChatColor.RED + "기를 두를 내력이 없다 (" + next + " 전개 " + deploy + ")");
+            flash(player, ChatColor.RED + "기를 두를 내력이 없다 (" + next + " 전개 " + deploy + ")");
             return;
         }
         state.energy -= deploy;
@@ -3409,7 +3422,8 @@ public final class SkillListener implements Listener {
                     Math.min(m.charge().count() * 2, engine.motionBudget().perPointTickMax()), false);
             sfx(player.getLocation(), m.armSounds());
         }
-        SkillHud.actionBar(player, hud.gradeColor(next) + next + " — " + gradeFlavor(next));
+        // 태세 전환의 문구는 flash 로 — 맨 actionBar 는 다음 statusBar 틱(≤0.2초)에 덮여 겹쳐 읽힌다 (B-116)
+        flash(player, hud.gradeColor(next) + next + " — " + gradeFlavor(next));
         hud.energyBar(player, state);
     }
 
@@ -3417,7 +3431,7 @@ public final class SkillListener implements Listener {
         state.armed = null;
         state.nextSustainTick = -1;
         event(handLocation(player), "격_소산");
-        SkillHud.actionBar(player, ChatColor.GRAY + why);
+        flash(player, ChatColor.GRAY + why);
     }
 
     private static String gradeFlavor(String grade) {
@@ -3470,7 +3484,7 @@ public final class SkillListener implements Listener {
                 + " (" + Math.round(art.costRatio() * 100) + "%)"
                 + (art.bloodline() ? ChatColor.DARK_RED + " · 혈통 제한" : "")
                 + (art.demonic() ? ChatColor.DARK_RED + " · 마공" : ""));
-        SkillHud.actionBar(player, ChatColor.LIGHT_PURPLE + art.name() + ChatColor.DARK_GRAY
+        flash(player, ChatColor.LIGHT_PURPLE + art.name() + ChatColor.DARK_GRAY
                 + " — " + engine.ultimateStage(state.realm) + "  (F: 시전 · Shift+F: 다음 오의)");
     }
 
@@ -3482,20 +3496,20 @@ public final class SkillListener implements Listener {
      */
     private void castUltimate(Player player, SkillEngine.State state) {
         if (state.ultimateId == null) {
-            SkillHud.actionBar(player, ChatColor.GRAY + "펼칠 오의가 없다 — Shift+F 로 고른다");
+            flash(player, ChatColor.GRAY + "펼칠 오의가 없다 — Shift+F 로 고른다");
             return;
         }
         if (tick < state.busyUntil) {
-            SkillHud.actionBar(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
+            flash(player, ChatColor.DARK_GRAY + "아직 자세가 돌아오지 않았다");
             return;
         }
         if (state.flow < engine.flowRequired()) {
-            SkillHud.actionBar(player, ChatColor.GRAY + "흐름이 없다 — 오의는 버튼이 아니라 읽어낸 순간이다 ("
+            flash(player, ChatColor.GRAY + "흐름이 없다 — 오의는 버튼이 아니라 읽어낸 순간이다 ("
                     + state.flow + "/" + engine.flowRequired() + ")");
             return;
         }
         if (state.ultimateUses >= engine.ultimateLimit(state.realm)) {
-            SkillHud.actionBar(player, ChatColor.GRAY + "이 전투에서 이미 한 번 펼쳤다 (자재는 현경부터다)");
+            flash(player, ChatColor.GRAY + "이 전투에서 이미 한 번 펼쳤다 (자재는 현경부터다)");
             return;
         }
         SkillEngine.Ultimate art = engine.ultimate(state.ultimateId);
@@ -3503,7 +3517,7 @@ public final class SkillListener implements Listener {
         SkillEngine.Cast cast = engine.planUltimate(art, state.realm, state.energy, pool,
                 state.armed, engine.weaponClassOf(player.getInventory().getItemInMainHand(), materialName(player)));
         if (cast == null) {
-            SkillHud.actionBar(player, ChatColor.RED + "내력이 반도 남지 않았다 — 태울 것이 없다 ("
+            flash(player, ChatColor.RED + "내력이 반도 남지 않았다 — 태울 것이 없다 ("
                     + state.energy + "/" + engine.ultimateCost(art, pool) + ")");
             return;
         }

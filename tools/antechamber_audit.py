@@ -165,7 +165,9 @@ def audit_gate(rep: Report, ante: dict, code: str) -> None:
         rep.good(f"내리는 자리 등록: {dests}")
     # ★ 이름만 보지 않는다 — **속을 본다.** (getSpawnLocation 이 파일 어딘가에 있는 것으로는 부족하다.
     #   destination() 이 null 을 돌려줄 수 있으면 그 순간 사람은 못 내린다.)
-    dest = body_of(code, r"private Location destination\(\)")
+    # ★ 서명을 못 박지 않는다 — destination() 은 인자를 받게 바뀌었다(Player). 옛 눈은 `destination\(\)`
+    #   만 찾다가 **없다**고 소리쳤다. 눈이 코드보다 늦으면, 그 눈은 거짓 경보를 울린다.
+    dest = body_of(code, r"private Location destination\([^)]*\)")
     if dest is None:
         rep.bad("destination() 를 못 찾았다")
     elif "getSpawnLocation()" not in dest:
@@ -324,9 +326,13 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
                     f"어긋난다 — 빠진 말: {missing}")
         else:
             rep.good(f"경공 과제 = gyeonggong.yml activate ({' '.join(words)})")
-        # 코드가 실제로 그 조건을 보는가: 달림(isSprinting) + 뜬 몸(!isOnGround)
-        if not re.search(r"isSprinting\(\)[\s\S]{0,80}?!\s*player\.isOnGround\(\)", code):
-            rep.bad("경공 감지가 '달리며 점프'가 아니다 — isSprinting() && !isOnGround() 를 안 본다")
+        # 코드가 실제로 그 조건을 보는가 — ★ 발동이 **손가락**으로 옮겨간 뒤로는 '흉내'를 보면 안 된다.
+        #   구판은 isSprinting() && !isOnGround() 를 봤다: 그건 그냥 **달리다 뛴 몸**이다.
+        #   지금은 경공이 **실제로 켜졌는가**를 그 주인(GyeonggongListener.riding)에게 묻는다.
+        if not re.search(r"\.riding\(player\)[\s\S]{0,80}?!\s*player\.isOnGround\(\)", code):
+            rep.bad("경공 감지가 '발동'이 아니라 '흉내'를 본다 — "
+                    "gyeonggong().riding(player) && !isOnGround() 를 안 본다 "
+                    "(달리며 점프하는 흉내로 과제가 통과되면, 과제가 가르치는 것이 거짓이 된다)")
         else:
             rep.good("코드가 달림+뜸을 본다")
 
@@ -399,21 +405,8 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
         else:
             rep.good(f"/혼천 {cmd} → Antechamber.{method.group(1)}(Player) — 손은 준비됐다")
 
-    # ── 격: 못 하는 것을 가르치지 않는가
-    gyeok = lessons.get("격") or {}
-    if not gyeok.get("requires_armable_grade"):
-        rep.bad("격 과제에 requires_armable_grade 가 없다 — 범인(경지 게이트 미통과)에게 "
-                "'Shift+우클릭으로 격을 둘러라'를 가르치게 된다. 그것은 존재하지 않는 조작이다")
-    else:
-        rep.good("격 과제는 두를 격이 있는 몸에게만 뜬다 (requires_armable_grade)")
-    if not re.search(r"armableGrades\(", code):
-        rep.bad("코드가 SkillEngine.armableGrades() 를 보지 않는다 — 격의 가부를 지어내고 있다")
-    else:
-        rep.good("코드가 SkillEngine.armableGrades(경지) 로 격의 가부를 묻는다")
-    if not gyeok.get("unavailable"):
-        rep.warn("격 과제에 unavailable 문장이 없다 — 못 하는 사람에게 아무 말도 안 한다")
-
     # ── 손/격 조작이 SkillListener 의 조작표와 같은가
+    gyeok = lessons.get("격") or {}
     sl = source("SkillListener.java")
     table = sl[:6000]
     if "Shift + 우클릭" in table:
@@ -427,7 +420,7 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
 
     son = lessons.get("손") or {}
     if "좌클릭" in table and "좌클릭" not in son.get("how", ""):
-        rep.bad("손 과제가 조작표('좌클릭 = 기본 무공 콤보')와 다른 조작을 가르친다")
+        rep.bad("손 과제가 조작표('좌클릭')와 다른 조작을 가르친다")
     else:
         rep.good("손 = 좌클릭 (조작표와 일치)")
 
@@ -449,6 +442,396 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
                     "해도 안 닫힌다 (읽는 것으로 끝난다)")
         else:
             rep.good(f"과제 '{lid}' — {det} 를 실제로 본다")
+
+    audit_combo(rep, lessons, sl)
+    audit_capability(rep, ante, lessons, code)
+    audit_discord(rep, ante, lessons)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ③-a 콤보 — ★ **그림의 리듬을 입력의 문법이라 가르치면 안 된다**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 2026-07-13. 공격이 **참격**이 됐다: 획이 호를 그리며 돌고, 연타하면 방향이 바뀐다.
+# 그런데 옛 손 과제는 이렇게 적혀 있었다:
+#
+#     "검을 든 손이 알아서 초식을 낸다 (1·2타 → 3타)"
+#
+# 그것은 **육합검을 배운 손**의 이야기다. 나루에 서는 몸은 무공이 백지고, 그 손은
+# SkillListener.basicSwing 을 탄다 — 그 코드가 제 주석에 **못 박아 뒀다**:
+#
+#     "【함정 ②를 지킨다】 이것은 **콤보가 아니다.** … 우리 전투의 문법은 **몸짓이 곧 선택**이고,
+#      콤보 창은 그 삼문을 잡아먹는다. 여기 있는 것은 **숫자 하나**다: 연타하면 획의 **방향만** 바뀐다."
+#
+# 코드가 "콤보가 아니다"라고 세 번 적어 둔 것을 **튜토리얼이 콤보라고 가르치고 있었다.**
+# 이 눈은 그 어긋남을 잡는다 — 손으로 답을 쓰지 않고, **코드의 선언**과 **등록부의 순번**에서 읽는다.
+
+def audit_combo(rep: Report, lessons: dict, skill_listener: str) -> None:
+    son = lessons.get("손") or {}
+    how = son.get("how", "")
+
+    # ① 코드가 "콤보가 아니다"라고 선언했는가 — 그것이 이 눈의 근거다 (없으면 대조할 정본이 없다)
+    declares = re.search(r"이것은\s*</?b>?\s*콤보가\s*아니다", strip_comments(skill_listener) or "") \
+        or "콤보가 아니다" in skill_listener
+    if not declares:
+        rep.warn("SkillListener 가 '콤보가 아니다'라고 선언하지 않았다 — 기본 손이 콤보인지 아닌지 "
+                 "대조할 정본이 없다 (전투 담당이 문법을 바꿨다면 이 눈을 고쳐라)")
+        return
+    rep.good("SkillListener 선언: 기본 손은 **콤보가 아니다** (획의 방향만 바뀐다)")
+
+    # ② 그런데 과제가 콤보를 가르치는가
+    liars = [w for w in ("콤보", "1타", "2타", "3타", "1·2타", "연계기") if w in how]
+    if liars:
+        rep.bad(f"손 과제가 **콤보**를 가르친다 {liars} — 코드는 '이것은 콤보가 아니다'라고 못 박았다. "
+                "무공 없는 손(나루의 모든 손)은 basicSwing 을 타고, 연타는 **획의 방향만** 바꾼다. "
+                "외울 입력 문법이 없는데 있다고 가르치면 그것이 거짓말이다")
+    else:
+        rep.good("손 과제가 콤보 문법을 가르치지 않는다")
+
+    # ③ 순번의 **그림**은 등록부가 정본이다 — skill_motion.yml swing_arcs.cycle
+    motion = load_yaml("skill_motion.yml")
+    def find_cycle(d):
+        if not isinstance(d, dict):
+            return None
+        if "swing_arcs" in d and isinstance(d["swing_arcs"], dict):
+            return d["swing_arcs"].get("cycle")
+        for v in d.values():
+            got = find_cycle(v)
+            if got:
+                return got
+        return None
+    cycle = find_cycle(motion) or []
+    if not cycle:
+        rep.warn("skill_motion.yml 에서 swing_arcs.cycle 을 못 찾았다 — 획의 순번을 대조 못 했다")
+        return
+    # 획 이름의 **머리말**이 과제 문장에 있는가 (횡_좌우 → '횡' · 올려베기 → '올려베기')
+    plain = re.sub(r"[§][0-9a-fk-or]", "", how)
+    missing = [c for c in cycle if c.split("_")[0] not in plain]
+    if missing:
+        rep.bad(f"손 과제가 획의 순번을 말하지 않는다 — skill_motion.yml swing_arcs.cycle={cycle} "
+                f"인데 문장에 없는 획: {missing}. 연타하면 눈앞에서 방향이 바뀌는데 "
+                "과제가 그것을 설명 안 하면, 사람은 그것을 **콤보로 오해한다**")
+    else:
+        rep.good(f"손 과제 = swing_arcs.cycle {cycle} (그림의 리듬 — 입력 문법 아님)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ③-b 능(能) — ★★ **나루에 오는 몸이 못 하는 조작을 시키고 있는가**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 오늘 경공 담당이 이 눈에 걸렸다 (과제 문장이 gyeonggong.yml 과 어긋난다고). 그런데 그 눈은
+# **문장만** 봤다. 문장이 등록부와 글자 그대로 같아도, **그 조작을 할 수 있는 몸이 아니면**
+# 그것은 여전히 거짓말이다 — 그리고 실제로 그랬다:
+#
+#   player_creation.yml   starting_realm: 범인
+#   gyeonggong.yml        realm_ceiling.범인.air_jumps: 0      ← **허공을 못 딛는다**
+#   antechamber.yml       경공 과제: "공중에서 점프를 한 번 더"  ← **모든 신참이 못 하는 조작**
+#
+# 게다가 그 과제에는 requires 가 없어서 applicable() 이 그것을 셌다 —
+# **'몸이 알았다'(all_done)가 영영 안 떴다. 아무도 다 끝낼 수 없는 튜토리얼이었다.**
+#
+# 그래서 이 눈은 **문장이 아니라 몸을 본다**: 나루에 서는 경지가 이 조작을 할 수 있는가.
+# 못 하면 requires 가 있어야 하고, unavailable(예고)이 있어야 하고, 코드에 술어가 있어야 한다.
+
+def audit_capability(rep: Report, ante: dict, lessons: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ③-b 능(能) — ★ 나루에 오는 몸이 **못 하는 조작**을 시키는가")
+
+    # ── 나루에 서는 몸은 누구인가 (등록부가 답한다 — 손으로 '범인'이라 쓰지 않는다)
+    pc = load_yaml("player_creation.yml")
+    def find_key(d, key):
+        if not isinstance(d, dict):
+            return None
+        if key in d:
+            return d[key]
+        for v in d.values():
+            got = find_key(v, key)
+            if got is not None:
+                return got
+        return None
+    realm = find_key(pc, "starting_realm")
+    if not realm:
+        rep.bad("player_creation.yml 에서 starting_realm 을 못 찾았다 — "
+                "나루에 **누가** 서는지 모르면 무엇을 못 하는지도 모른다")
+        return
+    rep.good(f"나루에 서는 몸 = {realm} (player_creation.yml starting_realm)")
+
+    # ── 그 몸이 무엇을 할 수 있는가 — **등록부 셋에게 묻는다** (코드에 답을 안 적는다)
+    #     두를_격   internal_energy.yml realm_gates[경지] ∩ qi_manifestation.yml grades
+    #     허공_딛기 gyeonggong.yml realm_ceiling[경지].air_jumps > 0
+    gates = (load_yaml("internal_energy.yml").get("realm_gates") or {}).get(realm) or []
+    ladder = set((load_yaml("qi_manifestation.yml").get("grades") or {}).keys())
+    ceil = (load_yaml("gyeonggong.yml").get("realm_ceiling") or {}).get(realm) or {}
+    truth = {
+        "두를_격": bool(set(gates) & ladder),
+        "허공_딛기": int(ceil.get("air_jumps") or 0) > 0,
+    }
+    for cap, can in truth.items():
+        rep.good(f"{realm} — {cap}: {'가능' if can else '★ 불가'}")
+
+    # ── ① 못 하는 능을 요구하는 과제는 **requires 로 선언**돼 있어야 한다
+    #      (과제 id 가 아니라 **능의 이름**으로 묶는다 — 과제 이름을 바꿔도 눈은 안 멀어야 한다)
+    needs = {"격": "두를_격", "경공": "허공_딛기"}
+    for lid, cap in needs.items():
+        l = lessons.get(lid)
+        if not l:
+            rep.warn(f"과제 '{lid}' 가 없다 — 능({cap}) 대조를 건너뛴다")
+            continue
+        declared = l.get("requires", "")
+        if truth[cap]:
+            rep.good(f"과제 '{lid}' — {realm} 이 할 수 있다 (requires 는 없어도 된다)")
+            continue
+        if declared != cap:
+            rep.bad(f"★★ 과제 '{lid}' 가 **{realm} 이 못 하는 조작**을 시킨다 ({cap} 불가). "
+                    f"requires: {cap} 이 없다 (지금 값 {declared!r}) — "
+                    f"나루에 오는 **모든 사람**이 이 과제를 영영 못 닫는다. "
+                    f"applicable() 이 그것을 세므로 **all_done('몸이 알았다')이 영영 안 뜬다**")
+        else:
+            rep.good(f"과제 '{lid}' — 못 하는 몸에게는 예고로 바뀐다 (requires: {cap})")
+
+    # ── ② requires 를 단 과제는 **예고 문장**이 있어야 한다 (못 하는 사람에게 침묵하지 않는다)
+    #      그리고 그 예고는 **못 하는 조작을 시키면 안 된다** (예고인데 명령이면 그것도 거짓말이다)
+    for lid, l in lessons.items():
+        cap = l.get("requires", "")
+        if not cap:
+            continue
+        if not l.get("unavailable"):
+            rep.bad(f"과제 '{lid}' 에 requires({cap}) 는 있는데 unavailable(예고)이 없다 — "
+                    "못 하는 사람의 판이 **비어 버린다**")
+        else:
+            plain = re.sub(r"[§][0-9a-fk-or]", "", l["unavailable"])
+            if re.search(r"(눌러라|밟아라|쳐라|뛰어라|해 보아라|바꿔라)", plain):
+                rep.bad(f"과제 '{lid}' 의 예고(unavailable)가 **명령형**이다: {plain!r} — "
+                        "못 하는 사람에게 하라고 시킨다. 예고는 시키는 것이 아니라 **알리는 것**이다")
+            else:
+                rep.good(f"과제 '{lid}' 예고 — 시키지 않고 알린다")
+
+    # ── ③ 등록부가 적은 능의 이름이 **코드에 술어로 있는가** (지어낸 이름을 잡는다)
+    declared_caps = {l.get("requires") for l in lessons.values() if l.get("requires")}
+    body = body_of(code, r"private boolean capable\([^)]*\)")
+    if body is None:
+        rep.bad("Antechamber.capable(Player, Lesson) 이 없다 — "
+                "등록부가 능(requires)을 적는데 코드에 그것을 판단할 술어가 없다")
+        return
+    for cap in sorted(declared_caps):
+        if not re.search(r'case\s+"' + re.escape(cap) + r'"\s*->', body):
+            rep.bad(f"등록부가 지어낸 능의 이름이다: requires: {cap} — "
+                    f"capable() 에 case \"{cap}\" 이 없다. 코드는 이 능을 **모른다** "
+                    "(그래서 '못 한다'로 답하고, 그 과제는 아무에게도 안 뜬다)")
+        else:
+            rep.good(f"능 '{cap}' — capable() 에 술어가 있다")
+
+    # ── ④ 그 술어들이 **제 주인에게 묻는가** (숫자를 여기서 지어내면 등록부가 바뀌어도 안 따라온다)
+    owners = {
+        "두를_격": (r"armableGrades\(", "SkillEngine.armableGrades(경지)"),
+        "허공_딛기": (r"ceiling\([^)]*\)\.airJumps\(\)", "Gyeonggong.ceiling(경지).airJumps()"),
+    }
+    for cap in sorted(declared_caps):
+        pat, who = owners.get(cap, (None, None))
+        if not pat:
+            continue
+        if not re.search(pat, body):
+            rep.bad(f"능 '{cap}' 의 술어가 제 주인({who})에게 묻지 않는다 — "
+                    "가부를 여기서 지어내고 있다. 등록부가 바뀌면 대기실만 거짓말하게 된다")
+        else:
+            rep.good(f"능 '{cap}' → {who} 에게 묻는다")
+
+    # ── ⑤ 못 하는 과제를 **세지 않는가** (all_done 이 영영 안 뜨던 바로 그 병)
+    app = body_of(code, r"private List<Lesson> applicable\([^)]*\)")
+    if app is None:
+        rep.bad("applicable() 이 없다 — 못 하는 과제를 걸러내는 곳이 없다")
+    elif not re.search(r"(lacks|capable)\(", app):
+        rep.bad("applicable() 이 능(requires)을 안 본다 — **못 하는 것을 못 했다고 센다.** "
+                "그러면 all_done('몸이 알았다')이 영영 안 뜬다")
+    else:
+        rep.good("applicable() 이 못 하는 과제를 세지 않는다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ③-c 접합 — ★ 디스코드가 되돌려보내는 문을 대기실이 말하는가
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 접속 과제는 "발판 밟아라 → 코드 나온다 → 디스코드에서 확정한다" 라고만 적혀 있었다.
+# 그런데 코드를 받는 쪽(server-bot GameListener.linkWithCode)은 그 **앞에 문을 둘 더** 두고 있다:
+#
+#     "캐릭터가 없다. `/혼천 시작`부터."          ← 이름·성별·서장은 **디스코드에서** 만든다
+#     "아직 서장 중이다. 서장 스레드를 끝내야 출도한다."
+#
+# 그 둘을 안 적으면, 발판을 밟고 코드를 붙여넣은 사람이 **거기서 튕긴다** — 그리고 대기실은
+# 아무 예고도 안 했다. 이 눈은 **봇의 거절 문구**를 읽어, 대기실이 그 선행 문을 말하는지 본다.
+
+def audit_discord(rep: Report, ante: dict, lessons: dict) -> None:
+    link = lessons.get("접속") or {}
+    # ★ **how 만 본다** (done 이 아니다). done 은 이미 밟은 뒤에 뜬다 — 튕기고 나서 알려 주는 것은
+    #   예고가 아니다. 선행 문은 **밟기 전에** 판(how)에 적혀 있어야 한다.
+    how = re.sub(r"[§][0-9a-fk-or]", "", link.get("how", ""))
+
+    bot = os.path.join(ROOT, "server-bot", "src", "main", "java", "com", "honcheon", "bot",
+                       "GameListener.java")
+    if not os.path.isfile(bot):
+        rep.warn("server-bot GameListener.java 가 없다 — 접합의 선행 문을 대조 못 했다")
+        return
+    with open(bot, encoding="utf-8") as fh:
+        gl = fh.read()
+
+    # 봇이 코드를 받기 전에 되돌려보내는 문 — **그 문구에서 명령을 읽는다** (손으로 안 쓴다)
+    prereqs = sorted(set(re.findall(r"캐릭터가 없다[^\"]*?`/혼천 ([가-힣]+)`", gl)))
+    if not prereqs:
+        rep.warn("봇의 '캐릭터가 없다' 거절 문구를 못 찾았다 — 접합의 선행 문을 대조 못 했다")
+    for cmd in prereqs:
+        if cmd not in how:
+            rep.bad(f"접속 과제가 **선행 문**을 말하지 않는다 — 봇은 캐릭터가 없으면 "
+                    f"'/혼천 {cmd} 부터' 라며 되돌려보낸다. 대기실이 그것을 **밟기 전에** 안 적으면, "
+                    f"발판을 밟은 사람이 **거기서 튕긴다**")
+        else:
+            rep.good(f"접속 과제가 선행 문(/혼천 {cmd})을 밟기 전에 말한다")
+
+    # ★★ **접합의 흐름을 대기실이 적지 않는다** — 그것은 접합 담당의 몫이고, **지금 바뀌는 중이다**
+    #   (코드 방식 폐기 → 초대 링크 + 닉네임 + 수락 창). 발판은 `/혼천 접속` 을 **대신 쳐 줄 뿐**이고,
+    #   그 명령이 무엇을 말하든 그대로 흐른다. 여기에 흐름을 적어 두면 **다음 주에 거짓말이 된다.**
+    doomed = [w for w in ("코드 복사", "코드 칸", "붙여넣", "1회용", "10분") if w in how]
+    if doomed:
+        rep.bad(f"접속 과제가 **접합의 흐름**을 적고 있다 {doomed} — 그것은 대기실의 몫이 아니다. "
+                "접합 방식은 바뀐다 (코드 → 초대 링크·닉네임·수락 창). 발판은 명령을 대신 쳐 줄 뿐이고, "
+                "**화면이 말하게 두어야** 대기실이 늙지 않는다")
+    else:
+        rep.good("접속 과제는 접합의 흐름을 적지 않는다 (화면이 말한다 — 대기실은 안 늙는다)")
+
+    # ★ 「접속」 발판은 **종 앞**이어야 한다 (사용자: "종 앞 발판 밟으면 디코 접속 메시지 뜨도록")
+    #   = 같은 길(z) 위에서, 종에 닿기 **전에** 밟히는 자리
+    bell = (ante.get("dock") or {}).get("bell") or []
+    road_z = (ante.get("road") or {}).get("z", 0)
+    plate = next((p for p in ((ante.get("plates") or {}).get("list") or [])
+                  if p.get("command", "").endswith("접속")), None)
+    if not plate or len(bell) < 2:
+        rep.bad("「접속」 발판이나 종이 등록부에 없다 — 종 앞에서 이름을 올릴 자리가 없다")
+    else:
+        px, pz = plate["pos"]
+        if pz != road_z or not (0 < bell[0] - px <= 6):
+            rep.bad(f"「접속」 발판(x {px}, z {pz})이 **종 앞이 아니다** (종 x {bell[0]}, 길 z {road_z}) — "
+                    "종으로 걸어가는 길 위에서, 종에 닿기 전에 밟히는 자리여야 한다")
+        else:
+            rep.good(f"「접속」 발판은 종 앞이다 (x {px} → 종 x {bell[0]} · 길 z {road_z})")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑫ 조성 — ★★ **반쯤 선 것을 "서 있다"고 하는가**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 오늘 크래시가 나루를 **반쯤 지어 놓고** 죽였다. 다음 기동에서 조성기는 *"이미 서 있다"* 며
+# 건너뛰었다. 왜냐하면 built() 가 본 것이 **블록 하나**였기 때문이다:
+#
+#     return w.getBlockAt(bell...).getType() == Material.BELL;
+#
+# 종 하나가 놓였다는 것은 **종 하나가 놓였다는 뜻**이지 나루가 섰다는 뜻이 아니다.
+# 수만 칸짜리 판을 한 칸으로 판단했다 — **한 칸은 표본이 아니다.**
+#
+# 이 눈은 조성 완결성의 판단이 **세계에게 묻는 것**인지 본다: 판을 훑어 세고, 등록부의 문턱과
+# 견주고, 못 미치면 다시 짓는가. (그리고 그 문턱이 config 에 있는가 — 코드가 숫자를 지어내면 안 된다)
+
+def audit_wholeness(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑫ 조성 — ★ 반쯤 선 나루를 '서 있다'고 하는가")
+
+    b = ante.get("build") or {}
+    sample = b.get("verify_sample")
+    minpct = b.get("verify_min_pct")
+    if not sample or not minpct:
+        rep.bad("build.verify_sample / verify_min_pct 가 등록돼 있지 않다 — "
+                "조성이 '끝났는가'의 눈금을 코드가 지어내게 된다")
+        return
+    rep.good(f"조성 완결성 눈금: 표본 1/{sample} · 문턱 {minpct}%")
+
+    if not isinstance(minpct, int) or not 50 <= minpct <= 100:
+        rep.bad(f"build.verify_min_pct 가 이상하다: {minpct!r} (50~100 이어야 한다)")
+
+    # ① 완결성을 **세는가** — 판을 훑어 세계와 대조하는가
+    body = body_of(code, r"private int completeness\([^)]*\)")
+    if body is None:
+        rep.bad("completeness(World) 가 없다 — 조성이 끝났는지 **세는 곳**이 없다")
+        return
+    if not re.search(r"plan\(", body) or not re.search(r"getBlockAt\(", body):
+        rep.bad("completeness() 가 조성 판(plan)을 세계(getBlockAt)와 대조하지 않는다 — "
+                "무엇을 세고 있는지 모르겠다")
+    else:
+        rep.good("completeness() 가 조성 판을 세계와 한 칸씩 대조한다")
+
+    # ② ★ 결정론 — 난수 표본이면 같은 세계가 매번 다른 점수를 받는다
+    if re.search(r"(Random|random\(|ThreadLocalRandom)", body):
+        rep.bad("completeness() 가 **난수**로 표본을 집는다 — 같은 세계가 매번 다른 점수를 받는다 "
+                "(결정론 규약 위반: 조성이 켜졌다 꺼졌다 한다)")
+    else:
+        rep.good("표본은 결정론이다 (고정 간격 — 같은 세계는 같은 점수)")
+
+    # ③ **한 칸으로 판단하지 않는가** — 옛 병 그대로가 남아 있는가
+    old = re.search(r"private boolean built\s*\([^)]*\)\s*\{[^}]*getBlockAt[^}]*Material\.BELL", code)
+    if old:
+        rep.bad("★ built() 가 여전히 **블록 하나(BELL)**를 보고 나루가 섰다고 판단한다 — "
+                "반쯤 선 나루가 '이미 서 있다'로 읽힌다 (오늘의 병 그대로다)")
+    else:
+        rep.good("블록 하나로 나루를 판단하지 않는다")
+
+    # ④ 못 미치면 **다시 짓는가** (세기만 하고 안 지으면 눈은 있고 손이 없는 것이다)
+    bb = body_of(code, r"void build\([^)]*\)")
+    if bb is None:
+        rep.bad("build() 를 못 찾았다")
+    elif not re.search(r"completeness\(", bb) or not re.search(r"verifyMinPct", bb):
+        rep.bad("build() 가 완결성 점수를 등록부의 문턱(verify_min_pct)과 견주지 않는다 — "
+                "세어 놓고 그 답을 안 쓴다")
+    else:
+        rep.good("build() 가 문턱에 못 미치면 처음부터 다시 짓는다")
+
+    # ⑤ 그리고 **소리를 내는가** — 침묵이 성공으로 읽히면 안 된다 (오늘 그 침묵이 병이었다)
+    if bb and not re.search(r"(warning|severe)\(", bb):
+        rep.warn("build() 가 반쯤 선 나루를 만났을 때 로그에 아무 말도 안 한다 — "
+                 "침묵은 '잘 지어졌다'로 읽힌다")
+
+    # ══════════════════════════════════════════════════════════════════
+    #  ★★ 이정표 — **표본은 부피를 재지 의미를 재지 않는다**
+    # ══════════════════════════════════════════════════════════════════
+    #
+    # 2026-07-13. 사용자: **"발판 밟아도 메시지가 안 뜬다."** 재 보니 나루에 압력판이 **0개**.
+    # 그런데 완결도는 **97%** 였고 조성기는 "이미 서 있다"며 건너뛰었다.
+    #
+    # 왜인가: 조성 판은 **늪(물·자갈·허공)이 99% 를 차지한다.** 발판 6칸은 4만 칸 중 6칸 —
+    # **0.015%** 다. 표본(1/61)이 그것을 집을 확률은 거의 0 이다. 그래서 **발판이 하나도 없어도
+    # 표본은 97% 를 준다.** 문턱을 넘으니 영영 안 깔렸다.
+    #
+    # 드물지만 없으면 튜토리얼이 통째로 죽는 것(발판·종)은 **세지 않고 전수 검사**해야 한다.
+    lm = body_of(code, r"private boolean landmarksStand\([^)]*\)")
+    if lm is None:
+        rep.bad("★★ 이정표(발판·종) 전수 검사가 없다 — 표본은 **부피를 재지 의미를 재지 않는다.** "
+                "발판 6칸은 4만 칸 중 6칸(0.015%)이라 표본이 못 본다. "
+                "**발판이 0개인데 완결도 97% 로 '이미 서 있다'가 된다** (오늘의 병 그 자체)")
+    elif not re.search(r"countPlates\(", lm):
+        rep.bad("이정표 검사가 발판을 세지 않는다 — 밟을 것이 없는 나루가 '섰다'로 읽힌다")
+    else:
+        rep.good("이정표(발판·종)는 표본이 아니라 **전수 검사**한다")
+
+    if bb and lm is not None and not re.search(r"landmarksStand\(", bb):
+        rep.bad("build() 가 이정표를 안 본다 — 세어 놓고 그 답을 안 쓴다 "
+                "(발판 0개인 나루가 '이미 서 있다'로 통과한다)")
+
+    # ⑥ ★ 발판을 **세계에게 묻는가** — plates.size() 는 **등록부의 개수**다 (오늘 이것이 거짓말했다)
+    cp = body_of(code, r"private int countPlates\([^)]*\)")
+    if cp is None:
+        rep.bad("countPlates(World) 가 없다 — 세계에 발판이 몇 개 깔렸는지 **묻는 곳이 없다**")
+    elif not re.search(r"getBlockAt\(", cp):
+        rep.bad("countPlates() 가 세계에게 묻지 않는다 — 등록부의 개수를 세고 있다")
+    else:
+        rep.good("countPlates() 는 세계에게 묻는다 (깔린 것을 센다)")
+
+    cen = body_of(strip_comments(code), r"private void census\(World w, String head\)")
+    if cen is None:
+        rep.bad("census() 를 못 찾았다")
+    elif re.search(r'"\s*·\s*발판\s*"\s*\+\s*plates\.size\(\)', cen):
+        rep.bad("★ 조성 로그가 발판을 **등록부에서** 센다 (`plates.size()`) — "
+                "세계에 0개가 깔려 있어도 '발판 6' 이라 말한다. 오늘 사용자가 밟을 것이 없었던 이유를 "
+                "로그가 **가려 주고 있었다**. 세계에게 물어 `N/M` 꼴로 찍어라")
+    elif not re.search(r"countPlates\(", cen):
+        rep.bad("조성 로그가 발판을 세계에게 묻지 않는다 — 침묵(과 등록부)이 성공으로 읽힌다")
+    else:
+        rep.good("조성 로그는 발판도 세계에게 묻는다 (발판 N/M)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -501,8 +884,11 @@ def audit_panels(rep: Report, ante: dict, code: str) -> None:
     if build_body is None:
         rep.bad("build() 를 못 찾았다")
     else:
-        ci = build_body.find("clearPanels(w)")
-        si = build_body.find("spawnPanels(w)")
+        # 직접 호출이든 단위 격리(stage(w, ..., this::spawnPanels))든 — **이름이 나오는 순서**를 본다.
+        # (재조성 경로에서 걷기가 세우기보다 **뒤에** 오면 글이 두 겹으로 겹친다.)
+        rebuild = build_body[build_body.find("building = true"):] or build_body
+        ci = rebuild.find("clearPanels")
+        si = rebuild.find("spawnPanels")
         if si < 0:
             rep.bad("build() 가 글판을 세우지 않는다")
         elif ci < 0 or ci > si:
@@ -542,19 +928,20 @@ def audit_panels(rep: Report, ante: dict, code: str) -> None:
         rep.bad("판을 사람마다 감추고 보이는 손(show/hideEntity)이 없다")
     elif rp is None or "show(player" not in rp:
         rep.bad("refreshPanels() 가 판을 사람마다 가르지 않는다")
-    elif "_없음" not in rp or "armable" not in rp:
-        rep.bad("격의 두 판(가능/불가)을 사람마다 갈라 주지 않는다 — "
-                "범인에게 '격을 둘러라'가 보인다 (거짓말)")
+    elif "_없음" not in rp or not re.search(r"(lacks|capable)\(", rp):
+        rep.bad("능(requires) 있는 관문의 두 판(가능/예고)을 사람마다 갈라 주지 않는다 — "
+                "못 하는 몸에게 '하라'가 보인다 (거짓말)")
     else:
-        rep.good("판은 사람마다 보이고 안 보인다 (격: 두를 수 있는 몸에게만 · 없는 몸에겐 대체 판)")
+        rep.good("판은 사람마다 보이고 안 보인다 (할 수 있는 몸에게는 how · 없는 몸에겐 예고)")
 
     expected = len(ante.get("stations") or []) + sum(
         1 for st in (ante.get("stations") or [])
-        if (lessons.get(st.get("lesson") or "") or {}).get("requires_armable_grade"))
+        if (lessons.get(st.get("lesson") or "") or {}).get("requires"))
     if cap and expected > cap:
         rep.bad(f"글판 {expected}개 > 상한 {cap}")
     else:
-        rep.good(f"글판 {expected}개 (관문 {len(ante.get('stations') or [])} + 격 대체 1) ≤ 상한 {cap}")
+        rep.good(f"글판 {expected}개 (관문 {len(ante.get('stations') or [])} "
+                 f"+ 예고 판 {expected - len(ante.get('stations') or [])}) ≤ 상한 {cap}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -907,11 +1294,11 @@ def audit_flow(rep: Report, ante: dict, code: str) -> None:
     ps = body_of(code, r"private boolean passed\(Player player, Station s\)")
     if ps is None:
         rep.bad("passed() 를 못 찾았다")
-    elif "requiresArmable" not in ps or "armable(player)" not in ps:
+    elif not re.search(r"(lacks|capable)\(", ps):
         rep.bad("passed() 가 '못 하는 관문'을 지나가게 하지 않는다 — "
-                "범인이 격 관문에서 막히면 그 뒤 관문을 영영 못 본다")
+                "범인이 격·경공 관문에서 막히면 그 뒤 관문을 영영 못 본다")
     else:
-        rep.good("못 하는 관문(범인의 격)은 '지나간 것'으로 친다 — 길이 안 막힌다")
+        rep.good("못 하는 관문(범인의 격·경공)은 '지나간 것'으로 친다 — 길이 안 막힌다")
 
     # ★★ 글판이 안 보이는 것과 **문이 잠기는 것**은 다른 것이다. 종은 언제나 울려야 한다
     cross = body_of(code, r"public void cross\(Player player\)")
@@ -1113,9 +1500,291 @@ def audit_plates(rep: Report, ante: dict, code: str) -> None:
         rep.good(f"발판의 배분 {taught} = player_creation.yml default_curriculum (지어내지 않았다)")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑩ 허수아비 — ★ 때릴 상대가 **서 있는가**
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 이 눈은 2026-07-13 에 생겼다. 그날 사용자가 말했다:
+#   "인증 전까지 때릴 상대가 없습니다. 아직 입도진에 허수아비가 안 보여요."
+#
+# 그때까지 이 감사는 허수아비를 **한 번도 보지 않았다.** 문·갇힘·거짓말·글판·길·빛·발판을
+# 다 재면서, 정작 **때릴 상대가 서 있는가**는 안 물었다. 위반 0건이었고, 마당은 비어 있었다.
+# (유일한 언급은 detect '허수아비_타격' 의 배선 검사였다 — 즉 "때리면 세는가"만 봤지
+#  "때릴 것이 있는가"는 안 봤다. 셈틀은 멀쩡했고 대상이 없었다.)
+#
+# 병은 둘이었고 **둘 다 조용했다**:
+#   ① Difficulty.PEACEFUL — 평화는 몬스터를 매 틱 지운다. 허수아비의 몸은 좀비다.
+#      예외도 로그도 없다. 태어나서 사라졌다.
+#   ② 조성 로그가 `dummySpots.size()` (등록부의 수)를 찍었다 — **선 것의 수가 아니다.**
+#      로그는 "허수아비 3"이라 말했고 세계에는 0이 서 있었다. **침묵이 아니라 거짓말이었다.**
+
+def audit_dummies(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑩ 허수아비 — 때릴 상대가 서 있는가 (★ 이 눈이 없어서 마당이 비어 있었다)")
+    du = ante.get("dummies") or {}
+    dummies = du.get("list") or []
+
+    if not dummies:
+        rep.bad("허수아비가 하나도 등록돼 있지 않다 — 대기실에서 때릴 상대가 없다 "
+                "(손 과제는 '허수아비를 좌클릭으로 쳐라'라고 가르친다)")
+        return
+    rep.good(f"허수아비 {len(dummies)}몸 등록")
+
+    # ★★ ① 평화(PEACEFUL) 는 몬스터를 지운다 — 허수아비의 몸이 좀비인 한, 평화 = 허수아비 없음.
+    #    예외도 로그도 없이 조용히. **이것이 오늘의 병이었고, 이 줄이 그 눈이다.**
+    body = strip_comments(code)
+    spawns_monster = re.search(r"spawn\([^;]{0,120}?(Zombie|Skeleton|Husk|Zoglin|Monster)\.class", body)
+    peaceful = re.search(r"setDifficulty\(\s*Difficulty\.PEACEFUL", body)
+    if spawns_monster and peaceful:
+        rep.bad("★ 나루가 PEACEFUL 인데 허수아비의 몸이 몬스터(좀비)다 — "
+                "평화는 몬스터를 **매 틱 조용히 지운다** (예외도 로그도 없고 setPersistent 도 소용없다). "
+                "허수아비는 태어나자마자 사라진다. 난이도를 올리고, 사람은 피해 취소로 지켜라")
+    elif spawns_monster:
+        rep.good("허수아비의 몸은 몬스터(좀비)이고, 나루는 평화가 아니다 (지워지지 않는다)")
+    cfg_diff = str(ante.get("difficulty", "")).upper()
+    if cfg_diff == "PEACEFUL":
+        rep.bad("★ antechamber.difficulty: PEACEFUL — 평화는 허수아비(좀비)를 지운다")
+    elif not cfg_diff:
+        rep.bad("antechamber.difficulty 가 등록돼 있지 않다 — 코드가 난이도를 지어낸다 "
+                "(그리고 그 값이 PEACEFUL 이면 허수아비가 조용히 사라진다)")
+    else:
+        rep.good(f"난이도 = {cfg_diff} (등록부가 정한다 · 평화가 아니다)")
+
+    # 평화를 버렸으면 사람은 무엇이 지키는가 — 약속은 그대로여야 한다 ("나루에서는 죽지 않는다")
+    if ante.get("damage_players") is not False:
+        rep.bad("damage_players 가 false 가 아니다 — 평화를 버렸는데 사람을 지킬 손이 등록돼 있지 않다")
+    elif not re.search(r"EntityDamageEvent[\s\S]{0,600}?setCancelled\(true\)", body):
+        rep.bad("사람에게 오는 피해를 끊는 손이 코드에 없다 — "
+                "난이도를 올린 대가로 사람이 나루에서 죽을 수 있다")
+    else:
+        rep.good("나루에서 사람은 안 죽는다 — 난이도가 아니라 피해 취소가 지킨다 (허수아비는 산다)")
+
+    # ★★ ② 체력을 손으로 넣지 않는가 — 2048 병의 재발 방지.
+    #    MAX_HEALTH 특성의 범위는 …1024 다. 숫자를 그대로 setHealth 에 넣는 순간 언젠가 또 터진다.
+    for name, sig in (("입도진", r"private void spawnDummy\(World w, Dummy d, int y\)"),
+                      ("연무장", r"void dummy\(Player player, int durability\)")):
+        src = code if name == "입도진" else source("Dojang.java")
+        b = body_of(strip_comments(src), sig)
+        if b is None:
+            rep.bad(f"{name}의 허수아비 조성기를 못 찾았다")
+            continue
+        sh = re.search(r"setHealth\((.*)\);", b)   # ★ getValue() 의 괄호까지 물어야 한다 ([^)]* 로는 못 본다)
+        if not sh:
+            rep.warn(f"{name}의 허수아비가 체력을 안 세운다")
+        elif re.search(r"^\s*-?[\d_.]+\s*$|DUMMY_HEALTH", sh.group(1)):
+            rep.bad(f"★ {name}의 허수아비가 체력에 숫자를 손으로 넣는다: setHealth({sh.group(1).strip()}) "
+                    "— MAX_HEALTH 특성의 범위(…1024)를 넘으면 예외가 나고 **좀비가 아예 안 태어난다**. "
+                    "특성에게 물어라: setHealth(attr.getValue())")
+        elif "getValue()" not in sh.group(1):
+            rep.warn(f"{name}의 setHealth({sh.group(1).strip()}) 가 특성값에서 오지 않는다")
+        else:
+            rep.good(f"{name}의 허수아비 체력 = 특성의 실효값 (상한이 몇이든 안 터진다)")
+
+    # ★ ③ 하나가 죽어도 나머지는 서는가 (과거 병: 하나의 예외가 대기실 전체를 죽였다)
+    ed = body_of(strip_comments(code), r"private void ensureDummies\(World w\)")
+    if ed is None:
+        rep.bad("ensureDummies() 를 못 찾았다")
+    elif "catch" not in ed:
+        rep.bad("★ 허수아비를 하나씩 격리해 세우지 않는다 — 한 몸이 예외를 던지면 "
+                "나머지도, 글판도, 발판도 다 안 선다 (2026-07-13 오전의 병 그대로)")
+    else:
+        rep.good("허수아비는 하나씩 제 울타리 안에서 선다 (하나가 죽어도 나머지는 선다)")
+
+    # ★★ ③-b **많은 것도 틀린 것이다** — 등록부는 6인데 세계에 24 가 서 있었다.
+    #    옛 코드: `if (countDummies(w) >= dummies.size()) return;`
+    #    재조성이 돌 때마다 6씩 쌓였고, 한 번 넘치고 나면 `24 >= 6` 이라 **영영 안 치웠다.**
+    #    겹쳐 선 허수아비는 히트박스가 겹쳐 **타격 계측을 망친다** (허수아비는 계기다).
+    if ed and re.search(r"countDummies\(w\)\s*>=\s*dummies\.size\(\)", ed):
+        rep.bad("★ ensureDummies() 가 `>=` 로 판단한다 — **많은 것도 틀린 것이다.** "
+                "재조성이 허수아비를 쌓고(등록부 6 → 세계 24), 넘치고 나면 영영 안 치운다. "
+                "겹쳐 선 몸은 히트박스가 겹쳐 계측을 망친다. `!=` 여야 한다")
+    elif ed and re.search(r"countDummies\(w\)\s*==\s*dummies\.size\(\)", ed):
+        rep.good("ensureDummies() 는 `==` 로 판단한다 (모자라도 넘쳐도 다시 세운다)")
+    else:
+        rep.warn("ensureDummies() 가 등록부의 개수와 세계의 개수를 어떻게 견주는지 못 읽었다")
+
+    # ★ ④ 로그가 **선 것**을 세는가 — 등록부의 개수를 찍으면 그것은 거짓말이다
+    cen = body_of(strip_comments(code), r"private void census\(World w, String head\)")
+    if cen is None:
+        rep.bad("census() 가 없다 — 조성이 무엇을 몇 개 세웠는지 말하지 않는다 (침묵이 성공으로 읽힌다)")
+    elif not (re.search(r"liveDummies = countDummies\(", cen)
+              and re.search(r"livePanels = countPanels\(", cen)):
+        rep.bad("★ 조성 로그가 **세계에게 묻지 않는다** — 등록부의 개수를 찍으면 "
+                "허수아비가 0인 날에도 로그는 '허수아비 6'이라 말한다 (로그가 거짓말한다)")
+    else:
+        rep.good("조성 로그는 세계에게 묻는다 (countDummies/countPanels — 등록부가 아니라 선 것을 센다)")
+
+    # ★ ⑤ 등급은 지어낸 것이 아니다 — DojangGui 의 등급표가 정본이다
+    gui = source("DojangGui.java")
+    m = re.search(r"int\[\]\s+durabilities\s*=\s*\{([^}]*)\}", gui)
+    lm = re.search(r"String\[\]\s+labels\s*=\s*\{([^}]*)\}", gui)
+    if not m:
+        rep.warn("DojangGui.java 에서 등급별 내구를 못 읽었다 — 대조할 정본이 없다")
+    else:
+        truth = {int(x) for x in re.findall(r"\d+", m.group(1))}
+        taught = {d.get("durability") for d in dummies}
+        stray = sorted(x for x in taught if x not in truth)
+        if stray:
+            rep.bad(f"허수아비 내구 {stray} 가 DojangGui 의 등급표 {sorted(truth)} 에 없다 "
+                    "— 코드/등록부가 등급을 지어낸다")
+        else:
+            rep.good(f"허수아비 내구 {sorted(taught)} ⊆ DojangGui 등급표 {sorted(truth)} (지어내지 않았다)")
+        if lm:
+            names = {re.sub(r"\(.*", "", s).strip() for s in re.findall(r'"([^"]+)"', lm.group(1))}
+            for d in dummies:
+                if d.get("label") not in names:
+                    rep.bad(f"허수아비 '{d.get('id')}' 의 이름 {d.get('label')!r} 이 "
+                            f"DojangGui 의 등급 이름 {sorted(names)} 에 없다")
+
+    # ★ ⑥ 명패가 다섯 눈금을 말하는가 (최근·누적·합수·평균·TTK — Dojang 의 명패와 같다)
+    hit = du.get("hit") or ""
+    for token in ("{last}", "{total}", "{hits}", "{avg}", "{ttk}"):
+        if token not in hit:
+            rep.bad(f"허수아비 명패에 {token} 이 없다 — 맞은 것을 다 말하지 않는다 "
+                    "(최근·누적·합수·평균·TTK 다섯이 있어야 타격감을 잴 수 있다)")
+    hn = body_of(strip_comments(code), r"private String hitName\(String label, int durability, double\[\] t\)")
+    if hn is None:
+        rep.bad("hitName() 이 없다 — 명패의 문장이 어디서 오는지 알 수 없다")
+    elif "dummyHit" not in hn:
+        rep.bad("명패 서식이 등록부(dummies.hit)에서 오지 않는다 — 코드가 문장을 지어낸다")
+    else:
+        rep.good("명패 = 등록부의 서식 + 실제로 맞은 값 (최근·누적·합수·평균·TTK)")
+
+    # ★ ⑦ 설 수 있는 자리인가 — 물 위나 난간·등롱·화톳불 속에 세우면 영영 못 만난다
+    g = Geo(ante)
+    walk = g.walkable()
+    seen: dict[tuple, str] = {}
+    for d in dummies:
+        pos = tuple(d.get("pos") or [])
+        did = d.get("id")
+        if len(pos) != 2:
+            rep.bad(f"허수아비 '{did}' 에 자리가 없다")
+            continue
+        if pos in seen:
+            rep.bad(f"허수아비 '{did}' 가 '{seen[pos]}' 와 같은 칸에 선다 {list(pos)} — 겹친다")
+        seen[pos] = did
+        if pos not in walk:
+            why = "물 위다" if not g.is_deck(*pos) else "난간·등롱·화톳불이 이미 서 있다"
+            rep.bad(f"허수아비 '{did}' {list(pos)} 를 세울 수 없다 — {why}")
+        else:
+            st = g.station_at(*pos)
+            rep.good(f"허수아비 '{did}' {list(pos)} — 딛는 자리에 선다 "
+                     f"(관문 '{st['id'] if st else '길'}')")
+
+    # 손 과제가 있는 관문 마당에 허수아비가 있어야 한다 (가르치는 곳에 상대가 있어야 한다)
+    lessons = {l["id"]: l for l in ((ante.get("lessons") or {}).get("list") or []) if "id" in l}
+    for st in (ante.get("stations") or []):
+        lid = st.get("lesson") or ""
+        if (lessons.get(lid) or {}).get("detect") != "허수아비_타격":
+            continue
+        here = [d for d in dummies
+                if g.station_at(*(d.get("pos") or [999, 999])) is not None
+                and g.station_at(*(d.get("pos") or [999, 999]))["id"] == st["id"]]
+        if not here:
+            rep.bad(f"관문 '{st['id']}' 은 허수아비를 치라고 가르치는데 그 마당에 허수아비가 없다")
+        else:
+            rep.good(f"관문 '{st['id']}' 의 마당에 허수아비 {len(here)}몸 — 가르치는 곳에 상대가 있다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑪ 세계 — ★ **정말로 서 있는가** (등록부가 아니라 저장된 세계에게 묻는다)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 위의 눈은 전부 **정적**이다 — config 와 소스만 읽는다. 그래서 오늘의 병을 못 봤다:
+# 코드도 config 도 "허수아비 셋"이라 말했고, 조성 로그도 "허수아비 3"이라 말했고,
+# **세계에는 0이 서 있었다.** 아무도 세계에게 묻지 않았다.
+#
+# 이 눈은 저장된 월드(run/mvt/<world>/entities/*.mca)를 열어 **PDC 표식을 직접 센다.**
+# 이것이 내가 오늘 병을 잡은 방법 그대로다 — 글판 8, 허수아비 0.
+#
+# ★ 한계는 정직하게: 이것은 **마지막 저장 시점**의 세계다. 서버가 돌고 있고 아직 저장이
+#   안 됐으면 낡은 값을 본다. 그래도 "등록부가 그렇다더라"보다는 언제나 세계에 가깝다.
+
+def audit_world(rep: Report, ante: dict) -> None:
+    import struct
+    import zlib
+
+    rep.say()
+    rep.say("  ⑪ 세계 — 저장된 나루에 **정말로** 무엇이 서 있는가 (등록부가 아니라 세계에게 묻는다)")
+    world = ante.get("world") or "honcheon_ipdo"
+    ent = os.path.join(ROOT, "run", "mvt", world, "entities")
+    if not os.path.isdir(ent):
+        rep.warn(f"저장된 나루가 없다 ({ent}) — 아직 한 번도 안 지어졌거나 서버를 안 돌렸다. "
+                 "세계 축은 재지 못했다")
+        return
+
+    want_dummies = len((ante.get("dummies") or {}).get("list") or [])
+    stations = ante.get("stations") or []
+    lessons = {l["id"]: l for l in ((ante.get("lessons") or {}).get("list") or []) if "id" in l}
+    want_panels = len(stations) + sum(
+        1 for st in stations
+        if (lessons.get(st.get("lesson") or "") or {}).get("requires"))
+
+    found = {b"ipdo_dummy": 0, b"ipdo_panel": 0}
+    chunks = 0
+    for fn in sorted(os.listdir(ent)):
+        if not fn.endswith(".mca"):
+            continue
+        raw = open(os.path.join(ent, fn), "rb").read()
+        for i in range(1024):
+            off = int.from_bytes(raw[i * 4:i * 4 + 3], "big")
+            if off == 0:
+                continue
+            start = off * 4096
+            if start + 5 > len(raw):
+                continue
+            ln = int.from_bytes(raw[start:start + 4], "big")
+            comp = raw[start + 4]
+            blob = raw[start + 5:start + 4 + ln]
+            try:
+                if comp == 1:
+                    data = zlib.decompress(blob, 16 + zlib.MAX_WBITS)
+                elif comp == 2:
+                    data = zlib.decompress(blob)
+                elif comp == 3:
+                    data = blob
+                else:
+                    rep.warn(f"{fn} 청크 {i}: 모르는 압축 방식 {comp} — 못 셌다")
+                    continue
+            except zlib.error as e:
+                rep.warn(f"{fn} 청크 {i}: 풀지 못했다 ({e})")
+                continue
+            chunks += 1
+            for key in found:
+                found[key] += data.count(key)
+
+    dummies_in_world = found[b"ipdo_dummy"]
+    panels_in_world = found[b"ipdo_panel"]
+    rep.say(f"    · 저장된 엔티티 청크 {chunks} — 허수아비 {dummies_in_world} · 글판 {panels_in_world}")
+
+    if dummies_in_world < want_dummies:
+        rep.bad(f"★ 세계에 허수아비가 {dummies_in_world}몸뿐이다 (등록부는 {want_dummies}몸). "
+                "때릴 상대가 없다 — 조성 로그가 뭐라 찍었든 **세계가 진실이다**. "
+                "(마지막 저장 시점 기준. 서버를 다시 돌리고 /혼천 입도 재조성 뒤 다시 재라)")
+    elif dummies_in_world > want_dummies:
+        # ★★ **많은 것도 틀린 것이다.** 이 눈은 여태 '모자람'만 봤다 — 그래서 등록부 6인데
+        #   세계에 24 가 서 있어도 ✅ 였다. 겹쳐 선 몸은 히트박스가 겹쳐 **타격 계측을 망친다**
+        #   (허수아비는 계기다). 원인은 ensureDummies() 의 `>=` 였다 — 넘치면 영영 안 치웠다.
+        rep.bad(f"★ 세계에 허수아비가 {dummies_in_world}몸이다 — 등록부는 {want_dummies}몸. "
+                "**많은 것도 틀린 것이다**: 재조성이 몸을 쌓았다. 겹쳐 선 허수아비는 히트박스가 겹쳐 "
+                "타격 계측을 망친다 (허수아비는 계기다). ensureDummies() 가 `==` 로 판단해야 한다 "
+                "— 서버를 다시 돌리고 /혼천 입도 재조성 하면 걷힌다")
+    else:
+        rep.good(f"세계에 허수아비 {dummies_in_world}몸이 서 있다 (등록부 {want_dummies}) — 때릴 상대가 있다")
+
+    if panels_in_world < want_panels:
+        rep.bad(f"세계에 글판이 {panels_in_world}개뿐이다 (등록부는 {want_panels}개)")
+    elif panels_in_world > want_panels:
+        rep.warn(f"세계에 글판이 {panels_in_world}개 — 등록부({want_panels})보다 많다. 겹쳤을 수 있다")
+    else:
+        rep.good(f"세계에 글판 {panels_in_world}개 (등록부와 같다)")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--verbose", "-v", action="store_true", help="통과 항목도 보인다")
+    ap.add_argument("--no-world", action="store_true",
+                    help="세계 축(⑪)을 건너뛴다 — 정적 검사만 (자기 시험이 쓴다)")
     args = ap.parse_args()
 
     rep = Report(args.verbose)
@@ -1142,12 +1811,16 @@ def main() -> int:
     audit_gate(rep, ante, code)
     audit_trap(rep, ante, code)
     audit_truth(rep, ante, code)
+    audit_wholeness(rep, ante, code)
     audit_panels(rep, ante, code)
     audit_road(rep, ante, code)
     audit_flow(rep, ante, code)
     audit_light(rep, ante, code)
     audit_plates(rep, ante, code)
+    audit_dummies(rep, ante, code)
     audit_conventions(rep, code, raw_cfg)
+    if not args.no_world:
+        audit_world(rep, ante)
 
     rep.say()
     rep.say("═" * 72)

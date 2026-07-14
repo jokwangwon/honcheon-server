@@ -40,10 +40,15 @@ MUTATIONS = [
     ("⑤ 내릴 자리를 없앤다", CFG,
      "destinations: [흑수나루, 장터]", "destinations: []", "destinations 가 비었다"),
     ("⑥ 세계 스폰 최종 보루를 뜯는다", SRC,
-     "return Bukkit.getWorlds().get(0).getSpawnLocation();", "return null;", "내릴 자리가 없다"),
+     "        Location last = Bukkit.getWorlds().get(0).getSpawnLocation();",
+     "        Location last = null;\n        if (true) {\n            return null;\n        }",
+     "내릴 자리가 없다|null 을 돌려줄 수 있다"),
+    # ★ 조각은 **enter() 의 것**이어야 한다 — rebuild() 도 같은 모양(World w = world(); if (w == null))
+    #   으로 시작하고 파일에서 먼저 나온다. 첫 일치를 바꾸면 엉뚱한 메서드를 흔들고, 눈은 멀쩡한데
+    #   시험이 "못 잡았다"고 거짓 보고한다 (자기 시험도 거짓말할 수 있다 — 실제로 한 번 했다).
     ("⑦ 월드가 안 열려도 텔레포트한다", SRC,
-     "        World w = world();\n        if (w == null) {\n            player.sendMessage(ChatColor.RED + displayName",
-     "        World w = world();\n        player.teleport(player.getLocation());\n        if (w == null) {\n            player.sendMessage(ChatColor.RED + displayName",
+     '        World w = world();\n        if (w == null) {\n            player.sendMessage(ChatColor.RED + displayName + "을(를) 열 수 없다 — 강호로 바로 간다.");',
+     '        World w = world();\n        player.teleport(player.getLocation());\n        if (w == null) {\n            player.sendMessage(ChatColor.RED + displayName + "을(를) 열 수 없다 — 강호로 바로 간다.");',
      "먼저 teleport"),
     ("⑧ 종이 문에 안 이어진다 (손잡이 없는 문)", SRC,
      "            event.setCancelled(true);\n            cross(player);\n            return;",
@@ -80,8 +85,8 @@ MUTATIONS = [
     ("⑱ 앞 관문의 판을 안 감춘다", SRC,
      "        if (visible) {\n            player.showEntity(plugin, d);\n        } else {\n            player.hideEntity(plugin, d);\n        }",
      "        player.showEntity(plugin, d);", "감추지 않는다"),
-    ("⑲ 범인이 격 관문에서 막힌다 (그 뒤를 영영 못 본다)", SRC,
-     "        if (l.requiresArmable() && !armable(player)) {\n            return true;   // ★ 못 하는 것 때문에 길이 막히지 않는다. 그냥 지나간다\n        }",
+    ("⑲ 범인이 격·경공 관문에서 막힌다 (그 뒤를 영영 못 본다)", SRC,
+     "        if (lacks(player, l)) {\n            return true;   // ★ 못 하는 것 때문에 길이 막히지 않는다. 그냥 지나간다 (판은 예고로 바뀐다)\n        }",
      "", "지나가게 하지 않는다"),
 
     # ─── ★ 빛 ───
@@ -115,17 +120,17 @@ MUTATIONS = [
     ("㉚ 몸짓에서 방패(막기)를 뺀다", CFG,
      "gestures: [isBlocking, isSneaking, isSprinting]",
      "gestures: [isSneaking, isSprinting]", "화면이 세계에 대해 거짓말한다"),
-    ("㉛ 경공을 '웅크리고 점프'라 적는다", CFG,
-     "§f달리며 점프§7 — 발이 이미 움직일 때만 몸이 뜬다.",
-     "§f웅크리고 점프§7 — 낮춘 몸이 뜬다.", "gyeonggong.yml activate"),
-    ("㉜ 코드가 경공을 딴 것으로 본다", SRC,
-     "if (player.isSprinting() && !player.isOnGround() && player.getFallDistance() <= 0.1f) {",
-     "if (!player.isOnGround()) {", "달리며 점프'가 아니다"),
-    ("㉝ 범인에게 '격을 둘러라'를 가르친다", CFG,
-     "requires_armable_grade: true", "requires_armable_grade: false", "존재하지 않는 조작"),
+    ("㉛ 경공을 '달리며 점프'라 적는다 (오늘 폐기된 옛 조작)", CFG,
+     "개화한 몸은 §f공중에서 점프§7 키를 §f한 번 더§7 눌러 허공을 딛는다.",
+     "§f달리며 점프§7 하면 몸이 뜬다.", "gyeonggong.yml activate"),
+    ("㉜ 코드가 경공을 '흉내'로 본다 (달리다 뛴 몸을 통과시킨다)", SRC,
+     "        if (gg != null && gg.riding(player) && !player.isOnGround()) {",
+     "        if (player.isSprinting() && !player.isOnGround()) {", "흉내"),
+    ("㉝ 범인에게 '격을 둘러라'를 가르친다 (requires 를 뗀다)", CFG,
+     "        requires: 두를_격", "        requires_없앰: 두를_격", "못 하는 조작"),
     ("㉞ 코드가 격의 가부를 지어낸다", SRC,
-     "return realm != null && !plugin.skillEngine().armableGrades(realm).isEmpty();",
-     "return true;", "armableGrades"),
+     'case "두를_격" -> !plugin.skillEngine().armableGrades(realm).isEmpty();',
+     'case "두를_격" -> true;', "armableGrades"),
     ("㉟ 과제 감지기를 뜯는다 (쳐도 안 닫힌다)", SRC,
      'bump(player, "손");', "// bump 제거됨", "표지판일 뿐이다|해도 안 닫힌다"),
     ("㊱ 안내 문장이 없는 명령을 말한다", CFG,
@@ -137,8 +142,9 @@ MUTATIONS = [
      "            clearPanels(w);\n        }\n        stowed.clear();",
      "        }\n        stowed.clear();", "세계에 남는다"),
     ("㊳ 재조성이 겹친다 (걷기 전에 세운다)", SRC,
-     "            clearPanels(w);       // ★ 다시 지으면 글이 두 겹으로 겹치면 안 된다\n            clearDummies(w);\n            spawnPanels(w);",
-     "            clearDummies(w);\n            spawnPanels(w);", "두 겹으로 겹친다"),
+     '            stage(w, "글판 걷기", this::clearPanels);\n            stage(w, "허수아비 걷기", this::clearDummies);\n            stage(w, "글판 세우기", this::spawnPanels);',
+     '            stage(w, "허수아비 걷기", this::clearDummies);\n            stage(w, "글판 세우기", this::spawnPanels);',
+     "두 겹으로 겹친다"),
     ("㊴ 판이 과제와 딴말을 한다", SRC,
      "        return List.of(panelSpec.titlePrefix() + l.title(),\n                unavailableVariant ? l.unavailable() : l.how());",
      "        return List.of(panelSpec.titlePrefix() + s.id(), \"§7알아서 해라\");",
@@ -152,11 +158,126 @@ MUTATIONS = [
      "return w.getHighestBlockYAt(cx + 512, cz + 512);", "return 5;", "월드에게 묻지 않는다"),
     ("㊸ 조성이 틱을 다 먹는다 (슬라이싱 제거)", SRC,
      'TickBudget.slice(plugin, "입도진"', 'noSlice(plugin, "입도진"', "틱 슬라이싱을 안 탄다"),
+
+    # ─── ★★ 허수아비 (2026-07-13 · 사용자: "인증 전까지 때릴 상대가 없습니다") ───
+    #
+    # 이 눈은 그날까지 **없었다**. 감사는 위반 0건이라 했고, 마당은 비어 있었다.
+    # 아래 열 가지는 그날의 병과 그 이웃들이다 — 하나라도 못 잡으면 눈이 또 거짓말하는 것이다.
+    ("㊹ ★ 허수아비를 통째로 뺀다 (때릴 상대가 없다)", CFG,
+     "\n  dummies:\n", "\n  dummies_없앰:\n", "때릴 상대가 없다"),
+    ("㊺ ★ 손 관문의 허수아비를 뺀다 (가르치는데 상대가 없다)", CFG,
+     '      - { id: 손_삼류, label: "삼류 몸",   pos: [-20, -3], durability: 12 }\n'
+     '      - { id: 손_이류, label: "이류 몸",   pos: [-20,  3], durability: 18 }\n'
+     '      - { id: 손_절정, label: "절정 몸",   pos: [-16, -3], durability: 22 }\n'
+     '      - { id: 손_고수, label: "고수의 몸", pos: [-16,  3], durability: 30 }\n',
+     "", "마당에 허수아비가 없다"),
+    ("㊻ ★★ 난이도를 평화로 되돌린다 (config) — 오늘의 병 그 자체", CFG,
+     "  difficulty: EASY", "  difficulty: PEACEFUL", "평화는 허수아비"),
+    ("㊼ ★★ 코드가 나루를 평화로 세운다 — 좀비가 조용히 지워진다", SRC,
+     "            w.setDifficulty(difficulty);", "            w.setDifficulty(Difficulty.PEACEFUL);",
+     "매 틱 조용히 지운다"),
+    ("㊽ 평화를 버렸는데 사람을 지킬 손이 없다", CFG,
+     "  damage_players: false", "  damage_players: true", "지킬 손"),
+    ("㊾ ★ 체력에 숫자를 손으로 넣는다 (2048 병 재발 — 좀비가 아예 안 태어난다)", SRC,
+     "                e.setHealth(attr.getValue());", "                e.setHealth(DUMMY_HEALTH);",
+     "숫자를 손으로 넣는다"),
+    ("㊿ ★ 허수아비 격리를 뜯는다 (하나가 죽으면 전부 안 선다)", SRC,
+     "            try {\n                spawnDummy(w, d, y);\n                stood++;\n            } catch (Throwable t) {",
+     "            if (true) {\n                spawnDummy(w, d, y);\n                stood++;\n            } else {",
+     "격리해 세우지 않는다"),
+    ("(51) ★ 조성 로그가 등록부의 개수를 찍는다 (로그가 거짓말한다)", SRC,
+     "        int liveDummies = countDummies(w);", "        int liveDummies = dummies.size();",
+     "세계에게 묻지 않는다"),
+    ("(52) 허수아비를 물 위에 세운다 (영영 못 만난다)", CFG,
+     'pos: [-20, -3], durability: 12', 'pos: [-20, -14], durability: 12', "세울 수 없다"),
+    ("(53) 허수아비의 내구를 지어낸다 (DojangGui 등급표에 없는 몸)", CFG,
+     "durability: 22 }", "durability: 23 }", "지어낸다"),
+    ("(54) 명패에서 TTK 를 뺀다 (타격감을 잴 수 없다)", CFG,
+     "상대 TTK {ttk}합", "상대 TTK", "맞은 것을 다 말하지 않는다"),
+
+    # ─── ★★ 능(能) — 2026-07-13. **못 하는 것을 시키지 마라** ───
+    #
+    # 오늘의 가장 큰 거짓말: 나루에 오는 몸은 **범인**인데(air_jumps 0), 경공 과제는
+    # "공중에서 점프를 한 번 더" 라고 시키고 있었다. 문장은 gyeonggong.yml 과 **글자 그대로 같았다** —
+    # 그래서 옛 눈(문장 대조)은 통과시켰다. 눈이 **문장만 보고 몸을 안 봤다.**
+    # 아래는 그 축을 시험한다.
+    ("(55) ★★ 경공 과제에서 requires 를 뗀다 (모든 신참이 못 하는 조작을 시킨다)", CFG,
+     "        requires: 허공_딛기", "        requires_없앰: 허공_딛기", "못 하는 조작"),
+    ("(56) ★ 예고(unavailable)를 명령형으로 바꾼다 (못 하는 사람에게 하라고 시킨다)", CFG,
+     "§8허공을 딛는 것은 §7개화(일류)§8 부터다 — 지금 네 발은 땅의 것이다.",
+     "§8공중에서 점프를 한 번 더 눌러라.", "명령형"),
+    ("(57) ★ 예고를 통째로 지운다 (못 하는 사람의 판이 빈다)", CFG,
+     "        unavailable: \"§8허공을 딛는 것은", "        unavailable_없앰: \"§8허공을 딛는 것은",
+     "예고\\)이 없다"),
+    ("(58) ★ 코드가 허공 딛기의 가부를 지어낸다 (등록부에 안 묻는다)", SRC,
+     "                    yield gg != null && gg.open(realm) && gg.ceiling(realm).airJumps() > 0;",
+     "                    yield gg != null;", "제 주인"),
+    ("(59) ★★ applicable() 이 못 하는 과제를 센다 (all_done 이 영영 안 뜬다)", SRC,
+     "            if (lacks(player, l)) {\n                continue;\n            }", "",
+     "all_done|못 했다고 센다"),
+    ("(60) ★ 등록부가 지어낸 능의 이름을 적는다 (코드가 모르는 능)", CFG,
+     "        requires: 허공_딛기", "        requires: 물_위_걷기", "지어낸 능"),
+
+    # ─── ★★ 콤보 — 공격이 참격이 됐다. **그림의 리듬을 입력의 문법이라 가르치면 안 된다** ───
+    ("(61) ★ 손 과제가 콤보를 가르친다 (코드는 '콤보가 아니다'라고 못 박았다)", CFG,
+     "획이 §f호를 그리며 돈다§7 — 연타하면 §f방향§7만 바뀐다(횡 → 역횡 → 올려베기).",
+     "검을 든 손이 알아서 초식을 낸다 (1·2타 → 3타).", "콤보"),
+
+    # ─── ★★ 접합 — 디스코드가 되돌려보내는 선행 문 ───
+    ("(62) ★ 접속 과제가 선행 문(/혼천 시작)을 안 말한다 (거기서 튕긴다)", CFG,
+     "§7① §f디스코드§7 에서 §f/혼천 시작§7 — 이름·성별을 짓고 §f서장§7 을 끝낸다.\\n",
+     "", "선행 문"),
+
+    # ─── ★★ 조성 완결성 — **반쯤 선 것을 '서 있다'고 하지 마라** ───
+    #
+    # 오늘 크래시가 나루를 반쯤 지어 놓고 죽였고, 조성기는 "이미 서 있다"며 건너뛰었다.
+    # built() 가 본 것이 **블록 하나(종)** 였기 때문이다. 한 칸은 표본이 아니다.
+    ("(63) ★★ 조성 완결성을 블록 하나(종)로 판단한다 — 오늘의 병 그 자체", SRC,
+     "    private int completeness(World w) {\n        List<Place> plan = plan(groundY(w));",
+     "    private boolean built(World w) {\n        return w.getBlockAt(cx + bell[0], "
+     "groundY(w) + road.deckY() + 1, cz + bell[1]).getType() == Material.BELL;\n    }\n"
+     "    private int completeness(World w) {\n        List<Place> plan = plan(groundY(w));",
+     "블록 하나"),
+    ("(64) ★ 완결성 표본을 난수로 집는다 (같은 세계가 매번 다른 점수를 받는다)", SRC,
+     "        for (int i = 0; i < plan.size(); i += verifySample) {",
+     "        for (int i = 0; i < plan.size(); i += 1 + (int) (Math.random() * verifySample)) {",
+     "난수"),
+    ("(65) ★ 완결성 문턱을 등록부에서 뗀다 (코드가 눈금을 지어낸다)", CFG,
+     "    verify_min_pct: 97", "    verify_min_pct_없앰: 97", "눈금을 코드가 지어내"),
+    ("(66) ★ 세어 놓고 그 답을 안 쓴다 (못 미쳐도 안 짓는다)", SRC,
+     "        int score = force ? -1 : completeness(w);",
+     "        int score = 100;",
+     "견주지 않는다|세어 놓고"),
+
+    # ─── ★★ 발판 — 2026-07-13. 사용자: **"발판 밟아도 메시지가 안 뜬다."** ───
+    #
+    # 재 보니 나루에 압력판이 **하나도 없었다.** 그런데:
+    #   · 조성 로그는 "발판 6" 이라 찍었다 — 그것은 **등록부의 개수**(plates.size())였다
+    #   · 완결도는 **97%** 였다 — 표본이 늪(4만 칸)에 묻혀 **발판 6칸을 못 봤다** (0.015%)
+    # 그래서 조성기는 "이미 서 있다"며 건너뛰었고, 발판은 **영영 안 깔렸다.**
+    # 표본은 **부피를 재지 의미를 재지 않는다.** 이정표는 전수 검사해야 한다.
+    ("(68) ★★ 조성 로그가 발판을 등록부에서 센다 (0개가 깔려도 '발판 6')", SRC,
+     '                + " · 발판 " + livePlates + "/" + plates.size()',
+     '                + " · 발판 " + plates.size()', "세계에게 묻지 않는다|발판"),
+    ("(69) ★★ 이정표(발판·종) 전수 검사를 뜯는다 — 발판 0인데 '이미 서 있다'", SRC,
+     "        boolean marks = !force && landmarksStand(w);",
+     "        boolean marks = true;", "이정표|전수"),
+    ("(70) ★ 발판을 세계가 아니라 등록부에서 센다", SRC,
+     "            if (w.getBlockAt(cx + p.x(), y, cz + p.z()).getType() == PLATE) {\n                n++;\n            }",
+     "            n++;",
+     "세계에게 묻지 않는다|발판"),
+
+    # ─── ★ 허수아비가 쌓인다 — 등록부는 6인데 세계에 24 (오늘 저장된 나루에서 실제로 나왔다) ───
+    ("(67) ★ ensureDummies 가 `>=` 로 판단한다 (허수아비가 쌓이고 영영 안 치워진다)", SRC,
+     "        if (countDummies(w) == dummies.size()) {",
+     "        if (countDummies(w) >= dummies.size()) {", "많은 것도 틀린 것이다"),
 ]
 
 
 def run_audit():
-    p = subprocess.run([sys.executable, AUDIT], capture_output=True, text=True)
+    # --no-world: 이 시험은 **정적 눈**을 시험한다 (config·소스를 흔들어 본다).
+    # 세계 축(⑪)은 저장된 월드를 읽으므로 소스를 흔든다고 바뀌지 않는다 — 그것은 따로 잰다.
+    p = subprocess.run([sys.executable, AUDIT, "--no-world"], capture_output=True, text=True)
     return p.returncode, p.stdout + p.stderr
 
 

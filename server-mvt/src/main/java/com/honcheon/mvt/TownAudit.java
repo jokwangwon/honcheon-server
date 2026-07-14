@@ -182,6 +182,10 @@ public final class TownAudit {
         return audit(world, anchors, List.of(), cx, cy, cz);
     }
 
+    /** 앵커이되 건물이 아닌 것 — 야외 표식. 건물로 실측하면 전부 "지붕없음" 위반이 된다. */
+    private static final java.util.Set<String> NOT_A_BUILDING =
+            java.util.Set.of("장터", "북쪽_산길", "흑수나루");
+
     public static List<String> audit(World world, Map<String, Location> anchors, List<Zone> zones,
                                      int cx, int cy, int cz) {
         List<String> out = new ArrayList<>();
@@ -198,7 +202,7 @@ public final class TownAudit {
         List<Bld> blds = new ArrayList<>();
         if (anchors != null) {
             for (Map.Entry<String, Location> e : anchors.entrySet()) {
-                if (e.getValue() == null || "북쪽_산길".equals(e.getKey()) || "장터".equals(e.getKey())) {
+                if (e.getValue() == null || NOT_A_BUILDING.contains(e.getKey())) {
                     continue;   // 앵커이되 건물이 아니다 (좌표 표식)
                 }
                 Bld b = measureBuilding(world, e.getKey(), e.getValue());
@@ -220,6 +224,7 @@ public final class TownAudit {
         nightLight(out, violations, world, path, cx, cy, cz);
         outsideTown(out, violations, world, cx, cy, cz);
         contracts(out, violations, world, anchors, cx, cy, cz);
+        standable(out, violations, anchors);   // v7.3 ★ — 앵커에 사람이 설 수 있는가
 
         out.add(HEAD + "── 총평 ──");
         if (violations.isEmpty()) {
@@ -1024,6 +1029,45 @@ public final class TownAudit {
         } else {
             out.add(BAD + String.format("암흑 구간 %.1f%% > %.0f%% — 등롱 리듬이 성기다", pct, DARK_MAX_PCT));
             violations.add(String.format("암흑 %.0f%%", pct));
+        }
+    }
+
+    // ─── ⑩ 앵커 착지 — ★ 사람이 설 수 있는가 (오늘의 병) ───
+
+    /**
+     * ★ <b>모든 앵커가 설 수 있는 자리인가.</b> {@link Standing} 이 발밑·머리·<b>걸어 나갈 길</b>을 잰다.
+     *
+     * <p>이 눈이 없어서 {@code 장터} 앵커가 <b>광장 우물</b> 안에 박힌 채 아무도 못 봤고, 나루를 건넌
+     * 사람이 우물에 갇혔다. 이제 <b>검수가 이것을 위반으로 잡는다</b>.
+     *
+     * <p>못 서는 앵커라도 <b>보정 착지점</b>을 같이 찍는다 — 실제로 사람이 내려질 자리다.
+     */
+    static void standable(List<String> out, List<String> violations, Map<String, Location> anchors) {
+        out.add(HEAD + "⑩ 앵커 착지 (설 수 있는가 · 걸어 나갈 수 있는가)");
+        if (anchors == null || anchors.isEmpty()) {
+            out.add(BAD + "앵커가 없다");
+            violations.add("앵커없음");
+            return;
+        }
+        for (Map.Entry<String, Location> e : anchors.entrySet()) {
+            String k = e.getKey();
+            Location at = e.getValue();
+            if (at == null || at.getWorld() == null) {
+                out.add(BAD + k + " — 앵커가 비었다");
+                violations.add(k + " 앵커빔");
+                continue;
+            }
+            Standing.Verdict v = Standing.measure(at);
+            if (v.ok()) {
+                out.add(OK + k + " " + Standing.describe(at) + " — 설 수 있다");
+                continue;
+            }
+            Location spot = Standing.landing(at);
+            out.add(BAD + k + " " + Standing.describe(at) + " — " + v.why());
+            out.add((spot == null ? BAD : INFO) + "    착지 보정 → " + Standing.describe(spot)
+                    + (spot == null ? " ★ 둘레 " + Standing.SEARCH_R + "칸에도 설 자리가 없다"
+                    : " (사람은 여기로 내려진다)"));
+            violations.add(k + " 착지불가");
         }
     }
 

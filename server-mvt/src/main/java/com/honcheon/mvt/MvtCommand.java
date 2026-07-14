@@ -53,7 +53,9 @@ public final class MvtCommand implements CommandExecutor {
                 case "시드검사" -> seedCheck(sender, args);    // 지형 적합성 점수 (관리자)
                 case "세계조성" -> buildWorld(sender);         // 등록 지역을 제 좌표에 (관리자)   // 무공 검증용 — MVT엔 캐릭터 시트가 없다
                 case "지역조성" -> buildRegion(sender, args);   // 원거리 등록지 하나를 짓는다 (관리자·콘솔 가능)
+                case "지형조성" -> forgeLand(sender, args);     // ★ 땅만 빚는다 — 집은 안 짓는다 (지도 → 지형 → 건축)
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
+                case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
@@ -61,21 +63,37 @@ public final class MvtCommand implements CommandExecutor {
                 case "태세" -> stance(sender, args);         // 맞는 쪽의 선택 — 회피·막기·흘리기 (기본은 자동)
                 case "조성" -> buildTown(sender, args);
                 case "검수" -> auditTown(sender);   // 규칙 린트 — 콘솔 가능 (앵커 기준)
+                case "앵커검사" -> anchorCheck(sender);   // ★ 앵커에 사람이 설 수 있는가 (우물을 잡는 눈)
+                case "앵커재측" -> anchorRemeasure(sender);   // ★ 못 서는 앵커를 설 수 있는 자리로 다시 박는다
                 case "조감" -> renderTown(sender, args);   // 조감도 PNG — 콘솔 가능 (인자 = 지역id)
                 case "출행" -> travel(sender, args);          // 지역으로 간다 (조성된 곳만)
-                case "입도" -> antechamber(sender);          // 나루로 — 몸을 다시 익힌다
+                case "입도" -> antechamber(sender, args);    // 나루로 — 몸을 다시 익힌다 (인자 재조성 = 다시 세운다)
                 case "도강" -> crossRiver(sender);           // 강을 건넌다 (= 부두의 종)
                 case "연무장" -> dojangEnter(sender);        // 시험 월드로 (스킬·몹·허수아비)
                 case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
+                case "금고" -> dojangVault(sender);          // ★ 연무장이 누구의 무엇을 맡고 있는가 (콘솔 가능)
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
                 case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
                 case "계측" -> metrics(sender, args);        // MSPT·티커별 예산 (performance.yml 대조)
                 case "수련" -> training(sender, args);       // 하루 5구간을 무엇에 쓸 것인가 (성장 축)
                 case "시트" -> sheetInfo(sender);            // 나는 누구인가 — 강호의 장부가 답한다
-                case "접속" -> link(sender);                 // 마크의 몸 ↔ 디스코드의 이름 (코드 발급)
+                case "접속" -> link(sender);                 // 초대 링크 + 안내 (★ 낡은 청을 초기화한다)
+                // ★★ 접합의 결속 — 사람이 치지 않는다. 화면의 [잇는다]/[아니다] 클릭이 대신 친다.
+                //   이 두 줄이 **도용을 막는 자리**다 (linkDecision 이 몸을 대조한다)
+                case "수락" -> linkDecide(sender, args, true);
+                case "거절" -> linkDecide(sender, args, false);
+                // ★★ 서장 — 사람이 치지 않는다. **책 안의 글자를 누르면** 이것이 대신 쳐진다
+                //   (/혼천 서장 <토큰> <n> — SeojangBook 의 ClickEvent.runCommand)
+                case "서장" -> seojangPick(sender, args);
                 case "판정보기" -> judgeEye(sender);         // 【디버그】 판정의 눈 — 히트박스·2d6·피해의 층
+                case "타격보기" -> hitEye(sender);           // 【디버그】 타격의 눈 — 시간 구조·히트스톱·넉백·흔들림
                 case "모션진단" -> motionDiag(sender, args);   // 3D 층이 실제로 떴는가 (팩 유무 포함)
+                case "획시험" -> strokeTest(sender);          // 획 15종 + 대조군을 한 줄로 — 보라 큐브를 이름으로 지목한다
+                case "사다리" -> ladder(sender);              // ★ 여섯 격을 나란히 — 한눈에 사다리를 본다 (화려함의 눈)
+                case "획위치" -> strokeOrigin(sender, args);   // ★ 획이 서는 자리 — 인게임에서 밀고 당긴다 (즉시 그어 본다)
+                case "스윙" -> swing(sender, args);           // ★★ 스윙의 크기·각도·활·전진 — 밀면 즉시 한 획 (찌르기 → 베기)
                 case "문장" -> crests(sender);
+                case "초기화" -> wipe(sender, args);   // ★ 되돌린다 — 시험용 (두 번 쳐야 지운다)
                 default -> help(sender);
             };
         } catch (Exception e) {
@@ -439,12 +457,39 @@ public final class MvtCommand implements CommandExecutor {
      * 첫 합격지를 잡는다 (청하현과 같은 규칙 — 좌표는 흔들려도 여정 일수는 안 흔들린다).
      */
     private boolean buildRegion(CommandSender sender, String[] args) {
+        return region(sender, args, false);
+    }
+
+    /**
+     * /혼천 지형조성 &lt;id&gt; — <b>땅만 빚는다. 집은 안 짓는다.</b>
+     *
+     * <p><b>왜 이 문이 따로 있는가.</b> 사용자의 순서는 <b>지도 → 지형 → 건축</b>이고, 2계층 계약은
+     * <b>"땅에 맞게 건물이 올라가는 것이지, 건축에 맞게 지형이 생기는 게 아니다"</b> 이다.
+     * 그런데 {@code /혼천 지역조성} 은 {@link RemoteBuilder#unbuildableReasons} 로 <b>먼저 거절하고 돌아선다</b> —
+     * 그래서 <b>집이 미결이면 땅도 못 선다</b>. 그것은 계층이 거꾸로 선 것이다:
+     * 땅은 {@code build_radius} 를 <b>쓰지도 않는다</b> (지형 반경은 §1-b {@code land.forge_radius} 하나 —
+     * <b>"땅은 세력을 모른다"</b>). 강남 상로가 바로 그 인질이다: 물길(rivers.yml)도 지형(수향)도
+     * 등록부에 <b>이미 적혀 있는데</b>, {@code commercial_class} 가 미결이라 <b>땅조차 못 빚는다</b>.
+     *
+     * <p>그러므로 이 문은 <b>건축의 미결을 지형의 발목에서 푼다</b>. 집이 왜 못 서는지는 <b>그대로 말한다</b> —
+     * 조용히 넘어가지 않는다. 땅이 선 뒤 등급이 정해지면 {@code /혼천 지역조성} 이 <b>그 땅 위에</b> 집을 올린다
+     * ({@code Terraform} 이 원장을 보고 <b>땅을 한 블록도 안 건드린다</b>).
+     */
+    private boolean forgeLand(CommandSender sender, String[] args) {
+        return region(sender, args, true);
+    }
+
+    /**
+     * @param terrainOnly 참이면 <b>땅까지만</b> — 건축 게이트({@code unbuildableReasons})를 <b>묻지 않는다</b>
+     */
+    private boolean region(CommandSender sender, String[] args, boolean terrainOnly) {
         if (sender instanceof Player p && !p.isOp()) {
             return true;
         }
+        String cmd = terrainOnly ? "지형조성" : "지역조성";
         WorldMap map = plugin.worldMap();
         if (map == null || args.length < 2) {
-            sender.sendMessage(ChatColor.GRAY + "/혼천 지역조성 <지역id>  (예: nokrim_sochae)");
+            sender.sendMessage(ChatColor.GRAY + "/혼천 " + cmd + " <지역id>  (예: nokrim_sochae)");
             return true;
         }
         WorldMap.Place place = map.place(args[1]);
@@ -452,11 +497,44 @@ public final class MvtCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + args[1]);
             return true;
         }
-        java.util.List<String> blockers = RemoteBuilder.unbuildableReasons(place);
-        if (!blockers.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + place.name() + " — " + String.join(" · ", blockers));
+        // ══════════ ① 지형 게이트 — **땅의 일만 묻는다** (docs/design/gate_and_watertown.md) ══════════
+        //
+        // ★★ 여기가 뒤집힌 자리다. 예전엔 **건축 게이트가 먼저** 서서, 집의 등급이 미결이면
+        //    `return` 하고 돌아섰다 — **집이 미결이면 땅조차 안 빚어졌다.**
+        //    사용자: *"건축의 미결은 건축만 막을 수 있다. 건축의 미결이 땅을 막아서는 안 된다."*
+        TerrainGate.Verdict gate = TerrainGate.judge(place, map.forgeRadius());
+        // ★★ 관문의 판정은 **언제나 로그에 남는다.** 조용히 막으면 그것은 관문이 아니라 함정이다
+        //   (RCON 의 sender 는 명령이 반환되는 순간 죽는다 — 그리로만 말하면 아무도 못 듣는다).
+        Announce.say(plugin, sender, ChatColor.GRAY + "[지형 관문] " + place.id()
+                + " — terrain_state: " + gate.state()
+                + (gate.reason() == null ? "" : " · pending_reason: " + gate.reason())
+                + " · forge_mode: " + gate.mode()
+                + " · 판 v" + TerrainGate.forgeVersion()
+                + (TerrainGate.approved() ? " (승인됨)" : " (★ 미승인)"));
+        for (String note : gate.notes()) {
+            Announce.say(plugin, sender, ChatColor.GRAY + "[지형 관문] " + note);
+        }
+        if ("pending".equals(gate.state()) && gate.mode() == TerrainGate.Mode.preview) {
+            // ★ preview — **월드에 한 블록도 안 쓴다.** 그리고 **그렇다고 소리내어 말한다**
+            Announce.warn(plugin, sender, place.name() + " — 땅을 빚지 않았다 (forge_mode: preview · "
+                    + "pending_reason: " + gate.reason() + "). 예정: 프로파일 "
+                    + TerrainForge.requestedProfile(place)
+                    + " · 표층 " + TerrainForge.surface(place)
+                    + " · 반경 " + map.forgeRadius()
+                    + " · 좌표 (" + place.x() + ", " + place.z() + ")");
             return true;
         }
+        // ══════════ ④ 건축 게이트 — **집만 막는다** (땅은 이미 제 길을 간다) ══════════
+        java.util.List<String> blockers = RemoteBuilder.unbuildableReasons(place);
+        boolean architectureBlocked = !blockers.isEmpty();
+        if (architectureBlocked) {
+            // ★ 실패가 아니다: terrain_state: forged · architecture_state: blocked 는 **정상 상태**다
+            Announce.say(plugin, sender, ChatColor.YELLOW + place.name()
+                    + " — 땅은 빚는다. 집은 아직 못 선다 (architecture_state: blocked): "
+                    + String.join(" · ", blockers));
+        }
+        // ★ 집이 못 서면 **땅만** 짓는다 (⑥ 땅만 남기고 사유 출력). 땅은 이미 제 길을 갔다
+        boolean landOnly = terrainOnly || architectureBlocked;
         World world = sender instanceof Player p2 ? p2.getWorld() : org.bukkit.Bukkit.getWorlds().get(0);
         // 부지 탐색이 먼저 서버를 멈춘다 — 후보마다 지형을 표본하며 **청크를 동기 생성**하기 때문이다
         // (20km 밖의 땅은 아직 존재하지 않는다). 시드검사와 같은 병이고 같은 처방이다: 틱을 나눠 먹는다.
@@ -467,24 +545,29 @@ public final class MvtCommand implements CommandExecutor {
         //   **우리가 만든 것이 다음 탐색을 흔든다.** 그러므로 첫 답을 원장에 굽고, 그 뒤로는 그것을 쓴다.
         int[] at = plugin.regionSite(place.id());
         if (at != null) {
-            sender.sendMessage(ChatColor.GRAY + place.name() + " 부지 (원장 · 다시 찾지 않는다) — ("
-                    + at[0] + ", " + at[2] + ") · 지면 y" + at[1]);
+            Announce.say(plugin, sender, ChatColor.GRAY + place.name()
+                    + " 부지 (원장 · 다시 찾지 않는다) — (" + at[0] + ", " + at[2] + ") · 지면 y" + at[1]);
             preloadThenBuild(sender, world, place,
                     new WorldMap.Site(at[0], at[2], at[1], 0,
-                            map.fit(world, at[0], at[2], place.terrain(), place.biomes())));
+                            map.fit(world, at[0], at[2], place.terrain(), place.biomes())), landOnly);
             return true;
         }
-        sender.sendMessage(ChatColor.GRAY + place.name() + " 부지를 찾는다 — 지형을 표본한다 "
-                + ChatColor.DARK_GRAY + "(틱을 나눠 먹는다 · 서버는 계속 돈다)");
+        Announce.say(plugin, sender, ChatColor.GRAY + place.name() + " 부지를 찾는다 — 지형을 표본한다 "
+                + "(틱을 나눠 먹는다 · 서버는 계속 돈다)");
+        // ★ 얼마나 걸리는지 **미리** 말한다. 화산파는 729초 걸렸고, 그 침묵이 곧 "죽었다"는 오해였다
+        Announce.say(plugin, sender, ChatColor.DARK_GRAY
+                + "※ 봉우리를 세우는 땅은 10분을 넘길 수 있다 (화산파 실측 729초). "
+                + "진행은 [조성·진행] 으로 로그에 남는다 — 조용하면 그때가 사고다");
         new SiteProbe(plugin, map, place, world,
-                site -> preloadThenBuild(sender, world, place, site)).runTaskTimer(plugin, 1L, 1L);
+                site -> preloadThenBuild(sender, world, place, site, landOnly)).runTaskTimer(plugin, 1L, 1L);
         return true;
     }
 
     /** 부지가 정해진 뒤 — 땅을 비동기로 싣고, 실리면 짓는다 */
-    private void preloadThenBuild(CommandSender sender, World world, WorldMap.Place place, WorldMap.Site site) {
-        sender.sendMessage(ChatColor.GRAY + place.name() + " 부지 (" + site.x() + ", " + site.z()
-                + ") · 지면 y" + site.groundY() + " · 지형 점수 " + site.fit().score()
+    private void preloadThenBuild(CommandSender sender, World world, WorldMap.Place place,
+                                  WorldMap.Site site, boolean terrainOnly) {
+        Announce.say(plugin, sender, ChatColor.GRAY + place.name() + " 부지 (" + site.x() + ", "
+                + site.z() + ") · 지면 y" + site.groundY() + " · 지형 점수 " + site.fit().score()
                 + (site.shift() == 0 ? "" : " (등록 좌표에서 " + site.shift() + "칸 이동)"));
 
         // 청크를 **비동기로** 실어 온다. 원거리 조성은 20km 밖의 땅을 처음 만드는 일이라,
@@ -492,17 +575,25 @@ public final class MvtCommand implements CommandExecutor {
         // 땅이 다 실린 뒤에 짓는다: 짓는 것 자체는 메인 스레드의 일이다 (블록 API 는 그것만 허락한다).
         java.util.List<java.util.concurrent.CompletableFuture<org.bukkit.Chunk>> loading =
                 new java.util.ArrayList<>();
-        int pre = "noklim".equals(place.faction()) ? 64 : 150;   // 부지보다 넓게 — 동기 청크 생성이 서버를 멈춘다
+        // ★★ 부지보다 넓게 — 동기 청크 생성이 서버를 멈춘다. **그러나 세력을 묻지 않는다** —
+        //   예전엔 `noklim ? 64 : 150` 이었다. **땅은 세력을 모른다** (world_map.yml §1-b land).
+        int pre = plugin.worldMap().forgeRadius() + plugin.worldMap().probeMargin();
         for (int chunkX = (site.x() - pre) >> 4; chunkX <= (site.x() + pre) >> 4; chunkX++) {
             for (int chunkZ = (site.z() - pre) >> 4; chunkZ <= (site.z() + pre) >> 4; chunkZ++) {
                 loading.add(world.getChunkAtAsync(chunkX, chunkZ, true));
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "땅을 싣는다 — 청크 " + loading.size() + "개 (비동기)");
+        Announce.say(plugin, sender, ChatColor.GRAY + "땅을 싣는다 — 청크 " + loading.size() + "개 (비동기)");
         java.util.concurrent.CompletableFuture
                 .allOf(loading.toArray(new java.util.concurrent.CompletableFuture[0]))
                 .thenRun(() -> org.bukkit.Bukkit.getScheduler().runTask(plugin,
-                        () -> finishRegion(sender, world, place, site)));
+                        () -> finishRegion(sender, world, place, site, terrainOnly)))
+                // ★ 청크 적재가 터지면 **여기서 끝난다** — 예전엔 그 뒤로 아무 일도, 아무 말도 없었다.
+                //   조용한 실패는 없다: 로그에 남긴다 (RCON 은 이미 끊겼을 수 있으므로 로그가 정본이다).
+                .exceptionally(err -> {
+                    Announce.fail(plugin, sender, "★ 땅을 싣지 못했다 — " + place.id() + ": " + err);
+                    return null;
+                });
     }
 
     /**
@@ -603,24 +694,37 @@ public final class MvtCommand implements CommandExecutor {
     }
 
     /** 땅이 실린 뒤 — 짓고 구역을 등록한다 (메인 스레드) */
-    private void finishRegion(CommandSender sender, World world, WorldMap.Place place, WorldMap.Site site) {
+    private void finishRegion(CommandSender sender, World world, WorldMap.Place place,
+                              WorldMap.Site site, boolean terrainOnly) {
         // 지면은 **첫 조성이 잰 값**을 쓴다 (원장). 다시 재면 지난번에 세운 산을 지면으로 읽는다.
         Integer remembered = plugin.regionBase(place.id());
         int baseY = remembered == null ? site.groundY() : remembered;
         if (remembered == null) {
             plugin.setRegionBase(place.id(), site.x(), baseY, site.z());   // 자리를 굽는다 — 좌표까지
         }
-        // 문파 부지 110 — 산이 72켜로 서면 계단이 그만큼 길어야 오른다 (반경 44 는 17켜에서 멎는다).
-        int forgeRadius = "noklim".equals(place.faction()) ? 24 : 110;
+        // ★★★ **땅의 반경 — 어디나 같은 값** (world_map.yml §1-b land.forge_radius).
+        //
+        //   예전엔 이 줄이 `noklim ? 24 : 110` 이었다 — **땅이 세력을 알고 있었다.**
+        //   ★ 사용자 (2026-07-13): *"**땅은 세력을 모른다.** 산은 문파가 흥하든 망하든 그 자리에 그만큼 있다."*
+        //     ⇒ 도적 24 의 예외를 **폐지**했다. 도적의 산이라고 작게 서지 않는다 — 산은 산이다.
+        //
+        //   ★ 110 인 이유: 산이 72켜로 서면 계단이 그만큼 길어야 오른다 (반경 44 는 17켜에서 멎는다).
+        //     ★★ 그리고 **이미 이 반경으로 빚어진 땅이 있다** (TerrainLedger) — 그래서 값은 안 건드렸다.
+        //   ★ 2계층: 집(build_radius ≤ 80)이 이 안에 있어야 한다 — map_lint.two_layers 가 매번 잰다.
+        int forgeRadius = plugin.worldMap().forgeRadius();
 
         if (TickBudget.busy()) {
-            sender.sendMessage(ChatColor.RED + "이미 조성이 돌고 있다.");
+            Announce.warn(plugin, sender, "이미 조성이 돌고 있다 — 끝난 뒤에 다시 쳐라 "
+                    + "(한 번에 하나만 돈다).");
             return;
         }
+        Announce.say(plugin, sender, ChatColor.GRAY + "[조성] " + place.id() + " 시작 — 반경 "
+                + forgeRadius + " · 프로파일 " + TerrainForge.requestedProfile(place)
+                + " · 좌표 (" + site.x() + ", " + baseY + ", " + site.z() + ")");
         // ★ 청크를 **먼저 실어야 한다.** 안 그러면 드레인 도중 메인이 청크를 동기 생성한다 —
         //   땅을 빚느라 느린 게 아니라 **청크를 기다리느라** 느려진다 (화산파가 300초 안전핀에 걸린 진범).
         //   실어 둘 반경은 지형이 빚을 반경이 정한다 — 등록부가 아니라 **이 조성이 손댈 범위**가.
-        int preloadRadius = forgeRadius + 24;
+        int preloadRadius = forgeRadius + plugin.worldMap().preloadMargin();
         // 지형·굴·건축 셋을 **한 세션**으로 묶어 틱을 나눠 먹인다 (셋 다 world 를 받으므로 대역 하나로 덮인다).
         // 봉우리 하나가 반경 64 × 높이 72 다 — 청하현보다 큰 폭탄이었다.
         TickBudget.preload(plugin, world, site.x(), site.z(), preloadRadius).thenRun(() ->
@@ -637,7 +741,10 @@ public final class MvtCommand implements CommandExecutor {
                     // ★ 봉인 — **건축이 땅을 바꿨는가**를 기계가 증명한다 (자재가 아니라 **형상**을 잰다)
                     TerrainSeal.Probe probe = TerrainSeal.of(w);
                     TerrainSeal.Seal before = TerrainSeal.seal(probe, land.spec());
-                    java.util.List<Zone> built = RemoteBuilder.build(w, place, land.spec(), land.cave());
+                    // ★ 지형조성이면 **집을 안 짓는다.** 땅은 건축을 모른다 — 그것이 2계층 계약이다
+                    java.util.List<Zone> built = terrainOnly
+                            ? java.util.List.of()
+                            : RemoteBuilder.build(w, place, land.spec(), land.cave());
                     TerrainSeal.Seal after = TerrainSeal.seal(probe, land.spec());
                     return new RegionResult(land, before, after, built);
                 },
@@ -645,34 +752,52 @@ public final class MvtCommand implements CommandExecutor {
                     plugin.getLogger().info("[지형] " + (r.land().forged()
                             ? "새로 빚었다" : "★ 원장에서 읽었다 (땅을 안 건드렸다)")
                             + " · 요청 " + r.land().requests() + "건 — " + r.spec().summary());
+                    if (r.land().forged()) {
+                        // ③ 조성 영수증 — **땅은 한 번만 선다.** 어느 판(版)으로 섰는지 남긴다
+                        //   (다음 사람이 "이 땅은 점묘판으로 빚어졌는가"를 물을 수 있어야 한다)
+                        TerrainGate.receipt(place, site.x(), site.z(), forgeRadius, world.getSeed());
+                        Announce.say(plugin, sender, ChatColor.GRAY + "[영수증] " + place.id()
+                                + " — terrain_state: forged · forge_version: "
+                                + TerrainGate.forgeVersion() + " · state: committed");
+                    }
                     if (!r.land().forged() && r.land().requests() > 0) {
-                        sender.sendMessage(ChatColor.GOLD + "땅에 " + r.land().requests()
-                                + "가지 일을 **더했다** (나머지는 그대로다)");
+                        Announce.say(plugin, sender, ChatColor.GOLD + "땅에 " + r.land().requests()
+                                + "가지 일을 더했다 (나머지는 그대로다)");
                     }
                     for (String no : Terraform.refusals) {
-                        sender.sendMessage(ChatColor.RED + "거절: " + no);
+                        Announce.warn(plugin, sender, "거절: " + no);
                     }
                     for (String no : LandRequest.refusals) {
                         // 거절은 소리내어 말한다 — 조용히 넘어가면 그것이 곧 거짓말이다
-                        sender.sendMessage(ChatColor.RED + "요청 거절: " + no);
+                        Announce.warn(plugin, sender, "요청 거절: " + no);
                     }
                     for (String line : TerrainSeal.compare(r.before(), r.after())) {
-                        sender.sendMessage(line);
+                        Announce.say(plugin, sender, line);   // ★ 봉인 판정도 로그에 남는다
                     }
                     if (RiverForge.lastRefusal != null) {
                         // 조용히 넘어가지 않는다 — **짓지 않으면 위반이 없다**는 침묵이 이 사고의 정체였다
-                        plugin.getLogger().warning("[지형/강] " + RiverForge.lastRefusal);
-                        sender.sendMessage(ChatColor.RED + "강을 파지 못했다 — " + RiverForge.lastRefusal);
+                        Announce.warn(plugin, sender,
+                                "[지형/강] 강을 파지 못했다 — " + RiverForge.lastRefusal);
                     }
                     if (r.cave() != null) {
-                        plugin.getLogger().info("[지형/동굴] " + place.id() + " — 입구 ("
-                                + r.cave().mouthX() + "," + r.cave().mouthY() + "," + r.cave().mouthZ()
-                                + ") · 파낸 칸 " + r.cave().carved());
-                        sender.sendMessage(ChatColor.GRAY + "굴 입구: /tp " + r.cave().mouthX() + " "
-                                + r.cave().mouthY() + " " + r.cave().mouthZ());
+                        Announce.say(plugin, sender, ChatColor.GRAY + "[지형/동굴] " + place.id()
+                                + " — 굴 입구: /tp " + r.cave().mouthX() + " " + r.cave().mouthY()
+                                + " " + r.cave().mouthZ() + " · 파낸 칸 " + r.cave().carved());
+                    }
+                    if (terrainOnly) {
+                        // ★ 땅이 섰다. **집은 일부러 안 지었다** — 조용한 성공이 아니라 **말하는 성공**이다
+                        Announce.say(plugin, sender, ChatColor.GOLD + "[지형조성] " + place.name()
+                                + " 의 땅이 섰다 — (" + site.x() + ", " + baseY + ", " + site.z()
+                                + ") · 반경 " + forgeRadius + " · 지형 " + place.terrain()
+                                + " · 건축 없음 (땅만)");
+                        Announce.say(plugin, sender, ChatColor.GRAY
+                                + "집은 안 지었다. 등급이 정해지면 /혼천 지역조성 이 이 땅 위에 올린다 "
+                                + "— 땅은 원장에 굳었으므로 다시 안 빚는다");
+                        return;
                     }
                     if (r.built().isEmpty()) {
-                        sender.sendMessage(ChatColor.RED + "원형이 없어 아무것도 서지 않았다.");
+                        Announce.warn(plugin, sender, "원형이 없어 아무것도 서지 않았다 — "
+                                + place.id() + " (땅은 섰다)");
                         return;
                     }
                     java.util.List<Zone> all = new java.util.ArrayList<>(plugin.zones());
@@ -682,14 +807,17 @@ public final class MvtCommand implements CommandExecutor {
                     // ★ 사람은 **조성 순간에만** 설 수 있다. 지역 앵커는 SiteSpec/CaveSpec 에만 있고
                     //   Zone 상자는 중심 대칭이라 방위를 모른다 — 나중에 재측량하면 장문이 허공에 선다.
                     plugin.populace().bindRegion(place, r.spec(), r.cave());
-                    sender.sendMessage(ChatColor.GOLD + place.name() + " 이(가) 섰다 — (" + site.x() + ", "
-                            + baseY + ", " + site.z() + ") · 구역 " + r.built().size() + "곳");
+                    Announce.say(plugin, sender, ChatColor.GOLD + place.name() + " 이(가) 섰다 — ("
+                            + site.x() + ", " + baseY + ", " + site.z() + ") · 구역 "
+                            + r.built().size() + "곳");
                     plugin.getLogger().info("[지역조성] " + place.id() + " (" + place.name() + ") — ("
                             + site.x() + ", " + baseY + ", " + site.z() + ") · 구역 "
                             + r.built().size() + "곳");
                 },
-                err -> sender.sendMessage(ChatColor.RED + "조성 실패: " + err),
-                sender::sendMessage)));
+                // ★★ 여기가 진범이었다: 실패와 진행이 **죽은 RCON sender 로만** 갔다.
+                //    RCON 은 명령이 반환되는 순간 소켓을 닫는다 — 12분간의 진행도, 실패도 허공이었다.
+                err -> Announce.fail(plugin, sender, "★ 조성 실패 — " + place.id() + ": " + err),
+                line -> Announce.progress(plugin, sender, line))));
     }
 
     /** 지형·굴·건축을 한 세션으로 묶은 결과 (봉인 전/후 포함) */
@@ -734,7 +862,7 @@ public final class MvtCommand implements CommandExecutor {
             //   조성기는 **한 줄도 안 고친다** — 대역 월드를 주고 쓰기를 큐에 적어 메인이 20ms 씩 집행한다.
             java.util.List<Zone> zones = new java.util.ArrayList<>();
             if (TickBudget.busy()) {
-                sender.sendMessage(ChatColor.RED + "이미 조성이 돌고 있다.");
+                Announce.warn(plugin, sender, "이미 조성이 돌고 있다 — 끝난 뒤에 다시 쳐라.");
                 return;
             }
             TickBudget.preload(plugin, world, site.x(), site.z(), 96).thenRun(() ->
@@ -745,17 +873,16 @@ public final class MvtCommand implements CommandExecutor {
                                         TickBudget.rebind(built, world);   // 앵커가 대역 월드를 물고 있다
                                         plugin.setAnchors(built);
                                         plugin.setZones(zones);
-                                        sender.sendMessage(ChatColor.GOLD + "세계가 섰다 — 청하현 ("
-                                                + site.x() + ", " + site.z() + ") · 장소 " + built.size()
-                                                + "곳 · 구역 " + zones.size() + "곳");
-                                        sender.sendMessage(ChatColor.GRAY
-                                                + "원거리 지역: /혼천 지역조성 <id> (예: nokrim_sochae)");
-                                        plugin.getLogger().info("[세계조성] 청하현 — (" + site.x() + ", "
+                                        Announce.say(plugin, sender, ChatColor.GOLD
+                                                + "[세계조성] 세계가 섰다 — 청하현 (" + site.x() + ", "
                                                 + site.groundY() + ", " + site.z() + ") · 장소 "
-                                                + built.size() + "곳");
+                                                + built.size() + "곳 · 구역 " + zones.size() + "곳");
+                                        Announce.say(plugin, sender, ChatColor.GRAY
+                                                + "원거리 지역: /혼천 지역조성 <id> (예: nokrim_sochae)");
                                     },
-                                    err -> sender.sendMessage(ChatColor.RED + "조성 실패: " + err),
-                                    sender::sendMessage)));
+                                    // ★ 같은 병이 여기에도 있었다 — 청하현이 터져도 콘솔은 조용했을 것이다
+                                    err -> Announce.fail(plugin, sender, "★ 조성 실패 — 청하현: " + err),
+                                    line -> Announce.progress(plugin, sender, line))));
         }).runTaskTimer(plugin, 1L, 1L);
         return true;
     }
@@ -943,6 +1070,92 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * ★ <b>/혼천 앵커검사</b> — 앵커마다 <b>사람이 설 수 있는가</b>를 잰다 (콘솔 가능).
+     *
+     * <p>발밑이 단단한가 · 몸이 들어가는가 · <b>걸어 나갈 수 있는가</b>. 셋째가 <b>우물을 거르는 조건</b>이다:
+     * 우물은 앞의 둘을 만족할 수 있으나 사방이 담이라 <b>못 나온다</b> ({@link Standing}).
+     */
+    private boolean anchorCheck(CommandSender sender) {
+        Map<String, Location> anchors = plugin.anchors();
+        if (anchors.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "앵커가 없다 — 먼저 /혼천 조성");
+            return true;
+        }
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.List<String> violations = new java.util.ArrayList<>();
+        TownAudit.standable(out, violations, anchors);
+        out.forEach(sender::sendMessage);
+        if (violations.isEmpty()) {
+            sender.sendMessage(ChatColor.GREEN + "앵커 " + anchors.size() + "곳 전부 설 수 있다.");
+        } else {
+            sender.sendMessage(ChatColor.RED + "★ 착지 불가 " + violations.size() + "건 — "
+                    + ChatColor.WHITE + "/혼천 앵커재측" + ChatColor.GRAY + " 로 고친다.");
+        }
+        return true;
+    }
+
+    /**
+     * ★ <b>/혼천 앵커재측</b> — 못 서는 앵커를 <b>설 수 있는 자리로 다시 박는다</b> (관리자 · anchors.yml 저장).
+     *
+     * <p><b>「장터」 는 옮기지 않는다.</b> 그 앵커는 장소 표식이 아니라 <b>마을 원점</b>이다 — 콘솔 재조성
+     * ({@code /혼천 조성})·검수·조감이 {@code anchor("장터").getBlockY() - 1} 을 원점으로 삼는다.
+     * 옮기면 다음 재조성 때 <b>마을이 통째로 이사한다</b>. 그래서 표식은 그대로 두고, 대신
+     * <b>내릴 때마다 잰다</b> ({@link Standing#landing}) — 도강·귀환·출행 세 곳 모두. 사람은 우물이 아니라
+     * 우물 <b>곁</b>에 내린다. 이 사실을 여기서 <b>소리내어 말한다</b> (조용한 기본값 금지).
+     */
+    private boolean anchorRemeasure(CommandSender sender) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage(ChatColor.RED + "앵커는 관리자의 몫이다.");
+            return true;
+        }
+        Map<String, Location> anchors = plugin.anchors();
+        if (anchors.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "앵커가 없다 — 먼저 /혼천 조성");
+            return true;
+        }
+        Map<String, Location> fixed = new java.util.LinkedHashMap<>(anchors);
+        int moved = 0, kept = 0, failed = 0;
+        for (Map.Entry<String, Location> e : anchors.entrySet()) {
+            String k = e.getKey();
+            Location at = e.getValue();
+            if (at == null || at.getWorld() == null) {
+                continue;
+            }
+            Standing.Verdict v = Standing.measure(at);
+            if (v.ok()) {
+                continue;
+            }
+            Location spot = Standing.landing(at);
+            if (spot == null) {
+                sender.sendMessage(ChatColor.RED + "✘ " + k + " " + Standing.describe(at) + " — "
+                        + v.why() + " · 둘레 " + Standing.SEARCH_R + "칸에도 설 자리가 없다");
+                failed++;
+                continue;
+            }
+            if ("장터".equals(k)) {
+                // ★ 원점은 못 옮긴다 — 옮기면 다음 콘솔 재조성 때 마을이 이사한다.
+                sender.sendMessage(ChatColor.YELLOW + "◆ 장터 " + Standing.describe(at) + " — " + v.why());
+                sender.sendMessage(ChatColor.GRAY + "   장터 앵커는 **마을 원점 표식**이라 옮기지 않는다 "
+                        + "(옮기면 재조성 때 마을이 이사한다).");
+                sender.sendMessage(ChatColor.GRAY + "   대신 도강·귀환·출행이 내릴 때마다 잰다 → 착지 "
+                        + ChatColor.WHITE + Standing.describe(spot));
+                kept++;
+                continue;
+            }
+            fixed.put(k, spot);
+            sender.sendMessage(ChatColor.GREEN + "✔ " + k + " " + Standing.describe(at) + " → "
+                    + Standing.describe(spot) + ChatColor.GRAY + " (" + v.why() + ")");
+            moved++;
+        }
+        if (moved > 0) {
+            plugin.setAnchors(fixed);   // anchors.yml 에 적는다 — 재기동을 넘어 산다
+        }
+        sender.sendMessage(ChatColor.GOLD + "앵커 재측 — 다시 박음 " + moved + " · 원점 유지 " + kept
+                + " · 실패 " + failed + " · 멀쩡 " + (anchors.size() - moved - kept - failed));
+        return true;
+    }
+
     /** 조감 — 탑다운·아이소메트릭·건물별 PNG 렌더 (plugins/HoncheonMVT/render/). 콘솔 가능 */
     /**
      * /혼천 조감 [지역id] — 조감도 PNG (콘솔 가능).
@@ -993,6 +1206,50 @@ public final class MvtCommand implements CommandExecutor {
         for (String line : RegionAudit.audit(world, place, zone)) {
             sender.sendMessage(line);
             plugin.getLogger().info("[지역검수] " + org.bukkit.ChatColor.stripColor(line));
+        }
+        return true;
+    }
+
+    /**
+     * /혼천 원형대조 [지역id | 시험] — <b>집들이 서로 구별되는가</b>를 잰다 (콘솔 가능).
+     *
+     * <p>★ <b>이 명령이 오늘의 병을 겨눈다.</b> 기존 검수({@code /혼천 지역검수})는 <b>한 집씩</b> 보므로
+     * "소림에 매화 20장"을 통과시켰다 — 계약이 「도관」이었고, 계약대로 서 있었기 때문이다.
+     * 병은 한 집 안이 아니라 <b>집들 사이</b>에 있었다.
+     *
+     * <ul>
+     *   <li><b>인자 없음</b> — 원형 21종의 계약을 통째로 견준다 (월드가 없어도 돈다).
+     *       두 원형의 계약이 80% 이상 겹치면 <b>그 둘은 한 집</b>이라고 짖는다</li>
+     *   <li><b>{@code 시험}</b> — ★ <b>눈을 시험한다.</b> 거짓말 셋을 <b>일부러 지어내</b> 눈에 먹이고
+     *       (소림을 도관으로 · 곤륜에 회벽 · 산채에 석축) 짖는지 본다. 그리고 <b>참말에는 안 짖는지</b>도</li>
+     *   <li><b>{@code <지역id>}</b> — 실제로 선 집을 본다: <b>금지 자재가 섞였는가</b></li>
+     * </ul>
+     */
+    private boolean compareArchetypes(CommandSender sender, String[] args) {
+        java.util.List<String> lines;
+        if (args.length >= 2 && "시험".equals(args[1])) {
+            lines = ArchetypeAudit.selfTest();
+        } else if (args.length >= 2) {
+            WorldMap map = plugin.worldMap();
+            WorldMap.Place place = map == null ? null : map.place(args[1]);
+            if (place == null) {
+                sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + args[1]);
+                return true;
+            }
+            Zone zone = plugin.zones().stream().filter(z -> z.name().equals(place.name()))
+                    .findFirst().orElse(null);
+            if (zone == null) {
+                sender.sendMessage(ChatColor.RED + place.name() + " 은 아직 서지 않았다 — /혼천 지역조성 "
+                        + args[1]);
+                return true;
+            }
+            lines = ArchetypeAudit.audit(org.bukkit.Bukkit.getWorld(zone.world()), place, zone);
+        } else {
+            lines = ArchetypeAudit.distinctness();
+        }
+        for (String line : lines) {
+            sender.sendMessage(line);
+            plugin.getLogger().info("[원형대조] " + org.bukkit.ChatColor.stripColor(line));
         }
         return true;
     }
@@ -1133,8 +1390,16 @@ public final class MvtCommand implements CommandExecutor {
                 sender.sendMessage(ChatColor.RED + "청하현이 아직 서지 않았다.");
                 return true;
             }
-            player.teleport(market.clone().add(0, 1, 0));
-            player.sendMessage(ChatColor.GOLD + "청하현 장터");
+            // ★ 옛 코드: market.clone().add(0, 1, 0) — 앵커(= 마을 원점 = **광장 우물**) 위 한 칸.
+            //   그 한 칸은 우물 두레박 사슬 자리다. 재지 않고 내리면 사람이 우물에 갇힌다.
+            Location spot = Standing.landing(market);
+            if (spot == null) {
+                sender.sendMessage(ChatColor.RED + "장터 앵커 " + Standing.describe(market)
+                        + " 둘레에 설 자리가 없다 — /혼천 앵커검사");
+                return true;
+            }
+            player.teleport(spot);
+            player.sendMessage(ChatColor.GOLD + "청하현 장터 " + ChatColor.GRAY + Standing.describe(spot));
             return true;
         }
         WorldMap.Place place = map.place(id);
@@ -1153,7 +1418,16 @@ public final class MvtCommand implements CommandExecutor {
         int tx = (zone.x1() + zone.x2()) / 2;
         int tz = zone.z2() - 4;
         int ty = world.getHighestBlockYAt(tx, tz);
-        player.teleport(new Location(world, tx + 0.5, ty + 1.0, tz + 0.5, 180f, 0f));
+        // ★ 지표(getHighestBlockYAt)는 **설 수 있는 자리가 아니다** — 물 위·지붕 위·담 안일 수 있다.
+        //   재고 내린다 (앵커 우물 사건의 같은 병).
+        Location door = new Location(world, tx + 0.5, ty + 1.0, tz + 0.5, 180f, 0f);
+        Location spot = Standing.landing(door, 16);
+        if (spot == null) {
+            sender.sendMessage(ChatColor.RED + place.name() + " 문 앞 " + Standing.describe(door)
+                    + " 둘레에 사람이 설 자리가 없다 — 내리지 않는다 (지역을 다시 조성하라).");
+            return true;
+        }
+        player.teleport(spot);
         player.sendMessage(ChatColor.GOLD + place.name() + ChatColor.GRAY + " — 문 앞이다"
                 + (place.days() > 0 ? " (걸어서라면 " + place.days() + "일)" : ""));
         return true;
@@ -1172,6 +1446,17 @@ public final class MvtCommand implements CommandExecutor {
         if (sender instanceof Player p) {
             plugin.dojang().leave(p);
         }
+        return true;
+    }
+
+    /**
+     * ★ <b>/혼천 금고</b> — 연무장이 <b>누구의 무엇을 맡고 있는가</b> (콘솔 가능).
+     *
+     * <p>연무장은 들어온 사람에게서 진짜 장부·무공·짐을 <b>떼어 낸다</b>. 그것이 어디 있는지 볼 수 있어야
+     * 한다 — 안 보이면 사라져도 아무도 모른다 (그렇게 사라졌다).
+     */
+    private boolean dojangVault(CommandSender sender) {
+        plugin.dojang().auditLines().forEach(sender::sendMessage);
         return true;
     }
 
@@ -1265,6 +1550,103 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * <b>/혼천 획시험</b> — 획의 눈을 게임 안에 세운다.
+     *
+     * <p>정적 검산은 전부 통과했다 (배급 zip = 최신 · 키 15개 전부 팩에 있음 · items→models→textures 사슬
+     * 안 끊김 · 배치본 = 저장소). 그런데 사용자는 보라 큐브를 본다. <b>검산이 볼 수 없는 곳에서 어긋나 있다.</b>
+     *
+     * <p>그래서 획을 <b>한 줄로 세우고 이름을 단다</b> — 사용자가 걸어가며 <b>어느 것이 보라인지 이름으로
+     * 지목</b>할 수 있게. 대조군(맨 종이 · 없는 키 · 병기 키)이 같은 줄에 선다: <b>없는 키가 보라가
+     * 아니면 원인은 팩이 아니라 코드다.</b>
+     */
+    private boolean strokeTest(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "획시험은 몸이 있어야 한다 — 게임 안에서 쳐라 (콘솔 불가)");
+            return true;
+        }
+        for (String line : plugin.skills().strokeTest(player)) {
+            player.sendMessage(line);
+        }
+        return true;
+    }
+
+    /**
+     * <b>/혼천 사다리</b> — 여섯 격의 생김새를 <b>나란히</b> 세운다 (화려함의 눈).
+     *
+     * <p>사용자의 요구: <i>"격별 획을 나란히 보여 주는 길을 만들어라 — 한눈에 사다리를 보고 판단할 수
+     * 있어야 한다."</i> 말뚝 여섯이 앞에 서고, 각 말뚝에서 그 격의 파티클(잔상·먹번짐·먹점·강조·<b>폭발</b>)이
+     * 반복해 터진다. 동시에 손에서는 3D 획이 격을 갈아 가며 그어진다 (굵기·밝기의 사다리).
+     */
+    private boolean ladder(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED
+                    + "사다리는 몸이 있어야 한다 — 눈으로 봐야 판단할 수 있는 값이다 (콘솔 불가)");
+            return true;
+        }
+        for (String line : plugin.skills().ladder(player)) {
+            player.sendMessage(line);
+        }
+        return true;
+    }
+
+    /**
+     * <b>/혼천 획위치</b> — 획이 서는 자리를 <b>인게임에서</b> 맞춘다.
+     *
+     * <p>사용자가 본 것: "<b>획은 몸 안에서 나오는 느낌입니다. 1인칭 시점에선 보이지도 않아요.</b>"
+     * 원인은 코드가 획을 <b>시전자의 눈</b>에 세운 것이었다 (앞으로 미는 값이 없었다). 자리는 이제
+     * 등록부({@code display.stroke_origin})가 쥐지만 — 그 값은 <b>눈으로 봐야 정해진다</b>.
+     * 서버를 세우고 등록부를 고치고 다시 세우는 왕복으로는 한 값도 못 맞춘다.
+     *
+     * <p>그래서 이 명령이 있다: <b>밀고 → 즉시 그어 보고 → 맞으면 뽑아서 등록부에 적는다.</b>
+     * <pre>
+     *   /혼천 획위치                     지금 값 · 실효값 · 몸 안 검사
+     *   /혼천 획위치 호 앞 1.2           밀고 **즉시 획 한 번** (호·선·원 × 앞·높이·옆)
+     *   /혼천 획위치 그려 선             지금 값으로 한 번 더
+     *   /혼천 획위치 되돌려              등록부의 값으로
+     *   /혼천 획위치 적기                config/skill_motion.yml 에 붙일 줄을 뽑는다
+     * </pre>
+     */
+    private boolean strokeOrigin(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED
+                    + "획위치는 몸이 있어야 한다 — 눈으로 봐야 정해지는 값이다 (콘솔 불가)");
+            return true;
+        }
+        for (String line : plugin.skills().strokeOrigin(player, args)) {
+            player.sendMessage(line);
+        }
+        return true;
+    }
+
+    /**
+     * <b>/혼천 스윙</b> — 스윙의 <b>크기·각도</b>를 인게임에서 밀고 당긴다.
+     *
+     * <p>사용자가 본 것: "<b>지금은 앞으로 툭 치는 공격 같다. 원하는 건 검을 크게 휘둘러 시원하게 베는
+     * 공격이다.</b>" 원인은 획이 <b>돌지 않은 것</b>이었다 (각을 세우고 길이만 키웠다 — 각이동 0도).
+     * 이제 획은 시작 각에서 끝 각으로 <b>쓸고 지나간다</b>. 그러나 <b>그 각은 눈으로 봐야 정해진다</b>.
+     *
+     * <pre>
+     *   /혼천 스윙                    지금 값 + 눈 (계열마다 참격인가 찌르기인가)
+     *   /혼천 스윙 호 1.4             호 각도를 1.4배 → **즉시 획 한 번**
+     *   /혼천 스윙 활 1.8             파티클 궤적의 활(弧)을 부풀린다
+     *   /혼천 스윙 전진 0             전진을 죽인다 (그래도 참격인가 — 눈의 대조군)
+     *   /혼천 스윙 그려 내려베기      넷을 눈으로 비교한다
+     *   /혼천 스윙 되돌려 · 적기
+     * </pre>
+     */
+    private boolean swing(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED
+                    + "스윙은 몸이 있어야 한다 — 눈으로 봐야 정해지는 값이다 (콘솔 불가)");
+            return true;
+        }
+        for (String line : plugin.skills().swing(player, args)) {
+            player.sendMessage(line);
+        }
+        return true;
+    }
+
     /** 경지 문장 글리프 시연 — 리소스팩 검증용 (E020~E027) */
     private boolean crests(CommandSender sender) {
         StringBuilder line = new StringBuilder(ChatColor.GOLD + "경지 문장: ");
@@ -1283,7 +1665,22 @@ public final class MvtCommand implements CommandExecutor {
         sender.sendMessage("/혼천 팔기 — 가죽 매각(50%) / /혼천 물가 [경제지수 0~100]");
         sender.sendMessage("/혼천 정산 [개입 -3~3] — 한백 계절 정산 / /혼천 협공 <인원>");
         sender.sendMessage("/혼천 조성 — 청하현 마을 생성 (관리자) / /혼천 문장 — 경지 문장 글리프 확인");
+        sender.sendMessage(ChatColor.GRAY + "앵커의 눈: " + ChatColor.WHITE + "/혼천 앵커검사"
+                + ChatColor.GRAY + " (사람이 설 수 있는 자리인가 — 우물·독방을 잡는다) · "
+                + ChatColor.WHITE + "/혼천 앵커재측" + ChatColor.GRAY + " (고친다)");
+        sender.sendMessage(ChatColor.GRAY + "연무장: " + ChatColor.WHITE + "/혼천 연무장"
+                + ChatColor.GRAY + " (시험장 — 진짜 장부·짐은 금고에 맡긴다) · "
+                + ChatColor.WHITE + "/혼천 귀환" + ChatColor.GRAY + " · "
+                + ChatColor.WHITE + "/혼천 금고" + ChatColor.GRAY + " (맡긴 것을 본다)");
         sender.sendMessage(ChatColor.GRAY + "사냥 루프: 늑대·여우(격상) vs 가축(회색) — 기세·적립·감쇠·돌파를 몸으로 확인");
+        sender.sendMessage(ChatColor.GRAY + "모션의 눈: " + ChatColor.WHITE
+                + "/혼천 사다리" + ChatColor.GRAY + " (여섯 격을 나란히) · "
+                + ChatColor.WHITE + "/혼천 획시험" + ChatColor.GRAY + " · "
+                + ChatColor.WHITE + "/혼천 획위치" + ChatColor.GRAY + " · "
+                + ChatColor.WHITE + "/혼천 모션진단");
+        sender.sendMessage(ChatColor.GRAY + "되돌리기: " + ChatColor.WHITE
+                + "/혼천 초기화 <접합|캐릭터|전부>" + ChatColor.GRAY
+                + " (시험용 — 두 번 쳐야 지운다. 백업은 항상 뜬다. 세계는 안 건드린다)");
         return true;
     }
 
@@ -1353,31 +1750,147 @@ public final class MvtCommand implements CommandExecutor {
     }
 
     /**
-     * <b>/혼천 접속</b> — 마크의 몸에 디스코드의 이름을 붙인다.
+     * <b>/혼천 접속</b> — <b>코드를 내지 않는다.</b> 초대를 주고, 어디서 무엇을 칠지 말해 주는 손이다.
      *
-     * <p>코드는 마크가 내고 <b>확정은 디스코드가 한다</b> (반대가 아니다). 훔칠 수 있는 것은 코드뿐이고
-     * 지킬 것은 캐릭터이므로, 최종 결속을 <b>인증된 자리</b>에 둔다 — 남의 캐릭터를 뺏으려면
-     * 남의 디스코드 계정이 필요해진다. 코드가 새도 도둑이 할 수 있는 최악은 <b>제 캐릭터에 남의 몸을 붙이는 것</b>,
-     * 곧 자해다.
+     * <p><b>★ 그리고 초기화한다.</b> 사용자의 말: <i>"발판 밟을 때마다 코드 초기화를 시켜야 할 듯."</i>
+     * 코드는 없어졌지만 원리는 남는다 — <b>다시 부르면 낡은 청은 죽는다</b>
+     * ({@link WorldBridge#linkReset}). 사람이 발판을 다시 밟는 것은 "처음부터 다시 하겠다"는 뜻이고,
+     * 그때 낡은 청이 살아 있으면 ① 죽은 줄 알았던 창을 나중에 실수로 수락하거나 ② 두 청이 경쟁한다.
+     * <b>한 몸에 살아 있는 청은 언제나 하나뿐</b>이다.
+     *
+     * <p>★ 발판({@code Antechamber.stepPlate})은 {@code performCommand("혼천 접속")} 로 <b>이 함수를
+     * 대신 부를 뿐</b>이다 — 발판에 따로 넣은 로직은 없다. 손으로 친 것과 발판으로 밟은 것이 <b>같은 함수</b>를
+     * 지나므로 둘이 어긋날 자리가 없다.
      */
+    /**
+     * <b>/혼천 초기화 &lt;접합|캐릭터|전부&gt;</b> — 시험을 위해 되돌린다.
+     *
+     * <p><b>자기 자신만</b> 지운다 — 남을 지우는 길은 <b>없다</b> (인자에 남의 이름을 댈 칸이 아예 없다).
+     * 콘솔에서도 못 친다: 지울 <b>몸</b>이 없기 때문이다. 남을 지워야 하면 디스코드에서
+     * {@code /초기화 대상:@아무개} 를 쳐라 (거기서 서버 관리자를 검사한다).
+     *
+     * <p><b>두 번 쳐야 지운다.</b> 첫 번째는 무엇이 사라지는지 말하고 멈춘다 ({@link Reset#command}).
+     */
+    private boolean wipe(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            // ★ 콘솔에는 몸이 없다. "전원 초기화" 같은 문을 열어 두지 않는다
+            sender.sendMessage(ChatColor.RED + "마크에서 쳐라 — 초기화는 **자기 몸**에만 듣는다. "
+                    + "남을 되돌리려면 디스코드에서 /초기화 대상:@아무개");
+            return true;
+        }
+        Reset reset = plugin.reset();
+        if (reset == null || reset.locked()) {
+            player.sendMessage(ChatColor.RED + "초기화가 잠겨 있다 — 등록부(config/reset.yml)를 못 읽었다"
+                    + (reset == null ? "." : ": " + reset.fault()));
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GOLD + "/혼천 초기화 <" + String.join("|", reset.scopes()) + ">");
+            player.sendMessage(ChatColor.GRAY + "  접합 — 마크의 몸과 디스코드의 이름을 끊는다 (캐릭터는 남는다)");
+            player.sendMessage(ChatColor.GRAY + "  캐릭터 — 유년의 기억부터 다시 (마크의 몸·짐은 그대로)");
+            player.sendMessage(ChatColor.GRAY + "  전부 — 나루(입도진)부터 다시 (몸·원장·금고까지)");
+            player.sendMessage(ChatColor.DARK_GRAY + "  백업은 항상 뜬다. 세계(청하현·사람·소문)는 안 건드린다.");
+            return true;
+        }
+        reset.command(player, args[1]);
+        return true;
+    }
+
     private boolean link(CommandSender sender) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
             return true;
         }
-        String code = WorldBridge.requestLink(player.getUniqueId(), player.getName());
-        if (code == null) {
-            player.sendMessage(ChatColor.RED + "세계 다리가 서지 않았다.");
-            return true;
-        }
         String linked = WorldBridge.linkedName(player.getUniqueId());
         if (linked != null) {
             player.sendMessage(LinkGate.already(linked));
+            return true;   // 이미 이어져 있다 — 청을 낼 일이 없다 (끊는 것은 디스코드에서)
         }
-        // ★ 코드를 **외우게 하지 않는다.** [코드 복사] = 클립보드 · [혼천 접속] = 디스코드 채널을 연다.
-        //   마크의 손은 **URL 을 여는 데서 끝난다** — 디스코드 앱을 열어 명령을 대신 칠 수는 없다.
-        //   그래서 진짜 답은 디스코드 쪽이었다: 거기엔 **버튼과 모달**이 있고, 붙여넣기 한 번이면 끝난다.
-        player.sendMessage(LinkGate.gate(code));
+        // ★ 초기화 — 이 몸에게 살아 있던 낡은 청은 여기서 죽는다 (봇의 장부에서도 폐기된다)
+        WorldBridge.linkReset(player.getUniqueId(), player.getName());
+        player.sendMessage(LinkGate.invite(player.getName()));
+        return true;
+    }
+
+    /**
+     * ★★ <b>/혼천 수락 &lt;토큰&gt;</b> · <b>/혼천 거절 &lt;토큰&gt;</b> — <b>접합의 결속 순간.</b>
+     *
+     * <p>사람이 치는 명령이 아니다 — 화면에 뜬 <b>[잇는다] / [아니다]</b> 클릭이 대신 친다 (RUN_COMMAND).
+     *
+     * <p><b>★ 여기가 도용을 막는 자리다.</b> {@link WorldBridge#linkDecision} 이
+     * {@code player.getUniqueId()} 를 <b>청에 적힌 몸</b>과 대조한다. 토큰을 어깨너머로 본 자가 제 화면에서
+     * 같은 명령을 쳐도 — 몸이 다르므로 {@code NOT_YOURS} 다. <b>토큰은 열쇠가 아니라 지목이다.</b>
+     * (그리고 봇이 다리 건너에서 <b>같은 대조를 한 번 더</b> 한다 — jsonl 은 파일이므로 믿지 않는다.)
+     */
+    private boolean linkDecide(CommandSender sender, String[] args, boolean accept) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "몸이 있어야 답한다.");
+            return true;
+        }
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.GRAY + "청이 없다 — 디스코드에서 먼저 청하라 (/혼천 접속).");
+            return true;
+        }
+        WorldBridge.Decision d = WorldBridge.linkDecision(player.getUniqueId(), args[1], accept,
+                player.getName());
+        switch (d) {
+            case ACCEPTED -> {
+                // ★ 봇의 장부가 정본이다 — 여기서 "이어졌다"고 단정하지 않는다.
+                //   다리를 건너 확정되면 다음 스냅숏의 links 가 이 몸의 이름을 데려온다 (그때가 진짜다).
+                player.sendMessage(ChatColor.GREEN + WorldBridge.gateText("accepted",
+                        "이었다 — 강호가 그대의 이름을 받아 적는다.").replace("{name}", player.getName()));
+                player.sendMessage(ChatColor.DARK_GRAY + "(장부가 확정하면 사이드바의 이름이 바뀐다 — 몇 초)");
+            }
+            case REJECTED -> player.sendMessage(ChatColor.GRAY
+                    + WorldBridge.gateText("rejected", "청을 물렸다."));
+            // ★★ 남의 청 — 여기서 죽는다. 토큰을 알아도 남의 몸은 이을 수 없다
+            case NOT_YOURS -> player.sendMessage(ChatColor.RED
+                    + WorldBridge.gateText("not_yours", "그 청은 그대에게 온 것이 아니다."));
+            case EXPIRED -> player.sendMessage(ChatColor.RED
+                    + WorldBridge.gateText("expired", "그 청은 이미 죽었다. 디스코드에서 다시 청하라."));
+            case GONE -> player.sendMessage(ChatColor.RED
+                    + WorldBridge.gateText("gone", "그런 청은 없다."));
+            default -> { }
+        }
+        return true;
+    }
+
+    /**
+     * ★★ <b>/혼천 서장 &lt;토큰&gt; &lt;n&gt;</b> — <b>책의 글자를 눌렀다.</b>
+     *
+     * <p><b>사람이 이것을 칠 일은 없다.</b> {@link SeojangBook} 의 책장 안 클릭
+     * ({@code ClickEvent.runCommand})이 대신 친다 — 접합의 [잇는다] 와 같은 문법이다.
+     *
+     * <p><b>마크는 아무것도 판정하지 않는다.</b> 번호 하나를 다리에 얹을 뿐이고, 나머지는 전부 봇이
+     * 한다 (주사위·경지·성별 보정·시트). <b>토큰은 열쇠가 아니라 지목</b>이다: 낡은 책을 눌러도,
+     * 남의 토큰을 주워 눌러도 <b>봇이 거른다</b> (지금 그 장면의 것이 아니면 버린다).
+     * 그래서 여기서는 <b>몸이 있는가</b>만 본다 — 자물쇠는 다리 건너에 있다.
+     */
+    private boolean seojangPick(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "몸이 있어야 책을 편다.");
+            return true;
+        }
+        if (args.length < 3) {
+            player.sendMessage(ChatColor.GRAY + "서책이 없다 — 강호에 이름을 올려라 (/혼천 접속).");
+            return true;
+        }
+        int n;
+        try {
+            n = Integer.parseInt(args[2]);
+        } catch (NumberFormatException e) {
+            return true;   // 책이 내는 값은 언제나 수다 — 아니면 사람이 손으로 친 것이다
+        }
+        // ★ 낡은 책의 클릭 — 그 자리에서 말해 준다 (봇도 거르지만, 사람은 **지금** 알아야 한다)
+        String live = SeojangBook.get() == null ? null : SeojangBook.get().tokenOf(player.getUniqueId());
+        if (live != null && !live.equals(args[1])) {
+            player.sendMessage(SeojangBook.legacy(
+                    SeojangBook.get().stale()));
+            return true;
+        }
+        WorldBridge.seojangChoice(player.getUniqueId(), player.getName(), args[1], n);
+        player.sendMessage(SeojangBook.legacy(SeojangBook.get().waiting()));
+        player.closeInventory();   // 책을 덮는다 — 다음 장이 오면 저절로 펼쳐진다
         return true;
     }
 
@@ -1444,9 +1957,14 @@ public final class MvtCommand implements CommandExecutor {
     }
 
     /** <b>/혼천 입도</b> — 나루로 돌아간다 (몸을 다시 익히고 싶은 자를 위해) */
-    private boolean antechamber(CommandSender sender) {
+    private boolean antechamber(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(ChatColor.RED + "마크에서 쳐라.");
+            return true;
+        }
+        // /혼천 입도 재조성 — 나루를 **다시 세운다** (재접속 없이 허수아비·글판을 다시 세운다)
+        if (args.length >= 2 && "재조성".equals(args[1])) {
+            plugin.antechamber().rebuild(player);
             return true;
         }
         plugin.antechamber().enter(player);
@@ -1583,6 +2101,28 @@ public final class MvtCommand implements CommandExecutor {
         player.sendMessage(on
                 ? ChatColor.DARK_AQUA + "판정의 눈 — 켰다 (히트박스 · 2d6 · 피해의 층이 보인다)"
                 : ChatColor.GRAY + "판정의 눈 — 껐다");
+        return true;
+    }
+
+    /**
+     * <b>/혼천 타격보기</b> — <b>타격의 눈</b>. 한 대가 들어갈 때마다 <b>시간 구조와 히트스톱이
+     * 실제로 도는가</b>를 손에 찍는다. <b>켠 사람에게만 보인다.</b>
+     *
+     * <p>사용자 보고("공격해도 전혀 바뀌는 게 없다")를 <b>게임 안에서</b> 반증하거나 확증하는 눈이다:
+     * 선딜·지속·후딜이 몇 틱인지, 이 격이 몇 틱을 얼리는지, 넉백과 흔들림이 몇인지가 <b>매 타격</b> 찍힌다.
+     * 숫자가 0 으로 찍히면 <b>등록부가 꺼져 있는 것</b>이고 (combat.yml {@code impact}),
+     * 아무것도 안 찍히면 <b>이 손이 타격의 문을 안 지나는 것</b>이다 — 두 사건이 다르게 보인다.
+     */
+    private boolean hitEye(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "몸이 있어야 친다.");
+            return true;
+        }
+        boolean on = plugin.skills().toggleHitEye(player);
+        player.sendMessage(on
+                ? ChatColor.DARK_AQUA + "타격의 눈 — 켰다 "
+                        + ChatColor.GRAY + "(선딜·지속·후딜 · 히트스톱 · 넉백 · 흔들림이 매 타격 찍힌다)"
+                : ChatColor.GRAY + "타격의 눈 — 껐다");
         return true;
     }
 }

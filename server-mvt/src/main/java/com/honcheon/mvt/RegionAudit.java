@@ -56,7 +56,10 @@ final class RegionAudit {
         out.add(INFO + "  구역 [" + zone.x1() + ".." + zone.x2() + "] × [" + zone.z1() + ".." + zone.z2()
                 + "] · y " + zone.y1() + ".." + zone.y2());
 
-        boolean sect = !"noklim".equals(place.faction());
+        // ★ 세력이 아니라 **원형**이 묻는다 — 예전엔 `!noklim` 한 줄이었고, 그래서 세력 하나가
+        //   집 하나라고 가정했다. 도달성의 물음은 "누구의 집이냐"가 아니라 "오르는 집이냐"다:
+        //   산채는 **마당**에 닿으면 되고, 나머지는 **가장 높은 사람의 자리**(본전 단)에 닿아야 한다.
+        boolean sect = RemoteBuilder.archetype(place) != RemoteBuilder.Archetype.산채;
         reachability(out, violations, world, zone, sect);
         contract(out, violations, world, zone, place);
         floating(out, violations, world, zone);
@@ -228,10 +231,23 @@ final class RegionAudit {
      */
     private static void contract(List<String> out, List<String> violations,
                                  World world, Zone zone, WorldMap.Place place) {
-        out.add(HEAD + "② 구조 계약 — 그 집이 그 집이려면 (" + RemoteBuilder.archetype(place) + ")");
+        RemoteBuilder.Archetype kind = RemoteBuilder.archetype(place);
+        out.add(HEAD + "② 구조 계약 — 그 집이 그 집이려면 (" + kind + ")");
         java.util.Map<Material, Integer> census = census(world, zone);
-        for (RemoteBuilder.Need n : RemoteBuilder.contract(RemoteBuilder.archetype(place))) {
+        for (RemoteBuilder.Need n : RemoteBuilder.contract(kind)) {
             need(out, violations, census, n.material(), n.min(), n.what());
+        }
+        // ★★ **부정(否定)도 계약이다** — 오늘의 병은 여기에 있었다.
+        //   「도관」의 계약을 소림에 적용해도 계약은 **충족된다** (매화 20장이 실제로 심겼으니까).
+        //   위반 0건이 찍혔고, **여덟 문파는 같은 집이었다.** 있어야 할 것만 세는 눈은 그 병을 못 본다.
+        //   그러므로 **있으면 안 되는 것**을 센다: 숭산에 매화가 있으면 그것은 소림이 아니다.
+        for (ArchetypeAudit.Need n : ArchetypeAudit.forbidden(kind)) {
+            int have = census.getOrDefault(n.material(), 0);
+            if (have >= n.max()) {
+                out.add(BAD + "  ★ 금지 자재 — " + n.why() + " (" + n.material().name() + " "
+                        + have + "개 ≥ " + n.max() + ")");
+                violations.add("금지자재:" + n.material().name());
+            }
         }
     }
 

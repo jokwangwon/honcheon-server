@@ -112,8 +112,12 @@ faction_groups:
       ami:
         name: "아미파"
         description: "사천의 여승 문파 — 구파일방. 당가와 앙숙(독은 협이 아니다)."
-        registry: 예약        # 상세 미설계 — 좌표·관계만 등록 (world_map·faction_politics 참조)
-        active: false
+        registry: 예약        # ★ 등록 등급은 **그대로 둔다** — 사용자가 정하지 않았다 (질문 목록)
+        active: true          # ★★ 2026-07-13 사용자 결정 — **미설계가 끝났다.**
+                              #   아미의 집이 생겼다: 「운해 비구니원」 (docs/design/ami_architecture.md ·
+                              #   world_map.yml places.ami · RemoteBuilder.Archetype.비구니원)
+                              # ★ 주의: `parent: gupailbang` 은 **여전히 붙이지 않았다** (사용자 결정 없음).
+                              #   그것을 붙이면 §16 W-C 의 봉우리 집합이 바뀐다 — 건드리지 않는다
 
       cheongseong:
         name: "청성파"
