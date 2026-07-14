@@ -34,8 +34,9 @@ MUTATIONS = [
     ("③ 과제가 문을 잠그게 한다 (config)", CFG,
      "\n    gating: false", "\n    gating: true", "과제가 문을 잠근다"),
     ("④ 과제가 문을 잠그게 한다 (코드) — 글판 진척을 문이 본다", SRC,
-     "        if (plugin.ledger(player.getUniqueId()).linked()) {\n            depart(player, List.of());\n            return;\n        }\n        if (bridgeDownAllows",
-     "        if (currentStation(player) < stations.size() - 1) {\n            return;\n        }\n        if (plugin.ledger(player.getUniqueId()).linked()) {\n            depart(player, List.of());\n            return;\n        }\n        if (bridgeDownAllows",
+     # (B-118 뒤의 실제 꼴 — linked 블록 끝의 depart 앞에 과제 잠금을 심는다)
+     "            depart(player, List.of());\n            return;\n        }\n        if (bridgeDownAllows",
+     "            if (currentStation(player) < stations.size() - 1) {\n                return;\n            }\n            depart(player, List.of());\n            return;\n        }\n        if (bridgeDownAllows",
      "과제가 문을 잠근다"),
     ("⑤ 내릴 자리를 없앤다", CFG,
      "destinations: [흑수나루, 장터]", "destinations: []", "destinations 가 비었다"),

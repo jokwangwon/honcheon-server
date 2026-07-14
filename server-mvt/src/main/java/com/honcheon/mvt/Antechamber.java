@@ -171,6 +171,8 @@ public final class Antechamber implements Listener {
     private final String arrivalSubtitle;
     private final List<String> arrivalLines;
     private final String revisitLine;
+    /** B-124 — 건넌 몸이 다시 섰을 때, 과제 장부가 백지인 이유를 말하는 한 줄 (침묵 금지) */
+    private final String revisitLedgerLine;
 
     private final boolean kitGive;
     private final String kitLine;
@@ -193,6 +195,13 @@ public final class Antechamber implements Listener {
     private final String arrivalPanelId;
 
     // ─── 장부 (사람마다) ───
+    /**
+     * 과제 장부 — ★ <b>메모리뿐이다. 설계다</b> (B-124): 나루는 시험장이 아니라 문지방이고,
+     * 문({@link #cross})은 과제를 보지 않으므로 장부를 세계에 남길 이유가 없다.
+     * 나감({@link #onQuit})·재기동마다 백지가 된다 — 이미 건넌 몸이 다시 서면 관문이 도로
+     * 열려 있는 이유가 이것이고, 그 결은 {@link #enter} 의 재방문 한 줄
+     * ({@code arrival.revisit_ledger_line})이 말한다 (침묵 금지 — 다시 하는 것은 자유다).
+     */
     private final Map<UUID, Map<String, Integer>> progress = new HashMap<>();
     private final Map<UUID, Set<String>> gesturesSeen = new HashMap<>();
     private final Map<UUID, String> lastArmed = new HashMap<>();
@@ -367,6 +376,7 @@ public final class Antechamber implements Listener {
         this.arrivalSubtitle = str(arrival.get("subtitle"), "");
         this.arrivalLines = lines(arrival.get("lines"));
         this.revisitLine = str(arrival.get("revisit_line"), "");
+        this.revisitLedgerLine = str(arrival.get("revisit_ledger_line"), "");
 
         Map<String, Object> kit = RulesConfig.section(a, "kit");
         this.kitGive = !(kit.get("give") instanceof Boolean g) || g;
@@ -1356,6 +1366,11 @@ public final class Antechamber implements Listener {
         player.setFallDistance(0f);
         if (plugin.ledger(player.getUniqueId()).linked()) {
             player.sendMessage(revisitLine);
+            // ★ B-124 — 과제 장부는 메모리뿐이라(progress 필드 주석) 건넌 몸에게도 관문이 도로
+            //   열려 있다. 그 결을 한 줄로 말한다: 다시 하는 것은 자유고, 종은 과제를 묻지 않는다.
+            if (!revisitLedgerLine.isEmpty()) {
+                player.sendMessage(revisitLedgerLine);
+            }
         } else {
             player.sendTitle(ChatColor.GOLD + arrivalTitle, ChatColor.GRAY + arrivalSubtitle, 10, 70, 20);
             arrivalLines.forEach(player::sendMessage);
@@ -1854,7 +1869,18 @@ public final class Antechamber implements Listener {
         }
     }
 
-    /** 과제: 격 — Shift+우클릭으로 두름이 바뀌는 순간 */
+    /**
+     * 과제: 격 — Shift+우클릭으로 두름이 바뀌는 순간.
+     *
+     * <p>★ B-124 (실사용: <i>"캐릭터 초기화를 하지 않으면 설명대로 해도 안 깨지는 건가?"</i>) —
+     * <b>못 하는 몸은 아예 안 본다</b> ({@code requires: 두를_격}). 접합 전의 몸은 범인이고
+     * ({@code player_creation.yml starting_realm}), 범인의 {@code armableGrades} 는 비어 있어
+     * SkillListener 가 순환 자체를 거절한다("단전이 열리지 않았다"). 그 몸에게 이 과제는
+     * "영영 안 깨지는" 것이 아니라 <b>없는 것</b>이다: {@link #applicable} 에서 빠져
+     * all_done 을 막지 않고, 판은 예고({@code unavailable})로 바뀌어 이유를 말하며,
+     * {@link #passed} 가 관문을 지나간 것으로 쳐 길도 안 막힌다. 접합으로 경지가 서면
+     * {@link #watchGate} 가 판을 다시 세우고 — 그때부터 이 눈이 뜬다.
+     */
     private void watchArmed(Player player) {
         Lesson l = lessons.get("격");
         if (l == null || complete(player, l) || !capable(player, l)) {
@@ -1989,8 +2015,7 @@ public final class Antechamber implements Listener {
         }
         mine.put(lessonId, now + 1);
         if (now + 1 < l.count()) {
-            player.sendActionBar(ChatColor.GRAY + l.title() + "  "
-                    + ChatColor.WHITE + (now + 1) + ChatColor.GRAY + "/" + l.count());
+            flashCount(player, l, now + 1);
             return;
         }
         player.sendMessage(doneLine.replace("{title}", l.title()).replace("{done}", l.done()));
@@ -2005,6 +2030,35 @@ public final class Antechamber implements Listener {
         } else if (advanced && !nextLine.isEmpty()) {
             player.sendMessage(nextLine);
         }
+    }
+
+    /**
+     * 과제 카운트 한 줄 — ★ <b>B-123: 맨 {@code sendActionBar} 를 버리고 B-116 의 flash
+     * 단일 창구({@link SkillListener#flash})를 탄다.</b> 입도진이 마지막 남은 맨 액션바 손이었다.
+     *
+     * <p><b>겹침의 기전</b> (실사용 2026-07-14): 격 순환 한 사건이 판정 flash("검기 — …")와
+     * 이 카운트를 같은 액션바 줄에 세웠다 — Shift 는 웅크림이기도 해서 태세 과제("태세 … n/3")가
+     * 같은 순간에 셈을 했다. 맨 sendActionBar 는 다음 statusBar 틱(≤0.2초)에 덮여 겹쳐 읽히고,
+     * flash 로 바로 쏘면 "마지막이 이김" 규칙이 카운트로 판정을 지운다 — 어느 쪽이든 한쪽이 안 읽힌다.
+     *
+     * <p><b>순서로 푼다 (합성이 아니라)</b>: 카운트는 읽을 시간
+     * ({@code skill_motion.yml hud.flash_read_ticks}) 하나 <b>뒤에</b> 줄을 받는다 —
+     * 같은 사건의 판정 flash 가 제 시간을 다 읽히고, 그 다음 카운트가 같은 시간만큼 읽힌다.
+     * 합성은 못 한다: 판정의 글자는 SkillListener 의 것이고 이 손은 그 글자를 모른다 —
+     * 지어서 병기하면 화면이 세계에 대해 거짓말할 수 있다. 눈금은 그 flash 의 것을 그대로 쓴다
+     * (하드코딩 금지 — {@code engine.hudFlashTicks()}, B-116 과 같은 정본).
+     * 기다리는 사이 과제가 이미 닫혔으면(연타) 낡은 카운트는 그리지 않는다 — done 줄이 이미 말했다.
+     */
+    private void flashCount(Player player, Lesson l, int n) {
+        String text = ChatColor.GRAY + l.title() + "  "
+                + ChatColor.WHITE + n + ChatColor.GRAY + "/" + l.count();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            SkillListener skills = plugin.skills();
+            if (skills != null && player.isOnline()
+                    && isAntechamber(player.getWorld()) && !complete(player, l)) {
+                skills.flash(player, text);
+            }
+        }, plugin.skillEngine().hudFlashTicks());
     }
 
     /**
