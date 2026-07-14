@@ -42,6 +42,17 @@ MUTATIONS = [
      "    start_label_낡음: 1",
      "`board.start_label` 가 **비어 있다**"),
 
+    # ══ ★ B-117 — 접속이 도로 **명령어 타이핑**이 되는가 ══
+    ("★ 판에서 [마크와 잇기] 를 뺀다 (접속이 도로 명령어 타이핑이 된다 — B-117)", GAME,
+     'Button.primary("np:link", rules.panelBoard("link_label", "마크와 잇기"))',
+     'Button.primary("np_gone:link", rules.panelBoard("link_label", "마크와 잇기"))',
+     "판에 `np:link`"),
+
+    ("★ [마크와 잇기] 의 이름을 등록부에서 지운다", CFG,
+     '    link_label: "마크와 잇기 — 닉네임 한 칸"',
+     "    link_label_낡음: 1",
+     "`board.link_label` 가 **비어 있다**"),
+
     # ══ ★★ ① 죽은 버튼 — 이 시험의 이유 ══
     ("★ 몸이 없는 사람에게 [몸을 끊는다] 를 내민다", CFG,
      "        buttons: [link, sheet, reset]\n      서장_접합:",

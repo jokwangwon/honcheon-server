@@ -141,7 +141,7 @@ def audit(config_dir: Path, bot_dir: Path):
             fails.append(f"버튼 `{key}` 의 style 이 모르는 값이다: `{style}` "
                          f"(primary·secondary·danger 뿐)")
 
-    for key in ("title", "body", "button_label", "start_label", "already"):
+    for key in ("title", "body", "button_label", "start_label", "link_label", "already"):
         if not (panel.get("board") or {}).get(key):
             fails.append(f"판의 `board.{key}` 가 **비어 있다** (코드가 문장을 지어내게 된다)")
 
@@ -167,6 +167,14 @@ def audit(config_dir: Path, bot_dir: Path):
         fails.append("★ 판에 **아무 버튼도 없다** — 처음 온 사람은 캐릭터를 만들 길이 없다")
     if "me" not in board_ids:
         fails.append("판에 `np:me`([내 자리])가 없다 — 이미 태어난 사람이 갈 곳이 없다")
+    # ★ B-117 (2026-07-14 실측): "접속이 명령어 타이핑이다." 잇기도 판의 버튼이어야 한다 —
+    #   np:link → openLinkModal → lk:submit 모달 → askLink (`/혼천 접속` 과 같은 파이프).
+    if "link" not in board_ids:
+        fails.append("★ 판에 `np:link`([마크와 잇기])가 없다 — 접속이 도로 **명령어 타이핑**이 된다 "
+                     "(B-117: 버튼 → 닉네임 모달 → askLink, 명령과 같은 파이프)")
+    else:
+        say.append(f"{OK} ★ 잇기 — 판에 `np:link` 가 박혀 있다 (버튼 → 모달 → askLink — "
+                   f"명령과 같은 파이프, B-117)")
 
     # ★★ 침묵 금지 — [강호에 들다] 는 공용 버튼이라 **이미 태어난 사람도 누른다.**
     #    그때 startCreation 이 **등록부의 말로** 대답하는가 (조용히 넘기거나 코드가 문장을 지어내면 위반)

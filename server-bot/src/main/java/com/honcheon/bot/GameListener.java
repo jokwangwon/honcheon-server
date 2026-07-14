@@ -841,7 +841,10 @@ public final class GameListener extends ListenerAdapter {
         Born born = birth(event.getUser().getId(), event.getUser().getEffectiveName(), c);
         // ★★ 스레드를 열지 않는다. **이야기는 강호에서 흐른다**
         //   (사용자: "디스코드에서 채팅을 치고 진행하는 것이 아닌 마크로 넘어가는 걸로 표현하자")
-        event.editMessageEmbeds(birthEmbed(born), signpostEmbed(born)).setComponents().queue();
+        // ★ B-117 — 이정표가 "명령을 쳐라"로 끝나면 안 된다 (사용자 실측: "접속이 명령어 타이핑이다").
+        //   [마크와 잇기] 버튼이 함께 선다 — 접합문의 버튼과 **같은 문**(lk:open → 모달 → askLink).
+        event.editMessageEmbeds(birthEmbed(born), signpostEmbed(born))
+                .setComponents(ActionRow.of(signpostLinkButton(rules))).queue();
         startSeojang(born);   // ★ 그리고 **지금부터 서장을 미리 쓴다** (사람이 마크로 걸어오는 동안)
     }
 
@@ -5873,7 +5876,11 @@ public final class GameListener extends ListenerAdapter {
                 //   보이고, **이미 태어난 사람이 누르면 그렇다고 말해 준다** (startCreation — 침묵 금지).
                 .addComponents(ActionRow.of(
                         Button.primary("np:start", rules.panelBoard("start_label", "강호에 들다")),
-                        Button.secondary("np:me", rules.panelBoard("button_label", "내 자리"))))
+                        Button.secondary("np:me", rules.panelBoard("button_label", "내 자리")),
+                        // ★ B-117 — 사용자 실측(2026-07-14): "접속이 명령어 타이핑이다."  잇기도 **버튼**이다.
+                        //   np:link → onPanel → openLinkModal → lk:submit 모달 → askLink —
+                        //   `/혼천 접속` 과 **같은 파이프**다 (새 검증을 발명하지 않았다. 자물쇠는 게임 안).
+                        Button.primary("np:link", rules.panelBoard("link_label", "마크와 잇기"))))
                 .queue();
         String say = rules.panelBoard("posted", "안내판이 섰다.");
         // ★ 판이 둘이면 하나가 낡는다 — 옛 자리를 **말해 준다** (조용히 옮기지 않는다)
@@ -6046,6 +6053,47 @@ public final class GameListener extends ListenerAdapter {
                 .setEphemeral(true).queue();
     }
 
+    // ─── ★ 접합의 손잡이 — id 를 **한 곳에** 박는다 (조립하는 손과 알아보는 손이 같은 상수를 쥔다) ───
+    //   문은 셋(접합문 · 안내판 np:link · 생성 완료 이정표)이지만 **창은 하나**(lk:submit)고,
+    //   창이 흘러드는 파이프도 하나(askLink — `/혼천 접속` 과 같은 것)다. B-117.
+
+    /** 접합 창을 여는 버튼의 id — {@code onButtonInteraction} 의 {@code case "lk"} 가 받는다 */
+    static final String LINK_OPEN_ID = "lk:open";
+    /** 접합 모달의 id — {@link #linkModal} 이 만들고 {@link #onModalInteraction} 이 이 값으로 알아본다 */
+    static final String LINK_MODAL_ID = "lk:submit";
+    /** 모달의 닉네임 칸 id — 만드는 쪽과 읽는 쪽({@code event.getValue})이 같은 이름을 쥔다 */
+    static final String LINK_NICK_INPUT = "닉네임";
+
+    /** 접합문의 버튼 — 라벨은 등록부({@code world_bridge.yml identity.gate.discord.button_label}) */
+    static Button gateLinkButton(Rules rules) {
+        return Button.primary(LINK_OPEN_ID, rules.gateText("button_label", "마크의 몸을 잇는다"));
+    }
+
+    /**
+     * ★ B-117 — 생성 완료 이정표에 싣는 [마크와 잇기].
+     * 라벨은 등록부({@code seojang.yml signpost.link_label}) — 이정표 본문이 이 라벨을 가리킨다.
+     */
+    static Button signpostLinkButton(Rules rules) {
+        return Button.primary(LINK_OPEN_ID, rules.seojang.signpost("link_label", "마크와 잇기"));
+    }
+
+    /**
+     * 접합 모달 — 닉네임 <b>한 칸</b>. 문장은 전부 등록부({@code gate.discord})가 진다.
+     * <b>여기서는 아무것도 확정하지 않는다</b> — 제출은 {@link #onModalInteraction} 을 거쳐
+     * {@link #askLink} 로 흐른다. 슬래시({@code /혼천 접속})와 <b>같은 파이프</b>다.
+     */
+    static Modal linkModal(Rules rules) {
+        TextInput nick = TextInput.create(LINK_NICK_INPUT, rules.gateText("modal_field", "마크 닉네임"),
+                        TextInputStyle.SHORT)
+                .setPlaceholder(rules.gateText("modal_hint", "지금 마크에 접속해 있는 그대의 이름"))
+                .setMinLength(3)
+                .setMaxLength(16)
+                .setRequired(true)
+                .build();
+        return Modal.create(LINK_MODAL_ID, rules.gateText("modal_title", "접합"))
+                .addComponents(ActionRow.of(nick)).build();
+    }
+
     /** 접속의 문을 세운다 (관리자) — 이 채널이 마크의 [혼천 접속] 클릭이 닿을 자리가 된다 */
     private void postLinkGate(SlashCommandInteractionEvent event) throws Exception {
         if (event.getMember() == null || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
@@ -6062,8 +6110,7 @@ public final class GameListener extends ListenerAdapter {
                         .setTitle(rules.gateText("title", "접합의 문"))
                         .setDescription(rules.gateText("body", "마크에서 `/혼천 접속` 을 쳐서 코드를 받아라."))
                         .build())
-                .addComponents(ActionRow.of(Button.primary("lk:open",
-                        rules.gateText("button_label", "마크의 몸을 잇는다"))))
+                .addComponents(ActionRow.of(gateLinkButton(rules)))
                 .queue();
         // ★ 초대 링크가 없으면 관리자에게 그 자리에서 알린다 — 문은 섰지만 담이 없다
         String posted = rules.gateText("gate_posted", "이 채널이 접속의 문으로 섰다.");
@@ -6081,15 +6128,7 @@ public final class GameListener extends ListenerAdapter {
      * (버튼은 공개다. 누가 눌러도 좋다 — 버튼은 아무것도 담고 있지 않다).
      */
     private void openLinkModal(ButtonInteractionEvent event) {
-        TextInput nick = TextInput.create("닉네임", rules.gateText("modal_field", "마크 닉네임"),
-                        TextInputStyle.SHORT)
-                .setPlaceholder(rules.gateText("modal_hint", "지금 마크에 접속해 있는 그대의 이름"))
-                .setMinLength(3)
-                .setMaxLength(16)
-                .setRequired(true)
-                .build();
-        event.replyModal(Modal.create("lk:submit", rules.gateText("modal_title", "접합"))
-                .addComponents(ActionRow.of(nick)).build()).queue();
+        event.replyModal(linkModal(rules)).queue();
     }
 
     /**
@@ -6099,10 +6138,10 @@ public final class GameListener extends ListenerAdapter {
     @Override
     public void onModalInteraction(net.dv8tion.jda.api.events.interaction.ModalInteractionEvent event) {
         try {
-            if (!"lk:submit".equals(event.getModalId())) {
+            if (!LINK_MODAL_ID.equals(event.getModalId())) {
                 return;
             }
-            var value = event.getValue("닉네임");
+            var value = event.getValue(LINK_NICK_INPUT);
             askLink(event, event.getUser(), value == null ? "" : value.getAsString());
         } catch (Exception e) {
             event.reply("오류: " + e.getMessage()).setEphemeral(true).queue();
@@ -6130,7 +6169,9 @@ public final class GameListener extends ListenerAdapter {
                          User user, String raw) throws Exception {
         var found = db.findCharacter(user.getId());
         if (found.isEmpty()) {
-            event.reply(user.getEffectiveName() + " — 캐릭터가 없다. `/혼천 시작`부터.")
+            // ★ B-117 — 여기서도 명령을 가리키지 않는다. 문장은 등록부(panel.locks.캐릭터_없음)의 것이다
+            event.reply(user.getEffectiveName() + " — "
+                            + rules.panelLock("캐릭터_없음", "캐릭터가 없다 — 먼저 **[강호에 들다]**."))
                     .setEphemeral(true).queue();
             return;
         }
