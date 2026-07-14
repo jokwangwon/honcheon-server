@@ -108,6 +108,19 @@ public final class TerrainAuditSelfTest {
         cells("저지(지면62) 기여", 90, 57, 13);                 // 41-13=28칸의 하늘이 빠졌다
         cells("깊은 골 기여", 90, 34, 0);                       // 대역 전체가 지면 위 — 0
 
+        // ═══ 3.5 땅인가 — 나무는 땅이 아니다 (isGround · B-114 6차) ═══
+        // 3.86% 의 진범: 통나무를 땅으로 읽어 수관 속 공기가 「지하」로 계수됐다 (천장 #leaves · 벽 #logs 실측)
+        ground("돌은 나무가 아니다", "STONE", false);
+        ground("잔디 블록도 나무가 아니다", "GRASS_BLOCK", false);
+        ground("참나무 통나무는 나무다", "OAK_LOG", true);
+        ground("자작 잎도 나무다", "BIRCH_LEAVES", true);
+        ground("참나무 원목(WOOD)도 나무다", "OAK_WOOD", true);
+        ground("껍질 벗긴 통나무도 나무다", "STRIPPED_OAK_LOG", true);
+        ground("껍질 벗긴 원목도 나무다", "STRIPPED_BIRCH_WOOD", true);
+        ground("버섯 갓도 나무다", "RED_MUSHROOM_BLOCK", true);
+        ground("버섯 대도 나무다", "MUSHROOM_STEM", true);
+        ground("장대나무도 나무다", "BAMBOO", true);
+
         // ═══ 4. 판정 — 공기만 문턱에 들어가는가 (문턱: terrain.yml audit.underground_*) ═══
         // 실측 재현: 39,401칸 중 1,513칸의 "공동"이 전부 하늘/액체/판굴로 분리되면 → 자연 공기 0% → 통과
         verdict("전부 분리됨 (실측 3.84% 재현)", 0, 0, 0, 37888, false, false);
@@ -139,6 +152,11 @@ public final class TerrainAuditSelfTest {
         boolean got = TerrainAudit.inCaveBox(boxes, x, y, z);
         check(got == want, String.format("[판굴?] (%d,%d,%d) -> %s (want %s)",
                 x, y, z, got ? "판굴" : "자연", want ? "판굴" : "자연"));
+    }
+
+    private static void ground(String name, String material, boolean want) {
+        boolean got = TerrainAudit.isTreeish(material);
+        check(got == want, String.format("[나무] %s: isTreeish(%s) = %s (want %s)", name, material, got, want));
     }
 
     private static void top(String name, int cy, int standY, int want) {

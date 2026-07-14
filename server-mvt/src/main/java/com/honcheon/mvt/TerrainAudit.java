@@ -773,15 +773,34 @@ final class TerrainAudit {
         return Integer.MIN_VALUE;
     }
 
-    /** 그 열의 지표면 y (물·잎·풀은 지나친다 — 딛는 자리를 찾는다) */
+    /** 그 열의 지표면 y (물·잎·풀·나무는 지나친다 — 딛는 자리를 찾는다) */
     private static int surfaceY(World world, int x, int z, int cy) {
         for (int y = cy + 40; y >= cy - 40; y--) {
             Material m = world.getBlockAt(x, y, z).getType();
-            if (m.isSolid() && !m.name().endsWith("_LEAVES")) {
+            if (isGround(m)) {
                 return y + 1;   // 그 위가 딛는 자리
             }
         }
         return Integer.MIN_VALUE;
+    }
+
+    /**
+     * <b>땅인가</b> — 지면 탐지가 딛는 자리로 인정하는 재질.
+     *
+     * <p>★ B-114 6차 — 3.86% 의 진범은 동굴이 아니라 <b>나무</b>였다. 잎만 지나치고 <b>통나무를
+     * 땅으로</b> 읽어, 숲 나무의 꼭대기가 그 기둥의 지면이 됐다 — 수관 속 공기(가지 사이 2~4칸)가
+     * 전부 「지하 공동」으로 계수됐다 (실측: 공동 천장이 #leaves · 벽이 #logs — RCON 재질 검증).
+     * 분포도 정합한다: 숲(중간 반경)에 많고 벌목된 마을 중심에 적고, 물 0, 팩 수리와 무관하게 불변.
+     * 그래서 나무의 몸(_LOG/_WOOD)과 잎을 <b>통째로</b> 지나친다 — 나무는 땅이 아니다.
+     */
+    private static boolean isGround(Material m) {
+        return m.isSolid() && !isTreeish(m.name());   // isSolid 는 서버 전용 — 이름 판정만 순수 분리
+    }
+
+    /** 나무의 몸인가 — 순수 이름 판정 (하네스가 시험한다 · Material API 는 레지스트리 함정) */
+    static boolean isTreeish(String n) {
+        return n.endsWith("_LEAVES") || n.endsWith("_LOG") || n.endsWith("_WOOD")
+                || n.endsWith("MUSHROOM_BLOCK") || n.equals("MUSHROOM_STEM") || n.equals("BAMBOO");
     }
 
     private static boolean canStand(World world, int x, int y, int z) {
