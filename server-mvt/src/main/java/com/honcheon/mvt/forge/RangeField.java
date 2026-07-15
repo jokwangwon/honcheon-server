@@ -66,6 +66,22 @@ public final class RangeField {
     /** 산기슭(등산로 고리 발치) 볼록 프로파일 지수 — 작을수록 발치가 급하다 (형상 잠정 · 사용자 피드백 조정) */
     private static final double TRAIL_FOOT_EXP = 0.85;
 
+    /**
+     * 바위 결(crag) 진폭 배수 — <b>돌산 재설계</b> (사용자 도보 피드백 2026-07-16: 산이 매끈해
+     * 돌산답지 않다). 옛 진폭 합 ~7.5 → 다옥타브 합 ~19.7 (아래 rockRelief). 이 배수는 면(비능선·
+     * 비단)의 바위 노출 결 세기다. ★형상 잠정·승인 대기(terrain_forge_v5.md §8.2 — 잠정 ~18~25).
+     * 옥타브 파장을 길게(37/41···) 잡아 진폭을 키우되 인접 블록 물매는 &lt;~1칸(연속성 B-155 여유).
+     */
+    private static final double CRAG_AMP = 1.0;
+
+    /**
+     * 보행 corridor 잠잠 반폭 — 남면(dz≥0)에서 |dx| 가 이 안이면 crag 를 끈다(건물 단·등산로가
+     * 앉는 평탄대). 등마루 반폭(20) 위에 여유. 옛 값 24(반폭+4)는 등산로 스위치백(dx~30)을 못
+     * 덮어 돌산 crag 가 노선 물매를 깨뜨렸다 → 32 로 넓혀 노선까지 덮는다(면은 그 밖이라 험준
+     * 유지). ★형상 잠정·승인 대기(§8.2). 램프 폭 CALM_RAMP 로 |dx|=CALM_HALF+CALM_RAMP 에서 완전 crag. */
+    private static final double CALM_HALF = 32.0;
+    private static final double CALM_RAMP = 14.0;
+
     /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③ 목록) · ③ 생성기 · 잠정 폴백 */
     private final double[] trailX;
     private final double[] trailZ;
@@ -198,6 +214,7 @@ public final class RangeField {
         for (RangeSpec.SideRidge sr : spec.sideRidges()) {
             h = Math.max(h, sideRidge(sr, dx, dz));
         }
+        h = Math.max(h, subPeaks(dx, dz));   // 다봉 massif — 봉우리 여럿 (돌산 지대)
         h = Math.max(0.0, h - gorgeCut(dx, dz));
         if (h <= 0.0) {
             return 0.0;
@@ -405,6 +422,33 @@ public final class RangeField {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // 부품 3b — 돌 봉우리 (다봉 massif) — 사용자 피드백 2026-07-16
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 다봉 봉우리 — 봉우리 여럿을 결정론 가우시안 융기로 세운다 (RangeSpec.subPeaks 유도값).
+     * 방사 몸체 위에 {@code max} 로 얹혀 <b>독립 국소 최고점</b>이 된다 — 능선·안부가 이들을
+     * 이어 하나의 바위 massif 를 이루고, 정상(중앙)은 그중 최고봉으로 남는다(height &lt; lift).
+     * 본산 건물 단은 봉우리들 사이 오목한 품(남축 안부)에 감싸인다.
+     *
+     * <p>가우시안 {@code height·exp(−(d/σ)²)} 는 매끄러워(C∞) z=0 급단차를 안 만든다 (B-155).
+     * 봉우리 마루(융기가 몸체를 이기는 곳)만 솟고, 그 밖은 몸체가 이겨 봉우리가 안 보인다.
+     * 좌표의 순수 함수(난수 0) — 봉우리 자리는 방위·반경으로 못박은 절대 좌표다.
+     */
+    private double subPeaks(double dx, double dz) {
+        double best = 0.0;
+        for (RangeSpec.SubPeak p : spec.subPeaks()) {
+            double a = Math.toRadians(p.azimuthDeg());
+            double px = p.radius() * Math.sin(a);         // 봉우리 중심 (주봉 기준 상대)
+            double pz = p.radius() * Math.cos(a);
+            double d = Math.hypot(dx - px, dz - pz);
+            double t = d / p.sigma();
+            best = Math.max(best, p.height() * Math.exp(-t * t));
+        }
+        return best;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // 부품 4 — 협곡 (감산 채널) · 바위 결
     // ═══════════════════════════════════════════════════════════════════
 
@@ -429,19 +473,25 @@ public final class RangeField {
     }
 
     /**
-     * 바위 결 — crag 문법 계승 (파장 11~23칸, TF:1155-1159). 정상 평탄부와 등마루
-     * 보행선은 매끈하고 중턱이 가장 험하다 (cragFactor 문법, TF:1168-1171).
+     * 바위 결 — <b>돌산 다옥타브 crag</b> (사용자 피드백 2026-07-16). crag 문법 계승·강화:
+     * 옛 3항(파장 11~23·진폭합 7.5)을 5옥타브(파장 41→7·진폭합 ~19.7)로 키워 <b>거친 바위 노출
+     * 결</b>을 낸다. 큰 파장에 큰 진폭·잔 파장에 작은 진폭 → 진폭은 커도 인접 블록 물매 &lt;~1칸
+     * (연속성 B-155 여유 · 자기시험이 잰다). 정상 평탄부·봉우리 마루·등마루 보행선·단은 매끈하고
+     * (calm·ramp) <b>면(비능선·비단)과 봉우리 사이가 가장 험하다</b> (cragFactor 문법 강화, TF:1168-1171).
      */
     private double rockRelief(int x, int z, double h, double dx, double dz) {
-        double crag = Math.sin(x / 13.0 + phase) * Math.cos(z / 11.0 - phase) * 3.5
-                + Math.sin((x + z) / 23.0 + phase) * 2.5
-                + Math.sin((x - z) / 17.0) * 1.5;
-        double tNorm = 1.0 - Math.min(1.0, h / spec.lift());   // 0 = 정상, 1 = 발치
-        double ramp = clamp01((tNorm - 0.05) / 0.25);           // 정상 부근은 0 (매끈한 단)
-        double factor = ramp * (0.5 + 0.5 * (1.0 - tNorm));     // 중턱이 가장 험하다
-        double calm = 1.0;                                       // 등마루 보행선은 잠잠하다
+        double crag = CRAG_AMP * (
+                  Math.sin(x / 37.0 + phase) * Math.cos(z / 41.0 - phase) * 8.0   // 큰 바위 덩어리 (저주파·큰 진폭)
+                + Math.sin((x + z) / 23.0 + phase) * 5.0                          // 중간 바위 단
+                + Math.cos((x - z) / 17.0 - phase) * 3.2                          // 바위 결
+                + Math.sin(x / 11.0 - phase) * Math.cos(z / 13.0 + phase) * 2.2   // 잔결
+                + Math.sin((x - z) / 7.0 + phase) * 1.3);                         // 아주 잔 결 (jagged)
+        double tNorm = 1.0 - Math.min(1.0, h / spec.lift());   // 0 = 정상·봉우리 마루, 1 = 발치
+        double ramp = clamp01((tNorm - 0.05) / 0.20);           // 정상·봉우리 마루 부근은 0 (매끈한 단)
+        double factor = ramp * (0.55 + 0.45 * (1.0 - tNorm));   // 중·상턱 면이 가장 험하다 (돌산 노출)
+        double calm = 1.0;                                       // 등마루·단·등산로 보행선은 잠잠하다
         if (dz >= 0) {
-            calm = clamp01((Math.abs(dx) - (spec.ridgeHalfWidth() + 4)) / 8.0);
+            calm = clamp01((Math.abs(dx) - CALM_HALF) / CALM_RAMP);
         }
         return crag * factor * calm;
     }
