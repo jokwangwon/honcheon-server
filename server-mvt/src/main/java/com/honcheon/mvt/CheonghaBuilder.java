@@ -262,6 +262,13 @@ import java.util.Set;
  *         (벽±8)** 안으로 들어와 의방의 물매 단면을 이웃 처마에서 시작하게 만든다 (v6.3 ③ 의 재발).
  *      ㉱ 다락형 #4·#8 · ㄱ자 #6 · 작업장 #7 은 **키우지 않았다** — 표국 부지·남골목·표국 진입 소로에
  *         막혀 121x121 안에서는 확대 여지가 없다 (보고서: 부지 141x141 = r70 이 필요하다).
+ *
+ * B-146 가설 D 수리 — **cy→gy 정합**. 병: 지면은 고도장 gy(±2)를 따르는데 일부 발자국·소품이 cy 에
+ *   못 박혀 묻히고 떴다. 뿌리는 buildRelief 의 문법이 아니라 **핀 상자(FLAT_PLOTS)가 발자국을 다 못
+ *   덮은 것**이다 (문법·진폭·핀 순서는 손대지 않았다 — 결정론 불변). 두 길로 고친다:
+ *   (b) 강체 발자국(건물·붙은 담·작업마당·부속·점포) = 핀 상자를 발자국+1칸까지 확장해 평탄화
+ *       — 의방 서변 x-32 · 민가 #2 z-38 · #6 z+37 · #7 x+29 · 잡화점 상자 신설.
+ *   (a) 상자 밖 낱개 소품(곁담·활주 네 귀·객잔 굴뚝 발치 통) = 열마다 제 지면(gy) 위에 앉힌다.
  */
 final class CheonghaBuilder {
 
@@ -1466,16 +1473,24 @@ final class CheonghaBuilder {
      * <p>객잔은 <b>북골목이 그 북벽 줄(z-20..-19)을 지나므로</b> 기단을 줄 수 없다 (골목 노면은 cy 고정).
      * 관청류 3채는 광장·대로에 면해 있어 그 앞마당이 곧 대로다 — 대로가 cy 면 그 앞집도 cy 다.
      * ㄱ자형·작업장형 민가는 날개·부속간이 있어 필지 경계가 사각형이 아니다 (기단은 사각형 위에만 선다).
+     *
+     * <p><b>B-146 가설 D 수리 — 상자는 발자국 전체를 덮어야 한다.</b> 이 상자 밖에 벽 한 줄이라도
+     * 남으면 그 열의 지면은 고도장(±2)을 따르는데 벽은 cy 에 못 박혀 <b>묻히거나 뜬다</b>
+     * (실측: #2 뒷날개 z-37..-34 · #6 뒷날개 z+34..+36 · #7 작업간/작업마당 x+23..+28 ·
+     * 잡화점 x+6..+7 · 의방 부속 x-31..-29 가 상자 밖이었다). 수리 방식은 (b) <b>발자국 평탄화</b>다 —
+     * 건물·담·마당은 한 몸의 강체라 열마다 gy 에 앉힐 수 없다. 상자는 발자국 + 여유 1칸으로 잡는다.
+     * 외곽 낱개 소품(곁담·굴뚝 발치 통·활주)만 (a) 열마다 gy 착지로 푼다 — 아래 각 함수 참조.
      */
     private static final int[][] FLAT_PLOTS = {
             {-35, -9, -23, -3},    // 청하객잔 (벽 x-32..-12 · z-20..-6 · 지붕 ±2)
             {8, 28, -21, -3},      // 의뢰소 (벽 x+11..+25 · z-18..-6)
-            {-28, -8, 3, 21},      // 의방
+            {-32, -8, 3, 21},      // 의방 — 서변 -28→-32: 부속(건조대 x-31·-28, 굴뚝 x-29, 약탕관 x-30)까지 덮는다
             {8, 28, 3, 21},        // 청하전장
             {-46, -24, -32, -21},  // 민가 #1 대장간 (본채 + 작업간 — 부속이 있어 사각형이 아니다)
-            {-19, -3, -33, -22},   // 민가 #2 ㄱ자형 (뒷날개)
-            {-45, -29, 21, 33},    // 민가 #6 ㄱ자형
-            {6, 22, 22, 33},       // 민가 #7 직조간 (본채 + 작업간)
+            {-19, -3, -38, -22},   // 민가 #2 ㄱ자형 — 북변 -33→-38: 뒷날개(z-37..-31)와 안마당 담·살림까지
+            {-45, -29, 21, 37},    // 민가 #6 ㄱ자형 — 남변 33→37: 뒷날개(z+30..+36)와 안마당까지
+            {6, 29, 22, 33},       // 민가 #7 직조간 — 동변 22→29: 작업간(x+19..+25)과 돌담 작업마당(x+26..+28)까지
+            {3, 9, -19, -13},      // 잡화점 (벽 x+4..+8 · z-18..-14 + 점두 디딤돌 x+3)
     };
 
     /**
@@ -4434,7 +4449,11 @@ final class CheonghaBuilder {
     private static void eavePosts(World world, int x0, int y0, int z0, int x1, int z1, int top) {
         for (int x : new int[]{x0, x1}) {
             for (int z : new int[]{z0, z1}) {
-                for (int y = y0 + 1; y <= top; y++) {
+                // B-146 (a) — 네 귀는 벽 대각 한 칸 밖이라 기단 필지(±1)에선 상자 밖 지면에 선다.
+                //   지면이 마루(y0)보다 낮으면 y0+1 에서 시작한 기둥의 발이 뜬다 → 그 열의 지면(gy)까지
+                //   내려 앉힌다. 지면이 높은 쪽은 isAir 검사가 이미 막는다 (땅속엔 안 박힌다).
+                int base = Math.min(y0, gy(x, z));
+                for (int y = base + 1; y <= top; y++) {
                     if (world.getBlockAt(x, y, z).getType().isAir()) {
                         world.getBlockAt(x, y, z).setType(Material.SPRUCE_FENCE);
                     }
@@ -5523,10 +5542,12 @@ final class CheonghaBuilder {
         world.getBlockAt(x0 + 6, y0 + 1, mid).setType(Material.BROWN_CARPET);    // 방석 깔개 (문 열 — 통행 가능)
         world.getBlockAt(x0 + 5, y0 + 1, mid).setType(Material.BROWN_CARPET);
         if (sideWallMat != null) {   // 곁담 — 정면 좌우 낮은 담 2칸 (문·골목은 막지 않는다)
+            // B-146 (a) — 곁담은 필지 상자 **밖**이라 이웃 지면이 기단(±1)과 다르다. y0 이 아니라
+            //   그 열의 지면(gy) 위에 앉힌다 — 안 그러면 기단 +1 집(#5)의 곁담이 뜨고 -1 집(#3)은 묻힌다.
             int frontZ = doorNorth ? z0 : z1;
             for (int i = 1; i <= 2; i++) {
-                world.getBlockAt(x0 - i, y0 + 1, frontZ).setType(sideWallMat);
-                world.getBlockAt(x1 + i, y0 + 1, frontZ).setType(sideWallMat);
+                world.getBlockAt(x0 - i, gy(x0 - i, frontZ) + 1, frontZ).setType(sideWallMat);
+                world.getBlockAt(x1 + i, gy(x1 + i, frontZ) + 1, frontZ).setType(sideWallMat);
             }
         }
     }
@@ -5542,6 +5563,8 @@ final class CheonghaBuilder {
         shell(world, x0, y0, z0, w, d, 4, doorNorth, ws, RoofStyle.SHINGLE, false,
                 WindowStyle.COTTAGE);   // v6.7 ② 벽고 3 → 4
         int x1 = x0 + w - 1, z1 = z0 + d - 1;
+        // B-146 (b) — 날개·안마당은 본채와 한 몸이라 cy(y0)에 선다. FLAT_PLOTS 의 #2(z-38)·#6(z+37)
+        //   상자가 이 발자국(날개 6x7 + 마당 담 z1+6/z0-6)까지 덮는다 — 날개를 늘리면 상자도 같이.
         int wingZ0 = doorNorth ? z1 : z0 - 6;   // 날개는 문 반대편(뒤)으로 뻗는다
         shell(world, x0, y0, wingZ0, 6, 7, 4, doorNorth, ws, RoofStyle.SHINGLE, false,
                 1, WindowStyle.NONE);   // 부속채 처마 1칸 (위계) · 헛간에 창은 내지 않는다
@@ -5667,6 +5690,8 @@ final class CheonghaBuilder {
         world.getBlockAt(x0 + 10, y0 + 1, near).setType(Material.LANTERN);       // 바닥 등롱
         world.getBlockAt(x0 + 6, y0 + 1, z0 + 4).setType(Material.BROWN_CARPET); // 방석 깔개
         // 작업간 — 본채 동벽에 잇대어 짓는다 (정면 정렬, 골목 쪽 별도 문)
+        // B-146 (b) — 작업간(x0+11..+17)·작업마당 담(x0+18..+20)도 cy(y0)에 선다.
+        //   FLAT_PLOTS 의 #1(x-24)·#7(x+29) 상자가 여기까지 덮는다 — 마당을 넓히면 상자도 같이.
         int sz0 = doorNorth ? z0 : z0 + 3;
         shell(world, x0 + 11, y0, sz0, 7, 6, 4, doorNorth,
                 poor ? WallStyle.MUD_BRICK : WallStyle.FRAME_GRAY, RoofStyle.SHINGLE, false,
@@ -5906,6 +5931,9 @@ final class CheonghaBuilder {
      * 시렁(대나무 울타리)은 cy+1·cy+2 라 probeY 를 지나지 않고, 애초에 불투과 블록도 아니다.
      */
     private static void medicineFacade(World world, int cx, int cy, int cz) {
+        // B-146 (b) — 이 부속(건조대 x-31·-28 · 굴뚝 x-29 · 약탕관/통 x-30 · 장작 x-31)은 cy 에 못 박혀
+        //   있으므로 의방 필지 상자(FLAT_PLOTS 서변 x-32)가 이 열들을 **반드시** 덮어야 한다.
+        //   부속을 서쪽으로 더 물리면 상자도 같이 넓혀라 — 안 넓히면 굴뚝이 언덕에 묻힌다.
         // v7.0 ③ — 의방이 x-25 까지 나오면서 처마 끝이 x-27 이 됐다. 건조대·굴뚝을 두 칸 서쪽으로 물린다.
         // ★ 앵커 행이 z+13 → **z+12** 로 바뀌었다. 짚단(불투과)이 그 행에 걸리면 검수의 서쪽 레이가
         //   건조대를 '의방의 서벽'으로 읽어 처마가 음수가 된다 → 짚단은 **홀수 열**에만 건다 (z+12 를 비운다).
@@ -5991,7 +6019,8 @@ final class CheonghaBuilder {
             world.getBlockAt(cx - 35, cy + 1, cz - 18 + dz).setBlockData(log);
             world.getBlockAt(cx - 35, cy + 2, cz - 18 + dz).setBlockData(log);
         }
-        world.getBlockAt(cx - 36, cy + 1, cz - 18).setType(Material.BARREL);
+        // B-146 (a) — x-36 은 객잔 필지 상자(x≥-35) 밖이라 지면이 고도장을 따른다. 통은 제 지면 위에.
+        world.getBlockAt(cx - 36, gy(cx - 36, cz - 18) + 1, cz - 18).setType(Material.BARREL);
     }
 
     // ─── 장터 — 노점 5개, 차양 5색 ───
@@ -6028,6 +6057,8 @@ final class CheonghaBuilder {
      * 붉은 차양 노점(cx+7,cz-5)·장쇠 스폰(cx+8,cz-6)·장터 앵커 반경 15 는 손대지 않는다 (매각 규칙 계약 불변).
      */
     private static void generalStore(World world, int cx, int cy, int cz) {
+        // B-146 (b) — 점포는 cy 에 서므로 FLAT_PLOTS 의 잡화점 상자 {3,9,-19,-13} 가 이 발자국
+        //   (벽 + 점두 디딤돌 x0-1)을 덮는다 — 부지를 옮기면 상자도 같이.
         int x0 = cx + 4, x1 = cx + 8, z0 = cz - 18, z1 = cz - 14;   // v6.3 ③ — 깊이 6→5
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {

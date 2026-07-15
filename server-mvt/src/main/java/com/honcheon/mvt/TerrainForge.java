@@ -1023,8 +1023,27 @@ final class TerrainForge {
     /** 대지의 들이 — 고원은 오르는 산이 아니라 <b>올라선 들</b>이다 */
     private static final int LIFT_PLATEAU = 24;
 
-    /** 정상 평탄지의 반경 — 본전(15×13)과 연무장이 앉을 만큼. <b>그 밖은 벼랑이다</b> */
-    private static final int SUMMIT_R = 22;
+    /**
+     * 정상 평탄지의 반경 — 본전·연무장·석등·매화가 앉을 만큼. <b>그 밖은 벼랑이다</b>.
+     *
+     * <p>【B-146 ③】 ★ 상수가 아니라 <b>건축 발자국에서 유도한다</b> — §2.4 3계층 헌법(2026-07-15 개정):
+     * 지도는 건축을 포함하고, <b>땅의 치수(정상부 폭)는 건축의 실측 footprint 에서 나온다</b>.
+     * 구판의 못박힌 22는 우연히 본전을 담았을 뿐, 본전이 커지면 산이 좁아 "봉우리가 너무 얇게
+     * 지어져 건물을 올려 디자인을 하기 힘들게" 됐다 (B-147 사용자 실측). 이제 한쪽만 산다.
+     *
+     * <p><b>유도식</b>: 본전 단의 대각 반지름({@link RemoteBuilder#summitNeedRadius} = 17)
+     * + 단 가장자리 여유 2(축대 한 칸 + 걷는 한 칸) = 19. 능선 왜곡({@link #slopeT}:
+     * {@code fEff = flatR·(1 + ridge/2)}, ridge 최솟값 ≈ −0.195)이 평탄부를 방위에 따라
+     * 최대 약 10% 좁히므로 0.9 로 나눈다 → {@code ceil(19 / 0.9)} = <b>22</b>.
+     *
+     * <p>값이 v4 상수(22)와 같다 — <b>이미 커밋된 땅과 어긋나지 않는다</b> (재조성해도 같은 산).
+     */
+    private static final int SUMMIT_R = summitFlatRadius();
+
+    private static int summitFlatRadius() {
+        int need = RemoteBuilder.summitNeedRadius() + 2;   // 발자국 대각 + 축대·걷는 여유
+        return (int) Math.ceil(need / 0.9);                // 능선 왜곡의 최악 수축(≈10%)을 미리 벌어 둔다
+    }
 
     /** 이 산의 높이 — 등록부가 먼저({@code terrain.yml lift:}), 없으면 지형이 정한다 */
     private static int lift(WorldMap.Place place, boolean plateau) {

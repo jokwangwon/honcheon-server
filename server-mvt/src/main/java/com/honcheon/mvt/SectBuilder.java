@@ -78,42 +78,70 @@ final class SectBuilder {
         int gateF = rad - 12;          // 산문
         int kingF = rad - 38;          // 천왕전
         int mainF = rad - 66;          // 대웅보전 — 축선의 끝
-        int axisY = base;
 
-        // 【단】 축선 — 마당은 관의 돌바닥이 아니라 **다져 쓴 마당**이다 (무승이 쓴다)
-        for (int f = mainF - 12; f <= gateF + 4; f++) {
+        // 【B-146 ④】 축선은 평면이 아니라 **땅을 따라 오른다.** 숭산은 봉우리(shaping: 봉우리 · lift 48)라
+        //   구판처럼 축선을 기준면(groundY) 평면에 못 박으면 대웅보전 쪽이 산허리에 통째로 묻힌다
+        //   (terrace 는 위로 14칸만 비운다 — 그 위 산이 지붕을 눌렀다). 산문에서 대웅보전으로 걸으며
+        //   열마다 실지면을 읽고 **한 걸음 ±1** 로 오른다 (approachPath 문법) — 세 전각의 높이는
+        //   그 걸음이 정한다: 건물이 길 위에 앉는다. lift 48 · 주행 54 라 1:1 안에 든다
+        //   (소림은 험산이 아니다 — terrain.yml 의 주석 그대로).
+        int f0 = mainF - 12;
+        int f1 = gateF + 4;
+        int[] axisY = new int[f1 - f0 + 1];
+        int prev = RemoteBuilder.seatY(world, spec, fw.x(cx, f1, 0), fw.z(cz, f1, 0));
+        for (int f = f1; f >= f0; f--) {
+            int g = RemoteBuilder.seatY(world, spec, fw.x(cx, f, 0), fw.z(cz, f, 0));
+            int y = Math.max(prev - 1, Math.min(prev + 1, g));
+            axisY[f - f0] = y;
+            // 【단】 축선 — 마당은 관의 돌바닥이 아니라 **다져 쓴 마당**이다 (무승이 쓴다)
             for (int l = -12; l <= 12; l++) {
-                TerrainForge.terrace(world, spec, fw.x(cx, f, l), fw.z(cz, f, l), axisY, 0, 0,
+                TerrainForge.terrace(world, spec, fw.x(cx, f, l), fw.z(cz, f, l), y, 0, 0,
                         Math.floorMod(fw.x(cx, f, l) + fw.z(cz, f, l), 6) == 0
                                 ? Material.ANDESITE : Material.POLISHED_ANDESITE);
             }
+            prev = y;
         }
-        RemoteBuilder.approachPath(world, spec, cx, cz, fw, gateF + 5, rad + 14, axisY, 2,
+        int gateY = axisY[gateF - f0];
+        int kingY = axisY[kingF - f0];
+        int mainY = axisY[mainF - f0];
+        RemoteBuilder.approachPath(world, spec, cx, cz, fw, gateF + 5, rad + 14, axisY[f1 - f0], 2,
                 Material.POLISHED_ANDESITE);
 
-        mountainGate(world, cx, axisY, cz, fw, gateF, 6);                          // 산문 — 넓다 (대찰이다)
-        hall(world, spec, cx, axisY, cz, fw, kingF, 8, 6, 4, true);                // 천왕전 — 삼문
-        podiumHall(world, spec, cx, axisY, cz, fw, mainF, 11, 8);                  // 대웅보전 — 월대 위
+        mountainGate(world, cx, gateY, cz, fw, gateF, 6);                          // 산문 — 넓다 (대찰이다)
+        hall(world, spec, cx, kingY, cz, fw, kingF, 8, 6, 4, true);                // 천왕전 — 삼문
+        podiumHall(world, spec, cx, mainY, cz, fw, mainF, 11, 8);                  // 대웅보전 — 월대 위
 
-        pagoda(world, spec, cx, axisY, cz, fw, kingF - 4, -22);                    // ★ 전탑 — 9층
-        cloisterWing(world, spec, cx, axisY, cz, fw, kingF, 20);                   // 승방 — 축선 오른쪽
-        cloisterWing(world, spec, cx, axisY, cz, fw, kingF, -20);                  // 승방 — 왼쪽 (탑 뒤)
+        // ★ 전탑 — 9층. 축선 밖(l −22)이라 **제 실지면**에 선다 (B-146 ②·④)
+        int pgx = fw.x(cx, kingF - 4, -22);
+        int pgz = fw.z(cz, kingF - 4, -22);
+        pagoda(world, spec, cx, RemoteBuilder.seatY(world, spec, pgx, pgz), cz, fw, kingF - 4, -22);
+        cloisterWing(world, spec, cx, cz, fw, kingF, 20);                          // 승방 — 축선 오른쪽
+        cloisterWing(world, spec, cx, cz, fw, kingF, -20);                         // 승방 — 왼쪽 (탑 뒤)
 
-        // 마당 — 무승이 무를 익힌다. 목인장 여섯 (연무장이 아니라 **마당**이다: 담이 없다)
+        // 마당 — 무승이 무를 익힌다. 목인장 여섯 (연무장이 아니라 **마당**이다: 담이 없다).
+        //   축선 단 위라 seatY == 그 단의 낯이다 (축선이 먼저 깔렸다)
         for (int i = -2; i <= 2; i += 2) {
-            woodenDummy(world, fw.x(cx, gateF - 10, i * 5), axisY, fw.z(cz, gateF - 10, i * 5), fw);
-            woodenDummy(world, fw.x(cx, gateF - 18, i * 5), axisY, fw.z(cz, gateF - 18, i * 5), fw);
+            for (int f : new int[]{gateF - 10, gateF - 18}) {
+                int dx = fw.x(cx, f, i * 5);
+                int dz = fw.z(cz, f, i * 5);
+                woodenDummy(world, dx, RemoteBuilder.seatY(world, spec, dx, dz), dz, fw);
+            }
         }
-        // 보리수 — ★ **매화가 아니다.** 대웅보전 앞 둘 (넓은 잎, 굵은 줄기)
-        bodhiTree(world, fw.x(cx, mainF + 14, -13), axisY, fw.z(cz, mainF + 14, -13));
-        bodhiTree(world, fw.x(cx, mainF + 14, 13), axisY, fw.z(cz, mainF + 14, 13));
+        // 보리수 — ★ **매화가 아니다.** 대웅보전 앞 둘. 축선 밖(l ±13) — 실지면에 심는다 (B-146 ②)
+        for (int side : new int[]{-13, 13}) {
+            int bx = fw.x(cx, mainF + 14, side);
+            int bz = fw.z(cz, mainF + 14, side);
+            bodhiTree(world, bx, RemoteBuilder.seatY(world, spec, bx, bz), bz);
+        }
 
-        for (int f = gateF - 6; f >= mainF + 8; f -= 8) {   // 축선의 불 — 등은 축을 따라만 선다
-            RemoteBuilder.lanternPost(world, fw.x(cx, f, -10), axisY, fw.z(cz, f, -10));
-            RemoteBuilder.lanternPost(world, fw.x(cx, f, 10), axisY, fw.z(cz, f, 10));
+        for (int f = gateF - 6; f >= mainF + 8; f -= 8) {   // 축선의 불 — 등은 축을 따라만 선다 (② 실지면 착좌)
+            RemoteBuilder.lanternPost(world, spec, fw.x(cx, f, -10), fw.z(cz, f, -10));
+            RemoteBuilder.lanternPost(world, spec, fw.x(cx, f, 10), fw.z(cz, f, 10));
         }
+        int lo = Math.min(base, Math.min(gateY, mainY)) - 8;
+        int hi = Math.max(kingY, mainY) + 46;   // 전탑(9층 ≈ +40)이 가장 높다
         return List.of(new Zone(place.name(), "사찰 — 산문에서 대웅보전까지 한 축선", world.getName(),
-                cx - rad, base - 8, cz - rad, cx + rad, base + 46, cz + rad));
+                cx - rad, lo, cz - rad, cx + rad, hi, cz + rad));
     }
 
     /**
@@ -168,11 +196,17 @@ final class SectBuilder {
         RemoteBuilder.lantern(world, px, y + 3, pz);   // 탑의 불 — 멀리서 이 불이 소림이다
     }
 
-    /** 승방 회랑 — 축선 옆의 긴 집. 회벽 · 검은 기와 · 문은 마당(축선)을 본다 */
-    private static void cloisterWing(World world, TerrainForge.SiteSpec spec, int cx, int cy, int cz,
+    /**
+     * 승방 회랑 — 축선 옆의 긴 집. 회벽 · 검은 기와 · 문은 마당(축선)을 본다.
+     * 【B-146 ②·④】 축선 밖(l ±20)의 비탈이라 채마다 **제 실지면**에 앉는다 (평면에 못 박지 않는다).
+     */
+    private static void cloisterWing(World world, TerrainForge.SiteSpec spec, int cx, int cz,
                                      RemoteBuilder.Facing fw, int f0, int l0) {
         for (int i = 0; i < 3; i++) {
-            plasterHall(world, spec, cx, cy, cz, fw, f0 - i * 14, l0, 5, 4, l0 > 0 ? -1 : 1);
+            int hx = fw.x(cx, f0 - i * 14, l0);
+            int hz = fw.z(cz, f0 - i * 14, l0);
+            plasterHall(world, spec, cx, RemoteBuilder.seatY(world, spec, hx, hz), cz, fw,
+                    f0 - i * 14, l0, 5, 4, l0 > 0 ? -1 : 1);
         }
     }
 
@@ -199,22 +233,30 @@ final class SectBuilder {
         int pz = spec.peakZ();
         int peakF = (px - cx) * fw.fx() + (pz - cz) * fw.fz();
 
-        // 오를 수 있는 만큼만 오른다 (못 오르는 계단은 벽이다 — 도관이 이미 배운 것)
         int stepFrom = peakF + 14;
         int stepTo = rad - 20;
         int run = stepTo - stepFrom;
-        boolean climb = spec.twoTier() && run >= 8;
-        int rise = climb ? Math.max(0, Math.min(spec.peakY() - base, run - 4)) : 0;
-        int top = base + rise;
+
+        // 【B-146 ④】 upper 잘림의 묘비 — 구판: top = base + min(peakY − base, run − 4).
+        //   계단이 닿는 높이로 누각을 **끌어내렸다**. 그 평면은 원뿔 비탈의 어디쯤이라
+        //   실지면과 어긋났다 — 누각이 뜨거나(봉우리가 밀린 자리) 산허리에 박혔다(비탈이 높은 자리).
+        //   이제 누각은 **실제 정상 평탄부(peakY — 원장 정본)** 에 앉는다. 팔각 단(반경 15,
+        //   최대 대각 ≈16.6)은 정상부 필요 반경(summitNeedRadius = 17) 안이라 반드시 담긴다.
+        int top = spec.twoTier() ? spec.peakY() : RemoteBuilder.seatY(world, spec, px, pz);
+        // 문전도 실지면 위 — 기준면(groundY)은 산 발치 들의 높이다 (B-146 ②)
+        int courtY = RemoteBuilder.seatY(world, spec, fw.x(cx, stepTo + 6, 0), fw.z(cz, stepTo + 6, 0));
+        // 계단은 **오를 수 있을 때만** — 1:1 이 사람의 한계다. 못 오르면 땅이 낸 등반로가 길이다
+        //   (TerrainForge.carveTrail — "오르는 길은 하나면 된다"). 못 오르는 계단은 벽이다.
+        boolean stairs = top > courtY && run >= 8 && top - courtY <= run - 4;
 
         // 【단】 팔각의 단 — 도가의 단(壇)이다. 사각이 아니다 (그것이 관의 것이다)
         octagon(world, spec, px, pz, top, 15, Material.POLISHED_ANDESITE);
-        TerrainForge.terrace(world, spec, fw.x(cx, stepTo + 6, 0), fw.z(cz, stepTo + 6, 0), base,
+        TerrainForge.terrace(world, spec, fw.x(cx, stepTo + 6, 0), fw.z(cz, stepTo + 6, 0), courtY,
                 fw.swapped() ? 5 : 7, fw.swapped() ? 7 : 5, Material.POLISHED_ANDESITE);
-        RemoteBuilder.approachPath(world, spec, cx, cz, fw, stepTo + 12, rad + 14, base, 2,
+        RemoteBuilder.approachPath(world, spec, cx, cz, fw, stepTo + 12, rad + 14, courtY, 2,
                 Material.POLISHED_ANDESITE);
-        if (top > base) {
-            steps(world, spec, cx, cz, fw, stepFrom, stepTo, top, base);
+        if (stairs) {
+            steps(world, spec, cx, cz, fw, stepFrom, stepTo, top, courtY);
         }
 
         // 3층 누각 — 각 층이 한 켜씩 물러선다. **높이가 곧 말이다**
@@ -238,13 +280,14 @@ final class SectBuilder {
         RemoteBuilder.put(world, px, top + 1, pz + 6, Material.CAULDRON);
         RemoteBuilder.candlesAt(world, px - 1, top + 1, pz + 6);
         RemoteBuilder.candlesAt(world, px + 1, top + 1, pz + 6);
-        for (int i = 0; i < 8; i++) {   // 단 둘레의 불 — 팔각의 여덟 귀
+        for (int i = 0; i < 8; i++) {   // 단 둘레의 불 — 팔각의 여덟 귀. 【B-146 ②】 소품 — 실지면 착좌
             double a = Math.PI * i / 4.0;
-            RemoteBuilder.lanternPost(world, px + (int) Math.round(Math.cos(a) * 13), top,
+            RemoteBuilder.lanternPost(world, spec, px + (int) Math.round(Math.cos(a) * 13),
                     pz + (int) Math.round(Math.sin(a) * 13));
         }
         return List.of(new Zone(place.name(), "전각 — 금정이 안개 위로 솟는다", world.getName(),
-                cx - rad, base - 8, cz - rad, cx + rad, Math.max(top, base) + 30, cz + rad));
+                cx - rad, Math.min(base, courtY) - 8, cz - rad, cx + rad,
+                Math.max(top, courtY) + 30, cz + rad));
     }
 
     /** 누각 한 층 — 회벽 · 노출 기둥 · 처마 기와. 위층은 아래층보다 좁다 */
@@ -330,7 +373,9 @@ final class SectBuilder {
             if (!spec.inside(hx, hz) || spec.wet(hx, hz)) {
                 continue;
             }
-            huts.add(new int[]{hx, hz, spec.groundAt(hx, hz)});   // ★ 제 지면 — 우리가 안 고른다
+            // ★ 제 지면 — 우리가 안 고른다. seatY: 측량은 사람이 깐 단(거친 흙은 자연으로 읽히지만
+            //   포석은 아니다)을 한 칸 아래로 읽으므로, 재조성 때 암자가 제 단에 박히지 않게 한다 (B-146 ②)
+            huts.add(new int[]{hx, hz, RemoteBuilder.seatY(world, spec, hx, hz)});
         }
         int lo = base;
         int hi = base;
@@ -454,10 +499,26 @@ final class SectBuilder {
         int rad = spec.radius();
         int base = spec.groundY();
 
+        // 【B-146 ④】 곤륜은 봉우리(shaping: 봉우리 · lift 84)다 — 도관은 **정상 평탄부에** 선다.
+        //   구판은 부지 중심·기준면(groundY) 평면에 못 박아, 산이 서면 도관이 산허리에 통째로
+        //   묻혔다 (terrace 는 위로 14칸만 비운다 — 그 위 산이 지붕을 눌렀다). 원점도 봉우리다
+        //   (부지 중심이 아니다 — 지형이 봉우리를 북으로 8칸 밀어 두었다). peakY 는 원장 정본이라
+        //   재조성에도 안 흔들린다. 켜가 하나면(twoTier 아님) 그 자리의 실지면이다.
+        //   ★ 발자국 37×37(대각 ≈25.5)은 정상 평탄부 유도(summitNeedRadius 17)를 넘는다 —
+        //   모서리는 terrace 의 축대(최대 16칸)가 받친다. B-147 지도 설계에서 유도 확장 검토 대상.
+        boolean summit = spec.twoTier();
+        int ox = summit ? spec.peakX() : cx;
+        int oz = summit ? spec.peakZ() : cz;
+        int gy = summit ? spec.peakY() : RemoteBuilder.seatY(world, spec, cx, cz);
+
         int half = 16;
-        TerrainForge.terrace(world, spec, cx, cz, base, half + 2, half + 2, Material.POLISHED_DEEPSLATE);
-        RemoteBuilder.approachPath(world, spec, cx, cz, fw, half + 3, rad + 12, base, 1,
-                Material.POLISHED_DEEPSLATE);
+        TerrainForge.terrace(world, spec, ox, oz, gy, half + 2, half + 2, Material.POLISHED_DEEPSLATE);
+        if (!summit) {
+            RemoteBuilder.approachPath(world, spec, ox, oz, fw, half + 3, rad + 12, gy, 1,
+                    Material.POLISHED_DEEPSLATE);
+        }
+        // summit 이면 직선 진입로를 깔지 않는다 — 1:0.9 벼랑을 ±1 걸음이 못 따라가 뜬 다리가 된다.
+        //   오르는 길은 땅이 이미 냈다 (TerrainForge.carveTrail — 등반로가 정상 단에 닿는다).
 
         // 두꺼운 벽 — 세 칸. 낮다(5켜). 무겁다. **오르는 집이 아니라 버티는 집이다**
         for (int f = -half; f <= half; f++) {
@@ -469,16 +530,16 @@ final class SectBuilder {
                 if (Math.abs(l) <= 2 && Math.abs(f) == half) {
                     continue;   // 문 둘 — 앞(중원)과 뒤(서역). 축선이 관통한다
                 }
-                int x = fw.x(cx, f, l);
-                int z = fw.z(cz, f, l);
-                for (int y = base + 1; y <= base + 6; y++) {
+                int x = fw.x(ox, f, l);
+                int z = fw.z(oz, f, l);
+                for (int y = gy + 1; y <= gy + 6; y++) {
                     world.getBlockAt(x, y, z).setType(coldStone(x, y, z));
                 }
                 if (ring == half) {   // 좁은 세로 창 — 눈보라를 막고 빛만 들인다
                     if (Math.floorMod(f * 3 + l * 5, 7) == 0) {
-                        world.getBlockAt(x, base + 4, z).setType(Material.AIR);
+                        world.getBlockAt(x, gy + 4, z).setType(Material.AIR);
                     }
-                    world.getBlockAt(x, base + 7, z).setType(Material.STONE_BRICK_SLAB);   // 돌 갓 (기와가 아니다)
+                    world.getBlockAt(x, gy + 7, z).setType(Material.STONE_BRICK_SLAB);   // 돌 갓 (기와가 아니다)
                 }
             }
         }
@@ -486,51 +547,51 @@ final class SectBuilder {
         int hh = 8;
         for (int f = -hh; f <= hh; f++) {
             for (int l = -hh; l <= hh; l++) {
-                int x = fw.x(cx, f, l);
-                int z = fw.z(cz, f, l);
+                int x = fw.x(ox, f, l);
+                int z = fw.z(oz, f, l);
                 boolean edge = Math.abs(f) == hh || Math.abs(l) == hh;
                 if (!edge) {
                     continue;
                 }
-                for (int y = base + 1; y <= base + 5; y++) {
+                for (int y = gy + 1; y <= gy + 5; y++) {
                     world.getBlockAt(x, y, z).setType(coldStone(x, y, z));
                 }
             }
         }
         for (int l = -1; l <= 1; l++) {   // 본당의 문 하나
-            for (int y = base + 1; y <= base + 3; y++) {
-                world.getBlockAt(fw.x(cx, hh, l), y, fw.z(cz, hh, l)).setType(Material.AIR);
+            for (int y = gy + 1; y <= gy + 3; y++) {
+                world.getBlockAt(fw.x(ox, hh, l), y, fw.z(oz, hh, l)).setType(Material.AIR);
             }
         }
         for (int i = 0; i <= hh; i++) {   // 돌 지붕 — 계단으로 접는다 (기와가 한 장도 없다)
-            int y = base + 6 + i;
+            int y = gy + 6 + i;
             for (int f = -hh - 1 + i; f <= hh + 1 - i; f++) {
-                RemoteBuilder.put(world, fw.x(cx, f, -hh - 1 + i), y, fw.z(cz, f, -hh - 1 + i),
+                RemoteBuilder.put(world, fw.x(ox, f, -hh - 1 + i), y, fw.z(oz, f, -hh - 1 + i),
                         Material.STONE_BRICK_STAIRS);
-                RemoteBuilder.put(world, fw.x(cx, f, hh + 1 - i), y, fw.z(cz, f, hh + 1 - i),
+                RemoteBuilder.put(world, fw.x(ox, f, hh + 1 - i), y, fw.z(oz, f, hh + 1 - i),
                         Material.STONE_BRICK_STAIRS);
             }
             for (int l = -hh + i; l <= hh - i; l++) {
-                RemoteBuilder.put(world, fw.x(cx, -hh - 1 + i, l), y, fw.z(cz, -hh - 1 + i, l),
+                RemoteBuilder.put(world, fw.x(ox, -hh - 1 + i, l), y, fw.z(oz, -hh - 1 + i, l),
                         Material.STONE_BRICK_STAIRS);
-                RemoteBuilder.put(world, fw.x(cx, hh + 1 - i, l), y, fw.z(cz, hh + 1 - i, l),
+                RemoteBuilder.put(world, fw.x(ox, hh + 1 - i, l), y, fw.z(oz, hh + 1 - i, l),
                         Material.STONE_BRICK_STAIRS);
             }
         }
         // 안 — 제단(향로·촛불)과 경전 시렁. 밖에 없는 살림이 전부 안에 있다
-        RemoteBuilder.put(world, cx, base + 1, cz, Material.CAULDRON);
-        RemoteBuilder.candlesAt(world, fw.x(cx, 0, -2), base + 1, fw.z(cz, 0, -2));
-        RemoteBuilder.candlesAt(world, fw.x(cx, 0, 2), base + 1, fw.z(cz, 0, 2));
-        RemoteBuilder.put(world, fw.x(cx, -3, 0), base + 1, fw.z(cz, -3, 0), Material.CHISELED_BOOKSHELF);
+        RemoteBuilder.put(world, ox, gy + 1, oz, Material.CAULDRON);
+        RemoteBuilder.candlesAt(world, fw.x(ox, 0, -2), gy + 1, fw.z(oz, 0, -2));
+        RemoteBuilder.candlesAt(world, fw.x(ox, 0, 2), gy + 1, fw.z(oz, 0, 2));
+        RemoteBuilder.put(world, fw.x(ox, -3, 0), gy + 1, fw.z(oz, -3, 0), Material.CHISELED_BOOKSHELF);
         for (int l : new int[]{-4, 4}) {   // 새김 돌 — 서역으로 가는 자의 이름을 적는다
-            RemoteBuilder.put(world, fw.x(cx, -hh + 1, l), base + 1, fw.z(cz, -hh + 1, l),
+            RemoteBuilder.put(world, fw.x(ox, -hh + 1, l), gy + 1, fw.z(oz, -hh + 1, l),
                     Material.CHISELED_STONE_BRICKS);
         }
         for (int[] p : new int[][]{{half - 3, 0}, {-half + 3, 0}, {0, half - 3}, {0, -half + 3}}) {
-            RemoteBuilder.lanternPost(world, fw.x(cx, p[0], p[1]), base, fw.z(cz, p[0], p[1]));
+            RemoteBuilder.lanternPost(world, spec, fw.x(ox, p[0], p[1]), fw.z(oz, p[0], p[1]));   // ② 소품 — 실지면(=단의 낯)
         }
         return List.of(new Zone(place.name(), "석조도관 — 돌만으로 선다. 서역으로 나가는 문", world.getName(),
-                cx - rad, base - 8, cz - rad, cx + rad, base + 24, cz + rad));
+                cx - rad, Math.min(base, gy) - 8, cz - rad, cx + rad, gy + 24, cz + rad));
     }
 
     /** 설선 위의 돌 — 결정론(좌표 해시). 회벽이 한 칸도 섞이지 않는다 */
@@ -647,8 +708,10 @@ final class SectBuilder {
             RemoteBuilder.put(world, fw.x(cx, f, -hw - 6), base + 2, fw.z(cz, f, -hw - 6),
                     Material.IRON_CHAIN);   // 그물
         }
+        // 【B-146 ②】 등롱은 소품 — 실지면 착좌 (여기는 twoTier 가 아니다: 바닷가 한 켜.
+        //   45×45 모래 단이 이미 깔렸으므로 seatY == 단의 낯 — 그림은 같고 재조성에 안 흔들린다)
         for (int[] p : new int[][]{{hd + 4, -6}, {hd + 4, 6}, {-hd - 4, 0}, {0, hw + 4}, {0, -hw - 4}}) {
-            RemoteBuilder.lanternPost(world, fw.x(cx, p[0], p[1]), base, fw.z(cz, p[0], p[1]));
+            RemoteBuilder.lanternPost(world, spec, fw.x(cx, p[0], p[1]), fw.z(cz, p[0], p[1]));
         }
         return List.of(new Zone(place.name(), "목조검문 — 담이 없다. 소금기에 삭은 나무", world.getName(),
                 cx - rad, base - 8, cz - rad, cx + rad, base + 22, cz + rad));
@@ -683,14 +746,13 @@ final class SectBuilder {
         // 여섯 단의 축 위치 (밖 → 안). 높이는 **땅이 정한다** — 우리는 읽기만 한다
         int[] axis = {rad - 8, rad - 20, rad - 30, rad - 40, rad - 48, rad - 56};
         int[] y = new int[6];
-        int prev = base;
         for (int i = 0; i < 6; i++) {
-            int gx = fw.x(cx, axis[i], 0);
-            int gz = fw.z(cz, axis[i], 0);
-            int g = spec.inside(gx, gz) ? spec.groundAt(gx, gz) : prev;
-            // 한 단은 이웃한 단보다 최대 6칸만 오른다 — 그 이상이면 계단이 벽이 된다
-            y[i] = Math.max(prev, Math.min(prev + 6, g));
-            prev = y[i];
+            // 【B-146 ④】 묘비 — 구판: y[i] = max(prev, min(prev + 6, g)) 「이웃 단 +6 상한」.
+            //   upper 잘림의 사촌이다: v3 급경사(아미 lift 72)에서 위 단들이 실지면보다 수십 칸
+            //   낮게 눌려 산허리에 통째로 묻혔다 (terrace 는 위로 14칸만 비운다). 이제 단은
+            //   **제 실지면**에 앉는다 — "건축이 산을 누르지 않고 산비탈을 따라 올라간다"(사용자).
+            //   오르는 문제는 계단의 몫이고, 계단은 오를 수 있을 때만 선다 (narrowStair 의 문턱).
+            y[i] = RemoteBuilder.seatY(world, spec, fw.x(cx, axis[i], 0), fw.z(cz, axis[i], 0));
         }
         RemoteBuilder.approachPath(world, spec, cx, cz, fw, axis[0] + 2, rad + 12, y[0], 1,
                 Material.COBBLESTONE);
@@ -724,15 +786,25 @@ final class SectBuilder {
         for (int i = 0; i < 5; i++) {
             narrowStair(world, spec, cx, cz, fw, axis[i] - 4, axis[i + 1] + 4, y[i], y[i + 1]);
         }
-        // 대나무와 약초밭 — 사용자의 목록 그대로 (꽃이 아니다)
+        // 대나무와 약초밭 — 사용자의 목록 그대로 (꽃이 아니다).
+        //   【B-146 ②】 대나무는 수행원 단(l ±12) **밖**의 비탈이라 대마다 실지면에 심는다
         for (int i = 0; i < 12; i++) {
             int f = axis[2] + 8 - i * 2;
             int l = 14 + Math.floorMod(i * 7, 3);
-            bamboo(world, fw.x(cx, f, l), y[2], fw.z(cz, f, l));
-            bamboo(world, fw.x(cx, f, -l), y[2], fw.z(cz, f, -l));
+            for (int side : new int[]{l, -l}) {
+                int bx = fw.x(cx, f, side);
+                int bz = fw.z(cz, f, side);
+                bamboo(world, bx, RemoteBuilder.seatY(world, spec, bx, bz), bz);
+            }
+        }
+        int lo = base;
+        int hi = base;
+        for (int t : y) {
+            lo = Math.min(lo, t);
+            hi = Math.max(hi, t);   // 단이 실지면을 따르므로 y[5] 가 최고라는 보장이 없다
         }
         return List.of(new Zone(place.name(), "운해 비구니원 — 산비탈을 따라 여섯 단", world.getName(),
-                cx - rad, base - 8, cz - rad, cx + rad, y[5] + 24, cz + rad));
+                cx - rad, lo - 8, cz - rad, cx + rad, hi + 24, cz + rad));
     }
 
     /** 청심문 — 작다. 그리고 <b>꺾인 길</b>: 문을 지나도 안이 한눈에 안 보인다 (사용자의 못) */
@@ -801,10 +873,11 @@ final class SectBuilder {
             TerrainForge.terrace(world, spec, x, z, ty - 1, 0, 0, Material.COBBLESTONE);
             world.getBlockAt(x, ty, z).setType(Material.WATER);
         }
-        // 불 — 대 **밖**에만 (안에 세우면 검이 등을 친다)
+        // 불 — 대 **밖**에만 (안에 세우면 검이 등을 친다).
+        //   【B-146 ②】 대 밖(l ±15)은 어느 단에도 안 실린 비탈이다 — 실지면에 앉힌다
         for (int l : new int[]{-15, 15}) {
-            RemoteBuilder.lanternPost(world, fw.x(cx, f0 + 4, l), ty, fw.z(cz, f0 + 4, l));
-            RemoteBuilder.lanternPost(world, fw.x(cx, f0 - 4, l), ty, fw.z(cz, f0 - 4, l));
+            RemoteBuilder.lanternPost(world, spec, fw.x(cx, f0 + 4, l), fw.z(cz, f0 + 4, l));
+            RemoteBuilder.lanternPost(world, spec, fw.x(cx, f0 - 4, l), fw.z(cz, f0 - 4, l));
         }
     }
 
@@ -895,6 +968,12 @@ final class SectBuilder {
                                     RemoteBuilder.Facing fw, int fFrom, int fTo, int yLow, int yHigh) {
         int run = fFrom - fTo;
         if (run <= 0) {
+            return;
+        }
+        // 【B-146 ④】 계단은 **오를 수 있을 때만** — 한 칸에 한 칸(1:1)이 사람의 한계다.
+        //   단들이 제 실지면에 앉으면서 수직차가 주행을 넘을 수 있다(급경사 산비탈) —
+        //   그때 계단을 놓으면 벽이다. 잇지 않는다: 오르는 길은 땅이 낸 등반로(carveTrail)다.
+        if (Math.abs(yHigh - yLow) > run) {
             return;
         }
         for (int i = 0; i <= run; i++) {

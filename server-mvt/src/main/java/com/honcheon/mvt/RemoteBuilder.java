@@ -584,7 +584,7 @@ final class RemoteBuilder {
         TerrainForge.terraceRound(world, spec, cx, cz, cy, R, Material.DIRT_PATH);
         speckleYard(world, cx, cy, cz);   // 마당 결 — 다져진 흙에 거친 흙을 점치환 (바닥 마감 = 건축의 일)
 
-        palisade(world, cx, cy, cz, fw);
+        palisade(world, spec, cx, cy, cz, fw);
         stockadeGate(world, spec, cx, cy, cz, fw);
 
         // 조감이 잡아낸 것: 막사 넷이 마당을 다 먹어 모닥불이 묻혔고, 두목 막사가 채문 앞을 막았다.
@@ -596,7 +596,7 @@ final class RemoteBuilder {
         watchtower(world, cx, cy, cz, fw, -13, -15);
         watchtower(world, cx, cy, cz, fw, -13, 14);
 
-        yard(world, cx, cy, cz, fw);
+        yard(world, spec, cx, cy, cz, fw);
         return List.of(new Zone(place.name(), "녹림 — 목책과 통나무", world.getName(),
                 cx - R - 2, cy - 4, cz - R - 2, cx + R + 2, cy + 14, cz + R + 2));
     }
@@ -615,8 +615,16 @@ final class RemoteBuilder {
         }
     }
 
-    /** 목책 — 통나무 기둥 5단 + 뾰족한 끝(계단) + 안쪽 순찰 마루 */
-    private static void palisade(World world, int cx, int cy, int cz, Facing fw) {
+    /**
+     * 목책 — 통나무 기둥 5단 + 뾰족한 끝(계단) + 안쪽 순찰 마루.
+     *
+     * <p>【B-146 ①】 목책 띠(반경 R-1..R+2)는 마당 단({@code terraceRound} 반경 R) <b>밖</b>이라
+     * 중턱단의 전이 비탈 위에 섰다 — 기둥이 비탈에서 뜨고 묻혔다. 이제 열마다 지형 계층에
+     * 단을 <b>요청</b>한다 (건축은 흙을 만지지 않는다 — 깎기·축대·봉인은 terrace 의 손이다).
+     * 목책은 「지면 따름」이 아니라 「평탄화」다: 순찰 마루(cy+4)가 한 줄로 이어져야 마루다.
+     */
+    private static void palisade(World world, TerrainForge.SiteSpec spec,
+                                 int cx, int cy, int cz, Facing fw) {
         for (int f = -R - 2; f <= R + 2; f++) {
             for (int l = -R - 2; l <= R + 2; l++) {
                 double d = dist(f, l);
@@ -629,6 +637,7 @@ final class RemoteBuilder {
                 }
                 int x = fw.x(cx, f, l);
                 int z = fw.z(cz, f, l);
+                TerrainForge.terrace(world, spec, x, z, cy, 0, 0, Material.COARSE_DIRT);
                 for (int y = cy + 1; y <= cy + 5; y++) {
                     world.getBlockAt(x, y, z).setType(Material.SPRUCE_LOG);
                 }
@@ -654,6 +663,14 @@ final class RemoteBuilder {
      */
     private static void stockadeGate(World world, TerrainForge.SiteSpec spec,
                                      int cx, int cy, int cz, Facing fw) {
+        // 【B-146 ①】 채문 발자국 — 목책 띠가 문 자리에서 열리므로(isGateSpan) 그 바닥은 목책의
+        //   단 요청에서 빠졌다. 걸어 드는 자리가 비탈이면 문턱이 벼랑이다 — 여기서 단을 요청한다.
+        for (int f = R - 1; f <= R + 2; f++) {
+            for (int l = -3; l <= 3; l++) {
+                TerrainForge.terrace(world, spec, fw.x(cx, f, l), fw.z(cz, f, l), cy, 0, 0,
+                        Material.DIRT_PATH);
+            }
+        }
         for (int l = -2; l <= 2; l++) {   // 문루 상단 — 통나무 들보
             world.getBlockAt(fw.x(cx, R, l), cy + 5, fw.z(cz, R, l)).setType(Material.SPRUCE_LOG);
             world.getBlockAt(fw.x(cx, R, l), cy + 6, fw.z(cz, R, l)).setType(Material.SPRUCE_SLAB);
@@ -823,7 +840,8 @@ final class RemoteBuilder {
      * 마당 — <b>모닥불이 중심</b>이다. 나눠 먹는 자리가 이 집의 정체다.
      * 좌표는 전부 국소(f = 문 쪽, l = 좌우) — 배치가 돌아가도 마당의 그림은 같다.
      */
-    private static void yard(World world, int cx, int cy, int cz, Facing fw) {
+    private static void yard(World world, TerrainForge.SiteSpec spec,
+                             int cx, int cy, int cz, Facing fw) {
         // 채문 → 마당 동선 — 들어오는 자가 곧장 모닥불을 본다 (아무도 그 앞을 막지 않는다)
         for (int f = 6; f <= R - 1; f++) {
             for (int l = -2; l <= 2; l++) {
@@ -884,7 +902,9 @@ final class RemoteBuilder {
         //   다만 등롱은 **리듬**이다: 격자로 도배하지 않고 동선(문 → 마당 → 막사)에만 세운다.
         int[][] posts = {{16, -5}, {16, 5}, {9, -12}, {9, 12}, {-6, -12}, {-6, 12}, {-14, 0}};
         for (int[] p : posts) {
-            lanternPost(world, fw.x(cx, p[0], p[1]), cy, fw.z(cz, p[0], p[1]));
+            // 【B-146 ②】 석등은 소품이다 — 평면(cy)에 못 박지 않고 실지면에 앉힌다 (등 하나에 단을
+            //   깎으면 땅이 운다). 마당 단 위에서는 seatY == cy 라 그림이 같다.
+            lanternPost(world, spec, fw.x(cx, p[0], p[1]), fw.z(cz, p[0], p[1]));
         }
         // 채기(寨旗) — 채색은 여기뿐이다 (수묵 규칙: 깃발·불빛에만 색을 허락한다)
         int fx = fw.x(cx, 9, 9);
@@ -907,19 +927,24 @@ final class RemoteBuilder {
      *
      * <p>v2 — 켜의 높이를 <b>더 이상 우리가 정하지 않는다</b>:
      * <ul>
-     *   <li>아래 켜 = {@code spec.groundY()} · 위 켜 = {@code spec.peakY()} (지형이 봉우리를 세웠다)</li>
+     *   <li>아래 켜 = 문전 자리의 <b>실지면</b> · 위 켜 = {@code spec.peakY()} (지형이 봉우리를 세웠다)</li>
      *   <li>축은 <b>봉우리를 지난다</b> — 봉우리가 부지 중심에서 밀려 있어도 계단이 정상에 닿는다
      *       (옛 버그: 계단이 정상에 못 닿아 지역 검수의 도달성이 떨어졌다)</li>
-     *   <li>계단이 <b>한 칸에 한 칸 넘게 오르지 않도록</b> 위 켜를 낮춘다 — 못 오르는 계단은 벽이다.
-     *       부지 반경이 좁으면 본전이 그만큼 내려앉는다 (터가 허락하는 만큼만 오른다)</li>
      *   <li>{@code twoTier()} 가 거짓이면(평지·들) 켜는 하나다 — 산문·마당·본전이 한 평면에 선다</li>
      * </ul>
+     *
+     * <p>【B-146 ④】 <b>upper 잘림의 묘비</b> — 구판은 위 켜를
+     * {@code upper = lower + min(peakY - lower, run - 4)} 로 <b>계단이 닿는 높이까지 끌어내렸다</b>.
+     * 그 평면은 원뿔 비탈의 어디쯤이라 실지면과 어긋났다: 봉우리가 북으로 밀린 자리에서는 단이
+     * 비탈 위 허공에 떠서 <b>본전이 떴고</b>(화산), 비탈이 단보다 높은 자리에서는 <b>박혔다</b>(종남).
+     * 이제 본전은 <b>실제 정상 평탄부(peakY)</b> 에 앉는다 — 정상 평탄부의 반경(SUMMIT_R)은
+     * 본전 발자국에서 유도되므로(§2.4 — 지도가 땅의 치수를 정한다) 반드시 담긴다.
+     * 계단은 오를 수 있을 때만 놓는다 — 못 오르면 땅이 이미 낸 등반로(carveTrail)가 길이다.
      */
     private static List<Zone> sect(World world, WorldMap.Place place, TerrainForge.SiteSpec spec) {
         Facing fw = entry(spec);
         int cx = spec.cx();
         int cz = spec.cz();
-        int lower = spec.groundY();
 
         // 축의 원점은 **봉우리**다 (부지 중심이 아니다 — 지형이 봉우리를 북으로 8칸 밀어 두었다).
         int px = spec.peakX();
@@ -939,40 +964,59 @@ final class RemoteBuilder {
         int stepTo = courtF - 6;                   // 계단 끝 (문전 마당의 뒷턱)
         int run = stepTo - stepFrom;
 
-        // 오를 수 있는 만큼만 오른다 — 한 칸에 한 칸이 한계고, 그 위에 여유 넷을 둔다.
-        //   못 오르는 계단은 계단이 아니라 벽이다. 터가 좁으면 본전이 그만큼 내려앉는다.
-        boolean climb = spec.twoTier() && run >= 8;
-        int rise = climb ? Math.max(0, Math.min(spec.peakY() - lower, run - 4)) : 0;
-        int upper = lower + rise;
+        // 【B-146 ④】 위 켜 = **실제 정상 평탄부**. 두 켜면 peakY (원장의 정본 — 재조성에도 안 흔들린다),
+        //   한 켜면 그 자리의 실지면이다. 계단이 닿는 높이로 본전을 끌어내리던 구판(upper 잘림)은 죽었다.
+        int upper = spec.twoTier() ? spec.peakY() : seatY(world, spec, px, pz);
+
+        // 문전(門前)도 실지면 위 — 기준면(groundY)은 산 발치 들의 높이라, v3 급경사 산에서는
+        //   문전 자리(비탈 어깨)가 그보다 높다. 평면에 못 박으면 문전이 산비탈에 박힌다 (B-146 ②).
+        int courtY = seatY(world, spec, fw.x(cx, courtF, 0), fw.z(cz, courtF, 0));
+
+        // 계단은 **오를 수 있을 때만** 놓는다 — 한 칸에 한 칸(1:1)이 사람의 한계고, 그 위에 여유 넷.
+        //   v3 급경사 산(물매 1:0.9)에서는 본전까지의 수직차가 직선 계단의 주행(run)을 넘는다 —
+        //   그때는 계단을 세우지 않는다. 오르는 길은 땅이 이미 냈다 (TerrainForge.carveTrail —
+        //   사용자 판정 "오르는 길은 하나면 된다"). 못 오르는 계단은 계단이 아니라 벽이다.
+        boolean stairs = upper > courtY && run >= 8 && upper - courtY <= run - 4;
 
         // 【단】 두 켜 — 깎기·축대·봉인은 전부 지형 계층의 손이다 (우리는 요청만 한다)
         TerrainForge.terrace(world, spec, px, pz, upper,
                 fw.swapped() ? UPPER_HALF_D : UPPER_HALF_W,
                 fw.swapped() ? UPPER_HALF_W : UPPER_HALF_D, Material.POLISHED_ANDESITE);
-        TerrainForge.terrace(world, spec, fw.x(cx, courtF, 0), fw.z(cz, courtF, 0), lower,
+        TerrainForge.terrace(world, spec, fw.x(cx, courtF, 0), fw.z(cz, courtF, 0), courtY,
                 fw.swapped() ? 6 : 8, fw.swapped() ? 8 : 6, Material.POLISHED_ANDESITE);
 
         // 산문 앞 진입로 — 마당 앞턱(gateF+1)에서 구역 밖까지. **지붕 없는 맨 길**이라
         //   검수의 걸음이 여기서 출발해 문전으로 걸어 들어온다 (도달성 ①의 첫 걸음).
-        approachPath(world, spec, cx, cz, fw, gateF + 1, rad + 16, lower, 2, Material.POLISHED_ANDESITE);
-        mountainGate(world, cx, lower, cz, fw, gateF);                     // 산문(山門) — 패방
-        if (upper > lower) {
-            thousandSteps(world, spec, cx, cz, fw, stepFrom, stepTo, upper, lower);
+        approachPath(world, spec, cx, cz, fw, gateF + 1, rad + 16, courtY, 2, Material.POLISHED_ANDESITE);
+        mountainGate(world, cx, courtY, cz, fw, gateF);                    // 산문(山門) — 패방
+        if (stairs) {
+            thousandSteps(world, spec, cx, cz, fw, stepFrom, stepTo, upper, courtY);
         }
         mainHall(world, px, pz, upper, fw);                                // 본전 — 회벽·검은 기와
         trainingGround(world, px, upper, pz, fw);                          // 연무장 — 오르면 먼저 보인다
-        sectLanterns(world, cx, cz, fw, px, pz, upper, lower, courtF);
-        plumTrees(world, px, upper, pz, fw);                               // 매화 — 채색은 여기뿐이다
+        sectLanterns(world, spec, cx, cz, fw, px, pz, courtF);
+        plumTrees(world, spec, px, pz, fw);                                // 매화 — 채색은 여기뿐이다
 
-        int lo = Math.min(lower, upper) - 8;
-        int hi = Math.max(lower, upper) + 18;
+        int lo = Math.min(courtY, upper) - 8;
+        int hi = Math.max(courtY, upper) + 18;
         return List.of(new Zone(place.name(), sectSubtitle(place), world.getName(),
                 cx - rad, lo, cz - rad, cx + rad, hi, cz + rad));
     }
 
-    /** 본전 단 — 봉우리 정상의 마당 (폭 27 x 깊이 21) */
+    /** 본전 단 — 봉우리 정상의 마당 (폭 27 x 깊이 21). 본전(15×13)·연무장·석등·매화가 전부 이 안에 앉는다 */
     private static final int UPPER_HALF_W = 13;
     private static final int UPPER_HALF_D = 10;
+
+    /**
+     * 정상부가 담아야 하는 건축 반경 — 본전 단(27×21)의 대각 반지름 {@code ceil(hypot(13,10)) = 17}.
+     *
+     * <p>【B-146 ③】 지형 계층이 봉우리 정상 평탄부(SUMMIT_R)를 <b>이 값에서 유도한다</b> —
+     * §2.4 3계층 헌법: 지도는 건축을 포함하고, <b>땅의 치수(정상부 폭)는 건축 발자국에서 나온다</b>.
+     * 본전 발자국이 커지면 산의 정상도 따라 넓어진다. 상수 두 벌이 아니라 유도 한 줄이다.
+     */
+    static int summitNeedRadius() {
+        return (int) Math.ceil(Math.hypot(UPPER_HALF_W, UPPER_HALF_D));   // = 17
+    }
 
     private static String sectSubtitle(WorldMap.Place place) {
         return "rich".equals(place.tier()) ? "도관 — 산문에서 본전까지 천 계단"
@@ -1118,25 +1162,32 @@ final class RemoteBuilder {
     /**
      * 문파의 불 — 정상 마당·문전. 계단만 밝혀서는 밤에 못 다닌다.
      * 다만 <b>격자로 도배하지 않는다</b> — 등은 동선(산문 · 마당 네 귀 · 본전 앞)에만 선다.
+     *
+     * <p>【B-146 ②】 석등은 소품이다 — 평면에 못 박지 않고 <b>실지면에 앉힌다</b>. 단 위에서는
+     * seatY 가 단의 낯을 돌려주므로 그림이 같고, 단 밖으로 밀려나도 뜨거나 박히지 않는다.
      */
-    private static void sectLanterns(World world, int cx, int cz, Facing fw,
-                                     int px, int pz, int upper, int lower, int courtF) {
+    private static void sectLanterns(World world, TerrainForge.SiteSpec spec, int cx, int cz,
+                                     Facing fw, int px, int pz, int courtF) {
         int[][] top = {{5, -10}, {5, 10}, {-5, -12}, {-5, 12}, {10, -6}, {10, 6}};   // 정상 마당 (본전 벽을 피한다)
         for (int[] p : top) {
-            lanternPost(world, fw.x(px, p[0], p[1]), upper, fw.z(pz, p[0], p[1]));
+            lanternPost(world, spec, fw.x(px, p[0], p[1]), fw.z(pz, p[0], p[1]));
         }
         int[][] court = {{-5, -6}, {-5, 6}, {5, -6}, {5, 6}};              // 문전 마당 네 귀
         for (int[] p : court) {
-            lanternPost(world, fw.x(cx, courtF + p[0], p[1]), lower, fw.z(cz, courtF + p[0], p[1]));
+            lanternPost(world, spec, fw.x(cx, courtF + p[0], p[1]), fw.z(cz, courtF + p[0], p[1]));
         }
     }
 
-    /** 매화 — 채색은 여기뿐이다 (등록부가 cherry_grove 를 적어 두었다). 본전 마당 모서리에 셋 */
-    private static void plumTrees(World world, int px, int cy, int pz, Facing fw) {
+    /**
+     * 매화 — 채색은 여기뿐이다 (등록부가 cherry_grove 를 적어 두었다). 본전 마당 모서리에 셋.
+     * 【B-146 ②】 나무는 소품이다 — 열마다의 실지면(seatY)에 심는다 (나무에 단을 깎으면 땅이 운다).
+     */
+    private static void plumTrees(World world, TerrainForge.SiteSpec spec, int px, int pz, Facing fw) {
         int[][] spots = {{-6, -11}, {-6, 11}, {6, -11}};   // 국소 (f, l)
         for (int[] s : spots) {
             int x = fw.x(px, s[0], s[1]);
             int z = fw.z(pz, s[0], s[1]);
+            int cy = seatY(world, spec, x, z);
             for (int y = cy + 1; y <= cy + 4; y++) {
                 world.getBlockAt(x, y, z).setType(Material.CHERRY_LOG);
             }
@@ -1152,6 +1203,29 @@ final class RemoteBuilder {
                 }
             }
         }
+    }
+
+    /** 석등을 <b>실지면에</b> 앉힌다 — 【B-146 ②】 소품은 평탄화를 요청하지 않는다 (등 하나에 단을 깎으면 땅이 운다) */
+    static void lanternPost(World world, TerrainForge.SiteSpec spec, int x, int z) {
+        lanternPost(world, x, seatY(world, spec, x, z), z);
+    }
+
+    /**
+     * <b>소품이 앉는 실지면</b> — 부지 안은 사양({@code groundAt})이 답하고, 밖은 세계를 읽는다.
+     *
+     * <p>★ 왜 {@code groundAt} 만으로 안 되는가: 사양의 지면은 {@code naturalGround} 로 재는데,
+     * 단(포석·마감 안산암)은 자연 자재가 아니라 <b>측량이 그 한 칸 아래(sealBelow 의 흙)를 읽는다</b> —
+     * 재조성 때 소품이 제 단에 한 칸씩 박히고, 그 단이 다시 한 칸 내려앉는 병이 된다
+     * (Terraform 의 "기준면이 조성 때마다 내려앉는다"와 같은 결). 그래서 이미 깔린 단의 낯
+     * ({@link #surfaceProbe} — 사람이 깐 것도 읽는다)과 견줘 <b>높은 쪽</b>을 쓴다.
+     * 블록을 읽을 뿐 놓지 않는다 — 결정론: 같은 세계·같은 좌표 = 같은 답.
+     */
+    static int seatY(World world, TerrainForge.SiteSpec spec, int x, int z) {
+        int g = groundOf(world, spec, x, z, spec.groundY());
+        int p = surfaceProbe(world, x, z, g);
+        // 단의 낯은 측량치보다 기껏 한두 칸 위다 — 그보다 높이 읽힌 것은 단이 아니라 **지붕**이다
+        //   (probe 는 사람이 지은 것을 가리지 않는다). 지붕 위에 소품을 앉히면 안 된다: 그때는 측량치.
+        return p > g && p <= g + 2 ? p : g;
     }
 
     /** 석등 — 돌기둥 + 등롱. 이미 뭔가 선 자리에는 서지 않는다 (등이 벽에 박히면 빛이 길로 안 나온다) */
@@ -1559,7 +1633,7 @@ final class RemoteBuilder {
         // 관도 — 성문으로 <b>드는</b> 길. 폭 7 (청하현 관도가 3칸이다)
         approachPath(world, spec, cx, cz, fw, 15, rad + 12, cy, 3, Material.DIRT_PATH);
         marketLane(world, spec, cx, cy, cz, fw);
-        cityLanterns(world, cx, cy, cz, fw, rad);
+        cityLanterns(world, spec, cx, cz, fw, rad);
 
         return List.of(new Zone(place.name(), "성문 — 담과 성벽은 다른 물건이다", world.getName(),
                 cx - rad, cy - 8, cz - rad, cx + rad, cy + 26, cz + rad));
@@ -1849,15 +1923,17 @@ final class RemoteBuilder {
      * 성문의 불 — <b>관이 지키는 길은 밝다</b> (도적의 산채가 어두운 것과 정반대의 말이다).
      * 광장은 격자로, 관도는 <b>여섯 칸 리듬</b>으로. 등롱은 노면 밖(±4)에 서서 길 한복판까지 빛을 던진다.
      */
-    private static void cityLanterns(World world, int cx, int cy, int cz, Facing fw, int rad) {
+    private static void cityLanterns(World world, TerrainForge.SiteSpec spec,
+                                     int cx, int cz, Facing fw, int rad) {
         for (int f : new int[]{0, 6, 12}) {           // 광장 — 열둘
             for (int l : new int[]{-9, -3, 3, 9}) {
-                lanternPost(world, fw.x(cx, f, l), cy, fw.z(cz, f, l));
+                lanternPost(world, spec, fw.x(cx, f, l), fw.z(cz, f, l));
             }
         }
-        for (int f = 18; f <= rad + 8; f += 6) {      // 관도 — 여섯 칸 리듬 (노면 폭 7의 양옆)
+        // 관도 등롱 — 노면(±3) **밖**의 열이라 어느 단에도 안 실린다. 【B-146 ②】 실지면에 앉힌다
+        for (int f = 18; f <= rad + 8; f += 6) {      // 여섯 칸 리듬 (노면 폭 7의 양옆)
             for (int l : new int[]{-4, 4}) {
-                lanternPost(world, fw.x(cx, f, l), cy, fw.z(cz, f, l));
+                lanternPost(world, spec, fw.x(cx, f, l), fw.z(cz, f, l));
             }
         }
     }
