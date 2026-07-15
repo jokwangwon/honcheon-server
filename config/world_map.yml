@@ -92,7 +92,8 @@ schema:
     access:       { readers: [], note: "접근 조건. 봇·서사가 읽는다" }
     danger:       { readers: [], note: "1~5" }
     stage_local:  { readers: [WorldMap.Place.stageLocal, probeCandidates], fallback: false }
-    hidden:       { readers: [], note: "플레이어 지도 비표시" }
+    hidden:       { readers: [WorldMap.readSection, MvtCommand.showMap, MvtCommand.travel(목록)],
+                    note: "플레이어 지도 비표시 (B-151 — 불리언만 읽는다. player_map: false 도 같은 뜻. 해금은 access/reveal 별도 축)" }
     population:   { readers: [Populace.REGIONS(파일명 규약)], since: "이 패스에서 신설",
                     note: "★ config/npcs/regions/<id>.yml — **파일 이름이 곧 연결**이다. 필드는 그 사실을 지도에 적을 뿐" }
 
