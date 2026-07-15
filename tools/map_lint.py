@@ -104,6 +104,22 @@ BANNED = [
      "★ 청크 선적 반경까지 **세력을 묻는다** — 땅은 세력을 모른다 (§1-b land.probe_margin)"),
 ]
 
+# ─── ★★ B-151 — **있어야 하는 배선.** hidden 의 독자 (2026-07-15) ───
+#
+#   B-151 의 병은 "등록만 되고 아무도 안 숨긴다"였다 — hidden/player_map 키에 **독자가 없었다.**
+#   독자를 심었으면 이번엔 **독자가 사라지는 것**을 지켜야 한다: 지우면 빚이 소리 없이 되돌아온다
+#   (키는 그대로 남으므로 등록부만 봐서는 아무 증상이 없다 — 그것이 이 빚의 모양이었다).
+#   각 항목: (파일, 있어야 하는 문자열, 없으면 무엇이 잘못인가)
+REQUIRED_WIRING = [
+    ("WorldMap.java", '"hidden"',
+     "B-151 — hidden 키의 판독이 사라졌다: **등록만 되고 아무도 안 숨긴다** (그 빚이 되돌아왔다)"),
+    ("WorldMap.java", '"player_map"',
+     "B-151 — player_map 키의 판독이 사라졌다 (§5.8 문법의 반쪽이 죽었다)"),
+    ("MvtCommand.java", ".hidden()",
+     "B-151 — 지도 렌더의 숨김 차단이 사라졌다: /혼천 지도 가 비밀 장소를 편다 "
+     "(마교 전초가 4일 거리라는 사실 자체가 스포일러다)"),
+]
+
 # ─── ★ 코드에 **수(數)가 박히는 것** 자체를 막는다 — 문자열 목록은 다음 하드코딩을 못 막는다 ───
 #
 #   ★★ 왜 정규식이 따로 필요한가: 위 BANNED 는 **그 문장 그대로**만 잡는다. 그런데 하드코딩은
@@ -180,6 +196,18 @@ class Lint:
             out |= set((g.get("members") or {}).keys())
         return out
 
+    def hidden_faction_ids(self):
+        """★ B-151 — **숨은 세력** (factions.yml faction_groups.<계열>.hidden: true 의 members).
+
+        지금은 forbidden 계열(마교·혈교)뿐이다. ★ 새외는 hidden: false 다 —
+        "마교는 hidden = 모른다 / 새외는 안다 = 못 갈 뿐이다. 이 대비가 두 축의 정의다" (§5.9).
+        """
+        out = set()
+        for g in (self.factions.get("faction_groups") or {}).values():
+            if isinstance(g, dict) and g.get("hidden") is True:
+                out |= set((g.get("members") or {}).keys())
+        return out
+
     def places(self):
         """(section, id, place) — 좌표를 가진 것만. 망(網)은 장소가 아니다"""
         for sec in SECTIONS:
@@ -197,6 +225,7 @@ class Lint:
         known = set((self.schema.get("fields") or {}).keys())
 
         fac_ids = self.faction_ids()
+        hidden_fac = self.hidden_faction_ids()
         terrains = set((self.wm.get("terrain_types") or {}).keys())
         regions = set((self.wm.get("regions") or {}).keys())
         # ★ 어휘 = 이미 지어지는 원형(registered) ∪ 청구된 원형(requested).
@@ -270,6 +299,28 @@ class Lint:
                             f"[상업위반] {pid}.{f} = {pl.get(f)!r} — ★★ **상업 거점에 무력을 부여하지 않는다.** "
                             f"상단연합은 무림 문파가 아니다. 크기는 `commercial_class` 가 정한다 (§17-b). "
                             f"**상인의 도시를 무력으로 재면 성곽 도시가 오두막이 된다**")
+
+            # ★★ B-151 — 표시 축 (hidden / player_map) --------------------
+            #   독자: WorldMap.readSection → MvtCommand.showMap/travel (지도 렌더 차단).
+            #   세 축 분리: build(조성 수명주기) · hidden/player_map(표시) · access(해금) —
+            #   access: hidden 은 **해금이 비밀**이라는 뜻이지 표시 은닉이 아니다 (새외가 그 증거다).
+            h, pm = pl.get("hidden"), pl.get("player_map")
+            for f, v in (("hidden", h), ("player_map", pm)):
+                if v is not None and not isinstance(v, bool):
+                    self.bad.append(
+                        f"[표시타입] {pid}.{f} = {v!r} — ★ 독자(WorldMap.readSection)는 **불리언만** 읽는다. "
+                        f"문자열은 **조용히 안 숨긴다** — 비밀이 지도에 뜨는데 아무 증상이 없다")
+            if isinstance(h, bool) and isinstance(pm, bool) and h == pm:
+                self.bad.append(
+                    f"[표시모순] {pid} — hidden: {str(h).lower()} 인데 player_map: {str(pm).lower()} — "
+                    f"두 표기는 서로 반대말이어야 한다 (§5.8 문법: hidden: true ↔ player_map: false). "
+                    f"★ 둘이 어긋나면 **어느 쪽이 참인지 아무도 모른다**")
+            # 숨김누락 — 숨은 세력(factions.yml hidden: true)의 거점인데 표기가 없다
+            if pl.get("faction") in hidden_fac and not (h is True or pm is False):
+                self.bad.append(
+                    f"[숨김누락] {pid} — faction '{pl.get('faction')}' 은 숨은 세력"
+                    f"(factions.yml faction_groups hidden: true)인데 hidden/player_map 표기가 없다 — "
+                    f"★ **비밀이 플레이어 지도에 뜬다** (§5.8: 금기는 hidden — 존재를 모른다)")
 
             # ③ pending 이 사유를 갖는가 — ★ 침묵 금지 ---------------------
             pend = [f for f, v in pl.items() if v == "pending"]
@@ -351,6 +402,17 @@ class Lint:
                 continue
             if needle in READ_JAVA(path):
                 self.bad.append(f"[배선위반] {fname} 에 `{needle}` 이 있다 — {why}")
+
+        # ★★ B-151 — **있어야 하는 것**이 사라졌는가. 금칙어의 반대 방향이다:
+        #   hidden 의 병은 코드에 무엇이 **있어서**가 아니라 **없어서** 생겼다 (등록만 되고 아무도 안 숨겼다).
+        #   독자를 지워도 등록부는 멀쩡하므로, 등록부만 보는 눈은 그 퇴행을 영영 모른다 — 그래서 코드를 본다.
+        for fname, needle, why in REQUIRED_WIRING:
+            path = MVT / fname
+            if not path.is_file():
+                self.warn.append(f"[독자소실] {fname} 를 못 찾았다 — B-151 독자 검사를 못 했다 (미검사다)")
+                continue
+            if needle not in READ_JAVA(path):
+                self.bad.append(f"[독자소실] {fname} 에 `{needle}` 이 없다 — {why}")
 
         # ★★ 문자열 목록은 **다음 하드코딩**을 못 막는다 — 모양을 바꿔 돌아오므로. **수가 박히는 자리**를 지킨다
         for fname, pattern, why in BANNED_RE:
@@ -961,6 +1023,49 @@ def selftest():
     probe_code("★ siteRadius 가 다시 **코드로 마을 크기를 정한다**",
                {"RemoteBuilder.java": '\nreturn "noklim".equals(place.faction()) ? 24 : 64;\n'},
                "[배선위반] RemoteBuilder.java 에 `\"noklim\".equals(place.faction()) ? 24 : 64`")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # ★★ B-151 — 표시 축의 눈들 (hidden / player_map · 2026-07-15)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    probe("★★ B-151 — 숨은 세력의 거점에서 **숨김을 벗긴다** (magyo_jinryeong.hidden·player_map 삭제)\n"
+          "      → 마교 전초가 4일 거리라는 사실 자체가 스포일러다",
+          lambda w: (w["places"]["magyo_jinryeong"].pop("hidden"),
+                     w["places"]["magyo_jinryeong"].pop("player_map")),
+          "[숨김누락] magyo_jinryeong")
+    probe("★★ B-151 — 두 표기가 **서로 반대말이 아니다** (magyo_bonkyo.player_map = true, hidden = true)",
+          lambda w: w["places"]["magyo_bonkyo"].update(player_map=True),
+          "[표시모순] magyo_bonkyo")
+    probe("★★ B-151 — 문자열 'true' 는 **숨기지 못한다** (dokmun.hidden = 'true') — 독자는 불리언만 읽는다",
+          lambda w: w["places"]["dokmun"].update(hidden="true"),
+          "[표시타입] dokmun.hidden")
+
+    def probe_gone(name, fname, needle, expect):
+        """★★ **독자를 지워 본다** — B-151 은 '독자가 없다'는 빚이었다. 독자가 다시 사라지면 짖어야 한다"""
+        global READ_JAVA
+        original = READ_JAVA
+        READ_JAVA = lambda p: (original(p).replace(needle, " ")   # noqa: E731
+                               if p.name == fname else original(p))
+        try:
+            lt = Lint(wm, fac, ter, rfs)
+            lt.run()
+            hits = [x for x in lt.bad if expect in x]
+        finally:
+            READ_JAVA = original
+        cases.append((name, bool(hits), hits[0] if hits else "— 짖지 않았다"))
+
+    probe_gone("★★★ B-151 — 지도 렌더에서 **숨김 차단을 지운다** (MvtCommand 의 .hidden() 소실)\n"
+               "      → 등록부는 멀쩡하므로 등록부만 보는 눈은 이 퇴행을 영영 모른다",
+               "MvtCommand.java", ".hidden()", "[독자소실] MvtCommand.java")
+    probe_gone("★★★ B-151 — WorldMap 이 hidden 을 **더는 읽지 않는다** — 등록만 되고 아무도 안 숨긴다",
+               "WorldMap.java", '"hidden"', "[독자소실] WorldMap.java")
+
+    probe_quiet("★★ B-151 — 새외에 숨김을 **요구하지 않는가** (bukmak — 새외는 알려져 있다. 다만 멀다)",
+                None, "[숨김누락] bukmak",
+                "✓ 조용했다 — 새외는 player_map: true 다. **못 갈 뿐, 지도에 있다** (§5.9 두 축의 정의)")
+    probe_quiet("★★ B-151 — hidden 만 적고 player_map 을 안 적은 곳(dokmun)에 **모순을 씌우지 않는가**",
+                None, "[표시모순] dokmun",
+                "✓ 조용했다 — 한쪽 표기만으로도 숨는다 (독자가 OR 로 읽는다). 모순은 **둘 다 있고 어긋날 때**다")
 
     # ═══════════════════════════════════════════════════════════════════════
     # ★★★ 크기의 자 — 2026-07-13 사용자 결정의 눈들 (docs/design/scale_systems.md 외)

@@ -94,11 +94,17 @@ final class WorldMap {
      * @param note        {@code architecture} <b>산문(散文)</b>. ★ <b>기계는 이것을 읽지 않는다</b> —
      *                    사람과 봇이 읽는다. (한때 TerrainForge 가 여기서 '동굴'·'산문' 낱말을 찾았다.
      *                    글을 고치면 굴이 사라졌다 — 그것은 등록부가 아니다)
+     * @param hidden      <b>★ 표시 축 (B-151)</b> — {@code hidden: true} 또는 {@code player_map: false} 면
+     *                    <b>플레이어 지도에 없다</b> (§5.8: 금기는 '존재를 모른다'가 설계다).
+     *                    ★ 세 축은 다른 것이다: {@code build}(조성 수명주기) · {@code hidden/player_map}(표시) ·
+     *                    {@code access}(해금) — <b>{@code build: never} 는 비밀 표기가 아니다.</b>
+     *                    독자: {@code MvtCommand.showMap}(지도 렌더 차단) · {@code MvtCommand.travel}(목록 차단)
      */
     record Place(String id, String name, int x, int z, String terrain, List<String> biomes,
                  String build, boolean stageLocal, int days, String section,
                  String faction, String tier, String note,
-                 String archetype, Integer buildRadius, String buildRadiusMark, String pendingWhy) {
+                 String archetype, Integer buildRadius, String buildRadiusMark, String pendingWhy,
+                 boolean hidden) {
 
         boolean buildableNow() {
             return "now".equals(build);
@@ -222,7 +228,11 @@ final class WorldMap {
                     m.get("archetype") == null ? null : String.valueOf(m.get("archetype")).trim(),
                     radius(m.get("build_radius")),
                     radiusMark(m.get("build_radius")),
-                    m.get("pending_why") == null ? null : String.valueOf(m.get("pending_why"))));
+                    m.get("pending_why") == null ? null : String.valueOf(m.get("pending_why")),
+                    // ★ B-151 — 표시 축. hidden: true / player_map: false 둘 다 같은 말이다
+                    //   (§5.8 의 문법이 둘을 나란히 적으므로 어느 쪽이든 숨긴다).
+                    //   ★ 불리언만 읽는다 — "true" 같은 문자열은 숨기지 못한다 (map_lint [표시타입] 이 짖는다)
+                    Boolean.TRUE.equals(m.get("hidden")) || Boolean.FALSE.equals(m.get("player_map"))));
         }
     }
 

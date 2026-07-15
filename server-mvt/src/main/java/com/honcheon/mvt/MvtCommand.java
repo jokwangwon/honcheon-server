@@ -289,20 +289,33 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
-    /** /혼천 지도 — 세계 지도 (등록 좌표·거리·여정 일수). 청하현이 원점이다 */
+    /**
+     * /혼천 지도 — 세계 지도 (등록 좌표·거리·여정 일수). 청하현이 원점이다.
+     *
+     * <p><b>★ B-151 — {@code hidden} 의 독자.</b> 등록부(world_map.yml §5.8)가 {@code hidden: true} /
+     * {@code player_map: false} 라 적은 곳은 <b>플레이어 지도에 없다</b> — 마교 전초가 4일 거리라는
+     * 사실 자체가 스포일러다 ("지도에 없는 것이 지도에서 가장 가깝다"가 그 좌표의 설계 의도다).
+     * 관리자(op)·콘솔에는 「숨김」 표기와 함께 보인다 — 검수의 눈은 남긴다.
+     * ★ 여기서 막는 것은 <b>표시</b>뿐이다 — 해금(access)은 다른 축이다 (세 축 분리).
+     */
     private boolean showMap(CommandSender sender) {
         WorldMap map = plugin.worldMap();
         if (map == null) {
             sender.sendMessage(ChatColor.RED + "world_map.yml 이 없다.");
             return true;
         }
+        boolean adminEye = !(sender instanceof Player viewer) || viewer.isOp();
         sender.sendMessage(ChatColor.GOLD + "── 세계 지도 (청하현 = 원점, 1블록 = 1m) ──");
         for (WorldMap.Place p : map.all()) {
+            if (p.hidden() && !adminEye) {
+                continue;   // ★ B-151 — 숨긴 곳은 플레이어 지도에 렌더되지 않는다
+            }
             int days = map.travelDays(p);
-            sender.sendMessage(String.format("%s%-14s %s(%+d, %+d) %s· %s · %s",
+            sender.sendMessage(String.format("%s%-14s %s(%+d, %+d) %s· %s · %s%s",
                     ChatColor.WHITE, p.name(), ChatColor.GRAY, map.worldX(p), map.worldZ(p),
                     ChatColor.DARK_GRAY, p.terrain(),
-                    days <= 0 ? "여기" : days + "일 여정"));
+                    days <= 0 ? "여기" : days + "일 여정",
+                    p.hidden() ? " · 숨김(hidden)" : ""));
         }
         return true;
     }
@@ -1633,6 +1646,11 @@ public final class MvtCommand implements CommandExecutor {
                         .filter(pl -> pl.name().equals(zone.name())).findFirst().orElse(null);
                 if (place == null) {
                     continue;   // 마을 안 구역(객잔·의방…)은 지역이 아니다
+                }
+                if (place.hidden() && !player.isOp()) {
+                    // ★ B-151 — 숨긴 곳은 목록(표시)에 없다. 아는 자가 id 로 직행하는 것을
+                    //   여기서 막지 않는다 — 그것은 해금(access)의 몫이다 (세 축 분리)
+                    continue;
                 }
                 int days = place.days();
                 sender.sendMessage(ChatColor.WHITE + "  " + place.name() + ChatColor.GRAY
