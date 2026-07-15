@@ -1116,6 +1116,13 @@ public final class Antechamber implements Listener {
                 spawnPanel(w, gy, s.id() + "_없음", s, panelText(s, true), false);
             }
         }
+        // ★★ 갓 뿌린 글판은 기본값이 「보임」이다 — 그 자리에 선 사람에게 즉시 가림을 다시 건다.
+        //   B-131 회귀: onPanelsLoad(EntitiesLoadEvent)는 청크 **적재**만 잡고 spawn()은 못 잡는다.
+        //   런타임 재건축(완결 미달 → 다시 짓기)이 이 갈래로 새 판을 뿌리면, 여기서 안 가리면
+        //   present 플레이어는 how·예고 두 장을 겹쳐 본다. 이 재적용은 멱등이다 (show 는 미적재 무시).
+        for (Player p : w.getPlayers()) {
+            refreshPanels(p);
+        }
     }
 
     private void spawnPanel(World w, int gy, String id, Station s, List<String> text, boolean accent) {
