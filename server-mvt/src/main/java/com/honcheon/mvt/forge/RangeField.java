@@ -63,6 +63,9 @@ public final class RangeField {
     /** z=0 이음 급단차 상한 (B-155 회귀 자) — 협곡벽·crag 여유 위, 옛 z=0 벼랑(25+) 아래 */
     private static final double SEAM_STEP_MAX = 6.0;
 
+    /** 산기슭(등산로 고리 발치) 볼록 프로파일 지수 — 작을수록 발치가 급하다 (형상 잠정 · 사용자 피드백 조정) */
+    private static final double TRAIL_FOOT_EXP = 0.85;
+
     /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③ 목록) · ③ 생성기 · 잠정 폴백 */
     private final double[] trailX;
     private final double[] trailZ;
@@ -325,7 +328,12 @@ public final class RangeField {
         double trailOuter = spec.honsanR() + spec.midDepth();
         if (s < trailOuter) {
             double t = (s - spec.honsanR()) / spec.midDepth();
-            return spec.trailRise() * (1.0 - Math.pow(t, 0.85));
+            // 산기슭(t→1·외곽)에 경사를 준다 — 옛 오목 프로파일(1−t^0.85)은 발치가 완만해
+            // 산이 멀어 보였다(사용자 실측 2026-07-16). 볼록 (1−t)^TRAIL_FOOT_EXP 로 발치를
+            // 세운다. 본산 쪽(t→0)은 완만해지되 그 위 본산권(§321)이 다시 가팔라 자연스럽다.
+            // honsanR 에서 두 프로파일 다 trailRise(88)라 이음은 연속. TRAIL_FOOT_EXP 는 형상
+            // 잠정값(±로 조정) — 작을수록 발치가 급하다 (0.85 ≈ 발치 물매 ~0.8/칸, 옛 ~0.54).
+            return spec.trailRise() * Math.pow(1.0 - t, TRAIL_FOOT_EXP);
         }
         return 0.0;
     }
