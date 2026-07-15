@@ -51,6 +51,19 @@ public final class RangeField {
     /** 협곡 방사 창의 여밈 폭 — 골이 칼로 시작하지 않게 하는 전이 (형상 상수 · 후보) */
     private static final double GORGE_EASE = 24.0;
 
+    /**
+     * 잠정 등산로 지그재그 진폭 (도) — <b>③ 미착수 1차 시험 조성용</b>. 곁구역 경계를 방사
+     * 원에서 떼어 놓는 스위치백의 폭. ③가 서면 spec.trail 이 이것을 대체한다 (미결 세부 §2.3).
+     */
+    private static final double PROVISIONAL_SWITCHBACK_DEG = 25.0;
+
+    /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③) 또는 잠정 노선 */
+    private final double[] trailX;
+    private final double[] trailZ;
+    /** 각 경유점까지의 누적 호장 · 전체 호장 — 호장 비율 u∈[0,1] 계산용 */
+    private final double[] trailCum;
+    private final double trailLen;
+
     public RangeField(RangeSpec spec) {
         this.spec = spec;
         long seed = Math.floorMod(31L * spec.peakX() + 17L * spec.peakZ(), 1_000_003L);
@@ -60,6 +73,60 @@ public final class RangeField {
         double crestSlope = spec.honsanRise()
                 / (double) Math.max(1, spec.honsanR() - spec.summitFlatR());
         this.lateralFall = (1.0 / spec.peakSteepSlope()) / Math.max(0.05, crestSlope);
+
+        // 등산로 폴리라인 세우기 — ③의 산출(spec.trail)이 있으면 그것, 없으면 잠정 노선.
+        // 순서: [0] 산기슭(입구 쪽·낮음) … [끝] 본산 문(높음). 호장 비율 u 는 이 순서를 딛는다.
+        double[][] wp = spec.trail().isEmpty()
+                ? provisionalTrail()
+                : fromSpecTrail();
+        this.trailX = wp[0];
+        this.trailZ = wp[1];
+        this.trailCum = new double[trailX.length];
+        double acc = 0.0;
+        for (int i = 1; i < trailX.length; i++) {
+            acc += Math.hypot(trailX[i] - trailX[i - 1], trailZ[i] - trailZ[i - 1]);
+            trailCum[i] = acc;
+        }
+        this.trailLen = acc;
+    }
+
+    /** ③의 경유점을 절대 좌표 배열로 (계약 경로) */
+    private double[][] fromSpecTrail() {
+        var t = spec.trail();
+        double[] xs = new double[t.size()];
+        double[] zs = new double[t.size()];
+        for (int i = 0; i < t.size(); i++) {
+            xs[i] = t.get(i).x();
+            zs[i] = t.get(i).z();
+        }
+        return new double[][]{xs, zs};
+    }
+
+    /**
+     * 잠정 등산로 — ③ 미착수 1차 시험 조성용 (확정값 전부에서 유도, 지어낸 노선 아님).
+     * 남면을 스위치백으로 오른다: 경유점 방사 = 곁구역 옛 띠 경계(264/229/194/159/124 =
+     * honsanR + {midDepth, 3·belt, 2·belt, belt, 0}), 방위 = ±{@value #PROVISIONAL_SWITCHBACK_DEG}°
+     * 교대 (방위 전환 = 검수 축 11 「굽이」의 씨앗). 이렇게 노선이 옛 띠 경계마다 스위치백으로
+     * 가로지르므로, 곁구역은 「스위치백 사이 노선 구간」이 되고 경계가 굽이친다.
+     */
+    private double[][] provisionalTrail() {
+        int belt = spec.beltDepth();
+        int[] radii = {
+                spec.honsanR() + spec.midDepth(),   // 264 — 입구 쪽 (매화림, 낮음) [0]
+                spec.honsanR() + 3 * belt,           // 229
+                spec.honsanR() + 2 * belt,           // 194
+                spec.honsanR() + belt,               // 159
+                spec.honsanR()                       // 124 — 본산 문 (연무 계곡, 높음) [끝]
+        };
+        double sw = Math.toRadians(PROVISIONAL_SWITCHBACK_DEG);
+        double[] az = {0.0, sw, -sw, sw, 0.0};       // 남축 ±교대 (남 = +z)
+        double[] xs = new double[radii.length];
+        double[] zs = new double[radii.length];
+        for (int i = 0; i < radii.length; i++) {
+            xs[i] = spec.peakX() + radii[i] * Math.sin(az[i]);
+            zs[i] = spec.peakZ() + radii[i] * Math.cos(az[i]);
+        }
+        return new double[][]{xs, zs};
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -120,32 +187,31 @@ public final class RangeField {
     }
 
     /**
-     * 구역 판정 — H-6 확정 깊이(140/30/150)·본산권 124 (H-7)의 방사 유도.
-     * 곁구역 넷은 각 35 (= 140÷4)의 방사 띠다 (★Q9 — 1차 단순화).
+     * 구역 판정 — 큰 골격(정상/본산·후산/입구/외곽)은 H-6 확정 깊이(140/30/150)·본산권
+     * 124 (H-7)의 방사 유도 그대로. <b>곁구역 넷(매화림·계곡·절벽·연무 계곡)의 경계만은
+     * 등산로가 꿴다</b> (Q9 확정 — 회차 A-2 · 재단 방식 terrain_forge_v5.md §2.3). 곁구역이
+     * 서는 중간 고리(honsanR &lt; r ≤ honsanR+midDepth)의 <b>안쪽 넷 가름</b>은 방사 등분(각
+     * 35)이 아니라 <b>등산로 폴리라인 위 호장 비율</b>로 판정한다 → 경계가 노선을 따라 굽이친다.
      * 후산은 주봉 북면(dz &lt; 0) — 정상 뒤가 후산이라는 기하 (브리프 §1.3).
      */
     public RangeZone zoneAt(int x, int z) {
         double dx = x - spec.peakX();
         double dz = z - spec.peakZ();
         double r = Math.hypot(dx, dz);
-        int belt = spec.beltDepth();
         if (r <= spec.summitFlatR()) {
             return RangeZone.SUMMIT;
         }
         if (r <= spec.honsanR()) {
             return dz < 0 ? RangeZone.HUSAN : RangeZone.HONSAN;
         }
-        if (r <= spec.honsanR() + belt) {
-            return RangeZone.DRILL_VALLEY;
-        }
-        if (r <= spec.honsanR() + belt * 2) {
-            return RangeZone.CLIFF;
-        }
-        if (r <= spec.honsanR() + belt * 3) {
-            return RangeZone.VALLEY;
-        }
         if (r <= spec.honsanR() + spec.midDepth()) {
-            return RangeZone.PLUM_GROVE;
+            // 곁구역 고리 — 곁구역은 등산로(남면 진입)가 가는 곳에만 산다.
+            // 주봉 북면(dz<0)은 후산이 그대로 흘러내린다 (정상 뒤가 후산 — 본산권 갈이 계승,
+            // 브리프 §1.3). 남면(dz≥0)만 넷으로 가르되, 가름은 등산로가 꾄다 (방사 띠 폐기 · Q9).
+            if (dz < 0) {
+                return RangeZone.HUSAN;
+            }
+            return sideZoneByU(projectU(x, z));
         }
         if (r <= spec.domainR()) {
             return RangeZone.ENTRANCE;
@@ -163,6 +229,52 @@ public final class RangeField {
         double c = reliefAt(x, z + 2);
         double e = reliefAt(x, z - 2);
         return Math.max(Math.abs(a - b), Math.abs(c - e)) / 4.0;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 곁구역 재단 — 등산로가 꾄다 (Q9 · terrain_forge_v5.md §2.3)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 등산로 폴리라인 위 호장 비율 u∈[0,1] — 0 = 산기슭 끝(입구 쪽), 1 = 본산 문.
+     * 열 (x,z)를 노선에 수직 투영해 가장 가까운 구간의 호장 위치를 비율로 돌려준다.
+     * u 의 등고선(노선에 수직인 선)이 노선을 따라 굽이치므로 곁구역 경계도 굽이친다.
+     */
+    private double projectU(int x, int z) {
+        double bestD2 = Double.MAX_VALUE;
+        double bestArc = 0.0;
+        for (int i = 0; i < trailX.length - 1; i++) {
+            double ax = trailX[i], az = trailZ[i];
+            double vx = trailX[i + 1] - ax, vz = trailZ[i + 1] - az;
+            double len2 = vx * vx + vz * vz;
+            double t = len2 <= 0.0 ? 0.0 : ((x - ax) * vx + (z - az) * vz) / len2;
+            t = Math.max(0.0, Math.min(1.0, t));
+            double cx = ax + vx * t, cz = az + vz * t;
+            double d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+            if (d2 < bestD2) {
+                bestD2 = d2;
+                bestArc = trailCum[i] + Math.sqrt(len2) * t;
+            }
+        }
+        return trailLen <= 0.0 ? 0.0 : bestArc / trailLen;
+    }
+
+    /**
+     * 호장 비율 → 곁구역 넷. 순서 = 오르는 경험 (hwasan_domain_design.md):
+     * 산기슭(u≈0) 매화림 → 계곡 → 절벽 → 연무 계곡(u≈1, 본산 곁). 사분 등분은 옛 방사 띠
+     * (각 35)의 비율 계승 — 이제 「방사」가 아니라 「노선 호장」으로 잰다 (분할 비율은 튜닝 대상).
+     */
+    private RangeZone sideZoneByU(double u) {
+        if (u < 0.25) {
+            return RangeZone.PLUM_GROVE;    // 매화림 — 산기슭 (낮음)
+        }
+        if (u < 0.50) {
+            return RangeZone.VALLEY;        // 계곡
+        }
+        if (u < 0.75) {
+            return RangeZone.CLIFF;         // 절벽
+        }
+        return RangeZone.DRILL_VALLEY;      // 연무 계곡 — 본산 곁 (높음)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -238,7 +350,7 @@ public final class RangeField {
         return crest(Math.hypot(dz, over));
     }
 
-    /** 곁능선 — 주능선 문법의 축소판 (사양 전부 후보 — ★Q4). 끝은 여며 든다 */
+    /** 곁능선 — 주능선 문법의 축소판 (3가닥 확정 — Q4 · 방위·규모 근거는 RangeSpec.hwasan). 끝은 여며 든다 */
     private double sideRidge(RangeSpec.SideRidge sr, double dx, double dz) {
         double a = Math.toRadians(sr.azimuthDeg());
         double ux = Math.sin(a);                          // 남축 기준 방위 → (x,z) 단위벡터
@@ -349,5 +461,61 @@ public final class RangeField {
 
     private static double clamp01(double v) {
         return Math.max(0.0, Math.min(1.0, v));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 자기 시험 — 검수 ⑪의 첫 눈 (서버 없이 돈다 · terrain_forge_v5.md §2.5·§6)
+    //   실행: java com.honcheon.mvt.forge.RangeField   (Bukkit 무의존)
+    // ═══════════════════════════════════════════════════════════════════
+    public static void main(String[] args) {
+        RangeSpec spec = RangeSpec.hwasan(0, 0, 63);
+        RangeField f = new RangeField(spec);
+        int r = spec.economyR();
+        boolean ok = true;
+
+        // 축 12 — 결정론: 같은 좌표를 두 번 불러 같아야 한다 (높이·구역·물매)
+        long checked = 0;
+        for (int x = -r; x <= r; x += 3) {
+            for (int z = -r; z <= r; z += 3) {
+                if (f.reliefAt(x, z) != f.reliefAt(x, z)
+                        || f.surfaceY(x, z) != f.surfaceY(x, z)
+                        || f.zoneAt(x, z) != f.zoneAt(x, z)) {
+                    System.out.println("FAIL 결정론: (" + x + "," + z + ") 두 호출이 다르다");
+                    ok = false;
+                }
+                checked++;
+            }
+        }
+
+        // 축 12 자기검증(눈을 시험하는 눈): 다른 좌표는 실제로 갈려야 한다 (비교가 살아 있는가)
+        boolean sawDifference = f.reliefAt(0, 0) != f.reliefAt(spec.honsanR(), 0);
+        if (!sawDifference) {
+            System.out.println("FAIL 자기검증: 정상과 본산 경계가 같은 높이 — 비교가 죽었다");
+            ok = false;
+        }
+
+        // 곁구역 재단(Q9): 중간 고리가 넷으로 온전히 갈리고 넷 다 서는가 (검수 축 4~6 분모)
+        java.util.EnumMap<RangeZone, Long> area = new java.util.EnumMap<>(RangeZone.class);
+        for (int x = -r; x <= r; x++) {
+            for (int z = -r; z <= r; z++) {
+                area.merge(f.zoneAt(x, z), 1L, Long::sum);
+            }
+        }
+        for (RangeZone side : new RangeZone[]{RangeZone.PLUM_GROVE, RangeZone.VALLEY,
+                RangeZone.CLIFF, RangeZone.DRILL_VALLEY}) {
+            if (area.getOrDefault(side, 0L) == 0L) {
+                System.out.println("FAIL 곁구역: " + side + " 가 서지 않는다 (등산로 재단 실패)");
+                ok = false;
+            }
+        }
+
+        System.out.println((ok ? "PASS" : "FAIL") + " — RangeField 자기 시험 ("
+                + checked + " 표본 · 곁구역 면적 " + area.entrySet().stream()
+                .filter(en -> en.getKey() == RangeZone.PLUM_GROVE || en.getKey() == RangeZone.VALLEY
+                        || en.getKey() == RangeZone.CLIFF || en.getKey() == RangeZone.DRILL_VALLEY)
+                .map(en -> en.getKey() + "=" + en.getValue()).sorted().toList() + ")");
+        if (!ok) {
+            System.exit(1);
+        }
     }
 }
