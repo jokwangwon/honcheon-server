@@ -75,6 +75,13 @@ public final class RangeField {
     private static final double CRAG_AMP = 1.0;
 
     /**
+     * 군집 soft-max 날카로움 α (log-sum-exp) — 클수록 hard-max 에 가까워 안부가 뾰족(V), 작을수록
+     * 둥글고 부풀림(≤ln(n)/α)이 크다. 첨봉 군집이라 다소 크게 잡아 안부를 살짝만 둥글린다.
+     * ★형상 잠정·승인 대기(terrain_forge_v5.md §8.2 R-11). 봉 apex 부풀림 &lt;0.5 (지배 원뿔 하나).
+     */
+    private static final double CLUSTER_ALPHA = 0.45;
+
+    /**
      * 보행 corridor 잠잠 반폭 — 남면(dz≥0)에서 |dx| 가 이 안이면 crag 를 끈다(건물 단·등산로가
      * 앉는 평탄대). 등마루 반폭(20) 위에 여유. 옛 값 24(반폭+4)는 등산로 스위치백(dx~30)을 못
      * 덮어 돌산 crag 가 노선 물매를 깨뜨렸다 → 32 로 넓혀 노선까지 덮는다(면은 그 밖이라 험준
@@ -209,12 +216,14 @@ public final class RangeField {
             return 0.0;
         }
 
+        // 바탕 = mesa 대지 + 바깥 skirt (r≥honsanR 는 옛 그대로 · 안쪽은 mesa 로 캡 — 중앙 돔 폐기).
         double body = radialBody(r, dx, dz);
         double h = Math.max(body, mainRidge(dx, dz));
         for (RangeSpec.SideRidge sr : spec.sideRidges()) {
             h = Math.max(h, sideRidge(sr, dx, dz));
         }
-        h = Math.max(h, subPeaks(dx, dz));   // 다봉 massif — 봉우리 여럿 (돌산 지대)
+        // 군집 모자 = 봉 원뿔 soft-max + 중앙 건물 단 (mesa 위로 솟는 여러 첨봉·안부·court)
+        h = Math.max(h, clusterCap(dx, dz));
         h = Math.max(0.0, h - gorgeCut(dx, dz));
         if (h <= 0.0) {
             return 0.0;
@@ -223,11 +232,14 @@ public final class RangeField {
     }
 
     /**
-     * 등마루 등고 (절대 y) — 주능선 축 위, 주봉에서 남으로 {@code s}칸.
-     * 단 사슬 배치기(⑥)와 등산로(③)가 단·경유점의 y 를 여기서 읽는다.
+     * 남축 지면 등고 (절대 y) — 주봉(중앙 단)에서 남으로 {@code s}칸(음수면 북). 단 사슬
+     * 배치기(⑥)·등산로(③)가 단·경유점의 y 를 여기서 읽는다. <b>★군집 재설계</b>: 이제 단일
+     * crest 가 아니라 mesa 대지·중앙 건물 단·바깥 skirt 의 합성이다 (남축은 봉이 없어 calm — crag 무영향).
      */
     public int crestY(int s) {
-        return spec.baseY() + (int) Math.round(crest(s));
+        double h = Math.max(radialBody(Math.abs((double) s), 0.0, s), mainRidge(0.0, s));
+        h = Math.max(h, clusterCap(0.0, s));
+        return spec.baseY() + (int) Math.round(h);
     }
 
     /**
@@ -372,14 +384,24 @@ public final class RangeField {
         return kMin + (1.0 - kMin) * lobe * lobe;
     }
 
-    /** 방사 몸체 — 단면을 방위 축척으로 압축해 두른다 */
+    /**
+     * 방사 몸체 — 단면을 방위 축척으로 압축해 두른다. <b>★군집 재설계: 중앙 돔 폐기.</b>
+     * 옛 코드는 {@code r≤flat → lift(160)} 로 중앙에 단일 돔을 세웠다 (「큰 산 하나」의 근원).
+     * 이제 안쪽은 <b>mesa 대지</b>(= crest(honsanR) = lift−honsanRise = 88)로 <b>캡</b>한다 —
+     * 봉·건물 단은 clusterCap 이 이 대지 위로 얹는다. {@code min(mesa, crest)} 이므로:
+     * <ul>
+     *   <li>안쪽(sEff&lt;honsanR, crest&gt;mesa) → mesa 로 평평 (돔 없음)</li>
+     *   <li>바깥(sEff≥honsanR, crest≤mesa) → crest 그대로 (옛 skirt 불변 → 등산로·TrailForge 불변)</li>
+     * </ul>
+     */
     private double radialBody(double r, double dx, double dz) {
         int flat = spec.summitFlatR();
+        double mesa = spec.mesaLevel();
         if (r <= flat) {
-            return spec.lift();
+            return mesa;                                  // 중앙 = mesa 대지 (옛 lift 돔 폐기)
         }
         double k = azimuthScale(dx, dz, r);
-        return crest(flat + (r - flat) / k);
+        return Math.min(mesa, crest(flat + (r - flat) / k));
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -398,7 +420,9 @@ public final class RangeField {
         double lat = Math.abs(dx);
         double over = Math.max(0.0, lat - spec.ridgeHalfWidth()) * lateralFall;
         double effDz = dz >= 0.0 ? dz : -dz * NORTH_STEEP;
-        return crest(Math.hypot(effDz, over));
+        // ★군집 재설계: mesa 로 캡 — 안쪽 남 spine 돔을 없앤다 (건물 단은 clusterCap 몫).
+        // 바깥(hypot≥honsanR)은 crest≤mesa 라 min 이 무영향 → 남 skirt·후산 험면(NORTH_STEEP) 불변.
+        return Math.min(spec.mesaLevel(), crest(Math.hypot(effDz, over)));
     }
 
     /** 곁능선 — 주능선 문법의 축소판 (3가닥 확정 — Q4 · 방위·규모 근거는 RangeSpec.hwasan). 끝은 여며 든다 */
@@ -412,7 +436,8 @@ public final class RangeField {
         }
         double lat = Math.abs(dx * uz - dz * ux);
         double over = Math.max(0.0, lat - sr.halfWidth()) * lateralFall;
-        double h = sr.crestScale() * crest(Math.hypot(along, over));
+        // mesa 캡 — 곁능선 뿌리(along 작음)가 안쪽에서 돔을 이루지 않게 (절벽 띠 r≈176 은 이미 <mesa 라 무영향)
+        double h = Math.min(spec.mesaLevel(), sr.crestScale() * crest(Math.hypot(along, over)));
         double tipStart = sr.length() * 0.7;
         if (along > tipStart) {
             double t = Math.min(1.0, (along - tipStart) / (sr.length() * 0.3));
@@ -422,30 +447,73 @@ public final class RangeField {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 부품 3b — 돌 봉우리 (다봉 massif) — 사용자 피드백 2026-07-16
+    // 부품 3b — 돌 봉우리 군집(cluster) — 사용자 도보 피드백 2026-07-16 (반복 3회차)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * 다봉 봉우리 — 봉우리 여럿을 결정론 가우시안 융기로 세운다 (RangeSpec.subPeaks 유도값).
-     * 방사 몸체 위에 {@code max} 로 얹혀 <b>독립 국소 최고점</b>이 된다 — 능선·안부가 이들을
-     * 이어 하나의 바위 massif 를 이루고, 정상(중앙)은 그중 최고봉으로 남는다(height &lt; lift).
-     * 본산 건물 단은 봉우리들 사이 오목한 품(남축 안부)에 감싸인다.
+     * 군집 모자 — <b>단일 중앙 돔을 폐기한 다봉 군집의 심장</b>. 여러 첨봉과 중앙 건물 단을
+     * <b>부드러운 max(soft-max = log-sum-exp)</b>로 합성해 mesa 대지 위에 얹는다.
      *
-     * <p>가우시안 {@code height·exp(−(d/σ)²)} 는 매끄러워(C∞) z=0 급단차를 안 만든다 (B-155).
-     * 봉우리 마루(융기가 몸체를 이기는 곳)만 솟고, 그 밖은 몸체가 이겨 봉우리가 안 보인다.
-     * 좌표의 순수 함수(난수 0) — 봉우리 자리는 방위·반경으로 못박은 절대 좌표다.
+     * <p>★ 왜 soft-max 인가 (「여러 산이 조율적으로 붙은」의 기하):
+     * <ul>
+     *   <li>각 봉은 <b>가파른 원뿔 첨봉</b> {@code height − slope·d} (slope=(height−mesa)/spread).
+     *       넓은 평탄 정상이 없다(첨봉). radius+spread ≤ ~120 이라 honsanR 안에 갇힌다.</li>
+     *   <li>인접 봉이 겹치는 곳에서 soft-max 는 <b>안부(saddle)를 두 원뿔의 만남선보다 살짝
+     *       들어 올려</b> 봉과 봉을 <b>능선으로 잇는다</b> — 바깥 사면보다 높은 안부(華山 蒼龍嶺).
+     *       고립된 첨봉 무더기도, 한 덩어리 돔도 아닌 「조율적으로 붙은 여러 산」.</li>
+     *   <li>중앙(모든 봉에서 먼 곳)은 원뿔이 다 낮아 <b>건물 단(court) 평탄면</b>이 이긴다 —
+     *       봉이 아니라 봉들에 감싸인 낮은 자리. 남축(봉 없음)은 안부가 mesa 로 낮아 남으로 열린다.</li>
+     * </ul>
+     *
+     * <p>envelope: 봉 마루는 전부 lift(160) 미만이고, 한 봉 apex 에선 그 원뿔만 지배해 soft-max
+     * 부풀림(≤ln(n)/α)이 &lt;0.5 라 160 을 안 넘는다. 최종 {@code min(lift, ·)} 로 못박는다.
+     * <p>결정론: 원뿔·삼각함수·exp — 난수 0. 연속성(B-155): 원뿔은 립시츠, soft-max·건물 단 램프는
+     * 매끄러워 z=0 급단차를 안 만든다 (자기시험 maxSeam &lt; {@value #SEAM_STEP_MAX}).
      */
-    private double subPeaks(double dx, double dz) {
-        double best = 0.0;
+    private double clusterCap(double dx, double dz) {
+        double mesa = spec.mesaLevel();
+        // 질량 = 봉 원뿔들 + 중앙 건물 단. soft-max 안정화(max-trick)를 위해 최댓값을 먼저 찾는다.
+        double m = platformPlateau(dx, dz);
         for (RangeSpec.SubPeak p : spec.subPeaks()) {
-            double a = Math.toRadians(p.azimuthDeg());
-            double px = p.radius() * Math.sin(a);         // 봉우리 중심 (주봉 기준 상대)
-            double pz = p.radius() * Math.cos(a);
-            double d = Math.hypot(dx - px, dz - pz);
-            double t = d / p.sigma();
-            best = Math.max(best, p.height() * Math.exp(-t * t));
+            m = Math.max(m, peakCone(p, dx, dz));
         }
-        return best;
+        if (m <= 0.0) {
+            return 0.0;                                   // 봉·단 영향 밖 — mesa/skirt 의 몫
+        }
+        double sum = Math.exp(CLUSTER_ALPHA * (platformPlateau(dx, dz) - m));
+        for (RangeSpec.SubPeak p : spec.subPeaks()) {
+            sum += Math.exp(CLUSTER_ALPHA * (peakCone(p, dx, dz) - m));
+        }
+        double soft = m + Math.log(sum) / CLUSTER_ALPHA;
+        return Math.max(0.0, Math.min(spec.lift(), soft));  // envelope: 최고봉 lift 이내
+    }
+
+    /** 한 봉의 원뿔 첨봉 등고(base 위) — mesa 로 내려온 뒤는 음수(soft-max 에서 무시됨) */
+    private double peakCone(RangeSpec.SubPeak p, double dx, double dz) {
+        double a = Math.toRadians(p.azimuthDeg());
+        double px = p.radius() * Math.sin(a);             // 봉 중심 (주봉 기준 상대)
+        double pz = p.radius() * Math.cos(a);
+        double d = Math.hypot(dx - px, dz - pz);
+        double slope = (p.height() - spec.mesaLevel()) / Math.max(1, p.spread());
+        return p.height() - slope * d;                    // 가파른 원뿔 (첨봉)
+    }
+
+    /**
+     * 중앙 건물 단(본전 court) — 봉이 아니라 봉들에 감싸인 <b>낮은 평탄 자리</b>. 안쪽은 평탄
+     * (건물이 앉는다), 가장자리는 mesa 로 매끄럽게 내려온다(램프 물매 &lt;{@value #SEAM_STEP_MAX}).
+     * 램프 밖은 0(음영 없음) — 봉·mesa·skirt 가 이어받는다. C∞ (ease) 라 연속성 안전.
+     */
+    private double platformPlateau(double dx, double dz) {
+        double d = Math.hypot(dx, dz);
+        double ph = spec.platformHeight();
+        int pr = spec.platformR(), ramp = spec.platformRamp();
+        if (d <= pr) {
+            return ph;                                    // court 평탄
+        }
+        if (d >= pr + ramp) {
+            return 0.0;                                   // 단 영향 밖 (mesa/봉이 이어받음)
+        }
+        return ph * (1.0 - ease((d - pr) / ramp));        // ph → 0 매끄럽게
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -486,14 +554,17 @@ public final class RangeField {
                 + Math.cos((x - z) / 17.0 - phase) * 3.2                          // 바위 결
                 + Math.sin(x / 11.0 - phase) * Math.cos(z / 13.0 + phase) * 2.2   // 잔결
                 + Math.sin((x - z) / 7.0 + phase) * 1.3);                         // 아주 잔 결 (jagged)
-        double tNorm = 1.0 - Math.min(1.0, h / spec.lift());   // 0 = 정상·봉우리 마루, 1 = 발치
-        double ramp = clamp01((tNorm - 0.05) / 0.20);           // 정상·봉우리 마루 부근은 0 (매끈한 단)
+        double tNorm = 1.0 - Math.min(1.0, h / spec.lift());   // 0 = 봉우리 마루, 1 = 발치
+        double ramp = clamp01((tNorm - 0.05) / 0.20);           // 봉우리 마루 부근은 0 (매끈한 첨봉 끝)
         double factor = ramp * (0.55 + 0.45 * (1.0 - tNorm));   // 중·상턱 면이 가장 험하다 (돌산 노출)
-        double calm = 1.0;                                       // 등마루·단·등산로 보행선은 잠잠하다
+        double calm = 1.0;                                       // 능선·단·등산로 보행선은 잠잠하다
         if (dz >= 0) {
             calm = clamp01((Math.abs(dx) - CALM_HALF) / CALM_RAMP);
         }
-        return crag * factor * calm;
+        // ★군집 재설계: 중앙 건물 단(court) 은 dz 부호와 무관하게 crag 를 끈다(평탄 건물 자리).
+        double dCenter = Math.hypot(dx, dz);
+        double platCalm = clamp01((dCenter - spec.platformR()) / Math.max(1, spec.platformRamp()));
+        return crag * factor * Math.min(calm, platCalm);
     }
 
     /** 외곽 평원의 요철 — undulation 문법 (terrain_grain.yml cell 9 · ±1) */
@@ -566,6 +637,57 @@ public final class RangeField {
         };
     }
 
+    /**
+     * 독립 봉(국소 최고점) 탐지 — 군집 자기시험용. 반경 {@code R} 안, {@code minH} 이상, 창
+     * {@code win}에서 최고인 열을 봉으로 잡고 18칸 안 중복은 병합한다. 높이 내림차순.
+     */
+    static java.util.List<int[]> detectPeaks(RangeField f, int minH, int win, int R) {
+        java.util.List<int[]> raw = new java.util.ArrayList<>();
+        for (int z = -R; z <= R; z += 2) {
+            for (int x = -R; x <= R; x += 2) {
+                if (Math.hypot(x, z) > R) {
+                    continue;
+                }
+                double h = f.reliefAt(x, z);
+                if (h < minH) {
+                    continue;
+                }
+                boolean top = true;
+                for (int dz = -win; dz <= win && top; dz += 2) {
+                    for (int dx = -win; dx <= win; dx += 2) {
+                        if ((dx != 0 || dz != 0) && f.reliefAt(x + dx, z + dz) > h + 1e-6) {
+                            top = false;
+                            break;
+                        }
+                    }
+                }
+                if (top) {
+                    raw.add(new int[]{x, z, (int) Math.round(h)});
+                }
+            }
+        }
+        java.util.List<int[]> uniq = new java.util.ArrayList<>();
+        for (int[] p : raw) {
+            boolean near = false;
+            for (int[] q : uniq) {
+                if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 18) {
+                    near = true;
+                    if (p[2] > q[2]) {
+                        q[0] = p[0];
+                        q[1] = p[1];
+                        q[2] = p[2];
+                    }
+                    break;
+                }
+            }
+            if (!near) {
+                uniq.add(new int[]{p[0], p[1], p[2]});
+            }
+        }
+        uniq.sort((p, q) -> q[2] - p[2]);
+        return uniq;
+    }
+
     public static void main(String[] args) {
         RangeSpec spec = RangeSpec.hwasan(0, 0, 63);
         RangeField f = new RangeField(spec);
@@ -600,7 +722,41 @@ public final class RangeField {
         // 축 12 자기검증(눈을 시험하는 눈): 다른 좌표는 실제로 갈려야 한다 (비교가 살아 있는가)
         boolean sawDifference = f.reliefAt(0, 0) != f.reliefAt(spec.honsanR(), 0);
         if (!sawDifference) {
-            System.out.println("FAIL 자기검증: 정상과 본산 경계가 같은 높이 — 비교가 죽었다");
+            System.out.println("FAIL 자기검증: 중앙 단과 본산 경계가 같은 높이 — 비교가 죽었다");
+            ok = false;
+        }
+
+        // ── 축 군집(★재설계) — 「여러 산이 조율적으로 붙은」이 서 있는가 (단일 돔 폐기 확인) ──
+        //   ① 중앙 (0,0)은 봉이 아니라 낮은 건물 단 = 최고봉보다 확실히 낮다 (옛 모델은 160 최고).
+        //   ② 독립 봉이 여럿(≥3) 선다. ③ 봉들이 서로 준한 높이(최고−최저 ≤ 20 — 하나가 안 압도).
+        java.util.List<int[]> pk = detectPeaks(f, 140, 10, 140);
+        int nPeaks = pk.size();
+        double centerH = f.reliefAt(0, 0);
+        int topH = nPeaks == 0 ? 0 : pk.get(0)[2];
+        int lowH = nPeaks == 0 ? 0 : pk.get(nPeaks - 1)[2];
+        boolean centerIsCourt = centerH < topH - 15;
+        boolean severalMountains = nPeaks >= 3;
+        boolean similarRank = nPeaks >= 2 && (topH - lowH) <= 20;
+        System.out.printf("군집: 봉 %d개 (최고 %d~최저 %d) · 중앙 단 %.0f · 최고봉 방위=%s%n",
+                nPeaks, topH, lowH, centerH,
+                nPeaks == 0 ? "-" : String.format("%.0f°", Math.toDegrees(Math.atan2(pk.get(0)[0], pk.get(0)[1]))));
+        if (!centerIsCourt) {
+            System.out.printf("FAIL 군집: 중앙(%.0f)이 최고봉(%d)에 준함 — 단일 돔 (여러 산 아님)%n", centerH, topH);
+            ok = false;
+        }
+        if (!severalMountains) {
+            System.out.println("FAIL 군집: 독립 봉 " + nPeaks + "개 (<3) — 봉 무더기가 아니다");
+            ok = false;
+        }
+        if (!similarRank) {
+            System.out.printf("FAIL 군집: 봉 높이 편차 %d (>20) — 한 봉이 압도한다%n", topH - lowH);
+            ok = false;
+        }
+        // 눈을 시험하는 눈: 옛 단일 돔(중앙이 최고)이면 "중앙<최고봉−15" 판정이 거짓이어야 한다.
+        //   가짜 돔: h=160−0.5·r → 중앙 160, r=60 에서 130. 중앙이 우세하므로 centerIsCourt 거짓.
+        double domeCenter = 160.0, domeOff = 160.0 - 0.5 * 60.0;
+        if (domeCenter < domeOff - 15) {
+            System.out.println("FAIL 자기검증: 군집 눈이 단일 돔의 중앙 우세를 못 본다 — 눈이 죽었다");
             ok = false;
         }
 
@@ -610,7 +766,7 @@ public final class RangeField {
         double maxSeam = 0.0;
         int sx = 0, sz = 0;
         for (int x = -r; x <= r; x++) {
-            for (int z = -30; z < 10; z++) {
+            for (int z = -46; z < 16; z++) {   // ★군집: 밴드 확대 — 북봉 사면·건물 단 가장자리까지 z=0 이음을 잰다
                 double d = Math.abs(f.reliefAt(x, z + 1) - f.reliefAt(x, z));
                 if (d > maxSeam) {
                     maxSeam = d;
