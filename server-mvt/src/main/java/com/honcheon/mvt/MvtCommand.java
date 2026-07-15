@@ -1,9 +1,11 @@
 package com.honcheon.mvt;
 
 import com.honcheon.core.rules.JudgmentEngine;
+import com.honcheon.mvt.forge.FloraForge;
 import com.honcheon.mvt.forge.MountainRangeForge;
 import com.honcheon.mvt.forge.RangeField;
 import com.honcheon.mvt.forge.RangeSpec;
+import com.honcheon.mvt.forge.RangeZone;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -63,6 +65,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
+                case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
@@ -1089,6 +1092,218 @@ public final class MvtCommand implements CommandExecutor {
                 Announce.say(plugin, sender, ChatColor.GRAY + "  입구(남 r280): /tp " + ex + " " + ey + " "
                         + ez + " (콘솔 — 좌표만 안내 · 월드 " + world.getName() + ")");
             }
+        }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  식생 시험 조성 — 산세시험 월드에 구역별 식생을 심는다 (기계 ⑨ 배선)
+    //  ★ 프로덕션 월드·D-12 무접촉. sanse_test_ 접두 월드에서만. 산세 위에 얹는다.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 한 식생 조성이 도는 동안 참 — 중복 실행을 막는다 (재실행은 결정론이라 무해하나 겹치면 헛일) */
+    private static final AtomicBoolean FLORA_FORGING = new AtomicBoolean(false);
+
+    /** 식생 타일 한 변 (칸) — 산세 타일과 같은 결. 나무 하나가 청크 왕복을 안 타 스파이크가 짧다 */
+    private static final int FLORA_TILE = 16;
+
+    /**
+     * /혼천 식생시험 [hwasan] — <b>산세시험 월드에 구역별 식생을 심는다</b> (OP·콘솔 전용).
+     *
+     * <p>식생층 생성기(기계 ⑨ — {@link FloraForge})의 인게임 면(面). 이미 선 산세
+     * ({@code sanse_test_hwasan}) 위에 구역별 식생(매화림→벚꽃 · 외곽→참나무 숲 · 계곡→대나무 ·
+     * 후산→오래된 소나무 등 — hwasan_domain_design.md §식생 표)을 얹는다.
+     *
+     * <p>절차: ① 산세시험 월드를 로드 (없거나 산세가 안 섰으면 「먼저 /혼천 산세시험」 안내) →
+     * ② 기준면 y 를 <b>산 밖 평지에서 실측</b> (getHighestBlockYAt · 코드가 baseY 를 지어내지 않는다) →
+     * ③ 경제권(444) 정사각을 {@value #FLORA_TILE}칸 타일로 {@link FloraForge#plantTile} 아래 굴린다
+     * (틱을 나눠 먹는다 · 서버는 계속 돈다) → ④ 15초 안쪽 진행 로그(silence_audit) → ⑤ census
+     * (심은 나무·대나무·지표 수 · 구역별) + 매화림(남 산기슭) 텔레포트. 재실행은 결정론이라 같은
+     * 식생이 선다 (덮어써도 무해). ★가드: sanse_test_ 접두만 (프로덕션 보호 — B-126 정신).
+     */
+    private boolean floraTest(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage(ChatColor.RED + "식생 시험 조성은 관리자의 몫이다.");
+            return true;
+        }
+        String variant = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "hwasan";
+        if (!variant.equals("hwasan")) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 식생시험 [hwasan]  (지금은 hwasan 하나)");
+            return true;
+        }
+        if (!FLORA_FORGING.compareAndSet(false, true)) {
+            Announce.warn(plugin, sender, "[식생시험] 이미 식생을 심는 중이다 — 끝난 뒤에 다시 쳐라.");
+            return true;
+        }
+        boolean started = false;
+        try {
+            String worldName = "sanse_test_" + variant;
+            // ★★ 가드 (B-126) — 대상은 반드시 버리는 sanse_test_ 접두다. 프로덕션 보호.
+            if (!worldName.startsWith("sanse_test_")) {
+                Announce.fail(plugin, sender,
+                        "[식생시험] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
+                return true;
+            }
+            World world = org.bukkit.Bukkit.getWorld(worldName);
+            if (world == null || !world.getName().startsWith("sanse_test_")) {
+                // ★ 식생은 산세 위에 얹는다 — 월드를 새로 만들지 않는다. 산세부터 세우라 안내한다
+                Announce.warn(plugin, sender, "[식생시험] " + worldName
+                        + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
+                return true;
+            }
+            // ★ 기준면 실측 — 산 밖 평지(경제권 밖)의 표면 y. 코드가 지어내지 않는다.
+            //   주봉은 산세시험과 같은 (0,0). economyR 은 baseY 무관 상수라 임시 spec 으로 읽는다.
+            int peakX = 0;
+            int peakZ = 0;
+            int economyR = RangeSpec.hwasan(peakX, peakZ, 0).economyR();
+            int baseY = world.getHighestBlockYAt(peakX + economyR + 40, peakZ);   // 산 밖 = superflat 평지
+            RangeSpec spec = RangeSpec.hwasan(peakX, peakZ, baseY);
+            // ★ 산세가 섰는가 — 정상 열이 기준면보다 한참 높아야 한다 (산이 없으면 식생 심을 자리가 없다)
+            int summitTop = world.getHighestBlockYAt(peakX, peakZ);
+            if (summitTop - baseY < 20) {
+                Announce.warn(plugin, sender, "[식생시험] " + worldName + " 에 산세가 안 섰다 (정상고 "
+                        + (summitTop - baseY) + " < 20) — 먼저 /혼천 산세시험 hwasan.");
+                return true;
+            }
+            Announce.say(plugin, sender, ChatColor.GRAY + "[식생시험] " + worldName
+                    + " — 기준면 실측 y" + baseY + " · 정상고 " + (summitTop - baseY)
+                    + " · 주봉 (" + peakX + "," + peakZ + ") · 생활권 r" + spec.economyR());
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  구역별 식생을 심는다 (한 변 "
+                    + FLORA_TILE + "칸 · 틱을 나눠 먹는다 · 서버는 계속 돈다) — 진행은 [식생시험·진행] 으로 남는다");
+            SanseFlora flora = new SanseFlora(plugin, sender, world, spec, FLORA_TILE);
+            TickBudget.slice(plugin, "식생시험:" + variant, flora, () -> {
+                try {
+                    flora.finish();
+                } finally {
+                    FLORA_FORGING.set(false);   // ★ 끝나면 잠금을 푼다
+                }
+            });
+            started = true;
+            return true;
+        } finally {
+            if (!started) {
+                FLORA_FORGING.set(false);
+            }
+        }
+    }
+
+    /**
+     * 식생 타일 순회기 — {@link SanseForge} 의 짝. 경제권 정사각을 {@code tile}칸 격자로 훑으며
+     * 타일마다 {@link FloraForge#plantTile}(제 안에서 청크를 선로드한다)을 부른다. 산세와 달리
+     * <b>산을 다시 빚지 않는다</b> — 이미 선 표면 위(surfaceY+1)에만 식생을 얹는다.
+     */
+    private static final class SanseFlora implements TickBudget.Step {
+        private final HoncheonMvt plugin;
+        private final CommandSender sender;
+        private final World world;
+        private final RangeSpec spec;
+        private final RangeField field;
+        private final FloraForge.Tally tally = new FloraForge.Tally();
+        private final int minX;
+        private final int minZ;
+        private final int maxX;
+        private final int maxZ;
+        private final int tile;
+        private final int tilesX;
+        private final int totalTiles;
+        private final long startNanos;
+
+        private int index;
+        private long lastProgressMs;
+
+        SanseFlora(HoncheonMvt plugin, CommandSender sender, World world, RangeSpec spec, int tile) {
+            this.plugin = plugin;
+            this.sender = sender;
+            this.world = world;
+            this.spec = spec;
+            this.field = new RangeField(spec);
+            this.tile = tile;
+            int r = spec.economyR();
+            this.minX = spec.peakX() - r;
+            this.maxX = spec.peakX() + r;
+            this.minZ = spec.peakZ() - r;
+            this.maxZ = spec.peakZ() + r;
+            this.tilesX = (maxX - minX + tile) / tile;
+            int tilesZ = (maxZ - minZ + tile) / tile;
+            this.totalTiles = tilesX * tilesZ;
+            this.startNanos = System.nanoTime();
+            this.lastProgressMs = System.currentTimeMillis();
+        }
+
+        @Override
+        public boolean step() {
+            if (index >= totalTiles) {
+                return false;
+            }
+            int ti = index % tilesX;
+            int tj = index / tilesX;
+            int x0 = minX + ti * tile;
+            int z0 = minZ + tj * tile;
+            int x1 = Math.min(maxX, x0 + tile - 1);
+            int z1 = Math.min(maxZ, z0 + tile - 1);
+            FloraForge.plantTile(world, spec, field, x0, z0, x1, z1, tally);
+            index++;
+            long now = System.currentTimeMillis();
+            if (now - lastProgressMs >= 3000L || index == totalTiles) {
+                lastProgressMs = now;
+                int pct = (int) (100L * index / totalTiles);
+                Announce.progress(plugin, sender, ChatColor.GRAY + "[식생시험·진행] " + index + "/"
+                        + totalTiles + " 타일 (" + pct + "%) · 나무 " + tally.trees() + " · 대나무 "
+                        + tally.bamboo() + " · 지표 " + tally.ground() + " · "
+                        + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
+            }
+            return index < totalTiles;
+        }
+
+        /** 조성 완료 — census + 매화림(남 산기슭) 텔레포트. 콘솔이면 좌표만 안내 */
+        void finish() {
+            long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
+            Announce.say(plugin, sender, ChatColor.GOLD + "[식생시험] 화산 식생이 섰다 — " + world.getName());
+            Announce.say(plugin, sender, ChatColor.GRAY + "  나무 " + tally.trees() + "그루 · 대나무 "
+                    + tally.bamboo() + "줄 · 지표(풀·꽃·이끼) " + tally.ground() + "칸 · 타일 "
+                    + totalTiles + " · " + secs + "초");
+            Announce.say(plugin, sender, ChatColor.GRAY + "  구역별 나무·대나무: " + tally.byZone());
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY
+                    + "  수종: 외곽=참나무·자작 · 매화림=벚꽃 · 계곡=대나무 · 후산=오래된 소나무·고목 · "
+                    + "입구=소나무(잠정) · 정상=풀만 · 절벽/연무/본산=성기게(풀·관목)");
+            // 매화림 = 남면(+z) 중간 고리 산기슭 쪽 — 곁구역 재단(등산로 호장)이 정한 자리를 찾는다
+            int[] pg = findPlumGrove();
+            if (pg == null) {
+                Announce.warn(plugin, sender, "  매화림 열을 못 찾았다 — 텔레포트 생략 (곁구역 재단 확인).");
+                return;
+            }
+            int ey = world.getHighestBlockYAt(pg[0], pg[1]) + 1;
+            if (sender instanceof Player player) {
+                Location spot = new Location(world, pg[0] + 0.5, ey, pg[1] + 0.5, 180f, 0f);   // 북향 = 산을 마주본다
+                player.teleport(spot);
+                Announce.say(plugin, sender, ChatColor.GREEN + "  매화림(남 산기슭)에 세운다 — 벚꽃을 본다 ("
+                        + pg[0] + ", " + ey + ", " + pg[1] + ")");
+            } else {
+                Announce.say(plugin, sender, ChatColor.GRAY + "  매화림(남 산기슭): /tp " + pg[0] + " " + ey
+                        + " " + pg[1] + " (콘솔 — 좌표만 안내 · 월드 " + world.getName() + ")");
+            }
+        }
+
+        /** 매화림 한 열 — 남면(+z) 중간 고리를 산기슭(바깥)에서 안쪽으로 훑어 첫 PLUM_GROVE 를 잡는다 */
+        private int[] findPlumGrove() {
+            int px = spec.peakX();
+            int pz = spec.peakZ();
+            int outer = spec.honsanR() + spec.midDepth();   // 산기슭 쪽 (u≈0 = 매화림)
+            int inner = spec.honsanR();
+            for (int z = pz + outer; z >= pz + inner; z--) {
+                for (int dx = 0; dx <= 80; dx++) {
+                    for (int sign : new int[]{1, -1}) {
+                        int x = px + sign * dx;
+                        if (field.zoneAt(x, z) == RangeZone.PLUM_GROVE) {
+                            return new int[]{x, z};
+                        }
+                        if (dx == 0) {
+                            break;
+                        }
+                    }
+                }
+            }
+            return null;
         }
     }
 
