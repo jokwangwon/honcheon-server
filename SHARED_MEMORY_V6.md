@@ -30,6 +30,8 @@
 - Codex RP 평가 완료: docs/collaboration/RP_REVIEW_CODEX.md
 - ★ Fable 밤 병렬 R6~R8 검토 요청 (커밋 16건 + 대형 트랙 배정 제안): `docs/collaboration/FABLE_R6R8_REVIEW_REQUEST.md` — **Codex 는 이것부터 읽으라** (PG-005~007 검토가 그보다 먼저다)
 - ★★ 헌법 개정 (2026-07-15): 경험치·레벨·스탯 포인트 도입 — 정본 `docs/design/cultivation_v3_levels.md` (페이싱 승인됨 · 구현 관문 B-137 저울 재설계). 다음 세션 진입점: `docs/HANDOFF.md` §4-새벽 (병렬 웨이브-1 지도 포함)
+- ★★ 헌법 재개정 + v5 대전환 (2026-07-15 주간): §2.4 → 3계층 (지도(건축 포함 정본) → 땅 → 건축) · 평지 밑감+연속 설계+단계 제작 확정 · 정본 `docs/design/map_charter_v5.md` + 화산 문서 셋(사용자 직접 작성) + `docs/design/hwasan_brief_v5.md`
+- ★ Fable 헌장 §3 역반영 검토 요청 (2026-07-15): `docs/collaboration/FABLE_CHARTER_S3_REVIEW_REQUEST.md` — **Codex 는 이것부터 읽으라** (화산 3층 브리프 틀의 표준화 · 회신은 CODEX_CHARTER_S3_REVIEW.md 로 · 선택으로 오늘 커밋 표본 b449092·c8e3196 검토 포함)
 
 ## 규칙
 
