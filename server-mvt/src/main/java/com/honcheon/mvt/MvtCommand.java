@@ -932,7 +932,10 @@ public final class MvtCommand implements CommandExecutor {
             }
             // ★ baseY 실측 — 코드가 지어내지 않는다. FLAT 프리셋이 정한 실제 표면 y 를 읽는다
             //   (생성기와 안 싸운다 — Q2). 봉우리·곁구역은 RangeSpec.hwasan 유도값이 정한다.
-            int baseY = world.getHighestBlockYAt(0, 0);
+            //   ★★ 주봉 (0,0) 이 아니라 **생활권 밖 평지**(x=600 > economyR 444)에서 잰다 —
+            //   (0,0) 은 재조성 때 이미 세운 산 꼭대기라 평지가 아니다. 거기서 재면 재실행마다
+            //   산 위에 산을 쌓는다 (B-159). 밖은 산이 안 닿아 언제 재도 FLAT 표면 → 멱등.
+            int baseY = world.getHighestBlockYAt(600, 0);
             RangeSpec spec = RangeSpec.hwasan(0, 0, baseY);
             Announce.say(plugin, sender, ChatColor.GRAY + "[산세시험] " + worldName
                     + " — 기준면 실측 y" + baseY + " (FLAT 표면) · 주봉 (0,0) · 상승 " + spec.lift()
