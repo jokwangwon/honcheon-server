@@ -203,6 +203,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.reset = new Reset(this, cfg);
         this.reset.start();
         getCommand("honcheon").setExecutor(new MvtCommand(this));
+        com.honcheon.mvt.rp4.Rp4Demo.register(this);   // RP-4 A/B 데모 무대 (/rp4demo — OP 전용, 승인: A/B 둘 다 진행)
         loadAnchors();
         loadZones();
         loadRegionBases();
@@ -249,6 +250,8 @@ public final class HoncheonMvt extends JavaPlugin {
         if (skills != null) {
             skills.shutdown();   // 무공의 3D 형체를 세계에 남기지 않는다
         }
+        com.honcheon.mvt.rp4.Rp4Demo.shutdown();   // 데모 무대 배우를 세계에 남기지 않는다
+
         if (antechamber != null) {
             // 글판을 걷는다 — 안 걷으면 다시 지을 때 **글이 두 겹으로 겹친다**
             antechamber.shutdown();
