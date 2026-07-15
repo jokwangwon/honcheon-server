@@ -476,6 +476,17 @@ final class SectBuilder {
 
     // ══════════════════════════════════════════════════════════════════
     //  석조도관(石造道觀) — 곤륜. <b>돌만으로 선다</b>
+
+    /** 석조도관 본채의 반폭 — 발자국 37×37 의 살(16) (축대 +2 는 {@link #summitNeedRadius} 가 더한다) */
+    private static final int CLOISTER_HALF = 16;
+
+    /**
+     * 이 집이 정상에 요구하는 반경 — 발자국 반폭 + 축대 2 의 대각. <b>지도가 땅의 치수를 정한다</b>
+     * (§2.4 3계층): {@code RemoteBuilder.summitNeedRadius()} 가 원형별 최대를 이 값과 견준다.
+     */
+    static int summitNeedRadius() {
+        return (int) Math.ceil(Math.hypot(CLOISTER_HALF + 2, CLOISTER_HALF + 2));   // = 26
+    }
     // ══════════════════════════════════════════════════════════════════
 
     /**
@@ -504,14 +515,14 @@ final class SectBuilder {
         //   묻혔다 (terrace 는 위로 14칸만 비운다 — 그 위 산이 지붕을 눌렀다). 원점도 봉우리다
         //   (부지 중심이 아니다 — 지형이 봉우리를 북으로 8칸 밀어 두었다). peakY 는 원장 정본이라
         //   재조성에도 안 흔들린다. 켜가 하나면(twoTier 아님) 그 자리의 실지면이다.
-        //   ★ 발자국 37×37(대각 ≈25.5)은 정상 평탄부 유도(summitNeedRadius 17)를 넘는다 —
-        //   모서리는 terrace 의 축대(최대 16칸)가 받친다. B-147 지도 설계에서 유도 확장 검토 대상.
+        //   ★ 발자국 37×37(대각 ≈25.5)이 유도의 최대치다 — summitNeedRadius() 가 이 집을
+        //   기준으로 산의 정상 폭을 정한다 (사용자 결정 2026-07-15: 원형별 최대 발자국 유도).
         boolean summit = spec.twoTier();
         int ox = summit ? spec.peakX() : cx;
         int oz = summit ? spec.peakZ() : cz;
         int gy = summit ? spec.peakY() : RemoteBuilder.seatY(world, spec, cx, cz);
 
-        int half = 16;
+        int half = CLOISTER_HALF;
         TerrainForge.terrace(world, spec, ox, oz, gy, half + 2, half + 2, Material.POLISHED_DEEPSLATE);
         if (!summit) {
             RemoteBuilder.approachPath(world, spec, ox, oz, fw, half + 3, rad + 12, gy, 1,

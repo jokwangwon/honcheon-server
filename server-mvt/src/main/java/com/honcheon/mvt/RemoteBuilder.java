@@ -1015,7 +1015,12 @@ final class RemoteBuilder {
      * 본전 발자국이 커지면 산의 정상도 따라 넓어진다. 상수 두 벌이 아니라 유도 한 줄이다.
      */
     static int summitNeedRadius() {
-        return (int) Math.ceil(Math.hypot(UPPER_HALF_W, UPPER_HALF_D));   // = 17
+        // ★ 원형별 최대 발자국 (사용자 결정 2026-07-15, 헌장 §5 후속): 정상에 앉는 원형 중
+        //   가장 넓은 것이 산의 정상 폭을 정한다 — 본전 단(대각 17)이 아니라 석조도관(대각 26)이
+        //   지금의 최대다. 새 봉우리 원형이 이보다 커지면 이 max 에 한 줄 더하라.
+        return Math.max(
+                (int) Math.ceil(Math.hypot(UPPER_HALF_W, UPPER_HALF_D)),   // 본전 단 27×21 = 17
+                SectBuilder.summitNeedRadius());                            // 석조도관 37×37 = 26
     }
 
     private static String sectSubtitle(WorldMap.Place place) {
