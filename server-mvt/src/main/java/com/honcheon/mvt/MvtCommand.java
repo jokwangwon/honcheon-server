@@ -737,17 +737,19 @@ public final class MvtCommand implements CommandExecutor {
             org.bukkit.Bukkit.getScheduler().runTask(plugin, () ->
         TickBudget.build(plugin, "조성:" + place.id(), world,
                 w -> {   // ★ 워커 스레드 — Bukkit API 직접 호출 금지 (대역 월드를 통하는 것만 안전하다)
-                    // ★★ **땅에 맞게 건물이 올라가는 것이지, 건축에 맞게 지형이 생기는 게 아니다.** (사용자)
-                    //   그래서 땅은 **한 번만** 선다 — `Terraform` 이 그 문이다:
+                    // ★★ 3계층 헌법 (2026-07-15 개정, HANDOFF §2.4): **지도(건축 포함 정본) →
+                    //   땅 → 건축.** 집행 안전핀은 존속한다 — 땅은 **한 번만** 선다 (`Terraform` 이 그 문):
                     //     땅이 없다 → 빚는다 (prepare → 강 → 요청 → 굴) → **원장에 적는다**
                     //     땅이 있다 → **측량만 한다. 블록을 하나도 안 건드린다.**
                     //   그러므로 `/혼천 지역조성` 을 두 번 치면 **두 번째는 건물만 다시 선다.**
+                    //   (구판 표어 "땅에 맞게 건물이…"는 폐지 — 지도가 바뀌면 갈아엎어 다시 빚는다)
                     Terraform.Land land =
                             Terraform.land(w, place, site.x(), baseY, site.z(), forgeRadius);
                     // ★ 봉인 — **건축이 땅을 바꿨는가**를 기계가 증명한다 (자재가 아니라 **형상**을 잰다)
                     TerrainSeal.Probe probe = TerrainSeal.of(w);
                     TerrainSeal.Seal before = TerrainSeal.seal(probe, land.spec());
-                    // ★ 지형조성이면 **집을 안 짓는다.** 땅은 건축을 모른다 — 그것이 2계층 계약이다
+                    // ★ 지형조성이면 **집을 안 짓는다.** 땅의 집행은 건축을 못질하지 않는다 —
+                    //   3계층에서 땅의 치수는 이미 지도(건축 footprint)가 정했고, 여기서는 집행만 가른다
                     java.util.List<Zone> built = terrainOnly
                             ? java.util.List.of()
                             : RemoteBuilder.build(w, place, land.spec(), land.cave());
