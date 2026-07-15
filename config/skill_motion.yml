@@ -83,6 +83,21 @@ budget:
 hud:
   flash_read_ticks: 15            # 0.75초 — 사람이 한 문구를 읽는 최소 시간 (옛 STANCE_READ_TICKS. 이제 여기가 정본)
 
+  # ── 내공/내력 보스바 — XP바에서 이사 (★사용자 확정 2026-07-15) ──
+  # 바닐라 XP바는 v3 경험/레벨의 자리다 (cultivation_v3_levels.md §4-b). XP바에 세 들어 살던
+  # 내공(레벨 숫자)·내력(게이지)이 이 보스바로 온다. 문구·색·구간 전부 여기가 정본 —
+  # 코드(EnergyBossBar.java)는 이름을 옮길 뿐이다. 틀린 이름이면 채널을 안 열고 소리낸다.
+  energy_bossbar:
+    # 자리끼움 셋: {내력} {내력최대} {내공} — 어휘는 기존 화면에서 옮김:
+    #   내력 n/n = 액션바 energySeg (SkillHud.statusBar) · /혼천 운기 "내력 n → n/n"
+    #   내공 n   = /혼천 경지 "내공 n / 내력 n" (내공 숫자는 정수 화후 단계만 — 옛 XP바 레벨과 같은 자)
+    # 【어휘 후보 — 사용자 다듬기 대상】 (보스바 제 문구는 전례가 없어 최소 구성으로 세웠다)
+    title: "내력 {내력}/{내력최대} · 내공 {내공}"
+    color: BLUE                   # 평시 — ★사용자 확정: 파랑 (BLUE·GREEN·PINK·PURPLE·RED·WHITE·YELLOW)
+    depleted_color: RED           # 고갈(SkillEngine.isDepleted) — ★사용자 확정: 빨강
+    overlay: PROGRESS             # 구간 없는 연속 게이지 (PROGRESS·NOTCHED_6·NOTCHED_10·NOTCHED_12·NOTCHED_20)
+    depleted_suffix: " (고갈 −2)"  # 액션바의 고갈 꼬리를 그대로 옮김 (internal_energy.yml depleted.state "내공 고갈 (판정 -2)")
+
 # ══════════════════════════════════════════════════════════════════════
 #  파티클 팔레트 — 【팩 담당에게 넘기는 목록】
 # ══════════════════════════════════════════════════════════════════════

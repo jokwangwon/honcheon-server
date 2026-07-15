@@ -186,6 +186,10 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(dojang, this);
         getServer().getPluginManager().registerEvents(dojangGui, this);
         getServer().getPluginManager().registerEvents(hunting.sparring(), this);
+        // 경험 경제 절연 — 바닐라 XP는 원장(v3)에 손대지 못한다 (★사용자 확정 2026-07-15 · B-136)
+        getServer().getPluginManager().registerEvents(new XpEconomyGuard(this), this);
+        getLogger().info("[절연] 바닐라 XP 유입 전부 차단 (몹 오브·수선·화로·낚시·병·교배)"
+                + " · 모루·인챈트대 레벨 환급 — 경험은 v3 원장 하나");
         skills.start();   // 중앙 티커 1개 (performance.yml F-P2)
         gyeonggong.start();   // 켜져 있는 사람만 돈다 (Metrics 가 잰다 — probes.gyeonggong)
         antechamber.start();   // 몸짓·경공·물안개·문이 열리는 순간을 본다

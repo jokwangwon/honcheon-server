@@ -14,12 +14,14 @@ import java.util.UUID;
  *
  * <p><b>왜 이 바인가</b> (docs/design/cultivation_v3_levels.md §4-b · ★사용자 확정 2026-07-15):
  * 바닐라 XP바는 v3 <b>경험/레벨</b>로 이사한다. 그때까지 XP바에 세 들어 살던 내공(레벨 숫자)·
- * 내력(게이지)은 집을 잃는다 — 그 살림이 이 보스바로 온다. {@link SkillHud#energyBar} 가
- * 하던 일({@code setLevel(내공)}·{@code setExp(내력/풀)})의 <b>이사 목적지</b>다.
+ * 내력(게이지)은 집을 잃는다 — 그 살림이 이 보스바로 온다. 옛 {@code SkillHud.energyBar}
+ * (2026-07-15 철거 — 묘비가 그 자리에 있다)가 하던 일({@code setLevel(내공)}·
+ * {@code setExp(내력/풀)})의 <b>이사 목적지</b>다.
  *
  * <p><b>등록제</b> (HANDOFF §2.1): 문구·색·구간(눈금)은 이 클래스가 고르지 않는다.
- * 등록부 키가 아직 없어 <b>생성자 인자</b>로 받는다 — 배선하는 손(조율자)이 등록부를 만들어
- * 그 값을 넘긴다. 코드 어디에도 기본 문구·기본 색은 없다.
+ * 등록부는 {@code config/skill_motion.yml hud.energy_bossbar} — 배선하는 손
+ * ({@code SkillListener.loadEnergyBossBar})이 그 값을 <b>생성자 인자</b>로 넘긴다.
+ * 코드 어디에도 기본 문구·기본 색은 없다.
  *
  * <p><b>침묵하는 실패 금지</b> (HANDOFF §2.2): 받은 색·구간 이름이 Adventure 의 것이 아니면
  * <b>소리내어</b> 경고하고 채널 자체를 열지 않는다 — 조용히 다른 색을 고르는 것이 곧 거짓말이다.

@@ -14,9 +14,10 @@ import java.util.UUID;
 /**
  * 무공 HUD + 파티클 예산 게이트.
  *
- * <p>HUD 매핑 (mc_action_mapping.md 2장 · cultivation.yml "XP 바 = 내력 유지"):
+ * <p>HUD 매핑 (mc_action_mapping.md 2장 · ★사용자 확정 2026-07-15):
  * <ul>
- *   <li>경험치 바 = 내력 (레벨 숫자 = 내공 화후 단계, 게이지 = 내력 잔량)</li>
+ *   <li>경험치 바 = <b>v3 경험/레벨</b> (cultivation_v3_levels.md §4-b — 이 클래스는 손대지 않는다)</li>
+ *   <li>보스바 = 내공/내력 ({@link EnergyBossBar} — 옛 XP바 세입자의 이사 목적지)</li>
  *   <li>액션바 = 격 태세 · 내력 게이지 글리프 · 쿨다운</li>
  *   <li>아이템 쿨다운 = 무공 후딜·발출 쿨다운 (바닐라 스와이프)</li>
  * </ul>
@@ -243,12 +244,10 @@ final class SkillHud {
         }
     }
 
-    /** 경험치 바 = 내력. 레벨 숫자 = 내공 화후 단계 (소수 2자리 × 100 은 과하다 — 정수 단계만) */
-    void energyBar(Player player, SkillEngine.State state) {
-        int pool = engine.pool(state.naegong);
-        player.setLevel((int) Math.floor(state.naegong));
-        player.setExp(pool <= 0 ? 0f : (float) Math.max(0.0, Math.min(1.0, state.energy / (double) pool)));
-    }
+    // ★ 묘비 — energyBar(setLevel=내공·setExp=내력/풀)는 여기 살았다 (2026-07-15 철거).
+    //   XP바는 이제 v3 경험/레벨의 자리다 (cultivation_v3_levels.md §4-b ★사용자 확정) —
+    //   이 클래스는 다시는 setLevel/setExp 를 만지지 않는다. 내공/내력 표시는
+    //   EnergyBossBar.update 로 이사했다 (등록부: skill_motion.yml hud.energy_bossbar).
 
     /**
      * 액션바 — <b>내구(부상)</b> · 격 태세 · 내력 · 쿨다운. 수치 비노출 원칙의 예외는 자원(내력·내구)뿐이다.

@@ -85,6 +85,12 @@ public final class SkillListener implements Listener {
     private final HoncheonMvt plugin;
     private final SkillEngine engine;
     private final SkillHud hud;
+    /**
+     * 내공/내력 보스바 — XP바에서 이사 (★사용자 확정 2026-07-15: XP바 = v3 경험/레벨).
+     * 옛 {@code hud.energyBar} 가 서 있던 자리마다 {@link EnergyBossBar#update} 가 선다.
+     * 문구·색·구간은 등록부(skill_motion.yml hud.energy_bossbar)의 것 — 코드가 지어내지 않는다.
+     */
+    private final EnergyBossBar energyBossBar;
     /** 3D 모션 층 — 파티클 위에 얹는다. 이것이 통째로 실패해도 무공은 보인다 (불변식 ㅁ) */
     private final SkillDisplay display;
     private final Map<UUID, SkillEngine.State> states = new HashMap<>();
@@ -157,6 +163,7 @@ public final class SkillListener implements Listener {
         this.plugin = plugin;
         this.engine = engine;
         this.hud = new SkillHud(engine);
+        this.energyBossBar = loadEnergyBossBar(plugin, engine);
         this.display = new SkillDisplay(plugin, engine);
         this.activeGuard = loadActiveGuard(plugin);
         this.safetyRules = loadSafetyRules(plugin);
@@ -184,6 +191,32 @@ public final class SkillListener implements Listener {
         } catch (RuntimeException missing) {
             return new ActiveGuard(false, "막기", 0, 0, 0, true);
         }
+    }
+
+    /**
+     * 내공/내력 보스바 등록부 판독 — {@code skill_motion.yml hud.energy_bossbar} (loadActiveGuard 와
+     * 같은 전례: SkillEngine 은 동결이라 이 층이 직접 읽는다). <b>침묵하는 실패 금지</b>: 절이 없거나
+     * 이름이 틀리면 {@link EnergyBossBar} 가 소리내고 채널을 열지 않는다 — 조용한 폴백 색은 없다.
+     */
+    private static EnergyBossBar loadEnergyBossBar(HoncheonMvt plugin, SkillEngine engine) {
+        Map<String, Object> bar;
+        try {
+            bar = RulesConfig.section(RulesConfig.section(
+                    RulesConfig.load(plugin.getDataFolder().toPath()
+                            .resolve("config").resolve("skill_motion.yml")), "hud"), "energy_bossbar");
+        } catch (RuntimeException missing) {
+            org.bukkit.Bukkit.getLogger().warning(
+                    "[혼천] skill_motion.yml hud.energy_bossbar 절이 없다 — 내력 보스바를 열지 않는다");
+            bar = java.util.Collections.emptyMap();
+        }
+        return new EnergyBossBar(engine,
+                strOrNull(bar.get("title")), strOrNull(bar.get("color")),
+                strOrNull(bar.get("depleted_color")), strOrNull(bar.get("overlay")),
+                strOrNull(bar.get("depleted_suffix")));
+    }
+
+    private static String strOrNull(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -375,6 +408,7 @@ public final class SkillListener implements Listener {
      */
     public void shutdown() {
         display.clearAll();
+        energyBossBar.clearAll();   // 리로드 뒤 유령 보스바가 화면에 살아남지 않게
     }
 
     /**
@@ -831,7 +865,7 @@ public final class SkillListener implements Listener {
             settleTraining(player, state);   // 날이 바뀌면 하루치 수련이 배분대로 갈린다
             // 생명 — 경지·장비가 바뀌면 다음 틱에 몸이 따라온다 (훅은 빠뜨리면 조용히 틀리고, 대조는 못 빠뜨린다)
             hud.vitalityTick(player, state, plugin.ledger(player.getUniqueId()));
-            hud.energyBar(player, state);
+            energyBossBar.update(player, state);   // 보스바 — 매 틱 대조 (값이 바뀔 때만 패킷이 나간다)
             // 내구·부상·태세는 격이 없어도 보인다 — 게이트를 두면 **삼류가 제 목숨을 영영 못 본다**
             // 경공 유지는 지속 상태다 — 순간 문구가 아니라 합성 한 줄의 상시 조각으로 병기한다 (B-116)
             GyeonggongListener gg = plugin.gyeonggong();
@@ -2229,7 +2263,7 @@ public final class SkillListener implements Listener {
         flash(player, hud.gradeColor(cast.grade()) + label + " "
                 + ChatColor.DARK_GRAY + "│ " + SkillHud.gradeLabel(cast.grade())
                 + (hits > 0 ? ChatColor.WHITE + " · " + hits + "타" : ChatColor.GRAY + " · 헛손질"));
-        hud.energyBar(player, state);
+        energyBossBar.update(player, state);
     }
 
     /** 상대의 경지 — 등록부의 몸이면 그 경지로 격차를 잰다 (몹 = 삼류 취급은 미등록 몸의 폴백) */
@@ -2743,7 +2777,7 @@ public final class SkillListener implements Listener {
                     ? ChatColor.YELLOW + "호신강기 — 튕겨 낸다 " + ChatColor.DARK_GRAY + "(상쇄 −" + guard.drain() + ")"
                     : ChatColor.RED + "관통 — " + grade + "가 강기를 갈랐다 " + ChatColor.DARK_GRAY
                             + "(피해 " + guard.pierce() + " · 상쇄 −" + guard.drain() + ")");
-            hud.energyBar(player, states.get(player.getUniqueId()));
+            energyBossBar.update(player, states.get(player.getUniqueId()));
         }
         return guard.blocked()
                 ? new Defense(true, 0)
@@ -3491,7 +3525,7 @@ public final class SkillListener implements Listener {
         }
         // 태세 전환의 문구는 flash 로 — 맨 actionBar 는 다음 statusBar 틱(≤0.2초)에 덮여 겹쳐 읽힌다 (B-116)
         flash(player, hud.gradeColor(next) + next + " — " + gradeFlavor(next));
-        hud.energyBar(player, state);
+        energyBossBar.update(player, state);
     }
 
     private void dispel(Player player, SkillEngine.State state, String why) {
@@ -3629,7 +3663,7 @@ public final class SkillListener implements Listener {
                 player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 600, 0, true, true));
                 player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 600, 0, true, true));
                 player.sendMessage(ChatColor.RED + "내상 — 벽 너머의 것을 억지로 끌어왔다. 내력이 전소했다.");
-                hud.energyBar(player, state);
+                energyBossBar.update(player, state);
             }));
         }
     }
@@ -4130,7 +4164,7 @@ public final class SkillListener implements Listener {
         state.flow = 0;
         state.ultimateUses = 0;
         state.combatUntil = -1;
-        hud.energyBar(player, state);
+        energyBossBar.update(player, state);
         player.sendMessage(ChatColor.GOLD + Glyphs.realmCrest(realm) + " " + realm
                 + ChatColor.WHITE + " — 내공 " + String.format("%.2f", naegong)
                 + " / 내력 " + state.energy
@@ -4157,7 +4191,7 @@ public final class SkillListener implements Listener {
         }
         int before = state.energy;
         state.energy = Math.min(pool, state.energy + engine.meditationRecover(state.naegong, 1.0));
-        hud.energyBar(player, state);
+        energyBossBar.update(player, state);
         event(player.getLocation().add(0, 1, 0), "운기조식");
         player.sendMessage(ChatColor.AQUA + "한 구간을 앉았다 — 내력 " + before + " → " + state.energy
                 + "/" + pool);
@@ -4253,6 +4287,7 @@ public final class SkillListener implements Listener {
         lastDodge.remove(id);
         lastStanceWin.remove(id);
         hud.forget(id);
+        energyBossBar.forget(id);   // 끊긴 몸의 보스바 기록 — 연결이 죽었으니 바는 이미 없다
         display.clear(id);      // 떠난 몸의 형체는 남지 않는다
         if (Onboarding.get() != null) {
             Onboarding.get().forget(id);
