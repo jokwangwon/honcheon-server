@@ -1,6 +1,9 @@
 package com.honcheon.mvt;
 
 import com.honcheon.core.rules.JudgmentEngine;
+import com.honcheon.mvt.forge.MountainRangeForge;
+import com.honcheon.mvt.forge.RangeField;
+import com.honcheon.mvt.forge.RangeSpec;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -14,6 +17,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * /혼천 — 관리자 검증 명령. 엔진을 직접 두드려 수치를 눈으로 확인한다.
@@ -58,6 +62,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
                 case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
+                case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
@@ -858,6 +863,232 @@ public final class MvtCommand implements CommandExecutor {
 
         TerrainForge.CaveSpec cave() {
             return land.cave();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  산세 시험 조성 — 버리는 FLAT 월드에 광역 산세를 세운다 (기계 ① 배선)
+    //  ★ 프로덕션 월드·D-12 무접촉. 전용 테스트 월드(sanse_test_*)에서만.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 한 산세 조성이 도는 동안 참 — 중복 실행을 막는다 (재실행은 결정론이라 무해하나 겹치면 헛일) */
+    private static final AtomicBoolean SANSE_FORGING = new AtomicBoolean(false);
+
+    /** 산세 타일 한 변 (칸). 작을수록 틱당 스파이크가 작다 — 16 = 정상 타일 최악 ~0.5초 */
+    private static final int SANSE_TILE = 16;
+
+    /**
+     * /혼천 산세시험 [hwasan] — <b>버리는 FLAT 테스트 월드에 화산 산세를 세운다</b> (OP·콘솔 전용).
+     *
+     * <p>기계 ①(MountainRangeForge)의 인게임 면(面). 조성은 <b>전용 테스트 월드</b>
+     * {@code sanse_test_<변종>} 에서만 돈다 — 프로덕션 월드·D-12 갈아엎기는 절대 무접촉이다
+     * (B-126 정신: 조성 대상 월드가 {@code sanse_test_} 접두가 아니면 거부).
+     *
+     * <p>절차: ① 버리는 FLAT 월드 생성/로드 → ② <b>그 월드의 실제 표면 y 실측</b>({@code
+     * getHighestBlockYAt(0,0)} — 코드가 baseY 를 지어내지 않는다) → ③ {@link RangeSpec#hwasan}
+     * (lift 160 내장)로 경제권(444) 도메인을 {@value #SANSE_TILE}칸 타일로 쪼개 {@link
+     * MountainRangeForge#forgeTile} 을 {@link TickBudget#slice} 아래 굴린다 (틱을 나눠 먹는다 ·
+     * 서버는 계속 돈다) → ④ 15초 안쪽 진행 로그(silence_audit) → ⑤ census + 입구(남 r≈280)
+     * 텔레포트. 재실행은 결정론이라 같은 산이 선다 (덮어써도 무해 — 백업 불요).
+     */
+    private boolean sanseTest(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage(ChatColor.RED + "산세 시험 조성은 관리자의 몫이다.");
+            return true;
+        }
+        String variant = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "hwasan";
+        if (!variant.equals("hwasan")) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 산세시험 [hwasan]  (지금은 hwasan 하나)");
+            return true;
+        }
+        // ★ 한 번에 하나만 — 두 조성이 같은 월드를 함께 쓰면 헛일이다 (재실행 자체는 무해)
+        if (!SANSE_FORGING.compareAndSet(false, true)) {
+            Announce.warn(plugin, sender, "[산세시험] 이미 산세를 빚는 중이다 — 끝난 뒤에 다시 쳐라.");
+            return true;
+        }
+        boolean started = false;
+        try {
+            // ★★ 가드 (B-126) — 대상 월드는 반드시 버리는 sanse_test_ 접두다. 프로덕션 보호.
+            String worldName = "sanse_test_" + variant;
+            if (!worldName.startsWith("sanse_test_")) {
+                Announce.fail(plugin, sender,
+                        "[산세시험] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
+                return true;
+            }
+            World world = loadOrCreateSanseWorld(worldName);
+            if (world == null) {
+                Announce.fail(plugin, sender, "[산세시험] 버리는 FLAT 월드를 만들 수 없다 — " + worldName);
+                return true;
+            }
+            // ★★ 실물 가드 — 빚기 직전, 대상 월드의 **실제 이름**이 sanse_test_ 접두인지 다시 잰다.
+            //   (프로덕션·D-12 를 산으로 덮는 사고를 여기서 최종 차단한다 — B-126 정신)
+            if (!world.getName().startsWith("sanse_test_")) {
+                Announce.fail(plugin, sender, "[산세시험] 조성 대상이 sanse_test_ 월드가 아니다 ("
+                        + world.getName() + ") — 거부 (프로덕션 보호).");
+                return true;
+            }
+            // ★ baseY 실측 — 코드가 지어내지 않는다. FLAT 프리셋이 정한 실제 표면 y 를 읽는다
+            //   (생성기와 안 싸운다 — Q2). 봉우리·곁구역은 RangeSpec.hwasan 유도값이 정한다.
+            int baseY = world.getHighestBlockYAt(0, 0);
+            RangeSpec spec = RangeSpec.hwasan(0, 0, baseY);
+            Announce.say(plugin, sender, ChatColor.GRAY + "[산세시험] " + worldName
+                    + " — 기준면 실측 y" + baseY + " (FLAT 표면) · 주봉 (0,0) · 상승 " + spec.lift()
+                    + " · 영향권 r" + spec.domainR() + " · 생활권 r" + spec.economyR());
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  타일 조성을 시작한다 (한 변 "
+                    + SANSE_TILE + "칸 · 틱을 나눠 먹는다 · 서버는 계속 돈다) — 진행은 [산세시험·진행] 으로 남는다");
+            SanseForge forge = new SanseForge(plugin, sender, world, spec, SANSE_TILE);
+            TickBudget.slice(plugin, "산세시험:" + variant, forge, () -> {
+                try {
+                    forge.finish();
+                } finally {
+                    SANSE_FORGING.set(false);   // ★ 끝나면 잠금을 푼다 (다음 시험을 위해)
+                }
+            });
+            started = true;
+            return true;
+        } finally {
+            if (!started) {
+                SANSE_FORGING.set(false);   // 시작 전에 빠져나온 길(거부·오류)은 여기서 푼다
+            }
+        }
+    }
+
+    /**
+     * 버리는 FLAT 산세 시험 월드 — 없으면 만든다, 있으면 그대로 쓴다 (재조성은 결정론이라 덮어써도 무해).
+     * 기본 FLAT 프리셋에 맡긴다 — 표면 y 는 밖에서 <b>실측</b>한다 (코드가 정하지 않는다 · Q2).
+     * 몹·날씨·시간을 잠근다 (도보 관찰만 남긴다).
+     */
+    private World loadOrCreateSanseWorld(String name) {
+        World existing = org.bukkit.Bukkit.getWorld(name);
+        if (existing != null) {
+            return existing;
+        }
+        World w = new org.bukkit.WorldCreator(name)
+                .type(org.bukkit.WorldType.FLAT)
+                .generateStructures(false)
+                .createWorld();
+        if (w == null) {
+            return null;
+        }
+        w.setGameRule(org.bukkit.GameRule.DO_MOB_SPAWNING, false);
+        w.setGameRule(org.bukkit.GameRule.DO_DAYLIGHT_CYCLE, false);
+        w.setGameRule(org.bukkit.GameRule.DO_WEATHER_CYCLE, false);
+        w.setGameRule(org.bukkit.GameRule.DO_IMMEDIATE_RESPAWN, true);
+        w.setGameRule(org.bukkit.GameRule.KEEP_INVENTORY, true);
+        w.setDifficulty(org.bukkit.Difficulty.PEACEFUL);
+        w.setTime(6000);
+        w.setStorm(false);
+        return w;
+    }
+
+    /**
+     * 산세 타일 순회기 — <b>내가 짠 루프</b>이므로 {@link TickBudget#slice} 로 나눠 먹인다
+     * (조성기 프록시 월드가 아니라 <b>진짜 월드에 직접</b> 쓴다 — 타일이 작아 스파이크가 짧고,
+     * 블록 읽기가 장벽 왕복을 안 탄다). 경제권(444) 정사각을 {@code tile}칸 격자로 훑으며 타일마다
+     * {@link MountainRangeForge#forgeTile}(제 안에서 청크를 선로드한다)을 부른다. 예산은 타일
+     * <i>사이</i>에서 물린다 — 한 타일은 {@code tile}²열로 유계라 워치독을 깨우지 않는다.
+     */
+    private static final class SanseForge implements TickBudget.Step {
+        private final HoncheonMvt plugin;
+        private final CommandSender sender;
+        private final World world;
+        private final RangeSpec spec;
+        private final RangeField field;
+        private final int minX;
+        private final int minZ;
+        private final int maxX;
+        private final int maxZ;
+        private final int tile;
+        private final int tilesX;
+        private final int totalTiles;
+        private final long startNanos;
+
+        private int index;
+        private long filledBlocks;   // census — 채운 열의 높이 합 (순수 계산, 블록 I/O 아님)
+        private long lastProgressMs;
+
+        SanseForge(HoncheonMvt plugin, CommandSender sender, World world, RangeSpec spec, int tile) {
+            this.plugin = plugin;
+            this.sender = sender;
+            this.world = world;
+            this.spec = spec;
+            this.field = new RangeField(spec);
+            this.tile = tile;
+            int r = spec.economyR();
+            this.minX = spec.peakX() - r;
+            this.maxX = spec.peakX() + r;
+            this.minZ = spec.peakZ() - r;
+            this.maxZ = spec.peakZ() + r;
+            this.tilesX = (maxX - minX + tile) / tile;   // ceil((span)/tile)
+            int tilesZ = (maxZ - minZ + tile) / tile;
+            this.totalTiles = tilesX * tilesZ;
+            this.startNanos = System.nanoTime();
+            this.lastProgressMs = System.currentTimeMillis();
+        }
+
+        @Override
+        public boolean step() {
+            if (index >= totalTiles) {
+                return false;
+            }
+            int ti = index % tilesX;
+            int tj = index / tilesX;
+            int x0 = minX + ti * tile;
+            int z0 = minZ + tj * tile;
+            int x1 = Math.min(maxX, x0 + tile - 1);
+            int z1 = Math.min(maxZ, z0 + tile - 1);
+            // census 집계 — 채운 블록 수(융기 열 높이 합). RangeField 는 결정론·Bukkit 무의존이라 값싸다
+            for (int x = x0; x <= x1; x++) {
+                for (int z = z0; z <= z1; z++) {
+                    int h = field.surfaceY(x, z) - spec.baseY();
+                    if (h > 0) {
+                        filledBlocks += h;
+                    }
+                }
+            }
+            MountainRangeForge.forgeTile(world, spec, field, x0, z0, x1, z1);
+            index++;
+            // 진행 — 3초마다 사람에게, 15초마다 로그(Announce 가 로그를 rate-limit). silence_audit 이 지킨다
+            long now = System.currentTimeMillis();
+            if (now - lastProgressMs >= 3000L || index == totalTiles) {
+                lastProgressMs = now;
+                int pct = (int) (100L * index / totalTiles);
+                Announce.progress(plugin, sender, ChatColor.GRAY + "[산세시험·진행] " + index + "/"
+                        + totalTiles + " 타일 (" + pct + "%) · 융기블록 " + filledBlocks + " · "
+                        + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
+            }
+            return index < totalTiles;
+        }
+
+        /** 조성 완료 — census(로그 먼저·사람 뒤) + 입구(남 r≈280) 텔레포트. 콘솔이면 좌표만 안내 */
+        void finish() {
+            int px = spec.peakX();
+            int pz = spec.peakZ();
+            int summitY = world.getHighestBlockYAt(px, pz);
+            int rise = summitY - spec.baseY();
+            long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
+            Announce.say(plugin, sender, ChatColor.GOLD + "[산세시험] 화산 산세가 섰다 — " + world.getName());
+            Announce.say(plugin, sender, ChatColor.GRAY + "  정상 (" + px + ", " + summitY + ", " + pz
+                    + ") · 상승고 " + rise + " (기준면 y" + spec.baseY() + " · 설계 lift " + spec.lift()
+                    + ") · 융기블록 " + filledBlocks + " · 타일 " + totalTiles + " · " + secs + "초");
+            Announce.say(plugin, sender, ChatColor.GRAY + "  지표: 정상 +" + spec.lift()
+                    + " · 곁구역 넷(매화림·계곡·절벽·연무 계곡) · 곁능선 " + spec.sideRidges().size()
+                    + "가닥 · 협곡 " + spec.gorges().size() + "줄 · 등산로 남면 진입 · 영향권 r"
+                    + spec.domainR() + " · 생활권 r" + spec.economyR());
+            // 입구 = 남측(+z) r≈280 지면 (입구 구역: honsanR+midDepth < r ≤ domainR = 264~294)
+            int ex = px;
+            int ez = pz + 280;
+            int ey = world.getHighestBlockYAt(ex, ez) + 1;
+            if (sender instanceof Player player) {
+                // 북(-z)을 바라보게 = 산을 마주본다 (yaw 180 = 북향)
+                Location entrance = new Location(world, ex + 0.5, ey, ez + 0.5, 180f, 0f);
+                player.teleport(entrance);
+                Announce.say(plugin, sender, ChatColor.GREEN + "  입구(남 r280)에 세운다 — 북으로 산을 마주본다 ("
+                        + ex + ", " + ey + ", " + ez + ")");
+            } else {
+                Announce.say(plugin, sender, ChatColor.GRAY + "  입구(남 r280): /tp " + ex + " " + ey + " "
+                        + ez + " (콘솔 — 좌표만 안내 · 월드 " + world.getName() + ")");
+            }
         }
     }
 
