@@ -32,6 +32,7 @@
 - ★★ 헌법 개정 (2026-07-15): 경험치·레벨·스탯 포인트 도입 — 정본 `docs/design/cultivation_v3_levels.md` (페이싱 승인됨 · 구현 관문 B-137 저울 재설계). 다음 세션 진입점: `docs/HANDOFF.md` §4-새벽 (병렬 웨이브-1 지도 포함)
 - ★★ 헌법 재개정 + v5 대전환 (2026-07-15 주간): §2.4 → 3계층 (지도(건축 포함 정본) → 땅 → 건축) · 평지 밑감+연속 설계+단계 제작 확정 · 정본 `docs/design/map_charter_v5.md` + 화산 문서 셋(사용자 직접 작성) + `docs/design/hwasan_brief_v5.md`
 - ✔ 헌장 §3 역반영 순환 완료 (2026-07-15): 요청 `FABLE_CHARTER_S3_REVIEW_REQUEST.md` → Codex 회신 `CODEX_CHARTER_S3_REVIEW.md` (총판정: 그대로 반영 반대 · 관문 6) → Fable 수정·반영 커밋 `4a82053` (관문 1~5). 남긴 것: 관문 6 = B-150(봉인 고지대 눈 + 재건축 2회 멱등) · B-151(hidden 독자) · 브리프 lint 구현 — 코드 후속
+- ★★ Fable 웨이브-2 새 미결 인계 + 산출 검토 요청 (2026-07-15 밤): `docs/collaboration/FABLE_WAVE2_MIGYEOL_REQUEST.md` — **Codex 는 이것을 읽으라.** 관문 6(B-150·B-151·brief_lint) 코드 후속은 이 세션에서 섰다(커밋 `6a150c7`·`b4b6e8d`). 새 미결: ① 헌장 §2.3 광역 지형 단계 실행 계약(Q7 — Codex 정본 몫) ② 청하현 해자 CH-13/14/15 형식 ③ 산세 확장 갈래·잠정 노선(기계 ③ 등산로 설계와 한 몸) ④ 경공 일류 진입/램프. 회신: `CODEX_WAVE2_MIGYEOL_REVIEW.md`
 
 ## 규칙
 
