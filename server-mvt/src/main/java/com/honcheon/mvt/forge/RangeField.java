@@ -57,6 +57,12 @@ public final class RangeField {
      */
     private static final double PROVISIONAL_SWITCHBACK_DEG = 25.0;
 
+    /** 북면(후산) 능선의 하강 배율 — 남면 능선을 이 배수로 더 빨리 내린다 (험면). dz=0 에서 연속 (B-155) */
+    private static final double NORTH_STEEP = 2.2;
+
+    /** z=0 이음 급단차 상한 (B-155 회귀 자) — 협곡벽·crag 여유 위, 옛 z=0 벼랑(25+) 아래 */
+    private static final double SEAM_STEP_MAX = 6.0;
+
     /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③) 또는 잠정 노선 */
     private final double[] trailX;
     private final double[] trailZ;
@@ -342,12 +348,14 @@ public final class RangeField {
      * (여기 본산 단 사슬이 앉는다 — 폭 41, 브리프 §1.5-가), 밖은 원뿔 물매로 낙하.
      */
     private double mainRidge(double dx, double dz) {
-        if (dz < 0) {
-            return 0.0;                                  // 북쪽은 험면(후산)의 것
-        }
+        // 남면(dz≥0)은 완만한 등산로 능선 · 북면(dz<0)은 같은 능선을 NORTH_STEEP 배로 빨리 내린
+        // 험면(후산). ★B-155: 옛 하드 컷(dz<0 → 0)은 남 능선(정상 높이)과 북 몸체(압축)가 z=0
+        //   에서 만나 최대 33칸 벼랑을 냈다 (화산 오프라인 미리보기가 잡음). 효과 거리를 dz=0 에서
+        //   0 으로 잇고 북으로 배증시키면 능선이 z=0 급단차 없이 후산으로 가파르게 흘러내린다.
         double lat = Math.abs(dx);
         double over = Math.max(0.0, lat - spec.ridgeHalfWidth()) * lateralFall;
-        return crest(Math.hypot(dz, over));
+        double effDz = dz >= 0.0 ? dz : -dz * NORTH_STEEP;
+        return crest(Math.hypot(effDz, over));
     }
 
     /** 곁능선 — 주능선 문법의 축소판 (3가닥 확정 — Q4 · 방위·규모 근거는 RangeSpec.hwasan). 끝은 여며 든다 */
@@ -491,6 +499,37 @@ public final class RangeField {
         boolean sawDifference = f.reliefAt(0, 0) != f.reliefAt(spec.honsanR(), 0);
         if (!sawDifference) {
             System.out.println("FAIL 자기검증: 정상과 본산 경계가 같은 높이 — 비교가 죽었다");
+            ok = false;
+        }
+
+        // 축 연속성 (B-155) — z=0 이음에 급단차가 없다. 옛 하드 컷은 남 능선과 북 후산이
+        //   z=0 에서 만나 최대 33칸 벼랑을 냈다 (화산 오프라인 미리보기가 잡음 · 이 축이 없었다).
+        //   후산 험면(kMin) 자체의 가파름은 이 밴드 밖이라 여기 안 걸린다.
+        double maxSeam = 0.0;
+        int sx = 0, sz = 0;
+        for (int x = -r; x <= r; x++) {
+            for (int z = -30; z < 10; z++) {
+                double d = Math.abs(f.reliefAt(x, z + 1) - f.reliefAt(x, z));
+                if (d > maxSeam) {
+                    maxSeam = d;
+                    sx = x;
+                    sz = z;
+                }
+            }
+        }
+        if (maxSeam > SEAM_STEP_MAX) {
+            System.out.printf("FAIL 연속성: z=0 이음 급단차 %.1f칸 @ (%d,%d) > %.0f (B-155 회귀)%n",
+                    maxSeam, sx, sz, SEAM_STEP_MAX);
+            ok = false;
+        }
+        // 눈을 시험하는 눈 — 같은 검출기가 일부러 심은 급단차를 잡는가 (심지 않으면 못 잡는다)
+        double[] planted = {5, 5, 5, 30, 30, 30};   // 5→30 = 25칸 턱
+        double plantedMax = 0.0;
+        for (int i = 0; i < planted.length - 1; i++) {
+            plantedMax = Math.max(plantedMax, Math.abs(planted[i + 1] - planted[i]));
+        }
+        if (!(plantedMax > SEAM_STEP_MAX)) {
+            System.out.println("FAIL 자기검증: 연속성 검출기가 심은 25칸 턱을 못 잡는다 — 눈이 죽었다");
             ok = false;
         }
 
