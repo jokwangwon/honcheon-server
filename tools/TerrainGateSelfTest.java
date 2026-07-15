@@ -152,7 +152,8 @@ public final class TerrainGateSelfTest {
                 null,                 // archetype — 미결 (건축 게이트가 막을 것이다)
                 null, "unresolved",   // build_radius — 미결
                 "commercial_class 미정",
-                false);               // hidden — 표시 축 (B-151). 땅의 게이트와는 무관하다
+                false,                // hidden — 표시 축 (B-151). 땅의 게이트와는 무관하다
+                null);                // access — 해금 축 (B-151). 땅의 게이트와는 무관하다 (미등록)
     }
 
     private static void say(String who, TerrainGate.Verdict v) {

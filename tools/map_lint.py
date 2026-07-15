@@ -53,6 +53,19 @@ FALLBACKS = {
 }
 MOUNTAINOUS = {"산", "험산", "설산", "고원"}
 
+# ─── ★★ B-151 셋째 축 — **access 어휘 (닫힌 타입).** config 의 실제 값에서 유도했다 ───
+#
+#   ★ 이 목록은 **server-mvt AccessJudge.Access enum 과 같은 어휘여야 한다** (둘은 한 어휘를 봐야 한다 —
+#     이 눈이 config 를, enum 이 런타임을 지킨다). 지도가 새 access 낱말을 쓰면 **둘 다** 고쳐라.
+#   ★★ 미지값을 조용히 넘기지 않는다 (등록제 §2.1): 어휘 밖 값은 오타이거나 발명이다. 그리고 그 값이
+#     런타임(AccessJudge)에서 **비op 거부**로 이어지므로, 여기서 못 짖으면 "왜 못 가지" 만 남는다.
+#   ※ 산문형 access(개방·하오문)는 pos: null(망·무거점)이라 places() 가 애초에 안 본다 — 여기 없어도 된다.
+ACCESS_VOCAB = {
+    "항상", "누구나",                                       # 공개
+    "hidden", "소문", "기연", "상로", "형벌", "해로",       # 관문형
+    "조건부", "제한", "유학", "세력", "관문",
+}
+
 # ─── ★★★ 상업 거점에 **부여하면 안 되는 것** (2026-07-13 사용자 결정 · docs/design/scale_systems.md) ───
 #
 #   *"`상단연합`은 **무림 문파도 정치 세력도 아니다.** 그러므로:
@@ -118,6 +131,16 @@ REQUIRED_WIRING = [
     ("MvtCommand.java", ".hidden()",
      "B-151 — 지도 렌더의 숨김 차단이 사라졌다: /혼천 지도 가 비밀 장소를 편다 "
      "(마교 전초가 4일 거리라는 사실 자체가 스포일러다)"),
+    # ─── ★★ B-151 셋째 축 — **해금(access) 의 독자.** hidden 과 같은 모양의 빚이다 ───
+    #   access 축의 병도 코드에 무엇이 **없어서** 생겼다: /혼천 출행 이 access 를 안 봐서
+    #   비op 가 id 만 알면 관문을 전부 우회했다 (Codex §8). 독자(로더·판정기)를 심었으니
+    #   이번엔 그 독자가 **사라지는 것**을 지킨다 — 지우면 우회 구멍이 소리 없이 되돌아온다.
+    ("WorldMap.java", '"access"',
+     "B-151 해금 축 — WorldMap 로더가 access 키를 안 읽는다: **등록만 되고 아무도 안 막는다** "
+     "(id 직행이 관문을 우회하던 그 구멍이 되돌아왔다)"),
+    ("MvtCommand.java", "AccessJudge",
+     "B-151 해금 축 — /혼천 출행·지도가 AccessJudge 를 안 부른다: **관문이 다시 뚫린다** "
+     "(목록·지도·id 직행이 같은 판정기를 불러야 한다 — 단일 창구)"),
 ]
 
 # ─── ★ 코드에 **수(數)가 박히는 것** 자체를 막는다 — 문자열 목록은 다음 하드코딩을 못 막는다 ───
@@ -284,6 +307,18 @@ class Lint:
             vocab("scale_system", set(enums.get("scale_system") or []), "schema.enums.scale_system")
             vocab("commercial_class", set(enums.get("commercial_class") or []),
                   "schema.enums.commercial_class")
+
+            # ★★ B-151 셋째 축 — access 어휘 (닫힌 타입). 미지값은 **거부**다 (조용히 넘기지 마라).
+            #   런타임(AccessJudge)이 어휘 밖 값을 비op 거부로 처리하므로, 여기서 오타를 미리 잡는다.
+            acc = pl.get("access")
+            if acc is None:
+                self.warn.append(
+                    f"[access없음] {pid} — 접근 조건(access)이 없다 → AccessJudge 가 비op 를 안전상 거부한다 "
+                    f"(좌표를 알아도 못 간다). 공개면 '항상' 을 적어라")
+            elif acc not in ACCESS_VOCAB:
+                self.bad.append(
+                    f"[access어휘] {pid}.access = '{acc}' — AccessJudge.Access(§5.8 access 어휘)에 없다. "
+                    f"★ 미지값은 런타임에서 **비op 거부**로 이어진다 (오타이거나 발명이다)")
 
             # ★★★ 미결(unresolved) — **세되 짖지 않는다.** (`unresolved` 는 실패가 아니라 정직이다)
             for f, v in pl.items():
@@ -1066,6 +1101,32 @@ def selftest():
     probe_quiet("★★ B-151 — hidden 만 적고 player_map 을 안 적은 곳(dokmun)에 **모순을 씌우지 않는가**",
                 None, "[표시모순] dokmun",
                 "✓ 조용했다 — 한쪽 표기만으로도 숨는다 (독자가 OR 로 읽는다). 모순은 **둘 다 있고 어긋날 때**다")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # ★★ B-151 셋째 축 — 해금(access) 의 눈들 (Codex §8 요구 자기시험 · 2026-07-15)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    probe("★★ B-151 access — **미지 access 값** (hwasan.access = 아무말) → 등록제 위반",
+          lambda w: w["places"]["hwasan"].update(access="아무말"),
+          "[access어휘] hwasan.access = '아무말'")
+    probe("★★ B-151 access — 산문형 access 를 토큰으로 쓴다 (hwasan.access = '걸인이 있는 곳이 개방이다')\n"
+          "      → 산문은 닫힌 타입이 아니다 (개방·하오문은 pos: null 이라 원래 안 실린다)",
+          lambda w: w["places"]["hwasan"].update(access="걸인이 있는 곳이 개방이다"),
+          "[access어휘] hwasan.access")
+    probe("★★ B-151 access — access 를 **아예 안 적는다** (hwasan.access 삭제)\n"
+          "      → AccessJudge 가 비op 를 안전상 거부한다 (좌표를 알아도 못 간다)",
+          lambda w: w["places"]["hwasan"].pop("access"),
+          "[access없음] hwasan")
+    probe_quiet("★★ B-151 access — 공개 토큰(항상)에 **거짓 경보를 울리지 않는가** (hwasan.access = 항상)",
+                lambda w: w["places"]["hwasan"].update(access="항상"), "[access어휘] hwasan",
+                "✓ 조용했다 — '항상' 은 닫힌 어휘 안에 있다 (공개). 미지값에만 짖는다")
+
+    probe_gone("★★★ B-151 access — WorldMap 이 access 를 **더는 읽지 않는다** (로더 누락)\n"
+               "      → 등록만 되고 아무도 안 막는다: id 직행이 관문을 우회하던 그 구멍이 되돌아온다",
+               "WorldMap.java", '"access"', "[독자소실] WorldMap.java")
+    probe_gone("★★★ B-151 access — /혼천 출행·지도가 **AccessJudge 를 안 부른다** (판정기 소실)\n"
+               "      → 목록·지도·id 직행이 같은 판정기를 불러야 한다 (단일 창구)",
+               "MvtCommand.java", "AccessJudge", "[독자소실] MvtCommand.java")
 
     # ═══════════════════════════════════════════════════════════════════════
     # ★★★ 크기의 자 — 2026-07-13 사용자 결정의 눈들 (docs/design/scale_systems.md 외)

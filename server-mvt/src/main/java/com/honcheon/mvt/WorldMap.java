@@ -99,12 +99,18 @@ final class WorldMap {
      *                    ★ 세 축은 다른 것이다: {@code build}(조성 수명주기) · {@code hidden/player_map}(표시) ·
      *                    {@code access}(해금) — <b>{@code build: never} 는 비밀 표기가 아니다.</b>
      *                    독자: {@code MvtCommand.showMap}(지도 렌더 차단) · {@code MvtCommand.travel}(목록 차단)
+     * @param access      <b>★ 해금 축 (B-151 셋째 축)</b> — 접근 조건 토큰 (world_map.yml §5.8 access:).
+     *                    <b>표시(hidden)와 다른 축이다</b>: 좌표를 안다고 갈 수 있는 것이 아니다.
+     *                    이 문자열은 {@link AccessJudge#classify}/{@link AccessJudge#judge} 가 <b>닫힌 타입</b>으로
+     *                    읽는다 (항상·누구나=공개, 나머지=관문형; 어휘 밖=미지값 거부). null 이면 <b>미등록</b>이다.
+     *                    독자: {@code MvtCommand.travel}(id 직행·목록) · {@code MvtCommand.showMap}(지도 주석) —
+     *                    <b>모두 같은 판정기(AccessJudge)를 부른다.</b>
      */
     record Place(String id, String name, int x, int z, String terrain, List<String> biomes,
                  String build, boolean stageLocal, int days, String section,
                  String faction, String tier, String note,
                  String archetype, Integer buildRadius, String buildRadiusMark, String pendingWhy,
-                 boolean hidden) {
+                 boolean hidden, String access) {
 
         boolean buildableNow() {
             return "now".equals(build);
@@ -232,7 +238,10 @@ final class WorldMap {
                     // ★ B-151 — 표시 축. hidden: true / player_map: false 둘 다 같은 말이다
                     //   (§5.8 의 문법이 둘을 나란히 적으므로 어느 쪽이든 숨긴다).
                     //   ★ 불리언만 읽는다 — "true" 같은 문자열은 숨기지 못한다 (map_lint [표시타입] 이 짖는다)
-                    Boolean.TRUE.equals(m.get("hidden")) || Boolean.FALSE.equals(m.get("player_map"))));
+                    Boolean.TRUE.equals(m.get("hidden")) || Boolean.FALSE.equals(m.get("player_map")),
+                    // ★ B-151 — 해금 축. access 토큰을 그대로 싣는다 (닫힌 타입 판정은 AccessJudge 의 몫이다).
+                    //   ★ 여기서 해석하지 않는다 — 로더는 받아 적고, 판정기가 어휘를 잰다 (미지값 거부·관문형 평가)
+                    m.get("access") == null ? null : String.valueOf(m.get("access")).trim()));
         }
     }
 

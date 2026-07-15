@@ -308,14 +308,22 @@ public final class MvtCommand implements CommandExecutor {
         sender.sendMessage(ChatColor.GOLD + "── 세계 지도 (청하현 = 원점, 1블록 = 1m) ──");
         for (WorldMap.Place p : map.all()) {
             if (p.hidden() && !adminEye) {
-                continue;   // ★ B-151 — 숨긴 곳은 플레이어 지도에 렌더되지 않는다
+                continue;   // ★ B-151 표시 축 — 숨긴 곳은 플레이어 지도에 렌더되지 않는다
             }
             int days = map.travelDays(p);
-            sender.sendMessage(String.format("%s%-14s %s(%+d, %+d) %s· %s · %s%s",
+            // ★★ B-151 해금 축 — **출행과 같은 판정기(AccessJudge).** 지도는 표시 축이므로 장소를 **지우지 않고**
+            //   접근이 막힌 곳에 주석을 더한다 (좌표는 알아도 못 가는 곳이 있다 — 새외가 그렇다).
+            //   관문형(공개 아님·미지·미등록)일 때만 표기: 비op 는 「잠김」, op·콘솔은 검수용으로 토큰을 본다.
+            AccessJudge.Access ac = AccessJudge.classify(p.access());
+            boolean gated = ac == null || !ac.open;
+            String lock = !gated ? "" : (adminEye
+                    ? " · access:" + (p.access() == null ? "미등록" : p.access())
+                    : " · 잠김");
+            sender.sendMessage(String.format("%s%-14s %s(%+d, %+d) %s· %s · %s%s%s",
                     ChatColor.WHITE, p.name(), ChatColor.GRAY, map.worldX(p), map.worldZ(p),
                     ChatColor.DARK_GRAY, p.terrain(),
                     days <= 0 ? "여기" : days + "일 여정",
-                    p.hidden() ? " · 숨김(hidden)" : ""));
+                    p.hidden() ? " · 숨김(hidden)" : "", lock));
         }
         return true;
     }
@@ -1648,8 +1656,12 @@ public final class MvtCommand implements CommandExecutor {
                     continue;   // 마을 안 구역(객잔·의방…)은 지역이 아니다
                 }
                 if (place.hidden() && !player.isOp()) {
-                    // ★ B-151 — 숨긴 곳은 목록(표시)에 없다. 아는 자가 id 로 직행하는 것을
-                    //   여기서 막지 않는다 — 그것은 해금(access)의 몫이다 (세 축 분리)
+                    // ★ B-151 표시 축 — 숨긴 곳은 목록에 없다 (해금 축과 별개다: 세 축 분리)
+                    continue;
+                }
+                // ★★ B-151 해금 축 — **id 직행과 같은 판정기.** "갈 수 있는 곳" 목록이니
+                //   접근이 막힌 곳은 여기서도 뺀다 (표시 축을 부수지 않고 접근 축을 더한다).
+                if (!AccessJudge.judge(place.access(), player.isOp()).allowed()) {
                     continue;
                 }
                 int days = place.days();
@@ -1682,6 +1694,15 @@ public final class MvtCommand implements CommandExecutor {
         WorldMap.Place place = map.place(id);
         if (place == null) {
             sender.sendMessage(ChatColor.RED + "지도에 없는 지역: " + id);
+            return true;
+        }
+        // ★★ B-151 — 해금 축. **id 직행이 관문을 우회하던 구멍을 여기서 막는다** (Codex §8).
+        //   목록·지도와 **같은 판정기**를 부른다 (단일 창구 — 두 벌 금지). 관문의 판정은 로그에 남긴다.
+        AccessJudge.Verdict access = AccessJudge.judge(place.access(), player.isOp());
+        if (!access.allowed()) {
+            player.sendMessage(ChatColor.RED + place.name() + " — 들어갈 수 없다: " + access.reason());
+            plugin.getLogger().info("[혼천/출행] 접근 거부 — " + player.getName()
+                    + " → " + place.id() + " (" + access.reason() + ")");
             return true;
         }
         Zone zone = plugin.zones().stream().filter(z -> z.name().equals(place.name()))
