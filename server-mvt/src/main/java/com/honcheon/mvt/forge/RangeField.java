@@ -63,12 +63,14 @@ public final class RangeField {
     /** z=0 이음 급단차 상한 (B-155 회귀 자) — 협곡벽·crag 여유 위, 옛 z=0 벼랑(25+) 아래 */
     private static final double SEAM_STEP_MAX = 6.0;
 
-    /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③) 또는 잠정 노선 */
+    /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③ 목록) · ③ 생성기 · 잠정 폴백 */
     private final double[] trailX;
     private final double[] trailZ;
     /** 각 경유점까지의 누적 호장 · 전체 호장 — 호장 비율 u∈[0,1] 계산용 */
     private final double[] trailCum;
     private final double trailLen;
+    /** ③ 생성기 산출 지표 (spec.trail 이 비어 생성기가 돌았을 때) — 검수·보고용. 아니면 null */
+    private final TrailForge.Result trailPlan;
 
     public RangeField(RangeSpec spec) {
         this.spec = spec;
@@ -80,11 +82,21 @@ public final class RangeField {
                 / (double) Math.max(1, spec.honsanR() - spec.summitFlatR());
         this.lateralFall = (1.0 / spec.peakSteepSlope()) / Math.max(0.05, crestSlope);
 
-        // 등산로 폴리라인 세우기 — ③의 산출(spec.trail)이 있으면 그것, 없으면 잠정 노선.
+        // 등산로 폴리라인 세우기 — 우선순위:
+        //   ① spec.trail(③ 산출 목록)이 채워져 있으면 그것 (기하는 ③ 소유 · §2.4-4 계약)
+        //   ② 비어 있으면 ③ 생성기(TrailForge)가 reliefAt 위에서 제약 만족 폴리라인을 낳는다 (기본)
+        //   ③ 생성 실패 시 확정값 유도 잠정 지그재그 (문서화된 폴백 · provisionalTrail)
         // 순서: [0] 산기슭(입구 쪽·낮음) … [끝] 본산 문(높음). 호장 비율 u 는 이 순서를 딛는다.
-        double[][] wp = spec.trail().isEmpty()
-                ? provisionalTrail()
-                : fromSpecTrail();
+        // ★reliefAt 은 trail 무의존이라(위 final 전부 배정됨) 생성기가 이 시점에 읽어도 순환 없다.
+        double[][] wp;
+        if (!spec.trail().isEmpty()) {
+            wp = fromSpecTrail();
+            this.trailPlan = null;
+        } else {
+            TrailForge.Result plan = TrailForge.generate(spec, this::reliefAt);
+            wp = new double[][]{plan.xs(), plan.zs()};
+            this.trailPlan = plan;
+        }
         this.trailX = wp[0];
         this.trailZ = wp[1];
         this.trailCum = new double[trailX.length];
@@ -94,6 +106,11 @@ public final class RangeField {
             trailCum[i] = acc;
         }
         this.trailLen = acc;
+    }
+
+    /** ③ 생성기 산출 지표 (spec.trail 이 비어 생성기가 돌았을 때) — 검수·보고용. 목록/폴백이면 null */
+    public TrailForge.Result trailPlan() {
+        return trailPlan;
     }
 
     /** ③의 경유점을 절대 좌표 배열로 (계약 경로) */
@@ -109,7 +126,8 @@ public final class RangeField {
     }
 
     /**
-     * 잠정 등산로 — ③ 미착수 1차 시험 조성용 (확정값 전부에서 유도, 지어낸 노선 아님).
+     * 잠정 등산로 — <b>폴백</b> (③ 생성기 {@link TrailForge} 가 기본 · 생성 실패나 회귀 대조용으로 남긴다).
+     * 확정값 전부에서 유도한다 (지어낸 노선 아님).
      * 남면을 스위치백으로 오른다: 경유점 방사 = 곁구역 옛 띠 경계(264/229/194/159/124 =
      * honsanR + {midDepth, 3·belt, 2·belt, belt, 0}), 방위 = ±{@value #PROVISIONAL_SWITCHBACK_DEG}°
      * 교대 (방위 전환 = 검수 축 11 「굽이」의 씨앗). 이렇게 노선이 옛 띠 경계마다 스위치백으로
@@ -475,11 +493,37 @@ public final class RangeField {
     // 자기 시험 — 검수 ⑪의 첫 눈 (서버 없이 돈다 · terrain_forge_v5.md §2.5·§6)
     //   실행: java com.honcheon.mvt.forge.RangeField   (Bukkit 무의존)
     // ═══════════════════════════════════════════════════════════════════
+    /** 굽이 렌더용 짧은 구역 표 */
+    private static String tag(RangeZone z) {
+        return switch (z) {
+            case PLUM_GROVE -> "매화림";
+            case VALLEY -> "계곡";
+            case CLIFF -> "절벽";
+            case DRILL_VALLEY -> "연무";
+            case HUSAN -> "후산";
+            case HONSAN -> "본산";
+            case ENTRANCE -> "입구";
+            case SUMMIT -> "정상";
+            default -> z.name();
+        };
+    }
+
     public static void main(String[] args) {
         RangeSpec spec = RangeSpec.hwasan(0, 0, 63);
         RangeField f = new RangeField(spec);
         int r = spec.economyR();
         boolean ok = true;
+
+        // 등산로 원(源) 보고 — 기본은 ③ 생성기(TrailForge). 곁구역 재단의 자가 무엇인지 찍는다.
+        TrailForge.Result plan = f.trailPlan();
+        if (plan != null) {
+            System.out.println("등산로 원: ③ 생성기(TrailForge) — " + plan.note());
+            System.out.printf("  경로계수=%.3f 최대경사=%.3f 구역회전=%s 헤어핀/구역=%d 진폭=%.1f 폴백=%b%n",
+                    plan.pathFactor(), plan.maxSlope(), java.util.Arrays.toString(plan.turnsPerZone()),
+                    plan.hairpinsPerZone(), plan.amplitude(), plan.fallback());
+        } else {
+            System.out.println("등산로 원: spec.trail 목록 (③ 산출 주입됨)");
+        }
 
         // 축 12 — 결정론: 같은 좌표를 두 번 불러 같아야 한다 (높이·구역·물매)
         long checked = 0;
@@ -546,6 +590,24 @@ public final class RangeField {
                 System.out.println("FAIL 곁구역: " + side + " 가 서지 않는다 (등산로 재단 실패)");
                 ok = false;
             }
+        }
+
+        // ── 오프라인 「굽이」 렌더 (수치) — 곁구역 경계가 노선을 따라 굽이치는가 ──
+        //   방사 등분이면 각 반경 z-단면에서 구역 경계 x 가 반경마다 같은 각(고정)일 것이다.
+        //   노선 재단이면 경계가 노선을 따라 x 로 이동한다 → 반경별 경계 x 가 갈린다 = 굽이.
+        System.out.println("곁구역 굽이 렌더 (남면 z-단면 · 경계가 반경마다 x 로 옮겨 다니면 노선 재단):");
+        int inner = spec.honsanR(), outer = spec.honsanR() + spec.midDepth();
+        for (int z = inner + 18; z <= outer - 18; z += 24) {
+            StringBuilder row = new StringBuilder();
+            RangeZone prev = null;
+            for (int x = -80; x <= 80; x += 2) {
+                RangeZone zz = f.zoneAt(x, z);
+                if (zz != prev) {
+                    row.append(String.format(" x=%d→%s", x, tag(zz)));
+                    prev = zz;
+                }
+            }
+            System.out.printf("  z=%3d (남 %3d칸):%s%n", z, z, row);
         }
 
         System.out.println((ok ? "PASS" : "FAIL") + " — RangeField 자기 시험 ("
