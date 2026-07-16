@@ -6,6 +6,7 @@ import com.honcheon.mvt.forge.MountainRangeForge;
 import com.honcheon.mvt.forge.RangeField;
 import com.honcheon.mvt.forge.RangeSpec;
 import com.honcheon.mvt.forge.RangeZone;
+import com.honcheon.mvt.forge.TrailBuilder;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -66,6 +67,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
+                case "도보길" -> trailBuild(sender, args);        // ★ 완성된 험산 위에 걸을 수 있는 계단길(천계단·잔도)을 짓는다 — 산기슭→정상 (프로덕션 무접촉)
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
@@ -1307,6 +1309,179 @@ public final class MvtCommand implements CommandExecutor {
                 }
             }
             return null;
+        }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  도보길 시험 조성 — 완성된 험산 위에 걸을 수 있는 계단길을 짓는다 (기계 ③ 조성분 배선)
+    //  ★ 프로덕션 월드·D-12 무접촉. sanse_test_ 접두 월드에서만. 산세 위에 블록만 얹는다.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 한 도보길 조성이 도는 동안 참 — 중복 실행을 막는다 (재실행은 결정론이라 무해하나 겹치면 헛일) */
+    private static final AtomicBoolean TRAIL_BUILDING = new AtomicBoolean(false);
+
+    /**
+     * /혼천 도보길 [hwasan] — <b>완성된 험산 위에 걸을 수 있는 계단길(천계단·잔도)을 짓는다</b>
+     * (OP·콘솔 전용).
+     *
+     * <p>도보길 조성기(기계 ③ 조성분 — {@link TrailBuilder})의 인게임 면(面). 이미 선 산세
+     * ({@code sanse_test_hwasan}) 위에 {@code TrailForge} 노선을 딛는 <b>석계단길</b>을 놓아
+     * <b>산기슭→정상(최고봉 Pm)</b> 을 끊김 없이 잇는다. 산세 높이장은 안 건드린다 — 블록만 얹는다.
+     *
+     * <p>절차: ① 산세시험 월드 로드 (없거나 산세 미조성이면 「먼저 /혼천 산세시험」 안내) →
+     * ② 산 밖 평지에서 baseY 실측 → ③ 노선 계획({@link TrailBuilder#plan} — 순수) →
+     * ④ 노드마다 {@link TrailBuilder#paveNode} 를 {@link TickBudget#slice} 아래 굴린다 (틱을 나눠
+     * 먹는다 · 15초 안쪽 진행 로그) → ⑤ census(계단·평탄·기단·등롱 수 · 시작/정상 좌표 · 소요) +
+     * 트레일헤드(산기슭)에 텔레포트(정상 바라보게). ★가드: {@code sanse_test_} 접두만 (B-126).
+     * 재실행은 결정론·멱등이라 덮어써도 무해.
+     */
+    private boolean trailBuild(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage(ChatColor.RED + "도보길 조성은 관리자의 몫이다.");
+            return true;
+        }
+        String variant = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "hwasan";
+        if (!variant.equals("hwasan")) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 도보길 [hwasan]  (지금은 hwasan 하나)");
+            return true;
+        }
+        if (!TRAIL_BUILDING.compareAndSet(false, true)) {
+            Announce.warn(plugin, sender, "[도보길] 이미 계단길을 놓는 중이다 — 끝난 뒤에 다시 쳐라.");
+            return true;
+        }
+        boolean started = false;
+        try {
+            String worldName = "sanse_test_" + variant;
+            // ★★ 가드 (B-126) — 대상은 반드시 버리는 sanse_test_ 접두다. 프로덕션 보호.
+            if (!worldName.startsWith("sanse_test_")) {
+                Announce.fail(plugin, sender,
+                        "[도보길] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
+                return true;
+            }
+            World world = org.bukkit.Bukkit.getWorld(worldName);
+            if (world == null || !world.getName().startsWith("sanse_test_")) {
+                Announce.warn(plugin, sender, "[도보길] " + worldName
+                        + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
+                return true;
+            }
+            // ★ 기준면 실측 — 산 밖 평지(경제권 밖)의 표면 y. 코드가 지어내지 않는다 (Q2).
+            int peakX = 0;
+            int peakZ = 0;
+            int economyR = RangeSpec.hwasan(peakX, peakZ, 0).economyR();
+            int baseY = world.getHighestBlockYAt(peakX + economyR + 40, peakZ);
+            RangeSpec spec = RangeSpec.hwasan(peakX, peakZ, baseY);
+            // ★ 산세가 섰는가 — 정상 열이 기준면보다 한참 높아야 한다 (산이 없으면 길을 낼 자리가 없다)
+            int summitTop = world.getHighestBlockYAt(peakX, peakZ);
+            if (summitTop - baseY < 20) {
+                Announce.warn(plugin, sender, "[도보길] " + worldName + " 에 산세가 안 섰다 (정상고 "
+                        + (summitTop - baseY) + " < 20) — 먼저 /혼천 산세시험 hwasan.");
+                return true;
+            }
+            // ★ 노선 계획은 순수(Bukkit 무의존) — 여기서 미리 세워 census 좌표를 확보한다
+            RangeField field = new RangeField(spec);
+            TrailBuilder.Plan plan = TrailBuilder.plan(spec, field);
+            Announce.say(plugin, sender, ChatColor.GRAY + "[도보길] " + worldName
+                    + " — 기준면 실측 y" + baseY + " · 노드 " + plan.nodes().size()
+                    + " · 트레일헤드 (" + plan.footX() + "," + plan.footY() + "," + plan.footZ()
+                    + ") → 정상 (" + plan.summitX() + "," + plan.summitY() + "," + plan.summitZ()
+                    + ") · 오름 " + (plan.summitY() - plan.footY()) + "칸");
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  석계단길을 놓는다 (노드마다 폭 "
+                    + (2 * TrailBuilder.HALF + 1) + " · 한 칸 계단 · 틱을 나눠 먹는다 · 서버는 계속 돈다)"
+                    + " — 진행은 [도보길·진행] 으로 남는다");
+            TrailPaver paver = new TrailPaver(plugin, sender, world, spec, plan);
+            TickBudget.slice(plugin, "도보길:" + variant, paver, () -> {
+                try {
+                    paver.finish();
+                } finally {
+                    TRAIL_BUILDING.set(false);
+                }
+            });
+            started = true;
+            return true;
+        } finally {
+            if (!started) {
+                TRAIL_BUILDING.set(false);
+            }
+        }
+    }
+
+    /**
+     * 도보길 노드 순회기 — {@link SanseForge}·{@link SanseFlora} 의 짝. 계획된 노드 사슬을 하나씩
+     * 꺼내 {@link TrailBuilder#paveNode}(제 안에서 청크를 선로드한다)로 땅에 놓는다. 산을 다시
+     * 빚지 않는다 — 이미 선 험산 위에 노반·계단·기단만 얹는다.
+     */
+    private static final class TrailPaver implements TickBudget.Step {
+        private final HoncheonMvt plugin;
+        private final CommandSender sender;
+        private final World world;
+        private final RangeSpec spec;
+        private final TrailBuilder.Plan plan;
+        private final TrailBuilder.Tally tally = new TrailBuilder.Tally();
+        private final int total;
+        private final long startNanos;
+
+        private int index;
+        private long lastProgressMs;
+
+        TrailPaver(HoncheonMvt plugin, CommandSender sender, World world,
+                   RangeSpec spec, TrailBuilder.Plan plan) {
+            this.plugin = plugin;
+            this.sender = sender;
+            this.world = world;
+            this.spec = spec;
+            this.plan = plan;
+            this.total = plan.nodes().size();
+            this.startNanos = System.nanoTime();
+            this.lastProgressMs = System.currentTimeMillis();
+        }
+
+        @Override
+        public boolean step() {
+            if (index >= total) {
+                return false;
+            }
+            TrailBuilder.paveNode(world, spec, plan.nodes().get(index), tally);
+            index++;
+            long now = System.currentTimeMillis();
+            if (now - lastProgressMs >= 3000L || index == total) {
+                lastProgressMs = now;
+                int pct = (int) (100L * index / total);
+                Announce.progress(plugin, sender, ChatColor.GRAY + "[도보길·진행] " + index + "/"
+                        + total + " 노드 (" + pct + "%) · 계단 " + tally.stairs() + " · 평탄 "
+                        + tally.flats() + " · 기단 " + tally.filled() + " · "
+                        + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
+            }
+            return index < total;
+        }
+
+        /** 조성 완료 — census + 트레일헤드(산기슭) 텔레포트(정상 바라보게). 콘솔이면 좌표만 안내 */
+        void finish() {
+            long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
+            Announce.say(plugin, sender, ChatColor.GOLD + "[도보길] 화산 천계단이 섰다 — " + world.getName());
+            Announce.say(plugin, sender, ChatColor.GRAY + "  석계단 " + tally.stairs() + " · 평탄 노반 "
+                    + tally.flats() + " · 기단 받침 " + tally.filled() + " · 깎아낸 바위 " + tally.carved()
+                    + " · 등롱 " + tally.lanterns() + " · 노드 " + total + " · " + secs + "초");
+            Announce.say(plugin, sender, ChatColor.GRAY + "  트레일헤드(산기슭) (" + plan.footX() + ","
+                    + plan.footY() + "," + plan.footZ() + ") → 정상 Pm (" + plan.summitX() + ","
+                    + plan.summitY() + "," + plan.summitZ() + ") · 오름 " + (plan.summitY() - plan.footY())
+                    + "칸 · 한 칸 계단 원칙(연속 노반 단차 ≤" + TrailBuilder.MAX_STEP + ")");
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  참고 최고 열(본산권): (" + plan.highestColX()
+                    + "," + plan.highestColY() + "," + plan.highestColZ() + ") — 잔도 절벽 종주는 미결");
+            // 트레일헤드 = 노선 시작(산기슭). 노반 위(standY+1)에 세우고 정상을 바라보게 한다
+            int hy = world.getHighestBlockYAt(plan.footX(), plan.footZ());
+            int fy = Math.max(plan.footY() + 1, hy + 1);
+            float yaw = (float) Math.toDegrees(Math.atan2(
+                    -(plan.summitX() - plan.footX()), plan.summitZ() - plan.footZ()));
+            if (sender instanceof Player player) {
+                Location head = new Location(world, plan.footX() + 0.5, fy, plan.footZ() + 0.5, yaw, 0f);
+                player.teleport(head);
+                Announce.say(plugin, sender, ChatColor.GREEN + "  트레일헤드에 세운다 — 계단을 밟고 오른다 ("
+                        + plan.footX() + ", " + fy + ", " + plan.footZ() + " · 정상 바라봄)");
+            } else {
+                Announce.say(plugin, sender, ChatColor.GRAY + "  트레일헤드: /tp " + plan.footX() + " " + fy
+                        + " " + plan.footZ() + " (콘솔 — 좌표만 안내 · 월드 " + world.getName() + ")");
+            }
         }
     }
 
