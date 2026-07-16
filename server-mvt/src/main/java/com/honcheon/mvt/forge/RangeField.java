@@ -86,8 +86,44 @@ public final class RangeField {
     /** 보행 corridor 잠잠 반폭 — 남면(dz≥0)에서 |dx| 가 이 안이면 crag 를 끈다(등산로·건물 단 평탄대) */
     private static final double CALM_HALF = 32.0;
     private static final double CALM_RAMP = 14.0;
-    /** 능선 마루 중심선 calm 반폭 — 보행선(창룡령 등) 잠잠 띠 반폭·램프 */
-    private static final double RIDGE_CALM_HALF = 4.0, RIDGE_CALM_RAMP = 6.0;
+    /** 능선 마루 중심선 calm 반폭 — 보행선(창룡령 등) 잠잠 띠 반폭·램프. ★좁혀 능선날을 세운다(§8.2 C-14) */
+    private static final double RIDGE_CALM_HALF = 3.0, RIDGE_CALM_RAMP = 5.0;
+
+    // ─── ★★ 험산 절벽 (방향성 절리 블록 · 2026-07-16 도보 진단·재작업 2회) — 전부 「잠정·승인 대기」(§8.2 C-14~C-20) ───
+    //   ★재작업 이력: (1) 순수 높이-양자화(rint(h)) → 등단=등고선 → 봉 둘레 동심원 링(웨딩케이크). (2) 삼각파
+    //   합 → 규칙 헤링본(직물 무늬). (3) ★현행: 근수직 절리 2계열이 평면을 곧은 슬랩으로 나누고 교차가
+    //   절리 블록 — 블록마다 해시 높이 오프셋 → 블록 경계(곧은 절리선)가 절벽, 블록은 h 를 따라 산을
+    //   오른다 (Codex §3.5 "방향을 가진 절리면·잘린 벽"). 화강암이 직교 절리로 각진 토르 블록으로 깨지는
+    //   실제 기작. 동심원·헤링본 둘 다 없다. 불연속은 비-calm 에만. 결정론: 해시·rint·좌표뿐(난수 0).
+    /** 층단(벤치/절벽) 높이 — 절리 블록 높이 스냅 간격, 그 사이가 수직 절벽. 크게=성긴 큰 절벽(과감) (잠정) */
+    private static final double CLIFF_STEP = 12.0;
+    /** 절벽 노출 물매 문턱·상한(localSlope) — 이 사이에서 절벽이 선다 (잠정) */
+    private static final double CLIFF_EXPOSE_LO = 0.30, CLIFF_EXPOSE_HI = 0.85;
+    /** 봉 마루 여밈(h/lift) — 이 위(정상 근처)는 절벽 0 → 뾰족한 정상 보존. [LO,HI]에서 여민다 (잠정) */
+    private static final double CLIFF_TOP_LO = 0.87, CLIFF_TOP_HI = 0.99;
+    /** 발치 여밈 — 이 높이 밑은 절벽 0, 위로 CLIFF_FOOT_RAMP 칸에 걸쳐 여민다(산기슭 매끈) (잠정) */
+    private static final double CLIFF_MIN_H = 6.0, CLIFF_FOOT_RAMP = 8.0;
+    // ─── ★★ carve(깎아내기) — 험산을 전면에 세운 뒤 보행/건축 자리를 감산 후처리로 깎는다 (2026-07-16 사용자 설계) ───
+    //   "reserve"(calm 을 매끄러운 평면으로 비워 두기) 폐기 → 완전한 방향성 절리 바위산을 domain 전체에
+    //   세우고, calm(등산로 corridor·능선 척추·건물 품)을 목표 평탄면으로 **깎아낸다**. 깎인 가장자리는
+    //   자연 rugged 가 목표면보다 높던 곳이라 **깎인 암벽(cut wall)**이 남는다 — 華山 잔도·암벽 계단·바위
+    //   깎아 앉힌 전각의 형태. 보행 표면=평탄 연속(calm), 깎인 벽=비-calm(허용).
+    /** carve 가중 램프 — calm 이 이 사이를 지나며 rugged→목표 평탄면으로 깎인다. calm 코어(≥HI)는 순수 평탄 */
+    private static final double CARVE_LO = 0.35, CARVE_HI = 0.65;
+    /** 보행 평탄대 판정 문턱(검수 B-155 calm-only) — CARVE_HI 위여야 순수 평탄(연속). 이 위 셀만 연속성 요구 */
+    private static final double CALM_WALK_TAU = 0.70;
+    /**
+     * ★방향성 절리 블록 — 근수직 절리 2계열(방위)이 평면을 곧은 슬랩으로 나누고 교차가 절리 블록
+     * (≈직교 granite 블록 절단). 주향·간격 전부 잠정 (crag 절리계와 한 결).
+     */
+    private static final double[] JOINT_AZ = {Math.toRadians(24), Math.toRadians(112)};  // 근수직 2계열(≈직교)
+    private static final double[] JOINT_SP = {26.0, 23.0};          // 절리 간격(칸) = 블록 한 변
+    /** 블록 높이 오프셋 진폭(칸) — 블록마다 다른 높이로 평탄 블록을 흩어 각진 결을 낸다 (잠정) */
+    private static final double JOINT_OFF = 8.0;
+    /** 슬랩 경계 <b>저주파</b> 굽이(셀 ≫ 간격) — 자로 그은 직선을 살짝 흩되 각짐 유지 (잠정) */
+    private static final double JOINT_WARP = 9.0, JOINT_WARP_CELL = 130.0;
+    /** 절벽 낙차 상한(칸) — 평탄 블록이 급사면에서 h 와 벌어져 비현실적 거벽이 되지 않게 못박음 (잠정) */
+    private static final double CLIFF_WALL_MAX = 26.0;
 
     /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③ 목록) · ③ 생성기 · 잠정 폴백 */
     private final double[] trailX;
@@ -324,6 +360,43 @@ public final class RangeField {
         }
 
         // 2) uplift = smoothUnion(massif base, 비등방 봉들, 능선 간선들). 근사 hard-max(넓은 융기 평원 방지).
+        double h = upliftAt(wx, wz);
+
+        // 3) 골 절개 (능선망과 짝 · calm 우회)
+        double cut = 0.0;
+        for (RangeSpec.Valley v : valleys) {
+            cut = Math.max(cut, valleyCut(v, wx, wz));
+        }
+        cut *= (1.0 - 0.9 * courtMask(dx, dz));
+        h = Math.max(0.0, h - cut);
+
+        // 3.5) smoothBase — 능선·골 골격의 <b>매끄러운 보행 기준면</b> (연속 ≤6). carve 의 목표면.
+        double smoothBase = h;
+
+        // 4) ★험산 — 방향성 절리 crag·절벽을 domain 전체에 세운다 (calm 비우기 없음 · 완전한 바위산).
+        double rugged = h;
+        if (crag && h > 2.0) {
+            double slope = localSlope(wx, wz, warp);
+            double cragExp = clamp01((slope - CRAG_EXPOSE_LO) / CRAG_EXPOSE_HI);
+            double cragTop = clamp01((0.9 - h / lift) / 0.15);          // 봉 마루 근처 0
+            rugged += jointCrag(wx, wz) * (cragExp * cragTop);          // ★calm 게이트 없음 (전면 험산)
+            rugged = cliffTerrace(rugged, wx, wz, slope, lift);         // ★calm 게이트 없음 (전면 절벽)
+        }
+
+        // 5) ★carve — 보행/건축 자리를 감산 후처리로 깎아낸다. 목표 평탄면으로 내리고 가장자리는
+        //    깎인 암벽(cut wall)이 남는다: court=평탄 안부 · 능선 척추·남 corridor=깎인 잔도·척추.
+        double cm = courtMask(dx, dz);
+        double target = smoothBase * (1.0 - cm) + court.h() * cm;       // 보행 표면 높이 (매끈·연속)
+        double w = clamp01((calmMask(dx, dz) - CARVE_LO) / (CARVE_HI - CARVE_LO));  // calm 코어=1(순수 평탄)
+        double carved = rugged * (1.0 - w) + target * w;
+        return Math.max(0.0, Math.min(lift, carved));
+    }
+
+    /**
+     * 골격 uplift — smoothUnion(massif base, 비등방 봉, 능선 간선). 순수 함수(워프 무적용 · calm/골/crag 무관).
+     * 절리 블록의 <b>평탄 높이</b>(블록 중심에서 한 번 잰다) 계산에도 쓴다 — 순환 없음(cliffTerrace 무의존).
+     */
+    private double upliftAt(double wx, double wz) {
         double m = massifBase(wx, wz);
         for (RangeSpec.Peak p : peaks) {
             m = Math.max(m, peakBody(p, wx, wz));
@@ -338,31 +411,7 @@ public final class RangeField {
         for (RangeSpec.Ridge rg : ridges) {
             sum += Math.exp(UNION_K * (ridgeBody(rg, wx, wz) - m));
         }
-        double h = m + Math.log(sum) / UNION_K;
-
-        // 3) 골 절개 (능선망과 짝 · calm 우회)
-        double cut = 0.0;
-        for (RangeSpec.Valley v : valleys) {
-            cut = Math.max(cut, valleyCut(v, wx, wz));
-        }
-        cut *= (1.0 - 0.9 * courtMask(dx, dz));
-        h = Math.max(0.0, h - cut);
-
-        // 4) 건물 품 — 자연 산 만든 뒤 상부 안부에서 최소 평탄화 (중앙 원반 court 폐기)
-        double cm = courtMask(dx, dz);
-        if (cm > 0) {
-            h = h * (1 - cm) + court.h() * cm;
-        }
-
-        // 5) 절리형 crag — 방향성 절리 2계열 + 잔결. 노출 급사면 강, calm/정상/보행선 0.
-        if (crag && h > 2.0) {
-            double slope = localSlope(wx, wz, warp);
-            double exposure = clamp01((slope - CRAG_EXPOSE_LO) / CRAG_EXPOSE_HI);
-            double topFade = clamp01((0.9 - h / lift) / 0.15);   // 봉 마루 근처 0
-            double mask = exposure * topFade * (1.0 - calmMask(dx, dz));
-            h += jointCrag(wx, wz) * mask;
-        }
-        return Math.max(0.0, Math.min(lift, h));
+        return m + Math.log(sum) / UNION_K;
     }
 
     /** crag 없는 높이 (slope 계산용 — 순환 방지) */
@@ -492,11 +541,65 @@ public final class RangeField {
         return j1 * CRAG_J1 + j2 * CRAG_J2 + fine * CRAG_FINE;
     }
 
-    /** 국소 물매 (crag 노출 마스크용) — crag 없는 높이의 중앙차분. */
+    /** 국소 물매 (crag/절벽 노출 마스크용) — crag/절벽 없는 매끄러운 높이의 중앙차분. */
     private double localSlope(double dx, double dz, boolean warp) {
         double a = reliefNoCrag(dx + 2, dz, warp), b = reliefNoCrag(dx - 2, dz, warp);
         double c = reliefNoCrag(dx, dz + 2, warp), e = reliefNoCrag(dx, dz - 2, warp);
         return Math.max(Math.abs(a - b), Math.abs(c - e)) / 4.0;
+    }
+
+    /**
+     * ★험산 절벽 — 노출 사면을 <b>방향성 절리 블록</b>으로 절단한다. 근수직 절리 2계열(각기 방위·간격)이
+     * 평면을 곧은 슬랩으로 나누고, 두 계열의 교차가 절리 블록. 각 블록에 <b>해시 높이 오프셋</b>을 더한 뒤
+     * {@code CLIFF_STEP} 로 스냅한다 → <b>블록 경계(곧은 절리선)가 절벽</b>(각진 벽·사선 층), 블록은 h 를
+     * 따라 산을 오른다. 화강암이 직교 절리로 각진 토르 블록으로 깨지는 실제 기작 — 동심원 링·헤링본 둘 다
+     * 없다. 물매가 급하면 블록 경계가 촘촘해 수직벽으로 합쳐진다.
+     * ★carve 모델: 절벽을 domain <b>전체</b>에 세운다(calm 비우기 없음). 보행/건축 평탄대는 이 뒤의 carve
+     * 후처리(reliefCore 5단계)가 목표면으로 깎아내고 가장자리에 깎인 암벽을 남긴다 — 결정론(해시·rint·좌표뿐,
+     * 난수 0). 봉 마루(뾰족한 정상)와 발치(산기슭)만 여며 절벽을 끈다.
+     */
+    private double cliffTerrace(double h, double wx, double wz, double slope, double lift) {
+        if (h <= CLIFF_MIN_H) {
+            return h;
+        }
+        double expose = clamp01((slope - CLIFF_EXPOSE_LO) / (CLIFF_EXPOSE_HI - CLIFF_EXPOSE_LO));
+        double topFade = clamp01((CLIFF_TOP_HI - h / lift) / (CLIFF_TOP_HI - CLIFF_TOP_LO));  // 봉 마루 여밈
+        double lowFade = clamp01((h - CLIFF_MIN_H) / CLIFF_FOOT_RAMP);                        // 발치 여밈
+        double mask = expose * topFade * lowFade;
+        if (mask <= 1e-3) {
+            return h;
+        }
+        // 방향성 절리 블록 — 근수직 2계열이 평면을 곧은 슬랩으로 나눈다(슬랩 경계는 저주파로만 살짝
+        // 휘어 각짐 유지·불규칙 배치). 두 슬랩 지수가 블록 (s1,s2).
+        double c1 = Math.cos(JOINT_AZ[0]), sn1 = Math.sin(JOINT_AZ[0]);
+        double c2 = Math.cos(JOINT_AZ[1]), sn2 = Math.sin(JOINT_AZ[1]);
+        double w1 = JOINT_WARP * grainD(wx + 91.0, wz - 53.0, (int) JOINT_WARP_CELL, 3.0);
+        double w2 = JOINT_WARP * grainD(wx - 77.0, wz + 131.0, (int) JOINT_WARP_CELL, 8.0);
+        double u1 = c1 * wx + sn1 * wz + w1;
+        double u2 = c2 * wx + sn2 * wz + w2;
+        int s1 = (int) Math.floor(u1 / JOINT_SP[0]);
+        int s2 = (int) Math.floor(u2 / JOINT_SP[1]);
+        // ★평탄 블록 — 블록 중심을 되짚어(두 슬랩 좌표 역변환) 그 자리의 골격 uplift 를 한 번 잰다 →
+        //   블록 전체가 그 높이로 평탄(암반 슬랩). 블록 안엔 등고선이 없어 동심원이 안 생긴다.
+        double uc1 = (s1 + 0.5) * JOINT_SP[0] - w1;
+        double uc2 = (s2 + 0.5) * JOINT_SP[1] - w2;
+        double det = c1 * sn2 - sn1 * c2;                          // = sin(az2 − az1) ≠ 0
+        double cx = (uc1 * sn2 - uc2 * sn1) / det;                 // 블록 중심 (워프 저주파라 블록 내 상수 근사)
+        double cz = (c1 * uc2 - c2 * uc1) / det;
+        double blockOffset = JOINT_OFF * latticeS(s1, s2, 17.0);   // 블록 상수 오프셋 [-OFF,OFF]
+        double blockLevel = CLIFF_STEP * Math.rint((upliftAt(cx, cz) + blockOffset) / CLIFF_STEP);
+        // ★절벽 낙차 상한 — 평탄 블록이 급사면에서 h 와 멀어져 비현실적 거벽이 되지 않게 h±MAX 로 못박음
+        //   (가장 급한 면은 여기서 h 를 따라 사실상 수직벽; 완·중사면은 각진 평탄 블록). 인접 블록 낙차 = 절벽.
+        blockLevel = Math.max(h - CLIFF_WALL_MAX, Math.min(h + CLIFF_WALL_MAX, blockLevel));
+        return h * (1.0 - mask) + blockLevel * mask;
+    }
+
+    /**
+     * calm(보행/건축 평탄) 강도 [0,1] — 검수(B-155 <b>calm-only</b> 재범위)가 읽는 창구.
+     * calm ≥ 문턱인 셀만 연속성(≤{@value #SEAM_STEP_MAX})을 요구한다(비-calm 절벽 면은 큰 단차 허용).
+     */
+    double calmAt(int x, int z) {
+        return calmMask(x - spec.peakX(), z - spec.peakZ());
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -629,6 +732,15 @@ public final class RangeField {
     // 자기 시험 — 검수 ⑪의 첫 눈 (서버 없이 · java com.honcheon.mvt.forge.RangeField)
     //   ① B-155 연속성(≤6) ② 다봉 위계(주봉 ≥3·중앙<최고) ③ 결정론 ④ 곁구역 넷 ⑤ 눈을 시험하는 눈
     // ═══════════════════════════════════════════════════════════════════
+    /**
+     * B-155 재범위 판정 — 두 이웃이 <b>둘 다 calm(보행/건축 평탄대)</b>일 때만 연속성(≤max)을
+     * 요구한다. 하나라도 비-calm(절벽 면)이면 큰 단차 허용(험산). 이 술어가 「눈」이고, main 이
+     * 심은 표본(calm 절벽·비-calm 절벽·경계·작은 단차)으로 이 눈을 시험한다.
+     */
+    private static boolean calmSeamViolation(double calmA, double calmB, double dh, double tau, double max) {
+        return calmA >= tau && calmB >= tau && dh > max;
+    }
+
     private static String tag(RangeZone z) {
         return switch (z) {
             case PLUM_GROVE -> "매화림";
@@ -777,27 +889,60 @@ public final class RangeField {
             ok = false;
         }
 
-        // ① 연속성 (B-155) — z=0 이음 급단차 ≤ SEAM_STEP_MAX. 봉 사면·품 가장자리까지 잰다.
-        double maxSeam = 0.0;
-        int sx = 0, sz = 0;
+        // ① 연속성 (B-155 재범위 · ★calm-only) — 보행/건축 calm 셀에서만 연속(≤SEAM_STEP_MAX).
+        //   비-calm(절벽 면)은 큰 단차 허용(험산의 본질). 세로·가로 두 이웃 다 잰다(걸으려면 두 축 연속).
+        //   전 domain 을 훑어 남면 corridor·창룡령·품·봉 사면을 전부 덮는다.
+        final double calmTau = CALM_WALK_TAU;   // 이 위 = carve 순수 평탄대(w=1) — 보행/건축 표면
+        double maxCalmSeam = 0.0, maxCliffSeam = 0.0;
+        int cx0 = 0, cz0 = 0;
         for (int x = -r; x <= r; x++) {
-            for (int z = -60; z < 60; z++) {   // 확대 밴드 — 북 봉군 사면·품 가장자리·창룡령 결절 전부
-                double d = Math.abs(f.reliefAt(x, z + 1) - f.reliefAt(x, z));
-                if (d > maxSeam) { maxSeam = d; sx = x; sz = z; }
+            for (int z = -r; z <= r; z++) {
+                double h0 = f.reliefAt(x, z);
+                double ca = f.calmAt(x, z);
+                for (int[] d : new int[][]{{0, 1}, {1, 0}}) {   // 세로·가로 이웃
+                    int nx = x + d[0], nz = z + d[1];
+                    double dstep = Math.abs(f.reliefAt(nx, nz) - h0);
+                    double cb = f.calmAt(nx, nz);
+                    if (ca >= calmTau && cb >= calmTau) {
+                        if (dstep > maxCalmSeam) { maxCalmSeam = dstep; cx0 = x; cz0 = z; }
+                    } else {
+                        maxCliffSeam = Math.max(maxCliffSeam, dstep);
+                    }
+                }
             }
         }
-        System.out.printf("연속성: maxSeam %.2f칸 @ (%d,%d) (상한 %.0f)%n", maxSeam, sx, sz, SEAM_STEP_MAX);
-        if (maxSeam > SEAM_STEP_MAX) {
-            System.out.printf("FAIL 연속성: 급단차 %.2f칸 @ (%d,%d) > %.0f (B-155 회귀)%n", maxSeam, sx, sz, SEAM_STEP_MAX);
+        System.out.printf("연속성(calm-only): calm maxSeam %.2f칸 @ (%d,%d) (상한 %.0f) · 비-calm 절벽 최대 %.2f칸%n",
+                maxCalmSeam, cx0, cz0, SEAM_STEP_MAX, maxCliffSeam);
+        if (maxCalmSeam > SEAM_STEP_MAX) {
+            System.out.printf("FAIL 연속성: calm 급단차 %.2f칸 @ (%d,%d) > %.0f (보행/건축 평탄대 회귀)%n",
+                    maxCalmSeam, cx0, cz0, SEAM_STEP_MAX);
             ok = false;
         }
-        double[] planted = {5, 5, 5, 30, 30, 30};
-        double plantedMax = 0.0;
-        for (int i = 0; i < planted.length - 1; i++) {
-            plantedMax = Math.max(plantedMax, Math.abs(planted[i + 1] - planted[i]));
+        // 험산 확인 — 비-calm 사면에 실제 절벽(큰 단차)이 서야 험산이다 (매끄러운 원뿔 회귀 감지)
+        if (maxCliffSeam <= SEAM_STEP_MAX) {
+            System.out.printf("FAIL 험산: 비-calm 최대 단차 %.2f ≤ %.0f — 절벽이 하나도 없다 (매끄러운 산 회귀)%n",
+                    maxCliffSeam, SEAM_STEP_MAX);
+            ok = false;
         }
-        if (!(plantedMax > SEAM_STEP_MAX)) {
-            System.out.println("FAIL 자기검증: 연속성 검출기가 심은 25칸 턱을 못 잡는다 — 눈이 죽었다");
+        // ── 눈을 시험하는 눈 (calm-gating 술어가 살아 있는가 — 심은 표본으로 시험) ──
+        //  (a) calm 안 25칸 턱 → 위반으로 잡아야 (보행 평탄대는 연속이어야)
+        if (!calmSeamViolation(0.9, 0.9, 25.0, calmTau, SEAM_STEP_MAX)) {
+            System.out.println("FAIL 자기검증: calm 안 25칸 턱을 못 잡는다 — 눈이 죽었다");
+            ok = false;
+        }
+        //  (b) 비-calm 25칸 절벽 → 통과해야 (험산 절벽은 허용 — 절벽을 막으면 안 된다)
+        if (calmSeamViolation(0.1, 0.1, 25.0, calmTau, SEAM_STEP_MAX)) {
+            System.out.println("FAIL 자기검증: 비-calm 절벽을 위반으로 본다 — 험산을 막는다");
+            ok = false;
+        }
+        //  (c) calm↔비-calm 경계 25칸 → 통과해야 (평탄대 가장자리에서 절벽이 시작될 수 있다)
+        if (calmSeamViolation(0.9, 0.1, 25.0, calmTau, SEAM_STEP_MAX)) {
+            System.out.println("FAIL 자기검증: calm↔비-calm 경계 절벽을 위반으로 본다 — 험산을 막는다");
+            ok = false;
+        }
+        //  (d) calm 안 작은 단차(3칸) → 통과해야 (평탄대 안 미세 요철은 정상)
+        if (calmSeamViolation(0.9, 0.9, 3.0, calmTau, SEAM_STEP_MAX)) {
+            System.out.println("FAIL 자기검증: calm 안 3칸 요철을 위반으로 본다 — 눈이 지나치게 예민");
             ok = false;
         }
 
