@@ -41,3 +41,4 @@
 - 상대 작업은 로그와 diff를 검토하되 소유 파일을 임의 수정하지 않는다.
 - 한쪽이 없어도 완료 문서의 검증 명령으로 인수할 수 있다.
 - DB 비의존 P0만 PostgreSQL 작업과 병렬 진행한다.
+- ★ Fable 화산 산세 「돌산 인상」 아이디어 요청 (2026-07-16): `docs/collaboration/FABLE_HWASAN_TERRAIN_IDEAS_REQUEST.md` — 사용자가 화산 산세를 도보 3회 보고 "인상이 이상하다". 목표=華山/화산귀환식 다봉 돌산(여러 산 조율적으로 붙음·건물은 봉우리에 감싸인 낮은 품). 여정: 단일원뿔완만→발치볼록→돌산다봉(큰산에봉붙음)→군집(현재 mesa캡+soft-max첨봉5+중앙court118). ★코드 튜닝 아닌 **생성 접근 아이디어** 청함(ridged multifractal·도메인워핑·보로노이·침식근사 등 · 제약: superflat·난수0해시결정론·B-155연속성·평탄건축자리·envelope lift160/r444). 회신: `CODEX_HWASAN_TERRAIN_IDEAS.md`
