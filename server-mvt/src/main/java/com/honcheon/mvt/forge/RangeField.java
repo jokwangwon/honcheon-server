@@ -90,8 +90,12 @@ public final class RangeField {
     //   골격 급물매 + crag 로 불규칙하게. ★B-155 calm-only 라 사면에 급한 요철 자유. 결정론(해시·삼각뿐·난수 0).
     /** 봉 마루 여밈(h/lift) — 이 위(정상 근처)는 crag 0 → 뾰족한 정상 보존. [LO,HI]에서 여민다 (잠정) */
     private static final double CLIFF_TOP_LO = 0.87, CLIFF_TOP_HI = 0.99;
-    /** 발치 여밈 — 이 높이 밑은 crag 0, 위로 CLIFF_FOOT_RAMP 칸에 걸쳐 여민다(산기슭 매끈) (잠정) */
-    private static final double CLIFF_MIN_H = 6.0, CLIFF_FOOT_RAMP = 10.0;
+    /** crag 최소 발동 높이 — 이 밑(relief≈0 가장자리)은 crag 0 (평원과의 얇은 이음) (잠정) */
+    private static final double CLIFF_MIN_H = 0.25;
+    /** 발치 요철 가둠 — crag 를 relief 의 이 비율 안으로 (발치에서 요철이 지면을 뚫거나 뜨지 않게).
+     *  옛 「발치 매끈 여밈」이 매끄러운 밑동 + 정수 반올림 → 동심원 등고선 링을 냈다(사용자 실측).
+     *  이제 발치도 relief 에 비례해 거칠다 — 작은 바위 요철이 링을 깬다. (잠정) */
+    private static final double FOOT_CAP = 0.9;
     /** ★강한 불규칙 crag 등방 다옥타브 진폭(칸)·격자셀 — 큰 덩어리→잔결. B-155 calm-only 라 크게 (잠정) */
     private static final double[] CRAG_OCT_A = {15.0, 9.0, 4.5};
     private static final int[]    CRAG_OCT_C = {36, 16, 6};
@@ -368,8 +372,12 @@ public final class RangeField {
         double rugged = h;
         if (crag && h > CLIFF_MIN_H) {
             double topFade = clamp01((CLIFF_TOP_HI - h / lift) / (CLIFF_TOP_HI - CLIFF_TOP_LO));  // 봉 마루 여밈
-            double lowFade = clamp01((h - CLIFF_MIN_H) / CLIFF_FOOT_RAMP);                        // 발치 여밈
-            rugged += ruggedRelief(wx, wz) * (topFade * lowFade);       // 몸통 전체 거칠게 (평탄대 없음)
+            double c = ruggedRelief(wx, wz) * topFade;
+            // ★발치 여밈(옛 lowFade) 폐기 → relief 비례 가둠: 발치도 거칠되 요철이 낮은 지면을
+            //   뚫거나(음수) 뜨지(거대혹) 않게 |c| ≤ relief·FOOT_CAP. 이 작은 요철이 동심원 등고선
+            //   링을 깬다. 몸통(relief 큼)은 가둠이 안 물어 full crag.
+            double cap = h * FOOT_CAP;
+            rugged += Math.max(-cap, Math.min(cap, c));                 // 발치 링 파쇄 + 몸통 험산
         }
         return Math.max(0.0, Math.min(lift, rugged));
     }
