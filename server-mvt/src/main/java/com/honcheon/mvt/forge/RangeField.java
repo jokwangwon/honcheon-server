@@ -96,6 +96,9 @@ public final class RangeField {
      *  옛 「발치 매끈 여밈」이 매끄러운 밑동 + 정수 반올림 → 동심원 등고선 링을 냈다(사용자 실측).
      *  이제 발치도 relief 에 비례해 거칠다 — 작은 바위 요철이 링을 깬다. (잠정) */
     private static final double FOOT_CAP = 0.9;
+    /** 발치 요철 최소 바닥(칸) — relief 비례 가둠이 relief<1 에선 1칸 미만이라 정수 반올림 경계를
+     *  못 깨 맨 바깥 등고선이 매끈한 호로 남는다(사용자 실측). 최소 이만큼은 흔들어 외곽 링도 깬다. (잠정) */
+    private static final double FOOT_CRAG_MIN = 1.4;
     /** ★강한 불규칙 crag 등방 다옥타브 진폭(칸)·격자셀 — 큰 덩어리→잔결. B-155 calm-only 라 크게 (잠정) */
     private static final double[] CRAG_OCT_A = {15.0, 9.0, 4.5};
     private static final int[]    CRAG_OCT_C = {36, 16, 6};
@@ -376,7 +379,7 @@ public final class RangeField {
             // ★발치 여밈(옛 lowFade) 폐기 → relief 비례 가둠: 발치도 거칠되 요철이 낮은 지면을
             //   뚫거나(음수) 뜨지(거대혹) 않게 |c| ≤ relief·FOOT_CAP. 이 작은 요철이 동심원 등고선
             //   링을 깬다. 몸통(relief 큼)은 가둠이 안 물어 full crag.
-            double cap = h * FOOT_CAP;
+            double cap = Math.max(FOOT_CRAG_MIN, h * FOOT_CAP);        // 최소 바닥으로 외곽 링까지 깬다
             rugged += Math.max(-cap, Math.min(cap, c));                 // 발치 링 파쇄 + 몸통 험산
         }
         return Math.max(0.0, Math.min(lift, rugged));
