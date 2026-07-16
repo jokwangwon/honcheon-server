@@ -224,9 +224,9 @@ public final class RangeField {
         }
         double h = reliefAt(x, z);
         if (h <= 0.0) {
-            if (zone == RangeZone.OUTER_PLAIN) {
-                return spec.baseY() + undulation(x, z);
-            }
+            // ★외곽 평원 ±1 undulation 폐기 (사용자 실측 2026-07-16): cell-9 매끈 격자 보간이라
+            //   ±1 경계가 산 밖 평지에 「원형처럼 매끄럽게 이어진 곡선 아크」로 그려졌다. 평지는
+            //   평평하게 둔다(회랑·산촌·건축이 앉을 자리). ★Q8(±1 요철)은 이 실측으로 폐기.
             return spec.baseY();
         }
         return spec.baseY() + (int) Math.round(h);
