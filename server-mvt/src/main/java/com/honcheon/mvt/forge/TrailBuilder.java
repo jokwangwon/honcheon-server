@@ -193,8 +193,9 @@ public final class TrailBuilder {
             int[] b = spineCells.get(Math.min(spineCells.size() - 1, i + 1));
             BlockFace travel = cardinal(b[0] - a[0], b[1] - a[1]);
             int[] perp = perpOf(travel);
-            // 오르는 칸의 석계단은 <b>내리막(왔던) 쪽</b>이 낮게 서야 걸어 오른다 → facing = travel 반대
-            BlockFace stairFacing = up ? travel.getOppositeFace() : null;
+            // 오르는 칸의 석계단은 <b>진행 방향</b>으로 서야 그 방향으로 걸어 오른다 (facing=travel).
+            //   ★수리(사용자 실측): 옛 travel 반대는 계단 등이 앞을 막아 못 올랐다 — 뒤집는다.
+            BlockFace stairFacing = up ? travel : null;
             int lantSide = (i > 0 && i % LANTERN_EVERY == 0) ? (((i / LANTERN_EVERY) % 2 == 0) ? +1 : -1) : 0;
             nodes.add(new Node(c[0], c[1], stand, up, stairFacing, perp[0], perp[1], lantSide));
             prevStand = stand;
