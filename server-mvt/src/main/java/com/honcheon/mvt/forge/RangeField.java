@@ -5,22 +5,29 @@ package com.honcheon.mvt.forge;
  *
  * <p>결정론 헌법(TerrainForge 머리 주석 · config/terrain_grain.yml)의 계승:
  * <ul>
- *   <li><b>난수 0</b> — 모든 흔들림은 격자점 해시 보간(값 잡음)과 저주파 사인이다.</li>
+ *   <li><b>난수 0</b> — 모든 흔들림은 격자점 해시 보간(값 잡음)과 삼각함수·smoothstep 이다.</li>
  *   <li><b>씨앗 = 좌표 해시</b> — {@code floorMod(31·px + 17·pz, 1_000_003)}
  *       (carveTrail 문법, TerrainForge.java:1238). 같은 주봉 좌표 = 같은 산.</li>
  *   <li><b>타일 무관성</b> — 열 하나의 높이가 이웃 열에 안 기댄다. 어느 순서로 빚어도 같은 땅.</li>
  * </ul>
  *
- * <p>형상 문법 (terrain_forge_v5.md §2.4 — 네 부품의 합성):
+ * <p>★★ <b>후보 C (능선 골격 파이프라인) 이식</b> (2026-07-16 — 사용자 A/B/C 실루엣에서 C 확정).
+ * 옛 군집 모델(mesa 캡 + soft-max 원뿔 군집 + 중앙 원반 court)을 폐기하고, 검증된 프로토타입
+ * (HwasanProto)의 <b>골격-먼저 파이프라인</b>으로 교체했다 (Codex CODEX_HWASAN_TERRAIN_IDEAS.md
+ * §3·§5~§7 · terrain_forge_v5.md §2 재작성):
  * <pre>
- *   H(x,z) = max(방사 몸체, 주능선, 곁능선…) − 협곡 + 바위 결
+ *   H(x,z) = clamp[0,lift]( 저주파 워프 → smoothUnion(massif base, 비등방 봉, 능선 간선)
+ *                           − 골 절개 → 품 투영 → 절리 crag )
  * </pre>
- * 방사 몸체는 §2.3 등고 예산(crest)을 방위별 축척 k(θ)로 압축해 두른 것이다 —
- * 남(주능선)은 단면 그대로, 험면은 원뿔 물매 1:0.9 (raiseMassif 계승)까지 죈다.
+ * 봉을 먼저 찍지 않는다 — 능선/골 위상 골격(RangeSpec.skel*)을 먼저 세우고 봉은 결절에서 비등방
+ * 암체로 솟는다. 원뿔(height−slope·d)·mesa 돔·soft-max 링·중앙 원반 court 는 폐기.
  *
- * <p>★ grain(격자 보간)은 TerrainForge.java:2432-2472 의 <b>사본</b>이다 — TerrainForge 가
- * package-private 라 이 패키지에서 못 읽는다. 통일은 배선 지점(terrain_forge_v5.md §5-5) —
- * 통일 전까지 두 구현의 동일성 self-test 를 검수 ⑪에 둔다.
+ * <p>★ <b>B-155 연속성 최우선</b>: 프로토타입은 판단용이라 인접단차 11.9칸이었다. 생산은 워프
+ * 진폭·crag 세기를 낮추고, 봉 횡 반경(shortScale)을 넓히고, massif base 로 봉의 유효 수직 범위를
+ * 줄여 도함수 상한을 낮췄다 → 자기시험 {@code maxSeam ≤ }{@value #SEAM_STEP_MAX} PASS. C 성격
+ * (돌결·비대칭·비원뿔)을 최대한 지키되 연속성이 우선 — 절충값은 「잠정·승인 대기」(§8.2).
+ *
+ * <p>★ grain(격자 보간)은 TerrainForge.java:2432-2472 의 <b>사본</b>이다 (§5-5 통일 대상).
  */
 public final class RangeField {
 
@@ -29,18 +36,11 @@ public final class RangeField {
     /** 바위 결의 위상 — 좌표 해시 씨앗 (TF:1238 문법). 난수가 아니다 */
     private final double phase;
 
-    /**
-     * 험면(비능선) 방위 축척 하한 — 원뿔 물매 1:0.9 유도:
-     * {@code k_min = slope·lift / (domainR − summitFlatR)} (lift 160 → ≈0.51)
-     */
-    private final double kMin;
-
-    /**
-     * 능선 측면 낙하 배율 — 등마루 밖 이격 1칸이 등고를 몇 「단면 칸」만큼 미는가.
-     * 측면 물매가 원뿔 물매(1:0.9)와 같아지도록 유도:
-     * {@code (1/0.9) ÷ (본산 몫 물매 72/114)} ≈ 1.76
-     */
-    private final double lateralFall;
+    // ─── 골격 노드 캐시 (spec 만 읽어 세운다 · trail 무의존) ───────────────
+    private final RangeSpec.Peak[] peaks;
+    private final RangeSpec.Ridge[] ridges;
+    private final RangeSpec.Valley[] valleys;
+    private final RangeSpec.Court court;
 
     /** 외곽 평원 요철의 덩어리 한 변 — terrain_grain.yml undulation.cell 기본값 (등록부 이관 대상) */
     private static final int UNDULATION_CELL = 9;
@@ -48,46 +48,46 @@ public final class RangeField {
     /** 외곽 평원 요철의 진폭 — terrain_grain.yml undulation.amplitude 기본값 (★Q8 — ±1 잠정) */
     private static final int UNDULATION_AMP = 1;
 
-    /** 협곡 방사 창의 여밈 폭 — 골이 칼로 시작하지 않게 하는 전이 (형상 상수 · 후보) */
-    private static final double GORGE_EASE = 24.0;
-
     /**
-     * 잠정 등산로 지그재그 진폭 (도) — <b>③ 미착수 1차 시험 조성용</b>. 곁구역 경계를 방사
-     * 원에서 떼어 놓는 스위치백의 폭. ③가 서면 spec.trail 이 이것을 대체한다 (미결 세부 §2.3).
+     * 잠정 등산로 지그재그 진폭 (도) — <b>③ 미착수 1차 시험 조성용</b> 폴백. ③(TrailForge)가
+     * 기본이고 이것은 폴백/회귀 대조용 (provisionalTrail).
      */
     private static final double PROVISIONAL_SWITCHBACK_DEG = 25.0;
 
-    /** 북면(후산) 능선의 하강 배율 — 남면 능선을 이 배수로 더 빨리 내린다 (험면). dz=0 에서 연속 (B-155) */
-    private static final double NORTH_STEEP = 2.2;
-
-    /** z=0 이음 급단차 상한 (B-155 회귀 자) — 협곡벽·crag 여유 위, 옛 z=0 벼랑(25+) 아래 */
+    /** z=0 이음 급단차 상한 (B-155 회귀 자) — 이 값 이하여야 PASS. C 이식의 최우선 계약 */
     private static final double SEAM_STEP_MAX = 6.0;
 
-    /** 산기슭(등산로 고리 발치) 볼록 프로파일 지수 — 작을수록 발치가 급하다 (형상 잠정 · 사용자 피드백 조정) */
+    /** 산기슭(등산로 고리 발치) 볼록 프로파일 지수 — 작을수록 발치가 급하다 (crest 발치 형상 잠정) */
     private static final double TRAIL_FOOT_EXP = 0.85;
 
+    // ─── C 파이프라인 튜닝 손잡이 — 전부 「잠정·승인 대기」(§8.2). B-155 로 프로토타입 대비 낮췄다 ───
+    /** 저주파 도메인 워프 진폭 (칸) — 프로토타입 20 · maxSeam 여유로 성격 복원 {@value} (B-155 여밈). 경계·calm 0 */
+    private static final double WARP_AMP = 9.5;
+    /** 워프 격자 셀 (칸) — 저주파 (원·직선·등간격 흔적만 휜다) */
+    private static final int WARP_CELL = 150;
+    /** smoothUnion 날카로움 — 클수록 hard-max (넓은 158 융기 평원 방지·안부 보존) */
+    private static final double UNION_K = 2.5;
     /**
-     * 바위 결(crag) 진폭 배수 — <b>돌산 재설계</b> (사용자 도보 피드백 2026-07-16: 산이 매끈해
-     * 돌산답지 않다). 옛 진폭 합 ~7.5 → 다옥타브 합 ~19.7 (아래 rockRelief). 이 배수는 면(비능선·
-     * 비단)의 바위 노출 결 세기다. ★형상 잠정·승인 대기(terrain_forge_v5.md §8.2 — 잠정 ~18~25).
-     * 옥타브 파장을 길게(37/41···) 잡아 진폭을 키우되 인접 블록 물매는 &lt;~1칸(연속성 B-155 여유).
+     * 저(低) 넓은 skirt 최고 등고 (base 위) — <b>공통 mesa 대지 폐기</b> (Codex §1.2·§5.2 「봉마다 제
+     * 발치」). 봉·능선이 이 낮은 받침 위로 각자 뻗어 발치가 domain 가장자리까지 구분된다. 남면 등산로
+     * walkability 는 이 skirt 가 아니라 창룡령(골격 능선)이 맡는다. ★C 성격 복원(잠정).
      */
-    private static final double CRAG_AMP = 1.0;
+    private static final double SKIRT_MAX = 30.0;
+    /** skirt 반경 — 이 반경에서 0 (봉·골이 여기까지 제 사면·집수를 뻗는다) */
+    private static final double SKIRT_R = 245.0;
 
-    /**
-     * 군집 soft-max 날카로움 α (log-sum-exp) — 클수록 hard-max 에 가까워 안부가 뾰족(V), 작을수록
-     * 둥글고 부풀림(≤ln(n)/α)이 크다. 첨봉 군집이라 다소 크게 잡아 안부를 살짝만 둥글린다.
-     * ★형상 잠정·승인 대기(terrain_forge_v5.md §8.2 R-11). 봉 apex 부풀림 &lt;0.5 (지배 원뿔 하나).
-     */
-    private static final double CLUSTER_ALPHA = 0.45;
+    /** 절리 crag 진폭 — 프로토타입(7/5/4) · maxSeam 여유로 성격 복원 (B-155 ≤6 지킴). 노출 급사면 강 */
+    private static final double CRAG_J1 = 4.4;   // 절리 계열 1 (사선)
+    private static final double CRAG_J2 = 2.8;   // 절리 계열 2 (수직)
+    private static final double CRAG_FINE = 1.8; // 블록 잔결
+    /** crag 노출 문턱·폭 (물매 정규화) — slope 가 이 위여야 결이 선다. 폭 넓게(마스크 도함수↓ → B-155) */
+    private static final double CRAG_EXPOSE_LO = 0.30, CRAG_EXPOSE_HI = 0.80;
 
-    /**
-     * 보행 corridor 잠잠 반폭 — 남면(dz≥0)에서 |dx| 가 이 안이면 crag 를 끈다(건물 단·등산로가
-     * 앉는 평탄대). 등마루 반폭(20) 위에 여유. 옛 값 24(반폭+4)는 등산로 스위치백(dx~30)을 못
-     * 덮어 돌산 crag 가 노선 물매를 깨뜨렸다 → 32 로 넓혀 노선까지 덮는다(면은 그 밖이라 험준
-     * 유지). ★형상 잠정·승인 대기(§8.2). 램프 폭 CALM_RAMP 로 |dx|=CALM_HALF+CALM_RAMP 에서 완전 crag. */
+    /** 보행 corridor 잠잠 반폭 — 남면(dz≥0)에서 |dx| 가 이 안이면 crag 를 끈다(등산로·건물 단 평탄대) */
     private static final double CALM_HALF = 32.0;
     private static final double CALM_RAMP = 14.0;
+    /** 능선 마루 중심선 calm 반폭 — 보행선(창룡령 등) 잠잠 띠 반폭·램프 */
+    private static final double RIDGE_CALM_HALF = 4.0, RIDGE_CALM_RAMP = 6.0;
 
     /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③ 목록) · ③ 생성기 · 잠정 폴백 */
     private final double[] trailX;
@@ -102,17 +102,17 @@ public final class RangeField {
         this.spec = spec;
         long seed = Math.floorMod(31L * spec.peakX() + 17L * spec.peakZ(), 1_000_003L);
         this.phase = (seed % 628) / 100.0;
-        this.kMin = spec.peakSteepSlope() * spec.lift()
-                / (double) (spec.domainR() - spec.summitFlatR());
-        double crestSlope = spec.honsanRise()
-                / (double) Math.max(1, spec.honsanR() - spec.summitFlatR());
-        this.lateralFall = (1.0 / spec.peakSteepSlope()) / Math.max(0.05, crestSlope);
+
+        // 골격 노드 캐시 — spec 만 읽는다 (trail 무의존 → 생성기가 reliefAt 읽어도 순환 없음)
+        this.peaks = spec.skelPeaks().toArray(new RangeSpec.Peak[0]);
+        this.ridges = spec.skelRidges().toArray(new RangeSpec.Ridge[0]);
+        this.valleys = spec.skelValleys().toArray(new RangeSpec.Valley[0]);
+        this.court = spec.court();
 
         // 등산로 폴리라인 세우기 — 우선순위:
         //   ① spec.trail(③ 산출 목록)이 채워져 있으면 그것 (기하는 ③ 소유 · §2.4-4 계약)
         //   ② 비어 있으면 ③ 생성기(TrailForge)가 reliefAt 위에서 제약 만족 폴리라인을 낳는다 (기본)
         //   ③ 생성 실패 시 확정값 유도 잠정 지그재그 (문서화된 폴백 · provisionalTrail)
-        // 순서: [0] 산기슭(입구 쪽·낮음) … [끝] 본산 문(높음). 호장 비율 u 는 이 순서를 딛는다.
         // ★reliefAt 은 trail 무의존이라(위 final 전부 배정됨) 생성기가 이 시점에 읽어도 순환 없다.
         double[][] wp;
         if (!spec.trail().isEmpty()) {
@@ -152,12 +152,8 @@ public final class RangeField {
     }
 
     /**
-     * 잠정 등산로 — <b>폴백</b> (③ 생성기 {@link TrailForge} 가 기본 · 생성 실패나 회귀 대조용으로 남긴다).
+     * 잠정 등산로 — <b>폴백</b> (③ 생성기 {@link TrailForge} 가 기본 · 생성 실패나 회귀 대조용).
      * 확정값 전부에서 유도한다 (지어낸 노선 아님).
-     * 남면을 스위치백으로 오른다: 경유점 방사 = 곁구역 옛 띠 경계(264/229/194/159/124 =
-     * honsanR + {midDepth, 3·belt, 2·belt, belt, 0}), 방위 = ±{@value #PROVISIONAL_SWITCHBACK_DEG}°
-     * 교대 (방위 전환 = 검수 축 11 「굽이」의 씨앗). 이렇게 노선이 옛 띠 경계마다 스위치백으로
-     * 가로지르므로, 곁구역은 「스위치백 사이 노선 구간」이 되고 경계가 굽이친다.
      */
     private double[][] provisionalTrail() {
         int belt = spec.beltDepth();
@@ -180,7 +176,7 @@ public final class RangeField {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 공개 창구 — 기록기·배치기(⑥)·등산로(③)·검수(⑪)가 읽는다
+    // 공개 창구 — 기록기·배치기(⑥)·등산로(③)·검수(⑪)가 읽는다 (서명 불변)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
@@ -205,50 +201,31 @@ public final class RangeField {
     }
 
     /**
-     * base 위 실수 높이 (블록 반올림 전) — 물매 계산·검수 표본용.
+     * base 위 실수 높이 (블록 반올림 전) — 물매 계산·검수 표본용. C 파이프라인(워프+crag 포함).
      * 같은 좌표로 두 번 불러 같으면 결정론이다 (검수 ⑪의 첫 self-test).
      */
     public double reliefAt(int x, int z) {
-        double dx = x - spec.peakX();
-        double dz = z - spec.peakZ();
-        double r = Math.hypot(dx, dz);
-        if (r > spec.economyR()) {
-            return 0.0;
-        }
-
-        // 바탕 = mesa 대지 + 바깥 skirt (r≥honsanR 는 옛 그대로 · 안쪽은 mesa 로 캡 — 중앙 돔 폐기).
-        double body = radialBody(r, dx, dz);
-        double h = Math.max(body, mainRidge(dx, dz));
-        for (RangeSpec.SideRidge sr : spec.sideRidges()) {
-            h = Math.max(h, sideRidge(sr, dx, dz));
-        }
-        // 군집 모자 = 봉 원뿔 soft-max + 중앙 건물 단 (mesa 위로 솟는 여러 첨봉·안부·court)
-        h = Math.max(h, clusterCap(dx, dz));
-        h = Math.max(0.0, h - gorgeCut(dx, dz));
-        if (h <= 0.0) {
-            return 0.0;
-        }
-        return Math.max(0.0, h + rockRelief(x, z, h, dx, dz));
+        return reliefCore(x - spec.peakX(), z - spec.peakZ(), true, true);
     }
 
     /**
-     * 남축 지면 등고 (절대 y) — 주봉(중앙 단)에서 남으로 {@code s}칸(음수면 북). 단 사슬
-     * 배치기(⑥)·등산로(③)가 단·경유점의 y 를 여기서 읽는다. <b>★군집 재설계</b>: 이제 단일
-     * crest 가 아니라 mesa 대지·중앙 건물 단·바깥 skirt 의 합성이다 (남축은 봉이 없어 calm — crag 무영향).
+     * 남축 지면 등고 (절대 y) — 주봉에서 남으로 {@code s}칸(음수면 북). 단 사슬 배치기(⑥)·등산로(③)가
+     * 단·경유점의 y 를 여기서 읽는다. 남축(dx=0)은 창룡령 보행선·건물 품 개구라 calm — 워프·crag 무영향
+     * 으로 잰다(보행 spine 의 등고).
      */
     public int crestY(int s) {
-        double h = Math.max(radialBody(Math.abs((double) s), 0.0, s), mainRidge(0.0, s));
-        h = Math.max(h, clusterCap(0.0, s));
+        double h = reliefCore(0.0, s, false, false);
         return spec.baseY() + (int) Math.round(h);
     }
 
     /**
-     * 구역 판정 — 큰 골격(정상/본산·후산/입구/외곽)은 H-6 확정 깊이(140/30/150)·본산권
-     * 124 (H-7)의 방사 유도 그대로. <b>곁구역 넷(매화림·계곡·절벽·연무 계곡)의 경계만은
-     * 등산로가 꿴다</b> (Q9 확정 — 회차 A-2 · 재단 방식 terrain_forge_v5.md §2.3). 곁구역이
-     * 서는 중간 고리(honsanR &lt; r ≤ honsanR+midDepth)의 <b>안쪽 넷 가름</b>은 방사 등분(각
-     * 35)이 아니라 <b>등산로 폴리라인 위 호장 비율</b>로 판정한다 → 경계가 노선을 따라 굽이친다.
-     * 후산은 주봉 북면(dz &lt; 0) — 정상 뒤가 후산이라는 기하 (브리프 §1.3).
+     * 구역 판정 — <b>불변</b> (C 이식이 건드리지 않는다 — 곁구역/flora/audit 계약 보존). 큰 골격
+     * (정상/본산·후산/입구/외곽)은 H-6 확정 깊이·본산권 124 (H-7)의 방사 유도. 곁구역 넷의 경계만
+     * 등산로 폴리라인 위 호장 비율로 재단 (Q9 · §2.3). 후산은 주봉 북면(dz &lt; 0).
+     *
+     * <p>★ SUMMIT(r≤10) 의미: C 모델은 최고봉(Pm)이 중앙에서 벗어난 상부 안부(관문척추)에 솟으므로
+     * 중앙(r≤10)은 최고 마루가 아니라 <b>관문척추 상부 안부</b>(≈120~135)다 — 옛 군집 모델의 중앙
+     * court(118)와 같은 성격(비-최고 중앙)이라 재라벨 아님. 재라벨 위험은 보고서에 미결로 남긴다.
      */
     public RangeZone zoneAt(int x, int z) {
         double dx = x - spec.peakX();
@@ -261,9 +238,6 @@ public final class RangeField {
             return dz < 0 ? RangeZone.HUSAN : RangeZone.HONSAN;
         }
         if (r <= spec.honsanR() + spec.midDepth()) {
-            // 곁구역 고리 — 곁구역은 등산로(남면 진입)가 가는 곳에만 산다.
-            // 주봉 북면(dz<0)은 후산이 그대로 흘러내린다 (정상 뒤가 후산 — 본산권 갈이 계승,
-            // 브리프 §1.3). 남면(dz≥0)만 넷으로 가르되, 가름은 등산로가 꾄다 (방사 띠 폐기 · Q9).
             if (dz < 0) {
                 return RangeZone.HUSAN;
             }
@@ -288,14 +262,10 @@ public final class RangeField {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 곁구역 재단 — 등산로가 꾄다 (Q9 · terrain_forge_v5.md §2.3)
+    // 곁구역 재단 — 등산로가 꾄다 (Q9 · terrain_forge_v5.md §2.3) — 불변
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * 등산로 폴리라인 위 호장 비율 u∈[0,1] — 0 = 산기슭 끝(입구 쪽), 1 = 본산 문.
-     * 열 (x,z)를 노선에 수직 투영해 가장 가까운 구간의 호장 위치를 비율로 돌려준다.
-     * u 의 등고선(노선에 수직인 선)이 노선을 따라 굽이치므로 곁구역 경계도 굽이친다.
-     */
+    /** 등산로 폴리라인 위 호장 비율 u∈[0,1] — 0 = 산기슭 끝(입구 쪽), 1 = 본산 문. */
     private double projectU(int x, int z) {
         double bestD2 = Double.MAX_VALUE;
         double bestArc = 0.0;
@@ -315,257 +285,223 @@ public final class RangeField {
         return trailLen <= 0.0 ? 0.0 : bestArc / trailLen;
     }
 
-    /**
-     * 호장 비율 → 곁구역 넷. 순서 = 오르는 경험 (hwasan_domain_design.md):
-     * 산기슭(u≈0) 매화림 → 계곡 → 절벽 → 연무 계곡(u≈1, 본산 곁). 사분 등분은 옛 방사 띠
-     * (각 35)의 비율 계승 — 이제 「방사」가 아니라 「노선 호장」으로 잰다 (분할 비율은 튜닝 대상).
-     */
+    /** 호장 비율 → 곁구역 넷 (산기슭 매화림 → 계곡 → 절벽 → 연무 계곡 본산 곁). */
     private RangeZone sideZoneByU(double u) {
         if (u < 0.25) {
-            return RangeZone.PLUM_GROVE;    // 매화림 — 산기슭 (낮음)
+            return RangeZone.PLUM_GROVE;
         }
         if (u < 0.50) {
-            return RangeZone.VALLEY;        // 계곡
+            return RangeZone.VALLEY;
         }
         if (u < 0.75) {
-            return RangeZone.CLIFF;         // 절벽
+            return RangeZone.CLIFF;
         }
-        return RangeZone.DRILL_VALLEY;      // 연무 계곡 — 본산 곁 (높음)
+        return RangeZone.DRILL_VALLEY;
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 부품 1 — 등고 예산 단면 (terrain_forge_v5.md §2.3 표 그대로)
+    // C 파이프라인 — reliefCore (순수 함수 · 골격 먼저)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * 대표 단면 — 주능선 등마루의 등고 (base 위).
-     * <pre>
-     *   0…flatR          : +lift            (정상 평탄부)
-     *   flatR…honsanR    : −72 (본산 몫 — 계단 1:1 × 굴곡 1.5 → 방사 48 + 단 44)
-     *   honsanR…+140     : −(lift−72), 오목 t^0.85 (오를수록 가파르다 — TF:1104 문법 계승)
-     *   그 밖            : 0 (입구·외곽 평원 — 산기슭 평지)
-     * </pre>
+     * 높이장 핵 — {@code (dx,dz)} 는 주봉 기준 상대(남=+z). warp/crag 플래그로 계층을 켠다.
+     * 파이프라인: 워프 → smoothUnion(massif base, 비등방 봉, 능선) → 골 절개 → 품 투영 → 절리 crag.
      */
-    private double crest(double s) {
-        if (s <= spec.summitFlatR()) {
-            return spec.lift();
-        }
-        if (s <= spec.honsanR()) {
-            double t = (s - spec.summitFlatR()) / (spec.honsanR() - spec.summitFlatR());
-            return spec.lift() - spec.honsanRise() * ease(t);
-        }
-        double trailOuter = spec.honsanR() + spec.midDepth();
-        if (s < trailOuter) {
-            double t = (s - spec.honsanR()) / spec.midDepth();
-            // 산기슭(t→1·외곽)에 경사를 준다 — 옛 오목 프로파일(1−t^0.85)은 발치가 완만해
-            // 산이 멀어 보였다(사용자 실측 2026-07-16). 볼록 (1−t)^TRAIL_FOOT_EXP 로 발치를
-            // 세운다. 본산 쪽(t→0)은 완만해지되 그 위 본산권(§321)이 다시 가팔라 자연스럽다.
-            // honsanR 에서 두 프로파일 다 trailRise(88)라 이음은 연속. TRAIL_FOOT_EXP 는 형상
-            // 잠정값(±로 조정) — 작을수록 발치가 급하다 (0.85 ≈ 발치 물매 ~0.8/칸, 옛 ~0.54).
-            return spec.trailRise() * Math.pow(1.0 - t, TRAIL_FOOT_EXP);
-        }
-        return 0.0;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 부품 2 — 방사 몸체 (방위별 축척)
-    // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * 방위별 축척 k(θ) — 남(주능선 방위) 1.0, 험면 {@link #kMin}.
-     * cos 남향값의 거듭제곱으로 로브를 좁힌다 (지수 2 — 형상 상수 · 후보).
-     */
-    private double azimuthScale(double dx, double dz, double r) {
-        if (r < 1.0) {
-            return 1.0;
-        }
-        double cosSouth = dz / r;                        // 남 = +z
-        double lobe = Math.max(0.0, cosSouth);
-        return kMin + (1.0 - kMin) * lobe * lobe;
-    }
-
-    /**
-     * 방사 몸체 — 단면을 방위 축척으로 압축해 두른다. <b>★군집 재설계: 중앙 돔 폐기.</b>
-     * 옛 코드는 {@code r≤flat → lift(160)} 로 중앙에 단일 돔을 세웠다 (「큰 산 하나」의 근원).
-     * 이제 안쪽은 <b>mesa 대지</b>(= crest(honsanR) = lift−honsanRise = 88)로 <b>캡</b>한다 —
-     * 봉·건물 단은 clusterCap 이 이 대지 위로 얹는다. {@code min(mesa, crest)} 이므로:
-     * <ul>
-     *   <li>안쪽(sEff&lt;honsanR, crest&gt;mesa) → mesa 로 평평 (돔 없음)</li>
-     *   <li>바깥(sEff≥honsanR, crest≤mesa) → crest 그대로 (옛 skirt 불변 → 등산로·TrailForge 불변)</li>
-     * </ul>
-     */
-    private double radialBody(double r, double dx, double dz) {
-        int flat = spec.summitFlatR();
-        double mesa = spec.mesaLevel();
-        if (r <= flat) {
-            return mesa;                                  // 중앙 = mesa 대지 (옛 lift 돔 폐기)
-        }
-        double k = azimuthScale(dx, dz, r);
-        return Math.min(mesa, crest(flat + (r - flat) / k));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 부품 3 — 주능선·곁능선 (스와스)
-    // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * 주능선 — 주봉에서 남(+z)으로 뻗는 스와스. 등마루 반폭 안은 단면 그대로
-     * (여기 본산 단 사슬이 앉는다 — 폭 41, 브리프 §1.5-가), 밖은 원뿔 물매로 낙하.
-     */
-    private double mainRidge(double dx, double dz) {
-        // 남면(dz≥0)은 완만한 등산로 능선 · 북면(dz<0)은 같은 능선을 NORTH_STEEP 배로 빨리 내린
-        // 험면(후산). ★B-155: 옛 하드 컷(dz<0 → 0)은 남 능선(정상 높이)과 북 몸체(압축)가 z=0
-        //   에서 만나 최대 33칸 벼랑을 냈다 (화산 오프라인 미리보기가 잡음). 효과 거리를 dz=0 에서
-        //   0 으로 잇고 북으로 배증시키면 능선이 z=0 급단차 없이 후산으로 가파르게 흘러내린다.
-        double lat = Math.abs(dx);
-        double over = Math.max(0.0, lat - spec.ridgeHalfWidth()) * lateralFall;
-        double effDz = dz >= 0.0 ? dz : -dz * NORTH_STEEP;
-        // ★군집 재설계: mesa 로 캡 — 안쪽 남 spine 돔을 없앤다 (건물 단은 clusterCap 몫).
-        // 바깥(hypot≥honsanR)은 crest≤mesa 라 min 이 무영향 → 남 skirt·후산 험면(NORTH_STEEP) 불변.
-        return Math.min(spec.mesaLevel(), crest(Math.hypot(effDz, over)));
-    }
-
-    /** 곁능선 — 주능선 문법의 축소판 (3가닥 확정 — Q4 · 방위·규모 근거는 RangeSpec.hwasan). 끝은 여며 든다 */
-    private double sideRidge(RangeSpec.SideRidge sr, double dx, double dz) {
-        double a = Math.toRadians(sr.azimuthDeg());
-        double ux = Math.sin(a);                          // 남축 기준 방위 → (x,z) 단위벡터
-        double uz = Math.cos(a);
-        double along = dx * ux + dz * uz;
-        if (along <= 0) {
+    private double reliefCore(double dx, double dz, boolean warp, boolean crag) {
+        double r = Math.hypot(dx, dz);
+        double lift = spec.lift();
+        if (r > spec.economyR()) {
             return 0.0;
         }
-        double lat = Math.abs(dx * uz - dz * ux);
-        double over = Math.max(0.0, lat - sr.halfWidth()) * lateralFall;
-        // mesa 캡 — 곁능선 뿌리(along 작음)가 안쪽에서 돔을 이루지 않게 (절벽 띠 r≈176 은 이미 <mesa 라 무영향)
-        double h = Math.min(spec.mesaLevel(), sr.crestScale() * crest(Math.hypot(along, over)));
-        double tipStart = sr.length() * 0.7;
-        if (along > tipStart) {
-            double t = Math.min(1.0, (along - tipStart) / (sr.length() * 0.3));
-            h *= 1.0 - ease(t);
-        }
-        return h;
-    }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 부품 3b — 돌 봉우리 군집(cluster) — 사용자 도보 피드백 2026-07-16 (반복 3회차)
-    // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * 군집 모자 — <b>단일 중앙 돔을 폐기한 다봉 군집의 심장</b>. 여러 첨봉과 중앙 건물 단을
-     * <b>부드러운 max(soft-max = log-sum-exp)</b>로 합성해 mesa 대지 위에 얹는다.
-     *
-     * <p>★ 왜 soft-max 인가 (「여러 산이 조율적으로 붙은」의 기하):
-     * <ul>
-     *   <li>각 봉은 <b>가파른 원뿔 첨봉</b> {@code height − slope·d} (slope=(height−mesa)/spread).
-     *       넓은 평탄 정상이 없다(첨봉). radius+spread ≤ ~120 이라 honsanR 안에 갇힌다.</li>
-     *   <li>인접 봉이 겹치는 곳에서 soft-max 는 <b>안부(saddle)를 두 원뿔의 만남선보다 살짝
-     *       들어 올려</b> 봉과 봉을 <b>능선으로 잇는다</b> — 바깥 사면보다 높은 안부(華山 蒼龍嶺).
-     *       고립된 첨봉 무더기도, 한 덩어리 돔도 아닌 「조율적으로 붙은 여러 산」.</li>
-     *   <li>중앙(모든 봉에서 먼 곳)은 원뿔이 다 낮아 <b>건물 단(court) 평탄면</b>이 이긴다 —
-     *       봉이 아니라 봉들에 감싸인 낮은 자리. 남축(봉 없음)은 안부가 mesa 로 낮아 남으로 열린다.</li>
-     * </ul>
-     *
-     * <p>envelope: 봉 마루는 전부 lift(160) 미만이고, 한 봉 apex 에선 그 원뿔만 지배해 soft-max
-     * 부풀림(≤ln(n)/α)이 &lt;0.5 라 160 을 안 넘는다. 최종 {@code min(lift, ·)} 로 못박는다.
-     * <p>결정론: 원뿔·삼각함수·exp — 난수 0. 연속성(B-155): 원뿔은 립시츠, soft-max·건물 단 램프는
-     * 매끄러워 z=0 급단차를 안 만든다 (자기시험 maxSeam &lt; {@value #SEAM_STEP_MAX}).
-     */
-    private double clusterCap(double dx, double dz) {
-        double mesa = spec.mesaLevel();
-        // 질량 = 봉 원뿔들 + 중앙 건물 단. soft-max 안정화(max-trick)를 위해 최댓값을 먼저 찾는다.
-        double m = platformPlateau(dx, dz);
-        for (RangeSpec.SubPeak p : spec.subPeaks()) {
-            m = Math.max(m, peakCone(p, dx, dz));
+        // 1) 저주파 도메인 워프 — 배열·직선 흔적만 휜다. 경계·calm 에서 0 (B-155·계약 보존).
+        double wx = dx, wz = dz;
+        if (warp) {
+            double fade = boundaryFade(r) * (1.0 - 0.85 * calmMask(dx, dz));
+            double amp = WARP_AMP * fade;
+            wx = dx + amp * grainD(dx, dz, WARP_CELL, 11.0);
+            wz = dz + amp * grainD(dx + 5000, dz + 5000, WARP_CELL, 23.0);
         }
-        if (m <= 0.0) {
-            return 0.0;                                   // 봉·단 영향 밖 — mesa/skirt 의 몫
-        }
-        double sum = Math.exp(CLUSTER_ALPHA * (platformPlateau(dx, dz) - m));
-        for (RangeSpec.SubPeak p : spec.subPeaks()) {
-            sum += Math.exp(CLUSTER_ALPHA * (peakCone(p, dx, dz) - m));
-        }
-        double soft = m + Math.log(sum) / CLUSTER_ALPHA;
-        return Math.max(0.0, Math.min(spec.lift(), soft));  // envelope: 최고봉 lift 이내
-    }
 
-    /** 한 봉의 원뿔 첨봉 등고(base 위) — mesa 로 내려온 뒤는 음수(soft-max 에서 무시됨) */
-    private double peakCone(RangeSpec.SubPeak p, double dx, double dz) {
-        double a = Math.toRadians(p.azimuthDeg());
-        double px = p.radius() * Math.sin(a);             // 봉 중심 (주봉 기준 상대)
-        double pz = p.radius() * Math.cos(a);
-        double d = Math.hypot(dx - px, dz - pz);
-        double slope = (p.height() - spec.mesaLevel()) / Math.max(1, p.spread());
-        return p.height() - slope * d;                    // 가파른 원뿔 (첨봉)
-    }
-
-    /**
-     * 중앙 건물 단(본전 court) — 봉이 아니라 봉들에 감싸인 <b>낮은 평탄 자리</b>. 안쪽은 평탄
-     * (건물이 앉는다), 가장자리는 mesa 로 매끄럽게 내려온다(램프 물매 &lt;{@value #SEAM_STEP_MAX}).
-     * 램프 밖은 0(음영 없음) — 봉·mesa·skirt 가 이어받는다. C∞ (ease) 라 연속성 안전.
-     */
-    private double platformPlateau(double dx, double dz) {
-        double d = Math.hypot(dx, dz);
-        double ph = spec.platformHeight();
-        int pr = spec.platformR(), ramp = spec.platformRamp();
-        if (d <= pr) {
-            return ph;                                    // court 평탄
+        // 2) uplift = smoothUnion(massif base, 비등방 봉들, 능선 간선들). 근사 hard-max(넓은 융기 평원 방지).
+        double m = massifBase(wx, wz);
+        for (RangeSpec.Peak p : peaks) {
+            m = Math.max(m, peakBody(p, wx, wz));
         }
-        if (d >= pr + ramp) {
-            return 0.0;                                   // 단 영향 밖 (mesa/봉이 이어받음)
+        for (RangeSpec.Ridge rg : ridges) {
+            m = Math.max(m, ridgeBody(rg, wx, wz));
         }
-        return ph * (1.0 - ease((d - pr) / ramp));        // ph → 0 매끄럽게
-    }
+        double sum = Math.exp(UNION_K * (massifBase(wx, wz) - m));
+        for (RangeSpec.Peak p : peaks) {
+            sum += Math.exp(UNION_K * (peakBody(p, wx, wz) - m));
+        }
+        for (RangeSpec.Ridge rg : ridges) {
+            sum += Math.exp(UNION_K * (ridgeBody(rg, wx, wz) - m));
+        }
+        double h = m + Math.log(sum) / UNION_K;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 부품 4 — 협곡 (감산 채널) · 바위 결
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** 협곡 — 마른 골. 물은 수계(②)의 몫. 바닥이 base 아래로 내려가지 않는 것은 합성부의 clamp */
-    private double gorgeCut(double dx, double dz) {
+        // 3) 골 절개 (능선망과 짝 · calm 우회)
         double cut = 0.0;
-        for (RangeSpec.Gorge g : spec.gorges()) {
-            double a = Math.toRadians(g.azimuthDeg());
-            double ux = Math.sin(a);
-            double uz = Math.cos(a);
-            double along = dx * ux + dz * uz;
-            if (along < g.innerR() - GORGE_EASE || along > g.outerR() + GORGE_EASE) {
-                continue;
-            }
-            double win = ease(clamp01((along - g.innerR()) / GORGE_EASE))
-                    * ease(clamp01((g.outerR() - along) / GORGE_EASE));
-            double lat = Math.abs(dx * uz - dz * ux);
-            double q = Math.max(0.0, 1.0 - (lat / g.halfWidth()) * (lat / g.halfWidth()));
-            cut = Math.max(cut, g.depth() * win * q);
+        for (RangeSpec.Valley v : valleys) {
+            cut = Math.max(cut, valleyCut(v, wx, wz));
         }
-        return cut;
+        cut *= (1.0 - 0.9 * courtMask(dx, dz));
+        h = Math.max(0.0, h - cut);
+
+        // 4) 건물 품 — 자연 산 만든 뒤 상부 안부에서 최소 평탄화 (중앙 원반 court 폐기)
+        double cm = courtMask(dx, dz);
+        if (cm > 0) {
+            h = h * (1 - cm) + court.h() * cm;
+        }
+
+        // 5) 절리형 crag — 방향성 절리 2계열 + 잔결. 노출 급사면 강, calm/정상/보행선 0.
+        if (crag && h > 2.0) {
+            double slope = localSlope(wx, wz, warp);
+            double exposure = clamp01((slope - CRAG_EXPOSE_LO) / CRAG_EXPOSE_HI);
+            double topFade = clamp01((0.9 - h / lift) / 0.15);   // 봉 마루 근처 0
+            double mask = exposure * topFade * (1.0 - calmMask(dx, dz));
+            h += jointCrag(wx, wz) * mask;
+        }
+        return Math.max(0.0, Math.min(lift, h));
+    }
+
+    /** crag 없는 높이 (slope 계산용 — 순환 방지) */
+    private double reliefNoCrag(double dx, double dz, boolean warp) {
+        return reliefCore(dx, dz, warp, false);
+    }
+
+    /** 검수·probe 훅 (package-private) — 계층(워프/crag) 토글로 연속성 기여를 분해한다. */
+    double reliefLayers(int x, int z, boolean warp, boolean crag) {
+        return reliefCore(x - spec.peakX(), z - spec.peakZ(), warp, crag);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 골격 부품 — 비등방 암체 · 능선 간선 · 골 절개 · massif base · 품 · calm
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * massif base — <b>낮은 넓은 skirt</b> (공통 mesa 대지 폐기 · Codex §1.2·§5.2). 봉·능선이 각자
+     * 이 낮은 받침 위로 뻗어 발치가 domain 가장자리까지 구분되고(다섯 봉이 같은 등고에서 안 끊긴다),
+     * 골이 이 skirt 를 domain 밖까지 깎아 봉 사이가 깊게 갈린다. 남면 등산로 walkability 는 이 skirt 가
+     * 아니라 <b>창룡령</b>(x≈0 골격 능선)이 맡으므로 skirt 는 순수 저 받침이면 된다.
+     * ★C 성격 복원(잠정): 프로토타입 계승. 봉 벽 도함수는 넓은 shortScale + 능선 채움 + smoothstep 여밈
+     * 으로 B-155(≤6) 안에 든다 — 오프라인 재측이 증명한다.
+     */
+    private double massifBase(double dx, double dz) {
+        double r = Math.hypot(dx, dz);
+        return SKIRT_MAX * (1.0 - ss(clamp01(r / SKIRT_R), 0, 1));
+    }
+
+    /** 비등방 암체 봉 (원뿔 폐기) — axisDeg 로 길고 횡으로 짧다(비대칭 어깨/벽·전단). */
+    private double peakBody(RangeSpec.Peak p, double dx, double dz) {
+        double rx = dx - p.px(), rz = dz - p.pz();
+        double a = Math.toRadians(p.axisDeg());
+        double along = rx * Math.sin(a) + rz * Math.cos(a);
+        double across = -rx * Math.cos(a) + rz * Math.sin(a);
+        across += p.skew() * along;                             // 전단 → 기울어진 등고선
+        boolean gentle = (across * p.gentleOnPlusSide()) >= 0;
+        double shortS = gentle ? p.shortGentle() : p.shortWall();
+        double an = along / p.longScale();
+        double cn = across / shortS;
+        double d = Math.sqrt(an * an + cn * cn);
+        if (d >= 1.0) {
+            return -80.0;                                       // 영향 밖 (union 에서 무시)
+        }
+        return p.h() * descend(clamp01(d), gentle);
     }
 
     /**
-     * 바위 결 — <b>돌산 다옥타브 crag</b> (사용자 피드백 2026-07-16). crag 문법 계승·강화:
-     * 옛 3항(파장 11~23·진폭합 7.5)을 5옥타브(파장 41→7·진폭합 ~19.7)로 키워 <b>거친 바위 노출
-     * 결</b>을 낸다. 큰 파장에 큰 진폭·잔 파장에 작은 진폭 → 진폭은 커도 인접 블록 물매 &lt;~1칸
-     * (연속성 B-155 여유 · 자기시험이 잰다). 정상 평탄부·봉우리 마루·등마루 보행선·단은 매끈하고
-     * (calm·ramp) <b>면(비능선·비단)과 봉우리 사이가 가장 험하다</b> (cragFactor 문법 강화, TF:1168-1171).
+     * 비선형 단조 하강 프로파일 — 직선 종단면(height−slope·d)을 깬다. 여러 smoothstep 가중합이라
+     * 단조 감소이면서 상부 벽·중간 어깨·하부 발치의 곡률이 다르다 (Codex §3.2 "가변 물매").
+     * 완만 어깨 쪽은 중간대 가중을 키운다 → 비대칭 사면. m(0)=1·m(1)=0·m'(1)=0.
      */
-    private double rockRelief(int x, int z, double h, double dx, double dz) {
-        double crag = CRAG_AMP * (
-                  Math.sin(x / 37.0 + phase) * Math.cos(z / 41.0 - phase) * 8.0   // 큰 바위 덩어리 (저주파·큰 진폭)
-                + Math.sin((x + z) / 23.0 + phase) * 5.0                          // 중간 바위 단
-                + Math.cos((x - z) / 17.0 - phase) * 3.2                          // 바위 결
-                + Math.sin(x / 11.0 - phase) * Math.cos(z / 13.0 + phase) * 2.2   // 잔결
-                + Math.sin((x - z) / 7.0 + phase) * 1.3);                         // 아주 잔 결 (jagged)
-        double tNorm = 1.0 - Math.min(1.0, h / spec.lift());   // 0 = 봉우리 마루, 1 = 발치
-        double ramp = clamp01((tNorm - 0.05) / 0.20);           // 봉우리 마루 부근은 0 (매끈한 첨봉 끝)
-        double factor = ramp * (0.55 + 0.45 * (1.0 - tNorm));   // 중·상턱 면이 가장 험하다 (돌산 노출)
-        double calm = 1.0;                                       // 능선·단·등산로 보행선은 잠잠하다
-        if (dz >= 0) {
-            calm = clamp01((Math.abs(dx) - CALM_HALF) / CALM_RAMP);
-        }
-        // ★군집 재설계: 중앙 건물 단(court) 은 dz 부호와 무관하게 crag 를 끈다(평탄 건물 자리).
-        double dCenter = Math.hypot(dx, dz);
-        double platCalm = clamp01((dCenter - spec.platformR()) / Math.max(1, spec.platformRamp()));
-        return crag * factor * Math.min(calm, platCalm);
+    private double descend(double t, boolean gentle) {
+        double w1 = gentle ? 0.40 : 0.55;   // 상부 벽
+        double w2 = gentle ? 0.30 : 0.14;   // 중간 어깨(완만 쪽 큼)
+        double w3 = 1 - w1 - w2;            // 하부 발치
+        double s = w1 * ss(t, 0.0, 0.28) + w2 * ss(t, 0.26, 0.58) + w3 * ss(t, 0.50, 1.0);
+        return 1 - s;
     }
+
+    /** 능선 간선 몸체 — 폴리라인 위 crest(중간 안부) − 비대칭 횡단 낙하. */
+    private double ridgeBody(RangeSpec.Ridge rg, double dx, double dz) {
+        double[] pr = projectPoly(rg.xs(), rg.zs(), dx, dz);
+        double s = pr[0], lat = pr[1];
+        double crest = interpH(rg.hs(), s) - rg.saddleDepth() * (4 * s * (1 - s));
+        double w = rg.wStart() + (rg.wEnd() - rg.wStart()) * s;
+        double over = Math.max(0.0, Math.abs(lat) - w);
+        double fall = (lat >= 0 ? rg.fallR() : rg.fallL());
+        double val = crest - over * fall;
+        return val < -80 ? -80 : val;
+    }
+
+    /** 골 절개 — 배수선 따라 감산. 하류로 넓고 깊게(clamp). 상류 머리 여밈(칼 시작 금지). */
+    private double valleyCut(RangeSpec.Valley v, double dx, double dz) {
+        double[] pr = projectPoly(v.xs(), v.zs(), dx, dz);
+        double s = pr[0], lat = Math.abs(pr[1]);
+        double w = v.wNear() + (v.wFar() - v.wNear()) * s;
+        // 상류(중앙·평탄 mesa 위)는 얕게, 하류(산자락 경사면)로 깊게 — 평탄 대지에 깊은 칼벽 금지(B-155)
+        double depth = v.depthMax() * (0.15 + 0.85 * s);
+        double q = Math.max(0.0, 1.0 - (lat / w) * (lat / w));
+        double head = ss(clamp01(s / 0.18), 0, 1);      // 상류 머리 여밈 넓게 (칼 시작·급단차 금지 · B-155)
+        return depth * q * head;
+    }
+
+    /** 건물 품 마스크 — 남으로 긴 타원, 남쪽 가장자리는 출구(개구)로 약함. */
+    private double courtMask(double dx, double dz) {
+        double ux = (dx - court.cx()) / court.ax();
+        double uz = (dz - court.cz()) / court.az();
+        double d = Math.sqrt(ux * ux + uz * uz);
+        double m = 1.0 - ss(clamp01((d - 0.55) / 0.45), 0, 1);
+        if (dz > court.cz()) {
+            m *= (1 - 0.6 * ss(clamp01((dz - court.cz()) / court.az()), 0, 1)); // 남측 개구
+        }
+        return m;
+    }
+
+    /** calm(보행·건축 평탄) = 건물 품 ∪ 능선 보행 중심선 띠 ∪ 남면 corridor. 워프·crag 를 끈다. */
+    private double calmMask(double dx, double dz) {
+        double m = courtMask(dx, dz);
+        for (RangeSpec.Ridge rg : ridges) {
+            double[] pr = projectPoly(rg.xs(), rg.zs(), dx, dz);
+            double lat = Math.abs(pr[1]);
+            m = Math.max(m, 1.0 - ss(clamp01((lat - RIDGE_CALM_HALF) / RIDGE_CALM_RAMP), 0, 1));
+        }
+        // 남면 등산로 corridor (dz≥0, |dx|<CALM_HALF) — 스위치백·건물 단 평탄대 (③ 노선 보호).
+        // ★남 gate 를 smoothstep 으로 여며 dz=0 급단차 금지 (옛 하드 dz≥0 스위치가 워프 불연속을
+        //   내 maxSeam 8.7 을 냈다 — B-155). 북(dz<0)으로 fade → 0.
+        double southGate = ss(clamp01((dz + 12.0) / 24.0), 0, 1);
+        double corridor = southGate * (1.0 - clamp01((Math.abs(dx) - CALM_HALF) / CALM_RAMP));
+        m = Math.max(m, corridor);
+        return clamp01(m);
+    }
+
+    private double boundaryFade(double r) {
+        double d0 = 170.0, d1 = spec.domainR();
+        return 1.0 - ss(clamp01((r - d0) / (d1 - d0)), 0, 1);
+    }
+
+    /** 절리형 crag — 방향성 절리 2계열(사선/수직) + 잔결. ridged(1−|sin|) 로 날 선 절리면. */
+    private double jointCrag(double dx, double dz) {
+        double a1 = Math.toRadians(28), a2 = Math.toRadians(112);
+        double u1 = dx * Math.cos(a1) + dz * Math.sin(a1);
+        double u2 = dx * Math.cos(a2) + dz * Math.sin(a2);
+        double j1 = (1 - Math.abs(Math.sin(u1 / 13.0))) - 0.5;
+        double j2 = (1 - Math.abs(Math.sin(u2 / 19.0))) - 0.5;
+        double fine = grainD(dx + 111, dz + 777, 7, 3.0) * 0.5;
+        return j1 * CRAG_J1 + j2 * CRAG_J2 + fine * CRAG_FINE;
+    }
+
+    /** 국소 물매 (crag 노출 마스크용) — crag 없는 높이의 중앙차분. */
+    private double localSlope(double dx, double dz, boolean warp) {
+        double a = reliefNoCrag(dx + 2, dz, warp), b = reliefNoCrag(dx - 2, dz, warp);
+        double c = reliefNoCrag(dx, dz + 2, warp), e = reliefNoCrag(dx, dz - 2, warp);
+        return Math.max(Math.abs(a - b), Math.abs(c - e)) / 4.0;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 외곽 평원 요철
+    // ═══════════════════════════════════════════════════════════════════
 
     /** 외곽 평원의 요철 — undulation 문법 (terrain_grain.yml cell 9 · ±1) */
     private int undulation(int x, int z) {
@@ -573,10 +509,59 @@ public final class RangeField {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 결(結) — 격자점 해시 보간. ★TerrainForge.java:2432-2472 의 사본 (§5-5 통일 대상)
+    // 공용 수학 — 폴리라인 투영 · 보간 · smoothstep · 격자 해시 결
     // ═══════════════════════════════════════════════════════════════════
 
-    /** 격자점 하나의 값 [-1,1] — 정수 해시 (splitmix64 계열 섞기). 난수 씨앗이 없다 */
+    /**
+     * 폴리라인 투영 → {호장비율 s∈[0,1], 부호있는 횡거리}. 크기 = clamp 된 최근접점까지의 진짜
+     * 유클리드 거리(끝점 밖은 끝점에서 방사로 여밈 — 무한직선 연장 줄무늬 방지). 부호는 선분 좌/우.
+     */
+    private static double[] projectPoly(double[] xs, double[] zs, double x, double z) {
+        double total = 0;
+        for (int i = 1; i < xs.length; i++) {
+            total += Math.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]);
+        }
+        double bestD2 = Double.MAX_VALUE, bestArc = 0, bestLat = 0, acc = 0;
+        for (int i = 0; i < xs.length - 1; i++) {
+            double ax = xs[i], az = zs[i], vx = xs[i + 1] - ax, vz = zs[i + 1] - az;
+            double len2 = vx * vx + vz * vz;
+            double segLen = Math.sqrt(len2);
+            double t = len2 <= 0 ? 0 : ((x - ax) * vx + (z - az) * vz) / len2;
+            t = Math.max(0, Math.min(1, t));
+            double cx = ax + vx * t, cz = az + vz * t;
+            double d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+            if (d2 < bestD2) {
+                bestD2 = d2;
+                bestArc = acc + segLen * t;
+                double cross = vx * (z - az) - vz * (x - ax);
+                bestLat = (cross >= 0 ? 1 : -1) * Math.sqrt(d2);
+            }
+            acc += segLen;
+        }
+        return new double[]{total <= 0 ? 0 : bestArc / total, bestLat};
+    }
+
+    private static double interpH(double[] hs, double s) {
+        if (hs.length == 1) return hs[0];
+        double f = s * (hs.length - 1);
+        int i = (int) Math.floor(f);
+        if (i >= hs.length - 1) return hs[hs.length - 1];
+        if (i < 0) return hs[0];
+        double t = ss(f - i, 0, 1);
+        return hs[i] * (1 - t) + hs[i + 1] * t;
+    }
+
+    private static double ss(double t, double a, double b) {
+        if (b <= a) return t >= b ? 1 : 0;
+        double u = clamp01((t - a) / (b - a));
+        return u * u * (3 - 2 * u);
+    }
+
+    // ── 격자점 해시 보간 (값 잡음) — 결정론. 두 계승 문법: ──
+    //   (1) int-좌표 lattice/grain/grain2 (TF:2432-2472 사본 · undulation 용) — 서명 불변.
+    //   (2) double-좌표 salted 변형 (grainD/latticeS) — 워프·crag 잔결 용 (프로토타입 계승).
+
+    /** 격자점 하나의 값 [-1,1] — 정수 해시 (splitmix64 계열). 난수 씨앗이 없다 */
     private static double lattice(int gx, int gz) {
         long h = gx * 0x9E3779B97F4A7C15L ^ gz * 0xC2B2AE3D27D4EB4FL;
         h ^= h >>> 30;
@@ -587,12 +572,23 @@ public final class RangeField {
         return ((h >>> 11) / (double) (1L << 53)) * 2.0 - 1.0;
     }
 
-    /** 매끄러운 이음 (smoothstep) */
+    /** salted 격자점 값 [-1,1] — 계층별 decorrelate (워프 x/z·crag 잔결). 난수 아님 */
+    private static double latticeS(int gx, int gz, double salt) {
+        long si = Double.doubleToLongBits(salt);
+        long h = gx * 0x9E3779B97F4A7C15L ^ gz * 0xC2B2AE3D27D4EB4FL ^ si * 0xD6E8FEB86659FD93L;
+        h ^= h >>> 30;
+        h *= 0xBF58476D1CE4E5B9L;
+        h ^= h >>> 27;
+        h *= 0x94D049BB133111EBL;
+        h ^= h >>> 31;
+        return ((h >>> 11) / (double) (1L << 53)) * 2.0 - 1.0;
+    }
+
     private static double ease(double t) {
         return t * t * (3 - 2 * t);
     }
 
-    /** 결의 값 [-1,1] — cell 칸 격자에 해시를 깔고 보간한다 */
+    /** 결의 값 [-1,1] — cell 칸 격자에 해시를 깔고 보간한다 (int 좌표) */
     static double grain(int x, int z, int cell) {
         int c = Math.max(1, cell);
         double fx = x / (double) c;
@@ -608,6 +604,17 @@ public final class RangeField {
         return (a * (1 - tx) + b * tx) * (1 - tz) + (c0 * (1 - tx) + d * tx) * tz;
     }
 
+    /** 결의 값 [-1,1] — double 좌표 + salt (워프·crag 잔결). 프로토타입 grain 계승 */
+    private static double grainD(double x, double z, int cell, double salt) {
+        int c = Math.max(1, cell);
+        double fx = x / c, fz = z / c;
+        int x0 = (int) Math.floor(fx), z0 = (int) Math.floor(fz);
+        double tx = ss(fx - x0, 0, 1), tz = ss(fz - z0, 0, 1);
+        double a = latticeS(x0, z0, salt), b = latticeS(x0 + 1, z0, salt);
+        double c0 = latticeS(x0, z0 + 1, salt), d = latticeS(x0 + 1, z0 + 1, salt);
+        return (a * (1 - tx) + b * tx) * (1 - tz) + (c0 * (1 - tx) + d * tx) * tz;
+    }
+
     /** 두 겹의 결 — 큰 덩어리 위에 작은 결 (2옥타브) */
     static double grain2(int x, int z, int cell) {
         return grain(x, z, cell) * 0.72
@@ -619,10 +626,9 @@ public final class RangeField {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 자기 시험 — 검수 ⑪의 첫 눈 (서버 없이 돈다 · terrain_forge_v5.md §2.5·§6)
-    //   실행: java com.honcheon.mvt.forge.RangeField   (Bukkit 무의존)
+    // 자기 시험 — 검수 ⑪의 첫 눈 (서버 없이 · java com.honcheon.mvt.forge.RangeField)
+    //   ① B-155 연속성(≤6) ② 다봉 위계(주봉 ≥3·중앙<최고) ③ 결정론 ④ 곁구역 넷 ⑤ 눈을 시험하는 눈
     // ═══════════════════════════════════════════════════════════════════
-    /** 굽이 렌더용 짧은 구역 표 */
     private static String tag(RangeZone z) {
         return switch (z) {
             case PLUM_GROVE -> "매화림";
@@ -638,20 +644,16 @@ public final class RangeField {
     }
 
     /**
-     * 독립 봉(국소 최고점) 탐지 — 군집 자기시험용. 반경 {@code R} 안, {@code minH} 이상, 창
-     * {@code win}에서 최고인 열을 봉으로 잡고 18칸 안 중복은 병합한다. 높이 내림차순.
+     * 지속성(prominence) 기반 봉 탐지 — 국소 최고점 + 직선 안부 근사 prominence. crag 잡음을 봉으로
+     * 세지 않게 win/minH·병합. 높이 내림차순. {@code prom} 은 더 높은 봉으로의 직선 최소높이 대비.
      */
-    static java.util.List<int[]> detectPeaks(RangeField f, int minH, int win, int R) {
-        java.util.List<int[]> raw = new java.util.ArrayList<>();
+    static java.util.List<double[]> detectPeaks(RangeField f, double minH, int win, int R) {
+        java.util.List<double[]> raw = new java.util.ArrayList<>();
         for (int z = -R; z <= R; z += 2) {
             for (int x = -R; x <= R; x += 2) {
-                if (Math.hypot(x, z) > R) {
-                    continue;
-                }
+                if (Math.hypot(x, z) > R) continue;
                 double h = f.reliefAt(x, z);
-                if (h < minH) {
-                    continue;
-                }
+                if (h < minH) continue;
                 boolean top = true;
                 for (int dz = -win; dz <= win && top; dz += 2) {
                     for (int dx = -win; dx <= win; dx += 2) {
@@ -661,30 +663,41 @@ public final class RangeField {
                         }
                     }
                 }
-                if (top) {
-                    raw.add(new int[]{x, z, (int) Math.round(h)});
-                }
+                if (top) raw.add(new double[]{x, z, h, 0});
             }
         }
-        java.util.List<int[]> uniq = new java.util.ArrayList<>();
-        for (int[] p : raw) {
+        java.util.List<double[]> uniq = new java.util.ArrayList<>();
+        for (double[] p : raw) {
             boolean near = false;
-            for (int[] q : uniq) {
-                if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 18) {
+            for (double[] q : uniq) {
+                if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 20) {
                     near = true;
-                    if (p[2] > q[2]) {
-                        q[0] = p[0];
-                        q[1] = p[1];
-                        q[2] = p[2];
-                    }
+                    if (p[2] > q[2]) { q[0] = p[0]; q[1] = p[1]; q[2] = p[2]; }
                     break;
                 }
             }
-            if (!near) {
-                uniq.add(new int[]{p[0], p[1], p[2]});
-            }
+            if (!near) uniq.add(p);
         }
-        uniq.sort((p, q) -> q[2] - p[2]);
+        uniq.sort((a, b) -> Double.compare(b[2], a[2]));
+        // prominence: 각 봉→더 높은 봉 직선상 최소높이(안부 근사)의 최댓값을 키 안부로
+        for (double[] p : uniq) {
+            double bestSaddle = 0;
+            boolean hasHigher = false;
+            for (double[] q : uniq) {
+                if (q[2] <= p[2] + 1e-6) continue;
+                hasHigher = true;
+                double lo = Double.MAX_VALUE;
+                int steps = (int) Math.max(4, Math.hypot(p[0] - q[0], p[1] - q[1]));
+                for (int s = 1; s < steps; s++) {
+                    double t = s / (double) steps;
+                    double sx = p[0] + (q[0] - p[0]) * t, sz = p[1] + (q[1] - p[1]) * t;
+                    double hh = f.reliefAt((int) Math.round(sx), (int) Math.round(sz));
+                    if (hh < lo) lo = hh;
+                }
+                bestSaddle = Math.max(bestSaddle, lo);
+            }
+            p[3] = hasHigher ? (p[2] - bestSaddle) : p[2];
+        }
         return uniq;
     }
 
@@ -694,18 +707,26 @@ public final class RangeField {
         int r = spec.economyR();
         boolean ok = true;
 
-        // 등산로 원(源) 보고 — 기본은 ③ 생성기(TrailForge). 곁구역 재단의 자가 무엇인지 찍는다.
+        // ④ 등산로 원(源) 보고 — 기본은 ③ 생성기(TrailForge)
         TrailForge.Result plan = f.trailPlan();
         if (plan != null) {
             System.out.println("등산로 원: ③ 생성기(TrailForge) — " + plan.note());
             System.out.printf("  경로계수=%.3f 최대경사=%.3f 구역회전=%s 헤어핀/구역=%d 진폭=%.1f 폴백=%b%n",
                     plan.pathFactor(), plan.maxSlope(), java.util.Arrays.toString(plan.turnsPerZone()),
                     plan.hairpinsPerZone(), plan.amplitude(), plan.fallback());
+            if (plan.fallback()) {
+                System.out.println("FAIL 등산로: ③ 생성기가 폴백으로 물러섰다 (제약 만족 노선 없음 — 산기슭 완사면 확인)");
+                ok = false;
+            }
+            if (plan.maxSlope() > TrailForge.MAX_SLOPE + 1e-9) {
+                System.out.printf("FAIL 등산로: 최대경사 %.3f > 1:1%n", plan.maxSlope());
+                ok = false;
+            }
         } else {
             System.out.println("등산로 원: spec.trail 목록 (③ 산출 주입됨)");
         }
 
-        // 축 12 — 결정론: 같은 좌표를 두 번 불러 같아야 한다 (높이·구역·물매)
+        // ③ 결정론: 같은 좌표 두 번 (높이·구역·물매)
         long checked = 0;
         for (int x = -r; x <= r; x += 3) {
             for (int z = -r; z <= r; z += 3) {
@@ -718,70 +739,59 @@ public final class RangeField {
                 checked++;
             }
         }
-
-        // 축 12 자기검증(눈을 시험하는 눈): 다른 좌표는 실제로 갈려야 한다 (비교가 살아 있는가)
         boolean sawDifference = f.reliefAt(0, 0) != f.reliefAt(spec.honsanR(), 0);
         if (!sawDifference) {
-            System.out.println("FAIL 자기검증: 중앙 단과 본산 경계가 같은 높이 — 비교가 죽었다");
+            System.out.println("FAIL 자기검증: 중앙과 본산 경계가 같은 높이 — 비교가 죽었다");
             ok = false;
         }
 
-        // ── 축 군집(★재설계) — 「여러 산이 조율적으로 붙은」이 서 있는가 (단일 돔 폐기 확인) ──
-        //   ① 중앙 (0,0)은 봉이 아니라 낮은 건물 단 = 최고봉보다 확실히 낮다 (옛 모델은 160 최고).
-        //   ② 독립 봉이 여럿(≥3) 선다. ③ 봉들이 서로 준한 높이(최고−최저 ≤ 20 — 하나가 안 압도).
-        java.util.List<int[]> pk = detectPeaks(f, 140, 10, 140);
+        // ② 다봉 위계 — prominence 주봉 ≥3 · 중앙 품 < 최고봉 (C 골격: 최고봉이 중앙 밖 결절)
+        java.util.List<double[]> pk = detectPeaks(f, 120, 10, 130);
         int nPeaks = pk.size();
         double centerH = f.reliefAt(0, 0);
-        int topH = nPeaks == 0 ? 0 : pk.get(0)[2];
-        int lowH = nPeaks == 0 ? 0 : pk.get(nPeaks - 1)[2];
-        boolean centerIsCourt = centerH < topH - 15;
-        boolean severalMountains = nPeaks >= 3;
-        boolean similarRank = nPeaks >= 2 && (topH - lowH) <= 20;
-        System.out.printf("군집: 봉 %d개 (최고 %d~최저 %d) · 중앙 단 %.0f · 최고봉 방위=%s%n",
-                nPeaks, topH, lowH, centerH,
-                nPeaks == 0 ? "-" : String.format("%.0f°", Math.toDegrees(Math.atan2(pk.get(0)[0], pk.get(0)[1]))));
-        if (!centerIsCourt) {
-            System.out.printf("FAIL 군집: 중앙(%.0f)이 최고봉(%d)에 준함 — 단일 돔 (여러 산 아님)%n", centerH, topH);
-            ok = false;
+        double courtH = f.reliefAt(-2, 46);
+        double topH = nPeaks == 0 ? 0 : pk.get(0)[2];
+        int promMains = 0;
+        for (double[] p : pk) if (p[3] >= 25) promMains++;
+        boolean severalMountains = promMains >= 3;
+        boolean courtIsLow = courtH < topH - 15;
+        System.out.printf("다봉: 봉 %d개 (최고 %.0f) · prominence≥25 주봉 %d개 · 중앙(0,0) %.0f · 품(-2,46) %.0f%n",
+                nPeaks, topH, promMains, centerH, courtH);
+        StringBuilder pks = new StringBuilder("        봉: ");
+        for (int k = 0; k < Math.min(6, pk.size()); k++) {
+            pks.append(String.format("(%.0f,%.0f h%.0f p%.0f) ", pk.get(k)[0], pk.get(k)[1], pk.get(k)[2], pk.get(k)[3]));
         }
+        System.out.println(pks);
         if (!severalMountains) {
-            System.out.println("FAIL 군집: 독립 봉 " + nPeaks + "개 (<3) — 봉 무더기가 아니다");
+            System.out.println("FAIL 다봉: prominence≥25 주봉 " + promMains + "개 (<3) — 여러 독립 봉이 아니다");
             ok = false;
         }
-        if (!similarRank) {
-            System.out.printf("FAIL 군집: 봉 높이 편차 %d (>20) — 한 봉이 압도한다%n", topH - lowH);
+        if (!courtIsLow) {
+            System.out.printf("FAIL 다봉: 품(%.0f)이 최고봉(%.0f)에 준함 — 중앙이 낮은 품이 아니다%n", courtH, topH);
             ok = false;
         }
-        // 눈을 시험하는 눈: 옛 단일 돔(중앙이 최고)이면 "중앙<최고봉−15" 판정이 거짓이어야 한다.
-        //   가짜 돔: h=160−0.5·r → 중앙 160, r=60 에서 130. 중앙이 우세하므로 centerIsCourt 거짓.
-        double domeCenter = 160.0, domeOff = 160.0 - 0.5 * 60.0;
-        if (domeCenter < domeOff - 15) {
-            System.out.println("FAIL 자기검증: 군집 눈이 단일 돔의 중앙 우세를 못 본다 — 눈이 죽었다");
+        // 눈을 시험하는 눈: 가짜 단일 원뿔(중앙 최고)이면 courtIsLow 판정이 거짓이어야
+        double coneTop = 158, coneOff = 158 - 0.5 * 60;
+        if (coneTop < coneOff - 15) {
+            System.out.println("FAIL 자기검증: 다봉 눈이 단일 원뿔 중앙 우세를 못 본다 — 눈이 죽었다");
             ok = false;
         }
 
-        // 축 연속성 (B-155) — z=0 이음에 급단차가 없다. 옛 하드 컷은 남 능선과 북 후산이
-        //   z=0 에서 만나 최대 33칸 벼랑을 냈다 (화산 오프라인 미리보기가 잡음 · 이 축이 없었다).
-        //   후산 험면(kMin) 자체의 가파름은 이 밴드 밖이라 여기 안 걸린다.
+        // ① 연속성 (B-155) — z=0 이음 급단차 ≤ SEAM_STEP_MAX. 봉 사면·품 가장자리까지 잰다.
         double maxSeam = 0.0;
         int sx = 0, sz = 0;
         for (int x = -r; x <= r; x++) {
-            for (int z = -46; z < 16; z++) {   // ★군집: 밴드 확대 — 북봉 사면·건물 단 가장자리까지 z=0 이음을 잰다
+            for (int z = -60; z < 60; z++) {   // 확대 밴드 — 북 봉군 사면·품 가장자리·창룡령 결절 전부
                 double d = Math.abs(f.reliefAt(x, z + 1) - f.reliefAt(x, z));
-                if (d > maxSeam) {
-                    maxSeam = d;
-                    sx = x;
-                    sz = z;
-                }
+                if (d > maxSeam) { maxSeam = d; sx = x; sz = z; }
             }
         }
+        System.out.printf("연속성: maxSeam %.2f칸 @ (%d,%d) (상한 %.0f)%n", maxSeam, sx, sz, SEAM_STEP_MAX);
         if (maxSeam > SEAM_STEP_MAX) {
-            System.out.printf("FAIL 연속성: z=0 이음 급단차 %.1f칸 @ (%d,%d) > %.0f (B-155 회귀)%n",
-                    maxSeam, sx, sz, SEAM_STEP_MAX);
+            System.out.printf("FAIL 연속성: 급단차 %.2f칸 @ (%d,%d) > %.0f (B-155 회귀)%n", maxSeam, sx, sz, SEAM_STEP_MAX);
             ok = false;
         }
-        // 눈을 시험하는 눈 — 같은 검출기가 일부러 심은 급단차를 잡는가 (심지 않으면 못 잡는다)
-        double[] planted = {5, 5, 5, 30, 30, 30};   // 5→30 = 25칸 턱
+        double[] planted = {5, 5, 5, 30, 30, 30};
         double plantedMax = 0.0;
         for (int i = 0; i < planted.length - 1; i++) {
             plantedMax = Math.max(plantedMax, Math.abs(planted[i + 1] - planted[i]));
@@ -791,7 +801,7 @@ public final class RangeField {
             ok = false;
         }
 
-        // 곁구역 재단(Q9): 중간 고리가 넷으로 온전히 갈리고 넷 다 서는가 (검수 축 4~6 분모)
+        // ⑤ 곁구역 넷 온전 분할
         java.util.EnumMap<RangeZone, Long> area = new java.util.EnumMap<>(RangeZone.class);
         for (int x = -r; x <= r; x++) {
             for (int z = -r; z <= r; z++) {
@@ -806,9 +816,7 @@ public final class RangeField {
             }
         }
 
-        // ── 오프라인 「굽이」 렌더 (수치) — 곁구역 경계가 노선을 따라 굽이치는가 ──
-        //   방사 등분이면 각 반경 z-단면에서 구역 경계 x 가 반경마다 같은 각(고정)일 것이다.
-        //   노선 재단이면 경계가 노선을 따라 x 로 이동한다 → 반경별 경계 x 가 갈린다 = 굽이.
+        // 곁구역 굽이 렌더 (남면 z-단면)
         System.out.println("곁구역 굽이 렌더 (남면 z-단면 · 경계가 반경마다 x 로 옮겨 다니면 노선 재단):");
         int inner = spec.honsanR(), outer = spec.honsanR() + spec.midDepth();
         for (int z = inner + 18; z <= outer - 18; z += 24) {
@@ -816,10 +824,7 @@ public final class RangeField {
             RangeZone prev = null;
             for (int x = -80; x <= 80; x += 2) {
                 RangeZone zz = f.zoneAt(x, z);
-                if (zz != prev) {
-                    row.append(String.format(" x=%d→%s", x, tag(zz)));
-                    prev = zz;
-                }
+                if (zz != prev) { row.append(String.format(" x=%d→%s", x, tag(zz))); prev = zz; }
             }
             System.out.printf("  z=%3d (남 %3d칸):%s%n", z, z, row);
         }

@@ -36,10 +36,12 @@ import java.util.List;
  *                       여유 6 (hwasan_brief_v5.md §1.5-가 "폭 후보 ≥41")
  * @param peakSteepSlope 주봉 험면(비능선)의 물매 — 1:0.9 원뿔 문법 계승
  *                       (TerrainForge raiseMassif · terrain.yml massif_slope)
- * @param sideRidges     곁능선 — <b>3가닥 확정</b> (Q4 — 웨이브-2 결정 회차 A-2 · 재유도
- *                       terrain_forge_v5.md §2.4-3·§7 딸린 재작업 1). 방위·규모의 근거는
- *                       {@link #hwasan} 팩토리 주석 참조
- * @param gorges         협곡 (감산 채널 — 계곡 구역·수계 ②의 자리) — 2줄 확정 (Q5 · A-2)
+ * @param sideRidges     곁능선 — <b>레거시 레코드 성분</b> (서명 불변용 · MvtCommand 로그가 개수를
+ *                       읽는다). ★후보 C 이식(2026-07-16) 이후 <b>reliefAt 은 {@link #skelRidges}
+ *                       (골격 능선)를 쓴다</b> — 이 항은 산세 형상에 안 쓰인다 (withTrail 재구성·
+ *                       호출부 계약 보존용으로만 남긴다). 근거는 {@link #hwasan} 팩토리 주석
+ * @param gorges         협곡 — <b>레거시 레코드 성분</b> (서명 불변). ★C 이식 이후 골 절개는
+ *                       {@link #skelValleys}(골격 골 4줄)가 맡는다 — 이 항은 안 쓰인다
  * @param trail          등산로 경유점 — <b>곁구역(매화림·계곡·절벽·연무 계곡) 경계가 이것을
  *                       "꿴다"</b> (Q9 확정 — A-2 · 재단 방식 §2.3·§7 딸린 재작업 2).
  *                       ★계약: 이 폴리라인은 <b>등산로 생성기(기계 ③)의 산출</b>이다 —
@@ -87,79 +89,118 @@ public record RangeSpec(
     public record Gorge(double azimuthDeg, int innerR, int outerR, int depth, int halfWidth) {
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 골격 노드 (TerrainSkeleton) — C 파이프라인 (능선 골격 먼저 · 봉은 결절에서 비등방 암체)
+    //   ★★ 군집 모델(SubPeak 원뿔 + soft-max + 중앙 원반 court) 폐기 → 골격-먼저 파이프라인
+    //   (사용자 오프라인 A/B/C 실루엣에서 C 확정 — Codex CODEX_HWASAN_TERRAIN_IDEAS.md §3·§5~§7).
+    //   전부 **잠정·승인 대기**: 좌표는 위계/역할이지 실측 복사 아님. 프로토타입(HwasanProto)에서
+    //   유도하고 생산 envelope(lift 160·honsanR 124·domain 294)에 맞춰 축소했다. 난수 0.
+    //   좌표계: 주봉 기준 상대 (dx,dz) · 남 = +z. 접근·건물 품 개구는 남, 최고 봉군은 북(−z).
+    // ═══════════════════════════════════════════════════════════════════
+
     /**
-     * 돌 봉우리 — 다봉 <b>군집(cluster)</b>의 한 봉. <b>봉우리 부품</b> (군집 재설계 · 사용자 도보
-     * 피드백 2026-07-16 반복 3회차: "큰 산 하나에 봉우리가 붙은" 게 아니라 "여러 산이 조율적으로
-     * 붙은" — 華山 다섯 봉이 각각 독립 화강암 첨봉·능선으로 이어진 돌산 군집).
+     * 비등방 암체 봉 — 원뿔 아님. axisDeg 방향으로 길고(longScale), 횡으로 짧다(shortGentle/shortWall
+     * 비대칭). 직선 종단면(height−slope·d)을 깬다 — 상부 벽·중간 어깨·하부 발치의 곡률이 다르다.
+     * ★B-155: shortScale 을 넓혀(생산 튜닝) 횡 도함수 상한을 낮췄다 (프로토타입 대비 완만한 벽).
      *
-     * <p>★★ 단일 중앙 돔 폐기: 옛 모델은 중앙 (0,0) 단일 원뿔(radialBody, +160)이 지배하고 봉은
-     * 그 어깨에 얹힌 낮은 융기였다. 새 모델은 봉을 <b>1차 질량</b>으로 세운다 — 각 봉은 mesa
-     * (본산 몫 등고 = lift−honsanRise = 88) 위로 솟는 <b>가파른 원뿔 첨봉</b>이고, 봉들이
-     * <b>부드러운 max(soft-max)</b>로 합성돼 <b>안부(saddle)로 조율적으로 이어진다</b>. 중앙은
-     * 봉이 아니라 봉들에 감싸인 <b>낮은 건물 단(court)</b>이다 (남으로 열림). 봉 마루는 전부
-     * lift(160) 미만이나 서로 준하는 높이(150~158)라 하나가 압도하지 않는다.
-     *
-     * <p>원뿔 물매 = {@code (height − mesa) / spread} — spread 안에서 mesa 로 내려온다. spread 를
-     * radius 와 합쳐 <b>honsanR(124) 안</b>에 가두므로(r≥124 는 옛 skirt 그대로 → 등산로·TrailForge
-     * 불변), 군집은 mesa 대지 위의 「모자」다. 첨봉은 가파르게(spread 작게) 세워 넓은 평탄 정상이 없다.
-     *
-     * <p>결정론: 좌표의 순수 함수(원뿔·삼각함수·soft-max — 난수 0). 봉우리는 방위·반경으로 못박은
-     * 절대 자리다. B-155 연속성: 원뿔은 립시츠(물매 유한)·soft-max 는 C∞ 라 z=0 급단차를 안 만든다.
-     *
-     * @param azimuthDeg 남축(+z) 기준 방위각(도) — 봉우리 중심의 방위 (★잠정·승인 대기)
-     * @param radius     주봉(중앙 단)에서 봉우리 중심까지 방사(칸) — 감싸는 링 (★잠정·승인 대기)
-     * @param height     봉우리 마루 등고(base 위) — <b>lift 미만</b> 강제 · 서로 준함 (★잠정·승인 대기)
-     * @param spread     첨봉 반경(칸) — 이 안에서 height→mesa 로 내려온다. 작을수록 가파른 첨봉.
-     *                   {@code radius + spread ≤ ~120} 로 honsanR 안에 가둔다 (★잠정·승인 대기)
+     * @param id          역할 이름
+     * @param px,pz        봉 중심 (주봉 기준 상대 · 남=+z) (★잠정)
+     * @param h            봉 마루 등고(base 위) — lift 미만 (★잠정)
+     * @param axisDeg      장축(능선 접선) 방위, 남축(+z) 기준 시계 (★잠정)
+     * @param longScale    장축 반경(정규화 d=1 발치) (★잠정)
+     * @param shortGentle  완만 어깨 쪽 횡 반경 (★잠정 — B-155 여유로 넓힘)
+     * @param shortWall    급벽 쪽 횡 반경 (★잠정)
+     * @param skew         전단(등고선 기울임) (★잠정)
+     * @param gentleOnPlusSide +1 이면 across>0 쪽이 완만 어깨
      */
-    public record SubPeak(double azimuthDeg, int radius, double height, int spread) {
+    public record Peak(String id, double px, double pz, double h, double axisDeg,
+                       double longScale, double shortGentle, double shortWall,
+                       double skew, double gentleOnPlusSide) {
     }
 
-    // ─── 돌 봉우리(다봉 군집) 잠정 파라미터 — 華山 다섯 봉 유도 · 전부 승인 대기 ──────────
-    //   구성: 중앙 = 낮은 건물 단(court, 봉 아님) + 감싸는 봉 5 (서·동·북·남서·남동). 정확한
-    //     수·배치는 사용자 결정(§8.2 R-3~R-7).
-    //   방위 유도(감싸되 남으로 열림): 서(−100)·동(+100) 좌우 측봉 · 북(180) 뒤 봉(후산 방위) ·
-    //     남서(−50)·남동(+50) 앞 봉이 진입로를 좌우에서 낀다. 남축(az0)은 비운다 — 앞 두 봉
-    //     사이가 안부(mesa)로 낮아 등산로·조망이 남으로 열린 품이 된다.
-    //   높이 유도(서로 준함): 150~158 · 전부 lift(160) 미만. 서봉(蓮花峰 모티프)이 최고(158),
-    //     북봉이 최저(150 — 실제 華山 北峰 최저 계승). 하나가 압도하지 않는 「여러 산」.
-    //   반경·spread: 링 반경 66~72 · spread 44~50 → radius+spread ≤ 116~120(honsanR 안). 봉 마루가
-    //     인접 안부보다 20~40 솟아 봉으로 읽히고, soft-max 가 안부를 바깥 사면보다 높게 이어 준다.
-    private static final double PK_W_H = 158, PK_E_H = 152, PK_N_H = 150, PK_SW_H = 156, PK_SE_H = 150;
+    /**
+     * 능선 간선 — 폴리라인 위 crest(안부 포함) − 비대칭 횡단 낙하. 창룡령·칼능선을 1급으로 소유
+     * (우연한 soft-max 교차선이 아니라). xs/zs 는 주봉 기준 상대 경유점.
+     *
+     * @param saddleDepth 중간 안부 깊이 (봉이 봉으로 읽히게)
+     * @param fallL,fallR 좌/우 횡단 낙하 배율(비대칭)
+     */
+    public record Ridge(String id, double[] xs, double[] zs, double[] hs,
+                        double wStart, double wEnd, double saddleDepth,
+                        double fallL, double fallR) {
+    }
+
+    /** 골 간선 — 배수선 따라 감산. 하류(s→1)로 넓어지고 깊어지되 clamp. domain 밖으로 배수. */
+    public record Valley(String id, double[] xs, double[] zs,
+                         double depthMax, double wNear, double wFar) {
+    }
 
     /**
-     * 다봉 군집 봉우리 목록 — <b>확정값(honsanR·mesa)에서 유도한 잠정 배치</b>. 레코드 성분이
-     * 아니라 파생 메서드다(레코드 서명 불변 → withTrail·호출부·TrailForge 무영향 · 소유 파일 밖
-     * 무수정 규약). RangeField.clusterCap 이 이 목록을 원뿔 soft-max 로 합성해 봉·안부를 이룬다.
+     * 건물 품(court) — <b>중앙 원반 폐기</b> (Codex §7). 상부 관문 남쪽 어깨의 <b>상부 안부</b>.
+     * 남으로 긴 타원, 남쪽 가장자리는 배수 출구로 약해진다(남향 개구). 자연 산을 만든 뒤 이
+     * 마스크 안에서만 최소 평탄화 (봉·능선이 만든 자리).
+     *
+     * @param cx,cz 품 중심 (주봉 기준 상대 · 남=+z) (★잠정)
+     * @param h     품 평탄 등고(base 위) — 봉보다 낮음 (★잠정)
+     * @param ax,az x 반폭 / z 반폭 (남으로 긴 타원) (★잠정)
      */
-    public java.util.List<SubPeak> subPeaks() {
+    public record Court(double cx, double cz, double h, double ax, double az) {
+    }
+
+    // ─── 골격 잠정 배치 — 華山 위상 유도 · 전부 승인 대기 (§8.2 R-3~R-7·R-11~R-13) ──────────
+    //   위상: 접근(남·낮음) → 전초봉 O → 창룡령 → 상부 관문/안부(spine 뿌리) →
+    //     주봉군{최고 Pm(북) ─칼능선─ 서봉 Wm · 주동릉 ─ 동봉 Em ─ 동종속 Es} · 건물 품(상부 안부·남 개구).
+    //   골 4줄은 능선 사이에서 시작해 domain 밖으로 배수(중앙 폐쇄 분지 없음).
+    //   높이(서로 준함): Pm 최고 158 · Em 152 · Wm 150 · Es 128(종속) · O 80(전초). 전부 lift 미만.
+
+    /**
+     * 골격 봉 목록 — 확정 envelope 에서 유도한 잠정 배치. 레코드 <b>성분이 아니라 파생 메서드</b>
+     * (레코드 서명 불변 → withTrail·호출부·TrailForge 무영향 · 소유 파일 밖 무수정 규약).
+     * RangeField 가 이 노드로 비등방 암체·능선·골을 합성한다 (군집 SubPeak 대체).
+     */
+    public java.util.List<Peak> skelPeaks() {
         return java.util.List.of(
-                new SubPeak(-100, 70, PK_W_H, 46),  // 서봉(蓮花峰) — 좌측, 최고봉
-                new SubPeak(100, 70, PK_E_H, 46),   // 동봉(朝陽峰) — 우측
-                new SubPeak(180, 66, PK_N_H, 50),   // 북봉 — 중앙 단 뒤(후산 방위), 최저봉
-                new SubPeak(-50, 72, PK_SW_H, 44),  // 남서봉 — 진입로 좌측 문기둥
-                new SubPeak(50, 72, PK_SE_H, 44));  // 남동봉 — 진입로 우측 문기둥
+                //         id     px    pz    h   axis long gentle wall skew  gentleSide
+                new Peak("Pm",  -24,  -54, 158,  90,  50,   46,   40,  0.20, -1),  // 최고 주봉(북)·남(품)쪽 급벽
+                new Peak("Wm", -104,  -16, 150,  60,  48,   46,   40, -0.20, +1),  // 서봉·칼능선(NE)으로 멀리 김
+                new Peak("Em",   62,  -46, 152, 116,  48,   46,   40,  0.18, +1),  // 동봉·ESE 로 멀리 김
+                new Peak("Es",   98,  -18, 128, 120,  32,   34,   28,  0.0,  +1),  // 동봉 붙은 종속 로브(낮음)
+                new Peak("O",     6,  180,  56, 180,  52,   52,   48,  0.0,  +1));  // 전초봉(남·낮음·완만)·창룡령 위
     }
 
-    // ─── 중앙 건물 단(court) · mesa 대지 — 군집이 딛는 두 등고 (전부 잠정·승인 대기) ──────────
-    /** 본산 몫 등고 = mesa 대지 높이 (base 위) — 봉·단이 이 위로 솟는다. crest(honsanR) 과 동일 */
+    /** 골격 능선 간선 목록 — 창룡령·관문척추·칼능선·주동릉·동종속릉 (전부 잠정). */
+    public java.util.List<Ridge> skelRidges() {
+        return java.util.List.of(
+                new Ridge("창룡령", new double[]{4, 2, 0, -2}, new double[]{250, 180, 86, 30},
+                        new double[]{10, 58, 104, 116}, 18, 10, 8, 1.5, 1.5),  // 산자락→O→관문 (x≈0 접근 능선·보행 calm·③ 노선이 딛는다)
+                new Ridge("관문척추", new double[]{-2, -24}, new double[]{30, -54},
+                        new double[]{116, 158}, 12, 10, 8, 1.6, 1.6),        // 관문→Pm
+                new Ridge("칼능선", new double[]{-24, -104}, new double[]{-54, -16},
+                        new double[]{158, 150}, 6, 6, 32, 2.2, 2.2),         // Pm→Wm 좁고 급·깊은 안부(prominence)
+                new Ridge("주동릉", new double[]{-24, 62}, new double[]{-54, -46},
+                        new double[]{158, 152}, 9, 9, 32, 1.7, 1.7),         // Pm→Em·깊은 안부(prominence)
+                new Ridge("동종속릉", new double[]{62, 98}, new double[]{-46, -18},
+                        new double[]{152, 128}, 9, 8, 14, 1.7, 1.7));        // Em→Es
+    }
+
+    /** 골격 골 간선 목록 — 4줄, 능선 사이에서 시작해 domain 밖 배수 (품출구는 남향 개구). */
+    public java.util.List<Valley> skelValleys() {
+        return java.util.List.of(
+                new Valley("골서", new double[]{-56, -130, -235}, new double[]{-20, 4, 28}, 26, 12, 26),   // 칼능선/관문 사이 → SW 밖
+                new Valley("골남동", new double[]{20, 72, 155}, new double[]{-34, 64, 180}, 26, 14, 30),   // 관문/주동릉 사이 → SE 밖
+                new Valley("골동", new double[]{86, 158, 238}, new double[]{-44, -58, -60}, 22, 12, 24),   // 동봉군 동쪽 → E 밖
+                new Valley("골남서", new double[]{-24, -44, -58}, new double[]{56, 150, 255}, 16, 14, 28)); // 서 앞자락 배수 → S-SW 밖 (x≈0 노선 비켜감)
+    }
+
+    /** 건물 품 — 상부 관문 남 어깨의 상부 안부 (중앙 원반 폐기 · 남 개구). 잠정. */
+    public Court court() {
+        return new Court(-2, 46, 118, 28, 40);
+    }
+
+    // ─── mesa 대지 — 골격이 딛는 등고 앵커 (연속성) ──────────
+    /** 본산 몫 등고 = mesa 대지 높이 (base 위) = crest(honsanR). 골격 base·crag topFade 앵커 */
     public int mesaLevel() {
         return lift - honsanRise;               // 160−72 = 88 — honsanR 이음의 등고 (연속성 앵커)
-    }
-
-    /** 중앙 건물 단(본전 court) 등고(base 위) — 봉이 아니라 봉들에 감싸인 낮은 평탄 자리 (★잠정) */
-    public int platformHeight() {
-        return mesaLevel() + 30;                // 88+30 = 118 — 봉(150~158)보다 32~40 낮은 court (★잠정)
-    }
-
-    /** 건물 단 평탄 반경(칸) — 이 안은 court 평탄(건물이 앉는다) (★잠정·승인 대기) */
-    public int platformR() {
-        return 30;                              // ★잠정
-    }
-
-    /** 건물 단 가장자리 램프 폭(칸) — platformHeight→mesa 로 내려오는 전이 (물매 ≈30/40 <6, B-155) (★잠정) */
-    public int platformRamp() {
-        return 40;                              // ★잠정 — 물매 (118−88... 실은 118→0 유도 아님) 완만
     }
 
     /**
