@@ -102,14 +102,16 @@ public final class RangeField {
     private static final double[] JOINT_AZ = {Math.toRadians(24), Math.toRadians(112)};
     /** 계단 감지 상한 — 비-calm 노출 사면의 '평탄 셀'(4이웃 다 ±1) 비율이 이보다 크면 계단식(양자화 회귀) FAIL */
     private static final double STAIR_FLAT_MAX = 0.30;
-    // ─── ★★ carve(깎아내기) — 험산을 전면에 세운 뒤 보행/건축 자리를 감산 후처리로 깎는다 (2026-07-16 사용자 설계) ───
-    //   "reserve"(calm 을 매끄러운 평면으로 비워 두기) 폐기 → 완전한 불규칙 바위산을 domain 전체에
-    //   세우고, calm(등산로 corridor·능선 척추·건물 품)을 목표 평탄면으로 **깎아낸다**. 깎인 가장자리는
-    //   자연 rugged 가 목표면보다 높던 곳이라 **깎인 암벽(cut wall)**이 남는다 — 華山 잔도·암벽 계단·바위
-    //   깎아 앉힌 전각의 형태. 보행 표면=평탄 연속(calm), 깎인 벽=비-calm(허용).
-    /** carve 가중 램프 — calm 이 이 사이를 지나며 rugged→목표 평탄면으로 깎인다. calm 코어(≥HI)는 순수 평탄 */
-    private static final double CARVE_LO = 0.35, CARVE_HI = 0.65;
-    /** 보행 평탄대 판정 문턱(검수 B-155 calm-only) — CARVE_HI 위여야 순수 평탄(연속). 이 위 셀만 연속성 요구 */
+    // ─── ★★ carve(깎아내기) 폐기 (2026-07-16 사용자 도보 판단) — 산을 통짜 험산으로 완성 ───
+    //   ★사용자 판단: "도보 길이 너무 매끄러워 보인다 — 일단 산을 다 완성 후 도보길을 내는 형태로
+    //   진행." → 보행/건축 자리를 목표 평탄면으로 깎던 감산 후처리(carve: `carved = rugged·(1−w) +
+    //   target·w`)를 **걷어냈다**. reliefAt 은 이제 crag·골격 그대로의 <b>울퉁불퉁 통짜 험산</b>이다
+    //   (매끈해진 carve 자리 없음). 도보길(잔도·천계단)은 이 완성된 바위산 위에 **나중에 별도로 짓는다**
+    //   (기계 ③ 조성분 — 이번 임무 밖). 그때 실제 노반을 깎아 물매를 맞춘다. TrailForge 는 그 도보길이
+    //   놓일 「예정 중심선」(노선 호장 u)만 계획한다 — 곁구역 재단(zoneAt)의 자.
+    //   ※ 폐기 상수: CARVE_LO/CARVE_HI(가중 램프) — carve 감산과 함께 삭제. CALM_WALK_TAU 는 유지
+    //     (B-155 calm-only 검수의 보행 평탄대 문턱으로 살아 있다).
+    /** 보행 평탄대 판정 문턱(검수 B-155 calm-only) — 이 위 calm 셀(예정 보행선)만 연속성(≤SEAM)을 요구 */
     private static final double CALM_WALK_TAU = 0.70;
 
     /** 등산로 폴리라인 (절대 좌표) — 곁구역 재단의 자. spec.trail(③ 목록) · ③ 생성기 · 잠정 폴백 */
@@ -328,7 +330,8 @@ public final class RangeField {
 
     /**
      * 높이장 핵 — {@code (dx,dz)} 는 주봉 기준 상대(남=+z). warp/crag 플래그로 계층을 켠다.
-     * 파이프라인: 워프 → smoothUnion(massif base, 비등방 봉, 능선) → 골 절개 → 품 투영 → 절리 crag.
+     * 파이프라인: 워프 → smoothUnion(massif base, 비등방 봉, 능선) → 골 절개 → 절리 crag.
+     * ★carve(보행/건축 자리 평탄화 후처리)는 제거됐다(2026-07-16) — 통짜 험산 그대로 반환.
      */
     private double reliefCore(double dx, double dz, boolean warp, boolean crag) {
         double r = Math.hypot(dx, dz);
@@ -357,25 +360,18 @@ public final class RangeField {
         cut *= (1.0 - 0.9 * courtMask(dx, dz));
         h = Math.max(0.0, h - cut);
 
-        // 3.5) smoothBase — 능선·골 골격의 <b>매끄러운 보행 기준면</b> (연속 ≤6). carve 의 목표면.
-        double smoothBase = h;
-
         // 4) ★험산 — 강한 불규칙 다옥타브 crag 를 노출 사면에 얹는다 (평탄 블록·양자화 폐기 · 울퉁불퉁).
-        //    calm 비우기 없음(전면) · 보행자리는 5단계 carve 가 깎는다. B-155 calm-only 라 사면에 급한 요철 자유.
+        //    ★carve 제거(2026-07-16 사용자 도보 판단): 보행/건축 자리를 목표 평탄면으로 깎던 5단계
+        //    감산 후처리를 걷어냈다. 산은 이제 crag·골격 그대로의 <b>통짜 험산</b>(매끈해진 carve 자리
+        //    없음) — 도보길(잔도·천계단)은 이 완성된 바위산 위에 나중에 별도 조성한다(기계 ③ · 임무 밖).
+        //    B-155 calm-only 라 사면에 급한 요철 자유. 봉 마루·발치만 여며(topFade·lowFade) 몸통 전체 거칠게.
         double rugged = h;
         if (crag && h > CLIFF_MIN_H) {
             double topFade = clamp01((CLIFF_TOP_HI - h / lift) / (CLIFF_TOP_HI - CLIFF_TOP_LO));  // 봉 마루 여밈
             double lowFade = clamp01((h - CLIFF_MIN_H) / CLIFF_FOOT_RAMP);                        // 발치 여밈
             rugged += ruggedRelief(wx, wz) * (topFade * lowFade);       // 몸통 전체 거칠게 (평탄대 없음)
         }
-
-        // 5) ★carve — 보행/건축 자리를 감산 후처리로 깎아낸다. 목표 평탄면으로 내리고 가장자리는
-        //    깎인 암벽(cut wall)이 남는다: court=평탄 안부 · 능선 척추·남 corridor=깎인 잔도·척추.
-        double cm = courtMask(dx, dz);
-        double target = smoothBase * (1.0 - cm) + court.h() * cm;       // 보행 표면 높이 (매끈·연속)
-        double w = clamp01((calmMask(dx, dz) - CARVE_LO) / (CARVE_HI - CARVE_LO));  // calm 코어=1(순수 평탄)
-        double carved = rugged * (1.0 - w) + target * w;
-        return Math.max(0.0, Math.min(lift, carved));
+        return Math.max(0.0, Math.min(lift, rugged));
     }
 
     /**
@@ -516,7 +512,8 @@ public final class RangeField {
      * 뒤섞인 울퉁불퉁 바위 표면을 낸다 (평탄 계단·양자화 없음). 두 층: (1) <b>등방 다옥타브 해시</b>(큰
      * 덩어리→잔결) — 연속적으로 거칠되 옥타브가 겹쳐 곳곳이 급함(작은 절벽 자연 발생). (2) <b>방향성 절리
      * 크랙</b>(24°/112° 계열, {@code ridged=1−|sin|} 날 선 골) — 파장을 저주파 해시로 흔들어 규칙 줄무늬를
-     * 피한다. ★B-155 calm-only 라 사면 요철 자유 — 보행 자리는 이 뒤의 carve(reliefCore 5단계)가 깎는다.
+     * 피한다. ★B-155 calm-only 라 사면 요철 자유 — carve(보행 자리 평탄화)는 제거됐고(2026-07-16)
+     * 이 crag 가 몸통 전체를 덮어 통짜 험산을 낸다. 도보길은 나중에 이 위에 별도 조성(기계 ③ · 임무 밖).
      * 결정론(격자 해시 보간·삼각뿐, 난수 0).
      */
     private double ruggedRelief(double dx, double dz) {
@@ -781,13 +778,13 @@ public final class RangeField {
                     plan.pathFactor(), plan.maxSlope(), java.util.Arrays.toString(plan.turnsPerZone()),
                     plan.hairpinsPerZone(), plan.amplitude(), plan.fallback());
             if (plan.fallback()) {
-                System.out.println("FAIL 등산로: ③ 생성기가 폴백으로 물러섰다 (제약 만족 노선 없음 — 산기슭 완사면 확인)");
+                System.out.println("FAIL 등산로: ③ 생성기가 폴백으로 물러섰다 (노선 계획 실패 — 경로계수·회전·4구역 제약)");
                 ok = false;
             }
-            if (plan.maxSlope() > TrailForge.MAX_SLOPE + 1e-9) {
-                System.out.printf("FAIL 등산로: 최대경사 %.3f > 1:1%n", plan.maxSlope());
-                ok = false;
-            }
+            // ★carve 제거(2026-07-16): 노선은 통짜 험산 위 '미래 도보길 중심선' 계획이라 물매가 1:1 을
+            //   넘는다. 물매-보행성 검사는 미래 도보길(잔도·천계단) 조성으로 이관(미결) — 여기선 FAIL 아님.
+            System.out.printf("  노선 물매(미래 도보길 조성 이관·미결): 최대 %.3f (통짜 험산 위 중심선 — 1:1 검사 이관)%n",
+                    plan.maxSlope());
         } else {
             System.out.println("등산로 원: spec.trail 목록 (③ 산출 주입됨)");
         }
@@ -843,10 +840,12 @@ public final class RangeField {
             ok = false;
         }
 
-        // ① 연속성 (B-155 재범위 · ★calm-only) — 보행/건축 calm 셀에서만 연속(≤SEAM_STEP_MAX).
-        //   비-calm(절벽 면)은 큰 단차 허용(험산의 본질). 세로·가로 두 이웃 다 잰다(걸으려면 두 축 연속).
-        //   전 domain 을 훑어 남면 corridor·창룡령·품·봉 사면을 전부 덮는다.
-        final double calmTau = CALM_WALK_TAU;   // 이 위 = carve 순수 평탄대(w=1) — 보행/건축 표면
+        // ① 연속성 (B-155 재범위 · ★calm-only) — calm 셀(예정 보행선 = 미래 도보길 중심선)에서만
+        //   연속(≤SEAM_STEP_MAX)을 요구한다. ★carve 제거(2026-07-16) 뒤 험산 본체는 거의 다 비-calm —
+        //   calm 은 얇은 예정 중심선 띠(남 corridor·창룡령·품)와 산기슭·입구 평탄부에만 남는다. 이 검사는
+        //   그 예정 중심선이 봉·능선의 급면 절벽을 가로지르지 않는지를 잰다(비-calm 절벽 면은 큰 단차 허용 —
+        //   험산의 본질). 세로·가로 두 이웃 다 잰다. 전 domain 을 훑는다.
+        final double calmTau = CALM_WALK_TAU;   // 이 위 calm 셀 = 예정 보행선(미래 도보길 중심선) — 연속 요구
         double maxCalmSeam = 0.0, maxCliffSeam = 0.0;
         int cx0 = 0, cz0 = 0;
         long expoCells = 0, flatCells = 0;      // 계단 감지 — 비-calm 노출 셀 중 '평탄'(4이웃 다 ±1) 비율

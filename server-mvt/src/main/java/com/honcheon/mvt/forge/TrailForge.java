@@ -44,7 +44,12 @@ public final class TrailForge {
     }
 
     // ── 승인된 제약 (확정값 — Codex §5.1) ──────────────────────────────────
-    /** 최대 경사 1:1 (계단 상한 · H-8 · Codex §5.1) */
+    /**
+     * 최대 경사 1:1 (계단 상한 · H-8 · Codex §5.1). ★carve 제거(2026-07-16) 뒤 이 값은 노선 후보
+     * <b>탈락 필터가 아니다</b> — 산이 통짜 험산이라 예정 중심선 물매가 1:1 을 넘는다. 물매-보행성은
+     * 미래 도보길(잔도·천계단) 조성이 실제 노반을 깎아 맞춘다(미결 이관). {@code maxSlope} 는 보고·
+     * 검출기 자기시험(경사 검출 눈)에만 쓴다.
+     */
     public static final double MAX_SLOPE = 1.0;
     /** 구역당 방향 전환 최소 (Codex §5.1 · 검수 축 11 굽이) */
     public static final int MIN_TURNS_PER_ZONE = 2;
@@ -166,10 +171,11 @@ public final class TrailForge {
                 if (err > PATH_FACTOR_TOL) {
                     continue;                       // 경로계수 밴드 밖
                 }
+                // ★2026-07-16 carve 제거: 산이 통짜 험산이라 노선 중심선 물매가 1:1 을 넘는다.
+                //   물매-보행성은 미래 도보길(잔도·천계단) 조성의 몫으로 이관 — 여기선 노선 '계획'만
+                //   (경로계수·회전·4구역)으로 후보를 고른다. 물매는 여전히 재어 Result.maxSlope 로
+                //   보고하나 후보 탈락 사유가 아니다 (미결: 도보길 조성이 실제 노반을 깎아 물매를 맞춘다).
                 double ms = maxSlope(wp[0], wp[1], height);
-                if (ms > MAX_SLOPE) {
-                    continue;                       // 경사 상한 위반
-                }
                 int[] turns = turnsPerZone(spec, wp[0], wp[1]);
                 if (!turnsOk(turns) || !fourZones(spec, wp[0], wp[1])) {
                     continue;                       // 회전 부족 또는 4구역 미달
@@ -437,11 +443,11 @@ public final class TrailForge {
             ok = false;
         }
 
-        // 2) 경사 상한 ≤ 1:1
-        if (r.maxSlope() > MAX_SLOPE + 1e-9) {
-            System.out.printf("FAIL 경사: 최대 %.3f > 1:1%n", r.maxSlope());
-            ok = false;
-        }
+        // 2) 경사 — ★carve 제거(2026-07-16)로 노선이 통짜 험산 위를 지난다. 물매-보행성은 미래 도보길
+        //    (잔도·천계단) 조성의 몫으로 이관됐다(미결). 여기선 FAIL 하지 않고 보고만 한다 — 노선은
+        //    '미래 도보길 중심선' 계획이지 '지금 이 지형에서 걸을 수 있다'는 게 아니다.
+        System.out.printf("  노선 물매(미래 도보길 조성 이관·미결): 최대 %.3f (통짜 험산 위 중심선 — 1:1 검사 이관)%n",
+                r.maxSlope());
 
         // 3) 구역당 회전 ≥ 2
         for (int zi = 0; zi < ZONES; zi++) {
