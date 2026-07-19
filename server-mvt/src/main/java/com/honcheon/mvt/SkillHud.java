@@ -28,6 +28,9 @@ import java.util.UUID;
  */
 final class SkillHud {
 
+    /** 합성 구분자 — statusBar 와 notice 즉시 렌더가 같은 것을 쓴다 (줄이 두 얼굴을 갖지 않게) */
+    static final String SEP = ChatColor.DARK_GRAY + " │ ";
+
     private final SkillEngine engine;
 
     /** 이번 틱 전역 발행량 — newTick() 이 0으로 되돌린다 (중앙 티커 1개, F-P2) */
@@ -270,6 +273,28 @@ final class SkillHud {
         actionBar(player, text);   // 지금 당장 — 다음 statusBar 틱을 기다리지 않는다
     }
 
+    /**
+     * 바깥 손의 지속 표시 (B-116 전역 소유권) — 비무 카운트다운·서장 집필 대기·시신 은닉 진행이
+     * 이 문으로 온다. 줄을 통째로 갖지 않고 <b>채널 조각</b>이 되어 statusBar 합성에 병기된다.
+     *
+     * @param renderNow 무공 상태가 없는 몸(statusBar 틱이 안 도는 몸)은 여기서 직접 그린다 —
+     *                  안 그리면 그 몸에게 조각은 영영 안 보인다. 상태가 있는 몸은 다음
+     *                  statusBar 틱(≤0.2초)이 전체 합성으로 그린다 (조각만 먼저 그리면
+     *                  생명·내력 조각이 0.2초 깜빡인다 — 그 깜빡임이 B-116 의 병이었다).
+     */
+    void notice(Player player, String channel, String text, long now, long until, boolean renderNow) {
+        line.notice(player.getUniqueId(), channel, text, until);
+        if (renderNow && line.owner(player.getUniqueId(), now) == null) {
+            actionBar(player, HudLine.compose(SEP,
+                    line.notices(player.getUniqueId(), now).toArray(new String[0])));
+        }
+    }
+
+    /** 채널을 비운다 — 판이 끝난 카운트다운은 TTL 만료를 기다리지 않고 내린다 */
+    void dropNotice(UUID id, String channel) {
+        line.dropNotice(id, channel);
+    }
+
     void forget(UUID id) {
         line.forget(id);
     }
@@ -331,9 +356,12 @@ final class SkillHud {
                             + flowDots(state.flow, engine.flowRequired()));
         }
 
-        // ─── 합성 — 생명(제일 앞. 목숨보다 앞에 오는 정보는 없다) │ 태세 │ 격 │ 내력 │ 경공 │ 발출 │ 오의 ───
-        actionBar(player, HudLine.compose(ChatColor.DARK_GRAY + " │ ",
+        // ─── 합성 — 생명(제일 앞. 목숨보다 앞에 오는 정보는 없다) │ 태세 │ 격 │ 내력 │ 경공 │ 발출 │ 오의
+        //     │ 바깥 조각(notice: 비무·서장·은닉 — B-116 전역 소유권. 뒤에 붙는다: 상태가 먼저다) ───
+        java.util.List<String> segments = new java.util.ArrayList<>(java.util.Arrays.asList(
                 vitality(player), stanceSeg, gradeSeg, energySeg, rider, shotSeg, ultSeg));
+        segments.addAll(line.notices(player.getUniqueId(), now));
+        actionBar(player, HudLine.compose(SEP, segments.toArray(new String[0])));
     }
 
     /**

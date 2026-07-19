@@ -10,6 +10,15 @@ final class Glyphs {
     /** U+E000 — 기세 아이콘 (색 코드로 틴트: 회/백/황/적) */
     static final String GISE = "\uE000";   // F26: PUA 리터럴 금지 — 이스케이프로만 쓴다
 
+    /**
+     * U+E030 — 비무 표식 (교차한 목검 + 띠 · 백색계 4단 명암, 색 코드로 틴트).
+     * 용처 정본은 빌더 주석 (build_resourcepack.py "비무 표식 (E030)" 절): "액션바·명패 앞에
+     * 붙일 글리프 … Sparring 의 액션바 문구만으로도 읽힌다". 액션바 쪽은 {@link Sparring}
+     * 카운트다운 앞에 배선됐다 (2026-07-16 · B-116 회차). 명패 쪽은 문구·자리 정본이 없어
+     * 미배선 — 미결. 팩 미설치 시 □ — 빌더 주석의 계약대로 문구만으로도 읽힌다.
+     */
+    static final String BIMU = "\uE030";
+
     private static final char GAUGE_BASE = '\uE010';
 
     private Glyphs() {

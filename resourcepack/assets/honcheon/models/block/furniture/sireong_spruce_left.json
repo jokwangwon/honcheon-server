@@ -1,0 +1,7 @@
+{
+  "parent": "honcheon:block/furniture/template_sireong_left",
+  "textures": {
+    "all": "minecraft:block/spruce_shelf",
+    "particle": "minecraft:block/spruce_shelf"
+  }
+}

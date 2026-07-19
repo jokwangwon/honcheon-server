@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "honcheon:block/furniture/beteul"
+    },
+    "facing=east": {
+      "model": "honcheon:block/furniture/beteul",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "honcheon:block/furniture/beteul",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "honcheon:block/furniture/beteul",
+      "y": 270
+    }
+  }
+}

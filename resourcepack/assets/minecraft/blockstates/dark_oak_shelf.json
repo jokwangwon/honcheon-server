@@ -1,0 +1,402 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak"
+      },
+      "when": {
+        "facing": "north"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak",
+        "y": 90
+      },
+      "when": {
+        "facing": "east"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak",
+        "y": 180
+      },
+      "when": {
+        "facing": "south"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak",
+        "y": 270
+      },
+      "when": {
+        "facing": "west"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unpowered"
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "north"
+          },
+          {
+            "powered": "false"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unpowered",
+        "y": 90
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "east"
+          },
+          {
+            "powered": "false"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unpowered",
+        "y": 180
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "south"
+          },
+          {
+            "powered": "false"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unpowered",
+        "y": 270
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "west"
+          },
+          {
+            "powered": "false"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unconnected"
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "north"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "unconnected"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unconnected",
+        "y": 90
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "east"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "unconnected"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unconnected",
+        "y": 180
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "south"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "unconnected"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_unconnected",
+        "y": 270
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "west"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "unconnected"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_left"
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "north"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "left"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_left",
+        "y": 90
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "east"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "left"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_left",
+        "y": 180
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "south"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "left"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_left",
+        "y": 270
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "west"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "left"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_center"
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "north"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "center"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_center",
+        "y": 90
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "east"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "center"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_center",
+        "y": 180
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "south"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "center"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_center",
+        "y": 270
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "west"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "center"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_right"
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "north"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "right"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_right",
+        "y": 90
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "east"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "right"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_right",
+        "y": 180
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "south"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "right"
+          }
+        ]
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/sireong_dark_oak_right",
+        "y": 270
+      },
+      "when": {
+        "AND": [
+          {
+            "facing": "west"
+          },
+          {
+            "powered": "true"
+          },
+          {
+            "side_chain": "right"
+          }
+        ]
+      }
+    }
+  ]
+}

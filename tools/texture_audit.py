@@ -1488,11 +1488,64 @@ MODEL_ATLASES = ("blocks", "items")     # 모델 렌더러가 쓰는 아틀라�
 #   면제된 것은 **숨은 것이 아니다**: 축 ⑮·⑯ 이 이것들을 계속 잰다 (자리와 비율).
 NON_ICON = ("/textures/item/qi/", "/textures/item/ult/", "/textures/item/mob/")
 
+# ═══ 고해상 등록부 — 【2026-07-16 신설 · V2-W 2차 청구】 축 ①·⑥ 의 **등록형** 면제 ═══
+# NON_ICON 은 하드코딩 3종으로 굳었다 — 네 번째부터는 **등록부가 주도한다**
+# (config/resourcepack_design.yml hi_res_channels: 경로 글롭 · 허용 해상도 · 사유).
+# 등재된 채널은 아이콘 규율(① 16x16 · ⑥ 외곽선)의 관할이 아니다 — 3D 모델의 면이지
+# 핫바 아이콘이 아니기 때문이다. 그러나 면제는 무법지대가 아니다: **축 ㉓ 이 다른 자로 잰다**
+# (치수·팔레트·적색·알파 실루엣·아틀라스 실존). 미등록 고해상은 여전히 축 ① 이 잡는다.
+_HI_RES_CACHE = []
+
+
+def hi_res_registry():
+    """hi_res_channels.entries — [(글롭, [허용 변길이…], 사유)…]. 절이 없으면 None (축 ㉓ 이 운다)."""
+    if _HI_RES_CACHE:
+        return _HI_RES_CACHE[0]
+    src = (ROOT / "config" / "resourcepack_design.yml").read_text(encoding="utf-8")
+    body = src.split("\nhi_res_channels:", 1)
+    if len(body) < 2:
+        _HI_RES_CACHE.append(None)
+        return None
+    out = []
+    for line in body[1].splitlines():
+        if line and not line[0].isspace():
+            break                                  # 다음 최상위 절 — 등록부는 끝났다
+        m = re.match(r'\s*-\s*\{\s*path:\s*"([^"]+)"\s*,\s*sizes:\s*\[([\d,\s]+)\]\s*,'
+                     r'\s*reason:\s*"([^"]+)"', line)
+        if m:
+            # 【V2-W 6차 개정 — 팔레트 해방은 등록부 주도】 채널별 선택 필드 (없으면 전역 기본):
+            #   chroma_mean_max / chroma_pixel_max / chroma_pixel_frac / hue_free
+            # 사유: 레퍼런스(TWC 실측 2장)의 설계 언어 — 흑자주·심녹 기조 + 선명한 악센트 —
+            # 는 전역 채도·색상 상한(묵청 자재의 잣대)으로 성립 불가. 무기 paint 채널만
+            # 제 잣대를 등록하고, 미등록 채널·아이콘·블록 축은 옛 법 그대로다. 【잠정】
+            pal = {}
+            for key in ("chroma_mean_max", "chroma_pixel_max", "chroma_pixel_frac"):
+                km = re.search(key + r':\s*([\d.]+)', line)
+                if km:
+                    pal[key] = float(km.group(1))
+            if re.search(r'hue_free:\s*true', line):
+                pal["hue_free"] = True
+            if re.search(r'animation:\s*true', line):
+                pal["animation"] = True             # 20차 — 세로 프레임 스트립(h=n·w)+.mcmeta 허용
+            out.append((m.group(1), [int(v) for v in m.group(2).split(",")], m.group(3), pal))
+    _HI_RES_CACHE.append(out)
+    return out
+
+
+def _hi_res_entry(path):
+    """이 파일이 걸리는 hi_res 등재 행 — (글롭, sizes, 사유, 팔레트) 또는 None. 첫 일치가 이긴다."""
+    import fnmatch
+    reg = hi_res_registry() or []
+    p = str(path).replace("\\", "/")
+    return next((row for row in reg if fnmatch.fnmatch(p, "*/" + row[0])), None)
+
 
 def is_icon(path):
-    """핫바에 뜨는 **아이콘**인가 — 축 ①·⑥ 의 사정거리. (획·가죽은 3D 모델의 면이지 아이콘이 아니다)"""
+    """핫바에 뜨는 **아이콘**인가 — 축 ①·⑥ 의 사정거리. (획·가죽은 3D 모델의 면이지 아이콘이 아니다.
+    hi_res_channels 등재분도 아이콘이 아니다 — 등록형 면제, 축 ㉓ 이 대신 잰다)"""
     p = str(path).replace("\\", "/")
-    return "/textures/item/" in p and not any(k in p for k in NON_ICON)
+    return ("/textures/item/" in p and not any(k in p for k in NON_ICON)
+            and _hi_res_entry(path) is None)
 
 
 def png_size(path):
@@ -2173,6 +2226,268 @@ def gauge_axis():
     return violations
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 축 ㉓ 고해상 페인트 — 「면제는 무법지대가 아니다」  【2026-07-16 신설 · V2-W 2차 청구】
+#
+# ── 왜 이 축이 생겼나 ──
+# 사용자가 무기 디자인을 겐신 무기팩(TWC)급으로 지시했다. 그 문법 = 큰 평면 원소 +
+# **64px 페인트 텍스처** (곡선 실루엣은 알파로). 그런데 축 ①(16x16)은 textures/item/**
+# 전역(NON_ICON 밖)을 막아 고해상이 설 자리가 없었다 — V2-W 2차가 "16x16 2장 모자이크가
+# 합법 상한"이라 적고 **등록형 면제 + 페인트 전용 축**을 정식 청구했다 (pack_upgrade_v2_3d §5).
+#
+# ── 법 (등록부 주도 — NON_ICON 처럼 하드코딩을 늘리지 않는다) ──
+# config/resourcepack_design.yml hi_res_channels 에 등재된 글롭만 축 ①·⑥에서 벗어난다.
+# 그리고 벗어난 자리를 **이 축이 다른 자로 잰다** (면제 = "재지 않는다"가 아니라 "다른 자로 잰다"):
+#   ⓐ 치수 — 등록 sizes 의 **정사각 정확히** (과도기 [16,64]: 16=현행 2차 시트 · 64=3차 목표.
+#      3차 뒤 등록부가 [64] 로 좁힌다 — 여기 코드는 등록부를 따라갈 뿐이다)
+#   ⓑ 등록 팔레트 준수 — weapons.py 등록 색(강철 5단·놋 3단·주사·옥·백·삼줄)의 mix 는
+#      계측 가능한 세 잣대로 남는다 (2026-07-16 현행 114장 실측이 근거 — 실측 + 여유):
+#        · 파일 평균 채도 ≤ 60   (실측 최대 42.0 — bu_mabyeong_hilt)
+#        · 픽셀 채도 > 160 비율 ≤ 1%  (등록 팔레트의 픽셀 최대 134 — mix 는 끝점을 못 넘는다)
+#        · 팔레트에 없는 색상 대역 200°~330°(청·보라·마젠타) 비율 ≤ 1%  (실측 0픽셀)
+#      ★ 축 ⑱의 _forbidden_hue 를 그대로 쓰면 안 된다 — 놋(hue ≈43°)이 "과도한 노랑"에
+#        걸린다 (실측 43.8%). 획의 자를 페인트에 들이대면 거짓 위반이 뜬다 — 제 자를 짓는다.
+#   ⓒ 적색 — semantic_red_registry **그대로** (paint 2행이 상한. 축 ⑳과 같은 자·같은 등록부 —
+#      두 자가 다르면 둘 다 거짓말이다)
+#   ⓓ 알파 실루엣 위생 【잠정 — 3차 실물이 나오면 실측으로 조인다】: 완전 투명(α≤8)/불투명(α≥248)
+#      이분이 기본. 중간 알파는 **부드러운 가장자리**로만 허용 — 투명에서 체비쇼프 2px 이내 ·
+#      전체의 ≤25%. 실루엣에서 떨어진 중간 알파(내부 안개)는 위반이다 (아틀라스에서 유령 번짐이 된다).
+#   ⓔ 아틀라스 실존 (축 ⑮ 연동) — 클라이언트가 훑는 자리(atlases 원천)에 있고, 모델이
+#      **실제로 부른다** (부르지 않는 등재 시트 = 죽은 짐 — 등록·실물·참조가 어긋난 것이다).
+# ═══════════════════════════════════════════════════════════════════════════
+HI_CHROMA_MEAN_MAX = 60        # 파일 평균 채도 상한 — 실측 최대 42.0 + 여유 (드리프트 감지선)
+HI_PIXEL_CHROMA_MAX = 160      # 픽셀 채도 상한 — 등록 팔레트 픽셀 최대 134 (mix 는 끝점을 못 넘는다)
+HI_PIXEL_CHROMA_FRAC = 0.01    # 상한 초과 픽셀 허용 비율
+HI_FORBID_HUE = (200.0, 330.0) # 등록 팔레트에 없는 색상 대역 (실측 0픽셀 — 청·보라·마젠타)
+HI_FORBID_FRAC_MAX = 0.01      # 금지 대역 픽셀 허용 비율 (채도 ≤20 회색은 색상이 없다 — 세지 않는다)
+HI_MID_ALPHA = (8, 248)        # 이 사이 = 중간 알파 (완전 투명/불투명 이분의 바깥)
+HI_MID_FRAC_MAX = 0.25         # 중간 알파 비율 상한 【잠정】
+HI_EDGE_DIST = 2               # 중간 알파가 투명에서 떨어져도 되는 체비쇼프 거리 【잠정】
+
+
+def _alpha_hygiene(w, h, rows):
+    """(중간알파 비율, 내부 안개 픽셀 수) — ⓓ. 중간 알파는 투명 가장자리 2px 이내만 합법이다."""
+    transp, mid = set(), set()
+    for y in range(h):
+        for x in range(w):
+            a = px(rows, x, y)[3]
+            if a <= HI_MID_ALPHA[0]:
+                transp.add((x, y))
+            elif a < HI_MID_ALPHA[1]:
+                mid.add((x, y))
+    if not mid:
+        return 0.0, 0
+    near = set(transp)
+    for _ in range(HI_EDGE_DIST):                    # 투명을 2번 부풀린다 = 거리 ≤2 의 띠
+        near |= {(x + dx, y + dy) for x, y in near
+                 for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                 if 0 <= x + dx < w and 0 <= y + dy < h}
+    return len(mid) / (w * h), sum(1 for p in mid if p not in near)
+
+
+def hi_res_axis():
+    """축 ㉓ — 고해상 등록 채널 검수 (치수·팔레트·적색·알파·아틀라스). 위반 수를 돌려준다."""
+    import fnmatch
+    print("\n── 축 ㉓ 고해상 페인트 — 「면제는 무법지대가 아니다」 (등록부: hi_res_channels) ──")
+    reg = hi_res_registry()
+    if reg is None:
+        print("  ❌ config/resourcepack_design.yml 에 hi_res_channels 가 없다 — "
+              "등록부 없는 면제는 잴 수 없다 (is_icon 의 면제가 공중에 뜬다)")
+        return 1
+    try:
+        dirs, _singles = atlas_sources()
+    except Exception as e:
+        dirs = [("block", "block/"), ("item", "item/")]
+        print(f"  ⚠ 아틀라스 원천을 jar 에서 못 읽었다 ({e}) — 1.21.11 기본값(block·item)으로 잰다")
+    refs = {(r if ":" in r else f"minecraft:{r}") for _f, _s, r in model_texture_refs()}
+    red_reg = _red_registry() or []
+    all_pngs = sorted(PACK.rglob("*.png"))
+    violations = 0
+    for glob_, sizes, why, pal in reg:
+        mean_cap = pal.get("chroma_mean_max", HI_CHROMA_MEAN_MAX)
+        px_cap = pal.get("chroma_pixel_max", HI_PIXEL_CHROMA_MAX)
+        px_frac = pal.get("chroma_pixel_frac", HI_PIXEL_CHROMA_FRAC)
+        hue_free = pal.get("hue_free", False)
+        hits = [f for f in all_pngs
+                if fnmatch.fnmatch(str(f.relative_to(PACK)).replace("\\", "/"), glob_)]
+        if not hits:
+            violations += 1
+            print(f"  ❌ {glob_}: 등록됐으나 실물 0장 (등록부가 팩을 앞지른다)")
+            continue
+        worst_mean = worst_mid = 0.0
+        size_seen = {}
+        for f in hits:
+            rel = str(f.relative_to(PACK)).replace("\\", "/")
+            notes = []
+            w, h = png_size(f)
+            size_seen[(w, h)] = size_seen.get((w, h), 0) + 1
+            if w not in sizes:                                 # ⓐ 치수 — 프레임 변길이
+                notes.append(f"크기 {w}x{h} — 등록 해상도 {sizes} 의 변길이가 아니다")
+            elif w != h:                                       # 세로 스트립 — 애니(등록 + .mcmeta)만
+                meta = (f.with_name(f.name + ".mcmeta").exists()
+                        or f"assets/{f.relative_to(PACK).parts[0]}/textures/"
+                        f"{'/'.join(f.relative_to(PACK).parts[2:])}.mcmeta"
+                        in set(client_jar().namelist()))
+                if not (pal.get("animation") and h % w == 0 and meta):
+                    notes.append(f"크기 {w}x{h} — 등록 애니 스트립(animation:true + h=n·{w} + "
+                                 f".mcmeta)이 아니다 (정사각도 애니 스트립도 아니다)")
+            w2, h2, rows = read_png(f)
+            vis = [px(rows, x, y) for y in range(h2) for x in range(w2)
+                   if px(rows, x, y)[3] > HI_MID_ALPHA[0]]
+            if vis:                                            # ⓑ 등록 팔레트
+                n = len(vis)
+                mean_c = sum(max(p[:3]) - min(p[:3]) for p in vis) / n
+                worst_mean = max(worst_mean, mean_c)
+                hyper = sum(1 for p in vis if max(p[:3]) - min(p[:3]) > px_cap) / n
+                forbid = 0
+                if not hue_free:                   # 색상 자유 채널은 대역을 묻지 않는다 (등록제)
+                    for p in vis:
+                        hu, c = _hue(*p[:3])
+                        if c > 20 and HI_FORBID_HUE[0] <= hu <= HI_FORBID_HUE[1]:
+                            forbid += 1
+                forbid /= n
+                if mean_c > mean_cap:
+                    notes.append(f"평균 채도 {mean_c:.0f} > {mean_cap:.0f} — 채널 등록 상한 밖이다 (형광 도배)")
+                if hyper > px_frac:
+                    notes.append(f"픽셀 채도 >{px_cap:.0f} 이 {hyper:.1%} > {px_frac:.0%} — 채널 상한 밖의 원색")
+                if forbid > HI_FORBID_FRAC_MAX:
+                    notes.append(f"금지 색상 대역({HI_FORBID_HUE[0]:.0f}°~{HI_FORBID_HUE[1]:.0f}°) {forbid:.1%} > "
+                                 f"{HI_FORBID_FRAC_MAX:.0%} — 이 팩에 없는 색(청·보라·마젠타)")
+            mid_frac, ghost = _alpha_hygiene(w2, h2, rows)     # ⓓ 알파 실루엣 위생
+            worst_mid = max(worst_mid, mid_frac)
+            if mid_frac > HI_MID_FRAC_MAX:
+                notes.append(f"중간 알파 {mid_frac:.0%} > {HI_MID_FRAC_MAX:.0%} — 이분(투명/불투명)이 본체다")
+            if ghost:
+                notes.append(f"내부 안개 {ghost}px — 중간 알파가 실루엣 가장자리({HI_EDGE_DIST}px)에서 떨어져 있다")
+            vis_n, red_n = _red_ratio(f)                       # ⓒ 적색 — 축 ⑳과 같은 등록부
+            if vis_n:
+                cap = next((c for pat, c, _r in red_reg if fnmatch.fnmatch(rel, pat)),
+                           RED_DEFAULT_MAX)
+                if red_n / vis_n > cap:
+                    notes.append(f"적색 {red_n / vis_n:.1%} > {cap:.0%} — semantic_red_registry 상한 (축 ⑳과 같은 자)")
+            parts = rel.split("/")                             # ⓔ 아틀라스 실존 (축 ⑮ 연동)
+            ns, tex_rel = parts[0], "/".join(parts[2:])        # <ns>/textures/<...>.png
+            if not any(tex_rel.startswith(src + "/") for src, _p in dirs):
+                notes.append("아틀라스 밖 — 클라이언트가 훑지 않는 자리다 (스프라이트가 안 생긴다 ⇒ 보라 큐브)")
+            elif f"{ns}:{tex_rel[:-4]}" not in refs:
+                notes.append("모델이 부르지 않는다 — 죽은 등재 시트 (등록·실물·참조가 어긋났다)")
+            if notes:
+                violations += 1
+                print(f"  ❌ {rel}: " + " · ".join(notes))
+        sz = " · ".join(f"{w}x{h}×{n}" for (w, h), n in sorted(size_seen.items()))
+        print(f"  {glob_}: {len(hits)}장 ({sz}) · 허용 {sizes} · 평균채도 최대 {worst_mean:.1f} "
+              f"(≤{mean_cap:.0f}{' · 색상 자유' if hue_free else ''}) · 중간알파 최대 {worst_mid:.1%} — {why}")
+    print(f"  ⇒ 고해상 등록 채널 {len(reg)}행 · 위반 {violations}건")
+    return violations
+
+
+def hi_res_selftest():
+    """★ 축 ㉓ 의 눈 시험 — 심은 위반 네 갈래(크기·미등록 hi-res·과채도·적색) + 알파 안개.
+    팩을 임시로 더럽히고 반드시 되돌린다 (try/finally)."""
+    print("\n══ 축 ㉓ 눈 시험 (일부러 어긴다) ══")
+    base = hi_res_axis()
+    if base:
+        print(f"  ⚠ 기준선이 이미 위반 {base}건 — 시험의 뜻이 흐려진다")
+    ok = True
+    pdir = PACK / "honcheon" / "textures" / "item" / "weapon" / "paint"
+
+    # ① 등재 글롭 안에 32x32 를 심는다 — 등록 해상도(14차: 128) 밖의 치수
+    f1 = pdir / "_selftest_mid.png"
+    write_png(f1, 32, 32, [b"\x60\x60\x60\xff" * 32 for _ in range(32)])
+    try:
+        n = hi_res_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉓ⓐ] 32x32 를 paint/ 에 심었다 — "
+              f"{'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+    finally:
+        f1.unlink()
+
+    # ② **미등록** 고해상 — 면제가 넓어지지 않았는가 (축 ① 이 여전히 잡아야 한다)
+    f2 = PACK / "honcheon" / "textures" / "item" / "weapon" / "_selftest_hires.png"
+    write_png(f2, 64, 64, [bytes(v for x in range(64)
+                                 for v in ((x * 3) % 200, (x * 3) % 200, (x * 3) % 200, 255))
+                           for _ in range(64)])
+    try:
+        r = lint(f2, f2.stem)
+        caught = r[2] and any("크기" in note for note in r[1])
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉓→①] 미등록 64x64 를 weapon/ 에 심었다 — "
+              f"축 ① 이 {'잡았다 (면제는 등재 글롭뿐이다)' if caught else '**못 잡았다 — 면제가 새 나갔다**'}")
+    finally:
+        f2.unlink()
+
+    # ③ 과채도 — 등재 시트를 네온 보라로 (금지 대역 + 평균 채도 + 픽셀 채도 동시 위반)
+    target = pdir / "bu_beomcheol.png"  # 3차 개명(시트 1장/자루) 추종 — 2026-07-16
+    keep = target.read_bytes()
+    try:
+        _paint(target, (190, 40, 230))
+        n = hi_res_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉓ⓑ] 등재 시트를 네온 보라로 칠했다 — "
+              f"{'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+
+        # ④ 적색 초과 — 시트를 통째로 주사로 (등록 상한 12% 를 훌쩍 넘는다)
+        _paint(target, (200, 40, 44))
+        n = hi_res_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉓ⓒ] 등재 시트를 통째로 붉혔다 — "
+              f"{'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+
+        # ⑤ 알파 안개 — 내부 한 덩이를 중간 알파로 (투명 가장자리에서 떨어진 자리)
+        w, h, rows = read_png(target)
+        out = []
+        for y in range(h):
+            line = bytearray(rows[y])
+            for x in range(w):
+                if 6 <= x <= 9 and 6 <= y <= 9:
+                    line[x * 4 + 3] = 120
+            out.append(bytes(line))
+        write_png(target, w, h, out)
+        n = hi_res_axis()
+        caught = n > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉓ⓓ] 내부에 중간 알파 안개를 심었다 — "
+              f"{'잡았다' if caught else '**못 잡았다**'} ({base} → {n})")
+    finally:
+        target.write_bytes(keep)
+
+    # ⑥ 세로 스트립 애니 (20차) — 모델이 부르는 등재 시트를 스트립으로: mcmeta 없으면 잡고
+    #    (스트립은 등록만으론 부족), 있으면 통과 (죽은 시트 오염을 피하려 실참조 시트를 빌린다)
+    strip_t = pdir / "sword_bobyeong.png"           # 실 시트(모델 참조) · 실물 mcmeta 없는 등급 고른다
+    meta = strip_t.with_name(strip_t.name + ".mcmeta")
+    keep_s = strip_t.read_bytes()
+    keep_meta = meta.read_bytes() if meta.exists() else None   # 실물 mcmeta 가 있으면 보존
+    write_png(strip_t, 128, 256, [b"\x60\x80\x70\xff" * 128 for _ in range(256)])
+    try:
+        n_nometa = hi_res_axis()
+        caught = n_nometa > base
+        ok &= caught
+        print(f"  {'✅' if caught else '❌'} [㉓ⓐ-애니] mcmeta 없는 세로 스트립(128x256) — "
+              f"{'잡았다 (스트립은 등록+ .mcmeta 라야 합법)' if caught else '**못 잡았다**'} ({base} → {n_nometa})")
+        meta.write_text(json.dumps({"animation": {"frametime": 2}}), encoding="utf-8")
+        n_meta = hi_res_axis()
+        passed = n_meta == base
+        ok &= passed
+        print(f"  {'✅' if passed else '❌'} [㉓ⓐ-애니] .mcmeta 동반 세로 스트립 — "
+              f"{'통과 (animation:true 등록 스트립은 합법)' if passed else '**거짓 위반**'} ({base} → {n_meta})")
+    finally:
+        strip_t.write_bytes(keep_s)
+        if keep_meta is not None:
+            meta.write_bytes(keep_meta)             # 실물 mcmeta 복원 (있었다면)
+        elif meta.exists():
+            meta.unlink()
+
+    after = hi_res_axis()
+    restored = after == base
+    ok &= restored
+    print(f"  {'✅' if restored else '❌'} 팩을 되돌렸다 (위반 {after} == 기준선 {base})")
+    print(f"  ⇒ 눈의 시험 (㉓): {'통과' if ok else '**실패**'}")
+    return 0 if ok else 1
+
+
 def rp_axes_selftest():
     """★ 축 ⑲·⑳·㉑·㉒ 의 눈 시험 — 일부러 어겨서 실제로 잡는지 본다. 반드시 되돌린다."""
     print("\n══ 축 ⑲·⑳·㉑·㉒ 눈 시험 (일부러 어긴다) ══")
@@ -2329,7 +2644,8 @@ def lint(path, name):
     notes, bad = [], False
     # 흐르는 유체는 바닐라가 **32x32** 다 (물길·용암길). 치수는 바닐라 계약이라 우리가 못 고른다
     want = (32, 32) if name in ("water_flow", "lava_flow") else (16, 16)
-    # 16x16 은 **아이콘**의 계약이다 — 획(item/qi·ult)·가죽(item/mob)은 3D 모델의 면이라 열외다
+    # 16x16 은 **아이콘**의 계약이다 — 획(item/qi·ult)·가죽(item/mob)은 3D 모델의 면이라 열외고,
+    # hi_res_channels 등재분(페인트 시트)도 열외다 — 그 자리는 축 ㉓ 이 치수·팔레트·적색·알파를 잰다
     # (is_icon 의 등록 주석 참조: 축을 피해 파일을 숨긴 것이 보라 큐브의 뿌리였다)
     if (w, h) != want and "block" in str(path) or (w, h) != (16, 16) and is_icon(path):
         notes.append(f"크기 {w}x{h} ({want[0]}x{want[1]} 아님)")
@@ -2487,8 +2803,8 @@ def main():
     args = ap.parse_args()
 
     if args.selftest:
-        # 축 ⑮·⑯·⑰ + ⑱(획의 색) + **⑲·⑳·㉑·㉒ (RP 합의 축)**
-        return selftest() + stroke_color_selftest() + rp_axes_selftest()
+        # 축 ⑮·⑯·⑰ + ⑱(획의 색) + **⑲·⑳·㉑·㉒ (RP 합의 축)** + ㉓(고해상 등록부)
+        return selftest() + stroke_color_selftest() + rp_axes_selftest() + hi_res_selftest()
     if args.atlas_only:
         v = _axis_15_16_17()
         print(f"\n총평: 위반 {v}건 (축 ⑮·⑯·⑰)")
@@ -2556,6 +2872,7 @@ def main():
     violations += red_axis()              # 축 ⑳ — RP-5 (예외를 숨기지 않고 예외 자체를 잰다)
     violations += crest_axis()            # 축 ㉑ — RP-1 (초절정↔화경 XOR 2px 이던 자리)
     violations += gauge_axis()            # 축 ㉒ — RP-2 (붓홈 고정·9단 단조·틴트 시인성)
+    violations += hi_res_axis()           # 축 ㉓ — 고해상 등록부 (V2-W 2차 청구 — 면제는 무법지대가 아니다)
 
     if not args.lint_only:
         roof = PACK / "minecraft" / "textures" / "block" / "deepslate_tiles.png"

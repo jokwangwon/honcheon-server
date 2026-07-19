@@ -503,8 +503,8 @@ public final class SkillListener implements Listener {
                 if (basic == null) {
                     return;   // 활·무관·짐승 — 그을 획이 없다 (등록부대로다)
                 }
-                player.sendActionBar(net.kyori.adventure.text.Component.text(
-                        "획 — " + g.rank() + ". " + g.grade()));
+                // 사다리의 격 이름도 flash 로 — 맨 sendActionBar 는 다음 statusBar 틱에 덮인다 (B-116)
+                flash(player, "획 — " + g.rank() + ". " + g.grade());
                 display.slash(player, basic.trail(), g.grade(), weaponClass,
                         basic.range(), basic.angle(), basic.frames().total());
             }));
@@ -762,6 +762,25 @@ public final class SkillListener implements Listener {
      */
     void flash(Player player, String text) {
         hud.flash(player, text, tick + engine.hudFlashTicks());
+    }
+
+    /**
+     * 바깥 지속 표시의 한 조각 (B-116 전역 소유권) — 비무 카운트다운·서장 집필 대기·시신 은닉
+     * 진행처럼 <b>반복 송신되는 상태</b>는 flash(줄 독점)가 아니라 이 길로 온다: statusBar 합성의
+     * 채널 조각이 되어 생명·격 두름·경공과 <b>나란히</b> 읽힌다 (겹치지 않는다).
+     *
+     * @param readTicks 조각의 수명 — 보내는 손의 재송신 주기 + statusBar 주기(4틱)보다 길게.
+     *                  재송신이 끊기면 이 수명 뒤에 조각이 스스로 빠진다.
+     */
+    void notice(Player player, String channel, String text, int readTicks) {
+        // 무공 상태가 없는 몸은 statusBar 틱이 안 돈다 — 그 몸에게는 여기서 직접 그린다
+        boolean stateless = states.get(player.getUniqueId()) == null;
+        hud.notice(player, channel, text, tick, tick + readTicks, stateless);
+    }
+
+    /** 채널을 비운다 — 끝난 판의 카운트다운을 TTL 만료까지 끌고 다니지 않는다 */
+    void dropNotice(java.util.UUID playerId, String channel) {
+        hud.dropNotice(playerId, channel);
     }
 
     public SkillEngine.State state(Player player) {
@@ -1288,6 +1307,20 @@ public final class SkillListener implements Listener {
                 tick + engine.hudFlashTicks());
     }
 
+    /**
+     * <b>채굴의 그림자</b> — 이 몸이 마지막으로 블록을 깬 틱 ({@link AttackRhythm#digShadow}).
+     * 좌클릭 홀드로 캐는 동안 클라이언트는 매 틱 스윙 패킷을 보내고, 블록이 깨진 틱의 스윙은
+     * 갓 뚫린 구멍을 지나 빗나가 Paper 가 LEFT_CLICK_AIR 로 합성한다 — 그것은 공격 입력이 아니다.
+     * 월아산(유일한 삽 병기)이 땅을 2~4틱에 깨서 이 합성이 자동 연속 공격으로 나타났다 (2026-07-17).
+     */
+    private final Map<UUID, Long> lastDig = new HashMap<>();
+
+    /** 깬 틱을 적는다 — 취소 여부와 무관 (깨졌을 때만 구멍이 나지만, 적어 둬서 해로울 일이 없다) */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDig(org.bukkit.event.block.BlockBreakEvent event) {
+        lastDig.put(event.getPlayer().getUniqueId(), tick);
+    }
+
     /** 허공 좌클릭 = 헛손질(콤보는 진행된다) / Shift+좌클릭 = 발출 / Shift+우클릭 = 격 태세 */
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent event) {
@@ -1310,6 +1343,13 @@ public final class SkillListener implements Listener {
         }
         if (action != Action.LEFT_CLICK_AIR) {
             return;   // LEFT_CLICK_BLOCK 은 건드리지 않는다 — 채굴을 무공이 잡아먹으면 안 된다
+        }
+        // ★ 【월아산 자동 연발 · 2026-07-17】 채굴의 그림자 — 블록을 깬 직후의 허공 스윙 패킷은
+        //   캐는 손이지 공격의 손이 아니다 (기전·근거는 AttackRhythm 의 문서에 있다).
+        //   breakGuard 보다 먼저 선다: 캐는 손은 공격이 아니므로 방어 전념도 깨지 않는다.
+        if (AttackRhythm.digShadow(tick,
+                lastDig.getOrDefault(player.getUniqueId(), Long.MIN_VALUE / 2))) {
+            return;
         }
         breakGuard(player);   // 행동 소모 — 공격하는 손은 방어 전념을 버린 것이다 (active_guard.break_on_attack)
         SkillEngine.State state = state(player);
@@ -1602,7 +1642,12 @@ public final class SkillListener implements Listener {
         if (basic == null) {
             return;   // 활·무관·짐승 — 우리가 얹을 것이 없다 (바닐라가 제 일을 한다)
         }
-        state.cooldownUntil.put(CD_BASIC, tick + engine.basicCooldownTicks());
+        // ★ 【병기의 박자 · 2026-07-17】 등록부 연출 간격(4틱)과 계열 공속(월아산 20틱) 중 긴 쪽 —
+        //   홀드·연타가 병기의 박자를 넘어 획·전진을 연발하지 못한다. 무공 경로의
+        //   busyUntil = max(frames, swingInterval) ("공속이 거짓말하지 않게")과 같은 못이다.
+        //   판정은 불변: 몹 타격의 피해는 이 문과 무관하게 basicMelee 가 그대로 잰다.
+        state.cooldownUntil.put(CD_BASIC, AttackRhythm.basicCooldownUntil(
+                tick, engine.basicCooldownTicks(), swingInterval(player)));
 
         // 격은 두른 것을 그대로 쓴다 — 검기를 두르고 그냥 휘둘러도 **기의 획**이 나간다 (무공과 무관하게)
         String grade = offense(state) == null ? SkillEngine.BARE : offense(state);
@@ -4286,6 +4331,7 @@ public final class SkillListener implements Listener {
         lastParry.remove(id);
         lastDodge.remove(id);
         lastStanceWin.remove(id);
+        lastDig.remove(id);        // 채굴의 그림자도 접속과 함께 걷힌다
         hud.forget(id);
         energyBossBar.forget(id);   // 끊긴 몸의 보스바 기록 — 연결이 죽었으니 바는 이미 없다
         display.clear(id);      // 떠난 몸의 형체는 남지 않는다

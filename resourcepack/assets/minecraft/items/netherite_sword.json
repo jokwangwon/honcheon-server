@@ -68,10 +68,38 @@
         }
       },
       {
+        "when": "honcheon:weapon/myeong/cheongseong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/cheongseong"
+        }
+      },
+      {
         "when": "honcheon:weapon/myeong/dangga",
         "model": {
           "type": "minecraft:model",
           "model": "honcheon:item/weapon/myeong/dangga"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/gaebang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/gaebang"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/gonryun",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/gonryun"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/haenam",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/haenam"
         }
       },
       {

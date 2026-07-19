@@ -1,7 +1,5 @@
 package com.honcheon.mvt;
 
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -59,7 +57,8 @@ public final class HuntListener implements Listener {
             default -> ChatColor.GRAY;
         };
         // 기세 글리프(백색 비트맵)는 색 코드로 틴트된다 — 리소스팩 미설치 시 □
-        actionBar(player, color + Glyphs.GISE + " 기세: " + gap.replace('_', ' '));
+        // 순간 문구는 flash 로 (B-116) — 맨 sendActionBar 는 다음 statusBar 틱(≤0.2초)에 덮인다
+        plugin.skills().flash(player, color + Glyphs.GISE + " 기세: " + gap.replace('_', ' '));
     }
 
     @EventHandler
@@ -108,7 +107,8 @@ public final class HuntListener implements Listener {
         ledger.countRepetition(mobType);
 
         if (granted <= 0) {
-            actionBar(killer, ChatColor.GRAY + (accrual <= 0 ? "배울 것이 없다" : "오늘은 몸이 벅차다"));
+            plugin.skills().flash(killer,
+                    ChatColor.GRAY + (accrual <= 0 ? "배울 것이 없다" : "오늘은 몸이 벅차다"));
             return;
         }
 
@@ -128,7 +128,8 @@ public final class HuntListener implements Listener {
         plugin.skills().pushLedger(killer, ledger, plugin.skills().state(killer));
 
         // 처치 즉시 같은 틱 피드백 — 수련 일수가 경험치 숫자의 자리를 맡는다
-        actionBar(killer, ChatColor.AQUA + String.format("사냥이 손에 익는다 (+%.2f일)", granted));
+        plugin.skills().flash(killer,
+                ChatColor.AQUA + String.format("사냥이 손에 익는다 (+%.2f일)", granted));
         killer.playSound(killer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.2f);
 
         if (levelAfter > levelBefore) {
@@ -147,7 +148,6 @@ public final class HuntListener implements Listener {
         return item;
     }
 
-    private static void actionBar(Player player, String message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(message));
-    }
+    // ★ 묘비 — private actionBar(맨 sendActionBar)는 여기 살았다 (2026-07-16 철거, B-116).
+    //   순간 문구(기세·적립)는 전부 SkillListener.flash — HudLine 이 한 줄을 중재한다.
 }

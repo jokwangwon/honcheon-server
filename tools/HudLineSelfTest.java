@@ -10,8 +10,13 @@ import java.util.UUID;
  * 4틱(0.2초)마다 도는 statusBar 가 곧바로 덮었다. 수리 — {@link HudLine} 주인 규칙:
  * <ul>
  *   <li>순간 사건은 flash 로 읽을 시간(skill_motion.yml hud.flash_read_ticks)만큼 줄을 갖는다</li>
+ *   <li>바깥 지속 표시(비무·서장·은닉)는 notice 채널 조각 — 합성 한 줄의 다른 자리다 (★Codex R6~R8)</li>
  *   <li>지속 상태(생명·태세·격 두름·내력·경공 유지)는 compose 로 한 줄에 병기된다</li>
  * </ul>
+ *
+ * <p>⑨ 는 <b>정적 감사</b>다 — server-mvt 소스를 훑어 중재기 밖의 맨
+ * {@code sendActionBar}·{@code ChatMessageType.ACTION_BAR} 손을 찾는다 (허용 = SkillHud 하나).
+ * 눈을 시험하는 눈: 위반을 심은 표본 문자열이 잡히는지 먼저 잰다.
  *
  * <h2>어떻게 돌리나 (저장소 루트에서 · 서버를 켜지 않는다 — HudLine 은 Bukkit 을 모른다)</h2>
  * <pre>
@@ -75,7 +80,84 @@ public final class HudLineSelfTest {
         eye("전부 비면 빈 줄", HudLine.compose(SEP, null, "").isEmpty());
         eye("한 조각이면 구분자가 없다", "외공(外功)".equals(HudLine.compose(SEP, "외공(外功)", null)));
 
+        // ══════════ ⑧ notice — 바깥 지속 표시는 채널 조각이다 (전역 소유권 · ★Codex R6~R8) ══════════
+        HudLine bus = new HudLine();
+        UUID body = UUID.randomUUID();
+        bus.notice(body, "비무", "비무 30초", 24);
+        bus.notice(body, "은닉", "은닉 40%", 24);
+        eye("두 채널 = 두 조각, 등재 순서대로 (마지막-승자 덮어쓰기가 없다)",
+                java.util.List.of("비무 30초", "은닉 40%").equals(bus.notices(body, 10)));
+        bus.notice(body, "비무", "비무 29초", 44);
+        eye("같은 채널 재송신은 글자만 갈고 자리를 지킨다",
+                java.util.List.of("비무 29초", "은닉 40%").equals(bus.notices(body, 10)));
+        eye("만료된 채널은 조각에서 빠진다 (TTL) — 남은 채널은 산다",
+                java.util.List.of("비무 29초").equals(bus.notices(body, 30)));
+        bus.dropNotice(body, "비무");
+        eye("dropNotice — 끝난 판의 카운트다운은 만료를 기다리지 않는다", bus.notices(body, 31).isEmpty());
+        bus.notice(body, "서장", "먹을 가는 소리…", 100);
+        bus.flash(body, "회피 │ 방어 12", 50);
+        eye("flash 는 notice 위다 (우선순위 계약) — 줄의 주인은 순간 사건",
+                "회피 │ 방어 12".equals(bus.owner(body, 40)));
+        eye("flash 만료가 notice 를 지우지 않는다 — 조각은 제 수명대로 산다",
+                bus.owner(body, 51) == null
+                        && java.util.List.of("먹을 가는 소리…").equals(bus.notices(body, 60)));
+        bus.forget(body);
+        eye("forget 은 조각의 기억도 지운다 (나간 몸)", bus.notices(body, 60).isEmpty());
+
+        // ══════════ ⑨ 정적 감사 — 중재기 밖의 맨 액션바 손이 남아 있는가 ══════════
+        // 눈을 시험하는 눈 — 위반 표본이 안 잡히면 이 감사는 장님이다
+        eye("[자기시험] 심은 위반(sendActionBar)이 잡힌다",
+                stray("HuntListener.java", "  player.sendActionBar(x);\n").size() == 1);
+        eye("[자기시험] 심은 위반(ChatMessageType.ACTION_BAR)이 잡힌다",
+                stray("Foo.java", "spigot().sendMessage(ChatMessageType.ACTION_BAR, tc);\n").size() == 1);
+        eye("[자기시험] 주석 속 언급은 위반이 아니다",
+                stray("Bar.java", "// 맨 sendActionBar 는 덮인다 (B-116)\n"
+                        + "/* ChatMessageType.ACTION_BAR 도 */\n").isEmpty());
+        eye("[자기시험] SkillHud(유일한 문)는 허용이다",
+                stray("SkillHud.java", "player.spigot().sendMessage(ChatMessageType.ACTION_BAR, m);\n")
+                        .isEmpty());
+        java.nio.file.Path root = java.nio.file.Path.of(
+                args.length > 0 ? args[0] : "server-mvt/src/main/java");
+        if (!java.nio.file.Files.isDirectory(root)) {
+            System.err.println("✗ 감사할 소스가 안 보인다: " + root.toAbsolutePath()
+                    + " (저장소 루트에서 돌리거나 경로를 인자로)");
+            System.exit(1);
+        }
+        java.util.List<String> strays = new java.util.ArrayList<>();
+        try (var walk = java.nio.file.Files.walk(root)) {
+            for (java.nio.file.Path p : walk.filter(f -> f.toString().endsWith(".java")).toList()) {
+                strays.addAll(stray(p.getFileName().toString(), java.nio.file.Files.readString(p)));
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("✗ 감사 실패: " + e);
+            System.exit(1);
+        }
+        strays.forEach(s -> System.err.println("  잔존 손: " + s));
+        eye("중재기 밖의 맨 액션바 손 0곳 (문은 SkillHud.actionBar 하나)", strays.isEmpty());
+
         System.out.println("HudLineSelfTest — 눈 " + eyes + "개 전부 떠 있다 (exit 0)");
+    }
+
+    /**
+     * 파일 하나에서 중재기 밖의 맨 액션바 호출을 찾는다 — 주석(//·블록)은 걷어 내고 잰다.
+     * SkillHud 는 유일하게 허용된 문이다 (HudLine 이 중재한 글자만 거기서 나간다).
+     */
+    private static java.util.List<String> stray(String fileName, String source) {
+        if ("SkillHud.java".equals(fileName)) {
+            return java.util.List.of();
+        }
+        // 블록 주석은 줄 수를 지키며 지운다 — 신고 줄번호가 어긋나면 사람이 못 찾는다
+        String bare = java.util.regex.Pattern.compile("(?s)/\\*.*?\\*/")
+                .matcher(source).replaceAll(m -> m.group().replaceAll("[^\n]", ""));
+        java.util.List<String> hits = new java.util.ArrayList<>();
+        String[] lines = bare.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String code = lines[i].replaceFirst("//.*$", "");
+            if (code.contains("sendActionBar") || code.contains("ChatMessageType.ACTION_BAR")) {
+                hits.add(fileName + ":" + (i + 1) + "  " + code.strip());
+            }
+        }
+        return hits;
     }
 
     private static void eye(String what, boolean holds) {

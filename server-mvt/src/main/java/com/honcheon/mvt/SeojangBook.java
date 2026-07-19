@@ -60,6 +60,9 @@ public final class SeojangBook {
     /** 지금 붓이 들려 있는 몸들 — 액션바 반복이 이 명단을 돈다 (state=쓰는_중) */
     private final java.util.Set<java.util.UUID> writingNow = new java.util.LinkedHashSet<>();
 
+    /** 액션바 notice 채널 이름 (B-116) — 집필 대기 조각이 사는 자리 */
+    private static final String NOTICE_CHANNEL = "서장";
+
     // ─── 연출 등록부 (presentation) — 초·문장·소리는 전부 여기서 온다 ───
     private final String waitBar;            // 기다림 액션바 (비면 침묵 — 그러나 침묵 금지가 규약이다)
     private final int waitInterval;          // 액션바 반복 주기 (틱)
@@ -149,11 +152,14 @@ public final class SeojangBook {
         while (it.hasNext()) {
             Player p = plugin.getServer().getPlayer(it.next());
             if (p == null || !p.isOnline()) {
-                it.remove();   // 나간 몸 — 명단이 유령을 들고 있지 않는다
+                it.remove();   // 나간 몸 — 명단이 유령을 들고 있지 않는다 (조각은 quit 의 forget 이 지운다)
                 continue;
             }
             if (!waitBar.isBlank()) {
-                p.sendActionBar(legacy(waitBar));
+                // B-116: 집필 대기는 지속 표시 — notice 채널 조각으로, 생명·격 두름과 나란히 읽힌다.
+                // 수명 = 재송신 주기(waitInterval) + statusBar 주기(4틱) — 잠정 도출값
+                // waitBar 는 § 코드 문자열 그대로 — 액션바의 문(SkillHud.actionBar)도 § 코드를 그린다
+                plugin.skills().notice(p, NOTICE_CHANNEL, waitBar, waitInterval + 4);
             }
             play(p, waitSound);
         }
@@ -189,11 +195,13 @@ public final class SeojangBook {
         // 같은 장면의 책을 두 번 주지 않는다 (다리는 2초마다 같은 것을 내려보낸다)
         if (scene.token() != null && scene.token().equals(given.get(player.getUniqueId()))) {
             writingNow.remove(player.getUniqueId());   // 붓은 내려놨다 — 액션바도 그친다
+            plugin.skills().dropNotice(player.getUniqueId(), NOTICE_CHANNEL);
             return;
         }
         given.put(player.getUniqueId(), scene.token());
         told.remove(player.getUniqueId());
         writingNow.remove(player.getUniqueId());
+        plugin.skills().dropNotice(player.getUniqueId(), NOTICE_CHANNEL);
 
         ItemStack book = build(scene);
         // 옛 장의 책은 회수한다 — 품에 두 권이 있으면 어느 것이 지금인지 알 수 없다

@@ -1,0 +1,68 @@
+{
+  "textures": {
+    "particle": "minecraft:block/chiseled_bookshelf_occupied",
+    "front": "minecraft:block/chiseled_bookshelf_occupied"
+  },
+  "elements": [
+    {
+      "from": [
+        5,
+        0,
+        -0.75
+      ],
+      "to": [
+        10,
+        8,
+        2
+      ],
+      "faces": {
+        "north": {
+          "texture": "#front",
+          "uv": [
+            6,
+            8,
+            11,
+            16
+          ],
+          "cullface": "north"
+        },
+        "up": {
+          "texture": "#front",
+          "uv": [
+            6,
+            8,
+            11,
+            8.5
+          ]
+        },
+        "down": {
+          "texture": "#front",
+          "uv": [
+            6,
+            15.5,
+            11,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#front",
+          "uv": [
+            6,
+            8,
+            6.5,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#front",
+          "uv": [
+            10.5,
+            8,
+            11,
+            16
+          ]
+        }
+      }
+    }
+  ]
+}

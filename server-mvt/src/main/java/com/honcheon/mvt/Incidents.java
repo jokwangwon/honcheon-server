@@ -88,6 +88,9 @@ public final class Incidents implements Listener {
     /** person → (관계 유형 → 상대 id). populace.yml relations 를 양방향 색인한 것 */
     private static final Map<String, Map<String, String>> KIN = new LinkedHashMap<>();
 
+    /** 액션바 notice 채널 이름 (B-116) — 시신 은닉 진행 조각이 사는 자리 */
+    private static final String CONCEAL_CHANNEL = "은닉";
+
     // 기계값 (populace.yml incidents)
     private static int tickerPeriod = 20;
     private static int concealSeconds = 6;
@@ -617,12 +620,15 @@ public final class Incidents implements Listener {
             if (player == null || corpse == null || corpse.discovered || corpse.concealed) {
                 concealStart.remove(id);
                 concealTarget.remove(id);
+                plugin.skills().dropNotice(id, CONCEAL_CHANNEL);
                 continue;
             }
             if (!player.isSneaking() || player.getLocation().distance(corpse.at) > concealRadius) {
                 concealStart.remove(id);
                 concealTarget.remove(id);
-                player.sendActionBar(ChatColor.GRAY + "손을 뗐다.");
+                // 순간 문구는 flash, 진행 조각은 내린다 (B-116) — 맨 sendActionBar 는 곧 덮인다
+                plugin.skills().dropNotice(id, CONCEAL_CHANNEL);
+                plugin.skills().flash(player, ChatColor.GRAY + "손을 뗐다.");
                 continue;
             }
             // 방해 — 반경 안에 산 사람이 들어오면 중단 + 목격 +1
@@ -630,6 +636,7 @@ public final class Incidents implements Listener {
             if (!near.isEmpty()) {
                 concealStart.remove(id);
                 concealTarget.remove(id);
+                plugin.skills().dropNotice(id, CONCEAL_CHANNEL);
                 corpse.witnesses++;
                 corpse.discovered = true;
                 corpse.discoverDay = day(world);
@@ -643,6 +650,7 @@ public final class Incidents implements Listener {
                 corpse.concealed = true;
                 concealStart.remove(id);
                 concealTarget.remove(id);
+                plugin.skills().dropNotice(id, CONCEAL_CHANNEL);
                 removeMarker(corpse);
                 player.sendMessage(ChatColor.DARK_GRAY + LINE.get("conceal.done"));
                 applyStage(corpse, "은밀", player);
@@ -650,8 +658,11 @@ public final class Incidents implements Listener {
                 emit("시신_은닉", Map.of("victim", corpse.victim, "killer", player.getName()));
             } else {
                 int pct = (int) (elapsed * 100 / Math.max(1, concealSeconds));
-                player.sendActionBar(ChatColor.DARK_RED
-                        + fmt(LINE.get("conceal.progress"), Map.of("pct", String.valueOf(pct))));
+                // B-116: 은닉 진행은 지속 표시 — notice 채널 조각으로, 생명·격 두름과 나란히 읽힌다.
+                // 수명 = 재송신 주기(tickerPeriod) + statusBar 주기(4틱) — 잠정 도출값
+                plugin.skills().notice(player, CONCEAL_CHANNEL, ChatColor.DARK_RED
+                        + fmt(LINE.get("conceal.progress"), Map.of("pct", String.valueOf(pct))),
+                        tickerPeriod + 4);
             }
         }
     }

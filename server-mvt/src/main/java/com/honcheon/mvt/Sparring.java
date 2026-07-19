@@ -1,7 +1,5 @@
 package com.honcheon.mvt;
 
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -63,6 +61,10 @@ public final class Sparring implements Listener {
     private static final long CHALLENGE_TIMEOUT_MS = 30_000;
 
     private static final String SKILL = "비무";
+    /** 액션바 notice 채널 이름 (B-116) — 이 판의 카운트다운 조각이 사는 자리 */
+    private static final String NOTICE_CHANNEL = "비무";
+    /** 조각 수명 — 재송신 주기(중앙 티커 1초 = 20틱) + statusBar 주기(4틱). 잠정 도출값 (설계 수치 아님) */
+    private static final int NOTICE_TICKS = 24;
 
     private final HoncheonMvt plugin;
     private final HuntingGrounds grounds;
@@ -279,8 +281,13 @@ public final class Sparring implements Listener {
                 judgeByHealth(bout, a, b);
                 continue;
             }
-            actionBar(a, ChatColor.AQUA + "비무 " + ChatColor.WHITE + left + "초"
-                    + ChatColor.GRAY + " — 중상이면 끝난다 (항복: /혼천 비무 항복)");
+            // B-116: 카운트다운은 지속 표시 — flash(줄 독점)가 아니라 notice 채널 조각으로,
+            // 생명·격 두름·경공과 나란히 읽힌다. 글리프는 팩의 비무 표식 (E030 — 빌더 정본:
+            // "액션바 … 앞에 붙일 글리프", 팩 없으면 □ 이되 문구만으로도 읽힌다).
+            plugin.skills().notice(a, NOTICE_CHANNEL,
+                    ChatColor.AQUA + Glyphs.BIMU + " 비무 " + ChatColor.WHITE + left + "초"
+                            + ChatColor.GRAY + " — 중상이면 끝난다 (항복: /혼천 비무 항복)",
+                    NOTICE_TICKS);
         }
     }
 
@@ -372,7 +379,8 @@ public final class Sparring implements Listener {
         double granted = plugin.progression().cappedGrant(ledger.grantedToday(), accrual);
         ledger.countRepetition(key);
         if (granted <= 0) {
-            actionBar(player, ChatColor.GRAY + (accrual <= 0
+            // 순간 문구는 flash 로 (B-116) — 맨 sendActionBar 는 다음 statusBar 틱에 덮인다
+            plugin.skills().flash(player, ChatColor.GRAY + (accrual <= 0
                     ? "배울 것이 없는 상대였다" : "오늘은 몸이 벅차다"));
             return;
         }
@@ -381,7 +389,8 @@ public final class Sparring implements Listener {
         ledger.pendSkill(SKILL, granted);   // 다리로 — 시트를 적는 것은 봇이다
         plugin.skills().pushLedger(player, ledger, plugin.skills().state(player));
         int after = ledger.levelOf(SKILL, plugin.progression());
-        actionBar(player, ChatColor.AQUA + String.format("겨루며 배운다 (+%.2f일 · 비무 ×0.5)", granted));
+        plugin.skills().flash(player,
+                ChatColor.AQUA + String.format("겨루며 배운다 (+%.2f일 · 비무 ×0.5)", granted));
         if (after > before) {
             player.sendTitle(ChatColor.GOLD + "손속에 요령이 붙는다",
                     ChatColor.YELLOW + "비무 숙련 " + before + " → " + after, 10, 40, 20);
@@ -397,6 +406,9 @@ public final class Sparring implements Listener {
     private void clear(Bout bout) {
         bouts.remove(bout.a);
         bouts.remove(bout.b);
+        // 끝난 판의 카운트다운 조각은 즉시 내린다 — TTL 만료(≤1.2초)를 기다리지 않는다 (B-116)
+        plugin.skills().dropNotice(bout.a, NOTICE_CHANNEL);
+        plugin.skills().dropNotice(bout.b, NOTICE_CHANNEL);
         Entity npc = bout.npcOpponent ? plugin.getServer().getEntity(bout.b) : null;
         if (npc instanceof LivingEntity partner) {
             var max = partner.getAttribute(Attribute.MAX_HEALTH);
@@ -414,6 +426,8 @@ public final class Sparring implements Listener {
     private void abort(Bout bout) {
         bouts.remove(bout.a);
         bouts.remove(bout.b);
+        plugin.skills().dropNotice(bout.a, NOTICE_CHANNEL);
+        plugin.skills().dropNotice(bout.b, NOTICE_CHANNEL);
     }
 
     @EventHandler
@@ -474,8 +488,6 @@ public final class Sparring implements Listener {
         b.sendMessage(message);
     }
 
-    @SuppressWarnings("deprecation")
-    private static void actionBar(Player player, String message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(message));
-    }
+    // ★ 묘비 — private actionBar(맨 sendActionBar)는 여기 살았다 (2026-07-16 철거, B-116).
+    //   액션바의 문은 하나다: SkillListener.flash(순간) · notice(지속 조각) — HudLine 이 중재한다.
 }

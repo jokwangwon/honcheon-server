@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "honcheon:block/furniture/seoan"
+    },
+    "facing=east": {
+      "model": "honcheon:block/furniture/seoan",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "honcheon:block/furniture/seoan",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "honcheon:block/furniture/seoan",
+      "y": 270
+    }
+  }
+}

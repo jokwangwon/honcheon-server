@@ -1,0 +1,7 @@
+{
+  "parent": "honcheon:block/furniture/template_sireong_body",
+  "textures": {
+    "all": "minecraft:block/oak_shelf",
+    "particle": "minecraft:block/oak_shelf"
+  }
+}

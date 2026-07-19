@@ -220,6 +220,20 @@
 | `hay_block` / `barrel` / `chest` / `lectern` / `cauldron` / `brewing_stand` | (약초·수납·장부·약탕) | 마을·구조물 전반에 대량 생성. 게다가 **팩 없이도 각자 읽힌다** | — | **금지** |
 | `oxidized_cut_copper_*` (민가 다락형 지붕) | (산화동 너와) | 플레이어 건축·구리 사용처 광범위. 얻는 것 적음 | 청록 산화동 | **금지** |
 
+> **§3.1 정정 주석 (2026-07-16 · V2-F 착수와 함께 — 사용자 확인 대기)**
+> 이 표의 `hay_block / barrel / chest / lectern / cauldron / brewing_stand` 행 「금지」는 이후 판정에
+> **초과(supersede)** 되었다. 근거와 이력:
+> 1. **§9 자재층 반전(2026-07)** 이 금지의 숨은 전제("바닐라가 지킬 만한 정당한 모습")를 뒤집었고,
+>    등록부(`resourcepack_design.yml block_channels.자재층`)가 실물 텍스처로 이미 덮었다 —
+>    기물 절(**barrel·cauldron·lectern**) · 초가 절(**hay_block**) · 퇴비통·세간_2차(composter·loom) ·
+>    기물_블록엔티티(**chest** — entity 텍스처 한정).
+> 2. **v2 가구 3D(V2-F, 2026-07-16)** 가 barrel·lectern·cauldron·composter·loom 에 **형태
+>    (blockstate + 블록 모델)** 까지 얹었다 (`pack_upgrade_v2_3d.md` · `tools/respack/furniture.py` —
+>    히트박스 불변·바닐라 전 variant 재정의).
+> 3. 남는 금지는 **brewing_stand 하나**다 (등록·재작화 이력 없음 — 표의 판정 그대로).
+> 행 자체는 당시 판정의 사료(史料)로 보존한다 — 침묵 개정 금지 원칙(v2 청사진 §1-3)에 따라
+> 본 주석으로 정정을 명시하고 **사용자 확인을 기다린다.**
+
 ### 3.2 등록부 요약과 규율
 
 - **징발 12 / 보류 4 / 금지 6계열** (금지는 계열 묶음 — 실제 블록 수는 훨씬 많다).

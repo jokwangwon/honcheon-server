@@ -190,6 +190,42 @@
         "\ue0a4": -128,
         "\ue0a5": 1
       }
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/seojang_divider.png",
+      "height": 5,
+      "ascent": 3,
+      "chars": [
+        "\ue0b0"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/seojang_dot.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        "\ue0b1"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/seojang_seal.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        "\ue0b2"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "honcheon:font/seojang_seal_empty.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [
+        "\ue0b3"
+      ]
     }
   ]
 }

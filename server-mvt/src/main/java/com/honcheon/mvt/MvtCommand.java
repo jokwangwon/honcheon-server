@@ -1449,7 +1449,7 @@ public final class MvtCommand implements CommandExecutor {
                 int pct = (int) (100L * index / total);
                 Announce.progress(plugin, sender, ChatColor.GRAY + "[도보길·진행] " + index + "/"
                         + total + " 노드 (" + pct + "%) · 계단 " + tally.stairs() + " · 평탄 "
-                        + tally.flats() + " · 기단 " + tally.filled() + " · "
+                        + tally.flats() + " · 기단 " + tally.filled() + " · 다리 " + tally.bridges() + " · "
                         + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
             }
             return index < total;
@@ -1462,6 +1462,10 @@ public final class MvtCommand implements CommandExecutor {
             Announce.say(plugin, sender, ChatColor.GRAY + "  석계단 " + tally.stairs() + " · 평탄 노반 "
                     + tally.flats() + " · 기단 받침 " + tally.filled() + " · 깎아낸 바위 " + tally.carved()
                     + " · 등롱 " + tally.lanterns() + " · 노드 " + total + " · " + secs + "초");
+            Announce.say(plugin, sender, ChatColor.GRAY + "  다리(잔도·현공교) 상판 " + tally.bridges()
+                    + "노드 · 지지 기둥 " + tally.piers() + "다리 · 난간 " + tally.rails()
+                    + " · 기둥(울타리 2단) " + tally.posts()
+                    + " (뜬 구간은 다리 — 밑 허공 · 목책풍 난간: 다리 양옆·낭떠러지 쪽·굽이 바깥)");
             Announce.say(plugin, sender, ChatColor.GRAY + "  트레일헤드(산기슭) (" + plan.footX() + ","
                     + plan.footY() + "," + plan.footZ() + ") → 정상 Pm (" + plan.summitX() + ","
                     + plan.summitY() + "," + plan.summitZ() + ") · 오름 " + (plan.summitY() - plan.footY())

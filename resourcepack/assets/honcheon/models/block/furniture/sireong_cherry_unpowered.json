@@ -1,0 +1,7 @@
+{
+  "parent": "honcheon:block/furniture/template_sireong_unpowered",
+  "textures": {
+    "all": "minecraft:block/cherry_shelf",
+    "particle": "minecraft:block/cherry_shelf"
+  }
+}

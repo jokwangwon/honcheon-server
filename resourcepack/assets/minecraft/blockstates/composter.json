@@ -1,0 +1,73 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents1"
+      },
+      "when": {
+        "level": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents2"
+      },
+      "when": {
+        "level": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents3"
+      },
+      "when": {
+        "level": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents4"
+      },
+      "when": {
+        "level": "4"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents5"
+      },
+      "when": {
+        "level": "5"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents6"
+      },
+      "when": {
+        "level": "6"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_contents7"
+      },
+      "when": {
+        "level": "7"
+      }
+    },
+    {
+      "apply": {
+        "model": "honcheon:block/furniture/jeolgu_ready"
+      },
+      "when": {
+        "level": "8"
+      }
+    }
+  ]
+}
