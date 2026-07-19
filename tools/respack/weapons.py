@@ -769,6 +769,18 @@ _R21_PHASE = None       # 기 흐름 애니 위상 (None=정지 대표 프레임
 _R21_PILOTS = frozenset({("sword", "beomcheol"), ("sword", "sinbyeong"),
                          ("sword", "mabyeong"), ("dao", "sinbyeong")})
 _R21_MYEONG_PILOTS = frozenset({"hwasan"})
+
+# ═══ V2-W 25차 — 깨끗한 재건축 파일럿 (clean hand-placed · 검·도 신병) 【2026-07-19】 ═══
+# 배경: 무기 대장정 내내 사용자 "무기가 뭉툭·이상하다" 반복 · 인게임에서 우리 복셀 무기
+#   (_voxelize — 두꺼운 볼록 날·팔각·수실·기 껍질 누적 복잡함)를 크게 키우면 어수선함 객관 확인.
+#   반면 손으로 지은 ref_blade(청뢰검)는 우아. ★사용자 결정: **청뢰검의 깨끗한 손 배치 방식을
+#   우리 무기 로스터에 녹인다.** clean_weapons.py 가 refblade_forge 문법을 계열·등급으로 일반화.
+# 배선: weapon_model_3d 가 _R25_PILOTS 두 자루에서만 clean 경로로 갈아탄다 (부위별 소수 cuboid
+#   손 배치 · _voxelize 미경유). 나머지 45+12 무기 무접촉 · 아이콘(GUI 2D) 불변 · 3D 만 교체.
+#   모델은 정지 깨끗한 병기 — 날 위 번개 애니 제거(파티클 트랙 소관). 옛 R21 스트립 .mcmeta 제거.
+# ★_R25 = False → clean 경로 잠듦 (복셀 현행 유지). 파일럿만 _R25_PILOTS.
+_R25 = True
+_R25_PILOTS = frozenset({("sword", "sinbyeong"), ("dao", "sinbyeong")})
 # ★기 복셀 껍질 (사용자: "날이 일렁이는 게 아닌, 검 주변의 복셀을 생성하여 애니메이션으로
 #   기(氣)가 흐르듯이" · 21b 정밀: "기가 검을 감쌀 때 연속적인 나선형이 아닌 **포인트만 조금씩
 #   주는 형태로**") — 무기를 두르는 **띄엄띄엄 떠 있는 기 포인트**(짧은 발광 입자)로 재해석.
@@ -4702,6 +4714,9 @@ def weapon_model_3d(series, grade, grid=None):
     grid 인자는 옛 서명 호환용이다 (아이콘 격자는 이제 3D 와 무관)."""
     rings, blen, tassel, mab = _GRADE_FORM[grade]
     salt = zlib.crc32(f"{series}_{grade}".encode()) & 0x7F
+    if _R25 and (series, grade) in _R25_PILOTS:   # 25차 — 깨끗한 재건축 (손 배치 cuboid · _voxelize 미경유)
+        from .clean_weapons import write_clean_pilot
+        return write_clean_pilot(series, grade)   # clean 스와치 굽고(정지 128²) 옛 애니 mcmeta 제거 → clean 모델
     if (series, grade) in _PILOT7:      # 7차 파일럿 — 전용 프레임 (잠정: 사용자 선택 뒤 전파 시
         box, shapes, extras, ink = _spec_sword_pilot7(salt, _PILOT7[(series, grade)])  # 계열 프레임 재구성)
         return _paint_model(f"{series}_{grade}", box, shapes, extras, salt, grade, ink=ink)
