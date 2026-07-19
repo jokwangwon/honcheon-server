@@ -233,7 +233,7 @@ item_channels:
     #    model_key_audit ②: 이 리터럴이 있어야 팩의 ref_blade 정의가 '죽은 자산'으로 안 걸린다.
     #    인게임 조회는 코드가 아니라 give 명령으로 한다 (docs/design/ref_blade_anatomy.md §3):
     #      /give Lindydone golden_sword[minecraft:item_model="honcheon:weapon/ref_blade"]
-    ref_blade: { model_key: "honcheon:weapon/ref_blade", note: "레퍼런스 복제 — 가늘고 긴 청록 검 + 금 십자 코등이 + 청록 번개 애니. 스크린샷 대조·로직 흡수용 (등록·미배선)" }
+    ref_blade: { model_key: "honcheon:weapon/ref_blade", note: "레퍼런스 검 영상 정합 — 롱소드 폭 청록 검 + 흰-청록 능선 + 금 장식 십자 코등이(파란 보석) + 남색 자루/금 물미. 번개는 파티클 트랙 소관(모델은 정지). 스크린샷 대조·로직 흡수용 (등록·미배선)" }
     혈음도:
       base_item: netherite_sword
       model_key: "honcheon:weapon/dao_mabyeong"
@@ -1277,7 +1277,8 @@ semantic_red_registry:
 hi_res_channels:
   entries:
     - { path: "honcheon/textures/item/weapon/paint/*.png", sizes: [128], reason: "V2-W 겐신풍 페인트 층 — 사용자 지시 2026-07-16. 3차: 자루당 64x64 1장 (병기 45 + 명병 12 = 57장, SDF 페인팅 · 알파 실루엣) · ★14차 복셀 정밀화: 같은 SDF 그림을 128x128 로 재굽기 (복셀 피치 절반 — 계단이 곱다). 과도기 [16,64]→[64]→[128] 각 재굽기로 닫았다. ★6차 팔레트 해방(잠정): 레퍼런스 설계 언어(흑자주·심녹 기조+선명 악센트)에 따라 이 채널만 색상 자유 + 채도 상한 완화 — 형광 도배는 평균 채도 85 가 계속 문다. ★20차: 표면 광택 일렁임 파일럿(_R20)은 세로 프레임 스트립(128×128·N)+.mcmeta 로 굽는다 — animation:true 가 스트립(h=n·128)을 허용한다 (몸 정지·광택만 흐른다 · campfire/kelp 전례). 정지 시트(128²)도 그대로 합법 (파일럿만 스트립)", hue_free: true, chroma_mean_max: 85, chroma_pixel_max: 200, chroma_pixel_frac: 0.06, animation: true }
-    # ── 레퍼런스 번개 검 복제 (ref_blade) — 손 배치 cuboid, tools/refblade_forge.py 산출. 기존 병기 계열과 무관한 독립 키.
-    #    ref_blade.png = 32x32 색 스와치 아틀라스(심 청백·날 청록·금 코등이·자루 감김). ref_bolt.png = 32x256(8프레임) 청록 번개 애니 스트립.
-    #    청록/청은 전역 금지 색상 대역(청·보라)이라 hue_free 로 해방(레퍼런스가 청록 그 자체다). 채도 상한은 금(채도 128)까지 담게 완화.
-    - { path: "honcheon/textures/item/weapon/ref_*.png", sizes: [32], reason: "레퍼런스 번개 검 정밀 복제 — 사용자 지시(스크린샷 로직을 무기에 녹이기). 청록 검신 아틀라스 + 번개 애니 스트립. weapons.py 복셀 스펙 미경유(손 cuboid). 인게임: /give golden_sword[minecraft:item_model=\"honcheon:weapon/ref_blade\"]", hue_free: true, chroma_mean_max: 130, chroma_pixel_max: 210, chroma_pixel_frac: 0.1, animation: true }
+    # ── 레퍼런스 검 (ref_blade) — 손 배치 cuboid, tools/refblade_forge.py 산출. 기존 병기 계열과 무관한 독립 키.
+    #    24차 영상 정합: ref_blade.png = 32x32 색 스와치 아틀라스(능선 흰-청록·검신 청록·금 코등이/물미/띠/스터드·남색 자루·파란 보석).
+    #    ref_bolt.png(옛 번개 스트립)은 24차에 제거 — 흐르는 기운은 파티클 트랙(플러그인) 소관, 이 트랙은 정지 모델만 영상에 맞춘다.
+    #    청록/청·파랑은 전역 금지 색상 대역(청·보라)이라 hue_free 로 해방(레퍼런스가 청록+파란 보석 그 자체다). 채도 상한은 금(채도 128)까지 담게 완화.
+    - { path: "honcheon/textures/item/weapon/ref_*.png", sizes: [32], reason: "레퍼런스 검 영상 정합 — 사용자 지시(스크린샷 로직을 무기에 녹이기). 청록 검신+흰-청록 능선+금 장식 십자 코등이(파란 보석)+남색 자루 아틀라스. weapons.py 복셀 스펙 미경유(손 cuboid). 인게임: /give golden_sword[minecraft:item_model=\"honcheon:weapon/ref_blade\"]", hue_free: true, chroma_mean_max: 130, chroma_pixel_max: 210, chroma_pixel_frac: 0.1 }
