@@ -1122,7 +1122,9 @@ public final class SkillEngine {
                 str(m.get("geom_particle")), str(m.get("geom_ink")),
                 // ★ 호의 각은 **판의 sweep_deg 와 다른 것**이다. 재사용했다가 한 점으로 접혔다
                 //   (sweep_deg 는 0 으로 맞춰져 있다 — 프레임이 흩어지지 않게 한 값이다).
-                dblOr(m.get("geom_sweep_deg"), 150.0));
+                dblOr(m.get("geom_sweep_deg"), 150.0),
+                // ★ 점 간격(도) — 작을수록 촘촘하다. 6도는 티끌로 읽혔다 (사용자 평가 · 실측)
+                dblOr(m.get("geom_step_deg"), 1.5));
     }
 
     /** {@code rgb: [r, g, b]} — 세 칸이 아니면 null (등록부가 색을 반만 적었으면 색이 아니다) */
@@ -1520,7 +1522,8 @@ public final class SkillEngine {
                             double bladePitchDeg,
                             int drawTicks, int fadeTicks, String billboard, boolean alternate,
                             int brightness, KigiSpark spark, boolean calmHeldAura,
-                            String geomParticle, String geomInk, double geomSweepDeg) {
+                            String geomParticle, String geomInk, double geomSweepDeg,
+                            double geomStepDeg) {
         /** 이 무기의 basic trail 이 검기를 받는가 (apply_to_trails 에 등록됐는가) */
         public boolean appliesToTrail(String trail) {
             return trail != null && applyToTrails.contains(trail);

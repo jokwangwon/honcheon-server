@@ -544,9 +544,10 @@ final class SkillDisplay {
             note("검기호", geom == null ? "기하가 없다 (EffectLib 미적재)" : "등록부가 안 켰다 (geom_particle 비어 있음)");
             return;
         }
-        // ★ **그리는 시간에 걸쳐 자란다** — 한 번에 다 뿌리면 1틱 섬광이라 눈에도 안 남고
-        //   15fps 촬영은 아예 놓친다 (첫 판이 그래서 0px 이었다).
-        //   진행도를 0→1 로 올리며 뿌리면 「한 번의 베기가 자라나는」 3프레임과 같은 뜻이 된다.
+        // ★ **지나간 자리만 새로 긋는다** — 매 틱 호 전체를 다시 뿌리던 판을 버렸다.
+        //   왜: 전체를 다시 뿌리면 예산에 막혀 오히려 **성겨지고**, 사용자 평가대로
+        //   「칼자국이 아니라 흩어진 티끌」로 읽혔다 (실측 2026-07-20).
+        //   파티클은 제 수명 동안 남으므로, 새 구간만 촘촘히 그으면 자국이 **쌓여 궤적**이 된다.
         final int span = Math.max(1, cfg.drawTicks());
         final float yaw = caster.getLocation().getYaw();
         final Location center = at.clone();
@@ -556,14 +557,17 @@ final class SkillDisplay {
 
             @Override
             public void run() {
-                if (t > span || !caster.isOnline()) {
+                if (t >= span || !caster.isOnline()) {
                     cancel();
-                    note("검기호", "점 " + sent[0] + "개 발행 (반경 " + String.format("%.2f", cfg.orbitRadius())
-                            + "m · 각 " + Math.round(cfg.geomSweepDeg()) + "도 · " + span + "틱)");
+                    note("검기호", "점 " + sent[0] + "개 (반경 " + String.format("%.2f", cfg.orbitRadius())
+                            + "m · 각 " + Math.round(cfg.geomSweepDeg()) + "도 · 간격 "
+                            + String.format("%.1f", cfg.geomStepDeg()) + "도 · " + span + "틱)");
                     return;
                 }
                 sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
-                        (double) t / span, cfg.geomParticle(), cfg.geomInk());
+                        (double) t / span, (double) (t + 1) / span,
+                        cfg.tiltDeg(), cfg.geomStepDeg(),
+                        cfg.geomParticle(), cfg.geomInk());
                 t++;
             }
         }.runTaskTimer(plugin, 0L, 1L);

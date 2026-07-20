@@ -375,6 +375,7 @@ kigi_slash:
   #   색은 등록부의 격 사다리를 따른다 — 검기는 청회다 (연두 아니다).
   geom_particle: dust
   geom_ink: 청회
+  geom_step_deg: 1.5   # ★점 간격(도) — 작을수록 촘촘. 6도는 「티끌」로 읽혔다
   geom_sweep_deg: 150   # ★호가 무는 각 — 판의 sweep_deg 와 다른 값이다
 
   forward: 0.1  # 공전 중심을 앞으로 미는 값(m). 0 이면 몸 한복판이 중심

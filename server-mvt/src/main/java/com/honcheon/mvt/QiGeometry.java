@@ -170,24 +170,38 @@ final class QiGeometry {
      * @param facing  바라보는 방향(도) — 호의 한복판이 이쪽을 본다
      * @param radius  공전 반지름 (m) — 몸 앞이 아니라 둘레다
      * @param sweepDeg 호가 무는 각(도)
-     * @param progress 0..1 — <b>한 번의 베기가 자라나는 정도</b> (3프레임의 그 자람과 같은 뜻)
+     * @param from     0..1 — <b>이번에 그을 구간의 시작</b>
+     * @param to       0..1 — 그 구간의 끝. ★ 매 틱 <b>지나간 자리만</b> 새로 긋는다 —
+     *                 호 전체를 매번 다시 뿌리면 낭비이고, 예산에 막혀 오히려 성겨진다.
+     *                 파티클은 제 수명 동안 남으므로 그은 자국이 <b>쌓여</b> 궤적이 된다.
+     * @param tiltDeg  궤도면의 기울기 — 판(kigiPose)의 tilt_deg 와 같은 값을 줘야 둘이 같은 평면에 선다
+     * @param stepDeg  점 간격(도). 작을수록 촘촘하다 (실측: 6도는 티끌로 읽혔다)
      * @param particle 등록부의 파티클 이름
      * @param ink      먹빛 이름 (없으면 {@code null})
      * @return 실제로 발행된 파티클 수 (예산에 막히면 요청보다 적다)
      */
     int slashArc(Location center, float facing, double radius, double sweepDeg,
-                 double progress, String particle, String ink) {
-        if (center == null || center.getWorld() == null) {
+                 double from, double to, double tiltDeg, double stepDeg,
+                 String particle, String ink) {
+        if (center == null || center.getWorld() == null || to <= from) {
             return 0;
         }
-        double span = Math.toRadians(sweepDeg) * Math.max(0.0, Math.min(1.0, progress));
-        double start = Math.toRadians(facing) - span / 2.0;
-        int steps = Math.max(4, (int) Math.round(sweepDeg * progress / 6.0));
+        double full = Math.toRadians(sweepDeg);
+        double base = Math.toRadians(facing) - full / 2.0;
+        double a0 = base + full * Math.max(0.0, Math.min(1.0, from));
+        double a1 = base + full * Math.max(0.0, Math.min(1.0, to));
+        int steps = Math.max(1, (int) Math.ceil(Math.toDegrees(a1 - a0) / Math.max(0.2, stepDeg)));
+        double tilt = Math.toRadians(tiltDeg);
 
         int sent = 0;
         for (int i = 0; i <= steps; i++) {
-            double th = start + span * i / steps;
-            Location at = center.clone().add(-Math.sin(th) * radius, 0.0, Math.cos(th) * radius);
+            double th = a0 + (a1 - a0) * i / steps;
+            // 수평 궤도를 시선축 둘레로 눕힌다 — 판(kigiPose)의 tilt_deg 와 **같은 평면**에 놓기 위해서다.
+            //   (둘이 다른 평면에 있으면 점과 판이 서로 딴 데서 논다)
+            double x = -Math.sin(th) * radius;
+            double z = Math.cos(th) * radius;
+            double y = -x * Math.sin(tilt);
+            Location at = center.clone().add(x * Math.cos(tilt), y, z);
             // ★ 우리 창구로만 나간다 — 예산·관람자·LOD 가 여기서 걸린다
             sent += ink == null ? hud.emit(at, particle, 1, 0.0, 0.0)
                                 : hud.emit(at, particle, ink, 1, 0.0, 0.0, false);
