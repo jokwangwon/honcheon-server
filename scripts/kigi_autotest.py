@@ -35,6 +35,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kigi_rcon import Rcon  # noqa: E402
+import vfx_detect as DET  # noqa: E402
+import vfx_preflight as PF  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TEST_DIR = ROOT / "run" / "mvt-test"
@@ -58,13 +60,19 @@ BOT = "kigibot"
 BOT_UUID = "b0c40300922b3aa7881d178caaa13b03"
 SERVER_HOST, SERVER_PORT = "127.0.0.1", 25566
 
-# 검기 검출 — 밝은 초록 마스크 (조율자가 정한 문턱)
-# ★ 검기 초록의 실측값 (2026-07-20 · 픽셀을 직접 재서 고쳤다)
-#   옛 문턱 (150,45,35) 은 **검기를 한 픽셀도 못 잡았다** — 그런데 검기는 내내 잘 뜨고 있었다.
-#   그 거짓 0px 를 근거로 빌보드·forward 결론을 낼 뻔했다 (프레임을 눈으로 보고서야 알았다).
-#   실측: 검기 평균 RGB(49,86,61) · g 44~129 · g−r 21~47 · g−b 16~31 — 밝은 형광이 아니라 **어두운 이끼색**이다.
-#   흰 별(회색)·흰 무대·하늘은 g−r 이 거의 0 이라 아래 문턱으로도 안 걸린다.
-G_MIN, GR_MIN, GB_MIN = 40, 18, 12
+# 검기 검출 문턱 — **정본은 vfx_detect 하나뿐이다** (여기서는 그것을 비춰 볼 뿐이다).
+#   왜 옮겼나: 같은 문턱이 이 파일과 kigi_cam_test 에 복사돼 있었다. 한쪽만 고치면 다른 쪽은
+#   옛 문턱으로 계속 재고, 그 차이는 **조용하다** — 숫자는 나오고 표는 채워진다.
+#   그리고 그 로직은 한 번도 시험받은 적이 없었다 (옛 문턱 g>150 은 검기 g≈86 을 못 잡았다).
+#   이제 검출은 vfx_detect 가 하고, 그 눈은 매 실행마다 합성 이미지로 자가시험을 받는다.
+G_MIN, GR_MIN, GB_MIN = DET.G_MIN, DET.GR_MIN, DET.GB_MIN
+
+# preflight 가 검사할 config 키 — 검기 측정이 실제로 읽는 값들
+PREFLIGHT_KEYS = [
+    "kigi_slash.enabled", "kigi_slash.scale", "kigi_slash.orbit_radius",
+    "kigi_slash.sweep_deg", "kigi_slash.tilt_deg", "kigi_slash.blade_pitch_deg",
+    "kigi_slash.draw_ticks", "kigi_slash.fade_ticks", "kigi_slash.frame_ticks",
+]
 
 
 def sh(cmd, **kw):
@@ -392,25 +400,17 @@ def swing(win, n, gap):
 # ══════════════════════════════════════════════════════════════════
 #  ⑥ 판독 — 초록 픽셀을 센다 (조율자가 좌표로 판단할 수 있게)
 # ══════════════════════════════════════════════════════════════════
-def analyze(outdir: Path, min_area: int):
-    import numpy as np
-    from PIL import Image
+def analyze(outdir: Path, min_area: int, exclude=None):
+    """프레임을 읽어 검기를 센다. **검출 자체는 vfx_detect 가 한다** (자가시험을 받는 눈).
 
+    exclude: 붙박이 초록(HUD) 마스크. 주면 빼고 센다.
+    """
     frames = sorted(outdir.glob("frame_*.png"))
     rows = []
     for f in frames:
-        a = np.asarray(Image.open(f).convert("RGB")).astype(np.int16)
-        r, g, b = a[..., 0], a[..., 1], a[..., 2]
-        mask = (g > G_MIN) & (g - r > GR_MIN) & (g - b > GB_MIN)
-        area = int(mask.sum())
-        if area >= min_area:
-            ys, xs = np.nonzero(mask)
-            rows.append({
-                "frame": f.name, "area": area,
-                "cx": int(xs.mean()), "cy": int(ys.mean()),
-                "x0": int(xs.min()), "x1": int(xs.max()),
-                "y0": int(ys.min()), "y1": int(ys.max()),
-            })
+        m = DET.measure_frame(f, exclude=exclude, min_area=min_area)
+        if m:
+            rows.append({"frame": f.name, **m})
     return len(frames), rows
 
 
@@ -505,6 +505,10 @@ def main():
                     help="HUD 를 끄지 않는다 (초록 글자가 검출을 오염시킨다 — 눈으로 볼 때만)")
     ap.add_argument("--restart-client", action="store_true", help="클라이언트를 새로 띄운다")
     ap.add_argument("--outdir", default=None)
+    ap.add_argument("--force", action="store_true",
+                    help="preflight 가 어긋나도 강행한다 (그 숫자는 근거로 쓰지 마라)")
+    ap.add_argument("--cleanup", action="store_true",
+                    help="측정이 끝나면 띄운 클라를 거둔다 (누수 방지)")
     args = ap.parse_args()
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -513,6 +517,12 @@ def main():
     ensure_xvfb()
     ensure_server()
     ensure_client(force_restart=args.restart_client)
+
+    # ★ 재기 **직전에** 전제를 검사한다 — 어긋나면 숫자를 내지 않고 멈춘다.
+    #   왜 여기(클라 접속 뒤)인가: 팩 사슬의 셋째 고리(봇이 받은 ?v=)는 **봇이 들어와야** 로그에 생긴다.
+    #   결과 폴더에 preflight.txt 로 남긴다 — 나중에 "그때 조건이 뭐였나"를 답할 수 있게.
+    PF.gate(keys=PREFLIGHT_KEYS, work_dirs=[MC_DIR], players=[BOT],
+            outdir=outdir, force=args.force)
 
     win = mc_window()
     if not win:
@@ -546,6 +556,9 @@ def main():
     sheet = contact_sheet(outdir, bursts)
     if sheet:
         print(f"  한 장 요약(검기가 뜬 프레임만): {sheet}")
+    print(f"  잰 조건: {outdir}/preflight.txt")
+    if args.cleanup:
+        PF.reap_clients(MC_DIR)
     print(f"\n  재실행: scripts/kigi_autotest.sh --swings {args.swings} --view {args.view}\n")
 
 
