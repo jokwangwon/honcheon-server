@@ -2,6 +2,7 @@ package com.honcheon.mvt;
 
 import com.honcheon.core.rules.RulesConfig;
 
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
@@ -41,7 +42,12 @@ import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -207,7 +213,22 @@ public final class Antechamber implements Listener {
     private final Map<UUID, Map<String, Integer>> progress = new HashMap<>();
     private final Map<UUID, Set<String>> gesturesSeen = new HashMap<>();
     private final Map<UUID, String> lastArmed = new HashMap<>();
+    /**
+     * ★ <b>맡아 둔 짐</b> — 나루의 꾸러미를 쥐여 주는 동안 <b>사람의 진짜 짐</b>을 여기 둔다.
+     *
+     * <p><b>이것은 디스크에 적힌다</b> ({@link #STOW_FILE}). 예전에는 이 맵이 <b>메모리에만</b> 있었고,
+     * 옆의 주석은 <i>"서버가 죽어도 사람의 짐은 안 죽는다"</i> 라고 적혀 있었다 — <b>사실이 아니었다.</b>
+     * 실측(2026-07-20): 짐을 지닌 채 나루에 든 사람이 <b>평범한 재기동</b> 하나로 전부 잃었다.
+     * ({@code onDisable} 은 나루 월드의 {@code getPlayers()} 를 도는데, 종료 시점엔 이미 아무도 없다.
+     *  그리고 그 뒤 {@code stowed.clear()} 가 증거까지 지웠다.)
+     *
+     * <p>연무장 금고가 이 위험 때문에 원자적 디스크 저장을 갖췄다. 나루는 <b>같은 책임</b>을 지면서
+     * 아무 보호가 없었다. 그래서 같은 손을 쓴다 — <b>맡는 순간 적고, 돌려주는 순간 지운다.</b>
+     */
     private final Map<UUID, ItemStack[]> stowed = new HashMap<>();
+
+    /** 맡아 둔 짐이 적히는 곳 — 연무장의 {@code dojang.yml} 과 같은 역할이다. */
+    static final String STOW_FILE = "ipdo_stow.yml";
     private final Set<UUID> boarding = new LinkedHashSet<>();
     /** B-120 — 부두를 기다린다는 말을 이미 들은 사람 (자동 출발 대기 안내는 한 번만) */
     private final Set<UUID> dockWaitSaid = new LinkedHashSet<>();
@@ -1409,10 +1430,29 @@ public final class Antechamber implements Listener {
         boolean first = !isAntechamber(player.getWorld());
         build(w, false, null);
         if (first && kitGive) {
-            stowed.put(player.getUniqueId(), player.getInventory().getContents().clone());
-            player.getInventory().clear();
-            player.getInventory().addItem(new ItemStack(Material.WOODEN_SWORD));
-            player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));
+            // ★ 이미 맡긴 것이 있으면 **아무것도 파괴하지 않고 물러선다.**
+            //
+            //   여기서 두 번 틀렸다 (실측 2026-07-20):
+            //   ① 그냥 덮어쓰면 → 앞서 맡긴 진짜 짐이 사라진다.
+            //   ② "덮어쓰지 않는다"고 거르기만 하면 → 바로 아래 `clear()` 가 **지금 든 것**을 없앴다
+            //      (신병 겸·고대잔해·황금사과가 그렇게 사라졌다). 거르는 것과 버리는 것은 다르다.
+            //   ③ 앞의 것을 먼저 restore 해도 → `setContents` 가 **덮어쓰기**라 지금 든 것이 죽는다.
+            //
+            //   두 벌의 인벤토리를 한 몸에 넣을 방법은 없다. 그러니 **손대지 않는다.**
+            //   꾸러미를 못 쥐여 주는 것은 불편이고, 짐을 지우는 것은 손실이다 — 불편을 고른다.
+            if (stowed.containsKey(player.getUniqueId())) {
+                plugin.getLogger().severe("[나루/짐] ★ " + player.getName()
+                        + " 은(는) 이미 맡긴 짐이 있다 (" + STOW_FILE + ") — 앞뒤가 맞지 않는다. "
+                        + "짐에 손대지 않고 꾸러미도 쥐여 주지 않는다. 관리자가 봐야 한다.");
+                player.sendMessage(ChatColor.RED + "★ 맡긴 짐이 이미 있다 — 짐은 그대로 둔다. "
+                        + "관리자에게 말하라.");
+            } else {
+                stowed.put(player.getUniqueId(), player.getInventory().getContents().clone());
+                saveStow();   // ★ **맡는 순간** 적는다 — 여기서 죽어도 짐은 디스크에 있다
+                player.getInventory().clear();
+                player.getInventory().addItem(new ItemStack(Material.WOODEN_SWORD));
+                player.getInventory().setItemInOffHand(new ItemStack(Material.SHIELD));
+            }
         }
         player.setGameMode(GameMode.ADVENTURE);   // 손은 쓴다. 잔교는 못 부순다
         player.teleport(spawnAt(w));
@@ -1494,8 +1534,82 @@ public final class Antechamber implements Listener {
             return;
         }
         player.getInventory().setContents(back);
+        saveStow();   // ★ 돌려준 것은 그 자리에서 지운다 (두 번 돌려주면 짐이 복제된다)
         if (!kitTakeBackLine.isEmpty()) {
             player.sendMessage(kitTakeBackLine);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  ★ 맡아 둔 짐의 디스크 (연무장 금고와 같은 손 — 원자적으로 쓴다)
+    // ══════════════════════════════════════════════════════════════════════
+
+    private File stowFile() {
+        return new File(plugin.getDataFolder(), STOW_FILE);
+    }
+
+    /** <b>맡는 순간·돌려주는 순간</b> 굽는다. 여기서 죽어도 짐은 디스크에 있다. */
+    private void saveStow() {
+        File f = stowFile();
+        if (stowed.isEmpty() && !f.isFile()) {
+            return;
+        }
+        try {
+            YamlConfiguration yml = new YamlConfiguration();
+            stowed.forEach((id, items) -> yml.set(id.toString(),
+                    Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(items))));
+            File tmp = new File(f.getParentFile(), f.getName() + ".tmp");
+            yml.save(tmp);
+            try {
+                Files.move(tmp.toPath(), f.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException noAtomic) {
+                Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException | RuntimeException e) {
+            plugin.getLogger().severe("[나루/짐] ★★ 맡은 짐을 못 구웠다 — 지금 서버가 죽으면 "
+                    + "나루에 있는 사람이 짐을 잃는다: " + e);
+        }
+    }
+
+    /**
+     * 기동 — 맡아 둔 짐을 연다. <b>남아 있으면 짖는다</b> (관리자가 알아야 한다).
+     *
+     * <p>사람은 여기서 안 꺼낸다 — 접속할 때 꺼낸다. 오프라인인 몸은 만질 수 없다.
+     * <b>깨진 파일은 덮지 않는다</b> — 옆으로 치우고 짖는다. 사람의 짐이 걸려 있다.
+     */
+    void loadStow() {
+        stowed.clear();
+        File f = stowFile();
+        if (!f.isFile()) {
+            return;
+        }
+        YamlConfiguration yml = new YamlConfiguration();
+        try {
+            yml.load(f);
+        } catch (IOException | org.bukkit.configuration.InvalidConfigurationException broken) {
+            File keep = new File(plugin.getDataFolder(),
+                    STOW_FILE + ".broken-" + System.currentTimeMillis());
+            boolean moved = f.renameTo(keep);
+            plugin.getLogger().severe("[나루/짐] ★★ 맡은 짐을 읽을 수 없다: " + broken);
+            plugin.getLogger().severe("[나루/짐] " + (moved
+                    ? "깨진 것을 " + keep.getName() + " 로 옮겼다 — 손으로 살릴 수 있다."
+                    : "★ 옮기지도 못했다 — 파일을 건드리지 마라."));
+            return;
+        }
+        for (String key : yml.getKeys(false)) {
+            try {
+                stowed.put(UUID.fromString(key), ItemStack.deserializeItemsFromBytes(
+                        Base64.getDecoder().decode(yml.getString(key, ""))));
+            } catch (RuntimeException bad) {
+                // ★ 한 사람이 깨졌다고 나머지를 버리지 않는다. 그 사람만 짖고 넘어간다.
+                plugin.getLogger().severe("[나루/짐] ★ " + key + " 의 짐을 못 읽는다 — "
+                        + STOW_FILE + " 에 원본은 남아 있다: " + bad);
+            }
+        }
+        if (!stowed.isEmpty()) {
+            plugin.getLogger().warning("[나루] ★ 맡은 짐이 " + stowed.size()
+                    + "인 남아 있다 (나루에 있는 채로 서버가 내려갔다). 접속하면 돌려준다.");
         }
     }
 
@@ -1629,6 +1743,15 @@ public final class Antechamber implements Listener {
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) {
                 return;
+            }
+            // ★ 안전망 — 맡긴 짐이 있는데 **나루 밖에** 서 있다면 지금 돌려준다.
+            //   나루를 벗어나는 정상 경로는 restore() 하나지만, 리붓·강제 이동·다른 손으로
+            //   밖에 나가 있을 수 있다. 그때 짐이 디스크에만 남아 영영 안 돌아오면 그것도 손실이다.
+            //   (틱을 미뤄서 부른다 — 접속 그 순간의 인벤토리 조작은 클라에 안 붙는 일이 있다.)
+            if (stowed.containsKey(player.getUniqueId()) && !isAntechamber(player.getWorld())) {
+                plugin.getLogger().warning("[나루/짐] " + player.getName()
+                        + " 이(가) 나루 밖에 있는데 맡긴 짐이 남아 있다 — 지금 돌려준다");
+                restore(player);
             }
             if (plugin.ledger(player.getUniqueId()).linked()) {
                 if (isAntechamber(player.getWorld())
@@ -1863,9 +1986,15 @@ public final class Antechamber implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         UUID id = player.getUniqueId();
-        if (stowed.containsKey(id)) {   // 서버가 죽어도 사람의 짐은 안 죽는다
-            player.getInventory().setContents(stowed.remove(id));
-        }
+        // ★★ **접속이 끊길 때는 맡은 짐에 손대지 않는다** (실측 2026-07-20).
+        //   예전에는 여기서 돌려주고 기록을 지웠다. 그런데 **종료 중의 quit** 에서는
+        //   이 `setContents` 가 디스크의 playerdata 까지 못 간다 — 사람은 이미 떠나는 중이다.
+        //   그래서 짐은 인벤토리에도, 기록에도 없게 됐다. **그것이 짐을 잃던 자리다.**
+        //   (측정: 정상 재기동 한 번에 신병·에메랄드·황금사과가 통째로 사라졌다.)
+        //
+        //   이제 기록은 **나루에 있는 동안 그대로 둔다.** 끊겼다 다시 들어와도 그 사람은
+        //   여전히 나루에 있고 손에는 꾸러미가 있다 — 진짜 짐은 디스크에 그대로다.
+        //   돌려주는 자리는 하나뿐이다: **나루를 실제로 벗어날 때** ({@link #restore}).
         progress.remove(id);
         gesturesSeen.remove(id);
         lastArmed.remove(id);
@@ -2167,14 +2296,17 @@ public final class Antechamber implements Listener {
         }
         World w = Bukkit.getWorld(worldName);
         if (w != null) {
-            for (Player player : w.getPlayers()) {
-                if (stowed.containsKey(player.getUniqueId())) {
-                    player.getInventory().setContents(stowed.remove(player.getUniqueId()));
-                }
-            }
+            // ★ 여기서도 **돌려주지 않는다** — quit 과 같은 이유다: 종료 중의 setContents 는
+            //   playerdata 까지 못 갈 수 있고, 그 사이 기록을 지우면 짐은 어디에도 없다.
+            //   기록만 디스크에 맞추고 떠난다. 다음 기동의 loadStow() 가 그대로 되살린다.
             clearPanels(w);
         }
-        stowed.clear();
+        // ★ **지우기 전에 굽는다.** 여기가 짐을 잃던 자리다 (실측 2026-07-20):
+        //   위 반복은 나루 월드의 getPlayers() 를 도는데 **종료 시점엔 이미 아무도 없다.**
+        //   그래서 아무도 못 돌려받고, 곧바로 stowed.clear() 가 증거까지 지웠다.
+        //   이제 디스크가 진실을 쥔다 — 맵을 비워도 다음 기동이 loadStow() 로 되살린다.
+        saveStow();
+        stowed.clear();   // 메모리만 비운다 (파일은 위에서 이미 맞췄다 — 다시 굽지 않는다)
         tally.clear();
     }
 

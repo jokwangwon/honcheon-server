@@ -237,6 +237,252 @@ final class Dojang implements Listener {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  ★ 금고 왕복 실측 (B-011) — **진짜 ItemStack 으로** 잰다
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // 왜 새로 짓는가: `tools/DojangVaultSelfTest.java` 는 **문자열**을 왕복시킨다
+    //   (`before.realItems = "REAL:칠성검,비급,은자7971"`). 그것이 증명하는 것은
+    //   "YAML 이 불투명한 줄을 잃지 않는다" 뿐이고, **증명하지 않는 것**이
+    //   "재기동을 건너 사람의 짐이 살아 돌아온다" 이다.
+    //   그 둘 사이에 `ItemStack.serializeItemsAsBytes` 가 통째로 빠져 있었다.
+    //
+    // ★ 이 시험은 **금고 파일을 건드리지 않는다.** 메모리에서 encode→decode 만 왕복시킨다.
+    //   (시험이 진짜 장부를 덮으면 그것 자체가 데이터 손실이다.)
+
+    /** 한 판의 결과 — 무엇을 걸었고, 살아 돌아왔는가. */
+    record VaultCase(String name, boolean pass, String detail) { }
+
+    /**
+     * <b>진짜 짐을 금고 경로에 넣었다 뺀다.</b> 사람이 실제로 들고 다니는 것들로 건다 —
+     * 빈 칸(null), 인챈트, 이름·설명, <b>우리 신병의 PDC</b>, 상자 속의 상자.
+     *
+     * <p>비교는 {@code ItemStack.equals} 로 한다 — 종류·개수·메타(=PDC 포함)를 다 본다.
+     */
+    List<VaultCase> vaultRoundTripTest() {
+        List<VaultCase> out = new ArrayList<>();
+
+        out.add(runCase("빈 손 (null)", null));
+        out.add(runCase("빈 배열", new ItemStack[0]));
+        out.add(runCase("평범한 것 (돌 64)", new ItemStack[]{ new ItemStack(Material.STONE, 64) }));
+
+        // ★ 인벤토리에는 **빈 칸이 있다.** 배열 한가운데의 null 을 못 넘기면 짐이 밀려 어긋난다.
+        out.add(runCase("빈 칸(null) 구멍", new ItemStack[]{
+                new ItemStack(Material.STONE), null, new ItemStack(Material.DIRT), null }));
+
+        ItemStack air = new ItemStack(Material.AIR);
+        out.add(runCase("AIR 섞임", new ItemStack[]{ air, new ItemStack(Material.STONE) }));
+
+        ItemStack fancy = new ItemStack(Material.IRON_SWORD);
+        org.bukkit.inventory.meta.ItemMeta fm = fancy.getItemMeta();
+        fm.setDisplayName(ChatColor.AQUA + "시험용 이름");
+        fm.setLore(List.of("첫 줄", "둘째 줄"));
+        fm.addEnchant(org.bukkit.enchantments.Enchantment.SHARPNESS, 3, true);
+        fm.setCustomModelData(12345);
+        fancy.setItemMeta(fm);
+        out.add(runCase("이름·설명·인챈트·모델데이터", new ItemStack[]{ fancy }));
+
+        // ★★ 여기가 진짜 물음이다 — **우리 신병의 PDC 가 왕복을 견디는가.**
+        //    이것이 깨지면 검이 「그냥 철검」이 되어 돌아온다. 사람은 그것을 손실이라 부른다.
+        try {
+            ItemStack weapon = Weapons.makeRolled(Weapons.Series.values()[0], Weapons.Grade.values()[0]);
+            out.add(runCase("★ 신병 (PDC 붙은 무기)", new ItemStack[]{ weapon }));
+        } catch (RuntimeException | Error e) {
+            out.add(new VaultCase("★ 신병 (PDC 붙은 무기)", false, "무기를 못 만들었다 — " + e));
+        }
+
+        // 상자 속의 상자 — 중첩 인벤토리가 통째로 살아야 한다
+        try {
+            ItemStack box = new ItemStack(Material.SHULKER_BOX);
+            org.bukkit.inventory.meta.BlockStateMeta bm =
+                    (org.bukkit.inventory.meta.BlockStateMeta) box.getItemMeta();
+            org.bukkit.block.ShulkerBox state = (org.bukkit.block.ShulkerBox) bm.getBlockState();
+            state.getInventory().setItem(0, new ItemStack(Material.DIAMOND, 7));
+            bm.setBlockState(state);
+            box.setItemMeta(bm);
+            out.add(runCase("상자 속의 상자 (셜커)", new ItemStack[]{ box }));
+        } catch (RuntimeException | Error e) {
+            out.add(new VaultCase("상자 속의 상자 (셜커)", false, "못 지었다 — " + e));
+        }
+
+        // 실제 인벤토리 크기 그대로 — 41칸(주 36 + 방어구 4 + 보조 1)
+        ItemStack[] full = new ItemStack[41];
+        for (int i = 0; i < full.length; i++) {
+            full[i] = (i % 3 == 0) ? null : new ItemStack(Material.BREAD, 1 + (i % 16));
+        }
+        out.add(runCase("인벤토리 한 벌 (41칸 · 빈 칸 섞임)", full));
+
+        // ══════════════════════════════════════════════════════════════
+        //  ★ 눈을 시험하는 눈 — 이 시험이 **실패를 잡아낼 수 있는가**
+        // ══════════════════════════════════════════════════════════════
+        //  "전부 통과"는 그 자체로는 아무 뜻이 없다. 아무것도 안 보는 눈도 통과를 낸다.
+        //  그러니 **틀린 것을 일부러 먹여** 시험이 짖는지 본다. 여기서 안 짖으면
+        //  위의 아홉 판은 전부 무의미하다 — 그때는 이 줄이 그렇다고 말한다.
+        out.addAll(eyeTests());
+
+        return out;
+    }
+
+    /**
+     * <b>짐의 지문</b> — 같은 짐이면 같은 값이 나온다. <b>재기동 전후를 견주기 위한 것</b>이다.
+     *
+     * <p>왜 필요했나: `data get entity … Inventory` 는 서버가 <b>174바이트에서 잘라</b> 준다.
+     * 잘린 글로는 "같은 것이 돌아왔다"를 말할 수 없다. 그래서 <b>금고가 실제로 적는 그 바이트</b>
+     * (= {@link #encodeItems})를 그대로 sha1 로 접는다 — 한 칸이라도 다르면 지문이 달라진다.
+     */
+    static String inventoryFingerprint(ItemStack[] items) {
+        String blob = encodeItems(items);
+        if (blob == null) {
+            return "빈손";
+        }
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-1")
+                    .digest(blob.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                sb.append(String.format("%02x", d[i]));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            return "sha1없음";
+        }
+    }
+
+    /** 사람이 눈으로도 대조할 수 있게 — 칸마다 무엇이 몇 개, PDC 는 몇 줄인가. */
+    static List<String> inventoryLines(ItemStack[] items) {
+        List<String> out = new ArrayList<>();
+        if (items == null) {
+            out.add("  (빈손)");
+            return out;
+        }
+        int n = 0;
+        for (int i = 0; i < items.length; i++) {
+            ItemStack s = items[i];
+            if (s == null || s.getType() == Material.AIR) {
+                continue;
+            }
+            n++;
+            out.add("  " + i + "번  " + describe(s));
+        }
+        out.add("  — 물건이 든 칸: " + n + "개 / 전체 " + items.length + "칸");
+        return out;
+    }
+
+    /** 일부러 어긋난 것을 먹인다 — <b>잡아내면</b> 통과다. */
+    private List<VaultCase> eyeTests() {
+        List<VaultCase> out = new ArrayList<>();
+
+        // ① 다른 물건을 같다고 하지는 않는가
+        VaultCase mismatch = compareArrays("눈① 다른 물건 판별",
+                new ItemStack[]{ new ItemStack(Material.STONE, 64) },
+                new ItemStack[]{ new ItemStack(Material.STONE, 63) });
+        out.add(new VaultCase("눈① 개수 1개 차이를 잡는가", !mismatch.pass(),
+                mismatch.pass() ? "★ 못 잡았다 — 이 시험은 눈이 멀었다" : "잡았다: " + mismatch.detail()));
+
+        // ② 빈 칸이 밀린 것을 잡는가 (짐이 어긋나는 전형적인 손실)
+        VaultCase shifted = compareArrays("눈② 밀림 판별",
+                new ItemStack[]{ new ItemStack(Material.STONE), null },
+                new ItemStack[]{ null, new ItemStack(Material.STONE) });
+        out.add(new VaultCase("눈② 빈 칸 밀림을 잡는가", !shifted.pass(),
+                shifted.pass() ? "★ 못 잡았다 — 밀려도 통과가 난다" : "잡았다: " + shifted.detail()));
+
+        // ③ 깨진 줄을 먹였을 때 **조용히 빈손**을 만들지 않는가
+        //    decodeItems 는 못 읽으면 null 을 주고 로그에 짖는 것이 계약이다.
+        //    ★ null 은 「짐 없음」이 아니라 「모르겠다」다 — 부르는 쪽이 이걸 빈손으로 쓰면 그게 손실이다.
+        ItemStack[] fromGarbage;
+        try {
+            fromGarbage = decodeItems("이건-Base64-가-아니다!!");
+        } catch (RuntimeException e) {
+            fromGarbage = null;
+        }
+        out.add(new VaultCase("눈③ 깨진 줄에 빈손을 내놓지 않는가", fromGarbage == null,
+                fromGarbage == null
+                        ? "null 을 돌려주고 로그에 짖는다 (빈손으로 덮지 않는다)"
+                        : "★ " + fromGarbage.length + "칸을 내놨다 — 깨진 줄을 짐으로 읽는다"));
+
+        return out;
+    }
+
+    /** {@link #runCase} 의 비교부만 떼어 쓴다 — 왕복 없이 두 배열을 견준다. */
+    private VaultCase compareArrays(String name, ItemStack[] a, ItemStack[] b) {
+        if (a.length != b.length) {
+            return new VaultCase(name, false, "칸 수가 다르다");
+        }
+        for (int i = 0; i < a.length; i++) {
+            ItemStack x = a[i], y = b[i];
+            boolean xe = x == null || x.getType() == Material.AIR;
+            boolean ye = y == null || y.getType() == Material.AIR;
+            if (xe && ye) {
+                continue;
+            }
+            if (xe != ye || !x.equals(y)) {
+                return new VaultCase(name, false,
+                        i + "번 칸 " + describe(x) + " ≠ " + describe(y));
+            }
+        }
+        return new VaultCase(name, true, "같다");
+    }
+
+    /** 한 판 — encode→decode 를 **진짜 경로로** 돌리고 같은 것이 왔는지 본다. */
+    private VaultCase runCase(String name, ItemStack[] items) {
+        try {
+            ItemStack[] back = decodeItems(encodeItems(items));
+            if (items == null || items.length == 0) {
+                // 빈 손은 null 로 돌아오는 것이 계약이다 (encodeItems 가 null 을 준다)
+                boolean ok = back == null || back.length == 0;
+                return new VaultCase(name, ok, ok ? "빈 채로 돌아왔다" : "빈 손인데 " + back.length + "칸이 왔다");
+            }
+            if (back == null) {
+                return new VaultCase(name, false, "★ null 이 돌아왔다 — 짐이 통째로 사라진다");
+            }
+            if (back.length != items.length) {
+                return new VaultCase(name, false,
+                        "칸 수가 다르다: " + items.length + " → " + back.length);
+            }
+            for (int i = 0; i < items.length; i++) {
+                ItemStack a = items[i], b = back[i];
+                boolean aEmpty = a == null || a.getType() == Material.AIR;
+                boolean bEmpty = b == null || b.getType() == Material.AIR;
+                if (aEmpty && bEmpty) {
+                    continue;
+                }
+                if (aEmpty != bEmpty) {
+                    return new VaultCase(name, false,
+                            i + "번 칸: " + (aEmpty ? "빈 칸이 채워져 왔다" : "★ 물건이 빈 칸이 돼 왔다"));
+                }
+                if (!a.equals(b)) {
+                    return new VaultCase(name, false,
+                            i + "번 칸이 달라졌다: " + describe(a) + "  →  " + describe(b));
+                }
+            }
+            return new VaultCase(name, true, items.length + "칸 전부 같은 것으로 돌아왔다");
+        } catch (RuntimeException | Error e) {
+            return new VaultCase(name, false, "★ 왕복 중 터졌다 — " + e);
+        }
+    }
+
+    /** 어긋났을 때 **무엇이** 어긋났는지 사람이 읽을 수 있게. */
+    private static String describe(ItemStack s) {
+        if (s == null) {
+            return "(빈 칸)";
+        }
+        StringBuilder sb = new StringBuilder(s.getType().name()).append(" x").append(s.getAmount());
+        if (s.hasItemMeta()) {
+            org.bukkit.inventory.meta.ItemMeta m = s.getItemMeta();
+            if (m.hasDisplayName()) {
+                sb.append(" 「").append(ChatColor.stripColor(m.getDisplayName())).append("」");
+            }
+            int pdc = m.getPersistentDataContainer().getKeys().size();
+            if (pdc > 0) {
+                sb.append(" PDC:").append(pdc).append("개");
+            }
+            if (!m.getEnchants().isEmpty()) {
+                sb.append(" 인챈트:").append(m.getEnchants().size()).append("종");
+            }
+        }
+        return sb.toString();
+    }
+
     /** 무공 상태 → 금고. <b>틱 값(쿨다운·경직·창)은 적지 않는다</b> — 리붓을 넘으면 뜻이 없는 숫자다 */
     static void writeState(ConfigurationSection to, SkillEngine.State s) {
         if (s == null) {

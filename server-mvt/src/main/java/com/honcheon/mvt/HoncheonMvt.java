@@ -215,6 +215,7 @@ public final class HoncheonMvt extends JavaPlugin {
         loadRegionBases();
         loadLedgers();   // ★ 원장 — 재기동을 넘어 살아남는다 (여태 순수 HashMap 이었다)
         dojang.loadVault();   // ★ 연무장 금고 — 맡긴 것이 남아 있으면 짖는다 (접속하면 돌려준다)
+        antechamber.loadStow();   // ★ 나루가 맡아 둔 짐 — 같은 이유로 같은 손 (예전엔 메모리뿐이라 잃었다)
         // 원장·금고 굽기 — 주기 저장. 크래시는 예고하지 않는다 (onDisable 이 안 불리는 죽음이 있다)
         getServer().getScheduler().runTaskTimer(this, () -> {
             saveLedgers();

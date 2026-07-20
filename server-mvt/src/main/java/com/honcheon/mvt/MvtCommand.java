@@ -7,6 +7,7 @@ import com.honcheon.mvt.forge.RangeField;
 import com.honcheon.mvt.forge.RangeSpec;
 import com.honcheon.mvt.forge.RangeZone;
 import com.honcheon.mvt.forge.TrailBuilder;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -17,6 +18,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
@@ -86,6 +88,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "연무장" -> dojangEnter(sender);        // 시험 월드로 (스킬·몹·허수아비)
                 case "귀환" -> dojangLeave(sender);          // 세계로 돌아온다
                 case "금고" -> dojangVault(sender);          // ★ 연무장이 누구의 무엇을 맡고 있는가 (콘솔 가능)
+                case "금고시험" -> dojangVaultTest(sender);   // ★ 진짜 ItemStack 이 왕복을 견디는가 (B-011)
+                case "짐지문" -> inventoryFingerprint(sender, args);   // ★ 재기동 전후로 같은 짐인가 (B-011 끝단)
                 case "시험" -> dojangTune(sender, args);     // 경지·내력·무공 조정
                 case "허수아비" -> dojangDummy(sender, args); // 맞아 주는 몸 (피해 계측)
                 case "계측" -> metrics(sender, args);        // MSPT·티커별 예산 (performance.yml 대조)
@@ -2397,6 +2401,62 @@ public final class MvtCommand implements CommandExecutor {
      */
     private boolean dojangVault(CommandSender sender) {
         plugin.dojang().auditLines().forEach(sender::sendMessage);
+        return true;
+    }
+
+    /**
+     * <b>/혼천 짐지문 [플레이어]</b> — 지금 든 짐의 <b>지문</b>을 찍는다.
+     *
+     * <p>재기동을 <b>실제로 건너</b> 같은 짐이 돌아왔는지 보려면 전후를 견줘야 하는데,
+     * `data get entity … Inventory` 는 서버가 <b>174바이트에서 잘라</b> 준다 — 잘린 글로는 못 견준다.
+     * 그래서 금고가 실제로 적는 바이트를 sha1 로 접어 한 줄로 만든다. 콘솔에서도 부를 수 있다.
+     */
+    private boolean inventoryFingerprint(CommandSender sender, String[] args) {
+        Player who;
+        if (args.length >= 2) {
+            who = Bukkit.getPlayerExact(args[1]);
+            if (who == null) {
+                sender.sendMessage(ChatColor.RED + "그런 사람이 접속해 있지 않다: " + args[1]);
+                return true;
+            }
+        } else if (sender instanceof Player p) {
+            who = p;
+        } else {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 짐지문 <플레이어>  (콘솔은 이름을 줘야 한다)");
+            return true;
+        }
+        ItemStack[] items = who.getInventory().getContents();
+        sender.sendMessage(ChatColor.DARK_GRAY + "━━━ " + who.getName() + " 의 짐 ━━━");
+        Dojang.inventoryLines(items).forEach(sender::sendMessage);
+        sender.sendMessage(ChatColor.AQUA + "지문: " + ChatColor.WHITE
+                + Dojang.inventoryFingerprint(items));
+        return true;
+    }
+
+    /**
+     * <b>/혼천 금고시험</b> — 금고가 <b>진짜 짐</b>을 잃지 않는지 잰다 (B-011).
+     *
+     * <p>왜 필요했나: 옛 자기시험은 <b>문자열</b>을 왕복시켰다. 그것은
+     * "YAML 이 줄을 잃지 않는다"를 증명할 뿐, <b>"재기동을 건너 사람의 짐이 살아 돌아온다"</b>는
+     * 한 번도 증명한 적이 없다 — 그 사이의 {@code ItemStack.serializeItemsAsBytes} 가 통째로 빠져 있었다.
+     *
+     * <p>금고 파일은 <b>건드리지 않는다</b>. 메모리에서만 왕복시킨다.
+     */
+    private boolean dojangVaultTest(CommandSender sender) {
+        if (!sender.isOp()) {
+            sender.sendMessage(ChatColor.RED + "금고시험은 관리자의 몫이다.");
+            return true;
+        }
+        List<Dojang.VaultCase> rs = plugin.dojang().vaultRoundTripTest();
+        long bad = rs.stream().filter(r -> !r.pass()).count();
+        sender.sendMessage(ChatColor.DARK_GRAY + "━━━ 금고 왕복 실측 (진짜 ItemStack) ━━━");
+        for (Dojang.VaultCase r : rs) {
+            sender.sendMessage((r.pass() ? ChatColor.GREEN + "  통과  " : ChatColor.RED + "  ★실패 ")
+                    + ChatColor.WHITE + r.name() + ChatColor.GRAY + " — " + r.detail());
+        }
+        sender.sendMessage(bad == 0
+                ? ChatColor.GREEN + "전부 통과 — 짐은 재기동을 건너 살아 돌아온다"
+                : ChatColor.RED + "★ " + bad + "건 실패 — 이 상태로는 사람의 물건을 잃는다");
         return true;
     }
 
