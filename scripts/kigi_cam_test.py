@@ -565,14 +565,25 @@ def count_parts(rcon: Rcon) -> int:
     return n
 
 
+# ★ 검기의 색이 **연두 → 청회**로 바뀌었다 (2026-07-20 사용자 결정 · 등록부의 격 사다리).
+#   그래서 이 눈도 바뀐다. 청회는 배경(돌·하늘·안개)과 겹치므로 **바탕을 빼고** 재야 한다 —
+#   그 계약은 vfx_detect.qi_mask 안에 있고 자가시험 ⑤·⑤-b 가 그것을 증명한다.
+#   ★ 색을 바꾼 대가: 초록이던 시절엔 필요 없던 **카메라 고정** 전제가 생겼다. 카메라가 움직이면
+#     이 자는 망가지고, 그때 0 은 「효과 없음」이 아니라 「내 눈이 멀었다」다.
+_QI_BASELINE = {}          # 표시자 → 스윙 전 바탕 (효과가 없을 때의 같은 화면)
+
+
 def green_mask(arr):
-    """검기 초록 마스크 — **정본은 vfx_detect 하나뿐이다** (복사본을 없앴다).
+    """검기 마스크 — **정본은 vfx_detect 하나뿐이다** (복사본을 없앴다).
+
+    ★ 이름은 옛것을 그대로 둔다 (부르는 곳이 많다). 재는 것은 이제 **청회**다.
 
     옛 코드는 여기에 문턱을 한 번 더 적어 뒀다. 한쪽만 고치면 다른 쪽은 옛 문턱으로 계속
     재고, 그 차이는 조용하다. 이제 두 하네스가 **같은 눈**을 쓰고, 그 눈은 매 실행마다
     합성 이미지로 자가시험을 받는다.
     """
-    return DET.green_mask(arr)
+    base = _QI_BASELINE.get('base')
+    return DET.qi_mask(arr, base) if base is not None else DET.qi_band(arr)
 
 
 def static_green(display, n=6, pause=0.7):
@@ -599,7 +610,9 @@ def static_green(display, n=6, pause=0.7):
     if not frames:
         return None
     # 마스크 만들기·팽창은 vfx_detect 가 한다 — 그쪽이 자가시험(③·③-b)을 받는 코드다
-    raw = int(sum(int(DET.green_mask(a).sum()) for a in frames) / len(frames))
+    if frames:
+        _QI_BASELINE['base'] = frames[0]      # ★ 스윙 전 화면 = 바탕 (청회는 이것 없이 못 잰다)
+    raw = int(sum(int(DET.qi_band(a).sum()) for a in frames) / len(frames))
     d = DET.build_static_mask(frames)
     print(f"[촬영] 붙박이 초록(HUD) 평균 {raw}px 를 빼고 센다 → 팽창 후 {int(d.sum())}px")
     return d

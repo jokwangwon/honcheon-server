@@ -1779,11 +1779,15 @@ QI_TEX_DIRS = ("qi", "ult", "kigi")   # kigi = 녹색 검기 (아래 KIGI 밴드
 QI_ACHROMATIC_MAX = 12        # qi/* 의 평균 채도 상한 — 이보다 크면 '무색'이 아니다
 QI_HUE_TOLERANCE = 20         # 구워진 색상 ↔ 등록부 색상(옥·청백)의 허용 오차(도). 넘으면 빌더가 색을 지어낸 것이다
 QI_CHROMA_FLOOR = 8           # ult/* 의 채도 하한 — 색이 죽으면 "최상위는 화려하다"가 거짓말이 된다
-# ── kigi/* 녹색 검기 — 【등록형 색 예외 · 2026-07 · 레퍼런스 마크에이지】 ──
-#   qi/* 무색 판을 물들이지 않으려고 별도 경로에 굽는 색이다. "재지 않는다"가 아니라 **다른 자로 잰다**:
-#   ① 금지색(_forbidden_hue: 네온보라·과노랑·형광)이 없고 ② 색이 **연두(黃緑)** 밴드 안이며
-#   ③ 죽지 않았다(채도 하한). 밴드는 노랑(≤68°)·청록/파랑(≥180°)을 배제한다 (실측 avg hue 137°).
-KIGI_HUE_LO, KIGI_HUE_HI = 90, 170   # 연두~초록 (노랑 38~68 · 보라 265~345 밖 · 청록 ≥180 밖)
+# ── kigi/* 검기(劍氣) — 【2026-07-20 사용자 결정: 등록부의 격 사다리를 따른다】 ──
+#   ★ **연두 밴드 예외를 걷었다.** 그 예외는 레퍼런스 영상의 연두색을 통과시키려고 있던 것인데,
+#     등록부(config/skill_motion.yml inks)의 사다리는 이미 색을 정해 놨다:
+#     외공기 회백 → **검기 청회** → 강기 청록 → 어검 옥 → 심검 청백.
+#     검기의 등록된 색은 **청회(124,143,152)** 이고 초록이 아니다.
+#   ⇒ 이제 kigi/ 는 **다른 자**가 아니라 **등록부 자체**로 잰다 — 구운 색이 `청회` 에서 얼마나
+#     떨어졌는가(QI_HUE_TOLERANCE). qi/* 무색판과 경로만 다를 뿐, **색의 출처는 하나**가 됐다.
+#   왜 이게 나은가: 예외는 은닉이 아니어도 **자를 하나 더 만든다.** 자가 둘이면 둘 다 믿기 어렵다.
+KIGI_INK = "청회"             # 등록부의 그 색 — inks 에서 읽는다 (여기 숫자를 적지 않는다)
 # 【면제 — 소리내어 청구한다】 둘 다 "빛나지 않는 것이 곧 정보"인 자리다. 은닉이 아니라 등록이다.
 QI_COLOR_EXEMPT = {
     "ult/blood_tide": ("혈", "【채색 예외】 마공의 혈조 — '저것은 사람의 기가 아니다'"),
@@ -1890,18 +1894,22 @@ def stroke_color_axis():
                 continue
 
             if sub == "kigi":
-                # 녹색 검기 — **연두(黃緑)** 계열이어야 한다. qi/* 무색을 물들이지 않으려고 별도 경로에
-                #   구운 색이다 (등록형 예외). 노랑·청록/파랑으로 새거나 죽으면(채도 하한) 위반이다.
-                ok = KIGI_HUE_LO <= hue <= KIGI_HUE_HI and chroma >= QI_CHROMA_FLOOR
+                # 검기 — **등록부의 `청회` 에서 얼마나 떨어졌는가**로 잰다 (밴드 예외를 걷었다).
+                #   자를 새로 만들지 않는다: ult/* 가 옥·청백을 재는 그 자(QI_HUE_TOLERANCE)를 그대로 쓴다.
+                want = inks.get(KIGI_INK)
+                if want is None:
+                    print(f"  ❌ {key:20s} — 등록부에 먹빛 '{KIGI_INK}' 이(가) 없다 "
+                          f"(config/skill_motion.yml inks)")
+                    violations += 1
+                    continue
+                want_hue, _want_chroma = _hue(*want)   # _hue 는 (색상, 채도) 쌍을 준다
+                d = abs(hue - want_hue)
+                d = min(d, 360 - d)                       # 색상환은 둥글다
+                ok = d <= QI_HUE_TOLERANCE
                 violations += 0 if ok else 1
-                why = ("" if ok
-                       else ("  ← **색이 죽었다** (채도 %d < %d)" % (chroma, QI_CHROMA_FLOOR)
-                             if chroma < QI_CHROMA_FLOOR
-                             else "  ← **연두 밖이다** (노랑·청록으로 샜다 — 검기는 연두다)"))
                 print(f"  {'✅' if ok else '❌'} {key:20s} rgb{avg} hue {hue:5.0f}° 채도 {chroma:3d}"
-                      f" — 연두 ∈ [{KIGI_HUE_LO}°,{KIGI_HUE_HI}°] · 채도 ≥ {QI_CHROMA_FLOOR}"
-                      f" (녹색 검기 — qi/* 무색 판 밖의 등록된 색)"
-                      + why)
+                      f" — 등록부 {KIGI_INK} hue {want_hue:.0f}° 와 {d:.0f}° 차 (허용 {QI_HUE_TOLERANCE}°)"
+                      + ("" if ok else f"  ← **{KIGI_INK} 에서 벗어났다** — 검기의 색은 등록부가 정한다"))
                 continue
 
             # ult/* — 등록부의 옥·청백 **색상(hue)** 이어야 한다.

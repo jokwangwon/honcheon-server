@@ -48,6 +48,34 @@ def green_mask(arr, g_min=None, gr_min=None, gb_min=None):
     return (g > g_min) & (g - r > gr_min) & (g - b > gb_min)
 
 
+# ── 검기 청회 문턱 — 【2026-07-20 사용자 결정: 등록부의 격 사다리를 따른다】 ────────────
+#   검기의 색이 연두 → **청회**(124,143,152)로 바뀌었다. 그런데 이 색은 **재기가 훨씬 어렵다**:
+#   초록은 강호의 배경에 거의 없었지만, 청회는 **돌바닥·하늘·안개가 이미 그 색**이다.
+#   실측(2026-07-20): 색만으로 재면 효과가 없는 바탕에서도 **109,336px** 이 걸린다.
+#   그래서 이 색은 **「무슨 색인가」가 아니라 「무엇이 바뀌었나」로 잰다.**
+#
+#   실측된 검기 픽셀: 평균 RGB(58,62,76) · b−r 15~21 · b−g 12~15 · 밝기 b 45~112.
+QI_BR_MIN, QI_BG_MIN, QI_BG_MAX = 10, 7, 40
+QI_B_MIN, QI_B_MAX = 30, 190
+
+
+def qi_band(arr):
+    """청회 밴드 — **이것만으로는 못 쓴다.** 반드시 {@link qi_mask} 로 바탕을 빼고 써라."""
+    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+    return ((b - r > QI_BR_MIN) & (b - g > QI_BG_MIN) & (b - g < QI_BG_MAX)
+            & (b > QI_B_MIN) & (b < QI_B_MAX))
+
+
+def qi_mask(arr, baseline):
+    """검기(청회) 마스크 — 밴드 ∧ **바탕에 없던 것**.
+
+    ★ 바탕(baseline)은 **효과가 없을 때의 같은 화면**이다. 카메라가 움직이면 이 자는 망가진다 —
+      그때는 0 이 「효과 없음」이 아니라 「내 눈이 멀었다」이므로, 부르는 쪽이 카메라 고정을 보장해야 한다.
+      (초록이던 시절엔 이 전제가 필요 없었다. 색을 바꾼 대가다 — 적어 둔다.)
+    """
+    return qi_band(arr) & ~qi_band(baseline)
+
+
 def measure(mask):
     """마스크 하나에서 면적·중심·bbox 를 뽑는다. 빈 마스크면 None."""
     import numpy as np
@@ -215,6 +243,34 @@ def selftest(verbose=True):
     ok &= passed
     got = f"({m['cx']},{m['cy']})" if m else "없음"
     say(f"    ④ 중심 좌표     : 정답 (240,60) · 검출 {got}  {'통과' if passed else '★실패'}")
+
+    # ⑤ ★ **청회 자** — 색이 연두에서 청회로 바뀌었다. 새 자에도 눈을 시험하는 눈이 있어야 한다.
+    #    청회는 배경(돌·하늘)과 겹치므로 **반드시 바탕을 빼고** 써야 한다 — 그 계약을 여기서 증명한다.
+    QI = (58, 62, 76)          # 실측된 검기 픽셀 평균
+    # ★ 바탕은 **밴드를 실제로 울리는 색**이라야 시험이 뜻이 있다.
+    #   흰 무대(207,213,214)는 b−r=7 이라 밴드에 안 걸린다 — 그걸로 시험했다가
+    #   ⑤-b 가 0px 를 내고 **시험 자체가 무의미해졌다** (이 자가시험이 그걸 잡았다).
+    #   실제로 울리는 것은 **그늘진 돌·먼 안개**다 (b−r 20 · b−g 15).
+    SHADE = (90, 95, 110)
+    bg = _canvas()
+    _draw_disc(bg, 120, 60, 24, SHADE)           # 바탕에 이미 청회 계열 덩어리가 있다
+    fx = bg.copy()
+    _draw_disc(fx, 240, 60, 20, QI)             # 그 위에 검기가 새로 떴다
+    m = measure(qi_mask(fx, bg))
+    want = int(3.14159 * 20 * 20)
+    passed = m is not None and abs(m["area"] - want) / want < 0.25 and abs(m["cx"] - 240) <= 3
+    ok &= passed
+    say(f"    ⑤ 청회 검출     : 정답 ~{want}px @(240,60) · 검출 "
+        f"{m['area'] if m else 0}px @({m['cx'] if m else '-'},{m['cy'] if m else '-'})  "
+        f"{'통과' if passed else '★실패'}")
+
+    # ⑤-b ★ **바탕을 안 빼면 망가지는가** — 이 계약이 진짜인지 반대로 시험한다.
+    #      바탕에 이미 있던 잿빛을 「효과」로 세면 그 눈은 못 믿는다.
+    naive = measure(qi_band(bg))                # 일부러 바탕만, 밴드만
+    passed = naive is not None and naive["area"] > 100
+    ok &= passed
+    say(f"    ⑤-b 바탕 오검출 : 밴드만 쓰면 {naive['area'] if naive else 0}px 를 효과로 센다 "
+        f"→ 바탕 빼기는 **선택이 아니다**  {'통과' if passed else '★실패 — 이 시험이 무의미하다'}")
 
     say(f"  [자가시험] {'전부 통과 — 이 눈으로 잰 숫자를 믿어도 된다' if ok else '★ 실패 — 측정을 거부한다'}")
     return ok, lines
