@@ -695,6 +695,24 @@ def shoot_mob(rcon, angle, outdir: Path, args, target):
     foe = mob_foe_id(rcon)
     print(f"[몹] PDC foe_id = {foe or '⚠ 없다'}   형체 파츠(item_display) = {parts}개")
 
+    # ★ **찍기 전에 눈이 살았는지 본다** — 8초를 찍고 나서 「죽은 화면이었다」를 아는 건 늦다.
+    #   실측 2026-07-20: 연무장에서 카메라를 표적 앞 5.4칸(z=5.9)에 두면 llvmpipe 가 그 시야를
+    #   **잘못 렌더한다** — 반투명 판이 화면을 덮고 바닥이 황토빛으로 물들며, 그 그림은
+    #   완전히 정지한다(141프레임 바이트 동일). 2.0·3.0·7.5칸에서는 멀쩡하다.
+    #   변장을 풀어도, 구름을 꺼도, 클라·Xvfb 를 새로 띄워도 같은 자리면 같은 그림이다.
+    #   → 원인은 Mesa 쪽이라 우리가 못 고친다. 대신 **그 자리를 피한다.**
+    for attempt, mul in enumerate((args.dist_mul, args.dist_mul * 0.62, args.dist_mul * 1.35)):
+        if camera_alive(CAM_DISPLAY):
+            if attempt:
+                print(f"[카메라] 거리 {mul:.2f}배에서 눈이 살아났다")
+            break
+        print(f"[카메라] ★ 화면이 죽었다 — 거리를 {mul:.2f}배로 흔들어 다시 세운다")
+        place_camera(rcon, angle, args.cam_mode, target=target,
+                     aim_y=args.aim_y, dist_mul=mul, quiet=True, dim=dim)
+        time.sleep(7.0)
+    else:
+        print("[카메라] ★ 세 자리 모두 죽은 화면이다 — 이 촬영은 근거가 못 된다")
+
     still = outdir / "mob_view.png"
     grab_one(CAM_DISPLAY, still)
 
@@ -729,6 +747,31 @@ def shoot_mob(rcon, angle, outdir: Path, args, target):
     motion = frame_motion(outdir)
     return dict(angle=angle, outdir=outdir, still=still, parts=parts,
                 foe=foe, motion=motion)
+
+
+def camera_alive(display: str, gap: float = 2.2, thresh: int = 60) -> bool:
+    """**눈이 살아 있는가** — 두 장을 사이 두고 긁어 서로 다른지 본다.
+
+    살아 있는 마인크래프트 화면은 가만 둬도 변한다 (구름·하늘·HUD 시계·엔티티 숨결).
+    두 장이 사실상 같으면 그건 「세상이 멈췄다」가 아니라 **「내가 못 본다」**다.
+    이 물음을 **찍기 전에** 던져야 8초를 버리지 않는다.
+    """
+    import tempfile
+    from PIL import Image
+    import numpy as np
+    with tempfile.TemporaryDirectory() as td:
+        a, b = Path(td) / "a.png", Path(td) / "b.png"
+        grab_one(display, a)
+        time.sleep(gap)
+        grab_one(display, b)
+        try:
+            xa = np.asarray(Image.open(a).convert("L")).astype(np.int16)
+            xb = np.asarray(Image.open(b).convert("L")).astype(np.int16)
+        except Exception:
+            return True          # 못 읽으면 막지 않는다 — 검사기가 촬영을 잡아먹으면 안 된다
+        if xa.shape != xb.shape:
+            return True
+        return int((np.abs(xa - xb) > 25).sum()) > thresh
 
 
 def frame_motion(outdir: Path):
