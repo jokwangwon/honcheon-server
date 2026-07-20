@@ -43,6 +43,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kigi_rcon import Rcon  # noqa: E402
 import kigi_autotest as AT  # noqa: E402
+import vfx_detect as DET  # noqa: E402
+import vfx_preflight as PF  # noqa: E402
 
 ROOT = AT.ROOT
 SCRATCH = AT.SCRATCH
@@ -295,18 +297,27 @@ def read_rot(rcon: Rcon, who: str):
     return float(n[0]), float(n[1])
 
 
-def place_camera(rcon: Rcon, angle: str, mode: str = "spectator"):
-    """kigibot 을 기준으로 카메라를 세우고 **정확히 kigibot 을 바라보게** 한다.
+def place_camera(rcon: Rcon, angle: str, mode: str = "spectator",
+                 target: str = None, aim_y: float = None, dist_mul: float = 1.0,
+                 quiet: bool = False, dim: str = None):
+    """표적을 기준으로 카메라를 세우고 **정확히 그 표적을 바라보게** 한다.
 
     ★ 마인크래프트 좌표계: yaw 0 = +Z(남), 90 = -X(서), 180 = -Z(북), 270 = +X(동).
-      시선벡터 f = (-sin yaw, cos yaw). 방위각 a 만큼 봇 둘레를 돈 자리는 yaw' = yaw + a.
-      (a=180 이면 봇의 **등 뒤**, a=0 이면 봇의 **정면 앞**, a=90 이면 옆.)
-    ★ 되돌아보는 각은 삼각함수로 낸다 — 카메라 눈(발밑+1.62)에서 봇 가슴(발밑+1.1)을 향한
+      시선벡터 f = (-sin yaw, cos yaw). 방위각 a 만큼 표적 둘레를 돈 자리는 yaw' = yaw + a.
+      (a=180 이면 표적의 **등 뒤**, a=0 이면 **정면 앞**, a=90 이면 옆.)
+    ★ 되돌아보는 각은 삼각함수로 낸다 — 카메라 눈(발밑+1.62)에서 표적의 가슴께를 향한
       벡터로 yaw=atan2(-dx, dz), pitch=atan2(-dy, √(dx²+dz²)) 를 구한다.
+
+    ★ target 은 플레이어 이름이든 **엔티티 UUID** 든 된다 (`data get entity <uuid>`).
+      몹 촬영에서 이 축이 필요하다 — 호랑이는 kigibot 이 아니다.
+      aim_y/dist_mul 은 표적의 덩치에 맞춘다 (호랑이는 낮고 넓다 — 더 멀리서 더 낮게 본다).
     """
+    who = target or BOT
+    aim = AIM_Y if aim_y is None else aim_y
     dist, dy_off, azim = ANGLES[angle]
-    bx, by, bz = read_pos(rcon, BOT)
-    byaw, _bpitch = read_rot(rcon, BOT)
+    dist *= dist_mul
+    bx, by, bz = read_pos(rcon, who)
+    byaw, _bpitch = read_rot(rcon, who)
 
     a = math.radians(byaw + azim)
     cx = bx + (-math.sin(a)) * dist
@@ -315,24 +326,253 @@ def place_camera(rcon: Rcon, angle: str, mode: str = "spectator"):
 
     dx = bx - cx
     dz = bz - cz
-    dy = (by + AIM_Y) - (cy + EYE)
+    dy = (by + aim) - (cy + EYE)
     yaw = math.degrees(math.atan2(-dx, dz))
     pitch = math.degrees(math.atan2(-dy, math.hypot(dx, dz)))
 
+    # ★ **차원을 명시해서** 옮긴다 (`execute in <dim> run tp`).
+    #   맨 `tp <이름> <좌표>` 는 **그 사람이 지금 있는 차원**의 좌표로 간다. 카메라 클라는
+    #   가끔 끊겼다 붙는데(소프트렌더), 연무장은 재접속한 사람을 오버월드로 내보낸다
+    #   (Dojang 의 onJoin 안전장치). 그러면 카메라는 오버월드의 **똑같이 생긴 초원**에서
+    #   같은 좌표에 서서 「빈 들판」을 찍는다 — 표적은 연무장에 있는데.
+    #   차원을 박아 두면 떠내려가도 매번 제자리로 끌려온다.
+    # ★ 차원은 **불러 준 쪽이 알려 준다.** 선택자(@e[...])로 읽으면 빈 대답이 오는 일이 있고
+    #   (실측), 그때 조용히 prefix 가 빠져 카메라가 옛 차원에 남는다 — 그것이 「빈 들판」의 정체다.
+    d = dim or read_dim(rcon, who)
+    prefix = f"execute in {d} run " if d and d != "?" else ""
     rcon.cmd(f"gamemode {mode} {CAM}")
-    rcon.cmd(f"tp {CAM} {cx:.3f} {cy:.3f} {cz:.3f} {yaw:.2f} {pitch:.2f}")
+    rcon.cmd(f"{prefix}tp {CAM} {cx:.3f} {cy:.3f} {cz:.3f} {yaw:.2f} {pitch:.2f}")
     time.sleep(0.4)
-    rcon.cmd(f"tp {CAM} {cx:.3f} {cy:.3f} {cz:.3f} {yaw:.2f} {pitch:.2f}")
-    print(f"[카메라] {angle:<5} pos=({cx:.2f},{cy:.2f},{cz:.2f}) "
-          f"yaw={yaw:.1f} pitch={pitch:.1f}  ← 봇({bx:.2f},{by:.2f},{bz:.2f}) yaw={byaw:.1f}")
+    rcon.cmd(f"{prefix}tp {CAM} {cx:.3f} {cy:.3f} {cz:.3f} {yaw:.2f} {pitch:.2f}")
+    if not quiet:
+        label = who if len(who) < 20 else who[:8] + "…"
+        print(f"[카메라] {angle:<5} pos=({cx:.2f},{cy:.2f},{cz:.2f}) "
+              f"yaw={yaw:.1f} pitch={pitch:.1f}  ← {label}({bx:.2f},{by:.2f},{bz:.2f}) yaw={byaw:.1f}")
     return dict(angle=angle, cam=(cx, cy, cz), yaw=yaw, pitch=pitch,
                 bot=(bx, by, bz), bot_yaw=byaw)
 
 
+# ══════════════════════════════════════════════════════════════════
+#  ②-b 몹 무대 — 형체(MobDisplay)가 실제로 붙는가 · 다리가 실제로 걷는가
+# ══════════════════════════════════════════════════════════════════
+#
+# ★ 왜 `summon ravager {Tags:[…]}` 로는 안 되는가 (오늘 부딪힌 벽)
+#   형체 부착은 **태그가 아니라 PDC** 로 판정된다 — MobDisplay.scan() 이 보는 것은
+#   `HuntingGrounds.KEY_ID`(honcheon:foe_id) 라는 PersistentDataContainer 키다.
+#   바닐라 `summon` 은 PDC 를 못 심는다(NBT 의 BukkitValues 를 손으로 쓰는 건 취약하다).
+#   ⇒ **등록부를 지나는 유일한 정문**은 `HuntingGrounds.spawnById()` 이고, 그것을 부르는
+#     인게임 손은 `/혼천 시험 몹 <id>` 다. 그런데 그 명령은 **몸**을 요구한다(콘솔 거절).
+#   ⇒ 그래서 `/혼천 대행` 을 냈다: 콘솔이 봇의 손을 빌려 그 명령을 친다.
+#     RCON → 혼천 대행 kigibot 혼천 시험 몹 horangi 걷기 → spawnById → PDC → attach.
+#
+# ★ 「걷기」가 왜 따로 있는가
+#   `Dojang.mob` 은 기본이 `setAI(false)` 다(계기용). 그런데 형체의 **다리 관절 위상은
+#   「실제로 움직인 거리」로 돈다** (MobDisplay: `rig.phase += moved * walkBobRate`).
+#   AI 를 끄면 다리는 영원히 안 흔들린다 — 걷기를 보려면 AI 를 켜고 표적을 줘야 한다.
+
+MOB_TAG = "camtarget"          # 카메라가 조준할 몸에 붙이는 표 (선택자 하나로 잡는다)
+MOB_SEL = f"@e[tag={MOB_TAG},limit=1]"
+
+
+def _tag_count(reply: str) -> int:
+    """`/tag … add X` 의 대답에서 **몇 마리에 붙었는지**를 읽는다.
+
+    바닐라에는 「세어라」 명령이 없다. 그런데 tag 는 붙인 개수를 말해 준다 —
+    "Added tag 'x' to N entities" / 한 마리면 "…to <이름>". 그 수를 센다.
+    """
+    m = re.search(r"to (\d+) entit", reply)
+    if m:
+        return int(m.group(1))
+    if "Added tag" in reply or "Removed tag" in reply:
+        return 1               # 한 마리는 이름으로 말한다
+    return 0
+
+
+DOJANG_DIM = "minecraft:honcheon_dojang"
+
+
+def read_dim(rcon: Rcon, who: str) -> str:
+    out = rcon.cmd(f"execute as {who} run data get entity @s Dimension")
+    m = re.search(r'"([a-z_]+:[a-z_]+)"', out)
+    return m.group(1) if m else "?"
+
+
+def ensure_dojang(rcon: Rcon, host: str, tries: int = 3) -> bool:
+    """봇이 **실제로 연무장 안에 서 있는지** 확인한다 — 믿지 않고 잰다.
+
+    ★ 왜 재야 하나 (실측 2026-07-20): `/혼천 연무장` 은 **상태를 가진** 명령이다.
+      들어간 채로 밖으로 tp 되면 연무장의 장부는 「안에 있다」로 남고, 그 상태에서 다시
+      `연무장` 을 쳐도 **아무 일도 안 일어난다** — 그리고 거절 메시지는 **봇의 채팅**으로
+      가서 RCON 에는 안 보인다. 「대행 성공」만 보고 들어갔다고 믿으면 그 다음 단계가
+      통째로 헛돈다(실제로 두 판을 그렇게 날렸다).
+    ⇒ 한 번 `귀환` 해서 상태를 풀고 `연무장` 으로 들어간 뒤, **차원을 읽어 확인**한다.
+    """
+    for i in range(1, tries + 1):
+        dim = read_dim(rcon, host)
+        if dim == DOJANG_DIM:
+            print(f"[연무장] {host} 확인 — {dim}")
+            return True
+        rcon.cmd(f"혼천 대행 {host} 혼천 귀환")
+        time.sleep(1.5)
+        rcon.cmd(f"혼천 대행 {host} 혼천 연무장")
+        time.sleep(2.5)
+        print(f"[연무장] 진입 시도 {i}/{tries} — 지금 차원 {read_dim(rcon, host)}")
+    dim = read_dim(rcon, host)
+    if dim == DOJANG_DIM:
+        return True
+    print(f"[연무장] ⚠ 못 들어갔다 — {host} 는 {dim} 에 있다 (봇 채팅에 이유가 있을 것이다)")
+    return False
+
+
+def mob_body_type(mob_id: str) -> str:
+    """등록부가 말하는 **바닐라 몸**(호랑이=ravager) — 선택자를 좁히는 데 쓴다.
+
+    ★ 왜 필요한가: 「봇 곁의 플레이어 아닌 것 중 가장 가까운 것」으로 잡으면 연무장의
+      허수아비·명패·interaction 을 집는다(실측으로 파츠 0개를 얻었다). 몸의 종류를
+      **등록부에서 읽어** 그 타입만 고른다 — 하네스가 config 를 추측하지 않는다.
+    """
+    import yaml
+    p = ROOT / "config" / "mob_models.yml"
+    try:
+        doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        body = (doc.get("foes", {}).get(mob_id, {}) or {}).get("body")
+        if body:
+            return str(body).lower()
+    except Exception as e:
+        print(f"[몹] ⚠ mob_models.yml 을 못 읽었다 ({e}) — 타입 없이 고른다")
+    return None
+
+
+def summon_mob(rcon: Rcon, mob_id: str, walking: bool, host: str = BOT):
+    """등록부의 몹을 무대에 세운다 — **대행**으로 봇의 손을 빌려서.
+
+    반환: (성공?, 선택자). 조용히 실패하지 않는다 — 대행의 대답을 그대로 보여 준다.
+    """
+    # ★ 무대는 **연무장**이다 — 검기의 흰 발판(하늘 200,100,200)이 아니다.
+    #   왜(실측 2026-07-20): 흰 발판에서 `혼천 시험 몹` 은 「대행 성공」을 내고도 몹이 안 섰다.
+    #   Dojang.mob 은 `footing()` 으로 **앞 4칸의 설 자리**를 찾는데 그 발판에서는 못 찾았고,
+    #   실패 메시지는 **봇의 채팅**으로 가서 RCON 에는 안 보였다(조용한 실패의 전형).
+    #   연무장은 애초에 몹 시험용으로 지어진 월드다 — 바닥·항상 낮·자연 스폰 없음. 거기로 간다.
+    if not ensure_dojang(rcon, host):
+        return False, None
+    # ★ 카메라도 **정식으로** 든다. 몰래 tp 로 넣으면 연무장이 도로 내보낸다 —
+    #   그리고 오버월드도 같은 초원이라 **똑같아 보이는 빈 들판**을 찍게 된다.
+    #   (이 함정에 세 판을 빠졌다: 파츠는 7개로 잡히는데 화면엔 아무것도 없었다.)
+    rcon.cmd(f"gamemode survival {CAM}")
+    if not ensure_dojang(rcon, CAM):
+        print("[연무장] ⚠ 카메라가 못 들어갔다 — 빈 들판을 찍게 된다")
+        return False, None
+    rcon.cmd(f"gamemode spectator {CAM}")
+    time.sleep(6.0)          # 교차 차원 뒤 청크·엔티티 스트리밍 — 서두르면 빈 화면이다
+
+    # 지난 판의 몸과 파츠를 걷는다 — 안 그러면 파츠가 7·14·28 로 쌓여 계측이 뒤섞인다
+    rcon.cmd(f"혼천 대행 {host} 혼천 시험 몹 치움")
+    time.sleep(1.0)
+
+    rcon.cmd(f"tag @e[tag={MOB_TAG}] remove {MOB_TAG}")   # 지난 판의 표를 걷는다
+    walk = " 걷기" if walking else ""
+    reply = rcon.cmd(f"혼천 대행 {host} 혼천 시험 몹 {mob_id}{walk}")
+    print(f"[몹] 대행 대답: {reply.strip()[:200]}")
+    if "대행 성공" not in reply:
+        print(f"[몹] ⚠ 대행이 성공을 말하지 않았다 — 소환이 안 됐을 수 있다")
+    time.sleep(1.2)
+
+    # 방금 선 몸을 잡는다 — 봇 곁의, 플레이어가 아닌 살아 있는 것.
+    # ★ 반드시 `execute at <봇>` 로 **자리를 준다**: RCON 콘솔에는 위치가 없어서
+    #   맨 `@e[distance=..]` 는 조용히 "No entity was found" 가 된다 (실측으로 물린 자리다).
+    body = mob_body_type(mob_id)
+    filt = (f"type={body}" if body else
+            "type=!player,type=!item_display,type=!text_display,type=!interaction")
+    got = _tag_count(rcon.cmd(
+        f"execute at {host} run tag @e[{filt},distance=..16,limit=1,sort=nearest] add {MOB_TAG}"))
+    if got == 0:
+        print("[몹] ⚠ 세워진 몸을 못 찾았다")
+        return False, None
+    name = rcon.cmd(f"data get entity {MOB_SEL} CustomName").strip()
+    print(f"[몹] 잡았다 → {MOB_SEL}  {name[:160]}")
+    return True, MOB_SEL
+
+
+def summon_bm(rcon: Rcon, model: str, host: str = BOT):
+    """BetterModel 의 형체를 무대에 세운다 — 우리 등록부가 아니라 `/bm spawn` 을 지난다.
+
+    우리 MobDisplay 와 **다른 길**이라는 것이 요점이다: PDC foe_id 도, item_display 파츠도
+    쓰지 않는다(BetterModel 은 제 방식으로 표시 엔티티를 관리한다). 그러니 여기서 재는 것은
+    파츠 수가 아니라 **프레임 간 변화량** 하나다 — 팔이 실제로 도는가.
+
+    반환: (성공?, 선택자)
+    """
+    if not ensure_dojang(rcon, host):
+        return False, None
+    rcon.cmd(f"gamemode survival {CAM}")
+    if not ensure_dojang(rcon, CAM):
+        print("[연무장] ⚠ 카메라가 못 들어갔다 — 빈 들판을 찍게 된다")
+        return False, None
+    rcon.cmd(f"gamemode spectator {CAM}")
+    time.sleep(6.0)
+
+    rcon.cmd(f"tag @e[tag={MOB_TAG}] remove {MOB_TAG}")
+    # 지난 판의 형체·고아 파츠를 걷는다 — 안 그러면 **남의 움직임을 이 모델의 것으로 읽는다**
+    #   (실측 2026-07-20: spawn 이 실패했는데 직전 판의 호랑이가 잡혀 "팔이 돈다" 가 나왔다)
+    rcon.cmd(f"kill @e[type=!player,tag={MOB_TAG}]")
+    rcon.cmd("kill @e[type=item_display]")
+    rcon.cmd("kill @e[type=text_display]")
+    time.sleep(0.8)
+
+    # ★ `bm spawn` 은 **콘솔에서 안 된다** (자리가 없어 인자 파싱이 거부된다) — 대행으로도
+    #   조용히 실패했다. 대신 **봇 자신을 그 형체로 변장**시킨다: 봇은 이미 무대에 서 있고
+    #   카메라가 겨누는 대상이라 자리 문제가 없다.
+    rcon.cmd(f"혼천 대행 {host} bm undisguise")
+    time.sleep(0.5)
+    reply = rcon.cmd(f"혼천 대행 {host} bm disguise {model}")
+    print(f"[BM] 변장 대답: {reply.strip()[:160]}")
+    if "대행 성공" not in reply:
+        print("[BM] ⚠ 대행이 성공을 말하지 않았다")
+        return False, None
+    time.sleep(2.0)
+
+    # ★ 파츠를 **세지 않는다.** BetterModel 3.x 는 표시 엔티티를 **패킷으로** 보낸다 —
+    #   월드에 실물이 없으니 `@e` 로는 원리상 0 이다. 여기서 파츠 0 은 고장이 아니다.
+    #   그래서 이 갈래의 유일한 증인은 **화면**이다 (변화량과 그림).
+    print(f"[BM] 변장 걸었다 — 표적은 봇 자신({host}). 파츠 수는 재지 않는다(패킷 방식)")
+    return True, host
+
+
+def mob_foe_id(rcon: Rcon) -> str:
+    """그 몸의 **PDC** 에 등록부 id 가 실제로 박혔는가 — 형체 부착의 전제다.
+
+    이것이 없으면 MobDisplay 는 그 몸을 쳐다보지도 않는다. 그러니 파츠를 세기 전에
+    **여기부터** 본다 (파츠 0개일 때 「왜」를 정확히 답하기 위해서다).
+
+    ★ PDC 는 루트 NBT 의 `BukkitValues` 아래 산다 — `data get entity <sel> data` 가 아니다
+      (그 길은 "Found no elements" 를 낸다). 전체 NBT 를 받으면 RCON 이 잘라 먹으니
+      **경로를 콕 집어** 묻는다.
+    """
+    out = rcon.cmd(f'data get entity {MOB_SEL} BukkitValues."honcheon:foe_id"')
+    m = re.search(r'entity data:\s*"([^"]+)"', out)
+    return m.group(1) if m else None
+
+
+def count_parts(rcon: Rcon) -> int:
+    """몸에 붙은 **형체 파츠(item_display) 개수** — 형체가 실제로 붙었는가의 실측.
+
+    말로 「붙었다」 하지 않는다. 몹 주위 4m 안의 item_display 를 **센다**.
+    호랑이(v2 관절)는 7개여야 한다: torso · head · tail · 다리 4.
+    """
+    n = _tag_count(rcon.cmd(
+        f"execute at {MOB_SEL} run tag @e[type=item_display,distance=..4] add _partprobe"))
+    rcon.cmd("tag @e[tag=_partprobe] remove _partprobe")
+    return n
+
+
 def green_mask(arr):
-    """검기 초록 마스크 — 문턱은 kigi_autotest 와 **같은 값**을 쓴다 (실측 g>40 & g−r>18 & g−b>12)."""
-    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
-    return (g > AT.G_MIN) & (g - r > AT.GR_MIN) & (g - b > AT.GB_MIN)
+    """검기 초록 마스크 — **정본은 vfx_detect 하나뿐이다** (복사본을 없앴다).
+
+    옛 코드는 여기에 문턱을 한 번 더 적어 뒀다. 한쪽만 고치면 다른 쪽은 옛 문턱으로 계속
+    재고, 그 차이는 조용하다. 이제 두 하네스가 **같은 눈**을 쓰고, 그 눈은 매 실행마다
+    합성 이미지로 자가시험을 받는다.
+    """
+    return DET.green_mask(arr)
 
 
 def static_green(display, n=6, pause=0.7):
@@ -349,44 +589,25 @@ def static_green(display, n=6, pause=0.7):
     """
     from PIL import Image
     import numpy as np
-    acc = None
+    frames = []
     probe = SCRATCH / ".static_green.png"
     for _ in range(n):
         grab_one(display, probe)
-        if not probe.exists() or probe.stat().st_size == 0:
-            continue
-        m = green_mask(np.asarray(Image.open(probe).convert("RGB")).astype(np.int16))
-        acc = m if acc is None else (acc | m)
+        if probe.exists() and probe.stat().st_size > 0:
+            frames.append(np.asarray(Image.open(probe).convert("RGB")).astype(np.int16))
         time.sleep(pause)
-    if acc is None:
+    if not frames:
         return None
-    d = acc.copy()                       # 3x3 팽창 — 한 픽셀 흔들려도 HUD 로 친다
-    for ax in (0, 1):
-        for s in (-1, 1):
-            d |= np.roll(acc, s, axis=ax)
-    print(f"[촬영] 붙박이 초록(HUD) {int(acc.sum())}px 를 빼고 센다 → 팽창 후 {int(d.sum())}px")
+    # 마스크 만들기·팽창은 vfx_detect 가 한다 — 그쪽이 자가시험(③·③-b)을 받는 코드다
+    raw = int(sum(int(DET.green_mask(a).sum()) for a in frames) / len(frames))
+    d = DET.build_static_mask(frames)
+    print(f"[촬영] 붙박이 초록(HUD) 평균 {raw}px 를 빼고 센다 → 팽창 후 {int(d.sum())}px")
     return d
 
 
 def analyze_masked(outdir: Path, min_area: int, exclude):
-    """kigi_autotest.analyze 와 같은 문턱 · 같은 출력. 다만 붙박이 초록을 뺀다."""
-    import numpy as np
-    from PIL import Image
-    frames = sorted(outdir.glob("frame_*.png"))
-    rows = []
-    for f in frames:
-        a = np.asarray(Image.open(f).convert("RGB")).astype(np.int16)
-        mask = green_mask(a)
-        if exclude is not None:
-            mask &= ~exclude
-        area = int(mask.sum())
-        if area >= min_area:
-            ys, xs = np.nonzero(mask)
-            rows.append({"frame": f.name, "area": area,
-                         "cx": int(xs.mean()), "cy": int(ys.mean()),
-                         "x0": int(xs.min()), "x1": int(xs.max()),
-                         "y0": int(ys.min()), "y1": int(ys.max())})
-    return len(frames), rows
+    """kigi_autotest.analyze 와 **같은 함수**를 쓴다 (문턱도 출력도 하나뿐이다)."""
+    return AT.analyze(outdir, min_area, exclude=exclude)
 
 
 def bot_in_frame(display) -> tuple[bool, int]:
@@ -438,6 +659,134 @@ def shoot(rcon, angle, outdir: Path, args, bot_win):
                 bursts=bursts, still=still, bot_visible=ok, dark=dark)
 
 
+def shoot_mob(rcon, angle, outdir: Path, args, target):
+    """몹을 촬영한다 — 검기가 아니라 **형체와 걸음**을 본다 (초록 판정을 쓰지 않는다).
+
+    검기 하네스의 초록 마스크는 여기서 의미가 없다. 대신 재는 것은 두 가지다:
+      ① 파츠 수 (item_display) — 형체가 붙었는가
+      ② 프레임 간 **변화량** — 다리가 실제로 움직이는가 (정지 화면이면 0 이다)
+    """
+    outdir.mkdir(parents=True, exist_ok=True)
+    # 몹은 봇 곁에 선다 — 그러니 **봇의 차원**이 곧 표적의 차원이다 (선택자보다 이쪽이 확실하다)
+    dim = read_dim(rcon, BOT)
+    place_camera(rcon, angle, args.cam_mode, target=target,
+                 aim_y=args.aim_y, dist_mul=args.dist_mul, dim=dim)
+    # ★ 차원을 건넌 뒤에는 **가만히 둬야** 클라가 새 월드를 다 그린다 (실측 8초면 넉넉하다).
+    #   매 초 다시 tp 하면 클라는 영원히 로딩 중이라 **직전 월드(오버월드)를 계속 그린다** —
+    #   그래서 파츠는 7개로 잡히는데 화면은 빈 초원이었다. 서두르는 것이 곧 거짓 화면이다.
+    time.sleep(8.0)
+
+    # ★ 믿지 말고 **재라** — 카메라가 표적과 같은 월드에 있는가.
+    #   오버월드도 연무장도 y=-60 의 평지라 화면만 봐서는 구별이 안 된다. 그 닮음이
+    #   「빈 들판」 다섯 판을 만들었다. 여기서 어긋나면 고치고, 못 고치면 **말하고 멈춘다**.
+    for _ in range(3):
+        cd, td = read_dim(rcon, CAM), dim
+        if cd == td:
+            break
+        print(f"[카메라] ⚠ 차원이 어긋났다 (카메라 {cd} ≠ 표적 {td}) — 다시 끌어온다")
+        place_camera(rcon, angle, args.cam_mode, target=target,
+                     aim_y=args.aim_y, dist_mul=args.dist_mul, quiet=True, dim=dim)
+        time.sleep(8.0)
+    cd, td = read_dim(rcon, CAM), dim
+    print(f"[카메라] 차원 확인: 카메라 {cd} / 표적 {td}"
+          + ("" if cd == td else "   ★ 어긋난 채로 찍는다 — 이 화면을 근거로 쓰지 마라"))
+
+    parts = count_parts(rcon)
+    foe = mob_foe_id(rcon)
+    print(f"[몹] PDC foe_id = {foe or '⚠ 없다'}   형체 파츠(item_display) = {parts}개")
+
+    still = outdir / "mob_view.png"
+    grab_one(CAM_DISPLAY, still)
+
+    print(f"[촬영] {CAM_DISPLAY} {args.fps}fps · {args.seconds}초 → {outdir}")
+    cap = start_capture(CAM_DISPLAY, outdir, args.fps)
+    try:
+        # 걷게 두는 동안 찍는다. 봇이 물러나면 몹이 따라온다 — 도착해 멈추면 보행 위상이 죽는다.
+        # 카메라도 **매 초 다시 겨눈다**: 걷는 몹은 가만있지 않는다(고정 카메라는 빈 들판을 찍는다).
+        end = time.time() + args.seconds
+        last_aim = time.time()
+        last_anim = 0.0
+        while time.time() < end:
+            # ★ BetterModel 애니메이션은 **한 번 재생하고 끝난다**(loop: once).
+            #   재생 길이보다 촬영이 기니 주기적으로 다시 걸어야 팔이 도는 구간이 프레임에 남는다.
+            #   안 그러면 대부분의 프레임이 idle 이라 「변화량 0」 이 나온다 — 없는 게 아니라 놓친 것이다.
+            if getattr(args, "bm_anim", None) and time.time() - last_anim > 2.0:
+                # 변장한 **봇 자신**에게 건다 — 대행이라야 「자리 있는 손」이 된다
+                rcon.cmd(f"혼천 대행 {BOT} bm test {args.bm_model} {args.bm_anim}")
+                last_anim = time.time()
+            if args.walk:
+                rcon.cmd(f"execute at {target} run tp {BOT} ^ ^ ^-3 facing entity {target}")
+                # 다시 겨누는 것은 **드문드문** — 매 초 옮기면 클라가 로딩을 못 끝낸다(위 주석)
+                if time.time() - last_aim > 4.0:
+                    place_camera(rcon, angle, args.cam_mode, target=target,
+                                 aim_y=args.aim_y, dist_mul=args.dist_mul,
+                                 quiet=True, dim=dim)
+                    last_aim = time.time()
+            time.sleep(1.0)
+    finally:
+        stop_capture(cap)
+
+    motion = frame_motion(outdir)
+    return dict(angle=angle, outdir=outdir, still=still, parts=parts,
+                foe=foe, motion=motion)
+
+
+def frame_motion(outdir: Path):
+    """연속 프레임의 **차이**를 잰다 — 「걷는가」를 눈이 아니라 숫자로 답한다.
+
+    형체가 붙어도 AI 가 꺼져 있으면 그림은 **완전히 정지**한다(다리 위상이 이동거리로 도니까).
+    그러니 프레임 간 변화 픽셀 수가 0 에 가까우면 그것은 「안 걷는다」의 실측 증거다.
+    """
+    from PIL import Image
+    import numpy as np
+    frames = sorted(outdir.glob("*.png"))
+    frames = [f for f in frames if f.name not in ("mob_view.png",)]
+    if len(frames) < 3:
+        return None
+    diffs = []
+    prev = None
+    for f in frames:
+        try:
+            a = np.asarray(Image.open(f).convert("L")).astype(np.int16)
+        except Exception:
+            continue
+        if prev is not None and prev.shape == a.shape:
+            diffs.append(int((np.abs(a - prev) > 18).sum()))
+        prev = a
+    if not diffs:
+        return None
+    # ★ **화면이 얼었는가** — 「안 움직인다」와 「내 눈이 멀었다」를 가른다.
+    #   실측 2026-07-20: Xvfb :98 의 프레임버퍼가 굳어 168프레임이 **바이트까지 동일**했다.
+    #   그 화면에도 하늘·구름·HUD 가 있었으니 살아 있었다면 최소한의 흔들림은 남는다 —
+    #   peak 이 한 자리면 그건 세상이 멈춘 것이 아니라 **카메라가 죽은 것**이다.
+    #   여기서 0 을 「정지」로 적어 넘기면 그 뒤 판단이 전부 거짓 위에 선다.
+    frozen = max(diffs) <= 2
+    return dict(n=len(diffs), mean=int(sum(diffs) / len(diffs)),
+                peak=max(diffs), zero=sum(1 for d in diffs if d < 50),
+                frozen=frozen)
+
+
+def make_gif(outdir: Path, out: Path, fps: int = 10, max_frames: int = 90):
+    """걷는 모습을 **한 장으로 못 보여 준다** — 다리는 시간 위에서만 움직인다. 그래서 GIF."""
+    from PIL import Image
+    frames = [f for f in sorted(outdir.glob("*.png")) if f.name != "mob_view.png"]
+    if len(frames) < 4:
+        return None
+    step = max(1, len(frames) // max_frames)
+    imgs = []
+    for f in frames[::step][:max_frames]:
+        try:
+            im = Image.open(f).convert("RGB")
+            imgs.append(im.resize((im.width // 2, im.height // 2)))
+        except Exception:
+            pass
+    if len(imgs) < 4:
+        return None
+    imgs[0].save(out, save_all=True, append_images=imgs[1:],
+                 duration=int(1000 / fps), loop=0, optimize=True)
+    return out
+
+
 def report(res):
     o = res
     print()
@@ -480,6 +829,32 @@ def main():
                     help="카메라 게임모드 (spectator 가 지형에 안 걸린다)")
     ap.add_argument("--restart-cam", action="store_true")
     ap.add_argument("--outdir", default=None)
+    ap.add_argument("--force", action="store_true",
+                    help="preflight 가 어긋나도 강행한다 (그 숫자는 근거로 쓰지 마라)")
+    ap.add_argument("--cleanup", action="store_true",
+                    help="측정이 끝나면 두 클라를 모두 거둔다 (누수 방지)")
+    ap.add_argument("--preflight-only", action="store_true",
+                    help="조건만 검사하고 촬영하지 않는다")
+    # ── 몹 촬영 (검기가 아니라 형체·걸음을 본다) ──
+    ap.add_argument("--summon", default=None, metavar="몹id",
+                    help="config/mob_models.yml 의 몹을 무대에 세우고 찍는다 (예: horangi). "
+                         "대행으로 등록부 정문(spawnById)을 지난다 — 그래야 형체가 붙는다")
+    ap.add_argument("--target", default=None,
+                    help="카메라가 조준할 대상 (기본 kigibot · --summon 이면 세운 몹)")
+    ap.add_argument("--walk", action="store_true",
+                    help="AI 를 켜고 표적을 줘서 **걷게** 한다 — 다리 관절 위상은 이동거리로 돈다")
+    ap.add_argument("--seconds", type=float, default=12.0, help="몹 촬영 길이(초)")
+    ap.add_argument("--aim-y", type=float, default=None,
+                    help="조준 높이 (기본 1.1 — 호랑이는 낮아서 0.8 쯤이 좋다)")
+    ap.add_argument("--dist-mul", type=float, default=1.0, help="카메라 거리 배수")
+    ap.add_argument("--gif", action="store_true", help="촬영을 GIF 로 묶는다 (걸음은 시간 위에 있다)")
+    # ── BetterModel 갈래 (저작 도구로 만든 형체·애니메이션을 본다) ──
+    ap.add_argument("--bm-model", default=None, metavar="모델명",
+                    help="BetterModel 의 모델을 세우고 찍는다 (예: demon_knight). "
+                         "우리 등록부가 아니라 `/bm spawn` 을 지난다")
+    ap.add_argument("--bm-anim", default=None, metavar="애니메이션",
+                    help="세운 모델에 재생시킬 애니메이션 (예: hammer_attack_1). "
+                         "지정하면 촬영 중 반복 재생한다 — 팔이 실제로 도는지 재기 위해서다")
     args = ap.parse_args()
 
     angles = list(ANGLES) if args.angle == "all" else [a.strip() for a in args.angle.split(",")]
@@ -496,6 +871,15 @@ def main():
     AT.ensure_client()                      # kigibot (:99)
     ensure_cam_client(force_restart=args.restart_cam)
 
+    # ★ 재기 **직전에** 전제를 검사한다 — 어긋나면 숫자를 내지 않고 멈춘다.
+    #   왜 여기(두 클라가 붙은 뒤)인가: 팩 사슬의 셋째 고리(봇이 받은 ?v=)는 **봇이 들어와야** 생긴다.
+    #   결과는 base/preflight.txt 로 남는다 — "그때 조건이 뭐였나"를 나중에 답할 수 있게.
+    PF.gate(keys=AT.PREFLIGHT_KEYS, work_dirs=[MAIN_DIR, CAM_WORK], players=[BOT, CAM],
+            outdir=base, force=args.force)
+    if args.preflight_only:
+        print(f"  preflight 만 돌렸다 (촬영하지 않았다) — {base}/preflight.txt")
+        return
+
     bot_win = window_of(BOT_DISPLAY)
     if not bot_win:
         raise SystemExit("kigibot 창(:99)을 못 찾았다")
@@ -503,14 +887,69 @@ def main():
     results = []
     rcon = Rcon()
     try:
-        held = AT.prepare_scene(rcon, args.item, args.night)
-        print(f"[무대] 든 것: {held.strip()[:90]}")
-        # ★ 카메라도 무대 위 하늘로 끌어온다 — 안 그러면 스폰 지점의 지하에서 허공을 본다
-        sx, sy, sz = AT.STAGE
-        rcon.cmd(f"gamemode {args.cam_mode} {CAM}")
-        rcon.cmd(f"tp {CAM} {sx} {sy} {sz}")
-        time.sleep(2.0)
+        # ★ 검기의 흰 발판(하늘 200,100,200)은 **몹 갈래에서는 깔지 않는다.**
+        #   prepare_scene 은 봇을 그 발판으로 tp 한다 — 그러면 방금 들어간 연무장에서
+        #   도로 끌려 나오고, 연무장 장부는 「안에 있다」로 남아 다음 진입이 조용히 막힌다
+        #   (실측으로 두 판을 날린 자리다). 몹은 제 무대(연무장)에서 선다.
+        if not args.summon and not args.bm_model:
+            held = AT.prepare_scene(rcon, args.item, args.night)
+            print(f"[무대] 든 것: {held.strip()[:90]}")
+            # ★ 카메라도 무대 위 하늘로 끌어온다 — 안 그러면 스폰 지점의 지하에서 허공을 본다
+            sx, sy, sz = AT.STAGE
+            rcon.cmd(f"gamemode {args.cam_mode} {CAM}")
+            rcon.cmd(f"tp {CAM} {sx} {sy} {sz}")
+            time.sleep(2.0)
+        else:
+            rcon.cmd(f"gamemode {args.cam_mode} {CAM}")
         wait_until_ingame(CAM_DISPLAY, label="카메라")
+
+        # ★ 몹 갈래 — 검기 판정(초록)을 타지 않는다. 재는 것은 형체 파츠와 걸음이다
+        if args.summon or args.bm_model:
+            if args.bm_model:
+                ok, sel = summon_bm(rcon, args.bm_model)
+                if not ok:
+                    raise SystemExit(f"BetterModel 형체를 못 세웠다: {args.bm_model}")
+            else:
+                ok, sel = summon_mob(rcon, args.summon, args.walk)
+                if not ok:
+                    raise SystemExit(f"몹을 못 세웠다: {args.summon}")
+            tgt = args.target or sel
+            for a in angles:
+                m = shoot_mob(rcon, a, base / f"mob-{a}", args, tgt)
+                print()
+                print("═" * 78)
+                label = (f"BM {args.bm_model}" + (f" · {args.bm_anim}" if args.bm_anim else "")
+                         if args.bm_model else f"몹 {args.summon}")
+                print(f"  {label} — 각도 {a}   ({m['outdir']})")
+                print("═" * 78)
+                # ★ BetterModel 은 우리 등록부를 지나지 않는다 — PDC·파츠 수는 여기서 뜻이 없다.
+                #   없는 잣대를 들이대면 「⚠ 없다」가 고장으로 읽힌다. 그래서 갈래마다 다르게 적는다.
+                if args.bm_model:
+                    print(f"  경로              : BetterModel (`/bm spawn`) — 우리 MobDisplay 아님")
+                else:
+                    print(f"  PDC foe_id        : {m['foe'] or '⚠ 없다 (형체가 붙을 리 없다)'}")
+                    print(f"  형체 파츠(item_display): {m['parts']}개")
+                if m["motion"]:
+                    mo = m["motion"]
+                    print(f"  프레임 간 변화    : 평균 {mo['mean']}px · 최대 {mo['peak']}px "
+                          f"· 정지프레임 {mo['zero']}/{mo['n']}")
+                    moving = mo['mean'] > 200
+                    if mo.get("frozen"):
+                        print("  ★ 화면이 얼었다 — 프레임이 서로 **완전히 동일**하다.")
+                        print("     이건 「안 움직인다」가 아니라 「못 봤다」다. 이 숫자를 근거로 쓰지 마라.")
+                        print("     고치는 법: 카메라 클라와 Xvfb 를 함께 내리고 다시 띄운다.")
+                    elif args.bm_anim:
+                        print(f"  → {'팔이 돈다' if moving else '⚠ 거의 정지 — 애니메이션이 안 걸렸다'}")
+                    else:
+                        print(f"  → {'움직인다' if moving else '⚠ 거의 정지 — 걷지 않는다'}")
+                print(f"  한 장             : {m['still']}")
+                if args.gif:
+                    g = make_gif(m["outdir"], base / f"mob-{a}.gif", fps=10)
+                    if g:
+                        print(f"  움직임(GIF)       : {g}")
+                print("═" * 78)
+            return
+
         for a in angles:
             res = shoot(rcon, a, base / a, args, bot_win)
             report(res)
@@ -532,6 +971,10 @@ def main():
         print(f"  {r['angle']:<8}{r['total']:>8}{len(r['rows']):>7}{len(r['bursts']):>7}"
               f"{peak:>12}   {loc:<14}{r['still']}")
     print("━" * 78)
+    print(f"  잰 조건: {base}/preflight.txt")
+    if args.cleanup:
+        PF.reap_clients(MAIN_DIR)
+        PF.reap_clients(CAM_WORK)
     print(f"\n  재실행: scripts/kigi_cam_test.sh --angle {args.angle} --swings {args.swings}\n")
 
 
