@@ -19,6 +19,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
+source "$ROOT/scripts/lib/live_pids.sh"   # 라이브 PID 는 cwd 로 찾는다 (정본)
 PROPS="$RUN/server.properties"
 WORLD_NAME="honcheon"
 SEED="${1:-20260710}"      # 기본값 = config/map_spec/cheongha_hyeon_map.yml 의 고정 시드
@@ -28,7 +29,7 @@ if [ ! -f "$PROPS" ]; then
   exit 1
 fi
 
-if pgrep -f "paper.jar" >/dev/null 2>&1; then
+if [ -n "$(live_pids)" ]; then
   echo "오류: MVT 서버가 돌고 있다. 먼저 끄라 (콘솔에서 stop)." >&2
   echo "      level-name 은 기동 시에만 읽히므로, 켜 둔 채로 바꾸면 반영되지 않는다." >&2
   exit 1

@@ -11,7 +11,9 @@ set -uo pipefail
 # ★ DISCORD_TOKEN 은 프로세스 env 에만 있다 — kill 전에 /proc 에서 확보한다. 파일에 절대 안 쓴다.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+RUN="$ROOT/run/mvt"          # live_pids 가 볼 폴더 (정본이 이걸 읽는다)
 export JAVA_HOME="$ROOT/run/jdk-21"
+source "$ROOT/scripts/lib/live_pids.sh"   # 라이브 PID 는 cwd 로 찾는다 (정본)
 
 rcon() { python3 - "$@" <<'PY'
 import socket, struct, sys
@@ -49,7 +51,11 @@ echo "  → $BK"
 
 echo "══ [3/5] 서버 정지 · 캐릭터 데이터 삭제"
 rcon stop >/dev/null 2>&1 || true
-for _ in $(seq 1 40); do pgrep -f paper.jar >/dev/null || break; sleep 1; done
+for _ in $(seq 1 40); do [ -z "$(live_pids)" ] && break; sleep 1; done
+# ★ **정말 멈췄는지 확인하고 나서** 지운다. 옛 코드는 이 확인이 없었다 —
+#   `pgrep -f paper.jar` 가 테스트 서버까지 잡아 루프가 40초를 헛돌고 나면,
+#   라이브가 살아 있어도 그대로 playerdata 를 지웠다. 그건 되돌아오지 않는다.
+[ -n "$(live_pids)" ] && { echo "중단: 라이브가 안 멈췄다 (PID:$(live_pids)) — 지우지 않는다" >&2; exit 1; }
 for w in honcheon honcheon_dojang honcheon_ipdo; do
   rm -rf "run/mvt/$w/playerdata" "run/mvt/$w/stats" "run/mvt/$w/advancements"
 done

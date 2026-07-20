@@ -23,6 +23,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
+source "$ROOT/scripts/lib/live_pids.sh"   # 라이브 PID 는 cwd 로 찾는다 (정본)
 SERVE_DIR="$ROOT/run/pack-http"        # HTTP 로 노출되는 유일한 폴더 (zip 만 둔다)
 ZIP_NAME="honcheon_pack.zip"
 ZIP="$SERVE_DIR/$ZIP_NAME"
@@ -193,7 +194,7 @@ if [ ! -f "$RUN/server.properties" ]; then
   echo "경고: $RUN/server.properties 가 없다 — 서버를 한 번 기동해 생성한 뒤 다시 실행하라" >&2
   exit 0
 fi
-if pgrep -f "paper.jar" >/dev/null 2>&1; then
+if [ -n "$(live_pids)" ]; then
   echo "경고: 서버가 떠 있다 — 지금 쓴 server.properties 는 종료 시 덮어써질 수 있다." >&2
   echo "      팩 설정을 확실히 먹이려면 서버를 내리고 다시 실행하라 (scripts/redeploy_mvt.sh)." >&2
 fi

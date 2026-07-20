@@ -11,6 +11,7 @@ RUN="$ROOT/run/mvt"
 #   21 로 컴파일한 것을 25 에서 돌리는 것은 안전하다(앞방향 호환). 그 반대가 안 된다.
 export JAVA_HOME="$ROOT/run/jdk-21"      # ← gradle 빌드용. 올리지 마라.
 SERVER_JAVA="$ROOT/run/jdk-25/bin/java"  # ← 서버 런타임용.
+source "$ROOT/scripts/lib/live_pids.sh"   # 라이브 PID 는 cwd 로 찾는다 (정본)
 
 rcon() {   # 콘솔 명령 (서버가 떠 있을 때만)
   python3 - "$@" <<'PY'
@@ -39,18 +40,6 @@ PY
 }
 
 
-# ★ 라이브 서버 PID — **cwd 로** 찾는다 (2026-07-20).
-#   왜 명령줄이 아닌가: 처음엔 "paper.jar" 로 찾았다 → 테스트 서버(run/mvt-test)까지 잡혀
-#   라이브가 이미 멈췄는데도 "안 멈춘다"고 오판했다(재배포가 1단계에서 죽어 옛 jar 로 돌았다).
-#   그래서 "-Xms2G" 로 좁혔다 → 그런데 테스트 서버도 -Xms2G 로 뜨자 **다시** 겹쳤다.
-#   플래그는 언제든 바뀐다. 바뀌지 않는 것은 **어느 폴더에서 도는가** 뿐이다.
-live_pids() {
-  local out=""
-  for p in $(pgrep -x java 2>/dev/null); do
-    [ "$(readlink /proc/$p/cwd 2>/dev/null)" = "$RUN" ] && out="$out $p"
-  done
-  echo $out
-}
 
 cd "$ROOT"
 

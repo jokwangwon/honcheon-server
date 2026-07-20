@@ -19,6 +19,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
 export JAVA_HOME="$ROOT/run/jdk-21"
+source "$ROOT/scripts/lib/live_pids.sh"   # 라이브 PID 는 cwd 로 찾는다 (정본)
 cd "$ROOT"
 
 TOWN_ONLY=0
@@ -57,7 +58,7 @@ PY
 
 stop_server() {
   rcon stop >/dev/null 2>&1 || true
-  for _ in $(seq 1 40); do pgrep -f "paper.jar" >/dev/null || break; sleep 1; done
+  for _ in $(seq 1 40); do [ -z "$(live_pids)" ] && break; sleep 1; done
 }
 
 echo "══ [1/6] 빌드"
