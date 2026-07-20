@@ -3,7 +3,9 @@ set -euo pipefail
 # config 만 바꿨을 때 — 재빌드 없이 정지→config동기화→재기동 (Java 무변경 전용)
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
-export JAVA_HOME="$ROOT/run/jdk-21"
+# ★ 이 스크립트는 재빌드를 안 한다 — JAVA_HOME 이 곧 서버 런타임이다.
+#   BetterModel 3.x(class 69) 때문에 25 로 올렸다 (2026-07-20).
+export JAVA_HOME="$ROOT/run/jdk-25"
 rcon(){ python3 - "$@" <<'PY'
 import socket,struct,sys
 pw=None

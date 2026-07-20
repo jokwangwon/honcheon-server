@@ -83,7 +83,7 @@ cp server-mvt/build/libs/server-mvt-*.jar run/mvt/plugins/
 rm -rf run/mvt/plugins/HoncheonMVT/config && cp -r config run/mvt/plugins/HoncheonMVT/config
 
 echo "══ [5/5] 기동"
-(cd run/mvt && nohup ../jdk-21/bin/java -Xms2G -Xmx2G -jar paper.jar nogui > server-console.log 2>&1 &)
+(cd run/mvt && nohup ../jdk-25/bin/java -Xms2G -Xmx2G -jar paper.jar nogui > server-console.log 2>&1 &)
 until grep -qE 'Done \(' run/mvt/server-console.log 2>/dev/null; do sleep 3; done
 echo "  기동 완료 · ERROR $(grep -cE '^\[.*(ERROR|SEVERE)\]' run/mvt/server-console.log)줄"
 grep -E "\[팩\] 배급 준비" run/mvt/server-console.log | tail -1 | sed 's/.*MVT\] //'

@@ -5,7 +5,12 @@ set -euo pipefail
 # 사용: scripts/redeploy_mvt.sh [--backup]
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/run/mvt"
-export JAVA_HOME="$ROOT/run/jdk-21"
+# ★ **빌드와 기동의 JDK 를 가른다** (2026-07-20).
+#   빌드는 21 로 남긴다 — 산출 바이트코드의 목표를 바꾸지 않기 위해서다.
+#   기동만 25 로 올린다 (BetterModel 3.x 가 class 69 라 21 에서는 못 뜬다).
+#   21 로 컴파일한 것을 25 에서 돌리는 것은 안전하다(앞방향 호환). 그 반대가 안 된다.
+export JAVA_HOME="$ROOT/run/jdk-21"      # ← gradle 빌드용. 올리지 마라.
+SERVER_JAVA="$ROOT/run/jdk-25/bin/java"  # ← 서버 런타임용.
 
 rcon() {   # 콘솔 명령 (서버가 떠 있을 때만)
   python3 - "$@" <<'PY'
@@ -33,6 +38,20 @@ s.close()
 PY
 }
 
+
+# ★ 라이브 서버 PID — **cwd 로** 찾는다 (2026-07-20).
+#   왜 명령줄이 아닌가: 처음엔 "paper.jar" 로 찾았다 → 테스트 서버(run/mvt-test)까지 잡혀
+#   라이브가 이미 멈췄는데도 "안 멈춘다"고 오판했다(재배포가 1단계에서 죽어 옛 jar 로 돌았다).
+#   그래서 "-Xms2G" 로 좁혔다 → 그런데 테스트 서버도 -Xms2G 로 뜨자 **다시** 겹쳤다.
+#   플래그는 언제든 바뀐다. 바뀌지 않는 것은 **어느 폴더에서 도는가** 뿐이다.
+live_pids() {
+  local out=""
+  for p in $(pgrep -x java 2>/dev/null); do
+    [ "$(readlink /proc/$p/cwd 2>/dev/null)" = "$RUN" ] && out="$out $p"
+  done
+  echo $out
+}
+
 cd "$ROOT"
 
 if [ "${1:-}" = "--backup" ]; then
@@ -46,10 +65,13 @@ echo "[1/5] 서버 정지"
 rcon "say 재배포 — 잠시 후 재기동" >/dev/null 2>&1 || true
 rcon stop >/dev/null 2>&1 || true
 for _ in $(seq 1 30); do
-  pgrep -f "paper.jar" >/dev/null || break
+  [ -z "$(live_pids)" ] && break
   sleep 1
 done
-pgrep -f "paper.jar" >/dev/null && { echo "경고: 서버가 안 멈춘다 — 수동 확인 필요"; exit 1; }
+# ★ 라이브만 본다 (2026-07-20): 옛 패턴 "paper.jar" 는 **테스트 서버(run/mvt-test)까지** 잡아
+#   라이브가 이미 멈췄는데도 "안 멈춘다"고 오판했다 — 재배포가 1단계에서 죽어 jar·config 가
+#   옛것으로 남았고, 서버는 옛 버전으로 돌았다. 그것을 모르고 "배포 완료"라 할 뻔했다.
+[ -n "$(live_pids)" ] && { echo "경고: 라이브가 안 멈춘다 (PID:$(live_pids)) — 수동 확인 필요"; exit 1; }
 
 echo "[2/5] 리소스팩 빌드·서빙 (서버 정지 상태에서 server.properties 갱신)"
 # HTTP 서버가 이미 떠 있으면 재사용한다 (재배포마다 중복 기동하지 않는다 — 스크립트가 포트를 확인).
@@ -67,7 +89,7 @@ cp -r "$ROOT/config" "$RUN/plugins/HoncheonMVT/config"
 echo "[5/5] 재기동 (백그라운드)"
 # -DHONCHEON_PACK_DIR — 팩 인식 렌더러(TownRender)가 읽을 팩 경로. 없으면 렌더러가 상대경로로
 # 자동 탐색하고, 그것도 실패하면 하드코딩 팔레트로 폴백한다 (팩 없이도 렌더는 돈다).
-cd "$RUN" && nohup "$JAVA_HOME/bin/java" -Xms2G -Xmx2G \
+cd "$RUN" && nohup "$SERVER_JAVA" -Xms2G -Xmx2G \
   -DHONCHEON_PACK_DIR="$ROOT/resourcepack" -jar paper.jar nogui \
   > "$RUN/server-console.log" 2>&1 &
 for _ in $(seq 1 60); do
