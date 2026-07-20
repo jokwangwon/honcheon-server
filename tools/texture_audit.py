@@ -1486,7 +1486,11 @@ MODEL_ATLASES = ("blocks", "items")     # 모델 렌더러가 쓰는 아틀라�
 #      옳은 길은 파일을 제자리(아틀라스 안)에 두고 **면제를 등록제로 적는 것**이다 —
 #      이 팩이 이미 쓰는 관행 그대로 (SEAM_FACES · 밝기 대역 제외 등록).
 #   면제된 것은 **숨은 것이 아니다**: 축 ⑮·⑯ 이 이것들을 계속 잰다 (자리와 비율).
-NON_ICON = ("/textures/item/qi/", "/textures/item/ult/", "/textures/item/mob/")
+# kigi/ — 녹색 검기(劍氣) 참격. qi/ 와 **같은 부류**(ItemDisplay 가 3D 판에 입혀 공중에 띄우는
+#   반투명 획)이므로 아이콘 규율(축 ①·⑥)의 관할이 아니다. 색만 다르다 (qi/* 무색 판을 물들이지
+#   않으려고 별도 경로에 굽는다 — 축 ⑱ QI_ACHROMATIC 참조). 면제는 은닉이 아니다: 축 ⑮·⑯(자리·비율)
+#   ·⑰(중심)·⑱(색)이 kigi/ 를 계속 잰다 (아래 QI_TEX_DIRS · stroke_models 참조).
+NON_ICON = ("/textures/item/qi/", "/textures/item/ult/", "/textures/item/mob/", "/textures/item/kigi/")
 
 # ═══ 고해상 등록부 — 【2026-07-16 신설 · V2-W 2차 청구】 축 ①·⑥ 의 **등록형** 면제 ═══
 # NON_ICON 은 하드코딩 3종으로 굳었다 — 네 번째부터는 **등록부가 주도한다**
@@ -1709,7 +1713,7 @@ def stroke_models():
     """획 모델 — models/item/qi/** · models/item/ult/** (참격선·오의·투사체의 형체)."""
     root = PACK / "honcheon" / "models" / "item"
     return [f for f in sorted(root.rglob("*.json"))
-            if str(f.relative_to(root)).replace("\\", "/").split("/")[0] in ("qi", "ult")]
+            if str(f.relative_to(root)).replace("\\", "/").split("/")[0] in ("qi", "ult", "kigi")]
 
 
 def model_center(f):
@@ -1771,10 +1775,15 @@ def center_axis():
 #   ③ 금지색 — 형광 핑크 · 네온 보라 · 과도한 노랑. **어느 획에도 없어야 한다.**
 #      예외: ult/blood_tide (혈해만리) — 【채색 예외】. 소리내어 등록한다.
 # ═══════════════════════════════════════════════════════════════════════════
-QI_TEX_DIRS = ("qi", "ult")
+QI_TEX_DIRS = ("qi", "ult", "kigi")   # kigi = 녹색 검기 (아래 KIGI 밴드가 잰다 — 등록형 색 예외)
 QI_ACHROMATIC_MAX = 12        # qi/* 의 평균 채도 상한 — 이보다 크면 '무색'이 아니다
 QI_HUE_TOLERANCE = 20         # 구워진 색상 ↔ 등록부 색상(옥·청백)의 허용 오차(도). 넘으면 빌더가 색을 지어낸 것이다
 QI_CHROMA_FLOOR = 8           # ult/* 의 채도 하한 — 색이 죽으면 "최상위는 화려하다"가 거짓말이 된다
+# ── kigi/* 녹색 검기 — 【등록형 색 예외 · 2026-07 · 레퍼런스 마크에이지】 ──
+#   qi/* 무색 판을 물들이지 않으려고 별도 경로에 굽는 색이다. "재지 않는다"가 아니라 **다른 자로 잰다**:
+#   ① 금지색(_forbidden_hue: 네온보라·과노랑·형광)이 없고 ② 색이 **연두(黃緑)** 밴드 안이며
+#   ③ 죽지 않았다(채도 하한). 밴드는 노랑(≤68°)·청록/파랑(≥180°)을 배제한다 (실측 avg hue 137°).
+KIGI_HUE_LO, KIGI_HUE_HI = 90, 170   # 연두~초록 (노랑 38~68 · 보라 265~345 밖 · 청록 ≥180 밖)
 # 【면제 — 소리내어 청구한다】 둘 다 "빛나지 않는 것이 곧 정보"인 자리다. 은닉이 아니라 등록이다.
 QI_COLOR_EXEMPT = {
     "ult/blood_tide": ("혈", "【채색 예외】 마공의 혈조 — '저것은 사람의 기가 아니다'"),
@@ -1878,6 +1887,21 @@ def stroke_color_axis():
                 print(f"  {'✅' if ok else '❌'} {key:20s} rgb{avg} 채도 {chroma:3d} ≤ {QI_ACHROMATIC_MAX}"
                       f" — 무색 (격의 사다리가 이 판 한 장을 나눠 쓴다)"
                       + ("" if ok else "  ← **색이 들었다**: 외공기의 주먹이 심검처럼 빛난다"))
+                continue
+
+            if sub == "kigi":
+                # 녹색 검기 — **연두(黃緑)** 계열이어야 한다. qi/* 무색을 물들이지 않으려고 별도 경로에
+                #   구운 색이다 (등록형 예외). 노랑·청록/파랑으로 새거나 죽으면(채도 하한) 위반이다.
+                ok = KIGI_HUE_LO <= hue <= KIGI_HUE_HI and chroma >= QI_CHROMA_FLOOR
+                violations += 0 if ok else 1
+                why = ("" if ok
+                       else ("  ← **색이 죽었다** (채도 %d < %d)" % (chroma, QI_CHROMA_FLOOR)
+                             if chroma < QI_CHROMA_FLOOR
+                             else "  ← **연두 밖이다** (노랑·청록으로 샜다 — 검기는 연두다)"))
+                print(f"  {'✅' if ok else '❌'} {key:20s} rgb{avg} hue {hue:5.0f}° 채도 {chroma:3d}"
+                      f" — 연두 ∈ [{KIGI_HUE_LO}°,{KIGI_HUE_HI}°] · 채도 ≥ {QI_CHROMA_FLOOR}"
+                      f" (녹색 검기 — qi/* 무색 판 밖의 등록된 색)"
+                      + why)
                 continue
 
             # ult/* — 등록부의 옥·청백 **색상(hue)** 이어야 한다.

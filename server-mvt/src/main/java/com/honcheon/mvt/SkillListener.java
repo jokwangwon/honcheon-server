@@ -5,6 +5,9 @@ import com.honcheon.core.rules.RulesConfig;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Display;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
@@ -24,9 +27,13 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -689,6 +696,169 @@ public final class SkillListener implements Listener {
         return out;
     }
 
+    // ══════════ ★ /혼천 검기 — 검기 값을 인게임에서 즉석에 돌려 본다 (재기동 없이) ══════════
+
+    /**
+     * <b>/혼천 검기</b> — 초승달 검기의 <b>각도·크기</b>를 눈으로 보며 찾는다.
+     *
+     * <p>사용자의 못: <i>"이런 값은 인게임에서 눈으로 봐야 정해진다."</i> 그런데 config 를 고쳐 재기동하면
+     * 왕복이 1분이다 — 값 하나에 1분이면 값을 못 찾는다. 그래서 여기서 민 값은
+     * {@link SkillEngine#setKigiSlash} 로 <b>메모리에만</b> 산다 (다음 스윙부터 반영).
+     *
+     * <p><b>config 파일은 안 쓴다.</b> {@code skill_motion.yml} 은 주석이 정본의 절반이라 프로그램이
+     * 쓰면 그 절반이 죽는다. 확정값은 {@code 보기} 가 뱉는 <b>붙여넣기용 줄</b>로 사람이 못 박는다 —
+     * 재기동하면 오버라이드는 사라지고 등록부 값이 돈다.
+     *
+     * <pre>
+     *   /혼천 검기 [보기]        지금 값 전부 + config 에 붙일 줄
+     *   /혼천 검기 tilt 25       그 값을 즉시 (다음 스윙부터)
+     *   /혼천 검기 시험          휘두르지 않고 지금 값으로 한 번 소환 (눈의 대조)
+     *   /혼천 검기 초기화        등록부(config) 값으로 되돌린다
+     * </pre>
+     *
+     * @return 화면에 찍을 줄들 (MvtCommand 가 그대로 보낸다)
+     */
+    public List<String> kigi(Player player, String[] args) {
+        SkillEngine.KigiSlash cfg = engine.kigiSlash();
+        if (cfg == null) {
+            return List.of(ChatColor.RED
+                    + "검기 등록부가 없다 — config/skill_motion.yml 의 kigi_slash 절이 비었다.");
+        }
+        String verb = args.length >= 2 ? args[1] : "보기";
+
+        if ("보기".equals(verb)) {
+            return kigiReport(cfg);
+        }
+        if ("초기화".equals(verb) || "되돌려".equals(verb)) {
+            engine.resetKigiSlash();
+            List<String> out = new ArrayList<>();
+            out.add(ChatColor.GREEN + "등록부(config)의 값으로 되돌렸다 — 인게임에서 민 것은 전부 버렸다");
+            out.addAll(kigiReport(engine.kigiSlash()));
+            return out;
+        }
+        if ("시험".equals(verb)) {
+            // ★ 실전과 **같은 함수**를 부른다 (SkillDisplay.kigiSlash + 흰 별) — 시험용으로 따로 그리면
+            //   시험이 실전을 대변하지 못한다. 휘두르지 않아도 눈앞에 같은 검기가 선다.
+            boolean drawn = spawnKigiSlash(player);
+            return List.of(ChatColor.GOLD + "검기를 한 번 소환했다" + ChatColor.GRAY
+                    + (drawn ? " (3D 검기가 떴다)" : " (3D 는 안 떴다 — 팩 없음/enabled: false. 흰 별만 뿌렸다)"));
+        }
+
+        // /혼천 검기 <키> <값>
+        if (args.length < 3) {
+            return List.of(ChatColor.RED + "쓰는 법: /혼천 검기 <키> <값>",
+                    ChatColor.GRAY + "  키: " + KIGI_KEYS,
+                    ChatColor.GRAY + "  또는: /혼천 검기 보기 · /혼천 검기 시험 · /혼천 검기 초기화");
+        }
+        double value;
+        try {
+            value = Double.parseDouble(args[2]);
+        } catch (NumberFormatException notANumber) {
+            return List.of(ChatColor.RED + "숫자가 아니다: " + args[2],
+                    ChatColor.GRAY + "  예: /혼천 검기 " + args[1] + " 25");
+        }
+        SkillEngine.KigiSlash next = withKigi(cfg, args[1], value);
+        if (next == null) {
+            return List.of(ChatColor.RED + "모르는 칸: " + args[1],
+                    ChatColor.GRAY + "  키: " + KIGI_KEYS);
+        }
+        engine.setKigiSlash(next);
+        List<String> out = new ArrayList<>();
+        out.add(String.format(ChatColor.GOLD + "%s = %s" + ChatColor.GRAY
+                + " (메모리에만 — 다음 스윙부터 보인다)", args[1], trim(value)));
+        out.addAll(kigiReport(next));
+        return out;
+    }
+
+    /** {@code /혼천 검기} 가 받는 칸들 — 오류 안내가 여기 하나만 본다 (문구가 갈라지지 않게) */
+    private static final String KIGI_KEYS =
+            "roll · tilt · sweep · radius · scale · height · forward · draw · fade · frame · sparks";
+
+    /**
+     * 값 하나만 갈아끼운 <b>사본</b> — {@code KigiSlash} 는 record(불변)라 새 인스턴스를 만든다.
+     * 모르는 키면 null (부르는 쪽이 안내한다).
+     */
+    private static SkillEngine.KigiSlash withKigi(SkillEngine.KigiSlash c, String key, double v) {
+        double scale = c.scale();
+        double height = c.centerHeight();
+        double forward = c.forward();
+        double radius = c.orbitRadius();
+        double sweep = c.sweepDeg();
+        double tilt = c.tiltDeg();
+        double roll = c.rollDeg();
+        int draw = c.drawTicks();
+        int fade = c.fadeTicks();
+        int frame = c.frameTicks();
+        SkillEngine.KigiSpark spark = c.spark();
+        switch (key) {
+            case "roll" -> roll = v;
+            case "tilt" -> tilt = v;
+            case "sweep" -> sweep = v;
+            case "radius" -> radius = v;
+            case "scale" -> scale = v;
+            case "height" -> height = v;
+            case "forward" -> forward = v;
+            // 틱은 등록부 로더와 **같은 못**을 쓴다 (draw/frame ≥ 1 · fade ≥ 0) — 0틱은 그림이 없다
+            case "draw" -> draw = Math.max(1, (int) Math.round(v));
+            case "fade" -> fade = Math.max(0, (int) Math.round(v));
+            case "frame" -> frame = Math.max(1, (int) Math.round(v));
+            case "sparks" -> spark = spark == null ? null : new SkillEngine.KigiSpark(
+                    spark.particle(), Math.max(0, (int) Math.round(v)),
+                    spark.spread(), spark.speed(), spark.alongArc());
+            default -> {
+                return null;
+            }
+        }
+        return new SkillEngine.KigiSlash(c.enabled(), c.model(), c.applyToTrails(),
+                c.frameModels(), frame, c.replaceStroke(), scale, height, forward,
+                radius, sweep, tilt, roll, draw, fade, c.billboard(), c.alternate(),
+                c.brightness(), spark, c.calmHeldAura());
+    }
+
+    /** 지금 값 전부 + <b>config 에 그대로 붙일 줄</b> (확정은 사람이 config 에 못 박는다) */
+    private List<String> kigiReport(SkillEngine.KigiSlash c) {
+        List<String> out = new ArrayList<>();
+        out.add(ChatColor.GOLD + "── 검기(kigi_slash) 지금 값 ──" + ChatColor.GRAY
+                + (engine.kigiSlashOverridden() ? "  ★ 인게임 오버라이드 중" : "  (등록부 원본)"));
+        out.add(String.format(ChatColor.WHITE + "각: roll %s · tilt %s · sweep %s"
+                + ChatColor.GRAY + "   (롤 · 공전면 기울기 · 공전 호각)",
+                trim(c.rollDeg()), trim(c.tiltDeg()), trim(c.sweepDeg())));
+        out.add(String.format(ChatColor.WHITE + "몸: radius %s · scale %s · height %s · forward %s"
+                + ChatColor.GRAY + "   (공전 반경 · 초승달 크기 · 중심 높이 · 앞으로)",
+                trim(c.orbitRadius()), trim(c.scale()), trim(c.centerHeight()), trim(c.forward())));
+        out.add(String.format(ChatColor.WHITE + "때: draw %d · fade %d · frame %d · sparks %d"
+                + ChatColor.GRAY + "   (그리는 틱 · 지우는 틱 · 단계당 틱 · 흰 별 수)",
+                c.drawTicks(), c.fadeTicks(), c.frameTicks(),
+                c.spark() == null ? 0 : c.spark().count()));
+        out.add(ChatColor.DARK_GRAY + "enabled " + c.enabled() + " · billboard " + c.billboard()
+                + " · alternate " + c.alternate() + " · brightness " + c.brightness());
+        out.add(ChatColor.GOLD + "── config/skill_motion.yml · kigi_slash 에 붙일 줄 ──");
+        out.add(String.format("§f  scale: %s   center_height: %s   forward: %s   orbit_radius: %s",
+                trim(c.scale()), trim(c.centerHeight()), trim(c.forward()), trim(c.orbitRadius())));
+        out.add(String.format("§f  sweep_deg: %s   tilt_deg: %s   roll_deg: %s"
+                + "   draw_ticks: %d   fade_ticks: %d   frame_ticks: %d",
+                trim(c.sweepDeg()), trim(c.tiltDeg()), trim(c.rollDeg()),
+                c.drawTicks(), c.fadeTicks(), c.frameTicks()));
+        // ★ 한 줄로도 뽑는다 — 조율자가 복사해서 확정값을 config 에 못 박는다 (YAML flow 로도 유효)
+        out.add(String.format("§f{scale: %s, center_height: %s, forward: %s, orbit_radius: %s, "
+                + "sweep_deg: %s, tilt_deg: %s, roll_deg: %s, draw_ticks: %d, fade_ticks: %d, "
+                + "frame_ticks: %d, spark: {count: %d}}",
+                trim(c.scale()), trim(c.centerHeight()), trim(c.forward()), trim(c.orbitRadius()),
+                trim(c.sweepDeg()), trim(c.tiltDeg()), trim(c.rollDeg()),
+                c.drawTicks(), c.fadeTicks(), c.frameTicks(),
+                c.spark() == null ? 0 : c.spark().count()));
+        out.add(ChatColor.GRAY + "※ 여기서 민 값은 §f메모리에만§7 산다 — 재기동하면 config 값으로 돌아간다. "
+                + "확정했으면 위 줄을 config 에 적어라 (프로그램은 config 를 안 쓴다 — 주석을 지키기 위해서다)");
+        return out;
+    }
+
+    /** 2.50 → 2.5, 25.00 → 25 (붙여넣을 줄에 0 이 늘어지면 읽기 싫어진다) */
+    private static String trim(double v) {
+        String s = String.format("%.3f", v);
+        s = s.replaceAll("0+$", "");
+        return s.endsWith(".") ? s.substring(0, s.length() - 1) : s;
+    }
+
     private static String hitTypeOf(String alias) {
         String motion = STROKE_ALIAS.getOrDefault(alias, "참격_호");
         return motion.substring(motion.indexOf('_') + 1);
@@ -867,6 +1037,23 @@ public final class SkillListener implements Listener {
 
         if (tick % engine.npcThinkTicks() == 0) {
             npcSweep();   // NPC 격 — 매 틱 사고 금지 (npc_combat think_interval_ticks)
+        }
+        // 무기 오라 — 병기 둘레를 도는 기운 (순수 VFX · 판정 불변). 격 두름(state.armed)과 별개 층이라
+        // 여기서 (state 유무와 무관하게) 자체 주기로 돈다. 발행은 SkillHud 예산 게이트를 그대로 탄다.
+        //   ① ★영상 정합 — 월드에 떨어진/세워진 병기 아이템 둘레 (검을 땅에 두면 기운이 돈다)
+        //   ② 부차 — 든 무기 곁 (우하단 손 자리)
+        SkillEngine.WeaponAura wa = engine.weaponAura();
+        if (wa != null && wa.enabled()) {
+            // dropped/전시(정지)는 성긴 주기로 (interval). held(움직임)는 촘촘히 (held_interval) —
+            // 파티클이 검에서 벗어났다 붙는 끊김을 없애려 매 틱 손 자리에 뿌린다 (발행당 수는 아래서 줄인다).
+            if (wa.dropped() && wa.intervalTicks() > 0 && tick % wa.intervalTicks() == 0) {
+                weaponAuraDropped(wa);
+            }
+            if (wa.held() && wa.heldIntervalTicks() > 0 && tick % wa.heldIntervalTicks() == 0) {
+                for (Player player : plugin.getServer().getOnlinePlayers()) {
+                    weaponAuraHeld(player, wa);
+                }
+            }
         }
         if (tick % 4 != 0) {
             return;   // HUD·유지비는 4틱(0.2초)마다 — 액션바 갱신 비용 절감
@@ -1654,10 +1841,103 @@ public final class SkillListener implements Listener {
         int swingTicks = (int) Math.max(basic.frames().total(), swingInterval(player));
 
         String stroke = nextStroke(player, weaponClass);   // 그림의 순번 (입력 문법이 아니다)
+
+        // ★ 전용 검기(劍氣) 평타 — 호 계열의 작은 무협 참격을 크고 선명한 초록 초승달로 대체 (kigi_slash)
+        SkillEngine.KigiSlash kigi = engine.kigiSlash();
+        if (kigi != null && kigi.enabled() && kigi.appliesToTrail(basic.trail())) {
+            spawnKigiSlash(player);                         // 초록 초승달 검기(3D) + 흰 별 반짝이
+            if (kigi.replaceStroke()) {
+                // 기존 무협 참격 아크·궤적 파티클을 이 무기에 대해 그리지 않는다 (레퍼런스는 검기+흰별만).
+                // 몸의 자세(전진·포즈)는 유지하고, 스윙음만 남긴다 — 판정(basicMelee)은 어차피 별개 경로다.
+                SkillEngine.Style style = engine.weaponStyle(weaponClass);
+                if (style != null) {
+                    sfx(player.getLocation(), style.swing());
+                }
+                posture(player, weaponClass, basic.trail(), swingTicks);
+                return;
+            }
+            // replace_stroke=false — 검기에 **더해** 기존 참격·궤적도 그린다 (additive)
+        }
+
         boolean solid = strike(player, basic.trail(), grade, weaponClass,
                 basic.range(), basic.angle(), swingTicks, stroke);
         // ★ 무공 없는 손도 궤적을 남긴다 — 여기에 **아무것도 없었다** (그것이 찌르기로 보인 절반이다)
         basicTrail(player, basic, grade, weaponClass, stroke, swingTicks, solid);
+    }
+
+    // ══════════ ★ 전용 검기(劍氣) 평타 — 발행 층 (3D 소환 + 흰 별) ══════════
+
+    /** 스윙마다 좌↔우 방향 — alternate 면 토글, 아니면 +1 고정 (레퍼런스 "한 세트 더") */
+    private final Map<UUID, Integer> kigiDir = new HashMap<>();
+
+    /**
+     * 전용 검기 평타 발행 — 초록 초승달 검기(3D · {@link SkillDisplay#kigiSlash})를 소환하고
+     * 흰 별을 아크를 따라 뿌린다. dirSign 은 alternate 면 스윙마다 번갈아 바뀐다.
+     *
+     * @return 3D 검기가 실제로 떴는가 (흰 별은 팩 유무와 무관하게 늘 뿌린다)
+     */
+    private boolean spawnKigiSlash(Player player) {
+        SkillEngine.KigiSlash cfg = engine.kigiSlash();
+        if (cfg == null || !cfg.enabled()) {
+            return false;
+        }
+        int dirSign;
+        if (cfg.alternate()) {
+            dirSign = -kigiDir.getOrDefault(player.getUniqueId(), -1);
+            kigiDir.put(player.getUniqueId(), dirSign);
+        } else {
+            dirSign = 1;
+        }
+        boolean drawn = display.kigiSlash(player, cfg, dirSign);
+        kigiSparks(player, cfg, dirSign);   // 흰 별 — 파티클은 팩이 없어도 늘 보인다
+        return drawn;
+    }
+
+    /**
+     * 흰 별 반짝이 — 검기 아크를 표본해 {@code spark.particle}(end_rod)을 성기게 뿌린다.
+     * {@code along_arc} 면 그리는 시간(draw_ticks)에 갈라 뿌려 별이 검기를 따라 흐르게 한다.
+     */
+    private void kigiSparks(Player player, SkillEngine.KigiSlash cfg, int dirSign) {
+        SkillEngine.KigiSpark sp = cfg.spark();
+        if (sp == null || sp.count() <= 0 || sp.particle() == null) {
+            return;
+        }
+        Vector flat = flatOf(player);
+        // 국소축을 세계축으로 편다 — 디스플레이의 국소 +X 는 시전자의 **왼쪽**이다 (yaw 0 = 남쪽 = +Z)
+        Vector left = new Vector(flat.getZ(), 0, -flat.getX());
+        Vector up = new Vector(0, 1, 0);
+        Location feet = player.getLocation();
+        Location base = feet.clone().add(flat.clone().multiply(cfg.forward()));
+        base.setY(feet.getY() + cfg.centerHeight());
+        // ★ 별도 **같은 공전 궤도**를 돈다 (SkillDisplay.kigiOrbit 과 같은 수식) — 3D 초승달이 몸 둘레를
+        //   도는데 별만 정면 평면에 남으면 둘이 갈라진다. 별의 모습(입자·개수·퍼짐)은 그대로다
+        double radius = cfg.orbitRadius();
+        double half = Math.toRadians(cfg.sweepDeg() * 0.5);
+        double tilt = Math.toRadians(cfg.tiltDeg());
+        double sign = dirSign < 0 ? -1.0 : 1.0;
+        int n = sp.count();
+        for (int i = 0; i < n; i++) {
+            double phase = n <= 1 ? 0.0 : (i / (double) (n - 1)) * 2.0 - 1.0;   // −1..+1
+            double theta = half * phase * sign;                   // 공전각
+            // (r sinθ, 0, r cosθ) 을 앞축 둘레로 tilt 만큼 눕힌 것 = Rz(tilt) 를 편 꼴
+            double lx = radius * Math.sin(theta) * Math.cos(tilt);
+            double ly = radius * Math.sin(theta) * Math.sin(tilt);
+            double lz = radius * Math.cos(theta);
+            Vector off = left.clone().multiply(lx)
+                    .add(up.clone().multiply(ly))
+                    .add(flat.clone().multiply(lz));
+            Location at = base.clone().add(off);
+            long due = tick + (sp.alongArc()
+                    ? Math.round(cfg.drawTicks() * (n <= 1 ? 0.0 : i / (double) (n - 1)))
+                    : 0L);
+            if (due <= tick) {
+                hud.emit(at, sp.particle(), 1, sp.spread(), sp.speed());
+            } else {
+                final Location fat = at;
+                pending.add(new Pending(due,
+                        () -> hud.emit(fat, sp.particle(), 1, sp.spread(), sp.speed())));
+            }
+        }
     }
 
     /**
@@ -3976,6 +4256,372 @@ public final class SkillListener implements Listener {
                     form.ringParticle(), form.ringPerPoint(), 0.02, 0.0);
         }
         display.ring(body, SkillEngine.GUARD);   // 그 위에 3D 판이 돈다 (심장박동 — 갱신이 끊기면 사라진다)
+    }
+
+    /** 병기 전시대 표식 — 이 표가 붙은 ItemDisplay 는 회수 대상이고 오라 반경이 커진다 (VFX 표식과 별개) */
+    static final NamespacedKey KEY_WEAPON_STAND = new NamespacedKey("honcheon", "weapon_stand");
+    /** 전시대 주인 UUID — 회수는 주인만 (강탈해도 남의 검을 못 걷는다) */
+    static final NamespacedKey KEY_WEAPON_STAND_OWNER = new NamespacedKey("honcheon", "weapon_stand_owner");
+    /** 자동 드롭 전시 표식 — 떨어뜨린 병기를 대신하는 큰 디스플레이 (다가가면 줍힌다 · 수명 있음) */
+    static final NamespacedKey KEY_DROP_DISPLAY = new NamespacedKey("honcheon", "weapon_drop_display");
+    /** 드롭 전시가 태어난 벽시계 시각(ms) — 줍기 지연·수명(바닐라 despawn 정합)을 잰다 (재기동 넘어 유효) */
+    static final NamespacedKey KEY_DROP_BORN = new NamespacedKey("honcheon", "weapon_drop_born");
+    /** 줍기 지연 — 버린 직후 바로 도로 줍히지 않게 (바닐라 2초 소유자 지연에 준한다) */
+    private static final long PICKUP_DELAY_MS = 1500L;
+
+    /**
+     * 병기를 품은 <b>큰 ItemDisplay</b> 를 세운다 — 전시대와 자동 드롭이 함께 쓰는 문.
+     * {@code setPersistent(true)} 라 재기동에도 병기를 잃지 않는다. VFX 표식이 아니라 유령 청소에 안 걸린다.
+     */
+    private void spawnWeaponDisplay(Location at, ItemStack weapon, double scale,
+                                    double rotX, double rotY, double rotZ,
+                                    NamespacedKey marker, java.util.UUID owner, boolean born) {
+        ItemStack one = weapon.clone();
+        one.setAmount(1);
+        float s = (float) scale;
+        Quaternionf rot = new Quaternionf().rotationXYZ(
+                (float) Math.toRadians(rotX), (float) Math.toRadians(rotY), (float) Math.toRadians(rotZ));
+        at.getWorld().spawn(at, ItemDisplay.class, e -> {
+            e.setItemStack(one);
+            e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);   // 모델 그대로 (손 변형 없이)
+            e.setBillboard(Display.Billboard.FIXED);                            // 세운 채 고정 (카메라 안 따라감)
+            e.setPersistent(true);                                              // ★재기동해도 검을 잃지 않는다
+            e.setViewRange(engine.displayBudget().viewRange());
+            e.setTransformation(new Transformation(
+                    new Vector3f(), rot, new Vector3f(s, s, s), new Quaternionf()));
+            var pdc = e.getPersistentDataContainer();
+            pdc.set(marker, PersistentDataType.BYTE, (byte) 1);
+            if (owner != null) {
+                pdc.set(KEY_WEAPON_STAND_OWNER, PersistentDataType.STRING, owner.toString());
+            }
+            if (born) {
+                pdc.set(KEY_DROP_BORN, PersistentDataType.LONG, System.currentTimeMillis());
+            }
+        });
+    }
+
+    /**
+     * <b>/혼천 병기전시</b> — 든 혼천 병기를 앞 지면에 <b>크게 세운다</b>(전시), 빈손이면 가까운 제
+     * 전시대를 <b>회수</b>한다. ★영상 정합: 땅에 박힌 큰 검 둘레를 오라가 돈다 (전시대는 실물 병기의
+     * ItemDisplay라 {@link #weaponAuraDropped} 순회가 자동으로 오라를 두른다).
+     *
+     * <p><b>병기를 잃지 않는다</b>: 전시 엔티티는 {@code setPersistent(true)} — 재기동해도 검이 사라지지
+     * 않고 그 자리에 서 있다 (회수하면 인벤토리로 돌아온다). 우리 VFX 표식(honcheon:vfx)이 아니므로
+     * {@link SkillDisplay#start} 의 유령 청소에 걸리지 않는다.
+     */
+    public void weaponStandCommand(Player player) {
+        SkillEngine.WeaponStand ws = engine.weaponStand();
+        if (ws == null || !ws.enabled()) {
+            player.sendMessage(ChatColor.GRAY + "병기 전시대가 꺼져 있다 (config/skill_motion.yml weapon_stand.enabled)");
+            return;
+        }
+        ItemStack hand = player.getInventory().getItemInMainHand();
+        if (Weapons.isWeapon(hand)) {
+            plantWeaponStand(player, ws, hand);
+        } else {
+            retrieveWeaponStand(player, ws);
+        }
+    }
+
+    /** 든 병기를 앞 지면에 크게 세운다 — ItemDisplay(스케일·직립 회전) + 손에서 회수 */
+    private void plantWeaponStand(Player player, SkillEngine.WeaponStand ws, ItemStack hand) {
+        Vector flat = player.getLocation().getDirection().setY(0);
+        if (flat.lengthSquared() < 1.0e-6) {
+            flat = new Vector(0, 0, 1);
+        }
+        flat.normalize();
+        // 앞 1.5m 지면 — 발 높이 기준 (박힌 검처럼 보이게 rise 로 띄운다)
+        Location base = player.getLocation().add(flat.clone().multiply(1.5));
+        base.setY(player.getLocation().getY() + ws.rise());
+        base.setYaw(player.getLocation().getYaw());
+        base.setPitch(0);
+
+        spawnWeaponDisplay(base, hand, ws.scale(), ws.rotX(), ws.rotY(), ws.rotZ(),
+                KEY_WEAPON_STAND, player.getUniqueId(), false);   // 전시대 — 수명 없음(영구), 회수는 주인만
+        // 손에서 거둔다 — 전시된 그 한 자루가 세계에 하나 (복제 아님)
+        player.getInventory().setItemInMainHand(null);
+        player.sendMessage(ChatColor.AQUA + "병기를 세웠다 " + ChatColor.GRAY
+                + "— 빈손으로 " + ChatColor.WHITE + "/혼천 병기전시" + ChatColor.GRAY + " 하면 도로 거둔다");
+    }
+
+    /** 빈손 호출 — 반경 안의 제 전시대를 회수 (병기가 인벤토리로 돌아온다) */
+    private void retrieveWeaponStand(Player player, SkillEngine.WeaponStand ws) {
+        double r = ws.retrieveRadius();
+        ItemDisplay found = null;
+        double best = Double.MAX_VALUE;
+        for (org.bukkit.entity.Entity e
+                : player.getWorld().getNearbyEntities(player.getLocation(), r, r, r)) {
+            if (!(e instanceof ItemDisplay disp)) {
+                continue;
+            }
+            var pdc = disp.getPersistentDataContainer();
+            if (!pdc.has(KEY_WEAPON_STAND)) {
+                continue;
+            }
+            String owner = pdc.get(KEY_WEAPON_STAND_OWNER, PersistentDataType.STRING);
+            if (owner != null && !owner.equals(player.getUniqueId().toString())) {
+                continue;   // 남의 전시대 — 회수는 주인만
+            }
+            double d = disp.getLocation().distanceSquared(player.getLocation());
+            if (d < best) {
+                best = d;
+                found = disp;
+            }
+        }
+        if (found == null) {
+            player.sendMessage(ChatColor.GRAY + "가까이에 거둘 내 전시대가 없다 (반경 "
+                    + String.format("%.0f", r) + "m · 든 병기가 있으면 세운다)");
+            return;
+        }
+        ItemStack stored = found.getItemStack();
+        found.remove();
+        if (stored != null && !stored.getType().isAir()) {
+            player.getInventory().addItem(stored).values()
+                    .forEach(rest -> player.getWorld().dropItem(player.getLocation(), rest));
+        }
+        player.sendMessage(ChatColor.AQUA + "병기를 도로 거뒀다");
+    }
+
+    /**
+     * <b>무기 오라 — ★영상 정합 (떨어진/세워진 아이템).</b> 월드에 <b>떨어져 있거나 세워진</b> 혼천
+     * 병기 둘레를 <b>기운</b>이 소용돌이친다 (레퍼런스: 땅에 박힌 검 둘레를 파티클이 돈다).
+     *
+     * <p>청크 로드된 엔티티만 순회한다 ({@code getEntitiesByClass} — 언로드된 세계는 나오지 않는다).
+     * 볼 눈이 없는 세계·거리 밖 아이템은 건너뛴다 (거리 컬링). 우리 VFX 엔티티(honcheon:vfx)는
+     * <b>제외</b>한다 — 이기어검·던진 암기의 ItemDisplay 가 제 위에 또 오라를 두르지 않게.
+     */
+    private void weaponAuraDropped(SkillEngine.WeaponAura wa) {
+        // 지면에 낮게 뜬 아이템 — 수직 기둥으로 돈다 (세운 검 둘레를 감는 소용돌이)
+        Vector u = new Vector(1, 0, 0);
+        Vector v = new Vector(0, 0, 1);
+        Vector w = new Vector(0, 1, 0);
+        double cull = engine.cullBeyond();
+        SkillEngine.WeaponStand ws = engine.weaponStand();
+        SkillEngine.DroppedDisplay dd = engine.droppedDisplay();
+        for (org.bukkit.World world : plugin.getServer().getWorlds()) {
+            if (world.getPlayers().isEmpty()) {
+                continue;   // 볼 눈이 없는 세계 — 발행해도 아무도 못 본다
+            }
+            int interval = Math.max(1, wa.intervalTicks());
+            // ─── ① 떨어뜨린 병기 — dropped_display 가 켜져 있으면 작은 바닐라 아이템을 큰 디스플레이로 교체 ───
+            for (org.bukkit.entity.Item item : world.getEntitiesByClass(org.bukkit.entity.Item.class)) {
+                ItemStack stack = item.getItemStack();
+                if (!Weapons.isWeapon(stack) || !anyPlayerWithin(item.getLocation(), cull)) {
+                    continue;
+                }
+                if (dd != null && dd.enabled()) {
+                    // 작은 아이템을 치우고 같은 자리에 큰 디스플레이를 세운다 (병기는 디스플레이가 품는다 — 안 잃음)
+                    spawnWeaponDisplay(item.getLocation().add(0, dd.rise(), 0), stack, dd.scale(),
+                            dd.rotX(), dd.rotY(), dd.rotZ(), KEY_DROP_DISPLAY, item.getThrower(), true);
+                    item.remove();
+                } else {
+                    // dropped_display 꺼짐 — 옛 동작: 작은 아이템에 오라만 두른다
+                    spawnWeaponAura(item.getLocation().add(0, wa.droppedRise(), 0), u, v, w, stack, wa,
+                            1.0, interval, 1.0);
+                }
+            }
+            if (!wa.includeDisplays()) {
+                continue;
+            }
+            // ─── ② 세워진 디스플레이 (전시대 · 자동 드롭) — 오라 + 드롭은 줍기/수명 처리 ───
+            for (ItemDisplay disp : world.getEntitiesByClass(ItemDisplay.class)) {
+                var pdc = disp.getPersistentDataContainer();
+                if (pdc.has(SkillDisplay.KEY_VFX)) {
+                    continue;   // 우리 VFX 엔티티 — 그 위에 오라를 겹치지 않는다
+                }
+                ItemStack stack = disp.getItemStack();
+                if (stack == null || !Weapons.isWeapon(stack)) {
+                    continue;
+                }
+                boolean stand = ws != null && pdc.has(KEY_WEAPON_STAND);
+                boolean drop = pdc.has(KEY_DROP_DISPLAY);
+                if (drop && handleDropDisplay(disp, stack, pdc, dd)) {
+                    continue;   // 줍혔거나 수명이 다해 사라졌다 — 오라를 그릴 대상이 없다
+                }
+                if (!anyPlayerWithin(disp.getLocation(), cull)) {
+                    continue;
+                }
+                // 큰 검(전시대·드롭)이면 오라 반경·중심을 키운다 — 작은 아이템과 달리 검 몸통을 감싼다
+                double rise;
+                double radiusScale;
+                if (stand) {
+                    rise = ws.auraCenterRise();
+                    radiusScale = ws.auraScale();
+                } else if (drop && dd != null) {
+                    rise = dd.auraCenterRise();
+                    radiusScale = dd.auraScale();
+                } else {
+                    rise = wa.droppedRise();
+                    radiusScale = 1.0;
+                }
+                spawnWeaponAura(disp.getLocation().add(0, rise, 0), u, v, w, stack, wa,
+                        1.0, interval, radiusScale);
+            }
+        }
+    }
+
+    /**
+     * 자동 드롭 디스플레이의 줍기·수명 — 사라지게 했으면 true.
+     * <ul>
+     *   <li><b>수명</b> — 바닐라 드롭 despawn(5분)과 정합. 벽시계로 재므로 재기동을 넘어 유효하다.
+     *       {@code lifetime_seconds: 0} 이면 안 사라진다 (귀한 병기 보호용 설정).</li>
+     *   <li><b>줍기</b> — 줍기 지연 뒤, 반경 안 가장 가까운 플레이어에게 병기가 돌아가고 디스플레이는 사라진다.</li>
+     * </ul>
+     */
+    private boolean handleDropDisplay(ItemDisplay disp, ItemStack stack,
+                                      org.bukkit.persistence.PersistentDataContainer pdc,
+                                      SkillEngine.DroppedDisplay dd) {
+        if (dd == null) {
+            return false;
+        }
+        long born = pdc.getOrDefault(KEY_DROP_BORN, PersistentDataType.LONG, 0L);
+        long age = System.currentTimeMillis() - born;
+        if (dd.lifetimeSeconds() > 0 && age > dd.lifetimeSeconds() * 1000L) {
+            disp.remove();   // 병기가 사라진다 — 바닐라 드롭 despawn 과 같다 (0 이면 이 길을 안 탄다)
+            return true;
+        }
+        if (age < PICKUP_DELAY_MS) {
+            return false;   // 버린 직후 — 아직 도로 줍히지 않는다
+        }
+        Player taker = nearestPlayer(disp.getLocation(), dd.pickupRadius());
+        if (taker == null) {
+            return false;
+        }
+        disp.remove();
+        // 병기가 인벤토리로 — 넘치면 발 밑에 (다시 작은 아이템으로 떨어지면 다음 순회가 또 크게 세운다)
+        taker.getInventory().addItem(stack).values()
+                .forEach(rest -> taker.getWorld().dropItem(taker.getLocation(), rest));
+        return true;
+    }
+
+    /** 반경 안 가장 가까운 플레이어 — 없으면 null (드롭 디스플레이 줍기용) */
+    private static Player nearestPlayer(Location at, double range) {
+        if (at.getWorld() == null) {
+            return null;
+        }
+        double best = range * range;
+        Player found = null;
+        for (Player p : at.getWorld().getPlayers()) {
+            double d = p.getLocation().distanceSquared(at);
+            if (d <= best) {
+                best = d;
+                found = p;
+            }
+        }
+        return found;
+    }
+
+    /**
+     * <b>무기 오라 — 부차 (든 무기 곁).</b> 혼천 병기를 주 손에 들면 <b>실제 렌더되는 손 자리</b>
+     * (우하단)에서 병기 곁으로 기운이 돈다. 1인칭 정면을 가리지 않는다 (눈앞이 아니라 손 곁이다).
+     */
+    private void weaponAuraHeld(Player player, SkillEngine.WeaponAura wa) {
+        ItemStack hand = player.getInventory().getItemInMainHand();
+        if (!Weapons.isWeapon(hand)) {
+            return;   // 바닐라 아이템·빈손 — 서릴 기운이 없다
+        }
+        // ★ calm_held_aura — 검기 평타 무기(호 계열)를 들었으면 held 오라를 억제해 장면을 깨끗하게 (가역).
+        //   레퍼런스처럼 검기+흰별만 남기고 연두 사각 클러터(weapon_aura held)를 끈다.
+        SkillEngine.KigiSlash kigi = engine.kigiSlash();
+        if (kigi != null && kigi.enabled() && kigi.calmHeldAura()) {
+            SkillEngine.Basic basic = engine.basicStrike(
+                    engine.weaponClassOf(hand, materialName(player)));
+            if (basic != null && kigi.appliesToTrail(basic.trail())) {
+                return;
+            }
+        }
+        Vector dir = player.getEyeLocation().getDirection().normalize();
+        Vector flat = dir.clone().setY(0);
+        if (flat.lengthSquared() < 1.0e-6) {
+            flat = new Vector(1, 0, 0);
+        }
+        flat.normalize();
+        Vector right = new Vector(-flat.getZ(), 0, flat.getX());   // 시선의 오른쪽 (오른손 자리)
+        // 손 자리 — 눈에서 앞·오른쪽·아래로 (우하단 손). 정면(눈앞)이 아니다
+        Location center = player.getEyeLocation()
+                .add(dir.clone().multiply(wa.heldForward()))
+                .add(right.clone().multiply(wa.heldRight()))
+                .subtract(0, wa.heldDown(), 0);
+        // 궤도 평면 — 병기축(시선)에 수직. 시선이 수직에 가까우면 기준 up 을 바꾼다
+        Vector up0 = Math.abs(dir.getY()) > 0.99 ? new Vector(1, 0, 0) : new Vector(0, 1, 0);
+        Vector u = dir.clone().crossProduct(up0).normalize();
+        Vector v = u.clone().crossProduct(dir).normalize();
+        // 촘촘한 주기라 발행당 수를 held/interval 비율로 줄인다 (초당 총량 균형). 스파크 박자도 held 주기 기준
+        double density = (double) wa.heldIntervalTicks() / Math.max(1, wa.intervalTicks());
+        spawnWeaponAura(center, u, v, dir, hand, wa, density, wa.heldIntervalTicks(), 1.0);
+    }
+
+    /** 이 자리에서 {@code range} 안에 눈이 하나라도 있는가 — 거리 컬링 (없으면 발행을 아낀다) */
+    private static boolean anyPlayerWithin(Location at, double range) {
+        if (at.getWorld() == null) {
+            return false;
+        }
+        double r2 = range * range;
+        for (Player p : at.getWorld().getPlayers()) {
+            if (p.getLocation().distanceSquared(at) <= r2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 한 병기의 오라를 한 자리에 뿌린다 — 궤도 평면은 {@code u × v}, 나선축은 {@code w}.
+     * held 는 (시선수직평면, 시선축), dropped 는 (수평평면, 수직축)을 준다.
+     *
+     * <p><b>순수 VFX다 — 판정을 한 톨도 바꾸지 않는다</b>: 등급 미등록·계열색 없음·예산 초과 어디서
+     * 실패해도 조용히 물러선다. 등급 사다리(범철 없음 → 정련 희미 → 신병 또렷 → 마병 격렬)와 계열/명병색은
+     * <b>등록부가 정한다</b> (skill_motion.yml weapon_aura). 코드는 파티클·색을 고르지 않는다.
+     * 발행은 {@link SkillHud#emit} 예산 게이트를 그대로 타므로 시야당/전역 예산·LOD·컬링이 자동 적용된다.
+     */
+    private void spawnWeaponAura(Location center, Vector u, Vector v, Vector w,
+                                 ItemStack item, SkillEngine.WeaponAura wa,
+                                 double densityMul, int sparkBeatInterval, double radiusScale) {
+        Weapons.Series series = Weapons.seriesOf(item);
+        Weapons.Grade grade = Weapons.gradeOf(item);
+        if (series == null || grade == null) {
+            return;
+        }
+        SkillEngine.WeaponAuraGrade g = wa.grade(grade.name());
+        if (g == null || (g.shards() <= 0 && g.sparks() <= 0)) {
+            return;   // 범철(오라 없음) 또는 미등록 등급 — 조용히 물러선다
+        }
+        // 색: 등급이 덮어썼으면 그것(마병 혈), 아니면 계열/명병색. 파일럿 밖 계열은 계열색이 없어 물러선다
+        String ink = g.inkOverride() != null ? g.inkOverride()
+                : wa.inkFor(series.name(), Weapons.sectOf(item));
+        if (ink == null) {
+            return;   // 계열 악센트색이 등록 안 됨 (검·도 밖 계열 — 2차의 몫). 조용히 꺼진다
+        }
+
+        // 밀도 — held 는 촘촘히 뿌리므로 발행당 수를 줄여 초당 총량을 맞춘다 (예산 균형). 최소 1개는 남긴다
+        int shards = g.shards() <= 0 ? 0
+                : Math.max(1, (int) Math.round(g.shards() * densityMul));
+        double radius = wa.radius() * radiusScale;
+        double helix = wa.helix() * radiusScale;
+        double phase = tick * wa.orbitSpeed();
+        for (int i = 0; i < shards; i++) {
+            double a = phase + Math.PI * 2 * i / shards;
+            double along = Math.sin(a * 1.5) * helix;   // 나선 — 축을 따라 오르내린다
+            Location at = center.clone()
+                    .add(u.clone().multiply(Math.cos(a) * radius))
+                    .add(v.clone().multiply(Math.sin(a) * radius))
+                    .add(w.clone().multiply(along));
+            // 작은 결정 — dust size 를 실어 뭉치를 없앤다 (색은 등록 먹빛, 크기만 등록부 shard_size)
+            hud.emitSized(at, wa.shardParticle(), ink, wa.shardSize(), 1, wa.shardSpread(), 0.0);
+        }
+        // 흰 반짝이 — 떠도는 별. spark_every 번의 발행 주기마다 한 번만 (성기게)
+        long beats = tick / Math.max(1, sparkBeatInterval);
+        if (g.sparks() > 0 && g.sparkEvery() > 0 && beats % g.sparkEvery() == 0) {
+            double a = phase * 0.7;   // 결정과 다른 속도로 돌아 서로 붙지 않는다
+            double r = radius * wa.sparkRadiusMul();
+            for (int s = 0; s < g.sparks(); s++) {
+                double aa = a + Math.PI * 2 * s / g.sparks();
+                Location at = center.clone()
+                        .add(u.clone().multiply(Math.cos(aa) * r))
+                        .add(v.clone().multiply(Math.sin(aa) * r));
+                hud.emitSized(at, wa.sparkParticle(), ink, wa.sparkSize(), 1, wa.sparkSpread(), 0.0);
+            }
+        }
     }
 
     /**

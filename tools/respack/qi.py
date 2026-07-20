@@ -615,3 +615,153 @@ def write_qi_assets() -> int:
     return len(QI_MODELS)
 
 
+# ═══ 녹색 검기(劍氣) — 평타 스윕의 초승달 참격 【2026-07 · 레퍼런스: 마크에이지】 ═══
+# 【왜 새 경로 kigi/ 인가 — qi/* 무색 판을 물들이지 않는다】
+#   참격선 판(qi/slash_arc)은 **여섯 격이 한 장을 나눠 쓴다** — 거기 색을 넣으면 외공기의 주먹이
+#   심검처럼 빛난다 (texture_audit 축 ⑱ QI_ACHROMATIC_MAX=12 가 그것을 강제한다). 그래서 색 검기는
+#   **별도 경로 honcheon:item/kigi/arc** 에 굽는다. qi/slash_arc/line/ring 은 무색 그대로 둔다.
+# 【색·모양의 출처】 scratch/ref_attack/kigi_proto.py 확정본 — 두 톤 깊은 초승달: 양쪽 먹 외곽선
+#   (RIM) + 고른 연두 몸(DARK→MID→BRIGHT→HOT) + 자라는 앞머리 하이라이트, 6프레임 좌→우 스윕.
+#   이 파일은 그 로직을 **무수정 이식**한다 (색·형·프레임 동일). 난수 0 — 결정론.
+KIGI_W, KIGI_H = 64, 22         # 가로로 긴 초승달 — 레퍼런스는 우리보다 깊은 배 (semi-circle 쪽)
+KIGI_CANVAS = 64                # ★정사각 **단일 프레임** (아래 【스윙 동기화】 참조 — 스트립을 버렸다)
+KIGI_FRAMES = 3                 # ★레퍼런스처럼 3단계 뚜렷한 스와이프 (사용자 확정 2026-07-19)
+KIGI_UV_V = 16.0 * KIGI_H / KIGI_CANVAS   # = 5.5 — 그림은 캔버스의 **맨 위 22행**에 있다
+
+# ═══ 【스윙 동기화 · 2026-07-19】 왜 .mcmeta 애니를 버리고 **모델 3벌**로 굽는가 ═══
+# 옛 판은 arc.png 를 3프레임 세로 스트립 + .mcmeta(frametime 3)로 구웠다. 그런데 마인크래프트의
+#   텍스처 애니는 **전역 시계**로 돈다 — 월드 틱을 나눈 값이 프레임 번호다. 모든 인스턴스가
+#   동시에 같은 프레임을 본다. 검기 디스플레이의 수명은 draw(9)+fade(5)=14틱인데 애니 한 바퀴는
+#   9틱이므로, **소환 순간의 프레임이 매번 제각각**이었다: 어떤 스윙은 3단계부터 시작하고
+#   어떤 스윙은 2단계에서 끝났다. 사용자 실측: "검기 프레임이 전혀 반영이 안 된다".
+# ⇒ 프레임을 **텍스처가 아니라 모델**로 가른다: arc1/arc2/arc3 (각각 정사각 64×64 · .mcmeta 없음).
+#   플러그인이 스윙 중 frame_ticks 마다 ItemDisplay 의 아이템을 갈아끼워 1→2→3 을 **스윙마다
+#   정확히 순서대로** 보여 준다 (SkillDisplay.advanceFrames). 그림은 한 픽셀도 안 바뀐다 —
+#   옛 스트립의 세 프레임(ph 0 · 0.5 · 1.0)이 그대로 세 장이 된다.
+KIGI_RIM = (14, 22, 16)         # 먹 테두리 (아주 짙은 초록빛 검정)
+KIGI_DARK = (26, 120, 60)       # 몸 어두운 연두
+KIGI_MID = (78, 200, 120)       # 몸 중간 민트
+KIGI_BRIGHT = (150, 245, 170)   # 밝은 심
+KIGI_HOT = (222, 255, 226)      # 핫 코어 (인선)
+KIGI_RIM_PX = 1.7               # 먹 외곽선 두께 (양쪽)
+
+
+def _kigi_lerp(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def _kigi_body(s, hi):
+    """s: 밴드 내 위치 0(바깥)…1(안쪽). 몸은 고르게 민트, 가운데가 가장 밝다. hi: 앞머리 하이라이트."""
+    center = 1.0 - abs(s - 0.42) * 1.4
+    center = max(0.0, min(1.0, center))
+    base = _kigi_lerp(KIGI_DARK, KIGI_MID, 0.4 + 0.6 * center)
+    col = _kigi_lerp(base, KIGI_BRIGHT, min(1.0, 0.35 * center + hi))
+    if hi > 0.6:
+        col = _kigi_lerp(col, KIGI_HOT, (hi - 0.6) / 0.4)
+    return col
+
+
+KIGI_BASE = (16, 52, 34)        # 아직 채워지지 않은 밑그림 (어두운 초록 — 레퍼런스 17.2s 밑칠)
+
+
+def _kigi_frame(ph):
+    """한 프레임 (ph 0…1) — 22×64 RGBA. ★레퍼런스 그대로 3단계 '채워지는' 애니:
+    넓고 얕은 대칭 ∩ 아크(무지개형). **위(볼록) 가장자리 = 밝은 흰빛-민트 인선**, 아래로 초록 몸.
+    초록은 위 가장자리에서 아래로 **채워진다** — ph 0(윗변만) → 0.5(위쪽 반) → 1.0(가득).
+    (검은 외곽선 없음: 레퍼런스는 어두운 밑그림을 초록으로 덮는다.)"""
+    g = [[T] * KIGI_W for _ in range(KIGI_H)]
+    ybase = KIGI_H * 0.88                      # 아크가 위로 봉긋 (배는 아래·인선은 위)
+    wmax = 5.2                                 # 밴드 반두께 — ★얇은 리본(레퍼런스 초승달). 두꺼우면 바닥이 평평한 돔이 된다
+    bow = 9.5                                  # 넓고 얕은 아크 (레퍼런스 무지개형)
+    taper = 0.50                               # 양 끝 더 날카롭게(첨점) — 레퍼런스는 끝이 뾰족하다
+    # ★레퍼런스 실물 프레임(사용자 제공 image1/2/3): 아크가 **길이 방향으로 자란다**
+    #   ① 짧은 획 → ② 왼쪽에서 휘어 뻗은 초승달 → ③ 넓은 ∩ 전체 아크.
+    #   (채워지는 것이 아니라 **검이 지나간 궤적이 그려지는** 애니다.)
+    grow = 0.30 + 0.70 * ph                    # 그려진 아크의 길이 비율 (좌 → 우)
+    for x in range(KIGI_W):
+        t = x / (KIGI_W - 1)
+        if t > grow:
+            continue                           # 아직 검이 지나가지 않은 자리
+        env = math.sin(math.pi * t)
+        if env <= 0.04:
+            continue
+        Wc = wmax * env ** taper
+        if Wc < 0.6:
+            continue
+        yc = ybase - bow * env
+        y_out = yc - Wc                        # 위(볼록) 가장자리 = 인선
+        span = 2 * Wc
+        for y in range(KIGI_H):
+            d = (y + 0.5) - y_out              # 0 = 위 가장자리 … span = 아래 가장자리
+            if d < -1.0 or d > span:
+                continue
+            if d < 0:                          # 인선 바로 위 — 밝은 빛 번짐 (얇게)
+                a = 210 * env * max(0.0, 1.0 + d)
+                if a >= 14:
+                    g[y][x] = (KIGI_HOT[0], KIGI_HOT[1], KIGI_HOT[2], min(255, int(a)))
+                continue
+            u = d / max(0.8, span)             # 0 = 위 인선 … 1 = 아래 가장자리
+            # 몸 색: 위 인선이 가장 밝고(흰빛 민트) 아래로 갈수록 초록이 짙어진다
+            if u < 0.22:
+                col = _kigi_lerp(KIGI_HOT, KIGI_BRIGHT, u / 0.22)
+            elif u < 0.66:
+                col = _kigi_lerp(KIGI_BRIGHT, KIGI_MID, (u - 0.22) / 0.44)
+            else:
+                col = _kigi_lerp(KIGI_MID, KIGI_DARK, (u - 0.66) / 0.34)
+            # 자라는 앞머리(방금 검이 지나간 자리)는 더 희게 — 궤적이 그려지는 인상
+            head = max(0.0, 1.0 - (grow - t) / 0.16)
+            if head > 0.0:
+                col = _kigi_lerp(col, KIGI_HOT, min(1.0, head))
+            a = min(255.0, 252 * (0.6 + 0.4 * env))
+            g[y][x] = (col[0], col[1], col[2], int(a))
+    return g
+
+
+def kigi_canvas(ph):
+    """단계 하나 — **정사각 64×64 단일 프레임**. 그림은 맨 위 22행 · 아래 42행은 투명 여백.
+    모델 uv v(0..KIGI_UV_V) 가 그 위쪽 22행을 문다 (참격선의 SLASH_UV_V 규약과 같은 문법).
+    .mcmeta 를 동반하지 않는다 — 정사각이므로 축 ⑯(정사각 or 스트립+mcmeta)이 그대로 통과한다."""
+    g = _kigi_frame(ph)
+    return [row[:] for row in g] + [[T] * KIGI_W for _ in range(KIGI_CANVAS - KIGI_H)]
+
+
+def _kigi_model(length_m=1.5, width_m=0.55, thick_m=0.04):
+    """검기 참격의 판 — 참격_호(qi/slash_arc) 기하를 본뜬다: 중심이 원점(8,8,8)이고 ±X 로 반씩 뻗는다
+    (축 ⑰ 중심 계약). 초승달이 더 깊고 두꺼우니 UV v 를 콘텐츠(22행)에 맞춘다 (참격_호는 16행=4.0).
+    size 정규화상수 length=1.5 는 참격_호와 호환 (등록부 size[0]=1.5 · MC 좌표 한계 [-16,32])."""
+    lx, hy, hz = length_m * 16.0, width_m * 8.0, thick_m * 8.0
+    faces = {f: {"texture": "#0",
+                 "uv": [0, 0, 16, KIGI_UV_V] if f in ("north", "south") else _HIDE}
+             for f in ("north", "south", "east", "west", "up", "down")}
+    return [{"from": [8.0 - lx / 2.0, 8.0 - hy, 8.0 - hz],   # 꼬리 (−X 끝)
+             "to": [8.0 + lx / 2.0, 8.0 + hy, 8.0 + hz],     # … 머리 (+X 끝) — 중심이 원점이다
+             "faces": faces}]
+
+
+def write_kigi_assets() -> int:
+    """녹색 검기 3단계 — kigi/arc1·arc2·arc3 (각각 정사각 PNG + 모델 + 아이템 정의 · .mcmeta 없음).
+
+    등록부(config/skill_motion.yml display.models 참격_호_검기1/2/3)가 honcheon:kigi/arc1|2|3 을
+    청구하고, kigi_slash.frame_models 가 스윙 중 갈아끼울 순서를 적는다 (위 【스윙 동기화】 참조).
+    옛 kigi/arc(스트립+mcmeta)는 **더 이상 굽지 않고 자리에 남은 것도 지운다** — 등록부가 안 부르는
+    자산은 model_key_audit 의 '죽은 자산'이다."""
+    base = PACK / "assets" / "honcheon" / "textures" / "item"
+    # 옛 스트립의 잔해를 걷는다 (빌더는 덮어쓸 뿐 지우지 않는다 — 남으면 죽은 자산 위반)
+    for stale in (base / "kigi" / "arc.png", base / "kigi" / "arc.png.mcmeta",
+                  MODEL_DIR / "item" / "kigi" / "arc.json", ITEM_DEF_DIR / "kigi" / "arc.json"):
+        if stale.exists():
+            stale.unlink()
+    for i in range(KIGI_FRAMES):
+        key = f"kigi/arc{i + 1}"
+        ph = i / max(1, KIGI_FRAMES - 1)          # 0 · 0.5 · 1.0 — 옛 스트립의 세 프레임 그대로
+        write_png(base / f"{key}.png", kigi_canvas(ph))
+        write_json(MODEL_DIR / "item" / f"{key}.json", {
+            "textures": {"0": f"honcheon:item/{key}", "particle": f"honcheon:item/{key}"},
+            "elements": _kigi_model(),
+            "gui_light": "front",
+        })
+        write_json(ITEM_DEF_DIR / f"{key}.json",
+                   {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
+    return KIGI_FRAMES
+
+

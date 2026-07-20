@@ -27,7 +27,7 @@ from .blocks import (
 from .entities import (write_entity_textures, write_mob_assets)
 from .furniture import (write_furniture_assets)
 from .hanok import (write_hanok_assets)   # V2-H 한옥 건축 어휘 3D
-from .qi import (write_qi_assets)
+from .qi import (write_qi_assets, write_kigi_assets)
 
 def assert_unique_codepoints(providers):
     """중복 codepoint 검사 【SJ-002 · RP 합의 7】 — 같은 자리에 두 글리프면 **뒤가 앞을 조용히 덮는다.**
@@ -156,6 +156,7 @@ def main():
     furn_bs, furn_models = write_furniture_assets()   # V2-F 한옥 가구 3D — 팩 첫 blockstates+블록 모델
     hanok = write_hanok_assets()    # V2-H 한옥 건축 어휘 — 기와 프로파일·세살창 (모델 재정의 · blockstates 불변)  # noqa: F841
     qi = write_qi_assets()          # 무공의 획 9종 (skill_motion.yml display.models 의 청구서)
+    kigi = write_kigi_assets()      # 녹색 검기 3단계 (kigi/arc1|2|3 — 참격_호_검기1/2/3. 색은 qi/* 무색 판 밖에)
     mobs = write_mob_assets()       # 짐승의 형체 8종 (mob_models.yml 의 청구서)
     ui = write_ui_sprites()         # 메뉴·버튼 (바닐라 mcmeta 를 건드리지 않는다 = 좌표 계약 불변)
 
@@ -187,6 +188,7 @@ def main():
     print(f"  ├ 명병(名兵) {myeong}자루 — **문파의 얼굴** (실루엣이 지문에서 나온다: 점창=최박 ·"
           f" 종남=최중 · 남궁=최장 · 팽가=최광폭 · 화산=매화). 문양은 코등이·물미에만")
     print(f"  무공의 획 {qi}종 (3D 모션 — SkillDisplay 가 item_model 로 태운다. 길이축 +X)")
+    print(f"  녹색 검기 {kigi}종 (kigi/arc — 호 평타 스윕의 연두 초승달. qi/* 무색 판과 별도 경로)")
     print(f"  짐승의 형체 {mobs}종 (MobDisplay 가 본체를 감추고 태운다. 코가 +Z · 발이 원점)")
     print(f"  메뉴·버튼 {ui}장 (GUI 스프라이트 — mcmeta 미포함 = 바닐라 나인슬라이스·좌표 계약 그대로)")
     print(f"  소리 침묵 {muted}건 (배경음악 {len(MUTED_MUSIC)} + 동굴 앰비언스 {len(MUTED_AMBIENT)})"

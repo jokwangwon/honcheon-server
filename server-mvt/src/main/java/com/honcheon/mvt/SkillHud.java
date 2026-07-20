@@ -157,6 +157,44 @@ final class SkillHud {
         return emit(at, p, count, spread, spread, spread, extra, data, priority);
     }
 
+    /**
+     * 크기 지정 발행 — 무기 오라의 <b>작은 결정</b>용. dust 계열이면 등록 먹빛 색에 {@code size} 를 실어
+     * {@link Particle.DustOptions} 를 세우고(색은 여전히 등록부의 것 — 코드가 색을 고르지 않는다),
+     * dust 가 아니면(end_rod) 색·크기 없이 그대로 발행한다. {@code size ≤ 0} 이면 등록 먹빛 크기.
+     */
+    int emitSized(Location at, String particle, String ink, float size, int count,
+                  double spread, double extra) {
+        Particle p = particle(particle);
+        if (p == null || count <= 0) {
+            return 0;
+        }
+        Object data = null;
+        if (needsInk(p)) {
+            data = dustSized(ink, size);
+            if (data == null) {
+                return 0;   // 색 없는 dust — 등록부가 색을 안 적었다 (dustSized 가 이미 소리냈다)
+            }
+        }
+        return emit(at, p, count, spread, spread, spread, extra, data, false);
+    }
+
+    /** 먹빛 → 크기 지정 {@link Particle.DustOptions}. 색은 등록부, 크기만 호출자가 준다 (캐시 안 함) */
+    private Object dustSized(String inkName, float size) {
+        if (inkName == null) {
+            return null;
+        }
+        SkillEngine.InkColor ink = engine.inkColor(inkName);
+        if (ink == null) {
+            if (unknownReported.add("ink:" + inkName)) {
+                org.bukkit.Bukkit.getLogger().warning(
+                        "[혼천] 모션 등록부에 없는 먹빛: " + inkName + " (config/skill_motion.yml inks)");
+            }
+            return null;
+        }
+        return new Particle.DustOptions(
+                org.bukkit.Color.fromRGB(ink.r(), ink.g(), ink.b()), size > 0 ? size : ink.size());
+    }
+
     /** 오의 — 예산 내 최우선권 (생략되지 않고 깎인다) */
     int emitPriority(Location at, String particle, int count, double spread, double extra) {
         Particle p = particle(particle);

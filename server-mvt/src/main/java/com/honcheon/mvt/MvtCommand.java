@@ -50,6 +50,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "경지" -> realm(sender, args);
                 case "병기" -> giveWeapon(sender, args);   // 관리자 지급 — 검증용
                 case "병기상" -> weaponShop(sender);        // 장쇠 좌판
+                case "병기전시" -> weaponStand(sender);      // 든 병기를 땅에 크게 세운다 / 빈손이면 회수
                 case "명명" -> enshrine(sender, args);       // 애병을 문파의 명병으로 (매화검은 매화검처럼 생긴다)
                 case "재련" -> reforgeWeapon(sender);        // 야철수 — 품 1단 상승
                 case "각인" -> inscribeWeapon(sender, args); // 각인 — 슬롯 안에서만
@@ -105,6 +106,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "사다리" -> ladder(sender);              // ★ 여섯 격을 나란히 — 한눈에 사다리를 본다 (화려함의 눈)
                 case "획위치" -> strokeOrigin(sender, args);   // ★ 획이 서는 자리 — 인게임에서 밀고 당긴다 (즉시 그어 본다)
                 case "스윙" -> swing(sender, args);           // ★★ 스윙의 크기·각도·활·전진 — 밀면 즉시 한 획 (찌르기 → 베기)
+                case "검기" -> kigi(sender, args);           // ★★ 검기의 각도·크기 — 재기동 없이 즉석 조율
                 case "문장" -> crests(sender);
                 case "초기화" -> wipe(sender, args);   // ★ 되돌린다 — 시험용 (두 번 쳐야 지운다)
                 default -> help(sender);
@@ -1662,6 +1664,16 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /** 든 병기를 땅에 크게 세운다 (전시) — 빈손이면 가까운 제 전시대를 회수한다 (SkillListener 가 판다) */
+    private boolean weaponStand(CommandSender sender) {
+        if (sender instanceof Player player) {
+            plugin.skills().weaponStandCommand(player);
+        } else {
+            sender.sendMessage(ChatColor.GRAY + "병기전시는 플레이어만 쓴다");
+        }
+        return true;
+    }
+
     /** /혼천 운기 — 운기조식 1구간 (내력 회복) */
     private boolean meditate(CommandSender sender) {
         if (sender instanceof Player player) {
@@ -2573,6 +2585,36 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * <b>/혼천 검기</b> — 초승달 검기(kigi_slash)의 <b>각도·크기</b>를 인게임에서 즉석에 돌려 본다.
+     *
+     * <p>재기동이 없다: 민 값은 {@link SkillEngine#setKigiSlash} 로 <b>메모리에만</b> 살고 다음 스윙부터
+     * 보인다. config 파일은 안 쓴다 (주석이 정본의 절반이다) — 확정값은 {@code 보기} 가 뱉는
+     * 붙여넣기용 줄로 사람이 못 박는다.
+     *
+     * <pre>
+     *   /혼천 검기 [보기]        지금 값 전부 + config 에 붙일 줄
+     *   /혼천 검기 &lt;키&gt; &lt;값&gt;     roll·tilt·sweep·radius·scale·height·forward·draw·fade·frame·sparks
+     *   /혼천 검기 시험          휘두르지 않고 지금 값으로 한 번 소환
+     *   /혼천 검기 초기화        등록부(config) 값으로 되돌린다
+     * </pre>
+     */
+    private boolean kigi(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED
+                    + "검기는 몸이 있어야 한다 — 눈으로 봐야 정해지는 값이다 (콘솔 불가)");
+            return true;
+        }
+        if (!player.isOp()) {
+            player.sendMessage(ChatColor.RED + "검기 조율은 관리자의 몫이다.");
+            return true;
+        }
+        for (String line : plugin.skills().kigi(player, args)) {
+            player.sendMessage(line);
+        }
+        return true;
+    }
+
     /** 경지 문장 글리프 시연 — 리소스팩 검증용 (E020~E027) */
     private boolean crests(CommandSender sender) {
         StringBuilder line = new StringBuilder(ChatColor.GOLD + "경지 문장: ");
@@ -2604,6 +2646,9 @@ public final class MvtCommand implements CommandExecutor {
                 + ChatColor.WHITE + "/혼천 획시험" + ChatColor.GRAY + " · "
                 + ChatColor.WHITE + "/혼천 획위치" + ChatColor.GRAY + " · "
                 + ChatColor.WHITE + "/혼천 모션진단");
+        sender.sendMessage(ChatColor.GRAY + "검기의 눈: " + ChatColor.WHITE + "/혼천 검기"
+                + ChatColor.GRAY + " (각도·크기를 재기동 없이 즉석 조율 · "
+                + ChatColor.WHITE + "검기 시험" + ChatColor.GRAY + " 이 그 자리에서 한 번 소환한다)");
         sender.sendMessage(ChatColor.GRAY + "되돌리기: " + ChatColor.WHITE
                 + "/혼천 초기화 <접합|캐릭터|전부>" + ChatColor.GRAY
                 + " (시험용 — 두 번 쳐야 지운다. 백업은 항상 뜬다. 세계는 안 건드린다)");

@@ -3228,3 +3228,65 @@ B-160 수사의 부산물 (2026-07-17): 월아산 병기의 PDC `weapon_class` �
 · §swings 두께/기울기 · §body 웅크림 대본 · §basic_strike 프레임 [5,3,9] · §heavy_classes)이
 **전부 죽은 글자다** (실제로는 봉의 값이 실린다). 부·겸·구·권갑도 같은 방식으로 다른 계열 이름에
 얹혀 있다 — 위력·모션 밸런스가 걸려 있어 일방 수정 대신 장부에 올린다.
+
+---
+
+### B-163 · 무기 오라 — 검·도 파일럿을 나머지 계열·명병 문파색으로 넓힌다
+- **상태**: 진행
+- **분류**: ★세계
+- **단계**: P3
+- **위치**: `config/skill_motion.yml` (weapon_aura) · `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java:4004` (weaponAuraDropped · weaponAuraHeld · spawnWeaponAura)
+- **의존**: —
+- **닫는 조건**: (1) 창·권갑·단검·부·겸·월아산·구 계열에 악센트색(weapon_aura.series[…].ink)이
+  등록되어 손에 들면 오라가 서린다. (2) 명병 문파색(weapon_aura.myeong[hwasan·jeomchang·…])이
+  등록되어 계열색을 덮는다 (지금은 `myeong: {}` — 빈 상태라 명병도 계열색으로 돈다).
+  (3) dust 결정 조각이 **팩에서 청록 결정 텍스처**로 다시 그려진다 (지금은 바닐라 dust 원형 — 팩의 몫).
+- **검증**: `python3 tools/motion_audit.py` (위반 0) · 인게임 `/혼천 병기 도 신병` 지급 후 손에 들고
+  주위 파티클 소용돌이 목격 (검=옥/청록 · 도=혈/진홍) · 등급 사다리(범철 없음 → 신병 또렷 → 마병 격렬) 대조
+- **닫힘**: —
+
+1차(2026-07-19): 무기 오라 틱 루프 신설. **검·도 계열 · 전 등급 사다리**가 배선됐다 (파일럿).
+계열색이 등록된 검(옥)·도(혈)만 오라가 돈다 — 나머지 7계열과 명병 문파색은 등록부 자리만 비워 두었다
+(위 닫는 조건). 순수 VFX(판정 불변) · SkillHud 예산 게이트를 그대로 탄다 · 전역 스위치
+`weapon_aura.enabled`. 결정 조각=dust(계열 악센트색) · 흰 반짝이=end_rod.
+
+2차(2026-07-19 · 사용자 인게임 실측 반영 — 두 수정):
+- **★떨어진/세워진 아이템 오라 신설** (`SkillListener.weaponAuraDropped`): 영상은 held 가 아니라
+  **월드에 세워진/떨어진 검** 둘레를 파티클이 돈다. 청크 로드된 dropped `Item`(+ `ItemDisplay`,
+  우리 VFX `honcheon:vfx` 제외) 중 혼천 병기를 매 주기 순회해 **아이템 월드 위치**를 궤도 중심으로
+  수직 기둥 소용돌이. 거리 컬링(`anyPlayerWithin(cull_beyond)`)·볼 눈 없는 세계 스킵·예산 게이트.
+  스위치 `weapon_aura.dropped` · `include_displays`.
+- **held 위치 수리** (`weaponAuraHeld`): 눈앞 정면(forward 0.95)이 아니라 **실제 렌더 손 자리**
+  (눈에서 앞 0.45 · 오른쪽 0.32 · 아래 0.30 — 우하단)로 옮겨 1인칭 정면을 안 가린다. 스위치 `held`.
+- 공통 궤도 로직은 `spawnWeaponAura(center,u,v,w,item,wa)` 로 추출 (held=시선수직평면·시선축,
+  dropped=수평평면·수직축). 리터럴 0(등록부 경유) 유지 · 판정 불변.
+
+3차(2026-07-19 · 사용자 인게임 실측 — 세 수정 한 회차):
+- **파티클 크기↓ + 종류 판단**: `shard_size 0.7`/`spark_size` 노출(뭉치 제거). `SkillHud.emitSized`
+  (DustOptions 색은 등록 먹빛, 크기만 호출자) 신설. **판단: 기본 dust 유지** — 레퍼런스 결정은
+  계열색(검=청록·도=진홍)을 띠는데 `electric_spark`는 색을 못 입혀 도/마병 진홍을 못 그린다.
+  각진 결정 모양은 팩 리텍스처 몫. `electric_spark`는 config 선택지로 열어 둠(색 포기).
+- **held 이동 끊김 수리**: held 를 `held_interval_ticks 1`(매 틱) 발행 → 파티클이 검에서 벗어났다
+  붙는 gap 제거. 촘촘해진 만큼 발행당 결정 수를 `held/interval` 비율로 줄여 총량 균형(예산 유지).
+  dropped/전시(정지)는 기존 성긴 주기(interval 3) 유지. (dust 수명은 Bukkit API 로 못 줄여
+  velocity-carry 도 dust 는 무시 — 매 틱 발행이 실효 수리다.)
+- **★큰 병기 전시대 신설** (`/혼천 병기전시` · `SkillListener.weaponStandCommand`): 든 병기를 앞
+  지면에 **스케일 3.5배 직립 ItemDisplay** 로 세운다(빈손 재호출=회수). `setPersistent(true)` 라
+  재기동해도 병기를 안 잃는다(세계 유일 신병 보호). 표식 `honcheon:weapon_stand`(+owner) — VFX 표식과
+  별개라 유령 청소 안 걸리고, dropped 순회가 `aura_scale 2.8` 로 큰 검을 감싸 오라를 두른다.
+  회수는 주인만. config `weapon_stand`(scale·rot_*·rise·retrieve_radius·aura_scale). **회전(rot_*)은
+  인게임 실측 다듬기 대상** (검 직립 각).
+
+4차(2026-07-19 · 사용자 결정 — 두 수정):
+- **★떨어뜨린 병기 자동 확대** (`weaponAuraDropped` ① · `dropped_display` 절): 바닐라 dropped Item 은
+  렌더 크기 고정이라 작다 → 혼천 병기를 버리면 작은 아이템을 **치우고**(`item.remove()`) 같은 자리에
+  **큰 ItemDisplay(scale 2.5)** 를 세운다(전시대와 `spawnWeaponDisplay` 공유). 병기 안 잃음:
+  디스플레이가 실물 병기를 품고 `setPersistent(true)`(재기동 생존) · **줍기**(반경 1.6m 다가가면
+  인벤토리 복원 · 줍기지연 1.5s) · **수명**(벽시계 `weapon_drop_born`, `lifetime_seconds 300` =
+  바닐라 despawn 5분 정합 · **0 이면 안 사라짐** — 귀한 병기 보호 설정). 표식 `honcheon:weapon_drop_display`
+  (VFX·수동전시대와 별개). 성능: 혼천 병기만·throttle(3틱)·거리 컬링·볼 눈 없는 세계 스킵·청크 로드
+  엔티티만. 유령 없음(실물 품고 줍힘/수명 관리).
+- **helix 세로 비례 수리**: helix 를 대상 크기(aura_scale)에 비례(코드가 이미 `helix × radiusScale`).
+  base `helix` 0.9→**0.15**(held·작은 대상 낮게) — 큰 전시/드롭은 aura_scale 배로 커진다. 0.9 가
+  held 에 너무 높이 솟던 것을 고쳤다. 큰 기둥을 더 높이려면 `*.aura_scale` 를 올린다.
+- ※ 조율자 config 유지: 신병 shards 10·마병 13·rot_z 90. **회전(rot_*)·수명·스케일은 인게임 다듬기 대상.**

@@ -176,6 +176,24 @@ public final class SkillEngine {
     /** 오의의 화려함 — default 가 21종을 덮고, by_id 가 정체를 가진 것만 덮어쓴다 */
     private final UltFlourish ultFlourishDefault;
     private final Map<String, UltFlourish> ultFlourish;
+    /** 무기 오라 — 손에 든 병기 둘레를 도는 기운 (weapon_aura). 없으면 null (등록 안 되면 조용히 꺼진다) */
+    private final WeaponAura weaponAura;
+    /** 병기 전시대 — 든 병기를 땅에 크게 세운다 (weapon_stand). 없으면 null */
+    private final WeaponStand weaponStand;
+    /** 떨어뜨린 병기 자동 확대 (dropped_display). 없으면 null */
+    private final DroppedDisplay droppedDisplay;
+    /** 전용 검기 평타 — 초록 초승달 검기 (kigi_slash). 없으면 null (기존 무협 참격이 돈다) */
+    private final KigiSlash kigiSlashConfig;
+
+    /**
+     * ★ 검기의 <b>인게임 오버라이드</b> — {@code /혼천 검기 <키> <값>} 이 갈아끼운 값. null 이면 등록부 원본.
+     *
+     * <p>각도·크기는 <b>눈으로 봐야</b> 정해진다. config 를 고쳐 재기동하면 왕복이 1분이라 값 하나를
+     * 못 찾는다. 그래서 <b>메모리에만</b> 사는 사본을 둔다 — 재기동하면 등록부 값으로 돌아간다
+     * (config 파일은 <b>절대 안 쓴다</b>: 주석이 정본의 절반이라 프로그램이 쓰면 그 절반이 죽는다).
+     * 확정값은 {@code /혼천 검기 보기} 가 뱉는 붙여넣기용 줄로 사람이 config 에 못 박는다.
+     */
+    private KigiSlash kigiSlashOverride;
 
     // ─── 3D 모션 등록부 (skill_motion.yml display) — 파티클 위에 얹는 층 ───
     // 【불변식 ㅁ】 디스플레이는 덧칠이다. 여기가 비어 있어도 파티클 층은 그대로 돈다.
@@ -526,6 +544,12 @@ public final class SkillEngine {
         Map<String, UltFlourish> ufs = new LinkedHashMap<>();
         asMap(uf.get("by_id")).forEach((id, raw) -> ufs.put(id, ultFlourish(id, asMap(raw))));
         this.ultFlourish = Collections.unmodifiableMap(ufs);
+
+        // ─── 무기 오라 (weapon_aura) — 손에 든 병기 둘레를 도는 기운. 미등록이면 null (조용히 꺼진다) ───
+        this.weaponAura = weaponAura(RulesConfig.section(mo, "weapon_aura"));
+        this.weaponStand = weaponStand(RulesConfig.section(mo, "weapon_stand"));
+        this.droppedDisplay = droppedDisplay(RulesConfig.section(mo, "dropped_display"));
+        this.kigiSlashConfig = kigiSlash(RulesConfig.section(mo, "kigi_slash"));
 
         Map<String, FormMotion> fms = new LinkedHashMap<>();
         RulesConfig.section(mo, "forms").forEach((name, raw) -> {
@@ -980,6 +1004,120 @@ public final class SkillEngine {
                 dblOr(m.get("spread"), 0.1), dblOr(m.get("extra"), 0.0), str(m.get("ink")));
     }
 
+    /**
+     * 무기 오라 등록부 한 벌 — {@code weapon_aura} 절. 절이 없으면 null (조용히 꺼진다).
+     * 계열/명병 색과 등급 사다리를 문자열 그대로 담는다 (코드는 색·파티클을 고르지 않는다).
+     */
+    private static WeaponAura weaponAura(Map<String, Object> m) {
+        if (m == null || m.isEmpty()) {
+            return null;
+        }
+        Map<String, String> seriesInk = new LinkedHashMap<>();
+        asMap(m.get("series")).forEach((s, raw) -> {
+            String ink = str(asMap(raw).get("ink"));
+            if (ink != null) {
+                seriesInk.put(s, ink);
+            }
+        });
+        Map<String, String> myeongInk = new LinkedHashMap<>();
+        asMap(m.get("myeong")).forEach((s, raw) -> {
+            String ink = str(asMap(raw).get("ink"));
+            if (ink != null) {
+                myeongInk.put(s, ink);
+            }
+        });
+        Map<String, WeaponAuraGrade> grades = new LinkedHashMap<>();
+        asMap(m.get("grades")).forEach((g, raw) -> {
+            Map<String, Object> gm = asMap(raw);
+            grades.put(g, new WeaponAuraGrade(intOr(gm.get("shards"), 0),
+                    intOr(gm.get("sparks"), 0), intOr(gm.get("spark_every"), 0),
+                    str(gm.get("ink"))));
+        });
+        return new WeaponAura(
+                m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
+                intOr(m.get("interval_ticks"), 3), dblOr(m.get("orbit_speed"), 0.22),
+                dblOr(m.get("radius"), 0.30), dblOr(m.get("helix"), 0.12),
+                m.get("dropped") == null || Boolean.TRUE.equals(m.get("dropped")),
+                dblOr(m.get("dropped_rise"), 0.25),
+                m.get("include_displays") == null || Boolean.TRUE.equals(m.get("include_displays")),
+                m.get("held") == null || Boolean.TRUE.equals(m.get("held")),
+                intOr(m.get("held_interval_ticks"), 1),
+                dblOr(m.get("held_forward"), 0.45), dblOr(m.get("held_right"), 0.32),
+                dblOr(m.get("held_down"), 0.30),
+                str(m.get("shard_particle")), str(m.get("spark_particle")),
+                (float) dblOr(m.get("shard_size"), 0.7), (float) dblOr(m.get("spark_size"), 0.6),
+                dblOr(m.get("shard_spread"), 0.02), dblOr(m.get("spark_spread"), 0.03),
+                dblOr(m.get("spark_radius_mul"), 1.3),
+                Collections.unmodifiableMap(seriesInk), Collections.unmodifiableMap(myeongInk),
+                Collections.unmodifiableMap(grades));
+    }
+
+    /** 병기 전시대 등록부 — {@code weapon_stand} 절. 없으면 null (전시대 명령이 조용히 거절한다) */
+    private static WeaponStand weaponStand(Map<String, Object> m) {
+        if (m == null || m.isEmpty()) {
+            return null;
+        }
+        return new WeaponStand(
+                m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
+                dblOr(m.get("scale"), 3.5), dblOr(m.get("rot_x"), 0.0),
+                dblOr(m.get("rot_y"), 0.0), dblOr(m.get("rot_z"), 135.0),
+                dblOr(m.get("rise"), 1.4), dblOr(m.get("retrieve_radius"), 4.0),
+                dblOr(m.get("aura_scale"), 2.8), dblOr(m.get("aura_center_rise"), 1.5));
+    }
+
+    /** 떨어뜨린 병기 자동 확대 등록부 — {@code dropped_display} 절. 없으면 null (드롭 확대 안 함) */
+    private static DroppedDisplay droppedDisplay(Map<String, Object> m) {
+        if (m == null || m.isEmpty()) {
+            return null;
+        }
+        return new DroppedDisplay(
+                m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
+                dblOr(m.get("scale"), 2.5), dblOr(m.get("rot_x"), 0.0),
+                dblOr(m.get("rot_y"), 0.0), dblOr(m.get("rot_z"), 90.0),
+                dblOr(m.get("rise"), 0.9), dblOr(m.get("pickup_radius"), 1.6),
+                intOr(m.get("lifetime_seconds"), 300),
+                dblOr(m.get("aura_scale"), 2.2), dblOr(m.get("aura_center_rise"), 1.0));
+    }
+
+    /** 전용 검기 평타 등록부 — {@code kigi_slash} 절. 없으면 null (조용히 꺼진다 — 기존 무협 참격이 돈다) */
+    private static KigiSlash kigiSlash(Map<String, Object> m) {
+        if (m == null || m.isEmpty()) {
+            return null;
+        }
+        List<String> trails = new ArrayList<>();
+        if (m.get("apply_to_trails") instanceof List<?> l) {
+            l.forEach(o -> trails.add(String.valueOf(o)));
+        }
+        // ★ 단계 모델 — 스윙 중 갈아끼울 순서 (등록 이름. 비면 교체가 꺼지고 model 하나로 고정)
+        List<String> frameModels = new ArrayList<>();
+        if (m.get("frame_models") instanceof List<?> fl) {
+            fl.forEach(o -> frameModels.add(String.valueOf(o)));
+        }
+        Map<String, Object> sp = asMap(m.get("spark"));
+        KigiSpark spark = new KigiSpark(
+                String.valueOf(sp.getOrDefault("particle", "end_rod")),
+                intOr(sp.get("count"), 7), dblOr(sp.get("spread"), 0.9),
+                dblOr(sp.get("speed"), 0.02),
+                sp.get("along_arc") == null || Boolean.TRUE.equals(sp.get("along_arc")));
+        return new KigiSlash(
+                m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
+                str(m.get("model")), Collections.unmodifiableList(trails),
+                Collections.unmodifiableList(frameModels),
+                Math.max(1, intOr(m.get("frame_ticks"), 3)),
+                Boolean.TRUE.equals(m.get("replace_stroke")),
+                dblOr(m.get("scale"), 2.0), dblOr(m.get("center_height"), 1.0),
+                dblOr(m.get("forward"), 0.1), dblOr(m.get("orbit_radius"), 1.1),
+                dblOr(m.get("sweep_deg"), 140.0),
+                dblOr(m.get("tilt_deg"), 35.0), dblOr(m.get("roll_deg"), 0.0),
+                Math.max(1, intOr(m.get("draw_ticks"), 8)),
+                Math.max(0, intOr(m.get("fade_ticks"), 5)),
+                String.valueOf(m.getOrDefault("billboard", "FIXED")),
+                m.get("alternate") == null || Boolean.TRUE.equals(m.get("alternate")),
+                Math.max(0, Math.min(15, intOr(m.get("brightness"), 15))),
+                spark,
+                m.get("calm_held_aura") == null || Boolean.TRUE.equals(m.get("calm_held_aura")));
+    }
+
     /** {@code rgb: [r, g, b]} — 세 칸이 아니면 null (등록부가 색을 반만 적었으면 색이 아니다) */
     private static int[] rgb(Object raw) {
         if (!(raw instanceof List<?> list) || list.size() < 3) {
@@ -1285,6 +1423,96 @@ public final class SkillEngine {
                               String trailParticle, int trailPerPoint,
                               Fx echo, Fx haze, Fx burst,
                               List<Sfx> chargeSounds, List<Sfx> armSounds, List<Sfx> impactSounds) {
+    }
+
+    /**
+     * 무기 오라 — 손에 든 병기 둘레를 도는 기운 (weapon_aura). 순수 VFX (판정을 모른다).
+     * 계열/명병은 색(ink)만 정하고, 등급이 밀도(shards·sparks)를 정한다 (사다리는 등급이다).
+     */
+    public record WeaponAura(boolean enabled, int intervalTicks, double orbitSpeed, double radius,
+                             double helix,
+                             boolean dropped, double droppedRise, boolean includeDisplays,
+                             boolean held, int heldIntervalTicks,
+                             double heldForward, double heldRight, double heldDown,
+                             String shardParticle, String sparkParticle,
+                             float shardSize, float sparkSize,
+                             double shardSpread, double sparkSpread, double sparkRadiusMul,
+                             Map<String, String> seriesInk, Map<String, String> myeongInk,
+                             Map<String, WeaponAuraGrade> grades) {
+        /** 이 등급의 밀도 — 미등록 등급은 null (오라 없음으로 처리) */
+        public WeaponAuraGrade grade(String g) {
+            return g == null ? null : grades.get(g);
+        }
+
+        /** 결정 조각의 색 — 명병 문파색이 등록돼 있으면 그것, 아니면 계열색. 둘 다 없으면 null */
+        public String inkFor(String series, String sect) {
+            if (sect != null && myeongInk.containsKey(sect)) {
+                return myeongInk.get(sect);
+            }
+            return series == null ? null : seriesInk.get(series);
+        }
+    }
+
+    /** 무기 오라의 등급 한 칸 — 밀도(결정·반짝이)와 색 덮어쓰기(마병 혈) */
+    public record WeaponAuraGrade(int shards, int sparks, int sparkEvery, String inkOverride) {
+    }
+
+    /** 병기 전시대 — 든 병기를 땅에 크게 세운 ItemDisplay (weapon_stand). 미등록이면 null */
+    public record WeaponStand(boolean enabled, double scale, double rotX, double rotY, double rotZ,
+                              double rise, double retrieveRadius, double auraScale,
+                              double auraCenterRise) {
+    }
+
+    /** 떨어뜨린 병기 자동 확대 — 작은 드롭을 큰 ItemDisplay 로 교체 (dropped_display). 미등록이면 null */
+    public record DroppedDisplay(boolean enabled, double scale, double rotX, double rotY, double rotZ,
+                                 double rise, double pickupRadius, int lifetimeSeconds,
+                                 double auraScale, double auraCenterRise) {
+    }
+
+    /**
+     * 전용 검기(劍氣) 평타 — 크고 선명한 초록 초승달 검기 ({@code kigi_slash}). 미등록이면 null.
+     *
+     * <p>기존 무협 참격(작은 획)을 대체한다. 모든 시각 파라미터는 등록부가 준다 — 코드는 읽어서
+     * 동작할 뿐이다 (조율자가 재빌드 없이 값만 바꿔 인게임에서 반복 조율한다).
+     *
+     * @param model         item_model 키 (kigi/arc1 — display.models 의 어떤 모델의 key). 소환 시 1단계
+     * @param frameModels   ★ <b>단계 모델</b> — 스윙 중 이 순서로 갈아끼운다 (display.models 의 <b>등록
+     *                      이름</b>. key 가 아니다). 마인크래프트의 .mcmeta 텍스처 애니는 <b>전역 시계</b>로
+     *                      돌아 소환 순간의 프레임이 매번 제각각이었다 — 그래서 단계를 텍스처가 아니라
+     *                      <b>모델</b>로 가르고 코드가 갈아끼운다 ({@code SkillDisplay.advanceFrames}).
+     *                      비었거나 1개면 교체가 꺼진다 (가역)
+     * @param frameTicks    단계당 틱 — 이 간격으로 다음 단계로 넘어간다 (3단계 × 3 = draw_ticks 9 와 정합)
+     * @param applyToTrails 이 basic trail 무기에만 검기를 씌운다 (호 = 검·도·부·겸·월아산 sweep)
+     * @param replaceStroke true 면 이 무기의 기존 무협 참격 아크·궤적 파티클을 억제한다
+     * @param scale         초승달 크기(대략 m) — 크게, 3인칭에서 잘 보이게
+     * @param centerHeight  발바닥에서 <b>공전 중심</b> 높이(m) — 몸의 중심
+     * @param forward       공전 중심을 앞으로 미는 값(m). 0 이면 몸 한복판이 중심이다
+     * @param orbitRadius   ★ <b>공전 반경</b>(m) — 몸 중심에서 초승달까지. 크레센트는 이 반경으로
+     *                      몸 주위를 <b>돈다</b> (제자리 자전이 아니다 — 레퍼런스가 그렇다)
+     * @param sweepDeg      ★ <b>공전 호각</b> — 몸 주위를 도는 총 각(시작→끝을 클라이언트가 보간)
+     * @param tiltDeg       ★ <b>공전면의 기울기</b> — 수평 공전면을 앞축(前) 둘레로 눕힌다 (내려베는 대각)
+     * @param rollDeg       정적 롤 오프셋
+     * @param drawTicks     휩쓰는(그리는) 시간 — 시작각→끝각 보간 틱
+     * @param fadeTicks     사라지는 시간(꼬리부터 수축)
+     * @param alternate     true 면 스윙마다 좌↔우 방향을 번갈아
+     * @param brightness    발광(block_light = sky_light = 이 값)
+     * @param calmHeldAura  true 면 이 무기를 들었을 때 weapon_aura held 방출을 억제 (가역)
+     */
+    public record KigiSlash(boolean enabled, String model, List<String> applyToTrails,
+                            List<String> frameModels, int frameTicks,
+                            boolean replaceStroke, double scale, double centerHeight, double forward,
+                            double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
+                            int drawTicks, int fadeTicks, String billboard, boolean alternate,
+                            int brightness, KigiSpark spark, boolean calmHeldAura) {
+        /** 이 무기의 basic trail 이 검기를 받는가 (apply_to_trails 에 등록됐는가) */
+        public boolean appliesToTrail(String trail) {
+            return trail != null && applyToTrails.contains(trail);
+        }
+    }
+
+    /** 검기의 흰 별 반짝이 — 아크 궤적을 따라 성기게 터진다 (kigi_slash.spark) */
+    public record KigiSpark(String particle, int count, double spread, double speed,
+                            boolean alongArc) {
     }
 
     /**
@@ -2280,6 +2508,65 @@ public final class SkillEngine {
     /** 등록된 먹빛 전부 — 눈({@code /혼천 사다리})과 감사가 나란히 세운다 */
     public java.util.Collection<InkColor> inkColors() {
         return inks.values();
+    }
+
+    /** 무기 오라 등록부 — 미등록이면 null (SkillListener 는 이때 오라를 뿌리지 않는다) */
+    public WeaponAura weaponAura() {
+        return weaponAura;
+    }
+
+    /** 병기 전시대 등록부 — 미등록이면 null (전시대 명령이 거절한다) */
+    public WeaponStand weaponStand() {
+        return weaponStand;
+    }
+
+    /** 떨어뜨린 병기 자동 확대 등록부 — 미등록이면 null (드롭 확대 안 함) */
+    public DroppedDisplay droppedDisplay() {
+        return droppedDisplay;
+    }
+
+    /**
+     * 전용 검기 평타 등록부 — 미등록이면 null (SkillListener 는 이때 기존 무협 참격을 그대로 그린다).
+     * <b>인게임 오버라이드가 있으면 그것이 이긴다</b> ({@code /혼천 검기}).
+     */
+    public KigiSlash kigiSlash() {
+        return kigiSlashOverride != null ? kigiSlashOverride : kigiSlashConfig;
+    }
+
+    /** 등록부가 적어 둔 원본 — 오버라이드와 무관하다 (되돌릴 자리이자 대조군) */
+    public KigiSlash kigiSlashConfig() {
+        return kigiSlashConfig;
+    }
+
+    /** 지금 화면에 도는 값이 사람이 민 값인가 (오버라이드가 걸렸는가) */
+    public boolean kigiSlashOverridden() {
+        return kigiSlashOverride != null;
+    }
+
+    /** 검기 값을 <b>메모리에서만</b> 갈아끼운다 — 다음 스윙부터 반영. config 파일은 안 건드린다 */
+    public void setKigiSlash(KigiSlash cfg) {
+        this.kigiSlashOverride = cfg;
+    }
+
+    /** 등록부(config 파일) 값으로 되돌린다 — 인게임에서 민 것은 전부 버린다 */
+    public void resetKigiSlash() {
+        this.kigiSlashOverride = null;
+    }
+
+    /**
+     * item_model {@code key} 를 가진 모델의 등록부 이름(id)을 돌려준다 — 없으면 null.
+     * 검기 평타는 등록부 이름이 아니라 <b>키</b>(honcheon:kigi/arc)로 모델을 가리키므로 이 역참조가 필요하다.
+     */
+    public String displayModelNameByKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        for (DisplayModel m : displayModels.values()) {
+            if (key.equals(m.key())) {
+                return m.id();
+            }
+        }
+        return null;
     }
 
     /** 오의의 화려함 — by_id 가 있으면 그것, 없으면 default (등록되지 않은 오의는 default 를 쓴다) */

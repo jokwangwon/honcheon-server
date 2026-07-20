@@ -101,6 +101,21 @@ final class SkillDisplay {
         long fadeAt = -1;
         Quaternionf rot;        // ★ 스윙이 끝난 각 — 지울 때 여기서 지운다 (되돌리면 검이 도로 튄다)
         float rise;             // ★ 스윙이 끝난 높이 (올려베기·내려베기)
+        /**
+         * ★ <b>공전이 끝난 자리</b> (검기 평타 전용 · 그 밖은 null) — 엔티티 국소축의 translation.
+         * 지울 때 이 자리를 <b>그대로</b> 써야 한다: {@link #transform} 의 headAnchor 로 돌아가면
+         * 다 휩쓴 초승달이 <b>몸 한복판으로 순간이동</b>하며 사라진다.
+         */
+        Vector3f orbit;
+        /**
+         * ★ <b>검기의 단계 아이템</b> (1→2→3 · 검기 평타 전용 · 그 밖은 null) — 중앙 티커가
+         * {@code frameTicks} 마다 다음 것으로 갈아끼운다 ({@link #advanceFrames}). Transformation 은
+         * <b>건드리지 않는다</b> (공전 보간·크기·수축이 그대로 산다 — 바뀌는 것은 무는 모델뿐이다).
+         */
+        List<ItemStack> frames;
+        int frameTicks = 1;
+        int frameIndex;
+        long frameStart;
         // 투사 — 날아간다
         Vector dir;
         Location head;
@@ -167,6 +182,9 @@ final class SkillDisplay {
             }
             if (p.burstAt >= 0 && now >= p.burstAt) {
                 bloom(p);
+            }
+            if (p.frames != null && !p.fading) {
+                advanceFrames(p, now);          // ★ 검기 — 스윙에 맞춰 1→2→3 단계를 갈아끼운다
             }
             if (!p.fading && p.fadeAt >= 0 && now >= p.fadeAt) {
                 erase(p);                       // 참격선 — 꼬리부터 지워진다
@@ -371,12 +389,255 @@ final class SkillDisplay {
     private void erase(Piece p) {
         p.fading = true;
         float s = p.m.spread();
+        if (p.orbit != null) {
+            // 검기 평타 — 공전이 끝난 그 자리에서 오므라든다 (자리를 되돌리면 초승달이 몸으로 튄다).
+            // 세 축을 같이 줄인다: 공전 초승달은 머리 고정을 쓰지 않으므로 x 만 줄이면 세로 조각이 남는다
+            for (Display d : p.parts) {
+                kigiTransform(d, new float[]{p.full[0] * s * 0.02f, p.full[1] * s * 0.02f,
+                        p.full[2] * s * 0.02f}, p.rot == null ? pose(p.m, 0.0f) : p.rot,
+                        p.orbit, p.m.fade());
+            }
+            return;
+        }
         for (Display d : p.parts) {
             // scale.x → 0 : 머리(원점)로 수축한다 = 꼬리가 먼저 사라진다.
             // 각은 **스윙이 끝난 그 각 그대로다** — 여기서 되돌리면 다 벤 검이 도로 튄다
             transform(d, p.m, new float[]{0.001f, p.full[1] * s, p.full[2] * s},
                     p.rot == null ? pose(p.m, 0.0f) : p.rot, p.rise, p.m.fade());
         }
+    }
+
+    // ══════════ ★ 전용 검기(劍氣) 평타 — 크고 선명한 초록 초승달 ══════════
+
+    /**
+     * 전용 검기 평타 — <b>몸 주위를 공전(公轉)</b>하는 초록 초승달. 기존 무협 참격(작은 획)의 대체.
+     *
+     * <p><b>【2026-07-19 — 초승달이 앞에 붙박여 자전만 하던 병】</b> 예전 그림은 디스플레이를
+     * {@code 발 + 앞×forward} 에 <b>놓고</b> 각만 {@code qStart→qEnd} 로 보간했다. 그래서 초승달은
+     * <b>정면 한 자리에서 시계바늘처럼 돌기만</b> 했다 — 사용자의 말 그대로 "정면에서 본 반원".
+     * 레퍼런스(마크에이지)의 검기는 <b>크레센트의 자리 자체가 몸 둘레를 돈다</b>: 오른쪽 아래에서
+     * 몸을 감으며 왼쪽 위로. 자전이 아니라 <b>공전</b>이다.
+     *
+     * <p><b>그래서 자리와 각을 갈랐다</b>: 엔티티는 <b>몸의 중심</b>(발 + {@code center_height},
+     * {@code forward} 만큼만 앞)에 <b>못 박고</b>, 초승달은 Transformation 의 <b>translation</b> 으로
+     * 그 중심에서 {@code orbit_radius} 만큼 떨어져 <b>돈다</b>:
+     * <pre>
+     *   θ      = toRadians(sweep_deg × 0.5) × phase × dirSign      (phase −1 → +1)
+     *   국소축   앞 = +Z · 위 = +Y   (엔티티가 시선을 보고 서 있다)
+     *   t(θ)   = Rz(tilt_deg) · ( r·sinθ , 0 , r·cosθ )            ← 공전 자리
+     *   R(θ)   = Rz(tilt_deg) · Ry(θ) · Rz(roll_deg)               ← 궤도 접선을 향한 각
+     * </pre>
+     * {@code Ry(θ)} 가 모델의 길이축(+X)을 궤도의 <b>접선</b>으로 돌려 놓는다 (초승달이 궤도를 따라
+     * 눕고, 그 면은 바깥을 본다). {@code Rz(tilt)} 가 <b>수평 공전면을 앞축 둘레로 눕혀</b> 대각
+     * 내려베기를 만든다 — 자리와 각에 <b>같은 기울기</b>를 먹이므로 초승달은 끝까지 궤도에 붙어 있다.
+     *
+     * <p><b>둘 다 phase −1/+1 로 재서</b> 시작값으로 띄우고({@code spawn}) 끝값을 준다
+     * ({@link #kigiTransform}) — 클라이언트가 <b>translation 은 lerp · rotation 은 slerp</b> 하므로
+     * 초승달이 몸 둘레를 <b>돌며</b> 휩쓴다. 그린 뒤 {@code fade_ticks} 동안 <b>그 자리에서</b>
+     * 오므라든다 ({@link #erase} — 자리를 되돌리면 다 벤 검기가 몸으로 도로 튄다).
+     *
+     * <p>공전 translation 은 {@link #transform} 의 {@code headAnchor} 가 덮어쓰므로 <b>검기 전용
+     * 경로</b>({@link #kigiTransform})로 간다. 다른 참격(참격_호·선·원)은 옛 길 그대로다.
+     *
+     * <p><b>모든 값은 등록부(kigi_slash)가 준다</b> — 자리·반경·호각·기울기·크기·시간·발광. 코드는
+     * 옮길 뿐이다. 흰 별 파티클은 발행 층({@link SkillListener#spawnKigiSlash})이 뿌린다 (불변).
+     *
+     * @param dirSign 스윙 방향 (+1 / −1) — alternate 면 발행 층이 스윙마다 토글한다.
+     *                공전 방향(어느 쪽으로 감아 도는가)이 뒤집힌다
+     * @return 검기가 실제로 떴는가 (팩 없는 눈뿐이면 못 뜬다 — fallback null · 파티클이 지킨다)
+     */
+    boolean kigiSlash(Player caster, SkillEngine.KigiSlash cfg, int dirSign) {
+        if (cfg == null || !cfg.enabled() || caster.getWorld() == null) {
+            return false;
+        }
+        String modelName = engine.displayModelNameByKey(cfg.model());
+        if (modelName == null) {
+            return false;   // 이 키의 모델이 등록부에 없다 — 조용히 물러선다 (파티클이 지킨다)
+        }
+        SkillEngine.DisplayModel model = engine.displayModel(modelName);
+        if (model == null) {
+            return false;
+        }
+        SkillEngine.DisplayMotion m = kigiMotion(cfg, modelName);
+
+        // ★ 자리 = **공전의 중심**. 발 + center_height, 시선(수평)으로 forward 만큼만 앞.
+        //   초승달은 여기에 있지 않다 — 여기를 **중심으로 돈다** (translation 이 반경을 준다)
+        Vector flat = flat(caster);
+        Location feet = caster.getLocation();
+        Location at = feet.clone().add(flat.clone().multiply(cfg.forward()));
+        at.setY(feet.getY() + cfg.centerHeight());
+        at.setDirection(flat);   // 국소축을 시선에 맞춘다 — 공전은 시전자의 축에서 돈다
+
+        // 공전 — 자리와 각을 **같은 phase(−1 → +1)** 로 잰다. 클라이언트가 둘 다 보간한다
+        Quaternionf qStart = kigiPose(cfg, dirSign, -1.0);
+        Quaternionf qEnd = kigiPose(cfg, dirSign, +1.0);
+        Vector3f tStart = kigiOrbit(cfg, dirSign, -1.0);
+        Vector3f tEnd = kigiOrbit(cfg, dirSign, +1.0);
+
+        Piece p = spawn(m, at, caster, 1, false, caster.getUniqueId(), qStart, tStart);
+        if (p == null) {
+            return false;   // 볼 눈이 없거나 예산 초과 — 파티클(흰 별)이 그 자리를 지킨다
+        }
+        p.rot = qEnd;
+        p.rise = 0.0f;
+        p.orbit = tEnd;   // 지울 때도 이 자리다 (되돌리면 초승달이 몸 한복판으로 튄다)
+        // 배율 — 모델 size[0](정규화 상수)로 나눠 초승달을 scale(m) 만큼 크게 (셋을 같이 키워 형태 유지)
+        float f = (float) (cfg.scale() / Math.max(0.01f, model.size()[0]));
+        p.full = new float[]{f, f, f};
+        p.fadeAt = tick + cfg.drawTicks();          // 그리기가 끝나면 수축 시작
+        p.dieAt = p.fadeAt + cfg.fadeTicks();
+        // ★ 단계 — 스윙 중 갈아끼울 아이템을 미리 굽는다 (교체는 중앙 티커가 한다)
+        List<ItemStack> frames = kigiFrames(cfg);
+        if (frames.size() > 1) {
+            p.frames = frames;
+            p.frameTicks = Math.max(1, cfg.frameTicks());
+            p.frameIndex = 0;                       // 소환한 그것이 1단계다 (cfg.model() = frame_models[0])
+            p.frameStart = tick;
+        }
+        for (Display d : p.parts) {
+            d.setBrightness(new Display.Brightness(cfg.brightness(), cfg.brightness()));
+            // 씨앗에서 자라며 **몸 둘레를 돈다** (검기 전용 경로 — headAnchor 가 공전을 덮지 못하게)
+            kigiTransform(d, p.full, qEnd, tEnd, cfg.drawTicks());
+        }
+        note("검기평타", String.format("scale%.1f 공전 반경%.2fm 호각%.0f도 기울기%.0f도 dir%s 그리기%d틱",
+                cfg.scale(), cfg.orbitRadius(), cfg.sweepDeg(), cfg.tiltDeg(),
+                dirSign < 0 ? "−" : "+", cfg.drawTicks()));
+        return true;
+    }
+
+    /**
+     * ★ <b>검기의 단계 아이템</b> — {@code frame_models} 가 적은 순서대로 구운다 (1단계 … 3단계).
+     *
+     * <p><b>【왜 코드가 갈아끼우는가 — .mcmeta 애니는 스윙을 모른다】</b> 옛 판은 한 텍스처를
+     * 3프레임 세로 스트립 + {@code .mcmeta}(frametime 3) 로 구웠다. 그런데 마인크래프트의 텍스처
+     * 애니는 <b>전역 시계</b>로 돈다 — 프레임 번호는 월드 틱에서 나오고 모든 인스턴스가 동시에 같은
+     * 것을 본다. 검기의 수명은 {@code draw(9) + fade(5) = 14} 틱인데 애니 한 바퀴는 9틱이라
+     * <b>소환 순간의 프레임이 매번 제각각</b>이었다 (어떤 스윙은 3단계부터 시작했다).
+     * 사용자 실측: "검기 프레임이 전혀 반영이 안 된다".
+     *
+     * <p>⇒ 단계를 <b>텍스처가 아니라 모델</b>로 가르고, 갈아끼우는 일을 코드가 한다. 그러면 단계는
+     * 디스플레이의 <b>제 나이</b>({@code now − frameStart})에 매이므로 <b>스윙마다 반드시 1→2→3</b> 이다.
+     *
+     * <p><b>팩을 든 눈만 갈아끼운다</b> — 폴백 아이템에는 {@code item_model} 이 없다 (모델이 아니라
+     * 바닐라 아이템이므로 갈아끼울 단계 자체가 없다). 검기 모델은 {@code fallback: null} 이라
+     * 실제로 폴백 조각이 생기지도 않지만, 규약은 규약대로 지킨다.
+     *
+     * @return 구워진 단계 아이템 (2개 미만이면 부르는 쪽이 교체를 끈다)
+     */
+    private List<ItemStack> kigiFrames(SkillEngine.KigiSlash cfg) {
+        List<ItemStack> out = new ArrayList<>(3);
+        for (String name : cfg.frameModels()) {
+            SkillEngine.DisplayModel fm = engine.displayModel(name);
+            if (fm == null) {
+                if (barked.add("검기단계없음|" + name)) {
+                    plugin.getLogger().warning("[혼천] kigi_slash.frame_models 의 '" + name
+                            + "' 가 display.models 에 없다 — 그 단계를 건너뛴다"
+                            + " (config/skill_motion.yml)");
+                }
+                continue;
+            }
+            ItemStack s = item(fm, true, null);
+            if (s != null) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * ★ <b>단계를 갈아끼운다</b> — {@code frame_ticks} 마다 다음 모델로. 중앙 티커가 매 틱 부른다.
+     *
+     * <p>바꾸는 것은 <b>ItemDisplay 가 든 아이템뿐</b>이다. {@link Transformation} 은 한 글자도
+     * 건드리지 않으므로 클라이언트가 돌리고 있던 공전 보간(translation lerp · rotation slerp)·크기가
+     * <b>끊기지 않는다</b>. 수축({@link #erase})이 시작되면 부르는 쪽이 이 길로 안 온다 —
+     * 다 벤 검기는 3단계 그대로 오므라든다.
+     */
+    private void advanceFrames(Piece p, long now) {
+        int last = p.frames.size() - 1;
+        long aged = Math.max(0L, now - p.frameStart) / p.frameTicks;
+        int idx = (int) Math.min(last, aged);
+        if (idx <= p.frameIndex) {
+            return;
+        }
+        p.frameIndex = idx;
+        ItemStack next = p.frames.get(idx);
+        for (Display d : p.parts) {
+            // 팩을 든 조각만 — 폴백 조각(item_model 없음)은 갈아끼울 단계가 없다
+            if (d instanceof ItemDisplay id && id.isValid() && itemModelOf(id.getItemStack()) != null) {
+                id.setItemStack(next.clone());
+            }
+        }
+    }
+
+    /**
+     * <b>공전각</b> θ — phase(−1 → +1) 을 {@code sweep_deg} 의 절반씩 좌우로 편다.
+     * {@code dirSign} 이 감아 도는 방향을 뒤집는다 (alternate: 한 번은 오른→왼, 다음은 왼→오른).
+     */
+    private static double kigiTheta(SkillEngine.KigiSlash cfg, int dirSign, double phase) {
+        return Math.toRadians(cfg.sweepDeg() * 0.5) * phase * (dirSign < 0 ? -1.0 : 1.0);
+    }
+
+    /**
+     * <b>공전 자리</b> — 몸 중심에서 반경 {@code orbit_radius} 만큼 떨어진 점을 θ 만큼 돌린 것.
+     *
+     * <p>국소축은 시전자의 축이다 (엔티티가 시선을 보고 선다): <b>앞 = +Z · 위 = +Y</b>. 그러므로
+     * {@code (r·sinθ, 0, r·cosθ)} 는 <b>수평면 공전</b>이다 — θ=0 이면 정면 r 미터, θ 가 커지면
+     * 옆으로 감아 돈다. 거기에 {@code Rz(tilt_deg)} 를 먹여 <b>공전면 자체를 앞축 둘레로 눕힌다</b>:
+     * 한쪽 끝은 올라가고 반대 끝은 내려간다 = <b>대각으로 내려베는 궤도</b>.
+     * ({@code tilt 0} 이면 순수 수평 공전 — 조율자가 두 극단 사이를 잡는다.)
+     */
+    private static Vector3f kigiOrbit(SkillEngine.KigiSlash cfg, int dirSign, double phase) {
+        double theta = kigiTheta(cfg, dirSign, phase);
+        float r = (float) cfg.orbitRadius();
+        return new Vector3f((float) (r * Math.sin(theta)), 0.0f, (float) (r * Math.cos(theta)))
+                .rotateZ((float) Math.toRadians(cfg.tiltDeg()));   // 공전면을 눕힌다 (자리도 함께)
+    }
+
+    /**
+     * <b>공전 자리에서의 각</b> — 초승달이 <b>궤도의 접선</b>을 향해 눕는다.
+     *
+     * <p>모델의 길이축은 +X 다 ({@code models.<키>.size[0]} 이 그 길이다). 궤도
+     * {@code (r·sinθ, 0, r·cosθ)} 의 접선은 {@code (cosθ, 0, −sinθ)} 이고, {@code Ry(θ)} 가
+     * 정확히 +X 를 그리로 돌린다 — 그래서 초승달은 <b>궤도를 따라 눕고</b> 그 면은 몸 바깥을 본다
+     * (예전처럼 시전자 정면을 향해 붙박인 평면이 아니다). {@code Rz(tilt_deg)} 는 자리에 먹인 것과
+     * <b>같은 기울기</b>라 초승달이 기울어진 궤도에 끝까지 붙어 있고, {@code Rz(roll_deg)} 는
+     * 초승달을 제 평면 안에서 돌리는 정적 오프셋이다 (배가 위로/아래로).
+     */
+    private static Quaternionf kigiPose(SkillEngine.KigiSlash cfg, int dirSign, double phase) {
+        return new Quaternionf()
+                .rotateZ((float) Math.toRadians(cfg.tiltDeg()))     // 공전면 기울기 (자리와 같은 것)
+                .rotateY((float) kigiTheta(cfg, dirSign, phase))    // 궤도 접선으로 눕힌다
+                .rotateZ((float) Math.toRadians(cfg.rollDeg()));    // 정적 롤 오프셋
+    }
+
+    /**
+     * ★ <b>검기 전용 변환</b> — translation 을 <b>공전 오프셋</b>으로 준다.
+     *
+     * <p>공유 {@link #transform} 은 translation 을 {@code headAnchor}(모델의 머리 고정)로 <b>덮어쓴다</b>.
+     * 그 길로 가면 공전이 매 틱 지워져 초승달이 도로 몸 한복판에 붙는다. 그래서 검기만 이 길로 간다 —
+     * <b>공유 메서드는 한 글자도 건드리지 않는다</b> (다른 참격은 옛 그림 그대로다).
+     */
+    private void kigiTransform(Display d, float[] scale, Quaternionf rot, Vector3f orbit, int ticks) {
+        if (!d.isValid()) {
+            return;
+        }
+        d.setInterpolationDelay(0);
+        d.setInterpolationDuration(Math.max(1, ticks));
+        d.setTransformation(new Transformation(new Vector3f(orbit), new Quaternionf(rot),
+                new Vector3f(scale[0], scale[1], scale[2]), new Quaternionf()));
+    }
+
+    /** 검기 모델을 실은 임시 모션 — kind 참격(그렸다 꼬리부터 지워진다)·등록부 값(billboard·fade·brightness) */
+    private SkillEngine.DisplayMotion kigiMotion(SkillEngine.KigiSlash cfg, String modelName) {
+        int lifetime = Math.min(cfg.drawTicks() + cfg.fadeTicks() + 2,
+                engine.displayBudget().maxLifetimeTicks());
+        return new SkillEngine.DisplayMotion(
+                "검기_평타", "참격", modelName,
+                lifetime, 0, cfg.fadeTicks(), Math.max(1, cfg.drawTicks()),
+                1.0f, 0.0f, 0.0, 1.0f, 3, 0,
+                1, 0.85, 1.0, 0.0f,
+                new float[]{1.0f, 1.0f, 1.0f}, new float[]{0.0f, 0.0f, 0.0f},
+                cfg.billboard(), cfg.brightness(), cfg.brightness());
     }
 
     // ══════════ ★ 획이 서는 자리 — 팔이 지나가는 자리에 세운다 ══════════
@@ -805,7 +1066,12 @@ final class SkillDisplay {
 
     private Piece spawn(SkillEngine.DisplayMotion m, Location at, Player owner,
                         int units, boolean ultimate, UUID ownerId) {
-        return spawn(m, at, owner, units, ultimate, ownerId, null);
+        return spawn(m, at, owner, units, ultimate, ownerId, null, null);
+    }
+
+    private Piece spawn(SkillEngine.DisplayMotion m, Location at, Player owner,
+                        int units, boolean ultimate, UUID ownerId, Quaternionf seed) {
+        return spawn(m, at, owner, units, ultimate, ownerId, seed, null);
     }
 
     /**
@@ -818,10 +1084,12 @@ final class SkillDisplay {
      * <b>폴백이 null 인 모델</b>(참격선 · 날의 기)은 팩 없는 눈에게 <b>아예 띄우지 않는다</b> —
      * 억지 폴백(검을 복제한 획)보다 파티클이 낫다.
      *
+     * @param seedOffset ★ <b>씨앗의 자리</b> (엔티티 국소축 translation) — 검기의 <b>공전 시작점</b>.
+     *                   null 이면 영(零): 옛 그림 그대로 엔티티 자리에서 자란다
      * @return 예산이 없거나 볼 사람이 없으면 null
      */
-    private Piece spawn(SkillEngine.DisplayMotion m, Location at, Player owner,
-                        int units, boolean ultimate, UUID ownerId, Quaternionf seed) {
+    private Piece spawn(SkillEngine.DisplayMotion m, Location at, Player owner, int units,
+                        boolean ultimate, UUID ownerId, Quaternionf seed, Vector3f seedOffset) {
         SkillEngine.DisplayModel model = engine.displayModel(m.model());
         if (model == null || at.getWorld() == null) {
             return null;
@@ -838,7 +1106,7 @@ final class SkillDisplay {
                 return null;
             }
             Piece p = new Piece(m, ownerId);
-            p.parts.add(create(at, m, stack, null, seed));   // 모두의 눈에 — 팩 분기가 없다
+            p.parts.add(create(at, m, stack, null, seed, seedOffset));   // 모두의 눈에 — 팩 분기가 없다
             p.dieAt = tick + m.lifetime();
             pieces.add(p);
             return p;
@@ -861,13 +1129,13 @@ final class SkillDisplay {
         if (!withPack.isEmpty()) {
             ItemStack packedItem = item(model, true, held);
             if (packedItem != null) {
-                p.parts.add(create(at, m, packedItem, withPack, seed));
+                p.parts.add(create(at, m, packedItem, withPack, seed, seedOffset));
             }
         }
         if (!without.isEmpty() && plainOk) {
             ItemStack plainItem = item(model, false, held);
             if (plainItem != null) {
-                p.parts.add(create(at, m, plainItem, without, seed));
+                p.parts.add(create(at, m, plainItem, without, seed, seedOffset));
             }
         }
         if (p.parts.isEmpty()) {
@@ -884,7 +1152,7 @@ final class SkillDisplay {
      *                그 사이를 클라이언트가 slerp 한다 = <b>획이 쓸고 지나간다</b>. null 이면 등록된 각 그대로
      */
     private Display create(Location at, SkillEngine.DisplayMotion m, ItemStack stack,
-                           List<Player> viewers, Quaternionf seed) {
+                           List<Player> viewers, Quaternionf seed, Vector3f seedOffset) {
         SkillEngine.DisplayBudget b = engine.displayBudget();
         ItemDisplay d = at.getWorld().spawn(at, ItemDisplay.class, e -> {
             e.setItemStack(stack);
@@ -898,7 +1166,8 @@ final class SkillDisplay {
             e.setVisibleByDefault(viewers == null);
             e.getPersistentDataContainer().set(KEY_VFX, PersistentDataType.BYTE, (byte) 1);
             // 씨앗에서 자란다 — 다만 <b>선 각은 처음부터 제 각</b>이다 (뒤에 돌리면 형체가 튄다)
-            e.setTransformation(new Transformation(new Vector3f(),
+            e.setTransformation(new Transformation(
+                    seedOffset == null ? new Vector3f() : new Vector3f(seedOffset),
                     seed == null ? pose(m, 0.0f) : new Quaternionf(seed),
                     new Vector3f(0.001f, 0.001f, 0.001f), new Quaternionf()));
         });

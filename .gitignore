@@ -116,3 +116,13 @@ hook_debug.log
 # Gradle build output
 build/
 .gradle/
+
+# ── 검기 자동 검증 하네스의 산물 (2026-07-20) ────────────────────────────
+# scratch/ 는 6GB 가 넘는다 — MC 클라 에셋·연속 프레임 캡처·venv 가 산다.
+# 도구는 scripts/ 에 커밋하고, **산물은 커밋하지 않는다** (재생성 가능하다).
+scratch/
+run/mvt-test/
+# 사용자 인게임 녹화 — 근거로 쓰고 저장소에는 남기지 않는다 (수십 MB)
+*.mkv
+# 병합 도구가 남긴 백업
+*.orig
