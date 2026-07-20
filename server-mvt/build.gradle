@@ -17,6 +17,14 @@ dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
     implementation project(':core')          // 룰 엔진 — 단일 진실 원천 config/*.yml 을 읽는다
     implementation 'org.yaml:snakeyaml:2.2'
+    // ★ EffectLib — **검증된 기하 원시형 49종** (Circle·Arc·Cone·Helix·…).
+    //   왜 남의 것을 쓰나: 우리 연출 어휘에 **궤적 생성기가 0개**였다. 검기 하나를 위해
+    //   부분 호를 손으로 짜려 했는데, 그건 이미 10년 굴러간 라이브러리의 49종 중 하나를
+    //   다시 만드는 일이었다 (사용자 지적, 2026-07-20).
+    //   ★ MagicSpells 를 통째로 들이지 **않는** 까닭: 그쪽은 우리 감사(motion_audit·lint_config)가
+    //     못 읽는 자리에 스펠을 두어 「커버리지 100%」라고 거짓 보고하게 만든다. EffectLib 은
+    //     리스너 없는 **렌더 라이브러리**라 그 문제가 없다 (MagicSpells 도 이걸 셰이딩해 쓴다).
+    implementation 'com.elmakers.mine.bukkit:EffectLib:10.10'
 }
 
 java {

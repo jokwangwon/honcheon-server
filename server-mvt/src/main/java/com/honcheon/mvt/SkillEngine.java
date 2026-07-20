@@ -1117,7 +1117,12 @@ public final class SkillEngine {
                 m.get("alternate") == null || Boolean.TRUE.equals(m.get("alternate")),
                 Math.max(0, Math.min(15, intOr(m.get("brightness"), 15))),
                 spark,
-                m.get("calm_held_aura") == null || Boolean.TRUE.equals(m.get("calm_held_aura")));
+                m.get("calm_held_aura") == null || Boolean.TRUE.equals(m.get("calm_held_aura")),
+                // ★ 몸 둘레를 도는 호 (EffectLib 기하) — 이름이 없으면 안 그린다 (옛 동작 그대로)
+                str(m.get("geom_particle")), str(m.get("geom_ink")),
+                // ★ 호의 각은 **판의 sweep_deg 와 다른 것**이다. 재사용했다가 한 점으로 접혔다
+                //   (sweep_deg 는 0 으로 맞춰져 있다 — 프레임이 흩어지지 않게 한 값이다).
+                dblOr(m.get("geom_sweep_deg"), 150.0));
     }
 
     /** {@code rgb: [r, g, b]} — 세 칸이 아니면 null (등록부가 색을 반만 적었으면 색이 아니다) */
@@ -1501,6 +1506,12 @@ public final class SkillEngine {
      * @param alternate     true 면 스윙마다 좌↔우 방향을 번갈아
      * @param brightness    발광(block_light = sky_light = 이 값)
      * @param calmHeldAura  true 면 이 무기를 들었을 때 weapon_aura held 방출을 억제 (가역)
+     * @param geomParticle  ★ 몸 둘레 호에 쓸 파티클 이름. <b>비우면 안 그린다</b> — 판만으로 간다.
+     *                      (판이 못 푸는 등 뒤 각도를 점으로 메운다. 실측: 파티클로 바꿔도 배치를
+     *                       안 바꾸면 뒤는 45px 로 그대로다 — 그래서 공전 반경 위에 찍는다)
+     * @param geomInk       그 호의 먹빛 이름 (없으면 {@code null} — 파티클 기본색)
+     * @param geomSweepDeg  그 호가 무는 각(도). ★ {@code sweepDeg}(판의 공전 보간)와 <b>다른 값</b>이다 —
+     *                      한 번 재사용했다가 {@code sweep_deg: 0} 탓에 호가 한 점으로 접혔다 (실측)
      */
     public record KigiSlash(boolean enabled, String model, List<String> applyToTrails,
                             List<String> frameModels, int frameTicks,
@@ -1508,7 +1519,8 @@ public final class SkillEngine {
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
                             double bladePitchDeg,
                             int drawTicks, int fadeTicks, String billboard, boolean alternate,
-                            int brightness, KigiSpark spark, boolean calmHeldAura) {
+                            int brightness, KigiSpark spark, boolean calmHeldAura,
+                            String geomParticle, String geomInk, double geomSweepDeg) {
         /** 이 무기의 basic trail 이 검기를 받는가 (apply_to_trails 에 등록됐는가) */
         public boolean appliesToTrail(String trail) {
             return trail != null && applyToTrails.contains(trail);

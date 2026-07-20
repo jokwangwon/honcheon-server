@@ -37,6 +37,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private Incidents incidents;   // 사건 — 살인이 남기는 자국 (시신·목격·수사·유족의 의뢰)
     private SkillCast skillCast;   // 절기(絶技) — 삼문(承·間·虛)이 열려야 나간다
     private Dojang dojang;
+    private QiGeometry qiGeometry;   // 기(氣)의 기하 — EffectLib 을 빌리되 발행은 우리 예산으로
     private Antechamber antechamber;   // 입도진 — 강호에 들지 않은 자를 세계에 떨구지 않는다
     private Reset reset;   // 되돌리는 손 — 시험을 위해 이 몸을 지운다 (백업은 항상 뜬다)
     private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
@@ -102,6 +103,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.incidents = new Incidents(this);   // 순서 중요 — 생성자가 populace 에 스스로 접합한다
         this.skillCast = new SkillCast(this, skillEngine, skills, cfg);
         this.dojang = new Dojang(this);
+        this.qiGeometry = new QiGeometry(this, skills.hud());
         this.antechamber = new Antechamber(this, cfg);
         this.dojangGui = new DojangGui(this);
         this.gyeonggong = new GyeonggongListener(this);   // 몸이 땅을 딛는 법
@@ -762,6 +764,11 @@ public final class HoncheonMvt extends JavaPlugin {
     }
 
     /** 연무장 — 시험은 세계에 자국을 남기면 안 된다 */
+    /** 기(氣)의 기하 — 궤적 생성기. 없으면 {@code null} (연출만 빠지고 판정은 불변). */
+    public QiGeometry qiGeometry() {
+        return qiGeometry;
+    }
+
     public Dojang dojang() {
         return dojang;
     }

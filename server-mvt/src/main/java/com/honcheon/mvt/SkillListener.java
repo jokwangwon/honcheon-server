@@ -93,6 +93,12 @@ public final class SkillListener implements Listener {
     /** 등록부. {@code final} 이 아닌 이유는 {@link #rebind} — 핫 리로드가 이 참조를 갈아끼운다 */
     private SkillEngine engine;
     private final SkillHud hud;
+
+    /** 파티클의 유일한 창구 — 예산·관람자·LOD 가 여기서 걸린다 ({@link QiGeometry} 가 이 손을 빌린다) */
+    SkillHud hud() {
+        return hud;
+    }
+
     /**
      * 내공/내력 보스바 — XP바에서 이사 (★사용자 확정 2026-07-15: XP바 = v3 경험/레벨).
      * 옛 {@code hud.energyBar} 가 서 있던 자리마다 {@link EnergyBossBar#update} 가 선다.
@@ -834,7 +840,8 @@ public final class SkillListener implements Listener {
         return new SkillEngine.KigiSlash(c.enabled(), c.model(), c.applyToTrails(),
                 c.frameModels(), frame, c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
-                c.brightness(), spark, c.calmHeldAura());
+                c.brightness(), spark, c.calmHeldAura(),
+                c.geomParticle(), c.geomInk(), c.geomSweepDeg());
     }
 
     /** 지금 값 전부 + <b>config 에 그대로 붙일 줄</b> (확정은 사람이 config 에 못 박는다) */

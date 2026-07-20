@@ -517,10 +517,56 @@ final class SkillDisplay {
             // 씨앗에서 자라며 **몸 둘레를 돈다** (검기 전용 경로 — headAnchor 가 공전을 덮지 못하게)
             kigiTransform(d, p.full, qEnd, tEnd, cfg.drawTicks());
         }
+        kigiGeomArc(caster, cfg, at);
         note("검기평타", String.format("scale%.1f 공전 반경%.2fm 호각%.0f도 기울기%.0f도 dir%s 그리기%d틱",
                 cfg.scale(), cfg.orbitRadius(), cfg.sweepDeg(), cfg.tiltDeg(),
                 dirSign < 0 ? "−" : "+", cfg.drawTicks()));
         return true;
+    }
+
+    /**
+     * ★ <b>몸 둘레를 도는 호</b> — 판이 못 푸는 각도를 점으로 메운다 (EffectLib 기하).
+     *
+     * <p><b>왜 판만으로 안 되는가 (실측).</b> 납작한 판은 각도에 따라 옆면이 되어 사라진다.
+     * 그런데 파티클로 바꾸기만 해서는 <b>등 뒤가 안 풀린다</b> — MagicSpells 로 옮겨 재 봤을 때
+     * 뒤 <b>45px</b> 로 우리 판(47px)과 사실상 같았다. 까닭은 원시도형이 아니라 <b>배치</b>다:
+     * 호를 몸 <b>앞</b>에 두면 등 뒤에서는 몸이 가린다.
+     * ⇒ 그래서 여기서는 {@code orbit_radius} 만큼 <b>몸 둘레로</b> 돌린다.
+     *
+     * <p>파티클은 {@link QiGeometry} 가 <b>우리 {@link SkillHud#emit} 으로만</b> 흘린다 —
+     * 예산·관람자·LOD 게이트가 그대로 걸린다. 남의 기하를 빌리되 <b>발행권은 넘기지 않는다.</b>
+     */
+    private void kigiGeomArc(Player caster, SkillEngine.KigiSlash cfg, Location at) {
+        QiGeometry geom = plugin.qiGeometry();
+        if (geom == null || cfg.geomParticle() == null || cfg.geomParticle().isBlank()) {
+            // ★ **안 그린 것도 기록한다.** 「호가 0을 냈다」와 「호를 아예 안 불렀다」는 다른 사건인데,
+            //   조용히 돌아서면 진단에서 둘이 구별되지 않는다 (실측으로 한 판 날린 자리다).
+            note("검기호", geom == null ? "기하가 없다 (EffectLib 미적재)" : "등록부가 안 켰다 (geom_particle 비어 있음)");
+            return;
+        }
+        // ★ **그리는 시간에 걸쳐 자란다** — 한 번에 다 뿌리면 1틱 섬광이라 눈에도 안 남고
+        //   15fps 촬영은 아예 놓친다 (첫 판이 그래서 0px 이었다).
+        //   진행도를 0→1 로 올리며 뿌리면 「한 번의 베기가 자라나는」 3프레임과 같은 뜻이 된다.
+        final int span = Math.max(1, cfg.drawTicks());
+        final float yaw = caster.getLocation().getYaw();
+        final Location center = at.clone();
+        final int[] sent = {0};
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int t = 0;
+
+            @Override
+            public void run() {
+                if (t > span || !caster.isOnline()) {
+                    cancel();
+                    note("검기호", "점 " + sent[0] + "개 발행 (반경 " + String.format("%.2f", cfg.orbitRadius())
+                            + "m · 각 " + Math.round(cfg.geomSweepDeg()) + "도 · " + span + "틱)");
+                    return;
+                }
+                sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                        (double) t / span, cfg.geomParticle(), cfg.geomInk());
+                t++;
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     /**
