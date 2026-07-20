@@ -92,7 +92,8 @@ public final class SkillCast implements Listener {
     private static final String GUI_TITLE = "경락도 — 절기 편성";
 
     private final HoncheonMvt plugin;
-    private final SkillEngine engine;
+    /** 등록부. {@code final} 이 아닌 이유는 {@link #rebind} — 핫 리로드가 이 참조를 갈아끼운다 */
+    private SkillEngine engine;
     private final SkillListener skills;
 
     /** 절기 등록부 — skill_mechanics.yml 의 art:true (config 가 정본. 코드가 앞서지 않는다) */
@@ -185,6 +186,18 @@ public final class SkillCast implements Listener {
                     str(req.get("id")), intOr(req.get("mastery"), 0)));
         }
         this.arts = Map.copyOf(found);
+    }
+
+    /**
+     * 핫 리로드 — 새 등록부로 갈아끼운다 ({@code /혼천 모션 재적재}).
+     *
+     * <p><b>{@link #arts} 는 안 다시 읽는다.</b> 그것은 {@code skill_mechanics.yml}·{@code skills.yml}
+     * (판정·전투 규칙)에서 온 것이고, 재적재는 <b>연출을 보는 손</b>이지 규칙을 갈아엎는 손이 아니다 —
+     * 시전 한복판에 절기의 문(삼문)이 바뀌면 진행 중인 판정이 제 규칙을 잃는다.
+     * 갈아끼우는 것은 연출·수치를 읽는 출처뿐이고, 절기 정의를 고쳤다면 재기동이 정직한 길이다.
+     */
+    void rebind(SkillEngine engine) {
+        this.engine = engine;
     }
 
     /** 중앙 티커 — 효과별 개별 태스크 생성 금지 (performance.yml F-P2) */

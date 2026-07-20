@@ -54,7 +54,8 @@ final class SkillDisplay {
     static final NamespacedKey KEY_VFX = new NamespacedKey("honcheon", "vfx");
 
     private final HoncheonMvt plugin;
-    private final SkillEngine engine;
+    /** 등록부. {@code final} 이 아닌 이유는 {@link #rebind} — 핫 리로드가 이 참조를 갈아끼운다 */
+    private SkillEngine engine;
 
     /** 팩을 받은 눈 — 이 집합에 없으면 폴백을 보거나, 아무것도 못 본다 (그 자리는 파티클이 지킨다) */
     private final Set<UUID> packed = new HashSet<>();
@@ -85,6 +86,23 @@ final class SkillDisplay {
     SkillDisplay(HoncheonMvt plugin, SkillEngine engine) {
         this.plugin = plugin;
         this.engine = engine;
+    }
+
+    /**
+     * 핫 리로드 — 새 등록부로 갈아끼운다 ({@code /혼천 모션 재적재}).
+     *
+     * <p><b>이미 떠 있는 형체({@link Piece})는 안 건드린다.</b> 각 조각은 소환될 때 붙잡은
+     * {@link SkillEngine.DisplayMotion}(불변 레코드)으로 제 수명을 마친다 — 리로드 한복판에
+     * 날던 검기가 사라지거나 터지지 않는다. 새 값은 <b>다음 발행부터</b> 실린다.
+     *
+     * <p>{@code materials} 는 등록부의 모델 이름을 바닐라 재료로 옮긴 캐시라 함께 버린다.
+     * {@code originOverride}({@code /혼천 획위치} 가 민 값)는 <b>남긴다</b>: 그것은 config 가 아니라
+     * 사람이 지금 손으로 밀고 있는 값이고, 되돌리는 손은 이미 따로 있다.
+     */
+    void rebind(SkillEngine engine) {
+        this.engine = engine;
+        materials.clear();
+        witnessed.clear();
     }
 
     // ══════════ 수명 ══════════
@@ -607,6 +625,11 @@ final class SkillDisplay {
         return new Quaternionf()
                 .rotateZ((float) Math.toRadians(cfg.tiltDeg()))     // 공전면 기울기 (자리와 같은 것)
                 .rotateY((float) kigiTheta(cfg, dirSign, phase))    // 궤도 접선으로 눕힌다
+                // ★ 날의 눕힘 (2026-07-20 · 사용자 실측: "아치가 위아래를 보고 있다").
+                //   여기까지는 판이 **세로로 선 채** 접선만 따라갔다 — 그래서 ∩ 의 배가 하늘을 봤다.
+                //   횡베기는 판이 **누워야** 한다: 볼록한 바깥이 정면(플레이어 밖)을,
+                //   오목한 안쪽이 플레이어를 향하도록. 접선축(모델 X)을 중심으로 90도 눕히면 그 자세다.
+                .rotateX((float) Math.toRadians(cfg.bladePitchDeg()))
                 .rotateZ((float) Math.toRadians(cfg.rollDeg()));    // 정적 롤 오프셋
     }
 

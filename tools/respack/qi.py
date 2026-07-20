@@ -717,11 +717,55 @@ def _kigi_frame(ph):
     return g
 
 
+_KIGI_SHAPES = None
+
+
+def _kigi_traced(idx):
+    """★ 레퍼런스 실물 프레임을 **픽셀 그대로** 쓴다 (2026-07-20 · 사용자 지정).
+
+    왜: 실루엣을 수식(sin 아크)으로 만들던 것을 버린다. 레퍼런스의 세 프레임은
+      ① 짧고 굵은 대각 획 → ② 왼쪽으로 휘어 뻗은 발톱 → ③ 넓은 ∩ 아치 로,
+      대칭 아크 수식으로는 흉내 낼 수 없는 손그림이다. 사용자가 영상에서 뽑아 준
+      image2/image1/image3 에서 그려진 픽셀을 읽어(tools/kigi_trace.py) 마스크로 쓴다.
+      순서도 사용자가 지정했다: image2=1번 · image1=2번 · image3=3번.
+    색: 마스크 안에서 **위(바깥) 가장자리가 밝은 인선**, 아래로 갈수록 짙은 초록.
+    """
+    global _KIGI_SHAPES
+    if _KIGI_SHAPES is None:
+        path = Path(__file__).resolve().parent.parent / "kigi_shapes.json"
+        _KIGI_SHAPES = json.loads(path.read_text(encoding="utf-8"))
+    sh = _KIGI_SHAPES
+    grid = sh["frames"][idx]
+    gw, gh = sh["w"], sh["h"]
+    g = [[T] * KIGI_W for _ in range(KIGI_H)]
+    # 각 세로줄에서 '그림의 위 끝' 을 찾아 거기서부터의 깊이로 색을 정한다 (인선이 위)
+    for x in range(min(gw, KIGI_W)):
+        col = [y for y in range(gh) if grid[y][x]]
+        if not col:
+            continue
+        top, bot = col[0], col[-1]
+        span = max(1, bot - top)
+        for y in col:
+            if y >= KIGI_H:
+                continue
+            u = (y - top) / span              # 0 = 위 인선 … 1 = 아래 끝
+            if u < 0.22:
+                c = _kigi_lerp(KIGI_HOT, KIGI_BRIGHT, u / 0.22)
+            elif u < 0.66:
+                c = _kigi_lerp(KIGI_BRIGHT, KIGI_MID, (u - 0.22) / 0.44)
+            else:
+                c = _kigi_lerp(KIGI_MID, KIGI_DARK, (u - 0.66) / 0.34)
+            g[y][x] = (c[0], c[1], c[2], 250)
+    return g
+
+
 def kigi_canvas(ph):
     """단계 하나 — **정사각 64×64 단일 프레임**. 그림은 맨 위 22행 · 아래 42행은 투명 여백.
     모델 uv v(0..KIGI_UV_V) 가 그 위쪽 22행을 문다 (참격선의 SLASH_UV_V 규약과 같은 문법).
-    .mcmeta 를 동반하지 않는다 — 정사각이므로 축 ⑯(정사각 or 스트립+mcmeta)이 그대로 통과한다."""
-    g = _kigi_frame(ph)
+    .mcmeta 를 동반하지 않는다 — 정사각이므로 축 ⑯(정사각 or 스트립+mcmeta)이 그대로 통과한다.
+    ph 0.0/0.5/1.0 → 레퍼런스 1/2/3 번 프레임."""
+    idx = 0 if ph < 0.25 else (1 if ph < 0.75 else 2)
+    g = _kigi_traced(idx)
     return [row[:] for row in g] + [[T] * KIGI_W for _ in range(KIGI_CANVAS - KIGI_H)]
 
 

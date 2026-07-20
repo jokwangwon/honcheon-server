@@ -40,8 +40,9 @@ final class EnergyBossBar {
     static final String PH_POOL = "{내력최대}";
     static final String PH_NAEGONG = "{내공}";
 
-    private final SkillEngine engine;
-    private final String title;             // 등록부의 문구 템플릿 ({내력}·{내력최대}·{내공})
+    /** 등록부. {@code final} 이 아닌 이유는 {@link #rebind} — 핫 리로드가 이 참조를 갈아끼운다 */
+    private SkillEngine engine;
+    private final String title;           // 등록부의 문구 템플릿 ({내력}·{내력최대}·{내공})
     private final String depletedSuffix;    // 고갈 시 문구 뒤에 붙는 조각 ("" 이면 안 붙는다)
     private final BossBar.Color color;
     private final BossBar.Color depletedColor;
@@ -73,6 +74,18 @@ final class EnergyBossBar {
             org.bukkit.Bukkit.getLogger().warning("[혼천] 내력 보스바 문구가 비었다 — 채널을 열지 않는다");
         }
         this.disabled = !ok;
+    }
+
+    /**
+     * 핫 리로드 — 새 등록부로 갈아끼운다 ({@code /혼천 모션 재적재}).
+     *
+     * <p><b>이미 열린 바({@link #bars})는 안 건드린다</b> — 새로 만들면 지금 화면에 떠 있는 바가
+     * 한 번 깜빡이며 사라졌다 돌아온다. 문구·색·구간은 생성자가 구운 것이라 <b>재적재로 안 바뀐다</b>
+     * ({@code skill_motion.yml hud.energy_bossbar} 를 고쳤다면 그것만은 재기동이 필요하다).
+     * 갈아끼우는 것은 수치의 출처(내력 한도·고갈 판정)뿐이다.
+     */
+    void rebind(SkillEngine engine) {
+        this.engine = engine;
     }
 
     /** 등록부의 색 이름 → Adventure 색. 모르는 이름은 <b>소리내어</b> 알리고 null — 코드가 색을 고르지 않는다 */

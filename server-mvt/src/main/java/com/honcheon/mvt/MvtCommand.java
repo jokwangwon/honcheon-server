@@ -107,6 +107,8 @@ public final class MvtCommand implements CommandExecutor {
                 case "획위치" -> strokeOrigin(sender, args);   // ★ 획이 서는 자리 — 인게임에서 밀고 당긴다 (즉시 그어 본다)
                 case "스윙" -> swing(sender, args);           // ★★ 스윙의 크기·각도·활·전진 — 밀면 즉시 한 획 (찌르기 → 베기)
                 case "검기" -> kigi(sender, args);           // ★★ 검기의 각도·크기 — 재기동 없이 즉석 조율
+                case "모션" -> motion(sender, args);         // ★★ 재적재/상태 — 서버를 안 내리고 등록부를 다시 읽는다
+                case "대행" -> proxy(sender, args);         // ★★ 콘솔/RCON 이 **플레이어의 손을 빌린다** — 하네스 전용
                 case "문장" -> crests(sender);
                 case "초기화" -> wipe(sender, args);   // ★ 되돌린다 — 시험용 (두 번 쳐야 지운다)
                 default -> help(sender);
@@ -2405,7 +2407,7 @@ public final class MvtCommand implements CommandExecutor {
         }
         if (args.length < 2) {
             p.sendMessage(ChatColor.GRAY + "/혼천 시험 경지 <경지> · 내력 <값> · 무공 <id> [일수] · "
-                    + "몹 <id> · 치움");
+                    + "몹 <id> [걷기] · 치움");
             return true;
         }
         switch (args[1]) {
@@ -2427,7 +2429,9 @@ public final class MvtCommand implements CommandExecutor {
             }
             case "몹" -> {
                 if (args.length >= 3) {
-                    plugin.dojang().mob(p, args[2]);
+                    // 넷째 인자 「걷기」 = AI 를 켜고 표적을 준다 (다리 관절은 이동거리로 돈다)
+                    boolean walking = args.length >= 4 && args[3].equals("걷기");
+                    plugin.dojang().mob(p, args[2], walking);
                 }
             }
             case "치움" -> plugin.dojang().clear(p);
@@ -2600,9 +2604,22 @@ public final class MvtCommand implements CommandExecutor {
      * </pre>
      */
     private boolean kigi(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player player)) {
+        Player player = asBody(sender);
+        if (player == null) {
+            // ★ 콘솔이면 **몸을 이름으로 지목**할 수 있다 (맨 끝 인자)
+            Player named = args.length >= 2
+                    ? plugin.getServer().getPlayerExact(args[args.length - 1]) : null;
+            if (named != null) {
+                player = named;
+                args = java.util.Arrays.copyOf(args, args.length - 1);   // 이름은 떼어낸다
+            }
+        }
+        if (player == null) {
             sender.sendMessage(ChatColor.RED
-                    + "검기는 몸이 있어야 한다 — 눈으로 봐야 정해지는 값이다 (콘솔 불가)");
+                    + "검기는 몸이 있어야 한다 — 검기를 세울 자리와 방향이 필요하다");
+            sender.sendMessage(ChatColor.GRAY
+                    + "  콘솔에서는 몸을 지목하라:  혼천 검기 "
+                    + (args.length >= 2 ? args[1] : "시험") + " <플레이어>");
             return true;
         }
         if (!player.isOp()) {
@@ -2613,6 +2630,274 @@ public final class MvtCommand implements CommandExecutor {
             player.sendMessage(line);
         }
         return true;
+    }
+
+    /**
+     * 명령을 친 자의 <b>몸</b>을 찾는다 — 없으면 null.
+     *
+     * <p>★ 왜 이 명령이 몸을 요구하나: <b>검기를 세울 자리와 방향</b>이 필요해서지
+     * 「사람이 직접 쳤는가」가 아니다. 그러니 자리와 방향만 있으면 콘솔이 쳐도 된다 —
+     * 그 길이 열려야 하네스가 RCON 한 줄로 스킬을 발동한다 (사람도 xdotool 도 없이).
+     *
+     * <p>★ 실측으로 배운 것 (2026-07-20 · 자동 루프가 막힌 자리):
+     * {@code /execute as kigibot run 혼천 검기 시험} 은 <b>안 통한다.</b> 페이퍼는 레거시 Bukkit
+     * 명령에 <b>원래 sender 를 그대로</b> 넘긴다 — 실측한 껍데기는
+     * {@code CraftRemoteConsoleCommandSender} 였다 ({@code ProxiedCommandSender} 조차 아니다).
+     * {@code execute as} 는 바닐라 소스스택의 엔티티만 바꿀 뿐 Bukkit sender 는 안 바꾼다.
+     * ⇒ 그래서 콘솔은 <b>몸을 이름으로 지목</b>한다: {@code 혼천 검기 시험 kigibot}.
+     * 아래 반사(reflection)는 그래도 남겨 둔다 — 다른 경로(플러그인 간 호출·판올림)에서
+     * 진짜 프록시가 올 수 있고, 그때 이름을 안 대고도 풀리면 그편이 낫다.
+     */
+    private static Player asBody(CommandSender sender) {
+        if (sender instanceof Player player) {
+            return player;
+        }
+        if (sender instanceof org.bukkit.command.ProxiedCommandSender proxied
+                && proxied.getCallee() instanceof Player callee) {
+            return callee;      // execute as <플레이어> run … — 몸은 callee 다
+        }
+        // ★ 껍데기의 이름은 서버 구현·판올림마다 다르다 (ProxiedNativeCommandSender ·
+        //   CommandSourceStack · …). 이름을 박아 두면 다음 판올림에 조용히 깨진다.
+        //   ⇒ **몸을 내놓는 메서드가 있으면 쓴다** — 이름이 아니라 능력으로 본다.
+        for (String getter : new String[]{"getCallee", "getExecutor", "getEntity"}) {
+            try {
+                Object body = sender.getClass().getMethod(getter).invoke(sender);
+                if (body instanceof Player callee) {
+                    return callee;
+                }
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // 그 메서드가 없거나 못 부른다 — 다음 것을 본다
+            }
+        }
+        return null;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  /혼천 대행 — 콘솔이 플레이어의 손을 빌린다
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * <b>/혼천 대행 &lt;플레이어&gt; &lt;명령…&gt;</b> — 지목한 <b>몸</b>이 그 명령을 친 것처럼 실행한다.
+     *
+     * <p><b>★ 이것은 시험 도구다 (하네스 전용).</b> 라이브에서 남용되면 <b>사칭</b>이 된다 —
+     * 남의 몸으로 돈을 쓰고 문파를 옮길 수 있다. 그래서 <b>OP 또는 콘솔만</b> 부를 수 있고,
+     * 부른 자·빌린 몸·친 명령을 <b>서버 로그에 남긴다</b> (조용히 지나가지 않는다).
+     *
+     * <p><b>★ 왜 필요한가 — 실측으로 부딪힌 벽 (2026-07-20):</b> 하네스는 사람 없이
+     * 시각효과를 검증한다. 그런데 {@code /혼천} 의 대부분 하위명령이 <b>몸</b>을 요구해
+     * ({@code sender instanceof Player}) 콘솔·RCON 에서 거절당한다. 우회로가 전부 막혔다:
+     * <ul>
+     *   <li>{@code execute as <봇> run 혼천 …} — 안 된다. 페이퍼는 레거시 Bukkit 명령에
+     *       <b>원래 sender 를 그대로</b> 넘긴다 ({@code CraftRemoteConsoleCommandSender}).
+     *       자세한 실측은 {@link #asBody(CommandSender)} 의 주석을 보라.</li>
+     *   <li>{@code xdotool} 로 채팅창에 치기 — <b>한글이 뭉개진다</b>(「혼천」→「천」).</li>
+     * </ul>
+     * ⇒ 열쇠는 이미 있었다: {@code Antechamber} 의 발판이 {@code player.performCommand(cmd)} 로
+     * 플레이어를 대신해 명령을 친다. 그 통로를 RCON 에서 부를 수 있게 낸 문이 이것이다.
+     *
+     * <p><b>★ {@code performCommand} 는 {@code PlayerCommandPreprocessEvent} 를 안 태운다.</b>
+     * (Antechamber 도 같은 이유로 과제 적립을 직접 닫는다.) 여기서는 <b>일부러 그대로 둔다</b> —
+     * 이 문은 <b>계측용</b>이고, 하네스가 친 명령이 사람의 과제·통계로 집계되면 오히려 장부가
+     * 더러워진다. 대신 그 사실을 <b>출력에 적어</b> 부른 자가 모르고 지나가지 않게 한다.
+     *
+     * <pre>
+     *   혼천 대행 kigibot 혼천 시험 몹 horangi     # 봇이 연무장 몹을 부른다
+     *   혼천 대행 kigibot 혼천 검기 시험           # 몸이 필요한 명령을 콘솔에서
+     * </pre>
+     */
+    private boolean proxy(CommandSender sender, String[] args) {
+        // 문지기 — OP 또는 콘솔만. (콘솔 sender 는 isOp() 가 true 다)
+        if (!sender.isOp()) {
+            sender.sendMessage(ChatColor.RED + "대행은 관리자의 몫이다.");
+            return true;
+        }
+        if (args.length < 3) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 대행 <플레이어> <명령…> — "
+                    + "그 몸이 친 것처럼 실행한다 (시험용)");
+            sender.sendMessage(ChatColor.DARK_GRAY + "  예: 혼천 대행 kigibot 혼천 시험 몹 horangi");
+            return true;
+        }
+
+        String who = args[1];
+        Player body = plugin.getServer().getPlayerExact(who);
+        if (body == null) {
+            // 조용히 실패하지 않는다 — 누가 접속해 있는지까지 말해 준다
+            String online = plugin.getServer().getOnlinePlayers().stream()
+                    .map(Player::getName).reduce((a, b) -> a + ", " + b).orElse("(아무도 없다)");
+            sender.sendMessage(ChatColor.RED + "그런 몸이 접속해 있지 않다: " + who);
+            sender.sendMessage(ChatColor.GRAY + "  접속 중: " + online);
+            return true;
+        }
+
+        String cmd = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)).trim();
+        if (cmd.startsWith("/")) {
+            cmd = cmd.substring(1);   // 있어도 되고 없어도 된다 — performCommand 는 / 를 안 받는다
+        }
+        if (cmd.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "칠 명령이 비었다.");
+            return true;
+        }
+
+        String verdict = refuse(cmd);
+        if (verdict != null) {
+            sender.sendMessage(ChatColor.RED + "거부: " + verdict);
+            return true;
+        }
+
+        // 남는다 — 사칭은 흔적 없이 지나가면 안 된다
+        plugin.getLogger().warning("[대행] " + sender.getName() + " 이(가) "
+                + body.getName() + " 의 손을 빌렸다: /" + cmd);
+
+        boolean ok;
+        try {
+            ok = body.performCommand(cmd);
+        } catch (Exception e) {
+            // 조용히 실패하지 마라 — 오늘 `ms cast` 가 조용히 실패해 한참 헤맸다
+            sender.sendMessage(ChatColor.RED + "대행 중 터졌다: "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
+            plugin.getLogger().warning("[대행] 실패 — " + e);
+            return true;
+        }
+        sender.sendMessage((ok ? ChatColor.GREEN + "대행 성공" : ChatColor.YELLOW + "대행 반환 false")
+                + ChatColor.GRAY + " — " + body.getName() + " (으)로 /" + cmd);
+        if (!ok) {
+            sender.sendMessage(ChatColor.GRAY + "  false = 그런 명령이 없거나 실행기가 false 를 냈다. "
+                    + "몸에게 간 메시지는 그 몸의 화면에 있다");
+        }
+        sender.sendMessage(ChatColor.DARK_GRAY
+                + "  (performCommand 는 PlayerCommandPreprocessEvent 를 안 태운다 — "
+                + "과제·통계에 안 잡힌다. 계측용으로는 이편이 깨끗하다)");
+        return true;
+    }
+
+    /**
+     * 대행으로 <b>치면 안 되는</b> 명령인가 — 막을 이유가 있는 것만 막는다 (과하게 막지 않는다).
+     *
+     * <p>고른 기준은 <b>「op 인 사람이 자기 손으로 못 하는 일을 대행으로만 할 수 있는가」</b>다.
+     * 부른 자는 이미 op 라 {@code stop}·{@code op} 를 직접 칠 수 있다 — 그러니 그것을 막는 것은
+     * 보안이 아니라 <b>사고 방지</b>다. 실제로 막을 값어치가 있는 것은 두 부류다:
+     * <ul>
+     *   <li><b>되돌릴 수 없는 것</b> — {@code stop}·{@code op}·{@code ban}·{@code whitelist} …
+     *       대행은 자동 루프가 부른다. 루프가 실수로 서버를 내리면 시험이 통째로 날아간다.</li>
+     *   <li><b>재귀</b> — {@code 혼천 대행 …} 을 대행시키면 A→B→A 로 무한히 돈다.</li>
+     * </ul>
+     * 나머지(월드 편집·give·tp 등)는 <b>막지 않는다</b> — 그것이 이 도구의 쓰임이다.
+     */
+    private static String refuse(String cmd) {
+        String head = cmd.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+        if (head.startsWith("minecraft:") || head.startsWith("bukkit:")) {
+            head = head.substring(head.indexOf(':') + 1);
+        }
+        switch (head) {
+            case "stop", "restart", "reload", "op", "deop", "ban", "ban-ip", "pardon",
+                 "pardon-ip", "whitelist", "save-off" ->
+                    { return "되돌릴 수 없는 명령은 대행하지 않는다 (" + head + ") — 직접 쳐라"; }
+            default -> { }
+        }
+        // 재귀 방지 — 대행이 대행을 부르면 끝이 없다
+        String[] parts = cmd.split("\\s+");
+        if (parts.length >= 2 && (head.equals("혼천") || head.equals("honcheon"))
+                && parts[1].equals("대행")) {
+            return "대행이 대행을 부를 수 없다 (무한 재귀)";
+        }
+        return null;
+    }
+
+    /**
+     * <b>/혼천 모션 &lt;재적재|상태&gt;</b> — 모션 등록부를 <b>서버를 안 내리고</b> 다시 읽는다.
+     *
+     * <p>이것이 스킬 모션 디자인의 병목을 푸는 손이다. 값 하나를 보려고 서버를 내리면
+     * 클라 접속이 끊기고 소프트렌더 재접속에 1~3분이 간다 — 값 하나에 3~5분.
+     * 여기서는 <b>고친다 → 재적재 → 발동 → 본다</b> 가 10초다.
+     *
+     * <pre>
+     *   /혼천 모션 재적재    config/skill_motion.yml 을 다시 읽고 무엇이 달라졌는지 요약
+     *   /혼천 모션 상태      지금 메모리에 실린 값 + 마지막 재적재 시각 (파일이 더 새로운지 알려 준다)
+     * </pre>
+     *
+     * <p><b>콘솔에서도 된다</b> — 몸이 필요 없다. RCON 으로 부르는 것이 이 도구의 본래 쓰임이다
+     * ({@code /혼천 검기} 는 눈으로 봐야 하는 값이라 몸을 요구하지만, 재적재는 그렇지 않다).
+     */
+    private boolean motion(CommandSender sender, String[] args) {
+        if (!sender.isOp()) {
+            sender.sendMessage(ChatColor.RED + "모션 재적재는 관리자의 몫이다.");
+            return true;
+        }
+        String verb = args.length >= 2 ? args[1] : "상태";
+        switch (verb) {
+            case "재적재", "리로드" -> {
+                for (String line : plugin.reloadSkillMotion()) {
+                    sender.sendMessage(line);
+                }
+            }
+            case "상태" -> {
+                for (String line : motionStatus()) {
+                    sender.sendMessage(line);
+                }
+            }
+            default -> sender.sendMessage(ChatColor.GRAY
+                    + "/혼천 모션 <재적재|상태> — 재적재는 서버를 안 내리고 skill_motion.yml 을 다시 읽는다");
+        }
+        return true;
+    }
+
+    /**
+     * 지금 <b>메모리에 실린</b> 값을 보여 준다 — 파일이 아니라 메모리다.
+     *
+     * <p>핵심은 마지막 줄이다: <b>파일이 메모리보다 새로우면 재적재를 안 한 것</b>이다.
+     * 그 어긋남을 모르고 재면 <b>파일에 적은 값을 본다고 믿으며 옛 값을 재게 된다</b>.
+     */
+    private java.util.List<String> motionStatus() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        SkillEngine engine = plugin.skillEngine();
+        java.time.format.DateTimeFormatter clock =
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+        long reloaded = plugin.motionReloadedAt();
+        java.nio.file.Path file = plugin.configPath() == null
+                ? null : plugin.configPath().resolve("skill_motion.yml");
+        long mtime = file == null ? 0L : file.toFile().lastModified();
+
+        out.add(ChatColor.GOLD + "── 모션 등록부 — 지금 메모리에 실린 것 ──");
+        StringBuilder counts = new StringBuilder(ChatColor.GRAY.toString());
+        engine.motionCensus().forEach((k, v) ->
+                counts.append(ChatColor.WHITE).append(k).append(' ').append(v)
+                        .append(ChatColor.GRAY).append("종  "));
+        out.add(counts.toString().stripTrailing());
+
+        SkillEngine.KigiSlash kigi = engine.kigiSlash();
+        if (kigi == null) {
+            out.add(ChatColor.GRAY + "검기(kigi_slash): 등록부에 없다");
+        } else {
+            out.add(ChatColor.GRAY + "검기: " + ChatColor.WHITE
+                    + "scale " + kigi.scale() + "  sweep " + kigi.sweepDeg()
+                    + "  radius " + kigi.orbitRadius() + "  roll " + kigi.rollDeg()
+                    + "  tilt " + kigi.tiltDeg() + "  height " + kigi.centerHeight()
+                    + "  forward " + kigi.forward()
+                    + ChatColor.GRAY + (engine.kigiSlashOverridden() ? "  ★ 인게임 오버라이드 중" : "  (등록부 원본)"));
+        }
+
+        if (reloaded == 0L) {
+            out.add(ChatColor.GRAY + "재적재: " + ChatColor.WHITE + "없음"
+                    + ChatColor.GRAY + " — 기동 때 읽은 것 그대로다");
+        } else {
+            out.add(ChatColor.GRAY + "마지막 재적재: " + ChatColor.WHITE
+                    + java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(reloaded),
+                            java.time.ZoneId.systemDefault()).format(clock));
+        }
+        if (file != null && mtime > 0) {
+            out.add(ChatColor.GRAY + "파일 mtime: " + ChatColor.WHITE
+                    + java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(mtime),
+                            java.time.ZoneId.systemDefault()).format(clock));
+            // 기동으로 읽은 경우엔 비교 기준이 없다 (프로세스 시작 시각을 안 들고 있다) — 그때는 말을 아낀다
+            if (reloaded > 0 && mtime > reloaded) {
+                out.add(ChatColor.RED + "★ 파일이 메모리보다 새롭다 — 재적재를 안 했다. "
+                        + ChatColor.WHITE + "/혼천 모션 재적재");
+            } else if (reloaded > 0) {
+                out.add(ChatColor.GREEN + "파일 ↔ 메모리 동기 — 지금 도는 값이 파일이 말하는 값이다");
+            }
+        }
+        return out;
     }
 
     /** 경지 문장 글리프 시연 — 리소스팩 검증용 (E020~E027) */
@@ -2646,6 +2931,9 @@ public final class MvtCommand implements CommandExecutor {
                 + ChatColor.WHITE + "/혼천 획시험" + ChatColor.GRAY + " · "
                 + ChatColor.WHITE + "/혼천 획위치" + ChatColor.GRAY + " · "
                 + ChatColor.WHITE + "/혼천 모션진단");
+        sender.sendMessage(ChatColor.GRAY + "모션 재적재: " + ChatColor.WHITE + "/혼천 모션 재적재"
+                + ChatColor.GRAY + " (서버를 안 내리고 skill_motion.yml 을 다시 읽는다 — 클라가 안 끊긴다) · "
+                + ChatColor.WHITE + "/혼천 모션 상태" + ChatColor.GRAY + " (파일이 메모리보다 새로운가)");
         sender.sendMessage(ChatColor.GRAY + "검기의 눈: " + ChatColor.WHITE + "/혼천 검기"
                 + ChatColor.GRAY + " (각도·크기를 재기동 없이 즉석 조율 · "
                 + ChatColor.WHITE + "검기 시험" + ChatColor.GRAY + " 이 그 자리에서 한 번 소환한다)");

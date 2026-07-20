@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 무공 시전 규칙 — config 판독 전담. 부수효과 없음, Bukkit 의존 0 (테스트 가능).
@@ -1109,6 +1110,7 @@ public final class SkillEngine {
                 dblOr(m.get("forward"), 0.1), dblOr(m.get("orbit_radius"), 1.1),
                 dblOr(m.get("sweep_deg"), 140.0),
                 dblOr(m.get("tilt_deg"), 35.0), dblOr(m.get("roll_deg"), 0.0),
+                dblOr(m.get("blade_pitch_deg"), 90.0),
                 Math.max(1, intOr(m.get("draw_ticks"), 8)),
                 Math.max(0, intOr(m.get("fade_ticks"), 5)),
                 String.valueOf(m.getOrDefault("billboard", "FIXED")),
@@ -1492,6 +1494,8 @@ public final class SkillEngine {
      * @param sweepDeg      ★ <b>공전 호각</b> — 몸 주위를 도는 총 각(시작→끝을 클라이언트가 보간)
      * @param tiltDeg       ★ <b>공전면의 기울기</b> — 수평 공전면을 앞축(前) 둘레로 눕힌다 (내려베는 대각)
      * @param rollDeg       정적 롤 오프셋
+     * @param bladePitchDeg 날의 눕힘 — 접선축 기준. 90 이면 판이 누워 볼록한 바깥이 정면을 본다
+     *                      (0 이면 판이 세로로 서서 ∩ 의 배가 하늘을 본다 — 사용자가 잡은 그 버그)
      * @param drawTicks     휩쓰는(그리는) 시간 — 시작각→끝각 보간 틱
      * @param fadeTicks     사라지는 시간(꼬리부터 수축)
      * @param alternate     true 면 스윙마다 좌↔우 방향을 번갈아
@@ -1502,6 +1506,7 @@ public final class SkillEngine {
                             List<String> frameModels, int frameTicks,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
+                            double bladePitchDeg,
                             int drawTicks, int fadeTicks, String billboard, boolean alternate,
                             int brightness, KigiSpark spark, boolean calmHeldAura) {
         /** 이 무기의 basic trail 이 검기를 받는가 (apply_to_trails 에 등록됐는가) */
@@ -2551,6 +2556,56 @@ public final class SkillEngine {
     /** 등록부(config 파일) 값으로 되돌린다 — 인게임에서 민 것은 전부 버린다 */
     public void resetKigiSlash() {
         this.kigiSlashOverride = null;
+    }
+
+    // ══════════ 핫 리로드의 눈 — 무엇이 실렸고 무엇이 달라졌나 ══════════
+
+    /**
+     * <b>모션 등록부 인구조사</b> — 지금 메모리에 실린 등록부의 크기.
+     *
+     * <p>{@code /혼천 모션 재적재} 가 리로드 전후로 이것을 재서 <b>사람에게 요약을 보여 준다</b>.
+     * "재적재했다"는 말은 증거가 아니다 — <b>숫자가 달라진 것</b>이 증거다.
+     */
+    public java.util.Map<String, Integer> motionCensus() {
+        java.util.Map<String, Integer> census = new LinkedHashMap<>();
+        census.put("모션", skillMotion.size());
+        census.put("격모션", gradeMotion.size());
+        census.put("형태모션", formMotion.size());
+        census.put("오의모션", ultimateMotion.size());
+        census.put("사건모션", eventMotion.size());
+        census.put("궤적", trajectories.size());
+        census.put("3D모델", displayModels.size());
+        census.put("3D모션", displayMotions.size());
+        census.put("먹빛", inks.size());
+        return census;
+    }
+
+    /**
+     * 두 검기 등록부의 <b>다른 칸만</b> 골라 낸다 ({@code 키: 옛값 → 새값}).
+     *
+     * <p>레코드 성분을 반사로 훑는다 — {@link KigiSlash} 에 칸이 늘어도 이 눈이 따라온다
+     * (손으로 적은 목록은 반드시 언젠가 뒤처진다).
+     */
+    public static List<String> diffKigiSlash(KigiSlash before, KigiSlash after) {
+        List<String> out = new ArrayList<>();
+        if (before == null || after == null) {
+            if (before != after) {
+                out.add("kigi_slash: " + (before == null ? "없음 → 생김" : "있음 → 사라짐"));
+            }
+            return out;
+        }
+        for (java.lang.reflect.RecordComponent rc : KigiSlash.class.getRecordComponents()) {
+            try {
+                Object a = rc.getAccessor().invoke(before);
+                Object b = rc.getAccessor().invoke(after);
+                if (!Objects.equals(a, b)) {
+                    out.add(rc.getName() + ": " + a + " → " + b);
+                }
+            } catch (ReflectiveOperationException unreadable) {
+                out.add(rc.getName() + ": 읽지 못했다 (" + unreadable.getMessage() + ")");
+            }
+        }
+        return out;
     }
 
     /**

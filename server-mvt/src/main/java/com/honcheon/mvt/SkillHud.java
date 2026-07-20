@@ -31,7 +31,8 @@ final class SkillHud {
     /** 합성 구분자 — statusBar 와 notice 즉시 렌더가 같은 것을 쓴다 (줄이 두 얼굴을 갖지 않게) */
     static final String SEP = ChatColor.DARK_GRAY + " │ ";
 
-    private final SkillEngine engine;
+    /** 등록부. {@code final} 이 아닌 이유는 {@link #rebind} — 핫 리로드가 이 참조를 갈아끼운다 */
+    private SkillEngine engine;
 
     /** 이번 틱 전역 발행량 — newTick() 이 0으로 되돌린다 (중앙 티커 1개, F-P2) */
     private int globalThisTick;
@@ -53,6 +54,17 @@ final class SkillHud {
 
     SkillHud(SkillEngine engine) {
         this.engine = engine;
+    }
+
+    /**
+     * 핫 리로드 — 새 등록부로 갈아끼운다 ({@code /혼천 모션 재적재}).
+     * 팔레트 해석 캐시도 함께 버린다: 등록부의 팔레트가 바뀌었는데 옛 해석이 남으면
+     * <b>화면이 config 에 대해 거짓말한다</b> (재적재했는데 색이 안 바뀐다).
+     */
+    void rebind(SkillEngine engine) {
+        this.engine = engine;
+        resolved.clear();
+        unknownReported.clear();
     }
 
     void newTick() {

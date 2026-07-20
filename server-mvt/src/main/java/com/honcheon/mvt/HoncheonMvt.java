@@ -42,6 +42,11 @@ public final class HoncheonMvt extends JavaPlugin {
     private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
 
+    /** config 디렉터리 — 핫 리로드({@link #reloadSkillMotion})가 같은 자리를 다시 읽는다 */
+    private Path cfgDir;
+    /** 마지막 재적재 시각 (epoch ms). 0 이면 아직 한 번도 안 했다 = 기동 때 읽은 것 그대로다 */
+    private long motionReloadedAt;
+
     private final Map<UUID, PlayerLedger> ledgers = new HashMap<>();
     private final Map<String, Location> anchors = new HashMap<>();
     private final java.util.List<Zone> zones = new java.util.ArrayList<>();
@@ -56,7 +61,8 @@ public final class HoncheonMvt extends JavaPlugin {
             return;
         }
         Path cfg = configDir.toPath();
-        Metrics.load(cfg);      // 계기 등록부 — performance.yml metrics.probes (예산이 정본이다)
+        this.cfgDir = cfg;
+        Metrics.load(cfg);    // 계기 등록부 — performance.yml metrics.probes (예산이 정본이다)
         TickBudget.load(cfg);   // 틱 슬라이싱 예산 — 조성의 한 틱 폭탄을 나눠 먹인다
         Metrics.start(this);    // 계기 쓸기 (안 돈 틱도 마감한다)
         this.judgment = new JudgmentEngine(RulesConfig.load(cfg.resolve("judgment.yml")));
@@ -601,6 +607,129 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public SkillEngine skillEngine() {
         return skillEngine;
+    }
+
+    // ══════════ 모션 핫 리로드 — 재기동 없이 등록부를 다시 읽는다 ══════════
+
+    /**
+     * 마지막 재적재 시각 (epoch ms) — 0 이면 기동 때 읽은 것 그대로다.
+     *
+     * <p>이것이 있어야 <b>"파일은 고쳤는데 재적재를 안 했다"</b>를 밖에서 잡을 수 있다
+     * ({@code scripts/vfx_preflight.py} ③ config 검사). 파일 mtime 이 이 시각보다 새로우면
+     * 화면에 도는 값은 <b>파일이 말하는 값이 아니다.</b>
+     */
+    public long motionReloadedAt() {
+        return motionReloadedAt;
+    }
+
+    /** 지금 실린 등록부가 읽힌 config 디렉터리 */
+    public Path configPath() {
+        return cfgDir;
+    }
+
+    /**
+     * <b>{@code /혼천 모션 재적재}</b> — {@code config/skill_motion.yml} 을 <b>다시 읽어</b>
+     * {@link SkillEngine} 을 새로 세우고, 그것을 쥔 층들에 내려보낸다.
+     *
+     * <p><b>왜 이것이 있는가.</b> 모션 값 하나를 보려고 서버를 내리면 클라 접속까지 끊기고,
+     * 소프트렌더 재접속이 1~3분이다. 값 하나에 3~5분 — 그 고리를 수십 번 돌았다.
+     * 이 명령은 그 고리를 <b>10초</b>로 만든다. 클라를 안 끊는 것이 핵심이다.
+     *
+     * <p><b>실패하면 옛 엔진을 그대로 둔다.</b> YAML 문법이 깨졌다고 서버가 무공을 잃으면 안 된다 —
+     * 새 엔진을 <b>먼저 다 세운 뒤에야</b> 참조를 갈아끼운다 (반쯤 갈아끼운 상태가 존재하지 않게).
+     *
+     * <p><b>검기 오버라이드는 버린다.</b> {@code /혼천 검기} 가 민 값은 메모리에만 있던 것이고,
+     * config 를 다시 읽었으니 <b>config 가 진실</b>이다. 요약에 그렇게 적어 낸다 — 조용히 버리면
+     * 사람이 제가 민 값을 계속 보고 있다고 착각한다.
+     *
+     * @return 사람에게 보여 줄 요약 (첫 줄이 성패). 절대 예외를 던지지 않는다
+     */
+    public java.util.List<String> reloadSkillMotion() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (cfgDir == null) {
+            out.add("§c재적재 실패 — config 디렉터리를 모른다 (기동이 온전치 않았다)");
+            return out;
+        }
+        Path motionFile = cfgDir.resolve("skill_motion.yml");
+
+        SkillEngine fresh;
+        long began = System.nanoTime();
+        try {
+            fresh = new SkillEngine(cfgDir);   // ★ 다 세운 뒤에야 갈아끼운다
+        } catch (RuntimeException | LinkageError broken) {
+            // 옛 엔진은 그대로다 — 무공은 계속 나간다
+            getLogger().warning("[모션] 재적재 실패 — 옛 등록부를 그대로 쓴다: " + broken);
+            out.add("§c재적재 실패 — §7옛 등록부를 그대로 쓴다 (서버는 멀쩡하다)");
+            out.add("§7" + broken.getClass().getSimpleName() + ": " + broken.getMessage());
+            out.add("§8" + motionFile);
+            return out;
+        }
+
+        SkillEngine old = this.skillEngine;
+        boolean hadOverride = old != null && old.kigiSlashOverridden();
+        SkillEngine.KigiSlash kigiBefore = old == null ? null : old.kigiSlash();
+        java.util.Map<String, Integer> censusBefore =
+                old == null ? java.util.Map.of() : old.motionCensus();
+
+        // ─── 갈아끼우기 — 이 세 줄이 원자적이어야 한다 (그 사이에 틱이 안 돌게 메인 스레드에서만 부른다) ───
+        this.skillEngine = fresh;
+        if (skills != null) {
+            skills.rebind(fresh);      // → SkillHud · SkillDisplay · EnergyBossBar 까지 내려간다
+        }
+        if (skillCast != null) {
+            skillCast.rebind(fresh);
+        }
+        this.motionReloadedAt = System.currentTimeMillis();
+
+        long tookMs = (System.nanoTime() - began) / 1_000_000L;
+        long mtime = motionFile.toFile().lastModified();
+        java.time.format.DateTimeFormatter clock =
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String now = java.time.LocalDateTime.now().format(clock);
+        String fileTime = java.time.LocalDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(mtime), java.time.ZoneId.systemDefault()).format(clock);
+
+        // ★ preflight 가 읽는 줄 — 형식을 바꾸면 scripts/vfx_preflight.py 도 같이 고쳐라
+        getLogger().info("[모션] 재적재 — " + now + " · 파일 mtime " + fileTime
+                + " · " + tookMs + "ms");
+
+        out.add("§a모션 등록부 재적재 §7— " + tookMs + "ms · 서버는 안 내렸다");
+        out.add("§8" + motionFile + " (mtime " + fileTime + ")");
+
+        // ─── 무엇이 달라졌나 ① 등록부 크기 ───
+        java.util.Map<String, Integer> censusAfter = fresh.motionCensus();
+        StringBuilder counts = new StringBuilder("§7실린 것: ");
+        StringBuilder moved = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> e : censusAfter.entrySet()) {
+            Integer was = censusBefore.get(e.getKey());
+            counts.append("§f").append(e.getKey()).append(' ').append(e.getValue()).append("§7종  ");
+            if (was != null && !was.equals(e.getValue())) {
+                moved.append("§e").append(e.getKey()).append(' ')
+                        .append(was).append("→").append(e.getValue()).append("§7  ");
+            }
+        }
+        out.add(counts.toString().stripTrailing());
+        if (moved.length() > 0) {
+            out.add("§e달라진 종수: §7" + moved.toString().stripTrailing());
+        }
+
+        // ─── 무엇이 달라졌나 ② 검기 값 (한 칸씩) ───
+        java.util.List<String> kigiDiff =
+                SkillEngine.diffKigiSlash(kigiBefore, fresh.kigiSlash());
+        if (kigiDiff.isEmpty()) {
+            out.add("§7검기(kigi_slash): 달라진 값 없음"
+                    + (hadOverride ? " §8(오버라이드를 버렸는데도 같았다)" : ""));
+        } else {
+            out.add("§b검기(kigi_slash) 달라진 값 " + kigiDiff.size() + "칸:");
+            for (String line : kigiDiff) {
+                out.add("  §f" + line);
+            }
+        }
+        if (hadOverride) {
+            out.add("§6★ 인게임 검기 오버라이드를 버렸다 §7— config 를 다시 읽었으니 config 가 진실이다");
+        }
+        out.add("§8이제 스킬을 발동해 보라 — 클라는 안 끊겼다");
+        return out;
     }
 
     /** 되돌리는 손 — {@code /혼천 초기화} 가 쥔다 */

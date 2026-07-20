@@ -90,7 +90,8 @@ public final class SkillListener implements Listener {
     // recovery.in_combat.조식)을 플레이어와 **같은 함수**로 탄다 (regulateBreath).
 
     private final HoncheonMvt plugin;
-    private final SkillEngine engine;
+    /** 등록부. {@code final} 이 아닌 이유는 {@link #rebind} — 핫 리로드가 이 참조를 갈아끼운다 */
+    private SkillEngine engine;
     private final SkillHud hud;
     /**
      * 내공/내력 보스바 — XP바에서 이사 (★사용자 확정 2026-07-15: XP바 = v3 경험/레벨).
@@ -176,6 +177,25 @@ public final class SkillListener implements Listener {
         this.safetyRules = loadSafetyRules(plugin);
         this.keyPopulace = new org.bukkit.NamespacedKey(plugin, "populace");
         this.keyRegionNpc = new org.bukkit.NamespacedKey(plugin, "region_npc");
+    }
+
+    /**
+     * 핫 리로드 — 새 등록부를 <b>제 아래 층까지</b> 내려보낸다 ({@code /혼천 모션 재적재}).
+     *
+     * <p>이 층이 {@link SkillHud}·{@link SkillDisplay}·{@link EnergyBossBar} 를 쥐고 있으므로,
+     * 갈아끼우는 손도 여기서 한 번에 내려간다 — <b>한 곳만 갈아끼우면 나머지가 옛 등록부를 계속 읽는다</b>
+     * (그것이 "재적재했는데 안 먹었다"의 정체다).
+     *
+     * <p><b>플레이어 상태({@link #states}·태세·경직·동결)는 안 건드린다.</b> 그것은 config 가 아니라
+     * 지금 살아 있는 몸이다 — 재적재가 사람의 내력을 되돌리면 안 된다.
+     */
+    void rebind(SkillEngine engine) {
+        this.engine = engine;
+        hud.rebind(engine);
+        display.rebind(engine);
+        if (energyBossBar != null) {
+            energyBossBar.rebind(engine);
+        }
     }
 
     /**
@@ -772,7 +792,7 @@ public final class SkillListener implements Listener {
 
     /** {@code /혼천 검기} 가 받는 칸들 — 오류 안내가 여기 하나만 본다 (문구가 갈라지지 않게) */
     private static final String KIGI_KEYS =
-            "roll · tilt · sweep · radius · scale · height · forward · draw · fade · frame · sparks";
+            "roll·pitch · tilt · sweep · radius · scale · height · forward · draw · fade · frame · sparks";
 
     /**
      * 값 하나만 갈아끼운 <b>사본</b> — {@code KigiSlash} 는 record(불변)라 새 인스턴스를 만든다.
@@ -786,6 +806,7 @@ public final class SkillListener implements Listener {
         double sweep = c.sweepDeg();
         double tilt = c.tiltDeg();
         double roll = c.rollDeg();
+        double pitch = c.bladePitchDeg();
         int draw = c.drawTicks();
         int fade = c.fadeTicks();
         int frame = c.frameTicks();
@@ -798,6 +819,7 @@ public final class SkillListener implements Listener {
             case "scale" -> scale = v;
             case "height" -> height = v;
             case "forward" -> forward = v;
+            case "pitch" -> pitch = v;   // 날의 눕힘 — 90 이면 볼록한 바깥이 정면
             // 틱은 등록부 로더와 **같은 못**을 쓴다 (draw/frame ≥ 1 · fade ≥ 0) — 0틱은 그림이 없다
             case "draw" -> draw = Math.max(1, (int) Math.round(v));
             case "fade" -> fade = Math.max(0, (int) Math.round(v));
@@ -811,7 +833,7 @@ public final class SkillListener implements Listener {
         }
         return new SkillEngine.KigiSlash(c.enabled(), c.model(), c.applyToTrails(),
                 c.frameModels(), frame, c.replaceStroke(), scale, height, forward,
-                radius, sweep, tilt, roll, draw, fade, c.billboard(), c.alternate(),
+                radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura());
     }
 

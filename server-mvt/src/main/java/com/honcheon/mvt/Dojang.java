@@ -858,20 +858,40 @@ final class Dojang implements Listener {
 
     /** 몹 시험 — 등록부의 적을 그대로 부른다 (짐승·산적·무인) */
     void mob(Player player, String foeId) {
+        mob(player, foeId, false);
+    }
+
+    /**
+     * 몹 시험 — 등록부의 적을 그대로 부른다 (짐승·산적·무인).
+     *
+     * <p><b>{@code walking} 이 왜 있는가:</b> 기본은 {@code setAI(false)} 다 — 시험대의 몸은
+     * 계기라서, 걸어 다니면 사거리·피해를 못 잰다. 그런데 <b>형체(MobDisplay)의 다리 관절은
+     * 「실제로 움직인 거리」로 위상이 돈다</b>({@code rig.phase += moved * walkBobRate}) —
+     * 즉 <b>AI 를 끄면 다리가 영원히 안 흔들린다.</b> 걷는 모습을 봐야 하는 시험
+     * (하네스의 보행 애니메이션 검증)에서는 이 축이 필요하다.
+     *
+     * <p>{@code walking} 이면 AI 를 켜고 <b>부른 자를 표적으로</b> 준다 — 그래야 제자리에서
+     * 배회하지 않고 카메라 쪽으로 곧장 걸어온다 (보행 위상이 확실히 돈다).
+     */
+    void mob(Player player, String foeId, boolean walking) {
         Location at = footing(player);   // 허수아비와 같은 손 — 적도 땅에 파묻히면 안 된다
         if (at == null) {
             player.sendMessage(ChatColor.RED + "앞에 설 자리가 없다 — 트인 곳에서 다시 부르라");
             return;
         }
         LivingEntity spawned = plugin.hunting().spawnById(foeId, at);
-        if (spawned != null) {
-            spawned.setAI(false);   // ★ 시험대의 몸은 계기다 — 걸어 다니면 사거리를 못 잰다
-        }
         if (spawned == null) {
             player.sendMessage(ChatColor.RED + "등록부에 없는 적: " + foeId);
             return;
         }
-        player.sendMessage(ChatColor.GOLD + spawned.getCustomName() + ChatColor.GRAY + " 을(를) 불렀다");
+        // ★ 다리 관절은 **이동거리**로 돈다 — AI 를 끄면 걷기 애니메이션이 영원히 멈춘다
+        spawned.setAI(walking);
+        if (walking && spawned instanceof org.bukkit.entity.Mob beast) {
+            beast.setTarget(player);   // 제자리 배회 말고 이쪽으로 걸어오게 (보행 위상을 돌린다)
+        }
+        player.sendMessage(ChatColor.GOLD + spawned.getCustomName() + ChatColor.GRAY + " 을(를) 불렀다"
+                + (walking ? ChatColor.YELLOW + " (걷는다 — AI 켬 · 표적 " + player.getName() + ")"
+                           : ChatColor.DARK_GRAY + " (AI 끔 — 계기용)"));
     }
 
     void clear(Player player) {
