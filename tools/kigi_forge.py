@@ -8,6 +8,8 @@
   즉 무기·문파·기술마다 그림을 새로 그리는 게 아니라 **(실루엣, 먹빛) 한 쌍을 주문**한다.
   격 사다리(검기 청회 → 강기 청록 → 어검 옥)도 먹빛 인자만 갈아끼우면 자동으로 오른다.
 
+【확정값】 먹 몸 굵기 body_scale = 0.78 (2026-07-21 사용자 확정 — 「나」)
+
 【삼합의 층 (고정 골격)】
   ① 담묵 번짐 (수묵) ② 붓 눌림 먹 몸 (수묵) ③ 겹겹 광채 (글로우)
   ④ 금속 서슬 줄 (금속) ⑤ 흰 심 — 순서와 비율이 골격이고, 색만 팔레트를 따른다.
@@ -83,7 +85,7 @@ def _normal(pts, i, off):
     return pts[i][0] - dy / L * off, pts[i][1] + dx / L * off
 
 
-def samhap(pts: list, pal: dict, base_w: float = None, body_scale: float = 1.0) -> Image.Image:
+def samhap(pts: list, pal: dict, base_w: float = None, body_scale: float = 0.78) -> Image.Image:
     """★ 삼합 골격 — 어떤 경로든 이 붓으로 긋는다. (실루엣, 팔레트) 만 주문하라."""
     base_w = base_w or W * 0.088
     n = len(pts)
