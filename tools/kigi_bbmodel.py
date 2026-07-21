@@ -80,27 +80,29 @@ def build() -> dict:
 
     for i in range(SEGMENTS):
         th = -half + step * (i + 0.5)
+        # ★ 호를 **XY(수직)면**에 놓는다 — 검기는 몸 앞의 세로 아치다 (바닥에 눕는 XZ 가 아니다).
+        #   ∩ 이 위로 봉긋하게: X 가 좌우, Y 가 높이. Z(두께)는 render_sides:double 이 채운다.
         cx = math.sin(th) * RADIUS
-        cz = math.cos(th) * RADIUS
+        cy = math.cos(th) * RADIUS
         eid, gid = _uid(), _uid()
         # ★ 조각은 **제자리에 직접 놓는다.** bbmodel 에서 그룹의 origin 은 **회전 축일 뿐**
         #   자식을 옮기지 않는다 — 원점에 만들고 뼈가 옮겨 주기를 기대했다가
         #   조각 14개가 한 자리에 쌓여 **세로 기둥**이 나왔다 (실측 2026-07-20).
+        # ★ 호를 **XY(수직)면**에 놓는다 — 검기는 몸 앞의 세로 아치다 (바닥에 눕는 XZ 가 아니다).
+        #   X=좌우 · Y=높이 · Z=두께(render_sides:double 이 채운다). 접선축은 이제 Z 다.
         elements.append({
             "name": f"seg{i}", "type": "cube", "uuid": eid,
-            "from": [cx - seg_len / 2.0, -WIDTH / 2.0, cz - THICK / 2.0],
-            "to": [cx + seg_len / 2.0, WIDTH / 2.0, cz + THICK / 2.0],
-            "origin": [cx, 0.0, cz],
-            # ★ 부호 주의 — Y 회전 a 는 X축을 (cos a, 0, −sin a) 로 보낸다.
-            #   원 위 각 th 의 접선이 (cos th, 0, −sin th) 이므로 **a = +th** 다.
-            #   −th 로 줬다가 판들이 접선이 아니라 바깥으로 벌어져 **울타리처럼** 섰다 (실측).
-            "rotation": [0.0, math.degrees(th), 0.0],
+            "from": [cx - seg_len / 2.0, cy - WIDTH / 2.0, -THICK / 2.0],
+            "to": [cx + seg_len / 2.0, cy + WIDTH / 2.0, THICK / 2.0],
+            "origin": [cx, cy, 0.0],
+            # 수직면이니 회전축은 Z. 접선 각 th 만큼 조각을 눕힌다 (부호는 실측으로 맞춘다).
+            "rotation": [0.0, 0.0, -math.degrees(th)],
             "faces": {f: {"uv": [0, 0, 16, 16], "texture": 0}
                       for f in ("north", "south", "east", "west", "up", "down")},
         })
         outliner.append({
             "name": f"seg{i}", "uuid": gid, "isOpen": False,
-            "origin": [cx, 0.0, cz],
+            "origin": [cx, cy, 0.0],
             "children": [eid],
         })
         # 자라는 애니메이션 — 조각이 차례로 **제자리로 펴진다** (없으면 통째로 나타난다)

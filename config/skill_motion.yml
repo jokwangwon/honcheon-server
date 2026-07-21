@@ -373,6 +373,9 @@ kigi_slash:
   # ★ 몸 둘레를 도는 호 (EffectLib 기하) — 비우면 안 그린다 (판만으로 간다).
   #   판이 못 푸는 **등 뒤**를 점으로 메운다 (실측 47px → 3,936px).
   #   색은 등록부의 격 사다리를 따른다 — 검기는 청회다 (연두 아니다).
+  # ★ 3D 리본 (BetterModel · D) — 이름이 있으면 판·점보다 먼저 선다. 없으면 판·점 (가역).
+  model3d: kigi_arc
+  model3d_anim: grow
   geom_particle: dust
   geom_ink: 청회
   geom_step_deg: 1.5   # ★점 간격(도) — 작을수록 촘촘. 6도는 「티끌」로 읽혔다

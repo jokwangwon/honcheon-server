@@ -468,6 +468,46 @@ final class SkillDisplay {
         if (cfg == null || !cfg.enabled() || caster.getWorld() == null) {
             return false;
         }
+        // ★ 자리 = **공전의 중심**. 발 + center_height, 시선(수평)으로 forward 만큼만 앞.
+        //   초승달은 여기에 있지 않다 — 여기를 **중심으로 돈다** (translation 이 반경을 준다)
+        Vector flat = flat(caster);
+        Location feet = caster.getLocation();
+        Location at = feet.clone().add(flat.clone().multiply(cfg.forward()));
+        at.setY(feet.getY() + cfg.centerHeight());
+        at.setDirection(flat);   // 국소축을 시선에 맞춘다 — 공전은 시전자의 축에서 돈다
+
+        // ★ **3D 리본을 먼저 시도한다** (D · 2026-07-21). 서면 판·점을 **둘 다** 건너뛴다 —
+        //   리본 하나가 A(형태)와 B(각도)를 겸하므로 겹쳐 세우면 덤불이 된다 (A·B 실측의 교훈).
+        //   BetterModel 이 없거나 모델을 못 찾으면 false — 그때 아래 판·점이 그대로 메운다 (가역).
+        if (cfg.model3d() != null && !cfg.model3d().isBlank()) {
+            // ★ 팩을 든 눈에게만 리본을 보낸다 — 3D 모델은 팩 없이는 못 본다.
+            //   팩 없는 사람은 이 갈래 밖에서 판(바닐라 아이템)이 지킨다.
+            List<Player> whom = new ArrayList<>();
+            List<Player> noPack = new ArrayList<>();
+            audience(at, whom, noPack);
+            // 리본은 bbmodel 에서 이미 세로면(XY)에 서 있다 — pitch 로 안 세운다.
+            //   tilt_deg 는 그 위에 얹는 대각(내려베기) 기울기다.
+            boolean stood = plugin.modelBridge().spawnArc(at, cfg.model3d(), cfg.model3dAnim(),
+                    (float) cfg.tiltDeg(), caster.getLocation().getYaw(),
+                    cfg.drawTicks() + cfg.fadeTicks(), whom);
+            if (stood) {
+                note("검기리본", "3D 리본 " + cfg.model3d() + " (기울기 " + Math.round(cfg.tiltDeg())
+                        + "도 · " + (cfg.drawTicks() + cfg.fadeTicks()) + "틱)");
+                return true;
+            }
+            // 못 섰으면 조용히 판·점으로 — 다만 「왜」를 남긴다 (0 을 침묵으로 넘기지 않는다)
+            note("검기리본", "리본을 못 세웠다 — 판·점으로 물러선다 (" + cfg.model3d() + ")");
+        }
+
+        // ★ **점을 판보다 먼저, 판과 무관하게 긋는다** (2026-07-20).
+        //   왜: 예전엔 이 호출이 판을 세운 뒤에 있었다. 그래서 모델이 없거나 판을 끄면
+        //   **점까지 같이 꺼졌다** — 두 층을 갈라서 재려는데 갈라지지가 않았다.
+        //   층을 견주려면 층이 **서로 독립**이어야 한다.
+        kigiGeomArc(caster, cfg, at);
+
+        if (!cfg.plate()) {
+            return true;   // 점만 쓰는 판 — 판(ItemDisplay)은 세우지 않는다 (층 비교용 · 가역)
+        }
         String modelName = engine.displayModelNameByKey(cfg.model());
         if (modelName == null) {
             return false;   // 이 키의 모델이 등록부에 없다 — 조용히 물러선다 (파티클이 지킨다)
@@ -477,14 +517,6 @@ final class SkillDisplay {
             return false;
         }
         SkillEngine.DisplayMotion m = kigiMotion(cfg, modelName);
-
-        // ★ 자리 = **공전의 중심**. 발 + center_height, 시선(수평)으로 forward 만큼만 앞.
-        //   초승달은 여기에 있지 않다 — 여기를 **중심으로 돈다** (translation 이 반경을 준다)
-        Vector flat = flat(caster);
-        Location feet = caster.getLocation();
-        Location at = feet.clone().add(flat.clone().multiply(cfg.forward()));
-        at.setY(feet.getY() + cfg.centerHeight());
-        at.setDirection(flat);   // 국소축을 시선에 맞춘다 — 공전은 시전자의 축에서 돈다
 
         // 공전 — 자리와 각을 **같은 phase(−1 → +1)** 로 잰다. 클라이언트가 둘 다 보간한다
         Quaternionf qStart = kigiPose(cfg, dirSign, -1.0);
@@ -517,7 +549,6 @@ final class SkillDisplay {
             // 씨앗에서 자라며 **몸 둘레를 돈다** (검기 전용 경로 — headAnchor 가 공전을 덮지 못하게)
             kigiTransform(d, p.full, qEnd, tEnd, cfg.drawTicks());
         }
-        kigiGeomArc(caster, cfg, at);
         note("검기평타", String.format("scale%.1f 공전 반경%.2fm 호각%.0f도 기울기%.0f도 dir%s 그리기%d틱",
                 cfg.scale(), cfg.orbitRadius(), cfg.sweepDeg(), cfg.tiltDeg(),
                 dirSign < 0 ? "−" : "+", cfg.drawTicks()));

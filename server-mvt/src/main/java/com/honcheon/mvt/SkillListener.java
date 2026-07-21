@@ -841,7 +841,8 @@ public final class SkillListener implements Listener {
                 c.frameModels(), frame, c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
-                c.geomParticle(), c.geomInk(), c.geomSweepDeg(), c.geomStepDeg());
+                c.geomParticle(), c.geomInk(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),
+                c.model3d(), c.model3dAnim());
     }
 
     /** 지금 값 전부 + <b>config 에 그대로 붙일 줄</b> (확정은 사람이 config 에 못 박는다) */
