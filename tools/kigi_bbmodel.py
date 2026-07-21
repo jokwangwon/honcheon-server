@@ -45,19 +45,26 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
+# ★ 채도를 살린 청회 — 등록부 청회(chroma 28)는 낮에 회색과 안 갈렸다 (실측 chroma 7).
+#   등록부 색을 **버리는 게 아니라 대비를 키운다**: 인선은 청백, 심은 청회를 **더 진하게**,
+#   배는 먹. hue 는 그대로 청회 계열(≈200°)에 두되 채도를 올려 「기가 실린 날」로 읽히게.
+CHEONGHOE_DEEP = (86, 128, 148)   # 청회를 진하게 (chroma 62 — 등록부 청록 수준, hue 199° 유지)
+
+
 def _texture() -> str:
-    """세로 램프 — 위가 인선(청백), 아래가 배(먹). 리본의 모든 조각이 이 한 장을 문다."""
+    """세로 램프 — 위가 인선(밝은 청백), 아래로 청회 심 → 먹 배. 대비를 세워 낮에도 갈리게."""
     im = Image.new("RGBA", (TEX, TEX), (0, 0, 0, 0))
     px = im.load()
     for y in range(TEX):
         u = y / (TEX - 1)
-        if u < 0.18:
-            c = _lerp(CHEONGBAEK, HOEBAEK, u / 0.18)
-        elif u < 0.55:
-            c = _lerp(HOEBAEK, CHEONGHOE, (u - 0.18) / 0.37)
+        # 위 절반을 밝은 심(청백→진한 청회)에 넓게 준다 — 검기는 인선이 주역이다
+        if u < 0.30:
+            c = _lerp(CHEONGBAEK, CHEONGHOE_DEEP, u / 0.30)       # 인선 → 진한 청회
+        elif u < 0.72:
+            c = _lerp(CHEONGHOE_DEEP, CHEONGHOE, (u - 0.30) / 0.42)  # 심
         else:
-            c = _lerp(CHEONGHOE, MEOK, (u - 0.55) / 0.45)
-        a = int(252 * (1.0 - max(0.0, (u - 0.82) / 0.18) * 0.85))
+            c = _lerp(CHEONGHOE, MEOK, (u - 0.72) / 0.28)         # 배(먹)로 짧게 떨어진다
+        a = int(252 * (1.0 - max(0.0, (u - 0.86) / 0.14) * 0.80))
         for x in range(TEX):
             px[x, y] = (c[0], c[1], c[2], a)
     buf = io.BytesIO()
@@ -114,16 +121,20 @@ def build() -> dict:
             "origin": [cx, 0.0, cz],
             "children": [eid],
         })
-        # 자라는 애니메이션 — 조각이 차례로 **제자리로 펴진다** (없으면 통째로 나타난다)
-        t_in = 0.62 * i / max(1, SEGMENTS - 1)
+        # ★ **베기 한 번**의 애니 — 조각이 궤적을 따라 차례로 그어지고(앞), 꼬리부터 사라진다(뒤).
+        #   한 번 베는 것이지 「자라서 서 있는」 게 아니다 (실측: 옛 grow 는 대부분 정지라 촬영에 안 잡혔다).
+        #   f=0.55 까지 다 그어지고, f=0.62 부터 앞 조각(먼저 그은)부터 스러진다.
+        t_in = 0.55 * i / max(1, SEGMENTS - 1)              # 그어지는 시점 (머리가 앞선다)
+        t_out = 0.62 + 0.30 * i / max(1, SEGMENTS - 1)      # 스러지는 시점 (꼬리가 뒤에 남는다)
         animators[gid] = {
             "name": f"seg{i}", "type": "bone",
             "keyframes": [
                 _kf("scale", 0.0, [0.0, 0.0, 0.0]),
                 _kf("scale", max(0.001, t_in), [0.0, 0.0, 0.0]),
-                _kf("scale", t_in + 0.10, [1.0, 1.0, 1.0]),
-                _kf("scale", 0.95, [1.0, 1.0, 1.0]),
-                _kf("scale", 1.10, [1.0, 0.15, 1.0]),
+                _kf("scale", min(t_in + 0.07, 0.54), [1.15, 1.15, 1.15]),   # 그어지며 살짝 부풀고
+                _kf("scale", min(t_in + 0.14, 0.60), [1.0, 1.0, 1.0]),      # 제 크기로
+                _kf("scale", min(t_out, 0.98), [1.0, 1.0, 1.0]),
+                _kf("scale", min(t_out + 0.12, 1.0), [1.0, 0.0, 1.0]),      # 세로로 스러진다
             ],
         }
 
@@ -143,7 +154,7 @@ def build() -> dict:
         }],
         "animations": [{
             "uuid": _uid(), "name": "grow", "loop": "once", "override": False,
-            "length": 1.2, "snapping": 24, "animators": animators,
+            "length": 0.9, "snapping": 24, "animators": animators,
         }],
     }
 

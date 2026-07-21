@@ -376,7 +376,7 @@ kigi_slash:
   # ★ 3D 리본 (BetterModel · D) — 이름이 있으면 판·점보다 먼저 선다. 없으면 판·점 (가역).
   model3d: kigi_arc
   model3d_anim: grow
-  model3d_up: -0.5      # ★리본 자리를 가슴에서 올림(m) — 재적재로 쓴다
+  model3d_up: 0.0      # ★리본 자리를 가슴에서 올림(m) — 재적재로 쓴다
   model3d_yaw: 0.0     # ★방향 회전(도)
   model3d_pitch: 40.0   # ★기울기 회전(도)
   geom_particle: dust
@@ -392,7 +392,7 @@ kigi_slash:
   #   90 = 판이 누워 **볼록한 바깥이 정면**을 보고 오목한 안쪽이 플레이어를 감싼다 (횡베기).
   #    0 = 판이 세로로 서서 ∩ 의 배가 하늘을 본다 (그 버그의 자세).
   blade_pitch_deg: 90
-  draw_ticks: 12  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간
+  draw_ticks: 13  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간
   fade_ticks: 5                    # 사라지는 시간(꼬리부터 수축)
   billboard: FIXED                 # 세운 채 고정 (획에는 방향이 있다)
   alternate: true                  # 스윙마다 좌↔우 방향 번갈아(레퍼런스 "한 세트 더")
