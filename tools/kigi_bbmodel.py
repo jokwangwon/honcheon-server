@@ -41,9 +41,15 @@ CHEONGBAEK = (226, 240, 238)
 SEGMENTS = 16          # 조각 수 — 매끄러운 호
 RADIUS = 24.0          # 호의 반지름 (≈1.5블록)
 SWEEP = 155.0          # 무는 각(도)
-DEPTH_MAX = 9.0        # ★초승달의 **깊이**(방사 방향 폭) — 가운데가 깊고 양 끝이 뾰족하다
+DEPTH_MAX = 9.0        # ★콤마의 최대 **깊이**(방사 방향 폭) — 날 끝(머리) 쪽이 깊다
 THIN = 0.5             # ★판의 두께 — **얇다.** 이것이 모서리에서 얇게 보이게 하는 값이다
 TEX = 32               # 텍스처 한 변
+
+# ── 애니메이션 시간 (초) — 검이 호를 달리는 리듬 ────────────────────────────
+SWING_T = 0.30         # 날이 시작→끝을 훑는 시간 (빠르게 — 검은 순식간에 벤다)
+TRAIL = 0.22           # 지나간 자리가 꼬리로 남는 시간 (이 길이가 콤마의 길이를 정한다)
+FADE = 0.12            # 꼬리가 스러지는 시간
+ANIM_LEN = SWING_T + TRAIL + FADE   # 전체 (≈0.64초)
 
 
 def _uid() -> str:
@@ -97,9 +103,14 @@ def build() -> dict:
         #   깊이(방사 폭)는 가운데가 깊고 양 끝이 뾰족하다 → 초승달·콤마 꼴.
         cx = math.sin(th) * RADIUS
         cz = math.cos(th) * RADIUS
-        # 끝을 뾰족하게: 가운데(th=0)에서 깊고 양 끝에서 0 으로 (sin 곡선의 뿌리)
-        depth = DEPTH_MAX * (math.cos(th / half * (math.pi / 2.0)) ** 0.6)
-        depth = max(0.6, depth)
+        # ★ **콤마 꼴** — 시작(꼬리)은 가늘고 날 끝(머리)로 갈수록 깊어진다. 검이 지나간 자리다.
+        #   대칭 초승달(가운데 깊음)은 「정적」으로 읽혔다 — 방향이 없어서다 (사용자 교정 2026-07-21).
+        #   머리는 i=SEGMENTS-1(th=+half). 꼬리에서 머리로 깊이가 자라고, 아주 끝만 뾰족하게 만다.
+        f = i / max(1, SEGMENTS - 1)                        # 0=시작(꼬리) … 1=날 끝(머리)
+        prof = 0.16 + 0.84 * f                              # 꼬리 가늘게 → 머리 깊게
+        if f > 0.86:
+            prof *= 1.0 - (f - 0.86) / 0.14 * 0.55          # 맨 끝은 뾰족하게 만다
+        depth = max(0.6, DEPTH_MAX * prof)
         eid, gid = _uid(), _uid()
         elements.append({
             "name": f"seg{i}", "type": "cube", "uuid": eid,
@@ -125,20 +136,22 @@ def build() -> dict:
             "origin": [cx, 0.0, cz],
             "children": [eid],
         })
-        # ★ **베기 한 번**의 애니 — 조각이 궤적을 따라 차례로 그어지고(앞), 꼬리부터 사라진다(뒤).
-        #   한 번 베는 것이지 「자라서 서 있는」 게 아니다 (실측: 옛 grow 는 대부분 정지라 촬영에 안 잡혔다).
-        #   f=0.55 까지 다 그어지고, f=0.62 부터 앞 조각(먼저 그은)부터 스러진다.
-        t_in = 0.55 * i / max(1, SEGMENTS - 1)              # 그어지는 시점 (머리가 앞선다)
-        t_out = 0.62 + 0.30 * i / max(1, SEGMENTS - 1)      # 스러지는 시점 (꼬리가 뒤에 남는다)
+        # ★★ **검이 호를 따라 달린다** — 날(머리)이 시작→끝으로 훑고, 지나간 자리에 꼬리가 남아 흐른다.
+        #   레퍼런스가 말한 「시작 위치 → 베는 흐름 → 전체 흐름」이 이 **달리는 콤마**로 표현된다:
+        #   어느 순간이든 화면엔 날 끝(밝은 머리) + 뒤로 늘어진 꼬리(스러지는) 만 보인다 = 검이 베는 모습.
+        #   (옛 애니는 「통째로 나타났다 사라짐」이라 방향도 흐름도 없었다 — 사용자 교정.)
+        #   ★ 키프레임 시간은 **초** 단위다 (length=SWING+TRAIL+FADE). 옛 값은 length(0.9)를 넘겨 잘렸다.
+        arrive = SWING_T * f                                # 날이 이 마디에 닿는 순간
+        gone = arrive + TRAIL                               # 날이 지나가고 꼬리가 스러지기 시작
         animators[gid] = {
             "name": f"seg{i}", "type": "bone",
             "keyframes": [
                 _kf("scale", 0.0, [0.0, 0.0, 0.0]),
-                _kf("scale", max(0.001, t_in), [0.0, 0.0, 0.0]),
-                _kf("scale", min(t_in + 0.07, 0.54), [1.15, 1.15, 1.15]),   # 그어지며 살짝 부풀고
-                _kf("scale", min(t_in + 0.14, 0.60), [1.0, 1.0, 1.0]),      # 제 크기로
-                _kf("scale", min(t_out, 0.98), [1.0, 1.0, 1.0]),
-                _kf("scale", min(t_out + 0.12, 1.0), [1.0, 0.0, 1.0]),      # 세로로 스러진다
+                _kf("scale", max(0.001, arrive), [0.0, 0.0, 0.0]),         # 날이 오기 전엔 없다
+                _kf("scale", arrive + 0.035, [1.0, 1.0, 1.35]),           # 닿는 순간 날 끝이 번쩍(깊이로 부풀)
+                _kf("scale", arrive + 0.08, [1.0, 1.0, 1.0]),             # 제 크기 (꼬리로 남는다)
+                _kf("scale", gone, [1.0, 1.0, 1.0]),                      # 꼬리로 흐르는 동안 유지
+                _kf("scale", gone + FADE, [1.0, 1.0, 0.0]),               # 안쪽부터 스러진다
             ],
         }
 
@@ -158,7 +171,7 @@ def build() -> dict:
         }],
         "animations": [{
             "uuid": _uid(), "name": "grow", "loop": "once", "override": False,
-            "length": 0.9, "snapping": 24, "animators": animators,
+            "length": round(ANIM_LEN, 3), "snapping": 24, "animators": animators,
         }],
     }
 
@@ -176,7 +189,7 @@ def main():
     out.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     print(f"  구웠다: {out}  ({out.stat().st_size // 1024}KB)")
     print(f"  조각 {SEGMENTS}개 · 반지름 {RADIUS/16:.2f}블록 · 무는 각 {SWEEP}도 · 두께 {THIN}(얇다) · 깊이 {DEPTH_MAX}")
-    print(f"  애니메이션: grow ({0.9}초 · 궤적을 따라 그어지고 스러진다)")
+    print(f"  애니메이션: grow ({ANIM_LEN:.2f}초 · 날이 호를 달리고 꼬리가 흐른다)")
 
 
 if __name__ == "__main__":
