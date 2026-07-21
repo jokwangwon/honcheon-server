@@ -83,7 +83,7 @@ def _normal(pts, i, off):
     return pts[i][0] - dy / L * off, pts[i][1] + dx / L * off
 
 
-def samhap(pts: list, pal: dict, base_w: float = None) -> Image.Image:
+def samhap(pts: list, pal: dict, base_w: float = None, body_scale: float = 1.0) -> Image.Image:
     """★ 삼합 골격 — 어떤 경로든 이 붓으로 긋는다. (실루엣, 팔레트) 만 주문하라."""
     base_w = base_w or W * 0.088
     n = len(pts)
@@ -103,14 +103,14 @@ def samhap(pts: list, pal: dict, base_w: float = None) -> Image.Image:
         im.alpha_composite(lay)
     # ② 붓 눌림 먹 몸
     lay = canvas(); d = ImageDraw.Draw(lay)
-    stroke(d, pts, [base_w * press(t) for t in ts], pal["body"], 250)
+    stroke(d, pts, [base_w * press(t) * body_scale for t in ts], pal["body"], 250)
     im.alpha_composite(lay)
     # 갈필 — 꼬리 절반의 마른 줄기
     lay = canvas(); d = ImageDraw.Draw(lay)
     for off in (-0.5, -0.15, 0.3, 0.62):
         seg = [i for i in range(n) if ts[i] < 0.45]
         stroke(d, [_normal(pts, i, base_w * off) for i in seg],
-               [base_w * press(ts[i]) * 0.15 for i in seg], pal["body"], 190)
+               [base_w * press(ts[i]) * 0.15 * body_scale for i in seg], pal["body"], 190)
     im.alpha_composite(lay)
     # ④ 금속 서슬 줄
     lay = canvas(); d = ImageDraw.Draw(lay)
