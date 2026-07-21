@@ -1089,10 +1089,20 @@ public final class SkillEngine {
         if (m.get("apply_to_trails") instanceof List<?> l) {
             l.forEach(o -> trails.add(String.valueOf(o)));
         }
+        // ★ 원형(archetype) 축 — 있으면 trail 축을 대신한다 (도끼가 검압을 받지 않게 · 검토 P0)
+        List<String> classes = new ArrayList<>();
+        if (m.get("apply_to_classes") instanceof List<?> cl) {
+            cl.forEach(o -> classes.add(String.valueOf(o)));
+        }
         // ★ 단계 모델 — 스윙 중 갈아끼울 순서 (등록 이름. 비면 교체가 꺼지고 model 하나로 고정)
         List<String> frameModels = new ArrayList<>();
         if (m.get("frame_models") instanceof List<?> fl) {
             fl.forEach(o -> frameModels.add(String.valueOf(o)));
+        }
+        // ★ B 방향 세트 (검압 올려베기) — 있으면 스윙 방향(dirSign)에 따라 A/B 를 번갈아 쓴다
+        List<String> frameModelsB = new ArrayList<>();
+        if (m.get("frame_models_b") instanceof List<?> fb) {
+            fb.forEach(o -> frameModelsB.add(String.valueOf(o)));
         }
         Map<String, Object> sp = asMap(m.get("spark"));
         KigiSpark spark = new KigiSpark(
@@ -1103,7 +1113,9 @@ public final class SkillEngine {
         return new KigiSlash(
                 m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
                 str(m.get("model")), Collections.unmodifiableList(trails),
+                Collections.unmodifiableList(classes),
                 Collections.unmodifiableList(frameModels),
+                Collections.unmodifiableList(frameModelsB),
                 Math.max(1, intOr(m.get("frame_ticks"), 3)),
                 Boolean.TRUE.equals(m.get("replace_stroke")),
                 dblOr(m.get("scale"), 2.0), dblOr(m.get("center_height"), 1.0),
@@ -1524,7 +1536,8 @@ public final class SkillEngine {
      *                      한 번 재사용했다가 {@code sweep_deg: 0} 탓에 호가 한 점으로 접혔다 (실측)
      */
     public record KigiSlash(boolean enabled, String model, List<String> applyToTrails,
-                            List<String> frameModels, int frameTicks,
+                            List<String> applyToClasses,
+                            List<String> frameModels, List<String> frameModelsB, int frameTicks,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
                             double bladePitchDeg,
@@ -1537,6 +1550,19 @@ public final class SkillEngine {
         /** 이 무기의 basic trail 이 검기를 받는가 (apply_to_trails 에 등록됐는가) */
         public boolean appliesToTrail(String trail) {
             return trail != null && applyToTrails.contains(trail);
+        }
+
+        /**
+         * ★ 이 무기가 검기를 받는가 — <b>원형(archetype) 축이 trail 축보다 우선한다</b> (2026-07-21 ·
+         * 외부 검토 P0). 호 궤적은 검·도뿐 아니라 부(도끼)·월아산도 쓰므로, trail 만 보면 도끼가
+         * 검압 초승달을 받아 무기군 원형(vfx_primitives.md)이 런타임에서 무너진다.
+         * {@code apply_to_classes} 가 있으면 무기 분류로만 판단하고, 없으면 옛 trail 규약(가역).
+         */
+        public boolean appliesTo(String weaponClass, String trail) {
+            if (!applyToClasses.isEmpty()) {
+                return weaponClass != null && applyToClasses.contains(weaponClass);
+            }
+            return appliesToTrail(trail);
         }
     }
 

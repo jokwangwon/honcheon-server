@@ -90,13 +90,21 @@ def press_brush(pts, ink: str = "청회", *, edge_side: str = "inner",
     W = F.W
     wmax = (wmax or W * WMAX_SCALE) * (1.07 if mode == "pass" else 1.0)
     body_alpha = {"peak": 0.82, "pass": 0.62, "collapse": 0.10}[mode]
-    if mode == "pass":                                   # 전방 이동 — 진행 방향으로 살짝
-        adv = max(2, len(pts) // 60)
-        pts = pts[adv:] + [pts[-1]] * adv
+    # ★ 절단 통과 = **후방 30% 를 비운다** (검토 2차: 옛 pts 절단+끝점 중복은 이동이 아니었다 —
+    #   같은 그림이 다시 그려졌다). 본체가 앞으로 빠져나가고 뒤가 비는 것이 2틱에서 읽히는 차이다.
+    rear_cut = 0.30 if mode == "pass" else 0.0
     n = len(pts)
     ts = [i / (n - 1) for i in range(n)]
     outer, inner = _edges(pts, wmax, edge_side)
     im = F.canvas()
+
+    def alive(t):
+        """후방 비움 게이트 — rear_cut 이전은 없고, 경계 6% 구간은 알파 램프."""
+        if rear_cut <= 0:
+            return 1.0
+        if t < rear_cut:
+            return 0.0
+        return min(1.0, (t - rear_cut) / 0.06)
 
     # ── ① 검압 몸체 — 면 하나. 서슬 쪽이 짙고 먹 테 쪽으로 빠르게 흐려진다
     if body_alpha > 0.12:
@@ -106,11 +114,11 @@ def press_brush(pts, ink: str = "청회", *, edge_side: str = "inner",
             t = ts[i]
             col = F._mix(F._mix(pal["glow_deep"], pal["glow_mid"], min(1.0, t * 1.6)),
                          F.INKS["청백"], max(0.0, (t - 0.74) * 1.5))
-            base_a = _lerp(55, 150, min(1.0, t * 1.35)) * body_alpha
+            base_a = _lerp(55, 150, min(1.0, t * 1.35)) * body_alpha * alive(t)
             for k in range(SLICES):
                 f0, f1 = k / SLICES, (k + 1) / SLICES
                 fm = (k + 0.5) / SLICES
-                dens = 0.10 + 0.90 * (fm if edge_side == "inner" else 1.0 - fm) ** 2.2
+                dens = 0.22 + 0.78 * (fm if edge_side == "inner" else 1.0 - fm) ** 1.6   # 밝은 배경 보강 (검토 3.7)
                 p00 = _between(outer[i], inner[i], f0); p01 = _between(outer[i], inner[i], f1)
                 p10 = _between(outer[i + 1], inner[i + 1], f0); p11 = _between(outer[i + 1], inner[i + 1], f1)
                 d.polygon([p00, p10, p11, p01], fill=(*col, int(base_a * dens)))
@@ -127,7 +135,7 @@ def press_brush(pts, ink: str = "청회", *, edge_side: str = "inner",
             p00 = _between(outer[i], inner[i], f0); p01 = _between(outer[i], inner[i], f1)
             p10 = _between(outer[i + 1], inner[i + 1], f0); p11 = _between(outer[i + 1], inner[i + 1], f1)
             d.polygon([p00, p10, p11, p01],
-                      fill=(*col, int(95 * body_alpha / 0.82 * min(1.0, t * 1.5))))
+                      fill=(*col, int(95 * body_alpha / 0.82 * min(1.0, t * 1.5) * alive(t))))
         im.alpha_composite(lay)
 
         # 흐름 결 — 딱 한 줄, 아주 희미하게 (부분적)
@@ -204,37 +212,26 @@ def press_brush(pts, ink: str = "청회", *, edge_side: str = "inner",
             continue
         if any(a <= t <= b for a, b in SEOSUL_BREAKS):
             continue
-        if mode == "collapse" and not (0.30 <= t <= 0.42 or 0.62 <= t <= 0.90):
-            continue                                     # 끊어진 토막 둘
+        if mode == "collapse" and not (0.35 <= t <= 0.46 or 0.67 <= t <= 0.94):
+            continue                                     # 끊어진 토막 둘 — 진행 방향으로 밀린 자리 (검토 3.5)
         cut = edge_cut(t, "inner" if edge_side == "inner" else "outer")
         if cut <= 0.45:
+            continue
+        a_live = alive(t)
+        if a_live <= 0:
             continue
         col = F._mix(F.INKS["청백"], WHITE, max(0.0, (t - 0.55) * 1.6))
         ww = wmax * 0.048 * sw * min(1.0, (cut - 0.45) / 0.35)
         if mode == "pass":
             ww *= 0.78
         x, y = lit_edge[i]
-        d.ellipse([x - ww, y - ww, x + ww, y + ww], fill=(*col, 255))
+        # 접촉 그림자 — 서슬 바로 안쪽의 얇은 먹 (흰 구름 배경에서 서슬을 지킨다 · 검토 3.7).
+        #   별도의 세 번째 선이 아니라 서슬에 붙은 그늘이다 (몸 쪽으로 반쯤 겹침)
+        sx, sy = _between((x, y), _between(outer[i], inner[i], 0.5), 0.30)
+        d.ellipse([sx - ww * 0.9, sy - ww * 0.9, sx + ww * 0.9, sy + ww * 0.9],
+                  fill=(*F._mix(F.MEOK, F.INKS["청회"], 0.25), int(175 * a_live)))
+        d.ellipse([x - ww, y - ww, x + ww, y + ww], fill=(*col, int(255 * a_live)))
     im.alpha_composite(lay)
-
-    # ── 붕괴: 짧은 절단선 3개 (머리 부근 부채꼴 — 파편 대체)
-    if mode == "collapse":
-        lay = F.canvas(); d = ImageDraw.Draw(lay)
-        hx, hy = pts[int(n * 0.84)]
-        lim = F.W * 0.985
-        for k, ang_deg in enumerate((-46, 8, 52)):
-            a = math.radians(ang_deg)
-            L = wmax * (0.42 + 0.20 * F.noise(k * 7.7, 31))
-            x0 = hx + math.cos(a) * wmax * 0.30
-            y0 = hy + math.sin(a) * wmax * 0.30
-            x1, y1 = x0 + math.cos(a) * L, y0 + math.sin(a) * L
-            if x1 > lim:                                  # 캔버스를 뚫지 않는다 (UV 절단선 방지)
-                y1 = y0 + (y1 - y0) * (lim - x0) / max(1e-6, x1 - x0)
-                x1 = lim
-            d.line([(x0, y0), (x1, y1)],
-                   fill=(*F._mix(F.INKS["청백"], WHITE, 0.3), 220),
-                   width=max(2, int(F.W / 256 * 1.6)))
-        im.alpha_composite(lay)
 
     return im.resize((F.OUT, F.OUT), Image.LANCZOS)
 

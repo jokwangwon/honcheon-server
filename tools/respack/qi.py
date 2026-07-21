@@ -625,7 +625,8 @@ def write_qi_assets() -> int:
 #   이 파일은 그 로직을 **무수정 이식**한다 (색·형·프레임 동일). 난수 0 — 결정론.
 KIGI_W, KIGI_H = 256, 112       # 판 띠 — 깊은 초승달. 112행: 획 살집(붓 0.070)의 광채까지 담는다
 KIGI_CANVAS = 256               #   (256 인 이유: 삼합 붓의 층이 저해상도에선 서브픽셀로 뭉개진다)
-KIGI_FRAMES = 5                 # ★5프레임 통일 (사용자 확정 2026-07-21): 시작→흐름→전체→잔상→스러짐
+KIGI_SETS = (("press_a", "inner"),   # ★검압형 A — 내려·횡베기 (오목면 서슬) · 피크→통과→붕괴 3장
+             ("press_b", "outer"))   #   검압형 B — 올려베기 (볼록면 서슬). 2026-07-21 검토 P0: A/B 각 3장
 KIGI_UV_V = 16.0 * KIGI_H / KIGI_CANVAS   # = 7.0 — 그림은 캔버스의 **맨 위 112행**에 있다
 
 # ═══ 【스윙 동기화 · 2026-07-19】 왜 .mcmeta 애니를 버리고 **모델 3벌**로 굽는가 ═══
@@ -662,10 +663,26 @@ def _forge():
     return _FORGE
 
 
-def kigi_frames():
-    """확정 5장 — 대장간의 band_frames(청회, 256)를 write_png 행렬로 바꾼다."""
+_PRESS = None
+
+
+def _press():
+    """tools/kigi_press.py — 검압형 렌더러 (kigi_forge 를 스스로 불러 쓴다)."""
+    global _PRESS
+    if _PRESS is None:
+        import importlib.util
+        path = Path(__file__).resolve().parent.parent / "kigi_press.py"
+        spec = importlib.util.spec_from_file_location("kigi_press", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _PRESS = mod
+    return _PRESS
+
+
+def kigi_frames(edge_side):
+    """검압형 3장 (피크→절단 통과→붕괴) — kigi_press 가 그린 것을 write_png 행렬로 바꾼다."""
     out = []
-    for im in _forge().band_frames("청회", res=KIGI_CANVAS):
+    for im in _press().press_frames("청회", edge_side, res=KIGI_CANVAS):
         px = im.load()
         out.append([[px[x, y] for x in range(KIGI_CANVAS)] for y in range(KIGI_CANVAS)])
     return out
@@ -685,29 +702,36 @@ def _kigi_model(length_m=1.5, width_m=0.66, thick_m=0.04):
 
 
 def write_kigi_assets() -> int:
-    """검기 5단계 (삼합·청회) — kigi/arc1..arc5 (각각 정사각 PNG + 모델 + 아이템 정의 · .mcmeta 없음).
+    """검압형 검기 6키 — kigi/press_a1..3 + press_b1..3 (각각 정사각 PNG + 모델 + 아이템 정의).
 
-    등록부(config/skill_motion.yml display.models 참격_호_검기1..5)가 honcheon:kigi/arc1..5 를
-    청구하고, kigi_slash.frame_models 가 스윙 중 갈아끼울 순서를 적는다 (위 【스윙 동기화】 참조).
-    옛 kigi/arc(스트립+mcmeta)는 **더 이상 굽지 않고 자리에 남은 것도 지운다** — 등록부가 안 부르는
-    자산은 model_key_audit 의 '죽은 자산'이다."""
+    등록부(display.models 검압_내려1..3 · 검압_올려1..3)가 이 키들을 청구하고,
+    kigi_slash.frame_models(_b) 가 스윙 중 갈아끼울 순서를 적는다 (위 【스윙 동기화】 참조).
+    옛 세대(kigi/arc 스트립 · arc1..5 삼합)는 **더 이상 굽지 않고 자리에 남은 것도 지운다** —
+    등록부가 안 부르는 자산은 model_key_audit 의 '죽은 자산'이다."""
     base = PACK / "assets" / "honcheon" / "textures" / "item"
-    # 옛 스트립의 잔해를 걷는다 (빌더는 덮어쓸 뿐 지우지 않는다 — 남으면 죽은 자산 위반)
-    for stale in (base / "kigi" / "arc.png", base / "kigi" / "arc.png.mcmeta",
-                  MODEL_DIR / "item" / "kigi" / "arc.json", ITEM_DEF_DIR / "kigi" / "arc.json"):
-        if stale.exists():
-            stale.unlink()
-    frames = kigi_frames()
-    for i in range(KIGI_FRAMES):
-        key = f"kigi/arc{i + 1}"
-        write_png(base / f"{key}.png", frames[i])
-        write_json(MODEL_DIR / "item" / f"{key}.json", {
-            "textures": {"0": f"honcheon:item/{key}", "particle": f"honcheon:item/{key}"},
-            "elements": _kigi_model(),
-            "gui_light": "front",
-        })
-        write_json(ITEM_DEF_DIR / f"{key}.json",
-                   {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
-    return KIGI_FRAMES
+    stale = [base / "kigi" / "arc.png", base / "kigi" / "arc.png.mcmeta",
+             MODEL_DIR / "item" / "kigi" / "arc.json", ITEM_DEF_DIR / "kigi" / "arc.json"]
+    for i in range(1, 6):
+        stale += [base / "kigi" / f"arc{i}.png",
+                  MODEL_DIR / "item" / "kigi" / f"arc{i}.json",
+                  ITEM_DEF_DIR / "kigi" / f"arc{i}.json"]
+    for f in stale:
+        if f.exists():
+            f.unlink()
+    made = 0
+    for prefix, side in KIGI_SETS:
+        frames = kigi_frames(side)
+        for i, grid in enumerate(frames, 1):
+            key = f"kigi/{prefix}{i}"
+            write_png(base / f"{key}.png", grid)
+            write_json(MODEL_DIR / "item" / f"{key}.json", {
+                "textures": {"0": f"honcheon:item/{key}", "particle": f"honcheon:item/{key}"},
+                "elements": _kigi_model(),
+                "gui_light": "front",
+            })
+            write_json(ITEM_DEF_DIR / f"{key}.json",
+                       {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}})
+            made += 1
+    return made
 
 

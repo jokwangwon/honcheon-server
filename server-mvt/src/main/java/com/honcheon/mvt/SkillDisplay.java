@@ -60,6 +60,8 @@ final class SkillDisplay {
     /** 팩을 받은 눈 — 이 집합에 없으면 폴백을 보거나, 아무것도 못 본다 (그 자리는 파티클이 지킨다) */
     private final Set<UUID> packed = new HashSet<>();
     private final List<Piece> pieces = new ArrayList<>();
+    /** ★ 시전자당 검기 평타 판 1장 — 새 스윙이 이전 판을 즉시 거둔다 (연타 상시 점등·누적 방지) */
+    private final Map<UUID, Piece> kigiByCaster = new HashMap<>();
     /** 지속 형체 — 몸 → (자리 → 형체). 심장박동으로 산다 (갱신이 끊기면 스스로 사라진다) */
     private final Map<UUID, Map<String, Persist>> persistent = new HashMap<>();
     private final Map<String, Material> materials = new HashMap<>();
@@ -510,15 +512,42 @@ final class SkillDisplay {
         if (!cfg.plate()) {
             return true;   // 점만 쓰는 판 — 판(ItemDisplay)은 세우지 않는다 (층 비교용 · 가역)
         }
-        String modelName = engine.displayModelNameByKey(cfg.model());
+        // ★ 소환 모델 = 단계 목록의 첫 장 (2026-07-21 · 검토 P0). 예전엔 cfg.model 키로 소환했는데,
+        //   frame_models 만 바꾸고 model 을 안 바꾸면 **첫 단계가 조용히 건너뛰어졌다**
+        //   (advanceFrames 는 idx 0 을 다시 안 끼운다 — 소환한 그것이 1단계라는 계약).
+        //   이제 계약을 구조로 강제한다: 단계 목록이 있으면 그 [0] 이 곧 소환 모델이다.
+        List<String> frameNames = kigiFrameNames(cfg, dirSign);
+        String modelName = frameNames.isEmpty()
+                ? engine.displayModelNameByKey(cfg.model()) : frameNames.get(0);
         if (modelName == null) {
             return false;   // 이 키의 모델이 등록부에 없다 — 조용히 물러선다 (파티클이 지킨다)
         }
         SkillEngine.DisplayModel model = engine.displayModel(modelName);
         if (model == null) {
+            if (barked.add("검기소환모델없음|" + modelName)) {
+                plugin.getLogger().warning("[혼천] kigi_slash 단계 '" + modelName
+                        + "' 가 display.models 에 없다 — 검기를 못 세운다 (config/skill_motion.yml)");
+            }
             return false;
         }
+        if (!frameNames.isEmpty() && cfg.model() != null && !cfg.model().equals(model.key())
+                && barked.add("검기모델표류|" + cfg.model())) {
+            plugin.getLogger().warning("[혼천] kigi_slash.model(" + cfg.model() + ") ≠ frame_models[0]("
+                    + model.key() + ") — 단계 목록이 이긴다. config 의 model 을 맞춰라");
+        }
         SkillEngine.DisplayMotion m = kigiMotion(cfg, modelName);
+
+        // ★ 시전자당 평타 판은 **한 장** (검토: 수명 8틱 vs 공격 간격 → 상시 점등·누적 방지).
+        //   새 스윙이 시작되면 이전 판을 즉시 거둔다 — 연타 사이의 시각적 공백이 「빡」을 지킨다.
+        Piece prev = kigiByCaster.remove(caster.getUniqueId());
+        if (prev != null) {
+            for (Display d : prev.parts) {
+                if (d.isValid()) {
+                    d.remove();
+                }
+            }
+            prev.dieAt = tick;   // 중앙 티커가 다음 순회에서 목록을 정리한다
+        }
 
         // 공전 — 자리와 각을 **같은 phase(−1 → +1)** 로 잰다. 클라이언트가 둘 다 보간한다
         Quaternionf qStart = kigiPose(cfg, dirSign, -1.0);
@@ -530,6 +559,7 @@ final class SkillDisplay {
         if (p == null) {
             return false;   // 볼 눈이 없거나 예산 초과 — 파티클(흰 별)이 그 자리를 지킨다
         }
+        kigiByCaster.put(caster.getUniqueId(), p);
         p.rot = qEnd;
         p.rise = 0.0f;
         p.orbit = tEnd;   // 지울 때도 이 자리다 (되돌리면 초승달이 몸 한복판으로 튄다)
@@ -539,7 +569,7 @@ final class SkillDisplay {
         p.fadeAt = tick + cfg.drawTicks();          // 그리기가 끝나면 수축 시작
         p.dieAt = p.fadeAt + cfg.fadeTicks();
         // ★ 단계 — 스윙 중 갈아끼울 아이템을 미리 굽는다 (교체는 중앙 티커가 한다)
-        List<ItemStack> frames = kigiFrames(cfg);
+        List<ItemStack> frames = kigiFrames(frameNames);
         if (frames.size() > 1) {
             p.frames = frames;
             p.frameTicks = Math.max(1, cfg.frameTicks());
@@ -549,7 +579,11 @@ final class SkillDisplay {
         for (Display d : p.parts) {
             d.setBrightness(new Display.Brightness(cfg.brightness(), cfg.brightness()));
             // 씨앗에서 자라며 **몸 둘레를 돈다** (검기 전용 경로 — headAnchor 가 공전을 덮지 못하게)
-            kigiTransform(d, p.full, qEnd, tEnd, cfg.drawTicks());
+            // ★ 버스트 문법 (2026-07-21 · 검토 P0): 평타 피크는 **시작부터 최종 크기**여야 한다.
+            //   예전엔 0.001 → full 을 draw_ticks 내내 보간해 피크가 점, 붕괴가 최대가 됐다 —
+            //   레퍼런스 실측(즉시 최대 → 빠른 소멸)과 정반대. 이제 1틱 팝만 허용한다.
+            //   공전(sweep_deg ≠ 0)이면 회전·자리 보간이 필요하므로 옛 시간을 쓴다 (가역).
+            kigiTransform(d, p.full, qEnd, tEnd, cfg.sweepDeg() == 0.0 ? 1 : cfg.drawTicks());
         }
         note("검기평타", String.format("scale%.1f 공전 반경%.2fm 호각%.0f도 기울기%.0f도 dir%s 그리기%d틱",
                 cfg.scale(), cfg.orbitRadius(), cfg.sweepDeg(), cfg.tiltDeg(),
@@ -625,9 +659,22 @@ final class SkillDisplay {
      *
      * @return 구워진 단계 아이템 (2개 미만이면 부르는 쪽이 교체를 끈다)
      */
-    private List<ItemStack> kigiFrames(SkillEngine.KigiSlash cfg) {
+    /**
+     * ★ A/B 방향 세트 선택 — dirSign(alternate 토글)이 음이고 B 세트가 있으면 B(올려베기)를 쓴다.
+     * 바닐라 스윙 애니메이션에는 올려/내려 구분이 없으므로, 의미 방향이 생기기 전까지는
+     * 스윙 교대(alternate)가 A/B 를 번갈아 끼우는 것이 시각 변화의 정직한 최소 구현이다
+     * (외부 검토는 의미 방향 명시를 권고 — 자세(posture) 시스템이 방향을 갖게 되면 그리로 옮긴다).
+     */
+    private List<String> kigiFrameNames(SkillEngine.KigiSlash cfg, int dirSign) {
+        if (dirSign < 0 && !cfg.frameModelsB().isEmpty()) {
+            return cfg.frameModelsB();
+        }
+        return cfg.frameModels();
+    }
+
+    private List<ItemStack> kigiFrames(List<String> frameNames) {
         List<ItemStack> out = new ArrayList<>(3);
-        for (String name : cfg.frameModels()) {
+        for (String name : frameNames) {
             SkillEngine.DisplayModel fm = engine.displayModel(name);
             if (fm == null) {
                 if (barked.add("검기단계없음|" + name)) {

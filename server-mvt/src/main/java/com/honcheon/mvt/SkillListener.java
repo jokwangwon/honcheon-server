@@ -838,7 +838,8 @@ public final class SkillListener implements Listener {
             }
         }
         return new SkillEngine.KigiSlash(c.enabled(), c.model(), c.applyToTrails(),
-                c.frameModels(), frame, c.replaceStroke(), scale, height, forward,
+                c.applyToClasses(),
+                c.frameModels(), c.frameModelsB(), frame, c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
                 c.geomParticle(), c.geomInk(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),
@@ -1875,7 +1876,7 @@ public final class SkillListener implements Listener {
 
         // ★ 전용 검기(劍氣) 평타 — 호 계열의 작은 무협 참격을 크고 선명한 초록 초승달로 대체 (kigi_slash)
         SkillEngine.KigiSlash kigi = engine.kigiSlash();
-        if (kigi != null && kigi.enabled() && kigi.appliesToTrail(basic.trail())) {
+        if (kigi != null && kigi.enabled() && kigi.appliesTo(weaponClass, basic.trail())) {
             spawnKigiSlash(player);                         // 초록 초승달 검기(3D) + 흰 별 반짝이
             if (kigi.replaceStroke()) {
                 // 기존 무협 참격 아크·궤적 파티클을 이 무기에 대해 그리지 않는다 (레퍼런스는 검기+흰별만).

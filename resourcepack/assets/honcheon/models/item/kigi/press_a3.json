@@ -1,7 +1,7 @@
 {
   "textures": {
-    "0": "honcheon:item/kigi/arc5",
-    "particle": "honcheon:item/kigi/arc5"
+    "0": "honcheon:item/kigi/press_a3",
+    "particle": "honcheon:item/kigi/press_a3"
   },
   "elements": [
     {
