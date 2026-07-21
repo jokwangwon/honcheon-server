@@ -1128,7 +1128,11 @@ public final class SkillEngine {
                 // ★ 판(ItemDisplay)을 세우는가. false 면 **점만** 쓴다 (층을 갈라 재기 위한 문 · 가역)
                 m.get("plate") == null || Boolean.TRUE.equals(m.get("plate")),
                 // ★ 3D 리본 (BetterModel) — 이름이 있으면 판·점보다 먼저 시도한다. 없으면 옛 동작 (가역)
-                str(m.get("model3d")), str(m.get("model3d_anim")));
+                str(m.get("model3d")), str(m.get("model3d_anim")),
+                // ★ 리본의 배치 — 재적재로 쓸어 맞춘다 (재기동 없이). up=올림(m) · yaw/pitch=회전(도)
+                dblOr(m.get("model3d_up"), 0.0),
+                dblOr(m.get("model3d_yaw"), 0.0),
+                dblOr(m.get("model3d_pitch"), 0.0));
     }
 
     /** {@code rgb: [r, g, b]} — 세 칸이 아니면 null (등록부가 색을 반만 적었으면 색이 아니다) */
@@ -1528,7 +1532,8 @@ public final class SkillEngine {
                             int brightness, KigiSpark spark, boolean calmHeldAura,
                             String geomParticle, String geomInk, double geomSweepDeg,
                             double geomStepDeg, boolean plate,
-                            String model3d, String model3dAnim) {
+                            String model3d, String model3dAnim,
+                            double model3dUp, double model3dYaw, double model3dPitch) {
         /** 이 무기의 basic trail 이 검기를 받는가 (apply_to_trails 에 등록됐는가) */
         public boolean appliesToTrail(String trail) {
             return trail != null && applyToTrails.contains(trail);

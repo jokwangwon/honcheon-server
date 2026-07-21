@@ -487,8 +487,10 @@ final class SkillDisplay {
             audience(at, whom, noPack);
             // 리본은 bbmodel 에서 이미 세로면(XY)에 서 있다 — pitch 로 안 세운다.
             //   tilt_deg 는 그 위에 얹는 대각(내려베기) 기울기다.
-            boolean stood = plugin.modelBridge().spawnArc(at, cfg.model3d(), cfg.model3dAnim(),
-                    (float) cfg.tiltDeg(), caster.getLocation().getYaw(),
+            Location ribbonAt = at.clone().add(0.0, cfg.model3dUp(), 0.0);
+            boolean stood = plugin.modelBridge().spawnArc(ribbonAt, cfg.model3d(), cfg.model3dAnim(),
+                    (float) (cfg.tiltDeg() + cfg.model3dPitch()),
+                    caster.getLocation().getYaw() + (float) cfg.model3dYaw(),
                     cfg.drawTicks() + cfg.fadeTicks(), whom);
             if (stood) {
                 note("검기리본", "3D 리본 " + cfg.model3d() + " (기울기 " + Math.round(cfg.tiltDeg())
