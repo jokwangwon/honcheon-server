@@ -70,39 +70,32 @@ def _uid() -> str:
 CHEONGHOE_DEEP = (86, 128, 148)   # 청회를 진하게 (chroma 62 — 등록부 청록 수준, hue 199° 유지)
 
 
-def _noise(x: int, y: int, seed: int) -> float:
-    """씨앗 고정 값잡음 — 굽는 결과가 매번 같아야 한다 (팩 sha1 안정)."""
-    n = math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453
-    return n - math.floor(n)
+# ★ 묵청 먹 — 순수 회흑이 아니라 **푸른 잿빛이 도는 먹** (묵청 무협의 그 먹).
+#   검기의 몸통은 이것이다 (등록부 「먹빛 획」). 청회는 그 위 얇은 테두리일 뿐.
+MEOK_BLUE = (38, 46, 54)
 
 
 def _texture() -> str:
-    """★ **거친 붓질** 텍스처 (2026-07-21 · 사용자: 매끄럽지 말고 거칠게).
-    세로 램프(위=인선 청백 → 아래=먹 배)에 **먹 자국·갈필·성긴 가장자리**를 얹어
-    매끄러운 그러데이션이 아니라 **한 붓에 벤 자국**으로 만든다.
+    """★ **먹 획 + 청회 테두리** (2026-07-21 · 세계관 정합 · 사용자 확정).
+    등록부: 검기 = "먹빛 획 위의 얇은 테두리(청회)". 그래서 몸통은 **짙은 먹**,
+    날 끝(바깥 가장자리)만 **밝은 청회 테두리**다. 밝은 테두리가 어두운 몸 위에서 튀어
+    「검기」로 읽힌다 (레퍼런스의 빛나는 날과 같은 역할). **매끈하게** — 거친 갈필은 뺐다.
     """
     im = Image.new("RGBA", (TEX, TEX), (0, 0, 0, 0))
     px = im.load()
     for y in range(TEX):
-        u = y / (TEX - 1)
-        if u < 0.26:
-            base = _lerp(CHEONGBAEK, CHEONGHOE_DEEP, u / 0.26)    # 인선 → 진한 청회
-        elif u < 0.68:
-            base = _lerp(CHEONGHOE_DEEP, CHEONGHOE, (u - 0.26) / 0.42)  # 심
+        u = y / (TEX - 1)     # 0 = 바깥 날 끝(밝은 테두리) … 1 = 안쪽(먹 배)
+        if u < 0.06:
+            c = CHEONGBAEK                                        # 인선 — 가장 밝은 실오라기
+        elif u < 0.16:
+            c = _lerp(CHEONGBAEK, CHEONGHOE_DEEP, (u - 0.06) / 0.10)  # 청회 테두리
+        elif u < 0.30:
+            c = _lerp(CHEONGHOE_DEEP, MEOK_BLUE, (u - 0.16) / 0.14)   # 테두리 → 먹 (빠르게 어두워진다)
         else:
-            base = _lerp(CHEONGHOE, MEOK, (u - 0.68) / 0.32)      # 배(먹)
+            c = MEOK_BLUE                                         # ★몸통 = 짙은 먹 (수묵 획)
+        # 안쪽(배)으로 갈수록 살짝 옅어져 붓의 물기를 낸다 — 매끈한 담묵
+        a = int(250 * (1.0 - max(0.0, (u - 0.80) / 0.20) * 0.45))
         for x in range(TEX):
-            # 먹 자국 — 밝기를 거칠게 흔든다 (매끄러운 면을 깬다)
-            blot = 0.72 + 0.56 * _noise(x, y, 3)
-            c = tuple(max(0, min(255, int(base[k] * blot))) for k in range(3))
-            a = 250
-            # ★ 갈필 — 붓이 닿지 않은 자리 (군데군데 빈다). 거친 획의 핵심이다
-            if _noise(x * 2, y * 2, 7) < 0.07:
-                a = 0
-            # ★ 성긴 가장자리 — 아래(배)와 좌우 끝을 잡음으로 갉아 **곧은 테두리를 없앤다**
-            edge = min(u / 0.12, (1.0 - u) / 0.12, x / 3.0, (TEX - 1 - x) / 3.0, 1.0)
-            if edge < 1.0 and _noise(x, y, 11) > 0.55 + edge * 0.45:
-                a = 0
             px[x, y] = (c[0], c[1], c[2], a)
     buf = io.BytesIO()
     im.save(buf, format="PNG")
