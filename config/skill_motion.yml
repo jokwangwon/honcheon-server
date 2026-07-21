@@ -2253,7 +2253,8 @@ display:
   #   ① 전진(lunge)   — setVelocity 로 몸을 민다. **창의 5m 는 몸이 나가야 5m 다** (음수 = 뺀다)
   #   ② 자세(pose)    — Entity.setPose(Pose, fixed) 로 몸통 각도를 바꾼다 (바닐라가 가진 자세만):
   #        SWIMMING    몸을 수평으로 눕힌다 → **찌르기·돌진**의 몸 (창·돌)
-  #        SNEAKING    몸을 낮춘다 → 웅크려 들어올리고, 내려찍은 뒤 가라앉는다 (부·중병기·월아산·도)
+  #        SNEAKING    (★2026-07-22 제거 — 자동 앉기는 본인 시점 침습이라 뺐다. 육중함은 리듬·획·소리가
+#                     담당한다. 관전자 전용 포즈 패킷으로 되살리는 길은 예약 — 사용자 결정)
   #        SPIN_ATTACK 몸을 회전시킨다 (트라이던트 급류) → **회전 베기** (원 궤적)
   #   ③ 몸의 회전(yaw·pitch) — **허리가 도는 축**. Player.setRotation 으로 몸을 틀고 젖힌다.
   #      여기가 "다리를 뒤로 보내고 몸을 쓴다"에 가장 가까운 축이다 (어깨가 뒤로 갔다 앞으로 나온다).
@@ -2334,7 +2335,7 @@ display:
         script:
           - { at: 0.00, yaw: 5, pitch: -6 }                          # 치켜든다
           - { at: 0.30, yaw: -3, pitch: 10, lunge: 0.09, hand: 주 }  # 내리친다
-          - { at: 0.60, yaw: -1, pitch: 6, lunge: -0.03, pose: SNEAKING }   # 가라앉으며 **되돌아온다**
+          - { at: 0.60, yaw: -1, pitch: 6, lunge: -0.03 }   # 가라앉으며 **되돌아온다**
           - { at: 1.00 }
       # 창 — 찌른다. **몸이 나간다** (전진이 곧 사거리다). SWIMMING = 몸을 수평으로 던진 자세
       창:
@@ -2426,11 +2427,10 @@ display:
       # 월아산 — 크게 들었다 내린다. 웅크림(SNEAKING)이 **예비**고, 낙차(pitch 18도)가 **본편**이다
       월아산:
         lunge: 0.12
-        pose: SNEAKING
         pose_ticks: 4
-        windup: { lunge: -0.05, yaw: 8, pitch: -9, pose: SNEAKING }
+        windup: { lunge: -0.05, yaw: 8, pitch: -9 }
         script:
-          - { at: 0.00, yaw: 7, pitch: -7, pose: SNEAKING }           # 웅크려 **든다**
+          - { at: 0.00, yaw: 7, pitch: -7 }           # 웅크려 **든다**
           - { at: 0.35, yaw: -6, pitch: 11, lunge: 0.12, pose: 없음, hand: 주 }   # 일어서며 **내린다**
           - { at: 0.70, yaw: -2, pitch: 5, lunge: -0.04 }             # 되돌아온다
           - { at: 1.00 }
@@ -2448,24 +2448,22 @@ display:
       # 중병기 — 짓뭉갠다. 웅크렸다(SNEAKING) 위에서 아래로 20도를 떨군 뒤 **다시 가라앉는다**
       중병기:
         lunge: 0.14
-        pose: SNEAKING
         pose_ticks: 6
-        windup: { lunge: -0.06, yaw: 9, pitch: -10, pose: SNEAKING }
+        windup: { lunge: -0.06, yaw: 9, pitch: -10 }
         script:
-          - { at: 0.00, yaw: 8, pitch: -8, pose: SNEAKING }
+          - { at: 0.00, yaw: 8, pitch: -8 }
           - { at: 0.40, yaw: -7, pitch: 12, lunge: 0.14, pose: 없음, hand: 주 }
-          - { at: 0.70, yaw: -3, pitch: 6, lunge: -0.05, pose: SNEAKING }   # 짓눌러 가라앉으며 되돌아온다
+          - { at: 0.70, yaw: -3, pitch: 6, lunge: -0.05 }   # 짓눌러 가라앉으며 되돌아온다
           - { at: 1.00 }
       # 부 — 가장 무거운 손 (0.9/s). 가장 크게 들고(pitch −10) **가장 크게 떨군다**(pitch +12, 22도)
       부:
         lunge: 0.15
-        pose: SNEAKING
         pose_ticks: 6
-        windup: { lunge: -0.07, yaw: 10, pitch: -12, pose: SNEAKING }
+        windup: { lunge: -0.07, yaw: 10, pitch: -12 }
         script:
-          - { at: 0.00, yaw: 9, pitch: -10, pose: SNEAKING }          # 머리 위로 든다
+          - { at: 0.00, yaw: 9, pitch: -10 }          # 머리 위로 든다
           - { at: 0.40, yaw: -8, pitch: 12, lunge: 0.15, pose: 없음, hand: 주 }   # 찍어벤다 (가장 무거운 손)
-          - { at: 0.70, yaw: -3, pitch: 7, lunge: -0.05, pose: SNEAKING }   # 도끼를 뽑으며 되돌아온다
+          - { at: 0.70, yaw: -3, pitch: 7, lunge: -0.05 }   # 도끼를 뽑으며 되돌아온다
           - { at: 1.00 }
       무관:   null
       짐승:   null
