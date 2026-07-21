@@ -362,9 +362,9 @@ kigi_slash:
   #   plate | model3d 는 보스몹·특수 무기가 그 효과만 갈아탈 교체 지점 — 코드·자산 유지.
   medium: particle
   # ── 파티클 띠 (docs/design/kigi_particle_v2.md · 야마토 실측 대역) ──
-  band_width: 0.6       # 띠 폭(m) — 날에서 안쪽으로
-  band_rows: 5          # 몸 줄 수 (청백 날·먹 안감은 자동으로 얹힌다)
-  band_jitter: 0.10     # 두께 지터(m) — 그레인 입체감
+  band_width: 0.35      # 띠 폭(m) — 얇게 (사용자: 뭉툭함 제거)
+  band_rows: 3          # 몸 줄 수
+  band_jitter: 0.12     # 두께 지터(m)
   band_sweep_ticks: 4   # 스윕 틱 (~200ms 급상승 — 잔류·소멸은 파티클 수명이 맡는다)
   accent_count: 12      # 흰 별(end_rod) — 머리 구간에만
   model: "honcheon:kigi/press_a1"  # 소환 시 1단계 = frame_models[0] 의 key (계약: 코드가 목록을 우선한다)

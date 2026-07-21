@@ -273,11 +273,27 @@ final class QiGeometry {
                 double fwd = Math.cos(phi) * r;
                 Location at = center.clone().add(
                         fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
-                double jt = edge ? jitter * 0.3 : jitter;           // 날은 또렷하게 (지터 작게)
+                double jt = edge ? jitter * 0.5 : jitter;           // 날도 약간은 흩어진다 (딱딱한 선 금지)
                 at.add((rnd.nextDouble() - 0.5) * jt, (rnd.nextDouble() - 0.5) * jt * 2.0,
                        (rnd.nextDouble() - 0.5) * jt);
                 String ink = edge ? "청백" : dark ? "먹" : inkBody;
-                sent += hud.emit(at, particle, ink, 1, 0.0, 0.0, false);
+                // ★ 잘게 (2026-07-21 사용자: "밀도가 굵다·뭉툭하다") — 등록 크기 1.0 정사각이 아니라
+                //   가는 알갱이. spread 는 발행 시 무작위 오프셋 — 「선 긋기」가 아니라 자연 확산.
+                float sz = edge ? 0.50f : dark ? 0.60f : 0.55f;
+                sent += hud.emitSized(at, particle, ink, sz, 1, 0.05, 0.0);
+            }
+            // 담묵 헤일로 — 획 둘레의 옅은 번짐 (둘에 하나 · 크게 흩고 · 성기게) — 퍼지는 느낌의 몸통
+            if (i % 2 == 0 && phase > 0.15) {
+                double r2 = radius - w * 0.5;
+                double side2 = Math.sin(phi) * r2 * Math.cos(tilt);
+                double up2 = -Math.sin(phi) * r2 * Math.sin(tilt);
+                double fwd2 = Math.cos(phi) * r2;
+                Location at2 = center.clone().add(
+                        fwdX * fwd2 + rgtX * side2, up2, fwdZ * fwd2 + rgtZ * side2);
+                at2.add((rnd.nextDouble() - 0.5) * jitter * 3.5,
+                        (rnd.nextDouble() - 0.5) * jitter * 4.5,
+                        (rnd.nextDouble() - 0.5) * jitter * 3.5);
+                sent += hud.emitSized(at2, particle, inkBody, 0.45f, 1, 0.12, 0.0);
             }
         }
         return sent;
