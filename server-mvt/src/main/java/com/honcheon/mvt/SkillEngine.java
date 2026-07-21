@@ -185,7 +185,7 @@ public final class SkillEngine {
     private final DroppedDisplay droppedDisplay;
     /** 전용 검기 평타 — 초록 초승달 검기 (kigi_slash). 없으면 null (기존 무협 참격이 돈다) */
     private final KigiSlash kigiSlashConfig;
-    private ImpactStrike impactStrikeConfig;
+    private HeavySlash heavySlashConfig;
 
     /**
      * ★ 검기의 <b>인게임 오버라이드</b> — {@code /혼천 검기 <키> <값>} 이 갈아끼운 값. null 이면 등록부 원본.
@@ -552,7 +552,7 @@ public final class SkillEngine {
         this.weaponStand = weaponStand(RulesConfig.section(mo, "weapon_stand"));
         this.droppedDisplay = droppedDisplay(RulesConfig.section(mo, "dropped_display"));
         this.kigiSlashConfig = kigiSlash(RulesConfig.section(mo, "kigi_slash"));
-        this.impactStrikeConfig = impactStrike(RulesConfig.section(mo, "impact_strike"));
+        this.heavySlashConfig = heavySlash(RulesConfig.section(mo, "heavy_slash"));
 
         Map<String, FormMotion> fms = new LinkedHashMap<>();
         RulesConfig.section(mo, "forms").forEach((name, raw) -> {
@@ -1083,11 +1083,11 @@ public final class SkillEngine {
     }
 
     /**
-     * ★ Impact 원형 (도끼·둔기) — {@code impact_strike} 절 (vfx_primitives.md 원형 2호 · 2026-07-21).
-     * 호(초승달) 금지: 짧고 넓은 압력면 + 접촉 후 확장되는 불완전 충격 고리. 첨두는 중심.
-     * 판정은 검기 띠와 같은 문법 — 압력면에 닿으면 딜 (빗나감/명중 분기 없음).
+     * ★ 부(斧)의 횡참(橫斬) — {@code heavy_slash} 절 (2026-07-21 사용자 확정: "충격은 빼고 횡참으로").
+     * 검의 띠와 같은 밴드 문법이되 <b>짧고 굵고 둔중하다</b> — 검은 베고 지나가고, 부는 부수고 멈춘다.
+     * 판정도 같은 문법: 궤적에 닿으면 딜 (빗나감/명중 분기 없음).
      */
-    private static ImpactStrike impactStrike(Map<String, Object> m) {
+    private static HeavySlash heavySlash(Map<String, Object> m) {
         if (m == null || m.isEmpty()) {
             return null;
         }
@@ -1095,14 +1095,17 @@ public final class SkillEngine {
         if (m.get("apply_to_classes") instanceof List<?> cl) {
             cl.forEach(o -> classes.add(String.valueOf(o)));
         }
-        return new ImpactStrike(
+        return new HeavySlash(
                 m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
                 Collections.unmodifiableList(classes),
                 String.valueOf(m.getOrDefault("ink", "청회")),
-                dblOr(m.get("forward"), 1.8), dblOr(m.get("face_radius"), 0.85),
-                dblOr(m.get("ring_max"), 1.7), Math.max(2, intOr(m.get("ticks"), 4)),
+                dblOr(m.get("radius"), 1.5), dblOr(m.get("sweep_deg"), 70.0),
+                dblOr(m.get("tilt_deg"), 20.0), dblOr(m.get("center_height"), 1.0),
+                dblOr(m.get("band_width"), 0.55), Math.max(1, intOr(m.get("band_rows"), 4)),
+                dblOr(m.get("band_jitter"), 0.14), Math.max(1, intOr(m.get("sweep_ticks"), 3)),
+                dblOr(m.get("step_deg"), 1.2),
                 m.get("hit") == null || Boolean.TRUE.equals(m.get("hit")),
-                dblOr(m.get("hit_reach"), 1.1),
+                dblOr(m.get("hit_reach"), 0.9),
                 m.get("replace_stroke") == null || Boolean.TRUE.equals(m.get("replace_stroke")));
     }
 
@@ -1611,10 +1614,12 @@ public final class SkillEngine {
                             boolean alongArc) {
     }
 
-    /** Impact 원형 (도끼·둔기) — 압력면 + 충격 고리. 판정은 면에 닿으면 딜 (impact_strike 절) */
-    public record ImpactStrike(boolean enabled, List<String> applyToClasses, String ink,
-                               double forward, double faceRadius, double ringMax, int ticks,
-                               boolean hit, double hitReach, boolean replaceStroke) {
+    /** 부의 횡참 — 짧고 굵은 밴드. 판정은 궤적에 닿으면 딜 (heavy_slash 절) */
+    public record HeavySlash(boolean enabled, List<String> applyToClasses, String ink,
+                             double radius, double sweepDeg, double tiltDeg, double centerHeight,
+                             double bandWidth, int bandRows, double bandJitter, int sweepTicks,
+                             double stepDeg,
+                             boolean hit, double hitReach, boolean replaceStroke) {
         public boolean appliesTo(String weaponClass) {
             return weaponClass != null && applyToClasses.contains(weaponClass);
         }
@@ -2638,9 +2643,9 @@ public final class SkillEngine {
         return kigiSlashOverride != null ? kigiSlashOverride : kigiSlashConfig;
     }
 
-    /** Impact 원형 등록부 — 없으면 null (조용히 꺼진다) */
-    public ImpactStrike impactStrike() {
-        return impactStrikeConfig;
+    /** 부의 횡참 등록부 — 없으면 null (조용히 꺼진다) */
+    public HeavySlash heavySlash() {
+        return heavySlashConfig;
     }
 
     /** 등록부가 적어 둔 원본 — 오버라이드와 무관하다 (되돌릴 자리이자 대조군) */

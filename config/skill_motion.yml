@@ -358,22 +358,27 @@ weapon_aura:
 #     공전 보간(translation/rotation)·크기·파티클·수축은 **한 글자도 안 건드린다** — 모델만 바뀐다.
 
 # ══════════════════════════════════════════════════════════════════════
-#  Impact 원형 — 도끼·둔기의 평타 (vfx_primitives.md 원형 2호 · 2026-07-21)
+#  부(斧)의 횡참 — 도끼 평타 (2026-07-21 사용자 확정: "충격은 빼고 횡참으로")
 # ══════════════════════════════════════════════════════════════════════
-# 호(초승달) 금지 — 짧고 넓은 압력면이 피격점에 눌렸다 터지고, 불완전 충격 고리가 번진다.
-# 첨두는 중심(청백) — Slash(가장자리 서슬)와 위계가 다르다 (헌장: 원형별로 갈리는 것).
-# 판정: 검기 띠와 같은 문법 — 압력면에 닿으면 딜 (basicMelee 재진입 · 빗나감/명중 분기 없음).
-impact_strike:
+# 검기 띠와 같은 밴드 문법이되 짧고 굵고 둔중하다 — 검은 베고 지나가고, 부는 부수고 멈춘다.
+# (착지 충격면 impactBurst 는 기술·보스용 예약으로 남겨 뒀다 — QiGeometry)
+# 판정: 궤적에 닿으면 딜 (basicMelee 재진입 · 빗나감/명중 분기 없음).
+heavy_slash:
   enabled: true
-  apply_to_classes: [부]   # 도끼 계열. ★바닐라 도끼는 legacy 매핑상 '도'라 혼천 부 실물만 받는다
-  ink: 청회                # 색의 주인(격 vs 문파)은 보류 — 기본은 청회
-  forward: 1.8             # 피격점 (몸 앞 m)
-  face_radius: 0.85        # 압력면 반경 (m)
-  ring_max: 1.7            # 충격 고리 최대 반경 (m)
-  ticks: 4                 # 압축 1 · 피크 1 · 고리 2
+  apply_to_classes: [부]   # ★바닐라 도끼는 legacy 매핑상 '도' — 혼천 부 실물만 받는다
+  ink: 청회
+  radius: 1.5              # 궤적 반경 (검 1.8 보다 짧다)
+  sweep_deg: 70            # 호각 (검 130 의 절반 — 짧게 후려친다)
+  tilt_deg: 20             # 얕은 대각 (횡참)
+  center_height: 1.0       # 허리 높이
+  band_width: 0.55         # 폭 (검 0.35 의 1.5배 — 굵다)
+  band_rows: 4
+  band_jitter: 0.14
+  sweep_ticks: 3
+  step_deg: 1.2
   hit: true
-  hit_reach: 1.1           # 압력면 판정 반경 (m)
-  replace_stroke: true     # 기존 무협 참격 획은 억제 (검기와 같은 규약)
+  hit_reach: 0.9
+  replace_stroke: true
 
 kigi_slash:
   enabled: true

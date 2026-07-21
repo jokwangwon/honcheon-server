@@ -762,15 +762,15 @@ public final class SkillListener implements Listener {
             out.addAll(kigiReport(engine.kigiSlash()));
             return out;
         }
-        if ("임팩트시험".equals(verb)) {
-            // Impact 원형 검증 훅 — 실전과 같은 함수 (spawnImpactStrike). 클라 입력 없이 판정·연출을 잰다
-            SkillEngine.ImpactStrike imp = engine.impactStrike();
+        if ("횡참시험".equals(verb) || "임팩트시험".equals(verb)) {
+            // 부 횡참 검증 훅 — 실전과 같은 함수 (spawnHeavySlash). 클라 입력 없이 판정·연출을 잰다
+            SkillEngine.HeavySlash imp = engine.heavySlash();
             if (imp == null || !imp.enabled()) {
-                return List.of(ChatColor.RED + "impact_strike 가 없다/꺼져 있다 (config/skill_motion.yml)");
+                return List.of(ChatColor.RED + "heavy_slash 가 없다/꺼져 있다 (config/skill_motion.yml)");
             }
-            spawnImpactStrike(player, imp);
-            return List.of(ChatColor.GOLD + "임팩트를 한 번 소환했다 (피격점 앞 "
-                    + imp.forward() + "m · 면 " + imp.faceRadius() + "m)");
+            spawnHeavySlash(player, imp);
+            return List.of(ChatColor.GOLD + "횡참을 한 번 소환했다 (반경 " + imp.radius()
+                    + "m · 호 " + Math.round(imp.sweepDeg()) + "도 · 폭 " + imp.bandWidth() + "m)");
         }
         if ("시험".equals(verb)) {
             // ★ 실전과 **같은 함수**를 부른다 (SkillDisplay.kigiSlash + 흰 별) — 시험용으로 따로 그리면
@@ -1887,10 +1887,10 @@ public final class SkillListener implements Listener {
 
         String stroke = nextStroke(player, weaponClass);   // 그림의 순번 (입력 문법이 아니다)
 
-        // ★ Impact 원형 (도끼·둔기) — 압력면 + 충격 고리 (impact_strike · 원형 2호)
-        SkillEngine.ImpactStrike imp = engine.impactStrike();
+        // ★ 부(斧)의 횡참 — 짧고 굵고 둔중한 궤적 (heavy_slash · 사용자 확정: 충격은 빼고 횡참)
+        SkillEngine.HeavySlash imp = engine.heavySlash();
         if (imp != null && imp.enabled() && imp.appliesTo(weaponClass)) {
-            spawnImpactStrike(player, imp);
+            spawnHeavySlash(player, imp);
             if (imp.replaceStroke()) {
                 SkillEngine.Style style0 = engine.weaponStyle(weaponClass);
                 if (style0 != null) {
@@ -1956,42 +1956,62 @@ public final class SkillListener implements Listener {
     }
 
     /**
-     * Impact 원형 소환 — 피격점(몸 앞 forward m 바닥)에 압력면·고리를 그리고,
-     * 압축·피크 틱(0·1) 동안 면에 닿은 생명체에 딜을 넣는다 (띠와 같은 판정 문법 — 재진입 일원화).
+     * 부의 횡참 소환 — 검기 띠와 같은 밴드를 <b>짧고 굵게</b> 긋는다 (허리 높이 · 얕은 대각).
+     * 판정도 같은 문법: 스윕 동안 궤적 좌표를 표본해 닿은 생명체에 딜 (재진입 일원화).
      */
-    private void spawnImpactStrike(Player player, SkillEngine.ImpactStrike cfg) {
+    private void spawnHeavySlash(Player player, SkillEngine.HeavySlash cfg) {
         QiGeometry geom = plugin.qiGeometry();
         if (geom == null) {
             return;
         }
-        Vector flat = flatOf(player);
         Location feet = player.getLocation();
-        Location at = feet.clone().add(flat.clone().multiply(cfg.forward()));
-        at.setY(feet.getY() + 0.1);
-        int ticks = Math.max(2, cfg.ticks());
+        Location center = feet.clone();
+        center.setY(feet.getY() + cfg.centerHeight());
+        double f = Math.toRadians(player.getLocation().getYaw());
+        double full = Math.toRadians(cfg.sweepDeg());
+        double tilt = Math.toRadians(cfg.tiltDeg());
+        double r = cfg.radius();
+        double reach = Math.max(0.3, cfg.hitReach());
+        int span = Math.max(1, cfg.sweepTicks());
+        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
+        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
         Set<UUID> struck = new HashSet<>();
+        float yaw = player.getLocation().getYaw();
         new org.bukkit.scheduler.BukkitRunnable() {
             int t = 0;
 
             @Override
             public void run() {
-                if (t >= ticks || !player.isOnline()) {
+                if (t >= span || !player.isOnline()) {
                     cancel();
                     return;
                 }
-                geom.impactBurst(at, cfg.faceRadius(), cfg.ringMax(), t, ticks, cfg.ink());
-                if (cfg.hit() && t <= 1) {
-                    double reach = cfg.hitReach();
-                    for (org.bukkit.entity.Entity e
-                            : at.getWorld().getNearbyEntities(at, reach, 1.6, reach)) {
-                        if (!(e instanceof LivingEntity le) || e == player
-                                || struck.contains(e.getUniqueId())) {
-                            continue;
+                geom.slashBand(center, yaw, r, cfg.sweepDeg(),
+                        (double) t / span, (double) (t + 1) / span,
+                        cfg.tiltDeg(), cfg.stepDeg(),
+                        cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
+                        "dust", cfg.ink());
+                if (cfg.hit()) {
+                    for (int i = 0; i <= 6; i++) {
+                        double phase = (t + i / 6.0) / span;
+                        double phi = -full / 2.0 + full * phase;
+                        double side = Math.sin(phi) * r * Math.cos(tilt);
+                        double up = -Math.sin(phi) * r * Math.sin(tilt);
+                        double fwd = Math.cos(phi) * r;
+                        Location p = center.clone().add(
+                                fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
+                        for (org.bukkit.entity.Entity e
+                                : p.getWorld().getNearbyEntities(p, reach, 1.4, reach)) {
+                            if (!(e instanceof LivingEntity le) || e == player
+                                    || struck.contains(e.getUniqueId())) {
+                                continue;
+                            }
+                            struck.add(e.getUniqueId());
+                            var atk = player.getAttribute(
+                                    org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
+                            double dmg = Math.max(1.0, atk == null ? 1.0 : atk.getValue());
+                            le.damage(dmg, player);   // → basicMelee 재진입 (판정 일원화)
                         }
-                        struck.add(e.getUniqueId());
-                        var atk = player.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
-                        double dmg = Math.max(1.0, atk == null ? 1.0 : atk.getValue());
-                        le.damage(dmg, player);   // → basicMelee 재진입 (판정 일원화 — 띠와 같은 길)
                     }
                 }
                 t++;
