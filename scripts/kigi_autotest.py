@@ -140,6 +140,38 @@ def mc_window():
     return ids[0] if ids else None
 
 
+def reap_clients():
+    """이 봇 클라(및 그 좀비)를 **정확히** 거둔다 — 서버 java 는 절대 안 건드린다.
+
+    표식은 커맨드라인의 ``--main-dir <MC_DIR>`` 다. mvt 서버 java 의 커맨드라인엔 그 문자열이
+    없으므로 서버가 섞일 길이 없다 (그래도 아래에서 한 번 더 cwd 로 확인한다 — 사람 잃은 적 있는 자리다).
+    """
+    want = str(MC_DIR)
+    reaped = 0
+    for pid_dir in Path("/proc").glob("[0-9]*"):
+        try:
+            cmd = (pid_dir / "cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace")
+        except OSError:
+            continue
+        if want not in cmd or "--main-dir" not in cmd:
+            continue
+        # ★ 이중 안전장치 — cwd 가 서버 폴더면 절대 아니다 (표식이 겹칠 리 없지만, 그 대가가 크다)
+        try:
+            cwd = os.readlink(pid_dir / "cwd")
+        except OSError:
+            cwd = ""
+        if cwd.endswith(("/run/mvt", "/run/mvt-test")):
+            continue
+        try:
+            os.kill(int(pid_dir.name), 9)
+            reaped += 1
+        except (ProcessLookupError, PermissionError, ValueError):
+            pass
+    if reaped:
+        print(f"[클라] 옛 클라 {reaped}개 거둠 (누수 방지)")
+        time.sleep(2)
+
+
 def ensure_client(force_restart=False):
     """★ 왜 --exclude-lib / --include-bin 인가:
     Mojang 은 리눅스 LWJGL 네이티브를 **x86_64 만** 배급한다. 이 기계는 aarch64 다.
@@ -152,6 +184,12 @@ def ensure_client(force_restart=False):
         return
     if not NATIVES.is_dir() or not list(NATIVES.glob("*.so")):
         raise SystemExit(f"ARM64 네이티브가 없다: {NATIVES} (README 참조 — setup 을 먼저 돌려라)")
+
+    # ★★ **새로 띄우기 전에 옛 클라를 거둔다** (2026-07-21 · 클라 25개·57GB 누수 사고).
+    #   force_restart 는 새 클라를 띄우면서 옛것을 안 죽였다 — 재기동을 수십 번 하는 동안
+    #   소프트렌더 클라가 한 대당 2~3GB 씩 쌓여 가용 메모리를 8GB 까지 갉았다 (그날 두 번째다).
+    #   이 클라의 표식은 **--main-dir MC_DIR** 다 (mvt 서버 java 와 겹치지 않는다 — cwd 로도 갈린다).
+    reap_clients()
 
     print("[클라] 마인크래프트 1.21.11 기동 (Xvfb :99 · llvmpipe)")
     excl = []
