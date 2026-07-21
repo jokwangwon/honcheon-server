@@ -80,29 +80,38 @@ def build() -> dict:
 
     for i in range(SEGMENTS):
         th = -half + step * (i + 0.5)
-        # ★ 호를 **XY(수직)면**에 놓는다 — 검기는 몸 앞의 세로 아치다 (바닥에 눕는 XZ 가 아니다).
-        #   ∩ 이 위로 봉긋하게: X 가 좌우, Y 가 높이. Z(두께)는 render_sides:double 이 채운다.
+        # ★★ 호를 **몸 둘레를 도는 울타리**로 놓는다 — 이것이 「각도 무관」의 열쇠다 (2026-07-21).
+        #   평평한 리본(XY 세로면)은 어느 방향에 놔도 90도에서 모서리가 된다 — 옆에서 면을 보이면
+        #   뒤에서 선이 됐다 (실측). 몸 둘레를 도는 울타리는 **카메라 쪽 조각이 항상 있어** 어디서든
+        #   벽이 보인다 (B 점이 뒤에서 보였던 그 원리 — 둘레를 돈다).
+        #   조각은 수평 원(XZ) 위에 서고, **폭은 세로(Y)** 다 — 울타리 판자처럼.
+        #   대각 검기는 이 수평 울타리를 spawn 때 pitch 로 기울여 만든다 (model3d_pitch).
         cx = math.sin(th) * RADIUS
-        cy = math.cos(th) * RADIUS
+        cz = math.cos(th) * RADIUS
         eid, gid = _uid(), _uid()
-        # ★ 조각은 **제자리에 직접 놓는다.** bbmodel 에서 그룹의 origin 은 **회전 축일 뿐**
-        #   자식을 옮기지 않는다 — 원점에 만들고 뼈가 옮겨 주기를 기대했다가
-        #   조각 14개가 한 자리에 쌓여 **세로 기둥**이 나왔다 (실측 2026-07-20).
-        # ★ 호를 **XY(수직)면**에 놓는다 — 검기는 몸 앞의 세로 아치다 (바닥에 눕는 XZ 가 아니다).
-        #   X=좌우 · Y=높이 · Z=두께(render_sides:double 이 채운다). 접선축은 이제 Z 다.
         elements.append({
             "name": f"seg{i}", "type": "cube", "uuid": eid,
-            "from": [cx - seg_len / 2.0, cy - WIDTH / 2.0, -THICK / 2.0],
-            "to": [cx + seg_len / 2.0, cy + WIDTH / 2.0, THICK / 2.0],
-            "origin": [cx, cy, 0.0],
-            # 수직면이니 회전축은 Z. 접선 각 th 만큼 조각을 눕힌다 (부호는 실측으로 맞춘다).
-            "rotation": [0.0, 0.0, -math.degrees(th)],
-            "faces": {f: {"uv": [0, 0, 16, 16], "texture": 0}
-                      for f in ("north", "south", "east", "west", "up", "down")},
+            # X·Z 로 원을 돌고, Y 가 판자의 높이(폭). Z 두께가 아니라 **폭이 세로**다.
+            "from": [cx - seg_len / 2.0, -WIDTH / 2.0, cz - THICK / 2.0],
+            "to": [cx + seg_len / 2.0, WIDTH / 2.0, cz + THICK / 2.0],
+            "origin": [cx, 0.0, cz],
+            # 수평면이니 회전축은 Y. 접선 각 th 만큼 판자를 돌려 원에 붙인다.
+            "rotation": [0.0, math.degrees(th), 0.0],
+            # ★ UV — 램프는 **세로**다 (위=청백 인선, 아래=먹 배). 판자의 **높이(Y)** 방향에 그대로 물린다.
+            #   보이는 면은 안팎(north/south) 벽이다. UV [x0,y0,x1,y1] 에서 y 가 텍스처 세로 →
+            #   판자 세로에 걸리게 텍스처 전체 높이(TEX)를 문다. 옆·위·아래 면은 얇아 안 보이니 한 줄만.
+            "faces": {
+                "north": {"uv": [0, 0, TEX, TEX], "texture": 0},
+                "south": {"uv": [0, 0, TEX, TEX], "texture": 0},
+                "east":  {"uv": [0, 0, 2, TEX], "texture": 0},
+                "west":  {"uv": [0, 0, 2, TEX], "texture": 0},
+                "up":    {"uv": [0, 0, TEX, 2], "texture": 0},
+                "down":  {"uv": [0, TEX - 2, TEX, TEX], "texture": 0},
+            },
         })
         outliner.append({
             "name": f"seg{i}", "uuid": gid, "isOpen": False,
-            "origin": [cx, cy, 0.0],
+            "origin": [cx, 0.0, cz],
             "children": [eid],
         })
         # 자라는 애니메이션 — 조각이 차례로 **제자리로 펴진다** (없으면 통째로 나타난다)
