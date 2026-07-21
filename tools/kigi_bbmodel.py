@@ -33,11 +33,16 @@ HOEBAEK = (178, 181, 178)
 CHEONGBAEK = (226, 240, 238)
 
 # ── 호의 기하 (모델 단위: 16 = 1블록) ───────────────────────────────────
-SEGMENTS = 14          # 조각 수 — 뼈대 수와 같다. 스윙마다 이만큼의 표시 파츠가 나간다
-RADIUS = 26.0          # 호의 반지름 (≈1.6블록)
-SWEEP = 150.0          # 무는 각(도) — 등록부 geom_sweep_deg 와 같은 뜻
-WIDTH = 7.0            # 리본의 폭 (날의 너비)
-THICK = 0.6            # 두께 — 얇지만 0 이 아니다. **이것이 뒤에서 보이게 하는 값**이다
+#
+# ★★ 검의 궤적은 **평평한 초승달**이다 (2026-07-21 · 사용자 교정).
+#   앞서 「뒤에서도 보여야 한다」는 데 집착해 원통(울타리)으로 만들었다 — 그건 궤적이 아니라 통이다.
+#   날이 지나간 자리는 얇은 판이라: **궤적면을 마주 보면 넓고(초승달), 모서리로 보면 얇다.**
+#   그 얇음은 버그가 아니라 **검의 궤적이라는 증거**다. 뒤에서 얇아지는 것도 정상이다.
+SEGMENTS = 16          # 조각 수 — 매끄러운 호
+RADIUS = 24.0          # 호의 반지름 (≈1.5블록)
+SWEEP = 155.0          # 무는 각(도)
+DEPTH_MAX = 9.0        # ★초승달의 **깊이**(방사 방향 폭) — 가운데가 깊고 양 끝이 뾰족하다
+THIN = 0.5             # ★판의 두께 — **얇다.** 이것이 모서리에서 얇게 보이게 하는 값이다
 TEX = 32               # 텍스처 한 변
 
 
@@ -87,33 +92,32 @@ def build() -> dict:
 
     for i in range(SEGMENTS):
         th = -half + step * (i + 0.5)
-        # ★★ 호를 **몸 둘레를 도는 울타리**로 놓는다 — 이것이 「각도 무관」의 열쇠다 (2026-07-21).
-        #   평평한 리본(XY 세로면)은 어느 방향에 놔도 90도에서 모서리가 된다 — 옆에서 면을 보이면
-        #   뒤에서 선이 됐다 (실측). 몸 둘레를 도는 울타리는 **카메라 쪽 조각이 항상 있어** 어디서든
-        #   벽이 보인다 (B 점이 뒤에서 보였던 그 원리 — 둘레를 돈다).
-        #   조각은 수평 원(XZ) 위에 서고, **폭은 세로(Y)** 다 — 울타리 판자처럼.
-        #   대각 검기는 이 수평 울타리를 spawn 때 pitch 로 기울여 만든다 (model3d_pitch).
+        # ★ 조각을 **평평한 초승달**의 한 마디로 놓는다 — 궤적면은 XZ(수평)에 눕고, 판은 Y로 얇다.
+        #   궤적면을 위에서 마주 보면 초승달이 넓게, 앞(모서리)에서 보면 얇게 보인다 (검의 궤적).
+        #   깊이(방사 폭)는 가운데가 깊고 양 끝이 뾰족하다 → 초승달·콤마 꼴.
         cx = math.sin(th) * RADIUS
         cz = math.cos(th) * RADIUS
+        # 끝을 뾰족하게: 가운데(th=0)에서 깊고 양 끝에서 0 으로 (sin 곡선의 뿌리)
+        depth = DEPTH_MAX * (math.cos(th / half * (math.pi / 2.0)) ** 0.6)
+        depth = max(0.6, depth)
         eid, gid = _uid(), _uid()
         elements.append({
             "name": f"seg{i}", "type": "cube", "uuid": eid,
-            # X·Z 로 원을 돌고, Y 가 판자의 높이(폭). Z 두께가 아니라 **폭이 세로**다.
-            "from": [cx - seg_len / 2.0, -WIDTH / 2.0, cz - THICK / 2.0],
-            "to": [cx + seg_len / 2.0, WIDTH / 2.0, cz + THICK / 2.0],
+            # x = 접선(길이), y = **두께(얇다)**, z = 방사 깊이(초승달의 폭)
+            "from": [cx - seg_len / 2.0, -THIN / 2.0, cz - depth],
+            "to": [cx + seg_len / 2.0, THIN / 2.0, cz],
             "origin": [cx, 0.0, cz],
-            # 수평면이니 회전축은 Y. 접선 각 th 만큼 판자를 돌려 원에 붙인다.
+            # 수평면이니 회전축은 Y. 접선 각 th 만큼 마디를 돌려 호에 붙인다.
             "rotation": [0.0, math.degrees(th), 0.0],
-            # ★ UV — 램프는 **세로**다 (위=청백 인선, 아래=먹 배). 판자의 **높이(Y)** 방향에 그대로 물린다.
-            #   보이는 면은 안팎(north/south) 벽이다. UV [x0,y0,x1,y1] 에서 y 가 텍스처 세로 →
-            #   판자 세로에 걸리게 텍스처 전체 높이(TEX)를 문다. 옆·위·아래 면은 얇아 안 보이니 한 줄만.
+            # ★ 넓은 면은 **위·아래**(up/down) — 궤적면이다. 램프를 방사(깊이) 방향에 물린다:
+            #   바깥(호의 가장자리=날 끝)이 밝고, 안(몸쪽)으로 짙어진다. z 가 깊이축이니 UV v 가 그것.
             "faces": {
-                "north": {"uv": [0, 0, TEX, TEX], "texture": 0},
-                "south": {"uv": [0, 0, TEX, TEX], "texture": 0},
+                "up":    {"uv": [0, 0, TEX, TEX], "texture": 0},
+                "down":  {"uv": [0, 0, TEX, TEX], "texture": 0},
+                "north": {"uv": [0, 0, TEX, 2], "texture": 0},   # 얇은 테두리 (바깥 끝)
+                "south": {"uv": [0, 0, TEX, 2], "texture": 0},
                 "east":  {"uv": [0, 0, 2, TEX], "texture": 0},
                 "west":  {"uv": [0, 0, 2, TEX], "texture": 0},
-                "up":    {"uv": [0, 0, TEX, 2], "texture": 0},
-                "down":  {"uv": [0, TEX - 2, TEX, TEX], "texture": 0},
             },
         })
         outliner.append({
@@ -171,8 +175,8 @@ def main():
     d = build()
     out.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     print(f"  구웠다: {out}  ({out.stat().st_size // 1024}KB)")
-    print(f"  조각 {SEGMENTS}개 · 반지름 {RADIUS/16:.2f}블록 · 무는 각 {SWEEP}도 · 두께 {THICK}")
-    print(f"  애니메이션: grow (1.2초 · 조각이 차례로 펴진다)")
+    print(f"  조각 {SEGMENTS}개 · 반지름 {RADIUS/16:.2f}블록 · 무는 각 {SWEEP}도 · 두께 {THIN}(얇다) · 깊이 {DEPTH_MAX}")
+    print(f"  애니메이션: grow ({0.9}초 · 궤적을 따라 그어지고 스러진다)")
 
 
 if __name__ == "__main__":
