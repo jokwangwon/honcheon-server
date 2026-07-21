@@ -300,6 +300,60 @@ final class QiGeometry {
     }
 
     /**
+     * ★ <b>Impact 원형</b> (도끼·둔기 · vfx_primitives.md 원형 2호) — 호가 아니라 <b>충격</b>이다.
+     *
+     * <p>피격점에 짧고 넓은 <b>압력면</b>(눌린 원반)이 눌렸다 터지고, <b>불완전 충격 고리</b>가
+     * 바깥으로 번진다. Slash 와 같은 재질 문법(등록부 색·명암 샌드위치)이되 첨두는 가장자리가
+     * 아니라 <b>중심</b>이다 (헌장 — 원형별로 갈리는 것).
+     *
+     * @param tick  0=압축(작고 짙게) · 1=피크(면 완성+중심 청백) · 2..=고리 확장(결락 25%)
+     */
+    int impactBurst(Location at, double faceRadius, double ringMax, int tick, int ticks, String ink) {
+        if (at == null || at.getWorld() == null) {
+            return 0;
+        }
+        java.util.Random rnd = java.util.concurrent.ThreadLocalRandom.current();
+        int sent = 0;
+        if (tick <= 1) {
+            double R = faceRadius * (tick == 0 ? 0.55 : 1.0);
+            int rings = tick == 0 ? 3 : 4;
+            for (int q = 0; q < rings; q++) {
+                double rr = R * (q + 1) / rings;
+                int n = Math.max(6, (int) (rr * 28));
+                boolean rim = q == rings - 1;
+                for (int i = 0; i < n; i++) {
+                    double a = Math.PI * 2 * i / n + rnd.nextDouble() * 0.25;
+                    Location pt = at.clone().add(Math.cos(a) * rr,
+                            rnd.nextDouble() * 0.14, Math.sin(a) * rr);
+                    sent += hud.emitSized(pt, "dust", rim ? "먹" : ink,
+                            rim ? 0.6f : 0.55f, 1, 0.06, 0.0);
+                }
+            }
+            if (tick == 1) {
+                for (int i = 0; i < 10; i++) {          // 중심 청백 초점 — Impact 의 첨두
+                    Location pt = at.clone().add((rnd.nextDouble() - 0.5) * 0.3,
+                            rnd.nextDouble() * 0.25, (rnd.nextDouble() - 0.5) * 0.3);
+                    sent += hud.emitSized(pt, "dust", "청백", 0.7f, 1, 0.05, 0.0);
+                }
+            }
+        } else {
+            double u = (tick - 1.0) / Math.max(1, ticks - 2);
+            double rr = faceRadius + (ringMax - faceRadius) * u;
+            int n = Math.max(10, (int) (rr * 30));
+            for (int i = 0; i < n; i++) {
+                if (rnd.nextDouble() < 0.28) {
+                    continue;                            // 불완전 고리 — 결락이 곧 통제된 비대칭
+                }
+                double a = Math.PI * 2 * i / n;
+                Location pt = at.clone().add(Math.cos(a) * rr,
+                        0.06 + rnd.nextDouble() * 0.18, Math.sin(a) * rr);
+                sent += hud.emitSized(pt, "dust", ink, 0.5f, 1, 0.10, 0.0);
+            }
+        }
+        return sent;
+    }
+
+    /**
      * EffectLib 의 기하를 <b>그대로</b> 빌려 쓰는 길 — 호 말고 다른 모양이 필요할 때.
      *
      * <p>지금은 검기가 위 {@link #slashArc} 로 충분하지만, 몹·보스의 기술은 원·나선·원뿔이

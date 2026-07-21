@@ -762,6 +762,16 @@ public final class SkillListener implements Listener {
             out.addAll(kigiReport(engine.kigiSlash()));
             return out;
         }
+        if ("임팩트시험".equals(verb)) {
+            // Impact 원형 검증 훅 — 실전과 같은 함수 (spawnImpactStrike). 클라 입력 없이 판정·연출을 잰다
+            SkillEngine.ImpactStrike imp = engine.impactStrike();
+            if (imp == null || !imp.enabled()) {
+                return List.of(ChatColor.RED + "impact_strike 가 없다/꺼져 있다 (config/skill_motion.yml)");
+            }
+            spawnImpactStrike(player, imp);
+            return List.of(ChatColor.GOLD + "임팩트를 한 번 소환했다 (피격점 앞 "
+                    + imp.forward() + "m · 면 " + imp.faceRadius() + "m)");
+        }
         if ("시험".equals(verb)) {
             // ★ 실전과 **같은 함수**를 부른다 (SkillDisplay.kigiSlash + 흰 별) — 시험용으로 따로 그리면
             //   시험이 실전을 대변하지 못한다. 휘두르지 않아도 눈앞에 같은 검기가 선다.
@@ -1877,6 +1887,20 @@ public final class SkillListener implements Listener {
 
         String stroke = nextStroke(player, weaponClass);   // 그림의 순번 (입력 문법이 아니다)
 
+        // ★ Impact 원형 (도끼·둔기) — 압력면 + 충격 고리 (impact_strike · 원형 2호)
+        SkillEngine.ImpactStrike imp = engine.impactStrike();
+        if (imp != null && imp.enabled() && imp.appliesTo(weaponClass)) {
+            spawnImpactStrike(player, imp);
+            if (imp.replaceStroke()) {
+                SkillEngine.Style style0 = engine.weaponStyle(weaponClass);
+                if (style0 != null) {
+                    sfx(player.getLocation(), style0.swing());
+                }
+                posture(player, weaponClass, basic.trail(), swingTicks);
+                return;
+            }
+        }
+
         // ★ 전용 검기(劍氣) 평타 — 호 계열의 작은 무협 참격을 크고 선명한 초록 초승달로 대체 (kigi_slash)
         SkillEngine.KigiSlash kigi = engine.kigiSlash();
         if (kigi != null && kigi.enabled() && kigi.appliesTo(weaponClass, basic.trail())) {
@@ -1929,6 +1953,50 @@ public final class SkillListener implements Listener {
             kigiBandStrike(player, cfg);    // ★ 띠가 곧 판정 — 닿으면 딜 (빗나감/명중 분기 없음)
         }
         return drawn;
+    }
+
+    /**
+     * Impact 원형 소환 — 피격점(몸 앞 forward m 바닥)에 압력면·고리를 그리고,
+     * 압축·피크 틱(0·1) 동안 면에 닿은 생명체에 딜을 넣는다 (띠와 같은 판정 문법 — 재진입 일원화).
+     */
+    private void spawnImpactStrike(Player player, SkillEngine.ImpactStrike cfg) {
+        QiGeometry geom = plugin.qiGeometry();
+        if (geom == null) {
+            return;
+        }
+        Vector flat = flatOf(player);
+        Location feet = player.getLocation();
+        Location at = feet.clone().add(flat.clone().multiply(cfg.forward()));
+        at.setY(feet.getY() + 0.1);
+        int ticks = Math.max(2, cfg.ticks());
+        Set<UUID> struck = new HashSet<>();
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int t = 0;
+
+            @Override
+            public void run() {
+                if (t >= ticks || !player.isOnline()) {
+                    cancel();
+                    return;
+                }
+                geom.impactBurst(at, cfg.faceRadius(), cfg.ringMax(), t, ticks, cfg.ink());
+                if (cfg.hit() && t <= 1) {
+                    double reach = cfg.hitReach();
+                    for (org.bukkit.entity.Entity e
+                            : at.getWorld().getNearbyEntities(at, reach, 1.6, reach)) {
+                        if (!(e instanceof LivingEntity le) || e == player
+                                || struck.contains(e.getUniqueId())) {
+                            continue;
+                        }
+                        struck.add(e.getUniqueId());
+                        var atk = player.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
+                        double dmg = Math.max(1.0, atk == null ? 1.0 : atk.getValue());
+                        le.damage(dmg, player);   // → basicMelee 재진입 (판정 일원화 — 띠와 같은 길)
+                    }
+                }
+                t++;
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     /**

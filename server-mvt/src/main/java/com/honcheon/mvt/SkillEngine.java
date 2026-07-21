@@ -185,6 +185,7 @@ public final class SkillEngine {
     private final DroppedDisplay droppedDisplay;
     /** 전용 검기 평타 — 초록 초승달 검기 (kigi_slash). 없으면 null (기존 무협 참격이 돈다) */
     private final KigiSlash kigiSlashConfig;
+    private ImpactStrike impactStrikeConfig;
 
     /**
      * ★ 검기의 <b>인게임 오버라이드</b> — {@code /혼천 검기 <키> <값>} 이 갈아끼운 값. null 이면 등록부 원본.
@@ -551,6 +552,7 @@ public final class SkillEngine {
         this.weaponStand = weaponStand(RulesConfig.section(mo, "weapon_stand"));
         this.droppedDisplay = droppedDisplay(RulesConfig.section(mo, "dropped_display"));
         this.kigiSlashConfig = kigiSlash(RulesConfig.section(mo, "kigi_slash"));
+        this.impactStrikeConfig = impactStrike(RulesConfig.section(mo, "impact_strike"));
 
         Map<String, FormMotion> fms = new LinkedHashMap<>();
         RulesConfig.section(mo, "forms").forEach((name, raw) -> {
@@ -1080,6 +1082,30 @@ public final class SkillEngine {
                 dblOr(m.get("aura_scale"), 2.2), dblOr(m.get("aura_center_rise"), 1.0));
     }
 
+    /**
+     * ★ Impact 원형 (도끼·둔기) — {@code impact_strike} 절 (vfx_primitives.md 원형 2호 · 2026-07-21).
+     * 호(초승달) 금지: 짧고 넓은 압력면 + 접촉 후 확장되는 불완전 충격 고리. 첨두는 중심.
+     * 판정은 검기 띠와 같은 문법 — 압력면에 닿으면 딜 (빗나감/명중 분기 없음).
+     */
+    private static ImpactStrike impactStrike(Map<String, Object> m) {
+        if (m == null || m.isEmpty()) {
+            return null;
+        }
+        List<String> classes = new ArrayList<>();
+        if (m.get("apply_to_classes") instanceof List<?> cl) {
+            cl.forEach(o -> classes.add(String.valueOf(o)));
+        }
+        return new ImpactStrike(
+                m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
+                Collections.unmodifiableList(classes),
+                String.valueOf(m.getOrDefault("ink", "청회")),
+                dblOr(m.get("forward"), 1.8), dblOr(m.get("face_radius"), 0.85),
+                dblOr(m.get("ring_max"), 1.7), Math.max(2, intOr(m.get("ticks"), 4)),
+                m.get("hit") == null || Boolean.TRUE.equals(m.get("hit")),
+                dblOr(m.get("hit_reach"), 1.1),
+                m.get("replace_stroke") == null || Boolean.TRUE.equals(m.get("replace_stroke")));
+    }
+
     /** 전용 검기 평타 등록부 — {@code kigi_slash} 절. 없으면 null (조용히 꺼진다 — 기존 무협 참격이 돈다) */
     private static KigiSlash kigiSlash(Map<String, Object> m) {
         if (m == null || m.isEmpty()) {
@@ -1583,6 +1609,15 @@ public final class SkillEngine {
     /** 검기의 흰 별 반짝이 — 아크 궤적을 따라 성기게 터진다 (kigi_slash.spark) */
     public record KigiSpark(String particle, int count, double spread, double speed,
                             boolean alongArc) {
+    }
+
+    /** Impact 원형 (도끼·둔기) — 압력면 + 충격 고리. 판정은 면에 닿으면 딜 (impact_strike 절) */
+    public record ImpactStrike(boolean enabled, List<String> applyToClasses, String ink,
+                               double forward, double faceRadius, double ringMax, int ticks,
+                               boolean hit, double hitReach, boolean replaceStroke) {
+        public boolean appliesTo(String weaponClass) {
+            return weaponClass != null && applyToClasses.contains(weaponClass);
+        }
     }
 
     /**
@@ -2601,6 +2636,11 @@ public final class SkillEngine {
      */
     public KigiSlash kigiSlash() {
         return kigiSlashOverride != null ? kigiSlashOverride : kigiSlashConfig;
+    }
+
+    /** Impact 원형 등록부 — 없으면 null (조용히 꺼진다) */
+    public ImpactStrike impactStrike() {
+        return impactStrikeConfig;
     }
 
     /** 등록부가 적어 둔 원본 — 오버라이드와 무관하다 (되돌릴 자리이자 대조군) */
