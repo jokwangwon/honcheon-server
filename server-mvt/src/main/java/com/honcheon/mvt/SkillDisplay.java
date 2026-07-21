@@ -481,7 +481,7 @@ final class SkillDisplay {
         // ★ 매체 축 (재설계 v2 · 2026-07-21 사용자 확정) — 일반 무기는 particle.
         //   plate·model3d 경로는 지우지 않는다: 보스몹·특수 무기가 그 효과만 매체를 갈아탈 자리다.
         if ("particle".equals(cfg.medium())) {
-            kigiGeomBand(caster, cfg, at);
+            kigiGeomBand(caster, cfg, at, dirSign);
             return true;
         }
 
@@ -619,7 +619,7 @@ final class SkillDisplay {
      * 잔류·소멸은 dust 파티클 자체 수명이 맡는다 (야마토 실측: 긋고 → 먼지로 남는다).
      * 흰 별(end_rod)은 머리 구간에만 성기게 — 액센트는 몸이 아니라 진행 끝에 산다.
      */
-    private void kigiGeomBand(Player caster, SkillEngine.KigiSlash cfg, Location at) {
+    private void kigiGeomBand(Player caster, SkillEngine.KigiSlash cfg, Location at, int dirSign) {
         QiGeometry geom = plugin.qiGeometry();
         if (geom == null) {
             note("검기띠", "기하가 없다 (EffectLib 미적재) — 검기가 안 나간다");
@@ -648,7 +648,7 @@ final class SkillDisplay {
                         (double) t / span, (double) (t + 1) / span,
                         cfg.tiltDeg(), cfg.geomStepDeg(),
                         cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
-                        particle, inkBody);
+                        particle, inkBody, dirSign);
                 // 흰 별 — 머리(마지막 두 틱) 구간에만, 성기게
                 if (t >= span - 2 && cfg.accentCount() > 0) {
                     sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),

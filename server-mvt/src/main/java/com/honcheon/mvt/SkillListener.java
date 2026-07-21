@@ -768,7 +768,7 @@ public final class SkillListener implements Listener {
             if (imp == null || !imp.enabled()) {
                 return List.of(ChatColor.RED + "heavy_slash 가 없다/꺼져 있다 (config/skill_motion.yml)");
             }
-            spawnHeavySlash(player, imp);
+            spawnHeavySlash(player, imp, 1);
             return List.of(ChatColor.GOLD + "횡참을 한 번 소환했다 (반경 " + imp.radius()
                     + "m · 호 " + Math.round(imp.sweepDeg()) + "도 · 폭 " + imp.bandWidth() + "m)");
         }
@@ -1890,7 +1890,9 @@ public final class SkillListener implements Listener {
         // ★ 부(斧)의 횡참 — 짧고 굵고 둔중한 궤적 (heavy_slash · 사용자 확정: 충격은 빼고 횡참)
         SkillEngine.HeavySlash imp = engine.heavySlash();
         if (imp != null && imp.enabled() && imp.appliesTo(weaponClass)) {
-            spawnHeavySlash(player, imp);
+            int heavyDir = -kigiDir.getOrDefault(player.getUniqueId(), -1);
+            kigiDir.put(player.getUniqueId(), heavyDir);          // 검기와 같은 교대 토글 공유
+            spawnHeavySlash(player, imp, heavyDir);
             if (imp.replaceStroke()) {
                 SkillEngine.Style style0 = engine.weaponStyle(weaponClass);
                 if (style0 != null) {
@@ -1950,7 +1952,7 @@ public final class SkillListener implements Listener {
         boolean drawn = display.kigiSlash(player, cfg, dirSign);
         kigiSparks(player, cfg, dirSign);   // 흰 별 — 파티클은 팩이 없어도 늘 보인다
         if (cfg.bandHit()) {
-            kigiBandStrike(player, cfg);    // ★ 띠가 곧 판정 — 닿으면 딜 (빗나감/명중 분기 없음)
+            kigiBandStrike(player, cfg, dirSign);   // ★ 띠가 곧 판정 — 화면과 같은 거울로
         }
         return drawn;
     }
@@ -1959,7 +1961,7 @@ public final class SkillListener implements Listener {
      * 부의 횡참 소환 — 검기 띠와 같은 밴드를 <b>짧고 굵게</b> 긋는다 (허리 높이 · 얕은 대각).
      * 판정도 같은 문법: 스윕 동안 궤적 좌표를 표본해 닿은 생명체에 딜 (재진입 일원화).
      */
-    private void spawnHeavySlash(Player player, SkillEngine.HeavySlash cfg) {
+    private void spawnHeavySlash(Player player, SkillEngine.HeavySlash cfg, int dirSign) {
         QiGeometry geom = plugin.qiGeometry();
         if (geom == null) {
             return;
@@ -1990,13 +1992,13 @@ public final class SkillListener implements Listener {
                         (double) t / span, (double) (t + 1) / span,
                         cfg.tiltDeg(), cfg.stepDeg(),
                         cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
-                        "dust", cfg.ink());
+                        "dust", cfg.ink(), dirSign);
                 if (cfg.hit()) {
                     for (int i = 0; i <= 6; i++) {
                         double phase = (t + i / 6.0) / span;
                         double phi = -full / 2.0 + full * phase;
                         double side = Math.sin(phi) * r * Math.cos(tilt);
-                        double up = -Math.sin(phi) * r * Math.sin(tilt);
+                        double up = -Math.sin(phi) * r * Math.sin(tilt) * (dirSign < 0 ? -1.0 : 1.0);
                         double fwd = Math.cos(phi) * r;
                         Location p = center.clone().add(
                                 fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
@@ -2028,7 +2030,7 @@ public final class SkillListener implements Listener {
      * 바닐라 직접 클릭과의 이중타는 MC 무적 프레임(10틱)이 막고, 한 스윙 안의 중복은 struck 이 막는다.
      * 좌표 수식은 {@code QiGeometry.slashBand} 와 같은 시선 기준 베기면 — 화면과 판정이 같은 자리다.
      */
-    private void kigiBandStrike(Player player, SkillEngine.KigiSlash cfg) {
+    private void kigiBandStrike(Player player, SkillEngine.KigiSlash cfg, int dirSign) {
         Location feet = player.getLocation();
         Vector flat0 = flatOf(player);
         Location center = feet.clone().add(flat0.clone().multiply(cfg.forward()));
@@ -2056,7 +2058,7 @@ public final class SkillListener implements Listener {
                     double phase = (t + i / 6.0) / span;
                     double phi = -full / 2.0 + full * phase;
                     double side = Math.sin(phi) * r * Math.cos(tilt);
-                    double up = -Math.sin(phi) * r * Math.sin(tilt);
+                    double up = -Math.sin(phi) * r * Math.sin(tilt) * (dirSign < 0 ? -1.0 : 1.0);
                     double fwd = Math.cos(phi) * r;
                     pts.add(center.clone().add(fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side));
                 }

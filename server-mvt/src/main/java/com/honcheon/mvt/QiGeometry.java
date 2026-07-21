@@ -229,7 +229,8 @@ final class QiGeometry {
     int slashBand(Location center, float facing, double radius, double sweepDeg,
                   double from, double to, double tiltDeg, double stepDeg,
                   double width, int rows, double jitter,
-                  String particle, String inkBody) {
+                  String particle, String inkBody, int mirror) {
+        // mirror: +1 = 왼위→오른아래 대각 · −1 = 오른위→왼아래 (스윙마다 교대 — "한 방향으로만 벤다" 해소)
         if (center == null || center.getWorld() == null || to <= from) {
             return 0;
         }
@@ -269,7 +270,7 @@ final class QiGeometry {
                 double fr = edge ? 0.0 : dark ? 1.0 : (k + 1.0) / (rows + 1.0);
                 double r = radius - w * fr;
                 double side = Math.sin(phi) * r * Math.cos(tilt);
-                double up = -Math.sin(phi) * r * Math.sin(tilt);   // 왼쪽 위 → 오른쪽 아래 대각
+                double up = -Math.sin(phi) * r * Math.sin(tilt) * (mirror < 0 ? -1.0 : 1.0);
                 double fwd = Math.cos(phi) * r;
                 Location at = center.clone().add(
                         fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
