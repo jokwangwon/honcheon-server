@@ -361,45 +361,46 @@ kigi_slash:
   model: "honcheon:kigi/arc1"      # 소환 시 1단계 (display.models.참격_호_검기1 의 key)
   # ★단계 모델 — 이 순서대로 갈아끼운다. 이름은 display.models 의 **등록 이름**이다 (key 가 아니다).
   #   비우거나 1개만 적으면 교체가 꺼지고 model 하나로 고정된다 (가역).
-  frame_models: [참격_호_검기1, 참격_호_검기2, 참격_호_검기3]
-  frame_ticks: 4  # 단계당 틱 — 3단계 × 3 = 9틱 = draw_ticks 와 정합 (스윙이 끝나면 3단계)
+  frame_models: [참격_호_검기1, 참격_호_검기2, 참격_호_검기3, 참격_호_검기4, 참격_호_검기5]
+  frame_ticks: 2  # 단계당 틱 — 5단계 × 2 = 10틱 = draw_ticks 와 정합 (스윙이 끝나면 5단계)
   apply_to_trails: [호]            # 이 basic trail 무기에만 (호=검·도·부·겸·월아산 sweep)
   replace_stroke: true             # 이 무기의 기존 무협 display.slash 아크를 억제(안 그림) + 궤적 파티클도 억제
+  plate: true  # 판(ItemDisplay)을 그린다 — 5프레임의 몸 (테스트 조율값 동기화)
   # ★ 공전(公轉) — 초승달의 **자리 자체가 몸 주위를 돈다** (레퍼런스: 오른쪽 아래 → 몸을 감으며 → 왼쪽).
   #   예전엔 정면 한 자리에 붙박여 자전만 했다("정면에서 본 반원") — 그것이 유일한 결함이었다.
-  scale: 2.0  # 초승달 크기(대략 m) — 크게, 3인칭에서 잘 보이게
-  center_height: 1.1  # 발바닥에서 **공전 중심** 높이(m) — 몸의 중심
-  orbit_radius: 1.25  # ★공전 반경(m) — 몸 중심에서 초승달까지. 크면 크게 돈다
+  scale: 3.6  # 초승달 크기(대략 m) — 크게, 3인칭에서 잘 보이게
+  center_height: 1.2  # 발바닥에서 **공전 중심** 높이(m) — 몸의 중심
+  orbit_radius: 1.9  # ★공전 반경(m) — 몸 중심에서 초승달까지. 크면 크게 돈다
   # ★ 몸 둘레를 도는 호 (EffectLib 기하) — 비우면 안 그린다 (판만으로 간다).
   #   판이 못 푸는 **등 뒤**를 점으로 메운다 (실측 47px → 3,936px).
   #   색은 등록부의 격 사다리를 따른다 — 검기는 청회다 (연두 아니다).
   # ★ 3D 리본 (BetterModel · D) — 이름이 있으면 판·점보다 먼저 선다. 없으면 판·점 (가역).
-  model3d: kigi_arc
+  model3d: ""          # ★2026-07-21 사용자 확정: 2D 5프레임으로 간다 — 리본은 쉼 (kigi_arc 로 되살림 가능)
   model3d_anim: grow
   model3d_up: 0.5      # ★리본 자리를 가슴에서 올림(m) — 재적재로 쓴다
   model3d_yaw: 0.0     # ★방향 회전(도)
   model3d_pitch: 0.0   # ★기울기 회전(도)
-  geom_particle: dust
+  geom_particle: ""    # 기하 점도 쉼 — 판 5장의 그림을 깨끗이 본다 (dust 로 되살림 가능)
   geom_ink: 청회
   geom_step_deg: 1.5   # ★점 간격(도) — 작을수록 촘촘. 6도는 「티끌」로 읽혔다
   geom_sweep_deg: 150   # ★호가 무는 각 — 판의 sweep_deg 와 다른 값이다
 
   forward: 0.0  # 공전 중심을 앞으로 미는 값(m). 0 이면 몸 한복판이 중심
-  sweep_deg: 60  # ★공전 호각 — 몸 주위를 도는 총 각(시작→끝, 클라이언트가 보간). 레퍼런스는 크게 돈다
+  sweep_deg: 0  # ★공전 호각 — 몸 주위를 도는 총 각(시작→끝, 클라이언트가 보간). 레퍼런스는 크게 돈다
   tilt_deg: 25  # ★공전면의 기울기 — 수평 궤도를 앞축 둘레로 눕힌다(대각 내려베기). 0 이면 순수 수평 공전
   roll_deg: 180  # 초승달을 제 평면 안에서 돌리는 정적 롤 오프셋(배가 위/아래)
   # ★ 날의 눕힘 — 접선축 기준(2026-07-20 · 사용자 실측: \"아치가 위아래를 보고 있다\").
   #   90 = 판이 누워 **볼록한 바깥이 정면**을 보고 오목한 안쪽이 플레이어를 감싼다 (횡베기).
   #    0 = 판이 세로로 서서 ∩ 의 배가 하늘을 본다 (그 버그의 자세).
-  blade_pitch_deg: 90
-  draw_ticks: 10  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간
+  blade_pitch_deg: -90
+  draw_ticks: 10  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간 (= 5단계 × frame_ticks 2)
   fade_ticks: 3                    # 사라지는 시간(꼬리부터 수축)
   billboard: FIXED                 # 세운 채 고정 (획에는 방향이 있다)
   alternate: true                  # 스윙마다 좌↔우 방향 번갈아(레퍼런스 "한 세트 더")
   brightness: 15                   # 발광(full-bright · block_light = sky_light = 이 값)
   spark:
     particle: firework  # 흰 별/반짝(깔끔한 흰색). 대안: firework
-    count: 14  # 아크를 따라 뿌리는 흰 별 개수 (표본점당 1개)
+    count: 0  # 아크를 따라 뿌리는 흰 별 개수 — 5프레임 평가 동안 쉼 (표본점당 1개)
     spread: 1.3  
     speed: 0.02
     along_arc: true                # 아크 궤적을 따라 뿌림(그리는 시간에 갈라 뿌린다)
@@ -1896,7 +1897,7 @@ display:
       fallback: null              # 팩 없음 → 파티클 궤적 (참격_호 와 같은 규약)
       size: [1.5, 0.55, 0.04]     # 참격_호 와 호환 — size[0]=1.5 (정규화 상수 · MC 좌표 한계 [-16,32])
       anchor: head                # 성장·소멸의 고정점 = 머리(+X 끝)
-      form: "녹색 초승달 검기 ①단계 — 방금 시작한 짧은 획 (검이 막 지나가기 시작한 자리)"
+      form: "삼합 청회 검기 ①시작 — 베는 찰나의 짧은 획 (28%)"
 
     참격_호_검기2:
       key: "honcheon:kigi/arc2"
@@ -1904,7 +1905,7 @@ display:
       fallback: null
       size: [1.5, 0.55, 0.04]
       anchor: head
-      form: "녹색 초승달 검기 ②단계 — 왼쪽에서 휘어 뻗은 리본 (궤적이 절반쯤 그려졌다)"
+      form: "삼합 청회 검기 ②흐름 — 절반쯤 그어진 획 (62%)"
 
     참격_호_검기3:
       key: "honcheon:kigi/arc3"
@@ -1912,7 +1913,23 @@ display:
       fallback: null
       size: [1.5, 0.55, 0.04]
       anchor: head
-      form: "녹색 초승달 검기 ③단계 — 넓은 ∩ 전체 아크 (다 베고 지나간 자리)"
+      form: "삼합 청회 검기 ③전체 — 다 그어진 호 (검이 지나간 온 자리)"
+
+    참격_호_검기4:
+      key: "honcheon:kigi/arc4"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.55, 0.04]
+      anchor: head
+      form: "삼합 청회 검기 ④잔상 — 빛이 가라앉기 시작한다 (알파 감쇠)"
+
+    참격_호_검기5:
+      key: "honcheon:kigi/arc5"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.55, 0.04]
+      anchor: head
+      form: "삼합 청회 검기 ⑤스러짐 — 재만 남는다 (곧 사라진다)"
 
     참격_선:
       key: "honcheon:qi/slash_line"

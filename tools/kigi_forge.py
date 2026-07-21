@@ -85,23 +85,28 @@ def _normal(pts, i, off):
     return pts[i][0] - dy / L * off, pts[i][1] + dx / L * off
 
 
-def samhap(pts: list, pal: dict, base_w: float = None, body_scale: float = 0.78) -> Image.Image:
-    """★ 삼합 골격 — 어떤 경로든 이 붓으로 긋는다. (실루엣, 팔레트) 만 주문하라."""
+def samhap(pts: list, pal: dict, base_w: float = None, body_scale: float = 0.78,
+           white_scale: float = 1.0) -> Image.Image:
+    """★ 삼합 골격 — 어떤 경로든 이 붓으로 긋는다. (실루엣, 팔레트) 만 주문하라.
+    white_scale: 흰 층(심·서슬·광점)의 상대 굵기. 확정 64룩에서 흰 층은 서브픽셀로 뭉개져
+    먹에 스몄다 — 고해상도로 구울 때 1.0 이면 흰 층이 또렷이 살아나 획을 덮으므로,
+    0.45 쯤으로 줄여 그 뭉개짐(획 대비 ~0.2 비율)을 재현한다. 기본 1.0 = 기존 그림 불변."""
     base_w = base_w or W * 0.088
+    bu = base_w / (W * 0.088)      # 블러도 붓 굵기에 비례 — 가는 붓에서 광채가 획을 씻지 않게
     n = len(pts)
     ts = [i / (n - 1) for i in range(n)]
     im = canvas()
     # ① 담묵 번짐
     lay = canvas(); d = ImageDraw.Draw(lay)
     stroke(d, pts, [base_w * press(t) * 1.6 for t in ts], pal["glow_deep"], 55)
-    lay = lay.filter(ImageFilter.GaussianBlur(SS * 2.4))
+    lay = lay.filter(ImageFilter.GaussianBlur(W / 64 * 2.4 * bu))   # 블러는 W 에 비례 — 어느 해상도든 같은 그림
     im.alpha_composite(lay)
     # ③ 겹겹 광채 (몸 아래에 깔린다)
     for scale, col, alpha, blur in ((2.0, pal["glow_deep"], 115, 3.0),
                                      (1.45, pal["glow_mid"], 155, 1.7)):
         lay = canvas(); d = ImageDraw.Draw(lay)
         stroke(d, pts, [base_w * press(t) * scale for t in ts], col, alpha)
-        lay = lay.filter(ImageFilter.GaussianBlur(SS * blur))
+        lay = lay.filter(ImageFilter.GaussianBlur(W / 64 * blur * bu))
         im.alpha_composite(lay)
     # ② 붓 눌림 먹 몸
     lay = canvas(); d = ImageDraw.Draw(lay)
@@ -121,14 +126,14 @@ def samhap(pts: list, pal: dict, base_w: float = None, body_scale: float = 0.78)
                                          (-0.42, (0.42, 0.88), 0.09, "core")):
         seg = [i for i in range(n) if t0 <= ts[i] <= t1]
         stroke(d, [_normal(pts, i, base_w * off) for i in seg],
-               [base_w * taper(ts[i]) * wmul for i in seg], pal[colkey], 255)
+               [base_w * taper(ts[i]) * wmul * white_scale for i in seg], pal[colkey], 255)
     x, y = pts[int(n * 0.97)]
-    r = W * 0.018
+    r = base_w * 0.205 * white_scale   # 광점은 붓 굵기에 비례 (0.088W 붓에서 옛 값 0.018W 와 동일)
     d.ellipse([x - r, y - r, x + r, y + r], fill=(*pal["core"], 255))
     im.alpha_composite(lay)
     # ⑤ 흰 심 (얇게 — 삼합의 마무리)
     lay = canvas(); d = ImageDraw.Draw(lay)
-    stroke(d, pts, [base_w * press(t) * 0.35 for t in ts], pal["core"], 255)
+    stroke(d, pts, [base_w * press(t) * 0.35 * white_scale for t in ts], pal["core"], 255)
     im.alpha_composite(lay)
     return im.resize((OUT, OUT), Image.LANCZOS)
 
@@ -165,6 +170,58 @@ def sil_scurve(n=260):
 
 SILS = [("호 (참격)", sil_arc), ("일섬 (직선)", sil_line), ("용틀임 (S자)", sil_scurve)]
 PALS = ["청회", "청록", "옥", "혈"]
+
+
+# ═══ 확정 산출 — 팩이 굽는 실물 (2026-07-21 사용자 확정: 5프레임 통일) ═══════
+# 한 번의 베기 = 시작(28%) → 흐름(62%) → 전체 → 잔상 → 스러짐. 2틱/장 × 5 = 10틱 = draw_ticks.
+FRAMES_5 = [(0.28, 0.0), (0.62, 0.0), (1.00, 0.0), (1.00, 0.35), (1.00, 0.75)]
+
+# 판 띠 굵기 배율 — 정사각 붓(0.088)을 띠 높이(22/64)에 맞춰 줄인 값. 키우면 광채가 띠를 벗어난다.
+BAND_W_SCALE = 0.055
+
+
+def set_res(out: int):
+    """산출 해상도를 바꾼다 — 팩 실물은 256, 견본·비교는 기본 64.
+    붓 굵기·블러·실루엣 전부 W 에 비례하므로 어느 해상도든 같은 그림이 나온다."""
+    global OUT, W
+    OUT = out
+    W = OUT * SS
+
+
+def sil_arc_band(n=260):
+    """판 띠(64×22)용 표준 참격 호 — 넓고 얕은 ∩. 인게임 판(1.5×0.55m)과 같은 비율의
+    캔버스 맨 위 22행 안에 광채까지 들어가도록 반지름을 크게(얕게) 잡았다."""
+    cx, cy, r = W * 0.5, W * 1.33, W * 1.20
+    a0, a1 = math.radians(-112), math.radians(-68)
+    return [(cx + r * math.cos(a0 + (a1 - a0) * i / (n - 1)),
+             cy + r * math.sin(a0 + (a1 - a0) * i / (n - 1))) for i in range(n)]
+
+
+def frame(pts: list, ink: str, frac: float, decay: float, base_w: float = None,
+          white_scale: float = 1.0) -> Image.Image:
+    """베기의 한 장 — frac 만큼 그어졌고, decay 만큼 스러졌다 (프레임 세트의 원자).
+    frac 절단은 머리 쪽을 남긴다: 부분 획도 제 머리(서슬·광점)를 가진 짧은 완성 획이 된다."""
+    n = max(12, int(len(pts) * frac))
+    im = samhap(pts[:n], palette(ink), base_w=base_w, white_scale=white_scale)
+    if decay > 0:
+        a = im.split()[3].point(lambda v: int(v * (1.0 - decay * 0.72)))
+        im.putalpha(a)
+    return im
+
+
+def band_frames(ink: str = "청회", res: int = 256) -> list:
+    """★ 팩이 굽는 확정 5장 — 띠 실루엣 × 삼합 붓 × FRAMES_5.
+    tools/respack/qi.py write_kigi_assets 가 이것을 불러 kigi/arc1..5 로 만든다.
+    격 사다리 승급(강기·어검…)은 ink 인자만 바꾸면 된다.
+    res=256: 64 였을 땐 띠 높이 22px 에 획이 3px 이 되어 삼합의 층이 흰 덩어리로 뭉개졌다."""
+    old = OUT
+    set_res(res)
+    try:
+        pts = sil_arc_band()
+        return [frame(pts, ink, fr, dc, base_w=W * BAND_W_SCALE, white_scale=0.45)
+                for fr, dc in FRAMES_5]
+    finally:
+        set_res(old)
 
 
 def main():
