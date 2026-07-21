@@ -837,9 +837,11 @@ public final class SkillListener implements Listener {
                 return null;
             }
         }
-        return new SkillEngine.KigiSlash(c.enabled(), c.model(), c.applyToTrails(),
+        return new SkillEngine.KigiSlash(c.enabled(), c.medium(), c.model(), c.applyToTrails(),
                 c.applyToClasses(),
-                c.frameModels(), c.frameModelsB(), frame, c.replaceStroke(), scale, height, forward,
+                c.frameModels(), c.frameModelsB(), frame,
+                c.bandWidth(), c.bandRows(), c.bandJitter(), c.bandSweepTicks(), c.accentCount(),
+                c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
                 c.geomParticle(), c.geomInk(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),

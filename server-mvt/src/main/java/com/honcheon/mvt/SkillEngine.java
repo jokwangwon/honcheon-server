@@ -1112,11 +1112,19 @@ public final class SkillEngine {
                 sp.get("along_arc") == null || Boolean.TRUE.equals(sp.get("along_arc")));
         return new KigiSlash(
                 m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
+                // ★ 매체 축 (재설계 v2 · 사용자 확정): 일반 무기는 particle.
+                //   plate·model3d 는 지우지 않는다 — 보스·특수 무기의 교체 지점이다.
+                String.valueOf(m.getOrDefault("medium", "particle")),
                 str(m.get("model")), Collections.unmodifiableList(trails),
                 Collections.unmodifiableList(classes),
                 Collections.unmodifiableList(frameModels),
                 Collections.unmodifiableList(frameModelsB),
                 Math.max(1, intOr(m.get("frame_ticks"), 3)),
+                // ★ 파티클 띠 (docs/design/kigi_particle_v2.md — 야마토 실측 대역)
+                dblOr(m.get("band_width"), 0.6), Math.max(1, intOr(m.get("band_rows"), 4)),
+                dblOr(m.get("band_jitter"), 0.10),
+                Math.max(1, intOr(m.get("band_sweep_ticks"), 4)),
+                Math.max(0, intOr(m.get("accent_count"), 12)),
                 Boolean.TRUE.equals(m.get("replace_stroke")),
                 dblOr(m.get("scale"), 2.0), dblOr(m.get("center_height"), 1.0),
                 dblOr(m.get("forward"), 0.1), dblOr(m.get("orbit_radius"), 1.1),
@@ -1535,9 +1543,11 @@ public final class SkillEngine {
      * @param geomSweepDeg  그 호가 무는 각(도). ★ {@code sweepDeg}(판의 공전 보간)와 <b>다른 값</b>이다 —
      *                      한 번 재사용했다가 {@code sweep_deg: 0} 탓에 호가 한 점으로 접혔다 (실측)
      */
-    public record KigiSlash(boolean enabled, String model, List<String> applyToTrails,
+    public record KigiSlash(boolean enabled, String medium, String model, List<String> applyToTrails,
                             List<String> applyToClasses,
                             List<String> frameModels, List<String> frameModelsB, int frameTicks,
+                            double bandWidth, int bandRows, double bandJitter,
+                            int bandSweepTicks, int accentCount,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
                             double bladePitchDeg,

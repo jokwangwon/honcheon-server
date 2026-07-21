@@ -210,6 +210,80 @@ final class QiGeometry {
     }
 
     /**
+     * ★ <b>검기의 띠(밴드)</b> — 단선 호가 아니라 <b>폭·두께·단면색을 가진 리본</b>이다
+     * (검기 재설계 v2 · docs/design/kigi_particle_v2.md · 야마토 레퍼런스 실측 2026-07-21).
+     *
+     * <p>단면 = 명암 샌드위치의 파티클 번역 (등록부 색만):
+     * 바깥(날) <b>청백 1줄</b> → 몸 <b>본색(먹빛 인자) 여러 줄</b> → 안쪽 <b>먹 소량</b>(밝은 하늘 가독).
+     * 실루엣은 검압을 계승한다 — 꼬리(스윕 시작) 가늘고 머리(진행 끝)로 갈수록 폭·밀도가 는다.
+     *
+     * <p>이전 「티끌」 실패(단선·저밀도)와의 차이가 이 폭×줄×지터다. 발행은 전부
+     * {@code hud.emit} 창구로 — 예산·관람자·LOD 게이트가 그대로 산다.
+     *
+     * @param width  띠 폭(m) — 날(바깥 반경)에서 안쪽으로 이만큼 (실측 대역 0.5~0.8)
+     * @param rows   몸 줄 수 (청백 날·먹 안감은 별도로 얹는다)
+     * @param jitter 두께 지터(m) — 궤도면에 수직으로 ±이만큼 흩어 그레인 입체감을 만든다
+     * @param inkBody 몸의 먹빛 (격 사다리 축 — 검기 청회 → 강기 청록 …)
+     * @return 발행된 파티클 수
+     */
+    int slashBand(Location center, float facing, double radius, double sweepDeg,
+                  double from, double to, double tiltDeg, double stepDeg,
+                  double width, int rows, double jitter,
+                  String particle, String inkBody) {
+        if (center == null || center.getWorld() == null || to <= from) {
+            return 0;
+        }
+        double full = Math.toRadians(sweepDeg);
+        double base = Math.toRadians(facing) - full / 2.0;
+        double a0 = base + full * Math.max(0.0, Math.min(1.0, from));
+        double a1 = base + full * Math.max(0.0, Math.min(1.0, to));
+        int steps = Math.max(1, (int) Math.ceil(Math.toDegrees(a1 - a0) / Math.max(0.2, stepDeg)));
+        double tilt = Math.toRadians(tiltDeg);
+        java.util.Random rnd = java.util.concurrent.ThreadLocalRandom.current();
+
+        // ★ 시선 기준 좌표계 (v2b 실측 교훈: 월드축 기울임은 시선과 무관하게 「머리 위 화환」을 만든다).
+        //   호는 몸 **앞** 반구를 가로지르고, 기울임은 시선축 둘레의 대각(왼위→오른아래)이다 — 베기면.
+        double f = Math.toRadians(facing);
+        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);            // 시선 앞
+        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);            // 시전자의 오른쪽
+        double half = full / 2.0;
+        int sent = 0;
+        for (int i = 0; i <= steps; i++) {
+            double u = (double) i / steps;
+            double phase = from + (to - from) * u;                 // 0=꼬리 … 1=머리
+            double phi = -half + full * phase;                     // 시선 기준 호각
+            // 검압 실루엣 — 꼬리 12% → 머리 100% (판 세대에서 확정한 폭 프로필의 요지)
+            double taper = phase < 0.2 ? 0.12 + 0.88 * (phase / 0.2) * 0.25
+                         : Math.min(1.0, 0.34 + 0.66 * Math.pow((phase - 0.2) / 0.6, 0.85));
+            double w = width * taper;
+            for (int k = -1; k <= rows; k++) {
+                // k=-1: 날(청백·바깥) · 0..rows-1: 몸(본색) · rows: 먹 안감(소량)
+                boolean edge = k < 0;
+                boolean dark = k >= rows;
+                if (dark && (i % 3 != 0 || phase < 0.25)) {
+                    continue;                                       // 먹은 소량 — 셋에 하나
+                }
+                if (!edge && !dark && rnd.nextDouble() > 0.80 + 0.20 * taper) {
+                    continue;                                       // 꼬리 쪽 몸은 성기게 (밀도 테이퍼)
+                }
+                double fr = edge ? 0.0 : dark ? 1.0 : (k + 1.0) / (rows + 1.0);
+                double r = radius - w * fr;
+                double side = Math.sin(phi) * r * Math.cos(tilt);
+                double up = -Math.sin(phi) * r * Math.sin(tilt);   // 왼쪽 위 → 오른쪽 아래 대각
+                double fwd = Math.cos(phi) * r;
+                Location at = center.clone().add(
+                        fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
+                double jt = edge ? jitter * 0.3 : jitter;           // 날은 또렷하게 (지터 작게)
+                at.add((rnd.nextDouble() - 0.5) * jt, (rnd.nextDouble() - 0.5) * jt * 2.0,
+                       (rnd.nextDouble() - 0.5) * jt);
+                String ink = edge ? "청백" : dark ? "먹" : inkBody;
+                sent += hud.emit(at, particle, ink, 1, 0.0, 0.0, false);
+            }
+        }
+        return sent;
+    }
+
+    /**
      * EffectLib 의 기하를 <b>그대로</b> 빌려 쓰는 길 — 호 말고 다른 모양이 필요할 때.
      *
      * <p>지금은 검기가 위 {@link #slashArc} 로 충분하지만, 몹·보스의 기술은 원·나선·원뿔이

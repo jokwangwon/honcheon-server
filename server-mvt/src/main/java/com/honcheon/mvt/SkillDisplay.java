@@ -478,10 +478,17 @@ final class SkillDisplay {
         at.setY(feet.getY() + cfg.centerHeight());
         at.setDirection(flat);   // 국소축을 시선에 맞춘다 — 공전은 시전자의 축에서 돈다
 
+        // ★ 매체 축 (재설계 v2 · 2026-07-21 사용자 확정) — 일반 무기는 particle.
+        //   plate·model3d 경로는 지우지 않는다: 보스몹·특수 무기가 그 효과만 매체를 갈아탈 자리다.
+        if ("particle".equals(cfg.medium())) {
+            kigiGeomBand(caster, cfg, at);
+            return true;
+        }
+
         // ★ **3D 리본을 먼저 시도한다** (D · 2026-07-21). 서면 판·점을 **둘 다** 건너뛴다 —
         //   리본 하나가 A(형태)와 B(각도)를 겸하므로 겹쳐 세우면 덤불이 된다 (A·B 실측의 교훈).
         //   BetterModel 이 없거나 모델을 못 찾으면 false — 그때 아래 판·점이 그대로 메운다 (가역).
-        if (cfg.model3d() != null && !cfg.model3d().isBlank()) {
+        if ("model3d".equals(cfg.medium()) && cfg.model3d() != null && !cfg.model3d().isBlank()) {
             // ★ 팩을 든 눈에게만 리본을 보낸다 — 3D 모델은 팩 없이는 못 본다.
             //   팩 없는 사람은 이 갈래 밖에서 판(바닐라 아이템)이 지킨다.
             List<Player> whom = new ArrayList<>();
@@ -580,9 +587,10 @@ final class SkillDisplay {
             d.setBrightness(new Display.Brightness(cfg.brightness(), cfg.brightness()));
             // 씨앗에서 자라며 **몸 둘레를 돈다** (검기 전용 경로 — headAnchor 가 공전을 덮지 못하게)
             // ★ 버스트 문법 (2026-07-21 · 검토 P0): 평타 피크는 **시작부터 최종 크기**여야 한다.
-            //   예전엔 0.001 → full 을 draw_ticks 내내 보간해 피크가 점, 붕괴가 최대가 됐다 —
-            //   레퍼런스 실측(즉시 최대 → 빠른 소멸)과 정반대. 이제 1틱 팝만 허용한다.
-            //   공전(sweep_deg ≠ 0)이면 회전·자리 보간이 필요하므로 옛 시간을 쓴다 (가역).
+            //   예전엔 0.001 → full 을 draw_ticks 내내 보간해 피크가 점, 붕괴가 최대가 됐다.
+            //   ① 스냅(보간 0) — 태어날 때 이미 완전 크기·시작 각. 스윕 모드에서도 크기는 안 자란다.
+            kigiSnap(d, p.full, qStart, tStart);
+            //   ② 스윕 — 각·자리만 보간 (sweep=0 이면 시작=끝이라 정지 · 1틱로 마감)
             kigiTransform(d, p.full, qEnd, tEnd, cfg.sweepDeg() == 0.0 ? 1 : cfg.drawTicks());
         }
         note("검기평타", String.format("scale%.1f 공전 반경%.2fm 호각%.0f도 기울기%.0f도 dir%s 그리기%d틱",
@@ -603,6 +611,56 @@ final class SkillDisplay {
      * <p>파티클은 {@link QiGeometry} 가 <b>우리 {@link SkillHud#emit} 으로만</b> 흘린다 —
      * 예산·관람자·LOD 게이트가 그대로 걸린다. 남의 기하를 빌리되 <b>발행권은 넘기지 않는다.</b>
      */
+    /**
+     * ★ <b>파티클 띠 검기</b> — 재설계 v2 의 본체 (docs/design/kigi_particle_v2.md).
+     *
+     * <p>스윕 {@code band_sweep_ticks} 틱 동안 검끝을 따라 <b>지나간 구간만</b> 새로 긋는다 —
+     * 판 세대에서 불가능했던 「스윙과의 인과」가 여기서는 매체 특성으로 생긴다.
+     * 잔류·소멸은 dust 파티클 자체 수명이 맡는다 (야마토 실측: 긋고 → 먼지로 남는다).
+     * 흰 별(end_rod)은 머리 구간에만 성기게 — 액센트는 몸이 아니라 진행 끝에 산다.
+     */
+    private void kigiGeomBand(Player caster, SkillEngine.KigiSlash cfg, Location at) {
+        QiGeometry geom = plugin.qiGeometry();
+        if (geom == null) {
+            note("검기띠", "기하가 없다 (EffectLib 미적재) — 검기가 안 나간다");
+            return;
+        }
+        String particle = cfg.geomParticle() == null || cfg.geomParticle().isBlank()
+                ? "dust" : cfg.geomParticle();
+        String inkBody = cfg.geomInk() == null || cfg.geomInk().isBlank() ? "청회" : cfg.geomInk();
+        final int span = Math.max(1, cfg.bandSweepTicks());
+        final float yaw = caster.getLocation().getYaw();
+        final Location center = at.clone();
+        final int[] sent = {0};
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int t = 0;
+
+            @Override
+            public void run() {
+                if (t >= span || !caster.isOnline()) {
+                    cancel();
+                    note("검기띠", "점 " + sent[0] + "개 (폭 " + cfg.bandWidth() + "m · "
+                            + cfg.bandRows() + "줄 · 각 " + Math.round(cfg.geomSweepDeg())
+                            + "도 · " + span + "틱 스윕)");
+                    return;
+                }
+                sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                        (double) t / span, (double) (t + 1) / span,
+                        cfg.tiltDeg(), cfg.geomStepDeg(),
+                        cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
+                        particle, inkBody);
+                // 흰 별 — 머리(마지막 두 틱) 구간에만, 성기게
+                if (t >= span - 2 && cfg.accentCount() > 0) {
+                    sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                            (double) t / span, (double) (t + 1) / span,
+                            cfg.tiltDeg(), Math.max(6.0, cfg.geomStepDeg() * 4.0),
+                            "end_rod", null);
+                }
+                t++;
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
+    }
+
     private void kigiGeomArc(Player caster, SkillEngine.KigiSlash cfg, Location at) {
         QiGeometry geom = plugin.qiGeometry();
         if (geom == null || cfg.geomParticle() == null || cfg.geomParticle().isBlank()) {
@@ -776,6 +834,17 @@ final class SkillDisplay {
         }
         d.setInterpolationDelay(0);
         d.setInterpolationDuration(Math.max(1, ticks));
+        d.setTransformation(new Transformation(new Vector3f(orbit), new Quaternionf(rot),
+                new Vector3f(scale[0], scale[1], scale[2]), new Quaternionf()));
+    }
+
+    /** 스냅 — 보간 없이 즉시 적용 (검기 피크: 소환 스케일 0.001 을 한 번에 완전 크기로 덮는다) */
+    private void kigiSnap(Display d, float[] scale, Quaternionf rot, Vector3f orbit) {
+        if (!d.isValid()) {
+            return;
+        }
+        d.setInterpolationDelay(0);
+        d.setInterpolationDuration(0);
         d.setTransformation(new Transformation(new Vector3f(orbit), new Quaternionf(rot),
                 new Vector3f(scale[0], scale[1], scale[2]), new Quaternionf()));
     }
