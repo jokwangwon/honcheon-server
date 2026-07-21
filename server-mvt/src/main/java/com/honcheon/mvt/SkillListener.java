@@ -841,6 +841,7 @@ public final class SkillListener implements Listener {
                 c.applyToClasses(),
                 c.frameModels(), c.frameModelsB(), frame,
                 c.bandWidth(), c.bandRows(), c.bandJitter(), c.bandSweepTicks(), c.accentCount(),
+                c.bandHit(), c.bandHitReach(),
                 c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
@@ -1924,7 +1925,73 @@ public final class SkillListener implements Listener {
         }
         boolean drawn = display.kigiSlash(player, cfg, dirSign);
         kigiSparks(player, cfg, dirSign);   // 흰 별 — 파티클은 팩이 없어도 늘 보인다
+        if (cfg.bandHit()) {
+            kigiBandStrike(player, cfg);    // ★ 띠가 곧 판정 — 닿으면 딜 (빗나감/명중 분기 없음)
+        }
         return drawn;
+    }
+
+    /**
+     * ★ <b>띠 = 판정</b> (2026-07-21 사용자 확정: "빗나감·명중을 없애고 파티클에 부딪치면 딜").
+     *
+     * <p>스윕 동안 띠의 실제 좌표를 표본해, 닿은 생명체에 {@code damage(원피해, player)} 를 넣는다.
+     * 그 호출이 {@code EntityDamageByEntityEvent} → {@link #basicMelee} 로 <b>재진입</b>하므로
+     * 태세·기 방어·입도 문지방·허수아비 계기 판정이 전부 기존 한 경로로 잰다 — 별도 판정 분기가 없다.
+     * 바닐라 직접 클릭과의 이중타는 MC 무적 프레임(10틱)이 막고, 한 스윙 안의 중복은 struck 이 막는다.
+     * 좌표 수식은 {@code QiGeometry.slashBand} 와 같은 시선 기준 베기면 — 화면과 판정이 같은 자리다.
+     */
+    private void kigiBandStrike(Player player, SkillEngine.KigiSlash cfg) {
+        Location feet = player.getLocation();
+        Vector flat0 = flatOf(player);
+        Location center = feet.clone().add(flat0.clone().multiply(cfg.forward()));
+        center.setY(feet.getY() + cfg.centerHeight());
+        double f = Math.toRadians(player.getLocation().getYaw());
+        double full = Math.toRadians(cfg.geomSweepDeg());
+        double tilt = Math.toRadians(cfg.tiltDeg());
+        double r = cfg.orbitRadius();
+        double reach = Math.max(0.3, cfg.bandHitReach());
+        int span = Math.max(1, cfg.bandSweepTicks());
+        Set<UUID> struck = new HashSet<>();
+        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
+        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
+        new org.bukkit.scheduler.BukkitRunnable() {
+            int t = 0;
+
+            @Override
+            public void run() {
+                if (t >= span || !player.isOnline()) {
+                    cancel();
+                    return;
+                }
+                List<Location> pts = new ArrayList<>();
+                for (int i = 0; i <= 6; i++) {
+                    double phase = (t + i / 6.0) / span;
+                    double phi = -full / 2.0 + full * phase;
+                    double side = Math.sin(phi) * r * Math.cos(tilt);
+                    double up = -Math.sin(phi) * r * Math.sin(tilt);
+                    double fwd = Math.cos(phi) * r;
+                    pts.add(center.clone().add(fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side));
+                }
+                for (org.bukkit.entity.Entity e
+                        : center.getWorld().getNearbyEntities(center, r + 1.5, 2.5, r + 1.5)) {
+                    if (!(e instanceof LivingEntity le) || e == player
+                            || struck.contains(e.getUniqueId())) {
+                        continue;
+                    }
+                    Location chest = le.getLocation().add(0, le.getHeight() * 0.5, 0);
+                    for (Location p : pts) {
+                        if (chest.distanceSquared(p) <= reach * reach) {
+                            struck.add(e.getUniqueId());
+                            var atk = player.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
+                            double dmg = Math.max(1.0, atk == null ? 1.0 : atk.getValue());
+                            le.damage(dmg, player);   // → basicMelee 로 재진입 (판정 일원화)
+                            break;
+                        }
+                    }
+                }
+                t++;
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     /**

@@ -367,6 +367,10 @@ kigi_slash:
   band_jitter: 0.12     # 두께 지터(m)
   band_sweep_ticks: 4   # 스윕 틱 (~200ms 급상승 — 잔류·소멸은 파티클 수명이 맡는다)
   accent_count: 12      # 흰 별(end_rod) — 머리 구간에만
+  # ★ 띠 = 판정 (2026-07-21 사용자 확정: "빗나감·명중 없애고 파티클에 부딪치면 딜")
+  #   damage(원피해, player) 가 basicMelee 로 재진입 — 태세·문지방·허수아비 판정은 기존 한 경로
+  band_hit: true
+  band_hit_reach: 0.9   # 띠 표면에서 몸까지 허용 거리(m)
   model: "honcheon:kigi/press_a1"  # 소환 시 1단계 = frame_models[0] 의 key (계약: 코드가 목록을 우선한다)
   # ★단계 모델 — 이 순서대로 갈아끼운다. 이름은 display.models 의 **등록 이름**이다 (key 가 아니다).
   #   비우거나 1개만 적으면 교체가 꺼지고 model 하나로 고정된다 (가역).

@@ -1125,6 +1125,9 @@ public final class SkillEngine {
                 dblOr(m.get("band_jitter"), 0.10),
                 Math.max(1, intOr(m.get("band_sweep_ticks"), 4)),
                 Math.max(0, intOr(m.get("accent_count"), 12)),
+                // ★ 띠 = 판정 (2026-07-21 사용자 확정) — 닿으면 딜. 빗나감/명중 분기 없음
+                m.get("band_hit") == null || Boolean.TRUE.equals(m.get("band_hit")),
+                dblOr(m.get("band_hit_reach"), 0.9),
                 Boolean.TRUE.equals(m.get("replace_stroke")),
                 dblOr(m.get("scale"), 2.0), dblOr(m.get("center_height"), 1.0),
                 dblOr(m.get("forward"), 0.1), dblOr(m.get("orbit_radius"), 1.1),
@@ -1548,6 +1551,7 @@ public final class SkillEngine {
                             List<String> frameModels, List<String> frameModelsB, int frameTicks,
                             double bandWidth, int bandRows, double bandJitter,
                             int bandSweepTicks, int accentCount,
+                            boolean bandHit, double bandHitReach,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
                             double bladePitchDeg,
