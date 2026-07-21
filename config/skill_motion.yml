@@ -392,8 +392,8 @@ kigi_slash:
   #   90 = 판이 누워 **볼록한 바깥이 정면**을 보고 오목한 안쪽이 플레이어를 감싼다 (횡베기).
   #    0 = 판이 세로로 서서 ∩ 의 배가 하늘을 본다 (그 버그의 자세).
   blade_pitch_deg: 90
-  draw_ticks: 10  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간
-  fade_ticks: 3                    # 사라지는 시간(꼬리부터 수축)
+  draw_ticks: 15  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간
+  fade_ticks: 4                    # 사라지는 시간(꼬리부터 수축)
   billboard: FIXED                 # 세운 채 고정 (획에는 방향이 있다)
   alternate: true                  # 스윙마다 좌↔우 방향 번갈아(레퍼런스 "한 세트 더")
   brightness: 15                   # 발광(full-bright · block_light = sky_light = 이 값)
