@@ -176,6 +176,12 @@ final class SkillHud {
      */
     int emitSized(Location at, String particle, String ink, float size, int count,
                   double spread, double extra) {
+        return emitSized(at, particle, ink, size, count, spread, extra, null);
+    }
+
+    /** 관중을 가르는 크기 지정 발행 — {@link #emitSized} + audience (검기 띠의 시점별 굵기) */
+    int emitSized(Location at, String particle, String ink, float size, int count,
+                  double spread, double extra, java.util.function.Predicate<Player> audience) {
         Particle p = particle(particle);
         if (p == null || count <= 0) {
             return 0;
@@ -187,7 +193,7 @@ final class SkillHud {
                 return 0;   // 색 없는 dust — 등록부가 색을 안 적었다 (dustSized 가 이미 소리냈다)
             }
         }
-        return emit(at, p, count, spread, spread, spread, extra, data, false);
+        return emit(at, p, count, spread, spread, spread, extra, data, false, audience);
     }
 
     /** 먹빛 → 크기 지정 {@link Particle.DustOptions}. 색은 등록부, 크기만 호출자가 준다 (캐시 안 함) */
@@ -245,6 +251,17 @@ final class SkillHud {
      */
     private int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
                      double extra, Object data, boolean priority) {
+        return emit(at, particle, count, dx, dy, dz, extra, data, priority, null);
+    }
+
+    /**
+     * ★ 관중을 가르는 발행 (2026-07-22) — 파티클은 관람자별로 쏘므로 <b>같은 획을 사람마다
+     * 다르게</b> 보일 수 있다. 검기 띠가 이 문을 쓴다: 시전자(1인칭)에겐 얇게, 남(3인칭 관전)에겐
+     * 넓게 — 시점별 최적 굵기 (사용자 주문). {@code audience == null} 이면 모두에게 (기존 동작).
+     */
+    private int emit(Location at, Particle particle, int count, double dx, double dy, double dz,
+                     double extra, Object data, boolean priority,
+                     java.util.function.Predicate<Player> audience) {
         if (count <= 0 || at.getWorld() == null) {
             return 0;
         }
@@ -252,6 +269,9 @@ final class SkillHud {
         for (Player viewer : at.getWorld().getPlayers()) {
             if (!viewer.getWorld().equals(at.getWorld())) {
                 continue;
+            }
+            if (audience != null && !audience.test(viewer)) {
+                continue;                                     // 이 관중의 획이 아니다
             }
             double dist = viewer.getLocation().distance(at);
             if (dist > engine.cullBeyond()) {

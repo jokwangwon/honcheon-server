@@ -644,11 +644,18 @@ final class SkillDisplay {
                             + "도 · " + span + "틱 스윕)");
                     return;
                 }
+                // ★ 시점별 굵기 — 시전자(1인칭)에겐 얇게, 관전자(3인칭)에겐 넓게 (같은 획·같은 판정)
+                java.util.UUID me = caster.getUniqueId();
                 sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
                         (double) t / span, (double) (t + 1) / span,
                         cfg.tiltDeg(), cfg.geomStepDeg(),
-                        cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
-                        particle, inkBody, dirSign);
+                        cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
+                        particle, inkBody, dirSign, v -> v.getUniqueId().equals(me));
+                sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                        (double) t / span, (double) (t + 1) / span,
+                        cfg.tiltDeg(), cfg.geomStepDeg(),
+                        cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
+                        particle, inkBody, dirSign, v -> !v.getUniqueId().equals(me));
                 // 흰 별 — 머리(마지막 두 틱) 구간에만, 성기게
                 if (t >= span - 2 && cfg.accentCount() > 0) {
                     sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),

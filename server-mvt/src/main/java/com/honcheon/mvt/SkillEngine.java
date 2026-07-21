@@ -1104,6 +1104,9 @@ public final class SkillEngine {
                 dblOr(m.get("band_width"), 0.55), Math.max(1, intOr(m.get("band_rows"), 4)),
                 dblOr(m.get("band_jitter"), 0.14), Math.max(1, intOr(m.get("sweep_ticks"), 3)),
                 dblOr(m.get("step_deg"), 1.2),
+                // ★ 몸이 먼저, 궤적이 나중 (2026-07-22 사용자) — 선딜 뒤에 띠·판정이 함께 나간다
+                Math.max(0, intOr(m.get("trail_delay_ticks"), 3)),
+                dblOr(m.get("width_self_mul"), 0.8), dblOr(m.get("width_others_mul"), 1.25),
                 m.get("hit") == null || Boolean.TRUE.equals(m.get("hit")),
                 dblOr(m.get("hit_reach"), 0.9),
                 m.get("replace_stroke") == null || Boolean.TRUE.equals(m.get("replace_stroke")));
@@ -1154,6 +1157,8 @@ public final class SkillEngine {
                 dblOr(m.get("band_jitter"), 0.10),
                 Math.max(1, intOr(m.get("band_sweep_ticks"), 4)),
                 Math.max(0, intOr(m.get("accent_count"), 12)),
+                // ★ 시점별 굵기 (2026-07-22 사용자): 시전자(1인칭) 얇게 · 관전자(3인칭) 넓게
+                dblOr(m.get("width_self_mul"), 0.8), dblOr(m.get("width_others_mul"), 1.25),
                 // ★ 띠 = 판정 (2026-07-21 사용자 확정) — 닿으면 딜. 빗나감/명중 분기 없음
                 m.get("band_hit") == null || Boolean.TRUE.equals(m.get("band_hit")),
                 dblOr(m.get("band_hit_reach"), 0.9),
@@ -1580,6 +1585,7 @@ public final class SkillEngine {
                             List<String> frameModels, List<String> frameModelsB, int frameTicks,
                             double bandWidth, int bandRows, double bandJitter,
                             int bandSweepTicks, int accentCount,
+                            double widthSelfMul, double widthOthersMul,
                             boolean bandHit, double bandHitReach,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
@@ -1618,7 +1624,8 @@ public final class SkillEngine {
     public record HeavySlash(boolean enabled, List<String> applyToClasses, String ink,
                              double radius, double sweepDeg, double tiltDeg, double centerHeight,
                              double bandWidth, int bandRows, double bandJitter, int sweepTicks,
-                             double stepDeg,
+                             double stepDeg, int trailDelayTicks,
+                             double widthSelfMul, double widthOthersMul,
                              boolean hit, double hitReach, boolean replaceStroke) {
         public boolean appliesTo(String weaponClass) {
             return weaponClass != null && applyToClasses.contains(weaponClass);

@@ -851,6 +851,7 @@ public final class SkillListener implements Listener {
                 c.applyToClasses(),
                 c.frameModels(), c.frameModelsB(), frame,
                 c.bandWidth(), c.bandRows(), c.bandJitter(), c.bandSweepTicks(), c.accentCount(),
+                c.widthSelfMul(), c.widthOthersMul(),
                 c.bandHit(), c.bandHitReach(),
                 c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
@@ -1988,11 +1989,17 @@ public final class SkillListener implements Listener {
                     cancel();
                     return;
                 }
+                java.util.UUID me = player.getUniqueId();
                 geom.slashBand(center, yaw, r, cfg.sweepDeg(),
                         (double) t / span, (double) (t + 1) / span,
                         cfg.tiltDeg(), cfg.stepDeg(),
-                        cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
-                        "dust", cfg.ink(), dirSign);
+                        cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
+                        "dust", cfg.ink(), dirSign, v -> v.getUniqueId().equals(me));
+                geom.slashBand(center, yaw, r, cfg.sweepDeg(),
+                        (double) t / span, (double) (t + 1) / span,
+                        cfg.tiltDeg(), cfg.stepDeg(),
+                        cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
+                        "dust", cfg.ink(), dirSign, v -> !v.getUniqueId().equals(me));
                 if (cfg.hit()) {
                     for (int i = 0; i <= 6; i++) {
                         double phase = (t + i / 6.0) / span;
@@ -2018,7 +2025,9 @@ public final class SkillListener implements Listener {
                 }
                 t++;
             }
-        }.runTaskTimer(plugin, 0L, 1L);
+        }.runTaskTimer(plugin, cfg.trailDelayTicks(), 1L);
+        // ★ 몸이 먼저, 궤적이 나중 (2026-07-22 사용자) — 선딜(trail_delay_ticks) 뒤에
+        //   띠와 판정이 **함께** 나간다. 화면 = 판정 원칙은 지연 속에서도 유지된다.
     }
 
     /**

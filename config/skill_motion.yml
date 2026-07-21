@@ -378,6 +378,10 @@ heavy_slash:
   band_jitter: 0.14
   sweep_ticks: 3
   step_deg: 1.2
+  # ★ 시점별 굵기 + 몸 먼저·궤적 나중 (2026-07-22 사용자)
+  width_self_mul: 0.8
+  width_others_mul: 1.25
+  trail_delay_ticks: 3     # 선딜 — 몸(쏠림)이 나간 뒤 띠·판정이 함께 나간다
   hit: true
   hit_reach: 0.9
   replace_stroke: true
@@ -392,6 +396,9 @@ kigi_slash:
   band_rows: 3          # 몸 줄 수
   band_jitter: 0.12     # 두께 지터(m)
   band_sweep_ticks: 4   # 스윕 틱 (~200ms 급상승 — 잔류·소멸은 파티클 수명이 맡는다)
+  # ★ 시점별 굵기 (2026-07-22 사용자): 시전자(1인칭) 얇게 · 관전자(3인칭) 넓게 — 같은 획·같은 판정
+  width_self_mul: 0.8
+  width_others_mul: 1.25
   accent_count: 12      # 흰 별(end_rod) — 머리 구간에만
   # ★ 띠 = 판정 (2026-07-21 사용자 확정: "빗나감·명중 없애고 파티클에 부딪치면 딜")
   #   damage(원피해, player) 가 basicMelee 로 재진입 — 태세·문지방·허수아비 판정은 기존 한 경로

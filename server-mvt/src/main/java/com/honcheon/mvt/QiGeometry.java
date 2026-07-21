@@ -230,6 +230,19 @@ final class QiGeometry {
                   double from, double to, double tiltDeg, double stepDeg,
                   double width, int rows, double jitter,
                   String particle, String inkBody, int mirror) {
+        return slashBand(center, facing, radius, sweepDeg, from, to, tiltDeg, stepDeg,
+                width, rows, jitter, particle, inkBody, mirror, null);
+    }
+
+    /**
+     * 관중을 가르는 띠 — 시전자(1인칭)와 관전자(3인칭)에게 <b>다른 굵기</b>의 같은 획을 보인다
+     * (2026-07-22 사용자: "1인칭은 얇게, 3인칭은 넓게 — 검·도끼 둘 다"). 판정은 이 갈래와 무관하다.
+     */
+    int slashBand(Location center, float facing, double radius, double sweepDeg,
+                  double from, double to, double tiltDeg, double stepDeg,
+                  double width, int rows, double jitter,
+                  String particle, String inkBody, int mirror,
+                  java.util.function.Predicate<org.bukkit.entity.Player> audience) {
         // mirror: +1 = 왼위→오른아래 대각 · −1 = 오른위→왼아래 (스윙마다 교대 — "한 방향으로만 벤다" 해소)
         if (center == null || center.getWorld() == null || to <= from) {
             return 0;
@@ -294,7 +307,7 @@ final class QiGeometry {
                 at2.add((rnd.nextDouble() - 0.5) * jitter * 3.5,
                         (rnd.nextDouble() - 0.5) * jitter * 4.5,
                         (rnd.nextDouble() - 0.5) * jitter * 3.5);
-                sent += hud.emitSized(at2, particle, inkBody, 0.45f, 1, 0.12, 0.0);
+                sent += hud.emitSized(at2, particle, inkBody, 0.45f, 1, 0.12, 0.0, audience);
             }
         }
         return sent;
