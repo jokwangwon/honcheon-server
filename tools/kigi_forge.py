@@ -177,7 +177,7 @@ PALS = ["청회", "청록", "옥", "혈"]
 FRAMES_5 = [(0.28, 0.0), (0.62, 0.0), (1.00, 0.0), (1.00, 0.35), (1.00, 0.75)]
 
 # 판 띠 굵기 배율 — 정사각 붓(0.088)을 띠 높이(22/64)에 맞춰 줄인 값. 키우면 광채가 띠를 벗어난다.
-BAND_W_SCALE = 0.055
+BAND_W_SCALE = 0.070   # 획 살집 (2026-07-21 버스트 문법: 레퍼런스는 획이 화면을 채운다)
 
 
 def set_res(out: int):
@@ -189,10 +189,10 @@ def set_res(out: int):
 
 
 def sil_arc_band(n=260):
-    """판 띠(64×22)용 표준 참격 호 — 넓고 얕은 ∩. 인게임 판(1.5×0.55m)과 같은 비율의
-    캔버스 맨 위 22행 안에 광채까지 들어가도록 반지름을 크게(얕게) 잡았다."""
-    cx, cy, r = W * 0.5, W * 1.33, W * 1.20
-    a0, a1 = math.radians(-112), math.radians(-68)
+    """판 띠(256×112)용 표준 참격 호 — 깊은 초승달. 인게임 판(1.5×0.66m)과 같은 비율(2.29:1)의
+    캔버스 맨 위 112행 안에 광채까지 들어간다 (획 살집으로 띠를 22→28행 비율로 넓혔다)."""
+    cx, cy, r = W * 0.5, W * 0.844, W * 0.696
+    a0, a1 = math.radians(-130.2), math.radians(-49.8)
     return [(cx + r * math.cos(a0 + (a1 - a0) * i / (n - 1)),
              cy + r * math.sin(a0 + (a1 - a0) * i / (n - 1))) for i in range(n)]
 
@@ -218,8 +218,21 @@ def band_frames(ink: str = "청회", res: int = 256) -> list:
     set_res(res)
     try:
         pts = sil_arc_band()
-        return [frame(pts, ink, fr, dc, base_w=W * BAND_W_SCALE, white_scale=0.45)
-                for fr, dc in FRAMES_5]
+        band_h = round(res * 28 / 64)          # 판 띠 높이 (qi.py KIGI_H 와 같은 비율)
+        out = []
+        for fr, dc in FRAMES_5:
+            im = frame(pts, ink, fr, dc, base_w=W * BAND_W_SCALE, white_scale=0.45)
+            # 띠 가장자리 6행 알파 램프 — 어떤 실루엣이든 UV 절단선이 안 보이게 보장
+            px = im.load()
+            edge = max(1, round(res * 6 / 256))
+            for dy in range(edge):
+                k = dy / edge
+                for row in (dy, band_h - 1 - dy):
+                    for x in range(res):
+                        r_, g_, b_, a_ = px[x, row]
+                        px[x, row] = (r_, g_, b_, int(a_ * k))
+            out.append(im)
+        return out
     finally:
         set_res(old)
 

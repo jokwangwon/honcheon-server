@@ -1895,7 +1895,7 @@ display:
       key: "honcheon:kigi/arc1"
       base: PAPER
       fallback: null              # 팩 없음 → 파티클 궤적 (참격_호 와 같은 규약)
-      size: [1.5, 0.55, 0.04]     # 참격_호 와 호환 — size[0]=1.5 (정규화 상수 · MC 좌표 한계 [-16,32])
+      size: [1.5, 0.66, 0.04]     # 참격_호 와 호환 — size[0]=1.5 (정규화 상수 · MC 좌표 한계 [-16,32])
       anchor: head                # 성장·소멸의 고정점 = 머리(+X 끝)
       form: "삼합 청회 검기 ①시작 — 베는 찰나의 짧은 획 (28%)"
 
@@ -1903,7 +1903,7 @@ display:
       key: "honcheon:kigi/arc2"
       base: PAPER
       fallback: null
-      size: [1.5, 0.55, 0.04]
+      size: [1.5, 0.66, 0.04]
       anchor: head
       form: "삼합 청회 검기 ②흐름 — 절반쯤 그어진 획 (62%)"
 
@@ -1911,7 +1911,7 @@ display:
       key: "honcheon:kigi/arc3"
       base: PAPER
       fallback: null
-      size: [1.5, 0.55, 0.04]
+      size: [1.5, 0.66, 0.04]
       anchor: head
       form: "삼합 청회 검기 ③전체 — 다 그어진 호 (검이 지나간 온 자리)"
 
@@ -1919,7 +1919,7 @@ display:
       key: "honcheon:kigi/arc4"
       base: PAPER
       fallback: null
-      size: [1.5, 0.55, 0.04]
+      size: [1.5, 0.66, 0.04]
       anchor: head
       form: "삼합 청회 검기 ④잔상 — 빛이 가라앉기 시작한다 (알파 감쇠)"
 
@@ -1927,7 +1927,7 @@ display:
       key: "honcheon:kigi/arc5"
       base: PAPER
       fallback: null
-      size: [1.5, 0.55, 0.04]
+      size: [1.5, 0.66, 0.04]
       anchor: head
       form: "삼합 청회 검기 ⑤스러짐 — 재만 남는다 (곧 사라진다)"
 
