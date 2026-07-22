@@ -414,13 +414,13 @@ kigi_slash:
   #   damage(원피해, player) 가 basicMelee 로 재진입 — 태세·문지방·허수아비 판정은 기존 한 경로
   band_hit: true
   band_hit_reach: 0.9   # 띠 표면에서 몸까지 허용 거리(m)
-  model: "honcheon:kigi/sheet_a1"  # 소환 시 1단계 = frame_models[0] 의 key (계약: 코드가 목록을 우선한다)
+  model: "honcheon:kigi/sheet_b1"  # 소환 시 1단계 = frame_models[0] 의 key (계약: 코드가 목록을 우선한다)
   # ★단계 모델 — 이 순서대로 갈아끼운다. 이름은 display.models 의 **등록 이름**이다 (key 가 아니다).
   #   비우거나 1개만 적으면 교체가 꺼지고 model 하나로 고정된다 (가역).
   # ★ 원형(archetype) 축 — trail(호) 축과 분리 (검토 P0). 호를 쓰는 부(도끼)·봉은 못 받는다.
   apply_to_classes: [검, 도]
-  frame_models: [시트판A_1, 시트판A_2, 시트판A_3]      # 시트판: 피크 → 빈짐 → 소멸
-  frame_models_b: [시트판A_1, 시트판A_2, 시트판A_3]    # ★사용자: 반전 방향이 이상 — 양쪽 다 A (교대 없음)
+  frame_models: [시트판B_1, 시트판B_2, 시트판B_3]      # ★반전본 — 오목면이 시전자를 감싼다 (사용자 7차: "베는 면이 반대")
+  frame_models_b: [시트판B_1, 시트판B_2, 시트판B_3]    # 양쪽 동일 — 방향 통일 유지
   frame_ticks: 2  # 버스트 문법 시험 — 즉시 최대(3단계)로 시작 → 잔상 → 스러짐
   apply_to_trails: [호]            # 이 basic trail 무기에만 (호=검·도·부·겸·봉 sweep)
   replace_stroke: true             # 이 무기의 기존 무협 display.slash 아크를 억제(안 그림) + 궤적 파티클도 억제
@@ -457,7 +457,7 @@ kigi_slash:
   #   90 = 판이 누워 **볼록한 바깥이 정면**을 보고 오목한 안쪽이 플레이어를 감싼다 (횡베기).
   #    0 = 판이 세로로 서서 ∩ 의 배가 하늘을 본다 (그 버그의 자세).
   blade_pitch_deg: 0   # 세운 그림
-  yaw_deg: 90          # ★베기면 고정 — 판 길이축=전진축 (정면=칼날 두께 · 측면=그림 전체)
+  yaw_deg: 90          # ★베기면 고정 — 판 길이축=전진축. ※180° 회전은 시각 무효(양면 판) — 좌우는 텍스처(A/B)로 뒤집는다. -90: 오목면이 시전자를 감싼다 (사용자: "베는 면이 반대")
   draw_ticks: 6  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간 (= 5단계 × frame_ticks 2)
   fade_ticks: 2  # 사라지는 시간(꼬리부터 수축)
   billboard: FIXED                 # ★베기면 고정 (2026-07-23 사용자: "정면·후면 얇게, 측면에서 보여야 정상")
