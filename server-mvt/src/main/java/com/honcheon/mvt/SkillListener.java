@@ -856,7 +856,7 @@ public final class SkillListener implements Listener {
                 c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
-                c.geomParticle(), c.geomInk(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),
+                c.geomParticle(), c.geomInk(), c.geomInkAlt(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),
                 c.model3d(), c.model3dAnim(),
                 c.model3dUp(), c.model3dYaw(), c.model3dPitch());
     }
@@ -1996,18 +1996,18 @@ public final class SkillListener implements Listener {
                             cfg.tiltDeg(), cfg.stepDeg(),
                             cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
                             "dust", cfg.ink(), dirSign, v -> v.getUniqueId().equals(me),
-                            1.0, player.getEyeLocation(), false, false);
+                            1.0, player.getEyeLocation(), false, false, cfg.inkAlt());
                     geom.slashBand(center, yaw, r, cfg.sweepDeg(),
                             (double) t / span, (double) (t + 1) / span,
                             cfg.tiltDeg(), cfg.stepDeg(),
                             cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
                             "dust", cfg.ink(), dirSign, v -> !v.getUniqueId().equals(me),
-                            cfg.heightOthersMul(), null, true, false);
+                            cfg.heightOthersMul(), null, true, false, cfg.inkAlt());
                 } else if (t == span + 1 || t == span + 3) {
                     geom.slashBand(center, yaw, r, cfg.sweepDeg(), 0.0, 1.0,
                             cfg.tiltDeg(), cfg.stepDeg() * 2.0,
                             cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
-                            "dust", cfg.ink(), dirSign, null, 1.4, null, false, true);
+                            "dust", cfg.ink(), dirSign, null, 1.4, null, false, true, cfg.inkAlt());
                 }
                 if (cfg.hit()) {
                     for (int i = 0; i <= 6; i++) {

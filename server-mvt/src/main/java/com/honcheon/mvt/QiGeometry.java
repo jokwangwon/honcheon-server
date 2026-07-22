@@ -278,6 +278,19 @@ final class QiGeometry {
                   String particle, String inkBody, int mirror,
                   java.util.function.Predicate<org.bukkit.entity.Player> audience,
                   double heightMul, Location clearNear, boolean darkOutline, boolean echoPass) {
+        return slashBand(center, facing, radius, sweepDeg, from, to, tiltDeg, stepDeg,
+                width, rows, jitter, particle, inkBody, mirror, audience, heightMul,
+                clearNear, darkOutline, echoPass, null);
+    }
+
+    /** inkAlt — 몸색 혼합 (디자이너 시트: 몸통 옥/청록 · 2026-07-22 "색감 동일하게"). null 이면 단색 */
+    int slashBand(Location center, float facing, double radius, double sweepDeg,
+                  double from, double to, double tiltDeg, double stepDeg,
+                  double width, int rows, double jitter,
+                  String particle, String inkBody, int mirror,
+                  java.util.function.Predicate<org.bukkit.entity.Player> audience,
+                  double heightMul, Location clearNear, boolean darkOutline, boolean echoPass,
+                  String inkAlt) {
         if (center == null || center.getWorld() == null || to <= from) {
             return 0;
         }
@@ -331,8 +344,15 @@ final class QiGeometry {
                 if (clearNear != null && at.distanceSquared(clearNear) < clearSq) {
                     continue;                               // 1인칭 크로스헤어 앞은 비운다
                 }
-                String ink = edge ? "청백" : dark ? "먹" : inkBody;
-                float sz = edge ? 0.45f : dark ? 0.60f : 0.55f;
+                // inkAlt 있음 = 시트 평가판: 날 청백 · 몸 본색+alt 40% 혼합 · 잔향 먹/청회 교대 · 점묘 미세
+                // inkAlt 없음 = 기존 v5 그대로 (기존 설정은 바꾸지 않는다 — 2026-07-22 사용자)
+                boolean sheet = inkAlt != null;
+                String ink = edge ? "청백"
+                        : dark ? (sheet && rnd.nextBoolean() ? "청회" : "먹")
+                        : (sheet && rnd.nextDouble() < 0.4 ? inkAlt : inkBody);
+                float sz = edge ? (sheet ? 0.40f : 0.45f)
+                        : dark ? (sheet ? 0.50f : 0.60f)
+                        : (sheet ? 0.45f : 0.55f);
                 sent += hud.emitSized(at, particle, ink, sz, 1, 0.05, 0.0, audience);
             }
             // ★ 외곽 먹선 (관전자 실루엣 강조 — 가이드 TPS 배치) — 날 바깥에 성긴 먹

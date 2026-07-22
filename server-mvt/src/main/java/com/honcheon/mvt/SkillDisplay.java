@@ -654,13 +654,13 @@ final class SkillDisplay {
                             cfg.tiltDeg(), cfg.geomStepDeg(),
                             cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
                             particle, inkBody, dirSign, v -> v.getUniqueId().equals(me),
-                            1.0, eye, false, false);
+                            1.0, eye, false, false, cfg.geomInkAlt());
                     sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
                             (double) t / span, (double) (t + 1) / span,
                             cfg.tiltDeg(), cfg.geomStepDeg(),
                             cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
                             particle, inkBody, dirSign, v -> !v.getUniqueId().equals(me),
-                            cfg.heightOthersMul(), null, true, false);
+                            cfg.heightOthersMul(), null, true, false, cfg.geomInkAlt());
                     if (t == span - 1 && cfg.accentCount() > 0) {
                         sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
                                 0.6, 1.0, cfg.tiltDeg(), Math.max(6.0, cfg.geomStepDeg() * 4.0),
@@ -672,7 +672,7 @@ final class SkillDisplay {
                             0.0, 1.0, cfg.tiltDeg(), cfg.geomStepDeg() * 2.0,
                             cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
                             particle, inkBody, dirSign, null,
-                            1.4, null, false, true);
+                            1.4, null, false, true, cfg.geomInkAlt());
                 }
                 t++;
             }

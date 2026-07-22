@@ -1,0 +1,2609 @@
+# ═══════════════════════════════════════════════════════════════
+# 검기 평가판 v6 — 디자이너 1차 피드백 「저대로」 재현 (2026-07-22)
+# 기존 skill_motion.yml(v5)은 손대지 않고 새로 생성한 설정이다 (사용자 지시).
+# 색감: 날 청백 / 몸 청록+옥 40% 혼합 / 잔향 먹·청회 — 컨셉 시트 그대로
+# 크기: 표현을 위해 상향 (검 반경 2.1·호 140·폭 0.42·4열 / 부 반경 1.7)
+# 적용: 테스트 서버 전용. 라이브는 v5 유지.
+# ═══════════════════════════════════════════════════════════════
+# 무공 모션 등록부 (기계 판독용) — 「팩이 없어도 읽힌다」
+# 기준 문서: docs/design/skill_motion.md · resourcepack_design.yml (수묵 규약)
+# 엔진: SkillEngine (판독) · SkillListener (발행) · SkillHud (예산 게이트)
+#
+# ─── 두 층의 모션 ───
+#   ① 팩이 있으면 — 여기 적힌 바닐라 파티클의 **텍스처**가 수묵 획으로 다시 그려진다 (팩 담당의 몫)
+#   ② 팩이 없어도 — 여기 적힌 **개수·퍼짐·소리·궤적**만으로 무엇이 일어났는지 읽힌다 (이 파일의 몫)
+#   불가침: require-resource-pack=false — 팩을 거절해도 플레이는 된다. 그러므로 ②가 본체다.
+#
+# ─── 불변식 4개 ───
+#   ㄱ. 코드에 파티클·소리를 하드코딩하지 않는다 (등록제 규약). 이 파일이 정본이다.
+#   ㄴ. 보이는 것과 맞는 것이 같아야 한다 — trail 은 skill_mechanics.yml 의 히트박스 type 과 **같은 모양**이다.
+#      (호를 그렸는데 선으로 맞으면 그건 거짓말이다. motion_audit 이 그 거짓말을 잡는다.)
+#   ㄷ. 격의 사다리는 시각적으로 **단조 증가**한다 — rank 가 오르면 count·brightness·aura 가 반드시 커진다.
+#      (강해진 것이 눈에 덜 띄면 격은 장식이다.)
+#   ㄹ. 【2026-07 개정 — 사용자 지시】 색은 **격의 사다리를 따라서만** 오른다 (수묵 → 청록 → 옥 → 청백).
+#      옛 규약은 "채색 금지 · 격은 밝기로만 갈린다" 였다. 사용자가 방향을 다시 세웠다:
+#        *"묵청 무협/청록산수/수묵 저채도는 유지하되, 공격 궤적과 파티클은 경지와 기술 등급이
+#          올라갈수록 RPG 스타일로 더 화려해지는 구조로 설계할 것."*
+#      그래서 색은 **금지**가 아니라 **등록**된다 (아래 inks). 금지되는 것은 색 자체가 아니라
+#      **형광 핑크·네온 보라·과도한 노랑·SF 발광**이다 (inks.forbidden — motion_audit 축 ⑦이 잰다).
+#      마공의 혈점(crimson_spore)은 여전히 예외다: 그 예외 자체가 정보다 — "저것은 사람의 기가 아니다".
+
+# ══════════════════════════════════════════════════════════════════════
+#  파티클 예산 (performance.yml F-P1 을 무공 층으로 좁힌 값)
+# ══════════════════════════════════════════════════════════════════════
+# 【한 지점·한 틱 30개】가 이 설계의 못이다. 근거:
+#   · 시야당 예산 600/틱 (performance.yml particles.per_player_view_per_tick)
+#   · load_test.combat_cluster_size = 20 — 한 시야에 20인이 동시에 친다고 가정한다
+#   · 600 ÷ 20 = 30 ⇒ per_point_tick_max 30. 스무 명이 같은 틱에 때려도 시야 예산에 **정확히** 들어온다.
+#
+# 【2026-07 — 타격점 예산의 재도출】 사용자가 "타격 순간 작은 폭발형 입자"를 청구했다.
+#   그런데 옛 타격점은 **이미 꽉 차 있었다**: 심검 타격 24 + 강조 1 + 대성공 4 = 29 ≤ 30 (여유 1).
+#   여유 1 에 폭발을 끼워 넣는 것은 폭발이 아니라 알리바이다. 그렇다고 30 을 올리면 600÷20 의
+#   도출이 무너진다 (그것은 예산이 아니라 소원이 된다).
+#   ⇒ **더하지 않고 나눈다.** 격의 타격은 이제 두 몫이다 — 먹점(impact)과 **폭발(burst)**:
+#         impact + accent + burst + 대성공(4) ≤ per_point_tick_max
+#     사다리는 **셋 다** 단조 증가한다 (motion_audit 축 ⑧ 이 실제 발행량으로 잰다):
+#         격      impact  accent  burst   보이는 합   +대성공
+#         외공기     4       0       2        6         10
+#         발경       8       1       4       13         17
+#         검기      10       5       5       20         24
+#         강기      12       1       8       21         25
+#         어검      13       1      10       24         28
+#         심검      14       1      11       26         30  ← 상한에 **정확히** 닿는다
+#     옛 심검(먹점 24)보다 보이는 총량이 늘었고(25→26), 그중 11 개가 **청백의 폭발**이다.
+#     예산은 한 톨도 안 늘었다.
+#
+#   · 그 위의 세 예산(응집·궤적·타격)은 **풀**이다 — 프레임이 길다고 파티클이 비례해 늘면 안 된다:
+#       응집 풀 32 — 선딜 20틱짜리 오의급 초식도 응집에 32개까지만 쓴다 (2틱마다 발행, 풀이 마르면 멈춘다)
+#       궤적 풀 36 — 궤적 24 + **잔상·먹번짐 12** (심검 echo 8 + haze 4 — 사다리의 꼭대기).
+#                    사거리 12m 선을 그려도 36개 (점당 개수 × 표본점이 이 값을 넘으면 점을 솎는다)
+#                    ★ 24 → 36 으로 올린 값이다. 잔상을 궤적 예산 **밖에서** 뽑으면 그것은 예산이 아니다
+#       타격 풀 48 — 다중 대상은 **나눠 쓴다** (광역 8인 = 6개씩). 아무리 나눠도 대상당 3개는 남긴다
+#                    (performance over_budget: "핵심 타격 표시만 유지" — 타격이 안 보이면 판정이 거짓말이 된다)
+#   · 한 수의 총합 = 32 + 36 + 1 + 30 = 99 ≤ per_cast_max 160 (여유는 무기 격돌·자기 손상 같은 겹침 몫)
+#   · 오의는 우선권(ultimate_arts world_weight.particle_priority) — 생략되지 않고 **깎인다**.
+#     전투당 1회(화경 이하)라 동시성이 낮다: 한 틱 48 × 동시 12인 = 576 < 600.
+#     개시 틱 = burst 40 + 강조 1 + **개화 폭발(bloom) 7** = 48 — 상한에 정확히 닿는다 (ultimate_flourish).
+budget:
+  per_point_tick_max: 30          # 한 지점·한 틱 상한 (응집·궤적·타격 각각) — 600 ÷ 군집 20인
+  per_cast_max: 160               # 한 시전(단일 대상)이 전 프레임에 걸쳐 쓰는 총량
+  telegraph_pool: 32              # 응집 총 예산 — 선딜이 길어도 여기서 끊는다
+  trail_pool: 36                  # 궤적 총 예산 (궤적 24 + 잔상·먹번짐 12) — 사거리가 길어도 여기서 끊는다
+  crit_reserve: 4                 # 대성공(급소)이 타격점 위에 겹칠 자리 — **미리 비워 둔다** (= events.대성공.count)
+  impact_pool: 48                 # 타격 총 예산 — 대상 수로 나눈다 (다중 히트가 예산을 터뜨리지 못한다)
+  min_impact_per_target: 3        # 나눠도 이만큼은 남긴다 — 맞았다는 사실은 언제나 보여야 한다
+  ultimate_per_tick_max: 48       # 오의 — 우선권. 전투당 1회이므로 동시성이 낮다
+  ultimate_per_cast_max: 320
+  telegraph_step_ticks: 2         # 응집은 2틱마다 한 번 (선딜이 6틱이면 3회 = 상대가 셀 수 있다)
+  trail_max_points: 12            # 궤적 표본점 상한 — 점당 파티클은 아래 trajectories 가 정한다
+  ultimate_ring_points: 8         # 오의 응집 고리의 표본점
+
+# ══════════════════════════════════════════════════════════════════════
+#  HUD — 액션바 한 줄의 주인 (B-116)
+# ══════════════════════════════════════════════════════════════════════
+# 실사용 발견 (2026-07-14): 격 두름·경공의 문구가 다른 글과 겹쳐 읽혔다. 기전 — 액션바는
+# 한 줄뿐인데 손이 여럿이었다: 순간 문구를 4틱(0.2초)마다 도는 statusBar 가 곧바로 덮었다.
+# 주인 규칙 (HudLine.java — 순수 로직 · tools/HudLineSelfTest.java 가 시험한다):
+#   · 순간 사건(판정 flash · 격 태세 전환 · 경공 도약·낙법)은 아래 시간 동안 줄을 갖는다.
+#     새 사건이 오면 그 사건이 이긴다 (마지막 사건이 가장 지금이다).
+#   · 그 밖에는 statusBar(지속 상태 합성 — 생명 │ 태세 │ 격 │ 내력 │ 경공 │ 발출 │ 오의)가 주인이다.
+hud:
+  flash_read_ticks: 15            # 0.75초 — 사람이 한 문구를 읽는 최소 시간 (옛 STANCE_READ_TICKS. 이제 여기가 정본)
+
+  # ── 내공/내력 보스바 — XP바에서 이사 (★사용자 확정 2026-07-15) ──
+  # 바닐라 XP바는 v3 경험/레벨의 자리다 (cultivation_v3_levels.md §4-b). XP바에 세 들어 살던
+  # 내공(레벨 숫자)·내력(게이지)이 이 보스바로 온다. 문구·색·구간 전부 여기가 정본 —
+  # 코드(EnergyBossBar.java)는 이름을 옮길 뿐이다. 틀린 이름이면 채널을 안 열고 소리낸다.
+  energy_bossbar:
+    # 자리끼움 셋: {내력} {내력최대} {내공} — 어휘는 기존 화면에서 옮김:
+    #   내력 n/n = 액션바 energySeg (SkillHud.statusBar) · /혼천 운기 "내력 n → n/n"
+    #   내공 n   = /혼천 경지 "내공 n / 내력 n" (내공 숫자는 정수 화후 단계만 — 옛 XP바 레벨과 같은 자)
+    # 【어휘 후보 — 사용자 다듬기 대상】 (보스바 제 문구는 전례가 없어 최소 구성으로 세웠다)
+    title: "내력 {내력}/{내력최대} · 내공 {내공}"
+    color: BLUE                   # 평시 — ★사용자 확정: 파랑 (BLUE·GREEN·PINK·PURPLE·RED·WHITE·YELLOW)
+    depleted_color: RED           # 고갈(SkillEngine.isDepleted) — ★사용자 확정: 빨강
+    overlay: PROGRESS             # 구간 없는 연속 게이지 (PROGRESS·NOTCHED_6·NOTCHED_10·NOTCHED_12·NOTCHED_20)
+    depleted_suffix: " (고갈 −2)"  # 액션바의 고갈 꼬리를 그대로 옮김 (internal_energy.yml depleted.state "내공 고갈 (판정 -2)")
+
+# ══════════════════════════════════════════════════════════════════════
+#  파티클 팔레트 — 【팩 담당에게 넘기는 목록】
+# ══════════════════════════════════════════════════════════════════════
+# 우리가 쓰기로 한 바닐라 파티클은 이 13종뿐이다. 팩은 이 13장의 텍스처만 수묵으로 다시 그리면 된다.
+# (여기 없는 파티클을 코드가 쓰면 motion_audit 이 위반으로 잡는다 — 팩이 못 따라간 획은 없어야 한다)
+palette:
+  smoke:          { ink: 담묵, 뜻: "먹의 번짐 — 외공·기 소산·다운캐스트. '저 자의 내력이 다했다'" }
+  crit:           { ink: 농묵, 뜻: "먹점 — 타격의 착지. 발경의 알갱이" }
+  sweep_attack:   { ink: 획,   뜻: "한 획 — 검·도의 벤 자리 (호 궤적의 마침표)" }
+  cloud:          { ink: 비백, 뜻: "마른 붓 자국 — 헛손질·보법 잔상·돌진의 꼬리" }
+  electric_spark: { ink: 세필, 뜻: "날에 서린 서슬 — 검기" }
+  end_rod:        { ink: 백호, 뜻: "흰 획 — 강기·호신강기·어검·심검·오의. 격의 상단" }
+  enchanted_hit:  { ink: 점획, 뜻: "찌름의 점 — 창·봉·암기·화살의 직선" }
+  explosion:      { ink: 파묵, 뜻: "터진 먹 — 강기의 관통·오의의 파열 (개당 1개만)" }
+  flash:          { ink: 여백, 뜻: "빈 자리 — 오의 개시의 한 순간 (개당 1개만)" }
+  item:           { ink: 파편, 뜻: "부러진 병기의 조각 (아이템 데이터 필요)" }
+  crimson_spore:  { ink: 혈점, 뜻: "【채색 예외】 마공의 붉은 점 — 흡성·약탈. 예외가 곧 정보다" }
+  soul:           { ink: 그림자, 뜻: "은신·암살 — 귀식술·무영비수. 기가 아니라 없음" }
+  ash:            { ink: 재,   뜻: "독·취기 — 칠보독장·취팔선보" }
+  happy_villager: { ink: 자,   뜻: "【디버그 예외 — 세계의 먹이 아니다】 판정의 눈이 히트박스를 재는 자(尺). 켠 사람에게만 보인다" }
+  # 【2026-07 신설】 색을 가진 티끌 — 색은 코드가 아니라 아래 inks 등록부가 준다 (바닐라 DUST 는 RGB 를 받는다).
+  # 이 한 장으로 회백 잔상·청회 검기·청록 강기·옥빛 어검·청백 폭발을 전부 그린다 — 팩이 구울 텍스처는 여전히 한 장이다.
+  dust:           { ink: 채색, 뜻: "색을 가진 티끌 — inks 등록부가 색을 준다 (팔레트는 안 늘고 색만 는다)" }
+
+# ══════════════════════════════════════════════════════════════════════
+#  먹빛(墨色) — 색의 등록부 【사용자 지시 2026-07】
+# ══════════════════════════════════════════════════════════════════════
+# 사용자가 정한 색상 원칙을 **그대로** 옮긴다 (코드가 색을 지어내지 않는다):
+#   기본       = 먹색 · 회백색
+#   중급 포인트 = 청회색 · 푸른 잿빛
+#   상급 포인트 = 청록색 · 옥색 · 백색
+#   금지       = 형광 핑크 · 네온 보라 · 과도한 노랑 · SF 같은 발광
+#
+# rgb  — DUST 파티클의 색 (0~255).  size — 티끌의 크기 (바닐라 기본 1.0)
+# 【검수】 motion_audit 축 ⑦ 이 여기 등록된 모든 색을 forbidden 규칙으로 잰다.
+#   등록되지 않은 색을 코드가 쓰면 축 ⑥(하드코딩 금지)이 잡고, 등록했는데 금지색이면 축 ⑦ 이 잡는다.
+inks:
+  먹:   { rgb: [46, 49, 54],    size: 1.00, 뜻: "농묵 — 쇠가 지나간 자리. 빛나지 않는다 (외공기)" }
+  회백: { rgb: [178, 181, 178], size: 0.90, 뜻: "회백색 잔상 — 발경까지의 잔상은 색이 아니라 **재**다" }
+  청회: { rgb: [124, 143, 152], size: 1.00, 뜻: "청회색·푸른 잿빛 — 중급(검기)의 포인트. 먹빛 획 위의 얇은 테두리" }
+  청록: { rgb: [82, 158, 146],  size: 1.10, 뜻: "청록색 — 상급(강기)의 포인트. 청록산수의 그 청록이다" }
+  옥:   { rgb: [166, 214, 199], size: 1.00, 뜻: "옥색 — 어검. 청록보다 맑고 옅다 (기가 쇠를 떠났다)" }
+  청백: { rgb: [226, 240, 238], size: 0.90, 뜻: "청백색 — 심검·오의의 폭발. 흰빛에 푸른 기가 남는다" }
+  혈:   { rgb: [138, 38, 42],   size: 1.00, 뜻: "【채색 예외】 마공의 혈점 — 예외가 곧 정보다 (crimson_spore 와 같은 뜻)" }
+
+# 【금지색】 색 자체를 금하지 않는다. **서양 판타지의 발광**을 금한다 (사용자: "형광 네온·보라/핑크 금지").
+#   hue  — HSV 색상환의 각(도). from~to 안에 들면 위반
+#   chroma_max — max(R,G,B) − min(R,G,B). 이 값을 넘으면 '형광'이다 (원색에 가깝다)
+#   exempt — 소리내어 청구한 면제. **은닉이 아니다** (혈점은 규약이 인정한 유일한 채색 예외다)
+inks_forbidden:
+  hues:
+    - { from: 265, to: 345, name: "네온 보라 · 형광 핑크 — 서양 판타지의 발광" }
+    - { from: 38,  to: 68,  name: "과도한 노랑 — 금빛 이펙트는 이 세계의 것이 아니다" }
+  chroma_max: 130                 # 혈(138−38 = 100) 이 이 아래다. 원색(255,0,0 = 255)은 여기서 걸린다
+  exempt: [혈]                    # 마공의 붉은 점 — hue 358° · chroma 100 (규칙 안이지만 **명시**해 둔다)
+
+# ══════════════════════════════════════════════════════════════════════
+#  격(格)의 사다리 — 팩 없이 읽히는 첫 번째 축
+# ══════════════════════════════════════════════════════════════════════
+# 【불변식 ㄷ】 rank 가 오르면 brightness · charge.count · impact.count · aura.count 가 **전부** 커진다.
+# 상대가 알아야 하는 것은 하나다: "지금 저것이 나보다 위인가 아래인가."
+#   숫자를 못 세어도 밝기와 밀도로 안다 — 외공(먹점 4개)과 강기(흰 획 18개)는 착각할 수 없다.
+#
+# ─── 【2026-07 — 사용자 지시로 새로 붙은 세 칸】 ───
+#   echo   회백 잔상 — 획이 지나간 자리에 남는 **잔상**. 격이 오를수록 잦고 색이 오른다
+#          (외공기 회백 → 검기 청회 → 강기 청록 → 어검 옥 → 심검 청백)
+#   haze   먼지 · 바람결 · **먹번짐** — 초급의 "발광 거의 없음"을 지키는 자.
+#          외공·발경은 smoke(담묵)로 번지고, 검기 위로는 cloud(비백·기류)가 된다
+#   burst  **타격 순간의 작은 폭발형 입자** — 사용자가 이름을 대어 청구한 것.
+#          타격점 예산은 안 늘었다: 먹점(impact)에서 갈라 왔다 (budget 절의 표 참조)
+#
+#   ★ 이번 바퀴(1차 MVP)는 **양 끝**이다: 외공기·발경의 수묵 강화 + 오의의 화려함.
+#     가운데 넷(검기~심검)의 echo/haze/burst 는 **사다리가 거짓말하지 않도록 얕게** 세웠다 —
+#     반월형 검기 궤적·문파별 색 분화는 2차의 몫이다 (이 주석을 지우는 날이 그때다).
+grades:
+  외공기:
+    rank: 0
+    brightness: 0                 # 검산용 — 시각 등급 (단조 증가해야 한다)
+    color: GRAY                   # 액션바 색 (ChatColor 이름 — 무채색 계열이 원칙)
+    charge:  { particle: smoke, count: 0, spread: 0.00, extra: 0.00 }   # 응집이 없다 (예고할 격이 없다)
+    aura:    { particle: smoke, count: 0, spread: 0.00, extra: 0.00 }   # 두름이 없다
+    impact:  { particle: crit,  count: 4, spread: 0.15, extra: 0.05 }
+    accent:  { particle: null,  count: 0 }
+    trail:   { particle: cloud, per_point: 1 }
+    echo:    { particle: dust, ink: 회백, count: 3, spread: 0.18, extra: 0.00 }   # 회백 잔상 — 먹빛 획의 뒤끝
+    haze:    { particle: smoke, count: 2, spread: 0.12, extra: 0.01 }             # 약한 먼지 · 먹번짐
+    burst:   { particle: dust, ink: 먹, count: 2, spread: 0.14, extra: 0.06 }     # 먹점이 튄다 — **발광 없음**
+    sounds:
+      charge: []
+      arm:    []
+      impact: [{ key: "entity.player.attack.strong", volume: 0.8, pitch: 1.0 }]
+
+  발경:
+    rank: 1
+    brightness: 1
+    color: WHITE
+    charge:  { particle: crit, count: 3, spread: 0.10, extra: 0.01 }
+    aura:    { particle: crit, count: 1, spread: 0.08, extra: 0.00 }    # 태세 잔광 — 켜져 있다는 사실이 정보다
+    impact:  { particle: crit, count: 8, spread: 0.25, extra: 0.15 }
+    accent:  { particle: sweep_attack, count: 1 }                        # 짧은 충격파 — 기가 몸 안에서 터진다
+    trail:   { particle: crit, per_point: 1 }
+    echo:    { particle: dust, ink: 회백, count: 4, spread: 0.20, extra: 0.01 }   # 잔상이 둘~셋 겹친다
+    haze:    { particle: smoke, count: 2, spread: 0.14, extra: 0.01 }
+    burst:   { particle: dust, ink: 회백, count: 4, spread: 0.18, extra: 0.08 }   # 기가 몸 안에서 터진 자리
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.6, pitch: 1.4 }]
+      arm:    [{ key: "item.trident.riptide_1", volume: 0.8, pitch: 1.5 }]
+      impact: [{ key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.9 },
+               { key: "block.anvil.land", volume: 0.35, pitch: 1.8 }]
+
+  검기:
+    rank: 2
+    brightness: 2
+    color: GRAY                   # 액션바는 무채 그대로 — 색이 오르는 것은 **획과 파티클**이다
+    charge:  { particle: electric_spark, count: 4, spread: 0.12, extra: 0.01 }
+    aura:    { particle: electric_spark, count: 3, spread: 0.10, extra: 0.00 }
+    impact:  { particle: electric_spark, count: 10, spread: 0.30, extra: 0.05 }
+    accent:  { particle: end_rod, count: 5 }                             # 날에 서린 기운이 살을 가른다
+    trail:   { particle: electric_spark, per_point: 2 }
+    echo:    { particle: dust, ink: 청회, count: 5, spread: 0.22, extra: 0.01 }   # ★ 여기서부터 색이 든다 (청회·푸른 잿빛)
+    haze:    { particle: cloud, count: 3, spread: 0.20, extra: 0.01 }             # 먼지가 아니라 **기류**가 된다
+    burst:   { particle: dust, ink: 청회, count: 5, spread: 0.22, extra: 0.10 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.4 }]
+      arm:    [{ key: "item.trident.riptide_1", volume: 0.8, pitch: 1.2 }]
+      impact: [{ key: "item.trident.throw", volume: 0.8, pitch: 1.5 }]
+
+  강기:
+    rank: 3
+    brightness: 3
+    color: WHITE
+    charge:  { particle: end_rod, count: 5, spread: 0.14, extra: 0.02 }
+    aura:    { particle: end_rod, count: 5, spread: 0.12, extra: 0.00 }
+    impact:  { particle: end_rod, count: 12, spread: 0.35, extra: 0.06 }
+    accent:  { particle: explosion, count: 1 }                           # 터지는 것이 아니라 뚫는다
+    trail:   { particle: end_rod, per_point: 2 }
+    echo:    { particle: dust, ink: 청록, count: 6, spread: 0.26, extra: 0.01 }   # 청록 — 청록산수의 그 색
+    haze:    { particle: cloud, count: 3, spread: 0.24, extra: 0.01 }
+    burst:   { particle: dust, ink: 청록, count: 8, spread: 0.26, extra: 0.12 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.7, pitch: 0.6 }]
+      arm:    [{ key: "block.conduit.activate", volume: 0.8, pitch: 0.7 }]
+      impact: [{ key: "block.conduit.activate", volume: 0.9, pitch: 1.2 }]
+
+  어검:
+    rank: 4
+    brightness: 4
+    color: WHITE
+    charge:  { particle: end_rod, count: 6, spread: 0.16, extra: 0.02 }
+    aura:    { particle: end_rod, count: 7, spread: 0.14, extra: 0.01 }
+    impact:  { particle: end_rod, count: 13, spread: 0.40, extra: 0.08 }
+    accent:  { particle: explosion, count: 1 }
+    trail:   { particle: end_rod, per_point: 2 }
+    echo:    { particle: dust, ink: 옥, count: 7, spread: 0.30, extra: 0.01 }     # 옥빛 — 기가 쇠를 떠났다
+    haze:    { particle: cloud, count: 4, spread: 0.28, extra: 0.01 }
+    burst:   { particle: dust, ink: 옥, count: 10, spread: 0.30, extra: 0.14 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.8, pitch: 0.5 }]
+      arm:    [{ key: "block.conduit.activate", volume: 0.9, pitch: 0.6 }]
+      impact: [{ key: "block.beacon.activate", volume: 0.9, pitch: 1.4 }]
+
+  심검:
+    rank: 5
+    brightness: 5
+    color: WHITE
+    charge:  { particle: end_rod, count: 7, spread: 0.18, extra: 0.02 }
+    aura:    { particle: end_rod, count: 9, spread: 0.16, extra: 0.01 }
+    impact:  { particle: end_rod, count: 14, spread: 0.45, extra: 0.08 }
+    accent:  { particle: flash, count: 1 }                               # 형(形)이 사라진다 — 빈 자리만 남는다
+    trail:   { particle: end_rod, per_point: 2 }
+    echo:    { particle: dust, ink: 청백, count: 8, spread: 0.34, extra: 0.02 }   # 사다리의 꼭대기 — 청백의 다중 잔상
+    haze:    { particle: cloud, count: 4, spread: 0.32, extra: 0.01 }             # 운무가 몸을 두른다
+    burst:   { particle: dust, ink: 청백, count: 11, spread: 0.34, extra: 0.16 }  # 타격점 총합 = 14+1+11+4 = 30 (상한)
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.5 }]
+      arm:    [{ key: "block.conduit.activate", volume: 1.0, pitch: 0.5 }]
+      impact: [{ key: "block.beacon.activate", volume: 1.0, pitch: 1.7 }]
+
+# ══════════════════════════════════════════════════════════════════════
+#  무기 오라 — 손에 든 병기 둘레를 도는 기운 (마크에이지 "간지 마검" 참조)
+# ══════════════════════════════════════════════════════════════════════
+# 격(두름)과 다르다: 격은 내력을 실은 태세다(grades[].aura — 발출·발경으로 켠다). 무기 오라는
+# **병기 자체의 격**이 손에 쥐어져 있는 것만으로 상시 서리는 연출이다 — 순수 VFX(판정 불변).
+#   ① 결정 조각(shard) = 계열 악센트색의 dust — 검 둘레를 **소용돌이**로 돈다
+#      (팩이 이 dust 를 청록 결정 텍스처로 다시 그린다 — 레퍼런스의 청록 결정 조각)
+#   ② 흰 반짝이(spark) = end_rod — 검 둘레를 **떠도는 흰 별** (레퍼런스의 4각 반짝이)
+# 등급 사다리(불변식 ㄷ — 단조 증가): 범철=없음 → 정련 희미 → 보병 → 신병 또렷 → 마병 검붉은 격렬.
+# 계열/명병 색: 검=옥(청록) · 도=혈(진홍) · 명병=문파색(2차 — myeong 에 등록되면 계열색을 덮는다).
+# 규율: 코드에 파티클·색 하드코딩 금지 — 이 절이 정본. 발행은 SkillHud 예산 게이트를 그대로 탄다
+#       (per-view 600/틱 · 전역 4000/틱 · LOD 16m/32m · cull 32m). 밀도는 성기게 (레퍼런스도 성기다).
+weapon_aura:
+  enabled: true                 # 전역 스위치 — false 면 한 발도 안 뿌린다 (설정으로 on/off · 판정 불변)
+  interval_ticks: 3             # 몇 틱마다 한 바퀴 (throttle) — 4틱 HUD 루프와 어긋나게 3으로 둔다
+  orbit_speed: 0.22             # 위상 증가/틱 — 소용돌이 회전 속도 (rad)
+  radius: 0.30                  # 궤도 반경 (병기 둘레, m) — held·작은 아이템 기준. 큰 전시는 aura_scale 배
+  helix: 0.15                   # ★세로 나선 폭 — held·작은 대상 기준(낮게). **큰 대상은 aura_scale 에 비례**해
+                                #   커진다(코드가 helix × aura_scale). 0.9 는 held 에 너무 높이 솟았다 → 낮춘다.
+                                #   큰 전시 기둥을 더 높이려면 weapon_stand/dropped_display.aura_scale 를 올려라
+  # ── ★영상 정합 우선: 떨어진/세워진 아이템 엔티티 오라 (검을 땅에 두면 그 둘레를 돈다) ──
+  dropped: true                 # 월드의 dropped Item(그리고 ItemDisplay) 순회 on/off
+  dropped_rise: 0.25            # 아이템 위치에서 궤도 중심을 올리는 값 (아이템은 지면에 낮게 뜬다)
+  include_displays: true        # ItemDisplay 도 순회한다 (우리 VFX 엔티티 honcheon:vfx 는 제외)
+  # ── 부차: held(든 무기) 곁 — 실제 렌더되는 우하단 손 자리. 1인칭 정면을 안 가린다 ──
+  held: true                    # 든 무기 오라 on/off
+  held_interval_ticks: 1        # ★든 무기는 매 틱 발행 — 걸을 때 파티클이 검에서 벗어났다 붙는 끊김을 없앤다
+                                #   (파티클은 월드 정지라 뒤처진다. 촘촘히 뿌려 항상 손 곁에 있게. 주기 촘촘 →
+                                #    발행당 수는 held_interval/interval 비율로 줄여 총량을 맞춘다 — 예산 균형)
+  held_forward: 0.45            # 눈에서 앞으로 (손이 화면에 나오는 깊이)
+  held_right: 0.32              # 시선의 오른쪽으로 (오른손 자리)
+  held_down: 0.30               # 눈에서 아래로 (우하단 손 높이)
+  # ── 파티클 종류·크기 ──
+  # 【판단 — 레퍼런스 청록 결정에 무엇이 가까운가】 dust vs electric_spark:
+  #   레퍼런스 조각은 **계열색(검=청록 · 도=진홍)** 을 띤다 — 계열색은 이 병기 체계의 핵심 축이다.
+  #   electric_spark(1.21 청백 전격)는 **색을 못 입힌다**(고정 청백) → 도(진홍)·마병(검붉음)을 못 그린다.
+  #   그래서 기본은 **dust**(계열색 그대로 · 크기를 줄여 뭉치를 없앤다). 결정의 **각진 모양**은 팩이
+  #   이 dust 를 결정 텍스처로 다시 그리는 몫이다. electric_spark 는 선택지로 열어 둔다(색 포기 · 전격 느낌).
+  shard_particle: dust          # 결정 조각 — dust(계열색) 기본 · 대안: electric_spark(색 없음·전격)
+  spark_particle: end_rod       # 흰 반짝이 — 떠도는 별 (palette.end_rod — 색 데이터 없음)
+  shard_size: 0.7               # ★결정 크기 (dust size) — 1.0 은 뭉치로 크다. 0.7 로 작게 (실측 다듬기)
+  spark_size: 0.6               # 반짝이 크기 — dust 계열 spark 에만 걸린다(end_rod 는 고정 크기라 무시)
+  shard_spread: 0.02
+  spark_spread: 0.03
+  spark_radius_mul: 1.3         # 반짝이는 결정보다 조금 바깥을 떠돈다
+  # ── 계열 악센트색 (결정 조각의 먹빛 — inks 의 등록된 이름만) ──
+  series:
+    검: { ink: 옥 }              # 옥(166,214,199) — 청록산수의 그 옥빛 (레퍼런스의 청록 결정)
+    도: { ink: 혈 }              # 혈(138,38,42) — 도의 살기 (채색 예외색이되 여기선 병기색이다)
+  # ── 명병 문파색 (계열보다 우선 · 2차) — 등록된 문파만 계열색을 덮어쓴다. 지금은 비어 있다 ──
+  myeong: {}
+  # ── 등급 사다리 (shards·sparks 는 rank 를 따라 단조 증가) ──
+  grades:
+    범철:  { shards: 0, sparks: 0, spark_every: 0 }                 # 오라 없음 — 첫 병기엔 기운이 서리지 않는다
+    정련:  { shards: 2, sparks: 0, spark_every: 0 }                 # 희미 — 날 둘레에 옅게만
+    보병:  { shards: 6, sparks: 1, spark_every: 4 }                 # 또렷해지기 시작 (반짝이 드물게)
+    신병:  { shards: 10, sparks: 2, spark_every: 2 }                 # 또렷 — ★파일럿 기준
+    마병:  { shards: 13, sparks: 3, spark_every: 2, ink: 혈 }        # 검붉은 격렬 — 계열색을 혈로 덮는다
+
+# ══════════════════════════════════════════════════════════════════════
+#  전용 검기(劍氣) 평타 — 크고 선명한 초록 초승달 검기 V1 【레퍼런스: 마크에이지】
+# ══════════════════════════════════════════════════════════════════════
+# 【문제】 기존 무협 참격(display.slash → 참격_호_검기)은 획을 몸 앞 0.85m 에 **작게·짧게** 그린다.
+#   레퍼런스는 다르다: 크고 선명한 **초록 초승달**이 스윙 궤적을 따라 **몸을 감싸며 크게 휩쓸고**,
+#   흰 별(4점) 반짝이가 성기게 터진다. 그래서 호 계열 평타의 획을 **이 검기로 대체**한다.
+#
+# 【코드가 읽는 자리】 SkillEngine.kigiSlash(등록부 판독) · SkillListener.spawnKigiSlash(발행) ·
+#   SkillDisplay.kigiSlash(ItemDisplay 소환·slerp). 모든 시각 파라미터는 **여기서 읽는다** —
+#   조율자가 재빌드 없이 값만 바꿔 인게임 스크린샷으로 scale/sweep/tilt 를 반복 조율한다 (하드코딩 금지).
+#
+# 【가역】 enabled: false 로 두면 한 획도 안 그리고 기존 무협 참격이 그대로 돌아온다.
+#   기존 자산(honcheon:kigi/arc1|2|3 텍스처·참격_호_검기1/2/3 모델)을 **재사용**한다.
+#
+# ★【스윙 동기화 · 2026-07-19】 검기의 3단계는 **텍스처 애니가 아니라 모델 교체**다.
+#   MC 의 .mcmeta 텍스처 애니는 **전역 시계**로 돈다 — 모든 인스턴스가 월드 틱에 맞춰 동시에 같은
+#   프레임을 본다. 그래서 소환 순간의 프레임이 스윙마다 제각각이었고 1→2→3 이 스윙과 전혀
+#   동기화되지 않았다 (사용자 실측: "검기 프레임이 전혀 반영이 안 된다").
+#   ⇒ 이제 단계마다 **제 텍스처를 문 모델**이 있고(kigi/arc1|2|3 · 정사각 단일 프레임 · mcmeta 없음),
+#     SkillDisplay 의 중앙 티커가 frame_ticks 마다 그 ItemDisplay 의 아이템을 다음 단계로 갈아끼운다.
+#     공전 보간(translation/rotation)·크기·파티클·수축은 **한 글자도 안 건드린다** — 모델만 바뀐다.
+
+# ══════════════════════════════════════════════════════════════════════
+#  부(斧)의 횡참 — 도끼 평타 (2026-07-21 사용자 확정: "충격은 빼고 횡참으로")
+# ══════════════════════════════════════════════════════════════════════
+# 검기 띠와 같은 밴드 문법이되 짧고 굵고 둔중하다 — 검은 베고 지나가고, 부는 부수고 멈춘다.
+# (착지 충격면 impactBurst 는 기술·보스용 예약으로 남겨 뒀다 — QiGeometry)
+# 판정: 궤적에 닿으면 딜 (basicMelee 재진입 · 빗나감/명중 분기 없음).
+heavy_slash:
+  enabled: true
+  # ★ 원형 축의 열쇠는 **전투 분류**다 (실측 2026-07-21: 혼천 부 실물의 class = '중병기', '부'가 아니다
+  #   — 계열명 [부]로 적으면 영원히 안 맞아 옛 참격이 새어 나온다). 바닐라 도끼는 legacy '도'라 제외.
+  apply_to_classes: [중병기]
+  ink: 청록
+  ink_alt: 옥
+  radius: 1.7              # 표현 크기 상향
+  sweep_deg: 75            # 호각 (검 140 의 절반쯤 — 짧게 후려친다)
+  tilt_deg: 20             # 얕은 대각 (횡참)
+  center_height: 1.0       # 허리 높이
+  band_width: 0.62
+  band_rows: 4
+  band_jitter: 0.14
+  sweep_ticks: 2
+  step_deg: 0.8
+  # ★ 시점별 굵기 + 몸 먼저·궤적 나중 (2026-07-22 사용자)
+  width_self_mul: 0.8
+  width_others_mul: 1.25
+  height_others_mul: 2.0   # ★관전자에게 세로(위아래) 퍼짐 — "초승달이 두툼하게" (재질문 답)
+  trail_delay_ticks: 3     # 선딜 — 몸(쏠림)이 나간 뒤 띠·판정이 함께 나간다
+  hit: true
+  hit_reach: 0.9
+  replace_stroke: true
+
+kigi_slash:
+  enabled: true
+  # ★ 매체 축 (재설계 v2 · 2026-07-21 사용자 확정): 일반 무기 = particle.
+  #   plate | model3d 는 보스몹·특수 무기가 그 효과만 갈아탈 교체 지점 — 코드·자산 유지.
+  medium: particle
+  # ── 파티클 띠 (docs/design/kigi_particle_v2.md · 야마토 실측 대역) ──
+  band_width: 0.42     # 배부름 상향 — taper 가 끝은 여전히 얇게 죽인다
+  band_rows: 4         # 단면 밀도
+  band_jitter: 0.12     # 두께 지터(m)
+  band_sweep_ticks: 2   # 피크 100ms (디자이너 시트: 0~100ms 생성·피크)
+  # ★ 시점별 굵기 (2026-07-22 사용자): 시전자(1인칭) 얇게 · 관전자(3인칭) 넓게 — 같은 획·같은 판정
+  width_self_mul: 0.8
+  width_others_mul: 1.25
+  height_others_mul: 2.2   # ★관전자에게 세로(위아래) 퍼짐 — "초승달이 두툼하게" (재질문 답)
+  accent_count: 12      # 흰 별(end_rod) — 머리 구간에만
+  # ★ 띠 = 판정 (2026-07-21 사용자 확정: "빗나감·명중 없애고 파티클에 부딪치면 딜")
+  #   damage(원피해, player) 가 basicMelee 로 재진입 — 태세·문지방·허수아비 판정은 기존 한 경로
+  band_hit: true
+  band_hit_reach: 0.9   # 띠 표면에서 몸까지 허용 거리(m)
+  model: "honcheon:kigi/press_a1"  # 소환 시 1단계 = frame_models[0] 의 key (계약: 코드가 목록을 우선한다)
+  # ★단계 모델 — 이 순서대로 갈아끼운다. 이름은 display.models 의 **등록 이름**이다 (key 가 아니다).
+  #   비우거나 1개만 적으면 교체가 꺼지고 model 하나로 고정된다 (가역).
+  # ★ 원형(archetype) 축 — trail(호) 축과 분리 (검토 P0). 호를 쓰는 부(도끼)·월아산은 못 받는다.
+  apply_to_classes: [검, 도]
+  frame_models: [검압_내려1, 검압_내려2, 검압_내려3]      # A: 피크 → 절단 통과 → 붕괴
+  frame_models_b: [검압_올려1, 검압_올려2, 검압_올려3]    # B: 올려베기 — alternate 가 스윙마다 A/B 교대
+  frame_ticks: 2  # 버스트 문법 시험 — 즉시 최대(3단계)로 시작 → 잔상 → 스러짐
+  apply_to_trails: [호]            # 이 basic trail 무기에만 (호=검·도·부·겸·월아산 sweep)
+  replace_stroke: true             # 이 무기의 기존 무협 display.slash 아크를 억제(안 그림) + 궤적 파티클도 억제
+  plate: true  # 판(ItemDisplay)을 그린다 — 5프레임의 몸 (테스트 조율값 동기화)
+  # ★ 공전(公轉) — 초승달의 **자리 자체가 몸 주위를 돈다** (레퍼런스: 오른쪽 아래 → 몸을 감으며 → 왼쪽).
+  #   예전엔 정면 한 자리에 붙박여 자전만 했다("정면에서 본 반원") — 그것이 유일한 결함이었다.
+  scale: 6.5  # 초승달 크기(대략 m) — 크게, 3인칭에서 잘 보이게
+  center_height: 1.1  # 발바닥에서 **공전 중심** 높이(m) — 몸의 중심
+  orbit_radius: 2.1    # 표현 크기 상향 (사용자: 부족하면 키워라)
+  # ★ 몸 둘레를 도는 호 (EffectLib 기하) — 비우면 안 그린다 (판만으로 간다).
+  #   판이 못 푸는 **등 뒤**를 점으로 메운다 (실측 47px → 3,936px).
+  #   색은 등록부의 격 사다리를 따른다 — 검기는 청회다 (연두 아니다).
+  # ★ 3D 리본 (BetterModel · D) — 이름이 있으면 판·점보다 먼저 선다. 없으면 판·점 (가역).
+  model3d: ""          # ★2026-07-21 사용자 확정: 2D 5프레임으로 간다 — 리본은 쉼 (kigi_arc 로 되살림 가능)
+  model3d_anim: grow
+  model3d_up: 0.5      # ★리본 자리를 가슴에서 올림(m) — 재적재로 쓴다
+  model3d_yaw: 0.0     # ★방향 회전(도)
+  model3d_pitch: 0.0   # ★기울기 회전(도)
+  geom_particle: dust   # 띠의 입자 (재설계 v2 — 띠가 주인공이 됐다)
+  geom_ink: 청록      # 시트: 몸통 옥/청록
+  geom_ink_alt: 옥    # 몸색 40% 혼합 → 평가판 모드 스위치
+  geom_step_deg: 0.8   # 반경 상향분 밀도 보전 + 점묘 촘촘
+  geom_sweep_deg: 140   # 호를 물어 초승달을 더 길게
+
+  forward: 0.0  # 공전 중심을 앞으로 미는 값(m). 0 이면 몸 한복판이 중심
+  sweep_deg: 0  # ★공전 호각 — 몸 주위를 도는 총 각(시작→끝, 클라이언트가 보간). 레퍼런스는 크게 돈다
+  tilt_deg: 32  # 사용자: 더 눕혀 (42→32)
+  roll_deg: 180  # 초승달을 제 평면 안에서 돌리는 정적 롤 오프셋(배가 위/아래)
+  # ★ 날의 눕힘 — 접선축 기준(2026-07-20 · 사용자 실측: \"아치가 위아래를 보고 있다\").
+  #   90 = 판이 누워 **볼록한 바깥이 정면**을 보고 오목한 안쪽이 플레이어를 감싼다 (횡베기).
+  #    0 = 판이 세로로 서서 ∩ 의 배가 하늘을 본다 (그 버그의 자세).
+  blade_pitch_deg: -45
+  draw_ticks: 6  # 휩쓰는(도는) 시간 — 이 틱 동안 공전 시작→끝을 보간 (= 5단계 × frame_ticks 2)
+  fade_ticks: 2  # 사라지는 시간(꼬리부터 수축)
+  billboard: FIXED                 # 세운 채 고정 (획에는 방향이 있다)
+  alternate: true                  # 스윙마다 좌↔우 방향 번갈아(레퍼런스 "한 세트 더")
+  brightness: 15                   # 발광(full-bright · block_light = sky_light = 이 값)
+  spark:
+    particle: firework  # 흰 별/반짝(깔끔한 흰색). 대안: firework
+    count: 0  # 아크를 따라 뿌리는 흰 별 개수 — 5프레임 평가 동안 쉼 (표본점당 1개)
+    spread: 1.3  
+    speed: 0.02
+    along_arc: true                # 아크 궤적을 따라 뿌림(그리는 시간에 갈라 뿌린다)
+  calm_held_aura: true             # 이 무기를 들었을 때 weapon_aura 의 held 방출을 억제 — 장면을 깨끗하게 (가역)
+
+# ══════════════════════════════════════════════════════════════════════
+#  병기 전시대 — 든 병기를 땅에 크게 세운다 (★영상 정합: 땅에 박힌 큰 검 + 오라)
+# ══════════════════════════════════════════════════════════════════════
+# `/혼천 병기전시` — 든 혼천 병기를 앞 지면에 **크게 세운 ItemDisplay** 로 박는다 (스케일 ≈3.5배).
+#   빈손으로 다시 부르면 가까운 제 전시대를 **회수**한다 (병기가 인벤토리로 돌아온다).
+# 전시대는 우리 VFX(honcheon:vfx)가 아니라 실물 병기의 ItemDisplay라, weapon_aura.dropped 순회가
+#   자동으로 그 둘레에 오라를 두른다 (큰 검이라 aura_scale 로 반경을 키운다). 판정 불변 · 순수 전시.
+# 【실측 다듬기】 회전(rot_*)은 검 모델을 곧추 세우는 값이라 **인게임에서 눈으로 맞춘다** (재컴파일 없이 config).
+# ── 떨어뜨린 병기 자동 확대 (드롭 → 큰 디스플레이) ──
+# 바닐라 dropped Item 은 렌더 크기가 고정이라 작다. 혼천 병기를 땅에 버리면 그 작은 아이템을 **치우고**
+#   같은 자리에 **큰 ItemDisplay** 를 세워 크게 보이게 + 오라가 둘레를 돈다 (전시대와 코드 공유).
+#   병기는 절대 안 잃는다: 디스플레이가 실물 병기를 품고(setPersistent) 재기동에도 살아남으며, 다가가면
+#   인벤토리로 돌아온다(줍기 복원). 수명은 바닐라 드롭 despawn(5분)과 정합 — 그때 디스플레이도 정리한다.
+dropped_display:
+  enabled: true                 # 드롭 자동 확대 on/off (끄면 작은 바닐라 아이템에 오라만 두른다 — 옛 동작)
+  scale: 1.2                    # 일반 무기 크기 (땅에 눕힘 — 바닐라 드롭보다 크지만 전시대처럼 거대하진 않게)
+  rot_x: 0                      # 세우는 회전 — 전시대와 동일(자루 위·칼끝 아래). ★인게임 다듬기 대상
+  rot_y: 0
+  rot_z: 0                      # 눕힘(수평) — 땅에 꽂지 않는다 (사용자: 일반 무기 크기로 바닥에)
+  rise: 0.18                    # 지면 바로 위 (눕힌 무기)
+  pickup_radius: 1.6            # 이 반경에 플레이어가 들면 병기가 인벤토리로 돌아오고 디스플레이 제거
+  lifetime_seconds: 300         # 바닐라 드롭 despawn 5분 정합 — 이 시간 뒤 디스플레이 정리(병기 사라짐). 0 = 안 사라짐
+  aura_scale: 1.1               # 작은 눕힌 무기에 비례
+  aura_center_rise: 0.3         # 눕힌 무기 높이
+
+weapon_stand:
+  enabled: true                 # 전역 스위치
+  scale: 3.5                    # 병기 크기 배율 (영상의 큰 검)
+  rot_x: 0                      # 세우는 회전 (오일러 도) — 검 모델의 대각을 수직으로. ★인게임 다듬기 대상
+  rot_y: 0
+  rot_z: 90
+  rise: 1.4                     # 지면에서 띄우는 중심 높이 (스케일 큰 모델이 땅에 박혀 보이게)
+  retrieve_radius: 4.0          # 빈손 호출 시 이 반경 안의 제 전시대를 회수
+  aura_scale: 2.8               # 전시대 오라 반경·나선 배율 (큰 검을 감싸도록 — dropped 일반 아이템은 1.0)
+  aura_center_rise: 1.5         # 오라 기둥의 중심 높이 (검 몸통을 감는다)
+
+# ══════════════════════════════════════════════════════════════════════
+#  형태(形) — qi_manifestation.yml forms 의 6개 잎 전수 (두름 · 쏨 · 두름_몸 · 부림)
+# ══════════════════════════════════════════════════════════════════════
+# 팩 없이 읽히는 두 번째 축: **응집(선딜) vs 발출(쏨) vs 두름(근접타)** 이 서로 달라야 한다.
+#   응집 — 기가 손끝으로 **모인다** (제자리, 2틱마다, 소리 있음) → 보고 물러설 수 있다
+#   두름 — 잔광이 **머문다** (라운드마다, 손끝, 소리 없음) → 켜져 있다는 사실만 알린다
+#   발출 — 기가 **날아간다** (직선 궤적 8m, 큰 소리) → 몸을 빼는 것 말고는 답이 없다
+forms:
+  검기_두름:
+    kind: 두름
+    grade: 검기
+    aura_from_grade: true         # 잔광 = grades.검기.aura (한 곳에서만 정의한다)
+    on_sustain_sound: []          # 두름은 소리로 알리지 않는다 — 잔광만이 정보다 (소리는 응집의 몫)
+
+  검강_두름:
+    kind: 두름
+    grade: 강기
+    aura_from_grade: true
+    on_sustain_sound: []
+
+  검기_참격:
+    kind: 쏨
+    grade: 검기
+    trail: 선                     # skill_mechanics hitbox 와 같은 모양 (qi_manifestation forms.쏨.hitbox: 선)
+    length: 8.0
+    width: 1.5
+    frames: [8, 2, 12]            # 코드 폴백(DEFAULT_SHOT_FRAMES)을 등록부로 끌어올린다
+    cooldown_ticks: 40
+    charge:  { particle: electric_spark, count: 5, spread: 0.14, extra: 0.02 }
+    beam:    { particle: electric_spark, per_point: 2 }
+    burst:   { particle: end_rod, count: 8, spread: 0.25, extra: 0.05 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.8, pitch: 1.6 }]
+      release: [{ key: "item.trident.throw", volume: 1.0, pitch: 0.8 }]
+
+  강기_포:
+    kind: 쏨
+    grade: 강기
+    trail: 선
+    length: 8.0
+    width: 1.5
+    frames: [8, 2, 12]
+    cooldown_ticks: 40
+    charge:  { particle: end_rod, count: 6, spread: 0.16, extra: 0.02 }
+    beam:    { particle: end_rod, per_point: 2 }
+    burst:   { particle: explosion, count: 1, spread: 0.0, extra: 0.0 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.5 }]
+      release: [{ key: "block.conduit.activate", volume: 1.0, pitch: 0.7 },
+                { key: "item.trident.throw", volume: 0.8, pitch: 0.6 }]
+
+  호신강기:
+    kind: 두름_몸
+    grade: 강기
+    # 【읽힘 요건】 "호신강기가 켜져 있다"를 상대가 보고 판단할 수 있어야 한다.
+    #   손끝 잔광(두름)과 달리 **몸을 두르는 고리**다 — 실루엣이 다르다. 그것이 형태의 차이다.
+    ring: { particle: end_rod, points: 6, radius: 0.9, per_point: 1, height: 1.0 }
+    aura: { particle: end_rod, count: 6, spread: 0.45, extra: 0.00 }
+    sounds:
+      deploy: [{ key: "block.conduit.activate", volume: 0.9, pitch: 0.6 }]
+
+  이기어검:
+    kind: 부림
+    grade: 어검
+    # MVT 미배선 (P5 — 디스플레이 엔티티). 모션만 먼저 등록한다: 등록되지 않은 것은 배선될 수 없다.
+    trail: 시
+    length: 16.0
+    charge:  { particle: end_rod, count: 6, spread: 0.20, extra: 0.02 }
+    beam:    { particle: end_rod, per_point: 1 }
+    burst:   { particle: end_rod, count: 12, spread: 0.30, extra: 0.05 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.4 }]
+      release: [{ key: "item.trident.return", volume: 1.0, pitch: 0.8 }]
+    mc: "VFX 엔티티 풀 120 · 수명 60틱 (performance.yml vfx_entities) — 파티클 궤적은 폴백"
+
+# ══════════════════════════════════════════════════════════════════════
+#  궤적(軌跡) — skill_mechanics.yml 의 히트박스 type 과 1:1
+# ══════════════════════════════════════════════════════════════════════
+# 【불변식 ㄴ】 여기 키 = hitbox_types [호, 선, 원, 시, 돌, 진] + 비타격형 [태세, 가드태세, 시전]
+#   보이는 모양이 맞는 모양이다. 호는 부채꼴로 그리고 부채꼴로 맞는다.
+#   points = 표본점 수 (budget.trail_max_points 이하) · phase = 어느 프레임에 그리는가
+trajectories:
+  호:
+    shape: arc                    # 정면 부채꼴 — angle 을 points 로 나눠 훑는다
+    points: 7
+    phase: active                 # 판정 프레임 — 벤 자리가 남는다
+    radius_ratio: 0.8             # 사거리의 80% 반경에 획을 놓는다 (닿는 자리)
+    accent_at: mid                # sweep_attack 은 호의 중앙 1개
+  선:
+    shape: line                   # 시선 방향 직선 — 찌르기·참격·발출
+    points: 8
+    phase: active
+    step: 1.0                     # 1m 간격 표본
+    accent_at: end
+  원:
+    shape: circle                 # 사방 — 매화검법 4타·태극검·매화만개
+    points: 12
+    phase: active
+    radius_ratio: 1.0
+    accent_at: center
+  시:
+    shape: shot                   # 투사체 — 화살·비수. 궤적은 발사점 → 표적선
+    points: 10
+    phase: active
+    step: 2.0                     # 사거리가 길다 (활 40m) — 2m 간격으로 성기게
+    accent_at: end
+  돌:
+    shape: dash                   # 돌진·보법 — 지나온 자리에 잔상이 남는다 (뒤로 그린다)
+    points: 6
+    phase: active
+    step: 0.8
+    accent_at: start
+  진:
+    shape: ring                   # 합격진 — 진주를 중심으로 한 고리 (radius = 진의 반경)
+    points: 12
+    phase: startup                # 진 전개는 선딜에 보인다 (20틱 — 성원이 자리를 잡을 시간)
+    radius_ratio: 1.0
+    accent_at: center
+  태세:
+    shape: aura                   # 몸에 머문다 — 금강부동·귀식술
+    points: 4
+    phase: active
+    radius_ratio: 0.5
+    accent_at: center
+  가드태세:
+    shape: aura                   # 태극권·정심검결 — 패링 창이 열린 동안 몸 앞에 머문다
+    points: 4
+    phase: active
+    radius_ratio: 0.6
+    accent_at: center
+  시전:
+    shape: aura                   # 활인침법 — 비전투 시전 (표적에 머문다)
+    points: 4
+    phase: startup
+    radius_ratio: 0.4
+    accent_at: center
+
+# ══════════════════════════════════════════════════════════════════════
+#  무기 계열별 모션 — 검은 벤다, 창은 찌른다
+# ══════════════════════════════════════════════════════════════════════
+# 같은 '호'라도 검의 호와 봉의 호는 다르다: 검은 날이 지나간 자리(sweep_attack)를 남기고,
+# 봉은 바람을 밀어낸다(cloud). 같은 '선'이라도 창은 점으로 찌르고(enchanted_hit) 검은 획으로 벤다.
+# 키 = skills.yml weapon_classes.registry + 무관 + 짐승(NPC)
+weapon_styles:
+  검:      { verb: 벤다,   arc: sweep_attack, thrust: sweep_attack,   trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.1 } }
+  도:      { verb: 내려벤다, arc: sweep_attack, thrust: sweep_attack, trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.9 } }
+  창:      { verb: 찌른다, arc: cloud,        thrust: enchanted_hit, trail: enchanted_hit, swing: { key: "item.trident.throw", volume: 0.6, pitch: 1.3 } }
+  봉:      { verb: 후려친다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 0.8 } }
+  단검:    { verb: 찌른다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.6 } }
+  암기:    { verb: 던진다, arc: enchanted_hit, thrust: enchanted_hit, trail: enchanted_hit, swing: { key: "entity.arrow.shoot", volume: 0.6, pitch: 1.5 } }
+  활:      { verb: 쏜다,   arc: enchanted_hit, thrust: enchanted_hit, trail: enchanted_hit, swing: { key: "entity.arrow.shoot", volume: 0.8, pitch: 1.0 } }
+  맨손:    { verb: 지른다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.player.attack.knockback", volume: 0.6, pitch: 1.2 } }
+  권갑:    { verb: 지른다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.player.attack.knockback", volume: 0.7, pitch: 1.0 } }
+  겸:      { verb: 걸어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+  월아산:  { verb: 휘두른다, arc: sweep_attack, thrust: enchanted_hit, trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.7 } }
+  구:      { verb: 찍는다, arc: cloud,        thrust: enchanted_hit, trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.7, pitch: 0.9 } }
+  중병기:  { verb: 짓뭉갠다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.6 } }
+  부:      { verb: 찍어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.9, pitch: 0.8 } }
+  무관:    { verb: 움직인다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.4 } }
+  짐승:    { verb: 덮친다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.wolf.growl", volume: 0.8, pitch: 0.9 } }
+
+# ══════════════════════════════════════════════════════════════════════
+#  무공·초식별 모션 — skill_mechanics.yml skills 33종 전수
+# ══════════════════════════════════════════════════════════════════════
+# 【커버리지】 skill_mechanics.yml 의 모든 무공, 그 모든 초식(콤보 칸)이 여기 한 줄씩 있어야 한다.
+#   steps[i].trail 은 skill_mechanics combo[i].type (또는 단발형의 type) 과 **같아야 한다** (불변식 ㄴ).
+# 초식이 서로 달라 보이는 수단 3개 (파티클 종류를 바꾸는 것은 마지막 수단이다 — 팔레트가 13장뿐이므로):
+#   ① 궤적의 모양 (호/선/원/돌/시) — 히트박스가 이미 다르다. 그것을 그대로 그린다.
+#   ② 소리의 음높이(pitch) — 같은 검이라도 쾌검(음풍검 1.6)과 중검(제왕검형 0.5)은 귀로 갈린다.
+#   ③ 강조(accent) — 마무리 타(finisher)에만 붙는 한 개의 획. "이번 것이 무겁다"는 신호.
+skills:
+  # ── 민간·낭인 ──
+  taejo_jangkwon:
+    name: "태조장권"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.3 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.4 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.9 } }   # 붕권 — 3타는 무겁다
+
+  cheolsan_go:
+    name: "철산고"
+    style: 맨손
+    steps:
+      - { trail: 돌, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.7 } }
+
+  yeopho_gungsul:
+    name: "엽호궁술"
+    style: 활
+    steps:
+      - { trail: 시, count: 1, sound: { key: "entity.arrow.shoot", volume: 0.9, pitch: 1.0 } }
+    charge_hint: "시위를 당기는 14틱 — 응집이 아니라 '조준'이다 (격이 없어도 텔레그래프가 있다)"
+
+  ohodanmun_chang:
+    name: "오호단문창"
+    style: 창
+    steps:
+      - { trail: 선, count: 2, sound: { key: "item.trident.throw", volume: 0.6, pitch: 1.4 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "item.trident.throw", volume: 0.8, pitch: 1.1 } }
+
+  hwalin_chimbeop:
+    name: "활인침법"
+    style: 무관
+    steps:
+      - { trail: 시전, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.5, pitch: 1.8 } }
+
+  # ── 하오문·뒷골목 ──
+  biyeon_dangeom:
+    name: "비연단검술"
+    style: 단검
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.7 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.8 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.9 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.7, pitch: 1.6 } }
+
+  gwisik_sul:
+    name: "귀식술"
+    style: 무관
+    steps:
+      - { trail: 태세, particle: soul, count: 3, sound: { key: "block.sculk_sensor.clicking_stop", volume: 0.5, pitch: 0.8 } }
+
+  # ── 화산파 ──
+  yukhap_geom:
+    name: "육합검"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.1 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+      - { trail: 호, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.9 } }   # 3타 = 발경 라이더
+
+  maehwa_bo:
+    name: "매화보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.4, pitch: 1.8 } }   # 잔상
+
+  maehwa_geombeop:
+    name: "매화검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.3 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 원, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.8 } }   # 광역 마무리 — 매화만개의 선행
+
+  maehwa_geomjin:
+    name: "매화검진"
+    style: 검
+    steps:
+      - { trail: 진, count: 2, sound: { key: "block.beacon.activate", volume: 0.7, pitch: 1.5 } }
+
+  maehwa_cham:
+    name: "매화참"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.4 } }   # 쾌속 찌르기 — 높은 음
+
+  maehwa_naksu:
+    name: "매화낙수"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.1 } }   # 꽃이 진다 — 사방으로
+
+  maehwa_jeomjeom:
+    name: "매화점점"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.6 } }   # 점을 찍듯 — 가볍고 잦다
+
+  # ── 소림사 ──
+  nahan_kwon:
+    name: "나한권"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.0 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.8, pitch: 0.9 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.7 } }
+
+  nahan_bokho:
+    name: "나한복호"
+    style: 맨손
+    steps:
+      - { trail: 돌, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.8 } }   # 엎드린 범 — 몸으로 덮친다 (선딜 8틱)
+
+  geumgang_bokma:
+    name: "금강복마권"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.5 } }   # 복마 — 선딜 10틱, 가장 낮은 주먹
+
+  geumgang_budong:
+    name: "금강부동신법"
+    style: 무관
+    steps:
+      - { trail: 태세, count: 4, sound: { key: "block.anvil.land", volume: 0.7, pitch: 0.5 } }   # 부동 — 쇠가 땅에 박히는 소리
+
+  # ── 무당파 ──
+  saryang_balcheongeun:
+    name: "사량발천근"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "block.amethyst_block.chime", volume: 0.5, pitch: 1.5 } }   # 넉 냥으로 천 근을 — 힘이 아니라 결
+
+  taegeuk_kwon:
+    name: "태극권"
+    style: 맨손
+    steps:
+      - { trail: 가드태세, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.5, pitch: 0.9 } }
+
+  taegeuk_geom:
+    name: "태극검"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }   # 원을 그리는 반격 검
+
+  jewoon_jong:
+    name: "제운종"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.phantom.flap", volume: 0.5, pitch: 1.6 } }   # 수직 이동 — 무당의 지문
+
+  # ── 남궁세가 ──
+  changgung_geom:
+    name: "창궁무애검"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.8 } }
+
+  namgung_jehwang_geom:
+    name: "제왕검형"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.5 } }   # 검로 12틱 텔레그래프 — 가장 낮은 음
+
+  changgung_ilseom:
+    name: "창궁일섬"
+    style: 검
+    steps:
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.2 } }   # 한 줄기 섬광 — 창궁의 쾌검
+
+  # ── 사천당가 ──
+  dangmun_bisu:
+    name: "당문비수술"
+    style: 암기
+    steps:
+      - { trail: 시, count: 2, sound: { key: "entity.arrow.shoot", volume: 0.6, pitch: 1.7 } }   # 쌍비수
+
+  chilbo_dokjang:
+    name: "칠보독장"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: ash, count: 3, finisher: true, sound: { key: "entity.witch.throw", volume: 0.7, pitch: 0.9 } }   # 독 — 재가 흩날린다
+
+  manchon_hwau:
+    name: "만천화우"
+    style: 암기
+    steps:
+      - { trail: 시, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.arrow.shoot", volume: 1.0, pitch: 1.2 } }   # 손이 하늘로 — 16틱
+
+  bihong_chim:
+    name: "비홍침"
+    style: 암기
+    steps:
+      - { trail: 시, count: 1, sound: { key: "entity.arrow.shoot", volume: 0.5, pitch: 1.9 } }   # 침 한 대 — 가장 작고 가장 높은 소리
+
+  # ── 개방 ──
+  chwipalseon_bo:
+    name: "취팔선보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: ash, count: 3, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.1 } }   # 취보 — 비틀거리는 잔상
+
+  tagu_bongbeop:
+    name: "타구봉법"
+    style: 봉
+    steps:
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 0.9 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.8 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.6 } }
+
+  chwiho_bunggyeok:
+    name: "취호붕격"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, particle: ash, sound: { key: "entity.generic.drink", volume: 0.7, pitch: 0.9 } }   # 취권 — 비틀거리며 친다 (취기가 흩날린다)
+
+  # ── 관군 ──
+  chamma_dobeop:
+    name: "참마도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.7 } }   # 내려베기 — 갑주를 가른다
+
+  # ── 녹림·사파 ──
+  sando_sippallo:
+    name: "산도십팔로"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.1 } }
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.9 } }
+
+  heuksal_dobeop:
+    name: "흑살도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.2 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, particle: soul, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.8 } }   # 파격 — 가드·패링을 관통한다 (그림자가 낀다)
+
+  heuksal_dansu:
+    name: "흑살단수"
+    style: 도
+    steps:
+      - { trail: 선, particle: soul, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.9, pitch: 0.9 } }   # 흑살의 단수 — 그림자가 낀 한 칼
+
+  eumpung_geom:
+    name: "음풍검"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.8 } }   # 쾌검 — 가장 높은 음
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.9 } }
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.5 } }
+
+  # ── 살막 ──
+  muyeong_bisu:
+    name: "무영비수"
+    style: 단검
+    steps:
+      - { trail: 선, particle: soul, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.6, pitch: 1.4 } }   # 일격 이탈 — 소리가 작다 (은신의 값)
+
+  # ── 혈교 ──
+  hyeolsu_magong:
+    name: "혈수마공"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: crimson_spore, count: 4, finisher: true,
+          sound: { key: "entity.wither.shoot", volume: 0.7, pitch: 0.6 } }   # 【채색 예외】 흡성 — 붉은 점이 곧 경고다
+
+  # ── 잡기 ──
+  geumna_su:
+    name: "금나수"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.8 } }   # 관절기 — 파격
+
+  # ── 심법 태세 (정본은 simbeop.yml — 여기는 모션만) ──
+  jeongsim_geomgyeol:
+    name: "정심검결"
+    style: 검
+    steps:
+      - { trail: 가드태세, count: 3, sound: { key: "block.amethyst_block.chime", volume: 0.6, pitch: 1.2 } }
+
+  # ══════════════════════════════════════════════════════════════════
+  #  15문파 계보 (docs/design/sect_lineage.md) — 문파가 궤적으로 갈린다
+  # ══════════════════════════════════════════════════════════════════
+  # 【문파의 지문 — 무엇으로 가르는가】 파티클 종류는 마지막 수단이다 (팔레트 13장). 앞의 셋으로 가른다:
+  #   ① 궤적의 짜임 — 히트박스가 이미 다르다. 그것을 그대로 그린다.
+  #        화산 호→원 (꽃이 벌어진다) · 남궁 선 (가장 길다) · 무당 원으로 닫는다 ·
+  #        점창 선·선·선·선 (네 번 다 찌른다) · 청성 돌로 연다 (검 계보 유일) ·
+  #        해남 짧은 호와 역수의 선 · 팽가 호에서 내려베는 선 · 개방 150° 의 호
+  #   ② 음높이 — 점창 1.85~1.95 (전 무공 최고) ↔ 종남 0.45~0.85 (전 무공 최저). 눈을 감아도 문파가 갈린다.
+  #        같은 검이라도 쾌검과 중검은 **귀로** 먼저 갈린다.
+  #   ③ 텔레그래프 — 종남 +3 (가장 크게 예고한다) · 점창 0 (예고하지 않는다) ·
+  #        곤륜 무성무색 **−9 (응집이 아예 없다 — 전 무공 유일. 소리도 안 난다)**
+  #
+  # ── 화산파 (계보) — 호로 열고 **원으로 진다**: 꽃이 벌어지는 짜임 ──
+  nagyeong_geom:
+    name: "낙영검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.35 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.25 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.05 } }   # 떨어지는 꽃잎 하나 (발경 라이더)
+
+  maehwa_nanman_geom:
+    name: "매화난만검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.30 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.10 } }
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.85 } }   # 난만(爛漫) — 선딜 11틱에 검기가 원을 연다
+
+  # ── 남궁세가 (계보) — **선이 가장 길다** (7.5m). 낮은 음 · 큰 예고 ──
+  daeyeon_geom:
+    name: "대연검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.00 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.95, pitch: 0.75 } }
+
+  changgung_daeyeon_geom:
+    name: "창궁대연검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.55 } }   # 검로가 12틱 서 있다 — 보고도 못 피한다
+
+  # ── 사천당가 (계보) — 손을 떠나는 것 (시). 가장 높고 가장 잦다 ──
+  dangmun_bijeop:
+    name: "당문비접표"
+    style: 암기
+    steps:
+      - { trail: 시, count: 2, finisher: true,
+          sound: { key: "entity.arrow.shoot", volume: 0.7, pitch: 1.75 } }   # 네 마리 나비 — 궤가 넷으로 갈린다 (hit_count 4)
+
+  # ── 하북팽가 (계보) — 호에서 **내려베는 선**으로. 도의 무게 (음이 낮다) ──
+  gaesan_do:
+    name: "개산도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.75 } }   # 산을 연다 — 흙이 튄다
+
+  honwon_do:
+    name: "혼원도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.85, pitch: 0.80 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.60 } }   # 도신이 운다 — 벼락의 예고
+
+  byeokryeok_do:
+    name: "벽력도법"
+    style: 도
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.50 } }   # 파격 — 11틱 보인다. 그래도 막을 수 없다
+
+  # ── 소림사 (계보) — 리치 2.4 (최단). 대신 **네 번** 친다 ──
+  sorim_kwonbeop:
+    name: "소림권법"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.10 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.05 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.8, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.70 } }   # 108수의 끝 — 4타에 발경
+
+  banya_jang:
+    name: "반야장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.60 } }   # 장심(掌心) — 여래신장의 아래층
+
+  # ── 무당파 (계보) — **원으로 닫는다**. 마무리가 사방이다 (반격의 결) ──
+  yuun_geom:
+    name: "유운검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.15 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.05 } }
+      - { trail: 원, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.95 } }   # 구름이 감긴다 — 원을 그린다
+
+  jinmu_geom:
+    name: "진무검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.10 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.00 } }
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.85 } }   # 검이 원을 닫는다
+
+  # ── 개방 (계보) — 취기가 흩날린다(ash) · 봉은 **150° 를 훑는다** (최광각) ──
+  chwikwon:
+    name: "취권"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.20 } }
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.10 } }
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.85 } }   # 휘청이다 갑자기 곧게 온다
+
+  gaebang_bongbeop:
+    name: "개방봉법"
+    style: 봉
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.75, pitch: 0.95 } }   # 150° — 포위를 푸는 획
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.70 } }   # 먼지가 인다
+
+  # ── 곤륜파 (계보) — 경공의 문파. **무성무색은 응집도 소리도 없다 (전 무공 유일)** ──
+  yangui_geom:
+    name: "양의검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.30 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.10 } }   # 두 획이 엇갈린다 — 음양
+
+  museong_musaek:
+    name: "무성무색"
+    style: 검
+    # 【전 무공 유일 — 텔레그래프가 없다】 telegraph_boost −9 는 응집 파티클을 0 으로 만들고
+    #   (SkillListener.telegraph: n ≤ 0 이면 발행하지 않는다) **응집음까지 함께 죽인다**
+    #   (scheduleTelegraph 는 per ≤ 0 에서 되돌아가므로 charge 사운드도 안 난다).
+    #   그래서 이 검은 **오는 것이 보이지도 들리지도 않는다** — 그것이 곤륜 중급의 값이다.
+    #
+    # 【2026-07 — 무음이 완결됐다】 지난 판은 **스윙음만** −60% 로 내릴 수 있었다. 타격음은 격의 것
+    #   (grades[].sounds.impact)이라 초식이 손댈 칸이 없었고, 그래서 조용히 다가온 검이 **닿는 순간
+    #   여느 검과 똑같이 울었다**. 이제 `sound_scale` 이 그 칸이다 — 이 초식이 내는 **모든** 소리
+    #   (스윙음·응집음·**타격음**)가 함께 0.4 배로 내려간다. 등록부만으로 무음이 완결된다.
+    #   그래서 스윙음의 volume 은 **검의 정상값(0.7/0.7/0.8)으로 되돌렸다** — 두 번 깎이면 안 된다.
+    #   다만 **타격 파티클은 그대로다** — 맞았다는 사실까지 지우면 화면이 판정에 대해 거짓말하는 것이다.
+    steps:
+      - { trail: 선, count: 1, telegraph_boost: -9, sound_scale: 0.4,
+          sound: { key: "entity.player.attack.weak", volume: 0.70, pitch: 1.45 } }
+      - { trail: 선, count: 1, telegraph_boost: -9, sound_scale: 0.4,
+          sound: { key: "entity.player.attack.weak", volume: 0.70, pitch: 1.40 } }
+      - { trail: 호, count: 2, finisher: true, telegraph_boost: -9, sound_scale: 0.4,
+          sound: { key: "entity.player.attack.weak", volume: 0.80, pitch: 1.25 } }
+
+  taeheo_geom:
+    name: "태허검법"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.90 } }   # 원이 비어 있다 — 그 안이 전부 검이다
+
+  dabun_jong:
+    name: "답운종"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 4, sound: { key: "entity.phantom.flap", volume: 0.6, pitch: 1.40 } }   # 거리 10 — 제운종(8)보다 멀리 간다. 잔상이 더 길다
+
+  # ── 종남파 (계보) — **가장 느리고 가장 낮다**. 예고가 가장 크다 (숨지 않는다) ──
+  gusang_geom:
+    name: "구상검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.85, pitch: 0.85 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.65 } }   # 공기가 밀린다
+
+  cheongang_geom:
+    name: "천강검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, telegraph_boost: 1, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.80 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.60 } }   # 은하가 흐른다 — 검신에 별빛
+
+  taeeul_bungwang_geom:
+    name: "태을분광검"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 3,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.45 } }   # 13틱 — 전 무공 최장 선딜 · 최저 음. 종남의 검은 숨지 않는다
+
+  # ── 점창파 (계보) — **가장 빠르고 가장 높다**. 네 번 다 찌른다 · 예고가 없다 ──
+  bungwang_geom:
+    name: "분광검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.85 } }
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.90 } }
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.95 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.7, pitch: 1.70 } }   # 빛 한 줄 — 이미 지나갔다
+
+  hoepung_muryu_geom:
+    name: "회풍무류검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.80 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.75 } }   # 궤가 둘로 보인다 — 찌르다 벤다
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.85 } }
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.60 } }
+
+  bungwang_sippalsu:
+    name: "분광십팔수"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.8, pitch: 1.90 } }   # 다섯 점의 빛 — 선딜 3틱. 세는 사이에 끝난다 (예고 없음)
+
+  # ── 청성파 (계보) — **검 계보 유일: 돌(突)로 연다**. 바람의 음 (높다) ──
+  cheongpung_geom:
+    name: "청풍검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.40 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.65, pitch: 1.30 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.10 } }
+
+  neungpung_geom:
+    name: "능풍검법"
+    style: 검
+    steps:
+      - { trail: 돌, particle: cloud, count: 2, sound: { key: "entity.phantom.flap", volume: 0.5, pitch: 1.35 } }   # 바람을 밟고 들어간다 — 검 계보 유일의 돌진 개시
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.25 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.05 } }
+
+  songpung_geom:
+    name: "송풍검법"
+    style: 검
+    steps:
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.00 } }   # 솔잎이 인다 — 받아넘기며 벤다 (흘리기 +3틱)
+
+  # ── 해남파 (계보) — 짧고 날카롭다. **역수·좌수** — 어느 손에서 나올지 모른다 ──
+  haepung_geom:
+    name: "해풍검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.50 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.55 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.35 } }   # 짠 바람 — 획이 짧다
+
+  yeoksu_geom:
+    name: "역수검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.60 } }   # 칼등이 먼저 온다
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.50 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.30 } }
+
+  jwasu_khwaegeom:
+    name: "좌수쾌검"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.8, pitch: 1.70 } }   # 왼쪽에서 빛 — 보던 손이 아니다 (가드 각 바깥)
+
+  # ── NPC 전용 표본 (대칭 원칙 — NPC 도 같은 등록부를 탄다) ──
+  galho_sando:
+    name: "갈호의 산도"
+    style: 도
+    steps:
+      - { trail: 돌, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.8 } }   # 자세 낮춤 + 경로 표시 10틱
+
+  beast_pounce:
+    name: "덮치기"
+    style: 짐승
+    steps:
+      - { trail: 돌, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.wolf.growl", volume: 1.0, pitch: 0.8 } }   # 짐승도 예고한다 — 몸을 낮추는 8틱
+
+# ══════════════════════════════════════════════════════════════════════
+#  오의(奧義) — ultimate_arts.yml legacy_arts 전수. 한 번 보면 잊지 못할 것
+# ══════════════════════════════════════════════════════════════════════
+# 【읽힘 요건】 오의는 격 사다리의 어느 칸과도 헷갈리면 안 된다. 구분 수단 3개:
+#   ① 응집 고리 — 사방에서 몸으로 **빨려드는** 고리 (다른 어떤 모션도 고리를 쓰지 않는다)
+#   ② 개시 섬광 — flash 1개 + 뇌격음 (팔레트에서 flash 를 쓰는 것은 오의와 심검뿐이다)
+#   ③ 이름 — 32m 안의 모든 눈에 오의명 타이틀 (world_weight: 시전 목격 = 강도 3 소문)
+# 예산: emitPriority — 생략되지 않고 깎인다. ultimate_per_tick_max 48.
+ultimates:
+  maehwa_mangae:
+    name: "매화만개"
+    trail: 원                     # ultimate_arts type.hitbox 와 같아야 한다
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.33, extra: 0.08 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.5 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.3 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.6 }]
+
+  taegeuk_hyegeom:
+    name: "태극혜검"
+    trail: 가드태세               # 반격 오의 — 벨 것을 찾지 않는다. 기다린다 (hitbox 가 없다)
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 20, spread_ratio: 0.25, extra: 0.05 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.7 }]
+      release: [{ key: "item.trident.return", volume: 1.0, pitch: 1.2 }]
+      hit: [{ key: "item.trident.return", volume: 1.0, pitch: 1.2 }]
+
+  jewang_gunrim:
+    name: "제왕검형·군림"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: explosion, core_count: 1 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.25, extra: 0.10 }
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.6 }]
+      hit: [{ key: "block.anvil.destroy", volume: 1.0, pitch: 0.7 }]
+
+  hyeolhae_malli:
+    name: "혈해만리"
+    trail: 원
+    charge: { particle: crimson_spore, ring_points: 8, per_point: 2, core: crimson_spore, core_count: 6 }
+    burst:  { particle: crimson_spore, count: 36, spread_ratio: 0.33, extra: 0.04 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "entity.wither.spawn", volume: 0.8, pitch: 1.4 }]
+      release: [{ key: "entity.wither.shoot", volume: 1.0, pitch: 0.5 }]
+      hit: [{ key: "entity.generic.drink", volume: 0.8, pitch: 0.5 }]   # 약탈 — 마시는 소리
+
+  # ══════════════════════════════════════════════════════════════════
+  #  문파 전승 오의 17종 (ultimate_arts.yml · docs/design/sect_lineage.md)
+  # ══════════════════════════════════════════════════════════════════
+  # 【궤적】 원(圓)·선(線)뿐이다 — 새 궤적 타입이 없으므로 도구도 안 고친다 (ULT_TRAIL 그대로).
+  # 【응집 고리가 오의의 얼굴이다】 ring_points × per_point + core_count 가 곧 "얼마나 크게 모으는가"다.
+  #   선딜이 길수록 고리가 크다 (혼원벽력 22틱 = 가장 오래 모은다) — 그리고 예산이 그 상한을 잡는다:
+  #   ring × (선딜÷2) + burst + 타격풀 48 ≤ ultimate_per_cast_max 320.
+  # 【두 예외 — 예외 자체가 정보다】
+  #   · 무형지독 — **응집이 없다. 개시 섬광도 없다. 응집음도 없다.** 오의인데 아무 예고가 없는 유일한 것.
+  #     터진 뒤의 재(ash)만 보인다 — 그때는 이미 마셨다.
+  #   · 사일검법 — 선딜 6틱(최속). 고리를 그릴 시간이 없다 (emits 3) → 가장 작은 고리.
+
+  # ── 화산파 ── 매화는 벌어진다 (원)
+  isipsasu_maehwa:
+    name: "이십사수매화검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.33, extra: 0.07 }   # 여덟 번 벤다 — 전 오의 최다단
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.9, pitch: 1.5 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.5 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.8 }]     # 여덟 번 — 가장 잦고 가장 높다
+
+  jaha_nanhwa:
+    name: "자하난화검수"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 38, spread_ratio: 0.30, extra: 0.09 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.8 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.1 }]
+      hit: [{ key: "block.conduit.activate", volume: 0.9, pitch: 1.3 }]         # 자하(紫霞)가 그 자리에 남는다
+
+  # ── 남궁세가 ── 하늘은 끝이 없다 (원) · 번개는 한 줄이다 (선)
+  changgung_muae:
+    name: "창궁무애검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 40, spread_ratio: 0.25, extra: 0.10 }   # 반경 8 — 전 오의 최대
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.6 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.9 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.9, pitch: 0.9 }]
+
+  seomjeon_sipsam:
+    name: "섬전십삼검뢰"
+    trail: 선
+    charge: { particle: electric_spark, ring_points: 6, per_point: 2, core: end_rod, core_count: 2 }   # 선딜 10 — 번개는 예고하지 않는다
+    burst:  { particle: end_rod, count: 36, spread_ratio: 0.20, extra: 0.14 }   # 열셋이 한 줄에 겹친다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.9 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.7 }]
+      hit: [{ key: "item.trident.throw", volume: 0.8, pitch: 1.6 }]
+
+  # ── 사천당가 ── 하늘을 덮는다 (원) · 그리고 보이지 않는 것 (원)
+  manchon_nakhwa:
+    name: "만천화우·낙화"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: ash, count: 36, spread_ratio: 0.40, extra: 0.06 }       # 반경 10 — 재가 하늘을 덮는다 (독)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "entity.arrow.shoot", volume: 0.8, pitch: 1.4 }]
+      release: [{ key: "entity.arrow.shoot", volume: 1.0, pitch: 0.8 }]
+      hit: [{ key: "entity.witch.throw", volume: 0.8, pitch: 1.1 }]
+
+  muhyeong_jidok:
+    name: "무형지독"
+    trail: 원
+    # 【전 오의 유일 — 예고가 없다】 응집 고리 0 · 개시 섬광 없음 · 응집음 없음.
+    #   "보이지 않는다"가 이 오의의 본체다 (텔레그래프 없음 · 기독 20). 다른 오의는 전부 고리로 예고한다.
+    #   그래도 **터진 뒤의 재는 보인다** — 맞았다는 사실까지 지우면 그것은 판정이 거짓말하는 것이다.
+    charge: { particle: ash, ring_points: 0, per_point: 0, core: ash, core_count: 0 }
+    burst:  { particle: ash, count: 40, spread_ratio: 0.45, extra: 0.02 }       # 터지지 않는다 — **퍼진다** (느리게, 넓게)
+    accent: { particle: null, count: 0 }                                        # 섬광이 없다 — 개시를 알리지 않는다
+    sounds:
+      charge: []
+      release: [{ key: "entity.witch.throw", volume: 0.4, pitch: 0.6 }]         # 숨소리만 한 소리
+      hit: [{ key: "entity.witch.throw", volume: 0.5, pitch: 0.9 }]
+
+  # ── 하북팽가 ── 다섯 범이 문을 끊는다 (선) · 벼락은 모였다 떨어진다 (원)
+  oho_danmun_do:
+    name: "오호단문도"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: crit, core_count: 2 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.22, extra: 0.12 }   # 파격 — 가드를 관통한다 (전 오의 유일)
+    accent: { particle: explosion, count: 1 }                                   # 터지는 것이 아니라 **끊는** 것이다
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.5 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.7 }]
+      hit: [{ key: "block.anvil.destroy", volume: 1.0, pitch: 0.8 }]            # 문이 끊긴다 — 쇠가 부러지는 소리
+
+  honwon_byeokryeok_do:
+    name: "혼원벽력도"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }   # 22틱 — 가장 오래 모은다
+    burst:  { particle: end_rod, count: 28, spread_ratio: 0.30, extra: 0.14 }
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.5 }]
+      hit: [{ key: "block.anvil.land", volume: 1.0, pitch: 0.6 }]               # 병기를 든 손을 친다 — 쇠가 땅에 떨어진다
+
+  # ── 소림사 ── 백 보 밖을 친다 (선) · 손바닥이 내려온다 (원)
+  baekbo_singwon:
+    name: "백보신권"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: crit, core_count: 4 }
+    burst:  { particle: end_rod, count: 30, spread_ratio: 0.12, extra: 0.16 }   # 24m — 전 오의 최장. 퍼짐이 가장 좁다 (한 줄로 간다)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.9 }]
+      release: [{ key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.5 }]   # 주먹 소리가 백 보를 간다
+      hit: [{ key: "block.anvil.land", volume: 0.9, pitch: 0.9 }]
+
+  yeorae_sinjang:
+    name: "여래신장"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 36, spread_ratio: 0.35, extra: 0.05 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.ambient", volume: 0.9, pitch: 0.7 }]        # 종소리가 아니라 **울림** — 정화의 결
+      release: [{ key: "block.beacon.activate", volume: 1.0, pitch: 0.8 }]
+      hit: [{ key: "block.conduit.activate", volume: 1.0, pitch: 1.0 }]
+
+  # ── 개방 ── 용을 항복시킨다 (선) — 지형이 무기다
+  hangryong_sippalchang:
+    name: "항룡십팔장"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: cloud, core_count: 2 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.28, extra: 0.18 }   # 넉백 8 — 퍼지는 것이 아니라 **민다** (extra 최대)
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "entity.generic.drink", volume: 0.8, pitch: 0.6 }]        # 거지의 오의 — 한 모금 마시고 시작한다
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.8 }]
+      hit: [{ key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.6 }]
+
+  # ── 곤륜파 ── 구름 위의 용 (원) · 용을 잡는 검 (선)
+  unryong_daepalsik:
+    name: "운룡대팔식"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: cloud, core_count: 4 }
+    burst:  { particle: end_rod, count: 38, spread_ratio: 0.36, extra: 0.10 }   # 여덟 번 밟고 여덟 번 벤다 (무적 20틱 — 상한)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "entity.phantom.flap", volume: 0.8, pitch: 0.9 }]         # 경공의 오의 — 발이 먼저 운다
+      release: [{ key: "entity.lightning_bolt.impact", volume: 0.9, pitch: 1.4 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.4 }]
+
+  taeheo_doryong:
+    name: "태허도룡검법"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 32, spread_ratio: 0.18, extra: 0.12 }
+    accent: { particle: explosion, count: 1 }                                   # 격을 벗긴다 — 남의 기가 터진다
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 0.7 }]
+      release: [{ key: "block.conduit.deactivate", volume: 1.0, pitch: 0.6 }]   # **남의 격이 꺼지는 소리** (전 오의 유일)
+      hit: [{ key: "block.conduit.deactivate", volume: 1.0, pitch: 0.9 }]
+
+  # ── 종남파 ── 서른여섯 검로가 여섯 방위로 (원) — 맞으면서 벤다
+  cheonha_36geom:
+    name: "천하삼십육검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.30, extra: 0.08 }
+    accent: { particle: explosion, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]   # 종남은 오의에서도 가장 낮다
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.6 }]
+      hit: [{ key: "block.anvil.destroy", volume: 0.9, pitch: 0.7 }]            # 내구 40% — 상대의 검이 운다
+
+  # ── 점창파 ── 해를 쏜다 (선) — 전 오의 최속. 예고할 시간이 없다
+  sail_geom:
+    name: "사일검법"
+    trail: 선
+    charge: { particle: electric_spark, ring_points: 4, per_point: 2, core: electric_spark, core_count: 2 }   # 선딜 6틱 — 고리를 다 그리지 못한다
+    burst:  { particle: end_rod, count: 30, spread_ratio: 0.10, extra: 0.20 }   # 아홉 점이 한 줄로 — 가장 좁고 가장 빠르다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.6, pitch: 2.0 }]  # 전 등록부 최고음 — 들렸을 때는 이미 왔다
+      release: [{ key: "item.trident.throw", volume: 1.0, pitch: 1.9 }]
+      hit: [{ key: "entity.player.attack.crit", volume: 0.9, pitch: 1.9 }]
+
+  # ── 청성파 ── 푸른 달 한 획 (선) — 그어 두고 기다린다 (설치형 참격)
+  cheongwol_geom:
+    name: "청월검법"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 6, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 28, spread_ratio: 0.16, extra: 0.03 }   # 터지지 않는다 — **그 자리에 10틱 머문다** (extra 최소)
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.8, pitch: 1.2 }]
+      release: [{ key: "block.beacon.activate", volume: 0.9, pitch: 1.3 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.2 }]     # 다가온 자가 벤다 — 획은 이미 거기 있었다
+
+  # ── 해남파 ── 여섯 획이 사방에서 (원) — 어느 손에서 나올지 모른다
+  namhae_36geom:
+    name: "남해삼십육검"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: crit, core_count: 2 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.32, extra: 0.09 }   # 가드 각(120°) 무시 — 뒤에서도 온다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.7 }]
+      release: [{ key: "entity.player.attack.sweep", volume: 1.0, pitch: 1.6 }]
+      hit: [{ key: "entity.player.attack.crit", volume: 0.8, pitch: 1.5 }]
+
+# ══════════════════════════════════════════════════════════════════════
+#  오의의 화려함(絢) — 【1차 MVP의 다른 한 끝】 사용자 지시 2026-07
+# ══════════════════════════════════════════════════════════════════════
+# 사용자의 문장 그대로: *"어검·필살기 = 다층 궤적 + 운무 + 청백색 폭발감."*
+#   그리고 못: *"형광 네온·보라/핑크 위주의 서양 판타지 느낌 금지. 반드시 먹선+청록+옥색+백색 안에서만."*
+#
+# 【세 겹 — 각각이 사용자가 이름을 댄 것이다】
+#   bloom   개시의 **청백색 폭발감** — 개시 틱에 burst 위로 겹친다.
+#           예산: burst 40 + 강조 1 + bloom 7 = 48 = ultimate_per_tick_max (**정확히 상한**)
+#   layers  **다층 궤적** — 개시 다음 틱부터 arcs 개의 호가 차례로 벌어진다 (반월형 궤적의 겹).
+#           한 겹 = points 점 × per_point 개 ⇒ 8 × 1 = 8/틱
+#   mist    **운무(雲霧)** — 구름·기류·물결. 개화가 사는 동안 몸 둘레에 낮게 깔린다. 4/틱
+#   hit     맞은 몸에서 터지는 옥·청백 (오의의 타격 — 격의 burst 와 같은 문법, 더 크다)
+#   ⇒ 개시 뒤 한 틱 최대 = layers 8 + mist 4 + (hit 은 대상 쪽) = 12 ≤ 48 ✓
+#
+# 【등록의 구조】 default 한 줄이 21종을 덮고, by_id 가 **정체를 가진 것만** 덮어쓴다.
+#   문파마다 색을 나누는 것(문파별 색 분화)은 **2차**다 — 지금 나누면 21줄이 되고, 21줄은 유지되지 않는다.
+ultimate_flourish:
+  default:
+    bloom:  { particle: dust, ink: 청백, count: 7, spread: 0.30, extra: 0.18 }
+    layers: { particle: dust, ink: 옥, arcs: 3, points: 8, per_point: 1, spread: 0.10, extra: 0.02, radius_ratio: 0.55 }
+    mist:   { particle: cloud, count: 4, spread: 0.70, extra: 0.01, ticks: 6, height: 0.4 }
+    hit:    { particle: dust, ink: 청백, count: 6, spread: 0.35, extra: 0.14 }
+
+  by_id:
+    # 【채색 예외 — 예외가 곧 정보다】 혈교의 오의는 청백이 아니다. 붉다
+    hyeolhae_malli:
+      bloom:  { particle: dust, ink: 혈, count: 7, spread: 0.30, extra: 0.18 }
+      layers: { particle: dust, ink: 혈, arcs: 3, points: 8, per_point: 1, spread: 0.10, extra: 0.02, radius_ratio: 0.55 }
+      mist:   { particle: crimson_spore, count: 4, spread: 0.70, extra: 0.01, ticks: 6, height: 0.4 }
+      hit:    { particle: dust, ink: 혈, count: 6, spread: 0.35, extra: 0.14 }
+
+    # 【전 오의 유일 — 예고도 화려함도 없다】 무형지독은 **빛나지 않는다** (독무_범람의 밝기 4 와 같은 뜻).
+    #   화려함을 0 으로 등록하는 것도 **등록**이다 — 코드가 "이건 빼자"고 결정하는 것이 아니다.
+    muhyeong_jidok:
+      bloom:  { particle: null, count: 0 }
+      layers: { particle: null, arcs: 0, points: 0, per_point: 0 }
+      mist:   { particle: ash, count: 4, spread: 0.90, extra: 0.01, ticks: 10, height: 0.2 }   # 재만 퍼진다
+      hit:    { particle: ash, count: 6, spread: 0.35, extra: 0.04 }
+
+    # 당가의 원 = 하늘을 덮는 재 — 폭발이 아니라 **퍼짐**이다 (청백 폭발은 여기 안 어울린다)
+    manchon_nakhwa:
+      bloom:  { particle: ash, count: 7, spread: 0.40, extra: 0.06 }
+      layers: { particle: dust, ink: 옥, arcs: 2, points: 8, per_point: 1, spread: 0.10, extra: 0.02, radius_ratio: 0.70 }
+      mist:   { particle: ash, count: 4, spread: 0.80, extra: 0.01, ticks: 8, height: 0.3 }
+      hit:    { particle: ash, count: 6, spread: 0.35, extra: 0.06 }
+
+# ══════════════════════════════════════════════════════════════════════
+#  사건(事件) — 격 밖의 읽힘. 무기 파괴·격돌·패링·고갈
+# ══════════════════════════════════════════════════════════════════════
+# 이 다섯은 격이 아니지만 **판단의 재료**다. 상대가 보고 결정을 바꿀 수 있어야 한다:
+#   "저 자의 검에 금이 갔다" → 한 합 더 밀어붙인다
+#   "저 자의 기가 흩어졌다" → 지금 들어간다
+events:
+  헛손질:
+    particle: cloud
+    count: 3
+    spread: 0.10
+    extra: 0.01
+    sounds: [{ key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.3 }]
+
+  다운캐스트:                     # 내력이 모자라 맨 기술로 떨어졌다 — 【빈약함이 곧 정보다】
+    particle: smoke
+    count: 4
+    spread: 0.10
+    extra: 0.01
+    sounds: [{ key: "block.fire.extinguish", volume: 0.5, pitch: 1.6 }]
+
+  격_소산:                        # 두름 유지비를 못 냈다 / 태세를 거뒀다
+    particle: smoke
+    count: 5
+    spread: 0.12
+    extra: 0.01
+    sounds: [{ key: "block.fire.extinguish", volume: 0.5, pitch: 1.6 }]
+
+  발출_불발:                      # 쏠 것이 없다 (발출엔 다운캐스트가 없다)
+    particle: smoke
+    count: 4
+    spread: 0.10
+    extra: 0.01
+    sounds: [{ key: "entity.player.attack.nodamage", volume: 0.6, pitch: 0.7 }]
+
+  호신강기_무효:                  # 하위·동격을 튕겨 냈다 (상쇄 소모는 냈다 — 공짜가 아니다)
+    particle: end_rod
+    count: 10
+    spread: 0.35
+    extra: 0.03
+    sounds: [{ key: "block.conduit.deactivate", volume: 0.8, pitch: 1.6 }]
+
+  호신강기_관통:                  # 상위 격이 강기를 갈랐다
+    particle: end_rod
+    count: 16
+    spread: 0.35
+    extra: 0.03
+    sounds: [{ key: "block.anvil.land", volume: 0.8, pitch: 0.7 }]
+
+  호신강기_붕괴:                  # 상쇄할 내력이 없다 — 다음 타격은 맨몸으로 받는다
+    particle: smoke
+    count: 8
+    spread: 0.20
+    extra: 0.02
+    sounds: [{ key: "block.glass.break", volume: 0.7, pitch: 0.8 }]
+
+  무기_균열:                      # 격돌 누적 (breaks_at 3합) — "날에 금이 간다"
+    particle: crit
+    count: 8
+    spread: 0.20
+    extra: 0.05
+    sounds: [{ key: "block.anvil.land", volume: 0.5, pitch: 1.9 }]
+
+  무기_파괴:                      # 3합째 — 그 뒤는 맨손이다
+    particle: item                # 아이템 데이터 필요 (부러진 병기 그 자체가 파편이 된다)
+    count: 20
+    spread: 0.30
+    extra: 0.08
+    sounds: [{ key: "entity.item.break", volume: 1.0, pitch: 0.8 },
+             { key: "block.anvil.destroy", volume: 0.6, pitch: 1.4 }]
+
+  무기_절단:                      # 2격 초과 — 한 합에 잘린다 (범철 vs 검강)
+    particle: item
+    count: 24
+    spread: 0.35
+    extra: 0.10
+    sounds: [{ key: "entity.item.break", volume: 1.0, pitch: 0.6 },
+             { key: "block.anvil.destroy", volume: 0.8, pitch: 1.0 }]
+
+  자기_손상:                      # 제 격을 못 견디는 쇠 — "검이 운다" (self_damage_every 3)
+    particle: crit
+    count: 6
+    spread: 0.12
+    extra: 0.02
+    sounds: [{ key: "block.anvil.land", volume: 0.4, pitch: 1.9 }]
+
+  패링_성공:                      # 태극권·정심검결의 창 (defense_states.패링)
+    particle: sweep_attack
+    count: 1
+    spread: 0.0
+    extra: 0.0
+    sounds: [{ key: "item.shield.block", volume: 0.9, pitch: 1.4 },
+             { key: "block.amethyst_block.chime", volume: 0.7, pitch: 1.8 }]
+
+  반격_오의:                      # 태극혜검 — 받은 것을 그대로 돌려준다
+    particle: end_rod
+    count: 20
+    spread: 0.40
+    extra: 0.05
+    sounds: [{ key: "item.trident.return", volume: 1.0, pitch: 1.2 }]
+
+  대성공:                         # 급소 (judgment critical_success) — 격과 무관하게 타격 위에 겹쳐 붙는다
+    particle: crit
+    count: 4                      # 심검 타격(24) + 강조(1) + 이것(4) = 29 ≤ per_point_tick_max 30
+    spread: 0.30
+    extra: 0.20
+    sounds: [{ key: "entity.player.attack.crit", volume: 0.9, pitch: 1.0 }]
+
+  흐름_충전:                      # 발동권을 얻었다 — 오의가 열린다 (읽어낸 순간)
+    particle: end_rod
+    count: 12
+    spread: 0.40
+    extra: 0.02
+    sounds: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 1.6 }]
+
+  운기조식:                       # /혼천 운기 — 앉아서 한 구간
+    particle: end_rod
+    count: 8
+    spread: 0.30
+    extra: 0.01
+    sounds: [{ key: "block.beacon.ambient", volume: 0.6, pitch: 1.2 }]
+
+  흡성:                           # 마공 — 남의 것을 빼앗는다 (혈수마공 on_hit · 혈해만리)
+    particle: crimson_spore
+    count: 12
+    spread: 0.40
+    extra: 0.02
+    sounds: [{ key: "entity.generic.drink", volume: 0.7, pitch: 0.6 }]
+
+# ══════════════════════════════════════════════════════════════════════
+#  3D 모션 (디스플레이 엔티티) — 파티클 위에 얹는 층
+# ══════════════════════════════════════════════════════════════════════
+# 【세 층 + 몸】 사용자의 정정(2026-07)을 그대로 새긴다:
+#
+#   ① 손의 병기   — 팩이 구운 3D 모델. 바닐라가 그린다. **우리는 손대지 않는다** (복제 금지)
+#   ② 날의 기     — 격을 두르면 **손에 든 병기에 겹쳐** 기가 서린다 (지속 — 태세만 잡아도 남이 안다)
+#   ③ 참격선(斬擊線) — 휘두르면 **지나간 자리**가 남는다. 만화의 검격이다. **검을 그리지 않는다**
+#   ④ 몸의 자세   — 전진·pose 로 체중을 싣는다 (팔다리 각도는 서버가 못 준다 — §body 참조)
+#
+# 【버린 설계 — 왜 버렸는지 남긴다】 병기 ItemStack 을 실은 디스플레이를 궤적에 태우는 방식은
+#   팩 게이트가 저절로 충족되는 이점이 있었으나, 화면에서 **검이 하나 더 복제되어 허공을 나는 것**으로
+#   보였다. 보이는 결과가 틀렸으면 이점은 의미가 없다. 참격선은 **획 모델**이 그린다.
+#   (use_held 는 남겨 뒀다 — 던진 암기와 손을 떠난 어검, 즉 **정말로 날아가는 물건**의 몫이다.)
+#
+# ─── 불변식 (파티클 층의 4개에 둘이 붙는다) ───
+#   ㅁ. 【디스플레이는 덧칠이다】 이 층이 통째로 실패해도(팩 없음·예산 초과·미등록) 파티클 층은
+#      그대로 돈다. require-resource-pack=false 는 여기서도 불가침이다 — 3D 는 특권이 아니라 사치다.
+#   ㅂ. 【획은 히트박스를 벗어나지 못한다】 range·angle 은 판정이 준다. 등록부는 reach(≤1.0)로
+#      **줄일 수만** 있다. 히트박스 3.5m 에 6m 획을 그릴 방법이 이 구조엔 없다.
+#
+# ─── 팩 유무의 분기 ───
+#   팩 수락 → base 아이템에 item_model(key)을 얹는다 → 팩이 구운 3D 형체
+#   팩 거절 → fallback 바닐라 아이템. **fallback 이 null 이면 아무것도 띄우지 않는다**
+#            (그 자리는 파티클 층이 지킨다 — 참격선·날의 기가 그렇다: 억지 폴백이 더 나쁘다)
+#   use_held → 시전자의 아이템 그 자체 (팩 유무와 무관 · 던진 물건에만)
+display:
+
+  # ─── 예산 (performance.yml vfx_entities) ───
+  # 【근거】 20인 군집(load_test.combat_cluster_size)이 쉬지 않고 치는 정상 상태:
+  #   · 참격선 — 20인 × 1개 (수명 ≈ 10틱 / 스윙 간격 ≥ 9틱)          ⇒ 동시 ≈ 20
+  #   · 날의 기 — 20인 × 1개 (지속 — 격을 두른 동안 계속)            ⇒ 동시 ≈ 20
+  #   · 발출·투척 — 20인 × 1개 (수명 ≈ 14틱 / 쿨 40틱)               ⇒ 동시 ≈ 7
+  #   · 오의 — 예약분 16
+  #   합 63 ≤ 강등선 100 ≤ 전역 120.  호신강기 고리(4장/인)에 남는 여유 = 100 − 47 = 53 ⇒ 13인분
+  #   ※ 한 사람은 **공격 태세(날의 기)이거나 방어 태세(고리)이지 둘 다일 수 없다** (armed 는 하나다)
+  #     — 그래서 최악치가 겹치지 않는다. 20인 전원 호신강기(80장)면 고리가 먼저 강등된다.
+  budget:
+    global_cap: 120               # = performance.yml vfx_entities.global_cap (audit ⑧이 대조)
+    max_lifetime_ticks: 60        # = performance.yml vfx_entities.max_lifetime_ticks
+    degrade_at: 100               # 살아 있는 형체가 이 수를 넘으면 새 요청 거절 → 파티클로 강등
+    reserve_for_ultimate: 16      # 오의 몫 — 잡졸의 참격이 오의의 자리를 먹지 못한다
+    per_cast_max: 4
+    per_player_max: 8             # 한 몸: 고리 4 + 참격선 1 + 날의 기 1 + 투척 1 + 여유 1
+    view_range: 0.5               # 0.5 × 64m = 32m (파티클 cull_beyond 와 같은 눈금)
+    heartbeat_ticks: 12           # 지속 형체(날의 기·고리)의 심장박동 — 갱신이 끊기면 스스로 사라진다
+    slash_min_ticks: 3            # 참격선은 이보다 짧을 수 없다 (3틱 미만은 보간이 못 따라간다)
+    slash_max_ticks: 18           # 이보다 길 수도 없다 (부·중병기의 무게도 여기서 끊긴다)
+
+  # ══════════════════════════════════════════════════════════════════
+  #  ★ 획이 서는 자리 (原點) — **팔이 지나가는 자리에 세운다**
+  # ══════════════════════════════════════════════════════════════════
+  # 【2026-07 — 획이 몸 안에서 나오던 병】 참격선의 원점은 **시전자의 눈**이었다
+  #   (SkillDisplay: eyeLocation − 0.25 · 앞으로 미는 값이 **없었다**). 그래서:
+  #     · 3인칭 — 획이 얼굴·가슴을 **관통**한다 (몸 안에서 나오는 느낌)
+  #     · 1인칭 — 카메라가 획의 **안쪽**에 있다 ⇒ **제 검의 궤적을 제 눈이 못 본다**
+  #   사용자가 인게임에서 본 것이 그것이다. 그래서 자리를 **등록부로 끌어올린다** — 코드가 지어내지 않는다.
+  #
+  # 【세 칸】 시전자의 발을 원점으로, 몸을 기준으로 잰다:
+  #   forward  시선(수평)으로 **앞으로 미는 거리** (m) — 몸을 안 뚫고 나오게. 1인칭의 값이 여기 있다
+  #   height   **발바닥에서 잰 절대 높이** (m) — 눈(1.62)이 아니라 **어깨/가슴**이 팔이 지나가는 자리다
+  #   lateral  **오른쪽으로** 미는 거리 (m) — 바닐라 플레이어는 오른손잡이다 (음수 = 왼쪽)
+  #   centered 참(true) 이면 **몸에 겹치는 것이 옳다**는 선언 (고리). 몸 안 검사에서 면제된다 —
+  #            면제는 **등록부가 소리내어 청구**해야 한다 (코드가 예외를 지어내지 않는다)
+  #
+  # 【초기값의 근거 — 바닐라 플레이어 모델 실측】 (1px = 1.8m ÷ 32px = 0.05625m)
+  #   · 키 1.8m · 눈 1.62m · 히트박스 폭 0.6m ⇒ **몸의 반지름 0.30m**
+  #   · 몸통 상단(= 어깨) = 모델 y 24px × 0.05625 = **1.35m**  ← height 의 근거
+  #   · 팔 길이 12px = **0.675m** · 오른어깨는 중심에서 6px = **0.34m** 오른쪽
+  #   ⇒ 휘두르는 손은 몸 앞 0.5~0.9m · 높이 1.1~1.5m 를 지난다. 획의 중심을 그 안에 놓는다.
+  #   · 1인칭 검산: FOV 70°(세로 반각 35°) — 앞 0.85m 에서 눈보다 0.60m 아래까지 화면에 든다.
+  #     height 1.35 는 눈보다 **0.27m** 아래다 ⇒ **화면 안이다** (제 검의 궤적이 제 눈에 보인다)
+  #   · lateral 0.15 는 **임의**다 (어깨는 0.34m 오른쪽이지만 획은 몸 앞을 **가로지르므로** 그 중심은
+  #     어깨보다 안쪽이다 — 0.34 를 그대로 쓰면 획이 오른쪽으로 쏠린다). 눈으로 맞출 값이다.
+  #
+  # 【사거리와의 관계 — 너무 밀면 허공에 뜬 판자다】 forward 는 획의 길이에 매인다:
+  #     실효 forward = clamp(forward, 몸반지름+여유, 획길이 × forward_max_ratio)
+  #   맨손(길이 2.5×0.60 = 1.5m)의 획은 0.675m 까지만 나간다 — 주먹의 획이 창처럼 앞에 뜨지 않는다.
+  #   검(3.0×0.95 = 2.85m)은 1.28m 까지 허용되므로 0.85 가 그대로 선다.
+  #   **아래 한계(몸반지름+여유)가 위 한계보다 세다** — 어떤 값을 적어도 획은 몸 밖에 선다.
+  #
+  # 【인게임에서 맞춘다】 이 값들은 **눈으로 봐야 정해진다**. `/혼천 획위치` 가 실시간으로 밀고 당긴다:
+  #     /혼천 획위치                     지금 값 + 몸 안 검사 + 여기 적을 줄
+  #     /혼천 획위치 호 앞 1.2           밀고 → **즉시 획을 한 번 긋는다** (한 번 접속으로 맞춘다)
+  #     /혼천 획위치 적기                맞춘 값을 이 블록에 그대로 붙일 수 있게 뽑는다
+  stroke_origin:
+    limits:
+      body_radius: 0.30           # 【실측】 플레이어 히트박스 폭 0.6m ÷ 2 — 이 안은 **몸**이다
+      clearance: 0.10             # 【임의】 몸 밖으로 더 밀어내는 여유 (모델의 팔·망토가 스치는 폭)
+      max_height: 1.80            # 【실측】 플레이어의 키 — 발~키 사이가 '몸의 높이'다
+      forward_max_ratio: 0.45     # 【임의】 앞으로 미는 거리 ≤ 획 길이 × 이 값 (허공의 판자 방지)
+
+    # default — 등록되지 않은 참격 모션의 자리 (지금은 전부 등록되어 있다)
+    default:  { forward: 0.85, height: 1.35, lateral: 0.15 }
+
+    참격_호:  { forward: 0.85, height: 1.35, lateral: 0.15 }
+              # 베는 호 — 어깨 높이(1.35). 바닐라 팔은 **오른쪽 위 → 왼쪽 아래**로 지나간다.
+              # 획은 모델의 X축(= 몸의 **좌우**)으로 누워 있고 swings.tilt 가 그 축을 눕힌다(검 25°) —
+              # 그 기울기가 팔의 호와 같은 방향이다. 원점만 팔이 지나는 자리로 옮기면 어긋나지 않는다
+    참격_선:  { forward: 1.00, height: 1.40, lateral: 0.10 }
+              # 찌름(선)·잔영(돌) — 몸이 앞으로 나간다. 호보다 앞에(1.00) · 조금 높게(1.40) · 덜 쏠리게
+    참격_원:  { forward: 0.00, height: 1.00, lateral: 0.00, centered: true }
+              # 【몸에 겹치는 것이 옳다】 사방을 훑은 고리는 **시전자를 중심으로** 돈다.
+              # centered: true — 몸 안 검사 면제를 **등록부가 소리내어 청구한다**
+    날의_기:  { forward: 0.55, height: 1.47, lateral: 0.00 }
+              # 【B-027】 날의 기(sheath)가 서는 자리 — hand() 의 0.55·0.15 리터럴이 여기로 왔다
+              #   (등록부로 옮긴 것이지 튜닝이 아니다 — 값은 그대로다).
+              # ★ 획과 달리 **시선(피치 포함)을 따라** forward 만큼 민다 — 날의 기는 손에 든
+              #   병기 위에 겹쳐 살므로, 고개를 숙이면 날도 내려간다 (1인칭에서도 제 검에 보인다).
+              # height 는 수평 시선 기준 발에서 잰 높이: 눈(실측 1.62)에서 1.62−1.47 = 0.15 내려앉는다.
+              # lateral 은 시선의 오른쪽으로 민다 (0 = 정면 — 지금 그대로)
+
+  # ══════════════════════════════════════════════════════════════════
+  #  ★★ 스윙 넷 (斬) — 【2026-07-13 · 사용자 지시】 찌르기가 아니라 **베기**
+  # ══════════════════════════════════════════════════════════════════
+  # 【왜 찌르기로 보였는가 — 진단 (짐작이 아니라 코드에서 읽은 사실)】
+  #   ㄱ. **획이 돌지 않았다.** SkillDisplay.slash 는 참격선을 **한 번 세우고 각을 고정**한 뒤
+  #      scale.x 만 0→1 로 키웠다. 즉 획은 **자라기만 하고 쓸지 않았다** — 각이동 0도.
+  #      "지나간 자리"라 적어 놓고 실은 **제자리에서 길어지는 판자**였다.
+  #   ㄴ. **기본 타격에는 궤적 파티클이 아예 없었다.** basicSwing → strike() 는 3D 획과 몸만
+  #      부르고 trail() 을 부르지 않는다 (파티클 궤적은 **무공 시전 경로에만** 있었다).
+  #      그런데 참격선 모델은 fallback: null — **팩을 못 받은 눈에는 3D 도 안 뜬다.**
+  #      ⇒ 팩 없는 사람의 일반 공격에 서버가 얹은 것은 **전진(lunge)과 팔 휘두름뿐**이었다.
+  #   ㄷ. **몸의 회전축이 꺼져 있다** (body.limits.yaw_kick_enabled: false — 멀미 때문에 껐고,
+  #      되살리지 않는다). 그래서 script 의 yaw·pitch 는 파싱 단계에서 **0 으로 지워진다**.
+  #      남는 것은 lunge(전진) 하나 — **앞으로 미는 힘이 모션의 전부**였다.
+  #   ⇒ 각이동 0도 · 전진 0.16/틱. 이것을 사람은 **찌르기**라고 부른다. 사용자가 옳았다.
+  #
+  # 【고치는 손 — 카메라가 아니라 획을 돌린다】
+  #   ItemDisplay 의 Transformation 은 **회전도 보간된다**(client slerp). 시작 각과 끝 각을 주면
+  #   그리는 틱(draw) 동안 획이 **호를 그리며 쓸고 지나간다**. 엔티티는 하나 그대로다 (예산 0 증가).
+  #   ★ 이것이 함정 ①의 정답이다: **도는 것은 검이지 카메라가 아니다.**
+  #     (setRotation·yaw_kick 은 손대지 않았다. impact.shake 도 꺼진 채다.)
+  #
+  # 【함정 ② — 콤보가 아니다】 cycle 은 **그림의 리듬**이다. 입력 창(combo window)도 버퍼도 없고,
+  #   우클릭·웅크림·달림의 뜻을 하나도 안 바꾼다. 연타하면 획의 **방향만** 번갈아 바뀐다.
+  #   idle 이 reset_ticks 를 넘으면 1타로 돌아온다 — 그것이 전부다.
+  #
+  # 【칸의 뜻】
+  #   yaw·pitch·roll  [시작, 끝] (도) — **획(ItemDisplay)이 도는 각**. 시전자 기준 좌표계
+  #                   (+X 왼쪽 · +Y 위 · +Z 앞). roll = 정면(前面)에서 시계바늘처럼 도는 각 —
+  #                   **참격의 인상은 대부분 여기서 나온다**. yaw = 좌우로 쓴다. pitch = 위아래로 쓴다.
+  #                   ★ yaw 는 **히트박스 부채꼴(angle) 밖으로 못 나간다** (불변식 ㅂ) — 코드가 깎고
+  #                     등록부가 밖을 청구했으면 **소리내어 짖는다**. pitch·roll 은 자유다:
+  #                     호 히트박스는 **높이를 안 본다**(arcTargets — 수평각만). 그래서 위아래로 크게
+  #                     휘둘러도 그림이 판정에 대해 거짓말하지 않는다.
+  #   rise            [시작, 끝] (m) — 획이 **오르내리는 높이** (stroke_origin.height 에 더한다).
+  #                   올려베기는 아래에서 위로(−0.55 → +0.60), 내려베기는 위에서 아래로.
+  #   fan             파티클이 훑는 **부채꼴의 몫** (0~1). 1.0 = 히트박스 각 그대로. 1 을 넘지 못한다
+  #   bow             파티클 궤적의 **활(弧)** (m) — 중간이 위로 부풀면 +, 아래로 처지면 −.
+  #                   직선이 아니라 **호로 보이게** 하는 값이다 (사용자: "궤적이 호형으로")
+  swing_arcs:
+    limits:
+      enabled: true
+      max_arc_deg: 150            # 한 획이 쓸 수 있는 최대 각 — 이 이상은 팔이 아니라 프로펠러다
+      reset_ticks: 24             # 이 틱 동안 안 치면 1타로 돌아온다 (그림의 리듬 · 입력 문법 아님)
+      lunge_to_meters: 2.5        # 【도출】 lunge 는 틱당 속도(블록)다. 지면 마찰(≈0.6/틱)이 먹으면
+                                  #   총 이동 ≈ v / (1 − 0.6) = 2.5v. 눈(slash_eye)이 이 환산을 쓴다
+    # ★ 인게임에서 민다 (/혼천 스윙) — **이런 값은 눈으로 봐야 정해진다**
+    tuning:
+      arc_scale: 1.00             # 호 각도 배율 (yaw·pitch·roll 에 곱한다)
+      rise_scale: 1.00            # 오르내림 배율
+      bow_scale: 1.00             # 파티클 호의 부풂 배율
+      lunge_scale: 1.00           # 전진 배율 — 0 으로 두면 전진이 통째로 죽는다 (시험용)
+    # 연타의 그림 — 1타 좌→우 · 2타 우→좌 · 3타 아래→위 (사용자 청구 그대로)
+    cycle: [횡_좌우, 횡_우좌, 올려베기]
+    # ★ 내려베기 — 사용자가 '강공격'으로 청구했으나 **그 입력 수단이 이 서버에 없다**
+    #   (좌클릭=평타 · 웅크림+좌클릭=기 발출 · 우클릭=태세 · 웅크림=흘리기 · 달림=회피 — 삼문이 꽉 찼다).
+    #   지어내지 않는다 (함정 ②: 입력의 뜻을 바꾸지 않는다). 그래서 **내려베는 계열**(도·부·중병기·
+    #   월아산·구)의 1타가 이 획을 쓴다 — 그 계열은 원래 위에서 아래로 찍는 손이다 (swings.tilt 45~70).
+    heavy: 내려베기
+    heavy_classes: [도, 부, 중병기, 월아산, 구]
+    strokes:
+      횡_좌우:  { yaw: [-48,  48], pitch: [ -6,   6], roll: [-38,  22],
+                  rise: [-0.10,  0.10], fan: 1.00, bow:  0.35 }
+      횡_우좌:  { yaw: [ 48, -48], pitch: [ -6,   6], roll: [ 38, -22],
+                  rise: [ 0.10, -0.10], fan: 1.00, bow:  0.35 }
+      올려베기: { yaw: [-30,  22], pitch: [ 40, -40], roll: [-72, -28],
+                  rise: [-0.55,  0.60], fan: 0.60, bow:  0.20 }
+      내려베기: { yaw: [ 34, -18], pitch: [-42,  42], roll: [ 74,  26],
+                  rise: [ 0.70, -0.55], fan: 0.55, bow: -0.20 }
+
+  # ─── 【눈】 이것은 참격인가 찌르기인가 ───
+  # 【축】 획이 쓸고 지나간 **각(도)** 과 몸이 나간 **거리(m)** 의 비.
+  #   찌르기 = 전진이 크고 각이 작다 · 참격 = 각이 크고 전진이 작다. 그래서 셋을 잰다:
+  #     · 호각(arc_deg)  — 시작 각 ↔ 끝 각 사이의 **쿼터니언 각** (합이 아니라 실제 돌아간 각이다)
+  #     · 전진(lunge_m)  — script 의 양수 lunge 합 × lunge_to_meters
+  #     · 참격비          — 호각 ÷ 전진 (도/m). 전진이 0 이면 무한 = 순수 참격
+  #   호(弧) 궤적을 청구한 계열만 잰다. **찌르는 것은 찌른다** — 창·암기는 면제고, 그 면제는
+  #   등록부가 소리내어 청구한다 (exempt_trails). 코드가 예외를 지어내지 않는다.
+  #   재는 자: tools/motion_audit.py 축 ⑬ (정적) + SkillEngine 기동 시 경고 (실물)
+  #   ★ 【눈을 시험해서 고친 자리 — 2026-07-13】 처음엔 전진 상한을 **한 칸**(0.40m)으로 뒀다.
+  #     그런데 그 값은 **옛 검의 전진과 정확히 같았다**(0.16 × 2.5 = 0.40). 눈의 시험(--selftest)에서
+  #     "검의 전진을 옛 값으로 되돌린다"를 **못 잡았다** — 담장 위에 세운 못은 아무것도 못 막는다.
+  #     그래서 등록부가 이미 가르고 있는 것을 따라 상한도 갈랐다: **가벼운 손과 무거운 손은 다르다.**
+  #     내려베는 계열(부·중병기)은 몸을 실어야 그 무게가 산다 — 그것은 들이받기가 아니라 도끼다.
+  slash_eye:
+    min_arc_deg: 60               # 호를 청구한 계열은 최소 이만큼 쓸어야 '벤 것'이다
+    max_lunge_m: 0.30             # 【가벼운 손】 발이 아니라 **체중만** 실린다 (옛 검 0.40 은 여기서 걸린다)
+    max_lunge_m_heavy: 0.40       # 【무거운 손 — swing_arcs.heavy_classes】 도끼는 몸을 싣는다
+    min_ratio: 150                # 호각 ÷ 전진 (도/m) — 이 아래는 찌르기 쪽에 가깝다
+    exempt_trails: [선, 시]       # 찌르는 것은 찌른다 (창·암기) — 면제는 등록부가 청구한다
+
+  # ─── 모델 등록부 【팩 담당에게 넘기는 목록】 ───
+  # key      = item_model 컴포넌트 키. 팩은 두 장을 굽는다 (병기와 같은 문법):
+  #            assets/honcheon/items/<경로>.json (아이템 정의) + assets/honcheon/models/item/<경로>.json
+  # base     = 팩이 있을 때의 바탕 아이템 (모델이 덮으므로 형체는 무의미)
+  # fallback = 팩이 없을 때의 바닐라 아이템. **null = 띄우지 않는다** (파티클 층이 그 자리를 지킨다)
+  # size     = 기준 치수 [x, y, z] (m). 코드는 이 값으로 배율을 역산한다 (길이 3m 획 → scale.x = 사거리/3.0)
+  #
+  # 【참격선 모델 규약 — 만화의 검격】
+  #   · 모델의 **기하 중심이 원점(8,8,8)** 이다. 획은 원점에서 ±X 로 **반씩** 뻗는다
+  #     (머리 = +X 끝 · 꼬리 = −X 끝).
+  #
+  #     ★ 2026-07 — 예전엔 **머리를 원점에 두고 몸을 전부 −X 로** 늘어뜨렸다. 그 계약은
+  #       "꼬리부터 지워진다"를 얻는 대신 **모델의 중심을 x −12 만큼 치우치게** 했다.
+  #       ItemDisplay 는 모델을 엔티티 자리에 **중심을 두고** 그리고, 모델의 +X 는 (아래 좌표계)
+  #       **앞이 아니라 좌우 축**이다 ⇒ 획이 시전자의 **정면이 아니라 옆구리**에 걸렸다
+  #       (사용자 지적: "주먹 휘두를 때 모션이 정면이 아닌 왼쪽에서 나온다").
+  #       ⇒ **모델은 중심에 서고, 위치·성장은 코드가 정한다.** 모델에 오프셋을 박으면
+  #         그 편향을 모든 모션이 물려받는다. 머리 고정은 아래 `anchor: head` 가 청구하고
+  #         SkillDisplay.transform 의 translation 이 이행한다 — 그림은 한 틱도 안 바뀐다.
+  #
+  #   · anchor: head — **성장·소멸의 고정점이 머리(+X 끝)** 라는 청구.
+  #       translation.x = halfLen × (1 − scale.x)
+  #       scale.x 1 → 획이 정면에 **좌우 대칭**으로 걸린다 · scale.x → 0 → **머리로 수축**한다
+  #       ⇒ 그리면 머리에서 꼬리로 자라고, 지우면 **꼬리부터 지워진다** (옛 그림 그대로).
+  #       (anchor 가 없으면 원점=중심에서 대칭으로 자란다 — 고리(참격_원)가 그것이다)
+  #   · 시작(머리)이 굵고 끝(꼬리)이 가늘게 **테이퍼**를 굽는다. 꼬리 쪽 알파를 낮춰 굽는다 —
+  #     사라지는 인상의 절반은 그 그라데이션이 만든다.
+  #   · **무색·반투명**이 기본이다 (외공기의 획도 뜬다). 격은 코드가 밝기·굵기로 올린다 (수묵 규약).
+  models:
+    참격_호:
+      key: "honcheon:qi/slash_arc"
+      base: PAPER
+      fallback: null              # 팩 없음 → 파티클 궤적 (검을 복제하느니 파티클이 낫다)
+      # size[0] 은 **정규화 상수**다 (참격선의 scale = length / size[0]). 모델의 실제 치수와 같기만 하면
+      # 값이 무엇이든 인게임 길이는 같다 — 길이는 **판정의 range** 가 정한다.
+      # 3.0 은 구울 수 없었다: 원점=머리 계약 + MC 모델 좌표 한계([-16,32])라 −X 로 최대 1.5m 다.
+      size: [1.5, 0.55, 0.04]
+      anchor: head                # 성장·소멸의 고정점 = 머리(+X 끝) — 위 규약 참조
+      form: "초승달 한 획 — 부채꼴을 훑고 지나간 자리. 머리가 굵고 꼬리로 가늘어진다"
+
+    # ─── 녹색 검기(劍氣) — 호 평타 스윕의 연두 초승달 【2026-07 · 레퍼런스: 마크에이지】 ───
+    #   참격_호(qi/slash_arc 무색)와 **같은 기하**이되 텍스처만 색(kigi/arc*)이다. qi/* 무색 판을
+    #   물들이지 않으려고 별도 경로에 굽는다 (texture_audit 축 ⑱ QI_ACHROMATIC 이 qi/* 를 강제).
+    #   motions.참격_호.model 이 1단계를 가리켜(아래) 호 궤적(검·도·부·겸·월아산 sweep) 평타가 녹색이 된다.
+    #   되돌리기: motions.참격_호.model 을 참격_호 로 되돌리면 무색으로 복귀.
+    #
+    #   ★【스윙 동기화 · 2026-07-19】 셋으로 갈랐다. 옛 단일 모델(kigi/arc)은 3프레임 스트립 +
+    #     .mcmeta 애니였는데, MC 텍스처 애니는 **전역 시계**로 돌아 소환 순간의 프레임이 매번
+    #     제각각이었다 (사용자 실측: "검기 프레임이 전혀 반영이 안 된다"). 이제 단계가 곧 모델이고,
+    #     kigi_slash.frame_models·frame_ticks 가 스윙 중 갈아끼울 순서·간격을 청구한다.
+    #     세 모델은 기하·크기·앵커가 **완전히 같다** — 다른 것은 무는 텍스처(획이 자란 길이)뿐이다.
+    검압_내려1:
+      key: "honcheon:kigi/press_a1"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.66, 0.04]
+      anchor: head
+      form: "검압 피크 — 압축된 절단파, 시작부터 완전체"
+
+    검압_내려2:
+      key: "honcheon:kigi/press_a2"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.66, 0.04]
+      anchor: head
+      form: "절단 통과 — 후방 30% 비움 + 잔상 한 줄"
+
+    검압_내려3:
+      key: "honcheon:kigi/press_a3"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.66, 0.04]
+      anchor: head
+      form: "붕괴 — 밀린 서슬 토막과 먹 잔재"
+
+    검압_올려1:
+      key: "honcheon:kigi/press_b1"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.66, 0.04]
+      anchor: head
+      form: "검압 피크 (올려베기 — 서슬이 볼록면)"
+
+    검압_올려2:
+      key: "honcheon:kigi/press_b2"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.66, 0.04]
+      anchor: head
+      form: "절단 통과 (올려베기)"
+
+    검압_올려3:
+      key: "honcheon:kigi/press_b3"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.66, 0.04]
+      anchor: head
+      form: "붕괴 (올려베기)"
+
+    참격_선:
+      key: "honcheon:qi/slash_line"
+      base: PAPER
+      fallback: null
+      size: [1.5, 0.35, 0.04]     # 위와 같은 정규화 상수 (모델 좌표 한계)
+      anchor: head                # 성장·소멸의 고정점 = 머리(+X 끝) — 위 규약 참조
+      form: "곧은 한 획 — 찌름(선)·잔영(돌). 앞이 뾰족하고 뒤로 늘어진다"
+
+    참격_원:
+      key: "honcheon:qi/slash_ring"
+      base: PAPER
+      fallback: null
+      size: [2.0, 0.35, 2.0]      # 지름 2m 기준 고리 (XZ 평면)
+      form: "원형 한 획 — 사방을 훑은 자리 (매화만개·태극검·합격진). 납작한 고리"
+
+    날의_기:
+      key: "honcheon:qi/blade_sheath"
+      base: PAPER
+      fallback: null              # 팩 없음 → 손끝 잔광 파티클 (이미 돌고 있다)
+      size: [1.2, 0.16, 0.16]     # 날의 축을 따라 늘어난 얇은 빛
+      form: "병기의 날을 따라 흐르는 기 — **손에 든 검 위에 겹친다** (복제가 아니다).
+             격이 오를수록 날을 넘어 자란다 (강기는 날 밖으로 삐져나온다)"
+
+    검기_비:
+      key: "honcheon:qi/bolt_edge"
+      base: PAPER
+      fallback: END_ROD           # 흰 막대가 날아간다 (검을 복제하지 않는다 — 기가 나는 것이다)
+      size: [1.6, 0.30, 0.04]
+      form: "날아가는 검기 — 앞이 뾰족하고 뒤로 꼬리가 늘어진 한 자루의 빛. 자전한다"
+
+    강기_포신:
+      key: "honcheon:qi/bolt_lance"
+      base: PAPER
+      fallback: AMETHYST_SHARD    # 빛 덩어리가 느리게 밀려온다 (검이 아니다: 뚫는 것이다)
+      size: [2.2, 0.7, 0.7]
+      form: "강기 포 — 검기보다 굵고 짧다. 창끝이 아니라 **말뚝**. 착탄에서 2.2배로 확장"
+
+    호신_조각:
+      key: "honcheon:qi/guard_shard"
+      base: PAPER
+      fallback: END_ROD
+      size: [0.5, 1.1, 0.05]
+      form: "몸을 두르는 판 조각 — 세로로 선 얇은 방패 한 장. 4장이 궤도를 돈다"
+
+    # 【use_held】 실을 것이 시전자의 아이템 **그 자체**. 팩 유무와 무관하다 (분기 없음).
+    #   복제가 아니다 — **정말로 손을 떠나 날아가는 물건**이기 때문이다. 팩 담당에게 요구할 것이 없다.
+    던진_암기:
+      use_held: true
+      size: [1.0, 1.0, 1.0]
+      form: "던져진 비수·침 그 자체 (회전하며 난다). 요구 없음 — 암기 아이템 모델이 이미 그 목록이다"
+
+    어검_검:
+      use_held: true
+      size: [1.0, 1.0, 1.0]
+      form: "손을 떠난 병기 그 자체 (부림 — 쇠가 난다). 요구 없음"
+
+    매화_꽃:
+      key: "honcheon:ult/plum_bloom"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.0, 1.0, 1.0]
+      form: "다섯 잎 매화 — 위에서 본 꽃. 응집에서 오므리고 개시에서 활짝 편다"
+
+    태극_원반:
+      key: "honcheon:ult/taegeuk_disc"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.6, 1.6, 0.05]
+      form: "태극 원반 — 몸 앞에 서서 천천히 자전한다 (기다림의 얼굴)"
+
+    군림_획:
+      key: "honcheon:ult/emperor_edge"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.2, 4.0, 0.10]
+      form: "하늘에서 내려오는 세로 획 — 거대한 칼"
+
+    혈해_파문:
+      key: "honcheon:ult/blood_tide"
+      base: PAPER
+      fallback: REDSTONE          # 【채색 예외】 팩 없어도 붉다 — 예외가 곧 정보다
+      size: [1.0, 0.08, 1.0]
+      form: "붉은 파문 — 바닥에 깔린 고리가 사방으로 퍼진다"
+
+    # 【15문파 오의의 형체 4장】 — 17종이 이 넷과 기존 넷(매화·태극·군림·혈해)을 나눠 쓴다.
+    #   문파마다 형체를 하나씩 굽는 길도 있었으나, 그것은 **팩 21장**이다 (예산·유지비 모두 진다).
+    #   대신 **히트박스가 형체를 정하게** 했다 — 원은 펴지고(고리·꽃·손바닥), 선은 앞에 선다(빗살).
+    #   그것이 이 등록부의 규칙이기도 하다: 보이는 모양 = 맞는 모양 (불변식 ㄴ).
+    #   문파는 그 안에서 **파티클·소리·응집 고리**가 가른다 (형체는 히트박스의 것이다).
+    #
+    # 【방향 계약 — 2026-07 개정: 이제 **회전이 있다**】
+    #   좌표계: 형체는 시전자를 향해 선다. 그 몸을 기준으로 **+X 왼쪽 · +Y 위 · +Z 앞** 이다.
+    #           **앞은 Z 다** (바닐라 규약: yaw 0 인 몸은 +Z 를 본다). 이 한 줄이 어디에도 없어서
+    #           지난 판은 '앞으로 뻗는 축'을 모델에 새기지 못했다 (yaw 로만 서고 scale 로만 자랐다).
+    #   이제 `motions[].orient: [pitch, yaw, roll]` (도) 이 형체를 돌려 세우고,
+    #        `motions[].burst_scale: [x, y, z]` 가 **축마다 다르게** 자라게 한다.
+    #        둘이 함께여야 창(槍)이 된다: 한 축만 사거리를 따라 뻗고, orient 가 그 축을 앞으로 눕힌다.
+    #   그래서 선(線) 오의는 이제 **'앞에 선 빗살'이 아니라 '앞으로 뻗는 뇌격의 다발'** 이다 (뇌격_강림).
+    #   ※ 스칼라 burst_scale 은 그대로 돈다 (세 축이 같이 자란다 — 원 오의의 문법은 변하지 않았다).
+    검풍_고리:
+      key: "honcheon:ult/sword_gale"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [2.0, 0.06, 2.0]      # XZ 평면에 눕는다 (몸을 중심으로 사방)
+      form: "여덟 획이 사방으로 뻗은 검풍(劍風) — 원 오의의 얼굴. 꽃이 아니라 **검의 자리**다"
+
+    뇌격_빗살:
+      key: "honcheon:ult/bolt_comb"
+      base: PAPER
+      fallback: END_ROD
+      size: [1.4, 2.2, 0.06]      # 폭(X) 1.4 · **길이(Y) 2.2** · 두께(Z) 0.06
+      # 【주의 — 개화의 size 는 치수가 아니라 **종횡비**다】 참격선은 size 로 **나누고**(scale = 길이/size),
+      #   개화는 size 를 **곱한다**(scale = size × 사거리 × burst_scale). 그래서 개화 모델의 실제 뻗은
+      #   길이는 언제나 **1m(16단위)** 여야 한다 — 그보다 길게 구우면 그 배만큼 더 길어진다.
+      # 【원점 계약 — 앞으로 뻗는 형체 · 팩 청구서】 참격선이 원점을 **머리**에 두듯, 뻗는 형체는 원점을
+      #   **꽁무니**(시전자 쪽)에 둔다. 획들은 거기서 **+Y 로 16단위(1m)** 늘어난다 (elements y: 8 → 24).
+      #   그래야 orient [90, 0, 0] 이 그 축을 **앞(+Z)** 으로 눕혔을 때 다발이 시전자의 가슴에서
+      #   **표적을 향해** 뻗는다. 지금 구워진 것은 **원점 중심의 1m 정육면체(자리표)** 이므로,
+      #   다시 굽기 전까지는 다발의 **뒤 절반이 시전자 뒤로 삐져나온다** (팩 미배포라 지금은 안 보인다).
+      #   길이는 판정이 준다 (burst_scale.y × 사거리 — length 10~24m).
+      form: "**앞으로 뻗는 뇌격의 다발** — 선 오의(섬전 13 · 오호 5 · 항룡 3 · 사일 9)의 얼굴.
+             원점은 꽁무니, +Y 로 늘어난다. 가운데가 길고 양옆이 짧다 — 한 줄로 간다는 뜻이다"
+
+    장심_인:
+      key: "honcheon:ult/palm_bloom"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.6, 1.6, 0.06]
+      form: "거대한 장심(掌心) — 다섯 손가락이 펴진 손바닥 하나 (소림의 원 오의). 앞을 향해 선다"
+
+    독무_고리:
+      key: "honcheon:ult/toxin_veil"
+      base: PAPER
+      fallback: AMETHYST_SHARD
+      size: [1.0, 0.06, 1.0]
+      form: "바닥을 기는 재(灰)의 겹고리 — **독은 터지지 않는다. 퍼진다.**
+             다른 오의의 형체가 한 순간에 펴진다면 이것은 느리게 밀려 나간다"
+
+  # ─── 모션 등록부 — 어떻게 움직이는가 (보간이 부드러움의 전부다) ───
+  # kind: 참격(그렸다 지워진다) · 서림(병기에 겹쳐 지속) · 투사(날아간다) · 고리(궤도) · 개화(오의)
+  #   draw          획이 그려지는 틱 (꼬리가 자란다) — 실제 값은 계열 공속이 정한다 (swings.span_ratio)
+  #   fade          획이 지워지는 틱 (**꼬리부터**)
+  #   interpolation 보간 틱 — 0 이면 형체가 튄다. 부드러움의 전부가 여기 있다
+  motions:
+    참격_호:  { kind: 참격, model: 검압_내려1, fade: 5, interpolation: 2, spread: 1.15 }  # ★녹색 검기 1단계 (되돌리기: model 을 참격_호 로)
+    참격_선:  { kind: 참격, model: 참격_선, fade: 4, interpolation: 2, spread: 1.10 }
+    참격_원:  { kind: 참격, model: 참격_원, fade: 6, interpolation: 3, spread: 1.20 }
+              # spread — 지워질 때 획이 살짝 **퍼지며** 사라진다 (연기처럼). 1.0 이면 그대로 얇아진다
+
+    날의_기:  { kind: 서림, model: 날의_기, interpolation: 4, lifetime: 60 }
+              # 지속 — 수명이 아니라 **심장박동**으로 산다 (태세를 거두면 그 자리에서 사라진다)
+
+    검기_투사: { kind: 투사, model: 검기_비,   lifetime: 14, speed: 1.6, spin: 0.30,
+                birth: 1, fade: 3, interpolation: 2, impact_scale: 1.8, impact_ticks: 4, brightness: [15, 15] }
+    강기_투사: { kind: 투사, model: 강기_포신, lifetime: 20, speed: 1.0, spin: 0.10,
+                birth: 2, fade: 4, interpolation: 3, impact_scale: 2.2, impact_ticks: 6, brightness: [15, 15] }
+    어검_비행: { kind: 투사, model: 어검_검,   lifetime: 26, speed: 1.2, spin: 0.55,
+                birth: 1, fade: 3, interpolation: 2, impact_scale: 1.4, impact_ticks: 3, brightness: [0, 15] }
+    암기_투척: { kind: 투사, model: 던진_암기, lifetime: 30, speed: 1.4, spin: 0.75,
+                birth: 1, fade: 2, interpolation: 1, impact_scale: 1.0, impact_ticks: 1,
+                stick_ticks: 20, brightness: [0, 15] }
+                # 던진 물건은 **꽂힌다** — 빗나가면 땅에 20틱 남았다가 사라진다 (회수는 인벤토리의 몫이 아니다:
+                # skill_mechanics ranged.암기 "회수 가능 (전투 후 절반)" 은 경제 층의 규칙이다)
+
+    호신_고리: { kind: 고리, model: 호신_조각, count: 4, radius: 0.85, height: 1.0,
+                orbit: 0.10, interpolation: 4, brightness: [15, 15] }
+
+    매화_개화: { kind: 개화, model: 매화_꽃,   lifetime: 30, birth: 0, fade: 8,
+                interpolation: 4, spin: 0.06, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+    태극_대기: { kind: 개화, model: 태극_원반, lifetime: 40, birth: 4, fade: 6,
+                interpolation: 4, spin: 0.12, burst_scale: 0.5, billboard: FIXED, brightness: [15, 15] }
+    군림_강림: { kind: 개화, model: 군림_획,   lifetime: 24, birth: 0, fade: 5,
+                interpolation: 3, spin: 0.0, burst_scale: 0.8, billboard: FIXED, brightness: [15, 15] }
+    혈해_범람: { kind: 개화, model: 혈해_파문, lifetime: 30, birth: 0, fade: 8,
+                interpolation: 4, spin: 0.04, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+
+    # 15문파 오의 (17종이 이 넷을 나눠 쓴다 — 히트박스가 형체를 정한다)
+    검풍_개화: { kind: 개화, model: 검풍_고리, lifetime: 30, birth: 0, fade: 8,
+                interpolation: 4, spin: 0.10, burst_scale: 1.0, billboard: FIXED, brightness: [15, 15] }
+                # 원 오의 — 사방으로 펴진다 (창궁무애·혼원벽력·운룡대팔식·천하36검·남해36검)
+    뇌격_강림: { kind: 개화, model: 뇌격_빗살, lifetime: 22, birth: 0, fade: 4,
+                interpolation: 2, spin: 0.0, orient: [90, 0, 0],
+                burst_scale: [0.06, 0.45, 0.50], billboard: FIXED, brightness: [15, 15] }
+                # 선 오의 — **앞으로 뻗는다**. 자전하지 않는다 (한 줄로 가는 것은 돌지 않는다)
+                # orient [90,0,0] — 모델의 길이축(+Y)을 **앞(+Z)** 으로 눕힌다. 그래서 창이 된다
+                # burst_scale 축이 갈린다 (final = size × 사거리 × 배율):
+                #   y 0.45 = 길이 2.2 × range × 0.45 ≈ **사거리 그대로** (10m → 9.9m · 24m → 23.8m)
+                #   x 0.06 = 폭   1.4 × range × 0.06 ≈ 0.8~2.0m — 히트박스 width(0.8~3)를 따라간다
+                #   z 0.50 = 두께 0.06 × range × 0.50 ≈ 0.3~0.7m (누운 뒤엔 위아래 두께다)
+                # 예전엔 세 축이 **같이** 자라서 길이를 사거리까지 늘리면 폭도 하늘을 덮었다 —
+                # 그래서 0.15 로 통째로 줄여 '앞에 선 빗살'로 세울 수밖에 없었다. 그 청구서를 여기서 갚는다
+    장심_개화: { kind: 개화, model: 장심_인,  lifetime: 26, birth: 2, fade: 6,
+                interpolation: 4, spin: 0.02, burst_scale: 0.60, billboard: FIXED, brightness: [15, 15] }
+                # 소림 — 손바닥이 천천히 펴진다 (여래신장). 거의 돌지 않는다
+    독무_범람: { kind: 개화, model: 독무_고리, lifetime: 40, birth: 0, fade: 10,
+                interpolation: 6, spin: 0.03, burst_scale: 1.0, billboard: FIXED, brightness: [4, 15] }
+                # 당가 독 — 가장 오래 산다(40틱) · 가장 느리게 펴진다(보간 6) · **가장 어둡다**(밝기 4)
+                # 다른 오의는 빛나고, 이것은 **빛나지 않는다** — 그것이 무형(無形)이다
+
+  # ─── 참격선 배선 — 히트박스 모양 → 획 (【불변식 ㅂ】 모양은 판정이 정한다) ───
+  slashes:
+    호: 참격_호
+    선: 참격_선
+    돌: 참격_선                   # 보법의 잔영 — 지나온 자리에 남는 곧은 획 (뒤로 그린다)
+    원: 참격_원
+    진: 참격_원
+    시: null                      # 투사체는 **제 몸이 궤적이다** (암기_투척·화살) — 획을 겹치면 거짓말
+    태세: null                    # 몸에 머무는 것에는 획이 없다
+    가드태세: null
+    시전: null
+
+  # ─── 격이 획에 스며든다 — 3D 사다리 (파티클 사다리와 같은 문법: 단조 증가) ───
+  # 【외공기도 획을 그린다】 이것이 이번 정정의 핵심이다: 무공이 없어도, 격이 없어도,
+  #   병기를 휘두르면 지나간 자리가 남는다. 격은 그 획을 **밝고 굵게** 만들 뿐이다.
+  grade_ink:
+    외공기: { thickness: 0.55, brightness: [0, 15],  hold: 0 }   # 빛나지 않는다 — 쇠가 지나간 자리
+    발경:   { thickness: 0.75, brightness: [7, 15],  hold: 1 }   # 기가 몸 안에서 터진다 — 획이 살짝 밝다
+    검기:   { thickness: 1.00, brightness: [15, 15], hold: 2 }   # 날에 서린 기가 그대로 그어진다
+    강기:   { thickness: 1.35, brightness: [15, 15], hold: 3 }
+    어검:   { thickness: 1.70, brightness: [15, 15], hold: 4 }
+    심검:   { thickness: 2.10, brightness: [15, 15], hold: 5 }   # hold — 획이 공중에 머무는 틱 (무게)
+
+  # ─── 날의 기 (지속) — 격을 두르면 병기에 서린다 ───
+  # 【전의 규칙의 전제】 npc_combat 의 격_목격(검기 −2 · 강기 −5 · 어검 −8)은 "본다"를 전제한다.
+  #   휘둘러야만 보이면 그 규칙은 거짓말이다. **검을 뽑아 기를 두르면 그 자리의 모두가 안다.**
+  #   1인칭에서도 보인다 (손에 든 검 위에 겹쳐 뜨므로 제 눈에도 들어온다).
+  sheaths:
+    발경: { motion: 날의_기, scale: [0.45, 0.60, 0.60], brightness: [8, 15] }    # 손끝에 맺힌다 (날을 안 넘는다)
+    검기: { motion: 날의_기, scale: [1.00, 1.00, 1.00], brightness: [15, 15] }   # 날에 서린 실선
+    강기: { motion: 날의_기, scale: [1.35, 1.60, 1.60], brightness: [15, 15] }   # 날을 넘어 자란 빛
+    어검: { motion: 날의_기, scale: [1.70, 2.00, 2.00], brightness: [15, 15] }
+    심검: { motion: 날의_기, scale: [2.00, 2.40, 2.40], brightness: [15, 15] }
+    호신강기: null                # 몸에 두른 것 — 그 자리는 고리다 (forms.호신강기)
+
+  # ══════════════════════════════════════════════════════════════════
+  #  계열의 손 — 획의 굵기·길이·시간 (【공속이 곧 리듬】)
+  # ══════════════════════════════════════════════════════════════════
+  # span_ratio  자세가 돌아오는 시간(프레임·계열 공속 중 긴 쪽)에 곱해 **획을 그리는 틱**을 낸다.
+  #             단검(2.2/s = 9틱)의 획은 3틱에 끝나고, 부(0.9/s = 22틱)의 획은 18틱을 끈다.
+  # reach       히트박스 사거리 대비 획의 길이 (**1.0 을 넘지 못한다** — 불변식 ㅂ)
+  # thickness   속도가 곧 두께다 — 빠른 단검은 가늘고 날카롭게, 무거운 부는 굵고 느리게
+  # tilt        획이 누운 각(도). 【MC 규약: pitch 양수 = 아래】 내려베는 것일수록 크다
+  swings:
+    검:     { span_ratio: 0.55, reach: 0.95, thickness: 1.00, tilt: 25 }   # 벤다 — 눕혀 긋는다
+    도:     { span_ratio: 0.60, reach: 0.95, thickness: 1.25, tilt: 45 }   # 내려벤다 — 위에서 아래로
+    창:     { span_ratio: 0.45, reach: 1.00, thickness: 0.70, tilt: 0 }    # 찌른다 — 가늘고 곧다
+    봉:     { span_ratio: 0.65, reach: 0.90, thickness: 1.30, tilt: 10 }   # 후려친다 — 날이 없으니 굵다
+    단검:   { span_ratio: 0.35, reach: 0.85, thickness: 0.55, tilt: 15 }   # 가늘고 날카롭다 (속검)
+    암기:   { span_ratio: 0.30, reach: 0.50, thickness: 0.50, tilt: 0 }    # 손목의 획 — 짧다 (본체는 날아간다)
+    활:     { span_ratio: 0.00, reach: 0.00, thickness: 0.00, tilt: 0 }    # 휘두르는 물건이 아니다
+    권갑:   { span_ratio: 0.35, reach: 0.70, thickness: 0.80, tilt: 0 }    # 지른다 — 짧고 뭉툭하다
+    맨손:   { span_ratio: 0.35, reach: 0.60, thickness: 0.70, tilt: 0 }    # 【맨손도 획을 그린다】 권풍
+    겸:     { span_ratio: 0.55, reach: 0.95, thickness: 0.95, tilt: 20 }   # 걸어벤다 — 당기는 획
+    월아산: { span_ratio: 0.80, reach: 1.00, thickness: 1.55, tilt: 55 }
+    구:     { span_ratio: 0.60, reach: 0.95, thickness: 1.10, tilt: 50 }   # 찍는다
+    중병기: { span_ratio: 0.90, reach: 0.95, thickness: 1.80, tilt: 60 }   # 짓뭉갠다 — 가장 굵다
+    부:     { span_ratio: 0.85, reach: 1.00, thickness: 1.70, tilt: 70 }   # 찍어벤다 (0.9/s — 가장 느린 손)
+    무관:   null                                                           # 보법·심법 — 벨 것이 없다
+    짐승:   null                                                           # 발톱은 병기가 아니다
+
+  # ══════════════════════════════════════════════════════════════════
+  #  몸의 자세(體勢) — 되는 것만 한다. 그러나 **되는 것을 다 한다**
+  # ══════════════════════════════════════════════════════════════════
+  # 【조사 결과 — 안 되는 것】 바닐라 클라이언트에서 **플레이어의 팔다리 각도는 서버가 줄 수 없다.**
+  #   애니메이션은 클라이언트가 돌리고, 리소스팩으로 플레이어 지오메트리를 바꿀 수 없다.
+  #   "다리를 뒤로 보내고 허리를 쓰는" 골격 애니메이션은 **바닐라 프로토콜에 자리가 없다.**
+  #   (플레이어를 감추고 커스텀 형체를 태우는 길은 자기 시점·손·판정이 전부 깨진다 — 하지 않는다.)
+  #
+  # 【되는 것 — 다섯】 그리고 이 다섯이면 체중이 실린다:
+  #   ① 전진(lunge)   — setVelocity 로 몸을 민다. **창의 5m 는 몸이 나가야 5m 다** (음수 = 뺀다)
+  #   ② 자세(pose)    — Entity.setPose(Pose, fixed) 로 몸통 각도를 바꾼다 (바닐라가 가진 자세만):
+  #        SWIMMING    몸을 수평으로 눕힌다 → **찌르기·돌진**의 몸 (창·돌)
+  #        SNEAKING    (★2026-07-22 제거 — 자동 앉기는 본인 시점 침습이라 뺐다. 육중함은 리듬·획·소리가
+#                     담당한다. 관전자 전용 포즈 패킷으로 되살리는 길은 예약 — 사용자 결정)
+  #        SPIN_ATTACK 몸을 회전시킨다 (트라이던트 급류) → **회전 베기** (원 궤적)
+  #   ③ 몸의 회전(yaw·pitch) — **허리가 도는 축**. Player.setRotation 으로 몸을 틀고 젖힌다.
+  #      여기가 "다리를 뒤로 보내고 몸을 쓴다"에 가장 가까운 축이다 (어깨가 뒤로 갔다 앞으로 나온다).
+  #   ④ 팔의 휘두름(hand) — swingMainHand/swingOffHand. **서버가 줄 수 있는 유일한 사지 애니메이션**.
+  #      권갑의 원-투(부→주)가 여기서 나온다. 암기의 사출도 이 손이 친다.
+  #   ⑤ 정지(hitstop) — 프레임(선딜·후딜)이 이미 발을 묶는다 (SLOWNESS). 관성 뒤의 **멈춤**이 무게다.
+  #
+  # 【자세는 한 칸이 아니라 한 줄기다 — script】 예전엔 자세가 한 번 찍히고 끝났다 (그래서 몸이 뻣뻣했다).
+  #   이제 획이 그려지는 동안 몸이 **beat 를 따라 흐른다**. at 은 스윙 시간(swingTicks)의 비율이다:
+  #     at 0.0  사출/베기의 순간 (판정과 같은 틱 — 여기를 늦추면 "맞고 나서 검이 온다" = 거짓말)
+  #     at 0.3~0.4  획이 끝을 향해 흐르는 중 (체중이 실린다)
+  #     at 0.6~0.7  따라 나감(follow-through) · 또는 **다음 수를 벼르는 자세**
+  #     at 1.0  **반드시 원점** (yaw 0 · pitch 0) — 몸이 돌아온다
+  #   windup 은 **선딜이 있는 초식에만** 붙는다 (초식은 commit 에서 startup 틱을 기다린다).
+  #   기본 타격(basic_strike)은 선딜을 기다리지 않고 즉발이므로 **windup 이 없다** —
+  #   있는 척하면 "암기가 날아간 뒤에 몸이 뒤로 젖혀지는" 거짓말이 된다. 그래서 안 넣었다.
+  #
+  # 【회전의 규약】 · yaw + = 오른쪽으로 튼다 (어깨를 뒤로 빼는 쪽) · pitch + = 아래 (MC 규약)
+  #   · **회전은 반드시 원점으로 돌아온다**(kick_recover). 매 beat 는 원점 기준의 목표각이고,
+  #     엔진은 언제나 **차분(delta)만** 더한다 — 그 사이 플레이어가 마우스를 움직인 것은 보존된다.
+  #     마지막 beat 가 (0,0) 이므로 **조준은 순증하지 않는다** (반동이지 조준 훼손이 아니다).
+  #   · kick_max 를 넘는 각은 등록부가 적어도 엔진이 깎는다 (조작감이 등록부보다 높다).
+  #   · yaw_kick_enabled: false 로 두면 **회전 축만 통째로 꺼진다** (전진·자세·팔은 그대로 돈다).
+  #
+  # 【안전 규칙 — 조작감을 해치는 것이 최악이다】
+  #   · 공중·물속·기어가기 중에는 자세를 강제하지 않는다 (낙하·수영 자세와 싸우면 몸이 굳는다).
+  #   · 전진은 지면에서만. 상한 max_lunge — 전투 중 미끄러지면 조준이 깨진다.
+  #   · pose 강제는 max_pose_ticks 를 넘지 못한다. 길면 몸이 굳고, 굳으면 그것은 버그로 읽힌다.
+  body:
+    limits:
+      max_lunge: 0.55             # 틱당 속도 상한 (블록) — 이 이상은 미끄러진다.
+                                  # 돌진 초식(철산고 distance 4)의 몸이 이 상한을 정했다 —
+                                  # 근접타(검 0.16)는 그 3분의 1도 안 쓴다. 상한은 돌진의 것이다
+      max_pose_ticks: 8           # 자세 강제 상한 — 넘으면 몸이 굳는다
+      require_ground: true        # 공중에서는 전진·자세 없음 (낙하와 싸우지 않는다)
+      skip_when: [수영, 기어가기, 활강]   # 이 상태에서는 손대지 않는다 (바닐라 자세가 이긴다)
+      # ★★ 【사용자 판정 · 2026-07-13】 **껐다.** "공격시 화면이 흔들려 **멀미가 발생**한다.
+      #   화면 흔들림은 없애고 **앞뒤로 이동만 살려라**." — 이것이 때리는 쪽의 시야를 돌리던 손이다
+      #   (맞는 쪽의 흔들림은 combat.yml impact.shake 이고, 그것도 껐다).
+      #   아래 주석이 이미 예언하고 있었다: *"이 이상은 조준이 아니라 **멀미**다."* 12도도 멀미였다.
+      #   ★ **전진(lunge)은 살아 있다** — 무게는 카메라가 아니라 **몸이 앞뒤로 가는 것**으로 말한다.
+      #   되살리려면 enabled: true 하나면 된다 (수치는 그대로 남겨 둔다).
+      yaw_kick_enabled: false     # 몸의 회전 축 — **껐다** (멀미). 조준은 반드시 원점으로 돌아온다(아래)
+      kick_max: 12                # 원점에서 벗어날 수 있는 최대 각(도) — 이 이상은 조준이 아니라 멀미다
+      kick_recover: true          # **불변식**: 마지막 beat 는 (0,0). 회전은 순증하지 않는다
+    # by_class — 계열의 몸. lunge/pose/pose_ticks 는 script 가 없을 때의 대비책(fallback)이고,
+    #            **script 가 있으면 script 가 몸이다.** beat: { at, lunge, pose, yaw, pitch, hand }
+    #            hand: 주(main) · 부(off) — 팔이 실제로 휘둘러진다 (관중도 보고 제 손도 본다)
+    #
+    # ★★ 【2026-07-13 · 전진(lunge)을 반으로 깎았다 — 사용자 지시】
+    #   사용자: *"앞으로 짧게 나가는 느낌"* 을 싫어한다. 그러나 *"앞뒤로 이동만 살림"* 이라고도 했다.
+    #   그래서 **없애지 않고 절반으로 깎고, 되돌아오는 beat 를 붙였다.**
+    #   근거(수치): lunge 는 틱당 속도(블록)다. 지면 마찰(≈0.6/틱)이 먹으면 총 이동 ≈ 2.5 × lunge.
+    #     · 옛 검 0.16 ⇒ **0.40m** — 한 발 들어가는 거리다. 이것이 사람 눈에 **찌르기**로 읽혔다.
+    #     · 새 검 0.07 ⇒ **0.18m** — 발이 아니라 **체중이 앞으로 실리는** 거리다.
+    #   그리고 follow-through 에 **음수 lunge** 를 붙였다 ⇒ 순 변위 ≈ 0.
+    #   몸이 **앞으로 갔다 뒤로 온다** — 그것이 사용자가 청구한 "앞뒤로 이동"이다.
+    #   ★ 계열의 사다리는 그대로다 (단검 0.05 < 검 0.07 < … < 부 0.15 — 무거운 손이 여전히 더 나간다).
+    #   ★ 창(0.42)·암기(0.18)는 **안 깎았다** — 그들은 원래 찌르고 던진다 (slash_eye 가 면제한다).
+    by_class:
+      # 검 — 벤다. 발은 거의 안 나가고 **획이 크게 돈다** (몸의 회전축은 꺼져 있다 — 멀미)
+      검:
+        lunge: 0.07
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.04, yaw: 9, pitch: -3 }
+        script:
+          - { at: 0.00, yaw: 6, pitch: -2 }                          # 어깨가 뒤에 있다
+          - { at: 0.30, yaw: -7, pitch: 4, lunge: 0.07, hand: 주 }   # 체중이 실리며 벤다
+          - { at: 0.65, yaw: -3, pitch: 1, lunge: -0.03 }            # **되돌아온다** (앞뒤로 흔들린다)
+          - { at: 1.00 }                                             # 돌아온다
+      # 도 — 내려벤다. **체중이 위에서 아래로** 떨어지고, 끝에 몸이 가라앉는다
+      도:
+        lunge: 0.09
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.05, yaw: 6, pitch: -8 }
+        script:
+          - { at: 0.00, yaw: 5, pitch: -6 }                          # 치켜든다
+          - { at: 0.30, yaw: -3, pitch: 10, lunge: 0.09, hand: 주 }  # 내리친다
+          - { at: 0.60, yaw: -1, pitch: 6, lunge: -0.03 }   # 가라앉으며 **되돌아온다**
+          - { at: 1.00 }
+      # 창 — 찌른다. **몸이 나간다** (전진이 곧 사거리다). SWIMMING = 몸을 수평으로 던진 자세
+      창:
+        lunge: 0.42
+        pose: SWIMMING
+        pose_ticks: 5
+        windup: { lunge: -0.06, pitch: -3, yaw: 3 }
+        script:
+          - { at: 0.00, pose: SWIMMING, lunge: 0.42, pitch: 2, hand: 주 }   # 몸을 던져 꿴다
+          - { at: 0.45, pitch: -2 }                                   # 창을 거둔다 (상체가 선다)
+          - { at: 1.00 }
+      # 봉 — 후려친다. 날이 없으니 **크게 돈다** (가장 넓은 횡전 21도)
+      봉:
+        lunge: 0.08
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.04, yaw: 11, pitch: -2 }
+        script:
+          - { at: 0.00, yaw: 10, pitch: -3 }
+          - { at: 0.35, yaw: -11, pitch: 4, lunge: 0.08, hand: 주 }   # 몸통째 후려친다
+          - { at: 0.70, yaw: -6, pitch: 1, lunge: -0.03 }             # 되돌아온다
+          - { at: 1.00 }
+      # 단검 — 속검. 몸을 거의 안 쓴다(그것이 속검이다). 대신 **두 손이 두 번 번쩍인다**
+      단검:
+        lunge: 0.05
+        pose: 없음
+        pose_ticks: 0
+        windup: { yaw: 4, pitch: -2 }
+        script:
+          - { at: 0.00, yaw: 4, pitch: 2, lunge: 0.05, hand: 주 }     # 긋는다 (속검 — 발이 거의 안 나간다)
+          - { at: 0.30, yaw: -5, pitch: -2, hand: 부 }                # 되받아 긋는다 (왼손)
+          - { at: 0.55, yaw: 2, pitch: 1, lunge: -0.02 }              # 되돌아온다
+          - { at: 1.00 }
+      # ★ 암기 — **던진다**. 여기가 사용자가 이름을 대어 청구한 자리다.
+      #   손목이 아니라 **몸이 던진다**: 어깨가 앞으로 나가고(yaw −), 상체가 채찍처럼 꺾이고(pitch +11),
+      #   체중이 앞으로 실린다(lunge 0.18 — 예전 0.05 의 세 배 반). 그리고 **따라 나간 뒤 다시 벼른다**:
+      #   0.60 에서 몸이 뒤로 젖혀지며(pitch −7) 어깨가 뒤로 돌아간다(yaw +9) — 다음 암기를 뽑아 쥐는 자세다.
+      #   연속으로 던지면 이 끝자세가 곧 다음 던짐의 **예비 동작**이 된다 (거짓말 없이 얻은 windup).
+      암기:
+        lunge: 0.18
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.08, yaw: 10, pitch: -11 }                 # 초식에서만: 몸을 빼고 팔을 뒤로 젖힌다
+        script:
+          - { at: 0.00, yaw: -6, pitch: 11, lunge: 0.18, hand: 주 }   # **사출** — 상체가 앞으로 꺾인다
+          - { at: 0.30, yaw: -3, pitch: 5 }                           # 팔이 따라 나간다 (follow-through)
+          - { at: 0.60, yaw: 9, pitch: -7, lunge: -0.05 }             # **다시 벼른다** — 뒤로 젖히며 뽑는다
+          - { at: 1.00 }
+      # 활 — 몸을 주지 않는다. 바닐라가 이미 시위를 당기는 자세를 그린다 (겹치면 그것이 거짓말이다)
+      활:
+        lunge: 0.00
+        pose: 없음
+        pose_ticks: 0
+        script: null
+      # 권갑 — 다리→허리→어깨의 사슬. **원-투**: 왼손 잽(부) 뒤에 오른손 크로스(주)가 허리를 끌고 나온다
+      권갑:
+        lunge: 0.10
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.03, yaw: 5, pitch: -1 }
+        script:
+          - { at: 0.00, yaw: 3, pitch: 1, lunge: 0.03, hand: 부 }     # 잽 — 앞손이 먼저 간다
+          - { at: 0.35, yaw: -8, pitch: 2, lunge: 0.08, hand: 주 }    # 크로스 — 허리가 돌며 지른다
+          - { at: 0.65, yaw: -3, lunge: -0.03 }                       # 되돌아온다 (가드로 돌아간다)
+          - { at: 1.00 }
+      # 맨손 — 권풍. 권갑과 같은 사슬이나 얕다 (실린 것이 없다)
+      맨손:
+        lunge: 0.10
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.03, yaw: 4 }
+        script:
+          - { at: 0.00, yaw: 3, hand: 부 }
+          - { at: 0.35, yaw: -7, pitch: 2, lunge: 0.09, hand: 주 }
+          - { at: 0.70, yaw: -2, lunge: -0.03 }                       # 되돌아온다
+          - { at: 1.00 }
+      # 겸 — **건다, 그리고 당긴다**. 예전엔 음수 전진 하나였다 (그래서 그냥 뒤로 미끄러졌다).
+      #   이제 순서가 있다: 한 발 들어가 걸고(0.06) → **몸이 빠지며 끌어온다**(−0.10)
+      겸:
+        lunge: -0.10
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: 0.06, yaw: -6 }
+        script:
+          - { at: 0.00, yaw: -8, pitch: 3, lunge: 0.06, hand: 주 }    # 안으로 넣어 **건다**
+          - { at: 0.35, yaw: 9, pitch: -2, lunge: -0.10 }             # **당긴다** — 몸이 뒤로 빠진다
+          - { at: 0.70, yaw: 4 }
+          - { at: 1.00 }
+      # 월아산 — 크게 들었다 내린다. 웅크림(SNEAKING)이 **예비**고, 낙차(pitch 18도)가 **본편**이다
+      월아산:
+        lunge: 0.12
+        pose_ticks: 4
+        windup: { lunge: -0.05, yaw: 8, pitch: -9 }
+        script:
+          - { at: 0.00, yaw: 7, pitch: -7 }           # 웅크려 **든다**
+          - { at: 0.35, yaw: -6, pitch: 11, lunge: 0.12, pose: 없음, hand: 주 }   # 일어서며 **내린다**
+          - { at: 0.70, yaw: -2, pitch: 5, lunge: -0.04 }             # 되돌아온다
+          - { at: 1.00 }
+      # 구 — 찍고 **끈다** (갈고리다). 찍은 뒤 몸이 뒤로 빠지며 건 것을 끌어온다
+      구:
+        lunge: 0.11
+        pose: 없음
+        pose_ticks: 0
+        windup: { lunge: -0.04, yaw: 5, pitch: -8 }
+        script:
+          - { at: 0.00, yaw: 4, pitch: -6 }
+          - { at: 0.35, yaw: -4, pitch: 10, lunge: 0.11, hand: 주 }   # 찍는다
+          - { at: 0.65, yaw: -2, pitch: 4, lunge: -0.06 }             # **끈다** (걸린 것을 당긴다)
+          - { at: 1.00 }
+      # 중병기 — 짓뭉갠다. 웅크렸다(SNEAKING) 위에서 아래로 20도를 떨군 뒤 **다시 가라앉는다**
+      중병기:
+        lunge: 0.14
+        pose_ticks: 6
+        windup: { lunge: -0.06, yaw: 9, pitch: -10 }
+        script:
+          - { at: 0.00, yaw: 8, pitch: -8 }
+          - { at: 0.40, yaw: -7, pitch: 12, lunge: 0.14, pose: 없음, hand: 주 }
+          - { at: 0.70, yaw: -3, pitch: 6, lunge: -0.05 }   # 짓눌러 가라앉으며 되돌아온다
+          - { at: 1.00 }
+      # 부 — 가장 무거운 손 (0.9/s). 가장 크게 들고(pitch −10) **가장 크게 떨군다**(pitch +12, 22도)
+      부:
+        lunge: 0.15
+        pose_ticks: 6
+        windup: { lunge: -0.07, yaw: 10, pitch: -12 }
+        script:
+          - { at: 0.00, yaw: 9, pitch: -10 }          # 머리 위로 든다
+          - { at: 0.40, yaw: -8, pitch: 12, lunge: 0.15, pose: 없음, hand: 주 }   # 찍어벤다 (가장 무거운 손)
+          - { at: 0.70, yaw: -3, pitch: 7, lunge: -0.05 }   # 도끼를 뽑으며 되돌아온다
+          - { at: 1.00 }
+      무관:   null
+      짐승:   null
+    # by_trail — **몸을 통째로 던지는 궤적만** 계열을 이긴다 (돌진은 어떤 병기를 들었든 몸을 던지는 것이다).
+    #   ★ '시'(던지고 쏨)는 **여기서 뺐다.** 예전엔 시가 계열을 이겨서 **암기의 몸이 영영 안 나왔다** —
+    #     암기의 던짐도, 활의 정지도 전부 시의 밋밋한 한 줄(lunge 0.05)에 먹혔다.
+    #     던지는 몸은 계열이 안다: **암기는 던지고 활은 선다.** 그래서 시는 계열에게 돌려줬다.
+    by_trail:
+      돌:                                                  # 돌진 — 몸을 앞으로 던진다 (철산고·보법)
+        lunge: 0.55
+        pose: SWIMMING
+        pose_ticks: 6
+        script:
+          - { at: 0.00, pose: SWIMMING, lunge: 0.55, pitch: 3, hand: 주 }
+          - { at: 0.50, pitch: -2 }                        # 부딪히고 상체가 선다
+          - { at: 1.00 }
+      원:                                                  # 회전 베기 — 몸이 **돈다** (매화만개·태극혜검)
+        lunge: 0.10
+        pose: SPIN_ATTACK
+        pose_ticks: 5
+        script:
+          - { at: 0.00, pose: SPIN_ATTACK, yaw: -10, lunge: 0.10, hand: 주 }
+          - { at: 0.35, yaw: 10, hand: 부 }                # 한 바퀴 — 좌우로 크게 쓸며 돈다
+          - { at: 0.70, yaw: -4 }
+          - { at: 1.00 }
+
+  # ─── 암기 투척 — 던진 물건은 **실제로 날아간다** (복제가 아니다) ───
+  throw:
+    motion: 암기_투척
+    classes: [암기]               # 이 계열의 '시' 궤적만 물건이 난다 (활은 바닐라 화살이 이미 3D 다)
+    spin_axis: X                  # 비수는 제 길이축을 돌며 난다
+
+  # ─── 두 층의 조율 — 참격선이 뜨면 파티클 궤적은 물러선다 (0 은 아니다) ───
+  blend:
+    trail_particle_ratio: 0.35    # 3D 획이 떴으면 궤적 파티클은 35% 만
+    trail_particle_min: 1         # 그래도 0 은 아니다 — 획이 지나간 자리는 언제나 남는다
+    keep_impact: true             # 타격 파티클은 깎지 않는다 (격의 사다리는 타격에서 읽힌다)
+
+  # ─── 배선 (형태·오의) ───
+  bind:
+    forms:
+      검기_두름: null             # 두름 = 손끝 잔광 + **날의 기**(sheaths) — 고리가 아니다
+      검강_두름: null
+      검기_참격: 검기_투사
+      강기_포:   강기_투사
+      호신강기:  호신_고리
+      이기어검:  어검_비행
+    ultimates:
+      maehwa_mangae:  매화_개화
+      taegeuk_hyegeom: 태극_대기
+      jewang_gunrim:  군림_강림
+      hyeolhae_malli: 혈해_범람
+      # ── 15문파 전승 오의 17종 — 원은 펴지고, 선은 앞에 선다 ──
+      isipsasu_maehwa:       매화_개화     # 화산의 오의는 매화다 (문파의 지문 — 형체를 나눠 쓴다)
+      jaha_nanhwa:           매화_개화
+      changgung_muae:        검풍_개화
+      seomjeon_sipsam:       뇌격_강림
+      manchon_nakhwa:        독무_범람     # 당가의 원 = 하늘을 덮는 재
+      muhyeong_jidok:        독무_범람     # 응집은 없다. 형체는 **터진 뒤에만** 뜬다
+      oho_danmun_do:         뇌격_강림
+      honwon_byeokryeok_do:  검풍_개화
+      baekbo_singwon:        뇌격_강림
+      yeorae_sinjang:        장심_개화
+      hangryong_sippalchang: 뇌격_강림
+      unryong_daepalsik:     검풍_개화
+      taeheo_doryong:        뇌격_강림
+      cheonha_36geom:        검풍_개화
+      sail_geom:             뇌격_강림
+      cheongwol_geom:        뇌격_강림
+      namhae_36geom:         검풍_개화
+
+# ══════════════════════════════════════════════════════════════════════
+#  기본 초식(基本) — 【무공이 없어도 병기는 궤적을 그린다】
+# ══════════════════════════════════════════════════════════════════════
+# 사용자 보고: "공격 모션은 아직 안 바뀐 거 같고" — 원인은 3D 층이 **무공 시전 경로 안에만** 있었던 것이다.
+# 무공을 안 배운 채(또는 배운 무공의 계열이 아닌 병기로) 좌클릭하면 아무 일도 일어나지 않았다.
+# 그것이 **가장 흔한 경로**다 (연무장에서 크리에이티브로 칼을 들고 치는 사람).
+#
+# 【정본】 무공은 궤적을 **바꾸는 것**이지, 무공이 없다고 궤적이 **없는** 것이 아니다.
+#   그래서 여기에 '무공 없는 손'의 히트박스·프레임을 등록한다. 코드는 이것을 읽는다 (하드코딩 금지).
+#   이 값은 지금 **연출 전용**이다 — 판정은 바닐라 피해가 그대로 낸다 (외공기).
+#   훗날 이 값이 판정으로 승격되면 같은 등록부를 읽게 된다 (그때 이 주석을 지워라).
+basic_strike:
+  cooldown_ticks: 4               # 연출 최소 간격 — 바닐라 연타에 획이 겹쳐 쌓이지 않게
+  by_class:
+    검:     { trail: 호, range: 3.0, angle: 100, frames: [2, 2, 4] }
+    도:     { trail: 호, range: 3.0, angle: 110, frames: [3, 2, 5] }
+    창:     { trail: 선, range: 5.0, angle: 30,  frames: [4, 2, 6] }   # angle 칸 = 선의 폭
+    봉:     { trail: 호, range: 4.0, angle: 120, frames: [3, 2, 5] }
+    단검:   { trail: 호, range: 2.5, angle: 80,  frames: [1, 1, 3] }
+    겸:     { trail: 호, range: 3.0, angle: 100, frames: [3, 2, 5] }
+    부:     { trail: 호, range: 3.0, angle: 90,  frames: [6, 3, 10] }
+    월아산: { trail: 호, range: 3.5, angle: 120, frames: [5, 3, 9] }
+    구:     { trail: 호, range: 3.0, angle: 90,  frames: [4, 2, 7] }
+    중병기: { trail: 호, range: 3.5, angle: 130, frames: [7, 3, 11] }
+    권갑:   { trail: 호, range: 2.5, angle: 90,  frames: [1, 1, 3] }
+    맨손:   { trail: 호, range: 2.5, angle: 90,  frames: [1, 1, 3] }
+    암기:   { trail: 시, range: 16.0, angle: 1,  frames: [2, 1, 4] }   # 던진다 (ranged.암기 사거리 16)
+    활:     null                  # 바닐라 활이 제 일을 한다 — 우리가 얹을 것이 없다
+    무관:   null
+    짐승:   null
+
+# ══════════════════════════════════════════════════════════════════════
+#  판정의 눈(判定の眼) — 【디버그】 보이는 것이 정말 맞는 것인가
+# ══════════════════════════════════════════════════════════════════════
+# 【왜 있는가】 이 프로젝트의 규칙은 **"보이는 것 = 맞는 것"** 이다. 그런데 그것을 **확인할 방법이
+#   없었다.** 성능은 Metrics 가 재고, 등록부는 감사가 재는데, **판정만은 아무도 못 봤다** —
+#   히트박스가 정말 그 각도인지, 2d6 이 무엇을 굴렸는지, 피해가 어느 층에서 깎였는지.
+#   오늘 이 프로젝트에서 눈이 스무 번 넘게 거짓말했다. **눈을 시험할 눈이 필요하다.**
+#
+# 【정직의 못】 이 눈은 히트박스를 **다시 그리지 않는다.** 판정이 쓰는 그 함수(inArc·inLine·inCircle)에
+#   점을 물어본다 — "이 자리는 맞는 자리인가?" **그리는 코드와 맞히는 코드가 하나여야** 그림이
+#   판정에 대해 거짓말할 수 없다. (감사가 이 사실을 지킨다: 눈이 제 기하학을 따로 갖는 순간 위반이다.)
+#
+# 【켠 사람에게만 보인다】 파티클은 시전자 한 명에게만 간다 (관중의 화면을 더럽히지 않는다).
+#   꺼져 있으면 **비용이 0 이다** (판정 경로에 if 한 줄).
+eye:
+  hitbox:
+    particle: happy_villager     # 맞는 자리 — 판정 함수가 "그렇다"고 답한 점만 찍힌다
+    step: 0.6                    # 표본 간격(m) — 촘촘할수록 정확하지만 비싸다
+    height: 0.3                  # 발치에서 띄우는 높이 (지면에 묻히지 않게)
+    max_points: 140              # 【예산】 한 번의 판정에 찍는 점의 상한 — 눈이 서버를 죽이면 안 된다
+  targets:
+    particle: crit               # 실제로 목록에 오른 몸 — 히트박스가 고른 자 (그 머리 위에 찍는다)
+  log: true                      # 판정의 산수를 채팅으로 (2d6 · 실행력 내역 · 저항 · 피해가 깎인 층)

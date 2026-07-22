@@ -1098,7 +1098,7 @@ public final class SkillEngine {
         return new HeavySlash(
                 m.get("enabled") == null || Boolean.TRUE.equals(m.get("enabled")),
                 Collections.unmodifiableList(classes),
-                String.valueOf(m.getOrDefault("ink", "청회")),
+                String.valueOf(m.getOrDefault("ink", "청회")), str(m.get("ink_alt")),
                 dblOr(m.get("radius"), 1.5), dblOr(m.get("sweep_deg"), 70.0),
                 dblOr(m.get("tilt_deg"), 20.0), dblOr(m.get("center_height"), 1.0),
                 dblOr(m.get("band_width"), 0.55), Math.max(1, intOr(m.get("band_rows"), 4)),
@@ -1179,7 +1179,7 @@ public final class SkillEngine {
                 spark,
                 m.get("calm_held_aura") == null || Boolean.TRUE.equals(m.get("calm_held_aura")),
                 // ★ 몸 둘레를 도는 호 (EffectLib 기하) — 이름이 없으면 안 그린다 (옛 동작 그대로)
-                str(m.get("geom_particle")), str(m.get("geom_ink")),
+                str(m.get("geom_particle")), str(m.get("geom_ink")), str(m.get("geom_ink_alt")),
                 // ★ 호의 각은 **판의 sweep_deg 와 다른 것**이다. 재사용했다가 한 점으로 접혔다
                 //   (sweep_deg 는 0 으로 맞춰져 있다 — 프레임이 흩어지지 않게 한 값이다).
                 dblOr(m.get("geom_sweep_deg"), 150.0),
@@ -1595,7 +1595,7 @@ public final class SkillEngine {
                             double bladePitchDeg,
                             int drawTicks, int fadeTicks, String billboard, boolean alternate,
                             int brightness, KigiSpark spark, boolean calmHeldAura,
-                            String geomParticle, String geomInk, double geomSweepDeg,
+                            String geomParticle, String geomInk, String geomInkAlt, double geomSweepDeg,
                             double geomStepDeg, boolean plate,
                             String model3d, String model3dAnim,
                             double model3dUp, double model3dYaw, double model3dPitch) {
@@ -1624,7 +1624,7 @@ public final class SkillEngine {
     }
 
     /** 부의 횡참 — 짧고 굵은 밴드. 판정은 궤적에 닿으면 딜 (heavy_slash 절) */
-    public record HeavySlash(boolean enabled, List<String> applyToClasses, String ink,
+    public record HeavySlash(boolean enabled, List<String> applyToClasses, String ink, String inkAlt,
                              double radius, double sweepDeg, double tiltDeg, double centerHeight,
                              double bandWidth, int bandRows, double bandJitter, int sweepTicks,
                              double stepDeg, int trailDelayTicks,
