@@ -84,10 +84,12 @@ echo "[5/5] 재기동 (백그라운드)"
 cd "$RUN" && nohup "$SERVER_JAVA" -Xms2G -Xmx2G \
   -DHONCHEON_PACK_DIR="$ROOT/resourcepack" -jar paper.jar nogui \
   > "$RUN/server-console.log" 2>&1 &
-for _ in $(seq 1 60); do
+# ★ 대기 150초 (2026-07-23): 60초는 실부팅(~90~105초)보다 짧아 성공을 exit 1 로 오보했다
+for _ in $(seq 1 150); do
   grep -q 'Done (' "$RUN/server-console.log" 2>/dev/null && break
   sleep 1
 done
-grep -E 'Done \(|HoncheonMVT\] 혼천' "$RUN/server-console.log" | tail -2
+grep -E 'Done \(|HoncheonMVT\] 혼천' "$RUN/server-console.log" | tail -2 \
+  || { echo "경고: 150초 안에 Done 이 안 떴다 — 콘솔을 직접 확인하라"; exit 1; }
 echo
 echo "→ 인게임에서 광장 중앙에 서서: /혼천 조성   (재조성은 덮어쓴다)"
