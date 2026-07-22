@@ -42,7 +42,7 @@ VANILLA_ITEM_DIR = PACK / "assets" / "minecraft" / "items"
 # 계열 → 바닐라 도구 (Weapons.java Series.base — 18반 병기는 바닐라 도구를 징발했다)
 SERIES_TOOL = {
     "sword": "sword", "dao": "sword", "spear": "sword", "gauntlet": "sword", "dagger": "sword",
-    "bu": "axe", "gyeom": "hoe", "wolasan": "shovel", "gu": "pickaxe",
+    "bu": "axe", "gyeom": "hoe", "bong": "shovel", "gu": "pickaxe",
 }
 # 등급 → 바닐라 재질 (Weapons.java Base.byGrade — **팩 없이도 이 색이 등급이다**)
 GRADE_MATERIAL = {
@@ -96,6 +96,23 @@ def write_vanilla_dispatch() -> int:
             else:
                 node = _model_ref(f"honcheon:item/{key}")   # key 가 이미 'weapon/…' 을 물고 있다
             add(f"{GRADE_MATERIAL[grade]}_{tool}", key, node)
+
+    # ─── 이주 별칭 — 월아산 → 봉 (2026-07-23 사용자 확정: 계열 삭제·대체) ───
+    #   이미 세계에 나간 옛 아이템은 strings[0] 에 weapon/wolasan_* 을 문 채로 남아 있다
+    #   (청하현 병기대 등). 팩이 옛 키를 봉 모델로 받아 준다 — 실물 회수 없이 이주가 끝난다.
+    for grade in _GRADE_FORM:
+        if grade == "mabyeong":
+            node = {
+                "type": "minecraft:select",
+                "property": "minecraft:custom_model_data",
+                "index": 1,
+                "cases": [{"when": "revealed",
+                           "model": _model_ref("honcheon:item/weapon/bong_mabyeong")}],
+                "fallback": _model_ref("honcheon:item/weapon/bong_jeongryeon"),
+            }
+        else:
+            node = _model_ref(f"honcheon:item/weapon/bong_{grade}")
+        add(f"{GRADE_MATERIAL[grade]}_shovel", f"weapon/wolasan_{grade}", node)
 
     # ─── 명병 8 — 등급은 무엇이든 될 수 있다 (범철 매화검도 매화검이다) → 5재질 전부에 얹는다 ───
     for sect, series in MYEONG_BASE.items():

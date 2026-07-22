@@ -4637,7 +4637,7 @@ final class CheonghaBuilder {
                 Weapons.makeSeeded(Weapons.Series.도, Weapons.Grade.범철, seed + 1),      // 표사의 도
                 Weapons.makeSeeded(Weapons.Series.검, Weapons.Grade.범철, seed + 2));
         shelf(world, cx + 39, cy + 3, cz + 52, Material.DARK_OAK_SHELF, BlockFace.NORTH,
-                Weapons.makeSeeded(Weapons.Series.월아산, Weapons.Grade.범철, seed + 3),
+                Weapons.makeSeeded(Weapons.Series.봉, Weapons.Grade.범철, seed + 3),
                 null,                                                                     // 빈 칸 = 지금 표행 나간 병기
                 Weapons.makeSeeded(Weapons.Series.단검, Weapons.Grade.범철, seed + 4));
         // 상단 = 시렁 위 조명. v7.1 — 등롱 → 벽등: 시렁 둘이 남벽 안줄의 소품 예산(3점)에 들어왔다.

@@ -57,7 +57,7 @@ import java.util.concurrent.ThreadLocalRandom;
  *       <b>감당 격</b>뿐이다 (equipment.yml: "가치는 보정이 아니라 생존").</li>
  *   <li><b>PDC가 진실</b> — 등급·계열·치우침·품·이력을 재질로 근사하지 않는다. 한 번 벼려진 병기의 값은
  *       아이템에 영구히 새겨지고, 같은 입력으로 다시 만들면 같은 값이 나온다 (제작은 순함수다).</li>
- *   <li><b>팩 게이트</b> — 팩에 구워지지 않은 계열(부·겸·월아산·구)에는 {@code item_model} 을 붙이지 않는다.</li>
+ *   <li><b>팩 게이트</b> — 팩에 구워지지 않은 계열(부·겸·봉·구)에는 {@code item_model} 을 붙이지 않는다.</li>
  *   <li><b>치우침은 합을 보존한다</b> — {@link Bias} 는 공격력과 공속을 <b>서로의 역수</b>로 민다
  *       (곱 = 초당 피해가 불변). 한쪽으로 치우친 병기는 다른 쪽을 정확히 그만큼 잃는다 — 상위 호환이 없다.
  *       <b>사거리는 계열이 정한다</b> — 치우침도 품도 재련도 사거리를 건드리지 않는다 (사용자 규정).</li>
@@ -78,7 +78,7 @@ public final class Weapons {
 
     // ══════════ PDC 태그 규약 — 판정층(SkillEngine)이 읽는 키 ══════════
 
-    /** 계열 — 값: 검·도·창·권갑·단검·부·겸·월아산·구 */
+    /** 계열 — 값: 검·도·창·권갑·단검·부·겸·봉·구 (옛 "월아산"은 Series.of 가 봉으로 이주) */
     public static final NamespacedKey KEY_SERIES = key("weapon_series");
     /** 등급 — 값: 범철·정련·보병·신병·마병 */
     public static final NamespacedKey KEY_GRADE = key("weapon_grade");
@@ -233,7 +233,7 @@ public final class Weapons {
         // ─── 바닐라 도구 징발 (18반 병기) — 팩 6차에서 텍스처 16장이 구워져 점등됐다 ───
         부("bu", Base.AXE, "중병기", -3.1, 0.0),        // 0.9/s — 가장 느리고 한 방이 가장 무겁다 (방패 파괴)
         겸("gyeom", Base.HOE, "단검", -2.1, 0.0),          // 1.9/s — 걸어 채는 날. 가볍고 빠르다
-        월아산("wolasan", Base.SHOVEL, "봉", -3.0, 1.0),      // 1.0/s — 승려의 장병기. 간격 4.0m
+        봉("bong", Base.SHOVEL, "봉", -3.0, 1.0),      // 1.0/s — 날 없는 장병기. 간격 4.0m (월아산 계승 — 2026-07-23 사용자 확정)
         구("gu", Base.PICKAXE, "검", -2.5, 0.0);        // 1.5/s — 걸고 당긴다. 중간
 
         /** 팩 모델 키의 계열 부분. null = 팩 미구움 → item_model 부착 금지 */
@@ -253,13 +253,16 @@ public final class Weapons {
         }
 
         public static Series of(String korean) {
+            if ("월아산".equals(korean)) {
+                return 봉;   // 이주 별칭 — 월아산 삭제·봉 대체 (2026-07-23). 옛 PDC·명령 입력을 받아 준다
+            }
             for (Series s : values()) {
                 if (s.name().equals(korean)) {
                     return s;
                 }
             }
             throw new IllegalArgumentException("없는 계열: " + korean
-                    + " (검·도·창·권갑·단검·부·겸·월아산·구)");
+                    + " (검·도·창·권갑·단검·부·겸·봉·구)");
         }
 
         /** 계열 표준 공속 (치우침 없음) */
@@ -744,7 +747,7 @@ public final class Weapons {
                 key("weapon_speed"), attackSpeed(series, bias) - BASE_ATTACK_SPEED,
                 AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
         if (series.reachMod != 0.0) {
-            // 창·월아산 — 간격이 곧 병기의 성격. 계열 고정: 치우침·품·강화가 못 건드린다
+            // 창·봉 — 간격이 곧 병기의 성격. 계열 고정: 치우침·품·강화가 못 건드린다
             meta.addAttributeModifier(Attribute.ENTITY_INTERACTION_RANGE, new AttributeModifier(
                     key("weapon_reach"), series.reachMod,
                     AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
@@ -890,7 +893,7 @@ public final class Weapons {
             case 단검 -> "";
             case 부 -> ChatColor.DARK_GRAY + "(斧)";
             case 겸 -> ChatColor.DARK_GRAY + "(鎌)";
-            case 월아산 -> ChatColor.DARK_GRAY + "(月牙鏟)";
+            case 봉 -> ChatColor.DARK_GRAY + "(棒)";
             case 구 -> ChatColor.DARK_GRAY + "(鉤)";
         };
     }
@@ -912,7 +915,7 @@ public final class Weapons {
             case 단검 -> "짧고 가볍다 — 가장 빠른 손. 대신 한 합이 가볍다.";
             case 부 -> "가장 느리고 가장 무겁다 — 병기를 부수는 병기.";
             case 겸 -> "걸어 채는 날 — 가볍고 빠르다.";
-            case 월아산 -> "승려의 장병기 — 길고 느리며 간격이 있다.";
+            case 봉 -> "날이 없는 장병기 — 길고 느리며 간격이 있다.";
             case 구 -> "걸고 당긴다 — 상대의 병기를 얽는 손.";
         };
         return List.of(byGrade, bySeries);

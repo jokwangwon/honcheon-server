@@ -40,13 +40,6 @@
         }
       },
       {
-        "when": "honcheon:weapon/myeong/gaebang",
-        "model": {
-          "type": "minecraft:model",
-          "model": "honcheon:item/weapon/myeong/gaebang"
-        }
-      },
-      {
         "when": "honcheon:weapon/myeong/gonryun",
         "model": {
           "type": "minecraft:model",

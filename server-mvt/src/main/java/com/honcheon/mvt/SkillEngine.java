@@ -1562,7 +1562,7 @@ public final class SkillEngine {
      *                      <b>모델</b>로 가르고 코드가 갈아끼운다 ({@code SkillDisplay.advanceFrames}).
      *                      비었거나 1개면 교체가 꺼진다 (가역)
      * @param frameTicks    단계당 틱 — 이 간격으로 다음 단계로 넘어간다 (3단계 × 3 = draw_ticks 9 와 정합)
-     * @param applyToTrails 이 basic trail 무기에만 검기를 씌운다 (호 = 검·도·부·겸·월아산 sweep)
+     * @param applyToTrails 이 basic trail 무기에만 검기를 씌운다 (호 = 검·도·부·겸·봉 sweep)
      * @param replaceStroke true 면 이 무기의 기존 무협 참격 아크·궤적 파티클을 억제한다
      * @param scale         초승달 크기(대략 m) — 크게, 3인칭에서 잘 보이게
      * @param centerHeight  발바닥에서 <b>공전 중심</b> 높이(m) — 몸의 중심
@@ -1610,7 +1610,7 @@ public final class SkillEngine {
 
         /**
          * ★ 이 무기가 검기를 받는가 — <b>원형(archetype) 축이 trail 축보다 우선한다</b> (2026-07-21 ·
-         * 외부 검토 P0). 호 궤적은 검·도뿐 아니라 부(도끼)·월아산도 쓰므로, trail 만 보면 도끼가
+         * 외부 검토 P0). 호 궤적은 검·도뿐 아니라 부(도끼)·봉도 쓰므로, trail 만 보면 도끼가
          * 검압 초승달을 받아 무기군 원형(vfx_primitives.md)이 런타임에서 무너진다.
          * {@code apply_to_classes} 가 있으면 무기 분류로만 판단하고, 없으면 옛 trail 규약(가역).
          */

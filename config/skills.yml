@@ -43,7 +43,7 @@ schema:
 # MVT SkillListener 의 SKILL_BY_WEAPON_CLASS 는 이 표를 읽어야 한다 (하드코딩 금지).
 # 위력 수치는 combat.yml damage.weapon_power — 여기는 '어떤 무공이 어떤 병장기에 실리는가'만.
 weapon_classes:
-  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 월아산, 구, 중병기, 부]
+  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 구, 중병기, 부]   # 월아산 삭제 → 봉 통합 (2026-07-23 사용자 확정)
   unarmed_family: [맨손, 권갑]     # 권갑은 맨손의 연장 — 권법·장법·박투·금나술·독공이 그대로 실린다
   rule: "무공은 자기 weapon_class 의 병장기를 들었을 때만 온전히 나간다. 다른 병장기를 들면 다운캐스트('맨 기술')"
   unarmed_rule: "【사용자 지시】 권법을 배운 자는 무기를 들지 않아도 초식이 나간다 — 맨손이 곧 그 무공의 병장기다"

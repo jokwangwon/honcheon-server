@@ -595,7 +595,7 @@ SERIES_INK = {
     "dagger": (DK_PLUM, DK_PLUM_HI) + _ORN_BONE + (PGRN_V, mix(PGRN_V, MOON_V, 0.4)),  # 비수 — 흑자주·독록
     "bu": (DK_SLATE, DK_SLATE_HI) + _ORN_BONE + (COPPER_V, COPPER_VHI),          # 부 — 먹흑·적동
     "gyeom": (DK_GREEN, DK_GREEN_HI) + _ORN_BONE + (CYANJ_V, CYANJ_VHI),         # 겸 — 심녹·청옥
-    "wolasan": (DK_PLUM, DK_PLUM_HI) + _ORN_BONE + (MOON_V, MOON_V),             # 월아산 — 흑자주·백월
+    "bong": (DK_PLUM, DK_PLUM_HI) + _ORN_BONE + (MOON_V, MOON_V),                # 봉 — 흑자주·백월 (월아산 계승)
     "gu": (DK_PLUM, DK_PLUM_HI) + _ORN_BONE + (VIOL_V, VIOL_VHI),                # 구 — 흑자주·남자주
 }
 _ORN = {"beomcheol": 0, "jeongryeon": 1, "bobyeong": 2, "sinbyeong": 3, "mabyeong": 4}
@@ -649,7 +649,7 @@ _MYEONG_MOTIF = {"hwasan": "매화", "mudang": "태극", "haenam": "파도",
 #   느낌"】 — "calm"+정렬을 **기본 팩 배선**으로 전파한다 (9계열×5등급 45 + 명병 12 = 57).
 #   16차 유보 배선 해소: ① _wisps·수실/홍영 acc 의 계열 악센트 배선 (옥 폴백 폐지 —
 #   SERIES_INK 8차 색표 승계: 검=옥·도=진홍·창=호박·권갑=금·비수=독록·부=적동·겸=청옥·
-#   월아산=백월·구=남자주 · 명병은 _SECT_ACCENT 상속) ② 명병 문양의 기맥 번역
+#   봉=백월·구=남자주 · 명병은 _SECT_ACCENT 상속) ② 명병 문양의 기맥 번역
 #   (_MYEONG_MOTIF — 매화·태극·파도·구름·새끼줄이 _qi_vein 파형·기혈 매듭에 녹는다 ·
 #   한 획 규칙 R3 준수) ③ 전 계열 기맥 오버레이 배선 (파일럿 검·도 → 9계열+명병 —
 #   스타일 속 무늬(vein=True)는 전 호출부에서 잠근다). "full" 은 대조 기록으로만 남는다.
@@ -908,7 +908,7 @@ def _sweep_coord(series, t, rel):
     """계열 스윕 서명 — 광택 하이라이트가 표면 위를 흐르는 축 (0..1, 위상과 비교)."""
     if series == "dao":                            # 도 — 넓은 배를 가로지르는 사행
         return (0.62 * t + 0.5 * rel) % 1.0
-    if series in ("gyeom", "gu", "wolasan"):       # 곡선 병기 — 호를 따라 흐른다
+    if series in ("gyeom", "gu"):                  # 곡선 병기 — 호를 따라 흐른다
         return t
     if series == "spear":                          # 창 — 날에서 자루로 흘러내린다
         return (1.0 - t) % 1.0
@@ -1255,7 +1255,7 @@ _HEAD_FORM = {   # 계열 → (고리 r · 앞 브래킷 이격(None=없음) · 
     "dagger": (1.6, 0.45, False, 1.0),   # 비수 — 축소 의장 (작고 응축 — 브래킷이 고리를 문다)
     "bu": (2.1, None, True, 1.05),       # 부 — 도끼 목 고리 + 깃
     "gyeom": (2.0, None, True, 1.0),     # 겸 — 슴베 목 고리
-    "wolasan": (1.85, None, False, 1.3), # 월아산 — 쌍월 (뒤 소형 고리는 스펙이 단다)
+    "bong": (1.85, None, False, 1.3),    # 봉 — 장병 배율 유지 (월아산 계승 · 의장은 머리테 곁)
     "gu": (1.95, 1.15, True, 1.0),       # 구 — 갈고리 관
 }
 
@@ -1662,7 +1662,7 @@ PART_CANON = frozenset((
     "창날", "소켓", "홍영", "준",                  # 창
     "부채날", "수염", "도끼목", "폴",              # 부
     "낫날", "끝휨", "슴베목", "매듭",              # 겸 (+개방 매듭)
-    "월아", "삽날", "삽목", "달목",                # 월아산
+    "머리테",                                      # 봉 (棒 — 날이 없다. 위 끝 쇠테가 유일한 머리다)
     "구신", "갈고리", "미늘",                      # 구
     "손등판", "마디", "엄지", "손목띠", "띠끝", "손등능선",   # 권갑
     # 명병 문양·전용 (§2 명병)
@@ -1683,7 +1683,7 @@ _PART_ORDER = {
     "spear": (("준", "자루"), ("자루", "소켓"), ("소켓", "창날")),
     "bu": (("물미관", "자루"), ("자루", "도끼목"), ("도끼목", "부채날")),
     "gyeom": (("물미관", "자루"), ("자루", "슴베목"), ("슴베목", "낫날")),
-    "wolasan": (("삽날", "삽목"), ("삽목", "자루"), ("자루", "달목"), ("달목", "월아")),
+    "bong": (("물미관", "자루"), ("자루", "머리테")),
     "gu": (("물미관", "자루"), ("자루", "코등이"), ("코등이", "구신"), ("구신", "갈고리")),
     "gauntlet": (("손목띠", "손등판"), ("손등판", "마디")),
     "gaebang": (),                                 # 봉 — 축 순서 부위가 없다 (매듭은 봉 위)
@@ -3203,74 +3203,53 @@ def _spec_gyeom(salt, grade, rings, blen, tassel, mab):
     return (min(lox, 0.6), min(loy, 2.2), 17.6 + blen * 0.3, 15.2), sh, h_ex
 
 
-def _spec_wolasan(salt, grade, rings, blen, tassel, mab):
-    """월아산 — Codex §3: 자루 12% 축소 · 달 r 4.2+0.18blen/폭 0.65+2.05sin · 삽날 확대 ·
-    양단 명암 분리(달=밝은 인선 · 삽=어두운 앵커) · 고리는 날 목에 누적 · 짝 띠 왕관."""
-    b8 = _ink8("wolasan")
+def _spec_bong(salt, grade, rings, blen, tassel, mab):
+    """봉(棒) — 날이 없다: **온몸이 자루다** (2026-07-23 사용자 확정 — 월아산 삭제·봉 대체).
+    아홉 계열 중 쇠날이 어느 끝에도 없는 유일한 축. 실루엣의 정체는 '긴 나무 한 획'이고,
+    등급은 양끝 쇠테(물미관·머리테)와 고리로만 자란다 — 타구봉의 문법(매듭이 계급)과 같다.
+    길이는 blen 을 그대로 상속한다 (월아산의 장병 footprint 유지 — 간격 4.0m 의 몸)."""
+    b8 = _ink8("bong")
     ink = b8[:2]
     calm17 = _R16 == "calm" and _R16_ALIGN         # 18차 — calm 전 계열 전파
-    sh = [_pn(_vd(_stroke([(-11.0, 8.0), (13.7, 8.0)], 0.62,
-                          _grip_style(salt, 24.7, ink=ink if grade != "beomcheol" else None,
+    tipx = 15.8 + blen * 0.18                      # 위 끝 — 등급이 오르면 조금 길어진다
+    sh = [_pn(_vd(_stroke([(-15.0, 8.0), (tipx, 8.0)], 0.66,
+                          _grip_style(salt, 30.8, ink=ink if grade != "beomcheol" else None,
                                       grade=grade, acc=b8[4:6], vein=not calm17)),
-                  _vrod(0.62)), "자루")]           # 13차 — 자루 슬림 0.72→0.62 (양단 날 유지)
-    # 17차 (R1 실측 — 월아 566px 고립): 달의 안쪽 인(15.9)이 자루 끝(≤14.6)에 닿지 않아
-    # 초승달이 허공에 떠 있었다. 달목을 슴베처럼 초승 아가리 속(16.2)까지 뻗어 물린다 —
-    # 실병 월아산의 결구(月牙는 자루 소켓의 슴베에 물린다). 정본 §2-월아산.
-    sh.append(_pn(_vd(_stroke([(13.6, 8.0), (16.2, 8.0)], 1.0,
-                              _brass_style(salt, grade)), _VD_ORN), "달목"))
-    moon = _arcpts(14.7, 8.0, 4.2 + blen * 0.18, -78, 78, 16)                         # 초승달
-    wm = (_jag(9.0, 1.0) if mab
-          else _crystal(9.0, 1.0) if grade == "sinbyeong" and not calm17 else None)
-    sh.append(_pn(_stroke(moon, lambda t: 0.7 + 2.3 * math.sin(math.pi * t),
-                          _steel_style(salt, grade, hamon_w=0.45, series="wolasan",
-                                       vein=not calm17), wmod=wm),
-                  "월아"))
-    st_ = _steel_style(salt, grade, hamon_w=0.45, groove="root", series="wolasan",
-                       vein=not calm17)            # 18차 — 삽날도 calm 배선 (유보 해소)
-    def spade_style(t, d0, w, side, mx, my):       # 삽날 — 어두운 앵커 (양단 명암 분리)
-        return mix(st_(t, d0, w, side, mx, my), BLADE_DIM, 0.3)
-    sh.append(_pn(_stroke([(-11.5, 8.0), (-15.5, 8.0)],
-                          lambda t: 1.0 + 2.2 * min(1.0, t * 2.2), spade_style), "삽날"))
-    sh.append(_pn(_vd(_stroke([(-11.3, 8.0), (-11.31, 8.0)], 0.95,
-                              _brass_style(salt, grade)), _VD_ORN), "삽목"))
+                  _vrod(0.66)), "자루")]           # 감김이 전신을 두른다 — 봉수(棒手)의 손자리
+    # 양끝 쇠테 — 범철은 민나무(마감이 없는 것이 가장 싼 봉이다), 정련부터 쇠가 문다
+    if grade != "beomcheol":
+        sh.append(_pn(_vd(_stroke([(tipx - 1.3, 8.0), (tipx - 0.1, 8.0)], 0.78,
+                                  _brass_style(salt, grade)), _VD_ORN), "머리테"))
+        sh.append(_pn(_vd(_stroke([(-14.9, 8.0), (-13.7, 8.0)], 0.78,
+                                  _brass_style(salt, grade)), _VD_ORN), "물미관"))
     extras = []
-    if grade in _DECOR:                            # 보병 왕관 — 양단 목 짝 띠 (§5)
+    if grade in _DECOR:                            # 보병 왕관 — 머리테 아래 짝 띠 (§5 문법 상속)
         onbaek = mix(BLADE_HI, FIT_HI, 0.24)
-        for bx_ in (12.85, -10.55):
+        for bx_ in (tipx - 2.4, -12.9):
             sh.append(_pn(_vd(_stroke([(bx_, 7.0), (bx_, 9.0)], 0.24,
                                       _flat_style(mix(onbaek, FIT_MID, 0.5), onbaek)),
                               _VD_ORN), "목띠"))
-    ring_xs = (12.2, -9.8, 11.3)                   # 고리 — 각 날 목에 하나씩 누적 (§3)
+    ring_xs = (12.4, -11.6, 10.0)                  # 고리 — 위·아래·위 순 누적 (양끝 균형)
     for i in range(rings):
         rx = ring_xs[i]
-        sh.append(_pn(_vd(_stroke([(rx, 8 - 1.1), (rx, 8 + 1.1)], 0.36, _ring_style()),
+        sh.append(_pn(_vd(_stroke([(rx, 8 - 1.05), (rx, 8 + 1.05)], 0.36, _ring_style()),
                           _VD_STUD), "등급고리"))
     if tassel:
-        tp = _bez((-9.9, 7.2), (-10.7, 5.9), (-11.7, 5.2), 8)
+        tp = _bez((-13.3, 7.2), (-14.1, 5.9), (-15.1, 5.2), 8)
         sh.append(_pn(_vd(_stroke(tp, lambda t: 0.75 - 0.32 * t,
                                   _tassel_style(salt, acc=b8[4:6])),
                           _VD_DRAPE), "수실"))
-    if mab:
-        sh.append(_pn(_vd(_stroke([(-11.1, 8.0), (-11.11, 8.0)], 0.5,
+    if mab:                                        # 마병 — 손자리에 밴 혈적 (날이 없어도 피는 남는다)
+        sh.append(_pn(_vd(_stroke([(5.8, 8.0), (5.81, 8.0)], 0.5,
                                   _flat_style(BLOOD, BLOOD_HI)), _VD_ORN), "혈적"))
-    tang = (moon[-1][0] - moon[-2][0], moon[-1][1] - moon[-2][1])
-    sh += _wisps(salt, moon[-1][0], moon[-1][1], grade, scale=0.75, tangent=tang,
-                 series="wolasan")
-    if calm17 and _QI_GRADE_CALM[grade][1]:        # 기맥 — 자루→달목→월아 배 한 획 (정본 §4-②
-        r_moon = 4.2 + blen * 0.18                 #   양끝 병기의 본류는 월아 쪽 — 이름의 끝)
-        def _amp(mx):
-            return 0.22 if mx < 13.5 else 0.34
-        sh += _qi_vein(salt, grade, "wolasan",
-                       [(-10.4, 8.0), (14.7 + r_moon + 2.1, 8.0)], _amp,
+    sh += _wisps(salt, tipx, 8.0, grade, scale=0.72, tangent=(1.0, 0.0),
+                 series="bong")
+    if calm17 and _QI_GRADE_CALM[grade][1]:        # 기맥 — 자루 전신 한 획 (정본 §4-②)
+        sh += _qi_vein(salt, grade, "bong",
+                       [(-13.9, 8.0), (tipx + 1.8, 8.0)], lambda mx: 0.24,
                        nvein=_QI_GRADE_CALM[grade][1])
-    sh += _head_kit(salt, "wolasan", grade, 13.1, 8.0, wing=(-1.0, 0.85))
-    if _ORN[grade] >= 3:                           # 쌍월 — 뒤(삽날) 목에도 소형 고리 (계열 변주)
-        b8 = _ink8("wolasan")
-        o2 = ((mix(b8[2], WPN_OUT, 0.5), mix(b8[3], WPN_OUT, 0.45)) if mab
-              else (b8[2], b8[3]))
-        sh.append(_pn(_vd(_ring_orn(-10.6, 8.0, 1.5, 0.48, o2[0], o2[1]),
-                          _vrot((1.1, 0.0, None), -22.5, -10.6, 8.0)), "의장고리"))   # (11차)
-    return (-16.6, 2.2, 22.4 + blen * 0.18, 14.3), sh, extras
+    sh += _head_kit(salt, "bong", grade, tipx - 1.9, 8.0, wing=(-1.0, 0.85))
+    return (-16.4, 2.2, tipx + 3.2, 14.0), sh, extras
 
 
 def _spec_gu(salt, grade, rings, blen, tassel, mab):
@@ -3313,7 +3292,7 @@ def _spec_gu(salt, grade, rings, blen, tassel, mab):
 WEAPON_SPEC = {
     "sword": _spec_sword, "dao": _spec_dao, "spear": _spec_spear,
     "gauntlet": _spec_gauntlet, "dagger": _spec_dagger,
-    "bu": _spec_bu, "gyeom": _spec_gyeom, "wolasan": _spec_wolasan, "gu": _spec_gu,
+    "bu": _spec_bu, "gyeom": _spec_gyeom, "bong": _spec_bong, "gu": _spec_gu,
 }
 
 
@@ -3619,7 +3598,7 @@ _QI_TIP_REACH_U = 2.5   # R3 — 기맥이 "날끝에 닿았다"고 보는 잔�
 #    못 갈라 거짓 양성 (실측: 깃·고리 접선 열) ② 곡선 부위(낫날·부채날·월아·갈고리·수염·
 #    끝휨)는 안쪽 벽의 기울기가 수직에 접근해 열 단차가 **형태의 성질**이다 (실측: 겸의
 #    아가리 12px). 그들의 연속성은 R1(연결)이 잰다. 전부 【잠정】 — 정본 §3-R2.
-_R2_AXIAL = frozenset(("검신", "도신", "비수날", "창날", "구신", "삽날", "자루", "봉"))
+_R2_AXIAL = frozenset(("검신", "도신", "비수날", "창날", "구신", "자루", "봉"))
 
 
 def _components(pix):
@@ -4106,7 +4085,7 @@ def gauntlet_grid(rings, mabyeong):
     return g
 
 
-# ═══ 장병기 4계열 (부·겸·월아산·구) — 곡선은 손으로 찍지 않는다 ═══════════════
+# ═══ 장병기 4계열 (부·겸·봉·구) — 곡선은 손으로 찍지 않는다 ═══════════════
 # 검·도·창은 직선 띠(band)로 족했다. 그러나 도끼날·낫날·갈고리는 '휨'이 곧 정체다 —
 # 계단식 띠로 곡선을 흉내내면 걸음마다 각이 져서 16px에서 '톱니 막대'가 된다.
 # 그래서 곡선은 원(圓)의 대수로 굽는다: 원 안/밖 판정으로 칠하면 곡률이 저절로 매끈하다.
@@ -4227,51 +4206,26 @@ BU_HEAD = [
     "................",
 ]
 
-# 월아산의 삽날 — 원으로 굽기엔 너무 각지다 (삽은 곡선이 아니라 판이다). 아트로 얹는다.
-# 넓고 납작한 판이어야 '삽'이다 — 작은 덩이는 그냥 자루 끝의 혹으로 읽힌다.
-WOLASAN_SPADE = [
-    "................", "................", "................", "................",
-    "................", "................", "................", "................",
-    "................", "................",
-    "..SBBB..........",
-    "..SBBLB.........",
-    "..SBLLLB........",
-    "..SLLLLB........",
-    "................",
-    "................",
-]
-
-
-def wolasan_grid(rings, mabyeong):
-    """월아산(月牙鏟) — 승려의 병기. 긴 자루의 양끝이 서로 다르다:
-    위는 월아(月牙, 두 뿔이 벌어진 초승달), 아래는 넓은 삽날. 이 '양끝'이 계열의 전부다 —
-    다른 여덟 계열은 모두 한쪽 끝에만 쇠가 달렸다. 실루엣만으로 갈리는 유일한 축이다.
-    월아는 두 뿔이 자루를 사이에 두고 벌어지도록 앉힌다 (오목한 안쪽이 자루 끝을 문다) —
-    뿔이 하나로 뭉치면 갈고리가 되어 구(鉤)와 섞인다. 벌어져야 달이다."""
+def bong_grid(rings, mabyeong):
+    """봉(棒) — 날이 없다. **온몸이 자루다** (2026-07-23 사용자 확정 — 월아산 삭제·봉 대체).
+    아홉 계열 중 쇠날이 어느 끝에도 없는 유일한 축 — 실루엣의 정체는 '긴 나무 한 획'.
+    검·창과 같은 대각선에 놓이지만 날·술·코등이가 전부 없어 눈이 갈라 본다
+    (창과의 갈림: 창은 얇은 자루 끝에 잎꼴 날 — 봉은 굵은 감김이 끝까지 간다).
+    등급은 공용 문법 그대로 고리와 물미로만 자란다 — 타구봉의 문법(매듭이 계급)."""
     g = blank16()
-    blit(g, WOLASAN_SPADE, mabyeong)                  # 아래 끝 — 삽날 (자루보다 먼저: 자루가 목을 덮는다)
-    band(g, 5, 11, 7, wrap_grip, sx=1, sy=-1)         # 긴 자루
-    put_rings(g, 5, 11, rings, (1, 2, 4), sx=1, sy=-1)   # 월아에 먹히지 않는 자리
-    # 월아 — 자루 끝에 얹힌 초승달. 앞을 보는 대칭 U도 시도했으나 12x12 안에서는
-    # 두 뿔이 각각 1px로 뭉개져 '꺾쇠(⌐)'가 됐다 — 16px이 허락하지 않는 형태가 있다.
-    # 그래서 달은 한쪽으로 눕히고, 구(鉤)와의 갈림은 반대쪽 끝의 삽날에 맡긴다:
-    # 아홉 계열 중 쇠가 '양끝'에 달린 것은 이것뿐이다 — 그 비대칭이 곧 이름이다.
-    crescent(g, (10.8, 5.2), 3.2, (8.2, 7.8), 3.4,
-             ("H", "L", "m" if mabyeong else "B", "S"))
-    # 등급 표식 — 월아산만 자루 끝이 비어 있지 않다 (거기 삽날이 달렸다). 그래서 물미는
-    # '삽날 목의 놋 테'가 되고, 수실은 물미가 아니라 **삽날 아래**로 늘어진다 (석장의 문법).
-    grade_butt(g, 5, 11, rings, tassel=False)
-    if rings >= 3:
-        for k, ch in enumerate(("T", "t", "t")):
-            g[14][3 + k] = ch
+    band(g, 1, 14, 13, wrap_grip, sx=1, sy=-1)        # 자루 — 대각 전체 (1,14)→(13,2). 최장 실루엣
+    put_rings(g, 1, 14, rings, (3, 6, 9), sx=1, sy=-1)
+    grade_butt(g, 1, 14, rings)                        # 아래 끝 물미 — 등급이 자라고 수실이 늘어진다
+    if mabyeong:
+        g[7][8] = "M"                                  # 혈적 — 손자리에 밴 낙인 (날이 없어도 피는 남는다)
     return g
 
 
 WEAPON_SERIES = {          # 계열 = model_key 앞자리 (config item_channels.무기.series)
     "sword": sword_grid, "dao": dao_grid, "spear": spear_grid,
     "gauntlet": gauntlet_grid, "dagger": dagger_grid,
-    # 18반 병기 — 바닐라 도구 4종을 병기화한 계열 (axe=부 / hoe=겸 / shovel=월아산 / pickaxe=구)
-    "bu": bu_grid, "gyeom": gyeom_grid, "wolasan": wolasan_grid, "gu": gu_grid,
+    # 18반 병기 — 바닐라 도구 4종을 병기화한 계열 (axe=부 / hoe=겸 / shovel=봉 / pickaxe=구)
+    "bu": bu_grid, "gyeom": gyeom_grid, "bong": bong_grid, "gu": gu_grid,
 }
 
 
@@ -4626,13 +4580,12 @@ def write_weapon_asset(series: str, grade: str):
 # 명병 → 그 문파의 병기 계열 (Weapons.java MYEONG_SERIES 와 **같은 표**여야 한다 — 눈이 대조한다)
 # ★ 신작 4문파(MYEONG_NEW)는 Java 쪽에 아직 짝이 없다 — 팩이 앞서 굽고 배선이 따라온다
 #   (등록·배선 청구: resourcepack_design.yml myeongbyeong.등록 4줄 + Weapons.java MYEONG_SERIES 4항).
-#   gaebang 의 "spear" 는 **바닐라 분기용 잠정값**이다: 봉(棒) 계열이 없어(B-037: "신설 선행")
-#   같은 긴 자루 병기의 베이스(검 재질 5종)를 빌린다. 3D 는 전용 리그(bong_rig)가 맡는다.
+#   gaebang 은 봉(棒) 계열 신설(2026-07-23 — 월아산 삭제·봉 대체)로 제 베이스를 얻었다.
 MYEONG_BASE = {
     "hwasan": "sword", "jeomchang": "sword", "jongnam": "sword", "namgung": "sword",
     "mudang": "sword", "paengga": "dao", "dangga": "dagger", "sorimsa": "gauntlet",
     "gonryun": "sword", "cheongseong": "sword", "haenam": "sword",   # 셋 다 검 (sect_lineage §2)
-    "gaebang": "spear",                                              # ★ 잠정 — 봉 계열 신설 전
+    "gaebang": "bong",                                               # 봉 계열 신설로 제자리 (2026-07-23)
 }
 # 지물·기물·재료 → 바닐라 베이스 (Goods.java build(Material.X, ...) 와 **같은 표** — 눈이 대조한다)
 # ═══ 등급은 **형체로도** 오른다 ═══════════════════════════════════════════════

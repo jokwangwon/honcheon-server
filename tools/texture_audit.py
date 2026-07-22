@@ -84,7 +84,7 @@ BLOCK_ENTITIES = {
 FACE_AXES = {"up": ("x", "z"), "down": ("x", "z"), "north": ("x", "y"),
              "south": ("x", "y"), "east": ("z", "y"), "west": ("z", "y")}
 
-WEAPON_SERIES = ["sword", "dao", "spear", "gauntlet", "dagger", "bu", "gyeom", "wolasan", "gu"]
+WEAPON_SERIES = ["sword", "dao", "spear", "gauntlet", "dagger", "bu", "gyeom", "bong", "gu"]
 # 마병(魔兵)이 이 목록에 들어왔다 (2026-07). 그전까지 축 ⑩은 **네 등급만** 재고 있었고,
 # 그 사이 팩은 마병을 도(刀) 한 자루만 굽고 있었다 — 즉 나머지 여덟 계열의 마병은
 # **재는 자도 굽는 자도 없었다**. Weapons.java 는 45개의 item_model 키를 전부 박는데도.

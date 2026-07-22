@@ -5,6 +5,34 @@
     "index": 0,
     "cases": [
       {
+        "when": "honcheon:weapon/bong_mabyeong",
+        "model": {
+          "type": "minecraft:select",
+          "property": "minecraft:custom_model_data",
+          "index": 1,
+          "cases": [
+            {
+              "when": "revealed",
+              "model": {
+                "type": "minecraft:model",
+                "model": "honcheon:item/weapon/bong_mabyeong"
+              }
+            }
+          ],
+          "fallback": {
+            "type": "minecraft:model",
+            "model": "honcheon:item/weapon/bong_jeongryeon"
+          }
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/gaebang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/gaebang"
+        }
+      },
+      {
         "when": "honcheon:weapon/wolasan_mabyeong",
         "model": {
           "type": "minecraft:select",
@@ -15,13 +43,13 @@
               "when": "revealed",
               "model": {
                 "type": "minecraft:model",
-                "model": "honcheon:item/weapon/wolasan_mabyeong"
+                "model": "honcheon:item/weapon/bong_mabyeong"
               }
             }
           ],
           "fallback": {
             "type": "minecraft:model",
-            "model": "honcheon:item/weapon/wolasan_jeongryeon"
+            "model": "honcheon:item/weapon/bong_jeongryeon"
           }
         }
       }

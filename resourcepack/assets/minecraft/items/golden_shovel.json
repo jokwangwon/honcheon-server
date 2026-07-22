@@ -5,10 +5,24 @@
     "index": 0,
     "cases": [
       {
+        "when": "honcheon:weapon/bong_sinbyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/bong_sinbyeong"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/gaebang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/gaebang"
+        }
+      },
+      {
         "when": "honcheon:weapon/wolasan_sinbyeong",
         "model": {
           "type": "minecraft:model",
-          "model": "honcheon:item/weapon/wolasan_sinbyeong"
+          "model": "honcheon:item/weapon/bong_sinbyeong"
         }
       }
     ],

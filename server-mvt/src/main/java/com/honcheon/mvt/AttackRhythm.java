@@ -3,7 +3,7 @@ package com.honcheon.mvt;
 /**
  * 공격 입력의 리듬 — <b>좌클릭 한 번 = 공격 한 번, 홀드는 병기의 박자를 넘지 못한다.</b>
  *
- * <p><b>【월아산 자동 연발 · 2026-07-17】</b> 사용자 실측: "월아산으로 좌클릭 시 자동으로 계속
+ * <p><b>【봉(옛 월아산) 자동 연발 · 2026-07-17】</b> 사용자 실측: "월아산(현 봉)으로 좌클릭 시 자동으로 계속
  * 공격이 나간다." 기전은 플러그인의 스케줄러가 아니라 <b>패킷 층</b>에 있었다:
  *
  * <ol>
@@ -15,7 +15,7 @@ package com.honcheon.mvt;
  *       (실측: paper-1.21.11 {@code ServerGamePacketListenerImpl.handleAnimate} 바이트코드 —
  *       패킷마다 {@code CraftEventFactory.callPlayerInteractEvent(LEFT_CLICK_AIR)}).</li>
  *   <li>블록이 <b>깨진 그 틱</b>의 스윙은 갓 뚫린 구멍을 지나 빗나간다 → ②의 합성이 온다.
- *       월아산은 <b>유일한 삽 병기</b>다 (Weapons.Base.SHOVEL) — 흙·잔디 블록(어디에나 있는 땅)을
+ *       봉은 <b>유일한 삽 베이스 병기</b>다 (Weapons.Base.SHOVEL) — 흙·잔디 블록(어디에나 있는 땅)을
  *       2~4틱에 깨고, 풀포기는 즉시 깬다. 땅·풀숲을 향해 좌클릭을 홀드하면 "깨짐 → 빗나간 스윙 →
  *       LEFT_CLICK_AIR" 가 초당 여러 번 돌고, {@code SkillListener.onInteract} 는 그것을 전부
  *       공격 입력(획·전진·무공 시전)으로 읽었다. <b>자동 연속 공격의 정체다.</b>
@@ -30,7 +30,7 @@ package com.honcheon.mvt;
  *       불가능하다 — 오탐이 원리적으로 없다. 몹 타격(EntityDamageByEntityEvent)은 이 문을
  *       지나지 않으므로 전투 회귀가 없다.</li>
  *   <li>{@link #basicCooldownUntil} — <b>병기의 박자</b>: 기본 초식의 연출·체술(획·전진·자세)은
- *       계열 공속(월아산 1.0/s = 20틱)을 넘지 못한다. 옛 못은 등록부의 연출 간격
+ *       계열 공속(봉 1.0/s = 20틱)을 넘지 못한다. 옛 못은 등록부의 연출 간격
  *       ({@code basic_strike.cooldown_ticks} 4틱)뿐이라 홀드·연타가 초당 5획을 그렸다 —
  *       무공 경로는 이미 같은 못이 있다 ({@code busyUntil = max(frames, swingInterval)},
  *       "공속이 거짓말하지 않게"). 기본 초식만 구멍이었다.</li>
@@ -66,7 +66,7 @@ final class AttackRhythm {
      * 혼천 병기가 아니면 {@code swingIntervalTicks} 가 0 이라 옛 동작(등록부 간격 4틱) 그대로다.
      *
      * @param basicCooldownTicks 등록부의 연출 최소 간격 ({@code basic_strike.cooldown_ticks})
-     * @param swingIntervalTicks 계열 공속의 스윙 간격 ({@code 20 / attackSpeed} — 월아산 20틱)
+     * @param swingIntervalTicks 계열 공속의 스윙 간격 ({@code 20 / attackSpeed} — 봉 20틱)
      */
     static long basicCooldownUntil(long now, int basicCooldownTicks, long swingIntervalTicks) {
         return now + Math.max(basicCooldownTicks, swingIntervalTicks);

@@ -8,13 +8,13 @@
         "when": "revealed",
         "model": {
           "type": "minecraft:model",
-          "model": "honcheon:item/weapon/wolasan_mabyeong"
+          "model": "honcheon:item/weapon/bong_mabyeong"
         }
       }
     ],
     "fallback": {
       "type": "minecraft:model",
-      "model": "honcheon:item/weapon/wolasan_jeongryeon"
+      "model": "honcheon:item/weapon/bong_jeongryeon"
     }
   }
 }

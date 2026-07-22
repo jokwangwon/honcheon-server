@@ -5,10 +5,24 @@
     "index": 0,
     "cases": [
       {
+        "when": "honcheon:weapon/bong_bobyeong",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/bong_bobyeong"
+        }
+      },
+      {
+        "when": "honcheon:weapon/myeong/gaebang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "honcheon:item/weapon/myeong/gaebang"
+        }
+      },
+      {
         "when": "honcheon:weapon/wolasan_bobyeong",
         "model": {
           "type": "minecraft:model",
-          "model": "honcheon:item/weapon/wolasan_bobyeong"
+          "model": "honcheon:item/weapon/bong_bobyeong"
         }
       }
     ],

@@ -3260,8 +3260,49 @@ B-160 수사의 부산물 (2026-07-17): `Weapons.make` 는 재질(STONE~NETHERIT
 12, 가장 빠르다). 무협 병기가 땅을 파는 것은 세계관·채집 경제와 부딪히나, 도구를 따로 못 사는
 현 경제에선 기능이기도 하다 — 코드로 못 푸는 저울질이라 결정 항목으로 올린다.
 
-### B-162 · 월아산의 **등록부 이름이 갈라져 있다** — PDC 는 봉, 등록부는 월아산 (죽은 등록 5벌)
+【추기 2026-07-23 · B-172】 월아산은 삭제되고 봉이 대체했다 (삽 베이스 승계) — 이 결정의 대상은
+이제 **부(도끼)·겸(괭이)·봉(삽)·구(곡괭이)**다. 물음 자체는 그대로 살아 있다.
+
+### B-172 · 월아산 **삭제 → 봉 대체** — 계열·디자인·등록 전부 (사용자 확정)
+- **상태**: 닫힘
+- **분류**: 결정
+- **단계**: P3
+- **위치**: `server-mvt/src/main/java/com/honcheon/mvt/Weapons.java:236`
+- **의존**: B-162
+- **닫는 조건**: 계열 월아산이 등록부·코드·팩에서 사라지고 봉이 그 자리(삽 베이스·간격 4.0m)를
+  받는다. 이미 나간 옛 아이템(청하현 병기대 등)이 깨지지 않는다
+- **검증**: `python3 tools/lint_config.py` + `python3 tools/combat_audit.py` + 팩 dispatch 의
+  `weapon/wolasan_*` 이주 별칭이 봉 모델을 가리키는지 (`resourcepack/assets/minecraft/items/stone_shovel.json`)
+- **닫힘**: 2026-07-23 · `python3 tools/lint_config.py` → 오류 0·경고 0 + `python3 tools/combat_audit.py`
+  → 위반 0건 + `resourcepack/assets/minecraft/items/stone_shovel.json` 에 wolasan→bong 이주 분기 실물
+
+사용자 원문: *"월아산은 삭제 봉으로 변경 디자인도 봉으로 변경."* 집행:
+- **계열**: `Series.월아산` → `Series.봉`("bong") — 삽 베이스·공속 1.0/s·간격 4.0m 승계 (수치 불변).
+  powerKey "봉"과 이름이 한 벌이 되어 B-162 가 함께 닫혔다. 밸런스 변동 0 (위력은 줄곧 봉:3 이었다)
+- **이주**: `Series.of("월아산")` → 봉 별칭 (옛 PDC·명령 입력) + 팩 dispatch 에 `weapon/wolasan_*`
+  → 봉 모델 별칭 5분기 — 이미 나간 실물의 회수 없이 끝난다
+- **디자인**: 아이콘·3D 스펙을 봉(날 없는 장대 — 온몸이 자루, 양끝 쇠테)으로 재작성. 부위 등록
+  월아·삽날·삽목·달목 폐기 → 머리테 신설. 개방 타구봉 명병 베이스도 잠정 spear → bong 제자리
+- **잔재**: 옛 wolasan 팩 산출물 20파일 git rm · registry 14→13계열
+
+### B-173 · ★ 병기 적합성 **점검 절차** 신설 — "무공을 실을 만한 무기인가"를 재는 손 (사용자 지시)
 - **상태**: 열림
+- **분류**: 결정
+- **단계**: P3
+- **위치**: `docs/design/weapon_fitness_review.md`
+- **의존**: —
+- **닫는 조건**: 절차 정본이 서고(§1 세 물음·§3 절차), 첫 대기열(§4 — 부·구·겸 채굴 B-161 ·
+  부·겸·구·권갑 죽은 모션 행 · 활/암기/중병기 실물 부재 · 봉 모션 실측)이 사용자 결정 회차를
+  한 바퀴 돈다
+- **검증**: `docs/design/weapon_fitness_review.md` §4 표의 각 행이 결정(유지/수정/삭제)을 얻었는가
+- **닫힘**: —
+
+사용자 원문 (2026-07-23): *"무공을 사용할만한 무기가 아니다 싶으면 조금 수정하는 점검의 절차를
+가지자."* 첫 집행 선례가 B-172 (월아산→봉)다. 절차 정본은 위치의 문서 — 세 물음(무공이 실리는가
+· 등록부가 한 벌인가 · 몸이 세계와 충돌하지 않는가)과 최소 처방 사다리(ⓐ이름→ⓑ통합→ⓒ대체→ⓓ삭제).
+
+### B-162 · 월아산의 **등록부 이름이 갈라져 있다** — PDC 는 봉, 등록부는 월아산 (죽은 등록 5벌)
+- **상태**: 닫힘
 - **분류**: 빚
 - **단계**: P3
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/Weapons.java:236`
@@ -3272,7 +3313,14 @@ B-160 수사의 부산물 (2026-07-17): `Weapons.make` 는 재질(STONE~NETHERIT
   combat.yml weapon_power 의 "14계열" 주석과 실제 배선이 일치한다
 - **검증**: `python3 tools/combat_audit.py` · `config/skill_motion.yml` 의 월아산 항목이 실제로
   읽히는지 (또는 제거됐는지) 코드 대조
-- **닫힘**: —
+- **닫힘**: 2026-07-23 · `python3 tools/combat_audit.py` → 위반 0건 + `python3 tools/lint_config.py`
+  → 오류 0 · 경고 0 — **봉 통합 방향으로 닫혔다** (사용자 확정 「월아산은 삭제 봉으로 변경」 · B-172).
+  skill_motion 의 월아산 죽은 등록 5벌은 삭제됐고(살아 있던 봉 행이 정본 — 인게임 거동 불변),
+  combat.yml 주석은 13계열로 정정. 봉은 이제 name==powerKey 라 이 병이 재발하지 않는다.
+  ★ 함께 판정한 부·겸·구·권갑: **같은 병이 확인됐다** — 모션 조회는 `weapon_class`(powerKey)
+  를 쓰므로 (SkillListener weaponClassOf → KEY_CLASS) skill_motion 의 부·겸·구·권갑 자기 이름
+  행이 죽은 글자다 (부→중병기·겸→단검·구→검·권갑→맨손 행이 실린다). 밸런스 변동이 걸려
+  일방 수정하지 않는다 — **B-173 점검 대기열로 이관** (docs/design/weapon_fitness_review.md §4)
 
 B-160 수사의 부산물 (2026-07-17): 월아산 병기의 PDC `weapon_class` 는 `Series.powerKey` = **"봉"**
 (Weapons.java:667) — 그래서 combat.yml `weapon_power.월아산: 4` (등록 주석 "14계열"에 명시)가

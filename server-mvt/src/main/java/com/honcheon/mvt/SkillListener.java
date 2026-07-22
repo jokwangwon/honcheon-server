@@ -1545,7 +1545,7 @@ public final class SkillListener implements Listener {
      * <b>채굴의 그림자</b> — 이 몸이 마지막으로 블록을 깬 틱 ({@link AttackRhythm#digShadow}).
      * 좌클릭 홀드로 캐는 동안 클라이언트는 매 틱 스윙 패킷을 보내고, 블록이 깨진 틱의 스윙은
      * 갓 뚫린 구멍을 지나 빗나가 Paper 가 LEFT_CLICK_AIR 로 합성한다 — 그것은 공격 입력이 아니다.
-     * 월아산(유일한 삽 병기)이 땅을 2~4틱에 깨서 이 합성이 자동 연속 공격으로 나타났다 (2026-07-17).
+     * 봉(옛 월아산 — 유일한 삽 베이스 병기)이 땅을 2~4틱에 깨서 이 합성이 자동 연속 공격으로 나타났다 (2026-07-17).
      */
     private final Map<UUID, Long> lastDig = new HashMap<>();
 
@@ -1578,7 +1578,7 @@ public final class SkillListener implements Listener {
         if (action != Action.LEFT_CLICK_AIR) {
             return;   // LEFT_CLICK_BLOCK 은 건드리지 않는다 — 채굴을 무공이 잡아먹으면 안 된다
         }
-        // ★ 【월아산 자동 연발 · 2026-07-17】 채굴의 그림자 — 블록을 깬 직후의 허공 스윙 패킷은
+        // ★ 【봉(옛 월아산) 자동 연발 · 2026-07-17】 채굴의 그림자 — 블록을 깬 직후의 허공 스윙 패킷은
         //   캐는 손이지 공격의 손이 아니다 (기전·근거는 AttackRhythm 의 문서에 있다).
         //   breakGuard 보다 먼저 선다: 캐는 손은 공격이 아니므로 방어 전념도 깨지 않는다.
         if (AttackRhythm.digShadow(tick,
@@ -1876,7 +1876,7 @@ public final class SkillListener implements Listener {
         if (basic == null) {
             return;   // 활·무관·짐승 — 우리가 얹을 것이 없다 (바닐라가 제 일을 한다)
         }
-        // ★ 【병기의 박자 · 2026-07-17】 등록부 연출 간격(4틱)과 계열 공속(월아산 20틱) 중 긴 쪽 —
+        // ★ 【병기의 박자 · 2026-07-17】 등록부 연출 간격(4틱)과 계열 공속(봉 20틱) 중 긴 쪽 —
         //   홀드·연타가 병기의 박자를 넘어 획·전진을 연발하지 못한다. 무공 경로의
         //   busyUntil = max(frames, swingInterval) ("공속이 거짓말하지 않게")과 같은 못이다.
         //   판정은 불변: 몹 타격의 피해는 이 문과 무관하게 basicMelee 가 그대로 잰다.

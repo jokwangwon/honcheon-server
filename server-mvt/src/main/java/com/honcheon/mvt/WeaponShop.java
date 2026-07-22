@@ -23,7 +23,7 @@ import java.util.Map;
  * 장쇠의 병기 좌판 — 범철 무기를 파는 유일한 상시 경로 (장터).
  *
  * <p>등록제: {@code config/economy.yml price_table.장비} 에 <b>가격이 등록된 품목만</b> 진열한다.
- * 가격을 발명하지 않는다 — 미등록 계열(도·권갑·부·겸·월아산·구)은 진열되지 않으며,
+ * 가격을 발명하지 않는다 — 미등록 계열(도·권갑·부·겸·봉·구)은 진열되지 않으며,
  * economy.yml 에 {@code 도_범철} 등이 추가되는 순간 코드 변경 없이 자동으로 좌판에 오른다.
  *
  * <p>결제는 전낭(PlayerLedger.money) — 아이템 화폐는 없다 (economy.yml mc.ledger_based:
