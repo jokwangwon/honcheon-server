@@ -655,7 +655,8 @@ final class SkillDisplay {
                         (double) t / span, (double) (t + 1) / span,
                         cfg.tiltDeg(), cfg.geomStepDeg(),
                         cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
-                        particle, inkBody, dirSign, v -> !v.getUniqueId().equals(me));
+                        particle, inkBody, dirSign, v -> !v.getUniqueId().equals(me),
+                        cfg.heightOthersMul());
                 // 흰 별 — 머리(마지막 두 틱) 구간에만, 성기게
                 if (t >= span - 2 && cfg.accentCount() > 0) {
                     sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),

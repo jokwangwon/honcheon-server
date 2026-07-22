@@ -243,6 +243,20 @@ final class QiGeometry {
                   double width, int rows, double jitter,
                   String particle, String inkBody, int mirror,
                   java.util.function.Predicate<org.bukkit.entity.Player> audience) {
+        return slashBand(center, facing, radius, sweepDeg, from, to, tiltDeg, stepDeg,
+                width, rows, jitter, particle, inkBody, mirror, audience, 1.0);
+    }
+
+    /**
+     * heightMul — 세로(위아래) 퍼짐 배율 (2026-07-22 사용자 재질문 답: "3인칭 넓게 = 세로 높이").
+     * 관전자 갈래에만 키워 초승달 띠가 상하로 두툼한 면적을 덮게 한다. 판정 무관.
+     */
+    int slashBand(Location center, float facing, double radius, double sweepDeg,
+                  double from, double to, double tiltDeg, double stepDeg,
+                  double width, int rows, double jitter,
+                  String particle, String inkBody, int mirror,
+                  java.util.function.Predicate<org.bukkit.entity.Player> audience,
+                  double heightMul) {
         // mirror: +1 = 왼위→오른아래 대각 · −1 = 오른위→왼아래 (스윙마다 교대 — "한 방향으로만 벤다" 해소)
         if (center == null || center.getWorld() == null || to <= from) {
             return 0;
@@ -288,7 +302,8 @@ final class QiGeometry {
                 Location at = center.clone().add(
                         fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
                 double jt = edge ? jitter * 0.5 : jitter;           // 날도 약간은 흩어진다 (딱딱한 선 금지)
-                at.add((rnd.nextDouble() - 0.5) * jt, (rnd.nextDouble() - 0.5) * jt * 2.0,
+                at.add((rnd.nextDouble() - 0.5) * jt,
+                       (rnd.nextDouble() - 0.5) * jt * 2.0 * heightMul,
                        (rnd.nextDouble() - 0.5) * jt);
                 String ink = edge ? "청백" : dark ? "먹" : inkBody;
                 // ★ 잘게 (2026-07-21 사용자: "밀도가 굵다·뭉툭하다") — 등록 크기 1.0 정사각이 아니라
@@ -305,7 +320,7 @@ final class QiGeometry {
                 Location at2 = center.clone().add(
                         fwdX * fwd2 + rgtX * side2, up2, fwdZ * fwd2 + rgtZ * side2);
                 at2.add((rnd.nextDouble() - 0.5) * jitter * 3.5,
-                        (rnd.nextDouble() - 0.5) * jitter * 4.5,
+                        (rnd.nextDouble() - 0.5) * jitter * 4.5 * heightMul,
                         (rnd.nextDouble() - 0.5) * jitter * 3.5);
                 sent += hud.emitSized(at2, particle, inkBody, 0.45f, 1, 0.12, 0.0, audience);
             }

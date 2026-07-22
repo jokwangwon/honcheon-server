@@ -851,7 +851,7 @@ public final class SkillListener implements Listener {
                 c.applyToClasses(),
                 c.frameModels(), c.frameModelsB(), frame,
                 c.bandWidth(), c.bandRows(), c.bandJitter(), c.bandSweepTicks(), c.accentCount(),
-                c.widthSelfMul(), c.widthOthersMul(),
+                c.widthSelfMul(), c.widthOthersMul(), c.heightOthersMul(),
                 c.bandHit(), c.bandHitReach(),
                 c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
@@ -1999,7 +1999,8 @@ public final class SkillListener implements Listener {
                         (double) t / span, (double) (t + 1) / span,
                         cfg.tiltDeg(), cfg.stepDeg(),
                         cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
-                        "dust", cfg.ink(), dirSign, v -> !v.getUniqueId().equals(me));
+                        "dust", cfg.ink(), dirSign, v -> !v.getUniqueId().equals(me),
+                        cfg.heightOthersMul());
                 if (cfg.hit()) {
                     for (int i = 0; i <= 6; i++) {
                         double phase = (t + i / 6.0) / span;

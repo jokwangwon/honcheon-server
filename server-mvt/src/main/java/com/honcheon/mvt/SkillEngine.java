@@ -1107,6 +1107,7 @@ public final class SkillEngine {
                 // ★ 몸이 먼저, 궤적이 나중 (2026-07-22 사용자) — 선딜 뒤에 띠·판정이 함께 나간다
                 Math.max(0, intOr(m.get("trail_delay_ticks"), 3)),
                 dblOr(m.get("width_self_mul"), 0.8), dblOr(m.get("width_others_mul"), 1.25),
+                dblOr(m.get("height_others_mul"), 2.0),
                 m.get("hit") == null || Boolean.TRUE.equals(m.get("hit")),
                 dblOr(m.get("hit_reach"), 0.9),
                 m.get("replace_stroke") == null || Boolean.TRUE.equals(m.get("replace_stroke")));
@@ -1159,6 +1160,8 @@ public final class SkillEngine {
                 Math.max(0, intOr(m.get("accent_count"), 12)),
                 // ★ 시점별 굵기 (2026-07-22 사용자): 시전자(1인칭) 얇게 · 관전자(3인칭) 넓게
                 dblOr(m.get("width_self_mul"), 0.8), dblOr(m.get("width_others_mul"), 1.25),
+                // ★ 세로 퍼짐 (2026-07-22 재질문 답: "3인칭 넓게 = 세로 높이") — 관전자에게만
+                dblOr(m.get("height_others_mul"), 2.2),
                 // ★ 띠 = 판정 (2026-07-21 사용자 확정) — 닿으면 딜. 빗나감/명중 분기 없음
                 m.get("band_hit") == null || Boolean.TRUE.equals(m.get("band_hit")),
                 dblOr(m.get("band_hit_reach"), 0.9),
@@ -1585,7 +1588,7 @@ public final class SkillEngine {
                             List<String> frameModels, List<String> frameModelsB, int frameTicks,
                             double bandWidth, int bandRows, double bandJitter,
                             int bandSweepTicks, int accentCount,
-                            double widthSelfMul, double widthOthersMul,
+                            double widthSelfMul, double widthOthersMul, double heightOthersMul,
                             boolean bandHit, double bandHitReach,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
@@ -1625,7 +1628,7 @@ public final class SkillEngine {
                              double radius, double sweepDeg, double tiltDeg, double centerHeight,
                              double bandWidth, int bandRows, double bandJitter, int sweepTicks,
                              double stepDeg, int trailDelayTicks,
-                             double widthSelfMul, double widthOthersMul,
+                             double widthSelfMul, double widthOthersMul, double heightOthersMul,
                              boolean hit, double hitReach, boolean replaceStroke) {
         public boolean appliesTo(String weaponClass) {
             return weaponClass != null && applyToClasses.contains(weaponClass);
