@@ -134,10 +134,10 @@ def main() -> None:
             im = fr.transpose(Image.FLIP_LEFT_RIGHT) if flip else fr
             key = f"kigi/{prefix}{i}"
             (TEX / "kigi").mkdir(parents=True, exist_ok=True)
-            (MODEL / "item" / "kigi").mkdir(parents=True, exist_ok=True)
+            (MODEL / "kigi").mkdir(parents=True, exist_ok=True)
             (ITEMDEF / "kigi").mkdir(parents=True, exist_ok=True)
             im.save(TEX / f"{key}.png")
-            (MODEL / "item" / f"{key}.json").write_text(
+            (MODEL / f"{key}.json").write_text(
                 json.dumps(model_json(key), ensure_ascii=False, indent=1))
             (ITEMDEF / f"{key}.json").write_text(json.dumps(
                 {"model": {"type": "minecraft:model", "model": f"honcheon:item/{key}"}},
