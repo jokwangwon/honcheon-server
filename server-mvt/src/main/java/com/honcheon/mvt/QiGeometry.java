@@ -456,6 +456,26 @@ final class QiGeometry {
                 ox = fwdX * fx2 + vx * (ty * halfH);
                 oy = vy * (ty * halfH);
                 oz = fwdZ * fx2 + vz * (ty * halfH);
+                // ★ 외곽 먹선 백킹 (독립 진단 · 시트 우하단 주석 「외곽 먹선 강조」의 템플릿판):
+                //   낮 하늘에서 청백 날은 배경과 대비가 0에 가깝다 — 시트는 검은 종이 위 그림이라
+                //   밝음=형체지만, 게임 하늘에선 **도상-배경이 역전**된다 (r9 실측: 먹 잔향이 형체로,
+                //   날이 배경으로 읽힘). 헌장의 명암 샌드위치(먹 테가 밝은 배경 담당)를 템플릿에도
+                //   복원한다: 날점 절반에, 곡률 중심(초승달 열린 쪽 ≈ 그림 x=+0.75) 반대 방향으로
+                //   0.09(그림 단위) 밀린 먹 쌍둥이 — 밝은 림이 하늘이 아니라 먹을 등지고 선다.
+                if (stage == 0 && "청백".equals(tpl.pts.get(i).ink())) {
+                    // r12 실측: 간격 0.09+지터는 림에서 떨어져 소음으로 읽혔다 — 0.045 로 바짝,
+                    //   크기도 살짝만 키워 「얇은 그림자 테」(명암 샌드위치)로 만든다
+                    QiTemplate.Pt bp = tpl.pts.get(i);
+                    double ddx = bp.x() - 0.75, ddy = bp.y();
+                    double dl = Math.max(1e-6, Math.hypot(ddx, ddy));
+                    double bx = bp.x() + ddx / dl * 0.045, by = bp.y() + ddy / dl * 0.045;
+                    double btx = bx * cr - by * sr, bty = bx * sr + by * cr;
+                    double bfx = -btx * halfW + halfW * 0.5;
+                    Location back = center.clone().add(
+                            fwdX * bfx + vx * (bty * halfH), vy * (bty * halfH),
+                            fwdZ * bfx + vz * (bty * halfH));
+                    sent += hud.emitSized(back, "dust", "먹", bp.size() + 0.03f, 1, 0.015, 0.0, audience);
+                }
             }
             Location at = center.clone().add(
                     ox + (rnd.nextDouble() - 0.5) * jbase,
@@ -476,6 +496,9 @@ final class QiGeometry {
             //   수는 예산 상향(평가 서버)이 받친다. end_rod 는 12%만 (30% 는 흰 줄무늬로 번졌다)
             //   청백(날)만 군집 2.5cm — 림이 몸으로 번지지 않게 (r9: 날 13%로 흐려졌다)
             double cluster = "청백".equals(ink) ? 0.025 : 0.05;
+            // (독립 진단 r11 실측: dust_color_transition 은 생애 **전체**에 선형 감광이라
+            //  피크부터 어두워진다 — 효과픽셀 1/3 급감. 시트의 피크는 밝아야 하므로 환원.
+            //  빈짐 서사는 dust 자연 페이드에 맡긴다. emitTransition 훅은 기술·보스용으로 남긴다)
             sent += hud.emitSized(at, "dust", ink, sz, stage == 0 ? 2 : 1, cluster, 0.0, audience);
             if (stage == 0 && "청백".equals(ink) && rnd.nextDouble() < 0.12) {
                 sent += hud.emitSized(at, "end_rod", null, sz, 1, 0.0, 0.0, audience);

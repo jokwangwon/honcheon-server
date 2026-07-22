@@ -196,6 +196,36 @@ final class SkillHud {
         return emit(at, p, count, spread, spread, spread, extra, data, false, audience);
     }
 
+    /**
+     * ★ 시간 색전이 발행 (dust_color_transition) — 시트의 수명 3단(피크→빈짐→소멸)을
+     * <b>파티클 한 알의 생애 안</b>에 싣는다. 재발행이 아니므로 r1 의 누적 오염(피크+빈짐이
+     * 한 화면에 겹침)이 구조적으로 없다 — 빈짐은 "다시 뿌리는 것"이 아니라 "한 알이 어두워지는 것"이다.
+     *
+     * <p>색은 둘 다 등록부의 먹빛 이름 — 코드가 색을 만들지 않는다 (emitSized 와 같은 계약).
+     * 렌더 비용은 dust 와 동일하며 같은 예산 게이트를 지난다.
+     */
+    int emitTransition(Location at, String inkFrom, String inkTo, float size, int count,
+                       double spread, java.util.function.Predicate<Player> audience) {
+        if (count <= 0) {
+            return 0;
+        }
+        SkillEngine.InkColor a = engine.inkColor(inkFrom);
+        SkillEngine.InkColor b = engine.inkColor(inkTo == null ? inkFrom : inkTo);
+        if (a == null || b == null) {
+            String miss = a == null ? inkFrom : inkTo;
+            if (unknownReported.add("ink:" + miss)) {
+                org.bukkit.Bukkit.getLogger().warning(
+                        "[혼천] 모션 등록부에 없는 먹빛: " + miss + " (config/skill_motion.yml inks)");
+            }
+            return 0;
+        }
+        Particle.DustTransition data = new Particle.DustTransition(
+                org.bukkit.Color.fromRGB(a.r(), a.g(), a.b()),
+                org.bukkit.Color.fromRGB(b.r(), b.g(), b.b()), size);
+        return emit(at, Particle.DUST_COLOR_TRANSITION, count, spread, spread, spread,
+                0.0, data, false, audience);
+    }
+
     /** 먹빛 → 크기 지정 {@link Particle.DustOptions}. 색은 등록부, 크기만 호출자가 준다 (캐시 안 함) */
     private Object dustSized(String inkName, float size) {
         if (inkName == null) {
