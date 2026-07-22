@@ -895,6 +895,8 @@ def main():
     ap.add_argument("--item", default="minecraft:iron_sword")
     ap.add_argument("--bow", action="store_true",
                     help="활 시안 (B-174): 혼천 활+화살을 콘솔로 지급하고 우클릭 홀드로 쏜다")
+    ap.add_argument("--honcheon", default=None, metavar="계열 등급",
+                    help='혼천 병기를 쥐여 준다 (예: "검 정련") — 바닐라 give 대신 콘솔 지급 경로')
     ap.add_argument("--draw", type=float, default=1.2, help="시위 당김 유지(초) — 만작 ≈1.0+")
     ap.add_argument("--min-area", type=int, default=40)
     ap.add_argument("--night", action="store_true")
@@ -974,6 +976,13 @@ def main():
                 print("[무대] 활 지급:", rcon.cmd(f"혼천 병기 {BOT} 활 범철").strip()[:70])
                 rcon.cmd(f"give {BOT} minecraft:arrow 64")
                 xdo(BOT_DISPLAY, "key", "1")   # 핫바 1번 — 활
+                time.sleep(0.5)
+            elif args.honcheon:
+                # ★ 혼천 병기 손 — 바닐라 give 를 걷고 팩 3D 가 무는 진짜 병기를 쥔다
+                rcon.cmd(f"clear {BOT}")
+                print("[무대] 혼천 병기:",
+                      rcon.cmd(f"혼천 병기 {BOT} {args.honcheon}").strip()[:70])
+                xdo(BOT_DISPLAY, "key", "1")
                 time.sleep(0.5)
             # ★ 카메라도 무대 위 하늘로 끌어온다 — 안 그러면 스폰 지점의 지하에서 허공을 본다
             sx, sy, sz = AT.STAGE
