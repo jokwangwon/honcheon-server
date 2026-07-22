@@ -666,6 +666,10 @@ weapon_styles:
   무관:    { verb: 움직인다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.4 } }
   짐승:    { verb: 덮친다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.wolf.growl", volume: 0.8, pitch: 0.9 } }
 
+# ── 원거리 사선의 그림 (ranged_fx — B-174 시안 축 · 평가판) ──────
+ranged_fx:
+  활: { mode: 즉발, core_ink: 청백, rim_ink: 먹, step: 0.6, speed_mpt: 12.0, tail_m: 3.0, size: 0.5 }
+
 # ══════════════════════════════════════════════════════════════════════
 #  무공·초식별 모션 — skill_mechanics.yml skills 33종 전수
 # ══════════════════════════════════════════════════════════════════════

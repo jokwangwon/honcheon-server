@@ -653,6 +653,13 @@ weapon_styles:
   무관:    { verb: 움직인다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.4 } }
   짐승:    { verb: 덮친다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.wolf.growl", volume: 0.8, pitch: 0.9 } }
 
+# ── 원거리 사선의 그림 (ranged_fx — B-174 · 2026-07-23 "원거리는 전부 이펙트") ──────
+#   mode 셋: 즉발(한 겹 — weapon_styles trail 그대로) · 먹줄(청백 심 + 먹 테 두 겹 즉발)
+#           · 주행(트레이서 speed_mpt m/틱 비행 — ★판정도 도달 틱에 맞는다: 화면=판정)
+#   시안 회차는 테스트 서버 사본에서 mode 를 갈아 끼운다 — 정본 기본값은 즉발(v1 현행)이다.
+ranged_fx:
+  활: { mode: 즉발, core_ink: 청백, rim_ink: 먹, step: 0.6, speed_mpt: 12.0, tail_m: 3.0, size: 0.5 }
+
 # ══════════════════════════════════════════════════════════════════════
 #  무공·초식별 모션 — skill_mechanics.yml skills 33종 전수
 # ══════════════════════════════════════════════════════════════════════

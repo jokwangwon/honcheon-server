@@ -143,6 +143,18 @@ def swing(display, win, n, gap):
         time.sleep(gap)
 
 
+def bow_volley(display, win, n, draw, gap):
+    """활 — 우클릭 홀드(당김) 뒤 놓는다 (B-174 원거리 모션 시안 촬영용)."""
+    xdo(display, "windowfocus", win)
+    xdo(display, "mousemove", str(W // 2), str(H // 2))
+    time.sleep(0.3)
+    for _ in range(n):
+        xdo(display, "mousedown", "3")
+        time.sleep(draw)
+        xdo(display, "mouseup", "3")
+        time.sleep(gap)
+
+
 def wait_until_ingame(display, timeout=300, label=""):
     """진짜 **게임 안**인지 화면으로 판정한다 (스플래시·로딩 회색을 배제)."""
     from PIL import Image
@@ -661,7 +673,10 @@ def shoot(rcon, angle, outdir: Path, args, bot_win):
     print(f"[촬영] {CAM_DISPLAY} {args.fps}fps → {outdir}")
     cap = start_capture(CAM_DISPLAY, outdir, args.fps)
     try:
-        swing(BOT_DISPLAY, bot_win, args.swings, args.gap)
+        if getattr(args, "bow", False):
+            bow_volley(BOT_DISPLAY, bot_win, args.swings, args.draw, args.gap)
+        else:
+            swing(BOT_DISPLAY, bot_win, args.swings, args.gap)
         time.sleep(1.5)
     finally:
         stop_capture(cap)
@@ -878,6 +893,9 @@ def main():
     ap.add_argument("--gap", type=float, default=1.4)
     ap.add_argument("--fps", type=int, default=15, help="카메라 촬영 fps (클라 2개라 낮춘다)")
     ap.add_argument("--item", default="minecraft:iron_sword")
+    ap.add_argument("--bow", action="store_true",
+                    help="활 시안 (B-174): 혼천 활+화살을 콘솔로 지급하고 우클릭 홀드로 쏜다")
+    ap.add_argument("--draw", type=float, default=1.2, help="시위 당김 유지(초) — 만작 ≈1.0+")
     ap.add_argument("--min-area", type=int, default=40)
     ap.add_argument("--night", action="store_true")
     ap.add_argument("--cam-mode", default="spectator",
@@ -950,6 +968,13 @@ def main():
         if not args.summon and not args.bm_model:
             held = AT.prepare_scene(rcon, args.item, args.night)
             print(f"[무대] 든 것: {held.strip()[:90]}")
+            if args.bow:
+                # ★ 혼천 활은 콘솔 지급 경로로 (giveWeapon 콘솔 분기 — 2026-07-23 신설)
+                rcon.cmd(f"clear {BOT}")
+                print("[무대] 활 지급:", rcon.cmd(f"혼천 병기 {BOT} 활 범철").strip()[:70])
+                rcon.cmd(f"give {BOT} minecraft:arrow 64")
+                xdo(BOT_DISPLAY, "key", "1")   # 핫바 1번 — 활
+                time.sleep(0.5)
             # ★ 카메라도 무대 위 하늘로 끌어온다 — 안 그러면 스폰 지점의 지하에서 허공을 본다
             sx, sy, sz = AT.STAGE
             rcon.cmd(f"gamemode {args.cam_mode} {CAM}")

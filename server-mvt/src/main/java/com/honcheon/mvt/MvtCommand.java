@@ -262,6 +262,25 @@ public final class MvtCommand implements CommandExecutor {
     /** /혼천 병기 <계열> <등급> [속성...] — 관리자 지급 (검증용) */
     private boolean giveWeapon(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
+            // ★ 콘솔 경로 (2026-07-23 · 계율 "플레이어 전용 명령은 RCON execute-as 로 안 된다 —
+            //   콘솔 경로를 설계하라"): /혼천 병기 <플레이어> <계열> <등급> — 촬영 봇 지급용
+            if (args.length >= 4) {
+                Player target = plugin.getServer().getPlayerExact(args[1]);
+                if (target == null) {
+                    sender.sendMessage("[혼천] 병기 지급 실패 — 접속 중이 아니다: " + args[1]);
+                    return true;
+                }
+                try {
+                    target.getInventory().addItem(Weapons.make(
+                            Weapons.Series.of(args[2]), Weapons.Grade.of(args[3]),
+                            Weapons.Bias.균, Weapons.Craft.보통, java.util.List.of()));
+                    sender.sendMessage("[혼천] 병기 지급 — " + args[1] + " ← " + args[3] + " " + args[2]);
+                } catch (IllegalArgumentException rejected) {
+                    sender.sendMessage("[혼천] 병기 지급 실패 — " + rejected.getMessage());
+                }
+            } else {
+                sender.sendMessage("[혼천] 콘솔 용법: /혼천 병기 <플레이어> <계열> <등급>");
+            }
             return true;
         }
         if (!player.isOp()) {

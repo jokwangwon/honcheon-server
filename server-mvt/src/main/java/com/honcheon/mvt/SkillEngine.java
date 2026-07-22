@@ -170,6 +170,7 @@ public final class SkillEngine {
     private final Map<String, Traj> trajectories;
     private final Map<String, Style> weaponStyles;
     private final Map<String, Ranged> rangedSpecs;         // skill_mechanics.yml: ranged (활·암기)
+    private final Map<String, RangedFx> rangedFx;          // skill_motion.yml: ranged_fx (사선의 그림)
     private final Budget budget;
     /** HUD flash 읽을 시간 (skill_motion.yml hud.flash_read_ticks) — 순간 사건이 액션바 줄을 갖는 틱 수 (B-116) */
     private final int hudFlashTicks;
@@ -649,6 +650,20 @@ public final class SkillEngine {
                     str(r.get("ammo"))));
         });
         this.rangedSpecs = Collections.unmodifiableMap(rgs);
+
+        // ─── 원거리 사선의 그림 (skill_motion.yml ranged_fx — 시안 축. 없으면 즉발·weapon_styles) ───
+        Map<String, RangedFx> rfx = new LinkedHashMap<>();
+        RulesConfig.section(mo, "ranged_fx").forEach((cls, raw) -> {
+            if (!(raw instanceof Map)) {
+                return;
+            }
+            Map<String, Object> r = asMap(raw);
+            rfx.put(cls, new RangedFx(str(r.get("mode")),
+                    str(r.get("core_ink")), str(r.get("rim_ink")),
+                    dblOr(r.get("step"), 0.6), dblOr(r.get("speed_mpt"), 12.0),
+                    dblOr(r.get("tail_m"), 3.0), (float) dblOr(r.get("size"), 0.5)));
+        });
+        this.rangedFx = Collections.unmodifiableMap(rfx);
 
         // ─── 3D 모션 등록부 (skill_motion.yml display) ───
         // 예산은 performance.yml vfx_entities 와 **둘 중 작은 쪽**을 쓴다 — 등록부가 상위 예산을 못 넘는다
@@ -1737,6 +1752,15 @@ public final class SkillEngine {
                          String ammo) {
     }
 
+    /**
+     * 원거리 사선의 그림 — skill_motion.yml ranged_fx.<계열> (시안 축 · 2026-07-23 B-174).
+     * mode: 즉발(현행 — weapon_styles trail 한 겹) · 먹줄(심+테 두 겹 즉발) ·
+     * 주행(트레이서가 speed_mpt m/틱으로 날아가고 판정도 도달 틱에 맞춘다 — 화면=판정).
+     */
+    public record RangedFx(String mode, String coreInk, String rimInk,
+                           double step, double speedMpt, double tailM, float size) {
+    }
+
     /** 플레이어 무공 런타임 상태 — 순수 데이터 (엔진은 이걸 읽고 쓰지 않는다; 리스너가 소유) */
     public static final class State {
         /**
@@ -2815,6 +2839,11 @@ public final class SkillEngine {
     /** 원거리 등록부 — 없는 계열은 null (지어내지 않는다: null 이면 호출자가 물러선다) */
     public Ranged ranged(String weaponClass) {
         return rangedSpecs.get(weaponClass);
+    }
+
+    /** 사선의 그림 — 없으면 null (즉발·weapon_styles 폴백) */
+    public RangedFx rangedFx(String weaponClass) {
+        return rangedFx.get(weaponClass);
     }
 
     // ══════════ 3D 모션 등록부 (skill_motion.yml display) ══════════

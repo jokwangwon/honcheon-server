@@ -84,22 +84,99 @@ final class RangedShot implements Listener {
         RayTraceResult hit = world.rayTraceEntities(eye, dir, dist, 0.6,
                 e -> e instanceof LivingEntity && e != player
                         && e.getLocation().distance(eye) >= spec.minRange());
-        if (hit != null && hit.getHitEntity() instanceof LivingEntity target) {
-            dist = Math.min(dist, hit.getHitPosition().distance(eye.toVector()));
+        LivingEntity target = null;
+        double hitDist = -1.0;
+        if (hit != null && hit.getHitEntity() instanceof LivingEntity le) {
+            target = le;
+            hitDist = hit.getHitPosition().distance(eye.toVector());
+            dist = Math.min(dist, hitDist);
+        }
+
+        // ③ 사선의 그림 + 시위 소리 — 그림은 ranged_fx(시안 축), 소리·폴백은 weapon_styles.활
+        SkillEngine.Style style = engine.weaponStyle("활");
+        SkillEngine.RangedFx fx = engine.rangedFx("활");
+        if (style.swing() != null) {
+            world.playSound(eye, style.swing().key(), style.swing().volume(), style.swing().pitch());
+        }
+        String mode = fx == null || fx.mode() == null ? "즉발" : fx.mode();
+        switch (mode) {
+            case "먹줄" -> drawInkLine(eye, dir, dist, fx);
+            case "주행" -> { drawTracer(eye, dir, dist, fx, target, hitDist, bow, player); return; }
+            default -> drawInstant(eye, dir, dist, style);
+        }
+        if (target != null) {
             // basicMelee 재진입 — 태세·기 방어·계기 판정이 전부 기존 한 경로로 잰다 (판정 일원화)
             target.damage(Math.max(1.0, Weapons.attackDamageOf(bow)), player);
         }
+    }
 
-        // ③ 사선 이펙트 + 시위 소리 — 전부 weapon_styles.활 의 것 (예산·관람자는 hud 창구가 지킨다)
-        SkillEngine.Style style = engine.weaponStyle("활");
+    /** 즉발 한 겹 — v1 현행 (weapon_styles.활.trail 그대로) */
+    private void drawInstant(Location eye, Vector dir, double dist, SkillEngine.Style style) {
         SkillHud hud = plugin.skills().hud();
         String particle = style.trail() == null || style.trail().isBlank()
                 ? "enchanted_hit" : style.trail();
         for (double d = 1.2; d <= dist; d += 0.6) {
             hud.emit(eye.clone().add(dir.clone().multiply(d)), particle, 1, 0.02, 0.0);
         }
-        if (style.swing() != null) {
-            world.playSound(eye, style.swing().key(), style.swing().volume(), style.swing().pitch());
+    }
+
+    /** 먹줄 — 심(core)+테(rim) 두 겹 즉발. 검기의 먹빛 문법을 사선에 잇는다 */
+    private void drawInkLine(Location eye, Vector dir, double dist, SkillEngine.RangedFx fx) {
+        SkillHud hud = plugin.skills().hud();
+        String core = fx.coreInk() == null ? "청백" : fx.coreInk();
+        String rim = fx.rimInk() == null ? "먹" : fx.rimInk();
+        // 사선에 수직인 테 방향 — 수평 우측 (연직 사선에서도 죽지 않게 월드 Y 와의 외적)
+        Vector side = dir.clone().crossProduct(new Vector(0, 1, 0));
+        if (side.lengthSquared() < 1.0e-6) {
+            side = new Vector(1, 0, 0);
         }
+        side.normalize().multiply(0.09);
+        for (double d = 1.2; d <= dist; d += fx.step()) {
+            Location at = eye.clone().add(dir.clone().multiply(d));
+            hud.emitSized(at, "dust", core, fx.size(), 1, 0.01, 0.0);
+            hud.emitSized(at.clone().add(side), "dust", rim, fx.size() * 0.7f, 1, 0.02, 0.0);
+            hud.emitSized(at.clone().subtract(side), "dust", rim, fx.size() * 0.7f, 1, 0.02, 0.0);
+        }
+    }
+
+    /**
+     * 주행 — 트레이서가 틱마다 {@code speed_mpt} m 씩 난다. <b>판정도 도달 틱에 맞춘다</b>
+     * (화면 = 판정: 그림이 늦게 닿으면 피해도 늦게 닿는다 — 즉발 판정에 주행 그림만 씌우면 거짓말이 된다).
+     */
+    private void drawTracer(Location eye, Vector dir, double dist, SkillEngine.RangedFx fx,
+                            LivingEntity target, double hitDist, ItemStack bow, Player shooter) {
+        SkillHud hud = plugin.skills().hud();
+        String core = fx.coreInk() == null ? "청백" : fx.coreInk();
+        String rim = fx.rimInk() == null ? "청회" : fx.rimInk();
+        final double total = dist;
+        final double hitAt = target != null ? hitDist : -1.0;
+        new org.bukkit.scheduler.BukkitRunnable() {
+            double head = 1.2;
+            boolean struck = false;
+
+            @Override
+            public void run() {
+                double next = Math.min(total, head + fx.speedMpt());
+                for (double d = head; d <= next; d += fx.step()) {
+                    Location at = eye.clone().add(dir.clone().multiply(d));
+                    hud.emitSized(at, "dust", core, fx.size(), 1, 0.01, 0.0);
+                }
+                // 꼬리 — 머리 뒤 tail_m 만큼 성긴 잔상
+                for (double d = Math.max(1.2, next - fx.tailM()); d < next; d += fx.step() * 2.0) {
+                    hud.emitSized(eye.clone().add(dir.clone().multiply(d)),
+                            "dust", rim, fx.size() * 0.6f, 1, 0.04, 0.0);
+                }
+                if (!struck && hitAt > 0 && next >= hitAt) {
+                    struck = true;
+                    if (target.isValid() && shooter.isOnline()) {
+                        target.damage(Math.max(1.0, Weapons.attackDamageOf(bow)), shooter);
+                    }
+                }
+                head = next;
+                if (head >= total) {
+                    cancel();
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 }
