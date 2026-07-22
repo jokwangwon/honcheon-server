@@ -270,7 +270,7 @@ public final class MvtCommand implements CommandExecutor {
         }
         if (args.length < 3) {
             player.sendMessage(ChatColor.GRAY
-                    + "/혼천 병기 <검|도|창|권갑|단검|부|겸|봉|구> <범철|정련|보병|신병|마병> [속성…]");
+                    + "/혼천 병기 <검|도|창|권갑|단검|부|겸|봉|구|활> <범철|정련|보병|신병|마병> [속성…]");
             return true;
         }
         int i = 3;

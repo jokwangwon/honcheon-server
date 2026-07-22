@@ -182,6 +182,7 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new BlockCovenant(), this);   // 세계는 부서지지 않는다 (B-161)
+        getServer().getPluginManager().registerEvents(new RangedShot(this), this);  // 화살은 이펙트다 (B-174)
         getServer().getPluginManager().registerEvents(new ZoneListener(this), this);
         TradeListener trade = new TradeListener(this);
         getServer().getPluginManager().registerEvents(trade, this);

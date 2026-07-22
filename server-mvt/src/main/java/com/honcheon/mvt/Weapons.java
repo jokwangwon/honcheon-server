@@ -234,7 +234,10 @@ public final class Weapons {
         부("bu", Base.AXE, "중병기", -3.1, 0.0),        // 0.9/s — 가장 느리고 한 방이 가장 무겁다 (방패 파괴)
         겸("gyeom", Base.HOE, "단검", -2.1, 0.0),          // 1.9/s — 걸어 채는 날. 가볍고 빠르다
         봉("bong", Base.SHOVEL, "봉", -3.0, 1.0),      // 1.0/s — 날 없는 장병기. 간격 4.0m (월아산 계승 — 2026-07-23 사용자 확정)
-        구("gu", Base.PICKAXE, "검", -2.5, 0.0);        // 1.5/s — 걸고 당긴다. 중간
+        구("gu", Base.PICKAXE, "검", -2.5, 0.0),        // 1.5/s — 걸고 당긴다. 중간
+        // ─── 원거리 — 화살은 아이템이 아니라 이펙트다 (2026-07-23 사용자 확정 · B-174:
+        //     "활도 스킬 모션으로 공격 이펙트로 활을 쏘는것 처럼 표시") ───
+        활(null, Base.BOW, "활", -2.4, 0.0);           // modelId null = 팩 미구움 — 바닐라 활 그대로 (RangedShot 이 사선을 긋는다)
 
         /** 팩 모델 키의 계열 부분. null = 팩 미구움 → item_model 부착 금지 */
         public final String modelId;
@@ -262,7 +265,7 @@ public final class Weapons {
                 }
             }
             throw new IllegalArgumentException("없는 계열: " + korean
-                    + " (검·도·창·권갑·단검·부·겸·봉·구)");
+                    + " (검·도·창·권갑·단검·부·겸·봉·구·활)");
         }
 
         /** 계열 표준 공속 (치우침 없음) */
@@ -295,7 +298,9 @@ public final class Weapons {
         SHOVEL(Material.STONE_SHOVEL, Material.IRON_SHOVEL, Material.DIAMOND_SHOVEL,
                 Material.GOLDEN_SHOVEL, Material.NETHERITE_SHOVEL),
         PICKAXE(Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.DIAMOND_PICKAXE,
-                Material.GOLDEN_PICKAXE, Material.NETHERITE_PICKAXE);
+                Material.GOLDEN_PICKAXE, Material.NETHERITE_PICKAXE),
+        // 활 — 바닐라에 재질 사다리가 없다. 등급은 재질 색이 아니라 툴팁·PDC 가 말한다
+        BOW(Material.BOW, Material.BOW, Material.BOW, Material.BOW, Material.BOW);
 
         private final Material[] byGrade;   // 범철·정련·보병·신병·마병 순
 
@@ -740,9 +745,13 @@ public final class Weapons {
      * 반올림을 표시 쪽에서만 하면 툴팁이 거짓말을 하게 된다.
      */
     private static void applyStats(ItemMeta meta, Series series, Grade grade, Bias bias, Craft craft) {
-        meta.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(
-                key("weapon_damage"), attackDamage(series, bias, craft) - BASE_ATTACK_DAMAGE,
-                AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
+        if (series != Series.활) {
+            // 활은 근접 보정을 얹지 않는다 — ranged.활.min_range: "그 안은 활대로 치는 맨손 취급".
+            // 사격의 위력은 attackDamageOf 로 RangedShot(사선 판정)이 직접 잰다
+            meta.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(
+                    key("weapon_damage"), attackDamage(series, bias, craft) - BASE_ATTACK_DAMAGE,
+                    AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
+        }
         meta.addAttributeModifier(Attribute.ATTACK_SPEED, new AttributeModifier(
                 key("weapon_speed"), attackSpeed(series, bias) - BASE_ATTACK_SPEED,
                 AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
@@ -895,6 +904,7 @@ public final class Weapons {
             case 겸 -> ChatColor.DARK_GRAY + "(鎌)";
             case 봉 -> ChatColor.DARK_GRAY + "(棒)";
             case 구 -> ChatColor.DARK_GRAY + "(鉤)";
+            case 활 -> ChatColor.DARK_GRAY + "(弓)";
         };
     }
 
@@ -917,6 +927,7 @@ public final class Weapons {
             case 겸 -> "걸어 채는 날 — 가볍고 빠르다.";
             case 봉 -> "날이 없는 장병기 — 길고 느리며 간격이 있다.";
             case 구 -> "걸고 당긴다 — 상대의 병기를 얽는 손.";
+            case 활 -> "거리를 위력으로 바꾼다 — 닿기 전에 맞힌다. 코앞은 못 쏜다.";
         };
         return List.of(byGrade, bySeries);
     }
@@ -1299,6 +1310,12 @@ public final class Weapons {
     }
 
     /** 치우침 — 태그가 없는 구(舊) 병기는 균(均)으로 읽는다 (하위 호환) */
+    /** 이 병기의 한 합 위력 (계열·치우침·품 반영) — 원거리 사선 판정(RangedShot)이 쓴다. 혼천 병기가 아니면 맨주먹 1 */
+    public static double attackDamageOf(ItemStack item) {
+        Series s = seriesOf(item);
+        return s == null ? BASE_ATTACK_DAMAGE : attackDamage(s, biasOf(item), craftOf(item));
+    }
+
     public static Bias biasOf(ItemStack item) {
         String value = tag(item, KEY_BIAS);
         return value == null ? Bias.균 : Bias.of(value);

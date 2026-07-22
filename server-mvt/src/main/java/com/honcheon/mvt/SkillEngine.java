@@ -169,6 +169,7 @@ public final class SkillEngine {
     private final Map<String, EventMotion> eventMotion;
     private final Map<String, Traj> trajectories;
     private final Map<String, Style> weaponStyles;
+    private final Map<String, Ranged> rangedSpecs;         // skill_mechanics.yml: ranged (활·암기)
     private final Budget budget;
     /** HUD flash 읽을 시간 (skill_motion.yml hud.flash_read_ticks) — 순간 사건이 액션바 줄을 갖는 틱 수 (B-116) */
     private final int hudFlashTicks;
@@ -635,6 +636,19 @@ public final class SkillEngine {
                     str(s.get("trail")), sfx(s.get("swing"))));
         });
         this.weaponStyles = Collections.unmodifiableMap(sts);
+
+        // ─── 원거리 등록부 (skill_mechanics.yml ranged — 활·암기. 사거리를 위력으로 바꾼다) ───
+        Map<String, Ranged> rgs = new LinkedHashMap<>();
+        RulesConfig.section(mech, "ranged").forEach((cls, raw) -> {
+            if (!(raw instanceof Map)) {
+                return;   // note 등 서술 키는 계열이 아니다
+            }
+            Map<String, Object> r = asMap(raw);
+            rgs.put(cls, new Ranged(cls, dblOr(r.get("range"), 24.0),
+                    intOr(r.get("draw_ticks"), 20), dblOr(r.get("min_range"), 0.0),
+                    str(r.get("ammo"))));
+        });
+        this.rangedSpecs = Collections.unmodifiableMap(rgs);
 
         // ─── 3D 모션 등록부 (skill_motion.yml display) ───
         // 예산은 performance.yml vfx_entities 와 **둘 중 작은 쪽**을 쓴다 — 등록부가 상위 예산을 못 넘는다
@@ -1718,6 +1732,11 @@ public final class SkillEngine {
                         String trail, Sfx swing) {
     }
 
+    /** 원거리 등록부 한 줄 — skill_mechanics.yml ranged.<계열> (사거리·당김·최소거리·탄약) */
+    public record Ranged(String weaponClass, double range, int drawTicks, double minRange,
+                         String ammo) {
+    }
+
     /** 플레이어 무공 런타임 상태 — 순수 데이터 (엔진은 이걸 읽고 쓰지 않는다; 리스너가 소유) */
     public static final class State {
         /**
@@ -2791,6 +2810,11 @@ public final class SkillEngine {
     public Style weaponStyle(String weaponClass) {
         Style s = weaponStyles.get(weaponClass);
         return s != null ? s : weaponStyles.get("무관");
+    }
+
+    /** 원거리 등록부 — 없는 계열은 null (지어내지 않는다: null 이면 호출자가 물러선다) */
+    public Ranged ranged(String weaponClass) {
+        return rangedSpecs.get(weaponClass);
     }
 
     // ══════════ 3D 모션 등록부 (skill_motion.yml display) ══════════
