@@ -45,7 +45,9 @@ def extract() -> Image.Image:
         crop[-24:, :24].reshape(-1, 3), crop[-24:, -24:].reshape(-1, 3)])
     bg = np.median(corners, axis=0)
     dist = np.linalg.norm(crop - bg, axis=2)
-    alpha = np.clip((dist - 16.0) / (85.0 - 16.0), 0.0, 1.0)
+    # 농도 상향 (2026-07-23 사용자: "그림 색의 농도를 좀 올리고") — 문턱을 낮추고
+    # 감마 0.75 로 중간 농도를 짙게 (인게임 반투명 체감 보정)
+    alpha = np.clip((dist - 12.0) / (70.0 - 12.0), 0.0, 1.0) ** 0.75
     for mx0, my0, mx1, my1 in MASKS:            # 주석은 그림이 아니다
         alpha[my0:my1, mx0:mx1] = 0.0
     # 티끌 제거 — 3×3 이웃 평균이 옅으면 고립점이다

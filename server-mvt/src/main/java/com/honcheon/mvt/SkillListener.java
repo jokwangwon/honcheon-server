@@ -854,7 +854,7 @@ public final class SkillListener implements Listener {
                 c.widthSelfMul(), c.widthOthersMul(), c.heightOthersMul(),
                 c.bandHit(), c.bandHitReach(),
                 c.replaceStroke(), scale, height, forward,
-                radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
+                radius, sweep, tilt, roll, pitch, c.yawDeg(), draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
                 c.geomParticle(), c.geomInk(), c.geomInkAlt(),
                 c.geomTemplate(), c.geomTemplateFps(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),

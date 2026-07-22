@@ -1201,6 +1201,8 @@ public final class SkillEngine {
                 dblOr(m.get("sweep_deg"), 140.0),
                 dblOr(m.get("tilt_deg"), 35.0), dblOr(m.get("roll_deg"), 0.0),
                 dblOr(m.get("blade_pitch_deg"), 90.0),
+                dblOr(m.get("yaw_deg"), 0.0),   // ★베기면 고정 (2026-07-23): 90 = 판 길이축이 전진축 — 정면·후면 얇고 측면이 그림 전체
+
                 Math.max(1, intOr(m.get("draw_ticks"), 8)),
                 Math.max(0, intOr(m.get("fade_ticks"), 5)),
                 String.valueOf(m.getOrDefault("billboard", "FIXED")),
@@ -1624,7 +1626,7 @@ public final class SkillEngine {
                             boolean bandHit, double bandHitReach,
                             boolean replaceStroke, double scale, double centerHeight, double forward,
                             double orbitRadius, double sweepDeg, double tiltDeg, double rollDeg,
-                            double bladePitchDeg,
+                            double bladePitchDeg, double yawDeg,
                             int drawTicks, int fadeTicks, String billboard, boolean alternate,
                             int brightness, KigiSpark spark, boolean calmHeldAura,
                             String geomParticle, String geomInk, String geomInkAlt,

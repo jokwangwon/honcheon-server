@@ -876,7 +876,9 @@ final class SkillDisplay {
     private static Quaternionf kigiPose(SkillEngine.KigiSlash cfg, int dirSign, double phase) {
         return new Quaternionf()
                 .rotateZ((float) Math.toRadians(cfg.tiltDeg()))     // 공전면 기울기 (자리와 같은 것)
-                .rotateY((float) kigiTheta(cfg, dirSign, phase))    // 궤도 접선으로 눕힌다
+                // ★ yaw_deg (2026-07-23 사용자: "정면·후면 얇게, 측면에서 보여야 정상") —
+                //   90 이면 판 면이 베기면(전진축+세로축)에 눕는다: 정면=칼날 두께, 측면=그림 전체
+                .rotateY((float) (kigiTheta(cfg, dirSign, phase) + Math.toRadians(cfg.yawDeg())))
                 // ★ 날의 눕힘 (2026-07-20 · 사용자 실측: "아치가 위아래를 보고 있다").
                 //   여기까지는 판이 **세로로 선 채** 접선만 따라갔다 — 그래서 ∩ 의 배가 하늘을 봤다.
                 //   횡베기는 판이 **누워야** 한다: 볼록한 바깥이 정면(플레이어 밖)을,
