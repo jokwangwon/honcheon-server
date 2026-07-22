@@ -257,72 +257,111 @@ final class QiGeometry {
                   String particle, String inkBody, int mirror,
                   java.util.function.Predicate<org.bukkit.entity.Player> audience,
                   double heightMul) {
-        // mirror: +1 = 왼위→오른아래 대각 · −1 = 오른위→왼아래 (스윙마다 교대 — "한 방향으로만 벤다" 해소)
+        return slashBand(center, facing, radius, sweepDeg, from, to, tiltDeg, stepDeg,
+                width, rows, jitter, particle, inkBody, mirror, audience, heightMul,
+                null, false, false);
+    }
+
+    /**
+     * ★ v5 — 디자이너 컨셉 시트 반영 (2026-07-22 · 작업물/검기/2db88914….jpg):
+     * 초승달 배 프로필(양끝 가늘고 중앙 최대) · 밀도 3계층(날 100%/몸 ~60%/안쪽 잔향 ~20%) ·
+     * 먹방울 튀김(미숙한 내력의 흔적) · 1인칭 중앙 비움(clearNear) · 3인칭 외곽 먹선(darkOutline) ·
+     * echoPass=true 면 번짐 단계(스윕 뒤) — 성긴 먹·본색이 뒤로 흩어진다 (100→350ms 구간).
+     *
+     * @param clearNear   null 아니면 이 지점 1.4m 안은 발행하지 않는다 — 1인칭 크로스헤어 비움
+     * @param darkOutline 날 바깥에 성긴 먹 윤곽선 — 관전자(3인칭) 실루엣 강조
+     * @param echoPass    번짐 패스 — 밀도 1/3 · 지터 2.5배 · 먹/본색만 (밝은 날 없음)
+     */
+    int slashBand(Location center, float facing, double radius, double sweepDeg,
+                  double from, double to, double tiltDeg, double stepDeg,
+                  double width, int rows, double jitter,
+                  String particle, String inkBody, int mirror,
+                  java.util.function.Predicate<org.bukkit.entity.Player> audience,
+                  double heightMul, Location clearNear, boolean darkOutline, boolean echoPass) {
         if (center == null || center.getWorld() == null || to <= from) {
             return 0;
         }
         double full = Math.toRadians(sweepDeg);
-        double base = Math.toRadians(facing) - full / 2.0;
-        double a0 = base + full * Math.max(0.0, Math.min(1.0, from));
-        double a1 = base + full * Math.max(0.0, Math.min(1.0, to));
-        int steps = Math.max(1, (int) Math.ceil(Math.toDegrees(a1 - a0) / Math.max(0.2, stepDeg)));
+        int steps = Math.max(1, (int) Math.ceil(sweepDeg * (to - from) / Math.max(0.2, stepDeg)));
         double tilt = Math.toRadians(tiltDeg);
         java.util.Random rnd = java.util.concurrent.ThreadLocalRandom.current();
 
-        // ★ 시선 기준 좌표계 (v2b 실측 교훈: 월드축 기울임은 시선과 무관하게 「머리 위 화환」을 만든다).
-        //   호는 몸 **앞** 반구를 가로지르고, 기울임은 시선축 둘레의 대각(왼위→오른아래)이다 — 베기면.
         double f = Math.toRadians(facing);
-        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);            // 시선 앞
-        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);            // 시전자의 오른쪽
+        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
+        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
         double half = full / 2.0;
+        double mir = mirror < 0 ? -1.0 : 1.0;
+        double clearSq = 1.4 * 1.4;
         int sent = 0;
         for (int i = 0; i <= steps; i++) {
             double u = (double) i / steps;
-            double phase = from + (to - from) * u;                 // 0=꼬리 … 1=머리
-            double phi = -half + full * phase;                     // 시선 기준 호각
-            // 검압 실루엣 — 꼬리 12% → 머리 100% (판 세대에서 확정한 폭 프로필의 요지)
-            double taper = phase < 0.2 ? 0.12 + 0.88 * (phase / 0.2) * 0.25
-                         : Math.min(1.0, 0.34 + 0.66 * Math.pow((phase - 0.2) / 0.6, 0.85));
+            double phase = from + (to - from) * u;
+            double phi = -half + full * phase;
+            // ★ 초승달 배 프로필 — 양끝(뿔) 가늘고 중앙(배)이 최대 (디자이너: 중반부가 가장 묵직)
+            double d0 = Math.abs(phase - 0.55) / 0.55;
+            double taper = Math.max(0.14, 1.0 - d0 * d0 * 0.95);
             double w = width * taper;
+            // 끝자락 비백(飛白) — 뿔 근처는 지터가 커져 드문드문 흩어진다
+            double horn = phase < 0.12 || phase > 0.88 ? 1.8 : 1.0;
             for (int k = -1; k <= rows; k++) {
-                // k=-1: 날(청백·바깥) · 0..rows-1: 몸(본색) · rows: 먹 안감(소량)
                 boolean edge = k < 0;
                 boolean dark = k >= rows;
-                if (dark && (i % 3 != 0 || phase < 0.25)) {
-                    continue;                                       // 먹은 소량 — 셋에 하나
+                if (echoPass && edge) {
+                    continue;                               // 번짐 단계엔 밝은 날이 없다 (날 먼저 죽는다)
                 }
-                if (!edge && !dark && rnd.nextDouble() > 0.80 + 0.20 * taper) {
-                    continue;                                       // 꼬리 쪽 몸은 성기게 (밀도 테이퍼)
+                // ★ 밀도 3계층 (가이드): 날 100% · 몸 ~55%×배부름 · 안쪽 잔향 ~20%
+                double keep = edge ? 1.0 : dark ? 0.20 : 0.55 * (0.5 + 0.5 * taper);
+                if (echoPass) {
+                    keep *= 0.35;                           // 번짐 — 전체가 성겨진다
+                }
+                if (!edge && rnd.nextDouble() > keep) {
+                    continue;
                 }
                 double fr = edge ? 0.0 : dark ? 1.0 : (k + 1.0) / (rows + 1.0);
                 double r = radius - w * fr;
                 double side = Math.sin(phi) * r * Math.cos(tilt);
-                double up = -Math.sin(phi) * r * Math.sin(tilt) * (mirror < 0 ? -1.0 : 1.0);
+                double up = -Math.sin(phi) * r * Math.sin(tilt) * mir;
                 double fwd = Math.cos(phi) * r;
                 Location at = center.clone().add(
                         fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
-                double jt = edge ? jitter * 0.5 : jitter;           // 날도 약간은 흩어진다 (딱딱한 선 금지)
+                double jt = (edge ? jitter * 0.5 : jitter) * horn * (echoPass ? 2.5 : 1.0);
                 at.add((rnd.nextDouble() - 0.5) * jt,
                        (rnd.nextDouble() - 0.5) * jt * 2.0 * heightMul,
                        (rnd.nextDouble() - 0.5) * jt);
+                if (clearNear != null && at.distanceSquared(clearNear) < clearSq) {
+                    continue;                               // 1인칭 크로스헤어 앞은 비운다
+                }
                 String ink = edge ? "청백" : dark ? "먹" : inkBody;
-                // ★ 잘게 (2026-07-21 사용자: "밀도가 굵다·뭉툭하다") — 등록 크기 1.0 정사각이 아니라
-                //   가는 알갱이. spread 는 발행 시 무작위 오프셋 — 「선 긋기」가 아니라 자연 확산.
-                float sz = edge ? 0.50f : dark ? 0.60f : 0.55f;
-                sent += hud.emitSized(at, particle, ink, sz, 1, 0.05, 0.0);
+                float sz = edge ? 0.45f : dark ? 0.60f : 0.55f;
+                sent += hud.emitSized(at, particle, ink, sz, 1, 0.05, 0.0, audience);
             }
-            // 담묵 헤일로 — 획 둘레의 옅은 번짐 (둘에 하나 · 크게 흩고 · 성기게) — 퍼지는 느낌의 몸통
-            if (i % 2 == 0 && phase > 0.15) {
-                double r2 = radius - w * 0.5;
-                double side2 = Math.sin(phi) * r2 * Math.cos(tilt);
-                double up2 = -Math.sin(phi) * r2 * Math.sin(tilt);
-                double fwd2 = Math.cos(phi) * r2;
-                Location at2 = center.clone().add(
-                        fwdX * fwd2 + rgtX * side2, up2, fwdZ * fwd2 + rgtZ * side2);
-                at2.add((rnd.nextDouble() - 0.5) * jitter * 3.5,
-                        (rnd.nextDouble() - 0.5) * jitter * 4.5 * heightMul,
-                        (rnd.nextDouble() - 0.5) * jitter * 3.5);
-                sent += hud.emitSized(at2, particle, inkBody, 0.45f, 1, 0.12, 0.0, audience);
+            // ★ 외곽 먹선 (관전자 실루엣 강조 — 가이드 TPS 배치) — 날 바깥에 성긴 먹
+            if (darkOutline && !echoPass && i % 2 == 0) {
+                double r2 = radius + width * 0.12;
+                double side = Math.sin(phi) * r2 * Math.cos(tilt);
+                double up = -Math.sin(phi) * r2 * Math.sin(tilt) * mir;
+                double fwd = Math.cos(phi) * r2;
+                Location at = center.clone().add(
+                        fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
+                at.add((rnd.nextDouble() - 0.5) * jitter * 0.6,
+                       (rnd.nextDouble() - 0.5) * jitter * heightMul,
+                       (rnd.nextDouble() - 0.5) * jitter * 0.6);
+                sent += hud.emitSized(at, particle, "먹", 0.55f, 1, 0.04, 0.0, audience);
+            }
+        }
+        // ★ 먹방울 튀김 — 미숙한 내력의 흔적 (스윕 본 패스에서 구간당 최대 1방울)
+        if (!echoPass && rnd.nextDouble() < 0.6) {
+            double phase = from + (to - from) * rnd.nextDouble();
+            double phi = -half + full * phase;
+            double r = radius - width * (1.3 + rnd.nextDouble() * 1.2);   // 날 뒤(안쪽)로 튄다
+            double side = Math.sin(phi) * r * Math.cos(tilt);
+            double up = -Math.sin(phi) * r * Math.sin(tilt) * mir;
+            double fwd = Math.cos(phi) * r;
+            Location at = center.clone().add(
+                    fwdX * fwd + rgtX * side, up + (rnd.nextDouble() - 0.5) * 0.3,
+                    fwdZ * fwd + rgtZ * side);
+            if (clearNear == null || at.distanceSquared(clearNear) >= clearSq) {
+                sent += hud.emitSized(at, particle, "먹", 0.7f, 1, 0.06, 0.0, audience);
             }
         }
         return sent;

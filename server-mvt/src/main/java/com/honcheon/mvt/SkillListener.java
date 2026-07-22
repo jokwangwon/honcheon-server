@@ -1985,22 +1985,30 @@ public final class SkillListener implements Listener {
 
             @Override
             public void run() {
-                if (t >= span || !player.isOnline()) {
+                if (t >= span + 5 || !player.isOnline()) {
                     cancel();
                     return;
                 }
                 java.util.UUID me = player.getUniqueId();
-                geom.slashBand(center, yaw, r, cfg.sweepDeg(),
-                        (double) t / span, (double) (t + 1) / span,
-                        cfg.tiltDeg(), cfg.stepDeg(),
-                        cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
-                        "dust", cfg.ink(), dirSign, v -> v.getUniqueId().equals(me));
-                geom.slashBand(center, yaw, r, cfg.sweepDeg(),
-                        (double) t / span, (double) (t + 1) / span,
-                        cfg.tiltDeg(), cfg.stepDeg(),
-                        cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
-                        "dust", cfg.ink(), dirSign, v -> !v.getUniqueId().equals(me),
-                        cfg.heightOthersMul());
+                if (t < span) {
+                    geom.slashBand(center, yaw, r, cfg.sweepDeg(),
+                            (double) t / span, (double) (t + 1) / span,
+                            cfg.tiltDeg(), cfg.stepDeg(),
+                            cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
+                            "dust", cfg.ink(), dirSign, v -> v.getUniqueId().equals(me),
+                            1.0, player.getEyeLocation(), false, false);
+                    geom.slashBand(center, yaw, r, cfg.sweepDeg(),
+                            (double) t / span, (double) (t + 1) / span,
+                            cfg.tiltDeg(), cfg.stepDeg(),
+                            cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
+                            "dust", cfg.ink(), dirSign, v -> !v.getUniqueId().equals(me),
+                            cfg.heightOthersMul(), null, true, false);
+                } else if (t == span + 1 || t == span + 3) {
+                    geom.slashBand(center, yaw, r, cfg.sweepDeg(), 0.0, 1.0,
+                            cfg.tiltDeg(), cfg.stepDeg() * 2.0,
+                            cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
+                            "dust", cfg.ink(), dirSign, null, 1.4, null, false, true);
+                }
                 if (cfg.hit()) {
                     for (int i = 0; i <= 6; i++) {
                         double phase = (t + i / 6.0) / span;

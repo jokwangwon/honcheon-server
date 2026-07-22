@@ -632,37 +632,47 @@ final class SkillDisplay {
         final float yaw = caster.getLocation().getYaw();
         final Location center = at.clone();
         final int[] sent = {0};
+        final Location eye = caster.getEyeLocation();
         new org.bukkit.scheduler.BukkitRunnable() {
             int t = 0;
 
             @Override
             public void run() {
-                if (t >= span || !caster.isOnline()) {
+                // ★ v5 수명 주기 (디자이너 시트): 스윕(피크 ~100ms) → +2·+4틱 번짐 패스 → 파티클 소멸
+                if (t >= span + 5 || !caster.isOnline()) {
                     cancel();
                     note("검기띠", "점 " + sent[0] + "개 (폭 " + cfg.bandWidth() + "m · "
                             + cfg.bandRows() + "줄 · 각 " + Math.round(cfg.geomSweepDeg())
-                            + "도 · " + span + "틱 스윕)");
+                            + "도 · " + span + "틱 스윕 + 번짐 2회)");
                     return;
                 }
-                // ★ 시점별 굵기 — 시전자(1인칭)에겐 얇게, 관전자(3인칭)에겐 넓게 (같은 획·같은 판정)
                 java.util.UUID me = caster.getUniqueId();
-                sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
-                        (double) t / span, (double) (t + 1) / span,
-                        cfg.tiltDeg(), cfg.geomStepDeg(),
-                        cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
-                        particle, inkBody, dirSign, v -> v.getUniqueId().equals(me));
-                sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
-                        (double) t / span, (double) (t + 1) / span,
-                        cfg.tiltDeg(), cfg.geomStepDeg(),
-                        cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
-                        particle, inkBody, dirSign, v -> !v.getUniqueId().equals(me),
-                        cfg.heightOthersMul());
-                // 흰 별 — 머리(마지막 두 틱) 구간에만, 성기게
-                if (t >= span - 2 && cfg.accentCount() > 0) {
-                    sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                if (t < span) {
+                    // 본 스윕 — 시전자: 얇게 + 크로스헤어 비움 / 관전자: 넓게 + 외곽 먹선
+                    sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
                             (double) t / span, (double) (t + 1) / span,
-                            cfg.tiltDeg(), Math.max(6.0, cfg.geomStepDeg() * 4.0),
-                            "end_rod", null);
+                            cfg.tiltDeg(), cfg.geomStepDeg(),
+                            cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
+                            particle, inkBody, dirSign, v -> v.getUniqueId().equals(me),
+                            1.0, eye, false, false);
+                    sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                            (double) t / span, (double) (t + 1) / span,
+                            cfg.tiltDeg(), cfg.geomStepDeg(),
+                            cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
+                            particle, inkBody, dirSign, v -> !v.getUniqueId().equals(me),
+                            cfg.heightOthersMul(), null, true, false);
+                    if (t == span - 1 && cfg.accentCount() > 0) {
+                        sent[0] += geom.slashArc(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                                0.6, 1.0, cfg.tiltDeg(), Math.max(6.0, cfg.geomStepDeg() * 4.0),
+                                "end_rod", null);
+                    }
+                } else if (t == span + 1 || t == span + 3) {
+                    // 번짐 — 밝은 날 없이 먹·본색이 뒤로 성기게 흩어진다 (100→350ms 구간)
+                    sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                            0.0, 1.0, cfg.tiltDeg(), cfg.geomStepDeg() * 2.0,
+                            cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
+                            particle, inkBody, dirSign, null,
+                            1.4, null, false, true);
                 }
                 t++;
             }

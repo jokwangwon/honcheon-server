@@ -376,7 +376,7 @@ heavy_slash:
   band_width: 0.55         # 폭 (검 0.35 의 1.5배 — 굵다)
   band_rows: 4
   band_jitter: 0.14
-  sweep_ticks: 3
+  sweep_ticks: 2
   step_deg: 1.2
   # ★ 시점별 굵기 + 몸 먼저·궤적 나중 (2026-07-22 사용자)
   width_self_mul: 0.8
@@ -396,7 +396,7 @@ kigi_slash:
   band_width: 0.35      # 띠 폭(m) — 얇게 (사용자: 뭉툭함 제거)
   band_rows: 3          # 몸 줄 수
   band_jitter: 0.12     # 두께 지터(m)
-  band_sweep_ticks: 4   # 스윕 틱 (~200ms 급상승 — 잔류·소멸은 파티클 수명이 맡는다)
+  band_sweep_ticks: 2   # 피크 100ms (디자이너 시트: 0~100ms 생성·피크)
   # ★ 시점별 굵기 (2026-07-22 사용자): 시전자(1인칭) 얇게 · 관전자(3인칭) 넓게 — 같은 획·같은 판정
   width_self_mul: 0.8
   width_others_mul: 1.25
