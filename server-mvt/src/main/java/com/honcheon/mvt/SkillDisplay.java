@@ -630,6 +630,8 @@ final class SkillDisplay {
         String inkBody = cfg.geomInk() == null || cfg.geomInk().isBlank() ? "청회" : cfg.geomInk();
         final int span = Math.max(1, cfg.bandSweepTicks());
         final float yaw = caster.getLocation().getYaw();
+        // ★ 베기면이 시선의 위아래를 따른다 (2026-07-22 사용자 — 「획은 하늘을 보지 않는다」 폐지)
+        final float pitch = caster.getLocation().getPitch();
         final Location center = at.clone();
         final int[] sent = {0};
         final Location eye = caster.getEyeLocation();
@@ -693,13 +695,13 @@ final class SkillDisplay {
                 java.util.UUID me = caster.getUniqueId();
                 if (t < span) {
                     // 본 스윕 — 시전자: 얇게 + 크로스헤어 비움 / 관전자: 넓게 + 외곽 먹선
-                    sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                    sent[0] += geom.slashBand(center, yaw, pitch, cfg.orbitRadius(), cfg.geomSweepDeg(),
                             (double) t / span, (double) (t + 1) / span,
                             cfg.tiltDeg(), cfg.geomStepDeg(),
                             cfg.bandWidth() * cfg.widthSelfMul(), cfg.bandRows(), cfg.bandJitter(),
                             particle, inkBody, dirSign, v -> v.getUniqueId().equals(me),
                             1.0, eye, false, false, cfg.geomInkAlt());
-                    sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                    sent[0] += geom.slashBand(center, yaw, pitch, cfg.orbitRadius(), cfg.geomSweepDeg(),
                             (double) t / span, (double) (t + 1) / span,
                             cfg.tiltDeg(), cfg.geomStepDeg(),
                             cfg.bandWidth() * cfg.widthOthersMul(), cfg.bandRows(), cfg.bandJitter(),
@@ -712,7 +714,7 @@ final class SkillDisplay {
                     }
                 } else if (t == span + 1 || t == span + 3) {
                     // 번짐 — 밝은 날 없이 먹·본색이 뒤로 성기게 흩어진다 (100→350ms 구간)
-                    sent[0] += geom.slashBand(center, yaw, cfg.orbitRadius(), cfg.geomSweepDeg(),
+                    sent[0] += geom.slashBand(center, yaw, pitch, cfg.orbitRadius(), cfg.geomSweepDeg(),
                             0.0, 1.0, cfg.tiltDeg(), cfg.geomStepDeg() * 2.0,
                             cfg.bandWidth(), cfg.bandRows(), cfg.bandJitter(),
                             particle, inkBody, dirSign, null,
@@ -1021,7 +1023,10 @@ final class SkillDisplay {
         note("획·위반", m.id() + " — " + fault);
     }
 
-    /** 시선의 수평 성분 — 획은 하늘을 보지 않는다 (베는 것은 땅 위의 일이다) */
+    /**
+     * 시선의 수평 성분 — <b>닻(중심점)은 땅 위에 선다.</b> 베기면 자체는 pitch 를 따라 돈다
+     * (2026-07-22 개정 — 옛 「획은 하늘을 보지 않는다」는 면의 방향에서만 폐지. 중심은 여전히 수평 앞).
+     */
     private static Vector flat(Player caster) {
         Vector flat = caster.getLocation().getDirection().setY(0);
         if (flat.lengthSquared() < 1.0e-6) {

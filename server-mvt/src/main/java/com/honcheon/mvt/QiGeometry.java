@@ -291,6 +291,23 @@ final class QiGeometry {
                   java.util.function.Predicate<org.bukkit.entity.Player> audience,
                   double heightMul, Location clearNear, boolean darkOutline, boolean echoPass,
                   String inkAlt) {
+        return slashBand(center, facing, 0.0f, radius, sweepDeg, from, to, tiltDeg, stepDeg,
+                width, rows, jitter, particle, inkBody, mirror, audience, heightMul,
+                clearNear, darkOutline, echoPass, inkAlt);
+    }
+
+    /**
+     * ★ pitchDeg — <b>베기면이 시선의 위아래를 따른다</b> (2026-07-22 사용자: "바라보는 방향으로
+     * 베지 않음 — 하늘을 바라봐도 한방향으로만 나감"). 옛 「획은 하늘을 보지 않는다」는 검기에서
+     * 폐지됐다. MC 규약: pitch 양수 = 아래. 0 이면 기존 수평 베기 그대로다.
+     */
+    int slashBand(Location center, float facing, float pitchDeg, double radius, double sweepDeg,
+                  double from, double to, double tiltDeg, double stepDeg,
+                  double width, int rows, double jitter,
+                  String particle, String inkBody, int mirror,
+                  java.util.function.Predicate<org.bukkit.entity.Player> audience,
+                  double heightMul, Location clearNear, boolean darkOutline, boolean echoPass,
+                  String inkAlt) {
         if (center == null || center.getWorld() == null || to <= from) {
             return 0;
         }
@@ -300,8 +317,14 @@ final class QiGeometry {
         java.util.Random rnd = java.util.concurrent.ThreadLocalRandom.current();
 
         double f = Math.toRadians(facing);
-        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
-        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
+        double pt = Math.toRadians(pitchDeg);
+        double cp = Math.cos(pt), sp = Math.sin(pt);
+        // ★ 국소 정규직교 기저 — 앞(시선 3D)·오른손(수평)·위(둘의 외적).
+        //   옛 rgtZ=+sin(f) 는 부호가 틀려 yaw 45°에서 fwd 와 **평행**해졌다 (내적 = sin 2f) —
+        //   대각을 보고 베면 초승달이 한 줄로 붕괴하던 병의 뿌리 (2026-07-22 라이브 실증).
+        double fwdX = -Math.sin(f) * cp, fwdY = -sp, fwdZ = Math.cos(f) * cp;
+        double rgtX = -Math.cos(f), rgtZ = -Math.sin(f);
+        double upX = -rgtZ * fwdY, upY = rgtZ * fwdX - rgtX * fwdZ, upZ = rgtX * fwdY;
         double half = full / 2.0;
         double mir = mirror < 0 ? -1.0 : 1.0;
         double clearSq = 1.4 * 1.4;
@@ -336,7 +359,9 @@ final class QiGeometry {
                 double up = -Math.sin(phi) * r * Math.sin(tilt) * mir;
                 double fwd = Math.cos(phi) * r;
                 Location at = center.clone().add(
-                        fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
+                        fwdX * fwd + rgtX * side + upX * up,
+                        fwdY * fwd + upY * up,
+                        fwdZ * fwd + rgtZ * side + upZ * up);
                 double jt = (edge ? jitter * 0.5 : jitter) * horn * (echoPass ? 2.5 : 1.0);
                 at.add((rnd.nextDouble() - 0.5) * jt,
                        (rnd.nextDouble() - 0.5) * jt * 2.0 * heightMul,
@@ -362,7 +387,9 @@ final class QiGeometry {
                 double up = -Math.sin(phi) * r2 * Math.sin(tilt) * mir;
                 double fwd = Math.cos(phi) * r2;
                 Location at = center.clone().add(
-                        fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side);
+                        fwdX * fwd + rgtX * side + upX * up,
+                        fwdY * fwd + upY * up,
+                        fwdZ * fwd + rgtZ * side + upZ * up);
                 at.add((rnd.nextDouble() - 0.5) * jitter * 0.6,
                        (rnd.nextDouble() - 0.5) * jitter * heightMul,
                        (rnd.nextDouble() - 0.5) * jitter * 0.6);
@@ -378,8 +405,9 @@ final class QiGeometry {
             double up = -Math.sin(phi) * r * Math.sin(tilt) * mir;
             double fwd = Math.cos(phi) * r;
             Location at = center.clone().add(
-                    fwdX * fwd + rgtX * side, up + (rnd.nextDouble() - 0.5) * 0.3,
-                    fwdZ * fwd + rgtZ * side);
+                    fwdX * fwd + rgtX * side + upX * up,
+                    fwdY * fwd + upY * up + (rnd.nextDouble() - 0.5) * 0.3,
+                    fwdZ * fwd + rgtZ * side + upZ * up);
             if (clearNear == null || at.distanceSquared(clearNear) >= clearSq) {
                 sent += hud.emitSized(at, particle, "먹", 0.7f, 1, 0.06, 0.0, audience);
             }
@@ -421,7 +449,8 @@ final class QiGeometry {
         java.util.Random rnd = java.util.concurrent.ThreadLocalRandom.current();
         double f = Math.toRadians(facing);
         double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
-        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
+        // ★ 부호 수정 (2026-07-22): 옛 rgtZ=+sin(f) 는 yaw 45°에서 fwd 와 평행 — slashBand 와 같은 병
+        double rgtX = -Math.cos(f), rgtZ = -Math.sin(f);
         double tilt = Math.toRadians(tiltDeg);
         double mir = mirror < 0 ? -1.0 : 1.0;
         double halfW = halfH / Math.max(0.3, tpl.aspect);

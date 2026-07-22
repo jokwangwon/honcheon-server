@@ -72,6 +72,9 @@ echo "[3/5] 빌드 (:server-mvt)"
 
 echo "[4/5] jar 교체 + config 동기화"
 cp "$ROOT"/server-mvt/build/libs/server-mvt-*.jar "$RUN/plugins/"
+# ★ 재맵 캐시 제거 (2026-07-22) — jar 만 갈고 캐시를 두면 플러그인이 **조용히** 안 실린다
+#   (증상: 혼천 명령 불완전·효과 0 — HANDOFF §4-검기 함정 2번)
+rm -rf "$RUN/plugins/.paper-remapped"
 rm -rf "$RUN/plugins/HoncheonMVT/config"
 cp -r "$ROOT/config" "$RUN/plugins/HoncheonMVT/config"
 

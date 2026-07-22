@@ -1978,7 +1978,8 @@ public final class SkillListener implements Listener {
         double reach = Math.max(0.3, cfg.hitReach());
         int span = Math.max(1, cfg.sweepTicks());
         double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
-        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
+        // ★ 부호 수정 (2026-07-22): 옛 rgtZ=+sin(f) 는 yaw 45°에서 fwd 와 평행 — 화면과 같은 거울 유지
+        double rgtX = -Math.cos(f), rgtZ = -Math.sin(f);
         Set<UUID> struck = new HashSet<>();
         float yaw = player.getLocation().getYaw();
         new org.bukkit.scheduler.BukkitRunnable() {
@@ -2061,8 +2062,12 @@ public final class SkillListener implements Listener {
         double reach = Math.max(0.3, cfg.bandHitReach());
         int span = Math.max(1, cfg.bandSweepTicks());
         Set<UUID> struck = new HashSet<>();
-        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
-        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
+        // ★ QiGeometry.slashBand 와 같은 기저 (화면 = 판정) — pitch 추종·부호 수정 포함 (2026-07-22)
+        double pt = Math.toRadians(player.getLocation().getPitch());
+        double cp = Math.cos(pt), sp = Math.sin(pt);
+        double fwdX = -Math.sin(f) * cp, fwdY = -sp, fwdZ = Math.cos(f) * cp;
+        double rgtX = -Math.cos(f), rgtZ = -Math.sin(f);
+        double upX = -rgtZ * fwdY, upY = rgtZ * fwdX - rgtX * fwdZ, upZ = rgtX * fwdY;
         new org.bukkit.scheduler.BukkitRunnable() {
             int t = 0;
 
@@ -2079,10 +2084,14 @@ public final class SkillListener implements Listener {
                     double side = Math.sin(phi) * r * Math.cos(tilt);
                     double up = -Math.sin(phi) * r * Math.sin(tilt) * (dirSign < 0 ? -1.0 : 1.0);
                     double fwd = Math.cos(phi) * r;
-                    pts.add(center.clone().add(fwdX * fwd + rgtX * side, up, fwdZ * fwd + rgtZ * side));
+                    pts.add(center.clone().add(
+                            fwdX * fwd + rgtX * side + upX * up,
+                            fwdY * fwd + upY * up,
+                            fwdZ * fwd + rgtZ * side + upZ * up));
                 }
                 for (org.bukkit.entity.Entity e
-                        : center.getWorld().getNearbyEntities(center, r + 1.5, 2.5, r + 1.5)) {
+                        : center.getWorld().getNearbyEntities(center, r + 1.5,
+                        Math.max(2.5, r + 1.5), r + 1.5)) {   // 세로도 반경만큼 — 위아래 베기가 닿는다
                     if (!(e instanceof LivingEntity le) || e == player
                             || struck.contains(e.getUniqueId())) {
                         continue;
