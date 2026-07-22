@@ -387,6 +387,103 @@ final class QiGeometry {
         return sent;
     }
 
+    /** 빈짐 1단(+1틱) 색 내림 — 시트 「빈짐 350ms」: 밝은 날이 먼저 죽고 몸이 어두워진다. */
+    private static final java.util.Map<String, String> DIM1 = java.util.Map.of(
+            "청백", "옥", "옥", "청록", "청록", "청회", "청회", "먹", "먹", "먹");
+    /** 빈짐 2단(+3틱) — 소멸(700ms)로 가는 길: 거의 다 청회·먹으로 가라앉는다. */
+    private static final java.util.Map<String, String> DIM2 = java.util.Map.of(
+            "청백", "청회", "옥", "청회", "청록", "먹", "청회", "먹", "먹", "먹");
+
+    /**
+     * ★ <b>템플릿 발행</b> — 컨셉 시트의 그림을 베기면에 그대로 놓는다 (QiTemplate 참조).
+     *
+     * <p>두 좌표계:
+     * <ul>
+     * <li><b>베기면 데칼</b> (billboard=false · 관전자): 그림 세로(y) = 베기 진행축
+     *   (기울기 tilt 만큼 옆으로 누운 세로축), 그림 가로(x) = 앞뒤축 — 그림 오른쪽(초승달 열린 쪽)이
+     *   시전자 쪽을 본다. 측면 관전자가 시트의 TPS 그림을 정면으로 본다.</li>
+     * <li><b>빌보드</b> (billboard=true · 1인칭): 눈앞 고정 거리에 화면 평행으로 —
+     *   시전자가 시트의 FPS 그림 그대로를 본다.</li>
+     * </ul>
+     *
+     * @param halfH  그림 세로 반높이(m) — 초승달 전체 높이는 2×halfH
+     * @param f0,f1  공개 구간 [f0,f1) — 점 목록(y 정렬)의 비율. 스윕 틱마다 새 구간만 긋는다
+     * @param stage  0=본 스윕 · 1=빈짐(+1틱, 35% 색내림) · 2=빈짐(+3틱, 15% 색내림 2단)
+     * @param rotDeg 그림 회전(도) — 횡참(부)은 90 으로 눕힌다
+     */
+    int emitTemplate(Location center, float facing, QiTemplate tpl, boolean billboard,
+                     double halfH, double tiltDeg, int mirror, double f0, double f1,
+                     int stage, double rotDeg,
+                     java.util.function.Predicate<org.bukkit.entity.Player> audience) {
+        if (center == null || center.getWorld() == null || tpl == null || tpl.pts.isEmpty()) {
+            return 0;
+        }
+        java.util.Random rnd = java.util.concurrent.ThreadLocalRandom.current();
+        double f = Math.toRadians(facing);
+        double fwdX = -Math.sin(f), fwdZ = Math.cos(f);
+        double rgtX = -Math.cos(f), rgtZ = Math.sin(f);
+        double tilt = Math.toRadians(tiltDeg);
+        double mir = mirror < 0 ? -1.0 : 1.0;
+        double halfW = halfH / Math.max(0.3, tpl.aspect);
+        double rot = Math.toRadians(rotDeg);
+        double cr = Math.cos(rot), sr = Math.sin(rot);
+        int n = tpl.pts.size();
+        int i0 = Math.max(0, (int) Math.floor(f0 * n));
+        int i1 = Math.min(n, (int) Math.floor(f1 * n));
+        double keep = stage == 0 ? 1.0 : stage == 1 ? 0.35 : 0.15;
+        double jbase = stage == 0 ? 0.03 : stage == 1 ? 0.28 : 0.5;   // r3: 지터가 윤곽을 흐렸다
+        int sent = 0;
+        for (int i = i0; i < i1; i++) {
+            if (stage > 0 && rnd.nextDouble() > keep) {
+                continue;
+            }
+            QiTemplate.Pt p = tpl.pts.get(i);
+            double tx = p.x() * cr - p.y() * sr;
+            double ty = p.x() * sr + p.y() * cr;
+            double ox, oy, oz;
+            if (billboard) {
+                // 1인칭 — 화면 평행: 그림 x → 오른쪽(거울로 좌/우 교대), 그림 y(아래) → 화면 아래
+                ox = rgtX * (tx * halfW * mir) + fwdX * 0.0;
+                oy = -ty * halfH;
+                oz = rgtZ * (tx * halfW * mir) + fwdZ * 0.0;
+            } else {
+                // 관전자 — 베기면 데칼: 그림 y → 기울어진 세로축, 그림 x → 앞뒤축(열린 쪽이 시전자 쪽)
+                // ★ 앞 밀기 halfW·0.5 — 몸 중심에 놓으면 초승달이 몸에 겹친다 (r1 실측: 배치 가이드는
+                //   초승달이 몸 **앞을 감싼다**)
+                double vx = rgtX * Math.sin(tilt) * mir, vy = -Math.cos(tilt),
+                        vz = rgtZ * Math.sin(tilt) * mir;
+                double fx2 = -tx * halfW + halfW * 0.5;
+                ox = fwdX * fx2 + vx * (ty * halfH);
+                oy = vy * (ty * halfH);
+                oz = fwdZ * fx2 + vz * (ty * halfH);
+            }
+            Location at = center.clone().add(
+                    ox + (rnd.nextDouble() - 0.5) * jbase,
+                    oy + (rnd.nextDouble() - 0.5) * jbase,
+                    oz + (rnd.nextDouble() - 0.5) * jbase);
+            String ink = p.ink();
+            float sz = p.size();
+            if (stage == 1) {
+                ink = DIM1.getOrDefault(ink, ink);
+                sz += 0.04f;
+            } else if (stage == 2) {
+                ink = DIM2.getOrDefault(ink, ink);
+                sz += 0.07f;
+            }
+            // ★ 날 발광 (r3→r5): 청백을 절반 end_rod 로 바꿨더니 dust 림이 **끊겨** 읽혔다.
+            //   그래서 청백 dust 는 전부 두고, 30% 에 end_rod 를 **덧얹는다** — 연속 림 + 광채.
+            // 점당 2발 · 5cm 군집 (r8): 한 점을 살짝 어긋난 쌍으로 — 시트의 드라이브러시 뭉침.
+            //   수는 예산 상향(평가 서버)이 받친다. end_rod 는 12%만 (30% 는 흰 줄무늬로 번졌다)
+            //   청백(날)만 군집 2.5cm — 림이 몸으로 번지지 않게 (r9: 날 13%로 흐려졌다)
+            double cluster = "청백".equals(ink) ? 0.025 : 0.05;
+            sent += hud.emitSized(at, "dust", ink, sz, stage == 0 ? 2 : 1, cluster, 0.0, audience);
+            if (stage == 0 && "청백".equals(ink) && rnd.nextDouble() < 0.12) {
+                sent += hud.emitSized(at, "end_rod", null, sz, 1, 0.0, 0.0, audience);
+            }
+        }
+        return sent;
+    }
+
     /**
      * ★ <b>Impact 원형</b> (도끼·둔기 · vfx_primitives.md 원형 2호) — 호가 아니라 <b>충격</b>이다.
      *

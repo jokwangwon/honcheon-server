@@ -856,7 +856,8 @@ public final class SkillListener implements Listener {
                 c.replaceStroke(), scale, height, forward,
                 radius, sweep, tilt, roll, pitch, draw, fade, c.billboard(), c.alternate(),
                 c.brightness(), spark, c.calmHeldAura(),
-                c.geomParticle(), c.geomInk(), c.geomInkAlt(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),
+                c.geomParticle(), c.geomInk(), c.geomInkAlt(),
+                c.geomTemplate(), c.geomTemplateFps(), c.geomSweepDeg(), c.geomStepDeg(), c.plate(),
                 c.model3d(), c.model3dAnim(),
                 c.model3dUp(), c.model3dYaw(), c.model3dPitch());
     }

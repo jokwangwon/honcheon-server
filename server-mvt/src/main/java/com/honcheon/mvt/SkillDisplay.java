@@ -633,6 +633,50 @@ final class SkillDisplay {
         final Location center = at.clone();
         final int[] sent = {0};
         final Location eye = caster.getEyeLocation();
+        // ★ 시트 템플릿 모드 — geom_template 이 있을 때만 (없으면 아래 v5 밴드 그대로: 기존 불변)
+        final QiTemplate tplTps = QiTemplate.get(
+                new java.io.File(plugin.getDataFolder(), "config"), cfg.geomTemplate());
+        final QiTemplate tplFps = QiTemplate.get(
+                new java.io.File(plugin.getDataFolder(), "config"), cfg.geomTemplateFps());
+        if (cfg.geomTemplate() != null && tplTps == null) {
+            note("검기띠", "템플릿 '" + cfg.geomTemplate() + "' 을 못 읽었다 — 밴드로 후퇴");
+        }
+        if (tplTps != null) {
+            final QiTemplate fps = tplFps != null ? tplFps : tplTps;
+            final Location eyeAnchor = eye.clone().add(
+                    eye.getDirection().setY(0).normalize().multiply(2.0));
+            new org.bukkit.scheduler.BukkitRunnable() {
+                int t = 0;
+
+                @Override
+                public void run() {
+                    // 수명 3단 (시트): 스윕 span틱 피크 → +1·+3틱 빈짐 → dust 소멸
+                    if (t >= span + 5 || !caster.isOnline()) {
+                        cancel();
+                        note("검기띠", "템플릿 " + tplTps.name + " 점 " + sent[0] + "개 ("
+                                + span + "틱 스윕 + 빈짐 2회)");
+                        return;
+                    }
+                    java.util.UUID me = caster.getUniqueId();
+                    if (t < span) {
+                        double f0 = (double) t / span, f1 = (double) (t + 1) / span;
+                        sent[0] += geom.emitTemplate(eyeAnchor, yaw, fps, true,
+                                cfg.orbitRadius() * 0.55, cfg.tiltDeg(), dirSign, f0, f1, 0, 0.0,
+                                v -> v.getUniqueId().equals(me));
+                        sent[0] += geom.emitTemplate(center, yaw, tplTps, false,
+                                cfg.orbitRadius(), cfg.tiltDeg(), dirSign, f0, f1, 0, 0.0,
+                                v -> !v.getUniqueId().equals(me));
+                    }
+                    // (r7 실측: 같은 좌표 겹침 재발행은 화면 밀도를 안 올린다 — 폐기.
+                    //  밀도는 「점 수 × 가는 크기」로 세운다: 템플릿 2200점 + 시야 예산 상향)
+                    // ★ 빈짐 재발행은 하지 않는다 (r1 실측): dust 수명 ~0.7s 가 5틱보다 길어
+                    //   피크+빈짐이 **한 화면에 누적**돼 먹 49% 로 어두워졌다. 시트의 3단은
+                    //   교체인데 dust 로는 누적이 된다 — 소멸은 dust 자연 페이드에 맡긴다.
+                    t++;
+                }
+            }.runTaskTimer(plugin, 0L, 1L);
+            return;
+        }
         new org.bukkit.scheduler.BukkitRunnable() {
             int t = 0;
 
