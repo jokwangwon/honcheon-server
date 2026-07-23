@@ -135,32 +135,54 @@ async function syncGame(manifest) {
 }
 
 // ⑤ 공식 런처에 「혼천」 프로필 추가 (기존 프로필·설정은 보존)
+//
+// ★ 파일이 둘이다 (2026-07-23 실측): 독립 설치판은 launcher_profiles.json,
+//   MS 스토어(게임패스)판은 launcher_profiles_microsoft_store.json 을 읽는다.
+//   어느 런처든 잡히게 **둘 다**에 쓴다. 없는 파일은 새로 만든다 (그 런처를 쓰면 그때 읽힌다).
 function writeProfile(versionId) {
-  const pf = path.join(DOTMC, 'launcher_profiles.json');
-  let root = { profiles: {}, settings: {}, version: 3 };
-  if (fs.existsSync(pf)) {
-    try { root = JSON.parse(fs.readFileSync(pf, 'utf8')); } catch (e) { /* 깨졌으면 새로 */ }
-  }
-  if (!root.profiles) root.profiles = {};
   const now = new Date().toISOString();
-  const seal = loadSealDataUri();
-  root.profiles.honcheon = {
+  const entry = {
     name: '혼천',
     type: 'custom',
-    created: (root.profiles.honcheon && root.profiles.honcheon.created) || now,
+    created: now,
     lastUsed: now,
     lastVersionId: versionId,
     gameDir: GAMEDIR,
-    icon: seal || 'Furnace',
+    icon: loadSealDataUri() || 'Furnace',
     javaArgs: '-Xmx4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC',
   };
-  fs.writeFileSync(pf, JSON.stringify(root, null, 2));
+  const names = ['launcher_profiles.json', 'launcher_profiles_microsoft_store.json'];
+  // 존재하는 파일 하나를 씨앗으로 (없는 파일은 그 설정·프로필을 물려받아 만든다)
+  let seed = null;
+  for (const n of names) {
+    const p = path.join(DOTMC, n);
+    if (fs.existsSync(p)) { try { seed = fs.readFileSync(p, 'utf8'); break; } catch (e) { /* 다음 */ } }
+  }
+  let wrote = 0;
+  for (const name of names) {
+    const pf = path.join(DOTMC, name);
+    let root = { profiles: {}, settings: {}, version: 3 };
+    const raw = fs.existsSync(pf) ? safeRead(pf) : seed;
+    if (raw) { try { root = JSON.parse(raw); } catch (e) { /* 깨졌으면 새로 */ } }
+    if (!root.profiles) root.profiles = {};
+    // 기존 created 는 보존 (재설치해도 프로필 정렬이 안 흔들리게)
+    const prev = root.profiles.honcheon;
+    root.profiles.honcheon = { ...entry, created: (prev && prev.created) || now };
+    fs.writeFileSync(pf, JSON.stringify(root, null, 2));
+    wrote++;
+  }
+  return wrote;
+}
+
+function safeRead(p) {
+  try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; }
 }
 
 function loadSealDataUri() {
+  // 런처 프로필 아이콘은 PNG 를 기대한다 (.ico 는 안 뜬다) — 낙관 PNG 를 데이터URI 로
   try {
-    const p = path.join(__dirname, 'honcheon.ico');
-    if (fs.existsSync(p)) return 'data:image/x-icon;base64,' + fs.readFileSync(p).toString('base64');
+    const p = path.join(__dirname, 'honcheon_seal.png');
+    if (fs.existsSync(p)) return 'data:image/png;base64,' + fs.readFileSync(p).toString('base64');
   } catch (e) { /* 아이콘 없으면 기본 */ }
   return null;
 }

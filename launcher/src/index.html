@@ -62,10 +62,10 @@ async function onPlay(){
     state='installing'; $('play').classList.add('busy'); $('play').textContent='설치 중';
     $('seal').classList.remove('show'); await hc.install();
   } else if(state==='ready'){
-    state='running'; $('status').textContent='공식 런처를 엽니다 — 「혼천」을 골라 Play 하세요.';
+    state='running'; $('status').textContent='공식 런처를 엽니다 — 「혼천」 설치를 골라 Play 하세요. (이미 열려 있었다면 완전히 껐다 다시 켜야 목록에 뜹니다)';
     const r=await hc.launch();
-    if(r&&r.ok){ setTimeout(()=>hc.close(),2500); }
-    else { $('status').textContent='공식 런처를 자동으로 못 열었습니다 — 마인크래프트 런처를 직접 열어 「혼천」을 선택하세요.'; state='ready'; }
+    if(r&&r.ok){ setTimeout(()=>hc.close(),3500); }
+    else { $('status').textContent='런처를 자동으로 못 열었습니다 — 마인크래프트 자바 런처를 직접 열어 「혼천」을 선택하세요.'; state='ready'; }
   }
 }
 </script></body></html>
