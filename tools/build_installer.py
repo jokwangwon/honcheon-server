@@ -102,16 +102,43 @@ PS1_TEMPLATE = r"""
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $host.UI.RawUI.WindowTitle = '혼천 설치기'
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 Write-Host ''
-Write-Host '══════════════════════════════════════════'
-Write-Host '  혼천(渾天) — 원클릭 설치'
-Write-Host '══════════════════════════════════════════'
+Write-Host '  ┌────────────────────────────────────────────┐' -ForegroundColor DarkCyan
+Write-Host '  │                                            │' -ForegroundColor DarkCyan
+Write-Host '  │        혼  천  (渾 天)                     │' -ForegroundColor Cyan
+Write-Host '  │        무협 공유세계 — 원클릭 설치         │' -ForegroundColor Gray
+Write-Host '  │                                            │' -ForegroundColor DarkCyan
+Write-Host '  └────────────────────────────────────────────┘' -ForegroundColor DarkCyan
+Write-Host ''
 
 function Get-File($url, $to) {
     $name = Split-Path $to -Leaf
-    if (Test-Path $to) { Write-Host "  · $name (이미 있음)"; return }
-    Write-Host "  ↓ $name"
-    Invoke-WebRequest -Uri $url -OutFile $to
+    $show = if ($name.Length -gt 44) { $name.Substring(0, 41) + '...' } else { $name.PadRight(44) }
+    if (Test-Path $to) {
+        Write-Host "   · $show (있음)" -ForegroundColor DarkGray
+        return
+    }
+    $req = [Net.HttpWebRequest]::Create($url)
+    $req.UserAgent = 'honcheon-installer'
+    $res = $req.GetResponse()
+    $total = $res.ContentLength
+    $in = $res.GetResponseStream()
+    $out = [IO.File]::Create($to)
+    try {
+        $buf = New-Object byte[] 131072
+        $got = 0L
+        while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+            $out.Write($buf, 0, $n)
+            $got += $n
+            if ($total -gt 0) {
+                $pct = [int](100 * $got / $total)
+                $bar = ('#' * [int]($pct / 5)).PadRight(20, '-')
+                Write-Host -NoNewline ("`r   > {0} [{1}] {2,3}%" -f $show, $bar, $pct)
+            }
+        }
+    } finally { $out.Close(); $in.Close(); $res.Close() }
+    Write-Host ("`r   + {0} [{1}] 100%" -f $show, ('#' * 20)) -ForegroundColor Green
 }
 
 $root  = Join-Path $env:LOCALAPPDATA 'Honcheon'
@@ -174,9 +201,15 @@ $lnk.WorkingDirectory = $prism
 $lnk.Save()
 
 Write-Host ''
-Write-Host '✅ 완료! 바탕화면의 「혼천」 아이콘으로 시작하세요.'
-Write-Host '   · 첫 실행에서 Java 를 자동으로 받고, 마인크래프트 계정 로그인 한 번이 필요합니다.'
-Write-Host '   · 셰이더(Complementary Unbound)는 켜진 채 시작됩니다.'
+Write-Host '  ┌────────────────────────────────────────────┐' -ForegroundColor DarkGreen
+Write-Host '  │   ✅ 설치 완료!                            │' -ForegroundColor Green
+Write-Host '  │   바탕화면의 「혼천」 아이콘으로 시작      │' -ForegroundColor Gray
+Write-Host '  └────────────────────────────────────────────┘' -ForegroundColor DarkGreen
+Write-Host ''
+Write-Host '   · 첫 실행에서 Java 를 자동으로 받습니다 (1~2분)' -ForegroundColor DarkGray
+Write-Host '   · 마인크래프트 계정 로그인은 한 번만 필요합니다' -ForegroundColor DarkGray
+Write-Host '   · 셰이더(Complementary Unbound)는 켜진 채 시작됩니다' -ForegroundColor DarkGray
+Write-Host ''
 Read-Host '엔터를 누르면 닫힙니다'
 """
 
