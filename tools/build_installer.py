@@ -47,17 +47,23 @@ def main() -> None:
     cfg = yaml.safe_load((ROOT / "config" / "modpack.yml").read_text(encoding="utf-8"))
     prism_url = prism_portable()
     mod_lines = []
+    mod_names = []
+    shader_names = []
     for m in cfg.get("mods", []):
         f = file_of(m["slug"], m["version"])
+        mod_names.append(f["filename"])
         mod_lines.append(f"Get-File '{f['url']}' \"$inst\\.minecraft\\mods\\{f['filename']}\"")
         print(f"  ✔ {m['slug']}")
     shader_file = None
     for s in cfg.get("shaderpacks", []) or []:
         f = file_of(s["slug"], s["version"])
         shader_file = f["filename"]
+        shader_names.append(f["filename"])
         mod_lines.append(
             f"Get-File '{f['url']}' \"$inst\\.minecraft\\shaderpacks\\{f['filename']}\"")
         print(f"  ✔ (셰이더) {s['slug']}")
+    keep_mods = ",".join(f"'{n}'" for n in mod_names)
+    keep_shaders = ",".join(f"'{n}'" for n in shader_names) or "''"
     mmc = json.dumps({"formatVersion": 1, "components": [
         {"important": True, "uid": "net.minecraft", "version": str(cfg["minecraft"])},
         {"uid": "net.fabricmc.fabric-loader", "version": str(cfg["fabric_loader"])}]})
@@ -65,6 +71,8 @@ def main() -> None:
     ps1 = PS1_TEMPLATE.replace("@PRISM_URL@", prism_url) \
         .replace("@MMC_PACK@", mmc.replace("'", "''")) \
         .replace("@DOWNLOADS@", "\n".join(mod_lines)) \
+        .replace("@KEEP_MODS@", keep_mods) \
+        .replace("@KEEP_SHADERS@", keep_shaders) \
         .replace("@SHADER_FILE@", shader_file or "")
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "honcheon_setup.ps1").write_bytes(b"\xef\xbb\xbf" + ps1.encode("utf-8"))
@@ -132,8 +140,17 @@ iconKey=default
 '@ | Set-Content -Path "$inst\instance.cfg" -Encoding UTF8
 Set-Content -Path "$inst\mmc-pack.json" -Value '@MMC_PACK@' -Encoding UTF8
 
-# [3/4] 모드·셰이더
-Write-Host '[3/4] 모드·셰이더 내려받는 중...'
+# [3/4] 모드·셰이더 — ★동기화: 핀 목록에 없는 것은 걷어낸다 (재실행 = 깨끗한 갱신)
+#   옛 판 jar 가 남으면 같은 모드 두 벌로 클라가 안 뜬다 — 지우는 것이 안전이다
+Write-Host '[3/4] 모드·셰이더 맞추는 중...'
+$keepMods = @(@KEEP_MODS@)
+Get-ChildItem "$inst\.minecraft\mods" -Filter *.jar -ErrorAction SilentlyContinue |
+    Where-Object { $keepMods -notcontains $_.Name } |
+    ForEach-Object { Write-Host "  ✕ $($_.Name) (구판 제거)"; Remove-Item $_.FullName }
+$keepShaders = @(@KEEP_SHADERS@)
+Get-ChildItem "$inst\.minecraft\shaderpacks" -Filter *.zip -ErrorAction SilentlyContinue |
+    Where-Object { $keepShaders -notcontains $_.Name } |
+    ForEach-Object { Write-Host "  ✕ $($_.Name) (구판 제거)"; Remove-Item $_.FullName }
 @DOWNLOADS@
 if ('@SHADER_FILE@' -ne '') {
     "enableShaders=true`nshaderPack=@SHADER_FILE@" |
