@@ -76,7 +76,7 @@ def main() -> None:
         {"uid": "net.fabricmc.fabric-loader", "version": str(cfg["fabric_loader"])}]})
 
     # 전체 걸음 수 = Prism 1 + 내려받을 파일들 + 마무리 1 (진행 막대의 분모)
-    total_steps = 1 + len(mod_lines) + 1
+    total_steps = 4 + 1 + len(mod_lines) + 1
     ps1 = PS1_TEMPLATE.replace("@PRISM_URL@", prism_url) \
         .replace("@MMC_PACK@", mmc.replace("'", "''")) \
         .replace("@DOWNLOADS@", "\n".join(mod_lines)) \
@@ -145,15 +145,24 @@ if ($gui) {
     $sub.Location = New-Object System.Drawing.Point(2, 100)
 
     $barBack = New-Object System.Windows.Forms.Panel
-    $barBack.Size = New-Object System.Drawing.Size(420, 6)
-    $barBack.Location = New-Object System.Drawing.Point(45, 170)
-    $barBack.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 52)
+    $barBack.Size = New-Object System.Drawing.Size(420, 3)
+    $barBack.Location = New-Object System.Drawing.Point(45, 176)
+    $barBack.BackColor = [System.Drawing.Color]::FromArgb(52, 52, 60)
 
-    $barFill = New-Object System.Windows.Forms.Panel
-    $barFill.Size = New-Object System.Drawing.Size(0, 6)
-    $barFill.Location = New-Object System.Drawing.Point(0, 0)
-    $barFill.BackColor = $INK_ACC
-    $barBack.Controls.Add($barFill)
+    # 붓 획 — 그림(honcheon_stroke.png)을 진행 폭만큼 늘린다 (자르면 꼬리가 죽는다)
+    $barFill = New-Object System.Windows.Forms.PictureBox
+    $barFill.Size = New-Object System.Drawing.Size(1, 14)
+    $barFill.Location = New-Object System.Drawing.Point(45, 170)
+    $barFill.SizeMode = 'StretchImage'
+    $barFill.BackColor = [System.Drawing.Color]::Transparent
+
+    # 낙관 「入門」 — 완료의 도장 (숨겨 뒀다가 끝에 찍는다)
+    $seal = New-Object System.Windows.Forms.PictureBox
+    $seal.Size = New-Object System.Drawing.Size(92, 92)
+    $seal.Location = New-Object System.Drawing.Point(398, 96)
+    $seal.SizeMode = 'StretchImage'
+    $seal.BackColor = [System.Drawing.Color]::Transparent
+    $seal.Visible = $false
 
     $status = New-Object System.Windows.Forms.Label
     $status.Text = '준비하는 중...'
@@ -183,7 +192,10 @@ if ($gui) {
     $done.Visible = $false
     $done.Add_Click({ $form.Close() })
 
-    $form.Controls.AddRange(@($title, $sub, $pctLabel, $barBack, $status, $done))
+    foreach ($c in @($title, $sub, $pctLabel, $status)) { $c.BackColor = [System.Drawing.Color]::Transparent }
+    try { $title.Font = New-Object System.Drawing.Font('Batang', 34, [System.Drawing.FontStyle]::Bold) } catch {}
+    $form.Controls.AddRange(@($title, $sub, $pctLabel, $barFill, $barBack, $status, $done, $seal))
+    $barFill.BringToFront(); $seal.BringToFront()
     $form.Show()
     $form.Activate()
     # 콘솔 창은 뒤로 숨긴다 — 창이 얼굴이다
@@ -202,7 +214,7 @@ function Set-Face($text, $filePct) {
     if ($gui) {
         $status.Text = $text
         $pctLabel.Text = "$overall%"
-        $barFill.Width = [int](420 * $overall / 100)
+        $barFill.Width = [Math]::Max(1, [int](420 * $overall / 100))
         [System.Windows.Forms.Application]::DoEvents()
     } else {
         Write-Host ("`r  [{0,3}%] {1}" -f $overall, $text.PadRight(60)) -NoNewline
@@ -234,7 +246,30 @@ function Get-File($url, $to) {
 $root  = Join-Path $env:LOCALAPPDATA 'Honcheon'
 $prism = Join-Path $root 'prism'
 $inst  = Join-Path $prism 'instances\honcheon'
-New-Item -ItemType Directory -Force -Path $prism | Out-Null
+$art   = Join-Path $root 'art'
+New-Item -ItemType Directory -Force -Path $prism, $art | Out-Null
+
+# [0] 화폭 — 창의 옷부터 입힌다 (수묵 산수 · 붓 획 · 낙관)
+$AB = 'https://github.com/jokwangwon/honcheon-pack/releases/download/pack'
+Get-File "$AB/honcheon_bg.png" (Join-Path $art 'honcheon_bg.png')
+Get-File "$AB/honcheon_stroke.png" (Join-Path $art 'honcheon_stroke.png')
+Get-File "$AB/honcheon_seal.png" (Join-Path $art 'honcheon_seal.png')
+Get-File "$AB/honcheon.ico" (Join-Path $art 'honcheon.ico')
+if ($gui) {
+    try {
+        $form.BackgroundImage = [System.Drawing.Image]::FromFile((Join-Path $art 'honcheon_bg.png'))
+        $form.BackgroundImageLayout = 'Stretch'
+        $barFill.Image = [System.Drawing.Image]::FromFile((Join-Path $art 'honcheon_stroke.png'))
+        $seal.Image = [System.Drawing.Image]::FromFile((Join-Path $art 'honcheon_seal.png'))
+        $title.TextAlign = 'TopLeft'
+        $title.Location = New-Object System.Drawing.Point(30, 22)
+        $title.Size = New-Object System.Drawing.Size(240, 70)
+        $sub.TextAlign = 'TopLeft'
+        $sub.Location = New-Object System.Drawing.Point(34, 92)
+        $sub.Size = New-Object System.Drawing.Size(300, 24)
+        [System.Windows.Forms.Application]::DoEvents()
+    } catch {}
+}
 
 # [1] Prism Launcher (포터블 — 시스템에 아무것도 설치하지 않는다)
 if (!(Test-Path (Join-Path $prism 'prismlauncher.exe'))) {
@@ -283,11 +318,21 @@ $lnk = $ws.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) '
 $lnk.TargetPath = Join-Path $prism 'prismlauncher.exe'
 $lnk.Arguments = '-l honcheon'
 $lnk.WorkingDirectory = $prism
+$lnk.IconLocation = (Join-Path $art 'honcheon.ico') + ',0'
 $lnk.Save()
 $script:stepDone = $TOTAL_STEPS
 Set-Face '설치 완료 — 바탕화면의 「혼천」 아이콘으로 시작하세요' 0
 
 if ($gui) {
+    # 낙관을 찍는다 — 설치를 마친 자는 문에 들었다 (크게 왔다가 자리를 잡는다)
+    if ($seal.Image) {
+        $seal.Visible = $true
+        foreach ($z in 130, 112, 100, 92) {
+            $seal.Size = New-Object System.Drawing.Size($z, $z)
+            $seal.Location = New-Object System.Drawing.Point((444 - [int]($z/2)), (142 - [int]($z/2)))
+            [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 55
+        }
+    }
     $sub.Text = '첫 실행: Java 자동 설치 · 계정 로그인 한 번 · 셰이더는 켜진 채 시작'
     $sub.ForeColor = $INK_FG
     $status.ForeColor = $INK_ACC
