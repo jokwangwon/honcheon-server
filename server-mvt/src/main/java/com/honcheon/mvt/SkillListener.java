@@ -1868,6 +1868,7 @@ public final class SkillListener implements Listener {
     private void basicSwing(Player player) {
         SkillEngine.State state = state(player);
         if (state.onCooldown(CD_BASIC, tick)) {
+            basicWhiff(player);   // 헛박자 신호 — 조용히 버리면 "랜덤으로 안 나간다"로 읽힌다
             return;   // 바닐라 연타에 획이 겹쳐 쌓이지 않게 (등록부 basic_strike.cooldown_ticks)
         }
         String weaponClass = engine.weaponClassOf(
@@ -1926,6 +1927,25 @@ public final class SkillListener implements Listener {
                 basic.range(), basic.angle(), swingTicks, stroke);
         // ★ 무공 없는 손도 궤적을 남긴다 — 여기에 **아무것도 없었다** (그것이 찌르기로 보인 절반이다)
         basicTrail(player, basic, grade, weaponClass, stroke, swingTicks, solid);
+    }
+
+    /**
+     * 헛박자 신호 — 박자(계열 공속) 미도래로 획이 안 나간 스윙의 정직한 소리 (2026-07-23 사용자 확정).
+     *
+     * <p>가짜 획은 안 그린다 (획=판정 — 그리면 거짓말이 된다). 등록부 {@code basic_strike.whiff}
+     * 가 없으면 구판대로 조용히 버린다. 획이 없는 손(활·무관·짐승)은 헛박자도 없다.
+     */
+    private void basicWhiff(Player player) {
+        SkillEngine.Sfx whiff = engine.basicWhiff();
+        if (whiff == null) {
+            return;
+        }
+        String weaponClass = engine.weaponClassOf(
+                player.getInventory().getItemInMainHand(), materialName(player));
+        if (engine.basicStrike(weaponClass) == null) {
+            return;
+        }
+        sfx(player.getLocation(), whiff);
     }
 
     // ══════════ ★ 전용 검기(劍氣) 평타 — 발행 층 (3D 소환 + 흰 별) ══════════

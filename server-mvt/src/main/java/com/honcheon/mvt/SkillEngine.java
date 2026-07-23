@@ -222,6 +222,8 @@ public final class SkillEngine {
     private final List<String> throwClasses;
     private final Map<String, Basic> basicStrike;            // 【무공 없는 손】 계열 → 기본 히트박스
     private final int basicCooldownTicks;
+    /** 헛박자 신호 — 박자 미도래로 획이 안 나간 스윙의 소리 (basic_strike.whiff · 없으면 null) */
+    private final Sfx basicWhiff;
     /** 판정의 눈 — 【디버그】 히트박스를 재는 자(尺). 켠 사람에게만 보인다 */
     private final Eye eye;
     /** party.yml — 무공은 아군을 베지 않는다 (friendly_fire.스킬 = 면제) */
@@ -857,6 +859,7 @@ public final class SkillEngine {
         // 【무공 없는 손】 병기를 들고 좌클릭하면 그것만으로 궤적이 뜬다 (가장 흔한 경로)
         Map<String, Object> bs = RulesConfig.section(mo, "basic_strike");
         this.basicCooldownTicks = intOr(bs.get("cooldown_ticks"), 4);
+        this.basicWhiff = sfx(bs.get("whiff"));
         Map<String, Basic> bsc = new LinkedHashMap<>();
         asMap(bs.get("by_class")).forEach((cls, raw) -> {
             if (!(raw instanceof Map<?, ?>)) {
@@ -3041,6 +3044,11 @@ public final class SkillEngine {
     /** 【무공 없는 손】 병기를 든 것만으로 성립하는 기본 초식 — 없으면 null (활·무관·짐승) */
     public Basic basicStrike(String weaponClass) {
         return weaponClass == null ? null : basicStrike.get(weaponClass);
+    }
+
+    /** 헛박자 신호 소리 (basic_strike.whiff) — 등록부에 없으면 null (구판대로 조용히 버린다) */
+    public Sfx basicWhiff() {
+        return basicWhiff;
     }
 
     public int basicCooldownTicks() {
