@@ -75,12 +75,15 @@ def main() -> None:
         {"important": True, "uid": "net.minecraft", "version": str(cfg["minecraft"])},
         {"uid": "net.fabricmc.fabric-loader", "version": str(cfg["fabric_loader"])}]})
 
+    # 전체 걸음 수 = Prism 1 + 내려받을 파일들 + 마무리 1 (진행 막대의 분모)
+    total_steps = 1 + len(mod_lines) + 1
     ps1 = PS1_TEMPLATE.replace("@PRISM_URL@", prism_url) \
         .replace("@MMC_PACK@", mmc.replace("'", "''")) \
         .replace("@DOWNLOADS@", "\n".join(mod_lines)) \
         .replace("@KEEP_MODS@", keep_mods) \
         .replace("@KEEP_SHADERS@", keep_shaders) \
-        .replace("@SHADER_FILE@", shader_file or "")
+        .replace("@SHADER_FILE@", shader_file or "") \
+        .replace("@TOTAL@", str(total_steps))
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "honcheon_setup.ps1").write_bytes(b"\xef\xbb\xbf" + ps1.encode("utf-8"))
 
@@ -101,24 +104,114 @@ def main() -> None:
 PS1_TEMPLATE = r"""
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$host.UI.RawUI.WindowTitle = '혼천 설치기'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
-Write-Host ''
-Write-Host '  ┌────────────────────────────────────────────┐' -ForegroundColor DarkCyan
-Write-Host '  │                                            │' -ForegroundColor DarkCyan
-Write-Host '  │        혼  천  (渾 天)                     │' -ForegroundColor Cyan
-Write-Host '  │        무협 공유세계 — 원클릭 설치         │' -ForegroundColor Gray
-Write-Host '  │                                            │' -ForegroundColor DarkCyan
-Write-Host '  └────────────────────────────────────────────┘' -ForegroundColor DarkCyan
-Write-Host ''
+
+# ── 수묵 GUI (WinForms) — 실패하면 콘솔로 물러선다 ──────────────────────────
+$gui = $false
+try {
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    [System.Windows.Forms.Application]::EnableVisualStyles()
+    $gui = $true
+} catch {}
+
+$INK_BG  = [System.Drawing.Color]::FromArgb(22, 22, 26)     # 먹지
+$INK_FG  = [System.Drawing.Color]::FromArgb(232, 228, 218)  # 종이빛
+$INK_DIM = [System.Drawing.Color]::FromArgb(120, 118, 110)
+$INK_ACC = [System.Drawing.Color]::FromArgb(63, 167, 160)   # 청록 (검기의 색)
+
+if ($gui) {
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = '혼천 설치기'
+    $form.Size = New-Object System.Drawing.Size(520, 340)
+    $form.FormBorderStyle = 'FixedSingle'
+    $form.MaximizeBox = $false
+    $form.StartPosition = 'CenterScreen'
+    $form.BackColor = $INK_BG
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = '渾 天'
+    $title.Font = New-Object System.Drawing.Font('Malgun Gothic', 34, [System.Drawing.FontStyle]::Bold)
+    $title.ForeColor = $INK_FG
+    $title.TextAlign = 'MiddleCenter'
+    $title.Size = New-Object System.Drawing.Size(500, 70)
+    $title.Location = New-Object System.Drawing.Point(2, 28)
+
+    $sub = New-Object System.Windows.Forms.Label
+    $sub.Text = '혼천 — 무협 공유세계'
+    $sub.Font = New-Object System.Drawing.Font('Malgun Gothic', 11)
+    $sub.ForeColor = $INK_DIM
+    $sub.TextAlign = 'MiddleCenter'
+    $sub.Size = New-Object System.Drawing.Size(500, 24)
+    $sub.Location = New-Object System.Drawing.Point(2, 100)
+
+    $barBack = New-Object System.Windows.Forms.Panel
+    $barBack.Size = New-Object System.Drawing.Size(420, 6)
+    $barBack.Location = New-Object System.Drawing.Point(45, 170)
+    $barBack.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 52)
+
+    $barFill = New-Object System.Windows.Forms.Panel
+    $barFill.Size = New-Object System.Drawing.Size(0, 6)
+    $barFill.Location = New-Object System.Drawing.Point(0, 0)
+    $barFill.BackColor = $INK_ACC
+    $barBack.Controls.Add($barFill)
+
+    $status = New-Object System.Windows.Forms.Label
+    $status.Text = '준비하는 중...'
+    $status.Font = New-Object System.Drawing.Font('Malgun Gothic', 9)
+    $status.ForeColor = $INK_DIM
+    $status.TextAlign = 'MiddleCenter'
+    $status.Size = New-Object System.Drawing.Size(500, 22)
+    $status.Location = New-Object System.Drawing.Point(2, 186)
+
+    $pctLabel = New-Object System.Windows.Forms.Label
+    $pctLabel.Text = ''
+    $pctLabel.Font = New-Object System.Drawing.Font('Malgun Gothic', 9, [System.Drawing.FontStyle]::Bold)
+    $pctLabel.ForeColor = $INK_ACC
+    $pctLabel.TextAlign = 'MiddleCenter'
+    $pctLabel.Size = New-Object System.Drawing.Size(500, 20)
+    $pctLabel.Location = New-Object System.Drawing.Point(2, 148)
+
+    $done = New-Object System.Windows.Forms.Button
+    $done.Text = '완료 — 닫기'
+    $done.Font = New-Object System.Drawing.Font('Malgun Gothic', 10)
+    $done.ForeColor = $INK_FG
+    $done.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 46)
+    $done.FlatStyle = 'Flat'
+    $done.FlatAppearance.BorderColor = $INK_ACC
+    $done.Size = New-Object System.Drawing.Size(140, 34)
+    $done.Location = New-Object System.Drawing.Point(190, 240)
+    $done.Visible = $false
+    $done.Add_Click({ $form.Close() })
+
+    $form.Controls.AddRange(@($title, $sub, $pctLabel, $barBack, $status, $done))
+    $form.Show()
+    $form.Activate()
+    # 콘솔 창은 뒤로 숨긴다 — 창이 얼굴이다
+    try {
+        Add-Type -Name Win -Namespace Native -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'
+        [Native.Win]::ShowWindow([Native.Win]::GetConsoleWindow(), 0) | Out-Null
+    } catch {}
+}
+
+$script:stepDone = 0
+$TOTAL_STEPS = @TOTAL@
+
+function Set-Face($text, $filePct) {
+    $overall = [int](100 * ($script:stepDone + $filePct / 100.0) / $TOTAL_STEPS)
+    if ($overall -gt 100) { $overall = 100 }
+    if ($gui) {
+        $status.Text = $text
+        $pctLabel.Text = "$overall%"
+        $barFill.Width = [int](420 * $overall / 100)
+        [System.Windows.Forms.Application]::DoEvents()
+    } else {
+        Write-Host ("`r  [{0,3}%] {1}" -f $overall, $text.PadRight(60)) -NoNewline
+    }
+}
 
 function Get-File($url, $to) {
     $name = Split-Path $to -Leaf
-    $show = if ($name.Length -gt 44) { $name.Substring(0, 41) + '...' } else { $name.PadRight(44) }
-    if (Test-Path $to) {
-        Write-Host "   · $show (있음)" -ForegroundColor DarkGray
-        return
-    }
+    if (Test-Path $to) { $script:stepDone++; Set-Face "$name (있음)" 0; return }
     $req = [Net.HttpWebRequest]::Create($url)
     $req.UserAgent = 'honcheon-installer'
     $res = $req.GetResponse()
@@ -131,14 +224,11 @@ function Get-File($url, $to) {
         while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
             $out.Write($buf, 0, $n)
             $got += $n
-            if ($total -gt 0) {
-                $pct = [int](100 * $got / $total)
-                $bar = ('#' * [int]($pct / 5)).PadRight(20, '-')
-                Write-Host -NoNewline ("`r   > {0} [{1}] {2,3}%" -f $show, $bar, $pct)
-            }
+            if ($total -gt 0) { Set-Face "내려받는 중 — $name" ([int](100 * $got / $total)) }
         }
     } finally { $out.Close(); $in.Close(); $res.Close() }
-    Write-Host ("`r   + {0} [{1}] 100%" -f $show, ('#' * 20)) -ForegroundColor Green
+    $script:stepDone++
+    Set-Face "받음 — $name" 0
 }
 
 $root  = Join-Path $env:LOCALAPPDATA 'Honcheon'
@@ -146,14 +236,14 @@ $prism = Join-Path $root 'prism'
 $inst  = Join-Path $prism 'instances\honcheon'
 New-Item -ItemType Directory -Force -Path $prism | Out-Null
 
-# [1/4] Prism Launcher (포터블 — 시스템에 아무것도 설치하지 않는다)
+# [1] Prism Launcher (포터블 — 시스템에 아무것도 설치하지 않는다)
 if (!(Test-Path (Join-Path $prism 'prismlauncher.exe'))) {
-    Write-Host '[1/4] Prism Launcher 내려받는 중... (약 20MB)'
     $zip = Join-Path $root 'prism.zip'
-    Invoke-WebRequest -Uri '@PRISM_URL@' -OutFile $zip
+    Get-File '@PRISM_URL@' $zip
+    Set-Face 'Prism Launcher 푸는 중...' 50
     Expand-Archive -Path $zip -DestinationPath $prism -Force
     Remove-Item $zip
-} else { Write-Host '[1/4] Prism Launcher — 이미 있음' }
+} else { $script:stepDone++; Set-Face 'Prism Launcher — 이미 있음' 0 }
 New-Item -ItemType File -Force -Path (Join-Path $prism 'portable.txt') | Out-Null
 @'
 [General]
@@ -162,8 +252,7 @@ AutomaticJavaDownload=true
 AutomaticJavaSwitch=true
 '@ | Set-Content -Path (Join-Path $prism 'prismlauncher.cfg') -Encoding UTF8
 
-# [2/4] 혼천 인스턴스
-Write-Host '[2/4] 혼천 인스턴스 만드는 중...'
+# [2] 혼천 인스턴스
 New-Item -ItemType Directory -Force -Path "$inst\.minecraft\mods","$inst\.minecraft\shaderpacks","$inst\.minecraft\config" | Out-Null
 @'
 [General]
@@ -174,43 +263,42 @@ iconKey=default
 '@ | Set-Content -Path "$inst\instance.cfg" -Encoding UTF8
 Set-Content -Path "$inst\mmc-pack.json" -Value '@MMC_PACK@' -Encoding UTF8
 
-# [3/4] 모드·셰이더 — ★동기화: 핀 목록에 없는 것은 걷어낸다 (재실행 = 깨끗한 갱신)
-#   옛 판 jar 가 남으면 같은 모드 두 벌로 클라가 안 뜬다 — 지우는 것이 안전이다
-Write-Host '[3/4] 모드·셰이더 맞추는 중...'
+# [3] 모드·셰이더 — ★동기화: 핀 목록에 없는 것은 걷어낸다 (재실행 = 깨끗한 갱신)
 $keepMods = @(@KEEP_MODS@)
 Get-ChildItem "$inst\.minecraft\mods" -Filter *.jar -ErrorAction SilentlyContinue |
-    Where-Object { $keepMods -notcontains $_.Name } |
-    ForEach-Object { Write-Host "  ✕ $($_.Name) (구판 제거)"; Remove-Item $_.FullName }
+    Where-Object { $keepMods -notcontains $_.Name } | Remove-Item
 $keepShaders = @(@KEEP_SHADERS@)
 Get-ChildItem "$inst\.minecraft\shaderpacks" -Filter *.zip -ErrorAction SilentlyContinue |
-    Where-Object { $keepShaders -notcontains $_.Name } |
-    ForEach-Object { Write-Host "  ✕ $($_.Name) (구판 제거)"; Remove-Item $_.FullName }
+    Where-Object { $keepShaders -notcontains $_.Name } | Remove-Item
 @DOWNLOADS@
 if ('@SHADER_FILE@' -ne '') {
     "enableShaders=true`nshaderPack=@SHADER_FILE@" |
         Set-Content -Path "$inst\.minecraft\config\iris.properties" -Encoding ASCII
 }
 
-# [4/4] 바탕화면 바로가기
-Write-Host '[4/4] 바탕화면 바로가기 만드는 중...'
+# [4] 바탕화면 바로가기
+Set-Face '바탕화면 바로가기 만드는 중...' 50
 $ws = New-Object -ComObject WScript.Shell
 $lnk = $ws.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) '혼천.lnk'))
 $lnk.TargetPath = Join-Path $prism 'prismlauncher.exe'
 $lnk.Arguments = '-l honcheon'
 $lnk.WorkingDirectory = $prism
 $lnk.Save()
+$script:stepDone = $TOTAL_STEPS
+Set-Face '설치 완료 — 바탕화면의 「혼천」 아이콘으로 시작하세요' 0
 
-Write-Host ''
-Write-Host '  ┌────────────────────────────────────────────┐' -ForegroundColor DarkGreen
-Write-Host '  │   ✅ 설치 완료!                            │' -ForegroundColor Green
-Write-Host '  │   바탕화면의 「혼천」 아이콘으로 시작      │' -ForegroundColor Gray
-Write-Host '  └────────────────────────────────────────────┘' -ForegroundColor DarkGreen
-Write-Host ''
-Write-Host '   · 첫 실행에서 Java 를 자동으로 받습니다 (1~2분)' -ForegroundColor DarkGray
-Write-Host '   · 마인크래프트 계정 로그인은 한 번만 필요합니다' -ForegroundColor DarkGray
-Write-Host '   · 셰이더(Complementary Unbound)는 켜진 채 시작됩니다' -ForegroundColor DarkGray
-Write-Host ''
-Read-Host '엔터를 누르면 닫힙니다'
+if ($gui) {
+    $sub.Text = '첫 실행: Java 자동 설치 · 계정 로그인 한 번 · 셰이더는 켜진 채 시작'
+    $sub.ForeColor = $INK_FG
+    $status.ForeColor = $INK_ACC
+    $done.Visible = $true
+    while ($form.Visible) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 40 }
+} else {
+    Write-Host ''
+    Write-Host '  ✅ 설치 완료! 바탕화면의 「혼천」 아이콘으로 시작하세요.' -ForegroundColor Green
+    Write-Host '   · 첫 실행에서 Java 자동 설치 · 계정 로그인 한 번 · 셰이더 켜진 채 시작' -ForegroundColor DarkGray
+    Read-Host '엔터를 누르면 닫힙니다'
+}
 """
 
 if __name__ == "__main__":
