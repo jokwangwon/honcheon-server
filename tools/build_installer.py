@@ -94,8 +94,7 @@ def main() -> None:
            "\"[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; "
            f"$p=Join-Path $env:TEMP 'honcheon_setup.ps1'; "
            f"Invoke-WebRequest -Uri '{PS1_URL}' -OutFile $p; "
-           "& powershell -NoProfile -ExecutionPolicy Bypass -File $p\"\r\n"
-           "pause\r\n")
+           "& powershell -NoProfile -ExecutionPolicy Bypass -File $p\"\r\n")
     (OUT / "혼천설치.bat").write_bytes(bat.encode("ascii"))
     print(f"\n구웠다 — {OUT}/혼천설치.bat + honcheon_setup.ps1")
     print("배포: gh release upload pack 두 파일 --clobber (jokwangwon/honcheon-pack)")
@@ -151,8 +150,8 @@ if ($gui) {
 
     # 붓 획 — 그림(honcheon_stroke.png)을 진행 폭만큼 늘린다 (자르면 꼬리가 죽는다)
     $barFill = New-Object System.Windows.Forms.PictureBox
-    $barFill.Size = New-Object System.Drawing.Size(1, 14)
-    $barFill.Location = New-Object System.Drawing.Point(45, 170)
+    $barFill.Size = New-Object System.Drawing.Size(1, 18)
+    $barFill.Location = New-Object System.Drawing.Point(45, 168)
     $barFill.SizeMode = 'StretchImage'
     $barFill.BackColor = [System.Drawing.Color]::Transparent
 
@@ -181,7 +180,7 @@ if ($gui) {
     $pctLabel.Location = New-Object System.Drawing.Point(2, 148)
 
     $done = New-Object System.Windows.Forms.Button
-    $done.Text = '완료 — 닫기'
+    $done.Text = '게임 시작'
     $done.Font = New-Object System.Drawing.Font('Malgun Gothic', 10)
     $done.ForeColor = $INK_FG
     $done.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 46)
@@ -190,7 +189,10 @@ if ($gui) {
     $done.Size = New-Object System.Drawing.Size(140, 34)
     $done.Location = New-Object System.Drawing.Point(190, 240)
     $done.Visible = $false
-    $done.Add_Click({ $form.Close() })
+    $done.Add_Click({
+        Start-Process (Join-Path $prism 'prismlauncher.exe') -ArgumentList '-l','honcheon' -WorkingDirectory $prism
+        $form.Close()
+    })
 
     foreach ($c in @($title, $sub, $pctLabel, $status)) { $c.BackColor = [System.Drawing.Color]::Transparent }
     try { $title.Font = New-Object System.Drawing.Font('Batang', 34, [System.Drawing.FontStyle]::Bold) } catch {}
@@ -323,8 +325,9 @@ $lnk.Save()
 $script:stepDone = $TOTAL_STEPS
 Set-Face '설치 완료 — 바탕화면의 「혼천」 아이콘으로 시작하세요' 0
 
+# ★ 설치가 곧 실행이다 (사용자: "다른 걸 누를 필요 없게") — 낙관 찍고 바로 게임을 띄운다
+$launch = Join-Path $prism 'prismlauncher.exe'
 if ($gui) {
-    # 낙관을 찍는다 — 설치를 마친 자는 문에 들었다 (크게 왔다가 자리를 잡는다)
     if ($seal.Image) {
         $seal.Visible = $true
         foreach ($z in 130, 112, 100, 92) {
@@ -333,16 +336,26 @@ if ($gui) {
             [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 55
         }
     }
-    $sub.Text = '첫 실행: Java 자동 설치 · 계정 로그인 한 번 · 셰이더는 켜진 채 시작'
-    $sub.ForeColor = $INK_FG
     $status.ForeColor = $INK_ACC
-    $done.Visible = $true
-    while ($form.Visible) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 40 }
+    $status.Text = '혼천을 시작합니다...'
+    $sub.Text = '첫 실행: Java 자동 설치 · 계정 로그인 한 번'
+    $sub.ForeColor = $INK_FG
+    [System.Windows.Forms.Application]::DoEvents()
+    Start-Sleep -Milliseconds 1200
+    try {
+        Start-Process $launch -ArgumentList '-l','honcheon' -WorkingDirectory $prism
+        Start-Sleep -Milliseconds 800
+        $form.Close()
+    } catch {
+        # 자동 시작이 막혔다 — 버튼이 예비다 (조용히 닫지 않는다)
+        $status.Text = '자동 시작 실패 — 아래 버튼으로 시작하세요'
+        $done.Visible = $true
+        while ($form.Visible) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 40 }
+    }
 } else {
     Write-Host ''
-    Write-Host '  ✅ 설치 완료! 바탕화면의 「혼천」 아이콘으로 시작하세요.' -ForegroundColor Green
-    Write-Host '   · 첫 실행에서 Java 자동 설치 · 계정 로그인 한 번 · 셰이더 켜진 채 시작' -ForegroundColor DarkGray
-    Read-Host '엔터를 누르면 닫힙니다'
+    Write-Host '  ✅ 설치 완료 — 혼천을 시작합니다.' -ForegroundColor Green
+    Start-Process $launch -ArgumentList '-l','honcheon' -WorkingDirectory $prism
 }
 """
 

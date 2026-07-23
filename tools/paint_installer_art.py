@@ -114,25 +114,38 @@ def paint_stroke():
     설치기는 이 그림을 StretchImage 로 진행 폭만큼 늘린다 — 어느 길이에서도
     머리·꼬리가 산다 (자르면 꼬리가 죽는다).
     """
-    w, h = 800, 28
+    w, h = 840, 36
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     xs = np.linspace(0, 1, w)
-    half = (h * 0.5) * (0.92 - 0.74 * xs ** 1.35) \
-        * (1 + 0.10 * np.sin(xs * 13 + 0.7))          # 흔들리는 손
-    mid = h / 2 + np.sin(xs * 5.5) * 1.6              # 획의 허리
+    half = (h * 0.5) * (0.94 - 0.72 * xs ** 1.3) \
+        * (1 + 0.08 * np.sin(xs * 13 + 0.7))          # 흔들리는 손
+    mid = h / 2 + np.sin(xs * 5.5) * 2.0              # 획의 허리
+    # 비취 점층 — 머리(왼쪽)가 밝게 타오르고 꼬리로 갈수록 깊어진다
+    head = np.array([111, 212, 203])
+    tail = np.array([28, 96, 92])
     for x in range(w):
-        a = 255 if xs[x] < 0.86 else int(255 * (1 - (xs[x] - 0.86) / 0.14) ** 1.5)
-        d.line([(x, mid[x] - half[x]), (x, mid[x] + half[x])], fill=(63, 167, 160, a))
-    # 갈필 — 획 속을 긁는 마른 결 (세로 위치 고정의 옅은 줄)
+        c = (head * (1 - xs[x]) + tail * xs[x]).astype(int)
+        a = 255 if xs[x] < 0.84 else int(255 * max(0.0, 1 - (xs[x] - 0.84) / 0.16) ** 1.6)
+        d.line([(x, mid[x] - half[x]), (x, mid[x] + half[x])],
+               fill=(int(c[0]), int(c[1]), int(c[2]), a))
+    # 획심 — 머리 쪽 밝은 심 한 줄 (붓에 기가 흐른다)
+    core = ImageDraw.Draw(img)
+    for x in range(int(w * 0.5)):
+        a = int(150 * (1 - x / (w * 0.5)) ** 1.4)
+        core.line([(x, mid[x] - 1), (x, mid[x] + 1)], fill=(228, 248, 244, a))
+    # 갈필 — 획 속을 긁는 마른 결
     dry = ImageDraw.Draw(img)
-    for _ in range(9):
+    for _ in range(10):
         yy = float(rng.uniform(h * 0.2, h * 0.8))
-        x0 = int(rng.uniform(w * 0.25, w * 0.6))
-        dry.line([(x0, yy), (w - 1, yy + rng.uniform(-2, 2))],
-                 fill=(22, 22, 26, int(rng.integers(60, 130))), width=1)
-    img = img.filter(ImageFilter.GaussianBlur(0.6))
-    img.resize((400, 14), Image.LANCZOS).save(OUT / "honcheon_stroke.png")
+        x0 = int(rng.uniform(w * 0.3, w * 0.62))
+        dry.line([(x0, yy), (w - 1, yy + rng.uniform(-2.5, 2.5))],
+                 fill=(16, 16, 20, int(rng.integers(60, 120))), width=1)
+    # 먹 번짐 테 — 획 가장자리에 어두운 숨을 한 겹
+    edge = img.filter(ImageFilter.GaussianBlur(2.2))
+    out = Image.alpha_composite(edge.point(lambda v: v // 2), img)
+    out = out.filter(ImageFilter.GaussianBlur(0.5))
+    out.resize((420, 18), Image.LANCZOS).save(OUT / "honcheon_stroke.png")
 
 
 def paint_seal():
