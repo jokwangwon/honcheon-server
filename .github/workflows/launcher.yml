@@ -1,0 +1,27 @@
+name: 혼천 런처 빌드 (Windows)
+
+on:
+  workflow_dispatch:        # 손으로 돌린다 (gh workflow run)
+  push:
+    paths: ['launcher/**', '.github/workflows/launcher.yml']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 의존성
+        working-directory: launcher
+        run: npm ci
+      - name: 빌드 (electron-builder · win NSIS)
+        working-directory: launcher
+        run: npm run dist
+      - name: 산출물 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: honcheon-launcher-setup
+          path: launcher/dist/*.exe
+          if-no-files-found: error
