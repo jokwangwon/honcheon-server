@@ -260,6 +260,8 @@ New-Item -ItemType Directory -Force -Path $prism, $art | Out-Null
 
 # [0] 화폭 — 창의 옷부터 입힌다 (수묵 산수 · 붓 획 · 낙관)
 $AB = 'https://github.com/jokwangwon/honcheon-pack/releases/download/pack'
+# 그림은 항상 최신을 받는다 — 화가 그림으로 갈리면 기존 설치자에게도 가야 한다 (작은 파일들)
+Remove-Item (Join-Path $art '*') -ErrorAction SilentlyContinue
 Get-File "$AB/honcheon_bg.png" (Join-Path $art 'honcheon_bg.png')
 Get-File "$AB/honcheon_stroke.png" (Join-Path $art 'honcheon_stroke.png')
 Get-File "$AB/honcheon_seal.png" (Join-Path $art 'honcheon_seal.png')
