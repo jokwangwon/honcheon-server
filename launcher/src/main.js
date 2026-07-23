@@ -205,9 +205,36 @@ function launchOfficial() {
   for (const exe of candidates) {
     if (fs.existsSync(exe)) { spawn(exe, [], { detached: true, stdio: 'ignore' }).unref(); return true; }
   }
-  // 확인된 자바 런처를 못 찾았다 — **아무것도 대신 열지 않는다** (베드락·스토어 AUMID 추측 금지).
-  //   false 를 돌려주면 UI 가 "마인크래프트 런처를 직접 열어 「혼천」을 선택하세요"로 안내한다.
+  // ★ 위치 무관 — 공식 런처(스토어·독립 설치)는 전부 **시작 메뉴에 바로가기**를 만든다.
+  //   그 .lnk 를 찾아 열면 설치 형태와 무관하게 올바른 런처가 뜬다 (베드락 위험 없음).
+  const lnk = findLauncherShortcut();
+  if (lnk) {
+    spawn('explorer.exe', [lnk], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  // 그래도 못 찾으면 아무것도 대신 안 연다 → UI 가 "직접 열어 「혼천」 선택" 안내.
   return false;
+}
+
+// 시작 메뉴에서 「Minecraft Launcher」 바로가기를 찾는다 (베드락의 "Minecraft" 는 제외)
+function findLauncherShortcut() {
+  const roots = [
+    path.join(process.env.ProgramData || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    path.join(APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+  ];
+  const walk = (dir, depth) => {
+    if (depth < 0 || !fs.existsSync(dir)) return null;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return null; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { const hit = walk(full, depth - 1); if (hit) return hit; }
+      else if (/minecraft launcher.*\.lnk$/i.test(e.name)) return full;
+    }
+    return null;
+  };
+  for (const r of roots) { const hit = walk(r, 3); if (hit) return hit; }
+  return null;
 }
 
 app.whenReady().then(() => {
