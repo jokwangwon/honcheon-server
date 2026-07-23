@@ -5,6 +5,54 @@
 
 ---
 
+## 4-성장. ★★★★★ 최신 — 2026-07-23~24 성장·전투·런처 마라톤 (이 절이 §4-판 보다 새롭다. 여기서 시작하라)
+
+**한 줄**: 검기 라이브 반영 + 타격 피드백(대미지 숫자·HP바) + **전용 런처(Electron·공식 마크 재활용)**
++ **성장 v3 구현 3단계** + **전투 판정 재설계(2d6 제거)** 설계 완결. ★다음 = 전투 v2 코드 배선.
+
+### ★★ 다음 세션 첫 걸음 — 여기서 시작하라
+**전투 v2 코드 배선 (B-177 2단계)** — 설계·config 다 섰고 `combat_v2.enabled: false`라 라이브 무영향.
+1. `docs/design/combat_resolution_v2.md` 읽기 (모델 정본) + `config/combat.yml` `combat_v2` 절
+2. `SkillEngine.strike(cast, execBase, roll2d6, resist)` → roll2d6·tierOf 명중 삭제,
+   피해 = `max(1, 공격력 − 방어력) × 크리배수`. `SkillListener` 전투 루프: roll2d6() 제거·resist→방어력·
+   크리 확률 굴림(액션 RNG). `npcDefenseScore`→방어력. **enabled 스위치로 전환** (켜기 전 무영향)
+3. ★라이브 전투를 바꾸는 큰 변경 — 신중히. 배선 뒤 인게임 실측으로 【제안】 수치 튜닝
+
+### 이 마라톤에서 선 것 (전부 커밋)
+
+| 트랙 | 무엇 | 상태 |
+|---|---|---|
+| 검기 | 시트판 8차 라이브 승격 + 대각(roll 45)·시전자 추종·판 뒷면 UV(C↔Ɔ 수리) | 라이브 |
+| 타격 피드백 | 대미지 숫자·표적 HP바·처치 흩어짐 + **접촉 무딜(딜은 획만)** + 공통 몹 명패 | 라이브 |
+| ★런처 | Electron 전용 런처 — **공식 마크 재활용**(재로그인 없음·설정 이어받기·기존 모드 안전) · Windows CI 빌드 · MS Store 프로필 파일 문제·베드락 오픈·Sodium/Iris 짝 전부 수리 | 배포 (honcheon-pack 릴리스 `honcheon_setup_0.1.0.exe`) |
+| 모드팩 | Fabric 1.21.11 · 10모드 + Complementary Unbound · 게이트 v0(fabric 브랜드) · Emotecraft 양단 | 라이브 |
+| **성장 v3 (B-135)** | 단계 0(cultivation.yml levels)·1(원장 backfill 무DDL)·2(판정치=floor√원장) **완료**. 단계 3~5 남음 | 구현중 |
+| **전투 v2 (B-177)** | 설계·config 완결 (2d6 제거·공방·크리 감각/지혜/무기/장비). **코드 배선만 남음** | 설계 완 |
+
+### ★ 성장/전투 설계 정본 (다 읽어라)
+- `docs/design/attribute_scale_v3.md` §8.9 — 저울 12항 승인 (B-137 **닫힘** · floor√원장)
+- `docs/design/growth_v3_impl_plan.md` — 성장 6단계 배선 (무DDL 발견)
+- `docs/design/growth_v3_feel.md` — 체감: 두 속도(레벨=조용·승급=연출+칭호)·칭호(세계반응만·B-176)·무공 문턱=대가곡선
+- `docs/design/combat_resolution_v2.md` — 전투 v2 (B-177)
+- 눈: `tools/judgment_scale_harness.py`(옛/새 동등 위반0) · `tools/growth_v3_backfill_selftest.py`
+
+### 성장 v3 남은 단계 (B-135)
+- 단계 3: 파생치 √원장 (내력 풀·이속·내구가 √원장 실수치를 읽게 — "몸 체감")
+- 단계 4: 성장 로직 (XP→레벨업→3포인트→배분+은행 · 무공 문턱 대가곡선 · Growth/ProgressionEngine v3)
+- 단계 5: UI (레벨업 연출·시트 원장 표기·획득 토스트) + 칭호 B-176
+- ★MVT 다리: 원장 독립 성장 시 √원장을 attrDays 로 동기화 (단계 4 — 지금은 backfill 로 동등)
+
+### 함정·주의 (이 마라톤에서 물린 것)
+- **MS Store 런처는 launcher_profiles_microsoft_store.json** 을 읽는다 (독립설치판과 다름) — 둘 다 써야 함
+- **minecraft:// 는 베드락** — 자바 런처는 Get-StartApps 로 AUMID 조회해 연다
+- **Iris↔Sodium 정확 짝** — Iris 1.10.7 은 Sodium 0.8.7 요구 (0.8.13 충돌)
+- 런처 CI: `launcher/` push → windows-latest 빌드 → `gh run download` → pack 릴리스 업로드 (workflow scope 필요)
+- 원장 backfill 비파괴: 판정 권위는 원장으로 넘어왔으나 결과 불변 (원장=능력치² · 하네스 증명)
+
+---
+
+---
+
 ## 0. 먼저 읽을 것 (순서대로)
 
 | 문서 | 무엇 |
