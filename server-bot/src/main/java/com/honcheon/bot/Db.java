@@ -170,6 +170,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
                     return Optional.empty();
                 }
                 Map<String, Object> sheet = JSON.readValue(rs.getString("sheet_json"), Map.class);
+                GrowthV3.backfill(sheet);   // v3 원장 backfill (무DDL · 채우기만 · 판정 무변경)
                 return Optional.of(Map.of(
                         "id", rs.getLong("id"), "name", rs.getString("name"),
                         "status", rs.getString("status"), "realm", rs.getString("realm"),
@@ -177,6 +178,14 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
                         "sheet", sheet, "wallet", rs.getInt("wallet")));
             }
         }
+    }
+
+    /** sheet_json 파싱 + v3 원장 backfill (인라인 로드용 · 무DDL · 판정 무변경) */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> backfilled(String json) throws Exception {
+        Map<String, Object> sheet = JSON.readValue(json, Map.class);
+        GrowthV3.backfill(sheet);
+        return sheet;
     }
 
     /** 강호에 나와 있는 모든 캐릭터 — 세계일 정산(빈사 마감·감쇠)의 순회 대상 */
@@ -192,7 +201,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
                         "name", rs.getString("name"), "status", rs.getString("status"),
                         "realm", rs.getString("realm"),
                         "location", String.valueOf(rs.getString("location")),
-                        "sheet", JSON.readValue(rs.getString("sheet_json"), Map.class),
+                        "sheet", backfilled(rs.getString("sheet_json")),
                         "wallet", rs.getInt("wallet")));
             }
         }
@@ -225,6 +234,7 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
                     return Optional.empty();
                 }
                 Map<String, Object> sheet = JSON.readValue(rs.getString("sheet_json"), Map.class);
+                GrowthV3.backfill(sheet);   // v3 원장 backfill (무DDL · 채우기만 · 판정 무변경)
                 return Optional.of(Map.of(
                         "id", rs.getLong("id"), "name", rs.getString("name"),
                         "status", rs.getString("status"), "realm", rs.getString("realm"),
