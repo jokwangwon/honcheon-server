@@ -136,6 +136,15 @@ final class SkillDisplay {
         int frameTicks = 1;
         int frameIndex;
         long frameStart;
+        /**
+         * ★ <b>시전자 추종</b> (검기 평타 전용 · 그 밖은 null) — 소환 순간의 「발 → 판」 오프셋.
+         * 매 틱 지금의 발에 이 오프셋을 더한 자리로 옮긴다 (2026-07-23 사용자: "이펙트가
+         * 지나간 자리 허공에 남는다"). 국소축(소환 순간의 시선 yaw/pitch)은 <b>안 돌린다</b> —
+         * 획의 방향은 이미 그어진 것이고, 몸을 따라 도는 것은 자리뿐이다.
+         */
+        Vector followOffset;
+        float followYaw;
+        float followPitch;
         // 투사 — 날아간다
         Vector dir;
         Location head;
@@ -205,6 +214,9 @@ final class SkillDisplay {
             }
             if (p.frames != null && !p.fading) {
                 advanceFrames(p, now);          // ★ 검기 — 스윙에 맞춰 1→2→3 단계를 갈아끼운다
+            }
+            if (p.followOffset != null) {
+                followCaster(p);                // ★ 검기 — 자리만 몸을 따른다 (kigi_slash.follow)
             }
             if (!p.fading && p.fadeAt >= 0 && now >= p.fadeAt) {
                 erase(p);                       // 참격선 — 꼬리부터 지워진다
@@ -567,6 +579,15 @@ final class SkillDisplay {
             return false;   // 볼 눈이 없거나 예산 초과 — 파티클(흰 별)이 그 자리를 지킨다
         }
         kigiByCaster.put(caster.getUniqueId(), p);
+        // ★ 시전자 추종 (kigi_slash.follow) — 자리만 몸을 따른다. 국소축은 소환 순간 그대로다.
+        if (cfg.follow()) {
+            p.followOffset = at.toVector().subtract(feet.toVector());
+            p.followYaw = at.getYaw();
+            p.followPitch = at.getPitch();
+            for (Display d : p.parts) {
+                d.setTeleportDuration(1);   // 이동 보간 — 이것이 없으면 틱마다 순간이동한다
+            }
+        }
         p.rot = qEnd;
         p.rise = 0.0f;
         p.orbit = tEnd;   // 지울 때도 이 자리다 (되돌리면 초승달이 몸 한복판으로 튄다)
@@ -822,6 +843,32 @@ final class SkillDisplay {
      * <b>끊기지 않는다</b>. 수축({@link #erase})이 시작되면 부르는 쪽이 이 길로 안 온다 —
      * 다 벤 검기는 3단계 그대로 오므라든다.
      */
+    /**
+     * ★ 검기 평타 판의 시전자 추종 — 매 틱, 지금의 발 + 소환 순간의 오프셋으로 옮긴다.
+     *
+     * <p>돌리는 것은 <b>자리뿐</b>이다. yaw/pitch 는 소환 순간의 것을 그대로 쓴다 — 국소축이
+     * 돌면 이미 그어진 획의 방향(공전 보간·베기면)이 몸과 함께 헛돈다. 시전자가 나갔거나
+     * 세계를 건너갔으면 그 자리에 둔다 (수명 ≤ draw+fade 틱이라 곧 스러진다).
+     */
+    private void followCaster(Piece p) {
+        Player caster = plugin.getServer().getPlayer(p.owner);
+        if (caster == null || p.parts.isEmpty()) {
+            return;
+        }
+        Display first = p.parts.get(0);
+        if (!caster.getWorld().equals(first.getWorld())) {
+            return;
+        }
+        Location dest = caster.getLocation().add(p.followOffset);
+        dest.setYaw(p.followYaw);
+        dest.setPitch(p.followPitch);
+        for (Display d : p.parts) {
+            if (d.isValid()) {
+                d.teleport(dest);
+            }
+        }
+    }
+
     private void advanceFrames(Piece p, long now) {
         int last = p.frames.size() - 1;
         long aged = Math.max(0L, now - p.frameStart) / p.frameTicks;
