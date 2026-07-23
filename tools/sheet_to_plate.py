@@ -119,10 +119,15 @@ def stage(im: Image.Image, alpha_mul: float, ink_mix: float) -> Image.Image:
 
 
 def model_json(key: str) -> dict:
-    """판 1장 — qi.py _kigi_model 문법 (중심 원점 계약 · 축 ⑰). 시트는 정사각이라 UV 전면."""
+    """판 1장 — qi.py _kigi_model 문법 (중심 원점 계약 · 축 ⑰). 시트는 정사각이라 UV 전면.
+
+    ★뒷면(north)은 UV 좌우 반전 — 같은 UV 를 양면에 주면 뒷면이 거울상으로 그려져
+    보는 쪽에 따라 C ↔ Ɔ 가 갈린다 (2026-07-23 사용자 실측: "보는 방법마다 뒤집힌 C").
+    """
     l, h, t = 1.4 * 16.0, 1.4 * 8.0, 0.04 * 8.0
     faces = {f: {"texture": "#0",
-                 "uv": [0, 0, 16, 16] if f in ("north", "south") else [0, 0, 0.01, 0.01]}
+                 "uv": [16, 0, 0, 16] if f == "north"
+                 else [0, 0, 16, 16] if f == "south" else [0, 0, 0.01, 0.01]}
              for f in ("north", "south", "east", "west", "up", "down")}
     return {"textures": {"0": f"honcheon:item/{key}", "particle": f"honcheon:item/{key}"},
             "elements": [{"from": [8.0 - l / 2.0, 8.0 - h, 8.0 - t],
