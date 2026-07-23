@@ -1,0 +1,34 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  클라이언트 모드팩 등록부 — Phase 1 (B-175 · docs/design/modpack_transition.md)
+# ═══════════════════════════════════════════════════════════════════════════
+# ★ 이것이 핀의 정본이다. tools/build_modpack.py 가 이것을 읽어 .mrpack 을 굽는다.
+#   버전 문자열은 Modrinth version_number 와 **정확히** 일치해야 한다 (2026-07-23 실사 —
+#   docs/design/modpack_pins.md 의 조사가 근거다).
+# 갱신 절차: 값 수정 → python3 tools/build_modpack.py → 산출물 재배포.
+
+name: 혼천
+version: 0.1.0            # 모드팩 자체의 판 — 구성이 바뀌면 올린다
+minecraft: 1.21.11
+fabric_loader: 0.19.3
+
+# 모드 — slug 는 Modrinth 프로젝트 주소의 그것이다
+mods:
+  - { slug: fabric-api,               version: "0.141.5+1.21.11" }
+  - { slug: sodium,                   version: "mc1.21.11-0.8.13-fabric" }
+  - { slug: iris,                     version: "1.10.7+1.21.11-fabric" }   # Sodium 필수
+  - { slug: xaeros-minimap,           version: "fabric-1.21.11-26.4.2" }
+  - { slug: xaeros-world-map,         version: "fabric-1.21.11-1.44.2" }   # 미니맵과 같은 날짜 짝
+  - { slug: emotecraft,               version: "3.2.0-b.build.159+1.21.11-fabric" }  # ★베타 — Paper 플러그인과 같은 build.159 (프로토콜 짝)
+  - { slug: player-animation-library, version: "1.1.8" }                   # Phase 2 모션의 기반 (선탑재)
+  - { slug: wi-zoom,                  version: "1.7-MC1.21.11" }
+  - { slug: wavey-capes,              version: "1.10.2" }
+  - { slug: caxton,                   version: "0.9.0-beta.3+1.21.11-FABRIC" }
+
+# 셰이더팩 — Iris 가 읽는다. ★기본 동봉은 사용자 결정 대기 (D4) — 후보 3종은
+#   docs/design/modpack_pins.md. 결정되면 아래 주석을 푼다 (파일은 shaderpacks/ 로 들어간다)
+shaderpacks: []
+#  - { slug: complementary-reimagined, version: "r5.8.1" }
+
+# 서버 짝 (mrpack 에는 안 들어간다 — 조율자가 plugins/ 에 놓는 것) — 기록용
+server_plugins:
+  - { slug: emotecraft, version: "3.2.0-b.build.159+1.21.11-paper", loader: paper }
