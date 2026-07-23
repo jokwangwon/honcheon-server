@@ -13,7 +13,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 const REL = 'https://github.com/jokwangwon/honcheon-pack/releases/download/pack';
 const FABRIC_META = 'https://meta.fabricmc.net/v2';
@@ -211,7 +211,7 @@ async function runInstall() {
 // ★ minecraft:// 프로토콜은 쓰지 않는다 — 그것은 **베드락 에디션**의 것이라 엉뚱한 게 열린다
 //   (2026-07-23 사용자 실측). 자바 런처 exe 를 실제로 찾았을 때만 연다. 못 찾으면 정직하게
 //   물러서고(UI 가 "직접 열어 「혼천」 선택" 안내), 절대 다른 것을 대신 열지 않는다.
-function launchOfficial() {
+async function launchOfficial() {
   const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
   const pf = process.env.ProgramFiles || 'C:\\Program Files';
   const local = process.env.LOCALAPPDATA || '';
@@ -220,49 +220,42 @@ function launchOfficial() {
     path.join(pf, 'Minecraft Launcher', 'MinecraftLauncher.exe'),
     path.join(pf86, 'Minecraft Launcher', 'Minecraft.exe'),
     path.join(pf, 'Minecraft Launcher', 'Minecraft.exe'),
-    // 미니크래프트닷넷 신형(일렉트론) 스탠드얼론
     path.join(local, 'Programs', 'Minecraft Launcher', 'Minecraft.exe'),
     path.join(local, 'Programs', 'Minecraft Launcher', 'MinecraftLauncher.exe'),
   ];
   for (const exe of candidates) {
     if (fs.existsSync(exe)) { spawn(exe, [], { detached: true, stdio: 'ignore' }).unref(); return true; }
   }
-  // ★ 위치 무관 — 공식 런처(스토어·독립 설치)는 전부 **시작 메뉴에 바로가기**를 만든다.
-  //   그 .lnk 를 찾아 열면 설치 형태와 무관하게 올바른 런처가 뜬다 (베드락 위험 없음).
-  const lnk = findLauncherShortcut();
-  if (lnk) {
-    spawn('explorer.exe', [lnk], { detached: true, stdio: 'ignore' }).unref();
+  // ★ 스토어(게임패스)판은 exe·.lnk 가 디스크에 없다 — AppsFolder 가상 공간에만 있다.
+  //   Windows 에 직접 묻는다: Get-StartApps 가 이름·실행ID(AUMID)를 돌려준다 (모든 설치 형태 커버).
+  //   베드락은 이름이 "Minecraft" 라 "Minecraft Launcher" 정확 매칭으로 배제된다.
+  const appId = await getStartAppId();
+  if (appId) {
+    spawn('explorer.exe', [`shell:AppsFolder\\${appId}`], { detached: true, stdio: 'ignore' }).unref();
     return true;
   }
-  // 그래도 못 찾으면 아무것도 대신 안 연다 → UI 가 "직접 열어 「혼천」 선택" 안내.
-  return false;
+  return false;   // 그래도 못 찾으면 아무것도 대신 안 연다 → UI 안내
 }
 
-// 시작 메뉴에서 「Minecraft Launcher」 바로가기를 찾는다 (베드락의 "Minecraft" 는 제외)
-function findLauncherShortcut() {
-  const roots = [
-    path.join(process.env.ProgramData || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-    path.join(APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-  ];
-  const walk = (dir, depth) => {
-    if (depth < 0 || !fs.existsSync(dir)) return null;
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return null; }
-    for (const e of entries) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) { const hit = walk(full, depth - 1); if (hit) return hit; }
-      else if (/minecraft launcher.*\.lnk$/i.test(e.name)) return full;
-    }
-    return null;
-  };
-  for (const r of roots) { const hit = walk(r, 3); if (hit) return hit; }
-  return null;
+// Get-StartApps 로 「Minecraft Launcher」의 실행ID 를 얻는다 (정확 매칭 우선 · 없으면 느슨 매칭)
+function getStartAppId() {
+  const ps = "$a = Get-StartApps | Where-Object { $_.Name -eq 'Minecraft Launcher' };"
+    + " if (-not $a) { $a = Get-StartApps | Where-Object { $_.Name -like '*Minecraft*Launcher*' -and $_.Name -notlike '*Bedrock*' -and $_.Name -notlike '*Preview*' } };"
+    + " $a | Select-Object -First 1 -ExpandProperty AppID";
+  return new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps],
+      { timeout: 15000, windowsHide: true }, (err, stdout) => {
+        if (err || !stdout) { resolve(null); return; }
+        const id = String(stdout).trim().split(/\r?\n/)[0].trim();
+        resolve(id || null);
+      });
+  });
 }
 
 app.whenReady().then(() => {
   createWindow();
   ipcMain.handle('install', runInstall);
-  ipcMain.handle('launch', () => { const ok = launchOfficial(); return { ok }; });
+  ipcMain.handle('launch', async () => { const ok = await launchOfficial(); return { ok }; });
   ipcMain.handle('close', () => app.quit());
   ipcMain.handle('minimize', () => win.minimize());
   ipcMain.handle('openFolder', () => shell.openPath(GAMEDIR));
