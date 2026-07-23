@@ -1440,7 +1440,8 @@ public final class SkillListener implements Listener {
         String note = stanceNote(target, stance, surrounded);
 
         double incoming = event.getDamage();
-        if (line != null) {
+        boolean v2 = engine.combatV2Enabled();
+        if (line != null && !v2) {
             // 대립 판정 — 공격 총합(+7) vs 태세 판정치 + 2d6(플레이어) / +7(NPC)
             int atk = foeAttackScore(attacker, target, attackers);
             int roll = target instanceof Player ? roll2d6() : NPC_JUDGMENT;
@@ -1466,7 +1467,26 @@ public final class SkillListener implements Listener {
                 clashWeapon(target, grade);   // 막기는 무기를 태워 목숨을 산다 (회피·흘리기는 접촉이 없다)
             }
         }
-        incoming -= armorSoak(target, grade);   // 갑옷 — 태세와 무관하게 언제나. 단 강기 앞에서는 0
+        if (v2) {
+            // ★전투 v2 (B-177) — NPC 의 한 대도 같은 공식이다 [대칭 원칙 · 사용자 확정 2026-07-24]:
+            //   공격력 = 바닐라 피해 + 능력치(병기 축) + 격(위에서 이미 실렸다) · 피해 = max(1, 공−방) × 크리.
+            //   태세는 굴리지 않는다 — 회피로 안 맞는 길은 판정이 아니라 몸(위치·경공)이고,
+            //   막기·흘리기의 값은 방어력 경감으로 산다. 포위의 값도 태세 선택(회피 봉쇄)으로 산다.
+            Growth growth = Growth.get();
+            String weaponClass = npc == null ? null : npc.weaponClass();
+            String attrName = growth == null ? null : growth.attackAttribute(weaponClass);
+            int attrBonus = npc != null ? npc.attr(attrName, engine.realmAttr(npc.realm()))
+                    : engine.realmAttr(foeRealm(attacker, attacker instanceof Monster));
+            int defense = defenseV2(target, grade, line);
+            boolean crit = critRollV2(attacker, weaponClass);
+            incoming = Math.max(1.0, incoming + attrBonus - defense)
+                    * (crit ? critMultV2(attacker, weaponClass) : 1.0);
+            if (line != null && line.clashes()) {
+                clashWeapon(target, grade);   // 막기의 격돌은 v2 에도 산다
+            }
+        } else {
+            incoming -= armorSoak(target, grade);   // 갑옷 — 태세와 무관하게 언제나. 단 강기 앞에서는 0
+        }
 
         Defense defense = defend(target, attacker, grade, Math.max(0.0, incoming));
         if (defense.blocked() || defense.damage() <= 0.0) {
@@ -1813,7 +1833,8 @@ public final class SkillListener implements Listener {
         // 【판정의 눈 · B-105】 평타도 무공과 같은 가시성 — 꺼져 있으면 비용은 if 한 줄이다
         boolean eye = eyes.contains(player.getUniqueId());
         boolean preyEye = target instanceof Player && eyes.contains(target.getUniqueId());
-        if (line != null) {
+        boolean v2 = engine.combatV2Enabled();
+        if (line != null && !v2) {
             // 대립 판정 — 공격 총합 + 2d6(공격자가 굴린다) vs 태세 판정치 + 7
             int atkScore = basicAttackScore(player, target);
             int roll = roll2d6();
@@ -1853,6 +1874,33 @@ public final class SkillListener implements Listener {
         double base = raw;
         int stanceSoak = line == null ? 0 : line.soak();
         int armor = armorSoak(target, grade);   // 갑옷 — 태세와 무관하게 언제나. 단 강기 앞에서는 0
+        if (v2) {
+            // ★전투 v2 (B-177) — 평타: 공격력 = 바닐라 피해(연타 감쇠 실림) + 능력치(병기 축) + 격(raw 에
+            //   이미 실렸다) [사용자 확정 2026-07-24]. 태세는 굴리지 않는다 — 경감(soak)·갑옷·체력 파생이
+            //   방어력으로 한 번에 든다. 피해 = max(1, 공격력 − 방어력) × 크리배수.
+            String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(), null);
+            Growth growth = Growth.get();
+            int attrBonus = growth == null ? 0 : growth.attackBonus(
+                    plugin.ledger(player.getUniqueId()), weaponClass, engine.realmAttr(state.realm));
+            int defense = defenseV2(target, grade, line);
+            boolean crit = critRollV2(player, weaponClass);
+            base = Math.max(1.0, raw + attrBonus - defense)
+                    * (crit ? critMultV2(player, weaponClass) : 1.0);
+            stanceSoak = 0;                       // 방어력에 이미 들었다 — 아래에서 또 빼면 이중 경감
+            armor = 0;
+            if (line != null && line.clashes()) {
+                clashWeapon(target, grade);       // 막기의 격돌은 v2 에도 산다 — 무기를 태워 목숨을 산다
+            }
+            if (eye) {
+                eyeRollV2(player, target, attrBonus, 0, defense,
+                        engine.critChance(critAttr(player, engine.combatV2().senseAttribute()),
+                                critAttr(player, engine.combatV2().wisdomAttribute()), weaponClass),
+                        new SkillEngine.Strike(0, (int) Math.round(raw + attrBonus) - defense,
+                                crit ? "critical_success" : "success",
+                                engine.tierName(crit ? "critical_success" : "success"),
+                                true, (int) Math.round(base)));
+            }
+        }
 
         // 상대의 기 방어(호신강기)·반격 오의가 같은 규칙으로 판정된다 (대칭)
         Defense defense = defend(target, player, grade, Math.max(0.0, base - stanceSoak - armor));
@@ -2814,20 +2862,38 @@ public final class SkillListener implements Listener {
                 //   (등록부는 회피·막기·흘리기를 적어 뒀는데, 엔진의 NPC 는 서 있기만 했다).
                 //   저항 = 태세 판정치 + 7 (NPC 는 굴리지 않는다 — combat.yml defender_bonus).
                 Guardline foeLine = defenderStance(target);
-                int resist = foeLine != null ? foeLine.score() + NPC_JUDGMENT
-                        : engine.difficulty(hostile ? "보통" : "쉬움");
-                int roll = roll2d6();   // 전투는 주사위를 쓴다
+                boolean v2 = engine.combatV2Enabled();
+                SkillEngine.Strike strike;
+                if (v2) {
+                    // ★전투 v2 (B-177) — 명중은 기하가 이미 정했다 (band_hit). 판정 없음.
+                    //   태세는 굴리지 않는다: 막기·흘리기의 값은 방어력 경감(soak)으로,
+                    //   회피는 획을 몸으로 피하는 것으로 산다 (주사위가 아니라 위치다).
+                    int defense = defenseV2(target, cast.grade(), foeLine);
+                    boolean crit = critRollV2(player, weaponClass);
+                    strike = engine.strikeV2(cast, mastery, attrBonus, defense,
+                            crit, crit ? critMultV2(player, weaponClass) : 1.0);
+                    if (eye) {
+                        eyeRollV2(player, target, attrBonus, mastery, defense,
+                                engine.critChance(critAttr(player, engine.combatV2().senseAttribute()),
+                                        critAttr(player, engine.combatV2().wisdomAttribute()),
+                                        weaponClass), strike);
+                    }
+                } else {
+                    int resist = foeLine != null ? foeLine.score() + NPC_JUDGMENT
+                            : engine.difficulty(hostile ? "보통" : "쉬움");
+                    int roll = roll2d6();   // 전투는 주사위를 쓴다
 
-                SkillEngine.Strike strike = engine.strike(cast, execBase, roll, resist);
-                if (eye) {
-                    // 【판정의 눈】 2d6 이 무엇을 굴렸고, 실행력이 무엇으로 이루어졌고, 저항이 어디서 왔는가
-                    eyeRoll(player, target, attrBonus, mastery, execBase, roll, resist,
-                            foeLine, strike);
-                }
-                if (foeLine != null && target instanceof Player prey
-                        && eyes.contains(prey.getUniqueId())) {
-                    // 【판정의 눈 · 맞는 쪽】 내 태세(선언 포함)가 초식을 무엇으로 받았는가 (B-105)
-                    eyeStance(prey, player, foeLine, execBase + roll, NPC_JUDGMENT, strike.margin());
+                    strike = engine.strike(cast, execBase, roll, resist);
+                    if (eye) {
+                        // 【판정의 눈】 2d6 이 무엇을 굴렸고, 실행력이 무엇으로 이루어졌고, 저항이 어디서 왔는가
+                        eyeRoll(player, target, attrBonus, mastery, execBase, roll, resist,
+                                foeLine, strike);
+                    }
+                    if (foeLine != null && target instanceof Player prey
+                            && eyes.contains(prey.getUniqueId())) {
+                        // 【판정의 눈 · 맞는 쪽】 내 태세(선언 포함)가 초식을 무엇으로 받았는가 (B-105)
+                        eyeStance(prey, player, foeLine, execBase + roll, NPC_JUDGMENT, strike.margin());
+                    }
                 }
                 touchCombat(state);
                 if (engine.isFlowTier(strike.tierId())) {
@@ -2841,15 +2907,18 @@ public final class SkillListener implements Listener {
                     continue;
                 }
                 // 상대의 경감 — 태세는 맞아도 값을 한다 (막기 −3 · 흘리기 −1). 갑옷은 그 뒤에 든다
+                // ★v2 는 태세 경감·갑옷이 방어력에 이미 들었다 (strikeV2 안) — 여기서 또 빼면 이중 경감
                 double raw = strike.damage();
-                int stanceSoak = foeLine == null ? 0 : foeLine.soak();
+                int stanceSoak = v2 || foeLine == null ? 0 : foeLine.soak();
                 if (foeLine != null) {
-                    raw -= foeLine.soak();
+                    if (!v2) {
+                        raw -= foeLine.soak();
+                    }
                     if (foeLine.clashes()) {
                         clashWeapon(target, cast.grade());   // 막기 — 그 몸의 무기가 내 격을 먹는다
                     }
                 }
-                int armor = armorSoak(target, cast.grade());
+                int armor = v2 ? 0 : armorSoak(target, cast.grade());
                 raw -= armor;
                 // 상대의 기 방어·무기가 같은 규칙으로 판정된다 (대칭)
                 Defense defense = defend(target, player, cast.grade(), Math.max(0.0, raw));
@@ -3235,6 +3304,77 @@ public final class SkillListener implements Listener {
         ItemStack held = gear == null ? null : gear.getItemInMainHand();
         boolean armed = held != null && !held.getType().isAir();
         return new Guardline(stance, score, st.soak(), !st.weaponSafe() && armed);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  전투 판정 v2 — 공방(攻防) (combat.yml combat_v2 · B-177)
+    //  enabled: false 면 아래 세 도우미는 어느 판정길에서도 불리지 않는다 (v1 그대로)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * v2 방어력 — 갑옷 경감 + 체력 파생(per_body × 체력 판정치) + 태세 경감(soak).
+     * 시트 없는 몸은 그 경지의 표준 무인이다 ({@link Growth#attackBonus} 와 같은 규칙 —
+     * NPC 는 등록부 능력치, 없으면 realmAttr). 갑옷은 v1 과 같은 문을 지난다 —
+     * {@link #armorSoak} 라서 강기 앞의 갑옷 0(mitigation_pierced_from)도 그대로 산다.
+     */
+    private int defenseV2(LivingEntity target, String grade, Guardline line) {
+        SkillEngine.CombatV2 v2 = engine.combatV2();
+        int armor = v2.defenseFromArmor() ? armorSoak(target, grade) : 0;
+        int body;
+        if (target instanceof Player player) {
+            double attr = plugin.ledger(player.getUniqueId()).attr(v2.bodyAttribute());
+            body = attr > 0 ? (int) attr : engine.realmAttr(state(player).realm);
+        } else {
+            SkillEngine.Npc npc = npcOf(target);
+            String realm = foeRealm(target, target instanceof Monster);
+            body = npc == null ? engine.realmAttr(realm)
+                    : npc.attr(v2.bodyAttribute(), engine.realmAttr(npc.realm()));
+        }
+        int soak = v2.defenseStanceSoak() && line != null ? line.soak() : 0;
+        return armor + (int) Math.floor(v2.defensePerBody() * body) + soak;
+    }
+
+    /** v2 크리 축의 판정치 — 공격자의 감각·지혜. 시트 없는 몸은 그 경지의 표준 무인 */
+    private int critAttr(LivingEntity attacker, String attribute) {
+        if (attacker instanceof Player player) {
+            double attr = plugin.ledger(player.getUniqueId()).attr(attribute);
+            return attr > 0 ? (int) attr : engine.realmAttr(state(player).realm);
+        }
+        SkillEngine.Npc npc = npcOf(attacker);
+        String realm = foeRealm(attacker, attacker instanceof Monster);
+        return npc == null ? engine.realmAttr(realm)
+                : npc.attr(attribute, engine.realmAttr(npc.realm()));
+    }
+
+    /** v2 크리 굴림 — 액션 RNG (2d6 아님). 확률·배수는 combat.yml combat_v2.crit 이 정본 */
+    private boolean critRollV2(LivingEntity attacker, String weaponClass) {
+        double chance = engine.critChance(critAttr(attacker, engine.combatV2().senseAttribute()),
+                critAttr(attacker, engine.combatV2().wisdomAttribute()), weaponClass);
+        return chance > 0.0 && ThreadLocalRandom.current().nextDouble() < chance;
+    }
+
+    /** v2 크리 배수 — 이 공격자·이 무기의 값 (critRollV2 가 참일 때만 쓴다) */
+    private double critMultV2(LivingEntity attacker, String weaponClass) {
+        return engine.critMultiplier(critAttr(attacker, engine.combatV2().senseAttribute()),
+                critAttr(attacker, engine.combatV2().wisdomAttribute()), weaponClass);
+    }
+
+    /**
+     * 【판정의 눈 · v2】 공격력이 무엇으로 이루어졌고 방어력이 무엇을 깎았는가 —
+     * {@link #eyeRoll} 의 v2 문법 (주사위가 없으니 굴림 대신 크리 확률이 보인다).
+     */
+    private void eyeRollV2(Player player, LivingEntity target, int attrBonus, int mastery,
+                           int defense, double critChance, SkillEngine.Strike strike) {
+        if (!engine.eye().log()) {
+            return;
+        }
+        player.sendMessage(ChatColor.DARK_AQUA + "  ├ " + ChatColor.WHITE + target.getName()
+                + ChatColor.GRAY + " · 공격력 " + ChatColor.WHITE + (strike.margin() + defense)
+                + ChatColor.DARK_GRAY + "(능력치 " + attrBonus + " + 숙련 " + mastery + " + 무기·격)"
+                + ChatColor.GRAY + " − 방어력 " + ChatColor.WHITE + defense
+                + ChatColor.GRAY + " · 크리 " + Math.round(critChance * 100) + "%"
+                + " → " + ChatColor.GREEN + strike.tierName()
+                + ChatColor.GRAY + " (피해 " + strike.damage() + ")");
     }
 
     /** NPC 의 방어 판정치 — 등록된 능력치, 없으면 경지의 표준 무인 (코드가 수치를 짓지 않는다) */

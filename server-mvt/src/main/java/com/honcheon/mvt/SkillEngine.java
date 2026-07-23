@@ -110,6 +110,8 @@ public final class SkillEngine {
     private final Impact impact;
     /** 타격 허용 — 누가 맞을 수 있는가의 문 (combat.yml strike_admission · B-119). 기본: 전부 허용 */
     private final StrikeAdmission admission;
+    /** 전투 판정 v2 — 공방(攻防) (combat.yml combat_v2 · B-177). enabled: false 면 v1 그대로 */
+    private final CombatV2 combatV2;
     /** 형태별 위력 — 발출형은 더 아프다 (검기_참격 3 > 검기 두름 2). forms[].power 가 격 기본값보다 우선 */
     private final Map<String, Integer> formPower;
     /** 소모 밴드의 스칼라 코스트 — internal_energy.yml cost_bands (발경 1). 범위형([1,3])은 형태가 정한다 */
@@ -372,6 +374,9 @@ public final class SkillEngine {
 
         // ─── 타격 허용 (combat.yml strike_admission · B-119) — 절이 없으면 전부 허용 (기본 자세가 열림) ───
         this.admission = StrikeAdmission.load(RulesConfig.section(cb, "strike_admission"));
+
+        // ─── 전투 판정 v2 (combat.yml combat_v2 · B-177) — 절이 없거나 enabled: false 면 v1 그대로 ───
+        this.combatV2 = CombatV2.load(RulesConfig.section(cb, "combat_v2"));
         Map<String, Integer> powers = new LinkedHashMap<>();
         Map<String, Integer> sustains = new LinkedHashMap<>();
         RulesConfig.section(qm, "forms").forEach((category, raw) -> {
@@ -2644,6 +2649,109 @@ public final class SkillEngine {
             damage = (int) Math.ceil(damage / 2.0);           // 개안 — 불완전 시전 (위력 절반)
         }
         return new Strike(roll2d6, margin, tier.id(), tier.name(), true, Math.max(1, damage));
+    }
+
+    // ══════════ 전투 판정 v2 — 공방(攻防) (combat.yml combat_v2 · B-177) ══════════
+
+    /**
+     * 전투 v2 등록부 — 명중 = 획 히트박스(판정 없음) · 피해 = max(1, 공격력 − 방어력) × 크리배수.
+     * <b>enabled: false 면 어느 판정길도 이 값을 읽지 않는다</b> (v1 그대로 — 단계적 전환 스위치).
+     * 수치는 전부 combat.yml 이 정본이다 — 코드는 수치를 지어내지 않는다.
+     */
+    public record CombatV2(boolean enabled,
+                           boolean defenseFromArmor, double defensePerBody,
+                           boolean defenseStanceSoak, boolean defenseNpcRealmBase,
+                           String bodyAttribute, String senseAttribute, String wisdomAttribute,
+                           double chanceBase, double chancePerSense, double chancePerWisdom,
+                           double chanceCap, Map<String, Double> chanceByWeapon,
+                           double damageBase, double damagePerSense, double damagePerWisdom,
+                           Map<String, Double> damageAmpByWeapon) {
+
+        static CombatV2 load(Map<String, Object> sec) {
+            Map<String, Object> def = RulesConfig.section(sec, "defense");
+            Map<String, Object> crit = RulesConfig.section(sec, "crit");
+            return new CombatV2(Boolean.TRUE.equals(sec.get("enabled")),
+                    Boolean.TRUE.equals(def.get("from_armor")),
+                    num(def.get("per_body")),
+                    Boolean.TRUE.equals(def.get("stance_soak")),
+                    Boolean.TRUE.equals(def.get("npc_realm_base")),
+                    String.valueOf(def.getOrDefault("body_attribute", "체력")),
+                    String.valueOf(crit.getOrDefault("sense_attribute", "감각")),
+                    String.valueOf(crit.getOrDefault("wisdom_attribute", "지혜")),
+                    num(crit.get("chance_base")), num(crit.get("chance_per_sense")),
+                    num(crit.get("chance_per_wisdom")), num(crit.get("chance_cap")),
+                    doubleMap(crit.get("chance_by_weapon")),
+                    num(crit.get("damage_base")), num(crit.get("damage_per_sense")),
+                    num(crit.get("damage_per_wisdom")),
+                    doubleMap(crit.get("damage_amp_by_weapon")));
+        }
+
+        private static double num(Object v) {
+            return v instanceof Number n ? n.doubleValue() : 0.0;
+        }
+
+        private static Map<String, Double> doubleMap(Object raw) {
+            Map<String, Double> out = new LinkedHashMap<>();
+            if (raw instanceof Map<?, ?> m) {
+                m.forEach((k, v) -> out.put(String.valueOf(k), num(v)));
+            }
+            return Collections.unmodifiableMap(out);
+        }
+    }
+
+    public boolean combatV2Enabled() {
+        return combatV2.enabled();
+    }
+
+    /** 등급 이름 — 판정 등록부(judgment.yml tiers)의 것. v2 의 눈이 재사용한다 (코드는 이름을 짓지 않는다) */
+    public String tierName(String tierId) {
+        JudgmentEngine.Tier tier = judgment.tierById(tierId);
+        return tier == null ? tierId : tier.name();
+    }
+
+    public CombatV2 combatV2() {
+        return combatV2;
+    }
+
+    /**
+     * v2 크리 확률 — 기본 0 + 감각(주축) + 지혜(급소를 안다) + 무기별, 상한 chance_cap.
+     * 굴림은 호출자가 한다 (액션 RNG — 2d6 아님). 장비 가산은 equipment.yml crit 슬롯 등재 뒤에 붙는다.
+     */
+    public double critChance(int sense, int wisdom, String weaponClass) {
+        double c = combatV2.chanceBase()
+                + combatV2.chancePerSense() * sense
+                + combatV2.chancePerWisdom() * wisdom
+                + combatV2.chanceByWeapon().getOrDefault(weaponClass, 0.0);
+        return Math.min(combatV2.chanceCap(), Math.max(0.0, c));
+    }
+
+    /** v2 크리 배수 — 기본 1.2 + 감각 + 지혜 + 무기 증강 (장비 증강은 equipment.yml 등재 뒤) */
+    public double critMultiplier(int sense, int wisdom, String weaponClass) {
+        return combatV2.damageBase()
+                + combatV2.damagePerSense() * sense
+                + combatV2.damagePerWisdom() * wisdom
+                + combatV2.damageAmpByWeapon().getOrDefault(weaponClass, 0.0);
+    }
+
+    /**
+     * v2 타격 — <b>명중은 기하가 이미 정했다</b> (band_hit). 판정 없음, 언제나 타격.
+     * 공격력 = 무기 위력 + 기술 숙련 + 능력치(병기 축) + 격 보정 — 4항 (사용자 2026-07-24:
+     * 무공 위력표·경지 격차·내공 고갈 보정은 v2 에 없다). 하한 1 → 크리배수 → 개안 절반.
+     * 크리 여부·배수는 호출자가 굴려 온다 (엔진은 난수를 만들지 않는다: 테스트 가능성).
+     * 등급 문법(성공/대성공)은 판정 등록부의 것을 재사용한다 — 급소 연출(critReserve)이 같은 문을 지난다.
+     */
+    public Strike strikeV2(Cast cast, int mastery, int attrBonus, int defense,
+                           boolean crit, double critMult) {
+        int attackPower = cast.weaponPower() + mastery + attrBonus + cast.gradeBonus();
+        double dmg = Math.max(1, attackPower - defense) * (crit ? critMult : 1.0);
+        if (cast.halved()) {
+            dmg = Math.ceil(dmg / 2.0);                       // 개안 — 불완전 시전 (위력 절반)
+        }
+        String tierId = crit ? "critical_success" : "success";
+        JudgmentEngine.Tier tier = judgment.tierById(tierId);
+        return new Strike(0, attackPower - defense, tierId,
+                tier == null ? tierId : tier.name(),   // 이름은 등록부의 것 — 코드는 짓지 않는다
+                true, Math.max(1, (int) Math.round(dmg)));
     }
 
     // ══════════ 성능 예산 (performance.yml) ══════════

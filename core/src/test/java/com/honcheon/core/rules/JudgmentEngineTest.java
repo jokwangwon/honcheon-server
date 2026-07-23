@@ -43,6 +43,14 @@ class JudgmentEngineTest {
     }
 
     @Test
+    void 등급을_id_로_찾는다_전투v2의_문법_재사용() {
+        // 전투 v2 (B-177) — 판정 없이 등급 문법(성공/대성공)을 재사용하는 자리 (tierById)
+        assertEquals("성공", engine.tierById("success").name());
+        assertEquals("대성공", engine.tierById("critical_success").name());
+        assertEquals(null, engine.tierById("없는_등급"));   // 등록부에 없으면 null — 이름을 짓지 않는다
+    }
+
+    @Test
     void 대등_판정에서_6단이_전부_굴러간다() {
         // 표준 대립: 실행력 5 vs 저항 13 → 마진 = 2d6 − 8 (범위 −6 ~ +4)
         // 신 문턱: 대성공 1/36 · 성공 5/36 · 아슬 9/36 · 부분 15/36 · 실패 5/36 · 치명 1/36

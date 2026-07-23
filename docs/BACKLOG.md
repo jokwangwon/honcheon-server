@@ -3479,3 +3479,16 @@ B-160 수사의 부산물 (2026-07-17): 월아산 병기의 PDC `weapon_class` �
 ★사용자 확정: 전투로 주사위는 이상하다 — 명중은 획이 닿으면 무조건, 피해는 공격력 vs 방어력
 (격차 곧 압도), 치명타만 확률(감각+무기별·기본0). 판정 개념 제거. TRPG(서장·퀘스트)의 2d6은 유지.
 원장 → 공격력 = 몸으로 느끼는 성장(growth_v3_feel §2)의 전투 실현. 미결: 크리 배수(×1.5 제안).
+
+진행 (2026-07-24 · 2단계 코드 배선 완료 — `combat_v2.enabled: false` 라 라이브 무영향):
+- 결정 회차 (사용자): 공격력 = 무기+숙련+능력치+격 **4항** (무공 위력표 제외) · 경지 격차 ±2·내공
+  고갈 −2 **제거** · 평타/NPC 무기 항 = **바닐라 피해 + 능력치 + 격**. combat.yml combat_v2 주석에 등재
+- 배선: `SkillEngine.strikeV2`(공방·크리·개안 절반) + `CombatV2` 등록부 적재 + `critChance/critMultiplier` ·
+  `SkillListener` 세 판정길(resolve·basicJudged·npcStrike) enabled 분기 — v2 는 roll2d6·태세 대립·
+  이중 경감 없음 (soak·갑옷·체력 파생 = `defenseV2` 방어력 한 곳) · 크리 = 액션 RNG · v2 눈(eyeRollV2) ·
+  등급 문법(성공/대성공)은 판정 등록부 재사용(`JudgmentEngine.tierById` + core 테스트 1눈)
+- 검증: `:server-mvt:jar` 빌드 ✓ · `:core:test` ✓ · combat_audit·defense_audit·lint_config 위반 0
+  (v1 불변 — enabled:false)
+- ★남은 3단계: enabled:true 전환 + 인게임 실측(【제안】 수치 튜닝: per_body·크리표·상한) +
+  **combat_audit·defense_audit 의 기대 모델을 v2 로 갱신** (지금 눈들은 v1 산술을 잰다 — 켜는 순간
+  눈부터 갈아야 눈이 거짓말하지 않는다) + 장비 크리 슬롯(equipment.yml) 별도 등재

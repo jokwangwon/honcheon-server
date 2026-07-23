@@ -339,15 +339,23 @@ combat_v2:
   enabled: false                # ★단계적 전환 스위치 — true 로 켜면 전투가 공방으로 (코드 배선 뒤)
   hit: "획 히트박스(band_hit) 겹치면 무조건 타격 — 명중 판정 없음"
   damage_formula: "max(1, 공격력 − 방어력) × 크리배수"   # 격차 곧 압도: 하한 1, 상한 없음
+  # ★공격력의 꼴 (사용자 확정 2026-07-24 · 결정 회차):
+  #   무공: 공격력 = 무기 위력 + 기술 숙련 + 능력치(병기 축 attacker_attribute) + 격 보정 — 4항.
+  #        옛 '무공 위력표'(technique_power 0~2)·경지 격차(realm_gap ±2)·내공 고갈(−2)은 v2 에 없다
+  #        (격차 압도는 원장→공격력이 이미 표현하고, 고갈의 대가는 격 다운캐스트가 이미 있다)
+  #   평타·NPC 타격: 무기 항 = 바닐라 피해(연타 감쇠 실림) 그대로 + 능력치 + 격 — 평타에도 원장 체감이 실린다
   # ── 방어력 = 기존에서 유도 (새 축 아님 · 사용자: 갑옷 + 체력) ──
   defense:
     from_armor: true            # armor 경감(mitigation) 을 그대로 방어력에 (기존 값)
     per_body: 0.5               # 【제안】 체력 판정치 1당 방어력 +0.5 (원장 파생 √원장 — 성장 체감)
+    body_attribute: 체력        # 방어 파생의 능력치 축 (judgment.yml attributes 의 이름 — 코드가 짓지 않는다)
     stance_soak: true           # 막기(-3)·흘리기(-1) soak 을 방어력에 합산 (기존 defender_choice)
     npc_realm_base: true        # 시트 없는 NPC 는 경지 표준 방어(realmAttr) + armor (코드가 realm_axis 판독)
   # ── 치명타 (사용자 2026-07-24: 기본 0·감각+무기별 확률 · 배수 1.2+증강) ──
   # ★크리의 축 (사용자 2026-07-24): 감각 = 주축(확률+피해) · 지혜 = 급소를 안다(추가) · 무기 · 장비
   crit:
+    sense_attribute: 감각       # 크리 주축의 능력치 이름 (judgment.yml attributes — 코드가 짓지 않는다)
+    wisdom_attribute: 지혜      # 급소를 아는 능력치 이름 (〃)
     chance_base: 0.0            # 기본 0% (사용자 확정)
     chance_per_sense: 0.02      # 감각 판정치 1당 크리 확률 +2% (감각 = 크리 주축 · 사용자)
     chance_per_wisdom: 0.01     # 【제안】 지혜 판정치 1당 +1% — "급소를 안다"(어디를 칠지)

@@ -42,6 +42,16 @@ public final class JudgmentEngine {
         this.extremeDiceEnabled = extreme != null && Boolean.TRUE.equals(extreme.get("enabled"));
     }
 
+    /** 등록부의 등급을 id 로 — 전투 v2(B-177)가 판정 없이 등급 문법(성공/대성공)을 재사용하는 자리 */
+    public Tier tierById(String id) {
+        for (Tier tier : tiers) {
+            if (tier.id().equals(id)) {
+                return tier;
+            }
+        }
+        return null;
+    }
+
     public Tier tierOf(int margin) {
         for (Tier tier : tiers) {
             if (tier.minMargin() != null && margin >= tier.minMargin()) {
