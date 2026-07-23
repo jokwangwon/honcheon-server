@@ -184,19 +184,29 @@ async function runInstall() {
   }
 }
 
-// 공식 런처를 연다 — 사용자는 「혼천」을 골라 Play (이미 로그인돼 있다)
+// 공식 **자바** 런처를 연다 — 사용자는 「혼천」을 골라 Play (이미 로그인돼 있다)
+//
+// ★ minecraft:// 프로토콜은 쓰지 않는다 — 그것은 **베드락 에디션**의 것이라 엉뚱한 게 열린다
+//   (2026-07-23 사용자 실측). 자바 런처 exe 를 실제로 찾았을 때만 연다. 못 찾으면 정직하게
+//   물러서고(UI 가 "직접 열어 「혼천」 선택" 안내), 절대 다른 것을 대신 열지 않는다.
 function launchOfficial() {
-  const pf = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const pf = process.env.ProgramFiles || 'C:\\Program Files';
+  const local = process.env.LOCALAPPDATA || '';
   const candidates = [
+    path.join(pf86, 'Minecraft Launcher', 'MinecraftLauncher.exe'),
     path.join(pf, 'Minecraft Launcher', 'MinecraftLauncher.exe'),
-    path.join(pf, 'Minecraft', 'MinecraftLauncher.exe'),
-    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Minecraft Launcher', 'MinecraftLauncher.exe'),
+    path.join(pf86, 'Minecraft Launcher', 'Minecraft.exe'),
+    path.join(pf, 'Minecraft Launcher', 'Minecraft.exe'),
+    // 미니크래프트닷넷 신형(일렉트론) 스탠드얼론
+    path.join(local, 'Programs', 'Minecraft Launcher', 'Minecraft.exe'),
+    path.join(local, 'Programs', 'Minecraft Launcher', 'MinecraftLauncher.exe'),
   ];
   for (const exe of candidates) {
     if (fs.existsSync(exe)) { spawn(exe, [], { detached: true, stdio: 'ignore' }).unref(); return true; }
   }
-  // 스탠드얼론이 없으면 MS 스토어판을 프로토콜로 (실패해도 사람이 직접 열 수 있다)
-  shell.openExternal('minecraft://').catch(() => {});
+  // 확인된 자바 런처를 못 찾았다 — **아무것도 대신 열지 않는다** (베드락·스토어 AUMID 추측 금지).
+  //   false 를 돌려주면 UI 가 "마인크래프트 런처를 직접 열어 「혼천」을 선택하세요"로 안내한다.
   return false;
 }
 
