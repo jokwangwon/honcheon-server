@@ -7,7 +7,7 @@
 # 갱신 절차: 값 수정 → python3 tools/build_modpack.py → 산출물 재배포.
 
 name: 혼천
-version: 0.1.0            # 모드팩 자체의 판 — 구성이 바뀌면 올린다
+version: 0.2.0            # 모드팩 자체의 판 — 구성이 바뀌면 올린다 (0.2.0: 셰이더 동봉)
 minecraft: 1.21.11
 fabric_loader: 0.19.3
 
@@ -24,10 +24,9 @@ mods:
   - { slug: wavey-capes,              version: "1.10.2" }
   - { slug: caxton,                   version: "0.9.0-beta.3+1.21.11-FABRIC" }
 
-# 셰이더팩 — Iris 가 읽는다. ★기본 동봉은 사용자 결정 대기 (D4) — 후보 3종은
-#   docs/design/modpack_pins.md. 결정되면 아래 주석을 푼다 (파일은 shaderpacks/ 로 들어간다)
-shaderpacks: []
-#  - { slug: complementary-reimagined, version: "r5.8.1" }
+# 셰이더팩 — Iris 가 읽는다. ★D4 확정 (2026-07-23 사용자): Complementary **Unbound** 스타일
+shaderpacks:
+  - { slug: complementary-unbound, version: "r5.8.1" }
 
 # 서버 짝 (mrpack 에는 안 들어간다 — 조율자가 plugins/ 에 놓는 것) — 기록용
 server_plugins:
