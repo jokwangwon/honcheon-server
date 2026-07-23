@@ -55,7 +55,6 @@ hc.onProgress((d)=>{
 function becomeReady(){
   state='ready'; $('seal').classList.add('show');
   $('play').textContent='시 작'; $('play').classList.remove('busy');
-  $('status').textContent='첫 실행은 Java 설치·계정 로그인 한 번이 필요합니다.';
 }
 async function onPlay(){
   if(state==='installing'||state==='running') return;
@@ -63,8 +62,10 @@ async function onPlay(){
     state='installing'; $('play').classList.add('busy'); $('play').textContent='설치 중';
     $('seal').classList.remove('show'); await hc.install();
   } else if(state==='ready'){
-    state='running'; $('status').textContent='혼천을 시작합니다...';
-    await hc.launch(); setTimeout(()=>hc.close(),1500);
+    state='running'; $('status').textContent='공식 런처를 엽니다 — 「혼천」을 골라 Play 하세요.';
+    const r=await hc.launch();
+    if(r&&r.ok){ setTimeout(()=>hc.close(),2500); }
+    else { $('status').textContent='공식 런처를 자동으로 못 열었습니다 — 마인크래프트 런처를 직접 열어 「혼천」을 선택하세요.'; state='ready'; }
   }
 }
 </script></body></html>

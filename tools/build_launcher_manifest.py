@@ -42,6 +42,7 @@ def main():
     manifest = {
         "version": cfg["version"],
         "minecraft": mc,
+        "fabric_loader": str(cfg["fabric_loader"]),
         "mmc": {"formatVersion": 1, "components": [
             {"important": True, "uid": "net.minecraft", "version": mc},
             {"uid": "net.fabricmc.fabric-loader", "version": str(cfg["fabric_loader"])}]},
