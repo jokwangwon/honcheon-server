@@ -346,9 +346,11 @@ combat_v2:
     stance_soak: true           # 막기(-3)·흘리기(-1) soak 을 방어력에 합산 (기존 defender_choice)
     npc_realm_base: true        # 시트 없는 NPC 는 경지 표준 방어(realmAttr) + armor (코드가 realm_axis 판독)
   # ── 치명타 (사용자 2026-07-24: 기본 0·감각+무기별 확률 · 배수 1.2+증강) ──
+  # ★크리의 축 (사용자 2026-07-24): 감각 = 주축(확률+피해) · 지혜 = 급소를 안다(추가) · 무기 · 장비
   crit:
     chance_base: 0.0            # 기본 0% (사용자 확정)
-    chance_per_sense: 0.02      # 【제안】 감각 판정치 1당 크리 확률 +2%
+    chance_per_sense: 0.02      # 감각 판정치 1당 크리 확률 +2% (감각 = 크리 주축 · 사용자)
+    chance_per_wisdom: 0.01     # 【제안】 지혜 판정치 1당 +1% — "급소를 안다"(어디를 칠지)
     chance_cap: 0.75            # 【제안】 확률 상한 (100% 크리 방지)
     chance_by_weapon:           # 【제안】 무기별 크리 성향 — 눈·속검이 급소를 노린다
       단검: 0.10
@@ -363,13 +365,16 @@ combat_v2:
       봉: 0.0
       맨손: 0.02
       중병기: 0.0               # 짓뭉갠다 — 급소 개념 약함
+    chance_from_equipment: true # 장비에 붙은 크리 확률 가산 (equipment.yml crit 슬롯 · 사용자: 장비에도 붙음)
     damage_base: 1.2            # 기본 크리 배수 (사용자 확정)
+    damage_per_sense: 0.02      # 감각 판정치 1당 배수 +0.02 (감각이 피해 증강도 — 사용자)
+    damage_per_wisdom: 0.03     # 【제안】 지혜 판정치 1당 배수 +0.03 — 급소 지식이 더 치명적으로
     damage_amp_by_weapon:       # 【제안】 크리 피해 증강 — 무기가 배수를 더 올린다 (1.2 + 증강)
-      단검: 0.3                  # 단검 크리 = ×1.5
+      단검: 0.3                  # 단검 크리 = ×1.5 (+ 감각·지혜·장비)
       암기: 0.2                  # 암기 크리 = ×1.4
       활: 0.1
-    # 능력치 증강 자리 — 감각은 확률에, 크리 피해 증강은 특화/장비가 (미결: 어느 축이 배수를 올리나)
-    damage_amp_note: "무기·특화·장비가 배수를 증강 (chance 는 감각·무기 · damage 증강은 무기·특화)"
+    damage_from_equipment: true # 장비에 붙은 크리 피해 증강 (equipment.yml crit 슬롯)
+    # ★장비 크리 슬롯은 equipment.yml 에 신설 예정 (crit_chance·crit_damage 옵션 — 별도 등재)
 
 damage:
   formula: "무기 위력 + 무공 위력 + 격 위력 + floor(마진 / 2)"
