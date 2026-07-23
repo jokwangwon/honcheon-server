@@ -390,10 +390,12 @@ def registry_audit(perf, stripped, tools_src=None):
                        for p in probe_loaders]
         # 파이썬 도구 — **같은 줄**에서 performance.yml 을 파고 이 키를 집는 것만 센다
         # (주석 속 언급이나 딴 yml 을 파는 코드가 키를 살려 주면 그것이 곧 거짓말이다)
-        if not readers:
-            readers = [os.path.relpath(p, ROOT) for p, s in tools_src.items()
-                       if any("performance.yml" in ln and f'"{leaf}"' in ln
-                              for ln in s.splitlines())]
+        # ★항상 합산한다 (2026-07-24): 자바 독자가 생기면 파이썬 독자가 가려지던 폴백이
+        #  selftest 를 죽였다 (Rp4Registry 가 combat_cluster_size 를 읽자 motion_audit 실종)
+        tool_readers = [os.path.relpath(p, ROOT) for p, s in tools_src.items()
+                        if any("performance.yml" in ln and f'"{leaf}"' in ln
+                               for ln in s.splitlines())]
+        readers += [t for t in tool_readers if t not in readers]
         # 같은 이름을 다른 yml 이 또 정의하는가 (값이 다르면 그게 곧 불일치다)
         others = [(f, k, v) for f, k, v in dup.get(leaf, []) if v != value]
         same = [(f, k, v) for f, k, v in dup.get(leaf, []) if v == value]

@@ -225,7 +225,12 @@ def audit_trap(rep: Report, ante: dict, code: str) -> None:
 
     # 접합이 오프라인에서 확정된 경우: 나루에 서 있는 linked 는 그대로 건너야 한다
     # (창 120→900: B-118 이 isAntechamber 와 depart 사이에 서장 붙듦 분기를 넣었다 — 경로는 그대로다)
-    if not re.search(r"onJoin[\s\S]{0,700}?isAntechamber\(player\.getWorld\(\)\)[\s\S]{0,900}?depart\(", code):
+    # (창 폐지 2026-07-24: B-170 이 onJoin 앞머리에 짐 복원 안전망을 넣어 또 넘쳤다 — 글자 수
+    #  창은 주석이 자랄 때마다 거짓 짖음을 낸다. onJoin 몸통 안에서 **부정(!) 아닌**
+    #  isAntechamber 검사 뒤 depart 가 오는지를 잰다 — 몸통이 경계다)
+    jbody = body_of(code, r"public void onJoin\([^)]*\)")
+    if jbody is None or not re.search(
+            r"(?<!!)isAntechamber\(player\.getWorld\(\)\)[\s\S]*?depart\(", jbody):
         rep.bad("onJoin 에서 '나루에 서 있는 접합자'를 건네주는 경로가 없다 — "
                 "디스코드에서 확정하고 로그아웃한 사람이 나루에 남는다")
     else:

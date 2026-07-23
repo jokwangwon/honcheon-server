@@ -209,8 +209,8 @@ P0 네 항목(B-001 ~ B-004)은 **전부 닫혔다** (2026-07-14) — 「닫힌 
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/Dojang.java:220`
 - **의존**: —
 - **닫는 조건**: **진짜 `ItemStack`** 이 `serializeItemsAsBytes` → `deserializeItemsFromBytes` 를 왕복해 **같은 것**으로 돌아옴을 본다
-- **검증**: `tools/DojangVaultSelfTest.java` — ★ 지금 이것은 **가짜를 왕복시킨다**
-- **닫힘**: —
+- **검증**: `/혼천 금고시험` — 진짜 ItemStack 9판 왕복 + 눈 시험 3종 (`server-mvt/src/main/java/com/honcheon/mvt/Dojang.java`). 옛 `tools/DojangVaultSelfTest.java` 는 문자열만 왕복시켰다 (증거 아님)
+- **닫힘**: 2026-07-20 — `/혼천 금고시험` 9판 전체 통과 실측 (빈 칸·AIR·인챈트·PDC 신병·상자 속 상자·41칸 한 벌) + 눈 시험 3종이 짖는 것을 봤다 (커밋 f4efdb1)
 
 `Dojang.java:223` 이 진짜로 하는 일: `Base64(ItemStack.serializeItemsAsBytes(items))`.
 `Dojang.java:232` 가 되돌린다: `deserializeItemsFromBytes(...)`.
@@ -233,8 +233,8 @@ before.realItems = "REAL:칠성검,비급,은자7971";   // (진짜 서버에서
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/Antechamber.java:210`
 - **의존**: B-011 (이것을 닫다가 나왔다)
 - **닫는 조건**: 맡은 짐이 재기동을 건너 살아남는다 — 디스크에 원자적으로 적힌다
-- **검증**: `/혼천 짐지문` 으로 전후 지문 대조 + `ipdo_stow.yml` 실물
-- **닫힘**: 2026-07-20
+- **검증**: `/혼천 짐지문` 으로 전후 지문 대조 + `run/mvt/plugins/HoncheonMVT/ipdo_stow.yml` 실물
+- **닫힘**: 2026-07-20 — 테스트 서버 실측: 맡긴 기록이 재기동을 견뎠다 (491바이트 sha1 불변 · 기동 로그 「맡은 짐이 1인 남아 있다」) · 안전 경로에서 봇의 짐(a57ce21e) 무파괴 보존 (커밋 f4efdb1)
 
 `Antechamber.enter()` 는 나루의 꾸러미를 쥐여 주며 **사람의 진짜 짐 전부**를 `stowed` 맵에 옮겼다.
 그 맵은 `new HashMap<>()` — **디스크에 적히는 곳이 없었다.** 옆의 주석은
@@ -2563,7 +2563,7 @@ WeaponShop 이 이미 있다 — 강화소가 새 상점인지 무기점의 기�
 - **의존**: B-135
 - **닫는 조건**: 새 능력치 눈금이 선다 — ≈300포인트(최종장 기준)를 담고, 판정 공식(실행력 = 능력치+기술+보정+2d6 · 저항 = NPC능력치+…+7)이 새 눈금으로 재환산되며, NPC 수치표·장비 보정·성별 ±1(B-056)까지 연쇄 환산이 끝난다. 수치 전 항목 사용자 승인
 - **검증**: `python3 tools/lint_config.py` · 판정 재현 하네스 (신설 — 옛/새 눈금 동등 시나리오 대조)
-- **닫힘**: 2026-07-23 — 설계·수치 전 12항목 사용자 승인 완료(attribute_scale_v3.md §8.9, 2026-07-15) + judgment_scale_harness.py 재실행 위반 0건(옛/새 눈금 동등). 저울 결정은 닫힘 — 이 눈금의 **구현**은 B-135 소관(아직 v2)
+- **닫힘**: 2026-07-23 — 설계·수치 전 12항목 사용자 승인 (`docs/design/attribute_scale_v3.md` §8.9 · 2026-07-15) + `python3 tools/judgment_scale_harness.py` 재실행 위반 0건 (옛/새 눈금 동등). 저울 결정은 닫힘 — 이 눈금의 **구현**은 B-135 소관 (단계 2에서 판정치=floor√원장 배선됨)
 
 ★사용자 확정 (2026-07-15): "매 레벨 3포인트 기준 (설정 능력치를 다 변화시켜서 밸런스
 재설계 필요)." 옛 눈금은 ±1 이 유의미한 TRPG 저울 — 2d6 의 분산이 판정을 지배한다.
