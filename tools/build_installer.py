@@ -206,6 +206,13 @@ if ($gui) {
         [Native.Win]::ShowWindow([Native.Win]::GetConsoleWindow(), 0) | Out-Null
     } catch {}
 }
+if (-not $gui) {
+    # exe 가 파워셸을 숨김으로 띄운다 — GUI 폴백(콘솔)이면 콘솔을 도로 보인다 (보이지 않는 멈춤 금지)
+    try {
+        Add-Type -Name Win2 -Namespace Native -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);'
+        [Native.Win2]::ShowWindow([Native.Win2]::GetConsoleWindow(), 5) | Out-Null
+    } catch {}
+}
 
 $script:stepDone = 0
 $TOTAL_STEPS = @TOTAL@

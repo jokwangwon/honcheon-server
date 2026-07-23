@@ -1,0 +1,21 @@
+1 ICON "honcheon.ico"
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041204b0"
+    BEGIN
+      VALUE "ProductName", "혼천"
+      VALUE "FileDescription", "혼천 설치·실행기"
+      VALUE "CompanyName", "Honcheon"
+      VALUE "FileVersion", "1.0.0.0"
+      VALUE "ProductVersion", "1.0.0.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x412, 1200
+  END
+END
