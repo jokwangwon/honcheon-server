@@ -721,10 +721,19 @@ public final class Rules {
      */
     @SuppressWarnings("unchecked")
     public int genderStat(Map<String, Object> sheet, String attribute, int fallback) {
-        Object attrs = sheet == null ? null : sheet.get("능력치");
         int base = fallback;
-        if (attrs instanceof Map<?, ?> m && m.get(attribute) instanceof Number n) {
-            base = n.intValue();
+        // ★ v3 저울 (B-135 단계 2 · attribute_scale_v3 §8.1): 판정치 = floor(√원장).
+        //   성별 ±1 은 이 base **뒤**에 얹힌다 (judgmentStat 후치 — §8.4). 판정 엔진은 무변경.
+        Object rawLedger = sheet == null ? null : sheet.get("원장");
+        if (rawLedger instanceof Map<?, ?> rm && rm.get(attribute) instanceof Number rn) {
+            base = GrowthV3.judgmentValue(rn.doubleValue());
+        } else {
+            // 원장이 아직 없는 시트 — 옛 능력치로 물러선다.
+            //   동등: floor(능력치) = floor(√능력치²) (backfill 이 원장=능력치² 라 결과 불변 — 하네스 증명)
+            Object attrs = sheet == null ? null : sheet.get("능력치");
+            if (attrs instanceof Map<?, ?> m && m.get(attribute) instanceof Number n) {
+                base = n.intValue();
+            }
         }
         Object g = sheet == null ? null : sheet.get(genderSheetKey());
         return genderEngine.judgmentStat(g == null ? null : String.valueOf(g), attribute, base);
