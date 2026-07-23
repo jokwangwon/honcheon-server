@@ -7,15 +7,15 @@
 # 갱신 절차: 값 수정 → python3 tools/build_modpack.py → 산출물 재배포.
 
 name: 혼천
-version: 0.2.1            # 모드팩 자체의 판 — 구성이 바뀌면 올린다 (0.2.1: PAL·망토 fabric 파일 교정)
+version: 0.2.2            # 모드팩 판 (0.2.2: Sodium 0.8.7 로 Iris 짝 맞춤)
 minecraft: 1.21.11
 fabric_loader: 0.19.3
 
 # 모드 — slug 는 Modrinth 프로젝트 주소의 그것이다
 mods:
   - { slug: fabric-api,               version: "0.141.5+1.21.11" }
-  - { slug: sodium,                   version: "mc1.21.11-0.8.13-fabric" }
-  - { slug: iris,                     version: "1.10.7+1.21.11-fabric" }   # Sodium 필수
+  - { slug: sodium,                   version: "mc1.21.11-0.8.7-fabric" }   # ★Iris 1.10.7 이 정확히 이 판을 요구 (0.8.13 은 충돌 — 2026-07-23 실측)
+  - { slug: iris,                     version: "1.10.7+1.21.11-fabric" }   # Sodium 0.8.7 필수
   - { slug: xaeros-minimap,           version: "fabric-1.21.11-26.4.2" }
   - { slug: xaeros-world-map,         version: "fabric-1.21.11-1.44.2" }   # 미니맵과 같은 날짜 짝
   - { slug: emotecraft,               version: "3.2.0-b.build.159+1.21.11-fabric" }  # ★베타 — Paper 플러그인과 같은 build.159 (프로토콜 짝)
