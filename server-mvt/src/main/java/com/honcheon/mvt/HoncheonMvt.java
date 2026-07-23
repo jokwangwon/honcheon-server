@@ -75,6 +75,10 @@ public final class HoncheonMvt extends JavaPlugin {
                 RulesConfig.load(cfg.resolve("npc_lifecycle.yml")), RulesConfig.load(cfg.resolve("judgment.yml")));
         this.party = new PartyEngine(RulesConfig.load(cfg.resolve("party.yml")));
         this.skillEngine = new SkillEngine(cfg);
+        if (skillEngine.combatV2Enabled()) {
+            // ★침묵 금지 — 전투 전체를 바꾸는 스위치가 조용히 켜져 있으면 그것이 곧 사고다 (B-177)
+            getLogger().warning("★[전투 v2] 공방 판정이 켜져 있다 (combat_v2.enabled: true) — 이 서버의 전투는 2d6 이 아니다");
+        }
         this.worldMap = WorldMap.load(cfg);   // 세계 지도 — world_map.yml (없으면 null)
         TerrainForge.load(cfg);   // 지형 계층 — 동굴 등록부 (config/terrain.yml · 없어도 돈다)
         Weapons.init(cfg);   // 병기 제작소 — equipment.yml·combat.yml 판독
