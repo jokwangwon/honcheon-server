@@ -102,8 +102,9 @@ final class HitFeedback {
         if (c.numberEnabled()) {
             spawnNumber(target, damage, c);
         }
-        // ★ 허수아비는 계기 — 체력이 안 움직이므로 띠는 거짓 그림이다. 숫자·명패(장부)가 말한다
-        if (c.barEnabled() && !Antechamber.dummy(target)) {
+        // ★ 모든 몹 공통 명패 (2026-07-23 사용자: "이름·체력바·숫자 — 허수아비 포함 공통").
+        //   레벨 칸은 B-135(성장 시스템)가 오면 이 줄 앞에 붙는다 — 사용자 확정: 지금은 비워 둔다
+        if (c.barEnabled()) {
             plugin.getServer().getScheduler().runTask(plugin, () -> upsertBar(target, c));
         }
     }
@@ -217,7 +218,9 @@ final class HitFeedback {
         for (int i = filled; i < width; i++) {
             bar.append('█');
         }
-        String name = target.getCustomName();
+        // 이름 — 허수아비는 등급표(label)가 이름이다 (customName 은 장부라 길다 — 그건 숨긴 채 둔다)
+        String name = target.getPersistentDataContainer().getOrDefault(
+                Antechamber.KEY_DUMMY_LABEL, PersistentDataType.STRING, target.getCustomName());
         b.d.setText((name == null || name.isBlank() ? "" : "§f" + name + "\n")
                 + bar + " §f" + Math.round(hp) + "§7/" + Math.round(max));
         b.dieAt = tick + c.barSeconds() * 20L;

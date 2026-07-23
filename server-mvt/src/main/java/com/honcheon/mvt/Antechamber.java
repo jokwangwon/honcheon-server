@@ -117,8 +117,8 @@ public final class Antechamber implements Listener {
     private static final double DUMMY_HEALTH = 1024.0;
 
     private static final NamespacedKey KEY_DUMMY = new NamespacedKey("honcheon", "ipdo_dummy");
-    /** 허수아비의 등급표(이름·내구) — 명패가 이것을 말한다 */
-    private static final NamespacedKey KEY_DUMMY_LABEL = new NamespacedKey("honcheon", "ipdo_dummy_label");
+    /** 허수아비의 등급표(이름·내구) — 명패가 이것을 말한다 (HitFeedback 공통 명패도 이 이름을 쓴다) */
+    static final NamespacedKey KEY_DUMMY_LABEL = new NamespacedKey("honcheon", "ipdo_dummy_label");
 
     private static String worldName = "honcheon_ipdo";
 
@@ -151,10 +151,6 @@ public final class Antechamber implements Listener {
 
     private final List<Dummy> dummies = new ArrayList<>();
     private final String dummyIdle;
-    /** 명패가 열려 있는 시간(초) — 타격이 열고, 이 시간 뒤 더 새 타격이 없으면 닫는다 */
-    private final int dummyNameSeconds;
-    /** 명패를 연 타격의 시각 — 더 새 타격이 있으면 옛 닫기 예약은 물러선다 */
-    private final Map<UUID, Long> dummyNameShownAt = new HashMap<>();
     private final String dummyHit;
 
     private final int leash;
@@ -349,8 +345,6 @@ public final class Antechamber implements Listener {
         this.mooring = !(d.get("mooring") instanceof Boolean mo) || mo;
 
         Map<String, Object> du = RulesConfig.section(a, "dummies");
-        this.dummyNameSeconds = Math.max(1, du.get("name_seconds") instanceof Number n
-                ? n.intValue() : 6);
         this.dummyIdle = str(du.get("idle"), "§7{label} §8· 내구 {durability}");
         this.dummyHit = str(du.get("hit"), "§7{label} §f최근 {last} §7· 누적 {total} · {hits}합 "
                 + "· 평균 {avg}§e → 내구 {durability} 상대 TTK {ttk}합");
@@ -1946,18 +1940,10 @@ public final class Antechamber implements Listener {
                     .getOrDefault(KEY_DUMMY, PersistentDataType.INTEGER, 20);
             String label = dummy.getPersistentDataContainer()
                     .getOrDefault(KEY_DUMMY_LABEL, PersistentDataType.STRING, "허수아비");
+            // ★ 명패(장부 줄)는 상시 숨김 (2026-07-23 사용자 확정: 보이는 것은 공통 명패 —
+            //   이름·체력바·대미지 숫자뿐. HitFeedback 이 label 로 그린다). 장부는 이름에 계속
+            //   쌓인다 — 눈이 필요해지면 그때 여는 손을 단다
             dummy.setCustomName(hitName(label, durability, t));
-            // ★ 명패는 맞은 동안만 말한다 (dummies.name_seconds) — 침묵이 기본, 장부는 타격이 연다
-            dummy.setCustomNameVisible(true);
-            long shownAt = System.nanoTime();
-            dummyNameShownAt.put(dummy.getUniqueId(), shownAt);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (dummy.isValid()
-                        && Long.valueOf(shownAt).equals(dummyNameShownAt.get(dummy.getUniqueId()))) {
-                    dummy.setCustomNameVisible(false);   // 더 새 타격이 없었다 — 닫는다
-                    dummyNameShownAt.remove(dummy.getUniqueId());
-                }
-            }, dummyNameSeconds * 20L);
         });
         bump(player, "손");
     }
