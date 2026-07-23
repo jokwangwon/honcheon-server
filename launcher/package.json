@@ -1,0 +1,24 @@
+{
+  "name": "honcheon-launcher",
+  "version": "0.1.0",
+  "description": "혼천 런처",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.honcheon.launcher",
+    "productName": "혼천",
+    "directories": { "output": "dist" },
+    "win": { "target": "nsis", "icon": "src/honcheon.ico" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true
+    },
+    "files": ["src/**/*"]
+  },
+  "devDependencies": { "electron": "^31.0.0", "electron-builder": "^24.13.3" }
+}
