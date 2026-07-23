@@ -883,7 +883,8 @@ public final class SkillEngine {
                 Boolean.TRUE.equals(hf.get("enabled")),
                 hfNum.get("enabled") == null || Boolean.TRUE.equals(hfNum.get("enabled")),
                 Math.max(1, intOr(hfNum.get("ticks"), 18)), dblOr(hfNum.get("rise"), 0.8),
-                dblOr(hfNum.get("scale"), 1.4), Math.max(1, intOr(hfNum.get("max_alive"), 24)),
+                dblOr(hfNum.get("scale"), 1.4), dblOr(hfNum.get("scatter"), 0.45),
+                Math.max(1, intOr(hfNum.get("max_alive"), 24)),
                 hfBar.get("enabled") == null || Boolean.TRUE.equals(hfBar.get("enabled")),
                 Math.max(1, intOr(hfBar.get("seconds"), 6)), Math.max(1, intOr(hfBar.get("width"), 10)),
                 dblOr(hfBar.get("height"), 0.5), Math.max(1, intOr(hfBar.get("max_alive"), 8)),
@@ -1505,7 +1506,7 @@ public final class SkillEngine {
      */
     public record HitFx(boolean enabled,
                         boolean numberEnabled, int numberTicks, double numberRise,
-                        double numberScale, int numberMaxAlive,
+                        double numberScale, double numberScatter, int numberMaxAlive,
                         boolean barEnabled, int barSeconds, int barWidth,
                         double barHeight, int barMaxAlive,
                         boolean killEnabled, String killParticle, int killCount, double killSpread) {

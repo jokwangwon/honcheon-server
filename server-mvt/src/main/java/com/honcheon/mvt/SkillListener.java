@@ -1675,10 +1675,26 @@ public final class SkillListener implements Listener {
         //   **조용히** 기각됐다 (실측 2026-07-15: 여러 타 중 누적 1 — 나루의 손 과제가 안 늘었다).
         //   획은 그리고, 취소하지 않는다 — 바닐라 피해가 그대로 실리고 나루의 눈(onDamage)이 센다 (B-132)
         if (Antechamber.dummy(target)) {
+            if (bandDelivering) {
+                return;   // 획의 피해 — 그대로 실려 계기가 센다 (스윙 재발행 없음)
+            }
             basicSwing(player);
+            if (effectOwnsDamage(player)) {
+                event.setCancelled(true);   // ★ 접촉 무딜 — 계기도 획으로만 센다 (판정 한 경로)
+            }
             return;
         }
-        basicSwing(player);   // 획 · 몸의 자세 (있던 그대로 — CD_BASIC 이 겹침만 막는다)
+        if (bandDelivering) {
+            // 획이 넣는 피해의 재진입 — 스윙은 이미 나갔다. 아래 판정층만 태운다
+        } else if (effectOwnsDamage(player)) {
+            // ★ 접촉은 그림자다 (2026-07-23 사용자) — 스윙(획+판정)만 발행하고 접촉 피해는 끊는다.
+            //   딜은 kigiBandStrike/heavySlash 의 궤적 표본이 넣는다 (화면 = 판정 — 획이 닿아야 맞는다)
+            basicSwing(player);
+            event.setCancelled(true);
+            return;
+        } else {
+            basicSwing(player);   // 획 · 몸의 자세 (있던 그대로 — CD_BASIC 이 겹침만 막는다)
+        }
 
         SkillEngine.Impact im = engine.impact();
         String weaponClass = engine.weaponClassOf(
@@ -1977,6 +1993,33 @@ public final class SkillListener implements Listener {
     private final Map<UUID, Integer> kigiDir = new HashMap<>();
 
     /**
+     * ★ 획의 피해가 지나가는 중 — {@code kigiBandStrike}/{@code spawnHeavySlash} 의
+     * {@code le.damage()} 재진입 표식. 이 깃발이 선 동안의 피해는 <b>획의 것</b>이라
+     * 접촉 무딜 게이트를 지나가고, 스윙도 다시 발행하지 않는다 (겹소리·겹획 방지).
+     */
+    private boolean bandDelivering;
+
+    /**
+     * ★ <b>접촉은 그림자다 — 딜은 획만 넣는다</b> (2026-07-23 사용자: "일반 평타도 딜 안
+     * 들어가게, 이펙트 모션에만"). 이 무기의 피해 주인이 획 판정(band_hit)인가.
+     */
+    private boolean effectOwnsDamage(Player player) {
+        String weaponClass = engine.weaponClassOf(
+                player.getInventory().getItemInMainHand(), materialName(player));
+        SkillEngine.Basic basic = engine.basicStrike(weaponClass);
+        if (basic == null) {
+            return false;   // 활·무관·짐승 — 획이 없는 손은 바닐라가 제 일을 한다
+        }
+        SkillEngine.KigiSlash kigi = engine.kigiSlash();
+        if (kigi != null && kigi.enabled() && kigi.bandHit()
+                && kigi.appliesTo(weaponClass, basic.trail())) {
+            return true;
+        }
+        SkillEngine.HeavySlash imp = engine.heavySlash();
+        return imp != null && imp.enabled() && imp.hit() && imp.appliesTo(weaponClass);
+    }
+
+    /**
      * 전용 검기 평타 발행 — 초록 초승달 검기(3D · {@link SkillDisplay#kigiSlash})를 소환하고
      * 흰 별을 아크를 따라 뿌린다. dirSign 은 alternate 면 스윙마다 번갈아 바뀐다.
      *
@@ -2073,7 +2116,12 @@ public final class SkillListener implements Listener {
                             var atk = player.getAttribute(
                                     org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
                             double dmg = Math.max(1.0, atk == null ? 1.0 : atk.getValue());
-                            le.damage(dmg, player);   // → basicMelee 재진입 (판정 일원화)
+                            bandDelivering = true;   // 획의 피해다 — 접촉 무딜 게이트를 지나간다
+                            try {
+                                le.damage(dmg, player);   // → basicMelee 재진입 (판정 일원화)
+                            } finally {
+                                bandDelivering = false;
+                            }
                         }
                     }
                 }
@@ -2145,7 +2193,12 @@ public final class SkillListener implements Listener {
                             struck.add(e.getUniqueId());
                             var atk = player.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
                             double dmg = Math.max(1.0, atk == null ? 1.0 : atk.getValue());
-                            le.damage(dmg, player);   // → basicMelee 로 재진입 (판정 일원화)
+                            bandDelivering = true;   // 획의 피해다 — 접촉 무딜 게이트를 지나간다
+                            try {
+                                le.damage(dmg, player);   // → basicMelee 로 재진입 (판정 일원화)
+                            } finally {
+                                bandDelivering = false;
+                            }
                             break;
                         }
                     }

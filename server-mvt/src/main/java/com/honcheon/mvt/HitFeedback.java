@@ -102,7 +102,8 @@ final class HitFeedback {
         if (c.numberEnabled()) {
             spawnNumber(target, damage, c);
         }
-        if (c.barEnabled()) {
+        // ★ 허수아비는 계기 — 체력이 안 움직이므로 띠는 거짓 그림이다. 숫자·명패(장부)가 말한다
+        if (c.barEnabled() && !Antechamber.dummy(target)) {
             plugin.getServer().getScheduler().runTask(plugin, () -> upsertBar(target, c));
         }
     }
@@ -154,7 +155,13 @@ final class HitFeedback {
                 old.d().remove();
             }
         }
-        Location at = target.getLocation().add(0, target.getHeight() * 0.75, 0);
+        // ★ 흩뿌림 — 연타 숫자가 같은 자리에 겹치지 않게 (2026-07-23 사용자 1차 실측)
+        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
+        double sc = c.numberScatter();
+        Location at = target.getLocation().add(
+                rnd.nextDouble(-sc, sc),
+                target.getHeight() * 0.75 + rnd.nextDouble(-sc * 0.4, sc * 0.4),
+                rnd.nextDouble(-sc, sc));
         TextDisplay d = target.getWorld().spawn(at, TextDisplay.class, e -> {
             e.setText("§f§l" + Math.round(damage));   // 흰 종이빛 + 그림자 — 수묵 (발광 없음)
             e.setShadowed(true);

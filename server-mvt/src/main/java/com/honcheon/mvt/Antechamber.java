@@ -151,6 +151,10 @@ public final class Antechamber implements Listener {
 
     private final List<Dummy> dummies = new ArrayList<>();
     private final String dummyIdle;
+    /** 명패가 열려 있는 시간(초) — 타격이 열고, 이 시간 뒤 더 새 타격이 없으면 닫는다 */
+    private final int dummyNameSeconds;
+    /** 명패를 연 타격의 시각 — 더 새 타격이 있으면 옛 닫기 예약은 물러선다 */
+    private final Map<UUID, Long> dummyNameShownAt = new HashMap<>();
     private final String dummyHit;
 
     private final int leash;
@@ -345,6 +349,8 @@ public final class Antechamber implements Listener {
         this.mooring = !(d.get("mooring") instanceof Boolean mo) || mo;
 
         Map<String, Object> du = RulesConfig.section(a, "dummies");
+        this.dummyNameSeconds = Math.max(1, du.get("name_seconds") instanceof Number n
+                ? n.intValue() : 6);
         this.dummyIdle = str(du.get("idle"), "§7{label} §8· 내구 {durability}");
         this.dummyHit = str(du.get("hit"), "§7{label} §f최근 {last} §7· 누적 {total} · {hits}합 "
                 + "· 평균 {avg}§e → 내구 {durability} 상대 TTK {ttk}합");
@@ -1391,7 +1397,9 @@ public final class Antechamber implements Listener {
                 e.setHealth(attr.getValue());
             }
             e.setInvulnerable(false);   // 맞는 것은 보여야 한다 (다만 죽지 않는다 — 리스너가 되돌린다)
-            e.setCustomNameVisible(true);
+            // ★ 명패는 기본 숨김 (2026-07-23 사용자: "텍스트가 너무 나와서 — 보여줄 것만") —
+            //   때린 사람에게만 잠깐 열린다 (아래 타격 손). 장부 자체는 그대로 산다
+            e.setCustomNameVisible(false);
             e.setCustomName(idleName(d.label(), d.durability()));
         });
     }
@@ -1939,6 +1947,17 @@ public final class Antechamber implements Listener {
             String label = dummy.getPersistentDataContainer()
                     .getOrDefault(KEY_DUMMY_LABEL, PersistentDataType.STRING, "허수아비");
             dummy.setCustomName(hitName(label, durability, t));
+            // ★ 명패는 맞은 동안만 말한다 (dummies.name_seconds) — 침묵이 기본, 장부는 타격이 연다
+            dummy.setCustomNameVisible(true);
+            long shownAt = System.nanoTime();
+            dummyNameShownAt.put(dummy.getUniqueId(), shownAt);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (dummy.isValid()
+                        && Long.valueOf(shownAt).equals(dummyNameShownAt.get(dummy.getUniqueId()))) {
+                    dummy.setCustomNameVisible(false);   // 더 새 타격이 없었다 — 닫는다
+                    dummyNameShownAt.remove(dummy.getUniqueId());
+                }
+            }, dummyNameSeconds * 20L);
         });
         bump(player, "손");
     }
