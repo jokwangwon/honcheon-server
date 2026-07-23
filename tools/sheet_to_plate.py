@@ -45,9 +45,12 @@ def extract() -> Image.Image:
         crop[-24:, :24].reshape(-1, 3), crop[-24:, -24:].reshape(-1, 3)])
     bg = np.median(corners, axis=0)
     dist = np.linalg.norm(crop - bg, axis=2)
-    # 농도 상향 (2026-07-23 사용자: "그림 색의 농도를 좀 올리고") — 문턱을 낮추고
-    # 감마 0.75 로 중간 농도를 짙게 (인게임 반투명 체감 보정)
-    alpha = np.clip((dist - 12.0) / (70.0 - 12.0), 0.0, 1.0) ** 0.75
+    # 농도 2차 상향 (2026-07-23 사용자: "시트 원본처럼 확실히 보이게") — 먹이 얹힌 곳은
+    # 거의 불투명까지: 문턱 10 · 상한 55 · 감마 0.55 · 상향 1.15 (인게임 반투명 체감 보정)
+    alpha = np.minimum(np.clip((dist - 10.0) / (55.0 - 10.0), 0.0, 1.0) ** 0.55 * 1.15, 1.0)
+    # 채도 보강 — 청록·옥이 시트처럼 선다 (회색축 기준 1.25배)
+    gray = crop.mean(axis=2, keepdims=True)
+    crop = np.clip(gray + (crop - gray) * 1.25, 0.0, 255.0)
     for mx0, my0, mx1, my1 in MASKS:            # 주석은 그림이 아니다
         alpha[my0:my1, mx0:mx1] = 0.0
     # 티끌 제거 — 3×3 이웃 평균이 옅으면 고립점이다
