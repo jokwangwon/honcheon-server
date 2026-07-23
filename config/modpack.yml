@@ -31,3 +31,12 @@ shaderpacks:
 # 서버 짝 (mrpack 에는 안 들어간다 — 조율자가 plugins/ 에 놓는 것) — 기록용
 server_plugins:
   - { slug: emotecraft, version: "3.2.0-b.build.159+1.21.11-paper", loader: paper }
+
+# ★ 모드팩 게이트 v0 (2026-07-23 사용자: "해당 프로그램으로 실행시켜야 게임 가능") — ModpackGate.java 가 읽는다
+# 브랜드 검사: 전용 설치기가 세우는 클라는 Fabric — 바닐라 런처는 한국어 안내 후 퇴장.
+# ※문패이지 자물쇠가 아니다 (브랜드는 위조 가능) — 자물쇠(토큰 핸드셰이크)는 자체 모드(Phase 2)와 함께.
+gate:
+  enforce: true
+  wait_seconds: 8              # 브랜드 패킷 대기 (접속 직후엔 아직 안 왔을 수 있다)
+  exempt: [kigibot, kigicam]   # 촬영 하네스 — 바닐라 프로토콜
+  message: "혼천은 전용 설치기로 접속합니다.\n디스코드 안내판에서 honcheon.exe 를 받아 실행해 주세요."

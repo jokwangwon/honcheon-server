@@ -309,13 +309,21 @@ iconKey=default
 '@ | Set-Content -Path "$inst\instance.cfg" -Encoding UTF8
 Set-Content -Path "$inst\mmc-pack.json" -Value '@MMC_PACK@' -Encoding UTF8
 
-# [3] 모드·셰이더 — ★동기화: 핀 목록에 없는 것은 걷어낸다 (재실행 = 깨끗한 갱신)
+# [3] 모드·셰이더 — ★예의 있는 동기화 (2026-07-23 사용자 지적):
+#   지우는 것은 **우리가 전에 설치한 것 중 핀에서 빠진 것**뿐이다 (장부 manifest 대조).
+#   사용자가 제 손으로 넣은 모드는 건드리지 않는다 — 남의 짐을 지우는 것은 손실이다.
 $keepMods = @(@KEEP_MODS@)
-Get-ChildItem "$inst\.minecraft\mods" -Filter *.jar -ErrorAction SilentlyContinue |
-    Where-Object { $keepMods -notcontains $_.Name } | Remove-Item
 $keepShaders = @(@KEEP_SHADERS@)
+$manifest = Join-Path $inst 'honcheon_manifest.txt'
+$ours = @()
+if (Test-Path $manifest) { $ours = @(Get-Content $manifest -ErrorAction SilentlyContinue) }
+Get-ChildItem "$inst\.minecraft\mods" -Filter *.jar -ErrorAction SilentlyContinue |
+    Where-Object { ($ours -contains $_.Name) -and ($keepMods -notcontains $_.Name) } |
+    Remove-Item
 Get-ChildItem "$inst\.minecraft\shaderpacks" -Filter *.zip -ErrorAction SilentlyContinue |
-    Where-Object { $keepShaders -notcontains $_.Name } | Remove-Item
+    Where-Object { ($ours -contains $_.Name) -and ($keepShaders -notcontains $_.Name) } |
+    Remove-Item
+Set-Content -Path $manifest -Value ($keepMods + $keepShaders) -Encoding UTF8
 @DOWNLOADS@
 if ('@SHADER_FILE@' -ne '') {
     "enableShaders=true`nshaderPack=@SHADER_FILE@" |

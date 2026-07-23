@@ -175,6 +175,9 @@ public final class HoncheonMvt extends JavaPlugin {
         PackPusher packPusher = new PackPusher(this);
         packPusher.load(cfg);                    // 팩은 **접속한 주소**로 나간다 (박힌 URL 은 LAN 밖에서 죽는다)
         getServer().getPluginManager().registerEvents(packPusher, this);
+        ModpackGate modpackGate = new ModpackGate(this);   // 전용 설치기 게이트 v0 (브랜드 검사)
+        modpackGate.load(cfg);
+        getServer().getPluginManager().registerEvents(modpackGate, this);
         Hunger hunger = new Hunger(this);         // 허기 — 경공이 달리기를 쓰므로 바닐라 허기가 너무 빨리 닳는다
         hunger.load(cfg);
         getServer().getPluginManager().registerEvents(hunger, this);
