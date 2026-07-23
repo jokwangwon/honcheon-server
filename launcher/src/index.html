@@ -17,9 +17,9 @@ html,body{width:900px;height:560px;overflow:hidden;font-family:'Malgun Gothic',s
 #fill{height:100%;width:0;background:linear-gradient(90deg,#2e8f88,#6fd4cb);border-radius:3px;transition:width .35s ease}
 #row{display:flex;align-items:center;gap:16px;margin-top:22px;-webkit-app-region:no-drag}
 #play{font-family:'HcSerif',serif;font-size:19px;letter-spacing:.12em;color:#e8e4da;background:rgba(46,143,136,.14);
-  border:1.5px solid #3fa7a0;border-radius:4px;padding:13px 44px;cursor:pointer;transition:.18s;opacity:.45;pointer-events:none}
-#play.ready{opacity:1;pointer-events:auto}
-#play.ready:hover{background:rgba(63,167,160,.28);box-shadow:0 6px 24px rgba(63,167,160,.3)}
+  border:1.5px solid #3fa7a0;border-radius:4px;padding:13px 44px;cursor:pointer;transition:.18s;opacity:1;pointer-events:auto}
+#play:hover{background:rgba(63,167,160,.28);box-shadow:0 6px 24px rgba(63,167,160,.3)}
+#play.busy{opacity:.45;pointer-events:none;box-shadow:none}
 #pct{font-size:12px;color:#8a8578;font-variant-numeric:tabular-nums}
 #folder{margin-left:auto;font-size:12px;color:#8a8578;cursor:pointer;text-decoration:underline}
 #folder:hover{color:#c8c3b6}
@@ -50,16 +50,17 @@ hc.onProgress((d)=>{
   $('fill').style.width=pct+'%';
   $('pct').textContent=(d.phase==='done'||d.phase==='error')?'':pct+'%';
   if(d.phase==='done') becomeReady();
-  if(d.phase==='error'){ $('play').textContent='다시 시도'; $('play').classList.add('ready'); state='idle'; }
+  if(d.phase==='error'){ $('play').textContent='다시 시도'; $('play').classList.remove('busy'); state='idle'; }
 });
 function becomeReady(){
   state='ready'; $('seal').classList.add('show');
-  $('play').textContent='시 작'; $('play').classList.add('ready');
+  $('play').textContent='시 작'; $('play').classList.remove('busy');
   $('status').textContent='첫 실행은 Java 설치·계정 로그인 한 번이 필요합니다.';
 }
 async function onPlay(){
+  if(state==='installing'||state==='running') return;
   if(state==='idle'){
-    state='installing'; $('play').classList.remove('ready'); $('play').textContent='설치 중';
+    state='installing'; $('play').classList.add('busy'); $('play').textContent='설치 중';
     $('seal').classList.remove('show'); await hc.install();
   } else if(state==='ready'){
     state='running'; $('status').textContent='혼천을 시작합니다...';
