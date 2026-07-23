@@ -224,6 +224,8 @@ public final class SkillEngine {
     private final int basicCooldownTicks;
     /** 헛박자 신호 — 박자 미도래로 획이 안 나간 스윙의 소리 (basic_strike.whiff · 없으면 null) */
     private final Sfx basicWhiff;
+    /** 타격 피드백 — 맞았다는 그림 (hit_feedback) */
+    private final HitFx hitFx;
     /** 판정의 눈 — 【디버그】 히트박스를 재는 자(尺). 켠 사람에게만 보인다 */
     private final Eye eye;
     /** party.yml — 무공은 아군을 베지 않는다 (friendly_fire.스킬 = 면제) */
@@ -872,6 +874,23 @@ public final class SkillEngine {
         });
         this.basicStrike = Collections.unmodifiableMap(bsc);
 
+        // 【타격 피드백】 맞았다는 그림 — 판정의 결과 표시 (hit_feedback · 2026-07-23 사용자 승인)
+        Map<String, Object> hf = RulesConfig.section(mo, "hit_feedback");
+        Map<String, Object> hfNum = asMap(hf.get("damage_number"));
+        Map<String, Object> hfBar = asMap(hf.get("target_bar"));
+        Map<String, Object> hfKill = asMap(hf.get("kill_burst"));
+        this.hitFx = new HitFx(
+                Boolean.TRUE.equals(hf.get("enabled")),
+                hfNum.get("enabled") == null || Boolean.TRUE.equals(hfNum.get("enabled")),
+                Math.max(1, intOr(hfNum.get("ticks"), 18)), dblOr(hfNum.get("rise"), 0.8),
+                dblOr(hfNum.get("scale"), 1.4), Math.max(1, intOr(hfNum.get("max_alive"), 24)),
+                hfBar.get("enabled") == null || Boolean.TRUE.equals(hfBar.get("enabled")),
+                Math.max(1, intOr(hfBar.get("seconds"), 6)), Math.max(1, intOr(hfBar.get("width"), 10)),
+                dblOr(hfBar.get("height"), 0.5), Math.max(1, intOr(hfBar.get("max_alive"), 8)),
+                hfKill.get("enabled") == null || Boolean.TRUE.equals(hfKill.get("enabled")),
+                str(hfKill.get("particle")), Math.max(0, intOr(hfKill.get("count"), 14)),
+                dblOr(hfKill.get("spread"), 0.35));
+
         // ─── 손이 가려야 할 것 — 【등록부가 이미 답을 갖고 있었다】 (party.yml mc.friendly_fire) ───
         //   "friendly_fire: { 스킬: 면제, 오의_광역: 예외 }" — 무공은 아군을 베지 않는다.
         //   **다만 오의의 광역은 예외다** ("매화만개 앞에서는 아군도 물러선다").
@@ -1480,6 +1499,18 @@ public final class SkillEngine {
     }
 
     /** 한 대상에 대한 판정 결과 — 전투는 주사위를 쓴다 (조성기와 달리 난수 허용) */
+    /**
+     * 타격 피드백 등록부 (hit_feedback) — 대미지 숫자 · 표적 HP띠 · 처치 흩어짐.
+     * <b>판정의 결과 표시일 뿐이다</b> — 판정·피해는 한 획도 안 바꾼다.
+     */
+    public record HitFx(boolean enabled,
+                        boolean numberEnabled, int numberTicks, double numberRise,
+                        double numberScale, int numberMaxAlive,
+                        boolean barEnabled, int barSeconds, int barWidth,
+                        double barHeight, int barMaxAlive,
+                        boolean killEnabled, String killParticle, int killCount, double killSpread) {
+    }
+
     public record Strike(int roll, int margin, String tierId, String tierName, boolean hit, int damage) {
     }
 
@@ -3051,6 +3082,11 @@ public final class SkillEngine {
     /** 헛박자 신호 소리 (basic_strike.whiff) — 등록부에 없으면 null (구판대로 조용히 버린다) */
     public Sfx basicWhiff() {
         return basicWhiff;
+    }
+
+    /** 타격 피드백 등록부 (hit_feedback) — 없으면 enabled=false 로 온다 (옛 동작 그대로) */
+    public HitFx hitFx() {
+        return hitFx;
     }
 
     public int basicCooldownTicks() {

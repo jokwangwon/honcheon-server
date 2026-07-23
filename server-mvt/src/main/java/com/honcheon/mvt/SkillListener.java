@@ -107,6 +107,8 @@ public final class SkillListener implements Listener {
     private final EnergyBossBar energyBossBar;
     /** 3D 모션 층 — 파티클 위에 얹는다. 이것이 통째로 실패해도 무공은 보인다 (불변식 ㅁ) */
     private final SkillDisplay display;
+    /** 타격 피드백 — 맞았다는 그림 (대미지 숫자·표적 HP띠·처치 흩어짐 · hit_feedback) */
+    private final HitFeedback hitFeedback;
     private final Map<UUID, SkillEngine.State> states = new HashMap<>();
     /** NPC 의 격 — 대칭 원칙. 같은 State 를 쓴다 (내력·두름·다운캐스트가 같은 규칙이라는 뜻이다) */
     private final Map<UUID, SkillEngine.State> npcStates = new HashMap<>();
@@ -179,6 +181,7 @@ public final class SkillListener implements Listener {
         this.hud = new SkillHud(engine);
         this.energyBossBar = loadEnergyBossBar(plugin, engine);
         this.display = new SkillDisplay(plugin, engine);
+        this.hitFeedback = new HitFeedback(plugin, engine);
         this.activeGuard = loadActiveGuard(plugin);
         this.safetyRules = loadSafetyRules(plugin);
         this.keyPopulace = new org.bukkit.NamespacedKey(plugin, "populace");
@@ -199,6 +202,7 @@ public final class SkillListener implements Listener {
         this.engine = engine;
         hud.rebind(engine);
         display.rebind(engine);
+        hitFeedback.rebind(engine);
         if (energyBossBar != null) {
             energyBossBar.rebind(engine);
         }
@@ -441,6 +445,7 @@ public final class SkillListener implements Listener {
      */
     public void shutdown() {
         display.clearAll();
+        hitFeedback.clearAll();     // 대미지 숫자·HP띠도 — 그림을 남기지 않는다
         energyBossBar.clearAll();   // 리로드 뒤 유령 보스바가 화면에 살아남지 않게
     }
 
@@ -1062,6 +1067,7 @@ public final class SkillListener implements Listener {
         tick++;
         hud.newTick();
         display.tick(tick);   // 3D 층 — 투사 전진 · 수축 · 회수 (중앙 티커 하나를 같이 쓴다, F-P2)
+        hitFeedback.tick(tick);   // 타격 피드백 — 숫자 소멸 · 띠 추종 (같은 티커)
 
         if (!pending.isEmpty()) {
             List<Pending> due = new ArrayList<>();
@@ -1333,6 +1339,22 @@ public final class SkillListener implements Listener {
      *   <li><b>그 밖</b> — 격 없는 타격(외공기). 그래도 호신강기·반격 오의는 반응한다</li>
      * </ul>
      */
+    /**
+     * ★ 타격 피드백 배선 — <b>실린 피해만</b> 그린다 (MONITOR = 모든 판정·경감·취소가 끝난 뒤).
+     *
+     * <p>여기가 한 경로다: 평타 즉발·선딜 재적용({@code target.damage})·무공 띠 재진입·허수아비
+     * 전부 이 문을 지난다. 판정은 한 획도 안 바꾼다 — 이미 확정된 getFinalDamage 를 보일 뿐이다.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamageFeedback(EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof LivingEntity target)) {
+            return;
+        }
+        if (event.getDamager() instanceof Player attacker) {
+            hitFeedback.onDamaged(target, attacker, event.getFinalDamage());
+        }
+    }
+
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onMelee(EntityDamageByEntityEvent event) {
         if (applying || !(event.getEntity() instanceof LivingEntity target)) {
@@ -5232,6 +5254,7 @@ public final class SkillListener implements Listener {
         npcStates.remove(event.getEntity().getUniqueId());
         clashCounts.remove(event.getEntity().getUniqueId());
         display.clear(event.getEntity().getUniqueId());   // 죽은 몸의 고리도 (심장박동이 멎기 전에)
+        hitFeedback.onKilled(event.getEntity());          // 처치 흩어짐 + 띠 거둠 (hit_feedback)
     }
 
     @EventHandler
