@@ -27,9 +27,18 @@ def fetch(url: str):
         return json.load(r)
 
 
-def pin(slug: str, version: str, folder: str) -> dict:
-    """slug 의 version_number 일치 판을 찾아 mrpack files[] 한 줄을 짓는다."""
-    versions = fetch(f"{API}/project/{slug}/version")
+def pin(slug: str, version: str, folder: str, mc: str = None) -> dict:
+    """slug 의 version_number 일치 판을 찾아 mrpack files[] 한 줄을 짓는다.
+
+    ★모드는 fabric+게임버전 필터를 건다 — 같은 version_number 가 로더별로 여러 벌이라
+    무필터 첫 일치가 NeoForge/딴 게임버전 jar 를 문 적 있다 (2026-07-23 실측).
+    """
+    query = ""
+    if folder == "mods" and mc:
+        import urllib.parse
+        query = "?" + urllib.parse.urlencode(
+            {"game_versions": f'["{mc}"]', "loaders": '["fabric"]'})
+    versions = fetch(f"{API}/project/{slug}/version{query}")
     hit = next((v for v in versions if v["version_number"] == version), None)
     if hit is None:
         near = [v["version_number"] for v in versions[:8]]
@@ -48,7 +57,7 @@ def main() -> None:
     cfg = yaml.safe_load((ROOT / "config" / "modpack.yml").read_text(encoding="utf-8"))
     files = []
     for m in cfg.get("mods", []):
-        files.append(pin(m["slug"], m["version"], "mods"))
+        files.append(pin(m["slug"], m["version"], "mods", str(cfg["minecraft"])))
         print(f"  ✔ {m['slug']} {m['version']}")
     for s in cfg.get("shaderpacks", []) or []:
         files.append(pin(s["slug"], s["version"], "shaderpacks"))

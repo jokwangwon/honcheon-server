@@ -26,11 +26,18 @@ def fetch(url: str):
         return json.load(r)
 
 
-def file_of(slug: str, version: str) -> dict:
-    versions = fetch(f"{API}/project/{slug}/version")
+def file_of(slug: str, version: str, mc: str = None, mod: bool = True) -> dict:
+    """★모드는 fabric+게임버전 필터 필수 — 같은 version_number 가 로더별로 여러 벌이라
+    무필터 첫 일치가 NeoForge/딴 게임버전 jar 를 문 적 있다 (2026-07-23 실측)."""
+    query = ""
+    if mod and mc:
+        import urllib.parse
+        query = "?" + urllib.parse.urlencode(
+            {"game_versions": f'["{mc}"]', "loaders": '["fabric"]'})
+    versions = fetch(f"{API}/project/{slug}/version{query}")
     hit = next((v for v in versions if v["version_number"] == version), None)
     if hit is None:
-        sys.exit(f"❌ {slug}: 핀 '{version}' 이 Modrinth 에 없다")
+        sys.exit(f"❌ {slug}: 핀 '{version}' 이 Modrinth 에 없다 (필터: {query or '없음'})")
     return next((x for x in hit["files"] if x.get("primary")), hit["files"][0])
 
 
@@ -50,13 +57,13 @@ def main() -> None:
     mod_names = []
     shader_names = []
     for m in cfg.get("mods", []):
-        f = file_of(m["slug"], m["version"])
+        f = file_of(m["slug"], m["version"], str(cfg["minecraft"]))
         mod_names.append(f["filename"])
         mod_lines.append(f"Get-File '{f['url']}' \"$inst\\.minecraft\\mods\\{f['filename']}\"")
         print(f"  ✔ {m['slug']}")
     shader_file = None
     for s in cfg.get("shaderpacks", []) or []:
-        f = file_of(s["slug"], s["version"])
+        f = file_of(s["slug"], s["version"], mod=False)
         shader_file = f["filename"]
         shader_names.append(f["filename"])
         mod_lines.append(

@@ -7,7 +7,7 @@
 # 갱신 절차: 값 수정 → python3 tools/build_modpack.py → 산출물 재배포.
 
 name: 혼천
-version: 0.2.0            # 모드팩 자체의 판 — 구성이 바뀌면 올린다 (0.2.0: 셰이더 동봉)
+version: 0.2.1            # 모드팩 자체의 판 — 구성이 바뀌면 올린다 (0.2.1: PAL·망토 fabric 파일 교정)
 minecraft: 1.21.11
 fabric_loader: 0.19.3
 
