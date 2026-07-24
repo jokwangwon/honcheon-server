@@ -148,6 +148,26 @@ public final class Antechamber implements Listener {
     private final int barrierHeight;
     private final boolean barrierCap;
     private final Lighting light;
+    // ★명계 개정 (2026-07-24 사용자 확정) — 저승 구간(부두 관문 서쪽)의 넋등 리듬
+    private final int soulEvery;
+    private final String soulUntilStation;
+    // ★삼도천 화폭 (사용자 확정 2026-07-24 — tutorial_rooting.md §7 · config canvas)
+    private final int lilyHash;
+    private final long fixedTime;
+    private final int groveZFrom;
+    private final int groveSpacing;
+    private final double groveThreshold;
+    private final int[] groveShift;
+    private final int[] groveHeight;
+    private final double[] mudBand;
+    private final int relicZ;
+    private final int[] relicX;
+    private final int relicPostHash;
+    private final List<Integer> relicLanterns = new ArrayList<>();
+    private final int lycorisHash;
+    private final int[] ridgeX;
+    private final int[] ridgeZ;
+    private final int[] horizonLight;
     private final Hut hut;
     // 사공의 몸 (3차 개정 추기) — pos 길이 0 = 몸 없음 (등록부가 스위치)
     private final int[] ferrymanPos;
@@ -337,6 +357,34 @@ public final class Antechamber implements Listener {
         int[] mz = pair(ma.get("z"), -22, 22);
         this.marsh = new Marsh(mx[0], mx[1], mz[0], mz[1],
                 Math.max(1, num(ma.get("depth"), 1)), Math.max(2, num(ma.get("reed_hash"), 11)));
+        this.lilyHash = Math.max(2, num(ma.get("lily_hash"), 21));
+
+        // ── ★삼도천 화폭 (canvas) — 명계의 근경·중경·원경. 수치는 등록부가 정한다
+        Map<String, Object> cv = RulesConfig.section(a, "canvas");
+        this.fixedTime = num(cv.get("fixed_time"), 22900);
+        Map<String, Object> pg = RulesConfig.section(cv, "pale_grove");
+        this.groveZFrom = num(pg.get("z_from"), 6);
+        this.groveSpacing = Math.max(2, num(pg.get("spacing"), 4));
+        this.groveThreshold = dbl(pg.get("threshold"), 0.55);
+        this.groveShift = pair(pg.get("grain_shift"), 120, 120);
+        this.groveHeight = pair(pg.get("height"), 3, 6);
+        this.mudBand = dpair(cv.get("mud_band"), 0.475, 0.525);
+        Map<String, Object> rl = RulesConfig.section(cv, "relics");
+        this.relicZ = num(rl.get("z"), -9);
+        this.relicX = pair(rl.get("x"), -4, 18);
+        this.relicPostHash = Math.max(2, num(rl.get("post_hash"), 3));
+        if (rl.get("stone_lanterns") instanceof List<?> sll) {
+            for (Object o : sll) {
+                if (o instanceof Number n) {
+                    relicLanterns.add(n.intValue());
+                }
+            }
+        }
+        this.lycorisHash = Math.max(2, num(cv.get("lycoris_hash"), 17));
+        Map<String, Object> hor = RulesConfig.section(cv, "horizon");
+        this.ridgeX = pair(hor.get("ridge_x"), 56, 68);
+        this.ridgeZ = pair(hor.get("ridge_z"), -36, 36);
+        this.horizonLight = pair(hor.get("light"), 58, 0);
 
         Map<String, Object> li = RulesConfig.section(a, "lighting");
         this.light = new Lighting(
@@ -348,6 +396,10 @@ public final class Antechamber implements Listener {
                 dbl(li.get("dark_min_pct"), 12), dbl(li.get("dark_max_pct"), 40),
                 dbl(li.get("main_dark_max_pct"), 15), dbl(li.get("lamp_density_max_pct"), 6),
                 num(li.get("main_light_span_min"), 3));
+        // ★명계 개정 — 저승 구간(넋등)의 리듬. 경계 관문은 stations 등록부에 실존해야 한다 (감사가 잡는다)
+        Map<String, Object> so = RulesConfig.section(li, "soul");
+        this.soulUntilStation = str(so.get("until_station"), "");
+        this.soulEvery = Math.max(2, num(so.get("post_every"), 5));
 
         Map<String, Object> h = RulesConfig.section(a, "hut");
         int[] hx = pair(h.get("x"), 19, 24);
@@ -571,7 +623,10 @@ public final class Antechamber implements Listener {
                     + " (평화는 허수아비를 지운다)");
             w.setDifficulty(difficulty);
         }
-        w.setTime(15000);   // ★ 초저녁 — 등롱이 길을 그린다. 대낮이면 빛이 아무것도 안 가리킨다
+        // ★삼도천 — 새벽녘 고정 (사용자 확정 · canvas.fixed_time). 동쪽 하늘만 주홍으로 물들어
+        //   「서=저승 청백 → 동=이승 주홍」의 축과 하늘이 같은 말을 한다 (황혼은 서쪽이 주홍 — 반대말).
+        //   대낮이면 빛이 아무것도 안 가리킨다 — 어스름이어야 등롱이 길을 그린다.
+        w.setTime(fixedTime);
         w.setStorm(false);
         return w;
     }
@@ -933,21 +988,43 @@ public final class Antechamber implements Listener {
     }
 
     /**
+     * ★명계 개정 — 저승 구간의 동쪽 끝. <b>지어내지 않는다</b>: 등록부(soul.until_station)가
+     * 가리키는 관문의 서쪽 끝이다. 등록부가 모르는 이름이면 저승 구간이 없다 — 감사가 잡는다.
+     */
+    private int soulBoundary() {
+        for (Station s : stations) {
+            if (s.id().equals(soulUntilStation)) {
+                return s.x() - s.half();
+            }
+        }
+        return road.from();
+    }
+
+    /** 사공의 집과 그 처마 곁 — 고사목이 여기 서면 집을 찌른다 (한 칸 여유까지 비켜 선다) */
+    private boolean nearHut(int x, int z) {
+        return x >= hut.x1() - hut.eave() - 1 && x <= hut.x2() + hut.eave() + 1
+                && z >= hut.z1() - hut.eave() - 1 && z <= hut.z2() + hut.eave() + 1;
+    }
+
+    /**
      * 이 x 에 등롱이 서는가, 선다면 어느 쪽인가 — <b>격자가 아니라 리듬</b>.
      * 좌·우로 번갈아 세운다 (한 줄로 세우면 그것도 격자다). 난수 없음 — 좌표 산술이다.
+     *
+     * <p>★명계 개정 — 리듬이 구간마다 다르다: 저승(서·넋등)은 촘촘, 이승(부두·등롱)은 성글다.
      */
     private Integer lampSide(int x) {
         if (x < road.from() || x > road.to()) {
             return null;
         }
         int n = x - road.from();
-        if (Math.floorMod(n, light.postEvery()) != 0) {
+        int every = x < soulBoundary() ? soulEvery : light.postEvery();
+        if (Math.floorMod(n, every) != 0) {
             return null;
         }
         if (!light.postAlternate()) {
             return light.postZ();
         }
-        return Math.floorMod(n / light.postEvery(), 2) == 0 ? light.postZ() : -light.postZ();
+        return Math.floorMod(n / every, 2) == 0 ? light.postZ() : -light.postZ();
     }
 
     /** 화톳불 자리 — 관문 마당의 한 귀퉁이. <b>길 위가 아니다</b> (불이 길을 막으면 안 된다) */
@@ -986,7 +1063,18 @@ public final class Antechamber implements Listener {
                     if (n > 0.80) {
                         out.add(new Place(cx + x, gy + 2, cz + z, Material.SUGAR_CANE, null));
                     }
-                } else if (n < 0.30 && Math.floorMod(x * 7 + z * 13, 9) == 0) {
+                } else if (n >= mudBand[0] && n <= mudBand[1]) {
+                    // ★삼도천 중경 ② — 잿빛 진흙 둔덕: grain 중간 띠가 수면 위로 반 뼘 솟는다
+                    //   (띠라서 굽이치는 뻘둑이 된다 — 점묘가 아니다). 갈대 띠(>0.66)와 불가침.
+                    out.add(new Place(cx + x, gy, cz + z, Material.MUD, null));
+                    out.add(new Place(cx + x, gy + 1, cz + z, Material.MUD, null));
+                    if (Math.floorMod(x * 3 + z * 29, lycorisHash) == 0) {
+                        // ★삼도천 중경 ④ — 피안화 점정: 붉은 꽃 몇 송이, 둔덕 위에만
+                        //   (팩 석산화 텍스처는 후속 — 지금은 바닐라 양귀비)
+                        out.add(new Place(cx + x, gy + 2, cz + z, Material.POPPY, null));
+                    }
+                } else if (n < 0.30 && Math.floorMod(x * 7 + z * 13, lilyHash) == 0) {
+                    // ★삼도천 — 먹빛 강에 수련잎은 최소다 (lily_hash 가 성김을 정한다)
                     out.add(new Place(cx + x, gy + 1, cz + z, Material.LILY_PAD, null));
                 }
             }
@@ -1036,7 +1124,9 @@ public final class Antechamber implements Listener {
             }
             int z = road.z() + side;
             out.add(new Place(cx + x, deck + 1, cz + z, Material.DARK_OAK_FENCE, null));
-            out.add(new Place(cx + x, deck + 2, cz + z, Material.LANTERN, null));
+            // ★명계 개정 — 서쪽(저승)은 넋등, 부두(이승)만 따뜻한 등롱. 의미의 축이 빛의 색으로 선다
+            out.add(new Place(cx + x, deck + 2, cz + z,
+                    x < soulBoundary() ? Material.SOUL_LANTERN : Material.LANTERN, null));
         }
 
         // ⑤ 화톳불 — 관문 마당에만. **관문이 곧 불빛이다** (멀리서 다음 관문이 보인다)
@@ -1047,6 +1137,76 @@ public final class Antechamber implements Listener {
             int[] at = brazierAt(s);
             out.add(new Place(cx + at[0], deck + 1, cz + at[1], Material.CAMPFIRE, null));
         }
+
+        // ⑤-2 ★삼도천 중경 ① — 창백한 고사목 군락 (남쪽 물가에만 · 비대칭 — 북쪽은 옛 잔교의 자리).
+        //   후보는 spacing 격자, 군락은 grain 이 가른다 (§2.5 — 점묘 금지), 자리는 좌표 해시가
+        //   한 칸 흔든다 (격자로 안 보이게). 잔교·사공의 집 곁은 비켜 선다. 난수 0.
+        for (int x = marsh.x1(); x <= marsh.x2(); x++) {
+            for (int z = groveZFrom; z <= marsh.z2(); z++) {
+                if (Math.floorMod(x, groveSpacing) != 0 || Math.floorMod(z, groveSpacing) != 0) {
+                    continue;
+                }
+                // 고사목 전용 grain 위상 — 갈대 장 그대로면 군락이 동남(이승 곁)에 몰린다.
+                // 이 위상이 군락을 서남(저승 쪽)에 앉힌다 (등록부 grain_shift · 결정론)
+                if (grain(x + groveShift[0], z + groveShift[1]) < groveThreshold) {
+                    continue;
+                }
+                int tx = x + Math.floorMod(x * 31 + z * 17, 3) - 1;
+                int tz = z + Math.floorMod(x * 13 + z * 41, 3) - 1;
+                if (tz < groveZFrom || tz > marsh.z2() || tx < marsh.x1() || tx > marsh.x2()
+                        || isDeck(tx, tz) || nearHut(tx, tz)) {
+                    continue;
+                }
+                int h = groveHeight[0]
+                        + Math.floorMod(tx * 7 + tz * 19, groveHeight[1] - groveHeight[0] + 1);
+                out.add(new Place(cx + tx, gy, cz + tz, Material.MUD, null));   // 뿌리 발치
+                for (int y = 1; y <= h; y++) {
+                    out.add(new Place(cx + tx, gy + y, cz + tz, Material.PALE_OAK_LOG, null));
+                }
+                if (h >= groveHeight[0] + 2) {
+                    // 죽은 가지 하나 — 키 큰 몸만, 방향은 좌표 해시
+                    int dir = Math.floorMod(tx + tz, 4);
+                    int ax = dir == 0 ? 1 : dir == 1 ? -1 : 0;
+                    int az = dir == 2 ? 1 : dir == 3 ? -1 : 0;
+                    out.add(new Place(cx + tx + ax, gy + h - 1, cz + tz + az,
+                            Material.PALE_OAK_WOOD, null));
+                }
+            }
+        }
+
+        // ⑤-3 ★삼도천 중경 ③ — 반쯤 잠긴 옛 잔교 (북쪽 · 건너간 혼들의 흔적).
+        //   말뚝은 post_hash 자리만 살아남았고, 절반은 수면과 같은 키다 (반쯤 잠겼다).
+        for (int x = relicX[0]; x <= relicX[1]; x++) {
+            if (Math.floorMod(x, relicPostHash) != 0) {
+                continue;
+            }
+            out.add(new Place(cx + x, gy, cz + relicZ, Material.DARK_OAK_FENCE, null));
+            if (Math.floorMod(x * 11, 2) == 0) {
+                out.add(new Place(cx + x, gy + 1, cz + relicZ, Material.DARK_OAK_FENCE, null));
+            }
+        }
+        for (int lx : relicLanterns) {
+            // 석등 — 아직 불이 꺼지지 않은 넋등이 얹혀 있다 (기단은 반쯤 잠겼다)
+            out.add(new Place(cx + lx, gy, cz + relicZ, Material.COBBLED_DEEPSLATE_WALL, null));
+            out.add(new Place(cx + lx, gy + 1, cz + relicZ, Material.COBBLED_DEEPSLATE_WALL, null));
+            out.add(new Place(cx + lx, gy + 2, cz + relicZ, Material.SOUL_LANTERN, null));
+        }
+
+        // ⑤-4 ★삼도천 원경 — **동쪽에만**: 이승의 실루엣 둔덕과 따뜻한 불빛 한 점.
+        //   장벽 밖 — 눈으로만 가는 땅이다 (안개 실루엣 미결의 흡수). grain 이 높낮이를 가른다.
+        for (int x = ridgeX[0]; x <= ridgeX[1]; x++) {
+            for (int z = ridgeZ[0]; z <= ridgeZ[1]; z++) {
+                int rh = (int) Math.round(grain(x, z) * 4) - 1;   // −1..3 — 성긴 둔덕만 물 위로 솟는다
+                for (int y = 0; y <= rh; y++) {
+                    out.add(new Place(cx + x, gy + y, cz + z, Material.BLACKSTONE, null));
+                }
+            }
+        }
+        int lh = Math.max(0, (int) Math.round(grain(horizonLight[0], horizonLight[1]) * 4) - 1);
+        out.add(new Place(cx + horizonLight[0], gy + lh + 1, cz + horizonLight[1],
+                Material.DARK_OAK_FENCE, null));
+        out.add(new Place(cx + horizonLight[0], gy + lh + 2, cz + horizonLight[1],
+                Material.LANTERN, null));
 
         planHut(out, deck);
 
@@ -2534,6 +2694,15 @@ public final class Antechamber implements Listener {
                     list.get(1) instanceof Number n2 ? n2.intValue() : b};
         }
         return new int[]{a, b};
+    }
+
+    private static double[] dpair(Object raw, double a, double b) {
+        if (raw instanceof List<?> list && list.size() >= 2) {
+            return new double[]{
+                    list.get(0) instanceof Number n1 ? n1.doubleValue() : a,
+                    list.get(1) instanceof Number n2 ? n2.doubleValue() : b};
+        }
+        return new double[]{a, b};
     }
 
     /**

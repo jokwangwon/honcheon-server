@@ -1032,6 +1032,17 @@ class Geo:
         self.post_z = li.get("post_z", 2)
         self.brazier_st = set(li.get("brazier_stations") or [])
         self.hut_lantern = li.get("hut_lantern", True)
+        self.eave = h.get("eave", 2)
+        # ★명계 개정 — 저승 구간(넋등)의 리듬 (경계는 stations 등록부에서 유도)
+        so = li.get("soul") or {}
+        self.soul_until = so.get("until_station", "")
+        self.soul_every = so.get("post_every", 5)
+        self.soul_dark = so.get("dark_pct") or [40, 92]
+        # ★삼도천 화폭 — 옛 잔교의 석등 (습지 어둠 계산에 실린다)
+        cv = ante.get("canvas") or {}
+        rl = cv.get("relics") or {}
+        self.relic_z = rl.get("z", -9)
+        self.relic_lanterns = rl.get("stone_lanterns") or []
         d = ante.get("dock") or {}
         self.bell = tuple(d.get("bell") or [26, 0])
         self.plates = ((ante.get("plates") or {}).get("list")) or []
@@ -1065,15 +1076,25 @@ class Geo:
     def abuts_hut(self, x, z):
         return self.on_hut(x, z + 1) or self.on_hut(x, z - 1)
 
+    def soul_boundary(self):
+        # 저승 구간의 동쪽 끝 — soul.until_station 관문의 서쪽 끝 (Java soulBoundary 와 같은 규칙).
+        # 등록부가 모르는 이름이면 저승 구간이 없다 (전부 이승) — audit_canvas 가 그 오배선을 잡는다.
+        for s in self.stations:
+            if s["id"] == self.soul_until:
+                return s["x"] - s["half"]
+        return self.x0
+
     def lamp_side(self, x):
         if not (self.x0 <= x <= self.x1):
             return None
         n = x - self.x0
-        if n % self.post_every != 0:
+        # ★명계 개정 — 두 리듬: 저승(넋등)은 촘촘, 이승(등롱)은 성글다 (Java lampSide 와 같은 규칙)
+        every = self.soul_every if x < self.soul_boundary() else self.post_every
+        if n % every != 0:
             return None
         if not self.post_alt:
             return self.post_z
-        return self.post_z if (n // self.post_every) % 2 == 0 else -self.post_z
+        return self.post_z if (n // every) % 2 == 0 else -self.post_z
 
     def on_lamp_bracket(self, x, z):
         side = self.lamp_side(x)
@@ -1125,27 +1146,35 @@ class Geo:
     def walkable(self):
         return self.deck_cells() - self.blocked()
 
-    # ── 빛 (해석 모형: 밝기 = 15 − 맨해튼거리, 7 미만이면 암흑) ──
+    # ── 빛 (해석 모형: 밝기 = 광원세기 − 맨해튼거리, 7 미만이면 암흑) ──
+    #    ★명계 개정 — 광원마다 세기가 다르다: 넋등(SOUL_LANTERN) 10 · 등롱/화톳불 15.
+    #    세기를 뭉뚱그리면 눈이 저승을 이승만큼 밝다고 잰다 (그 거짓말을 막으려 개정했다)
     def sources(self):
         out = []
+        b = self.soul_boundary()
         for x in range(self.x0, self.x1 + 1):
             side = self.lamp_side(x)
             if side is not None:
-                out.append((x, self.deck + 2, self.rz + side))
+                out.append((x, self.deck + 2, self.rz + side, 10 if x < b else 15))
         for s in self.stations:
             if s["id"] in self.brazier_st:
                 bx, bz = self.brazier_at(s)
-                out.append((bx, self.deck + 1, bz))
+                out.append((bx, self.deck + 1, bz, 15))
         if self.hut_lantern:
             out.append(((self.hx[0] + self.hx[1]) // 2, self.deck + self.wall_h,
-                        (self.hz[0] + self.hz[1]) // 2))
+                        (self.hz[0] + self.hz[1]) // 2, 15))
         return out
+
+    def relic_sources(self):
+        # 옛 잔교의 석등 (넋등 10) — 잔교의 등불이 아니라 습지의 화폭이다:
+        # 습지 어둠(②)에는 실리고, 광원 밀도(③ — 등롱 도배의 눈)에는 안 실린다
+        return [(lx, self.deck + 1, self.relic_z, 10) for lx in self.relic_lanterns]
 
     def light_at(self, x, z, srcs):
         foot = self.deck + 1
         best = 0
-        for sx, sy, sz in srcs:
-            lvl = 15 - (abs(sx - x) + abs(sy - foot) + abs(sz - z))
+        for sx, sy, sz, power in srcs:
+            lvl = power - (abs(sx - x) + abs(sy - foot) + abs(sz - z))
             if lvl > best:
                 best = lvl
         return best
@@ -1378,19 +1407,41 @@ def audit_light(rep: Report, ante: dict, code: str) -> None:
         rep.bad("빛을 잴 표본이 없다")
         return
 
-    # ① 주 동선(잔교·마당) — 밝아야 한다
-    main_lv = [g.light_at(x, z, srcs) for (x, z) in walk]
-    main_dark = 100.0 * sum(1 for v in main_lv if v < 7) / len(main_lv)
+    # ① 주 동선(잔교·마당) — ★명계 개정 (2026-07-24 사용자 확정): **구간을 갈랐다.**
+    #   이승(부두 관문부터 동쪽)은 TownAudit 눈금 그대로 밝아야 하고,
+    #   저승(그 서쪽·넋등)은 **어둑함이 정본**이다 — 창(soul.dark_pct) 밖이면 위반.
+    b = g.soul_boundary()
+    east = [(x, z) for (x, z) in walk if x >= b]
+    west = [(x, z) for (x, z) in walk if x < b]
+    if not east or not west:
+        rep.bad("저승/이승 구간이 비었다 — soul.until_station 이 등록부의 관문을 가리키는가")
+        return
+    east_lv = [g.light_at(x, z, srcs) for (x, z) in east]
+    main_dark = 100.0 * sum(1 for v in east_lv if v < 7) / len(east_lv)
     lim = float(li.get("main_dark_max_pct", 15))
     if main_dark > lim:
-        rep.bad(f"주 동선 암흑 {main_dark:.1f}% > {lim:.0f}% — 걸어야 할 길이 어둡다 "
+        rep.bad(f"주 동선 암흑(이승 구간) {main_dark:.1f}% > {lim:.0f}% — 걸어야 할 길이 어둡다 "
                 "(빛이 길을 안 가리킨다)")
     else:
-        rep.good(f"주 동선 암흑 {main_dark:.1f}% ≤ {lim:.0f}% — 길은 밝다")
+        rep.good(f"주 동선 암흑(이승 구간) {main_dark:.1f}% ≤ {lim:.0f}% — 부두는 밝다")
 
-    # ② 어둠의 하한 — ★ 어두운 곳이 **없으면 그것도 실패다** (등롱 도배)
+    # ①-b 저승 구간 — 이승처럼 밝아도, 넋등 없이 전맹이어도 위반이다
+    west_lv = [g.light_at(x, z, srcs) for (x, z) in west]
+    west_dark = 100.0 * sum(1 for v in west_lv if v < 7) / len(west_lv)
+    lo_s, hi_s = float(g.soul_dark[0]), float(g.soul_dark[1])
+    if west_dark < lo_s:
+        rep.bad(f"저승 구간이 이승처럼 밝다 — 암흑 {west_dark:.1f}% < {lo_s:.0f}% "
+                "(넋등의 어둑함이 정본이다 · 명계 개정)")
+    elif west_dark > hi_s:
+        rep.bad(f"저승 구간이 전맹이다 — 암흑 {west_dark:.1f}% > {hi_s:.0f}% "
+                "(넋등의 리듬마저 없다 — 어둑함과 캄캄함은 다르다)")
+    else:
+        rep.good(f"저승 구간 암흑 {west_dark:.1f}% ∈ [{lo_s:.0f}, {hi_s:.0f}] — 넋등이 어스름을 지킨다")
+
+    # ② 어둠의 하한 — ★ 어두운 곳이 **없으면 그것도 실패다** (등롱 도배) · 석등도 합산한다
     allc = [(x, z) for x in range(g.mx[0], g.mx[1] + 1) for z in range(g.mz[0], g.mz[1] + 1)]
-    all_lv = [g.light_at(x, z, srcs) for (x, z) in allc]
+    all_srcs = srcs + g.relic_sources()
+    all_lv = [g.light_at(x, z, all_srcs) for (x, z) in allc]
     all_dark = 100.0 * sum(1 for v in all_lv if v < 7) / len(all_lv)
     lo = float(li.get("dark_min_pct", 12))
     if all_dark < lo:
@@ -1429,6 +1480,155 @@ def audit_light(rep: Report, ante: dict, code: str) -> None:
         rep.good("등롱 간격은 config(post_every) 가 정한다 (코드가 안 지어낸다)")
     if re.search(r"lantern_every|floorMod\(z - yardZ", code):
         rep.bad("아직 격자 등롱(lantern_every)을 깐다 — 격자는 아무것도 안 가리킨다")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑧-2 ★삼도천 화폭 — 명계의 근경·중경·원경 (2026-07-24 사용자 확정 · tutorial_rooting.md §7)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _knot(gx: int, gz: int) -> float:
+    return ((gx * 73856093 + gz * 19349663) % 1024) / 1024.0
+
+
+def _grain(x: int, z: int) -> float:
+    """Antechamber.grain 의 거울 — 8칸 격자점 해시의 쌍선형 보간 (결정론)"""
+    g = 8
+    gx, gz = x // g, z // g
+    fx, fz = (x - gx * g) / g, (z - gz * g) / g
+    a = _knot(gx, gz) + (_knot(gx + 1, gz) - _knot(gx, gz)) * fx
+    b = _knot(gx, gz + 1) + (_knot(gx + 1, gz + 1) - _knot(gx, gz + 1)) * fx
+    return a + (b - a) * fz
+
+
+REED_THRESHOLD = 0.66   # 갈대 띠의 문턱 (Antechamber plan ① — n > 0.66 이 갈대다)
+DAWN_WINDOW = (22331, 23800)   # 새벽 창 — 하늘이 밝기 시작해 동트기 직전까지 (마크 시각)
+
+
+def audit_canvas(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑧-2 삼도천 화폭 — 서=저승 청백 · 동=이승 주홍 (의미의 축이 서 있는가)")
+    cv = ante.get("canvas") or {}
+    if not cv:
+        rep.bad("canvas 절이 없다 — 화폭이 등록부에 없다 (tutorial_rooting.md §7 이 정본이다)")
+        return
+    g = Geo(ante)
+
+    # ── 넋등 — 저승 구간의 등롱은 넋등이어야 한다 (경계는 등록부의 관문)
+    ids = {s["id"] for s in (ante.get("stations") or [])}
+    if g.soul_until not in ids:
+        rep.bad(f"soul.until_station = {g.soul_until!r} — 등록부가 모르는 관문이다 "
+                "(경계를 지어내면 저승 구간이 통째로 사라진다)")
+    else:
+        rep.good(f"저승 구간 경계 = 관문 「{g.soul_until}」 서쪽 끝 x{g.soul_boundary()} (등록부 유도)")
+    if re.search(r"x\s*<\s*soulBoundary\(\)\s*\?\s*Material\.SOUL_LANTERN\s*:\s*Material\.LANTERN",
+                 code):
+        rep.good("등롱 재질이 구간을 따른다 — 서쪽 넋등 · 부두 등롱 (의미의 축)")
+    else:
+        rep.bad("넋등이 없다 — 저승 구간 등롱이 전부 따뜻하다 (의미의 축이 죽었다)")
+    # 넋등의 리듬 — 어둑함(dark_pct 창)만으로는 못 잡는다: 동쪽 불빛이 서쪽으로 번져
+    # 넋등이 사라져도 창 안에 남을 수 있다. 리듬은 등록부에서 직접 잰다.
+    if g.soul_every > g.post_every:
+        rep.bad(f"넋등 간격 {g.soul_every} > 등롱 간격 {g.post_every} — 저승의 넋등은 이승의 "
+                "등롱보다 촘촘해야 한다 (리듬이 풀리면 어둑함이 전맹이 된다)")
+    else:
+        rep.good(f"넋등 간격 {g.soul_every} ≤ 등롱 간격 {g.post_every} — 강가에 늘어선 넋등의 리듬")
+
+    # ── 시각 — 새벽녘 고정 (동쪽 하늘만 주홍 — 축과 하늘이 같은 말을 해야 한다)
+    t = int(cv.get("fixed_time", -1))
+    if DAWN_WINDOW[0] <= t <= DAWN_WINDOW[1]:
+        rep.good(f"fixed_time {t} — 새벽 창 {DAWN_WINDOW} 안 (동쪽만 주홍으로 물든다)")
+    else:
+        rep.bad(f"fixed_time {t} — 새벽 창 {DAWN_WINDOW} 밖이다 (하늘이 축과 딴말을 한다: "
+                "황혼은 서쪽이 주홍이다)")
+    if "setTime(fixedTime)" not in code or re.search(r"setTime\(\s*\d", code):
+        rep.bad("시각을 코드가 지어낸다 — configure() 는 canvas.fixed_time 을 읽어야 한다")
+    else:
+        rep.good("시각은 등록부(canvas.fixed_time)가 정한다")
+
+    # ── 고사목 군락 — 남쪽에만 (비대칭) · 잔교/집을 안 찌른다 · 비어 있지 않다
+    pg = cv.get("pale_grove") or {}
+    z_from = pg.get("z_from", 6)
+    spacing = max(2, pg.get("spacing", 4))
+    threshold = pg.get("threshold", 0.55)
+    shift = (pg.get("grain_shift") or [120, 120])[:2]
+    hmin, hmax = (pg.get("height") or [3, 6])[:2]
+    if z_from <= g.post_z:
+        rep.bad(f"pale_grove.z_from = {z_from} — 잔교 곁(±{g.post_z})·북쪽을 침범한다 "
+                "(고사목은 남쪽 물가에만 — 비대칭이 화폭의 계약이다)")
+    trees = []
+    for x in range(g.mx[0], g.mx[1] + 1):
+        for z in range(max(z_from, g.mz[0]), g.mz[1] + 1):
+            if (x % spacing != 0 or z % spacing != 0
+                    or _grain(x + shift[0], z + shift[1]) < threshold):
+                continue
+            tx = x + (x * 31 + z * 17) % 3 - 1
+            tz = z + (x * 13 + z * 41) % 3 - 1
+            if (tz < z_from or tz > g.mz[1] or tx < g.mx[0] or tx > g.mx[1]
+                    or g.is_deck(tx, tz)
+                    or (g.hx[0] - g.eave - 1 <= tx <= g.hx[1] + g.eave + 1
+                        and g.hz[0] - g.eave - 1 <= tz <= g.hz[1] + g.eave + 1)):
+                continue
+            trees.append((tx, tz))
+    if not trees:
+        rep.bad("고사목 군락이 비었다 — 화폭에 중경이 없다 (threshold 가 너무 높은가)")
+    elif any(tz <= 0 for _, tz in trees):
+        rep.bad("고사목이 북쪽(z ≤ 0)에 선다 — 비대칭(남쪽만)이 깨졌다")
+    else:
+        west = sum(1 for tx, _ in trees if tx < g.soul_boundary())
+        rep.good(f"고사목 {len(trees)}그루 — 전부 남쪽 물가 · 저승 구간(서) {west}그루 "
+                 f"(키 {hmin}~{hmax} · 군락은 grain_shift 위상이 가른다)")
+    if "PALE_OAK_LOG" not in code:
+        rep.bad("고사목이 말뿐이다 — 코드에 PALE_OAK_LOG 조성이 없다")
+
+    # ── 진흙 둔덕 — 갈대 띠(> 0.66)와 불가침 · 수련잎 띠(< 0.30)와도 안 겹친다
+    band = (cv.get("mud_band") or [0.475, 0.525])[:2]
+    if band[1] >= REED_THRESHOLD:
+        rep.bad(f"진흙 둔덕 띠 {band} 가 갈대 띠(> {REED_THRESHOLD})를 침범한다 — "
+                "두 띠가 같은 칸을 두고 다툰다")
+    elif band[0] < 0.30:
+        rep.warn(f"진흙 둔덕 띠 {band} 가 수련잎 띠(< 0.30)와 겹친다 — 둔덕 위 수련잎은 어색하다")
+    else:
+        rep.good(f"진흙 둔덕 띠 {band} — 갈대·수련잎 띠와 불가침")
+    if "Material.MUD" not in code:
+        rep.bad("진흙 둔덕이 말뿐이다 — 코드에 MUD 조성이 없다")
+
+    # ── 옛 잔교 — 북쪽 물가 · 습지 안 · 석등은 그 선 위에만
+    rl = cv.get("relics") or {}
+    rx = (rl.get("x") or [-4, 18])[:2]
+    rz = rl.get("z", -9)
+    if rz >= -(g.post_z + 1):
+        rep.bad(f"relics.z = {rz} — 옛 잔교가 잔교 곁까지 올라왔다 (북쪽 물가여야 한다)")
+    elif not (g.mz[0] <= rz and g.mx[0] <= rx[0] <= rx[1] <= g.mx[1]):
+        rep.bad(f"옛 잔교(x {rx} · z {rz})가 습지 밖이다 — 장벽 너머 잔해는 아무도 못 본다")
+    else:
+        rep.good(f"옛 잔교 — 북쪽 물가 z{rz} · x {rx[0]}~{rx[1]} (끊긴 말뚝 · 건너간 혼들의 흔적)")
+    for lx in (rl.get("stone_lanterns") or []):
+        if not (rx[0] <= lx <= rx[1]):
+            rep.bad(f"석등 x{lx} 가 옛 잔교 선(x {rx[0]}~{rx[1]})을 벗어났다 — "
+                    "석등은 그 잔교의 유물이다")
+    if "COBBLED_DEEPSLATE_WALL" not in code:
+        rep.bad("석등이 말뿐이다 — 코드에 석등 조성이 없다")
+
+    # ── 원경 — **동쪽에만** (이승의 불빛 한 점 + 실루엣). 서쪽 저승엔 아무것도 없다
+    hor = cv.get("horizon") or {}
+    hl = (hor.get("light") or [58, 0])[:2]
+    hrx = (hor.get("ridge_x") or [56, 68])[:2]
+    if hl[0] <= g.mx[1]:
+        rep.bad(f"이승의 불빛 x{hl[0]} — 동쪽 원경(습지 동쪽 끝 {g.mx[1]} 너머)이 아니다. "
+                "원경은 동쪽에만 — 서쪽은 세계의 없음이다")
+    elif hrx[0] <= g.mx[1]:
+        rep.bad(f"실루엣 둔덕 x{hrx} — 습지를 침범한다 (원경은 장벽 밖, 눈으로만 가는 땅)")
+    else:
+        rep.good(f"원경 — 동쪽 x{hrx[0]}~{hrx[1]} 실루엣 + 불빛 한 점 x{hl[0]} (삿대가 향하는 곳)")
+    if "BLACKSTONE" not in code:
+        rep.bad("실루엣이 말뿐이다 — 코드에 원경 둔덕 조성이 없다")
+
+    # ── 수련잎 최소 — 성김은 등록부(lily_hash)가 정한다
+    if "lilyHash" not in code:
+        rep.bad("수련잎 성김을 코드가 지어낸다 — marsh.lily_hash 를 읽어야 한다")
+    else:
+        rep.good(f"수련잎 성김 = marsh.lily_hash {(ante.get('marsh') or {}).get('lily_hash')} "
+                 "(먹빛 강에 수련잎은 최소다)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1878,6 +2078,7 @@ def main() -> int:
     audit_road(rep, ante, code)
     audit_flow(rep, ante, code)
     audit_light(rep, ante, code)
+    audit_canvas(rep, ante, code)
     audit_plates(rep, ante, code)
     audit_dummies(rep, ante, code)
     audit_conventions(rep, code, raw_cfg)
