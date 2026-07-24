@@ -23,6 +23,8 @@ CFG = f"{ROOT}/config/antechamber.yml"
 SRC = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/Antechamber.java"
 SBK = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SeojangBook.java"
 VOY = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/Voyage.java"
+SJS = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SeojangStage.java"
+STG = f"{ROOT}/config/seojang_stage.yml"
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -312,6 +314,21 @@ MUTATIONS = [
     ("(92) 승선 전의 책을 안 붙든다 (책이 부두에서 열린다)", VOY,
      "            return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();",
      "            return false;", "부두에서"),
+
+    # ─── ★★기억의 무대 (B-179 2차 · "글이 아닌 몸으로 역사를 느끼는 형태") ───
+    ("(93) 무대 제목이 장면과 어긋난다 (계열 판별이 죽는다)", STG,
+     '      - title: "그날 밤"', '      - title: "그날_밤"', "못 알아본다"),
+    ("(94) 강등 문을 뜯는다 (무대가 꺼진 날 책도 안 온다 — 침묵)", VOY,
+     "                SeojangBook.get().deliver(player, r.latest);", "", "강등 문이 없다"),
+    ("(95) 재배달 억제를 뜯는다 (무대 그릇인데 책이 몰래 온다)", VOY,
+     "            return ante.stage().enabled();", "            return false;",
+     "몰래 쥐여 줄 수 있다"),
+    ("(96) 무대의 숨을 뺏는다 (조형만 있는 침묵)", STG,
+     '        pulse:\n          - "§c불길이 담을 넘었다 §7— 매캐한 연기가 코끝을 찔렀다"\n          - "§7식구들의 그림자가 뿔뿔이 흩어졌다"',
+     "        pulse: []", "조형만 있는 침묵"),
+    ("(97) 등불이 다리에 안 얹는다 (골라도 아무 일도 없다)", SJS,
+     "        WorldBridge.seojangChoice(player.getUniqueId(), player.getName(), token, choice);",
+     "", "다리에 안 얹는다"),
 ]
 
 

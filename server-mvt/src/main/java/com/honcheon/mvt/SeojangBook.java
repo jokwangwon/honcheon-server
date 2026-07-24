@@ -241,8 +241,9 @@ public final class SeojangBook {
         }, openDelay);
     }
 
-    /** 타이틀의 큰 줄에 쓰는 머리말 — 책의 첫 쪽과 같은 등록부(book.header)에서 온다 (정본은 하나) */
-    private String headText(WorldBridge.SeojangScene scene) {
+    /** 타이틀의 큰 줄에 쓰는 머리말 — 책의 첫 쪽과 같은 등록부(book.header)에서 온다 (정본은 하나).
+     *  ★B-179 2차 — 무대(SeojangStage)·필사본(Voyage)도 같은 문장을 쓴다 (그래서 문이 열렸다) */
+    String headText(WorldBridge.SeojangScene scene) {
         return scene.last()
                 ? say("epilogue_header", "서장의 끝")
                 : say("header", "제 {scene} 장")
@@ -302,6 +303,46 @@ public final class SeojangBook {
         given.remove(body);
         told.remove(body);
         writingNow.remove(body);
+    }
+
+    /** ★B-179 2차 — 필사본 표식: 진행용 서책(TAG)과 다르다 — close() 가 거두지 않고, 클릭도 없다 */
+    static final String MEMOIR_TAG = "서장_필사본";
+
+    /**
+     * <b>서장 필사본</b> — 강을 건너며 겪은 기억의 <b>전문</b>이 품에 남는다 (읽기 전용 · 선택 없음).
+     *
+     * <p>무대 그릇(★2차: "글이 아닌 몸으로")에서 글은 한 줄 맥박로만 흘렀다 — LLM 이 지은
+     * 개인 서사는 여기 보존된다. 진행용 서책과 표식이 달라 다리의 회수(close)가 거두지 않는다.
+     */
+    public void memoir(Player player, List<String> sceneTexts, String givenLine, String fullLine) {
+        ItemStack item = new ItemStack(Material.WRITTEN_BOOK);
+        item.editMeta(BookMeta.class, meta -> {
+            meta.title(Component.text(say("memoir_title", "서장 필사본")));
+            meta.author(Component.text(say("author", "혼천")));
+            meta.displayName(Component.text(say("memoir_title", "서장 필사본"),
+                    NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
+            meta.getPersistentDataContainer().set(Goods.KEY_GOODS,
+                    PersistentDataType.STRING, MEMOIR_TAG);
+            List<Component> pages = new ArrayList<>();
+            for (String text : sceneTexts) {
+                for (String chunk : BookLayout.paginate(text, 0)) {
+                    pages.add(Component.text(chunk, NamedTextColor.BLACK));
+                }
+            }
+            if (pages.isEmpty()) {
+                pages.add(Component.text(say("memoir_empty", "…기억은 안개 속에 남았다."),
+                        NamedTextColor.DARK_GRAY));
+            }
+            meta.pages(pages);
+        });
+        var leftover = player.getInventory().addItem(item);
+        if (leftover.isEmpty()) {
+            if (givenLine != null && !givenLine.isEmpty()) {
+                player.sendMessage(legacy(givenLine));
+            }
+        } else if (fullLine != null && !fullLine.isEmpty()) {
+            player.sendMessage(legacy(fullLine));   // 지급 강행 금지 (SJ-004) — 다만 침묵하지 않는다
+        }
     }
 
     static boolean isSeojang(ItemStack item) {

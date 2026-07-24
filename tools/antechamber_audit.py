@@ -1358,7 +1358,7 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
             not in voy):
         rep.bad("승선 전의 책을 안 붙든다 — 다리(2초)가 승선(5틱)을 이기면 책이 **부두에서** "
                 "열린다 (실기동 2026-07-25: \"이으니까 바로 책을 받고 읽기 시작\")")
-    elif not re.search(r"seojangHolds\([\s\S]{0,400}?depart\(", voy):
+    elif not re.search(r"seojangHolds\([\s\S]{0,900}?depart\(", voy):
         rep.bad("기슭의 문이 없다 — 명단이 끝나도(출도·봇 죽음) 배가 출도로 못 잇는다 "
                 "(영원한 항해 = 갇힘)")
     else:
@@ -1372,6 +1372,82 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
         rep.bad("정거장 문(門)이 말뿐이다 — plan() 이 정거장 등록부를 안 읽는다")
     else:
         rep.good("정거장 문은 조성 판에 선다 (plan ⑤-6 — 같은 등록부)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ⑧-4 ★기억의 무대 — 몸으로 겪는 서장인가 (B-179 2차 · 사용자 확정 2026-07-25)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def audit_stage(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑧-4 기억의 무대 — 몸으로 겪는 서장인가 (글은 맥박 · 선택은 등불 · 전문은 필사본)")
+    stg = load_yaml("seojang_stage.yml").get("stage") or {}
+    if not stg:
+        rep.bad("seojang_stage.yml stage 절이 없다 — 무대가 등록부에 없다 (강등 스위치도 없다)")
+        return
+    scenes = load_yaml("seojang.yml").get("scenes") or {}
+    sets = stg.get("sets") or {}
+
+    # ① 무대 ↔ 장면 — 제목 글자 그대로 대조 (계열 판별이 이 대조로 돈다) + 에필로그 무대 존재
+    for name, sc in scenes.items():
+        stages = sets.get(name)
+        if not stages:
+            rep.warn(f"계열 '{name}' 의 무대가 없다 — 중립 무대(안개의 고동)로 강등된다")
+            continue
+        if len(stages) != len(sc) + 1:
+            rep.bad(f"계열 '{name}' 무대 {len(stages)}장 ≠ 장면 {len(sc)}장+에필로그 — "
+                    "어느 장은 무대 없이 지나간다")
+        ok = True
+        for i, s in enumerate(sc):
+            reg = str(stages[i].get("title", "")) if i < len(stages) else ""
+            if reg != str(s.get("title", "")):
+                ok = False
+                rep.bad(f"무대 '{name}'[{i + 1}] 제목 {reg!r} ≠ 장면 제목 {s.get('title')!r} — "
+                        "무대가 장면을 못 알아본다 (계열 판별 = 제목 대조)")
+        if ok:
+            rep.good(f"계열 '{name}' — 무대 {len(stages)}장 (장면 {len(sc)} + 에필로그) · 제목 일치")
+
+    # ② 침묵 금지 — 모든 무대(중립 포함)에 맥박(숨)이 있다
+    if not ((stg.get("neutral") or {}).get("pulse")):
+        rep.bad("중립 무대에 숨(pulse)이 없다 — 등록부 밖 계열이 침묵 속을 지난다")
+    for name, stages in sets.items():
+        for i, e in enumerate(stages or []):
+            if not e.get("pulse"):
+                rep.bad(f"무대 '{name}'[{i + 1}] 에 숨(pulse)이 없다 — 조형만 있는 침묵")
+    rep.good("맥박 — 모든 무대가 숨을 쉰다 (조형이 없어도 침묵은 아니다)")
+
+    # ③ 배선 — 정거장=무대 · 강등 문 · 재배달 억제 · 등불의 손 · 격리 · 필사본
+    voy = source("Voyage.java")
+    if "ante.stage().play(" not in voy:
+        rep.bad("정거장이 무대를 안 연다 — Voyage 가 stage.play 를 안 부른다 (책 그릇 그대로)")
+    elif "SeojangBook.get().deliver(player, r.latest)" not in voy:
+        rep.bad("강등 문이 없다 — 무대가 꺼진 날 책도 안 온다 (침묵은 그릇이 아니다)")
+    else:
+        rep.good("정거장 = 무대 (꺼져 있으면 책으로 강등 — 어느 날도 침묵은 없다)")
+    if "return ante.stage().enabled();" not in voy:
+        rep.bad("무대 그릇인데 2초 재배달이 책을 몰래 쥐여 줄 수 있다 — 그릇이 둘이 된다")
+    else:
+        rep.good("무대 그릇에서는 책이 흐르지 않는다 (재배달 억제)")
+    sjs = source("SeojangStage.java")
+    if not sjs:
+        rep.bad("SeojangStage.java 가 없다 — 무대가 말뿐이다")
+    else:
+        if "WorldBridge.seojangChoice(" not in sjs:
+            rep.bad("등불이 다리에 안 얹는다 — 우클릭해도 아무 일도 없다 (선택이 몸을 잃었다)")
+        else:
+            rep.good("등불 우클릭 → 다리(seojangChoice) — 판정은 여전히 봇의 것")
+        if "hideEntity" not in sjs:
+            rep.bad("무대가 남에게도 보인다 — 「본인에게만」이 격리 확정의 계약이다")
+        else:
+            rep.good("무대·등불은 본인에게만 보인다 (hideEntity)")
+    if "registerEvents(stage" not in code:
+        rep.bad("등불의 손이 등록되지 않았다 — 우클릭이 허공을 친다 (Listener 미등록)")
+    if "stage.sweep(" not in code:
+        rep.bad("주인 잃은 무대를 걷는 손이 없다 — 조형이 강 위에 쌓인다")
+    if (stg.get("memoir") or {}).get("give") and "memoir(player" not in voy:
+        rep.bad("필사본이 말뿐이다 — 기슭에서 전문을 안 준다 (개인 서사가 증발한다)")
+    else:
+        rep.good("기슭의 필사본 — LLM 개인 서사는 잃지 않는다")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1807,6 +1883,7 @@ def main() -> int:
     audit_light(rep, ante, code)
     audit_canvas(rep, ante, code)
     audit_voyage(rep, ante, code)
+    audit_stage(rep, ante, code)
     audit_plates(rep, ante, code)
     audit_dummies(rep, ante, code)
     audit_conventions(rep, code, raw_cfg)

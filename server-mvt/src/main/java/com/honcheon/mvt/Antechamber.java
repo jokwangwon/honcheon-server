@@ -168,6 +168,8 @@ public final class Antechamber implements Listener {
     private final int[] horizonLight;
     /** ★B-179 — 기억의 회랑 (삼도천 항해). 서장의 책이 열리는 자리와 사이의 시간 */
     private final Voyage voyage;
+    /** ★B-179 2차 — 몸으로 겪는 서장 (정거장의 기억 무대 · 등불 선택) */
+    private final SeojangStage stage;
     private final Hut hut;
     // 사공의 몸 (3차 개정 추기) — pos 길이 0 = 몸 없음 (등록부가 스위치)
     private final int[] ferrymanPos;
@@ -372,6 +374,8 @@ public final class Antechamber implements Listener {
 
         // ★B-179 — 기억의 회랑 (삼도천 항해 · seojang_presentation.md §0). 배·물길·정거장의 주인
         this.voyage = new Voyage(plugin, this, RulesConfig.section(a, "voyage"));
+        // ★B-179 2차 — 몸으로 겪는 서장: 정거장의 기억 무대 (등록부 seojang_stage.yml)
+        this.stage = new SeojangStage(plugin, configDir);
 
         Map<String, Object> li = RulesConfig.section(a, "lighting");
         this.light = new Lighting(
@@ -599,6 +603,10 @@ public final class Antechamber implements Listener {
 
     Voyage voyage() {
         return voyage;
+    }
+
+    SeojangStage stage() {
+        return stage;
     }
 
     int cx() {
@@ -2120,6 +2128,8 @@ public final class Antechamber implements Listener {
         if (ticker != null) {
             return;
         }
+        // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다
+        Bukkit.getPluginManager().registerEvents(stage, plugin);
         ticker = Bukkit.getScheduler().runTaskTimer(plugin,
                 Metrics.wrap("antechamber", this::tick), 40L, 5L);
     }
@@ -2260,6 +2270,7 @@ public final class Antechamber implements Listener {
         World w = Bukkit.getWorld(worldName);
         if (w != null) {
             voyage.sweepBoats(w);   // 주인 잃은 배까지 (표식 있는 것만)
+            stage.sweep(w);         // 무대·등불도 (표식 있는 것만)
             // ★ 여기서도 **돌려주지 않는다** — quit 과 같은 이유다: 종료 중의 setContents 는
             //   playerdata 까지 못 갈 수 있고, 그 사이 기록을 지우면 짐은 어디에도 없다.
             //   기록만 디스크에 맞추고 떠난다. 다음 기동의 loadStow() 가 그대로 되살린다.

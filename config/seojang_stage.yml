@@ -1,0 +1,139 @@
+# 서장 무대(序章舞臺) — ★몸으로 겪는 회랑 (사용자 확정 2026-07-25 새벽 · B-179 2차 개정)
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# 사용자: "지금 책을 읽는 시스템이 너무 루즈하다" → "글이 아닌 **몸으로 역사를 느끼는 형태**."
+#
+# 그래서 그릇을 바꿨다 — 항해 중의 서장은 이제 책이 아니다:
+#   · 정거장에 닿으면 **기억의 무대**가 안개 속에서 재생된다 (다층 조형 애니메이션 +
+#     파티클 + 사건음 — 전부 **본인에게만** 보인다)
+#   · 글은 **한 줄 맥박**만 — 장면의 방향을 짚는 짧은 숨 (LLM 전문은 도착 때 필사본으로 —
+#     개인 서사는 잃지 않는다)
+#   · 선택은 **물 위 세 등불 우클릭** — 화면 클릭이 아니라 몸의 행위다
+#   · 판정·이야기·진행은 여전히 전부 봇의 것 — 무대는 그릇일 뿐이다
+#
+# ★강등 계약: enabled: false 면 옛 책 그릇으로 되돌아간다 (무대가 없어도 서장은 흐른다).
+# ★등록제: sets 의 title 은 seojang.yml scenes 의 title 과 **글자 그대로** 같아야 한다
+#   (계열 판별이 이 대조로 돈다 — 감사가 잰다. {region} 류 자리채움은 앞부분만 대조).
+# ★수치·조형·문장 전부 【제안】 — 파일럿(기본 계열 다층)을 눈으로 보고 빨간펜 대상.
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+stage:
+  enabled: true
+
+  # 맥박 — 장면 도착 때 타이틀(장 제목) + 짧은 숨 줄들 (액션바 · 간격마다 하나씩)
+  pulse:
+    beat_interval_ticks: 60      # 3초에 한 숨 【제안】
+    beat_read_ticks: 70          # 한 숨이 화면에 사는 시간
+    choices_delay_ticks: 40      # 마지막 숨 뒤 등불이 떠오르기까지
+
+  # 선택의 등불 — 물 위 세 개 (에필로그는 하나 — 출도의 등불)
+  lanterns:
+    ahead: 7                     # 정거장에서 동쪽으로 이 칸 앞 물 위에 뜬다
+    spread: 4                    # z 간격 (셋이면 -4·0·+4)
+    height: 1.6                  # 수면 위
+    label_prefix: "§6◆ "
+    hint: "§8등불을 §f우클릭§8 하면 그 길을 고른다 — 되돌릴 수 없다."
+    pick_line: "§6등불이 사위어 든다 — 기억이 길을 정했다."
+    debut_label: "강호로 나선다"   # 에필로그의 단 하나의 등불 (따뜻한 등롱)
+
+  # 필사본 — 도착 때 품에 남는 전문 (읽기 전용 · 선택 없음)
+  memoir:
+    give: true
+    line: "§7품 안에 §f서장 필사본§7 이 남았다 — 강을 건너며 겪은 기억의 전문이다."
+    full_line: "§8품이 가득해 필사본을 못 받았다 — 자리를 비우고 다시 강을 건너면 사공이 내어 준다."   # 【제안】
+
+  # 중립 무대 — 등록부에 없는 계열/장면의 폴백 (안개의 고동 — 침묵 금지: 무대가 없어도 숨은 쉰다)
+  neutral:
+    sound: { key: "minecraft:block.bell.resonate", volume: 0.5, pitch: 0.6 }
+    particle: { type: CAMPFIRE_COSY_SMOKE, count: 10, spread: 2.5 }
+    pulse:
+      - "§7안개가 짙어진다 — 기억이 형체를 찾지 못한다"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # 무대 등록부 — 계열(seojang.yml scenes 키) → 장면 순서대로
+  #
+  #   layers 의 at = 정거장 중심 기준 [동x, 위y, 남z] · anim: 솟는다|기운다|멎는다
+  #   (솟는다 = 물속에서 떠오른다 · 기운다 = 천천히 기울며 자리 잡는다 · 멎는다 = 정지)
+  # ═══════════════════════════════════════════════════════════════════════
+  sets:
+
+    # ─── 재난이 닥친 아이 (★다층 파일럿 — 눈으로 보고 빨간펜) ───
+    기본:
+      - title: "그날 밤"
+        pulse:
+          - "§c불길이 담을 넘었다 §7— 매캐한 연기가 코끝을 찔렀다"
+          - "§7식구들의 그림자가 뿔뿔이 흩어졌다"
+        sound: { key: "minecraft:entity.blaze.ambient", volume: 0.55, pitch: 0.65 }
+        particle: { type: FLAME, count: 6, spread: 2.5 }
+        layers:
+          - { at: [2, 0, -8],  block: DARK_OAK_LOG,    scale: [0.7, 3.4, 0.7], yaw: 14,  anim: 기운다 }   # 기울어진 기둥
+          - { at: [4, 0, -10], block: DARK_OAK_PLANKS, scale: [3.4, 2.4, 0.5], yaw: -6,  anim: 솟는다 }   # 무너진 벽
+          - { at: [3, 2, -9],  block: FIRE,            scale: [1.6, 1.6, 1.6], yaw: 0,   anim: 솟는다 }   # 지붕을 삼킨 불
+          - { at: [1, 0, -7],  block: CAMPFIRE,        scale: [1.0, 1.0, 1.0], yaw: 30,  anim: 멎는다 }   # 잔불
+          - { at: [5, 1, -11], block: FIRE,            scale: [1.0, 1.0, 1.0], yaw: 45,  anim: 솟는다 }
+      - title: "길 위에서"
+        pulse:
+          - "§7밤길 — 뒤에서 붉은 놀이 하늘을 핥았다"
+          - "§7맨발이 이슬에 젖었다. 멈추면 끝이다"
+        sound: { key: "minecraft:ambient.cave", volume: 0.4, pitch: 1.3 }
+        particle: { type: MYCELIUM, count: 8, spread: 3.0 }
+        layers:
+          - { at: [1, 0, -7],  block: DIRT_PATH,       scale: [4.0, 0.3, 1.2], yaw: -18, anim: 솟는다 }   # 어둠 속 흙길
+          - { at: [3, 0, -9],  block: STRIPPED_DARK_OAK_LOG, scale: [0.4, 2.2, 0.4], yaw: 8, anim: 기운다 } # 이정목
+          - { at: [5, 0, -8],  block: DARK_OAK_LEAVES, scale: [1.8, 1.4, 1.8], yaw: 0,   anim: 멎는다 }   # 밤 숲의 검은 덤불
+          - { at: [4, 2, -12], block: MAGMA_BLOCK,     scale: [2.6, 0.8, 0.4], yaw: 0,   anim: 솟는다 }   # 지평선의 붉은 놀
+      - title: "낯선 고을 {region}"
+        pulse:
+          - "§7낯선 저잣거리 — 아무도 이름을 묻지 않았다"
+          - "§7빈 손, 빈 배 — 그래도 아침은 왔다"
+        sound: { key: "minecraft:block.bell.use", volume: 0.45, pitch: 1.2 }
+        particle: { type: END_ROD, count: 3, spread: 2.0 }
+        layers:
+          - { at: [2, 0, -8],  block: SPRUCE_PLANKS,   scale: [2.8, 2.0, 0.5], yaw: 5,   anim: 솟는다 }   # 객잔의 벽
+          - { at: [2, 2, -8],  block: DARK_OAK_SLAB,   scale: [3.2, 0.4, 0.9], yaw: 5,   anim: 솟는다 }   # 처마
+          - { at: [4, 0, -7],  block: HAY_BLOCK,       scale: [0.9, 0.9, 0.9], yaw: 20,  anim: 멎는다 }   # 장터의 짚단
+          - { at: [1, 1, -7],  block: LANTERN,         scale: [0.8, 0.8, 0.8], yaw: 0,   anim: 솟는다 }   # 처마의 등
+      - title: "서장의 끝"        # 에필로그 — 기슭이 가까워진다 (등불 하나: 출도)
+        pulse:
+          - "§6동녘이 밝는다 — 강 건너에서 이승의 불빛이 손짓한다"
+        sound: { key: "minecraft:block.bell.resonate", volume: 0.6, pitch: 0.9 }
+        particle: { type: END_ROD, count: 5, spread: 3.0 }
+        layers:
+          - { at: [4, 0, -9],  block: LANTERN,         scale: [1.2, 1.2, 1.2], yaw: 0,   anim: 솟는다 }
+
+    # ─── 무가의 자식 — 수행 파견 (1차 기본판 【제안】 — 파일럿 빨간펜 뒤 다층 증축) ───
+    수행_파견:
+      - title: "출문(出門)"
+        pulse:
+          - "§7가문의 대문이 등 뒤에서 닫혔다 — 기대는 짐보다 무겁다"
+        sound: { key: "minecraft:block.wooden_door.close", volume: 0.6, pitch: 0.8 }
+        particle: { type: CLOUD, count: 4, spread: 2.0 }
+        layers:
+          - { at: [3, 0, -9],  block: DARK_OAK_PLANKS, scale: [0.6, 3.2, 0.6], yaw: 0,   anim: 솟는다 }   # 대문 기둥
+          - { at: [5, 0, -9],  block: DARK_OAK_PLANKS, scale: [0.6, 3.2, 0.6], yaw: 0,   anim: 솟는다 }
+          - { at: [4, 3, -9],  block: DARK_OAK_SLAB,   scale: [3.0, 0.5, 0.8], yaw: 0,   anim: 솟는다 }   # 현판 들보
+      - title: "이름 없는 길"
+        pulse:
+          - "§7대로 — 아무도 가문의 이름을 몰랐다. 그게 홀가분했다"
+        sound: { key: "minecraft:ambient.cave", volume: 0.35, pitch: 1.5 }
+        particle: { type: MYCELIUM, count: 6, spread: 3.0 }
+        layers:
+          - { at: [2, 0, -8],  block: DIRT_PATH,       scale: [4.5, 0.3, 1.4], yaw: -10, anim: 솟는다 }
+          - { at: [4, 0, -10], block: STRIPPED_SPRUCE_LOG, scale: [0.4, 2.0, 0.4], yaw: -5, anim: 기운다 }
+      - title: "{region} — 전표와 이름"
+        pulse:
+          - "§7전장(錢莊)의 주판 소리 — 여기서부터는 제 이름으로 산다"
+        sound: { key: "minecraft:block.bell.use", volume: 0.45, pitch: 1.1 }
+        particle: { type: END_ROD, count: 3, spread: 2.0 }
+        layers:
+          - { at: [3, 0, -8],  block: SPRUCE_PLANKS,   scale: [3.0, 2.2, 0.5], yaw: 0,   anim: 솟는다 }
+          - { at: [2, 1, -7],  block: LANTERN,         scale: [0.8, 0.8, 0.8], yaw: 0,   anim: 솟는다 }
+      - title: "서장의 끝"
+        pulse:
+          - "§6동녘이 밝는다 — 이제 가문의 이름이 아니라 네 이름의 차례다"
+        sound: { key: "minecraft:block.bell.resonate", volume: 0.6, pitch: 0.9 }
+        particle: { type: END_ROD, count: 5, spread: 3.0 }
+        layers:
+          - { at: [4, 0, -9],  block: LANTERN,         scale: [1.2, 1.2, 1.2], yaw: 0,   anim: 솟는다 }

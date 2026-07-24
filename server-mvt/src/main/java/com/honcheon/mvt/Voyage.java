@@ -57,7 +57,9 @@ final class Voyage {
     private static final class Rider {
         UUID boat;                            // 배 엔티티
         WorldBridge.SeojangScene latest;      // 다리가 내려보낸 최신 장면 (writing 포함)
-        String deliveredToken;                // 정거장에서 이미 편 책의 토큰 (두 번 열지 않는다)
+        String deliveredToken;                // 정거장에서 이미 연 장의 토큰 (두 번 열지 않는다)
+        String stageSet;                      // ★2차 — 계열 (무대 등록부의 벌 이름 · 제목으로 판별)
+        final java.util.List<String> transcript = new java.util.ArrayList<>();   // 필사본의 재료
     }
 
     private final Map<UUID, Rider> riders = new LinkedHashMap<>();
@@ -137,12 +139,20 @@ final class Voyage {
         ensureClock();
     }
 
-    /** 하선 — 배를 걷는다 (출도·퇴장·종료 공통). 항해 기억은 메모리뿐이다 — 진실은 봇의 명단이다 */
+    /** 하선 — 배와 무대를 걷는다 (출도·퇴장·종료 공통). 항해 기억은 메모리뿐 — 진실은 봇의 명단이다 */
     void disembark(UUID body) {
         Rider r = riders.remove(body);
         if (r != null && r.boat != null && Bukkit.getEntity(r.boat) instanceof Boat b) {
             b.remove();
         }
+        ante.stage().clear(body);
+    }
+
+    /** 필사본 한 장의 재료 — 장 머리말 + 제목 + 전문 (책과 같은 문법 · SeojangBook.headText) */
+    private String transcriptOf(WorldBridge.SeojangScene scene) {
+        String head = SeojangBook.get().headText(scene) + " — " + scene.title();
+        String body = scene.narration() == null ? "" : scene.narration();
+        return head + "\n\n" + body;
     }
 
     void shutdownAll() {
@@ -210,7 +220,9 @@ final class Voyage {
             return false;   // 붓 소식은 미루지 않는다 — 침묵 금지 기계가 맡는다
         }
         if (scene.token() != null && scene.token().equals(r.deliveredToken)) {
-            return false;   // 이미 정거장에서 폈다 — 중복 배달의 소거는 SeojangBook.given 이 맡는다
+            // 이미 정거장에서 연 장 — 무대 그릇이면 책을 아예 안 준다 (2초 재배달이 책을 몰래
+            // 쥐여 주면 그릇이 둘이 된다). 강등(책 그릇)일 때만 통과 — SeojangBook.given 이 소거한다
+            return ante.stage().enabled();
         }
         // 몸이 뒤처져 있으면(재접속) 배를 제 장면의 정거장 앞으로 옮긴다 — 80초 재항해는 벌이다
         relocateIfBehind(player, r, scene.scene());
@@ -286,6 +298,12 @@ final class Voyage {
         if (!WorldBridge.seojangHolds(player.getUniqueId())) {
             if (x >= shoreX) {
                 UUID body = player.getUniqueId();
+                // ★2차 — 필사본: 강을 건너며 겪은 기억의 전문이 품에 남는다 (개인 서사는 잃지 않는다)
+                if (ante.stage().enabled() && ante.stage().memoirGive()
+                        && !r.transcript.isEmpty()) {
+                    SeojangBook.get().memoir(player, List.copyOf(r.transcript),
+                            ante.stage().memoirLine(), ante.stage().memoirFullLine());
+                }
                 disembark(body);
                 ante.depart(player, List.of());
                 return;
@@ -311,9 +329,18 @@ final class Voyage {
         }
         double dx = stationX + 0.5 - (boat.getLocation().getX() - ante.cx());
         if (Math.abs(dx) < 0.8) {
-            push(boat, 0);   // ★ 정거장 — 배가 멈추고, 그 자리에서 책이 열린다
+            push(boat, 0);   // ★ 정거장 — 배가 멈추고, 그 자리에서 기억이 재생된다
             r.deliveredToken = r.latest.token();
-            SeojangBook.get().deliver(player, r.latest);
+            if (r.stageSet == null) {
+                r.stageSet = ante.stage().detectSet(r.latest.scene(), r.latest.title());
+            }
+            r.transcript.add(transcriptOf(r.latest));
+            // ★2차 (사용자: "글이 아닌 몸으로") — 책 대신 무대. 꺼져 있으면 옛 책 그릇으로 강등
+            if (!ante.stage().play(player, player.getWorld(),
+                    ante.cx() + stationX + 0.5, ante.waterTop(player.getWorld()) + 1.0,
+                    r.latest, r.stageSet)) {
+                SeojangBook.get().deliver(player, r.latest);
+            }
             return;
         }
         push(boat, dx);
