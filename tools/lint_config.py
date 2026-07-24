@@ -116,6 +116,14 @@ for gid, ground in (hunting.get("grounds") or {}).items():
         if rank == "영물" and (quota.get("day", 0) or quota.get("night", 0)):
             issues.append(f"사냥터 '{gid}' 영물 '{nid}' 정원 ≠ 0 — 양산 금지 (cultivation beast_ranks)")
 
+# 5-d. NPC xp_grade — 등록부(grade_coefficient) 밖의 등급은 조용히 잡졸이 된다 (침묵 금지: 여기서 잡는다)
+xp_grades = set((cultivation.get("levels", {}).get("xp_sources", {}).get("combat", {})
+                 .get("grade_coefficient") or {}).keys())
+for nid, npc in npcs["npcs"].items():
+    g = npc.get("xp_grade")
+    if g is not None and g not in xp_grades:
+        issues.append(f"NPC '{nid}' xp_grade '{g}' 가 grade_coefficient({sorted(xp_grades)})에 없다")
+
 # 6. 심법 겸수/상성 id
 sim_ids = set(simbeop["simbeop"].keys())
 for sid, s in simbeop["simbeop"].items():

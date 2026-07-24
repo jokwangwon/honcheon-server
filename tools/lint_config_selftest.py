@@ -50,6 +50,17 @@ def main():
                       display.stdout))
 
         first["faction"] = original
+        ultimate_path.write_text(yaml.safe_dump(ultimate, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+        # xp_grade 눈 (5-d) — 등록부(grade_coefficient) 밖의 등급을 심으면 잡아야 한다
+        npcs_path = work / "config" / "npcs" / "cheongha_npcs.yml"
+        npcs_doc = yaml.safe_load(npcs_path.read_text(encoding="utf-8"))
+        first_npc = next(iter(npcs_doc["npcs"].values()))
+        first_npc["xp_grade"] = "없는_등급"
+        npcs_path.write_text(yaml.safe_dump(npcs_doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        bad_grade = run(work)
+        cases.append(("미등록 xp_grade 를 거부한다", bad_grade.returncode == 1 and "없는_등급" in bad_grade.stdout,
+                      bad_grade.stdout))
 
     ok = True
     print("══ lint_config 눈을 시험한다 ══")

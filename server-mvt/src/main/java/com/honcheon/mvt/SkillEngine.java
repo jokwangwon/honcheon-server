@@ -1401,9 +1401,12 @@ public final class SkillEngine {
         }
         // 몹 레벨 (성장 v3 XP — 등록값 우선, 없으면 상당 경지의 자격 레벨로 유도. 코드가 짓지 않는다)
         int level = e.get("level") instanceof Number ln ? ln.intValue() : 0;
+        // XP 등급 (성장 v3 — 잡졸/정예/두목 · levels.xp_sources.combat.grade_coefficient 의 키만
+        //   유효하다. lint_config 가 잰다). 미등록이면 null — killXp 가 잡졸 계수로 읽는다
+        String xpGrade = e.get("xp_grade") == null ? null : String.valueOf(e.get("xp_grade"));
         return new Npc(id, String.valueOf(e.getOrDefault("name", id)),
                 beast ? "짐승" : "사람", rank, realm, pool, grade,
-                Collections.unmodifiableMap(stats), weaponClass, level);
+                Collections.unmodifiableMap(stats), weaponClass, level, xpGrade);
     }
 
     /** 전승 오의 한 줄 → 시전 가능한 한 수 (ultimate_arts.yml legacy_arts) */
@@ -1487,7 +1490,7 @@ public final class SkillEngine {
      */
     public record Npc(String id, String name, String kind, String beastRank, String realm,
                       int pool, String grade, Map<String, Integer> stats, String weaponClass,
-                      int level) {
+                      int level, String xpGrade) {
 
         public boolean manifests() {
             return !BARE.equals(grade) && pool > 0;

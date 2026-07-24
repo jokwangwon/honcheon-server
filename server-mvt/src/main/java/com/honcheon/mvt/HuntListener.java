@@ -98,7 +98,7 @@ public final class HuntListener implements Listener {
     /**
      * 성장 v3 XP (B-135 단계 4) — 처치 = 몹 레벨 × 등급 계수 (클래식 고정값 · 사용자 확정 2026-07-24).
      * 몹 레벨 = 등록값(npcs/*.yml level) 우선, 없으면 상당 경지의 자격 레벨. 레벨업·포인트는 봇이 굴린다.
-     * ★정예·두목 등급 지정 필드는 아직 등록부에 없다 — 전부 잡졸 계수 (등록부 확장 때 함께 배선).
+     * 등급 = 등록값(npcs/*.yml xp_grade — 잡졸/정예/두목) · 미등록이면 잡졸 계수 (killXp 폴백).
      */
     private void grantXp(Player killer, EntityDeathEvent event, SkillEngine.Npc npc) {
         SkillEngine engine = plugin.skillEngine();
@@ -106,7 +106,8 @@ public final class HuntListener implements Listener {
         if (!engine.xpEnabled() || !ledger.linked()) {
             return;
         }
-        int xp = engine.killXp(engine.mobLevel(npc, REALM_BY_MOB.get(event.getEntityType())), "잡졸");
+        int xp = engine.killXp(engine.mobLevel(npc, REALM_BY_MOB.get(event.getEntityType())),
+                npc == null ? null : npc.xpGrade());
         if (xp <= 0) {
             return;
         }

@@ -65,7 +65,7 @@ levels:
   xp_sources:
     combat:
       formula: "XP = 몹 레벨 × 등급 계수"
-      grade_coefficient: { 잡졸: 1.0, 정예: 1.5, 두목: 3.0 }
+      grade_coefficient: { 잡졸: 1.0, 정예: 1.5, 두목: 3.0 }   # 개체 지정 = npcs/*.yml xp_grade (미등록 = 잡졸 · lint_config 5-d 가 잰다)
       # 미등록 몹의 레벨 = 상당 경지의 자격 레벨 (qualifying_level — 코드가 수치를 짓지 않는다)
       default_level: 상당_경지_자격_레벨
       daily_cap: 없음
