@@ -52,14 +52,28 @@ final class Voyage {
     private final int stallMargin;
     private final int frameZ;
     private final String embarkLine;
+    // ★조립 나룻배 (2026-07-25 실기동 "마크 보트라 … 뱃사공도 없고") — 등록부 voyage.barge
+    private final int bargeLerp;
+    private final boolean bargeFerryman;
+    private final String bargeFerrymanName;
+    private final double[] ferrymanAt;
+    private final List<BargePart> bargeParts = new java.util.ArrayList<>();
+
+    /** 나룻배 부품 하나 — 좌석(투명 보트) 중심 기준 상대 자리 */
+    private record BargePart(double[] at, org.bukkit.Material block, float[] scale) { }
+
+    /** 물 위에 선 부품 하나 — 엔티티와 그 상대 자리 (배를 따라 미끄러진다) */
+    private record Placed(UUID id, double[] at) { }
 
     /** 항해 중인 몸 하나 */
     private static final class Rider {
-        UUID boat;                            // 배 엔티티
+        UUID boat;                            // 좌석 — 투명한 바닐라 보트 (물리와 앉음새만 맡는다)
         WorldBridge.SeojangScene latest;      // 다리가 내려보낸 최신 장면 (writing 포함)
         String deliveredToken;                // 정거장에서 이미 연 장의 토큰 (두 번 열지 않는다)
         String stageSet;                      // ★2차 — 계열 (무대 등록부의 벌 이름 · 제목으로 판별)
         final java.util.List<String> transcript = new java.util.ArrayList<>();   // 필사본의 재료
+        final java.util.List<Placed> barge = new java.util.ArrayList<>();   // 조립 나룻배 부품들
+        UUID ferryman;                        // 배 위의 사공 (고물)
     }
 
     private final Map<UUID, Rider> riders = new LinkedHashMap<>();
@@ -79,6 +93,56 @@ final class Voyage {
         this.stallMargin = Math.max(1, num(cfg.get("stall_margin"), 6));
         this.frameZ = Math.max(2, num(cfg.get("frame_z"), 8));
         this.embarkLine = cfg.get("embark_line") == null ? "" : String.valueOf(cfg.get("embark_line"));
+        // ── 조립 나룻배 등록부 (voyage.barge)
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bg = cfg.get("barge") instanceof Map
+                ? (Map<String, Object>) cfg.get("barge") : Map.of();
+        this.bargeLerp = Math.max(0, num(bg.get("teleport_duration"), 2));
+        this.bargeFerryman = !(bg.get("ferryman") instanceof Boolean fb) || fb;
+        this.bargeFerrymanName = bg.get("ferryman_name") == null ? "사공"
+                : String.valueOf(bg.get("ferryman_name"));
+        this.ferrymanAt = dtriple(bg.get("ferryman_at"), -1.3, 0.0, -0.35);
+        if (bg.get("parts") instanceof List<?> pl) {
+            for (Object o : pl) {
+                if (!(o instanceof Map<?, ?> pm)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p = (Map<String, Object>) pm;
+                org.bukkit.Material m;
+                try {
+                    m = org.bukkit.Material.valueOf(String.valueOf(p.get("block")));
+                } catch (IllegalArgumentException e) {
+                    continue;   // 등록부가 모르는 블록 — 그 부품만 비운다
+                }
+                bargeParts.add(new BargePart(dtriple(p.get("at"), 0, 0, 0), m,
+                        ftriple(p.get("scale"))));
+            }
+        }
+    }
+
+    private static double[] dtriple(Object o, double a, double b, double c) {
+        double[] out = new double[]{a, b, c};
+        if (o instanceof List<?> l) {
+            for (int i = 0; i < Math.min(3, l.size()); i++) {
+                if (l.get(i) instanceof Number n) {
+                    out[i] = n.doubleValue();
+                }
+            }
+        }
+        return out;
+    }
+
+    private static float[] ftriple(Object o) {
+        float[] out = new float[]{1f, 1f, 1f};
+        if (o instanceof List<?> l) {
+            for (int i = 0; i < Math.min(3, l.size()); i++) {
+                if (l.get(i) instanceof Number n) {
+                    out[i] = n.floatValue();
+                }
+            }
+        }
+        return out;
     }
 
     /** 정거장 x 들 — 조성(plan ⑤-6)과 감사가 같은 등록부를 읽는다 */
@@ -142,8 +206,11 @@ final class Voyage {
     /** 하선 — 배와 무대를 걷는다 (출도·퇴장·종료 공통). 항해 기억은 메모리뿐 — 진실은 봇의 명단이다 */
     void disembark(UUID body) {
         Rider r = riders.remove(body);
-        if (r != null && r.boat != null && Bukkit.getEntity(r.boat) instanceof Boat b) {
-            b.remove();
+        if (r != null) {
+            if (r.boat != null && Bukkit.getEntity(r.boat) instanceof Boat b) {
+                b.remove();
+            }
+            clearBarge(r);
         }
         ante.stage().clear(body);
     }
@@ -182,16 +249,84 @@ final class Voyage {
         if (r.boat != null && Bukkit.getEntity(r.boat) instanceof Boat old) {
             old.remove();
         }
+        clearBarge(r);
         double y = ante.waterTop(w) + 1.0;
         Location at = new Location(w, ante.cx() + atX + 0.5, y,
                 ante.cz() + laneOf(player.getUniqueId()) + 0.5, -90f, 0f);
         Boat boat = (Boat) w.spawnEntity(at, EntityType.DARK_OAK_BOAT);
         boat.setPersistent(false);   // 항해는 메모리뿐 — 재기동이 배를 되살리지 않는다 (명단이 다시 띄운다)
         boat.setInvulnerable(true);
+        // ★조립 나룻배 (실기동: "마크 보트라 … 이상함") — 바닐라 보트는 **투명한 좌석**일 뿐이다.
+        //   눈에 보이는 배는 등록부(voyage.barge)의 조립 선체이고, 고물에는 사공이 올라탄다
+        boat.setInvisible(!bargeParts.isEmpty());
         boat.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
         r.boat = boat.getUniqueId();
+        spawnBarge(w, r, at);
         player.teleport(at);
         boat.addPassenger(player);
+    }
+
+    /** 조립 나룻배 — 등록부의 부품들이 좌석을 따라 미끄러진다. 배는 모두에게 보인다 (실루엣 확정) */
+    private void spawnBarge(World w, Rider r, Location seat) {
+        for (BargePart p : bargeParts) {
+            Location at = seat.clone().add(p.at()[0], p.at()[1], p.at()[2]);
+            org.bukkit.entity.BlockDisplay d = w.spawn(at, org.bukkit.entity.BlockDisplay.class, e -> {
+                e.setBlock(p.block().createBlockData());
+                e.setPersistent(false);
+                e.setTeleportDuration(bargeLerp);
+                e.setBrightness(new org.bukkit.entity.Display.Brightness(12, 15));
+                e.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
+                e.setTransformation(new org.bukkit.util.Transformation(
+                        new org.joml.Vector3f(-p.scale()[0] / 2f, 0f, -p.scale()[2] / 2f),
+                        new org.joml.AxisAngle4f(),
+                        new org.joml.Vector3f(p.scale()[0], p.scale()[1], p.scale()[2]),
+                        new org.joml.AxisAngle4f()));
+            });
+            r.barge.add(new Placed(d.getUniqueId(), p.at()));
+        }
+        if (bargeFerryman && !bargeParts.isEmpty()) {
+            Location at = seat.clone().add(ferrymanAt[0], ferrymanAt[1], ferrymanAt[2]);
+            at.setYaw(-90f);
+            org.bukkit.entity.Villager v = w.spawn(at, org.bukkit.entity.Villager.class, e -> {
+                e.setCustomName(bargeFerrymanName);
+                e.setCustomNameVisible(false);   // 명패는 조용히 — 우클릭하면 보인다 (사공은 말이 없다)
+                e.setAI(false);
+                e.setSilent(true);
+                e.setInvulnerable(true);
+                e.setPersistent(false);
+                e.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
+            });
+            r.ferryman = v.getUniqueId();
+        }
+    }
+
+    private void clearBarge(Rider r) {
+        for (Placed p : r.barge) {
+            Entity e = Bukkit.getEntity(p.id());
+            if (e != null) {
+                e.remove();
+            }
+        }
+        r.barge.clear();
+        if (r.ferryman != null && Bukkit.getEntity(r.ferryman) != null) {
+            Bukkit.getEntity(r.ferryman).remove();
+        }
+        r.ferryman = null;
+    }
+
+    /** 배가 나아간 만큼 선체와 사공이 따라 미끄러진다 (teleport_duration 이 보간한다) */
+    private void followBarge(Rider r, Boat boat) {
+        Location seat = boat.getLocation();
+        for (Placed p : r.barge) {
+            if (Bukkit.getEntity(p.id()) instanceof org.bukkit.entity.BlockDisplay d) {
+                d.teleport(seat.clone().add(p.at()[0], p.at()[1], p.at()[2]));
+            }
+        }
+        if (r.ferryman != null && Bukkit.getEntity(r.ferryman) instanceof org.bukkit.entity.Villager v) {
+            Location at = seat.clone().add(ferrymanAt[0], ferrymanAt[1], ferrymanAt[2]);
+            at.setYaw(-90f);
+            v.teleport(at);   // 한 틱 0.03칸 — 상대 이동 패킷이라 미끄럽다 (NoAI 라 흐르지 않는다)
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -288,6 +423,7 @@ final class Voyage {
                 boat.addPassenger(player);
             }
             steer(player, r, boat);
+            followBarge(r, boat);   // 선체와 사공이 좌석을 따라 미끄러진다
         }
     }
 

@@ -1368,6 +1368,23 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
         rep.bad("출도가 배를 안 걷는다 — 배가 기슭에 쌓인다")
     else:
         rep.good("출도는 배를 걷는다 (항해는 메모리뿐)")
+
+    # ⑥ ★조립 나룻배 (실기동 2026-07-25 "마크 보트라 … 뱃사공도 없고 뭔가 이상함") —
+    #   좌석(바닐라 보트)은 투명하고, 눈에 보이는 배는 등록부의 조립 선체다. 고물에 사공이 탄다
+    bgc = vo.get("barge") or {}
+    if not (bgc.get("parts") or []):
+        rep.bad("나룻배가 등록부에 없다 (voyage.barge.parts) — 마크 보트가 맨몸으로 보인다")
+    else:
+        rep.good(f"조립 나룻배 — 부품 {len(bgc['parts'])}점 · 사공 "
+                 f"{'고물에 탄다' if bgc.get('ferryman') else '없다'}")
+    if "boat.setInvisible(!bargeParts.isEmpty())" not in voy:
+        rep.bad("좌석(바닐라 보트)이 투명하지 않다 — 조립 선체와 겹쳐 보인다 (마크 보트 티가 난다)")
+    elif "followBarge(r, boat)" not in voy:
+        rep.bad("선체가 좌석을 안 따라간다 — 배가 사람만 두고 떠난다")
+    elif bgc.get("ferryman") and "r.ferryman = v.getUniqueId()" not in voy:
+        rep.bad("사공이 말뿐이다 — 고물에 몸이 안 선다 (섭구가 집 지을 때와 같은 병)")
+    else:
+        rep.good("좌석은 투명 · 선체는 따라 미끄러지고 · 사공이 고물에 선다")
     if "voyage.stationsX()" not in code:
         rep.bad("정거장 문(門)이 말뿐이다 — plan() 이 정거장 등록부를 안 읽는다")
     else:
