@@ -22,6 +22,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
+import org.bukkit.entity.Villager;
 import org.bukkit.entity.Zombie;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -117,6 +118,9 @@ public final class Antechamber implements Listener {
     private static final double DUMMY_HEALTH = 1024.0;
 
     private static final NamespacedKey KEY_DUMMY = new NamespacedKey("honcheon", "ipdo_dummy");
+
+    /** 사공의 몸 표식 (3차 개정 추기 — 실사용 "나루에 섭구가 없음") — ensure 가 정확히 한 몸을 지킨다 */
+    private static final NamespacedKey KEY_FERRYMAN = new NamespacedKey("honcheon", "ipdo_ferryman");
     /** 허수아비의 등급표(이름·내구) — 명패가 이것을 말한다 (HitFeedback 공통 명패도 이 이름을 쓴다) */
     static final NamespacedKey KEY_DUMMY_LABEL = new NamespacedKey("honcheon", "ipdo_dummy_label");
 
@@ -145,6 +149,10 @@ public final class Antechamber implements Listener {
     private final boolean barrierCap;
     private final Lighting light;
     private final Hut hut;
+    // 사공의 몸 (3차 개정 추기) — pos 길이 0 = 몸 없음 (등록부가 스위치)
+    private final int[] ferrymanPos;
+    private final String ferrymanName;
+    private final List<String> ferrymanLines;
     private final int[] bell;
     private final int[] boat;
     private final boolean mooring;
@@ -343,6 +351,13 @@ public final class Antechamber implements Listener {
         this.bell = pair(d.get("bell"), 26, 0);
         this.boat = pair(d.get("boat"), 29, 0);
         this.mooring = !(d.get("mooring") instanceof Boolean mo) || mo;
+
+        // ★3차 개정 추기 — 사공의 몸 (이름·성정 정본은 npcs/cheongha_npcs.yml seopgu).
+        //   pos 가 등록돼 있지 않으면 몸도 없다 — 사공이 글줄이던 시절로 되돌리는 스위치다.
+        Map<String, Object> fm = RulesConfig.section(a, "ferryman");
+        this.ferrymanPos = fm.get("pos") == null ? new int[0] : pair(fm.get("pos"), 24, 1);
+        this.ferrymanName = str(fm.get("name"), "뱃사공 섭구");
+        this.ferrymanLines = lines(fm.get("lines"));
 
         Map<String, Object> du = RulesConfig.section(a, "dummies");
         this.dummyIdle = str(du.get("idle"), "§7{label} §8· 내구 {durability}");
@@ -668,6 +683,7 @@ public final class Antechamber implements Listener {
         if (score >= verifyMinPct && marks) {
             stage(w, "글판", this::ensurePanels);
             stage(w, "허수아비", this::ensureDummies);
+            stage(w, "사공", this::ensureFerryman);
             // ★ **침묵을 없앤다.** 이 갈래(이미 서 있다)는 여태 아무 말도 안 했다 —
             //   그래서 로그에 입도진이 한 줄도 없었고, 그 침묵이 "잘 지어졌다"로 읽혔다.
             census(w, "나루는 이미 서 있다 (완결 " + score + "% ≥ " + verifyMinPct + "%)");
@@ -714,6 +730,7 @@ public final class Antechamber implements Listener {
             stage(w, "허수아비 걷기", this::clearDummies);
             stage(w, "글판 세우기", this::spawnPanels);
             stage(w, "허수아비 세우기", this::ensureDummies);
+            stage(w, "사공 세우기", this::ensureFerryman);
             census(w, "나루가 섰다 — 블록 " + plan.size());
             if (onDone != null) {
                 onDone.run();
@@ -1366,6 +1383,49 @@ public final class Antechamber implements Listener {
         }
     }
 
+    /**
+     * 사공의 몸 (3차 개정 추기 — 실사용 2026-07-24 "나루에 섭구가 없음").
+     * 1~2차판의 사공은 글줄뿐이었다 — 집 지을 때와 같은 병("있다고 말만 하고").
+     * <b>정확히 한 몸</b>이다 (ensureDummies 와 같은 계약 — 많은 것도 틀린 것이다).
+     * 우클릭 대사는 TradeListener 가 잇는다 (KEY_NPC=seopgu · 나루 세계 분기 → ferrymanLines).
+     */
+    private void ensureFerryman(World w) {
+        if (ferrymanPos.length < 2) {
+            return;   // 등록부에 자리가 없으면 몸도 없다
+        }
+        List<Entity> standing = new ArrayList<>();
+        for (Entity e : w.getEntities()) {
+            if (e.getPersistentDataContainer().has(KEY_FERRYMAN, PersistentDataType.BYTE)) {
+                standing.add(e);
+            }
+        }
+        if (standing.size() == 1) {
+            return;
+        }
+        standing.forEach(Entity::remove);
+        int y = groundY(w) + road.deckY() + 1;
+        Location at = new Location(w, cx + ferrymanPos[0] + 0.5, y, cz + ferrymanPos[1] + 0.5, -90f, 0f);
+        w.spawn(at, Villager.class, v -> {
+            v.setCustomName(ferrymanName);
+            v.setCustomNameVisible(true);
+            v.setAI(false);              // 배회 금지 — 사공은 부두를 지킨다
+            v.setSilent(true);
+            v.setPersistent(true);
+            v.setRemoveWhenFarAway(false);
+            // 나루는 성역이다 — B-119(살아 있는 것은 다 맞는다)는 본세계의 계약이고,
+            // 문지방의 안내인은 죽지 않는다 (이행 스윕도 나루 세계는 건너뛴다 — TradeListener)
+            v.setInvulnerable(true);
+            v.getPersistentDataContainer().set(KEY_FERRYMAN, PersistentDataType.BYTE, (byte) 1);
+            v.getPersistentDataContainer().set(CheonghaBuilder.KEY_NPC,
+                    PersistentDataType.STRING, "seopgu");
+        });
+    }
+
+    /** 나루 쪽 사공의 대사 — TradeListener 가 입도진 세계의 섭구 우클릭에 이 줄을 읽는다 */
+    List<String> ferrymanLines() {
+        return ferrymanLines;
+    }
+
     private void spawnDummy(World w, Dummy d, int y) {
         Location at = new Location(w, cx + d.x() + 0.5, y, cz + d.z() + 0.5, 90f, 0f);
         w.spawn(at, Zombie.class, e -> {
@@ -1430,7 +1490,22 @@ public final class Antechamber implements Listener {
             return;   // ★ 못 열면 사람을 원래 있던 자리에 그대로 둔다. 절대 붙잡지 않는다
         }
         boolean first = !isAntechamber(player.getWorld());
-        build(w, false, null);
+        // ★잔교가 서기 전에는 사람을 내려놓지 않는다 (실측 2026-07-24: 월드 재생성 뒤 첫 입장이
+        //   조성보다 먼저 텔레포트돼 잔교 없는 허공을 지나 심층 동굴(y-59)에 떨어졌다 —
+        //   문지방이 함정이 됐다). build 의 onDone 이 유일한 문이다. 조성 중이면 잠깐 기다린다.
+        if (building) {
+            player.sendMessage(ChatColor.GRAY + "나루가 아직 서는 중이다 — 잠시 뒤에 내려선다.");
+            Bukkit.getScheduler().runTaskLater(plugin, () -> enter(player), 40L);
+            return;
+        }
+        build(w, false, () -> arrive(player, w, first));
+    }
+
+    /** 잔교가 선 뒤의 도착 — enter 의 몸 (build.onDone 만이 부른다) */
+    private void arrive(Player player, World w, boolean first) {
+        if (!player.isOnline()) {
+            return;   // 조성을 기다리다 나갔다 — 다음 접속의 onJoin 이 다시 데려온다
+        }
         if (first && kitGive) {
             // ★ 이미 맡긴 것이 있으면 **아무것도 파괴하지 않고 물러선다.**
             //

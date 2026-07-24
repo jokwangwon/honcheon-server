@@ -241,6 +241,11 @@ MUTATIONS = [
     ("(67) ★ ensureDummies 가 `>=` 로 판단한다 (허수아비가 쌓이고 영영 안 치워진다)", SRC,
      "        if (countDummies(w) == dummies.size()) {",
      "        if (countDummies(w) >= dummies.size()) {", "많은 것도 틀린 것이다"),
+
+    # ─── ★3차 개정 추기 — 사공의 몸 (실사용 2026-07-24: "나루에 섭구가 없음") ───
+    ("(71) ★ 사공을 말만 하고 몸을 안 세운다 (ensureFerryman 실종)", SRC,
+     "    private void ensureFerryman(World w) {",
+     "    private void ensureFerrymanX(World w) {", "말만 한다"),
 ]
 
 

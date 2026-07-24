@@ -1558,6 +1558,17 @@ def audit_dummies(rep: Report, ante: dict, code: str) -> None:
     else:
         rep.good(f"허수아비 {len(dummies)}몸 등록")
 
+    # ★3차 개정 추기 — 사공의 몸: 등록됐으면 세우는 손이 코드에 있어야 한다
+    #   ("있다고 말만 하고" — 사공의 집과 같은 병이 몸에서 재발하지 않게)
+    fman = ante.get("ferryman") or {}
+    if fman.get("pos"):
+        # 이름만 훑으면 호출부 문자열(this::ensureFerryman)에 속는다 — **정의**를 본다
+        if not re.search(r"void\s+ensureFerryman\s*\(\s*World", strip_comments(code)):
+            rep.bad("ferryman 이 등록됐는데 세우는 손(ensureFerryman)이 코드에 없다 — "
+                    "사공이 있다고 말만 한다 (집 지을 때와 같은 병)")
+        else:
+            rep.good("사공의 몸 — 등록부(ferryman.pos)와 세우는 손(ensureFerryman)이 있다")
+
     # ★★ ① 평화(PEACEFUL) 는 몬스터를 지운다 — 허수아비의 몸이 좀비인 한, 평화 = 허수아비 없음.
     #    예외도 로그도 없이 조용히. **이것이 오늘의 병이었고, 이 줄이 그 눈이다.**
     body = strip_comments(code)

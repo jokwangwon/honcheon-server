@@ -125,6 +125,18 @@ final class TradeListener implements Listener {
                 .get(CheonghaBuilder.KEY_NPC, PersistentDataType.STRING);
         // 뿌리내림 과정 (B-178) — 마중(섭구)·다음 벽(곽진)은 우클릭 대화가 곧 과제다
         if ("seopgu".equals(id)) {
+            // ★나루(입도진)의 사공 — 같은 사람, 다른 강가 (3차 개정 추기: 사공이 몸을 얻었다).
+            //   아직 못 건넌 몸에게 문(접속 발판·종)을 가리킨다. 대사는 antechamber.yml ferryman
+            //   (흑수나루 greeting_lines 는 갓 내린 자의 것 — 여기서 읽으면 거짓말이 된다).
+            //   마중 정거장은 건넌 뒤 흑수나루의 것이므로 여기서는 안 센다.
+            if (Antechamber.isAntechamber(player.getWorld())) {
+                String name = registryNames.getOrDefault(id, ChatColor.stripColor(nameplate));
+                for (String line : plugin.antechamber().ferrymanLines()) {
+                    player.sendMessage(ChatColor.GOLD + "[" + name + "] " + ChatColor.WHITE + line);
+                }
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_AMBIENT, 0.8f, 1.0f);
+                return;
+            }
             plugin.tutorial().bump(player, "마중");
         } else if ("gwakjin".equals(id)) {
             plugin.tutorial().bump(player, "다음_벽");
