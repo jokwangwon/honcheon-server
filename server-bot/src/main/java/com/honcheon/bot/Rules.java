@@ -30,6 +30,8 @@ public final class Rules {
     public final boolean naegongUnified;
     /** 처치 XP 등급 계수 ({@code levels.xp_sources.combat.grade_coefficient} — 잡졸/정예/두목) */
     public final Map<String, Double> xpGradeCoef;
+    /** 게시판 의뢰 등급 → XP ({@code levels.xp_sources.board_quests} — 사용자 확정 2026-07-24) */
+    public final Map<String, Integer> boardQuestXp;
     public final Map<String, Integer> questXp;
     public final EconomyEngine economy;
     public final InternalEnergyEngine energy;
@@ -118,6 +120,11 @@ public final class Rules {
         RulesConfig.section(RulesConfig.section(levels, "xp_sources"), "quests")
                 .forEach((k, v) -> qxp.put(k, v instanceof Number nq ? nq.intValue() : 0));
         this.questXp = java.util.Collections.unmodifiableMap(qxp);
+        // 게시판 의뢰 등급별 XP (levels.xp_sources.board_quests — quest_generation grade_ladder 와 짝)
+        Map<String, Integer> bqx = new java.util.LinkedHashMap<>();
+        RulesConfig.section(RulesConfig.section(levels, "xp_sources"), "board_quests")
+                .forEach((k, v) -> bqx.put(k, v instanceof Number nb2 ? nb2.intValue() : 0));
+        this.boardQuestXp = java.util.Collections.unmodifiableMap(bqx);
         // ★원장 캡은 폐지됐다 (B안 — 사용자 확정 2026-07-24 · §8.10). 판정 캡(judgmentCap)만 남는다
         // 처치 XP 등급 계수 (levels.xp_sources.combat.grade_coefficient) — 비면 처치 XP 미배선 (마크와 동일 규약)
         Map<String, Double> gcoef = new java.util.LinkedHashMap<>();

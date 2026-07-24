@@ -2505,6 +2505,19 @@ public final class GameListener extends ListenerAdapter {
                     rules.rumors.intensityByVisibility("소수_목격_또는_간접"),
                     rules.initialAccuracy("직접_목격"), rules.originNetwork("request_office"), today);
 
+            // ★성장 v3 XP — 게시판 의뢰도 경험이다 (등급별 board_quests · 성공만 · 사용자 확정 2026-07-24).
+            //   승급 판정보다 먼저 굴린다 (새 레벨이 이중 관문에 실리도록 — 사냥과 같은 순서)
+            int questXp = rules.levelsEnabled ? rules.boardQuestXp.getOrDefault(q.grade(), 0) : 0;
+            if (questXp > 0) {
+                int ups = GrowthV3.grantXp(sheet, questXp, rules.xpBase, rules.xpGrowth,
+                        rules.pointsPerLevel);
+                gains.append("\n**+").append(questXp).append(" 경험**");
+                if (ups > 0) {
+                    gains.append(" · 💥 **레벨업 — Lv").append(sheet.get("레벨")).append("** (+")
+                            .append(ups * rules.pointsPerLevel).append("포인트 · 미사용 ")
+                            .append(sheet.get("미사용포인트")).append(" — 시트의 [포인트 배분])");
+                }
+            }
             String promoted = promoteIfDue(sheet, realm);
             if (!promoted.equals(realm)) {
                 gains.append("\n💥 **돌파 — ").append(promoted).append("에 올랐다**");
@@ -2513,7 +2526,7 @@ public final class GameListener extends ListenerAdapter {
             }
             result.setColor(BLOOD).appendDescription("\n" + gains);
             db.logEvent("의뢰_완수", "character", String.valueOf(chId), "quest", q.key(),
-                    Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward));
+                    Map.of("의뢰", q.key(), "굴림", roll, "마진", margin, "보수", reward, "xp", questXp));
             storyTick(chId, realm);   // B-109 — 의뢰_완수·favor·승급이 마디를 닫을 수 있다
         } else {
             result.setColor(INK).appendDescription(

@@ -61,6 +61,17 @@ def main():
         bad_grade = run(work)
         cases.append(("미등록 xp_grade 를 거부한다", bad_grade.returncode == 1 and "없는_등급" in bad_grade.stdout,
                       bad_grade.stdout))
+        del first_npc["xp_grade"]
+        npcs_path.write_text(yaml.safe_dump(npcs_doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+        # 게시판 의뢰 XP 눈 (5-e) — 사다리 등급에서 XP 표 항목을 빼면 잡아야 한다
+        cult_path = work / "config" / "cultivation.yml"
+        cult = yaml.safe_load(cult_path.read_text(encoding="utf-8"))
+        removed = cult["levels"]["xp_sources"]["board_quests"].pop("잔심부름")
+        cult_path.write_text(yaml.safe_dump(cult, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        missing_xp = run(work)
+        cases.append(("XP 표에서 빠진 의뢰 등급을 잡는다", missing_xp.returncode == 1 and "잔심부름" in missing_xp.stdout,
+                      missing_xp.stdout))
 
     ok = True
     print("══ lint_config 눈을 시험한다 ══")

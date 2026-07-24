@@ -2600,9 +2600,11 @@ defenseScore·bestStance realm 편입 + judgmentAttrOf(v2 방어체력·크리�
 수리: Beast 에 상당 경지 필드(여우·늑대=삼류 들짐승 · 곰=일류 맹수 — npc_combat.yml beasts.ranks ·
 마크 REALM_BY_MOB 와 같은 규약) + Rules.xpGradeCoef(grade_coefficient 독자) → onHuntChoice 에서
 **잡은 것(pelt)만** XP = 자격 레벨 × 잡졸 계수 (여우·늑대 10 · 곰 65) · 승급 판정 앞에 굴려 새
-레벨이 이중 관문에 실린다. 레벨업 시 embed 에 포인트·[포인트 배분] 안내. ★미결(사용자 결정):
-**디스코드 의뢰(소연 게시판 · quest_generation.yml)는 xp_sources 등록부 밖** — XP 를 줄 것인가,
-준다면 얼마인가 (무명의뢰 80/50/40/30 은 MVT 다리 경로만).
+레벨이 이중 관문에 실린다. 레벨업 시 embed 에 포인트·[포인트 배분] 안내. ★닫힘 (2026-07-24 같은 날 · 사용자 확정): **게시판 의뢰 XP 등재** —
+`levels.xp_sources.board_quests` 등급별 (잔심부름 20 · 조사_채집 30 · 호위_소탕 50 ·
+표행_현상금 80 · 세력_전속 120. 유도: 20=need(1) · 30/50/80=무명의뢰 눈금 동급 · 120만 새 수 —
+전부 사용자 승인). onQuestPerform 성공만 · 승급 판정 앞 · 레벨업 안내 표기. 눈: lint 5-e
+(사다리 등급 ↔ XP 표 양방향 — 빠지면 조용한 0 XP 를 잡는다) + lint_selftest 케이스.
 ★사용자 확정 (2026-07-15): "rpg 서버이긴 하니까 스텟처럼 직접 찍어서 올리는 것도 필요 —
 몬스터나 퀘스트를 깨고 경험을 얻어, 레벨이 오르면 어느 방향으로 올릴지 같은 느낌." 조율자가
 현행 헌법 조항(cultivation.yml v2: "레벨은 없다, 경지가 레벨이다" · "경험치·레벨 없음" ·

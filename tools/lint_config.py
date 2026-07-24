@@ -124,6 +124,15 @@ for nid, npc in npcs["npcs"].items():
     if g is not None and g not in xp_grades:
         issues.append(f"NPC '{nid}' xp_grade '{g}' 가 grade_coefficient({sorted(xp_grades)})에 없다")
 
+# 5-e. 게시판 의뢰 XP 표 ↔ 의뢰 등급 사다리 — 등급이 표에 없으면 그 의뢰는 조용히 0 XP 가 된다 (침묵 금지)
+quest_gen = load("quest_generation.yml")
+ladder_grades = {r["grade"] for r in quest_gen.get("grade_ladder", {}).get("rungs", [])}
+board_xp = (cultivation.get("levels", {}).get("xp_sources", {}).get("board_quests") or {})
+for g in ladder_grades - set(board_xp):
+    issues.append(f"의뢰 등급 '{g}' 의 XP 가 board_quests 에 없다 (완수해도 0 경험 — 침묵)")
+for g in set(board_xp) - ladder_grades:
+    issues.append(f"board_quests '{g}' 가 quest_generation grade_ladder 에 없는 등급이다 (죽은 등재)")
+
 # 6. 심법 겸수/상성 id
 sim_ids = set(simbeop["simbeop"].keys())
 for sid, s in simbeop["simbeop"].items():
