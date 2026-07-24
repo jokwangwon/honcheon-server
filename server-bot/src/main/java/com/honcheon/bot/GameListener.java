@@ -691,14 +691,19 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> raw = sheet.get("원장") instanceof Map
                 ? (Map<String, Object>) sheet.get("원장") : Map.of();
         StringBuilder axes = new StringBuilder();
+        boolean anyCapped = false;
         for (String axis : GrowthV3.AXES) {
             double v = raw.get(axis) instanceof Number n ? n.doubleValue() : 0.0;
+            boolean capped = v + 1.0 > cap + 1e-9;
+            anyCapped |= capped;
             axes.append(axis).append(' ').append(ledgerLabel(v))
-                    .append(v + 1.0 > cap + 1e-9 ? " (캡)" : "").append("  ");
+                    .append(capped ? " (캡)" : "").append("  ");
         }
         return new EmbedBuilder().setColor(INK).setTitle("포인트 배분")
                 .setDescription("미사용 포인트 **" + points + "** · " + realm + " (원장 캡 " + cap + ")\n"
                         + axes.toString().strip()
+                        // 왜 못 찍는지 말한다 (침묵 금지) — 캡의 열쇠는 승급이고, 포인트는 안 사라진다
+                        + (anyCapped ? "\n*캡에 닿은 축은 **승급**이 푼다 — 남는 포인트는 은행에 쌓인다 (무기한)*" : "")
                         + (notice == null ? "" : "\n\n" + notice))
                 .build();
     }
