@@ -1703,6 +1703,8 @@ public final class MvtCommand implements CommandExecutor {
     private boolean meditate(CommandSender sender) {
         if (sender instanceof Player player) {
             plugin.skills().meditate(player);
+            // 뿌리내림 (B-178) — 시도 자체를 센다: 개화 전의 거절("단전이 비어 있다")도 가르침이다
+            plugin.tutorial().bump(player, "운기");
         }
         return true;
     }
@@ -3084,6 +3086,7 @@ public final class MvtCommand implements CommandExecutor {
         ledger.setSegments(subject, want);
         player.sendMessage(ChatColor.GOLD + subject + " → " + want + "구간 "
                 + ChatColor.GRAY + "(내일부터 그렇게 쌓인다)");
+        plugin.tutorial().bump(player, "수련");   // 뿌리내림 (B-178) — 배분이 실제로 섰을 때만
         return true;
     }
 

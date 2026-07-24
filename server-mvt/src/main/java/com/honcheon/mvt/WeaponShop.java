@@ -128,6 +128,7 @@ final class WeaponShop implements Listener {
                 + offer.grade().name() + " " + offer.series().name() + ChatColor.WHITE
                 + " — " + ChatColor.YELLOW + offer.price() + "문" + ChatColor.WHITE + "일세. 잘 쓰게.");
         player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_TRADE, 1.0f, 1.0f);
+        plugin.tutorial().bump(player, "채비");   // 뿌리내림 과정 (B-178) — 무기를 장만했다
         plugin.updateSidebar(player);
         open(plugin, player);   // 전낭 표시 갱신
     }

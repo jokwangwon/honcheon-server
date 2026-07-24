@@ -123,6 +123,12 @@ final class TradeListener implements Listener {
         // 등록부의 대사가 먼저다 (B-121) — PDC 표식의 등록부 id 로 npcs/cheongha_npcs.yml 을 부른다
         String id = villager.getPersistentDataContainer()
                 .get(CheonghaBuilder.KEY_NPC, PersistentDataType.STRING);
+        // 뿌리내림 과정 (B-178) — 마중(섭구)·다음 벽(곽진)은 우클릭 대화가 곧 과제다
+        if ("seopgu".equals(id)) {
+            plugin.tutorial().bump(player, "마중");
+        } else if ("gwakjin".equals(id)) {
+            plugin.tutorial().bump(player, "다음_벽");
+        }
         List<String> lines = id == null ? null : registryLines.get(id);
         if (lines != null) {
             String name = registryNames.getOrDefault(id, plain);

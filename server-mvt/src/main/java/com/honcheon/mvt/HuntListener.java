@@ -88,6 +88,7 @@ public final class HuntListener implements Listener {
             accrue(killer, event, gap);
         }
         grantXp(killer, event, npc);
+        plugin.tutorial().bump(killer, "첫_사냥");   // 뿌리내림 과정 (B-178) — 등록부의 죽음만 센다
         // ★flush 는 처치의 끝에서 한 번 — 여기가 아니면 XP 가 다리에 안 실린다 (2026-07-24 실측 결함):
         //   ① accrue 안의 flush 는 grantXp **앞**이라 XP 가 늘 다음 처치로 밀렸고
         //   ② gap 표 밖의 등록 개체(호랑이=Ravager·갈호 등)는 accrue 자체가 안 돌아 영영 안 실렸다

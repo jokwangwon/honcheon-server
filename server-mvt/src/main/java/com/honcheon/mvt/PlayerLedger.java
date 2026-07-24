@@ -380,6 +380,15 @@ public final class PlayerLedger {
         return points;
     }
 
+    // ─── 뿌리내림 과정 (B-178) — 정거장 id → 계수. 영속: 본토의 삶은 이어지는 삶이다 ───
+
+    private final Map<String, Integer> tutorial = new LinkedHashMap<>();
+
+    /** 튜토리얼 진행 장부 — 의미는 TutorialGuide 가 안다 (여기는 칸일 뿐) */
+    public Map<String, Integer> tutorial() {
+        return tutorial;
+    }
+
     // ─── 미결(未決) — 아직 다리를 못 건넌 증분 ───
     //
     // 마크에서 쌓인 것은 여기 모였다가 `cultivation_logged` 로 봇에 올라간다. 올려 보내고 비운다.
@@ -494,6 +503,7 @@ public final class PlayerLedger {
         to.set("pending.marks_실전", pending실전);
         to.set("pending.marks_사선", pending사선);
         to.set("pending.xp", pendingXp);   // ★미영속이면 재기동이 XP 를 지운다 (2026-07-24 실측)
+        tutorial.forEach((k, v) -> to.set("tutorial." + k, v));   // 뿌리내림 과정 (B-178)
     }
 
     public static PlayerLedger load(org.bukkit.configuration.ConfigurationSection from) {
@@ -521,6 +531,7 @@ public final class PlayerLedger {
         led.pending실전 = from.getInt("pending.marks_실전");
         led.pending사선 = from.getInt("pending.marks_사선");
         led.pendingXp = from.getInt("pending.xp");
+        copyInt(from, "tutorial", led.tutorial);   // 뿌리내림 과정 (B-178)
         return led;
     }
 

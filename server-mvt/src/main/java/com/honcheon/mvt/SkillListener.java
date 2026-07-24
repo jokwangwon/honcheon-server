@@ -1060,7 +1060,14 @@ public final class SkillListener implements Listener {
             flash(player, ChatColor.GOLD + "레벨업 — Lv" + ledger.level()
                     + (gained > 0 ? " · 포인트 +" + gained : "")
                     + (ledger.points() > 0 ? " (미사용 " + ledger.points() + " — 디스코드 시트)" : ""));
+            plugin.tutorial().bump(player, "첫_레벨");   // 뿌리내림 과정 (B-178)
         }
+        // 뿌리내림 (B-178) — 배분은 디스코드에서 일어나지만 거울로 보인다: 포인트가 줄었다 = 배분했다.
+        //   레벨업과 같은 스냅숏에 겹치면(포인트 +3 −1) 델타가 가려질 수 있으나 mirror 소급이 받친다.
+        if (pointsBefore > 0 && ledger.points() >= 0 && ledger.points() < pointsBefore) {
+            plugin.tutorial().bump(player, "배분");
+        }
+        plugin.tutorial().mirror(player, ledger);   // 이미-한-몸의 소급 인정 (첫_레벨·배분)
         // 바닐라 XP바 = v3 경험/레벨 (cultivation_v3_levels §4-b ② — XpEconomyGuard 가 바닐라
         // 유입을 0 으로 끊어 두었다. 표시는 서버가 원장 거울에서 그린다 — 이 두 줄이 그 자리다)
         if (ledger.level() >= 1 && ledger.xpNeed() > 0) {

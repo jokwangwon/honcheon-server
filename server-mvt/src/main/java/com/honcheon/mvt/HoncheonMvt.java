@@ -40,6 +40,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private QiGeometry qiGeometry;
     private ModelBridge modelBridge;   // BetterModel 로 가는 다리 (리플렉션 · 없으면 판·점으로)   // 기(氣)의 기하 — EffectLib 을 빌리되 발행은 우리 예산으로
     private Antechamber antechamber;   // 입도진 — 강호에 들지 않은 자를 세계에 떨구지 않는다
+    private TutorialGuide tutorial;    // 뿌리내림 과정 — 본토 안내 층 (B-178)
     private Reset reset;   // 되돌리는 손 — 시험을 위해 이 몸을 지운다 (백업은 항상 뜬다)
     private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
@@ -111,6 +112,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.qiGeometry = new QiGeometry(this, skills.hud());
         this.modelBridge = new ModelBridge(this);
         this.antechamber = new Antechamber(this, cfg);
+        this.tutorial = new TutorialGuide(this);   // 뿌리내림 과정 — 본토 안내 층 (B-178)
         this.dojangGui = new DojangGui(this);
         this.gyeonggong = new GyeonggongListener(this);   // 몸이 땅을 딛는 법
         Onboarding.init(cfg);   // 첫 접속의 목소리 — player_creation.yml mvt_onboarding
@@ -450,6 +452,11 @@ public final class HoncheonMvt extends JavaPlugin {
         Zone zone = zoneAt(player.getLocation());
         boolean dojang = Dojang.isDojang(player.getWorld());
         PlayerLedger ledger = ledger(player.getUniqueId());
+        // ★뿌리내림 트래커 (B-178 · 한월 A7) — 배우는 동안만 자를 보인다 (끝나면 줄이 사라진다)
+        String tut = tutorial == null ? null : tutorial.trackerLine(ledger);
+        if (tut != null) {
+            obj.getScore(tut).setScore(6);
+        }
         // ★ 접합 여부와 경지를 **상시** 보여 준다 — 미접합자가 "조용히 반쪽 세계에서 노는" 것이
         //   이 게임의 가장 나쁜 상태였다. 화면이 늘 말해 준다: 너는 강호에 있는가, 없는가.
         if (ledger.linked()) {
@@ -772,6 +779,11 @@ public final class HoncheonMvt extends JavaPlugin {
 
     public Antechamber antechamber() {
         return antechamber;
+    }
+
+    /** 뿌리내림 과정 (B-178) — 훅 6곳(섭구·장쇠·사냥·시트 거울·수련·운기)이 부른다 */
+    public TutorialGuide tutorial() {
+        return tutorial;
     }
 
     public SkillListener skills() {
