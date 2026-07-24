@@ -163,6 +163,7 @@ npcs:
     location: north_road
     faction: noklim
     realm: "이류"
+    xp_grade: 두목               # 처치 XP 등급 (사용자 확정 2026-07-24 — 도적 두목 = 두목 ×3.0)
     stats:
       근력: 5
       체력: 4
@@ -488,6 +489,7 @@ npcs:
     location: north_road            # 북산 = 북쪽 산길 상단 (등록 장소 north_road 안)
     beast_rank: 맹수               # 일류 상당
     realm: "일류"
+    xp_grade: 정예               # 처치 XP 등급 (사용자 확정 2026-07-24 — 맹수 = 정예 ×1.5)
     stats: { 근력: 6, 민첩: 6, 체력: 5, 감각: 6, 사냥: 6, 은신: 5 }
     natural_weapon: { name: 발톱, weapon_power_as: 단검, reach: 2 }
     durability: 20
@@ -505,6 +507,7 @@ npcs:
     location: north_road            # 북산 = 북쪽 산길 상단 (등록 장소 north_road 안)
     beast_rank: 맹수
     realm: "일류"
+    xp_grade: 정예               # 처치 XP 등급 (사용자 확정 2026-07-24 — 맹수 = 정예 ×1.5)
     stats: { 근력: 7, 민첩: 3, 체력: 7, 감각: 4, 완력: 6 }
     natural_weapon: { name: 앞발, weapon_power_as: 봉, reach: 2 }       # 3 — 뭉툭하지만 무겁다
     durability: 24                 # 가장 두꺼운 짐승 — 오래 걸린다
@@ -521,6 +524,7 @@ npcs:
     location: north_road            # 북산 = 북쪽 산길 상단 (등록 장소 north_road 안)
     beast_rank: 영물               # 절정 이상
     realm: "절정"
+    xp_grade: 두목               # 처치 XP 등급 (사용자 확정 2026-07-24 — 영물 = 두목 ×3.0)
     stats: { 근력: 6, 민첩: 9, 체력: 6, 감각: 9, 내공: 3.0 }
     natural_weapon: { name: 발톱, weapon_power_as: 검, reach: 2 }       # 4 — 기가 서린 발톱
     durability: 22
