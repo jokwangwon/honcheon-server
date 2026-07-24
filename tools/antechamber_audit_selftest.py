@@ -369,6 +369,17 @@ MUTATIONS = [
      "", "조종석이 사람에게"),
     ("(108) 붓을 내려놔도 「적고 있다」가 남는다 (화면의 거짓말)", VOY,
      "        SeojangBook.get().settle(player);", "", "적고 있다\\S*가 안 걷힌다|기다림 기계를 걷어야"),
+
+    # ─── ★낙하 3방어 (실사용 2026-07-25 — 우물 질식·이상 리스폰) ───
+    ("(109) 나루를 미리 안 연다 (재기동 후 재접속 = 우물 낙하)", SRC,
+     "        world();\n        // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다",
+     "        // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다", "미리 안 연다"),
+    ("(110) 나루 밖의 항해자를 onJoin 이 안 집는다 (낙하한 몸 방치)", SRC,
+     "                if (!isAntechamber(player.getWorld())\n                        && WorldBridge.seojangHolds(player.getUniqueId())) {",
+     "                if (false) {", "안 집는다|방치"),
+    ("(111) 죽은 넋이 나루로 못 돌아온다 (리스폰이 본세계에 세운다)", SRC,
+     "        if (WorldBridge.seojangHolds(event.getPlayer().getUniqueId())) {",
+     "        if (false) {", "못 돌아온다"),
 ]
 
 

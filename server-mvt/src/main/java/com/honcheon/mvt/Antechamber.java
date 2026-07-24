@@ -1901,6 +1901,17 @@ public final class Antechamber implements Listener {
                 restore(player);
             }
             if (plugin.ledger(player.getUniqueId()).linked()) {
+                // ★서장 미완의 몸이 나루 **밖**에 섰다 (재기동 창의 기본 월드 낙하 — 우물 질식의
+                //   자리. 위 start() 의 미리 열기가 1차 방어, 이것이 2차다) — 항해로 되돌린다.
+                //   watchGate 가 나루의 몸만 보므로, 밖에 선 몸은 여기서 집지 않으면 영영 방치된다.
+                if (!isAntechamber(player.getWorld())
+                        && WorldBridge.seojangHolds(player.getUniqueId())) {
+                    World w = world();
+                    if (w != null) {
+                        player.teleport(spawnAt(w));   // 항해는 watchGate 가 다시 태운다 (relocate)
+                    }
+                    return;
+                }
                 if (isAntechamber(player.getWorld())) {
                     // ★B-179 — 서장이 남은 몸은 재방문이 아니라 **항해가 끊긴 몸**이다.
                     //   표식을 안 달면 watchGate 가 다시 태운다 (배는 봇의 명단이 다시 띄운다 —
@@ -1936,6 +1947,16 @@ public final class Antechamber implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGH)
     public void onRespawn(PlayerRespawnEvent event) {
+        // ★서장 미완의 몸 (실사용 2026-07-25 "리스폰 하니까 스폰 위치도 이상함") — 강을 건너다
+        //   죽은 넋은 침대가 있든 없든 **나루로 돌아온다** (항해는 watchGate 가 다시 태운다).
+        //   본세계의 내리는 자리는 건넌 몸의 것이다 — 아직 못 건넌 몸을 거기 세우면 서장이 끊긴다.
+        if (WorldBridge.seojangHolds(event.getPlayer().getUniqueId())) {
+            World w = world();
+            if (w != null) {
+                event.setRespawnLocation(spawnAt(w));
+            }
+            return;
+        }
         if (event.isBedSpawn() || event.isAnchorSpawn()) {
             return;   // 사람이 고른 자리 — 남의 집에 손대지 않는다
         }
@@ -2130,6 +2151,11 @@ public final class Antechamber implements Listener {
         if (ticker != null) {
             return;
         }
+        // ★★ 나루를 **미리 연다** (실사용 2026-07-25 04시대 "재접속 하니까 땅에 끼임 그리고 죽어버림")
+        //   — 나루가 지연 로드라, 재기동 직후 항해 중 튕긴 몸이 재접속하면 바닐라가 그 몸을
+        //   **기본 월드 스폰(광장 우물 기둥)**에 떨궜다. 나루 밖이라 어느 손도 안 집었고, 질식사했다.
+        //   월드가 미리 열려 있으면 바닐라가 제자리(강 위)에 되살린다 — 낙하 자체가 소멸한다.
+        world();
         // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다
         Bukkit.getPluginManager().registerEvents(stage, plugin);
         ticker = Bukkit.getScheduler().runTaskTimer(plugin,

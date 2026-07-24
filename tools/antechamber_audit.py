@@ -1515,6 +1515,26 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
                 "settle 이 기다림 기계를 걷어야 한다 (화면의 거짓말)")
     else:
         rep.good("붓이 내려오면 기다림 기계가 걷힌다 (settle — 남은 기다림은 항해다)")
+
+    # ⑦ ★재기동·죽음의 낙하 3방어 (실사용 2026-07-25 "재접속 하니까 땅에 끼임 그리고 죽어버림" ·
+    #   "리스폰 하니까 스폰 위치도 이상함") — 항해 중의 몸은 어느 문으로 나가도 나루로 돌아온다
+    st_body = body_of(code, r"void start\(\)")
+    if st_body is None or "world();" not in st_body:
+        rep.bad("나루를 미리 안 연다 — 재기동 직후 재접속한 항해자의 몸이 기본 월드 스폰"
+                "(광장 우물 기둥)에 낙하해 질식한다 (지연 로드의 함정)")
+    else:
+        rep.good("나루는 기동 때 미리 열린다 — 재접속 낙하가 원천 소멸 (1차 방어)")
+    jb = body_of(code, r"public void onJoin\([^)]*\)")
+    if jb is None or not re.search(r"!isAntechamber[\s\S]{0,300}?seojangHolds[\s\S]{0,400}?spawnAt",
+                                   jb):
+        rep.bad("나루 밖에 선 항해자를 onJoin 이 안 집는다 — 낙하한 몸이 영영 방치된다 (2차 방어 부재)")
+    else:
+        rep.good("나루 밖의 항해자는 onJoin 이 되돌린다 (2차 방어)")
+    rb = body_of(code, r"public void onRespawn\([^)]*\)")
+    if rb is None or not re.search(r"seojangHolds[\s\S]{0,300}?setRespawnLocation\(spawnAt", rb):
+        rep.bad("강을 건너다 죽은 넋이 나루로 못 돌아온다 — 리스폰이 본세계 자리에 세운다 (서장 단절)")
+    else:
+        rep.good("죽은 넋은 나루로 돌아온다 (리스폰 귀항 — 3차 방어)")
     sjs = source("SeojangStage.java")
     if not sjs:
         rep.bad("SeojangStage.java 가 없다 — 무대가 말뿐이다")
