@@ -266,8 +266,8 @@ final class SeojangStage implements Listener {
      * <b>무대를 재생한다</b> — 정거장에 닿은 순간 {@link Voyage} 가 부른다.
      * 꺼져 있으면 false (강등 — 부르는 쪽이 책을 편다).
      */
-    boolean play(Player player, World w, double baseX, double baseY, WorldBridge.SeojangScene scene,
-                 String setName) {
+    boolean play(Player player, World w, double baseX, double baseY, Location boat,
+                 WorldBridge.SeojangScene scene, String setName) {
         if (!enabled) {
             return false;
         }
@@ -323,11 +323,12 @@ final class SeojangStage implements Listener {
             }, (long) beatInterval * (i + 1)));
         }
 
-        // 등불 — 마지막 숨이 지나면 물 위로 떠오른다 (선택은 몸의 행위다)
+        // 선택 패 — 마지막 숨이 지나면 이물 난간에 걸린다 (★2.0: 배가 곧 무대 — 좌석에서 닿는다)
         long lanternAt = (long) beatInterval * (pulse.size() + 1) + choicesDelay;
+        Location dock = boat.clone();   // 정박 좌표 — 선택 동안 배는 매여 있다
         myClocks.add(Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline() && Antechamber.isAntechamber(player.getWorld())) {
-                offerChoices(player, w, baseX, baseY, scene);
+                offerChoices(player, w, dock, scene);
             }
         }, lanternAt));
         return true;
@@ -393,31 +394,39 @@ final class SeojangStage implements Listener {
         return d;
     }
 
-    /** 선택의 등불 — 물 위 세 개 (에필로그는 하나 — 출도의 따뜻한 등롱) */
-    private void offerChoices(Player player, World w, double baseX, double baseY,
+    /**
+     * 선택 패(牌木) — ★2.0 (사용자 확정: "큰 나룻배에 선택지가 올라가 있고 그걸 누른다").
+     * 정박한 배의 <b>이물 난간</b>에 패 셋이 걸린다 — 좌석에서 시선만 돌려 우클릭한다
+     * (이동 0 · 조준 실패 없음). 에필로그는 따뜻한 등롱 하나 — 출도의 등이다.
+     */
+    private void offerChoices(Player player, World w, Location boat,
                               WorldBridge.SeojangScene scene) {
         List<String> labels = scene.last() ? List.of(debutLabel) : scene.choices();
         if (labels.isEmpty()) {
             return;   // 고를 것이 없는 장 — 다음 배달이 흐름을 잇는다
         }
         List<UUID> mine = standing.computeIfAbsent(player.getUniqueId(), k -> new ArrayList<>());
-        double z0 = player.getLocation().getZ() - (labels.size() - 1) * lanternSpread / 2.0;
+        double z0 = boat.getZ() - (labels.size() - 1) * lanternSpread / 2.0;
         for (int i = 0; i < labels.size(); i++) {
             String lab = labels.get(i);
-            double x = baseX + lanternAhead;
+            double x = boat.getX() + lanternAhead;
             double z = z0 + i * lanternSpread;
-            Location at = new Location(w, x, baseY + lanternHeight, z);
-            Material lamp = scene.last() ? Material.LANTERN : Material.SOUL_LANTERN;
+            Location at = new Location(w, x, boat.getY() + lanternHeight, z);
+            Material lamp = scene.last() ? Material.LANTERN : Material.DARK_OAK_PLANKS;
+            // 패목 — 세로로 선 얇은 판 (에필로그는 등롱). 난간 위에 걸린 결
+            Vector3f pScale = scene.last() ? new Vector3f(0.45f, 0.45f, 0.45f)
+                    : new Vector3f(0.1f, 0.6f, 0.42f);
             BlockDisplay body = w.spawn(at, BlockDisplay.class, e -> {
                 e.setBlock(lamp.createBlockData());
                 e.setPersistent(false);
                 e.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.STRING,
                         player.getUniqueId().toString());
                 e.setBrightness(new Display.Brightness(15, 15));
-                e.setTransformation(new Transformation(new Vector3f(-0.35f, 0f, -0.35f),
-                        new AxisAngle4f(), new Vector3f(0.7f, 0.7f, 0.7f), new AxisAngle4f()));
+                e.setTransformation(new Transformation(
+                        new Vector3f(-pScale.x / 2f, 0f, -pScale.z / 2f),
+                        new AxisAngle4f(), pScale, new AxisAngle4f()));
             });
-            TextDisplay label = w.spawn(at.clone().add(0, 1.1, 0), TextDisplay.class, e -> {
+            TextDisplay label = w.spawn(at.clone().add(0, 0.75, 0), TextDisplay.class, e -> {
                 e.setText(labelPrefix + lab);
                 e.setBillboard(Display.Billboard.CENTER);
                 e.setSeeThrough(false);
@@ -430,9 +439,9 @@ final class SeojangStage implements Listener {
                 e.setBrightness(new Display.Brightness(13, 15));
             });
             int idx = scene.last() ? -1 : i;
-            Interaction hand = w.spawn(at.clone().add(0, -0.3, 0), Interaction.class, e -> {
-                e.setInteractionWidth(1.2f);
-                e.setInteractionHeight(2.2f);
+            Interaction hand = w.spawn(at.clone().add(0, -0.15, 0), Interaction.class, e -> {
+                e.setInteractionWidth(0.7f);   // 패 하나의 폭 — 이웃 패와 안 겹친다 (spread 0.9)
+                e.setInteractionHeight(1.1f);
                 e.setPersistent(false);
                 var pdc = e.getPersistentDataContainer();
                 pdc.set(KEY_STAGE, PersistentDataType.STRING, player.getUniqueId().toString());

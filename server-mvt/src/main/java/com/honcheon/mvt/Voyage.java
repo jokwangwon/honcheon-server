@@ -59,8 +59,10 @@ final class Voyage {
     private final double[] ferrymanAt;
     private final List<BargePart> bargeParts = new java.util.ArrayList<>();
 
-    /** 나룻배 부품 하나 — 좌석(투명 보트) 중심 기준 상대 자리 */
-    private record BargePart(double[] at, org.bukkit.Material block, float[] scale) { }
+    /** 나룻배 부품 하나 — 좌석(투명 보트) 중심 기준 상대 자리. 회전은 도(度) — yaw(Y)·pitch(X)·roll(Z:
+     *  동진하는 배의 **앞들림**이 roll 이다. 이물 +14, 고물 -12 같은 값이 곡선을 흉내 낸다) */
+    private record BargePart(double[] at, org.bukkit.Material block, float[] scale,
+                             float yaw, float pitch, float roll) { }
 
     /** 물 위에 선 부품 하나 — 엔티티와 그 상대 자리 (배를 따라 미끄러진다) */
     private record Placed(UUID id, double[] at) { }
@@ -116,7 +118,10 @@ final class Voyage {
                     continue;   // 등록부가 모르는 블록 — 그 부품만 비운다
                 }
                 bargeParts.add(new BargePart(dtriple(p.get("at"), 0, 0, 0), m,
-                        ftriple(p.get("scale"))));
+                        ftriple(p.get("scale")),
+                        p.get("yaw") instanceof Number n1 ? n1.floatValue() : 0f,
+                        p.get("pitch") instanceof Number n2 ? n2.floatValue() : 0f,
+                        p.get("roll") instanceof Number n3 ? n3.floatValue() : 0f));
             }
         }
     }
@@ -283,11 +288,16 @@ final class Voyage {
                 e.setTeleportDuration(bargeLerp);
                 e.setBrightness(new org.bukkit.entity.Display.Brightness(12, 15));
                 e.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
+                // 회전 — 도(度)를 라디안으로. 회전 중심이 부품 원점이라 미세한 쏠림은 at 으로 다듬는다 (빨간펜)
+                org.joml.Quaternionf rot = new org.joml.Quaternionf().rotationYXZ(
+                        (float) Math.toRadians(p.yaw()),
+                        (float) Math.toRadians(p.pitch()),
+                        (float) Math.toRadians(p.roll()));
                 e.setTransformation(new org.bukkit.util.Transformation(
                         new org.joml.Vector3f(-p.scale()[0] / 2f, 0f, -p.scale()[2] / 2f),
-                        new org.joml.AxisAngle4f(),
+                        rot,
                         new org.joml.Vector3f(p.scale()[0], p.scale()[1], p.scale()[2]),
-                        new org.joml.AxisAngle4f()));
+                        new org.joml.Quaternionf()));
             });
             r.barge.add(new Placed(d.getUniqueId(), p.at()));
         }
@@ -481,7 +491,7 @@ final class Voyage {
             // ★2차 (사용자: "글이 아닌 몸으로") — 책 대신 무대. 꺼져 있으면 옛 책 그릇으로 강등
             if (!ante.stage().play(player, player.getWorld(),
                     ante.cx() + stationX + 0.5, ante.waterTop(player.getWorld()) + 1.0,
-                    r.latest, r.stageSet)) {
+                    boat.getLocation(), r.latest, r.stageSet)) {
                 SeojangBook.get().deliver(player, r.latest);
             }
             return;

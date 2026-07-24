@@ -426,15 +426,35 @@ antechamber:
       ferryman: true
       ferryman_name: "사공"
       ferryman_at: [-1.3, 0.0, -0.35]   # 고물 — 삿대 곁
+      # ★2.0 (사용자 확정 2026-07-25: 큰 나룻배 ~5.5칸 · pitch 곡선 · 배 위의 선택 패) —
+      #   yaw(Y)·pitch(X)·roll(Z — 동진하는 배의 **앞들림**) 회전으로 이물·고물이 들려 올라간다.
+      #   수치 전부 【제안】 — 빨간펜 대상.
       parts:                     # at = [앞x(동), 위y, 옆z] — 보트(좌석) 중심 기준
-        - { at: [0.0, -0.45, 0.0],   block: DARK_OAK_PLANKS, scale: [3.4, 0.25, 1.6] }   # 밑판
-        - { at: [0.0, -0.2, -0.85],  block: DARK_OAK_PLANKS, scale: [3.2, 0.5, 0.15] }   # 뱃전 (좌)
-        - { at: [0.0, -0.2, 0.7],    block: DARK_OAK_PLANKS, scale: [3.2, 0.5, 0.15] }   # 뱃전 (우)
-        - { at: [1.7, -0.3, 0.0],    block: DARK_OAK_PLANKS, scale: [0.7, 0.5, 1.2] }    # 이물 (뱃머리)
-        - { at: [-1.7, -0.3, 0.0],   block: DARK_OAK_PLANKS, scale: [0.7, 0.5, 1.2] }    # 고물
-        - { at: [1.95, 0.25, 0.0],   block: SOUL_LANTERN,    scale: [0.5, 0.5, 0.5] }    # 뱃머리 넋등
-        - { at: [-1.25, -0.1, 0.45], block: DARK_OAK_FENCE,  scale: [0.12, 2.8, 0.12] }  # 삿대
-        - { at: [0.6, -0.32, 0.0],   block: SPRUCE_SLAB,     scale: [0.9, 0.12, 1.1] }   # 앉을 널
+        # 밑판 3분할 — 중앙은 평평, 양끝이 들린다
+        - { at: [0.0, -0.5, 0.0],    block: DARK_OAK_PLANKS, scale: [3.0, 0.22, 1.7] }
+        - { at: [2.05, -0.36, 0.0],  block: DARK_OAK_PLANKS, scale: [1.5, 0.2, 1.5],  roll: 14 }
+        - { at: [-2.05, -0.38, 0.0], block: DARK_OAK_PLANKS, scale: [1.5, 0.2, 1.5],  roll: -12 }
+        # 뱃전 좌우 3분할 — 끝단은 밑판 각을 따라 오르며 살짝 오므라든다
+        - { at: [0.0, -0.25, -0.92], block: DARK_OAK_PLANKS, scale: [3.0, 0.55, 0.14] }
+        - { at: [0.0, -0.25, 0.78],  block: DARK_OAK_PLANKS, scale: [3.0, 0.55, 0.14] }
+        - { at: [2.0, -0.1, -0.8],   block: DARK_OAK_PLANKS, scale: [1.45, 0.5, 0.13], roll: 14,  yaw: -7 }
+        - { at: [2.0, -0.1, 0.66],   block: DARK_OAK_PLANKS, scale: [1.45, 0.5, 0.13], roll: 14,  yaw: 7 }
+        - { at: [-2.0, -0.12, -0.8], block: DARK_OAK_PLANKS, scale: [1.45, 0.5, 0.13], roll: -12, yaw: 7 }
+        - { at: [-2.0, -0.12, 0.66], block: DARK_OAK_PLANKS, scale: [1.45, 0.5, 0.13], roll: -12, yaw: -7 }
+        # 테두리 — 밝은 결 (뱃전 상단 · 배의 윤곽선)
+        - { at: [0.0, 0.06, -0.95],  block: STRIPPED_DARK_OAK_LOG, scale: [3.1, 0.09, 0.18] }
+        - { at: [0.0, 0.06, 0.77],   block: STRIPPED_DARK_OAK_LOG, scale: [3.1, 0.09, 0.18] }
+        # 이물·고물 마구리 (막음판)
+        - { at: [2.72, -0.02, 0.0],  block: DARK_OAK_PLANKS, scale: [0.16, 0.52, 1.0], roll: 14 }
+        - { at: [-2.72, -0.06, 0.0], block: DARK_OAK_PLANKS, scale: [0.16, 0.46, 1.0], roll: -12 }
+        # 앉는 널 (객석·사공석)
+        - { at: [0.55, -0.32, 0.0],  block: SPRUCE_SLAB,     scale: [0.9, 0.12, 1.4] }
+        - { at: [-1.5, -0.32, 0.0],  block: SPRUCE_SLAB,     scale: [0.8, 0.12, 1.4] }
+        # 뱃머리 넋등 (기둥 + 등)
+        - { at: [2.45, 0.05, 0.0],   block: DARK_OAK_FENCE,  scale: [0.1, 0.95, 0.1] }
+        - { at: [2.45, 0.95, 0.0],   block: SOUL_LANTERN,    scale: [0.45, 0.45, 0.45] }
+        # 삿대 — 물에 담근 각 (사공 곁)
+        - { at: [-1.7, -0.35, 0.55], block: DARK_OAK_FENCE,  scale: [0.11, 3.1, 0.11], roll: -28, yaw: 9 }
     embark_line: "§8사공이 삿대를 민다 — 배가 안개 속으로 미끄러진다. §7강을 건너는 동안, 네 기억이 너를 따라온다."   # 【제안】
 
   # ═══════════════════════════════════════════════════════════════════════
