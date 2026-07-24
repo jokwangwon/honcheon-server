@@ -622,6 +622,11 @@ public final class Antechamber implements Listener {
         return groundY(w);
     }
 
+    /** ★3차 — 정박 갑판의 설 자리 (갑판 널 gy+1 위 · 고물 쪽 중앙 · 동쪽을 본다) */
+    Location deckAnchor(World w, int stationX) {
+        return new Location(w, cx + stationX - 0.5, groundY(w) + 2.0, cz + 0.5, -90f, 0f);
+    }
+
     /** 격자 잡음 (헌법 §2.5 — 점묘 금지): 8칸 격자점 해시값의 쌍선형 보간. 난수 없음 — 결정론 */
     private static double grain(int x, int z) {
         int g = 8;
@@ -1191,8 +1196,8 @@ public final class Antechamber implements Listener {
                 Material.LANTERN, null));
 
         // ⑤-6 ★기억의 회랑 (B-179) — 정거장의 넋등 문(門): 물길 양옆에 한 쌍씩.
-        //   배가 이 사이에서 멈추고, 그 자리에서 책이 열린다. 계열별 기억 조형(디스플레이
-        //   엔티티 — 본인에게만 보인다)은 후속 조형 회차의 몫이다 (시안 §0.3).
+        //   갑판이 이 사이에 정박하고, 그 위에서 장이 열린다. 계열별 기억 조형(디스플레이
+        //   엔티티 — 본인에게만 보인다)은 SeojangStage 의 몫이다.
         for (int sx : voyage.stationsX()) {
             for (int side : new int[]{-1, 1}) {
                 int gz2 = side * voyage.frameZ();
@@ -1202,6 +1207,24 @@ public final class Antechamber implements Listener {
                 }
                 out.add(new Place(cx + sx, gy + 3, cz + gz2, Material.SOUL_LANTERN, null));
             }
+        }
+
+        // ⑤-7 ★정박 나룻배 (B-179 3차 — 정박 무대 + 암전 도하): 정거장마다 실블록 갑판이
+        //   매여 있다 — 사람은 여기 **서서** 기억을 겪고 패를 고른다 (좌석 폐지 · Voyage 묘비).
+        //   갑판 널 + 뱃전 난간(z 양변) + 이물 넋등. 치수는 voyage.moored 등록부.
+        for (int sx : voyage.stationsX()) {
+            for (int dx = -voyage.mooredWest(); dx <= voyage.mooredEast(); dx++) {
+                for (int dz = -voyage.mooredHalfW(); dz <= voyage.mooredHalfW(); dz++) {
+                    out.add(new Place(cx + sx + dx, gy + 1, cz + dz, Material.SPRUCE_PLANKS, null));
+                    if (Math.abs(dz) == voyage.mooredHalfW()) {
+                        out.add(new Place(cx + sx + dx, gy + 2, cz + dz,
+                                Material.DARK_OAK_FENCE, null));   // 뱃전 난간
+                    }
+                }
+            }
+            int bow = sx + voyage.mooredEast() + 1;   // 이물 끝 — 넋등 기둥
+            out.add(new Place(cx + bow, gy + 1, cz, Material.DARK_OAK_FENCE, null));
+            out.add(new Place(cx + bow, gy + 2, cz, Material.SOUL_LANTERN, null));
         }
 
         planHut(out, deck);
