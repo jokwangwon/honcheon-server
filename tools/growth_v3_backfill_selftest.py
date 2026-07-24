@@ -170,6 +170,34 @@ def selftest_naegong():
     return 0 if caught else 1
 
 
+def check_freeze():
+    """단계 4 마감 — v2 수련→능력치 동결 (training_attr_frozen): 행위는 능력치를 안 민다."""
+    def settle_attr(hwahu, delta, frozen):
+        return hwahu if frozen else hwahu + delta
+    bad = 0
+    # ① 동결 — 수련 delta 가 화후를 못 민다 → 화후² ≤ 원장 유지 → 화해 무연산 (원장 불변)
+    h = settle_attr(3.7, 0.5, True)
+    s = backfill({"능력치_화후": {"근력": h}, "원장": {"근력": 13.69}})
+    ok = h == 3.7 and abs(s["원장"]["근력"] - 13.69) < 1e-9   # 3.7² 부동소수 오차 허용
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 동결 — 수련이 능력치를 안 민다 (화후 3.7 · 원장 13.69 불변 · 화해 무연산)")
+    # ② 스위치 off — v2 그대로 (화후 4.2 → 화해가 원장 17.64 로 올린다)
+    h = settle_attr(3.7, 0.5, False)
+    s = backfill({"능력치_화후": {"근력": h}, "원장": {"근력": 13.69}})
+    ok = abs(s["원장"]["근력"] - 17.64) < 1e-9
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 스위치 off = v2 (화후 4.2 → 원장 {s['원장']['근력']:.2f})")
+    return bad
+
+
+def selftest_freeze():
+    """눈을 시험하는 눈 — 동결인데 적립이 새면 화해가 원장을 밀어 올린다 → 그 표류를 잡아야 한다."""
+    s = backfill({"능력치_화후": {"근력": 4.2}, "원장": {"근력": 13.69}})   # 오배선: 동결인데 화후가 자랐다
+    caught = s["원장"]["근력"] > 13.69
+    print(f"  {'✅' if caught else '❌'} 동결 누수 오배선 감지 (원장 13.69 → {s['원장']['근력']:.2f} 표류)")
+    return 0 if caught else 1
+
+
 def check_gate():
     """단계 4 — 승급 이중 관문: 승급 = 사건 요건 AND 자격 레벨 N_k ("레벨은 자격, 사건이 문")."""
     nk = {"삼류": 10, "이류": 40, "일류": 65}   # cultivation.yml levels.qualifying_level (승인 수치)
@@ -240,6 +268,8 @@ if __name__ == "__main__":
     fail += check_levelup()
     print("  ── 단계 4 — 포인트 배분 ──")
     fail += check_allocate()
+    print("  ── 단계 4 — v2 수련→능력치 동결 ──")
+    fail += check_freeze()
     print("  ── 단계 4 — 승급 이중 관문 ──")
     fail += check_gate()
     print("  ── 단계 4 — A안 내공 통일 ──")
@@ -250,5 +280,6 @@ if __name__ == "__main__":
     fail += selftest_allocate()
     fail += selftest_gate()
     fail += selftest_naegong()
+    fail += selftest_freeze()
     print(f"\n총 위반/오류: {fail}건 — {'통과' if fail == 0 else '실패'}")
     sys.exit(1 if fail else 0)

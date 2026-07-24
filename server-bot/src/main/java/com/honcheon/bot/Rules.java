@@ -28,6 +28,8 @@ public final class Rules {
     public final Map<String, Integer> qualifyingLevel;
     /** ★A안 내공 통일 ({@code cultivation.yml levels.naegong_unified}) — 내력 풀 = √원장[내공] */
     public final boolean naegongUnified;
+    /** ★v2 수련→능력치 동결 ({@code levels.training_attr_frozen}) — 능력치는 레벨 포인트의 것 */
+    public final boolean trainingAttrFrozen;
     /** 처치 XP 등급 계수 ({@code levels.xp_sources.combat.grade_coefficient} — 잡졸/정예/두목) */
     public final Map<String, Double> xpGradeCoef;
     /** 게시판 의뢰 등급 → XP ({@code levels.xp_sources.board_quests} — 사용자 확정 2026-07-24) */
@@ -134,6 +136,8 @@ public final class Rules {
         this.xpGradeCoef = java.util.Collections.unmodifiableMap(gcoef);
         // ★A안 내공 통일 (사용자 확정 2026-07-24) — 내력 풀의 내공 실수치 = √원장[내공]
         this.naegongUnified = Boolean.TRUE.equals(levels.get("naegong_unified"));
+        // ★v2 수련→능력치 동결 (단계 4 마감) — 행위는 기술·화후만, 능력치는 레벨 포인트의 것
+        this.trainingAttrFrozen = Boolean.TRUE.equals(levels.get("training_attr_frozen"));
         // 자격 레벨 N_k (경지별) — 승급 이중 관문의 '자격' 축 (사건 마크가 '문' — cultivation_v3_levels.md §5)
         Map<String, Integer> quals = new java.util.LinkedHashMap<>();
         RulesConfig.section(levels, "qualifying_level")

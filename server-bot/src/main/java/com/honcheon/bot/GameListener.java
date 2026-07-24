@@ -5781,8 +5781,12 @@ public final class GameListener extends ListenerAdapter {
         }
 
         // ─ 능력치 — 실수 원장(능력치_화후)이 정본, 정수부가 판정치 ─
+        //   ★v2 동결 (단계 4 마감 · levels.training_attr_frozen): 행위(수련)는 능력치를 더 밀지
+        //   않는다 — 능력치는 레벨 포인트의 것 (헌법 v3). 화후² ≤ 원장이 유지되어 화해가 자연
+        //   무연산이 된다. 기술 수련·화후_원장(승급 관문)·내공 축기는 아래 블록들이 그대로 잇는다.
         Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
-        Map<String, Object> deltaAttr = train ? asMap(data.get("attr_days")) : Map.of();
+        Map<String, Object> deltaAttr = train && !rules.trainingAttrFrozen
+                ? asMap(data.get("attr_days")) : Map.of();
         if (attrs != null && !deltaAttr.isEmpty()) {
             Map<String, Object> hwahu = new LinkedHashMap<>(
                     (Map<String, Object>) sheet.getOrDefault("능력치_화후", Map.of()));
