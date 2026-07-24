@@ -21,6 +21,8 @@ import shutil, subprocess, sys, os
 ROOT = "/home/delangi/문서/project/category/honcheon-server"
 CFG = f"{ROOT}/config/antechamber.yml"
 SRC = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/Antechamber.java"
+SBK = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SeojangBook.java"
+VOY = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/Voyage.java"
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -262,8 +264,9 @@ MUTATIONS = [
      "z_from: 6", "z_from: -6", "침범|비대칭"),
     ("(76) 고사목 문턱을 올려 군락을 지운다 (화폭에 중경이 없다)", CFG,
      "threshold: 0.55", "threshold: 0.99", "군락이 비었다"),
+    # ((77) 조각 갱신 B-179 — 원경이 기슭 자리 x92 로 이사했다)
     ("(77) 이승의 불빛을 서쪽에 단다 (원경은 동쪽에만)", CFG,
-     "light: [58, 0]", "light: [-58, 0]", "동쪽"),
+     "light: [92, 0]", "light: [-92, 0]", "동쪽"),
     ("(78) 새벽을 황혼으로 되돌린다 (하늘이 축과 딴말을 한다)", CFG,
      "fixed_time: 22900", "fixed_time: 12800", "새벽 창"),
     ("(79) 시각을 코드가 지어낸다 (등록부를 안 본다)", SRC,
@@ -282,6 +285,29 @@ MUTATIONS = [
     ("(84) 겹친 기록의 자리를 안 옮긴다 (얹히는 것이 받침을 앞지른다)", SRC,
      "            dedup.remove(key);   // 자리를 끝으로 옮긴다 (put 만 하면 첫 자리에 남아 받침을 앞지른다)\n            dedup.put(key, p);",
      "            dedup.put(key, p);", "겹쳐 쓰기를 안 걷어낸다"),
+
+    # ─── ★★기억의 회랑 (B-179 · 2026-07-25) — 강을 건너는 동안이 곧 서장이다 ───
+    #
+    # 회랑의 계약: 승선 세 길이 다 배를 띄운다 · 책은 정거장에서 열린다 · 배는 이승의 불빛에
+    # 닿는다 · 명단이 끝나면 기슭=출도 (갇힘 금지). 하나라도 못 잡으면 회랑이 조용히 무너진다.
+    ("(85) 정거장을 하나 줄인다 (어느 장은 열릴 자리가 없다)", CFG,
+     "stations_x: [44, 60, 76]", "stations_x: [44, 60]", "열릴 자리가 없다"),
+    ("(86) 기슭이 이승의 불빛을 비껴간다 (배가 불빛에 닿지 않는다)", CFG,
+     "shore_x: 92", "shore_x: 120", "불빛"),
+    ("(87) 책이 정거장을 모른다 (아무 데서나 열린다)", SBK,
+     "        Antechamber ante = plugin.antechamber();\n        if (ante != null && ante.voyage().defer(player, scene)) {\n            return;\n        }",
+     "", "정거장을 모른다|아무 데서나"),
+    ("(88) 기슭의 문을 잠근다 (명단이 끝나도 영원한 항해)", VOY,
+     "        if (!WorldBridge.seojangHolds(player.getUniqueId())) {",
+     "        if (false) {", "기슭의 문|영원한 항해"),
+    ("(89) 배가 저어가지 않는다 (속도 0 = 갇힘)", CFG,
+     "speed_bps: 0.5", "speed_bps: 0", "저어가지 않는다"),
+    ("(90) 접합 직후의 승선 문을 닫는다 (부두 대기로 회귀)", SRC,
+     "            voyage.embark(player);\n            return;\n        }\n        if (autoCrossSeconds > 0) {",
+     "            return;\n        }\n        if (autoCrossSeconds > 0) {", "승선 문"),
+    ("(91) 출도가 배를 안 걷는다 (배가 기슭에 쌓인다)", SRC,
+     "        voyage.disembark(id);   // ★B-179 — 배는 기슭에 남지 않는다 (항해는 메모리뿐이다)\n",
+     "", "기슭에 쌓인다"),
 ]
 
 
@@ -324,8 +350,11 @@ def test_marker_census():
 
 def main():
     import re
-    shutil.copy(CFG, CFG + ".bak")
-    shutil.copy(SRC, SRC + ".bak")
+    # ★B-179 — 뮤테이션이 겨누는 파일이 넷으로 늘었다 (CFG·SRC·SBK·VOY). 목록에서 모아
+    #   전부 백업한다 — 두 개만 되돌리면 나머지 파일의 뮤테이션이 **영구 감염**된다.
+    paths = sorted({m[1] for m in MUTATIONS})
+    for p in paths:
+        shutil.copy(p, p + ".bak")
 
     rc, out = run_audit()
     base_v = re.search(r"위반 (\d+)건", out)
@@ -351,11 +380,11 @@ def main():
         else:
             print(f"  ❌  {name}\n      └ 눈이 못 잡았다! (종료 {rc}, '{expect}' 없음)")
             missed += 1
-        shutil.copy(CFG + ".bak", CFG)
-        shutil.copy(SRC + ".bak", SRC)
+        for p in paths:
+            shutil.copy(p + ".bak", p)
 
-    os.remove(CFG + ".bak")
-    os.remove(SRC + ".bak")
+    for p in paths:
+        os.remove(p + ".bak")
 
     rc, out = run_audit()
     print(f"\n되돌린 뒤: 종료코드 {rc}")

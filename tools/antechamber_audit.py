@@ -1282,6 +1282,95 @@ def audit_canvas(rep: Report, ante: dict, code: str) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  ⑧-3 ★기억의 회랑 — 강을 건너는 동안이 곧 서장인가 (B-179 · seojang_presentation.md §0)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def audit_voyage(rep: Report, ante: dict, code: str) -> None:
+    rep.say()
+    rep.say("  ⑧-3 기억의 회랑 — 강을 건너는 동안이 곧 서장인가 (B-179)")
+    vo = ante.get("voyage") or {}
+    if not vo:
+        rep.bad("voyage 절이 없다 — 회랑이 등록부에 없다 (seojang_presentation.md §0 이 정본이다)")
+        return
+    g = Geo(ante)
+    stations = vo.get("stations_x") or []
+    shore = vo.get("shore_x", 0)
+    start = vo.get("start_x", 0)
+    lanes = vo.get("lanes_z") or []
+    speed = vo.get("speed_bps", 0)
+    frame = vo.get("frame_z", 8)
+    wall = g.mx[1] + (ante.get("barrier") or {}).get("margin", 1)
+
+    # ① 물길의 기하 — 장벽 밖에서 시작해, 정거장이 오름차순으로, 기슭까지
+    if (start <= wall or stations != sorted(stations)
+            or not stations or not all(start < s < shore for s in stations)):
+        rep.bad(f"뱃길 기하가 어긋난다 — 시작 x{start}(장벽 x{wall} 밖이어야) · "
+                f"정거장 {stations}(오름차순 · 시작과 기슭 사이) · 기슭 x{shore}")
+    else:
+        rep.good(f"뱃길 — 장벽 x{wall} 밖 x{start}에서 정거장 {stations} 를 지나 기슭 x{shore}")
+
+    # ② ★기슭 = 이승의 불빛 (두 등록부 대조 — 배는 그 불빛에 닿아야 한다)
+    hl = (((ante.get("canvas") or {}).get("horizon") or {}).get("light") or [0, 0])
+    if shore != hl[0]:
+        rep.bad(f"기슭 x{shore} ≠ 이승의 불빛 x{hl[0]} — 배가 불빛에 닿지 않는다 "
+                "(canvas.horizon.light 가 목적지의 정본이다)")
+    else:
+        rep.good(f"기슭 x{shore} = 이승의 불빛 (배가 그 불빛을 향해 저어간다)")
+
+    # ③ ★정거장 수 = 장면 수 (seojang.yml scenes 각 벌 — 어느 장이든 열릴 자리가 있어야 한다)
+    scenes = load_yaml("seojang.yml").get("scenes") or {}
+    if not scenes:
+        rep.warn("seojang.yml scenes 를 못 읽었다 — 정거장 수 대조를 못 했다")
+    for name, sc in scenes.items():
+        if isinstance(sc, list) and len(sc) != len(stations):
+            rep.bad(f"장면 벌 '{name}' 은 {len(sc)}장인데 정거장은 {len(stations)}곳 — "
+                    "어느 장은 열릴 자리가 없다 (두 등록부가 어긋난다)")
+        elif isinstance(sc, list):
+            rep.good(f"장면 벌 '{name}' {len(sc)}장 = 정거장 {len(stations)}곳")
+
+    # ④ 물길이 문설주 안 · 배가 실제로 저어가는가
+    if lanes and max(abs(int(l)) for l in lanes) >= frame:
+        rep.bad(f"물길 lanes {lanes} 가 정거장 문설주(±{frame})를 친다")
+    else:
+        rep.good(f"물길 {lanes} — 문설주(±{frame}) 안을 지난다")
+    if not speed or float(speed) <= 0:
+        rep.bad("voyage.speed_bps 가 0 — 배가 저어가지 않는다 (영원한 항해 = 갇힘)")
+    else:
+        rep.good(f"속도 {speed}칸/초 — 정거장 간격이 붓(~22초+)을 덮는다")
+
+    # ⑤ 배선 — 승선 세 길 · 정거장 펼침 · 기슭의 문 · 하선
+    n_embark = strip_comments(code).count("voyage.embark(player)")
+    if n_embark < 3:
+        rep.bad(f"승선 문이 {n_embark}곳뿐이다 — 접합 직후(watchGate)·명단 지각(시계)·종(cross) "
+                "세 길이 모두 배를 띄워야 한다 (하나라도 빠지면 그 길은 부두 대기로 되돌아간다)")
+    else:
+        rep.good(f"승선 문 {n_embark}곳 — 어느 길로 와도 배가 뜬다")
+    sbk = source("SeojangBook.java")
+    if "voyage().defer(player, scene)" not in sbk:
+        rep.bad("책이 정거장을 모른다 — SeojangBook.deliver 가 항해에 묻지 않는다 "
+                "(책이 아무 데서나 열린다)")
+    else:
+        rep.good("항해 중의 책은 정거장에서 열린다 (deliver → Voyage.defer)")
+    voy = source("Voyage.java")
+    if not voy:
+        rep.bad("Voyage.java 가 없다 — 항해 기계가 말뿐이다")
+    elif not re.search(r"seojangHolds\([\s\S]{0,400}?depart\(", voy):
+        rep.bad("기슭의 문이 없다 — 명단이 끝나도(출도·봇 죽음) 배가 출도로 못 잇는다 "
+                "(영원한 항해 = 갇힘)")
+    else:
+        rep.good("명단이 끝나면 배는 기슭으로 — 닿는 순간이 출도다 (갇힘 금지)")
+    dp = body_of(code, r"void depart\(Player player, List<String> extra\)")
+    if dp is None or "voyage.disembark" not in dp:
+        rep.bad("출도가 배를 안 걷는다 — 배가 기슭에 쌓인다")
+    else:
+        rep.good("출도는 배를 걷는다 (항해는 메모리뿐)")
+    if "voyage.stationsX()" not in code:
+        rep.bad("정거장 문(門)이 말뿐이다 — plan() 이 정거장 등록부를 안 읽는다")
+    else:
+        rep.good("정거장 문은 조성 판에 선다 (plan ⑤-6 — 같은 등록부)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  ⑨ 발판 — 밟으면 그 명령이 정말 쳐지는가
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1713,6 +1802,7 @@ def main() -> int:
     audit_flow(rep, ante, code)
     audit_light(rep, ante, code)
     audit_canvas(rep, ante, code)
+    audit_voyage(rep, ante, code)
     audit_plates(rep, ante, code)
     audit_dummies(rep, ante, code)
     audit_conventions(rep, code, raw_cfg)

@@ -180,6 +180,13 @@ public final class SeojangBook {
      * <p>메인 스레드에서 불려야 한다 (Bukkit API 는 그렇게 산다 — {@link HoncheonMvt} 가 넘겨 준다).
      */
     public void deliver(Player player, WorldBridge.SeojangScene scene) {
+        // ★B-179 (기억의 회랑) — 항해 중의 책은 **정거장에서** 열린다: 배가 그 자리로 데려간다.
+        //   미루는 것은 펼침뿐이다 — 집필 중 조각은 통과시켜 기다림 기계가 그대로 돈다.
+        //   항해가 아니면(부두 없는 세계·옛 경로) 옛 몸짓 그대로 즉시 편다.
+        Antechamber ante = plugin.antechamber();
+        if (ante != null && ante.voyage().defer(player, scene)) {
+            return;
+        }
         // ★ 붓이 아직 들려 있다 — 책을 주지 않는다. 대신 **사공이 말한다** (침묵 금지)
         if (scene.writing()) {
             // 기다림 명단에 올린다 — 이제부터 액션바가 반복해서 말한다 ("집필 중"이지 고장이 아니다).

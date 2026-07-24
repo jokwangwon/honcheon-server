@@ -166,6 +166,8 @@ public final class Antechamber implements Listener {
     private final int[] ridgeX;
     private final int[] ridgeZ;
     private final int[] horizonLight;
+    /** ★B-179 — 기억의 회랑 (삼도천 항해). 서장의 책이 열리는 자리와 사이의 시간 */
+    private final Voyage voyage;
     private final Hut hut;
     // 사공의 몸 (3차 개정 추기) — pos 길이 0 = 몸 없음 (등록부가 스위치)
     private final int[] ferrymanPos;
@@ -364,9 +366,12 @@ public final class Antechamber implements Listener {
         }
         this.lycorisHash = Math.max(2, num(cv.get("lycoris_hash"), 17));
         Map<String, Object> hor = RulesConfig.section(cv, "horizon");
-        this.ridgeX = pair(hor.get("ridge_x"), 56, 68);
+        this.ridgeX = pair(hor.get("ridge_x"), 88, 100);
         this.ridgeZ = pair(hor.get("ridge_z"), -36, 36);
-        this.horizonLight = pair(hor.get("light"), 58, 0);
+        this.horizonLight = pair(hor.get("light"), 92, 0);
+
+        // ★B-179 — 기억의 회랑 (삼도천 항해 · seojang_presentation.md §0). 배·물길·정거장의 주인
+        this.voyage = new Voyage(plugin, this, RulesConfig.section(a, "voyage"));
 
         Map<String, Object> li = RulesConfig.section(a, "lighting");
         this.light = new Lighting(
@@ -588,6 +593,25 @@ public final class Antechamber implements Listener {
      *  조성이 손대지 않는 먼 자리에서 재므로, 습지를 파도 이 값은 안 흔들린다. */
     private int groundY(World w) {
         return w.getHighestBlockYAt(cx + 512, cz + 512);
+    }
+
+    // ─── ★B-179 — 항해(Voyage)가 묻는 것들 (같은 등록부 · 같은 자) ───
+
+    Voyage voyage() {
+        return voyage;
+    }
+
+    int cx() {
+        return cx;
+    }
+
+    int cz() {
+        return cz;
+    }
+
+    /** 수면 — 배가 뜨는 높이의 기준 (지면 질문과 같은 자) */
+    int waterTop(World w) {
+        return groundY(w);
     }
 
     /** 격자 잡음 (헌법 §2.5 — 점묘 금지): 8칸 격자점 해시값의 쌍선형 보간. 난수 없음 — 결정론 */
@@ -1158,6 +1182,20 @@ public final class Antechamber implements Listener {
         out.add(new Place(cx + horizonLight[0], gy + lh + 2, cz + horizonLight[1],
                 Material.LANTERN, null));
 
+        // ⑤-6 ★기억의 회랑 (B-179) — 정거장의 넋등 문(門): 물길 양옆에 한 쌍씩.
+        //   배가 이 사이에서 멈추고, 그 자리에서 책이 열린다. 계열별 기억 조형(디스플레이
+        //   엔티티 — 본인에게만 보인다)은 후속 조형 회차의 몫이다 (시안 §0.3).
+        for (int sx : voyage.stationsX()) {
+            for (int side : new int[]{-1, 1}) {
+                int gz2 = side * voyage.frameZ();
+                for (int y = 0; y <= 2; y++) {
+                    out.add(new Place(cx + sx, gy + y, cz + gz2,
+                            Material.COBBLED_DEEPSLATE_WALL, null));
+                }
+                out.add(new Place(cx + sx, gy + 3, cz + gz2, Material.SOUL_LANTERN, null));
+            }
+        }
+
         planHut(out, deck);
 
         // ⑦ 발판 — 밟으면 명령이 대신 쳐진다
@@ -1592,6 +1630,11 @@ public final class Antechamber implements Listener {
             //   서장을 짓는 수십 초 동안 토큰이 없어서, 토큰만 보면 문이 경주에서 이겨 서사를 통째로
             //   건너뛴다. 다리가 죽어 명단이 낡으면 붙들지 않는다 (아래 bridge_down 과 같은 원칙).
             if (WorldBridge.seojangHolds(player.getUniqueId())) {
+                // ★B-179 — 종이 곧 승선이다: 서장이 남은 몸에게 종은 배를 띄운다 (강 위의 서장)
+                if (!voyage.riding(player.getUniqueId())) {
+                    voyage.embark(player);
+                    return;
+                }
                 boolean bookInHand = SeojangBook.get() != null
                         && SeojangBook.get().tokenOf(player.getUniqueId()) != null;
                 player.sendMessage(bookInHand ? seojangReadingLine : seojangWritingLine);
@@ -1608,8 +1651,9 @@ public final class Antechamber implements Listener {
         refuseLines.forEach(player::sendMessage);
     }
 
-    private void depart(Player player, List<String> extra) {
+    void depart(Player player, List<String> extra) {
         UUID id = player.getUniqueId();
+        voyage.disembark(id);   // ★B-179 — 배는 기슭에 남지 않는다 (항해는 메모리뿐이다)
         restore(player);
         player.setGameMode(GameMode.SURVIVAL);
         player.teleport(destination(player));
@@ -1848,11 +1892,17 @@ public final class Antechamber implements Listener {
             }
             if (plugin.ledger(player.getUniqueId()).linked()) {
                 if (isAntechamber(player.getWorld())) {
+                    // ★B-179 — 서장이 남은 몸은 재방문이 아니라 **항해가 끊긴 몸**이다.
+                    //   표식을 안 달면 watchGate 가 다시 태운다 (배는 봇의 명단이 다시 띄운다 —
+                    //   제 장면의 정거장 앞에서 깨어난다. relocateIfBehind).
+                    if (WorldBridge.seojangHolds(player.getUniqueId())) {
+                        return;
+                    }
                     // ★재방문 (2026-07-24) — 나루 안에서 재접속한 **이미 건넌 몸**은 끌고 가지
                     //   않는다: 자동 출항은 첫 건넘의 의식이고, 재방문의 문은 종이다 (사공에게
                     //   말도 걸기 전에 실려 가던 실사용 결함의 재접속 판). 표식은 메모리뿐이라
                     //   재접속마다 여기서 다시 단다. 갇힘은 없다 — 종(cross)은 언제나 울린다.
-                    //   (첫 건넘 직전에 나갔다 온 드문 몸도 이 길로 온다 — 그 몸도 종이 건넨다)
+                    //   (첫 건넘 직전에 나갔다 온 드문 몸도 이 길로 온다 — 그 몸도 종이 건넌다)
                     revisiting.add(player.getUniqueId());
                     if (!revisitLine.isEmpty()) {
                         player.sendMessage(revisitLine);
@@ -2058,6 +2108,7 @@ public final class Antechamber implements Listener {
         boarding.remove(id);
         revisiting.remove(id);
         dockWaitSaid.remove(id);
+        voyage.disembark(id);   // ★B-179 — 나간 몸의 배는 걷는다 (재접속하면 명단이 다시 띄운다)
         plateCooldowns.keySet().removeIf(k -> k.startsWith(id.toString()));
     }
 
@@ -2120,6 +2171,15 @@ public final class Antechamber implements Listener {
         String who = WorldBridge.linkedName(id);
         openedLines.forEach(line ->
                 player.sendMessage(line.replace("{name}", who == null ? player.getName() : who)));
+        // ★B-179 — 서장이 남은 몸은 부두에서 기다리지 않는다: **강을 건너는 동안이 곧 서장이다.**
+        //   배가 안개 물길의 정거장으로 데려가고, 장마다 그 자리에서 책이 열린다 (Voyage).
+        if (WorldBridge.seojangHolds(id)) {
+            if (!seojangWaitLine.isEmpty()) {
+                player.sendMessage(seojangWaitLine);
+            }
+            voyage.embark(player);
+            return;
+        }
         if (autoCrossSeconds > 0) {
             // ★ 【실사용 2026-07-14】 접합 6초 뒤 자동 출발이 **서장을 읽는 사람을 책째로 끌고 갔다** —
             //   장면 도중 청하현으로 이동돼 서사가 끊겼다. 서장의 문은 서장이 닫는다(에필로그 [강호로
@@ -2130,9 +2190,6 @@ public final class Antechamber implements Listener {
             //   **다리의 서장 명단**(WorldBridge.seojangHolds — 쓰는_중 포함)을 본다: 접합 즉시 실리고,
             //   에필로그 [강호로 나선다] 가 눌려야 사라진다. 갇힘은 없다 — 끝나면 반드시 건너고,
             //   다리가 죽어 명단이 낡아도 붙들지 않는다 (gate.bridge_down 과 같은 원칙).
-            if (WorldBridge.seojangHolds(id) && !seojangWaitLine.isEmpty()) {
-                player.sendMessage(seojangWaitLine);   // 배는 붓을 기다린다 — 침묵 금지
-            }
             Bukkit.getScheduler().runTaskTimer(plugin, task -> {
                 if (!player.isOnline() || !isAntechamber(player.getWorld())
                         || !plugin.ledger(id).linked()) {
@@ -2140,7 +2197,13 @@ public final class Antechamber implements Listener {
                     return;
                 }
                 if (WorldBridge.seojangHolds(id)) {
-                    return;   // 서장이 남았다 — 붓이 먼저다
+                    // ★B-179 — 명단이 한 박자 늦게 실렸다 (접합 직후의 경주) — 그래도 배는 뜬다.
+                    //   부두 대기가 아니라 승선이다: 서장은 강 위에서 흐른다
+                    if (!voyage.riding(id)) {
+                        voyage.embark(player);
+                    }
+                    task.cancel();
+                    return;
                 }
                 // ★ B-120 【실사용 2026-07-14 · 부계정】 — **배는 부두에서 뜬다.**
                 //   접합 6초 뒤 자동 출발이 마당에서 몸짓(태세 셋)을 배우던 사람을 끌고 갔다 —
@@ -2193,8 +2256,10 @@ public final class Antechamber implements Listener {
             ticker.cancel();
             ticker = null;
         }
+        voyage.shutdownAll();   // ★B-179 — 항해선을 걷는다 (배는 저장되지 않는다 — 명단이 다시 띄운다)
         World w = Bukkit.getWorld(worldName);
         if (w != null) {
+            voyage.sweepBoats(w);   // 주인 잃은 배까지 (표식 있는 것만)
             // ★ 여기서도 **돌려주지 않는다** — quit 과 같은 이유다: 종료 중의 setContents 는
             //   playerdata 까지 못 갈 수 있고, 그 사이 기록을 지우면 짐은 어디에도 없다.
             //   기록만 디스크에 맞추고 떠난다. 다음 기동의 loadStow() 가 그대로 되살린다.
