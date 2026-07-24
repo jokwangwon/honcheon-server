@@ -41,6 +41,9 @@ final class Voyage {
     /** 이 배가 항해의 배인가 — 기동·재조성 때 떠돌이 배를 걷는 표식 */
     static final NamespacedKey KEY_BOAT = new NamespacedKey("honcheon", "ipdo_voyage_boat");
 
+    /** 좌석(바닐라 보트)을 선체 속으로 가라앉히는 깊이 — 부품·패의 기준면은 이만큼 되올린다 */
+    private static final double SEAT_SINK = 0.35;
+
     private final HoncheonMvt plugin;
     private final Antechamber ante;
 
@@ -258,12 +261,18 @@ final class Voyage {
         double y = ante.waterTop(w) + 1.0;
         Location at = new Location(w, ante.cx() + atX + 0.5, y,
                 ante.cz() + laneOf(player.getUniqueId()) + 0.5, -90f, 0f);
+        // ★좌석 감춤 (실기동 스샷 2026-07-25 — 투명 플래그를 보트는 클라가 무시한다):
+        //   중력을 끄고 선체 속으로 가라앉힌다 — 밑판·뱃전이 바닐라 보트를 삼킨다
+        if (!bargeParts.isEmpty()) {
+            at = at.clone().subtract(0, SEAT_SINK, 0);
+        }
         Boat boat = (Boat) w.spawnEntity(at, EntityType.DARK_OAK_BOAT);
         boat.setPersistent(false);   // 항해는 메모리뿐 — 재기동이 배를 되살리지 않는다 (명단이 다시 띄운다)
         boat.setInvulnerable(true);
-        // ★조립 나룻배 (실기동: "마크 보트라 … 이상함") — 바닐라 보트는 **투명한 좌석**일 뿐이다.
-        //   눈에 보이는 배는 등록부(voyage.barge)의 조립 선체이고, 고물에는 사공이 올라탄다
+        // ★조립 나룻배 (실기동: "마크 보트라 … 이상함") — 바닐라 보트는 **숨은 좌석**일 뿐이다.
+        //   눈에 보이는 배는 등록부(voyage.barge)의 조립 선체이고, 사공이 함께 올라탄다
         boat.setInvisible(!bargeParts.isEmpty());
+        boat.setGravity(bargeParts.isEmpty());   // 부력이 좌석을 도로 띄우지 않게 (가라앉힌 채 유지)
         boat.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
         r.boat = boat.getUniqueId();
         spawnBarge(w, r, at);
@@ -278,8 +287,14 @@ final class Voyage {
         boat.addPassenger(player);
     }
 
+    /** 부품·패의 기준면 — 가라앉힌 좌석을 도로 올린 자리 (선체는 수면의 것이다) */
+    private Location deck(Location seat) {
+        return seat.clone().add(0, SEAT_SINK, 0);
+    }
+
     /** 조립 나룻배 — 등록부의 부품들이 좌석을 따라 미끄러진다. 배는 모두에게 보인다 (실루엣 확정) */
-    private void spawnBarge(World w, Rider r, Location seat) {
+    private void spawnBarge(World w, Rider r, Location sunkSeat) {
+        Location seat = deck(sunkSeat);
         for (BargePart p : bargeParts) {
             Location at = seat.clone().add(p.at()[0], p.at()[1], p.at()[2]);
             org.bukkit.entity.BlockDisplay d = w.spawn(at, org.bukkit.entity.BlockDisplay.class, e -> {
@@ -288,13 +303,19 @@ final class Voyage {
                 e.setTeleportDuration(bargeLerp);
                 e.setBrightness(new org.bukkit.entity.Display.Brightness(12, 15));
                 e.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
-                // 회전 — 도(度)를 라디안으로. 회전 중심이 부품 원점이라 미세한 쏠림은 at 으로 다듬는다 (빨간펜)
+                // 회전 — 도(度)를 라디안으로.
+                // ★피벗 (실기동 스샷 2026-07-25 "배가 분해되어 보임") — 디스플레이 회전은 **모서리
+                //   원점** 기준이라, 중심 보정(-s/2)을 회전 **밖**에 두면 긴 판의 끝이 크게 튕긴다.
+                //   보정 벡터를 회전에 태워(R × -s/2) 부품이 제 발치 중심으로 돌게 한다.
                 org.joml.Quaternionf rot = new org.joml.Quaternionf().rotationYXZ(
                         (float) Math.toRadians(p.yaw()),
                         (float) Math.toRadians(p.pitch()),
                         (float) Math.toRadians(p.roll()));
+                org.joml.Vector3f half =
+                        new org.joml.Vector3f(-p.scale()[0] / 2f, 0f, -p.scale()[2] / 2f);
+                rot.transform(half);
                 e.setTransformation(new org.bukkit.util.Transformation(
-                        new org.joml.Vector3f(-p.scale()[0] / 2f, 0f, -p.scale()[2] / 2f),
+                        half,
                         rot,
                         new org.joml.Vector3f(p.scale()[0], p.scale()[1], p.scale()[2]),
                         new org.joml.Quaternionf()));
@@ -334,7 +355,10 @@ final class Voyage {
 
     /** 배가 나아간 만큼 선체와 사공이 따라 미끄러진다 (teleport_duration 이 보간한다) */
     private void followBarge(Rider r, Boat boat) {
-        Location seat = boat.getLocation();
+        // ★뱃머리 고정 — 보트 yaw 는 물살·충돌로 흐른다. 선체는 세계축 정렬이라 배가 돌면
+        //   좌석(사람·사공)만 도는 그림이 된다 — 동진(-90)으로 매 틱 붙든다
+        boat.setRotation(-90f, 0f);
+        Location seat = deck(boat.getLocation());
         for (Placed p : r.barge) {
             if (Bukkit.getEntity(p.id()) instanceof org.bukkit.entity.BlockDisplay d) {
                 d.teleport(seat.clone().add(p.at()[0], p.at()[1], p.at()[2]));
@@ -491,7 +515,7 @@ final class Voyage {
             // ★2차 (사용자: "글이 아닌 몸으로") — 책 대신 무대. 꺼져 있으면 옛 책 그릇으로 강등
             if (!ante.stage().play(player, player.getWorld(),
                     ante.cx() + stationX + 0.5, ante.waterTop(player.getWorld()) + 1.0,
-                    boat.getLocation(), r.latest, r.stageSet)) {
+                    deck(boat.getLocation()), r.latest, r.stageSet)) {
                 SeojangBook.get().deliver(player, r.latest);
             }
             return;

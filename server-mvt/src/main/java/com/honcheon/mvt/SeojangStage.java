@@ -426,17 +426,23 @@ final class SeojangStage implements Listener {
                         new Vector3f(-pScale.x / 2f, 0f, -pScale.z / 2f),
                         new AxisAngle4f(), pScale, new AxisAngle4f()));
             });
-            TextDisplay label = w.spawn(at.clone().add(0, 0.75, 0), TextDisplay.class, e -> {
+            // ★스샷 수리 (2026-07-25 "텍스트 다 겹쳐서 뭐가 뭔지 모르겠음") — 글자 0.6배 ·
+            //   좁은 줄폭(자동 줄바꿈으로 세로 패가 된다) · 가운데 패만 위로 스태거
+            double stagger = labels.size() == 3 && i == 1 ? 0.35 : 0.0;
+            TextDisplay label = w.spawn(at.clone().add(0, 0.75 + stagger, 0), TextDisplay.class, e -> {
                 e.setText(labelPrefix + lab);
                 e.setBillboard(Display.Billboard.CENTER);
+                e.setLineWidth(90);
                 e.setSeeThrough(false);
                 e.setShadowed(true);
                 e.setDefaultBackground(false);
-                e.setBackgroundColor(org.bukkit.Color.fromARGB(0xB4140F0C));
+                e.setBackgroundColor(org.bukkit.Color.fromARGB(0xD8140F0C));
                 e.setPersistent(false);
                 e.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.STRING,
                         player.getUniqueId().toString());
                 e.setBrightness(new Display.Brightness(13, 15));
+                e.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(),
+                        new Vector3f(0.6f, 0.6f, 0.6f), new AxisAngle4f()));
             });
             int idx = scene.last() ? -1 : i;
             Interaction hand = w.spawn(at.clone().add(0, -0.15, 0), Interaction.class, e -> {
