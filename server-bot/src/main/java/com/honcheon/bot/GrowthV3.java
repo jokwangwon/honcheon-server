@@ -37,10 +37,18 @@ final class GrowthV3 {
     }
 
     /**
-     * 읽기 backfill — sheet 에 원장/레벨/경험치/미사용포인트가 없으면 채운다 (있으면 손 안 댐).
-     * 원장은 옛 능력치 실수의 제곱. 채운 sheet 는 다음 저장 때 영속화된다 (지연 마이그레이션).
+     * 읽기 backfill + <b>화해</b> — sheet 에 원장/레벨/경험치/미사용포인트가 없으면 채우고,
+     * 원장이 있어도 <b>끌어올리기만</b> 한다: {@code 원장 = max(원장, 실수 화후²)} (단계 3).
      *
-     * @return 무언가 채웠으면 true (호출부가 로그·저장 판단에 쓸 수 있다)
+     * <p>★실수의 정본은 {@code 능력치_화후} 다 (§8.9 ③ "옛 능력치 <b>실수</b> x") — 첫 판은
+     * 정수 {@code 능력치}를 제곱해 화후의 소수부를 떨어뜨렸고, 원장이 한 번 서면 얼어붙어
+     * <b>수련(화후 증가)이 판정·파생에 안 실리는 표류</b>가 있었다 (2026-07-24 수리).
+     * 화해가 raise-only 인 이유:
+     * ① 판정 보존 — {@code floor(√(화후²)) = floor(화후) = 능력치} (settle 가 그 불변식을 지킨다)
+     * ② 단계 4(원장 독립 성장 · 화후 동결) 뒤에는 화후² ≤ 원장이라 자연히 무연산이 된다 —
+     *    이 화해를 뜯어낼 날을 기다릴 필요가 없다.
+     *
+     * @return 무언가 채웠거나 끌어올렸으면 true (호출부가 로그·저장 판단에 쓸 수 있다)
      */
     @SuppressWarnings("unchecked")
     static boolean backfill(Map<String, Object> sheet) {
@@ -48,17 +56,27 @@ final class GrowthV3 {
             return false;
         }
         boolean changed = false;
-        if (!(sheet.get("원장") instanceof Map)) {
-            Object attrsObj = sheet.get("능력치");
-            Map<String, Object> raw = new LinkedHashMap<>();
-            if (attrsObj instanceof Map<?, ?> attrs) {
-                for (String axis : AXES) {
-                    double x = num(attrs.get(axis));
-                    raw.put(axis, x * x);   // 실수 보존 — x² (판정치 = floor(√) 로 옛 값 복원)
-                }
-            }
+        Object attrsObj = sheet.get("능력치");
+        Object hwahuObj = sheet.get("능력치_화후");
+        Map<String, Object> raw;
+        if (sheet.get("원장") instanceof Map) {
+            raw = (Map<String, Object>) sheet.get("원장");
+        } else {
+            raw = new LinkedHashMap<>();
             sheet.put("원장", raw);
             changed = true;
+        }
+        for (String axis : AXES) {
+            double x = hwahuObj instanceof Map<?, ?> h ? num(((Map<String, Object>) h).get(axis)) : 0.0;
+            if (x <= 0.0 && attrsObj instanceof Map<?, ?> a) {
+                x = num(((Map<String, Object>) a).get(axis));   // 화후가 없으면 옛 능력치 정수가 곧 실수다
+            }
+            double target = x * x;                              // 실수 보존 — 화후² (소수부까지 원장에)
+            double cur = num(raw.get(axis));
+            if (target > cur || !raw.containsKey(axis)) {
+                raw.put(axis, Math.max(cur, target));
+                changed = true;
+            }
         }
         if (!(sheet.get("레벨") instanceof Number)) {
             sheet.put("레벨", 1);

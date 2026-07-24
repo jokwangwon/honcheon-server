@@ -5616,6 +5616,9 @@ public final class GameListener extends ListenerAdapter {
             });
             sheet.put("능력치_화후", hwahu);
             sheet.put("능력치", next);
+            // ★원장 화해 (v3 단계 3) — 수련이 화후를 밀면 원장도 같이 선다 (raise-only ·
+            //   이게 없으면 원장이 backfill 시점에 얼어붙어 수련이 판정·파생에 안 실린다)
+            GrowthV3.backfill(sheet);
         }
 
         // ─ 무공 — 잔여 일치에 더하고 환산표를 걷는다 (배우지 않은 무공은 자라지 않는다) ─
@@ -5734,13 +5737,20 @@ public final class GameListener extends ListenerAdapter {
             System.err.println("형제 서열을 세우지 못했다: " + e.getMessage());
         }
 
-        // 능력치 — 실수 원장이 있으면 그것이 정본, 없으면 판정치가 곧 화후다 (아직 마크에서 안 자랐다)
+        // 능력치 — ★v3 원장이 정본 (단계 3 · §8.9 ⑩ 파생치 계약): 마크에 내려가는 실수치 = √원장.
+        //   원장은 화해(backfill raise-only)로 화후² 와 동등하므로 지금은 값이 같다 — 단계 4 에서
+        //   원장이 독립 성장하면 이 한 줄이 곧 "레벨업이 몸을 민다"의 배선이 된다.
+        //   원장이 없으면(이론상 backfill 뒤엔 없음) 옛 길: 화후 실수 → 능력치 정수.
         Map<String, Object> hwahu = (Map<String, Object>) sheet.get("능력치_화후");
+        Map<String, Object> rawLedger = (Map<String, Object>) sheet.get("원장");
         Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");
         Map<String, Object> outAttrs = new LinkedHashMap<>();
         if (attrs != null) {
-            attrs.forEach((k, v) -> outAttrs.put(k, hwahu != null && hwahu.get(k) instanceof Number n
-                    ? n.doubleValue() : ((Number) v).doubleValue()));
+            attrs.forEach((k, v) -> outAttrs.put(k,
+                    rawLedger != null && rawLedger.get(k) instanceof Number rn
+                            ? GrowthV3.realValue(rn.doubleValue())
+                            : (hwahu != null && hwahu.get(k) instanceof Number n
+                                    ? n.doubleValue() : ((Number) v).doubleValue())));
         }
         out.put("attrs", outAttrs);
 

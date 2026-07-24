@@ -35,6 +35,40 @@ def check():
     return bad
 
 
+def backfill(sheet):
+    """GrowthV3.backfill 의 계약 재현 (단계 3 · 화해 포함) — 자바와 같은 식이어야 한다.
+    실수의 정본 = 능력치_화후 (없으면 능력치 정수) · 원장 = max(원장, 화후²) raise-only."""
+    attrs = sheet.get("능력치") or {}
+    hwahu = sheet.get("능력치_화후") or {}
+    raw = sheet.setdefault("원장", {})
+    for axis in set(attrs) | set(hwahu) | set(raw):
+        x = hwahu.get(axis, 0.0) or attrs.get(axis, 0.0)
+        raw[axis] = max(raw.get(axis, 0.0), x * x)
+    return sheet
+
+
+def check_reconcile():
+    """단계 3 의 계약 — 화후 소수부가 원장을 거쳐 파생 실수치로 살아 돌아온다."""
+    bad = 0
+    # ① 화후 우선 + 소수부 보존: 능력치 3(정수) · 화후 3.7 → 원장 13.69 → 파생 3.7 · 판정 3
+    s = backfill({"능력치": {"근력": 3}, "능력치_화후": {"근력": 3.7}})
+    derived = math.sqrt(s["원장"]["근력"])
+    ok = abs(derived - 3.7) < 1e-9 and judgment(s["원장"]["근력"]) == 3
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 화후 소수부 보존 (3.7 → 원장 {s['원장']['근력']:.2f} → 파생 {derived:.2f} · 판정 {judgment(s['원장']['근력'])})")
+    # ② 화해 — 정수 제곱으로 얼어붙은 원장(9)이 화후(3.7)² 로 올라온다 (표류 수리)
+    s = backfill({"능력치": {"근력": 3}, "능력치_화후": {"근력": 3.7}, "원장": {"근력": 9.0}})
+    ok = abs(s["원장"]["근력"] - 13.69) < 1e-9
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 표류 화해 (원장 9 → {s['원장']['근력']:.2f})")
+    # ③ raise-only — 원장이 이미 앞서 있으면(단계 4 독립 성장) 화후가 끌어내리지 못한다
+    s = backfill({"능력치": {"근력": 3}, "능력치_화후": {"근력": 3.7}, "원장": {"근력": 16.0}})
+    ok = s["원장"]["근력"] == 16.0
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} raise-only (원장 16 유지 — 단계 4 앞방향 호환)")
+    return bad
+
+
 def selftest():
     """일부러 어긋난 환산을 심어 눈이 잡는지."""
     bad = 0
@@ -51,10 +85,22 @@ def selftest():
     return bad
 
 
+def selftest_reconcile():
+    """눈을 시험하는 눈 — 화해 없는 옛 backfill(동결 원장)을 심으면 파생이 어긋나야 한다."""
+    frozen = 9.0                       # 옛 계약: 원장 = 능력치(정수 3)² 로 동결
+    derived = math.sqrt(frozen)        # 3.0 — 화후 3.7 의 소수부가 죽었다
+    caught = abs(derived - 3.7) > 1e-9
+    print(f"  {'✅' if caught else '❌'} 동결 원장 오배선 감지 (파생 {derived:.2f} ≠ 화후 3.7)")
+    return 0 if caught else 1
+
+
 if __name__ == "__main__":
     print("═══ 성장 v3 원장 backfill 자기 시험 ═══")
     fail = check()
+    print("  ── 단계 3 — 화해·파생 보존 ──")
+    fail += check_reconcile()
     print("  ── 눈을 시험하는 눈 (오배선 심기) ──")
     fail += selftest()
+    fail += selftest_reconcile()
     print(f"\n총 위반/오류: {fail}건 — {'통과' if fail == 0 else '실패'}")
     sys.exit(1 if fail else 0)
