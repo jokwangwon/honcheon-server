@@ -87,6 +87,11 @@ public final class HuntListener implements Listener {
             accrue(killer, event, gap);
         }
         grantXp(killer, event, npc);
+        // ★flush 는 처치의 끝에서 한 번 — 여기가 아니면 XP 가 다리에 안 실린다 (2026-07-24 실측 결함):
+        //   ① accrue 안의 flush 는 grantXp **앞**이라 XP 가 늘 다음 처치로 밀렸고
+        //   ② gap 표 밖의 등록 개체(호랑이=Ravager·갈호 등)는 accrue 자체가 안 돌아 영영 안 실렸다
+        plugin.skills().pushLedger(killer, plugin.ledger(killer.getUniqueId()),
+                plugin.skills().state(killer));
     }
 
     /** 등록부의 몸인가 — 산적·행인·짐승 개체 (HuntingGrounds 가 심는 PDC 표식을 읽는다) */
@@ -161,7 +166,7 @@ public final class HuntListener implements Listener {
             ledger.mark실전();
             ledger.pend실전();
         }
-        plugin.skills().pushLedger(killer, ledger, plugin.skills().state(killer));
+        // (flush 는 onKill 끝의 pushLedger 하나 — XP 까지 함께 실린다. 여기 있던 flush 는 그리로 이사)
 
         // 처치 즉시 같은 틱 피드백 — 수련 일수가 경험치 숫자의 자리를 맡는다
         plugin.skills().flash(killer,

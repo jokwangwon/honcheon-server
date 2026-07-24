@@ -452,6 +452,7 @@ public final class PlayerLedger {
         to.set("pending.train", pendingTrain);
         to.set("pending.marks_실전", pending실전);
         to.set("pending.marks_사선", pending사선);
+        to.set("pending.xp", pendingXp);   // ★미영속이면 재기동이 XP 를 지운다 (2026-07-24 실측)
     }
 
     public static PlayerLedger load(org.bukkit.configuration.ConfigurationSection from) {
@@ -478,6 +479,7 @@ public final class PlayerLedger {
         led.pendingTrain = from.getDouble("pending.train");
         led.pending실전 = from.getInt("pending.marks_실전");
         led.pending사선 = from.getInt("pending.marks_사선");
+        led.pendingXp = from.getInt("pending.xp");
         return led;
     }
 
