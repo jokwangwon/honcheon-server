@@ -308,6 +308,10 @@ MUTATIONS = [
     ("(91) 출도가 배를 안 걷는다 (배가 기슭에 쌓인다)", SRC,
      "        voyage.disembark(id);   // ★B-179 — 배는 기슭에 남지 않는다 (항해는 메모리뿐이다)\n",
      "", "기슭에 쌓인다"),
+    # ★실기동 1호 (2026-07-25 "이으니까 바로 책을 받고 읽기 시작") — 접합 직후의 경주
+    ("(92) 승선 전의 책을 안 붙든다 (책이 부두에서 열린다)", VOY,
+     "            return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();",
+     "            return false;", "부두에서"),
 ]
 
 

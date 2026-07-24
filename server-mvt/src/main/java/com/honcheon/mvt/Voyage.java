@@ -197,7 +197,13 @@ final class Voyage {
     boolean defer(Player player, WorldBridge.SeojangScene scene) {
         Rider r = riders.get(player.getUniqueId());
         if (r == null) {
-            return false;   // 항해가 아니다 — 옛 몸짓 그대로 (부두 없이도 서장은 흐른다)
+            // ★실기동 (2026-07-25 "이으니까 바로 책을 받고 읽기 시작") — 접합 직후의 경주:
+            //   다리(2초)가 승선(watchGate 5틱·명단 전파)보다 먼저 배달하면 책이 **부두에서**
+            //   열렸다. 나루에 선 몸의 책은 승선을 기다린다 — 배가 정거장으로 데려간다
+            //   (watchGate 세 문이 곧 태운다 — 굶는 몸은 없다). 나루 밖의 몸은 옛 몸짓
+            //   그대로 즉시 편다 — 그쪽에서 붙들면 그것이 갇힘이다. 붓 소식(writing)은
+            //   어디서든 통과 — 기다림 기계는 자리를 안 가린다.
+            return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();
         }
         r.latest = scene;
         if (scene.writing()) {

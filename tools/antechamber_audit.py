@@ -1354,6 +1354,10 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
     voy = source("Voyage.java")
     if not voy:
         rep.bad("Voyage.java 가 없다 — 항해 기계가 말뿐이다")
+    elif ("return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();"
+            not in voy):
+        rep.bad("승선 전의 책을 안 붙든다 — 다리(2초)가 승선(5틱)을 이기면 책이 **부두에서** "
+                "열린다 (실기동 2026-07-25: \"이으니까 바로 책을 받고 읽기 시작\")")
     elif not re.search(r"seojangHolds\([\s\S]{0,400}?depart\(", voy):
         rep.bad("기슭의 문이 없다 — 명단이 끝나도(출도·봇 죽음) 배가 출도로 못 잇는다 "
                 "(영원한 항해 = 갇힘)")
