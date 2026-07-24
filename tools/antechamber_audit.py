@@ -1377,6 +1377,13 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
     else:
         rep.good(f"조립 나룻배 — 부품 {len(bgc['parts'])}점 · 사공 "
                  f"{'고물에 탄다' if bgc.get('ferryman') else '없다'}")
+    iv = voy.find("boat.addPassenger(v);")
+    ip = voy.find("boat.addPassenger(player);")
+    if iv < 0 or ip < 0 or iv > ip:
+        rep.bad("조종석이 사람에게 갔다 — 보트의 첫 좌석이 조종석이다. 사공이 먼저 타야 "
+                "사람이 노를 못 젓는다 (실사용: 파츠 분리·경로 이탈·등불까지 손수 운전)")
+    else:
+        rep.good("사공이 첫 좌석(조종석)에 탄다 — 배는 코드만 몬다")
     if "boat.setInvisible(!bargeParts.isEmpty())" not in voy:
         rep.bad("좌석(바닐라 보트)이 투명하지 않다 — 조립 선체와 겹쳐 보인다 (마크 보트 티가 난다)")
     elif "followBarge(r, boat)" not in voy:

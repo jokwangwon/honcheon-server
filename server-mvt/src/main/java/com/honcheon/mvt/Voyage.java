@@ -262,6 +262,13 @@ final class Voyage {
         boat.getPersistentDataContainer().set(KEY_BOAT, PersistentDataType.BYTE, (byte) 1);
         r.boat = boat.getUniqueId();
         spawnBarge(w, r, at);
+        // ★★ 조종권 (실사용 2026-07-25 "배를 움직이면 파츠가 분리 · 내가 배를 이동해서
+        //   선택지를 클릭해야 함") — 보트의 첫 좌석이 곧 조종석이다. **사공이 먼저 탄다**:
+        //   사람은 둘째 좌석이라 노를 못 젓고, 배는 코드(steer)만 몬다. 파츠 분리도 이것이
+        //   병인이었다 — 사람이 저어 낸 속도를 선체 추종이 못 따라간 것.
+        if (r.ferryman != null && Bukkit.getEntity(r.ferryman) instanceof org.bukkit.entity.Villager v) {
+            boat.addPassenger(v);
+        }
         player.teleport(at);
         boat.addPassenger(player);
     }
@@ -284,7 +291,8 @@ final class Voyage {
             });
             r.barge.add(new Placed(d.getUniqueId(), p.at()));
         }
-        if (bargeFerryman && !bargeParts.isEmpty()) {
+        if (bargeFerryman) {
+            // 사공의 몸 — 보트의 **첫 좌석**에 앉는다 (spawnBoat 가 태운다: 첫 좌석 = 조종석 봉인)
             Location at = seat.clone().add(ferrymanAt[0], ferrymanAt[1], ferrymanAt[2]);
             at.setYaw(-90f);
             org.bukkit.entity.Villager v = w.spawn(at, org.bukkit.entity.Villager.class, e -> {
@@ -322,11 +330,7 @@ final class Voyage {
                 d.teleport(seat.clone().add(p.at()[0], p.at()[1], p.at()[2]));
             }
         }
-        if (r.ferryman != null && Bukkit.getEntity(r.ferryman) instanceof org.bukkit.entity.Villager v) {
-            Location at = seat.clone().add(ferrymanAt[0], ferrymanAt[1], ferrymanAt[2]);
-            at.setYaw(-90f);
-            v.teleport(at);   // 한 틱 0.03칸 — 상대 이동 패킷이라 미끄럽다 (NoAI 라 흐르지 않는다)
-        }
+        // 사공은 보트의 첫 좌석에 타 있다 — 따로 옮길 것이 없다 (좌석이 데려간다)
     }
 
     // ══════════════════════════════════════════════════════════════════════

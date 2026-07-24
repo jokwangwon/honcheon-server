@@ -364,6 +364,9 @@ MUTATIONS = [
     ("(106) 선체가 좌석을 안 따라간다 (배가 사람만 두고 떠난다)", VOY,
      "            followBarge(r, boat);   // 선체와 사공이 좌석을 따라 미끄러진다",
      "", "안 따라간다"),
+    ("(107) 사공이 조종석에 안 탄다 (사람이 노를 젓는다 — 파츠 분리·경로 이탈)", VOY,
+     "        if (r.ferryman != null && Bukkit.getEntity(r.ferryman) instanceof org.bukkit.entity.Villager v) {\n            boat.addPassenger(v);\n        }",
+     "", "조종석이 사람에게"),
 ]
 
 

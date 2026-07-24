@@ -1632,7 +1632,9 @@ public final class Antechamber implements Listener {
             player.sendMessage(ChatColor.GRAY + "여기는 나루가 아니다.");
             return;
         }
-        if (plugin.ledger(player.getUniqueId()).linked()) {
+        // ★접합 직후의 20초 창 — watchGate 와 같은 빠른 거울 (서장 명단은 접합된 몸만 싣는다)
+        if (plugin.ledger(player.getUniqueId()).linked()
+                || WorldBridge.seojangHolds(player.getUniqueId())) {
             // ★ B-118 — 서장이 남았으면 종도 말린다. 판정은 「책이 지금 손에 있나」(토큰)가 아니라
             //   **「서장이 끝났나」**(다리의 서장 명단 — WorldBridge.seojangHolds)다: 새 몸은 붓(LLM)이
             //   서장을 짓는 수십 초 동안 토큰이 없어서, 토큰만 보면 문이 경주에서 이겨 서사를 통째로
@@ -2170,7 +2172,11 @@ public final class Antechamber implements Listener {
     /** 강호에 이름이 올랐다 — <b>배가 뜬다</b> */
     private void watchGate(Player player) {
         UUID id = player.getUniqueId();
-        if (!plugin.ledger(id).linked() || boarding.contains(id)) {
+        // ★접합 직후의 20초 창 (실사용 2026-07-25 04:06 "이름을 이었는데 종을 눌러도 이동 안 됨")
+        //   — linked 거울은 스냅숏(20초)으로 오지만, 서장 명단(2초)은 **접합된 몸만** 싣는다
+        //   (봇 seojangEntries 는 linkedBodies 를 돈다). 명단에 실렸으면 이미 접합이다.
+        boolean linked = plugin.ledger(id).linked() || WorldBridge.seojangHolds(id);
+        if (!linked || boarding.contains(id)) {
             return;
         }
         if (revisiting.contains(id)) {
