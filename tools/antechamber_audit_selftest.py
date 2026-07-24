@@ -246,6 +246,10 @@ MUTATIONS = [
     ("(71) ★ 사공을 말만 하고 몸을 안 세운다 (ensureFerryman 실종)", SRC,
      "    private void ensureFerryman(World w) {",
      "    private void ensureFerrymanX(World w) {", "말만 한다"),
+    # ─── ★재방문 규약 (실사용 2026-07-24: "우클릭 하기도 전에 청하현으로") ───
+    ("(72) ★ 재접속 접합자의 재방문 표식을 뗀다 (자동 출항이 다시 끌고 간다)", SRC,
+     "                    revisiting.add(player.getUniqueId());\n                    if (!revisitLine.isEmpty()) {",
+     "                    if (!revisitLine.isEmpty()) {", "재방문 표식"),
 ]
 
 

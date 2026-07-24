@@ -238,6 +238,15 @@ public final class Antechamber implements Listener {
     /** 맡아 둔 짐이 적히는 곳 — 연무장의 {@code dojang.yml} 과 같은 역할이다. */
     static final String STOW_FILE = "ipdo_stow.yml";
     private final Set<UUID> boarding = new LinkedHashSet<>();
+
+    /**
+     * 재방문자 — <b>이미 건넌 몸으로 나루에 든 사람</b> (/혼천 입도 · 나루에서 로그아웃한 재접속).
+     * 자동 출항은 <b>첫 건넘의 의식</b>이다 — 재방문자를 태우면 부두에 선 사공에게 말도 걸기 전에
+     * 실려 간다 (실사용 2026-07-24: "우클릭 하기도 전에 종 근처로 가서 바로 청하현으로").
+     * 재방문의 문은 종이다 (arrival.revisit_line 이 이미 그렇게 말한다 — "종을 울리면 언제든").
+     * 메모리뿐이다 (과제 장부와 같은 계약) — 건너면(depart) 지운다.
+     */
+    private final Set<UUID> revisiting = new LinkedHashSet<>();
     /** B-120 — 부두를 기다린다는 말을 이미 들은 사람 (자동 출발 대기 안내는 한 번만) */
     private final Set<UUID> dockWaitSaid = new LinkedHashSet<>();
     /** 발판 연타 방지 — (사람/발판) → 다시 밟을 수 있는 틱 */
@@ -1535,6 +1544,7 @@ public final class Antechamber implements Listener {
         player.teleport(spawnAt(w));
         player.setFallDistance(0f);
         if (plugin.ledger(player.getUniqueId()).linked()) {
+            revisiting.add(player.getUniqueId());   // 이미 건넌 몸 — 자동 출항 없음 (문은 종이다)
             player.sendMessage(revisitLine);
             // ★ B-124 — 과제 장부는 메모리뿐이라(progress 필드 주석) 건넌 몸에게도 관문이 도로
             //   열려 있다. 그 결을 한 줄로 말한다: 다시 하는 것은 자유고, 종은 과제를 묻지 않는다.
@@ -1599,6 +1609,7 @@ public final class Antechamber implements Listener {
         player.teleport(destination(player));
         player.setFallDistance(0f);
         boarding.remove(id);
+        revisiting.remove(id);
         dockWaitSaid.remove(id);
         shownThrough.remove(id);
         crossedLines.forEach(player::sendMessage);
@@ -1831,17 +1842,16 @@ public final class Antechamber implements Listener {
                 restore(player);
             }
             if (plugin.ledger(player.getUniqueId()).linked()) {
-                if (isAntechamber(player.getWorld())
-                        && !WorldBridge.seojangHolds(player.getUniqueId())
-                        && atDock(player)) {
-                    // 없는 사이에 이름이 올랐다 — 문은 이미 열려 있었다.
-                    // ★ B-118 — 단, 서장이 남은 몸은 여기서도 끌고 가지 않는다 (서장 도중 나갔다
-                    //   돌아온 몸): watchGate(5틱)가 배를 세워 두고, 책은 다리가 다시 배달하며,
-                    //   서장이 끝나면 그 시계가 반드시 건넨다.
-                    // ★ B-120 — 마당(부두 밖)에서 나갔다 돌아온 몸도 즉시 끌고 가지 않는다 (atDock):
-                    //   재접속 순간의 텔레포트가 걸어온 길의 글판을 통째로 지웠다. watchGate 의
-                    //   시계가 부두에 서는 순간 반드시 건넨다 — 갇힘은 없다.
-                    depart(player, List.of());
+                if (isAntechamber(player.getWorld())) {
+                    // ★재방문 (2026-07-24) — 나루 안에서 재접속한 **이미 건넌 몸**은 끌고 가지
+                    //   않는다: 자동 출항은 첫 건넘의 의식이고, 재방문의 문은 종이다 (사공에게
+                    //   말도 걸기 전에 실려 가던 실사용 결함의 재접속 판). 표식은 메모리뿐이라
+                    //   재접속마다 여기서 다시 단다. 갇힘은 없다 — 종(cross)은 언제나 울린다.
+                    //   (첫 건넘 직전에 나갔다 온 드문 몸도 이 길로 온다 — 그 몸도 종이 건넨다)
+                    revisiting.add(player.getUniqueId());
+                    if (!revisitLine.isEmpty()) {
+                        player.sendMessage(revisitLine);
+                    }
                 }
                 return;   // 강호에 든 자는 나루를 다시 안 거친다
             }
@@ -2079,6 +2089,7 @@ public final class Antechamber implements Listener {
         gesturesSeen.remove(id);
         lastArmed.remove(id);
         boarding.remove(id);
+        revisiting.remove(id);
         dockWaitSaid.remove(id);
         shownThrough.remove(id);
         plateCooldowns.keySet().removeIf(k -> k.startsWith(id.toString()));
@@ -2213,6 +2224,9 @@ public final class Antechamber implements Listener {
         UUID id = player.getUniqueId();
         if (!plugin.ledger(id).linked() || boarding.contains(id)) {
             return;
+        }
+        if (revisiting.contains(id)) {
+            return;   // 재방문자 — 의식(자동 출항)은 첫 건넘의 것이다. 종은 언제나 울린다
         }
         boarding.add(id);
         refreshPanels(player);   // 시트가 내려왔다 — 이제 격을 두를 수 있을지도 모른다

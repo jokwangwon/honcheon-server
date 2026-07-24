@@ -223,18 +223,21 @@ def audit_trap(rep: Report, ante: dict, code: str) -> None:
             else:
                 rep.good("월드가 안 열리면 enter() 는 아무것도 하지 않는다 (원래 자리에 그대로 선다)")
 
-    # 접합이 오프라인에서 확정된 경우: 나루에 서 있는 linked 는 그대로 건너야 한다
-    # (창 120→900: B-118 이 isAntechamber 와 depart 사이에 서장 붙듦 분기를 넣었다 — 경로는 그대로다)
-    # (창 폐지 2026-07-24: B-170 이 onJoin 앞머리에 짐 복원 안전망을 넣어 또 넘쳤다 — 글자 수
-    #  창은 주석이 자랄 때마다 거짓 짖음을 낸다. onJoin 몸통 안에서 **부정(!) 아닌**
-    #  isAntechamber 검사 뒤 depart 가 오는지를 잰다 — 몸통이 경계다)
+    # 나루 안에서 재접속한 접합자 — ★규약 개정 (2026-07-24 실사용 "우클릭 하기도 전에 청하현으로"):
+    #   옛 규약은 「접속하는 순간 건네준다」(depart)였다. 그 자동 출항이 재방문자(사공에게 볼일
+    #   있는 몸)를 말 걸기도 전에 실어 갔다. 새 규약: **끌고 가지 않되 침묵하지 않는다** —
+    #   재방문 표식(revisiting)을 달고 안내(revisitLine — "종을 울리면 언제든")를 말한다.
+    #   갇힘 금지의 보증은 depart 가 아니라 **종**(cross — 아래 ⑧ 손잡이 검사)이다.
     jbody = body_of(code, r"public void onJoin\([^)]*\)")
     if jbody is None or not re.search(
-            r"(?<!!)isAntechamber\(player\.getWorld\(\)\)[\s\S]*?depart\(", jbody):
-        rep.bad("onJoin 에서 '나루에 서 있는 접합자'를 건네주는 경로가 없다 — "
-                "디스코드에서 확정하고 로그아웃한 사람이 나루에 남는다")
+            r"(?<!!)isAntechamber\(player\.getWorld\(\)\)[\s\S]*?revisiting\.add\(", jbody):
+        rep.bad("onJoin 의 '나루에 서 있는 접합자' 경로가 재방문 표식(revisiting)을 안 단다 — "
+                "자동 출항 시계(watchGate)가 이 몸을 첫 건넘으로 오인해 끌고 간다")
+    elif not re.search(r"revisiting\.add\(player\.getUniqueId\(\)\);[\s\S]{0,300}?sendMessage\(", jbody):
+        rep.bad("나루 안 재접속 접합자에게 아무 말도 안 한다 — 왜 배가 안 뜨는지 침묵한다 "
+                "(안내 없는 잔류는 갇힘으로 읽힌다)")
     else:
-        rep.good("없는 사이에 이름이 올랐으면, 접속하는 순간 건넌다")
+        rep.good("나루 안 재접속 접합자 = 재방문 (표식 + 안내 — 문은 종이다)")
 
     # 물안개(leash)는 벽이 아니라 되돌림이어야 한다 — 죽이면 안 된다
     mist = ante.get("mist") or {}
