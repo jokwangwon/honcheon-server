@@ -582,6 +582,22 @@ public final class Antechamber implements Listener {
         return w.getHighestBlockYAt(cx + 512, cz + 512);
     }
 
+    /** 격자 잡음 (헌법 §2.5 — 점묘 금지): 8칸 격자점 해시값의 쌍선형 보간. 난수 없음 — 결정론 */
+    private static double grain(int x, int z) {
+        int g = 8;
+        int gx = Math.floorDiv(x, g);
+        int gz = Math.floorDiv(z, g);
+        double fx = (x - gx * g) / (double) g;
+        double fz = (z - gz * g) / (double) g;
+        double a = knot(gx, gz) + (knot(gx + 1, gz) - knot(gx, gz)) * fx;
+        double b = knot(gx, gz + 1) + (knot(gx + 1, gz + 1) - knot(gx, gz + 1)) * fx;
+        return a + (b - a) * fz;
+    }
+
+    private static double knot(int gx, int gz) {
+        return Math.floorMod(gx * 73856093 + gz * 19349663, 1024) / 1024.0;
+    }
+
     /**
      * 딛는 자리 — 길의 서쪽 끝. <b>동쪽을 본다.</b>
      *
@@ -959,13 +975,19 @@ public final class Antechamber implements Listener {
                 for (int y = gy + 1; y <= gy + 7; y++) {   // 잔교 밖 머리 위를 비운다
                     out.add(new Place(cx + x, y, cz + z, Material.AIR, null));
                 }
-                // 갈대 — 해시로 돋는다 (난수 아님). 습지가 습지처럼 보여야 한다
-                if (Math.floorMod(x * 31 + z * 17, marsh.reedHash()) == 0) {
+                // 갈대 — ★4차 개정 (실사용 "늪 디자인이 너무 반복적"): 점묘 → 덩어리.
+                //   한 칸 해시는 파장이 한 칸이라 균일 점묘가 된다 (헌법 §2.5 — "격자점에서 뽑고
+                //   보간하라"). 격자 잡음(grain)이 군락을 가른다: 짙은 곳은 갈대가 우거지고
+                //   (속은 키 2), 성긴 곳은 맨물에 수련잎만 드문드문 뜬다. 난수 없음 — 결정론.
+                double n = grain(x, z);
+                if (n > 0.66) {
                     out.add(new Place(cx + x, gy, cz + z, Material.SAND, null));
                     out.add(new Place(cx + x, gy + 1, cz + z, Material.SUGAR_CANE, null));
-                    if (Math.floorMod(x + z, 3) == 0) {
+                    if (n > 0.80) {
                         out.add(new Place(cx + x, gy + 2, cz + z, Material.SUGAR_CANE, null));
                     }
+                } else if (n < 0.30 && Math.floorMod(x * 7 + z * 13, 9) == 0) {
+                    out.add(new Place(cx + x, gy + 1, cz + z, Material.LILY_PAD, null));
                 }
             }
         }

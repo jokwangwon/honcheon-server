@@ -1174,9 +1174,13 @@ def audit_road(rep: Report, ante: dict, code: str) -> None:
         if not (g.x0 <= s["x"] <= g.x1):
             rep.bad(f"관문 '{s['id']}' (x={s['x']}) 가 길 밖에 있다 [{g.x0}..{g.x1}] — 아무도 못 간다")
 
-    # 첫 관문이 스폰이어야 한다 (눈을 뜬 자리가 곧 첫 관문)
-    if g.stations[0]["x"] != g.spawn[0]:
-        rep.warn(f"눈 뜨는 자리(x={g.spawn[0]}) 와 첫 관문(x={g.stations[0]['x']}) 이 다르다")
+    # 첫 관문(맞이 글판) — ★4차 개정 (사용자 실측 "코앞이면 못 읽는다"): 스폰과 같은 자리가
+    #   아니라 **열 걸음쯤 앞**이어야 한다 (원 지시도 "소환 위치에서 10걸음 범위 정도").
+    #   뒤(서쪽)에 있으면 아무도 못 보고, 너무 멀면 안내가 늦는다.
+    gap0 = g.stations[0]["x"] - g.spawn[0]
+    if gap0 < 4 or gap0 > 14:
+        rep.warn(f"맞이 글판(x={g.stations[0]['x']}) 이 스폰(x={g.spawn[0]}) 에서 {gap0}칸 — "
+                 "4~14칸(열 걸음 안팎) 앞이어야 읽힌다 (코앞도 등 뒤도 안 된다)")
 
     # ★ 걸어서 끝까지 가는가 — BFS. 뛰지 않고, 물에 안 빠지고
     #   (RegionAudit.groundStandY 의 교훈: 걷는 검사가 지붕에서 출발하면 무엇을 재든 거짓이다.
