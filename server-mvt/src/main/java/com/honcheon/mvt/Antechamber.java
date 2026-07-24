@@ -520,12 +520,15 @@ public final class Antechamber implements Listener {
             return configure(w);   // ★ 이미 열려 있어도 매번 다시 세운다 (아래 주석을 보라)
         }
         try {
+            // ★4차 개정 (2026-07-24 사용자 확정 — "평지 필드를 없애고 다 물로"): 맨 위 층이 **물**이다.
+            //   잔디 지평선은 "나머지가 전부 물"이라는 나루의 약속을 깼다 — 이제 수평선까지 물이고,
+            //   갈 길은 잔교 하나다. (먼 안개 실루엣 산은 다음 회차의 조형 — 시안 뒤 plan 에 얹는다)
             w = new WorldCreator(worldName)
                     .type(WorldType.FLAT)
                     .generateStructures(false)
                     .generatorSettings("{\"layers\":[{\"block\":\"minecraft:stone\",\"height\":1},"
                             + "{\"block\":\"minecraft:dirt\",\"height\":2},"
-                            + "{\"block\":\"minecraft:grass_block\",\"height\":1}],"
+                            + "{\"block\":\"minecraft:water\",\"height\":5}],"
                             + "\"biome\":\"minecraft:swamp\"}")
                     .createWorld();
         } catch (Throwable t) {
