@@ -367,6 +367,8 @@ MUTATIONS = [
     ("(107) 사공이 조종석에 안 탄다 (사람이 노를 젓는다 — 파츠 분리·경로 이탈)", VOY,
      "        if (r.ferryman != null && Bukkit.getEntity(r.ferryman) instanceof org.bukkit.entity.Villager v) {\n            boat.addPassenger(v);\n        }",
      "", "조종석이 사람에게"),
+    ("(108) 붓을 내려놔도 「적고 있다」가 남는다 (화면의 거짓말)", VOY,
+     "        SeojangBook.get().settle(player);", "", "적고 있다\\S*가 안 걷힌다|기다림 기계를 걷어야"),
 ]
 
 

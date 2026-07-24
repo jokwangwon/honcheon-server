@@ -1510,6 +1510,11 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
         rep.bad("무대 그릇인데 2초 재배달이 책을 몰래 쥐여 줄 수 있다 — 그릇이 둘이 된다")
     else:
         rep.good("무대 그릇에서는 책이 흐르지 않는다 (재배달 억제)")
+    if "SeojangBook.get().settle(player);" not in voy:
+        rep.bad("붓을 내려놨는데 「적고 있다」가 안 걷힌다 — 무대 길은 deliver 를 안 지나므로 "
+                "settle 이 기다림 기계를 걷어야 한다 (화면의 거짓말)")
+    else:
+        rep.good("붓이 내려오면 기다림 기계가 걷힌다 (settle — 남은 기다림은 항해다)")
     sjs = source("SeojangStage.java")
     if not sjs:
         rep.bad("SeojangStage.java 가 없다 — 무대가 말뿐이다")

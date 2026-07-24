@@ -279,6 +279,17 @@ public final class SeojangBook {
         player.playSound(player.getLocation(), c.key(), c.volume(), c.pitch());
     }
 
+    /**
+     * ★무대 그릇 (실사용 2026-07-25 "2장 출력 다 되었는데도 '붓이 다음 장을 적고 있다'가 존재") —
+     * 무대 길에서는 책을 안 주므로 {@link #deliver} 의 걷기 코드가 안 돈다. 붓이 내려온 순간
+     * (non-writing 장면 도착) 이 손이 기다림 기계만 걷는다 — 화면이 세계에 대해 거짓말하지 않는다.
+     */
+    public void settle(Player player) {
+        writingNow.remove(player.getUniqueId());
+        told.remove(player.getUniqueId());
+        plugin.skills().dropNotice(player.getUniqueId(), NOTICE_CHANNEL);
+    }
+
     /** 그 몸의 서장 책을 회수한다 (출도했거나 다음 장이 왔다) */
     public void removeOld(Player player) {
         ItemStack[] items = player.getInventory().getContents();

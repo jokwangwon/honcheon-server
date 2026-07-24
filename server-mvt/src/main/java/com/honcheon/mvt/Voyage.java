@@ -358,6 +358,9 @@ final class Voyage {
         if (scene.writing()) {
             return false;   // 붓 소식은 미루지 않는다 — 침묵 금지 기계가 맡는다
         }
+        // ★붓이 내려왔다 (실사용: 무대 그릇에서 "적고 있다" 액션바가 안 걷혔다) — 책은 안 주지만
+        //   기다림 기계는 지금 걷는다. 남은 기다림은 붓이 아니라 **항해**다 (배가 말한다)
+        SeojangBook.get().settle(player);
         if (scene.token() != null && scene.token().equals(r.deliveredToken)) {
             // 이미 정거장에서 연 장 — 무대 그릇이면 책을 아예 안 준다 (2초 재배달이 책을 몰래
             // 쥐여 주면 그릇이 둘이 된다). 강등(책 그릇)일 때만 통과 — SeojangBook.given 이 소거한다
