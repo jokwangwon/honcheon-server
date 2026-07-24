@@ -22,9 +22,9 @@ import java.util.Map;
  * 카운터: personal_story §6.4 부분 개정)과 완료 채팅. 액션바는 쓰지 않는다 (처치 순간은
  * 판정 flash·획득 flash 가 이미 그 줄을 쓴다 — B-123 의 겹침을 다시 만들지 않는다).
  */
-final class TutorialGuide {
+final class TutorialGuide implements org.bukkit.event.Listener {
 
-    record Station(String id, String name, int count, String tracker) {
+    record Station(String id, String name, int count, String tracker, String doneLine) {
     }
 
     private final HoncheonMvt plugin;
@@ -65,7 +65,8 @@ final class TutorialGuide {
                 stations.add(new Station(String.valueOf(st.get("id")),
                         str(st.get("name"), String.valueOf(st.get("id"))),
                         st.get("count") instanceof Number n ? Math.max(1, n.intValue()) : 1,
-                        str(st.get("tracker"), "")));
+                        str(st.get("tracker"), ""),
+                        str(st.get("done_line"), null)));   // 정거장별 완료 문장 (없으면 done_format)
             }
         }
         // 기동 고지 — 침묵 금지: 안내 층이 몇 정거장으로 섰는지 로그가 말한다
@@ -96,10 +97,45 @@ final class TutorialGuide {
         }
         ledger.tutorial().put(st.id(), cur + 1);
         if (cur + 1 >= st.count()) {
-            player.sendMessage(doneFormat.replace("{name}", st.name()));
+            player.sendMessage(st.doneLine() != null ? st.doneLine()
+                    : doneFormat.replace("{name}", st.name()));
             finishIfDone(player, ledger);
         }
         plugin.updateSidebar(player);   // 5초 폴링을 기다리지 않는다 — 자는 즉시 움직인다
+    }
+
+    // ─── 몸짓 감지 (정거장 「몸짓」) — 장비 없이 언제나 되는 두 몸짓만 (막기는 예고) ───
+    //   combat.yml defender_stance_mc.gestures 의 술어 그대로: 흘리기=isSneaking · 회피=isSprinting.
+    //   몸짓마다 한 번만 센다 — 표식 키(몸짓·이름)가 정거장 계수와 별도로 장부에 남는다.
+
+    @org.bukkit.event.EventHandler
+    public void onSneak(org.bukkit.event.player.PlayerToggleSneakEvent event) {
+        if (event.isSneaking()) {
+            gesture(event.getPlayer(), "흘리기");
+        }
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onSprint(org.bukkit.event.player.PlayerToggleSprintEvent event) {
+        if (event.isSprinting()) {
+            gesture(event.getPlayer(), "회피");
+        }
+    }
+
+    private void gesture(Player player, String name) {
+        if (!enabled || stationOf("몸짓") == null) {
+            return;
+        }
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        if (!ledger.linked()) {
+            return;
+        }
+        String marker = "몸짓·" + name;
+        if (ledger.tutorial().containsKey(marker)) {
+            return;   // 이 몸짓은 이미 세었다 — 웅크림 연타가 정거장을 혼자 닫으면 오배선이다
+        }
+        ledger.tutorial().put(marker, 1);
+        bump(player, "몸짓");
     }
 
     /**

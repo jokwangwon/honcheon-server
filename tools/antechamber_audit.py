@@ -285,6 +285,10 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
     dsm = find_dsm(combat)
     if not dsm or not dsm.get("gestures"):
         rep.bad("combat.yml 에서 defender_stance_mc.gestures 를 못 찾았다 — 대조할 정본이 없다")
+    elif "태세" not in lessons:
+        # ★3차 개정 (2026-07-24) — 태세 과제는 본토 뿌리내림(B-178)으로 이관됐다. 과제가 없으면
+        #   가르침 대조도 없다 — 다만 침묵하지 않고 어디로 갔는지 말한다 (tutorial_rooting.md §3)
+        rep.good("태세 과제 없음 — 몸짓은 본토 뿌리내림(B-178)이 가르친다 (3차 개정)")
     else:
         truth_gestures = set(dsm["gestures"].values())
         taught = set((lessons.get("태세") or {}).get("gestures") or [])
@@ -323,6 +327,9 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
     how_gg = (lessons.get("경공") or {}).get("how", "")
     if not activate:
         rep.bad("gyeonggong.yml 에서 activate 를 못 찾았다 — 대조할 정본이 없다")
+    elif "경공" not in lessons:
+        # ★3차 개정 — 경공 예고 관문은 제거됐다 (새 몸은 전원 범인 · 아무도 못 하는 예고 전용이었다)
+        rep.good("경공 과제 없음 — 예고는 개화 때 세계가 한다 (3차 개정)")
     else:
         # 정본에서 조작의 낱말을 뽑아 대기실 문장에 다 들어 있는지 본다 (손으로 '달리며 점프' 라 안 쓴다)
         words = [w for w in re.findall(r"[가-힣]+", activate.split("(")[0]) if len(w) >= 2]
@@ -411,11 +418,13 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
         else:
             rep.good(f"/혼천 {cmd} → Antechamber.{method.group(1)}(Player) — 손은 준비됐다")
 
-    # ── 손/격 조작이 SkillListener 의 조작표와 같은가
+    # ── 손/격 조작이 SkillListener 의 조작표와 같은가 (★과제가 있을 때만 — 3차 개정 이관)
     gyeok = lessons.get("격") or {}
     sl = source("SkillListener.java")
     table = sl[:6000]
-    if "Shift + 우클릭" in table:
+    if "격" not in lessons:
+        rep.good("격 과제 없음 — 격 두름은 개화 뒤의 것이다 (3차 개정)")
+    elif "Shift + 우클릭" in table:
         if "Shift + 우클릭" not in gyeok.get("how", ""):
             rep.bad("격 과제가 SkillListener 조작표('Shift + 우클릭')와 다른 조작을 가르친다: "
                     f"{gyeok.get('how','')!r}")
@@ -425,7 +434,9 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
         rep.warn("SkillListener 조작표에서 'Shift + 우클릭' 을 못 찾았다 — 대조를 못 했다")
 
     son = lessons.get("손") or {}
-    if "좌클릭" in table and "좌클릭" not in son.get("how", ""):
+    if "손" not in lessons:
+        rep.good("손 과제 없음 — 때리는 법은 본토 첫 사냥이 가르친다 (3차 개정)")
+    elif "좌클릭" in table and "좌클릭" not in son.get("how", ""):
         rep.bad("손 과제가 조작표('좌클릭')와 다른 조작을 가르친다")
     else:
         rep.good("손 = 좌클릭 (조작표와 일치)")
@@ -473,6 +484,8 @@ def audit_truth(rep: Report, ante: dict, code: str) -> None:
 # 이 눈은 그 어긋남을 잡는다 — 손으로 답을 쓰지 않고, **코드의 선언**과 **등록부의 순번**에서 읽는다.
 
 def audit_combo(rep: Report, lessons: dict, skill_listener: str) -> None:
+    if "손" not in lessons:
+        return   # 3차 개정 — 손 과제 이관 (콤보 오해의 눈은 과제 문장이 있을 때의 것이다)
     son = lessons.get("손") or {}
     how = son.get("how", "")
 
@@ -581,7 +594,7 @@ def audit_capability(rep: Report, ante: dict, lessons: dict, code: str) -> None:
     for lid, cap in needs.items():
         l = lessons.get(lid)
         if not l:
-            rep.warn(f"과제 '{lid}' 가 없다 — 능({cap}) 대조를 건너뛴다")
+            rep.good(f"과제 '{lid}' 없음 — 능({cap}) 대조 불요 (3차 개정 — 못 하는 것을 아예 안 시킨다)")
             continue
         declared = l.get("requires", "")
         if truth[cap]:
@@ -1531,10 +1544,19 @@ def audit_dummies(rep: Report, ante: dict, code: str) -> None:
     dummies = du.get("list") or []
 
     if not dummies:
-        rep.bad("허수아비가 하나도 등록돼 있지 않다 — 대기실에서 때릴 상대가 없다 "
-                "(손 과제는 '허수아비를 좌클릭으로 쳐라'라고 가르친다)")
-        return
-    rep.good(f"허수아비 {len(dummies)}몸 등록")
+        # ★3차 개정 — 허수아비는 타격 과제와 한 몸이다: 과제가 있는데 상대가 없으면 거짓말이고,
+        #   과제가 없으면(순수 문지방) 0몸이 맞다 (때리는 법은 본토 첫 사냥이 가르친다).
+        #   ★return 하지 않는다 — 사람 보호(damage_players)·코드 형태(평화·체력·격리·조성 로그)
+        #   검사는 허수아비 유무와 무관하다 (조기 return 이 그 눈들을 같이 감았던 적 있다)
+        hit_lesson = any((l or {}).get("detect") == "허수아비_타격"
+                         for l in ((ante.get("lessons") or {}).get("list") or []))
+        if hit_lesson:
+            rep.bad("허수아비가 하나도 등록돼 있지 않다 — 대기실에서 때릴 상대가 없다 "
+                    "(손 과제는 '허수아비를 좌클릭으로 쳐라'라고 가르친다)")
+        else:
+            rep.good("허수아비 0몸 — 타격 과제가 없다 (3차 개정: 순수 문지방)")
+    else:
+        rep.good(f"허수아비 {len(dummies)}몸 등록")
 
     # ★★ ① 평화(PEACEFUL) 는 몬스터를 지운다 — 허수아비의 몸이 좀비인 한, 평화 = 허수아비 없음.
     #    예외도 로그도 없이 조용히. **이것이 오늘의 병이었고, 이 줄이 그 눈이다.**

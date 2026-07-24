@@ -18,7 +18,10 @@ CONFIG = ROOT / "config" / "tutorial.yml"
 SRC = ROOT / "server-mvt" / "src" / "main" / "java"
 
 # 훅 문법: plugin.tutorial().bump(<변수>, "<정거장>")  ·  TutorialGuide 내부 소급: closeQuiet(ledger, "<정거장>")
+#          + TutorialGuide **자기 파일 안**의 맨 bump() (몸짓 감지가 부른다 — 남의 파일의 맨 bump 는
+#            딴 시스템(Antechamber)의 것이라 안 센다)
 BUMP = re.compile(r'tutorial\(\)\s*\.\s*bump\(\s*\w+\s*,\s*"([^"]+)"')
+BUMP_INNER = re.compile(r'(?<!\.)\bbump\(\s*\w+\s*,\s*"([^"]+)"')
 QUIET = re.compile(r'closeQuiet\(\s*\w+\s*,\s*"([^"]+)"')
 
 
@@ -35,6 +38,8 @@ def hook_stations(src=SRC):
         text = java.read_text(encoding="utf-8")
         for pat in (BUMP, QUIET):
             found.update(pat.findall(text))
+        if java.name == "TutorialGuide.java":
+            found.update(BUMP_INNER.findall(text))
     return found
 
 

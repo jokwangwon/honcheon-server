@@ -188,6 +188,7 @@ public final class HoncheonMvt extends JavaPlugin {
         hunger.load(cfg);
         getServer().getPluginManager().registerEvents(hunger, this);
         getServer().getPluginManager().registerEvents(antechamber, this);
+        getServer().getPluginManager().registerEvents(tutorial, this);   // 뿌리내림 몸짓 감지 (B-178)
         getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new BlockCovenant(), this);   // 세계는 부서지지 않는다 (B-161)
