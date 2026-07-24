@@ -129,6 +129,17 @@ public final class WorldBridge {
 
         Path root0 = repoRoot(configDir);
         bridgeDir = root0.resolve(String.valueOf(transport.getOrDefault("dir", "run/bridge")));
+        // ★★ 다리는 **라이브의 것**이다 (실증 2026-07-25 04시: 잔류 테스트 서버(run/mvt-test)가
+        //   같은 다리에 빈 명부를 5초마다 덮어써 — 봇이 "그 이름이 강호에 없다"며 접합 청을
+        //   거절했다. 침묵의 이중 작성자). 라이브 판별은 배포 정본(scripts/lib/live_pids.sh)과
+        //   같은 자 — **cwd 가 <root>/run/mvt 인 몸**만 공유 다리를 쓰고, 다른 몸(테스트 등)은
+        //   제 곁(cwd/bridge)에 격리 다리를 쓴다. 봇도 사람도 속지 않는다.
+        Path cwd = Path.of("").toAbsolutePath().normalize();
+        if (!cwd.equals(root0.resolve("run/mvt").normalize())) {
+            bridgeDir = cwd.resolve("bridge");
+            log.warning("[다리] 이 몸은 라이브가 아니다 (cwd=" + cwd + ") — 격리 다리 " + bridgeDir
+                    + " 를 쓴다 (공유 다리는 라이브의 것)");
+        }
         outboxDir = bridgeDir.resolve(String.valueOf(transport.getOrDefault("outbox", "mvt")));
         snapshotFile = bridgeDir.resolve(String.valueOf(
                 transport.getOrDefault("snapshot", "world_state.json")));
