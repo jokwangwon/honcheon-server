@@ -349,6 +349,9 @@ MUTATIONS = [
     ("(102) 봇이 갈래 등록부를 안 읽는다 (등록부가 있어도 출분은 재난 벌)", BSJ,
      '        Map<String, Object> bo = RulesConfig.section(cfg, "branch_of");',
      "        Map<String, Object> bo = Map.of();", "갈래 등록부"),
+    # ─── ★세가 (2026-07-25 — 오대세가 자제 · 승격 주사위) ───
+    ("(103) 세가 발단을 갈래 등록부에서 뗀다 (밀서가 재난 벌로 떨어진다)", SJY,
+     "  밀서: 세가\n", "", "재난 벌로 떨어진다"),
 ]
 
 

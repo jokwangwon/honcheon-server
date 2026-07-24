@@ -890,6 +890,11 @@ public final class Rules {
                 RulesConfig.section(playerCreation, "age_and_lifepath"), key);
     }
 
+    /** ★세가 승격 (2026-07-25) — 무가가 걸린 아이 중 드물게 오대세가의 자제다 (등록부가 확률을 정한다) */
+    public Map<String, Object> segaPromotion() {
+        return lifepath("sega_promotion");
+    }
+
     /**
      * ★★ <b>결(結) — 유년의 기억이 집안을 정한다</b> (player_creation.yml family_affinity).
      *

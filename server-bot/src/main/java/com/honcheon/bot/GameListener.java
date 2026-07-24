@@ -946,7 +946,17 @@ public final class GameListener extends ListenerAdapter {
             List<String> all = new ArrayList<>(rules.families().keySet());
             return all.get(dice.nextInt(all.size()));
         }
-        return pool.get(dice.nextInt(pool.size()));   // ★ 무늬 — 갈래 **안에서만** 구른다
+        String picked = pool.get(dice.nextInt(pool.size()));   // ★ 무늬 — 갈래 **안에서만** 구른다
+        // ★세가 승격 (2026-07-25 사용자 확정) — 결(무가)은 지켜지고 무늬가 격을 올린다:
+        //   무가가 걸린 아이 중 등록부의 확률만큼만 오대세가의 자제다 (드묾이 대사건의 무게다)
+        Map<String, Object> promo = rules.segaPromotion();
+        if (!promo.isEmpty() && picked.equals(String.valueOf(promo.get("from")))
+                && promo.get("chance_pct") instanceof Number pct
+                && dice.nextInt(100) < pct.intValue()
+                && rules.families().containsKey(String.valueOf(promo.get("to")))) {
+            return String.valueOf(promo.get("to"));
+        }
+        return picked;
     }
 
     /** 세가의 문 — 남을 것인가, 나올 것인가 (문장은 등록부의 것이다) */
@@ -1095,6 +1105,14 @@ public final class GameListener extends ListenerAdapter {
         if ("무가의_자식".equals(family)) {
             // armory 시작 대여 — 판정 보정 0 (equipment.yml), 팔거나 잃으면 support 단계 입력
             sheet.put("가문_대여", "정련급 가문 검 (가문 소유 — 잃으면 문책)");
+        }
+        // ★세가의_자제 (2026-07-25) — **어느 세가인가**는 무늬 주사위다 (등록부 great_houses ·
+        //   탄생에 한 번 구르고 시트에 박힌다). 같은 쇠, 다른 각인 — 백지의 평등은 그대로다.
+        if ("세가의_자제".equals(family) && familyCfg != null
+                && familyCfg.get("great_houses") instanceof List<?> gh && !gh.isEmpty()) {
+            String great = String.valueOf(gh.get(dice.nextInt(gh.size())));
+            sheet.put("세가", great);
+            sheet.put("가문_대여", "정련급 가문 검 — " + great + "의 각인 (가문 소유 · 잃으면 문책의 무게도 세가답다)");
         }
         // 집안 grants의 기술 축 배선 — 몰락_무가 검법0 = "아무 무공 입문 (숙련 0)" 승급 요건 충족
         if (familyCfg != null && familyCfg.get("grants") instanceof Map<?, ?> grants
