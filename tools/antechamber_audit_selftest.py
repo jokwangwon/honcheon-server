@@ -26,6 +26,8 @@ VOY = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/Voyage.java"
 SJS = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SeojangStage.java"
 STG = f"{ROOT}/config/seojang_stage.yml"
 GLB = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/GameListener.java"
+BSJ = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/Seojang.java"
+SJY = f"{ROOT}/config/seojang.yml"
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -340,6 +342,13 @@ MUTATIONS = [
     ("(100) 첫 장이 발단을 안 본다 (역병의 밤도 불타는 집)", SJS,
      "            SceneSpec byIncident = incidents.get(scene.incident());",
      "            SceneSpec byIncident = null;", "발단을 안 본다"),
+
+    # ─── ★B-181 — 출분의 제 벌 (갈래 배정 등록부) ───
+    ("(101) 출분 발단을 갈래 등록부에서 뗀다 (재난 벌로 떨어진다)", SJY,
+     "  담을_넘다: 출분\n", "", "재난 벌로 떨어진다"),
+    ("(102) 봇이 갈래 등록부를 안 읽는다 (등록부가 있어도 출분은 재난 벌)", BSJ,
+     '        Map<String, Object> bo = RulesConfig.section(cfg, "branch_of");',
+     "        Map<String, Object> bo = Map.of();", "갈래 등록부"),
 ]
 
 

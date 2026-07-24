@@ -66,6 +66,8 @@ final class Seojang {
     }
 
     private final Map<String, List<Scene>> scenes = new LinkedHashMap<>();
+    /** ★B-181 — 갈래 배정 등록부 (발단 → 벌). 출분이 재난의 뼈대를 빌려 입던 병의 수리 */
+    private final Map<String, String> branchMap = new LinkedHashMap<>();
     private final Map<String, List<String>> sceneBody = new LinkedHashMap<>();
     private final Map<String, String> incidentOpening = new LinkedHashMap<>();
     private final Map<String, String> familyColor = new LinkedHashMap<>();
@@ -106,6 +108,9 @@ final class Seojang {
             }
             scenes.put(branch, List.copyOf(list));
         });
+        // ★B-181 — 갈래 배정: 등록부(branch_of)가 정본이다 (여기 없는 발단은 기본 벌)
+        Map<String, Object> bo = RulesConfig.section(cfg, "branch_of");
+        bo.forEach((k, v) -> branchMap.put(k, String.valueOf(v)));
 
         Map<String, Object> prose = RulesConfig.section(cfg, "prose");
         RulesConfig.section(prose, "incident_opening").forEach((k, v) -> incidentOpening.put(k, str(v)));
@@ -163,8 +168,16 @@ final class Seojang {
 
     // ─── 뼈대 ───
 
-    /** 이 발단이 사는 갈래 — 무가의 자식(수행_파견)이냐, 재난을 겪은 아이냐 */
-    static String branchOf(String incident) {
+    /**
+     * 이 발단이 사는 갈래 — <b>등록부(branch_of)가 정한다</b> (★B-181: 수행_파견=명령의 벌 ·
+     * 출분 3발단=저지른 아이의 벌 · 나머지=재난의 벌). 등록부가 없거나 없는 벌을 가리키면
+     * 옛 규약(수행_파견만 갈림)으로 강등 — 등록부 없는 날에도 서장은 흐른다.
+     */
+    String branchOf(String incident) {
+        String b = branchMap.get(incident);
+        if (b != null && scenes.containsKey(b)) {
+            return b;
+        }
         return BRANCH_DISPATCH.equals(incident) ? BRANCH_DISPATCH : BRANCH_DEFAULT;
     }
 

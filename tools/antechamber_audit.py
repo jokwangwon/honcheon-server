@@ -1452,6 +1452,28 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
     else:
         rep.good("발단이 다리를 건넌다 (봇 put → 다리 parse → 무대 resolve)")
 
+    # ②-c ★B-181 — 출분이 재난의 뼈대를 빌려 입지 않는가 (갈래 배정 등록부)
+    branch_map = load_yaml("seojang.yml").get("branch_of") or {}
+    runaway = ((find_key(load_yaml("player_creation.yml"), "families") or {})
+               .get("가출한_무가의_자식") or {})
+    stray = [k for k in (runaway.get("incident_pool") or [])
+             if branch_map.get(k) in (None, "기본")]
+    if stray:
+        rep.bad(f"출분 발단 {stray} 이 재난 벌로 떨어진다 — 「식구들부터 깨운다」가 "
+                "제 발로 담을 넘은 아이에게 거짓말이 된다 (B-181)")
+    else:
+        rep.good("출분 발단은 제 벌을 산다 (branch_of — 저지른 아이의 뼈대)")
+    for k, b in branch_map.items():
+        if b not in scenes:
+            rep.bad(f"branch_of[{k}] = {b!r} — 없는 벌을 가리킨다 (그 발단은 기본으로 강등된다)")
+    bot_sj = os.path.join(ROOT, "server-bot", "src", "main", "java", "com", "honcheon", "bot",
+                          "Seojang.java")
+    bot_sj_src = open(bot_sj, encoding="utf-8").read() if os.path.isfile(bot_sj) else ""
+    if '"branch_of"' not in bot_sj_src:
+        rep.bad("봇이 갈래 등록부(branch_of)를 안 읽는다 — 등록부가 있어도 출분은 재난 벌이다")
+    else:
+        rep.good("갈래는 등록부가 정한다 (봇 Seojang.branchOf ← branch_of)")
+
     # ③ 배선 — 정거장=무대 · 강등 문 · 재배달 억제 · 등불의 손 · 격리 · 필사본
     voy = source("Voyage.java")
     if "ante.stage().play(" not in voy:
