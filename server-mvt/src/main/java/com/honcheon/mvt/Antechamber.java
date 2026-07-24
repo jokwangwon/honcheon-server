@@ -30,7 +30,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -79,9 +78,9 @@ import java.util.UUID;
  * 벽을 하나도 세우지 않았는데 길이 하나다 — 그것이 <b>가두지 않으면서 이끄는 법</b>이다.
  * (물에 빠져도 죽지 않는다: 수심 1 · 익사 꺼짐. 기어오르면 된다. <b>막지 않는다. 다만 젖을 뿐이다.</b>)
  *
- * <p><b>흐름</b> — 관문은 길을 따라 <b>하나씩</b> 나온다 (맞이 → 손 → 격 → 태세 → 경공 → 장부 → 나루).
- * 그리고 <b>한 번에 하나만 보인다</b>: 다음 관문의 글판은 앞 관문이 닫히기 전까지 뜨지 않는다
- * ({@code lessons.one_at_a_time}). 지금 무엇을 해야 하는지가 화면에 하나뿐이면 흐름은 저절로 생긴다.
+ * <p><b>흐름</b> — 관문은 둘뿐이다 (맞이 → 나루 · ★3차 순수 문지방). 판은 전부 <b>안내판</b>이고
+ * 늘 보인다 — ★5차 개정(2026-07-24)으로 과제와 그 기계(진척 장부·감지·순차 공개)가 폐지됐다.
+ * 나루는 시험하지 않는다: 사이는 갈대와 등롱과 걷기다, 그리고 그 걷기가 서장의 붓을 기다리는 시간이다.
  *
  * <p><b>빛</b> — 격자는 아무것도 안 가리킨다. 등롱이 <b>길을 따라</b> 늘어서면 그것이 곧 화살표다.
  * 그리고 <b>어두운 곳이 있어야 밝은 곳이 길로 읽힌다</b> — 습지는 어둡다. 눈금은
@@ -92,8 +91,7 @@ import java.util.UUID;
  * 강호에서는 혼자 쳐야 하니까. 화면에 뜨는 글자와 실행되는 글자는 <b>같은 변수 하나</b>다.
  *
  * <p><b>불변식</b>: 떨구지 않는다 · 가두지 않는다(봇이 꺼지면 사공이 그냥 건넨다) ·
- * 과제는 문을 잠그지 않는다(<b>글판이 안 보이는 것과 문이 잠기는 것은 다른 것이다 — 종은 언제나 울린다</b>) ·
- * 못 하는 것을 가르치지 않는다(범인에게 격 관문은 없는 것으로 친다) · 문장·좌표·조건은 config 가 정본 ·
+ * 문은 이름이 연다(<b>글판은 안내이지 자물쇠가 아니다 — 종은 언제나 울린다</b>) · 문장·좌표·조건은 config 가 정본 ·
  * 난수 없음 · 조성은 {@link TickBudget#slice} 로 나눠 먹인다.
  */
 public final class Antechamber implements Listener {
@@ -207,20 +205,14 @@ public final class Antechamber implements Listener {
     private final String arrivalSubtitle;
     private final List<String> arrivalLines;
     private final String revisitLine;
-    /** B-124 — 건넌 몸이 다시 섰을 때, 과제 장부가 백지인 이유를 말하는 한 줄 (침묵 금지) */
-    private final String revisitLedgerLine;
 
     private final boolean kitGive;
     private final String kitLine;
     private final String kitTakeBackLine;
 
-    private final boolean oneAtATime;
-    private final String doneLine;
-    private final String nextLine;
-    private final String allDoneTitle;
-    private final String allDoneSubtitle;
-    private final List<String> allDoneLines;
-    private final Map<String, Lesson> lessons = new LinkedHashMap<>();
+    // 【묘비】 과제 기계(oneAtATime·doneLine·allDone·lessons 장부) — ★5차 개정 (2026-07-24
+    //   사용자 지시 "아직 입도진에 과제가 존재 — 제거"). 나루는 시험하지 않는다: 판은 안내판
+    //   (Station.panel)이고, 문은 이름이 연다. 계보는 config lessons 묘비(§7)에 있다.
 
     private final String plateEcho;
     private final String plateHint;
@@ -231,16 +223,8 @@ public final class Antechamber implements Listener {
     private final String arrivalPanelId;
 
     // ─── 장부 (사람마다) ───
-    /**
-     * 과제 장부 — ★ <b>메모리뿐이다. 설계다</b> (B-124): 나루는 시험장이 아니라 문지방이고,
-     * 문({@link #cross})은 과제를 보지 않으므로 장부를 세계에 남길 이유가 없다.
-     * 나감({@link #onQuit})·재기동마다 백지가 된다 — 이미 건넌 몸이 다시 서면 관문이 도로
-     * 열려 있는 이유가 이것이고, 그 결은 {@link #enter} 의 재방문 한 줄
-     * ({@code arrival.revisit_ledger_line})이 말한다 (침묵 금지 — 다시 하는 것은 자유다).
-     */
-    private final Map<UUID, Map<String, Integer>> progress = new HashMap<>();
-    private final Map<UUID, Set<String>> gesturesSeen = new HashMap<>();
-    private final Map<UUID, String> lastArmed = new HashMap<>();
+    // 【묘비】 과제 진척 장부(progress·gesturesSeen·lastArmed — B-124 「메모리뿐」 설계 포함) —
+    //   ★5차 개정으로 과제 자체가 폐지돼 장부도 없다. 문(cross)은 원래 과제를 안 봤다 — 그 계약만 남는다.
     /**
      * ★ <b>맡아 둔 짐</b> — 나루의 꾸러미를 쥐여 주는 동안 <b>사람의 진짜 짐</b>을 여기 둔다.
      *
@@ -271,12 +255,10 @@ public final class Antechamber implements Listener {
     private final Set<UUID> dockWaitSaid = new LinkedHashSet<>();
     /** 발판 연타 방지 — (사람/발판) → 다시 밟을 수 있는 틱 */
     private final Map<String, Long> plateCooldowns = new HashMap<>();
-    /** 세운 글판 — 관문 id(+변형) → 엔티티 */
+    /** 세운 글판 — 관문 id → 엔티티 (판은 관문마다 하나 · 전부 안내판이라 늘 보인다) */
     private final Map<String, UUID> panelEntities = new LinkedHashMap<>();
     /** 허수아비 장부 — 엔티티 → [누적, 합수, 최근] (Dojang 의 명패와 같은 눈금) */
     private final Map<UUID, double[]> tally = new HashMap<>();
-    /** 이 사람에게 지금 열려 있는 관문 번호 */
-    private final Map<UUID, Integer> shownThrough = new HashMap<>();
 
     private org.bukkit.scheduler.BukkitTask ticker;
     private boolean building;
@@ -342,7 +324,7 @@ public final class Antechamber implements Listener {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> s = (Map<String, Object>) m;
                     stations.add(new Station(str(s.get("id"), ""), num(s.get("x"), 0),
-                            Math.max(1, num(s.get("half"), 4)), str(s.get("lesson"), "")));
+                            Math.max(1, num(s.get("half"), 4)), lines(s.get("panel"))));
                 }
             }
         }
@@ -475,7 +457,6 @@ public final class Antechamber implements Listener {
         this.arrivalSubtitle = str(arrival.get("subtitle"), "");
         this.arrivalLines = lines(arrival.get("lines"));
         this.revisitLine = str(arrival.get("revisit_line"), "");
-        this.revisitLedgerLine = str(arrival.get("revisit_ledger_line"), "");
 
         Map<String, Object> kit = RulesConfig.section(a, "kit");
         this.kitGive = !(kit.get("give") instanceof Boolean g) || g;
@@ -498,35 +479,7 @@ public final class Antechamber implements Listener {
             }
         }
 
-        Map<String, Object> les = RulesConfig.section(a, "lessons");
-        this.oneAtATime = !(les.get("one_at_a_time") instanceof Boolean oa) || oa;
-        this.doneLine = str(les.get("done_line"), "§a✔ §f{title}");
-        this.nextLine = str(les.get("next_line"), "");
-        Map<String, Object> allDone = RulesConfig.section(les, "all_done");
-        this.allDoneTitle = str(allDone.get("title"), "");
-        this.allDoneSubtitle = str(allDone.get("subtitle"), "");
-        this.allDoneLines = lines(allDone.get("lines"));
-        if (les.get("list") instanceof List<?> list) {
-            for (Object o : list) {
-                if (!(o instanceof Map<?, ?> m)) {
-                    continue;
-                }
-                @SuppressWarnings("unchecked")
-                Map<String, Object> l = (Map<String, Object>) m;
-                Lesson lesson = new Lesson(
-                        str(l.get("id"), ""), str(l.get("title"), ""), str(l.get("how"), ""),
-                        str(l.get("detect"), ""), Math.max(1, num(l.get("count"), 1)),
-                        str(l.get("done"), ""),
-                        new LinkedHashSet<>(lines(l.get("gestures"))),
-                        str(l.get("command"), ""),
-                        l.get("needs_args") instanceof Boolean na && na,
-                        str(l.get("requires"), ""),
-                        str(l.get("unavailable"), ""));
-                if (!lesson.id().isEmpty()) {
-                    lessons.put(lesson.id(), lesson);
-                }
-            }
-        }
+        // 【묘비】 lessons 파싱 — ★5차 개정 (과제 폐지). 되살아난 lessons 절은 감사가 위반으로 잰다.
 
         Map<String, Object> td = RulesConfig.section(a, "text_display");
         this.panelSpec = new Panels(
@@ -916,9 +869,6 @@ public final class Antechamber implements Listener {
                     + " · 글판 " + countPanels(w) + "/" + expectedPanels()
                     + " · 발판 " + countPlates(w) + "/" + plates.size()
                     + " · 종 " + (bellStands(w) ? "섬" : ChatColor.RED + "없음"));
-            if (isAntechamber(player.getWorld())) {
-                refreshPanels(player);
-            }
         });
     }
 
@@ -1235,7 +1185,18 @@ public final class Antechamber implements Listener {
                         "minecraft:iron_chain[axis=x]"));
             }
         }
-        return out;
+        // ★★ 같은 칸을 두 번 적으면 앞 기록이 거짓이 된다 (실측 2026-07-24: 갈대가 물을,
+        //   고사목이 공기를 겹쳐 써 완결성 검증이 **제 판에 속아** 94% — 매 진입마다 "반쯤
+        //   섰다"며 다시 지을 뻔했다). 마지막 기록만, **마지막 자리에** 남긴다 — 얹히는 것
+        //   (갈대·꽃·지붕 밑 등롱)이 늘 제 받침 뒤에 놓인다. 순수 함수 그대로 — 결정론 유지.
+        LinkedHashMap<Long, Place> dedup = new LinkedHashMap<>();
+        for (Place p : out) {
+            long key = (((long) p.x() & 0x3FFFFFFL) << 38)
+                    | (((long) p.z() & 0x3FFFFFFL) << 12) | ((long) p.y() & 0xFFFL);
+            dedup.remove(key);   // 자리를 끝으로 옮긴다 (put 만 하면 첫 자리에 남아 받침을 앞지른다)
+            dedup.put(key, p);
+        }
+        return new ArrayList<>(dedup.values());
     }
 
     /**
@@ -1316,45 +1277,26 @@ public final class Antechamber implements Listener {
     }
 
     private int expectedPanels() {
-        int n = 0;
-        for (Station s : stations) {
-            n++;
-            Lesson l = lessons.get(s.lesson());
-            if (l != null && l.gated()) {
-                n++;   // 판이 둘 — 할 수 있는 몸 / 없는 몸(예고). 사람마다 하나만 보인다
-            }
-        }
-        return n;
+        return stations.size();   // ★5차 — 판은 관문마다 하나, 전부 안내판이다 (예고 변형 소멸)
     }
 
-    /** 관문의 글 — <b>과제의 문장 그대로</b>. 판과 관문이 딴말을 할 수가 없다 */
-    private List<String> panelText(Station s, boolean unavailableVariant) {
-        Lesson l = lessons.get(s.lesson());
-        if (l == null) {
-            return s.id().equals(arrivalPanelId) ? arrivalLines
-                    : List.of(panelSpec.titlePrefix() + s.id());
+    /** 관문의 글 — <b>등록부의 문장 그대로</b> (Station.panel · 맞이는 arrival). 판이 딴말을 할 수가 없다 */
+    private List<String> panelText(Station s) {
+        if (!s.panel().isEmpty()) {
+            return s.panel();
         }
-        return List.of(panelSpec.titlePrefix() + l.title(),
-                unavailableVariant ? l.unavailable() : l.how());
+        return s.id().equals(arrivalPanelId) ? arrivalLines
+                : List.of(panelSpec.titlePrefix() + s.id());
     }
 
     private void spawnPanels(World w) {
         int gy = groundY(w);
         for (Station s : stations) {
-            Lesson l = lessons.get(s.lesson());
             boolean isGate = s.x() >= bell[0] - s.half();   // 문의 관문 — 주사 바탕
-            spawnPanel(w, gy, s.id(), s, panelText(s, false), isGate);
-            if (l != null && l.gated()) {
-                spawnPanel(w, gy, s.id() + "_없음", s, panelText(s, true), false);
-            }
+            spawnPanel(w, gy, s.id(), s, panelText(s), isGate);
         }
-        // ★★ 갓 뿌린 글판은 기본값이 「보임」이다 — 그 자리에 선 사람에게 즉시 가림을 다시 건다.
-        //   B-131 회귀: onPanelsLoad(EntitiesLoadEvent)는 청크 **적재**만 잡고 spawn()은 못 잡는다.
-        //   런타임 재건축(완결 미달 → 다시 짓기)이 이 갈래로 새 판을 뿌리면, 여기서 안 가리면
-        //   present 플레이어는 how·예고 두 장을 겹쳐 본다. 이 재적용은 멱등이다 (show 는 미적재 무시).
-        for (Player p : w.getPlayers()) {
-            refreshPanels(p);
-        }
+        // 【묘비】 순차 공개(refreshPanels 재적용·B-131 가림 경주) — ★5차: 과제가 없으니 가릴 판도
+        //   없다. 안내판은 늘 보인다 — 「한 길」의 흐름은 이제 판이 아니라 물이 만든다 (길이 하나다).
     }
 
     private void spawnPanel(World w, int gy, String id, Station s, List<String> text, boolean accent) {
@@ -1381,146 +1323,31 @@ public final class Antechamber implements Listener {
         panelEntities.put(id, d.getUniqueId());
     }
 
-    /**
-     * 이 관문이 이 사람에게 <b>넘어간 것</b>인가 — 과제가 닫혔거나, 과제가 없거나(맞이),
-     * <b>못 하는 조작이라 아예 없는 것으로 치는</b> 경우(범인의 격).
-     */
-    private boolean passed(Player player, Station s) {
-        Lesson l = lessons.get(s.lesson());
-        if (l == null) {
-            return true;   // 맞이 — 아무것도 요구하지 않는다 (첫 화면이 시험이면 그것은 초대가 아니다)
-        }
-        if (lacks(player, l)) {
-            return true;   // ★ 못 하는 것 때문에 길이 막히지 않는다. 그냥 지나간다 (판은 예고로 바뀐다)
-        }
-        return complete(player, l);
-    }
-
-    /** 지금 이 사람이 서 있는 관문의 번호 — 앞의 것이 다 닫혀야 다음이 열린다 */
-    private int currentStation(Player player) {
-        for (int i = 0; i < stations.size(); i++) {
-            if (!passed(player, stations.get(i))) {
-                return i;
-            }
-        }
-        return stations.size() - 1;   // 다 지났다 — 나루까지 열려 있다
-    }
+    // 【묘비】 passed/currentStation/refreshPanels/show — 순차 공개와 예고 변형은 과제의 기계였다.
+    //   ★5차 개정: 판은 두 장(맞이·나루)뿐이고 전부 안내판이라 늘 보인다. 그 시절의 계율은 남는다:
+    //   「글판이 안 보이는 것과 문이 잠기는 것은 다른 것이다 — 종은 언제나 울린다」 (감사가 cross 를 계속 잰다)
 
     /**
-     * <b>★ 한 번에 하나만.</b> 다음 관문의 글판은 앞 관문이 닫히기 전까지 <b>뜨지 않는다</b>.
-     * 지금 무엇을 해야 하는지가 화면에 하나뿐이면, 흐름은 저절로 생긴다
-     * (과제 여섯이 동시에 보이면 그것은 안내가 아니라 <b>여섯 개의 선택지</b>다 — 1차판의 병).
-     *
-     * <p>지나온 관문의 판은 <b>남긴다</b> (걸어온 길이 보여야 길이다). 앞의 판만 감춘다.
-     *
-     * <p>★ <b>이것은 문을 잠그는 것이 아니다.</b> 판이 안 보여도 <b>종은 울린다</b>
-     * ({@code lessons.gating: false}). 글판은 안내이지 자물쇠가 아니다.
-     */
-    void refreshPanels(Player player) {
-        int current = oneAtATime ? currentStation(player) : stations.size() - 1;
-        for (int i = 0; i < stations.size(); i++) {
-            Station s = stations.get(i);
-            Lesson l = lessons.get(s.lesson());
-            boolean reached = i <= current;
-            boolean gated = l != null && l.gated();
-            boolean lacking = lacks(player, l);
-            // 판이 둘이면 **하나만** 보인다: 할 수 있는 몸에게는 how, 없는 몸에게는 unavailable(예고)
-            show(player, s.id(), reached && (!gated || !lacking));
-            if (gated) {
-                show(player, s.id() + "_없음", reached && lacking);
-            }
-        }
-        shownThrough.put(player.getUniqueId(), current);
-    }
-
-    private void show(Player player, String panelId, boolean visible) {
-        UUID id = panelEntities.get(panelId);
-        if (id == null || !(Bukkit.getEntity(id) instanceof TextDisplay d)) {
-            return;   // 아직 안 실린 글판 — {@link #onPanelsLoad} 가 실리는 순간 다시 가린다
-        }
-        if (visible) {
-            player.showEntity(plugin, d);
-        } else {
-            player.hideEntity(plugin, d);
-        }
-    }
-
-    /**
-     * ★ <b>숨김이 적재보다 먼저 달리면 두 장이 다 보인다</b> (사용자 실측 2026-07-15 — 격·경공
-     * 관문의 본문 판과 예고 판이 겹쳐 보였다).
-     *
-     * <p>관문 글판은 한 자리에 <b>두 장</b>(how + unavailable)이고 {@link #refreshPanels} 가
-     * 사람마다 한 장을 가린다. 그런데 그 가림은 <b>엔티티가 실려 있어야</b> 걸린다 —
-     * 진입 직후의 refresh 는 엔티티 청크 비동기 적재보다 빠를 수 있고, {@link #show} 는
-     * 못 찾으면 조용히 지나갔다. 기본값은 「보임」이므로 <b>침묵의 값이 곧 겹침</b>이었다.
-     *
-     * <p>그래서: 나루의 엔티티가 실리는 순간 글판 명부를 다시 채우고(재기동 뒤의 빈 명부도
-     * 여기서 되살아난다), 그 세계에 서 있는 사람들의 가림을 재적용한다. 이 둘은 멱등이다.
+     * 나루의 엔티티가 실리는 순간 글판 명부를 다시 채운다 (재기동 뒤의 빈 명부가 여기서 되살아난다).
+     * ★5차 — 옛 가림 재적용(B-131 겹침 경주)은 순차 공개와 함께 걷혔다: 판은 늘 보인다.
      */
     @EventHandler
     public void onPanelsLoad(EntitiesLoadEvent event) {
         if (!isAntechamber(event.getWorld())) {
             return;
         }
-        boolean panels = false;
         for (Entity e : event.getEntities()) {
             if (e instanceof TextDisplay && e.getPersistentDataContainer().has(KEY_PANEL)) {
                 String id = e.getPersistentDataContainer().get(KEY_PANEL, PersistentDataType.STRING);
                 if (id != null) {
                     panelEntities.putIfAbsent(id, e.getUniqueId());
-                    panels = true;
                 }
             }
         }
-        if (!panels) {
-            return;
-        }
-        for (Player p : event.getWorld().getPlayers()) {
-            refreshPanels(p);
-        }
     }
 
-    /**
-     * <b>★★ 이 몸이 이 조작을 할 수 있는가</b> — <b>못 하는 것을 시키지 않는다.</b>
-     *
-     * <p>능(能)의 이름은 <b>등록부</b>가 적는다 ({@code lessons.list[].requires}). 코드는 그 이름의
-     * <b>술어</b>만 갖는다 — 그리고 그 술어는 <b>지어내지 않고 제 주인에게 묻는다</b>:
-     *
-     * <table>
-     *   <tr><td>{@code 두를_격}</td><td>{@link SkillEngine#armableGrades}(경지) 가 비지 않았는가</td></tr>
-     *   <tr><td>{@code 허공_딛기}</td><td>{@link Gyeonggong#ceiling}(경지).airJumps() &gt; 0 인가
-     *       ({@code gyeonggong.yml realm_ceiling} — <b>개화 전은 0 이다</b>)</td></tr>
-     * </table>
-     *
-     * <p><b>모르는 이름은 "못 한다"로 답한다.</b> 없는 조작을 가르치는 것보다 안 가르치는 것이 낫고,
-     * 감사({@code antechamber_audit.py} ③)가 그 이름을 잡아 준다.
-     */
-    private boolean capable(Player player, Lesson l) {
-        if (!l.gated()) {
-            return true;
-        }
-        try {
-            String realm = plugin.skills().state(player).realm;
-            if (realm == null) {
-                return false;
-            }
-            return switch (l.requires()) {
-                case "두를_격" -> !plugin.skillEngine().armableGrades(realm).isEmpty();
-                case "허공_딛기" -> {
-                    Gyeonggong gg = Gyeonggong.get();
-                    yield gg != null && gg.open(realm) && gg.ceiling(realm).airJumps() > 0;
-                }
-                default -> false;   // 등록부가 지어낸 이름 — 코드는 흉내내지 않는다 (감사가 잡는다)
-            };
-        } catch (Throwable t) {
-            return false;   // 모르면 "못 한다" 쪽으로 — 없는 조작을 가르치는 것보다 안 가르치는 게 낫다
-        }
-    }
-
-    /** 이 사람에게 이 관문의 판이 <b>예고(unavailable)</b>로 떠야 하는가 */
-    private boolean lacks(Player player, Lesson l) {
-        return l != null && l.gated() && !capable(player, l);
-    }
+    // 【묘비】 capable/lacks (능·requires·예고) — 「못 하는 것을 시키지 않는다」의 기계. ★5차 개정으로
+    //   시키는 것 자체가 없어져 함께 걷혔다. 상속자는 본토 뿌리내림의 「막기 예고」다 (tutorial_rooting.md).
 
     // ══════════════════════════════════════════════════════════════════════
     //  허수아비
@@ -1731,11 +1558,6 @@ public final class Antechamber implements Listener {
         if (plugin.ledger(player.getUniqueId()).linked()) {
             revisiting.add(player.getUniqueId());   // 이미 건넌 몸 — 자동 출항 없음 (문은 종이다)
             player.sendMessage(revisitLine);
-            // ★ B-124 — 과제 장부는 메모리뿐이라(progress 필드 주석) 건넌 몸에게도 관문이 도로
-            //   열려 있다. 그 결을 한 줄로 말한다: 다시 하는 것은 자유고, 종은 과제를 묻지 않는다.
-            if (!revisitLedgerLine.isEmpty()) {
-                player.sendMessage(revisitLedgerLine);
-            }
         } else {
             player.sendTitle(ChatColor.GOLD + arrivalTitle, ChatColor.GRAY + arrivalSubtitle, 10, 70, 20);
             arrivalLines.forEach(player::sendMessage);
@@ -1750,7 +1572,6 @@ public final class Antechamber implements Listener {
         //   {@link #onHunger} 는 줄지 않게만 하므로, 채우는 것은 문이 한다 (들어올 때 한 번).
         player.setFoodLevel(20);
         player.setSaturation(20f);
-        refreshPanels(player);
     }
 
     /**
@@ -1796,7 +1617,6 @@ public final class Antechamber implements Listener {
         boarding.remove(id);
         revisiting.remove(id);
         dockWaitSaid.remove(id);
-        shownThrough.remove(id);
         crossedLines.forEach(player::sendMessage);
         extra.forEach(player::sendMessage);
     }
@@ -2141,42 +1961,8 @@ public final class Antechamber implements Listener {
             player.sendMessage(plateHint);
         }
         player.performCommand(cmd);
-        // performCommand 는 PlayerCommandPreprocessEvent 를 안 태운다 — 과제는 여기서 직접 닫는다.
-        // 손으로 친 것과 발판으로 친 것이 **같은 함수**를 지나야 둘이 어긋나지 않는다
-        String[] parts = cmd.trim().split("\\s+");
-        if (parts.length >= 2) {
-            creditCommand(player, parts[1], parts.length - 2);
-        }
-    }
-
-    /** 과제: 명령 — <b>손으로 친 것</b> */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onCommand(PlayerCommandPreprocessEvent event) {
-        Player player = event.getPlayer();
-        if (!isAntechamber(player.getWorld())) {
-            return;
-        }
-        String[] parts = event.getMessage().trim().split("\\s+");
-        if (parts.length < 2 || !parts[0].toLowerCase(Locale.ROOT).startsWith("/혼천")) {
-            return;
-        }
-        creditCommand(player, parts[1], parts.length - 2);
-    }
-
-    /**
-     * 명령 하나를 과제에 <b>기입한다</b> — 손으로 쳤든 발판으로 쳤든 <b>같은 문</b>을 지난다.
-     * (두 경로가 각자 셈을 하면 언젠가 둘이 어긋난다.)
-     */
-    private void creditCommand(Player player, String sub, int extraArgs) {
-        for (Lesson l : lessons.values()) {
-            if (!"명령".equals(l.detect()) || !l.command().equals(sub)) {
-                continue;
-            }
-            if (l.needsArgs() && extraArgs < 1) {
-                continue;   // `/혼천 수련` 만 친 것 = 도움말. 배분을 실제로 해야 닫힌다
-            }
-            bump(player, l.id());
-        }
+        // 【묘비】 creditCommand/onCommand(명령 감지) — 과제 폐지(★5차)로 기입할 장부가 없다.
+        //   발판의 계약은 그대로다: 대신 쳐 주되, 무엇이 쳐졌는지 그대로 보여준다 (echo = cmd 한 변수).
     }
 
     /**
@@ -2215,7 +2001,6 @@ public final class Antechamber implements Listener {
             //   쌓인다 — 눈이 필요해지면 그때 여는 손을 단다
             dummy.setCustomName(hitName(label, durability, t));
         });
-        bump(player, "손");
     }
 
     /**
@@ -2270,13 +2055,9 @@ public final class Antechamber implements Listener {
         //   이제 기록은 **나루에 있는 동안 그대로 둔다.** 끊겼다 다시 들어와도 그 사람은
         //   여전히 나루에 있고 손에는 꾸러미가 있다 — 진짜 짐은 디스크에 그대로다.
         //   돌려주는 자리는 하나뿐이다: **나루를 실제로 벗어날 때** ({@link #restore}).
-        progress.remove(id);
-        gesturesSeen.remove(id);
-        lastArmed.remove(id);
         boarding.remove(id);
         revisiting.remove(id);
         dockWaitSaid.remove(id);
-        shownThrough.remove(id);
         plateCooldowns.keySet().removeIf(k -> k.startsWith(id.toString()));
     }
 
@@ -2299,10 +2080,7 @@ public final class Antechamber implements Listener {
         }
         for (Player player : w.getPlayers()) {
             leash(player);
-            watchGestures(player);
-            watchArmed(player);
-            watchGyeonggong(player);
-            watchGate(player);
+            watchGate(player);   // ★5차 — 과제의 눈 셋(몸짓·격·경공)은 과제와 함께 걷혔다. 문만 본다
         }
     }
 
@@ -2322,87 +2100,11 @@ public final class Antechamber implements Listener {
         }
     }
 
-    /**
-     * 과제: 방어 태세 — <b>몸짓이 곧 선택이다.</b> 보는 술어는
-     * {@code combat.yml defender_stance_mc.gestures} 의 값 그대로다 (막기=isBlocking · 흘리기=isSneaking ·
-     * 회피=isSprinting). {@code tools/antechamber_audit.py} 가 두 등록부를 대조한다.
-     */
-    private void watchGestures(Player player) {
-        Lesson l = lessons.get("태세");
-        if (l == null || !"방어_몸짓".equals(l.detect()) || complete(player, l)) {
-            return;
-        }
-        Set<String> seen = gesturesSeen.computeIfAbsent(player.getUniqueId(),
-                k -> new LinkedHashSet<>());
-        int before = seen.size();
-        for (String g : l.gestures()) {
-            boolean now = switch (g) {
-                case "isBlocking" -> player.isBlocking();
-                case "isSneaking" -> player.isSneaking();
-                case "isSprinting" -> player.isSprinting();
-                default -> false;   // 등록부에 없는 술어는 코드가 지어내지 않는다 (감사가 잡는다)
-            };
-            if (now) {
-                seen.add(g);
-            }
-        }
-        for (int i = before; i < seen.size(); i++) {
-            bump(player, l.id());
-        }
-    }
-
-    /**
-     * 과제: 격 — Shift+우클릭으로 두름이 바뀌는 순간.
-     *
-     * <p>★ B-124 (실사용: <i>"캐릭터 초기화를 하지 않으면 설명대로 해도 안 깨지는 건가?"</i>) —
-     * <b>못 하는 몸은 아예 안 본다</b> ({@code requires: 두를_격}). 접합 전의 몸은 범인이고
-     * ({@code player_creation.yml starting_realm}), 범인의 {@code armableGrades} 는 비어 있어
-     * SkillListener 가 순환 자체를 거절한다("단전이 열리지 않았다"). 그 몸에게 이 과제는
-     * "영영 안 깨지는" 것이 아니라 <b>없는 것</b>이다: {@link #applicable} 에서 빠져
-     * all_done 을 막지 않고, 판은 예고({@code unavailable})로 바뀌어 이유를 말하며,
-     * {@link #passed} 가 관문을 지나간 것으로 쳐 길도 안 막힌다. 접합으로 경지가 서면
-     * {@link #watchGate} 가 판을 다시 세우고 — 그때부터 이 눈이 뜬다.
-     */
-    private void watchArmed(Player player) {
-        Lesson l = lessons.get("격");
-        if (l == null || complete(player, l) || !capable(player, l)) {
-            return;
-        }
-        String armed;
-        try {
-            armed = plugin.skills().state(player).armed;
-        } catch (Throwable t) {
-            return;
-        }
-        String was = lastArmed.get(player.getUniqueId());
-        lastArmed.put(player.getUniqueId(), armed == null ? "" : armed);
-        if (armed != null && !armed.isEmpty() && was != null && !armed.equals(was)) {
-            bump(player, l.id());
-        }
-    }
-
-    /**
-     * 과제: 경공 — {@code gyeonggong.yml activate}: <b>"공중에서 점프 키 한 번 더"</b> (더블 점프).
-     *
-     * <p>구판은 {@code isSprinting() && !isOnGround()} 를 봤다 — 그것은 <b>달리며 점프</b>의 눈이었고,
-     * 발동이 손가락으로 옮겨간 지금은 <b>그냥 달리다 뛴 몸</b>까지 통과시킨다. 그래서 이제
-     * <b>경공이 실제로 켜졌는가</b>를 그 주인({@link GyeonggongListener#riding})에게 직접 묻는다 —
-     * 과제는 <b>흉내</b>가 아니라 <b>발동</b>을 봐야 한다.
-     *
-     * <p>★ 그리고 <b>못 하는 몸은 아예 안 본다</b> ({@code requires: 허공_딛기}). 나루에 서는 몸은
-     * <b>범인</b>이고 ({@code player_creation.yml starting_realm}), {@code gyeonggong.yml realm_ceiling}
-     * 이 범인·삼류·이류의 {@code air_jumps} 를 <b>0</b> 으로 적어 뒀다 — <b>개화 전에는 안 켜진다.</b>
-     */
-    private void watchGyeonggong(Player player) {
-        Lesson l = lessons.get("경공");
-        if (l == null || complete(player, l) || !capable(player, l)) {
-            return;
-        }
-        GyeonggongListener gg = plugin.gyeonggong();
-        if (gg != null && gg.riding(player) && !player.isOnGround()) {
-            bump(player, l.id());
-        }
-    }
+    // 【묘비】 watchGestures/watchArmed/watchGyeonggong — 과제의 눈 셋 (몸짓·격·경공 감지).
+    //   ★5차 개정으로 과제와 함께 걷혔다. 여기 살던 계율들은 뿌리내림(B-178)이 상속했다:
+    //   · 몸짓 술어는 combat.yml defender_stance_mc.gestures 가 정본 (지어내지 않는다)
+    //   · 과제는 흉내가 아니라 **발동**을 본다 (경공은 riding — 달리다 뛴 몸이 아니다)
+    //   · 못 하는 몸은 아예 안 본다 (requires — 「뛰어라」 함정의 상처)
 
     /** 강호에 이름이 올랐다 — <b>배가 뜬다</b> */
     private void watchGate(Player player) {
@@ -2414,7 +2116,6 @@ public final class Antechamber implements Listener {
             return;   // 재방문자 — 의식(자동 출항)은 첫 건넘의 것이다. 종은 언제나 울린다
         }
         boarding.add(id);
-        refreshPanels(player);   // 시트가 내려왔다 — 이제 격을 두를 수 있을지도 모른다
         player.sendTitle(ChatColor.GOLD + openedTitle, ChatColor.WHITE + openedSubtitle, 10, 70, 20);
         String who = WorldBridge.linkedName(id);
         openedLines.forEach(line ->
@@ -2478,91 +2179,10 @@ public final class Antechamber implements Listener {
         return true;   // 등록부가 모르는 이름 — 붙들지 않는다 (갇힘 금지)
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  과제 장부
-    // ══════════════════════════════════════════════════════════════════════
-
-    private boolean complete(Player player, Lesson l) {
-        return progress.getOrDefault(player.getUniqueId(), Map.of())
-                .getOrDefault(l.id(), 0) >= l.count();
-    }
-
-    private void bump(Player player, String lessonId) {
-        Lesson l = lessons.get(lessonId);
-        if (l == null) {
-            return;
-        }
-        Map<String, Integer> mine = progress.computeIfAbsent(player.getUniqueId(),
-                k -> new LinkedHashMap<>());
-        int now = mine.getOrDefault(lessonId, 0);
-        if (now >= l.count()) {
-            return;
-        }
-        mine.put(lessonId, now + 1);
-        if (now + 1 < l.count()) {
-            flashCount(player, l, now + 1);
-            return;
-        }
-        player.sendMessage(doneLine.replace("{title}", l.title()).replace("{done}", l.done()));
-
-        int before = shownThrough.getOrDefault(player.getUniqueId(), 0);
-        refreshPanels(player);   // ★ 다음 관문의 글판이 여기서 비로소 뜬다
-        boolean advanced = currentStation(player) > before;
-
-        if (applicable(player).stream().allMatch(x -> complete(player, x))) {
-            player.sendTitle(ChatColor.GOLD + allDoneTitle, ChatColor.GRAY + allDoneSubtitle, 10, 70, 20);
-            allDoneLines.forEach(player::sendMessage);
-        } else if (advanced && !nextLine.isEmpty()) {
-            player.sendMessage(nextLine);
-        }
-    }
-
-    /**
-     * 과제 카운트 한 줄 — ★ <b>B-123: 맨 {@code sendActionBar} 를 버리고 B-116 의 flash
-     * 단일 창구({@link SkillListener#flash})를 탄다.</b> 입도진이 마지막 남은 맨 액션바 손이었다.
-     *
-     * <p><b>겹침의 기전</b> (실사용 2026-07-14): 격 순환 한 사건이 판정 flash("검기 — …")와
-     * 이 카운트를 같은 액션바 줄에 세웠다 — Shift 는 웅크림이기도 해서 태세 과제("태세 … n/3")가
-     * 같은 순간에 셈을 했다. 맨 sendActionBar 는 다음 statusBar 틱(≤0.2초)에 덮여 겹쳐 읽히고,
-     * flash 로 바로 쏘면 "마지막이 이김" 규칙이 카운트로 판정을 지운다 — 어느 쪽이든 한쪽이 안 읽힌다.
-     *
-     * <p><b>순서로 푼다 (합성이 아니라)</b>: 카운트는 읽을 시간
-     * ({@code skill_motion.yml hud.flash_read_ticks}) 하나 <b>뒤에</b> 줄을 받는다 —
-     * 같은 사건의 판정 flash 가 제 시간을 다 읽히고, 그 다음 카운트가 같은 시간만큼 읽힌다.
-     * 합성은 못 한다: 판정의 글자는 SkillListener 의 것이고 이 손은 그 글자를 모른다 —
-     * 지어서 병기하면 화면이 세계에 대해 거짓말할 수 있다. 눈금은 그 flash 의 것을 그대로 쓴다
-     * (하드코딩 금지 — {@code engine.hudFlashTicks()}, B-116 과 같은 정본).
-     * 기다리는 사이 과제가 이미 닫혔으면(연타) 낡은 카운트는 그리지 않는다 — done 줄이 이미 말했다.
-     */
-    private void flashCount(Player player, Lesson l, int n) {
-        String text = ChatColor.GRAY + l.title() + "  "
-                + ChatColor.WHITE + n + ChatColor.GRAY + "/" + l.count();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            SkillListener skills = plugin.skills();
-            if (skills != null && player.isOnline()
-                    && isAntechamber(player.getWorld()) && !complete(player, l)) {
-                skills.flash(player, text);
-            }
-        }, plugin.skillEngine().hudFlashTicks());
-    }
-
-    /**
-     * 이 사람이 <b>실제로 할 수 있는</b> 과제만. <b>못 하는 것을 못 했다고 세지 않는다.</b>
-     *
-     * <p>★ 이것이 없어서 <b>'몸이 알았다'(all_done)가 영영 안 떴다</b>: 경공 과제에 {@code requires} 가
-     * 없던 시절, 나루에 오는 모든 몸(범인 — {@code air_jumps} 0)이 그 과제를 <b>영원히</b> 못 닫았고,
-     * {@code allMatch(complete)} 는 언제나 거짓이었다. <b>아무도 다 끝낼 수 없는 튜토리얼이었다.</b>
-     */
-    private List<Lesson> applicable(Player player) {
-        List<Lesson> out = new ArrayList<>();
-        for (Lesson l : lessons.values()) {
-            if (lacks(player, l)) {
-                continue;
-            }
-            out.add(l);
-        }
-        return out;
-    }
+    // 【묘비】 과제 장부 (complete/bump/flashCount/applicable) — ★5차 개정 (과제 폐지)으로 걷혔다.
+    //   계율은 남는다: 과제 카운트는 맨 sendActionBar 가 아니라 flash 단일 창구를 탔다 (B-123 —
+    //   액션바 한 줄의 주인 규약은 SkillHud/HudLine 에 살아 있다) · 「못 하는 것을 못 했다고 세지
+    //   않는다」(applicable — all_done 이 영영 안 뜨던 병)는 뿌리내림 과정이 상속했다.
 
     // ══════════════════════════════════════════════════════════════════════
     //  종료 — 세계에 아무것도 남기지 않는다
@@ -2599,7 +2219,8 @@ public final class Antechamber implements Listener {
 
     private record Road(int z, int halfWidth, int from, int to, int deckY, List<Gap> gaps) { }
 
-    private record Station(String id, int x, int half, String lesson) { }
+    /** 관문 하나 — panel 은 이 관문의 <b>안내판 문장</b>이다 (비면 arrival 또는 이름만 · ★5차: 과제 아님) */
+    private record Station(String id, int x, int half, List<String> panel) { }
 
     private record Marsh(int x1, int x2, int z1, int z2, int depth, int reedHash) { }
 
@@ -2615,22 +2236,7 @@ public final class Antechamber implements Listener {
                             double darkMinPct, double darkMaxPct, double mainDarkMaxPct,
                             double lampDensityMaxPct, int mainLightSpanMin) { }
 
-    /**
-     * 과제 하나. {@code requires} 는 <b>이 조작을 할 수 있는 몸</b>의 이름이다 (빈 문자열 = 누구나).
-     *
-     * <p>등록부가 능(能)의 이름을 적고, 코드가 그 이름의 <b>술어</b>를 갖는다
-     * ({@link #capable}). 등록부에 없는 이름을 코드가 지어내지 않고, 코드에 없는 이름을 등록부가
-     * 적으면 {@code tools/antechamber_audit.py} 가 잡는다.
-     */
-    private record Lesson(String id, String title, String how, String detect, int count, String done,
-                          Set<String> gestures, String command, boolean needsArgs,
-                          String requires, String unavailable) {
-
-        /** 이 과제가 <b>경지에 따라 없을 수도 있는</b> 것인가 (판이 둘 — 할 수 있는 몸 / 없는 몸) */
-        boolean gated() {
-            return !requires.isEmpty();
-        }
-    }
+    // 【묘비】 record Lesson — 과제의 몸. ★5차 개정 (2026-07-24)으로 과제 자체가 폐지됐다 (config §7 묘비 참조).
 
     private record Panels(int maxPanels, float scale, float viewRange, int lineWidth, double yOffset,
                           String billboard, String alignment, boolean seeThrough, boolean shadowed,
