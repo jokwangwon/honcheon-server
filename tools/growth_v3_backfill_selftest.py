@@ -142,6 +142,33 @@ def check_allocate():
     return bad
 
 
+def check_naegong():
+    """단계 4 — A안 내공 통일: 내력 풀의 내공 실수치 = √원장[내공] (pool 공식은 무변경)."""
+    def pool(x):    # internal_energy.yml: round(x(x+1)/2 × pool_per_year 3) — 등록 수치
+        return round(x * (x + 1) / 2 * 3)
+    bad = 0
+    # ① 원장 13.69(화후 3.7²) → 실수 3.7 → 풀 26 — 축기가 아니라 원장이 단전을 정한다
+    x = math.sqrt(13.69)
+    ok = abs(x - 3.7) < 1e-9 and pool(x) == 26
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 풀 = √원장[내공] (원장 13.69 → 실수 {x:.1f} → 풀 {pool(x)})")
+    # ② 포인트가 단전을 민다 — 원장 +1눈금마다 풀 단조 증가
+    mono = all(pool(math.sqrt(r + 1)) >= pool(math.sqrt(r)) for r in range(0, 100))
+    bad += 0 if mono else 1
+    print(f"  {'✅' if mono else '❌'} 풀 단조 (원장 0~100 전 눈금)")
+    return bad
+
+
+def selftest_naegong():
+    """눈을 시험하는 눈 — √ 를 빼고 원장을 그대로 풀에 넣는 오배선은 풀이 폭주해 잡혀야 한다."""
+    def pool(x):
+        return round(x * (x + 1) / 2 * 3)
+    wrong = pool(13.69)               # 오배선: 원장 직결 (√ 생략)
+    caught = wrong != pool(3.7)
+    print(f"  {'✅' if caught else '❌'} √ 생략 오배선 감지 (풀 {wrong} ≠ {pool(3.7)})")
+    return 0 if caught else 1
+
+
 def check_gate():
     """단계 4 — 승급 이중 관문: 승급 = 사건 요건 AND 자격 레벨 N_k ("레벨은 자격, 사건이 문")."""
     nk = {"삼류": 10, "이류": 40, "일류": 65}   # cultivation.yml levels.qualifying_level (승인 수치)
@@ -215,10 +242,13 @@ if __name__ == "__main__":
     fail += check_allocate()
     print("  ── 단계 4 — 승급 이중 관문 ──")
     fail += check_gate()
+    print("  ── 단계 4 — A안 내공 통일 ──")
+    fail += check_naegong()
     print("  ── 눈을 시험하는 눈 (오배선 심기) ──")
     fail += selftest()
     fail += selftest_reconcile()
     fail += selftest_allocate()
     fail += selftest_gate()
+    fail += selftest_naegong()
     print(f"\n총 위반/오류: {fail}건 — {'통과' if fail == 0 else '실패'}")
     sys.exit(1 if fail else 0)

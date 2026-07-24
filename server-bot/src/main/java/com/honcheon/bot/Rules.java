@@ -28,6 +28,8 @@ public final class Rules {
     public final Map<String, Integer> rawCapByRealm;
     /** 경지 → 자격 레벨 N_k ({@code cultivation.yml levels.qualifying_level}) — 승급 이중 관문 */
     public final Map<String, Integer> qualifyingLevel;
+    /** ★A안 내공 통일 ({@code cultivation.yml levels.naegong_unified}) — 내력 풀 = √원장[내공] */
+    public final boolean naegongUnified;
     public final Map<String, Integer> questXp;
     public final EconomyEngine economy;
     public final InternalEnergyEngine energy;
@@ -121,6 +123,8 @@ public final class Rules {
         RulesConfig.section(levels, "raw_attribute_cap_by_realm")
                 .forEach((k, v) -> caps.put(k, v instanceof Number nc ? nc.intValue() : 0));
         this.rawCapByRealm = java.util.Collections.unmodifiableMap(caps);
+        // ★A안 내공 통일 (사용자 확정 2026-07-24) — 내력 풀의 내공 실수치 = √원장[내공]
+        this.naegongUnified = Boolean.TRUE.equals(levels.get("naegong_unified"));
         // 자격 레벨 N_k (경지별) — 승급 이중 관문의 '자격' 축 (사건 마크가 '문' — cultivation_v3_levels.md §5)
         Map<String, Integer> quals = new java.util.LinkedHashMap<>();
         RulesConfig.section(levels, "qualifying_level")

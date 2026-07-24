@@ -609,10 +609,11 @@ public final class GameListener extends ListenerAdapter {
             boolean opened = "개화".equals(sheet.get("단전"));
             eb.addField("심법", sheet.get("심법") + (opened ? " · 단전 개화" : " · 단전 미개화"), true);
             if (opened) {
+                // 화후 라벨은 축기 연차 그대로 · 풀은 A안 (poolNaegong — √원장[내공])
                 double naegong = naegongOf(((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue());
                 int cur = ((Number) sheet.getOrDefault("내력", 0)).intValue();
                 eb.addField("내공", hwahuLabel(naegong) + " · 내력 " + cur + "/"
-                        + rules.energy.pool(naegong), true);
+                        + rules.energy.pool(poolNaegong(sheet)), true);
             }
         }
         var reply = event.replyEmbeds(eb.build()).setEphemeral(true);
@@ -2959,6 +2960,20 @@ public final class GameListener extends ListenerAdapter {
     }
 
     /**
+     * ★A안 내공 통일 (B-135 단계 4 · {@code cultivation.yml levels.naegong_unified} — 사용자 확정
+     * 2026-07-24): <b>내력 풀의 내공 실수치 = √원장[내공]</b> — 포인트가 단전을 키운다.
+     * 축기(축기_원장)·심법은 개화 자격 게이트·화후 표시로만 남는다 (풀에 안 실린다).
+     * 스위치 off 거나 원장이 없으면 옛 길(축기 연차) — 켜기 전 무영향.
+     */
+    private double poolNaegong(Map<String, Object> sheet) {
+        if (rules.naegongUnified && sheet.get("원장") instanceof Map<?, ?> m
+                && m.get("내공") instanceof Number n) {
+            return GrowthV3.realValue(n.doubleValue());
+        }
+        return naegongOf(((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue());
+    }
+
+    /**
      * 발경 자격 — 개화 + 경지 게이트(삼류부터) + 내력 1 이상 (cost_bands 발경 = 1).
      * 부족하면 맨 기술 — 시전 불가가 아니라 다운캐스트 (internal_energy).
      */
@@ -3184,9 +3199,10 @@ public final class GameListener extends ListenerAdapter {
         } else {
             double days = ((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue() + 1.0;
             sheet.put("축기_원장", days);
-            double naegong = naegongOf(days);
+            double naegong = naegongOf(days);   // 화후 라벨용 (축기 연차 — A안에서도 표시는 산다)
             // 운기조식 — 내력 전량 회복 (internal_energy meditation, 알파: 하루 1회 운기에 통합)
-            int pool = rules.energy.pool(naegong);
+            //   풀은 A안 (poolNaegong — √원장[내공]. 축기는 풀에 안 실린다)
+            int pool = rules.energy.pool(poolNaegong(sheet));
             sheet.put("내력", pool);
             db.logEvent("운기", "character", String.valueOf(chId), "simbeop",
                     String.valueOf(sheet.get("심법")), Map.of("적립", 1));
@@ -5912,8 +5928,8 @@ public final class GameListener extends ListenerAdapter {
         out.put("attrs", outAttrs);
 
         out.put("simbeop", sheet.get("심법"));   // null = 개화 전 (마크의 내공 과목 게이트)
-        double naegong = "개화".equals(sheet.get("단전"))
-                ? naegongOf(((Number) sheet.getOrDefault("축기_원장", 0)).doubleValue()) : 0.0;
+        // ★A안 — 마크의 내력 풀·조식·전투 회복이 전부 이 값을 읽는다: 실수치 = √원장[내공] (개화 후)
+        double naegong = "개화".equals(sheet.get("단전")) ? poolNaegong(sheet) : 0.0;
         out.put("naegong", naegong);
 
         // 주무공 — 승급 요건('주력 무공 숙련')이 쌓이는 무공. 없으면 null (아직 아무것도 안 배웠다)
