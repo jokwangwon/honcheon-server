@@ -26,6 +26,8 @@ public final class Rules {
     public final int pointsPerLevel;
     /** 경지 → 원장 캡 c² ({@code cultivation.yml levels.raw_attribute_cap_by_realm}) */
     public final Map<String, Integer> rawCapByRealm;
+    /** 경지 → 자격 레벨 N_k ({@code cultivation.yml levels.qualifying_level}) — 승급 이중 관문 */
+    public final Map<String, Integer> qualifyingLevel;
     public final Map<String, Integer> questXp;
     public final EconomyEngine economy;
     public final InternalEnergyEngine energy;
@@ -119,6 +121,11 @@ public final class Rules {
         RulesConfig.section(levels, "raw_attribute_cap_by_realm")
                 .forEach((k, v) -> caps.put(k, v instanceof Number nc ? nc.intValue() : 0));
         this.rawCapByRealm = java.util.Collections.unmodifiableMap(caps);
+        // 자격 레벨 N_k (경지별) — 승급 이중 관문의 '자격' 축 (사건 마크가 '문' — cultivation_v3_levels.md §5)
+        Map<String, Integer> quals = new java.util.LinkedHashMap<>();
+        RulesConfig.section(levels, "qualifying_level")
+                .forEach((k, v) -> quals.put(k, v instanceof Number nq ? nq.intValue() : 0));
+        this.qualifyingLevel = java.util.Collections.unmodifiableMap(quals);
         this.economyCfg = RulesConfig.load(configDir.resolve("economy.yml"));
         this.economy = new EconomyEngine(economyCfg);
         this.energy = new InternalEnergyEngine(RulesConfig.load(configDir.resolve("internal_energy.yml")));

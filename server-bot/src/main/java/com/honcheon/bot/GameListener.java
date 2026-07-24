@@ -5629,6 +5629,10 @@ public final class GameListener extends ListenerAdapter {
     /**
      * 범인 → 삼류 (trigger 자동): 아무 무공 입문(기술에 검법 — 숙련 0도 입문이다) + 기초 단련 3개월.
      * 이류+ 요건(주력 숙련·실전 마크)은 기술 화후 축과 함께 다음 증분. 승급 후 경지를 돌려준다.
+     *
+     * <p>★v3 이중 관문 (B-135 단계 4 — cultivation_v3_levels.md "레벨은 자격, 사건이 문"):
+     * 기존 요건(무공·화후·마크·개화 = 사건 축)에 <b>자격 레벨 N_k</b> 가 AND 로 얹힌다.
+     * {@code levels.enabled: false} 면 v2 그대로 (관문 추가 없음).
      */
     @SuppressWarnings("unchecked")
     private String promoteIfDue(Map<String, Object> sheet, String realm) {
@@ -5636,14 +5640,15 @@ public final class GameListener extends ListenerAdapter {
         if ("범인".equals(realm)) {
             boolean martial = skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains);
             double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
-            return (martial && hwahu >= BASIC_TRAINING_DAYS) ? "삼류" : realm;
+            return (martial && hwahu >= BASIC_TRAINING_DAYS && levelQualified(sheet, "삼류"))
+                    ? "삼류" : realm;
         }
         if ("삼류".equals(realm) && skills != null) {
             // 이류 (trigger 자동): 주력 무공 숙련 2 + 실전 마크 1 (cultivation_stages·battle_marks)
             int mastery = MARTIAL_SKILLS.stream().filter(skills::containsKey)
                     .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
             int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
-            return (mastery >= 2 && marks >= 1) ? "이류" : realm;
+            return (mastery >= 2 && marks >= 1 && levelQualified(sheet, "이류")) ? "이류" : realm;
         }
         if ("이류".equals(realm) && skills != null) {
             // 일류 (trigger 자동 — 개화가 사실상의 관문): 주력 숙련 3 + 개화 + 실전 마크 3
@@ -5651,9 +5656,25 @@ public final class GameListener extends ListenerAdapter {
                     .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
             int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
             boolean opened = "개화".equals(sheet.get("단전"));
-            return (mastery >= 3 && opened && marks >= 3) ? "일류" : realm;
+            return (mastery >= 3 && opened && marks >= 3 && levelQualified(sheet, "일류"))
+                    ? "일류" : realm;
         }
         return realm;   // 절정+ 은 벽(壁) — 깨달음 사건이 문 (자동 승급 없음)
+    }
+
+    /**
+     * 자격 레벨 N_k 관문 — {@code cultivation.yml levels.qualifying_level} 이 정본.
+     * 표에 없는 경지는 레벨 관문이 등록되지 않은 것이다 (기존 요건만 — 수치를 지어내지 않는다).
+     */
+    private boolean levelQualified(Map<String, Object> sheet, String target) {
+        if (!rules.levelsEnabled) {
+            return true;
+        }
+        Integer need = rules.qualifyingLevel.get(target);
+        if (need == null || need <= 0) {
+            return true;
+        }
+        return ((Number) sheet.getOrDefault("레벨", 1)).intValue() >= need;
     }
 
     private String extremeMark(int roll) {

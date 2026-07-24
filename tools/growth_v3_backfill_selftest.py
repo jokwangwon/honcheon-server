@@ -142,6 +142,34 @@ def check_allocate():
     return bad
 
 
+def check_gate():
+    """단계 4 — 승급 이중 관문: 승급 = 사건 요건 AND 자격 레벨 N_k ("레벨은 자격, 사건이 문")."""
+    nk = {"삼류": 10, "이류": 40, "일류": 65}   # cultivation.yml levels.qualifying_level (승인 수치)
+    def promote(events_met, level, target):
+        return events_met and level >= nk[target]
+    bad = 0
+    cases = [
+        # (사건 요건, 레벨, 목표, 기대, 설명)
+        (True, 9, "삼류", False, "사건 충족·Lv9 → 삼류 불가 (자격 미달)"),
+        (True, 10, "삼류", True, "사건 충족·Lv10 → 삼류 승급"),
+        (False, 100, "이류", False, "Lv100·사건 미달 → 이류 불가 (레벨은 문이 아니다)"),
+    ]
+    for events, lv, target, want, label in cases:
+        ok = promote(events, lv, target) == want
+        bad += 0 if ok else 1
+        print(f"  {'✅' if ok else '❌'} {label}")
+    return bad
+
+
+def selftest_gate():
+    """눈을 시험하는 눈 — AND 를 OR 로 오배선하면 자격 미달 승급이 잡혀야 한다."""
+    events_met, level, need = True, 9, 10
+    wrong = events_met or level >= need     # 오배선: 이중 관문이 외짝 문이 됐다
+    caught = wrong is True                  # 자격 미달인데 통과 → 눈이 이것을 '틀림'으로 봐야 함
+    print(f"  {'✅' if caught else '❌'} OR 오배선 감지 (사건만으로 Lv9 승급 → 이중 관문 위반)")
+    return 0 if caught else 1
+
+
 def selftest_allocate():
     """눈을 시험하는 눈 — 캡을 무시하는 오배선 배분을 심으면 캡 초과가 잡혀야 한다."""
     raw, pts, cap = 15.5, 5, 16
@@ -185,9 +213,12 @@ if __name__ == "__main__":
     fail += check_levelup()
     print("  ── 단계 4 — 포인트 배분 ──")
     fail += check_allocate()
+    print("  ── 단계 4 — 승급 이중 관문 ──")
+    fail += check_gate()
     print("  ── 눈을 시험하는 눈 (오배선 심기) ──")
     fail += selftest()
     fail += selftest_reconcile()
     fail += selftest_allocate()
+    fail += selftest_gate()
     print(f"\n총 위반/오류: {fail}건 — {'통과' if fail == 0 else '실패'}")
     sys.exit(1 if fail else 0)
