@@ -973,13 +973,17 @@ public final class WorldBridge {
      * @param houseRegion ★ 가문이 사는 고을 — <b>시작 위치가 여기서 나온다</b> (지역 × 집안)
      * @param houseState  ★ 가문의 형태 (흥·쇠·멸) — <b>탄생에 고정</b>. 변하지 않는다
      * @param kin         ★ 같은 집에 태어난 아이들 — <b>태어난 순서대로</b> (형·누나·동생)
+     * @param level       ★ 성장 v3 레벨 거울 (단계 5) — 봇이 정본. -1 = 봇이 모른다 (levels off·옛 봇)
+     * @param xp          현재 레벨의 경험치 잔여 (-1 = 모른다) — 바닐라 XP바가 이 진척도를 그린다
+     * @param xpNeed      다음 레벨까지의 필요치 need(L) (-1 = 모른다)
+     * @param points      미사용 스탯 포인트 (-1 = 모른다) — 배분의 손은 디스코드 시트다
      */
     public record Sheet(String realm, Map<String, Double> attrs, double naegong, String simbeop,
                         String primaryArt, Map<String, Double> skillDays,
                         int marks실전, int marks사선, int money,
                         String house, String gender, String startAnchor, boolean leftHouse,
                         String birthRank, String houseName, String houseRegion, String houseState,
-                        List<Kin> kin) {
+                        List<Kin> kin, int level, double xp, double xpNeed, int points) {
     }
 
     /** 피붙이 하나 — <b>형·누나·동생</b> (문파의 사형·사저와 **다른 어휘**다. 축이 다르다: 태어난 순) */
@@ -1531,6 +1535,9 @@ public final class WorldBridge {
                 text(raw.get("birth_rank")),   // ★ 적서 — 적자/서자 (null = 적서가 없는 집)
                 // ★★ 가문 — **한 채의 집**. 「청하현 이가(李家)」 · 지역 · 형태(흥·쇠·멸)
                 text(raw.get("house_name")), text(raw.get("house_region")), text(raw.get("house_state")),
-                List.copyOf(kin));
+                List.copyOf(kin),
+                // ★성장 v3 레벨 거울 (단계 5) — 없는 칸은 "봇이 모르는 값"(-1). 몸의 것을 덮지 않는다
+                num(raw.get("level"), -1), dec(raw.get("xp"), -1),
+                dec(raw.get("xp_need"), -1), num(raw.get("points"), -1));
     }
 }

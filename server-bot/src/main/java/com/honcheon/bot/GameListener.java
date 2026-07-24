@@ -540,6 +540,8 @@ public final class GameListener extends ListenerAdapter {
         if (marks > 0) {
             eb.addField("실전 마크", String.valueOf(marks), true);
         }
+        // ★단계 5 — 승급은 침묵하지 않는다: 왜 승급이 안 되는지(관문별 현재/필요)를 시트가 말한다
+        promotionField(eb, sheet, String.valueOf(ch.get("realm")));
 
         // ─── 단계 4 — 몸(부상·수명)·장부(외상·예치)·세계(세력 관계·피의 장부) ───
         long chId = ((Number) ch.get("id")).longValue();
@@ -5665,55 +5667,135 @@ public final class GameListener extends ListenerAdapter {
     private static final int BASIC_TRAINING_DAYS =
             com.honcheon.core.rules.ProgressionEngine.durationToDays("3개월");
 
+    /** 자동 승급 사다리 — promoteIfDue 가 걷는 문. 절정+ 은 벽(壁)·깨달음 사건이 문이라 여기 없다 */
+    private static final Map<String, String> AUTO_NEXT =
+            Map.of("범인", "삼류", "삼류", "이류", "이류", "일류");
+
+    /** 승급 관문 하나 — 시트가 「왜 안 되나」를 말하는 단위 (침묵 boolean 금지 · 헌법 §2.2) */
+    record Gate(String label, boolean met) {}
+
     /**
-     * 범인 → 삼류 (trigger 자동): 아무 무공 입문(기술에 검법 — 숙련 0도 입문이다) + 기초 단련 3개월.
-     * 이류+ 요건(주력 숙련·실전 마크)은 기술 화후 축과 함께 다음 증분. 승급 후 경지를 돌려준다.
+     * 자동 승급 관문 상태 (단계 5) — 판정(promoteIfDue)과 표시(시트 「승급」 필드)가
+     * <b>같은 해석기</b>를 쓴다 (두 벌이면 언젠가 다른 곳을 가리킨다 — §4-밤 계율).
+     * 자동 승급이 없는 경지(일류+)는 null — 표시는 등록부의 문(trigger)을 인용한다.
      *
      * <p>★v3 이중 관문 (B-135 단계 4 — cultivation_v3_levels.md "레벨은 자격, 사건이 문"):
      * 기존 요건(무공·화후·마크·개화 = 사건 축)에 <b>자격 레벨 N_k</b> 가 AND 로 얹힌다.
      * {@code levels.enabled: false} 면 v2 그대로 (관문 추가 없음).
      */
     @SuppressWarnings("unchecked")
-    private String promoteIfDue(Map<String, Object> sheet, String realm) {
+    private List<Gate> promotionGates(Map<String, Object> sheet, String realm) {
+        String target = AUTO_NEXT.get(realm);
+        if (target == null) {
+            return null;
+        }
         Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
-        if ("범인".equals(realm)) {
-            boolean martial = skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains);
-            double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
-            return (martial && hwahu >= BASIC_TRAINING_DAYS && levelQualified(sheet, "삼류"))
-                    ? "삼류" : realm;
+        List<Gate> gates = new java.util.ArrayList<>();
+        switch (target) {
+            case "삼류" -> {
+                // 아무 무공 입문(숙련 0도 입문이다) + 기초 단련 3개월 (cultivation_stages)
+                boolean martial = skills != null
+                        && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains);
+                double hwahu = ((Number) sheet.getOrDefault("화후_원장", 0)).doubleValue();
+                gates.add(new Gate("무공 입문", martial));
+                gates.add(new Gate(String.format("기초 단련 %.0f/%d일치", Math.floor(hwahu),
+                        BASIC_TRAINING_DAYS), hwahu >= BASIC_TRAINING_DAYS));
+            }
+            case "이류" -> {
+                // 주력 무공 숙련 2 + 실전 마크 1 (cultivation_stages·battle_marks)
+                gates.add(masteryGate(skills, 2));
+                gates.add(marksGate(sheet, 1));
+            }
+            case "일류" -> {
+                // 주력 숙련 3 + 개화(사실상의 관문) + 실전 마크 3
+                gates.add(masteryGate(skills, 3));
+                gates.add(new Gate("개화 — 단전 개방", "개화".equals(sheet.get("단전"))));
+                gates.add(marksGate(sheet, 3));
+            }
+            default -> { }
         }
-        if ("삼류".equals(realm) && skills != null) {
-            // 이류 (trigger 자동): 주력 무공 숙련 2 + 실전 마크 1 (cultivation_stages·battle_marks)
-            int mastery = MARTIAL_SKILLS.stream().filter(skills::containsKey)
-                    .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
-            int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
-            return (mastery >= 2 && marks >= 1 && levelQualified(sheet, "이류")) ? "이류" : realm;
+        levelGate(sheet, target).ifPresent(gates::add);
+        return gates;
+    }
+
+    private String promoteIfDue(Map<String, Object> sheet, String realm) {
+        List<Gate> gates = promotionGates(sheet, realm);
+        if (gates == null || gates.isEmpty()) {
+            return realm;   // 절정+ 은 벽(壁) — 깨달음 사건이 문 (자동 승급 없음)
         }
-        if ("이류".equals(realm) && skills != null) {
-            // 일류 (trigger 자동 — 개화가 사실상의 관문): 주력 숙련 3 + 개화 + 실전 마크 3
-            int mastery = MARTIAL_SKILLS.stream().filter(skills::containsKey)
-                    .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
-            int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
-            boolean opened = "개화".equals(sheet.get("단전"));
-            return (mastery >= 3 && opened && marks >= 3 && levelQualified(sheet, "일류"))
-                    ? "일류" : realm;
+        return gates.stream().allMatch(Gate::met) ? AUTO_NEXT.get(realm) : realm;
+    }
+
+    /**
+     * 시트의 「승급」 필드 (단계 5) — 자동 경지는 관문 현황(✅/❌ · 현재/필요), 벽 경지(일류+)는
+     * 등록부({@code cultivation_stages})의 문(trigger)·요건을 <b>인용</b>하고 잰 현재값을 병기한다.
+     * 생사경(꼭대기)·사다리 밖 경지는 필드 없음.
+     */
+    @SuppressWarnings("unchecked")
+    private void promotionField(EmbedBuilder eb, Map<String, Object> sheet, String realm) {
+        List<Gate> gates = promotionGates(sheet, realm);
+        StringBuilder sb = new StringBuilder();
+        if (gates != null && !gates.isEmpty()) {
+            for (Gate g : gates) {
+                sb.append(g.met() ? "✅ " : "❌ ").append(g.label()).append('\n');
+            }
+            eb.addField("승급 — " + AUTO_NEXT.get(realm), sb.toString().strip(), false);
+            return;
         }
-        return realm;   // 절정+ 은 벽(壁) — 깨달음 사건이 문 (자동 승급 없음)
+        String next = rules.nextRealm(realm);
+        if (next == null) {
+            return;   // 생사경 — 위가 없다
+        }
+        List<String> reqs = rules.realmRequirements.getOrDefault(next, List.of());
+        for (String r : reqs) {
+            sb.append("· ").append(r).append('\n');
+        }
+        // 요건이 말하는 축의 현재값 — 재서 병기한다 (문장은 등록부의 것, 수치는 시트의 것)
+        Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
+        int mastery = skills == null ? 0 : MARTIAL_SKILLS.stream().filter(skills::containsKey)
+                .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
+        sb.append("지금: 숙련 ").append(mastery)
+                .append(" · 내공 ").append(String.format("%.1f", poolNaegong(sheet)))
+                .append(" · 실전 마크 ").append(((Number) sheet.getOrDefault("실전_마크", 0)).intValue())
+                .append(" · 사선 마크 ").append(((Number) sheet.getOrDefault("사선_마크", 0)).intValue())
+                .append('\n');
+        levelGate(sheet, next).ifPresent(g ->
+                sb.append(g.met() ? "✅ " : "❌ ").append(g.label()).append('\n'));
+        String trigger = rules.realmTrigger.get(next);
+        if (trigger != null) {
+            sb.append("문(門): ").append(trigger);
+        }
+        if (!sb.isEmpty()) {
+            eb.addField("승급 — " + next, sb.toString().strip(), false);
+        }
+    }
+
+    /** 주력 무공 숙련 관문 — 최고 숙련 무공 하나가 주력이다 (배운 무공이 없으면 0) */
+    private Gate masteryGate(Map<String, Object> skills, int need) {
+        int mastery = skills == null ? 0 : MARTIAL_SKILLS.stream().filter(skills::containsKey)
+                .mapToInt(k -> ((Number) skills.get(k)).intValue()).max().orElse(0);
+        return new Gate("주력 숙련 " + mastery + "/" + need, mastery >= need);
+    }
+
+    private Gate marksGate(Map<String, Object> sheet, int need) {
+        int marks = ((Number) sheet.getOrDefault("실전_마크", 0)).intValue();
+        return new Gate("실전 마크 " + marks + "/" + need, marks >= need);
     }
 
     /**
      * 자격 레벨 N_k 관문 — {@code cultivation.yml levels.qualifying_level} 이 정본.
      * 표에 없는 경지는 레벨 관문이 등록되지 않은 것이다 (기존 요건만 — 수치를 지어내지 않는다).
      */
-    private boolean levelQualified(Map<String, Object> sheet, String target) {
+    private java.util.Optional<Gate> levelGate(Map<String, Object> sheet, String target) {
         if (!rules.levelsEnabled) {
-            return true;
+            return java.util.Optional.empty();
         }
         Integer need = rules.qualifyingLevel.get(target);
         if (need == null || need <= 0) {
-            return true;
+            return java.util.Optional.empty();
         }
-        return ((Number) sheet.getOrDefault("레벨", 1)).intValue() >= need;
+        int level = Math.max(1, ((Number) sheet.getOrDefault("레벨", 1)).intValue());
+        return java.util.Optional.of(new Gate("자격 레벨 " + level + "/" + need, level >= need));
     }
 
     private String extremeMark(int roll) {
@@ -5981,6 +6063,17 @@ public final class GameListener extends ListenerAdapter {
         out.put("skill_days", outSkills);
         out.put("marks_실전", ((Number) sheet.getOrDefault("실전_마크", 0)).intValue());
         out.put("marks_사선", ((Number) sheet.getOrDefault("사선_마크", 0)).intValue());
+
+        // ★단계 5 — 레벨 거울: 마크가 제 레벨을 안다 (조용한 레벨업 알림·바닐라 XP바·명패의 원천).
+        //   지금까지 마크는 XP 를 올려보내기만 하고 결과를 몰랐다 — 다리는 시트 스냅샷 단방향이라
+        //   내려가는 델타 감지(레벨↑·경지 변화)가 마크 쪽 연출의 유일한 문이다.
+        if (rules.levelsEnabled) {
+            int level = Math.max(1, ((Number) sheet.getOrDefault("레벨", 1)).intValue());
+            out.put("level", level);
+            out.put("xp", ((Number) sheet.getOrDefault("경험치", 0)).doubleValue());
+            out.put("xp_need", GrowthV3.need(level, rules.xpBase, rules.xpGrowth));
+            out.put("points", ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue());
+        }
         return out;
     }
 

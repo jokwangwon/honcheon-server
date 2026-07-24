@@ -34,8 +34,9 @@ public final class HuntListener implements Listener {
 
     private static final String HUNT_SKILL = "사냥";
 
-    /** 짐승의 상당 경지 (npc_combat beast_ranks) — 몹 레벨 유도용 (성장 v3 XP · 표에 없으면 Lv1) */
-    private static final Map<EntityType, String> REALM_BY_MOB = Map.of(
+    /** 짐승의 상당 경지 (npc_combat beast_ranks) — 몹 레벨 유도용 (성장 v3 XP · 표에 없으면 Lv1).
+     *  ★명패의 레벨 칸(HitFeedback)도 이 표를 읽는다 — XP 와 명패가 다른 레벨을 말하면 안 된다 */
+    static final Map<EntityType, String> REALM_BY_MOB = Map.of(
             EntityType.WOLF, "삼류",          // 들짐승 = 삼류 상당
             EntityType.FOX, "삼류",
             EntityType.POLAR_BEAR, "일류");   // 맹수 = 일류 상당
@@ -117,7 +118,29 @@ public final class HuntListener implements Listener {
             return;
         }
         ledger.pendXp(xp);
-        plugin.skills().flash(killer, ChatColor.GOLD + "+" + xp + " 경험");
+        // 획득 문법 통일 (한월 A6 — 사용자 확정 2026-07-24). XP 는 연사 도배를 피해 액션바에 남는다
+        plugin.skills().flash(killer, ChatColor.GOLD + "획득 » 경험 +" + xp);
+    }
+
+    /**
+     * 획득 토스트 (한월 A6 「획득 » '이름' +N개」 — 사용자 확정 2026-07-24 · 획득 전반 통일).
+     * <b>이름 있는 물건만</b> — 이름 없는 바닐라 잡동사니의 이름을 지어내지 않는다
+     * (이 세계의 물건은 전부 이름을 달고 나온다: 가죽·전낭·비급…).
+     */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    @SuppressWarnings("deprecation")
+    public void onPickup(org.bukkit.event.entity.EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        ItemStack stack = event.getItem().getItemStack();
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null || !meta.hasDisplayName()) {
+            return;
+        }
+        player.sendMessage(ChatColor.GREEN + "획득 » " + ChatColor.WHITE + "'"
+                + ChatColor.stripColor(meta.getDisplayName()) + "'"
+                + ChatColor.GREEN + " +" + stack.getAmount() + "개");
     }
 
     /**

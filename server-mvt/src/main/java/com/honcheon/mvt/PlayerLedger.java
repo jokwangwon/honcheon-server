@@ -337,6 +337,47 @@ public final class PlayerLedger {
         if (sheet.money() >= 0) {
             money = sheet.money();
         }
+        // ★성장 v3 레벨 거울 (단계 5) — 봇이 정본, 여기는 표시용 사본이다 (연출·XP바·명패가 읽는다).
+        //   영속하지 않는다: 재기동 뒤 첫 스냅숏이 다시 채우고, 그 첫 적용은 델타가 아니라 도착이다.
+        if (sheet.level() >= 1) {
+            level = sheet.level();
+        }
+        if (sheet.xp() >= 0) {
+            xp = sheet.xp();
+        }
+        if (sheet.xpNeed() > 0) {
+            xpNeed = sheet.xpNeed();
+        }
+        if (sheet.points() >= 0) {
+            points = sheet.points();
+        }
+    }
+
+    // ─── 성장 v3 레벨 거울 (단계 5) — 봇의 시트가 채운다. -1 = 아직 모른다 ───
+
+    private int level = -1;
+    private double xp = -1;
+    private double xpNeed = -1;
+    private int points = -1;
+
+    /** 성장 v3 레벨 (봇 거울) — -1 = 스냅숏 전이거나 levels off */
+    public int level() {
+        return level;
+    }
+
+    /** 현재 레벨의 경험치 잔여 (봇 거울) */
+    public double xp() {
+        return xp;
+    }
+
+    /** 다음 레벨 필요치 need(L) (봇 거울) */
+    public double xpNeed() {
+        return xpNeed;
+    }
+
+    /** 미사용 스탯 포인트 (봇 거울) — 배분의 손은 디스코드 시트다 */
+    public int points() {
+        return points;
     }
 
     // ─── 미결(未決) — 아직 다리를 못 건넌 증분 ───

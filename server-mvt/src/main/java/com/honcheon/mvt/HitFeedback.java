@@ -103,7 +103,7 @@ final class HitFeedback {
             spawnNumber(target, damage, c);
         }
         // ★ 모든 몹 공통 명패 (2026-07-23 사용자: "이름·체력바·숫자 — 허수아비 포함 공통").
-        //   레벨 칸은 B-135(성장 시스템)가 오면 이 줄 앞에 붙는다 — 사용자 확정: 지금은 비워 둔다
+        //   레벨 칸은 upsertBar 가 붙인다 (B-135 단계 5 — 예약됐던 자리가 채워졌다)
         if (c.barEnabled()) {
             plugin.getServer().getScheduler().runTask(plugin, () -> upsertBar(target, c));
         }
@@ -221,7 +221,18 @@ final class HitFeedback {
         // 이름 — 허수아비는 등급표(label)가 이름이다 (customName 은 장부라 길다 — 그건 숨긴 채 둔다)
         String name = target.getPersistentDataContainer().getOrDefault(
                 Antechamber.KEY_DUMMY_LABEL, PersistentDataType.STRING, target.getCustomName());
-        b.d.setText((name == null || name.isBlank() ? "" : "§f" + name + "\n")
+        // ★ 레벨 칸 (B-135 단계 5 — 한월 「[1] 연습용허수아비」 문법). 처치 XP 와 같은 해석기
+        //   (mobLevel: 등록값 우선 → 상당 경지 자격 레벨) — 등록부 밖 몹의 레벨은 지어내지 않는다.
+        String levelSlot = "";
+        if (engine.xpEnabled()) {
+            String id = HuntingGrounds.tag(target, HuntingGrounds.KEY_ID);
+            SkillEngine.Npc npc = id == null ? null : engine.npc(id);
+            String realmOf = HuntListener.REALM_BY_MOB.get(target.getType());
+            if (npc != null || realmOf != null) {
+                levelSlot = "§7[" + engine.mobLevel(npc, realmOf) + "] ";
+            }
+        }
+        b.d.setText((name == null || name.isBlank() ? "" : levelSlot + "§f" + name + "\n")
                 + bar + " §f" + Math.round(hp) + "§7/" + Math.round(max));
         b.dieAt = tick + c.barSeconds() * 20L;
     }

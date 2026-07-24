@@ -1038,6 +1038,8 @@ public final class SkillListener implements Listener {
             ledger.setLinked(false);
             return false;
         }
+        int levelBefore = ledger.level();
+        int pointsBefore = ledger.points();
         ledger.applySheet(sheet);
         SkillEngine.State state = state(player);
         String before = state.realm;
@@ -1048,10 +1050,47 @@ public final class SkillListener implements Listener {
             // 승급은 강호가 인정하는 것이다 — 마크는 그것을 전해 듣는다
             state.armed = null;
             state.energy = engine.pool(state.naegong);
-            player.sendTitle(ChatColor.GOLD + Glyphs.realmCrest(state.realm) + " " + state.realm,
-                    ChatColor.GRAY + "강호가 너를 그렇게 부른다", 10, 60, 20);
+            promotionCeremony(player, state.realm);
+        }
+        // ★단계 5 — 레벨은 조용히 스며든다 (growth_v3_feel §1: 연출 없음 · 알림만).
+        //   첫 스냅숏(levelBefore=-1)은 델타가 아니라 도착이다 — 알리지 않는다.
+        if (levelBefore >= 1 && ledger.level() > levelBefore) {
+            int gained = pointsBefore >= 0 && ledger.points() > pointsBefore
+                    ? ledger.points() - pointsBefore : 0;
+            flash(player, ChatColor.GOLD + "레벨업 — Lv" + ledger.level()
+                    + (gained > 0 ? " · 포인트 +" + gained : "")
+                    + (ledger.points() > 0 ? " (미사용 " + ledger.points() + " — 디스코드 시트)" : ""));
+        }
+        // 바닐라 XP바 = v3 경험/레벨 (cultivation_v3_levels §4-b ② — XpEconomyGuard 가 바닐라
+        // 유입을 0 으로 끊어 두었다. 표시는 서버가 원장 거울에서 그린다 — 이 두 줄이 그 자리다)
+        if (ledger.level() >= 1 && ledger.xpNeed() > 0) {
+            player.setLevel(ledger.level());
+            player.setExp((float) Math.max(0.0, Math.min(0.999, ledger.xp() / ledger.xpNeed())));
         }
         return true;
+    }
+
+    /**
+     * 승급 연출 (단계 5 · growth_v3_feel §4 "승급은 터진다" — 한월 A5 구조의 수묵 번안):
+     * Title 큰 글자 = 새 경지 이름 · 부제 = 등록부의 경지 설명({@code cultivation_stages}
+     * description 인용 — 사용자 확정 2026-07-24) · 버스트·소리 = {@code promotion_fx} 등록부.
+     * 등록부가 없으면 Title 만 뜬다 (옛 동작 그대로 — 조용한 0 이 아니라 등록부 부재다).
+     */
+    private void promotionCeremony(Player player, String realm) {
+        String desc = engine.realmDescription(realm);
+        player.sendTitle(ChatColor.GOLD + Glyphs.realmCrest(realm) + " " + realm,
+                ChatColor.GRAY + (desc == null ? "강호가 너를 그렇게 부른다" : desc), 10, 70, 20);
+        SkillEngine.PromotionFx fx = engine.promotionFx();
+        if (fx == null || !fx.enabled()) {
+            return;
+        }
+        org.bukkit.Location at = player.getLocation().add(0, player.getHeight() * 0.5, 0);
+        if (fx.burst() != null && fx.burst().present()) {
+            hud.emit(at, fx.burst(), true);
+        }
+        if (fx.sound() != null) {
+            sfx(at, fx.sound());
+        }
     }
 
     /** 접속한 모든 몸에 시트를 다시 싣는다 — 스냅숏이 바뀔 때마다 (메인 스레드에서 부를 것) */

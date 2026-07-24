@@ -232,6 +232,8 @@ public final class SkillEngine {
     private final Sfx basicWhiff;
     /** 타격 피드백 — 맞았다는 그림 (hit_feedback) */
     private final HitFx hitFx;
+    private final Map<String, String> realmDescription;    // cultivation_stages description — 승급 부제
+    private final PromotionFx promotionFx;                 // skill_motion.yml promotion_fx — 승급 연출
     /** 판정의 눈 — 【디버그】 히트박스를 재는 자(尺). 켠 사람에게만 보인다 */
     private final Eye eye;
     /** party.yml — 무공은 아군을 베지 않는다 (friendly_fire.스킬 = 면제) */
@@ -276,8 +278,16 @@ public final class SkillEngine {
         Map<String, Object> cu = RulesConfig.load(cfg.resolve("cultivation.yml"));
         List<Map<String, Object>> stages = (List<Map<String, Object>>) cu.get("cultivation_stages");
         List<String> realms = new ArrayList<>();
-        stages.forEach(s -> realms.add(String.valueOf(s.get("name"))));
+        Map<String, String> realmDesc = new LinkedHashMap<>();
+        stages.forEach(s -> {
+            realms.add(String.valueOf(s.get("name")));
+            // 경지 설명 — 승급 연출의 부제가 이 문장을 그대로 인용한다 (단계 5 · 사용자 확정 2026-07-24)
+            if (s.get("description") != null) {
+                realmDesc.put(String.valueOf(s.get("name")), String.valueOf(s.get("description")));
+            }
+        });
         this.realmOrder = List.copyOf(realms);
+        this.realmDescription = Collections.unmodifiableMap(realmDesc);
         this.realmGapPerStage = RulesConfig.intValue(RulesConfig
                 .section(RulesConfig.load(cfg.resolve("gm_modifiers.yml")), "realm_gap").get("per_stage"));
 
@@ -909,6 +919,12 @@ public final class SkillEngine {
                 str(hfKill.get("particle")), Math.max(0, intOr(hfKill.get("count"), 14)),
                 dblOr(hfKill.get("spread"), 0.35));
 
+        // 【승급 연출】 경지가 바뀌는 순간 — 터진다 (growth_v3_feel §4 · 한월 A5의 수묵 번안).
+        //   레벨업은 조용하다 (§1 — 액션바 알림만, 여기 등록부가 없다). 등록부 없으면 미발동.
+        Map<String, Object> pmf = RulesConfig.section(mo, "promotion_fx");
+        this.promotionFx = new PromotionFx(Boolean.TRUE.equals(pmf.get("enabled")),
+                fx(pmf.get("burst")), sfx(pmf.get("sound")));
+
         // ─── 손이 가려야 할 것 — 【등록부가 이미 답을 갖고 있었다】 (party.yml mc.friendly_fire) ───
         //   "friendly_fire: { 스킬: 면제, 오의_광역: 예외 }" — 무공은 아군을 베지 않는다.
         //   **다만 오의의 광역은 예외다** ("매화만개 앞에서는 아군도 물러선다").
@@ -1536,6 +1552,13 @@ public final class SkillEngine {
     }
 
     public record Strike(int roll, int margin, String tierId, String tierName, boolean hit, int damage) {
+    }
+
+    /**
+     * 승급 연출 등록부 ({@code promotion_fx}) — 경지가 바뀌는 순간의 버스트·소리.
+     * Title 큰 글자 = 새 경지 이름 · 부제 = {@code cultivation_stages} description (등록부 인용).
+     */
+    public record PromotionFx(boolean enabled, Fx burst, Sfx sound) {
     }
 
     // ══════════ 모션 등록부 값 타입 (skill_motion.yml) ══════════
@@ -3239,6 +3262,16 @@ public final class SkillEngine {
     /** 타격 피드백 등록부 (hit_feedback) — 없으면 enabled=false 로 온다 (옛 동작 그대로) */
     public HitFx hitFx() {
         return hitFx;
+    }
+
+    /** 승급 연출 등록부 (promotion_fx) — 없으면 enabled=false (Title 만 뜨고 버스트·소리 없음) */
+    public PromotionFx promotionFx() {
+        return promotionFx;
+    }
+
+    /** 경지 설명 ({@code cultivation_stages} description) — 승급 부제의 인용 원문. 없으면 null */
+    public String realmDescription(String realm) {
+        return realmDescription.get(realm);
     }
 
     public int basicCooldownTicks() {

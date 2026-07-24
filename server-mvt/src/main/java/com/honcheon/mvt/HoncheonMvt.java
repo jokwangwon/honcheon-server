@@ -454,10 +454,29 @@ public final class HoncheonMvt extends JavaPlugin {
         //   이 게임의 가장 나쁜 상태였다. 화면이 늘 말해 준다: 너는 강호에 있는가, 없는가.
         if (ledger.linked()) {
             String name = WorldBridge.linkedName(player.getUniqueId());
+            int level = ledger.level();   // 성장 v3 레벨 거울 (-1 = 봇이 안 내려보냈다 — 그럼 안 쓴다)
             obj.getScore("§6" + ledger.realm(skillEngine.baseRealm())
+                    + (level >= 1 ? " §fLv" + level : "")
                     + " §7" + (name == null ? "" : name)).setScore(5);
         } else {
             obj.getScore("§c강호에 없다 §7/혼천 접속").setScore(5);
+        }
+        // ★경지 칭호 명패 (B-176 첫 조각 — 사용자 확정 2026-07-24: 칭호 = 경지 이름 그대로 ·
+        //   범인은 칭호 없음). 「남도 본다」: 보는 사람의 판에 온 몸의 팀 접두를 새긴다 —
+        //   5초 폴링·구역 갱신·상점이 부르는 이 손이 곧 전파 주기다 (승급 반영 ≤5초).
+        for (org.bukkit.entity.Player other : getServer().getOnlinePlayers()) {
+            PlayerLedger ol = ledger(other.getUniqueId());
+            if (!ol.linked()) {
+                continue;
+            }
+            String otherRealm = ol.realm(skillEngine.baseRealm());
+            if (otherRealm.equals(skillEngine.baseRealm())) {
+                continue;   // 범인 — 칭호 없음 (한월 「평민〈칭호없음〉」과 같은 문법)
+            }
+            org.bukkit.scoreboard.Team team = board.registerNewTeam(
+                    "hc" + other.getUniqueId().toString().substring(0, 8));
+            team.setPrefix("§6[" + otherRealm + "] ");
+            team.addEntry(other.getName());
         }
         obj.getScore("§7위치: §f" + (dojang ? "연무장 §8(시험)" : zone == null ? "야외" : zone.name()))
                 .setScore(4);

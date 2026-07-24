@@ -217,6 +217,54 @@ def check_gate():
     return bad
 
 
+def gates_of(sheet, nk):
+    """단계 5 — GameListener.promotionGates 의 계약 재현 (범인→삼류 관문 · 자바와 같은 축).
+    반환: [(라벨 축, 충족)] — 시트 「승급」 표시와 promoteIfDue 가 **이 한 벌**을 같이 읽는다."""
+    gates = [
+        ("무공 입문", bool(sheet.get("기술"))),
+        ("기초 단련", sheet.get("화후_원장", 0) >= 90),
+        ("자격 레벨", sheet.get("레벨", 1) >= nk["삼류"]),
+    ]
+    return gates
+
+
+def check_gates_ui():
+    """단계 5 — 승급 조건 표시: ① 표시와 판정이 한 해석기 ② 부족한 관문이 정확히 말한다."""
+    nk = {"삼류": 10}
+    bad = 0
+    # ① 전 조합에서 승급 ⇔ 관문 전부 충족 (표시가 ❌ 를 하나라도 들면 판정도 멈춘다)
+    mismatch = 0
+    for skill in (None, {"검법": 0}):
+        for hwahu in (0, 89, 90, 200):
+            for lv in (1, 9, 10, 40):
+                s = {"기술": skill, "화후_원장": hwahu, "레벨": lv}
+                gates = gates_of(s, nk)
+                promoted = all(met for _, met in gates)
+                display_blocks = any(not met for _, met in gates)
+                if promoted == display_blocks:   # 같은 벌이면 모순 불가
+                    mismatch += 1
+    bad += mismatch
+    print(f"  {'✅' if mismatch == 0 else '❌'} 표시=판정 한 해석기 (32조합 모순 {mismatch}건)")
+    # ② 부족한 관문만 ❌ — 숙련·레벨이 모자란 시트는 그 둘만 막힘으로 표기
+    s = {"기술": None, "화후_원장": 200, "레벨": 9}
+    unmet = [axis for axis, met in gates_of(s, nk) if not met]
+    ok = unmet == ["무공 입문", "자격 레벨"]
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 부족 관문이 말한다 (막힌 것 = {unmet})")
+    return bad
+
+
+def selftest_gates_ui():
+    """눈을 시험하는 눈 — 표시가 딴 해석기(레벨 관문 누락)를 읽는 오배선을 심으면 잡혀야 한다."""
+    nk = {"삼류": 10}
+    s = {"기술": {"검법": 0}, "화후_원장": 200, "레벨": 9}
+    wrong_display = [(a, m) for a, m in gates_of(s, nk) if a != "자격 레벨"]   # 오배선: 레벨 칸 실종
+    promoted = all(m for _, m in gates_of(s, nk))                              # 판정은 이중 관문 그대로
+    caught = all(m for _, m in wrong_display) and not promoted   # 표시 "전부 ✅"인데 승급 안 됨 → 모순 검출
+    print(f"  {'✅' if caught else '❌'} 표시 해석기 갈라짐 오배선 감지 (전부 ✅ 인데 승급 불가)")
+    return 0 if caught else 1
+
+
 def selftest_gate():
     """눈을 시험하는 눈 — AND 를 OR 로 오배선하면 자격 미달 승급이 잡혀야 한다."""
     events_met, level, need = True, 9, 10
@@ -274,11 +322,14 @@ if __name__ == "__main__":
     fail += check_gate()
     print("  ── 단계 4 — A안 내공 통일 ──")
     fail += check_naegong()
+    print("  ── 단계 5 — 승급 조건 표시 (표시=판정 한 해석기) ──")
+    fail += check_gates_ui()
     print("  ── 눈을 시험하는 눈 (오배선 심기) ──")
     fail += selftest()
     fail += selftest_reconcile()
     fail += selftest_allocate()
     fail += selftest_gate()
+    fail += selftest_gates_ui()
     fail += selftest_naegong()
     fail += selftest_freeze()
     print(f"\n총 위반/오류: {fail}건 — {'통과' if fail == 0 else '실패'}")

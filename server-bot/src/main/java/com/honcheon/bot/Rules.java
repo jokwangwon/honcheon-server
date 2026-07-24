@@ -26,6 +26,18 @@ public final class Rules {
     public final int pointsPerLevel;
     /** 경지 → 자격 레벨 N_k ({@code cultivation.yml levels.qualifying_level}) — 승급 이중 관문 */
     public final Map<String, Integer> qualifyingLevel;
+    /** 경지 사다리 — {@code cultivation_stages} 이름 순서 (다음 경지 탐색의 축) */
+    public final List<String> realmLadder;
+    /** 경지 → 승급 trigger 문장 ({@code cultivation_stages.promotion.trigger} — 등록부 인용) */
+    public final Map<String, String> realmTrigger;
+    /** 경지 → 승급 requirements 문장 ({@code cultivation_stages.promotion.requirements} — 등록부 인용) */
+    public final Map<String, List<String>> realmRequirements;
+
+    /** 다음 경지 (사다리 순서) — 꼭대기(생사경)거나 사다리 밖이면 null */
+    public String nextRealm(String realm) {
+        int i = realmLadder.indexOf(realm);
+        return i >= 0 && i + 1 < realmLadder.size() ? realmLadder.get(i + 1) : null;
+    }
     /** ★A안 내공 통일 ({@code cultivation.yml levels.naegong_unified}) — 내력 풀 = √원장[내공] */
     public final boolean naegongUnified;
     /** ★v2 수련→능력치 동결 ({@code levels.training_attr_frozen}) — 능력치는 레벨 포인트의 것 */
@@ -143,6 +155,33 @@ public final class Rules {
         RulesConfig.section(levels, "qualifying_level")
                 .forEach((k, v) -> quals.put(k, v instanceof Number nq ? nq.intValue() : 0));
         this.qualifyingLevel = java.util.Collections.unmodifiableMap(quals);
+        // 경지 사다리·승급 문(trigger·requirements) — 시트의 「승급」 표시가 인용하는 등록부.
+        //   promotion 은 **그 경지가 되는** 조건이다 (이류의 promotion = 이류에 오르는 문).
+        java.util.List<String> ladder = new java.util.ArrayList<>();
+        Map<String, String> triggers = new java.util.LinkedHashMap<>();
+        Map<String, List<String>> stageReqs = new java.util.LinkedHashMap<>();
+        if (cultivationCfg.get("cultivation_stages") instanceof List<?> stages) {
+            for (Object o : stages) {
+                if (!(o instanceof Map<?, ?> st)) {
+                    continue;
+                }
+                Map<String, Object> stage = (Map<String, Object>) st;
+                String name = String.valueOf(stage.get("name"));
+                ladder.add(name);
+                if (stage.get("promotion") instanceof Map<?, ?> p) {
+                    Map<String, Object> promo = (Map<String, Object>) p;
+                    if (promo.get("trigger") != null) {
+                        triggers.put(name, String.valueOf(promo.get("trigger")));
+                    }
+                    if (promo.get("requirements") instanceof List<?> rl) {
+                        stageReqs.put(name, rl.stream().map(String::valueOf).toList());
+                    }
+                }
+            }
+        }
+        this.realmLadder = java.util.Collections.unmodifiableList(ladder);
+        this.realmTrigger = java.util.Collections.unmodifiableMap(triggers);
+        this.realmRequirements = java.util.Collections.unmodifiableMap(stageReqs);
         this.economyCfg = RulesConfig.load(configDir.resolve("economy.yml"));
         this.economy = new EconomyEngine(economyCfg);
         this.energy = new InternalEnergyEngine(RulesConfig.load(configDir.resolve("internal_energy.yml")));
