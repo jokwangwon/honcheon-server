@@ -3737,7 +3737,7 @@ DB 단일 작성자 규약의 다리판 재발). 조치: ① 잔류 테스트 �
 
 ### B-182 · 세가의_자제 — 오대세가 실명 루트 (사용자 확정 2026-07-25 새벽 · 설계 문답 4건)
 - **상태**: 진행
-- **분류**: 기능
+- **분류**: 미완
 - **단계**: P2
 - **위치**: `config/player_creation.yml` (sega_promotion·families.세가의_자제·발단 3종·적서·거절) ·
   `config/seojang.yml` (세가 벌) · `config/seojang_stage.yml` · `server-bot` (승격·세가 지목)
