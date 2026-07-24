@@ -420,6 +420,13 @@ antechamber:
       west: 3                  # 서쪽(고물)으로 이 칸
       east: 2                  # 동쪽(이물)으로 이 칸
       half_w: 1                # 반폭 (z ±1 = 폭 3)
+      # ★겉몸 — 팩 모델 셸 (사용자: "리소스팩을 수정해서라도 디자인적 개선"). 갑판 블록은
+      #   발판이고, 이 모델이 배의 윤곽(들린 이물·고물·뱃전)이다. 모델 정본:
+      #   resourcepack/assets/honcheon/models/item/naru/barge.json (수치 전부 【제안】)
+      shell:
+        model: "honcheon:naru/barge"
+        scale: 2.2
+        y: 0.95                # 수면 위 (갑판 널과 맞물리는 높이)
     transit:
       ticks: 50                # 암전 도하 길이 (2.5초) 【제안】
       line: "§8노 소리가 어둠을 가른다 — 물이 갈라지고, 배가 나아간다."   # 【제안】

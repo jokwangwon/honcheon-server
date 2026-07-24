@@ -1,0 +1,88 @@
+{
+  "__comment": "나룻배(거룻배) — 정박 갑판의 겉몸 (B-179 3차 · 2026-07-25). 갑판 실블록은 발판이고, 이 모델이 배의 윤곽이다. 바닐라 텍스처만 쓴다 — 새 그림 0. 요소 회전(±22.5°)이 이물·고물의 들림을 만든다. 단위 16=1블록 · ItemDisplay 가 2.2배로 키운다 (전장 ~5.5블록). 수치 전부 【제안】 — 빨간펜 대상.",
+  "textures": {
+    "hull": "minecraft:block/dark_oak_planks",
+    "rim": "minecraft:block/stripped_dark_oak_log",
+    "deck": "minecraft:block/spruce_planks",
+    "particle": "minecraft:block/dark_oak_planks"
+  },
+  "elements": [
+    {
+      "__comment": "밑판 — 평평한 중앙",
+      "from": [-12, 0, 2], "to": [28, 3, 14],
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#deck"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#hull"}, "east": {"texture": "#hull"}
+      }
+    },
+    {
+      "__comment": "뱃전 좌 (북측)",
+      "from": [-12, 3, 1], "to": [28, 9, 3],
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#hull"}, "east": {"texture": "#hull"}
+      }
+    },
+    {
+      "__comment": "뱃전 우 (남측)",
+      "from": [-12, 3, 13], "to": [28, 9, 15],
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#hull"}, "east": {"texture": "#hull"}
+      }
+    },
+    {
+      "__comment": "이물(동쪽 뱃머리) — 22.5도 들려 올라간다",
+      "from": [26, 1, 2], "to": [32, 10, 14],
+      "rotation": {"origin": [26, 3, 8], "axis": "z", "angle": 22.5},
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#hull"}, "east": {"texture": "#hull"}
+      }
+    },
+    {
+      "__comment": "이물 마구리 — 좁아지는 끝",
+      "from": [31, 4, 5], "to": [34, 12, 11],
+      "rotation": {"origin": [31, 6, 8], "axis": "z", "angle": 22.5},
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#hull"}, "east": {"texture": "#rim"}
+      }
+    },
+    {
+      "__comment": "고물(서쪽) — 완만하게 들린다",
+      "from": [-16, 1, 2], "to": [-10, 9, 14],
+      "rotation": {"origin": [-10, 3, 8], "axis": "z", "angle": -22.5},
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#rim"}, "east": {"texture": "#hull"}
+      }
+    },
+    {
+      "__comment": "고물 사공 발판",
+      "from": [-11, 3, 4], "to": [-5, 5, 12],
+      "faces": {
+        "down": {"texture": "#hull"}, "up": {"texture": "#deck"},
+        "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
+        "west": {"texture": "#hull"}, "east": {"texture": "#hull"}
+      }
+    },
+    {
+      "__comment": "가로장(앉는 널)",
+      "from": [6, 4, 2], "to": [11, 6, 14],
+      "faces": {
+        "down": {"texture": "#deck"}, "up": {"texture": "#deck"},
+        "north": {"texture": "#deck"}, "south": {"texture": "#deck"},
+        "west": {"texture": "#deck"}, "east": {"texture": "#deck"}
+      }
+    }
+  ],
+  "gui_light": "side",
+  "display": {}
+}

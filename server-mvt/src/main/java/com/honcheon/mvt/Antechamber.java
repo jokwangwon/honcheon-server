@@ -2178,7 +2178,14 @@ public final class Antechamber implements Listener {
         //   — 나루가 지연 로드라, 재기동 직후 항해 중 튕긴 몸이 재접속하면 바닐라가 그 몸을
         //   **기본 월드 스폰(광장 우물 기둥)**에 떨궜다. 나루 밖이라 어느 손도 안 집었고, 질식사했다.
         //   월드가 미리 열려 있으면 바닐라가 제자리(강 위)에 되살린다 — 낙하 자체가 소멸한다.
-        world();
+        World pre = world();
+        if (pre != null) {
+            // ★정박 갑판 (실사용 2026-07-25 "배가 없어서 서 있을 곳이 없어 물에 빠짐") —
+            //   접합자 재접속은 enter() 를 안 지나 완결성 검사가 영영 안 돌았다. 판이 자라도
+            //   (갑판 신설) 세계는 옛 몸 그대로였다. 기동 때 세계를 재고, 모자라면 짓는다.
+            //   그 위에 나룻배의 겉몸(팩 모델 셸)을 세운다 — ensure 라 몇 번 불러도 수가 지켜진다.
+            build(pre, false, () -> voyage.ensureMooredShells(pre));
+        }
         // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다
         Bukkit.getPluginManager().registerEvents(stage, plugin);
         ticker = Bukkit.getScheduler().runTaskTimer(plugin,

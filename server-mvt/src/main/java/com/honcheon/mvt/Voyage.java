@@ -36,6 +36,8 @@ final class Voyage {
 
     /** 항해 소유물의 표식 — 걷을 때 우리 것만 걷는다 (지금은 무대·패가 SeojangStage 표식을 쓴다) */
     static final NamespacedKey KEY_BOAT = new NamespacedKey("honcheon", "ipdo_voyage_boat");
+    /** 정박 나룻배 겉몸(팩 모델 셸)의 표식 — ensure 가 세고, 걷을 때 우리 것만 걷는다 */
+    static final NamespacedKey KEY_SHELL = new NamespacedKey("honcheon", "ipdo_barge_shell");
 
     private final HoncheonMvt plugin;
     private final Antechamber ante;
@@ -46,6 +48,9 @@ final class Voyage {
     private final int mooredWest;
     private final int mooredEast;
     private final int mooredHalfW;
+    private final String shellModel;
+    private final float shellScale;
+    private final double shellY;
     private final int transitTicks;
     private final String embarkLine;
     private final String transitLine;
@@ -75,6 +80,10 @@ final class Voyage {
         this.mooredWest = Math.max(1, num(mo.get("west"), 3));
         this.mooredEast = Math.max(1, num(mo.get("east"), 2));
         this.mooredHalfW = Math.max(1, num(mo.get("half_w"), 1));
+        Map<String, Object> sh = sub(mo, "shell");
+        this.shellModel = str(sh.get("model"), "");
+        this.shellScale = sh.get("scale") instanceof Number n2 ? n2.floatValue() : 2.2f;
+        this.shellY = sh.get("y") instanceof Number n3 ? n3.doubleValue() : 0.95;
         Map<String, Object> tr = sub(cfg, "transit");
         this.transitTicks = Math.max(20, num(tr.get("ticks"), 50));
         this.transitLine = str(tr.get("line"),
@@ -177,6 +186,52 @@ final class Voyage {
             if (e.getPersistentDataContainer().has(KEY_BOAT)) {
                 e.remove();
             }
+        }
+    }
+
+    /**
+     * 정박 나룻배의 <b>겉몸</b> — 팩 모델 셸 (사용자: "리소스팩을 수정해서라도 디자인적 개선").
+     * 갑판 블록은 발판이고, 이 ItemDisplay 모델이 배의 윤곽(들린 이물·고물·뱃전)이다.
+     * 허수아비 ensure 와 같은 문법: 세고, 어긋나면 걷고 다시 세운다 (많은 것도 틀린 것이다).
+     */
+    void ensureMooredShells(World w) {
+        if (shellModel.isBlank()) {
+            return;   // 등록부가 겉몸을 안 적었다 — 갑판 블록만으로 선다 (강등)
+        }
+        int have = 0;
+        for (org.bukkit.entity.Entity e : w.getEntities()) {
+            if (e.getPersistentDataContainer().has(KEY_SHELL)) {
+                have++;
+            }
+        }
+        if (have == stationsX.length) {
+            return;
+        }
+        for (org.bukkit.entity.Entity e : w.getEntities()) {
+            if (e.getPersistentDataContainer().has(KEY_SHELL)) {
+                e.remove();
+            }
+        }
+        int gy = ante.waterTop(w);
+        String[] mk = shellModel.split(":", 2);
+        NamespacedKey model = new NamespacedKey(mk.length == 2 ? mk[0] : "honcheon",
+                mk.length == 2 ? mk[1] : mk[0]);
+        for (int sx : stationsX) {
+            Location at = new Location(w, ante.cx() + sx - 0.5, gy + shellY, ante.cz() + 0.5, 0f, 0f);
+            w.spawn(at, org.bukkit.entity.ItemDisplay.class, e -> {
+                org.bukkit.inventory.ItemStack it =
+                        new org.bukkit.inventory.ItemStack(org.bukkit.Material.PAPER);
+                it.editMeta(m -> m.setItemModel(model));
+                e.setItemStack(it);
+                e.setPersistent(true);   // 세계의 가구다 — 재기동에도 남는다 (ensure 가 수를 지킨다)
+                e.setBrightness(new org.bukkit.entity.Display.Brightness(12, 15));
+                e.getPersistentDataContainer().set(KEY_SHELL,
+                        org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
+                e.setTransformation(new org.bukkit.util.Transformation(
+                        new org.joml.Vector3f(), new org.joml.Quaternionf(),
+                        new org.joml.Vector3f(shellScale, shellScale, shellScale),
+                        new org.joml.Quaternionf()));
+            });
         }
     }
 
