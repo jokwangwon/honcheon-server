@@ -438,9 +438,31 @@ public final class GameListener extends ListenerAdapter {
                         + "\n" + ch.get("status") + " · " + ch.get("location"));
         StringBuilder stats = new StringBuilder();
         @SuppressWarnings("unchecked")
-        Map<String, Integer> attr = (Map<String, Integer>) sheet.get("능력치");
-        attr.forEach((k, v) -> stats.append(k).append(' ').append(v).append("  "));
-        eb.addField("능력치", stats.toString(), false);
+        Map<String, Object> rawLedger = sheet.get("원장") instanceof Map
+                ? (Map<String, Object>) sheet.get("원장") : null;
+        if (rules.levelsEnabled && rawLedger != null) {
+            // ★v3 — 시트는 **원장만** 표기 (§8.9 ⑪ 사용자 확정 · 판정치 병기 없음).
+            //   성별 보정은 genderStat 을 지나야 든다 — 시트가 지나면 히든이 깨진다 (Rules 주석).
+            for (String axis : GrowthV3.AXES) {
+                if (rawLedger.get(axis) instanceof Number n) {
+                    stats.append(axis).append(' ').append(ledgerLabel(n.doubleValue())).append("  ");
+                }
+            }
+            eb.addField("원장", stats.toString().strip(), false);
+            int level = Math.max(1, ((Number) sheet.getOrDefault("레벨", 1)).intValue());
+            double xpCur = ((Number) sheet.getOrDefault("경험치", 0)).doubleValue();
+            eb.addField("레벨", "Lv" + level + " · 경험 " + (int) xpCur + "/"
+                    + (int) Math.ceil(GrowthV3.need(level, rules.xpBase, rules.xpGrowth)), true);
+            int pts = ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue();
+            if (pts > 0) {
+                eb.addField("미사용 포인트", "**" + pts + "** — 아래 [포인트 배분]", true);
+            }
+        } else {
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> attr = (Map<String, Integer>) sheet.get("능력치");
+            attr.forEach((k, v) -> stats.append(k).append(' ').append(v).append("  "));
+            eb.addField("능력치", stats.toString(), false);
+        }
         eb.addField("소지금", ch.get("wallet") + "문", true);
         eb.addField("발단", String.valueOf(sheet.get("발단")), true);
 
@@ -593,7 +615,109 @@ public final class GameListener extends ListenerAdapter {
                         + rules.energy.pool(naegong), true);
             }
         }
-        event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+        var reply = event.replyEmbeds(eb.build()).setEphemeral(true);
+        int unspent = ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue();
+        if (rules.levelsEnabled && unspent > 0) {
+            reply = reply.addComponents(ActionRow.of(Button.primary(
+                    "al:open:" + event.getUser().getId(), "포인트 배분 (" + unspent + ")")));
+        }
+        reply.queue();
+    }
+
+    /** 원장 표기 — 정수면 정수로, 화후 소수부가 남았으면 한 자리로 (%f 에 long 을 넣지 마라 — 기동 사고 전력) */
+    private static String ledgerLabel(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.format("%.1f", v);
+    }
+
+    // ─── ★성장 v3 — 포인트 배분 손 (B-135 단계 4 · attribute_scale_v3 §8.5·§8.9 ⑨⑪) ───
+    //
+    //   레벨업(grantXp)이 쌓은 미사용 포인트가 여기서 원장으로 들어간다. 판정(genderStat)·
+    //   파생(√원장)·마크 거울(mvtSheet attrs) 이 전부 원장을 읽으므로(단계 2·3), 이 한 손이
+    //   곧 「찍으면 몸이 는다」의 전부다. 캡 c² 는 GrowthV3.allocate 가 지키고, 캡 표는
+    //   cultivation.yml 이 정본이다 — 이 코드에 수치는 없다.
+
+    @SuppressWarnings("unchecked")
+    private void onAllocate(ButtonInteractionEvent event, String[] id) throws Exception {
+        String ownerId = id[id.length - 1];
+        if (!event.getUser().getId().equals(ownerId)) {
+            event.reply("남의 시트다 — 네 몫은 안내판 [내 자리]에 있다.").setEphemeral(true).queue();
+            return;
+        }
+        if ("done".equals(id[1])) {
+            event.editMessage("배분을 마쳤다 — 시트는 안내판 [내 자리] 또는 `/혼천 정보`.")
+                    .setEmbeds().setComponents().queue();
+            return;
+        }
+        var found = db.findCharacter(ownerId);
+        if (found.isEmpty()) {
+            event.editMessage("캐릭터가 없다 — `/혼천 시작`으로 만들어라.")
+                    .setEmbeds().setComponents().queue();
+            return;
+        }
+        Map<String, Object> row = found.get();
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        String realm = String.valueOf(row.get("realm"));
+        Integer cap = rules.rawCapByRealm.get(realm);
+        if (cap == null || cap <= 0) {
+            // 등록제 — 경지가 캡 표에 없으면 코드는 수치를 지어내지 않는다 (침묵 금지: 말하고 멈춘다)
+            event.reply("이 경지(" + realm + ")의 원장 캡이 등록부에 없다 — 관리자에게 알려라.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        String notice = null;
+        if ("ax".equals(id[1])) {
+            String axis = GrowthV3.AXES.get(Integer.parseInt(id[2]));
+            switch (GrowthV3.allocate(sheet, axis, cap)) {
+                case OK -> {
+                    db.updateCharacter(((Number) row.get("id")).longValue(), sheet,
+                            ((Number) row.get("wallet")).intValue(), realm,
+                            String.valueOf(row.get("status")), String.valueOf(row.get("location")));
+                    double now = ((Number) ((Map<String, Object>) sheet.get("원장")).get(axis)).doubleValue();
+                    notice = "**" + axis + " +1** — 원장 " + ledgerLabel(now);
+                }
+                case CAP -> notice = "캡이 막았다 — " + realm + "의 원장 캡은 **" + cap
+                        + "**. 포인트는 은행에 남는다 (승급이 문이다).";
+                case NO_POINTS -> notice = "미사용 포인트가 없다.";
+            }
+        }
+        event.editMessageEmbeds(allocEmbed(sheet, realm, cap, notice))
+                .setComponents(allocRows(sheet, ownerId, cap)).queue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private MessageEmbed allocEmbed(Map<String, Object> sheet, String realm, int cap, String notice) {
+        int points = ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue();
+        Map<String, Object> raw = sheet.get("원장") instanceof Map
+                ? (Map<String, Object>) sheet.get("원장") : Map.of();
+        StringBuilder axes = new StringBuilder();
+        for (String axis : GrowthV3.AXES) {
+            double v = raw.get(axis) instanceof Number n ? n.doubleValue() : 0.0;
+            axes.append(axis).append(' ').append(ledgerLabel(v))
+                    .append(v + 1.0 > cap + 1e-9 ? " (캡)" : "").append("  ");
+        }
+        return new EmbedBuilder().setColor(INK).setTitle("포인트 배분")
+                .setDescription("미사용 포인트 **" + points + "** · " + realm + " (원장 캡 " + cap + ")\n"
+                        + axes.toString().strip()
+                        + (notice == null ? "" : "\n\n" + notice))
+                .build();
+    }
+
+    /** 축 7버튼 (4+3) + [그만] — 캡에 닿았거나 포인트가 없으면 눌리지 않는다 (이유는 embed 가 말한다) */
+    @SuppressWarnings("unchecked")
+    private List<ActionRow> allocRows(Map<String, Object> sheet, String ownerId, int cap) {
+        int points = ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue();
+        Map<String, Object> raw = sheet.get("원장") instanceof Map
+                ? (Map<String, Object>) sheet.get("원장") : Map.of();
+        List<Button> buttons = new ArrayList<>();
+        for (int i = 0; i < GrowthV3.AXES.size(); i++) {
+            String axis = GrowthV3.AXES.get(i);
+            double v = raw.get(axis) instanceof Number n ? n.doubleValue() : 0.0;
+            boolean blocked = points <= 0 || v + 1.0 > cap + 1e-9;
+            buttons.add(Button.primary("al:ax:" + i + ":" + ownerId, axis + " +1")
+                    .withDisabled(blocked));
+        }
+        return List.of(ActionRow.of(buttons.subList(0, 4)), ActionRow.of(buttons.subList(4, 7)),
+                ActionRow.of(Button.secondary("al:done:" + ownerId, "그만")));
     }
 
     private MessageEmbed help() {
@@ -742,6 +866,7 @@ public final class GameListener extends ListenerAdapter {
                 case "hs" -> onHouseChoice(event, "stay".equals(id[1]));    // ★ 세가 — 남는가, 나오는가
                 case "ln" -> onLineageChoice(event, "kin".equals(id[1]));   // 새 삶 — 혈연 / 무관
                 case "lk" -> openLinkModal(event);   // ★ 접속의 문 — 코드 창을 연다 (확정은 모달에서)
+                case "al" -> onAllocate(event, id);  // ★ 포인트 배분 — v3 성장의 손 (B-135 단계 4)
                 case "np" -> onPanel(event, id);     // ★★ 안내판 — 명령을 치지 않게 하는 판
                 case "rs" -> onResetConfirm(event, id[1], id[2], id[3]);   // 되돌린다 — 확인의 손
                 case "rx" -> event.editMessage("초기화를 그만두었다. **아무것도 지우지 않았다.**")

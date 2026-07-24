@@ -24,6 +24,8 @@ public final class Rules {
     public final double xpBase;
     public final double xpGrowth;
     public final int pointsPerLevel;
+    /** 경지 → 원장 캡 c² ({@code cultivation.yml levels.raw_attribute_cap_by_realm}) */
+    public final Map<String, Integer> rawCapByRealm;
     public final Map<String, Integer> questXp;
     public final EconomyEngine economy;
     public final InternalEnergyEngine energy;
@@ -112,6 +114,11 @@ public final class Rules {
         RulesConfig.section(RulesConfig.section(levels, "xp_sources"), "quests")
                 .forEach((k, v) -> qxp.put(k, v instanceof Number nq ? nq.intValue() : 0));
         this.questXp = java.util.Collections.unmodifiableMap(qxp);
+        // 원장 캡 c² (경지별) — 배분 손이 지키는 천장 (§8.5 · 캡 표는 등록부가 정본)
+        Map<String, Integer> caps = new java.util.LinkedHashMap<>();
+        RulesConfig.section(levels, "raw_attribute_cap_by_realm")
+                .forEach((k, v) -> caps.put(k, v instanceof Number nc ? nc.intValue() : 0));
+        this.rawCapByRealm = java.util.Collections.unmodifiableMap(caps);
         this.economyCfg = RulesConfig.load(configDir.resolve("economy.yml"));
         this.economy = new EconomyEngine(economyCfg);
         this.energy = new InternalEnergyEngine(RulesConfig.load(configDir.resolve("internal_energy.yml")));
