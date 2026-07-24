@@ -340,13 +340,8 @@ public final class Growth {
         return ledger.attr("체력");
     }
 
-    /**
-     * 공격 판정의 능력치 항 — {@code combat.yml attack.attacker} 의 '능력치'.
-     * 판정은 <b>정수부</b>만 본다 (화후 규칙 — 3.9와 4.0은 세계가 다르다).
-     */
-    public int attackBonus(PlayerLedger ledger, String weaponClass) {
-        return (int) ledger.attr(attackAttribute(weaponClass));
-    }
+    // ★묘비: attackBonus(ledger, weaponClass) 2항 서명은 삭제됐다 (B안 §8.10 — 경지 없이 읽는
+    //   판정 능력치는 캡을 지나지 않는 뒷문이 된다. 호출자 0 확인 후 제거 2026-07-24)
 
     /**
      * 공격 판정의 능력치 항 — <b>시트가 없는 몸은 그 경지의 표준 무인이다.</b>
@@ -360,11 +355,15 @@ public final class Growth {
      * 돌아간다"</i>. 그 규칙을 공격에도 세운다. 접합된 자는 제 시트로 싸우고, 아직 강호에 없는 자는
      * 적어도 <b>제 급의 표준</b>으로 선다.
      *
+     * <p>★B안 (attribute_scale_v3 §8.10 · 사용자 확정 2026-07-24): 원장은 무캡 — <b>판정만</b>
+     * min(정수부, 경지 판정 캡)으로 조인다. 파생(체력 내구·민첩 이속)은 이 문을 지나지 않는다.
+     *
+     * @param realm         이 몸의 경지 — 판정 캡의 열쇠 (player_creation attribute_cap_by_realm)
      * @param realmStandard 그 경지의 표준 능력치 ({@code SkillEngine.realmAttr}) — 코드가 짓지 않는다
      */
-    public int attackBonus(PlayerLedger ledger, String weaponClass, int realmStandard) {
+    public int attackBonus(PlayerLedger ledger, String weaponClass, String realm, int realmStandard) {
         double attr = ledger.attr(attackAttribute(weaponClass));
-        return attr > 0 ? (int) attr : realmStandard;
+        return attr > 0 ? Math.min(cap(realm), (int) attr) : realmStandard;
     }
 
     /**
@@ -387,8 +386,8 @@ public final class Growth {
      *                    <b>회피에만 든다</b> — 갑옷은 회피를 판다
      * @param surrounded  둘 이상에게 잡혔는가 — 그러면 흘리기의 −2 를 물지 않는다 (forced_guard.waives)
      */
-    public int defenseScore(PlayerLedger ledger, String stanceName, int weaponSkill, int gyeonggong,
-                            int armorDodge, boolean surrounded) {
+    public int defenseScore(PlayerLedger ledger, String realm, String stanceName, int weaponSkill,
+                            int gyeonggong, int armorDodge, boolean surrounded) {
         Stance st = stances.get(stanceName);
         if (st == null) {
             return weaponSkill;
@@ -399,13 +398,11 @@ public final class Growth {
                 : gyeol.getOrDefault(ledger.simbeop(), Map.of()).getOrDefault(stanceName, 0);
         int skill = st.usesGyeonggong() ? gyeonggong : weaponSkill;
         int armor = st.usesGyeonggong() ? armorDodge : 0;   // 갑옷이 파는 것은 회피뿐이다
-        return (int) ledger.attr(st.attribute()) + skill + gy + pen + armor;
+        // ★B안 (§8.10) — 판정 능력치 = min(정수부, 경지 판정 캡)
+        return Math.min(cap(realm), (int) ledger.attr(st.attribute())) + skill + gy + pen + armor;
     }
 
-    /** 옛 서명 — 기술 항을 가르지 않던 시절 (호출자가 남아 있으면 조용히 근사한다) */
-    public int defenseScore(PlayerLedger ledger, String stanceName, int mastery, boolean surrounded) {
-        return defenseScore(ledger, stanceName, mastery, mastery, 0, surrounded);
-    }
+    // ★묘비: defenseScore 4항 옛 서명(기술 미분리 시절)은 삭제됐다 — 호출자 0 · B안 경지 편입과 함께 정리 (2026-07-24)
 
     /**
      * <b>이 몸이 고를 방어</b> — <b>기대 피해가 가장 작은</b> 태세. 포위되면 회피를 못 고른다.
@@ -418,15 +415,15 @@ public final class Growth {
      * 막기가 뜨고, 감각을 키운 자는 흘리기가 뜬다. 그리고 <b>포위당하는 순간 회피 빌드는 태세를 잃는다</b> —
      * 화면이 그 사실을 말해 준다 ("몸을 뺄 자리가 없다").
      */
-    public String bestStance(PlayerLedger ledger, int weaponSkill, int gyeonggong, int armorDodge,
-                             boolean surrounded) {
+    public String bestStance(PlayerLedger ledger, String realm, int weaponSkill, int gyeonggong,
+                             int armorDodge, boolean surrounded) {
         String best = forcedFloor;
         int bestScore = Integer.MIN_VALUE;
         for (String name : stances.keySet()) {
             if (surrounded && lostWhenSurrounded(name)) {
                 continue;               // 회피 — 뺄 자리가 없으면 못 고른다
             }
-            int score = defenseScore(ledger, name, weaponSkill, gyeonggong, armorDodge, surrounded)
+            int score = defenseScore(ledger, realm, name, weaponSkill, gyeonggong, armorDodge, surrounded)
                     + stances.get(name).soak();      // 경감도 방어의 값이다 (판정만 보면 회피가 늘 이긴다)
             if (score > bestScore) {
                 bestScore = score;

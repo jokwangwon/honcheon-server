@@ -1847,7 +1847,7 @@ public final class SkillListener implements Listener {
                 int attrBonus = growth == null ? 0 : growth.attackBonus(
                         plugin.ledger(player.getUniqueId()),
                         engine.weaponClassOf(player.getInventory().getItemInMainHand(), null),
-                        engine.realmAttr(state.realm));
+                        state.realm, engine.realmAttr(state.realm));
                 eyeRoll(player, target, attrBonus, weaponSkill(player), atkScore, roll, resist,
                         line, new SkillEngine.Strike(roll, margin,
                                 margin < 0 ? "miss" : "basic", margin < 0 ? "빗나감" : "명중",
@@ -1881,7 +1881,8 @@ public final class SkillListener implements Listener {
             String weaponClass = engine.weaponClassOf(player.getInventory().getItemInMainHand(), null);
             Growth growth = Growth.get();
             int attrBonus = growth == null ? 0 : growth.attackBonus(
-                    plugin.ledger(player.getUniqueId()), weaponClass, engine.realmAttr(state.realm));
+                    plugin.ledger(player.getUniqueId()), weaponClass, state.realm,
+                    engine.realmAttr(state.realm));
             int defense = defenseV2(target, grade, line);
             boolean crit = critRollV2(player, weaponClass);
             base = Math.max(1.0, raw + attrBonus - defense)
@@ -1930,7 +1931,7 @@ public final class SkillListener implements Listener {
         // 시트가 없는 몸은 그 경지의 표준 무인이다 (resolve 와 같은 폴백 — realmAttr)
         int attrBonus = growth == null ? 0 : growth.attackBonus(plugin.ledger(player.getUniqueId()),
                 engine.weaponClassOf(player.getInventory().getItemInMainHand(), null),
-                engine.realmAttr(state.realm));
+                state.realm, engine.realmAttr(state.realm));
         return attrBonus + weaponSkill(player)
                 + engine.weaponJudgmentBonus(weaponGrade(player))
                 + engine.realmGapBonus(state.realm, foeRealm(target, target instanceof Monster))
@@ -2852,7 +2853,7 @@ public final class SkillListener implements Listener {
                 //   (Vitality.cheOf 가 이미 같은 답을 갖고 있다 — 원장이 비면 경지 대체값)
                 int attrBonus = growth == null ? 0 : growth.attackBonus(led,
                         engine.weaponClassOf(player.getInventory().getItemInMainHand(), null),
-                        engine.realmAttr(state.realm));
+                        state.realm, engine.realmAttr(state.realm));
                 int execBase = attrBonus + mastery + engine.weaponJudgmentBonus(weaponGrade(player))
                         + engine.realmGapBonus(state.realm, foeRealm(target, hostile))
                         + (engine.isDepleted(state.energy) ? -2 : 0);   // 내공 고갈 = 판정 -2
@@ -3208,7 +3209,7 @@ public final class SkillListener implements Listener {
         // ③ 자동 — 몸이 아는 대로. 삼류도 여기서 제 목숨을 본다 (게이트 없음)
         if (body instanceof Player player) {
             PlayerLedger led = plugin.ledger(player.getUniqueId());
-            return growth.bestStance(led, weaponSkill(player), gyeonggongSkill(player),
+            return growth.bestStance(led, state(player).realm, weaponSkill(player), gyeonggongSkill(player),
                     armorDodge(player), surrounded);
         }
         return npcBestStance(body, surrounded);
@@ -3292,7 +3293,7 @@ public final class SkillListener implements Listener {
         }
         int score;
         if (body instanceof Player player) {
-            score = growth.defenseScore(plugin.ledger(player.getUniqueId()), stance,
+            score = growth.defenseScore(plugin.ledger(player.getUniqueId()), state(player).realm, stance,
                     weaponSkill(player), gyeonggongSkill(player), armorDodge(player), surrounded)
                     // 선언(방어_전념)의 +2 — 행동을 판 값이다 (active_guard.commit_bonus, 정본은 action_notes)
                     + (guardDeclared(player) ? activeGuard.commitBonus() : 0);
@@ -3322,8 +3323,7 @@ public final class SkillListener implements Listener {
         int armor = v2.defenseFromArmor() ? armorSoak(target, grade) : 0;
         int body;
         if (target instanceof Player player) {
-            double attr = plugin.ledger(player.getUniqueId()).attr(v2.bodyAttribute());
-            body = attr > 0 ? (int) attr : engine.realmAttr(state(player).realm);
+            body = judgmentAttrOf(player, v2.bodyAttribute());
         } else {
             SkillEngine.Npc npc = npcOf(target);
             String realm = foeRealm(target, target instanceof Monster);
@@ -3337,13 +3337,27 @@ public final class SkillListener implements Listener {
     /** v2 크리 축의 판정치 — 공격자의 감각·지혜. 시트 없는 몸은 그 경지의 표준 무인 */
     private int critAttr(LivingEntity attacker, String attribute) {
         if (attacker instanceof Player player) {
-            double attr = plugin.ledger(player.getUniqueId()).attr(attribute);
-            return attr > 0 ? (int) attr : engine.realmAttr(state(player).realm);
+            return judgmentAttrOf(player, attribute);
         }
         SkillEngine.Npc npc = npcOf(attacker);
         String realm = foeRealm(attacker, attacker instanceof Monster);
         return npc == null ? engine.realmAttr(realm)
                 : npc.attr(attribute, engine.realmAttr(npc.realm()));
+    }
+
+    /**
+     * 플레이어의 <b>판정</b> 능력치 — ★B안 (attribute_scale_v3 §8.10 · 사용자 확정 2026-07-24):
+     * 원장은 무캡, 판정만 min(정수부, 경지 판정 캡). 시트 없는 몸은 그 경지의 표준 무인.
+     * 파생 소비처(내구·이속·내력 풀)는 이 문을 지나지 말 것 — 몸은 천장 없이 자란다.
+     */
+    private int judgmentAttrOf(Player player, String attribute) {
+        double attr = plugin.ledger(player.getUniqueId()).attr(attribute);
+        String realm = state(player).realm;
+        if (attr <= 0) {
+            return engine.realmAttr(realm);
+        }
+        Growth growth = Growth.get();
+        return growth == null ? (int) attr : Math.min(growth.cap(realm), (int) attr);
     }
 
     /** v2 크리 굴림 — 액션 RNG (2d6 아님). 확률·배수는 combat.yml combat_v2.crit 이 정본 */

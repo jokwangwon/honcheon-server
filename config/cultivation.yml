@@ -20,7 +20,7 @@ principles:
 # ═══════════════════════════════════════════════════════════════════════════
 # 정본: cultivation_v3_levels.md §5(사다리) · attribute_scale_v3.md §8.9(저울 12항 확정)
 # ★비파괴: 이 절은 새 등록부다. v2 키(attribute_cap_by_realm 등 코드가 읽는 것)는 그대로 —
-#   판정 이음(단계 2)이 서면 코드가 raw_attribute_cap_by_realm 을 읽는다.
+#   B안 (2026-07-24): 판정 캡은 player_creation.yml attribute_cap_by_realm 이 정본 (원장 캡은 묘비 참조).
 levels:
   enabled: true
   # XP 곡선 — need(L) = L→L+1 비용 = base × growth^(L-1) (tools/xp_pacing.py 와 같은 식)
@@ -31,7 +31,8 @@ levels:
     rate_xp_per_hour: 200          # 【제안 — 텔레메트리 실측으로 교체하라】 (xp_pacing --rate)
     level_cap: 없음                 # 만렙 없음
   points_per_level: 3              # 매 레벨 3포인트 (최종장 Lv100 까지 ≈300 + 생성 원장)
-  point_bank: 무기한_보유           # 캡 초과 미사용 포인트 보유 → 승급 시 해금 (attribute_scale_v3 §8.9 ⑨)
+  # ~~point_bank: 무기한_보유~~ ★묘비 (B안 개정 2026-07-24 · §8.10): 원장 캡이 사라져 포인트가
+  #   언제나 들어간다 — '캡에 막혀 남는 포인트'라는 개념 자체가 소멸했다 (B-152 종결)
   # 경지별 자격 레벨 N_k — 승급의 '자격' 축 (사건 마크가 '문'). §5 반올림 확정값
   qualifying_level:
     삼류: 10
@@ -42,19 +43,11 @@ levels:
     화경: 100
     현경: 105
     생사경: 115
-  # 원장 캡 (제곱표) — 포인트가 캡²를 넘겨 못 들어간다. 판정 캡 c → 원장 캡 c² (√ 천장 보존 · §8.5)
-  #   ★판정 캡(1~10)은 player_creation.yml attribute_cap_by_realm 이 v2 정본으로 남는다.
-  #    단계 2(판정 이음)에서 판정치=floor(√원장)가 이 원장 캡을 읽는다.
-  raw_attribute_cap_by_realm:
-    범인: 9
-    삼류: 16
-    이류: 25
-    일류: 36
-    절정: 49
-    초절정: 64
-    화경: 81
-    현경: 100
-    생사경: 100
+  # ~~raw_attribute_cap_by_realm (제곱표)~~ ★묘비 (B안 개정 — 사용자 확정 2026-07-24 · §8.10):
+  #   원장 캡은 폐지됐다. 포인트는 어느 축이든 항상 들어가고(파생 √원장은 즉시 자란다),
+  #   **판정치만** min(floor√원장, 경지 판정 캡)으로 조인다 — 판정 캡의 정본은
+  #   player_creation.yml attribute_cap_by_realm (범인 3 ~ 생사경 10). 천장 너머로 쌓인
+  #   원장은 승급하는 순간 판정으로 터진다. 다시 세우지 마라 — 옛 제곱표: 9·16·25·36·49·64·81·100·100
   # 생성 원장 총량 — 판정 눈금 배분(현행 문항 그대로) → 제곱 저장 (§8.7 ⑤ · 백지의 평등 보존)
   creation_raw_total:
     유년: 19

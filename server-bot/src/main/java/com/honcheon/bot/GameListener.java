@@ -658,17 +658,10 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> row = found.get();
         Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
         String realm = String.valueOf(row.get("realm"));
-        Integer cap = rules.rawCapByRealm.get(realm);
-        if (cap == null || cap <= 0) {
-            // 등록제 — 경지가 캡 표에 없으면 코드는 수치를 지어내지 않는다 (침묵 금지: 말하고 멈춘다)
-            event.reply("이 경지(" + realm + ")의 원장 캡이 등록부에 없다 — 관리자에게 알려라.")
-                    .setEphemeral(true).queue();
-            return;
-        }
         String notice = null;
         if ("ax".equals(id[1])) {
             String axis = GrowthV3.AXES.get(Integer.parseInt(id[2]));
-            switch (GrowthV3.allocate(sheet, axis, cap)) {
+            switch (GrowthV3.allocate(sheet, axis)) {
                 case OK -> {
                     db.updateCharacter(((Number) row.get("id")).longValue(), sheet,
                             ((Number) row.get("wallet")).intValue(), realm,
@@ -676,51 +669,49 @@ public final class GameListener extends ListenerAdapter {
                     double now = ((Number) ((Map<String, Object>) sheet.get("원장")).get(axis)).doubleValue();
                     notice = "**" + axis + " +1** — 원장 " + ledgerLabel(now);
                 }
-                case CAP -> notice = "캡이 막았다 — " + realm + "의 원장 캡은 **" + cap
-                        + "**. 포인트는 은행에 남는다 (승급이 문이다).";
                 case NO_POINTS -> notice = "미사용 포인트가 없다.";
             }
         }
-        event.editMessageEmbeds(allocEmbed(sheet, realm, cap, notice))
-                .setComponents(allocRows(sheet, ownerId, cap)).queue();
+        event.editMessageEmbeds(allocEmbed(sheet, realm, notice))
+                .setComponents(allocRows(sheet, ownerId)).queue();
     }
 
     @SuppressWarnings("unchecked")
-    private MessageEmbed allocEmbed(Map<String, Object> sheet, String realm, int cap, String notice) {
+    private MessageEmbed allocEmbed(Map<String, Object> sheet, String realm, String notice) {
         int points = ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue();
+        int cap = rules.judgmentCap(realm);
         Map<String, Object> raw = sheet.get("원장") instanceof Map
                 ? (Map<String, Object>) sheet.get("원장") : Map.of();
         StringBuilder axes = new StringBuilder();
-        boolean anyCapped = false;
+        boolean anyOverCeiling = false;
         for (String axis : GrowthV3.AXES) {
             double v = raw.get(axis) instanceof Number n ? n.doubleValue() : 0.0;
-            boolean capped = v + 1.0 > cap + 1e-9;
-            anyCapped |= capped;
+            // 판정 천장(경지 캡)에 닿은 축 — 배분은 막히지 않는다. 천장 너머는 승급 때 판정으로 터진다
+            boolean over = GrowthV3.judgmentValue(v) >= cap;
+            anyOverCeiling |= over;
             axes.append(axis).append(' ').append(ledgerLabel(v))
-                    .append(capped ? " (캡)" : "").append("  ");
+                    .append(over ? " (천장)" : "").append("  ");
         }
         return new EmbedBuilder().setColor(INK).setTitle("포인트 배분")
-                .setDescription("미사용 포인트 **" + points + "** · " + realm + " (원장 캡 " + cap + ")\n"
+                .setDescription("미사용 포인트 **" + points + "** · " + realm + " (판정 천장 " + cap + ")\n"
                         + axes.toString().strip()
-                        // 왜 못 찍는지 말한다 (침묵 금지) — 캡의 열쇠는 승급이고, 포인트는 안 사라진다
-                        + (anyCapped ? "\n*캡에 닿은 축은 **승급**이 푼다 — 남는 포인트는 은행에 쌓인다 (무기한)*" : "")
+                        // ★B안 (§8.10) — 배분은 언제나 된다. 몸(파생)은 바로 자라고, 판정 천장은 승급이 올린다
+                        + (anyOverCeiling
+                                ? "\n*(천장) 축도 계속 찍힌다 — 몸(내력·이속·내구)은 바로 자라고, 천장 너머의"
+                                        + " 원장은 **승급하는 순간 판정으로 터진다***"
+                                : "")
                         + (notice == null ? "" : "\n\n" + notice))
                 .build();
     }
 
-    /** 축 7버튼 (4+3) + [그만] — 캡에 닿았거나 포인트가 없으면 눌리지 않는다 (이유는 embed 가 말한다) */
+    /** 축 7버튼 (4+3) + [그만] — 포인트가 없을 때만 눌리지 않는다 (B안: 캡 비활성은 폐지) */
     @SuppressWarnings("unchecked")
-    private List<ActionRow> allocRows(Map<String, Object> sheet, String ownerId, int cap) {
+    private List<ActionRow> allocRows(Map<String, Object> sheet, String ownerId) {
         int points = ((Number) sheet.getOrDefault("미사용포인트", 0)).intValue();
-        Map<String, Object> raw = sheet.get("원장") instanceof Map
-                ? (Map<String, Object>) sheet.get("원장") : Map.of();
         List<Button> buttons = new ArrayList<>();
         for (int i = 0; i < GrowthV3.AXES.size(); i++) {
-            String axis = GrowthV3.AXES.get(i);
-            double v = raw.get(axis) instanceof Number n ? n.doubleValue() : 0.0;
-            boolean blocked = points <= 0 || v + 1.0 > cap + 1e-9;
-            buttons.add(Button.primary("al:ax:" + i + ":" + ownerId, axis + " +1")
-                    .withDisabled(blocked));
+            buttons.add(Button.primary("al:ax:" + i + ":" + ownerId, GrowthV3.AXES.get(i) + " +1")
+                    .withDisabled(points <= 0));
         }
         return List.of(ActionRow.of(buttons.subList(0, 4)), ActionRow.of(buttons.subList(4, 7)),
                 ActionRow.of(Button.secondary("al:done:" + ownerId, "그만")));
@@ -1709,7 +1700,7 @@ public final class GameListener extends ListenerAdapter {
         }
         Seojang.Choice pick = sc.choices().get(choice);
 
-        int stat = rules.genderStat(sheet, pick.stat(), 2);   // ★ 성별 보정(히든)이 여기서 든다
+        int stat = rules.genderStat(sheet, String.valueOf(row.get().get("realm")), pick.stat(), 2);   // ★ 성별 보정(히든)이 여기서 든다
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         JudgmentEngine.Tier tier = rules.judgment.resolve(stat + pick.bonus(), roll, sc.resist());
         int margin = stat + pick.bonus() + roll - sc.resist();
@@ -2021,7 +2012,7 @@ public final class GameListener extends ListenerAdapter {
         Beast beast = BEASTS.get(beastIdx);
         String[] approach = HUNT_APPROACHES[opt];
 
-        int stat = rules.genderStat(sheet, approach[1], 2);   // ★ 성별 보정(히든)
+        int stat = rules.genderStat(sheet, String.valueOf(row.get("realm")), approach[1], 2);   // ★ 성별 보정(히든)
         // 발경 — 개화자는 타격에 기를 싣는다 (내력 1 → +1, 부족하면 맨 기술)
         int balgyeong = canBalgyeong(sheet, String.valueOf(row.get("realm"))) ? 1 : 0;
         if (balgyeong > 0) {
@@ -2457,7 +2448,7 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         Quests.Approach approach = q.approaches().get(opt);
-        int stat = rules.genderStat(sheet, approach.stat(), 2);   // ★ 성별 보정(히든)
+        int stat = rules.genderStat(sheet, String.valueOf(row.get("realm")), approach.stat(), 2);   // ★ 성별 보정(히든)
         // 격상 도전 — 금지가 아니라 사선: 저항 +2 (gate 느슨)
         boolean above = Quests.realmRank(q.realmReq()) > Quests.realmRank(String.valueOf(row.get("realm")));
         int resist = q.resist() + (above ? 2 : 0);
@@ -2769,7 +2760,7 @@ public final class GameListener extends ListenerAdapter {
     private void resolveInfoCheck(SlashCommandInteractionEvent event, Map<String, Object> row,
                                   long chId, String npcName, String say) throws Exception {
         Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
-        int stat = rules.genderStat(sheet, "화술", 2);   // ★ 성별 보정(히든) — 등록부가 화술을 안 가르면 0
+        int stat = rules.genderStat(sheet, String.valueOf(row.get("realm")), "화술", 2);   // ★ 성별 보정(히든) — 등록부가 화술을 안 가르면 0
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int resist = 11;
         int power = stat + woundMod(sheet);   // 부상은 입도 무겁게 한다 (condition 보정)
@@ -3743,8 +3734,8 @@ public final class GameListener extends ListenerAdapter {
                 ? rules.routes.watchedTagDiscount(HWASAN) : 0;
         int resist = rules.difficulty("보통") + mod - discount;
         // ★ 성별 보정(히든) — 남녀 모두 한 축씩 받으므로 '무재'의 기대값은 같다 (유리한 성별 없음)
-        int talent = Math.max(rules.genderStat(sheet, "근력", 2),
-                rules.genderStat(sheet, "민첩", 2));
+        int talent = Math.max(rules.genderStat(sheet, realm, "근력", 2),
+                rules.genderStat(sheet, realm, "민첩", 2));
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         JudgmentEngine.Tier tier = rules.judgment.resolve(talent, roll, resist);
         int margin = talent + roll - resist;
@@ -4641,7 +4632,7 @@ public final class GameListener extends ListenerAdapter {
         int today = db.worldDay();
         sheet.put("빈사일", today);
 
-        int con = rules.genderStat(sheet, "체력", 2);   // ★ 성별 보정(히든) — 등록부가 체력을 안 가르면 0
+        int con = rules.genderStat(sheet, String.valueOf(row.get("realm")), "체력", 2);   // ★ 성별 보정(히든) — 등록부가 체력을 안 가르면 0
         int resist = rules.legacy.dyingCheckDifficulty(rules.difficulty("보통"));
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int power = con + rules.conditionModifier("빈사");   // 빈사 페널티는 자기 자신에게도 물린다
@@ -4869,7 +4860,7 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> mine = (Map<String, Object>) medic.get().get("sheet");
         Map<String, Object> skills = mine.get("기술") instanceof Map<?, ?> m
                 ? (Map<String, Object>) m : Map.of();
-        int wis = rules.genderStat(mine, "지혜", 2);   // ★ 성별 보정(히든) — 등록부가 지혜를 안 가르면 0
+        int wis = rules.genderStat(mine, String.valueOf(medic.get().get("realm")), "지혜", 2);   // ★ 성별 보정(히든) — 등록부가 지혜를 안 가르면 0
         int medicine = ((Number) skills.getOrDefault("의술", 0)).intValue();
         int resist = rules.difficulty(rules.legacy.rescueDifficultyBand());
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
@@ -5512,8 +5503,8 @@ public final class GameListener extends ListenerAdapter {
     @SuppressWarnings("unchecked")
     private int duelExec(Map<String, Object> row) {
         Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
-        int str = rules.genderStat(sheet, "근력", 2);
-        int agi = rules.genderStat(sheet, "민첩", 2);
+        int str = rules.genderStat(sheet, String.valueOf(row.get("realm")), "근력", 2);
+        int agi = rules.genderStat(sheet, String.valueOf(row.get("realm")), "민첩", 2);
         return Math.max(str, agi);
     }
 
@@ -5612,7 +5603,7 @@ public final class GameListener extends ListenerAdapter {
 
         // 문답 — 곽진 앞에서 권형을 밟는다 (근력 판정, 공개)
         // ★ 여기는 **판정**이다 — 요건 관문과 달리 성별 보정(히든)이 든다
-        int str = rules.genderStat(sheet, "근력", 2);
+        int str = rules.genderStat(sheet, String.valueOf(row.get("realm")), "근력", 2);
         int roll = dice.nextInt(6) + 1 + dice.nextInt(6) + 1;
         int resist = 10;
         JudgmentEngine.Tier tier = rules.judgment.resolve(str + 2, roll, resist);

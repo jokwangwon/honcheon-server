@@ -24,8 +24,6 @@ public final class Rules {
     public final double xpBase;
     public final double xpGrowth;
     public final int pointsPerLevel;
-    /** 경지 → 원장 캡 c² ({@code cultivation.yml levels.raw_attribute_cap_by_realm}) */
-    public final Map<String, Integer> rawCapByRealm;
     /** 경지 → 자격 레벨 N_k ({@code cultivation.yml levels.qualifying_level}) — 승급 이중 관문 */
     public final Map<String, Integer> qualifyingLevel;
     /** ★A안 내공 통일 ({@code cultivation.yml levels.naegong_unified}) — 내력 풀 = √원장[내공] */
@@ -120,11 +118,7 @@ public final class Rules {
         RulesConfig.section(RulesConfig.section(levels, "xp_sources"), "quests")
                 .forEach((k, v) -> qxp.put(k, v instanceof Number nq ? nq.intValue() : 0));
         this.questXp = java.util.Collections.unmodifiableMap(qxp);
-        // 원장 캡 c² (경지별) — 배분 손이 지키는 천장 (§8.5 · 캡 표는 등록부가 정본)
-        Map<String, Integer> caps = new java.util.LinkedHashMap<>();
-        RulesConfig.section(levels, "raw_attribute_cap_by_realm")
-                .forEach((k, v) -> caps.put(k, v instanceof Number nc ? nc.intValue() : 0));
-        this.rawCapByRealm = java.util.Collections.unmodifiableMap(caps);
+        // ★원장 캡은 폐지됐다 (B안 — 사용자 확정 2026-07-24 · §8.10). 판정 캡(judgmentCap)만 남는다
         // 처치 XP 등급 계수 (levels.xp_sources.combat.grade_coefficient) — 비면 처치 XP 미배선 (마크와 동일 규약)
         Map<String, Double> gcoef = new java.util.LinkedHashMap<>();
         RulesConfig.section(RulesConfig.section(
@@ -755,21 +749,37 @@ public final class Rules {
     }
 
     /**
-     * <b>판정이 쓰는 능력치</b> = 시트값 + 성별 보정 (히든).
+     * 경지별 <b>판정 캡</b> — {@code player_creation.yml attribute_cap_by_realm} (여기서 발명하지 않는다).
      *
-     * <p>★ 모든 판정 호출부는 시트를 직접 읽지 말고 <b>이 문을 지나라.</b> 그래야 보정이 실제로 든다.
+     * <p>★B안 (사용자 확정 2026-07-24 · attribute_scale_v3 §8.10): 원장 캡은 폐지됐다 —
+     * 포인트는 어느 축이든 항상 들어가고, <b>판정치만</b> 이 캡이 조인다. 파생 실수치(√원장 —
+     * 내력 풀·이속·내구)는 캡을 지나지 않는다.
+     */
+    @SuppressWarnings("unchecked")
+    public int judgmentCap(String realm) {
+        Object caps = playerCreation.get("attribute_cap_by_realm");
+        Object v = caps instanceof Map<?, ?> m ? ((Map<String, Object>) m).get(realm) : null;
+        return v instanceof Number n ? n.intValue() : 3;
+    }
+
+    /**
+     * <b>판정이 쓰는 능력치</b> = min(floor(√원장), 경지 판정 캡) + 성별 보정 (히든).
+     *
+     * <p>★ 모든 판정 호출부는 시트를 직접 읽지 말고 <b>이 문을 지나라.</b> 그래야 보정과 캡이 실제로 든다.
      * <p>★ 시트 출력({@code /혼천 정보})은 <b>이 문을 지나지 마라.</b> 지나면 히든이 깨진다.
      *
      * @param sheet 캐릭터 시트 (성별과 능력치를 여기서 읽는다)
+     * @param realm 경지 — 판정 캡의 열쇠 (B안: 천장 너머 원장은 승급 때 판정으로 터진다)
      */
     @SuppressWarnings("unchecked")
-    public int genderStat(Map<String, Object> sheet, String attribute, int fallback) {
+    public int genderStat(Map<String, Object> sheet, String realm, String attribute, int fallback) {
         int base = fallback;
         // ★ v3 저울 (B-135 단계 2 · attribute_scale_v3 §8.1): 판정치 = floor(√원장).
-        //   성별 ±1 은 이 base **뒤**에 얹힌다 (judgmentStat 후치 — §8.4). 판정 엔진은 무변경.
+        //   ★B안 (§8.10): 원장은 무캡 — 판정만 min(·, 경지 캡). 성별 ±1 은 캡 **뒤**에 얹힌다
+        //   (judgmentStat 후치 — §8.4 · v2 에서도 캡 걸린 능력치 위에 ±1 이 얹혔다. 판정 엔진은 무변경)
         Object rawLedger = sheet == null ? null : sheet.get("원장");
         if (rawLedger instanceof Map<?, ?> rm && rm.get(attribute) instanceof Number rn) {
-            base = GrowthV3.judgmentValue(rn.doubleValue());
+            base = Math.min(judgmentCap(realm), GrowthV3.judgmentValue(rn.doubleValue()));
         } else {
             // 원장이 아직 없는 시트 — 옛 능력치로 물러선다.
             //   동등: floor(능력치) = floor(√능력치²) (backfill 이 원장=능력치² 라 결과 불변 — 하네스 증명)

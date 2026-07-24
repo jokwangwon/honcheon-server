@@ -2585,6 +2585,16 @@ Rules.qualifyingLevel ← `levels.qualifying_level` · levels off 면 v2 그대�
 거부) + lint_selftest 케이스 — 통과 · 양 모듈 빌드 ✓. 남은 단계 4: v2 수련→능력치 동결(★배분
 라이브 확인 뒤 — 이것으로 화해가 자연 무연산이 된다) · 단계 5 UI(레벨업 연출·승급 조건 표시).
 
+진행 (2026-07-24 · ★★**B안 개정 — 원장 캡 폐지·판정 캡 분리**, 사용자 확정 · 정본 §8.10):
+계기 = 라이브 실측 "캡 걸려서 못 찍는 스탯들이 존재" (범인 캡 9 에 생성 3배분 5축 즉시 도달).
+3안 시안 → 사용자 B안 확정: **원장 무캡**(배분 언제나 됨 · 파생 √원장 무캡 — 몸은 계속 자란다) ·
+**판정치만 min(floor√원장, 경지 판정 캡)** (정본 player_creation attribute_cap_by_realm) · 천장
+너머 원장은 **승급 순간 판정으로 터진다**. 배선: 봇 Rules.judgmentCap + genderStat(realm 편입 —
+호출부 9곳) · GrowthV3.allocate 캡 제거 · 배분 패널 천장 표기 / 마크 Growth.attackBonus·
+defenseScore·bestStance realm 편입 + judgmentAttrOf(v2 방어체력·크리축) — 파생 독자(내구·이속·
+내력 풀)는 캡 문 밖. 묘비: raw_attribute_cap_by_realm·point_bank(B-152 종결)·attackBonus 2항.
+눈: selftest B안 4눈 + 판정 캡 생략 오배선 — 23/23 · lint 0 · 양 모듈 빌드 ✓.
+
 진행 (2026-07-24 · 단계 4 — **디스코드 사냥 XP 구멍 수리**, 사용자 실측 "사냥했는데 경험이 안 올라"):
 첫 배선의 커버리지 구멍 — 처치 XP 가 마크 HuntListener 경로만 덮고 **봇 자체 `/혼천 사냥`은 빠졌었다**.
 수리: Beast 에 상당 경지 필드(여우·늑대=삼류 들짐승 · 곰=일류 맹수 — npc_combat.yml beasts.ranks ·
@@ -2804,6 +2814,8 @@ schema.enums.access 정식화 · 산문형(개방·하오문) access 토큰. 배
 - **닫힘**: 2026-07-15 · `docs/design/attribute_scale_v3.md` §8.9 ⑨ 에 결정이 섰다 —
   **미사용 포인트 무기한 보유**(캡 초과분은 승급 뒤 소비, 사용자 결정 회차 B-1). 닫는 조건이
   "사용자 결정 후 §8 에 등재"였고 그 파일이 존재한다. 구현은 B-135 의 일부.
+  ★추기 (2026-07-24 · B안 개정 §8.10): **은행 규약 자체가 소멸했다** — 원장 캡 폐지로
+  포인트가 언제나 들어간다. "캡에 막혀 남는 포인트"라는 전제가 사라졌다 (묘비 — 다시 세우지 마라).
 
 기원: 웨이브-2 트랙 B (2026-07-15, attribute_scale_v3.md §8.5). 경지 캡 제곱표 위에서 XP 사다리와
 교차 검산 중 발견 — 승급이 제때면 안 막히지만, 자격 레벨만 채우고 사건 마크가 늦은 자는 Lv33부터

@@ -103,42 +103,43 @@ def check_levelup():
     return bad
 
 
-def allocate(sheet, axis, cap):
-    """GrowthV3.allocate 의 계약 재현 — 포인트 1점 = 원장 1눈금 · 캡 c² · 거절분은 은행."""
+def allocate(sheet, axis):
+    """GrowthV3.allocate 의 계약 재현 — ★B안 (§8.10): 원장 무캡, 포인트만 있으면 언제나 들어간다."""
     pts = sheet.get("미사용포인트", 0)
     if pts <= 0:
         return "NO_POINTS"
     raw = sheet.setdefault("원장", {})
-    cur = raw.get(axis, 0.0)
-    if cur + 1.0 > cap + 1e-9:
-        return "CAP"
-    raw[axis] = cur + 1.0
+    raw[axis] = raw.get(axis, 0.0) + 1.0
     sheet["미사용포인트"] = pts - 1
     return "OK"
 
 
+def capped_judgment(raw, cap):
+    """★B안 판정치 = min(floor(√원장), 경지 판정 캡) — 정본 player_creation attribute_cap_by_realm."""
+    return min(cap, judgment(raw))
+
+
 def check_allocate():
-    """단계 4 — 배분 손의 계약: 캡 준수(§8.5) · 은행 보존(⑨) · 판정 단조."""
+    """단계 4 — 배분 손의 계약 (B안 §8.10): 무캡 배분 · 판정 캡 분리 · 파생 무캡 · 승급 터짐."""
+    caps = {"범인": 3, "삼류": 4, "이류": 5}   # player_creation.yml attribute_cap_by_realm (등록 수치)
     bad = 0
-    # ① 정상 배분 — 원장 +1 · 포인트 −1 · 판정 = floor(√)
-    s = {"미사용포인트": 3, "원장": {"근력": 15.0}}
-    ok = allocate(s, "근력", 16) == "OK" and s["원장"]["근력"] == 16.0 \
-        and s["미사용포인트"] == 2 and judgment(s["원장"]["근력"]) == 4
+    # ① 배분은 언제나 된다 — 원장 +1 · 포인트 −1 (천장 위에서도)
+    s = {"미사용포인트": 3, "원장": {"근력": 15.5}}
+    ok = allocate(s, "근력") == "OK" and s["원장"]["근력"] == 16.5 and s["미사용포인트"] == 2
     bad += 0 if ok else 1
-    print(f"  {'✅' if ok else '❌'} 배분 +1 (원장 15→16 · 포인트 3→2 · 판정 4)")
-    # ② 캡 거절 + 은행 — 화후 소수부 잔여(15.5, 캡 16)도 반 눈금 배분은 없다. 포인트 불변
-    s = {"미사용포인트": 5, "원장": {"근력": 15.5}}
-    ok = allocate(s, "근력", 16) == "CAP" and s["원장"]["근력"] == 15.5 and s["미사용포인트"] == 5
+    print(f"  {'✅' if ok else '❌'} 무캡 배분 (원장 15.5→16.5 · 포인트 3→2)")
+    # ② 판정 캡 분리 — 범인 원장 25 → 판정 3 (floor√25=5 를 경지 캡이 조인다) · 파생은 5.0 그대로
+    ok = capped_judgment(25.0, caps["범인"]) == 3 and abs(math.sqrt(25.0) - 5.0) < 1e-9
     bad += 0 if ok else 1
-    print(f"  {'✅' if ok else '❌'} 캡 거절·은행 보존 (15.5+1 > 16 → 거절 · 포인트 5 유지)")
-    # ③ 캡까지 정확히 — 원장 9 · 포인트 100 · 캡 16 → 7점 들어가고 93점 은행 (삼류 정체 시나리오)
-    s = {"미사용포인트": 100, "원장": {"근력": 9.0}}
-    landed = 0
-    while allocate(s, "근력", 16) == "OK":
-        landed += 1
-    ok = landed == 7 and s["원장"]["근력"] == 16.0 and s["미사용포인트"] == 93
+    print(f"  {'✅' if ok else '❌'} 판정 캡 분리 (범인 원장 25 → 판정 {capped_judgment(25.0, caps['범인'])} · 파생 5.0 무캡)")
+    # ③ 승급 터짐 — 같은 원장 25 가 삼류에서 판정 4, 이류에서 5 (쌓아 둔 만큼 승급이 터진다)
+    ok = capped_judgment(25.0, caps["삼류"]) == 4 and capped_judgment(25.0, caps["이류"]) == 5
     bad += 0 if ok else 1
-    print(f"  {'✅' if ok else '❌'} 캡 채움 (9→16 = {landed}점 · 은행 {s['미사용포인트']}점)")
+    print(f"  {'✅' if ok else '❌'} 승급 터짐 (원장 25: 삼류 4 → 이류 5)")
+    # ④ 캡 밑은 불변 — 원장 9 는 어느 경지에서든 판정 3 (캡이 낮은 쪽만 조인다)
+    ok = all(capped_judgment(9.0, c) == 3 for c in caps.values())
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 캡 밑 불변 (원장 9 → 판정 3, 전 경지)")
     return bad
 
 
@@ -198,11 +199,10 @@ def selftest_gate():
 
 
 def selftest_allocate():
-    """눈을 시험하는 눈 — 캡을 무시하는 오배선 배분을 심으면 캡 초과가 잡혀야 한다."""
-    raw, pts, cap = 15.5, 5, 16
-    raw += 1.0                        # 오배선: 캡 검사 없이 밀어 넣음
-    caught = raw > cap
-    print(f"  {'✅' if caught else '❌'} 캡 무시 오배선 감지 (원장 {raw:.1f} > 캡 {cap})")
+    """눈을 시험하는 눈 — 판정에 경지 캡을 안 태우는 오배선(floor√ 직결)을 심으면 잡혀야 한다."""
+    wrong = judgment(100.0)           # 오배선: min(·, 경지 캡) 생략 — 범인이 판정 10 을 받는다
+    caught = wrong != capped_judgment(100.0, 3)
+    print(f"  {'✅' if caught else '❌'} 판정 캡 생략 오배선 감지 (범인 원장 100 → {wrong} ≠ {capped_judgment(100.0, 3)})")
     return 0 if caught else 1
 
 

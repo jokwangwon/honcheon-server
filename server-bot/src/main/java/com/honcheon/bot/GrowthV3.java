@@ -126,20 +126,18 @@ final class GrowthV3 {
     }
 
     /** 배분 결과 — 손이 왜 안 됐는지 말해야 한다 (침묵하는 실패 금지 · HANDOFF §2.2) */
-    enum Allocation { OK, NO_POINTS, CAP }
+    enum Allocation { OK, NO_POINTS }
 
     /**
      * 포인트 배분 — 미사용 포인트 1점 → 원장 1눈금 (B-135 단계 4 · attribute_scale_v3 §8.1).
      *
-     * <p><b>캡은 원장에 선다</b> (§8.5 "포인트가 캡²를 넘겨 들어가지 못한다"): {@code 원장+1 > 캡}
-     * 이면 거절한다. 화후 소수부가 캡 밑에 1 미만의 잔여 눈금을 남겨도 같다 — 반 눈금 배분은 없다.
-     * 거절된 포인트는 사라지지 않는다 (§8.9 ⑨ <b>은행 무기한 보유</b> — 승급이 문이다).
-     *
-     * @param rawCap 이 경지의 원장 캡 c² ({@code cultivation.yml levels.raw_attribute_cap_by_realm}
-     *               — 호출부가 등록부에서 읽는다. 코드는 수치를 지어내지 않는다)
+     * <p>★B안 (사용자 확정 2026-07-24 · §8.10): <b>원장에 캡은 없다</b> — 포인트는 어느 축이든
+     * 항상 들어간다. 파생 실수치(√원장)는 즉시 자라고, <b>판정치만</b> 경지 판정 캡이 조인다
+     * ({@code Rules.genderStat} 의 min — 천장 너머로 쌓인 원장은 승급 때 판정으로 터진다).
+     * 옛 원장 캡 c²·포인트 은행 규약은 이 개정으로 소멸했다 (묘비: §8.9 ⑨).
      */
     @SuppressWarnings("unchecked")
-    static Allocation allocate(Map<String, Object> sheet, String axis, int rawCap) {
+    static Allocation allocate(Map<String, Object> sheet, String axis) {
         if (!AXES.contains(axis)) {
             throw new IllegalArgumentException("등록부 밖의 축이다: " + axis);
         }
@@ -154,11 +152,7 @@ final class GrowthV3 {
             raw = new LinkedHashMap<>();   // 이론상 backfill 뒤엔 없는 길 — 방어
             sheet.put("원장", raw);
         }
-        double cur = num(raw.get(axis));
-        if (cur + 1.0 > rawCap + 1e-9) {
-            return Allocation.CAP;
-        }
-        raw.put(axis, cur + 1.0);
+        raw.put(axis, num(raw.get(axis)) + 1.0);
         sheet.put("미사용포인트", points - 1);
         return Allocation.OK;
     }
