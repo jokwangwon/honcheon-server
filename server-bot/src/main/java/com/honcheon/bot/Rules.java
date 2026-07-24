@@ -30,6 +30,8 @@ public final class Rules {
     public final Map<String, Integer> qualifyingLevel;
     /** ★A안 내공 통일 ({@code cultivation.yml levels.naegong_unified}) — 내력 풀 = √원장[내공] */
     public final boolean naegongUnified;
+    /** 처치 XP 등급 계수 ({@code levels.xp_sources.combat.grade_coefficient} — 잡졸/정예/두목) */
+    public final Map<String, Double> xpGradeCoef;
     public final Map<String, Integer> questXp;
     public final EconomyEngine economy;
     public final InternalEnergyEngine energy;
@@ -123,6 +125,12 @@ public final class Rules {
         RulesConfig.section(levels, "raw_attribute_cap_by_realm")
                 .forEach((k, v) -> caps.put(k, v instanceof Number nc ? nc.intValue() : 0));
         this.rawCapByRealm = java.util.Collections.unmodifiableMap(caps);
+        // 처치 XP 등급 계수 (levels.xp_sources.combat.grade_coefficient) — 비면 처치 XP 미배선 (마크와 동일 규약)
+        Map<String, Double> gcoef = new java.util.LinkedHashMap<>();
+        RulesConfig.section(RulesConfig.section(
+                RulesConfig.section(levels, "xp_sources"), "combat"), "grade_coefficient")
+                .forEach((k, v) -> gcoef.put(k, v instanceof Number ngc ? ngc.doubleValue() : 0.0));
+        this.xpGradeCoef = java.util.Collections.unmodifiableMap(gcoef);
         // ★A안 내공 통일 (사용자 확정 2026-07-24) — 내력 풀의 내공 실수치 = √원장[내공]
         this.naegongUnified = Boolean.TRUE.equals(levels.get("naegong_unified"));
         // 자격 레벨 N_k (경지별) — 승급 이중 관문의 '자격' 축 (사건 마크가 '문' — cultivation_v3_levels.md §5)

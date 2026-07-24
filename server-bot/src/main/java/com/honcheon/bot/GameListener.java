@@ -1909,9 +1909,9 @@ public final class GameListener extends ListenerAdapter {
     // ─── 사냥 — 청하현 뒷산: 화후 적립 + 생계 (combat_hwahu·economy 배선) ───
 
     private static final List<Beast> BEASTS = List.of(
-            new Beast("여우", "하수", 9, "여우_가죽", "여우 가죽"),
-            new Beast("늑대", "동수", 10, "늑대_가죽", "늑대 가죽"),
-            new Beast("곰", "상수", 13, "웅담", "웅담"));
+            new Beast("여우", "하수", 9, "여우_가죽", "여우 가죽", "삼류"),
+            new Beast("늑대", "동수", 10, "늑대_가죽", "늑대 가죽", "삼류"),
+            new Beast("곰", "상수", 13, "웅담", "웅담", "일류"));
 
     private static final String[][] HUNT_APPROACHES = {
             {"정면 승부", "근력"}, {"몰이와 함정", "지혜"}, {"급소 노림", "감각"}};
@@ -2073,6 +2073,20 @@ public final class GameListener extends ListenerAdapter {
         }
         if (gains.isEmpty()) {
             gains.append("소득 없음");
+        }
+        // ★성장 v3 XP (B-135 단계 4) — 디스코드 사냥도 처치다. 마크 HuntListener 와 같은 식:
+        //   XP = 몹 레벨(상당 경지 자격 레벨) × 잡졸 계수. 잡은 것(pelt)만 처치로 센다 — 놓친 짐승은
+        //   경험이 아니다. 승급 판정보다 먼저 굴린다 (새 레벨이 이중 관문에 실리도록).
+        if (pelt && rules.levelsEnabled && !rules.xpGradeCoef.isEmpty()) {
+            int mobLevel = Math.max(1, rules.qualifyingLevel.getOrDefault(beast.realm(), 1));
+            int xp = (int) Math.round(mobLevel * rules.xpGradeCoef.getOrDefault("잡졸", 1.0));
+            int ups = GrowthV3.grantXp(sheet, xp, rules.xpBase, rules.xpGrowth, rules.pointsPerLevel);
+            gains.append("\n**+").append(xp).append(" 경험**");
+            if (ups > 0) {
+                gains.append(" · 💥 **레벨업 — Lv").append(sheet.get("레벨")).append("** (+")
+                        .append(ups * rules.pointsPerLevel).append("포인트 · 미사용 ")
+                        .append(sheet.get("미사용포인트")).append(" — 시트의 [포인트 배분])");
+            }
         }
         String realm = promoteIfDue(sheet, String.valueOf(row.get("realm")));
         if (!realm.equals(row.get("realm"))) {
@@ -6005,7 +6019,8 @@ public final class GameListener extends ListenerAdapter {
     //   · Scene·Choice(자바에 박힌 장면 뼈대) — **등록부로 갔다** (config/seojang.yml → Seojang.java)
     //   코드는 이제 이야기를 지지 않는다.
 
-    record Beast(String name, String gap, int resist, String peltKey, String peltLabel) {
+    /** realm = 상당 경지 (npc_combat.yml beasts.ranks — 들짐승=삼류·맹수=일류. 마크 REALM_BY_MOB 과 같은 규약) */
+    record Beast(String name, String gap, int resist, String peltKey, String peltLabel, String realm) {
     }
 
     // ═══════════════ 신원 접합(身元接合) — **디스코드가 청하고, 그 몸이 게임에서 수락한다** ═══════════════
