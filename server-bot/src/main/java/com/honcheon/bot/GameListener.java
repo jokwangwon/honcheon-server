@@ -5673,6 +5673,17 @@ public final class GameListener extends ListenerAdapter {
                     ((Number) sheet.getOrDefault("사선_마크", 0)).intValue() + deadly);
         }
 
+        // ─ ★성장 v3 XP (B-135 단계 4) — 처치·의뢰가 낸 경험이 레벨·포인트로 (사용자 확정 2026-07-24) ─
+        int xp = (int) num(data.get("xp"));
+        if (xp > 0 && rules.levelsEnabled) {
+            int ups = GrowthV3.grantXp(sheet, xp, rules.xpBase, rules.xpGrowth, rules.pointsPerLevel);
+            if (ups > 0) {
+                System.out.println("레벨업 — " + String.valueOf(data.get("player_name")) + " → Lv"
+                        + sheet.get("레벨") + " (+" + (ups * rules.pointsPerLevel) + "포인트 · 미사용 "
+                        + sheet.get("미사용포인트") + ")");
+            }
+        }
+
         return promoteIfDue(sheet, realm);   // 승급은 강호가 인정하는 것이다
     }
 

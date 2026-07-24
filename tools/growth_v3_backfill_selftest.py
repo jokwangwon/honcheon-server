@@ -69,6 +69,40 @@ def check_reconcile():
     return bad
 
 
+def check_levelup():
+    """단계 4 — GrowthV3.grantXp 의 계약 재현: need(L) = base×growth^(L-1) · 매 레벨 3포인트."""
+    base, growth, ppl = 20.0, 1.0565, 3   # cultivation.yml levels (승인 수치)
+    def need(lv):
+        return base * growth ** (lv - 1)
+    def grant(cur, level, pts, xp):
+        cur += xp
+        ups = 0
+        while cur >= need(level):
+            cur -= need(level)
+            level += 1
+            pts += ppl
+            ups += 1
+        return cur, level, pts, ups
+    bad = 0
+    # ① 삼류 잡졸(Lv10 · XP 10) 두 마리 = Lv2 (need(1)=20 — "첫 저녁에 무공"의 첫 계단)
+    cur, lv, pts, _ = grant(0.0, 1, 0, 10)
+    cur, lv, pts, _ = grant(cur, lv, pts, 10)
+    ok = lv == 2 and pts == 3 and abs(cur) < 1e-9
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 잡졸 2마리 = Lv2 (+3포인트, 잔여 {cur:.1f})")
+    # ② 큰 XP 한 방 — 연속 레벨업이 포인트를 전부 적립한다 (240 XP → Lv1에서 Lv11 넘김)
+    cur, lv, pts, ups = grant(0.0, 1, 0, 240)
+    total_need = sum(need(l) for l in range(1, lv))
+    ok = ups == lv - 1 and pts == ups * ppl and abs((cur + total_need) - 240) < 1e-6
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 240 XP 한 방 → Lv{lv} ({ups}연속 · {pts}포인트 · 보존 검산)")
+    # ③ 후반이 무겁다 — need(100) > need(10) × 100/10 (지수 감속이 선형 XP 를 이긴다)
+    ok = need(100) > need(10) * 10
+    bad += 0 if ok else 1
+    print(f"  {'✅' if ok else '❌'} 후반 무거움 (need(100)={need(100):.0f} > 10×need(10)={10 * need(10):.0f})")
+    return bad
+
+
 def selftest():
     """일부러 어긋난 환산을 심어 눈이 잡는지."""
     bad = 0
@@ -99,6 +133,8 @@ if __name__ == "__main__":
     fail = check()
     print("  ── 단계 3 — 화해·파생 보존 ──")
     fail += check_reconcile()
+    print("  ── 단계 4 — XP·레벨업 ──")
+    fail += check_levelup()
     print("  ── 눈을 시험하는 눈 (오배선 심기) ──")
     fail += selftest()
     fail += selftest_reconcile()

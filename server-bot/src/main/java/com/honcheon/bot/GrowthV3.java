@@ -93,6 +93,38 @@ final class GrowthV3 {
         return changed;
     }
 
+    /** L→L+1 비용 — need(L) = base × growth^(L-1) (cultivation.yml levels.xp_curve · xp_pacing.py 동식) */
+    static double need(int level, double base, double growth) {
+        return base * Math.pow(growth, Math.max(0, level - 1));
+    }
+
+    /**
+     * XP 적립 + 레벨업 (B-135 단계 4) — 시트의 경험치·레벨·미사용포인트를 굴린다.
+     * 만렙 없음 · 매 레벨 {@code pointsPerLevel} 포인트 적립 (배분은 별도 손 — 캡 c² 는 배분이 지킨다).
+     *
+     * @return 오른 레벨 수 (호출부 로그·연출용)
+     */
+    static int grantXp(Map<String, Object> sheet, int xp, double base, double growth,
+                       int pointsPerLevel) {
+        if (sheet == null || xp <= 0 || base <= 0) {
+            return 0;
+        }
+        double cur = num(sheet.get("경험치")) + xp;
+        int level = Math.max(1, (int) num(sheet.get("레벨")));
+        int points = (int) num(sheet.get("미사용포인트"));
+        int ups = 0;
+        while (cur >= need(level, base, growth)) {
+            cur -= need(level, base, growth);
+            level++;
+            points += pointsPerLevel;
+            ups++;
+        }
+        sheet.put("경험치", cur);
+        sheet.put("레벨", level);
+        sheet.put("미사용포인트", points);
+        return ups;
+    }
+
     private static double num(Object o) {
         return o instanceof Number n ? n.doubleValue() : 0.0;
     }

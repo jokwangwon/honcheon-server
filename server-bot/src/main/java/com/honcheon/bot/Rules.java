@@ -19,6 +19,12 @@ public final class Rules {
 
     public final JudgmentEngine judgment;
     public final ProgressionEngine progression;
+    // 성장 v3 레벨 (cultivation.yml levels — B-135 단계 4)
+    public final boolean levelsEnabled;
+    public final double xpBase;
+    public final double xpGrowth;
+    public final int pointsPerLevel;
+    public final Map<String, Integer> questXp;
     public final EconomyEngine economy;
     public final InternalEnergyEngine energy;
     public final Map<String, Object> dispositionTest;
@@ -95,6 +101,17 @@ public final class Rules {
         this.progression = new ProgressionEngine(
                 cultivationCfg,
                 RulesConfig.load(configDir.resolve("training.yml")));
+        // ─── 성장 v3 레벨 (cultivation.yml levels — B-135 단계 4 · 사용자 확정 2026-07-24) ───
+        Map<String, Object> levels = RulesConfig.section(cultivationCfg, "levels");
+        this.levelsEnabled = Boolean.TRUE.equals(levels.get("enabled"));
+        Map<String, Object> curve = RulesConfig.section(levels, "xp_curve");
+        this.xpBase = curve.get("base") instanceof Number nb ? nb.doubleValue() : 0.0;
+        this.xpGrowth = curve.get("growth") instanceof Number ng ? ng.doubleValue() : 1.0;
+        this.pointsPerLevel = levels.get("points_per_level") instanceof Number np ? np.intValue() : 0;
+        Map<String, Integer> qxp = new java.util.LinkedHashMap<>();
+        RulesConfig.section(RulesConfig.section(levels, "xp_sources"), "quests")
+                .forEach((k, v) -> qxp.put(k, v instanceof Number nq ? nq.intValue() : 0));
+        this.questXp = java.util.Collections.unmodifiableMap(qxp);
         this.economyCfg = RulesConfig.load(configDir.resolve("economy.yml"));
         this.economy = new EconomyEngine(economyCfg);
         this.energy = new InternalEnergyEngine(RulesConfig.load(configDir.resolve("internal_energy.yml")));

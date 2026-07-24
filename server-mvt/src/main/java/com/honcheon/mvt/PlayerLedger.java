@@ -351,6 +351,7 @@ public final class PlayerLedger {
     private double pendingTrain;
     private int pending실전;
     private int pending사선;
+    private int pendingXp;   // 성장 v3 XP (레벨 축) — 시트의 경험치·레벨은 봇이 적는다
 
     /**
      * 그날 실제로 몸에 들어간 수련 일치 — 봇의 {@code 화후_원장} 으로 간다.
@@ -388,27 +389,35 @@ public final class PlayerLedger {
         pending사선++;
     }
 
+    /** 성장 v3 XP (B-135 단계 4) — 처치·의뢰가 낸 경험. 레벨업·포인트 계산은 봇의 몫이다 */
+    public void pendXp(int xp) {
+        if (xp > 0) {
+            pendingXp += xp;
+        }
+    }
+
     public boolean hasPending() {
         return !pendingAttr.isEmpty() || !pendingSkill.isEmpty() || pendingNaegong > 0
-                || pendingTrain > 0 || pending실전 > 0 || pending사선 > 0;
+                || pendingTrain > 0 || pending실전 > 0 || pending사선 > 0 || pendingXp > 0;
     }
 
     /** 미결을 걷어 간다 — 다리에 실은 뒤 비운다 (실렸으면 봇이 정확히 한 번 적용한다) */
     public Pending takePending() {
         Pending p = new Pending(new LinkedHashMap<>(pendingAttr), new LinkedHashMap<>(pendingSkill),
-                pendingNaegong, pendingTrain, pending실전, pending사선);
+                pendingNaegong, pendingTrain, pending실전, pending사선, pendingXp);
         pendingAttr.clear();
         pendingSkill.clear();
         pendingNaegong = 0;
         pendingTrain = 0;
         pending실전 = 0;
         pending사선 = 0;
+        pendingXp = 0;
         return p;
     }
 
     /** 몸에서 쌓여 장부로 갈 증분 — {@code cultivation_logged} 의 페이로드 */
     public record Pending(Map<String, Double> attrs, Map<String, Double> skills, double naegong,
-                          double trainDays, int marks실전, int marks사선) {
+                          double trainDays, int marks실전, int marks사선, int xp) {
     }
 
     // ═══════════════ 영속 — 재기동을 넘어 살아남는다 ═══════════════

@@ -2551,8 +2551,17 @@ v3 레벨 포인트의 것 (병행+영역 분리, 사용자 결정). 하루 5구
 없음 · 미등록 몹 레벨 = 상당 경지 자격 레벨 자동 유도 · 후반 압축 수용(실측 재보정) ② 무명의뢰
 XP 80/50/40/30 ③ **사선 보너스 폐지** (마크만 잔존) ④ **내공 축 A안 통일** — 내력 풀 = √원장[내공],
 축기·심법은 개화 자격만. 정본: `config/cultivation.yml levels.xp_sources`·`naegong_unified` +
-`docs/design/xp_sources_v3.md` §0. lint 0. ★다음 = 단계 4 코드 배선 (XP 적립→레벨업→3포인트→배분
-→승급 게이트 → v2 수련→능력치 동결 → 내력 풀 독자 교체).
+`docs/design/xp_sources_v3.md` §0. lint 0.
+
+진행 (2026-07-24 · 단계 4 첫 배선 — **XP 파이프**): 처치 XP (HuntListener — 몹 레벨×잡졸 계수 ·
+등록 NPC 는 npcs/*.yml `level` 우선, 없으면 상당 경지 자격 레벨 · REALM_BY_MOB 들짐승=삼류·맹수=일류)
+→ pendXp → 다리 `xp` 칸 (cultivation_logged) → 봇 `GrowthV3.grantXp` (need = base×growth^(L-1) ·
+레벨업·3포인트 적립) + 무명의뢰 XP (Bridge.populaceQuest — 성공만 · quests 표). 눈:
+`growth_v3_backfill_selftest.py` 단계 4 3눈 (잡졸2=Lv2 · 240XP 연속 레벨업 보존 검산 · 후반 무거움) —
+10/10 통과 · 양 모듈 빌드 ✓. ★남은 단계 4: 포인트 **배분** 손(명령/버튼 · 캡 c² · 은행) → 승급
+게이트(자격 레벨 N_k 편입) → v2 수련→능력치 동결 → 내력 풀 √원장[내공] 교체(A안) →
+정예·두목 등급 필드 등록. 몹 처치 XP 커버리지: HuntListener 경로(짐승+등록 NPC 개체) — 명패
+없는 바닐라 잡몹은 표 밖(0 XP).
 ★사용자 확정 (2026-07-15): "rpg 서버이긴 하니까 스텟처럼 직접 찍어서 올리는 것도 필요 —
 몬스터나 퀘스트를 깨고 경험을 얻어, 레벨이 오르면 어느 방향으로 올릴지 같은 느낌." 조율자가
 현행 헌법 조항(cultivation.yml v2: "레벨은 없다, 경지가 레벨이다" · "경험치·레벨 없음" ·

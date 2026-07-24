@@ -34,6 +34,12 @@ public final class HuntListener implements Listener {
 
     private static final String HUNT_SKILL = "사냥";
 
+    /** 짐승의 상당 경지 (npc_combat beast_ranks) — 몹 레벨 유도용 (성장 v3 XP · 표에 없으면 Lv1) */
+    private static final Map<EntityType, String> REALM_BY_MOB = Map.of(
+            EntityType.WOLF, "삼류",          // 들짐승 = 삼류 상당
+            EntityType.FOX, "삼류",
+            EntityType.POLAR_BEAR, "일류");   // 맹수 = 일류 상당
+
     private final HoncheonMvt plugin;
 
     public HuntListener(HoncheonMvt plugin) {
@@ -69,14 +75,43 @@ public final class HuntListener implements Listener {
             return;
         }
         String gap = GAP_BY_MOB.get(event.getEntityType());
-        if (gap == null) {
-            return;
+        SkillEngine.Npc npc = npcOf(event);
+        if (gap == null && npc == null) {
+            return;   // 등록부 밖의 죽음 — 배울 것도 경험도 없다
         }
         // 부산물은 접합과 무관하다 — 가죽은 몸이 벗기는 것이지 장부가 주는 것이 아니다
         if (event.getEntityType() == EntityType.WOLF || event.getEntityType() == EntityType.FOX) {
             event.getDrops().add(pelt(event.getEntityType() == EntityType.WOLF ? "늑대 가죽" : "여우 가죽"));
         }
-        accrue(killer, event, gap);
+        if (gap != null) {
+            accrue(killer, event, gap);
+        }
+        grantXp(killer, event, npc);
+    }
+
+    /** 등록부의 몸인가 — 산적·행인·짐승 개체 (HuntingGrounds 가 심는 PDC 표식을 읽는다) */
+    private SkillEngine.Npc npcOf(EntityDeathEvent event) {
+        String id = HuntingGrounds.tag(event.getEntity(), HuntingGrounds.KEY_ID);
+        return id == null ? null : plugin.skillEngine().npc(id);
+    }
+
+    /**
+     * 성장 v3 XP (B-135 단계 4) — 처치 = 몹 레벨 × 등급 계수 (클래식 고정값 · 사용자 확정 2026-07-24).
+     * 몹 레벨 = 등록값(npcs/*.yml level) 우선, 없으면 상당 경지의 자격 레벨. 레벨업·포인트는 봇이 굴린다.
+     * ★정예·두목 등급 지정 필드는 아직 등록부에 없다 — 전부 잡졸 계수 (등록부 확장 때 함께 배선).
+     */
+    private void grantXp(Player killer, EntityDeathEvent event, SkillEngine.Npc npc) {
+        SkillEngine engine = plugin.skillEngine();
+        PlayerLedger ledger = plugin.ledger(killer.getUniqueId());
+        if (!engine.xpEnabled() || !ledger.linked()) {
+            return;
+        }
+        int xp = engine.killXp(engine.mobLevel(npc, REALM_BY_MOB.get(event.getEntityType())), "잡졸");
+        if (xp <= 0) {
+            return;
+        }
+        ledger.pendXp(xp);
+        plugin.skills().flash(killer, ChatColor.GOLD + "+" + xp + " 경험");
     }
 
     /**

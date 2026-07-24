@@ -725,6 +725,9 @@ public final class WorldBridge {
         if (pending.marks사선() > 0) {
             data.put("marks_사선", pending.marks사선());
         }
+        if (pending.xp() > 0) {
+            data.put("xp", pending.xp());   // 성장 v3 (B-135 단계 4) — 레벨업·포인트는 봇이 굴린다
+        }
         emit("cultivation_logged", data);
     }
 

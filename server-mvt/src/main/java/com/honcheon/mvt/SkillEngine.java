@@ -112,6 +112,10 @@ public final class SkillEngine {
     private final StrikeAdmission admission;
     /** 전투 판정 v2 — 공방(攻防) (combat.yml combat_v2 · B-177). enabled: false 면 v1 그대로 */
     private final CombatV2 combatV2;
+    /** 성장 v3 — 경지별 자격 레벨 (cultivation.yml levels.qualifying_level). 몹 레벨 유도의 표 */
+    private final Map<String, Integer> qualifyingLevel = new LinkedHashMap<>();
+    /** 성장 v3 — 처치 XP 등급 계수 (levels.xp_sources.combat.grade_coefficient). 비면 XP 미배선 */
+    private final Map<String, Double> xpGradeCoef = new LinkedHashMap<>();
     /** 형태별 위력 — 발출형은 더 아프다 (검기_참격 3 > 검기 두름 2). forms[].power 가 격 기본값보다 우선 */
     private final Map<String, Integer> formPower;
     /** 소모 밴드의 스칼라 코스트 — internal_energy.yml cost_bands (발경 1). 범위형([1,3])은 형태가 정한다 */
@@ -276,6 +280,14 @@ public final class SkillEngine {
         this.realmOrder = List.copyOf(realms);
         this.realmGapPerStage = RulesConfig.intValue(RulesConfig
                 .section(RulesConfig.load(cfg.resolve("gm_modifiers.yml")), "realm_gap").get("per_stage"));
+
+        // ─── 성장 v3 XP (cultivation.yml levels — B-135 단계 4 · 사용자 확정 2026-07-24) ───
+        Map<String, Object> v3Levels = RulesConfig.section(cu, "levels");
+        RulesConfig.section(v3Levels, "qualifying_level")
+                .forEach((realm, v) -> qualifyingLevel.put(realm, v instanceof Number n7 ? n7.intValue() : 0));
+        RulesConfig.section(RulesConfig.section(RulesConfig.section(v3Levels, "xp_sources"), "combat"),
+                        "grade_coefficient")
+                .forEach((g, v) -> xpGradeCoef.put(g, v instanceof Number n8 ? n8.doubleValue() : 0.0));
 
         Map<String, Object> grades = RulesConfig.section(qm, "grades");
         List<String> ladder = new ArrayList<>(grades.keySet());
@@ -1387,9 +1399,11 @@ public final class SkillEngine {
         } else if (beast) {
             weaponClass = "맨손";   // 이빨과 발톱 — 병장기가 없다
         }
+        // 몹 레벨 (성장 v3 XP — 등록값 우선, 없으면 상당 경지의 자격 레벨로 유도. 코드가 짓지 않는다)
+        int level = e.get("level") instanceof Number ln ? ln.intValue() : 0;
         return new Npc(id, String.valueOf(e.getOrDefault("name", id)),
                 beast ? "짐승" : "사람", rank, realm, pool, grade,
-                Collections.unmodifiableMap(stats), weaponClass);
+                Collections.unmodifiableMap(stats), weaponClass, level);
     }
 
     /** 전승 오의 한 줄 → 시전 가능한 한 수 (ultimate_arts.yml legacy_arts) */
@@ -1472,7 +1486,8 @@ public final class SkillEngine {
      * @param pool  내력 총량 (0 = 격을 못 쓴다)
      */
     public record Npc(String id, String name, String kind, String beastRank, String realm,
-                      int pool, String grade, Map<String, Integer> stats, String weaponClass) {
+                      int pool, String grade, Map<String, Integer> stats, String weaponClass,
+                      int level) {
 
         public boolean manifests() {
             return !BARE.equals(grade) && pool > 0;
@@ -1882,6 +1897,31 @@ public final class SkillEngine {
     /** 풀 → 내공 (역함수) — 등록부가 내력을 직접 적은 몸(npcs/*.yml)의 내공을 되찾는다 (조식이 읽는다) */
     public double naegongOf(int pool) {
         return internal.naegongOf(pool);
+    }
+
+    // ══════════ 성장 v3 XP (B-135 단계 4 — cultivation.yml levels.xp_sources) ══════════
+
+    /** XP 배선 여부 — 등급 계수 등록부가 비면 XP 를 내지 않는다 (config 가 스위치다) */
+    public boolean xpEnabled() {
+        return !xpGradeCoef.isEmpty();
+    }
+
+    /** 몹 레벨 — 등록값(npcs/*.yml level) 우선, 없으면 상당 경지의 자격 레벨 (표에 없으면 1) */
+    public int mobLevel(Npc npc, String fallbackRealm) {
+        if (npc != null && npc.level() > 0) {
+            return npc.level();
+        }
+        String realm = npc != null ? npc.realm() : fallbackRealm;
+        return Math.max(1, qualifyingLevel.getOrDefault(realm, 1));
+    }
+
+    /**
+     * 처치 XP = 몹 레벨 × 등급 계수 — 클래식 고정값 (사용자 확정 2026-07-24):
+     * 같은 몹은 언제나 같은 XP. 상황 배수·반복 감쇠·일일 상한 없음 — 사다리 감속이 pacing 이다.
+     */
+    public int killXp(int mobLevel, String mobGrade) {
+        double coef = xpGradeCoef.getOrDefault(mobGrade, xpGradeCoef.getOrDefault("잡졸", 1.0));
+        return Math.max(0, (int) Math.round(mobLevel * coef));
     }
 
     /** 경지의 표준 내공 — cultivation.yml 승급 요건 '내공 N' + realm_naegong_floor (보충 등록) */

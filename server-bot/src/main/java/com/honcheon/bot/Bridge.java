@@ -586,6 +586,26 @@ final class Bridge {
         if (!region.isEmpty()) {
             regions.nudge(region);
         }
+        // ★성장 v3 — 무명의뢰 XP (cultivation.yml levels.xp_sources.quests · 사용자 확정 2026-07-24).
+        //   실패(fail_body)·만료 0 — 성공만 경험이 된다. 끼인 전투 XP 는 처치 경로가 따로 낸다.
+        if ("success".equals(outcome) && who.linked() && rules.levelsEnabled) {
+            int xp = rules.questXp.getOrDefault(rule, 0);
+            if (xp > 0) {
+                var ch = db.findCharacterById(who.characterId());
+                if (ch.isPresent()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> sheet = (Map<String, Object>) ch.get().get("sheet");
+                    int ups = GrowthV3.grantXp(sheet, xp, rules.xpBase, rules.xpGrowth,
+                            rules.pointsPerLevel);
+                    db.updateCharacter(who.characterId(), sheet,
+                            ((Number) ch.get().getOrDefault("wallet", 0)).intValue(),
+                            str(ch.get().get("realm"), ""), str(ch.get().get("status"), "생존"),
+                            str(ch.get().get("location"), ""));
+                    System.out.println("무명의뢰 XP — " + who.actorId() + " +" + xp
+                            + (ups > 0 ? " · 레벨업 → Lv" + sheet.get("레벨") : ""));
+                }
+            }
+        }
         // ★ 살해자가 유족의 의뢰를 완수했다 — 혈교는 그것을 자격으로 읽는다
         if (Boolean.TRUE.equals(data.get("irony")) && who.linked()) {
             int blood = rules.populaceQuestIrony(rule);
