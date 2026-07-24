@@ -52,8 +52,150 @@ stage:
       - "§7안개가 짙어진다 — 기억이 형체를 찾지 못한다"
 
   # ═══════════════════════════════════════════════════════════════════════
+  # ★3차 — 발단별 첫 장 무대 (사용자 확정 2026-07-25: "모든 경우의 수로 다 만드는 건")
+  #
+  #   역병의 그날 밤과 화재의 그날 밤은 **다른 기억**이다 — 첫 장의 무대는 발단이 가른다.
+  #   키 = player_creation.yml inciting_incidents (등록제 — 지어낸 발단은 감사가 잡는다).
+  #   LLM 실시간 생성은 기각 (붓 지연 가중·품질 편차·빨간펜 불가) — 전부 사전 제작이라
+  #   지연 0 · 결정론 · 눈으로 보고 고칠 수 있다. 뒷장(길 위·낯선 고을)은 계열 공유(sets).
+  # ═══════════════════════════════════════════════════════════════════════
+  incidents:
+
+    가문의_몰락:               # 불타는 집 — 세간이 무너지는 밤
+      pulse:
+        - "§c불길이 담을 넘었다 §7— 매캐한 연기가 코끝을 찔렀다"
+        - "§7식구들의 그림자가 뿔뿔이 흩어졌다"
+      sound: { key: "minecraft:entity.blaze.ambient", volume: 0.55, pitch: 0.65 }
+      particle: { type: FLAME, count: 6, spread: 2.5 }
+      layers:
+        - { at: [2, 0, -8],  block: DARK_OAK_LOG,    scale: [0.7, 3.4, 0.7], yaw: 14,  anim: 기운다 }
+        - { at: [4, 0, -10], block: DARK_OAK_PLANKS, scale: [3.4, 2.4, 0.5], yaw: -6,  anim: 솟는다 }
+        - { at: [3, 2, -9],  block: FIRE,            scale: [1.6, 1.6, 1.6], yaw: 0,   anim: 솟는다 }
+        - { at: [1, 0, -7],  block: CAMPFIRE,        scale: [1.0, 1.0, 1.0], yaw: 30,  anim: 멎는다 }
+        - { at: [5, 1, -11], block: FIRE,            scale: [1.0, 1.0, 1.0], yaw: 45,  anim: 솟는다 }
+
+    습격:                      # 부서진 문과 담을 넘는 그림자들
+      pulse:
+        - "§c문이 부서졌다 §7— 발소리는 여럿이었다"
+        - "§7숨을 죽였다. 심장 소리가 제일 컸다"
+      sound: { key: "minecraft:block.wooden_door.close", volume: 0.7, pitch: 0.5 }
+      particle: { type: SMOKE, count: 6, spread: 2.0 }
+      layers:
+        - { at: [3, 0, -8],  block: DARK_OAK_PLANKS, scale: [1.2, 2.4, 0.3], yaw: 35,  anim: 기운다 }   # 부서져 기운 문짝
+        - { at: [2, 0, -10], block: STONE_BRICKS,    scale: [4.0, 1.8, 0.5], yaw: 0,   anim: 솟는다 }   # 담
+        - { at: [3, 1, -10], block: BLACK_CONCRETE,  scale: [0.5, 1.7, 0.3], yaw: 15,  anim: 솟는다 }   # 담 위의 그림자
+        - { at: [5, 1, -10], block: BLACK_CONCRETE,  scale: [0.5, 1.5, 0.3], yaw: -20, anim: 솟는다 }
+        - { at: [1, 0, -7],  block: FIRE,            scale: [0.8, 0.8, 0.8], yaw: 0,   anim: 솟는다 }   # 횃불의 잔광
+
+    역병:                      # 흰 천과 향불 — 조용해진 마을
+      pulse:
+        - "§7집집마다 문에 §f흰 천§7 이 걸렸다"
+        - "§7향불 연기만 골목을 지났다 — 마을이 조용해졌다"
+      sound: { key: "minecraft:block.bell.resonate", volume: 0.4, pitch: 0.5 }
+      particle: { type: CAMPFIRE_COSY_SMOKE, count: 8, spread: 2.0 }
+      layers:
+        - { at: [2, 0, -8],  block: SPRUCE_PLANKS,   scale: [2.6, 2.0, 0.5], yaw: 4,   anim: 솟는다 }   # 닫힌 집
+        - { at: [2, 1, -7],  block: WHITE_WOOL,      scale: [0.8, 1.4, 0.1], yaw: 8,   anim: 기운다 }   # 문의 흰 천
+        - { at: [4, 0, -7],  block: SOUL_CAMPFIRE,   scale: [0.9, 0.9, 0.9], yaw: 0,   anim: 멎는다 }   # 향불
+        - { at: [5, 0, -9],  block: PALE_OAK_LOG,    scale: [0.5, 2.4, 0.5], yaw: -10, anim: 기운다 }   # 마른 나무
+
+    목격:                      # 골목 — 봐서는 안 될 것을 보았다
+      pulse:
+        - "§7골목 어귀 — §c봐서는 안 될 것§7 을 보았다"
+        - "§7그들도 나를 보았다"
+      sound: { key: "minecraft:ambient.cave", volume: 0.5, pitch: 0.8 }
+      particle: { type: SMOKE, count: 5, spread: 1.5 }
+      layers:
+        - { at: [2, 0, -9],  block: STONE_BRICKS,    scale: [0.6, 2.6, 3.0], yaw: 0,   anim: 솟는다 }   # 골목의 두 벽
+        - { at: [5, 0, -9],  block: STONE_BRICKS,    scale: [0.6, 2.6, 3.0], yaw: 0,   anim: 솟는다 }
+        - { at: [3, 0, -9],  block: RED_NETHER_BRICKS, scale: [1.2, 0.1, 0.8], yaw: 25, anim: 멎는다 }  # 바닥의 얼룩
+        - { at: [4, 1, -11], block: BLACK_CONCRETE,  scale: [0.5, 1.7, 0.3], yaw: 10,  anim: 기운다 }   # 돌아본 그림자
+
+    맡겨짐:                    # 산문 앞 강보 — 문이 열리기를 기다렸다
+      pulse:
+        - "§7산문 앞 — 강보에 싸인 채 §f문이 열리기§7 를 기다렸다"
+        - "§7새벽 종소리가 첫 기억이다"
+      sound: { key: "minecraft:block.bell.use", volume: 0.5, pitch: 0.7 }
+      particle: { type: CLOUD, count: 4, spread: 1.5 }
+      layers:
+        - { at: [3, 0, -9],  block: SPRUCE_LOG,      scale: [0.6, 3.0, 0.6], yaw: 0,   anim: 솟는다 }   # 산문 기둥
+        - { at: [5, 0, -9],  block: SPRUCE_LOG,      scale: [0.6, 3.0, 0.6], yaw: 0,   anim: 솟는다 }
+        - { at: [4, 3, -9],  block: DARK_OAK_SLAB,   scale: [3.0, 0.5, 0.9], yaw: 0,   anim: 솟는다 }   # 현판 들보
+        - { at: [4, 0, -8],  block: WHITE_WOOL,      scale: [0.7, 0.4, 0.5], yaw: 15,  anim: 멎는다 }   # 강보
+        - { at: [3, 1, -8],  block: SOUL_LANTERN,    scale: [0.6, 0.6, 0.6], yaw: 0,   anim: 솟는다 }
+
+    핏줄의_비밀:               # 타는 족보 — 이름이 재가 되는 밤
+      pulse:
+        - "§7서안 위의 족보가 §c불길§7 에 말려들었다"
+        - "§7내 이름이 재가 되는 것을 보았다"
+      sound: { key: "minecraft:item.firecharge.use", volume: 0.4, pitch: 0.8 }
+      particle: { type: LAVA, count: 3, spread: 1.0 }
+      layers:
+        - { at: [3, 0, -8],  block: LECTERN,         scale: [1.1, 1.1, 1.1], yaw: 10,  anim: 솟는다 }   # 서안
+        - { at: [3, 1, -8],  block: FIRE,            scale: [0.7, 0.7, 0.7], yaw: 0,   anim: 솟는다 }   # 타는 족보
+        - { at: [5, 0, -9],  block: DARK_OAK_PLANKS, scale: [2.2, 2.4, 0.4], yaw: -5,  anim: 솟는다 }   # 서가
+        - { at: [1, 0, -7],  block: BLACK_CONCRETE,  scale: [0.5, 1.6, 0.3], yaw: -15, anim: 기운다 }   # 등을 돌린 어른
+
+    아이_거두기:               # 저잣거리 구석 — 낯선 손이 나를 일으켰다
+      pulse:
+        - "§7저잣거리 구석, 거적 한 장 — §f낯선 손§7 이 나를 일으켰다"
+        - "§7그날 처음으로 더운 밥을 먹었다"
+      sound: { key: "minecraft:block.barrel.open", volume: 0.5, pitch: 0.9 }
+      particle: { type: CLOUD, count: 3, spread: 1.5 }
+      layers:
+        - { at: [3, 0, -8],  block: HAY_BLOCK,       scale: [1.4, 0.8, 1.2], yaw: 20,  anim: 멎는다 }   # 짚가리
+        - { at: [3, 0, -7],  block: BROWN_WOOL,      scale: [1.2, 0.2, 0.9], yaw: 30,  anim: 기운다 }   # 거적
+        - { at: [5, 0, -9],  block: SPRUCE_PLANKS,   scale: [2.0, 1.8, 0.4], yaw: 8,   anim: 솟는다 }   # 좌판
+        - { at: [4, 1, -8],  block: LANTERN,         scale: [0.7, 0.7, 0.7], yaw: 0,   anim: 솟는다 }   # 따뜻한 등
+
+    수행_파견:                 # 가문의 대문 — 명이 내려온 아침 (계열 무대와 같은 결)
+      pulse:
+        - "§7가문의 대문이 등 뒤에서 닫혔다 — 기대는 짐보다 무겁다"
+      sound: { key: "minecraft:block.wooden_door.close", volume: 0.6, pitch: 0.8 }
+      particle: { type: CLOUD, count: 4, spread: 2.0 }
+      layers:
+        - { at: [3, 0, -9],  block: DARK_OAK_PLANKS, scale: [0.6, 3.2, 0.6], yaw: 0,   anim: 솟는다 }
+        - { at: [5, 0, -9],  block: DARK_OAK_PLANKS, scale: [0.6, 3.2, 0.6], yaw: 0,   anim: 솟는다 }
+        - { at: [4, 3, -9],  block: DARK_OAK_SLAB,   scale: [3.0, 0.5, 0.8], yaw: 0,   anim: 솟는다 }
+
+    담을_넘다:                 # 그날 밤, 내가 담을 넘었다 (출분 — 택한 것)
+      pulse:
+        - "§6그날 밤 — §f내가§6 담을 넘었다"
+        - "§7보퉁이 하나. 뒤는 돌아보지 않았다"
+      sound: { key: "minecraft:block.grass.step", volume: 0.7, pitch: 0.7 }
+      particle: { type: MYCELIUM, count: 6, spread: 2.0 }
+      layers:
+        - { at: [3, 0, -9],  block: STONE_BRICKS,    scale: [4.0, 2.2, 0.5], yaw: 0,   anim: 솟는다 }   # 가문의 담
+        - { at: [4, 2, -9],  block: BLACK_CONCRETE,  scale: [0.5, 1.4, 0.3], yaw: 35,  anim: 기운다 }   # 담 위의 나
+        - { at: [4, 1, -8],  block: BROWN_WOOL,      scale: [0.5, 0.4, 0.4], yaw: 20,  anim: 멎는다 }   # 보퉁이
+
+    아버지의_검:               # 빈 검가 — 검 한 자루를 품고 나왔다 (출분)
+      pulse:
+        - "§7검가(劍架)의 §f빈 자리§7 — 그 검은 이제 내 등에 있다"
+        - "§7아버지는 아침까지 모르실 것이다"
+      sound: { key: "minecraft:item.armor.equip_iron", volume: 0.6, pitch: 0.8 }
+      particle: { type: END_ROD, count: 2, spread: 1.0 }
+      layers:
+        - { at: [3, 0, -8],  block: DARK_OAK_PLANKS, scale: [2.4, 1.6, 0.4], yaw: 5,   anim: 솟는다 }   # 검가
+        - { at: [3, 1, -8],  block: POLISHED_DEEPSLATE, scale: [0.15, 1.5, 0.3], yaw: 40, anim: 기운다 } # 남은 검 한 자루
+        - { at: [5, 0, -9],  block: SPRUCE_PLANKS,   scale: [2.0, 2.2, 0.4], yaw: -6,  anim: 솟는다 }   # 무기고 벽
+
+    파혼:                      # 찢긴 혼서 — 붉은 등이 꺼진 밤 (출분)
+      pulse:
+        - "§c혼서(婚書)가 §7둘로 찢겼다 — 붉은 등이 꺼졌다"
+        - "§7그 집 담을 나서며, 처음으로 숨이 쉬어졌다"
+      sound: { key: "minecraft:entity.item.break", volume: 0.5, pitch: 0.8 }
+      particle: { type: CHERRY_LEAVES, count: 4, spread: 2.0 }
+      layers:
+        - { at: [3, 0, -8],  block: RED_WOOL,        scale: [2.6, 1.8, 0.2], yaw: 8,   anim: 기운다 }   # 혼례 휘장
+        - { at: [2, 1, -7],  block: WHITE_WOOL,      scale: [0.6, 0.8, 0.05], yaw: 25, anim: 기운다 }   # 찢긴 혼서 반쪽
+        - { at: [4, 1, -7],  block: WHITE_WOOL,      scale: [0.6, 0.8, 0.05], yaw: -30, anim: 기운다 }
+        - { at: [5, 0, -9],  block: LANTERN,         scale: [0.7, 0.7, 0.7], yaw: 0,   anim: 멎는다 }   # 꺼져 가는 등
+
+  # ═══════════════════════════════════════════════════════════════════════
   # 무대 등록부 — 계열(seojang.yml scenes 키) → 장면 순서대로
   #
+  #   ★첫 장은 위 incidents(발단)가 이긴다 — 여기 sets 의 1장은 발단 무대가 없을 때의 폴백이다.
   #   layers 의 at = 정거장 중심 기준 [동x, 위y, 남z] · anim: 솟는다|기운다|멎는다
   #   (솟는다 = 물속에서 떠오른다 · 기운다 = 천천히 기울며 자리 잡는다 · 멎는다 = 정지)
   # ═══════════════════════════════════════════════════════════════════════

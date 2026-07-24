@@ -1749,6 +1749,8 @@ public final class GameListener extends ListenerAdapter {
             Map<String, Object> e = new LinkedHashMap<>();
             e.put("mc_uuid", body.getKey());
             e.put("character", ch.name());
+            // ★B-179 3차 — 발단: 첫 장의 기억 무대를 가른다 (마크 seojang_stage.yml incidents 가 읽는다)
+            e.put("incident", ch.incident());
             e.put("scene", idx);
             e.put("total", total);
             e.put("final", epilogue);

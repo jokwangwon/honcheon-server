@@ -79,6 +79,8 @@ final class SeojangStage implements Listener {
     private final String memoirFullLine;
     private final SceneSpec neutral;
     private final Map<String, List<SceneSpec>> sets = new LinkedHashMap<>();
+    /** ★3차 — 발단별 첫 장 무대 (모든 경우의 수 사전 제작 · 키 = player_creation inciting_incidents) */
+    private final Map<String, SceneSpec> incidents = new LinkedHashMap<>();
 
     /** 이 몸 앞에 서 있는 무대·등불 (본인에게만 보이는 것들) */
     private final Map<UUID, List<UUID>> standing = new LinkedHashMap<>();
@@ -107,6 +109,17 @@ final class SeojangStage implements Listener {
         this.memoirLine = str(me.get("line"), "");
         this.memoirFullLine = str(me.get("full_line"), "");
         this.neutral = sceneOf(RulesConfig.section(st, "neutral"), "");
+        Object incRaw = st.get("incidents");
+        if (incRaw instanceof Map<?, ?> im) {
+            for (Map.Entry<?, ?> en : im.entrySet()) {
+                if (en.getValue() instanceof Map<?, ?> sm) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> spec = (Map<String, Object>) sm;
+                    incidents.put(String.valueOf(en.getKey()),
+                            sceneOf(spec, String.valueOf(en.getKey())));
+                }
+            }
+        }
         Object setsRaw = st.get("sets");
         if (setsRaw instanceof Map<?, ?> m) {
             for (Map.Entry<?, ?> en : m.entrySet()) {
@@ -259,9 +272,7 @@ final class SeojangStage implements Listener {
             return false;
         }
         clear(player.getUniqueId());
-        List<SceneSpec> list = setName == null ? null : sets.get(setName);
-        SceneSpec spec = list == null || list.isEmpty() ? neutral
-                : list.get(Math.min(scene.scene(), list.size() - 1));
+        SceneSpec spec = resolve(setName, scene);
 
         // 도착 — 장 제목 타이틀 + 사건음 (책 도착과 같은 문법 · 같은 등록부)
         SeojangBook book = SeojangBook.get();
@@ -320,6 +331,24 @@ final class SeojangStage implements Listener {
             }
         }, lanternAt));
         return true;
+    }
+
+    /**
+     * 무대 고르기 — ★3차 (사용자 확정 2026-07-25 "모든 경우의 수로 다 만드는 건"):
+     * <b>첫 장은 발단이 가른다</b> (역병의 그날 밤과 화재의 그날 밤은 다른 기억이다).
+     * 발단 무대가 등록부에 없으면 계열 무대로, 그것도 없으면 중립(안개의 고동)으로 강등 —
+     * 어느 계단에서도 침묵은 없다. 뒷장(길 위·낯선 고을·에필로그)은 계열 공유다.
+     */
+    private SceneSpec resolve(String setName, WorldBridge.SeojangScene scene) {
+        if (scene.scene() == 0 && !scene.last() && scene.incident() != null) {
+            SceneSpec byIncident = incidents.get(scene.incident());
+            if (byIncident != null) {
+                return byIncident;
+            }
+        }
+        List<SceneSpec> list = setName == null ? null : sets.get(setName);
+        return list == null || list.isEmpty() ? neutral
+                : list.get(Math.min(scene.scene(), list.size() - 1));
     }
 
     /** 조형 한 층 — 물속에서 솟거나(솟는다), 기울며 자리 잡거나(기운다), 그저 선다(멎는다) */

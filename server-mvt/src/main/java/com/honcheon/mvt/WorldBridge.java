@@ -211,7 +211,10 @@ public final class WorldBridge {
      */
     public record SeojangScene(UUID body, String character, int scene, int total, String title,
                                String narration, List<String> choices, String token,
-                               boolean writing, boolean last, boolean fallback, String ferry) {
+                               boolean writing, boolean last, boolean fallback, String ferry,
+                               String incident) {
+        // ★B-179 3차 — incident(발단): 첫 장의 기억 무대를 발단이 가른다 (모든 경우의 수 사전
+        //   제작 — 사용자 확정 2026-07-25). 봇의 캐릭터 정본에서 온다. 없으면 계열 무대 폴백.
     }
 
     /** 책이 왔다 — 그리는 손을 등록한다 (워커 스레드에서 불린다. 받는 쪽이 메인으로 넘겨야 한다) */
@@ -300,7 +303,8 @@ public final class WorldBridge {
                             "쓰는_중".equals(String.valueOf(s.get("state"))),
                             Boolean.TRUE.equals(s.get("final")),
                             Boolean.TRUE.equals(s.get("fallback")),
-                            s.get("ferry") == null ? null : String.valueOf(s.get("ferry"))));
+                            s.get("ferry") == null ? null : String.valueOf(s.get("ferry")),
+                            s.get("incident") == null ? null : String.valueOf(s.get("incident"))));
                     pending.add(uuid);   // ★ B-118 — 명단에 있다 = 서장이 아직 끝나지 않았다 (쓰는_중 포함)
                 } catch (IllegalArgumentException e) {
                     log.warning("서장 — 몸의 이름이 아니다: " + uuid);

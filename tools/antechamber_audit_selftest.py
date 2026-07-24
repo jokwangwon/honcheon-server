@@ -25,6 +25,7 @@ SBK = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SeojangBook.java"
 VOY = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/Voyage.java"
 SJS = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SeojangStage.java"
 STG = f"{ROOT}/config/seojang_stage.yml"
+GLB = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/GameListener.java"
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -329,6 +330,16 @@ MUTATIONS = [
     ("(97) 등불이 다리에 안 얹는다 (골라도 아무 일도 없다)", SJS,
      "        WorldBridge.seojangChoice(player.getUniqueId(), player.getName(), token, choice);",
      "", "다리에 안 얹는다"),
+
+    # ─── ★발단별 무대 (B-179 3차 · "모든 경우의 수") ───
+    ("(98) 발단 무대의 이름을 지어낸다 (역병 → 돌림병)", STG,
+     "    역병:                      # 흰 천과 향불 — 조용해진 마을",
+     "    돌림병:                    # 흰 천과 향불 — 조용해진 마을", "지어낸 발단|무대가 없다"),
+    ("(99) 봇이 발단을 안 싣는다 (첫 장이 영영 계열 폴백)", GLB,
+     '            e.put("incident", ch.incident());', "", "발단을 안 싣는다"),
+    ("(100) 첫 장이 발단을 안 본다 (역병의 밤도 불타는 집)", SJS,
+     "            SceneSpec byIncident = incidents.get(scene.incident());",
+     "            SceneSpec byIncident = null;", "발단을 안 본다"),
 ]
 
 

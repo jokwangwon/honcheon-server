@@ -1416,6 +1416,42 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
                 rep.bad(f"무대 '{name}'[{i + 1}] 에 숨(pulse)이 없다 — 조형만 있는 침묵")
     rep.good("맥박 — 모든 무대가 숨을 쉰다 (조형이 없어도 침묵은 아니다)")
 
+    # ②-b ★발단별 첫 장 — 모든 경우의 수 (사용자 확정 2026-07-25 · 키는 player_creation 이 정본)
+    incs = stg.get("incidents") or {}
+
+    def find_key(d, key):
+        if not isinstance(d, dict):
+            return None
+        if key in d:
+            return d[key]
+        for v in d.values():
+            got = find_key(v, key)
+            if got is not None:
+                return got
+        return None
+    truth_inc = find_key(load_yaml("player_creation.yml"), "inciting_incidents") or {}
+    fake = [k for k in incs if k not in truth_inc]
+    if fake:
+        rep.bad(f"지어낸 발단이 무대에 있다: {fake} — player_creation.inciting_incidents 가 정본이다")
+    missing = [k for k in truth_inc if k not in incs]
+    if missing:
+        rep.bad(f"발단 {missing} 의 첫 장 무대가 없다 — **모든 경우의 수**가 계약이다 "
+                "(역병의 그날 밤과 화재의 그날 밤은 다른 기억이다)")
+    elif truth_inc:
+        rep.good(f"발단 {len(truth_inc)}종 전부 첫 장 무대가 있다 (모든 경우의 수 · 사전 제작)")
+    for k, e in incs.items():
+        if not (e or {}).get("pulse"):
+            rep.bad(f"발단 무대 '{k}' 에 숨(pulse)이 없다 — 조형만 있는 침묵")
+    bot_gl = os.path.join(ROOT, "server-bot", "src", "main", "java", "com", "honcheon", "bot",
+                          "GameListener.java")
+    bot_src = open(bot_gl, encoding="utf-8").read() if os.path.isfile(bot_gl) else ""
+    if 'put("incident"' not in bot_src:
+        rep.bad("봇이 발단을 안 싣는다 — 다리에 발단이 없어 첫 장 무대가 영영 계열 폴백이다")
+    elif '"incident"' not in source("WorldBridge.java"):
+        rep.bad("다리가 발단을 안 읽는다 — 봇이 실어도 마크가 버린다")
+    else:
+        rep.good("발단이 다리를 건넌다 (봇 put → 다리 parse → 무대 resolve)")
+
     # ③ 배선 — 정거장=무대 · 강등 문 · 재배달 억제 · 등불의 손 · 격리 · 필사본
     voy = source("Voyage.java")
     if "ante.stage().play(" not in voy:
@@ -1436,6 +1472,10 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
             rep.bad("등불이 다리에 안 얹는다 — 우클릭해도 아무 일도 없다 (선택이 몸을 잃었다)")
         else:
             rep.good("등불 우클릭 → 다리(seojangChoice) — 판정은 여전히 봇의 것")
+        if "incidents.get(scene.incident())" not in sjs:
+            rep.bad("첫 장이 발단을 안 본다 — 역병의 밤도 불타는 집이 된다 (resolve 오배선)")
+        else:
+            rep.good("첫 장은 발단이 가른다 (resolve — 발단 → 계열 → 중립 강등 사다리)")
         if "hideEntity" not in sjs:
             rep.bad("무대가 남에게도 보인다 — 「본인에게만」이 격리 확정의 계약이다")
         else:
