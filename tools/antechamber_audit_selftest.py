@@ -30,6 +30,7 @@ BSJ = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/Seojang.java"
 SJY = f"{ROOT}/config/seojang.yml"
 TUT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/TutorialGuide.java"   # ★5차 — 침묵 게이트
 MVT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/HoncheonMvt.java"     # ★5차 — 사이드바 게이트
+LLR = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/LlmRenderer.java"  # ★붓 로마자 안전망
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -463,6 +464,13 @@ MUTATIONS = [
      '    head_format: "§8\\uE0B0 §e\\uE0B1 §6{header} §8\\uE0B0"     # 붓선 · 붓점 · 장 머리 【제안】',
      '    head_format: "§8- §6{header} §8-"     # 붓선 · 붓점 · 장 머리 【제안】',
      "기억첩 글리프"),
+
+    ("(131) 명패를 도로 가로로 눕힌다 (문장 라벨이 한 줄로 뭉개진다)", STG,
+     "    row_gap: 0.55                # 세로 줄 간격 【제안】",
+     "    row_없앰: 0.55               # 세로 줄 간격 【제안】", "세로 열이 아니다"),
+    ("(132) 붓의 로마자 안전망을 뜯는다 (days 가 다시 스민다)", LLR,
+     "            if (text == null || text.equals(fallback) || !hasLatin(text)) {",
+     "            if (true) {", "로마자 안전망"),
 ]
 
 

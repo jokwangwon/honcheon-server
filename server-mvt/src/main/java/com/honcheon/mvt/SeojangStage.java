@@ -68,7 +68,7 @@ final class SeojangStage implements Listener {
     private final int beatRead;
     private final int choicesDelay;
     private final double lanternAhead;
-    private final double lanternSpread;
+    private final double lanternRowGap;
     private final double lanternHeight;
     private final String labelFormat;
     private final float labelScale;
@@ -118,8 +118,8 @@ final class SeojangStage implements Listener {
         // ★소수 등록값은 소수로 읽는다 — int 파서가 ahead 1.9·spread 1.3 을 1로 잘라
         //   확정 간격이 세계에 닿지 않았다 (2026-07-25 명패형 회차에 잡음)
         this.lanternAhead = dbl(la.get("ahead"), 1.9);
-        this.lanternSpread = dbl(la.get("spread"), 1.3);
-        this.lanternHeight = dbl(la.get("height"), 1.05);
+        this.lanternRowGap = dbl(la.get("row_gap"), 0.55);   // ★4.0 세로 목록 — spread 는 묘비
+        this.lanternHeight = dbl(la.get("height"), 1.0);
         // ★3.0 명패형 + 먹 테 (사용자 확정 「명패처럼 디자인」) — 판목 몸은 걷혔다 (묘비)
         this.labelFormat = str(la.get("label_format"), "§f[ {label} ]");
         this.labelScale = (float) dbl(la.get("label_scale"), 0.8);
@@ -552,12 +552,14 @@ final class SeojangStage implements Listener {
             return;   // 고를 것이 없는 장 — 다음 배달이 흐름을 잇는다
         }
         List<UUID> mine = standing.computeIfAbsent(player.getUniqueId(), k -> new ArrayList<>());
-        double z0 = boat.getZ() - (labels.size() - 1) * lanternSpread / 2.0;
+        // ★4.0 세로 목록 (실기동 스샷 2026-07-25 "명패가 없고" — 긴 문장 라벨 셋이 가로
+        //   1.3칸에 겹쳐 한 줄로 뭉개졌다): 명패는 세로 열로 쌓인다 — 첫 선택이 맨 위.
+        //   【묘비】 가로 나열(spread)·가운데 스태거 — 문장 라벨에는 가로가 없다.
         for (int i = 0; i < labels.size(); i++) {
             String lab = labels.get(i);
             double x = boat.getX() + lanternAhead;
-            double z = z0 + i * lanternSpread;
-            Location at = new Location(w, x, boat.getY() + lanternHeight, z);
+            double y = boat.getY() + lanternHeight + (labels.size() - 1 - i) * lanternRowGap;
+            Location at = new Location(w, x, y, boat.getZ());
             // ★3.0 명패형 (사용자 확정 「명패처럼 디자인」 — 명패형 + 먹 테): 판목 몸은
             //   걷혔다 【묘비: 세로 판목 BlockDisplay + ◆ 접두 0.6배 세로 조판】. 에필로그의
             //   따뜻한 등롱 하나(=출도)만 몸을 가진다 (2차 확정 그대로).
@@ -576,7 +578,7 @@ final class SeojangStage implements Listener {
                 onlyFor(player, body);
                 mine.add(body.getUniqueId());
             }
-            TextDisplay label = w.spawn(at.clone().add(0, 0.55, 0), TextDisplay.class, e -> {
+            TextDisplay label = w.spawn(at.clone().add(0, 0.15, 0), TextDisplay.class, e -> {
                 e.setText(labelFormat.replace("{label}", lab));
                 e.setBillboard(Display.Billboard.CENTER);
                 e.setLineWidth(labelLineWidth);   // 한 줄 — 명패는 줄을 안 바꾼다
@@ -592,9 +594,9 @@ final class SeojangStage implements Listener {
                         new Vector3f(labelScale, labelScale, labelScale), new AxisAngle4f()));
             });
             int idx = scene.last() ? -1 : i;
-            Interaction hand = w.spawn(at.clone().add(0, 0.2, 0), Interaction.class, e -> {
-                e.setInteractionWidth(1.0f);   // 명패 하나의 손 — spread 1.3 이라 이웃과 안 겹친다
-                e.setInteractionHeight(0.8f);
+            Interaction hand = w.spawn(at, Interaction.class, e -> {
+                e.setInteractionWidth(2.6f);   // 문장 명패의 폭 — 글자 어디를 눌러도 닿는다
+                e.setInteractionHeight(0.45f); // 줄 간격(row_gap 0.55) 안 — 윗줄과 안 겹친다
                 e.setPersistent(false);
                 var pdc = e.getPersistentDataContainer();
                 pdc.set(KEY_STAGE, PersistentDataType.STRING, player.getUniqueId().toString());

@@ -97,7 +97,34 @@ final class LlmRenderer {
      * 반환 future 는 절대 예외로 완료되지 않는다 — 호출부는 서사를 받기만 하면 된다.
      */
     CompletableFuture<String> render(String facts, String fallback) {
-        return chat(SYSTEM, facts, fallback);
+        return chat(SYSTEM, facts, fallback).thenCompose(text -> {
+            // ★로마자 혼입 (실기동 2026-07-25 「길을 건넌 days」 — 규칙 5를 어겼다):
+            //   프롬프트만으로는 로컬 붓이 가끔 어긴다. 한 번 더 날 선 당부로 다시 쓰게 하고,
+            //   그래도 섞이면 로마자만 걷어낸다 (세척은 마지막 손 — 항해가 기다림을 덮는다).
+            if (text == null || text.equals(fallback) || !hasLatin(text)) {
+                return CompletableFuture.completedFuture(text);
+            }
+            LOG.warn("[붓] 서사에 로마자가 섞였다 — 재집필 1회");
+            return chat(SYSTEM + "\n★방금 너는 규칙 5를 어겨 영어 단어를 섞었다. "
+                            + "이번에는 로마자를 한 글자도 쓰지 마라.",
+                    facts, fallback)
+                    .thenApply(second -> hasLatin(second) ? scrubLatin(second) : second);
+        });
+    }
+
+    /** 서사에 로마자가 있는가 — 규칙 5(한국어만)의 눈 */
+    private static boolean hasLatin(String t) {
+        return t != null && t.codePoints()
+                .anyMatch(c -> (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+    }
+
+    /** 마지막 손 — 로마자 낱말만 걷고 성긴 자리를 여민다 (문장 전체는 살린다) */
+    private static String scrubLatin(String t) {
+        LOG.warn("[붓] 재집필도 로마자 — 세척으로 걷는다");
+        return t.replaceAll("[A-Za-z]+", "")
+                .replaceAll("\\s{2,}", " ")
+                .replaceAll(" ([,.!?…、।])", "$1")
+                .trim();
     }
 
     /** 범용 대화 — NPC 페르소나 등 커스텀 시스템 프롬프트 (라우팅·폴백 규칙은 render 와 동일) */

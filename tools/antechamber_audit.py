@@ -1491,6 +1491,26 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
                 "(E0B2 확정)이 등록 용도대로 배선돼야 한다 (resourcepack_design.yml E0B0_E0BF)")
     else:
         rep.good("기억첩 글리프 배선 — 붓선 틀 · 빈 인장 패 · 찍힌 인장 확정 (SJ-002 완결)")
+    # ★세로 목록 (실기동 스샷 2026-07-25 "명패가 없고" — 긴 문장 라벨의 가로 나열은 겹친다)
+    if not isinstance(la_stg.get("row_gap"), (int, float)) \
+            or "lanternRowGap" not in sjs or "lanternSpread" in sjs:
+        rep.bad("명패가 세로 열이 아니다 — row_gap 등록부/lanternRowGap 배선이 없거나 "
+                "가로 나열(spread)이 부활했다 (문장 라벨 셋이 한 줄로 뭉개진다)")
+    else:
+        rep.good(f"명패 세로 열 — 줄 간격 {la_stg.get('row_gap')} (첫 선택이 맨 위)")
+    # ★붓의 로마자 안전망 (실기동 2026-07-25 「길을 건넌 days」 — 프롬프트만으로는 로컬 붓이
+    #   가끔 어긴다): 재집필 1회 + 마지막 세척. 봇의 것이라 여기서 직접 읽는다
+    lr = ""
+    lr_path = os.path.join(ROOT, "server-bot", "src", "main", "java", "com", "honcheon",
+                           "bot", "LlmRenderer.java")
+    if os.path.isfile(lr_path):
+        with open(lr_path, encoding="utf-8") as fh:
+            lr = fh.read()
+    if "|| !hasLatin(text)) {" not in lr or "재집필" not in lr:
+        rep.bad("붓의 로마자 안전망이 없다 — 서사에 영어가 섞여도 아무도 안 잡는다 "
+                "(hasLatin 재집필 1회 + 세척 · LlmRenderer.render)")
+    else:
+        rep.good("붓의 로마자 안전망 — 감지 → 재집필 1회 → 세척 (규칙 5의 눈)")
     la = stg.get("lanterns") or {}
     if "{label}" not in str(la.get("label_format") or "") \
             or "Material.DARK_OAK_PLANKS" in sjs:
