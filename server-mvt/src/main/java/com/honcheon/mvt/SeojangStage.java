@@ -67,10 +67,20 @@ final class SeojangStage implements Listener {
     private final int beatInterval;
     private final int beatRead;
     private final int choicesDelay;
-    private final int lanternAhead;
-    private final int lanternSpread;
+    private final double lanternAhead;
+    private final double lanternSpread;
     private final double lanternHeight;
-    private final String labelPrefix;
+    private final String labelFormat;
+    private final float labelScale;
+    private final int labelLineWidth;
+    private final int labelBgArgb;
+    private final boolean npEnabled;
+    private final double npAhead;
+    private final double npHeight;
+    private final float npScale;
+    private final int npLineWidth;
+    private final int npBgArgb;
+    private final String npTitleFormat;
     private final String hint;
     private final String pickLine;
     private final String debutLabel;
@@ -97,10 +107,24 @@ final class SeojangStage implements Listener {
         this.beatRead = num(pu.get("beat_read_ticks"), 70);
         this.choicesDelay = num(pu.get("choices_delay_ticks"), 40);
         Map<String, Object> la = RulesConfig.section(st, "lanterns");
-        this.lanternAhead = num(la.get("ahead"), 7);
-        this.lanternSpread = num(la.get("spread"), 4);
-        this.lanternHeight = la.get("height") instanceof Number n ? n.doubleValue() : 1.6;
-        this.labelPrefix = str(la.get("label_prefix"), "§6◆ ");
+        // ★소수 등록값은 소수로 읽는다 — int 파서가 ahead 1.9·spread 1.3 을 1로 잘라
+        //   확정 간격이 세계에 닿지 않았다 (2026-07-25 명패형 회차에 잡음)
+        this.lanternAhead = dbl(la.get("ahead"), 1.9);
+        this.lanternSpread = dbl(la.get("spread"), 1.3);
+        this.lanternHeight = dbl(la.get("height"), 1.05);
+        // ★3.0 명패형 + 먹 테 (사용자 확정 「명패처럼 디자인」) — 판목 몸은 걷혔다 (묘비)
+        this.labelFormat = str(la.get("label_format"), "§f[ {label} ]");
+        this.labelScale = (float) dbl(la.get("label_scale"), 0.8);
+        this.labelLineWidth = num(la.get("label_line_width"), 200);
+        this.labelBgArgb = argb(la.get("label_bg_argb"), 0x78140F0C);
+        Map<String, Object> np = RulesConfig.section(st, "narration_panel");
+        this.npEnabled = !(np.get("enabled") instanceof Boolean b) || b;
+        this.npAhead = dbl(np.get("ahead"), 1.9);
+        this.npHeight = dbl(np.get("height"), 2.6);
+        this.npScale = (float) dbl(np.get("scale"), 0.7);
+        this.npLineWidth = num(np.get("line_width"), 170);
+        this.npBgArgb = argb(np.get("background_argb"), 0xC8140F0C);
+        this.npTitleFormat = str(np.get("title_format"), "§6§l{header} §7— §f{title}");
         this.hint = str(la.get("hint"), "");
         this.pickLine = str(la.get("pick_line"), "");
         this.debutLabel = str(la.get("debut_label"), "강호로 나선다");
@@ -182,6 +206,22 @@ final class SeojangStage implements Listener {
 
     private static String str(Object v, String def) {
         return v == null ? def : String.valueOf(v);
+    }
+
+    private static double dbl(Object v, double def) {
+        return v instanceof Number n ? n.doubleValue() : def;
+    }
+
+    /** ARGB 등록값 — "0xC8140F0C" 문자열 (나루 안내판과 같은 문법) */
+    private static int argb(Object v, int def) {
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return v == null ? def : (int) Long.decode(String.valueOf(v).trim()).longValue();
+        } catch (NumberFormatException e) {
+            return def;
+        }
     }
 
     private static int num(Object v, int def) {
@@ -287,6 +327,32 @@ final class SeojangStage implements Listener {
         List<UUID> mine = standing.computeIfAbsent(player.getUniqueId(), k -> new ArrayList<>());
         for (Layer l : spec.layers()) {
             mine.add(spawnLayer(player, w, baseX, baseY, l).getUniqueId());
+        }
+
+        // ★서사 글판 (사용자 확정 2026-07-25 "선택지만 뜨니까 무슨 내용에서 골라야 하는지
+        //   모르겠음") — 장면 전문이 패 위에 함께 선다: 읽고 싶은 만큼 읽고 고른다.
+        //   전문은 그대로 필사본에도 남는다 (이 판은 그 자리의 거울일 뿐이다).
+        if (npEnabled && scene.narration() != null && !scene.narration().isBlank()) {
+            String head = npTitleFormat.replace("{header}", book.headText(scene))
+                    .replace("{title}", scene.title());
+            Location at = boat.clone().add(npAhead, npHeight, 0);
+            TextDisplay panel = w.spawn(at, TextDisplay.class, e -> {
+                e.setText(head + "\n\n§f" + scene.narration());
+                e.setBillboard(Display.Billboard.CENTER);
+                e.setLineWidth(npLineWidth);
+                e.setSeeThrough(false);
+                e.setShadowed(true);
+                e.setDefaultBackground(false);
+                e.setBackgroundColor(org.bukkit.Color.fromARGB(npBgArgb));
+                e.setPersistent(false);
+                e.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.STRING,
+                        player.getUniqueId().toString());
+                e.setBrightness(new Display.Brightness(13, 15));
+                e.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(),
+                        new Vector3f(npScale, npScale, npScale), new AxisAngle4f()));
+            });
+            onlyFor(player, panel);
+            mine.add(panel.getUniqueId());
         }
 
         // 파티클 — 무대가 걷힐 때까지 숨을 쉰다
@@ -415,42 +481,43 @@ final class SeojangStage implements Listener {
             double x = boat.getX() + lanternAhead;
             double z = z0 + i * lanternSpread;
             Location at = new Location(w, x, boat.getY() + lanternHeight, z);
-            Material lamp = scene.last() ? Material.LANTERN : Material.DARK_OAK_PLANKS;
-            // 패목 — 세로로 선 얇은 판 (에필로그는 등롱). 난간 위에 걸린 결
-            Vector3f pScale = scene.last() ? new Vector3f(0.45f, 0.45f, 0.45f)
-                    : new Vector3f(0.1f, 0.6f, 0.42f);
-            BlockDisplay body = w.spawn(at, BlockDisplay.class, e -> {
-                e.setBlock(lamp.createBlockData());
-                e.setPersistent(false);
-                e.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.STRING,
-                        player.getUniqueId().toString());
-                e.setBrightness(new Display.Brightness(15, 15));
-                e.setTransformation(new Transformation(
-                        new Vector3f(-pScale.x / 2f, 0f, -pScale.z / 2f),
-                        new AxisAngle4f(), pScale, new AxisAngle4f()));
-            });
-            // ★스샷 수리 (2026-07-25 "텍스트 다 겹쳐서 뭐가 뭔지 모르겠음") — 글자 0.6배 ·
-            //   좁은 줄폭(자동 줄바꿈으로 세로 패가 된다) · 가운데 패만 위로 스태거
-            double stagger = labels.size() == 3 && i == 1 ? 0.35 : 0.0;
-            TextDisplay label = w.spawn(at.clone().add(0, 0.75 + stagger, 0), TextDisplay.class, e -> {
-                e.setText(labelPrefix + lab);
+            // ★3.0 명패형 (사용자 확정 「명패처럼 디자인」 — 명패형 + 먹 테): 판목 몸은
+            //   걷혔다 【묘비: 세로 판목 BlockDisplay + ◆ 접두 0.6배 세로 조판】. 에필로그의
+            //   따뜻한 등롱 하나(=출도)만 몸을 가진다 (2차 확정 그대로).
+            if (scene.last()) {
+                Vector3f pScale = new Vector3f(0.45f, 0.45f, 0.45f);
+                BlockDisplay body = w.spawn(at, BlockDisplay.class, e -> {
+                    e.setBlock(Material.LANTERN.createBlockData());
+                    e.setPersistent(false);
+                    e.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.STRING,
+                            player.getUniqueId().toString());
+                    e.setBrightness(new Display.Brightness(15, 15));
+                    e.setTransformation(new Transformation(
+                            new Vector3f(-pScale.x / 2f, 0f, -pScale.z / 2f),
+                            new AxisAngle4f(), pScale, new AxisAngle4f()));
+                });
+                onlyFor(player, body);
+                mine.add(body.getUniqueId());
+            }
+            TextDisplay label = w.spawn(at.clone().add(0, 0.55, 0), TextDisplay.class, e -> {
+                e.setText(labelFormat.replace("{label}", lab));
                 e.setBillboard(Display.Billboard.CENTER);
-                e.setLineWidth(90);
+                e.setLineWidth(labelLineWidth);   // 한 줄 — 명패는 줄을 안 바꾼다
                 e.setSeeThrough(false);
                 e.setShadowed(true);
                 e.setDefaultBackground(false);
-                e.setBackgroundColor(org.bukkit.Color.fromARGB(0xD8140F0C));
+                e.setBackgroundColor(org.bukkit.Color.fromARGB(labelBgArgb));
                 e.setPersistent(false);
                 e.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.STRING,
                         player.getUniqueId().toString());
                 e.setBrightness(new Display.Brightness(13, 15));
                 e.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(),
-                        new Vector3f(0.6f, 0.6f, 0.6f), new AxisAngle4f()));
+                        new Vector3f(labelScale, labelScale, labelScale), new AxisAngle4f()));
             });
             int idx = scene.last() ? -1 : i;
-            Interaction hand = w.spawn(at.clone().add(0, -0.15, 0), Interaction.class, e -> {
-                e.setInteractionWidth(0.7f);   // 패 하나의 폭 — 이웃 패와 안 겹친다 (spread 0.9)
-                e.setInteractionHeight(1.1f);
+            Interaction hand = w.spawn(at.clone().add(0, 0.2, 0), Interaction.class, e -> {
+                e.setInteractionWidth(1.0f);   // 명패 하나의 손 — spread 1.3 이라 이웃과 안 겹친다
+                e.setInteractionHeight(0.8f);
                 e.setPersistent(false);
                 var pdc = e.getPersistentDataContainer();
                 pdc.set(KEY_STAGE, PersistentDataType.STRING, player.getUniqueId().toString());
@@ -459,10 +526,8 @@ final class SeojangStage implements Listener {
                         scene.token() == null ? "" : scene.token());
                 pdc.set(KEY_CHOICE, PersistentDataType.INTEGER, idx);
             });
-            onlyFor(player, body);
             onlyFor(player, label);
             onlyFor(player, hand);
-            mine.add(body.getUniqueId());
             mine.add(label.getUniqueId());
             mine.add(hand.getUniqueId());
         }

@@ -1455,6 +1455,35 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
         rep.bad("사공이 말뿐이다 — 승선이 사공을 안 세운다 (ensureFerryman)")
     else:
         rep.good(f"사공이 고물에 탄다 — {fm.get('name')} (한 배에 한 사공)")
+    # ★물에 빠진 몸 (사용자 제안 2026-07-25 "뛰어내릴 경우 올라올 방법이 없음"):
+    #   1차 손 = 뱃전 사다리 (조성) · 안전망 = 사공의 삿대 (깊이·표류 회수)
+    if "minecraft:ladder[facing=" not in voy:
+        rep.bad("사다리가 없다 — 물에 빠진 몸이 배로 못 오른다 (뱃전 허리 양옆)")
+    else:
+        rep.good("뱃전 사다리 — 물에서 붙잡고 오른다")
+    rc = vo.get("rescue") or {}
+    if "rescueIfAdrift(player);" not in voy or not str(rc.get("line") or "").strip():
+        rep.bad("사공의 삿대가 없다 — 가라앉거나 떠내려간 몸이 밤바다에 남는다 "
+                "(rescue 등록부 + rescueIfAdrift · 밤바다는 벽이 아니라 되돌림이다)")
+    else:
+        rep.good(f"사공의 삿대 — 깊이·{rc.get('beyond', '?')}칸 밖은 갑판으로 되돌린다")
+    # ★서사 글판 + 명패형 패 (사용자 확정 2026-07-25 "선택지만 뜨니까 무슨 내용인지 모르겠음" ·
+    #   "명패처럼 디자인")
+    stg = load_yaml("seojang_stage.yml").get("stage") or {}
+    npn = stg.get("narration_panel") or {}
+    if not npn or npn.get("enabled") is False \
+            or "scene.narration().isBlank())" not in sjs:
+        rep.bad("서사 글판이 없다 — 무엇에서 고르는지 패만 안다 (장면 전문이 패 위에 서야 한다 · "
+                "narration_panel 등록부 + 무대 배선)")
+    else:
+        rep.good("서사 글판 — 장면 전문이 패 위에 선다 (읽고 고른다)")
+    la = stg.get("lanterns") or {}
+    if "{label}" not in str(la.get("label_format") or "") \
+            or "Material.DARK_OAK_PLANKS" in sjs:
+        rep.bad("패가 명패형이 아니다 — label_format({label} 문법) 또는 판목 몸의 부활 "
+                "(명패형 + 먹 테 · 판목 BlockDisplay 는 묘비다)")
+    else:
+        rep.good("패 = 명패형 + 먹 테 (판목 묘비는 잠들어 있다)")
 
     # 【묘비】 옛 ⑧-3 의 눈들 — 물길 기하(정거장 오름차순·장벽 밖)·기슭=이승의 불빛 대조·
     #   정거장 수=장면 수·정박 갑판(문설주 안)·조성 판 ⑤-6/⑤-7 — ★5차(별도 서장 월드 ·

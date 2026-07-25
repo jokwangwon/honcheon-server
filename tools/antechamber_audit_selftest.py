@@ -443,6 +443,19 @@ MUTATIONS = [
     ("(125) 사공의 이름을 지운다 (등록부 없는 사공)", CFG,
      '      name: "§7사공"           # 명패 — 조용한 회색 【제안】',
      '      name: ""                 # 명패 — 조용한 회색 【제안】', "사공 등록부"),
+    # ─── ★서사 글판·명패형·사다리·삿대 (2026-07-25 실기동 빨간펜 2회차) ───
+    ("(126) 서사 글판을 안 세운다 (무엇에서 고르는지 패만 안다)", SJS,
+     "        if (npEnabled && scene.narration() != null && !scene.narration().isBlank()) {",
+     "        if (false) {", "서사 글판이 없다"),
+    ("(127) 명패 문법을 굳힌다 (어느 패든 같은 글자)", STG,
+     '    label_format: "§f[ {label} ]"   # 명패 문법 【제안】',
+     '    label_format: "§f[ 패 ]"        # 명패 문법 【제안】', "명패형이 아니다"),
+    ("(128) 사다리를 걷는다 (물에 빠진 몸이 못 오른다)", VOY,
+     '            BlockData ladder = Bukkit.createBlockData(\n                    "minecraft:ladder[facing=" + facing + ",waterlogged=true]");',
+     "            BlockData ladder = null;", "사다리가 없다"),
+    ("(129) 삿대를 꺾는다 (떠내려간 몸이 밤바다에 남는다)", VOY,
+     "            rescueIfAdrift(player);   // ★삿대 — 사다리로도 못 오르는 몸은 사공이 건져 올린다\n",
+     "", "삿대가 없다"),
 ]
 
 

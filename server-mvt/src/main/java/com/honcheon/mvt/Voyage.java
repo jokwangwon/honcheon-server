@@ -66,6 +66,8 @@ final class Voyage {
     private final int fogDensity;
     private final String ferrymanName;
     private final int ferrymanX;
+    private final String rescueLine;
+    private final int rescueBeyond;
     private final String embarkLine;
     private final String transitLine;
     private final String rowSoundKey;
@@ -108,6 +110,9 @@ final class Voyage {
         Map<String, Object> fm = sub(cfg, "ferryman");
         this.ferrymanName = str(fm.get("name"), "§7사공");
         this.ferrymanX = num(fm.get("x"), -3);
+        Map<String, Object> rc = sub(cfg, "rescue");
+        this.rescueLine = str(rc.get("line"), "");
+        this.rescueBeyond = Math.max(8, num(rc.get("beyond"), 18));
         this.embarkLine = str(cfg.get("embark_line"), "");
     }
 
@@ -236,6 +241,14 @@ final class Voyage {
             int px = e * (len + 1);
             set(w, px, gy + 1, 0, Material.SPRUCE_FENCE);
             set(w, px, gy + 2, 0, Material.SOUL_LANTERN);
+        }
+        // ⑥ ★사다리 (사용자 제안 2026-07-25 "뛰어내릴 경우 올라올 방법이 없음") —
+        //   뱃전 허리 양옆, 물까지 내려간다 (헤엄치던 몸이 붙잡고 오른다)
+        for (int side = -1; side <= 1; side += 2) {
+            String facing = side > 0 ? "south" : "north";
+            BlockData ladder = Bukkit.createBlockData(
+                    "minecraft:ladder[facing=" + facing + ",waterlogged=true]");
+            w.getBlockAt(0, gy, side * (halfW + 1)).setBlockData(ladder, false);
         }
     }
 
@@ -410,6 +423,7 @@ final class Voyage {
                 continue;   // 흐르는 물 위 — 도하 예약이 끝을 맺는다
             }
             fogRing(player);   // ★안개 링 — 빈 수평선을 안개가 감싼다 (본인에게만)
+            rescueIfAdrift(player);   // ★삿대 — 사다리로도 못 오르는 몸은 사공이 건져 올린다
             // ★ 갇힘 금지 — 서장이 끝났거나 명단이 낡았다(봇 죽음): 마지막 도하 = 출도
             if (!WorldBridge.seojangHolds(body)) {
                 transit(player, r, -1);
@@ -560,6 +574,30 @@ final class Voyage {
                     at.getZ() + Math.sin(ang) * fogRadius,
                     fogDensity, 1.2, fogHeight / 2.0, 1.2, 0.004);
         }
+    }
+
+    /**
+     * <b>사공의 삿대</b> (사용자 제안 2026-07-25 "뛰어내릴 경우 올라올 방법이 없음" —
+     * 1차 손은 뱃전 사다리, 이것은 안전망): 깊이 가라앉았거나(사다리가 안 닿는 물속)
+     * 멀리 떠내려간 몸은 삿대가 갑판으로 끌어 올린다. 밤바다는 벽이 아니라 되돌림이다 —
+     * 나루의 물안개(leash)와 같은 문법.
+     */
+    private void rescueIfAdrift(Player player) {
+        World w = player.getWorld();
+        Location at = player.getLocation();
+        double dx = at.getX() - 0.5;
+        double dz = at.getZ() - 0.5;
+        boolean sunk = at.getY() < seaTop(w) - 1.5;
+        boolean adrift = dx * dx + dz * dz > (double) rescueBeyond * rescueBeyond;
+        if (!sunk && !adrift) {
+            return;
+        }
+        player.teleport(bargeAnchor(w));
+        player.setFallDistance(0f);
+        if (!rescueLine.isEmpty()) {
+            player.sendMessage(SeojangBook.legacy(rescueLine));
+        }
+        player.playSound(player.getLocation(), rowSoundKey, 0.8f, 0.9f);
     }
 
     /** 갑판 위에서 장이 열린다 — 무대(그릇)가 서고, 꺼져 있으면 옛 책으로 강등 */
