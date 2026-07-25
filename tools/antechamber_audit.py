@@ -1511,6 +1511,20 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
                 "(hasLatin 재집필 1회 + 세척 · LlmRenderer.render)")
     else:
         rep.good("붓의 로마자 안전망 — 감지 → 재집필 1회 → 세척 (규칙 5의 눈)")
+    # ★갈림길을 붓에 싣는가 (실기동 2026-07-25 "3장 내용과 선택지가 연결 안 됨" — 붓이
+    #   무슨 갈림인지 모르면 제 갈림을 지어낸다: 전문과 패가 딴 장을 산다)
+    glb_path = os.path.join(ROOT, "server-bot", "src", "main", "java", "com", "honcheon",
+                            "bot", "GameListener.java")
+    glb = ""
+    if os.path.isfile(glb_path):
+        with open(glb_path, encoding="utf-8") as fh:
+            glb = fh.read()
+    if "이 장의 끝에서 플레이어가 고를 갈림길" not in glb \
+            or "sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks)" not in glb:
+        rep.bad("붓이 갈림길을 모른다 — sceneFacts 에 선택지가 안 실린다 "
+                "(서사가 제 갈림을 지어내 등록부의 패와 딴 장을 산다)")
+    else:
+        rep.good("붓은 갈림길을 안다 — 서사가 등록부의 세 길 위에서 멈춘다")
     la = stg.get("lanterns") or {}
     if "{label}" not in str(la.get("label_format") or "") \
             or "Material.DARK_OAK_PLANKS" in sjs:

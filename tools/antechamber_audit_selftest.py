@@ -471,6 +471,10 @@ MUTATIONS = [
     ("(132) 붓의 로마자 안전망을 뜯는다 (days 가 다시 스민다)", LLR,
      "            if (text == null || text.equals(fallback) || !hasLatin(text)) {",
      "            if (true) {", "로마자 안전망"),
+    ("(133) 붓에게서 갈림길을 숨긴다 (전문과 패가 딴 장을 산다)", GLB,
+     "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks);",
+     "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, \"\");",
+     "갈림길을 모른다"),
 ]
 
 

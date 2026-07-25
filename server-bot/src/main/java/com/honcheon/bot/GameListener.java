@@ -1602,8 +1602,22 @@ public final class GameListener extends ListenerAdapter {
                 : rules.seojang.sceneBody(ch, idx, prevTier, rank, hState, hRegion, kinAtBirth);
         String title = epilogue ? rules.seojang.book("epilogue_header", "서장의 끝")
                 : rules.seojang.title(ch.incident(), idx, regionName);
+        // ★갈림길을 붓에 싣는다 (실기동 2026-07-25 "3장의 내용과 선택지가 잘 연결되는지
+        //   모르겠어요" — 붓은 규칙 6(갈림 직전에 멈춰라)만 알고 **무슨 갈림인지** 몰랐다.
+        //   그래서 제 갈림(문 앞의 숨소리)을 지어냈고, 등록부의 선택지와 딴 장을 살았다)
+        String forks = "";
+        if (!epilogue) {
+            List<Seojang.Scene> sl = rules.seojang.scenesOf(ch.incident());
+            if (idx < sl.size()) {
+                StringBuilder fb = new StringBuilder();
+                for (Seojang.Choice c : sl.get(idx).choices()) {
+                    fb.append("- ").append(c.label()).append('\n');
+                }
+                forks = fb.toString();
+            }
+        }
         String facts = epilogue ? epilogueFacts(ch, prevTier, base)
-                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion);
+                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks);
 
         // ★ 지문 — 이 글이 **어느 캐릭터의 어느 장면의 어느 이음새**를 위해 쓰였는가.
         //   내려보낼 때 지금과 다르면 그 글은 낡았다 (seojang.yml prerender.invalidate).
@@ -1909,12 +1923,18 @@ public final class GameListener extends ListenerAdapter {
      * 폴백 문장도 집안별로 갈린다 (seojang.yml prose.family_color — LLM 이 죽어도 글이 갈린다).
      */
     private String sceneFacts(Character ch, String title, String prevTier, String base, String rank,
-                             String houseState, String region) {
+                             String houseState, String region, String forks) {
         String houseLine = houseState == null && region == null ? ""
                 : "가문: " + (region == null ? "" : rules.regionName(region) + " ")
                 + (houseState == null ? "" : "(" + houseState + "한 집)") + "\n";
+        // ★갈림길 — 붓이 어디에 착지해야 하는지 안다 (문장을 그대로 베끼거나 나열하면 안 된다:
+        //   서사는 이 세 길이 자연스러운 자리에서 멈추기만 하면 된다)
+        String forkLine = forks == null || forks.isBlank() ? ""
+                : "이 장의 끝에서 플레이어가 고를 갈림길 (서사는 이 갈림이 자연스러운 상황에서 "
+                + "멈춘다 — 갈림 문장을 본문에 옮겨 적거나 나열하지 마라):\n" + forks;
         return "장면: " + title + "\n인물: " + personLine(ch, rank) + "\n" + houseLine
                 + (prevTier == null ? "" : "직전 판정 결과: " + prevTier + "\n")
+                + forkLine
                 + "기준 서사(이 사실 범위 안에서만 확장하라):\n" + base;
     }
 
