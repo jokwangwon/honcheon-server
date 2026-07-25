@@ -4309,6 +4309,14 @@ public final class GameListener extends ListenerAdapter {
                 continue;   // 주체가 플레이어가 아닌 소문 — 세계의 배경음 (대상별 점수가 없다)
             }
             long chId = ((Number) subjectId).longValue();
+            // ★유령 검사 (B-180 · 2026-07-25 확진 — rumors 는 초기화 보호 표라 지워진
+            //   캐릭터의 소문이 30일 재훑기 창에 남는다): 주인 잃은 소문은 세계의 배경음으로
+            //   강등한다. 검사 없이 standing 을 꽂으면 FK 로 터져 **그 소문만이 아니라 부른
+            //   쪽 전체**가 죽는다 — 실증 2건: 세계일 정산 실패 · 탄생 소문 "심지 못했다"
+            //   (실은 심어졌다 — factionAwareness 가 남의 유령에 걸려 뒤늦게 터진 것)
+            if (db.findCharacterById(chId).isEmpty()) {
+                continue;
+            }
             String group = String.valueOf(content.get("군"));
             int accuracy = ((Number) arrival.get("정확도")).intValue();
             String network = String.valueOf(arrival.get("망"));
