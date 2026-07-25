@@ -1673,6 +1673,53 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
     else:
         rep.good("갈래는 등록부가 정한다 (봇 Seojang.branchOf ← branch_of)")
 
+    # ②-d ★발단별 패 (사용자 확정 2026-07-25 「1장 패는 발단이 가른다」) — 공용 패가 발단의
+    #   전제와 충돌하던 병의 재발 방지 (그림자_시험 = 빈 몸·전표 없음인데 「노잣짐을 챙긴다」).
+    #   계약: ① 패의 발단은 실재하고 제 벌에 산다 ② stat 은 judgment 능력치 (오타 = 조용히 0)
+    #   ③ 수는 공용 패와 같다 (무대 명패 줄 수가 흔들리면 안 된다) ④ 봇이 이 키를 읽는다
+    #   ⑤ 세가 1장은 그림자_시험·밀서 전용 패를 갖는다 (확정 그 자체 — 지우면 위반)
+    attrs = set(load_yaml("judgment.yml").get("attributes") or [])
+    ovr_ok = True
+    for branch, sc_list in scenes.items():
+        for i, s in enumerate(sc_list):
+            ovr = s.get("choices_by_incident") or {}
+            base_n = len(s.get("choices") or [])
+            for inc, chs in ovr.items():
+                if inc not in truth_inc:
+                    ovr_ok = False
+                    rep.bad(f"발단별 패의 발단 '{inc}' ({branch}[{i + 1}]) — 지어낸 발단이다 "
+                            "(player_creation.inciting_incidents 가 정본)")
+                elif branch_map.get(inc) != branch:
+                    ovr_ok = False
+                    rep.bad(f"발단별 패 '{inc}' 가 남의 벌 '{branch}' 에 있다 — "
+                            f"branch_of 는 {branch_map.get(inc)!r} 라 한다")
+                for c in chs or []:
+                    st = str((c or {}).get("stat"))
+                    if st not in attrs:
+                        ovr_ok = False
+                        rep.bad(f"발단별 패 '{inc}' 의 stat {st!r} — judgment.yml attributes 에 "
+                                "없다 (그 판정은 조용히 0 이 된다)")
+                if len(chs or []) != base_n:
+                    ovr_ok = False
+                    rep.bad(f"발단별 패 '{inc}' 가 {len(chs or [])}개 ≠ 공용 패 {base_n}개 — "
+                            "무대 명패 줄 수가 발단마다 흔들린다")
+    required = {"세가": {0: ["그림자_시험", "밀서"]}}   # 사용자 확정 2026-07-25 — 계약이 늘면 여기 늘린다
+    for branch, want in required.items():
+        sc_list = scenes.get(branch) or []
+        for idx, incs in want.items():
+            ovr = (sc_list[idx].get("choices_by_incident") if idx < len(sc_list) else {}) or {}
+            gone = [k for k in incs if k not in ovr]
+            if gone:
+                ovr_ok = False
+                rep.bad(f"'{branch}' {idx + 1}장의 전용 패가 없다: {gone} — 공용 패가 발단의 "
+                        "전제와 충돌한다 (빈 몸에게 노잣짐 — 사용자 확정 2026-07-25)")
+    if '"choices_by_incident"' not in bot_sj_src:
+        rep.bad("봇이 발단별 패를 안 읽는다 (Seojang ← choices_by_incident) — 등록부가 있어도 "
+                "공용 패가 나간다")
+    elif ovr_ok:
+        rep.good("발단별 패 — 발단 실재·제 벌·stat 실재·수 일치 · 봇이 읽는다 "
+                 "(세가 1장: 그림자_시험·밀서 전용 패)")
+
     # ③ 배선 — 정거장=무대 · 강등 문 · 재배달 억제 · 등불의 손 · 격리 · 필사본
     voy = source("Voyage.java")
     if "ante.stage().play(" not in voy:

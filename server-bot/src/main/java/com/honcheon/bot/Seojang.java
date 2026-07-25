@@ -66,6 +66,8 @@ final class Seojang {
     }
 
     private final Map<String, List<Scene>> scenes = new LinkedHashMap<>();
+    /** ★발단별 패 — 갈래 → 장면 순서의 (발단 → 패 셋). 없는 발단은 scenes 의 공용 패로 강등 */
+    private final Map<String, List<Map<String, List<Choice>>>> choiceOverrides = new LinkedHashMap<>();
     /** ★B-181 — 갈래 배정 등록부 (발단 → 벌). 출분이 재난의 뼈대를 빌려 입던 병의 수리 */
     private final Map<String, String> branchMap = new LinkedHashMap<>();
     private final Map<String, List<String>> sceneBody = new LinkedHashMap<>();
@@ -97,18 +99,22 @@ final class Seojang {
         Map<String, Object> sceneCfg = RulesConfig.section(cfg, "scenes");
         sceneCfg.forEach((branch, raw) -> {
             List<Scene> list = new ArrayList<>();
+            List<Map<String, List<Choice>>> ovrList = new ArrayList<>();
             for (Object o : asList(raw)) {
                 Map<String, Object> s = (Map<String, Object>) o;
-                List<Choice> choices = new ArrayList<>();
-                for (Object c : asList(s.get("choices"))) {
-                    Map<String, Object> ch = (Map<String, Object>) c;
-                    choices.add(new Choice(str(ch.get("label")), str(ch.get("stat")),
-                            num(ch.get("bonus"), 0)));
+                List<Choice> choices = parseChoices(s.get("choices"));
+                // ★발단별 패 (사용자 확정 2026-07-25 「1장 패는 발단이 가른다」) — 없는 발단은
+                //   choices 로 강등: 등록부 없는 발단에도 서장은 흐른다
+                Map<String, List<Choice>> ovr = new LinkedHashMap<>();
+                if (s.get("choices_by_incident") instanceof Map<?, ?> om) {
+                    om.forEach((k, v) -> ovr.put(String.valueOf(k), parseChoices(v)));
                 }
+                ovrList.add(Map.copyOf(ovr));
                 list.add(new Scene(str(s.get("title")), num(s.get("resist"), 10),
                         List.copyOf(choices)));
             }
             scenes.put(branch, List.copyOf(list));
+            choiceOverrides.put(branch, List.copyOf(ovrList));
         });
         // ★B-181 — 갈래 배정: 등록부(branch_of)가 정본이다 (여기 없는 발단은 기본 벌)
         Map<String, Object> bo = RulesConfig.section(cfg, "branch_of");
@@ -194,8 +200,36 @@ final class Seojang {
         return BRANCH_DISPATCH.equals(incident) ? BRANCH_DISPATCH : BRANCH_DEFAULT;
     }
 
+    /**
+     * 이 발단의 장면들 — ★발단별 패가 등록돼 있으면 그 장의 패를 그것으로 바꿔 낀다
+     * (사용자 확정 2026-07-25: 공용 패가 발단의 전제와 충돌했다 — 빈 몸에게 「노잣짐」).
+     * 여기서 한 번 갈아 끼우면 아래 모든 소비처(붓의 갈림 사실·판정·다리의 명패)가 같은
+     * 패를 본다 — 표시와 판정은 한 해석기.
+     */
     List<Scene> scenesOf(String incident) {
-        return scenes.getOrDefault(branchOf(incident), List.of());
+        String branch = branchOf(incident);
+        List<Scene> base = scenes.getOrDefault(branch, List.of());
+        List<Map<String, List<Choice>>> ovr = choiceOverrides.get(branch);
+        if (ovr == null || ovr.stream().allMatch(Map::isEmpty)) {
+            return base;
+        }
+        List<Scene> out = new ArrayList<>(base.size());
+        for (int i = 0; i < base.size(); i++) {
+            Scene s = base.get(i);
+            List<Choice> alt = i < ovr.size() ? ovr.get(i).get(incident) : null;
+            out.add(alt == null ? s : new Scene(s.title(), s.resist(), alt));
+        }
+        return List.copyOf(out);
+    }
+
+    private static List<Choice> parseChoices(Object raw) {
+        List<Choice> out = new ArrayList<>();
+        for (Object c : asList(raw)) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> ch = (Map<String, Object>) c;
+            out.add(new Choice(str(ch.get("label")), str(ch.get("stat")), num(ch.get("bonus"), 0)));
+        }
+        return List.copyOf(out);
     }
 
     /** 장면 수 (에필로그는 세지 않는다 — 에필로그의 인덱스가 곧 이 값이다) */

@@ -493,6 +493,14 @@ MUTATIONS = [
     ("(138) 범인에게 갈래 수련을 돌린다 (첫날부터 「흩어졌다」)", SKL,
      "        double wasted = mortal ? 0.0 : growth.train(ledger, state.realm, 1.0);",
      "        double wasted = growth.train(ledger, state.realm, 1.0);", "범인이 갈래 수련"),
+    # ─── ★발단별 패 (1+3 개정 — 사용자 확정 2026-07-25: 공용 패가 발단의 전제와 충돌) ───
+    ("(139) 그림자_시험 전용 패를 뗀다 (빈 몸에게 도로 노잣짐)", SJY,
+     "\n        그림자_시험:   # 빈 몸·전표 없음·지켜보는 눈 — 생존 시험의 아침",
+     "\n        그림자_시헙:   # 빈 몸·전표 없음·지켜보는 눈 — 생존 시험의 아침",
+     "전용 패가 없다|지어낸 발단"),
+    ("(140) 봇이 발단별 패를 안 읽는다 (등록부가 있어도 공용 패)", BSJ,
+     "s.get(\"choices_by_incident\")", "s.get(\"choices_by_incident_x\")",
+     "발단별 패를 안 읽는다"),
 ]
 
 
