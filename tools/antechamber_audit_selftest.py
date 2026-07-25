@@ -473,9 +473,10 @@ MUTATIONS = [
     ("(132) 붓의 로마자 안전망을 뜯는다 (days 가 다시 스민다)", LLR,
      "            if (text == null || text.equals(fallback) || !hasLatin(text)) {",
      "            if (true) {", "로마자 안전망"),
+    # ((133) 재표적 — 세가 실명이 사실에 실리며 서명이 자랐다)
     ("(133) 붓에게서 갈림길을 숨긴다 (전문과 패가 딴 장을 산다)", GLB,
-     "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks);",
-     "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, \"\");",
+     "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, great, forks);",
+     "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, great, \"\");",
      "갈림길을 모른다"),
     # ─── ★내린 뒤의 세 손 (실기동 2026-07-25) ───
     ("(134) 첫걸음 안내를 뜯는다 (내린 몸이 길을 모른다)", SRC,

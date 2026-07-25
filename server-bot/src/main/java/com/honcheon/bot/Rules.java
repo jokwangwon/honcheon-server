@@ -1194,6 +1194,19 @@ public final class Rules {
         return v == null ? fallback : String.valueOf(v);
     }
 
+    /** ★세가의 성씨 — 등록부(great_house_surnames)가 안다 (코드가 세가명에서 성을 지어내지
+     *  않는다: 하북팽가의 성은 팽 · 사용자 확정 2026-07-25 「안내만」). 없으면 null = 안내 침묵 */
+    @SuppressWarnings("unchecked")
+    public String greatHouseSurname(String house) {
+        Object fam = families().get("세가의_자제");
+        if (fam instanceof Map<?, ?> m
+                && m.get("great_house_surnames") instanceof Map<?, ?> sn
+                && sn.get(house) != null) {
+            return String.valueOf(sn.get(house));
+        }
+        return null;
+    }
+
     /**
      * ★ <b>마크의 첫 자리 — 집안마다 다르다</b> (player_creation.yml mvt_start).
      *

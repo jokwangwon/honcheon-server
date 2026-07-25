@@ -1520,7 +1520,7 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
         with open(glb_path, encoding="utf-8") as fh:
             glb = fh.read()
     if "이 장의 끝에서 플레이어가 고를 갈림길" not in glb \
-            or "sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks)" not in glb:
+            or "sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, great, forks)" not in glb:
         rep.bad("붓이 갈림길을 모른다 — sceneFacts 에 선택지가 안 실린다 "
                 "(서사가 제 갈림을 지어내 등록부의 패와 딴 장을 산다)")
     else:

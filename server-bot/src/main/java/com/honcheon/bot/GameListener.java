@@ -901,7 +901,7 @@ public final class GameListener extends ListenerAdapter {
 
         // ★ 세가가 걸렸다 — **거절할 수 있다** (사용자: "세가가 걸렸을 경우 ... 거절할 수도 있다")
         if (rules.canRefuseHouse(c.family)) {
-            event.editMessageEmbeds(houseEmbed(c.family))
+            event.editMessageEmbeds(houseEmbed(c))
                     .setComponents(ActionRow.of(
                             Button.primary("hs:stay", rules.refuseText("accept_label", "가문의 아이로 남는다")),
                             Button.secondary("hs:leave", rules.refuseText("refuse_label", "집을 나온다"))))
@@ -954,19 +954,47 @@ public final class GameListener extends ListenerAdapter {
                 && promo.get("chance_pct") instanceof Number pct
                 && dice.nextInt(100) < pct.intValue()
                 && rules.families().containsKey(String.valueOf(promo.get("to")))) {
-            return String.valueOf(promo.get("to"));
+            String to = String.valueOf(promo.get("to"));
+            // ★어느 세가인가 — 여기서 함께 구른다 (사용자 확정 2026-07-25: 거절 문답과 성씨
+            //   안내가 그 이름을 불러야 하므로 시트 조립보다 먼저다. 같은 쇠, 다른 각인)
+            Object fc = rules.families().get(to);
+            if (fc instanceof Map<?, ?> m && m.get("great_houses") instanceof List<?> gh
+                    && !gh.isEmpty()) {
+                c.greatHouse = String.valueOf(gh.get(dice.nextInt(gh.size())));
+            }
+            return to;
         }
         return picked;
     }
 
-    /** 세가의 문 — 남을 것인가, 나올 것인가 (문장은 등록부의 것이다) */
-    private MessageEmbed houseEmbed(String family) {
+    /** 세가의 문 — 남을 것인가, 나올 것인가 (문장은 등록부의 것이다. ★세가판은 지목된
+     *  세가의 이름을 부르고, 성씨 안내 한 줄을 얹는다 — 사용자 확정 2026-07-25 「안내만」) */
+    private MessageEmbed houseEmbed(Creation c) {
+        boolean sega = c.greatHouse != null;
+        String house = sega ? c.greatHouse : c.family.replace('_', ' ');
+        String prompt = sega
+                ? rules.refuseText("prompt_세가", rules.refuseText("prompt", "가문이 너를 부른다."))
+                        .replace("{house}", house)
+                : rules.refuseText("prompt", "가문이 너를 부른다 — 검을 쥐여 주고, 이름을 지우지 말라 한다.");
+        String acceptNote = sega
+                ? rules.refuseText("accept_note_세가", rules.refuseText("accept_note", "입장권과 빚."))
+                : rules.refuseText("accept_note", "검법과 예법, 월례 전표.");
+        String refuseNote = sega
+                ? rules.refuseText("refuse_note_세가", rules.refuseText("refuse_note", "이름 하나."))
+                : rules.refuseText("refuse_note", "남는 것은 이름 하나.");
+        StringBuilder desc = new StringBuilder("**" + prompt + "**\n\n"
+                + "**남는다** — " + acceptNote + "\n"
+                + "**나온다** — " + refuseNote);
+        if (sega) {
+            String surname = rules.greatHouseSurname(c.greatHouse);
+            String hint = rules.refuseText("name_hint_세가", "");
+            if (surname != null && !hint.isBlank()) {
+                desc.append("\n\n").append(hint.replace("{surname}", surname));
+            }
+        }
         return new EmbedBuilder().setColor(BLOOD)
-                .setTitle("가문 — " + family.replace('_', ' '))
-                .setDescription("**" + rules.refuseText("prompt",
-                        "가문이 너를 부른다 — 검을 쥐여 주고, 이름을 지우지 말라 한다.") + "**\n\n"
-                        + "**남는다** — " + rules.refuseText("accept_note", "검법과 예법, 월례 전표.") + "\n"
-                        + "**나온다** — " + rules.refuseText("refuse_note", "남는 것은 이름 하나."))
+                .setTitle("가문 — " + (sega ? house : c.family.replace('_', ' ')))
+                .setDescription(desc.toString())
                 .build();
     }
 
@@ -1110,7 +1138,10 @@ public final class GameListener extends ListenerAdapter {
         //   탄생에 한 번 구르고 시트에 박힌다). 같은 쇠, 다른 각인 — 백지의 평등은 그대로다.
         if ("세가의_자제".equals(family) && familyCfg != null
                 && familyCfg.get("great_houses") instanceof List<?> gh && !gh.isEmpty()) {
-            String great = String.valueOf(gh.get(dice.nextInt(gh.size())));
+            // ★선굴림 우선 (2026-07-25 「안내만」) — rollFamily 가 이미 굴렸으면 그 각인이다
+            //   (거절 문답·성씨 안내가 그 이름을 불렀다 — 여기서 다시 굴리면 딴 집이 된다)
+            String great = c.greatHouse != null ? c.greatHouse
+                    : String.valueOf(gh.get(dice.nextInt(gh.size())));
             sheet.put("세가", great);
             sheet.put("가문_대여", "정련급 가문 검 — " + great + "의 각인 (가문 소유 · 잃으면 문책의 무게도 세가답다)");
         }
@@ -1616,8 +1647,12 @@ public final class GameListener extends ListenerAdapter {
                 forks = fb.toString();
             }
         }
+        // ★세가 실명을 붓에 싣는다 (사용자 확정 2026-07-25 — 「세가의 자제」까지만 실리던
+        //   것을 지목된 세가의 이름까지: 서사가 「남궁세가의 식객」을 쓸 수 있다. 규칙 3
+        //   「주어진 이름만 쓴다」의 범위 안이다)
+        String great = sh.get("세가") == null ? null : String.valueOf(sh.get("세가"));
         String facts = epilogue ? epilogueFacts(ch, prevTier, base)
-                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks);
+                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, great, forks);
 
         // ★ 지문 — 이 글이 **어느 캐릭터의 어느 장면의 어느 이음새**를 위해 쓰였는가.
         //   내려보낼 때 지금과 다르면 그 글은 낡았다 (seojang.yml prerender.invalidate).
@@ -1923,10 +1958,14 @@ public final class GameListener extends ListenerAdapter {
      * 폴백 문장도 집안별로 갈린다 (seojang.yml prose.family_color — LLM 이 죽어도 글이 갈린다).
      */
     private String sceneFacts(Character ch, String title, String prevTier, String base, String rank,
-                             String houseState, String region, String forks) {
+                             String houseState, String region, String great, String forks) {
         String houseLine = houseState == null && region == null ? ""
                 : "가문: " + (region == null ? "" : rules.regionName(region) + " ")
                 + (houseState == null ? "" : "(" + houseState + "한 집)") + "\n";
+        // ★세가 실명 (사용자 확정 2026-07-25) — 지목된 세가가 사실에 실린다
+        if (great != null && !great.isBlank() && !"null".equals(great)) {
+            houseLine = houseLine + "세가: " + great + " (천하가 아는 이름 — 서사에 써도 된다)\n";
+        }
         // ★갈림길 — 붓이 어디에 착지해야 하는지 안다 (문장을 그대로 베끼거나 나열하면 안 된다:
         //   서사는 이 세 길이 자연스러운 자리에서 멈추기만 하면 된다)
         String forkLine = forks == null || forks.isBlank() ? ""
@@ -6158,6 +6197,9 @@ public final class GameListener extends ListenerAdapter {
         String family;
         /** ★ 세가를 거절했는가 — 집을 나온 아이 (검도 전표도 없다. 이름 하나만 남는다) */
         boolean leftHouse;
+        /** ★어느 세가인가 — 승격 순간에 함께 구른다 (거절 문답·성씨 안내가 이름을 불러야 하므로
+         *  이름 입력보다 먼저다 · 사용자 확정 2026-07-25 「안내만」). 거절하면 버려진다 */
+        String greatHouse;
     }
 
     record Character(long id, String name, String disposition, String family, String incident,
