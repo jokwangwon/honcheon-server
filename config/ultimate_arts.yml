@@ -207,6 +207,30 @@ legacy_arts:
     resonance: "혼원벽력신공 필수 — 심법이 곧 자격이다"
     sole_transmission: true    # ★ 팽가 가주 일인전승
 
+  # ── 제갈세가 (2026-07-26 사용자 제공 자료 · 수치 【제안】) ──
+  chilhyeon_muhyeong_geom:
+    name: "칠현무형검(七絃無形劍)"
+    faction: jegal
+    lineage: jegal_geom
+    requires_skill: { id: cheolhyeon_geombeop, mastery: 8 }
+    type: { hitbox: 선, width: 2, length: 10, multi_hit: 7 }    # 일곱 줄 — 보이지 않는 현이 일곱 번 운다
+    frames: [18, 5, 16]
+    defense: "시전 중 무적 12틱"
+    cost: "내력 55%"
+    effect: "현음(絃音) — 무형의 검기 일곱 가닥. 다단 7 (막아도 줄은 남은 가닥으로 운다)"
+  cheonji_hoyeon_geombeop:
+    name: "천지호연검법(天地浩然劍法)"
+    faction: jegal
+    lineage: jegal_geom
+    requires_skill: { id: cheolhyeon_geombeop, mastery: 8 }
+    type: { hitbox: 원, range: 7 }
+    frames: [20, 4, 20]
+    defense: "시전 중 슈퍼아머"
+    cost: "내력 60%"
+    effect: "호연지기 — 천지에 가득 찬 기운이 터진다. 적중 시 다운 + 반경 밖까지 밀어냄"
+    resonance: "현원전단신공 필수 — 심법이 곧 자격이다"
+    sole_transmission: true    # ★ 제갈 가주 일인전승
+
   # ── 소림사 ──
   baekbo_singwon:
     name: "백보신권(百步神拳)"

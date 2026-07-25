@@ -1112,6 +1112,44 @@ skills:
     steps:
       - { trail: 진, count: 2, sound: { key: "block.beacon.activate", volume: 0.7, pitch: 1.1 } }   # 패왕의 대형 — 매화검진보다 낮게 운다
 
+  # ── 제갈세가 (계보) — 자리의 검: 가볍게 점찍고, 마지막에 줄이 운다 (현음 = 하프) ──
+  jamryong_geomsik:
+    name: "잠룡검식"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.3 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.strong", volume: 0.8, pitch: 1.1 } }   # 엎드린 용 — 아직 어리다
+
+  socheonseong_geombeop:
+    name: "소천성검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.4 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.5 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "block.note_block.harp", volume: 0.8, pitch: 1.6 } }   # 마지막 점 — 별이 하나 맺힌다
+
+  daecheonseong_geombeop:
+    name: "대천성검법"
+    style: 검
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.3 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.4 } }
+      - { trail: 선, count: 2, sound: { key: "block.note_block.harp", volume: 0.7, pitch: 1.2 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "block.note_block.harp", volume: 0.9, pitch: 0.9 } }   # 별자리가 맺힌다
+
+  cheolhyeon_geombeop:
+    name: "철현검법"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "block.note_block.harp", volume: 1.0, pitch: 0.6 } }   # 쇠 줄이 운다 — 소리가 베인 뒤에 온다
+
+  cheongi_miri_bo:
+    name: "천기미리보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.4, pitch: 1.85 } }   # 미리 비어 있던 자리
+
   # ── 소림사 (계보) — 리치 2.4 (최단). 대신 **네 번** 친다 ──
   sorim_kwonbeop:
     name: "소림권법"
@@ -1482,6 +1520,29 @@ ultimates:
       charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]
       release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.5 }]
       hit: [{ key: "block.anvil.land", volume: 1.0, pitch: 0.6 }]               # 병기를 든 손을 친다 — 쇠가 땅에 떨어진다
+
+  # ── 제갈세가 ── 일곱 줄이 운다 (선) · 호연지기가 가득 찬다 (원)
+  chilhyeon_muhyeong_geom:
+    name: "칠현무형검"
+    trail: 선
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 35, spread_ratio: 0.20, extra: 0.10 }   # 무형 — 궤적이 가장 가늘다
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.amethyst_block.chime", volume: 0.9, pitch: 1.2 }]
+      release: [{ key: "block.note_block.harp", volume: 1.0, pitch: 0.7 }]      # 시위를 놓는 소리 — 벼락이 아니라 현이다
+      hit: [{ key: "block.note_block.harp", volume: 0.8, pitch: 1.5 }]          # 일곱 번 — 줄이 차례로 운다
+
+  cheonji_hoyeon_geombeop:
+    name: "천지호연검법"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 6 }
+    burst:  { particle: end_rod, count: 32, spread_ratio: 0.30, extra: 0.12 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.9 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.0 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.9, pitch: 1.0 }]     # 천지가 밀려난다
 
   # ── 소림사 ── 백 보 밖을 친다 (선) · 손바닥이 내려온다 (원)
   baekbo_singwon:
@@ -2654,6 +2715,8 @@ display:
       sail_geom:             뇌격_강림
       cheongwol_geom:        뇌격_강림
       namhae_36geom:         검풍_개화
+      chilhyeon_muhyeong_geom:  검풍_개화   # 일곱 줄이 앞에 선다 (선 — 무형의 현)
+      cheonji_hoyeon_geombeop:  매화_개화   # 호연지기가 펴진다 (원 — 형체를 나눠 쓴다)
 
 # ══════════════════════════════════════════════════════════════════════
 #  기본 초식(基本) — 【무공이 없어도 병기는 궤적을 그린다】

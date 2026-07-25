@@ -362,6 +362,53 @@ simbeop:
     lineage_role: 가주_전승
     predecessor: geongon_miheo
 
+  # ─── 제갈세가 (2026-07-26 사용자 제공 자료 — 지략·별·현(絃)의 가문 · 수치 【제안】) ───
+  socheonseong_gong:
+    name: "소천성공"
+    faction: jegal
+    lineage: 세가
+    grade: 기초
+    method: 좌공
+    capacity: 4
+    purity: 1.0
+    qi_profile: { 연비: 없음, 발력: 없음 }
+    passive: 없음
+    special: ["개화 실패 없음 (기초 심법의 미덕 — 현천토납법과 같다)"]
+    circulation_color: "옅은 별빛"
+    acquisition: "제갈 가솔 전원 — 붓을 쥐기 전에 배우는 첫 호흡 (작은 별을 하나 띄운다)"
+    lineage_role: 세가_기초
+
+  daecheonseong_singong:
+    name: "대천성신공"
+    faction: jegal
+    lineage: 세가
+    grade: 상승
+    method: 좌공
+    capacity: 8
+    purity: 1.2
+    qi_profile: { 연비: 없음, 발력: "검에 실은 발경 위력 +1" }
+    passive: "성라(星羅) — 별자리를 읽는 눈 (제갈의 검은 힘이 아니라 자리에서 나온다)"
+    build_affinity: [심안, 초식]   # 검(劍)은 민첩의 병기지만, 제갈의 검은 지혜가 먼저 잡는다
+    circulation_color: "차가운 은하수빛"
+    acquisition: "제갈 내당 — 대천성검법과 함께 전수"
+    lineage_role: 세가_상승
+
+  hyeonwon_jeondan_singong:
+    name: "현원전단신공"
+    faction: jegal
+    lineage: 세가
+    grade: 상승
+    method: 좌공
+    capacity: 9
+    purity: 1.4
+    qi_profile: { 연비: 없음, 발력: "검에 실은 격 위력 +1" }
+    passive: "호연(浩然) — 천지에 가득 찬 기운 (오의 천지호연검법의 자격)"
+    circulation_color: "새벽하늘의 현묘한 검은빛"
+    acquisition: "★ 제갈세가 가주 계승 시에만 — 일인전승"
+    sole_transmission: true
+    lineage_role: 가주_전승
+    predecessor: daecheonseong_singong
+
   # ─── 소림사 ───
   banya_singong:
     name: "반야신공"

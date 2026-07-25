@@ -1311,6 +1311,116 @@ martial_arts:
     public_use_rumor: true
     faction_reaction: true
 
+  # ─── 제갈세가 (jegal) — 검·계보 jegal_geom (2026-07-26 사용자 제공 자료:
+  #     심법 소천성공·대천성신공·현원전단신공 / 검법 소천성·대천성·철현·칠현무형·천지호연 /
+  #     보법 천기미리보. 별호 와룡(臥龍) — 별과 현(絃)과 용의 결. 원천이 정형화돼 있지 않아
+  #     급 배치·수치 전부 【제안】: 소→대→철현(상) · 칠현무형·천지호연은 오의(ultimate_arts)) ───
+  jamryong_geomsik:
+    name: "잠룡검식"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "가전 기초 검식 (기초 — 엎드린 용: 검을 처음 쥐는 손의 형)"
+    grade: "입문"
+    tier: 기초
+    lineage: jegal_geom
+    faction: jegal
+    required_realm: "삼류"
+    required_stats: { 지혜: 2 }
+    required_mastery: 0
+    acquisition: "장원 사사 — 세가 아이의 첫 검 (가전 무공 입장권의 소비처 · 기초급은 삼류부터)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+    # ★이름 지어냄 【제안】 — 원천에 기초급 명이 없다 (별호 와룡의 결로 잠룡(潛龍) — 팽가 복호와 대구)
+
+  socheonseong_geombeop:
+    name: "소천성검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "가전 검법 (하급 — 작은 별을 점찍듯 잇는다)"
+    grade: "이류"
+    tier: 하급
+    lineage: jegal_geom
+    faction: jegal
+    required_realm: "이류"
+    required_stats: { 지혜: 4, 민첩: 3 }
+    required_mastery: 3
+    requires_skill: { id: jamryong_geomsik, mastery: 3 }
+    acquisition: "세가 가솔·방계 전수 (자리를 읽고 찌른다 — 힘의 검이 아니다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  daecheonseong_geombeop:
+    name: "대천성검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "가전 검법 (중급 — 큰 별자리를 긋는다: 대천성신공의 검)"
+    grade: "일류"
+    tier: 중급
+    lineage: jegal_geom
+    faction: jegal
+    required_realm: "일류"
+    required_stats: { 지혜: 5, 민첩: 4 }
+    required_mastery: 5
+    requires_skill: { id: socheonseong_geombeop, mastery: 5 }
+    acquisition: "세가 내당 전수 — 대천성신공 심법과 짝"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  cheolhyeon_geombeop:
+    name: "철현검법"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "세가 비전 (상급 — 쇠 줄을 퉁기듯 벤다: 현음(絃音)의 검)"
+    grade: "절정"
+    tier: 상급
+    lineage: jegal_geom
+    faction: jegal
+    required_realm: "절정"
+    required_stats: { 지혜: 5, 민첩: 5 }
+    required_mastery: 5
+    requires_skill: { id: daecheonseong_geombeop, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "세가주 재가 — 칠현무형검·천지호연검법(오의)의 선행"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  cheongi_miri_bo:
+    name: "천기미리보"
+    category: "경공"
+    weapon_class: 무관
+    sub_category: "보법 (중급 — 천기를 미리 읽고 반 걸음 먼저 비킨다)"
+    grade: "일류"
+    tier: 중급
+    lineage: jegal_bo
+    faction: jegal
+    required_realm: "일류"
+    required_stats: { 지혜: 4, 민첩: 4 }
+    required_mastery: 2
+    requires_skill: { id: socheonseong_geombeop, mastery: 2 }
+    acquisition: "세가 내당 전수 (제갈의 걸음은 피하는 것이 아니라 미리 아는 것이다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
   # ─── 소림사 (sorimsa) — 권 · 계보 sorim_kwon ───
   # 노션: 스킬 소림권법 / 오의 백보신권·여래신장. 하급(나한권 18수)은 기존 등재 — 본산 108수가 중급이다
   sorim_kwonbeop:

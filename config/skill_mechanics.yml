@@ -784,6 +784,59 @@ skills:
     cost: 0
     note: "매화검진과 같은 문법 — 값의 차별(패도 결)은 party.yml 합격진 회차에서 사용자와"
 
+  # ── 제갈세가 — jegal_geom·jegal_bo (2026-07-26 · 수치 【제안】: 정교한 다타 — 자리의 검) ──
+  jamryong_geomsik:               # 잠룡검식 (기초) — 엎드린 용: 검의 첫 형
+    combo:
+      - { type: 호, angle: 100, range: 3.0, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 3.2, frames: [6, 3, 9], stagger: 중, cost: 0 }
+    combo_input_window: 10
+    cooldown_ticks: 80
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "검끝에 별 하나" }
+
+  socheonseong_geombeop:          # 소천성검법 (하급) — 작은 별을 점찍듯
+    combo:
+      - { type: 호, angle: 100, range: 3.2, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 100, range: 3.2, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.1, length: 3.8, frames: [7, 3, 10], stagger: 강, cost: 0 }   # 마지막 점 — 자리를 맺는다
+    combo_input_window: 11
+    cooldown_ticks: 90
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "점점이 별빛" }
+
+  daecheonseong_geombeop:         # 대천성검법 (중급) — 큰 별자리를 긋는다
+    combo:
+      - { type: 호, angle: 105, range: 3.3, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 105, range: 3.3, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 4.0, frames: [5, 2, 7], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.3, length: 4.2, frames: [8, 3, 11], stagger: 강, cost: 0 }   # 별자리가 맺힌다
+    combo_input_window: 12
+    cooldown_ticks: 130
+    qi_rider: { step: 4, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "이어진 별 — 은하수 한 자락" }
+
+  cheolhyeon_geombeop:            # 철현검법 (상급) — 쇠 줄을 퉁기듯 벤다
+    type: 선
+    width: 1.4
+    length: 4.8
+    range: 4.8
+    angle: 1.4
+    frames: [10, 3, 13]
+    stagger: 강
+    hit_count: 2                  # 현음 — 벤 자리에서 줄이 한 번 더 운다
+    cost: 3
+    cooldown_ticks: 240
+    telegraph: "검이 활시위처럼 휜다 — 10틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "울리는 현 한 줄 — 소리가 베인 뒤에 온다" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+
+  cheongi_miri_bo:                # 천기미리보 (중급 보법) — 미리 알고 비킨다
+    type: 돌
+    distance: 6
+    frames: [0, 0, 3]
+    iframe: 7
+    cost: 0
+    cooldown_ticks: 190
+    vfx: "밟기 전에 이미 비어 있는 자리 (파티클 예산 경유)"
+    qi_note: "경신(내력 1~2)을 얹으면 거리 6 → 9 (일류+)"
+
 # ─── 소림사 — sorim_kwon ───
   sorim_kwonbeop:                 # 소림권법 (중급) — 본산 108수. 짧고 끈질기다
     combo:
