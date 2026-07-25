@@ -1430,7 +1430,7 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
     # ★튜토리얼 침묵 (실기동 2026-07-25 "배 위에서 우클릭 하니까 과제 » … 문구") — 뿌리내림은
     #   본토의 과정이다: 서장의 몸에 과제가 말을 걸면 위반이다
     tut = source("TutorialGuide.java")
-    if tut.count("silenced(player)") < 3 or "boolean silenced(Player player)" not in tut:
+    if tut.count("silenced(player)") < 4 or "boolean silenced(Player player)" not in tut:
         rep.bad("서장의 몸에 과제가 말을 건다 — TutorialGuide 침묵 게이트(silenced)가 "
                 "훅(bump·gesture·mirror)을 안 지킨다 (배 위의 우클릭이 태세 가르침으로 세인다)")
     else:
@@ -1525,6 +1525,25 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
                 "(서사가 제 갈림을 지어내 등록부의 패와 딴 장을 산다)")
     else:
         rep.good("붓은 갈림길을 안다 — 서사가 등록부의 세 길 위에서 멈춘다")
+    # ★내린 뒤의 세 손 (실기동 2026-07-25 "뭘 해야할지 모르겠어 · 리스폰이 이상한 곳"):
+    #   첫걸음 안내 · 리스폰=내리는 자리 · 비무 상대는 설 자리를 재고 선다
+    tut_cfg = load_yaml("tutorial.yml").get("tutorial") or {}
+    if not tut_cfg.get("arrival_lines") or "tutorial().arrivalHint(player);" not in code:
+        rep.bad("첫걸음 안내가 없다 — 내린 몸이 무엇을 할지 모른다 (arrival_lines 등록부 + "
+                "depart 배선 · 첫 정거장 전의 몸에게 한 번)")
+    else:
+        rep.good("첫걸음 안내 — 내린 자리에서 트래커와 섭구를 말해 준다")
+    if "Location down = destination(event.getPlayer());" not in code:
+        rep.bad("리스폰이 아무도 고르지 않은 자리로 간다 — 건넌 몸의 리스폰도 내리는 자리"
+                "(destination 한 벌)를 써야 한다")
+    else:
+        rep.good("리스폰 = 내리는 자리 (집안 앵커·Standing 한 벌)")
+    hg = source("HuntingGrounds.java")
+    if "Standing.landing(at, 8)" not in body_of(hg, r"private void partnerUpkeep\(\)"):
+        rep.bad("비무 상대가 설 자리를 안 재고 선다 — 벽 속 소환 = 질식 루프 "
+                "(2026-07-25: 곽진이 10초마다 죽었다)")
+    else:
+        rep.good("비무 상대는 설 자리를 재고 선다 (Standing — 못 서면 로그가 말한다)")
     la = stg.get("lanterns") or {}
     if "{label}" not in str(la.get("label_format") or "") \
             or "Material.DARK_OAK_PLANKS" in sjs:

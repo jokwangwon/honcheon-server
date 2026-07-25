@@ -1668,6 +1668,9 @@ public final class Antechamber implements Listener {
         dockWaitSaid.remove(id);
         crossedLines.forEach(player::sendMessage);
         extra.forEach(player::sendMessage);
+        // ★첫걸음 안내 (실기동 2026-07-25 "뭘 해야할지 잘 모르겠어") — 내린 자리에서
+        //   트래커와 첫 정거장(섭구)을 한 번 말해 준다 (첫 정거장을 이미 뗀 몸에겐 침묵)
+        plugin.tutorial().arrivalHint(player);
     }
 
     private void restore(Player player) {
@@ -1961,6 +1964,15 @@ public final class Antechamber implements Listener {
         }
         if (event.isBedSpawn() || event.isAnchorSpawn()) {
             return;   // 사람이 고른 자리 — 남의 집에 손대지 않는다
+        }
+        // ★건넌 몸의 리스폰 = 내리는 자리 (실기동 2026-07-25 "리스폰 했는데 이상한 곳으로
+        //   이동되었어" — 침대 없는 몸이 바닐라 월드 스폰(아무도 고르지 않은 자리)에 떨어졌다).
+        //   죽어서 돌아오는 자리도 출도와 같은 등록부를 쓴다: 집안 앵커 → destinations →
+        //   Standing 검사 — 전부 destination() 한 벌이다 【제안】
+        Location down = destination(event.getPlayer());
+        if (down != null && down.getWorld() != null && !isAntechamber(down.getWorld())) {
+            event.setRespawnLocation(down);
+            return;
         }
         Location at = event.getRespawnLocation();
         if (at == null || at.getWorld() == null

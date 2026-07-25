@@ -31,6 +31,7 @@ SJY = f"{ROOT}/config/seojang.yml"
 TUT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/TutorialGuide.java"   # ★5차 — 침묵 게이트
 MVT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/HoncheonMvt.java"     # ★5차 — 사이드바 게이트
 LLR = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/LlmRenderer.java"  # ★붓 로마자 안전망
+HTG = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/HuntingGrounds.java"  # ★비무 상대 설 자리
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -475,6 +476,15 @@ MUTATIONS = [
      "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, forks);",
      "        String facts = epilogue ? epilogueFacts(ch, prevTier, base)\n                : sceneFacts(ch, title, prevTier, base, rank, hState, hRegion, \"\");",
      "갈림길을 모른다"),
+    # ─── ★내린 뒤의 세 손 (실기동 2026-07-25) ───
+    ("(134) 첫걸음 안내를 뜯는다 (내린 몸이 길을 모른다)", SRC,
+     "        plugin.tutorial().arrivalHint(player);\n", "", "첫걸음 안내가 없다"),
+    ("(135) 리스폰을 월드 스폰으로 되돌린다 (아무도 고르지 않은 자리)", SRC,
+     "        Location down = destination(event.getPlayer());",
+     "        Location down = null;", "아무도 고르지 않은 자리"),
+    ("(136) 비무 상대를 안 재고 세운다 (벽 속 질식 루프)", HTG,
+     "            Location fixed = Standing.landing(at, 8);",
+     "            Location fixed = at;", "설 자리를 안 재고"),
 ]
 
 

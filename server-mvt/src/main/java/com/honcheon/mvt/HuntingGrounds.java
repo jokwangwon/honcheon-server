@@ -1751,6 +1751,19 @@ public final class HuntingGrounds implements Listener {
             }
         }
         Location at = yard.clone().add(3.5, 1, 3.5);
+        // ★설 자리를 재고 세운다 (실기동 2026-07-25 — 표국 마당 고정 오프셋이 벽 속이 돼
+        //   곽진이 10초마다 질식사·재소환을 돌았다: 로그 도배 + npc_logic 예산 초과.
+        //   벽 속에 세우느니 안 세우고 로그가 말한다 — 침묵 금지)
+        Standing.Verdict v = Standing.measure(at);
+        if (!v.ok()) {
+            Location fixed = Standing.landing(at, 8);
+            if (fixed == null) {
+                plugin.getLogger().severe("[비무] 곽진의 설 자리가 없다 — 표국 마당 "
+                        + Standing.describe(at) + " (" + v.why() + ") · 둘레 8칸에도 못 선다");
+                return;
+            }
+            at = fixed;
+        }
         LivingEntity spawned = spawn(partner, at, null);
         if (spawned != null) {
             spawned.setCustomName(org.bukkit.ChatColor.AQUA + partner.name()

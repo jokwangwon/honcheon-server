@@ -34,6 +34,7 @@ final class TutorialGuide implements org.bukkit.event.Listener {
     private final String formatSingle;
     private final String doneFormat;
     private final List<String> finishLines;
+    private final List<String> arrivalLines;
     private final List<Station> stations = new ArrayList<>();
 
     /** 과정 전체 완료 표식 — 정거장 id 와 겹치지 않는 예약 키 (finish_lines 를 한 번만 말한다) */
@@ -51,6 +52,11 @@ final class TutorialGuide implements org.bukkit.event.Listener {
         this.format = str(root.get("format"), "§6{header} §f{n}. {tracker} §e{cur}/{max}");
         this.formatSingle = str(root.get("format_single"), "§6{header} §f{n}. {tracker}");
         this.doneFormat = str(root.get("done_format"), "§6과제 » §f{name} §7— 끝");
+        List<String> arrive = new ArrayList<>();
+        if (root.get("arrival_lines") instanceof List<?> al) {
+            al.forEach(l -> arrive.add(String.valueOf(l)));
+        }
+        this.arrivalLines = List.copyOf(arrive);
         List<String> finish = new ArrayList<>();
         if (root.get("finish_lines") instanceof List<?> fl) {
             fl.forEach(l -> finish.add(String.valueOf(l)));
@@ -89,6 +95,24 @@ final class TutorialGuide implements org.bukkit.event.Listener {
         return WorldBridge.seojangHolds(player.getUniqueId())
                 || Antechamber.isAntechamber(player.getWorld())
                 || Voyage.isSea(player.getWorld());
+    }
+
+    /**
+     * ★첫 출도의 첫걸음 (실기동 2026-07-25 "바로 청하현으로 가버렸고 뭘 해야할지 잘
+     * 모르겠어") — 내린 몸에게 트래커 읽는 법과 첫 정거장을 한 번 말해 준다.
+     * 첫 정거장을 이미 뗀 몸에게는 침묵한다 (안내 층 — 문은 안 잠근다).
+     */
+    void arrivalHint(Player player) {
+        if (!enabled || arrivalLines.isEmpty() || stations.isEmpty() || silenced(player)) {
+            return;
+        }
+        PlayerLedger ledger = plugin.ledger(player.getUniqueId());
+        Station first = stations.get(0);
+        if (!ledger.linked()
+                || ledger.tutorial().getOrDefault(first.id(), 0) >= first.count()) {
+            return;
+        }
+        arrivalLines.forEach(player::sendMessage);
     }
 
     void bump(Player player, String stationId) {
