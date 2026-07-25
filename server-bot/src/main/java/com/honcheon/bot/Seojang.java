@@ -72,6 +72,8 @@ final class Seojang {
     private final Map<String, String> branchMap = new LinkedHashMap<>();
     private final Map<String, List<String>> sceneBody = new LinkedHashMap<>();
     private final Map<String, String> incidentOpening = new LinkedHashMap<>();
+    /** ★발단의 실 — 발단 → [2장 문장, 3장 문장] (prose.incident_thread · 없는 발단은 빈 실) */
+    private final Map<String, List<String>> incidentThread = new LinkedHashMap<>();
     private final Map<String, String> familyColor = new LinkedHashMap<>();
     private final Map<String, String> bridgeLine = new LinkedHashMap<>();
     /** ★ 적서의 색 — 적자의 유년과 서자의 유년은 같은 글일 수 없다 (seojang.yml prose.rank_color) */
@@ -122,6 +124,12 @@ final class Seojang {
 
         Map<String, Object> prose = RulesConfig.section(cfg, "prose");
         RulesConfig.section(prose, "incident_opening").forEach((k, v) -> incidentOpening.put(k, str(v)));
+        // ★발단의 실 (A안 · 사용자 확정 2026-07-25) — 2·3장에 그 발단의 그림자가 따라온다
+        RulesConfig.section(prose, "incident_thread").forEach((k, v) -> {
+            List<String> lines = new ArrayList<>();
+            asList(v).forEach(o -> lines.add(str(o)));
+            incidentThread.put(String.valueOf(k), List.copyOf(lines));
+        });
         RulesConfig.section(prose, "family_color").forEach((k, v) -> familyColor.put(k, str(v)));
         RulesConfig.section(prose, "bridge").forEach((k, v) -> bridgeLine.put(k, str(v)));
         RulesConfig.section(prose, "rank_color").forEach((k, v) -> rankColor.put(k, str(v)));
@@ -260,7 +268,12 @@ final class Seojang {
         //   앞뒤의 빈 줄이 남지 않도록 strip 한다 (빈 색 + \n\n = 책의 첫 장이 빈 줄로 시작한다)
         String rc = rank == null ? "" : rankColor.getOrDefault(rank,
                 rankColor.getOrDefault("default", ""));
+        // ★발단의 실 — 2장(idx 1)·3장(idx 2)에 그 발단의 그림자 한 문장 (없는 발단은 빈 실 —
+        //   빈 실이 남긴 겹빈줄은 아래에서 여민다. 등록부 전수는 눈(②-e)이 센다)
+        List<String> thread = incidentThread.getOrDefault(ch.incident(), List.of());
+        String threadLine = idx >= 1 && idx - 1 < thread.size() ? thread.get(idx - 1) : "";
         return bodies.get(idx)
+                .replace("{incident_thread}", threadLine)
                 .replace("{opening}", incidentOpening.getOrDefault(ch.incident(),
                         incidentOpening.getOrDefault("default", "")))
                 .replace("{family_color}", familyColor.getOrDefault(ch.family(),
@@ -278,6 +291,7 @@ final class Seojang {
                         .replace("{kin}", String.join(" · ", kinAtBirth)))
                 .replace("{bridge}", prevTier == null ? "" : bridgeLine.getOrDefault(grade(prevTier), ""))
                 .replace("{name}", ch.name())
+                .replaceAll("\n{3,}", "\n\n")   // 빈 실·빈 색이 남긴 겹빈줄을 여민다
                 .strip();
     }
 

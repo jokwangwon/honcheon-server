@@ -1703,7 +1703,8 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
                     ovr_ok = False
                     rep.bad(f"발단별 패 '{inc}' 가 {len(chs or [])}개 ≠ 공용 패 {base_n}개 — "
                             "무대 명패 줄 수가 발단마다 흔들린다")
-    required = {"세가": {0: ["그림자_시험", "밀서"]}}   # 사용자 확정 2026-07-25 — 계약이 늘면 여기 늘린다
+    # 사용자 확정 2026-07-25 (+견문 — 「평범한 관례 출행」 같은 날 확정) — 계약이 늘면 여기 늘린다
+    required = {"세가": {0: ["그림자_시험", "밀서", "견문"]}}
     for branch, want in required.items():
         sc_list = scenes.get(branch) or []
         for idx, incs in want.items():
@@ -1718,7 +1719,38 @@ def audit_stage(rep: Report, ante: dict, code: str) -> None:
                 "공용 패가 나간다")
     elif ovr_ok:
         rep.good("발단별 패 — 발단 실재·제 벌·stat 실재·수 일치 · 봇이 읽는다 "
-                 "(세가 1장: 그림자_시험·밀서 전용 패)")
+                 "(세가 1장: 그림자_시험·밀서·견문 전용 패)")
+
+    # ②-e ★발단의 실 (A안 · 사용자 확정 2026-07-25 「다 다른 느낌」) — 2·3장에 발단의 그림자가
+    #   따라오는가. 계약: ① 모든 발단이 실 두 가닥(2장·3장)을 갖는다 (없으면 그 발단은 2장부터
+    #   남의 결 — A안의 목적 자체가 죽는다) ② 지어낸 발단 금지 ③ 모든 갈래의 2·3장 뼈대에
+    #   {incident_thread} 자리가 있다 ④ 봇이 이 등록부를 읽는다
+    prose = load_yaml("seojang.yml").get("prose") or {}
+    threads = prose.get("incident_thread") or {}
+    thr_ok = True
+    fake_thr = [k for k in threads if k not in truth_inc]
+    if fake_thr:
+        thr_ok = False
+        rep.bad(f"발단의 실에 지어낸 발단이 있다: {fake_thr} — inciting_incidents 가 정본이다")
+    bare = [k for k in truth_inc
+            if len([t for t in (threads.get(k) or []) if str(t).strip()]) < 2]
+    if bare:
+        thr_ok = False
+        rep.bad(f"실이 없는(또는 모자란) 발단: {bare} — 그 아이의 2·3장은 남의 결이다 "
+                "(A안 계약: 발단마다 두 가닥)")
+    body_map = prose.get("scene_body") or {}
+    for branch, bodies in body_map.items():
+        for i in (1, 2):
+            if i < len(bodies or []) and "{incident_thread}" not in str(bodies[i]):
+                thr_ok = False
+                rep.bad(f"scene_body.{branch}[{i + 1}] 에 {{incident_thread}} 자리가 없다 — "
+                        "실이 있어도 그 갈래의 뼈대에 못 실린다")
+    if '"incident_thread"' not in bot_sj_src:
+        rep.bad("봇이 발단의 실을 안 읽는다 (Seojang ← incident_thread) — 등록부가 있어도 "
+                "2·3장은 옛 뼈대 그대로다")
+    elif thr_ok:
+        rep.good(f"발단의 실 — {len(truth_inc)}발단 전부 두 가닥 · 4갈래 2·3장 뼈대에 자리 · "
+                 "봇이 읽는다 (다 다른 느낌의 계약)")
 
     # ③ 배선 — 정거장=무대 · 강등 문 · 재배달 억제 · 등불의 손 · 격리 · 필사본
     voy = source("Voyage.java")

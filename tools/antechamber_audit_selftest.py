@@ -501,6 +501,19 @@ MUTATIONS = [
     ("(140) 봇이 발단별 패를 안 읽는다 (등록부가 있어도 공용 패)", BSJ,
      "s.get(\"choices_by_incident\")", "s.get(\"choices_by_incident_x\")",
      "발단별 패를 안 읽는다"),
+    # ─── ★발단의 실 (A안 — 사용자 확정 2026-07-25 「다 다른 느낌」) ───
+    ("(141) 습격의 실을 끊는다 (그 아이의 2·3장이 남의 결)", SJY,
+     "    습격:\n      - \"말발굽 소리가 등 뒤에서 난 것 같아",
+     "    습격_x:\n      - \"말발굽 소리가 등 뒤에서 난 것 같아",
+     "실이 없는|지어낸 발단"),
+    ("(142) 뼈대에서 실 자리를 뗀다 (실이 있어도 못 실린다)", SJY,
+     "이름을 접은 오늘, 처음으로 세상이 맨얼굴을 보인다.\\n\\n{incident_thread}",
+     "이름을 접은 오늘, 처음으로 세상이 맨얼굴을 보인다.",
+     "incident_thread.*자리가 없다"),
+    ("(143) 봇이 발단의 실을 안 읽는다", BSJ,
+     "RulesConfig.section(prose, \"incident_thread\")",
+     "RulesConfig.section(prose, \"incident_thread_x\")",
+     "발단의 실을 안 읽는다"),
 ]
 
 

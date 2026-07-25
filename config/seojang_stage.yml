@@ -237,6 +237,18 @@ stage:
         - { at: [3, 1, -8],  block: RED_WOOL,        scale: [0.12, 0.08, 0.12], yaw: 0, anim: 멎는다 }   # 주사(朱砂) 봉인
         - { at: [1, 1, -7],  block: LANTERN,         scale: [0.8, 0.8, 0.8], yaw: 0,   anim: 솟는다 }
 
+    견문:                      # 아무 일도 맡지 않은 아침 — 평범한 관례 출행 (사용자 확정 2026-07-25)
+      pulse:
+        - "§7\"사고 치지 말고, 보고 오너라\" — 배웅은 그것뿐이었다"
+        - "§7명도 시험도 아니다. 다만 이름은 두고 간다"
+      sound: { key: "minecraft:entity.villager.yes", volume: 0.4, pitch: 0.8 }
+      particle: { type: CLOUD, count: 3, spread: 1.6 }
+      layers:
+        - { at: [3, 0, -8],  block: SPRUCE_PLANKS,   scale: [3.6, 2.4, 0.4], yaw: 0,   anim: 솟는다 }   # 활짝 열린 대문
+        - { at: [3, 0, -6],  block: BROWN_WOOL,      scale: [0.6, 0.5, 0.5], yaw: 12,  anim: 멎는다 }   # 제 손으로 꾸린 행장
+        - { at: [1, 1, -7],  block: LANTERN,         scale: [0.8, 0.8, 0.8], yaw: 0,   anim: 솟는다 }   # 배웅의 등
+        - { at: [5, 0, -9],  block: SMOOTH_STONE,    scale: [2.4, 0.15, 1.2], yaw: -8,  anim: 멎는다 }   # 대문 밖으로 뻗은 길
+
     담을_넘다:                 # 그날 밤, 내가 담을 넘었다 (출분 — 택한 것)
       pulse:
         - "§6그날 밤 — §f내가§6 담을 넘었다"
