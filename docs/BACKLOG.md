@@ -1309,7 +1309,7 @@ if (!blockers.isEmpty()) {
 - **위치**: `server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java:1076`
 - **의존**: —
 - **닫는 조건**: 평타가 판정층을 통과한다 — 태세(회피·막기·흘리기)·마진·격 위력이 피해에 실린다
-- **검증**: `python3 tools/combat_audit.py` · `python3 tools/defense_audit.py`
+- **검증**: `python3 tools/combat_audit.py --lint-only` · `python3 tools/defense_audit.py` (★2026-07-25 좁힘: combat_audit 시뮬이 눈의 v2 갱신으로 B-177 밸런스 실측을 겸하게 됐다 — 그 위반 7건은 v2 수치 튜닝의 몫이지 이 항목(평타 배선)의 회귀가 아니다. 배선 증명은 린트 + defense_audit ②가 담당)
 - **닫힘**: 2026-07-14 · 병렬 R1 트랙 갑. 평타가 드디어 판정층을 지난다 — `SkillListener.java` 신설 `basicJudged()` 가 npcStrike(:861-889)와 같은 층 순서(격 지불 → 태세·마진 → 갑옷 → 기 방어)로 즉발·선딜 두 경로를 태운다. 격 위력은 지불한 타격에만 실리고(qiPower — "FX에만 먹인다" 병 종결), 마진은 resolve 의 PvP 근사(+7) 규약 그대로, 막기만 무기를 태운다(soak_rule 두 줄). impact 토글이 판정층을 못 끄게 분리. 새 수치 0개 — `config/combat.yml` attack.basic_strike_judgment 는 각 항의 출처를 적은 등록부 문서다. 실측: 컴파일 0 · `python3 tools/combat_audit.py` 위반 0 · `python3 tools/defense_audit.py` 위반 0 (Fable 재실행 확인 · 잔여 경고 6건은 전부 기존 — B-033 등). 남은 것은 B-105(판정의 눈에 평타 미배선)로 올림
 
 **다음 바퀴의 1순위였다.** `basicMelee` (`SkillListener.java:1063-1116`) 에서
@@ -3444,8 +3444,10 @@ B-160 수사의 부산물 (2026-07-17): `Weapons.make` 는 재질(STONE~NETHERIT
 - **의존**: B-162
 - **닫는 조건**: 계열 월아산이 등록부·코드·팩에서 사라지고 봉이 그 자리(삽 베이스·간격 4.0m)를
   받는다. 이미 나간 옛 아이템(청하현 병기대 등)이 깨지지 않는다
-- **검증**: `python3 tools/lint_config.py` + `python3 tools/combat_audit.py` + 팩 dispatch 의
+- **검증**: `python3 tools/lint_config.py` + `python3 tools/combat_audit.py --lint-only` + 팩 dispatch 의
   `weapon/wolasan_*` 이주 별칭이 봉 모델을 가리키는지 (`resourcepack/assets/minecraft/items/stone_shovel.json`)
+  (★2026-07-25 좁힘: combat_audit 시뮬은 눈의 v2 갱신 후 B-177 밸런스 실측을 겸한다 — 그 위반은
+  이 항목(계열 등록)의 회귀가 아니다. 계열 정합은 린트가 담당)
 - **닫힘**: 2026-07-23 · `python3 tools/lint_config.py` → 오류 0·경고 0 + `python3 tools/combat_audit.py`
   → 위반 0건 + `resourcepack/assets/minecraft/items/stone_shovel.json` 에 wolasan→bong 이주 분기 실물
 
@@ -3523,8 +3525,9 @@ range 40 × 당김 힘. 탄약(화살)은 수동 소모. `Series.활`(Base.BOW �
   과 정렬되거나(위력 3→4 변동은 사용자 승인), 등록부의 월아산 전용 항목들이 봉으로 통합된다.
   같은 병이 든 부("중병기")·겸("단검")·구("검")·권갑("맨손")도 함께 판정. 어느 쪽이든
   combat.yml weapon_power 의 "14계열" 주석과 실제 배선이 일치한다
-- **검증**: `python3 tools/combat_audit.py` · `config/skill_motion.yml` 의 월아산 항목이 실제로
-  읽히는지 (또는 제거됐는지) 코드 대조
+- **검증**: `python3 tools/combat_audit.py --lint-only` · `config/skill_motion.yml` 의 월아산 항목이
+  실제로 읽히는지 (또는 제거됐는지) 코드 대조 (★2026-07-25 좁힘: combat_audit 시뮬은 눈의 v2 갱신
+  후 B-177 밸런스 실측을 겸한다 — 그 위반은 이 항목(계열 이름 한 벌)의 회귀가 아니다)
 - **닫힘**: 2026-07-23 · `python3 tools/combat_audit.py` → 위반 0건 + `python3 tools/lint_config.py`
   → 오류 0 · 경고 0 — **봉 통합 방향으로 닫혔다** (사용자 확정 「월아산은 삭제 봉으로 변경」 · B-172).
   skill_motion 의 월아산 죽은 등록 5벌은 삭제됐고(살아 있던 봉 행이 정본 — 인게임 거동 불변),
@@ -3666,9 +3669,29 @@ B-160 수사의 부산물 (2026-07-17): 월아산 병기의 PDC `weapon_class` �
   오류 0 · 팩 sha1 불변. 테스트 서버(25566)도 같은 상태. 실측 = **일상 플레이 관찰** (사용자: 평가
   포인트 잡기 어려움 → 체감 한 줄 수집 방식: 한 방/긁힘/크리 빈도). 끄기·튜닝은 config +
   `/혼천 모션 재적재` 로 무재기동
-- ★남은 빚: 【제안】 수치 튜닝 (per_body·크리표·상한) + **combat_audit·defense_audit 의 기대 모델을
-  v2 로 갱신** (지금 눈들은 v1 산술을 잰다 — v2 가 라이브인 지금, 눈이 세계와 어긋나 있다) +
-  장비 크리 슬롯(equipment.yml) 별도 등재 + PvP directOpposed 거취 (설계서 미결 5)
+- ★남은 빚: 【제안】 수치 튜닝 (per_body·크리표·상한) + ~~**combat_audit·defense_audit 의 기대 모델을
+  v2 로 갱신**~~ (✓ 2026-07-25 아래) + 장비 크리 슬롯(equipment.yml) 별도 등재 + PvP directOpposed
+  거취 (설계서 미결 5) + ★growth_audit 도 자체 2d6 산술(v1)이다 — 다음 조각 (이번 회차에서 발견)
+
+★진행 (2026-07-25 · 눈의 v2 갱신 — combat_audit·defense_audit 기대 모델 v1→v2):
+- **디스패치 = 엔진과 같은 문**: `strike()`/`expected()` 가 `combat_v2.enabled` 를 읽어 갈아탄다
+  (v1 산술은 복귀 스위치 보존 — enabled:false 면 그대로 v1). v2 산술은 SkillEngine.strikeV2 ·
+  SkillListener.defenseV2 · critChance/critMultiplier 와 같은 줄: 공격력 4항(무기+숙련+능력치
+  병기 축+격) · 방어력 = 갑옷 + floor(per_body×체력) + 태세 경감 · 피해 = max(1, 공−방) × 크리 기대
+- **v1 전용 개념 재표적**: 고갈 판정 −2 → 다운캐스트(격 상실)로 · 무기 등급 judgment_bonus →
+  전투 밖(감당 격만 — [A] v2 절) · 죽은 선택지의 「무공 위력 0」 사유 철회(v2 는 위력표 자체를 안
+  읽는다) · 협공 판정 보정 → 슬롯+강제 태세만 · 부상 판정 페널티 제거 (실릴 판정이 없다)
+- **눈 신설**: combat_audit `lint_combat_v2`(능력치 3종·크리 무기 표 2종 실재 대조 + per_body>0) ·
+  defense_audit 배선 ⑧(strikeV2/defenseV2/critRollV2 실재 + v2 이중 경감 가드 — 스위치 양팔 검사)
+- **눈을 시험하는 눈 신설** (`--selftest` — 이 두 감사엔 없었다): combat 9/9 · defense 6/6
+  (뮤테이션 프로브 — per_body·크리표·weapon_power·공격 축 이사·관통 회귀 감응 + 음성 대조
+  technique_power + enabled 왕복)
+- ★★**결과 — 눈이 처음으로 v2 세계를 쟀다: combat_audit 위반 7건 실체** (동경지 TTK 2합 =
+  전투 증발 · 3인 협공 1합 · 매복 = 처형 · 일류가 졸개 5인 소탕 못함 · 격 TTK 전 경지 밴드 이탈).
+  「위반 0」이 거짓이었음이 확정 — 이 7건이 곧 수치 튜닝 회차(【제안】 per_body·크리표·격 위력)의
+  실측 기반. **수치는 사용자 승인 대상이라 이 회차에서 손대지 않았다.** defense_audit 은 위반 0 ·
+  경고 2(회피=기하 — 해석 모델 밖임을 정직 고지). 회귀: growth/gyeonggong_audit 0 · lint 0
+- B-005 검증 좁힘 (`--lint-only`) — 닫힌 항목의 증거가 B-177 밸런스에 물리지 않게 (그 항목 참조)
 
 ### B-178 · 뿌리내림 과정 — 본토 튜토리얼 (B-109 ①마디의 구체화 · 사용자 설계 2026-07-24)
 - **상태**: 진행

@@ -12,6 +12,12 @@
   ② 전투 시뮬 (해석적) — 2d6은 36가지뿐이다. 몬테카를로를 쓰지 않는다.
                      TTK(합 수) / 내력 곡선 / 격 상성 / 무기 등급 / 협공 / NPC 전의.
 
+★ 전투 판정 v2 (B-177 · combat.yml combat_v2.enabled) — 등록부가 켜져 있으면 시뮬의 산술이
+  v2 다: 명중 = 획(기하 — 판정 없음·항상 타격), 피해 = max(1, 공격력 − 방어력) × 크리 기대,
+  공격력 = 무기 위력 + 기술 숙련 + 능력치(병기 축) + 격 — 4항 (무공 위력표·부상/고갈/협공
+  판정 보정은 v2 에 없다 — 실릴 판정이 없다). enabled: false 면 v1(2d6) 그대로 잰다 —
+  엔진의 복귀 스위치와 같은 문이다. v2 가 라이브인 동안 v1 산술로 재면 「위반 0」이 거짓말이 된다.
+
 봇·엔진 코드를 복제하지 않는다 — config 수치만으로 계산한다.
 config 를 고치지 않는다 — 재기만 한다.
 
@@ -246,6 +252,69 @@ def qi_casts(pool, cost, regen, rounds):
     return casts
 
 
+# ── 전투 판정 v2 (combat.yml combat_v2 · B-177) — 눈의 기대 모델 ──────────────────
+_V2_CACHE = {}
+
+
+def v2_of(cfg):
+    """combat_v2 등록부 판독 — enabled 면 dict, 아니면 None (엔진 SkillEngine.CombatV2.load 와 같은 문).
+
+    ★ 이 판독이 이 눈의 존재 이유다: v2 가 라이브인 동안(2026-07-24 점화) v1 산술로 재면
+      「위반 0」은 v2 를 안 잰 것이다 (B-177 남은 빚 — 눈이 세계와 어긋난 채 묵었다).
+    """
+    key = id(cfg)
+    if key in _V2_CACHE:
+        return _V2_CACHE[key]
+    sec = dig(cfg, "combat.yml", "combat_v2", default={}) or {}
+    out = None
+    if sec.get("enabled"):
+        de = sec.get("defense") or {}
+        cr = sec.get("crit") or {}
+        out = {
+            "from_armor": bool(de.get("from_armor")),
+            "per_body": num(de.get("per_body"), 0),
+            "body_attr": str(de.get("body_attribute") or "체력"),
+            "stance_soak": bool(de.get("stance_soak")),
+            "sense_attr": str(cr.get("sense_attribute") or "감각"),
+            "wisdom_attr": str(cr.get("wisdom_attribute") or "지혜"),
+            "chance_base": num(cr.get("chance_base"), 0),
+            "chance_per_sense": num(cr.get("chance_per_sense"), 0),
+            "chance_per_wisdom": num(cr.get("chance_per_wisdom"), 0),
+            "chance_cap": num(cr.get("chance_cap"), 0),
+            "chance_by_weapon": {k: num(v, 0) for k, v in (cr.get("chance_by_weapon") or {}).items()},
+            "damage_base": num(cr.get("damage_base"), 0),
+            "damage_per_sense": num(cr.get("damage_per_sense"), 0),
+            "damage_per_wisdom": num(cr.get("damage_per_wisdom"), 0),
+            "damage_amp_by_weapon": {k: num(v, 0)
+                                     for k, v in (cr.get("damage_amp_by_weapon") or {}).items()},
+        }
+    _V2_CACHE[key] = out
+    return out
+
+
+def attack_attr_name(cfg, weapon):
+    """병기 계열 → 공격 능력치 축 (combat.yml attack.attacker_attribute — Growth.attackAttribute 와 같은 판독)."""
+    reg = dig(cfg, "combat.yml", "attack", "attacker_attribute", default={}) or {}
+    for attr, weapons in reg.items():
+        if isinstance(weapons, list) and weapon in weapons:
+            return attr
+    return str(reg.get("default") or "근력")
+
+
+def crit_ev_raw(v2, sense, wis, weapon):
+    """v2 크리 — (확률, 배수). SkillEngine.critChance / critMultiplier 와 같은 줄.
+
+    확률 = clamp(기본 + 감각·지혜 가산 + 무기별, 0, 상한) · 배수 = 기본 + 감각·지혜 + 무기 증강.
+    장비 가산(equipment.yml crit 슬롯)은 아직 미등재 — 등재되면 이 눈도 그 항을 실어야 한다.
+    """
+    p = (v2["chance_base"] + v2["chance_per_sense"] * sense
+         + v2["chance_per_wisdom"] * wis + v2["chance_by_weapon"].get(weapon, 0.0))
+    p = min(v2["chance_cap"], max(0.0, p))
+    mult = (v2["damage_base"] + v2["damage_per_sense"] * sense
+            + v2["damage_per_wisdom"] * wis + v2["damage_amp_by_weapon"].get(weapon, 0.0))
+    return p, mult
+
+
 # ── 포위 규칙 (combat.yml attack) — 협공·슬롯·피포위 방어·강제 막기 ─────────────────
 def gang_rules(cfg):
     """한 표적을 둘러싼 판의 규칙 전부를 config 에서 읽는다 (하드코딩 금지)."""
@@ -310,6 +379,57 @@ def lint(cfg, rep):
     lint_weapon_break(cfg, rep)
     lint_npc_and_beasts(cfg, rep)
     lint_vitality(cfg, rep)
+    lint_combat_v2(cfg, rep)
+
+
+def lint_combat_v2(cfg, rep):
+    """combat_v2 등록 정합 — 가리키는 능력치·무기가 실재하는가 (lint_config 5-d 와 같은 과의 눈).
+
+    v2 는 능력치 이름 셋(체력·감각·지혜)과 무기 계열 표 둘(크리 확률·증강)을 가리킨다.
+    오타 하나면 그 항이 조용히 0 이 된다 — 침묵하는 실패의 자리라 이름 대조가 필요하다.
+    """
+    rep.head("전투 판정 v2 (combat_v2) — 등록이 가리키는 것이 실재하는가")
+    sec = dig(cfg, "combat.yml", "combat_v2", default={}) or {}
+    if not sec:
+        rep.say("     combat_v2 절이 없다 — v1(2d6)만 잰다")
+        return
+    enabled = bool(sec.get("enabled"))
+    rep.say(f"     enabled: {enabled} — 시뮬 산술 = {'v2 (공방·크리)' if enabled else 'v1 (2d6)'}")
+
+    attrs = set(dig(cfg, "judgment.yml", "attributes", default=[]) or [])
+    weapons = set(dig(cfg, "combat.yml", "damage", "weapon_power", default={}) or {})
+    de = sec.get("defense") or {}
+    cr = sec.get("crit") or {}
+
+    bad_attrs = [(k, v) for k, v in (("defense.body_attribute", de.get("body_attribute")),
+                                     ("crit.sense_attribute", cr.get("sense_attribute")),
+                                     ("crit.wisdom_attribute", cr.get("wisdom_attribute")))
+                 if v is not None and str(v) not in attrs]
+    if bad_attrs:
+        for k, v in bad_attrs:
+            rep.fail(f"combat_v2.{k} '{v}' — judgment.yml attributes 에 없다. "
+                     f"그 항은 조용히 0 이 된다 (침묵하는 실패)")
+    else:
+        rep.ok("v2 의 능력치 셋(체력·감각·지혜 자리)이 전부 judgment.yml attributes 에 실재")
+
+    bad_weapons = []
+    for table in ("chance_by_weapon", "damage_amp_by_weapon"):
+        for w in (cr.get(table) or {}):
+            if w not in weapons:
+                bad_weapons.append((table, w))
+    if bad_weapons:
+        for table, w in bad_weapons:
+            rep.fail(f"combat_v2.crit.{table} 의 '{w}' — damage.weapon_power 13계열에 없다 "
+                     f"(유령 무기 — 아무 손에도 안 실린다)")
+    else:
+        rep.ok("크리 무기 표 둘의 계열이 전부 weapon_power 등록부에 실재")
+
+    if enabled:
+        pb = num(de.get("per_body"), 0)
+        rep.verdict(pb > 0,
+                    f"방어력에 몸이 산다 — per_body {pb:g} (체력 판정치가 방어력을 움직인다: 성장 체감의 방어 절반)"
+                    if pb > 0 else
+                    "per_body 0 — 체력을 키워도 방어력이 안 움직인다 (성장의 방어 절반이 죽는다)")
 
 
 def lint_vitality(cfg, rep):
@@ -785,9 +905,14 @@ class Fighter:
         self.name = name
         self.realm = realm
         self.stats = stats or {}
-        self.atk_stat = num(self.stats.get("근력"), attr if attr is not None else a["attr"])
-        self.def_stat = num(self.stats.get("민첩"), attr if attr is not None else a["attr"])
-        self.che = num(self.stats.get("체력"), attr if attr is not None else a["attr"])
+        std = attr if attr is not None else a["attr"]     # 표준 무인 = 상한 −1 (SkillEngine.realmAttr)
+        self.atk_stat = num(self.stats.get("근력"), std)
+        self.def_stat = num(self.stats.get("민첩"), std)
+        self.che = num(self.stats.get("체력"), std)
+        # v2 의 축 — 병기가 공격 능력치를 정하고(검=민첩·도=근력·활=감각), 크리는 감각·지혜가 산다
+        self.atk_attr = num(self.stats.get(attack_attr_name(cfg, weapon)), std)
+        self.sense = num(self.stats.get("감각"), std)
+        self.wis = num(self.stats.get("지혜"), std)
         self.skill = skill if skill is not None else a["skill"]
         self.is_npc = is_npc
         self.beast = beast
@@ -835,8 +960,31 @@ def margin_dist(att, dfn, att_pen=0, dfn_pen=0, mod=0):
     return out
 
 
+def strike_v2(att, dfn, qi_power=0.0, soak=0.0):
+    """v2 한 합 — 명중 = 획(기하)이 이미 정했다 (항상 1.0). 반환 (명중률, 기대 피해, 크리 확률).
+
+    피해 = max(1, 공격력 − 방어력) × 크리 기대 (SkillEngine.strikeV2 와 같은 줄):
+      공격력 = 무기 위력 + 기술 숙련 + 능력치(병기 축) + 격 — 4항 (무공 위력표는 v2 에 없다)
+      방어력 = floor(per_body × 체력 판정치) + 태세 경감(soak)  (SkillListener.defenseV2 —
+               갑옷 항은 이 눈의 표준 무인이 안 입어 0 · v1 의 soak 근사와 같은 층)
+      크리 기대 = (1−p)·1 + p·배수  (crit_ev_raw — 확률·배수 전부 등록부)
+    부상·고갈·협공의 판정 보정은 여기 없다 — 실릴 판정이 없다 (v1 인자 att_pen·mod 는 v1 의 것).
+    """
+    v2 = v2_of(att.cfg)
+    atk = att.wpower + att.skill + att.atk_attr + qi_power
+    dfn_power = int(v2["per_body"] * dfn.che) + soak
+    p, mult = crit_ev_raw(v2, att.sense, att.wis, att.weapon)
+    dmg = max(1.0, atk - dfn_power) * ((1 - p) + p * mult)
+    return 1.0, dmg, p
+
+
 def strike(att, dfn, att_pen=0, dfn_pen=0, mod=0, qi_power=0.0, soak=0.0):
-    """기대 피해·명중률·대성공률 (해석적). soak = 방어측 경감(막기 -3 등) — 피해에서 곧장 뺀다."""
+    """기대 피해·명중률·대성공률 (해석적). soak = 방어측 경감(막기 -3 등) — 피해에서 곧장 뺀다.
+
+    ★ combat_v2.enabled 면 v2 산술로 갈아탄다 (strike_v2) — 엔진의 enabled 분기와 같은 문.
+    """
+    if v2_of(att.cfg):
+        return strike_v2(att, dfn, qi_power=qi_power, soak=soak)
     dist = margin_dist(att, dfn, att_pen, dfn_pen, mod)
     hit = Fraction(0)
     crit = Fraction(0)
@@ -1018,9 +1166,15 @@ def standard_fighters(cfg):
 
 
 def sim_ttk(cfg, rep, max_rounds):
+    v2 = v2_of(cfg)
     rep.head("TTK — 몇 합에 끝나는가 (3합 미만 = 전투가 없다 / 20합 초과 = 지루하다)")
-    rep.say("     피해 = 무기 위력 + 무공 위력 + floor(마진/2), 마진 ≥ 0 에서만 (부분 성공 = 피해 0)")
-    rep.say("     내구 = round(10 + 체력×2) · 부상 페널티(경상 −1 / 중상 −2)는 라운드마다 반영")
+    if v2:
+        rep.say("     ★v2 — 피해 = max(1, 공격력 − 방어력) × 크리 기대 · 명중 = 획(항상 100%)")
+        rep.say(f"     공격력 = 무기 + 숙련 + 능력치(병기 축) + 격 · 방어력 = floor({v2['per_body']:g}×체력) + 태세")
+        rep.say("     내구 = round(10 + 체력×2) · 부상 판정 페널티는 v2 에 없다 (실릴 판정이 없다)")
+    else:
+        rep.say("     피해 = 무기 위력 + 무공 위력 + floor(마진/2), 마진 ≥ 0 에서만 (부분 성공 = 피해 0)")
+        rep.say("     내구 = round(10 + 체력×2) · 부상 페널티(경상 −1 / 중상 −2)는 라운드마다 반영")
     rep.say("")
     rep.say("     전투                                       명중률  피해/합  피격률  피해/합   TTK   피격 TTK")
 
@@ -1070,8 +1224,8 @@ def sim_ttk(cfg, rep, max_rounds):
              f"그리고 선공은 전부다: 대칭 대결의 승패가 판정이 아니라 선공 결정에서 이미 끝난다 "
              f"(선공자 내구 {left / jp.dur * 100:.0f}% 잔존)")
 
-    # 일류급 무공 위력이 대체값이라는 사실을 드러낸다
-    if any(f.tpower_assumed for _, f, _, _ in standard_fighters(cfg)):
+    # 일류급 무공 위력이 대체값이라는 사실을 드러낸다 (v2 는 무공 위력표를 안 읽는다 — v1 의 경고)
+    if not v2 and any(f.tpower_assumed for _, f, _, _ in standard_fighters(cfg)):
         rep.warn("위 표의 일류 무인 피해에는 '일류급 무공 위력' 대체값 2 가 들어갔다 — "
                  "combat.yml technique_power 에 일류급이 없어서다 (① 린트 참조). "
                  "실제 수치가 정해지면 이 줄의 TTK 는 바뀐다")
@@ -1188,7 +1342,10 @@ def sim_energy_curve(cfg, rep, max_rounds):
     dep_pen = num(dig(cfg, "judgment.yml", "situation_modifiers", "condition", "내공_고갈"), -2)
     regen, conditional = combat_regen(cfg, 1.0)   # 일류(내공 1)의 숨 — 이 절의 주인공
     fight = 7           # 표준 전투 = 5~9합의 중앙값 (본 도구의 기준 전투)
-    rep.say(f"     발경 = 내력 {bal:g}/합 · 고갈 = '{depleted}'(판정 {dep_pen:g}) + 다운캐스트('맨 기술')")
+    if v2_of(cfg):
+        rep.say(f"     발경 = 내력 {bal:g}/합 · 고갈 = '{depleted}' → 다운캐스트('맨 기술' — v2 는 판정 페널티 없음)")
+    else:
+        rep.say(f"     발경 = 내력 {bal:g}/합 · 고갈 = '{depleted}'(판정 {dep_pen:g}) + 다운캐스트('맨 기술')")
     rep.say(f"     전투 중 회복(조식) = 내공에 비례 (일류 = {regen:g}/합)"
             f"{' · 조건: 내력을 태운 합에는 안 돈다' if conditional else ' · 무조건'}"
             f" · 운기조식(앉기) = {dig(cfg, 'internal_energy.yml', 'internal_energy', 'recovery', 'in_combat', '운기조식', default='불가')}")
@@ -1237,21 +1394,43 @@ def sim_energy_curve(cfg, rep, max_rounds):
     # 다운캐스트로 계속 싸울 수 있는가 (고갈 후 능력)
     p1 = Fighter(cfg, "일류(고갈)", "일류", weapon="검", naegong=1.0)
     e1 = Fighter(cfg, "맹수", "일류", weapon="맨손", is_npc=True)
-    h_full, d_full, _ = strike(p1, e1)
-    h_dep, d_dep, _ = strike(p1, e1, att_pen=int(dep_pen))
-    drop = (d_full - d_dep) / d_full * 100 if d_full else 0
-    ttk_full, _, _ = duel(p1, e1, max_rounds)
-    ttk_dep, ttd_dep, _ = duel(p1, e1, max_rounds, a_mod=int(dep_pen))
     rep.say("")
-    rep.say(f"     고갈 전:  명중 {h_full * 100:.1f}% · 피해/합 {d_full:.2f} · TTK {ttk_full}합")
-    rep.say(f"     고갈 후:  명중 {h_dep * 100:.1f}% · 피해/합 {d_dep:.2f}(−{drop:.0f}%) · "
-            f"TTK {ttk_dep if ttk_dep else '>' + str(max_rounds)}합"
-            f"{'  ← 상대가 ' + str(ttd_dep) + '합에 먼저 나를 눕힌다' if ttd_dep and (not ttk_dep or ttd_dep <= ttk_dep) else ''}")
-    if ttk_dep is None or (ttd_dep and ttd_dep <= ttk_dep):
-        rep.fail(f"고갈(판정 {dep_pen:g}) 상태로는 같은 상대를 이길 수 없다 — 다운캐스트는 '계속 싸우는 길'이 "
-                 f"아니라 '지는 길'이다. 내력을 태우는 순간 그 전투의 후반을 저당잡힌다")
+    if v2_of(cfg):
+        # ★v2 — 고갈의 판정 페널티(내공_고갈 −2)는 없다 (실릴 판정이 없다 · 사용자 확정: 제거).
+        #   고갈의 대가 = 격 다운캐스트뿐이다: 내지 못한 합의 피해가 외공기 값으로 떨어진다
+        #   (combat.yml qi_power_note — "지불이 끊기면 그 합의 피해는 외공기 값으로 떨어진다")
+        bal_power = num(dig(cfg, "combat.yml", "damage", "qi_power", "발경"), 1)
+        _, d_full, _ = strike(p1, e1, qi_power=bal_power)
+        _, d_dep, _ = strike(p1, e1)
+        drop = (d_full - d_dep) / d_full * 100 if d_full else 0
+        ttk_full, _, _ = duel(p1, e1, max_rounds, a_qi=bal_power)
+        ttk_dep, ttd_dep, _ = duel(p1, e1, max_rounds)
+        rep.say(f"     ★v2 — 고갈의 대가는 판정 페널티가 아니라 **다운캐스트**다 (격이 외공기로 떨어진다)")
+        rep.say(f"     고갈 전(발경 +{bal_power:g}):  피해/합 {d_full:.2f} · TTK {ttk_full}합")
+        rep.say(f"     고갈 후(외공기):     피해/합 {d_dep:.2f}(−{drop:.0f}%) · "
+                f"TTK {ttk_dep if ttk_dep else '>' + str(max_rounds)}합"
+                f"{'  ← 상대가 ' + str(ttd_dep) + '합에 먼저 나를 눕힌다' if ttd_dep and (not ttk_dep or ttd_dep <= ttk_dep) else ''}")
+        if ttk_dep is None or (ttd_dep and ttd_dep <= ttk_dep):
+            rep.fail("고갈(다운캐스트) 상태로는 같은 상대를 이길 수 없다 — 격을 잃는 순간 그 전투의 "
+                     "후반을 저당잡힌다 (내력을 태울지 아낄지가 진짜 선택이 되려면 외공기로도 길은 남아야 한다)")
+        else:
+            rep.ok(f"고갈 후에도 다운캐스트(외공기)로 전투 지속 가능 (TTK {ttk_full}합 → {ttk_dep}합) — "
+                   f"격의 값(−{drop:.0f}%)은 치르되 지는 길은 아니다")
     else:
-        rep.ok(f"고갈 후에도 다운캐스트로 전투 지속 가능 (TTK {ttk_full}합 → {ttk_dep}합)")
+        h_full, d_full, _ = strike(p1, e1)
+        h_dep, d_dep, _ = strike(p1, e1, att_pen=int(dep_pen))
+        drop = (d_full - d_dep) / d_full * 100 if d_full else 0
+        ttk_full, _, _ = duel(p1, e1, max_rounds)
+        ttk_dep, ttd_dep, _ = duel(p1, e1, max_rounds, a_mod=int(dep_pen))
+        rep.say(f"     고갈 전:  명중 {h_full * 100:.1f}% · 피해/합 {d_full:.2f} · TTK {ttk_full}합")
+        rep.say(f"     고갈 후:  명중 {h_dep * 100:.1f}% · 피해/합 {d_dep:.2f}(−{drop:.0f}%) · "
+                f"TTK {ttk_dep if ttk_dep else '>' + str(max_rounds)}합"
+                f"{'  ← 상대가 ' + str(ttd_dep) + '합에 먼저 나를 눕힌다' if ttd_dep and (not ttk_dep or ttd_dep <= ttk_dep) else ''}")
+        if ttk_dep is None or (ttd_dep and ttd_dep <= ttk_dep):
+            rep.fail(f"고갈(판정 {dep_pen:g}) 상태로는 같은 상대를 이길 수 없다 — 다운캐스트는 '계속 싸우는 길'이 "
+                     f"아니라 '지는 길'이다. 내력을 태우는 순간 그 전투의 후반을 저당잡힌다")
+        else:
+            rep.ok(f"고갈 후에도 다운캐스트로 전투 지속 가능 (TTK {ttk_full}합 → {ttk_dep}합)")
 
 
 def sim_qi_counters(cfg, rep, max_rounds):
@@ -1296,7 +1475,7 @@ def sim_qi_counters(cfg, rep, max_rounds):
         t, _, _ = duel(p, e, max_rounds, a_qi=qp)
         delta = (dq - d0) / d0 * 100 if d0 else 0
         rep.say(f"       {nm:<9} {dq:>6.2f}   {delta:>+8.1f}%   {t}합")
-    rep.say("       → 격이 위력 +1 만 가져도 피해는 두 자릿수 % 로 움직인다. 지금은 0 이다")
+    rep.say("       → 격 한 단계의 무게를 나란히 보는 참조 표 (정본은 damage.qi_power — [A] 가 그 실측이다)")
 
     rep.say("")
     rep.say("     [C] 호신강기 — 하위 격 자동 무효의 실제 효과")
@@ -1336,6 +1515,35 @@ def sim_qi_counters(cfg, rep, max_rounds):
             rep.warn(f"그래도 {strip}합 — 전투 상한({max_rounds}합)보다 길다. 소모전이 이론에만 있다")
 
 
+def _grades_judgment_v2(cfg, rep, p, e):
+    """[A] 의 v2 — 등급 판정 보정(judgment_bonus)은 전투에 실리지 않는다 (실릴 판정이 없다).
+
+    v2 공격력 4항(무기+숙련+능력치+격)에 등급 항이 없다 — SkillEngine.strikeV2 가 그 정본이고,
+    weaponJudgmentBonus 는 v1 execBase 의 것이다. 등급의 전투 값 = 감당 격(부러지지 않는 것 —
+    [B])뿐이고, 판정 보정은 TRPG 경로(서장·퀘스트)에서만 산다.
+    """
+    rep.say("     [A] ★v2 — 등급 판정 보정(judgment_bonus)은 전투에 실리지 않는다 (판정이 없다)")
+    rep.say("         등급의 전투 값 = 감당 격([B] 무기 파괴 내성)뿐 · 판정 보정은 TRPG 경로의 것")
+    # 축 검사 — v1 은 '장비 천장 vs 격 천장'을 견줬다. v2 는 장비 판정의 전투 기여가 구조적으로 0 —
+    # 그래도 격 천장이 실제로 피해를 움직이는지는 잰다 (안 움직이면 위력의 축 자체가 없다)
+    _qi = dig(cfg, "combat.yml", "damage", "qi_power", default={}) or {}
+    _top = max((int(num(v, 0)) for v in _qi.values()), default=0)
+    _, d0, _ = strike(p, e)
+    _, d_top, _ = strike(p, e, qi_power=_top)
+    top_delta = (d_top - d0) / d0 * 100 if d0 else 0
+    rep.verdict(top_delta > 0,
+                f"위력의 축은 격이다 — 장비 판정의 전투 기여 0% < 격 최대(+{_top}) {top_delta:+.1f}% "
+                f"(v2 가 축 뒤집힘을 구조적으로 봉했다)"
+                if top_delta > 0 else
+                f"격 천장(+{_top})이 피해를 안 움직인다 — 위력의 축이 어디에도 없다")
+    # v2 의 무기 개성 — 크리 표가 등급이 아니라 **계열**에 산다 (단검=급소 · 중병기=짓뭉갬)
+    v2 = v2_of(cfg)
+    profile = " · ".join(
+        f"{w} {v2['chance_by_weapon'].get(w, 0) * 100:.0f}%/+{v2['damage_amp_by_weapon'].get(w, 0):g}"
+        for w in ("단검", "검", "도", "중병기") if w in v2["chance_by_weapon"])
+    rep.say(f"     v2 무기 개성 = 크리 표 (확률/배수 증강): {profile} — 계열의 결이 격 아래에서 산다")
+
+
 def sim_weapon_grades(cfg, rep, max_rounds):
     rep.head("무기 등급의 값 — 판정 보정 0~1 vs 무기 파괴")
     we = dig(cfg, "equipment.yml", "weapon_grades", default={}) or {}
@@ -1344,6 +1552,10 @@ def sim_weapon_grades(cfg, rep, max_rounds):
 
     p = Fighter(cfg, "절정 무인", "절정", weapon="검")
     e = Fighter(cfg, "절정 고수", "절정", weapon="검", is_npc=True)
+
+    if v2_of(cfg):
+        _grades_judgment_v2(cfg, rep, p, e)
+        return _weapon_break_tail(cfg, rep, p, e, breaks_at, trigger, max_rounds)
 
     # ★ 등급별 보정을 **글자로 박지 말라.** 예전엔 "(범철 0 · 정련 0 · 보병 +1 · 신병 +1)" 이라 적혀 있었는데
     #   config 는 이미 전부 0 으로 내려간 뒤였다 (equipment.yml 2026-07 전투 정합 패스).
@@ -1401,6 +1613,11 @@ def sim_weapon_grades(cfg, rep, max_rounds):
                 f"판정 한 칸이 무거운 것은 **애병을 귀하게 만드는 것**이지 축을 뒤집는 것이 아니다 "
                 f"(판정 출처: {_who})")
 
+    _weapon_break_tail(cfg, rep, p, e, breaks_at, trigger, max_rounds)
+
+
+def _weapon_break_tail(cfg, rep, p, e, breaks_at, trigger, max_rounds):
+    """[B] 무기 파괴 + 회피 자원 — v1/v2 공통 꼬리 (피해 산술은 strike 가 알아서 갈아탄다)."""
     rep.say("")
     rep.say(f"     [B] 무기 파괴 — 검기(절정) 상대로 '막기'를 고른다면 (trigger: {trigger})")
     rep.say(f"       범철(감당 발경) vs 검기 = 1격 초과 → {breaks_at}격돌째 파괴")
@@ -1408,16 +1625,24 @@ def sim_weapon_grades(cfg, rep, max_rounds):
     rep.say("")
     # 범철이 부러진 뒤: 무기 위력 검(3) → 맨손(1), 무공 다운캐스트 → 무공 위력 0, 재무장 = 행동 1개(1합 손실)
     broken = Fighter(cfg, "절정(파검)", "절정", weapon="맨손")
-    broken.tpower = 0.0     # after_break: 무기 요구 무공 다운캐스트 = 무공 위력 보정 상실
+    broken.tpower = 0.0     # after_break: 무기 요구 무공 다운캐스트 = 무공 위력 보정 상실 (v1 의 항)
     _, d_ok, _ = strike(p, e)
     _, d_br, _ = strike(broken, e)
     loss = (d_ok - d_br) / d_ok * 100 if d_ok else 0
     t_ok, _, _ = duel(p, e, max_rounds)
     t_br, td_br, _ = duel(broken, e, max_rounds)
-    rep.say("       상태                        무기위력  무공위력  피해/합    TTK")
-    rep.say(f"       정련(안 부러짐)             {p.wpower:>6.0f}  {p.tpower:>7.0f}  {d_ok:>6.2f}   {t_ok:>2}합")
-    rep.say(f"       범철({breaks_at}합째 파괴 → 맨손)   {broken.wpower:>6.0f}  {broken.tpower:>7.0f}  "
-            f"{d_br:>6.2f}   {t_br if t_br else '>' + str(max_rounds)}합")
+    if v2_of(cfg):
+        # v2 — 무공 위력 열이 없다 (공격력 4항에 그 항이 없다). 파검의 값 = 무기 위력 + 능력치 축 이사
+        #   (검=민첩 → 맨손=근력 — 병기가 능력치를 정하므로 검 빌드의 손해가 위력표보다 클 수 있다)
+        rep.say("       상태                        무기위력  피해/합    TTK")
+        rep.say(f"       정련(안 부러짐)             {p.wpower:>6.0f}  {d_ok:>6.2f}   {t_ok:>2}합")
+        rep.say(f"       범철({breaks_at}합째 파괴 → 맨손)   {broken.wpower:>6.0f}  "
+                f"{d_br:>6.2f}   {t_br if t_br else '>' + str(max_rounds)}합")
+    else:
+        rep.say("       상태                        무기위력  무공위력  피해/합    TTK")
+        rep.say(f"       정련(안 부러짐)             {p.wpower:>6.0f}  {p.tpower:>7.0f}  {d_ok:>6.2f}   {t_ok:>2}합")
+        rep.say(f"       범철({breaks_at}합째 파괴 → 맨손)   {broken.wpower:>6.0f}  {broken.tpower:>7.0f}  "
+                f"{d_br:>6.2f}   {t_br if t_br else '>' + str(max_rounds)}합")
     rep.say(f"       → 파검 시 피해 −{loss:.0f}% (+ 재무장 행동 1합 손실)"
             f"{', 상대가 ' + str(td_br) + '합에 먼저 끝낸다' if td_br and (not t_br or td_br <= t_br) else ''}")
     if loss >= 5:
@@ -1461,11 +1686,16 @@ def sim_gangup(cfg, rep, max_rounds):
     p = Fighter(cfg, "이류 무인", "이류", weapon="검")
     e = Fighter(cfg, "이류 무인", "이류", weapon="검", is_npc=True)      # 동수
     hi = Fighter(cfg, "절정 고수", "절정", weapon="검", is_npc=True)     # 격상
+    v2 = v2_of(cfg)
     rep.say(f"     협공 보정 {per:+d}/추가 인원(캡 {cap}) · 포위 슬롯 {slots} · "
             f"피포위 방어 {rules['def_per']:+d}/추가 인원(캡 {rules['def_cap']}) · "
             f"강제 태세(회피 상실 → 흘리기) 경감 −{rules['guard_soak']:g}")
-    rep.say(f"     → 순보정 = 협공 − 피포위 방어 = 0 (같은 눈금). 머릿수의 값은 '더 잘 맞히는 것'이 아니라")
-    rep.say(f"       '더 많은 손이 동시에 들어가는 것'이다 — 그리고 그 손은 {slots}개가 상한이다")
+    if v2:
+        rep.say("     ★v2 — 협공·피포위 판정 보정은 실릴 판정이 없다. 머릿수의 값 = 슬롯(동시에 드는 손)")
+        rep.say(f"       + 강제 태세(회피 봉쇄 → 흘리기 경감이 방어력에 든다) — 손은 {slots}개가 상한이다")
+    else:
+        rep.say(f"     → 순보정 = 협공 − 피포위 방어 = 0 (같은 눈금). 머릿수의 값은 '더 잘 맞히는 것'이 아니라")
+        rep.say(f"       '더 많은 손이 동시에 들어가는 것'이다 — 그리고 그 손은 {slots}개가 상한이다")
     rep.say(f"     기준: 동수 표적(이류 NPC, 내구 {e.dur}) — 공격자 이류 무인 N인")
     rep.say("")
     rep.say("       인원  슬롯  순보정  경감   1인 명중률  1인 피해/합  총 피해/합   1인 대비   표적 TTK")
@@ -1488,8 +1718,10 @@ def sim_gangup(cfg, rep, max_rounds):
         rep.fail(f"3인 협공이 동수 상대에게 1인의 {ratio3:.2f}배 — 초선형(머릿수 3배를 넘는다). "
                  f"협공 보정이 판정 위에서 곱셈으로 터진다")
     else:
-        rep.ok(f"3인 협공 = 1인의 {ratio3:.2f}배 — 선형 이하. 보정(+{min(2 * per, cap)})이 "
-               f"피포위 방어(+{min(2 * rules['def_per'], rules['def_cap'])})와 상쇄되고, 남는 것은 손의 수뿐이다")
+        rep.ok(f"3인 협공 = 1인의 {ratio3:.2f}배 — 선형 이하. "
+               + ("판정 보정이 아예 없고(v2), 남는 것은 손의 수뿐이다" if v2 else
+                  f"보정(+{min(2 * per, cap)})이 피포위 방어(+{min(2 * rules['def_per'], rules['def_cap'])})와 "
+                  f"상쇄되고, 남는 것은 손의 수뿐이다"))
 
     # ①-b 단조성 — 둘이 덤비는 것이 하나보다 덜 아프면 규칙이 뒤집힌 것이다
     #      (이 검사가 '포위 강제 태세 = 막기(-3)' 안을 잡아냈다: 총 피해 3.28 → 3.06)
@@ -1536,7 +1768,15 @@ def sim_gangup(cfg, rep, max_rounds):
             hi_solo = d * k
         rep.say(f"       {n:>3}인  {k:>3}   {mod:>+5}   {h * 100:9.1f}%   {d * k:>10.2f}   "
                 f"{(d * k) / hi_solo if hi_solo else 0:>6.2f}배")
-    if hi_mod_max > 0:
+    if v2:
+        # v2 — 명중률 절벽이 없다 (명중은 획). 격상이 사는 길 = 방어력(체력 파생)이 공격력을 깔아
+        #   피해가 하한(1×크리 기대)에 눌리는 것 + 내구. 다수의 이득은 어디까지나 슬롯이다.
+        _, d_hi1, _ = strike(p, hi)
+        floor_hit = d_hi1 <= 1.0 * (1 + 0.5) + 1e-9   # 하한 1 × 크리 기대(넉넉히) 근방인가 — 표시용
+        rep.ok(f"v2 — 격상 표적에 판정 보정이 없다 (실릴 판정이 없다). 이류의 한 손 = {d_hi1:.2f}/합"
+               f"{' (방어력이 공격력을 깔아 하한 근방)' if floor_hit else ''} — "
+               f"다수의 이득은 슬롯({slots}배)까지다. 고수는 방어력과 내구로 산다")
+    elif hi_mod_max > 0:
         rep.fail(f"격상 표적에 순보정 {hi_mod_max:+d} 가 남는다 — 이류의 절정 상대 명중률은 "
                  f"{strike(p, hi)[0] * 100:.1f}%(2d6 최대치에서만 마진 ≥0)인 절벽 위다. 그 위의 +1 은 "
                  f"명중률을 배로 만든다 (선형이 아니라 곱셈)")
@@ -1623,7 +1863,8 @@ def sim_gangup(cfg, rep, max_rounds):
                 f"{d_jin * k_jin:.2f}/합 vs 평협공 5인({d_plain * k_plain:.2f}/합) = "
                 f"{(d_jin * k_jin) / (d_plain * k_plain) * 100 - 100:+.0f}%")
         rep.say(f"       → 진법이 사는 것은 보정이 아니라 **다섯이 동시에 벤다**는 것이다 "
-                f"(슬롯 {slots} → {jin_slots}, 순보정 {mod_jin:+d}). 오합지졸은 셋까지다")
+                f"(슬롯 {slots} → {jin_slots}"
+                + ("" if v2 else f", 순보정 {mod_jin:+d}") + "). 오합지졸은 셋까지다")
 
 
 def sim_dead_options(cfg, rep):
@@ -1647,7 +1888,8 @@ def sim_dead_options(cfg, rep):
         reasons = []
         if p < cost:
             reasons.append(f"내력 풀 {p} < 코스트 {cost:g} (시전 불가)")
-        if tp == 0:
+        if tp == 0 and not v2_of(cfg):
+            # v2 는 무공 위력표를 아예 안 읽는다 (공격력 4항) — 등급의 값은 숙련 상한·격 개방에 있다
             reasons.append("무공 위력 0 (코스트만 있고 위력 보정 없음)")
         if reasons:
             dead.append((sid, art.get("name", sid), rr, reasons))
@@ -1677,6 +1919,128 @@ def sim_dead_options(cfg, rep):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  눈을 시험하는 눈 (--selftest) — v2 기대 모델이 등록부를 정말 읽는가 (뮤테이션 프로브)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _probe_pair(cfg):
+    """프로브의 표준 대결 한 쌍 — 절정 vs 절정 (atk ≫ def 라 하한 1 에 안 눌린다)."""
+    return (Fighter(cfg, "무인", "절정", weapon="검"),
+            Fighter(cfg, "고수", "절정", weapon="검", is_npc=True))
+
+
+def selftest():
+    """일부러 등록부를 비틀어 눈이 움직이는지 잰다 (헌법 2.3 — 시험 없는 눈은 눈이 아니다).
+
+    각 프로브 = 깊은 복사한 config 한 곳을 비틀고, v2 기대 피해/크리가 따라 움직이는지 본다.
+    안 움직이면 그 항은 하드코딩이거나 죽은 배선이다. 음성 대조(technique_power)는
+    v2 가 그 항을 **안 읽어야** 통과다 — 읽으면 v1 산술이 새고 있는 것이다.
+    """
+    import copy
+
+    base = load_all()
+    keep = []                      # id() 재사용 방지 — 프로브 cfg 를 산 채로 붙잡는다 (_V2_CACHE 가 id 키)
+
+    def fresh(mutate=None):
+        cfg = copy.deepcopy(base)
+        dig(cfg, "combat.yml", "combat_v2", default={})["enabled"] = True   # 프로브는 v2 산술을 겨눈다
+        if mutate:
+            mutate(cfg)
+        keep.append(cfg)
+        return cfg
+
+    results = []
+
+    def probe(name, ok, detail=""):
+        results.append((name, ok))
+        print(f"  {'✅' if ok else '❌'} {name}{' — ' + detail if detail else ''}")
+
+    cfg0 = fresh()
+    p0, e0 = _probe_pair(cfg0)
+    h0, d0, c0 = strike(p0, e0)
+
+    # ① v2 의 명중은 획 — 항상 1.0
+    probe("① v2 명중 = 1.0 (판정 없음)", abs(h0 - 1.0) < 1e-12, f"hit={h0}")
+
+    # ② per_body 를 비틀면 방어력이 움직인다
+    cfg2 = fresh(lambda c: dig(c, "combat.yml", "combat_v2", "defense", default={})
+                 .__setitem__("per_body", num(dig(c, "combat.yml", "combat_v2", "defense",
+                                                  "per_body", default=0), 0) + 1.0))
+    p2, e2 = _probe_pair(cfg2)
+    d2 = strike(p2, e2)[1]
+    probe("② per_body +1 → 기대 피해 감소 (방어력이 등록부를 읽는다)", d2 < d0 - 1e-9,
+          f"{d0:.2f} → {d2:.2f}")
+
+    # ③ damage_base 를 비틀면 크리 배수가 움직인다
+    cfg3 = fresh(lambda c: dig(c, "combat.yml", "combat_v2", "crit", default={})
+                 .__setitem__("damage_base", num(dig(c, "combat.yml", "combat_v2", "crit",
+                                                     "damage_base", default=0), 0) + 1.0))
+    p3, e3 = _probe_pair(cfg3)
+    d3 = strike(p3, e3)[1]
+    probe("③ crit damage_base +1 → 기대 피해 증가 (크리 배수가 등록부를 읽는다)", d3 > d0 + 1e-9,
+          f"{d0:.2f} → {d3:.2f}")
+
+    # ④ chance_by_weapon 을 비틀면 크리 확률이 움직인다
+    cfg4 = fresh(lambda c: dig(c, "combat.yml", "combat_v2", "crit", "chance_by_weapon", default={})
+                 .__setitem__("검", 0.5))
+    p4, e4 = _probe_pair(cfg4)
+    c4 = strike(p4, e4)[2]
+    probe("④ chance_by_weapon[검] 0.5 → 크리 확률 증가", c4 > c0 + 1e-9, f"{c0:.3f} → {c4:.3f}")
+
+    # ⑤ 격(qi_power)이 공격력에 실린다
+    d5 = strike(p0, e0, qi_power=2.0)[1]
+    probe("⑤ 격 +2 → 기대 피해 증가 (격 보정이 공격력 4항에 실린다)", d5 > d0 + 1e-9,
+          f"{d0:.2f} → {d5:.2f}")
+
+    # ⑥ weapon_power 를 비틀면 공격력이 움직인다
+    cfg6 = fresh(lambda c: dig(c, "combat.yml", "damage", "weapon_power", default={})
+                 .__setitem__("검", num(dig(c, "combat.yml", "damage", "weapon_power",
+                                            "검", default=4), 4) + 2))
+    p6, e6 = _probe_pair(cfg6)
+    d6 = strike(p6, e6)[1]
+    probe("⑥ weapon_power[검] +2 → 기대 피해 증가", d6 > d0 + 1e-9, f"{d0:.2f} → {d6:.2f}")
+
+    # ⑦ 병기가 능력치를 정한다 — 검의 축을 민첩 → 근력으로 옮기면 민첩 몰빵의 피해가 준다
+    def move_axis(c):
+        reg = dig(c, "combat.yml", "attack", "attacker_attribute", default={})
+        if isinstance(reg.get("민첩"), list) and "검" in reg["민첩"]:
+            reg["민첩"] = [w for w in reg["민첩"] if w != "검"]
+        if isinstance(reg.get("근력"), list):
+            reg["근력"] = reg["근력"] + ["검"]
+    stats = {"민첩": 9, "근력": 2, "체력": 4, "감각": 4, "지혜": 4}
+    pa = Fighter(cfg0, "쾌검수", "절정", weapon="검", stats=stats)
+    cfg7 = fresh(move_axis)
+    pb = Fighter(cfg7, "쾌검수", "절정", weapon="검", stats=stats)
+    e7 = Fighter(cfg7, "고수", "절정", weapon="검", is_npc=True)
+    da = strike(pa, e0)[1]
+    db = strike(pb, e7)[1]
+    probe("⑦ 공격 축 이사(검: 민첩→근력) → 민첩 몰빵 피해 감소 (병기가 능력치를 정한다)",
+          db < da - 1e-9, f"{da:.2f} → {db:.2f}")
+
+    # ⑧ enabled: false → v1(2d6) 복귀 — 명중이 1.0 미만으로 떨어진다 (복귀 스위치의 실존)
+    cfg8 = fresh(lambda c: dig(c, "combat.yml", "combat_v2", default={})
+                 .__setitem__("enabled", False))
+    p8, e8 = _probe_pair(cfg8)
+    h8 = strike(p8, e8)[0]
+    probe("⑧ enabled:false → v1 산술 복귀 (명중 < 1.0)", h8 < 1.0 - 1e-9, f"hit={h8:.3f}")
+
+    # ⑨ 음성 대조 — technique_power 를 비틀어도 v2 피해는 그대로다 (v2 는 무공 위력표를 안 읽는다)
+    cfg9 = fresh(lambda c: dig(c, "combat.yml", "damage", "technique_power", default={})
+                 .__setitem__("절정급", 99))
+    p9, e9 = _probe_pair(cfg9)
+    d9 = strike(p9, e9)[1]
+    probe("⑨ 음성 대조: technique_power 99 → v2 피해 불변 (무공 위력표는 v1 의 것)",
+          abs(d9 - d0) < 1e-9, f"{d0:.2f} → {d9:.2f}")
+
+    bad = [n for n, ok in results if not ok]
+    print()
+    if bad:
+        print(f"{FAIL} 눈의 시험 {len(results) - len(bad)}/{len(results)} — 실패: {bad}")
+        return 1
+    print(f"✅ 눈의 시험 {len(results)}/{len(results)} — v2 기대 모델이 등록부를 읽고, 스위치가 산다")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  진입점
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1685,7 +2049,12 @@ def main():
     ap.add_argument("--lint-only", action="store_true", help="① 전투 정합 린트만")
     ap.add_argument("--sim-only", action="store_true", help="② 전투 시뮬만")
     ap.add_argument("--rounds", type=int, default=25, help="TTK 상한 합 수 (기본 25)")
+    ap.add_argument("--selftest", action="store_true",
+                    help="눈을 시험하는 눈 — v2 기대 모델 뮤테이션 프로브 (헌법 2.3)")
     args = ap.parse_args()
+
+    if args.selftest:
+        return selftest()
 
     rep = Report()
     rep.say("╔" + "═" * 70 + "╗")

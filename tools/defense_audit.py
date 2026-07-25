@@ -19,6 +19,12 @@
 전투 수학(2d6 해석 · Fighter · 표준 무인)은 combat_audit / growth_audit 을 **그대로 재사용한다** —
 전투를 두 번 구현하면 두 개의 진실이 생긴다.
 
+★ 전투 판정 v2 (B-177 · combat.yml combat_v2.enabled) — 켜져 있으면 이 눈도 v2 로 잰다:
+  태세는 굴리지 않는다 (판정이 없다). 막기·흘리기의 값 = 방어력 경감(soak), 회피의 값 =
+  **기하**(획을 몸으로 피한다 — GyeonggongListener·회피 차지)라 이 해석 모델 **밖**이다.
+  그래서 v2 의 ①(지배 태세)은 v1 그대로 물을 수 없다 — 경감 사다리·성장의 방어 절반(체력
+  파생)·하한 1 을 재고, 못 재는 것(기하)은 못 잰다고 적는다. 눈이 제 한계를 말해야 눈이다.
+
 config 를 고치지 않는다 — 재기만 한다. 수치는 전부 config·소스에서 읽는다 (하드코딩 금지).
 
 사용법:
@@ -51,8 +57,10 @@ from game_audit import (  # noqa: E402
 )
 from combat_audit import (  # noqa: E402  — 전투 수학은 하나뿐이다 (복제 금지)
     DICE_ITEMS,
+    crit_ev_raw,
     realm_axis,
     top_band,
+    v2_of,
     weapon_power,
 )
 from growth_audit import (  # noqa: E402  — 빌드 모델도 하나뿐이다
@@ -401,20 +409,63 @@ def wiring(cfg, rep):
                 if gated is None else
                 f"방어 태세에 게이트가 걸렸다: {gated.group(0)[:50]}")
 
+    # ⑧ ★ 전투 v2 의 배선 (B-177) — 등록부(combat_v2)가 선언한 스위치의 양쪽이 코드에 실재하는가
+    #   enabled 와 무관하게 검사한다: 스위치가 있는데 한쪽 팔이 없으면 그 스위치는 거짓말이다
+    if dig(cfg, "combat.yml", "combat_v2", default=None) is not None:
+        try:
+            engine = src("SkillEngine.java")
+        except OSError as e:
+            rep.fail(f"소스를 못 읽는다: {e}")
+            return
+        rep.verdict("strikeV2" in engine,
+                    "SkillEngine.strikeV2 — v2 타격 (공격력 4항 · max(1, 공−방) × 크리)"
+                    if "strikeV2" in engine else
+                    "combat_v2 등록부는 있는데 SkillEngine.strikeV2 가 없다 — 스위치가 거짓말한다")
+        rep.verdict("defenseV2" in listener,
+                    "SkillListener.defenseV2 — 방어력 **한 곳** (갑옷 + 체력 파생 + 태세 경감)"
+                    if "defenseV2" in listener else
+                    "SkillListener 에 defenseV2 가 없다 — v2 방어력이 배선되지 않았다")
+        rep.verdict("critRollV2" in listener,
+                    "SkillListener.critRollV2 — 크리 = 액션 RNG (2d6 아님)"
+                    if "critRollV2" in listener else
+                    "critRollV2 가 없다 — v2 크리가 배선되지 않았다")
+        # v2 이중 경감 가드 — 태세·갑옷이 방어력에 든 뒤 아래층에서 **또** 빠지면 이중 경감이다
+        no_double = (re.search(r"v2\s*\?\s*0\s*:\s*armorSoak", listener) is not None
+                     and re.search(r"v2\s*\|\|\s*foeLine == null\s*\?\s*0", listener) is not None)
+        rep.verdict(no_double,
+                    "v2 이중 경감 가드 — 태세 경감·갑옷이 방어력(defenseV2)에 든 뒤 옛 경감 층에서 0 이 된다"
+                    if no_double else
+                    "★ v2 이중 경감 의심 — 방어력에 든 태세·갑옷이 옛 경감 층에서 또 빠질 수 있다 "
+                    "(SkillListener 의 v2 분기에서 stanceSoak/armor 0 처리가 안 보인다)")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ③ 태세 시뮬 — 지배 태세가 있는가 (해석적, 2d6 = 36가지)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def expected(cfg, atk, dfn_score, soak, armor, wp, tp, qi, defender_rolls=True):
+def expected(cfg, atk, dfn_score, soak, armor, wp, tp, qi, defender_rolls=True,
+             body=0.0, foe=None):
     """한 합의 기대 피해 · 방어 성공률 — **엔진과 같은 산술**.
 
-    마진 = (공격 총합 + 7) − (태세 판정치 + 2d6)          ← 한쪽만 굴린다
-    피해 = 무기 + 무공 + 격 + floor(마진/2) − 태세 경감 − 갑옷 경감   (하한 0)
+    v1: 마진 = (공격 총합 + 7) − (태세 판정치 + 2d6)          ← 한쪽만 굴린다
+        피해 = 무기 + 무공 + 격 + floor(마진/2) − 태세 경감 − 갑옷 경감   (하한 0)
 
-    ★ 이 두 줄이 `SkillListener.npcStrike` 의 두 줄과 **같아야 한다** (②-⑤가 그것을 본다).
+    ★v2 (combat_v2.enabled — SkillListener.defenseV2 · SkillEngine.strikeV2 와 같은 줄):
+        태세 판정이 없다 — 방어 성공률은 언제나 0 (회피는 기하 — 이 모델 밖).
+        공격력 = 무기 + 능력치·숙련(atk) + 격  (무공 위력표 tp 는 v2 에 없다)
+        방어력 = 태세 경감 + 갑옷 + floor(per_body × 체력 판정치)
+        피해 = max(1, 공격력 − 방어력) × 크리 기대  (foe 의 감각·지혜·무기 — crit_ev_raw)
+
+    ★ 이 줄들이 엔진의 줄과 **같아야 한다** (②의 배선 검사가 그것을 본다).
     """
-    _ = cfg
+    v2 = v2_of(cfg)
+    if v2:
+        atk_power = wp + atk + qi
+        defense = soak + armor + int(v2["per_body"] * body)
+        p, mult = (crit_ev_raw(v2, foe.get("sense", 0), foe.get("wis", 0),
+                               foe.get("weapon", "")) if foe else (0.0, 1.0))
+        dmg = max(1.0, atk_power - defense) * ((1 - p) + p * mult)
+        return float(dmg), 0.0
     dmg = Fraction(0)
     miss = Fraction(0)
     for roll, w in DICE_ITEMS:
@@ -457,18 +508,54 @@ def foe_power(cfg, realm, weapon="도"):
         "qi": num(qis.get(band), 0),
         "band": band,
         "realm": realm,
+        # v2 의 축 — 크리는 공격자의 감각·지혜·무기가 산다 (표준 무인은 균질: 전 능력치 = 상한 −1)
+        "sense": int(a["attr"]),
+        "wis": int(a["attr"]),
+        "weapon": weapon,
     }
 
 
 def simulate(cfg, rep, budget):
     rep.say()
     rep.say("═" * 72)
-    rep.say("  ③ 태세 시뮬 — 지배 태세가 있는가 (해석적, 2d6 = 36가지)")
+    if v2_of(cfg):
+        rep.say("  ③ 태세 시뮬 — v2 (공방·크리 기대. 판정 없음 — 회피의 기하는 이 모델 밖)")
+    else:
+        rep.say("  ③ 태세 시뮬 — 지배 태세가 있는가 (해석적, 2d6 = 36가지)")
     rep.say("═" * 72)
 
     tertiary(cfg, rep)
     dominance(cfg, rep, budget)
     armor_trade(cfg, rep, budget)
+
+
+def _tertiary_v2(cfg, rep, b, foe):
+    """삼류의 목숨 — v2: 방어 성공률이라는 눈금이 없다 (판정이 없다). 남는 질문 둘 —
+    ① 태세 경감이 삼류에게도 드는가 (게이트 없음) ② 그래도 안전하지 않은가 (하한 1)."""
+    v2 = v2_of(cfg)
+    body = b.ai(v2["body_attr"])
+    rows = {}
+    for stance in STANCES:
+        soak = defense_rules(cfg)[stance]["soak"]
+        dmg, _ = expected(cfg, foe["atk"], 0, soak, 0, foe["wp"], 0, foe["qi"],
+                          body=body, foe=foe)
+        rows[stance] = dmg
+        rep.say(f"     {stance:<4} 경감 −{soak:g} · 기대 피해 {dmg:>4.1f} · "
+                f"내구 {b.dur} → {b.dur / max(dmg, 0.01):>4.1f}합")
+    rep.say("")
+    rep.say("     ※ v2 — 회피(경감 0)의 값은 이 표에 없다: 획을 몸으로 피하는 **기하**다 "
+            "(경공·회피 차지 — gyeonggong_audit 과 실기동의 자)")
+    best, worst = min(rows.values()), max(rows.values())
+    rep.verdict(best < worst - 1e-9,
+                f"삼류가 제 목숨을 본다 — 태세 경감이 피해를 {worst:.1f} → {best:.1f} 로 깎는다. "
+                f"게이트가 없다: 경감을 사는 것은 내력이 아니라 **몸짓**이다"
+                if best < worst - 1e-9 else
+                "★ 태세를 바꿔도 피해가 그대로다 — 경감이 방어력에 안 들었다 (defenseV2 stance_soak 죽음)")
+    rep.verdict(best >= 1.0 - 1e-9,
+                f"그러나 안전하지도 않다 — 최선(막기)이어도 합마다 {best:.1f} 는 맞는다 "
+                f"(피해 하한 1 — 삼류는 삼류다)"
+                if best >= 1.0 - 1e-9 else
+                "삼류가 태세만으로 피해 0 을 산다 — 방어가 공짜다 (하한 1 이 깨졌다)")
 
 
 def tertiary(cfg, rep):
@@ -480,6 +567,9 @@ def tertiary(cfg, rep):
     rep.say(f"     몸: 전 능력치 2 · 숙련 0 · 보법 없음(경공 0) · 무복 · 내력 0")
     rep.say(f"     상대: 삼류 표준 무인 (공격 {foe['atk']} · 무기 {foe['wp']:g} · 격 {foe['band']})")
     rep.say("")
+
+    if v2_of(cfg):
+        return _tertiary_v2(cfg, rep, b, foe)
 
     worst = 1.0
     for stance in STANCES:
@@ -508,9 +598,73 @@ def tertiary(cfg, rep):
                 "삼류가 표준 무인의 공격을 100% 막는다 — 방어가 공짜다")
 
 
+def _dominance_v2(cfg, rep, budget):
+    """v2 의 태세 — 판정이 없으니 「지배 태세」를 v1 의 눈금(성공률×기대피해)으로 물을 수 없다.
+
+    해석 모델이 잴 수 있는 것: ① 경감 사다리(막기 > 흘리기 > 0)와 그 대가(막기만 무기를 태운다)
+    ② 성장의 방어 절반 — 체력 판정치가 방어력을 실제로 움직이는가 (빌드 표).
+    잴 수 없는 것: 회피의 값(기하) — 그것을 못 잰다고 적는 것이 이 눈의 정직이다.
+    """
+    v2 = v2_of(cfg)
+    rules = defense_rules(cfg)
+    rep.head("[v2] 태세의 값 — 경감 사다리 · 성장의 방어 절반 (판정 없음 — 지배 검사는 v1 의 눈금)")
+
+    # ① 경감 사다리 — 등록부의 값이 서로 다른 값이어야 선택이 산다 (전부 같으면 태세가 장식이다)
+    soaks = {s: rules[s]["soak"] for s in STANCES}
+    guard = soaks.get("막기", 0)
+    parry = soaks.get("흘리기", 0)
+    rep.say("     " + " · ".join(f"{s} 경감 −{soaks[s]:g}" for s in STANCES)
+            + " (defenseV2 방어력에 든다 — stance_soak)")
+    rep.verdict(guard > parry > 0,
+                f"경감 사다리가 선다 — 막기 −{guard:g} > 흘리기 −{parry:g} > 회피 0. "
+                f"많이 깎는 것일수록 대가가 있다 (막기 = 무기 격돌)"
+                if guard > parry > 0 else
+                f"★ 경감 사다리가 무너졌다 (막기 −{guard:g} · 흘리기 −{parry:g}) — "
+                f"태세 사이에 값의 차이가 없다")
+    safe_guard = weapon_safe(cfg, "막기")
+    safe_dodge = weapon_safe(cfg, "회피") and weapon_safe(cfg, "흘리기")
+    rep.verdict((not safe_guard) and safe_dodge,
+                "값의 대가 — 막기만 무기를 태운다 (weapon_safe: 회피·흘리기 ○ / 막기 ×). "
+                "경감 −3 은 공짜가 아니다"
+                if (not safe_guard) and safe_dodge else
+                "★ weapon_safe 배선이 뒤집혔다 — 막기가 공짜거나, 접촉 없는 태세가 무기를 태운다")
+    rep.warn("v2 의 회피는 이 표 밖이다 — 값은 경감이 아니라 **기하**(획을 몸으로 피한다 · "
+             "경공 차지·GyeonggongListener). 태세 셋의 균형은 해석이 아니라 실기동으로 재야 한다")
+
+    # ② 성장의 방어 절반 — 체력 판정치가 방어력을 움직이는가 (빌드별 피해 표)
+    for realm in ("일류", "절정"):
+        builds = {b.name.replace(" 몰빵", ""): b
+                  for b in standard_builds(cfg, realm, budget,
+                                           base_attrs={a: 3.0 for a in COMBAT_ATTRS},
+                                           base_skill=3.0)}
+        foe = foe_power(cfg, realm)
+        row = {}
+        for name, b in builds.items():
+            body = b.ai(v2["body_attr"])
+            dmg, _ = expected(cfg, foe["atk"], 0, 0, 0, foe["wp"], 0, foe["qi"],
+                              body=body, foe=foe)
+            row[name] = (body, dmg)
+        rep.say(f"     [{realm}] 동경지 표준 무인의 한 손 — "
+                + " · ".join(f"{n}(체력 {v[0]}) 피해 {v[1]:.1f}" for n, v in row.items()))
+        bodies = {v[0] for v in row.values()}
+        dmgs = sorted(v[1] for v in row.values())
+        if len(bodies) > 1:
+            rep.verdict(dmgs[0] < dmgs[-1] - 1e-9,
+                        f"체력이 방어력을 움직인다 — 빌드 간 피해 차 {dmgs[-1] - dmgs[0]:.1f}/합 "
+                        f"(성장의 방어 절반이 산다: per_body {v2['per_body']:g})"
+                        if dmgs[0] < dmgs[-1] - 1e-9 else
+                        f"★ 체력 판정치가 달라도({sorted(bodies)}) 피해가 같다 — "
+                        f"per_body 배선이 죽었다")
+        else:
+            rep.say(f"       (표준 빌드의 체력이 전부 {bodies.pop()} 로 같다 — "
+                    f"이 표로는 per_body 를 못 가른다. lint 의 per_body>0 눈이 그 자리를 지킨다)")
+
+
 def dominance(cfg, rep, budget):
     """★ 이 도구의 존재 이유 — 하나가 언제나 옳으면 그건 선택이 아니다."""
 
+    if v2_of(cfg):
+        return _dominance_v2(cfg, rep, budget)
 
     for realm in ("일류", "절정"):
         rep.head(f"[{realm}] 지배 태세 검사 — 빌드 × 상황 × 태세 (예산 {budget:g}일치)")
@@ -593,6 +747,62 @@ def cell(cfg, b, foe, spec, pierced):
                for s in STANCES)
 
 
+def _armor_trade_v2(cfg, rep, b, aa, pierced, foes):
+    """갑옷의 거래 — v2: 경감(mitigation)은 방어력에 실물로 든다 (defenseV2 from_armor).
+
+    v1 의 ①(졸개 앞 무복 승리)은 v2 눈금으로 물을 수 없다 — 무복의 값(회피 기하)이 이 모델
+    밖이라, 이 표에서는 경감을 가진 갑옷이 언제나 이긴다. 그래서 v2 가 묻는 것:
+    ① 경감이 실제로 피해를 깎는가 ② {pierced} 앞에서 정확히 0 이 되는가 (강기 앞 피갑은 종이)
+    ③ 대가(회피)는 어디서 사는가 — 기하 축(경공 무게·경공_불가): 이 표 밖임을 적는다.
+    """
+    v2 = v2_of(cfg)
+    body = b.ai(v2["body_attr"])
+    rep.say(f"     몸: 신법 몰빵 일류 (체력 판정치 {body} · 내구 {b.dur}) — 갑옷별 기대 피해/합")
+    rep.say("")
+    rep.say(f"     {'갑옷':<4} {'경감':>4} " + "".join(f"{n:>18}" for n, _ in foes))
+
+    def cell_v2(foe, spec):
+        mit = armor_mitigation(cfg, foe, spec, pierced)
+        dmg, _ = expected(cfg, foe["atk"], 0, 0, mit, foe["wp"], 0, foe["qi"],
+                          body=body, foe=foe)
+        return dmg
+
+    for name, spec in aa.items():
+        cells = [f"{cell_v2(foe, spec):>18.2f}" for _, foe in foes]
+        rep.say(f"     {name:<4} {spec['mitigation']:>4} " + "".join(cells))
+    rep.say("")
+
+    plain = {"dodge": 0, "mitigation": 0, "blocks_gyeonggong": False}
+    heavy = aa.get("철갑", {"dodge": -2, "mitigation": 2, "blocks_gyeonggong": True})
+
+    # ① 경감이 실물이다 — 격 아래의 상대에게 철갑이 피해를 깎는다
+    mook = foes[0][1]
+    m_bare, m_iron = cell_v2(mook, plain), cell_v2(mook, heavy)
+    rep.verdict(m_iron < m_bare - 1e-9,
+                f"경감이 방어력에 실물로 든다 — 졸개 앞 무복 {m_bare:.2f} → 철갑 {m_iron:.2f}/합 "
+                f"(defenseV2 from_armor)"
+                if m_iron < m_bare - 1e-9 else
+                f"★ 철갑을 입어도 피해가 그대로다 ({m_bare:.2f} → {m_iron:.2f}) — "
+                f"갑옷 경감이 방어력에 안 들었다")
+
+    # ② ★ 상위 격 앞에서 경감이 **정확히 0** — 갑옷의 이득이 사라져야 한다 (원칙 1 의 갑옷판)
+    boss = foes[2][1]
+    b_bare, b_iron = cell_v2(boss, plain), cell_v2(boss, heavy)
+    rep.verdict(b_iron >= b_bare - 1e-9,
+                f"{pierced} 앞에서 철갑의 이득이 **0** 이다 (무복 {b_bare:.2f} vs 철갑 {b_iron:.2f}) — "
+                f"경감이 종이가 됐다. **갑옷은 졸개에게 강하고 고수에게 무력하다** "
+                f"(equipment.yml mitigation_pierced_from)"
+                if b_iron >= b_bare - 1e-9 else
+                f"★ {pierced} 앞에서도 철갑이 이득이다 ({b_bare:.2f} → {b_iron:.2f}) — "
+                f"경감이 안 무너진다 (지배 장비)")
+
+    # ③ 이 모델이 못 재는 값 — 갑옷의 **대가**는 v2 에서 전부 기하 축에 산다
+    rep.warn("갑옷의 대가는 이 표에 **없다** — v2 의 회피는 기하라서: dodge_penalty 는 경공 무게"
+             "(Gyeonggong dodge_penalty_scale — 이동이 굼떠진다)로, 철갑은 경공_불가(armor_gate)로 "
+             "산다. 즉 위 표의 철갑은 **실제보다 후하게** 그려져 있다 — 이동의 값은 "
+             "gyeonggong_audit 과 실기동의 자다")
+
+
 def armor_trade(cfg, rep, budget):
     """갑옷의 거래 — 회피를 판 대가로 무엇을 사는가. 그리고 그것이 언제 무너지는가."""
 
@@ -609,6 +819,9 @@ def armor_trade(cfg, rep, budget):
     foes = [("졸개(외공기)", foe_power(cfg, "삼류")),
             ("검기 고수", foe_power(cfg, "절정")),
             (f"{pierced} 고수", foe_power(cfg, "화경"))]
+
+    if v2_of(cfg):
+        return _armor_trade_v2(cfg, rep, b, aa, pierced, foes)
 
     rep.say(f"     몸: 신법 몰빵 {realm} (민첩 {b.attr('민첩'):.1f} · 경공 {b.mastery} · 내구 {b.dur})")
     rep.say("")
@@ -669,12 +882,99 @@ def armor_trade(cfg, rep, budget):
 
 # ══════════════════════════════════════════════════════════════════════════════
 
+def selftest():
+    """눈을 시험하는 눈 — 일부러 등록부를 비틀어 v2 기대 모델이 움직이는지 잰다 (헌법 2.3).
+
+    ④ 관통 프로브는 이 눈이 실제로 물린 자리다 — armor_mitigation 에 0 을 손으로 적으면
+    pierced_from 개정을 영영 못 본다 (armor_mitigation 독스트링의 사고 기록). 그 회귀를 박아 둔다.
+    """
+    import copy
+
+    base = load_all()
+    keep = []                      # id() 재사용 방지 — 프로브 cfg 를 산 채로 붙잡는다 (v2 캐시가 id 키)
+
+    def fresh(mutate=None):
+        cfg = copy.deepcopy(base)
+        dig(cfg, "combat.yml", "combat_v2", default={})["enabled"] = True
+        if mutate:
+            mutate(cfg)
+        keep.append(cfg)
+        return cfg
+
+    results = []
+
+    def probe(name, ok, detail=""):
+        results.append((name, ok))
+        print(f"  {'✅' if ok else '❌'} {name}{' — ' + detail if detail else ''}")
+
+    cfg0 = fresh()
+    foe0 = foe_power(cfg0, "절정")
+    d0, miss0 = expected(cfg0, foe0["atk"], 0, 0, 0, foe0["wp"], foe0["tp"], foe0["qi"],
+                         body=5, foe=foe0)
+
+    # ① v2 — 방어 성공률이라는 눈금이 없다 (판정 없음 — 회피는 기하)
+    probe("① v2 방어 성공률 = 0 (판정 없음)", miss0 == 0.0, f"miss={miss0}")
+
+    # ② 태세 경감이 방어력에 든다
+    d2, _ = expected(cfg0, foe0["atk"], 0, 3, 0, foe0["wp"], foe0["tp"], foe0["qi"],
+                     body=5, foe=foe0)
+    probe("② 경감 −3 → 기대 피해 감소 (soak 이 방어력에 든다)", d2 < d0 - 1e-9,
+          f"{d0:.2f} → {d2:.2f}")
+
+    # ③ 체력 파생이 방어력에 든다 (per_body)
+    d3, _ = expected(cfg0, foe0["atk"], 0, 0, 0, foe0["wp"], foe0["tp"], foe0["qi"],
+                     body=9, foe=foe0)
+    probe("③ 체력 판정치 5 → 9 → 기대 피해 감소 (per_body 파생)", d3 < d0 - 1e-9,
+          f"{d0:.2f} → {d3:.2f}")
+
+    # ④ ★ 관통 회귀 — pierced_from 을 심검으로 밀면 강기 앞 갑옷이 다시 산다 (눈이 그것을 봐야 한다)
+    spec = {"mitigation": 2, "dodge": -1, "blocks_gyeonggong": False}
+    boss0 = foe_power(cfg0, "화경")                     # 강기를 두른 몸
+    mit_a = armor_mitigation(cfg0, boss0, spec, armor_pierced_from(cfg0))
+    cfg4 = fresh(lambda c: dig(c, "equipment.yml", "armor", default={})
+                 .__setitem__("mitigation_pierced_from", "심검"))
+    boss4 = foe_power(cfg4, "화경")
+    mit_b = armor_mitigation(cfg4, boss4, spec, armor_pierced_from(cfg4))
+    probe("④ pierced_from 강기 → 심검 개정 → 강기 앞 경감 부활을 눈이 본다 (0 하드코딩 회귀 방지)",
+          mit_a == 0 and mit_b == spec["mitigation"], f"경감 {mit_a} → {mit_b}")
+
+    # ⑤ 음성 대조 — technique_power 를 비틀어도 v2 피해 불변 (무공 위력표는 v1 의 것)
+    cfg5 = fresh(lambda c: dig(c, "combat.yml", "damage", "technique_power", default={})
+                 .__setitem__("절정급", 99))
+    foe5 = foe_power(cfg5, "절정")
+    d5, _ = expected(cfg5, foe5["atk"], 0, 0, 0, foe5["wp"], foe5["tp"], foe5["qi"],
+                     body=5, foe=foe5)
+    probe("⑤ 음성 대조: technique_power 99 → v2 피해 불변", abs(d5 - d0) < 1e-9,
+          f"{d0:.2f} → {d5:.2f}")
+
+    # ⑥ enabled: false → v1 복귀 — 방어 성공률이 되살아난다 (복귀 스위치의 실존)
+    cfg6 = fresh(lambda c: dig(c, "combat.yml", "combat_v2", default={})
+                 .__setitem__("enabled", False))
+    foe6 = foe_power(cfg6, "절정")
+    _, miss6 = expected(cfg6, foe6["atk"], 10, 0, 0, foe6["wp"], foe6["tp"], foe6["qi"],
+                        body=5, foe=foe6)
+    probe("⑥ enabled:false → v1 산술 복귀 (방어 성공률 > 0)", miss6 > 0.0, f"miss={miss6:.3f}")
+
+    bad = [n for n, ok in results if not ok]
+    print()
+    if bad:
+        print(f"{FAIL} 눈의 시험 {len(results) - len(bad)}/{len(results)} — 실패: {bad}")
+        return 1
+    print(f"✅ 눈의 시험 {len(results)}/{len(results)} — v2 기대 모델이 등록부를 읽고, 스위치가 산다")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="혼천 방어 태세 검수")
     ap.add_argument("--lint-only", action="store_true", help="① 등록 정합 + ② 엔진 배선만")
     ap.add_argument("--sim-only", action="store_true", help="③ 태세 시뮬만")
     ap.add_argument("--budget", type=float, default=1800.0, help="수련 예산(일치) — 기본 1800")
+    ap.add_argument("--selftest", action="store_true",
+                    help="눈을 시험하는 눈 — v2 기대 모델 뮤테이션 프로브 (헌법 2.3)")
     args = ap.parse_args()
+
+    if args.selftest:
+        return selftest()
 
     rep = Report()
     rep.say("╔" + "═" * 70 + "╗")
