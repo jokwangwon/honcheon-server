@@ -306,9 +306,9 @@ MUTATIONS = [
     ("(88) 기슭의 문을 잠근다 (명단이 끝나도 영원한 정박)", VOY,
      "            if (!WorldBridge.seojangHolds(body)) {\n                transit(player, r, -1);\n                continue;\n            }",
      "", "기슭의 문|영원한 정박"),
-    # ((89) 재표적 ★3차 — 속도 폐지: 도하의 침묵을 잰다)
-    ("(89) 도하가 침묵한다 (암전 속에서 아무도 말하지 않는다)", CFG,
-     '      line: "§8노 소리가 어둠을 가른다 — 물이 갈라지고, 배가 나아간다."   # 【제안】',
+    # ((89) 재표적 ★4차 — 가짜 항해: 문장이 바뀌어도 침묵의 눈은 그대로 겨눈다)
+    ("(89) 도하가 침묵한다 (물 위에서 아무도 말하지 않는다)", CFG,
+     '      line: "§8노가 물을 가른다 — 물살이 뒤로 흘러가고, 안개가 마중을 나온다."   # 【제안】',
      '      line: ""', "도하가 침묵"),
     ("(90) 접합 직후의 승선 문을 닫는다 (부두 대기로 회귀)", SRC,
      "            voyage.embark(player);\n            return;\n        }\n        if (autoCrossSeconds > 0) {",
@@ -358,8 +358,9 @@ MUTATIONS = [
      "  밀서: 세가\n", "", "재난 벌로 떨어진다"),
 
     # ─── ★도하 (3차 개정 — 정박 무대 + 암전. 옛 (104)~(107) 탈것 뮤테이션은 표적 소멸 · 재표적) ───
-    ("(104) 도하가 연출 없는 순간이동이 된다 (암전이 사라진다)", VOY,
-     "        player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,\n                transitTicks + 25, 0, false, false, false));",
+    # ((104) 재표적 ★4차 — 가짜 항해: 암전 단발이 눈깜빡임으로 줄었다 — 눈은 그대로 겨눈다)
+    ("(104) 도하가 연출 없는 순간이동이 된다 (눈깜빡임이 사라진다)", VOY,
+     "                p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,\n                        blinkTicks + 30, 0, false, false, false));",
      "", "연출 없는 순간이동"),
     ("(105) 정박 갑판을 조성 판에서 뗀다 (도하해 봐야 설 자리가 물이다)", SRC,
      "                    out.add(new Place(cx + sx + dx, gy + 1, cz + dz, Material.SPRUCE_PLANKS, null));",
@@ -370,15 +371,34 @@ MUTATIONS = [
      "        SeojangBook.get().settle(player);", "", "적고 있다\\S*가 안 걷힌다|기다림 기계를 걷어야"),
 
     # ─── ★낙하 3방어 (실사용 2026-07-25 — 우물 질식·이상 리스폰) ───
+    # ((109) 재표적 — 「미리 열기」가 겉몸 치유(build+ensure)와 한 몸이 되며 조각이 자랐다.
+    #   표류를 이 시험이 잡았다 (⁉️ 원본 조각을 못 찾았다 · 2026-07-25) — 눈은 그대로 겨눈다)
     ("(109) 나루를 미리 안 연다 (재기동 후 재접속 = 우물 낙하)", SRC,
-     "        world();\n        // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다",
-     "        // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다", "미리 안 연다"),
+     "        World pre = world();\n        if (pre != null) {",
+     "        World pre = null;\n        if (pre != null) {", "미리 안 연다"),
     ("(110) 나루 밖의 항해자를 onJoin 이 안 집는다 (낙하한 몸 방치)", SRC,
      "                if (!isAntechamber(player.getWorld())\n                        && WorldBridge.seojangHolds(player.getUniqueId())) {",
      "                if (false) {", "안 집는다|방치"),
     ("(111) 죽은 넋이 나루로 못 돌아온다 (리스폰이 본세계에 세운다)", SRC,
      "        if (WorldBridge.seojangHolds(event.getPlayer().getUniqueId())) {",
      "        if (false) {", "못 돌아온다"),
+
+    # ─── ★가짜 항해 + 안개 장막 (4차 개정 2026-07-25 — "정박+암전이 배 타고 건넌다로
+    #     안 읽힌다" · "다음 정거장이 보인다") ───
+    ("(112) 흐름 등록부를 뗀다 (도하에 항해의 몸이 없다)", CFG,
+     "      flow_ticks: 110          # 세계가 흐르는 길이 (5.5초) 【제안】\n",
+     "", "항해의 몸이 없다"),
+    ("(113) 노 박자 등록부를 뗀다 (노 없는 널빤지)", CFG,
+     "      row_period: 22           # 노 박자 간격 (틱) — 한 젓기 · 좌우 번갈아 【제안】\n",
+     "", "노 박자가 없다"),
+    ("(114) 안개 장막의 키를 눕힌다 (다음 정거장이 훤히 보인다)", CFG,
+     "      height: 6                # 물 위로 이 칸까지 피어오른다 【제안】",
+     "      height: 0                # 물 위로 이 칸까지 피어오른다 【제안】", "훤히 보인다"),
+    ("(115) 가짜 항해의 붓을 꺾는다 (암전 사이에 항해의 몸이 없다)", VOY,
+     "        startFlow(player, r);", "", "가짜 항해가 말뿐"),
+    ("(116) 시계가 장막을 안 피운다 (장막이 말뿐이다)", VOY,
+     "            fogCurtain(player);   // ★안개 장막 — 다음 정거장은 안개 너머다 (본인에게만)\n",
+     "", "장막이 말뿐"),
 ]
 
 

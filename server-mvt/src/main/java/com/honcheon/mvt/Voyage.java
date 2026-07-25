@@ -51,7 +51,12 @@ final class Voyage {
     private final String shellModel;
     private final float shellScale;
     private final double shellY;
-    private final int transitTicks;
+    private final int flowTicks;
+    private final int rowPeriod;
+    private final int blinkTicks;
+    private final int fogHeight;
+    private final int fogHalfZ;
+    private final int fogDensity;
     private final String embarkLine;
     private final String transitLine;
     private final String rowSoundKey;
@@ -62,7 +67,8 @@ final class Voyage {
         String deliveredToken;                // 이 갑판에서 이미 연 장의 토큰
         String stageSet;                      // 계열 (무대 등록부의 벌 이름 · 제목으로 판별)
         int deck = -1;                        // 지금 선 갑판 (-1 = 아직 부두)
-        boolean inTransit;                    // 암전 도하 중 — 시계가 건드리지 않는다
+        boolean inTransit;                    // 도하 중 — 시계가 건드리지 않는다
+        org.bukkit.scheduler.BukkitTask fx;  // 가짜 항해의 붓 (도하 동안만 산다)
         final java.util.List<String> transcript = new java.util.ArrayList<>();   // 필사본의 재료
     }
 
@@ -85,10 +91,16 @@ final class Voyage {
         this.shellScale = sh.get("scale") instanceof Number n2 ? n2.floatValue() : 2.2f;
         this.shellY = sh.get("y") instanceof Number n3 ? n3.doubleValue() : 0.95;
         Map<String, Object> tr = sub(cfg, "transit");
-        this.transitTicks = Math.max(20, num(tr.get("ticks"), 50));
+        this.flowTicks = Math.max(40, num(tr.get("flow_ticks"), 110));
+        this.rowPeriod = Math.max(6, num(tr.get("row_period"), 22));
+        this.blinkTicks = Math.max(4, num(tr.get("blink_ticks"), 12));
         this.transitLine = str(tr.get("line"),
-                "§8노 소리가 어둠을 가른다 — 물이 갈라지고, 배가 나아간다.");
+                "§8노가 물을 가른다 — 물살이 뒤로 흘러가고, 안개가 마중을 나온다.");
         this.rowSoundKey = str(tr.get("row_sound"), "minecraft:entity.boat.paddle_water");
+        Map<String, Object> fg = sub(cfg, "fog");
+        this.fogHeight = Math.max(2, num(fg.get("height"), 6));
+        this.fogHalfZ = Math.max(2, num(fg.get("half_z"), 7));
+        this.fogDensity = Math.max(1, num(fg.get("density"), 2));
         this.embarkLine = str(cfg.get("embark_line"), "");
     }
 
@@ -166,7 +178,11 @@ final class Voyage {
 
     /** 하선 — 무대를 걷고 시계에서 내린다. 도하 기억은 메모리뿐 — 진실은 봇의 명단이다 */
     void disembark(UUID body) {
-        riders.remove(body);
+        Rider r = riders.remove(body);
+        if (r != null && r.fx != null) {
+            r.fx.cancel();
+            r.fx = null;
+        }
         ante.stage().clear(body);
     }
 
@@ -287,8 +303,9 @@ final class Voyage {
             }
             Rider r = riders.get(body);
             if (r.inTransit) {
-                continue;   // 어둠 속 — 도하 예약이 끝을 맺는다
+                continue;   // 흐르는 물 위 — 도하 예약이 끝을 맺는다
             }
+            fogCurtain(player);   // ★안개 장막 — 다음 정거장은 안개 너머다 (본인에게만)
             // ★ 갇힘 금지 — 서장이 끝났거나 명단이 낡았다(봇 죽음): 마지막 도하 = 출도
             if (!WorldBridge.seojangHolds(body)) {
                 transit(player, r, -1);
@@ -308,22 +325,37 @@ final class Voyage {
     }
 
     /**
-     * <b>암전 도하</b> — 화면이 어두워지고, 노 소리가 지나가고, 다음 갑판에서 눈을 뜬다.
-     * {@code toDeck < 0} 은 마지막 도하다 — 어둠이 걷히면 강호(출도)다.
+     * <b>가짜 항해 도하</b> (★4차 개정 2026-07-25 사용자 확정 — 실기동 총평 "정박+암전이
+     * 「배 타고 건넌다」로 안 읽힌다"): 사람도 배도 제자리, <b>세계가 흐른다</b> — 물살이
+     * 뱃전을 뒤로 흘러가고, 노 박자가 좌우 번갈아 거듭되고, 안개가 앞에서 마중을 나온다.
+     * 흐름의 끝에 눈깜빡임(짧은 어둠) — 그 사이에 몸이 다음 갑판에 옮는다.
+     * {@code toDeck < 0} 은 마지막 도하다 — 눈을 뜨면 강호(출도)다.
+     *
+     * <p>【묘비】 3차의 단발 암전(2.5초 DARKNESS) — 암전 사이에 항해의 몸이 없었다.
      */
     private void transit(Player player, Rider r, int toDeck) {
         r.inTransit = true;
         ante.stage().clear(player.getUniqueId());
-        player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,
-                transitTicks + 25, 0, false, false, false));
         if (!transitLine.isEmpty()) {
             player.sendMessage(SeojangBook.legacy(transitLine));
         }
-        player.playSound(player.getLocation(), rowSoundKey, 0.8f, 0.7f);
         UUID body = player.getUniqueId();
+        startFlow(player, r);
+        // 눈깜빡임 — 어둠이 감기는 데 한 숨 걸린다: 흐름 끝 반 박자 앞에 감는다
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player p = Bukkit.getPlayer(body);
+            if (p != null && p.isOnline() && riders.containsKey(body)) {
+                p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,
+                        blinkTicks + 30, 0, false, false, false));
+            }
+        }, Math.max(1, flowTicks - 10));
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Player p = Bukkit.getPlayer(body);
             Rider still = riders.get(body);
+            if (still != null && still.fx != null) {
+                still.fx.cancel();
+                still.fx = null;
+            }
             if (p == null || !p.isOnline() || still == null) {
                 return;
             }
@@ -351,7 +383,89 @@ final class Voyage {
                     && Math.max(0, Math.min(scene.scene(), stationsX.length - 1)) == toDeck) {
                 open(p, still, scene);
             }
-        }, transitTicks);
+        }, flowTicks + blinkTicks);
+    }
+
+    /**
+     * <b>가짜 항해의 붓</b> — 도하 동안 세계가 흐른다 (전부 본인에게만 · 난수 없음:
+     * 틱 위상의 순수 무늬다). ① 물살이 뱃전 양쪽을 뒤로(서쪽) 흘러간다 ② 이물이 물을
+     * 가른다 ③ 노 박자가 좌우 번갈아 젓는다 ④ 안개가 앞(동쪽)에서 마중을 나온다 —
+     * 흐를수록 짙어져 눈깜빡임에 잇는다.
+     */
+    private void startFlow(Player player, Rider r) {
+        UUID body = player.getUniqueId();
+        final int[] t = {0};
+        r.fx = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            Player p = Bukkit.getPlayer(body);
+            Rider still = riders.get(body);
+            if (p == null || !p.isOnline() || still == null || still.fx == null
+                    || t[0] >= flowTicks || !Antechamber.isAntechamber(p.getWorld())) {
+                if (still != null && still.fx != null) {
+                    still.fx.cancel();
+                    still.fx = null;
+                }
+                return;
+            }
+            World w = p.getWorld();
+            double wy = ante.waterTop(w) + 1.0;
+            Location at = p.getLocation();
+            // ① 물살 — 뱃전 양쪽의 흰 결이 뒤로 흘러간다 (배는 제자리 · 세계가 흐른다)
+            for (int side = -1; side <= 1; side += 2) {
+                double z = at.getZ() + side * (mooredHalfW + 1.3);
+                double x = at.getX() + 3.5 - ((t[0] / 2 + (side > 0 ? 0 : 3)) % 8);
+                p.spawnParticle(org.bukkit.Particle.CLOUD, x, wy + 0.15, z, 0, -1.0, 0.0, 0.0, 0.3);
+            }
+            // ② 이물 물보라 — 배가 물을 가른다
+            if (t[0] % 6 == 0) {
+                p.spawnParticle(org.bukkit.Particle.SPLASH,
+                        at.getX() + mooredEast + 1.0, wy, at.getZ(), 6, 0.3, 0.1, 0.8, 0.0);
+            }
+            // ③ 노 박자 — 좌·우 번갈아 젓는다
+            if (t[0] % rowPeriod == 0) {
+                int side = (t[0] / rowPeriod) % 2 == 0 ? 1 : -1;
+                double oz = at.getZ() + side * (mooredHalfW + 1.0);
+                Location oar = new Location(w, at.getX() - 1.5, wy, oz);
+                p.playSound(oar, rowSoundKey, 0.9f, side > 0 ? 0.72f : 0.65f);
+                p.spawnParticle(org.bukkit.Particle.SPLASH, oar.getX(), wy, oz, 10, 0.2, 0.1, 0.2, 0.0);
+            }
+            // ④ 안개가 마중 나온다 — 동쪽 반원 · 흐를수록 짙게 (눈깜빡임에 잇는다)
+            int breath = 1 + (4 * t[0]) / Math.max(1, flowTicks);
+            for (int k = 0; k < breath; k++) {
+                double ang = Math.toRadians((t[0] * 29 + k * 133) % 180 - 90);   // 동쪽 반원
+                double dist = 5.0 + ((t[0] / 2 + k * 5) % 4);
+                p.spawnParticle(org.bukkit.Particle.CLOUD,
+                        at.getX() + Math.cos(ang) * dist, wy + 0.5 + (k % 3),
+                        at.getZ() + Math.sin(ang) * dist, 2, 0.6, 0.5, 0.6, 0.01);
+            }
+            t[0] += 2;
+        }, 0L, 2L);
+    }
+
+    /**
+     * <b>안개 장막</b> (★사용자 확정 2026-07-25 — "다음 정거장이 보인다"): 정거장 사이
+     * 중간과 기슭 앞에 항해자의 눈에만 입자 안개가 피어오른다. 자리는 stations_x·shore_x 의
+     * <b>순수 함수</b>(중간점)다 — 따로 적지 않는다 (등록부가 어긋날 수가 없다). 입자는
+     * 벽이 아니라 장막이다 — 윤곽을 흐리고, 나머지는 도하의 눈깜빡임이 맡는다.
+     */
+    private void fogCurtain(Player player) {
+        World w = player.getWorld();
+        double wy = ante.waterTop(w) + 1.0;
+        double px = player.getLocation().getX();
+        int gap0 = stationsX.length > 1 ? stationsX[1] - stationsX[0] : 16;
+        for (int i = 0; i <= stationsX.length; i++) {
+            int mid = i == 0 ? stationsX[0] - gap0 / 2
+                    : i == stationsX.length ? (stationsX[i - 1] + shoreX) / 2
+                    : (stationsX[i - 1] + stationsX[i]) / 2;
+            double cx = ante.cx() + mid + 0.5;
+            if (cx <= px || cx - px > 40) {
+                continue;   // 지나온 물과 먼 물의 장막은 안 피운다 (눈앞의 것만)
+            }
+            for (int dz = -fogHalfZ; dz <= fogHalfZ; dz += 2) {
+                player.spawnParticle(org.bukkit.Particle.CLOUD,
+                        cx, wy + fogHeight / 2.0, ante.cz() + 0.5 + dz,
+                        fogDensity, 0.7, fogHeight / 2.0, 0.7, 0.005);
+            }
+        }
     }
 
     /** 갑판 위에서 장이 열린다 — 무대(그릇)가 서고, 꺼져 있으면 옛 책으로 강등 */

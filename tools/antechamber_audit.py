@@ -1334,9 +1334,36 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
         rep.good(f"정박 갑판 — 서{mo.get('west')}·동{mo.get('east')}·반폭{mo.get('half_w')} (문설주 안)")
     tr = vo.get("transit") or {}
     if not str(tr.get("line") or "").strip():
-        rep.bad("도하가 침묵한다 — transit.line 이 비었다 (암전 속에서 아무도 말하지 않는다)")
+        rep.bad("도하가 침묵한다 — transit.line 이 비었다 (물 위에서 아무도 말하지 않는다)")
     else:
-        rep.good(f"도하 {tr.get('ticks', '?')}틱 — 노 소리와 한 마디가 어둠을 채운다")
+        rep.good("도하의 한 마디가 있다 (transit.line)")
+    # ★4차 — 가짜 항해 (사용자 확정 2026-07-25: "정박+암전이 배 타고 건넌다로 안 읽힌다").
+    #   흐름(flow)·노 박자(row)·눈깜빡임(blink)이 등록부에 서고, 코드가 그것을 젓는다.
+    flow = tr.get("flow_ticks")
+    blink = tr.get("blink_ticks")
+    rowp = tr.get("row_period")
+    if not isinstance(flow, int) or flow < 40 \
+            or not isinstance(blink, int) or not (4 <= blink <= 40):
+        rep.bad("도하에 항해의 몸이 없다 — flow_ticks(≥40)·blink_ticks(4~40) 등록부가 없거나 "
+                "창 밖 (4차: 단발 암전은 도하가 아니다 — 세계가 흘러야 한다)")
+    else:
+        rep.good(f"도하 = 흐름 {flow}틱 + 눈깜빡임 {blink}틱 — 세계가 흐른다")
+    if not isinstance(rowp, int) or not (6 <= rowp <= (flow if isinstance(flow, int) else 200)):
+        rep.bad("노 박자가 없다 — row_period 가 없거나 흐름 밖이다 (노 없는 배는 떠내려가는 "
+                "널빤지다)")
+    else:
+        rep.good(f"노 박자 {rowp}틱 — 좌우 번갈아 젓는다")
+    # ★안개 장막 (사용자 확정 2026-07-25: "다음 정거장이 보인다" — 간격 16칸의 이질감).
+    #   자리는 stations_x·shore_x 의 순수 함수(중간점)라 등록부엔 짙기·키만 산다.
+    fog = vo.get("fog") or {}
+    if not isinstance(fog.get("height"), int) or fog.get("height", 0) < 2 \
+            or not isinstance(fog.get("half_z"), int) or fog.get("half_z", 0) < 2 \
+            or not isinstance(fog.get("density"), int) or fog.get("density", 0) < 1:
+        rep.bad("안개 장막 등록부(fog: height≥2·half_z≥2·density≥1)가 없다 — "
+                "다음 정거장이 훤히 보인다 (가림도 등록부다)")
+    else:
+        rep.good(f"안개 장막 — 물 위 {fog['height']}칸 · 반폭 {fog['half_z']} · "
+                 f"짙기 {fog['density']}")
 
     # ⑤ 배선 — 승선 세 길 · 정거장 펼침 · 기슭의 문 · 하선
     n_embark = strip_comments(code).count("voyage.embark(player)")
@@ -1361,9 +1388,20 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
     else:
         rep.good("명단이 끝나면 마지막 도하 — 어둠이 걷히면 강호다 (갇힘 금지)")
     if "PotionEffectType.DARKNESS" not in voy or "p.teleport(ante.deckAnchor(" not in voy:
-        rep.bad("도하가 연출 없는 순간이동이다 — 암전·노 소리 없이 좌표만 바뀐다 (도하는 의식이다)")
+        rep.bad("도하가 연출 없는 순간이동이다 — 눈깜빡임·노 소리 없이 좌표만 바뀐다 (도하는 의식이다)")
     else:
-        rep.good("도하 = 암전 + 노 소리 + 다음 갑판에서 눈뜸")
+        rep.good("도하 = 눈깜빡임 + 다음 갑판에서 눈뜸")
+    # ★4차 — 가짜 항해의 붓: 흐름 타이머(startFlow)가 물살·노 박자·마중 안개를 젓는다
+    if "startFlow(player, r);" not in voy or "rowPeriod" not in voy \
+            or "Particle.CLOUD" not in voy:
+        rep.bad("가짜 항해가 말뿐이다 — startFlow(물살·노 박자·마중 안개)가 도하를 안 젓는다 "
+                "(4차: 암전 사이에 항해의 몸이 있어야 한다)")
+    else:
+        rep.good("가짜 항해 — 물살이 흐르고 노가 박자를 젓는다 (startFlow)")
+    if "fogCurtain(player)" not in voy:
+        rep.bad("안개 장막이 말뿐이다 — 시계(tick)가 장막을 안 피운다 (다음 정거장이 훤히 보인다)")
+    else:
+        rep.good("안개 장막은 시계가 피운다 (fogCurtain — 본인에게만)")
     if ("return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();"
             not in voy):
         rep.bad("승선 전의 책을 안 붙든다 — 다리(2초)가 승선(5틱)을 이기면 책이 **부두에서** "

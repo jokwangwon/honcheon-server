@@ -159,6 +159,15 @@ def main() -> int:
         print(f"   {d} → {cands}")
     reachable = {c for row in affinity.values() if isinstance(row, dict)
                  for c in row.get("candidates", [])}
+    # ★세가 승격 (B-182 · 2026-07-25): 세가의_자제는 성향 직배정이 아니라 **무가 당첨 중
+    #   승격 주사위**(sega_promotion.from → to)로 닿는다. 뿌리(from)가 닿는 집이고 확률이
+    #   0 보다 크면 그 집도 닿는 집이다 — 눈이 세계보다 낡아 헛짖었다 (이 날 이 눈을 고쳤다).
+    promo = lifepath.get("sega_promotion", {}) or {}
+    if promo.get("from") in reachable and promo.get("to") in families \
+            and (promo.get("chance_pct") or 0) > 0:
+        reachable.add(promo["to"])
+        print(f"   ★ 승격의 문: {promo['from']} → {promo['to']} "
+              f"(chance {promo.get('chance_pct')}%) — 주사위로 닿는 집")
     # ★ birth: false = **태어나는 집이 아니다** (가출한_무가의_자식 — 세가를 거절해야만 닿는다).
     #   그런 집이 대응표에 없는 것은 **병이 아니라 설계다.** 눈이 헛짖으면 사람이 눈을 끈다.
     born_families = {f for f, cfg in lifepath["families"].items()

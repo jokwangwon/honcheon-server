@@ -1,5 +1,5 @@
 {
-  "__comment": "나룻배(거룻배) — 정박 갑판의 겉몸 (B-179 3차 · 2026-07-25). 갑판 실블록은 발판이고, 이 모델이 배의 윤곽이다. 바닐라 텍스처만 쓴다 — 새 그림 0. 요소 회전(±22.5°)이 이물·고물의 들림을 만든다. 단위 16=1블록 · ItemDisplay 가 2.2배로 키운다 (전장 ~5.5블록). 수치 전부 【제안】 — 빨간펜 대상.",
+  "__comment": "나룻배(거룻배) — 정박 갑판의 겉몸 (B-179 3차 · 2026-07-25). 갑판 실블록은 발판이고, 이 모델이 배의 윤곽이다. 바닐라 텍스처만 쓴다 — 새 그림 0. ★빨간펜 1차 (2026-07-25 도하 개정 회차 — 장부의 아는 문제 셋): ① 갑판 맞물림 — 옛 몸(폭 12u·scale 2.2 = 1.65칸)은 갑판(3칸)보다 좁아 널·난간이 뱃전 밖에 떠 있었다 → 선체를 확폭(z -3~19 = 3.6칸 · scale 2.6)해 갑판 6×3 널과 난간을 **감싼다** ② 곡선 각짐 — 이물·고물이 한 판 22.5°뿐이라 각졌다 → 2단 굽힘(22.5°+45°) ③ 비례 — 전장 ~7.8칸 × 폭 ~3.6칸 (갑판 서3·동2 + 이물 넋등 기둥 x+3 에 뱃머리가 닿는다). 좌표 한계 -16~32 준수 (34는 모델을 통째로 죽였다 — 체커의 진범). 단위 16=1블록 · ItemDisplay 가 2.6배로 키운다. 수치 전부 【제안】 — 수리본 재확인 스샷 빨간펜 대상.",
   "textures": {
     "hull": "minecraft:block/dark_oak_planks",
     "rim": "minecraft:block/stripped_dark_oak_log",
@@ -8,8 +8,8 @@
   },
   "elements": [
     {
-      "__comment": "밑판 — 평평한 중앙",
-      "from": [-12, 0, 2], "to": [28, 3, 14],
+      "__comment": "밑판 — 평평한 중앙 (갑판 실블록이 이 안에 앉는다)",
+      "from": [-10, 0, -2], "to": [26, 3, 18],
       "faces": {
         "down": {"texture": "#hull"}, "up": {"texture": "#deck"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
@@ -17,8 +17,8 @@
       }
     },
     {
-      "__comment": "뱃전 좌 (북측)",
-      "from": [-12, 3, 1], "to": [28, 9, 3],
+      "__comment": "뱃전 좌 (북측) — 난간 실블록 바깥에 선다 (맞물림)",
+      "from": [-10, 3, -3], "to": [26, 9, -1],
       "faces": {
         "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
@@ -27,7 +27,7 @@
     },
     {
       "__comment": "뱃전 우 (남측)",
-      "from": [-12, 3, 13], "to": [28, 9, 15],
+      "from": [-10, 3, 17], "to": [26, 9, 19],
       "faces": {
         "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
@@ -35,9 +35,9 @@
       }
     },
     {
-      "__comment": "이물(동쪽 뱃머리) — 22.5도 들려 올라간다",
-      "from": [26, 1, 2], "to": [32, 10, 14],
-      "rotation": {"origin": [26, 3, 8], "axis": "z", "angle": 22.5},
+      "__comment": "이물(동쪽 뱃머리) 1단 — 22.5도 들려 올라간다 (곡선의 첫 굽이)",
+      "from": [24, 1, -1], "to": [31, 9, 17],
+      "rotation": {"origin": [24, 3, 8], "axis": "z", "angle": 22.5},
       "faces": {
         "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
@@ -45,9 +45,9 @@
       }
     },
     {
-      "__comment": "이물 마구리 — 좁아지는 끝 (좌표는 바닐라 한계 -16~32 안 — 34는 모델을 통째로 죽였다)",
-      "from": [29, 4, 5], "to": [32, 12, 11],
-      "rotation": {"origin": [29, 6, 8], "axis": "z", "angle": 22.5},
+      "__comment": "이물 끝 2단 — 45도 · 좁아지며 치켜든다 (곡선의 둘째 굽이 · 넋등 기둥에 닿는다)",
+      "from": [29, 3, 3], "to": [32, 10, 13],
+      "rotation": {"origin": [29, 5, 8], "axis": "z", "angle": 45},
       "faces": {
         "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
@@ -55,9 +55,9 @@
       }
     },
     {
-      "__comment": "고물(서쪽) — 완만하게 들린다",
-      "from": [-16, 1, 2], "to": [-10, 9, 14],
-      "rotation": {"origin": [-10, 3, 8], "axis": "z", "angle": -22.5},
+      "__comment": "고물(서쪽) 1단 — 완만하게 들린다",
+      "from": [-14, 1, -1], "to": [-8, 8, 17],
+      "rotation": {"origin": [-8, 3, 8], "axis": "z", "angle": -22.5},
       "faces": {
         "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
@@ -65,21 +65,13 @@
       }
     },
     {
-      "__comment": "고물 사공 발판",
-      "from": [-11, 3, 4], "to": [-5, 5, 12],
+      "__comment": "고물 끝 2단 — 45도 · 좁아지는 꼬리",
+      "from": [-16, 2, 4], "to": [-13, 9, 12],
+      "rotation": {"origin": [-13, 4, 8], "axis": "z", "angle": -45},
       "faces": {
-        "down": {"texture": "#hull"}, "up": {"texture": "#deck"},
+        "down": {"texture": "#hull"}, "up": {"texture": "#rim"},
         "north": {"texture": "#hull"}, "south": {"texture": "#hull"},
-        "west": {"texture": "#hull"}, "east": {"texture": "#hull"}
-      }
-    },
-    {
-      "__comment": "가로장(앉는 널)",
-      "from": [6, 4, 2], "to": [11, 6, 14],
-      "faces": {
-        "down": {"texture": "#deck"}, "up": {"texture": "#deck"},
-        "north": {"texture": "#deck"}, "south": {"texture": "#deck"},
-        "west": {"texture": "#deck"}, "east": {"texture": "#deck"}
+        "west": {"texture": "#rim"}, "east": {"texture": "#hull"}
       }
     }
   ],
