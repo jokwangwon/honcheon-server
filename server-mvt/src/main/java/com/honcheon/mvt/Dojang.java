@@ -1218,6 +1218,7 @@ final class Dojang implements Listener {
      * 이미 이 한 문장을 부르고 있으므로, <b>여기 한 줄이 세 곳을 다 막는다</b>.
      */
     static boolean suppressWorldEvents(World world) {
-        return isDojang(world) || Antechamber.isAntechamber(world);
+        // ★서장 월드(B-179 5차)도 강호가 아니다 — 소문·혈채가 밤바다를 무시한다
+        return isDojang(world) || Antechamber.isAntechamber(world) || Voyage.isSea(world);
     }
 }

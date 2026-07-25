@@ -78,8 +78,21 @@ final class TutorialGuide implements org.bukkit.event.Listener {
      * 정거장 계수 +1 — 훅 6곳이 부른다. 접합 전의 몸에는 쌓지 않는다 (과정은 강호에 든
      * 몸의 것이다). 등록부 밖의 id 는 조용히 버리지 않고 경고한다 (훅과 등록부의 표류 감지).
      */
+    /**
+     * ★서장의 몸에는 침묵한다 (B-179 5차 · 실기동 2026-07-25 "배 위에서 우클릭 하니까
+     * 과제 » 맞는 쪽의 선택이라는 문구가 떴음"): 뿌리내림은 <b>본토의 과정</b>이다 — 서장
+     * 미완의 몸(항해 중)과 나루·서장 월드에 선 몸에는 계수도, 완료 문구도, 트래커 줄도
+     * 전부 침묵한다. 우클릭·웅크림이 태세 가르침으로 세어지면 화면이 배 위에서 본토의
+     * 말을 하는 것이다.
+     */
+    boolean silenced(Player player) {
+        return WorldBridge.seojangHolds(player.getUniqueId())
+                || Antechamber.isAntechamber(player.getWorld())
+                || Voyage.isSea(player.getWorld());
+    }
+
     void bump(Player player, String stationId) {
-        if (!enabled) {
+        if (!enabled || silenced(player)) {
             return;
         }
         Station st = stationOf(stationId);
@@ -123,7 +136,7 @@ final class TutorialGuide implements org.bukkit.event.Listener {
     }
 
     private void gesture(Player player, String name) {
-        if (!enabled || stationOf("몸짓") == null) {
+        if (!enabled || silenced(player) || stationOf("몸짓") == null) {
             return;
         }
         PlayerLedger ledger = plugin.ledger(player.getUniqueId());
@@ -144,7 +157,7 @@ final class TutorialGuide implements org.bukkit.event.Listener {
      * 남은 게 없으면 쓴 것이다). 그 외 정거장은 그 순간의 훅만이 안다 — 소급하지 않는다.
      */
     void mirror(Player player, PlayerLedger ledger) {
-        if (!enabled || !ledger.linked() || ledger.level() < 2) {
+        if (!enabled || silenced(player) || !ledger.linked() || ledger.level() < 2) {
             return;
         }
         closeQuiet(ledger, "첫_레벨");

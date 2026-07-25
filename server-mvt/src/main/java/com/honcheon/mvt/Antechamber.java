@@ -622,10 +622,8 @@ public final class Antechamber implements Listener {
         return groundY(w);
     }
 
-    /** ★3차 — 정박 갑판의 설 자리 (갑판 널 gy+1 위 · 고물 쪽 중앙 · 동쪽을 본다) */
-    Location deckAnchor(World w, int stationX) {
-        return new Location(w, cx + stationX - 0.5, groundY(w) + 2.0, cz + 0.5, -90f, 0f);
-    }
+    // 【묘비】 deckAnchor(정박 갑판의 설 자리 · 3~4차) — ★5차: 항해가 서장 월드로 이사하며
+    //   닻은 Voyage.bargeAnchor 하나가 됐다 (배는 한 척뿐이다).
 
     /** 격자 잡음 (헌법 §2.5 — 점묘 금지): 8칸 격자점 해시값의 쌍선형 보간. 난수 없음 — 결정론 */
     private static double grain(int x, int z) {
@@ -1195,37 +1193,11 @@ public final class Antechamber implements Listener {
         out.add(new Place(cx + horizonLight[0], gy + lh + 2, cz + horizonLight[1],
                 Material.LANTERN, null));
 
-        // ⑤-6 ★기억의 회랑 (B-179) — 정거장의 넋등 문(門): 물길 양옆에 한 쌍씩.
-        //   갑판이 이 사이에 정박하고, 그 위에서 장이 열린다. 계열별 기억 조형(디스플레이
-        //   엔티티 — 본인에게만 보인다)은 SeojangStage 의 몫이다.
-        for (int sx : voyage.stationsX()) {
-            for (int side : new int[]{-1, 1}) {
-                int gz2 = side * voyage.frameZ();
-                for (int y = 0; y <= 2; y++) {
-                    out.add(new Place(cx + sx, gy + y, cz + gz2,
-                            Material.COBBLED_DEEPSLATE_WALL, null));
-                }
-                out.add(new Place(cx + sx, gy + 3, cz + gz2, Material.SOUL_LANTERN, null));
-            }
-        }
-
-        // ⑤-7 ★정박 나룻배 (B-179 3차 — 정박 무대 + 암전 도하): 정거장마다 실블록 갑판이
-        //   매여 있다 — 사람은 여기 **서서** 기억을 겪고 패를 고른다 (좌석 폐지 · Voyage 묘비).
-        //   갑판 널 + 뱃전 난간(z 양변) + 이물 넋등. 치수는 voyage.moored 등록부.
-        for (int sx : voyage.stationsX()) {
-            for (int dx = -voyage.mooredWest(); dx <= voyage.mooredEast(); dx++) {
-                for (int dz = -voyage.mooredHalfW(); dz <= voyage.mooredHalfW(); dz++) {
-                    out.add(new Place(cx + sx + dx, gy + 1, cz + dz, Material.SPRUCE_PLANKS, null));
-                    if (Math.abs(dz) == voyage.mooredHalfW()) {
-                        out.add(new Place(cx + sx + dx, gy + 2, cz + dz,
-                                Material.DARK_OAK_FENCE, null));   // 뱃전 난간
-                    }
-                }
-            }
-            int bow = sx + voyage.mooredEast() + 1;   // 이물 끝 — 넋등 기둥
-            out.add(new Place(cx + bow, gy + 1, cz, Material.DARK_OAK_FENCE, null));
-            out.add(new Place(cx + bow, gy + 2, cz, Material.SOUL_LANTERN, null));
-        }
+        // 【묘비】 ⑤-6 정거장 넋등 문 · ⑤-7 정박 나룻배 갑판 (B-179 3~4차) — ★5차 개정
+        //   (2026-07-25 사용자 확정 "서장은 별도의 서장 월드 · 한 배에 타고 있는 것처럼")으로
+        //   나루의 물길 항해가 통째로 서장 월드로 이사하며 표적이 소멸했다. 나루는 다시 순수
+        //   문지방+삼도천 화폭이다. 되살리는 날 git 2026-07-25 낮 판(4차)을 보라 — 그리고
+        //   그때는 「배가 하나뿐」 감사와 화해부터 하라 (배 두 척이 보이면 그것이 위반이다).
 
         planHut(out, deck);
 
@@ -1927,6 +1899,13 @@ public final class Antechamber implements Listener {
                 // ★서장 미완의 몸이 나루 **밖**에 섰다 (재기동 창의 기본 월드 낙하 — 우물 질식의
                 //   자리. 위 start() 의 미리 열기가 1차 방어, 이것이 2차다) — 항해로 되돌린다.
                 //   watchGate 가 나루의 몸만 보므로, 밖에 선 몸은 여기서 집지 않으면 영영 방치된다.
+                if (Voyage.isSea(player.getWorld())
+                        && WorldBridge.seojangHolds(player.getUniqueId())) {
+                    // ★5차 — 서장 월드 안에서 재접속한 항해자: 나루로 되돌리지 않는다 (한 배
+                    //   위의 몸이다) — 그 자리에서 다시 태운다 (배 닻으로 재정렬)
+                    voyage.embark(player);
+                    return;
+                }
                 if (!isAntechamber(player.getWorld())
                         && WorldBridge.seojangHolds(player.getUniqueId())) {
                     World w = world();
@@ -2180,11 +2159,17 @@ public final class Antechamber implements Listener {
         //   월드가 미리 열려 있으면 바닐라가 제자리(강 위)에 되살린다 — 낙하 자체가 소멸한다.
         World pre = world();
         if (pre != null) {
-            // ★정박 갑판 (실사용 2026-07-25 "배가 없어서 서 있을 곳이 없어 물에 빠짐") —
+            // ★기동 치유 (실사용 2026-07-25 "배가 없어서 서 있을 곳이 없어 물에 빠짐") —
             //   접합자 재접속은 enter() 를 안 지나 완결성 검사가 영영 안 돌았다. 판이 자라도
-            //   (갑판 신설) 세계는 옛 몸 그대로였다. 기동 때 세계를 재고, 모자라면 짓는다.
-            //   그 위에 나룻배의 겉몸(팩 모델 셸)을 세운다 — ensure 라 몇 번 불러도 수가 지켜진다.
-            build(pre, false, () -> voyage.ensureMooredShells(pre));
+            //   세계는 옛 몸 그대로였다. 기동 때 세계를 재고, 모자라면 짓는다.
+            //   ★5차 — 팩 모델 셸은 폐지됐다: 남은 셸이 있으면 걷는다 (부활 금지의 손).
+            build(pre, false, () -> voyage.sweepShells(pre));
+        }
+        // ★★서장 월드도 미리 연다 (5차 — 나루와 같은 1차 방어: 지연 로드가 항해자를 기본
+        //   월드 스폰에 떨궜던 함정의 재발 방지) + 나룻배가 선다 (결정론 조성 · 멱등)
+        World sea = voyage.sea();
+        if (sea != null) {
+            voyage.buildBarge(sea);
         }
         // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다
         Bukkit.getPluginManager().registerEvents(stage, plugin);

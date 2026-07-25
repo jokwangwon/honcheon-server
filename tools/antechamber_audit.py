@@ -1287,58 +1287,52 @@ def audit_canvas(rep: Report, ante: dict, code: str) -> None:
 
 def audit_voyage(rep: Report, ante: dict, code: str) -> None:
     rep.say()
-    rep.say("  ⑧-3 기억의 회랑 — 강을 건너는 동안이 곧 서장인가 (B-179)")
+    rep.say("  ⑧-3 기억의 회랑 — 한 배 위의 서장인가 (B-179 ★5차 — 서장 월드의 나룻배)")
     vo = ante.get("voyage") or {}
     if not vo:
         rep.bad("voyage 절이 없다 — 회랑이 등록부에 없다 (seojang_presentation.md §0 이 정본이다)")
         return
-    g = Geo(ante)
-    stations = vo.get("stations_x") or []
-    shore = vo.get("shore_x", 0)
-    frame = vo.get("frame_z", 8)
-    wall = g.mx[1] + (ante.get("barrier") or {}).get("margin", 1)
 
-    # ① 물길의 기하 — 정거장이 장벽 밖에서 오름차순으로, 기슭(불빛) 앞까지 (★3차: 도하라
-    #   승선 지점은 폐지 — 첫 도하가 첫 갑판이다)
-    if (stations != sorted(stations) or not stations
-            or not all(wall < s < shore for s in stations)):
-        rep.bad(f"뱃길 기하가 어긋난다 — 정거장 {stations}(오름차순 · 장벽 x{wall} 밖 · "
-                f"기슭 x{shore} 앞)")
+    # ① ★서장 월드 (5차 — 사용자 확정 "별도의 서장 월드"): 이름이 있고, 나루와 다른 세계고,
+    #   칠흑의 밤이다 (13000~23000 창 — 낮이면 달빛 컨셉이 죽는다)
+    wo = vo.get("world") or {}
+    wname = str(wo.get("name") or "").strip()
+    naru = str(ante.get("world") or "honcheon_ipdo")
+    ft = wo.get("fixed_time")
+    if not wname or wname == naru:
+        rep.bad(f"서장 월드 이름이 없다/나루와 같다 ({wname!r}) — 별도 월드가 5차의 뼈대다")
     else:
-        rep.good(f"뱃길 — 장벽 x{wall} 밖 정거장 {stations} 를 지나 기슭 x{shore}")
-
-    # ② ★기슭 = 이승의 불빛 (두 등록부 대조 — 배는 그 불빛에 닿아야 한다)
-    hl = (((ante.get("canvas") or {}).get("horizon") or {}).get("light") or [0, 0])
-    if shore != hl[0]:
-        rep.bad(f"기슭 x{shore} ≠ 이승의 불빛 x{hl[0]} — 배가 불빛에 닿지 않는다 "
-                "(canvas.horizon.light 가 목적지의 정본이다)")
+        rep.good(f"서장 월드 = {wname} (나루 {naru} 와 딴 세계)")
+    if not isinstance(ft, int) or not (13000 <= ft <= 23000):
+        rep.bad(f"서장 월드가 밤이 아니다 — fixed_time {ft!r} (칠흑+달빛 확정 · 13000~23000 창)")
     else:
-        rep.good(f"기슭 x{shore} = 이승의 불빛 (배가 그 불빛을 향해 저어간다)")
+        rep.good(f"칠흑 + 달빛 — fixed_time {ft}")
 
-    # ③ ★정거장 수 = 장면 수 (seojang.yml scenes 각 벌 — 어느 장이든 열릴 자리가 있어야 한다)
-    scenes = load_yaml("seojang.yml").get("scenes") or {}
-    if not scenes:
-        rep.warn("seojang.yml scenes 를 못 읽었다 — 정거장 수 대조를 못 했다")
-    for name, sc in scenes.items():
-        if isinstance(sc, list) and len(sc) != len(stations):
-            rep.bad(f"장면 벌 '{name}' 은 {len(sc)}장인데 정거장은 {len(stations)}곳 — "
-                    "어느 장은 열릴 자리가 없다 (두 등록부가 어긋난다)")
-        elif isinstance(sc, list):
-            rep.good(f"장면 벌 '{name}' {len(sc)}장 = 정거장 {len(stations)}곳")
-
-    # ④ ★3차 — 정박 갑판과 암전 도하 (좌석 폐지: "굳이 앉아서 갈 필요가 있을까")
-    mo = vo.get("moored") or {}
-    if not mo or (mo.get("half_w", 1) >= frame):
-        rep.bad(f"정박 갑판 등록부(moored)가 없거나 문설주(±{frame})를 친다 — 갑판이 설 자리가 없다")
+    # ② ★나룻배 등록부 — 중선 (전장 > 전폭 · 무대·패가 설 안칸이 있어야 한다)
+    ba = vo.get("barge") or {}
+    hl, hw = ba.get("half_len"), ba.get("half_w")
+    if not isinstance(hl, int) or hl < 4 or not isinstance(hw, int) or hw < 2 or hl <= hw:
+        rep.bad(f"나룻배 치수가 없다/눕는다 — barge.half_len(≥4·전폭보다 길게)·half_w(≥2) "
+                f"(지금 {hl!r}×{hw!r}) — 배 없는 바다에 사람을 내려놓게 된다")
     else:
-        rep.good(f"정박 갑판 — 서{mo.get('west')}·동{mo.get('east')}·반폭{mo.get('half_w')} (문설주 안)")
+        rep.good(f"나룻배 — 전장 {2 * hl + 1} × 전폭 {2 * hw + 1} (중선)")
+
+    # ③ ★묘비 부활 감시 (5차 계율 — "배는 하나뿐"): 3~4차의 나루 물길 등록부·조성이
+    #   되살아나면 배가 여러 척이 된다 — 부활 자체가 위반이다
+    dead = [k for k in ("stations_x", "shore_x", "frame_z", "moored") if k in vo]
+    plan_src = strip_comments(code)
+    if dead or "voyage.stationsX()" in plan_src or "voyage.mooredWest()" in plan_src:
+        rep.bad(f"묘비가 부활했다 — voyage {dead} / plan 의 정거장·정박 갑판: 3~4차 나루 물길의 "
+                "것이다 (5차: 배는 서장 월드에 하나뿐 — 1장 배에서 2장 배가 보이면 위반)")
+    else:
+        rep.good("묘비는 잠들어 있다 — 나루 물길 등록부·조성 부활 없음 (배는 하나뿐)")
+
+    # ④ 도하 등록부 — 가짜 항해 (4차 승계: 흐름·노 박자·눈깜빡임) + 침묵 금지
     tr = vo.get("transit") or {}
     if not str(tr.get("line") or "").strip():
         rep.bad("도하가 침묵한다 — transit.line 이 비었다 (물 위에서 아무도 말하지 않는다)")
     else:
         rep.good("도하의 한 마디가 있다 (transit.line)")
-    # ★4차 — 가짜 항해 (사용자 확정 2026-07-25: "정박+암전이 배 타고 건넌다로 안 읽힌다").
-    #   흐름(flow)·노 박자(row)·눈깜빡임(blink)이 등록부에 서고, 코드가 그것을 젓는다.
     flow = tr.get("flow_ticks")
     blink = tr.get("blink_ticks")
     rowp = tr.get("row_period")
@@ -1353,84 +1347,102 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
                 "널빤지다)")
     else:
         rep.good(f"노 박자 {rowp}틱 — 좌우 번갈아 젓는다")
-    # ★안개 장막 (사용자 확정 2026-07-25: "다음 정거장이 보인다" — 간격 16칸의 이질감).
-    #   자리는 stations_x·shore_x 의 순수 함수(중간점)라 등록부엔 짙기·키만 산다.
+    # ★안개 링 (5차 — 장막의 상속자): 빈 수평선을 안개가 감싼다
     fog = vo.get("fog") or {}
-    if not isinstance(fog.get("height"), int) or fog.get("height", 0) < 2 \
-            or not isinstance(fog.get("half_z"), int) or fog.get("half_z", 0) < 2 \
+    if not isinstance(fog.get("radius"), int) or fog.get("radius", 0) < 6 \
+            or not isinstance(fog.get("height"), int) or fog.get("height", 0) < 2 \
             or not isinstance(fog.get("density"), int) or fog.get("density", 0) < 1:
-        rep.bad("안개 장막 등록부(fog: height≥2·half_z≥2·density≥1)가 없다 — "
-                "다음 정거장이 훤히 보인다 (가림도 등록부다)")
+        rep.bad("안개 링 등록부(fog: radius≥6·height≥2·density≥1)가 없다 — "
+                "빈 수평선이 세계를 좁힌다 (가림도 등록부다)")
     else:
-        rep.good(f"안개 장막 — 물 위 {fog['height']}칸 · 반폭 {fog['half_z']} · "
-                 f"짙기 {fog['density']}")
+        rep.good(f"안개 링 — 반경 {fog['radius']} · 키 {fog['height']} · 짙기 {fog['density']}")
 
-    # ⑤ 배선 — 승선 세 길 · 정거장 펼침 · 기슭의 문 · 하선
+    # ⑤ 배선 — 승선 세 길 · 배가 선다 · 배 위의 장 · 기슭의 문 · 침묵 금지
     n_embark = strip_comments(code).count("voyage.embark(player)")
-    if n_embark < 3:
-        rep.bad(f"승선 문이 {n_embark}곳뿐이다 — 접합 직후(watchGate)·명단 지각(시계)·종(cross) "
-                "세 길이 모두 배를 띄워야 한다 (하나라도 빠지면 그 길은 부두 대기로 되돌아간다)")
+    if n_embark < 4:
+        rep.bad(f"승선 문이 {n_embark}곳뿐이다 — 접합 직후(watchGate)·명단 지각(시계)·종(cross)·"
+                "서장 월드 재접속(3방어) 네 길이 모두 배를 띄워야 한다 "
+                "(하나라도 빠지면 그 길은 부두 대기 또는 방치다)")
     else:
         rep.good(f"승선 문 {n_embark}곳 — 어느 길로 와도 배가 뜬다")
     sbk = source("SeojangBook.java")
     if "voyage().defer(player, scene)" not in sbk:
-        rep.bad("책이 정거장을 모른다 — SeojangBook.deliver 가 항해에 묻지 않는다 "
+        rep.bad("책이 배를 모른다 — SeojangBook.deliver 가 항해에 묻지 않는다 "
                 "(책이 아무 데서나 열린다)")
     else:
-        rep.good("항해 중의 책은 정거장에서 열린다 (deliver → Voyage.defer)")
+        rep.good("항해 중의 책은 배 위에서 열린다 (deliver → Voyage.defer)")
     voy = source("Voyage.java")
     if not voy:
         rep.bad("Voyage.java 가 없다 — 도하 기계가 말뿐이다")
-    elif not re.search(r"seojangHolds\(body\)\)\s*\{\s*\n\s*transit\(player, r, -1\)", voy) \
+        return
+    if "WorldCreator(seaName)" not in voy or "minecraft:water" not in voy:
+        rep.bad("서장 월드가 말뿐이다 — Voyage 가 물의 세계를 열지 않는다 (FLAT + 물 층)")
+    else:
+        rep.good("서장 월드는 Voyage 가 연다 (FLAT + 물 층 · 못 열면 null = 안 가둔다)")
+    if "buildBarge(sea);" not in voy:
+        rep.bad("승선이 배를 안 세운다 — 배 없는 바다에 사람을 내려놓는다 (embark 의 멱등 조성)")
+    else:
+        rep.good("승선이 배를 세운다 (buildBarge — 멱등)")
+    if "voyage.buildBarge(sea);" not in code:
+        rep.bad("기동이 배를 안 세운다 — 서장 월드 미리 열기(1차 방어)에 배가 빠졌다")
+    else:
+        rep.good("기동 때 바다가 열리고 배가 선다 (1차 방어)")
+    if not re.search(r"seojangHolds\(body\)\)\s*\{\s*\n\s*transit\(player, r, -1\)", voy) \
             or "ante.depart(p, List.of());" not in voy:
         rep.bad("기슭의 문이 없다 — 명단이 끝나도(출도·봇 죽음) 마지막 도하가 출도로 못 잇는다 "
-                "(영원한 정박 = 갇힘)")
+                "(영원한 항해 = 갇힘)")
     else:
-        rep.good("명단이 끝나면 마지막 도하 — 어둠이 걷히면 강호다 (갇힘 금지)")
-    if "PotionEffectType.DARKNESS" not in voy or "p.teleport(ante.deckAnchor(" not in voy:
-        rep.bad("도하가 연출 없는 순간이동이다 — 눈깜빡임·노 소리 없이 좌표만 바뀐다 (도하는 의식이다)")
+        rep.good("명단이 끝나면 마지막 도하 — 눈을 뜨면 강호다 (갇힘 금지)")
+    if "PotionEffectType.DARKNESS" not in voy or "p.teleport(bargeAnchor(" not in voy:
+        rep.bad("도하가 연출 없는 순간이동이다 — 눈깜빡임·닻 재정렬 없이 장만 바뀐다 (도하는 의식이다)")
     else:
-        rep.good("도하 = 눈깜빡임 + 다음 갑판에서 눈뜸")
-    # ★4차 — 가짜 항해의 붓: 흐름 타이머(startFlow)가 물살·노 박자·마중 안개를 젓는다
+        rep.good("도하 = 눈깜빡임 + 같은 배의 닻에서 눈뜸")
     if "startFlow(player, r);" not in voy or "rowPeriod" not in voy \
             or "Particle.CLOUD" not in voy:
         rep.bad("가짜 항해가 말뿐이다 — startFlow(물살·노 박자·마중 안개)가 도하를 안 젓는다 "
                 "(4차: 암전 사이에 항해의 몸이 있어야 한다)")
     else:
         rep.good("가짜 항해 — 물살이 흐르고 노가 박자를 젓는다 (startFlow)")
-    if "fogCurtain(player)" not in voy:
-        rep.bad("안개 장막이 말뿐이다 — 시계(tick)가 장막을 안 피운다 (다음 정거장이 훤히 보인다)")
+    if "fogRing(player);" not in voy:
+        rep.bad("안개 링이 말뿐이다 — 시계(tick)가 링을 안 피운다 (수평선이 훤히 빈다)")
     else:
-        rep.good("안개 장막은 시계가 피운다 (fogCurtain — 본인에게만)")
-    if ("return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();"
+        rep.good("안개 링은 시계가 피운다 (fogRing — 본인에게만)")
+    if ("return (Antechamber.isAntechamber(player.getWorld()) || isSea(player.getWorld()))"
             not in voy):
         rep.bad("승선 전의 책을 안 붙든다 — 다리(2초)가 승선(5틱)을 이기면 책이 **부두에서** "
                 "열린다 (실기동 2026-07-25: \"이으니까 바로 책을 받고 읽기 시작\")")
     else:
-        rep.good("승선 전의 책은 승선을 기다린다 (접합 직후의 경주 봉인)")
+        rep.good("승선 전의 책은 승선을 기다린다 (접합 직후의 경주 봉인 — 나루·바다 공통)")
     if "open(p, still, scene);" not in voy:
-        rep.bad("도하 뒤 장이 안 열린다 — 갑판에 닿아도 무대가 침묵한다")
+        rep.bad("도하 뒤 장이 안 열린다 — 눈을 떠도 무대가 침묵한다")
     else:
-        rep.good("갑판에 닿으면 장이 열린다 (open — 무대 또는 강등 책)")
-    plan_src = strip_comments(code)
-    if "voyage.mooredWest()" not in plan_src \
-            or "gy + 1, cz + dz, Material.SPRUCE_PLANKS" not in code:
-        rep.bad("정박 갑판이 조성 판에 없다 — 도하해 봐야 설 자리가 물이다 (plan ⑤-7)")
-    else:
-        rep.good("정박 갑판은 조성 판에 선다 (plan ⑤-7 — 같은 등록부)")
+        rep.good("눈을 뜨면 장이 열린다 (open — 무대 또는 강등 책)")
     dp = body_of(code, r"void depart\(Player player, List<String> extra\)")
     if dp is None or "voyage.disembark" not in dp:
-        rep.bad("출도가 배를 안 걷는다 — 배가 기슭에 쌓인다")
+        rep.bad("출도가 배를 안 걷는다 — 명단이 배 위에 쌓인다")
     else:
         rep.good("출도는 배를 걷는다 (항해는 메모리뿐)")
-
-    # 【묘비】 ⑥ 조립 나룻배의 눈들 (부품·좌석 투명·조종석·선체 추종·사공 몸) — ★3차 개정
-    #   (정박 무대 + 암전 도하)으로 탈것이 폐지되며 표적이 소멸했다. 정박 갑판·도하의 눈이
-    #   위(④·⑤)에서 그 자리를 잇는다. 탈것을 되살리는 날 git 2026-07-25 새벽 판을 보라.
-    if "voyage.stationsX()" not in code:
-        rep.bad("정거장 문(門)이 말뿐이다 — plan() 이 정거장 등록부를 안 읽는다")
+    if "Voyage.isSea(player.getWorld())" not in code:
+        rep.bad("서장 월드의 재접속을 아무도 안 집는다 — 배 위에서 나간 몸이 돌아와도 명단 밖이다 "
+                "(3방어의 구멍)")
     else:
-        rep.good("정거장 문은 조성 판에 선다 (plan ⑤-6 — 같은 등록부)")
+        rep.good("서장 월드 재접속 = 그 자리 재승선 (3방어)")
+    # ★튜토리얼 침묵 (실기동 2026-07-25 "배 위에서 우클릭 하니까 과제 » … 문구") — 뿌리내림은
+    #   본토의 과정이다: 서장의 몸에 과제가 말을 걸면 위반이다
+    tut = source("TutorialGuide.java")
+    if tut.count("silenced(player)") < 3 or "boolean silenced(Player player)" not in tut:
+        rep.bad("서장의 몸에 과제가 말을 건다 — TutorialGuide 침묵 게이트(silenced)가 "
+                "훅(bump·gesture·mirror)을 안 지킨다 (배 위의 우클릭이 태세 가르침으로 세인다)")
+    else:
+        rep.good("서장의 몸에 뿌리내림은 침묵한다 (silenced — bump·gesture·mirror)")
+    if "tutorial.silenced(player)" not in source("HoncheonMvt.java"):
+        rep.bad("항해 중에도 뿌리내림 트래커가 뜬다 — 사이드바가 침묵 게이트를 안 지난다")
+    else:
+        rep.good("항해 중 사이드바 트래커도 침묵한다")
+
+    # 【묘비】 옛 ⑧-3 의 눈들 — 물길 기하(정거장 오름차순·장벽 밖)·기슭=이승의 불빛 대조·
+    #   정거장 수=장면 수·정박 갑판(문설주 안)·조성 판 ⑤-6/⑤-7 — ★5차(별도 서장 월드 ·
+    #   배 한 척)로 표적 소멸. 위 ③(부활 감시)이 무덤을 지킨다. git 2026-07-25 낮 판이 정본.
 
 
 # ═══════════════════════════════════════════════════════════════════════════

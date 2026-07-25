@@ -453,8 +453,10 @@ public final class HoncheonMvt extends JavaPlugin {
         Zone zone = zoneAt(player.getLocation());
         boolean dojang = Dojang.isDojang(player.getWorld());
         PlayerLedger ledger = ledger(player.getUniqueId());
-        // ★뿌리내림 트래커 (B-178 · 한월 A7) — 배우는 동안만 자를 보인다 (끝나면 줄이 사라진다)
-        String tut = tutorial == null ? null : tutorial.trackerLine(ledger);
+        // ★뿌리내림 트래커 (B-178 · 한월 A7) — 배우는 동안만 자를 보인다 (끝나면 줄이 사라진다).
+        //   서장의 몸에는 침묵한다 (B-179 5차 — 배 위에 본토의 자가 뜨는 소음)
+        String tut = tutorial == null || tutorial.silenced(player)
+                ? null : tutorial.trackerLine(ledger);
         if (tut != null) {
             obj.getScore(tut).setScore(6);
         }

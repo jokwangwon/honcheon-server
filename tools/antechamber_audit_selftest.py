@@ -28,6 +28,8 @@ STG = f"{ROOT}/config/seojang_stage.yml"
 GLB = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/GameListener.java"
 BSJ = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/Seojang.java"
 SJY = f"{ROOT}/config/seojang.yml"
+TUT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/TutorialGuide.java"   # ★5차 — 침묵 게이트
+MVT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/HoncheonMvt.java"     # ★5차 — 사이드바 게이트
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -295,10 +297,16 @@ MUTATIONS = [
     #
     # 회랑의 계약: 승선 세 길이 다 배를 띄운다 · 책은 정거장에서 열린다 · 배는 이승의 불빛에
     # 닿는다 · 명단이 끝나면 기슭=출도 (갇힘 금지). 하나라도 못 잡으면 회랑이 조용히 무너진다.
-    ("(85) 정거장을 하나 줄인다 (어느 장은 열릴 자리가 없다)", CFG,
-     "stations_x: [44, 60, 76]", "stations_x: [44, 60]", "열릴 자리가 없다"),
-    ("(86) 기슭이 이승의 불빛을 비껴간다 (배가 불빛에 닿지 않는다)", CFG,
-     "shore_x: 92", "shore_x: 120", "불빛"),
+    # ((85)(86) 재표적 ★5차 — 나루 물길(정거장·기슭)이 서장 월드로 이사하며 표적 소멸.
+    #   새 표적 = 서장 월드·나룻배 등록부)
+    ("(85) 나룻배 치수를 눕힌다 (배 없는 바다에 사람을 내려놓는다)", CFG,
+     "      half_len: 6              # 이물·고물 끝까지 반길이 (전장 13 · 동서로 눕는다 · 이물=동)",
+     "      half_len: 3              # 이물·고물 끝까지 반길이 (전장 13 · 동서로 눕는다 · 이물=동)",
+     "나룻배 치수"),
+    ("(86) 서장 월드의 이름을 지운다 (별도 월드가 사라진다)", CFG,
+     '      name: "honcheon_seojang" # 서장 월드 — 물뿐이다 (FLAT · 구조물 0 · 몹 0 · 결정론)',
+     '      name: ""                 # 서장 월드 — 물뿐이다 (FLAT · 구조물 0 · 몹 0 · 결정론)',
+     "서장 월드 이름"),
     ("(87) 책이 정거장을 모른다 (아무 데서나 열린다)", SBK,
      "        Antechamber ante = plugin.antechamber();\n        if (ante != null && ante.voyage().defer(player, scene)) {\n            return;\n        }",
      "", "정거장을 모른다|아무 데서나"),
@@ -313,12 +321,14 @@ MUTATIONS = [
     ("(90) 접합 직후의 승선 문을 닫는다 (부두 대기로 회귀)", SRC,
      "            voyage.embark(player);\n            return;\n        }\n        if (autoCrossSeconds > 0) {",
      "            return;\n        }\n        if (autoCrossSeconds > 0) {", "승선 문"),
-    ("(91) 출도가 배를 안 걷는다 (배가 기슭에 쌓인다)", SRC,
+    # ((91) 재표적 ★5차 — 문구가 「명단이 배 위에 쌓인다」로 바뀌었다)
+    ("(91) 출도가 배를 안 걷는다 (명단이 배 위에 쌓인다)", SRC,
      "        voyage.disembark(id);   // ★B-179 — 배는 기슭에 남지 않는다 (항해는 메모리뿐이다)\n",
-     "", "기슭에 쌓인다"),
+     "", "배를 안 걷는다|배 위에 쌓인다"),
     # ★실기동 1호 (2026-07-25 "이으니까 바로 책을 받고 읽기 시작") — 접합 직후의 경주
+    # ((92) 재표적 ★5차 — 경주 봉인이 나루·바다 공통이 됐다)
     ("(92) 승선 전의 책을 안 붙든다 (책이 부두에서 열린다)", VOY,
-     "            return Antechamber.isAntechamber(player.getWorld()) && !scene.writing();",
+     "            return (Antechamber.isAntechamber(player.getWorld()) || isSea(player.getWorld()))\n                    && !scene.writing();",
      "            return false;", "부두에서"),
 
     # ─── ★★기억의 무대 (B-179 2차 · "글이 아닌 몸으로 역사를 느끼는 형태") ───
@@ -362,9 +372,10 @@ MUTATIONS = [
     ("(104) 도하가 연출 없는 순간이동이 된다 (눈깜빡임이 사라진다)", VOY,
      "                p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,\n                        blinkTicks + 30, 0, false, false, false));",
      "", "연출 없는 순간이동"),
-    ("(105) 정박 갑판을 조성 판에서 뗀다 (도하해 봐야 설 자리가 물이다)", SRC,
-     "                    out.add(new Place(cx + sx + dx, gy + 1, cz + dz, Material.SPRUCE_PLANKS, null));",
-     "", "조성 판에 없다"),
+    # ((105) 재표적 ★5차 — 정박 갑판(나루 조성 판)이 걷히고 배는 승선이 세운다)
+    ("(105) 승선이 배를 안 세운다 (배 없는 바다에 사람을 내려놓는다)", VOY,
+     "        buildBarge(sea);   // 멱등 — 배 없는 바다에 사람을 내려놓지 않는다\n",
+     "", "배를 안 세운다"),
     ("(106) 도하 뒤 장이 안 열린다 (갑판이 침묵한다)", VOY,
      "                open(p, still, scene);", "", "장이 안 열린다"),
     ("(108) 붓을 내려놔도 「적고 있다」가 남는다 (화면의 거짓말)", VOY,
@@ -391,14 +402,36 @@ MUTATIONS = [
     ("(113) 노 박자 등록부를 뗀다 (노 없는 널빤지)", CFG,
      "      row_period: 22           # 노 박자 간격 (틱) — 한 젓기 · 좌우 번갈아 【제안】\n",
      "", "노 박자가 없다"),
-    ("(114) 안개 장막의 키를 눕힌다 (다음 정거장이 훤히 보인다)", CFG,
-     "      height: 6                # 물 위로 이 칸까지 피어오른다 【제안】",
-     "      height: 0                # 물 위로 이 칸까지 피어오른다 【제안】", "훤히 보인다"),
+    # ((114)(116) 재표적 ★5차 — 안개 장막(중간점) → 안개 링(배 주위))
+    ("(114) 안개 링의 키를 눕힌다 (빈 수평선이 세계를 좁힌다)", CFG,
+     "      height: 5                # 물 위로 이 칸까지 【제안】",
+     "      height: 0                # 물 위로 이 칸까지 【제안】", "수평선"),
     ("(115) 가짜 항해의 붓을 꺾는다 (암전 사이에 항해의 몸이 없다)", VOY,
      "        startFlow(player, r);", "", "가짜 항해가 말뿐"),
-    ("(116) 시계가 장막을 안 피운다 (장막이 말뿐이다)", VOY,
-     "            fogCurtain(player);   // ★안개 장막 — 다음 정거장은 안개 너머다 (본인에게만)\n",
-     "", "장막이 말뿐"),
+    ("(116) 시계가 링을 안 피운다 (링이 말뿐이다)", VOY,
+     "            fogRing(player);   // ★안개 링 — 빈 수평선을 안개가 감싼다 (본인에게만)\n",
+     "", "링이 말뿐"),
+
+    # ─── ★5차 (2026-07-25 — 별도 서장 월드 · 한 배 위의 서장 · 튜토리얼 침묵) ───
+    ("(117) 묘비를 파헤친다 (나루 물길 등록부의 부활)", CFG,
+     "  voyage:\n    world:",
+     "  voyage:\n    stations_x: [44, 60, 76]\n    world:", "묘비가 부활"),
+    ("(118) 서장 월드를 낮으로 돌린다 (칠흑+달빛이 죽는다)", CFG,
+     "      fixed_time: 18000        # 칠흑 + 달빛 — 자정 (사용자 확정 「칠흑 + 달빛」) 【제안】",
+     "      fixed_time: 6000         # 칠흑 + 달빛 — 자정 (사용자 확정 「칠흑 + 달빛」) 【제안】",
+     "밤이 아니다"),
+    ("(119) 기동이 배를 안 세운다 (1차 방어에 배가 빠진다)", SRC,
+     "            voyage.buildBarge(sea);\n", "", "기동이 배를 안 세운다"),
+    ("(120) 튜토리얼 침묵 게이트를 뜯는다 (배 위 우클릭이 과제로 세인다)", TUT,
+     "        if (!enabled || silenced(player)) {\n            return;\n        }",
+     "        if (!enabled) {\n            return;\n        }", "과제가 말을 건다"),
+    ("(121) 트래커가 항해 중에도 뜬다 (사이드바 침묵 구멍)", MVT,
+     "        String tut = tutorial == null || tutorial.silenced(player)\n                ? null : tutorial.trackerLine(ledger);",
+     "        String tut = tutorial == null ? null : tutorial.trackerLine(ledger);",
+     "트래커가 뜬다"),
+    ("(122) 서장 월드 재접속을 안 집는다 (3방어의 구멍)", SRC,
+     "                if (Voyage.isSea(player.getWorld())\n                        && WorldBridge.seojangHolds(player.getUniqueId())) {",
+     "                if (false) {", "재접속을 아무도 안 집는다"),
 ]
 
 
