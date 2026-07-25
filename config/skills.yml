@@ -43,7 +43,7 @@ schema:
 # MVT SkillListener 의 SKILL_BY_WEAPON_CLASS 는 이 표를 읽어야 한다 (하드코딩 금지).
 # 위력 수치는 combat.yml damage.weapon_power — 여기는 '어떤 무공이 어떤 병장기에 실리는가'만.
 weapon_classes:
-  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 구, 중병기, 부]   # 월아산 삭제 → 봉 통합 (2026-07-23 사용자 확정)
+  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 구, 중병기, 부, 부채]   # 월아산 삭제 → 봉 통합 (2026-07-23) · 부채 신설 (2026-07-26 제갈 — 문사의 병기)
   unarmed_family: [맨손, 권갑]     # 권갑은 맨손의 연장 — 권법·장법·박투·금나술·독공이 그대로 실린다
   rule: "무공은 자기 weapon_class 의 병장기를 들었을 때만 온전히 나간다. 다른 병장기를 들면 다운캐스트('맨 기술')"
   unarmed_rule: "【사용자 지시】 권법을 배운 자는 무기를 들지 않아도 초식이 나간다 — 맨손이 곧 그 무공의 병장기다"
@@ -1420,6 +1420,52 @@ martial_arts:
     side_effects: false
     public_use_rumor: true
     faction_reaction: false
+
+  # ─── 제갈 확장 2 (2026-07-26 사용자 확정 「부채로도 싸우고, 마법처럼 진법을」):
+  #     선법(扇法) 계열 신설 (부채 = 문사의 병기 — weapon_power 부채 등록) + 팔진도.
+  #     이름 학우선법·팔진도는 원천 클리셰 (학우선 = 공명의 부채 · 팔진도 = 공명의 진).
+  #     ★부채는 **스킬 위주** (사용자 확정 2026-07-26): 평타 위력 1(맨손과 같다) — 부채의 값은
+  #     전부 초식·격 라이더·진에 실린다. 선법 중·상급 증축은 후속 (B-188) ───
+  hakuseon_beop:
+    name: "학우선법"
+    category: "선법"
+    weapon_class: 부채
+    sub_category: "가전 선법 (하급 — 학의 깃이 가리고, 접히며 벤다)"
+    grade: "이류"
+    tier: 하급
+    lineage: jegal_seon
+    faction: jegal
+    required_realm: "이류"
+    required_stats: { 지혜: 4, 민첩: 3 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수 (검을 놓은 손에도 부채는 남는다 — 문사의 병기)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  paljindo:
+    name: "팔진도"
+    category: "합격진"
+    weapon_class: 무관
+    sub_category: "환진 (2~5인 — 여덟 문이 닫히면 적은 길을 잃는다: 마법처럼 보이는 것은 자리다)"
+    grade: "절정"
+    tier: 상급
+    lineage: jegal_geom
+    faction: jegal
+    required_realm: "일류"
+    required_stats: { 지혜: 5 }
+    required_mastery: 3
+    requires_skill: { id: socheonseong_geombeop, mastery: 3 }
+    acquisition: "가전 진법 구결 — 가주·장로 전수 (기문둔갑의 절반은 자리 배치다 · party.yml 합격진 정합)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
 
   # ─── 소림사 (sorimsa) — 권 · 계보 sorim_kwon ───
   # 노션: 스킬 소림권법 / 오의 백보신권·여래신장. 하급(나한권 18수)은 기존 등재 — 본산 108수가 중급이다

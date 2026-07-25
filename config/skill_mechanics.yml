@@ -837,6 +837,26 @@ skills:
     vfx: "밟기 전에 이미 비어 있는 자리 (파티클 예산 경유)"
     qi_note: "경신(내력 1~2)을 얹으면 거리 6 → 9 (일류+)"
 
+  hakuseon_beop:                  # 학우선법 (하급 선법) — 깃으로 가리고, 접히며 벤다
+    combo:
+      - { type: 호, angle: 120, range: 2.8, frames: [3, 2, 4], stagger: 약, cost: 0 }   # 펼친 깃 — 넓고 가볍다
+      - { type: 호, angle: 120, range: 2.8, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.0, length: 3.0, frames: [5, 3, 8], stagger: 중, cost: 0 }   # 접힌 부채 — 뼈대로 찍는다
+    combo_input_window: 11
+    cooldown_ticks: 85
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "깃털 한 장이 떠서 벤다" }
+
+  paljindo:                       # 팔진도 (환진 2~5인) — 여덟 문이 닫힌다
+    type: 진
+    size: [2, 5]
+    radius: 6
+    frames: [20, 0, 10]
+    effect: "협공 슬롯 5 개방 · 성원 판정 +1 · 【제안】 진 안의 적 도주 판정 -2 (여덟 문 — 길을 잃는다 · party.yml 정합 등재는 미결)"
+    break_condition: "성원 1인 무력화 시 진 붕괴 — 라운드 종료까지 전원 -1"
+    cooldown_ticks: 400
+    cost: 0
+    note: "매화검진 문법 + 제갈의 결(가둠) — 값의 확정은 party.yml 합격진 회차에서 사용자와"
+
 # ─── 소림사 — sorim_kwon ───
   sorim_kwonbeop:                 # 소림권법 (중급) — 본산 108수. 짧고 끈질기다
     combo:

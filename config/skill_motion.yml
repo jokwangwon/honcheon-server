@@ -657,6 +657,7 @@ weapon_styles:
   구:      { verb: 찍는다, arc: cloud,        thrust: enchanted_hit, trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.7, pitch: 0.9 } }
   중병기:  { verb: 짓뭉갠다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.6 } }
   부:      { verb: 찍어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.9, pitch: 0.8 } }
+  부채:    { verb: 접어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.5 } }   # 扇 — 펼쳐 가리고 접어 벤다 (2026-07-26)
   무관:    { verb: 움직인다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.4 } }
   짐승:    { verb: 덮친다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.wolf.growl", volume: 0.8, pitch: 0.9 } }
 
@@ -1149,6 +1150,20 @@ skills:
     style: 무관
     steps:
       - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.4, pitch: 1.85 } }   # 미리 비어 있던 자리
+
+  hakuseon_beop:
+    name: "학우선법"
+    style: 부채
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.6 } }   # 깃이 스친다
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.7 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "block.note_block.harp", volume: 0.8, pitch: 1.3 } }   # 접히는 소리 — 뼈대가 운다
+
+  paljindo:
+    name: "팔진도"
+    style: 무관
+    steps:
+      - { trail: 진, count: 2, sound: { key: "block.beacon.activate", volume: 0.7, pitch: 1.4 } }   # 여덟 문이 닫힌다 — 가장 높게 운다
 
   # ── 소림사 (계보) — 리치 2.4 (최단). 대신 **네 번** 친다 ──
   sorim_kwonbeop:
@@ -2429,6 +2444,7 @@ display:
     구:     { span_ratio: 0.60, reach: 0.95, thickness: 1.10, tilt: 50 }   # 찍는다
     중병기: { span_ratio: 0.90, reach: 0.95, thickness: 1.80, tilt: 60 }   # 짓뭉갠다 — 가장 굵다
     부:     { span_ratio: 0.85, reach: 1.00, thickness: 1.70, tilt: 70 }   # 찍어벤다 (0.9/s — 가장 느린 손)
+    부채:   { span_ratio: 0.50, reach: 0.75, thickness: 0.60, tilt: 15 }   # 접어벤다 — 얇고 넓게 스친다 (문사의 손)
     무관:   null                                                           # 보법·심법 — 벨 것이 없다
     짐승:   null                                                           # 발톱은 병기가 아니다
 
@@ -2747,6 +2763,7 @@ basic_strike:
     권갑:   { trail: 호, range: 2.5, angle: 90,  frames: [1, 1, 3] }
     맨손:   { trail: 호, range: 2.5, angle: 90,  frames: [1, 1, 3] }
     암기:   { trail: 시, range: 16.0, angle: 1,  frames: [2, 1, 4] }   # 던진다 (ranged.암기 사거리 16)
+    부채:   { trail: 호, range: 2.6, angle: 110, frames: [2, 2, 4] }   # 접어벤다 — 가볍고 넓다 (문사의 손)
     활:     null                  # 바닐라 활이 제 일을 한다 — 우리가 얹을 것이 없다
     무관:   null
     짐승:   null

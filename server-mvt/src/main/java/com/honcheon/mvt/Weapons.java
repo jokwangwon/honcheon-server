@@ -137,6 +137,7 @@ public final class Weapons {
             "mudang", Series.검,        // 태극검
             "paengga", Series.도,       // 오호단문도
             "dangga", Series.단검,      // 비수 — 암기·독
+            "jegal", Series.부채,       // 학우선 — 문사의 병기 (2026-07-26)
             "sorimsa", Series.권갑);    // 권·장
 
     /**
@@ -237,7 +238,11 @@ public final class Weapons {
         구("gu", Base.PICKAXE, "검", -2.5, 0.0),        // 1.5/s — 걸고 당긴다. 중간
         // ─── 원거리 — 화살은 아이템이 아니라 이펙트다 (2026-07-23 사용자 확정 · B-174:
         //     "활도 스킬 모션으로 공격 이펙트로 활을 쏘는것 처럼 표시") ───
-        활(null, Base.BOW, "활", -2.4, 0.0);           // modelId null = 팩 미구움 — 바닐라 활 그대로 (RangedShot 이 사선을 긋는다)
+        활(null, Base.BOW, "활", -2.4, 0.0),           // modelId null = 팩 미구움 — 바닐라 활 그대로 (RangedShot 이 사선을 긋는다)
+        // ─── 부채(扇) — 문사의 병기 (2026-07-26 사용자 확정 「제갈은 부채로도 싸운다」 · 학우선의 결)
+        //     modelId null = 팩 미구움 (붓 아이템 그대로 — 팩 회차에서 굽는다) · 활과 같은 선례:
+        //     재질 사다리가 없어 등급은 툴팁·PDC 가 말한다 ───
+        부채(null, Base.BRUSH, "부채", -2.0, 0.0);      // 2.0/s — 가볍고 빠르다. 위력은 진(陣)과 무공이 만든다
 
         /** 팩 모델 키의 계열 부분. null = 팩 미구움 → item_model 부착 금지 */
         public final String modelId;
@@ -300,7 +305,9 @@ public final class Weapons {
         PICKAXE(Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.DIAMOND_PICKAXE,
                 Material.GOLDEN_PICKAXE, Material.NETHERITE_PICKAXE),
         // 활 — 바닐라에 재질 사다리가 없다. 등급은 재질 색이 아니라 툴팁·PDC 가 말한다
-        BOW(Material.BOW, Material.BOW, Material.BOW, Material.BOW, Material.BOW);
+        BOW(Material.BOW, Material.BOW, Material.BOW, Material.BOW, Material.BOW),
+        // 부채 — 붓(BRUSH)을 징발한다 (활과 같은 선례 — 등급은 툴팁·PDC 의 것)
+        BRUSH(Material.BRUSH, Material.BRUSH, Material.BRUSH, Material.BRUSH, Material.BRUSH);
 
         private final Material[] byGrade;   // 범철·정련·보병·신병·마병 순
 
@@ -905,6 +912,7 @@ public final class Weapons {
             case 봉 -> ChatColor.DARK_GRAY + "(棒)";
             case 구 -> ChatColor.DARK_GRAY + "(鉤)";
             case 활 -> ChatColor.DARK_GRAY + "(弓)";
+            case 부채 -> ChatColor.DARK_GRAY + "(扇)";
         };
     }
 
@@ -928,6 +936,7 @@ public final class Weapons {
             case 봉 -> "날이 없는 장병기 — 길고 느리며 간격이 있다.";
             case 구 -> "걸고 당긴다 — 상대의 병기를 얽는 손.";
             case 활 -> "거리를 위력으로 바꾼다 — 닿기 전에 맞힌다. 코앞은 못 쏜다.";
+            case 부채 -> "문사의 병기 — 가볍고 빠르다. 위력은 진(陣)과 무공이 만든다.";
         };
         return List.of(byGrade, bySeries);
     }
