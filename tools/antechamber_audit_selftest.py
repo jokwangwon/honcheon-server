@@ -32,6 +32,7 @@ TUT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/TutorialGuide.java"   #
 MVT = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/HoncheonMvt.java"     # ★5차 — 사이드바 게이트
 LLR = f"{ROOT}/server-bot/src/main/java/com/honcheon/bot/LlmRenderer.java"  # ★붓 로마자 안전망
 HTG = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/HuntingGrounds.java"  # ★비무 상대 설 자리
+SKL = f"{ROOT}/server-mvt/src/main/java/com/honcheon/mvt/SkillListener.java"    # ★수련 정산 미룸
 AUDIT = f"{ROOT}/tools/antechamber_audit.py"
 
 # (이름, 파일, 원본조각, 바꿀조각, 잡아야 하는 말)
@@ -485,6 +486,9 @@ MUTATIONS = [
     ("(136) 비무 상대를 안 재고 세운다 (벽 속 질식 루프)", HTG,
      "            Location fixed = Standing.landing(at, 8);",
      "            Location fixed = at;", "설 자리를 안 재고"),
+    ("(137) 수련 정산이 서장의 몸에 말을 건다 (무대 한가운데 「흩어졌다」)", SKL,
+     "        if (WorldBridge.seojangHolds(player.getUniqueId())\n                || Antechamber.isAntechamber(player.getWorld())\n                || Voyage.isSea(player.getWorld())) {\n            return;\n        }",
+     "", "서장의 몸에 말을 건다"),
 ]
 
 

@@ -1544,6 +1544,15 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
                 "(2026-07-25: 곽진이 10초마다 죽었다)")
     else:
         rep.good("비무 상대는 설 자리를 재고 선다 (Standing — 못 서면 로그가 말한다)")
+    # ★서장의 몸에는 강호의 하루가 흐르지 않는다 (실기동 2026-07-25 — 항해 무대에
+    #   「수련 N일치가 흩어졌다」): 일일 정산은 내린 뒤로 미룬다 (장부 손실 0)
+    skl = source("SkillListener.java")
+    st_body = body_of(skl, r"private void settleTraining\(Player player, SkillEngine.State state\)")
+    if st_body is None or "Voyage.isSea(player.getWorld())" not in st_body:
+        rep.bad("수련 정산이 서장의 몸에 말을 건다 — settleTraining 이 나루·서장 월드·명단을 "
+                "안 본다 (무대 한가운데 「흩어졌다」가 찍힌다)")
+    else:
+        rep.good("수련 정산은 내린 뒤에 온다 (서장의 몸에는 강호의 하루가 안 흐른다)")
     la = stg.get("lanterns") or {}
     if "{label}" not in str(la.get("label_format") or "") \
             or "Material.DARK_OAK_PLANKS" in sjs:

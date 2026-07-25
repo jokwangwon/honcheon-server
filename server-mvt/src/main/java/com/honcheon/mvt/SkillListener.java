@@ -5605,6 +5605,14 @@ public final class SkillListener implements Listener {
         if (!ledger.linked()) {
             return;   // 강호에 없는 몸에는 쌓을 장부가 없다 (onJoin 의 nag 가 그 이유를 말했다)
         }
+        // ★서장의 몸에는 강호의 하루가 흐르지 않는다 (실기동 2026-07-25 — 항해 무대
+        //   한가운데 「수련 0.2일치가 흩어졌다」가 찍혔다): 날은 안 굴리고 미룬다 —
+        //   내린 뒤 첫 정산이 같은 몫을 가져간다 (장부 손실 0 · 자리만 옮긴다)
+        if (WorldBridge.seojangHolds(player.getUniqueId())
+                || Antechamber.isAntechamber(player.getWorld())
+                || Voyage.isSea(player.getWorld())) {
+            return;
+        }
         if (!ledger.isNewDay(day)) {
             return;
         }
