@@ -432,6 +432,17 @@ MUTATIONS = [
     ("(122) 서장 월드 재접속을 안 집는다 (3방어의 구멍)", SRC,
      "                if (Voyage.isSea(player.getWorld())\n                        && WorldBridge.seojangHolds(player.getUniqueId())) {",
      "                if (false) {", "재접속을 아무도 안 집는다"),
+    # ─── ★5차 실기동 1호 (2026-07-25 "2장이 다시 시작되지도 않아" · "배에 뱃사공도 없어") ───
+    ("(123) 패의 세계 검사를 나루로 되돌린다 (서장 월드의 몸에게 패가 영영 안 걸린다)", SJS,
+     "            if (player.isOnline() && (Antechamber.isAntechamber(player.getWorld())\n                    || Voyage.isSea(player.getWorld()))) {",
+     "            if (player.isOnline() && Antechamber.isAntechamber(player.getWorld())) {",
+     "패가 서장 월드를 모른다"),
+    ("(124) 승선이 사공을 안 세운다 (사공 없는 배)", VOY,
+     "        ensureFerryman(sea);   // 사공 없는 배도 배가 아니다 (한 배에 한 사공)\n",
+     "", "사공이 말뿐"),
+    ("(125) 사공의 이름을 지운다 (등록부 없는 사공)", CFG,
+     '      name: "§7사공"           # 명패 — 조용한 회색 【제안】',
+     '      name: ""                 # 명패 — 조용한 회색 【제안】', "사공 등록부"),
 ]
 
 

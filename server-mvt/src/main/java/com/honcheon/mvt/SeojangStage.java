@@ -327,7 +327,10 @@ final class SeojangStage implements Listener {
         long lanternAt = (long) beatInterval * (pulse.size() + 1) + choicesDelay;
         Location dock = boat.clone();   // 정박 좌표 — 선택 동안 배는 매여 있다
         myClocks.add(Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline() && Antechamber.isAntechamber(player.getWorld())) {
+            // ★5차 — 무대는 서장 월드의 배 위에서 선다 (실기동 2026-07-25 "2장이 다시 시작되지도
+            //   않아": 나루-검사만 있어서 서장 월드의 몸에게 패가 영영 안 걸렸다 — 선택 불가 = 갇힘)
+            if (player.isOnline() && (Antechamber.isAntechamber(player.getWorld())
+                    || Voyage.isSea(player.getWorld()))) {
                 offerChoices(player, w, dock, scene);
             }
         }, lanternAt));

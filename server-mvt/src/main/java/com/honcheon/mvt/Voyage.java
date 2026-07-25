@@ -45,6 +45,8 @@ final class Voyage {
     static final NamespacedKey KEY_BOAT = new NamespacedKey("honcheon", "ipdo_voyage_boat");
     /** 【묘비】 팩 모델 셸(4차)의 표식 — 5차로 폐지. 남은 셸을 걷는 손만 남는다 */
     static final NamespacedKey KEY_SHELL = new NamespacedKey("honcheon", "ipdo_barge_shell");
+    /** 사공의 표식 — ensure 가 세고, 걷을 때 우리 것만 걷는다 (한 배에 한 사공) */
+    static final NamespacedKey KEY_FERRYMAN = new NamespacedKey("honcheon", "ipdo_ferryman");
 
     // ★월드 키는 ASCII 소문자만 — 한글 이름은 NamespacedKey 가 거부한다 (첫 기동 실증 2026-07-25)
     private static String seaName = "honcheon_seojang";
@@ -62,6 +64,8 @@ final class Voyage {
     private final int fogRadius;
     private final int fogHeight;
     private final int fogDensity;
+    private final String ferrymanName;
+    private final int ferrymanX;
     private final String embarkLine;
     private final String transitLine;
     private final String rowSoundKey;
@@ -101,6 +105,9 @@ final class Voyage {
         this.fogRadius = Math.max(6, num(fg.get("radius"), 14));
         this.fogHeight = Math.max(2, num(fg.get("height"), 5));
         this.fogDensity = Math.max(1, num(fg.get("density"), 1));
+        Map<String, Object> fm = sub(cfg, "ferryman");
+        this.ferrymanName = str(fm.get("name"), "§7사공");
+        this.ferrymanX = num(fm.get("x"), -3);
         this.embarkLine = str(cfg.get("embark_line"), "");
     }
 
@@ -241,6 +248,41 @@ final class Voyage {
         w.getBlockAt(x, y, z).setBlockData(d, false);
     }
 
+    /**
+     * <b>사공이 탄다</b> (실기동 2026-07-25 "배에 뱃사공도 없어" — 2차 확정의 승계: 고물에
+     * 사공이 실제로 탄다 · 삼도천의 삿대꾼은 이름이 없다). 빌리저 한 몸 — 조용히, AI 없이,
+     * 고물 갑판에 서서 동쪽(가는 방향)을 본다. ensure 문법: 세고, 어긋나면 걷고 다시 세운다.
+     */
+    void ensureFerryman(World w) {
+        int have = 0;
+        for (org.bukkit.entity.Entity e : w.getEntities()) {
+            if (e.getPersistentDataContainer().has(KEY_FERRYMAN)) {
+                have++;
+            }
+        }
+        if (have == 1) {
+            return;
+        }
+        for (org.bukkit.entity.Entity e : w.getEntities()) {
+            if (e.getPersistentDataContainer().has(KEY_FERRYMAN)) {
+                e.remove();   // 둘이면 겹친 것이다 — 한 배에 한 사공
+            }
+        }
+        Location at = new Location(w, ferrymanX + 0.5, seaTop(w) + 1.0, 0.5, -90f, 0f);
+        w.spawn(at, org.bukkit.entity.Villager.class, v -> {
+            v.setAI(false);
+            v.setSilent(true);
+            v.setInvulnerable(true);
+            v.setCollidable(false);
+            v.setPersistent(true);
+            v.setRemoveWhenFarAway(false);
+            v.setCustomName(ferrymanName);
+            v.setCustomNameVisible(true);
+            v.getPersistentDataContainer().set(KEY_FERRYMAN,
+                    org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
+        });
+    }
+
     /** 【묘비】 팩 모델 셸(4차) 걷기 — 나루에 남은 셸이 있으면 걷는다 (부활 금지의 손) */
     void sweepShells(World w) {
         for (org.bukkit.entity.Entity e : w.getEntities()) {
@@ -282,6 +324,7 @@ final class Voyage {
             return;   // 바다를 못 열면 붙잡지 않는다 — 사람은 원래 자리에 그대로 선다
         }
         buildBarge(sea);   // 멱등 — 배 없는 바다에 사람을 내려놓지 않는다
+        ensureFerryman(sea);   // 사공 없는 배도 배가 아니다 (한 배에 한 사공)
         riders.put(player.getUniqueId(), new Rider());
         player.teleport(bargeAnchor(sea));
         player.setFallDistance(0f);

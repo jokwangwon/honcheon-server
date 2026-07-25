@@ -1439,6 +1439,22 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
         rep.bad("항해 중에도 뿌리내림 트래커가 뜬다 — 사이드바가 침묵 게이트를 안 지난다")
     else:
         rep.good("항해 중 사이드바 트래커도 침묵한다")
+    # ★선택 패의 세계 (실기동 2026-07-25 "2장이 다시 시작되지도 않아" — 나루-검사만 있어서
+    #   서장 월드의 몸에게 패가 영영 안 걸렸다: 선택 불가 = 갇힘)
+    sjs = source("SeojangStage.java")
+    if "Voyage.isSea(player.getWorld())" not in sjs:
+        rep.bad("패가 서장 월드를 모른다 — offerChoices 예약이 나루-검사뿐이다 (서장 월드의 "
+                "몸에게 패가 영영 안 걸린다 · 선택 불가 = 갇힘)")
+    else:
+        rep.good("패는 서장 월드의 배 위에도 걸린다 (offerChoices — 나루·바다 공통)")
+    # ★사공 (실기동 2026-07-25 "배에 뱃사공도 없어" — 2차 확정의 승계)
+    fm = vo.get("ferryman") or {}
+    if not str(fm.get("name") or "").strip():
+        rep.bad("사공 등록부(ferryman.name)가 없다 — 사공 없는 배는 어색하다 (실기동이 말했다)")
+    elif "ensureFerryman(sea);" not in voy:
+        rep.bad("사공이 말뿐이다 — 승선이 사공을 안 세운다 (ensureFerryman)")
+    else:
+        rep.good(f"사공이 고물에 탄다 — {fm.get('name')} (한 배에 한 사공)")
 
     # 【묘비】 옛 ⑧-3 의 눈들 — 물길 기하(정거장 오름차순·장벽 밖)·기슭=이승의 불빛 대조·
     #   정거장 수=장면 수·정박 갑판(문설주 안)·조성 판 ⑤-6/⑤-7 — ★5차(별도 서장 월드 ·

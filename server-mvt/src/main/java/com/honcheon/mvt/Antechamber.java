@@ -2170,6 +2170,7 @@ public final class Antechamber implements Listener {
         World sea = voyage.sea();
         if (sea != null) {
             voyage.buildBarge(sea);
+            voyage.ensureFerryman(sea);   // 사공도 기동 때 함께 선다 (한 배에 한 사공)
         }
         // ★B-179 2차 — 등불 우클릭(선택의 몸)이 이 손으로 들어온다
         Bukkit.getPluginManager().registerEvents(stage, plugin);
