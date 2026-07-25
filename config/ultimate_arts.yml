@@ -207,6 +207,29 @@ legacy_arts:
     resonance: "혼원벽력신공 필수 — 심법이 곧 자격이다"
     sole_transmission: true    # ★ 팽가 가주 일인전승
 
+  # ── 모용세가 (2026-07-26 사용자 제공 자료 · 수치 【제안】) ──
+  dujeon_seongi:
+    name: "두전성이(斗轉星移)"
+    faction: moyong
+    lineage: moyong_su
+    requires_skill: { id: cheongjuksu, mastery: 8 }
+    type: { form: 반격_오의, window_ticks: 10 }
+    effect: "북두를 돌려 별자리를 옮긴다 — 지속 중 받은 공격 1회를 무효화하고 **그 주인에게 그대로 되돌린다** (되돌림의 극의 · 태극혜검과 같은 문 — 태극은 흘려 반사하고, 두전성이는 방향을 통째로 바꾼다)"
+    frames: [8, 10, 12]
+    cost: "내력 55%"
+    resonance: "건곤무적공 필수 — 심법이 곧 자격이다"
+    sole_transmission: true    # ★ 모용 가주 일인전승
+  geongon_baekjeol_geomhae:
+    name: "건곤백절검해(乾坤百絶劍解)"
+    faction: moyong
+    lineage: moyong_geom
+    requires_skill: { id: geongon_paseom_geom, mastery: 8 }
+    type: { hitbox: 원, range: 6, multi_hit: 5 }
+    frames: [16, 6, 18]
+    defense: "시전 중 무적 12틱"
+    cost: "내력 55%"
+    effect: "백 가지 절초를 푸는 검 — 상대의 초식을 읽고 다섯 수로 해(解)한다. 다단 5"
+
   # ── 제갈세가 (2026-07-26 사용자 제공 자료 · 수치 【제안】) ──
   chilhyeon_muhyeong_geom:
     name: "칠현무형검(七絃無形劍)"

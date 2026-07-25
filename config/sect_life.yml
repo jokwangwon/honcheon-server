@@ -222,6 +222,7 @@ succession_ladder:
     dangga:      { 가주: { simbeop: manryu_gwiwon, ultimate: manchon_nakhwa } }
     paengga:     { 가주: { simbeop: honwon_byeokryeok_singong, ultimate: honwon_byeokryeok_do } }
     jegal:       { 가주: { simbeop: hyeonwon_jeondan_singong, ultimate: cheonji_hoyeon_geombeop } }
+    moyong:      { 가주: { simbeop: geongon_mujeok, ultimate: dujeon_seongi } }
     sorimsa:     { 방장: { simbeop: daebanya_geumgang, ultimate: yeorae_sinjang },
                    히든: { simbeop: yeokgeungyeong, note: "★ 방장의 것이 아니다 — 장경각의 것이다" } }
     mudang:      { 장문: { simbeop: yangui_mugeuk_singong, ultimate: taegeuk_hyegeom } }

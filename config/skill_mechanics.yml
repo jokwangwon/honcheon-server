@@ -837,6 +837,157 @@ skills:
     vfx: "밟기 전에 이미 비어 있는 자리 (파티클 예산 경유)"
     qi_note: "경신(내력 1~2)을 얹으면 거리 6 → 9 (일류+)"
 
+  # ── 모용세가 — moyong_su·geom·do·seon (2026-07-26 · 수치 【제안】: 손이 주축 — 빠르고 정확하다) ──
+  ilyeopsu:                       # 일엽수 (기초 수공) — 잎 하나
+    combo:
+      - { type: 호, angle: 90, range: 2.5, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.0, length: 2.6, frames: [4, 2, 7], stagger: 중, cost: 0 }
+    combo_input_window: 9
+    cooldown_ticks: 70
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "손끝에 잎맥 하나" }
+
+  jukyeopsu:                      # 죽엽수 (하급 수공) — 댓잎이 흩날린다
+    combo:
+      - { type: 호, angle: 90, range: 2.6, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 90, range: 2.6, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.1, length: 2.8, frames: [5, 3, 8], stagger: 강, cost: 0 }
+    combo_input_window: 8
+    cooldown_ticks: 90
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "댓잎이 손을 따라 돈다" }
+
+  cheongjuksu:                    # 청죽수 (상급 수공) — 강호 일절: 대나무는 굽지 않는다
+    combo:
+      - { type: 호, angle: 95, range: 2.7, frames: [3, 2, 4], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 3.0, frames: [4, 2, 6], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 3.2, frames: [7, 3, 10], stagger: 다운, cost: 3 }   # 마디 — 꺾어 눕힌다
+    combo_input_window: 8
+    cooldown_ticks: 220
+    qi_rider: { step: 3, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "푸른 대 그림자 — 손이 숲이 된다" }
+    mastery_gate: { 하급: 6 }
+
+  yuseongji:                      # 유성지 (중급 지법) — 흐르는 별 한 점
+    type: 선
+    width: 0.7
+    length: 6.0
+    range: 6.0
+    angle: 0.7
+    frames: [5, 2, 8]
+    stagger: 중
+    cost: 1                       # 지풍 — 손끝의 기가 날아간다 (거리의 값)
+    cooldown_ticks: 130
+    telegraph: "손끝이 별처럼 빛난다 — 5틱"
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "별똥 한 줄" }
+
+  chuhonji:                       # 추혼지 (상급 지법) — 혼을 쫓는다
+    type: 선
+    width: 0.8
+    length: 7.0
+    range: 7.0
+    angle: 0.8
+    frames: [8, 2, 11]
+    stagger: 강
+    hit_count: 2                  # 쌍지 — 두 손가락이 잇따라 짚는다
+    cost: 3
+    cooldown_ticks: 240
+    telegraph: "두 손끝이 겹친다 — 8틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "따라붙는 빛점 — 피해도 짚는다" }
+    mastery_gate: { 중급: 6 }
+
+  byeokpa_kwon:                   # 벽파권 (하급 권법) — 쪼개고 부순다
+    combo:
+      - { type: 호, angle: 80, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.8, frames: [6, 3, 9], stagger: 강, cost: 0 }
+    combo_input_window: 8
+    cooldown_ticks: 100
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "주먹이 바위를 기억한다" }
+
+  geongon_mujeok_jang:            # 건곤무적장 (상급 장법) — 하늘과 땅에 적이 없다
+    type: 호
+    angle: 100
+    range: 2.8
+    frames: [10, 3, 13]
+    stagger: 다운
+    hit_count: 2                  # 쌍장 — 건(乾)과 곤(坤)
+    cost: 3
+    cooldown_ticks: 250
+    telegraph: "두 손바닥이 하늘과 땅을 가리킨다 — 10틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "휘도는 흑백 — 태극이 밀려온다" }
+
+  yeolhwa_gak:                    # 열화각 (중급 퇴법) — 뜨거운 다리
+    combo:
+      - { type: 호, angle: 75, range: 2.5, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 75, range: 2.5, frames: [3, 2, 4], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.8, frames: [5, 3, 8], stagger: 강, cost: 0 }   # 마지막 발 — 불이 붙는다
+    combo_input_window: 7
+    cooldown_ticks: 110
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "발끝의 불티" }
+
+  chugeom:                        # 추검 (하급 검법) — 미는 검: 찌르기 위주
+    combo:
+      - { type: 선, width: 0.9, length: 3.6, frames: [3, 2, 4], stagger: 약, cost: 0 }   # 찌른다
+      - { type: 선, width: 0.9, length: 3.8, frames: [5, 3, 8], stagger: 중, cost: 0 }   # 더 깊이 민다
+    combo_input_window: 9
+    cooldown_ticks: 85
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "검끝이 앞서 나간다" }
+
+  cheonun_samgeom:                # 천운삼검 (중급 검법) — 구름을 뚫는 세 검
+    combo:
+      - { type: 선, width: 1.0, length: 4.0, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.0, length: 4.0, frames: [4, 2, 5], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.1, length: 4.4, frames: [7, 3, 10], stagger: 강, cost: 0 }   # 셋째 검 — 구름이 갈린다
+    combo_input_window: 10
+    cooldown_ticks: 130
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "세 줄의 구름 자국" }
+
+  geongon_paseom_geom:            # 건곤파섬검 (상급 검법) — 번쩍임을 깬다
+    type: 선
+    width: 1.3
+    length: 5.0
+    range: 5.0
+    angle: 1.3
+    frames: [9, 3, 12]
+    stagger: 다운
+    cost: 3
+    cooldown_ticks: 250
+    telegraph: "검이 섬광을 머금는다 — 9틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "부서진 빛 조각" }
+    mastery_gate: { 하급: 6, 중급: 6 }
+
+  champung_do:                    # 참풍도 (하급 도법) — 바람을 벤다
+    combo:
+      - { type: 호, angle: 105, range: 3.1, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.4, length: 3.6, frames: [7, 3, 10], stagger: 강, cost: 0 }
+    combo_input_window: 10
+    cooldown_ticks: 95
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "바람이 두 쪽 난다" }
+
+  eungik_dobeop:                  # 응익도법 (중급 도법) — 매의 날개
+    combo:
+      - { type: 호, angle: 115, range: 3.3, frames: [4, 2, 5], stagger: 약, cost: 0 }   # 날개를 편다
+      - { type: 호, angle: 115, range: 3.3, frames: [5, 2, 6], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.5, length: 4.0, frames: [8, 3, 11], stagger: 강, cost: 0 }   # 내리꽂힌다
+    combo_input_window: 10
+    cooldown_ticks: 135
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "날개 그림자가 덮는다" }
+
+  eungik_bunpungseon:             # 응익분풍선 (하급 선법) — 매 날개가 바람을 가른다
+    combo:
+      - { type: 호, angle: 115, range: 2.8, frames: [3, 2, 4], stagger: 약, cost: 0 }   # 활짝 편 날개
+      - { type: 선, width: 1.1, length: 3.2, frames: [5, 3, 8], stagger: 중, cost: 0 }   # 접어 꽂는다
+    combo_input_window: 10
+    cooldown_ticks: 85
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "깃 하나가 칼날처럼" }
+
+  ilyeoprak:                      # 일엽락 (상급 신법) — 잎 하나 지듯 (강호 일절)
+    type: 돌
+    distance: 8
+    frames: [0, 0, 2]
+    iframe: 8                     # 지는 잎은 소리가 없다 — 전 보법 최장 iframe
+    cost: 2                       # 어기신풍과 같은 값 — 시전 자체가 내력이다
+    cooldown_ticks: 230
+    vfx: "잎 한 장이 진 자리 — 몸은 이미 없다"
+    qi_note: "신법의 극 — 고갈이면 잎은 지지 않는다"
+
   hakuseon_beop:                  # 학우선법 (하급 선법) — 깃으로 가리고, 접히며 벤다
     combo:
       - { type: 호, angle: 120, range: 2.8, frames: [3, 2, 4], stagger: 약, cost: 0 }   # 펼친 깃 — 넓고 가볍다

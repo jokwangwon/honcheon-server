@@ -1446,6 +1446,324 @@ martial_arts:
     public_use_rumor: true
     faction_reaction: false
 
+  # ─── 모용세가 (moyong) — 수공(手)·지법(指)의 명가 (2026-07-26 사용자 제공 자료 · 수치 【제안】)
+  #     원천: 심법 구천강·건곤무적공·청명기공 / 검법 13종 / 수공 벽파권·건곤무적장·유성지·추혼지·
+  #     적룡조·청죽수(강호 일절)·죽엽수·일엽수 / 도법 참풍도·응익도법 / 열화각(퇴)·일엽락(신법 일절)·
+  #     응익분풍선(선) / 두전성이(되돌림). 등재는 15종 — 잎에서 대나무로 자라는 수공 계보가 주축.
+  #     미등재 후보 (지어내지 않는다 — 후속 증축분): 검법 염혈검·쇄천검·비려십오검·섬광분운검·
+  #     성광추혼검·쌍용선풍검·적성환월검·현문구검술·구천유수십일검(미완성) · 조법 적룡조.
+  ilyeopsu:
+    name: "일엽수"
+    category: "수공"
+    weapon_class: [맨손, 권갑]
+    sub_category: "가전 수공 (기초 — 잎 하나: 손을 처음 쓰는 법)"
+    grade: "입문"
+    tier: 기초
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "삼류"
+    required_stats: { 민첩: 2 }
+    required_mastery: 0
+    acquisition: "장원 사사 — 모용 아이의 첫 손 (가전 무공 입장권의 소비처 · 수공의 명가는 검보다 손이 먼저다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  jukyeopsu:
+    name: "죽엽수"
+    category: "수공"
+    weapon_class: [맨손, 권갑]
+    sub_category: "가전 수공 (하급 — 댓잎: 잎이 모여 마디가 된다)"
+    grade: "이류"
+    tier: 하급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "이류"
+    required_stats: { 민첩: 4, 감각: 3 }
+    required_mastery: 3
+    requires_skill: { id: ilyeopsu, mastery: 3 }
+    acquisition: "세가 가솔·방계 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  cheongjuksu:
+    name: "청죽수"
+    category: "수공"
+    weapon_class: [맨손, 권갑]
+    sub_category: "세가 비전 수공 (상급 — 푸른 대나무: 강호 일절)"
+    grade: "절정"
+    tier: 상급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 5 }
+    required_mastery: 6
+    requires_skill: { id: jukyeopsu, mastery: 6 }
+    mastery_gate: { 하급: 6 }
+    acquisition: "세가주 재가 — 혈족의 손이라 중급을 건너뛴다. 그 대신 하급(죽엽수)을 더 깊이 요구한다 (남궁제황검 문법)"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  yuseongji:
+    name: "유성지"
+    category: "지법"
+    weapon_class: 맨손
+    sub_category: "가전 지법 (중급 — 흐르는 별: 한 점을 찍는다)"
+    grade: "일류"
+    tier: 중급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "일류"
+    required_stats: { 감각: 5, 민첩: 4 }
+    required_mastery: 4
+    requires_skill: { id: jukyeopsu, mastery: 4 }
+    acquisition: "세가 내당 전수 (지법은 수공에서 갈라진다 — 손바닥이 여물어야 손끝이 산다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  chuhonji:
+    name: "추혼지"
+    category: "지법"
+    weapon_class: 맨손
+    sub_category: "세가 비전 지법 (상급 — 혼을 쫓는 손끝)"
+    grade: "절정"
+    tier: 상급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "절정"
+    required_stats: { 감각: 5, 지혜: 4 }
+    required_mastery: 5
+    requires_skill: { id: yuseongji, mastery: 5 }
+    mastery_gate: { 중급: 6 }
+    acquisition: "세가주 재가"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  byeokpa_kwon:
+    name: "벽파권"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "가전 권법 (하급 — 쪼개고 부수는 주먹)"
+    grade: "이류"
+    tier: 하급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "이류"
+    required_stats: { 근력: 4 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  geongon_mujeok_jang:
+    name: "건곤무적장"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "세가 비전 장법 (상급 — 건곤무적공의 손바닥)"
+    grade: "절정"
+    tier: 상급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 5
+    requires_skill: { id: byeokpa_kwon, mastery: 5 }
+    acquisition: "세가주 재가 — 건곤무적공 심법과 짝"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  yeolhwa_gak:
+    name: "열화각"
+    category: "퇴법"
+    weapon_class: 맨손
+    sub_category: "가전 퇴법 (중급 — 뜨거운 불의 다리)"
+    grade: "일류"
+    tier: 중급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 4 }
+    required_mastery: 0
+    acquisition: "세가 내당 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  chugeom:
+    name: "추검"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "가전 검법 (하급 — 찌르기 위주: 미는 검)"
+    grade: "이류"
+    tier: 하급
+    lineage: moyong_geom
+    faction: moyong
+    required_realm: "이류"
+    required_stats: { 민첩: 4 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수 (자료 원문: 찌르기 위주의 검법)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  cheonun_samgeom:
+    name: "천운삼검"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "가전 검법 (중급 — 구름을 뚫는 세 검)"
+    grade: "일류"
+    tier: 중급
+    lineage: moyong_geom
+    faction: moyong
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: chugeom, mastery: 5 }
+    acquisition: "세가 내당 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  geongon_paseom_geom:
+    name: "건곤파섬검"
+    category: "검법"
+    weapon_class: 검
+    sub_category: "세가 비전 (상급 — 번쩍임을 깨는 검)"
+    grade: "절정"
+    tier: 상급
+    lineage: moyong_geom
+    faction: moyong
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 5 }
+    required_mastery: 5
+    requires_skill: { id: cheonun_samgeom, mastery: 5 }
+    mastery_gate: { 하급: 6, 중급: 6 }
+    acquisition: "세가주 재가 — 건곤백절검해(오의)의 선행"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  champung_do:
+    name: "참풍도"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "가전 도법 (하급 — 바람을 벤다)"
+    grade: "이류"
+    tier: 하급
+    lineage: moyong_do
+    faction: moyong
+    required_realm: "이류"
+    required_stats: { 근력: 4 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  eungik_dobeop:
+    name: "응익도법"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "가전 도법 (중급 — 매의 날개: 넓게 펴서 벤다)"
+    grade: "일류"
+    tier: 중급
+    lineage: moyong_do
+    faction: moyong
+    required_realm: "일류"
+    required_stats: { 근력: 4, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: champung_do, mastery: 5 }
+    acquisition: "세가 내당 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  eungik_bunpungseon:
+    name: "응익분풍선"
+    category: "선법"
+    weapon_class: 부채
+    sub_category: "가전 선법 (하급 — 매 날개가 바람을 가른다)"
+    grade: "이류"
+    tier: 하급
+    lineage: moyong_seon
+    faction: moyong
+    required_realm: "이류"
+    required_stats: { 민첩: 4, 감각: 3 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수 (부채의 두 번째 집 — 제갈은 자리로, 모용은 날개로 쓴다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  ilyeoprak:
+    name: "일엽락"
+    category: "신법"
+    weapon_class: 무관
+    sub_category: "신법 (상급 — 잎 하나 지듯: 강호 일절)"
+    grade: "절정"
+    tier: 상급
+    lineage: moyong_su
+    faction: moyong
+    required_realm: "절정"
+    required_stats: { 민첩: 5 }
+    required_mastery: 5
+    requires_skill: { id: jukyeopsu, mastery: 5 }
+    acquisition: "세가주 재가 (지는 잎은 소리가 없다 — 강호 일절)"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
   paljindo:
     name: "팔진도"
     category: "합격진"

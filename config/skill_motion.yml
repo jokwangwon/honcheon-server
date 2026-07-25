@@ -1151,6 +1151,116 @@ skills:
     steps:
       - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.4, pitch: 1.85 } }   # 미리 비어 있던 자리
 
+  # ── 모용세가 (계보) — 손의 결: 가볍고 정확하다. 마무리만 무겁다 ──
+  ilyeopsu:
+    name: "일엽수"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.5 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.strong", volume: 0.75, pitch: 1.2 } }   # 잎 하나
+
+  jukyeopsu:
+    name: "죽엽수"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.45 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.5 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "block.bamboo.hit", volume: 0.9, pitch: 1.1 } }   # 댓잎이 흩날린다
+
+  cheongjuksu:
+    name: "청죽수"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "block.bamboo.hit", volume: 0.8, pitch: 1.0 } }
+      - { trail: 선, count: 2, sound: { key: "block.bamboo.hit", volume: 0.85, pitch: 0.9 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "block.bamboo_wood.break", volume: 1.0, pitch: 0.8 } }   # 대나무는 굽지 않는다 — 꺾일 뿐
+
+  yuseongji:
+    name: "유성지"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.arrow.shoot", volume: 0.7, pitch: 1.7 } }   # 별똥 한 줄
+
+  chuhonji:
+    name: "추혼지"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.arrow.shoot", volume: 0.8, pitch: 1.4 } }   # 혼을 짚는 손끝 — 두 번 운다
+
+  byeokpa_kwon:
+    name: "벽파권"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.15 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.95, pitch: 0.85 } }   # 쪼갠다
+
+  geongon_mujeok_jang:
+    name: "건곤무적장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.6 } }   # 하늘과 땅 — 두 손바닥
+
+  yeolhwa_gak:
+    name: "열화각"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.35 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.65, pitch: 1.3 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.blaze.shoot", volume: 0.8, pitch: 1.2 } }   # 불붙은 발끝
+
+  chugeom:
+    name: "추검"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.65, pitch: 1.4 } }   # 민다
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.strong", volume: 0.85, pitch: 1.1 } }   # 더 깊이
+
+  cheonun_samgeom:
+    name: "천운삼검"
+    style: 검
+    steps:
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.3 } }
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.35 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.95, pitch: 1.0 } }   # 셋째 검 — 구름이 갈린다
+
+  geongon_paseom_geom:
+    name: "건곤파섬검"
+    style: 검
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.65 } }   # 섬광이 깨진다
+
+  champung_do:
+    name: "참풍도"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.75, pitch: 1.0 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.strong", volume: 0.9, pitch: 0.85 } }   # 바람이 두 쪽
+
+  eungik_dobeop:
+    name: "응익도법"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.75, pitch: 0.95 } }   # 날개를 편다
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.9 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.crit", volume: 0.95, pitch: 0.8 } }   # 내리꽂힌다
+
+  eungik_bunpungseon:
+    name: "응익분풍선"
+    style: 부채
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.55 } }   # 활짝 편 날개
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.strong", volume: 0.8, pitch: 1.25 } }   # 접어 꽂는다
+
+  ilyeoprak:
+    name: "일엽락"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 2, sound: { key: "block.azalea_leaves.step", volume: 0.5, pitch: 1.2 } }   # 잎 한 장 — 소리가 없다시피
+
   hakuseon_beop:
     name: "학우선법"
     style: 부채
@@ -1535,6 +1645,29 @@ ultimates:
       charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.4 }]
       release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 0.5 }]
       hit: [{ key: "block.anvil.land", volume: 1.0, pitch: 0.6 }]               # 병기를 든 손을 친다 — 쇠가 땅에 떨어진다
+
+  # ── 모용세가 ── 별자리를 옮긴다 (되돌림) · 백 절초를 푼다 (원)
+  dujeon_seongi:
+    name: "두전성이"
+    trail: 가드태세               # 반격 오의 — 기다린다. 북두가 도는 것은 맞는 순간이다
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 4 }
+    burst:  { particle: end_rod, count: 24, spread_ratio: 0.25, extra: 0.06 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 0.9, pitch: 1.1 }]
+      release: [{ key: "block.respawn_anchor.deplete", volume: 1.0, pitch: 1.3 }]   # 별이 자리를 바꾸는 소리
+      hit: [{ key: "entity.player.attack.crit", volume: 0.9, pitch: 1.1 }]          # 되돌아간 힘
+
+  geongon_baekjeol_geomhae:
+    name: "건곤백절검해"
+    trail: 원
+    charge: { particle: end_rod, ring_points: 8, per_point: 2, core: end_rod, core_count: 5 }
+    burst:  { particle: end_rod, count: 34, spread_ratio: 0.28, extra: 0.08 }
+    accent: { particle: flash, count: 1 }
+    sounds:
+      charge: [{ key: "block.beacon.power_select", volume: 1.0, pitch: 0.8 }]
+      release: [{ key: "entity.lightning_bolt.impact", volume: 1.0, pitch: 1.2 }]
+      hit: [{ key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.3 }]         # 다섯 수 — 절초가 풀린다
 
   # ── 제갈세가 ── 일곱 줄이 운다 (선) · 호연지기가 가득 찬다 (원)
   chilhyeon_muhyeong_geom:
@@ -2733,6 +2866,8 @@ display:
       namhae_36geom:         검풍_개화
       chilhyeon_muhyeong_geom:  검풍_개화   # 일곱 줄이 앞에 선다 (선 — 무형의 현)
       cheonji_hoyeon_geombeop:  매화_개화   # 호연지기가 펴진다 (원 — 형체를 나눠 쓴다)
+      dujeon_seongi:            태극_대기   # 되돌림 — 기다리는 형체 (태극혜검과 같은 문)
+      geongon_baekjeol_geomhae: 검풍_개화   # 백 절초가 풀린다 (원)
 
 # ══════════════════════════════════════════════════════════════════════
 #  기본 초식(基本) — 【무공이 없어도 병기는 궤적을 그린다】
