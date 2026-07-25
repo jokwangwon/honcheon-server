@@ -444,18 +444,25 @@ MUTATIONS = [
      '      name: "§7사공"           # 명패 — 조용한 회색 【제안】',
      '      name: ""                 # 명패 — 조용한 회색 【제안】', "사공 등록부"),
     # ─── ★서사 글판·명패형·사다리·삿대 (2026-07-25 실기동 빨간펜 2회차) ───
-    ("(126) 서사 글판을 안 세운다 (무엇에서 고르는지 패만 안다)", SJS,
-     "        if (npEnabled && scene.narration() != null && !scene.narration().isBlank()) {",
-     "        if (false) {", "서사 글판이 없다"),
+    # ((126) 재표적 — 전문 글판이 대화 타자기로 개정됐다 ("너무 난잡" 2차 빨간펜))
+    ("(126) 서사가 안 흐른다 (무엇에서 고르는지 패만 안다)", SJS,
+     "        if (dlgEnabled && scene.narration() != null && !scene.narration().isBlank()) {",
+     "        if (false) {", "서사가 안 흐른다"),
+        # ((127) 재표적 — 빈 인장 명패로 개정)
     ("(127) 명패 문법을 굳힌다 (어느 패든 같은 글자)", STG,
-     '    label_format: "§f[ {label} ]"   # 명패 문법 【제안】',
-     '    label_format: "§f[ 패 ]"        # 명패 문법 【제안】', "명패형이 아니다"),
+     '    label_format: "§f\\uE0B3 {label}"   # 빈 인장(클릭 전 선택 표식 — E0B3 등록 용도) + 명패 【제안】',
+     '    label_format: "§f\\uE0B3 패"        # 빈 인장(클릭 전 선택 표식 — E0B3 등록 용도) + 명패 【제안】',
+     "명패형이 아니다"),
     ("(128) 사다리를 걷는다 (물에 빠진 몸이 못 오른다)", VOY,
      '            BlockData ladder = Bukkit.createBlockData(\n                    "minecraft:ladder[facing=" + facing + ",waterlogged=true]");',
      "            BlockData ladder = null;", "사다리가 없다"),
     ("(129) 삿대를 꺾는다 (떠내려간 몸이 밤바다에 남는다)", VOY,
      "            rescueIfAdrift(player);   // ★삿대 — 사다리로도 못 오르는 몸은 사공이 건져 올린다\n",
      "", "삿대가 없다"),
+    ("(130) 붓선 틀을 걷는다 (기억첩 글리프가 안 실린다)", STG,
+     '    head_format: "§8\\uE0B0 §e\\uE0B1 §6{header} §8\\uE0B0"     # 붓선 · 붓점 · 장 머리 【제안】',
+     '    head_format: "§8- §6{header} §8-"     # 붓선 · 붓점 · 장 머리 【제안】',
+     "기억첩 글리프"),
 ]
 
 

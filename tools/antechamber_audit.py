@@ -1470,13 +1470,27 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
     # ★서사 글판 + 명패형 패 (사용자 확정 2026-07-25 "선택지만 뜨니까 무슨 내용인지 모르겠음" ·
     #   "명패처럼 디자인")
     stg = load_yaml("seojang_stage.yml").get("stage") or {}
-    npn = stg.get("narration_panel") or {}
-    if not npn or npn.get("enabled") is False \
-            or "scene.narration().isBlank())" not in sjs:
-        rep.bad("서사 글판이 없다 — 무엇에서 고르는지 패만 안다 (장면 전문이 패 위에 서야 한다 · "
-                "narration_panel 등록부 + 무대 배선)")
+    # ★서사 = 한월풍 대화 채팅 (2차 빨간펜 "서사 글판이 너무 난잡" — 전문 글판은 묘비):
+    #   장식 틀 + 문장 단위 타자기. 패는 마지막 문장 뒤 (읽기 전에 안 걸린다)
+    dlg = stg.get("dialogue") or {}
+    if not dlg or dlg.get("enabled") is False \
+            or "dlgEnabled && scene.narration()" not in sjs \
+            or "sentenceBeats(" not in sjs:
+        rep.bad("서사가 안 흐른다 — dialogue 등록부/타자기 배선(sentenceBeats)이 없다 "
+                "(무엇에서 고르는지 패만 안다)")
     else:
-        rep.good("서사 글판 — 장면 전문이 패 위에 선다 (읽고 고른다)")
+        rep.good(f"서사 = 대화 타자기 — 문장마다 {dlg.get('sentence_interval_ticks', '?')}틱, "
+                 f"최대 {dlg.get('max_beats', '?')}숨")
+    # ★기억첩 글리프 배선 (SJ-002 의 미결 — "리소스팩·UI 개선으로 확 와닿게"):
+    #   붓선(E0B0)이 틀, 빈 인장(E0B3)이 패, 찍힌 인장(E0B2)이 확정 — 등록된 용도 그대로
+    la_stg = stg.get("lanterns") or {}
+    if '\ue0b0' not in str(dlg.get("head_format") or "") \
+            or '\ue0b3' not in str(la_stg.get("label_format") or "") \
+            or '\ue0b2' not in str(la_stg.get("pick_line") or ""):
+        rep.bad("기억첩 글리프가 안 실렸다 — 붓선(E0B0 틀)·빈 인장(E0B3 패)·찍힌 인장"
+                "(E0B2 확정)이 등록 용도대로 배선돼야 한다 (resourcepack_design.yml E0B0_E0BF)")
+    else:
+        rep.good("기억첩 글리프 배선 — 붓선 틀 · 빈 인장 패 · 찍힌 인장 확정 (SJ-002 완결)")
     la = stg.get("lanterns") or {}
     if "{label}" not in str(la.get("label_format") or "") \
             or "Material.DARK_OAK_PLANKS" in sjs:

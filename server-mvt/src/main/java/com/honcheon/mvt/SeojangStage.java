@@ -74,6 +74,14 @@ final class SeojangStage implements Listener {
     private final float labelScale;
     private final int labelLineWidth;
     private final int labelBgArgb;
+    private final boolean dlgEnabled;
+    private final String dlgHeadFormat;
+    private final String dlgTitleFormat;
+    private final String dlgBodyFormat;
+    private final String dlgFoot;
+    private final int dlgInterval;
+    private final int dlgMaxBeats;
+    private final Chime dlgSound;
     private final boolean npEnabled;
     private final double npAhead;
     private final double npHeight;
@@ -117,6 +125,17 @@ final class SeojangStage implements Listener {
         this.labelScale = (float) dbl(la.get("label_scale"), 0.8);
         this.labelLineWidth = num(la.get("label_line_width"), 200);
         this.labelBgArgb = argb(la.get("label_bg_argb"), 0x78140F0C);
+        Map<String, Object> dg = RulesConfig.section(st, "dialogue");
+        this.dlgEnabled = !(dg.get("enabled") instanceof Boolean db) || db;
+        this.dlgHeadFormat = str(dg.get("head_format"), "§8── §6{header} §8──");
+        this.dlgTitleFormat = str(dg.get("title_format"), " §f『{title}』");
+        this.dlgBodyFormat = str(dg.get("body_format"), " §7{line}");
+        this.dlgFoot = str(dg.get("foot"), "");
+        this.dlgInterval = Math.max(20, num(dg.get("sentence_interval_ticks"), 55));
+        this.dlgMaxBeats = Math.max(1, num(dg.get("max_beats"), 8));
+        Map<String, Object> ds = RulesConfig.section(dg, "sound");
+        this.dlgSound = ds.isEmpty() ? null : new Chime(str(ds.get("key"), ""),
+                (float) dbl(ds.get("volume"), 0.35), (float) dbl(ds.get("pitch"), 1.4));
         Map<String, Object> np = RulesConfig.section(st, "narration_panel");
         this.npEnabled = !(np.get("enabled") instanceof Boolean b) || b;
         this.npAhead = dbl(np.get("ahead"), 1.9);
@@ -206,6 +225,33 @@ final class SeojangStage implements Listener {
 
     private static String str(Object v, String def) {
         return v == null ? def : String.valueOf(v);
+    }
+
+    /**
+     * 전문을 <b>문장 숨</b>으로 가른다 — 타자기 리듬의 단위 (문장 부호 뒤에서 가르고,
+     * 문장이 많으면 {@code maxBeats} 로 고르게 합쳐 총 시간을 막는다 — 리듬은 살고
+     * 밤은 길어지지 않는다).
+     */
+    private static List<String> sentenceBeats(String text, int maxBeats) {
+        String flat = text.replace("\r", "").replaceAll("\\n+", " ").trim();
+        List<String> sents = new ArrayList<>();
+        for (String s : flat.split("(?<=[.!?…”』」)])\\s+")) {
+            if (!s.isBlank()) {
+                sents.add(s.trim());
+            }
+        }
+        if (sents.isEmpty()) {
+            return List.of(flat);
+        }
+        if (sents.size() <= maxBeats) {
+            return sents;
+        }
+        List<String> out = new ArrayList<>();
+        int per = (int) Math.ceil(sents.size() / (double) maxBeats);
+        for (int i = 0; i < sents.size(); i += per) {
+            out.add(String.join(" ", sents.subList(i, Math.min(sents.size(), i + per))));
+        }
+        return out;
     }
 
     private static double dbl(Object v, double def) {
@@ -329,15 +375,14 @@ final class SeojangStage implements Listener {
             mine.add(spawnLayer(player, w, baseX, baseY, l).getUniqueId());
         }
 
-        // ★서사 글판 (사용자 확정 2026-07-25 "선택지만 뜨니까 무슨 내용에서 골라야 하는지
-        //   모르겠음") — 장면 전문이 패 위에 함께 선다: 읽고 싶은 만큼 읽고 고른다.
-        //   전문은 그대로 필사본에도 남는다 (이 판은 그 자리의 거울일 뿐이다).
-        if (npEnabled && scene.narration() != null && !scene.narration().isBlank()) {
+        // ★배 위 글판 = 제목 표지 (2차 빨간펜 "서사 글판이 너무 난잡" — 전문 글판은 묘비.
+        //   전문은 아래 dialogue 채팅의 것, 이 판은 지금 몇 장인지의 자리 표지다)
+        if (npEnabled) {
             String head = npTitleFormat.replace("{header}", book.headText(scene))
                     .replace("{title}", scene.title());
             Location at = boat.clone().add(npAhead, npHeight, 0);
             TextDisplay panel = w.spawn(at, TextDisplay.class, e -> {
-                e.setText(head + "\n\n§f" + scene.narration());
+                e.setText(head);
                 e.setBillboard(Display.Billboard.CENTER);
                 e.setLineWidth(npLineWidth);
                 e.setSeeThrough(false);
@@ -378,7 +423,7 @@ final class SeojangStage implements Listener {
             }
         }
 
-        // 맥박 — 한 줄씩, 숨 간격으로 (글은 방향만 짚는다 — 전문은 필사본의 것)
+        // 맥박 — 한 줄씩, 숨 간격으로 (글은 방향만 짚는다 — 전문은 대화·필사본의 것)
         List<String> pulse = spec.pulse();
         for (int i = 0; i < pulse.size(); i++) {
             String line = pulse.get(i);
@@ -389,8 +434,40 @@ final class SeojangStage implements Listener {
             }, (long) beatInterval * (i + 1)));
         }
 
-        // 선택 패 — 마지막 숨이 지나면 이물 난간에 걸린다 (★2.0: 배가 곧 무대 — 좌석에서 닿는다)
-        long lanternAt = (long) beatInterval * (pulse.size() + 1) + choicesDelay;
+        // ★★서사 = 한월풍 대화 채팅 (2차 빨간펜 "서사 글판이 너무 난잡" — 사용자 확정:
+        //   디자인 강화한 대화 글 + 타자기 자동): 장식 틀(붓선 E0B0·붓점 E0B1 — SJ-002 가
+        //   굽고 배선만 미결이던 기억첩 글리프)이 서고, 전문이 문장 단위로 흐른다.
+        //   놓쳐도 스크롤에 남는다. 패는 마지막 문장 뒤에 걸린다.
+        long dlgTicks = 0;
+        if (dlgEnabled && scene.narration() != null && !scene.narration().isBlank()) {
+            List<String> beats = sentenceBeats(scene.narration(), dlgMaxBeats);
+            player.sendMessage(SeojangBook.legacy(
+                    dlgHeadFormat.replace("{header}", book.headText(scene))));
+            player.sendMessage(SeojangBook.legacy(
+                    dlgTitleFormat.replace("{title}", scene.title())));
+            for (int i = 0; i < beats.size(); i++) {
+                String line = dlgBodyFormat.replace("{line}", beats.get(i));
+                boolean last = i == beats.size() - 1;
+                myClocks.add(Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!player.isOnline()) {
+                        return;
+                    }
+                    player.sendMessage(SeojangBook.legacy(line));
+                    if (dlgSound != null && !dlgSound.key().isBlank()) {
+                        player.playSound(player.getLocation(), dlgSound.key(),
+                                dlgSound.volume(), dlgSound.pitch());
+                    }
+                    if (last && !dlgFoot.isEmpty()) {
+                        player.sendMessage(SeojangBook.legacy(dlgFoot));
+                    }
+                }, (long) dlgInterval * (i + 1)));
+            }
+            dlgTicks = (long) dlgInterval * (beats.size() + 1);
+        }
+
+        // 선택 패 — 마지막 숨·마지막 문장이 지나면 이물 난간에 걸린다 (읽기 전에 안 걸린다)
+        long lanternAt = Math.max((long) beatInterval * (pulse.size() + 1), dlgTicks)
+                + choicesDelay;
         Location dock = boat.clone();   // 정박 좌표 — 선택 동안 배는 매여 있다
         myClocks.add(Bukkit.getScheduler().runTaskLater(plugin, () -> {
             // ★5차 — 무대는 서장 월드의 배 위에서 선다 (실기동 2026-07-25 "2장이 다시 시작되지도
