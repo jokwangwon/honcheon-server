@@ -1049,6 +1049,69 @@ skills:
       - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
           sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.50 } }   # 파격 — 11틱 보인다. 그래도 막을 수 없다
 
+  # ── 팽가 확장 (2026-07-26) — 도의 무게 문법 승계 (음이 낮다) ──
+  bokho_dosik:
+    name: "복호도식"
+    style: 도
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.05 } }
+      - { trail: 선, count: 2, finisher: true, sound: { key: "entity.player.attack.strong", volume: 0.8, pitch: 0.9 } }   # 엎드린 범 — 아직 어리다
+
+  geongon_sinjang:
+    name: "건곤신장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.1 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.0 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 0.95, pitch: 0.8 } }   # 미는 손
+
+  honwon_byeokryeok_jang:
+    name: "혼원벽력장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.55 } }   # 손바닥의 벼락
+
+  pagap_chu:
+    name: "파갑추"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.2 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.7 } }   # 갑주가 운다
+
+  cheolhyeol_baeksasippal_toe:
+    name: "철혈백사십팔퇴"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.3 } }
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.35 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.25 } }
+      - { trail: 선, count: 3, finisher: true, sound: { key: "entity.player.attack.knockback", volume: 0.95, pitch: 0.85 } }   # 마지막 발
+
+  honwon_bo:
+    name: "혼원보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.45, pitch: 1.5 } }   # 흙먼지 한 걸음
+
+  miheo_sinbo:
+    name: "미허신보"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.4, pitch: 1.9 } }   # 비운 자리
+
+  eogi_sinpung:
+    name: "어기신풍"
+    style: 무관
+    steps:
+      - { trail: 돌, particle: cloud, count: 4, sound: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 2.0 } }   # 바람이 지나간 자리
+
+  yeonhwan_paewang_jin:
+    name: "연환패왕진"
+    style: 도
+    steps:
+      - { trail: 진, count: 2, sound: { key: "block.beacon.activate", volume: 0.7, pitch: 1.1 } }   # 패왕의 대형 — 매화검진보다 낮게 운다
+
   # ── 소림사 (계보) — 리치 2.4 (최단). 대신 **네 번** 친다 ──
   sorim_kwonbeop:
     name: "소림권법"

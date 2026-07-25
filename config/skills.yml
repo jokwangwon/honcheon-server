@@ -1071,8 +1071,9 @@ martial_arts:
     faction: paengga
     required_realm: "이류"
     required_stats: { 근력: 4, 체력: 3 }
-    required_mastery: 0
-    acquisition: "세가 가솔·방계 전수 (하북팽가의 첫 도 — 도적 소탕이 가업이다)"
+    required_mastery: 3
+    requires_skill: { id: bokho_dosik, mastery: 3 }   # 기초 도식이 여물어야 王 을 쓴다 【제안】
+    acquisition: "세가 가솔·방계 전수 (하북팽가의 첫 정식 도 — 도적 소탕이 가업이다)"
     bloodline_restricted: false
     requires_master: true
     requires_manual: false
@@ -1117,6 +1118,193 @@ martial_arts:
     mastery_gate: { 하급: 6, 중급: 6 }
     acquisition: "세가주 재가 — 오호단문도·혼원벽력도(오의)의 선행"
     bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 하북팽가 확장 (2026-07-26 사용자 확정 「전부 등재」 — 한 문파는 한 줄기가 아니다:
+  #     무기·계열별 다양한 선택지 · 이름은 사용자 제공 자료의 보편 전승명 · 급 배치·수치 【제안】) ───
+  bokho_dosik:
+    name: "복호도식"
+    category: "도법"
+    weapon_class: 도
+    sub_category: "가전 기초 도식 (기초 — 엎드린 범: 도를 처음 쥐는 손의 형)"
+    grade: "입문"
+    tier: 기초
+    lineage: paengga_do
+    faction: paengga
+    required_realm: "삼류"
+    required_stats: { 근력: 2 }
+    required_mastery: 0
+    acquisition: "장원 도장 사사 — 세가 아이의 첫 도 (가전 무공 입장권의 소비처 · 기초급은 삼류부터: 사용자 확정 2026-07-26)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+    # ★이름 지어냄 【제안】 — 원천 자료에 기초급 명이 없다 (팽가 = 호랑이 문파의 결로 복호(伏虎))
+
+  geongon_sinjang:
+    name: "건곤신장"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "가전 장법 (하급 — 건곤미허신공의 손: 하늘과 땅으로 민다)"
+    grade: "이류"
+    tier: 하급
+    lineage: paengga_jang
+    faction: paengga
+    required_realm: "이류"
+    required_stats: { 근력: 4, 체력: 3 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수 (도를 놓친 손도 팽가답게 민다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  honwon_byeokryeok_jang:
+    name: "혼원벽력장"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "세가 비전 장법 (상급 — 혼원벽력신공의 손: 벼락이 손바닥에 내린다)"
+    grade: "절정"
+    tier: 상급
+    lineage: paengga_jang
+    faction: paengga
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 5
+    requires_skill: { id: geongon_sinjang, mastery: 5 }
+    acquisition: "세가 내당 전수 — 혼원벽력신공 심법과 짝 (simbeop 벽력 passive 의 손)"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  pagap_chu:
+    name: "파갑추"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "가전 권법 (중급 — 갑주를 깨는 망치 주먹)"
+    grade: "일류"
+    tier: 중급
+    lineage: paengga_kwon
+    faction: paengga
+    required_realm: "일류"
+    required_stats: { 근력: 5, 체력: 4 }
+    required_mastery: 0
+    acquisition: "세가 내당 전수 (타고난 힘의 권법 — 도적의 가죽 갑주가 상대다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  cheolhyeol_baeksasippal_toe:
+    name: "철혈백사십팔퇴"
+    category: "퇴법"
+    weapon_class: 맨손
+    sub_category: "가전 퇴법 (중급 — 백사십팔 갈래의 다리: 쉼 없이 짓밟는다)"
+    grade: "일류"
+    tier: 중급
+    lineage: paengga_kwon
+    faction: paengga
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 5 }
+    required_mastery: 0
+    acquisition: "세가 내당 전수 (연퇴 — 손이 묶여도 팽가는 선다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  honwon_bo:
+    name: "혼원보"
+    category: "경공"
+    weapon_class: 무관
+    sub_category: "보법 (하급 — 팽가의 첫걸음: 무겁게 딛고 크게 빠진다)"
+    grade: "이류"
+    tier: 하급
+    lineage: paengga_bo
+    faction: paengga
+    required_realm: "삼류"
+    required_stats: { 민첩: 3 }
+    required_mastery: 0
+    acquisition: "세가 가솔·방계 전수"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  miheo_sinbo:
+    name: "미허신보"
+    category: "경공"
+    weapon_class: 무관
+    sub_category: "보법 (중급 — 비움[彌虛]으로 피한다: 건곤미허신공의 걸음)"
+    grade: "일류"
+    tier: 중급
+    lineage: paengga_bo
+    faction: paengga
+    required_realm: "일류"
+    required_stats: { 민첩: 4 }
+    required_mastery: 3
+    requires_skill: { id: honwon_bo, mastery: 3 }
+    acquisition: "세가 내당 전수 — 건곤미허신공 심법과 짝"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  eogi_sinpung:
+    name: "어기신풍"
+    category: "신법"
+    weapon_class: 무관
+    sub_category: "신법 (상급 — 기를 부려 바람을 탄다)"
+    grade: "절정"
+    tier: 상급
+    lineage: paengga_bo
+    faction: paengga
+    required_realm: "절정"
+    required_stats: { 민첩: 5 }
+    required_mastery: 5
+    requires_skill: { id: miheo_sinbo, mastery: 5 }
+    acquisition: "세가주 재가 (어검 아닌 어기 — 몸이 바람이 된다)"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  yeonhwan_paewang_jin:
+    name: "연환패왕진"
+    category: "합격진"
+    weapon_class: 도
+    sub_category: "도진 (2~5인 — 연환으로 문을 끊는 패왕의 진)"
+    grade: "절정"
+    tier: 상급
+    lineage: paengga_do
+    faction: paengga
+    required_realm: "일류"
+    required_stats: { 지혜: 4 }
+    required_mastery: 3
+    requires_skill: { id: wangja_sado, mastery: 3 }
+    acquisition: "가전 진법 구결 — 장로 전수 (도적 소탕의 대형 · party.yml 합격진 정합)"
+    bloodline_restricted: false
     requires_master: true
     requires_manual: true
     side_effects: false

@@ -694,6 +694,96 @@ skills:
     mastery_gate: { 하급: 6, 중급: 6 }
     # 정체성: 파격 + 다운 + 폭 1.8(전 무공 최광폭). 금강복마권(파격·28틱)과 같은 결, 더 무겁다
 
+  # ── 팽가 확장 (2026-07-26 「전부 등재」 — 수치 전부 【제안】: 기존 급별 결에 맞춤) ──
+  bokho_dosik:                    # 복호도식 (기초) — 엎드린 범: 도의 첫 형
+    combo:
+      - { type: 호, angle: 100, range: 3.0, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.3, length: 3.2, frames: [6, 3, 9], stagger: 중, cost: 0 }
+    combo_input_window: 10
+    cooldown_ticks: 80
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "도끝이 낮게 운다" }
+
+  geongon_sinjang:                # 건곤신장 (하급 장법) — 하늘과 땅으로 민다
+    combo:
+      - { type: 호, angle: 90, range: 2.8, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 90, range: 2.8, frames: [4, 2, 5], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.4, length: 3.0, frames: [7, 3, 10], stagger: 강, cost: 0 }   # 밀어내는 손
+    combo_input_window: 9
+    cooldown_ticks: 90
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "장풍의 예고 — 옷자락이 먼저 민다" }
+
+  honwon_byeokryeok_jang:         # 혼원벽력장 (상급 장법) — 벼락이 손바닥에 내린다
+    type: 호
+    angle: 90
+    range: 2.7
+    frames: [10, 3, 13]
+    stagger: 강
+    property: 파격                # 벽력 — 심법 passive(혼원벽력신공)와 같은 결
+    cost: 3
+    cooldown_ticks: 240
+    telegraph: "장심이 희게 — 10틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "손바닥의 벼락 — 소리가 뒤에 온다" }
+
+  pagap_chu:                      # 파갑추 (중급 권법) — 갑주를 깨는 망치
+    combo:
+      - { type: 호, angle: 80, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.8, frames: [6, 3, 9], stagger: 강, cost: 0 }   # 내려찍는 추
+    combo_input_window: 8
+    armor_pierce: 1               # 破甲 — 이름이 곧 속성이다 (혼원도법 값 승계)
+    cooldown_ticks: 110
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "주먹이 쇳소리를 낸다" }
+
+  cheolhyeol_baeksasippal_toe:    # 철혈백사십팔퇴 (중급 퇴법) — 쉼 없이 짓밟는다
+    combo:
+      - { type: 호, angle: 70, range: 2.4, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 70, range: 2.4, frames: [2, 2, 3], stagger: 약, cost: 0 }
+      - { type: 호, angle: 70, range: 2.4, frames: [3, 2, 4], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.6, frames: [5, 3, 8], stagger: 강, cost: 0 }   # 마지막 발 — 문이 부서진다
+    combo_input_window: 7         # 태조장권보다 짧다 — 연퇴는 끊기면 처음부터다
+    cooldown_ticks: 100
+    qi_rider: { step: 4, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "발끝의 바람 — 148 갈래의 예고" }
+
+  honwon_bo:                      # 혼원보 (하급 보법) — 무겁게 딛고 크게 빠진다
+    type: 돌
+    distance: 4
+    frames: [0, 0, 4]
+    iframe: 5
+    cost: 0
+    cooldown_ticks: 170
+    vfx: "흙먼지 한 걸음 (파티클 예산 경유)"
+    qi_note: "경신(내력 1)을 얹으면 거리 4 → 6 (일류+)"
+
+  miheo_sinbo:                    # 미허신보 (중급 보법) — 비움으로 피한다
+    type: 돌
+    distance: 5
+    frames: [0, 0, 3]
+    iframe: 8                     # 매화보(6)보다 길다 — 대신 재사용이 느리다
+    cost: 0
+    cooldown_ticks: 200
+    vfx: "몸이 반 박자 비어 보인다 (파티클 예산 경유)"
+    qi_note: "경신(내력 1~2)을 얹으면 거리 5 → 8, iframe 8 유지 (일류+)"
+
+  eogi_sinpung:                   # 어기신풍 (상급 신법) — 기를 부려 바람을 탄다
+    type: 돌
+    distance: 8
+    frames: [0, 0, 2]
+    iframe: 6
+    cost: 2                       # 어기(御氣) — 기를 태우는 신법이다 (보법과 다른 값)
+    cooldown_ticks: 220
+    vfx: "바람이 몸을 지나간 자리만 남는다"
+    qi_note: "경신 격이 아니라 시전 자체가 내력이다 — 고갈이면 못 탄다"
+
+  yeonhwan_paewang_jin:           # 연환패왕진 (도진 2~5인) — 연환으로 문을 끊는다
+    type: 진
+    size: [2, 5]
+    radius: 6
+    frames: [20, 0, 10]
+    effect: "협공 슬롯 5 개방 (매화검진과 같은 값 【제안】 — party.yml 정합 등재는 미결) · 성원 판정 +1"
+    break_condition: "성원 1인 무력화 시 진 붕괴 — 라운드 종료까지 전원 -1"
+    cooldown_ticks: 400
+    cost: 0
+    note: "매화검진과 같은 문법 — 값의 차별(패도 결)은 party.yml 합격진 회차에서 사용자와"
+
 # ─── 소림사 — sorim_kwon ───
   sorim_kwonbeop:                 # 소림권법 (중급) — 본산 108수. 짧고 끈질기다
     combo:
