@@ -489,6 +489,9 @@ MUTATIONS = [
     ("(137) 수련 정산이 서장의 몸에 말을 건다 (무대 한가운데 「흩어졌다」)", SKL,
      "        if (WorldBridge.seojangHolds(player.getUniqueId())\n                || Antechamber.isAntechamber(player.getWorld())\n                || Voyage.isSea(player.getWorld())) {\n            return;\n        }",
      "", "서장의 몸에 말을 건다"),
+    ("(138) 범인에게 갈래 수련을 돌린다 (첫날부터 「흩어졌다」)", SKL,
+     "        double wasted = mortal ? 0.0 : growth.train(ledger, state.realm, 1.0);",
+     "        double wasted = growth.train(ledger, state.realm, 1.0);", "범인이 갈래 수련"),
 ]
 
 

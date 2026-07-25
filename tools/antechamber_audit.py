@@ -1553,6 +1553,13 @@ def audit_voyage(rep: Report, ante: dict, code: str) -> None:
                 "안 본다 (무대 한가운데 「흩어졌다」가 찍힌다)")
     else:
         rep.good("수련 정산은 내린 뒤에 온다 (서장의 몸에는 강호의 하루가 안 흐른다)")
+    # ★범인은 무공을 배우지 않았다 (사용자 확정 2026-07-25) — 갈래 수련 없음 · 하루는
+    #   통째로 기초 단련. 「흩어졌다」는 무공을 이고 난 뒤의 말이다
+    if "mortal ? 0.0 : growth.train(" not in (st_body or ""):
+        rep.bad("범인이 갈래 수련을 돈다 — 무공 없는 몸이 천장에 부딪혀 첫날부터 "
+                "「흩어졌다」를 본다 (범인 = 기초 단련만)")
+    else:
+        rep.good("범인은 기초 단련만 걷는다 (갈래 수련은 무공을 이고 나서)")
     la = stg.get("lanterns") or {}
     if "{label}" not in str(la.get("label_format") or "") \
             or "Material.DARK_OAK_PLANKS" in sjs:

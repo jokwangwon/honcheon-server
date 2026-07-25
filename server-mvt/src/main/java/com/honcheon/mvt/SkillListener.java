@@ -5616,7 +5616,12 @@ public final class SkillListener implements Listener {
         if (!ledger.isNewDay(day)) {
             return;
         }
-        double wasted = growth.train(ledger, state.realm, 1.0);
+        // ★범인은 무공을 배우지 않았다 — 갈래 수련이 오를 것이 없다 (사용자 확정 2026-07-25
+        //   "기본 배분 수치를 조정 — 범인은 무공을 배우지 않았기에 오르는 것도 없음").
+        //   하루는 통째로 기초 단련(pendTrain → 화후_원장)으로 간다 — 삼류의 관문(기초 단련
+        //   3개월)은 그대로 걷고, 「흩어졌다」는 무공을 이고 난 뒤의 말이 된다.
+        boolean mortal = state.realm == null || state.realm.equals(engine.baseRealm());
+        double wasted = mortal ? 0.0 : growth.train(ledger, state.realm, 1.0);
         ledger.addWasted(wasted);
         // 몸에 실제로 들어간 일치 — 봇의 `화후_원장` 으로 간다 (범인 → 삼류의 관문: 기초 단련 3개월)
         ledger.pendTrain(Math.max(0.0, 1.0 - wasted));
