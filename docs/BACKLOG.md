@@ -3672,6 +3672,9 @@ B-160 수사의 부산물 (2026-07-17): 월아산 병기의 PDC `weapon_class` �
 - ★남은 빚: 【제안】 수치 튜닝 (per_body·크리표·상한) + ~~**combat_audit·defense_audit 의 기대 모델을
   v2 로 갱신**~~ (✓ 2026-07-25 아래) + 장비 크리 슬롯(equipment.yml) 별도 등재 + PvP directOpposed
   거취 (설계서 미결 5) + ★growth_audit 도 자체 2d6 산술(v1)이다 — 다음 조각 (이번 회차에서 발견)
+  + ★**오의 경로도 v1 산술이다** (2026-07-26 오의 분석에서 발견): planUltimate 주석 공식이
+  「무공 위력+⌊마진/2⌋」(v1) · 오의 격돌(clash)은 2d6 실행력 경합 · v2 에선 오의 기본 위력(6)이
+  격 보정 칸에 실려 살고 무공 위력 항은 죽는다 — 오의의 v2 재설계는 별도 결정 회차
 
 ★진행 (2026-07-25 · 눈의 v2 갱신 — combat_audit·defense_audit 기대 모델 v1→v2):
 - **디스패치 = 엔진과 같은 문**: `strike()`/`expected()` 가 `combat_v2.enabled` 를 읽어 갈아탄다
