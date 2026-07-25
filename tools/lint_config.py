@@ -133,6 +133,33 @@ for g in ladder_grades - set(board_xp):
 for g in set(board_xp) - ladder_grades:
     issues.append(f"board_quests '{g}' 가 quest_generation grade_ladder 에 없는 등급이다 (죽은 등재)")
 
+# 5-f. ★가전 무공 입장권 (C안 · 2026-07-25) — 세가 → 계보 첫 무공 매핑의 정합.
+#   오타 하나면 그 세가의 아이는 입장권 없이 태어난다 (침묵하는 실패 — 여기서 잡는다)
+creation = load("player_creation.yml")
+
+
+def _find_key(node, key):
+    if isinstance(node, dict):
+        if key in node:
+            return node[key]
+        for v in node.values():
+            got = _find_key(v, key)
+            if got is not None:
+                return got
+    return None
+
+
+_sega = _find_key(creation, "세가의_자제") or {}
+_houses = set(_sega.get("great_houses") or [])
+_arts = _sega.get("great_house_arts") or {}
+_art_catalog = skills.get("martial_arts") or {}
+for house, art in _arts.items():
+    if house not in _houses:
+        issues.append(f"great_house_arts '{house}' 가 great_houses 등록부에 없다 (유령 세가)")
+    if art not in _art_catalog:
+        issues.append(f"great_house_arts[{house}] = '{art}' 가 skills.yml 카탈로그에 없다 "
+                      "(그 아이의 입장권이 조용히 빈손이 된다)")
+
 # 6. 심법 겸수/상성 id
 sim_ids = set(simbeop["simbeop"].keys())
 for sid, s in simbeop["simbeop"].items():

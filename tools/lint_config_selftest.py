@@ -72,6 +72,19 @@ def main():
         missing_xp = run(work)
         cases.append(("XP 표에서 빠진 의뢰 등급을 잡는다", missing_xp.returncode == 1 and "잔심부름" in missing_xp.stdout,
                       missing_xp.stdout))
+        cult["levels"]["xp_sources"]["board_quests"]["잔심부름"] = removed
+        cult_path.write_text(yaml.safe_dump(cult, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+        # ★가전 무공 입장권 눈 (5-f) — 카탈로그 밖 무공을 입장권에 적으면 잡아야 한다 (C안)
+        pc_path = work / "config" / "player_creation.yml"
+        pc_text = pc_path.read_text(encoding="utf-8")
+        pc_path.write_text(pc_text.replace("하북팽가: gaesan_do", "하북팽가: eopneun_mugong"),
+                           encoding="utf-8")
+        bad_art = run(work)
+        cases.append(("카탈로그 밖 가전 무공 입장권을 잡는다",
+                      bad_art.returncode == 1 and "eopneun_mugong" in bad_art.stdout,
+                      bad_art.stdout))
+        pc_path.write_text(pc_text, encoding="utf-8")
 
     ok = True
     print("══ lint_config 눈을 시험한다 ══")

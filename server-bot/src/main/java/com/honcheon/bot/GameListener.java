@@ -516,6 +516,12 @@ public final class GameListener extends ListenerAdapter {
         if (sheet.get("가문_대여") != null) {
             eb.addField("소지품", String.valueOf(sheet.get("가문_대여")), false);
         }
+        if (sheet.get("가전_무공") != null) {
+            // ★입장권 (C안) — 자격이지 힘이 아니다: 이름은 등록부(skills.yml)의 것을 부른다
+            String artId = String.valueOf(sheet.get("가전_무공"));
+            eb.addField("가전 무공", rules.skillName(artId)
+                    + " — 배울 자격이 있다 (아직 배우지 못했다 · 입문은 스승의 것)", false);
+        }
         if (sheet.get("기술") instanceof Map<?, ?> skills && !skills.isEmpty()) {
             StringBuilder sk = new StringBuilder();
             skills.forEach((k, v) -> sk.append(k).append(' ').append(v).append("  "));
@@ -1144,6 +1150,13 @@ public final class GameListener extends ListenerAdapter {
                     : String.valueOf(gh.get(dice.nextInt(gh.size())));
             sheet.put("세가", great);
             sheet.put("가문_대여", "정련급 가문 검 — " + great + "의 각인 (가문 소유 · 잃으면 문책의 무게도 세가답다)");
+            // ★가전 무공 입장권 (C안 · 사용자 확정 2026-07-25) — 지목된 세가의 계보 첫 무공을
+            //   배울 **자격**이 시트에 기장된다 (헌법 2.8 「입장권과 빚」 — 힘이 아니라 자격이다:
+            //   입문·숙련은 스승·수련의 것). 미등재 세가(모용·제갈)는 기장 없음 — 지어내지 않는다.
+            if (familyCfg.get("great_house_arts") instanceof Map<?, ?> arts
+                    && arts.get(great) != null) {
+                sheet.put("가전_무공", String.valueOf(arts.get(great)));
+            }
         }
         // 집안 grants의 기술 축 배선 — 몰락_무가 검법0 = "아무 무공 입문 (숙련 0)" 승급 요건 충족
         if (familyCfg != null && familyCfg.get("grants") instanceof Map<?, ?> grants
@@ -5672,10 +5685,15 @@ public final class GameListener extends ListenerAdapter {
 
         Map<String, Object> skills = (Map<String, Object>) sheet.get("기술");
         if (skills != null && skills.keySet().stream().anyMatch(MARTIAL_SKILLS::contains)) {
-            // 백지의 역설 — 사승은 백지에게만 (fortune_and_wanderer)
+            // 백지의 역설 — 사승은 백지에게만 (fortune_and_wanderer).
+            // ★C안 (2026-07-25) — 「네 집의 것」의 실명을 부른다: 입장권(가전_무공)이 시트에 있으면
+            //   거절이 안내가 된다 (어디로 가야 배우는지는 장원 회차(B-187)의 몫 — 지금은 이름까지만)
+            String art = sheet.get("가전_무공") == null ? null
+                    : rules.skillName(String.valueOf(sheet.get("가전_무공")));
             event.replyEmbeds(new EmbedBuilder().setColor(INK).setTitle("사사 — 곽진")
                     .setDescription("곽진이 손을 저었다. \"이미 길이 있는 몸이다 — 두 길을 함께 걷다간 둘 다 잃는다. "
-                            + "네 집의 것을 갈고닦아라.\"").build()).queue();
+                            + (art == null ? "네 집의 것을 갈고닦아라.\""
+                            : "네 집에는 " + art + "이 있지 않으냐 — 그 길을 걸어라.\"")).build()).queue();
             return;
         }
         Map<String, Object> attrs = (Map<String, Object>) sheet.get("능력치");

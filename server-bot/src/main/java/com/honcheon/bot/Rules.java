@@ -90,6 +90,8 @@ public final class Rules {
     private final Map<String, Object> judgmentCfg;
     private final Map<String, Object> economyCfg;
     private final Map<String, Object> llmCfg;
+    /** 무공 id → 이름 (skills.yml martial_arts — 코드가 이름을 짓지 않는다) */
+    private final Map<String, String> skillNames = new java.util.LinkedHashMap<>();
     private final Map<String, Object> npcsCfg;
     private final Map<String, Object> rumorCfg;
     private final Map<String, Object> timeCfg;
@@ -188,6 +190,13 @@ public final class Rules {
         this.dispositionTest = RulesConfig.load(configDir.resolve("disposition_test.yml"));
         this.playerCreation = RulesConfig.load(configDir.resolve("player_creation.yml"));
         this.genderEngine = GenderEngine.of(playerCreation);   // 성별 규칙의 단일 원천 (core)
+        // ★무공 이름부 (C안 · 2026-07-25) — 가전 무공 입장권이 실명을 부르려면 카탈로그가 필요하다
+        RulesConfig.section(RulesConfig.load(configDir.resolve("skills.yml")), "martial_arts")
+                .forEach((k, v) -> {
+                    if (v instanceof Map<?, ?> m && m.get("name") != null) {
+                        skillNames.put(k, String.valueOf(m.get("name")));
+                    }
+                });
         this.llmCfg = RulesConfig.load(configDir.resolve("llm.yml"));
         this.npcsCfg = RulesConfig.load(configDir.resolve("npcs/cheongha_npcs.yml"));
         this.rumorCfg = RulesConfig.load(configDir.resolve("rumor.yml"));
@@ -990,6 +999,11 @@ public final class Rules {
             return null;   // 등록부가 비었다 — 코드가 성을 지어내지 않는다
         }
         return String.valueOf(l.get(dice.nextInt(l.size())));
+    }
+
+    /** 무공 이름 — skills.yml 카탈로그의 것. 미등재 id 는 id 그대로 (조용히 지어내지 않는다) */
+    public String skillName(String id) {
+        return skillNames.getOrDefault(id, id);
     }
 
     public String houseNameFormat(boolean martial) {
