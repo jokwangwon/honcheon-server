@@ -1054,12 +1054,17 @@ martial_arts:
 
   # ─── 하북팽가 (paengga) — 도 · 계보 paengga_do ───
   # 노션: 심법 소호심법·건곤미허신공·혼원벽력신공(장문인) / 오의 오호단문도·혼원벽력도
-  #   → 하급·중급·상급 무공의 이름이 원천에 없다. 셋 다 ★지어냄 (오의 이름의 결을 따라 올라간다)
-  gaesan_do:
-    name: "개산도법"
+  # ★정격 개명 (2026-07-25 사용자 제공 자료 — 「패도적·실전적 도법의 명가」):
+  #   지어낸 임시 이름(개산도법·혼원도법·벽력도법)을 보편 전승명으로 갈았다.
+  #   사다리 배치는 【제안】: 왕자사도(하 — 王 한 자 네 획) → 철혈적성도(중) → 건곤연환탈백도(상)
+  #   → 오의 오호단문도·혼원벽력도(기존 등재 그대로). 【묘비】 gaesan_do·honwon_do·byeokryeok_do.
+  #   원천의 남은 후보(미등재 — 등재는 별도 결정): 장법 건곤신장·혼원벽력장 · 권법 파갑추 ·
+  #   퇴법 철혈백사십팔퇴 · 신법 어기신풍 · 보법 미허신보·혼원보 · 진법 연환패왕진
+  wangja_sado:
+    name: "왕자사도"
     category: "도법"
     weapon_class: 도
-    sub_category: "가전 도법 (하급 — 산을 연다)"
+    sub_category: "가전 도법 (하급 — 王 한 자를 네 획으로 벤다: 횡·횡·종·횡)"
     grade: "이류"
     tier: 하급
     lineage: paengga_do
@@ -1074,13 +1079,12 @@ martial_arts:
     side_effects: false
     public_use_rumor: true
     faction_reaction: false
-    # ★지어냄
 
-  honwon_do:
-    name: "혼원도법"
+  cheolhyeol_jeokseong_do:
+    name: "철혈적성도"
     category: "도법"
     weapon_class: 도
-    sub_category: "가전 도법 (중급 — 혼원벽력신공의 결을 도에 싣는다)"
+    sub_category: "가전 도법 (중급 — 철혈의 결: 별을 따듯 끊어 벤다)"
     grade: "일류"
     tier: 중급
     lineage: paengga_do
@@ -1088,7 +1092,7 @@ martial_arts:
     required_realm: "일류"
     required_stats: { 근력: 5, 체력: 4 }
     required_mastery: 5
-    requires_skill: { id: gaesan_do, mastery: 5 }
+    requires_skill: { id: wangja_sado, mastery: 5 }
     acquisition: "세가 내당 전수"
     bloodline_restricted: false
     requires_master: true
@@ -1096,13 +1100,12 @@ martial_arts:
     side_effects: false
     public_use_rumor: true
     faction_reaction: true
-    # ★지어냄
 
-  byeokryeok_do:
-    name: "벽력도법"
+  geongon_yeonhwan_talbaek_do:
+    name: "건곤연환탈백도"
     category: "도법"
     weapon_class: 도
-    sub_category: "세가 비전 (상급 — 벼락으로 가른다)"
+    sub_category: "세가 비전 (상급 — 연환으로 몰아쳐 혼백을 앗는다)"
     grade: "절정"
     tier: 상급
     lineage: paengga_do
@@ -1110,7 +1113,7 @@ martial_arts:
     required_realm: "절정"
     required_stats: { 근력: 5, 체력: 5 }
     required_mastery: 5
-    requires_skill: { id: honwon_do, mastery: 5 }
+    requires_skill: { id: cheolhyeol_jeokseong_do, mastery: 5 }
     mastery_gate: { 하급: 6, 중급: 6 }
     acquisition: "세가주 재가 — 오호단문도·혼원벽력도(오의)의 선행"
     bloodline_restricted: true
@@ -1119,7 +1122,6 @@ martial_arts:
     side_effects: false
     public_use_rumor: true
     faction_reaction: true
-    # ★지어냄
 
   # ─── 소림사 (sorimsa) — 권 · 계보 sorim_kwon ───
   # 노션: 스킬 소림권법 / 오의 백보신권·여래신장. 하급(나한권 18수)은 기존 등재 — 본산 108수가 중급이다

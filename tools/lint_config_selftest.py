@@ -78,7 +78,7 @@ def main():
         # ★가전 무공 입장권 눈 (5-f) — 카탈로그 밖 무공을 입장권에 적으면 잡아야 한다 (C안)
         pc_path = work / "config" / "player_creation.yml"
         pc_text = pc_path.read_text(encoding="utf-8")
-        pc_path.write_text(pc_text.replace("하북팽가: gaesan_do", "하북팽가: eopneun_mugong"),
+        pc_path.write_text(pc_text.replace("하북팽가: wangja_sado", "하북팽가: eopneun_mugong"),
                            encoding="utf-8")
         bad_art = run(work)
         cases.append(("카탈로그 밖 가전 무공 입장권을 잡는다",

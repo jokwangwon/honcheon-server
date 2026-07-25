@@ -1023,17 +1023,18 @@ skills:
       - { trail: 시, count: 2, finisher: true,
           sound: { key: "entity.arrow.shoot", volume: 0.7, pitch: 1.75 } }   # 네 마리 나비 — 궤가 넷으로 갈린다 (hit_count 4)
 
-  # ── 하북팽가 (계보) — 호에서 **내려베는 선**으로. 도의 무게 (음이 낮다) ──
-  gaesan_do:
-    name: "개산도법"
+  # ── 하북팽가 (계보) — 호에서 **내려베는 선**으로. 도의 무게 (음이 낮다)
+  #    (★정격 개명 2026-07-25 — 묘비: gaesan_do·honwon_do·byeokryeok_do) ──
+  wangja_sado:
+    name: "왕자사도"
     style: 도
     steps:
       - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.95 } }
       - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
-          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.75 } }   # 산을 연다 — 흙이 튄다
+          sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.75 } }   # 王의 마지막 획 — 흙이 튄다
 
-  honwon_do:
-    name: "혼원도법"
+  cheolhyeol_jeokseong_do:
+    name: "철혈적성도"
     style: 도
     steps:
       - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
@@ -1041,8 +1042,8 @@ skills:
       - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
           sound: { key: "entity.player.attack.crit", volume: 1.0, pitch: 0.60 } }   # 도신이 운다 — 벼락의 예고
 
-  byeokryeok_do:
-    name: "벽력도법"
+  geongon_yeonhwan_talbaek_do:
+    name: "건곤연환탈백도"
     style: 도
     steps:
       - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,

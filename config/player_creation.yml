@@ -862,7 +862,7 @@ age_and_lifepath:
       #   "네 집의 것을 갈고닦아라" 하고 거절할 때, 그 「집의 것」의 실명이 이것이다.
       #   ★모용·제갈은 가전 무공이 카탈로그(skills.yml)에 미등재 — 등재 전까지 입장권 없음
       #   (지어내지 않는다 · B-187 장원 회차에서 사용자와 등재)
-      great_house_arts: { 남궁세가: changgung_geom, 하북팽가: gaesan_do, 사천당가: dangmun_bisu }
+      great_house_arts: { 남궁세가: changgung_geom, 하북팽가: wangja_sado, 사천당가: dangmun_bisu }
       grants:
         기술: { 검법: 1 }
         소양: 예법

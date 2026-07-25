@@ -187,7 +187,7 @@ legacy_arts:
     name: "오호단문도(五虎斷門刀)"
     faction: paengga
     lineage: paengga_do
-    requires_skill: { id: byeokryeok_do, mastery: 8 }
+    requires_skill: { id: geongon_yeonhwan_talbaek_do, mastery: 8 }
     type: { hitbox: 선, width: 3, length: 10, multi_hit: 5 }    # 다섯 범 — 다섯 획이 문을 끊는다
     frames: [18, 5, 18]
     defense: "시전 중 슈퍼아머"
@@ -198,7 +198,7 @@ legacy_arts:
     name: "혼원벽력도(混元霹靂刀)"
     faction: paengga
     lineage: paengga_do
-    requires_skill: { id: byeokryeok_do, mastery: 8 }
+    requires_skill: { id: geongon_yeonhwan_talbaek_do, mastery: 8 }
     type: { hitbox: 원, range: 7 }
     frames: [22, 4, 20]                              # 전 오의 최장 선딜 — 벼락은 모였다 떨어진다
     defense: "시전 중 무적 16틱"

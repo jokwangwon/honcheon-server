@@ -659,8 +659,8 @@ skills:
     cooldown_ticks: 90
     qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "네 마리 나비 — 궤가 갈린다" }
 
-# ─── 하북팽가 — paengga_do ───
-  gaesan_do:                      # 개산도법 (하급) — 산을 연다. 무겁게 내려찍는다
+# ─── 하북팽가 — paengga_do (★정격 개명 2026-07-25 — 묘비: gaesan_do·honwon_do·byeokryeok_do) ───
+  wangja_sado:                    # 왕자사도 (하급) — 王 한 자 네 획. 무겁게 내려찍는다
     combo:
       - { type: 호, angle: 110, range: 3.2, frames: [5, 2, 6], stagger: 약, cost: 0 }
       - { type: 선, width: 1.5, length: 3.8, frames: [8, 3, 11], stagger: 강, cost: 0 }
@@ -668,7 +668,7 @@ skills:
     cooldown_ticks: 100
     qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "도신에 실린 무게 — 흙이 튄다" }
 
-  honwon_do:                      # 혼원도법 (중급) — 갑주를 씹는다
+  cheolhyeol_jeokseong_do:        # 철혈적성도 (중급) — 갑주를 씹는다
     combo:
       - { type: 호, angle: 100, range: 3.4, frames: [5, 2, 6], stagger: 약, cost: 0 }
       - { type: 호, angle: 100, range: 3.4, frames: [6, 2, 7], stagger: 중, cost: 0 }
@@ -678,7 +678,7 @@ skills:
     cooldown_ticks: 140
     qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "벼락의 예고 — 도신이 운다" }
 
-  byeokryeok_do:                  # 벽력도법 (상급) — 막아도 뚫린다
+  geongon_yeonhwan_talbaek_do:    # 건곤연환탈백도 (상급) — 막아도 뚫린다
     type: 선
     width: 1.8
     length: 5.0
