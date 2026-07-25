@@ -341,11 +341,43 @@ final class Voyage {
         riders.put(player.getUniqueId(), new Rider());
         player.teleport(bargeAnchor(sea));
         player.setFallDistance(0f);
+        veil(player, sea);   // ★명계의 격리 — 서장은 홀로 겪는다 (같은 배의 다른 넋이 안 보인다)
         if (!embarkLine.isEmpty()) {
             player.sendMessage(SeojangBook.legacy(embarkLine));
         }
         player.playSound(player.getLocation(), rowSoundKey, 0.7f, 0.6f);
         ensureClock();
+    }
+
+    /**
+     * ★명계의 격리 (실기동 2026-07-25 「2명이 서장 진입 시 같은 공간에 서로 보인다」) —
+     * 서장은 홀로 겪는 것이다. 배는 한 척이고 닻은 한 점이라, 가리지 않으면 남의 몸과
+     * 겹친다: 같은 바다의 넋들은 서로를 <b>보지도, 밀지도</b> 못한다. 무대·패·글은
+     * {@link SeojangStage}(기본 가림)와 개인 채널(sendMessage·spawnParticle)이 이미 가린다 —
+     * 여기서 가리는 것은 <b>몸</b>이다.
+     */
+    private void veil(Player player, World sea) {
+        player.setCollidable(false);   // 겹친 몸이 서로를 밀지 않는다
+        for (Player other : sea.getPlayers()) {
+            if (!other.getUniqueId().equals(player.getUniqueId())) {
+                player.hidePlayer(plugin, other);
+                other.hidePlayer(plugin, player);
+            }
+        }
+    }
+
+    /**
+     * 격리를 걷는다 — 강호로 돌아가는 몸은 다시 보이고 다시 부딪힌다.
+     * hidePlayer 는 월드를 건너도 남는다 — 걷지 않으면 강호에서 투명 인간 둘이 걷는다.
+     */
+    private void unveil(Player player) {
+        player.setCollidable(true);
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (!other.getUniqueId().equals(player.getUniqueId())) {
+                player.showPlayer(plugin, other);
+                other.showPlayer(plugin, player);
+            }
+        }
     }
 
     /** 하선 — 무대를 걷고 시계에서 내린다. 도하 기억은 메모리뿐 — 진실은 봇의 명단이다 */
@@ -356,6 +388,10 @@ final class Voyage {
             r.fx = null;
         }
         ante.stage().clear(body);
+        Player p = Bukkit.getPlayer(body);
+        if (p != null && p.isOnline()) {
+            unveil(p);   // 배에서 내린 몸은 다시 보인다 (퇴장한 몸은 접속이 격리를 이미 지웠다)
+        }
     }
 
     void shutdownAll() {

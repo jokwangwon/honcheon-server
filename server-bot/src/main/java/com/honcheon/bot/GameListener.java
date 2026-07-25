@@ -1659,6 +1659,16 @@ public final class GameListener extends ListenerAdapter {
         String print = Seojang.fingerprint(chId, idx, prevTier);
         String token = print + ":" + Long.toHexString(dice.nextLong() & 0xffffffffL);
 
+        if (!rules.seojang.liveBrush()) {
+            // ★사전 집필 (사용자 확정 2026-07-25 「실시간 생성이 아닌, 모든 루트의 출력값을
+            //   생성해두고 출력 — 이름만 변수」): 모든 루트의 문장은 등록부(seojang.yml prose)가
+            //   이미 갖고 있다 — scene_body(갈래) × opening(발단) × bridge(등급) × 색, {name} 만
+            //   몸이 채운다. 근인: 실기동 그림자_시험 1장 — 로컬 붓이 기준 서사를 대체해
+            //   (SYSTEM 7항 위반) 발단의 전제가 빠진 뜻 모를 장이 나갔다. 폴백이 아니라
+            //   정본이다 (fallback=false — 간기도 폴백 장부도 남지 않는다). 붓은 대화의 것.
+            persistScene(chId, idx, token, print, new Scribe.Written(base, false, null));
+            return true;
+        }
         scribe.write(facts, base, ahead -> ferryTell(chId, ahead))
                 .thenAccept(written -> persistScene(chId, idx, token, print, written));
         return true;

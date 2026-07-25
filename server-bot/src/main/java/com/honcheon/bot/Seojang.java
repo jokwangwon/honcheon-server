@@ -87,6 +87,8 @@ final class Seojang {
     private final Map<String, String> ferry = new LinkedHashMap<>();
     private final String debutLine;
     private final boolean prerender;
+    /** 서장이 붓(LLM)을 드는가 — 기본 false (사전 집필이 정본 · 사용자 확정 2026-07-25) */
+    private final boolean liveBrush;
 
     @SuppressWarnings("unchecked")
     Seojang(Path configDir) {
@@ -142,11 +144,22 @@ final class Seojang {
         RulesConfig.section(cfg, "ferry").forEach((k, v) -> ferry.put(k, str(v)));
         Object pre = RulesConfig.section(cfg, "prerender").get("enabled");
         this.prerender = !(pre instanceof Boolean b) || b;
+        // ★사전 집필 (사용자 확정 2026-07-25) — 키가 없어도 붓은 안 든다 (폐지가 새 기본값이다)
+        this.liveBrush = cfg.get("live_brush") instanceof Boolean lb && lb;
     }
 
     /** 미리 쓰기를 하는가 (seojang.yml prerender.enabled) */
     boolean prerender() {
         return prerender;
+    }
+
+    /**
+     * 서장이 붓(LLM)을 드는가 — <b>기본은 아니다</b> (seojang.yml live_brush · 사용자 확정
+     * 2026-07-25 「모든 루트의 출력값을 생성해두고 출력 · 이름만 변수」). false 면 prose
+     * 등록부가 그대로 책이 된다 — 옛 폴백 경로의 정본 승격이라 새 문장 파이프는 없다.
+     */
+    boolean liveBrush() {
+        return liveBrush;
     }
 
     /**

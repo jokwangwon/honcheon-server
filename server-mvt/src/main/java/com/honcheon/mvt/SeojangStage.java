@@ -615,13 +615,17 @@ final class SeojangStage implements Listener {
         }
     }
 
-    /** 본인에게만 보인다 — 삼도천의 격리 확정(멀리 실루엣만)과 계열 무대의 전제 */
+    /**
+     * 본인에게만 보인다 — 삼도천의 격리 확정(멀리 실루엣만)과 계열 무대의 전제.
+     *
+     * <p>★구판의 구멍 (실기동 2026-07-25 「1번의 선택지가 2번 화면에 보임」): hideEntity 는
+     * <b>스폰 시점에 월드에 있던 눈만</b> 가린다 — 늦게 승선한 눈에는 남의 무대·패가 그대로
+     * 보였다. 기본값을 가림으로 두고 주인에게만 연다 (MobDisplay·SkillDisplay 와 같은 문법 —
+     * 늦게 온 눈은 기본값이 가린다).
+     */
     private void onlyFor(Player owner, Entity e) {
-        for (Player p : e.getWorld().getPlayers()) {
-            if (!p.getUniqueId().equals(owner.getUniqueId())) {
-                p.hideEntity(plugin, e);
-            }
-        }
+        e.setVisibleByDefault(false);
+        owner.showEntity(plugin, e);
     }
 
     /** <b>등불을 우클릭했다</b> — 선택은 몸의 행위다. 번호 하나를 다리에 얹을 뿐, 판정은 봇의 것 */
