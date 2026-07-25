@@ -1830,10 +1830,16 @@ public final class MvtCommand implements CommandExecutor {
         java.util.List<String> out = new java.util.ArrayList<>();
         java.util.List<String> violations = new java.util.ArrayList<>();
         TownAudit.standable(out, violations, anchors);
+        // ★로그 먼저 (침묵 금지 — RCON 의 sender 는 응답을 삼킬 수 있다: 2026-07-25 실증.
+        //   로그는 아무도 안 죽는다 — §4 조성의 같은 계율)
+        out.forEach(line -> plugin.getLogger().info("[앵커검사] " + ChatColor.stripColor(line)));
         out.forEach(sender::sendMessage);
         if (violations.isEmpty()) {
+            plugin.getLogger().info("[앵커검사] 앵커 " + anchors.size() + "곳 전부 설 수 있다.");
             sender.sendMessage(ChatColor.GREEN + "앵커 " + anchors.size() + "곳 전부 설 수 있다.");
         } else {
+            plugin.getLogger().warning("[앵커검사] ★ 착지 불가 " + violations.size() + "건 — "
+                    + String.join(", ", violations));
             sender.sendMessage(ChatColor.RED + "★ 착지 불가 " + violations.size() + "건 — "
                     + ChatColor.WHITE + "/혼천 앵커재측" + ChatColor.GRAY + " 로 고친다.");
         }
@@ -1896,6 +1902,9 @@ public final class MvtCommand implements CommandExecutor {
         if (moved > 0) {
             plugin.setAnchors(fixed);   // anchors.yml 에 적는다 — 재기동을 넘어 산다
         }
+        // ★로그 먼저 (침묵 금지 — RCON 응답 유실 실증 2026-07-25. 로그는 아무도 안 죽는다)
+        plugin.getLogger().info("[앵커재측] 다시 박음 " + moved + " · 원점 유지 " + kept
+                + " · 실패 " + failed + " · 멀쩡 " + (anchors.size() - moved - kept - failed));
         sender.sendMessage(ChatColor.GOLD + "앵커 재측 — 다시 박음 " + moved + " · 원점 유지 " + kept
                 + " · 실패 " + failed + " · 멀쩡 " + (anchors.size() - moved - kept - failed));
         return true;

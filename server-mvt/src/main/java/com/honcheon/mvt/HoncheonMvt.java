@@ -237,6 +237,33 @@ public final class HoncheonMvt extends JavaPlugin {
             saveLedgers();
             dojang.saveVault();
         }, 6000L, 6000L);   // 5분
+        // ★콘솔 함 (2026-07-25 실증 — 플러그인 명령을 RCON 으로 치면 RCON 서비스가 통째로
+        //   죽는다: 조율자의 관리 명령 통로가 없어진다): 다리와 같은 문법 — 파일 한 줄 =
+        //   콘솔 명령 하나. 응답은 콘솔 로그가 정본이다 (침묵 금지 · 로그는 아무도 안 죽는다).
+        //   파일은 플러그인 폴더 안 — 서버 운영자의 손만 닿는 자리다.
+        java.nio.file.Path inbox = getDataFolder().toPath().resolve("console_inbox.txt");
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            try {
+                if (!java.nio.file.Files.exists(inbox)) {
+                    return;
+                }
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(inbox);
+                if (lines.isEmpty()) {
+                    return;
+                }
+                java.nio.file.Files.write(inbox, new byte[0]);
+                for (String line : lines) {
+                    String cmd = line.strip();
+                    if (cmd.isEmpty() || cmd.startsWith("#")) {
+                        continue;
+                    }
+                    getLogger().info("[콘솔함] > " + cmd);
+                    getServer().dispatchCommand(getServer().getConsoleSender(), cmd);
+                }
+            } catch (Exception e) {
+                getLogger().warning("[콘솔함] 읽기 실패: " + e.getMessage());
+            }
+        }, 100L, 40L);
         // 정보 패널 (사이드바) — 5초 주기 갱신: 위치·소지금·오늘 수련
         getServer().getScheduler().runTaskTimer(this,
                 Metrics.wrap("sidebar", () -> getServer().getOnlinePlayers().forEach(this::updateSidebar)),
