@@ -1034,6 +1034,135 @@ skills:
     qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "장심에서 퍼지는 금빛 — 여래신장의 아래층" }
     mastery_gate: { 하급: 6, 중급: 6 }
 
+  # ── 소림 장법 사다리 (B-188 ② · 2026-07-26) — 권(호 2.4 최단)과 갈린다: 장(掌)은 **밀어낸다** ──
+  wita_jang:                      # 위타장 (하급) — 초보적인 장법. 두 손이 밀 뿐이다
+    combo:
+      - { type: 호, angle: 75, range: 2.5, frames: [4, 2, 6], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.4, length: 2.6, frames: [6, 3, 9], stagger: 중, cost: 0 }   # 쌍장 — 밀어낸다
+    combo_input_window: 10
+    on_hit: { knockback: 1 }      # 장법의 지문 — 권은 세우고 장은 **띄운다** (거리를 만드는 하급기)
+    cooldown_ticks: 90
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "장심에 뿌연 기 — 아직 빛이 아니다" }
+
+  nahan_sippaljang:               # 나한십팔장 (중급) — 열여덟 로(路). 끊기지 않는다
+    combo:
+      - { type: 호, angle: 80, range: 2.6, frames: [3, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 80, range: 2.6, frames: [3, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.4, length: 2.8, frames: [6, 3, 9], stagger: 강, cost: 0 }
+    combo_input_window: 10
+    super_armor: "3타 선딜~지속"   # 반야장(지속 전체)의 아래층 — 마지막 손에만 붙는다
+    on_hit: { knockback: 1 }
+    cooldown_ticks: 120
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "손바닥에 어리는 금빛 — 반야장의 아래층" }
+
+# ─── 소림사 — sorim_gon (곤법 신설 · 봉 공급원 ★1→2) ───
+# ★개방 봉(150° 최광각 — 넓게 훑어 포위를 푼다)과 **반대로 갈랐다**: 소림 선장은 곧게 짚고 찍는다.
+#   같은 병기에 길이 둘 — B-188 「무기별 빌드 최소 2」가 요구한 것이 바로 이 대비다
+  hangma_seonjang:                # 항마선장 (하급) — 지팡이다. 짚고, 찍는다
+    combo:
+      - { type: 선, width: 0.9, length: 4.0, frames: [4, 2, 6], stagger: 약, cost: 0 }   # 찔러 짚는다
+      - { type: 선, width: 0.9, length: 4.0, frames: [4, 2, 6], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.3, length: 3.4, frames: [8, 3, 11], stagger: 강, cost: 0 }  # 내리찍는다
+    combo_input_window: 10
+    on_hit: { stagger: 다운 }     # 3타 — 지팡이가 발을 건다 (승려의 병기는 죽이지 않는다)
+    cooldown_ticks: 110
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "선장 끝에 도는 쇠고리 소리" }
+
+  daeyunhoe_geomryunjang:         # 대윤회겁륜장 (상급) — 겁(劫)의 바퀴가 돈다
+    type: 원
+    radius: 3.8                   # 봉의 길이가 그대로 반지름 — 전 원(圓) 기술 최대
+    frames: [12, 4, 16]
+    stagger: 강
+    super_armor: "지속 전체"
+    cost: 3
+    cooldown_ticks: 240
+    telegraph: "선장이 머리 위에서 한 바퀴 — 12틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "도는 금빛 바퀴 — 윤회의 테" }
+    mastery_gate: { 하급: 6 }
+
+# ─── 소림사 — sorim_ji (지공 신설 · 지법 공급원 1→2) ───
+# ★모용 지법(유성지·추혼지 = 한 점을 찍는 저격 선(線) 6~7m)과 갈랐다:
+#   탄지신통은 **잦고 짧다**(흩뿌린다) · 일지선은 **엄폐를 무시한다**(전 무공 유일)
+  tanji_sintong:                  # 탄지신통 (중급) — 튕긴다. 모든 지법의 대명사
+    combo:
+      - { type: 선, width: 0.5, length: 4.0, range: 4.0, angle: 0.5, frames: [2, 1, 4], stagger: 약, cost: 1 }
+      - { type: 선, width: 0.5, length: 4.0, range: 4.0, angle: 0.5, frames: [2, 1, 4], stagger: 약, cost: 1 }
+      - { type: 선, width: 0.6, length: 4.5, range: 4.5, angle: 0.6, frames: [4, 2, 6], stagger: 중, cost: 1 }
+    combo_input_window: 8         # 손끝은 빠르다 — 창이 좁다
+    cooldown_ticks: 100
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "튕겨나가는 빛알 셋" }
+    # 정체성: 사거리 4.0 (유성지 6.0 보다 짧다) 대신 **3연발 · 선딜 2틱**. 지풍의 기관총
+
+  iljiseon:                       # 일지선 (상급) — 격공지. 벽 뒤의 혈을 짚는다
+    type: 선
+    width: 0.6
+    length: 8.0
+    range: 8.0
+    angle: 0.6
+    frames: [10, 2, 14]
+    stagger: 강
+    cost: 3                       # 검기 밴드 상단(발출 3) — 절정의 지불. 4 는 강기(화경)라 경지와 어긋난다
+    cooldown_ticks: 260
+    telegraph: "손가락 하나가 곧게 선다 — 10틱 (가장 긴 예고: 피할 수는 있다)"
+    cover_rule: "★엄폐 무시 — 격공지(隔空指)는 사이에 낀 것을 세지 않는다 (ranged.활 엄폐 -2 의 정반대.
+      전 무공 유일 · 방패·엄폐물 뒤의 대상에게 감점 없음)"
+    on_hit: { 점혈: "적중 시 추가 경직 4틱 — 혈을 짚는다 (기절이 아니다)" }
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "손끝에서 곧게 뻗는 한 줄 — 소리가 없다" }
+    mastery_gate: { 중급: 6 }
+
+# ─── 소림사 — 금나·퇴·음공·진 ───
+  sorim_geumna_sippalta:          # 소림금나십팔타 (중급) — 잡고 꺾는다. 죽이지 않는다
+    type: 호
+    angle: 65
+    range: 1.8                    # 금나수(1.5)보다 조금 길다 — 십팔타는 뻗어서 잡는다
+    frames: [7, 2, 11]
+    property: 파격                # 가드·패링 관통 — 잡기의 값 (금나수 승계)
+    on_hit: { stagger: 다운 }
+    cost: 1
+    cooldown_ticks: 150
+    qi_note: "격이 붙지 않는다 — 금나는 위력이 아니라 **자세**를 무너뜨린다 (외공)"
+    # 정체성: 금나수(이류 파격)의 본산판. 상대를 죽이지 않고 이기는 불가의 손
+
+  hangma_yeonhwan_toe:            # 항마연환신퇴 (중급 퇴법) — 이어진다. 마지막이 위로 간다
+    combo:
+      - { type: 호, angle: 70, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 70, range: 2.6, frames: [3, 2, 4], stagger: 중, cost: 0 }
+      - { type: 호, angle: 90, range: 2.8, frames: [7, 3, 10], stagger: 강, cost: 0 }   # 회축 — 위를 친다
+    combo_input_window: 9
+    vertical: "3타는 상단 — 앉거나 낮춘 자세에 빗나간다 (연환의 대가)"
+    on_hit: { stagger: 다운 }
+    cooldown_ticks: 110
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "발끝이 그리는 반원 — 마가 엎어진다" }
+    # 팽가 철혈백사십팔퇴(4타 빠른 짓밟기 · 창 7)와 갈랐다: 소림은 3타에 **위로** 간다
+
+  sajahu:                         # 사자후 (음공) — 소리가 병기다
+    type: 원
+    radius: 6.0
+    frames: [14, 4, 18]
+    stagger: 중
+    cost: 1                       # 발경 밴드 — 일류의 지불. 소리에는 격이 붙지 않으니 그 위로 갈 수 없다
+    cooldown_ticks: 320            # 값은 코스트가 아니라 **재사용 대기**로 문다 (전 무공 최장급)
+    telegraph: "숨을 들이켠다 — 14틱 (다음에 올 것을 모두가 안다)"
+    effect: "★피해가 낮다 (원 기술 중 최저) — 값은 **판정**에 있다:
+      적중 대상 다음 1합 명중 -2 · 사기(morale) -2 (npc_combat 정합) ·
+      혈교·마교·괴이·주화입마 상태에는 -3 (마를 제압하는 소리)"
+    qi_note: "격이 붙지 않는다 — 소리에는 검기를 실을 수 없다"
+    note: "★전 무공 유일의 순수 판정기. 죽이지 않고 흩는다 (불가의 결) ·
+      values 는 【제안】 — npc_combat morale 정합은 B-176 소문/세계반응 회차와 동행"
+
+  nahan_jin:                      # 나한진 (합격진 2~5인) — 무너지지 않는다
+    type: 진
+    size: [2, 5]
+    radius: 5
+    frames: [20, 0, 10]
+    effect: "협공 슬롯 5 개방 (매화검진과 같은 값) · 성원 **피해 -1** (자리를 나눠 받는다)"
+    break_condition: "★성원 1인 무력화로는 무너지지 않는다 — 절반 이상이 쓰러져야 붕괴
+      (자료: 무림 역사상 한 번도 무너진 일이 없는 진). 붕괴 시 라운드 종료까지 전원 -1"
+    cooldown_ticks: 400
+    cost: 0
+    note: "매화검진 문법 + 소림의 결(버팀) — 다른 진은 한 사람이 뚫리면 끝난다.
+      나한진만 그렇지 않다 · 값의 확정은 party.yml 합격진 회차에서 사용자와 【제안】"
+
 # ─── 무당파 — mudang_geom ───
   yuun_geom:                      # 유운검법 (하급) — 흐르는 구름. 원으로 마무리한다
     combo:

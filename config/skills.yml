@@ -1820,7 +1820,7 @@ martial_arts:
     required_realm: "절정"
     required_stats: { 근력: 5, 체력: 5 }
     required_mastery: 5
-    requires_skill: { id: sorim_kwonbeop, mastery: 5 }
+    requires_skill: { id: nahan_sippaljang, mastery: 5 }   # ← 소림권법(권법)에서 나한십팔장(장법)으로 옮김
     mastery_gate: { 하급: 6, 중급: 6 }
     acquisition: "본산 승적 + 계율원 허가 — 백보신권·여래신장(오의)의 선행"
     bloodline_restricted: false
@@ -1829,7 +1829,238 @@ martial_arts:
     side_effects: false
     public_use_rumor: true
     faction_reaction: true
-    # ★지어냄 — 노션에 소림 상급 무공 이름이 없다. 심법(반야신공)의 결을 따 장법으로 세웠다
+    # ★정격 확인 (2026-07-26 사용자 자료) — 반야장(般若掌)은 소림 장법 목록의 실존 이름이다.
+    #   옛 ★지어냄 딱지를 벗긴다 (모용 건곤무적공 선례 — 자료가 오면 딱지가 벗겨진다)
+    # ★선행 이관: 장법 사다리가 서기 전에는 권법(소림권법)이 상급 장법의 선행이었다 — 계열이
+    #   어긋난 임시 배선이었다. 이제 위타장→나한십팔장→반야장으로 **장법 안에서** 닿는다.
+    #   소림권법(중급 권법)은 막다른 길이 아니다: 항마연환신퇴·사자후·나한진이 그 뒤에 선다
+
+  # ─── 소림사 — 장법 사다리 (B-188 ② · 사용자 자료 2026-07-26) ───
+  # 자료의 장법 목록: 위타장「초보적인 장법」·나한십팔장·복호장·반야장·대반야장·천수여래장 …
+  # 사다리: 위타장(하) → 나한십팔장(중) → 반야장(상·기존) → 백보신권/여래신장(오의)
+  wita_jang:
+    name: "위타장"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "속가 장법 (하급 — 초보적인 장법: 위타존자의 손)"
+    grade: "삼류"
+    tier: 하급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "삼류"
+    required_stats: { 근력: 3, 체력: 3 }
+    required_mastery: 0
+    acquisition: "소림 속가 전수 — 나한권과 나란히 주는 첫 손 (자료: 초보적인 장법)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false      # 너무 흔하다 — 이것만으로는 소림인 줄 모른다
+    faction_reaction: false
+
+  nahan_sippaljang:
+    name: "나한십팔장"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "본산 장법 십팔로 (중급 — 십팔나한의 손)"
+    grade: "일류"
+    tier: 중급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: wita_jang, mastery: 5 }
+    acquisition: "본산 승적 필요 — 십팔나한의 장법 열여덟 로(路). 반야장의 유일한 선행"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 소림사 — 곤법(棍·杖) 계보 sorim_gon (신설 · B-188 ② · 봉 공급원 ★1→2 해소) ───
+  # ★자료 안의 발견: 자료의 「장법」 목록에 掌(손바닥)이 아니라 **杖(지팡이)** 두 개가 섞여 있었다 —
+  #   항마선장(降魔禪杖) · 대윤회겁륜장(大輪廻劫輪杖). 동음이의(掌/杖)가 가린 것뿐, 소림 봉 무공의
+  #   정격 이름은 자료에 이미 있었다. 장문영부도 **녹옥불장(綠玉佛杖)** — 소림의 최고 권위가 지팡이다.
+  #   그래서 이 계보는 지어내지 않았다.
+  hangma_seonjang:
+    name: "항마선장"
+    category: "봉법"
+    weapon_class: 봉
+    sub_category: "계율원 무승의 선장 (하급 — 승려가 늘 짚고 다니는 것이 곧 병기다)"
+    grade: "이류"
+    tier: 하급
+    lineage: sorim_gon
+    faction: sorimsa
+    required_realm: "삼류"
+    required_stats: { 근력: 4, 체력: 3 }
+    required_mastery: 0
+    acquisition: "본산 계율원 전수 — 선장(禪杖)은 무장이 아니라 지팡이다. 그래서 산문을 나설 때 든다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true       # 승려가 지팡이를 든 자세 — 멀리서도 소림이 보인다
+    faction_reaction: false
+
+  daeyunhoe_geomryunjang:
+    name: "대윤회겁륜장"
+    category: "봉법"
+    weapon_class: 봉
+    sub_category: "본산 비전 곤법 (상급 — 겁(劫)의 바퀴를 굴린다)"
+    grade: "절정"
+    tier: 상급
+    lineage: sorim_gon
+    faction: sorimsa
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 6          # 중급 칸이 비어 하급 대성이 문턱 — 남궁제황검·모용청죽수 문법
+    requires_skill: { id: hangma_seonjang, mastery: 6 }
+    mastery_gate: { 하급: 6 }
+    acquisition: "본산 승적 + 계율원 허가 — 장경각을 지키는 손"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★중급 한 칸이 비어 있다 (하→상 직행) — 자료에 소림 중급 곤법 이름이 없다. **지어내지 않았다.**
+    #   후보(자료 밖·클리셰): 소림곤법·위타곤·복마곤 — 사용자 확정 후 등재 (B-188 문답)
+
+  # ─── 소림사 — 지공(指) 계보 sorim_ji (신설 · 지법 공급원 1→2: 모용 + 소림) ───
+  # 자료 지공 목록: 탄지신통「모든 지법의 대명사」·일지선「격공지 — 장애물 뒤를 친다」·금강지·달마지 …
+  tanji_sintong:
+    name: "탄지신통"
+    category: "지법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "본산 지공 (중급 — 튕기는 손끝: 모든 지법의 대명사)"
+    grade: "일류"
+    tier: 중급
+    lineage: sorim_ji
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 감각: 4, 지혜: 4 }
+    required_mastery: 4
+    requires_skill: { id: nahan_kwon, mastery: 4 }   # 주먹이 여물어야 손끝이 산다 (모용 수공→지법과 같은 결)
+    acquisition: "본산 내문 전수 — 손가락 하나로 여는 문"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  iljiseon:
+    name: "일지선"
+    category: "지법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "소림 비전 격공지 (상급 — 장애물 뒤의 혈을 짚는다)"
+    grade: "절정"
+    tier: 상급
+    lineage: sorim_ji
+    faction: sorimsa
+    required_realm: "절정"
+    required_stats: { 감각: 5, 지혜: 5 }
+    required_mastery: 5
+    requires_skill: { id: tanji_sintong, mastery: 5 }
+    mastery_gate: { 중급: 6 }
+    acquisition: "본산 비전 — 계율원 허가 (격공지는 벽 뒤를 친다. 그래서 함부로 주지 않는다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 소림사 — 나머지 정체성 (금나·퇴·음공·진) ───
+  sorim_geumna_sippalta:
+    name: "소림금나십팔타"
+    category: "금나술"
+    weapon_class: [맨손, 권갑]
+    sub_category: "본산 금나 십팔타 (중급 — 잡고 꺾고 던진다)"
+    grade: "일류"
+    tier: 중급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 근력: 4, 감각: 4 }
+    required_mastery: 4
+    requires_skill: { id: nahan_kwon, mastery: 4 }
+    acquisition: "본산 전수 — 죽이지 않고 이기는 법 (불가의 손: 제압이 먼저다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  hangma_yeonhwan_toe:
+    name: "항마연환신퇴"
+    category: "퇴법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "본산 각법 (중급 — 이어지는 발: 마를 항복시킨다)"
+    grade: "일류"
+    tier: 중급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 근력: 4, 민첩: 4 }
+    required_mastery: 5
+    requires_skill: { id: nahan_kwon, mastery: 5 }   # ★사다리 눈(chain-walk)이 잡았다 — 소림권법도 중급이라
+                                                     #   중급←중급은 역행이다. 발은 나한권 위에 선다
+    acquisition: "본산 승적 — 나한권으로 만든 몸 위에 서는 발 (108수의 아래를 받친다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  sajahu:
+    name: "사자후"
+    category: "음공"
+    weapon_class: 무관
+    sub_category: "불가 음공 (중급 — 마를 제압하는 호통)"
+    grade: "일류"
+    tier: 중급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 체력: 5, 지혜: 4 }
+    required_mastery: 3
+    requires_skill: { id: nahan_kwon, mastery: 5 }   # ★진짜 문턱은 손이 아니라 **내력**(일류·체력 5)이다.
+                                                     #   선행 필드는 무공만 가리킬 수 있어 몸 만드는 첫 칸을 세운다
+    acquisition: "본산 전수 — 석가세존이 악마를 굴복시킨 호통 (내력을 소리에 싣는다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  nahan_jin:
+    name: "나한진"
+    category: "합격진"
+    weapon_class: 무관
+    sub_category: "십팔나한진 (상급 — 한 번도 무너진 적이 없는 진: 소나한진 2~5인 운용)"
+    grade: "절정"
+    tier: 상급
+    lineage: sorim_kwon
+    faction: sorimsa
+    required_realm: "일류"
+    required_stats: { 체력: 5, 지혜: 4 }
+    required_mastery: 3
+    requires_skill: { id: sorim_kwonbeop, mastery: 3 }
+    acquisition: "본산 승적 — 장경각을 지키는 십팔나한의 자리 (party.yml 합격진 정합)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # 자료: 대나한진(108인) = 소나한진(18인) 6개 동시 운용. 게임의 합격진 상한은 5인 —
+    #   여기 등재하는 것은 **소나한진의 한 조각**이다 (팔진도 문법: 2~5인)
 
   # ─── 무당파 (mudang) — 검 · 계보 mudang_geom ───
   # 노션: 스킬 태극검 / 오의 태극혜검. 태극권(기존)은 권법이라 **검 계보의 칸이 아니다** — 동공 재료로 남는다

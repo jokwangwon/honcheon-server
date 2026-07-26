@@ -1293,6 +1293,88 @@ skills:
       - { trail: 호, count: 3, finisher: true, telegraph_boost: 2,
           sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.60 } }   # 장심(掌心) — 여래신장의 아래층
 
+  # ── 소림 장법 (B-188 ②) — 권은 짧게 때리고, 장은 **밀어낸다** (knockback 계열) ──
+  wita_jang:
+    name: "위타장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.00 } }
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.85 } }   # 쌍장 — 띄운다
+
+  nahan_sippaljang:
+    name: "나한십팔장"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.75, pitch: 1.05 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.8, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.75 } }   # 열여덟 로의 끝
+
+  # ── 소림 곤법 (계보 sorim_gon) — 개방 봉이 **훑는다**면 소림 선장은 **짚고 찍는다** ──
+  hangma_seonjang:
+    name: "항마선장"
+    style: 봉
+    steps:
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.05 } }   # 찔러 짚는다
+      - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.75, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.65 } }   # 내리찍는다 — 다운
+
+  daeyunhoe_geomryunjang:
+    name: "대윤회겁륜장"
+    style: 봉
+    steps:
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.55 } }   # 겁의 바퀴 — 가장 낮게 운다
+
+  # ── 소림 지공 (계보 sorim_ji) — 모용의 지법이 한 점을 저격한다면, 소림은 **흩뿌리고 꿰뚫는다** ──
+  tanji_sintong:
+    name: "탄지신통"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.80 } }   # 튕긴다 — 가장 높다
+      - { trail: 선, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.70 } }
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.55 } }
+
+  iljiseon:
+    name: "일지선"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "block.beacon.activate", volume: 0.6, pitch: 1.90 } }   # 격공지 — 타격음이 아니다. 공기가 운다
+
+  # ── 소림 금나·퇴·음공·진 ──
+  sorim_geumna_sippalta:
+    name: "소림금나십팔타"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.80 } }   # 잡아 꺾는다
+
+  hangma_yeonhwan_toe:
+    name: "항마연환신퇴"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.10 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 1.00 } }
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.70 } }   # 회축 — 위로 간다
+
+  sajahu:
+    name: "사자후"
+    style: 무관
+    steps:
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.ravager.roar", volume: 1.0, pitch: 0.80 } }   # ★소리 자체가 기술이다 (전 무공 유일)
+
+  nahan_jin:
+    name: "나한진"
+    style: 무관
+    steps:
+      - { trail: 진, count: 2, sound: { key: "block.bell.use", volume: 0.8, pitch: 0.90 } }   # 종이 운다 — 십팔나한이 선다
+
   # ── 무당파 (계보) — **원으로 닫는다**. 마무리가 사방이다 (반격의 결) ──
   yuun_geom:
     name: "유운검법"

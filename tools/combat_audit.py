@@ -75,10 +75,11 @@ CATEGORY_WEAPON = {
     "수공": "맨손",   # 일엽수~청죽수 (모용 2026-07-26) — 수공의 명가
     "지법": "맨손",   # 유성지·추혼지 (모용 2026-07-26) — 손끝의 기
     "독공": "맨손", "합격진": "검",
+    "음공": None,     # 사자후 (소림 2026-07-26) — 소리에는 병기가 없다. 값이 판정에만 있어 피해축 밖이다
     "궁술": "활", "암기": "암기", "암살술": "단검",
     "경공": None, "신법": None, "은신술": None, "의술": None, "심법": None,
 }
-NO_DAMAGE_CATEGORIES = {"경공", "신법", "은신술", "의술", "심법"}
+NO_DAMAGE_CATEGORIES = {"경공", "신법", "은신술", "의술", "심법", "음공"}
 
 
 def realm_axis(cfg):
@@ -376,6 +377,7 @@ def lint(cfg, rep):
     rep.say("  ① 전투 정합 린트 — 무공이 가리키는 것은 실재하는가")
     rep.say("═" * 72)
     lint_skill_refs(cfg, rep)
+    lint_ladder_chain(cfg, rep)
     lint_qi_gates(cfg, rep)
     lint_energy_budget(cfg, rep)
     lint_action_data(cfg, rep)
@@ -595,6 +597,130 @@ def lint_skill_refs(cfg, rep):
     if top and skill_scale_max != top:
         rep.warn(f"숙련 스케일 불일치 — skills.yml schema 는 '0~10', mastery_ladder 는 극성 {top} 이 상한, "
                  f"judgment.yml scales.skill.max 는 {skill_scale_max}. 8~10 구간의 의미가 정의되지 않았다")
+
+
+TIER_ORDER = {"기초": 0, "하급": 1, "중급": 2, "상급": 3}
+
+
+def lint_ladder_chain(cfg, rep):
+    """사다리 연결 — requires_skill 을 거슬러 올라가면 **첫 칸**에 닿는가 (B-188 닫는 조건 ③).
+
+    lint_skill_refs 는 '선행이 명시됐는가'를 본다. 그것으로는 부족하다:
+      · 선행 id 가 카탈로그에 없어도 (오타·삭제) 명시는 명시다
+      · 상급 무공이 선행 없이 홀로 서 있으면 **사다리가 공중에서 시작한다** (개방 봉법이 그랬다)
+      · 선행이 자기보다 높은 tier 면 사다리가 뒤집힌다
+      · 고리(A→B→A)가 있으면 아무도 첫 칸에 닿지 못한다
+
+    ★이 눈이 재는 것은 수치가 아니라 **길**이다. 무공은 배우는 순서가 곧 설계다.
+    """
+    rep.head("사다리 연결 — 선행을 거슬러 첫 칸에 닿는가 (chain-walk)")
+    arts = dig(cfg, "skills.yml", "martial_arts", default={}) or {}
+    # ★정본 키는 legacy_arts 다 (ultimate_arts 가 아니다). 처음 이 눈을 세울 때 키를 헛짚어
+    #   "오의 0종 — 전부 실재한다"고 **거짓 합격**을 냈다. 그래서 빈 등록부는 합격이 아니라 실패로 센다
+    ults = dig(cfg, "ultimate_arts.yml", "legacy_arts", default={}) or {}
+
+    def prereq(sid):
+        s = arts.get(sid)
+        if not isinstance(s, dict):
+            return None
+        rs = s.get("requires_skill")
+        if isinstance(rs, dict):
+            return rs.get("id")
+        return rs if isinstance(rs, str) else None
+
+    dangling, cycles, midair, inverted, cross_cat = [], [], [], [], []
+    roots = {}
+
+    for sid, s in sorted(arts.items()):
+        if not isinstance(s, dict):
+            continue
+        pid = prereq(sid)
+        tier = s.get("tier")
+
+        # ① 공중에서 시작 — 중급·상급인데 선행이 없다
+        if pid is None and tier in ("중급", "상급"):
+            midair.append(f"{sid}({tier})")
+
+        # ② 선행 실재 · 고리 · 뿌리
+        seen, cur, chain = set(), sid, []
+        while True:
+            nxt = prereq(cur)
+            if nxt is None:
+                roots[sid] = cur
+                break
+            if nxt not in arts:
+                dangling.append(f"{sid} → {nxt}(없음)")
+                break
+            if nxt in seen or nxt == sid:
+                cycles.append(f"{sid}: {' → '.join(chain + [nxt])}")
+                break
+            seen.add(nxt)
+            chain.append(nxt)
+            cur = nxt
+            if len(chain) > 20:               # 안전핀 — 어떤 사다리도 20칸을 넘지 않는다
+                cycles.append(f"{sid}: 20칸 초과 — 고리 의심")
+                break
+
+        # ③ 사다리 역행 — 선행의 tier 가 자기 이상
+        if pid and pid in arts and isinstance(arts[pid], dict):
+            p_tier = arts[pid].get("tier")
+            if tier in TIER_ORDER and p_tier in TIER_ORDER and TIER_ORDER[p_tier] >= TIER_ORDER[tier]:
+                inverted.append(f"{sid}({tier}) ← {pid}({p_tier})")
+            # ④ 계열 넘나듦 — 위반은 아니다 (무당은 권으로 몸을 만들고 검을 잡는다). 다만 보이게 둔다
+            if s.get("category") and arts[pid].get("category") and s["category"] != arts[pid]["category"]:
+                cross_cat.append(f"{sid}({s['category']}) ← {pid}({arts[pid]['category']})")
+
+    rep.say(f"     무공 {len(arts)}종 · 선행 사슬을 가진 것 {sum(1 for k in arts if prereq(k))}종 · "
+            f"첫 칸(뿌리) {len(set(roots.values()))}종")
+    rep.say("")
+
+    rep.verdict(not dangling, "선행 실재 — 가리키는 무공이 전부 카탈로그에 있다"
+                if not dangling else f"★선행이 허공을 가리킨다: {', '.join(dangling)}")
+    rep.verdict(not cycles, "고리 없음 — 모든 사슬이 첫 칸에서 끝난다"
+                if not cycles else f"★선행 고리 — 아무도 첫 칸에 닿지 못한다: {'; '.join(cycles)}")
+    rep.verdict(not inverted, "사다리 방향 — 선행이 언제나 자기보다 아래 칸"
+                if not inverted else f"★사다리 역행(선행이 같거나 위 칸): {', '.join(inverted)}")
+    # ★심각도 주의: 공중시작은 **위반이 아니라 경고**다. 이 도구의 두 칸은 이렇게 갈린다 —
+    #   위반 = 자기모순이거나 굴러가지 않는다 (허공 참조·고리·역행) ·
+    #   경고 = 굴러가지만 의도한 감각이 아닐 수 있다.
+    #   선행 없는 중급 무공은 **굴러간다** (바로 배워진다). 다만 사다리의 첫 칸이 없을 뿐이다 —
+    #   그것은 설계 구멍이고, B-188 닫는 조건 ①이 「채우거나 의도된 모양으로 명문화」한다.
+    if midair:
+        rep.warn(f"사다리가 공중에서 시작한다 (선행 없는 중급·상급 {len(midair)}종): {', '.join(midair)} "
+                 f"— 첫 칸을 채우거나 '의도된 모양'으로 명문화해야 한다 (B-188 닫는 조건 ①)")
+    else:
+        rep.ok("공중에서 시작하는 사다리 없음 — 중급·상급은 전부 딛고 올라선다")
+
+    # ⑤ 오의 선행 — 오의는 별개 사다리다. 그 첫 발판이 실재하는가
+    ult_bad = []
+    for uid, u in sorted(ults.items()):
+        if not isinstance(u, dict):
+            continue
+        rs = u.get("requires_skill")
+        rid = rs.get("id") if isinstance(rs, dict) else (rs if isinstance(rs, str) else None)
+        if rid is None:
+            ult_bad.append(f"{uid}(선행 미기재)")
+        elif rid not in arts:
+            ult_bad.append(f"{uid} → {rid}(없음)")
+    if not ults:
+        rep.fail("오의 등록부가 비었다 — ultimate_arts.yml legacy_arts 를 못 읽었다. "
+                 "★빈 등록부에 '전부 통과'를 내주면 그것이 곧 눈의 거짓말이다")
+    else:
+        rep.verdict(not ult_bad, f"오의 {len(ults)}종 — 전부 실재하는 무공을 발판으로 딛는다"
+                    if not ult_bad else f"오의 선행 문제: {', '.join(ult_bad)}")
+
+    # ⑥ tier 미기재 — 이 눈이 셀 수 없는 무공 (B-188 닫는 조건 ②)
+    no_tier = sorted(k for k, v in arts.items() if isinstance(v, dict) and not v.get("tier"))
+    if no_tier:
+        rep.warn(f"tier 미기재 {len(no_tier)}종 — 사다리 눈이 **이들의 층을 못 센다** "
+                 f"(역행·공중시작 판정에서 조용히 빠진다): {', '.join(no_tier[:8])}"
+                 f"{' …' if len(no_tier) > 8 else ''} · B-188 닫는 조건 ②")
+    else:
+        rep.ok("tier 전 무공 기재 — 사다리 눈이 전수를 센다")
+
+    if cross_cat:
+        rep.say(f"     계열을 넘는 선행 {len(cross_cat)}건 (위반 아님 — 의도일 수 있다): "
+                f"{', '.join(cross_cat[:6])}{' …' if len(cross_cat) > 6 else ''}")
 
 
 def lint_qi_gates(cfg, rep):
@@ -2035,12 +2161,86 @@ def selftest():
     probe("⑨ 음성 대조: technique_power 99 → v2 피해 불변 (무공 위력표는 v1 의 것)",
           abs(d9 - d0) < 1e-9, f"{d0:.2f} → {d9:.2f}")
 
+    # ══════════════════════════════════════════════════════════════════════
+    #  사다리 눈(chain-walk) 뮤테이션 — B-188 닫는 조건 ③ (2026-07-26)
+    #  등록부를 일부러 부러뜨리고 이 눈이 **소리를 내는지** 잰다.
+    #  ★기준선이 0 이 아니어도 된다 (공중시작 경고가 이미 있다) — 그래서 절대값이 아니라
+    #    **기준선 대비 증가**를 잰다. 그러지 않으면 프로브가 남의 구멍에 얹혀 통과한다.
+    # ══════════════════════════════════════════════════════════════════════
+    def chain_run(cfg):
+        r = Report()
+        lint_ladder_chain(cfg, r)
+        return r.violations, r.warnings
+
+    v_base, w_base = chain_run(fresh())
+
+    def chain_probe(name, mutate, expect_violation=True, needle=None):
+        """★건수가 아니라 **내용**을 잰다.
+
+        공중시작·tier 미기재처럼 여러 건을 **한 줄로 묶어 내는** 항목은 대상이 하나 늘어도
+        경고 '건수'가 그대로다 — 건수만 보는 프로브는 그 자리에서 조용히 통과한다
+        (⑬ 이 실제로 그렇게 통과할 뻔했다). 그래서 기준선에 **없던 문자열이 생겼는가**를 본다.
+        """
+        v, w = chain_run(fresh(mutate))
+        new_txt = " ".join(v if expect_violation else w)
+        base_txt = " ".join(v_base if expect_violation else w_base)
+        ok = (needle in new_txt) and (needle not in base_txt) if needle else \
+             (len(v) > len(v_base) if expect_violation else len(w) > len(w_base))
+        probe(name, ok, f"위반 {len(v_base)}→{len(v)} · 경고 {len(w_base)}→{len(w)}"
+                        f"{' · 새 표식 ' + repr(needle) if needle else ''}")
+
+    def arts_of(c):
+        return dig(c, "skills.yml", "martial_arts", default={}) or {}
+
+    # ⑩ 선행이 허공을 가리키면 잡는가
+    chain_probe("⑩ 선행 id 를 없는 것으로 → 허공 참조 위반",
+                lambda c: arts_of(c)["banya_jang"].__setitem__(
+                    "requires_skill", {"id": "___없는무공___", "mastery": 5}),
+                needle="허공")
+
+    # ⑪ 고리를 만들면 잡는가 (A→B→A — 아무도 첫 칸에 닿지 못한다)
+    def make_cycle(c):
+        a = arts_of(c)
+        a["wita_jang"]["requires_skill"] = {"id": "banya_jang", "mastery": 5}
+    chain_probe("⑪ 선행 고리(위타장↔반야장) → 고리 위반", make_cycle, needle="고리")
+
+    # ⑫ 사다리를 뒤집으면 잡는가 (하급이 상급을 선행으로 문다)
+    chain_probe("⑫ 사다리 역행(위타장 ← 반야장 tier 조작) → 역행 위반",
+                lambda c: arts_of(c)["nahan_sippaljang"].__setitem__("tier", "하급"),
+                needle="역행")
+
+    # ⑬ 중급의 선행을 지우면 공중시작 **경고가 는다**
+    chain_probe("⑬ 중급 무공의 선행 삭제 → 공중시작 목록에 그 이름이 뜬다",
+                lambda c: arts_of(c)["nahan_sippaljang"].pop("requires_skill", None),
+                expect_violation=False, needle="nahan_sippaljang")
+
+    # ⑭ 오의의 발판이 사라지면 잡는가
+    chain_probe("⑭ 오의 선행 id 를 없는 것으로 → 오의 위반",
+                lambda c: (dig(c, "ultimate_arts.yml", "legacy_arts", default={})
+                           ["baekbo_singwon"].__setitem__("requires_skill",
+                                                          {"id": "___없는무공___", "mastery": 8})),
+                needle="오의")
+
+    # ⑮ ★묘비 — 이 눈은 처음 세울 때 **키를 헛짚어 오의 0종에 '전부 통과'를 내줬다**.
+    #    빈 등록부에 합격을 주는 눈은 눈이 아니다. 그 버그가 돌아오면 여기서 걸린다.
+    chain_probe("⑮ 묘비: 오의 등록부를 비우면 → 합격이 아니라 위반 (빈 등록부 거짓 합격 금지)",
+                lambda c: dig(c, "ultimate_arts.yml", default={}).__setitem__("legacy_arts", {}),
+                needle="비었다")
+
+    # ⑯ 음성 대조 — 사다리와 무관한 값(무기 위력)을 비틀어도 이 눈은 조용해야 한다
+    v16, w16 = chain_run(fresh(lambda c: dig(c, "combat.yml", "damage", "weapon_power", default={})
+                               .__setitem__("검", 99)))
+    probe("⑯ 음성 대조: weapon_power 99 → 사다리 눈 불변 (수치는 길이 아니다)",
+          len(v16) == len(v_base) and len(w16) == len(w_base),
+          f"위반 {len(v_base)}→{len(v16)} · 경고 {len(w_base)}→{len(w16)}")
+
     bad = [n for n, ok in results if not ok]
     print()
     if bad:
         print(f"{FAIL} 눈의 시험 {len(results) - len(bad)}/{len(results)} — 실패: {bad}")
         return 1
-    print(f"✅ 눈의 시험 {len(results)}/{len(results)} — v2 기대 모델이 등록부를 읽고, 스위치가 산다")
+    print(f"✅ 눈의 시험 {len(results)}/{len(results)} — v2 기대 모델이 등록부를 읽고, "
+          f"사다리 눈이 부러진 길에 소리를 낸다")
     return 0
 
 

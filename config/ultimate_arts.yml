@@ -60,6 +60,8 @@ legacy_arts:
   maehwa_mangae:
     name: "매화만개(梅花滿開)"
     faction: hwasan
+    requires_skill: { id: maehwa_nanman_geom, mastery: 8 }   # ★선행 명문화 (사다리 눈 2026-07-26)
+    lineage: hwasan_geom
     type: { hitbox: 원, range: 6, multi_hit: 5 }
     frames: [16, 6, 18]
     defense: "시전 중 무적 12틱"
@@ -68,6 +70,8 @@ legacy_arts:
   taegeuk_hyegeom:
     name: "태극혜검(太極慧劍)"
     faction: mudang
+    requires_skill: { id: taegeuk_geom, mastery: 8 }          # ★선행 명문화 (사다리 눈 2026-07-26)
+    lineage: mudang_geom
     type: { form: 반격_오의, window_ticks: 10 }
     effect: "지속 중 받은 공격 1회를 무효화하고 위력 그대로 반사 (패링의 극의)"
     frames: [8, 10, 12]
@@ -75,6 +79,8 @@ legacy_arts:
   jewang_gunrim:
     name: "제왕검형·군림(君臨)"
     faction: namgung
+    requires_skill: { id: namgung_jehwang_geom, mastery: 8 }  # ★선행 명문화 (사다리 눈 2026-07-26)
+    lineage: namgung_geom
     type: { hitbox: 선, width: 2, length: 12 }
     frames: [20, 4, 20]
     defense: "시전 중 슈퍼아머"
@@ -84,6 +90,8 @@ legacy_arts:
   hyeolhae_malli:
     name: "혈해만리(血海萬里)"
     faction: hyeolgyo
+    requires_skill: { id: hyeolsu_magong, mastery: 8 }        # ★선행 명문화 (사다리 눈 2026-07-26)
+    lineage: hyeolgyo_ma
     type: { hitbox: 원, range: 8 }
     frames: [14, 8, 16]
     effect: "범위 내 원기·내력 약탈 (흡수량으로 자기 회복)"
