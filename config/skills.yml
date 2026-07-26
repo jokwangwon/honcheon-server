@@ -563,7 +563,7 @@ martial_arts:
     required_realm: "절정"
     required_stats: { 민첩: 5, 지혜: 4 }
     required_mastery: 6          # 개방봉법(중급) 대성 — 일인전승은 문턱이 한 칸 높다
-    requires_skill: { id: gaebang_bongbeop, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
+    requires_skill: { id: okryong_paljang, mastery: 6 }   # 선행 무공 — 기계 판독 필드 (주석이 아니라 규칙이다)
     mastery_gate: { 하급: 6, 중급: 6 }
     sole_transmission: true      # ★ 용두방주 9결 한 사람만 — sect_life.yml succession_ladder.gaebang
     acquisition: "용두방주 계승 시에만 전수 (개방 최심부 — 방주가 죽어야 다음 사람이 배운다)"
@@ -880,6 +880,8 @@ martial_arts:
     weapon_class: [맨손, 권갑]
     sub_category: "절기 (취팔선보 파생 — 회피 반격)"
     grade: "일류"
+    tier: 중급                       # ★tier 기재 (B-188 ③ 개방 회차 — 구멍 지도 「박투 tier 정리」)
+    lineage: gaebang_kwon
     faction: gaebang
     required_realm: "일류"
     required_stats: { 민첩: 5, 체력: 3 }
@@ -2130,11 +2132,39 @@ martial_arts:
     public_use_rumor: true
     faction_reaction: false
 
-  gaebang_bongbeop:
-    name: "개방봉법"
+  # ─── 개방 봉 사다리 (B-188 ③ · 사용자 자료 2026-07-26) ───
+  # 자료 무술 목록: 타구봉법·천화봉법·**옥룡팔장(玉龍八杖)**·타구진 …
+  #   ★소림 때와 같은 함정이 여기도 있었다 — 옥룡팔「장」은 掌(손바닥)이 아니라 **杖(지팡이)**다
+  #   (자료가 한자를 병기해 못 박아 뒀다). 그래서 개방 봉 사다리의 중간 칸 이름은 이미 있었다.
+  # 사다리: 천화봉법(하) → 옥룡팔장(중) → 타구봉법(상·방주 일인전승)
+  cheonhwa_bongbeop:
+    name: "천화봉법"
     category: "봉법"
     weapon_class: 봉
-    sub_category: "개방 봉술 (중급 — 타구봉법의 아래층)"
+    sub_category: "개방 봉술 (하급 — 아무 막대기나 들면 그것이 병기다)"
+    grade: "이류"
+    tier: 하급
+    lineage: gaebang_bong
+    faction: gaebang
+    required_realm: "삼류"
+    required_stats: { 민첩: 3, 체력: 3 }
+    required_mastery: 0
+    acquisition: "개방 개목(1~2결) — 거지에게 봉을 주는 것이 아니라, 든 것을 봉으로 쓰는 법을 준다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false      # 막대기 든 거지 — 아무도 무공으로 안 본다. 그것이 이 무공의 값이다
+    faction_reaction: false
+    # ★가난의 지문 (자료: "값비싼 무기는 사용하지 못한다 / 아무 막대기나 들면 되는 봉법")
+    #   — 기제는 skill_mechanics 의 rearm_free: 파봉 뒤 재무장이 **행동을 먹지 않는다**
+    #     (qi_manifestation weapon_break.after_break '재무장 = 행동 1개'의 유일한 예외)
+
+  okryong_paljang:
+    name: "옥룡팔장(玉龍八杖)"
+    category: "봉법"
+    weapon_class: 봉
+    sub_category: "개방 봉술 여덟 초식 (중급 — 타구봉법의 아래층)"
     grade: "일류"
     tier: 중급
     lineage: gaebang_bong
@@ -2142,7 +2172,7 @@ martial_arts:
     required_realm: "일류"
     required_stats: { 민첩: 4, 지혜: 3 }
     required_mastery: 5
-    requires_skill: { id: chwikwon, mastery: 5 }
+    requires_skill: { id: cheonhwa_bongbeop, mastery: 5 }   # ← 취권(박투)에서 봉법 안으로 (계열 정리)
     acquisition: "개방 5결(당주) 이상 전수 — 타구봉법(상급·일인전승)의 유일한 선행"
     bloodline_restricted: false
     requires_master: true
@@ -2150,7 +2180,167 @@ martial_arts:
     side_effects: false
     public_use_rumor: true
     faction_reaction: false
-    # ★지어냄 — 노션은 취권과 타구봉법(방주 전용)만 준다. 방주가 아닌 거지의 봉이 비어 있었다
+    # ★정격 개명 (2026-07-26 사용자 자료): 옛 id·이름은 gaebang_bongbeop「개방봉법」 ★지어냄이었다.
+    #   자료의 옥룡팔장(玉龍八杖)이 정확히 그 칸이다 — 팽가 도법 정격 개명과 같은 절차
+    #   (sect_life 5결 당주 전수 항목도 함께 옮겼다)
+
+  # ─── 개방 — 권 계보 gaebang_kwon (신설) ───
+  # ★자료의 결: 「손바닥, 주먹으로 후려치는 장법·권법을 주로 선보인다」 — 개방의 맨손엔 **길이 둘**이다:
+  #   취(醉)의 길 = 취권→취팔선권 (불규칙 · 안 맞는 것이 방어) ·
+  #   부수는 길 = 쇄비권→파옥권 (정면 · 파격). 술을 못 마시는 거지도 싸울 수 있어야 한다
+  chwipalseon_kwon:
+    name: "취팔선권"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "취팔선 여덟 신선의 권 (중급 — 취보와 한 몸)"
+    grade: "일류"
+    tier: 중급
+    lineage: gaebang_kwon
+    faction: gaebang
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: chwikwon, mastery: 5 }
+    acquisition: "개방 4결 이상 전수 — 취팔선보를 익힌 발 위에서만 손이 산다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  swaebi_kwon:
+    name: "쇄비권"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "개방 외가권 (하급 — 비석을 부순다)"
+    grade: "이류"
+    tier: 하급
+    lineage: gaebang_kwon
+    faction: gaebang
+    required_realm: "삼류"
+    required_stats: { 근력: 4, 체력: 3 }
+    required_mastery: 0
+    acquisition: "개방 개목 — 술을 못 마시는 거지의 주먹 (취공과 나란히 주는 첫 손)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  paok_kwon:
+    name: "파옥권"
+    category: "권법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "개방 강권 (상급 — 옥(玉)을 깬다: 단단할수록 잘 깨진다)"
+    grade: "절정"
+    tier: 상급
+    lineage: gaebang_kwon
+    faction: gaebang
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 5 }
+    required_mastery: 5
+    requires_skill: { id: swaebi_kwon, mastery: 6 }   # 중급 칸 없음 — 하→상 (남궁제황검 문법)
+    mastery_gate: { 하급: 6 }
+    acquisition: "개방 7결 이상 · 장로 재가 — 거지가 옥을 깨는 법을 배우는 것은 웃긴 일이다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+    # ★중급 한 칸이 비었다 — 자료에 개방 중급 강권 이름이 없다. 지어내지 않았다 (문답 대기)
+
+  yongeum_sipisu:
+    name: "용음십이수"
+    category: "수공"
+    weapon_class: [맨손, 권갑]
+    sub_category: "개방 수공 열두 수 (중급 — 용의 울음: 손이 운다)"
+    grade: "일류"
+    tier: 중급
+    lineage: gaebang_kwon
+    faction: gaebang
+    required_realm: "일류"
+    required_stats: { 감각: 4, 민첩: 4 }
+    required_mastery: 4
+    requires_skill: { id: swaebi_kwon, mastery: 4 }
+    acquisition: "개방 5결 이상 전수 — 항룡(降龍)의 결이 손에 처음 얹히는 자리"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  swaesim_ji:
+    name: "쇄심지"
+    category: "지법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "개방 지공 (중급 — 심장을 부순다는 이름값)"
+    grade: "일류"
+    tier: 중급
+    lineage: gaebang_kwon
+    faction: gaebang
+    required_realm: "일류"
+    required_stats: { 감각: 5, 근력: 3 }
+    required_mastery: 4
+    requires_skill: { id: swaebi_kwon, mastery: 4 }
+    acquisition: "개방 6결 이상 — 개방에 몇 남지 않은 '조용한' 무공"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  # ─── 개방 — 진·신법 ───
+  tagu_jin:
+    name: "타구진"
+    category: "합격진"
+    weapon_class: 무관
+    sub_category: "개 잡는 진 (2~5인 — 떨거지가 떨거지인 채로 이기는 법)"
+    grade: "이류"
+    tier: 중급
+    lineage: gaebang_bong
+    faction: gaebang
+    required_realm: "삼류"           # ★전 합격진 중 **가장 낮은 문턱** — 자료: 「쪽수로 밀어붙이는」
+    required_stats: { 체력: 3 }
+    required_mastery: 2
+    requires_skill: { id: cheonhwa_bongbeop, mastery: 2 }
+    acquisition: "개방 3결 이상 — 배우는 데 재능이 필요 없다. 그것이 이 진의 전부다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # ★머릿수의 지문: 매화검진·팔진도는 한 사람이 뚫리면 무너지고, 나한진은 절반까지 버틴다.
+    #   타구진은 **무너지지 않는다 — 줄어들 뿐이다** (거지 하나 빠져도 다음 거지가 그 자리에 선다).
+    #   대신 성원당 이득이 가장 작다. 떨거지는 떨거지다
+
+  bicheon_muyeong:
+    name: "비천무영신법"
+    category: "신법"
+    weapon_class: 무관
+    sub_category: "개방 신법 (상급 — 하늘을 날되 그림자가 없다)"
+    grade: "절정"
+    tier: 상급
+    lineage: gaebang_bong
+    faction: gaebang
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: chwipalseon_bo, mastery: 5 }
+    acquisition: "개방 7결 이상 — 거지가 천 리를 도는 데는 이유가 있다 (개방의 눈과 귀가 여기서 나온다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+    # 자료: 「가끔 운룡대팔식과 필적하는 신법이라고 언급되는 경우도 있다」 — 곤륜 오의와 나란히 두지는
+    #   않았다 (그쪽은 오의다). 상급 신법의 윗칸으로 둔다
 
   # ─── 곤륜파 (gonryun) — 검 + 절세의 신법·경공 · 계보 gonryun_geom ───
   # 노션: 스킬 양의검법·무성무색 / 오의 운룡대팔식·태허도룡검법 / "절세의 신법과 경공"

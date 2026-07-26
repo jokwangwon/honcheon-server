@@ -203,7 +203,7 @@ succession_ladder:
       - { gyeol: 3, rank: 분타주, maps_to: 내문_제자, simbeop: okhyeon_gwijin,
           note: "★ 심법이 여기서 온다 — 개방은 글을 안 쓴다. 구결로 준다" }
       - { gyeol: 4, rank: 호법, maps_to: 내문_제자 }
-      - { gyeol: 5, rank: 당주, maps_to: 진전_제자, skill: gaebang_bongbeop }
+      - { gyeol: 5, rank: 당주, maps_to: 진전_제자, skill: okryong_paljang }
       - { gyeol: 6, rank: 법개, maps_to: 진전_제자, note: "법(法) — 방규를 집행한다" }
       - { gyeol: 7, rank: 장로, maps_to: 장로 }
       - { gyeol: 8, rank: 후개, maps_to: 장로,

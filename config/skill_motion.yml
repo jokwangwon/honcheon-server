@@ -1403,14 +1403,77 @@ skills:
       - { trail: 선, count: 3, finisher: true,
           sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.85 } }   # 휘청이다 갑자기 곧게 온다
 
-  gaebang_bongbeop:
-    name: "개방봉법"
+  cheonhwa_bongbeop:
+    name: "천화봉법"
+    style: 봉
+    steps:
+      - { trail: 호, count: 2, particle: ash, sound: { key: "entity.player.attack.sweep", volume: 0.65, pitch: 1.05 } }
+      - { trail: 호, count: 2, particle: ash, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.00 } }
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 0.85, pitch: 0.80 } }   # 낡은 막대 — 소리가 가볍다
+
+  okryong_paljang:
+    name: "옥룡팔장(玉龍八杖)"
     style: 봉
     steps:
       - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.75, pitch: 0.95 } }   # 150° — 포위를 푸는 획
       - { trail: 선, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.8, pitch: 0.90 } }
       - { trail: 호, count: 3, finisher: true, telegraph_boost: 1,
           sound: { key: "entity.player.attack.knockback", volume: 1.0, pitch: 0.70 } }   # 먼지가 인다
+
+  # ── 개방 권 계보 (gaebang_kwon) — 취(醉)는 재[ash]가 흩날리고, 쇄·파(碎破)는 돌이 부서진다 ──
+  swaebi_kwon:
+    name: "쇄비권"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "block.stone.break", volume: 0.9, pitch: 0.80 } }   # 비석이 부서진다 — 타격음이 아니라 파쇄음
+
+  chwipalseon_kwon:
+    name: "취팔선권"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.25 } }
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.6, pitch: 1.15 } }
+      - { trail: 호, particle: ash, count: 2, sound: { key: "entity.generic.drink", volume: 0.65, pitch: 1.05 } }
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.knockback", volume: 0.95, pitch: 0.80 } }   # 여덟째 수 — 곧게 온다
+
+  paok_kwon:
+    name: "파옥권"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "block.amethyst_block.break", volume: 1.0, pitch: 0.60 } }   # 옥이 갈라진다
+
+  yongeum_sipisu:
+    name: "용음십이수"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.10 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.75, pitch: 1.00 } }
+      - { trail: 원, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.ender_dragon.growl", volume: 0.5, pitch: 1.60 } }   # 손이 운다 — 용의 울음
+
+  swaesim_ji:
+    name: "쇄심지"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.weak", volume: 0.5, pitch: 1.45 } }   # 조용한 개방 — 가장 작은 소리
+
+  tagu_jin:
+    name: "타구진"
+    style: 무관
+    steps:
+      - { trail: 진, count: 2, sound: { key: "entity.wolf.growl", volume: 0.7, pitch: 1.10 } }   # 개 잡는 진 — 개가 먼저 운다
+
+  bicheon_muyeong:
+    name: "비천무영신법"
+    style: 무관
+    steps:
+      - { trail: 태세, count: 2, sound: { key: "entity.phantom.flap", volume: 0.5, pitch: 1.40 } }   # 그림자가 없다
 
   # ── 곤륜파 (계보) — 경공의 문파. **무성무색은 응집도 소리도 없다 (전 무공 유일)** ──
   yangui_geom:

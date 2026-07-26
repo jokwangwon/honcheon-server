@@ -1098,7 +1098,7 @@ skills:
       - { trail: 선, count: 3, finisher: true,
           sound: { key: "entity.player.attack.knockback", volume: 0.9, pitch: 0.85 } }   # 휘청이다 갑자기 곧게 온다
 
-  gaebang_bongbeop:
+  okryong_paljang:
     name: "개방봉법"
     style: 봉
     steps:

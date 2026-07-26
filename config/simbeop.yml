@@ -520,9 +520,66 @@ simbeop:
     passive: "귀진(歸眞) — 굶주림·부상·추위 상태에서 내력 회복 배율 유지 (거지의 몸)"
     circulation_color: "때 묻은 잿빛"
     acquisition: "개방 3결(분타주) 이상 — 구결(口訣)로 전한다. 비급이 없다 (거지는 글을 안 쓴다)"
-    lineage_role: 문파_기초
+    lineage_role: 문파_상승     # ← 아래 취팔선공이 취(醉) 계열의 기초 자리를 받았다 (2026-07-26 자료)
     note: "★ 전공(戰功) 축기 — accumulation_methods 의 '전공'을 쓰는 유일한 심법.
       개방은 폐관하지 않는다. 맞으면서 큰다"
+
+  # ─── 개방 심법 증축 (B-188 ③ · 사용자 자료 2026-07-26) ───
+  # 자료 내공 목록: 취팔선공·옥현귀진현공(✓기존)·백결연화신공·홍무자염신공·혼천강룡신공
+  chwipalseon_gong:
+    name: "취팔선공"
+    faction: gaebang
+    lineage: 잡가
+    grade: 기초
+    method: 전공                   # 개방의 결 — 앉아서 하지 않는다 (옥현귀진현공과 같다)
+    capacity: 5
+    purity: 1.1
+    qi_profile: { 연비: "경신(보법) 소모 -1", 발력: 없음 }
+    passive: "취기(醉氣) — 취 계열 무공(취권·취팔선보·취팔선권·취호붕격) 시전 시
+              불규칙 판정 +1 (상대 예측 -1 추가). 취하지 않은 무공에는 아무것도 주지 않는다"
+    circulation_color: "일렁이는 누런빛 — 초점이 안 맞는다"
+    acquisition: "개방 2결 이상 — 술을 얻어먹는 법부터 배운다"
+    lineage_role: 문파_기초
+
+  baekgyeol_yeonhwa:
+    name: "백결연화신공(百結蓮花神功)"
+    faction: gaebang
+    lineage: 잡가
+    grade: 상승
+    method: 전공
+    capacity: 8
+    purity: 1.3
+    qi_profile: { 연비: 없음, 발력: "권·장·봉 계열 발경 위력 +1" }
+    # ★자료의 결을 그대로 기제로 옮긴 것 (「거지의 마음을 알수록 무공이 강해지는」 클리셰):
+    #   백 번 기운 누더기(百結)가 연꽃이 된다 — **가진 것이 없을수록 강해진다.**
+    passive: "백결(百結) — 소지 재화·장비 등급이 낮을수록 강해진다:
+              ① 무기 등급 범철 이하(또는 맨손)일 때 발경 위력 +1 (정련 이상이면 0)
+              ② 소지 전낭이 서민 생활비 이하일 때 내력 회복 +1
+              ★재물을 모으면 스스로 약해지는 유일한 심법 — 그래서 개방은 부자가 되지 않는다"
+    circulation_color: "누더기 사이로 새는 흰 연빛"
+    acquisition: "개방 6결 이상 — 가르치는 것이 아니라, 그 마음이 된 자에게 이름을 붙여 준다"
+    lineage_role: 문파_상승
+    predecessor: chwipalseon_gong
+    design_note: "【제안】 ①②의 수치와 판정 자리는 빨간펜 대상 (equipment weapon_grades ·
+      economy 전낭 축과의 정합은 이 회차에서 배선하지 않았다 — 값만 선언한다)"
+
+  honcheon_gangryong:
+    name: "혼천강룡신공(混天降龍神功)"
+    faction: gaebang
+    lineage: 잡가
+    grade: 상승
+    method: 전공
+    capacity: 9
+    purity: 1.4
+    qi_profile: { 연비: "강기 소모 -1", 발력: "장(掌) 계열 격 위력 +1" }
+    passive: "항룡(降龍) — 오의 항룡십팔장 시전 시 위력 +1 · 다단 히트 유지
+              (방주가 방주인 이유: 자료 「타구봉법이 대단하기에 방주는 고수라는 인식」의 안쪽)"
+    circulation_color: "탁류 위에 뜬 금빛 — 개방에 어울리지 않게 밝다"
+    acquisition: "★ 용두방주 계승 시에만 — 일인전승 (타구봉법·항룡십팔장과 한 벌)"
+    sole_transmission: true
+    lineage_role: 장문_전승
+    predecessor: okhyeon_gwijin
+    # ★이름 주의: 게임 제목 「혼천(渾天)」과 한자가 다르다 (混天) — 자료의 정격 이름 그대로 둔다
 
   # ─── 곤륜파 ───
   gonryun_hyeoncheon:

@@ -1196,7 +1196,22 @@ skills:
     irregular: "취보의 결 — 상대 예측 판정 -2, 자기 명중 판정 -1 (취팔선보와 같은 값과 대가)"
     qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "휘청이는 주먹 — 궤가 읽히지 않는다" }
 
-  gaebang_bongbeop:               # 개방봉법 (중급) — 봉은 넓다. 포위를 푼다
+  cheonhwa_bongbeop:              # 천화봉법 (하급) — 아무 막대기나. 그것이 이 무공의 전부다
+    combo:
+      - { type: 호, angle: 130, range: 3.8, frames: [4, 2, 6], stagger: 약, cost: 0 }
+      - { type: 호, angle: 130, range: 3.8, frames: [4, 2, 6], stagger: 중, cost: 0 }
+      - { type: 선, width: 0.9, length: 4.0, frames: [7, 3, 10], stagger: 강, cost: 0 }
+    combo_input_window: 11
+    cooldown_ticks: 95
+    # ★가난의 지문 — qi_manifestation weapon_break.after_break("재무장 = 행동 1개")의 **유일한 예외**.
+    #   자료: 「관리가 필요하거나 값비싼 무기는 사용하지 못한다 / 아무 막대기나 들면 되는 봉법」.
+    #   개방의 봉은 부러지는 것을 전제로 설계됐다 — 부러짐이 손실이 아니면 범철도 약점이 아니다
+    rearm_free: "봉이 부러져도 **재무장이 행동을 먹지 않는다** (다음 합에 곧바로 봉을 든 상태).
+      단, 주울 것이 있는 지형에서만 — 실내·수상·설원에서는 통상 규칙 【제안】"
+    weapon_grade_note: "명병 보정을 못 받는 대신 파봉의 대가도 없다 — 등급의 값이 이 무공에서만 0 이다"
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "낡은 막대 끝에 이는 흙먼지" }
+
+  okryong_paljang:               # 옥룡팔장 (중급) — 봉은 넓다. 포위를 푼다
     combo:
       - { type: 호, angle: 150, range: 4.2, frames: [5, 2, 6], stagger: 약, cost: 0 }
       - { type: 선, width: 0.9, length: 4.5, frames: [5, 2, 7], stagger: 중, cost: 0 }
@@ -1205,6 +1220,93 @@ skills:
     cooldown_ticks: 130
     qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "봉이 원을 그린다 — 먼지가 인다" }
     # 정체성: 호 150° — 전 무공 **최광각** (취호붕격 120°를 넘는다). 봉은 여럿을 상대하는 병기다
+
+# ─── 개방 — gaebang_kwon (권 계보 신설) ───
+# ★맨손에 길이 둘: 취(醉)는 안 맞는 것으로 이기고, 쇄·파(碎破)는 정면으로 부순다
+  swaebi_kwon:                    # 쇄비권 (하급) — 비석을 부순다. 화려하지 않다
+    combo:
+      - { type: 호, angle: 75, range: 2.3, frames: [4, 2, 5], stagger: 약, cost: 0 }
+      - { type: 선, width: 1.2, length: 2.4, frames: [6, 3, 9], stagger: 중, cost: 0 }
+    combo_input_window: 9
+    armor_pierce: 1               # 碎 — 이름이 곧 속성이다 (철혈적성도·파갑추와 같은 값, 다른 이유)
+    cooldown_ticks: 100
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "돌 부스러지는 소리" }
+
+  chwipalseon_kwon:               # 취팔선권 (중급) — 여덟 신선이 번갈아 친다
+    combo:
+      - { type: 호, angle: 95, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 95, range: 2.6, frames: [3, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 95, range: 2.6, frames: [3, 2, 4], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.1, length: 3.0, frames: [6, 3, 9], stagger: 강, cost: 0 }
+    combo_input_window: 8         # 취권(9)보다 짧다 — 여덟 수는 끊기면 처음부터다
+    irregular: "취보의 결 — 상대 예측 판정 -2, 자기 명중 판정 -1 (취권과 같은 값과 대가)"
+    dodge_bonus: "3타 중 회피 판정 +1 — 비틀거림이 곧 회피다 (취권에는 없는 중급의 값)"
+    cooldown_ticks: 120
+    qi_rider: { step: 4, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "여덟 갈래로 흩어지는 취기" }
+
+  paok_kwon:                      # 파옥권 (상급) — 단단할수록 잘 깨진다
+    type: 선
+    width: 1.3
+    length: 3.0
+    frames: [10, 3, 14]
+    stagger: 강
+    super_armor: "지속 전체"
+    armor_pierce: 2               # ★전 무공 최고 관통 — 갑주·가드가 두꺼울수록 이 주먹이 산다
+    cost: 3
+    cooldown_ticks: 250
+    telegraph: "주먹을 뒤로 완전히 뺀다 — 10틱 (숨길 생각이 없다)"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "옥 갈라지는 흰 금" }
+    mastery_gate: { 하급: 6 }
+
+  yongeum_sipisu:                 # 용음십이수 (중급 수공) — 손이 운다
+    combo:
+      - { type: 호, angle: 85, range: 2.5, frames: [3, 2, 5], stagger: 약, cost: 0 }
+      - { type: 호, angle: 85, range: 2.5, frames: [3, 2, 5], stagger: 중, cost: 0 }
+      - { type: 원, radius: 2.4, frames: [7, 3, 10], stagger: 강, cost: 0 }   # 열두 수의 끝 — 사방을 훑는다
+    combo_input_window: 10
+    cooldown_ticks: 115
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "손끝을 따라 도는 낮은 울림" }
+    # 모용 수공(일엽수~청죽수 — 부드럽게 감는다)과 갈랐다: 개방의 수공은 **울려서 친다** (원 마무리)
+
+  swaesim_ji:                     # 쇄심지 (중급 지법) — 조용한 개방
+    type: 선
+    width: 0.6
+    length: 5.0
+    range: 5.0
+    angle: 0.6
+    frames: [6, 2, 9]
+    stagger: 중
+    cost: 1
+    cooldown_ticks: 140
+    telegraph: "손끝을 세운다 — 6틱"
+    counter_hit_bonus: 1          # ★개방 지법의 지문: 맞받아칠 때 값이 커진다 (기다렸다 짚는다)
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "짧게 튀는 회색 점" }
+    # 모용 유성지(6.0 저격)·소림 탄지신통(4.0 3연발) 사이 — 5.0 단발에 **반격 보정**
+
+# ─── 개방 — 진·신법 ───
+  tagu_jin:                       # 타구진 (합격진 2~5인) — 무너지지 않는다. 줄어들 뿐이다
+    type: 진
+    size: [2, 5]
+    radius: 6
+    frames: [16, 0, 8]            # 전 합격진 중 **가장 빠른 전개** — 거지들은 신호가 필요 없다
+    effect: "협공 슬롯 4 개방 (매화검진·팔진도·나한진의 5 보다 **하나 적다**) · 성원 판정 +1"
+    break_condition: "★붕괴하지 않는다 — 성원이 무력화되면 그 몫만큼 효과가 줄 뿐이다
+      (2인 미만이 되면 자연 해제). 다른 진은 한 사람이 뚫리면 끝난다"
+    cooldown_ticks: 300
+    cost: 0
+    note: "★떨거지의 값 (자료: 「쪽수로 밀어붙이는 떨거지 집단」): 문턱이 가장 낮고(삼류) 전개가 가장
+      빠르고 안 무너진다 — 대신 슬롯이 하나 적다. **모이기는 쉽고 세지지는 않는다** ·
+      값의 확정은 party.yml 합격진 회차에서 사용자와 【제안】"
+
+  bicheon_muyeong:                # 비천무영신법 (상급 신법) — 그림자가 없다
+    type: 태세
+    frames: [6, 0, 8]
+    effect: "지속 중 이동 시 잔상만 남는다 — 상대 예측 판정 -2 · 추격 판정 -2 (개방의 눈과 귀)"
+    cost: 2                       # 경신 밴드 상단 — 보법·경공의 값
+    cooldown_ticks: 260
+    qi_note: "경신(cost_bands 1~2) — 격이 아니라 이동에 실린다"
+    note: "곤륜 운룡대팔식(오의)과 나란히 두지 않았다 — 자료의 「필적한다는 언급도 있다」는
+      비교이지 동급 선언이 아니다 【제안】"
 
 # ─── 곤륜파 — gonryun_geom ───
   yangui_geom:                    # 양의검법 (하급) — 음과 양, 두 갈래
