@@ -179,7 +179,8 @@ legacy_arts:
     name: "무형지독(無形之毒)"
     faction: dangga
     lineage: dangga_dok
-    requires_skill: { id: chilbo_dokjang, mastery: 8 }
+    requires_skill: { id: jeongryeon_sinjang, mastery: 8 }   # ★중급(칠보독장)→상급(적련신장)
+      # 으로 올렸다 (2026-07-26 당가 회차): 오의가 중급을 바로 무는 유일한 자리였다 — 구멍 지도의 지적
     type: { hitbox: 원, range: 9 }
     frames: [8, 12, 10]                              # 선딜이 가장 짧고 지속이 가장 길다 — 퍼지는 것이다
     defense: "없음 — 무형지독은 몸을 지키지 않는다. 그저 퍼진다"

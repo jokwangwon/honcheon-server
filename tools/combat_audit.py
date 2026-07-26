@@ -69,6 +69,7 @@ DICE_ITEMS = sorted(DICE.items())
 # 무공 category → combat.yml weapon_power 의 어느 무기인가 (도구의 매핑 가정)
 CATEGORY_WEAPON = {
     "검법": "검", "도법": "도", "창법": "창", "봉법": "봉", "단검술": "단검",
+    "편법": "편",     # 鞭 — 당가 편법 (2026-07-26). 15계열째 · 간격 최장 위력 최저
     "권법": "맨손", "장법": "맨손", "박투": "맨손", "금나술": "맨손",
     "퇴법": "맨손",   # 철혈백사십팔퇴 (팽가 확장 2026-07-26) — 발도 맨손의 값이다
     "선법": "부채",   # 학우선법 (제갈 확장 2026-07-26) — 문사의 병기
@@ -628,7 +629,13 @@ def lint_ladder_chain(cfg, rep):
             return rs.get("id")
         return rs if isinstance(rs, str) else None
 
+    # ★심법이 문턱인 무공은 공중에서 시작하는 것이 아니다 (2026-07-26 당가 회차에서 눈이 고쳐졌다).
+    #   칠보독장: "독은 손이 아니라 몸으로 배운다 — 심법(칠살음독경)으로 몸을 독에 동화시킨 자만
+    #   제 손에 독을 얹는다. 그래서 이 계보에는 하급이 없다." 그것은 구멍이 아니라 **설계**다.
+    #   눈이 requires_simbeop 를 못 읽어 「선행 없음」으로 셌다 — 없는 구멍을 지어내고 있었다.
+    simbeops = dig(cfg, "simbeop.yml", "simbeop", default={}) or {}
     dangling, cycles, midair, inverted, cross_cat = [], [], [], [], []
+    sim_dangling, sim_rooted = [], []
     roots = {}
 
     for sid, s in sorted(arts.items()):
@@ -637,8 +644,16 @@ def lint_ladder_chain(cfg, rep):
         pid = prereq(sid)
         tier = s.get("tier")
 
-        # ① 공중에서 시작 — 중급·상급인데 선행이 없다
-        if pid is None and tier in ("중급", "상급"):
+        # ①-0 심법 문턱 — 선행이 무공이 아니라 심법인 계보 (그 심법이 실재해야 한다)
+        rsb = s.get("requires_simbeop")
+        sim_id = rsb.get("id") if isinstance(rsb, dict) else (rsb if isinstance(rsb, str) else None)
+        if sim_id is not None:
+            sim_rooted.append(sid)
+            if sim_id not in simbeops:
+                sim_dangling.append(f"{sid} → {sim_id}(심법 없음)")
+
+        # ① 공중에서 시작 — 중급·상급인데 선행이 **무공도 심법도** 없다
+        if pid is None and sim_id is None and tier in ("중급", "상급"):
             midair.append(f"{sid}({tier})")
 
         # ② 선행 실재 · 고리 · 뿌리
@@ -676,6 +691,11 @@ def lint_ladder_chain(cfg, rep):
 
     rep.verdict(not dangling, "선행 실재 — 가리키는 무공이 전부 카탈로그에 있다"
                 if not dangling else f"★선행이 허공을 가리킨다: {', '.join(dangling)}")
+    if sim_rooted:
+        rep.verdict(not sim_dangling,
+                    f"심법 문턱 {len(sim_rooted)}종 — 가리키는 심법이 simbeop.yml 에 실재 "
+                    f"({', '.join(sim_rooted)})"
+                    if not sim_dangling else f"★심법 문턱이 허공을 가리킨다: {', '.join(sim_dangling)}")
     rep.verdict(not cycles, "고리 없음 — 모든 사슬이 첫 칸에서 끝난다"
                 if not cycles else f"★선행 고리 — 아무도 첫 칸에 닿지 못한다: {'; '.join(cycles)}")
     rep.verdict(not inverted, "사다리 방향 — 선행이 언제나 자기보다 아래 칸"
@@ -2226,6 +2246,18 @@ def selftest():
     chain_probe("⑮ 묘비: 오의 등록부를 비우면 → 합격이 아니라 위반 (빈 등록부 거짓 합격 금지)",
                 lambda c: dig(c, "ultimate_arts.yml", default={}).__setitem__("legacy_arts", {}),
                 needle="비었다")
+
+    # ⑰ 심법 문턱 — 가리키는 심법이 사라지면 잡는가 (칠보독장: "독은 손이 아니라 몸으로 배운다")
+    chain_probe("⑰ 심법 문턱 id 를 없는 것으로 → 심법 허공 위반",
+                lambda c: arts_of(c)["chilbo_dokjang"].__setitem__(
+                    "requires_simbeop", {"id": "___없는심법___"}),
+                needle="심법 문턱이 허공")
+
+    # ⑱ 묘비 — 심법 문턱을 **못 읽던 때** 이 눈은 칠보독장을 「공중에서 시작」으로 셌다.
+    #    없는 구멍을 지어내는 눈은 구멍을 놓치는 눈만큼 나쁘다. 문턱을 지우면 그때서야 공중시작이다
+    chain_probe("⑱ 묘비: 심법 문턱을 지워야 비로소 공중시작 (있을 땐 세지 않는다)",
+                lambda c: arts_of(c)["chilbo_dokjang"].pop("requires_simbeop", None),
+                expect_violation=False, needle="chilbo_dokjang")
 
     # ⑯ 음성 대조 — 사다리와 무관한 값(무기 위력)을 비틀어도 이 눈은 조용해야 한다
     v16, w16 = chain_run(fresh(lambda c: dig(c, "combat.yml", "damage", "weapon_power", default={})

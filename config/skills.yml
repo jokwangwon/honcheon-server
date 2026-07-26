@@ -43,7 +43,7 @@ schema:
 # MVT SkillListener 의 SKILL_BY_WEAPON_CLASS 는 이 표를 읽어야 한다 (하드코딩 금지).
 # 위력 수치는 combat.yml damage.weapon_power — 여기는 '어떤 무공이 어떤 병장기에 실리는가'만.
 weapon_classes:
-  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 구, 중병기, 부, 부채]   # 월아산 삭제 → 봉 통합 (2026-07-23) · 부채 신설 (2026-07-26 제갈 — 문사의 병기)
+  registry: [맨손, 권갑, 암기, 겸, 단검, 봉, 활, 검, 도, 창, 구, 중병기, 부, 부채, 편]   # 월아산 삭제 → 봉 통합 (2026-07-23) · 부채 신설 (2026-07-26 제갈) · 편(鞭) 신설 (2026-07-26 당가 — 15계열째)
   unarmed_family: [맨손, 권갑]     # 권갑은 맨손의 연장 — 권법·장법·박투·금나술·독공이 그대로 실린다
   rule: "무공은 자기 weapon_class 의 병장기를 들었을 때만 온전히 나간다. 다른 병장기를 들면 다운캐스트('맨 기술')"
   unarmed_rule: "【사용자 지시】 권법을 배운 자는 무기를 들지 않아도 초식이 나간다 — 맨손이 곧 그 무공의 병장기다"
@@ -52,6 +52,7 @@ weapon_classes:
     도법: 도
     창법: 창
     봉법: 봉
+    편법: 편
     단검술: 단검
     암살술: 단검
     권법: [맨손, 권갑]
@@ -508,6 +509,230 @@ martial_arts:
     public_use_rumor: true       # 일곱 걸음의 소문
     faction_reaction: true
     # 대처: 정화 규칙 (simbeop) — 대부분의 무사는 독에 무력하다
+    # ★2026-07-26 확인: 「하급이 없다」는 것은 구멍이 아니라 설계다 (심법이 문턱). 사다리 눈이
+    #   requires_simbeop 를 읽도록 고쳐, 이제 이 계보는 「공중에서 시작」으로 세지 않는다
+
+  jeongryeon_sinjang:
+    name: "적련신장(赤蓮神掌)"
+    category: "독공"
+    weapon_class: [맨손, 권갑]
+    sub_category: "독장 (상급 — 붉은 연꽃: 손자국이 꽃처럼 남는다)"
+    grade: "절정"
+    tier: 상급
+    lineage: dangga_dok
+    faction: dangga
+    required_realm: "절정"
+    required_stats: { 체력: 5, 지혜: 4 }
+    required_mastery: 5
+    requires_skill: { id: chilbo_dokjang, mastery: 5 }
+    mastery_gate: { 중급: 6 }
+    acquisition: "당가 가주 재가 — 독장의 끝 (무형지독 오의의 선행)"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: true
+    public_use_rumor: true
+    faction_reaction: true
+    # ★자료는 이 이름을 「장법」으로 분류했다. 여기서는 **독공**에 둔다 — 당가에서 장(掌)과 독은
+    #   같은 손이고(칠보독장 선례), 계보 dangga_dok 안에 있어야 무형지독까지 사다리가 닿는다.
+    #   자료 분류를 바꾼 유일한 건이라 여기 남긴다 (빨간펜 대상)
+
+  # ─── 사천당가 — 편(鞭) 계보 dangga_pyeon (신설 · 15계열째 · B-188 ④) ───
+  # 자료: 「다양한 암기술과 독공을 자랑하는 사천당가의 가장 유명한 무공은 만천화우이며
+  #        **채찍을 이용한 편법도 유명하다**」 — 편법 5종을 통째로 준다.
+  # ★한 세력이 혼자 두 빌드를 낸다: 연편(軟鞭 — 부드럽게 되받는다)과 장편(長鞭 — 멀리 훑는다)
+  baekseung_yeonpyeon:
+    name: "백승연편"
+    category: "편법"
+    weapon_class: 편
+    sub_category: "당가 연편 (하급 — 백 번 겨루어 백 번 이긴다는 이름값)"
+    grade: "이류"
+    tier: 하급
+    lineage: dangga_pyeon
+    faction: dangga
+    required_realm: "삼류"
+    required_stats: { 민첩: 4, 감각: 3 }
+    required_mastery: 0
+    acquisition: "당가 외당 전수 — 독을 만질 자격이 없는 자에게 먼저 쥐여 주는 것 (편은 피독이 필요 없다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  hoeta_yeonpyeon:
+    name: "회타연편십삼식"
+    category: "편법"
+    weapon_class: 편
+    sub_category: "당가 연편 열세 식 (중급 — 돌려 친다: 빗나간 줄이 되돌아온다)"
+    grade: "일류"
+    tier: 중급
+    lineage: dangga_pyeon
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 민첩: 5, 감각: 4 }
+    required_mastery: 5
+    requires_skill: { id: baekseung_yeonpyeon, mastery: 5 }
+    acquisition: "당가 내당 전수 — 줄은 곧게 가지 않는다. 그것이 편의 값이다"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  hwangsa_manri_pyeon:
+    name: "황사만리편법"
+    category: "편법"
+    weapon_class: 편
+    sub_category: "당가 장편 (중급 — 누런 모래가 만 리를 덮는다: 두 번째 빌드)"
+    grade: "일류"
+    tier: 중급
+    lineage: dangga_pyeon
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 근력: 4, 민첩: 4 }
+    required_mastery: 5
+    requires_skill: { id: baekseung_yeonpyeon, mastery: 5 }
+    acquisition: "당가 내당 전수 — 되받는 줄(회타) 대신 **훑는 줄**을 고른 자의 길"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  geumryong_pyeonbeop:
+    name: "금룡편법"
+    category: "편법"
+    weapon_class: 편
+    sub_category: "당가 비전 편법 (상급 — 금빛 용이 몸을 튼다)"
+    grade: "절정"
+    tier: 상급
+    lineage: dangga_pyeon
+    faction: dangga
+    required_realm: "절정"
+    required_stats: { 민첩: 5, 근력: 4 }
+    required_mastery: 5
+    requires_skill: { id: hoeta_yeonpyeon, mastery: 5 }
+    mastery_gate: { 중급: 6 }
+    acquisition: "당가 가주 재가 — 편법의 끝"
+    bloodline_restricted: true
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  hoyeon_sippalpyeon:
+    name: "호연십팔편"
+    category: "편법"
+    weapon_class: 편
+    sub_category: "당가 장편 열여덟 편 (상급 — 호연지기: 당가에서 가장 정대한 무공)"
+    grade: "절정"
+    tier: 상급
+    lineage: dangga_pyeon
+    faction: dangga
+    required_realm: "절정"
+    required_stats: { 근력: 5, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: hwangsa_manri_pyeon, mastery: 5 }
+    mastery_gate: { 중급: 6 }
+    acquisition: "당가 장로 전수 — ★독도 암기도 쓰지 않는다. 당가가 정파로 인정받은 얼굴이 이것이다
+      (자료: 「정당한 대결에서는 절대로 독을 사용하지 않았고」)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  # ─── 사천당가 — 삼양(三陽) 계보 dangga_samyang (신설) ───
+  # ★자료가 한 줄기를 통째로 준다: 심법 **도반삼양귀원공**(기등재) — 장법 **삼양신장** —
+  #   지법 **삼양지** — 금나 **삼양수**. 한 심법에서 세 손이 갈린다 (전 세력 유일의 모양)
+  bise_jang:
+    name: "비서장(飛絮掌)"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "당가 장법 (하급 — 날리는 버들솜: 닿는 줄도 모른다)"
+    grade: "이류"
+    tier: 하급
+    lineage: dangga_samyang
+    faction: dangga
+    required_realm: "삼류"
+    required_stats: { 민첩: 4, 감각: 3 }
+    required_mastery: 0
+    acquisition: "당가 외당 전수 — 가볍게 닿는 손부터 배운다 (독을 얹기 전의 손)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: false
+    faction_reaction: false
+
+  samyang_sinjang:
+    name: "삼양신장(三陽神掌)"
+    category: "장법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "삼양 계보 장법 (중급 — 세 겹의 양기)"
+    grade: "일류"
+    tier: 중급
+    lineage: dangga_samyang
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 근력: 4, 체력: 4 }
+    required_mastery: 5
+    requires_skill: { id: bise_jang, mastery: 5 }
+    acquisition: "당가 내당 전수 — 도반삼양귀원공을 익힌 몸에서 나오는 첫 손"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: true
+
+  samyang_ji:
+    name: "삼양지(三陽指)"
+    category: "지법"
+    weapon_class: [맨손, 권갑]
+    sub_category: "삼양 계보 지법 (중급 — 손끝으로 모은 세 겹)"
+    grade: "일류"
+    tier: 중급
+    lineage: dangga_samyang
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 감각: 5, 지혜: 3 }
+    required_mastery: 4
+    requires_skill: { id: bise_jang, mastery: 4 }
+    acquisition: "당가 내당 전수 — 장(掌)에서 갈라진 손끝 (삼양의 두 번째 손)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: true
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
+
+  samyang_su:
+    name: "삼양수(三陽手)"
+    category: "금나술"
+    weapon_class: [맨손, 권갑]
+    sub_category: "삼양 계보 금나 (중급 — 잡는 손: 자료가 「금나수」라 못 박았다)"
+    grade: "일류"
+    tier: 중급
+    lineage: dangga_samyang
+    faction: dangga
+    required_realm: "일류"
+    required_stats: { 근력: 4, 감각: 4 }
+    required_mastery: 4
+    requires_skill: { id: bise_jang, mastery: 4 }
+    acquisition: "당가 내당 전수 — 삼양의 세 번째 손 (잡으면 독을 얹을 자리가 생긴다)"
+    bloodline_restricted: false
+    requires_master: true
+    requires_manual: false
+    side_effects: false
+    public_use_rumor: true
+    faction_reaction: false
 
   manchon_hwau:
     name: "만천화우"
@@ -859,6 +1084,7 @@ martial_arts:
     weapon_class: 암기
     sub_category: "절기 (당문비수술 파생 — 원거리)"
     grade: "일류"
+    tier: 중급                       # ★tier 기재 (B-188 ④ 당가 회차)
     faction: dangga
     required_realm: "일류"
     required_stats: { 민첩: 4, 감각: 5 }

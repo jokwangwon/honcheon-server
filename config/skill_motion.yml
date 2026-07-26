@@ -658,6 +658,7 @@ weapon_styles:
   중병기:  { verb: 짓뭉갠다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 1.0, pitch: 0.6 } }
   부:      { verb: 찍어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.crit", volume: 0.9, pitch: 0.8 } }
   부채:    { verb: 접어벤다, arc: sweep_attack, thrust: crit,        trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.5 } }   # 扇 — 펼쳐 가리고 접어 벤다 (2026-07-26)
+  편:      { verb: 휘감는다, arc: sweep_attack, thrust: crit,     trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.55, pitch: 1.55 } }   # 鞭 — 얇은 줄이 공기를 가른다 (2026-07-26 당가)
   무관:    { verb: 움직인다, arc: cloud,      thrust: cloud,         trail: cloud, swing: { key: "entity.player.attack.sweep", volume: 0.5, pitch: 1.4 } }
   짐승:    { verb: 덮친다, arc: crit,         thrust: crit,          trail: cloud, swing: { key: "entity.wolf.growl", volume: 0.8, pitch: 0.9 } }
 
@@ -871,6 +872,85 @@ skills:
     steps:
       - { trail: 시, count: 4, finisher: true, telegraph_boost: 2,
           sound: { key: "entity.arrow.shoot", volume: 1.0, pitch: 1.2 } }   # 손이 하늘로 — 16틱
+
+  # ── 당가 독공 상급 ──
+  jeongryeon_sinjang:
+    name: "적련신장(赤蓮神掌)"
+    style: 맨손
+    steps:
+      - { trail: 호, particle: ash, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.witch.throw", volume: 0.85, pitch: 0.70 } }   # 붉은 연꽃 — 칠보독장보다 낮게 운다
+
+  # ── 당가 편(鞭) 계보 — 얇은 줄이 공기를 가른다. 획이 가장 길고 가장 얇다 ──
+  baekseung_yeonpyeon:
+    name: "백승연편"
+    style: 편
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.55, pitch: 1.60 } }
+      - { trail: 선, count: 2, finisher: true,
+          sound: { key: "entity.player.attack.crit", volume: 0.7, pitch: 1.45 } }   # 줄 끝이 터진다
+
+  hoeta_yeonpyeon:
+    name: "회타연편십삼식"
+    style: 편
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.55, pitch: 1.55 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.sweep", volume: 0.6, pitch: 1.45 } }
+      - { trail: 호, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.crit", volume: 0.8, pitch: 1.30 } }   # 돌아온 줄이 뒤에서 친다
+
+  hwangsa_manri_pyeon:
+    name: "황사만리편법"
+    style: 편
+    steps:
+      - { trail: 호, particle: ash, count: 3, sound: { key: "entity.player.attack.sweep", volume: 0.7, pitch: 1.20 } }   # 160° — 전 무공 최광각
+      - { trail: 호, particle: ash, count: 3, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 0.85, pitch: 1.05 } }   # 누런 모래
+
+  geumryong_pyeonbeop:
+    name: "금룡편법"
+    style: 편
+    steps:
+      - { trail: 선, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.crit", volume: 0.9, pitch: 1.15 } }   # 6.0m — 병기 최장
+
+  hoyeon_sippalpyeon:
+    name: "호연십팔편"
+    style: 편
+    steps:
+      - { trail: 원, count: 4, finisher: true, telegraph_boost: 2,
+          sound: { key: "entity.player.attack.sweep", volume: 0.95, pitch: 0.95 } }   # 사방으로 — 독이 없다
+
+  # ── 당가 삼양(三陽) 계보 — 한 심법에서 갈린 세 손 ──
+  bise_jang:
+    name: "비서장(飛絮掌)"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 1, sound: { key: "entity.player.attack.weak", volume: 0.45, pitch: 1.55 } }   # 가장 작은 소리 — 닿는 줄도 모른다
+      - { trail: 호, count: 2, finisher: true, sound: { key: "entity.player.attack.weak", volume: 0.55, pitch: 1.45 } }
+
+  samyang_sinjang:
+    name: "삼양신장(三陽神掌)"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.7, pitch: 1.05 } }
+      - { trail: 호, count: 2, sound: { key: "entity.player.attack.weak", volume: 0.75, pitch: 0.95 } }
+      - { trail: 선, count: 3, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 0.95, pitch: 0.80 } }   # 세 겹째
+
+  samyang_ji:
+    name: "삼양지(三陽指)"
+    style: 맨손
+    steps:
+      - { trail: 선, count: 3, finisher: true,
+          sound: { key: "entity.player.attack.weak", volume: 0.6, pitch: 1.65 } }   # 세 점을 한 번에 짚는다
+
+  samyang_su:
+    name: "삼양수(三陽手)"
+    style: 맨손
+    steps:
+      - { trail: 호, count: 2, finisher: true, telegraph_boost: 1,
+          sound: { key: "entity.player.attack.knockback", volume: 0.85, pitch: 0.85 } }   # 잡아 눌러 세운다
 
   bihong_chim:
     name: "비홍침"
@@ -2723,6 +2803,7 @@ display:
     중병기: { span_ratio: 0.90, reach: 0.95, thickness: 1.80, tilt: 60 }   # 짓뭉갠다 — 가장 굵다
     부:     { span_ratio: 0.85, reach: 1.00, thickness: 1.70, tilt: 70 }   # 찍어벤다 (0.9/s — 가장 느린 손)
     부채:   { span_ratio: 0.50, reach: 0.75, thickness: 0.60, tilt: 15 }   # 접어벤다 — 얇고 넓게 스친다 (문사의 손)
+    편:     { span_ratio: 0.75, reach: 1.00, thickness: 0.40, tilt: 30 }   # 휘감는다 — 가장 얇고 가장 넓게 돈다 (창과 같은 최장 간격, 두께는 절반 이하)
     무관:   null                                                           # 보법·심법 — 벨 것이 없다
     짐승:   null                                                           # 발톱은 병기가 아니다
 
@@ -3044,6 +3125,7 @@ basic_strike:
     맨손:   { trail: 호, range: 2.5, angle: 90,  frames: [1, 1, 3] }
     암기:   { trail: 시, range: 16.0, angle: 1,  frames: [2, 1, 4] }   # 던진다 (ranged.암기 사거리 16)
     부채:   { trail: 호, range: 2.6, angle: 110, frames: [2, 2, 4] }   # 접어벤다 — 가볍고 넓다 (문사의 손)
+    편:     { trail: 호, range: 5.0, angle: 140, frames: [4, 2, 7] }   # 휘감는다 — 가장 멀고 가장 넓다. 대신 되감기(후딜 7)가 길다
     활:     null                  # 바닐라 활이 제 일을 한다 — 우리가 얹을 것이 없다
     무관:   null
     짐승:   null

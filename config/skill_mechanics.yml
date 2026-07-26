@@ -291,6 +291,129 @@ skills:
     cooldown_ticks: 350
     telegraph: "손이 하늘로 — 16틱"
 
+  jeongryeon_sinjang:             # 적련신장 (독공 상급) — 손자국이 꽃처럼 남는다
+    type: 호
+    angle: 80
+    range: 2.4
+    frames: [9, 3, 13]
+    stagger: 강
+    hit_count: 2
+    on_hit: { 중독: "12합간 매 합 내구 -2 · 판정 -1 (칠보독장의 두 배 — 해독 난도도 한 단계 위)" }
+    cost: 0                       # 독은 내력이 아니라 몸에서 나온다 (칠보독장과 같은 규칙)
+    cooldown_ticks: 300
+    telegraph: "손바닥이 붉게 물든다 — 9틱 (보이면 이미 늦다)"
+    mastery_gate: { 중급: 6 }
+    qi_note: "격이 붙지 않는다 — 독장에 검기를 얹으면 독이 타 버린다 (칠보독장 규칙 승계)"
+
+# ─── 사천당가 — dangga_pyeon (편 계보 신설 · 15계열째) ───
+# ★편의 정체성 (combat.yml weapon_power 편 2 · 간격 5.0m): **가장 멀리 닿고 가장 약하다.**
+#   그래서 편법은 위력이 아니라 **자리**를 판다 — 되받기(회타)와 훑기(황사)로 길이 둘로 갈린다
+  baekseung_yeonpyeon:            # 백승연편 (하급) — 줄이 먼저 닿는다
+    combo:
+      - { type: 호, angle: 120, range: 4.6, frames: [5, 2, 8], stagger: 약, cost: 0 }
+      - { type: 선, width: 0.7, length: 5.0, frames: [6, 2, 9], stagger: 중, cost: 0 }
+    combo_input_window: 10
+    min_range: 1.5                # ★코앞에서는 못 휘두른다 — 편의 유일한 약점 (활 min_range 4 의 근접판)
+    cooldown_ticks: 120
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "줄 끝에 이는 파공음" }
+
+  hoeta_yeonpyeon:                # 회타연편십삼식 (중급) — 빗나간 줄이 되돌아온다
+    combo:
+      - { type: 호, angle: 130, range: 4.8, frames: [5, 2, 7], stagger: 약, cost: 0 }
+      - { type: 호, angle: 130, range: 4.8, frames: [5, 2, 7], stagger: 중, cost: 0 }
+      - { type: 호, angle: 150, range: 4.8, frames: [7, 3, 10], stagger: 강, cost: 0 }
+    combo_input_window: 13        # 열세 식 — 창이 가장 넓다 (되돌아올 시간을 준다)
+    min_range: 1.5
+    on_success: { counter_window: 10, counter_bonus: 0.5 }   # 廻打 — 되받아 친다
+    cooldown_ticks: 150
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "줄이 원을 그리며 돌아온다" }
+
+  hwangsa_manri_pyeon:            # 황사만리편법 (중급 · 두 번째 빌드) — 훑는다
+    combo:
+      - { type: 호, angle: 160, range: 5.0, frames: [7, 2, 10], stagger: 약, cost: 0 }   # ★전 무공 최광각
+      - { type: 호, angle: 160, range: 5.0, frames: [9, 3, 13], stagger: 중, cost: 0 }
+    combo_input_window: 11
+    min_range: 2.0                # 훑는 줄은 더 멀리서 시작한다
+    cooldown_ticks: 170
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "누런 흙먼지가 반원으로 인다" }
+    # 정체성: 호 160° — 개방 봉법(150°)을 넘는 **전 무공 최광각**. 대신 위력 2 에 선딜이 가장 길다
+
+  geumryong_pyeonbeop:            # 금룡편법 (상급) — 금빛 용이 몸을 튼다
+    type: 선
+    width: 1.0
+    length: 6.0                   # ★근접 무공 최장 사거리 (일지선 8.0 은 지풍 — 병기로는 이것이 최장)
+    frames: [11, 3, 15]
+    stagger: 강
+    super_armor: "지속 전체"
+    cost: 3
+    cooldown_ticks: 260
+    min_range: 1.5
+    telegraph: "줄이 머리 위로 감긴다 — 11틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "금빛으로 뻗는 줄 — 용의 몸" }
+    mastery_gate: { 중급: 6 }
+
+  hoyeon_sippalpyeon:             # 호연십팔편 (상급) — 당가에서 가장 정대한 무공
+    type: 원
+    radius: 4.4                   # 줄이 도는 반지름 — 대윤회겁륜장(3.8)을 넘는 전 원(圓) 최대
+    frames: [14, 4, 18]
+    stagger: 강
+    super_armor: "지속 전체"
+    cost: 3
+    cooldown_ticks: 290
+    telegraph: "열여덟 번 감았다 편다 — 14틱"
+    qi_rider: { step: 1, 격: 검기, cost: 3, gate: 절정, power: 2, vfx: "사방으로 퍼지는 흰 줄 — 독이 없다" }
+    mastery_gate: { 중급: 6 }
+    note: "★독도 암기도 없는 당가의 얼굴 — on_hit 에 중독이 없는 유일한 당가 상급기
+      (자료: 정당한 대결에서는 독을 쓰지 않았다)"
+
+# ─── 사천당가 — dangga_samyang (삼양 계보 신설) ───
+# ★한 심법(도반삼양귀원공)에서 세 손이 갈린다 — 장(掌)·지(指)·수(手). 전 세력 유일한 모양
+  bise_jang:                      # 비서장 (하급) — 날리는 버들솜. 닿는 줄도 모른다
+    combo:
+      - { type: 호, angle: 85, range: 2.4, frames: [2, 2, 4], stagger: 약, cost: 0 }
+      - { type: 호, angle: 85, range: 2.4, frames: [3, 2, 5], stagger: 약, cost: 0 }
+    combo_input_window: 11
+    cooldown_ticks: 70            # 전 무공 최단 쿨 — 가볍다는 것은 자주 온다는 것이다
+    feint: "약(弱) 2타 — 경직이 얕아 상대가 반격 타이밍을 못 잡는다 (飛絮: 스치는 손)"
+    qi_rider: { step: 2, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "흩날리는 흰 솜털" }
+
+  samyang_sinjang:                # 삼양신장 (중급) — 세 겹의 양기
+    combo:
+      - { type: 호, angle: 80, range: 2.5, frames: [4, 2, 6], stagger: 약, cost: 0 }
+      - { type: 호, angle: 80, range: 2.5, frames: [4, 2, 6], stagger: 중, cost: 0 }
+      - { type: 선, width: 1.3, length: 2.8, frames: [7, 3, 10], stagger: 강, cost: 0 }   # 세 번째 겹
+    combo_input_window: 10
+    cooldown_ticks: 130
+    qi_rider: { step: 3, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "장심에 겹치는 세 겹의 열기" }
+    simbeop_resonance: "도반삼양귀원공 보유 시 3타 위력 +1 — 같은 이름의 심법과 손이 만난다"
+
+  samyang_ji:                     # 삼양지 (중급 지법) — 손끝으로 모은 세 겹
+    type: 선
+    width: 0.6
+    length: 5.5
+    range: 5.5
+    angle: 0.6
+    frames: [6, 2, 9]
+    stagger: 중
+    hit_count: 3                  # ★三 — 한 번에 세 점을 짚는다 (지법 중 유일한 3연 명중)
+    cost: 1
+    cooldown_ticks: 150
+    telegraph: "세 손가락이 나란히 선다 — 6틱"
+    qi_rider: { step: 1, 격: 발경, cost: 1, gate: 일류, power: 1, vfx: "세 줄기 열선" }
+    # 지법 4번째 공급원 (모용 저격 6.0 · 소림 3연발 4.0 / 격공 8.0 · 개방 반격 5.0 · 당가 **3연 명중** 5.5)
+
+  samyang_su:                     # 삼양수 (중급 금나) — 잡으면 독을 얹을 자리가 생긴다
+    type: 호
+    angle: 60
+    range: 1.9
+    frames: [7, 2, 11]
+    property: 파격
+    on_hit: { stagger: 다운, 속박: "다음 1합 이동 불가 — 잡은 손을 놓지 않는다" }
+    cost: 1
+    cooldown_ticks: 160
+    qi_note: "격이 붙지 않는다 — 금나는 위력이 아니라 자세를 무너뜨린다 (소림금나십팔타와 같은 규칙)"
+    note: "당가에서 이 무공의 값은 **다음 손**에 있다 — 붙잡힌 상대에게 독장이 빗나갈 리 없다"
+
   # ── 개방 ──
   chwipalseon_bo:                 # 취팔선보 — 취보 (변칙 보법)
     type: 돌

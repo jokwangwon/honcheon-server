@@ -242,7 +242,11 @@ public final class Weapons {
         // ─── 부채(扇) — 문사의 병기 (2026-07-26 사용자 확정 「제갈은 부채로도 싸운다」 · 학우선의 결)
         //     modelId null = 팩 미구움 (붓 아이템 그대로 — 팩 회차에서 굽는다) · 활과 같은 선례:
         //     재질 사다리가 없어 등급은 툴팁·PDC 가 말한다 ───
-        부채(null, Base.BRUSH, "부채", -2.0, 0.0);      // 2.0/s — 가볍고 빠르다. 위력은 진(陣)과 무공이 만든다
+        부채(null, Base.BRUSH, "부채", -2.0, 0.0),      // 2.0/s — 가볍고 빠르다. 위력은 진(陣)과 무공이 만든다
+        // ─── 편(鞭) — 채찍. 사천당가의 두 번째 얼굴 (2026-07-26 사용자 자료 「채찍을 이용한 편법도 유명하다」)
+        //     modelId null = 팩 미구움 (낚싯대 아이템 그대로 — 팩 회차에서 굽는다) ·
+        //     ★간격 5.0m 은 창과 같은 최장인데 위력은 2 다 — 거리를 위력에서 뺀 값 (활·암기와 같은 원칙) ───
+        편(null, Base.ROD, "편", -3.0, 2.0);            // 1.0/s — 되감아야 다시 친다. 대신 가장 멀리 닿는다
 
         /** 팩 모델 키의 계열 부분. null = 팩 미구움 → item_model 부착 금지 */
         public final String modelId;
@@ -307,7 +311,11 @@ public final class Weapons {
         // 활 — 바닐라에 재질 사다리가 없다. 등급은 재질 색이 아니라 툴팁·PDC 가 말한다
         BOW(Material.BOW, Material.BOW, Material.BOW, Material.BOW, Material.BOW),
         // 부채 — 붓(BRUSH)을 징발한다 (활과 같은 선례 — 등급은 툴팁·PDC 의 것)
-        BRUSH(Material.BRUSH, Material.BRUSH, Material.BRUSH, Material.BRUSH, Material.BRUSH);
+        BRUSH(Material.BRUSH, Material.BRUSH, Material.BRUSH, Material.BRUSH, Material.BRUSH),
+        // 편 — 낚싯대(FISHING_ROD)를 징발한다 (활·부채와 같은 선례: 재질 사다리가 없다.
+        //   손잡이에서 줄이 뻗는 실루엣이 채찍에 가장 가깝다)
+        ROD(Material.FISHING_ROD, Material.FISHING_ROD, Material.FISHING_ROD,
+                Material.FISHING_ROD, Material.FISHING_ROD);
 
         private final Material[] byGrade;   // 범철·정련·보병·신병·마병 순
 
@@ -913,6 +921,7 @@ public final class Weapons {
             case 구 -> ChatColor.DARK_GRAY + "(鉤)";
             case 활 -> ChatColor.DARK_GRAY + "(弓)";
             case 부채 -> ChatColor.DARK_GRAY + "(扇)";
+            case 편 -> ChatColor.DARK_GRAY + "(鞭)";
         };
     }
 
@@ -937,6 +946,7 @@ public final class Weapons {
             case 구 -> "걸고 당긴다 — 상대의 병기를 얽는 손.";
             case 활 -> "거리를 위력으로 바꾼다 — 닿기 전에 맞힌다. 코앞은 못 쏜다.";
             case 부채 -> "문사의 병기 — 가볍고 빠르다. 위력은 진(陣)과 무공이 만든다.";
+            case 편 -> "가장 멀리 닿는 근접 병기 — 휘감아 당긴다. 되감기 전에는 두 번 못 친다.";
         };
         return List.of(byGrade, bySeries);
     }
