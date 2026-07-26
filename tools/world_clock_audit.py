@@ -354,6 +354,126 @@ def audit_marker(rep: Report, cfg: dict) -> None:
                  + ("배선됨 · 표식 없음" if engine_reads else "미배선 · 표식 있음"))
 
 
+# ═══════════════ ⑤ 엔딩 분기 — 넷 중 하나가 반드시 뽑히는가 ═══════════════
+
+def audit_endings(rep: Report, cfg: dict, acts: dict) -> None:
+    """엔딩 분기 문법의 눈 (2026-07-26 신설 — 사용자 확정 「분기 문법 늘리기」).
+
+    acts 는 선형이라(order 연속 + requires_beat 사슬) 엔딩 넷을 담을 수 없다.
+    그래서 별도 절이 됐고, 별도 절에는 별도 눈이 필요하다. 이 눈이 재는 것은 셋이다:
+      ① 판정 시점이 **실존하는 마지막 막의 실존 박**인가
+      ② **정확히 하나가 뽑히는가** — fallback(when 이 빈 것)이 있고, 그것이 마지막 우선순위인가
+         ★이것이 이 눈의 핵심이다: fallback 이 없으면 '아무 엔딩도 없는 세계'가 가능해진다
+      ③ do·소문·지역 눈금이 이웃 등록부 안인가 (막의 박과 같은 규칙)
+    """
+    rep.say()
+    rep.say("── ⑤ 엔딩 분기 — 넷 중 하나가 반드시 뽑히는가")
+    rep.say()
+
+    end = cfg.get("endings") or {}
+    if not end:
+        rep.bad("endings 절이 없다 — 정본(story_summary v2)이 엔딩 4분기를 말하는데 등록부에 없다")
+        return
+
+    meta = end.get("meta") or {}
+    world = end.get("world") or []
+    personal = end.get("personal") or []
+
+    # ① 판정 시점 — 마지막 막의 실존 박이어야 한다
+    ordered = sorted(acts.items(), key=lambda kv: (kv[1] or {}).get("order", 99))
+    last_id, last_act = (ordered[-1] if ordered else (None, {}))
+    decided = str(meta.get("decided_at") or "")
+    last_beats = [b.get("key") for b in (last_act or {}).get("beats", []) or []]
+    want = {f"{last_id}.{k}" for k in last_beats}
+    if decided not in want:
+        rep.bad(f"endings.meta.decided_at 이 마지막 막({last_id})의 실존 박이 아니다: {decided!r} "
+                f"— 후보: {sorted(want)}")
+    else:
+        rep.good(f"판정 시점 — 마지막 막의 종결박 {decided}")
+
+    # ② 정확히 하나 — fallback 의 존재와 자리
+    if not world:
+        rep.bad("endings.world 가 비었다 — 세계 엔딩이 하나도 없다")
+        return
+    prios = [e.get("priority") for e in world]
+    if sorted(p for p in prios if isinstance(p, int)) != list(range(1, len(world) + 1)):
+        rep.bad(f"세계 엔딩 priority 가 1부터 연속이 아니다: {prios}")
+    fallbacks = [e for e in world if not (e.get("when") or {})]
+    if len(fallbacks) != 1:
+        rep.bad(f"조건 없는 엔딩(fallback)이 정확히 하나가 아니다 ({len(fallbacks)}개) — "
+                f"★없으면 '아무 엔딩도 없는 세계'가 가능해지고, 둘이면 어느 것인지 정해지지 않는다")
+    else:
+        fb = fallbacks[0]
+        if fb.get("priority") != max(p for p in prios if isinstance(p, int)):
+            rep.bad(f"fallback({fb.get('id')})이 마지막 우선순위가 아니다 — "
+                    f"앞에 두면 조건부 엔딩이 영영 안 뽑힌다")
+        else:
+            rep.good(f"정확히 하나가 뽑힌다 — 세계 엔딩 {len(world)}개 · "
+                     f"fallback = {fb.get('id')} (마지막 우선순위)")
+
+    seen_ids = set()
+    for e in world + personal:
+        eid = e.get("id")
+        if not eid or eid in seen_ids:
+            rep.bad(f"엔딩 id 가 없거나 겹친다: {eid!r}")
+        seen_ids.add(eid)
+        if not e.get("name") or not e.get("outcome"):
+            rep.bad(f"엔딩 {eid} — name/outcome 이 없다 (이름 없는 끝은 끝이 아니다)")
+
+    # ★개인 엔딩은 세계 엔딩과 배타가 아니다 — scope 로 갈렸는지 본다
+    for e in personal:
+        if e.get("scope") != "personal":
+            rep.bad(f"개인 엔딩 {e.get('id')} — scope 가 'personal' 이 아니다 "
+                    f"(세계 엔딩과 배타로 오해된다)")
+    if personal:
+        rep.good(f"개인 엔딩 {len(personal)}개 — scope=personal (세계 엔딩과 동시 성립)")
+
+    # ③ do 유형·이웃 등록부 (막의 박과 같은 규칙)
+    networks = set((load_yaml(CONFIG / "rumor.yml").get("networks") or {}).keys())
+    stats: set[str] = set()
+    for deltas in (load_yaml(CONFIG / "region_state.yml").get("event_deltas") or {}).values():
+        stats |= set((deltas or {}).keys())
+    m = re.search(r'PRIMARY_REGION\s*=\s*"([^"]+)"', decomment(read(WORLDSTORE)))
+    primary = m.group(1) if m else None
+
+    n_do = 0
+    for e in world + personal:
+        do = e.get("do") or {}
+        unknown = set(do.keys()) - DO_KINDS
+        if unknown:
+            rep.bad(f"엔딩 {e.get('id')} — 등록되지 않은 do 유형: {sorted(unknown)}")
+        r = do.get("rumor")
+        if r:
+            n_do += 1
+            if r.get("망") not in networks:
+                rep.bad(f"엔딩 {e.get('id')} — rumor.yml 에 없는 망: {r.get('망')!r}")
+            if not isinstance(r.get("강도"), int) or not 1 <= r["강도"] <= 5:
+                rep.bad(f"엔딩 {e.get('id')} — 강도가 1~5 정수가 아니다: {r.get('강도')!r}")
+            if not r.get("문안키"):
+                rep.bad(f"엔딩 {e.get('id')} — 문안키가 없다")
+        rd = do.get("region_delta")
+        if rd:
+            n_do += 1
+            if primary and rd.get("region") != primary:
+                rep.bad(f"엔딩 {e.get('id')} — 등록 지역이 아니다: {rd.get('region')!r}")
+            ghost = set(rd.keys()) - {"region"} - stats
+            if ghost:
+                rep.bad(f"엔딩 {e.get('id')} — region_state.yml 에 없는 눈금: {sorted(ghost)}")
+
+    # ④ 판정 입력 — 가리키는 박이 실존하는가
+    for name, spec in (end.get("inputs") or {}).items():
+        src = str((spec or {}).get("from") or "")
+        hit = any(f"{aid}.{b.get('key')}" in src
+                  for aid, a in acts.items() for b in (a or {}).get("beats", []) or [])
+        if not hit and "faction_politics" not in src and "명분" not in src:
+            rep.warn(f"엔딩 판정 입력 '{name}' 의 출처가 실존 박도 기존 축도 아니다: {src[:48]!r}")
+
+    if meta.get("wiring_status") == "미배선":
+        rep.good("★미배선을 스스로 밝혔다 (wiring_status: 미배선) — "
+                 "등록부가 먼저 서고 코드가 따라오는 순서. 거짓말이 아니다")
+    rep.facts["endings"] = {"world": len(world), "personal": len(personal), "do": n_do}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="세계 시계 검산 — 막 등록부와 봇 배선의 대조 (B-110)")
     ap.add_argument("--json", action="store_true", help="기계 판독용 요약")
@@ -371,6 +491,7 @@ def main() -> int:
         audit_neighbors(rep, acts)
     audit_wiring(rep, cfg)
     audit_marker(rep, cfg)
+    audit_endings(rep, cfg, acts)
 
     rep.say()
     rep.say("═" * 78)

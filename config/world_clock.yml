@@ -41,155 +41,330 @@ clock:
 # ═══════════════════════════════════════════════════════════════════
 acts:
 
-  # ── story_summary 「프롤로그」 — 정파 문파 입문, 소규모 퀘스트 ──
+  # ══════════════════════════════════════════════════════════════════════
+  #  ★★v2 재작성 (2026-07-26 사용자 확정 — 거대 줄기 7막)
+  #  옛 5막(마교의 암류 → 혈교의 부상 → 삼파전 → 에필로그)을 **교체했다.**
+  #  근거 두 문장(사용자 원문 · story_summary v2 머리에도 적었다):
+  #    ① 「맹이 없는 게 당연하다」 — 각자 대립하다 **홀로는 부족함을 깨닫고** 맹이 선다.
+  #       연합은 시작이 아니라 결과다. → 그래서 옛 제1장의 「정파 연합이 격퇴」가 폐기된다.
+  #    ② 「혈교는 계기일 뿐이다」 — 하나만 터졌어도 났다. 원인이 아니라 **방아쇠**다.
+  #       → 그래서 제0막의 갈등 원인은 혈교와 **무관한 것들**도 함께 깔린다.
+  #
+  #  ★안전 확인 (재작성 전 실측): world_meta 세계막=prologue · 막진입일 36 · 현재일 36 ·
+  #    **박발화 키 0건** (prologue 박은 +12/+15 = 세계일 48/51 이라 아직 안 터졌다).
+  #    그래서 `prologue` id 를 **그대로 보존**하고 내용만 갈았다 — WorldClockEngine:252 가
+  #    등록부 밖의 막 id 를 만나면 예외를 던지므로, id 를 바꾸면 라이브 세계가 멎는다.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── story_summary v2 「제0막 — 혼란의 서막 (무림맹 창설 전)」 ──
+  #   ★id 는 prologue 를 유지한다 (라이브 상태 보존 — 위 안전 확인)
   prologue:
-    name: "프롤로그 — 강호 입문"
+    name: "제0막 — 혼란의 서막"
     order: 0
-    entry: { base_day: 1, gate: auto }         # 개벽과 함께 — 조건 없음
-    # 세계 시계가 가장 조용한 막: 주인공은 청하현 튜토리얼(경험 정본 §8)과 개인 사슬(B-109)이다.
+    entry: { base_day: 1, gate: auto }
+    # 가장 조용한 막이지만 **평화롭지는 않다**: 맹이 없어서 각자 제 앞만 본다.
+    # 주인공은 청하현 튜토리얼(경험 정본 §8)과 개인 사슬(B-109)을 걷는다.
     beats:
-      - key: byeonbang_goedam
-        at: 12                                  # 후반부 — 제1장의 전조를 미리 흘린다 (막 사이가 이어져 보이게)
-        do: { rumor: { 강도: 1, 태그: [괴사], 망: mingan_market, 문안키: 변방의_흉흉한_말 } }
-        resolve: "소문 자연 감쇠 (3일 -1) — 남는 것은 불안뿐"
-      - key: immun_ui_munteok                   # 종결박 — 청하현 1차 기립의 끝 = 입문의 문턱 (경험 정본 §8)
+      - key: munpa_ui_gyeongjaeng          # ★혈교와 무관한 갈등 — 「하나만 터졌어도 났다」의 근거
+        at: 6
+        do: { rumor: { 강도: 1, 태그: [정치, 무인], 망: inn_net, 문안키: 후계_다툼의_소문 } }
+        resolve: "소문 자연 감쇠 — 남는 것은 '강호가 조용하지 않다'는 감각뿐"
+      - key: wijang_tero                   # 사파인 척하는 의문의 무리 (정체 미상 = 혈교 잔재)
+        at: 12
+        do:
+          rumor: { 강도: 2, 태그: [사파, 괴사], 망: mingan_market, 문안키: 사파를_자칭한_자들 }
+          region_delta: { region: cheongha_hyeon, 치안: -3 }
+        resolve: "소문 감쇠 · 치안은 회복 문법대로 — 그러나 아무도 범인을 못 잡는다 (그것이 이 박의 값)"
+      - key: immun_ui_munteok              # 종결박 — 개인의 입문 문턱 (경험 정본 §8 · 옛 등재 승계)
         at: 15
-        do: { chapter_open: hwasan_examination }   # 기존 장 재사용 — 화산파 입문 시험
+        do: { chapter_open: hwasan_examination }
         resolve: "상시 개방 유지 — 개인의 입문은 각자의 때에 (세계 막은 기다리지 않고 넘어간다)"
-    tempo: {}                                   # 프롤로그는 가감 없음 — 배울 시간은 밀리지도 당겨지지도 않는다
-    heralds: []                                 # 첫 막 — 전조 없음 (전조는 '다음' 막의 것, beats 가 대신한다)
-    personal_hooks: [첫_생계, 첫_소문, 문파의_문턱]   # B-109 생성기가 참조 가능한 갈래 (강제 아님)
+    tempo: {}                              # 제0막은 가감 없음 — 배울 시간은 밀리지도 당겨지지도 않는다
+    heralds: []                            # 첫 막 — 전조 없음
+    personal_hooks: [첫_생계, 첫_소문, 문파의_문턱, 앙숙의_틈]
 
-  # ── story_summary 「제1장 — 마교의 암류(暗流)」 ──
-  magyo_amryu:
-    name: "제1장 — 마교의 암류"
+  # ── story_summary v2 「제1막 — 사도련 등장 (무림맹 창설 준비)」 ──
+  sadoryeon_deungjang:
+    name: "제1막 — 사도련 등장"
     order: 1
-    entry: { base_day: 20, gate: auto, requires_beat: prologue.immun_ui_munteok }
+    entry: { base_day: 24, gate: auto, requires_beat: prologue.immun_ui_munteok }
     beats:
-      - key: buhwal_jojim                       # 쇠퇴했던 천마신교의 부활 조짐 포착 (정본)
+      - key: gakja_ui_daeeung              # ★창설의 동력 — 각자 대응하고 각자 부족함을 안다
         at: 0
-        do: { rumor: { 강도: 2, 태그: [괴사, 정치], 망: inn_net, 문안키: 마교_부활_조짐 } }
-        resolve: "소문 감쇠 — 그러나 다음 박이 사실로 만든다"
-      - key: amyak_siljong                      # 마교 신도들의 암약, 실종사건 발생 (정본)
-        at: 7
         do:
-          chapter_open: vanishing_chain          # 기존 장 재사용 — 막 한정 상류: 매매선이 아니라 마교 세작
-          region_delta: { region: cheongha_hyeon, 민심: -3 }
-        resolve: "14일 미해결 시 방치 결말 (그 장의 outcomes.방치) — 세계는 기다려주지 않는다"
-      - key: chimryak_yego                      # 침략이 임박했다 — 정파 연합의 명분이 선다
-        at: 18
+          rumor: { 강도: 2, 태그: [정치, 무인], 망: orthodox_net, 문안키: 각자_막아섰으나 }
+          region_delta: { region: cheongha_hyeon, 민심: -2 }
+        resolve: "소문 감쇠 — 그러나 '혼자서는 안 된다'는 말은 남는다 (다음 박의 씨앗)"
+      - key: sadoryeon_seoneon             # 정파 회합 중 사도련이 자칭하며 등장
+        at: 9
+        do: { rumor: { 강도: 3, 태그: [사파, 정치], 망: inn_net, 문안키: 사도련의_자칭 } }
+        resolve: "소문 감쇠 — 그러나 이제 사파에 **이름이 하나** 생겼다 (돌이킬 수 없다)"
+      - key: nuga_jinjja_sapa              # ★「누가 진짜 사파인가?」 — 위장 침투의 첫 단서
+        at: 15
         do:
-          myeongbun: { issue: "마교_침략:magyo", target: magyo, tags: [존망, 무림침해], gauge: 13 }
-          rumor: { 강도: 3, 태그: [정치, 무인], 망: orthodox_net, 문안키: 침략_임박 }
-        resolve: "명분은 감쇠 문법대로 산다 (존망 태그는 4에서 멈춘다 — faction_politics)"
-      - key: ilcha_chimryak_gyeoktoe            # ★종결박 — 정파 연합이 1차 침략을 격퇴 (정본: 격퇴는 확정)
-        at: 21
-        do: { world_event: 방어전 }               # 마크 무대는 별도 청구서 (설계 문서 §8 ⑤) — 무대 없이도 결과는 원장에 선다
-        resolve: "방어전 종료 = 격퇴 (정본). 플레이어 몫: 참전 공적·favor·별호 / 무참전: 지역 델타 -5 추가"
-    tempo:                                      # 어둠을 돕거나 방치하면 빨리 오고, 꺾으면 늦어진다 (설계 문서 §5)
+          chapter_open: vanishing_chain     # 기존 장 재사용 — 막 한정 상류: 매매선이 아니라 위장 무리
+          rumor: { 강도: 2, 태그: [괴사, 사파], 망: haomun_net, 문안키: 사파가_사파를_모른다 }
+        resolve: "14일 미해결 시 방치 결말 (그 장의 outcomes.방치) — 단서가 식는다"
+      - key: changseol_jean                # 종결박 — 무림맹 창설 제안이 상에 오른다
+        at: 20
+        do: { rumor: { 강도: 3, 태그: [정치], 망: orthodox_net, 문안키: 맹을_세우자는_말 } }
+        resolve: "제안은 사라지지 않는다 — 제2막의 회의가 그것을 받는다"
+    tempo:
       accel:
-        - { key: "chapter:blood_scent.방치", days: 2 }          # 마병 방치 — 어둠의 물류가 산다
-        - { key: "chapter:vanishing_chain.방치", days: 2 }      # 실종 방치 — 세작이 활개친다
-        - { key: "registry:마병_암시장_유통", days: 1 }          # 건당 — 단 막당 1회 dedupe
-        - { key: "region:민심_35_미만_7일", days: 1 }            # 흉흉한 땅에 어둠이 빨리 스민다 (7일마다)
+        - { key: "chapter:vanishing_chain.방치", days: 2 }   # 단서를 놓치면 위장이 활개친다
+        - { key: "region:치안_30_미만_7일", days: 1 }
       decel:
-        - { key: "chapter:blood_scent.정화", days: -2 }
         - { key: "chapter:vanishing_chain.구출", days: -2 }
-        - { key: "registry:세작_검거", days: -1 }
-    heralds:                                    # 전환 3일 전 (clock.herald_lead_days) — 세계가 먼저 수군거린다
-      - { rumor: { 강도: 2, 태그: [괴사, 정치], 망: mingan_market, 문안키: 서쪽에서_온_상인의_말 } }
-    personal_hooks: [실종자_수색, 세작_의심, 변방_괴담_확인]
+    heralds:
+      - { rumor: { 강도: 2, 태그: [사파, 정치], 망: mingan_market, 문안키: 저잣거리의_수상한_말 } }
+    personal_hooks: [정체_추적, 문파의_심부름, 회합의_말석]
 
-  # ── story_summary 「제2장 — 혈교의 부상」 ──
-  hyeolgyo_busang:
-    name: "제2장 — 혈교의 부상"
+  # ── story_summary v2 「제2막 — 무림맹 창설 (협력과 반목)」 ──
+  murimmaeng_changseol:
+    name: "제2막 — 무림맹 창설"
     order: 2
-    entry: { base_day: 50, gate: auto, requires_beat: magyo_amryu.ilcha_chimryak_gyeoktoe }
+    entry:
+      base_day: 52
+      gate: human                          # ★세계의 구조가 바뀐다 (기구 신설) — 운영 판단이 선행한다
+      requires_beat: sadoryeon_deungjang.changseol_jean
+      approval: { command: /막개전, permission: MANAGE_SERVER }
     beats:
-      - key: hyeolma_buhwal                     # 혈마 부활, 금기 의식 진행 (정본)
+      - key: seollip_hoeui                 # 설립 회의 — 정파 vs 보수 세가 · 세가 vs 문파 이권
         at: 0
-        do: { rumor: { 강도: 3, 태그: [괴사, 금기], 망: haomun_net, 문안키: 혈마_부활_의식 } }
-        resolve: "소문 감쇠 — 그러나 전향 사건들이 사실로 만든다 (npc_lifecycle 전향 파이프)"
-      - key: sapa_heupsu                        # 사파 일부 흡수 (정본) — unorthodox 세력의 이탈
+        do: { rumor: { 강도: 3, 태그: [정치], 망: orthodox_net, 문안키: 맹약서를_두고 } }
+        resolve: "회의는 결렬되지 않는다 (정본: 최종적으로 합의된다) — 다만 누가 무엇을 양보했는지가 남는다"
+      - key: maengju_seonchul              # 맹주 선출 — 명성 or 실력 기반
+        at: 8
+        do: { world_event: 맹주선출 }
+        resolve: "선출 해소 = 맹주 확정. ★맹주 진영이 이후 막의 분기 입력이 된다 (endings.inputs)"
+      - key: maeng_changseol               # ★종결박 — 무림맹 결성 (되돌릴 수 없다)
+        at: 12
+        do:
+          rumor: { 강도: 4, 태그: [정치, 무인], 망: orthodox_net, 문안키: 맹이_섰다 }
+          region_delta: { region: cheongha_hyeon, 민심: 5, 치안: 3 }
+        resolve: "결성 확정 — factions.yml murimmaeng.exists_at_alpha=false 가 여기서 참이 아니게 된다"
+    tempo:
+      accel:
+        - { key: "registry:회합_중재_성사", days: -2 }        # ★감속이 아니라 가속의 반대 — 아래 decel 참조
+      decel:
+        - { key: "registry:회합_결렬", days: 3 }
+    heralds:
+      - { rumor: { 강도: 3, 태그: [정치], 망: orthodox_net, 문안키: 각_문파의_사자가_움직인다 }}
+    personal_hooks: [회의_참가, 문파_대표_수행, 맹주_지지]
+
+  # ── story_summary v2 「제3막 — 사도련과의 대립 (정 vs 사)」 ──
+  #   ★세부 미확정 (사용자: "이건 다시 대화를 통해 자세히 설명") — 골격만 세운다.
+  #     박 셋은 정본이 말한 것만 옮겼고, 값(강도·at·델타)은 전부 【제안】이다.
+  sadoryeon_daeripp:
+    name: "제3막 — 사도련과의 대립"
+    order: 3
+    entry: { base_day: 76, gate: auto, requires_beat: murimmaeng_changseol.maeng_changseol }
+    beats:
+      - key: wiseon_ui_myeongbun           # 「정파는 위선이다」 — 사도련의 무력 반격
+        at: 0
+        do:
+          rumor: { 강도: 3, 태그: [사파, 정치], 망: inn_net, 문안키: 위선이라는_말 }
+          region_delta: { region: cheongha_hyeon, 치안: -6 }
+        resolve: "충돌은 지역 델타와 조우로 산다 — 임계 효과(치안<30)가 전장을 만든다"
+      - key: hyeolgyo_spy_chujeok          # 혈교 스파이 추적 — 사도련 안의 진짜 적
         at: 10
         do:
           myeongbun: { issue: "혈교_잠식:hyeolgyo", target: hyeolgyo, tags: [금기, 존망], gauge: 8 }
-          rumor: { 강도: 2, 태그: [사파, 금기], 망: inn_net, 문안키: 수로채의_변절 }
-        resolve: "이탈은 명분 게이지의 일 — 세력별 참여는 faction_politics 연합 계산이 정한다"
-      - key: magyo_giseup                       # 혈교가 마교까지 기습 (정본) — 피해자 명단에 마교가 오른다
-        at: 20
-        do:
-          myeongbun: { issue: "혈교_잠식:hyeolgyo", victims_add: [magyo] }   # 피해_당사자 — 정·마 연합의 화학식
-          rumor: { 강도: 3, 태그: [폭력, 금기, 정치], 망: haomun_net, 문안키: 마교_본단_피습 }
-        resolve: "피해 사실은 원장에 — 연합 참여 계산의 입력이 된다"
-      - key: hyeolgyo_tobeol                    # ★종결박 — 정파+마교 연합군의 혈교 토벌 (정본: 토벌은 확정)
-        at: 30
-        do: { world_event: 토벌전 }               # 사상 초유의 연합 — 연합은 언제나 임시다 (다음 막의 화약)
-        resolve: "토벌 종료 = 혈교 격퇴 (정본). 잔재는 에필로그의 씨앗으로 원장에 남는다"
+          rumor: { 강도: 3, 태그: [괴사, 금기], 망: haomun_net, 문안키: 사도련_안의_피 }
+        resolve: "명분은 감쇠 문법대로 산다 (존망 태그는 4에서 멈춘다 — faction_politics)"
+      - key: bonjin_ui_gil                 # ★종결박 — 토벌이냐 협력이냐 (분기 입력)
+        at: 18
+        do: { world_event: 사도련_본진 }
+        resolve: "해소 = 노선 확정(토벌/협력). ★그 결과가 제4막의 연대 폭을 정한다 (endings.inputs)"
     tempo:
       accel:
-        - { key: "registry:전향_사건_발화", days: 3 }            # NPC 혈교화 (emergent 전향 파이프) — 가장 무거운 가속
-        - { key: "chapter:vanishing_chain.방치", days: 2 }      # 인신공양의 재료가 된다
-        - { key: "registry:금기물_거래", days: 1 }
+        - { key: "registry:살상_사건", days: 1 }
       decel:
-        - { key: "registry:전향_후보_구제", days: -2 }           # 침식 정화 — 사람을 어둠에서 건졌다
-        - { key: "chapter:blood_scent.회수조_격퇴", days: -1 }
-        - { key: "chapter:vanishing_chain.구출", days: -2 }
+        - { key: "registry:정전_중재_성사", days: -3 }
     heralds:
-      - { rumor: { 강도: 2, 태그: [괴사, 금기], 망: mingan_market, 문안키: 피_냄새_괴담 } }
-    personal_hooks: [금기_의식_흔적, 변절자_추적, 연합의_사자]
+      - { rumor: { 강도: 2, 태그: [사파], 망: mingan_market, 문안키: 흑도가_모인다는_말 } }
+    personal_hooks: [진영_선택, 스파이_색출, 전장의_생계]
 
-  # ── story_summary 「클라이맥스 — 삼파전 개전」 ──
-  sampajeon:
-    name: "클라이맥스 — 삼파전 개전"
-    order: 3
-    entry:
-      base_day: 80                              # '최소' 유효일 — 이보다 빨리는 못 온다. 실제 진입은 승인이 정한다
-      gate: human                               # ★ 자동 진입 금지 — 살상 PvP 개방과 맞물린다 (경험 정본 §2)
-      requires_beat: hyeolgyo_busang.hyeolgyo_tobeol
-      approval: { command: /막개전, permission: MANAGE_SERVER }   # settleDay 와 같은 권한 문법
-      # 조건 성숙 시: world_meta 세계막='관문_대기' + events '막관문' append + 관리자 채널 공지.
-      # 승인 전까지 세계는 '개전 전야'에 머문다 — 전조 소문 유지, 박 정지. 이것은 버그가 아니라 설계다:
-      # 살상 개방은 운영 판단(최종장 죽음 처리 규칙 완성 포함 — 보류 중)이 선행해야 하고, 기계는 그 판단을 못 한다.
-    rules_shift:
-      lethal_pvp: open                          # 이 막에서만 — 이전 막은 전부 쓰러짐→의방 회수 (B-111)
-    beats:
-      - key: dongmaeng_bunggoe                  # 혈교 격퇴 이후 마교와의 일시 동맹 붕괴 (정본)
-        at: 0
-        do: { rumor: { 강도: 3, 태그: [정치, 무인], 망: orthodox_net, 문안키: 동맹_파기 } }
-        resolve: "명분 소진 = 연합 해산 — faction_politics 가 이미 아는 자연 귀결"
-      - key: gakji_chungdol                     # 정 vs 마 vs 사 각지 충돌 (정본)
-        at: 5
-        do: { region_delta: { region: cheongha_hyeon, 치안: -10, 경제: -5 } }
-        resolve: "충돌은 지역 델타와 조우 사건으로 산다 — 임계 효과(치안<30 도적 문법)가 전장을 만든다"
-      - key: cheonma_gyeoljeon                  # ★종결박 — 정파 연합 vs 천마교주 결전 (정본)
-        at: 20
-        do: { world_event: 결전 }
-        resolve: "결전 해소 (정본: 정파 연합의 승리 구도) — 에필로그 관문이 열린다"
-    tempo:
-      accel:
-        - { key: "registry:살상_사건", days: 1 }                 # 피가 피를 부른다 — 건당, 막당 1회 dedupe
-      decel:
-        - { key: "registry:정전_중재_성사", days: -3 }            # 명분 중재 — 가장 무거운 감속
-    heralds:
-      - { rumor: { 강도: 3, 태그: [정치], 망: orthodox_net, 문안키: 동맹_균열의_말 } }
-      - { rumor: { 강도: 2, 태그: [무인, 정치], 망: inn_net, 문안키: 낭인들의_피신 } }
-    personal_hooks: [진영_선택, 옛_은원_청산, 전장의_생계]
-
-  # ── story_summary 「에필로그 — 시즌 확장 암시」 ──
-  epilogue:
-    name: "에필로그 — 혼돈의 재"
+  # ── story_summary v2 「제4막 — 무림 연합 탄생 (정사 연대)」 ──
+  #   ★세부 미확정 (제3막과 같은 대화에서 정한다)
+  murim_yeonhap:
+    name: "제4막 — 무림 연합 탄생"
     order: 4
+    entry: { base_day: 100, gate: auto, requires_beat: sadoryeon_daeripp.bonjin_ui_gil }
+    beats:
+      - key: gwageoreul_deopda             # 「공동의 적이 있다면, 과거는 덮을 수 있다」
+        at: 0
+        do: { rumor: { 강도: 4, 태그: [정치, 무인], 망: orthodox_net, 문안키: 손을_잡는다 } }
+        resolve: "연대 성립 — 폭은 제3막 노선이 정한다 (토벌이면 좁고, 협력이면 넓다)"
+      - key: yeonhap_gitbal                # 연합 깃발 — 소속·연합 기술 공유가 열린다
+        at: 6
+        do: { world_event: 연합_결성 }
+        resolve: "해소 = 연합 소속·연합 기술 공유 개방 (기능 신설은 별도 청구서)"
+      - key: hyeolgyo_tteokbap             # ★종결박 — 혈교 암약 떡밥 (제6막의 예고)
+        at: 16
+        do: { rumor: { 강도: 2, 태그: [괴사, 금기], 망: haomun_net, 문안키: 아직_남은_피 } }
+        resolve: "심고 멈춘다 — 제5막의 침공이 이 실을 덮는다 (그리고 제6막이 회수한다)"
+    tempo: {}
+    heralds:
+      - { rumor: { 강도: 3, 태그: [정치], 망: inn_net, 문안키: 원수와_마주_앉는다 } }
+    personal_hooks: [연대_중재, 옛_은원_청산, 연합의_사자]
+
+  # ── story_summary v2 「제5막 — 마교 침공 (강호의 붕괴 직전)」 ──
+  magyo_chimgong:
+    name: "제5막 — 마교 침공"
+    order: 5
     entry:
-      base_day: 0                               # 절대일 없음 — 결전 해소가 유일한 시계
-      gate: human                               # 시즌 마감 = 운영 판단 (다음 시즌 준비·리셋 규칙은 미결)
-      requires_beat: sampajeon.cheonma_gyeoljeon
+      base_day: 124
+      gate: human                          # ★살상 PvP 개방과 맞물린다 (경험 정본 §2 · 옛 sampajeon 승계)
+      requires_beat: murim_yeonhap.hyeolgyo_tteokbap
+      approval: { command: /막개전, permission: MANAGE_SERVER }
+    rules_shift:
+      lethal_pvp: open                     # 이 막부터 — 이전 막은 전부 쓰러짐→의방 회수 (B-111)
+    beats:
+      - key: chimgong_gaesi                # 천마신교의 본격 침공
+        at: 0
+        do:
+          myeongbun: { issue: "마교_침략:magyo", target: magyo, tags: [존망, 무림침해], gauge: 13 }
+          rumor: { 강도: 4, 태그: [정치, 무인], 망: orthodox_net, 문안키: 침공_개시 }
+        resolve: "명분은 감쇠 문법대로 산다 (존망 태그는 4에서 멈춘다)"
+      - key: gonryun_goryp                 # 곤륜파 고립 · 서역 붕괴
+        at: 8
+        do:
+          rumor: { 강도: 4, 태그: [괴사, 정치], 망: sangdan_net, 문안키: 서역이_끊겼다 }
+          region_delta: { region: cheongha_hyeon, 경제: -8 }
+        resolve: "상로가 끊긴 값은 경제로 산다 — 회복 문법대로"
+      - key: daejeon_gyeolgwa               # ★종결박 — 승패가 **정본이 정하지 않는다**
+        at: 20
+        do: { world_event: 마교_대전 }
+        resolve: "★해소가 승패를 남긴다 (유저 전투 결과·퀘스트 진행률). 옛 정본의 '격퇴 확정'은 폐기됐다 —
+          이 결과가 endings.inputs.마교_승패 로 들어간다"
+    tempo:
+      accel:
+        - { key: "registry:살상_사건", days: 1 }
+        - { key: "region:민심_35_미만_7일", days: 1 }
+      decel:
+        - { key: "registry:정전_중재_성사", days: -3 }
+    heralds:
+      - { rumor: { 강도: 4, 태그: [정치, 괴사], 망: orthodox_net, 문안키: 서쪽_하늘의_먼지 } }
+    personal_hooks: [참전, 피난민_구호, 전장의_생계]
+
+  # ── story_summary v2 「제6막 — 혈교 실체 등장 (모두의 적)」 ──
+  hyeolgyo_siltche:
+    name: "제6막 — 혈교 실체 등장"
+    order: 6
+    entry:
+      base_day: 0                          # 절대일 없음 — 대전 해소가 유일한 시계
+      gate: human
+      requires_beat: magyo_chimgong.daejeon_gyeolgwa
       approval: { command: /막개전, permission: MANAGE_SERVER }
     beats:
-      - key: janjae_amryak                      # 혈마 잔재·마교 권력 공백 → 새로운 암약 (정본 — 다음 시즌의 씨앗)
+      - key: bonsaek                       # 혈교가 본색을 드러낸다 — 사도련·정파·마교조차 공격
         at: 0
-        do: { rumor: { 강도: 2, 태그: [괴사, 정치], 망: haomun_net, 문안키: 재_속의_불씨 } }
-        resolve: "심고 멈춘다 — 다음 시즌(패왕·역천)은 이 등록부의 다음 판이다"
-    tempo: {}                                   # 끝난 이야기는 밀리지 않는다
-    heralds: []
-    personal_hooks: [전후의_삶, 공백의_기회]
+        do:
+          myeongbun: { issue: "혈교_전면:hyeolgyo", target: hyeolgyo, tags: [금기, 존망], gauge: 13,
+                       victims_add: [magyo] }
+          rumor: { 강도: 5, 태그: [괴사, 금기], 망: haomun_net, 문안키: 모두의_적 }
+        resolve: "★victims_add: magyo — 마교가 피해자 명단에 오른다. 진영 무관 협동의 근거"
+      - key: gangsi_budae                  # 강시 부대 · 피의식 · 인신공양
+        at: 6
+        do:
+          rumor: { 강도: 5, 태그: [괴사, 금기], 망: mingan_market, 문안키: 죽은_자가_걷는다 }
+          region_delta: { region: cheongha_hyeon, 민심: -10, 치안: -8 }
+        resolve: "강시는 npc_lifecycle·npc_combat 신설 대상 (별도 청구서) — 여기서는 세계 반응만"
+      - key: jeonmyeonjeon                 # ★종결박 — 정/사/마 전면 협동 → 엔딩 분기
+        at: 18
+        do: { world_event: 혈교_전면전 }
+        resolve: "★해소가 엔딩을 정한다 — endings 절이 그 판정을 적어 뒀다 (선형 다음 막이 없다)"
+    tempo:
+      accel:
+        - { key: "registry:살상_사건", days: 1 }
+      decel:
+        - { key: "registry:정전_중재_성사", days: -3 }
+    heralds:
+      - { rumor: { 강도: 4, 태그: [금기, 괴사], 망: inn_net, 문안키: 피비린내가_가까이 } }
+    personal_hooks: [진영_무관_협동, 강시_토벌, 잃은_것_찾기]
+
+# ═══════════════════════════════════════════════════════════════════
+# 엔딩 분기 — ★문법 신설 (사용자 확정 2026-07-26 「ㄹ 분기 문법 늘리기 신설」)
+# ═══════════════════════════════════════════════════════════════════
+#
+# ─── 왜 acts 로는 안 되는가 ───
+# acts 는 **선형**이다: order 0..N-1 연속 + requires_beat 로 직전 막의 박을 문다
+# (world_clock_audit ① 이 그 두 가지를 강제한다). 엔딩은 넷이 **동시에 후보**이고
+# 하나만 실현된다 — order 를 줄 수 없다. 그래서 막이 아니라 **별도 절**이다.
+#
+# ─── 원칙 ───
+#  ① 엔딩은 막이 아니다. 마지막 막(hyeolgyo_siltche)의 **종결박이 해소되는 순간** 판정된다.
+#  ② 판정 입력은 **이미 세계에 있는 것만** 쓴다 — 새 통화를 발명하지 않는다
+#     (world_clock 머리 원칙 그대로: 신규 통화 발명 없음).
+#  ③ **정확히 하나가 뽑힌다**: priority 낮은 수부터 검사하고 첫 성립을 취한다.
+#     마지막 것은 조건이 없다(fallback) — 그래서 '아무 엔딩도 없는 세계'가 불가능하다.
+#  ④ 수치는 노출 금지 (visibility 총원칙) — 엔딩 이름조차 소문·연출로만 드러난다.
+#  ⑤ ★비정규(D)는 **개인**의 엔딩이다. 세계 엔딩과 **동시에 성립할 수 있다** —
+#     그래서 scope 로 갈랐다: 세계(world) 하나 + 개인(personal) 별개.
+#
+endings:
+  meta:
+    decided_at: hyeolgyo_siltche.jeonmyeonjeon   # 이 박의 해소가 판정 시점
+    state_key: 세계엔딩                            # world_meta 키 — 한 번 적히면 되돌리지 않는다
+    event_type: 막엔딩                             # events 원장 append 타입 (되돌림 불가의 흔적)
+    exactly_one: world                            # scope=world 는 정확히 하나 (fallback 이 보장한다)
+    visibility: "엔딩 id·판정 입력 전부 내부 상태 — 노출 금지. 드러나는 것은 연출과 소문뿐"
+
+  # 판정 입력 — ★전부 기존 축에서 읽는다 (발명 없음)
+  inputs:
+    마교_승패:
+      from: "magyo_chimgong.daejeon_gyeolgwa 의 해소 결과"
+      values: [격퇴, 패배]                        # 옛 정본의 '격퇴 확정'은 폐기됐다 (유저 결과가 정한다)
+    연대_폭:
+      from: "sadoryeon_daeripp.bonjin_ui_gil 의 노선 (토벌/협력)"
+      values: [좁다, 넓다]
+    맹주_진영:
+      from: "murimmaeng_changseol.maengju_seonchul 의 해소 결과"
+      values: [미정]                              # ★후보 목록 미확정 (무림맹 미결 문답과 같은 대화에서)
+    혈교_명분:
+      from: "faction_politics 명분 게이지 (혈교_전면:hyeolgyo)"
+      note: "존망 태그는 4에서 멈춘다 — 게이지는 '전면전에 누가 나왔는가'의 대리값이다"
+
+  world:
+    - id: jeongpa_seungri
+      priority: 1
+      name: "A. 정파 승리"
+      when: { 마교_승패: 격퇴, 혈교_명분: 성립 }
+      outcome: "무림맹이 주도한 무림연합이 혈교를 **봉인**한다. 질서 확립·강호 안정"
+      do:
+        rumor: { 강도: 5, 태그: [정치, 무인], 망: orthodox_net, 문안키: 봉인의_날 }
+        region_delta: { region: cheongha_hyeon, 민심: 12, 치안: 10 }
+
+    - id: magyo_honran
+      priority: 2
+      name: "B. 마교 중심 혼란"
+      when: { 마교_승패: 패배 }
+      outcome: "마교가 일시 승리한 뒤 혈교와 부딪친다. 무림은 폐허 — 일부 세가·문파가 암흑화한다"
+      do:
+        rumor: { 강도: 5, 태그: [괴사, 정치], 망: inn_net, 문안키: 폐허의_강호 }
+        region_delta: { region: cheongha_hyeon, 민심: -15, 치안: -12, 경제: -10 }
+
+    - id: hyeolgyo_amyak
+      priority: 3
+      name: "C. 혈교 암약"
+      when: {}                                   # ★fallback — 조건 없음 (그래서 엔딩 없는 세계가 없다)
+      outcome: "혈교 잔재가 다시 어둠으로 숨는다. 평온해지지만 **공포는 사라지지 않는다**"
+      do:
+        rumor: { 강도: 3, 태그: [괴사, 금기], 망: haomun_net, 문안키: 재_속의_불씨 }
+      note: "★옛 에필로그(혼돈의 재)가 여기로 흡수됐다 — 다음 시즌의 씨앗은 이 엔딩이 심는다"
+
+  personal:
+    - id: munpa_route
+      name: "D. 개별 문파 엔딩 (비정규)"
+      scope: personal                            # ★세계 엔딩과 동시에 성립한다 (배타 아님)
+      when: { 조건: 미정 }                        # ★지어내지 않는다 — 은거·혈화·선경의 조건은 미결
+      outcome: "자기 문파 루트의 끝 (은거·혈화·선경 등)"
+      note: "★미결: 조건·문파별 갈래·개인 엔딩이 세계 엔딩 연출을 덮는가.
+        cultivation/sect_life 축과 함께 정할 일이다"
+
+  # ★미배선 (정직한 기록): 이 절을 읽는 코드는 아직 없다.
+  #   WorldClockEngine 은 '마지막 막이면 return' 으로 끝난다 (시즌 마감은 사람의 일).
+  #   엔딩 판정을 코드로 옮기는 것은 별도 청구서다 — 지금은 **등록부가 먼저 선다**
+  #   (이 파일의 다른 절들도 그 순서로 살았다: tempo 는 아직 입력이 미배선이다).
+  wiring_status: 미배선

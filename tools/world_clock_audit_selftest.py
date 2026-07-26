@@ -41,9 +41,9 @@ MUTATIONS = [
 
     # ══ ① 막 사슬 — requires_beat 이 유령 박을 가리킨다 ══
     ("requires_beat 을 유령 박으로 바꾼다", YML,
-     "requires_beat: magyo_amryu.ilcha_chimryak_gyeoktoe",
-     "requires_beat: magyo_amryu.eopneun_bak",
-     "직전 막(magyo_amryu)의 실존 박이 아니다"),
+     "requires_beat: murimmaeng_changseol.maeng_changseol",
+     "requires_beat: murimmaeng_changseol.eopneun_bak",
+     "직전 막(murimmaeng_changseol)의 실존 박이 아니다"),
 
     ("막 order 를 찢는다 (0~4 연속이 아니게)", YML,
      "    order: 2",
@@ -51,18 +51,18 @@ MUTATIONS = [
      "연속이 아니다"),
 
     ("human gate 를 미등록 값으로 바꾼다", YML,
-     "      gate: human                               # ★ 자동 진입 금지",
+     "      gate: human                          # ★세계의 구조가 바뀐다",
      "      gate: maybe                               # ★ 자동 진입 금지",
      "등록되지 않은 gate"),
 
     ("등록되지 않은 do 유형을 심는다", YML,
-     "        do: { world_event: 방어전 }",
+     "        do: { world_event: 맹주선출 }",
      "        do: { boss_spawn: 방어전 }",
      "등록되지 않은 do 유형"),
 
     # ══ ② 이웃 등록부 — 이름을 지어낸다 ══
     ("소문 망을 유령 망으로 바꾼다", YML,
-     "do: { rumor: { 강도: 2, 태그: [괴사, 정치], 망: inn_net, 문안키: 마교_부활_조짐 } }",
+     "do: { rumor: { 강도: 3, 태그: [사파, 정치], 망: inn_net, 문안키: 사도련의_자칭 } }",
      "do: { rumor: { 강도: 2, 태그: [괴사, 정치], 망: ghost_net, 문안키: 마교_부활_조짐 } }",
      "rumor.yml 에 없는 망"),
 
@@ -72,7 +72,7 @@ MUTATIONS = [
      "roster 에 없다"),
 
     ("지역 델타에 유령 눈금을 심는다", YML,
-     "region_delta: { region: cheongha_hyeon, 민심: -3 }",
+     "region_delta: { region: cheongha_hyeon, 민심: -2 }",
      "region_delta: { region: cheongha_hyeon, 사기: -3 }",
      "없는 눈금"),
 
@@ -106,6 +106,43 @@ MUTATIONS = [
      'static final String EVENT_GATE = "막관문";',
      'static final String EVENT_GATE = "막문관";',
      "'막관문'"),
+    # ══ ★ ⑤ 엔딩 분기 (2026-07-26 신설) ══
+    # ★핵심: fallback 을 지우면 '아무 엔딩도 없는 세계'가 가능해진다
+    ("★ fallback 엔딩에 조건을 붙인다 (엔딩 없는 세계가 가능해진다)", YML,
+     '      when: {}                                   # ★fallback',
+     '      when: { 마교_승패: 격퇴 }                    # ★fallback',
+     "fallback)이 정확히 하나가 아니다"),
+
+    # ★fallback 을 맨 앞으로 올리면 조건부 엔딩이 영영 안 뽑힌다
+    ("★ fallback 의 우선순위를 1로 올린다 (앞의 엔딩이 전부 사문화)", YML,
+     "    - id: hyeolgyo_amyak\n      priority: 3",
+     "    - id: hyeolgyo_amyak\n      priority: 1",
+     "priority 가 1부터 연속이 아니다"),
+
+    # ★판정 시점이 실존하지 않는 박을 가리킨다
+    ("★ 엔딩 판정 시점을 없는 박으로 돌린다", YML,
+     "    decided_at: hyeolgyo_siltche.jeonmyeonjeon",
+     "    decided_at: hyeolgyo_siltche.___없는박___",
+     "마지막 막"),
+
+    # ★개인 엔딩의 scope 를 지우면 세계 엔딩과 배타로 오해된다
+    ("★ 개인 엔딩의 scope 를 world 로 바꾼다 (동시 성립이 깨진다)", YML,
+     "      scope: personal                            # ★세계 엔딩과 동시에 성립한다",
+     "      scope: world                               # ★세계 엔딩과 동시에 성립한다",
+     "scope 가 'personal' 이 아니다"),
+
+    # ★엔딩의 소문 망을 없는 것으로
+    ("★ 엔딩 소문의 망을 없는 것으로 바꾼다", YML,
+     "        rumor: { 강도: 5, 태그: [정치, 무인], 망: orthodox_net, 문안키: 봉인의_날 }",
+     "        rumor: { 강도: 5, 태그: [정치, 무인], 망: ___없는망___, 문안키: 봉인의_날 }",
+     "rumor.yml 에 없는 망"),
+
+    # ★endings 절 자체를 지운다 — 정본이 4분기를 말하는데 등록부가 침묵하면 위반
+    ("★ endings 절을 통째로 지운다 (정본은 4분기를 말한다)", YML,
+     "endings:\n  meta:",
+     "endings_DISABLED:\n  meta:",
+     "endings 절이 없다"),
+
 ]
 
 
