@@ -766,7 +766,9 @@ def lint_faction_coverage(cfg, rep):
     arts = dig(cfg, "skills.yml", "martial_arts", default={}) or {}
     sims = dig(cfg, "simbeop.yml", "simbeop", default={}) or {}
     groups = dig(cfg, "factions.yml", "faction_groups", default={}) or {}
-    routes = cfg.get("faction_entry_routes.yml", {}) or {}
+    # ★`routes` 절로 파고든다 — 파일 전체를 넘기면 최상단 키가 meta·routes 라서
+    #   루트가 하나도 안 잡힌다 (실제로 「입문 경로 0곳」이 나왔다)
+    routes = dig(cfg, "faction_entry_routes.yml", "routes", default={}) or {}
 
     # ① factions.yml 에서 1급 세력 id 를 걷는다 (name 을 가진 dict — 명단(sects/clans)은 로스터라 뺀다)
     known = {}
@@ -795,24 +797,35 @@ def lint_faction_coverage(cfg, rep):
     by_name = {v: k for k, v in known.items() if isinstance(v, str)}
     entry = set()
 
-    def touch(x):
-        if isinstance(x, str):
-            if x in known:
-                entry.add(x)
-            elif x in by_name:
-                entry.add(by_name[x])
+    def resolve(x):
+        if not isinstance(x, str):
+            return None                      # dict/list 는 이름이 아니다 (unhashable — in known 이 터진다)
+        return x if x in known else by_name.get(x)
 
-    def collect(node):
-        if isinstance(node, dict):
-            for k, v in node.items():
-                touch(k)
-                touch(v)
-                collect(v)
-        elif isinstance(node, list):
-            for x in node:
-                touch(x)
-                collect(x)
-    collect(routes)
+    # ★★입문이 **닫힌** 루트는 문이 아니다 (2026-07-26 사용자 확정: 새외 입문 폐쇄).
+    #   `player_entry: false` 가 달린 절 안에서 가리키는 세력은 entry 로 세지 않고 npc_only 로 센다.
+    #   이 구분이 없으면 눈이 **유보를 백지로 착각해** 있지도 않은 약속을 어겼다고 보고한다.
+    npc_only = set()
+
+    #   ★폐쇄는 **그 절의 제 세력에만** 적용한다 — 하위로 전파하면 안 된다.
+    #     첫 판이 그렇게 했다가, 새외 절의 주석이 언급한 소림·무당·모용까지 「NPC 전용」으로 셌다
+    #     (「★화산 5일 · 당가 26일」 같은 대조 문장과 trigger 의 남의 세력 참조가 전부 걸렸다).
+    #     한 줄: **닫힌 문이 닫는 것은 그 문뿐이다.**
+    #   ★판정의 정밀화 (2026-07-26, 세 판을 거쳐 여기 왔다):
+    #     세는 것은 **루트가 제 `faction:` 으로 지목한 세력**뿐이다. 등록부 안의 느슨한 언급은
+    #     문이 아니다 — trigger 의 남의 세력 참조나 「★화산 5일 · 당가 26일」 같은 대조 문장까지
+    #     세면 상단·소림처럼 **제 루트가 없는 세력이 입문 가능으로 부풀어 오른다** (실제로 그랬다:
+    #     루트는 16개인데 눈은 22곳을 셌다). 그리고 반대로 폐쇄를 npc_only 에까지 전파하면
+    #     주석이 언급한 소림·무당·모용이 유보로 잡힌다 (그 판도 겪었다).
+    #     한 줄: **문의 이름은 그 문에만 적혀 있다.**
+    for _rid, _r in routes.items():
+        if not isinstance(_r, dict):
+            continue
+        own = resolve(_r.get("faction"))
+        if not own:
+            continue                             # saeoe_common 은 kind:공통_규칙 — 제 세력이 없다
+        (npc_only if _r.get("player_entry") is False else entry).add(own)
+    # saeoe_common 은 kind:공통_규칙 이라 제 faction 이 없다 — applies_to 가 가리키는 루트들이 제 몫을 한다
 
     n_art, n_sim = {}, {}
     for v in arts.values():
@@ -822,11 +835,38 @@ def lint_faction_coverage(cfg, rep):
         if isinstance(v, dict):
             n_sim[v.get("faction")] = n_sim.get(v.get("faction"), 0) + 1
 
-    sects = {k: v for k, v in known.items() if k not in FACTION_CONTAINERS}
-    rep.say(f"     factions.yml 1급 id {len(known)}종 (컨테이너 {len(known) - len(sects)} 제외 → "
+    # ★「무공을 갖지 않는 것이 의도」인 세력 — 기구(무림맹)처럼 제 무학이 없는 주체.
+    #   컨테이너와 다르다: 컨테이너는 **주체가 아니어서** 없고, 기구는 **주체이지만** 없다.
+    #   등록부가 no_arts_by_design 으로 말해 준다 (코드가 이름을 외우지 않는다).
+    by_design = set()
+
+    def scan_design(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, dict):
+                    if v.get("no_arts_by_design") is True and k in known:
+                        by_design.add(k)
+                    scan_design(v)
+                elif isinstance(v, list):
+                    scan_design(v)
+        elif isinstance(node, list):
+            for x in node:
+                scan_design(x)
+    scan_design(groups)
+
+    sects = {k: v for k, v in known.items()
+             if k not in FACTION_CONTAINERS and k not in by_design}
+    rep.say(f"     factions.yml 1급 id {len(known)}종 "
+            f"(컨테이너 {len(FACTION_CONTAINERS)} · 무공없음이_의도 {len(by_design)} 제외 → "
             f"세력 {len(sects)}) · 입문 경로가 가리키는 세력 {len(entry & set(sects))}")
+    if by_design:
+        rep.ok("무공 0 이 **의도**인 세력 — "
+               + ", ".join(f"{known[f]}({f})" for f in sorted(by_design))
+               + " : 기구는 제 무학을 갖지 않는다 (등록부 no_arts_by_design). "
+                 "★컨테이너와 다르다 — 컨테이너는 주체가 아니어서 없고, 이쪽은 주체인데 없다")
     rep.say("")
 
+    npc_only -= entry            # 한 세력이 양쪽에 걸리면 **열린 문이 이긴다** (약속이 먼저다)
     open_blank = sorted(f for f in sects if f in entry and n_art.get(f, 0) == 0)
     open_thin = sorted(f for f in sects if f in entry and 0 < n_art.get(f, 0) <= 2)
     closed_blank = sorted(f for f in sects if f not in entry and n_art.get(f, 0) == 0
@@ -853,6 +893,14 @@ def lint_faction_coverage(cfg, rep):
     if closed_blank:
         rep.say(f"     입문 경로 없이 백지 {len(closed_blank)}곳 (위반 아님 — 아직 문이 없다): "
                 f"{', '.join(known[f] for f in closed_blank)}")
+
+    # ★NPC 전용 — 유보를 백지로 착각하지 않기 위한 별도 칸 (경고가 아니다: 약속을 안 했으니 어기지도 않았다)
+    if npc_only:
+        deferred = sorted(f for f in npc_only if f in sects)
+        if deferred:
+            rep.ok(f"NPC 전용(입문 폐쇄) {len(deferred)}곳 — 무공 0 은 구멍이 아니라 **유보**다: "
+                   + ", ".join(f"{known[f]}(무공{n_art.get(f, 0)})" for f in deferred)
+                   + " · 거취는 npc_combat 축 (faction_entry_routes player_entry:false)")
 
     # ③ 컨테이너에 무공이 붙어 있으면 그것은 오분류다 (연합은 무공을 갖지 않는다)
     #   ★위반이 아니라 경고다 — 컨테이너에 붙은 무공도 **굴러간다** (사파 계열 반응이 그대로 걸린다).
@@ -2411,15 +2459,15 @@ def selftest():
         probe(name, ok, f"위반 {len(fv_base)}→{len(v)} · 경고 {len(fw_base)}→{len(w)}")
 
     # ⑲ 어떤 세력의 무공을 전부 지우면 「배울 것이 없다」 목록에 그 이름이 뜬다
-    #    ★대상은 **입문 경로가 있는** 세력이어야 한다 — 이 눈의 축이 「무공 0」이 아니라
-    #      「문이 열렸는데 무공 0」이기 때문이다. 첫 판은 개방을 골라 실패했다:
-    #      개방에는 입문 경로가 없다 (구파일방인데 — 그 사실 자체가 이 프로브가 알려 준 것이다)
-    def strip_sorim(c):
+    #    ★대상은 **제 입문 루트가 있는** 세력이어야 한다 — 이 눈의 축이 「무공 0」이 아니라
+    #      「문이 열렸는데 무공 0」이기 때문이다. 이 프로브가 두 번 실패하며 알려 준 것:
+    #      개방에도 **소림에도** 입문 경로가 없다. 루트는 16개뿐이고 정파는 **화산·당가 둘**이다
+    def strip_hwasan(c):
         a = dig(c, "skills.yml", "martial_arts", default={})
-        for k in [k for k, v in a.items() if isinstance(v, dict) and v.get("faction") == "sorimsa"]:
+        for k in [k for k, v in a.items() if isinstance(v, dict) and v.get("faction") == "hwasan"]:
             del a[k]
-    fac_probe("⑲ 소림 무공 전부 삭제 → 백지 목록에 소림이 뜬다 (입문 경로가 있는 세력)",
-              strip_sorim, "sorimsa")
+    fac_probe("⑲ 화산 무공 전부 삭제 → 백지 목록에 화산이 뜬다 (제 루트가 있는 세력)",
+              strip_hwasan, "hwasan")
 
     # ⑳ ★묘비 — 등록부는 세력을 **한글 이름으로도** 가리킨다 (magyo_encroachment 의 `faction: 마교`).
     #    id 만 보던 첫 판은 마교를 놓쳐 「9곳」이라 답했다. 이름 대조가 죽으면 다시 놓친다.
@@ -2427,6 +2475,54 @@ def selftest():
     probe("⑳ 묘비: 입문 경로의 한글 이름 대조 — 마교가 백지 목록에 있다",
           any("magyo" in x for x in fw_base),
           "faction: 마교 (id 아님) 로 적힌 경로를 읽는가")
+
+    # ⑳-2 ★입문 폐쇄(player_entry:false)를 열면 그 세력이 「배울 것이 없다」로 넘어온다
+    #      — 폐쇄가 실제로 판정을 바꾸는지 (플래그가 장식이 아닌지) 재는 프로브
+    def reopen_saeoe(c):
+        r = dig(c, "faction_entry_routes.yml", "routes", default={})
+        # ★milgyo_entry 만 열면 된다 — saeoe_common 은 kind:공통_규칙 이라 제 faction 이 없어서
+        #   판정에 직접 참여하지 않는다 (그 절의 폐쇄 표시는 사람이 읽는 헌장이다)
+        if isinstance(r.get("milgyo_entry"), dict):
+            r["milgyo_entry"].pop("player_entry", None)
+    fac_probe("⑳-2 새외 입문 폐쇄를 풀면 → 설역 밀교가 「배울 것 없다」로 넘어온다",
+              reopen_saeoe, "seolyeok_milgyo")
+
+    # ⑳-3 ★묘비 — 유보 칸이 새외 **여섯 전부**를 담는가 (기준선 단언).
+    #      폐쇄를 하위로 전파하지 않으면 `gates[].condition.favor.faction` 이 그 세력을 다시
+    #      열린 문으로 올린다 — 실제로 그렇게 새어 여섯 중 다섯이 잘못 셌다. 반대로 전파를
+    #      npc_only 까지 밀면 주석이 언급한 소림·무당·모용이 유보로 잡힌다 (그 판도 실제로 겪었다).
+    #      ★그래서 이 프로브는 **여섯이 다 있고 남이 없는지**를 함께 본다
+    _rep = Report()
+    lint_faction_coverage(fresh(), _rep)
+    _npc_line = " ".join(l for l in _rep.lines if "NPC 전용" in l)
+    probe("⑳-3 묘비: 유보 칸 = 새외 6곳 정확히 (다 있고, 남이 없다)",
+          all(w in _npc_line for w in ("배화신교", "북막", "동영", "오독교", "설역 밀교", "서역 상맹"))
+          and not any(w in _npc_line for w in ("소림", "무당", "모용", "곤륜", "해남")),
+          _npc_line[:80] or "NPC 전용 줄이 없다")
+
+    # ⑳-4 ★「무공 0 이 의도」 표시가 실제로 판정을 바꾸는가 (장식이 아닌지).
+    #      표시를 지우면 무림맹이 세력 수에 다시 들어오고, 문이 열리면 거짓 경고가 시작된다
+    def strip_design(c):
+        g = dig(c, "factions.yml", "faction_groups", default={})
+
+        def walk(n):
+            if isinstance(n, dict):
+                n.pop("no_arts_by_design", None)
+                for v in n.values():
+                    walk(v)
+            elif isinstance(n, list):
+                for x in n:
+                    walk(x)
+        walk(g)
+    _r0, _r1 = Report(), Report()
+    lint_faction_coverage(fresh(), _r0)
+    lint_faction_coverage(fresh(strip_design), _r1)
+    _base_n = " ".join(l for l in _r0.lines if "1급 id" in l)
+    _mut_n = " ".join(l for l in _r1.lines if "1급 id" in l)
+    probe("⑳-4 「무공 0 이 의도」 표시를 지우면 → 세력 수가 늘어난다 (표시가 판정을 바꾼다)",
+          "무공없음이_의도 1" in _base_n and "무공없음이_의도 0" in _mut_n
+          and "세력 36" in _base_n and "세력 37" in _mut_n,
+          f"기준선 「{_base_n.strip()[:44]}」")
 
     # ㉑ 컨테이너에 무공을 붙이면 오분류로 잡는가
     fac_probe("㉑ 연합(구파일방)에 무공을 붙이면 → 컨테이너 오분류 경고",
