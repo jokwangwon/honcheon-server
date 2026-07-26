@@ -2519,10 +2519,17 @@ def selftest():
     lint_faction_coverage(fresh(strip_design), _r1)
     _base_n = " ".join(l for l in _r0.lines if "1급 id" in l)
     _mut_n = " ".join(l for l in _r1.lines if "1급 id" in l)
-    probe("⑳-4 「무공 0 이 의도」 표시를 지우면 → 세력 수가 늘어난다 (표시가 판정을 바꾼다)",
-          "무공없음이_의도 1" in _base_n and "무공없음이_의도 0" in _mut_n
-          and "세력 36" in _base_n and "세력 37" in _mut_n,
-          f"기준선 「{_base_n.strip()[:44]}」")
+    # ★숫자를 박지 않는다 — 첫 판은 "무공없음이_의도 1"·"세력 36" 을 문자로 박았다가
+    #   사도련이 등재되자(1→2) 깨졌다. **상대 비교**만 한다: 표시가 지워지면 의도는 0 이 되고
+    #   세력 수는 그만큼 늘어난다. 이 관계는 등재가 몇 개 늘어도 참이다
+    def _nums(line):
+        m = re.search(r"무공없음이_의도 (\d+).*?세력 (\d+)", line)
+        return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+    _bd, _bs = _nums(_base_n)
+    _md, _ms = _nums(_mut_n)
+    probe("⑳-4 「무공 0 이 의도」 표시를 지우면 → 그만큼 세력 수가 늘어난다 (표시가 판정을 바꾼다)",
+          None not in (_bd, _bs, _md, _ms) and _bd > 0 and _md == 0 and _ms == _bs + _bd,
+          f"의도 {_bd}→{_md} · 세력 {_bs}→{_ms}")
 
     # ㉑ 컨테이너에 무공을 붙이면 오분류로 잡는가
     fac_probe("㉑ 연합(구파일방)에 무공을 붙이면 → 컨테이너 오분류 경고",
