@@ -859,9 +859,11 @@ martial_arts:
     name: "음풍검"
     category: "검법"
     weapon_class: 검   # 무기 계열 — combat.yml weapon_power 등록 키 (config가 정본. 코드가 앞서지 않는다)
-    sub_category: "쾌검 (변초)"
+    sub_category: "쾌검 (변초 — 낭인의 검: 계보가 없다)"
     grade: "이류"
-    faction: unorthodox
+    tier: 하급                       # ★tier 기재 (2026-07-26)
+    faction: nanginhoe               # ← unorthodox(컨테이너)에서 옮겼다. 눈이 잡고 자료가 답했다:
+                                     #   「어느 문파도 아닌 무공」의 자리는 **낭인회**다 (factions.yml)
     required_realm: "이류"
     required_stats: { 민첩: 4 }
     required_mastery: 0
