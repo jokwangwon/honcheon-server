@@ -379,6 +379,7 @@ def lint(cfg, rep):
     rep.say("═" * 72)
     lint_skill_refs(cfg, rep)
     lint_ladder_chain(cfg, rep)
+    lint_faction_coverage(cfg, rep)
     lint_qi_gates(cfg, rep)
     lint_energy_budget(cfg, rep)
     lint_action_data(cfg, rep)
@@ -741,6 +742,138 @@ def lint_ladder_chain(cfg, rep):
     if cross_cat:
         rep.say(f"     계열을 넘는 선행 {len(cross_cat)}건 (위반 아님 — 의도일 수 있다): "
                 f"{', '.join(cross_cat[:6])}{' …' if len(cross_cat) > 6 else ''}")
+
+
+# ★컨테이너 id — 무공을 가질 주체가 아니다 (연합·계열·계보). factions.yml 이 그렇게 적어 뒀다:
+#   불가는 "문파가 아니라 계보다" · 구파일방/오대세가는 members 를 가진 연합 · 나머지는 분류축.
+#   이들을 세력으로 세면 「백지 세력」이 열 곳쯤 늘어난다 — 있지도 않은 구멍이다.
+FACTION_CONTAINERS = {
+    "orthodox", "unorthodox", "saeoe", "civilian", "authority", "forbidden",
+    "gupailbang", "odaesega", "orthodox_heroes", "bulga",
+}
+
+
+def lint_faction_coverage(cfg, rep):
+    """세력 백지 지도 — **들어갈 수는 있는데 배울 것이 없는 세력**을 잰다 (B-188 닫는 조건 ④).
+
+    ★이 눈이 재는 것은 무공의 값이 아니라 **약속**이다: 입문 경로(faction_entry_routes)가
+    있다는 것은 세계가 "여기 들어올 수 있다"고 말한 것이다. 들어갔는데 배울 것이 없으면
+    그 약속이 거짓말이 된다. 그래서 판정의 축은 「무공 0」이 아니라 「문이 열렸는데 무공 0」이다.
+
+    장부(B-188)의 백지 지도는 손으로 센 것이라 낡는다 — 이 눈이 그 표를 대신 센다.
+    """
+    rep.head("세력 백지 지도 — 문이 열렸는데 배울 것이 있는가")
+    arts = dig(cfg, "skills.yml", "martial_arts", default={}) or {}
+    sims = dig(cfg, "simbeop.yml", "simbeop", default={}) or {}
+    groups = dig(cfg, "factions.yml", "faction_groups", default={}) or {}
+    routes = cfg.get("faction_entry_routes.yml", {}) or {}
+
+    # ① factions.yml 에서 1급 세력 id 를 걷는다 (name 을 가진 dict — 명단(sects/clans)은 로스터라 뺀다)
+    known = {}
+
+    def walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, dict) and "name" in v and k not in ("sects", "clans", "members"):
+                    known[k] = v.get("name")
+                    walk(v)
+                elif isinstance(v, (dict, list)):
+                    walk(v)
+        elif isinstance(node, list):
+            for x in node:
+                walk(x)
+    walk(groups)
+
+    if not known:
+        rep.fail("factions.yml faction_groups 에서 세력 id 를 하나도 못 걷었다 — "
+                 "★빈 등록부에 '백지 없음'을 내주면 그것이 곧 눈의 거짓말이다")
+        return
+
+    # ② 입문 경로가 가리키는 세력 (등록부를 문자열이 아니라 **키·값 전수**로 훑는다)
+    #   ★등록부는 세력을 id 로도, **한글 이름으로도** 가리킨다
+    #   (magyo_encroachment 의 `faction: 마교` — id 만 보던 눈은 마교를 놓쳤다. 2026-07-26 교정).
+    by_name = {v: k for k, v in known.items() if isinstance(v, str)}
+    entry = set()
+
+    def touch(x):
+        if isinstance(x, str):
+            if x in known:
+                entry.add(x)
+            elif x in by_name:
+                entry.add(by_name[x])
+
+    def collect(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                touch(k)
+                touch(v)
+                collect(v)
+        elif isinstance(node, list):
+            for x in node:
+                touch(x)
+                collect(x)
+    collect(routes)
+
+    n_art, n_sim = {}, {}
+    for v in arts.values():
+        if isinstance(v, dict):
+            n_art[v.get("faction")] = n_art.get(v.get("faction"), 0) + 1
+    for v in sims.values():
+        if isinstance(v, dict):
+            n_sim[v.get("faction")] = n_sim.get(v.get("faction"), 0) + 1
+
+    sects = {k: v for k, v in known.items() if k not in FACTION_CONTAINERS}
+    rep.say(f"     factions.yml 1급 id {len(known)}종 (컨테이너 {len(known) - len(sects)} 제외 → "
+            f"세력 {len(sects)}) · 입문 경로가 가리키는 세력 {len(entry & set(sects))}")
+    rep.say("")
+
+    open_blank = sorted(f for f in sects if f in entry and n_art.get(f, 0) == 0)
+    open_thin = sorted(f for f in sects if f in entry and 0 < n_art.get(f, 0) <= 2)
+    closed_blank = sorted(f for f in sects if f not in entry and n_art.get(f, 0) == 0
+                          and n_sim.get(f, 0) == 0)
+
+    def label(f):
+        n, m = n_art.get(f, 0), n_sim.get(f, 0)
+        return f"{known[f]}({f} 무공{n}·심법{m})"
+
+    if open_blank:
+        rep.warn(f"★들어갈 수는 있는데 배울 것이 없다 — {len(open_blank)}곳: "
+                 f"{', '.join(label(f) for f in open_blank)} "
+                 f"— 입문 경로가 있다는 것은 세계가 '들어올 수 있다'고 한 약속이다 "
+                 f"(B-188 닫는 조건 ④ · 채움 순서 ⑤~⑨)")
+    else:
+        rep.ok("입문 경로가 있는 세력은 전부 배울 무공이 있다 — 문과 방이 짝을 이룬다")
+
+    if open_thin:
+        rep.warn(f"입문 가능하나 무공 1~2종 — {len(open_thin)}곳: "
+                 f"{', '.join(label(f) for f in open_thin)} (사다리라 부를 수 없다 · 채움 순서 ⑩)")
+    else:
+        rep.ok("입문 가능한 세력 전부 무공 3종 이상")
+
+    if closed_blank:
+        rep.say(f"     입문 경로 없이 백지 {len(closed_blank)}곳 (위반 아님 — 아직 문이 없다): "
+                f"{', '.join(known[f] for f in closed_blank)}")
+
+    # ③ 컨테이너에 무공이 붙어 있으면 그것은 오분류다 (연합은 무공을 갖지 않는다)
+    #   ★위반이 아니라 경고다 — 컨테이너에 붙은 무공도 **굴러간다** (사파 계열 반응이 그대로 걸린다).
+    #     다만 그것이 「무소속」의 뜻인지 오분류인지는 등록부가 말해 주지 않는다. 사람이 정할 일이다.
+    misfiled = sorted(f for f in FACTION_CONTAINERS if n_art.get(f, 0) or n_sim.get(f, 0))
+    if misfiled:
+        who = {f: sorted(k for k, v in arts.items()
+                         if isinstance(v, dict) and v.get("faction") == f) for f in misfiled}
+        rep.warn("컨테이너(연합·계열·계보)에 무공이 붙어 있다 — "
+                 + " · ".join(f"{known.get(f, f)}: {', '.join(who[f])}" for f in misfiled)
+                 + " — 「어느 문파도 아닌 무공」이라는 뜻이라면 그 자리를 **1급 id 로** 세워야 하고"
+                   "(orthodox_heroes 선례: 「문파에 소속되지 않은 정파 성향 무인들」),"
+                   " 아니라면 소속을 고쳐야 한다 (문답)")
+    else:
+        rep.ok(f"컨테이너({len(FACTION_CONTAINERS)}종)에 붙은 무공·심법 없음 — 연합·계보는 손을 갖지 않는다")
+
+    # ④ 무공이 가리키는 faction 이 factions.yml 에 실재하는가 (오타의 자리)
+    ghost = sorted({v.get("faction") for v in arts.values()
+                    if isinstance(v, dict) and v.get("faction") and v.get("faction") not in known})
+    rep.verdict(not ghost, "무공의 소속 세력 — 전부 factions.yml 에 실재"
+                if not ghost else f"★factions.yml 에 없는 세력을 가리키는 무공: {', '.join(ghost)}")
 
 
 def lint_qi_gates(cfg, rep):
@@ -2258,6 +2391,59 @@ def selftest():
     chain_probe("⑱ 묘비: 심법 문턱을 지워야 비로소 공중시작 (있을 땐 세지 않는다)",
                 lambda c: arts_of(c)["chilbo_dokjang"].pop("requires_simbeop", None),
                 expect_violation=False, needle="chilbo_dokjang")
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  세력 백지 지도 뮤테이션 (⑲~㉒) — B-188 닫는 조건 ④
+    # ══════════════════════════════════════════════════════════════════════
+    def fac_run(cfg):
+        r = Report()
+        lint_faction_coverage(cfg, r)
+        return r.violations, r.warnings
+
+    fv_base, fw_base = fac_run(fresh())
+
+    def fac_probe(name, mutate, needle, in_violation=False, absent=False):
+        v, w = fac_run(fresh(mutate))
+        txt = " ".join(v if in_violation else w)
+        base = " ".join(fv_base if in_violation else fw_base)
+        ok = (needle not in txt) and (needle in base) if absent else \
+             (needle in txt) and (needle not in base)
+        probe(name, ok, f"위반 {len(fv_base)}→{len(v)} · 경고 {len(fw_base)}→{len(w)}")
+
+    # ⑲ 어떤 세력의 무공을 전부 지우면 「배울 것이 없다」 목록에 그 이름이 뜬다
+    #    ★대상은 **입문 경로가 있는** 세력이어야 한다 — 이 눈의 축이 「무공 0」이 아니라
+    #      「문이 열렸는데 무공 0」이기 때문이다. 첫 판은 개방을 골라 실패했다:
+    #      개방에는 입문 경로가 없다 (구파일방인데 — 그 사실 자체가 이 프로브가 알려 준 것이다)
+    def strip_sorim(c):
+        a = dig(c, "skills.yml", "martial_arts", default={})
+        for k in [k for k, v in a.items() if isinstance(v, dict) and v.get("faction") == "sorimsa"]:
+            del a[k]
+    fac_probe("⑲ 소림 무공 전부 삭제 → 백지 목록에 소림이 뜬다 (입문 경로가 있는 세력)",
+              strip_sorim, "sorimsa")
+
+    # ⑳ ★묘비 — 등록부는 세력을 **한글 이름으로도** 가리킨다 (magyo_encroachment 의 `faction: 마교`).
+    #    id 만 보던 첫 판은 마교를 놓쳐 「9곳」이라 답했다. 이름 대조가 죽으면 다시 놓친다.
+    #    이것은 뮤테이션이 아니라 **기준선 자체에 대한 단언**이다 (놓치면 조용히 사라지는 종류라서)
+    probe("⑳ 묘비: 입문 경로의 한글 이름 대조 — 마교가 백지 목록에 있다",
+          any("magyo" in x for x in fw_base),
+          "faction: 마교 (id 아님) 로 적힌 경로를 읽는가")
+
+    # ㉑ 컨테이너에 무공을 붙이면 오분류로 잡는가
+    fac_probe("㉑ 연합(구파일방)에 무공을 붙이면 → 컨테이너 오분류 경고",
+              lambda c: dig(c, "skills.yml", "martial_arts", default={})["nahan_kwon"]
+              .__setitem__("faction", "gupailbang"),
+              "구파일방")
+
+    # ㉒ factions.yml 에 없는 세력을 가리키면 위반 (오타의 자리)
+    fac_probe("㉒ 없는 세력을 가리키는 무공 → 위반",
+              lambda c: dig(c, "skills.yml", "martial_arts", default={})["nahan_kwon"]
+              .__setitem__("faction", "___없는세력___"),
+              "___없는세력___", in_violation=True)
+
+    # ㉓ 음성 대조 — 세력 등록부를 비우면 「백지 없음」이 아니라 **실패**여야 한다
+    fv, _ = fac_run(fresh(lambda c: dig(c, "factions.yml", default={}).__setitem__("faction_groups", {})))
+    probe("㉓ 묘비: 세력 등록부를 비우면 → 합격이 아니라 위반 (빈 등록부 거짓 합격 금지)",
+          any("하나도 못 걷었다" in x for x in fv), f"위반 {len(fv_base)}→{len(fv)}")
 
     # ⑯ 음성 대조 — 사다리와 무관한 값(무기 위력)을 비틀어도 이 눈은 조용해야 한다
     v16, w16 = chain_run(fresh(lambda c: dig(c, "combat.yml", "damage", "weapon_power", default={})
