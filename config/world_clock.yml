@@ -83,9 +83,9 @@ acts:
     heralds: []                            # 첫 막 — 전조 없음
     personal_hooks: [첫_생계, 첫_소문, 문파의_문턱, 앙숙의_틈]
 
-  # ── story_summary v2 「제1막 — 사도련 등장 (무림맹 창설 준비)」 ──
-  sadoryeon_deungjang:
-    name: "제1막 — 사도련 등장"
+  # ── story_summary v2 「제1막 — 사도천 등장 (무림맹 창설 준비)」 ──
+  sadocheon_deungjang:
+    name: "제1막 — 사도천 등장"
     order: 1
     entry: { base_day: 24, gate: auto, requires_beat: prologue.immun_ui_munteok }
     beats:
@@ -95,9 +95,9 @@ acts:
           rumor: { 강도: 2, 태그: [정치, 무인], 망: orthodox_net, 문안키: 각자_막아섰으나 }
           region_delta: { region: cheongha_hyeon, 민심: -2 }
         resolve: "소문 감쇠 — 그러나 '혼자서는 안 된다'는 말은 남는다 (다음 박의 씨앗)"
-      - key: sadoryeon_seoneon             # 정파 회합 중 사도련이 자칭하며 등장
+      - key: sadocheon_seoneon             # 정파 회합 중 사도천이 자칭하며 등장
         at: 9
-        do: { rumor: { 강도: 3, 태그: [사파, 정치], 망: inn_net, 문안키: 사도련의_자칭 } }
+        do: { rumor: { 강도: 3, 태그: [사파, 정치], 망: inn_net, 문안키: 사도천의_자칭 } }
         resolve: "소문 감쇠 — 그러나 이제 사파에 **이름이 하나** 생겼다 (돌이킬 수 없다)"
       - key: nuga_jinjja_sapa              # ★「누가 진짜 사파인가?」 — 위장 침투의 첫 단서
         at: 15
@@ -126,7 +126,7 @@ acts:
     entry:
       base_day: 52
       gate: human                          # ★세계의 구조가 바뀐다 (기구 신설) — 운영 판단이 선행한다
-      requires_beat: sadoryeon_deungjang.changseol_jean
+      requires_beat: sadocheon_deungjang.changseol_jean
       approval: { command: /막개전, permission: MANAGE_SERVER }
     beats:
       - key: seollip_hoeui                 # 설립 회의 — 정파 vs 보수 세가 · 세가 vs 문파 이권
@@ -152,30 +152,35 @@ acts:
       - { rumor: { 강도: 3, 태그: [정치], 망: orthodox_net, 문안키: 각_문파의_사자가_움직인다 }}
     personal_hooks: [회의_참가, 문파_대표_수행, 맹주_지지]
 
-  # ── story_summary v2 「제3막 — 사도련과의 대립 (정 vs 사)」 ──
+  # ── story_summary v2 「제3막 — 사도천과의 대립 (정 vs 사)」 ──
   #   ★세부 미확정 (사용자: "이건 다시 대화를 통해 자세히 설명") — 골격만 세운다.
   #     박 셋은 정본이 말한 것만 옮겼고, 값(강도·at·델타)은 전부 【제안】이다.
-  sadoryeon_daeripp:
-    name: "제3막 — 사도련과의 대립"
+  sadocheon_daeripp:
+    name: "제3막 — 사도천과의 대립"
     order: 3
     entry: { base_day: 76, gate: auto, requires_beat: murimmaeng_changseol.maeng_changseol }
     beats:
-      - key: wiseon_ui_myeongbun           # 「정파는 위선이다」 — 사도련의 무력 반격
+      - key: wiseon_ui_myeongbun           # 「정파는 위선이다」 — 사도천의 무력 반격
         at: 0
         do:
           rumor: { 강도: 3, 태그: [사파, 정치], 망: inn_net, 문안키: 위선이라는_말 }
           region_delta: { region: cheongha_hyeon, 치안: -6 }
         resolve: "충돌은 지역 델타와 조우로 산다 — 임계 효과(치안<30)가 전장을 만든다"
-      - key: hyeolgyo_spy_chujeok          # 혈교 스파이 추적 — 사도련 안의 진짜 적
+      - key: hyeolgyo_spy_chujeok          # 혈교 스파이 추적 — 사도천 안의 진짜 적
         at: 10
         do:
           myeongbun: { issue: "혈교_잠식:hyeolgyo", target: hyeolgyo, tags: [금기, 존망], gauge: 8 }
-          rumor: { 강도: 3, 태그: [괴사, 금기], 망: haomun_net, 문안키: 사도련_안의_피 }
+          rumor: { 강도: 3, 태그: [괴사, 금기], 망: haomun_net, 문안키: 사도천_안의_피 }
         resolve: "명분은 감쇠 문법대로 산다 (존망 태그는 4에서 멈춘다 — faction_politics)"
-      - key: bonjin_ui_gil                 # ★종결박 — 토벌이냐 협력이냐 (분기 입력)
+      - key: bonjin_ui_gil                 # ★종결박 — 토벌이냐 협력이냐
         at: 18
-        do: { world_event: 사도련_본진 }
-        resolve: "해소 = 노선 확정(토벌/협력). ★그 결과가 제4막의 연대 폭을 정한다 (endings.inputs)"
+        do: { world_event: 사도천_본진 }
+        resolve: |
+          ★★노선은 **개인별로 갈린다** (사용자 확정 2026-07-27) — 서버가 한 방향으로 가지 않는다.
+          플레이어마다 제 노선을 갖고, 세계는 그 **분포**로 반응한다:
+          제4막 연대의 폭이 「협력」을 고른 자들의 **비율**로 정해진다.
+          ★그래서 이 박의 해소는 승패가 아니라 **집계**다 — 이기고 지는 것이 아니라 갈라진다.
+          ★미결: 집계의 단위·시점·개인 노선의 저장 자리 (world_meta? 캐릭터 축?) — 배선 회차
     tempo:
       accel:
         - { key: "registry:살상_사건", days: 1 }
@@ -190,16 +195,25 @@ acts:
   murim_yeonhap:
     name: "제4막 — 무림 연합 탄생"
     order: 4
-    entry: { base_day: 100, gate: auto, requires_beat: sadoryeon_daeripp.bonjin_ui_gil }
+    entry: { base_day: 100, gate: auto, requires_beat: sadocheon_daeripp.bonjin_ui_gil }
     beats:
       - key: gwageoreul_deopda             # 「공동의 적이 있다면, 과거는 덮을 수 있다」
         at: 0
         do: { rumor: { 강도: 4, 태그: [정치, 무인], 망: orthodox_net, 문안키: 손을_잡는다 } }
-        resolve: "연대 성립 — 폭은 제3막 노선이 정한다 (토벌이면 좁고, 협력이면 넓다)"
+        resolve: "연대 성립 — 폭은 제3막 개인 노선의 **분포**가 정한다 (협력 비율이 높을수록 넓다)"
       - key: yeonhap_gitbal                # 연합 깃발 — 소속·연합 기술 공유가 열린다
         at: 6
         do: { world_event: 연합_결성 }
-        resolve: "해소 = 연합 소속·연합 기술 공유 개방 (기능 신설은 별도 청구서)"
+        resolve: |
+          ★★무림연합은 **기구가 아니라 상태다** (사용자 확정 2026-07-27):
+          「무림맹주와 사도천주가 동시적으로 협력한 상태 — 두 대표를 바탕으로 유지되는 상태」.
+          그래서 factions.yml 에 새 세력 id 를 만들지 않았다 — 세력이 아니라 **두 사람의 악수**다.
+          ★비대칭이 여기서 산다: 천주는 안 바뀌고(무력 고정) 맹주는 바뀔 수 있다(선출) →
+            **흔들리는 쪽은 언제나 무림맹이다.**
+          ★해소 조건 (사용자 확정): 「**서로의 이유를 알고 옛날만큼의 전쟁까진 아님**」 —
+            연합이 풀려도 **옛날로 돌아가지 않는다.** 한 번 안 것은 못 잊으니까.
+            → 제6막 이후에도 정·사가 완전 적대로 복귀하지 않는다 (엔딩 A~C 전부에 걸린다)
+          ★미결: 「연합 기술 공유」가 무엇인가 · 외부 세력 결집(무기상·중립)이 누구인가 — 배선 회차
       - key: hyeolgyo_tteokbap             # ★종결박 — 혈교 암약 떡밥 (제6막의 예고)
         at: 16
         do: { rumor: { 강도: 2, 태그: [괴사, 금기], 망: haomun_net, 문안키: 아직_남은_피 } }
@@ -258,7 +272,7 @@ acts:
       requires_beat: magyo_chimgong.daejeon_gyeolgwa
       approval: { command: /막개전, permission: MANAGE_SERVER }
     beats:
-      - key: bonsaek                       # 혈교가 본색을 드러낸다 — 사도련·정파·마교조차 공격
+      - key: bonsaek                       # 혈교가 본색을 드러낸다 — 사도천·정파·마교조차 공격
         at: 0
         do:
           myeongbun: { issue: "혈교_전면:hyeolgyo", target: hyeolgyo, tags: [금기, 존망], gauge: 13,
@@ -317,8 +331,10 @@ endings:
       from: "magyo_chimgong.daejeon_gyeolgwa 의 해소 결과"
       values: [격퇴, 패배]                        # 옛 정본의 '격퇴 확정'은 폐기됐다 (유저 결과가 정한다)
     연대_폭:
-      from: "sadoryeon_daeripp.bonjin_ui_gil 의 노선 (토벌/협력)"
+      from: "sadocheon_daeripp.bonjin_ui_gil 의 **개인 노선 분포** (협력을 고른 비율)"
       values: [좁다, 넓다]
+      note: "★서버 하나의 값이 아니라 집계다 (노선은 개인별로 갈린다 — 2026-07-27 확정).
+        임계값·집계 시점은 미결"
     맹주_진영:
       from: "murimmaeng_changseol.maengju_seonchul 의 해소 결과"
       values: [미정]                              # ★후보 목록 미확정 (무림맹 미결 문답과 같은 대화에서)
