@@ -188,6 +188,52 @@ for aid, art in ultimate["legacy_arts"].items():
     if art["faction"] not in known_faction_ids:
         issues.append(f"오의 '{aid}' 문파 '{art['faction']}' 가 세력 정의에 없음")
 
+# 10. ★★세계 주제 — 「절대 악은 없다 (혈교 제외). 서로 이유가 있어 싸운다」 (2026-07-28)
+#
+#   ─── 왜 이 눈이 있나 ───
+#   factions.yml 의 `세계_주제` 절이 **「lint_config 가 싸우는_이유 가 빈 세력을 잡는다」**고
+#   적어 두었는데, **그런 눈이 없었다** (2026-07-28 발견 — 선언만 하고 안 만들었다).
+#   ★그것이 곧 감사 거짓말이다: 등록부가 있지도 않은 눈을 제 보증으로 내세웠다.
+#   → 이 절이 그 말을 참으로 만든다.
+#
+#   ─── 무엇을 재는가 ───
+#   · 계열 컨테이너는 **안 싸운다** (분류다) — 요구하지 않는다
+#   · **싸우는 주체**(member 세력)에 `싸우는_이유` 가 있는가 → 없으면 **경고**
+#     (위반이 아니라 경고인 까닭: 대부분이 아직 미기입이고, **지어내면 안 되기 때문**이다.
+#      이 목록이 곧 「아직 안 정한 것」 장부다 — 채워지면 목록이 줄어든다)
+#   · 면제는 `세계_주제.규약.면제` 가 말하는 것만 (지금은 혈교 하나)
+#   · ★그리고 **면제 세력이 실제로 그렇게 적어 뒀는가**도 잰다 (혈교의 `싸우는_이유: 없음`)
+theme = factions.get("세계_주제", {})
+rule = theme.get("규약", {})
+if not theme:
+    issues.append("factions.yml 에 세계_주제 절이 없다 — 주제가 등록부에서 사라졌다")
+else:
+    exempt_ids = set(rule.get("면제", []))
+    field = rule.get("필수_필드", "싸우는_이유")
+    missing, bad_exempt = [], []
+    for gid, grp in factions["faction_groups"].items():
+        for fid, f in (grp.get("members") or {}).items():
+            if not isinstance(f, dict):
+                continue
+            has = bool(str(f.get(field, "")).strip())
+            if fid in exempt_ids:
+                # 면제 세력은 **비워 두는 게 아니라 「없음」이라고 적어야** 한다.
+                # 빈칸은 '아직 안 정했다'와 구별되지 않는다 — 면제는 선언이지 공백이 아니다.
+                if str(f.get(field, "")).strip() != "없음":
+                    bad_exempt.append(fid)
+            elif not has:
+                missing.append(fid)
+    for fid in bad_exempt:
+        issues.append(
+            f"세계 주제 — 면제 세력 '{fid}' 의 {field} 가 '없음' 이 아니다 "
+            f"(면제는 **선언**이다. 비워 두면 '아직 안 정했다'와 구별되지 않는다)"
+        )
+    if missing:
+        warns.append(
+            f"세계 주제 — {field} 미기입 {len(missing)}곳: {', '.join(sorted(missing))} "
+            f"(★지어내지 말 것 — 이 목록이 곧 「아직 안 정한 것」 장부다)"
+        )
+
 # 9. 지역 초기값 ↔ 시뮬레이터/테스트 가정 (치안 50/경제 48/민심 55)
 state = regions["region"]["state"]
 expected = {"security": 50, "economy": 48, "public_mood": 55}
