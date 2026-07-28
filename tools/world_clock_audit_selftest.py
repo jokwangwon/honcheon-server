@@ -123,15 +123,18 @@ MUTATIONS = [
      "priority 가 1부터 연속이 아니다"),
 
     # ★판정 시점이 실존하지 않는 박을 가리킨다
+    #   ★2026-07-28 재표적: 종결박 jeonmyeonjeon(혈교_전면전) → bongin(혈교_봉인)
     ("★ 엔딩 판정 시점을 없는 박으로 돌린다", YML,
-     "    decided_at: hyeolgyo_siltche.jeonmyeonjeon",
+     "    decided_at: hyeolgyo_siltche.bongin",
      "    decided_at: hyeolgyo_siltche.___없는박___",
      "마지막 막"),
 
     # ★개인 엔딩의 scope 를 지우면 세계 엔딩과 배타로 오해된다
+    #   ★2026-07-28 재표적: D 가 셋(은거·혈화·선경)으로 갈리며 절이 재작성됐다.
+    #     ★앵커를 **id 와 붙여** 잡는다 — scope 줄만 잡으면 셋 중 어느 것인지 모호해진다.
     ("★ 개인 엔딩의 scope 를 world 로 바꾼다 (동시 성립이 깨진다)", YML,
-     "      scope: personal                            # ★세계 엔딩과 동시에 성립한다",
-     "      scope: world                               # ★세계 엔딩과 동시에 성립한다",
+     "    - id: eungeo\n      name: \"D-1. 은거(隱居)\"\n      scope: personal",
+     "    - id: eungeo\n      name: \"D-1. 은거(隱居)\"\n      scope: world",
      "scope 가 'personal' 이 아니다"),
 
     # ★엔딩의 소문 망을 없는 것으로
