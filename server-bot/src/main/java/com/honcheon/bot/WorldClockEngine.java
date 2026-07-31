@@ -64,8 +64,13 @@ final class WorldClockEngine {
     record Approval(boolean ok, String body) {
     }
 
-    /** 박 — 막 진입일 기준 상대 유효일 {@code at} 에 발화하는 세계 사건 (do 는 기존 기계의 입력) */
-    private record Beat(String key, int at, Map<String, Object> does, String resolve) {
+    /**
+     * 박 — 막 진입일 기준 상대 유효일 {@code at} 에 발화하는 세계 사건 (do 는 기존 기계의 입력).
+     * resolution(B-190) = 해소 명세 — 이 박의 **결과**가 어떻게 태어나 막해소 그릇에 적히는가
+     * (자리_판독·노선_집계·다리_보고 — 없으면 해소 없는 박이다).
+     */
+    private record Beat(String key, int at, Map<String, Object> does,
+                        Map<String, Object> resolution, String resolve) {
     }
 
     private record Act(String id, String name, int order, int baseDay, String gate,
@@ -82,6 +87,14 @@ final class WorldClockEngine {
     static final String WAITING = "관문_대기";
     static final String EVENT_TRANSITION = "막전환";
     static final String EVENT_GATE = "막관문";
+    // ─── B-190 해소 그릇 — 박의 해소 결과가 태어나는 자리 (등록부 meta.state_keys) ───
+    /** 막해소:&lt;막id&gt;.&lt;박key&gt; = 해소 값 — endings 판정은 이 키만 읽는다 */
+    static final String KEY_RESOLVE = "막해소:";
+    /** 자리:&lt;자리&gt; = 세 자리의 주인 ("player:&lt;캐릭터id&gt;" | "npc:&lt;등록키&gt;") — npc_fallback 이 읽히는 곳 */
+    static final String KEY_SEAT = "자리:";
+    /** 계보:붙듦수 = 2대 천마가 붙든 마존 계보 수 0~5 — 침공 규모의 원료 (endings.산술) */
+    static final String KEY_LINEAGE = "계보:붙듦수";
+    static final String EVENT_RESOLVE = "막해소";
     /** 원장의 행위자 — 세계 시계가 적은 것임을 감사가 알아보게 */
     static final String ACTOR = "세계시계";
 
@@ -94,6 +107,13 @@ final class WorldClockEngine {
     private final Map<String, Act> byId = new LinkedHashMap<>();
     private int tempoClamp;
     private int heraldLeadDays;
+    // ─── B-190 엔딩 판정 — endings 절이 여기로 들어온다 (등록부가 정본, 이 코드는 지어내지 않는다) ───
+    private String endingDecidedAt;                            // "<막id>.<박key>" — 발화 = 판정 시점
+    private String endingStateKey;                             // world_meta 키 (세계엔딩)
+    private String endingEventType;                            // 원장 타입 (막엔딩)
+    private final Map<String, Map<String, Object>> endingInputs = new LinkedHashMap<>();
+    private final List<Map<String, Object>> endingWorld = new ArrayList<>();   // priority 순
+    private Map<String, Object> arithmetic = Map.of();         // endings.산술 — 다리 보고 없는 판의 폴백
     private final String fault;                                // null 이면 건강
 
     /** HoncheonBot·PersonalStory 와 같은 규약 — 설정 디렉터리는 HONCHEON_CONFIG 하나로 정해진다 */
@@ -116,6 +136,7 @@ final class WorldClockEngine {
             this.tempoClamp = RulesConfig.intValue(clock.get("tempo_clamp"));
             this.heraldLeadDays = RulesConfig.intValue(clock.get("herald_lead_days"));
             parseActs(RulesConfig.section(cfg, "acts"));
+            parseEndings(cfg);
         } catch (Exception e) {
             broken = e.getMessage() == null ? e.toString() : e.getMessage();
             System.err.println("세계 시계: 등록부(config/world_clock.yml)를 못 세웠다 — 시계가 잠긴다: "
@@ -158,8 +179,14 @@ final class WorldClockEngine {
                     throw new IllegalStateException("막 " + e.getKey() + " 박 " + b.get("key")
                             + " — rumor.yml 에 없는 망: " + rumor.get("망"));
                 }
+                Map<String, Object> resolution = (Map<String, Object>) b.get("resolution");
+                if (resolution != null && !List.of("자리_판독", "노선_집계", "다리_보고")
+                        .contains(String.valueOf(resolution.get("kind")))) {
+                    throw new IllegalStateException("막 " + e.getKey() + " 박 " + b.get("key")
+                            + " — 등록되지 않은 해소 유형: " + resolution.get("kind"));
+                }
                 beats.add(new Beat(String.valueOf(b.get("key")), RulesConfig.intValue(b.get("at")),
-                        does, String.valueOf(b.getOrDefault("resolve", ""))));
+                        does, resolution, String.valueOf(b.getOrDefault("resolve", ""))));
             }
             List<Map<String, Object>> heralds = new ArrayList<>();
             for (Map<String, Object> h : (List<Map<String, Object>>) a.getOrDefault("heralds", List.of())) {
@@ -202,6 +229,39 @@ final class WorldClockEngine {
                         + prevId + ")의 박을 가리키지 않는다: " + req);
             }
         }
+    }
+
+    /**
+     * B-190 — endings 절을 세운다. 판정 시점(decided_at)이 실존 박이 아니면 시계를 세우지 않는다
+     * (등록부가 스스로 모순이면 잠근다 — parseActs 와 같은 결). world 목록은 priority 순으로 눕힌다.
+     */
+    @SuppressWarnings("unchecked")
+    private void parseEndings(Map<String, Object> cfg) {
+        Map<String, Object> endings = (Map<String, Object>) cfg.get("endings");
+        if (endings == null) {
+            return;                                            // 엔딩 없는 등록부 — 판정 없이 돈다 (옛 모양)
+        }
+        Map<String, Object> emeta = (Map<String, Object>) endings.getOrDefault("meta", Map.of());
+        this.endingDecidedAt = emeta.get("decided_at") == null
+                ? null : String.valueOf(emeta.get("decided_at"));
+        this.endingStateKey = emeta.get("state_key") == null
+                ? null : String.valueOf(emeta.get("state_key"));
+        this.endingEventType = String.valueOf(emeta.getOrDefault("event_type", "막엔딩"));
+        if (endingDecidedAt != null) {
+            int dot = endingDecidedAt.indexOf('.');
+            Act act = dot < 0 ? null : byId.get(endingDecidedAt.substring(0, dot));
+            if (act == null || act.beats().stream()
+                    .noneMatch(b -> endingDecidedAt.equals(act.id() + "." + b.key()))) {
+                throw new IllegalStateException(
+                        "endings.meta.decided_at 이 실존 박이 아니다: " + endingDecidedAt);
+            }
+        }
+        ((Map<String, Object>) endings.getOrDefault("inputs", Map.of()))
+                .forEach((k, v) -> endingInputs.put(k, (Map<String, Object>) v));
+        this.arithmetic = (Map<String, Object>) endings.getOrDefault("산술", Map.of());
+        ((List<Map<String, Object>>) endings.getOrDefault("world", List.of())).stream()
+                .sorted(java.util.Comparator.comparingInt(w -> RulesConfig.intValue(w.get("priority"))))
+                .forEach(endingWorld::add);
     }
 
     /** 시계가 잠겨 있으면 그 이유 — null 이면 건강 (감사·시험용) */
@@ -323,6 +383,208 @@ final class WorldClockEngine {
             System.out.println("세계 시계 — 세계 사건 '" + worldEvent + "' (" + act.id() + "."
                     + beat.key() + ") — 무대 미배선. 정본 결말: " + beat.resolve());
             out.append("⚔️ ").append(beat.resolve()).append('\n');
+        }
+        if (beat.resolution() != null) {
+            resolveBeat(act, beat, beat.resolution(), day, out);   // B-190 — 해소가 그릇에 적힌다
+        }
+        if ((act.id() + "." + beat.key()).equals(endingDecidedAt)) {
+            judgeEnding(day, out);                                 // B-190 — 종결박의 발화가 곧 판정 시점
+        }
+    }
+
+    // ─── B-190 해소 그릇 — 박의 해소 결과가 태어나는 자리 (등록부 resolution 이 정본) ───
+
+    @SuppressWarnings("unchecked")
+    private void resolveBeat(Act act, Beat beat, Map<String, Object> resolution, int day,
+                             StringBuilder out) throws Exception {
+        switch (String.valueOf(resolution.get("kind"))) {
+            case "자리_판독" -> {
+                // 세 자리의 판정 (B-190 ⑤): '자리:<자리>' 를 읽고, 비어 있으면 세계가 채운다
+                // (factions.yml npc_fallback: true 가 여기서 읽힌다 — 사람이 못 채우면 NPC).
+                String seat = String.valueOf(resolution.get("자리"));
+                String holder = meta(KEY_SEAT + seat).orElse(null);
+                if (holder == null) {
+                    holder = "npc:" + resolution.get("npc_default");
+                    db.setMeta(KEY_SEAT + seat, holder);
+                }
+                writeResolution(act, beat, holder.startsWith("player:") ? "player" : "npc",
+                        Map.of("자리", seat, "주인", holder), day);
+            }
+            case "노선_집계" -> writeResolution(act, beat, tallyRoutes(resolution),
+                    Map.of("집계", String.valueOf(resolution.get("event_type"))), day);
+            case "다리_보고" ->
+                // 발화는 무대를 열 뿐 승패를 정하지 않는다 — 결과는 다리(raid_resolved)가 적고,
+                // 엔딩 판정 시점까지 보고가 없으면 endings.산술 이 폴백으로 값을 낳는다.
+                System.out.println("세계 시계 — " + act.id() + "." + beat.key() + " 의 해소는 다리 보고("
+                        + resolution.get("bridge_kind") + ")를 기다린다 — 폴백은 endings.산술");
+            default -> throw new IllegalStateException(
+                    "등록되지 않은 해소 유형: " + resolution.get("kind"));
+        }
+    }
+
+    /** 해소 값을 그릇에 — world_meta 가 판정이 읽는 캐시, 원장(막해소)이 감사 흔적. 첫 값이 정본이다 */
+    private void writeResolution(Act act, Beat beat, String value, Map<String, Object> extra, int day)
+            throws Exception {
+        String key = KEY_RESOLVE + act.id() + "." + beat.key();
+        if (meta(key).isPresent()) {
+            return;                                            // 한 번 적힌 해소는 다시 적지 않는다
+        }
+        db.setMeta(key, value);
+        Map<String, Object> data = new LinkedHashMap<>(extra);
+        data.put("day", day);
+        data.put("값", value);
+        db.logEvent(EVENT_RESOLVE, "world", ACTOR, "beat", act.id() + "." + beat.key(), data);
+        System.out.println("세계 시계 — 막해소: " + act.id() + "." + beat.key() + " = " + value);
+    }
+
+    /**
+     * 노선 집계 (B-190 ④ · 사용자 확정: 노선은 고르지 않는다, 드러난다) — 원장의 개인_노선
+     * (actor=character · target=노선)을 캐릭터별로 접는다: 한 사람의 노선 = 최다 태그(동률이면 최근),
+     * 세계의 값 = 다수_노선 비율이 threshold 이상인가. ★참여 0명이면 좁다 —
+     * 아무도 안 골랐으면 세계는 가장 흔하고 가장 쓸쓸한 쪽으로 흐른다 (등록부 주석 그대로).
+     */
+    private String tallyRoutes(Map<String, Object> resolution) throws Exception {
+        String narrow = String.valueOf(resolution.get("좁다_값"));
+        Map<String, Map<String, long[]>> perActor = new LinkedHashMap<>();  // actor → 노선 → {건수, 최근 순번}
+        long seq = 0;
+        for (Map<String, Object> ev : db.eventsByType(String.valueOf(resolution.get("event_type")))) {
+            seq++;
+            Map<String, long[]> routes = perActor.computeIfAbsent(
+                    String.valueOf(ev.get("actor_id")), k -> new LinkedHashMap<>());
+            long[] s = routes.get(String.valueOf(ev.get("target_id")));
+            if (s == null) {
+                routes.put(String.valueOf(ev.get("target_id")), new long[]{1, seq});
+            } else {
+                s[0]++;
+                s[1] = seq;
+            }
+        }
+        if (perActor.isEmpty()) {
+            return narrow;
+        }
+        String majorityRoute = String.valueOf(resolution.get("다수_노선"));
+        long majority = 0;
+        for (Map<String, long[]> routes : perActor.values()) {
+            String best = null;
+            long[] bestScore = null;
+            for (Map.Entry<String, long[]> r : routes.entrySet()) {
+                long[] s = r.getValue();
+                if (bestScore == null || s[0] > bestScore[0]
+                        || (s[0] == bestScore[0] && s[1] > bestScore[1])) {
+                    best = r.getKey();
+                    bestScore = s;
+                }
+            }
+            if (majorityRoute.equals(best)) {
+                majority++;
+            }
+        }
+        double threshold = Double.parseDouble(String.valueOf(resolution.get("threshold")));
+        return majority >= threshold * perActor.size()
+                ? String.valueOf(resolution.get("넓다_값")) : narrow;
+    }
+
+    /**
+     * 엔딩 판정 (B-190) — decided_at 박이 발화하는 순간 한 번. inputs 의 state_from(해소 그릇)을 읽고
+     * world 목록을 priority 순으로 대조해 첫 일치를 적는다 (fallback 이 마지막이라 반드시 하나 뽑힌다 —
+     * 등록부 exactly_one 의 근거). 한 번 적힌 세계엔딩은 되돌리지도 다시 판정하지도 않는다 (§6 과 같은 결).
+     * personal(D 셋)은 조건 미정이라 판정하지 않는다 — 등록부가 그렇게 말한다.
+     */
+    @SuppressWarnings("unchecked")
+    private void judgeEnding(int day, StringBuilder out) throws Exception {
+        if (endingStateKey == null || meta(endingStateKey).isPresent()) {
+            return;
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        for (Map.Entry<String, Map<String, Object>> in : endingInputs.entrySet()) {
+            Map<String, Object> spec = in.getValue();
+            if (spec.get("state_from") == null) {
+                continue;                                      // 쓰임: 연출 — 판정에 안 쓴다 (등록부 명시)
+            }
+            String v = meta(String.valueOf(spec.get("state_from"))).orElse(null);
+            if (v == null) {
+                v = fallbackValue(spec, values, day, out);     // 그릇이 비었으면 폴백이 그 자리에서 낳는다
+            }
+            if (v != null) {
+                values.put(in.getKey(), v);
+            }
+        }
+        for (Map<String, Object> ending : endingWorld) {
+            Map<String, Object> when = (Map<String, Object>) ending.getOrDefault("when", Map.of());
+            if (!when.entrySet().stream().allMatch(
+                    c -> String.valueOf(c.getValue()).equals(values.get(String.valueOf(c.getKey()))))) {
+                continue;
+            }
+            String id = String.valueOf(ending.get("id"));
+            db.setMeta(endingStateKey, id);
+            db.logEvent(endingEventType, "world", ACTOR, "ending", id,
+                    Map.of("day", day, "입력", values, "이름", String.valueOf(ending.get("name"))));
+            System.out.println("세계 시계 — 막엔딩: " + id + " " + values);
+            out.append("🏮 ").append(String.valueOf(ending.getOrDefault("outcome", ""))).append('\n');
+            Map<String, Object> does = (Map<String, Object>) ending.getOrDefault("do", Map.of());
+            Map<String, Object> rumor = (Map<String, Object>) does.get("rumor");
+            if (rumor != null) {
+                plantRumor(ACTOR + ":엔딩:" + id, rumor, day, out);
+            }
+            Map<String, Object> delta = (Map<String, Object>) does.get("region_delta");
+            if (delta != null) {
+                nudgeRegion(delta, out);
+            }
+            return;
+        }
+    }
+
+    /**
+     * 판정 시점의 폴백 — 그릇이 빈 입력의 값을 그 자리에서 낳는다. 출처 박의 resolution 이 방법을 말한다:
+     * 노선_집계·자리_판독은 같은 셈을 지금 돌리고, 다리_보고는 endings.산술(침공_규모 vs 맹_전력 —
+     * B-190 ②③, 수치 전부 등록부 【제안】)로 값을 낸다. 폴백으로 태어난 값도 그릇에 적힌다 (감사 가능).
+     */
+    @SuppressWarnings("unchecked")
+    private String fallbackValue(Map<String, Object> spec, Map<String, String> values, int day,
+                                 StringBuilder out) throws Exception {
+        String stateFrom = String.valueOf(spec.get("state_from"));
+        if (!stateFrom.startsWith(KEY_RESOLVE)) {
+            return null;
+        }
+        String beatPath = stateFrom.substring(KEY_RESOLVE.length());
+        int dot = beatPath.indexOf('.');
+        Act act = dot < 0 ? null : byId.get(beatPath.substring(0, dot));
+        Beat beat = act == null ? null : act.beats().stream()
+                .filter(b -> b.key().equals(beatPath.substring(dot + 1))).findFirst().orElse(null);
+        if (beat == null || beat.resolution() == null) {
+            return null;
+        }
+        Map<String, Object> resolution = beat.resolution();
+        switch (String.valueOf(resolution.get("kind"))) {
+            case "노선_집계", "자리_판독" -> {
+                resolveBeat(act, beat, resolution, day, out);
+                return meta(stateFrom).orElse(null);
+            }
+            case "다리_보고" -> {
+                Map<String, Object> scale = (Map<String, Object>) arithmetic.getOrDefault("침공_규모", Map.of());
+                Map<String, Object> power = (Map<String, Object>) arithmetic.getOrDefault("맹_전력", Map.of());
+                int invasion = meta(String.valueOf(scale.getOrDefault("from", KEY_LINEAGE)))
+                        .map(Integer::parseInt)
+                        .orElse(RulesConfig.intValue(scale.getOrDefault("기본값", 0)));
+                int strength = RulesConfig.intValue(power.getOrDefault("기본", 0));
+                Map<String, Object> keepIf = (Map<String, Object>) power.getOrDefault("잃는_조건", Map.of());
+                boolean lost = !keepIf.isEmpty() && keepIf.entrySet().stream().allMatch(
+                        c -> String.valueOf(c.getValue()).equals(values.get(String.valueOf(c.getKey()))));
+                if (!lost) {
+                    strength += RulesConfig.intValue(power.getOrDefault("썩은_머릿수", 0));
+                }
+                List<Object> outcomes = (List<Object>) resolution.getOrDefault("값", List.of());
+                if (outcomes.size() < 2) {
+                    return null;
+                }
+                String v = strength >= invasion
+                        ? String.valueOf(outcomes.get(0)) : String.valueOf(outcomes.get(1));
+                writeResolution(act, beat, v, Map.of("산술", "침공 " + invasion + " vs 전력 " + strength), day);
+                return v;
+            }
+            default -> {
+                return null;
+            }
         }
     }
 

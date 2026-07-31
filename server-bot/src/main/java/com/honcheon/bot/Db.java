@@ -996,6 +996,27 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         return out;
     }
 
+    /** 한 유형의 이벤트 전부 (id 순) — 세계 시계의 노선 집계(B-190 ④)가 분포를 접는 조회 지점 */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> eventsByType(String type) throws Exception {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT day, actor_id, target_type, target_id, data_json FROM events "
+                        + "WHERE type = ? ORDER BY id")) {
+            ps.setString(1, type);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(Map.of("day", rs.getInt(1),
+                            "actor_id", String.valueOf(rs.getString(2)),
+                            "target_type", String.valueOf(rs.getString(3)),
+                            "target_id", String.valueOf(rs.getString(4)),
+                            "data", JSON.readValue(rs.getString(5), Map.class)));
+                }
+            }
+        }
+        return out;
+    }
+
     /** 한 캐릭터의 이벤트 유형별 건수 — 명성 동결(세계 연표)의 재료 */
     public Map<String, Integer> eventTally(String actorType, String actorId)
             throws SQLException {

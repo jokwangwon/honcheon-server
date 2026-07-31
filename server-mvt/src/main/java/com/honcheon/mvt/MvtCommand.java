@@ -36,6 +36,28 @@ public final class MvtCommand implements CommandExecutor {
         this.plugin = plugin;
     }
 
+    /**
+     * ★B-190 ② — 세계 사건(레이드)의 결말 선고: /혼천 레이드해소 <막id> <박key> <격퇴|패배>.
+     * 무대(보스 스폰·페이즈)가 서기 전까지의 발신자다 — 대장들의 싸움(사용자 확정 2026-07-31:
+     * 제5막 승패는 인게임 레이드가 정한다)을 사람이 심판하고, 다리(raid_resolved)가 봇의 해소
+     * 그릇(막해소:&lt;막&gt;.&lt;박&gt;)으로 나른다. ★무대가 서면 같은 emit 을 무대가 부른다 —
+     * 이 명령은 그때도 남는다 (심판 불능 판의 폴백). 검증은 봇이 다시 한다
+     * (Bridge.raidResolved — 등록 값 밖은 버리고, 첫 보고가 정본이다).
+     */
+    private boolean raidResolve(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            sender.sendMessage("§c레이드해소는 관리자의 손이다.");
+            return true;
+        }
+        if (args.length < 4 || !(args[3].equals("격퇴") || args[3].equals("패배"))) {
+            sender.sendMessage("§7쓰임: /혼천 레이드해소 <막id> <박key> <격퇴|패배>");
+            return true;
+        }
+        WorldBridge.emit("raid_resolved", Map.of("act", args[1], "beat", args[2], "result", args[3]));
+        sender.sendMessage("§6레이드 결말을 다리에 실었다 — " + args[1] + "." + args[2] + " = " + args[3]);
+        return true;
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
@@ -67,6 +89,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "지형조성" -> forgeLand(sender, args);     // ★ 땅만 빚는다 — 집은 안 짓는다 (지도 → 지형 → 건축)
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
                 case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
+                case "레이드해소" -> raidResolve(sender, args);   // ★B-190 — 세계 사건(레이드) 결말 선고 (관리자)
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)

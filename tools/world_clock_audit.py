@@ -44,12 +44,17 @@ ENGINE = BOT / "WorldClockEngine.java"
 LISTENER = BOT / "GameListener.java"
 BOOT = BOT / "HoncheonBot.java"
 WORLDSTORE = BOT / "WorldStore.java"
+BRIDGE = BOT / "Bridge.java"
+QUESTS = BOT / "Quests.java"
 YML = CONFIG / "world_clock.yml"
+BRIDGE_YML = CONFIG / "world_bridge.yml"
 
 OK, NO, WARN = "✅", "❌", "⚠️"
 
 DO_KINDS = {"rumor", "chapter_open", "myeongbun", "region_delta", "world_event"}
 GATES = {"auto", "human"}
+# B-190 해소 그릇 — 엔진 parseActs 의 화이트리스트와 같은 셋이어야 한다 (어긋나면 시계가 잠긴다)
+RESOLUTION_KINDS = {"자리_판독", "노선_집계", "다리_보고"}
 
 
 class Report:
@@ -468,10 +473,143 @@ def audit_endings(rep: Report, cfg: dict, acts: dict) -> None:
         if not hit and "faction_politics" not in src and "명분" not in src:
             rep.warn(f"엔딩 판정 입력 '{name}' 의 출처가 실존 박도 기존 축도 아니다: {src[:48]!r}")
 
-    if meta.get("wiring_status") == "미배선":
+    rep.facts["endings"] = {"world": len(world), "personal": len(personal), "do": n_do}
+
+
+# ═══════════════ ⑥ 해소 그릇 — 판정 입력이 실제로 태어나는가 (B-190) ═══════════════
+
+def audit_resolutions(rep: Report, cfg: dict, acts: dict) -> None:
+    """해소 그릇의 눈 (2026-07-31 신설 — B-190 「세계관 → 기계」).
+
+    B-190 의 함정이 정확히 이것이었다: 「판정 입력」이라 적힌 값들이 **태어나는 자리가 없었다**
+    (world_event 는 콘솔 로그만 찍고 사라졌다). 그래서 이 눈이 재는 것은 넷이다:
+      ① 박의 resolution 이 등록된 유형(자리_판독·노선_집계·다리_보고)이고 필수 칸이 차 있는가
+      ② endings.inputs 의 state_from(막해소:<막>.<박>)이 **해소를 낳는 실존 박**을 가리키는가
+         ★핵심이다 — 아무도 안 채우는 그릇을 읽는 판정은 등록부의 거짓말이다
+      ③ 다리_보고의 bridge_kind 가 world_bridge.yml 에 등재되고 Bridge 에 처리기(case)가 있는가
+      ④ 배선 선언(wiring_status)이 정직한가 — 배선이라 적었으면 엔진이 endings 를 실제로 읽고,
+         노선을 적는 손(개인_노선)이 실제로 있어야 한다 (선언만 하고 안 만든 눈이 P0 급 거짓말이었다)
+    """
+    rep.say()
+    rep.say("── ⑥ 해소 그릇 — 판정 입력이 실제로 태어나는가 (B-190)")
+    rep.say()
+
+    # ① 박의 resolution — 유형·필수 칸
+    resolved_beats: dict[str, dict] = {}          # "<막id>.<박key>" → resolution
+    n_res = 0
+    for aid, act in acts.items():
+        for b in (act or {}).get("beats", []) or []:
+            res = b.get("resolution")
+            if not res:
+                continue
+            n_res += 1
+            path = f"{aid}.{b.get('key')}"
+            resolved_beats[path] = res
+            kind = res.get("kind")
+            if kind not in RESOLUTION_KINDS:
+                rep.bad(f"박 {path} — 등록되지 않은 해소 유형: {kind!r} (엔진이 시계를 잠근다)")
+                continue
+            need = {"자리_판독": ["key", "자리", "npc_default"],
+                    "노선_집계": ["key", "event_type", "다수_노선", "threshold", "넓다_값", "좁다_값"],
+                    "다리_보고": ["key", "bridge_kind", "값", "fallback"]}[kind]
+            missing = [f for f in need if res.get(f) in (None, "")]
+            if missing:
+                rep.bad(f"박 {path} — 해소({kind})의 필수 칸이 비었다: {missing}")
+            if kind == "노선_집계":
+                t = res.get("threshold")
+                if not isinstance(t, (int, float)) or not 0 < t <= 1:
+                    rep.bad(f"박 {path} — threshold 가 (0,1] 실수가 아니다: {t!r}")
+            if kind == "다리_보고":
+                vals = res.get("값") or []
+                if not isinstance(vals, list) or len(vals) < 2:
+                    rep.bad(f"박 {path} — 다리_보고의 값 목록이 둘 미만이다: {vals!r} "
+                            f"(산술 폴백이 이길 값·질 값을 못 고른다)")
+    if n_res and not rep.violations:
+        rep.good(f"해소 명세 {n_res}개 — 유형·필수 칸이 등록값 안이다")
+
+    end = cfg.get("endings") or {}
+
+    # ② inputs.state_from — 아무도 안 채우는 그릇을 읽지 않는가
+    n_inputs = 0
+    for name, spec in (end.get("inputs") or {}).items():
+        sf = (spec or {}).get("state_from")
+        if not sf:
+            continue                              # 쓰임: 연출 (판정에 안 씀) — 등록부가 밝혔다
+        n_inputs += 1
+        if not str(sf).startswith("막해소:"):
+            rep.bad(f"판정 입력 '{name}' — state_from 이 해소 그릇(막해소:)이 아니다: {sf!r}")
+            continue
+        path = str(sf)[len("막해소:"):]
+        if path not in resolved_beats:
+            rep.bad(f"판정 입력 '{name}' — state_from 이 해소를 낳는 박이 아니다: {path!r} "
+                    f"— ★아무도 안 채우는 그릇을 읽는 판정은 등록부의 거짓말이다")
+    if n_inputs:
+        rep.good(f"판정 입력 {n_inputs}개 — 전부 해소를 낳는 박(resolution)을 가리킨다")
+
+    # ②-b 산술 — 다리_보고의 폴백이 실재하고, 잃는_조건이 실존 입력을 가리키는가
+    arith = end.get("산술") or {}
+    input_names = set((end.get("inputs") or {}).keys())
+    needs_arith = [p for p, r in resolved_beats.items()
+                   if r.get("kind") == "다리_보고" and r.get("fallback") == "산술"]
+    if needs_arith:
+        if not arith.get("침공_규모") or not arith.get("맹_전력"):
+            rep.bad(f"다리_보고 {needs_arith} 가 산술 폴백을 지목하는데 endings.산술 이 비었다 — "
+                    f"보고 없는 판의 엔딩이 공중에 뜬다")
+        else:
+            cond = ((arith.get("맹_전력") or {}).get("잃는_조건") or {})
+            ghost = set(cond.keys()) - input_names
+            if ghost:
+                rep.bad(f"산술.맹_전력.잃는_조건 이 없는 판정 입력을 가리킨다: {sorted(ghost)}")
+            else:
+                rep.good("산술 폴백 — 침공_규모·맹_전력이 서고, 잃는_조건이 실존 입력을 가리킨다")
+
+    # ③ 다리 — bridge_kind 가 등재되고 처리기가 있는가 (등록제: 없는 kind 는 세계에 존재하지 않는다)
+    bridge_kinds = set((load_yaml(BRIDGE_YML).get("events") or {}).keys())
+    bridge_src = decomment(read(BRIDGE)) if BRIDGE.is_file() else ""
+    for path, res in resolved_beats.items():
+        if res.get("kind") != "다리_보고":
+            continue
+        bk = str(res.get("bridge_kind") or "")
+        if bk not in bridge_kinds:
+            rep.bad(f"박 {path} — bridge_kind '{bk}' 가 world_bridge.yml events 에 없다 "
+                    f"(등록 안 된 kind 는 세계에 존재하지 않는다)")
+        elif f'case "{bk}"' not in bridge_src:
+            rep.bad(f"박 {path} — bridge_kind '{bk}' 의 처리기(case)가 Bridge 에 없다 — "
+                    f"등재만 되고 아무도 안 받는 보고다")
+        else:
+            rep.good(f"다리 보고 '{bk}' — 등재(world_bridge.yml) = 처리기(Bridge case)")
+
+    # ④ 배선 선언의 정직 — 선언만 하고 안 만든 눈이 P0 급 거짓말이었다 (같은 병을 여기서 잰다)
+    status = end.get("wiring_status")
+    engine_src = decomment(read(ENGINE))
+    engine_reads_endings = "decided_at" in engine_src and "막해소:" in engine_src
+    if status == "배선" and not engine_reads_endings:
+        rep.bad("wiring_status: 배선 인데 엔진이 endings 를 안 읽는다 — 선언이 거짓말이다")
+    elif status == "미배선" and engine_reads_endings:
+        rep.bad("wiring_status: 미배선 인데 엔진이 endings 를 읽는다 — 표식을 걷어라")
+    elif status == "배선":
+        rep.good("배선 선언 = 엔진 실배선 (decided_at 판정·막해소 그릇을 코드가 읽는다)")
+    elif status == "미배선":
         rep.good("★미배선을 스스로 밝혔다 (wiring_status: 미배선) — "
                  "등록부가 먼저 서고 코드가 따라오는 순서. 거짓말이 아니다")
-    rep.facts["endings"] = {"world": len(world), "personal": len(personal), "do": n_do}
+
+    # ④-b 노선을 적는 손 — 집계가 읽는 원장(개인_노선)을 실제로 적는 코드가 있는가
+    tallies = [p for p, r in resolved_beats.items() if r.get("kind") == "노선_집계"]
+    if tallies:
+        listener_src = decomment(read(LISTENER))
+        quests_src = decomment(read(QUESTS)) if QUESTS.is_file() else ""
+        ev = {str((resolved_beats[p] or {}).get("event_type")) for p in tallies}
+        for event_type in sorted(ev):
+            if f'"{event_type}"' not in listener_src:
+                rep.bad(f"노선_집계가 읽는 원장 '{event_type}' 을 적는 손이 GameListener 에 없다 — "
+                        f"아무도 안 적는 장부를 집계하는 판정이다")
+            elif "noseon" not in quests_src:
+                rep.bad("의뢰에 노선 칸(noseon)이 없다 — 집계는 있는데 노선이 태어날 길이 없다")
+            else:
+                rep.good(f"노선의 손 — 원장 '{event_type}' 을 적는 코드(GameListener)와 "
+                         f"노선 의뢰(Quests.noseon)가 실재한다")
+
+    rep.facts["resolutions"] = {"beats": n_res, "inputs": n_inputs}
 
 
 def main() -> int:
@@ -492,6 +630,7 @@ def main() -> int:
     audit_wiring(rep, cfg)
     audit_marker(rep, cfg)
     audit_endings(rep, cfg, acts)
+    audit_resolutions(rep, cfg, acts)
 
     rep.say()
     rep.say("═" * 78)

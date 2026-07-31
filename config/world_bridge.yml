@@ -326,6 +326,15 @@ events:
                successor_name: "곰치", world_day: "세계일" }
     effects: { region_event: 도적_두목_승계 }
 
+  raid_resolved:
+    desc: "★B-190 — 세계 사건(레이드)의 결말: 대장들의 싸움이 끝났다 (사용자 확정 2026-07-31 —
+      제5막 승패는 정본이 아니라 인게임 레이드가 정한다). ★무대(보스 스폰·페이즈)는 별도 청구서 —
+      통로가 먼저 선다. MVT 쪽 발신 지점이 서면 이 kind 로 쏜다"
+    payload: { act: "막 id (예: magyo_chimgong)", beat: "박 key (예: daejeon_gyeolgwa)",
+               result: "격퇴 | 패배 — 봇은 이 둘만 받는다 (그 밖은 버린다)" }
+    effects: { world_meta: "막해소:<act>.<beat> = result — 첫 보고가 정본 (중복 보고는 버린다) ·
+      원장 '막해소' append · WorldClockEngine 엔딩 판정이 이 키를 읽는다 (world_clock.yml endings)" }
+
   beast_slain:
     desc: "짐승을 잡았다 — 사냥 (생계와 수련)"
     payload:

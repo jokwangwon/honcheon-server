@@ -2323,6 +2323,8 @@ public final class GameListener extends ListenerAdapter {
         if (!disavowed(chId, today)) {
             out.addAll(Injections.politicsQuests(rules, politics(today)));
         }
+        // ★B-190 ④ — 세계막에 딸린 의뢰 (제3막 노선 셋): 막이 그 막일 때만 게시판에 오른다
+        out.addAll(Quests.actQuests(db.getMeta(WorldClockEngine.KEY_ACT).orElse("")));
         return out;
     }
 
@@ -2627,6 +2629,14 @@ public final class GameListener extends ListenerAdapter {
                 gains.append("\n💥 **돌파 — ").append(promoted).append("에 올랐다**");
                 db.logEvent("승급", "character", String.valueOf(chId), Map.of("경지", promoted));
                 realm = promoted;
+            }
+            // ★B-190 ④ — 노선은 고르지 않는다, 드러난다 (사용자 확정 2026-07-31):
+            //   노선 의뢰의 완수가 원장에 '개인_노선'을 적는다 (원장이 곧 상태 — PersonalStory 문법).
+            //   제3막 종결박(bonjin_ui_gil)이 이 분포를 집계해 연대_폭을 낳는다 (world_clock.yml).
+            if (q.noseon() != null) {
+                db.logEvent("개인_노선", "character", String.valueOf(chId), "노선", q.noseon(),
+                        Map.of("의뢰", q.key()));
+                gains.append("\n*그 일을 어떻게 처리했는지 — 저잣거리는 잊지 않는다.*");
             }
             result.setColor(BLOOD).appendDescription("\n" + gains);
             db.logEvent("의뢰_완수", "character", String.valueOf(chId), "quest", q.key(),

@@ -18,6 +18,9 @@ interface EventStore {
 
     List<Map<String, Object>> eventsOf(String type, String actorId) throws Exception;
 
+    /** 한 유형의 이벤트 전부 (id 순) — 세계 시계의 노선 집계(B-190 ④)가 분포를 접는 조회 지점 */
+    List<Map<String, Object>> eventsByType(String type) throws Exception;
+
     Map<String, Integer> eventTally(String actorType, String actorId) throws Exception;
 
     int countEvents(String actorType, String actorId, List<String> types) throws Exception;

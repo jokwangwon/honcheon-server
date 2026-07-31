@@ -21,6 +21,7 @@ BOT = ROOT / "server-bot/src/main/java/com/honcheon/bot"
 ENGINE = BOT / "WorldClockEngine.java"
 LISTENER = BOT / "GameListener.java"
 BOOT = BOT / "HoncheonBot.java"
+BRIDGE = BOT / "Bridge.java"
 YML = ROOT / "config/world_clock.yml"
 AUDIT = ROOT / "tools/world_clock_audit.py"
 
@@ -148,6 +149,57 @@ MUTATIONS = [
      "endings:\n  meta:",
      "endings_DISABLED:\n  meta:",
      "endings 절이 없다"),
+
+    # ══ ⑥ 해소 그릇 (B-190 · 2026-07-31 신설) — 판정 입력이 태어나는 자리를 지킨다 ══
+    #   ★앵커는 id·박key 와 붙여 잡는다 (재표적 계율 — 흔한 줄만 잡으면 모호해진다)
+
+    # ★해소 유형을 유령으로 — 엔진이 시계를 잠그는 값이니 눈이 먼저 잡아야 한다
+    ("★⑥ 해소 유형을 유령으로 바꾼다 (맹주 자리_판독)", YML,
+     "resolution: { key: 맹주_진영, kind: 자리_판독, 자리: 맹주, npc_default: namgung }",
+     "resolution: { key: 맹주_진영, kind: 유령_판독, 자리: 맹주, npc_default: namgung }",
+     "등록되지 않은 해소 유형"),
+
+    # ★판정 입력이 아무도 안 채우는 그릇을 읽게 한다 — 이 눈의 핵심 (등록부의 거짓말)
+    ("★⑥ 연대_폭 state_from 을 해소 없는 박으로 돌린다", YML,
+     "state_from: \"막해소:paedocheon_daeripp.bonjin_ui_gil\"",
+     "state_from: \"막해소:paedocheon_daeripp.wiseon_ui_myeongbun\"",
+     "해소를 낳는 박이 아니다"),
+
+    # ★다리 kind 를 미등록으로 — 등록제: 없는 kind 는 세계에 존재하지 않는다
+    ("★⑥ 다리_보고의 bridge_kind 를 미등록으로 바꾼다", YML,
+     "kind: 다리_보고, bridge_kind: raid_resolved,",
+     "kind: 다리_보고, bridge_kind: raid_done,",
+     "world_bridge.yml events 에 없다"),
+
+    # ★처리기 절단 — 등재만 되고 아무도 안 받는 보고
+    ("★⑥ Bridge 에서 raid_resolved 처리기를 뗀다", BRIDGE,
+     "                case \"raid_resolved\" -> raidResolved(data, today);",
+     "                // selftest — 처리기 절단",
+     "처리기(case)가 Bridge 에 없다"),
+
+    # ★임계값을 (0,1] 밖으로
+    ("★⑥ 노선 집계 threshold 를 2.0 으로 올린다", YML,
+     "threshold: 0.5, 넓다_값: 넓다",
+     "threshold: 2.0, 넓다_값: 넓다",
+     "threshold 가 (0,1] 실수가 아니다"),
+
+    # ★배선 선언 거짓말 — 엔진이 읽는데 미배선이라 적으면 표식이 낡은 것
+    ("★⑥ wiring_status 를 미배선으로 되돌린다 (엔진은 읽는데)", YML,
+     "  wiring_status: 배선",
+     "  wiring_status: 미배선",
+     "표식을 걷어라"),
+
+    # ★노선을 적는 손 절단 — 아무도 안 적는 장부를 집계하는 판정
+    ("★⑥ GameListener 의 개인_노선 기록을 뗀다", LISTENER,
+     "db.logEvent(\"개인_노선\", \"character\", String.valueOf(chId), \"노선\", q.noseon(),",
+     "db.logEvent(\"개인_노선_절단\", \"character\", String.valueOf(chId), \"노선\", q.noseon(),",
+     "적는 손이 GameListener 에 없다"),
+
+    # ★산술 폴백을 지운다 — 보고 없는 판의 엔딩이 공중에 뜬다
+    ("★⑥ endings.산술 의 침공_규모를 지운다", YML,
+     "    침공_규모: { from: \"계보:붙듦수\", 기본값: 3 }",
+     "    침공_규모_절단: { from: \"계보:붙듦수\", 기본값: 3 }",
+     "endings.산술 이 비었다"),
 
 ]
 

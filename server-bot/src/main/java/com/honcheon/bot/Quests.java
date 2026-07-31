@@ -19,10 +19,20 @@ final class Quests {
     record Approach(String label, String stat, int bonus) {
     }
 
-    /** issuer = 발주 NPC 등록 키 (null = 관·유족 등 개인이 아닌 발주처) */
+    /**
+     * issuer = 발주 NPC 등록 키 (null = 관·유족 등 개인이 아닌 발주처).
+     * noseon = ★B-190 ④ — 이 의뢰의 완수가 원장에 적는 개인 노선 (덮다|도려내다|이용하다 · null = 무관).
+     *   노선은 고르지 않는다, 드러난다 (사용자 확정 2026-07-31) — 선택지가 아니라 **한 일**이 적힌다.
+     */
     record Quest(String key, String name, String grade, String realmReq, int resist,
                  String rewardKey, boolean combatMark, String brief, List<Approach> approaches,
-                 String issuer) {
+                 String issuer, String noseon) {
+        Quest(String key, String name, String grade, String realmReq, int resist,
+              String rewardKey, boolean combatMark, String brief, List<Approach> approaches,
+              String issuer) {
+            this(key, name, grade, realmReq, resist, rewardKey, combatMark, brief, approaches,
+                    issuer, null);
+        }
     }
 
     /** 경지 사다리 서열 — 격상 도전 판별용 (gate 느슨: 금지가 아니라 사선) */
@@ -56,6 +66,34 @@ final class Quests {
                     "곽진의 상단이 남쪽 관도 단거리 호위를 구한다 — 표국 경력 우대, 담력 필수.",
                     List.of(new Approach("정면에서 습격을 막아선다", "근력", 2),
                             new Approach("먼저 알아채고 자리를 잡는다", "감각", 2)), "gwakjin"));
+
+    /**
+     * ★B-190 ④ — 제3막의 노선 의뢰 (자릿세 셋). 세계막이 제3막(paedocheon_daeripp)일 때만 오른다.
+     * 썩은 뿌리의 형태는 자릿세다 (world_clock.yml sseogeun_ppuri_chujeok) — 그 부패를 두고
+     * 무엇을 했는가가 곧 노선이다. 이름·문안 전부 【제안】 (★지어냄 — 빨간펜 대상).
+     * 발주자 null = 이름을 밝히지 않는 발주처 (덮는 쪽과 이용하는 쪽은 원래 이름이 없다).
+     */
+    static final List<Quest> ACT3_NOSEON = List.of(
+            new Quest("jarissae_deopgi", "부탁: 조용한 뒤처리", "조사_채집", "삼류", 11, "조사", false,
+                    "맹의 이름이 적힌 자릿세 장부가 저잣거리에 돌기 전에 거둬 달라는 은밀한 부탁 — 출처는 묻지 마라.",
+                    List.of(new Approach("장부가 도는 길목을 미리 막는다", "감각", 2),
+                            new Approach("가진 자를 구슬려 조용히 넘겨받는다", "화술", 2)),
+                    null, "덮다"),
+            new Quest("jarissae_gobal", "의뢰: 자릿세 장부 고발", "조사_채집", "삼류", 11, "조사", false,
+                    "맹의 이름으로 저잣거리를 뜯는 자들의 증좌를 모아 맹에 들이밀어라 — 맹이 제 살을 도려내게.",
+                    List.of(new Approach("걷는 현장을 붙잡아 증좌를 챙긴다", "감각", 2),
+                            new Approach("뜯긴 상인들의 증언을 모은다", "화술", 2)),
+                    null, "도려내다"),
+            new Quest("jarissae_heungjeong", "구함: 길목을 아는 자", "조사_채집", "삼류", 11, "조사", false,
+                    "자릿세가 걷히는 길목과 시각을 아는 자를 찾는 이들이 있다 — 값은 후하고, 이름은 안 묻는다.",
+                    List.of(new Approach("걷는 자들의 동선을 알아내 판다", "지혜", 2),
+                            new Approach("양쪽을 다 만나 값을 올린다", "화술", 2)),
+                    null, "이용하다"));
+
+    /** 세계막에 딸린 의뢰 — 막이 지나가면 게시판에서 내려간다 (세계가 곧 발주처다) */
+    static List<Quest> actQuests(String worldAct) {
+        return "paedocheon_daeripp".equals(worldAct) ? ACT3_NOSEON : List.of();
+    }
 
     /**
      * 오늘의 게시판 — 정적 3건(세계일 결정론 회전) + 동적 주입분.

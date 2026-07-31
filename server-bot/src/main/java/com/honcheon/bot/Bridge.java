@@ -284,9 +284,38 @@ final class Bridge {
                 case "link_confirm" -> linkConfirm(envelope, data, today);
                 case "cultivation_logged" -> cultivationLogged(data, today);
                 case "seojang_choice" -> seojangChoice(data, today);
+                case "raid_resolved" -> raidResolved(data, today);
                 default -> throw new IllegalStateException("다리 — 처리기 없음: " + kind);
             }
         });
+    }
+
+    /**
+     * ★B-190 ② — 레이드(대장들의 싸움)의 결말이 세계의 해소 그릇에 적힌다 (사용자 확정 2026-07-31:
+     * 제5막 승패는 정본이 아니라 인게임 레이드가 정한다). 적는 곳은 world_meta
+     * '막해소:&lt;막&gt;.&lt;박&gt;' + 원장 '막해소' — WorldClockEngine 의 엔딩 판정이 이 키를 읽는다.
+     *
+     * <p><b>다리를 믿지 않는다</b> — jsonl 은 파일이라 손으로 끼워 넣을 수 있다. 그래서 값이
+     * 등록 값(격퇴|패배)이 아니면 버리고, <b>한 번 적힌 해소는 다시 적지 않는다</b>
+     * (첫 보고가 정본 — 세계 시계의 되돌림 불가와 같은 결).
+     */
+    private void raidResolved(Map<String, Object> data, int today) throws Exception {
+        String act = str(data.get("act"), "").strip();
+        String beat = str(data.get("beat"), "").strip();
+        String result = str(data.get("result"), "").strip();
+        if (act.isEmpty() || beat.isEmpty() || !List.of("격퇴", "패배").contains(result)) {
+            System.err.println("다리 — raid_resolved 페이로드 불량 (버린다): " + data);
+            return;
+        }
+        String key = WorldClockEngine.KEY_RESOLVE + act + "." + beat;
+        if (db.getMeta(key).isPresent()) {
+            System.err.println("다리 — raid_resolved 중복 보고 (첫 보고가 정본): " + key);
+            return;
+        }
+        db.setMeta(key, result);
+        db.logEvent(WorldClockEngine.EVENT_RESOLVE, "world", "다리", "beat", act + "." + beat,
+                Map.of("day", today, "값", result, "출처", "raid_resolved"));
+        System.out.println("다리 — 막해소: " + act + "." + beat + " = " + result + " (레이드 보고)");
     }
 
     /**
