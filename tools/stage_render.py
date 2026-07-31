@@ -41,6 +41,8 @@ DATA_COLOR = {"door": (90, 66, 36), "fence_gate": (76, 52, 28), "trapdoor": (66,
 
 
 def color_of(mat):
+    if "light[" in mat:
+        return None                 # 보이지 않는 광원 — 그리지 않는다
     if mat in COLORS:
         return COLORS[mat]
     for key, c in DATA_COLOR.items():
@@ -96,6 +98,8 @@ def render_plan(cfg, layers, out):
             if top is None:
                 continue
             col = color_of(top)
+            if col is None:
+                continue
             shade = 0.55 + 0.11 * height           # 높을수록 밝다 — 평면도에서 층이 읽힌다
             dr.rectangle([c * s, r * s, c * s + s - 1, r * s + s - 1],
                          fill=tuple(min(255, int(v * shade)) for v in col))
@@ -125,6 +129,8 @@ def render_iso(cfg, layers, out):
                 if mat == "air":
                     continue
                 col = color_of(mat)
+                if col is None:
+                    continue
                 x0, y0 = px(c, r, y)
                 top = [(x0, y0 - hh), (x0 + hw, y0), (x0, y0 + hh), (x0 - hw, y0)]
                 left = [(x0 - hw, y0), (x0, y0 + hh), (x0, y0 + hh + vz), (x0 - hw, y0 + vz)]

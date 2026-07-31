@@ -48,7 +48,7 @@ legend:
   "F": spruce_fence                 # 골목 등롱대 (불은 없다 — 그날 밤이니까)
   "j": decorated_pot                # 장독 (살림의 흔적 — 마당 서남)
   "B": barrel                       # 궤짝 (방 안 살림)
-  "C": "minecraft:spruce_trapdoor[facing=south,open=true,half=bottom]"   # 닫힌 문살창 (남벽)
+  "i": "minecraft:light[level=7]"   # 보이지 않는 광원 — 방의 바닥 밝기 (구석이 구멍처럼 보이는 병의 수리)
   "D": "minecraft:spruce_door[facing=east,half=lower]"
   "U": "minecraft:spruce_door[facing=east,half=upper]"
   "G": "minecraft:dark_oak_fence_gate[facing=south,open=true]"
@@ -116,12 +116,12 @@ layers:
     ..............................
     ..............................
     ..LPPPPPPPL#################..
-    ..P...T...P................#..
     ..P.......P................#..
     ..P.......P................#..
+    ..P..i....P................#..
     ..P.......U................#..
     ..P.......P................#..
-    ..P...C...P...................
+    ..P..i....P...................
     ..LPPPPPPPL................#..
     ..#........................#..
     ..#........................#..

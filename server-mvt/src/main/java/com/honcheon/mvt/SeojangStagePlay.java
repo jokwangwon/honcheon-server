@@ -163,13 +163,28 @@ final class SeojangStagePlay implements Listener {
             e.setSilent(true);
             e.setInvulnerable(true);
             e.setCollidable(false);
+            e.setPersistent(true);
+            e.setRemoveWhenFarAway(false);
             e.setVisibleByDefault(false);                 // ★아무에게도 안 보인다 —
             e.setGlowing(true);                           //   이 사람에게만 보여 준다 (아래)
             e.setCustomName(ChatColor.GRAY + "식구");
             e.setCustomNameVisible(false);
+            e.getPersistentDataContainer().set(
+                    new org.bukkit.NamespacedKey("honcheon", "stage_family"),
+                    org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
         });
-        p.showEntity(plugin, v);
         s.npc = v.getUniqueId();
+        // ★빨간펜 4호 「식구가 없다」 — 갓 스폰한 엔티티에 같은 틱 showEntity 가 안 먹을 수 있다.
+        //   두 틱 뒤에 보여 주고, 콘솔에 증거를 남긴다 (다음 실측 때 로그로 판별)
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            var e = Bukkit.getEntity(s.npc);
+            if (e != null && p.isOnline()) {
+                p.showEntity(plugin, e);
+                plugin.getLogger().info("[서장무대] 식구 표시 — " + p.getName() + " 에게 (" + s.npc + ")");
+            } else {
+                plugin.getLogger().warning("[서장무대] 식구가 사라졌다 — 스폰 직후 제거됨? (" + s.npc + ")");
+            }
+        }, 2L);
     }
 
     /**

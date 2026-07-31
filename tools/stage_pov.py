@@ -22,7 +22,7 @@ MOON = (-0.35, -0.8, 0.25)  # 달빛 방향 (서쪽 하늘에서)
 
 
 def solid(mat):
-    return mat != "air" and "carpet" not in mat   # 카펫은 밟는 것 — 시선은 통과시킨다 (얇음)
+    return mat != "air" and "carpet" not in mat and "light[" not in mat   # 카펫·광원은 시선 통과
 
 
 def build_grid(layers, w, d):
