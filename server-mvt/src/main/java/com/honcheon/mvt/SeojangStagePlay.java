@@ -50,6 +50,8 @@ final class SeojangStagePlay implements Listener {
     private final Map<UUID, Session> sessions = new HashMap<>();
     private StageLoader.Stage stage;                      // 게으른 적재 — 첫 체험 때 도면을 읽는다
     private List<Map<String, Object>> spotSpecs;          // enactment.spots (속삭임·행동)
+    private List<Object> introLines = List.of();          // enactment.도입_안내 — 세계가 먼저 말한다
+    private String wanderWhisper;                         // enactment.배회_속삭임 — 길을 잃은 몸에게
     private Map<String, Object> openings;                 // prose.incident_opening (내레이션 — 등록부 문장)
 
     private static final class Session {
@@ -90,6 +92,11 @@ final class SeojangStagePlay implements Listener {
                 List<Map<String, Object>> scenes = (List<Map<String, Object>>) enact.getOrDefault("기본", List.of());
                 spotSpecs = scenes.isEmpty() ? List.of()
                         : (List<Map<String, Object>>) scenes.get(0).getOrDefault("spots", List.of());
+                if (!scenes.isEmpty()) {
+                    introLines = (List<Object>) scenes.get(0).getOrDefault("도입_안내", List.of());
+                    Object ww = scenes.get(0).get("배회_속삭임");
+                    wanderWhisper = ww == null ? null : String.valueOf(ww);
+                }
                 openings = (Map<String, Object>) ((Map<String, Object>) seojang
                         .getOrDefault("prose", Map.of())).getOrDefault("incident_opening", Map.of());
             }
@@ -109,6 +116,8 @@ final class SeojangStagePlay implements Listener {
             p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 30, 0, false, false));
             p.teleport(StageLoader.spot(stage, w, oy, "깨어남"));
             p.setPlayerTime(MIDNIGHT, false);             // 그 사람에게만 자정 — 밤바다는 그대로
+            p.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION,
+                    20 * 600, 0, true, false));           // 밤눈 — 어둠의 결은 두되 몸은 본다 (빨간펜 1호)
             spawnFamily(p, w, oy, s);
             narrate(p, incident);
             sceneAmbience(p, s);
@@ -155,6 +164,9 @@ final class SeojangStagePlay implements Listener {
             p.sendMessage(ChatColor.GRAY + String.valueOf(opening));
             p.sendMessage("");
         }
+        for (Object line : introLines) {
+            p.sendMessage(ChatColor.DARK_AQUA + "" + ChatColor.ITALIC + String.valueOf(line));
+        }
     }
 
     /**
@@ -196,11 +208,18 @@ final class SeojangStagePlay implements Listener {
                 near = i;
             }
             // 넋등 — 파티클 빛점 (그 사람에게만). 가까우면 짙어진다
-            int count = d < 2.0 ? 6 : 2;
+            int count = d < 2.5 ? 12 : 5;
             p.spawnParticle(Particle.SOUL_FIRE_FLAME, s.spots[i].clone().add(0, 0.9, 0),
-                    count, 0.12, 0.22, 0.12, 0.004);
+                    count, 0.15, 0.35, 0.15, 0.005);
+            if (d >= 2.5) {
+                p.spawnParticle(Particle.END_ROD, s.spots[i].clone().add(0, 1.3, 0),
+                        1, 0.05, 0.3, 0.05, 0.002);       // 먼 눈에도 걸리는 흰 점 하나
+            }
         }
-        if (near >= 0 && near < spotSpecs.size() && best < 4.5) {
+        if ((near < 0 || best >= 12.0) && wanderWhisper != null && s.age % 60 == 0) {
+            p.sendActionBar(ChatColor.DARK_GRAY + wanderWhisper);   // 길 잃은 몸에게 — 배회 속삭임
+        }
+        if (near >= 0 && near < spotSpecs.size() && best < 12.0) {
             Object whisper = spotSpecs.get(near).get("속삭임");
             if (whisper != null) {
                 p.sendActionBar(ChatColor.GRAY + String.valueOf(whisper));
