@@ -47,6 +47,8 @@ legend:
   "l": soul_lantern                 # 등잔 (낮게 탄다)
   "F": spruce_fence                 # 골목 등롱대 (불은 없다 — 그날 밤이니까)
   "j": decorated_pot                # 장독 (살림의 흔적 — 마당 서남)
+  "B": barrel                       # 궤짝 (방 안 살림)
+  "C": "minecraft:spruce_trapdoor[facing=south,open=true,half=bottom]"   # 닫힌 문살창 (남벽)
   "D": "minecraft:spruce_door[facing=east,half=lower]"
   "U": "minecraft:spruce_door[facing=east,half=upper]"
   "G": "minecraft:dark_oak_fence_gate[facing=south,open=true]"
@@ -94,7 +96,7 @@ layers:
     ..P.w.....P................#..
     ..P.w.....P................#..
     ..P.......D................#..
-    ..P.......P.......mmm......#..
+    ..P......BP.......mmm......#..
     ..P...rww.P.......mWm......#..
     ..LPPPPPPPL.......mmm......#..
     ..#........................#..
@@ -119,7 +121,7 @@ layers:
     ..P.......P................#..
     ..P.......U................#..
     ..P.......P................#..
-    ..P.......P...................
+    ..P...C...P...................
     ..LPPPPPPPL................#..
     ..#........................#..
     ..#........................#..

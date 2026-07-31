@@ -51,6 +51,7 @@ final class SeojangStagePlay implements Listener {
     private StageLoader.Stage stage;                      // 게으른 적재 — 첫 체험 때 도면을 읽는다
     private List<Map<String, Object>> spotSpecs;          // enactment.spots (속삭임·행동)
     private String lastQuestion;                          // enactment.마지막_물음 — 뼈대의 그 문장
+    private String entrySubtitle;                         // enactment.입장_자막 — 어둠은 연출이다
     private String wanderWhisper;                         // enactment.배회_속삭임 — 길을 잃은 몸에게
     private Map<String, Object> openings;                 // prose.incident_opening (내레이션 — 등록부 문장)
 
@@ -95,6 +96,8 @@ final class SeojangStagePlay implements Listener {
                 if (!scenes.isEmpty()) {
                     Object q = scenes.get(0).get("마지막_물음");
                     lastQuestion = q == null ? null : String.valueOf(q);
+                    Object es = scenes.get(0).get("입장_자막");
+                    entrySubtitle = es == null ? null : String.valueOf(es);
                     Object ww = scenes.get(0).get("배회_속삭임");
                     wanderWhisper = ww == null ? null : String.valueOf(ww);
                 }
@@ -117,6 +120,9 @@ final class SeojangStagePlay implements Listener {
             // ★빨간펜 2호 — 인과의 순서: 어둠(3.5초) 속에서 **소리가 먼저** 온다. 그래서 깬다.
             //   글은 그다음이다 — 첫머리가 방금 들은 그 소리를 말하게 (글이 소리를 앞서면 거짓말)
             p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 80, 0, false, false));
+            if (entrySubtitle != null) {
+                p.sendTitle(" ", ChatColor.DARK_GRAY + entrySubtitle, 10, 60, 20);
+            }
             p.teleport(StageLoader.spot(stage, w, oy, "깨어남"));
             p.setPlayerTime(MIDNIGHT, false);             // 그 사람에게만 자정 — 밤바다는 그대로
             p.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION,
@@ -129,7 +135,7 @@ final class SeojangStagePlay implements Listener {
             }, 15L);
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!s.done && p.isOnline()) {
-                    narrate(p, incident);                 // ② 눈을 뜨자, 방금 들은 것이 글이 된다
+                    narrate(p, s, incident);              // ② 눈을 뜨자, 방금 들은 것이 글이 된다
                     s.ticker = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(p, s), 5L, 5L);
                 }
             }, 80L);
@@ -166,25 +172,52 @@ final class SeojangStagePlay implements Listener {
         s.npc = v.getUniqueId();
     }
 
-    /** 내레이션 — 등록부의 문장 그대로 (마크는 한 문장도 짓지 않는다) */
-    private void narrate(Player p, String incident) {
-        p.sendTitle(ChatColor.GOLD + "第一章", ChatColor.GRAY + "그날 밤", 20, 60, 30);
+    /**
+     * 내레이션 — 등록부의 문장 그대로, ★한 문장씩 시간차로 (빨간펜 3호 「채팅이라 못 읽어」).
+     * 생각이 흐르는 그 순간 **그 자리가 밝아진다** — 글과 세계가 같은 박자를 탄다
+     * (「공간이 생각이 안 든다」의 수리: 공간이 문장에 응답한다).
+     * 마지막 물음은 화면 한가운데 타이틀 — 못 놓친다.
+     */
+    private void narrate(Player p, Session s, String incident) {
+        p.sendTitle(ChatColor.GOLD + "第一章", ChatColor.GRAY + "그날 밤", 10, 50, 20);
+        long t = 30;
         Object opening = openings.get(incident);
         if (opening != null) {
-            p.sendMessage("");
-            p.sendMessage(ChatColor.GRAY + String.valueOf(opening));
-            p.sendMessage("");
+            sched(p, s, t, () -> {
+                p.sendMessage("");
+                p.sendMessage(ChatColor.GRAY + String.valueOf(opening));
+            });
+            t += 70;
         }
-        for (Map<String, Object> spec : spotSpecs) {
-            Object thought = spec.get("생각");
-            if (thought != null) {
-                p.sendMessage(ChatColor.DARK_AQUA + "" + ChatColor.ITALIC + String.valueOf(thought));
+        for (int i = 0; i < spotSpecs.size() && i < 3; i++) {
+            final int idx = i;
+            sched(p, s, t, () -> {
+                Object thought = spotSpecs.get(idx).get("생각");
+                if (thought != null) {
+                    p.sendMessage(ChatColor.DARK_AQUA + "" + ChatColor.ITALIC + String.valueOf(thought));
+                }
+                // ★생각이 자리를 비춘다 — 같은 순간에 (글 따로 공간 따로면 생각이 안 든다)
+                p.spawnParticle(Particle.SOUL_FIRE_FLAME,
+                        s.spots[idx].clone().add(0, 1.0, 0), 25, 0.2, 0.5, 0.2, 0.01);
+                p.playSound(s.spots[idx], Sound.BLOCK_AMETHYST_CLUSTER_STEP, 0.9f, 0.7f);
+            });
+            t += 55;
+        }
+        sched(p, s, t, () -> {
+            if (lastQuestion != null) {
+                p.sendTitle(" ", ChatColor.WHITE + lastQuestion, 10, 70, 25);
+                p.sendMessage("");
+                p.sendMessage(ChatColor.WHITE + lastQuestion);
             }
-        }
-        if (lastQuestion != null) {
-            p.sendMessage("");
-            p.sendMessage(ChatColor.WHITE + lastQuestion);
-        }
+        });
+    }
+
+    private void sched(Player p, Session s, long delay, Runnable r) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!s.done && p.isOnline()) {
+                r.run();
+            }
+        }, delay);
     }
 
     /**

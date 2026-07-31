@@ -34,6 +34,7 @@ COLORS = {
     "soul_lantern": (120, 200, 210),
     "spruce_fence": (100, 74, 42),
     "decorated_pot": (112, 78, 58),
+    "barrel": (96, 68, 38),
 }
 # 블록데이터 문자열은 어미로 색을 고른다
 DATA_COLOR = {"door": (90, 66, 36), "fence_gate": (76, 52, 28), "trapdoor": (66, 46, 26)}
