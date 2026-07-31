@@ -41,6 +41,7 @@ public final class HoncheonMvt extends JavaPlugin {
     private ModelBridge modelBridge;   // BetterModel 로 가는 다리 (리플렉션 · 없으면 판·점으로)   // 기(氣)의 기하 — EffectLib 을 빌리되 발행은 우리 예산으로
     private Antechamber antechamber;   // 입도진 — 강호에 들지 않은 자를 세계에 떨구지 않는다
     private TutorialGuide tutorial;    // 뿌리내림 과정 — 본토 안내 층 (B-178)
+    private SeojangStagePlay stagePlay; // 체험형 서장 — 기억의 무대 (B-194)
     private Reset reset;   // 되돌리는 손 — 시험을 위해 이 몸을 지운다 (백업은 항상 뜬다)
     private GyeonggongListener gyeonggong;   // 경공 — 몸이 땅을 딛는 법
     private DojangGui dojangGui;   // 시험대 — 클릭으로 고른다
@@ -113,6 +114,7 @@ public final class HoncheonMvt extends JavaPlugin {
         this.modelBridge = new ModelBridge(this);
         this.antechamber = new Antechamber(this, cfg);
         this.tutorial = new TutorialGuide(this);   // 뿌리내림 과정 — 본토 안내 층 (B-178)
+        this.stagePlay = new SeojangStagePlay(this);   // 체험형 서장 — 기억의 무대 (B-194)
         this.dojangGui = new DojangGui(this);
         this.gyeonggong = new GyeonggongListener(this);   // 몸이 땅을 딛는 법
         Onboarding.init(cfg);   // 첫 접속의 목소리 — player_creation.yml mvt_onboarding
@@ -189,6 +191,7 @@ public final class HoncheonMvt extends JavaPlugin {
         getServer().getPluginManager().registerEvents(hunger, this);
         getServer().getPluginManager().registerEvents(antechamber, this);
         getServer().getPluginManager().registerEvents(tutorial, this);   // 뿌리내림 몸짓 감지 (B-178)
+        getServer().getPluginManager().registerEvents(stagePlay, this);  // 체험형 서장 감지 (B-194)
         getServer().getPluginManager().registerEvents(gyeonggong, this);
         getServer().getPluginManager().registerEvents(new HuntListener(this), this);
         getServer().getPluginManager().registerEvents(new BlockCovenant(), this);   // 세계는 부서지지 않는다 (B-161)
@@ -815,6 +818,10 @@ public final class HoncheonMvt extends JavaPlugin {
     }
 
     /** 뿌리내림 과정 (B-178) — 훅 6곳(섭구·장쇠·사냥·시트 거울·수련·운기)이 부른다 */
+    public SeojangStagePlay stagePlay() {
+        return stagePlay;
+    }
+
     public TutorialGuide tutorial() {
         return tutorial;
     }

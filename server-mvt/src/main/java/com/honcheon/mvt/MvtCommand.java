@@ -63,13 +63,19 @@ public final class MvtCommand implements CommandExecutor {
      * 도면이 정본(config/stages/geunal_bam.stage.yml — 렌더 검수를 통과한 것)이고,
      * 로더는 도면 그대로 찍는다 (멱등 — 다시 부르면 손댄 것이 되돌아간다).
      */
-    private boolean seojangStage(CommandSender sender) {
+    private boolean seojangStage(CommandSender sender, String[] args) {
         if (!(sender instanceof Player p)) {
             sender.sendMessage("몸이 있어야 걷는다.");
             return true;
         }
         if (!p.isOp()) {
             p.sendMessage("§c무대는 관리자가 세운다.");
+            return true;
+        }
+        // ★생명 체험 — /혼천 서장무대 체험 [발단] (기본: 습격). 판정·시트 무접촉 시험이다
+        if (args.length >= 2 && args[1].equals("체험")) {
+            String incident = args.length >= 3 ? args[2] : "습격";
+            plugin.stagePlay().begin(p, incident, null);
             return true;
         }
         Voyage voyage = plugin.antechamber().voyage();
@@ -139,7 +145,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
                 case "레이드해소" -> raidResolve(sender, args);   // ★B-190 — 세계 사건(레이드) 결말 선고 (관리자)
                 case "시험돌" -> trialStone(sender);              // ★B-190 ① — 신교의 시험 돌 (관리자 세움)
-                case "서장무대" -> seojangStage(sender);          // ★B-194 — 기억의 마을 조성·방문 (관리자)
+                case "서장무대" -> seojangStage(sender, args);    // ★B-194 — 조성·방문 · 체험 (관리자)
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)

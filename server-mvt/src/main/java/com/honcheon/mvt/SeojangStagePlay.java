@@ -1,0 +1,318 @@
+package com.honcheon.mvt;
+
+import com.honcheon.core.rules.RulesConfig;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Villager;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitTask;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.IntConsumer;
+
+/**
+ * ★B-194 체험형 서장 — 무대의 생명 (넋등 자리 점등 · 행동 감지 · 발단별 연출 · 격리).
+ *
+ * <p>정본: docs/design/seojang_experiential_v1.md · config/seojang.yml enactment.
+ * <b>선택 = 자리 + 그 자리의 간단한 행동</b>: ① 이부자리 뒤에서 웅크리기 ② 담장 틈 앞에서
+ * 틈을 바라보기 ③ 식구 우클릭. 넋등은 실물이 아니라 <b>파티클 빛점</b>이고, 전부
+ * <b>그 사람에게만</b> 보인다 (격리 — 무대는 하나, 사람은 서로에게 없다).
+ *
+ * <p><b>봇이 저자, 마크는 서책</b> — 이 클래스는 문장을 짓지 않는다. 내레이션은 등록부
+ * (seojang.yml prose)의 문장을 그대로 보여 줄 뿐이고, 행동은 「어느 패를 눌렀는가」로
+ * 번역되어 호출자(onChoice)에게 간다. 시험 체험(/혼천 서장무대 체험)은 호출자가 없다 —
+ * 선택을 화면에 보여 주고 끝낸다 (판정·시트 무접촉).
+ *
+ * <p>폴백(갇힘 금지): 60초 무행동이면 안내를 내고 시험 체험은 끝낸다 — 실배선에서는
+ * 글자 패(기존 책)가 그 자리를 받는다.
+ */
+final class SeojangStagePlay implements Listener {
+
+    /** 자리 이름 (enactment.spots 순서 = scenes.기본[0].choices 순서 — 등록부 계약) */
+    private static final List<String> SPOT_NAMES = List.of("이부자리_뒤", "담장_틈", "식구_머리맡");
+    private static final int FALLBACK_TICKS = 20 * 60;   // 【제안】 60초 — 무행동이면 강등
+    private static final int MIDNIGHT = 18000;            // 그날 밤 — 자정 (등록부 시간: 자정)
+
+    private final HoncheonMvt plugin;
+    private final Map<UUID, Session> sessions = new HashMap<>();
+    private StageLoader.Stage stage;                      // 게으른 적재 — 첫 체험 때 도면을 읽는다
+    private List<Map<String, Object>> spotSpecs;          // enactment.spots (속삭임·행동)
+    private Map<String, Object> openings;                 // prose.incident_opening (내레이션 — 등록부 문장)
+
+    private static final class Session {
+        String incident;
+        Location[] spots = new Location[3];
+        Location back;                                    // 끝나면 돌아갈 자리
+        UUID npc;                                         // 식구 — 이 사람에게만 보인다
+        int hold;                                         // 행동 유지 틱 (웅크림·응시)
+        int holdSpot = -1;
+        int age;                                          // 폴백 시계
+        boolean done;
+        IntConsumer onChoice;                             // null = 시험 체험
+        BukkitTask ticker;
+    }
+
+    SeojangStagePlay(HoncheonMvt plugin) {
+        this.plugin = plugin;
+    }
+
+    // ─── 진입 ───
+
+    @SuppressWarnings("unchecked")
+    void begin(Player p, String incident, IntConsumer onChoice) {
+        if (sessions.containsKey(p.getUniqueId())) {
+            p.sendMessage(ChatColor.GRAY + "이미 기억 속에 있다.");
+            return;
+        }
+        World w = plugin.antechamber().voyage().sea();
+        if (w == null) {
+            p.sendMessage(ChatColor.RED + "서장 월드를 못 열었다.");
+            return;
+        }
+        try {
+            if (stage == null) {
+                stage = StageLoader.load(plugin.configPath(), "geunal_bam");
+                Map<String, Object> seojang = RulesConfig.load(plugin.configPath().resolve("seojang.yml"));
+                Map<String, Object> enact = (Map<String, Object>) seojang.getOrDefault("enactment", Map.of());
+                List<Map<String, Object>> scenes = (List<Map<String, Object>>) enact.getOrDefault("기본", List.of());
+                spotSpecs = scenes.isEmpty() ? List.of()
+                        : (List<Map<String, Object>>) scenes.get(0).getOrDefault("spots", List.of());
+                openings = (Map<String, Object>) ((Map<String, Object>) seojang
+                        .getOrDefault("prose", Map.of())).getOrDefault("incident_opening", Map.of());
+            }
+            int oy = StageLoader.originY(stage, w, plugin.antechamber().voyage());
+            StageLoader.build(stage, w, oy);              // 멱등 — 무대는 언제나 도면대로
+
+            Session s = new Session();
+            s.incident = incident;
+            s.back = p.getLocation();
+            s.onChoice = onChoice;
+            for (int i = 0; i < 3; i++) {
+                s.spots[i] = StageLoader.spot(stage, w, oy, SPOT_NAMES.get(i));
+            }
+            sessions.put(p.getUniqueId(), s);
+
+            veil(p, w);
+            p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 30, 0, false, false));
+            p.teleport(StageLoader.spot(stage, w, oy, "깨어남"));
+            p.setPlayerTime(MIDNIGHT, false);             // 그 사람에게만 자정 — 밤바다는 그대로
+            spawnFamily(p, w, oy, s);
+            narrate(p, incident);
+            sceneAmbience(p, s);
+            s.ticker = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(p, s), 10L, 5L);
+        } catch (Exception e) {
+            sessions.remove(p.getUniqueId());
+            p.sendMessage(ChatColor.RED + "기억이 열리지 않았다: " + e.getMessage());
+        }
+    }
+
+    /** 격리 — 무대는 하나, 사람은 서로에게 없다 (Voyage.veil 과 같은 문법) */
+    private void veil(Player p, World sea) {
+        p.setCollidable(false);
+        for (Player other : sea.getPlayers()) {
+            if (!other.getUniqueId().equals(p.getUniqueId())) {
+                p.hidePlayer(plugin, other);
+                other.hidePlayer(plugin, p);
+            }
+        }
+    }
+
+    private void spawnFamily(Player p, World w, int oy, Session s) {
+        Location at = StageLoader.spot(stage, w, oy, "식구_NPC");
+        Villager v = w.spawn(at, Villager.class, e -> {
+            e.setAI(false);
+            e.setSilent(true);
+            e.setInvulnerable(true);
+            e.setCollidable(false);
+            e.setVisibleByDefault(false);                 // ★아무에게도 안 보인다 —
+            e.setGlowing(true);                           //   이 사람에게만 보여 준다 (아래)
+            e.setCustomName(ChatColor.GRAY + "식구");
+            e.setCustomNameVisible(false);
+        });
+        p.showEntity(plugin, v);
+        s.npc = v.getUniqueId();
+    }
+
+    /** 내레이션 — 등록부의 문장 그대로 (마크는 한 문장도 짓지 않는다) */
+    private void narrate(Player p, String incident) {
+        p.sendTitle(ChatColor.GOLD + "第一章", ChatColor.GRAY + "그날 밤", 20, 60, 30);
+        Object opening = openings.get(incident);
+        if (opening != null) {
+            p.sendMessage("");
+            p.sendMessage(ChatColor.GRAY + String.valueOf(opening));
+            p.sendMessage("");
+        }
+    }
+
+    /**
+     * 발단별 연출 — 같은 무대, 다른 그날 밤 (등록부 enactment.연출_by_incident 의 결).
+     * ★소리는 바닐라 근사 【제안】 — 리소스팩 ogg(말발굽·곡소리·언성)가 디자인 사다리 ③에서 갈아탄다.
+     */
+    private void sceneAmbience(Player p, Session s) {
+        switch (s.incident) {
+            case "습격" -> {
+                // 개 짖는 소리가 뚝 끊긴다 → 잠시 뒤 말발굽 — 담장 틈 쪽에서
+                p.playSound(s.spots[1], Sound.ENTITY_WOLF_GROWL, 0.6f, 0.8f);
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!s.done) {
+                        p.playSound(s.spots[1], Sound.ENTITY_HORSE_GALLOP, 1.0f, 0.7f);
+                    }
+                }, 70L);
+            }
+            case "역병" -> p.playSound(s.spots[1], Sound.ENTITY_GHAST_AMBIENT, 0.25f, 0.5f);
+            case "가문의_몰락" -> p.playSound(s.spots[1], Sound.ENTITY_VILLAGER_NO, 0.5f, 0.6f);
+            case "목격" -> p.playSound(p.getLocation(), Sound.AMBIENT_CAVE, 0.4f, 0.9f);
+            default -> p.playSound(p.getLocation(), Sound.AMBIENT_SOUL_SAND_VALLEY_MOOD, 0.4f, 0.8f);
+        }
+    }
+
+    // ─── 심장 — 5틱마다: 넋등 점등 · 접근 속삭임 · 행동 감지 · 폴백 ───
+
+    private void tick(Player p, Session s) {
+        if (s.done || !p.isOnline()) {
+            return;
+        }
+        s.age += 5;
+        Location eye = p.getLocation();
+        int near = -1;
+        double best = 6.5;
+        for (int i = 0; i < 3; i++) {
+            double d = s.spots[i].distanceSquared(eye);
+            if (d < best) {
+                best = d;
+                near = i;
+            }
+            // 넋등 — 파티클 빛점 (그 사람에게만). 가까우면 짙어진다
+            int count = d < 2.0 ? 6 : 2;
+            p.spawnParticle(Particle.SOUL_FIRE_FLAME, s.spots[i].clone().add(0, 0.9, 0),
+                    count, 0.12, 0.22, 0.12, 0.004);
+        }
+        if (near >= 0 && near < spotSpecs.size() && best < 4.5) {
+            Object whisper = spotSpecs.get(near).get("속삭임");
+            if (whisper != null) {
+                p.sendActionBar(ChatColor.GRAY + String.valueOf(whisper));
+            }
+        }
+        // 행동 감지 — 자리 기반이라 정직하다 (시안 §2)
+        if (near == 0 && best < 2.0 && p.isSneaking()) {
+            holdToward(p, s, 0, 60);                      // 웅크린 채 3초
+        } else if (near == 1 && best < 2.0 && facingEast(p)) {
+            holdToward(p, s, 1, 40);                      // 틈을 2초 바라본다
+        } else if (s.holdSpot >= 0) {
+            s.hold = 0;
+            s.holdSpot = -1;
+        }
+        if (s.age >= FALLBACK_TICKS && !s.done) {
+            p.sendMessage(ChatColor.GRAY + "…기억이 흐려진다. (행동이 없으면 이야기가 글로 돌아간다 — 갇히지 않는다)");
+            finish(p, s, -1);
+        }
+    }
+
+    /** 틈은 동쪽 담에 있다 — 동쪽을 바라보는 시선이 곧 「살핀다」 (자리+방향, 허공 벡터 아님) */
+    private boolean facingEast(Player p) {
+        return p.getLocation().getDirection().getX() > 0.6;
+    }
+
+    private void holdToward(Player p, Session s, int spot, int need) {
+        if (s.holdSpot != spot) {
+            s.holdSpot = spot;
+            s.hold = 0;
+        }
+        s.hold += 5;
+        if (s.hold >= need) {
+            choose(p, s, spot);
+        }
+    }
+
+    @EventHandler
+    public void onInteract(PlayerInteractEntityEvent event) {
+        Session s = sessions.get(event.getPlayer().getUniqueId());
+        if (s != null && !s.done && s.npc != null
+                && event.getRightClicked().getUniqueId().equals(s.npc)) {
+            event.setCancelled(true);
+            choose(event.getPlayer(), s, 2);
+        }
+    }
+
+    // ─── 선택 확정 — 나머지 두 불이 꺼지고, 장면이 응답한다 ───
+
+    private void choose(Player p, Session s, int spot) {
+        if (s.done) {
+            return;
+        }
+        s.done = true;
+        p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.7f, 0.6f);
+        p.spawnParticle(Particle.SOUL, s.spots[spot].clone().add(0, 1.0, 0), 20, 0.2, 0.4, 0.2, 0.01);
+        Object label = spot < spotSpecs.size() ? spotSpecs.get(spot).get("행동") : null;
+        p.sendActionBar(ChatColor.GOLD + (label == null ? "그리 하였다." : String.valueOf(label) + " — 그리 하였다."));
+        Bukkit.getScheduler().runTaskLater(plugin, () -> finish(p, s, spot), 50L);
+    }
+
+    /** 끝 — 암전, 몸과 시간을 되돌리고, 선택을 호출자에게 넘긴다 (시험 체험은 화면에만) */
+    private void finish(Player p, Session s, int chosen) {
+        s.done = true;
+        if (s.ticker != null) {
+            s.ticker.cancel();
+        }
+        removeNpc(s);
+        if (p.isOnline()) {
+            p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 30, 0, false, false));
+            p.resetPlayerTime();
+            p.teleport(s.back);
+            p.setCollidable(true);
+            if (!Voyage.isSea(p.getWorld())) {
+                for (Player other : Bukkit.getOnlinePlayers()) {
+                    if (!other.getUniqueId().equals(p.getUniqueId())) {
+                        p.showPlayer(plugin, other);
+                        other.showPlayer(plugin, p);
+                    }
+                }
+            }
+            if (chosen >= 0) {
+                if (s.onChoice != null) {
+                    s.onChoice.accept(chosen);
+                } else {
+                    p.sendMessage(ChatColor.GOLD + "체험 끝 — 선택 " + (chosen + 1) + "번이 판정으로 갔을 자리다 "
+                            + ChatColor.GRAY + "(시험 체험이라 판정·시트는 안 건드린다)");
+                }
+            }
+        }
+        sessions.remove(p.getUniqueId());
+    }
+
+    private void removeNpc(Session s) {
+        if (s.npc != null) {
+            for (World w : Bukkit.getWorlds()) {
+                var e = Bukkit.getEntity(s.npc);
+                if (e != null) {
+                    e.remove();
+                    break;
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        Session s = sessions.remove(event.getPlayer().getUniqueId());
+        if (s != null) {
+            if (s.ticker != null) {
+                s.ticker.cancel();
+            }
+            removeNpc(s);                                 // 나간 몸의 식구는 세계에 남지 않는다
+        }
+    }
+}
