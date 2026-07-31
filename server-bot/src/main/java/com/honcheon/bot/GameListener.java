@@ -873,6 +873,7 @@ public final class GameListener extends ListenerAdapter {
                 case "lk" -> openLinkModal(event);   // ★ 접속의 문 — 코드 창을 연다 (확정은 모달에서)
                 case "al" -> onAllocate(event, id);  // ★ 포인트 배분 — v3 성장의 손 (B-135 단계 4)
                 case "mg" -> onVesselContact(event, id);   // ★B-190 ① — 그릇 접촉의 패 (기명각)
+                case "im" -> onInitiation(event, id);      // ★B-191 — 입문식 (사문 등록 · PONR)
                 case "np" -> onPanel(event, id);     // ★★ 안내판 — 명령을 치지 않게 하는 판
                 case "rs" -> onResetConfirm(event, id[1], id[2], id[3]);   // 되돌린다 — 확인의 손
                 case "rx" -> event.editMessage("초기화를 그만두었다. **아무것도 지우지 않았다.**")
@@ -3827,6 +3828,13 @@ public final class GameListener extends ListenerAdapter {
         String realm = String.valueOf(row.get("realm"));
         Map<String, Object> tags = tagsOf(sheet);
 
+        // ★B-191 — 겸적 불가: 사문이 있는 몸은 다른 문의 심사·잡역에 서지 않는다 (입문식 PONR 의 뒷면)
+        if (sheet.get("사문") != null) {
+            event.editMessage("장로는 당신의 손을 보고 고개를 저었다 — \"이미 사문이 있는 몸이군. "
+                    + "두 문을 섬길 수는 없네.\"").setComponents().queue();
+            return;
+        }
+
         if ("chore".equals(kind)) {
             // 일수당 favor +1 (상한 8) — 잡역 = 사실상의 안면 단계 진입. 누적 30일이면 심사 자격 자동
             int stay = Math.max(1, ((Number) sheet.getOrDefault("출행_여정일", 1)).intValue());
@@ -3891,8 +3899,9 @@ public final class GameListener extends ListenerAdapter {
                     .setDescription("검을 세 번 휘두르게 하고, 장로는 더 보지 않았다. 대신 물었다.\n"
                             + "\"…무엇이 되고 싶어 여기까지 왔나.\"\n\n"
                             + "당신의 대답을 장로는 오래 곱씹었다. 그리고 고개를 끄덕였다.\n"
-                            + "**상태 태그: 화산_심사_통과** · 정파 favor **" + favor + "**\n"
-                            + "*(입문식은 아직이다 — 사문 등록은 봇 다음 증분. 그러나 문은 열렸다)*");
+                            + "**상태 태그: 화산_심사_통과** · 정파 favor **" + favor + "**\n\n"
+                            + "★**입문식이 남았다** — 사문에 들면 **겸적은 불가**하다 "
+                            + "(되돌리려면 탈문 또는 파문뿐). 예는 마음이 섰을 때 올린다.");
         } else {
             putTag(sheet, rules.routes.choreTag(HWASAN), today);   // 낙방해도 눈여겨봄은 남는다
             db.logEvent("세력_심사", "character", String.valueOf(chId), "faction", "화산파",
@@ -3905,7 +3914,62 @@ public final class GameListener extends ListenerAdapter {
                             + "** (다시 오면 심사 난이도 -" + rules.routes.watchedTagDiscount(HWASAN) + ")");
         }
         db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(), realm, "강호", "청하현");
-        event.editMessageEmbeds(judge.build(), scene.build()).setComponents().queue();
+        if (margin >= 0) {
+            // ★B-191 — 합격의 패에 입문식(PONR)이 실린다. 예를 미루면 패는 남는다
+            event.editMessageEmbeds(judge.build(), scene.build()).setComponents(ActionRow.of(
+                    Button.success("im:ok:" + event.getUser().getId() + ":" + chId, "입문식을 올린다"),
+                    Button.secondary("im:no:" + event.getUser().getId() + ":" + chId, "아직 올리지 않는다")))
+                    .queue();
+        } else {
+            event.editMessageEmbeds(judge.build(), scene.build()).setComponents().queue();
+        }
+    }
+
+    /**
+     * ★B-191 — 입문식 (PONR · faction_entry_routes.yml hwasan.point_of_no_return):
+     * 심사 합격은 문이 열린 것이고, <b>사문 등록은 이 예(禮)가 한다</b>. 겸적 불가 —
+     * 되돌리려면 탈문 또는 파문뿐. 튜토리얼의 결승선(「한 세력에 들어간다」)이 여기서 일어난다.
+     */
+    @SuppressWarnings("unchecked")
+    private void onInitiation(ButtonInteractionEvent event, String[] id) throws Exception {
+        if (!event.getUser().getId().equals(id[2])) {
+            event.reply("남의 예식이다.").setEphemeral(true).queue();
+            return;
+        }
+        if ("no".equals(id[1])) {
+            event.reply("장로는 재촉하지 않았다 — \"예는 마음이 섰을 때 올리는 것이네.\" *(패는 남아 있다)*")
+                    .setEphemeral(true).queue();
+            return;
+        }
+        long chId = Long.parseLong(id[3]);
+        Map<String, Object> row = db.findCharacterById(chId).orElse(null);
+        if (row == null) {
+            event.editMessage("…그 몸은 이미 강호에 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> sheet = new LinkedHashMap<>((Map<String, Object>) row.get("sheet"));
+        if (sheet.get("사문") != null) {
+            event.editMessage("이미 사문이 있는 몸이다.").setComponents().queue();
+            return;
+        }
+        if (!tagsOf(sheet).containsKey("화산_심사_통과")) {
+            event.editMessage("심사를 통과한 몸이 아니다.").setComponents().queue();
+            return;
+        }
+        sheet.put("사문", "hwasan");                     // id_policy — 참조는 id 로 (표시는 factionName)
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                String.valueOf(row.get("realm")), String.valueOf(row.get("status")),
+                String.valueOf(row.get("location")));
+        db.logEvent("입문식", "character", String.valueOf(chId), "faction", "hwasan",
+                Map.of("day", db.worldDay()));
+        storyTick(chId, null);
+        event.editMessageEmbeds(new EmbedBuilder().setColor(BLOOD)
+                .setTitle("입문식 — 향 하나가 다 탈 동안")
+                .setDescription("조사전(祖師殿)에 향을 사르고, 스물네 번 절했다.\n"
+                        + "장로가 당신의 이름을 사문 명부에 적어 넣는다 — 붓은 느리고, 확실했다.\n\n"
+                        + "**사문 — " + rules.factionName("hwasan") + "** · *이후 겸적 불가 "
+                        + "(되돌리려면 탈문 또는 파문뿐)*\n\n*이것으로 강호의 첫 문을 넘었다.*")
+                .build()).setComponents().queue();
     }
 
     // ─── B. NPC 사망 연쇄 — 죽음은 막다른 길이 아니다 (npc_death.yml) ───

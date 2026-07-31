@@ -43,6 +43,20 @@ def hook_stations(src=SRC):
     return found
 
 
+BOT_LISTENER = ROOT / "server-bot/src/main/java/com/honcheon/bot/GameListener.java"
+ROUTES_YML = ROOT / "config" / "faction_entry_routes.yml"
+
+
+def finish_line(ponr_key, src_text):
+    """★B-191 — 튜토리얼의 결승선: 등록부의 입문식(PONR)을 여는 손이 실재하는가.
+    선언만 있고 손이 없던 것이 6일 침묵한 빚이었다 — 같은 병을 여기서 잰다."""
+    if str(ponr_key) != "입문식":
+        return [("hwasan point_of_no_return 이 입문식이 아니다 (등록부가 갈렸다)", str(ponr_key))]
+    if '"입문식"' not in src_text or '"사문"' not in src_text or 'case "im"' not in src_text:
+        return [("등록부가 입문식(PONR)을 정의했는데 여는 손이 없다 — 결승선 없는 튜토리얼", "입문식")]
+    return []
+
+
 def audit(reg, hooks):
     """위반 목록 — (종류, 정거장). reg 는 순서 보존 목록, hooks 는 집합."""
     bad = []
@@ -67,7 +81,12 @@ def selftest():
     clean = audit(["마중"], {"마중"})
     ok2 = not clean
     print(f"  {'✅' if ok2 else '❌'} 자기 시험 — 깨끗한 판에 거짓 짖음 {len(clean)}건")
-    return 0 if ok and ok2 else 1
+    # ★B-191 결승선의 눈 — 손 없는 판에 짖고, 손 있는 판에 조용한가
+    bark = finish_line("입문식", "// 손이 없다")
+    quiet = finish_line("입문식", 'case "im" … "사문" … "입문식"')
+    ok3 = len(bark) == 1 and not quiet
+    print(f"  {'✅' if ok3 else '❌'} 자기 시험 — 결승선(입문식) 절단에 {len(bark)}건 · 정상에 {len(quiet)}건")
+    return 0 if ok and ok2 and ok3 else 1
 
 
 def main():
@@ -76,7 +95,12 @@ def main():
     reg = registry_stations()
     hooks = hook_stations()
     bad = audit(reg, hooks)
-    print(f"뿌리내림 감사 — 등록부 {len(reg)}정거장 · 훅 참조 {len(hooks)}종")
+    with open(ROUTES_YML, encoding="utf-8") as f:
+        routes = yaml.safe_load(f) or {}
+    ponr = (((routes.get("routes") or {}).get("hwasan_entry") or {})
+            .get("point_of_no_return") or {})
+    bad += finish_line(ponr.get("key"), BOT_LISTENER.read_text(encoding="utf-8"))
+    print(f"뿌리내림 감사 — 등록부 {len(reg)}정거장 · 훅 참조 {len(hooks)}종 · 결승선(입문식) 검사")
     for kind, st in bad:
         print(f"  ✗ {kind}: {st}")
     print(f"  총평: {'✅ 위반 0건' if not bad else f'❌ 위반 {len(bad)}건'}")
