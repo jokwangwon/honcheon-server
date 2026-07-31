@@ -138,6 +138,46 @@ def render_iso(cfg, layers, out):
     img.save(out)
 
 
+def render_mood(cfg, layers, out):
+    """분위기 렌더 — 밤 워시 + 광원 글로우 (쉐이더의 근사 · 접속 없이 빛의 유도를 검수한다).
+    광원: 도면의 soul_lantern 자동 감지 + meta.lights([[col,row,색이름], …] — 화광 등 연출 광원)."""
+    w, d = cfg["meta"]["size"]
+    hw, hh, vz = 12, 6, 12
+    W = (w + d) * hw + 40
+    H = (w + d) * hh + len(layers) * vz + 80
+    base = Image.open(OUT / f"{cfg['_name']}_iso.png").convert("RGB")
+    # ① 밤 워시 — 푸르게 가라앉힌다 (달밤)
+    night = Image.new("RGB", base.size, (24, 30, 52))
+    img = Image.blend(base, night, 0.45)
+    # ② 광원 수집 — 등잔(자동) + 연출 광원(meta.lights)
+    ox, oy = d * hw + 20, 40
+    glow_colors = {"warm": (255, 190, 110), "fire": (255, 130, 50), "moon": (180, 200, 235),
+                   "soul": (130, 210, 220)}
+    lights = []
+    for y, (_, grid) in enumerate(layers):
+        for r in range(d):
+            for c in range(w):
+                if grid[r][c] == "soul_lantern":
+                    lights.append((c, r, y, "soul", 60))
+    for spec in (cfg["meta"].get("lights") or []):
+        c, r = int(spec[0]), int(spec[1])
+        lights.append((c, r, 2, str(spec[2]) if len(spec) > 2 else "warm", 80))
+    # ③ 글로우 — 가산 방사 (PIL: 작은 원들을 겹쳐 근사)
+    from PIL import ImageChops
+    overlay = Image.new("RGB", base.size, (0, 0, 0))
+    dr = ImageDraw.Draw(overlay)
+    for c, r, y, kind, radius in lights:
+        x0 = ox + (c - r) * hw
+        y0 = oy + (c + r) * hh + (len(layers) - y) * vz
+        col = glow_colors.get(kind, glow_colors["warm"])
+        for i in range(radius, 4, -6):
+            a = max(6, int(70 * (1 - i / radius)))
+            dr.ellipse([x0 - i, y0 - i // 2 - 6, x0 + i, y0 + i // 2 - 6],
+                       fill=tuple(v * a // 255 for v in col))
+    img = ImageChops.add(img, overlay)
+    img.save(out)
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__)
@@ -150,12 +190,15 @@ def main():
             print("  ·", b)
         return 1
     OUT.mkdir(parents=True, exist_ok=True)
+    cfg["_name"] = name
     render_plan(cfg, layers, OUT / f"{name}_plan.png")
     render_iso(cfg, layers, OUT / f"{name}_iso.png")
+    render_mood(cfg, layers, OUT / f"{name}_mood.png")
     w, d = cfg["meta"]["size"]
     print(f"✅ {cfg['meta']['name']} — {w}×{d} · 층 {len(layers)} · spots {len(cfg.get('spots') or {})}")
     print(f"   {OUT / (name + '_plan.png')}")
     print(f"   {OUT / (name + '_iso.png')}")
+    print(f"   {OUT / (name + '_mood.png')}")
     return 0
 
 
