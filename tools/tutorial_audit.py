@@ -45,6 +45,20 @@ def hook_stations(src=SRC):
 
 BOT_LISTENER = ROOT / "server-bot/src/main/java/com/honcheon/bot/GameListener.java"
 ROUTES_YML = ROOT / "config" / "faction_entry_routes.yml"
+CREATION_YML = ROOT / "config" / "player_creation.yml"
+
+
+def start_pool(playable, start_regions):
+    """★B-187 ① — 시작 마을 뽑기 풀의 눈: mvt_start.playable 의 모든 마을이 start_regions 에서
+    status 완비여야 한다 (스텁이 풀에 들면 사람이 허공에 떨어진다). start_regions 의 첫 독자다 —
+    그전까지 그 표는 어떤 코드도 읽지 않는 의도의 기록이었다."""
+    bad = []
+    for r in playable:
+        st = str(((start_regions.get(r) or {}) if isinstance(start_regions.get(r), dict)
+                  else {}).get("status"))
+        if st != "완비":
+            bad.append((f"뽑기 풀(playable)에 완비 아닌 마을이 있다 (status={st}) — 허공에 떨어진다", r))
+    return bad
 
 
 def finish_line(ponr_key, src_text):
@@ -86,7 +100,12 @@ def selftest():
     quiet = finish_line("입문식", 'case "im" … "사문" … "입문식"')
     ok3 = len(bark) == 1 and not quiet
     print(f"  {'✅' if ok3 else '❌'} 자기 시험 — 결승선(입문식) 절단에 {len(bark)}건 · 정상에 {len(quiet)}건")
-    return 0 if ok and ok2 and ok3 else 1
+    # ★B-187 ① 뽑기 풀의 눈 — 스텁이 풀에 들면 짖고, 완비만이면 조용한가
+    bark2 = start_pool(["하북_평야"], {"하북_평야": {"status": "스텁"}})
+    quiet2 = start_pool(["cheongha_hyeon"], {"cheongha_hyeon": {"status": "완비"}})
+    ok4 = len(bark2) == 1 and not quiet2
+    print(f"  {'✅' if ok4 else '❌'} 자기 시험 — 뽑기 풀 스텁 혼입에 {len(bark2)}건 · 정상에 {len(quiet2)}건")
+    return 0 if ok and ok2 and ok3 and ok4 else 1
 
 
 def main():
@@ -100,7 +119,17 @@ def main():
     ponr = (((routes.get("routes") or {}).get("hwasan_entry") or {})
             .get("point_of_no_return") or {})
     bad += finish_line(ponr.get("key"), BOT_LISTENER.read_text(encoding="utf-8"))
-    print(f"뿌리내림 감사 — 등록부 {len(reg)}정거장 · 훅 참조 {len(hooks)}종 · 결승선(입문식) 검사")
+    with open(CREATION_YML, encoding="utf-8") as f:
+        creation = yaml.safe_load(f) or {}
+    lifepath = creation.get("age_and_lifepath") or {}
+    if not lifepath.get("mvt_start"):
+        # 절 이름이 갈렸다 — 공허 통과(빈 풀 = 위반 0)는 눈이 먼 것이니 소리낸다
+        bad.append(("age_and_lifepath.mvt_start 를 못 찾았다 — 눈이 절 이름을 잃었다", "mvt_start"))
+    mvt = (lifepath.get("mvt_start") or {})
+    srs = (lifepath.get("start_regions") or {})
+    bad += start_pool([str(r) for r in (mvt.get("playable") or [])], srs)
+    print(f"뿌리내림 감사 — 등록부 {len(reg)}정거장 · 훅 참조 {len(hooks)}종 · "
+          f"결승선(입문식)·뽑기 풀(시작 마을) 검사")
     for kind, st in bad:
         print(f"  ✗ {kind}: {st}")
     print(f"  총평: {'✅ 위반 0건' if not bad else f'❌ 위반 {len(bad)}건'}")
