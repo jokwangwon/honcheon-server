@@ -50,7 +50,7 @@ final class SeojangStagePlay implements Listener {
     private final Map<UUID, Session> sessions = new HashMap<>();
     private StageLoader.Stage stage;                      // 게으른 적재 — 첫 체험 때 도면을 읽는다
     private List<Map<String, Object>> spotSpecs;          // enactment.spots (속삭임·행동)
-    private List<Object> introLines = List.of();          // enactment.도입_안내 — 세계가 먼저 말한다
+    private String lastQuestion;                          // enactment.마지막_물음 — 뼈대의 그 문장
     private String wanderWhisper;                         // enactment.배회_속삭임 — 길을 잃은 몸에게
     private Map<String, Object> openings;                 // prose.incident_opening (내레이션 — 등록부 문장)
 
@@ -93,7 +93,8 @@ final class SeojangStagePlay implements Listener {
                 spotSpecs = scenes.isEmpty() ? List.of()
                         : (List<Map<String, Object>>) scenes.get(0).getOrDefault("spots", List.of());
                 if (!scenes.isEmpty()) {
-                    introLines = (List<Object>) scenes.get(0).getOrDefault("도입_안내", List.of());
+                    Object q = scenes.get(0).get("마지막_물음");
+                    lastQuestion = q == null ? null : String.valueOf(q);
                     Object ww = scenes.get(0).get("배회_속삭임");
                     wanderWhisper = ww == null ? null : String.valueOf(ww);
                 }
@@ -113,15 +114,25 @@ final class SeojangStagePlay implements Listener {
             sessions.put(p.getUniqueId(), s);
 
             veil(p, w);
-            p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 30, 0, false, false));
+            // ★빨간펜 2호 — 인과의 순서: 어둠(3.5초) 속에서 **소리가 먼저** 온다. 그래서 깬다.
+            //   글은 그다음이다 — 첫머리가 방금 들은 그 소리를 말하게 (글이 소리를 앞서면 거짓말)
+            p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 80, 0, false, false));
             p.teleport(StageLoader.spot(stage, w, oy, "깨어남"));
             p.setPlayerTime(MIDNIGHT, false);             // 그 사람에게만 자정 — 밤바다는 그대로
             p.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION,
                     20 * 600, 0, true, false));           // 밤눈 — 어둠의 결은 두되 몸은 본다 (빨간펜 1호)
             spawnFamily(p, w, oy, s);
-            narrate(p, incident);
-            sceneAmbience(p, s);
-            s.ticker = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(p, s), 10L, 5L);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!s.done && p.isOnline()) {
+                    sceneAmbience(p, s);                  // ① 어둠 속의 소리 — 깨는 이유
+                }
+            }, 15L);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!s.done && p.isOnline()) {
+                    narrate(p, incident);                 // ② 눈을 뜨자, 방금 들은 것이 글이 된다
+                    s.ticker = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(p, s), 5L, 5L);
+                }
+            }, 80L);
         } catch (Exception e) {
             sessions.remove(p.getUniqueId());
             p.sendMessage(ChatColor.RED + "기억이 열리지 않았다: " + e.getMessage());
@@ -164,8 +175,15 @@ final class SeojangStagePlay implements Listener {
             p.sendMessage(ChatColor.GRAY + String.valueOf(opening));
             p.sendMessage("");
         }
-        for (Object line : introLines) {
-            p.sendMessage(ChatColor.DARK_AQUA + "" + ChatColor.ITALIC + String.valueOf(line));
+        for (Map<String, Object> spec : spotSpecs) {
+            Object thought = spec.get("생각");
+            if (thought != null) {
+                p.sendMessage(ChatColor.DARK_AQUA + "" + ChatColor.ITALIC + String.valueOf(thought));
+            }
+        }
+        if (lastQuestion != null) {
+            p.sendMessage("");
+            p.sendMessage(ChatColor.WHITE + lastQuestion);
         }
     }
 
@@ -176,13 +194,16 @@ final class SeojangStagePlay implements Listener {
     private void sceneAmbience(Player p, Session s) {
         switch (s.incident) {
             case "습격" -> {
-                // 개 짖는 소리가 뚝 끊긴다 → 잠시 뒤 말발굽 — 담장 틈 쪽에서
-                p.playSound(s.spots[1], Sound.ENTITY_WOLF_GROWL, 0.6f, 0.8f);
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    if (!s.done) {
-                        p.playSound(s.spots[1], Sound.ENTITY_HORSE_GALLOP, 1.0f, 0.7f);
-                    }
-                }, 70L);
+                // 개 짖는 소리가 뚝 끊긴다 → 말발굽이 반복해서 **다가온다** (조용히 → 크게)
+                p.playSound(s.spots[1], Sound.ENTITY_WOLF_GROWL, 0.7f, 0.8f);
+                for (int i = 0; i < 6; i++) {
+                    float vol = 0.3f + i * 0.14f;
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (!s.done && p.isOnline()) {
+                            p.playSound(s.spots[1], Sound.ENTITY_HORSE_GALLOP, vol, 0.7f);
+                        }
+                    }, 50L + i * 45L);
+                }
             }
             case "역병" -> p.playSound(s.spots[1], Sound.ENTITY_GHAST_AMBIENT, 0.25f, 0.5f);
             case "가문의_몰락" -> p.playSound(s.spots[1], Sound.ENTITY_VILLAGER_NO, 0.5f, 0.6f);
