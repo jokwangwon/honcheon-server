@@ -58,6 +58,40 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * ★B-194 — 기억의 마을 「그날 밤」을 서장 월드에 찍고 걸어 본다 (관리자 검수).
+     * 도면이 정본(config/stages/geunal_bam.stage.yml — 렌더 검수를 통과한 것)이고,
+     * 로더는 도면 그대로 찍는다 (멱등 — 다시 부르면 손댄 것이 되돌아간다).
+     */
+    private boolean seojangStage(CommandSender sender) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage("몸이 있어야 걷는다.");
+            return true;
+        }
+        if (!p.isOp()) {
+            p.sendMessage("§c무대는 관리자가 세운다.");
+            return true;
+        }
+        Voyage voyage = plugin.antechamber().voyage();
+        World w = voyage.sea();
+        if (w == null) {
+            p.sendMessage("§c서장 월드를 못 열었다 — 콘솔 로그를 보라.");
+            return true;
+        }
+        try {
+            StageLoader.Stage s = StageLoader.load(plugin.configPath(), "geunal_bam");
+            int oy = StageLoader.originY(s, w, voyage);
+            StageLoader.build(s, w, oy);
+            p.teleport(StageLoader.spot(s, w, oy, "깨어남"));
+            p.sendMessage("§6무대가 섰다 — " + s.name() + " (" + s.width() + "×" + s.depth()
+                    + "×" + s.layers().size() + "층 · 자리 " + s.spots().size() + ")");
+            p.sendMessage("§7깨어나는 자리에 내렸다. 이부자리 뒤 · 담장 틈 · 식구 머리맡을 걸어 보라.");
+        } catch (Exception e) {
+            p.sendMessage("§c무대 조성 실패: " + e.getMessage());
+        }
+        return true;
+    }
+
     /** ★B-190 ① — 신교의 시험 돌을 세운다 (관리자) · 정본: factions.yml cheonma.플레이어_루트_기계.시험 */
     private boolean trialStone(CommandSender sender) {
         if (!(sender instanceof Player p)) {
@@ -105,6 +139,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
                 case "레이드해소" -> raidResolve(sender, args);   // ★B-190 — 세계 사건(레이드) 결말 선고 (관리자)
                 case "시험돌" -> trialStone(sender);              // ★B-190 ① — 신교의 시험 돌 (관리자 세움)
+                case "서장무대" -> seojangStage(sender);          // ★B-194 — 기억의 마을 조성·방문 (관리자)
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
