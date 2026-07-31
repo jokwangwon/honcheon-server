@@ -123,7 +123,10 @@ final class SeojangStagePlay implements Listener {
             if (entrySubtitle != null) {
                 p.sendTitle(" ", ChatColor.DARK_GRAY + entrySubtitle, 10, 60, 20);
             }
-            p.teleport(StageLoader.spot(stage, w, oy, "깨어남"));
+            Location wake = StageLoader.spot(stage, w, oy, "깨어남");
+            wake.setDirection(StageLoader.spot(stage, w, oy, "식구_NPC").toVector()
+                    .subtract(wake.toVector()));           // 눈을 뜨면 첫 시야 = 잠든 식구
+            p.teleport(wake);
             p.setPlayerTime(MIDNIGHT, false);             // 그 사람에게만 자정 — 밤바다는 그대로
             p.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION,
                     20 * 600, 0, true, false));           // 밤눈 — 어둠의 결은 두되 몸은 본다 (빨간펜 1호)
@@ -157,6 +160,17 @@ final class SeojangStagePlay implements Listener {
     }
 
     private void spawnFamily(Player p, World w, int oy, Session s) {
+        // ★고아 청소 (공간덤프 실측 2026-07-31: 보이지 않는 식구 둘이 남아 있었다) —
+        //   세션이 재기동·이탈로 안 닫히면 visible_default=false 인 몸이 영영 남는다. 스폰 전에 걷는다
+        for (org.bukkit.entity.Entity e : w.getEntities()) {
+            boolean ours = e.getPersistentDataContainer().has(
+                    new org.bukkit.NamespacedKey("honcheon", "stage_family"));
+            boolean named = e.getCustomName() != null
+                    && "식구".equals(ChatColor.stripColor(e.getCustomName()));
+            if ((ours || (named && e instanceof Villager)) && !sessionOwns(e.getUniqueId())) {
+                e.remove();
+            }
+        }
         Location at = StageLoader.spot(stage, w, oy, "식구_NPC");
         Villager v = w.spawn(at, Villager.class, e -> {
             e.setAI(false);
@@ -379,6 +393,15 @@ final class SeojangStagePlay implements Listener {
             }
         }
         sessions.remove(p.getUniqueId());
+    }
+
+    private boolean sessionOwns(UUID entity) {
+        for (Session s : sessions.values()) {
+            if (entity.equals(s.npc)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void removeNpc(Session s) {
