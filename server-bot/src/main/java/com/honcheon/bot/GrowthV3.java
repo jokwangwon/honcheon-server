@@ -157,6 +157,21 @@ final class GrowthV3 {
         return Allocation.OK;
     }
 
+    /**
+     * ★B-190 ① 기명각(棄名閣) — 성장을 전부 버린다 (사용자 확정 2026-07-31: 「모든 레벨 및
+     * 기술을 버리고」). ★세 그릇(원장·능력치_화후·능력치)을 반드시 함께 지운다 — 하나라도 남으면
+     * raise-only 인 {@link #backfill} 이 다음 읽기에서 능력치를 되살린다.
+     * 기술·심법·경지 등 성장 밖의 키는 부르는 쪽(기명각 손)의 몫이다.
+     */
+    static void wipe(Map<String, Object> sheet) {
+        sheet.remove("레벨");
+        sheet.remove("경험치");
+        sheet.remove("미사용포인트");
+        sheet.remove("원장");
+        sheet.remove("능력치");
+        sheet.remove("능력치_화후");
+    }
+
     private static double num(Object o) {
         return o instanceof Number n ? n.doubleValue() : 0.0;
     }

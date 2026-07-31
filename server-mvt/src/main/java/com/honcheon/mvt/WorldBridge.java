@@ -998,7 +998,9 @@ public final class WorldBridge {
                         int marks실전, int marks사선, int money,
                         String house, String gender, String startAnchor, boolean leftHouse,
                         String birthRank, String houseName, String houseRegion, String houseState,
-                        List<Kin> kin, int level, double xp, double xpNeed, int points) {
+                        List<Kin> kin, int level, double xp, double xpNeed, int points,
+                        String title) {
+        // title = ★B-190 ① 칭호 (그릇이 될 자 …) — null = 칭호 없음 (경지 명패가 대신 선다)
     }
 
     /** 피붙이 하나 — <b>형·누나·동생</b> (문파의 사형·사저와 **다른 어휘**다. 축이 다르다: 태어난 순) */
@@ -1553,6 +1555,7 @@ public final class WorldBridge {
                 List.copyOf(kin),
                 // ★성장 v3 레벨 거울 (단계 5) — 없는 칸은 "봇이 모르는 값"(-1). 몸의 것을 덮지 않는다
                 num(raw.get("level"), -1), dec(raw.get("xp"), -1),
-                dec(raw.get("xp_need"), -1), num(raw.get("points"), -1));
+                dec(raw.get("xp_need"), -1), num(raw.get("points"), -1),
+                text(raw.get("title")));   // ★B-190 ① 칭호 — null = 없음
     }
 }

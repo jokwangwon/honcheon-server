@@ -264,6 +264,19 @@ final class WorldClockEngine {
                 .forEach(endingWorld::add);
     }
 
+    /** ★B-190 ① — 현재 막이 주어진 order 에 닿았는가. 관문_대기는 기다리는 막으로 센다 */
+    boolean actReached(int order) throws Exception {
+        if (fault != null) {
+            return false;
+        }
+        String cur = meta(KEY_ACT).orElse(null);
+        if (cur == null) {
+            return false;
+        }
+        Act act = WAITING.equals(cur) ? pendingAct() : byId.get(cur);
+        return act != null && act.order() >= order;
+    }
+
     /** 시계가 잠겨 있으면 그 이유 — null 이면 건강 (감사·시험용) */
     String fault() {
         return fault;

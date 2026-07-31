@@ -856,6 +856,28 @@ public final class Db implements AutoCloseable, FactionLedger, RegionLedger,
         return out;
     }
 
+    /**
+     * ★B-190 ① — 이 캐릭터가 주체인 소문이 그 망에 살아 있는가.
+     * 「하오문의 보고 = 소문망」(factions.yml cheonma.플레이어_루트_기계.보고)의 조회 지점 —
+     * 유효 강도 식은 heard 와 같은 셈이고, 주체 대조는 rumorGroupExists 의 LIKE 문법을 빌린다
+     * (주체_id 는 전용 컬럼이 아니라 content_json 안에 산다).
+     */
+    public boolean hasSubjectRumor(long subjectId, String network, int day, int decayEveryDays)
+            throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT 1 FROM rumors WHERE network = ? AND state = '전파중' "
+                        + "AND content_json LIKE ? "
+                        + "AND (strength - (? - born_day) / ?) > 0 LIMIT 1")) {
+            ps.setString(1, network);
+            ps.setString(2, "%\"주체_id\":" + subjectId + "%");
+            ps.setInt(3, day);
+            ps.setInt(4, Math.max(1, decayEveryDays));
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
     /** 특정 소문군이 이미 심어져 있는가 — 세계 개막 소문의 1회성 보장 */
     public boolean rumorGroupExists(String group) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(

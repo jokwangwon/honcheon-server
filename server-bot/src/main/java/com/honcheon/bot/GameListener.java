@@ -872,6 +872,7 @@ public final class GameListener extends ListenerAdapter {
                 case "ln" -> onLineageChoice(event, "kin".equals(id[1]));   // 새 삶 — 혈연 / 무관
                 case "lk" -> openLinkModal(event);   // ★ 접속의 문 — 코드 창을 연다 (확정은 모달에서)
                 case "al" -> onAllocate(event, id);  // ★ 포인트 배분 — v3 성장의 손 (B-135 단계 4)
+                case "mg" -> onVesselContact(event, id);   // ★B-190 ① — 그릇 접촉의 패 (기명각)
                 case "np" -> onPanel(event, id);     // ★★ 안내판 — 명령을 치지 않게 하는 판
                 case "rs" -> onResetConfirm(event, id[1], id[2], id[3]);   // 되돌린다 — 확인의 손
                 case "rx" -> event.editMessage("초기화를 그만두었다. **아무것도 지우지 않았다.**")
@@ -5405,6 +5406,11 @@ public final class GameListener extends ListenerAdapter {
             report.append(observable == null ? "" : "\n*" + observable + "*").append('\n');
         }
 
+        // ★B-190 ① — 저쪽이 먼저 본다: 그릇 찾기의 접촉. Dawn(공개)에는 싣지 않는다 —
+        //   노출 금지 (faction_entry_routes.yml magyo_encroachment.display_prohibition).
+        //   조용한 DM 하나가 전부다. 조건·화법의 정본: factions.yml cheonma.플레이어_루트_기계.
+        cheonmaContact(day);
+
         // 빈사 마감 — 개입 창구가 닫힌다 (death_pipeline.no_intervention: 사망_확정_비가역)
         for (Map<String, Object> row : db.activeCharacters()) {
             @SuppressWarnings("unchecked")
@@ -6094,6 +6100,10 @@ public final class GameListener extends ListenerAdapter {
         Map<String, Object> sheet = (Map<String, Object>) character.get("sheet");
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("realm", String.valueOf(character.get("realm")));
+        // ★B-190 ① — 칭호 (그릇이 될 자 …): 있으면 명패가 경지 대신 이것을 단다. 없으면 안 내린다
+        if (sheet.get("칭호") != null) {
+            out.put("title", String.valueOf(sheet.get("칭호")));
+        }
         out.put("money", ((Number) character.getOrDefault("wallet", 0)).intValue());
 
         // ═══ ★★ 신분 — **마크가 내가 누구의 자식인지 알아야 한다** (2026-07-13) ═══
@@ -6847,6 +6857,130 @@ public final class GameListener extends ListenerAdapter {
             return;
         }
         dm(req.discordId(), text, embeds);
+    }
+
+    /**
+     * ★B-190 ① — 마교의 그릇 찾기 (사용자 확정 2026-07-31 · 정본: factions.yml
+     * cheonma.플레이어_루트_기계). <b>저쪽이 먼저 본다</b> — 신청 명령은 문법 위반이라 없다.
+     * 조건 셋: 제3막 이후(초대의 병이 보인 뒤) · 하오문 망에 주체로 살아 있는 소문(하오문이
+     * 아는 자 — 자격 심사가 아니라 존재 확인이다) · 미접촉. 접촉은 DM 하나가 전부다 —
+     * "마교"라는 단어는 쓰지 않는다 (display_prohibition · 화법은 등록부의 「자네, 밥은 먹었나」).
+     * DM 이 닫혀 있으면 그 연은 조용히 끊긴다 — 표식은 남는다 (낯선 자는 두 번 오지 않는다).
+     */
+    @SuppressWarnings("unchecked")
+    private void cheonmaContact(int day) {
+        try {
+            if (!worldClock.actReached(3)) {
+                return;
+            }
+            for (Map<String, Object> row : db.activeCharacters()) {
+                Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+                if (sheet.containsKey("그릇_접촉") || sheet.containsKey("그릇_접촉_거절")
+                        || sheet.containsKey("칭호")) {
+                    continue;
+                }
+                long chId = ((Number) row.get("id")).longValue();
+                if (!db.hasSubjectRumor(chId, "haomun_net", day, rules.rumors.decayEveryDays())) {
+                    continue;   // 하오문이 모르는 자에게는 아무도 오지 않는다
+                }
+                sheet.put("그릇_접촉", day);
+                db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                        String.valueOf(row.get("realm")), String.valueOf(row.get("status")),
+                        String.valueOf(row.get("location")));
+                String discordId = String.valueOf(row.get("discord_id"));
+                dmButtons(discordId, new EmbedBuilder().setColor(INK)
+                                .setTitle("낯선 자")
+                                .setDescription("해 질 무렵, 낯선 자가 옆에 앉는다. 어느 소속인지 알 수 없는 행색이다.\n\n"
+                                        + "\"자네, 밥은 먹었나.\"\n\n"
+                                        + "\"…이름 말고는 버릴 것이 없는 사람을 찾고 있네. 자네 얘기를 들었지.\"\n\n"
+                                        + "*(무엇을 하는 자냐 묻자 그는 웃기만 한다)*").build(),
+                        ActionRow.of(
+                                Button.primary("mg:ok:" + discordId + ":" + chId, "이야기를 듣는다"),
+                                Button.secondary("mg:no:" + discordId + ":" + chId, "자리를 뜬다")));
+            }
+        } catch (Exception e) {
+            System.err.println("그릇 접촉 판정 실패 (세계일 " + day + "): " + e);
+        }
+    }
+
+    /** ★B-190 ① — 그릇 접촉의 패. ok → 값의 재확인(전부 버린다) → go 가 기명각을 집행한다 */
+    @SuppressWarnings("unchecked")
+    private void onVesselContact(ButtonInteractionEvent event, String[] id) throws Exception {
+        if (!event.getUser().getId().equals(id[2])) {
+            event.reply("남의 자리다.").setEphemeral(true).queue();
+            return;
+        }
+        long chId = Long.parseLong(id[3]);
+        Map<String, Object> row = db.findCharacterById(chId).orElse(null);
+        if (row == null) {
+            event.editMessage("…그 몸은 이미 강호에 없다.").setComponents().queue();
+            return;
+        }
+        Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+        switch (id[1]) {
+            case "no" -> {
+                // 거절 = 버릴 것이 있는 자라는 뜻 — 다시 오지 않는다 (등록부 확정)
+                sheet.put("그릇_접촉_거절", db.worldDay());
+                saveVessel(chId, row, sheet, String.valueOf(row.get("realm")));
+                event.editMessage("자리를 떴다. 낯선 자는 잡지 않는다 — 그리고 **다시 오지 않는다.**")
+                        .setComponents().queue();
+            }
+            case "ok" -> event.editMessageEmbeds(new EmbedBuilder().setColor(BLOOD)
+                            .setTitle("값")
+                            .setDescription("\"따라오려면 알아 두게. 문턱은 없네 — **값이 있을 뿐이지.**\"\n\n"
+                                    + "\"지금껏 쌓은 **전부**를 버리게 된다. 경지도, 무공도, 심법도, 집안의 이름도.\n"
+                                    + "몸은 **처음의 몸**으로 돌아가네. **되돌릴 수 없어.**\"\n\n"
+                                    + "\"그래도 오겠는가.\"").build())
+                    .setComponents(ActionRow.of(
+                            Button.danger("mg:go:" + id[2] + ":" + chId, "전부 버린다"),
+                            Button.secondary("mg:stop:" + id[2] + ":" + chId, "아직은 아니다"))).queue();
+            case "stop" -> {
+                // 중단 = 거절이 아니다 — 접촉 표식을 걷어 낯선 자가 다음에 다시 올 수 있게 한다
+                sheet.remove("그릇_접촉");
+                saveVessel(chId, row, sheet, String.valueOf(row.get("realm")));
+                event.editMessage("\"…생각이 바뀌면, 내가 알게 되겠지.\" — 낯선 자는 일어선다.")
+                        .setComponents().queue();
+            }
+            case "go" -> {
+                // ★기명각 — 전부 버린다 (GrowthV3.wipe 가 성장을, 여기가 나머지를. 경지는 범인으로)
+                String oldRealm = String.valueOf(row.get("realm"));
+                GrowthV3.wipe(sheet);
+                for (String key : List.of("기술", "기술_수련", "화후_원장", "심법", "단전",
+                        "축기_원장", "실전_마크", "사선_마크", "가전_무공")) {
+                    sheet.remove(key);
+                }
+                sheet.put("칭호", "그릇이 될 자");
+                saveVessel(chId, row, sheet, "범인");
+                db.logEvent("기명각", "character", String.valueOf(chId), "칭호", "그릇이_될_자",
+                        Map.of("day", db.worldDay(), "버린_경지", oldRealm));
+                event.editMessageEmbeds(new EmbedBuilder().setColor(BLOOD)
+                        .setTitle("기명각(棄名閣)")
+                        .setDescription("이름을 문 앞에 두고 들어간다.\n\n"
+                                + "쌓은 것이 전부 빠져나간다 — 경지도, 무공도, 집의 이름도.\n"
+                                + "비워진 몸만 남는다.\n\n**칭호 — 그릇이 될 자.**\n\n"
+                                + "*\"시험이 준비되면 다시 오겠네. 그때까지, 빈 채로 있게.\"*").build())
+                        .setComponents().queue();
+            }
+            default -> event.deferEdit().queue();
+        }
+    }
+
+    /** 그릇 접촉의 저장 손 — 시트·경지만 갈고 나머지는 그대로 (updateCharacter 한 벌) */
+    private void saveVessel(long chId, Map<String, Object> row, Map<String, Object> sheet,
+                            String realm) throws Exception {
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(), realm,
+                String.valueOf(row.get("status")), String.valueOf(row.get("location")));
+    }
+
+    /** ★B-190 ① — 버튼 딸린 DM (dm 은 embed 하나만 보낸다 — 패가 필요한 접촉의 전용 손) */
+    private void dmButtons(String discordId, MessageEmbed embed, ActionRow buttons) {
+        var jda = this.jda;
+        if (jda == null) {
+            return;
+        }
+        jda.retrieveUserById(discordId).queue(user -> user.openPrivateChannel().queue(ch ->
+                ch.sendMessageEmbeds(embed).setComponents(buttons).queue(ok -> { }, err -> { }),
+                err -> { }), err -> { });
     }
 
     private void dm(String discordId, String text, MessageEmbed... embeds) {

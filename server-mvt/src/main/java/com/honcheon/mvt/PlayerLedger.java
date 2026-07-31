@@ -48,6 +48,8 @@ public final class PlayerLedger {
      * 여기가 하드코딩 {@code "이류"} 가 서 있던 자리다 ({@code SkillEngine.State.realm}).
      */
     private String realm;
+    /** ★B-190 ① 칭호 (그릇이 될 자 …) — 봇의 확정값. null = 없음 (명패는 경지가 선다) */
+    private String title;
     /** 접합된 몸인가 — 스냅숏의 links 에 이 몸이 있는가 (없으면 강호에 없는 사람이다) */
     private boolean linked;
     /** 시트를 한 번이라도 받았는가 — 봇이 꺼져 있으면 거울은 파일에서 되살린 마지막 상(像)이다 */
@@ -280,6 +282,11 @@ public final class PlayerLedger {
         return realm == null || realm.isBlank() ? fallback : realm;
     }
 
+    /** ★B-190 ① — 칭호. null = 없음 (명패는 경지 칭호가 선다) */
+    public String title() {
+        return title;
+    }
+
     public boolean linked() {
         return linked;
     }
@@ -312,6 +319,8 @@ public final class PlayerLedger {
         if (sheet.realm() != null && !sheet.realm().isBlank()) {
             realm = sheet.realm();
         }
+        title = sheet.title() == null || sheet.title().isBlank() ? null : sheet.title();
+        // ★칭호는 null 도 진실이다 (기명각 전에는 없다) — simbeop 과 같은 문법
         if (sheet.attrs() != null && !sheet.attrs().isEmpty()) {
             attrDays.clear();
             sheet.attrs().forEach(this::setAttr);

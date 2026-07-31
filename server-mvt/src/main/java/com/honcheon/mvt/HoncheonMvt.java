@@ -506,13 +506,16 @@ public final class HoncheonMvt extends JavaPlugin {
             if (!ol.linked()) {
                 continue;
             }
+            // ★B-190 ① — 칭호가 있으면 경지보다 앞선다 (그릇이 될 자 — 기명각 뒤엔 경지가 범인이라
+            //   칭호 없이는 명패가 통째로 사라진다. 칭호가 그 자리를 잇는다)
+            String title = ol.title();
             String otherRealm = ol.realm(skillEngine.baseRealm());
-            if (otherRealm.equals(skillEngine.baseRealm())) {
-                continue;   // 범인 — 칭호 없음 (한월 「평민〈칭호없음〉」과 같은 문법)
+            if (title == null && otherRealm.equals(skillEngine.baseRealm())) {
+                continue;   // 범인·무칭호 — 명패 없음 (한월 「평민〈칭호없음〉」과 같은 문법)
             }
             org.bukkit.scoreboard.Team team = board.registerNewTeam(
                     "hc" + other.getUniqueId().toString().substring(0, 8));
-            team.setPrefix("§6[" + otherRealm + "] ");
+            team.setPrefix("§6[" + (title != null ? title : otherRealm) + "] ");
             team.addEntry(other.getName());
         }
         obj.getScore("§7위치: §f" + (dojang ? "연무장 §8(시험)" : zone == null ? "야외" : zone.name()))

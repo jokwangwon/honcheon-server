@@ -34,6 +34,10 @@ interface PoliticsStore {
 
     List<Rumors.Heard> heard(int day, String network, int decayEveryDays) throws Exception;
 
+    /** ★B-190 ① — 이 캐릭터가 주체인 소문이 그 망에 살아 있는가 (하오문 보고 = 소문망의 실물) */
+    boolean hasSubjectRumor(long subjectId, String network, int day, int decayEveryDays)
+            throws Exception;
+
     int arrivalCountOn(int day) throws Exception;
 
     List<Map<String, Object>> arrivalsThrough(int day, int lookbackDays) throws Exception;
