@@ -72,6 +72,10 @@ public final class MvtCommand implements CommandExecutor {
             p.sendMessage("§c무대는 관리자가 세운다.");
             return true;
         }
+        // ★공간덤프 — /혼천 서장무대 덤프 : 실제 블록·엔티티를 파일로 (콘솔 가능 — AI 원격 검수)
+        if (args.length >= 2 && args[1].equals("덤프")) {
+            return stageDump(sender);
+        }
         // ★생명 체험 — /혼천 서장무대 체험 [발단] (기본: 습격). 판정·시트 무접촉 시험이다
         if (args.length >= 2 && args[1].equals("체험")) {
             String incident = args.length >= 3 ? args[2] : "습격";
@@ -94,6 +98,72 @@ public final class MvtCommand implements CommandExecutor {
             p.sendMessage("§7깨어나는 자리에 내렸다. 이부자리 뒤 · 담장 틈 · 식구 머리맡을 걸어 보라.");
         } catch (Exception e) {
             p.sendMessage("§c무대 조성 실패: " + e.getMessage());
+        }
+        return true;
+    }
+
+    /**
+     * ★B-194 공간덤프 — 무대 상자의 실제 블록·엔티티를 JSON 으로 뜬다 (콘솔 가능).
+     * 「사진 찍고 좌표 찍는」 왕복의 반대편 눈: AI 가 접속 없이 실세계를 본다.
+     * 대조는 tools/stage_dump_diff.py — 도면과 실세계가 어긋난 곳을 센다.
+     */
+    private boolean stageDump(CommandSender sender) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage("§c덤프는 관리자의 손이다.");
+            return true;
+        }
+        try {
+            Voyage voyage = plugin.antechamber().voyage();
+            World w = voyage.sea();
+            if (w == null) {
+                sender.sendMessage("서장 월드를 못 열었다");
+                return true;
+            }
+            StageLoader.Stage s = StageLoader.load(plugin.configPath(), "geunal_bam");
+            int oy = StageLoader.originY(s, w, voyage);
+            StringBuilder out = new StringBuilder();
+            out.append("{\"origin\":[").append(s.ox()).append(',').append(oy).append(',')
+                    .append(s.oz()).append("],\"size\":[").append(s.width()).append(',')
+                    .append(s.layers().size()).append(',').append(s.depth()).append("],\"blocks\":[");
+            boolean first = true;
+            for (int y = -1; y <= s.layers().size(); y++) {
+                for (int r = 0; r < s.depth(); r++) {
+                    for (int c = 0; c < s.width(); c++) {
+                        var b = w.getBlockAt(s.ox() + c, oy + y, s.oz() + r);
+                        if (b.getType() == org.bukkit.Material.AIR) {
+                            continue;
+                        }
+                        if (!first) {
+                            out.append(',');
+                        }
+                        first = false;
+                        out.append("[").append(c).append(',').append(y).append(',').append(r)
+                                .append(",\"").append(b.getBlockData().getAsString()).append("\"]");
+                    }
+                }
+            }
+            out.append("],\"entities\":[");
+            first = true;
+            for (org.bukkit.entity.Entity e : w.getEntities()) {
+                if (!first) {
+                    out.append(',');
+                }
+                first = false;
+                out.append("{\"type\":\"").append(e.getType()).append("\",\"x\":")
+                        .append(String.format("%.1f", e.getLocation().getX())).append(",\"y\":")
+                        .append(String.format("%.1f", e.getLocation().getY())).append(",\"z\":")
+                        .append(String.format("%.1f", e.getLocation().getZ()))
+                        .append(",\"name\":\"").append(e.getCustomName() == null ? "" :
+                                org.bukkit.ChatColor.stripColor(e.getCustomName()))
+                        .append("\",\"visible_default\":").append(e.isVisibleByDefault()).append('}');
+            }
+            out.append("]}");
+            java.nio.file.Path f = plugin.getDataFolder().toPath().resolve("stage_dump.json");
+            java.nio.file.Files.writeString(f, out.toString());
+            sender.sendMessage("덤프 완료 — " + f);
+            plugin.getLogger().info("[서장무대] 공간덤프 — " + f);
+        } catch (Exception e) {
+            sender.sendMessage("덤프 실패: " + e.getMessage());
         }
         return true;
     }
