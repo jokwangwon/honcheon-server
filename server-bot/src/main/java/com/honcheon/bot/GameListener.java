@@ -1528,12 +1528,26 @@ public final class GameListener extends ListenerAdapter {
         // ★ 성별은 시트에서 읽는다 (Character 레코드가 아니라 — 시트가 사실의 원본이다)
         Object gender = born.sheet().get(rules.genderSheetKey());
         String head = gender == null ? "" : "**" + rules.genderLabel(String.valueOf(gender)) + "** · ";
+        // ★B-187 ① — 운명 뽑기의 가시화 (사용자 확정 2026-07-25): 심리 테스트가 정하는 것은
+        //   **시작 마을까지**다. 마을은 문파를 권할 뿐 — 소속은 그대의 것 (추천만 · 고정 없음).
+        //   마을 = 집의 지역 (뽑기는 mvt_start.playable — 완비 지역만, tutorial_audit 이 지킨다)
+        String village = "";
+        try {
+            Long hid = db.houseOfCharacter(ch.id());
+            String region = hid == null ? null : db.house(hid).map(HouseEntry::region).orElse(null);
+            if (region != null) {
+                village = "\n시작 마을: **" + rules.regionName(region)
+                        + "** — 운명이 그리 정했다. *마을은 문파를 권할 뿐, 소속은 그대의 것이다.*";
+            }
+        } catch (Exception e) {
+            // 임베드는 조용히 계속된다 — 마을 표기가 탄생을 막지 않는다
+        }
         return new EmbedBuilder().setColor(BLOOD)
                 .setTitle("한 아이가 태어났다 — " + ch.name)
                 .setDescription(head + "성향 **" + ch.disposition + "** · " + ch.bracket + " " + ch.age
                         + "세 · **" + ch.family.replace('_', ' ') + "**\n발단: **"
                         + ch.incident.replace('_', ' ')
-                        + "** — 나머지는 운명이 정했다.")
+                        + "** — 나머지는 운명이 정했다." + village)
                 .build();
     }
 
