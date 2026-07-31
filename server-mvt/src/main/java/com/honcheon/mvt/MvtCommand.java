@@ -64,6 +64,11 @@ public final class MvtCommand implements CommandExecutor {
      * 로더는 도면 그대로 찍는다 (멱등 — 다시 부르면 손댄 것이 되돌아간다).
      */
     private boolean seojangStage(CommandSender sender, String[] args) {
+        // ★공간덤프 — /혼천 서장무대 덤프 : 실제 블록·엔티티를 파일로 (★콘솔 가능 — AI 원격 검수.
+        //   플레이어 검사보다 먼저 — 콘솔함이 이 문으로 들어온다)
+        if (args.length >= 2 && args[1].equals("덤프")) {
+            return stageDump(sender);
+        }
         if (!(sender instanceof Player p)) {
             sender.sendMessage("몸이 있어야 걷는다.");
             return true;
@@ -71,10 +76,6 @@ public final class MvtCommand implements CommandExecutor {
         if (!p.isOp()) {
             p.sendMessage("§c무대는 관리자가 세운다.");
             return true;
-        }
-        // ★공간덤프 — /혼천 서장무대 덤프 : 실제 블록·엔티티를 파일로 (콘솔 가능 — AI 원격 검수)
-        if (args.length >= 2 && args[1].equals("덤프")) {
-            return stageDump(sender);
         }
         // ★생명 체험 — /혼천 서장무대 체험 [발단] (기본: 습격). 판정·시트 무접촉 시험이다
         if (args.length >= 2 && args[1].equals("체험")) {
