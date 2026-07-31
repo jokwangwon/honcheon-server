@@ -86,10 +86,15 @@ final class Dojang implements Listener {
     static final String VAULT_FILE = "dojang.yml";
 
     private static final NamespacedKey KEY_DUMMY = new NamespacedKey("honcheon", "dummy");
+    /** ★B-190 ① 신교의 시험 돌 — 내구는 사용자 값 1만 (정본: factions.yml cheonma.플레이어_루트_기계.시험) */
+    private static final NamespacedKey KEY_TRIAL = new NamespacedKey("honcheon", "trial_stone");
+    private static final int TRIAL_DURABILITY = 10_000;
 
     private final HoncheonMvt plugin;
     /** 허수아비 장부 — 누적 피해·합수. 세션의 것이다 (허수아비는 리붓을 넘지 않는다) */
     private final Map<UUID, double[]> tally = new HashMap<>();   // [누적, 합수, 최근]
+    /** ★B-190 ① — 시험 돌별 · 때린 손별 누적 (오직 「그릇이 될 자」의 손만 오른다) */
+    private final Map<UUID, Map<UUID, Double>> trialDealt = new HashMap<>();
 
     // ─── 두 세계의 장부는 섞이지 않는다 (사용자 규정) ───
     //
@@ -1064,6 +1069,77 @@ final class Dojang implements Listener {
     }
 
     /**
+     * ★B-190 ① 신교의 시험 — <b>체력 1만짜리 돌</b> (사용자 확정 2026-07-31 · 정본:
+     * factions.yml cheonma.플레이어_루트_기계.시험). 몸은 허수아비 문법 그대로다 —
+     * MAX_HEALTH 상한(1024)에 1만은 못 담으므로 진짜 체력이 아니라 <b>누적이 잰다</b>.
+     * ★오직 「그릇이 될 자」의 손만 센다 — 제 누적이 1만에 닿은 자가 통과이고,
+     * 통과는 {@code trial_passed} 로 다리를 탄다 (칭호 승급은 봇의 몫 — 마크는 시트를 안 고친다).
+     */
+    void trialStone(Player player) {
+        World w = player.getWorld();
+        Location at = footing(player);
+        if (at == null) {
+            player.sendMessage(ChatColor.RED + "앞에 설 자리가 없다 — 트인 곳에서 다시 부르라");
+            return;
+        }
+        Zombie z = w.spawn(at, Zombie.class, e -> {
+            e.setAI(false);
+            e.setSilent(true);
+            e.setCollidable(true);
+            e.setRemoveWhenFarAway(false);
+            e.setShouldBurnInDay(false);
+            e.setAdult();
+            e.getPersistentDataContainer().set(KEY_TRIAL, PersistentDataType.INTEGER, TRIAL_DURABILITY);
+            org.bukkit.attribute.AttributeInstance attr = e.getAttribute(Attribute.MAX_HEALTH);
+            if (attr != null) {
+                attr.setBaseValue(2048);   // 허수아비와 같은 함정 회피 — 실효값은 상한까지
+                e.setHealth(attr.getValue());
+            }
+            e.setCustomNameVisible(true);
+            e.setCustomName(ChatColor.GRAY + "시험의 돌 · 내구 " + TRIAL_DURABILITY);
+        });
+        trialDealt.put(z.getUniqueId(), new HashMap<>());
+        player.sendMessage(ChatColor.GOLD + "시험의 돌이 섰다 — 비운 손만이 깰 수 있다.");
+    }
+
+    /** ★B-190 ① — 시험 돌의 타격. 다음 틱에 읽는 것은 허수아비와 같은 이유다 */
+    private void onTrialHit(org.bukkit.event.entity.EntityDamageByEntityEvent event,
+                            LivingEntity stone, Map<UUID, Double> dealt) {
+        if (!(event.getDamager() instanceof Player striker)) {
+            return;
+        }
+        if (!"그릇이 될 자".equals(plugin.ledger(striker.getUniqueId()).title())) {
+            striker.sendMessage(ChatColor.GRAY + "돌은 미동도 없다 — 비운 손이 아니다.");
+            return;
+        }
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (stone.isDead()) {
+                return;
+            }
+            double total = dealt.merge(striker.getUniqueId(), event.getFinalDamage(), Double::sum);
+            org.bukkit.attribute.AttributeInstance attr = stone.getAttribute(Attribute.MAX_HEALTH);
+            if (attr != null) {
+                stone.setHealth(attr.getValue());          // 돌은 체력으로 죽지 않는다 — 누적이 잰다
+            }
+            if (total >= TRIAL_DURABILITY) {
+                trialDealt.remove(stone.getUniqueId());
+                stone.getWorld().playSound(stone.getLocation(),
+                        org.bukkit.Sound.BLOCK_ANCIENT_DEBRIS_BREAK, 1f, 0.6f);
+                stone.remove();
+                striker.sendMessage(ChatColor.GOLD + "돌이 갈라진다 — 시험을 마쳤다.");
+                Map<String, Object> data = new HashMap<>();
+                data.put("player_uuid", striker.getUniqueId().toString());
+                data.put("player_name", striker.getName());
+                data.put("total", (int) total);
+                WorldBridge.emit("trial_passed", data);
+            } else {
+                stone.setCustomName(ChatColor.GRAY + "시험의 돌 · " + ChatColor.WHITE
+                        + String.format("%.0f", total) + ChatColor.GRAY + " / " + TRIAL_DURABILITY);
+            }
+        });
+    }
+
+    /**
      * 허수아비 — 맞아 주는 몸. 죽지 않고, 반격하지 않고, <b>맞은 것을 말한다</b>.
      *
      * <p>몸은 좀비다 (인간형이라 격·무기 판정이 사람 상대와 같게 돈다 — 짚단을 때리면
@@ -1184,6 +1260,11 @@ final class Dojang implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof LivingEntity target)) {
+            return;
+        }
+        Map<UUID, Double> trial = trialDealt.get(target.getUniqueId());
+        if (trial != null) {
+            onTrialHit(event, target, trial);              // ★B-190 ① — 시험 돌은 제 장부가 따로 있다
             return;
         }
         double[] t = tally.get(target.getUniqueId());

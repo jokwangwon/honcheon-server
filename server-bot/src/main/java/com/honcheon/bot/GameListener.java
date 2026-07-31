@@ -5410,6 +5410,7 @@ public final class GameListener extends ListenerAdapter {
         //   노출 금지 (faction_entry_routes.yml magyo_encroachment.display_prohibition).
         //   조용한 DM 하나가 전부다. 조건·화법의 정본: factions.yml cheonma.플레이어_루트_기계.
         cheonmaContact(day);
+        cheonmaAppoint(day);
 
         // 빈사 마감 — 개입 창구가 닫힌다 (death_pipeline.no_intervention: 사망_확정_비가역)
         for (Map<String, Object> row : db.activeCharacters()) {
@@ -6900,6 +6901,57 @@ public final class GameListener extends ListenerAdapter {
             }
         } catch (Exception e) {
             System.err.println("그릇 접촉 판정 실패 (세계일 " + day + "): " + e);
+        }
+    }
+
+    /**
+     * ★B-190 ① 3단 — 지목 (승계 = 전대의 인정 · 정본: factions.yml 플레이어_루트_기계.지목).
+     * 제4막 이후(초대가 위임하고 물러나는 무렵) 자리가 비어 있으면, 시험을 가장 먼저 마친
+     * 그릇에게 초대의 지목이 간다 【제안: 최초 통과자 — 빨간펜 대상】.
+     * 칭호 = 신을 품은 자 · world_meta 자리:천마 = player:&lt;id&gt; —
+     * 제5막 chimgong_gaesi 의 자리_판독이 이것을 읽는다 (B-190 ⑤와 이어진다).
+     */
+    @SuppressWarnings("unchecked")
+    private void cheonmaAppoint(int day) {
+        try {
+            if (!worldClock.actReached(4) || db.getMeta("자리:천마").isPresent()) {
+                return;
+            }
+            Map<Long, Map<String, Object>> alive = new LinkedHashMap<>();
+            for (Map<String, Object> row : db.activeCharacters()) {
+                alive.put(((Number) row.get("id")).longValue(), row);
+            }
+            for (Map<String, Object> ev : db.eventsByType("시험_통과")) {
+                long chId;
+                try {
+                    chId = Long.parseLong(String.valueOf(ev.get("actor_id")));
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+                Map<String, Object> row = alive.get(chId);
+                if (row == null) {
+                    continue;                                // 강호에 없는 몸 — 다음 그릇으로
+                }
+                Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+                if (!"그릇이 된 자".equals(sheet.get("칭호"))) {
+                    continue;
+                }
+                sheet.put("칭호", "신을 품은 자");
+                saveVessel(chId, row, sheet, String.valueOf(row.get("realm")));
+                db.setMeta("자리:천마", "player:" + chId);
+                db.logEvent("지목", "character", String.valueOf(chId), "자리", "천마",
+                        Map.of("day", day));
+                dm(String.valueOf(row.get("discord_id")), null, new EmbedBuilder().setColor(BLOOD)
+                        .setTitle("지목")
+                        .setDescription("이백 년째 쉰 살이던 노인이, 처음으로 늙은 얼굴로 당신을 본다.\n\n"
+                                + "\"…그릇이 됐군. 이제 **이는 법**을 배우게.\"\n\n"
+                                + "**칭호 — 신을 품은 자.**\n"
+                                + "*이제 다섯 계보가 당신을 본다 — 붙들 것인가, 칠 것인가.*")
+                        .build());
+                return;                                      // 자리는 하나다 — 첫 그릇에서 끝난다
+            }
+        } catch (Exception e) {
+            System.err.println("지목 판정 실패 (세계일 " + day + "): " + e);
         }
     }
 

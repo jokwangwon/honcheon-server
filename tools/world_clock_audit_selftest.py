@@ -201,6 +201,20 @@ MUTATIONS = [
      "    침공_규모_절단: { from: \"계보:붙듦수\", 기본값: 3 }",
      "endings.산술 이 비었다"),
 
+    # ══ ⑥-c 천마 루트 (B-190 ① · 2026-07-31) — 선언만 하고 안 만든 손을 잡는가 ══
+
+    # ★자정의 접촉 호출을 뗀다 — 선언(플레이어_루트_기계)은 남는데 손이 사라진다
+    ("★⑥ 자정의 그릇 접촉 호출을 뗀다", LISTENER,
+     "        cheonmaContact(day);\n        cheonmaAppoint(day);",
+     "        ;   // selftest — 접촉 절단\n        cheonmaAppoint(day);",
+     "접촉의 손"),
+
+    # ★시험 보고의 처리기를 뗀다 — 등재만 되고 아무도 안 받는 통과
+    ("★⑥ Bridge 에서 trial_passed 처리기를 뗀다", BRIDGE,
+     "                case \"trial_passed\" -> trialPassed(data, today);",
+     "                // selftest — 시험 처리기 절단",
+     "시험 보고의 처리기"),
+
 ]
 
 

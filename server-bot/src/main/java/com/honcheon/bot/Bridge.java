@@ -285,9 +285,42 @@ final class Bridge {
                 case "cultivation_logged" -> cultivationLogged(data, today);
                 case "seojang_choice" -> seojangChoice(data, today);
                 case "raid_resolved" -> raidResolved(data, today);
+                case "trial_passed" -> trialPassed(data, today);
                 default -> throw new IllegalStateException("다리 — 처리기 없음: " + kind);
             }
         });
+    }
+
+    /**
+     * ★B-190 ① — 신교의 시험 통과: 칭호가 2단(그릇이 된 자)으로 오른다.
+     * <b>다리를 믿지 않는다</b> — 마크의 칭호 거울이 걸렀어도 봇이 다시 검사한다
+     * (지금 시트의 칭호가 「그릇이 될 자」가 아니면 버린다). 원장 '시험_통과'가 남는다 —
+     * 제4막 이후의 지목(GameListener.cheonmaAppoint)이 이 원장을 **순서대로** 읽는다.
+     */
+    @SuppressWarnings("unchecked")
+    private void trialPassed(Map<String, Object> data, int today) throws Exception {
+        String uuid = str(data.get("player_uuid"), "").strip();
+        Long chId = db.characterOfMc(uuid).orElse(null);
+        if (chId == null) {
+            System.err.println("다리 — trial_passed 인데 접합된 몸이 아니다 (버린다): " + uuid);
+            return;
+        }
+        Map<String, Object> row = db.findCharacterById(chId).orElse(null);
+        if (row == null) {
+            return;
+        }
+        Map<String, Object> sheet = (Map<String, Object>) row.get("sheet");
+        if (!"그릇이 될 자".equals(sheet.get("칭호"))) {
+            System.err.println("다리 — trial_passed 인데 그릇이 될 자가 아니다 (버린다): " + chId);
+            return;
+        }
+        sheet.put("칭호", "그릇이 된 자");
+        db.updateCharacter(chId, sheet, ((Number) row.get("wallet")).intValue(),
+                String.valueOf(row.get("realm")), String.valueOf(row.get("status")),
+                String.valueOf(row.get("location")));
+        db.logEvent("시험_통과", "character", String.valueOf(chId), "시험", "돌깨기",
+                Map.of("day", today, "총량", data.getOrDefault("total", 0)));
+        System.out.println("다리 — 시험 통과: 캐릭터 " + chId + " → 그릇이 된 자");
     }
 
     /**

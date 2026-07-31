@@ -58,6 +58,20 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /** ★B-190 ① — 신교의 시험 돌을 세운다 (관리자) · 정본: factions.yml cheonma.플레이어_루트_기계.시험 */
+    private boolean trialStone(CommandSender sender) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage("몸이 있어야 세운다.");
+            return true;
+        }
+        if (!p.isOp()) {
+            p.sendMessage("§c시험의 돌은 관리자가 세운다.");
+            return true;
+        }
+        plugin.dojang().trialStone(p);
+        return true;
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
@@ -90,6 +104,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "지역검수" -> auditRegion(sender, args);   // 지역 자동 검산 — 도달성·계약·허공·광원·수묵
                 case "원형대조" -> compareArchetypes(sender, args);   // ★ 집들이 서로 구별되는가 (오늘의 병) · `시험` = 눈을 시험한다
                 case "레이드해소" -> raidResolve(sender, args);   // ★B-190 — 세계 사건(레이드) 결말 선고 (관리자)
+                case "시험돌" -> trialStone(sender);              // ★B-190 ① — 신교의 시험 돌 (관리자 세움)
                 case "땅갈아엎기" -> forgetLand(sender, args);   // 땅을 다시 빚겠다는 **명시적 선언**
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)

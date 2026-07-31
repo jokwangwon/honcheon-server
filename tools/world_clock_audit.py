@@ -609,6 +609,24 @@ def audit_resolutions(rep: Report, cfg: dict, acts: dict) -> None:
                 rep.good(f"노선의 손 — 원장 '{event_type}' 을 적는 코드(GameListener)와 "
                          f"노선 의뢰(Quests.noseon)가 실재한다")
 
+    # ④-c ① 천마 루트 (B-190 ①) — 루트 기계 선언(factions.yml 플레이어_루트_기계)과 손의 실재.
+    #   선언만 하고 안 만든 손이 이 저장소의 병이었다 — 같은 병을 여기서 잰다.
+    factions_txt = read(CONFIG / "factions.yml")
+    if "플레이어_루트_기계" in factions_txt:
+        listener_src = decomment(read(LISTENER))
+        growth_src = decomment(read(BOT / "GrowthV3.java"))
+        for name, ok in [
+            ("접촉의 손 (cheonmaContact)", "cheonmaContact(day)" in listener_src),
+            ("기명각의 손 (GrowthV3.wipe + 그릇_접촉)",
+             "static void wipe" in growth_src and "그릇_접촉" in listener_src),
+            ("시험 보고의 처리기 (trial_passed)", 'case "trial_passed"' in bridge_src),
+            ("지목의 손 (자리:천마)", '"자리:천마"' in listener_src),
+        ]:
+            if ok:
+                rep.good(f"천마 루트 — {name} 실재")
+            else:
+                rep.bad(f"천마 루트 — 선언(플레이어_루트_기계)은 있는데 {name}이 코드에 없다")
+
     rep.facts["resolutions"] = {"beats": n_res, "inputs": n_inputs}
 
 
