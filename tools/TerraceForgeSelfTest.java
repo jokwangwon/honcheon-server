@@ -174,6 +174,25 @@ public final class TerraceForgeSelfTest {
         check("다리 몸체 covers: 난간 열(a0−2 · 폭 ±2)을 안다",
                 tb.covers(8, 2) && tb.covers(50, -2) && !tb.covers(8, 3), "covers");
 
+        // ══════════ ④-c 스킵 상자가 실물을 덮는가 — 회전 케이스 회귀 (4.0 평탄 1건) ══════════
+        TerraceForge.Pad side = TerraceForge.resolvePads(campus, 0, 0, 0).stream()
+                .filter(pp -> pp.spec().zone() == 16).findFirst().orElseThrow();
+        int gateX = side.x0() + side.spec().width() / 2 + 3;   // wallNS/gateEW 의 담 열
+        boolean wallCovered = true;
+        for (int z = side.zN(); z <= side.zS(); z++) {
+            boolean in = false;
+            for (int[] box : com.honcheon.mvt.forge.HwasanCampusBuilder.auditSkipBoxes(side)) {
+                if (gateX >= box[0] && gateX <= box[1] && z >= box[2] && z <= box[3]) {
+                    in = true;
+                    break;
+                }
+            }
+            if (!in) {
+                wallCovered = false;
+            }
+        }
+        check("★측문 담(남북 전장)이 스킵 상자에 다 덮인다", wallCovered, gateX);
+
         // ══════════ ⑤ 팔레트 — 금지 재료가 없다 (B-195 · HANDOFF 함정) ══════════
         Set<Material> palette = TerraceForge.palette();
         check("★ BARREL 없음 (가구_3D 유령 벽)", !palette.contains(Material.BARREL), "BARREL");
@@ -183,6 +202,17 @@ public final class TerraceForgeSelfTest {
         check("★ 배치기: BARREL 없음 (상자는 chest)", !bPal.contains(Material.BARREL), "BARREL");
         check("★ 배치기: LIGHT 없음", !bPal.contains(Material.LIGHT), "LIGHT");
         check("배치기: chest 로 대체했다", bPal.contains(Material.CHEST), "CHEST");
+        Set<Material> lPal = com.honcheon.mvt.forge.HwasanCampusBuilder.landscapePalette();
+        check("★조경: BARREL·LIGHT 없음",
+                !lPal.contains(Material.BARREL) && !lPal.contains(Material.LIGHT), "b/l");
+        Set<Material> scan = com.honcheon.mvt.forge.HwasanCampusBuilder.leakScanMats();
+        boolean disjoint = true;
+        for (Material m : lPal) {
+            if (scan.contains(m)) {
+                disjoint = false;
+            }
+        }
+        check("★조경 재료 ∩ 유출 스캔 = ∅ (패드 밖이 정상인 것을 눈이 쫓지 않는다)", disjoint, "교집합");
 
         // ══════════ ⑥ 건물 발자국 ⊂ 패드 — 순수 검증 (계율 #4) ══════════
         boolean bOk = true;

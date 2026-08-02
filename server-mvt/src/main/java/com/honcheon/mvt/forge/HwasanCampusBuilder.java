@@ -46,6 +46,10 @@ public final class HwasanCampusBuilder {
         public int dummies;
         public int racks;
         public int towers;
+        public int plums;      // 매화
+        public int pines;      // 절벽 소나무
+        public long vines;     // 덩굴·이끼·지의
+        public int props;      // 깃발·화로·상자·빨래줄·밭
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -115,6 +119,68 @@ public final class HwasanCampusBuilder {
     // 순수 검증 + 세계 검수 — 발자국은 패드 안 (계율 #4)
     // ═══════════════════════════════════════════════════════════════════
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 조경 (슬라이스 4) — 소품 목록이 정본: 조성·발자국 상자·검증이 같은 표를 읽는다
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 조경 소품 하나 — 종류와 자리 (절대 좌표).
+     * 'M' 매화(관 ±2) · 'B' 홍기(무지 — 문양·글자는 사용자 몫) · 'W' 백기 ·
+     * 'F' 화로 · 'C' 상자 더미(3×2) · 'L' 빨래줄(기둥 ±2 + 실) · 'P' 밭(5×4)
+     */
+    record Decor(char kind, int x, int z) {
+    }
+
+    /**
+     * 구역별 조경 소품 【제안 · 빨간펜 대상】 — 원작 11호의 여백이 기준: 단마다 1~3점.
+     * 자리는 통로·구조물 눈이 검증한다 ({@link #validateBuildings} 가 이 표의 상자를 잰다).
+     */
+    static List<Decor> decors(TerraceForge.Pad pad) {
+        int cx = pad.x0() + pad.spec().width() / 2;
+        int cz = pad.zN() + pad.spec().depth() / 2;
+        return switch (pad.spec().zone()) {
+            case 1 -> List.of(new Decor('M', cx - 8, cz + 5), new Decor('M', cx - 8, cz - 5));
+            case 2 -> List.of(new Decor('M', cx - 13, cz - 8), new Decor('M', cx + 8, cz - 8));
+            case 6 -> List.of(new Decor('M', cx - 10, cz + 6), new Decor('M', cx + 8, cz + 6));
+            case 9 -> List.of(new Decor('M', cx - 14, cz + 9), new Decor('M', cx + 14, cz + 9));
+            case 12 -> List.of(new Decor('M', cx - 8, cz + 4));
+            case 13 -> List.of(new Decor('M', cx + 6, cz - 5));
+            case 19 -> List.of(new Decor('M', cx - 4, cz - 3));
+            case 20 -> List.of(new Decor('M', cx - 5, cz + 4));
+            case 3 -> List.of(new Decor('B', cx - 14, pad.zN() + 2), new Decor('B', cx - 5, pad.zN() + 2),
+                    new Decor('F', pad.x0() + 3, pad.zN() + 4), new Decor('F', pad.x1() - 4, pad.zN() + 4));
+            case 14 -> List.of(new Decor('B', cx - 5, pad.zS() - 2), new Decor('B', cx + 5, pad.zS() - 2),
+                    new Decor('F', pad.x0() + 3, pad.zN() + 3));
+            case 7 -> List.of(new Decor('B', cx - 4, pad.zS() - 2), new Decor('B', cx + 4, pad.zS() - 2));
+            case 17 -> List.of(new Decor('C', cx + 6, cz - 2));
+            case 5 -> List.of(new Decor('L', cx, cz + 8));
+            case 8 -> List.of(new Decor('L', cx - 6, cz + 4), new Decor('P', cx + 5, cz + 3));
+            default -> List.of();
+        };
+    }
+
+    /** 소품 발자국 상자 — {@link #decors} 에서 유도 (조성과 검증이 같은 자를 쓴다) */
+    static List<int[]> decorBoxes(TerraceForge.Pad pad) {
+        java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
+        for (Decor d : decors(pad)) {
+            out.add(switch (d.kind()) {
+                case 'M' -> new int[]{d.x() - 2, d.x() + 2, d.z() - 2, d.z() + 2};
+                case 'C' -> new int[]{d.x(), d.x() + 2, d.z(), d.z() + 1};
+                case 'L' -> new int[]{d.x() - 2, d.x() + 2, d.z(), d.z()};
+                case 'P' -> new int[]{d.x(), d.x() + 4, d.z(), d.z() + 3};
+                default -> new int[]{d.x(), d.x(), d.z(), d.z()};
+            });
+        }
+        return out;
+    }
+
+    /** 검수 평탄 눈이 비켜 갈 상자 전부 — 구조물 + 소품 (포장면 위로 솟는 것들의 명세) */
+    public static List<int[]> auditSkipBoxes(TerraceForge.Pad pad) {
+        java.util.ArrayList<int[]> out = new java.util.ArrayList<>(structureBoxes(pad));
+        out.addAll(decorBoxes(pad));
+        return out;
+    }
+
     /**
      * 조성 전 순수 검증 — ①구역별 최대 발자국(처마 포함)이 패드 안에 드는가
      * ②★구조물(문루·홀·정자·탑·목인·시렁·연못·나무)이 <b>계단 몸체(통로)와 겹치지 않는가</b>.
@@ -125,15 +191,15 @@ public final class HwasanCampusBuilder {
     public static void validateBuildings(List<TerraceForge.Pad> pads, List<TerraceForge.StairLane> lanes,
                                          List<TerraceForge.Bridge> bridges) {
         for (TerraceForge.Pad pad : pads) {
-            int[] box = buildingBox(pad);
-            if (box != null
-                    && (box[0] < pad.x0() || box[1] > pad.x1() || box[2] < pad.zN() || box[3] > pad.zS())) {
-                throw new IllegalArgumentException("건물 발자국이 패드 밖: " + pad.spec().zone() + " "
-                        + pad.spec().name() + " — 발자국 x" + box[0] + ".." + box[1] + " z" + box[2]
-                        + ".." + box[3] + " vs 패드 x" + pad.x0() + ".." + pad.x1()
-                        + " z" + pad.zN() + ".." + pad.zS());
+            for (int[] box : auditSkipBoxes(pad)) {
+                if (box[0] < pad.x0() || box[1] > pad.x1() || box[2] < pad.zN() || box[3] > pad.zS()) {
+                    throw new IllegalArgumentException("건물·소품 발자국이 패드 밖: " + pad.spec().zone()
+                            + " " + pad.spec().name() + " — 발자국 x" + box[0] + ".." + box[1] + " z"
+                            + box[2] + ".." + box[3] + " vs 패드 x" + pad.x0() + ".." + pad.x1()
+                            + " z" + pad.zN() + ".." + pad.zS());
+                }
             }
-            for (int[] sb : structureBoxes(pad)) {
+            for (int[] sb : auditSkipBoxes(pad)) {
                 // ★다리 회랑 (걷는 폭 ±2 · 패드 안 두 칸 이음 포함) — 구조물이 다리 어귀를 막으면 거절
                 for (TerraceForge.Bridge b : bridges) {
                     for (int t = b.a0() - 2; t <= b.a1() + 2; t++) {
@@ -182,7 +248,9 @@ public final class HwasanCampusBuilder {
             case 2 -> List.of(new int[]{cx - 12, cx - 6, cz + 1, cz + 7},
                     new int[]{cx + 6, cx + 12, cz + 1, cz + 7});
             case 6 -> List.of(new int[]{cx - 6, cx + 6, cz - 1, cz + 1});
-            case 16 -> List.of(new int[]{cx + 2, cx + 4, cz - 4, cz + 4});   // 동향 문루만 (담은 lane 가드)
+            // ★16 은 회전 케이스 — 담이 남북 「전장」을 달린다. 4.0 실기동: 문루 범위(z±4)만 상자에
+            //   넣었다가 담 끝 칸(z169)이 평탄 위반으로 잡혔다. 담+문루 = x 세 열의 z 전장 띠 하나.
+            case 16 -> List.of(new int[]{cx + 2, cx + 4, pad.zN(), pad.zS()});
             case 3 -> List.of(new int[]{cx - 11, cx + 6, cz + 8, cz + 8},    // 목인 4 (팔 포함 · 남쪽 줄)
                     new int[]{cx - 12, cx - 6, pad.zN() + 2, pad.zN() + 2}); // 시렁 (북서)
             case 14, 7 -> List.of(new int[]{cx - 6, cx + 6, cz - 2, cz - 2},
@@ -203,31 +271,6 @@ public final class HwasanCampusBuilder {
             case 19 -> List.of(new int[]{cx, cx + 6, cz - 3, cz + 3});       // 정자 (동편 벼랑 쪽 — 서편은 다리 이음)
             case 20 -> List.of(new int[]{cx - 2, cx + 6, cz - 3, cz + 3});   // 암자 (동편 — 서편은 다리 이음)
             default -> List.of();
-        };
-    }
-
-    /** 구역별 최대 발자국(처마 포함) — 순수. 소품 없는 구역은 null. */
-    public static int[] buildingBox(TerraceForge.Pad pad) {
-        int cx = pad.x0() + pad.spec().width() / 2;
-        int cz = pad.zN() + pad.spec().depth() / 2;
-        return switch (pad.spec().zone()) {
-            case 1 -> new int[]{cx - 8, cx + 8, cz - 2, cz + 2};        // 문루 half5 + 처마
-            case 2 -> new int[]{cx - 12, cx + 12, cz + 1, cz + 7};      // 정자 둘 (half2 + 처마 · 남쪽 띠)
-            case 6 -> new int[]{cx - 7, cx + 7, cz - 2, cz + 2};
-            case 16 -> new int[]{cx + 2, cx + 4, pad.zN(), pad.zS()};   // 남북 담+문루 띠 (그것이 담이다)
-            case 3, 14, 7 -> new int[]{pad.x0() + 2, pad.x1() - 2, pad.zN() + 2, pad.zS() - 2};
-            case 4 -> new int[]{cx - 7, cx + 7, cz - 5, cz + 5};        // half 5×3 + 처마
-            case 5 -> new int[]{cx - 11, cx + 11, cz - 4, cz + 4};      // half 3×2 두 채 (±6 오프셋)
-            case 8 -> new int[]{cx - 6, cx + 6, cz - 4, cz + 4};
-            case 17 -> new int[]{cx - 6, cx + 6, cz - 5, cz + 5};
-            case 9 -> new int[]{cx - 12, cx + 12, cz - 9, cz + 12};     // 월대 + 처마 + 남계단
-            case 12 -> new int[]{cx - 7, cx + 7, cz - 1 - 4, cz - 1 + 4};
-            case 13 -> new int[]{cx - 7, cx + 7, cz - 4, cz + 4};       // 사당(half2+처마) + 정자
-            case 10 -> new int[]{cx - 7, cx + 2, cz - 8, cz + 7};       // 연못(서)·정자(남서)·매화(북서) — 동편 띠는 계단 몫
-            case 11 -> new int[]{cx - 4, cx + 4, cz + 1, cz + 9};       // 탑 (남편 — 북편 회랑은 계단 몫)
-            case 19 -> new int[]{cx, cx + 6, cz - 3, cz + 3};
-            case 20 -> new int[]{cx - 2, cx + 6, cz - 3, cz + 3};
-            default -> null;
         };
     }
 
@@ -644,6 +687,223 @@ public final class HwasanCampusBuilder {
         }
     }
 
+    /**
+     * 조경 상(相) — 소품 표({@link #decors})를 앉히고, 옹벽 면에 덩굴·지의를 점점이 찍고,
+     * 패드 밖 벼랑 턱에 소나무를 심는다 (슬라이스 4). 전부 결정론 — 난수 0.
+     */
+    public static void decorate(World world, TerraceForge.Plan plan, TerraceForge.Pad pad, Tally tally) {
+        int y = pad.y();
+        for (Decor d : decors(pad)) {
+            switch (d.kind()) {
+                case 'M' -> {
+                    plum(world, pad, d.x(), y, d.z(), tally);
+                    tally.plums++;
+                }
+                case 'B' -> {
+                    put(world, pad, d.x(), y + 1, d.z(), Material.RED_BANNER, tally);
+                    tally.props++;
+                }
+                case 'W' -> {
+                    put(world, pad, d.x(), y + 1, d.z(), Material.WHITE_BANNER, tally);
+                    tally.props++;
+                }
+                case 'F' -> {
+                    put(world, pad, d.x(), y + 1, d.z(), Material.CAMPFIRE, tally);
+                    tally.props++;
+                }
+                case 'C' -> {                                    // 상자 더미 — barrel 금지 → chest+반블록
+                    for (int i = 0; i <= 2; i++) {
+                        put(world, pad, d.x() + i, y + 1, d.z(), Material.CHEST, tally);
+                        put(world, pad, d.x() + i, y + 1, d.z() + 1,
+                                i == 1 ? Material.CHEST : Material.DARK_OAK_SLAB, tally);
+                    }
+                    put(world, pad, d.x() + 1, y + 2, d.z(), Material.DARK_OAK_SLAB, tally);
+                    tally.props++;
+                }
+                case 'L' -> {                                    // 빨래줄 — 기둥 둘 + 실
+                    for (int px : new int[]{d.x() - 2, d.x() + 2}) {
+                        put(world, pad, px, y + 1, d.z(), Material.SPRUCE_FENCE, tally);
+                        put(world, pad, px, y + 2, d.z(), Material.SPRUCE_FENCE, tally);
+                    }
+                    for (int px = d.x() - 1; px <= d.x() + 1; px++) {
+                        put(world, pad, px, y + 2, d.z(), Material.TRIPWIRE, tally);
+                    }
+                    tally.props++;
+                }
+                case 'P' -> {                                    // 밭 — 물 한 칸 + 경작지 + 밀
+                    for (int fx = d.x(); fx <= d.x() + 4; fx++) {
+                        for (int fz = d.z(); fz <= d.z() + 3; fz++) {
+                            if (fx == d.x() && fz == d.z()) {
+                                put(world, pad, fx, y, fz, Material.WATER, tally);
+                                continue;
+                            }
+                            put(world, pad, fx, y, fz, Material.FARMLAND, tally);
+                            put(world, pad, fx, y + 1, fz, Material.WHEAT, tally);
+                        }
+                    }
+                    tally.props++;
+                }
+                default -> {
+                }
+            }
+        }
+        wallGreen(world, plan, pad, tally);
+        for (int[] spot : pineSpots(pad)) {
+            pine(world, plan, pad, spot[0], spot[1], tally);
+        }
+    }
+
+    /** 매화 한 그루 — 벚 원목 + 벚잎 관 (정원 것과 같은 문법 · 군락 금지, 점을 찍는다) */
+    private static void plum(World world, TerraceForge.Pad pad, int tx, int y, int tz, Tally tally) {
+        for (int dy = 1; dy <= 3; dy++) {
+            put(world, pad, tx, y + dy, tz, Material.CHERRY_LOG, tally);
+        }
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = 3; dy <= 5; dy++) {
+                    if (Math.abs(dx) + Math.abs(dz) + (dy - 3) <= 3 && (dx != 0 || dz != 0 || dy > 3)) {
+                        put(world, pad, tx + dx, y + dy, tz + dz, Material.CHERRY_LEAVES, tally);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 옹벽 덩굴·이끼·지의 — 둘레 옹벽 면 바깥 공기 열에 결정론 해시로 점점이 (밀도 ~7% —
+     * 자연 70 비율: 뒤덮지 않는다). 재료는 조경 몫이라 유출 눈 대상 밖 ({@link #landscapePalette}).
+     */
+    private static void wallGreen(World world, TerraceForge.Plan plan, TerraceForge.Pad pad, Tally tally) {
+        int[][] sides = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+        for (int[] n : sides) {
+            int fx0 = n[0] == 0 ? pad.x0() : (n[0] < 0 ? pad.x0() : pad.x1());
+            int fx1 = n[0] == 0 ? pad.x1() : (n[0] < 0 ? pad.x0() : pad.x1());
+            int fz0 = n[1] == 0 ? pad.zN() : (n[1] < 0 ? pad.zN() : pad.zS());
+            int fz1 = n[1] == 0 ? pad.zS() : (n[1] < 0 ? pad.zN() : pad.zS());
+            for (int wx = fx0; wx <= fx1; wx++) {
+                for (int wz = fz0; wz <= fz1; wz++) {
+                    int ox = wx + n[0];
+                    int oz = wz + n[1];
+                    if (onAnyPad(plan, ox, oz)) {
+                        continue;
+                    }
+                    for (int yy = pad.y() - 1; yy >= pad.y() - 12; yy--) {
+                        Material face = world.getBlockAt(wx, yy, wz).getType();
+                        if (face.isAir() || !world.getBlockAt(ox, yy, oz).getType().isAir()) {
+                            break;   // 옹벽이 끝났거나 지형에 닿았다
+                        }
+                        int r = (int) Math.floorMod(hash(0x62EE7L, wx, yy, wz), 100);
+                        if (r < 5) {
+                            org.bukkit.block.data.MultipleFacing v =
+                                    (org.bukkit.block.data.MultipleFacing) Material.VINE.createBlockData();
+                            v.setFace(faceOf(-n[0], -n[1]), true);
+                            world.getBlockAt(ox, yy, oz).setBlockData(v, false);
+                            tally.vines++;
+                        } else if (r < 7) {
+                            org.bukkit.block.data.MultipleFacing g =
+                                    (org.bukkit.block.data.MultipleFacing) Material.GLOW_LICHEN.createBlockData();
+                            g.setFace(faceOf(-n[0], -n[1]), true);
+                            world.getBlockAt(ox, yy, oz).setBlockData(g, false);
+                            tally.vines++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static org.bukkit.block.BlockFace faceOf(int dx, int dz) {
+        if (dx < 0) {
+            return org.bukkit.block.BlockFace.WEST;
+        }
+        if (dx > 0) {
+            return org.bukkit.block.BlockFace.EAST;
+        }
+        return dz < 0 ? org.bukkit.block.BlockFace.NORTH : org.bukkit.block.BlockFace.SOUTH;
+    }
+
+    /**
+     * 벼랑 턱 소나무 자리 【제안】 — 남쪽 접근 시야·다리에서 보이는 벼랑 위주.
+     * 패드 밖 지형이라 조성 때 실지형·통로를 재고 안 맞으면 조용히 접는다 (자연은 강요하지 않는다).
+     */
+    private static List<int[]> pineSpots(TerraceForge.Pad pad) {
+        int cx = pad.x0() + pad.spec().width() / 2;
+        int cz = pad.zN() + pad.spec().depth() / 2;
+        return switch (pad.spec().zone()) {
+            case 1 -> List.of(new int[]{cx - 9, pad.zS() + 5}, new int[]{cx + 7, pad.zS() + 6});
+            case 2 -> List.of(new int[]{pad.x0() - 4, cz + 8}, new int[]{pad.x1() + 4, cz + 9});
+            case 9 -> List.of(new int[]{pad.x1() + 4, pad.zN() - 3}, new int[]{pad.x0() - 4, pad.zN() - 4});
+            case 13 -> List.of(new int[]{pad.x0() - 4, cz - 2});
+            case 19 -> List.of(new int[]{pad.x1() + 3, cz + 3}, new int[]{cx + 2, pad.zS() + 4});
+            case 20 -> List.of(new int[]{pad.x1() + 3, cz - 2}, new int[]{cx - 2, pad.zN() - 4});
+            case 105 -> List.of(new int[]{pad.x0() - 3, cz + 2}, new int[]{cx - 2, pad.zS() + 4});
+            default -> List.of();
+        };
+    }
+
+    /**
+     * 소나무 하나 — 벗긴 몸통이 아니라 껍질 통나무({@code SPRUCE_WOOD} — 건물 재료
+     * {@code SPRUCE_LOG} 와 갈라 유출 눈이 조경을 오인하지 않는다) + 잎. 자리가 패드·통로·다리
+     * 위면 접는다.
+     */
+    private static void pine(World world, TerraceForge.Plan plan, TerraceForge.Pad pad,
+                             int x, int z, Tally tally) {
+        if (onAnyPad(plan, x, z) || laneCrosses(plan, x, z) || onBridge(plan, x, z)) {
+            return;
+        }
+        int g = groundTop(world, x, z, pad.y() + 24);
+        if (g <= world.getMinHeight()) {
+            return;
+        }
+        int h = 3 + (int) Math.floorMod(hash(0x917E, x, 0, z), 3);   // 3~5
+        for (int dy = 1; dy <= h; dy++) {
+            world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.abs(dx) + Math.abs(dz) <= 1) {
+                    world.getBlockAt(x + dx, g + h, z + dz).setType(Material.SPRUCE_LEAVES, false);
+                    world.getBlockAt(x + dx, g + h - 1, z + dz).setType(Material.SPRUCE_LEAVES, false);
+                }
+            }
+        }
+        world.getBlockAt(x, g + h + 1, z).setType(Material.SPRUCE_LEAVES, false);
+        tally.pines++;
+    }
+
+    private static int groundTop(World world, int x, int z, int from) {
+        int yy = from;
+        int min = world.getMinHeight();
+        while (yy > min && world.getBlockAt(x, yy, z).getType().isAir()) {
+            yy--;
+        }
+        return yy;
+    }
+
+    private static long hash(long salt, int x, int y, int z) {
+        long h = salt ^ (x * 0x9E3779B97F4A7C15L) ^ (y * 0xC2B2AE3D27D4EB4FL)
+                ^ (z * 0x165667B19E3779F9L);
+        h ^= h >>> 29;
+        h *= 0xBF58476D1CE4E5B9L;
+        h ^= h >>> 32;
+        return h;
+    }
+
+    /** 조경 재료 — 유출 눈 대상 밖 (패드 밖이 정상인 것들 · 눈이 이 표와 건물 표의 불교집합을 잰다) */
+    public static Set<Material> landscapePalette() {
+        return EnumSet.of(
+                Material.VINE, Material.GLOW_LICHEN, Material.MOSS_BLOCK,
+                Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES,
+                Material.CHERRY_LOG, Material.CHERRY_LEAVES,
+                Material.RED_BANNER, Material.WHITE_BANNER, Material.CAMPFIRE,
+                Material.TRIPWIRE, Material.FARMLAND, Material.WHEAT);
+    }
+
+    /** 유출 눈이 찾는 건물 재료 표 — 눈이 조경 표와 겹치지 않는지 잰다 */
+    public static Set<Material> leakScanMats() {
+        return EnumSet.copyOf(BUILDING_MATS);
+    }
+
     /** 그 열을 계단 몸체가 지나는가 — 담·소품이 통로를 막지 않게 (같은 forge 라 lane.covers 를 읽는다) */
     private static boolean laneCrosses(TerraceForge.Plan plan, int x, int z) {
         for (TerraceForge.StairLane lane : plan.lanes()) {
@@ -690,6 +950,5 @@ public final class HwasanCampusBuilder {
             Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
             Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG,
             Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.GLASS_PANE,
-            Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
-            Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.CHEST);
+            Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 }

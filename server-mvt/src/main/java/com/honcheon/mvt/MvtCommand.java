@@ -1800,7 +1800,7 @@ public final class MvtCommand implements CommandExecutor {
             this.padCount = plan.pads().size();
             this.laneCount = plan.lanes().size();
             this.bridgeCount = plan.bridges().size();
-            this.total = padCount + laneCount + bridgeCount + padCount;   // 패드 → 계단 → 다리 → 구역 건물 (4상)
+            this.total = padCount + laneCount + bridgeCount + padCount + padCount;   // 패드 → 계단 → 다리 → 건물 → 조경 (5상)
             this.startNanos = System.nanoTime();
         }
 
@@ -1826,10 +1826,14 @@ public final class MvtCommand implements CommandExecutor {
                 TerraceForge.paveBridge(world, b, tally);
                 what = "다리 " + b.spec().name() + " (스팬 " + b.span() + " · y" + b.y()
                         + " · 교각 " + b.pierOffsets().size() + ")";
-            } else {
+            } else if (index < padCount + laneCount + bridgeCount + padCount) {
                 TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount);
                 HwasanCampusBuilder.buildZone(world, plan, p, buildTally);
                 what = "건물 " + p.spec().zone() + " " + p.spec().name();
+            } else {
+                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount - padCount);
+                HwasanCampusBuilder.decorate(world, plan, p, buildTally);
+                what = "조경 " + p.spec().zone() + " " + p.spec().name();
             }
             index++;
             Announce.progress(plugin, sender, ChatColor.GRAY + "[캠퍼스시험·진행] " + index + "/" + total
@@ -1839,7 +1843,7 @@ public final class MvtCommand implements CommandExecutor {
 
         /** 조성 완료 — ★검수 먼저 (위반이면 소리친다) → census → 산문(1구역) 남단 텔레포트 */
         void finish() {
-            TerraceForge.Audit audit = TerraceForge.audit(world, plan, HwasanCampusBuilder::buildingBox);
+            TerraceForge.Audit audit = TerraceForge.audit(world, plan, HwasanCampusBuilder::auditSkipBoxes);
             java.util.List<String> leaks = HwasanCampusBuilder.auditBuildings(world, plan);
             long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
             if (audit.clean() && leaks.isEmpty()) {
@@ -1866,6 +1870,8 @@ public final class MvtCommand implements CommandExecutor {
                     + buildTally.gates + " · 정자 " + buildTally.pavilions + " · 목인 " + buildTally.dummies
                     + " · 시렁 " + buildTally.racks + " · 탑 " + buildTally.towers
                     + " · 블록 " + buildTally.blocks);
+            Announce.say(plugin, sender, ChatColor.GRAY + "  조경: 매화 " + buildTally.plums + " · 소나무 "
+                    + buildTally.pines + " · 덩굴·지의 " + buildTally.vines + " · 소품 " + buildTally.props);
             TerraceForge.Pad gate = plan.pads().get(0);   // 명세 첫 줄 = 1 산문
             TerraceForge.Pad top = plan.pads().stream()
                     .max(java.util.Comparator.comparingInt(TerraceForge.Pad::y)).orElse(gate);

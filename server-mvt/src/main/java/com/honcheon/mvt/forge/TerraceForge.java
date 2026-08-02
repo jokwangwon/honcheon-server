@@ -903,18 +903,18 @@ public final class TerraceForge {
 
     /** 조성 뒤 전수 검수 — 건물 없는 판 (슬라이스 1 호환: 발자국 예외 없음). */
     public static Audit audit(World world, Plan plan) {
-        return audit(world, plan, p -> null);
+        return audit(world, plan, p -> List.of());
     }
 
     /**
      * 조성 뒤 전수 검수 — 위반은 세고, 표본은 남긴다 (호출자가 소리친다).
      *
-     * @param buildingBox 패드 → 건물 발자국 [x0,x1,zN,zS] (없으면 null) — 평탄 눈이 그 안을
-     *                    비켜 간다 (건물은 포장면 위로 솟는 것이 정상이다). 접지 눈은 안 비켜
-     *                    간다 — 건물 밑도 떠 있으면 안 된다 (B-146).
+     * @param skipBoxes 패드 → 건물·소품 발자국 [x0,x1,zN,zS] 목록 — 평탄 눈이 그 안을
+     *                  비켜 간다 (포장면 위로 솟는 것이 정상인 자리의 명세). 접지 눈은 안 비켜
+     *                  간다 — 건물·소품 밑도 떠 있으면 안 된다 (B-146).
      */
     public static Audit audit(World world, Plan plan,
-                              java.util.function.Function<Pad, int[]> buildingBox) {
+                              java.util.function.Function<Pad, List<int[]>> skipBoxes) {
         int flat = 0;
         int floats = 0;
         int cols = 0;
@@ -923,13 +923,18 @@ public final class TerraceForge {
         List<String> floatNotes = new ArrayList<>();
         List<String> walkNotes = new ArrayList<>();
         for (Pad pad : plan.pads()) {
-            int[] box = buildingBox.apply(pad);
+            List<int[]> boxes = skipBoxes.apply(pad);
             for (int x = pad.x0(); x <= pad.x1(); x++) {
                 for (int z = pad.zN(); z <= pad.zS(); z++) {
                     cols++;
                     boolean edge = x == pad.x0() || x == pad.x1() || z == pad.zN() || z == pad.zS();
-                    boolean inBox = box != null
-                            && x >= box[0] && x <= box[1] && z >= box[2] && z <= box[3];
+                    boolean inBox = false;
+                    for (int[] box : boxes) {
+                        if (x >= box[0] && x <= box[1] && z >= box[2] && z <= box[3]) {
+                            inBox = true;
+                            break;
+                        }
+                    }
                     // ① 평탄 — 안쪽 열의 밟는 면은 정확히 포장면 (여장·계단 몸체·건물 자리는 예외)
                     if (!edge && !inBox && !laneCovered(plan, x, z)) {
                         int top = topSolid(world, x, pad.y() + HEADROOM, z);
