@@ -375,7 +375,7 @@ public final class HwasanCampusBuilder {
                     }
                     Material m = Math.abs(f) == half || Math.abs(f) == 3
                             || (half >= 12 && Math.abs(Math.abs(f) - 9) == 2)
-                            ? Material.MANGROVE_LOG : Material.WHITE_TERRACOTTA;   // 적주 + 백벽
+                            ? Material.STRIPPED_MANGROVE_LOG : Material.WHITE_TERRACOTTA;   // 적주(벗긴 맹그로브 — 껍질면은 흑갈로 읽힌다) + 백벽
                     put(world, pad, x, y + dy, z, m, tally);
                 }
             }
@@ -386,7 +386,7 @@ public final class HwasanCampusBuilder {
                 boolean edge = Math.abs(f) == half - 2 || Math.abs(d) == 1;
                 for (int dy = 7; dy <= 10; dy++) {
                     Material m = !edge ? Material.AIR
-                            : (Math.abs(f) == half - 2 ? Material.MANGROVE_LOG
+                            : (Math.abs(f) == half - 2 ? Material.STRIPPED_MANGROVE_LOG
                             : (dy == 10 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA));
                     if (m != Material.AIR) {
                         put(world, pad, gx + f, y + dy, gz + d, m, tally);
@@ -994,7 +994,7 @@ public final class HwasanCampusBuilder {
                 Material.WHITE_TERRACOTTA, Material.RED_TERRACOTTA,
                 Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
                 Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
-                Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG,
+                Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
                 Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB,
                 Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
@@ -1007,7 +1007,7 @@ public final class HwasanCampusBuilder {
             Material.WHITE_TERRACOTTA, Material.RED_TERRACOTTA,
             Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
             Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
-            Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG,
+            Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
             Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.GLASS_PANE,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 }
