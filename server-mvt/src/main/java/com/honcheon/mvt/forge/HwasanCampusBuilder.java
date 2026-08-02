@@ -50,72 +50,123 @@ public final class HwasanCampusBuilder {
         public int pines;      // 절벽 소나무
         public long vines;     // 덩굴·이끼·지의
         public int props;      // 깃발·화로·상자·빨래줄·밭
+        Print print;           // ★마른 조성(dry run) — null 이 아니면 put 이 쓰지 않고 발자국만 적는다
+    }
+
+    /**
+     * 마른 조성 채집기 — <b>부품 코드 자체가 제 발자국의 정본이다</b> (슬라이스 7.5).
+     *
+     * <p>7.0 실기동의 평탄 95건 = 겹처마가 벽 밖 2칸 내밀었는데 손으로 적은 상자가 안 자랐다.
+     * 5.6(정원 매화)·7.0 둘 다 같은 병: <b>상자와 실물이 별도 손으로 적히면 어긋난다.</b>
+     * 처방: 상자를 손으로 적지 않는다 — {@code world=null}·{@code tally.print} 로 부품 함수를
+     * 그대로 돌리면 {@link #put}/{@link #putRoofStair} 깔때기가 블록 대신 발자국을 적는다.
+     * 조성과 상자가 <b>같은 코드</b>를 지나므로 어긋날 자리가 없다.
+     *
+     * <p>층위 둘: <b>전고</b>(처마 포함 — 평탄 검수 스킵·패드 담김)와 <b>지상</b>(y ≤ 포장+{@value
+     * #GROUND_TOP} — 통로·다리 어귀 겹침). 처마가 계단 머리 위를 덮는 것은 「걷는 자의 눈」이
+     * 이미 허용하므로 통로 검증은 지상만 잰다.
+     */
+    static final class Print {
+        static final int GROUND_TOP = 4;   // 포장 위 이 높이까지가 「지상」 — 벽·기둥·목인은 걸리고 처마(≥벽고 5)는 빠진다
+        private final int groundY;
+        private int x0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE,
+                z0 = Integer.MAX_VALUE, z1 = Integer.MIN_VALUE;           // 전고
+        private int gx0 = Integer.MAX_VALUE, gx1 = Integer.MIN_VALUE,
+                gz0 = Integer.MAX_VALUE, gz1 = Integer.MIN_VALUE;         // 지상
+        Print(int padY) {
+            this.groundY = padY + GROUND_TOP;
+        }
+        void take(int x, int y, int z) {
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+            z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+            if (y <= groundY) {
+                gx0 = Math.min(gx0, x); gx1 = Math.max(gx1, x);
+                gz0 = Math.min(gz0, z); gz1 = Math.max(gz1, z);
+            }
+        }
+        int[] full() {
+            return x0 > x1 ? null : new int[]{x0, x1, z0, z1};
+        }
+        int[] ground() {
+            return gx0 > gx1 ? null : new int[]{gx0, gx1, gz0, gz1};
+        }
+    }
+
+    /** 구역 부품 하나 — 실물 조성과 발자국 채집(마른 조성)이 같은 코드를 지난다 */
+    @FunctionalInterface
+    interface Part {
+        void build(World world, TerraceForge.Pad pad, Tally tally);
     }
 
     // ═══════════════════════════════════════════════════════════════════
     // 구역 배치 — 패드 하나 = 한 걸음 (TickBudget 이 사이를 문다)
     // ═══════════════════════════════════════════════════════════════════
 
-    /** 구역 하나의 건물을 앉힌다 — 계단참(101~103)은 소품 없음. 남향(문은 +z 쪽). */
+    /**
+     * 구역 하나의 건물을 앉힌다 — 계단참(102·103)은 소품 없음. 남향(문은 +z 쪽).
+     *
+     * <p>★구조는 두 층이다 (슬라이스 7.5): <b>지면 일</b>(재포장·모래 마당·담 — 포장면 높이라
+     * 상자가 필요 없거나[재포장] 스스로 통로를 비킨다[담])은 여기서 직접, <b>구조물</b>은
+     * {@link #parts} 목록으로 — 그 목록을 마른 조성으로 돌린 것이 곧 검수 상자다.
+     */
     public static void buildZone(World world, TerraceForge.Plan plan, TerraceForge.Pad pad, Tally tally) {
         int cx = pad.x0() + pad.spec().width() / 2;
         int cz = pad.zN() + pad.spec().depth() / 2;
-        switch (pad.spec().zone()) {
-            case 1 -> {                                          // 산문 — 전면 29 문루 (실측표 §3 · 1호)
-                sandyRepave(world, pad, tally);
-                gateGrand(world, pad, cx, cz, 14, tally);
-            }
-            case 2 -> {                                          // 외원 — 좌우 대칭 정자 · 중앙은 여백 (원작 11호)
-                sandyRepave(world, pad, tally);
-                pavilion(world, pad, cx - 10, cz + 6, 3, tally);
-                pavilion(world, pad, cx + 10, cz + 6, 3, tally);
-            }
-            case 6 -> {                                          // 종문 — 전면 21 문루 (산문의 2/3 · 실측표 §3) · 램프가 북편이라 남으로
-                sandyRepave(world, pad, tally);
-                gateGrand(world, pad, cx, cz + 7, 10, tally);
-            }
-            case 16 -> {                                         // 측문 — 남북 담에 낸 동향 작은 문 (통단 동편 끝)
-                gateEW(world, pad, cx, cz, 2, tally);
-                wallNS(world, plan, pad, cx, cz, tally);
-            }
-            case 3 -> yard(world, pad, cx, cz, true, 6, -2, tally);   // 연무장 하 — 모래 마당 ~36변 (실측표 §3)
-            case 14 -> yard(world, pad, cx, cz, true, 5, -2, tally);  // 연무장 상
-            case 7 -> yard(world, pad, cx, cz, false, 4, -2, tally);  // 훈련장 중 — 박석 마당
-            case 4 -> {                                          // 강당·무기고 — 큰 회벽 홀 17×11 + 병기 시렁
-                plasterHall(world, pad, cx, cz + 2, 8, 5, true, false, tally);
-                rack(world, pad, cx - 3, pad.y(), cz + 2, 3, tally);
-            }
-            case 5 -> {                                          // 생활 하 — 숙소·식당 두 채 13×9 (실측표 §3)
-                plasterHall(world, pad, cx - 10, cz + 2, 6, 4, true, false, tally);
-                plasterHall(world, pad, cx + 10, cz + 2, 6, 4, true, false, tally);
-            }
-            case 8 -> plasterHall(world, pad, cx, cz, 4, 2, true, false, tally);   // 생활 중
-            case 17 -> {                                         // 물자 창고 — 창 없는 홀 15×11 + 상자 (barrel 금지 → chest)
-                plasterHall(world, pad, cx, cz + 2, 7, 5, false, false, tally);
-                chests(world, pad, cx, pad.y(), cz + 2, tally);
-            }
-            case 9 -> mainHall(world, pad, cx, cz + 2, tally);   // 본전 — 33폭 2층 중루 (실측표 §3 · 램프 북편이라 남으로)
-            case 12 -> plasterHall(world, pad, cx, cz + 6, 8, 3, true, false, tally);   // 장로회 — 17×7 (북 램프 착지선·남 개구 줄을 다 비운다)
-            case 13 -> {                                         // 정상 — 사당 9×7 + 정자 7×7 (실측표 §3 · 10호)
-                sandyRepave(world, pad, tally);
-                plasterHall(world, pad, cx - 5, cz + 3, 4, 3, false, false, tally);
-                pavilion(world, pad, cx + 6, cz + 3, 3, tally);
-            }
-            case 19 -> pavilion(world, pad, cx + 3, cz, 2, tally);   // 절벽 전망대 — 정자 하나뿐 (벼랑 끝 · 절제)
-            case 20 -> {                                         // 부속 암자 — 9×7 + 빈 마당 (레퍼런스 9호)
-                plasterHall(world, pad, cx + 2, cz, 4, 3, true, false, tally);
-            }
-            case 101 -> {                                        // 중정 — 상단 쉼 마당: 정자 한 쌍
-                sandyRepave(world, pad, tally);
-                pavilion(world, pad, cx - 9, cz + 8, 3, tally);
-                pavilion(world, pad, cx + 9, cz + 8, 3, tally);
-            }
-            case 10 -> garden(world, pad, cx, cz, tally);        // 장문인 정원 — 연못·정자·매화
-            case 11 -> watchtower(world, pad, cx, cz + 6, tally);   // 망루 — 11/9/7 3층 (실측표 §3 · 9호)
+        switch (pad.spec().zone()) {                              // 지면 일 — 부품이 아니다
+            case 1, 2, 6, 13, 101 -> sandyRepave(world, pad, tally);   // 공공 = 모래빛
+            case 3, 14 -> sandField(world, pad, tally);                // 연무장 = 모래 마당 (테두리 4 박석)
+            case 16 -> wallNS(world, plan, pad, cx, cz, tally);        // 담은 laneCrosses 로 스스로 비킨다
             default -> {
-                // 계단참 101·102·103 — 소품 없음 (지나는 자리)
             }
         }
+        for (Part part : parts(pad)) {
+            part.build(world, pad, tally);
+        }
+    }
+
+    /**
+     * 구역별 구조물 부품 목록 — <b>이 표가 조성·검수 상자·통로 검증의 공동 정본이다</b>.
+     * 조성은 {@link #buildZone} 이 이 목록을 실행하고, 상자는 {@link #structureBoxes} 가
+     * 같은 목록을 마른 조성으로 돌려 얻는다 — 좌표·처마가 어긋날 자리가 없다 (7.5 계율).
+     */
+    static List<Part> parts(TerraceForge.Pad pad) {
+        int cx = pad.x0() + pad.spec().width() / 2;
+        int cz = pad.zN() + pad.spec().depth() / 2;
+        int y = pad.y();
+        int zS = pad.zS();
+        return switch (pad.spec().zone()) {
+            case 1 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 1, 14, t));   // 산문 29 — 처마(±4)가 램프 t0 줄을 비킨다
+            case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 10, cz + 6, 3, t),  // 외원 — 대칭 정자 · 중앙 여백 (원작 11호)
+                    (w, p, t) -> pavilion(w, p, cx + 10, cz + 6, 3, t));
+            case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 7, 10, t));   // 종문 21
+            case 16 -> List.of((w, p, t) -> gateEW(w, p, cx, cz, 2, t));          // 동향 문루 (담은 지면 일)
+            case 3 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 2, 6, t),      // 연무장 하 — 목인 6
+                    (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
+            case 14 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 2, 5, t),     // 연무장 상
+                    (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
+            case 7 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 2, 4, t),      // 훈련장 중 (박석 마당)
+                    (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
+            case 4 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 2, 8, 5, true, false, t),   // 강당 17×11
+                    (w, p, t) -> rack(w, p, cx - 3, y, cz + 2, 3, t));
+            case 5 -> List.of((w, p, t) -> plasterHall(w, p, cx - 9, cz + 2, 6, 4, true, false, t),   // 생활 두 채 13×9
+                    (w, p, t) -> plasterHall(w, p, cx + 9, cz + 2, 6, 4, true, false, t));
+            case 8 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz, 4, 2, true, false, t));
+            case 17 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 2, 7, 5, false, false, t),  // 창고 15×11
+                    (w, p, t) -> chests(w, p, cx, y, cz + 2, t));
+            case 9 -> List.of((w, p, t) -> mainHall(w, p, cx, cz + 2, t));        // 본전 — 33폭 2층 중루
+            case 12 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 6, 8, 3, true, false, t));  // 장로회 17×7
+            case 13 -> List.of((w, p, t) -> plasterHall(w, p, cx - 5, cz + 2, 4, 3, false, false, t),  // 정상 사당+정자
+                    (w, p, t) -> pavilion(w, p, cx + 5, cz + 2, 3, t));
+            case 19 -> List.of((w, p, t) -> pavilion(w, p, cx + 2, cz, 2, t));    // 절벽 전망대
+            case 20 -> List.of((w, p, t) -> plasterHall(w, p, cx + 2, cz, 4, 3, true, false, t));  // 부속 암자
+            case 101 -> List.of((w, p, t) -> pavilion(w, p, cx - 9, cz + 7, 2, t),   // 중정 정자 한 쌍
+                    (w, p, t) -> pavilion(w, p, cx + 9, cz + 7, 2, t));
+            case 10 -> List.of((w, p, t) -> gardenPond(w, p, cx, cz, t),          // 정원 — 연못·정자·매화 세 부품
+                    (w, p, t) -> pavilion(w, p, cx + 6, cz + 6, 2, t),
+                    (w, p, t) -> gardenPlum(w, p, cx - 2, cz - 6, t));
+            case 11 -> List.of((w, p, t) -> watchtower(w, p, cx, cz + 6, t));     // 망루 11/9/7
+            default -> List.of();                                                 // 계단참 102·103 — 지나는 자리
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -146,8 +197,7 @@ public final class HwasanCampusBuilder {
             case 2 -> List.of(new Decor('M', cx - 13, cz - 6), new Decor('M', cx + 13, cz - 6));
             case 6 -> List.of(new Decor('M', cx - 12, cz - 8), new Decor('M', cx + 12, cz - 8));
             case 9 -> List.of(new Decor('M', cx - 16, cz - 10), new Decor('M', cx + 16, cz - 10));
-            case 12 -> List.of(new Decor('M', cx - 16, cz + 6), new Decor('M', cx + 16, cz + 6));
-            case 19 -> List.of(new Decor('M', cx - 3, cz + 3));
+            case 12 -> List.of(new Decor('M', cx + 8, cz + 4), new Decor('M', cx + 14, cz + 4));   // 동편 마당 (홀은 서편)
             case 20 -> List.of(new Decor('M', cx - 5, cz + 4));
             case 10 -> List.of(new Decor('M', cx + 2, cz - 10));
             case 3 -> List.of(new Decor('B', cx - 6, pad.zN() + 3), new Decor('B', cx + 6, pad.zN() + 3),
@@ -177,10 +227,15 @@ public final class HwasanCampusBuilder {
         return out;
     }
 
-    /** 검수 평탄 눈이 비켜 갈 상자 전부 — 구조물 + 소품 (포장면 위로 솟는 것들의 명세) */
+    /** 검수 평탄 눈이 비켜 갈 상자 전부 — 구조물(전고·마른 조성) + 소품 + 측문 담 띠 */
     public static List<int[]> auditSkipBoxes(TerraceForge.Pad pad) {
         java.util.ArrayList<int[]> out = new java.util.ArrayList<>(structureBoxes(pad));
         out.addAll(decorBoxes(pad));
+        if (pad.spec().zone() == 16) {
+            // 담 띠 — wallNS 가 x=cx 한 열에 세운다 (같은 식 · 부품이 아니라 여기서 얹는다)
+            int cx = pad.x0() + pad.spec().width() / 2;
+            out.add(new int[]{cx, cx, pad.zN(), pad.zS()});
+        }
         return out;
     }
 
@@ -202,7 +257,11 @@ public final class HwasanCampusBuilder {
                             + " z" + pad.zN() + ".." + pad.zS());
                 }
             }
-            for (int[] sb : auditSkipBoxes(pad)) {
+            // ★통로·다리 어귀 겹침은 <b>지상 발자국</b>으로 잰다 (7.5) — 처마가 계단 머리 위를
+            //   덮는 것은 「걷는 자의 눈」이 허용하는 정상 통행이다 (문루 아래를 걷는다).
+            java.util.ArrayList<int[]> groundLevel = new java.util.ArrayList<>(groundBoxes(pad));
+            groundLevel.addAll(decorBoxes(pad));
+            for (int[] sb : groundLevel) {
                 // ★다리 회랑 (걷는 폭 ±2 · 패드 안 두 칸 이음 포함) — 구조물이 다리 어귀를 막으면 거절
                 for (TerraceForge.Bridge b : bridges) {
                     for (int t = b.a0() - 2; t <= b.a1() + 2; t++) {
@@ -239,44 +298,35 @@ public final class HwasanCampusBuilder {
     }
 
     /**
-     * 구역별 <b>실구조물</b> 발자국(빈틈 없이 좁게 — 처마 포함) — 계단 통로 겹침 검증용.
-     * {@link #buildingBox} 는 검수 스킵용의 느슨한 상자라 여기 못 쓴다 (마당 전체를 덮는다).
-     * 측문(16)의 담은 뺀다 — 담은 계단 통로를 스스로 비킨다 ({@code sideWalls} 의 laneCrosses 가드).
+     * 구역별 <b>실구조물</b> 발자국(<b>전고</b> — 처마 포함) — 평탄 스킵·패드 담김 검증용.
+     *
+     * <p>★손으로 적지 않는다 (슬라이스 7.5): {@link #parts} 목록을 <b>마른 조성</b>으로 돌려
+     * 부품 코드가 스스로 보고한 발자국을 쓴다. 5.6(정원 매화 한 칸)·7.0(처마 링 95건)이
+     * 전부 「상자와 실물이 별도 손」의 병이었다 — 이제 같은 코드가 둘 다를 만든다.
+     * 측문(16)의 담은 부품이 아니다 — 담은 계단 통로를 스스로 비킨다 ({@code wallNS} 의
+     * laneCrosses 가드) · 평탄 스킵 몫은 {@link #auditSkipBoxes} 가 담 띠로 얹는다.
      */
-    static List<int[]> structureBoxes(TerraceForge.Pad pad) {
-        int cx = pad.x0() + pad.spec().width() / 2;
-        int cz = pad.zN() + pad.spec().depth() / 2;
-        return switch (pad.spec().zone()) {
-            case 1 -> List.of(new int[]{cx - 15, cx + 15, cz - 3, cz + 3});     // 산문 문루 29+처마
-            case 6 -> List.of(new int[]{cx - 11, cx + 11, cz + 4, cz + 10});    // 종문 문루 (남편)
-            case 16 -> List.of(new int[]{cx - 1, cx + 1, pad.zN(), pad.zS()}); // 동향 문루+남북 담 띠
-            case 2 -> List.of(new int[]{cx - 14, cx - 6, cz + 2, cz + 10},      // 정자 7×7 두 짝
-                    new int[]{cx + 6, cx + 14, cz + 2, cz + 10});
-            case 101 -> List.of(new int[]{cx - 13, cx - 5, cz + 4, cz + 12},
-                    new int[]{cx + 5, cx + 13, cz + 4, cz + 12});
-            case 3 -> List.of(new int[]{cx - 16, cx + 16, cz - 3, cz - 1},      // 목인 6 (팔 포함)
-                    new int[]{cx - 3, cx + 3, pad.zS() - 3, pad.zS() - 3});     // 시렁
-            case 14 -> List.of(new int[]{cx - 13, cx + 13, cz - 3, cz - 1},
-                    new int[]{cx - 3, cx + 3, pad.zS() - 3, pad.zS() - 3});
-            case 7 -> List.of(new int[]{cx - 11, cx + 11, cz - 3, cz - 1},
-                    new int[]{cx - 3, cx + 3, pad.zS() - 3, pad.zS() - 3});
-            case 4 -> List.of(new int[]{cx - 9, cx + 9, cz - 4, cz + 8});       // 강당 17×11+처마
-            case 5 -> List.of(new int[]{cx - 17, cx - 3, cz - 3, cz + 7},       // 생활 두 채 13×9+처마
-                    new int[]{cx + 3, cx + 17, cz - 3, cz + 7});
-            case 8 -> List.of(new int[]{cx - 8, cx + 8, cz - 3, cz + 7});
-            case 17 -> List.of(new int[]{cx - 8, cx + 8, cz - 4, cz + 8});
-            case 9 -> List.of(new int[]{cx - 18, cx + 18, cz - 8, cz + 14});    // 월대 3켜+남계단+처마 (남단 개구 줄은 비운다)
-            case 12 -> List.of(new int[]{cx - 9, cx + 9, cz + 2, cz + 10});     // 장로회 17×7+처마
-            case 13 -> List.of(new int[]{cx - 10, cx, cz - 1, cz + 7},          // 사당 9×7 (개구 줄 제외)
-                    new int[]{cx + 2, cx + 10, cz - 1, cz + 7});                // 정자 7×7
-            case 10 -> List.of(new int[]{cx - 9, cx - 2, cz - 3, cz + 2},       // 연못
-                    new int[]{cx + 3, cx + 9, cz + 3, cz + 9},                  // 정자
-                    new int[]{cx - 4, cx, cz - 8, cz - 4});                     // 매화 (수관 = 중심 ±2 — 5.5 재판독의 한 칸 어긋남 수리)
-            case 11 -> List.of(new int[]{cx - 6, cx + 6, cz, cz + 12});         // 망루 11/9/7+처마
-            case 19 -> List.of(new int[]{cx, cx + 6, cz - 3, cz + 3});
-            case 20 -> List.of(new int[]{cx - 3, cx + 7, cz - 4, cz + 4});
-            default -> List.of();
-        };
+    public static List<int[]> structureBoxes(TerraceForge.Pad pad) {
+        return dryRunBoxes(pad, false);
+    }
+
+    /** 구역별 실구조물 <b>지상</b> 발자국(y ≤ 포장+{@value Print#GROUND_TOP}) — 통로·다리 어귀 겹침 검증용 (처마 제외) */
+    public static List<int[]> groundBoxes(TerraceForge.Pad pad) {
+        return dryRunBoxes(pad, true);
+    }
+
+    private static List<int[]> dryRunBoxes(TerraceForge.Pad pad, boolean ground) {
+        java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
+        for (Part part : parts(pad)) {
+            Tally dry = new Tally();
+            dry.print = new Print(pad.y());
+            part.build(null, pad, dry);          // world 는 안 닿는다 — put 깔때기가 발자국만 적는다
+            int[] box = ground ? dry.print.ground() : dry.print.full();
+            if (box != null) {
+                out.add(box);
+            }
+        }
+        return out;
     }
 
     /**
@@ -394,14 +444,15 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
-        // 흑기와 — 밑단 넓게, 위로 좁혀 용마루 (총고 ~14 = 기단~용마루 실측 ~17 의 몸)
-        for (int i = 0; i <= 2; i++) {
-            for (int f = -half - 1 + 2 * i; f <= half + 1 - 2 * i; f++) {
-                for (int d = -3 + i; d <= 3 - i; d++) {
-                    put(world, pad, gx + f, y + 11 + i, gz + d, Material.DEEPSLATE_TILES, tally);
-                }
+        // 상층 난간 — 개방 회랑의 가장자리 (실측 1호)
+        for (int f = -half + 1; f <= half - 1; f++) {
+            for (int d : new int[]{-2, 2}) {
+                put(world, pad, gx + f, y + 7, gz + d, Material.SPRUCE_FENCE, tally);
             }
         }
+        // 겹처마 — 하층 스커트 + 상층 팔작 (실측표 §3-b)
+        eaveRing(world, pad, gx, y + 6, gz, half, 2, tally);
+        sweepRoof(world, pad, gx, y + 10, gz, half - 2, 1, tally);
         put(world, pad, gx, y + 8, gz - 2, Material.DARK_OAK_PLANKS, tally);   // 빈 현판 (남면)
         put(world, pad, gx, y + 8, gz + 2, Material.DARK_OAK_PLANKS, tally);
         put(world, pad, gx - 3, y + 1, gz + 3, Material.LANTERN, tally);
@@ -419,12 +470,8 @@ public final class HwasanCampusBuilder {
         }
         for (int l = -half - 1; l <= half + 1; l++) {
             put(world, pad, gx, y + 7, cz + l, Material.POLISHED_ANDESITE, tally);
-            put(world, pad, gx, y + 8, cz + l, Material.DEEPSLATE_TILES, tally);
         }
-        for (int l = -half - 2; l <= half + 2; l++) {
-            put(world, pad, gx - 1, y + 8, cz + l, Material.DEEPSLATE_TILE_SLAB, tally);
-            put(world, pad, gx + 1, y + 8, cz + l, Material.DEEPSLATE_TILE_SLAB, tally);
-        }
+        sweepRoof(world, pad, gx, y + 7, cz, 1, half, tally);   // 회전 팔작 — 용마루가 남북
         put(world, pad, gx, y + 6, cz, Material.DARK_OAK_PLANKS, tally);   // 빈 현판
         put(world, pad, gx + 1, y + 1, cz - half, Material.LANTERN, tally);
         put(world, pad, gx + 1, y + 1, cz + half, Material.LANTERN, tally);
@@ -453,7 +500,7 @@ public final class HwasanCampusBuilder {
     private static void plasterHall(World world, TerraceForge.Pad pad, int cx, int cz,
                                     int hf, int hl, boolean windows, boolean red, Tally tally) {
         int y = pad.y();
-        int wallH = 4;
+        int wallH = 5;   // 실측 단층 벽 5~6
         for (int f = -hf; f <= hf; f++) {
             for (int l = -hl; l <= hl; l++) {
                 int x = cx + f;
@@ -475,28 +522,143 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
-        // 남문 — 한 칸 폭, 두 칸 높이
-        for (int dy = 1; dy <= 2; dy++) {
-            put(world, pad, cx, y + dy, cz + hl, Material.AIR, tally);
+        // 전면 — 적주 열주 + 처마 보 + 격자창 (실측표 §3-b)
+        int doorHalf = hf >= 6 ? 1 : 0;
+        colonnade(world, pad, cx, y, cz, hf, hl, wallH, doorHalf, tally);
+        for (int dx = -doorHalf; dx <= doorHalf; dx++) {   // 남문 — 큰 홀은 세 칸 폭
+            for (int dy = 1; dy <= 3; dy++) {
+                put(world, pad, cx + dx, y + dy, cz + hl, Material.AIR, tally);
+            }
         }
-        hipRoof(world, pad, cx, y + wallH, cz, hf, hl, tally);
+        sweepRoof(world, pad, cx, y + wallH, cz, hf, hl, tally);
         put(world, pad, cx, y + wallH, cz + hl + 1, Material.LANTERN, tally);
         tally.halls++;
     }
 
-    /** 흑기와 모임지붕 — {@code SectBuilder.tiledRoof} 문법 (능선으로 수렴) */
-    private static void hipRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
-                                int hf, int hl, Tally tally) {
-        for (int i = 0; i <= Math.min(hf, hl); i++) {
-            int y = cy + 1 + i;
-            for (int f = -hf - 1 + i; f <= hf + 1 - i; f++) {
-                put(world, pad, cx + f, y, cz - hl - 1 + i, Material.DEEPSLATE_TILES, tally);
-                put(world, pad, cx + f, y, cz + hl + 1 - i, Material.DEEPSLATE_TILES, tally);
+    /**
+     * 팔작/우진각 근사 지붕 — <b>실측표 §3-b 의 공용 지붕 문법</b> (슬라이스 7 · 전 건물 공통):
+     * 처마가 벽선 밖 2칸 내밀고(반블록 끝), 모서리는 1단 들리며, 계단 블록이 물매를 만들고,
+     * 용마루는 큐브+반블록, 마루 끝은 담장 블록(치미)이 솟는다.
+     */
+    private static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
+                                  int hf, int hl, Tally tally) {
+        int over = 2;
+        for (int i = 0; ; i++) {
+            int hF = hf + over - i;
+            int hL = hl + over - i;
+            int y = cy + i;
+            if (hF <= 0 || hL <= 0) {
+                // 용마루 — 긴 축으로 수렴 · 끝은 치미
+                boolean alongF = hF > 0;
+                int len = Math.max(alongF ? hF : hL, 0);
+                for (int k = -len; k <= len; k++) {
+                    int x = alongF ? cx + k : cx;
+                    int z = alongF ? cz : cz + k;
+                    put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                    put(world, pad, x, y + 1, z,
+                            Math.abs(k) == len ? Material.DEEPSLATE_TILE_WALL
+                                    : Material.DEEPSLATE_TILE_SLAB, tally);
+                }
+                return;
             }
-            for (int l = -hl + i; l <= hl - i; l++) {
-                put(world, pad, cx - hf - 1 + i, y, cz + l, Material.DEEPSLATE_TILES, tally);
-                put(world, pad, cx + hf + 1 - i, y, cz + l, Material.DEEPSLATE_TILES, tally);
+            for (int f = -hF; f <= hF; f++) {
+                for (int l = -hL; l <= hL; l++) {
+                    int x = cx + f;
+                    int z = cz + l;
+                    boolean eF = Math.abs(f) == hF;
+                    boolean eL = Math.abs(l) == hL;
+                    if (i == 0) {                          // 처마 끝 — 반블록, 모서리 들림
+                        put(world, pad, x, y, z, eF || eL ? Material.DEEPSLATE_TILE_SLAB
+                                : Material.DEEPSLATE_TILES, tally);
+                        if (eF && eL) {
+                            put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
+                        }
+                    } else if (eF && eL) {
+                        put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                    } else if (eL) {
+                        putRoofStair(world, pad, x, y, z,
+                                l > 0 ? org.bukkit.block.BlockFace.NORTH
+                                        : org.bukkit.block.BlockFace.SOUTH, tally);
+                    } else if (eF) {
+                        putRoofStair(world, pad, x, y, z,
+                                f > 0 ? org.bukkit.block.BlockFace.WEST
+                                        : org.bukkit.block.BlockFace.EAST, tally);
+                    } else {
+                        put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                    }
+                }
             }
+        }
+    }
+
+    /** 겹처마의 하단 스커트 — 몸체 둘레 한 바퀴: 안쪽 계단 켜 + 바깥 반블록 끝(모서리 들림) */
+    private static void eaveRing(World world, TerraceForge.Pad pad, int cx, int y, int cz,
+                                 int hf, int hl, Tally tally) {
+        for (int f = -(hf + 2); f <= hf + 2; f++) {
+            for (int l = -(hl + 2); l <= hl + 2; l++) {
+                int aF = Math.abs(f);
+                int aL = Math.abs(l);
+                boolean inner = aF <= hf + 1 && aL <= hl + 1 && (aF == hf + 1 || aL == hl + 1);
+                boolean outer = aF == hf + 2 || aL == hl + 2;
+                int x = cx + f;
+                int z = cz + l;
+                if (inner) {
+                    if (aF == hf + 1 && aL == hl + 1) {
+                        put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                    } else if (aL == hl + 1) {
+                        putRoofStair(world, pad, x, y, z,
+                                l > 0 ? org.bukkit.block.BlockFace.NORTH
+                                        : org.bukkit.block.BlockFace.SOUTH, tally);
+                    } else {
+                        putRoofStair(world, pad, x, y, z,
+                                f > 0 ? org.bukkit.block.BlockFace.WEST
+                                        : org.bukkit.block.BlockFace.EAST, tally);
+                    }
+                } else if (outer && aF <= hf + 2 && aL <= hl + 2) {
+                    put(world, pad, x, y, z, Material.DEEPSLATE_TILE_SLAB, tally);
+                    if (aF == hf + 2 && aL == hl + 2) {
+                        put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
+                    }
+                }
+            }
+        }
+    }
+
+    /** 지붕 계단 한 장 — 오름이 용마루를 향한다 (facing = 오름 방향 · 도보길 결) */
+    private static void putRoofStair(World world, TerraceForge.Pad pad, int x, int y, int z,
+                                     org.bukkit.block.BlockFace ascent, Tally tally) {
+        if (!pad.contains(x, z)) {
+            throw new IllegalStateException("건물 블록이 패드 밖: " + pad.spec().name()
+                    + " (" + x + "," + y + "," + z + ") 지붕 계단");
+        }
+        if (tally.print != null) {   // ★마른 조성 — BlockData 를 만들기 전에 빠진다 (서버 없이 돈다)
+            tally.print.take(x, y, z);
+            return;
+        }
+        org.bukkit.block.data.type.Stairs data =
+                (org.bukkit.block.data.type.Stairs) Material.DEEPSLATE_TILE_STAIRS.createBlockData();
+        data.setFacing(ascent);
+        world.getBlockAt(x, y, z).setBlockData(data, false);
+        tally.blocks++;
+    }
+
+    /** 전면 열주 — 적주 간격 3 이 처마 보(다크오크)를 받친다 · 기둥 사이 격자창 (실측표 §3-b) */
+    private static void colonnade(World world, TerraceForge.Pad pad, int cx, int y, int cz,
+                                  int hf, int hl, int wallH, int doorHalf, Tally tally) {
+        int z = cz + hl;
+        for (int f = -hf; f <= hf; f++) {
+            boolean pillar = Math.floorMod(f + hf, 3) == 0;
+            if (pillar) {
+                for (int dy = 1; dy < wallH; dy++) {
+                    put(world, pad, cx + f, y + dy, z, Material.STRIPPED_MANGROVE_LOG, tally);
+                }
+            } else if (Math.abs(f) > doorHalf) {
+                put(world, pad, cx + f, y + 2, z, Material.GLASS_PANE, tally);
+                if (wallH >= 5) {
+                    put(world, pad, cx + f, y + 3, z, Material.GLASS_PANE, tally);
+                }
+            }
+            put(world, pad, cx + f, y + wallH, z, Material.DARK_OAK_PLANKS, tally);   // 처마 보
         }
     }
 
@@ -507,8 +669,8 @@ public final class HwasanCampusBuilder {
     private static void mainHall(World world, TerraceForge.Pad pad, int cx, int cz, Tally tally) {
         int y = pad.y();
         int hf = 15;
-        int hl = 6;   // 전면 31+처마 33 · 깊이 13 (실측표 §3)
-        // 월대 — 세 켜 돌기단 + 남쪽 오름 계단 (실측표 §3: 기단 3켜 · 남계단 폭 7)
+        int hl = 6;   // 전면 31 + 처마 35 · 깊이 13 (실측표 §3 상한 쪽)
+        // 월대 — 세 켜 + 남계단 폭 7 (실측표 §3-b)
         for (int f = -hf - 3; f <= hf + 3; f++) {
             for (int l = -hl - 3; l <= hl + 3; l++) {
                 for (int k = 1; k <= 3; k++) {
@@ -522,7 +684,7 @@ public final class HwasanCampusBuilder {
             }
         }
         int base = y + 3;
-        // 1층 — 백벽 + 적목 모서리, 상단 적 띠, 남면 삼문 (불문 삼문이 아니라 정전의 격)
+        // 1층 — 백벽 + 적목 모서리 + 상단 적 띠 · 남면 삼문
         for (int f = -hf; f <= hf; f++) {
             for (int l = -hl; l <= hl; l++) {
                 int x = cx + f;
@@ -533,9 +695,9 @@ public final class HwasanCampusBuilder {
                     continue;
                 }
                 boolean corner = Math.abs(f) == hf && Math.abs(l) == hl;
-                for (int dy = 1; dy <= 5; dy++) {
+                for (int dy = 1; dy <= 6; dy++) {
                     Material m = corner ? Material.MANGROVE_LOG
-                            : (dy == 5 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : (dy == 6 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
                     put(world, pad, x, base + dy, z, m, tally);
                 }
             }
@@ -547,16 +709,18 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
-        // 1층 처마 — 한 바퀴 흑기와
-        for (int f = -hf - 1; f <= hf + 1; f++) {
-            put(world, pad, cx + f, base + 6, cz - hl - 1, Material.DEEPSLATE_TILES, tally);
-            put(world, pad, cx + f, base + 6, cz + hl + 1, Material.DEEPSLATE_TILES, tally);
+        // 퇴칸 회랑 — 월대 위 전면 열주가 처마 보를 받친다 (실측표 §3-b)
+        for (int f = -hf; f <= hf; f += 3) {
+            for (int dy = 1; dy <= 5; dy++) {
+                put(world, pad, cx + f, base + dy, cz + hl + 1, Material.STRIPPED_MANGROVE_LOG, tally);
+            }
         }
-        for (int l = -hl - 1; l <= hl + 1; l++) {
-            put(world, pad, cx - hf - 1, base + 6, cz + l, Material.DEEPSLATE_TILES, tally);
-            put(world, pad, cx + hf + 1, base + 6, cz + l, Material.DEEPSLATE_TILES, tally);
+        for (int f = -hf; f <= hf; f++) {
+            put(world, pad, cx + f, base + 6, cz + hl + 1, Material.DARK_OAK_PLANKS, tally);
         }
-        // 2층 — 세 칸 안으로 들인 중루
+        // 겹처마 하단 — 몸체+회랑을 덮는 스커트
+        eaveRing(world, pad, cx, base + 6, cz, hf, hl + 1, tally);
+        // 2층 — 세 칸 들인 중루 + 상단 팔작
         int hf2 = hf - 3;
         int hl2 = hl - 2;
         for (int f = -hf2; f <= hf2; f++) {
@@ -569,21 +733,20 @@ public final class HwasanCampusBuilder {
                     continue;
                 }
                 boolean corner = Math.abs(f) == hf2 && Math.abs(l) == hl2;
-                for (int dy = 7; dy <= 10; dy++) {
+                for (int dy = 7; dy <= 11; dy++) {
                     Material m = corner ? Material.MANGROVE_LOG
-                            : (dy == 10 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : (dy == 11 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
                     put(world, pad, x, base + dy, z, m, tally);
                 }
                 if (!corner && Math.floorMod(f * 3 + l * 5, 4) == 0) {
-                    put(world, pad, x, base + 8, z, Material.GLASS_PANE, tally);
+                    put(world, pad, x, base + 9, z, Material.GLASS_PANE, tally);
                 }
             }
         }
-        hipRoof(world, pad, cx, base + 10, cz, hf2, hl2, tally);
-        put(world, pad, cx - hf, base + 5, cz + hl + 1, Material.LANTERN, tally);
-        put(world, pad, cx + hf, base + 5, cz + hl + 1, Material.LANTERN, tally);
-        // 현판 자리 — 빈 판 (글자는 사용자 몫)
-        put(world, pad, cx, base + 4, cz + hl, Material.DARK_OAK_PLANKS, tally);
+        sweepRoof(world, pad, cx, base + 11, cz, hf2, hl2, tally);
+        put(world, pad, cx - hf, base + 5, cz + hl + 2, Material.LANTERN, tally);
+        put(world, pad, cx + hf, base + 5, cz + hl + 2, Material.LANTERN, tally);
+        put(world, pad, cx, base + 4, cz + hl, Material.DARK_OAK_PLANKS, tally);   // 빈 현판
         tally.halls++;
     }
 
@@ -592,40 +755,34 @@ public final class HwasanCampusBuilder {
         int y = pad.y();
         for (int f : new int[]{-half, half}) {
             for (int l : new int[]{-half, half}) {
-                for (int dy = 1; dy <= 3; dy++) {
+                for (int dy = 1; dy <= 4; dy++) {
                     put(world, pad, cx + f, y + dy, cz + l, Material.SPRUCE_LOG, tally);
                 }
             }
         }
-        hipRoof(world, pad, cx, y + 3, cz, half, half, tally);
+        sweepRoof(world, pad, cx, y + 4, cz, half, half, tally);
         put(world, pad, cx, y + 3, cz, Material.LANTERN, tally);
         tally.pavilions++;
     }
 
-    /**
-     * 마당 — 연무장(모래) 또는 훈련장(박석). 목인({@code SectBuilder.woodenDummy} 문법)과
-     * 병기 시렁을 세운다 (레퍼런스 3호의 모래 마당·목인·병기걸이).
-     */
-    private static void yard(World world, TerraceForge.Pad pad, int cx, int cz,
-                             boolean sand, int dummies, int dummyDz, Tally tally) {
+    /** 모래 마당 — 안쪽을 모래로 재포장 (테두리 4칸은 박석 그대로 · 지면 일이라 부품이 아니다) */
+    private static void sandField(World world, TerraceForge.Pad pad, Tally tally) {
         int y = pad.y();
-        if (sand) {
-            // 모래 마당 — 안쪽을 모래로 재포장 (테두리 3칸은 박석 그대로)
-            for (int x = pad.x0() + 4; x <= pad.x1() - 4; x++) {
-                for (int z = pad.zN() + 4; z <= pad.zS() - 4; z++) {
-                    put(world, pad, x, y, z,
-                            Math.floorMod(x * 7 + z * 13, 5) == 0 ? Material.SMOOTH_SANDSTONE
-                                    : Material.SAND, tally);
-                }
+        for (int x = pad.x0() + 4; x <= pad.x1() - 4; x++) {
+            for (int z = pad.zN() + 4; z <= pad.zS() - 4; z++) {
+                put(world, pad, x, y, z,
+                        Math.floorMod(x * 7 + z * 13, 5) == 0 ? Material.SMOOTH_SANDSTONE
+                                : Material.SAND, tally);
             }
         }
-        // 목인 — 마당 안 결정론 자리 (동서로 벌린다 · 줄의 남북 자리는 구역이 정한다 — 계단 통로 회피)
+    }
+
+    /** 목인 줄 — 동서로 5칸씩 벌린다 (줄의 남북 자리는 구역이 정한다 — 계단 통로 회피) */
+    private static void dummyRow(World world, TerraceForge.Pad pad, int cx, int cz, int dummies, Tally tally) {
         for (int i = 0; i < dummies; i++) {
             int dx = (i - dummies / 2) * 5;
-            woodenDummy(world, pad, cx + dx, y, cz + dummyDz, tally);
+            woodenDummy(world, pad, cx + dx, pad.y(), cz, tally);
         }
-        // 병기 시렁 【제안 — 전용 부품이 없어 울타리+판 반블록 조합으로 세웠다】
-        rack(world, pad, cx - 3, y, pad.zS() - 3, 3, tally);
     }
 
     /** 목인 — 벗긴 침엽 몸통 + 울타리 팔 ({@code SectBuilder.woodenDummy} 문법) */
@@ -656,20 +813,21 @@ public final class HwasanCampusBuilder {
     }
 
     /**
-     * 장문인 정원 — 연못(포장면 높이 물) · 소정자 · 매화 한 그루 (사용자 표: Cherry = 매화 대체).
-     * ★동편 띠(본전에서 내려오는 계단 몸체 x cx+2.., z cz−3..+3)는 비워 둔다 — 소품은 서·남·북으로.
+     * 정원 연못 — 포장면 높이 물 (밑은 돌 속). 정원(10)의 세 부품 중 하나 —
+     * ★동편 띠(본전에서 내려오는 계단 몸체)는 비워 둔다 — 소품은 서·남·북으로.
      */
-    private static void garden(World world, TerraceForge.Pad pad, int cx, int cz, Tally tally) {
+    private static void gardenPond(World world, TerraceForge.Pad pad, int cx, int cz, Tally tally) {
         int y = pad.y();
-        for (int dx = -6; dx <= -3; dx++) {   // 연못 — 서쪽 (밑은 돌 속)
+        for (int dx = -6; dx <= -3; dx++) {
             for (int dz = -2; dz <= 1; dz++) {
                 put(world, pad, cx + dx, y, cz + dz, Material.WATER, tally);
             }
         }
-        pavilion(world, pad, cx + 6, cz + 6, 2, tally);   // 동남 소정자 (상자와 한 몸 — 5.0 평탄 28건의 진범 수리)
-        // 매화 — 벚 원목 + 벚잎, 북서 (군락이 아니라 한 그루가 점을 찍는다)
-        int tx = cx - 2;
-        int tz = cz - 6;
+    }
+
+    /** 정원 매화 — 벚 원목+벚잎 한 그루 (사용자 표: Cherry = 매화 대체 · 군락이 아니라 점) */
+    private static void gardenPlum(World world, TerraceForge.Pad pad, int tx, int tz, Tally tally) {
+        int y = pad.y();
         for (int dy = 1; dy <= 3; dy++) {
             put(world, pad, tx, y + dy, tz, Material.CHERRY_LOG, tally);
         }
@@ -708,24 +866,16 @@ public final class HwasanCampusBuilder {
                     }
                 }
             }
-            if (s == 0) {   // 1층 남문
+            if (s == 0) {
                 for (int dy = 1; dy <= 2; dy++) {
                     put(world, pad, cx, base + dy, cz + half, Material.AIR, tally);
                 }
             }
-            // 층 처마 — 한 바퀴 반블록
-            for (int f = -half - 1; f <= half + 1; f++) {
-                put(world, pad, cx + f, base + wallH + 1, cz - half - 1, Material.DEEPSLATE_TILE_SLAB, tally);
-                put(world, pad, cx + f, base + wallH + 1, cz + half + 1, Material.DEEPSLATE_TILE_SLAB, tally);
-            }
-            for (int l = -half; l <= half; l++) {
-                put(world, pad, cx - half - 1, base + wallH + 1, cz + l, Material.DEEPSLATE_TILE_SLAB, tally);
-                put(world, pad, cx + half + 1, base + wallH + 1, cz + l, Material.DEEPSLATE_TILE_SLAB, tally);
-            }
+            eaveRing(world, pad, cx, base + wallH, cz, half, half, tally);   // 층 겹처마
             put(world, pad, cx - half, base + 1, cz + half + 1, Material.LANTERN, tally);
             base += wallH + 1;
         }
-        hipRoof(world, pad, cx, base, cz, 2, 2, tally);
+        sweepRoof(world, pad, cx, base, cz, halves[2], halves[2], tally);
         tally.towers++;
     }
 
@@ -984,6 +1134,10 @@ public final class HwasanCampusBuilder {
             throw new IllegalStateException("건물 블록이 패드 밖: " + pad.spec().name()
                     + " (" + x + "," + y + "," + z + ") " + m);
         }
+        if (tally.print != null) {   // ★마른 조성 — 발자국만 적는다 (상자와 실물이 한 식)
+            tally.print.take(x, y, z);
+            return;
+        }
         world.getBlockAt(x, y, z).setType(m, false);
         tally.blocks++;
     }
@@ -995,8 +1149,8 @@ public final class HwasanCampusBuilder {
                 Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
                 Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
                 Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
-                Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB,
-                Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
+                Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
+                Material.DEEPSLATE_TILE_WALL, Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
                 Material.CHEST, Material.LANTERN, Material.AIR);
@@ -1008,6 +1162,7 @@ public final class HwasanCampusBuilder {
             Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
             Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
             Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
-            Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.GLASS_PANE,
+            Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
+            Material.DEEPSLATE_TILE_WALL, Material.GLASS_PANE,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 }

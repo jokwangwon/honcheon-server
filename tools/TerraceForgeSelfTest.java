@@ -302,6 +302,33 @@ public final class TerraceForgeSelfTest {
         }
         check("기본 캠퍼스 전 구역 건물 발자국이 패드 안", bOk, bWhy);
 
+        // ══════════ ⑦ 상자 = 발자국 한 식 — 마른 조성 (슬라이스 7.5 · 평탄 95건의 처방) ══════════
+        // 상자는 손으로 적히지 않는다: parts() 를 world=null 로 돌린 발자국이 곧 상자다.
+        // 7.0 의 병(장로회 처마 링이 상자 밖)과 5.6 의 병(정원 매화 한 칸 어긋남)을 값으로 재현해 잰다.
+        {
+            java.util.List<TerraceForge.Pad> allPads = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad jangno = allPads.stream()
+                    .filter(p -> p.spec().zone() == 12).findFirst().orElseThrow();
+            java.util.List<int[]> full = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jangno);
+            java.util.List<int[]> ground = com.honcheon.mvt.forge.HwasanCampusBuilder.groundBoxes(jangno);
+            int[] fb = full.get(0);
+            int[] gb = ground.get(0);
+            check("★장로회 전고 상자가 처마를 덮는다 (17×7 홀 + 처마 → 21×11)",
+                    fb[1] - fb[0] == 20 && fb[3] - fb[2] == 10,
+                    (fb[1] - fb[0] + 1) + "×" + (fb[3] - fb[2] + 1));
+            check("★장로회 지상 상자는 처마를 뺀다 (벽 17×7 — 통로 검증은 걷는 몸높이만)",
+                    gb[1] - gb[0] == 16 && gb[3] - gb[2] == 6,
+                    (gb[1] - gb[0] + 1) + "×" + (gb[3] - gb[2] + 1));
+            TerraceForge.Pad garden = allPads.stream()
+                    .filter(p -> p.spec().zone() == 10).findFirst().orElseThrow();
+            int gcx = garden.x0() + garden.spec().width() / 2;
+            int gcz = garden.zN() + garden.spec().depth() / 2;
+            boolean plumBoxed = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(garden).stream()
+                    .anyMatch(b -> b[0] == gcx - 4 && b[1] == gcx && b[2] == gcz - 8 && b[3] == gcz - 4);
+            check("★정원 매화 상자 = 수관 ±2 그대로 (5.6 재발 방지 — 손이 아니라 코드가 적는다)",
+                    plumBoxed, "수관 상자 불일치");
+        }
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {
