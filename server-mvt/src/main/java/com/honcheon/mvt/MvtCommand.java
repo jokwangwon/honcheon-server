@@ -1978,7 +1978,7 @@ public final class MvtCommand implements CommandExecutor {
             long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
             int bad = 0;
             StringBuilder peaks = new StringBuilder();
-            for (SpireField.Cone c : SpireField.backPeaks()) {
+            for (SpireField.Ridge c : SpireField.backPeaks()) {
                 int top = world.getHighestBlockYAt(c.cx(), c.cz());
                 if (top < baseY + c.topH() - 3) {
                     bad++;

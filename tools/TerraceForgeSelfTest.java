@@ -260,6 +260,29 @@ public final class TerraceForgeSelfTest {
                 rings[0] > 0 && rings[1] > 0 && rings[2] > 0,
                 rings[0] + "/" + rings[1] + "/" + rings[2]);
         check("산군: 근경 침봉 마루가 실측 창(110~170) 안", r1max >= 110 && r1max <= 170, r1max);
+        // ★6.7 형태 계약 (§4-b) — 「바늘 침봉·원뿔 배후봉」 재발 방지
+        //   침봉 몸통 유지: 마루 열에서 3칸 비켜도 몸통(≥80%)이다 — 옛 (1−d²)^1.5 는 ~65% 라 실패한다
+        int mx = 0, mz = 0, mh = 0;
+        for (int gx = 300; gx <= 380; gx++) {
+            for (int gz = 0; gz <= 80; gz++) {
+                int hh = bare.targetH(gx, gz);
+                if (hh > mh) {
+                    mh = hh;
+                    mx = gx;
+                    mz = gz;
+                }
+            }
+        }
+        check("산군: 침봉 몸통 유지 — 마루 곁 3칸이 마루의 ≥80% (§4-b 실측 78% 몸통)",
+                mh > 0 && bare.targetH(mx + 3, mz) >= (int) (mh * 0.80),
+                mh + " → " + bare.targetH(mx + 3, mz));
+        //   배후봉 병풍 비대칭: Pm(축 동서) 남(+z) 급벽이 북 완사보다 낮다 · 능선 방향은 횡보다 높다
+        check("산군: 배후봉 Pm 비대칭 (남 급벽 < 북 완사 — §4-b 0.80/1.15)",
+                bare.targetH(-24, -54 + 30) < bare.targetH(-24, -54 - 30),
+                bare.targetH(-24, -24) + " vs " + bare.targetH(-24, -84));
+        check("산군: 배후봉 Pm 능선꼴 (장축 20칸 > 급벽횡 20칸)",
+                bare.targetH(-24 + 20, -54) > bare.targetH(-24, -54 + 20),
+                bare.targetH(-4, -54) + " vs " + bare.targetH(-24, -34));
         // ★6.5 — 기준면 프로브: 필드 밖 + 무침범 (6.0 병: 침봉 마루에서 기준을 재 캠퍼스가 54칸 떴다)
         check("산군: 프로브가 필드 밖 (PROBE_X > FIELD_R)",
                 com.honcheon.mvt.forge.SpireField.PROBE_X > com.honcheon.mvt.forge.SpireField.FIELD_R,

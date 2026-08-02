@@ -55,20 +55,28 @@ public final class SpireField {
 
     /**
      * 배후봉 증고 — 실측표 §4: 정상단(148) 위 +80 이 주봉. 곁봉도 캠퍼스 위로.
-     * 원뿔 아님 — pow 0.55 절벽 프로파일 (기존 봉 몸체 위에 max 로 앉는다).
      *
-     * @param topH 목표 마루 높이 (baseY 위)
+     * <p>★6.7 형태 재실측 (§4-b — s7 촬영 「매끈한 원뿔」 판정의 처방): 원뿔이 아니라
+     * <b>병풍꼴 능선봉</b>이다 — 마루가 점이 아니라 장축 방향 짧은 능선(선분)이고,
+     * 한쪽은 급벽(반경 ×0.80)·반대쪽은 완사(×1.15) 비대칭이며, 마루선은 요철(파임 0~5)로
+     * 울퉁불퉁하다. 세로 홈(방위 로브)이 몸을 가른다. ★계약: <b>선분 중심(cx,cz)의 높이는
+     * 정확히 topH</b> — 눈(selftest ④-d)과 산군시험 finish 검수가 이 점을 잰다.
+     *
+     * @param topH    목표 마루 높이 (baseY 위) — 선분 중심에서 정확히 이 값
+     * @param r       횡 기준 반경 (급벽 쪽 ×0.80 · 완사 쪽 ×1.15)
+     * @param axisDeg 능선 장축 방위 — 남축(+z) 기준 시계 (C 골격 Peak 과 같은 결)
+     * @param len     마루 능선 길이 (실측 §4-b: 2~10)
      */
-    public record Cone(String id, int cx, int cz, int topH, int r) {
+    public record Ridge(String id, int cx, int cz, int topH, int r, double axisDeg, int len) {
     }
 
-    /** 배후봉 넷 — 골격 Peak 자리 그대로, 높이만 실측 비로 (실측표 §4) */
-    public static List<Cone> backPeaks() {
+    /** 배후봉 넷 — 골격 Peak 자리·장축 방위 그대로, 높이는 실측 비로 (실측표 §4·§4-b) */
+    public static List<Ridge> backPeaks() {
         return List.of(
-                new Cone("Pm", -24, -54, 228, 56),
-                new Cone("Em", 62, -46, 200, 42),
-                new Cone("Wm", -104, -16, 195, 46),
-                new Cone("Es", 98, -18, 170, 32));
+                new Ridge("Pm", -24, -54, 228, 56, 90, 10),
+                new Ridge("Em", 62, -46, 200, 42, 116, 8),
+                new Ridge("Wm", -104, -16, 195, 46, 60, 8),
+                new Ridge("Es", 98, -18, 170, 32, 120, 4));
     }
 
     private final List<int[]> exclusions;
@@ -89,11 +97,8 @@ public final class SpireField {
             }
         }
         int best = 0;
-        for (Cone c : backPeaks()) {                    // ① 배후봉 증고
-            double d = Math.hypot(x - c.cx(), z - c.cz());
-            if (d < c.r()) {
-                best = Math.max(best, (int) (c.topH() * Math.pow(1.0 - d / c.r(), 0.55)));
-            }
+        for (Ridge c : backPeaks()) {                   // ① 배후봉 — 병풍꼴 능선봉 (§4-b)
+            best = Math.max(best, ridgeH(c, x, z));
         }
         int cellX = Math.floorDiv(x, CELL);             // ② 스파이어 켜 3 — 이웃 셀 아홉을 본다
         int cellZ = Math.floorDiv(z, CELL);
@@ -105,7 +110,51 @@ public final class SpireField {
         return best;
     }
 
-    /** 셀 하나의 침봉 — 실측: 반경 6~12 · 정상고(켜별) 70~170 · 세장비 1:4~1:8 */
+    /**
+     * 배후봉 하나의 높이 기여 — 병풍꼴 능선봉 (§4-b).
+     * 마루 = 장축 선분(길이 len) · 선분 중심에서 정확히 topH (계약) · 밖으로 요철 파임 0~5 ·
+     * 급벽/완사 비대칭 (0.80/1.15) · 세로 홈(방위 로브 7·11 가닥) · 하부 사면 4칸 턱 양자화.
+     */
+    private static int ridgeH(Ridge c, int x, int z) {
+        double rad = Math.toRadians(c.axisDeg());
+        double ax = Math.sin(rad), az = Math.cos(rad);          // 남축(+z) 기준 시계
+        double ux = x - c.cx(), uz = z - c.cz();
+        double u = ux * ax + uz * az;                            // 능선 방향 성분
+        double v = -ux * az + uz * ax;                           // 횡 성분
+        double half = c.len() / 2.0;
+        double uc = Math.abs(u) <= half ? 0.0 : Math.abs(u) - half;   // 마루 선분까지의 축상 거리
+        double rv = v >= 0 ? c.r() * 0.80 : c.r() * 1.15;        // 급벽(+) · 완사(−)
+        double d = Math.hypot(uc / c.r(), v / rv);
+        if (d >= 1.15) {
+            return 0;
+        }
+        // 세로 홈 — 방위 로브가 유효 거리를 흔든다 (몸 전 높이 관통 · 결정론)
+        double th = Math.atan2(uz, ux);
+        double flute = 1.0 + 0.05 * Math.sin(7 * th) + 0.03 * Math.sin(11 * th + 2.1);
+        double de = d / flute;
+        if (de >= 1.0) {
+            return 0;
+        }
+        // 마루 요철 — 능선을 따라 3칸 단위 파임 0~5. ★선분 중심 ±1 은 파임 0 (topH 계약)
+        double crest = c.topH();
+        if (Math.abs(u) > 1.0) {
+            long ph = mix(SALT ^ 0xB1DF, c.cx(), (int) Math.floor(u / 3.0), c.cz());
+            crest -= Math.floorMod(ph, 6);
+        }
+        int hh = (int) (crest * Math.pow(1.0 - de, 0.55));
+        if (hh < crest * 0.55) {
+            hh = (hh / 4) * 4;                                   // 하부 사면 바위 턱 (§4-b)
+        }
+        return hh;
+    }
+
+    /**
+     * 셀 하나의 침봉 — 실측: 반경 6~12 · 정상고(켜별) 70~170 · 세장비 1:4~1:8.
+     * ★6.7 형태 (§4-b — 「종유석 바늘」 판정의 처방): (1−d²)^1.5 폐기 →
+     * <b>몸통 유지(0.78 까지 마루의 88~100% — 둥근 소평두) + 치마(t^0.4 급락 · 발치 애추)</b>.
+     * 세로 홈(방위 로브 5~9 · 반경 ±8%)이 전 높이를 관통하고, 치마 높이는 3~5칸 턱으로
+     * 양자화된다. ★침봉 중심 높이 = top 정확히 (근경 마루 실측 창 110~170 눈이 잰다).
+     */
     private int spireAt(int cellX, int cellZ, int x, int z) {
         long h = mix(SALT, cellX, 0, cellZ);
         if (Math.floorMod(h, 100) >= 62) {
@@ -127,12 +176,31 @@ public final class SpireField {
             return 0;
         }
         int r = 6 + (int) Math.floorMod(h >> 32, 7);        // 6~12
-        double d = Math.hypot(x - cx, z - cz) / r;
+        double dx = x - cx, dz = z - cz;
+        if (Math.hypot(dx, dz) >= r * 1.13) {
+            return 0;                                        // 로브 최대 확장 밖 — 빠른 탈출
+        }
+        // 세로 홈 — 방위 로브 5~9 가닥이 유효 반경을 ±8% 흔든다 (주상절리 · §4-b)
+        double th = Math.atan2(dz, dx);
+        int lobes = 5 + (int) Math.floorMod(h >> 40, 5);     // 5~9
+        double ph = Math.floorMod(h >> 44, 628) / 100.0;     // 위상
+        double rEff = r * (1.0 + 0.08 * Math.sin(lobes * th + ph)
+                + 0.04 * Math.sin((lobes + 3) * th + 1.7 * ph));
+        double d = Math.hypot(dx, dz) / rEff;
         if (d >= 1.0) {
             return 0;
         }
-        // 세로로 긴 침봉 — (1−d²)^1.5: 반높이 반경 ≈ 0.55r → 폭:높이 ≈ 1:4~1:8 (실측)
-        return (int) (top * Math.pow(1.0 - d * d, 1.5));
+        // 몸통 유지 → 급락 캡 (§4-b): 0.78 까지 마루의 88~100% (둥근 소평두 — 중심 = top 정확),
+        // 밖은 t^0.4 치마 — 위 절반 수직벽 · 발치 애추. 치마는 3~5칸 턱으로 양자화.
+        final double body = 0.78;
+        if (d < body) {
+            double dome = Math.sqrt(1.0 - (d / body) * (d / body));
+            return (int) (top * (0.88 + 0.12 * dome));
+        }
+        double t = (d - body) / (1.0 - body);
+        int step = 3 + (int) Math.floorMod(h >> 48, 3);      // 3~5 — 수평 바위 턱
+        int skirt = (int) (top * 0.88 * (1.0 - Math.pow(t, 0.4)));
+        return (skirt / step) * step;
     }
 
     private static long mix(long salt, int x, int y, int z) {
