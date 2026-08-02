@@ -198,6 +198,75 @@ public final class TerraceForgeSelfTest {
         }
         check("★측문 담(남북 전장)이 스킵 상자에 다 덮인다", wallCovered, gateX);
 
+        // ══════════ ④-d 산군(SpireField) — 실측 §4 계약 (순수) ══════════
+        com.honcheon.mvt.forge.SpireField bare =
+                new com.honcheon.mvt.forge.SpireField(java.util.List.of());
+        com.honcheon.mvt.forge.SpireField bare2 =
+                new com.honcheon.mvt.forge.SpireField(java.util.List.of());
+        boolean det = true;
+        for (int[] pt : new int[][]{{200, 40}, {-300, 150}, {480, -200}, {-24, -54}, {150, 300}}) {
+            if (bare.targetH(pt[0], pt[1]) != bare2.targetH(pt[0], pt[1])) {
+                det = false;
+            }
+        }
+        check("산군: 결정론 (난수 0)", det, "표본 5");
+        check("산군: 배후봉 Pm 마루 h228 (정상단 148 + 80 — 실측 §4)",
+                bare.targetH(-24, -54) == 228, bare.targetH(-24, -54));
+        com.honcheon.mvt.forge.SpireField blocked = new com.honcheon.mvt.forge.SpireField(
+                java.util.List.of(new int[]{-30, -20, -60, -50}));
+        check("산군: 제외 사각 안은 0 (산이 사람의 것을 침범하지 않는다)",
+                blocked.targetH(-24, -54) == 0, blocked.targetH(-24, -54));
+        // 캠퍼스 통합 — 전 패드 중심·다리 한복판에서 산군 0
+        java.util.List<TerraceForge.Pad> spPads = TerraceForge.resolvePads(campus, 0, 0, 0);
+        java.util.List<TerraceForge.StairLane> spLanes = TerraceForge.resolveLanes(campus, spPads);
+        java.util.List<int[]> ex = new java.util.ArrayList<>();
+        for (TerraceForge.Pad pd : spPads) {
+            ex.add(new int[]{pd.x0() - 8, pd.x1() + 8, pd.zN() - 8, pd.zS() + 8});
+        }
+        for (TerraceForge.Bridge b : TerraceForge.resolveBridges(campus, spPads, spLanes, 0, 0, 0)) {
+            ex.add(new int[]{b.a0() - 6, b.a1() + 6, b.c() - 6, b.c() + 6});
+        }
+        com.honcheon.mvt.forge.SpireField guarded = new com.honcheon.mvt.forge.SpireField(ex);
+        boolean clear = true;
+        for (TerraceForge.Pad pd : spPads) {
+            if (guarded.targetH(pd.x0() + pd.spec().width() / 2, pd.zN() + pd.spec().depth() / 2) != 0) {
+                clear = false;
+            }
+        }
+        check("산군: 캠퍼스 전 패드 중심 무침범", clear, "패드 " + spPads.size());
+        // 켜 3 — 각 환대(環帶)에 침봉이 실재하고, 근경 마루가 실측 창(110~170) 안
+        int[] rings = new int[3];
+        int r1max = 0;
+        for (int gx = -600; gx <= 600; gx += 13) {
+            for (int gz = -600; gz <= 600; gz += 13) {
+                int hh = bare.targetH(gx, gz);
+                if (hh < 50) {
+                    continue;
+                }
+                double d = Math.hypot(gx, gz);
+                if (d >= 130 && d < 260) {
+                    rings[0]++;
+                    if (d >= 140 && hh > r1max) {
+                        r1max = hh;   // 배후봉 자락 밖에서만 잰다
+                    }
+                } else if (d >= 260 && d < 430) {
+                    rings[1]++;
+                } else if (d >= 430 && d < 620) {
+                    rings[2]++;
+                }
+            }
+        }
+        check("산군: 켜 3 실재 (근경/중경/원경 각 > 0)",
+                rings[0] > 0 && rings[1] > 0 && rings[2] > 0,
+                rings[0] + "/" + rings[1] + "/" + rings[2]);
+        check("산군: 근경 침봉 마루가 실측 창(110~170) 안", r1max >= 110 && r1max <= 170, r1max);
+        // ★6.5 — 기준면 프로브: 필드 밖 + 무침범 (6.0 병: 침봉 마루에서 기준을 재 캠퍼스가 54칸 떴다)
+        check("산군: 프로브가 필드 밖 (PROBE_X > FIELD_R)",
+                com.honcheon.mvt.forge.SpireField.PROBE_X > com.honcheon.mvt.forge.SpireField.FIELD_R,
+                com.honcheon.mvt.forge.SpireField.PROBE_X);
+        check("산군: 프로브 열 무침범 (probeUntouched)",
+                com.honcheon.mvt.forge.SpireField.probeUntouched(), "±2 링");
+
         // ══════════ ⑤ 팔레트 — 금지 재료가 없다 (B-195 · HANDOFF 함정) ══════════
         Set<Material> palette = TerraceForge.palette();
         check("★ BARREL 없음 (가구_3D 유령 벽)", !palette.contains(Material.BARREL), "BARREL");

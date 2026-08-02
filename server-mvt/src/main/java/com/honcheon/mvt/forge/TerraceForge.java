@@ -243,7 +243,7 @@ public final class TerraceForge {
     public record StairLane(StairLink link, int startX, int startZ, int dirX, int dirZ,
                             int topY, int lowY, int treads, int walk) {
 
-        int length() {
+        public int length() {
             return treads + walk;
         }
 

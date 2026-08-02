@@ -7,6 +7,7 @@ import com.honcheon.mvt.forge.RangeField;
 import com.honcheon.mvt.forge.RangeSpec;
 import com.honcheon.mvt.forge.HwasanCampusBuilder;
 import com.honcheon.mvt.forge.RangeZone;
+import com.honcheon.mvt.forge.SpireField;
 import com.honcheon.mvt.forge.TerraceForge;
 import com.honcheon.mvt.forge.TrailBuilder;
 import org.bukkit.Bukkit;
@@ -224,6 +225,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
                 case "도보길" -> trailBuild(sender, args);        // ★ 완성된 험산 위에 걸을 수 있는 계단길(천계단·잔도)을 짓는다 — 산기슭→정상 (프로덕션 무접촉)
                 case "캠퍼스시험" -> campusTest(sender, args);    // ★ 산세시험 월드에 마스터플랜 캠퍼스 패드·계단을 앉힌다 — B-146 처방 시험 (프로덕션 무접촉)
+                case "산군시험" -> spireTest(sender, args);       // ★ 산세 위에 산군(배후봉 증고+침봉 켜 3)을 얹는다 — 실측표 §4 (프로덕션 무접촉)
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
@@ -1117,7 +1119,8 @@ public final class MvtCommand implements CommandExecutor {
             //   ★★ 주봉 (0,0) 이 아니라 **생활권 밖 평지**(x=600 > economyR 444)에서 잰다 —
             //   (0,0) 은 재조성 때 이미 세운 산 꼭대기라 평지가 아니다. 거기서 재면 재실행마다
             //   산 위에 산을 쌓는다 (B-159). 밖은 산이 안 닿아 언제 재도 FLAT 표면 → 멱등.
-            int baseY = world.getHighestBlockYAt(600, 0);
+            int baseY = world.getHighestBlockYAt(SpireField.PROBE_X, SpireField.PROBE_Z);
+            SANSE_BASEY.put(world.getName(), baseY);   // ★기록 — 뒤 명령들의 대조 기준
             RangeSpec spec = RangeSpec.hwasan(0, 0, baseY);
             Announce.say(plugin, sender, ChatColor.GRAY + "[산세시험] " + worldName
                     + " — 기준면 실측 y" + baseY + " (FLAT 표면) · 주봉 (0,0) · 상승 " + spec.lift()
@@ -1341,7 +1344,10 @@ public final class MvtCommand implements CommandExecutor {
             int peakX = 0;
             int peakZ = 0;
             int economyR = RangeSpec.hwasan(peakX, peakZ, 0).economyR();
-            int baseY = world.getHighestBlockYAt(peakX + economyR + 40, peakZ);   // 산 밖 = superflat 평지
+            int baseY = probeBaseY(world, sender, plugin, "식생시험");   // ★정본 실측점 (6.5 통일 — 옛 484 는 침봉 필드 안)
+            if (baseY == -9999) {
+                return true;
+            }
             RangeSpec spec = RangeSpec.hwasan(peakX, peakZ, baseY);
             // ★ 산세가 섰는가 — 정상 열이 기준면보다 한참 높아야 한다 (산이 없으면 식생 심을 자리가 없다)
             int summitTop = world.getHighestBlockYAt(peakX, peakZ);
@@ -1545,11 +1551,13 @@ public final class MvtCommand implements CommandExecutor {
                         + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
                 return true;
             }
-            // ★ 기준면 실측 — 산 밖 평지(경제권 밖)의 표면 y. 코드가 지어내지 않는다 (Q2).
+            // ★ 기준면 실측 — 정본 실측점 (산군 필드 밖 · 6.5 통일 — 옛 484 는 침봉 필드 안이었다).
             int peakX = 0;
             int peakZ = 0;
-            int economyR = RangeSpec.hwasan(peakX, peakZ, 0).economyR();
-            int baseY = world.getHighestBlockYAt(peakX + economyR + 40, peakZ);
+            int baseY = probeBaseY(world, sender, plugin, "도보길");
+            if (baseY == -9999) {
+                return true;
+            }
             RangeSpec spec = RangeSpec.hwasan(peakX, peakZ, baseY);
             // ★ 산세가 섰는가 — 정상 열이 기준면보다 한참 높아야 한다 (산이 없으면 길을 낼 자리가 없다)
             int summitTop = world.getHighestBlockYAt(peakX, peakZ);
@@ -1722,11 +1730,13 @@ public final class MvtCommand implements CommandExecutor {
                         + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
                 return true;
             }
-            // ★ 기준면 실측 — 산 밖 평지(경제권 밖)의 표면 y. 코드가 지어내지 않는다 (Q2 · 도보길과 동일).
+            // ★ 기준면 실측 — 정본 실측점 (산군 필드 밖 · 6.5 통일). 표류면 거부.
             int peakX = 0;
             int peakZ = 0;
-            int economyR = RangeSpec.hwasan(peakX, peakZ, 0).economyR();
-            int baseY = world.getHighestBlockYAt(peakX + economyR + 40, peakZ);
+            int baseY = probeBaseY(world, sender, plugin, "캠퍼스시험");
+            if (baseY == -9999) {
+                return true;
+            }
             RangeSpec spec = RangeSpec.hwasan(peakX, peakZ, baseY);
             // ★ 산세가 섰는가 — 산이 없으면 단을 앉힐 비탈이 없다
             int summitTop = world.getHighestBlockYAt(peakX, peakZ);
@@ -1770,6 +1780,223 @@ public final class MvtCommand implements CommandExecutor {
             if (!started) {
                 CAMPUS_FORGING.set(false);
             }
+        }
+    }
+
+    /** 한 산군 조성이 도는 동안 참 — 중복 실행을 막는다 (재실행은 결정론·멱등이라 무해) */
+    private static final AtomicBoolean SPIRE_FORGING = new AtomicBoolean(false);
+
+    /** 산세시험이 기록한 기준면 — 뒤 명령들이 실측값과 대조한다 (표류 = 조용히 뜨는 캠퍼스) */
+    private static final java.util.Map<String, Integer> SANSE_BASEY = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 기준면 실측 — ★정본 실측점은 {@link SpireField#PROBE_X} 하나다 (6.0 병: 실측점이 침봉
+     * 필드 안이라 캠퍼스가 54칸 떴다). 산세시험 기록이 있으면 대조해서 어긋나면 -9999 로 거부.
+     */
+    private static int probeBaseY(World world, CommandSender sender, HoncheonMvt plugin, String who) {
+        int baseY = world.getHighestBlockYAt(SpireField.PROBE_X, SpireField.PROBE_Z);
+        Integer recorded = SANSE_BASEY.get(world.getName());
+        if (recorded != null && recorded != baseY) {
+            Announce.fail(plugin, sender, "[" + who + "] ★기준면 표류 — 실측 y" + baseY
+                    + " ≠ 산세시험 기록 y" + recorded + " (프로브 열이 오염됐다) — 거부. 산세를 다시 세워라.");
+            return -9999;
+        }
+        return baseY;
+    }
+
+    /**
+     * /혼천 산군시험 [hwasan] — <b>완성된 산세 위에 산군(배후봉 증고 + 침봉 켜 3)을 얹는다</b>
+     * (OP·콘솔 전용 · 프로덕션 무접촉).
+     *
+     * <p>★근거: 사용자 확정 (2026-08-03) — 「화산파 내외의 산들이 전부 구성되어야 한다」.
+     * 수치는 실측표 §4 ({@link SpireField} 주석). 캠퍼스·계단·다리 발자국(+여유)은 제외
+     * 목록으로 산이 비켜 간다. 권장 순서: 산세시험 → <b>산군시험</b> → 캠퍼스시험
+     * (캠퍼스가 마지막 — 걷기·스커트가 잔재도 정리한다). max 합성이라 협곡·골은 남는다.
+     */
+    private boolean spireTest(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage(ChatColor.RED + "산군 조성은 관리자의 몫이다.");
+            return true;
+        }
+        String variant = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "hwasan";
+        if (!variant.equals("hwasan")) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 산군시험 [hwasan]  (지금은 hwasan 하나)");
+            return true;
+        }
+        if (!SPIRE_FORGING.compareAndSet(false, true)) {
+            Announce.warn(plugin, sender, "[산군시험] 이미 산군을 세우는 중이다 — 끝난 뒤에 다시 쳐라.");
+            return true;
+        }
+        boolean started = false;
+        try {
+            String worldName = "sanse_test_" + variant;
+            if (!worldName.startsWith("sanse_test_")) {
+                Announce.fail(plugin, sender, "[산군시험] 대상이 sanse_test_ 접두가 아니다 — 거부.");
+                return true;
+            }
+            World world = org.bukkit.Bukkit.getWorld(worldName);
+            if (world == null || !world.getName().startsWith("sanse_test_")) {
+                Announce.warn(plugin, sender, "[산군시험] " + worldName
+                        + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan.");
+                return true;
+            }
+            if (!SpireField.probeUntouched()) {
+                Announce.fail(plugin, sender, "[산군시험] ★프로브 열이 산군에 덮인다 — SpireField 상수를 고쳐라.");
+                return true;
+            }
+            int baseY = probeBaseY(world, sender, plugin, "산군시험");
+            if (baseY == -9999) {
+                return true;
+            }
+            // 제외 목록 — 캠퍼스 패드(+8)·계단(+4)·다리(+6): 산이 사람의 것을 침범하지 않는다
+            TerraceForge.Campus campus = TerraceForge.hwasanCampus();
+            java.util.List<TerraceForge.Pad> pads = TerraceForge.resolvePads(campus, 0, 0, baseY);
+            java.util.List<TerraceForge.StairLane> lanes = TerraceForge.resolveLanes(campus, pads);
+            java.util.List<TerraceForge.Bridge> bridges =
+                    TerraceForge.resolveBridges(campus, pads, lanes, 0, 0, baseY);
+            java.util.List<int[]> ex = new java.util.ArrayList<>();
+            for (TerraceForge.Pad pd : pads) {
+                ex.add(new int[]{pd.x0() - 8, pd.x1() + 8, pd.zN() - 8, pd.zS() + 8});
+            }
+            for (TerraceForge.StairLane lane : lanes) {
+                int x2 = lane.startX() + lane.dirX() * (lane.length() - 1);
+                int z2 = lane.startZ() + lane.dirZ() * (lane.length() - 1);
+                ex.add(new int[]{Math.min(lane.startX(), x2) - 8, Math.max(lane.startX(), x2) + 8,
+                        Math.min(lane.startZ(), z2) - 8, Math.max(lane.startZ(), z2) + 8});
+            }
+            for (TerraceForge.Bridge b : bridges) {
+                if (b.alongX()) {
+                    ex.add(new int[]{b.a0() - 6, b.a1() + 6, b.c() - 6, b.c() + 6});
+                } else {
+                    ex.add(new int[]{b.c() - 6, b.c() + 6, b.a0() - 6, b.a1() + 6});
+                }
+            }
+            SpireField field = new SpireField(ex);
+            Announce.say(plugin, sender, ChatColor.GRAY + "[산군시험] " + worldName + " — 기준면 y"
+                    + baseY + " · 배후봉 4 (Pm h228) · 침봉 켜 3 (r130~620) · 제외 사각 " + ex.size());
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  타일을 나눠 먹는다 — 진행은 [산군시험·진행] 으로 남는다");
+            SpirePaver paver = new SpirePaver(plugin, sender, world, field, baseY);
+            TickBudget.slice(plugin, "산군시험:" + variant, paver, () -> {
+                try {
+                    paver.finish();
+                } finally {
+                    SPIRE_FORGING.set(false);
+                }
+            });
+            started = true;
+            return true;
+        } finally {
+            if (!started) {
+                SPIRE_FORGING.set(false);
+            }
+        }
+    }
+
+    /** 산군 타일 순회기 — {@link SanseForge} 의 짝. max 합성이라 멱등 (재실행 무해). */
+    private static final class SpirePaver implements TickBudget.Step {
+        private final HoncheonMvt plugin;
+        private final CommandSender sender;
+        private final World world;
+        private final SpireField field;
+        private final int baseY;
+        private final int tilesX;
+        private final int totalTiles;
+        private final long startNanos;
+
+        private int index;
+        private long raised;
+        private long lastProgressMs;
+
+        SpirePaver(HoncheonMvt plugin, CommandSender sender, World world, SpireField field, int baseY) {
+            this.plugin = plugin;
+            this.sender = sender;
+            this.world = world;
+            this.field = field;
+            this.baseY = baseY;
+            int span = 2 * SpireField.FIELD_R;
+            this.tilesX = (span + SANSE_TILE) / SANSE_TILE;
+            this.totalTiles = tilesX * tilesX;
+            this.startNanos = System.nanoTime();
+            this.lastProgressMs = System.currentTimeMillis();
+        }
+
+        @Override
+        public boolean step() {
+            if (index >= totalTiles) {
+                return false;
+            }
+            int x0 = -SpireField.FIELD_R + (index % tilesX) * SANSE_TILE;
+            int z0 = -SpireField.FIELD_R + (index / tilesX) * SANSE_TILE;
+            for (int x = x0; x < x0 + SANSE_TILE; x++) {
+                for (int z = z0; z < z0 + SANSE_TILE; z++) {
+                    int h = field.targetH(x, z);
+                    if (h < 4) {
+                        continue;   // 4 미만은 소음
+                    }
+                    int targetY = baseY + h;
+                    int curY = world.getHighestBlockYAt(x, z);
+                    for (int y = curY + 1; y <= targetY; y++) {
+                        world.getBlockAt(x, y, z).setType(spireStone(x, y, z, y == targetY), false);
+                        raised++;
+                    }
+                }
+            }
+            index++;
+            long now = System.currentTimeMillis();
+            if (now - lastProgressMs >= 3000L || index == totalTiles) {
+                lastProgressMs = now;
+                Announce.progress(plugin, sender, ChatColor.GRAY + "[산군시험·진행] " + index + "/"
+                        + totalTiles + " 타일 (" + (100L * index / totalTiles) + "%) · 융기 " + raised
+                        + " · " + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
+            }
+            return index < totalTiles;
+        }
+
+        /** 창백한 침봉 결 — 실측 8호의 옅은 바위 (켜켜이 방해석 띠) · 마루엔 이끼가 앉는다 */
+        private Material spireStone(int x, int y, int z, boolean cap) {
+            long h = (x * 0x9E3779B97F4A7C15L) ^ ((y / 6) * 0xC2B2AE3D27D4EB4FL)
+                    ^ (z * 0x165667B19E3779F9L);
+            h ^= h >>> 31;
+            int r = (int) Math.floorMod(h, 100);
+            if (cap) {
+                return r < 45 ? Material.MOSS_BLOCK : Material.STONE;
+            }
+            if (r < 60) {
+                return Material.STONE;
+            }
+            if (r < 76) {
+                return Material.ANDESITE;
+            }
+            if (r < 90) {
+                return Material.CALCITE;
+            }
+            return Material.TUFF;
+        }
+
+        /** 완료 — 검수(배후봉 마루·켜 표본·다리 회랑) + census */
+        void finish() {
+            long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
+            int bad = 0;
+            StringBuilder peaks = new StringBuilder();
+            for (SpireField.Cone c : SpireField.backPeaks()) {
+                int top = world.getHighestBlockYAt(c.cx(), c.cz());
+                if (top < baseY + c.topH() - 3) {
+                    bad++;
+                    Announce.fail(plugin, sender, "[산군시험] ★배후봉 " + c.id() + " 마루 y" + top
+                            + " < 목표 y" + (baseY + c.topH()) + " — 실측 비가 안 섰다");
+                }
+                if (peaks.length() > 0) {
+                    peaks.append(" · ");
+                }
+                peaks.append(c.id()).append(" y").append(top);
+            }
+            if (bad == 0) {
+                Announce.say(plugin, sender, ChatColor.GOLD + "[산군시험] 산군이 섰다 — " + world.getName()
+                        + " · 융기 " + raised + " 블록 · " + secs + "초");
+            }
+            Announce.say(plugin, sender, ChatColor.GRAY + "  배후봉: " + peaks
+                    + " (캠퍼스 정상단 y" + (baseY + 148) + " — 실측 §4: 주봉이 +80 위)");
+            Announce.say(plugin, sender, ChatColor.GRAY + "  다음: /혼천 캠퍼스시험 hwasan — 캠퍼스가 산군 잔재를 걷고 앉는다");
         }
     }
 
