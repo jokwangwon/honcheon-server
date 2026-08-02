@@ -37,7 +37,8 @@ COLORS = {
     "barrel": (96, 68, 38),
 }
 # 블록데이터 문자열은 어미로 색을 고른다
-DATA_COLOR = {"door": (90, 66, 36), "fence_gate": (76, 52, 28), "trapdoor": (66, 46, 26)}
+DATA_COLOR = {"door": (90, 66, 36), "fence_gate": (76, 52, 28), "trapdoor": (66, 46, 26),
+              "chest": (120, 90, 50)}
 
 
 def color_of(mat):
