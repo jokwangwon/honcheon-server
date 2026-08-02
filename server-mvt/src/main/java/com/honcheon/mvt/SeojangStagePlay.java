@@ -12,6 +12,7 @@ import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -124,7 +125,7 @@ final class SeojangStagePlay implements Listener {
                 p.sendTitle(" ", ChatColor.DARK_GRAY + entrySubtitle, 10, 60, 20);
             }
             Location wake = StageLoader.spot(stage, w, oy, "깨어남");
-            wake.setDirection(StageLoader.spot(stage, w, oy, "식구_NPC").toVector()
+            wake.setDirection(StageLoader.spot(stage, w, oy, "식구_숨소리").toVector()
                     .subtract(wake.toVector()));           // 눈을 뜨면 첫 시야 = 잠든 식구
             p.teleport(wake);
             p.setPlayerTime(MIDNIGHT, false);             // 그 사람에게만 자정 — 밤바다는 그대로
@@ -159,46 +160,21 @@ final class SeojangStagePlay implements Listener {
         }
     }
 
+    /**
+     * ★빨간펜 (2026-08-02 「식구가 안 보이고, 뭔지도 모르겠다」) — 엔티티를 버렸다.
+     * 서 있는 주민은 잠든 가족으로 안 읽힌다. 이제 식구는 **이불 속의 형태**(도면의 눈 둔덕)이고,
+     * 이 손은 지난 판들이 남긴 보이지 않는 주민 고아만 걷는다.
+     */
     private void spawnFamily(Player p, World w, int oy, Session s) {
-        // ★고아 청소 (공간덤프 실측 2026-07-31: 보이지 않는 식구 둘이 남아 있었다) —
-        //   세션이 재기동·이탈로 안 닫히면 visible_default=false 인 몸이 영영 남는다. 스폰 전에 걷는다
         for (org.bukkit.entity.Entity e : w.getEntities()) {
             boolean ours = e.getPersistentDataContainer().has(
                     new org.bukkit.NamespacedKey("honcheon", "stage_family"));
             boolean named = e.getCustomName() != null
                     && "식구".equals(ChatColor.stripColor(e.getCustomName()));
-            if ((ours || (named && e instanceof Villager)) && !sessionOwns(e.getUniqueId())) {
+            if (ours || (named && e instanceof Villager)) {
                 e.remove();
             }
         }
-        Location at = StageLoader.spot(stage, w, oy, "식구_NPC");
-        Villager v = w.spawn(at, Villager.class, e -> {
-            e.setAI(false);
-            e.setSilent(true);
-            e.setInvulnerable(true);
-            e.setCollidable(false);
-            e.setPersistent(true);
-            e.setRemoveWhenFarAway(false);
-            e.setVisibleByDefault(false);                 // ★아무에게도 안 보인다 —
-            e.setGlowing(true);                           //   이 사람에게만 보여 준다 (아래)
-            e.setCustomName(ChatColor.GRAY + "식구");
-            e.setCustomNameVisible(false);
-            e.getPersistentDataContainer().set(
-                    new org.bukkit.NamespacedKey("honcheon", "stage_family"),
-                    org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
-        });
-        s.npc = v.getUniqueId();
-        // ★빨간펜 4호 「식구가 없다」 — 갓 스폰한 엔티티에 같은 틱 showEntity 가 안 먹을 수 있다.
-        //   두 틱 뒤에 보여 주고, 콘솔에 증거를 남긴다 (다음 실측 때 로그로 판별)
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            var e = Bukkit.getEntity(s.npc);
-            if (e != null && p.isOnline()) {
-                p.showEntity(plugin, e);
-                plugin.getLogger().info("[서장무대] 식구 표시 — " + p.getName() + " 에게 (" + s.npc + ")");
-            } else {
-                plugin.getLogger().warning("[서장무대] 식구가 사라졌다 — 스폰 직후 제거됨? (" + s.npc + ")");
-            }
-        }, 2L);
     }
 
     /**
@@ -317,6 +293,9 @@ final class SeojangStagePlay implements Listener {
             s.hold = 0;
             s.holdSpot = -1;
         }
+        if (s.age % 70 == 0 && !s.done) {
+            p.playSound(s.spots[2], Sound.ENTITY_FOX_SLEEP, 0.7f, 0.85f);   // 잠든 식구의 숨
+        }
         if (s.age >= FALLBACK_TICKS && !s.done) {
             p.sendMessage(ChatColor.GRAY + "…기억이 흐려진다. (행동이 없으면 이야기가 글로 돌아간다 — 갇히지 않는다)");
             finish(p, s, -1);
@@ -341,11 +320,22 @@ final class SeojangStagePlay implements Listener {
 
     @EventHandler
     public void onInteract(PlayerInteractEntityEvent event) {
-        Session s = sessions.get(event.getPlayer().getUniqueId());
-        if (s != null && !s.done && s.npc != null
-                && event.getRightClicked().getUniqueId().equals(s.npc)) {
-            event.setCancelled(true);
-            choose(event.getPlayer(), s, 2);
+        interactAt(event.getPlayer());
+    }
+
+    /** 머리맡 우클릭 = 흔들어 깨운다 — 자리 기반 (엔티티 가시성의 덫을 통째로 비켜간다) */
+    @EventHandler
+    public void onUse(PlayerInteractEvent event) {
+        if (event.getAction().name().startsWith("RIGHT_CLICK")) {
+            interactAt(event.getPlayer());
+        }
+    }
+
+    private void interactAt(Player p) {
+        Session s = sessions.get(p.getUniqueId());
+        if (s != null && !s.done
+                && s.spots[2].distanceSquared(p.getLocation()) < 4.0) {
+            choose(p, s, 2);
         }
     }
 
@@ -369,7 +359,6 @@ final class SeojangStagePlay implements Listener {
         if (s.ticker != null) {
             s.ticker.cancel();
         }
-        removeNpc(s);
         if (p.isOnline()) {
             p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 30, 0, false, false));
             p.resetPlayerTime();
@@ -395,35 +384,11 @@ final class SeojangStagePlay implements Listener {
         sessions.remove(p.getUniqueId());
     }
 
-    private boolean sessionOwns(UUID entity) {
-        for (Session s : sessions.values()) {
-            if (entity.equals(s.npc)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void removeNpc(Session s) {
-        if (s.npc != null) {
-            for (World w : Bukkit.getWorlds()) {
-                var e = Bukkit.getEntity(s.npc);
-                if (e != null) {
-                    e.remove();
-                    break;
-                }
-            }
-        }
-    }
-
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         Session s = sessions.remove(event.getPlayer().getUniqueId());
-        if (s != null) {
-            if (s.ticker != null) {
-                s.ticker.cancel();
-            }
-            removeNpc(s);                                 // 나간 몸의 식구는 세계에 남지 않는다
+        if (s != null && s.ticker != null) {
+            s.ticker.cancel();
         }
     }
 }

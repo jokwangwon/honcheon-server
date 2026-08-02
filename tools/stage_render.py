@@ -35,10 +35,11 @@ COLORS = {
     "spruce_fence": (100, 74, 42),
     "decorated_pot": (112, 78, 58),
     "barrel": (96, 68, 38),
+    "snow": (235, 235, 240),
 }
 # 블록데이터 문자열은 어미로 색을 고른다
 DATA_COLOR = {"door": (90, 66, 36), "fence_gate": (76, 52, 28), "trapdoor": (66, 46, 26),
-              "chest": (120, 90, 50)}
+              "chest": (120, 90, 50), "snow": (235, 235, 240)}
 
 
 def color_of(mat):
@@ -79,7 +80,8 @@ def load(name):
     for sname, (c, r) in (cfg.get("spots") or {}).items():
         if not (0 <= c < w and 0 <= r < d):
             bad.append(f"spot {sname}: 도면 밖 [{c},{r}]")
-        elif layers and layers[1][1][r][c] != "air" and "carpet" not in layers[1][1][r][c]:
+        elif layers and layers[1][1][r][c] != "air" and "carpet" not in layers[1][1][r][c] \
+                and "snow" not in layers[1][1][r][c]:
             bad.append(f"spot {sname}: y1 에 설 수 없다 (벽·세간) [{c},{r}]")
     return cfg, layers, bad
 

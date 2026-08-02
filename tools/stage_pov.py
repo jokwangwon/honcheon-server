@@ -22,7 +22,7 @@ MOON = (-0.35, -0.8, 0.25)  # 달빛 방향 (서쪽 하늘에서)
 
 
 def solid(mat):
-    return mat != "air" and "carpet" not in mat and "light[" not in mat   # 카펫·광원은 시선 통과
+    return mat != "air" and "carpet" not in mat and "light[" not in mat and "snow" not in mat
 
 
 def build_grid(layers, w, d):
@@ -64,7 +64,8 @@ def ray(grid, w, d, h, pos, dirv, lights):
                 return lcol                             # 발광체 — 화광 그 자체 (틈 너머의 불)
         cell = (int(math.floor(x)), int(math.floor(y)), int(math.floor(z)))
         mat = grid.get(cell)
-        if mat is not None and "carpet" in mat and (y - math.floor(y)) < 0.08:
+        if mat is not None and "carpet" in mat and (y - math.floor(y)) < 0.08 \
+                or mat is not None and "snow" in mat and (y - math.floor(y)) < 0.4:
             pass                                        # 깔개 윗면 — 아래 hit 로직으로
         elif mat is None or not solid(mat):
             mat = None
