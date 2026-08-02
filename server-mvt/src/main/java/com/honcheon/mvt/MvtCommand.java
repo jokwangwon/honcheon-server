@@ -6,6 +6,7 @@ import com.honcheon.mvt.forge.MountainRangeForge;
 import com.honcheon.mvt.forge.RangeField;
 import com.honcheon.mvt.forge.RangeSpec;
 import com.honcheon.mvt.forge.RangeZone;
+import com.honcheon.mvt.forge.TerraceForge;
 import com.honcheon.mvt.forge.TrailBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -221,6 +222,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
                 case "도보길" -> trailBuild(sender, args);        // ★ 완성된 험산 위에 걸을 수 있는 계단길(천계단·잔도)을 짓는다 — 산기슭→정상 (프로덕션 무접촉)
+                case "캠퍼스시험" -> campusTest(sender, args);    // ★ 산세시험 월드에 마스터플랜 캠퍼스 패드·계단을 앉힌다 — B-146 처방 시험 (프로덕션 무접촉)
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
                 case "지하정리" -> sweepUnderground(sender, args);   // ★ 묻힌 나무를 걷는다 — 지면 밑 공기·잎·통나무 채움 (관리자·콘솔 가능)
@@ -1662,6 +1664,200 @@ public final class MvtCommand implements CommandExecutor {
             } else {
                 Announce.say(plugin, sender, ChatColor.GRAY + "  트레일헤드: /tp " + plan.footX() + " " + fy
                         + " " + plan.footZ() + " (콘솔 — 좌표만 안내 · 월드 " + world.getName() + ")");
+            }
+        }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  캠퍼스 시험 조성 — 산세시험 월드에 석축 테라스 단(段)을 앉힌다 (B-146 처방 시험)
+    //  ★ 프로덕션 월드 무접촉. sanse_test_ 접두 월드에서만. 산세 위에 얹는다 (높이장 무접촉).
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 한 캠퍼스 조성이 도는 동안 참 — 중복 실행을 막는다 (재실행은 결정론·멱등이라 무해) */
+    private static final AtomicBoolean CAMPUS_FORGING = new AtomicBoolean(false);
+
+    /**
+     * /혼천 캠퍼스시험 [hwasan] — <b>완성된 험산 위에 화산 캠퍼스(마스터플랜 20구역 중 슬라이스 1 몫)의 석축 패드·계단을 앉힌다</b>
+     * (OP·콘솔 전용).
+     *
+     * <p>석축 테라스 기계({@link TerraceForge})의 인게임 면. 설계 정본:
+     * {@code docs/design/hwasan_build_enhancement_v1.md} §2·§3. 이미 선 산세
+     * ({@code sanse_test_hwasan}) 위에 척추 단 6(산문→외원→종문→본전→장로회→정상)+계단참 2와
+     * 좌우 로브 단 7(연무장·강당·생활·훈련장·창고)을 앉힌다 — 패드 위는 평탄, 가장자리는
+     * 실지형까지 내려가 닿는 옹벽, 패드 사이는 폭 7 대계단(몸체 전 열 접지). <b>건물이 뜰 자리가 구조적으로 없다</b> (B-146).
+     *
+     * <p>절차는 도보길과 같은 결: ① 월드·산세 확인 → ② baseY 실측 → ③ 계획
+     * ({@link TerraceForge#plan} — 명세 순수 검증+지형 판독·어긋남 경고) → ④ 패드·계단을
+     * {@link TickBudget#slice} 아래 하나씩 → ⑤ <b>검수</b>({@link TerraceForge#audit} — 평탄·접지·보행)와 census.
+     * 검수 위반은 <b>소리친다</b> (조용한 성공 금지). ★가드: {@code sanse_test_} 접두만 (B-126).
+     */
+    private boolean campusTest(CommandSender sender, String[] args) {
+        if (sender instanceof Player p && !p.isOp()) {
+            p.sendMessage(ChatColor.RED + "캠퍼스 조성은 관리자의 몫이다.");
+            return true;
+        }
+        String variant = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "hwasan";
+        if (!variant.equals("hwasan")) {
+            sender.sendMessage(ChatColor.GRAY + "/혼천 캠퍼스시험 [hwasan]  (지금은 hwasan 하나)");
+            return true;
+        }
+        if (!CAMPUS_FORGING.compareAndSet(false, true)) {
+            Announce.warn(plugin, sender, "[캠퍼스시험] 이미 테라스를 앉히는 중이다 — 끝난 뒤에 다시 쳐라.");
+            return true;
+        }
+        boolean started = false;
+        try {
+            String worldName = "sanse_test_" + variant;
+            // ★★ 가드 (B-126) — 대상은 반드시 버리는 sanse_test_ 접두다. 프로덕션 보호.
+            if (!worldName.startsWith("sanse_test_")) {
+                Announce.fail(plugin, sender,
+                        "[캠퍼스시험] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
+                return true;
+            }
+            World world = org.bukkit.Bukkit.getWorld(worldName);
+            if (world == null || !world.getName().startsWith("sanse_test_")) {
+                Announce.warn(plugin, sender, "[캠퍼스시험] " + worldName
+                        + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
+                return true;
+            }
+            // ★ 기준면 실측 — 산 밖 평지(경제권 밖)의 표면 y. 코드가 지어내지 않는다 (Q2 · 도보길과 동일).
+            int peakX = 0;
+            int peakZ = 0;
+            int economyR = RangeSpec.hwasan(peakX, peakZ, 0).economyR();
+            int baseY = world.getHighestBlockYAt(peakX + economyR + 40, peakZ);
+            RangeSpec spec = RangeSpec.hwasan(peakX, peakZ, baseY);
+            // ★ 산세가 섰는가 — 산이 없으면 단을 앉힐 비탈이 없다
+            int summitTop = world.getHighestBlockYAt(peakX, peakZ);
+            if (summitTop - baseY < 20) {
+                Announce.warn(plugin, sender, "[캠퍼스시험] " + worldName + " 에 산세가 안 섰다 (정상고 "
+                        + (summitTop - baseY) + " < 20) — 먼저 /혼천 산세시험 hwasan.");
+                return true;
+            }
+            // 계획 — 명세 검증(순수) + 발자국 지형 판독 (~1.2만 열 · 청크 동기 로드 한 번의 스파이크)
+            TerraceForge.Plan plan = TerraceForge.plan(world, spec);
+            Announce.say(plugin, sender, ChatColor.GRAY + "[캠퍼스시험] " + worldName
+                    + " — 기준면 실측 y" + baseY + " · 패드 " + plan.pads().size()
+                    + " (척추 6+계단참 2+로브 7) · 계단 " + plan.lanes().size()
+                    + " — 마스터플랜 20구역 중 슬라이스 1 몫");
+            StringBuilder ys = new StringBuilder();
+            for (TerraceForge.Pad p : plan.pads()) {
+                if (ys.length() > 0) {
+                    ys.append(" · ");
+                }
+                ys.append(p.spec().zone()).append(' ').append(p.spec().name()).append(" y").append(p.y());
+            }
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  " + ys);
+            // ★잠정 높이 vs 실지형 어긋남 — 계획이 잰 것을 그대로 소리 낸다 (조용히 지어내지 않는다)
+            for (String n : plan.terrainNotes()) {
+                Announce.warn(plugin, sender, "[캠퍼스시험] 지형 어긋남 — " + n);
+            }
+            Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  패드·계단을 하나씩 앉힌다"
+                    + " (틱을 나눠 먹는다 · 서버는 계속 돈다) — 진행은 [캠퍼스시험·진행] 으로 남는다");
+            CampusPaver paver = new CampusPaver(plugin, sender, world, plan);
+            TickBudget.slice(plugin, "캠퍼스시험:" + variant, paver, () -> {
+                try {
+                    paver.finish();
+                } finally {
+                    CAMPUS_FORGING.set(false);
+                }
+            });
+            started = true;
+            return true;
+        } finally {
+            if (!started) {
+                CAMPUS_FORGING.set(false);
+            }
+        }
+    }
+
+    /**
+     * 캠퍼스 순회기 — {@link TrailPaver} 의 짝. 계획된 패드를 하나씩 앉히고, 패드가 다 서면
+     * 계단을 하나씩 놓고, 끝나면 <b>검수부터</b> 소리 내어 읽는다.
+     */
+    private static final class CampusPaver implements TickBudget.Step {
+        private final HoncheonMvt plugin;
+        private final CommandSender sender;
+        private final World world;
+        private final TerraceForge.Plan plan;
+        private final TerraceForge.Tally tally = new TerraceForge.Tally();
+        private final int padCount;
+        private final int total;
+        private final long startNanos;
+
+        private int index;
+
+        CampusPaver(HoncheonMvt plugin, CommandSender sender, World world, TerraceForge.Plan plan) {
+            this.plugin = plugin;
+            this.sender = sender;
+            this.world = world;
+            this.plan = plan;
+            this.padCount = plan.pads().size();
+            this.total = padCount + plan.lanes().size();
+            this.startNanos = System.nanoTime();
+        }
+
+        @Override
+        public boolean step() {
+            if (index >= total) {
+                return false;
+            }
+            String what;
+            if (index < padCount) {
+                TerraceForge.Pad p = plan.pads().get(index);
+                TerraceForge.pavePad(world, plan, p, tally);
+                what = "패드 " + p.spec().zone() + " " + p.spec().name() + " (y" + p.y()
+                        + " · " + p.spec().width() + "×" + p.spec().depth() + ")";
+            } else {
+                TerraceForge.StairLane lane = plan.lanes().get(index - padCount);
+                TerraceForge.paveStair(world, lane, tally);
+                what = "계단 " + lane.link().upperZone() + "→" + lane.link().lowerZone()
+                        + " (낙차 " + (lane.topY() - lane.lowY()) + " · 디딤 " + lane.treads()
+                        + (lane.walk() > 0 ? " · 보도 " + lane.walk() : "") + ")";
+            }
+            index++;
+            Announce.progress(plugin, sender, ChatColor.GRAY + "[캠퍼스시험·진행] " + index + "/" + total
+                    + " " + what + " · " + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
+            return index < total;
+        }
+
+        /** 조성 완료 — ★검수 먼저 (위반이면 소리친다) → census → 산문(1구역) 남단 텔레포트 */
+        void finish() {
+            TerraceForge.Audit audit = TerraceForge.audit(world, plan);
+            long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
+            if (audit.clean()) {
+                Announce.say(plugin, sender, ChatColor.GOLD + "[캠퍼스시험] 화산 캠퍼스 패드 " + padCount
+                        + " · 계단 " + plan.lanes().size() + " 이 앉았다 — " + world.getName()
+                        + " · 검수 깨끗 (열 " + audit.checkedCols() + ")");
+            } else {
+                Announce.fail(plugin, sender, "[캠퍼스시험] ★검수 위반 — 평탄 " + audit.flatViolations()
+                        + " · 접지(허공) " + audit.floatViolations() + " · 보행 단차 " + audit.walkBreaks()
+                        + " (열 " + audit.checkedCols() + ") — 아래 표본을 보라");
+                for (String n : audit.notes()) {
+                    Announce.fail(plugin, sender, "  · " + n);
+                }
+            }
+            Announce.say(plugin, sender, ChatColor.GRAY + "  포장 " + tally.pavement + " · 속채움 "
+                    + tally.core + " · 옹벽 결 " + tally.wallFace + " · 여장 " + tally.parapet
+                    + " · 계단 " + tally.stairTreads + " · 깎음 " + tally.cut + " · 등롱 " + tally.lanterns
+                    + " · " + secs + "초");
+            TerraceForge.Pad gate = plan.pads().get(0);   // 명세 첫 줄 = 1 산문
+            TerraceForge.Pad top = plan.pads().stream()
+                    .max(java.util.Comparator.comparingInt(TerraceForge.Pad::y)).orElse(gate);
+            Announce.say(plugin, sender, ChatColor.GRAY + "  " + gate.spec().name() + " y" + gate.y()
+                    + " → " + top.spec().name() + " y" + top.y() + " · 총 오름 " + (top.y() - gate.y())
+                    + "칸 · 다음 슬라이스: 구역 배치기(조닝 3색)·곁봉·운무교");
+            int sx = gate.x0() + gate.spec().width() / 2;
+            int sz = gate.zS() - 2;
+            int sy = gate.y() + 1;
+            if (sender instanceof Player player) {
+                // 북(-z)을 바라보게 = 척추를 올려다본다 (yaw 180 = 북향)
+                player.teleport(new Location(world, sx + 0.5, sy, sz + 0.5, 180f, 0f));
+                Announce.say(plugin, sender, ChatColor.GREEN + "  산문 남단에 세운다 — 북으로 척추를 올려다본다 ("
+                        + sx + ", " + sy + ", " + sz + ")");
+            } else {
+                Announce.say(plugin, sender, ChatColor.GRAY + "  산문 남단: /tp " + sx + " " + sy + " "
+                        + sz + " (콘솔 — 좌표만 안내 · 월드 " + world.getName() + ")");
             }
         }
     }
