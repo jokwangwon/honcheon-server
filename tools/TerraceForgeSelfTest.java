@@ -52,7 +52,7 @@ public final class TerraceForgeSelfTest {
             why = e.getMessage();
         }
         check("기본 캠퍼스(패드 " + campus.pads().size() + " · 링크 " + campus.links().size()
-                + ")가 전부 앉는다", valid, why);
+                + " · 다리 " + campus.bridges().size() + ")가 전부 앉는다", valid, why);
 
         // ══════════ ② 마스터플랜 구역이 다 있다 (척추 6 + 로브 7) ══════════
         for (int zone : new int[]{1, 2, 6, 9, 12, 13}) {
@@ -61,13 +61,14 @@ public final class TerraceForgeSelfTest {
         for (int zone : new int[]{3, 4, 5, 7, 8, 14, 17}) {
             check("로브 구역 " + zone + " 이 있다", hasZone(campus, zone), zone);
         }
-        check("슬라이스 3 몫(18·19·20)은 없다",
-                !hasZone(campus, 18) && !hasZone(campus, 19) && !hasZone(campus, 20), "18/19/20");
         check("결번 15 를 안 쓴다", !hasZone(campus, 15), 15);
         check("내부 계단참 3 (101·102·103)",
                 hasZone(campus, 101) && hasZone(campus, 102) && hasZone(campus, 103), "101/102/103");
         check("슬라이스 2 신설 (10 정원 · 11 망루 · 16 측문)",
                 hasZone(campus, 10) && hasZone(campus, 11) && hasZone(campus, 16), "10/11/16");
+        check("★슬라이스 3 곁봉 (19 전망대 · 20 암자) + 운무교 3",
+                hasZone(campus, 19) && hasZone(campus, 20) && campus.bridges().size() == 3,
+                campus.bridges().size());
         // 창-안 척추 앵커 넷 — 실기동 1차 p85 재조정(2026-08-02)에서도 살린 값. 바꾸면 근거를 적어라.
         check("앵커: 종문 h92", heightOf(campus, 6) == 92, heightOf(campus, 6));
         check("앵커: 본전 h116", heightOf(campus, 9) == 116, heightOf(campus, 9));
@@ -118,6 +119,61 @@ public final class TerraceForgeSelfTest {
                         new TerraceForge.PadSpec(3, "남의 것", 0, 10, 6, 6, 5)),
                 List.of(new TerraceForge.StairLink(2, 1, 'S'))));
 
+        // ══════════ ④-b 다리 — 기하 자재기 + 거절 ══════════
+        TerraceForge.Campus withBridge = new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "본산", 0, 0, 20, 16, 50),
+                        new TerraceForge.PadSpec(2, "곁봉", 60, 0, 20, 16, 50)),
+                List.of(),
+                List.of(new TerraceForge.BridgeSpec("시험교", true, 0, 10, 49, 50)));
+        boolean bv = true;
+        String bWhy2 = "";
+        try {
+            TerraceForge.validate(withBridge);
+        } catch (IllegalArgumentException e) {
+            bv = false;
+            bWhy2 = e.getMessage();
+        }
+        check("수평 다리가 앉는다 (양끝 패드 접속)", bv, bWhy2);
+        java.util.List<TerraceForge.Pad> bp = TerraceForge.resolvePads(withBridge, 0, 0, 0);
+        TerraceForge.Bridge tb = TerraceForge.resolveBridges(withBridge, bp,
+                java.util.List.of(), 0, 0, 0).get(0);
+        check("스팬 40 · 교각 0", tb.span() == 40 && tb.pierOffsets().isEmpty(),
+                tb.span() + "/" + tb.pierOffsets());
+        TerraceForge.Bridge tb79 = TerraceForge.resolveBridges(new TerraceForge.Campus(
+                        List.of(new TerraceForge.PadSpec(1, "본산", 0, 0, 20, 16, 50),
+                                new TerraceForge.PadSpec(2, "곁봉", 99, 0, 20, 16, 50)),
+                        List.of(),
+                        List.of(new TerraceForge.BridgeSpec("긴교", true, 0, 10, 88, 50))),
+                TerraceForge.resolvePads(new TerraceForge.Campus(
+                        List.of(new TerraceForge.PadSpec(1, "본산", 0, 0, 20, 16, 50),
+                                new TerraceForge.PadSpec(2, "곁봉", 99, 0, 20, 16, 50)),
+                        List.of(), List.of()), 0, 0, 0),
+                java.util.List.of(), 0, 0, 0).get(0);
+        check("스팬 79 → 교각 2", tb79.pierOffsets().size() == 2, tb79.pierOffsets());
+        checkThrows("높이 안 맞는 다리는 거절 (상판은 수평)", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "본산", 0, 0, 20, 16, 50),
+                        new TerraceForge.PadSpec(2, "곁봉", 60, 0, 20, 16, 44)),
+                List.of(),
+                List.of(new TerraceForge.BridgeSpec("기운교", true, 0, 10, 49, 50))));
+        checkThrows("허공에 끝나는 다리는 거절", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "본산", 0, 0, 20, 16, 50)),
+                List.of(),
+                List.of(new TerraceForge.BridgeSpec("허공교", true, 0, 10, 49, 50))));
+        checkThrows("스팬 상한(80) 초과는 거절", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "본산", 0, 0, 20, 16, 50),
+                        new TerraceForge.PadSpec(2, "곁봉", 120, 0, 20, 16, 50)),
+                List.of(),
+                List.of(new TerraceForge.BridgeSpec("만용교", true, 0, 10, 109, 50))));
+        // ★3.5 — expectedLift 는 계약이지 은폐가 아니다: 다리 없는 패드가 쓰면 거절
+        checkThrows("다리 없는 패드의 expectedLift 는 거절", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "맨땅", 0, 0, 20, 16, 50, 30)),
+                List.of(), List.of()));
+        check("expectedLift 계약: 19 전망대 = 31 (석탑 위 전각)",
+                liftOf(campus, 19) == 31, liftOf(campus, 19));
+        check("expectedLift 계약: 105 서교 착지 = 17", liftOf(campus, 105) == 17, liftOf(campus, 105));
+        check("다리 몸체 covers: 난간 열(a0−2 · 폭 ±2)을 안다",
+                tb.covers(8, 2) && tb.covers(50, -2) && !tb.covers(8, 3), "covers");
+
         // ══════════ ⑤ 팔레트 — 금지 재료가 없다 (B-195 · HANDOFF 함정) ══════════
         Set<Material> palette = TerraceForge.palette();
         check("★ BARREL 없음 (가구_3D 유령 벽)", !palette.contains(Material.BARREL), "BARREL");
@@ -133,8 +189,9 @@ public final class TerraceForgeSelfTest {
         String bWhy = "";
         try {
             java.util.List<TerraceForge.Pad> allPads = TerraceForge.resolvePads(campus, 0, 0, 0);
-            com.honcheon.mvt.forge.HwasanCampusBuilder.validateBuildings(
-                    allPads, TerraceForge.resolveLanes(campus, allPads));
+            java.util.List<TerraceForge.StairLane> allLanes = TerraceForge.resolveLanes(campus, allPads);
+            com.honcheon.mvt.forge.HwasanCampusBuilder.validateBuildings(allPads, allLanes,
+                    TerraceForge.resolveBridges(campus, allPads, allLanes, 0, 0, 0));
         } catch (IllegalArgumentException e) {
             bOk = false;
             bWhy = e.getMessage();
@@ -156,6 +213,11 @@ public final class TerraceForgeSelfTest {
 
     private static boolean hasZone(TerraceForge.Campus campus, int zone) {
         return campus.pads().stream().anyMatch(p -> p.zone() == zone);
+    }
+
+    private static int liftOf(TerraceForge.Campus campus, int zone) {
+        return campus.pads().stream().filter(p -> p.zone() == zone)
+                .mapToInt(TerraceForge.PadSpec::expectedLift).findFirst().orElse(-9999);
     }
 
     private static int heightOf(TerraceForge.Campus campus, int zone) {

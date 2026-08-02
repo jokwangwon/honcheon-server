@@ -99,6 +99,10 @@ public final class HwasanCampusBuilder {
                 plasterHall(world, pad, cx - 3, cz, 2, 2, false, false, tally);
                 pavilion(world, pad, cx + 5, cz, 1, tally);
             }
+            case 19 -> pavilion(world, pad, cx + 3, cz, 2, tally);   // 절벽 전망대 — 정자 하나뿐 (벼랑 끝 · 절제)
+            case 20 -> {                                         // 부속 암자 — 소형 암자 + 빈 마당 (레퍼런스 9호)
+                plasterHall(world, pad, cx + 2, cz, 3, 2, true, false, tally);
+            }
             case 10 -> garden(world, pad, cx, cz, tally);        // 장문인 정원 — 연못·정자·매화
             case 11 -> watchtower(world, pad, cx, cz + 5, tally);   // 망루 — 탑은 계단 회랑(북편) 남쪽에 (2.5 보행 단차의 수리)
             default -> {
@@ -118,7 +122,8 @@ public final class HwasanCampusBuilder {
      * <b>검수가 걷는 선은 조성이 다진 선과 같아야 하고, 그 선 위에 아무것도 세우지 않는다.</b>
      * 눈({@code tools/TerraceForgeSelfTest.java})과 계획이 같은 자를 쓴다.
      */
-    public static void validateBuildings(List<TerraceForge.Pad> pads, List<TerraceForge.StairLane> lanes) {
+    public static void validateBuildings(List<TerraceForge.Pad> pads, List<TerraceForge.StairLane> lanes,
+                                         List<TerraceForge.Bridge> bridges) {
         for (TerraceForge.Pad pad : pads) {
             int[] box = buildingBox(pad);
             if (box != null
@@ -129,6 +134,20 @@ public final class HwasanCampusBuilder {
                         + " z" + pad.zN() + ".." + pad.zS());
             }
             for (int[] sb : structureBoxes(pad)) {
+                // ★다리 회랑 (걷는 폭 ±2 · 패드 안 두 칸 이음 포함) — 구조물이 다리 어귀를 막으면 거절
+                for (TerraceForge.Bridge b : bridges) {
+                    for (int t = b.a0() - 2; t <= b.a1() + 2; t++) {
+                        for (int o = -2; o <= 2; o++) {
+                            int x = b.alongX() ? t : b.c() + o;
+                            int z = b.alongX() ? b.c() + o : t;
+                            if (x >= sb[0] && x <= sb[1] && z >= sb[2] && z <= sb[3]) {
+                                throw new IllegalArgumentException("구조물이 다리 어귀를 막는다: "
+                                        + pad.spec().zone() + " " + pad.spec().name() + " ∩ 다리 "
+                                        + b.spec().name() + " (" + x + "," + z + ")");
+                            }
+                        }
+                    }
+                }
                 for (TerraceForge.StairLane lane : lanes) {
                     int px = lane.dirZ() != 0 ? 1 : 0;
                     int pz = lane.dirZ() != 0 ? 0 : 1;
@@ -181,6 +200,8 @@ public final class HwasanCampusBuilder {
                     new int[]{cx - 3, cx + 1, cz + 3, cz + 7},               // 정자
                     new int[]{cx - 4, cx, cz - 8, cz - 4});                  // 매화
             case 11 -> List.of(new int[]{cx - 4, cx + 4, cz + 1, cz + 9});
+            case 19 -> List.of(new int[]{cx, cx + 6, cz - 3, cz + 3});       // 정자 (동편 벼랑 쪽 — 서편은 다리 이음)
+            case 20 -> List.of(new int[]{cx - 2, cx + 6, cz - 3, cz + 3});   // 암자 (동편 — 서편은 다리 이음)
             default -> List.of();
         };
     }
@@ -204,6 +225,8 @@ public final class HwasanCampusBuilder {
             case 13 -> new int[]{cx - 7, cx + 7, cz - 4, cz + 4};       // 사당(half2+처마) + 정자
             case 10 -> new int[]{cx - 7, cx + 2, cz - 8, cz + 7};       // 연못(서)·정자(남서)·매화(북서) — 동편 띠는 계단 몫
             case 11 -> new int[]{cx - 4, cx + 4, cz + 1, cz + 9};       // 탑 (남편 — 북편 회랑은 계단 몫)
+            case 19 -> new int[]{cx, cx + 6, cz - 3, cz + 3};
+            case 20 -> new int[]{cx - 2, cx + 6, cz - 3, cz + 3};
             default -> null;
         };
     }
@@ -217,8 +240,8 @@ public final class HwasanCampusBuilder {
         for (TerraceForge.Pad pad : plan.pads()) {
             for (int x = pad.x0() - 3; x <= pad.x1() + 3 && leaks.size() < 8; x++) {
                 for (int z = pad.zN() - 3; z <= pad.zS() + 3; z++) {
-                    if (pad.contains(x, z) || onAnyPad(plan, x, z)) {
-                        continue;
+                    if (pad.contains(x, z) || onAnyPad(plan, x, z) || onBridge(plan, x, z)) {
+                        continue;   // ★다리 몸체(상판·난간·교대)는 다리의 것 — 명세 기하로 판정 (3.0 유출 8건의 수리)
                     }
                     for (int y = pad.y() + 1; y <= pad.y() + 16; y++) {
                         Material m = world.getBlockAt(x, y, z).getType();
@@ -232,6 +255,16 @@ public final class HwasanCampusBuilder {
             }
         }
         return leaks;
+    }
+
+    /** 그 열이 등록된 다리 몸체(폭 ±2 · 패드 안 이음 포함)인가 — 유출 눈이 다리를 안다 */
+    private static boolean onBridge(TerraceForge.Plan plan, int x, int z) {
+        for (TerraceForge.Bridge b : plan.bridges()) {
+            if (b.covers(x, z)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean onAnyPad(TerraceForge.Plan plan, int x, int z) {

@@ -89,8 +89,18 @@ public final class TerraceForge {
      * @param width 동서 폭 (칸) — ≤ {@value #MAX_TIER_WIDTH} (H-3)
      * @param depth 남북 깊이 (칸) — ≤ {@value #MAX_TIER_WIDTH}
      * @param h     목표 포장면 높이 (baseY 위) — 골격 유도 잠정값 【제안】
+     * @param expectedLift ★의도된 Δ (h − 실지형 p85 의 기대값 · 0 = 없음) — 「석탑 위 전각」처럼
+     *                     일부러 실지형보다 높이 앉는 패드의 <b>계약</b>. 경고 눈은 |Δ−기대| 로 잰다.
+     *                     다리로 이어진 패드에만 허용된다 ({@link #resolveBridges} 가 거절한다) —
+     *                     맨땅 패드가 이 필드로 경고를 끄는 것은 계약이 아니라 은폐다.
      */
-    public record PadSpec(int zone, String name, int dx, int dz, int width, int depth, int h) {
+    public record PadSpec(int zone, String name, int dx, int dz, int width, int depth, int h,
+                          int expectedLift) {
+
+        /** 의도된 Δ 없는 판 (대부분의 패드) */
+        public PadSpec(int zone, String name, int dx, int dz, int width, int depth, int h) {
+            this(zone, name, dx, dz, width, depth, h, 0);
+        }
     }
 
     /**
@@ -103,8 +113,32 @@ public final class TerraceForge {
     public record StairLink(int upperZone, int lowerZone, char side) {
     }
 
-    /** 캠퍼스 명세 — 패드 목록 + 계단 링크. {@link #validate} 가 순수하게 전부 잰다. */
-    public record Campus(List<PadSpec> pads, List<StairLink> links) {
+    /**
+     * 운무교 명세 — <b>본산과 곁봉을 잇는 현공교</b> (마스터플랜 ⑱ · 슬라이스 3).
+     * 축 정렬 직선 다리: 석교 교대(양끝 2칸 — 실지형 접지) + 목교 상판(폭 5 · 걷는 폭 3 ·
+     * 난간 울타리 · 등롱) + 긴 스팬은 중간 돌교각. <b>상판 아래는 의도된 허공</b>이다 —
+     * 접지 눈은 등록된 다리의 교대·교각만 재고, 상판 밑 허공은 다리이기 때문에 허용한다
+     * (침묵 예외가 아니라 명세에 등록된 구간만).
+     *
+     * @param name    다리 이름 (검수·로그가 부른다)
+     * @param alongX  참이면 동서로 지난다 (varying = x · fixed = z), 거짓이면 남북
+     * @param c       고정축 좌표 (주봉 상대)
+     * @param a0,a1   상판 구간 (주봉 상대 · a0 ≤ a1) — 양끝 한 칸 밖은 패드 안이어야 한다
+     * @param h       상판 높이 (baseY 위) — 양끝 패드의 h 와 같아야 한다 (수평 상판)
+     */
+    public record BridgeSpec(String name, boolean alongX, int c, int a0, int a1, int h) {
+    }
+
+    /** 상판 스팬 상한 — 이보다 길면 다리가 아니라 만용이다 (스팬을 쪼개거나 자리를 옮겨라) */
+    public static final int MAX_BRIDGE_SPAN = 80;
+
+    /** 캠퍼스 명세 — 패드 목록 + 계단 링크 + 운무교. {@link #validate} 가 순수하게 전부 잰다. */
+    public record Campus(List<PadSpec> pads, List<StairLink> links, List<BridgeSpec> bridges) {
+
+        /** 다리 없는 판 (슬라이스 1~2 호환) */
+        public Campus(List<PadSpec> pads, List<StairLink> links) {
+            this(pads, links, List.of());
+        }
     }
 
     /**
@@ -161,7 +195,21 @@ public final class TerraceForge {
                 new PadSpec(11, "망루", 24, 56, 12, 22, 106),   // 3차 p85 h96 — Δ10 (경고 창 안)
                 // ★측문: 3차 p85 y-41(h20) 반영 h30 (Δ10 — 석축 감 상단 · 정원·망루와 같은 근거).
                 //   창고(42)→측문 낙차 12. 폭 16 — 램프(11칸)가 서편을 지나고 문루는 동편 평지에 선다.
-                new PadSpec(16, "측문", 48, 174, 16, 12, 28));   // 3차 p85 h19 — Δ9 (경고 창 안) · 창고 낙차 14
+                new PadSpec(16, "측문", 48, 174, 16, 12, 28),    // 3차 p85 h19 — Δ9 (경고 창 안) · 창고 낙차 14
+                // ── 슬라이스 3 곁봉 (마스터플랜 18·19·20 — 「주변 산들도 건축이 된다」) ──
+                //   ★꼭대기가 아니라 마루 바로 아래 「어깨」에 앉는다 (산이 먼저, 건물이 적응).
+                //   h 는 다리 상판과 수평이 되게 캠퍼스 쪽 끝 패드의 h 를 따른다 — 어깨 실지형과의
+                //   차는 옹벽/깎기가 흡수하고, p85 경고가 잰다 【제안】.
+                // ★19: 레퍼런스 9호를 정면 채택 — 벼랑 끝 「석탑 위 전각」. 어깨 실지형(p85 h97)에서
+                //   석축 탑 31칸을 쌓아 상판(장로회 h128)과 수평이 된다. 탑 몸체 = pavePad 의 옹벽
+                //   (전 열 실지형 접지 — 접지 눈이 잰다). expectedLift 31 이 그 계약이다.
+                new PadSpec(19, "절벽 전망대", 88, 10, 14, 12, 128, 31),
+                new PadSpec(20, "부속 암자", 62, -14, 18, 14, 138),    // Em(62,-46) 남 어깨 — 계단참 을과 수평
+                // ★105: 3.0 실기동 Δ67 → 분석 실측(RangeField 단면)으로 이사. 연무장 상 위도(z76~95)의
+                //   서벽 너머는 전부 h≤38 저지라 「높은 어깨」가 없다 — 서교를 장로회 서면(z8)으로
+                //   재정박했다 (지형이 마스터플랜의 「연무장 상 근처」를 거부 — 산이 먼저 【제안】).
+                //   Wm 남동 어깨 (−88,8) 실측 h≈105~115 · p85≈111 — expectedLift 17 로 상판과 수평.
+                new PadSpec(105, "서교 착지", -88, 8, 12, 12, 128, 17));
         List<StairLink> links = List.of(
                 // 척추 대계단 — 항상 남면으로 내려간다 (남→북 오름)
                 new StairLink(2, 1, 'S'),      // 낙차 12
@@ -184,7 +232,14 @@ public final class TerraceForge {
                 new StairLink(9, 10, 'W'),     // 본전 → 장문인 정원 (서 · 낙차 8)
                 new StairLink(9, 11, 'E'),     // 본전 → 망루 (동 · 낙차 8)
                 new StairLink(17, 16, 'E'));   // 물자 창고 → 측문 (동 · 낙차 8 — 이사에 따라 재배선)
-        return new Campus(pads, links);
+        List<BridgeSpec> bridges = List.of(
+                // 동1: 장로회(12) ↔ 절벽 전망대(19) — Es 어깨로. 스팬 79 · 교각 2
+                new BridgeSpec("운무교 동일", true, 12, 2, 80, 128),
+                // 동2: 계단참 을(102) ↔ 부속 암자(20) — Em 어깨로. 스팬 60 · 교각 1
+                new BridgeSpec("운무교 동이", true, -12, -7, 52, 138),
+                // 서: 장로회(12) ↔ 서교 착지(105) — 서편 협곡 저지를 건너 Wm 어깨로. 스팬 64 · 교각 1
+                new BridgeSpec("운무교 서", true, 8, -82, -19, 128));
+        return new Campus(pads, links, bridges);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -234,8 +289,37 @@ public final class TerraceForge {
         }
     }
 
-    /** 계획 — 앉힌 패드·계단과 지형 어긋남 메모. */
-    public record Plan(String placeId, List<Pad> pads, List<StairLane> lanes, List<String> terrainNotes) {
+    /**
+     * 앉힌 운무교 — 실좌표. {@code endA} 는 a0 쪽 끝 패드, {@code endB} 는 a1 쪽 (검수·개구가 읽는다).
+     */
+    public record Bridge(BridgeSpec spec, boolean alongX, int c, int a0, int a1, int y,
+                         Pad endA, Pad endB) {
+
+        public int span() {
+            return a1 - a0 + 1;
+        }
+
+        /** 상판·난간 폭(±2)이 그 열을 덮는가 — 여장 개구·검수가 읽는다 (패드 안 두 칸 이음 포함) */
+        public boolean covers(int x, int z) {
+            int v = alongX ? x : z;
+            int w = alongX ? z : x;
+            return v >= a0 - 2 && v <= a1 + 2 && Math.abs(w - c) <= 2;
+        }
+
+        /** 교각 자리 (a0 기준 상대 오프셋) — 조성과 검수가 같은 식을 쓴다 */
+        public java.util.List<Integer> pierOffsets() {
+            int n = Math.max(0, (span() - 20) / 24);
+            java.util.List<Integer> out = new ArrayList<>(n);
+            for (int k = 1; k <= n; k++) {
+                out.add(span() * k / (n + 1));
+            }
+            return out;
+        }
+    }
+
+    /** 계획 — 앉힌 패드·계단·다리와 지형 어긋남 메모. */
+    public record Plan(String placeId, List<Pad> pads, List<StairLane> lanes,
+                       List<Bridge> bridges, List<String> terrainNotes) {
     }
 
     /** 기본 캠퍼스로 계획한다 — 지형(p85)을 읽어 어긋남을 메모에 남긴다. */
@@ -247,16 +331,20 @@ public final class TerraceForge {
     public static Plan plan(World world, RangeSpec spec, Campus campus) {
         List<Pad> pads = resolvePads(campus, spec.peakX(), spec.peakZ(), spec.baseY());
         List<StairLane> lanes = resolveLanes(campus, pads);
+        List<Bridge> bridges = resolveBridges(campus, pads, lanes, spec.peakX(), spec.peakZ(), spec.baseY());
         List<String> notes = new ArrayList<>();
         for (Pad p : pads) {
             int p85 = percentileGround(world, p.x0(), p.x1(), p.zN(), p.zS(), PERCENTILE);
             int delta = p.y() - p85;
-            if (Math.abs(delta) > TERRAIN_MISMATCH_WARN) {
+            int off = delta - p.spec().expectedLift();   // 의도된 Δ 는 계약 — 계약과의 어긋남만 잰다
+            if (Math.abs(off) > TERRAIN_MISMATCH_WARN) {
                 notes.add(p.spec().zone() + " " + p.spec().name() + ": 목표 y" + p.y()
-                        + " vs 지형 p85 y" + p85 + " (Δ" + delta + ") — 잠정 높이를 빨간펜하라");
+                        + " vs 지형 p85 y" + p85 + " (Δ" + delta
+                        + (p.spec().expectedLift() != 0 ? " · 계약 Δ" + p.spec().expectedLift() : "")
+                        + ") — 잠정 높이를 빨간펜하라");
             }
         }
-        return new Plan(spec.placeId(), pads, lanes, List.copyOf(notes));
+        return new Plan(spec.placeId(), pads, lanes, bridges, List.copyOf(notes));
     }
 
     /**
@@ -393,7 +481,98 @@ public final class TerraceForge {
 
     /** 순수 전수 검증 — 명세만으로 앉힘 전체를 재본다 (월드 불요 · 눈과 계획이 같은 길을 쓴다). */
     public static void validate(Campus campus) {
-        resolveLanes(campus, resolvePads(campus, 0, 0, 0));
+        List<Pad> pads = resolvePads(campus, 0, 0, 0);
+        resolveBridges(campus, pads, resolveLanes(campus, pads), 0, 0, 0);
+    }
+
+    /**
+     * 다리 명세 → 실다리 — <b>순수 함수</b>. 여기서 거절한다: ①스팬 > {@value #MAX_BRIDGE_SPAN}
+     * ②양끝 한 칸 밖이 패드가 아니거나 상판 높이와 패드 h 가 다르다 (상판은 수평이다)
+     * ③상판 폭(±2)이 끝 패드의 가로 범위 밖 ④상판이 남의 패드나 계단 몸체를 지난다.
+     */
+    public static List<Bridge> resolveBridges(Campus campus, List<Pad> pads,
+                                              List<StairLane> lanes, int peakX, int peakZ, int baseY) {
+        List<Bridge> out = new ArrayList<>(campus.bridges().size());
+        for (BridgeSpec bs : campus.bridges()) {
+            int c = bs.c() + (bs.alongX() ? peakZ : peakX);
+            int a0 = bs.a0() + (bs.alongX() ? peakX : peakZ);
+            int a1 = bs.a1() + (bs.alongX() ? peakX : peakZ);
+            int y = baseY + bs.h();
+            int span = a1 - a0 + 1;
+            if (span < 3 || span > MAX_BRIDGE_SPAN) {
+                throw new IllegalArgumentException("다리 " + bs.name() + ": 스팬 " + span
+                        + " 이 [3," + MAX_BRIDGE_SPAN + "] 밖");
+            }
+            Pad endA = padAt(pads, bs.alongX() ? a0 - 1 : c, bs.alongX() ? c : a0 - 1);
+            Pad endB = padAt(pads, bs.alongX() ? a1 + 1 : c, bs.alongX() ? c : a1 + 1);
+            if (endA == null || endB == null) {
+                throw new IllegalArgumentException("다리 " + bs.name() + ": 끝이 패드에 닿지 않는다"
+                        + " (a0-1/a1+1 이 패드 밖)");
+            }
+            if (endA.y() != y || endB.y() != y) {
+                throw new IllegalArgumentException("다리 " + bs.name() + ": 상판 y" + y
+                        + " 이 끝 패드와 다르다 (" + endA.spec().name() + " y" + endA.y() + " · "
+                        + endB.spec().name() + " y" + endB.y() + ") — 상판은 수평이다");
+            }
+            for (Pad end : new Pad[]{endA, endB}) {
+                int w0 = bs.alongX() ? end.zN() : end.x0();
+                int w1 = bs.alongX() ? end.zS() : end.x1();
+                if (c - 2 < w0 || c + 2 > w1) {
+                    throw new IllegalArgumentException("다리 " + bs.name() + ": 상판 폭(" + (c - 2)
+                            + ".." + (c + 2) + ")이 " + end.spec().name() + " 가로 범위 밖");
+                }
+            }
+            Bridge bridge = new Bridge(bs, bs.alongX(), c, a0, a1, y, endA, endB);
+            for (int t = a0; t <= a1; t++) {
+                for (int o = -2; o <= 2; o++) {
+                    int x = bs.alongX() ? t : c + o;
+                    int z = bs.alongX() ? c + o : t;
+                    for (Pad pd : pads) {
+                        if (pd != endA && pd != endB && pd.contains(x, z)) {
+                            throw new IllegalArgumentException("다리 " + bs.name()
+                                    + " 상판이 남의 패드를 지난다: " + pd.spec().name()
+                                    + " (" + x + "," + z + ")");
+                        }
+                    }
+                    for (StairLane lane : lanes) {
+                        if (lane.covers(x, z)) {
+                            throw new IllegalArgumentException("다리 " + bs.name()
+                                    + " 상판이 계단 몸체를 지난다: " + lane.link().upperZone() + "→"
+                                    + lane.link().lowerZone() + " (" + x + "," + z + ")");
+                        }
+                    }
+                }
+            }
+            out.add(bridge);
+        }
+        // ★expectedLift 는 다리 끝 패드의 계약이다 — 맨땅 패드가 경고를 끄는 은폐를 거절한다
+        for (Pad p : pads) {
+            if (p.spec().expectedLift() == 0) {
+                continue;
+            }
+            boolean anchored = false;
+            for (Bridge b : out) {
+                if (b.endA() == p || b.endB() == p) {
+                    anchored = true;
+                    break;
+                }
+            }
+            if (!anchored) {
+                throw new IllegalArgumentException("expectedLift 는 다리 끝 패드만 쓴다: "
+                        + p.spec().zone() + " " + p.spec().name() + " (Δ" + p.spec().expectedLift()
+                        + ") — 다리가 없으면 높이를 실지형에 맞춰라");
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static Pad padAt(List<Pad> pads, int x, int z) {
+        for (Pad p : pads) {
+            if (p.contains(x, z)) {
+                return p;
+            }
+        }
+        return null;
     }
 
     /** 발자국 안 실지형(수목 제외)의 상위 백분위 y — 쌓기 우선의 눈금 */
@@ -428,6 +607,7 @@ public final class TerraceForge {
     /** 조성 대장 — census 가 읽는다 */
     public static final class Tally {
         public long pavement;
+        public long bridgeDeck;
         public long core;
         public long wallFace;
         public long parapet;
@@ -550,6 +730,11 @@ public final class TerraceForge {
                 return true;
             }
         }
+        for (Bridge bridge : plan.bridges()) {
+            if (bridge.covers(x, z)) {
+                return true;   // 다리로 나가는 개구 — 여장·평탄 눈이 함께 비킨다
+            }
+        }
         return false;
     }
 
@@ -618,6 +803,55 @@ public final class TerraceForge {
             if (!b.getType().isAir()) {
                 b.setType(Material.AIR, false);
                 tally.cut++;
+            }
+        }
+    }
+
+    /**
+     * 운무교 하나를 놓는다 — 석교 교대(양끝 2칸 · 전 열 접지) + 목교 상판(걷는 폭 3 ·
+     * 가장자리 보 + 난간 울타리 · 여덟 칸마다 등롱) + 교각(돌기둥 3×3 · 전 열 접지).
+     * <b>상판 아래 허공은 의도된 것</b>이다 — 그것이 현공교다 (레퍼런스 문법 · 검수는
+     * 교대·교각만 잰다).
+     */
+    public static void paveBridge(World world, Bridge b, Tally tally) {
+        java.util.List<Integer> piers = b.pierOffsets();
+        for (int t = b.a0(); t <= b.a1(); t++) {
+            int rel = t - b.a0();
+            boolean abut = rel <= 1 || t >= b.a1() - 1;
+            for (int o = -2; o <= 2; o++) {
+                int x = b.alongX() ? t : b.c() + o;
+                int z = b.alongX() ? b.c() + o : t;
+                // 상판 위 하늘 — 벼랑 어깨가 스팬에 걸쳐 있으면 걷는다
+                for (int y = b.y() + 1; y <= b.y() + 5; y++) {
+                    Block blk = world.getBlockAt(x, y, z);
+                    if (!blk.getType().isAir()) {
+                        blk.setType(Material.AIR, false);
+                        tally.cut++;
+                    }
+                }
+                Material deck = abut ? Material.STONE_BRICKS
+                        : (Math.abs(o) == 2 ? Material.SPRUCE_PLANKS : Material.DARK_OAK_PLANKS);
+                world.getBlockAt(x, b.y(), z).setType(deck, false);
+                tally.bridgeDeck++;
+                if (abut) {
+                    fillDown(world, x, b.y() - 1, z, tally);   // 교대 — 실지형까지 접지
+                } else if (Math.abs(o) == 2) {
+                    world.getBlockAt(x, b.y() + 1, z).setType(Material.DARK_OAK_FENCE, false);
+                    tally.parapet++;
+                    if (rel % 8 == 4) {
+                        world.getBlockAt(x, b.y() + 2, z).setType(Material.LANTERN, false);
+                        tally.lanterns++;
+                    }
+                }
+            }
+            if (piers.contains(rel)) {   // 교각 — 돌기둥 3×3, 실지형까지
+                for (int to = -1; to <= 1; to++) {
+                    for (int po = -1; po <= 1; po++) {
+                        int x = b.alongX() ? t + to : b.c() + po;
+                        int z = b.alongX() ? b.c() + po : t + to;
+                        fillDown(world, x, b.y() - 1, z, tally);
+                    }
+                }
             }
         }
     }
@@ -742,6 +976,53 @@ public final class TerraceForge {
                             + " (y" + prev + "→y" + stand + ")");
                 }
                 prev = stand;
+            }
+        }
+        // ④ 다리 — 상판 보행(걷는 자의 눈) + 교대·교각 접지. ★상판 아래 허공은 의도된 것이라
+        //   안 잰다 — 다리 명세에 등록된 구간만의 예외다 (등록 밖 허공은 여전히 ②가 잡는다).
+        for (Bridge b : plan.bridges()) {
+            int prev = Integer.MIN_VALUE;
+            for (int t = b.a0() - 2; t <= b.a1() + 2; t++) {
+                int x = b.alongX() ? t : b.c();
+                int z = b.alongX() ? b.c() : t;
+                int stand = prev == Integer.MIN_VALUE
+                        ? topSolid(world, x, b.y() + 2, z)
+                        : topSolid(world, x, prev + 2, z);
+                if (prev != Integer.MIN_VALUE && Math.abs(stand - prev) > 1) {
+                    breaks++;
+                    note(walkNotes, "보행: 다리 " + b.spec().name() + " (" + x + "," + z + ") 단차 "
+                            + Math.abs(stand - prev) + " (y" + prev + "→y" + stand + ")");
+                }
+                prev = stand;
+            }
+            java.util.List<Integer> piers = b.pierOffsets();
+            for (int t = b.a0(); t <= b.a1(); t++) {
+                int rel = t - b.a0();
+                boolean abut = rel <= 1 || t >= b.a1() - 1;
+                boolean pier = piers.contains(rel);
+                if (!abut && !pier) {
+                    continue;
+                }
+                int half = pier ? 1 : 2;
+                for (int o = -half; o <= half; o++) {
+                    int x = b.alongX() ? t : b.c() + o;
+                    int z = b.alongX() ? b.c() + o : t;
+                    cols++;
+                    int min = world.getMinHeight();
+                    for (int y = b.y(); y > min; y--) {
+                        Material m = world.getBlockAt(x, y, z).getType();
+                        if (m.isAir()) {
+                            floats++;
+                            note(floatNotes, "접지: 다리 " + b.spec().name() + " "
+                                    + (pier ? "교각" : "교대") + " (" + x + "," + z + ") y" + y
+                                    + " 허공 — 기둥이 떠 있다");
+                            break;
+                        }
+                        if (TrailBuilder.groundSolid(m) && !placedMasonry(m)) {
+                            break;
+                        }
+                    }
+                }
             }
         }
         List<String> notes = new ArrayList<>(flatNotes);

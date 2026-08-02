@@ -1737,11 +1737,11 @@ public final class MvtCommand implements CommandExecutor {
             }
             // 계획 — 명세 검증(순수) + 발자국 지형 판독 (~1.2만 열 · 청크 동기 로드 한 번의 스파이크)
             TerraceForge.Plan plan = TerraceForge.plan(world, spec);
-            HwasanCampusBuilder.validateBuildings(plan.pads(), plan.lanes());   // 발자국 ⊂ 패드 + 통로 무접촉 (계율 #4)
+            HwasanCampusBuilder.validateBuildings(plan.pads(), plan.lanes(), plan.bridges());   // 발자국 ⊂ 패드 + 통로·다리 어귀 무접촉 (계율 #4)
             Announce.say(plugin, sender, ChatColor.GRAY + "[캠퍼스시험] " + worldName
                     + " — 기준면 실측 y" + baseY + " · 패드 " + plan.pads().size()
-                    + " (척추 6+계단참 3+로브 7+부속 3) · 계단 " + plan.lanes().size()
-                    + " — 마스터플랜 20구역 중 슬라이스 1 몫");
+                    + " (척추 6+계단참 3+로브 7+부속 3+곁봉 3) · 계단 " + plan.lanes().size()
+                    + " · 다리 " + plan.bridges().size() + " — 마스터플랜 20구역 + 곁봉");
             StringBuilder ys = new StringBuilder();
             for (TerraceForge.Pad p : plan.pads()) {
                 if (ys.length() > 0) {
@@ -1786,6 +1786,7 @@ public final class MvtCommand implements CommandExecutor {
         private final HwasanCampusBuilder.Tally buildTally = new HwasanCampusBuilder.Tally();
         private final int padCount;
         private final int laneCount;
+        private final int bridgeCount;
         private final int total;
         private final long startNanos;
 
@@ -1798,7 +1799,8 @@ public final class MvtCommand implements CommandExecutor {
             this.plan = plan;
             this.padCount = plan.pads().size();
             this.laneCount = plan.lanes().size();
-            this.total = padCount + laneCount + padCount;   // 패드 → 계단 → 구역 건물 (3상)
+            this.bridgeCount = plan.bridges().size();
+            this.total = padCount + laneCount + bridgeCount + padCount;   // 패드 → 계단 → 다리 → 구역 건물 (4상)
             this.startNanos = System.nanoTime();
         }
 
@@ -1819,8 +1821,13 @@ public final class MvtCommand implements CommandExecutor {
                 what = "계단 " + lane.link().upperZone() + "→" + lane.link().lowerZone()
                         + " (낙차 " + (lane.topY() - lane.lowY()) + " · 디딤 " + lane.treads()
                         + (lane.walk() > 0 ? " · 보도 " + lane.walk() : "") + ")";
+            } else if (index < padCount + laneCount + bridgeCount) {
+                TerraceForge.Bridge b = plan.bridges().get(index - padCount - laneCount);
+                TerraceForge.paveBridge(world, b, tally);
+                what = "다리 " + b.spec().name() + " (스팬 " + b.span() + " · y" + b.y()
+                        + " · 교각 " + b.pierOffsets().size() + ")";
             } else {
-                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount);
+                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount);
                 HwasanCampusBuilder.buildZone(world, plan, p, buildTally);
                 what = "건물 " + p.spec().zone() + " " + p.spec().name();
             }
@@ -1837,8 +1844,8 @@ public final class MvtCommand implements CommandExecutor {
             long secs = (System.nanoTime() - startNanos) / 1_000_000_000L;
             if (audit.clean() && leaks.isEmpty()) {
                 Announce.say(plugin, sender, ChatColor.GOLD + "[캠퍼스시험] 화산 캠퍼스 패드 " + padCount
-                        + " · 계단 " + laneCount + " · 구역 건물이 앉았다 — " + world.getName()
-                        + " · 검수 깨끗 (열 " + audit.checkedCols() + " · 유출 0)");
+                        + " · 계단 " + laneCount + " · 다리 " + bridgeCount + " · 구역 건물이 앉았다 — "
+                        + world.getName() + " · 검수 깨끗 (열 " + audit.checkedCols() + " · 유출 0)");
             } else {
                 Announce.fail(plugin, sender, "[캠퍼스시험] ★검수 위반 — 평탄 " + audit.flatViolations()
                         + " · 접지(허공) " + audit.floatViolations() + " · 보행 단차 " + audit.walkBreaks()
