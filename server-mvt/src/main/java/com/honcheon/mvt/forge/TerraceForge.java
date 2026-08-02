@@ -110,53 +110,62 @@ public final class TerraceForge {
     /**
      * 화산 캠퍼스 기본값 【제안】 — 마스터플랜 20구역 중 슬라이스 1 몫:
      * <b>척추 공공 단 6</b> (1 산문 → 2 외원 → 6 종문 → 9 본전 → 12 장로회 → 13 정상) +
-     * <b>좌우 로브 단 7</b> (3·4·5·7·8·14·17) + 척추 낙차가 {@value #MAX_STAIR_DY}를 넘지 않게
-     * 끼운 <b>내부 계단참 2</b> (101·102 — 마스터플랜 결번 아님, 이 기계의 살림).
+     * <b>좌우 로브 단 7</b> (3·4·5·7·8·14·17) + 척추 낙차를 죄려고 끼운
+     * <b>내부 계단참 3</b> (101·102·103 — 마스터플랜 결번 아님, 이 기계의 살림).
      *
-     * <p>좌표·높이는 {@code RangeSpec.hwasan} 골격에서 유도한 잠정값이다 【제안】 —
-     * 척추는 창룡령 crest(z250→h10 · z180→h58 · z86→h104 · z30→h116)와 관문척추
-     * (z30·h116 → Pm z−54·h158)의 보간, 본전은 건물 품(court (−2,46) h118) 언저리,
-     * 로브는 척추 곁 비탈 추정값. 실지형과의 어긋남은 {@link #plan} 이 재어 소리 낸다.
+     * <p>높이는 <b>실기동 1차 p85 판독(2026-08-02 · 캠퍼스시험 지형 어긋남 경고 9건)으로
+     * 재조정한 잠정값</b>이다 【제안】 — 초판(골격 보간 유도)이 지형보다 11~29 높아 옹벽이
+     * 레퍼런스의 「석축 위 단」 감(4~12칸)을 넘었다. 이제 각 패드는 p85 ±2 를 딛고,
+     * 창-안이던 척추 앵커 넷(6 종문 92 · 9 본전 116 · 12 장로회 128 · 13 정상 148)은 살렸다.
+     * 그 대가로 세 링크의 높낮이가 뒤집혔다 — 종문>훈련장·훈련장>생활중·산문>창고
+     * (마스터플랜은 평면도라 상하는 지형이 정한다). 실지형과의 어긋남은 {@link #plan} 이
+     * 계속 재어 소리 낸다.
+     *
+     * <p>척추 하부(외원→종문)는 낙차 34 라 계단참 병(103)을 끼워 12+22 로 갈랐다 —
+     * 22 구간은 레퍼런스 1호의 긴 천계단 문법이다 (계단참 둘을 더 끼울 자리가 없다:
+     * 램프가 계단참 깊이를 다 먹는다).
      *
      * <p>16(측문)·10(정원)·11(망루)은 슬라이스 2(구역 배치기), 18·19·20(운무교·곁봉)은
      * 슬라이스 3 몫 — 여기 없다.
      */
     public static Campus hwasanCampus() {
         List<PadSpec> pads = List.of(
-                // ── 척추 (남 → 북 · 공공) ──────────────────────────────
-                new PadSpec(1, "산문", -2, 176, 24, 16, 60),
-                new PadSpec(2, "외원 광장", -2, 150, 30, 22, 70),
-                new PadSpec(6, "종문 중정", -2, 110, 28, 20, 92),
+                // ── 척추 (남 → 북 · 공공) ── h = p85 재조정 (앵커 넷은 초판 유지) ──
+                new PadSpec(1, "산문", -2, 176, 24, 16, 46),          // p85 46
+                new PadSpec(2, "외원 광장", -2, 150, 30, 22, 58),      // p85 59
+                new PadSpec(103, "계단참 병", -2, 130, 14, 13, 80),    // 외원↔종문 낙차 34 의 허리
+                new PadSpec(6, "종문 중정", -2, 110, 28, 20, 92),      // 앵커 (창 안)
                 new PadSpec(101, "계단참 갑", -2, 80, 12, 12, 104),
-                new PadSpec(9, "본전", -2, 52, 34, 26, 116),
-                new PadSpec(12, "장로회", -8, 12, 20, 14, 128),
+                new PadSpec(9, "본전", -2, 52, 34, 26, 116),           // 앵커 (창 안)
+                new PadSpec(12, "장로회", -8, 12, 20, 14, 128),        // 앵커 (창 안)
                 new PadSpec(102, "계단참 을", -14, -12, 14, 12, 138),
-                new PadSpec(13, "정상 암자", -16, -34, 14, 12, 148),
-                // ── 로브 (척추 좌우 · 수련/지원) ────────────────────────
-                new PadSpec(3, "연무장 하", -36, 148, 30, 24, 64),
-                new PadSpec(4, "강당·무기고", -32, 112, 22, 16, 84),
-                new PadSpec(5, "생활 하", 28, 144, 26, 20, 76),
-                new PadSpec(7, "훈련장 중", 28, 106, 24, 18, 96),
-                new PadSpec(8, "생활 중", 32, 72, 22, 16, 104),
-                new PadSpec(14, "연무장 상", -36, 56, 24, 18, 106),
-                new PadSpec(17, "물자 창고", 26, 174, 20, 14, 64));
+                new PadSpec(13, "정상 암자", -16, -34, 14, 12, 148),   // 앵커 (창 안)
+                // ── 로브 (척추 좌우 · 수련/지원) ── h = p85 ±2 ──────────
+                new PadSpec(3, "연무장 하", -36, 148, 30, 24, 40),     // p85 38
+                new PadSpec(4, "강당·무기고", -32, 112, 22, 16, 68),   // p85 67
+                new PadSpec(5, "생활 하", 28, 144, 26, 20, 64),        // p85 64
+                new PadSpec(7, "훈련장 중", 28, 106, 24, 18, 80),      // p85 80
+                new PadSpec(8, "생활 중", 32, 84, 22, 16, 76),         // p85 75 · 훈련장 곁으로 남하
+                new PadSpec(14, "연무장 상", -36, 56, 24, 18, 90),     // p85 88
+                new PadSpec(17, "물자 창고", 26, 174, 20, 14, 42));    // p85 43
         List<StairLink> links = List.of(
                 // 척추 대계단 — 항상 남면으로 내려간다 (남→북 오름)
-                new StairLink(2, 1, 'S'),
-                new StairLink(6, 2, 'S'),
-                new StairLink(101, 6, 'S'),
-                new StairLink(9, 101, 'S'),
-                new StairLink(12, 9, 'S'),
-                new StairLink(102, 12, 'S'),
-                new StairLink(13, 102, 'S'),
-                // 로브 협계단 — 척추에서 좌우로
-                new StairLink(2, 3, 'W'),      // 외원 → 연무장 하 (서)
-                new StairLink(5, 2, 'W'),      // 생활 하 → 외원 (서)
-                new StairLink(6, 4, 'W'),      // 종문 → 강당·무기고 (서)
-                new StairLink(7, 6, 'W'),      // 훈련장 중 → 종문 (서)
-                new StairLink(8, 7, 'S'),      // 생활 중 → 훈련장 중 (남)
-                new StairLink(9, 14, 'W'),     // 본전 → 연무장 상 (서)
-                new StairLink(17, 1, 'W'));    // 물자 창고 → 산문 (서)
+                new StairLink(2, 1, 'S'),      // 낙차 12
+                new StairLink(103, 2, 'S'),    // 낙차 22 — 긴 천계단 구간
+                new StairLink(6, 103, 'S'),    // 낙차 12
+                new StairLink(101, 6, 'S'),    // 낙차 12
+                new StairLink(9, 101, 'S'),    // 낙차 12
+                new StairLink(12, 9, 'S'),     // 낙차 12
+                new StairLink(102, 12, 'S'),   // 낙차 10
+                new StairLink(13, 102, 'S'),   // 낙차 10
+                // 로브 협계단 — 척추에서 좌우로 (p85 재조정으로 셋은 상하가 뒤집혔다)
+                new StairLink(2, 3, 'W'),      // 외원 → 연무장 하 (서 · 낙차 18)
+                new StairLink(5, 2, 'W'),      // 생활 하 → 외원 (서 · 낙차 6)
+                new StairLink(6, 4, 'W'),      // 종문 → 강당·무기고 (서 · 낙차 24)
+                new StairLink(6, 7, 'E'),      // ★역전: 종문 → 훈련장 중 (동 · 낙차 12)
+                new StairLink(7, 8, 'N'),      // ★역전: 훈련장 중 → 생활 중 (북 · 낙차 4)
+                new StairLink(9, 14, 'W'),     // 본전 → 연무장 상 (서 · 낙차 26)
+                new StairLink(1, 17, 'E'));    // ★역전: 산문 → 물자 창고 (동 · 낙차 4)
         return new Campus(pads, links);
     }
 
@@ -483,6 +492,10 @@ public final class TerraceForge {
             for (int o = -STAIR_HALF; o <= STAIR_HALF; o++) {
                 int x = cx + px * o;
                 int z = cz + pz * o;
+                // ★걷기 먼저 — 노선 위로 솟은 지형(능선 혹)을 실지면까지 재서 걷어낸다.
+                //   슬라이스 1 실기동이 잡은 병: 아래로는 접지하는데 위로는 안 깎아,
+                //   계단이 지형 혹을 타넘었다 (보행 단차 4~8 · 상부 척추 3링크). 디딤이 정본이다.
+                clearAbove(world, x, standY, z, tally);
                 // 접지 채움 — 밟는 면 밑을 실지형/아랫포장까지 (뜬 계단 없음)
                 fillDown(world, x, standY - 1, z, tally);
                 Block top = world.getBlockAt(x, standY, z);
@@ -495,18 +508,12 @@ public final class TerraceForge {
                     top.setType(Material.STONE_BRICKS, false);
                     tally.pavement++;
                 }
-                for (int y = standY + 1; y <= standY + 4; y++) {
-                    Block b = world.getBlockAt(x, y, z);
-                    if (!b.getType().isAir()) {
-                        b.setType(Material.AIR, false);
-                        tally.cut++;
-                    }
-                }
             }
-            // 측석 + 여장/등롱
+            // 측석 + 여장/등롱 — 여기도 위를 먼저 걷는다 (바위에 묻힌 난간 금지)
             for (int side : new int[]{-RAIL_OFF, RAIL_OFF}) {
                 int x = cx + px * side;
                 int z = cz + pz * side;
+                clearAbove(world, x, standY, z, tally);
                 fillDown(world, x, standY, z, tally);
                 world.getBlockAt(x, standY, z).setType(Material.STONE_BRICKS, false);
                 if (t % 4 == 0) {
@@ -517,6 +524,22 @@ public final class TerraceForge {
                     world.getBlockAt(x, standY + 1, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
                 }
+            }
+        }
+    }
+
+    /**
+     * 밟는 면 위를 하늘까지 연다 — 실지면({@link #groundY})이 밟는 면보다 높으면 그 위 2칸까지,
+     * 아니면 머리 공간({@value #HEADROOM})까지 걷는다 (패드 걷기와 같은 결).
+     */
+    private static void clearAbove(World world, int x, int standY, int z, Tally tally) {
+        int g = groundY(world, x, z);
+        int clearTop = Math.max(g + 2, standY + HEADROOM);
+        for (int y = standY + 1; y <= clearTop; y++) {
+            Block b = world.getBlockAt(x, y, z);
+            if (!b.getType().isAir()) {
+                b.setType(Material.AIR, false);
+                tally.cut++;
             }
         }
     }

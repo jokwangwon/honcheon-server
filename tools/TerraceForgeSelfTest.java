@@ -64,6 +64,13 @@ public final class TerraceForgeSelfTest {
         check("슬라이스 3 몫(18·19·20)은 없다",
                 !hasZone(campus, 18) && !hasZone(campus, 19) && !hasZone(campus, 20), "18/19/20");
         check("결번 15 를 안 쓴다", !hasZone(campus, 15), 15);
+        check("내부 계단참 3 (101·102·103)",
+                hasZone(campus, 101) && hasZone(campus, 102) && hasZone(campus, 103), "101/102/103");
+        // 창-안 척추 앵커 넷 — 실기동 1차 p85 재조정(2026-08-02)에서도 살린 값. 바꾸면 근거를 적어라.
+        check("앵커: 종문 h92", heightOf(campus, 6) == 92, heightOf(campus, 6));
+        check("앵커: 본전 h116", heightOf(campus, 9) == 116, heightOf(campus, 9));
+        check("앵커: 장로회 h128", heightOf(campus, 12) == 128, heightOf(campus, 12));
+        check("앵커: 정상 h148", heightOf(campus, 13) == 148, heightOf(campus, 13));
 
         // ══════════ ③ 계단 기하 — 아는 두 패드로 자로 잰다 ══════════
         TerraceForge.Campus two = new TerraceForge.Campus(
@@ -124,6 +131,11 @@ public final class TerraceForgeSelfTest {
 
     private static boolean hasZone(TerraceForge.Campus campus, int zone) {
         return campus.pads().stream().anyMatch(p -> p.zone() == zone);
+    }
+
+    private static int heightOf(TerraceForge.Campus campus, int zone) {
+        return campus.pads().stream().filter(p -> p.zone() == zone)
+                .mapToInt(TerraceForge.PadSpec::h).findFirst().orElse(-9999);
     }
 
     private static void checkThrows(String what, TerraceForge.Campus bad) {

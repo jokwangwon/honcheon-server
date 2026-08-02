@@ -1738,7 +1738,7 @@ public final class MvtCommand implements CommandExecutor {
             TerraceForge.Plan plan = TerraceForge.plan(world, spec);
             Announce.say(plugin, sender, ChatColor.GRAY + "[캠퍼스시험] " + worldName
                     + " — 기준면 실측 y" + baseY + " · 패드 " + plan.pads().size()
-                    + " (척추 6+계단참 2+로브 7) · 계단 " + plan.lanes().size()
+                    + " (척추 6+계단참 3+로브 7) · 계단 " + plan.lanes().size()
                     + " — 마스터플랜 20구역 중 슬라이스 1 몫");
             StringBuilder ys = new StringBuilder();
             for (TerraceForge.Pad p : plan.pads()) {
