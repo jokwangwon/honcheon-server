@@ -139,15 +139,29 @@ public final class TerraceForge {
                 new PadSpec(9, "본전", -2, 52, 34, 26, 116),           // 앵커 (창 안)
                 new PadSpec(12, "장로회", -8, 12, 20, 14, 128),        // 앵커 (창 안)
                 new PadSpec(102, "계단참 을", -14, -12, 14, 12, 138),
-                new PadSpec(13, "정상 암자", -16, -34, 14, 12, 148),   // 앵커 (창 안)
+                new PadSpec(13, "정상 암자", -16, -34, 18, 14, 148),   // 앵커 (창 안) · 사당+정자 몫으로 확장
                 // ── 로브 (척추 좌우 · 수련/지원) ── h = p85 ±2 ──────────
                 new PadSpec(3, "연무장 하", -36, 148, 30, 24, 40),     // p85 38
-                new PadSpec(4, "강당·무기고", -32, 112, 22, 16, 68),   // p85 67
+                // ★강당: 종문 서편(z112)에서 계단참 병 서편(z128)으로 이사 — 종문→강당 낙차 24 램프가
+                //   패드 중앙을 관통해 홀 처마가 보행선에 걸렸다 (2.5 실기동 보행 단차의 한 갈래).
+                //   병(80)→강당(68) 낙차 12 로 갈아 끼우고 홀은 램프 서쪽에 앉는다.
+                new PadSpec(4, "강당·무기고", -32, 128, 22, 16, 48),   // 3차 p85 y-14(h47) 실측 반영 (Δ1)
                 new PadSpec(5, "생활 하", 28, 144, 26, 20, 64),        // p85 64
                 new PadSpec(7, "훈련장 중", 28, 106, 24, 18, 80),      // p85 80
                 new PadSpec(8, "생활 중", 32, 84, 22, 16, 76),         // p85 75 · 훈련장 곁으로 남하
-                new PadSpec(14, "연무장 상", -36, 56, 24, 18, 90),     // p85 88
-                new PadSpec(17, "물자 창고", 26, 174, 20, 14, 42));    // p85 43
+                new PadSpec(14, "연무장 상", -34, 86, 24, 20, 86),     // ★「중단 서편」 · 2차 p85 24(y) 재조정
+                new PadSpec(17, "물자 창고", 26, 174, 20, 14, 42),     // p85 43
+                // ── 슬라이스 2 신설 (마스터플랜 10·11·16) ── 2차 p85 재조정 ──
+                // ★정원·망루 h108: p85(h99)+9 — 본전(116) 곁이라 p85±2 로 내리면 낙차 16 램프가
+                //   소패드 안을 관통해 소품(연못·탑)을 밀어낸다. 계단참을 낄 틈(본전과 2칸)도 없다.
+                //   옹벽 9칸은 석축 감(4~12) 안 — 본전 곁 위계로 읽힌다 【제안 · 빨간펜 대상】.
+                new PadSpec(10, "장문인 정원", -28, 52, 14, 16, 108),
+                // ★망루 패드를 남북 22 로 늘렸다 — 탑을 계단 회랑(z48~56) 남쪽으로 내리기 위해.
+                //   2.5 실기동: 탑이 램프 착지선을 가로막아 보행 단차 3·4·5 가 났다.
+                new PadSpec(11, "망루", 24, 56, 12, 22, 106),   // 3차 p85 h96 — Δ10 (경고 창 안)
+                // ★측문: 3차 p85 y-41(h20) 반영 h30 (Δ10 — 석축 감 상단 · 정원·망루와 같은 근거).
+                //   창고(42)→측문 낙차 12. 폭 16 — 램프(11칸)가 서편을 지나고 문루는 동편 평지에 선다.
+                new PadSpec(16, "측문", 48, 174, 16, 12, 28));   // 3차 p85 h19 — Δ9 (경고 창 안) · 창고 낙차 14
         List<StairLink> links = List.of(
                 // 척추 대계단 — 항상 남면으로 내려간다 (남→북 오름)
                 new StairLink(2, 1, 'S'),      // 낙차 12
@@ -161,11 +175,15 @@ public final class TerraceForge {
                 // 로브 협계단 — 척추에서 좌우로 (p85 재조정으로 셋은 상하가 뒤집혔다)
                 new StairLink(2, 3, 'W'),      // 외원 → 연무장 하 (서 · 낙차 18)
                 new StairLink(5, 2, 'W'),      // 생활 하 → 외원 (서 · 낙차 6)
-                new StairLink(6, 4, 'W'),      // 종문 → 강당·무기고 (서 · 낙차 24)
+                new StairLink(4, 3, 'S'),      // ★강당·무기고 → 연무장 하 (남 · 낙차 8 — 수련 단끼리 잇닿는다)
                 new StairLink(6, 7, 'E'),      // ★역전: 종문 → 훈련장 중 (동 · 낙차 12)
                 new StairLink(7, 8, 'N'),      // ★역전: 훈련장 중 → 생활 중 (북 · 낙차 4)
-                new StairLink(9, 14, 'W'),     // 본전 → 연무장 상 (서 · 낙차 26)
-                new StairLink(1, 17, 'E'));    // ★역전: 산문 → 물자 창고 (동 · 낙차 4)
+                new StairLink(101, 14, 'W'),   // 계단참 갑 → 연무장 상 (서 · 낙차 18 — 2차 재조정)
+                new StairLink(1, 17, 'E'),     // ★역전: 산문 → 물자 창고 (동 · 낙차 4)
+                // 슬라이스 2 신설 연결
+                new StairLink(9, 10, 'W'),     // 본전 → 장문인 정원 (서 · 낙차 8)
+                new StairLink(9, 11, 'E'),     // 본전 → 망루 (동 · 낙차 8)
+                new StairLink(17, 16, 'E'));   // 물자 창고 → 측문 (동 · 낙차 8 — 이사에 따라 재배선)
         return new Campus(pads, links);
     }
 
@@ -270,11 +288,32 @@ public final class TerraceForge {
         return List.copyOf(out);
     }
 
-    /** 링크 → 실계단 — <b>순수 함수</b>. 낙차 창·담김·닿음(보도 상한)을 여기서 거절한다. */
+    /**
+     * 링크 → 실계단 — <b>순수 함수</b>. 낙차 창·담김·닿음(보도 상한)을 거절하고,
+     * ★계단 몸체가 <b>남의 패드를 지나는 것</b>도 여기서 거절한다 (제 위·아래 패드는 예외 —
+     * 침범은 조성이 아니라 계획이 막는다).
+     */
     public static List<StairLane> resolveLanes(Campus campus, List<Pad> pads) {
         List<StairLane> lanes = new ArrayList<>(campus.links().size());
         for (StairLink link : campus.links()) {
-            lanes.add(laneOf(padOf(pads, link.upperZone()), padOf(pads, link.lowerZone()), link));
+            StairLane lane = laneOf(padOf(pads, link.upperZone()), padOf(pads, link.lowerZone()), link);
+            int px = lane.dirZ() != 0 ? 1 : 0;
+            int pz = lane.dirZ() != 0 ? 0 : 1;
+            for (int t = 1; t <= lane.length(); t++) {
+                for (int o = -RAIL_OFF; o <= RAIL_OFF; o++) {
+                    int x = lane.startX() + lane.dirX() * (t - 1) + px * o;
+                    int z = lane.startZ() + lane.dirZ() * (t - 1) + pz * o;
+                    for (Pad p : pads) {
+                        int zone = p.spec().zone();
+                        if (zone != link.upperZone() && zone != link.lowerZone() && p.contains(x, z)) {
+                            throw new IllegalArgumentException("계단 " + link.upperZone() + "→"
+                                    + link.lowerZone() + " 이 남의 패드를 지난다: " + p.spec().name()
+                                    + " (" + x + "," + z + ") — 링크나 패드 자리를 고쳐라");
+                        }
+                    }
+                }
+            }
+            lanes.add(lane);
         }
         return List.copyOf(lanes);
     }
@@ -431,7 +470,46 @@ public final class TerraceForge {
                 tally.pavement++;
             }
         }
+        skirt(world, plan, pad, tally);
         parapet(world, plan, pad, tally);
+    }
+
+    /** 패드 둘레 스커트 폭 — 가장자리에 걸린 지형 어깨를 이만큼 밀어낸다 */
+    public static final int SKIRT = 2;
+
+    /**
+     * 스커트 — 패드 둘레 {@value #SKIRT}칸 띠에서 포장면 위로 솟은 지형(어깨 혹)을 걷는다.
+     * 실기동 컷 4 의 병: 본전단 동편에서 지형 어깨가 여장에 바로 붙어 단을 내려다봤다.
+     * 포장면 아래는 안 건드린다 — 옹벽이 딛는 비탈은 자연 그대로다.
+     *
+     * <p>★가드 (슬라이스 2 실기동의 병): 띠가 <b>남의 패드·계단 발자국</b>에 걸치면 그 열은
+     * 건너뛴다 — 측문(16)의 스커트가 맞붙은 생활 하(5)의 가장자리 열(여장·포장·속채움)을
+     * 파먹어 접지 32·평탄 6 이 났다. 남의 것은 남의 것이다.
+     */
+    private static void skirt(World world, Plan plan, Pad pad, Tally tally) {
+        for (int x = pad.x0() - SKIRT; x <= pad.x1() + SKIRT; x++) {
+            for (int z = pad.zN() - SKIRT; z <= pad.zS() + SKIRT; z++) {
+                if (pad.contains(x, z) || onOtherPad(plan, pad, x, z) || laneCovered(plan, x, z)) {
+                    continue;
+                }
+                for (int y = pad.y() + 1; y <= pad.y() + HEADROOM; y++) {
+                    Block b = world.getBlockAt(x, y, z);
+                    if (!b.getType().isAir()) {
+                        b.setType(Material.AIR, false);
+                        tally.cut++;
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean onOtherPad(Plan plan, Pad self, int x, int z) {
+        for (Pad p : plan.pads()) {
+            if (p != self && p.contains(x, z)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 여장 — 네 가장자리. 계단 몸체가 덮는 자리는 비운다 (드나드는 문). 모서리엔 등롱. */
@@ -589,23 +667,41 @@ public final class TerraceForge {
         }
     }
 
-    /** 조성 뒤 전수 검수 — 위반은 세고, 표본은 남긴다 (호출자가 소리친다). */
+    /** 조성 뒤 전수 검수 — 건물 없는 판 (슬라이스 1 호환: 발자국 예외 없음). */
     public static Audit audit(World world, Plan plan) {
+        return audit(world, plan, p -> null);
+    }
+
+    /**
+     * 조성 뒤 전수 검수 — 위반은 세고, 표본은 남긴다 (호출자가 소리친다).
+     *
+     * @param buildingBox 패드 → 건물 발자국 [x0,x1,zN,zS] (없으면 null) — 평탄 눈이 그 안을
+     *                    비켜 간다 (건물은 포장면 위로 솟는 것이 정상이다). 접지 눈은 안 비켜
+     *                    간다 — 건물 밑도 떠 있으면 안 된다 (B-146).
+     */
+    public static Audit audit(World world, Plan plan,
+                              java.util.function.Function<Pad, int[]> buildingBox) {
         int flat = 0;
         int floats = 0;
         int cols = 0;
-        List<String> notes = new ArrayList<>();
+        // ★표본 쿼터 — 종류별 4건씩 (한 종류가 표본을 독식해 다른 위반의 좌표를 가리지 않게)
+        List<String> flatNotes = new ArrayList<>();
+        List<String> floatNotes = new ArrayList<>();
+        List<String> walkNotes = new ArrayList<>();
         for (Pad pad : plan.pads()) {
+            int[] box = buildingBox.apply(pad);
             for (int x = pad.x0(); x <= pad.x1(); x++) {
                 for (int z = pad.zN(); z <= pad.zS(); z++) {
                     cols++;
                     boolean edge = x == pad.x0() || x == pad.x1() || z == pad.zN() || z == pad.zS();
-                    // ① 평탄 — 안쪽 열의 밟는 면은 정확히 포장면 (여장·계단 몸체 자리는 예외)
-                    if (!edge && !laneCovered(plan, x, z)) {
+                    boolean inBox = box != null
+                            && x >= box[0] && x <= box[1] && z >= box[2] && z <= box[3];
+                    // ① 평탄 — 안쪽 열의 밟는 면은 정확히 포장면 (여장·계단 몸체·건물 자리는 예외)
+                    if (!edge && !inBox && !laneCovered(plan, x, z)) {
                         int top = topSolid(world, x, pad.y() + HEADROOM, z);
                         if (top != pad.y()) {
                             flat++;
-                            note(notes, "평탄: " + pad.spec().name() + " (" + x + "," + z
+                            note(flatNotes, "평탄: " + pad.spec().name() + " (" + x + "," + z
                                     + ") 밟는 면 y" + top + " ≠ 포장 y" + pad.y());
                         }
                     }
@@ -615,7 +711,7 @@ public final class TerraceForge {
                         Material m = world.getBlockAt(x, y, z).getType();
                         if (m.isAir()) {
                             floats++;
-                            note(notes, "접지: " + pad.spec().name() + " (" + x + "," + z
+                            note(floatNotes, "접지: " + pad.spec().name() + " (" + x + "," + z
                                     + ") y" + y + " 허공 — 열이 떠 있다");
                             break;
                         }
@@ -633,21 +729,29 @@ public final class TerraceForge {
             for (int t = -2; t <= lane.length() + 2; t++) {
                 int x = lane.startX() + lane.dirX() * (t - 1);
                 int z = lane.startZ() + lane.dirZ() * (t - 1);
-                int stand = topSolid(world, x, lane.topY() + HEADROOM, z);
+                // ★걷는 자의 눈 — 다음 발판은 「이전 발판 +2」에서 내려 찾는다. 하늘에서 찾으면
+                //   문루·처마의 지붕을 발판으로 오독한다 (2.6 실기동: 측문 문루 처마가 단차 8 로 짖음 —
+                //   보행자는 그 밑을 지나간다). 머리 높이(+2)에 막힌 것은 여전히 단차로 잡힌다.
+                int stand = prev == Integer.MIN_VALUE
+                        ? topSolid(world, x, lane.topY() + 2, z)
+                        : topSolid(world, x, prev + 2, z);
                 if (prev != Integer.MIN_VALUE && Math.abs(stand - prev) > 1) {
                     breaks++;
-                    note(notes, "보행: 계단 " + lane.link().upperZone() + "→" + lane.link().lowerZone()
+                    note(walkNotes, "보행: 계단 " + lane.link().upperZone() + "→" + lane.link().lowerZone()
                             + " (" + x + "," + z + ") 단차 " + Math.abs(stand - prev)
                             + " (y" + prev + "→y" + stand + ")");
                 }
                 prev = stand;
             }
         }
+        List<String> notes = new ArrayList<>(flatNotes);
+        notes.addAll(floatNotes);
+        notes.addAll(walkNotes);
         return new Audit(flat, floats, breaks, cols, List.copyOf(notes));
     }
 
     private static void note(List<String> notes, String s) {
-        if (notes.size() < 8) {
+        if (notes.size() < 4) {   // 종류별 쿼터 — 셋을 합쳐 최대 12건이 표본이 된다
             notes.add(s);
         }
     }

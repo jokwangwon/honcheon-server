@@ -66,6 +66,8 @@ public final class TerraceForgeSelfTest {
         check("결번 15 를 안 쓴다", !hasZone(campus, 15), 15);
         check("내부 계단참 3 (101·102·103)",
                 hasZone(campus, 101) && hasZone(campus, 102) && hasZone(campus, 103), "101/102/103");
+        check("슬라이스 2 신설 (10 정원 · 11 망루 · 16 측문)",
+                hasZone(campus, 10) && hasZone(campus, 11) && hasZone(campus, 16), "10/11/16");
         // 창-안 척추 앵커 넷 — 실기동 1차 p85 재조정(2026-08-02)에서도 살린 값. 바꾸면 근거를 적어라.
         check("앵커: 종문 h92", heightOf(campus, 6) == 92, heightOf(campus, 6));
         check("앵커: 본전 h116", heightOf(campus, 9) == 116, heightOf(campus, 9));
@@ -109,12 +111,35 @@ public final class TerraceForgeSelfTest {
         checkThrows("없는 구역을 부르는 링크는 거절", new TerraceForge.Campus(
                 List.of(new TerraceForge.PadSpec(1, "갑", 0, 0, 16, 16, 10)),
                 List.of(new TerraceForge.StairLink(1, 99, 'S'))));
+        // ★슬라이스 2.5 — 계단 몸체가 남의 패드를 지나면 계획이 거절한다 (침범은 계획이 막는다)
+        checkThrows("남의 패드를 지나는 계단은 거절", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(2, "위", 0, -4, 20, 16, 20),
+                        new TerraceForge.PadSpec(1, "아래", 0, 24, 20, 16, 10),
+                        new TerraceForge.PadSpec(3, "남의 것", 0, 10, 6, 6, 5)),
+                List.of(new TerraceForge.StairLink(2, 1, 'S'))));
 
         // ══════════ ⑤ 팔레트 — 금지 재료가 없다 (B-195 · HANDOFF 함정) ══════════
         Set<Material> palette = TerraceForge.palette();
         check("★ BARREL 없음 (가구_3D 유령 벽)", !palette.contains(Material.BARREL), "BARREL");
         check("★ LIGHT 없음 (컬링 전과)", !palette.contains(Material.LIGHT), "LIGHT");
         check("팔레트가 비어 있지 않다", !palette.isEmpty(), palette.size());
+        Set<Material> bPal = com.honcheon.mvt.forge.HwasanCampusBuilder.palette();
+        check("★ 배치기: BARREL 없음 (상자는 chest)", !bPal.contains(Material.BARREL), "BARREL");
+        check("★ 배치기: LIGHT 없음", !bPal.contains(Material.LIGHT), "LIGHT");
+        check("배치기: chest 로 대체했다", bPal.contains(Material.CHEST), "CHEST");
+
+        // ══════════ ⑥ 건물 발자국 ⊂ 패드 — 순수 검증 (계율 #4) ══════════
+        boolean bOk = true;
+        String bWhy = "";
+        try {
+            java.util.List<TerraceForge.Pad> allPads = TerraceForge.resolvePads(campus, 0, 0, 0);
+            com.honcheon.mvt.forge.HwasanCampusBuilder.validateBuildings(
+                    allPads, TerraceForge.resolveLanes(campus, allPads));
+        } catch (IllegalArgumentException e) {
+            bOk = false;
+            bWhy = e.getMessage();
+        }
+        check("기본 캠퍼스 전 구역 건물 발자국이 패드 안", bOk, bWhy);
 
         // ══════════ 결산 ══════════
         System.out.println();
