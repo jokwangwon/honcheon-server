@@ -99,6 +99,14 @@ final class StageLoader {
                 }
             }
         }
+        // ★유령 벽 수리 (실측 2026-08-02 — 「블럭 설치 시 벽을 관통하는 것처럼 보인다」):
+        //   물리 없는 대량 스탬프 뒤 클라 구역 데이터가 낡아, 재그리기 때 면이 투명하게 뚫렸다.
+        //   조성 직후 상자에 걸친 청크를 강제 재전송해 깨끗한 데이터로 다시 그리게 한다.
+        for (int cx = s.ox() >> 4; cx <= (s.ox() + s.width()) >> 4; cx++) {
+            for (int cz = s.oz() >> 4; cz <= (s.oz() + s.depth()) >> 4; cz++) {
+                w.refreshChunk(cx, cz);
+            }
+        }
     }
 
     private static void stamp(World w, int x, int y, int z, String mat) {
