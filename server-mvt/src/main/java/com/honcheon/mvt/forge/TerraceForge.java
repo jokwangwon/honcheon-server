@@ -60,8 +60,13 @@ public final class TerraceForge {
     /** 램프가 끝난 뒤 아랫패드까지 허용하는 평탄 보도 길이 */
     public static final int MAX_WALK = 12;
 
-    /** 패드 한 변 상한 — H-3 「최대 단 폭 35 (연무장 단)」 ({@link RangeSpec} ridgeHalfWidth 주석) */
-    public static final int MAX_TIER_WIDTH = 35;
+    /**
+     * 패드 한 변 상한 — ★H-3 의 35 를 <b>폐지</b>하고 안전핀 128(build_radius 후보)로 올렸다.
+     * 근거: 사용자 지시 (2026-08-02 · 슬라이스 5) — 「이미지를 보면 블록 하나하나가 보인다,
+     * 그대로 크기를 정해서 설치하라」. 마스터플랜의 단은 산 전폭을 채우는 통단(帶)이다
+     * (실측표 {@code docs/design/hwasan_block_measurements.md} §2·§5).
+     */
+    public static final int MAX_TIER_WIDTH = 128;
 
     /** 패드 위 머리 공간 — 이 높이까지 걷어 하늘을 연다 (수목·바위 돌출 제거) */
     private static final int HEADROOM = 8;
@@ -89,10 +94,11 @@ public final class TerraceForge {
      * @param width 동서 폭 (칸) — ≤ {@value #MAX_TIER_WIDTH} (H-3)
      * @param depth 남북 깊이 (칸) — ≤ {@value #MAX_TIER_WIDTH}
      * @param h     목표 포장면 높이 (baseY 위) — 골격 유도 잠정값 【제안】
-     * @param expectedLift ★의도된 Δ (h − 실지형 p85 의 기대값 · 0 = 없음) — 「석탑 위 전각」처럼
-     *                     일부러 실지형보다 높이 앉는 패드의 <b>계약</b>. 경고 눈은 |Δ−기대| 로 잰다.
-     *                     다리로 이어진 패드에만 허용된다 ({@link #resolveBridges} 가 거절한다) —
-     *                     맨땅 패드가 이 필드로 경고를 끄는 것은 계약이 아니라 은폐다.
+     * @param expectedLift ★의도된 Δ (h − 실지형 p85 의 기대값 · 0 = 없음) — 경고 눈은 |Δ−기대| 로
+     *                     잰다. 양수 = 석탑/성곽 옹벽(단 가장자리가 벼랑으로 내려가는 자리 —
+     *                     마스터플랜의 「산 전면 성곽」이 근거 · 슬라이스 5.5 에서 다리 전용 가드를
+     *                     통단 계약으로 확장), 음수 = 의도된 깎기(능선 어깨가 단을 뚫는 자리).
+     *                     한도 ±40 — 그 밖은 계약이 아니라 배치 오류다 ({@link #resolvePads} 가 거절).
      */
     public record PadSpec(int zone, String name, int dx, int dz, int width, int depth, int h,
                           int expectedLift) {
@@ -164,81 +170,48 @@ public final class TerraceForge {
      */
     public static Campus hwasanCampus() {
         List<PadSpec> pads = List.of(
-                // ── 척추 (남 → 북 · 공공) ── h = p85 재조정 (앵커 넷은 초판 유지) ──
-                new PadSpec(1, "산문", -2, 176, 24, 16, 46),          // p85 46
-                new PadSpec(2, "외원 광장", -2, 150, 30, 22, 58),      // p85 59
-                new PadSpec(103, "계단참 병", -2, 130, 14, 13, 80),    // 외원↔종문 낙차 34 의 허리
-                new PadSpec(6, "종문 중정", -2, 110, 28, 20, 92),      // 앵커 (창 안)
-                new PadSpec(101, "계단참 갑", -2, 80, 12, 12, 104),
-                new PadSpec(9, "본전", -2, 52, 34, 26, 116),           // 앵커 (창 안)
-                new PadSpec(12, "장로회", -8, 12, 20, 14, 128),        // 앵커 (창 안)
-                new PadSpec(102, "계단참 을", -14, -12, 14, 12, 138),
-                new PadSpec(13, "정상 암자", -16, -34, 18, 14, 148),   // 앵커 (창 안) · 사당+정자 몫으로 확장
-                // ── 로브 (척추 좌우 · 수련/지원) ── h = p85 ±2 ──────────
-                new PadSpec(3, "연무장 하", -36, 148, 30, 24, 40),     // p85 38
-                // ★강당: 종문 서편(z112)에서 계단참 병 서편(z128)으로 이사 — 종문→강당 낙차 24 램프가
-                //   패드 중앙을 관통해 홀 처마가 보행선에 걸렸다 (2.5 실기동 보행 단차의 한 갈래).
-                //   병(80)→강당(68) 낙차 12 로 갈아 끼우고 홀은 램프 서쪽에 앉는다.
-                new PadSpec(4, "강당·무기고", -32, 128, 22, 16, 48),   // 3차 p85 y-14(h47) 실측 반영 (Δ1)
-                new PadSpec(5, "생활 하", 28, 144, 26, 20, 64),        // p85 64
-                new PadSpec(7, "훈련장 중", 28, 106, 24, 18, 80),      // p85 80
-                new PadSpec(8, "생활 중", 32, 84, 22, 16, 76),         // p85 75 · 훈련장 곁으로 남하
-                new PadSpec(14, "연무장 상", -34, 86, 24, 20, 86),     // ★「중단 서편」 · 2차 p85 24(y) 재조정
-                new PadSpec(17, "물자 창고", 26, 174, 20, 14, 42),     // p85 43
-                // ── 슬라이스 2 신설 (마스터플랜 10·11·16) ── 2차 p85 재조정 ──
-                // ★정원·망루 h108: p85(h99)+9 — 본전(116) 곁이라 p85±2 로 내리면 낙차 16 램프가
-                //   소패드 안을 관통해 소품(연못·탑)을 밀어낸다. 계단참을 낄 틈(본전과 2칸)도 없다.
-                //   옹벽 9칸은 석축 감(4~12) 안 — 본전 곁 위계로 읽힌다 【제안 · 빨간펜 대상】.
-                new PadSpec(10, "장문인 정원", -28, 52, 14, 16, 108),
-                // ★망루 패드를 남북 22 로 늘렸다 — 탑을 계단 회랑(z48~56) 남쪽으로 내리기 위해.
-                //   2.5 실기동: 탑이 램프 착지선을 가로막아 보행 단차 3·4·5 가 났다.
-                new PadSpec(11, "망루", 24, 56, 12, 22, 106),   // 3차 p85 h96 — Δ10 (경고 창 안)
-                // ★측문: 3차 p85 y-41(h20) 반영 h30 (Δ10 — 석축 감 상단 · 정원·망루와 같은 근거).
-                //   창고(42)→측문 낙차 12. 폭 16 — 램프(11칸)가 서편을 지나고 문루는 동편 평지에 선다.
-                new PadSpec(16, "측문", 48, 174, 16, 12, 28),    // 3차 p85 h19 — Δ9 (경고 창 안) · 창고 낙차 14
-                // ── 슬라이스 3 곁봉 (마스터플랜 18·19·20 — 「주변 산들도 건축이 된다」) ──
-                //   ★꼭대기가 아니라 마루 바로 아래 「어깨」에 앉는다 (산이 먼저, 건물이 적응).
-                //   h 는 다리 상판과 수평이 되게 캠퍼스 쪽 끝 패드의 h 를 따른다 — 어깨 실지형과의
-                //   차는 옹벽/깎기가 흡수하고, p85 경고가 잰다 【제안】.
-                // ★19: 레퍼런스 9호를 정면 채택 — 벼랑 끝 「석탑 위 전각」. 어깨 실지형(p85 h97)에서
-                //   석축 탑 31칸을 쌓아 상판(장로회 h128)과 수평이 된다. 탑 몸체 = pavePad 의 옹벽
-                //   (전 열 실지형 접지 — 접지 눈이 잰다). expectedLift 31 이 그 계약이다.
+                // ═══ 통단(帶) 7대 — 실측표 §2·§5. 같은 h 의 칸들이 잇닿아 한 성곽 실루엣이 된다.
+                //     h 사슬 46/58/76/96/116/128/148 은 실기동 p85 사슬 계승 (옹벽 8~15 실측 합치).
+                // ── B1 산문단 h46 ──
+                new PadSpec(1, "산문", -2, 178, 60, 22, 46),
+                new PadSpec(17, "물자 창고", 45, 178, 34, 22, 46, 23),     // 계약 Δ23 — 동벽 벼랑 (p85 23)
+                // ── B2 외원단 h58 ──
+                new PadSpec(3, "연무장 하", -40, 148, 44, 32, 58, 19),    // 계약 Δ19 — 성곽 서벽 (p85 39)
+                new PadSpec(2, "외원 광장", -2, 148, 32, 32, 58),
+                new PadSpec(5, "생활 하", 32, 148, 36, 32, 58),
+                new PadSpec(16, "측문", 53, 148, 6, 16, 58, 31),           // 계약 Δ31 — 동벽 벼랑 위 (p85 27)
+                // ── B3 중단 h76 ──
+                new PadSpec(4, "강당·무기고", -38, 114, 40, 30, 76, 13),   // 계약 Δ13 — 서벽 (p85 63)
+                new PadSpec(6, "종문 중정", -2, 114, 32, 30, 76, -16),     // 계약 Δ-16 — 능선 어깨 깎기 (p85 92)
+                new PadSpec(7, "훈련장 중", 30, 114, 32, 30, 76),
+                // ── B4 상단 h96 ──
+                new PadSpec(14, "연무장 상", -37, 82, 40, 28, 96),
+                new PadSpec(101, "중정", -2, 82, 30, 28, 96, -14),         // 계약 Δ-14 — 능선 어깨 깎기 (p85 110)
+                new PadSpec(8, "생활 중", 29, 82, 32, 28, 96),
+                // ── B5 본전단 h116 ──
+                new PadSpec(10, "장문인 정원", -36, 50, 36, 32, 116, 18),  // 계약 Δ18 — 서벽 (p85 98)
+                new PadSpec(9, "본전", 1, 50, 38, 32, 116),
+                new PadSpec(11, "망루", 34, 50, 28, 32, 116, 28),          // 계약 Δ28 — 동벽 벼랑 (p85 88)
+                // ── B6 장로단 h128 ──
+                new PadSpec(12, "장로회", -2, 18, 44, 24, 128),
+                // ── B7 정상단 h148 ──
+                new PadSpec(13, "정상 암자", -2, -10, 26, 18, 148),
+                // ── 곁봉 (마스터플랜 19·20 + 서교 착지) — 석탑 위 전각 계약 ──
                 new PadSpec(19, "절벽 전망대", 88, 10, 14, 12, 128, 31),
-                new PadSpec(20, "부속 암자", 62, -14, 18, 14, 138),    // Em(62,-46) 남 어깨 — 계단참 을과 수평
-                // ★105: 3.0 실기동 Δ67 → 분석 실측(RangeField 단면)으로 이사. 연무장 상 위도(z76~95)의
-                //   서벽 너머는 전부 h≤38 저지라 「높은 어깨」가 없다 — 서교를 장로회 서면(z8)으로
-                //   재정박했다 (지형이 마스터플랜의 「연무장 상 근처」를 거부 — 산이 먼저 【제안】).
-                //   Wm 남동 어깨 (−88,8) 실측 h≈105~115 · p85≈111 — expectedLift 17 로 상판과 수평.
-                new PadSpec(105, "서교 착지", -88, 8, 12, 12, 128, 17));
+                new PadSpec(20, "부속 암자", 62, -14, 18, 14, 148, 20),
+                new PadSpec(105, "서교 착지", -88, 10, 12, 12, 128, 20));
         List<StairLink> links = List.of(
-                // 척추 대계단 — 항상 남면으로 내려간다 (남→북 오름)
+                // 척추 대계단만 — 같은 단 위 칸 사이는 여장의 자동 개구가 잇는다 (실측표 §5)
                 new StairLink(2, 1, 'S'),      // 낙차 12
-                new StairLink(103, 2, 'S'),    // 낙차 22 — 긴 천계단 구간
-                new StairLink(6, 103, 'S'),    // 낙차 12
-                new StairLink(101, 6, 'S'),    // 낙차 12
-                new StairLink(9, 101, 'S'),    // 낙차 12
+                new StairLink(6, 2, 'S'),      // 낙차 18
+                new StairLink(101, 6, 'S'),    // 낙차 20
+                new StairLink(9, 101, 'S'),    // 낙차 20
                 new StairLink(12, 9, 'S'),     // 낙차 12
-                new StairLink(102, 12, 'S'),   // 낙차 10
-                new StairLink(13, 102, 'S'),   // 낙차 10
-                // 로브 협계단 — 척추에서 좌우로 (p85 재조정으로 셋은 상하가 뒤집혔다)
-                new StairLink(2, 3, 'W'),      // 외원 → 연무장 하 (서 · 낙차 18)
-                new StairLink(5, 2, 'W'),      // 생활 하 → 외원 (서 · 낙차 6)
-                new StairLink(4, 3, 'S'),      // ★강당·무기고 → 연무장 하 (남 · 낙차 8 — 수련 단끼리 잇닿는다)
-                new StairLink(6, 7, 'E'),      // ★역전: 종문 → 훈련장 중 (동 · 낙차 12)
-                new StairLink(7, 8, 'N'),      // ★역전: 훈련장 중 → 생활 중 (북 · 낙차 4)
-                new StairLink(101, 14, 'W'),   // 계단참 갑 → 연무장 상 (서 · 낙차 18 — 2차 재조정)
-                new StairLink(1, 17, 'E'),     // ★역전: 산문 → 물자 창고 (동 · 낙차 4)
-                // 슬라이스 2 신설 연결
-                new StairLink(9, 10, 'W'),     // 본전 → 장문인 정원 (서 · 낙차 8)
-                new StairLink(9, 11, 'E'),     // 본전 → 망루 (동 · 낙차 8)
-                new StairLink(17, 16, 'E'));   // 물자 창고 → 측문 (동 · 낙차 8 — 이사에 따라 재배선)
+                new StairLink(13, 12, 'S'));   // 낙차 20
         List<BridgeSpec> bridges = List.of(
-                // 동1: 장로회(12) ↔ 절벽 전망대(19) — Es 어깨로. 스팬 79 · 교각 2
-                new BridgeSpec("운무교 동일", true, 12, 2, 80, 128),
-                // 동2: 계단참 을(102) ↔ 부속 암자(20) — Em 어깨로. 스팬 60 · 교각 1
-                new BridgeSpec("운무교 동이", true, -12, -7, 52, 138),
-                // 서: 장로회(12) ↔ 서교 착지(105) — 서편 협곡 저지를 건너 Wm 어깨로. 스팬 64 · 교각 1
-                new BridgeSpec("운무교 서", true, 8, -82, -19, 128));
+                new BridgeSpec("운무교 동일", true, 10, 20, 80, 128),    // 장로회 ↔ 전망대(19) · 스팬 61
+                new BridgeSpec("운무교 동이", true, -12, 11, 52, 148),   // 정상단 ↔ 부속 암자(20) · 스팬 42
+                new BridgeSpec("운무교 서", true, 10, -82, -25, 128));   // 장로회 ↔ 서교 착지(105) · 스팬 58
         return new Campus(pads, links, bridges);
     }
 
@@ -361,6 +334,10 @@ public final class TerraceForge {
             }
             if (!zones.add(ps.zone())) {
                 throw new IllegalArgumentException("구역 번호 중복: " + ps.zone());
+            }
+            if (Math.abs(ps.expectedLift()) > 40) {
+                throw new IllegalArgumentException("expectedLift 한도(±40) 밖: " + ps.name()
+                        + " Δ" + ps.expectedLift() + " — 그건 계약이 아니라 만용이다");
             }
             int x0 = peakX + ps.dx() - ps.width() / 2;
             int zN = peakZ + ps.dz() - ps.depth() / 2;
@@ -545,24 +522,6 @@ public final class TerraceForge {
             }
             out.add(bridge);
         }
-        // ★expectedLift 는 다리 끝 패드의 계약이다 — 맨땅 패드가 경고를 끄는 은폐를 거절한다
-        for (Pad p : pads) {
-            if (p.spec().expectedLift() == 0) {
-                continue;
-            }
-            boolean anchored = false;
-            for (Bridge b : out) {
-                if (b.endA() == p || b.endB() == p) {
-                    anchored = true;
-                    break;
-                }
-            }
-            if (!anchored) {
-                throw new IllegalArgumentException("expectedLift 는 다리 끝 패드만 쓴다: "
-                        + p.spec().zone() + " " + p.spec().name() + " (Δ" + p.spec().expectedLift()
-                        + ") — 다리가 없으면 높이를 실지형에 맞춰라");
-            }
-        }
         return List.copyOf(out);
     }
 
@@ -692,12 +651,12 @@ public final class TerraceForge {
         return false;
     }
 
-    /** 여장 — 네 가장자리. 계단 몸체가 덮는 자리는 비운다 (드나드는 문). 모서리엔 등롱. */
+    /** 여장 — 네 가장자리. 계단 몸체·다리·같은 단 이웃의 개구 자리는 비운다. 모서리엔 등롱. */
     private static void parapet(World world, Plan plan, Pad pad, Tally tally) {
         int y = pad.y() + 1;
         for (int x = pad.x0(); x <= pad.x1(); x++) {
             for (int z : new int[]{pad.zN(), pad.zS()}) {
-                if (!laneCovered(plan, x, z)) {
+                if (!laneCovered(plan, x, z) && !doorGap(plan, pad, x, z)) {
                     world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
                 }
@@ -705,7 +664,7 @@ public final class TerraceForge {
         }
         for (int z = pad.zN(); z <= pad.zS(); z++) {
             for (int x : new int[]{pad.x0(), pad.x1()}) {
-                if (!laneCovered(plan, x, z)) {
+                if (!laneCovered(plan, x, z) && !doorGap(plan, pad, x, z)) {
                     world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
                 }
@@ -722,6 +681,28 @@ public final class TerraceForge {
                 tally.lanterns++;
             }
         }
+    }
+
+    /**
+     * ★같은 단 이웃 개구 — 통단 문법 (실측표 §5): 같은 표고의 칸이 잇닿으면 회랑 담의
+     * <b>겹침 구간 중앙 7칸</b>이 문이 된다. 두 칸이 같은 중앙을 계산하므로 개구가 마주 난다.
+     */
+    private static boolean doorGap(Plan plan, Pad pad, int x, int z) {
+        boolean xEdge = x == pad.x0() || x == pad.x1();
+        int ox = xEdge ? (x == pad.x0() ? x - 1 : x + 1) : x;
+        int oz = xEdge ? z : (z == pad.zN() ? z - 1 : z + 1);
+        for (Pad p : plan.pads()) {
+            if (p == pad || !p.contains(ox, oz) || Math.abs(p.y() - pad.y()) > 1) {
+                continue;
+            }
+            int lo = xEdge ? Math.max(pad.zN(), p.zN()) : Math.max(pad.x0(), p.x0());
+            int hi = xEdge ? Math.min(pad.zS(), p.zS()) : Math.min(pad.x1(), p.x1());
+            int mid = (lo + hi) / 2;
+            if (Math.abs((xEdge ? z : x) - mid) <= 3) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean laneCovered(Plan plan, int x, int z) {
@@ -779,7 +760,7 @@ public final class TerraceForge {
                 clearAbove(world, x, standY, z, tally);
                 fillDown(world, x, standY, z, tally);
                 world.getBlockAt(x, standY, z).setType(Material.STONE_BRICKS, false);
-                if (t % 4 == 0) {
+                if (t % 7 == 0) {   // 석등 쌍 — 실측 6~8디딤 주기 (실측표 §1)
                     world.getBlockAt(x, standY + 1, z).setType(Material.STONE_BRICKS, false);
                     world.getBlockAt(x, standY + 2, z).setType(Material.LANTERN, false);
                     tally.lanterns++;

@@ -1740,8 +1740,8 @@ public final class MvtCommand implements CommandExecutor {
             HwasanCampusBuilder.validateBuildings(plan.pads(), plan.lanes(), plan.bridges());   // 발자국 ⊂ 패드 + 통로·다리 어귀 무접촉 (계율 #4)
             Announce.say(plugin, sender, ChatColor.GRAY + "[캠퍼스시험] " + worldName
                     + " — 기준면 실측 y" + baseY + " · 패드 " + plan.pads().size()
-                    + " (척추 6+계단참 3+로브 7+부속 3+곁봉 3) · 계단 " + plan.lanes().size()
-                    + " · 다리 " + plan.bridges().size() + " — 마스터플랜 20구역 + 곁봉");
+                    + " (통단 7대 17칸 + 곁봉 3 — 실측 재구성) · 계단 " + plan.lanes().size()
+                    + " · 다리 " + plan.bridges().size() + " — 마스터플랜 20구역 · 실측표 hwasan_block_measurements.md");
             StringBuilder ys = new StringBuilder();
             for (TerraceForge.Pad p : plan.pads()) {
                 if (ys.length() > 0) {

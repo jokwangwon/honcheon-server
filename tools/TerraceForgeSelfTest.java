@@ -62,15 +62,15 @@ public final class TerraceForgeSelfTest {
             check("로브 구역 " + zone + " 이 있다", hasZone(campus, zone), zone);
         }
         check("결번 15 를 안 쓴다", !hasZone(campus, 15), 15);
-        check("내부 계단참 3 (101·102·103)",
-                hasZone(campus, 101) && hasZone(campus, 102) && hasZone(campus, 103), "101/102/103");
+        check("중정(101) 만 남는다 — 102·103 은 통단 개편으로 흡수 (슬라이스 5)",
+                hasZone(campus, 101) && !hasZone(campus, 102) && !hasZone(campus, 103), "101");
         check("슬라이스 2 신설 (10 정원 · 11 망루 · 16 측문)",
                 hasZone(campus, 10) && hasZone(campus, 11) && hasZone(campus, 16), "10/11/16");
         check("★슬라이스 3 곁봉 (19 전망대 · 20 암자) + 운무교 3",
                 hasZone(campus, 19) && hasZone(campus, 20) && campus.bridges().size() == 3,
                 campus.bridges().size());
-        // 창-안 척추 앵커 넷 — 실기동 1차 p85 재조정(2026-08-02)에서도 살린 값. 바꾸면 근거를 적어라.
-        check("앵커: 종문 h92", heightOf(campus, 6) == 92, heightOf(campus, 6));
+        // 척추 앵커 — 통단 개편(슬라이스 5 · 사용자 지시)으로 종문은 76 이 됐다. 본전·장로회·정상은 살렸다.
+        check("앵커: 종문 h76 (통단 B3)", heightOf(campus, 6) == 76, heightOf(campus, 6));
         check("앵커: 본전 h116", heightOf(campus, 9) == 116, heightOf(campus, 9));
         check("앵커: 장로회 h128", heightOf(campus, 12) == 128, heightOf(campus, 12));
         check("앵커: 정상 h148", heightOf(campus, 13) == 148, heightOf(campus, 13));
@@ -94,8 +94,9 @@ public final class TerraceForgeSelfTest {
                 List.of(new TerraceForge.PadSpec(1, "아래", 0, 20, 20, 16, 10),
                         new TerraceForge.PadSpec(2, "위", 0, -4, 20, 16, 10)),
                 List.of(new TerraceForge.StairLink(2, 1, 'S'))));
-        checkThrows("폭 36 은 거절 (H-3)", new TerraceForge.Campus(
-                List.of(new TerraceForge.PadSpec(1, "넓다", 0, 0, 36, 16, 10)),
+        // ★슬라이스 5 — H-3 상한 35 폐지 (사용자 지시 「이미지 크기 그대로」) · 안전핀 128 만 남는다
+        checkThrows("폭 129 는 거절 (안전핀 128)", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "만용", 0, 0, 129, 16, 10)),
                 List.of()));
         checkThrows("구역 번호 중복은 거절", new TerraceForge.Campus(
                 List.of(new TerraceForge.PadSpec(1, "갑", 0, 0, 16, 16, 10),
@@ -164,20 +165,24 @@ public final class TerraceForgeSelfTest {
                         new TerraceForge.PadSpec(2, "곁봉", 120, 0, 20, 16, 50)),
                 List.of(),
                 List.of(new TerraceForge.BridgeSpec("만용교", true, 0, 10, 109, 50))));
-        // ★3.5 — expectedLift 는 계약이지 은폐가 아니다: 다리 없는 패드가 쓰면 거절
-        checkThrows("다리 없는 패드의 expectedLift 는 거절", new TerraceForge.Campus(
-                List.of(new TerraceForge.PadSpec(1, "맨땅", 0, 0, 20, 16, 50, 30)),
+        // ★5.5 — expectedLift 는 통단(성곽 옹벽·의도된 깎기) 계약으로 확장됐다 · 한도 ±40 만 지킨다
+        checkThrows("expectedLift ±40 밖은 거절", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "만용", 0, 0, 20, 16, 50, 41)),
                 List.of(), List.of()));
+        check("성곽 계약: 3 연무장하 Δ19 · 6 종문 Δ-16 (깎기)",
+                liftOf(campus, 3) == 19 && liftOf(campus, 6) == -16,
+                liftOf(campus, 3) + "/" + liftOf(campus, 6));
         check("expectedLift 계약: 19 전망대 = 31 (석탑 위 전각)",
                 liftOf(campus, 19) == 31, liftOf(campus, 19));
-        check("expectedLift 계약: 105 서교 착지 = 17", liftOf(campus, 105) == 17, liftOf(campus, 105));
+        check("expectedLift 계약: 105 서교 착지 = 20", liftOf(campus, 105) == 20, liftOf(campus, 105));
+        check("expectedLift 계약: 20 부속 암자 = 20", liftOf(campus, 20) == 20, liftOf(campus, 20));
         check("다리 몸체 covers: 난간 열(a0−2 · 폭 ±2)을 안다",
                 tb.covers(8, 2) && tb.covers(50, -2) && !tb.covers(8, 3), "covers");
 
         // ══════════ ④-c 스킵 상자가 실물을 덮는가 — 회전 케이스 회귀 (4.0 평탄 1건) ══════════
         TerraceForge.Pad side = TerraceForge.resolvePads(campus, 0, 0, 0).stream()
                 .filter(pp -> pp.spec().zone() == 16).findFirst().orElseThrow();
-        int gateX = side.x0() + side.spec().width() / 2 + 3;   // wallNS/gateEW 의 담 열
+        int gateX = side.x0() + side.spec().width() / 2;   // wallNS/gateEW 의 담 열 (통단 개편 후 중앙)
         boolean wallCovered = true;
         for (int z = side.zN(); z <= side.zS(); z++) {
             boolean in = false;
