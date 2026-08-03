@@ -168,6 +168,12 @@ public final class SpireField {
         }
         int cx = cellX * CELL + 5 + (int) Math.floorMod(h >> 8, 16);
         int cz = cellZ * CELL + 5 + (int) Math.floorMod(h >> 16, 16);
+        // ★8.8 남쪽 접근 시야 회랑 — 레퍼런스 1호(계단에서 산문이 보인다)·12호(남쪽 전경)의
+        //   문법이다: 축선(x≈-4) 남쪽 폭 ~70 은 침봉이 비운다 (중심 판정 ±45 — 몸통 가장자리가
+        //   회랑 끝을 살짝 무는 건 자연의 결). 배후봉·동서 침봉 무접촉 · 결정론.
+        if (cz >= 340 && Math.abs(cx + 4) <= 45) {
+            return 0;
+        }
         double centerDist = Math.hypot(cx, cz);
         int top;
         if (centerDist < INNER_R) {

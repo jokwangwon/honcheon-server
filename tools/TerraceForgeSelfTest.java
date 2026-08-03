@@ -267,6 +267,21 @@ public final class TerraceForgeSelfTest {
                 rings[0] > 0 && rings[1] > 0 && rings[2] > 0,
                 rings[0] + "/" + rings[1] + "/" + rings[2]);
         check("산군: 근경 침봉 마루가 실측 창(140~220) 안", r1max >= 140 && r1max <= 220, r1max);
+        // ★8.8 — 남쪽 접근 시야 회랑: 축선 남쪽 폭 ~70 에 침봉 0 · 회랑 밖 남쪽 필드엔 침봉 실재
+        boolean corridorClear = true;
+        int southSide = 0;
+        for (int gz = 400; gz <= 980; gz += 11) {
+            for (int gx = -30; gx <= 22; gx += 7) {
+                if (bare.targetH(gx, gz) != 0) {
+                    corridorClear = false;
+                }
+            }
+            if (bare.targetH(-140, gz) != 0 || bare.targetH(140, gz) != 0) {
+                southSide++;
+            }
+        }
+        check("★8.8 남쪽 시야 회랑 — 축선 폭 70 침봉 0 (1·12호 접근 조망)", corridorClear, "회랑 침범");
+        check("★8.8 회랑 밖 남쪽 침봉 실재 (회랑이 필드를 안 지웠다)", southSide > 0, southSide);
         // ★6.7 형태 계약 (§4-b) — 「바늘 침봉·원뿔 배후봉」 재발 방지
         //   침봉 몸통 유지: 마루 열에서 3칸 비켜도 몸통(≥80%)이다 — 옛 (1−d²)^1.5 는 ~65% 라 실패한다
         int mx = 0, mz = 0, mh = 0;
