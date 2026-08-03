@@ -2027,7 +2027,7 @@ public final class MvtCommand implements CommandExecutor {
             this.padCount = plan.pads().size();
             this.laneCount = plan.lanes().size();
             this.bridgeCount = plan.bridges().size();
-            this.total = padCount + laneCount + bridgeCount + padCount + padCount;   // 패드 → 계단 → 다리 → 건물 → 조경 (5상)
+            this.total = padCount + laneCount + bridgeCount + 1 + padCount + padCount;   // 패드 → 계단 → 다리 → 접근로 → 건물 → 조경 (6상 · 9b)
             this.startNanos = System.nanoTime();
         }
 
@@ -2053,12 +2053,16 @@ public final class MvtCommand implements CommandExecutor {
                 TerraceForge.paveBridge(world, b, tally);
                 what = "다리 " + b.spec().name() + " (스팬 " + b.span() + " · y" + b.y()
                         + " · 교각 " + b.pierOffsets().size() + ")";
-            } else if (index < padCount + laneCount + bridgeCount + padCount) {
-                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount);
+            } else if (index < padCount + laneCount + bridgeCount + 1) {
+                TerraceForge.paveApproach(world, plan, tally);   // ★9b — 도착하는 과정 (대계단·참·소문·비석)
+                what = "접근로 (남쪽 시퀀스 " + (plan.approach() != null
+                        ? TerraceForge.APPROACH_LEN + "칸" : "없음") + ")";
+            } else if (index < padCount + laneCount + bridgeCount + 1 + padCount) {
+                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount - 1);
                 HwasanCampusBuilder.buildZone(world, plan, p, buildTally);
                 what = "건물 " + p.spec().zone() + " " + p.spec().name();
             } else {
-                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount - padCount);
+                TerraceForge.Pad p = plan.pads().get(index - padCount - laneCount - bridgeCount - 1 - padCount);
                 HwasanCampusBuilder.decorate(world, plan, p, buildTally);
                 what = "조경 " + p.spec().zone() + " " + p.spec().name();
             }

@@ -172,8 +172,8 @@ public final class TerraceForgeSelfTest {
         checkThrows("expectedLift ±64 밖은 거절", new TerraceForge.Campus(
                 List.of(new TerraceForge.PadSpec(1, "만용", 0, 0, 20, 16, 50, 65)),
                 List.of(), List.of()));
-        check("성곽 계약: 3 연무장하 Δ36 · 16 측문 Δ64 (★8.7 — 실기동 p85 실측)",
-                liftOf(campus, 3) == 36 && liftOf(campus, 16) == 64,
+        check("성곽 계약: 3 연무장하 Δ40 · 16 측문 Δ60 (★9b — 단구 ±4 동행)",
+                liftOf(campus, 3) == 40 && liftOf(campus, 16) == 60,
                 liftOf(campus, 3) + "/" + liftOf(campus, 16));
         check("★8.6 척추 계약 삭제 — 본전·장로회·정상 Δ0/1/-5 실측 (창룡령 정렬의 증거)",
                 liftOf(campus, 9) == 0 && liftOf(campus, 12) == 0 && liftOf(campus, 13) == 0,
@@ -393,12 +393,32 @@ public final class TerraceForgeSelfTest {
                     .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
             int plazaParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(plaza).size();
             int jongParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jong).size();
-            check("★9 행각 — 외원 6부품(정자2+행각2+등롱열2) · 종문 3부품(문+행각2)",
-                    plazaParts == 6 && jongParts == 3, plazaParts + "/" + jongParts);
+            check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
+                    plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
             check("★9 재료 — 기와 혼합(벽돌·균열)과 암반 늑재(자갈돌)가 팔레트에",
                     bPal.contains(Material.DEEPSLATE_BRICKS)
                             && bPal.contains(Material.CRACKED_DEEPSLATE_TILES)
                             && palette.contains(Material.COBBLESTONE), "9 재료");
+            // ★9b — 단구 표고 분할: 같은 통단 안 칸이 ±4 로 갈렸다 (원경 스카이라인 요철)
+            check("★9b 단구 — B2 표고가 갈렸다 (연무장하 68 > 외원 64 > 생활하 60)",
+                    heightOf(campus, 3) == 68 && heightOf(campus, 2) == 64
+                            && heightOf(campus, 5) == 60,
+                    heightOf(campus, 3) + "/" + heightOf(campus, 2) + "/" + heightOf(campus, 5));
+            // ★9b — 소계단 기하: Δ4 · 전폭 5 (half 2) 링크가 앉고 폭이 좁다
+            TerraceForge.Campus mini = new TerraceForge.Campus(
+                    List.of(new TerraceForge.PadSpec(1, "위", 0, 0, 20, 16, 14),
+                            new TerraceForge.PadSpec(2, "아래", 20, 0, 20, 16, 10)),
+                    List.of(new TerraceForge.StairLink(1, 2, 'E', 2)));
+            java.util.List<TerraceForge.Pad> mp = TerraceForge.resolvePads(mini, 0, 0, 0);
+            TerraceForge.StairLane ml = TerraceForge.resolveLanes(mini, mp).get(0);
+            check("★9b 소계단 — 낙차 4 → 디딤 3 · 전폭 5 (rail ±3)",
+                    ml.treads() == 3 && ml.half() == 2 && ml.rail() == 3,
+                    ml.treads() + "/" + ml.half());
+            TerraceForge.Pad jongmun = allPads.stream()
+                    .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
+            int jongTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(jongmun) - jongmun.y();
+            check("★9b 층고 차등 — 종문(~30) < 산문(~38) (위계 사다리)",
+                    jongTop < gateTop && jongTop >= 28, jongTop + " vs " + gateTop);
         }
 
         // ══════════ 결산 ══════════

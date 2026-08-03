@@ -116,13 +116,26 @@ public final class TerraceForge {
     }
 
     /**
-     * 계단 링크 — 윗패드의 한 면에서 아랫패드로 내려가는 대계단.
+     * 계단 링크 — 윗패드의 한 면에서 아랫패드로 내려가는 계단.
      *
      * @param upperZone 윗패드 구역 번호 (h 가 더 높아야 한다)
      * @param lowerZone 아랫패드 구역 번호
      * @param side      윗패드의 어느 면에서 나가는가 — 'S'·'N'·'E'·'W'
+     * @param half      보행 반폭 — 대계단 {@value #STAIR_HALF}(전폭 21) 또는 ★소계단 2(전폭 5 —
+     *                  슬라이스 9b 단구 분할: 같은 통단 안 칸 사이를 잇는다)
+     * @param off       면 위 교차점 오프셋 (중심 기준) — 월대·행각 등 구조물을 비켜 건넌다
      */
-    public record StairLink(int upperZone, int lowerZone, char side) {
+    public record StairLink(int upperZone, int lowerZone, char side, int half, int off) {
+
+        /** 대계단 (척추) — 중심 교차 */
+        public StairLink(int upperZone, int lowerZone, char side) {
+            this(upperZone, lowerZone, side, STAIR_HALF, 0);
+        }
+
+        /** 소계단 (단구 사이 · 슬라이스 9b) — 중심 교차 */
+        public StairLink(int upperZone, int lowerZone, char side, int half) {
+            this(upperZone, lowerZone, side, half, 0);
+        }
     }
 
     /**
@@ -186,26 +199,29 @@ public final class TerraceForge {
                 //     — 옹벽 실측 12~24 (§1 재실측) · 전 낙차 ≤ MAX_STAIR_DY.
                 //     계약 Δ 는 옛 실기동 p85 (h−Δ 로 보존) 대비 새 h 로 재산출 — 재판독 실측이
                 //     오면 그 수치로 갱신하라 (발자국이 넓어져 가장자리 p85 가 다소 흐른다).
-                // ── B1 산문단 h46 ──
+                // ★슬라이스 9b — 단구 표고 분할 (코덱스 개선 1 완성): 같은 통단 안 칸을 ±4 로
+                //   갈라 원경 옹벽 스카이라인이 들쭉해진다. 척추 칸(1·2·6·101·9)은 앵커 그대로 —
+                //   로브만 ±4. 계약 Δ 는 h 이동분만큼 동행 (p85 는 지형이라 불변).
+                // ── B1 산문단 (산문 46 · 창고 42) ──
                 new PadSpec(1, "산문", -4, 356, 120, 44, 46, 16),          // 실측 p85 -31 → Δ16
-                new PadSpec(17, "물자 창고", 90, 356, 68, 44, 46, 35),     // 실측 p85 -50 → Δ35 (동벽)
-                // ── B2 외원단 h64 ── (★8.6 — 계약 = 8.5 실기동 p85 실측)
-                new PadSpec(3, "연무장 하", -80, 296, 88, 64, 64, 36),     // 실측 p85 -33 → Δ36 (성곽 서벽)
+                new PadSpec(17, "물자 창고", 90, 356, 68, 44, 42, 31),     // 9b: 46→42 · Δ35→31
+                // ── B2 외원단 (연무장하 68 · 외원 64 · 생활하 60 · 측문 60) ──
+                new PadSpec(3, "연무장 하", -80, 296, 88, 64, 68, 40),     // 9b: 64→68 · Δ36→40 (성곽 서벽)
                 new PadSpec(2, "외원 광장", -4, 296, 64, 64, 64),
-                new PadSpec(5, "생활 하", 60, 296, 64, 64, 64, 17),        // 실측 Δ17 · ★동편 8 안쪽으로 (측문 이동 몫)
-                new PadSpec(16, "측문", 100, 296, 16, 32, 64, 64),         // ★8.7 실측 Δ64 — 동벽 벼랑 (p85 0 · 단애 문법)
-                // ── B3 중단 h86 ──
-                new PadSpec(4, "강당·무기고", -76, 228, 80, 60, 86, 36),   // 실측 p85 -11 → Δ36 (성곽 서벽)
+                new PadSpec(5, "생활 하", 60, 296, 64, 64, 60, 13),        // 9b: 64→60 · Δ17→13
+                new PadSpec(16, "측문", 100, 296, 16, 32, 60, 60),         // 9b: 64→60 · Δ64→60 (동벽 단애)
+                // ── B3 중단 (강당 90 · 종문 86 · 훈련장 82) ──
+                new PadSpec(4, "강당·무기고", -76, 228, 80, 60, 90, 40),   // 9b: 86→90 · Δ36→40
                 new PadSpec(6, "종문 중정", -4, 228, 64, 60, 86),          // 창 안
-                new PadSpec(7, "훈련장 중", 60, 228, 64, 60, 86, 14),      // 실측 Δ14
-                // ── B4 상단 h108 ──
-                new PadSpec(14, "연무장 상", -74, 164, 80, 56, 108, 39),   // 실측 p85 8 → Δ39 (성곽 서벽)
+                new PadSpec(7, "훈련장 중", 60, 228, 64, 60, 82, 10),      // 9b: 86→82 · Δ14→10
+                // ── B4 상단 (연무장상 112 · 중정 108 · 생활중 104) ──
+                new PadSpec(14, "연무장 상", -74, 164, 80, 56, 112, 43),   // 9b: 108→112 · Δ39→43
                 new PadSpec(101, "중정", -4, 164, 60, 56, 108),            // 창 안
-                new PadSpec(8, "생활 중", 58, 164, 64, 56, 108, 12),       // 창 안 유지
-                // ── B5 본전단 h130 ──
-                new PadSpec(10, "장문인 정원", -76, 100, 64, 64, 130, 32), // 창 안 유지
+                new PadSpec(8, "생활 중", 58, 164, 64, 56, 104, 8),        // 9b: 108→104 · Δ12→8
+                // ── B5 본전단 (정원 134 · 본전 130 · 망루 126) ──
+                new PadSpec(10, "장문인 정원", -76, 100, 64, 64, 134, 36), // 9b: 130→134 · Δ32→36
                 new PadSpec(9, "본전", 0, 100, 88, 64, 130),               // ★실측 Δ0 — 창룡령 정렬, 계약 불요
-                new PadSpec(11, "망루", 70, 100, 52, 64, 130, 42),         // 창 안 유지
+                new PadSpec(11, "망루", 70, 100, 52, 64, 126, 38),         // 9b: 130→126 · Δ42→38
                 // ── B6 장로단 h146 ──
                 new PadSpec(12, "장로회", -4, 36, 88, 48, 146),            // ★실측 Δ1 — 계약 불요
                 // ── B7 정상단 h170 ──
@@ -217,13 +233,23 @@ public final class TerraceForge {
                 new PadSpec(20, "부속 암자", 62, -14, 26, 20, 170, 42),    // 실측 창 안 유지
                 new PadSpec(105, "서교 착지", -180, 16, 18, 18, 146));     // ★8.7 실측 Δ0 — 새 Wm 어깨가 정확한 자리 (계약 불요)
         List<StairLink> links = List.of(
-                // 척추 대계단만 — 같은 단 위 칸 사이는 여장의 자동 개구가 잇는다 (실측표 §5)
+                // 척추 대계단 — 전폭 21 (사용자 기준자)
                 new StairLink(2, 1, 'S'),      // 낙차 18
                 new StairLink(6, 2, 'S'),      // 낙차 22
                 new StairLink(101, 6, 'S'),    // 낙차 22
                 new StairLink(9, 101, 'S'),    // 낙차 22
                 new StairLink(12, 9, 'S'),     // 낙차 16
-                new StairLink(13, 12, 'S'));   // 낙차 24
+                new StairLink(13, 12, 'S'),    // 낙차 24
+                // ★9b 소계단 (전폭 5) — 갈린 단구 사이. Δ≤1 칸(5↔16)만 여장 개구가 잇는다.
+                new StairLink(1, 17, 'E', 2),
+                new StairLink(3, 2, 'E', 2),
+                new StairLink(2, 5, 'E', 2),
+                new StairLink(4, 6, 'E', 2),
+                new StairLink(6, 7, 'E', 2),
+                new StairLink(14, 101, 'E', 2),
+                new StairLink(101, 8, 'E', 2),
+                new StairLink(10, 9, 'E', 2, -24),   // off -24 — 본전 월대(남쪽)를 비켜 건넌다
+                new StairLink(9, 11, 'E', 2, -24));
         List<BridgeSpec> bridges = List.of(
                 // ★8.6 — 곁봉 재배치로 스팬이 길어졌다 (139·123) — 교각 24칸마다 (MAX 160 안)
                 new BridgeSpec("운무교 동일", true, 20, 40, 178, 146),   // 장로회(x1 39) ↔ 전망대(x0 179)
@@ -264,14 +290,24 @@ public final class TerraceForge {
             return treads + walk;
         }
 
-        /** 이 계단 몸체(폭 {@code 2·RAIL_OFF+1})가 그 열을 덮는가 — 여장·평탄 검수가 비켜 갈 자리 */
+        /** 보행 반폭 — 링크가 정한다 (대계단 {@value #STAIR_HALF} · 소계단 2) */
+        public int half() {
+            return link.half();
+        }
+
+        /** 측석(난간) 오프셋 — 보행 반폭 + 1 */
+        public int rail() {
+            return link.half() + 1;
+        }
+
+        /** 이 계단 몸체(폭 {@code 2·rail+1})가 그 열을 덮는가 — 여장·평탄 검수가 비켜 갈 자리 */
         boolean covers(int x, int z) {
             for (int t = 0; t <= length(); t++) {
                 int cx = startX + dirX * (t - 1);
                 int cz = startZ + dirZ * (t - 1);
                 int off = dirZ != 0 ? x - cx : z - cz;
                 boolean onCell = dirZ != 0 ? z == cz : x == cx;
-                if (onCell && Math.abs(off) <= RAIL_OFF) {
+                if (onCell && Math.abs(off) <= rail()) {
                     return true;
                 }
             }
@@ -307,9 +343,26 @@ public final class TerraceForge {
         }
     }
 
-    /** 계획 — 앉힌 패드·계단·다리와 지형 어긋남 메모. */
+    /**
+     * ★접근 시퀀스 명세 (슬라이스 9b · 코덱스 개선 3 — 「웅장함은 도착하는 과정에서 나온다」):
+     * 산문단 남단에서 남쪽 절벽 아래까지, 지형을 따라 오르내리는 20폭 대계단 노선.
+     * {@code ys[i]} = (z0+i) 행의 보행면 y — 계획이 조성 전 지형을 읽어 정하고 (한 칸 물매 ·
+     * 26칸마다 참 · 소문 마당), 조성·검수가 같은 표를 읽는다.
+     *
+     * @param x  축선 x (산문 중심열)
+     * @param z0 첫 행 (산문단 남단 + 1)
+     * @param ys 행별 보행면 y
+     */
+    public record Approach(int x, int z0, int[] ys) {
+
+        public int length() {
+            return ys.length;
+        }
+    }
+
+    /** 계획 — 앉힌 패드·계단·다리·접근로와 지형 어긋남 메모. */
     public record Plan(String placeId, List<Pad> pads, List<StairLane> lanes,
-                       List<Bridge> bridges, List<String> terrainNotes) {
+                       List<Bridge> bridges, Approach approach, List<String> terrainNotes) {
     }
 
     /** 기본 캠퍼스로 계획한다 — 지형(p85)을 읽어 어긋남을 메모에 남긴다. */
@@ -334,7 +387,143 @@ public final class TerraceForge {
                         + ") — 잠정 높이를 빨간펜하라");
             }
         }
-        return new Plan(spec.placeId(), pads, lanes, bridges, List.copyOf(notes));
+        return new Plan(spec.placeId(), pads, lanes, bridges,
+                approachOf(world, pads), List.copyOf(notes));
+    }
+
+    /** 접근로 길이 — 산문단 남단에서 남쪽으로 (기슭 언덕을 넘어 평지까지) */
+    public static final int APPROACH_LEN = 176;
+
+    /**
+     * 접근로 계획 — 산문단(1구역) 남단에서 남쪽으로, <b>조성 전 지형을 따라</b> 한 칸 물매의
+     * 보행면 표를 만든다. 26칸마다 참(평탄 2칸 — 석등 쌍이 선다) · i 96~108 은 소문 마당
+     * (기슭 언덕 마루쯤 — 작은 문루가 선다). 언덕은 지우지 않고 넘는다 (조율자 지시 —
+     * 「기슭 언덕을 활용」).
+     */
+    private static Approach approachOf(World world, List<Pad> pads) {
+        Pad gate = null;
+        for (Pad p : pads) {
+            if (p.spec().zone() == 1) {
+                gate = p;
+            }
+        }
+        if (gate == null) {
+            return null;
+        }
+        int ax = gate.cx();
+        int z0 = gate.zS() + 1;
+        int[] ys = new int[APPROACH_LEN];
+        int prev = gate.y();
+        for (int i = 0; i < APPROACH_LEN; i++) {
+            boolean landing = i % 26 < 2 || (i >= 96 && i <= 108);
+            int g = groundY(world, ax, z0 + i);
+            int target = landing ? prev
+                    : prev + Integer.compare(g, prev);   // 지형을 따르되 한 칸 물매 (걷는 자의 계약)
+            ys[i] = target;
+            prev = target;
+        }
+        return new Approach(ax, z0, ys);
+    }
+
+    /**
+     * 접근 시퀀스를 놓는다 (슬라이스 9b) — 절벽 아래에서 산문까지 <b>도착하는 과정</b>:
+     * 20폭 대계단(지형 추종·전 열 접지) → 참(석등 쌍) → 소문(작은 문루 — 기슭 언덕 마루) →
+     * 비석·소나무 → 산문. 계단·측석·석등은 대계단 문법 그대로.
+     */
+    public static void paveApproach(World world, Plan plan, Tally tally) {
+        Approach a = plan.approach();
+        if (a == null) {
+            return;
+        }
+        int prevY = a.ys()[0];
+        for (int i = 0; i < a.length(); i++) {
+            int z = a.z0() + i;
+            int y = a.ys()[i];
+            for (int o = -STAIR_HALF; o <= STAIR_HALF; o++) {
+                int x = a.x() + o;
+                clearAbove(world, x, y, z, tally);
+                fillDown(world, x, y - 1, z, tally);
+                Block top = world.getBlockAt(x, y, z);
+                if (y != prevY) {
+                    Stairs data = (Stairs) Material.STONE_BRICK_STAIRS.createBlockData();
+                    data.setFacing(y < prevY ? BlockFace.NORTH : BlockFace.SOUTH);   // 오름을 향한다
+                    top.setBlockData(data, false);
+                    tally.stairTreads++;
+                } else {
+                    top.setType(paveMaterial(x, z), false);
+                    tally.pavement++;
+                }
+            }
+            for (int side : new int[]{-RAIL_OFF, RAIL_OFF}) {
+                int x = a.x() + side;
+                clearAbove(world, x, y, z, tally);
+                fillDown(world, x, y, z, tally);
+                world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
+                if (i % 26 < 2 || i % 13 == 6) {   // 참 석등 쌍 + 중간 등롱 리듬
+                    world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICKS, false);
+                    world.getBlockAt(x, y + 2, z).setType(Material.LANTERN, false);
+                    tally.lanterns++;
+                } else {
+                    world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICK_WALL, false);
+                    tally.parapet++;
+                }
+            }
+            if (i == 102) {
+                approachGate(world, a.x(), y, z, tally);   // 소문 — 기슭 언덕 마루
+            }
+            if (i == 27 || i == 150) {
+                stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁
+                stele(world, a.x() - RAIL_OFF - 3, z, tally);
+            }
+            if (i % 20 == 15) {
+                approachPine(world, a.x() + (Math.floorMod(i, 40) == 15 ? RAIL_OFF + 5 : -RAIL_OFF - 5),
+                        z, tally);
+            }
+            prevY = y;
+        }
+    }
+
+    /** 소문 — 접근로를 걸치는 작은 문루 (두 돌기둥 + 보 + 기와 갓 · 전폭 ~23) */
+    private static void approachGate(World world, int ax, int y, int z, Tally tally) {
+        for (int side : new int[]{-RAIL_OFF - 1, RAIL_OFF + 1}) {
+            int x = ax + side;
+            fillDown(world, x, y, z, tally);
+            for (int dy = 0; dy <= 7; dy++) {
+                world.getBlockAt(x, y + dy, z).setType(Material.STONE_BRICKS, false);
+            }
+        }
+        for (int o = -RAIL_OFF - 1; o <= RAIL_OFF + 1; o++) {
+            world.getBlockAt(ax + o, y + 8, z).setType(Material.DARK_OAK_PLANKS, false);
+            world.getBlockAt(ax + o, y + 9, z).setType(Material.DEEPSLATE_TILE_SLAB, false);
+        }
+        world.getBlockAt(ax, y + 8, z).setType(Material.DARK_OAK_PLANKS, false);   // 빈 현판 자리 (보 중앙)
+    }
+
+    /** 비석 — 참 곁의 돌비 (기단 + 몸 3 + 갓) */
+    private static void stele(World world, int x, int z, Tally tally) {
+        int g = groundY(world, x, z);
+        world.getBlockAt(x, g + 1, z).setType(Material.STONE_BRICKS, false);
+        for (int dy = 2; dy <= 4; dy++) {
+            world.getBlockAt(x, g + dy, z).setType(Material.POLISHED_ANDESITE, false);
+        }
+        world.getBlockAt(x, g + 5, z).setType(Material.STONE_BRICK_WALL, false);
+    }
+
+    /** 접근로 곁 소나무 — 껍질 침엽 몸통 + 잎 (조경 층위 재료 — 유출 눈 밖) */
+    private static void approachPine(World world, int x, int z, Tally tally) {
+        int g = groundY(world, x, z);
+        int h = 3 + (int) Math.floorMod(mix(SALT_RIB ^ 0x917EL, x, 0, z), 3);
+        for (int dy = 1; dy <= h; dy++) {
+            world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.abs(dx) + Math.abs(dz) <= 1) {
+                    world.getBlockAt(x + dx, g + h, z + dz).setType(Material.SPRUCE_LEAVES, false);
+                }
+            }
+        }
+        world.getBlockAt(x, g + h + 1, z).setType(Material.SPRUCE_LEAVES, false);
     }
 
     /**
@@ -385,7 +574,7 @@ public final class TerraceForge {
             int px = lane.dirZ() != 0 ? 1 : 0;
             int pz = lane.dirZ() != 0 ? 0 : 1;
             for (int t = 1; t <= lane.length(); t++) {
-                for (int o = -RAIL_OFF; o <= RAIL_OFF; o++) {
+                for (int o = -lane.rail(); o <= lane.rail(); o++) {
                     int x = lane.startX() + lane.dirX() * (t - 1) + px * o;
                     int z = lane.startZ() + lane.dirZ() * (t - 1) + pz * o;
                     for (Pad p : pads) {
@@ -427,37 +616,38 @@ public final class TerraceForge {
         switch (link.side()) {
             case 'S' -> {
                 dirZ = 1;
-                sx = upper.cx();
+                sx = upper.cx() + link.off();
                 sz = upper.zS() + 1;
             }
             case 'N' -> {
                 dirZ = -1;
-                sx = upper.cx();
+                sx = upper.cx() + link.off();
                 sz = upper.zN() - 1;
             }
             case 'E' -> {
                 dirX = 1;
                 sx = upper.x1() + 1;
-                sz = upper.cz();
+                sz = upper.cz() + link.off();
             }
             case 'W' -> {
                 dirX = -1;
                 sx = upper.x0() - 1;
-                sz = upper.cz();
+                sz = upper.cz() + link.off();
             }
             default -> throw new IllegalArgumentException("계단 " + who + ": 면 '" + link.side()
                     + "' 은 S·N·E·W 가 아니다");
         }
-        // 폭 방향 담김 — 계단 몸체(±RAIL_OFF)가 아랫패드 안에 들어야 닿아서 이인다
+        // 폭 방향 담김 — 계단 몸체(±rail)가 아랫패드 안에 들어야 닿아서 이인다
+        int rail = link.half() + 1;
         if (dirZ != 0) {
-            if (sx - RAIL_OFF < lower.x0() || sx + RAIL_OFF > lower.x1()) {
-                throw new IllegalArgumentException("계단 " + who + ": 몸체(x" + (sx - RAIL_OFF) + ".."
-                        + (sx + RAIL_OFF) + ")가 아랫패드 폭(x" + lower.x0() + ".." + lower.x1() + ") 밖");
+            if (sx - rail < lower.x0() || sx + rail > lower.x1()) {
+                throw new IllegalArgumentException("계단 " + who + ": 몸체(x" + (sx - rail) + ".."
+                        + (sx + rail) + ")가 아랫패드 폭(x" + lower.x0() + ".." + lower.x1() + ") 밖");
             }
         } else {
-            if (sz - RAIL_OFF < lower.zN() || sz + RAIL_OFF > lower.zS()) {
-                throw new IllegalArgumentException("계단 " + who + ": 몸체(z" + (sz - RAIL_OFF) + ".."
-                        + (sz + RAIL_OFF) + ")가 아랫패드 깊이(z" + lower.zN() + ".." + lower.zS() + ") 밖");
+            if (sz - rail < lower.zN() || sz + rail > lower.zS()) {
+                throw new IllegalArgumentException("계단 " + who + ": 몸체(z" + (sz - rail) + ".."
+                        + (sz + rail) + ")가 아랫패드 깊이(z" + lower.zN() + ".." + lower.zS() + ") 밖");
             }
         }
         int treads = dy - 1;
@@ -745,22 +935,24 @@ public final class TerraceForge {
         return false;
     }
 
-    /** 여장 — 네 가장자리. 계단 몸체·다리·같은 단 이웃의 개구 자리는 비운다. 모서리엔 등롱. */
+    /**
+     * 여장 — 네 가장자리. 계단 몸체·다리·같은 단 이웃의 개구 자리는 비운다. 모서리엔 등롱.
+     * ★슬라이스 9b — 들쭉날쭉: ~5칸 구간 해시로 세 결이 섞인다 (담장 한 단 · 총안 성첩 ·
+     * 겹단 성벽) — 원경 스카이라인이 자로 그은 선이기를 그친다.
+     */
     private static void parapet(World world, Plan plan, Pad pad, Tally tally) {
         int y = pad.y() + 1;
         for (int x = pad.x0(); x <= pad.x1(); x++) {
             for (int z : new int[]{pad.zN(), pad.zS()}) {
                 if (!laneCovered(plan, x, z) && !doorGap(plan, pad, x, z)) {
-                    world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL, false);
-                    tally.parapet++;
+                    parapetCell(world, x, y, z, tally);
                 }
             }
         }
         for (int z = pad.zN(); z <= pad.zS(); z++) {
             for (int x : new int[]{pad.x0(), pad.x1()}) {
                 if (!laneCovered(plan, x, z) && !doorGap(plan, pad, x, z)) {
-                    world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL, false);
-                    tally.parapet++;
+                    parapetCell(world, x, y, z, tally);
                 }
             }
         }
@@ -775,6 +967,28 @@ public final class TerraceForge {
                 tally.lanterns++;
             }
         }
+    }
+
+    /** 여장 한 칸 — 구간 해시(~5칸)가 결을 고른다: 담장 1단 / 총안 성첩(교대) / 겹단(2단) */
+    private static void parapetCell(World world, int x, int y, int z, Tally tally) {
+        int style = (int) Math.floorMod(mix(SALT_RIB ^ 0x9A57L,
+                Math.floorDiv(x, 5), 0, Math.floorDiv(z, 5)), 3);
+        switch (style) {
+            case 1 -> {   // 총안 성첩 — 한 칸 걸러 이가 솟는다
+                if (Math.floorMod(x + z, 2) == 0) {
+                    world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
+                    world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICK_WALL, false);
+                } else {
+                    world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL, false);
+                }
+            }
+            case 2 -> {   // 겹단 성벽 — 구간째 한 단 높다
+                world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
+                world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICK_WALL, false);
+            }
+            default -> world.getBlockAt(x, y, z).setType(Material.STONE_BRICK_WALL, false);
+        }
+        tally.parapet++;
     }
 
     /**
@@ -810,6 +1024,11 @@ public final class TerraceForge {
                 return true;   // 다리로 나가는 개구 — 여장·평탄 눈이 함께 비킨다
             }
         }
+        Approach a = plan.approach();
+        if (a != null && Math.abs(x - a.x()) <= RAIL_OFF
+                && z >= a.z0() - 1 && z <= a.z0() + a.length()) {
+            return true;   // ★9b — 접근로 어귀·몸체 (남단 여장이 열리고 스커트·배터가 비킨다)
+        }
         return false;
     }
 
@@ -827,7 +1046,7 @@ public final class TerraceForge {
             int cz = lane.startZ() + lane.dirZ() * (t - 1);
             boolean ramp = t <= lane.treads();
             int standY = ramp ? lane.topY() - t : lane.lowY();
-            for (int o = -STAIR_HALF; o <= STAIR_HALF; o++) {
+            for (int o = -lane.half(); o <= lane.half(); o++) {
                 int x = cx + px * o;
                 int z = cz + pz * o;
                 // ★걷기 먼저 — 노선 위로 솟은 지형(능선 혹)을 실지면까지 재서 걷어낸다.
@@ -848,7 +1067,7 @@ public final class TerraceForge {
                 }
             }
             // 측석 + 여장/등롱 — 여기도 위를 먼저 걷는다 (바위에 묻힌 난간 금지)
-            for (int side : new int[]{-RAIL_OFF, RAIL_OFF}) {
+            for (int side : new int[]{-lane.rail(), lane.rail()}) {
                 int x = cx + px * side;
                 int z = cz + pz * side;
                 clearAbove(world, x, standY, z, tally);
@@ -1105,6 +1324,42 @@ public final class TerraceForge {
                 }
             }
         }
+        // ⑤ 접근로 (슬라이스 9b) — 보행(걷는 자의 눈) + 전 열 접지 (대계단 문법 재사용)
+        Approach a = plan.approach();
+        if (a != null) {
+            int prev = Integer.MIN_VALUE;
+            for (int i = -2; i < a.length(); i++) {
+                int z = a.z0() + i;
+                int stand = prev == Integer.MIN_VALUE
+                        ? topSolid(world, a.x(), a.ys()[0] + 2, z)
+                        : topSolid(world, a.x(), prev + 2, z);
+                if (prev != Integer.MIN_VALUE && Math.abs(stand - prev) > 1) {
+                    breaks++;
+                    note(walkNotes, "보행: 접근로 (" + a.x() + "," + z + ") 단차 "
+                            + Math.abs(stand - prev) + " (y" + prev + "→y" + stand + ")");
+                }
+                prev = stand;
+            }
+            int min = world.getMinHeight();
+            for (int i = 0; i < a.length(); i++) {
+                for (int o = -RAIL_OFF; o <= RAIL_OFF; o++) {
+                    cols++;
+                    int x = a.x() + o;
+                    for (int y = a.ys()[i]; y > min; y--) {
+                        Material m = world.getBlockAt(x, y, a.z0() + i).getType();
+                        if (m.isAir()) {
+                            floats++;
+                            note(floatNotes, "접지: 접근로 (" + x + "," + (a.z0() + i) + ") y" + y
+                                    + " 허공 — 열이 떠 있다");
+                            break;
+                        }
+                        if (TrailBuilder.groundSolid(m) && !placedMasonry(m)) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         List<String> notes = new ArrayList<>(flatNotes);
         notes.addAll(floatNotes);
         notes.addAll(walkNotes);
@@ -1150,6 +1405,8 @@ public final class TerraceForge {
                 Material.MOSSY_STONE_BRICKS, Material.ANDESITE, Material.POLISHED_ANDESITE,
                 Material.TUFF, Material.STONE_BRICK_STAIRS, Material.STONE_BRICK_WALL,
                 Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,   // ★슬라이스 9 — 암반 늑재
+                Material.DARK_OAK_PLANKS, Material.DEEPSLATE_TILE_SLAB,   // ★9b — 소문 보·갓
+                Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES,             // ★9b — 접근로 소나무
                 Material.LANTERN, Material.AIR);
     }
 
