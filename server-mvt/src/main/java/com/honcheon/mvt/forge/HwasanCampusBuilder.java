@@ -50,6 +50,7 @@ public final class HwasanCampusBuilder {
         public int pines;      // 절벽 소나무
         public long vines;     // 덩굴·이끼·지의
         public int props;      // 깃발·화로·상자·빨래줄·밭
+        public int cloisters;  // 행각 (슬라이스 9)
         Print print;           // ★마른 조성(dry run) — null 이 아니면 put 이 쓰지 않고 발자국만 적는다
     }
 
@@ -73,12 +74,14 @@ public final class HwasanCampusBuilder {
                 z0 = Integer.MAX_VALUE, z1 = Integer.MIN_VALUE;           // 전고
         private int gx0 = Integer.MAX_VALUE, gx1 = Integer.MIN_VALUE,
                 gz0 = Integer.MAX_VALUE, gz1 = Integer.MIN_VALUE;         // 지상
+        private int yTop = Integer.MIN_VALUE;                             // 최고점 (위계 눈 — 슬라이스 9)
         Print(int padY) {
             this.groundY = padY + GROUND_TOP;
         }
         void take(int x, int y, int z) {
             x0 = Math.min(x0, x); x1 = Math.max(x1, x);
             z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+            yTop = Math.max(yTop, y);
             if (y <= groundY) {
                 gx0 = Math.min(gx0, x); gx1 = Math.max(gx1, x);
                 gz0 = Math.min(gz0, z); gz1 = Math.max(gz1, z);
@@ -136,10 +139,18 @@ public final class HwasanCampusBuilder {
         int zS = pad.zS();
         // ★슬라이스 8 재척도: 사용자 기준자 (대계단 20) — 자리·크기 전부 ×2 (실측표 개정판)
         return switch (pad.spec().zone()) {
-            case 1 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 2, 28, t));   // 산문 57 — 처마가 램프 줄을 비킨다
-            case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 20, cz + 12, 6, t),  // 외원 — 대칭 정자 · 중앙 여백 (원작 11호)
-                    (w, p, t) -> pavilion(w, p, cx + 20, cz + 12, 6, t));
-            case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 14, 20, t));   // 종문 41
+            case 1 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 2, 28, t),   // 산문 57 — 처마가 램프 줄을 비킨다
+                    (w, p, t) -> lanternRow(w, p, cx - 12, p.zN() + p.spec().depth() / 2 + 12, p.zS() - 4, t),   // ★9 — 접근 축선 등롱 열
+                    (w, p, t) -> lanternRow(w, p, cx + 12, p.zN() + p.spec().depth() / 2 + 12, p.zS() - 4, t));
+            case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 14, cz + 12, 6, t),  // 외원 — 대칭 정자 · 중앙 여백 (원작 11호)
+                    (w, p, t) -> pavilion(w, p, cx + 14, cz + 12, 6, t),
+                    (w, p, t) -> cloister(w, p, p.x0() + 2, p.zN() + 4, p.zS() - 4, t),   // ★9 — 행각이 광장을 두른다
+                    (w, p, t) -> cloister(w, p, p.x1() - 6, p.zN() + 4, p.zS() - 4, t),
+                    (w, p, t) -> lanternRow(w, p, cx - 12, p.zN() + 6, cz - 6, t),
+                    (w, p, t) -> lanternRow(w, p, cx + 12, p.zN() + 6, cz - 6, t));
+            case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 14, 20, t),   // 종문 41
+                    (w, p, t) -> cloister(w, p, p.x0() + 2, p.zN() + 4, p.zS() - 4, t),
+                    (w, p, t) -> cloister(w, p, p.x1() - 6, p.zN() + 4, p.zS() - 4, t));
             case 16 -> List.of((w, p, t) -> gateEW(w, p, cx, cz, 5, t));          // 동향 문루 (담은 지면 일)
             case 3 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 4, 6, t),      // 연무장 하 — 목인 6
                     (w, p, t) -> rack(w, p, cx - 6, y, zS - 5, 6, t));
@@ -160,8 +171,10 @@ public final class HwasanCampusBuilder {
                     (w, p, t) -> pavilion(w, p, cx + 10, cz + 4, 6, t));
             case 19 -> List.of((w, p, t) -> pavilion(w, p, cx + 1, cz, 4, t));    // 절벽 전망대 (처마가 패드 안)
             case 20 -> List.of((w, p, t) -> plasterHall(w, p, cx + 1, cz, 7, 5, true, false, t));  // 부속 암자 (처마가 다리 어귀를 비킨다)
-            case 101 -> List.of((w, p, t) -> pavilion(w, p, cx - 18, cz + 14, 5, t),   // 중정 정자 한 쌍
-                    (w, p, t) -> pavilion(w, p, cx + 18, cz + 14, 5, t));
+            case 101 -> List.of((w, p, t) -> pavilion(w, p, cx - 14, cz + 14, 5, t),   // 중정 정자 한 쌍 (★9 — 행각 몫으로 안쪽)
+                    (w, p, t) -> pavilion(w, p, cx + 14, cz + 14, 5, t),
+                    (w, p, t) -> cloister(w, p, p.x0() + 2, p.zN() + 4, p.zS() - 4, t),
+                    (w, p, t) -> cloister(w, p, p.x1() - 6, p.zN() + 4, p.zS() - 4, t));
             case 10 -> List.of((w, p, t) -> gardenPond(w, p, cx, cz, t),          // 정원 — 연못·정자·매화 세 부품
                     (w, p, t) -> pavilion(w, p, cx + 12, cz + 12, 5, t),
                     (w, p, t) -> gardenPlum(w, p, cx - 4, cz - 12, t));
@@ -332,6 +345,21 @@ public final class HwasanCampusBuilder {
     }
 
     /**
+     * 구역 구조물의 최고점 y (마른 조성) — <b>위계의 눈</b>이 읽는다 (슬라이스 9 · 코덱스 §⑤:
+     * 전 건물이 같은 층고면 중심이 없다 — 본전 > 산문 > 홀 층고 차등을 값으로 잰다).
+     */
+    public static int structureTopY(TerraceForge.Pad pad) {
+        int top = Integer.MIN_VALUE;
+        for (Part part : parts(pad)) {
+            Tally dry = new Tally();
+            dry.print = new Print(pad.y());
+            part.build(null, pad, dry);
+            top = Math.max(top, dry.print.yTop);
+        }
+        return top;
+    }
+
+    /**
      * 조성 뒤 세계 검수 — 패드 밖 스커트 띠(1~{@code SKIRT+1}칸)에서 건물 재료가 나오면
      * 유출이다. put 가드가 있으니 0 이어야 하지만, <b>선 것을 다시 잰다 (계획을 안 믿는다)</b>.
      */
@@ -425,38 +453,76 @@ public final class HwasanCampusBuilder {
                         put(world, pad, x, y + dy, z, Material.AIR, tally);   // 아치 11×12 / 5×8
                         continue;
                     }
-                    Material m = Math.abs(f) == half || Math.abs(f) == 6
-                            || (half >= 24 && Math.abs(Math.abs(f) - 18) == 3)
-                            ? Material.STRIPPED_MANGROVE_LOG : Material.WHITE_TERRACOTTA;   // 적주(벗긴 맹그로브 — 껍질면은 흑갈로 읽힌다) + 백벽
+                    boolean pillarF = Math.abs(f) == half || Math.abs(f) == 6
+                            || (half >= 24 && Math.abs(Math.abs(f) - 18) == 3);
+                    boolean shell = Math.abs(d) == 4;   // 남·북 겉면 — 입면 층위는 겉면에만 (슬라이스 9)
+                    Material m = pillarF ? Material.STRIPPED_MANGROVE_LOG   // 적주(벗긴 맹그로브 — 껍질면은 흑갈로 읽힌다)
+                            : shell && dy == 1 ? Material.POLISHED_ANDESITE                     // 기단 밝은 선
+                            : shell && dy == 7 ? Material.DARK_OAK_PLANKS                       // 중방 — 두 층 리듬
+                            : shell && dy >= 11 ? Material.RED_TERRACOTTA                       // 상단 적 띠
+                            : shell && Math.floorMod(f, 3) == 1
+                                    && (dy == 4 || dy == 5 || dy == 9 || dy == 10)
+                                    ? Material.GLASS_PANE                                       // 창 리듬 3칸
+                            : Material.WHITE_TERRACOTTA;
                     put(world, pad, x, y + dy, z, m, tally);
                 }
             }
         }
-        // 상층 — 백벽 + 적주 모서리, 적 띠
-        for (int f = -half + 4; f <= half - 4; f++) {
-            for (int d = -2; d <= 2; d++) {
-                boolean edge = Math.abs(f) == half - 4 || Math.abs(d) == 2;
-                for (int dy = 13; dy <= 20; dy++) {
-                    Material m = !edge ? Material.AIR
-                            : (Math.abs(f) == half - 4 ? Material.STRIPPED_MANGROVE_LOG
-                            : (dy >= 19 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA));
-                    if (m != Material.AIR) {
-                        put(world, pad, gx + f, y + dy, gz + d, m, tally);
+        // ★슬라이스 9 — 산문 재설계 (코덱스 개선 2: 높이 1.5~2배·지붕 두께 2배·위계의 정점).
+        //   3단 구성: 하층(1..12 아치 몸) → 겹처마 스커트 → 중층(13..22) → 스커트 → 상층(23..30)
+        //   → 팔작. 총고 ~38 (구 ~26 의 1.5배) — 본전(~41)보다는 낮다 (위계: 본전 > 산문).
+        int mh = half - 4;   // 중층 반폭
+        for (int f = -mh; f <= mh; f++) {
+            for (int d = -3; d <= 3; d++) {
+                boolean edge = Math.abs(f) == mh || Math.abs(d) == 3;
+                if (!edge) {
+                    continue;
+                }
+                boolean pillar = Math.abs(f) == mh || Math.floorMod(f + mh, 6) == 0;
+                for (int dy = 13; dy <= 22; dy++) {
+                    Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
+                            : (dy == 17 ? Material.DARK_OAK_PLANKS                       // 중방
+                            : dy >= 21 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                    put(world, pad, gx + f, y + dy, gz + d, m, tally);
+                }
+                if (!pillar && Math.abs(d) == 3 && Math.floorMod(f, 3) == 1) {   // 창 리듬 3칸
+                    for (int wy : new int[]{15, 16, 19, 20}) {
+                        put(world, pad, gx + f, y + wy, gz + d, Material.GLASS_PANE, tally);
                     }
                 }
             }
         }
-        // 상층 난간 — 개방 회랑의 가장자리 (실측 1호)
-        for (int f = -half + 2; f <= half - 2; f++) {
-            for (int d : new int[]{-4, 4}) {
-                put(world, pad, gx + f, y + 13, gz + d, Material.SPRUCE_FENCE, tally);
+        bracketRing(world, pad, gx, y + 21, gz, mh + 1, 4, tally);   // 공포 — 중층 처마 밑
+        eaveRing(world, pad, gx, y + 22, gz, mh, 3, tally);
+        int th = half - 8;   // 상층 반폭
+        for (int f = -th; f <= th; f++) {
+            for (int d = -2; d <= 2; d++) {
+                put(world, pad, gx + f, y + 22, gz + d, Material.SPRUCE_PLANKS, tally);   // 상층 마루
+                boolean edge = Math.abs(f) == th || Math.abs(d) == 2;
+                if (!edge) {
+                    continue;
+                }
+                boolean pillar = Math.abs(f) == th || Math.floorMod(f + th, 6) == 0;
+                for (int dy = 23; dy <= 30; dy++) {
+                    Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
+                            : (dy >= 29 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                    put(world, pad, gx + f, y + dy, gz + d, m, tally);
+                }
+                if (!pillar && Math.abs(d) == 2 && Math.floorMod(f, 3) == 1) {
+                    for (int wy : new int[]{25, 26, 27}) {
+                        put(world, pad, gx + f, y + wy, gz + d, Material.GLASS_PANE, tally);
+                    }
+                }
             }
         }
+        bracketRing(world, pad, gx, y + 29, gz, th + 1, 3, tally);   // 공포 — 상층 처마 밑
         // 겹처마 — 하층 스커트 + 상층 팔작 (실측표 §3-b)
         eaveRing(world, pad, gx, y + 12, gz, half, 4, tally);
-        sweepRoof(world, pad, gx, y + 20, gz, half - 4, 2, tally);
-        put(world, pad, gx, y + 15, gz - 4, Material.DARK_OAK_PLANKS, tally);   // 빈 현판 (남면)
-        put(world, pad, gx, y + 15, gz + 4, Material.DARK_OAK_PLANKS, tally);
+        sweepRoof(world, pad, gx, y + 30, gz, th, 2, tally);
+        for (int pf = -1; pf <= 1; pf++) {                        // 빈 현판 (남·북면 — 글자는 사용자 몫)
+            put(world, pad, gx + pf, y + 16, gz + 3, Material.DARK_OAK_PLANKS, tally);
+            put(world, pad, gx + pf, y + 16, gz - 3, Material.DARK_OAK_PLANKS, tally);
+        }
         put(world, pad, gx - 6, y + 1, gz + 5, Material.LANTERN, tally);
         put(world, pad, gx + 6, y + 1, gz + 5, Material.LANTERN, tally);
         tally.gates++;
@@ -515,13 +581,23 @@ public final class HwasanCampusBuilder {
                 }
                 boolean corner = Math.abs(f) == hf && Math.abs(l) == hl;
                 for (int dy = 1; dy <= wallH; dy++) {
+                    // ★슬라이스 9 — 입면 층위 (코덱스 §②): 기단(밝은 수평선 1단) · 중방(다크오크
+                    //   띠 dy5 — 벽 10 이 두 층 리듬으로 읽힌다 · 인간 단위 층고 3~4 의 복원) · 상단 띠
                     Material m = corner ? (red ? Material.MANGROVE_LOG : Material.SPRUCE_LOG)
-                            : (red && dy == wallH ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : (dy == 1 ? Material.POLISHED_ANDESITE
+                            : dy == 5 ? Material.DARK_OAK_PLANKS
+                            : (red && dy == wallH ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA));
                     put(world, pad, x, y + dy, z, m, tally);
                 }
-                if (windows && !corner && Math.floorMod(f * 3 + l * 5, 4) == 0) {
-                    for (int wy = 3; wy <= 6; wy++) {
-                        put(world, pad, x, y + wy, z, Material.GLASS_PANE, tally);
+                // ★이중 창 리듬 — 3칸마다 (인간 단위 칸이 누적된다 · 코덱스 §⑤)
+                if (windows && !corner) {
+                    int along = Math.abs(l) == hl ? f : l;
+                    if (Math.floorMod(along, 3) == 1) {
+                        for (int wy : new int[]{3, 4, 7, 8}) {
+                            if (wy < wallH) {
+                                put(world, pad, x, y + wy, z, Material.GLASS_PANE, tally);
+                            }
+                        }
                     }
                 }
             }
@@ -529,11 +605,12 @@ public final class HwasanCampusBuilder {
         // 전면 — 적주 열주 + 처마 보 + 격자창 (실측표 §3-b · 재척도)
         int doorHalf = hf >= 12 ? 2 : 1;
         colonnade(world, pad, cx, y, cz, hf, hl, wallH, doorHalf, tally);
-        for (int dx = -doorHalf; dx <= doorHalf; dx++) {   // 남문 — 재척도 높이 6
-            for (int dy = 1; dy <= 6; dy++) {
+        for (int dx = -doorHalf; dx <= doorHalf; dx++) {   // 남문 — ★인간 단위 4 (코덱스 §⑤: 문이 크면 사람 기준이 사라진다)
+            for (int dy = 1; dy <= 4; dy++) {
                 put(world, pad, cx + dx, y + dy, cz + hl, Material.AIR, tally);
             }
         }
+        bracketRing(world, pad, cx, y + wallH - 1, cz, hf + 1, hl + 1, tally);   // 공포층 — 처마 밑 (슬라이스 9)
         sweepRoof(world, pad, cx, y + wallH, cz, hf, hl, tally);
         put(world, pad, cx, y + wallH, cz + hl + 1, Material.LANTERN, tally);
         tally.halls++;
@@ -573,7 +650,7 @@ public final class HwasanCampusBuilder {
                     boolean eL = Math.abs(l) == hL;
                     if (i == 0) {                          // 처마 끝 — 반블록, 모서리 들림
                         put(world, pad, x, y, z, eF || eL ? Material.DEEPSLATE_TILE_SLAB
-                                : Material.DEEPSLATE_TILES, tally);
+                                : roofCube(x, y, z), tally);
                         if (eF && eL) {
                             put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
                         }
@@ -588,7 +665,7 @@ public final class HwasanCampusBuilder {
                                 f > 0 ? org.bukkit.block.BlockFace.WEST
                                         : org.bukkit.block.BlockFace.EAST, tally);
                     } else {
-                        put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                        put(world, pad, x, y, z, roofCube(x, y, z), tally);
                     }
                 }
             }
@@ -641,11 +718,54 @@ public final class HwasanCampusBuilder {
             tally.print.take(x, y, z);
             return;
         }
+        // ★슬라이스 9 — 기와 결 혼합 (코덱스 §④: 「검은 단일 덩어리」의 처방 · 결정론)
+        Material mat = Math.floorMod(hash(0x5EA9L, x, y, z), 100) < 72
+                ? Material.DEEPSLATE_TILE_STAIRS : Material.DEEPSLATE_BRICK_STAIRS;
         org.bukkit.block.data.type.Stairs data =
-                (org.bukkit.block.data.type.Stairs) Material.DEEPSLATE_TILE_STAIRS.createBlockData();
+                (org.bukkit.block.data.type.Stairs) mat.createBlockData();
         data.setFacing(ascent);
         world.getBlockAt(x, y, z).setBlockData(data, false);
         tally.blocks++;
+    }
+
+    /**
+     * 기와 면 결 — 심층암 타일 60 / 벽돌 22 / 균열 타일 13 / 균열 벽돌 5 (코덱스 §④ 배합 ·
+     * 결정론). 처마 끝 반블록·용마루는 <b>안 섞는다</b> — 윤곽선은 또렷해야 한다.
+     */
+    private static Material roofCube(int x, int y, int z) {
+        int r = Math.floorMod((int) hash(0x5EA9L ^ 0xF00FL, x, y, z), 100);
+        if (r < 60) {
+            return Material.DEEPSLATE_TILES;
+        }
+        if (r < 82) {
+            return Material.DEEPSLATE_BRICKS;
+        }
+        if (r < 95) {
+            return Material.CRACKED_DEEPSLATE_TILES;
+        }
+        return Material.CRACKED_DEEPSLATE_BRICKS;
+    }
+
+    /**
+     * 공포층 — 처마 밑 받침 띠 (코덱스 §② — 입면 깊이 세 겹의 가운데 층 · 실측표 §3-b).
+     * 벽선 한 칸 밖 y 에 다크오크 반블록이 돌고, 세 칸마다 통판(주두)이 박힌다.
+     */
+    private static void bracketRing(World world, TerraceForge.Pad pad, int cx, int y, int cz,
+                                    int hf, int hl, Tally tally) {
+        for (int f = -hf; f <= hf; f++) {
+            for (int l : new int[]{-hl, hl}) {
+                put(world, pad, cx + f, y, cz + l,
+                        Math.floorMod(f, 3) == 0 ? Material.DARK_OAK_PLANKS
+                                : Material.DARK_OAK_SLAB, tally);
+            }
+        }
+        for (int l = -hl + 1; l <= hl - 1; l++) {
+            for (int f : new int[]{-hf, hf}) {
+                put(world, pad, cx + f, y, cz + l,
+                        Math.floorMod(l, 3) == 0 ? Material.DARK_OAK_PLANKS
+                                : Material.DARK_OAK_SLAB, tally);
+            }
+        }
     }
 
     /** 전면 열주 — 적주 간격 3 이 처마 보(다크오크)를 받친다 · 기둥 사이 격자창 (실측표 §3-b) */
@@ -676,11 +796,13 @@ public final class HwasanCampusBuilder {
         int y = pad.y();
         int hf = 36;
         int hl = 13;
-        // 월대 — 높이 5 (3켜의 재척도) + 남계단 폭 15
+        // 월대 — 높이 5 (3켜의 재척도) + 남계단 폭 15 · ★상단 테는 밝은 수평선 (기단 — 코덱스 §④)
         for (int f = -hf - 6; f <= hf + 6; f++) {
             for (int l = -hl - 6; l <= hl + 6; l++) {
                 for (int k = 1; k <= 5; k++) {
-                    put(world, pad, cx + f, y + k, cz + l, Material.STONE_BRICKS, tally);
+                    boolean rim = k == 5 && (Math.abs(f) == hf + 6 || Math.abs(l) == hl + 6);
+                    put(world, pad, cx + f, y + k, cz + l,
+                            rim ? Material.POLISHED_ANDESITE : Material.STONE_BRICKS, tally);
                 }
             }
         }
@@ -702,9 +824,18 @@ public final class HwasanCampusBuilder {
                 }
                 boolean corner = Math.abs(f) == hf && Math.abs(l) == hl;
                 for (int dy = 1; dy <= 12; dy++) {
+                    // ★슬라이스 9 — 기단·중방·창 리듬 (입면 층위 · plasterHall 과 같은 키트)
                     Material m = corner ? Material.MANGROVE_LOG
-                            : (dy >= 11 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : (dy == 1 ? Material.POLISHED_ANDESITE
+                            : dy == 6 ? Material.DARK_OAK_PLANKS
+                            : dy >= 11 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
                     put(world, pad, x, base + dy, z, m, tally);
+                }
+                int along = Math.abs(l) == hl ? f : l;
+                if (!corner && Math.floorMod(along, 3) == 1) {
+                    for (int wy : new int[]{3, 4, 8, 9}) {
+                        put(world, pad, x, base + wy, z, Material.GLASS_PANE, tally);
+                    }
                 }
             }
         }
@@ -724,7 +855,8 @@ public final class HwasanCampusBuilder {
         for (int f = -hf; f <= hf; f++) {
             put(world, pad, cx + f, base + 12, cz + hl + 2, Material.DARK_OAK_PLANKS, tally);
         }
-        // 겹처마 하단 — 몸체+회랑을 덮는 스커트
+        // 겹처마 하단 — 몸체+회랑을 덮는 스커트 (+공포 띠 — 슬라이스 9)
+        bracketRing(world, pad, cx, base + 11, cz, hf + 1, hl + 3, tally);
         eaveRing(world, pad, cx, base + 12, cz, hf, hl + 2, tally);
         // 2층 — 들인 중루 + 상단 팔작
         int hf2 = hf - 6;
@@ -751,11 +883,55 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
+        bracketRing(world, pad, cx, base + 21, cz, hf2 + 1, hl2 + 1, tally);   // 공포 — 상층 처마 밑
         sweepRoof(world, pad, cx, base + 22, cz, hf2, hl2, tally);
         put(world, pad, cx - hf, base + 9, cz + hl + 3, Material.LANTERN, tally);
         put(world, pad, cx + hf, base + 9, cz + hl + 3, Material.LANTERN, tally);
         put(world, pad, cx, base + 8, cz + hl, Material.DARK_OAK_PLANKS, tally);   // 빈 현판
         tally.halls++;
+    }
+
+    /**
+     * 행각(行閣) — <b>광장을 두르는 개방 열주 복도</b> (슬라이스 9 · 코덱스 개선 1·4:
+     * 빈 광장 해체 + 침봉과 전각 사이의 중간 크기). 남북으로 길게, 기둥 간격 4(인간 단위),
+     * 맞배 반블록 지붕. 양쪽이 열려 있어 통행을 막지 않는다 — 이웃 칸 개구·계단 어귀와
+     * 부딪치지 않게 배치는 {@link #parts} 가 정한다.
+     */
+    private static void cloister(World world, TerraceForge.Pad pad, int x0, int z0, int z1, Tally tally) {
+        int y = pad.y();
+        int x1 = x0 + 4;   // 폭 5
+        for (int z = z0; z <= z1; z++) {
+            if (Math.floorMod(z - z0, 4) == 0) {
+                for (int x : new int[]{x0, x1}) {
+                    for (int dy = 1; dy <= 4; dy++) {
+                        put(world, pad, x, y + dy, z, Material.SPRUCE_LOG, tally);
+                    }
+                }
+            }
+            // 보 + 맞배 지붕 — 가장자리 반블록, 안쪽 계단, 마루 솟음
+            put(world, pad, x0, y + 5, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            put(world, pad, x1, y + 5, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            putRoofStair(world, pad, x0 + 1, y + 5, z, org.bukkit.block.BlockFace.EAST, tally);
+            putRoofStair(world, pad, x1 - 1, y + 5, z, org.bukkit.block.BlockFace.WEST, tally);
+            put(world, pad, x0 + 2, y + 6, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            if (Math.floorMod(z - z0, 8) == 4) {
+                put(world, pad, x0 + 2, y + 3, z, Material.LANTERN, tally);   // 복도 등롱
+            }
+        }
+        tally.cloisters++;
+    }
+
+    /**
+     * 등롱 열주 — 광장 축선을 따라 반복되는 인간 크기 사물 (슬라이스 9 · 코덱스 §⑤:
+     * 웅장함은 인간 단위의 <b>누적</b>에서 나온다). 석전 기둥 2 + 등롱, 6칸 주기.
+     */
+    private static void lanternRow(World world, TerraceForge.Pad pad, int x, int z0, int z1, Tally tally) {
+        int y = pad.y();
+        for (int z = z0; z <= z1; z += 6) {
+            put(world, pad, x, y + 1, z, Material.STONE_BRICKS, tally);
+            put(world, pad, x, y + 2, z, Material.STONE_BRICKS, tally);
+            put(world, pad, x, y + 3, z, Material.LANTERN, tally);
+        }
     }
 
     /** 정자 — 침엽 네 기둥 + 흑기와 모임지붕, 사방이 열려 있다 (레퍼런스 6호의 대칭 소품) */
@@ -1165,6 +1341,8 @@ public final class HwasanCampusBuilder {
                 Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
                 Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
                 Material.DEEPSLATE_TILE_WALL, Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
+                Material.DEEPSLATE_BRICKS, Material.CRACKED_DEEPSLATE_TILES,          // ★9 — 기와 결 혼합
+                Material.CRACKED_DEEPSLATE_BRICKS, Material.DEEPSLATE_BRICK_STAIRS,
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
                 Material.CHEST, Material.LANTERN, Material.AIR);
@@ -1178,5 +1356,7 @@ public final class HwasanCampusBuilder {
             Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
             Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
             Material.DEEPSLATE_TILE_WALL, Material.GLASS_PANE,
+            Material.DEEPSLATE_BRICKS, Material.CRACKED_DEEPSLATE_TILES,          // ★9 — 기와 결 혼합
+            Material.CRACKED_DEEPSLATE_BRICKS, Material.DEEPSLATE_BRICK_STAIRS,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 }

@@ -84,6 +84,7 @@ public final class TerraceForge {
 
     private static final long SALT_FACE = 0x5EA_57ACL;                  // 옹벽 결
     private static final long SALT_PAVE = 0x0BAD_5EEDL ^ 0x7E44ACE5L;   // 포장 결
+    private static final long SALT_RIB = 0x0C0DE_0A9L;                  // 암반 늑재 구간 (슬라이스 9)
 
     // ═══════════════════════════════════════════════════════════════════
     // 명세 — 패드(폴리곤)와 계단 링크
@@ -613,9 +614,13 @@ public final class TerraceForge {
                     }
                 }
                 boolean edge = x == pad.x0() || x == pad.x1() || z == pad.zN() || z == pad.zS();
-                // 채움 — 실지면에서 포장면 밑까지. 가장자리 열은 석축 결(보이는 면)
+                // 채움 — 실지면에서 포장면 밑까지. 가장자리 열은 석축 결(보이는 면).
+                // ★슬라이스 9: 늑재 구간은 자연 암반 결 — 「성벽은 암반에서 솟는다」 (코덱스 검토 §③)
+                boolean rib = edge && ribSegment(x, z);
                 for (int y = g + 1; y < pad.y(); y++) {
-                    world.getBlockAt(x, y, z).setType(edge ? faceMaterial(x, y, z) : Material.STONE, false);
+                    world.getBlockAt(x, y, z).setType(
+                            edge ? (rib ? rockMaterial(x, y, z) : faceMaterial(x, y, z))
+                                    : Material.STONE, false);
                     if (edge) {
                         tally.wallFace++;
                     } else {
@@ -628,8 +633,78 @@ public final class TerraceForge {
                 tally.pavement++;
             }
         }
+        batter(world, plan, pad, tally);
         skirt(world, plan, pad, tally);
         parapet(world, plan, pad, tally);
+    }
+
+    /**
+     * ★경사 석축 + 암반 늑재 (슬라이스 9 — 「석대 해체」, 코덱스 검토 §①·③의 처방).
+     *
+     * <p>수직 옹벽 일색이 「자연지형을 지운 직육면체 석대」로 읽혔다 — 옹벽이 아래로 갈수록
+     * 밖으로 계단져 나가고(3칸 내려갈 때 1칸 — 산처럼 발치가 넓다), 결정론 구간(늑재)마다
+     * 석축 대신 <b>자연 암반 결</b>이 솟는다 (늑재는 한 칸 더 돌출). 우면(우세면)이 산몸에
+     * 닿으면 그 자리부터는 <b>산이 벽이다</b> — 파묻힌 단구가 공짜로 나온다.
+     *
+     * <p>계약: 전 열이 실지형까지 채워져 접지 (검수 ② 는 패드 안만 재지만 이 열들도 뜨지
+     * 않는다) · 남의 패드({@code onOtherPad})·계단/다리 몸체({@code laneCovered})는 비킨다 —
+     * 잇닿은 통단 칸 사이·척추 계단 골에는 안 나간다.
+     */
+    private static void batter(World world, Plan plan, Pad pad, Tally tally) {
+        for (int x = pad.x0(); x <= pad.x1(); x++) {
+            batterColumn(world, plan, pad, x, pad.zN(), 0, -1, tally);
+            batterColumn(world, plan, pad, x, pad.zS(), 0, 1, tally);
+        }
+        for (int z = pad.zN(); z <= pad.zS(); z++) {
+            batterColumn(world, plan, pad, pad.x0(), z, -1, 0, tally);
+            batterColumn(world, plan, pad, pad.x1(), z, 1, 0, tally);
+        }
+    }
+
+    private static void batterColumn(World world, Plan plan, Pad pad, int ex, int ez,
+                                     int dx, int dz, Tally tally) {
+        boolean rib = ribSegment(ex, ez);
+        int steps = rib ? 7 : 6;   // 늑재는 한 칸 더 돌출 — 바위가 벽을 뚫고 나온 결
+        for (int k = 1; k <= steps; k++) {
+            int x = ex + dx * k;
+            int z = ez + dz * k;
+            if (onOtherPad(plan, pad, x, z) || laneCovered(plan, x, z)) {
+                return;
+            }
+            int top = pad.y() - 3 * k;
+            int g = groundY(world, x, z);
+            if (top <= g) {
+                return;   // 산몸에 닿았다 — 여기부터는 산이 벽이다 (의도된 파묻힘)
+            }
+            for (int y = g + 1; y <= top; y++) {
+                world.getBlockAt(x, y, z).setType(
+                        rib ? rockMaterial(x, y, z) : faceMaterial(x, y, z), false);
+                tally.wallFace++;
+            }
+        }
+    }
+
+    /** 늑재 구간인가 — 가장자리를 ~7칸 단위로 갈라 약 1/3 이 암반 (결정론 · 난수 0) */
+    private static boolean ribSegment(int x, int z) {
+        return Math.floorMod(mix(SALT_RIB, Math.floorDiv(x, 7), 0, Math.floorDiv(z, 7)), 100) < 34;
+    }
+
+    /** 자연 암반 결 — 석축이 아니라 산몸이 드러난 자리 (늑재·돌출 바위) */
+    private static Material rockMaterial(int x, int y, int z) {
+        int r = (int) Math.floorMod(mix(SALT_RIB ^ 0x717L, x, y, z), 100);
+        if (r < 40) {
+            return Material.STONE;
+        }
+        if (r < 60) {
+            return Material.COBBLESTONE;
+        }
+        if (r < 75) {
+            return Material.TUFF;
+        }
+        if (r < 90) {
+            return Material.ANDESITE;
+        }
+        return Material.MOSSY_COBBLESTONE;
     }
 
     /** 패드 둘레 스커트 폭 — 가장자리에 걸린 지형 어깨를 이만큼 밀어낸다 */
@@ -1074,6 +1149,7 @@ public final class TerraceForge {
                 Material.STONE, Material.STONE_BRICKS, Material.CRACKED_STONE_BRICKS,
                 Material.MOSSY_STONE_BRICKS, Material.ANDESITE, Material.POLISHED_ANDESITE,
                 Material.TUFF, Material.STONE_BRICK_STAIRS, Material.STONE_BRICK_WALL,
+                Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,   // ★슬라이스 9 — 암반 늑재
                 Material.LANTERN, Material.AIR);
     }
 

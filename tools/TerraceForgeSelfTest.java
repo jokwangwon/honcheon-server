@@ -374,6 +374,33 @@ public final class TerraceForgeSelfTest {
                     plumBoxed, "수관 상자 불일치");
         }
 
+        // ══════════ ⑧ 슬라이스 9 — 산이 건축이 되게 (코덱스 검토 계약) ══════════
+        {
+            java.util.List<TerraceForge.Pad> allPads = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad gate = allPads.stream()
+                    .filter(p -> p.spec().zone() == 1).findFirst().orElseThrow();
+            TerraceForge.Pad main = allPads.stream()
+                    .filter(p -> p.spec().zone() == 9).findFirst().orElseThrow();
+            int gateTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(gate) - gate.y();
+            int mainTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(main) - main.y();
+            check("★9 산문 재설계 — 총고 ≥36 (구 ~26 의 1.5배 · 코덱스 개선 2)",
+                    gateTop >= 36, gateTop);
+            check("★9 위계 — 본전이 산문보다 높다 (같은 층고 금지 · 코덱스 §⑤)",
+                    mainTop > gateTop, mainTop + " vs " + gateTop);
+            TerraceForge.Pad plaza = allPads.stream()
+                    .filter(p -> p.spec().zone() == 2).findFirst().orElseThrow();
+            TerraceForge.Pad jong = allPads.stream()
+                    .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
+            int plazaParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(plaza).size();
+            int jongParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jong).size();
+            check("★9 행각 — 외원 6부품(정자2+행각2+등롱열2) · 종문 3부품(문+행각2)",
+                    plazaParts == 6 && jongParts == 3, plazaParts + "/" + jongParts);
+            check("★9 재료 — 기와 혼합(벽돌·균열)과 암반 늑재(자갈돌)가 팔레트에",
+                    bPal.contains(Material.DEEPSLATE_BRICKS)
+                            && bPal.contains(Material.CRACKED_DEEPSLATE_TILES)
+                            && palette.contains(Material.COBBLESTONE), "9 재료");
+        }
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {
