@@ -528,6 +528,15 @@ public final class TerraceForgeSelfTest {
                     jongTop < gateTop && jongTop >= 28, jongTop + " vs " + gateTop);
         }
 
+        // ══════════ ⑨ 슬라이스 11.5 — 실지면 정의 통일 (접근로 접지 64건의 처방) ══════════
+        check("★11.5 실지면 — 소나무 몸통·잎·관목은 식생 (지면이 아니다)",
+                TerraceForge.isVegetation(Material.SPRUCE_WOOD)
+                        && TerraceForge.isVegetation(Material.SPRUCE_LEAVES)
+                        && TerraceForge.isVegetation(Material.AZALEA), "식생 판정");
+        check("★11.5 실지면 — 이끼 블록은 지면이다 (절벽 캡·완사면 바닥은 밟는 땅)",
+                !TerraceForge.isVegetation(Material.MOSS_BLOCK)
+                        && !TerraceForge.isVegetation(Material.STONE), "지면 판정");
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {

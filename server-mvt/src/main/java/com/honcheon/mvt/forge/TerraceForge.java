@@ -789,11 +789,33 @@ public final class TerraceForge {
         return gs[Math.max(0, idx)];
     }
 
-    /** 실지면 — 수목·잎을 뚫고 밟는 땅을 찾는다 ({@link TrailBuilder#groundSolid} 재사용) */
+    /**
+     * ★식생 재료 — 「실지면」이 아니다 (슬라이스 11.5 · 접지 64건의 처방): 산군 식생(소나무
+     * 몸통·잎·관목·풀·덩굴)이 지형 위에 서므로, 계획(ys 표)·조성(fillDown)·검수가 같은
+     * 정의로 이것들을 <b>통과·제거 대상</b>으로 본다. groundSolid 가 나무를 「단단하다」고
+     * 해도 나무 위는 길의 지면이 아니다. ★이끼 블록(MOSS_BLOCK)은 식생이 아니라 지면이다 —
+     * 절벽 캡·완사면 바닥으로 깔리는 밟는 땅이다.
+     */
+    private static final Set<Material> VEGETATION = EnumSet.of(
+            Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES, Material.CHERRY_LOG,
+            Material.CHERRY_LEAVES, Material.AZALEA, Material.FLOWERING_AZALEA,
+            Material.FERN, Material.SHORT_GRASS, Material.VINE, Material.GLOW_LICHEN,
+            Material.MOSS_CARPET);
+
+    /** 그 재료가 식생인가 — 계획·조성·검수 공용 정의 (눈이 잰다) */
+    public static boolean isVegetation(Material m) {
+        return VEGETATION.contains(m);
+    }
+
+    /** 실지면 — 수목·잎·식생을 뚫고 밟는 땅을 찾는다 ({@link TrailBuilder#groundSolid} + 식생 통과) */
     private static int groundY(World world, int x, int z) {
         int y = world.getHighestBlockYAt(x, z);
         int min = world.getMinHeight();
-        while (y > min && !TrailBuilder.groundSolid(world.getBlockAt(x, y, z).getType())) {
+        while (y > min) {
+            Material m = world.getBlockAt(x, y, z).getType();
+            if (TrailBuilder.groundSolid(m) && !VEGETATION.contains(m)) {
+                break;
+            }
             y--;
         }
         return y;
@@ -1191,12 +1213,17 @@ public final class TerraceForge {
         return lane.dirX() > 0 ? BlockFace.WEST : BlockFace.EAST;
     }
 
-    /** (x, fromY, z) 에서 아래로, 이미 솟은 것(포장·지형)을 만날 때까지 석전으로 채운다 */
+    /**
+     * (x, fromY, z) 에서 아래로, 이미 솟은 것(포장·지형)을 만날 때까지 석전으로 채운다.
+     * ★식생(몸통·잎)은 지형이 아니다 — 만나면 석전으로 갈아 치우고 계속 내려간다 (11.5:
+     * 잎에서 멈추면 그 밑 허공이 떠 있는 열로 남는다 — 접지 64건의 진범).
+     */
     private static void fillDown(World world, int x, int fromY, int z, Tally tally) {
         int min = world.getMinHeight();
         for (int y = fromY; y > min; y--) {
             Block b = world.getBlockAt(x, y, z);
-            if (!b.getType().isAir()) {
+            Material m = b.getType();
+            if (!m.isAir() && !VEGETATION.contains(m)) {
                 return;
             }
             b.setType(Material.STONE_BRICKS, false);

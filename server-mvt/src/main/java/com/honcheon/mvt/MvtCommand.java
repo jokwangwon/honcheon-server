@@ -1907,6 +1907,10 @@ public final class MvtCommand implements CommandExecutor {
         private long raised;
         private long lastProgressMs;
 
+        private long pines;
+        private long shrubs;
+        private long mossPatches;
+
         SpirePaver(HoncheonMvt plugin, CommandSender sender, World world, SpireField field, int baseY) {
             this.plugin = plugin;
             this.sender = sender;
@@ -1922,34 +1926,158 @@ public final class MvtCommand implements CommandExecutor {
 
         @Override
         public boolean step() {
-            if (index >= totalTiles) {
+            // ★슬라이스 11 — 2상: ①지형 융기 → ②식생 (같은 타일 격자를 두 번 돈다)
+            int grand = totalTiles * 2;
+            if (index >= grand) {
                 return false;
             }
-            int x0 = -SpireField.FIELD_R + (index % tilesX) * SANSE_TILE;
-            int z0 = -SpireField.FIELD_R + (index / tilesX) * SANSE_TILE;
-            for (int x = x0; x < x0 + SANSE_TILE; x++) {
-                for (int z = z0; z < z0 + SANSE_TILE; z++) {
-                    int h = field.targetH(x, z);
-                    if (h < 4) {
-                        continue;   // 4 미만은 소음
+            boolean vegPhase = index >= totalTiles;
+            int tile = vegPhase ? index - totalTiles : index;
+            int x0 = -SpireField.FIELD_R + (tile % tilesX) * SANSE_TILE;
+            int z0 = -SpireField.FIELD_R + (tile / tilesX) * SANSE_TILE;
+            if (!vegPhase) {
+                for (int x = x0; x < x0 + SANSE_TILE; x++) {
+                    for (int z = z0; z < z0 + SANSE_TILE; z++) {
+                        int h = field.targetH(x, z);
+                        if (h < 4) {
+                            continue;   // 4 미만은 소음
+                        }
+                        int targetY = baseY + h;
+                        int curY = world.getHighestBlockYAt(x, z);
+                        for (int y = curY + 1; y <= targetY; y++) {
+                            world.getBlockAt(x, y, z).setType(spireStone(x, y, z, y == targetY), false);
+                            raised++;
+                        }
                     }
-                    int targetY = baseY + h;
-                    int curY = world.getHighestBlockYAt(x, z);
-                    for (int y = curY + 1; y <= targetY; y++) {
-                        world.getBlockAt(x, y, z).setType(spireStone(x, y, z, y == targetY), false);
-                        raised++;
-                    }
+                }
+            } else {
+                // ★11.5-② 시간 고삐: 식생은 r≤700 (보이는 켜 + 본산)만 — 밖 타일은 청크를
+                //   건드리지 않고 통째로 건너뛴다 (1087초의 주범 = 원경 타일 재방문 청크 부하)
+                int fx = Math.min(Math.abs(x0), Math.abs(x0 + SANSE_TILE - 1));
+                int fz = Math.min(Math.abs(z0), Math.abs(z0 + SANSE_TILE - 1));
+                if (fx * fx + fz * fz <= 700 * 700) {
+                    vegetateTile(x0, z0);
                 }
             }
             index++;
             long now = System.currentTimeMillis();
-            if (now - lastProgressMs >= 3000L || index == totalTiles) {
+            if (now - lastProgressMs >= 3000L || index == grand) {
                 lastProgressMs = now;
                 Announce.progress(plugin, sender, ChatColor.GRAY + "[산군시험·진행] " + index + "/"
-                        + totalTiles + " 타일 (" + (100L * index / totalTiles) + "%) · 융기 " + raised
+                        + grand + (vegPhase ? " 식생" : " 타일") + " (" + (100L * index / grand)
+                        + "%) · 융기 " + raised + " · 소나무 " + pines
                         + " · " + (System.nanoTime() - startNanos) / 1_000_000_000L + "초");
             }
-            return index < totalTiles;
+            return index < grand;
+        }
+
+        /** 식생이 앉을 수 있는 자연 상면 — 조성 석재(석전·박석 등 보행면)는 안 된다 */
+        private static final java.util.Set<Material> PLANTABLE = java.util.EnumSet.of(
+                Material.STONE, Material.ANDESITE, Material.TUFF, Material.CALCITE,
+                Material.DRIPSTONE_BLOCK, Material.SANDSTONE, Material.MOSS_BLOCK,
+                Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,
+                Material.GRASS_BLOCK, Material.DIRT);
+
+        /**
+         * ★슬라이스 11-①·③ 식생 상 — 실측 문법 (실측표 §13 · 1·8·9·12호): 완사면은 짙은
+         * 소나무 군락 · 어깨 턱은 점식 · 절벽은 이끼 띠와 턱 관목 · 침봉 소평두 마루 소나무.
+         * 본산권(캠퍼스 밑 산세)도 같은 문법 — 산군과 본산의 결이 갈라지지 않는다.
+         * 결정론(해시 표집 1/29) · 제외 사각(캠퍼스·다리)·조성 석재 상면 무침범.
+         */
+        private void vegetateTile(int x0, int z0) {
+            for (int x = x0; x < x0 + SANSE_TILE; x++) {
+                for (int z = z0; z < z0 + SANSE_TILE; z++) {
+                    long h = ((long) x * 0x9E3779B97F4A7C15L) ^ ((long) z * 0x165667B19E3779F9L);
+                    h ^= h >>> 31;
+                    if (Math.floorMod(h, 37) != 0 || field.excluded(x, z)) {
+                        continue;   // ★11.5-② 표집 1/29→1/37 (시간 고삐 1안)
+                    }
+                    int top = world.getHighestBlockYAt(x, z);
+                    Material ground = world.getBlockAt(x, top, z).getType();
+                    if (!PLANTABLE.contains(ground)) {
+                        continue;   // 보행면·건축 위 금지 — 재료가 곧 계약
+                    }
+                    // ★11.5-② 산몸 판정 경량화 — targetH(무거움) 대신 실표고 (같은 뜻: 산 위인가)
+                    boolean onBody = top > baseY + 20;
+                    if (!onBody && Math.floorMod(h >> 8, 100) < 85) {
+                        continue;   // 들판은 드문드문
+                    }
+                    int slope = 0;
+                    for (int[] n : new int[][]{{3, 0}, {-3, 0}, {0, 3}, {0, -3}}) {
+                        slope = Math.max(slope,
+                                Math.abs(world.getHighestBlockYAt(x + n[0], z + n[1]) - top));
+                    }
+                    if (slope <= 2) {                        // 완사면·마루 — 군락 (짙게)
+                        pine(x, top, z, h);
+                        if (Math.floorMod(h >> 16, 100) < 55) {
+                            pine(x + 2 + (int) Math.floorMod(h >> 20, 3), top, z + 1, h >> 24);
+                        }
+                        mossGround(x, top, z, h);
+                    } else if (slope <= 5) {                 // 어깨 턱 — 점식
+                        if (Math.floorMod(h >> 16, 100) < 55) {
+                            pine(x, top, z, h);
+                        } else {
+                            shrub(x, top, z, h);
+                        }
+                    } else {                                 // 절벽 — 이끼 띠 · 턱 관목 점점이
+                        world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);
+                        mossPatches++;
+                        if (Math.floorMod(h >> 16, 100) < 30) {
+                            shrub(x, top, z, h);
+                        }
+                    }
+                }
+            }
+        }
+
+        /** 소나무 — 껍질 침엽(SPRUCE_WOOD — 건물 재료와 층위 분리) + 잎 (몸통 곁이라 안 삭는다) */
+        private void pine(int x, int top, int z, long h) {
+            int hgt = 3 + (int) Math.floorMod(h >> 32, 5);   // 3~7
+            int g = world.getHighestBlockYAt(x, z);
+            if (g <= world.getMinHeight()
+                    || !PLANTABLE.contains(world.getBlockAt(x, g, z).getType())) {
+                return;
+            }
+            for (int dy = 1; dy <= hgt; dy++) {
+                world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
+            }
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) <= 1) {
+                        world.getBlockAt(x + dx, g + hgt, z + dz).setType(Material.SPRUCE_LEAVES, false);
+                        if (hgt >= 5) {
+                            world.getBlockAt(x + dx, g + hgt - 2, z + dz)
+                                    .setType(Material.SPRUCE_LEAVES, false);
+                        }
+                    }
+                }
+            }
+            world.getBlockAt(x, g + hgt + 1, z).setType(Material.SPRUCE_LEAVES, false);
+            pines++;
+        }
+
+        /** 턱 관목 — 이끼 위 진달래/양치 (잎 삭음 없는 식물 블록) */
+        private void shrub(int x, int top, int z, long h) {
+            world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);
+            Material m = Math.floorMod(h >> 36, 100) < 55 ? Material.AZALEA : Material.FERN;
+            world.getBlockAt(x, top + 1, z).setType(m, false);
+            shrubs++;
+        }
+
+        /** 완사면 바닥 결 — 이끼 자리 + 풀 (군락의 발치) */
+        private void mossGround(int x, int top, int z, long h) {
+            for (int[] o : new int[][]{{1, -1}, {-1, 1}, {2, 1}}) {
+                int gx = x + o[0];
+                int gz = z + o[1];
+                int gy = world.getHighestBlockYAt(gx, gz);
+                if (PLANTABLE.contains(world.getBlockAt(gx, gy, gz).getType())) {
+                    world.getBlockAt(gx, gy, gz).setType(Material.MOSS_BLOCK, false);
+                    if (Math.floorMod(h >> 40, 2) == 0) {
+                        world.getBlockAt(gx, gy + 1, gz).setType(Material.SHORT_GRASS, false);
+                    }
+                    mossPatches++;
+                }
+            }
         }
 
         /** 침봉·산체 결 — ★슬라이스 10-② 웜톤 이관: 정본은 {@link SpireField#stone} (눈이 잰다) */
@@ -1980,6 +2108,8 @@ public final class MvtCommand implements CommandExecutor {
             }
             Announce.say(plugin, sender, ChatColor.GRAY + "  배후봉: " + peaks
                     + " (캠퍼스 정상단 y" + (baseY + 148) + " — 실측 §4: 주봉이 +80 위)");
+            Announce.say(plugin, sender, ChatColor.GRAY + "  식생: 소나무 " + pines + " · 관목 " + shrubs
+                    + " · 이끼 " + mossPatches + " (슬라이스 11 — 완사면 군락·턱 점식·절벽 이끼)");
             Announce.say(plugin, sender, ChatColor.GRAY + "  다음: /혼천 캠퍼스시험 hwasan — 캠퍼스가 산군 잔재를 걷고 앉는다");
         }
     }

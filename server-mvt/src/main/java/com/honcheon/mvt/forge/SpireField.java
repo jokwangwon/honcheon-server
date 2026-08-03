@@ -92,6 +92,16 @@ public final class SpireField {
         this.exclusions = List.copyOf(exclusions);
     }
 
+    /** 그 열이 침범 금지 사각 안인가 — ★11 식생 상이 같은 계약을 쓴다 */
+    public boolean excluded(int x, int z) {
+        for (int[] e : exclusions) {
+            if (x >= e[0] && x <= e[1] && z >= e[2] && z <= e[3]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * 그 열의 산군 목표 높이 (baseY 위 · 0 = 손대지 않음). 조성은
      * {@code max(기존 지형, baseY + targetH)} 로 얹는다 — 감산 없음 (협곡·골 보존).
@@ -263,11 +273,12 @@ public final class SpireField {
         if (de >= 1.0) {
             return 0;
         }
-        // 마루 요철 — 능선을 따라 3칸 단위 파임 0~5. ★선분 중심 ±1 은 파임 0 (topH 계약)
+        // 마루 요철 — 능선을 따라 3칸 단위 파임 0~7 (★11-②: 탁상 꼭대기 손질 — 원경에서도
+        //   마루가 평평히 읽히지 않게 진폭 상향). ★선분 중심 ±1 은 파임 0 (topH 계약)
         double crest = c.topH();
         if (Math.abs(u) > 1.0) {
             long ph = mix(SALT ^ 0xB1DF, c.cx(), (int) Math.floor(u / 3.0), c.cz());
-            crest -= Math.floorMod(ph, 6);
+            crest -= Math.floorMod(ph, 8);
         }
         int hh = (int) (crest * Math.pow(1.0 - de, 0.55));
         if (hh < crest * 0.55) {
@@ -357,7 +368,12 @@ public final class SpireField {
         final double body = 0.78;
         if (d < body) {
             double dome = Math.sqrt(1.0 - (d / body) * (d / body));
-            return (int) (top * (0.88 + 0.12 * dome));
+            int hh = (int) (top * (0.88 + 0.12 * dome));
+            if (d > 0.3) {   // ★11-② 소평두 거칠기 — 넓은 돔이 탁상으로 읽히지 않게 (중심 계약 보존)
+                hh -= (int) Math.floorMod(mix(SALT ^ 0xD03EL,
+                        Math.floorDiv(x, 3), 0, Math.floorDiv(z, 3)), 3);
+            }
+            return hh;
         }
         double t = (d - body) / (1.0 - body);
         int step = 3 + (int) Math.floorMod(h >> 48, 3);      // 3~5 — 수평 바위 턱
