@@ -1873,7 +1873,7 @@ public final class MvtCommand implements CommandExecutor {
             }
             SpireField field = new SpireField(ex);
             Announce.say(plugin, sender, ChatColor.GRAY + "[산군시험] " + worldName + " — 기준면 y"
-                    + baseY + " · 배후봉 4 (Pm h228) · 침봉 켜 3 (r130~620) · 제외 사각 " + ex.size());
+                    + baseY + " · 배후봉 4 (Pm h250) · 침봉 켜 3 (r200~1000) · 제외 사각 " + ex.size());
             Announce.say(plugin, sender, ChatColor.DARK_GRAY + "  타일을 나눠 먹는다 — 진행은 [산군시험·진행] 으로 남는다");
             SpirePaver paver = new SpirePaver(plugin, sender, world, field, baseY);
             TickBudget.slice(plugin, "산군시험:" + variant, paver, () -> {

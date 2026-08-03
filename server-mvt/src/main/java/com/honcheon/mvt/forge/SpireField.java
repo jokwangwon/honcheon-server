@@ -24,10 +24,10 @@ public final class SpireField {
     public static final int CELL = 26;
 
     /** 산군 바깥 한계 (방사) — 원경 켜의 끝 */
-    public static final int FIELD_R = 620;
+    public static final int FIELD_R = 1000;   // ★8.5 — 산체 재척도 동행 (켜 3: 200~430~700~1000)
 
     /** 본산권 안쪽 한계 — 이 안은 골격(캠퍼스의 산)의 것, 산군은 손대지 않는다 */
-    public static final int INNER_R = 130;
+    public static final int INNER_R = 200;
 
     private static final long SALT = 0x5A9_F1E1DL;
 
@@ -70,13 +70,19 @@ public final class SpireField {
     public record Ridge(String id, int cx, int cz, int topH, int r, double axisDeg, int len) {
     }
 
-    /** 배후봉 넷 — 골격 Peak 자리·장축 방위 그대로, 높이는 실측 비로 (실측표 §4·§4-b) */
+    /**
+     * 배후봉 넷 — 골격 Peak 자리·장축 방위 그대로, 높이는 실측 비로 (실측표 §4·§4-b).
+     * ★슬라이스 8: 캠퍼스 표고 사슬이 정상단 148→170 으로 커져 (사용자 기준자 — 계단 20)
+     * 산의 우위(+60~100)를 지키려 배후봉을 함께 올렸다 — Pm 250 = 정상단 170 위 +80.
+     */
     public static List<Ridge> backPeaks() {
+        // ★8.5 — 골격 재척도 동행: 자리 = 새 skelPeaks · 높이 = 골격 마루 위 +8 (크랙 결 몫 ·
+        //   Pm 265 = 정상단 170 + 95 — 산의 우위 실측 창 +60~100 안)
         return List.of(
-                new Ridge("Pm", -24, -54, 228, 56, 90, 10),
-                new Ridge("Em", 62, -46, 200, 42, 116, 8),
-                new Ridge("Wm", -104, -16, 195, 46, 60, 8),
-                new Ridge("Es", 98, -18, 170, 32, 120, 4));
+                new Ridge("Pm", -50, -113, 265, 90, 90, 16),
+                new Ridge("Em", 130, -97, 255, 70, 116, 12),
+                new Ridge("Wm", -218, -34, 250, 76, 60, 12),
+                new Ridge("Es", 206, -38, 215, 52, 120, 6));
     }
 
     private final List<int[]> exclusions;
@@ -166,12 +172,12 @@ public final class SpireField {
         int top;
         if (centerDist < INNER_R) {
             return 0;                                   // 본산권 — 골격의 것
-        } else if (centerDist < 260) {
-            top = 110 + (int) Math.floorMod(h >> 24, 61);   // 근경 110~170
         } else if (centerDist < 430) {
-            top = 90 + (int) Math.floorMod(h >> 24, 51);    // 중경 90~140
+            top = 140 + (int) Math.floorMod(h >> 24, 81);   // 근경 140~220 (★8.5 산체 배율 동행)
+        } else if (centerDist < 700) {
+            top = 110 + (int) Math.floorMod(h >> 24, 71);   // 중경 110~180
         } else if (centerDist < FIELD_R) {
-            top = 70 + (int) Math.floorMod(h >> 24, 41);    // 원경 70~110
+            top = 90 + (int) Math.floorMod(h >> 24, 51);    // 원경 90~140
         } else {
             return 0;
         }
