@@ -2014,11 +2014,12 @@ public final class MvtCommand implements CommandExecutor {
                         continue;   // 경사·원경은 종전 밀도 유지 (12-① — 완사면 근·중경만 짙게)
                     }
                     if (slope <= 2) {                        // 완사면·마루 — 군락 (수관이 잇닿게)
+                        // ★12.5 — 수관이 커졌으므로 곁그루 간격도 넓힌다 (뭉쳐 한 덩이가 되지 않게)
                         pine(x, top, z, h);
-                        pine(x + 2 + (int) Math.floorMod(h >> 20, 3), top,
-                                z - 1 - (int) Math.floorMod(h >> 22, 2), h >> 24);
+                        pine(x + 5 + (int) Math.floorMod(h >> 20, 3), top,
+                                z - 3 - (int) Math.floorMod(h >> 22, 3), h >> 24);
                         if (Math.floorMod(h >> 16, 100) < 50) {
-                            pine(x - 2 - (int) Math.floorMod(h >> 26, 2), top, z + 2, h >> 28);
+                            pine(x - 4 - (int) Math.floorMod(h >> 26, 3), top, z + 5, h >> 28);
                         }
                         mossGround(x, top, z, h);
                     } else if (slope <= 5) {                 // 어깨 턱 — 점식
@@ -2039,9 +2040,14 @@ public final class MvtCommand implements CommandExecutor {
         }
 
         /**
-         * 소나무 — 껍질 침엽(SPRUCE_WOOD — 건물 재료와 층위 분리) + 잎 (몸통 곁이라 안 삭는다).
-         * ★12-① 수관 3급 변주: 소(3~4·십자관) / 중(5~7·현행) / 대(8~10·반경 2 겹관) —
-         * 군락에서 수관이 잇닿아 「초록 면」으로 읽히게.
+         * 소나무 — ★슬라이스 12.5 형태 재구축 (조율자 판정 「깃발 꽂은 막대」의 처방).
+         *
+         * <p>실측 (9호 우측 절벽·1호 접근로·8호 능선): 산 소나무는 <b>넓은 우산꼴</b>이다 —
+         * 수관 폭이 나무 높이와 비슷하거나 넓고(폭:높이 ≈ 0.7~1.1), 잎이 <b>2~3층</b>으로
+         * 옆으로 뻗으며(가지 팔), 층 사이로 굵은 몸통이 보인다. 대수는 몸통이 2×2.
+         *
+         * <p>급: 소 35% (높이 4~5 · 폭 5~7 · 층 2) / 중 45% (6~8 · 7~9 · 층 2~3) /
+         * 대 20% (9~12 · <b>폭 9~13 · 층 3 · 2×2 몸통</b>). 층은 아래로 갈수록 넓다.
          */
         private void pine(int x, int top, int z, long h) {
             int g = world.getHighestBlockYAt(x, z);
@@ -2050,33 +2056,51 @@ public final class MvtCommand implements CommandExecutor {
                 return;
             }
             int size = (int) Math.floorMod(h >> 36, 100);    // 0~99: 소 35 / 중 45 / 대 20
-            int hgt = size < 35 ? 3 + (int) Math.floorMod(h >> 32, 2)
-                    : size < 80 ? 5 + (int) Math.floorMod(h >> 32, 3)
-                    : 8 + (int) Math.floorMod(h >> 32, 3);
-            int canopy = size < 80 ? 1 : 2;
+            int hgt;
+            int rad;                                          // 최하층 수관 반경 (폭 = 2·rad+1)
+            int tiers;
+            boolean fat;                                      // 2×2 몸통
+            if (size < 35) {
+                hgt = 4 + (int) Math.floorMod(h >> 32, 2);    // 4~5
+                rad = 2 + (int) Math.floorMod(h >> 44, 2);    // 폭 5~7
+                tiers = 2;
+                fat = false;
+            } else if (size < 80) {
+                hgt = 6 + (int) Math.floorMod(h >> 32, 3);    // 6~8
+                rad = 3 + (int) Math.floorMod(h >> 44, 2);    // 폭 7~9
+                tiers = 2 + (int) Math.floorMod(h >> 46, 2);  // 2~3
+                fat = false;
+            } else {
+                hgt = 9 + (int) Math.floorMod(h >> 32, 4);    // 9~12
+                rad = 4 + (int) Math.floorMod(h >> 44, 3);    // 폭 9~13
+                tiers = 3;
+                fat = true;
+            }
+            // 몸통 — 대수는 2×2 (층 사이로 보이는 굵은 줄기)
             for (int dy = 1; dy <= hgt; dy++) {
                 world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
+                if (fat) {
+                    world.getBlockAt(x + 1, g + dy, z).setType(Material.SPRUCE_WOOD, false);
+                    world.getBlockAt(x, g + dy, z + 1).setType(Material.SPRUCE_WOOD, false);
+                    world.getBlockAt(x + 1, g + dy, z + 1).setType(Material.SPRUCE_WOOD, false);
+                }
             }
-            for (int dx = -canopy; dx <= canopy; dx++) {
-                for (int dz = -canopy; dz <= canopy; dz++) {
-                    if (Math.abs(dx) + Math.abs(dz) <= canopy) {
-                        world.getBlockAt(x + dx, g + hgt, z + dz).setType(Material.SPRUCE_LEAVES, false);
-                        if (hgt >= 5) {
-                            world.getBlockAt(x + dx, g + hgt - 2, z + dz)
-                                    .setType(Material.SPRUCE_LEAVES, false);
+            // 우산 수관 — 층마다 원판(아래가 넓다) · 층 간격 2 · 가지 팔이 옆으로 뻗는다
+            for (int t = 0; t < tiers; t++) {
+                int ty = g + hgt - t * 2;                     // 위층부터 아래로
+                int tr = Math.max(1, rad - (tiers - 1 - t));  // 아래층일수록 넓다
+                for (int dx = -tr; dx <= tr + (fat ? 1 : 0); dx++) {
+                    for (int dz = -tr; dz <= tr + (fat ? 1 : 0); dz++) {
+                        int ox = fat && dx > 0 ? dx - 1 : dx;   // 2×2 몸통 중심 보정
+                        int oz = fat && dz > 0 ? dz - 1 : dz;
+                        if (Math.abs(ox) + Math.abs(oz) > tr + 1 || (ox == 0 && oz == 0 && t > 0)) {
+                            continue;   // 마름모 우산 · 몸통 자리는 아래층에서 비운다
                         }
+                        world.getBlockAt(x + dx, ty, z + dz).setType(Material.SPRUCE_LEAVES, false);
                     }
                 }
             }
-            if (canopy == 2) {                               // 대수 — 가운데 켜를 한 겹 더 (겹관)
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        world.getBlockAt(x + dx, g + hgt - 1, z + dz)
-                                .setType(Material.SPRUCE_LEAVES, false);
-                    }
-                }
-            }
-            world.getBlockAt(x, g + hgt + 1, z).setType(Material.SPRUCE_LEAVES, false);
+            world.getBlockAt(x, g + hgt + 1, z).setType(Material.SPRUCE_LEAVES, false);   // 정수리
             pines++;
         }
 

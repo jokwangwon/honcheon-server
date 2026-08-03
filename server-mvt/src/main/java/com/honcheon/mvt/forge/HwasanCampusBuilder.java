@@ -1271,15 +1271,23 @@ public final class HwasanCampusBuilder {
         if (g <= world.getMinHeight()) {
             return;
         }
-        int h = 3 + (int) Math.floorMod(hash(0x917E, x, 0, z), 3);   // 3~5
+        // ★12.5 — 산군 식생과 같은 우산꼴 문법 (조율자 판정: 「깃발 꽂은 막대」 금지).
+        //   벼랑 턱이라 산의 대수보다는 작게: 높이 5~7 · 폭 7~9 · 층 2 (폭:높이 ≈ 1.2)
+        long hh = hash(0x917E, x, 0, z);
+        int h = 5 + (int) Math.floorMod(hh, 3);
+        int rad = 3 + (int) Math.floorMod(hh >> 8, 2);
         for (int dy = 1; dy <= h; dy++) {
             world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
         }
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (Math.abs(dx) + Math.abs(dz) <= 1) {
-                    world.getBlockAt(x + dx, g + h, z + dz).setType(Material.SPRUCE_LEAVES, false);
-                    world.getBlockAt(x + dx, g + h - 1, z + dz).setType(Material.SPRUCE_LEAVES, false);
+        for (int t = 0; t < 2; t++) {
+            int ty = g + h - t * 2;
+            int tr = Math.max(1, rad - (1 - t));
+            for (int dx = -tr; dx <= tr; dx++) {
+                for (int dz = -tr; dz <= tr; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) > tr + 1 || (dx == 0 && dz == 0 && t > 0)) {
+                        continue;
+                    }
+                    world.getBlockAt(x + dx, ty, z + dz).setType(Material.SPRUCE_LEAVES, false);
                 }
             }
         }

@@ -539,17 +539,27 @@ public final class TerraceForge {
         world.getBlockAt(x, g + 5, z).setType(Material.STONE_BRICK_WALL, false);
     }
 
-    /** 접근로 곁 소나무 — 껍질 침엽 몸통 + 잎 (조경 층위 재료 — 유출 눈 밖) */
+    /**
+     * 접근로 곁 소나무 — ★12.5 우산꼴 통일 (산군·캠퍼스와 한 문법): 높이 5~7 · 폭 7~9 ·
+     * 층 2. 조경 층위 재료(SPRUCE_WOOD — 유출 눈 밖).
+     */
     private static void approachPine(World world, int x, int z, Tally tally) {
         int g = groundY(world, x, z);
-        int h = 3 + (int) Math.floorMod(mix(SALT_RIB ^ 0x917EL, x, 0, z), 3);
+        long hh = mix(SALT_RIB ^ 0x917EL, x, 0, z);
+        int h = 5 + (int) Math.floorMod(hh, 3);
+        int rad = 3 + (int) Math.floorMod(hh >> 8, 2);
         for (int dy = 1; dy <= h; dy++) {
             world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
         }
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (Math.abs(dx) + Math.abs(dz) <= 1) {
-                    world.getBlockAt(x + dx, g + h, z + dz).setType(Material.SPRUCE_LEAVES, false);
+        for (int t = 0; t < 2; t++) {
+            int ty = g + h - t * 2;
+            int tr = Math.max(1, rad - (1 - t));
+            for (int dx = -tr; dx <= tr; dx++) {
+                for (int dz = -tr; dz <= tr; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) > tr + 1 || (dx == 0 && dz == 0 && t > 0)) {
+                        continue;
+                    }
+                    world.getBlockAt(x + dx, ty, z + dz).setType(Material.SPRUCE_LEAVES, false);
                 }
             }
         }
