@@ -468,8 +468,10 @@ public final class TerraceForge {
                     tally.parapet++;
                 }
             }
-            if (i == 102) {
-                approachGate(world, a.x(), y, z, tally);   // 소문 — 기슭 언덕 마루
+            if (i == 104) {
+                // 소문 — 기슭 언덕 마루 (중심 z0+102). ★i104 에 세운다: 지붕이 z±2 를 덮으므로
+                // 그 행들의 조성(clearAbove)이 끝난 뒤여야 한다 (마당 96~108 평탄이라 y 동일)
+                approachGate(world, a.x(), a.ys()[102], a.z0() + 102, tally);
             }
             if (i == 27 || i == 150) {
                 stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁
@@ -483,20 +485,48 @@ public final class TerraceForge {
         }
     }
 
-    /** 소문 — 접근로를 걸치는 작은 문루 (두 돌기둥 + 보 + 기와 갓 · 전폭 ~23) */
+    /**
+     * 소문 — 접근로를 걸치는 작은 문루 (★슬라이스 10-③ 재건: 「돌기둥 골대」가 아니라
+     * 지붕 있는 문이다). 적주 두 쌍(2겹 · 통행을 15 로 조인다 — 시퀀스의 조임) · 석재 기단 ·
+     * 다크오크 보+공포 · 팔작풍 기와 지붕(내밈 반블록·물매 계단·용마루·치미) · 빈 현판 · 등롱.
+     * 디테일 키트 문법(공포·겹처마)의 접근로판.
+     */
     private static void approachGate(World world, int ax, int y, int z, Tally tally) {
-        for (int side : new int[]{-RAIL_OFF - 1, RAIL_OFF + 1}) {
+        for (int side : new int[]{-8, -7, 7, 8}) {              // 적주 두 쌍 — 기단 위에 선다
             int x = ax + side;
             fillDown(world, x, y, z, tally);
-            for (int dy = 0; dy <= 7; dy++) {
-                world.getBlockAt(x, y + dy, z).setType(Material.STONE_BRICKS, false);
+            world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
+            for (int dy = 1; dy <= 7; dy++) {
+                world.getBlockAt(x, y + dy, z).setType(Material.STRIPPED_MANGROVE_LOG, false);
             }
         }
-        for (int o = -RAIL_OFF - 1; o <= RAIL_OFF + 1; o++) {
+        for (int o = -9; o <= 9; o++) {                          // 보 + 공포 띠
             world.getBlockAt(ax + o, y + 8, z).setType(Material.DARK_OAK_PLANKS, false);
-            world.getBlockAt(ax + o, y + 9, z).setType(Material.DEEPSLATE_TILE_SLAB, false);
+            for (int dz : new int[]{-1, 1}) {
+                world.getBlockAt(ax + o, y + 8, z + dz).setType(
+                        Math.floorMod(o, 3) == 0 ? Material.DARK_OAK_PLANKS
+                                : Material.DARK_OAK_SLAB, false);
+            }
         }
-        world.getBlockAt(ax, y + 8, z).setType(Material.DARK_OAK_PLANKS, false);   // 빈 현판 자리 (보 중앙)
+        for (int o = -11; o <= 11; o++) {                        // 기와 지붕 — 내밈·물매·용마루
+            world.getBlockAt(ax + o, y + 9, z - 2).setType(Material.DEEPSLATE_TILE_SLAB, false);
+            world.getBlockAt(ax + o, y + 9, z + 2).setType(Material.DEEPSLATE_TILE_SLAB, false);
+            for (int dz : new int[]{-1, 1}) {
+                Stairs s = (Stairs) Material.DEEPSLATE_TILE_STAIRS.createBlockData();
+                s.setFacing(dz > 0 ? BlockFace.NORTH : BlockFace.SOUTH);   // 오름이 용마루를 향한다
+                world.getBlockAt(ax + o, y + 9, z + dz).setBlockData(s, false);
+            }
+            world.getBlockAt(ax + o, y + 9, z).setType(Material.DEEPSLATE_TILES, false);
+            world.getBlockAt(ax + o, y + 10, z).setType(
+                    Math.abs(o) == 11 ? Material.DEEPSLATE_TILE_WALL
+                            : Material.DEEPSLATE_TILE_SLAB, false);        // 용마루 · 끝 치미
+        }
+        for (int o = -1; o <= 1; o++) {                          // 빈 현판 (남면 — 오는 이가 본다)
+            world.getBlockAt(ax + o, y + 7, z + 1).setType(Material.DARK_OAK_PLANKS, false);
+        }
+        world.getBlockAt(ax + 7, y + 3, z + 1).setType(Material.LANTERN, false);
+        world.getBlockAt(ax - 7, y + 3, z + 1).setType(Material.LANTERN, false);
+        tally.lanterns += 2;
     }
 
     /** 비석 — 참 곁의 돌비 (기단 + 몸 3 + 갓) */

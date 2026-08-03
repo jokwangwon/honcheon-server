@@ -1952,25 +1952,9 @@ public final class MvtCommand implements CommandExecutor {
             return index < totalTiles;
         }
 
-        /** 창백한 침봉 결 — 실측 8호의 옅은 바위 (켜켜이 방해석 띠) · 마루엔 이끼가 앉는다 */
+        /** 침봉·산체 결 — ★슬라이스 10-② 웜톤 이관: 정본은 {@link SpireField#stone} (눈이 잰다) */
         private Material spireStone(int x, int y, int z, boolean cap) {
-            long h = (x * 0x9E3779B97F4A7C15L) ^ ((y / 6) * 0xC2B2AE3D27D4EB4FL)
-                    ^ (z * 0x165667B19E3779F9L);
-            h ^= h >>> 31;
-            int r = (int) Math.floorMod(h, 100);
-            if (cap) {
-                return r < 45 ? Material.MOSS_BLOCK : Material.STONE;
-            }
-            if (r < 60) {
-                return Material.STONE;
-            }
-            if (r < 76) {
-                return Material.ANDESITE;
-            }
-            if (r < 90) {
-                return Material.CALCITE;
-            }
-            return Material.TUFF;
+            return SpireField.stone(x, y, z, cap);
         }
 
         /** 완료 — 검수(배후봉 마루·켜 표본·다리 회랑) + census */

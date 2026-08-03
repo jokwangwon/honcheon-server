@@ -102,7 +102,7 @@ public final class SpireField {
                 return 0;
             }
         }
-        int best = 0;
+        int best = baseRelief(x, z);                    // ⓪ ★산몸 — 침봉이 이 위에서 솟는다 (슬라이스 10)
         for (Ridge c : backPeaks()) {                   // ① 배후봉 — 병풍꼴 능선봉 (§4-b)
             best = Math.max(best, ridgeH(c, x, z));
         }
@@ -114,6 +114,64 @@ public final class SpireField {
             }
         }
         return best;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ★산몸 (基底 릴리프) — 슬라이스 10-① (사용자 재지시: 「그냥 기둥이지 산이 아니다.
+    //   산부터 완성시켜라」). 레퍼런스 8호(능선으로 이어진 봉군)·12호(하나의 산체) 재실측
+    //   (실측표 §11): 산체 마루 ≈ 침봉 마루의 35~45% · 안부 ≈ 산체 마루의 ~60% ·
+    //   운해 골 ≈ 자리의 1/4. 침봉·배후봉은 이 산체 위에서 솟는다 (max 합성) —
+    //   「평지+기둥」이 「산+암봉」이 된다. 본산(산세)과는 max 합성 + 안쪽 소멸 띠로 잇는다.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 산체가 미치는 끝 — 원경 침봉은 운해 위 실루엣로 남긴다 (조성량·시간의 고삐이기도 하다) */
+    public static final int RELIEF_FADE_END = 760;
+
+    /** 산체 높이 기여 (0 = 골/범위 밖). 능선 결(ridged) 노이즈 — 마루선이 이어지고 안부가 생긴다. */
+    private int baseRelief(int x, int z) {
+        double dist = Math.hypot(x, z);
+        if (dist >= RELIEF_FADE_END) {
+            return 0;
+        }
+        double n1 = 1.0 - 2.0 * Math.abs(valueNoise(x / 96.0, z / 96.0, SALT ^ 0x51DCEL) - 0.5);
+        double n2 = valueNoise(x / 37.0, z / 37.0, SALT ^ 0x52DCEL);
+        double n = 0.62 * n1 + 0.38 * n2;
+        if (n < 0.32) {
+            return 0;   // 운해 골 — 협곡 자리 보존 (~1/4)
+        }
+        double t = (n - 0.32) / 0.68;
+        double amp = dist < 430 ? 85 : dist < 700 ? 85 - 25 * (dist - 430) / 270.0 : 60;
+        double edge = Math.min(1.0, (RELIEF_FADE_END - dist) / 120.0);
+        double inner = dist >= INNER_R ? 1.0 : Math.max(0.0, (dist - 120) / 80.0);   // 본산권 — 산세에 양보
+        int hgt = (int) (t * t * amp * edge * inner);   // t² — 마루는 서고 발치는 완만
+        if (inCorridor(x, z)) {
+            hgt = Math.min(hgt, 20);   // ★시야 회랑 — 지형 금지가 아니라 낮은 구릉까지 (8.8 의 결)
+        }
+        return hgt;
+    }
+
+    /** 격자 값 노이즈 [0,1) — 결정론 (난수 0) · 스무스스텝 보간 */
+    private static double valueNoise(double u, double v, long salt) {
+        int iu = (int) Math.floor(u);
+        int iv = (int) Math.floor(v);
+        double fu = u - iu;
+        double fv = v - iv;
+        double su = fu * fu * (3 - 2 * fu);
+        double sv = fv * fv * (3 - 2 * fv);
+        double a = lattice(iu, iv, salt);
+        double b = lattice(iu + 1, iv, salt);
+        double c = lattice(iu, iv + 1, salt);
+        double d = lattice(iu + 1, iv + 1, salt);
+        return a + (b - a) * su + (c - a) * sv + (a - b - c + d) * su * sv;
+    }
+
+    private static double lattice(int iu, int iv, long salt) {
+        return Math.floorMod(mix(salt, iu, 0, iv), 10_000) / 10_000.0;
+    }
+
+    /** 남쪽 접근 시야 회랑인가 (8.8) — 침봉은 금지, 산체는 구릉 상한 */
+    private static boolean inCorridor(int x, int z) {
+        return z >= 340 && Math.abs(x + 4) <= 45;
     }
 
     /**
@@ -171,23 +229,34 @@ public final class SpireField {
         // ★8.8 남쪽 접근 시야 회랑 — 레퍼런스 1호(계단에서 산문이 보인다)·12호(남쪽 전경)의
         //   문법이다: 축선(x≈-4) 남쪽 폭 ~70 은 침봉이 비운다 (중심 판정 ±45 — 몸통 가장자리가
         //   회랑 끝을 살짝 무는 건 자연의 결). 배후봉·동서 침봉 무접촉 · 결정론.
-        if (cz >= 340 && Math.abs(cx + 4) <= 45) {
+        if (inCorridor(cx, cz)) {
             return 0;
         }
         double centerDist = Math.hypot(cx, cz);
-        int top;
+        int lo;
+        int hi;
         if (centerDist < INNER_R) {
             return 0;                                   // 본산권 — 골격의 것
         } else if (centerDist < 430) {
-            top = 140 + (int) Math.floorMod(h >> 24, 81);   // 근경 140~220 (★8.5 산체 배율 동행)
+            lo = 140;
+            hi = 220;                                   // 근경 (★8.5 산체 배율 동행)
         } else if (centerDist < 700) {
-            top = 110 + (int) Math.floorMod(h >> 24, 71);   // 중경 110~180
+            lo = 110;
+            hi = 180;                                   // 중경
         } else if (centerDist < FIELD_R) {
-            top = 90 + (int) Math.floorMod(h >> 24, 51);    // 원경 90~140
+            lo = 90;
+            hi = 140;                                   // 원경
         } else {
             return 0;
         }
-        int r = 6 + (int) Math.floorMod(h >> 32, 7);        // 6~12
+        // ★슬라이스 10 실루엣 변주 — 멱분포 느낌: 굵은 놈 소수(18% · r 13~17 · 마루 창 상단 1/3)
+        //   + 가는 놈 다수(r 5~9 · 창 전체). 「파이프오르간」 균일함을 깬다 (레퍼런스 8·9호 —
+        //   굵은 주봉 곁 가는 침봉 무리).
+        boolean thick = Math.floorMod(h >> 52, 100) < 18;
+        int r = thick ? 13 + (int) Math.floorMod(h >> 32, 5)
+                : 5 + (int) Math.floorMod(h >> 32, 5);
+        int top = thick ? hi - (int) Math.floorMod(h >> 24, (hi - lo) / 3 + 1)
+                : lo + (int) Math.floorMod(h >> 24, hi - lo + 1);
         double dx = x - cx, dz = z - cz;
         if (Math.hypot(dx, dz) >= r * 1.13) {
             return 0;                                        // 로브 최대 확장 밖 — 빠른 탈출
@@ -213,6 +282,51 @@ public final class SpireField {
         int step = 3 + (int) Math.floorMod(h >> 48, 3);      // 3~5 — 수평 바위 턱
         int skirt = (int) (top * 0.88 * (1.0 - Math.pow(t, 0.4)));
         return (skirt / step) * step;
+    }
+
+    /**
+     * ★암질 — 슬라이스 10-② 색 온도: 차가운 회색 일색 → 웜톤 (레퍼런스 1·8·12호의 베이지 끼
+     * 석재). 점적석(따뜻한 갈빛)·사암을 섞고 응회암 비중을 올렸다 — y-띠(6칸)·해시 결정론.
+     * 마루(cap)엔 이끼가 앉는다 (기존 결 유지).
+     */
+    public static org.bukkit.Material stone(int x, int y, int z, boolean cap) {
+        long h = (x * 0x9E3779B97F4A7C15L) ^ ((y / 6) * 0xC2B2AE3D27D4EB4FL)
+                ^ (z * 0x165667B19E3779F9L);
+        h ^= h >>> 31;
+        int r = (int) Math.floorMod(h, 100);
+        if (cap) {
+            return r < 45 ? org.bukkit.Material.MOSS_BLOCK : org.bukkit.Material.STONE;
+        }
+        if (r < 26) {
+            return org.bukkit.Material.STONE;
+        }
+        if (r < 40) {
+            return org.bukkit.Material.ANDESITE;
+        }
+        if (r < 58) {
+            return org.bukkit.Material.TUFF;
+        }
+        if (r < 70) {
+            return org.bukkit.Material.CALCITE;
+        }
+        if (r < 88) {
+            return org.bukkit.Material.DRIPSTONE_BLOCK;   // 웜톤의 몸통
+        }
+        if (r < 96) {
+            return org.bukkit.Material.SANDSTONE;
+        }
+        return org.bukkit.Material.MOSSY_COBBLESTONE;     // 벽면 이끼 낌 (10-① 예비)
+    }
+
+    /** 셀의 침봉 반경 (0 = 없음) — 실루엣 변주의 눈이 분포를 잰다 */
+    public static int spireRadius(int cellX, int cellZ) {
+        long h = mix(SALT, cellX, 0, cellZ);
+        if (Math.floorMod(h, 100) >= 62) {
+            return 0;
+        }
+        boolean thick = Math.floorMod(h >> 52, 100) < 18;
+        return thick ? 13 + (int) Math.floorMod(h >> 32, 5)
+                : 5 + (int) Math.floorMod(h >> 32, 5);
     }
 
     private static long mix(long salt, int x, int y, int z) {

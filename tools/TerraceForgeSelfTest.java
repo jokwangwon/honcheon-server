@@ -267,12 +267,13 @@ public final class TerraceForgeSelfTest {
                 rings[0] > 0 && rings[1] > 0 && rings[2] > 0,
                 rings[0] + "/" + rings[1] + "/" + rings[2]);
         check("산군: 근경 침봉 마루가 실측 창(140~220) 안", r1max >= 140 && r1max <= 220, r1max);
-        // ★8.8 — 남쪽 접근 시야 회랑: 축선 남쪽 폭 ~70 에 침봉 0 · 회랑 밖 남쪽 필드엔 침봉 실재
+        // ★8.8 — 남쪽 접근 시야 회랑: 축선 남쪽 폭 ~70 은 침봉 0 · ★10-①: 산체는 낮은 구릉(≤20)
+        //   까지 허용 (시야 회랑이지 지형 금지가 아니다 — 접근로가 구릉을 넘는 것이 시퀀스다)
         boolean corridorClear = true;
         int southSide = 0;
         for (int gz = 400; gz <= 980; gz += 11) {
             for (int gx = -30; gx <= 22; gx += 7) {
-                if (bare.targetH(gx, gz) != 0) {
+                if (bare.targetH(gx, gz) > 20) {
                     corridorClear = false;
                 }
             }
@@ -280,8 +281,61 @@ public final class TerraceForgeSelfTest {
                 southSide++;
             }
         }
-        check("★8.8 남쪽 시야 회랑 — 축선 폭 70 침봉 0 (1·12호 접근 조망)", corridorClear, "회랑 침범");
-        check("★8.8 회랑 밖 남쪽 침봉 실재 (회랑이 필드를 안 지웠다)", southSide > 0, southSide);
+        check("★8.8 남쪽 시야 회랑 — 침봉 0 · 산체 구릉 ≤20 (10-① 개정)", corridorClear, "회랑 침범");
+        check("★8.8 회랑 밖 남쪽 필드 실재 (회랑이 필드를 안 지웠다)", southSide > 0, southSide);
+        // ★10-① 산몸 — 「평지+기둥」이 아니라 「산+암봉」: 근경 환대에서 맨바닥(0) 비율이
+        //   절반 아래로 (침봉만 있던 8.5 는 ~75% 가 맨바닥이었다) + 산체 높이대(25~95) 실재
+        int zeros = 0;
+        int total = 0;
+        int bodyBand = 0;
+        for (int gx = -420; gx <= 420; gx += 17) {
+            for (int gz = -420; gz <= 420; gz += 17) {
+                double dd = Math.hypot(gx, gz);
+                if (dd < 240 || dd > 420) {
+                    continue;
+                }
+                total++;
+                int hh = bare.targetH(gx, gz);
+                if (hh == 0) {
+                    zeros++;
+                } else if (hh >= 25 && hh <= 95) {
+                    bodyBand++;
+                }
+            }
+        }
+        check("★10-① 산몸 연결 — 근경 맨바닥 ≤45% (침봉이 산체 위에서 솟는다)",
+                total > 0 && zeros * 100 / total <= 45, zeros + "/" + total);
+        check("★10-① 산체 높이대(25~95) 실재 — 능선·안부의 층", bodyBand > 0, bodyBand);
+        // ★10 실루엣 변주 — 멱분포: 가는 반경(≤9)과 굵은 반경(≥13)이 다 있다
+        boolean thin = false;
+        boolean thickR = false;
+        for (int cx2 = -30; cx2 <= 30; cx2++) {
+            for (int cz2 = -30; cz2 <= 30; cz2++) {
+                int rr = com.honcheon.mvt.forge.SpireField.spireRadius(cx2, cz2);
+                if (rr > 0 && rr <= 9) {
+                    thin = true;
+                }
+                if (rr >= 13) {
+                    thickR = true;
+                }
+            }
+        }
+        check("★10 침봉 변주 — 가는 놈(≤9)과 굵은 놈(≥13)이 공존 (파이프오르간 금지)",
+                thin && thickR, thin + "/" + thickR);
+        // ★10-② 웜톤 암질 — 점적석(따뜻한 갈빛)이 섞이고 금지 재료가 없다
+        boolean warm = false;
+        boolean bannedStone = false;
+        for (int s = 0; s < 400; s++) {
+            Material m = com.honcheon.mvt.forge.SpireField.stone(s * 13, (s % 40) * 3, s * 7, false);
+            if (m == Material.DRIPSTONE_BLOCK) {
+                warm = true;
+            }
+            if (m == Material.BARREL || m == Material.LIGHT) {
+                bannedStone = true;
+            }
+        }
+        check("★10-② 웜톤 — 점적석 섞임 · barrel/light 없음", warm && !bannedStone,
+                warm + "/" + bannedStone);
         // ★6.7 형태 계약 (§4-b) — 「바늘 침봉·원뿔 배후봉」 재발 방지
         //   침봉 몸통 유지: 마루 열에서 3칸 비켜도 몸통(≥80%)이다 — 옛 (1−d²)^1.5 는 ~65% 라 실패한다
         int mx = 0, mz = 0, mh = 0;
