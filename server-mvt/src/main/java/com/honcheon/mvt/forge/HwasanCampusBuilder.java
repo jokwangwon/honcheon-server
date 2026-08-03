@@ -921,11 +921,15 @@ public final class HwasanCampusBuilder {
                     }
                 }
             }
-            // 보 + 맞배 지붕 — 가장자리 반블록, 안쪽 계단, 마루 솟음
+            // 맞배 지붕 — ★12-③ 두 겹 (원거리에서 「선」으로 읽히던 것의 처방): 처마 내밈
+            //   반블록(y+4) → 가장자리 반블록 + 물매 계단(y+5) → 중심 통기와 + 용마루 반블록(y+6)
+            put(world, pad, x0 - 1, y + 4, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            put(world, pad, x1 + 1, y + 4, z, Material.DEEPSLATE_TILE_SLAB, tally);
             put(world, pad, x0, y + 5, z, Material.DEEPSLATE_TILE_SLAB, tally);
             put(world, pad, x1, y + 5, z, Material.DEEPSLATE_TILE_SLAB, tally);
             putRoofStair(world, pad, x0 + 1, y + 5, z, org.bukkit.block.BlockFace.EAST, tally);
             putRoofStair(world, pad, x1 - 1, y + 5, z, org.bukkit.block.BlockFace.WEST, tally);
+            put(world, pad, x0 + 2, y + 5, z, roofCube(x0 + 2, y + 5, z), tally);
             put(world, pad, x0 + 2, y + 6, z, Material.DEEPSLATE_TILE_SLAB, tally);
             if (Math.floorMod(z - z0, 8) == 4) {
                 put(world, pad, x0 + 2, y + 3, z, Material.LANTERN, tally);   // 복도 등롱

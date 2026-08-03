@@ -1989,8 +1989,10 @@ public final class MvtCommand implements CommandExecutor {
                 for (int z = z0; z < z0 + SANSE_TILE; z++) {
                     long h = ((long) x * 0x9E3779B97F4A7C15L) ^ ((long) z * 0x165667B19E3779F9L);
                     h ^= h >>> 31;
-                    if (Math.floorMod(h, 37) != 0 || field.excluded(x, z)) {
-                        continue;   // ★11.5-② 표집 1/29→1/37 (시간 고삐 1안)
+                    // ★12-① 이중 표집: 굵은 눈금 1/13 로 훑고, 완사면(짙은 군락 몫)만 다 심는다.
+                    //   그 외 경사·원경(500+)은 추가 관문(×1/3 ≈ 종전 1/37~39)으로 걸러 시간을 지킨다.
+                    if (Math.floorMod(h, 13) != 0 || field.excluded(x, z)) {
+                        continue;
                     }
                     int top = world.getHighestBlockYAt(x, z);
                     Material ground = world.getBlockAt(x, top, z).getType();
@@ -2007,10 +2009,16 @@ public final class MvtCommand implements CommandExecutor {
                         slope = Math.max(slope,
                                 Math.abs(world.getHighestBlockYAt(x + n[0], z + n[1]) - top));
                     }
-                    if (slope <= 2) {                        // 완사면·마루 — 군락 (짙게)
+                    boolean dense = slope <= 2 && (long) x * x + (long) z * z <= 500L * 500L;
+                    if (!dense && Math.floorMod(h >> 4, 3) != 0) {
+                        continue;   // 경사·원경은 종전 밀도 유지 (12-① — 완사면 근·중경만 짙게)
+                    }
+                    if (slope <= 2) {                        // 완사면·마루 — 군락 (수관이 잇닿게)
                         pine(x, top, z, h);
-                        if (Math.floorMod(h >> 16, 100) < 55) {
-                            pine(x + 2 + (int) Math.floorMod(h >> 20, 3), top, z + 1, h >> 24);
+                        pine(x + 2 + (int) Math.floorMod(h >> 20, 3), top,
+                                z - 1 - (int) Math.floorMod(h >> 22, 2), h >> 24);
+                        if (Math.floorMod(h >> 16, 100) < 50) {
+                            pine(x - 2 - (int) Math.floorMod(h >> 26, 2), top, z + 2, h >> 28);
                         }
                         mossGround(x, top, z, h);
                     } else if (slope <= 5) {                 // 어깨 턱 — 점식
@@ -2030,25 +2038,41 @@ public final class MvtCommand implements CommandExecutor {
             }
         }
 
-        /** 소나무 — 껍질 침엽(SPRUCE_WOOD — 건물 재료와 층위 분리) + 잎 (몸통 곁이라 안 삭는다) */
+        /**
+         * 소나무 — 껍질 침엽(SPRUCE_WOOD — 건물 재료와 층위 분리) + 잎 (몸통 곁이라 안 삭는다).
+         * ★12-① 수관 3급 변주: 소(3~4·십자관) / 중(5~7·현행) / 대(8~10·반경 2 겹관) —
+         * 군락에서 수관이 잇닿아 「초록 면」으로 읽히게.
+         */
         private void pine(int x, int top, int z, long h) {
-            int hgt = 3 + (int) Math.floorMod(h >> 32, 5);   // 3~7
             int g = world.getHighestBlockYAt(x, z);
             if (g <= world.getMinHeight()
                     || !PLANTABLE.contains(world.getBlockAt(x, g, z).getType())) {
                 return;
             }
+            int size = (int) Math.floorMod(h >> 36, 100);    // 0~99: 소 35 / 중 45 / 대 20
+            int hgt = size < 35 ? 3 + (int) Math.floorMod(h >> 32, 2)
+                    : size < 80 ? 5 + (int) Math.floorMod(h >> 32, 3)
+                    : 8 + (int) Math.floorMod(h >> 32, 3);
+            int canopy = size < 80 ? 1 : 2;
             for (int dy = 1; dy <= hgt; dy++) {
                 world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
             }
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    if (Math.abs(dx) + Math.abs(dz) <= 1) {
+            for (int dx = -canopy; dx <= canopy; dx++) {
+                for (int dz = -canopy; dz <= canopy; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) <= canopy) {
                         world.getBlockAt(x + dx, g + hgt, z + dz).setType(Material.SPRUCE_LEAVES, false);
                         if (hgt >= 5) {
                             world.getBlockAt(x + dx, g + hgt - 2, z + dz)
                                     .setType(Material.SPRUCE_LEAVES, false);
                         }
+                    }
+                }
+            }
+            if (canopy == 2) {                               // 대수 — 가운데 켜를 한 겹 더 (겹관)
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        world.getBlockAt(x + dx, g + hgt - 1, z + dz)
+                                .setType(Material.SPRUCE_LEAVES, false);
                     }
                 }
             }

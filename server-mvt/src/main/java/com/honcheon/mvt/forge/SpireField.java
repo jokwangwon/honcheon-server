@@ -266,9 +266,13 @@ public final class SpireField {
         if (d >= 1.15) {
             return 0;
         }
-        // 세로 홈 — 방위 로브가 유효 거리를 흔든다 (몸 전 높이 관통 · 결정론)
+        // 세로 홈 — 방위 로브가 유효 거리를 흔든다 (몸 전 높이 관통 · 결정론).
+        // ★12-② 급벽 쪽(v>2)은 진폭 상향 — 매끈한 비탈이 아니라 갈라진 절벽면으로 읽히게.
+        boolean steep = v > 2;
+        double a1 = steep ? 0.08 : 0.05;
+        double a2 = steep ? 0.05 : 0.03;
         double th = Math.atan2(uz, ux);
-        double flute = 1.0 + 0.05 * Math.sin(7 * th) + 0.03 * Math.sin(11 * th + 2.1);
+        double flute = 1.0 + a1 * Math.sin(7 * th) + a2 * Math.sin(11 * th + 2.1);
         double de = d / flute;
         if (de >= 1.0) {
             return 0;
@@ -281,8 +285,14 @@ public final class SpireField {
             crest -= Math.floorMod(ph, 8);
         }
         int hh = (int) (crest * Math.pow(1.0 - de, 0.55));
-        if (hh < crest * 0.55) {
-            hh = (hh / 4) * 4;                                   // 하부 사면 바위 턱 (§4-b)
+        if (steep && hh < crest * 0.85) {
+            // ★12-② 급벽면 계단짐 — 턱 간격 4~7 · 깊이 1~2 (배후봉 하부 문법의 강화판 ·
+            //   마루·계약은 무변경 — v>2 밖·상부 15% 는 손대지 않는다)
+            int stp = 4 + (int) Math.floorMod(mix(SALT ^ 0xC11FL, c.cx(), hh / 9, c.cz()), 4);
+            int notch = 1 + (int) Math.floorMod(mix(SALT ^ 0xC11FL, c.cx(), hh / 5, c.cz()) >> 3, 2);
+            hh = Math.max(0, (hh / stp) * stp - notch);
+        } else if (hh < crest * 0.55) {
+            hh = (hh / 4) * 4;                                   // 완사면 하부 — 종전 결 (§4-b)
         }
         return hh;
     }
