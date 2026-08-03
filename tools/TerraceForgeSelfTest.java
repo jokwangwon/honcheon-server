@@ -266,7 +266,60 @@ public final class TerraceForgeSelfTest {
         check("산군: 켜 3 실재 (근경/중경/원경 각 > 0)",
                 rings[0] > 0 && rings[1] > 0 && rings[2] > 0,
                 rings[0] + "/" + rings[1] + "/" + rings[2]);
-        check("산군: 근경 침봉 마루가 실측 창(140~220) 안", r1max >= 140 && r1max <= 220, r1max);
+        check("산군: 근경 남쪽 마루 최고가 창(140~220) 안 (광봉·침봉 공통 상한 · 10.5)",
+                r1max >= 140 && r1max <= 220, r1max);
+        // ★10.5 구도 반전 — 광봉이 주인 · 침봉은 장식 (실측 §12: 개수비 ≥4:1)
+        int gTotal = 0;
+        int gHit = 0;
+        for (int gx2 = -6; gx2 <= 6; gx2++) {
+            for (int gz2 = -6; gz2 <= 6; gz2++) {
+                double dd = Math.hypot(gx2 * 128 + 64, gz2 * 128 + 64);
+                if (dd < 240 || dd > 640) {
+                    continue;
+                }
+                gTotal++;
+                if (com.honcheon.mvt.forge.SpireField.broadRadius(gx2, gz2) > 0) {
+                    gHit++;
+                }
+            }
+        }
+        check("★10.5 광봉이 주인 — 근·중경 격자 점유 ≥70%", gTotal > 0 && gHit * 100 / gTotal >= 70,
+                gHit + "/" + gTotal);
+        int sTotal = 0;
+        int sHit = 0;
+        for (int cx3 = -25; cx3 <= 25; cx3++) {
+            for (int cz3 = -25; cz3 <= 25; cz3++) {
+                double dd = Math.hypot(cx3 * 26 + 13, cz3 * 26 + 13);
+                if (dd < 240 || dd > 640) {
+                    continue;
+                }
+                sTotal++;
+                if (com.honcheon.mvt.forge.SpireField.spireCenter(cx3, cz3) != null) {
+                    sHit++;
+                }
+            }
+        }
+        check("★10.5 침봉 강등 — 근·중경 셀 침봉 ≤6% (62% 밭의 폐지)",
+                sTotal > 0 && sHit * 100 / sTotal <= 6, sHit + "/" + sTotal);
+        // ★10.5 발치 가드 — 살아남은 근경 침봉이 실재하고 (절멸 방지) 마루가 창 안
+        boolean perched = false;
+        for (int cx3 = -16; cx3 <= 16 && !perched; cx3++) {
+            for (int cz3 = 6; cz3 <= 16 && !perched; cz3++) {
+                int[] sc = com.honcheon.mvt.forge.SpireField.spireCenter(cx3, cz3);
+                if (sc == null) {
+                    continue;
+                }
+                double dd = Math.hypot(sc[0], sc[1]);
+                if (dd < 200 || dd > 430) {
+                    continue;
+                }
+                int hh = bare.targetH(sc[0], sc[1]);
+                if (hh >= 140 && hh <= 220) {
+                    perched = true;
+                }
+            }
+        }
+        check("★10.5 광봉 위 침봉 실재 — 강등이 절멸은 아니다 (남쪽 근경 표본)", perched, "표본 0");
         // ★8.8 — 남쪽 접근 시야 회랑: 축선 남쪽 폭 ~70 은 침봉 0 · ★10-①: 산체는 낮은 구릉(≤20)
         //   까지 허용 (시야 회랑이지 지형 금지가 아니다 — 접근로가 구릉을 넘는 것이 시퀀스다)
         boolean corridorClear = true;

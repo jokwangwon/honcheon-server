@@ -102,11 +102,18 @@ public final class SpireField {
                 return 0;
             }
         }
-        int best = baseRelief(x, z);                    // ⓪ ★산몸 — 침봉이 이 위에서 솟는다 (슬라이스 10)
+        int best = baseRelief(x, z);                    // ⓪ 저지 릴리프 — 광봉 사이를 채운다
         for (Ridge c : backPeaks()) {                   // ① 배후봉 — 병풍꼴 능선봉 (§4-b)
             best = Math.max(best, ridgeH(c, x, z));
         }
-        int cellX = Math.floorDiv(x, CELL);             // ② 스파이어 켜 3 — 이웃 셀 아홉을 본다
+        int gX = Math.floorDiv(x, GCELL);               // ② ★광봉(廣峰) 켜 — 구도의 주인 (슬라이스 10.5)
+        int gZ = Math.floorDiv(z, GCELL);
+        for (int i = -1; i <= 1; i++) {
+            for (int j = -1; j <= 1; j++) {
+                best = Math.max(best, broadAt(gX + i, gZ + j, x, z));
+            }
+        }
+        int cellX = Math.floorDiv(x, CELL);             // ③ 침봉 — 장식으로 강등 (광봉 위 소수)
         int cellZ = Math.floorDiv(z, CELL);
         for (int i = -1; i <= 1; i++) {
             for (int j = -1; j <= 1; j++) {
@@ -114,6 +121,63 @@ public final class SpireField {
             }
         }
         return best;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ★광봉(廣峰) 켜 — 슬라이스 10.5 구도 반전 (사용자 재판정 「아직 기둥 밭」의 처방).
+    //   재실측 (실측표 §12 — 8·12호): 산의 주인공은 **넓은 몸통의 봉우리**다 —
+    //   밑변:높이 ≈ 1:0.8~1.5 · 계단진 절벽면 · 능선·안부로 이어진 매시프. 원작 12호는
+    //   독립 침봉이 사실상 0. 세장 침봉은 그 위 소수의 장식일 뿐이다 (개수비 ≥4:1).
+    //   문법: 배후봉의 병풍 능선({@link #ridgeH})을 절차 생성판으로 재사용 — 셀 해시가
+    //   자리·밑변(60~120)·높이(90~165)·장축·능선 길이를 정한다.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 광봉 격자 한 변 — 능선 도달 반경(≤~92)이 이웃 ±1 스캔 안에 들도록 */
+    public static final int GCELL = 128;
+
+    /** 광봉이 미치는 끝 — 원경(650+)은 운해 위 침봉 실루엣의 몫 */
+    public static final int BROAD_END = 650;
+
+    private int broadAt(int gX, int gZ, int x, int z) {
+        long h = mix(SALT ^ 0xB40ADL, gX, 0, gZ);
+        if (Math.floorMod(h, 100) >= 85) {
+            return 0;                                    // 이 격자엔 광봉이 없다 (밀도 85%)
+        }
+        int cx = gX * GCELL + 20 + (int) Math.floorMod(h >> 8, GCELL - 40);
+        int cz = gZ * GCELL + 20 + (int) Math.floorMod(h >> 16, GCELL - 40);
+        int r = 30 + (int) Math.floorMod(h >> 32, 31);       // 밑변 60~120 (실측 §12 — 1:0.8~1.5)
+        int len = 12 + (int) Math.floorMod(h >> 48, 29);     // 능선 길이 12~40 — 매시프로 이어진다
+        if (Math.abs(x - cx) > (len / 2 + r) + r / 3 || Math.abs(z - cz) > (len / 2 + r) + r / 3) {
+            return 0;                                        // 값싼 상자 탈출 — ridgeH 전에
+        }
+        double dist = Math.hypot(cx, cz);
+        if (dist < INNER_R || dist >= BROAD_END || inCorridor(cx, cz)) {
+            return 0;
+        }
+        int lo = dist < 430 ? 105 : 90;
+        int hi = dist < 430 ? 165 : 140;
+        int topH = lo + (int) Math.floorMod(h >> 24, hi - lo + 1);
+        double axis = Math.floorMod(h >> 40, 180);
+        int hh = ridgeH(new Ridge("광봉", cx, cz, topH, r, axis, len), x, z);
+        return corridorFaded(hh, x, z);
+    }
+
+    /**
+     * 회랑 소멸 — 시야 회랑(8.8)을 지나는 광봉 몸은 45~85 띠에서 매끄럽게 죽는다
+     * (수직 절단이 아니라 골짜기 벽 — 시선을 축선으로 이끈다).
+     */
+    private static int corridorFaded(int h, int x, int z) {
+        if (h <= 0 || z < 340) {
+            return h;
+        }
+        double a = Math.abs(x + 4.0);
+        if (a >= 85) {
+            return h;
+        }
+        if (a <= 45) {
+            return 0;
+        }
+        return (int) (h * (a - 45) / 40.0);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -221,42 +285,59 @@ public final class SpireField {
      */
     private int spireAt(int cellX, int cellZ, int x, int z) {
         long h = mix(SALT, cellX, 0, cellZ);
-        if (Math.floorMod(h, 100) >= 62) {
-            return 0;                                   // 이 셀엔 침봉이 없다 (밀도 62%)
-        }
         int cx = cellX * CELL + 5 + (int) Math.floorMod(h >> 8, 16);
         int cz = cellZ * CELL + 5 + (int) Math.floorMod(h >> 16, 16);
-        // ★8.8 남쪽 접근 시야 회랑 — 레퍼런스 1호(계단에서 산문이 보인다)·12호(남쪽 전경)의
-        //   문법이다: 축선(x≈-4) 남쪽 폭 ~70 은 침봉이 비운다 (중심 판정 ±45 — 몸통 가장자리가
-        //   회랑 끝을 살짝 무는 건 자연의 결). 배후봉·동서 침봉 무접촉 · 결정론.
+        // ★8.8 남쪽 접근 시야 회랑 — 침봉 금지 (몸통 가장자리가 살짝 무는 건 자연의 결)
         if (inCorridor(cx, cz)) {
             return 0;
         }
         double centerDist = Math.hypot(cx, cz);
         int lo;
         int hi;
+        // ★10.5 침봉 강등 (구도 반전 — 실측 §12: 광봉:침봉 ≥4:1): 근·중경 밀도 62%→4% —
+        //   광봉 마루·가장자리 위의 장식만 남는다. 원경(650+)은 운해 실루엣 몫으로 10%.
+        int density;
         if (centerDist < INNER_R) {
             return 0;                                   // 본산권 — 골격의 것
         } else if (centerDist < 430) {
             lo = 140;
             hi = 220;                                   // 근경 (★8.5 산체 배율 동행)
-        } else if (centerDist < 700) {
+            density = 4;
+        } else if (centerDist < BROAD_END) {
             lo = 110;
             hi = 180;                                   // 중경
+            density = 4;
         } else if (centerDist < FIELD_R) {
             lo = 90;
-            hi = 140;                                   // 원경
+            hi = 140;                                   // 원경 — 운해 위 실루엣
+            density = 10;
         } else {
             return 0;
         }
-        // ★슬라이스 10 실루엣 변주 — 멱분포 느낌: 굵은 놈 소수(18% · r 13~17 · 마루 창 상단 1/3)
-        //   + 가는 놈 다수(r 5~9 · 창 전체). 「파이프오르간」 균일함을 깬다 (레퍼런스 8·9호 —
-        //   굵은 주봉 곁 가는 침봉 무리).
+        if (Math.floorMod(h, 100) >= density) {
+            return 0;
+        }
+        // 실루엣 변주 (슬라이스 10) — 굵은 놈 소수(18%) + 가는 놈 다수
         boolean thick = Math.floorMod(h >> 52, 100) < 18;
         int r = thick ? 13 + (int) Math.floorMod(h >> 32, 5)
                 : 5 + (int) Math.floorMod(h >> 32, 5);
         int top = thick ? hi - (int) Math.floorMod(h >> 24, (hi - lo) / 3 + 1)
                 : lo + (int) Math.floorMod(h >> 24, hi - lo + 1);
+        // ★10.5 발치 가드 — 평지에서 곧장 솟는 침봉 금지: 광봉·저지 릴리프 위(지지고 ≥55)에서만,
+        //   그리고 지지면 위로 ≥20 은 솟아야 장식이 된다 (원경 실루엣 켜는 예외 — 운해가 발치를 가린다)
+        if (centerDist < BROAD_END) {
+            int support = baseRelief(cx, cz);
+            int sgX = Math.floorDiv(cx, GCELL);
+            int sgZ = Math.floorDiv(cz, GCELL);
+            for (int i = -1; i <= 1; i++) {
+                for (int j = -1; j <= 1; j++) {
+                    support = Math.max(support, broadAt(sgX + i, sgZ + j, cx, cz));
+                }
+            }
+            if (support < 55 || top < support + 20) {
+                return 0;
+            }
+        }
         double dx = x - cx, dz = z - cz;
         if (Math.hypot(dx, dz) >= r * 1.13) {
             return 0;                                        // 로브 최대 확장 밖 — 빠른 탈출
@@ -318,15 +399,47 @@ public final class SpireField {
         return org.bukkit.Material.MOSSY_COBBLESTONE;     // 벽면 이끼 낌 (10-① 예비)
     }
 
-    /** 셀의 침봉 반경 (0 = 없음) — 실루엣 변주의 눈이 분포를 잰다 */
+    /** 셀의 침봉 반경 (0 = 없음 — 밀도·회랑·본산권 반영 · 발치 가드는 targetH 의 몫) — 변주 눈용 */
     public static int spireRadius(int cellX, int cellZ) {
-        long h = mix(SALT, cellX, 0, cellZ);
-        if (Math.floorMod(h, 100) >= 62) {
+        int[] c = spireCenter(cellX, cellZ);
+        if (c == null) {
             return 0;
         }
+        long h = mix(SALT, cellX, 0, cellZ);
         boolean thick = Math.floorMod(h >> 52, 100) < 18;
         return thick ? 13 + (int) Math.floorMod(h >> 32, 5)
                 : 5 + (int) Math.floorMod(h >> 32, 5);
+    }
+
+    /** 셀 침봉의 중심 (밀도·회랑·켜 통과 시 · 아니면 null) — 마루 창·강등 비율의 눈용 */
+    public static int[] spireCenter(int cellX, int cellZ) {
+        long h = mix(SALT, cellX, 0, cellZ);
+        int cx = cellX * CELL + 5 + (int) Math.floorMod(h >> 8, 16);
+        int cz = cellZ * CELL + 5 + (int) Math.floorMod(h >> 16, 16);
+        if (inCorridor(cx, cz)) {
+            return null;
+        }
+        double d = Math.hypot(cx, cz);
+        int density = d < INNER_R || d >= FIELD_R ? 0 : d < BROAD_END ? 4 : 10;
+        if (density == 0 || Math.floorMod(h, 100) >= density) {
+            return null;
+        }
+        return new int[]{cx, cz};
+    }
+
+    /** 격자의 광봉 밑변 반경 (0 = 없음) — 구도 반전 비율의 눈용 (10.5) */
+    public static int broadRadius(int gX, int gZ) {
+        long h = mix(SALT ^ 0xB40ADL, gX, 0, gZ);
+        if (Math.floorMod(h, 100) >= 85) {
+            return 0;
+        }
+        int cx = gX * GCELL + 20 + (int) Math.floorMod(h >> 8, GCELL - 40);
+        int cz = gZ * GCELL + 20 + (int) Math.floorMod(h >> 16, GCELL - 40);
+        double d = Math.hypot(cx, cz);
+        if (d < INNER_R || d >= BROAD_END || inCorridor(cx, cz)) {
+            return 0;
+        }
+        return 30 + (int) Math.floorMod(h >> 32, 31);
     }
 
     private static long mix(long salt, int x, int y, int z) {
