@@ -1279,20 +1279,40 @@ public final class HwasanCampusBuilder {
         for (int dy = 1; dy <= h; dy++) {
             world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
         }
+        // ★12.6 — 층마다 두 켜 (얇은 파라솔 금지) + 잎 톤 혼합 (그늘·볕)
         for (int t = 0; t < 2; t++) {
-            int ty = g + h - t * 2;
             int tr = Math.max(1, rad - (1 - t));
-            for (int dx = -tr; dx <= tr; dx++) {
-                for (int dz = -tr; dz <= tr; dz++) {
-                    if (Math.abs(dx) + Math.abs(dz) > tr + 1 || (dx == 0 && dz == 0 && t > 0)) {
-                        continue;
+            for (int k = 0; k < 2; k++) {
+                int ty = g + h - t * 3 - (1 - k);
+                int rr = Math.max(1, tr - k);
+                for (int dx = -rr; dx <= rr; dx++) {
+                    for (int dz = -rr; dz <= rr; dz++) {
+                        if (Math.abs(dx) + Math.abs(dz) > rr + 1
+                                || (dx == 0 && dz == 0 && t > 0 && k == 0)) {
+                            continue;
+                        }
+                        world.getBlockAt(x + dx, ty, z + dz)
+                                .setType(leafTone(x + dx, ty, z + dz,
+                                        rr - Math.abs(dx) - Math.abs(dz), k), false);
                     }
-                    world.getBlockAt(x + dx, ty, z + dz).setType(Material.SPRUCE_LEAVES, false);
                 }
             }
         }
         world.getBlockAt(x, g + h + 1, z).setType(Material.SPRUCE_LEAVES, false);
         tally.pines++;
+    }
+
+    /** ★12.6 잎 톤 — 그늘(진달래 잎)·기본(spruce)·볕 반점 (산군 문법과 한 결) */
+    private static Material leafTone(int x, int y, int z, int edge, int k) {
+        int r = (int) Math.floorMod(hash(0x1EAF5L, x, y, z), 100);
+        int dark = 22 + (k == 0 ? 20 : 0) + Math.min(18, Math.max(0, edge) * 9);
+        if (r < dark) {
+            return Material.AZALEA_LEAVES;
+        }
+        if (r >= 92 && k == 1) {
+            return Material.FLOWERING_AZALEA_LEAVES;
+        }
+        return Material.SPRUCE_LEAVES;
     }
 
     private static int groundTop(World world, int x, int z, int from) {
@@ -1318,6 +1338,7 @@ public final class HwasanCampusBuilder {
         return EnumSet.of(
                 Material.VINE, Material.GLOW_LICHEN, Material.MOSS_BLOCK,
                 Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES,
+                Material.AZALEA_LEAVES, Material.FLOWERING_AZALEA_LEAVES,   // ★12.6 잎 톤
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES,
                 Material.RED_BANNER, Material.WHITE_BANNER, Material.CAMPFIRE,
                 Material.TRIPWIRE, Material.FARMLAND, Material.WHEAT);

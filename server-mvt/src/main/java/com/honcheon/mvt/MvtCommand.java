@@ -2014,12 +2014,12 @@ public final class MvtCommand implements CommandExecutor {
                         continue;   // 경사·원경은 종전 밀도 유지 (12-① — 완사면 근·중경만 짙게)
                     }
                     if (slope <= 2) {                        // 완사면·마루 — 군락 (수관이 잇닿게)
-                        // ★12.5 — 수관이 커졌으므로 곁그루 간격도 넓힌다 (뭉쳐 한 덩이가 되지 않게)
+                        // ★12.6 — 간격 3~4 (두꺼워진 수관끼리 맞물려 회색이 안 비친다)
                         pine(x, top, z, h);
-                        pine(x + 5 + (int) Math.floorMod(h >> 20, 3), top,
-                                z - 3 - (int) Math.floorMod(h >> 22, 3), h >> 24);
+                        pine(x + 3 + (int) Math.floorMod(h >> 20, 2), top,
+                                z - 2 - (int) Math.floorMod(h >> 22, 2), h >> 24);
                         if (Math.floorMod(h >> 16, 100) < 50) {
-                            pine(x - 4 - (int) Math.floorMod(h >> 26, 3), top, z + 5, h >> 28);
+                            pine(x - 3 - (int) Math.floorMod(h >> 26, 2), top, z + 3, h >> 28);
                         }
                         mossGround(x, top, z, h);
                     } else if (slope <= 5) {                 // 어깨 턱 — 점식
@@ -2085,23 +2085,56 @@ public final class MvtCommand implements CommandExecutor {
                     world.getBlockAt(x + 1, g + dy, z + 1).setType(Material.SPRUCE_WOOD, false);
                 }
             }
-            // 우산 수관 — 층마다 원판(아래가 넓다) · 층 간격 2 · 가지 팔이 옆으로 뻗는다
+            // 우산 수관 — ★12.6: 층마다 <b>두 켜</b>(아래 넓고 위 한 칸 좁게)로 두툼하게,
+            //   층 간격 3(=두 켜+1)이라 층 사이가 안 뚫린다. 줄기는 아래 두세 칸에서만 보인다.
+            int top0 = g + hgt;
             for (int t = 0; t < tiers; t++) {
-                int ty = g + hgt - t * 2;                     // 위층부터 아래로
                 int tr = Math.max(1, rad - (tiers - 1 - t));  // 아래층일수록 넓다
-                for (int dx = -tr; dx <= tr + (fat ? 1 : 0); dx++) {
-                    for (int dz = -tr; dz <= tr + (fat ? 1 : 0); dz++) {
-                        int ox = fat && dx > 0 ? dx - 1 : dx;   // 2×2 몸통 중심 보정
-                        int oz = fat && dz > 0 ? dz - 1 : dz;
-                        if (Math.abs(ox) + Math.abs(oz) > tr + 1 || (ox == 0 && oz == 0 && t > 0)) {
-                            continue;   // 마름모 우산 · 몸통 자리는 아래층에서 비운다
+                for (int k = 0; k < 2; k++) {                 // k=0 아래 켜(넓다) · k=1 위 켜
+                    int ty = top0 - t * 3 - (1 - k);
+                    int rr = Math.max(1, tr - k);
+                    for (int dx = -rr; dx <= rr + (fat ? 1 : 0); dx++) {
+                        for (int dz = -rr; dz <= rr + (fat ? 1 : 0); dz++) {
+                            int ox = fat && dx > 0 ? dx - 1 : dx;   // 2×2 몸통 중심 보정
+                            int oz = fat && dz > 0 ? dz - 1 : dz;
+                            if (Math.abs(ox) + Math.abs(oz) > rr + 1) {
+                                continue;                     // 마름모 우산
+                            }
+                            if (ox == 0 && oz == 0 && t > 0 && k == 0) {
+                                continue;                     // 아래층 중심은 비운다 (줄기 노출)
+                            }
+                            world.getBlockAt(x + dx, ty, z + dz)
+                                    .setType(leafTone(x + dx, ty, z + dz, rr - Math.abs(ox)
+                                            - Math.abs(oz), k), false);
                         }
-                        world.getBlockAt(x + dx, ty, z + dz).setType(Material.SPRUCE_LEAVES, false);
                     }
                 }
             }
-            world.getBlockAt(x, g + hgt + 1, z).setType(Material.SPRUCE_LEAVES, false);   // 정수리
+            world.getBlockAt(x, top0 + 1, z).setType(Material.SPRUCE_LEAVES, false);   // 정수리
             pines++;
+        }
+
+        /**
+         * ★12.6 잎 톤 — 단일 밝은 spruce 가 「만화처럼 평평」하던 것의 처방.
+         * 바닐라 잎 중 톤이 갈리는 셋을 섞는다: spruce(중간·기본) · **azalea(짙은 회록 —
+         * 그늘)** · **flowering_azalea(밝은 반점 — 볕)**. 수관 <b>아랫 켜·안쪽</b>은 그늘 비중을
+         * 올려 입체가 서고, 바깥·윗 켜는 밝게. 결정론 해시.
+         *
+         * @param edge 가장자리까지 남은 칸수 (클수록 안쪽) · @param k 0=아래 켜 1=위 켜
+         */
+        private static Material leafTone(int x, int y, int z, int edge, int k) {
+            long h = ((long) x * 0x9E3779B97F4A7C15L) ^ ((long) y * 0xC2B2AE3D27D4EB4FL)
+                    ^ ((long) z * 0x165667B19E3779F9L);
+            h ^= h >>> 29;
+            int r = (int) Math.floorMod(h, 100);
+            int dark = 22 + (k == 0 ? 20 : 0) + Math.min(18, Math.max(0, edge) * 9);   // 22~60
+            if (r < dark) {
+                return Material.AZALEA_LEAVES;                 // 그늘 — 짙은 회록
+            }
+            if (r >= 92 && k == 1) {
+                return Material.FLOWERING_AZALEA_LEAVES;       // 볕 반점 (윗 켜 소량)
+            }
+            return Material.SPRUCE_LEAVES;
         }
 
         /** 턱 관목 — 이끼 위 진달래/양치 (잎 삭음 없는 식물 블록) */

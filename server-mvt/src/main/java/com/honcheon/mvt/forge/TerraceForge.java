@@ -551,15 +551,25 @@ public final class TerraceForge {
         for (int dy = 1; dy <= h; dy++) {
             world.getBlockAt(x, g + dy, z).setType(Material.SPRUCE_WOOD, false);
         }
-        for (int t = 0; t < 2; t++) {
-            int ty = g + h - t * 2;
+        for (int t = 0; t < 2; t++) {                        // ★12.6 — 층마다 두 켜
             int tr = Math.max(1, rad - (1 - t));
-            for (int dx = -tr; dx <= tr; dx++) {
-                for (int dz = -tr; dz <= tr; dz++) {
-                    if (Math.abs(dx) + Math.abs(dz) > tr + 1 || (dx == 0 && dz == 0 && t > 0)) {
-                        continue;
+            for (int k = 0; k < 2; k++) {
+                int ty = g + h - t * 3 - (1 - k);
+                int rr = Math.max(1, tr - k);
+                for (int dx = -rr; dx <= rr; dx++) {
+                    for (int dz = -rr; dz <= rr; dz++) {
+                        if (Math.abs(dx) + Math.abs(dz) > rr + 1
+                                || (dx == 0 && dz == 0 && t > 0 && k == 0)) {
+                            continue;
+                        }
+                        int r = (int) Math.floorMod(mix(0x1EAF5L, x + dx, ty, z + dz), 100);
+                        int dark = 22 + (k == 0 ? 20 : 0)
+                                + Math.min(18, Math.max(0, rr - Math.abs(dx) - Math.abs(dz)) * 9);
+                        Material leaf = r < dark ? Material.AZALEA_LEAVES
+                                : (r >= 92 && k == 1 ? Material.FLOWERING_AZALEA_LEAVES
+                                : Material.SPRUCE_LEAVES);
+                        world.getBlockAt(x + dx, ty, z + dz).setType(leaf, false);
                     }
-                    world.getBlockAt(x + dx, ty, z + dz).setType(Material.SPRUCE_LEAVES, false);
                 }
             }
         }
@@ -809,6 +819,7 @@ public final class TerraceForge {
     private static final Set<Material> VEGETATION = EnumSet.of(
             Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES, Material.CHERRY_LOG,
             Material.CHERRY_LEAVES, Material.AZALEA, Material.FLOWERING_AZALEA,
+            Material.AZALEA_LEAVES, Material.FLOWERING_AZALEA_LEAVES,   // ★12.6 잎 톤
             Material.FERN, Material.SHORT_GRASS, Material.VINE, Material.GLOW_LICHEN,
             Material.MOSS_CARPET);
 
