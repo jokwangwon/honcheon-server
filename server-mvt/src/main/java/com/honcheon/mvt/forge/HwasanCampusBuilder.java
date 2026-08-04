@@ -451,11 +451,16 @@ public final class HwasanCampusBuilder {
         // ★슬라이스 8 재척도 ×2: 깊이 9 · 중앙 아치 11×12 · 곁 아치 5×8 (±18) · 하층 벽 12 · 상층 8
         int y = pad.y();
         for (int f = -half; f <= half; f++) {
-            // ★13b-② 정면 요철 — 끝 구간(|f| > half-6)은 한 칸 물러난다 (중앙이 앞선다)
-            int recess = Math.abs(f) > half - 6 ? 1 : 0;
-            for (int d = -4 + recess; d <= 4 - recess; d++) {
-                boolean sideArch = half >= 24 && Math.abs(Math.abs(f) - 18) <= 2;   // 곁 아치 5 폭
-                boolean arch = Math.abs(f) <= 5 || sideArch;                        // 중앙 아치 11 폭
+            int af = Math.abs(f);
+            // ★14-③ 정면 3단 요철 — 중앙 17폭이 <b>2칸 앞으로 나온다</b>. 대결의 두 평가가
+            //   똑같이 지목한 약점이 「중앙부 미돌출」이었다 (본전엔 13b 에 포치가 섰는데
+            //   산문엔 없었다). 끝 구간은 종전대로 한 칸 물러난다 → 앞선다/기준/물러난다 세 켜.
+            int relief = gateRelief(af, half);          // +2 앞선다 / 0 기준 / -1 물러난다
+            int jut = Math.max(relief, 0);
+            int recess = Math.max(-relief, 0);
+            for (int d = -4 + recess; d <= 4 - recess + jut; d++) {
+                boolean sideArch = half >= 24 && Math.abs(af - 18) <= 2;   // 곁 아치 5 폭
+                boolean arch = af <= 5 || sideArch;                        // 중앙 아치 11 폭
                 for (int dy = 1; dy <= 12; dy++) {
                     int x = gx + f;
                     int z = gz + d;
@@ -463,21 +468,36 @@ public final class HwasanCampusBuilder {
                         put(world, pad, x, y + dy, z, Material.AIR, tally);   // 아치 11×12 / 5×8
                         continue;
                     }
-                    boolean pillarF = Math.abs(f) == half || Math.abs(f) == 6
-                            || (half >= 24 && Math.abs(Math.abs(f) - 18) == 3);
-                    boolean shell = Math.abs(d) == 4;   // 남·북 겉면 — 입면 층위는 겉면에만 (슬라이스 9)
+                    // ★14-② 적주를 굵게 — 한 칸 → <b>두 칸</b>. 대결에서 코덱스 문루가 훨씬
+                    //   따뜻했고, 회백 과다가 우리 격차 ③의 뿌리였다 (적목 비중 상향·백벽 절제).
+                    boolean pillarF = af >= half - 1 || af == 6 || af == 7
+                            || (half >= 24 && Math.abs(af - 18) >= 3 && Math.abs(af - 18) <= 4);
+                    // 남·북 겉면 — 입면 층위는 겉면에만. ★돌출부는 <b>제 앞면</b>이 겉면이고
+                    //   뒷면(북)은 종전 자리 그대로다 — 두 쪽을 따로 잡지 않으면 돌출한 중앙의
+                    //   북면이 민 백벽으로 남는다 (요철을 넣다가 뒷면을 잃는 함정).
+                    boolean shell = d == 4 - recess + jut || d == -4 + recess;
                     Material m = pillarF ? Material.STRIPPED_MANGROVE_LOG   // 적주(벗긴 맹그로브 — 껍질면은 흑갈로 읽힌다)
                             : shell && dy == 1 ? Material.POLISHED_ANDESITE                     // 기단 밝은 선
+                            : shell && dy == 2 ? Material.STRIPPED_MANGROVE_LOG                 // ★14-② 하인방 적목 띠
                             : shell && dy == 7 ? Material.DARK_OAK_PLANKS                       // 중방 — 두 층 리듬
-                            : shell && dy >= 11 ? Material.RED_TERRACOTTA                       // 상단 적 띠
+                            : shell && dy >= 10 ? Material.RED_TERRACOTTA                       // ★14-② 상단 적 띠 (11→10 확대)
                             : shell && Math.floorMod(f, 3) == 1
-                                    && (dy == 4 || dy == 5 || dy == 9 || dy == 10)
+                                    && (dy == 4 || dy == 5 || dy == 8 || dy == 9)
                                     ? Material.GLASS_PANE                                       // 창 리듬 3칸
                             : Material.WHITE_TERRACOTTA;
                     put(world, pad, x, y + dy, z, m, tally);
                 }
             }
         }
+        // ★14-③ 포치 차양 — 돌출한 중앙이 제 처마를 인다 (돌출이 지붕 없이 벽만이면 요철이 안 읽힌다)
+        for (int f = -9; f <= 9; f++) {
+            for (int d = 5; d <= 7; d++) {
+                put(world, pad, gx + f, y + 11, gz + d,
+                        d == 7 || Math.abs(f) == 9 ? Material.DEEPSLATE_TILE_SLAB
+                                : roofCube(gx + f, y + 11, gz + d), tally);
+            }
+        }
+        eaveUpturn(world, pad, gx, y + 11, gz + 6, 9, 1, tally);   // 차양 귀도 들린다
         // ★슬라이스 9 — 산문 재설계 (코덱스 개선 2: 높이 1.5~2배·지붕 두께 2배·위계의 정점).
         //   3단 구성: 하층(1..12 아치 몸) → 겹처마 스커트 → 중층(13..22) → 스커트 → 상층(23..30)
         //   → 팔작. 총고 ~38 (구 ~26 의 1.5배) — 본전(~41)보다는 낮다 (위계: 본전 > 산문).
@@ -488,11 +508,14 @@ public final class HwasanCampusBuilder {
                 if (!edge) {
                     continue;
                 }
-                boolean pillar = Math.abs(f) == mh || Math.floorMod(f + mh, 6) == 0;
+                // ★14-② 적주 두 칸 (한 칸 → 두 칸 · 적목 비중 상향)
+                boolean pillar = Math.abs(f) >= mh - 1
+                        || Math.floorMod(f + mh, 6) <= 1;
                 for (int dy = 13; dy <= 22; dy++) {
                     Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
-                            : (dy == 17 ? Material.DARK_OAK_PLANKS                       // 중방
-                            : dy >= 21 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : (dy == 13 ? Material.STRIPPED_MANGROVE_LOG                 // ★14-② 하인방 적목
+                            : dy == 17 ? Material.DARK_OAK_PLANKS                        // 중방
+                            : dy >= 20 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
                     put(world, pad, gx + f, y + dy, gz + d, m, tally);
                 }
                 if (!pillar && Math.abs(d) == 3 && Math.floorMod(f, 3) == 1) {   // 창 리듬 3칸
@@ -514,10 +537,11 @@ public final class HwasanCampusBuilder {
                     if (!edge) {
                         continue;
                     }
-                    boolean pillar = Math.abs(f) == th || Math.floorMod(f + th, 6) == 0;
+                    boolean pillar = Math.abs(f) >= th - 1 || Math.floorMod(f + th, 6) <= 1;   // ★14-② 두 칸
                     for (int dy = 23; dy <= 30; dy++) {
                         Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
-                                : (dy >= 29 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                                : (dy == 23 ? Material.STRIPPED_MANGROVE_LOG              // ★14-② 하인방 적목
+                                : dy >= 28 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
                         put(world, pad, gx + f, y + dy, gz + d, m, tally);
                     }
                     if (!pillar && Math.abs(d) == 2 && Math.floorMod(f, 3) == 1) {
@@ -598,10 +622,14 @@ public final class HwasanCampusBuilder {
                 for (int dy = 1; dy <= wallH; dy++) {
                     // ★슬라이스 9 — 입면 층위 (코덱스 §②): 기단(밝은 수평선 1단) · 중방(다크오크
                     //   띠 dy5 — 벽 10 이 두 층 리듬으로 읽힌다 · 인간 단위 층고 3~4 의 복원) · 상단 띠
+                    //   ★14-② 백벽 절제 — 하인방(dy2) 적목 띠 + 상단 적 띠를 두 켜로. 조닝 계율은
+                    //   유지한다: 본전(red)만 강하게 붉고, 다른 건물은 「따뜻해지되 본전보다 덜」.
                     Material m = corner ? (red ? Material.MANGROVE_LOG : Material.SPRUCE_LOG)
                             : (dy == 1 ? Material.POLISHED_ANDESITE
+                            : dy == 2 ? Material.STRIPPED_MANGROVE_LOG
                             : dy == 5 ? Material.DARK_OAK_PLANKS
-                            : (red && dy == wallH ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA));
+                            : (red && dy >= wallH - 1 ? Material.RED_TERRACOTTA
+                            : dy == wallH ? Material.DARK_OAK_PLANKS : Material.WHITE_TERRACOTTA));
                     put(world, pad, x, y + dy, z, m, tally);
                 }
                 // ★이중 창 리듬 — 3칸마다 (인간 단위 칸이 누적된다 · 코덱스 §⑤)
@@ -673,12 +701,9 @@ public final class HwasanCampusBuilder {
                     int z = cz + l;
                     boolean eF = Math.abs(f) == hF;
                     boolean eL = Math.abs(l) == hL;
-                    if (i == 0) {                          // 처마 끝 — 반블록, 모서리 들림
+                    if (i == 0) {                          // 처마 끝 — 반블록 (귀솟음은 아래에서 한 벌)
                         put(world, pad, x, y, z, eF || eL ? Material.DEEPSLATE_TILE_SLAB
                                 : roofCube(x, y, z), tally);
-                        if (eF && eL) {
-                            put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
-                        }
                     } else if (eF && eL) {
                         // ★13c-② 내림마루 — 모서리에서 처마로 내려오는 마루 선 (면을 가른다)
                         put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
@@ -698,6 +723,9 @@ public final class HwasanCampusBuilder {
                     }
                 }
             }
+            if (i == 0) {   // ★14-① 귀솟음 — 처마 끝 네 귀가 들린다 (대결에서 배운 기법)
+                eaveUpturn(world, pad, cx, y, cz, hF, hL, tally);
+            }
             // ★13c-② 합각(측면 삼각 벽) — 짧은 축 끝면을 백벽으로 막아 지붕 옆이 「면」이 된다
             //   (레퍼런스 1·4호: 팔작의 측면 삼각). 큰 지붕만·용마루 쪽 두 켜.
             if (big && i >= 1 && hF > 0 && hL > 0 && hF != hL) {
@@ -714,6 +742,60 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
+    }
+
+    /**
+     * ★14-① <b>귀솟음(까치발)</b> — 처마 끝이 <b>모서리에서 가장 크게 들리고 중앙으로 갈수록
+     * 평평해진다</b>. 산문 문루 대결에서 코덱스에게 배운 기법이다: 곡선 블록이 없어도
+     * 계단·반블록을 귀에서 층지게 쌓으면 <b>「들린 처마」가 읽힌다</b> — 우리 지붕이 평평해
+     * 보이던 까닭이 이 한 켜의 부재였다 (곡선 처마 불허 판정과도 맞물린다: 블록만으로 되는 일).
+     *
+     * <p>정본: {@code docs/design/hwasan_gate_contest.md} 「내재화할 기법 3」 ①.
+     * 귀 = 두 켜(몸+꺾임) · 한 칸 안 = 한 켜 · 그 안쪽 = 평평.
+     */
+    private static void eaveUpturn(World world, TerraceForge.Pad pad, int cx, int y, int cz,
+                                   int hf, int hl, Tally tally) {
+        for (int sf : new int[]{-1, 1}) {
+            for (int sl : new int[]{-1, 1}) {
+                int gx = cx + sf * hf;
+                int gz = cz + sl * hl;
+                for (int d = 0; d <= 1; d++) {
+                    int rise = upturnRise(d);
+                    if (rise == 0) {
+                        continue;
+                    }
+                    if (d == 0) {
+                        put(world, pad, gx, y + 1, gz, Material.DEEPSLATE_TILES, tally);       // 귀 — 솟음의 몸
+                        put(world, pad, gx, y + rise, gz, Material.DEEPSLATE_TILE_WALL, tally); // 귀 끝 — 하늘로 꺾인다
+                        continue;
+                    }
+                    if (hf > d) {   // 점층 — 중앙으로 갈수록 낮아진다 (귀솟음의 결)
+                        put(world, pad, gx - sf * d, y + rise, gz, Material.DEEPSLATE_TILE_SLAB, tally);
+                    }
+                    if (hl > d) {
+                        put(world, pad, gx, y + rise, gz - sl * d, Material.DEEPSLATE_TILE_SLAB, tally);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * ★14-① 귀솟음의 <b>점층 규칙</b> — 귀에서 {@code d} 칸 안쪽이 몇 켜 들리는가.
+     * 조성과 눈이 <b>이 한 식에서 갈라져 나온다</b> (7.5 계율: 손으로 두 번 적으면 어긋난다).
+     * 귀(0)=2켜 · 한 칸 안(1)=1켜 · 그 안쪽=평평 — 「모서리에서 가장 크게, 중앙으로 갈수록 평평」.
+     */
+    public static int upturnRise(int d) {
+        return d == 0 ? 2 : d == 1 ? 1 : 0;
+    }
+
+    /**
+     * ★14-③ 산문 정면의 <b>3단 요철 규칙</b> — 중앙에서 {@code af}(=|f|) 칸 떨어진 자리가
+     * 앞으로 몇 칸 나오는가. 중앙 17폭이 2칸 앞서고, 그 밖은 기준, 끝 구간은 물러난다(음수).
+     * 대결의 두 평가가 똑같이 지목한 「중앙부 미돌출」의 처방 — 조성·눈 공동 정본.
+     */
+    public static int gateRelief(int af, int half) {
+        return af <= 8 ? 2 : af > half - 6 ? -1 : 0;
     }
 
     /** 겹처마의 하단 스커트 — 몸체 둘레 한 바퀴: 안쪽 계단 켜 + 바깥 반블록 끝(모서리 들림) */
@@ -733,9 +815,6 @@ public final class HwasanCampusBuilder {
                 int ry = y + (3 - Math.min(ring, 3));    // 안쪽이 높다 — 1켜=+2 · 2켜=+1 · 3켜=+0
                 if (ring == 4) {
                     put(world, pad, x, ry, z, Material.DEEPSLATE_TILE_SLAB, tally);
-                    if (aF == hf + 4 && aL == hl + 4) {
-                        put(world, pad, x, ry + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);   // 모서리 들림
-                    }
                 } else if (aF > hf && aL > hl) {
                     put(world, pad, x, ry, z, Material.DEEPSLATE_TILES, tally);   // 모서리 대각
                 } else if (aL > hl && aL - hl >= aF - hf) {
@@ -749,6 +828,7 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
+        eaveUpturn(world, pad, cx, y, cz, hf + 4, hl + 4, tally);   // ★14-① 스커트 귀도 들린다
     }
 
     /** 지붕 계단 한 장 — 오름이 용마루를 향한다 (facing = 오름 방향 · 도보길 결) */
@@ -850,7 +930,9 @@ public final class HwasanCampusBuilder {
                                   int hf, int hl, int wallH, int doorHalf, Tally tally) {
         int z = cz + hl;
         for (int f = -hf; f <= hf; f++) {
-            boolean pillar = Math.floorMod(f + hf, 6) == 0;   // 재척도 — 적주 간격 6
+            // ★14-② 적주를 굵게 — 간격 6 은 실측(사람 단위)이라 지키되 <b>기둥 자체를 두 칸</b>으로
+            //   (대결: 코덱스 문루의 적목 비중이 우리보다 높아 훨씬 따뜻했다 · 격차 ③의 처방)
+            boolean pillar = Math.floorMod(f + hf, 6) <= 1;
             if (pillar) {
                 for (int dy = 1; dy < wallH; dy++) {
                     put(world, pad, cx + f, y + dy, z, Material.STRIPPED_MANGROVE_LOG, tally);

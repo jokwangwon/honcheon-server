@@ -1333,7 +1333,7 @@ public final class MvtCommand implements CommandExecutor {
                         "[식생시험] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
                 return true;
             }
-            World world = org.bukkit.Bukkit.getWorld(worldName);
+            World world = loadOrCreateSanseWorld(worldName);   // 재기동으로 언로드돼 있어도 스스로 문다
             if (world == null || !world.getName().startsWith("sanse_test_")) {
                 // ★ 식생은 산세 위에 얹는다 — 월드를 새로 만들지 않는다. 산세부터 세우라 안내한다
                 Announce.warn(plugin, sender, "[식생시험] " + worldName
@@ -1546,7 +1546,7 @@ public final class MvtCommand implements CommandExecutor {
                         "[도보길] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
                 return true;
             }
-            World world = org.bukkit.Bukkit.getWorld(worldName);
+            World world = loadOrCreateSanseWorld(worldName);   // 재기동으로 언로드돼 있어도 스스로 문다
             if (world == null || !world.getName().startsWith("sanse_test_")) {
                 Announce.warn(plugin, sender, "[도보길] " + worldName
                         + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
@@ -1725,7 +1725,7 @@ public final class MvtCommand implements CommandExecutor {
                         "[캠퍼스시험] 대상 월드가 sanse_test_ 접두가 아니다 — 거부 (프로덕션 보호).");
                 return true;
             }
-            World world = org.bukkit.Bukkit.getWorld(worldName);
+            World world = loadOrCreateSanseWorld(worldName);   // 재기동으로 언로드돼 있어도 스스로 문다
             if (world == null || !world.getName().startsWith("sanse_test_")) {
                 Announce.warn(plugin, sender, "[캠퍼스시험] " + worldName
                         + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan 으로 산세를 세워라.");
@@ -1835,7 +1835,7 @@ public final class MvtCommand implements CommandExecutor {
                 Announce.fail(plugin, sender, "[산군시험] 대상이 sanse_test_ 접두가 아니다 — 거부.");
                 return true;
             }
-            World world = org.bukkit.Bukkit.getWorld(worldName);
+            World world = loadOrCreateSanseWorld(worldName);   // 재기동으로 언로드돼 있어도 스스로 문다
             if (world == null || !world.getName().startsWith("sanse_test_")) {
                 Announce.warn(plugin, sender, "[산군시험] " + worldName
                         + " 이(가) 없다 — 먼저 /혼천 산세시험 hwasan.");

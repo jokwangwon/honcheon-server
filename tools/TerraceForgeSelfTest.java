@@ -587,6 +587,45 @@ public final class TerraceForgeSelfTest {
                     mainTopY == 42, mainTopY);
         }
 
+        // ══════════ ⑪ 슬라이스 14 — 대결에서 배운 기법의 이식 ══════════
+        {
+            // ★14-① 귀솟음 — 귀가 가장 높고 중앙으로 갈수록 평평해진다 (조성과 이 눈이 한 식)
+            check("★14-① 귀솟음 점층 — 귀 2켜 > 한 칸 안 1켜 > 그 안쪽 평평",
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.upturnRise(0) == 2
+                            && com.honcheon.mvt.forge.HwasanCampusBuilder.upturnRise(1) == 1
+                            && com.honcheon.mvt.forge.HwasanCampusBuilder.upturnRise(2) == 0,
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.upturnRise(0) + "/"
+                            + com.honcheon.mvt.forge.HwasanCampusBuilder.upturnRise(1) + "/"
+                            + com.honcheon.mvt.forge.HwasanCampusBuilder.upturnRise(2));
+            // ★14-③ 산문 3단 요철 — 중앙이 앞서고 끝이 물러난다 (대결의 공통 진단)
+            int rMid = com.honcheon.mvt.forge.HwasanCampusBuilder.gateRelief(0, 28);
+            int rBody = com.honcheon.mvt.forge.HwasanCampusBuilder.gateRelief(15, 28);
+            int rEnd = com.honcheon.mvt.forge.HwasanCampusBuilder.gateRelief(26, 28);
+            check("★14-③ 산문 정면 3단 — 중앙 +2 > 기준 0 > 끝 -1 (평평한 한 판의 처방)",
+                    rMid == 2 && rBody == 0 && rEnd == -1, rMid + "/" + rBody + "/" + rEnd);
+            // 산문 발자국은 포치·차양이 커져도 여전히 패드 안 (계약)
+            java.util.List<TerraceForge.Pad> pads14 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad gate14 = pads14.stream()
+                    .filter(p -> p.spec().zone() == 1).findFirst().orElseThrow();
+            java.util.List<int[]> gb = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(gate14);
+            boolean gateIn = true;
+            for (int[] b : gb) {
+                gateIn &= b[0] >= gate14.x0() && b[1] <= gate14.x1()
+                        && b[2] >= gate14.zN() && b[3] <= gate14.zS();
+            }
+            check("★14-③ 산문 중앙 돌출·차양 뒤에도 발자국은 패드 안", gateIn, "패드 밖");
+            // ★14-② 위계는 그대로 — 적목을 늘려도 본전 > 산문 > 종문 사다리는 안 흔들린다
+            TerraceForge.Pad main14 = pads14.stream()
+                    .filter(p -> p.spec().zone() == 9).findFirst().orElseThrow();
+            TerraceForge.Pad jong14 = pads14.stream()
+                    .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
+            int gT = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(gate14) - gate14.y();
+            int mT = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(main14) - main14.y();
+            int jT = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(jong14) - jong14.y();
+            check("★14-② 위계 유지 — 본전 > 산문 > 종문 (배색을 덥혀도 사다리는 그대로)",
+                    mT > gT && gT > jT, mT + ">" + gT + ">" + jT);
+        }
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {
