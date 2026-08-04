@@ -928,6 +928,11 @@ public final class TerraceForge {
                                      int dx, int dz, Tally tally) {
         boolean rib = ribSegment(ex, ez);
         int steps = rib ? 7 : 6;   // 늑재는 한 칸 더 돌출 — 바위가 벽을 뚫고 나온 결
+        // ★슬라이스 13a — 중간 선반 (거대 회색 면의 분해): 구간(~9칸)마다 해시가 선반 하나를
+        //   정한다 — 그 구간에서는 배터가 k0 칸째에서 폭 2~4 로 <b>평평하게 내밀어</b> 한 면을
+        //   2~3단으로 가른다. 선반 위에는 난간·식생이 앉는다 (shelfTop 이 자리를 알려 준다).
+        int shelfK = shelfDepth(ex, ez);           // 0 = 이 구간엔 선반 없음
+        int shelfW = shelfWidth(ex, ez);
         for (int k = 1; k <= steps; k++) {
             int x = ex + dx * k;
             int z = ez + dz * k;
@@ -935,6 +940,11 @@ public final class TerraceForge {
                 return;
             }
             int top = pad.y() - 3 * k;
+            if (shelfK > 0 && k > shelfK && k <= shelfK + shelfW) {
+                top = pad.y() - 3 * shelfK;        // 선반 — 폭 shelfW 만큼 같은 높이로 편다
+            } else if (shelfK > 0 && k > shelfK + shelfW) {
+                top = pad.y() - 3 * (k - shelfW);  // 선반 아래 — 다시 물매
+            }
             int g = groundY(world, x, z);
             if (top <= g) {
                 return;   // 산몸에 닿았다 — 여기부터는 산이 벽이다 (의도된 파묻힘)
@@ -944,7 +954,60 @@ public final class TerraceForge {
                         rib ? rockMaterial(x, y, z) : faceMaterial(x, y, z), false);
                 tally.wallFace++;
             }
+            if (shelfK > 0 && k == shelfK + shelfW) {
+                // 선반 바깥 가장자리 — 난간 한 단 (레퍼런스의 축대 위 난간 띠)
+                world.getBlockAt(x, top + 1, z).setType(Material.STONE_BRICK_WALL, false);
+                tally.parapet++;
+            } else if (shelfK > 0 && k == shelfK + 1) {
+                // ★13a-2 선반 안쪽 — 중간 스케일 채움: 화단(흙+꽃) · 이끼 · 관목 (결정론 · ~1/3)
+                long sh = mix(SALT_RIB ^ 0x9A0DL, x, 0, z);
+                int r = (int) Math.floorMod(sh, 100);
+                if (r < 14) {
+                    world.getBlockAt(x, top, z).setType(Material.COARSE_DIRT, false);
+                    world.getBlockAt(x, top + 1, z).setType(
+                            (r & 1) == 0 ? Material.FERN : Material.SHORT_GRASS, false);
+                } else if (r < 24) {
+                    world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);
+                    world.getBlockAt(x, top + 1, z).setType(Material.AZALEA, false);
+                } else if (r < 30) {
+                    world.getBlockAt(x, top + 1, z).setType(Material.STONE_BRICKS, false);
+                    world.getBlockAt(x, top + 2, z).setType(Material.LANTERN, false);
+                    tally.lanterns++;
+                }
+            }
         }
+    }
+
+    /**
+     * ★선반 명세 — 구간(~9칸)마다 결정론 해시가 정한다 (13a).
+     * 0 = 선반 없음 (구간의 ~45%) · 그 밖은 몇 칸째에서 선반이 나는가 (2~4).
+     */
+    private static int shelfDepth(int x, int z) {
+        long h = mix(SALT_RIB ^ 0x5EA1FL, Math.floorDiv(x, 9), 0, Math.floorDiv(z, 9));
+        int r = (int) Math.floorMod(h, 100);
+        if (r < 45) {
+            return 0;
+        }
+        return 2 + (int) Math.floorMod(h >> 8, 3);
+    }
+
+    /** 선반 폭 2~4 (불규칙) */
+    private static int shelfWidth(int x, int z) {
+        return 2 + (int) Math.floorMod(
+                mix(SALT_RIB ^ 0x5EA1FL, Math.floorDiv(x, 9), 1, Math.floorDiv(z, 9)) >> 4, 3);
+    }
+
+    /**
+     * 그 열이 선반 상면인가 — 조경·소품(13a-2)이 자리를 묻는다. 상면 y 를 돌려준다
+     * (없으면 {@link Integer#MIN_VALUE}).
+     */
+    public static int shelfTopAt(Pad pad, int ex, int ez, int dx, int dz, int k) {
+        int shelfK = shelfDepth(ex, ez);
+        int shelfW = shelfWidth(ex, ez);
+        if (shelfK == 0 || k <= shelfK || k > shelfK + shelfW) {
+            return Integer.MIN_VALUE;
+        }
+        return pad.y() - 3 * shelfK;
     }
 
     /** 늑재 구간인가 — 가장자리를 ~7칸 단위로 갈라 약 1/3 이 암반 (결정론 · 난수 0) */
@@ -1485,40 +1548,57 @@ public final class TerraceForge {
                 Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,   // ★슬라이스 9 — 암반 늑재
                 Material.DARK_OAK_PLANKS, Material.DEEPSLATE_TILE_SLAB,   // ★9b — 소문 보·갓
                 Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES,             // ★9b — 접근로 소나무
+                Material.AZALEA_LEAVES, Material.FLOWERING_AZALEA_LEAVES, // ★12.6 잎 톤
+                Material.DRIPSTONE_BLOCK, Material.SMOOTH_SANDSTONE,      // ★13a-3 웜톤 분화
+                Material.COARSE_DIRT, Material.FERN, Material.SHORT_GRASS,
+                Material.MOSS_BLOCK, Material.AZALEA,                     // ★13a-2 선반 화단
                 Material.LANTERN, Material.AIR);
     }
 
-    /** 옹벽 결 — 층대(4단마다 안산암 띠) 위에 석전·응회암·이끼가 결정론으로 섞인다 */
+    /**
+     * 옹벽(축대) 결 — ★13a-3 구조별 분화: 축대는 <b>거칠고 따뜻하게</b> (기단·포장과 갈린다).
+     * 층대 띠(4단마다)는 응회암, 몸은 석전 바탕에 응회암·점적석(웜톤)·균열·이끼가 섞인다 —
+     * 산의 웜톤(SpireField.stone)과 같은 계열이 되게.
+     */
     private static Material faceMaterial(int x, int y, int z) {
         if (y % 4 == 0) {
-            return Material.ANDESITE;   // 층대 띠 — 레퍼런스 석축의 가로 결
+            return Material.TUFF;       // 층대 띠 — 레퍼런스 석축의 가로 결 (웜톤으로 교체)
         }
         int r = (int) Math.floorMod(mix(SALT_FACE, x, y, z), 100);
-        if (r < 62) {
+        if (r < 44) {
             return Material.STONE_BRICKS;
         }
-        if (r < 78) {
-            return Material.ANDESITE;
-        }
-        if (r < 88) {
+        if (r < 62) {
             return Material.TUFF;
         }
-        if (r < 96) {
+        if (r < 74) {
+            return Material.DRIPSTONE_BLOCK;    // 웜톤 몸통
+        }
+        if (r < 84) {
+            return Material.ANDESITE;
+        }
+        if (r < 93) {
             return Material.CRACKED_STONE_BRICKS;
         }
         return Material.MOSSY_STONE_BRICKS;
     }
 
-    /** 포장 결 — 박석(연마 안산암) 바탕에 석전이 섞인다 (레퍼런스 광장 바닥) */
+    /**
+     * 포장 결 — ★13a-3: 광장 바닥은 <b>따뜻한 베이지</b>를 섞는다 (축대의 거친 회갈과 갈린다).
+     * 박석(연마 안산암) 바탕 + 매끈 사암·석전.
+     */
     private static Material paveMaterial(int x, int z) {
         int r = (int) Math.floorMod(mix(SALT_PAVE, x, 0, z), 100);
-        if (r < 55) {
+        if (r < 42) {
             return Material.POLISHED_ANDESITE;
         }
-        if (r < 82) {
+        if (r < 62) {
             return Material.STONE_BRICKS;
         }
-        if (r < 93) {
+        if (r < 80) {
+            return Material.SMOOTH_SANDSTONE;   // 베이지 — 산의 웜톤과 한 계열
+        }
+        if (r < 92) {
             return Material.ANDESITE;
         }
         return Material.CRACKED_STONE_BRICKS;

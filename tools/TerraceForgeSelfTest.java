@@ -537,6 +537,36 @@ public final class TerraceForgeSelfTest {
                 !TerraceForge.isVegetation(Material.MOSS_BLOCK)
                         && !TerraceForge.isVegetation(Material.STONE), "지면 판정");
 
+        // ══════════ ⑩ 슬라이스 13a — 밀도 단계 (거대 회색 면의 분해) ══════════
+        {
+            java.util.List<TerraceForge.Pad> allPads = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad main2 = allPads.stream()
+                    .filter(p -> p.spec().zone() == 9).findFirst().orElseThrow();
+            java.util.List<int[]> boxes = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(main2);
+            int[] hall = boxes.get(0);
+            check("★13a-5 본전 처마 확대 — 전고 상자 폭 ≥ 87 (hf36+처마 3+4 좌우)",
+                    hall[1] - hall[0] + 1 >= 87, (hall[1] - hall[0] + 1));
+            check("★13a-5 본전 발자국은 여전히 패드 안 (처마 확대의 계약)",
+                    hall[0] >= main2.x0() && hall[1] <= main2.x1()
+                            && hall[2] >= main2.zN() && hall[3] <= main2.zS(), "패드 밖");
+            // 옹벽 선반 — 구간마다 나거나 안 나거나 (결정론 · 둘 다 실재해야 「불규칙」이다)
+            boolean someShelf = false;
+            boolean somePlain = false;
+            for (int sx = -400; sx <= 400; sx += 9) {
+                int st = TerraceForge.shelfTopAt(main2, sx, main2.zS(), 0, 1, 4);
+                if (st != Integer.MIN_VALUE) {
+                    someShelf = true;
+                } else {
+                    somePlain = true;
+                }
+            }
+            check("★13a-1 옹벽 선반 — 구간마다 나거나 안 난다 (불규칙 테라스)",
+                    someShelf && somePlain, someShelf + "/" + somePlain);
+            check("★13a-3 팔레트 웜톤 분화 — 축대 점적석·포장 사암이 표에 있다",
+                    palette.contains(Material.DRIPSTONE_BLOCK)
+                            && palette.contains(Material.SMOOTH_SANDSTONE), "웜톤");
+        }
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {

@@ -2009,9 +2009,16 @@ public final class MvtCommand implements CommandExecutor {
                         slope = Math.max(slope,
                                 Math.abs(world.getHighestBlockYAt(x + n[0], z + n[1]) - top));
                     }
-                    boolean dense = slope <= 2 && (long) x * x + (long) z * z <= 500L * 500L;
+                    // ★13a-4 재군집 — 총량 25~35% 감축 + 「자리」에 모으기 (고른 산포 폐지):
+                    //   군집 자리 = 능선/선반/균열/모서리 = <b>경사가 갈리는 곳</b>. 굵은 격자(24)
+                    //   해시로 군집 셀을 뽑고, 군집 밖 완사면은 성기게 (덜어낸 몫이 여기서 난다).
+                    boolean clusterCell = Math.floorMod(
+                            (int) (((long) Math.floorDiv(x, 24) * 73856093L)
+                                    ^ ((long) Math.floorDiv(z, 24) * 19349663L)) >> 3, 100) < 45;
+                    boolean dense = slope <= 2 && clusterCell
+                            && (long) x * x + (long) z * z <= 500L * 500L;
                     if (!dense && Math.floorMod(h >> 4, 3) != 0) {
-                        continue;   // 경사·원경은 종전 밀도 유지 (12-① — 완사면 근·중경만 짙게)
+                        continue;   // 경사·원경·군집 밖은 성기게 (12-① 의 개정)
                     }
                     if (slope <= 2) {                        // 완사면·마루 — 군락 (수관이 잇닿게)
                         // ★12.6 — 간격 3~4 (두꺼워진 수관끼리 맞물려 회색이 안 비친다)

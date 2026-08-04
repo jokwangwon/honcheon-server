@@ -824,6 +824,18 @@ public final class HwasanCampusBuilder {
                 put(world, pad, cx + l, y + 5 - i, cz + hl + 7 + i, Material.STONE_BRICKS, tally);
             }
         }
+        // ★13a-5 월대 3구역 — 중앙 계단 곁을 화단과 난간으로 가른다 (빈 스케일 메우기)
+        for (int side : new int[]{-1, 1}) {
+            for (int l = 10; l <= 22; l++) {
+                int px = cx + side * l;
+                put(world, pad, px, y + 5, cz + hl + 4, Material.MOSS_BLOCK, tally);
+                put(world, pad, px, y + 6, cz + hl + 4,
+                        Math.floorMod(l, 3) == 0 ? Material.AZALEA : Material.SHORT_GRASS, tally);
+                put(world, pad, px, y + 6, cz + hl + 6, Material.STONE_BRICK_WALL, tally);   // 난간 띠
+            }
+            put(world, pad, cx + side * 9, y + 6, cz + hl + 5, Material.STONE_BRICKS, tally);
+            put(world, pad, cx + side * 9, y + 7, cz + hl + 5, Material.LANTERN, tally);
+        }
         int base = y + 5;
         // 1층 — 백벽 + 적목 모서리 + 상단 적 띠 · 남면 삼문 (높이 6)
         for (int f = -hf; f <= hf; f++) {
@@ -868,9 +880,11 @@ public final class HwasanCampusBuilder {
         for (int f = -hf; f <= hf; f++) {
             put(world, pad, cx + f, base + 12, cz + hl + 2, Material.DARK_OAK_PLANKS, tally);
         }
-        // 겹처마 하단 — 몸체+회랑을 덮는 스커트 (+공포 띠 — 슬라이스 9)
-        bracketRing(world, pad, cx, base + 11, cz, hf + 1, hl + 3, tally);
-        eaveRing(world, pad, cx, base + 12, cz, hf, hl + 2, tally);
+        // 겹처마 하단 — 몸체+회랑을 덮는 스커트 (+공포 띠 — 슬라이스 9).
+        // ★13a-5: 처마를 좌우로 더 내밀어(hf+3) 하층 지붕이 <b>행랑처럼 수평으로</b> 뻗는다
+        //   (레퍼런스 4·7호의 수평 실루엣 — 처마 2~4 추가 돌출).
+        bracketRing(world, pad, cx, base + 11, cz, hf + 3, hl + 3, tally);
+        eaveRing(world, pad, cx, base + 12, cz, hf + 3, hl + 2, tally);
         // 2층 — 들인 중루 + 상단 팔작
         int hf2 = hf - 6;
         int hl2 = hl - 4;
@@ -898,6 +912,22 @@ public final class HwasanCampusBuilder {
         }
         bracketRing(world, pad, cx, base + 21, cz, hf2 + 1, hl2 + 1, tally);   // 공포 — 상층 처마 밑
         sweepRoof(world, pad, cx, base + 22, cz, hf2, hl2, tally);
+        // ★13a-5 중앙 3칸 높임 — 좌우가 낮고 가운데가 솟는 위계 (레퍼런스 7호의 정면 리듬)
+        for (int f = -4; f <= 4; f++) {
+            for (int l = -3; l <= 3; l++) {
+                if (Math.abs(f) + Math.abs(l) > 5) {
+                    continue;
+                }
+                boolean edge = Math.abs(f) == 4 || Math.abs(l) == 3;
+                put(world, pad, cx + f, base + 24, cz + l,
+                        edge ? Material.DEEPSLATE_TILE_SLAB : roofCube(cx + f, base + 24, cz + l), tally);
+            }
+        }
+        for (int f = -3; f <= 3; f++) {
+            put(world, pad, cx + f, base + 25, cz,
+                    Math.abs(f) == 3 ? Material.DEEPSLATE_TILE_WALL
+                            : Material.DEEPSLATE_TILE_SLAB, tally);   // 중앙 용마루 + 치미
+        }
         put(world, pad, cx - hf, base + 9, cz + hl + 3, Material.LANTERN, tally);
         put(world, pad, cx + hf, base + 9, cz + hl + 3, Material.LANTERN, tally);
         put(world, pad, cx, base + 8, cz + hl, Material.DARK_OAK_PLANKS, tally);   // 빈 현판
