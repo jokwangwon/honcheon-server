@@ -165,7 +165,7 @@ public final class GateClaude {
 
     /** 사슬에 매단 등롱 — 처마 밑 리듬. */
     private static void lantern(World w, int x, int yTop, int z, int chain) {
-        BlockData c = bd("minecraft:chain[axis=y,waterlogged=false]");
+        BlockData c = bd("minecraft:iron_bars[north=false,south=false,east=false,west=false,waterlogged=false]");
         for (int i = 0; i < chain; i++) set(w, x, yTop - i, z, c);
         set(w, x, yTop - chain, z, bd("minecraft:lantern[hanging=true,waterlogged=false]"));
     }

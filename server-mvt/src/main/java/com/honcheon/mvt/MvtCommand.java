@@ -225,6 +225,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
                 case "도보길" -> trailBuild(sender, args);        // ★ 완성된 험산 위에 걸을 수 있는 계단길(천계단·잔도)을 짓는다 — 산기슭→정상 (프로덕션 무접촉)
                 case "캠퍼스시험" -> campusTest(sender, args);    // ★ 산세시험 월드에 마스터플랜 캠퍼스 패드·계단을 앉힌다 — B-146 처방 시험 (프로덕션 무접촉)
+                case "대결시험" -> gateContest(sender, args);   // ★ 산문 문루 대결 — 클로드/코덱스 산출물을 나란히 (중립 배선 · 프로덕션 무접촉)
                 case "산군시험" -> spireTest(sender, args);       // ★ 산세 위에 산군(배후봉 증고+침봉 켜 3)을 얹는다 — 실측표 §4 (프로덕션 무접촉)
                 case "지도검수" -> auditMap(sender);         // ★ 등록된 곳이 그 지형답게 서 있는가 (안 지은 곳도 말한다)
                 case "환경검수" -> auditTerrain(sender, args);   // 조성물과 자연의 이음매 — 공동·수역·경계·연결성
@@ -4292,4 +4293,67 @@ public final class MvtCommand implements CommandExecutor {
                 : ChatColor.GRAY + "타격의 눈 — 껐다");
         return true;
     }
+
+    /**
+     * 산문 문루 대결 — <b>중립 배선</b> (docs/design/hwasan_gate_contest.md).
+     *
+     * <p>두 산출물(GateClaude · GateCodex)을 <b>같은 평지에 나란히</b> 세운다 — 조성 조건이
+     * 같아야 비교가 성립하기 때문이다. 서편(x-70)이 하나, 동편(x+70)이 하나이고, 어느 쪽이
+     * 누구인지는 로그가 밝힌다 (평가자는 알고 봐도 되게 항목을 미리 못박아 뒀다 — 규격 §심사).
+     *
+     * <p>대상은 <b>버리는 sanse_test_ 월드</b>뿐이다 (프로덕션 보호 — B-126 정신 그대로).
+     * 산세·산군이 없어도 된다: 문루는 <b>평지 계약</b>이므로 조성 전에 60×40 바닥을 고른다.
+     */
+    private boolean gateContest(org.bukkit.command.CommandSender sender, String[] args) {
+        if (!(sender instanceof org.bukkit.command.ConsoleCommandSender) && !sender.isOp()) {
+            Announce.fail(plugin, sender, "[대결시험] 관리자만 쓸 수 있다.");
+            return true;
+        }
+        String worldName = "sanse_test_" + (args.length > 1 ? args[1] : "hwasan");
+        if (!worldName.startsWith("sanse_test_")) {
+            Announce.fail(plugin, sender, "[대결시험] sanse_test_ 접두 월드만 — 거부 (프로덕션 보호).");
+            return true;
+        }
+        World world = loadOrCreateSanseWorld(worldName);   // 재기동으로 언로드돼 있어도 스스로 문다
+        if (world == null || !world.getName().startsWith("sanse_test_")) {
+            Announce.warn(plugin, sender, "[대결시험] " + worldName + " 을(를) 열 수 없다.");
+            return true;
+        }
+        // ★ 조성터 — 산군 필드 밖 평지 (프로브와 같은 결). 두 문루가 x 로 140 떨어져 선다.
+        final int siteZ = 1400;
+        final int gy = world.getHighestBlockYAt(0, siteZ);
+        Announce.say(plugin, sender, ChatColor.GRAY + "[대결시험] " + worldName
+                + " — 조성터 z" + siteZ + " · 지면 y" + gy + " · 서편(x-70)=클로드 · 동편(x+70)=코덱스");
+        // 바닥 고르기 — 같은 조건을 만든다 (두 구역 각 100×60)
+        for (int side = 0; side < 2; side++) {
+            int cx = side == 0 ? -70 : 70;
+            for (int dx = -50; dx <= 50; dx++) {
+                for (int dz = -30; dz <= 30; dz++) {
+                    int x = cx + dx;
+                    int z = siteZ + dz;
+                    for (int y = gy + 1; y <= gy + 60; y++) {
+                        world.getBlockAt(x, y, z).setType(org.bukkit.Material.AIR, false);
+                    }
+                    world.getBlockAt(x, gy, z).setType(org.bukkit.Material.GRASS_BLOCK, false);
+                }
+            }
+        }
+        long t0 = System.currentTimeMillis();
+        try {
+            com.honcheon.mvt.contest.GateClaude.build(world, -70, gy, siteZ);
+        } catch (Throwable e) {
+            Announce.fail(plugin, sender, "[대결시험] 클로드 조성 실패 — " + e);
+        }
+        try {
+            com.honcheon.mvt.contest.GateCodex.build(world, 70, gy, siteZ);
+        } catch (Throwable e) {
+            Announce.fail(plugin, sender, "[대결시험] 코덱스 조성 실패 — " + e);
+        }
+        Announce.say(plugin, sender, ChatColor.GOLD + "[대결시험] 두 문루가 섰다 — "
+                + ((System.currentTimeMillis() - t0) / 1000) + "초");
+        Announce.say(plugin, sender, ChatColor.GRAY + "  클로드: /tp -70 " + (gy + 2) + " " + (siteZ + 40)
+                + " (남에서 북쪽) · 코덱스: /tp 70 " + (gy + 2) + " " + (siteZ + 40));
+        return true;
+    }
+
 }
