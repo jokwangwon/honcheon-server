@@ -978,9 +978,11 @@ public final class HwasanCampusBuilder {
         for (int side : new int[]{-1, 1}) {
             for (int l = 5; l <= 11; l++) {
                 int px = cx + side * l;
-                put(world, pad, px, y + 3, cz + hl + 2, Material.MOSS_BLOCK, tally);
-                put(world, pad, px, y + 4, cz + hl + 2,
-                        Math.floorMod(l, 3) == 0 ? Material.AZALEA : Material.SHORT_GRASS, tally);
+                put(world, pad, px, y + 3, cz + hl + 2, Material.MOSS_BLOCK, tally);   // 이끼는 바위 결
+                if (TerraceForge.GREEN) {                        // ★초목 스위치 (2026-08-05)
+                    put(world, pad, px, y + 4, cz + hl + 2,
+                            Math.floorMod(l, 3) == 0 ? Material.AZALEA : Material.SHORT_GRASS, tally);
+                }
                 put(world, pad, px, y + 4, cz + hl + 3, Material.STONE_BRICK_WALL, tally);   // 난간 띠
             }
             put(world, pad, cx + side * 4, y + 4, cz + hl + 2, Material.STONE_BRICKS, tally);
@@ -1290,8 +1292,10 @@ public final class HwasanCampusBuilder {
         for (Decor d : decors(pad)) {
             switch (d.kind()) {
                 case 'M' -> {
-                    plum(world, pad, d.x(), y, d.z(), tally);
-                    tally.plums++;
+                    if (TerraceForge.GREEN) {                    // ★초목 스위치 — 매화
+                        plum(world, pad, d.x(), y, d.z(), tally);
+                        tally.plums++;
+                    }
                 }
                 case 'B' -> {
                     put(world, pad, d.x(), y + 1, d.z(), Material.RED_BANNER, tally);
@@ -1335,7 +1339,9 @@ public final class HwasanCampusBuilder {
                                 continue;
                             }
                             put(world, pad, fx, y, fz, Material.FARMLAND, tally);
-                            put(world, pad, fx, y + 1, fz, Material.WHEAT, tally);
+                            if (TerraceForge.GREEN) {            // ★경작지는 지면 · 밀만 스위치
+                                put(world, pad, fx, y + 1, fz, Material.WHEAT, tally);
+                            }
                         }
                     }
                     tally.props++;
@@ -1345,8 +1351,10 @@ public final class HwasanCampusBuilder {
             }
         }
         wallGreen(world, plan, pad, tally);
-        for (int[] spot : pineSpots(pad)) {
-            pine(world, plan, pad, spot[0], spot[1], tally);
+        if (TerraceForge.GREEN) {                                // ★초목 스위치 — 벼랑 소나무
+            for (int[] spot : pineSpots(pad)) {
+                pine(world, plan, pad, spot[0], spot[1], tally);
+            }
         }
     }
 
@@ -1392,6 +1400,9 @@ public final class HwasanCampusBuilder {
                         }
                         int r = (int) Math.floorMod(hash(0x62EE7L, wx, yy, wz), 100);
                         if (r < 5) {
+                            if (!TerraceForge.GREEN) {
+                                continue;   // ★덩굴은 초목 — 스위치를 탄다 (지의는 아래에서 남는다)
+                            }
                             org.bukkit.block.data.MultipleFacing v =
                                     (org.bukkit.block.data.MultipleFacing) Material.VINE.createBlockData();
                             v.setFace(faceOf(-n[0], -n[1]), true);

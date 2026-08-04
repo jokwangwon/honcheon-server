@@ -4,6 +4,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.type.Slab;
 import org.bukkit.block.data.type.Stairs;
 
 import java.util.ArrayList;
@@ -359,10 +360,30 @@ public final class TerraceForge {
      * @param z0 첫 행 (산문단 남단 + 1)
      * @param ys 행별 보행면 y
      */
-    public record Approach(int x, int z0, int[] ys) {
+    public record Approach(int x, int z0, int[] hs) {
 
         public int length() {
-            return ys.length;
+            return hs.length;
+        }
+
+        /** 그 행에 <b>블록이 놓이는</b> y — 짝수 반단위는 풀블록, 홀수는 하단 반블록 */
+        public static int blockY(int h) {
+            return (h & 1) == 0 ? h / 2 - 1 : (h - 1) / 2;
+        }
+
+        /** 그 행의 상면이 <b>반 칸</b>인가 (하단 반블록) */
+        public static boolean isSlab(int h) {
+            return (h & 1) == 1;
+        }
+
+        /** {@code i} 번째 행에 블록이 놓이는 y (인덱스로 묻는다) */
+        public int blockYAt(int i) {
+            return blockY(hs[i]);
+        }
+
+        /** {@code i} 번째 행의 상면이 반 칸인가 (인덱스로 묻는다) */
+        public boolean isSlabAt(int i) {
+            return isSlab(hs[i]);
         }
     }
 
@@ -397,8 +418,58 @@ public final class TerraceForge {
                 approachOf(world, pads), List.copyOf(notes));
     }
 
-    /** 접근로 길이 — 산문단 남단에서 남쪽으로 (기슭 언덕을 넘어 평지까지). ★척도 되돌림 176→88 */
-    public static final int APPROACH_LEN = 88;
+    /**
+     * <b>초목 스위치</b> — 꺼져 있으면 나무·관목·풀·꽃·매화·덩굴을 심지 않는다 (기본 <b>꺼짐</b>).
+     *
+     * <p>★사용자 지시 (2026-08-05): 「<b>일단 나무 다 치우고</b> 만들어봅시다」 — 건축 자체를
+     * 보기 위해서다. 되살릴 수 있어야 하므로 지우지 않고 <b>스위치</b>로 둔다: 이 한 줄을
+     * {@code true} 로 바꾸면 전부 되살아난다 (산군 식생·캠퍼스 조경·접근로 소나무가 모두
+     * 이 값을 읽는다).
+     *
+     * <p>★<b>남기는 것</b>: 이끼(MOSS_BLOCK·MOSSY_*)·지의(GLOW_LICHEN)는 「나무」가 아니라
+     * <b>바위의 결</b>이다 — 암벽 표면의 일부이므로 스위치와 무관하게 남는다. 화단·밭의
+     * 흙바닥(COARSE_DIRT·FARMLAND)도 지면이라 남고, 그 위에 서는 <b>초목만</b> 빠진다.
+     */
+    public static boolean GREEN = false;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 계단 문법 — 반 칸 하강 (★사용자 확정 2026-08-05)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * 한 단의 디딤 깊이 — <b>2칸</b> (목표 사진 1호 실측: 디딤마다 블록 면이 두 줄 보인다).
+     *
+     * <p>★사용자 지시: 「너무 한 칸씩 내리막을 설치하는 게 아닌 <b>반블록을 사용해 널널히
+     * 걷도록</b>」. 그래서 물매는 <b>0.5 : 2 = 1:4</b> 다 — 마크에서 반 칸은 점프 없이 걸어
+     * 오르내리므로, 이 물매가 「널널히 걷는」 계단의 실체다.
+     */
+    public static final int STAIR_TREAD = 2;
+
+    /** 한 주기의 단 수 — <b>아홉</b> (사용자 확정: 「위에서부터 아홉 칸 내려갔다가」) */
+    public static final int STAIR_RUN = 9;
+
+    /** 참 — <b>평지 4칸</b> (사용자 확정: 「평지 블럭이 4칸이고」) */
+    public static final int STAIR_LANDING = 4;
+
+    /**
+     * 소문이 서는 참은 <b>넓다</b> (8칸) — 문루 지붕이 z±2 를 덮으므로 4칸 참에는 못 앉는다.
+     * 마당이 문을 감싸야 「소문 마당」이 성립한다.
+     */
+    public static final int GATE_LANDING = 8;
+
+    /** 주기 수 · 소문이 앉는 주기 (0부터) */
+    public static final int APPROACH_CYCLES = 4;
+    public static final int GATE_CYCLE = 2;
+
+    /**
+     * 접근로 길이 — <b>주기 구조에서 유도한다</b> (임의 상수가 아니다).
+     * 주기마다 디딤 {@code 9×2=18} 행 + 참({@code 4}, 소문 주기만 {@code 8}).
+     *
+     * <p>★한 주기의 하강 = 9 × 반 칸 = <b>4.5 블록</b> · 네 주기 = <b>18 블록</b>.
+     */
+    public static final int APPROACH_LEN =
+            APPROACH_CYCLES * (STAIR_RUN * STAIR_TREAD)
+                    + (APPROACH_CYCLES - 1) * STAIR_LANDING + GATE_LANDING;
 
     /**
      * 접근로 식생 회랑 반폭 — <b>계단 중심 ±10 은 나무가 서지 않는다</b> (D-16).
@@ -423,21 +494,41 @@ public final class TerraceForge {
      * 밖으로 나가 <b>조용히 사라지고</b> 있었다. 그래서 자리를 전부 비례식으로 못 박고,
      * {@link #approachFixtureIndices()} 로 내보내 눈이 범위를 재게 한다.
      */
-    public static final int LANDING_EVERY = Math.max(6, APPROACH_LEN / 7);
+    /** 주기 {@code c} 의 첫 행 — 소문 주기의 참이 넓으므로 누적으로 센다 */
+    public static int cycleStart(int c) {
+        int i = 0;
+        for (int k = 0; k < c; k++) {
+            i += STAIR_RUN * STAIR_TREAD + (k == GATE_CYCLE ? GATE_LANDING : STAIR_LANDING);
+        }
+        return i;
+    }
 
-    /** 소문 — 접근로의 60% 지점 (기슭 언덕 마루쯤). 참 자리에 맞춰 내린다 */
-    public static final int GATE_I = APPROACH_LEN * 6 / 10 / LANDING_EVERY * LANDING_EVERY;
+    /** 그 행이 참인가 — 디딤 18행이 끝난 뒤부터 주기 끝까지 */
+    public static boolean isLanding(int i) {
+        for (int c = 0; c < APPROACH_CYCLES; c++) {
+            int s = cycleStart(c);
+            int land = s + STAIR_RUN * STAIR_TREAD;
+            int end = land + (c == GATE_CYCLE ? GATE_LANDING : STAIR_LANDING);
+            if (i >= land && i < end) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-    /** 소문 마당 — 소문 앞뒤 평탄 구간 */
-    public static final int GATE_YARD_N = Math.max(0, GATE_I - 4);
-    public static final int GATE_YARD_S = Math.min(APPROACH_LEN - 1, GATE_I + 2);
+    /** 소문 — 넓은 참(8칸)의 한가운데. 지붕이 z±2 를 덮어도 마당 안에 든다 */
+    public static final int GATE_I =
+            cycleStart(GATE_CYCLE) + STAIR_RUN * STAIR_TREAD + GATE_LANDING / 2 - 1;
 
-    /** 비석 두 쌍 — 아래·위 참 곁 (참 주기에 맞춘다) */
-    public static final int STELE_A = LANDING_EVERY;
-    public static final int STELE_B = Math.max(STELE_A + LANDING_EVERY,
-            (APPROACH_LEN - 1) / LANDING_EVERY * LANDING_EVERY - LANDING_EVERY);
+    /** 소문 마당 — 그 주기의 참 전체 */
+    public static final int GATE_YARD_N = cycleStart(GATE_CYCLE) + STAIR_RUN * STAIR_TREAD;
+    public static final int GATE_YARD_S = GATE_YARD_N + GATE_LANDING - 1;
 
-    /** 소나무 주기 — 회랑 밖에 좌우 번갈아 */
+    /** 비석 두 쌍 — 아래·위 참의 첫 행 곁 */
+    public static final int STELE_A = cycleStart(1) + STAIR_RUN * STAIR_TREAD;
+    public static final int STELE_B = cycleStart(3) + STAIR_RUN * STAIR_TREAD;
+
+    /** 소나무 주기 — 회랑 밖에 좌우 번갈아 (★{@link #GREEN} 이 꺼져 있으면 안 선다) */
     public static final int PINE_EVERY = Math.max(8, APPROACH_LEN / 4);
 
     /**
@@ -452,6 +543,33 @@ public final class TerraceForge {
         out[2] = STELE_B;
         for (int k = 0; k < Math.max(0, pines); k++) {
             out[3 + k] = 15 + k * PINE_EVERY;
+        }
+        return out;
+    }
+
+    /**
+     * 접근로 보행면 표 — <b>반 칸 단위</b>. {@code hs[i]} = 상면 높이 × 2 이므로
+     * 짝수는 풀블록 상면, 홀수는 <b>하단 반블록</b> 상면이다.
+     *
+     * <p>★<b>지형을 따르지 않는다</b> (2026-08-05 사용자 확정). 계단이 정본이고 지형이 계단에
+     * 맞춰 깎이거나 채워진다 — 종전에는 반대였다(지형 추종). 한 주기는 「아홉 단 × 반 칸 하강
+     * (디딤 2칸) + 참」이고, 네 주기가 <b>18블록</b>을 내려간다.
+     */
+    public static int[] approachProfile(int hs0) {
+        int[] out = new int[APPROACH_LEN];
+        int i = 0;
+        int h = hs0;
+        for (int c = 0; c < APPROACH_CYCLES; c++) {
+            for (int s = 0; s < STAIR_RUN; s++) {
+                for (int t = 0; t < STAIR_TREAD; t++) {
+                    out[i++] = h;          // 디딤 — 한 단이 두 칸 깊다
+                }
+                h--;                       // 반 칸 하강 (풀블록 ↔ 하단 반블록이 갈린다)
+            }
+            int landing = (c == GATE_CYCLE ? GATE_LANDING : STAIR_LANDING);
+            for (int t = 0; t < landing; t++) {
+                out[i++] = h;              // 참 — 평지
+            }
         }
         return out;
     }
@@ -472,19 +590,10 @@ public final class TerraceForge {
         if (gate == null) {
             return null;
         }
-        int ax = gate.cx();
-        int z0 = gate.zS() + 1;
-        int[] ys = new int[APPROACH_LEN];
-        int prev = gate.y();
-        for (int i = 0; i < APPROACH_LEN; i++) {
-            boolean landing = i % LANDING_EVERY < 2 || (i >= GATE_YARD_N && i <= GATE_YARD_S);
-            int g = groundY(world, ax, z0 + i);
-            int target = landing ? prev
-                    : prev + Integer.compare(g, prev);   // 지형을 따르되 한 칸 물매 (걷는 자의 계약)
-            ys[i] = target;
-            prev = target;
-        }
-        return new Approach(ax, z0, ys);
+        // ★2026-08-05 — 지형을 읽지 않는다. 계단이 정본이고 지형이 따라온다
+        //   (clearAbove 가 언덕을 깎고 fillDown 이 골을 채운다 — 조성이 그렇게 돌고 있었다).
+        return new Approach(gate.cx(), gate.zS() + 1,
+                approachProfile(2 * (gate.y() + 1)));
     }
 
     /**
@@ -497,18 +606,20 @@ public final class TerraceForge {
         if (a == null) {
             return;
         }
-        int prevY = a.ys()[0];
         for (int i = 0; i < a.length(); i++) {
             int z = a.z0() + i;
-            int y = a.ys()[i];
+            int by = a.blockYAt(i);
+            boolean slab = a.isSlabAt(i);
             for (int o = -STAIR_HALF; o <= STAIR_HALF; o++) {
                 int x = a.x() + o;
-                clearAbove(world, x, y, z, tally);
-                fillDown(world, x, y - 1, z, tally);
-                Block top = world.getBlockAt(x, y, z);
-                if (y != prevY) {
-                    Stairs data = (Stairs) Material.STONE_BRICK_STAIRS.createBlockData();
-                    data.setFacing(y < prevY ? BlockFace.NORTH : BlockFace.SOUTH);   // 오름을 향한다
+                clearAbove(world, x, by, z, tally);
+                fillDown(world, x, by - 1, z, tally);
+                Block top = world.getBlockAt(x, by, z);
+                if (slab) {
+                    // ★반 칸 상면 — 하단 반블록. 마크에서 반 칸은 점프 없이 걸어 오르내린다
+                    //   (「널널히 걷도록」의 실체). 계단 블록은 안 쓴다 — 한 칸 챌면이 되기 때문이다.
+                    Slab data = (Slab) Material.STONE_BRICK_SLAB.createBlockData();
+                    data.setType(Slab.Type.BOTTOM);
                     top.setBlockData(data, false);
                     tally.stairTreads++;
                 } else {
@@ -518,34 +629,32 @@ public final class TerraceForge {
             }
             for (int side : new int[]{-RAIL_OFF, RAIL_OFF}) {
                 int x = a.x() + side;
-                clearAbove(world, x, y, z, tally);
-                fillDown(world, x, y, z, tally);
-                world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
-                if (i % LANDING_EVERY < 2 || i % Math.max(3, LANDING_EVERY / 2) == 3) {   // 참 석등 쌍 + 중간 등롱
-                    world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICKS, false);
-                    world.getBlockAt(x, y + 2, z).setType(Material.LANTERN, false);
+                clearAbove(world, x, by, z, tally);
+                fillDown(world, x, by, z, tally);
+                world.getBlockAt(x, by, z).setType(Material.STONE_BRICKS, false);
+                if (isLanding(i)) {                        // 참마다 석등 쌍 — 시선을 위로 이끈다
+                    world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICKS, false);
+                    world.getBlockAt(x, by + 2, z).setType(Material.LANTERN, false);
                     tally.lanterns++;
                 } else {
-                    world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICK_WALL, false);
+                    world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
                 }
             }
             if (i == GATE_I + 2) {
-                // 소문 — 기슭 언덕 마루. ★마당 남끝(GATE_I+2)에서 세운다: 지붕이 z±2 를 덮으므로
+                // 소문 — 넓은 참(8칸)의 한가운데. ★마당 남끝에서 세운다: 지붕이 z±2 를 덮으므로
                 //   그 행들의 조성(clearAbove)이 끝난 뒤여야 한다 (마당이 평탄이라 y 동일)
-                approachGate(world, a.x(), a.ys()[GATE_I], a.z0() + GATE_I, tally);
+                approachGate(world, a.x(), a.blockYAt(GATE_I), a.z0() + GATE_I, tally);
             }
             if (i == STELE_A || i == STELE_B) {
                 stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁 (계단 곁에 선다)
                 stele(world, a.x() - RAIL_OFF - 3, z, tally);
             }
-            if (i >= 15 && (i - 15) % PINE_EVERY == 0) {
+            if (GREEN && i >= 15 && (i - 15) % PINE_EVERY == 0) {
                 // ★계단 회랑(±APPROACH_CLEAR) 밖에 선다 — 계단을 덮지 않고 곁을 채운다 (D-16).
-                //   옛 값 RAIL_OFF+5 는 전폭 21 계단의 것이라, 폭 7 로 줄자 계단 위에 앉았다.
                 int off = APPROACH_CLEAR + 2;
                 approachPine(world, a.x() + (((i - 15) / PINE_EVERY) % 2 == 0 ? off : -off), z, tally);
             }
-            prevY = y;
         }
     }
 
@@ -1103,11 +1212,15 @@ public final class TerraceForge {
                 int r = (int) Math.floorMod(sh, 100);
                 if (r < 14) {
                     world.getBlockAt(x, top, z).setType(Material.COARSE_DIRT, false);
-                    world.getBlockAt(x, top + 1, z).setType(
-                            (r & 1) == 0 ? Material.FERN : Material.SHORT_GRASS, false);
+                    if (GREEN) {   // ★흙바닥은 지면이라 남고, 그 위 초목만 스위치를 탄다
+                        world.getBlockAt(x, top + 1, z).setType(
+                                (r & 1) == 0 ? Material.FERN : Material.SHORT_GRASS, false);
+                    }
                 } else if (r < 24) {
-                    world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);
-                    world.getBlockAt(x, top + 1, z).setType(Material.AZALEA, false);
+                    world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);   // 이끼는 바위 결
+                    if (GREEN) {
+                        world.getBlockAt(x, top + 1, z).setType(Material.AZALEA, false);
+                    }
                 } else if (r < 30) {
                     world.getBlockAt(x, top + 1, z).setType(Material.STONE_BRICKS, false);
                     world.getBlockAt(x, top + 2, z).setType(Material.LANTERN, false);
@@ -1733,27 +1846,40 @@ public final class TerraceForge {
             }
         }
         // ⑤ 접근로 (슬라이스 9b) — 보행(걷는 자의 눈) + 전 열 접지 (대계단 문법 재사용)
+        //   ★2026-08-05 반 칸 하강: 눈도 <b>반 단위</b>로 잰다. 정수 y 로만 재면 반 칸 챌면을
+        //   0 으로 세어 「매끈하다」고 거짓말한다 — 조성과 눈이 같은 정의를 써야 한다.
         Approach a = plan.approach();
         if (a != null) {
-            int prev = Integer.MIN_VALUE;
+            int prevH = Integer.MIN_VALUE;
             for (int i = -2; i < a.length(); i++) {
                 int z = a.z0() + i;
-                int stand = prev == Integer.MIN_VALUE
-                        ? topSolid(world, a.x(), a.ys()[0] + 2, z)
-                        : topSolid(world, a.x(), prev + 2, z);
-                if (prev != Integer.MIN_VALUE && Math.abs(stand - prev) > 1) {
+                int from = (prevH == Integer.MIN_VALUE ? a.blockYAt(0) : Approach.blockY(prevH)) + 2;
+                int stand = topSolid(world, a.x(), from, z);
+                int h = surfaceHalf(world, a.x(), stand, z);
+                if (prevH != Integer.MIN_VALUE && Math.abs(h - prevH) > 2) {   // 반 단위 → 한 칸 = 2
                     breaks++;
                     note(walkNotes, "보행: 접근로 (" + a.x() + "," + z + ") 단차 "
-                            + Math.abs(stand - prev) + " (y" + prev + "→y" + stand + ")");
+                            + (Math.abs(h - prevH) / 2.0) + "칸 (y" + (prevH / 2.0)
+                            + "→y" + (h / 2.0) + ")");
                 }
-                prev = stand;
+                prevH = h;
+            }
+            for (int i = 0; i < a.length(); i++) {          // 계획한 반 칸이 실제로 반 칸인가
+                int stand = topSolid(world, a.x(), a.blockYAt(i) + 2, a.z0() + i);
+                int got = surfaceHalf(world, a.x(), stand, a.z0() + i);
+                if (got != a.hs()[i]) {
+                    breaks++;
+                    note(walkNotes, "보행: 접근로 (" + a.x() + "," + (a.z0() + i)
+                            + ") 상면 y" + (got / 2.0) + " ≠ 계획 y" + (a.hs()[i] / 2.0)
+                            + (Approach.isSlab(a.hs()[i]) ? " (반 칸이어야 한다)" : ""));
+                }
             }
             int min = world.getMinHeight();
             for (int i = 0; i < a.length(); i++) {
                 for (int o = -RAIL_OFF; o <= RAIL_OFF; o++) {
                     cols++;
                     int x = a.x() + o;
-                    for (int y = a.ys()[i]; y > min; y--) {
+                    for (int y = a.blockYAt(i); y > min; y--) {
                         Material m = world.getBlockAt(x, y, a.z0() + i).getType();
                         if (m.isAir()) {
                             floats++;
@@ -1800,6 +1926,19 @@ public final class TerraceForge {
             y--;
         }
         return y;
+    }
+
+    /**
+     * 그 열의 <b>실제 상면을 반 단위로</b> 읽는다 — 하단 반블록이면 홀수(반 칸), 그 밖은 짝수.
+     * {@link Approach#blockY(int)} 의 짝이다: 조성이 쓴 정의와 눈이 쓰는 정의가 같아야
+     * 반 칸 계단을 「매끈하다」고 오독하지 않는다 (2026-08-05).
+     */
+    private static int surfaceHalf(World world, int x, int blockY, int z) {
+        org.bukkit.block.data.BlockData d = world.getBlockAt(x, blockY, z).getBlockData();
+        if (d instanceof Slab s && s.getType() == Slab.Type.BOTTOM) {
+            return 2 * blockY + 1;
+        }
+        return 2 * (blockY + 1);
     }
 
     // ═══════════════════════════════════════════════════════════════════

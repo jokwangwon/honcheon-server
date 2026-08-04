@@ -398,11 +398,85 @@ public final class TerraceForgeSelfTest {
                         && TerraceForge.GATE_I <= TerraceForge.GATE_YARD_S,
                 TerraceForge.GATE_YARD_N + "<=" + TerraceForge.GATE_I + "<=" + TerraceForge.GATE_YARD_S);
         // 비석 둘이 서로 다른 참에 선다 (겹치면 한 쌍이 사라진 것과 같다)
-        check("★비석 두 쌍이 서로 다른 자리 (하나가 조용히 사라지지 않는다)",
+        check("★비석 두 쌍이 서로 다른 참 (하나가 조용히 사라지지 않는다)",
                 TerraceForge.STELE_A != TerraceForge.STELE_B
-                        && TerraceForge.STELE_A % TerraceForge.LANDING_EVERY == 0
-                        && TerraceForge.STELE_B % TerraceForge.LANDING_EVERY == 0,
+                        && TerraceForge.isLanding(TerraceForge.STELE_A)
+                        && TerraceForge.isLanding(TerraceForge.STELE_B),
                 TerraceForge.STELE_A + "/" + TerraceForge.STELE_B);
+
+        // ══════ ★★계단 문법 — 반 칸 하강 (사용자 확정 2026-08-05) ══════
+        //   「위에서부터 아홉 칸 내려갔다가 평지 블럭이 4칸이고 다시 한 칸씩 내려가는 형태」
+        //   + 「반블록을 사용해 널널히 걷도록」. 그래서 한 단은 **반 칸** 내려가고 디딤은 2칸이다.
+        //   ★이 눈이 없으면 「한 칸 계단」으로 되돌아가도 아무도 모른다 (종전이 그랬다).
+        {
+            int hs0 = 200;                                   // 임의 시작 (짝수 = 풀블록 상면)
+            int[] prof = TerraceForge.approachProfile(hs0);
+            check("★계단 문법 — 표 길이가 APPROACH_LEN 과 같다",
+                    prof.length == TerraceForge.APPROACH_LEN, prof.length);
+
+            // ① 한 단은 디딤 2칸 · 하강은 정확히 반 칸(1 반단위) — 한 칸도 0칸도 아니다
+            boolean tread2 = true;
+            boolean halfStep = true;
+            int drops = 0;
+            for (int i = 1; i < prof.length; i++) {
+                int d = prof[i - 1] - prof[i];
+                if (d != 0) {
+                    drops++;
+                    if (d != 1) {
+                        halfStep = false;                    // 반 칸이 아니다 (한 칸이면 d==2)
+                    }
+                    // 하강 직전 두 칸이 같은 높이여야 디딤 2칸이다 (참 뒤 첫 하강은 예외)
+                    if (i >= 2 && !TerraceForge.isLanding(i - 1) && prof[i - 2] != prof[i - 1]) {
+                        tread2 = false;
+                    }
+                }
+            }
+            check("★계단 문법 — 한 단이 <b>반 칸</b>씩 내려간다 (한 칸 계단이 아니다)",
+                    halfStep, "반 칸 아닌 단 있음");
+            check("★계단 문법 — 디딤이 " + TerraceForge.STAIR_TREAD + "칸 (뚝뚝 떨어지지 않는다)",
+                    tread2, "디딤 1칸 구간 있음");
+            check("★계단 문법 — 단 수 = 주기×9 = "
+                            + (TerraceForge.APPROACH_CYCLES * TerraceForge.STAIR_RUN),
+                    drops == TerraceForge.APPROACH_CYCLES * TerraceForge.STAIR_RUN, drops);
+
+            // ② 참은 평평하다 · 소문 참은 넓다
+            boolean landingFlat = true;
+            for (int i = 1; i < prof.length; i++) {
+                if (TerraceForge.isLanding(i) && TerraceForge.isLanding(i - 1)
+                        && prof[i] != prof[i - 1]) {
+                    landingFlat = false;
+                }
+            }
+            check("★계단 문법 — 참은 평지다 (" + TerraceForge.STAIR_LANDING + "칸 · 소문 참 "
+                            + TerraceForge.GATE_LANDING + "칸)",
+                    landingFlat, "참이 기울었다");
+
+            // ③ 총 하강 — 주기 4 × 9단 × 반 칸 = 18 칸
+            int totalHalf = hs0 - prof[prof.length - 1];
+            check("★계단 문법 — 총 하강 " + (totalHalf / 2.0) + "칸 (= 주기 "
+                            + TerraceForge.APPROACH_CYCLES + " × 9 × 0.5)",
+                    totalHalf == TerraceForge.APPROACH_CYCLES * TerraceForge.STAIR_RUN,
+                    totalHalf / 2.0);
+
+            // ④ 반 칸이 실재하는가 — 홀수 반단위(하단 반블록)가 절반쯤 있어야 한다.
+            //   전부 짝수면 「한 칸 계단」으로 되돌아간 것이다 (뮤테이션 판별력).
+            int slabs = 0;
+            for (int h : prof) {
+                if (TerraceForge.Approach.isSlab(h)) {
+                    slabs++;
+                }
+            }
+            check("★계단 문법 — 반블록 상면이 실재한다 (" + slabs + "/" + prof.length + " 행)",
+                    slabs > prof.length / 4 && slabs < prof.length * 3 / 4, slabs);
+
+            // ⑤ 지형을 따르지 않는다 — 순수 함수라 같은 입력에 같은 표 (결정론·지형 무관)
+            check("★계단 문법 — 지형 무관·결정론 (계단이 정본, 지형이 따라온다)",
+                    java.util.Arrays.equals(prof, TerraceForge.approachProfile(hs0)), "표가 흔들린다");
+        }
+
+        // ══════ ★초목 스위치 (사용자 지시 2026-08-05 「일단 나무 다 치우고」) ══════
+        check("★초목 스위치가 기본 꺼짐 — 건축을 가리는 나무가 없다",
+                !TerraceForge.GREEN, TerraceForge.GREEN);
         // ★10-① 산몸 — 「평지+기둥」이 아니라 「산+암봉」: 근경 환대에서 맨바닥(0) 비율이
         //   절반 아래로 (침봉만 있던 8.5 는 ~75% 가 맨바닥이었다) + 산체 높이대(25~95) 실재
         int zeros = 0;

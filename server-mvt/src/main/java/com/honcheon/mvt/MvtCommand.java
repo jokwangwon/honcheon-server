@@ -2039,31 +2039,39 @@ public final class MvtCommand implements CommandExecutor {
                     //   겹쳐(1/13 × 1/3 × 34%) 절벽 열의 0.9%만 남아 185가닥이 됐다 — 설계치
                     //   「절벽의 34%」와 두 자릿수로 어긋났다. 덩굴은 잎이 없어 값이 싸고
                     //   절벽의 지배적 초록이므로, 여기서 걸어 한 자리에 여러 가닥을 늘어뜨린다.
-                    if (slope > 5 && Math.floorMod(h >> 30, 100) < 70) {
+                    // ★초목 스위치 (2026-08-05 사용자 지시 「나무 다 치우고」) — TerraceForge.GREEN
+                    //   하나가 산군·캠퍼스·접근로를 함께 여닫는다. 이끼는 바위 결이라 남는다.
+                    if (com.honcheon.mvt.forge.TerraceForge.GREEN
+                            && slope > 5 && Math.floorMod(h >> 30, 100) < 70) {
                         cliffVines(x, top, z, h);
                     }
                     if (!dense && Math.floorMod(h >> 4, 3) != 0) {
                         continue;   // 경사·원경·군집 밖은 성기게 (12-① 의 개정)
                     }
+                    boolean green = com.honcheon.mvt.forge.TerraceForge.GREEN;
                     if (slope <= 2) {                        // 완사면·마루 — 군락 (수관이 잇닿게)
                         // ★12.6 — 간격 3~4 (두꺼워진 수관끼리 맞물려 회색이 안 비친다)
-                        pine(x, top, z, h);
-                        pine(x + 3 + (int) Math.floorMod(h >> 20, 2), top,
-                                z - 2 - (int) Math.floorMod(h >> 22, 2), h >> 24);
-                        if (Math.floorMod(h >> 16, 100) < 50) {
-                            pine(x - 3 - (int) Math.floorMod(h >> 26, 2), top, z + 3, h >> 28);
-                        }
-                        mossGround(x, top, z, h);
-                    } else if (slope <= 5) {                 // 어깨 턱 — 점식
-                        if (Math.floorMod(h >> 16, 100) < 55) {
+                        if (green) {
                             pine(x, top, z, h);
-                        } else {
-                            shrub(x, top, z, h);
+                            pine(x + 3 + (int) Math.floorMod(h >> 20, 2), top,
+                                    z - 2 - (int) Math.floorMod(h >> 22, 2), h >> 24);
+                            if (Math.floorMod(h >> 16, 100) < 50) {
+                                pine(x - 3 - (int) Math.floorMod(h >> 26, 2), top, z + 3, h >> 28);
+                            }
+                        }
+                        mossGround(x, top, z, h);            // 이끼는 바위 결 — 남는다
+                    } else if (slope <= 5) {                 // 어깨 턱 — 점식
+                        if (green) {
+                            if (Math.floorMod(h >> 16, 100) < 55) {
+                                pine(x, top, z, h);
+                            } else {
+                                shrub(x, top, z, h);
+                            }
                         }
                     } else {                                 // 절벽 — 이끼 띠 · 턱 관목 · ★덩굴
                         world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);
                         mossPatches++;
-                        if (Math.floorMod(h >> 16, 100) < 30) {
+                        if (green && Math.floorMod(h >> 16, 100) < 30) {
                             shrub(x, top, z, h);
                         }
                         // ★덩굴은 위(성김 관문 앞)에서 이미 걸었다 — 여기서 다시 걸지 않는다
