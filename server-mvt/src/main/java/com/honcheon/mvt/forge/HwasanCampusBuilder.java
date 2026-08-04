@@ -451,7 +451,9 @@ public final class HwasanCampusBuilder {
         // ★슬라이스 8 재척도 ×2: 깊이 9 · 중앙 아치 11×12 · 곁 아치 5×8 (±18) · 하층 벽 12 · 상층 8
         int y = pad.y();
         for (int f = -half; f <= half; f++) {
-            for (int d = -4; d <= 4; d++) {
+            // ★13b-② 정면 요철 — 끝 구간(|f| > half-6)은 한 칸 물러난다 (중앙이 앞선다)
+            int recess = Math.abs(f) > half - 6 ? 1 : 0;
+            for (int d = -4 + recess; d <= 4 - recess; d++) {
                 boolean sideArch = half >= 24 && Math.abs(Math.abs(f) - 18) <= 2;   // 곁 아치 5 폭
                 boolean arch = Math.abs(f) <= 5 || sideArch;                        // 중앙 아치 11 폭
                 for (int dy = 1; dy <= 12; dy++) {
@@ -625,6 +627,11 @@ public final class HwasanCampusBuilder {
         }
         bracketRing(world, pad, cx, y + wallH - 1, cz, hf + 1, hl + 1, tally);   // 공포층 — 처마 밑 (슬라이스 9)
         sweepRoof(world, pad, cx, y + wallH, cz, hf, hl, tally);
+        // ★13b-② 큰 홀은 중앙 현관이 앞으로 — 긴 벽의 요철. 단, 포치는 패드 안에서만
+        //   (남면 여유가 모자라면 세우지 않는다 — 눈이 계획 단계에서 잡아 준 계약)
+        if (hf >= 14 && cz + hl + 5 <= pad.zS() - 1) {
+            porch(world, pad, cx, y, cz + hl, 4, 3, wallH, tally);
+        }
         put(world, pad, cx, y + wallH, cz + hl + 1, Material.LANTERN, tally);
         tally.halls++;
     }
@@ -781,6 +788,39 @@ public final class HwasanCampusBuilder {
         }
     }
 
+    /**
+     * ★13b-② 현관 포치 — <b>정면 3단 요철</b>의 중심 (조율자 판정 「평평한 긴 벽」의 처방).
+     * 레퍼런스의 전각은 중앙이 앞으로 나오고(자체 지붕을 인 현관) 좌우 끝이 물러난다.
+     * 중앙 폭 2·ph+1 이 앞으로 {@code out} 칸 내밀고, 적주 열과 맞배 지붕을 인다.
+     *
+     * @param ph  포치 반폭 (중앙 폭 = 2·ph+1)
+     * @param out 앞으로 내미는 칸수 (3~5)
+     */
+    private static void porch(World world, TerraceForge.Pad pad, int cx, int y, int cz,
+                              int ph, int out, int wallH, Tally tally) {
+        for (int f = -ph; f <= ph; f++) {
+            for (int d = 1; d <= out; d++) {
+                boolean side = Math.abs(f) == ph;
+                if (side || d == out) {                 // 옆벽·앞벽 (문간은 비운다)
+                    for (int dy = 1; dy <= wallH - 2; dy++) {
+                        boolean doorway = d == out && Math.abs(f) <= 1 && dy <= 4;
+                        if (doorway) {
+                            continue;
+                        }
+                        boolean pillar = side && (d == 1 || d == out);
+                        put(world, pad, cx + f, y + dy, cz + d,
+                                pillar ? Material.STRIPPED_MANGROVE_LOG
+                                        : (dy == 1 ? Material.POLISHED_ANDESITE
+                                        : dy == 5 ? Material.DARK_OAK_PLANKS
+                                        : Material.WHITE_TERRACOTTA), tally);
+                    }
+                }
+            }
+        }
+        bracketRing(world, pad, cx, y + wallH - 3, cz + out / 2 + 1, ph + 1, out / 2 + 1, tally);
+        sweepRoof(world, pad, cx, y + wallH - 2, cz + out / 2 + 1, ph, out / 2, tally);
+    }
+
     /** 전면 열주 — 적주 간격 3 이 처마 보(다크오크)를 받친다 · 기둥 사이 격자창 (실측표 §3-b) */
     private static void colonnade(World world, TerraceForge.Pad pad, int cx, int y, int cz,
                                   int hf, int hl, int wallH, int doorHalf, Tally tally) {
@@ -871,15 +911,20 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
-        // 퇴칸 회랑 — 월대 위 전면 열주(간격 4)가 처마 보를 받친다 (실측표 §3-b)
+        // 퇴칸 회랑 — 월대 위 전면 열주(간격 4)가 처마 보를 받친다 (실측표 §3-b).
+        // ★13b-② 정면 3단 요철: 중앙(|f|≤10)은 포치가 앞으로 나오고, 끝(|f|>hf-8)은 두 칸
+        //   물러나며, 그 사이가 기준선 — 60칸 곧은 벽이 세 켜로 갈린다.
         for (int f = -hf; f <= hf; f += 4) {
+            int zOff = Math.abs(f) > hf - 8 ? 0 : 2;   // 끝은 후퇴 (열주가 뒤로)
             for (int dy = 1; dy <= 11; dy++) {
-                put(world, pad, cx + f, base + dy, cz + hl + 2, Material.STRIPPED_MANGROVE_LOG, tally);
+                put(world, pad, cx + f, base + dy, cz + hl + zOff, Material.STRIPPED_MANGROVE_LOG, tally);
             }
         }
         for (int f = -hf; f <= hf; f++) {
-            put(world, pad, cx + f, base + 12, cz + hl + 2, Material.DARK_OAK_PLANKS, tally);
+            int zOff = Math.abs(f) > hf - 8 ? 0 : 2;
+            put(world, pad, cx + f, base + 12, cz + hl + zOff, Material.DARK_OAK_PLANKS, tally);
         }
+        porch(world, pad, cx, base, cz + hl, 10, 5, 13, tally);   // 중앙 현관 — 21폭이 5칸 내민다
         // 겹처마 하단 — 몸체+회랑을 덮는 스커트 (+공포 띠 — 슬라이스 9).
         // ★13a-5: 처마를 좌우로 더 내밀어(hf+3) 하층 지붕이 <b>행랑처럼 수평으로</b> 뻗는다
         //   (레퍼런스 4·7호의 수평 실루엣 — 처마 2~4 추가 돌출).

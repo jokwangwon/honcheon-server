@@ -565,6 +565,12 @@ public final class TerraceForgeSelfTest {
             check("★13a-3 팔레트 웜톤 분화 — 축대 점적석·포장 사암이 표에 있다",
                     palette.contains(Material.DRIPSTONE_BLOCK)
                             && palette.contains(Material.SMOOTH_SANDSTONE), "웜톤");
+            // ★13b-② 정면 요철 — 본전 남면이 포치만큼 앞으로 나온다 (평평한 긴 벽의 처방)
+            int mcz = main2.zN() + main2.spec().depth() / 2;
+            check("★13b-② 본전 현관 포치 — 남면 발자국이 몸체보다 앞선다 (중앙 돌출)",
+                    hall[3] >= mcz + 4 + 13 + 4, hall[3] - mcz);
+            check("★13b-② 포치 확대 뒤에도 패드 담김 유지",
+                    hall[3] <= main2.zS(), hall[3] + " vs " + main2.zS());
         }
 
         // ══════════ 결산 ══════════

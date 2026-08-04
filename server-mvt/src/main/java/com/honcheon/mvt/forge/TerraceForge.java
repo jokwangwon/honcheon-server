@@ -882,7 +882,8 @@ public final class TerraceForge {
                 boolean rib = edge && ribSegment(x, z);
                 for (int y = g + 1; y < pad.y(); y++) {
                     world.getBlockAt(x, y, z).setType(
-                            edge ? (rib ? rockMaterial(x, y, z) : faceMaterial(x, y, z))
+                            edge ? (rib ? rockMaterial(x, y, z)
+                                    : faceMaterial(x, y, z, pad.y() - y))   // ★13b — 아래일수록 젖는다
                                     : Material.STONE, false);
                     if (edge) {
                         tally.wallFace++;
@@ -931,7 +932,10 @@ public final class TerraceForge {
         // ★슬라이스 13a — 중간 선반 (거대 회색 면의 분해): 구간(~9칸)마다 해시가 선반 하나를
         //   정한다 — 그 구간에서는 배터가 k0 칸째에서 폭 2~4 로 <b>평평하게 내밀어</b> 한 면을
         //   2~3단으로 가른다. 선반 위에는 난간·식생이 앉는다 (shelfTop 이 자리를 알려 준다).
-        int shelfK = shelfDepth(ex, ez);           // 0 = 이 구간엔 선반 없음
+        // ★13b-③ 면 높이에 비례한 선반 — 높은 면(20+)은 선반이 <b>반드시</b> 난다 (가장 큰
+        //   회색 면이 아직 넓다는 판정의 처방). 낮은 면은 종전 확률(55%) 그대로.
+        int faceH = pad.y() - groundY(world, ex + dx, ez + dz);
+        int shelfK = shelfDepth(ex, ez, faceH);    // 0 = 이 구간엔 선반 없음
         int shelfW = shelfWidth(ex, ez);
         for (int k = 1; k <= steps; k++) {
             int x = ex + dx * k;
@@ -951,7 +955,8 @@ public final class TerraceForge {
             }
             for (int y = g + 1; y <= top; y++) {
                 world.getBlockAt(x, y, z).setType(
-                        rib ? rockMaterial(x, y, z) : faceMaterial(x, y, z), false);
+                        rib ? rockMaterial(x, y, z)
+                                : faceMaterial(x, y, z, top - y + 2), false);   // ★13b 선반 밑이 젖는다
                 tally.wallFace++;
             }
             if (shelfK > 0 && k == shelfK + shelfW) {
@@ -983,12 +988,22 @@ public final class TerraceForge {
      * 0 = 선반 없음 (구간의 ~45%) · 그 밖은 몇 칸째에서 선반이 나는가 (2~4).
      */
     private static int shelfDepth(int x, int z) {
+        return shelfDepth(x, z, 0);
+    }
+
+    /**
+     * @param faceH 이 구간 옹벽 면의 높이 — ★13b-③: 20+ 면은 선반이 반드시 나고(0 반환 없음),
+     *              32+ 면은 더 얕은 자리(2~3칸째)에 나 위쪽부터 갈린다. 0 = 모름(종전 확률)
+     */
+    private static int shelfDepth(int x, int z, int faceH) {
         long h = mix(SALT_RIB ^ 0x5EA1FL, Math.floorDiv(x, 9), 0, Math.floorDiv(z, 9));
         int r = (int) Math.floorMod(h, 100);
-        if (r < 45) {
+        int skip = faceH >= 20 ? 0 : 45;          // 높은 면엔 「선반 없음」이 없다
+        if (r < skip) {
             return 0;
         }
-        return 2 + (int) Math.floorMod(h >> 8, 3);
+        int k = 2 + (int) Math.floorMod(h >> 8, 3);
+        return faceH >= 32 ? Math.min(k, 3) : k;   // 아주 높은 면은 위쪽에서부터 갈린다
     }
 
     /** 선반 폭 2~4 (불규칙) */
@@ -1561,26 +1576,50 @@ public final class TerraceForge {
      * 산의 웜톤(SpireField.stone)과 같은 계열이 되게.
      */
     private static Material faceMaterial(int x, int y, int z) {
+        return faceMaterial(x, y, z, Integer.MAX_VALUE);
+    }
+
+    /**
+     * 옹벽 결 — ★13b-① <b>원인 있는 풍화</b>: 점적석·이끼가 고른 산점(무늬)이 아니라
+     * <b>뭉치</b>로 나고, <b>아래쪽·모서리·선반 밑</b>에 몰린다 (물이 흐르고 이끼가 끼는 자리).
+     * 뭉치 = 3칸 격자 셀 해시로 「젖은 셀」을 뽑고 그 안에서 2~4칸으로 자란다.
+     *
+     * @param below 그 열이 선반·상단에서 몇 칸 아래인가 (클수록 아래 — 젖음이 는다).
+     *              {@link Integer#MAX_VALUE} = 모름 (기본 결)
+     */
+    private static Material faceMaterial(int x, int y, int z, int below) {
         if (y % 4 == 0) {
             return Material.TUFF;       // 층대 띠 — 레퍼런스 석축의 가로 결 (웜톤으로 교체)
         }
+        // ① 젖은 셀 — 3칸 뭉치 격자. 아래쪽일수록 셀이 젖을 확률이 는다 (물이 흘러내린다)
+        int wetBias = below == Integer.MAX_VALUE ? 12 : Math.min(34, 6 + below * 3);
+        boolean wetCell = Math.floorMod(mix(SALT_FACE ^ 0x5DE7L,
+                Math.floorDiv(x, 3), Math.floorDiv(y, 3), Math.floorDiv(z, 3)), 100) < wetBias;
         int r = (int) Math.floorMod(mix(SALT_FACE, x, y, z), 100);
-        if (r < 44) {
-            return Material.STONE_BRICKS;
-        }
-        if (r < 62) {
+        if (wetCell) {
+            // 뭉치 안 — 젖은 결이 이어진다 (점이 아니라 얼룩)
+            if (r < 46) {
+                return Material.DRIPSTONE_BLOCK;
+            }
+            if (r < 72) {
+                return Material.MOSSY_STONE_BRICKS;
+            }
+            if (r < 84) {
+                return Material.MOSSY_COBBLESTONE;
+            }
             return Material.TUFF;
         }
-        if (r < 74) {
-            return Material.DRIPSTONE_BLOCK;    // 웜톤 몸통
+        // 마른 면 — 석전·응회암·안산암만 (점적석·이끼 없음: 무늬가 안 생긴다)
+        if (r < 56) {
+            return Material.STONE_BRICKS;
         }
-        if (r < 84) {
+        if (r < 76) {
+            return Material.TUFF;
+        }
+        if (r < 90) {
             return Material.ANDESITE;
         }
-        if (r < 93) {
-            return Material.CRACKED_STONE_BRICKS;
-        }
-        return Material.MOSSY_STONE_BRICKS;
+        return Material.CRACKED_STONE_BRICKS;
     }
 
     /**
