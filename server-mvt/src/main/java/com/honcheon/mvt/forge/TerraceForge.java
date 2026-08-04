@@ -46,14 +46,19 @@ public final class TerraceForge {
     }
 
     /**
-     * 대계단 반폭 — 보행 19 + 측석 2 = 전폭 21.
-     * ★사용자 기준자 (2026-08-03): 「내 눈으로 세었을 때 계단 넓이가 20블록」 — 대계단이
-     * 척도의 앵커다. 홀수 격자(중심열 대칭) 제약으로 21 — 「줄이지 않는다」 계율 쪽으로 올림.
-     * 옛 값 3(전폭 9)은 절반 이하 오측이었다 (슬라이스 8 재실측).
+     * 대계단 반폭 — <b>보행 7</b> + 측석 2 = 전폭 9.
+     *
+     * <p>★★사용자 실측 (2026-08-04): 「레퍼런스 사진으로 보니 <b>계단의 폭이 7칸(도보길만)</b>」.
+     * 이 값은 슬라이스 8 <b>이전</b> 값과 정확히 같다 — 즉 슬라이스 8 의 「대계단 20」 척도
+     * 교정(9 로 올려 전폭 21)이 <b>오류였고</b>, 그때 그 앵커를 따라 전 캠퍼스가 ~2.8배로
+     * 커졌다. 계단부터 되돌린다 (정본: {@code docs/design/hwasan_target_diff.md} D-19).
+     *
+     * <p>★계율: 이 상수는 <b>목표 사진의 실측</b>이다. 「크게 하면 웅장하다」로 올리지 마라 —
+     * 웅장함은 폭이 아니라 길이·오름·양옆의 리듬에서 온다 (레퍼런스가 그렇다).
      */
-    public static final int STAIR_HALF = 9;
+    public static final int STAIR_HALF = 3;
 
-    /** 대계단 난간(측석) 오프셋 — 계단 중심 ±4 */
+    /** 대계단 난간(측석) 오프셋 — 계단 중심 ±4 (보행 7 바로 밖) */
     public static final int RAIL_OFF = STAIR_HALF + 1;
 
     /** 패드 사이 최소 낙차 — 이보다 얕으면 단이 단으로 안 읽힌다 (계단 링크의 하한) */
@@ -121,8 +126,10 @@ public final class TerraceForge {
      * @param upperZone 윗패드 구역 번호 (h 가 더 높아야 한다)
      * @param lowerZone 아랫패드 구역 번호
      * @param side      윗패드의 어느 면에서 나가는가 — 'S'·'N'·'E'·'W'
-     * @param half      보행 반폭 — 대계단 {@value #STAIR_HALF}(전폭 21) 또는 ★소계단 2(전폭 5 —
-     *                  슬라이스 9b 단구 분할: 같은 통단 안 칸 사이를 잇는다)
+     * @param half      보행 반폭 — 대계단 {@value #STAIR_HALF}(보행 7) 또는 ★소계단 1(보행 3 —
+     *                  슬라이스 9b 단구 분할: 같은 통단 안 칸 사이를 잇는다). ★2026-08-04
+     *                  사용자 실측으로 대계단이 9→3 으로 줄면서 소계단도 2→1 로 비례 축소했다
+     *                  (소계단이 대계단만 해지면 위계가 뒤집힌다)
      * @param off       면 위 교차점 오프셋 (중심 기준) — 월대·행각 등 구조물을 비켜 건넌다
      */
     public record StairLink(int upperZone, int lowerZone, char side, int half, int off) {
@@ -241,15 +248,15 @@ public final class TerraceForge {
                 new StairLink(12, 9, 'S'),     // 낙차 16
                 new StairLink(13, 12, 'S'),    // 낙차 24
                 // ★9b 소계단 (전폭 5) — 갈린 단구 사이. Δ≤1 칸(5↔16)만 여장 개구가 잇는다.
-                new StairLink(1, 17, 'E', 2),
-                new StairLink(3, 2, 'E', 2),
-                new StairLink(2, 5, 'E', 2),
-                new StairLink(4, 6, 'E', 2),
-                new StairLink(6, 7, 'E', 2),
-                new StairLink(14, 101, 'E', 2),
-                new StairLink(101, 8, 'E', 2),
-                new StairLink(10, 9, 'E', 2, -24),   // off -24 — 본전 월대(남쪽)를 비켜 건넌다
-                new StairLink(9, 11, 'E', 2, -24));
+                new StairLink(1, 17, 'E', 1),
+                new StairLink(3, 2, 'E', 1),
+                new StairLink(2, 5, 'E', 1),
+                new StairLink(4, 6, 'E', 1),
+                new StairLink(6, 7, 'E', 1),
+                new StairLink(14, 101, 'E', 1),
+                new StairLink(101, 8, 'E', 1),
+                new StairLink(10, 9, 'E', 1, -24),   // off -24 — 본전 월대(남쪽)를 비켜 건넌다
+                new StairLink(9, 11, 'E', 1, -24));
         List<BridgeSpec> bridges = List.of(
                 // ★8.6 — 곁봉 재배치로 스팬이 길어졌다 (139·123) — 교각 24칸마다 (MAX 160 안)
                 new BridgeSpec("운무교 동일", true, 20, 40, 178, 146),   // 장로회(x1 39) ↔ 전망대(x0 179)
@@ -290,7 +297,7 @@ public final class TerraceForge {
             return treads + walk;
         }
 
-        /** 보행 반폭 — 링크가 정한다 (대계단 {@value #STAIR_HALF} · 소계단 2) */
+        /** 보행 반폭 — 링크가 정한다 (대계단 {@value #STAIR_HALF} · 소계단 1) */
         public int half() {
             return link.half();
         }
@@ -395,6 +402,20 @@ public final class TerraceForge {
     public static final int APPROACH_LEN = 176;
 
     /**
+     * 접근로 식생 회랑 반폭 — <b>계단 중심 ±10 은 나무가 서지 않는다</b> (D-16).
+     *
+     * <p>★2026-08-04 사용자 지적: 목표 사진은 계단이 화면 하단을 차지하며 시선을 문루로
+     * 이끄는데, 우리 것은 <b>산의 야생 숲이 계단 위까지 자라</b> 하단이 초록 덩어리였다.
+     * 진범은 산군 식생의 제외 목록에 <b>접근로가 통째로 빠져 있던 것</b>이다 (패드·계단·다리만
+     * 있었다 — 접근로는 그 셋 어디에도 안 든다).
+     *
+     * <p>값의 근거: 보행 7(±3) + 난간(±4) + 여유 — <b>비우되 넓게 밀지는 않는다.</b>
+     * 목표 사진에도 계단 곁에는 매화·소나무가 있다 — 없어야 하는 것은 <b>계단을 덮는</b>
+     * 나무이지 곁에 선 나무가 아니다.
+     */
+    public static final int APPROACH_CLEAR = 10;
+
+    /**
      * 접근로 계획 — 산문단(1구역) 남단에서 남쪽으로, <b>조성 전 지형을 따라</b> 한 칸 물매의
      * 보행면 표를 만든다. 26칸마다 참(평탄 2칸 — 석등 쌍이 선다) · i 96~108 은 소문 마당
      * (기슭 언덕 마루쯤 — 작은 문루가 선다). 언덕은 지우지 않고 넘는다 (조율자 지시 —
@@ -474,12 +495,14 @@ public final class TerraceForge {
                 approachGate(world, a.x(), a.ys()[102], a.z0() + 102, tally);
             }
             if (i == 27 || i == 150) {
-                stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁
+                stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁 (계단 곁에 선다)
                 stele(world, a.x() - RAIL_OFF - 3, z, tally);
             }
             if (i % 20 == 15) {
-                approachPine(world, a.x() + (Math.floorMod(i, 40) == 15 ? RAIL_OFF + 5 : -RAIL_OFF - 5),
-                        z, tally);
+                // ★계단 회랑(±APPROACH_CLEAR) 밖에 선다 — 계단을 덮지 않고 곁을 채운다 (D-16).
+                //   옛 값 RAIL_OFF+5 는 전폭 21 계단의 것이라, 폭 7 로 줄자 계단 위에 앉았다.
+                int off = APPROACH_CLEAR + 2;
+                approachPine(world, a.x() + (Math.floorMod(i, 40) == 15 ? off : -off), z, tally);
             }
             prevY = y;
         }
@@ -492,7 +515,9 @@ public final class TerraceForge {
      * 디테일 키트 문법(공포·겹처마)의 접근로판.
      */
     private static void approachGate(World world, int ax, int y, int z, Tally tally) {
-        for (int side : new int[]{-8, -7, 7, 8}) {              // 적주 두 쌍 — 기단 위에 선다
+        // ★2026-08-04 계단 폭 7 로 줄면서 문루도 함께 좁혔다 — 기둥이 난간선(±RAIL_OFF)에
+        //   앉아 보행 7 은 그대로 트인다 (옛 값 ±7·±8 은 전폭 21 계단의 것이었다)
+        for (int side : new int[]{-5, -4, 4, 5}) {               // 적주 두 쌍 — 기단 위에 선다
             int x = ax + side;
             fillDown(world, x, y, z, tally);
             world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
@@ -500,7 +525,7 @@ public final class TerraceForge {
                 world.getBlockAt(x, y + dy, z).setType(Material.STRIPPED_MANGROVE_LOG, false);
             }
         }
-        for (int o = -9; o <= 9; o++) {                          // 보 + 공포 띠
+        for (int o = -6; o <= 6; o++) {                          // 보 + 공포 띠
             world.getBlockAt(ax + o, y + 8, z).setType(Material.DARK_OAK_PLANKS, false);
             for (int dz : new int[]{-1, 1}) {
                 world.getBlockAt(ax + o, y + 8, z + dz).setType(
@@ -508,7 +533,7 @@ public final class TerraceForge {
                                 : Material.DARK_OAK_SLAB, false);
             }
         }
-        for (int o = -11; o <= 11; o++) {                        // 기와 지붕 — 내밈·물매·용마루
+        for (int o = -8; o <= 8; o++) {                          // 기와 지붕 — 내밈·물매·용마루
             world.getBlockAt(ax + o, y + 9, z - 2).setType(Material.DEEPSLATE_TILE_SLAB, false);
             world.getBlockAt(ax + o, y + 9, z + 2).setType(Material.DEEPSLATE_TILE_SLAB, false);
             for (int dz : new int[]{-1, 1}) {
@@ -518,14 +543,14 @@ public final class TerraceForge {
             }
             world.getBlockAt(ax + o, y + 9, z).setType(Material.DEEPSLATE_TILES, false);
             world.getBlockAt(ax + o, y + 10, z).setType(
-                    Math.abs(o) == 11 ? Material.DEEPSLATE_TILE_WALL
+                    Math.abs(o) == 8 ? Material.DEEPSLATE_TILE_WALL
                             : Material.DEEPSLATE_TILE_SLAB, false);        // 용마루 · 끝 치미
         }
         for (int o = -1; o <= 1; o++) {                          // 빈 현판 (남면 — 오는 이가 본다)
             world.getBlockAt(ax + o, y + 7, z + 1).setType(Material.DARK_OAK_PLANKS, false);
         }
-        world.getBlockAt(ax + 7, y + 3, z + 1).setType(Material.LANTERN, false);
-        world.getBlockAt(ax - 7, y + 3, z + 1).setType(Material.LANTERN, false);
+        world.getBlockAt(ax + 4, y + 3, z + 1).setType(Material.LANTERN, false);
+        world.getBlockAt(ax - 4, y + 3, z + 1).setType(Material.LANTERN, false);
         tally.lanterns += 2;
     }
 

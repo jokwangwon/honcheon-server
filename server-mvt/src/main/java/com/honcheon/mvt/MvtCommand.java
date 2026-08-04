@@ -1872,6 +1872,19 @@ public final class MvtCommand implements CommandExecutor {
                     ex.add(new int[]{b.c() - 6, b.c() + 6, b.a0() - 6, b.a1() + 6});
                 }
             }
+            // ★★접근로 회랑 (2026-08-04 · D-16) — <b>여태 제외 목록에 없었다.</b> 그래서 산의
+            //   야생 숲이 대계단 바로 위까지 자라 목표 사진의 「계단이 시선을 이끄는」 하단이
+            //   초록 덩어리가 됐다 (사용자 지적). 계단 중심 ±10 을 비운다 — 보행 7 + 난간 ±4
+            //   에 여유 — 그래서 계단은 트여 보이고, 그 밖의 나무는 그대로 곁을 채운다.
+            for (TerraceForge.Pad pd : pads) {
+                if (pd.spec().zone() != 1) {            // 산문단 — 접근로가 그 남단에서 나간다
+                    continue;
+                }
+                int c = TerraceForge.APPROACH_CLEAR;
+                int acx = (pd.x0() + pd.x1()) / 2;      // 패드 중심 = 접근로 축선
+                ex.add(new int[]{acx - c, acx + c,
+                        pd.zS() + 1, pd.zS() + 1 + TerraceForge.APPROACH_LEN + 24});
+            }
             SpireField field = new SpireField(ex);
             Announce.say(plugin, sender, ChatColor.GRAY + "[산군시험] " + worldName + " — 기준면 y"
                     + baseY + " · 배후봉 4 (Pm h250) · 침봉 켜 3 (r200~1000) · 제외 사각 " + ex.size());

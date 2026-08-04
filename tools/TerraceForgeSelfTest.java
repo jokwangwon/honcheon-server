@@ -75,8 +75,14 @@ public final class TerraceForgeSelfTest {
         check("앵커: 본전 h130", heightOf(campus, 9) == 130, heightOf(campus, 9));
         check("앵커: 장로회 h146", heightOf(campus, 12) == 146, heightOf(campus, 12));
         check("앵커: 정상 h170", heightOf(campus, 13) == 170, heightOf(campus, 13));
-        check("앵커: 대계단 전폭 21 (사용자 기준자 20 — 홀수 격자·줄이지 않는다)",
-                2 * TerraceForge.STAIR_HALF + 3 == 21, 2 * TerraceForge.STAIR_HALF + 3);
+        // ★★D-19 (2026-08-04 사용자 실측) — 레퍼런스 계단 도보 폭은 7 이다.
+        //   슬라이스 8 의 「20」 앵커(전폭 21)가 오류였음이 드러나 되돌렸다.
+        //   이 눈이 지키는 것: 다시 「크게 하면 웅장하다」로 올리지 못한다.
+        check("★D-19 대계단 도보 폭 7 (사용자 실측 — 목표 사진의 자)",
+                2 * TerraceForge.STAIR_HALF + 1 == 7, 2 * TerraceForge.STAIR_HALF + 1);
+        check("★D-19 난간은 도보 바로 밖 (전폭 9 = 도보 7 + 측석 2)",
+                TerraceForge.RAIL_OFF == TerraceForge.STAIR_HALF + 1
+                        && 2 * TerraceForge.RAIL_OFF + 1 == 9, TerraceForge.RAIL_OFF);
 
         // ══════════ ③ 계단 기하 — 아는 두 패드로 자로 잰다 ══════════
         TerraceForge.Campus two = new TerraceForge.Campus(
@@ -336,6 +342,38 @@ public final class TerraceForgeSelfTest {
         }
         check("★8.8 남쪽 시야 회랑 — 침봉 0 · 산체 구릉 ≤20 (10-① 개정)", corridorClear, "회랑 침범");
         check("★8.8 회랑 밖 남쪽 필드 실재 (회랑이 필드를 안 지웠다)", southSide > 0, southSide);
+
+        // ★★D-16 (2026-08-04) — 접근로 회랑에는 나무가 서지 않는다.
+        //   진범이었던 것: 산군 식생의 제외 목록에 패드·계단·다리만 있고 **접근로가 통째로
+        //   빠져 있었다** — 그래서 야생 숲이 대계단 위까지 자라 하단이 초록 덩어리가 됐다.
+        //   여기서는 그 제외 사각이 실제로 접근로를 덮는지 순수하게 잰다 (조성 없이).
+        {
+            java.util.List<TerraceForge.Pad> ap = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad gate = ap.stream().filter(p2 -> p2.spec().zone() == 1)
+                    .findFirst().orElseThrow();
+            int acx = (gate.x0() + gate.x1()) / 2;
+            int c = TerraceForge.APPROACH_CLEAR;
+            java.util.List<int[]> corrEx = java.util.List.of(new int[]{acx - c, acx + c,
+                    gate.zS() + 1, gate.zS() + 1 + TerraceForge.APPROACH_LEN + 24});
+            com.honcheon.mvt.forge.SpireField corrField =
+                    new com.honcheon.mvt.forge.SpireField(corrEx);
+            boolean corridorExcluded = true;
+            for (int i = 4; i < TerraceForge.APPROACH_LEN; i += 17) {
+                int z = gate.zS() + 1 + i;
+                for (int o = -c; o <= c; o += 5) {
+                    if (!corrField.excluded(acx + o, z)) {
+                        corridorExcluded = false;
+                    }
+                }
+            }
+            check("★D-16 접근로 회랑(±" + c + ")이 식생 제외에 든다 — 계단을 덮는 나무가 없다",
+                    corridorExcluded, "제외 누락");
+            // 반대편도 잰다 — 「빼기」가 필드를 통째로 지우지는 않았는가 (곁의 나무는 남는다)
+            boolean besideAllowed = !corrField.excluded(acx + c + 6, gate.zS() + 40)
+                    && !corrField.excluded(acx - c - 6, gate.zS() + 90);
+            check("★D-16 회랑 밖은 여전히 심긴다 (곁의 나무까지 밀지는 않았다)",
+                    besideAllowed, "회랑 밖도 제외됐다");
+        }
         // ★10-① 산몸 — 「평지+기둥」이 아니라 「산+암봉」: 근경 환대에서 맨바닥(0) 비율이
         //   절반 아래로 (침봉만 있던 8.5 는 ~75% 가 맨바닥이었다) + 산체 높이대(25~95) 실재
         int zeros = 0;
@@ -585,12 +623,14 @@ public final class TerraceForgeSelfTest {
             TerraceForge.Campus mini = new TerraceForge.Campus(
                     List.of(new TerraceForge.PadSpec(1, "위", 0, 0, 20, 16, 14),
                             new TerraceForge.PadSpec(2, "아래", 20, 0, 20, 16, 10)),
-                    List.of(new TerraceForge.StairLink(1, 2, 'E', 2)));
+                    List.of(new TerraceForge.StairLink(1, 2, 'E', 1)));
             java.util.List<TerraceForge.Pad> mp = TerraceForge.resolvePads(mini, 0, 0, 0);
             TerraceForge.StairLane ml = TerraceForge.resolveLanes(mini, mp).get(0);
-            check("★9b 소계단 — 낙차 4 → 디딤 3 · 전폭 5 (rail ±3)",
-                    ml.treads() == 3 && ml.half() == 2 && ml.rail() == 3,
+            check("★9b 소계단 — 낙차 4 → 디딤 3 · 도보 3 (rail ±2 · 대계단보다 좁다)",
+                    ml.treads() == 3 && ml.half() == 1 && ml.rail() == 2,
                     ml.treads() + "/" + ml.half());
+            check("★D-19 위계 — 소계단이 대계단보다 좁다",
+                    ml.half() < TerraceForge.STAIR_HALF, ml.half() + "<" + TerraceForge.STAIR_HALF);
             TerraceForge.Pad jongmun = allPads.stream()
                     .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
             int jongTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(jongmun) - jongmun.y();
