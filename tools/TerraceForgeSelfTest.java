@@ -696,6 +696,55 @@ public final class TerraceForgeSelfTest {
                     mT > gT && gT > jT, mT + ">" + gT + ">" + jT);
         }
 
+        // ══════════ ⑬ 슬라이스 16 — 이음매 닫기 (축대 면의 기하) ══════════
+        {
+            // 판정 근거: 15 에서 재료를 통일했는데도 「평평한 축대 면 vs 계단진 산면」이 갈렸다.
+            // 그러니 이 눈이 재는 것은 재료가 아니라 <b>거칠기</b>다 — 너무 매끈하면 실패다.
+            //
+            // ★자연 산면의 거칠기 = faceRelief 가 본래 높이에서 깎아낸 양 (축대와 같은 자).
+            //   ★두 값 모두 「결이 없었다면 있었을 높이에서 벗어난 정도」다 — 경사는 안 센다.
+            int natSamples = 0;
+            long natSum = 0;
+            for (int t = 0; t < 400; t++) {
+                int h = com.honcheon.mvt.forge.SpireField.faceRelief(100, 3000 + t, 3000);
+                natSum += Math.abs(h - 100);
+                natSamples++;
+            }
+            double natural = (double) natSum / natSamples;
+
+            // 축대 면의 거칠기 — 여러 자리에서 재 평균 (한 자리는 우연일 수 있다)
+            double sum = 0;
+            int n = 0;
+            for (int s = 0; s < 40; s++) {
+                sum += TerraceForge.batterRoughness(120, 500 + s * 17, 500 - s * 13, 0, 1, 12);
+                n++;
+            }
+            double batter = sum / n;
+            // ★양쪽 문턱을 둔다 — 한쪽만 두면 눈이 절반만 뜬 것이다.
+            //   ㉠아래: 매끈하면(전부 3칸 고정) 결이 없다 = 슬라이스 15 판정의 그 병.
+            //   ㉡위:   너무 흔들리면 축대가 아니라 <b>무너진 폐허</b>다 — 사람이 쌓은 것으로
+            //           안 읽힌다. 열마다 평균 2칸 넘게 벗어나면 실패.
+            check("★16-④ 축대 면에 결이 실재한다 (매끈하면 실패 — 15 판정의 병)",
+                    batter >= natural * 0.5,
+                    String.format("축대 %.2f vs 산면 %.2f", batter, natural));
+            check("★16-④ 그러나 무너지지는 않았다 (열 평균 2칸 이내 — 폐허 방지)",
+                    batter <= 2.0, String.format("%.3f", batter));
+
+            // ★16-㉡㉢ 구간마다 다르게 나간다 — 돌출·기준·홈이 공존해야 발치 선이 반듯하지 않다
+            java.util.Set<Integer> reaches = new java.util.HashSet<>();
+            for (int s = 0; s < 300; s++) {
+                reaches.add(TerraceForge.batterStepsFor(s * 11, 0, 24, false));
+            }
+            check("★16-㉡㉢ 배터 칸수가 구간마다 갈린다 (돌출·기준·홈 — 최소 3종)",
+                    reaches.size() >= 3, reaches);
+
+            // ★16 결정론 — 두 번 물어도 같은 답 (난수 0)
+            check("★16 결정론 — 같은 자리는 같은 결",
+                    TerraceForge.batterRoughness(120, 77, -31, 1, 0, 10)
+                            == TerraceForge.batterRoughness(120, 77, -31, 1, 0, 10),
+                    "동일");
+        }
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {

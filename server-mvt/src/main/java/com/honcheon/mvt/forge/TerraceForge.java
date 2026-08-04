@@ -923,14 +923,63 @@ public final class TerraceForge {
             batterColumn(world, plan, pad, pad.x0(), z, -1, 0, tally);
             batterColumn(world, plan, pad, pad.x1(), z, 1, 0, tally);
         }
+        corners(world, plan, pad, tally);
+    }
+
+    /**
+     * ★16-③ <b>모서리를 깬다</b> — 직각으로 딱 떨어지는 네 귀가 인공성의 큰 몫이다.
+     *
+     * <p>종전 배터는 네 <b>면</b>만 나갔다 — 그래서 모서리에 대각선 빈틈(계단꼴 노치)이
+     * 남아 「자로 그은 상자」로 읽혔다. 이제 대각으로도 바위가 물려 나가되, 뻗는 거리를
+     * 귀마다 불규칙하게(2~5) 두고 같은 결({@link SpireField#faceRelief})을 얹어 각을 흐린다.
+     *
+     * <p>여장(패드 위)은 안 건드린다 — 사람이 쌓은 난간은 반듯한 것이 옳다. 흐리는 것은
+     * <b>그 아래 축대</b>뿐이다 (지시 §③).
+     */
+    private static void corners(World world, Plan plan, Pad pad, Tally tally) {
+        int[][] cs = {
+                {pad.x0(), pad.zN(), -1, -1}, {pad.x1(), pad.zN(), 1, -1},
+                {pad.x0(), pad.zS(), -1, 1}, {pad.x1(), pad.zS(), 1, 1},
+        };
+        for (int[] c : cs) {
+            int ex = c[0];
+            int ez = c[1];
+            int dx = c[2];
+            int dz = c[3];
+            long h = mix(SALT_RIB ^ 0xC02E4L, ex, 0, ez);
+            int reach = 2 + (int) Math.floorMod(h, 4);          // 귀마다 2~5칸 (불규칙)
+            boolean rib = ribSegment(ex, ez);
+            for (int k = 1; k <= reach; k++) {
+                for (int a = 0; a <= k; a++) {
+                    // 대각 계단꼴 — 귀에서 부채처럼 물려 나간다
+                    int x = ex + dx * (k - a);
+                    int z = ez + dz * a;
+                    if (pad.contains(x, z) || onOtherPad(plan, pad, x, z)
+                            || laneCovered(plan, x, z)) {
+                        continue;
+                    }
+                    int base = pad.y() - 3 * k;
+                    int top = SpireField.faceRelief(base, x, z);
+                    int g = groundY(world, x, z);
+                    if (top <= g) {
+                        continue;   // 산몸에 닿았다 — 산이 벽이다
+                    }
+                    for (int y = g + 1; y <= top; y++) {
+                        world.getBlockAt(x, y, z).setType(
+                                rib ? rockMaterial(x, y, z)
+                                        : faceMaterial(x, y, z, top - y + 2), false);
+                        tally.wallFace++;
+                    }
+                }
+            }
+        }
     }
 
     private static void batterColumn(World world, Plan plan, Pad pad, int ex, int ez,
                                      int dx, int dz, Tally tally) {
         boolean rib = ribSegment(ex, ez);
         int faceH0 = pad.y() - groundY(world, ex + dx, ez + dz);
-        // ★13c-① 높은 면은 배터가 더 멀리 나간다 (선반 여러 단이 들어갈 자리 — 발치가 넓어진다)
-        int steps = (rib ? 7 : 6) + (faceH0 >= 32 ? 6 : faceH0 >= 20 ? 3 : 0);
+        int steps = batterSteps(ex, ez, faceH0, rib);
         // ★슬라이스 13a — 중간 선반 (거대 회색 면의 분해): 구간(~9칸)마다 해시가 선반 하나를
         //   정한다 — 그 구간에서는 배터가 k0 칸째에서 폭 2~4 로 <b>평평하게 내밀어</b> 한 면을
         //   2~3단으로 가른다. 선반 위에는 난간·식생이 앉는다 (shelfTop 이 자리를 알려 준다).
@@ -957,7 +1006,7 @@ public final class TerraceForge {
                     flatten += shelfW;
                 }
             }
-            int top = onShelf >= 0 ? pad.y() - 3 * onShelf : pad.y() - 3 * (k - flatten);
+            int top = batterTop(pad.y(), x, z, k, flatten, onShelf);
             int g = groundY(world, x, z);
             if (top <= g) {
                 return;   // 산몸에 닿았다 — 여기부터는 산이 벽이다 (의도된 파묻힘)
@@ -1002,6 +1051,95 @@ public final class TerraceForge {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ★★슬라이스 16 — 이음매 닫기 (사용자 표적 「산과 건물의 조화」)
+    //
+    //   슬라이스 15 판정: 늑재가 산과 <b>같은 재료</b>를 쓰게 했는데도 인공 축대와 자연
+    //   산면이 눈에 갈렸다. 근경 컷에서 좌측 축대(평평한 면·직선 모서리)와 우측 산면
+    //   (계단진 결)이 또렷이 구분됐다 — <b>재료가 아니라 면의 기하가 달랐다.</b>
+    //
+    //   그래서 이번엔 <b>기하</b>를 같게 한다. 셋:
+    //     ㉠ 요철  — 축대 top 에 {@link SpireField#faceRelief} 를 물린다 (산과 한 자)
+    //     ㉡ 돌출  — 구간의 일부가 3~5칸 더 나간다 (튀어나온 바위 덩어리)
+    //     ㉢ 홈    — 일부는 덜 나가고 낮게 물러난다 (파인 골)
+    //
+    //   ★검수와의 화해: 배터는 <b>패드 밖</b>이다 — 평탄 눈은 패드 안쪽 열만, 접지 눈도 패드
+    //   열만 잰다. 그래서 요철이 아무리 커져도 두 눈은 흔들리지 않는다. 대신 배터 열은
+    //   <b>스스로</b> 실지형까지 채워 접지하고(뜬 돌 없음), 계단·다리·접근로·남의 패드는
+    //   {@code laneCovered}/{@code onOtherPad} 가드가 그대로 비킨다 — 돌출도 그 가드를
+    //   물려받으므로 보행 눈도 안 흔들린다.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * ★16-㉡㉢ 배터가 나가는 칸수 — 구간마다 다르다 (돌출·홈).
+     *
+     * <p>종전엔 면 높이만 보고 전 구간이 같은 거리로 나갔다 — 그래서 발치 선이 자로 그은
+     * 듯 반듯했다. 이제 구간(~11칸) 해시가 <b>더 나가는 구간(돌출)</b>과 <b>덜 나가는
+     * 구간(홈)</b>을 가른다. 순수 함수 — 조성·눈·선반 배치가 이 하나를 쓴다.
+     */
+    private static int batterSteps(int ex, int ez, int faceH, boolean rib) {
+        int base = (rib ? 7 : 6) + (faceH >= 32 ? 6 : faceH >= 20 ? 3 : 0);
+        long h = mix(SALT_RIB ^ 0x60D9EL, Math.floorDiv(ex, 11), 0, Math.floorDiv(ez, 11));
+        int r = (int) Math.floorMod(h, 100);
+        if (r < 20) {
+            return base + 3 + (int) Math.floorMod(h >> 8, 3);   // ㉡ 돌출 — 3~5칸 더 (20%)
+        }
+        if (r < 42) {
+            return Math.max(3, base - 2 - (int) Math.floorMod(h >> 8, 2));   // ㉢ 홈 (22%)
+        }
+        return base;
+    }
+
+    /**
+     * ★16-㉠ 배터 한 열의 top — <b>산과 같은 자로 결을 얹는다</b>.
+     *
+     * <p>선반 상면은 평평해야 난간·화단이 앉으므로 결을 안 얹는다 (그 자리는 사람이 다듬은
+     * 자리라는 것이 오히려 옳다). 그 밖의 면에는 {@link SpireField#faceRelief} 가 그대로
+     * 물린다 — 산 표면을 파고 턱을 남긴 바로 그 식이다.
+     */
+    private static int batterTop(int padY, int x, int z, int k, int flatten, int onShelf) {
+        if (onShelf >= 0) {
+            return padY - 3 * onShelf;      // 선반 상면 — 평평하다 (난간·화단의 자리)
+        }
+        int base = padY - 3 * (k - flatten);
+        // ★16-㉠ 흔들림 — 산의 결(faceRelief)은 7칸 셀이라 <b>축대처럼 좁은 면</b>에서는
+        //   드물게 걸린다 (실측: 축대 0.087 vs 산면 0.135). 산과 같은 자를 쓰되, 열마다
+        //   ±1~3 의 잔 흔들림을 더해 좁은 면에서도 결이 실제로 보이게 한다.
+        long j = mix(SALT_FACE ^ 0x316E7L, x, 0, z);
+        int r = (int) Math.floorMod(j, 100);
+        int jitter = r < 26 ? -1 : r < 38 ? -2 : r < 44 ? -3 : r < 62 ? 1 : 0;
+        return SpireField.faceRelief(base + jitter, x, z);
+    }
+
+    /**
+     * 축대 면의 거칠기 — <b>물매를 뺀 잔차</b>의 평균 (16-④).
+     *
+     * <p>★자를 조심해서 골랐다: 이웃 열의 높이차를 그냥 재면 <b>경사를 거칠기로 오인한다</b>
+     * (매끈한 배터도 한 칸마다 3씩 내려가므로 「거칠기 3」으로 나온다 — 눈이 거짓말한다).
+     * 그래서 <b>결이 없었다면 있었을 높이</b>(padY − 3k)에서 얼마나 벗어났는지를 잰다 —
+     * 매끈하면 정확히 0, 결이 있으면 양수다. 자연 산면도 같은 자로 잰다
+     * ({@code faceRelief(h) − h}).
+     *
+     * @param len 표본 열 수
+     */
+    public static double batterRoughness(int padY, int ex, int ez, int dx, int dz, int len) {
+        long sum = 0;
+        int n = 0;
+        for (int k = 1; k <= len; k++) {
+            int x = ex + dx * k;
+            int z = ez + dz * k;
+            int top = batterTop(padY, x, z, k, 0, -1);
+            sum += Math.abs(top - (padY - 3 * k));    // 물매를 뺀 잔차 = 결
+            n++;
+        }
+        return n == 0 ? 0 : (double) sum / n;
+    }
+
+    /** 그 구간이 돌출인가 — 눈이 「구간마다 다르게 나간다」를 잰다 (16-㉡) */
+    public static int batterStepsFor(int ex, int ez, int faceH, boolean rib) {
+        return batterSteps(ex, ez, faceH, rib);
+    }
+
     /**
      * ★선반 명세 — 구간(~9칸)마다 결정론 해시가 정한다 (13a).
      * 0 = 선반 없음 (구간의 ~45%) · 그 밖은 몇 칸째에서 선반이 나는가 (2~4).
@@ -1043,10 +1181,13 @@ public final class TerraceForge {
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
     }
 
-    /** 그 구간·면 높이에서 선반이 몇 단 나는가 — 눈이 「높이 비례」 계약을 잰다 (13c) */
+    /**
+     * 그 구간·면 높이에서 선반이 몇 단 나는가 — 눈이 「높이 비례」 계약을 잰다 (13c).
+     * ★16: 배터 칸수가 구간마다 달라졌으므로 {@link #batterSteps} 를 함께 쓴다 —
+     * 자를 두 번 적으면 어긋난다 (7.5 계율).
+     */
     public static int shelfCountFor(int x, int z, int faceH) {
-        int steps = 6 + (faceH >= 32 ? 6 : faceH >= 20 ? 3 : 0);
-        return shelfPlan(x, z, faceH, steps).length;
+        return shelfPlan(x, z, faceH, batterSteps(x, z, faceH, false)).length;
     }
 
     /** 선반 폭 2~4 (불규칙) */
@@ -1068,12 +1209,18 @@ public final class TerraceForge {
         return pad.y() - 3 * shelfK;
     }
 
-    /** 늑재 구간인가 — 가장자리를 ~7칸 단위로 갈라 약 1/3 이 암반 (결정론 · 난수 0) */
+    /**
+     * 늑재 구간인가 — 자연 암반이 축대 사이로 솟는 자리 (결정론 · 난수 0).
+     *
+     * <p>★16-② <b>구간 길이를 불규칙하게</b> (4~14칸) + 비중 46→60%. 종전엔 7칸 자로
+     * 반듯하게 갈라 「일정 간격으로 박힌 무늬」로 읽혔다 — 자연은 자를 안 쓴다. 굵은 격자
+     * (23칸)가 그 안의 구간 길이를 먼저 정하고, 그 길이로 다시 가른다.
+     */
     private static boolean ribSegment(int x, int z) {
-        // ★15-② 늑재를 늘린다 (34→46%) — 판정: 「건물이 산 위에 얹혀 있다」.
-        //   자연 암반이 축대 사이로 더 자주 솟아야 어디까지가 사람의 일이고 어디부터 산인지
-        //   눈이 못 가른다 (레퍼런스 9호의 이음매는 흐릿하다).
-        return Math.floorMod(mix(SALT_RIB, Math.floorDiv(x, 7), 0, Math.floorDiv(z, 7)), 100) < 46;
+        long span = mix(SALT_RIB ^ 0x11EC0L, Math.floorDiv(x, 23), 0, Math.floorDiv(z, 23));
+        int len = 4 + (int) Math.floorMod(span, 11);            // 구간 길이 4~14 (불규칙)
+        return Math.floorMod(mix(SALT_RIB, Math.floorDiv(x, len), 0, Math.floorDiv(z, len)),
+                100) < 60;
     }
 
     /**

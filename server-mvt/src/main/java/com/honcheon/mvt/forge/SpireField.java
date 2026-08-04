@@ -154,6 +154,23 @@ public final class SpireField {
      * 파임과 턱이 따로 굴러 어긋날 자리가 없다 (마른 조성 계율의 지형판).
      */
     private int fissureLedge(int h, int x, int z) {
+        return faceRelief(h, x, z);
+    }
+
+    /**
+     * ★★16 <b>면의 결 — 산과 축대가 함께 쓰는 자</b>.
+     *
+     * <p>슬라이스 15 판정: 재료를 통일했는데도 인공 축대(평평한 면·직선 모서리)와 자연 산면
+     * (계단진 결)이 눈에 갈렸다 — <b>면의 기하가 달랐기 때문</b>이다. 재료를 같게 하는 것으로는
+     * 이음매가 안 닫힌다. 그래서 이 식을 <b>공개</b>한다: {@link TerraceForge} 의 축대가 제
+     * top 에 이것을 물려, 산과 축대가 <b>한 자에서 나온 결</b>을 갖는다.
+     *
+     * <p>순수 함수다 (해시만 · 난수 0) — 조성과 눈이 같은 식을 쓴다.
+     *
+     * @param h 그 열의 본래 표면 y
+     * @return 결이 얹힌 표면 y (파이면 낮아지고, 턱이 남으면 덜 낮아진다)
+     */
+    public static int faceRelief(int h, int x, int z) {
         long f = mix(SALT ^ 0xF155EL, Math.floorDiv(x, FISS), 0, Math.floorDiv(z, FISS));
         int kind = (int) Math.floorMod(f, 100);
         if (kind >= 34) {
