@@ -163,10 +163,10 @@ public final class TerraceForge {
 
     /**
      * 상판 스팬 상한 — 이보다 길면 다리가 아니라 만용이다 (스팬을 쪼개거나 자리를 옮겨라).
-     * ★8.6: 80→160 — 산체 재척도로 협곡이 넓어졌고 (곁봉이 밀려남), 긴 스팬은 교각(24칸마다)이
-     * 받친다. 실측 9호의 현공교도 다주(多柱) 문법이다.
+     * ★척도 되돌림(2026-08-04): 160→80 — 곁봉이 제자리로 돌아와 협곡이 좁아졌다
+     * (현 스팬 61·42·58). 긴 스팬을 교각으로 받치는 다주 문법 자체는 남는다.
      */
-    public static final int MAX_BRIDGE_SPAN = 160;
+    public static final int MAX_BRIDGE_SPAN = 80;
 
     /** 캠퍼스 명세 — 패드 목록 + 계단 링크 + 운무교. {@link #validate} 가 순수하게 전부 잰다. */
     public record Campus(List<PadSpec> pads, List<StairLink> links, List<BridgeSpec> bridges) {
@@ -200,53 +200,52 @@ public final class TerraceForge {
      */
     public static Campus hwasanCampus() {
         List<PadSpec> pads = List.of(
-                // ═══ 통단(帶) 7대 — 실측표 §2·§5 (슬라이스 8 재척도 ×2).
-                //     ★사용자 기준자 (2026-08-03): 대계단 20 — 옛 실측이 절반 오측이라 평면 치수
-                //     전부 ×2 (지형 앵커인 곁봉 3 은 위치 유지·×1.5). h 사슬 46/64/86/108/130/146/170
-                //     — 옹벽 실측 12~24 (§1 재실측) · 전 낙차 ≤ MAX_STAIR_DY.
-                //     계약 Δ 는 옛 실기동 p85 (h−Δ 로 보존) 대비 새 h 로 재산출 — 재판독 실측이
-                //     오면 그 수치로 갱신하라 (발자국이 넓어져 가장자리 p85 가 다소 흐른다).
-                // ★슬라이스 9b — 단구 표고 분할 (코덱스 개선 1 완성): 같은 통단 안 칸을 ±4 로
-                //   갈라 원경 옹벽 스카이라인이 들쭉해진다. 척추 칸(1·2·6·101·9)은 앵커 그대로 —
-                //   로브만 ±4. 계약 Δ 는 h 이동분만큼 동행 (p85 는 지형이라 불변).
+                // ═══ 통단(帶) 7대 — 실측표 §2·§5.
+                //     ★★척도 되돌림 (사용자 확정 2026-08-04): 레퍼런스 계단 도보 폭이 **7** 임이
+                //     사용자 실측으로 확정됐고, 그 값은 슬라이스 8 **이전** 우리 값과 같다 —
+                //     즉 슬라이스 8 의 「대계단 20」 척도 교정(×2.2)이 통째로 오류였다.
+                //     평면 치수·표고 사슬을 그때 값으로 되돌린다 (h 46/58/76/96/116/128/148).
+                //     ★되돌리는 것은 **척도**뿐 — 슬라이스 9~16 의 문법(단구 분할·귀솟음·포치·
+                //     다중 선반·풍화·faceRelief 이음매…)은 전부 남는다.
+                // ★슬라이스 9b — 단구 표고 분할: 같은 통단 안 칸을 ±4 로 갈라 원경 옹벽
+                //   스카이라인이 들쭉해진다. 척추 칸(1·2·6·101·9)은 앵커 그대로 — 로브만 ±4.
+                //   계약 Δ 는 h 이동분만큼 동행 (p85 는 지형이라 불변).
                 // ── B1 산문단 (산문 46 · 창고 42) ──
-                new PadSpec(1, "산문", -4, 356, 120, 44, 46, 16),          // 실측 p85 -31 → Δ16
-                new PadSpec(17, "물자 창고", 90, 356, 68, 44, 42, 31),     // 9b: 46→42 · Δ35→31
-                // ── B2 외원단 (연무장하 68 · 외원 64 · 생활하 60 · 측문 60) ──
-                new PadSpec(3, "연무장 하", -80, 296, 88, 64, 68, 40),     // 9b: 64→68 · Δ36→40 (성곽 서벽)
-                new PadSpec(2, "외원 광장", -4, 296, 64, 64, 64),
-                new PadSpec(5, "생활 하", 60, 296, 64, 64, 60, 13),        // 9b: 64→60 · Δ17→13
-                new PadSpec(16, "측문", 100, 296, 16, 32, 60, 60),         // 9b: 64→60 · Δ64→60 (동벽 단애)
-                // ── B3 중단 (강당 90 · 종문 86 · 훈련장 82) ──
-                new PadSpec(4, "강당·무기고", -76, 228, 80, 60, 90, 40),   // 9b: 86→90 · Δ36→40
-                new PadSpec(6, "종문 중정", -4, 228, 64, 60, 86),          // 창 안
-                new PadSpec(7, "훈련장 중", 60, 228, 64, 60, 82, 10),      // 9b: 86→82 · Δ14→10
-                // ── B4 상단 (연무장상 112 · 중정 108 · 생활중 104) ──
-                new PadSpec(14, "연무장 상", -74, 164, 80, 56, 112, 43),   // 9b: 108→112 · Δ39→43
-                new PadSpec(101, "중정", -4, 164, 60, 56, 108),            // 창 안
-                new PadSpec(8, "생활 중", 58, 164, 64, 56, 104, 8),        // 9b: 108→104 · Δ12→8
-                // ── B5 본전단 (정원 134 · 본전 130 · 망루 126) ──
-                new PadSpec(10, "장문인 정원", -76, 100, 64, 64, 134, 36), // 9b: 130→134 · Δ32→36
-                new PadSpec(9, "본전", 0, 100, 88, 64, 130),               // ★실측 Δ0 — 창룡령 정렬, 계약 불요
-                new PadSpec(11, "망루", 70, 100, 52, 64, 126, 38),         // 9b: 130→126 · Δ42→38
-                // ── B6 장로단 h146 ──
-                new PadSpec(12, "장로회", -4, 36, 88, 48, 146),            // ★실측 Δ1 — 계약 불요
-                // ── B7 정상단 h170 ──
-                new PadSpec(13, "정상 암자", -4, -20, 52, 36, 170),        // ★실측 Δ-5 — 계약 불요
-                // ── B1 로브 실측 반영 ──
-                // (산문 17 은 아래 B1 절에서)
-                // ── 곁봉 — ★8.6: 산체 재척도로 옛 어깨가 밀려남 → 새 Es·Wm 어깨로 재배치 ──
-                new PadSpec(19, "절벽 전망대", 190, 20, 22, 18, 146, -14), // ★8.7 실측 Δ-14 — 새 Es 어깨가 상판보다 높다 (의도된 깎기)
-                new PadSpec(20, "부속 암자", 62, -14, 26, 20, 170, 42),    // 실측 창 안 유지
-                new PadSpec(105, "서교 착지", -180, 16, 18, 18, 146));     // ★8.7 실측 Δ0 — 새 Wm 어깨가 정확한 자리 (계약 불요)
+                new PadSpec(1, "산문", -2, 178, 60, 22, 46),
+                new PadSpec(17, "물자 창고", 45, 178, 34, 22, 42, 19),     // 9b: 46→42 · Δ23→19
+                // ── B2 외원단 (연무장하 62 · 외원 58 · 생활하 54 · 측문 54) ──
+                new PadSpec(3, "연무장 하", -40, 148, 44, 32, 62, 23),     // 9b: 58→62 · Δ19→23 (성곽 서벽)
+                new PadSpec(2, "외원 광장", -2, 148, 32, 32, 58),
+                new PadSpec(5, "생활 하", 32, 148, 36, 32, 54),            // 9b: 58→54 · 창 안
+                new PadSpec(16, "측문", 54, 148, 8, 16, 54, 27),           // 9b: 58→54 · Δ31→27 (동벽 단애)
+                // ── B3 중단 (강당 80 · 종문 76 · 훈련장 72) ──
+                new PadSpec(4, "강당·무기고", -38, 114, 40, 30, 80, 17),   // 9b: 76→80 · Δ13→17
+                new PadSpec(6, "종문 중정", -2, 114, 32, 30, 76, -16),     // 능선 어깨 깎기
+                new PadSpec(7, "훈련장 중", 30, 114, 32, 30, 72),          // 9b: 76→72 · 창 안
+                // ── B4 상단 (연무장상 100 · 중정 96 · 생활중 92) ──
+                new PadSpec(14, "연무장 상", -37, 82, 40, 28, 100),        // 9b: 96→100 · 창 안
+                new PadSpec(101, "중정", -2, 82, 30, 28, 96, -14),         // 능선 어깨 깎기
+                new PadSpec(8, "생활 중", 29, 82, 32, 28, 92),             // 9b: 96→92 · 창 안
+                // ── B5 본전단 (정원 120 · 본전 116 · 망루 112) ──
+                new PadSpec(10, "장문인 정원", -36, 50, 36, 32, 120, 22),  // 9b: 116→120 · Δ18→22
+                new PadSpec(9, "본전", 1, 50, 38, 32, 116),
+                new PadSpec(11, "망루", 34, 50, 28, 32, 112, 24),          // 9b: 116→112 · Δ28→24
+                // ── B6 장로단 h128 ──
+                new PadSpec(12, "장로회", -2, 18, 44, 24, 128),
+                // ── B7 정상단 h148 ──
+                new PadSpec(13, "정상 암자", -2, -10, 26, 18, 148),
+                // ── 곁봉 (지형 앵커 — 되돌린 골격의 어깨) ──
+                new PadSpec(19, "절벽 전망대", 88, 10, 14, 12, 128, 31),
+                new PadSpec(20, "부속 암자", 62, -14, 18, 14, 148, 20),
+                new PadSpec(105, "서교 착지", -88, 10, 12, 12, 128, 20));
         List<StairLink> links = List.of(
-                // 척추 대계단 — 전폭 21 (사용자 기준자)
-                new StairLink(2, 1, 'S'),      // 낙차 18
-                new StairLink(6, 2, 'S'),      // 낙차 22
-                new StairLink(101, 6, 'S'),    // 낙차 22
-                new StairLink(9, 101, 'S'),    // 낙차 22
-                new StairLink(12, 9, 'S'),     // 낙차 16
-                new StairLink(13, 12, 'S'),    // 낙차 24
+                // 척추 대계단 — 도보 7 (★사용자 실측 확정 2026-08-04)
+                new StairLink(2, 1, 'S'),      // 낙차 12
+                new StairLink(6, 2, 'S'),      // 낙차 18
+                new StairLink(101, 6, 'S'),    // 낙차 20
+                new StairLink(9, 101, 'S'),    // 낙차 20
+                new StairLink(12, 9, 'S'),     // 낙차 12
+                new StairLink(13, 12, 'S'),    // 낙차 20
                 // ★9b 소계단 (전폭 5) — 갈린 단구 사이. Δ≤1 칸(5↔16)만 여장 개구가 잇는다.
                 new StairLink(1, 17, 'E', 1),
                 new StairLink(3, 2, 'E', 1),
@@ -255,13 +254,13 @@ public final class TerraceForge {
                 new StairLink(6, 7, 'E', 1),
                 new StairLink(14, 101, 'E', 1),
                 new StairLink(101, 8, 'E', 1),
-                new StairLink(10, 9, 'E', 1, -24),   // off -24 — 본전 월대(남쪽)를 비켜 건넌다
-                new StairLink(9, 11, 'E', 1, -24));
+                new StairLink(10, 9, 'E', 1, -12),   // off -12 — 본전 월대(남쪽)를 비켜 건넌다
+                new StairLink(9, 11, 'E', 1, -12));
         List<BridgeSpec> bridges = List.of(
-                // ★8.6 — 곁봉 재배치로 스팬이 길어졌다 (139·123) — 교각 24칸마다 (MAX 160 안)
-                new BridgeSpec("운무교 동일", true, 20, 40, 178, 146),   // 장로회(x1 39) ↔ 전망대(x0 179)
-                new BridgeSpec("운무교 동이", true, -12, 22, 48, 170),   // 정상단(x1 21) ↔ 부속 암자(x0 49)
-                new BridgeSpec("운무교 서", true, 20, -171, -49, 146));  // 서교 착지(x1 -172) ↔ 장로회(x0 -48)
+                // ★척도 되돌림 — 곁봉이 제자리로 돌아와 스팬이 옛 값(61·42·58)으로
+                new BridgeSpec("운무교 동일", true, 10, 20, 80, 128),    // 장로회 ↔ 전망대(19) · 스팬 61
+                new BridgeSpec("운무교 동이", true, -12, 11, 52, 148),   // 정상단 ↔ 부속 암자(20) · 스팬 42
+                new BridgeSpec("운무교 서", true, 10, -82, -25, 128));   // 장로회 ↔ 서교 착지(105) · 스팬 58
         return new Campus(pads, links, bridges);
     }
 
@@ -354,7 +353,7 @@ public final class TerraceForge {
      * ★접근 시퀀스 명세 (슬라이스 9b · 코덱스 개선 3 — 「웅장함은 도착하는 과정에서 나온다」):
      * 산문단 남단에서 남쪽 절벽 아래까지, 지형을 따라 오르내리는 20폭 대계단 노선.
      * {@code ys[i]} = (z0+i) 행의 보행면 y — 계획이 조성 전 지형을 읽어 정하고 (한 칸 물매 ·
-     * 26칸마다 참 · 소문 마당), 조성·검수가 같은 표를 읽는다.
+     * 13칸마다 참 · 소문 마당), 조성·검수가 같은 표를 읽는다.
      *
      * @param x  축선 x (산문 중심열)
      * @param z0 첫 행 (산문단 남단 + 1)
@@ -398,8 +397,8 @@ public final class TerraceForge {
                 approachOf(world, pads), List.copyOf(notes));
     }
 
-    /** 접근로 길이 — 산문단 남단에서 남쪽으로 (기슭 언덕을 넘어 평지까지) */
-    public static final int APPROACH_LEN = 176;
+    /** 접근로 길이 — 산문단 남단에서 남쪽으로 (기슭 언덕을 넘어 평지까지). ★척도 되돌림 176→88 */
+    public static final int APPROACH_LEN = 88;
 
     /**
      * 접근로 식생 회랑 반폭 — <b>계단 중심 ±10 은 나무가 서지 않는다</b> (D-16).
@@ -416,8 +415,50 @@ public final class TerraceForge {
     public static final int APPROACH_CLEAR = 10;
 
     /**
+     * 접근로 부속의 자리 — <b>전부 {@link #APPROACH_LEN} 에서 유도한다</b>.
+     *
+     * <p>★2026-08-04 실증: 척도를 되돌리며 길이를 176→88 로 줄였는데 소문 몸체가 옛 인덱스
+     * (102)를 그대로 물고 있어 <b>조성 중 ArrayIndexOutOfBounds</b> 로 터졌다 (순수 검증은
+     * 통과했다 — 인덱스가 길이 안인지 아무도 안 쟀기 때문이다). 비석 하나는 i150 이라 범위
+     * 밖으로 나가 <b>조용히 사라지고</b> 있었다. 그래서 자리를 전부 비례식으로 못 박고,
+     * {@link #approachFixtureIndices()} 로 내보내 눈이 범위를 재게 한다.
+     */
+    public static final int LANDING_EVERY = Math.max(6, APPROACH_LEN / 7);
+
+    /** 소문 — 접근로의 60% 지점 (기슭 언덕 마루쯤). 참 자리에 맞춰 내린다 */
+    public static final int GATE_I = APPROACH_LEN * 6 / 10 / LANDING_EVERY * LANDING_EVERY;
+
+    /** 소문 마당 — 소문 앞뒤 평탄 구간 */
+    public static final int GATE_YARD_N = Math.max(0, GATE_I - 4);
+    public static final int GATE_YARD_S = Math.min(APPROACH_LEN - 1, GATE_I + 2);
+
+    /** 비석 두 쌍 — 아래·위 참 곁 (참 주기에 맞춘다) */
+    public static final int STELE_A = LANDING_EVERY;
+    public static final int STELE_B = Math.max(STELE_A + LANDING_EVERY,
+            (APPROACH_LEN - 1) / LANDING_EVERY * LANDING_EVERY - LANDING_EVERY);
+
+    /** 소나무 주기 — 회랑 밖에 좌우 번갈아 */
+    public static final int PINE_EVERY = Math.max(8, APPROACH_LEN / 4);
+
+    /**
+     * 접근로 부속이 앉는 행 인덱스 전부 — <b>눈이 이 표로 범위를 잰다</b> (같은 식이라
+     * 조성과 어긋날 수 없다). 소문·비석·소나무 순.
+     */
+    public static int[] approachFixtureIndices() {
+        int pines = (APPROACH_LEN - 15 + PINE_EVERY - 1) / PINE_EVERY;
+        int[] out = new int[3 + Math.max(0, pines)];
+        out[0] = GATE_I;
+        out[1] = STELE_A;
+        out[2] = STELE_B;
+        for (int k = 0; k < Math.max(0, pines); k++) {
+            out[3 + k] = 15 + k * PINE_EVERY;
+        }
+        return out;
+    }
+
+    /**
      * 접근로 계획 — 산문단(1구역) 남단에서 남쪽으로, <b>조성 전 지형을 따라</b> 한 칸 물매의
-     * 보행면 표를 만든다. 26칸마다 참(평탄 2칸 — 석등 쌍이 선다) · i 96~108 은 소문 마당
+     * 보행면 표를 만든다. 13칸마다 참(평탄 2칸 — 석등 쌍이 선다) · i 48~54 는 소문 마당
      * (기슭 언덕 마루쯤 — 작은 문루가 선다). 언덕은 지우지 않고 넘는다 (조율자 지시 —
      * 「기슭 언덕을 활용」).
      */
@@ -436,7 +477,7 @@ public final class TerraceForge {
         int[] ys = new int[APPROACH_LEN];
         int prev = gate.y();
         for (int i = 0; i < APPROACH_LEN; i++) {
-            boolean landing = i % 26 < 2 || (i >= 96 && i <= 108);
+            boolean landing = i % LANDING_EVERY < 2 || (i >= GATE_YARD_N && i <= GATE_YARD_S);
             int g = groundY(world, ax, z0 + i);
             int target = landing ? prev
                     : prev + Integer.compare(g, prev);   // 지형을 따르되 한 칸 물매 (걷는 자의 계약)
@@ -448,7 +489,7 @@ public final class TerraceForge {
 
     /**
      * 접근 시퀀스를 놓는다 (슬라이스 9b) — 절벽 아래에서 산문까지 <b>도착하는 과정</b>:
-     * 20폭 대계단(지형 추종·전 열 접지) → 참(석등 쌍) → 소문(작은 문루 — 기슭 언덕 마루) →
+     * 도보 7 대계단(지형 추종·전 열 접지) → 참(석등 쌍) → 소문(작은 문루 — 기슭 언덕 마루) →
      * 비석·소나무 → 산문. 계단·측석·석등은 대계단 문법 그대로.
      */
     public static void paveApproach(World world, Plan plan, Tally tally) {
@@ -480,7 +521,7 @@ public final class TerraceForge {
                 clearAbove(world, x, y, z, tally);
                 fillDown(world, x, y, z, tally);
                 world.getBlockAt(x, y, z).setType(Material.STONE_BRICKS, false);
-                if (i % 26 < 2 || i % 13 == 6) {   // 참 석등 쌍 + 중간 등롱 리듬
+                if (i % LANDING_EVERY < 2 || i % Math.max(3, LANDING_EVERY / 2) == 3) {   // 참 석등 쌍 + 중간 등롱
                     world.getBlockAt(x, y + 1, z).setType(Material.STONE_BRICKS, false);
                     world.getBlockAt(x, y + 2, z).setType(Material.LANTERN, false);
                     tally.lanterns++;
@@ -489,20 +530,20 @@ public final class TerraceForge {
                     tally.parapet++;
                 }
             }
-            if (i == 104) {
-                // 소문 — 기슭 언덕 마루 (중심 z0+102). ★i104 에 세운다: 지붕이 z±2 를 덮으므로
-                // 그 행들의 조성(clearAbove)이 끝난 뒤여야 한다 (마당 96~108 평탄이라 y 동일)
-                approachGate(world, a.x(), a.ys()[102], a.z0() + 102, tally);
+            if (i == GATE_I + 2) {
+                // 소문 — 기슭 언덕 마루. ★마당 남끝(GATE_I+2)에서 세운다: 지붕이 z±2 를 덮으므로
+                //   그 행들의 조성(clearAbove)이 끝난 뒤여야 한다 (마당이 평탄이라 y 동일)
+                approachGate(world, a.x(), a.ys()[GATE_I], a.z0() + GATE_I, tally);
             }
-            if (i == 27 || i == 150) {
+            if (i == STELE_A || i == STELE_B) {
                 stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁 (계단 곁에 선다)
                 stele(world, a.x() - RAIL_OFF - 3, z, tally);
             }
-            if (i % 20 == 15) {
+            if (i >= 15 && (i - 15) % PINE_EVERY == 0) {
                 // ★계단 회랑(±APPROACH_CLEAR) 밖에 선다 — 계단을 덮지 않고 곁을 채운다 (D-16).
                 //   옛 값 RAIL_OFF+5 는 전폭 21 계단의 것이라, 폭 7 로 줄자 계단 위에 앉았다.
                 int off = APPROACH_CLEAR + 2;
-                approachPine(world, a.x() + (Math.floorMod(i, 40) == 15 ? off : -off), z, tally);
+                approachPine(world, a.x() + (((i - 15) / PINE_EVERY) % 2 == 0 ? off : -off), z, tally);
             }
             prevY = y;
         }
@@ -616,11 +657,11 @@ public final class TerraceForge {
             if (!zones.add(ps.zone())) {
                 throw new IllegalArgumentException("구역 번호 중복: " + ps.zone());
             }
-            if (Math.abs(ps.expectedLift()) > 64) {
+            if (Math.abs(ps.expectedLift()) > 40) {
                 // ★한도 40→56(슬라이스 8)→64(8.7): 측문 동벽의 실측 Δ64 — B2 동단이 산 발치 밖
                 //   평지 위 성곽 벼랑이다 (이미지 12 단애 문법 · 벼랑 아래 접속은 후속 도보길 몫).
                 //   실측값 계약은 은폐가 아니다 — 근거 없는 추정만이 만용이다.
-                throw new IllegalArgumentException("expectedLift 한도(±64) 밖: " + ps.name()
+                throw new IllegalArgumentException("expectedLift 한도(±40) 밖: " + ps.name()
                         + " Δ" + ps.expectedLift() + " — 그건 계약이 아니라 만용이다");
             }
             int x0 = peakX + ps.dx() - ps.width() / 2;

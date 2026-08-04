@@ -24,10 +24,10 @@ public final class SpireField {
     public static final int CELL = 26;
 
     /** 산군 바깥 한계 (방사) — 원경 켜의 끝 */
-    public static final int FIELD_R = 1000;   // ★8.5 — 산체 재척도 동행 (켜 3: 200~430~700~1000)
+    public static final int FIELD_R = 620;   // ★척도 되돌림 (2026-08-04) — 켜 3: 130~260~430~620
 
     /** 본산권 안쪽 한계 — 이 안은 골격(캠퍼스의 산)의 것, 산군은 손대지 않는다 */
-    public static final int INNER_R = 200;
+    public static final int INNER_R = 130;
 
     private static final long SALT = 0x5A9_F1E1DL;
 
@@ -79,10 +79,10 @@ public final class SpireField {
         // ★8.5 — 골격 재척도 동행: 자리 = 새 skelPeaks · 높이 = 골격 마루 위 +8 (크랙 결 몫 ·
         //   Pm 265 = 정상단 170 + 95 — 산의 우위 실측 창 +60~100 안)
         return List.of(
-                new Ridge("Pm", -50, -113, 265, 90, 90, 16),
-                new Ridge("Em", 130, -97, 255, 70, 116, 12),
-                new Ridge("Wm", -218, -34, 250, 76, 60, 12),
-                new Ridge("Es", 206, -38, 215, 52, 120, 6));
+                new Ridge("Pm", -24, -54, 228, 56, 90, 10),
+                new Ridge("Em", 62, -46, 200, 42, 116, 8),
+                new Ridge("Wm", -104, -16, 195, 46, 60, 8),
+                new Ridge("Es", 98, -18, 170, 32, 120, 4));
     }
 
     private final List<int[]> exclusions;
@@ -198,10 +198,10 @@ public final class SpireField {
     // ═══════════════════════════════════════════════════════════════════
 
     /** 광봉 격자 한 변 — 능선 도달 반경(≤~92)이 이웃 ±1 스캔 안에 들도록 */
-    public static final int GCELL = 128;
+    public static final int GCELL = 80;
 
-    /** 광봉이 미치는 끝 — 원경(650+)은 운해 위 침봉 실루엣의 몫 */
-    public static final int BROAD_END = 650;
+    /** 광봉이 미치는 끝 — 원경(400+)은 운해 위 침봉 실루엣의 몫 */
+    public static final int BROAD_END = 400;
 
     private int broadAt(int gX, int gZ, int x, int z) {
         long h = mix(SALT ^ 0xB40ADL, gX, 0, gZ);
@@ -214,10 +214,10 @@ public final class SpireField {
         //   크기·능선 길이의 분산을 넓히고, 넷 중 하나는 <b>작고 뭉툭</b>하게 (큰 것 옆에
         //   작은 것이 서야 큰 것이 커 보인다 — 크기 단계의 원리).
         boolean squat = Math.floorMod(h >> 56, 4) == 0;
-        int r = squat ? 22 + (int) Math.floorMod(h >> 32, 17)        // 뭉툭 44~76
-                : 30 + (int) Math.floorMod(h >> 32, 41);             // 밑변 60~140 (실측 §12)
-        int len = squat ? 6 + (int) Math.floorMod(h >> 48, 13)       // 짧은 마루 6~18
-                : 12 + (int) Math.floorMod(h >> 48, 41);             // 능선 12~52 — 매시프로 이어진다
+        int r = squat ? 14 + (int) Math.floorMod(h >> 32, 11)        // 뭉툭 28~48
+                : 19 + (int) Math.floorMod(h >> 32, 25);             // 밑변 38~86 (★척도 되돌림)
+        int len = squat ? 4 + (int) Math.floorMod(h >> 48, 8)        // 짧은 마루 4~11
+                : 8 + (int) Math.floorMod(h >> 48, 25);              // 능선 8~32 — 매시프로 이어진다
         if (Math.abs(x - cx) > (len / 2 + r) + r / 3 || Math.abs(z - cz) > (len / 2 + r) + r / 3) {
             return 0;                                        // 값싼 상자 탈출 — ridgeH 전에
         }
@@ -225,11 +225,11 @@ public final class SpireField {
         if (dist < INNER_R || dist >= BROAD_END || inCorridor(cx, cz)) {
             return 0;
         }
-        int lo = dist < 430 ? 105 : 90;
-        int hi = dist < 430 ? 165 : 140;
+        int lo = dist < 260 ? 65 : 55;
+        int hi = dist < 260 ? 102 : 86;
         if (squat) {
-            lo -= 35;                                        // 뭉툭한 놈은 낮다 — 큰 봉을 돋운다
-            hi -= 45;
+            lo -= 22;                                        // 뭉툭한 놈은 낮다 — 큰 봉을 돋운다
+            hi -= 28;
         }
         int topH = lo + (int) Math.floorMod(h >> 24, hi - lo + 1);
         double axis = Math.floorMod(h >> 40, 180);
@@ -238,21 +238,21 @@ public final class SpireField {
     }
 
     /**
-     * 회랑 소멸 — 시야 회랑(8.8)을 지나는 광봉 몸은 45~85 띠에서 매끄럽게 죽는다
+     * 회랑 소멸 — 시야 회랑(8.8)을 지나는 광봉 몸은 22~42 띠에서 매끄럽게 죽는다
      * (수직 절단이 아니라 골짜기 벽 — 시선을 축선으로 이끈다).
      */
     private static int corridorFaded(int h, int x, int z) {
-        if (h <= 0 || z < 340) {
+        if (h <= 0 || z < 170) {
             return h;
         }
-        double a = Math.abs(x + 4.0);
-        if (a >= 85) {
+        double a = Math.abs(x + 2.0);
+        if (a >= 42) {
             return h;
         }
-        if (a <= 45) {
+        if (a <= 22) {
             return 0;
         }
-        return (int) (h * (a - 45) / 40.0);
+        return (int) (h * (a - 22) / 20.0);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -264,7 +264,7 @@ public final class SpireField {
     // ═══════════════════════════════════════════════════════════════════
 
     /** 산체가 미치는 끝 — 원경 침봉은 운해 위 실루엣로 남긴다 (조성량·시간의 고삐이기도 하다) */
-    public static final int RELIEF_FADE_END = 760;
+    public static final int RELIEF_FADE_END = 470;
 
     /** 산체 높이 기여 (0 = 골/범위 밖). 능선 결(ridged) 노이즈 — 마루선이 이어지고 안부가 생긴다. */
     private int baseRelief(int x, int z) {
@@ -279,9 +279,9 @@ public final class SpireField {
             return 0;   // 운해 골 — 협곡 자리 보존 (~1/4)
         }
         double t = (n - 0.32) / 0.68;
-        double amp = dist < 430 ? 85 : dist < 700 ? 85 - 25 * (dist - 430) / 270.0 : 60;
-        double edge = Math.min(1.0, (RELIEF_FADE_END - dist) / 120.0);
-        double inner = dist >= INNER_R ? 1.0 : Math.max(0.0, (dist - 120) / 80.0);   // 본산권 — 산세에 양보
+        double amp = dist < 260 ? 52 : dist < 430 ? 52 - 15 * (dist - 260) / 170.0 : 37;
+        double edge = Math.min(1.0, (RELIEF_FADE_END - dist) / 74.0);
+        double inner = dist >= INNER_R ? 1.0 : Math.max(0.0, (dist - 78) / 52.0);   // 본산권 — 산세에 양보
         int hgt = (int) (t * t * amp * edge * inner);   // t² — 마루는 서고 발치는 완만
         if (inCorridor(x, z)) {
             hgt = Math.min(hgt, 20);   // ★시야 회랑 — 지형 금지가 아니라 낮은 구릉까지 (8.8 의 결)
@@ -310,7 +310,7 @@ public final class SpireField {
 
     /** 남쪽 접근 시야 회랑인가 (8.8) — 침봉은 금지, 산체는 구릉 상한 */
     private static boolean inCorridor(int x, int z) {
-        return z >= 340 && Math.abs(x + 4) <= 45;
+        return z >= 170 && Math.abs(x + 2) <= 22;
     }
 
     /**
@@ -381,21 +381,21 @@ public final class SpireField {
         int lo;
         int hi;
         // ★10.5 침봉 강등 (구도 반전 — 실측 §12: 광봉:침봉 ≥4:1): 근·중경 밀도 62%→4% —
-        //   광봉 마루·가장자리 위의 장식만 남는다. 원경(650+)은 운해 실루엣 몫으로 10%.
+        //   광봉 마루·가장자리 위의 장식만 남는다. 원경(400+)은 운해 실루엣 몫으로 10%.
         int density;
         if (centerDist < INNER_R) {
             return 0;                                   // 본산권 — 골격의 것
-        } else if (centerDist < 430) {
-            lo = 140;
-            hi = 220;                                   // 근경 (★8.5 산체 배율 동행)
+        } else if (centerDist < 260) {
+            lo = 86;
+            hi = 136;                                   // 근경 (★척도 되돌림 2026-08-04)
             density = 4;
         } else if (centerDist < BROAD_END) {
-            lo = 110;
-            hi = 180;                                   // 중경
+            lo = 68;
+            hi = 111;                                   // 중경
             density = 4;
         } else if (centerDist < FIELD_R) {
-            lo = 90;
-            hi = 140;                                   // 원경 — 운해 위 실루엣
+            lo = 56;
+            hi = 86;                                    // 원경 — 운해 위 실루엣
             density = 10;
         } else {
             return 0;
@@ -405,12 +405,12 @@ public final class SpireField {
         }
         // 실루엣 변주 (슬라이스 10) — 굵은 놈 소수(18%) + 가는 놈 다수
         boolean thick = Math.floorMod(h >> 52, 100) < 18;
-        int r = thick ? 13 + (int) Math.floorMod(h >> 32, 5)
-                : 5 + (int) Math.floorMod(h >> 32, 5);
+        int r = thick ? 8 + (int) Math.floorMod(h >> 32, 4)
+                : 3 + (int) Math.floorMod(h >> 32, 4);
         int top = thick ? hi - (int) Math.floorMod(h >> 24, (hi - lo) / 3 + 1)
                 : lo + (int) Math.floorMod(h >> 24, hi - lo + 1);
-        // ★10.5 발치 가드 — 평지에서 곧장 솟는 침봉 금지: 광봉·저지 릴리프 위(지지고 ≥55)에서만,
-        //   그리고 지지면 위로 ≥20 은 솟아야 장식이 된다 (원경 실루엣 켜는 예외 — 운해가 발치를 가린다)
+        // ★10.5 발치 가드 — 평지에서 곧장 솟는 침봉 금지: 광봉·저지 릴리프 위(지지고 ≥34)에서만,
+        //   그리고 지지면 위로 ≥12 는 솟아야 장식이 된다 (원경 실루엣 켜는 예외 — 운해가 발치를 가린다)
         if (centerDist < BROAD_END) {
             int support = baseRelief(cx, cz);
             int sgX = Math.floorDiv(cx, GCELL);
@@ -420,7 +420,7 @@ public final class SpireField {
                     support = Math.max(support, broadAt(sgX + i, sgZ + j, cx, cz));
                 }
             }
-            if (support < 55 || top < support + 20) {
+            if (support < 34 || top < support + 12) {
                 return 0;
             }
         }

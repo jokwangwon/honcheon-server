@@ -71,10 +71,10 @@ public final class TerraceForgeSelfTest {
                 campus.bridges().size());
         // 척추 앵커 — 통단 개편(슬라이스 5 · 사용자 지시)으로 종문은 76 이 됐다. 본전·장로회·정상은 살렸다.
         // ★슬라이스 8 재척도 앵커 — h 사슬 46/64/86/108/130/146/170 (사용자 기준자: 계단 20)
-        check("앵커: 종문 h86 (통단 B3)", heightOf(campus, 6) == 86, heightOf(campus, 6));
-        check("앵커: 본전 h130", heightOf(campus, 9) == 130, heightOf(campus, 9));
-        check("앵커: 장로회 h146", heightOf(campus, 12) == 146, heightOf(campus, 12));
-        check("앵커: 정상 h170", heightOf(campus, 13) == 170, heightOf(campus, 13));
+        check("앵커: 종문 h76 (통단 B3 · ★척도 되돌림)", heightOf(campus, 6) == 76, heightOf(campus, 6));
+        check("앵커: 본전 h116 (★척도 되돌림)", heightOf(campus, 9) == 116, heightOf(campus, 9));
+        check("앵커: 장로회 h128 (★척도 되돌림)", heightOf(campus, 12) == 128, heightOf(campus, 12));
+        check("앵커: 정상 h148 (★척도 되돌림)", heightOf(campus, 13) == 148, heightOf(campus, 13));
         // ★★D-19 (2026-08-04 사용자 실측) — 레퍼런스 계단 도보 폭은 7 이다.
         //   슬라이스 8 의 「20」 앵커(전폭 21)가 오류였음이 드러나 되돌렸다.
         //   이 눈이 지키는 것: 다시 「크게 하면 웅장하다」로 올리지 못한다.
@@ -174,21 +174,21 @@ public final class TerraceForgeSelfTest {
                         new TerraceForge.PadSpec(2, "곁봉", 200, 0, 20, 16, 50)),
                 List.of(),
                 List.of(new TerraceForge.BridgeSpec("만용교", true, 0, 10, 189, 50))));
-        // ★8.7 — 한도 ±64 (측문 동벽 실측 Δ64 — 단애 문법 · 실측값 계약은 은폐가 아니다)
-        checkThrows("expectedLift ±64 밖은 거절", new TerraceForge.Campus(
-                List.of(new TerraceForge.PadSpec(1, "만용", 0, 0, 20, 16, 50, 65)),
+        // ★척도 되돌림 — 한도 ±40 (계약이 19~31 로 돌아왔다)
+        checkThrows("expectedLift ±40 밖은 거절", new TerraceForge.Campus(
+                List.of(new TerraceForge.PadSpec(1, "만용", 0, 0, 20, 16, 50, 41)),
                 List.of(), List.of()));
-        check("성곽 계약: 3 연무장하 Δ40 · 16 측문 Δ60 (★9b — 단구 ±4 동행)",
-                liftOf(campus, 3) == 40 && liftOf(campus, 16) == 60,
+        check("성곽 계약: 3 연무장하 Δ23 · 16 측문 Δ27 (★9b 단구 ±4 · 척도 되돌림)",
+                liftOf(campus, 3) == 23 && liftOf(campus, 16) == 27,
                 liftOf(campus, 3) + "/" + liftOf(campus, 16));
         check("★8.6 척추 계약 삭제 — 본전·장로회·정상 Δ0/1/-5 실측 (창룡령 정렬의 증거)",
                 liftOf(campus, 9) == 0 && liftOf(campus, 12) == 0 && liftOf(campus, 13) == 0,
                 liftOf(campus, 9) + "/" + liftOf(campus, 12) + "/" + liftOf(campus, 13));
-        check("expectedLift 계약: 19 전망대 = -14 (★8.7 실측 — 의도된 깎기)",
-                liftOf(campus, 19) == -14, liftOf(campus, 19));
-        check("expectedLift 계약: 105 서교 착지 = 0 (★8.7 실측 Δ0 — 계약 불요)",
-                liftOf(campus, 105) == 0, liftOf(campus, 105));
-        check("expectedLift 계약: 20 부속 암자 = 42", liftOf(campus, 20) == 42, liftOf(campus, 20));
+        check("expectedLift 계약: 19 전망대 = 31 (★척도 되돌림 — 곁봉 제자리)",
+                liftOf(campus, 19) == 31, liftOf(campus, 19));
+        check("expectedLift 계약: 105 서교 착지 = 20 (★척도 되돌림)",
+                liftOf(campus, 105) == 20, liftOf(campus, 105));
+        check("expectedLift 계약: 20 부속 암자 = 20 (★척도 되돌림)", liftOf(campus, 20) == 20, liftOf(campus, 20));
         check("다리 몸체 covers: 난간 열(a0−2 · 폭 ±2)을 안다",
                 tb.covers(8, 2) && tb.covers(50, -2) && !tb.covers(8, 3), "covers");
 
@@ -223,8 +223,8 @@ public final class TerraceForgeSelfTest {
             }
         }
         check("산군: 결정론 (난수 0)", det, "표본 5");
-        check("산군: 배후봉 Pm 마루 h265 (정상단 170 + 95 — 실측 §4 · 슬라이스 8.5 산체 동행)",
-                bare.targetH(-50, -113) == 265, bare.targetH(-50, -113));
+        check("산군: 배후봉 Pm 마루 h228 (정상단 148 + 80 — 실측 §4 · ★척도 되돌림)",
+                bare.targetH(-24, -54) == 228, bare.targetH(-24, -54));
         com.honcheon.mvt.forge.SpireField blocked = new com.honcheon.mvt.forge.SpireField(
                 java.util.List.of(new int[]{-30, -20, -60, -50}));
         check("산군: 제외 사각 안은 0 (산이 사람의 것을 침범하지 않는다)",
@@ -247,24 +247,24 @@ public final class TerraceForgeSelfTest {
             }
         }
         check("산군: 캠퍼스 전 패드 중심 무침범", clear, "패드 " + spPads.size());
-        // 켜 3 — 각 환대(環帶)에 침봉이 실재하고, 근경 마루가 실측 창 안 (★8.5 — 200/430/700/1000 · 140~220)
+        // 켜 3 — 각 환대(環帶)에 침봉이 실재하고, 근경 마루가 실측 창 안 (★척도 되돌림 — 130/260/430/620 · 86~136)
         int[] rings = new int[3];
         int r1max = 0;
-        for (int gx = -980; gx <= 980; gx += 17) {
-            for (int gz = -980; gz <= 980; gz += 17) {
+        for (int gx = -610; gx <= 610; gx += 11) {
+            for (int gz = -610; gz <= 610; gz += 11) {
                 int hh = bare.targetH(gx, gz);
-                if (hh < 50) {
+                if (hh < 30) {
                     continue;
                 }
                 double d = Math.hypot(gx, gz);
-                if (d >= 200 && d < 430) {
+                if (d >= 130 && d < 260) {
                     rings[0]++;
-                    if (gz > 150 && hh > r1max) {
+                    if (gz > 95 && hh > r1max) {
                         r1max = hh;   // 배후봉(북) 자락 밖 — 남쪽 반구에서만 잰다
                     }
-                } else if (d >= 430 && d < 700) {
+                } else if (d >= 260 && d < 430) {
                     rings[1]++;
-                } else if (d >= 700 && d < 1000) {
+                } else if (d >= 430 && d < 620) {
                     rings[2]++;
                 }
             }
@@ -272,15 +272,15 @@ public final class TerraceForgeSelfTest {
         check("산군: 켜 3 실재 (근경/중경/원경 각 > 0)",
                 rings[0] > 0 && rings[1] > 0 && rings[2] > 0,
                 rings[0] + "/" + rings[1] + "/" + rings[2]);
-        check("산군: 근경 남쪽 마루 최고가 창(140~220) 안 (광봉·침봉 공통 상한 · 10.5)",
-                r1max >= 140 && r1max <= 220, r1max);
+        check("산군: 근경 남쪽 마루 최고가 창(86~136) 안 (광봉·침봉 공통 상한 · 10.5 · 척도 되돌림)",
+                r1max >= 86 && r1max <= 136, r1max);
         // ★10.5 구도 반전 — 광봉이 주인 · 침봉은 장식 (실측 §12: 개수비 ≥4:1)
         int gTotal = 0;
         int gHit = 0;
         for (int gx2 = -6; gx2 <= 6; gx2++) {
             for (int gz2 = -6; gz2 <= 6; gz2++) {
-                double dd = Math.hypot(gx2 * 128 + 64, gz2 * 128 + 64);
-                if (dd < 240 || dd > 640) {
+                double dd = Math.hypot(gx2 * 80 + 40, gz2 * 80 + 40);
+                if (dd < 150 || dd > 390) {
                     continue;
                 }
                 gTotal++;
@@ -296,7 +296,7 @@ public final class TerraceForgeSelfTest {
         for (int cx3 = -25; cx3 <= 25; cx3++) {
             for (int cz3 = -25; cz3 <= 25; cz3++) {
                 double dd = Math.hypot(cx3 * 26 + 13, cz3 * 26 + 13);
-                if (dd < 240 || dd > 640) {
+                if (dd < 150 || dd > 390) {
                     continue;
                 }
                 sTotal++;
@@ -316,11 +316,11 @@ public final class TerraceForgeSelfTest {
                     continue;
                 }
                 double dd = Math.hypot(sc[0], sc[1]);
-                if (dd < 200 || dd > 430) {
+                if (dd < 130 || dd > 260) {
                     continue;
                 }
                 int hh = bare.targetH(sc[0], sc[1]);
-                if (hh >= 140 && hh <= 220) {
+                if (hh >= 86 && hh <= 136) {
                     perched = true;
                 }
             }
@@ -374,6 +374,35 @@ public final class TerraceForgeSelfTest {
             check("★D-16 회랑 밖은 여전히 심긴다 (곁의 나무까지 밀지는 않았다)",
                     besideAllowed, "회랑 밖도 제외됐다");
         }
+        // ══════ ★접근로 부속 인덱스가 길이 안인가 (2026-08-04 실증의 재발 방지) ══════
+        //   척도를 되돌리며 APPROACH_LEN 176→88 로 줄였는데 소문 몸체가 옛 인덱스(102)를 물고
+        //   있어 조성 중 ArrayIndexOutOfBounds 로 터졌다 — 순수 검증은 통과했다 (아무도 범위를
+        //   안 쟀다). 비석 하나(i150)는 범위 밖이라 조용히 사라지고 있었다.
+        //   ★이 눈은 「부속이 실재하는가」와 「범위 안인가」를 같은 표(approachFixtureIndices)로 잰다.
+        int[] fixtures = TerraceForge.approachFixtureIndices();
+        boolean fixturesInRange = fixtures.length > 0;
+        int worstFixture = -1;
+        for (int idx : fixtures) {
+            if (idx < 0 || idx >= TerraceForge.APPROACH_LEN) {
+                fixturesInRange = false;
+                worstFixture = idx;
+            }
+        }
+        check("★접근로 부속 " + fixtures.length + "개가 전부 길이(" + TerraceForge.APPROACH_LEN
+                        + ") 안 — 조성이 ys[] 를 넘지 않는다",
+                fixturesInRange, worstFixture < 0 ? "부속 0" : "범위 밖 i" + worstFixture);
+        // 소문은 제 마당 남끝에서 세운다 — 그 행도 길이 안이어야 한다 (조성 순서의 계약)
+        check("★소문 조성 행(GATE_I+2)도 길이 안 · 마당이 소문을 감싼다",
+                TerraceForge.GATE_I + 2 < TerraceForge.APPROACH_LEN
+                        && TerraceForge.GATE_YARD_N <= TerraceForge.GATE_I
+                        && TerraceForge.GATE_I <= TerraceForge.GATE_YARD_S,
+                TerraceForge.GATE_YARD_N + "<=" + TerraceForge.GATE_I + "<=" + TerraceForge.GATE_YARD_S);
+        // 비석 둘이 서로 다른 참에 선다 (겹치면 한 쌍이 사라진 것과 같다)
+        check("★비석 두 쌍이 서로 다른 자리 (하나가 조용히 사라지지 않는다)",
+                TerraceForge.STELE_A != TerraceForge.STELE_B
+                        && TerraceForge.STELE_A % TerraceForge.LANDING_EVERY == 0
+                        && TerraceForge.STELE_B % TerraceForge.LANDING_EVERY == 0,
+                TerraceForge.STELE_A + "/" + TerraceForge.STELE_B);
         // ★10-① 산몸 — 「평지+기둥」이 아니라 「산+암봉」: 근경 환대에서 맨바닥(0) 비율이
         //   절반 아래로 (침봉만 있던 8.5 는 ~75% 가 맨바닥이었다) + 산체 높이대(25~95) 실재
         int zeros = 0;
@@ -573,19 +602,19 @@ public final class TerraceForgeSelfTest {
             java.util.List<int[]> ground = com.honcheon.mvt.forge.HwasanCampusBuilder.groundBoxes(jangno);
             int[] fb = full.get(0);
             int[] gb = ground.get(0);
-            check("★장로회 전고 상자가 처마를 덮는다 (33×13 홀 + 처마 4 → 41×21 · 슬라이스 8)",
-                    fb[1] - fb[0] == 40 && fb[3] - fb[2] == 20,
+            check("★장로회 전고 상자가 처마를 덮는다 (17×7 홀 + 처마 → 21×11 · 척도 되돌림)",
+                    fb[1] - fb[0] == 20 && fb[3] - fb[2] == 10,
                     (fb[1] - fb[0] + 1) + "×" + (fb[3] - fb[2] + 1));
-            check("★장로회 지상 상자는 처마를 뺀다 (벽 33×13 — 통로 검증은 걷는 몸높이만)",
-                    gb[1] - gb[0] == 32 && gb[3] - gb[2] == 12,
+            check("★장로회 지상 상자는 처마를 뺀다 (벽 19×9 — 통로 검증은 걷는 몸높이만)",
+                    gb[1] - gb[0] == 18 && gb[3] - gb[2] == 8,
                     (gb[1] - gb[0] + 1) + "×" + (gb[3] - gb[2] + 1));
             TerraceForge.Pad garden = allPads.stream()
                     .filter(p -> p.spec().zone() == 10).findFirst().orElseThrow();
             int gcx = garden.x0() + garden.spec().width() / 2;
             int gcz = garden.zN() + garden.spec().depth() / 2;
             boolean plumBoxed = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(garden).stream()
-                    .anyMatch(b -> b[0] == gcx - 8 && b[1] == gcx && b[2] == gcz - 16 && b[3] == gcz - 8);
-            check("★정원 매화 상자 = 수관 ±4 그대로 (5.6 재발 방지 · 슬라이스 8 — 손이 아니라 코드가 적는다)",
+                    .anyMatch(b -> b[0] == gcx - 6 && b[1] == gcx + 2 && b[2] == gcz - 10 && b[3] == gcz - 2);
+            check("★정원 매화 상자 = 수관 ±4 그대로 (5.6 재발 방지 · 척도 되돌림 — 손이 아니라 코드가 적는다)",
                     plumBoxed, "수관 상자 불일치");
         }
 
@@ -598,8 +627,8 @@ public final class TerraceForgeSelfTest {
                     .filter(p -> p.spec().zone() == 9).findFirst().orElseThrow();
             int gateTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(gate) - gate.y();
             int mainTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(main) - main.y();
-            check("★9 산문 재설계 — 총고 ≥36 (구 ~26 의 1.5배 · 코덱스 개선 2)",
-                    gateTop >= 36, gateTop);
+            check("★9 산문 재설계 — 총고 ≥20 (3단 구성 · 코덱스 개선 2 · ★척도 되돌림)",
+                    gateTop >= 20, gateTop);
             check("★9 위계 — 본전이 산문보다 높다 (같은 층고 금지 · 코덱스 §⑤)",
                     mainTop > gateTop, mainTop + " vs " + gateTop);
             TerraceForge.Pad plaza = allPads.stream()
@@ -615,9 +644,9 @@ public final class TerraceForgeSelfTest {
                             && bPal.contains(Material.CRACKED_DEEPSLATE_TILES)
                             && palette.contains(Material.COBBLESTONE), "9 재료");
             // ★9b — 단구 표고 분할: 같은 통단 안 칸이 ±4 로 갈렸다 (원경 스카이라인 요철)
-            check("★9b 단구 — B2 표고가 갈렸다 (연무장하 68 > 외원 64 > 생활하 60)",
-                    heightOf(campus, 3) == 68 && heightOf(campus, 2) == 64
-                            && heightOf(campus, 5) == 60,
+            check("★9b 단구 — B2 표고가 갈렸다 (연무장하 62 > 외원 58 > 생활하 54 · 척도 되돌림)",
+                    heightOf(campus, 3) == 62 && heightOf(campus, 2) == 58
+                            && heightOf(campus, 5) == 54,
                     heightOf(campus, 3) + "/" + heightOf(campus, 2) + "/" + heightOf(campus, 5));
             // ★9b — 소계단 기하: Δ4 · 전폭 5 (half 2) 링크가 앉고 폭이 좁다
             TerraceForge.Campus mini = new TerraceForge.Campus(
@@ -634,8 +663,8 @@ public final class TerraceForgeSelfTest {
             TerraceForge.Pad jongmun = allPads.stream()
                     .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
             int jongTop = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(jongmun) - jongmun.y();
-            check("★9b 층고 차등 — 종문(~30) < 산문(~38) (위계 사다리)",
-                    jongTop < gateTop && jongTop >= 28, jongTop + " vs " + gateTop);
+            check("★9b 층고 차등 — 종문(~17) < 산문(~21) (위계 사다리 · 척도 되돌림)",
+                    jongTop < gateTop && jongTop >= 15, jongTop + " vs " + gateTop);
         }
 
         // ══════════ ⑨ 슬라이스 11.5 — 실지면 정의 통일 (접근로 접지 64건의 처방) ══════════
@@ -654,8 +683,8 @@ public final class TerraceForgeSelfTest {
                     .filter(p -> p.spec().zone() == 9).findFirst().orElseThrow();
             java.util.List<int[]> boxes = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(main2);
             int[] hall = boxes.get(0);
-            check("★13a-5 본전 처마 확대 — 전고 상자 폭 ≥ 87 (hf36+처마 3+4 좌우)",
-                    hall[1] - hall[0] + 1 >= 87, (hall[1] - hall[0] + 1));
+            check("★13a-5 본전 처마 확대 — 전고 상자 폭 ≥ 37 (hf15+처마 좌우 · 척도 되돌림)",
+                    hall[1] - hall[0] + 1 >= 37, (hall[1] - hall[0] + 1));
             check("★13a-5 본전 발자국은 여전히 패드 안 (처마 확대의 계약)",
                     hall[0] >= main2.x0() && hall[1] <= main2.x1()
                             && hall[2] >= main2.zN() && hall[3] <= main2.zS(), "패드 밖");
@@ -678,7 +707,7 @@ public final class TerraceForgeSelfTest {
             // ★13b-② 정면 요철 — 본전 남면이 포치만큼 앞으로 나온다 (평평한 긴 벽의 처방)
             int mcz = main2.zN() + main2.spec().depth() / 2;
             check("★13b-② 본전 현관 포치 — 남면 발자국이 몸체보다 앞선다 (중앙 돌출)",
-                    hall[3] >= mcz + 4 + 13 + 4, hall[3] - mcz);
+                    hall[3] >= mcz + 2 + 6 + 2, hall[3] - mcz);
             check("★13b-② 포치 확대 뒤에도 패드 담김 유지",
                     hall[3] <= main2.zS(), hall[3] + " vs " + main2.zS());
             // ★13c-① 다중 선반 — 높은 면은 여러 단으로 갈린다 (아래 20칸 민짜의 처방)
@@ -691,10 +720,10 @@ public final class TerraceForgeSelfTest {
                     TerraceForge.shelfCountFor(0, 0, 12) <= 1,
                     TerraceForge.shelfCountFor(0, 0, 12));
             // ★13c-② 큰 지붕 — 치미 솟음·내림마루가 면을 선으로 가른다 (본전 지붕 높이가 자란다)
-            // 상층 지붕 용마루 = 월대 5 + 층 22 + 수렴 13 + 치미 2 = 42 (13c 전 40 → +2 솟음)
+            // ★척도 되돌림 — 월대 3 + 층 12 + 수렴 + 치미 = 23 (치미 솟음 문법은 그대로)
             int mainTopY = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(main2) - main2.y();
-            check("★13c-② 본전 지붕 — 치미가 한 칸 더 솟는다 (총고 42 = 종전 40 +2)",
-                    mainTopY == 42, mainTopY);
+            check("★13c-② 본전 지붕 — 치미가 한 칸 더 솟는다 (총고 23 · 척도 되돌림)",
+                    mainTopY == 23, mainTopY);
         }
 
         // ══════════ ⑪ 슬라이스 14 — 대결에서 배운 기법의 이식 ══════════
