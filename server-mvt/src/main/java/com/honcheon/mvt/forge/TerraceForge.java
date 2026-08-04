@@ -1070,25 +1070,21 @@ public final class TerraceForge {
 
     /** 늑재 구간인가 — 가장자리를 ~7칸 단위로 갈라 약 1/3 이 암반 (결정론 · 난수 0) */
     private static boolean ribSegment(int x, int z) {
-        return Math.floorMod(mix(SALT_RIB, Math.floorDiv(x, 7), 0, Math.floorDiv(z, 7)), 100) < 34;
+        // ★15-② 늑재를 늘린다 (34→46%) — 판정: 「건물이 산 위에 얹혀 있다」.
+        //   자연 암반이 축대 사이로 더 자주 솟아야 어디까지가 사람의 일이고 어디부터 산인지
+        //   눈이 못 가른다 (레퍼런스 9호의 이음매는 흐릿하다).
+        return Math.floorMod(mix(SALT_RIB, Math.floorDiv(x, 7), 0, Math.floorDiv(z, 7)), 100) < 46;
     }
 
-    /** 자연 암반 결 — 석축이 아니라 산몸이 드러난 자리 (늑재·돌출 바위) */
+    /**
+     * 자연 암반 결 — 석축이 아니라 <b>산몸이 드러난 자리</b> (늑재·돌출 바위).
+     *
+     * <p>★★15-② <b>산과 같은 자를 쓴다</b>: 늑재가 제 표를 따로 굴리면 산의 암질과 미묘하게
+     * 달라져 「가짜 바위」로 읽힌다 — 이음매를 흐리려면 <b>같은 생성기</b>여야 한다.
+     * 정본은 {@link SpireField#stone} 하나다 (산의 얼룩 문법·웜톤·석전 섞임이 그대로 온다).
+     */
     private static Material rockMaterial(int x, int y, int z) {
-        int r = (int) Math.floorMod(mix(SALT_RIB ^ 0x717L, x, y, z), 100);
-        if (r < 40) {
-            return Material.STONE;
-        }
-        if (r < 60) {
-            return Material.COBBLESTONE;
-        }
-        if (r < 75) {
-            return Material.TUFF;
-        }
-        if (r < 90) {
-            return Material.ANDESITE;
-        }
-        return Material.MOSSY_COBBLESTONE;
+        return SpireField.stone(x, y, z, false);
     }
 
     /** 패드 둘레 스커트 폭 — 가장자리에 걸린 지형 어깨를 이만큼 밀어낸다 */

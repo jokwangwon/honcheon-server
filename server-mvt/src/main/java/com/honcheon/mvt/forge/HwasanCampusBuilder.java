@@ -381,7 +381,7 @@ public final class HwasanCampusBuilder {
                     }
                     for (int y = pad.y() + 1; y <= pad.y() + 16; y++) {
                         Material m = world.getBlockAt(x, y, z).getType();
-                        if (BUILDING_MATS.contains(m)) {
+                        if (LEAK_SCAN.contains(m)) {
                             leaks.add("유출: " + pad.spec().name() + " 곁 (" + x + "," + y + "," + z
                                     + ") " + m);
                             break;
@@ -1525,9 +1525,17 @@ public final class HwasanCampusBuilder {
                 Material.TRIPWIRE, Material.FARMLAND, Material.WHEAT);
     }
 
-    /** 유출 눈이 찾는 건물 재료 표 — 눈이 조경 표와 겹치지 않는지 잰다 */
+    /**
+     * 유출 눈이 찾는 건물 재료 표 — 눈이 조경 표·<b>암벽 표</b>와 겹치지 않는지 잰다.
+     *
+     * <p>★15 수리: 늑재(자연 암반 흉내)가 {@link SpireField#stone} 을 쓰게 되면서 웜톤 사암이
+     * 패드 밖에 섰고, 유출 눈이 그것을 「건물이 패드를 넘었다」로 잡았다 (오탐 8건). 산의 것은
+     * 스캔 밖이다 — <b>건물 전용 재료만 남긴다</b> (백벽·적목·기와·유리는 그대로 잡힌다).
+     */
     public static Set<Material> leakScanMats() {
-        return EnumSet.copyOf(BUILDING_MATS);
+        EnumSet<Material> out = EnumSet.copyOf(BUILDING_MATS);
+        out.removeAll(SpireField.rockMats());
+        return out;
     }
 
     /** 그 열을 계단 몸체가 지나는가 — 담·소품이 통로를 막지 않게 (같은 forge 라 lane.covers 를 읽는다) */
@@ -1586,4 +1594,11 @@ public final class HwasanCampusBuilder {
             Material.DEEPSLATE_BRICKS, Material.CRACKED_DEEPSLATE_TILES,          // ★9 — 기와 결 혼합
             Material.CRACKED_DEEPSLATE_BRICKS, Material.DEEPSLATE_BRICK_STAIRS,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
+
+    /**
+     * ★15 유출 스캔이 실제로 쓰는 표 — {@link #BUILDING_MATS} 에서 <b>암벽 재료를 뺀</b> 것.
+     * 늑재가 산의 재료로 패드 밖에 서므로, 빼지 않으면 산을 건물로 오인한다 (실기동 오탐 8건).
+     * ★선언 자리 주의: {@code BUILDING_MATS} <b>뒤</b>여야 한다 (정적 초기화는 선언 순서다).
+     */
+    private static final Set<Material> LEAK_SCAN = leakScanMats();
 }

@@ -1911,6 +1911,7 @@ public final class MvtCommand implements CommandExecutor {
         private long pines;
         private long shrubs;
         private long mossPatches;
+        private long vineStrands;
 
         SpirePaver(HoncheonMvt plugin, CommandSender sender, World world, SpireField field, int baseY) {
             this.plugin = plugin;
@@ -1977,6 +1978,9 @@ public final class MvtCommand implements CommandExecutor {
                 Material.STONE, Material.ANDESITE, Material.TUFF, Material.CALCITE,
                 Material.DRIPSTONE_BLOCK, Material.SANDSTONE, Material.MOSS_BLOCK,
                 Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,
+                // ★15 수리 — 암벽에 석전 계열이 섞이면서(이음매 흐림) 그 상면이 「심을 수 없는 땅」이
+                //   되어 산 표면의 ~12%가 조용히 민둥이 됐다. 석전도 <b>산의 것</b>이니 심는다.
+                Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS,
                 Material.GRASS_BLOCK, Material.DIRT);
 
         /**
@@ -2018,6 +2022,13 @@ public final class MvtCommand implements CommandExecutor {
                                     ^ ((long) Math.floorDiv(z, 24) * 19349663L)) >> 3, 100) < 45;
                     boolean dense = slope <= 2 && clusterCell
                             && (long) x * x + (long) z * z <= 500L * 500L;
+                    // ★★15 수리 — 덩굴은 <b>성김 관문 앞</b>에서 건다. 뒤에 두었더니 관문 셋이
+                    //   겹쳐(1/13 × 1/3 × 34%) 절벽 열의 0.9%만 남아 185가닥이 됐다 — 설계치
+                    //   「절벽의 34%」와 두 자릿수로 어긋났다. 덩굴은 잎이 없어 값이 싸고
+                    //   절벽의 지배적 초록이므로, 여기서 걸어 한 자리에 여러 가닥을 늘어뜨린다.
+                    if (slope > 5 && Math.floorMod(h >> 30, 100) < 70) {
+                        cliffVines(x, top, z, h);
+                    }
                     if (!dense && Math.floorMod(h >> 4, 3) != 0) {
                         continue;   // 경사·원경·군집 밖은 성기게 (12-① 의 개정)
                     }
@@ -2036,12 +2047,13 @@ public final class MvtCommand implements CommandExecutor {
                         } else {
                             shrub(x, top, z, h);
                         }
-                    } else {                                 // 절벽 — 이끼 띠 · 턱 관목 점점이
+                    } else {                                 // 절벽 — 이끼 띠 · 턱 관목 · ★덩굴
                         world.getBlockAt(x, top, z).setType(Material.MOSS_BLOCK, false);
                         mossPatches++;
                         if (Math.floorMod(h >> 16, 100) < 30) {
                             shrub(x, top, z, h);
                         }
+                        // ★덩굴은 위(성김 관문 앞)에서 이미 걸었다 — 여기서 다시 걸지 않는다
                     }
                 }
             }
@@ -2153,6 +2165,51 @@ public final class MvtCommand implements CommandExecutor {
             shrubs++;
         }
 
+        /**
+         * ★★슬라이스 15-㉣ 절벽 덩굴 — <b>벽면을 타고 늘어진 세로 줄기</b> (실측 9호).
+         *
+         * <p>절벽의 초록은 나무가 아니라 덩굴이다. 열의 옆이 트인 쪽(공기)을 골라 그 면에
+         * 매달고 3~10칸 내린다 — 벽에 닿는 면을 지정해야 뜨지 않는다 (덩굴의 부착면은
+         * 바위가 있는 <b>반대편</b>이다). 공기가 끊기면 거기서 멈춘다.
+         */
+        private void cliffVines(int x, int top, int z, long h) {
+            int[][] dirs = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+            int[] d = dirs[(int) Math.floorMod(h >> 34, 4)];
+            // ★15 수리 — 표집이 1/13 이라 한 자리에 <b>여러 가닥</b>을 늘어뜨려야 면으로 덮인다
+            //   (소나무 군락과 같은 문법). 가닥은 벽면을 따라 옆으로 퍼진다.
+            boolean alongX = d[0] == 0;
+            int strands = 2 + (int) Math.floorMod(h >> 44, 3);   // 2~4 가닥
+            for (int s = 0; s < strands; s++) {
+                int off = s == 0 ? 0 : (s % 2 == 1 ? (s + 1) / 2 : -(s / 2));
+                int sx = x + (alongX ? off : 0);
+                int sz = z + (alongX ? 0 : off);
+                hangVine(sx, sz, d, h + s * 0x9E3779B9L);
+            }
+            vineStrands += strands;
+        }
+
+        /** 덩굴 한 가닥 — 벽에 닿는 면을 지정해 매달고 공기가 끊길 때까지 내린다 */
+        private void hangVine(int x, int z, int[] d, long h) {
+            int top = world.getHighestBlockYAt(x, z);
+            int ax = x + d[0];
+            int az = z + d[1];
+            if (!world.getBlockAt(ax, top, az).getType().isAir()
+                    || world.getBlockAt(x, top, z).getType().isAir()) {
+                return;                       // 트이지 않았거나 매달 바위가 없다
+            }
+            String face = d[1] == -1 ? "south" : d[1] == 1 ? "north" : d[0] == -1 ? "east" : "west";
+            org.bukkit.block.data.BlockData vine =
+                    org.bukkit.Bukkit.createBlockData("minecraft:vine[" + face + "=true]");
+            int len = 3 + (int) Math.floorMod(h >> 38, 8);       // 3~10 (실측 — 긴 줄기가 결을 만든다)
+            for (int k = 0; k < len; k++) {
+                org.bukkit.block.Block b = world.getBlockAt(ax, top - k, az);
+                if (!b.getType().isAir()) {
+                    return;
+                }
+                b.setBlockData(vine, false);
+            }
+        }
+
         /** 완사면 바닥 결 — 이끼 자리 + 풀 (군락의 발치) */
         private void mossGround(int x, int top, int z, long h) {
             for (int[] o : new int[][]{{1, -1}, {-1, 1}, {2, 1}}) {
@@ -2198,7 +2255,8 @@ public final class MvtCommand implements CommandExecutor {
             Announce.say(plugin, sender, ChatColor.GRAY + "  배후봉: " + peaks
                     + " (캠퍼스 정상단 y" + (baseY + 148) + " — 실측 §4: 주봉이 +80 위)");
             Announce.say(plugin, sender, ChatColor.GRAY + "  식생: 소나무 " + pines + " · 관목 " + shrubs
-                    + " · 이끼 " + mossPatches + " (슬라이스 11 — 완사면 군락·턱 점식·절벽 이끼)");
+                    + " · 이끼 " + mossPatches + " · 덩굴 " + vineStrands
+                    + " (슬라이스 11·15 — 완사면 군락·턱 점식·절벽 이끼·★벽면 덩굴)");
             Announce.say(plugin, sender, ChatColor.GRAY + "  다음: /혼천 캠퍼스시험 hwasan — 캠퍼스가 산군 잔재를 걷고 앉는다");
         }
     }

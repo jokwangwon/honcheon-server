@@ -130,7 +130,45 @@ public final class SpireField {
                 best = Math.max(best, spireAt(cellX + i, cellZ + j, x, z));
             }
         }
-        return best;
+        return best <= 0 ? best : fissureLedge(best, x, z);   // ★15 — 표면의 결 (틈·바위턱)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ★★슬라이스 15 — 암벽 표면의 질 (사용자 재판정: 「산의 퀄리티가 레퍼런스와 가장 크게
+    //   다르다 · 지금은 매끈한 계단 반복이라 손으로 쌓은 덩어리로 읽힌다」).
+    //   레퍼런스 9호 실측 (좌측 절벽 근경 — 가장 선명한 표본):
+    //     ㉠ 수직 틈: 바위 기둥 폭 3~6 · 기둥 사이가 <b>실제로 파여</b> 그늘진다 (깊이 2~5)
+    //     ㉡ 바위턱: 파인 면 위로 1~3 칸 남은 선반 — 그 위에 식생이 앉고 아래가 어둡다
+    //   heightmap 이라 진짜 오버행은 못 만든다. 대신 <b>파임(틈)과 남김(턱)을 같은 자에서</b>
+    //   내면, 옆에서 볼 때 선반이 튀어나오고 그 아래가 물러난 실루엣이 된다 — 그림자가 생긴다.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 수직 틈 격자 한 변 — 바위 기둥 폭 3~6 의 근거 (실측 §16) */
+    private static final int FISS = 7;
+
+    /**
+     * 표면의 결 — 틈(파임)과 바위턱(남김)을 한 식으로 낸다.
+     *
+     * <p>같은 셀 해시가 ①이 열이 틈인가 ②그 틈이 어느 y 띠에서 멈추는가를 함께 정한다.
+     * 틈은 y 띠 아래로만 파이고 그 위는 온전히 남으므로, 남은 부분이 곧 <b>바위턱</b>이다 —
+     * 파임과 턱이 따로 굴러 어긋날 자리가 없다 (마른 조성 계율의 지형판).
+     */
+    private int fissureLedge(int h, int x, int z) {
+        long f = mix(SALT ^ 0xF155EL, Math.floorDiv(x, FISS), 0, Math.floorDiv(z, FISS));
+        int kind = (int) Math.floorMod(f, 100);
+        if (kind >= 34) {
+            return h;                       // 66% 는 온전한 바위 기둥 — 틈은 소수라야 결이 된다
+        }
+        int inX = Math.floorMod(x, FISS);
+        int inZ = Math.floorMod(z, FISS);
+        boolean vertical = (f >> 8 & 1L) == 0L;
+        int lane = (int) Math.floorMod(f >> 12, FISS);
+        if ((vertical ? inX : inZ) != lane) {
+            return h;                       // 셀 안에서도 틈은 한 줄 — 나머지는 기둥이다
+        }
+        int depth = 2 + (int) Math.floorMod(f >> 20, 4);        // 파임 2~5 (실측 ㉠)
+        int shelf = (int) Math.floorMod(f >> 28, 3);            // 0~2 — 턱이 남는 자리
+        return Math.max(1, h - depth + shelf);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -155,8 +193,14 @@ public final class SpireField {
         }
         int cx = gX * GCELL + 20 + (int) Math.floorMod(h >> 8, GCELL - 40);
         int cz = gZ * GCELL + 20 + (int) Math.floorMod(h >> 16, GCELL - 40);
-        int r = 30 + (int) Math.floorMod(h >> 32, 31);       // 밑변 60~120 (실측 §12 — 1:0.8~1.5)
-        int len = 12 + (int) Math.floorMod(h >> 48, 29);     // 능선 길이 12~40 — 매시프로 이어진다
+        // ★15-③ 실루엣 다양성 — 광봉이 서로 닮아 「같은 산이 여럿」으로 읽혔다.
+        //   크기·능선 길이의 분산을 넓히고, 넷 중 하나는 <b>작고 뭉툭</b>하게 (큰 것 옆에
+        //   작은 것이 서야 큰 것이 커 보인다 — 크기 단계의 원리).
+        boolean squat = Math.floorMod(h >> 56, 4) == 0;
+        int r = squat ? 22 + (int) Math.floorMod(h >> 32, 17)        // 뭉툭 44~76
+                : 30 + (int) Math.floorMod(h >> 32, 41);             // 밑변 60~140 (실측 §12)
+        int len = squat ? 6 + (int) Math.floorMod(h >> 48, 13)       // 짧은 마루 6~18
+                : 12 + (int) Math.floorMod(h >> 48, 41);             // 능선 12~52 — 매시프로 이어진다
         if (Math.abs(x - cx) > (len / 2 + r) + r / 3 || Math.abs(z - cz) > (len / 2 + r) + r / 3) {
             return 0;                                        // 값싼 상자 탈출 — ridgeH 전에
         }
@@ -166,6 +210,10 @@ public final class SpireField {
         }
         int lo = dist < 430 ? 105 : 90;
         int hi = dist < 430 ? 165 : 140;
+        if (squat) {
+            lo -= 35;                                        // 뭉툭한 놈은 낮다 — 큰 봉을 돋운다
+            hi -= 45;
+        }
         int topH = lo + (int) Math.floorMod(h >> 24, hi - lo + 1);
         double axis = Math.floorMod(h >> 40, 180);
         int hh = ridgeH(new Ridge("광봉", cx, cz, topH, r, axis, len), x, z);
@@ -397,32 +445,66 @@ public final class SpireField {
      * 마루(cap)엔 이끼가 앉는다 (기존 결 유지).
      */
     public static org.bukkit.Material stone(int x, int y, int z, boolean cap) {
-        long h = (x * 0x9E3779B97F4A7C15L) ^ ((y / 6) * 0xC2B2AE3D27D4EB4FL)
-                ^ (z * 0x165667B19E3779F9L);
-        h ^= h >>> 31;
-        int r = (int) Math.floorMod(h, 100);
+        // ★★15-㉢ <b>얼룩(뭉치)으로 섞는다</b> — 한 블록마다 굴리면 「점점이 노이즈」가 되어
+        //   멀리서 균질한 회색으로 뭉개진다 (실측 9호: 재료가 3~5칸 얼룩으로 뭉쳐 있다).
+        //   3칸 셀로 굴려 같은 재료가 덩어리지게 하고, 셀 안에서만 잔결을 준다.
+        long cell = (Math.floorDiv(x, 3) * 0x9E3779B97F4A7C15L)
+                ^ (Math.floorDiv(y, 3) * 0xC2B2AE3D27D4EB4FL)
+                ^ (Math.floorDiv(z, 3) * 0x165667B19E3779F9L);
+        cell ^= cell >>> 31;
+        int r = (int) Math.floorMod(cell, 100);
+        long fine = (x * 0x27D4EB2F165667C5L) ^ (y * 0x9E3779B97F4A7C15L) ^ (z * 0xC2B2AE3D27D4EB4FL);
+        fine ^= fine >>> 29;
+        boolean grain = Math.floorMod(fine, 100) < 22;      // 셀 안 잔결 — 얼룩의 경계를 허문다
         if (cap) {
             return r < 45 ? org.bukkit.Material.MOSS_BLOCK : org.bukkit.Material.STONE;
         }
-        if (r < 26) {
-            return org.bukkit.Material.STONE;
+        // ★★15-② <b>산·건축의 이음매를 흐린다</b>: 레퍼런스 9호의 절벽은 그 자체가 석전
+        //   계열(석전·이끼 석전·조약돌)로 쌓여 있다 — 그래서 옹벽이 어디서 끝나고 산이 어디서
+        //   시작하는지 눈이 못 가른다. 우리 축대와 같은 계열을 암벽에 섞어 그 모호함을 만든다.
+        if (r < 12) {
+            return grain ? org.bukkit.Material.MOSSY_STONE_BRICKS : org.bukkit.Material.STONE_BRICKS;
         }
-        if (r < 40) {
+        if (r < 20) {
+            return grain ? org.bukkit.Material.MOSSY_COBBLESTONE : org.bukkit.Material.COBBLESTONE;
+        }
+        if (r < 34) {
+            return grain ? org.bukkit.Material.ANDESITE : org.bukkit.Material.STONE;
+        }
+        if (r < 46) {
             return org.bukkit.Material.ANDESITE;
         }
-        if (r < 58) {
-            return org.bukkit.Material.TUFF;
+        if (r < 62) {
+            return grain ? org.bukkit.Material.STONE : org.bukkit.Material.TUFF;
         }
-        if (r < 70) {
+        if (r < 72) {
             return org.bukkit.Material.CALCITE;
         }
-        if (r < 88) {
-            return org.bukkit.Material.DRIPSTONE_BLOCK;   // 웜톤의 몸통
+        if (r < 90) {
+            return grain ? org.bukkit.Material.TUFF : org.bukkit.Material.DRIPSTONE_BLOCK;   // 웜톤 몸통
         }
         if (r < 96) {
             return org.bukkit.Material.SANDSTONE;
         }
-        return org.bukkit.Material.MOSSY_COBBLESTONE;     // 벽면 이끼 낌 (10-① 예비)
+        return org.bukkit.Material.MOSSY_COBBLESTONE;
+    }
+
+    /**
+     * ★★15 <b>암벽 재료 전부</b> — {@link #stone} 이 낼 수 있는 것의 전량 신고.
+     *
+     * <p>이 표가 계약인 까닭: 늑재(자연 암반 흉내)는 <b>패드 밖</b>에 서므로, 유출 눈이
+     * 「건물 재료가 패드를 넘었다」로 오탐한다 (15 실기동의 사암 8건). 산의 것은 스캔 밖이어야
+     * 한다 — 조경 팔레트가 이미 그 문법이다(§12.6 「조경 ∩ 유출 스캔 = ∅」). 여기서도 같은
+     * 불교집합을 세운다. ★{@code stone} 에 재료를 더하면 <b>이 표에도 더한다</b> (눈이 잰다).
+     */
+    public static java.util.Set<org.bukkit.Material> rockMats() {
+        return java.util.EnumSet.of(
+                org.bukkit.Material.MOSS_BLOCK, org.bukkit.Material.STONE,
+                org.bukkit.Material.STONE_BRICKS, org.bukkit.Material.MOSSY_STONE_BRICKS,
+                org.bukkit.Material.COBBLESTONE, org.bukkit.Material.MOSSY_COBBLESTONE,
+                org.bukkit.Material.ANDESITE, org.bukkit.Material.TUFF,
+                org.bukkit.Material.CALCITE, org.bukkit.Material.DRIPSTONE_BLOCK,
+                org.bukkit.Material.SANDSTONE);
     }
 
     /** 셀의 침봉 반경 (0 = 없음 — 밀도·회랑·본산권 반영 · 발치 가드는 targetH 의 몫) — 변주 눈용 */

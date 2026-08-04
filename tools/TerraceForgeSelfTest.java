@@ -389,6 +389,76 @@ public final class TerraceForgeSelfTest {
         }
         check("★10-② 웜톤 — 점적석 섞임 · barrel/light 없음", warm && !bannedStone,
                 warm + "/" + bannedStone);
+        // ══════════ ★★슬라이스 15 — 암벽 표면의 질 (사용자 판정 「산의 퀄리티」) ══════════
+        // ①-㉢ 얼룩 — 같은 재료가 뭉쳐야 한다. 이웃한 두 열이 같은 재료일 확률이 「점점이」
+        //   (한 블록마다 굴림 ≈ 12%) 보다 확실히 높아야 얼룩으로 읽힌다.
+        int same = 0;
+        int pairs = 0;
+        for (int s = 0; s < 600; s++) {
+            int bx = 400 + (s % 25);
+            int by = 40 + (s / 25) % 12;
+            int bz = 120 + (s % 17);
+            if (com.honcheon.mvt.forge.SpireField.stone(bx, by, bz, false)
+                    == com.honcheon.mvt.forge.SpireField.stone(bx + 1, by, bz, false)) {
+                same++;
+            }
+            pairs++;
+        }
+        check("★15-㉢ 얼룩 — 이웃 열이 같은 재료일 확률 ≥30% (점점이 노이즈가 아니다)",
+                same * 100 / pairs >= 30, same * 100 / pairs + "%");
+        // ②-이음매 — 산의 암질에 석전 계열이 섞여야 옹벽과 경계가 흐려진다
+        boolean brickInRock = false;
+        for (int s = 0; s < 900; s++) {
+            Material m = com.honcheon.mvt.forge.SpireField.stone(s * 7, (s % 30) * 4, s * 11, false);
+            if (m == Material.STONE_BRICKS || m == Material.MOSSY_STONE_BRICKS) {
+                brickInRock = true;
+            }
+        }
+        check("★15-② 이음매 흐림 — 암벽에 석전 계열이 섞인다 (축대와 한 계열)", brickInRock, brickInRock);
+        // ★15 유출 오탐의 계약 — 늑재는 「산의 것」이라 스캔 밖이어야 한다 (조경 표와 같은 문법).
+        //   실기동 오탐 8건(사암)의 처방: 암벽 재료 ∩ 유출 스캔 = ∅.
+        java.util.Set<Material> rockMats = com.honcheon.mvt.forge.SpireField.rockMats();
+        java.util.Set<Material> leakTbl = com.honcheon.mvt.forge.HwasanCampusBuilder.leakScanMats();
+        java.util.Set<Material> both = java.util.EnumSet.copyOf(rockMats);
+        both.retainAll(leakTbl);
+        check("★15 암벽 ∩ 유출 스캔 = ∅ (늑재를 건물로 오인하지 않는다)", both.isEmpty(), both);
+        // 그러나 건물 전용 재료는 여전히 잡혀야 한다 — 「빼기」가 스캔을 무력화하면 안 된다
+        check("★15 건물 전용 재료는 스캔에 남는다 (백벽·기와·유리)",
+                leakTbl.contains(Material.WHITE_TERRACOTTA)
+                        && leakTbl.contains(Material.DEEPSLATE_TILES)
+                        && leakTbl.contains(Material.GLASS_PANE), leakTbl.size());
+        // ★15 표면에 심을 수 있는가 — 암벽 재료가 「못 심는 땅」이면 산이 조용히 민둥이 된다
+        //   (실기동: 석전 섞임 뒤 산 표면 ~12%가 식생에서 빠졌다)
+        java.util.Set<Material> plantable = java.util.EnumSet.of(
+                Material.STONE, Material.ANDESITE, Material.TUFF, Material.CALCITE,
+                Material.DRIPSTONE_BLOCK, Material.SANDSTONE, Material.MOSS_BLOCK,
+                Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,
+                Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS,
+                Material.GRASS_BLOCK, Material.DIRT);
+        java.util.Set<Material> barren = java.util.EnumSet.copyOf(rockMats);
+        barren.removeAll(plantable);
+        check("★15 암벽 재료는 전부 심을 수 있다 (민둥 산 방지)", barren.isEmpty(), barren);
+        // ①-㉠㉡ 틈·바위턱 — 한 필드에서 파인 열과 온전한 열이 공존해야 결이 생긴다
+        com.honcheon.mvt.forge.SpireField fld =
+                new com.honcheon.mvt.forge.SpireField(java.util.List.of());
+        int carved = 0;
+        int solid = 0;
+        for (int x = 260; x < 320; x++) {
+            for (int z = -30; z < 30; z++) {
+                int h = fld.targetH(x, z);
+                if (h <= 0) {
+                    continue;
+                }
+                int nb = Math.max(fld.targetH(x + 1, z), fld.targetH(x, z + 1));
+                if (nb - h >= 2) {
+                    carved++;
+                } else if (Math.abs(nb - h) <= 1) {
+                    solid++;
+                }
+            }
+        }
+        check("★15-㉠㉡ 표면의 결 — 파인 틈과 온전한 기둥이 공존한다 (매끈한 계단 반복이 아니다)",
+                carved > 0 && solid > carved, carved + "틈/" + solid + "기둥");
         // ★6.7 형태 계약 (§4-b) — 「바늘 침봉·원뿔 배후봉」 재발 방지
         //   침봉 몸통 유지: 마루 열에서 3칸 비켜도 몸통(≥80%)이다 — 옛 (1−d²)^1.5 는 ~65% 라 실패한다
         int mx = 0, mz = 0, mh = 0;
