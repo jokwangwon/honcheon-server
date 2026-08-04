@@ -571,6 +571,20 @@ public final class TerraceForgeSelfTest {
                     hall[3] >= mcz + 4 + 13 + 4, hall[3] - mcz);
             check("★13b-② 포치 확대 뒤에도 패드 담김 유지",
                     hall[3] <= main2.zS(), hall[3] + " vs " + main2.zS());
+            // ★13c-① 다중 선반 — 높은 면은 여러 단으로 갈린다 (아래 20칸 민짜의 처방)
+            check("★13c-① 면 20 → 선반 ≥2 · 면 36 → ≥3 (높이 비례 · 아래까지 갈린다)",
+                    TerraceForge.shelfCountFor(0, 0, 20) >= 2
+                            && TerraceForge.shelfCountFor(0, 0, 36) >= 3,
+                    TerraceForge.shelfCountFor(0, 0, 20) + "/"
+                            + TerraceForge.shelfCountFor(0, 0, 36));
+            check("★13c-① 낮은 면(12)은 종전대로 0~1 (불규칙 유지)",
+                    TerraceForge.shelfCountFor(0, 0, 12) <= 1,
+                    TerraceForge.shelfCountFor(0, 0, 12));
+            // ★13c-② 큰 지붕 — 치미 솟음·내림마루가 면을 선으로 가른다 (본전 지붕 높이가 자란다)
+            // 상층 지붕 용마루 = 월대 5 + 층 22 + 수렴 13 + 치미 2 = 42 (13c 전 40 → +2 솟음)
+            int mainTopY = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(main2) - main2.y();
+            check("★13c-② 본전 지붕 — 치미가 한 칸 더 솟는다 (총고 42 = 종전 40 +2)",
+                    mainTopY == 42, mainTopY);
         }
 
         // ══════════ 결산 ══════════

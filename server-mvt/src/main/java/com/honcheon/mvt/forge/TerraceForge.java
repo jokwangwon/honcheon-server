@@ -928,14 +928,16 @@ public final class TerraceForge {
     private static void batterColumn(World world, Plan plan, Pad pad, int ex, int ez,
                                      int dx, int dz, Tally tally) {
         boolean rib = ribSegment(ex, ez);
-        int steps = rib ? 7 : 6;   // 늑재는 한 칸 더 돌출 — 바위가 벽을 뚫고 나온 결
+        int faceH0 = pad.y() - groundY(world, ex + dx, ez + dz);
+        // ★13c-① 높은 면은 배터가 더 멀리 나간다 (선반 여러 단이 들어갈 자리 — 발치가 넓어진다)
+        int steps = (rib ? 7 : 6) + (faceH0 >= 32 ? 6 : faceH0 >= 20 ? 3 : 0);
         // ★슬라이스 13a — 중간 선반 (거대 회색 면의 분해): 구간(~9칸)마다 해시가 선반 하나를
         //   정한다 — 그 구간에서는 배터가 k0 칸째에서 폭 2~4 로 <b>평평하게 내밀어</b> 한 면을
         //   2~3단으로 가른다. 선반 위에는 난간·식생이 앉는다 (shelfTop 이 자리를 알려 준다).
-        // ★13b-③ 면 높이에 비례한 선반 — 높은 면(20+)은 선반이 <b>반드시</b> 난다 (가장 큰
-        //   회색 면이 아직 넓다는 판정의 처방). 낮은 면은 종전 확률(55%) 그대로.
-        int faceH = pad.y() - groundY(world, ex + dx, ez + dz);
-        int shelfK = shelfDepth(ex, ez, faceH);    // 0 = 이 구간엔 선반 없음
+        // ★13c-① 다중 선반 — 높은 면은 선반이 <b>여러 개</b> 난다 (면 높이 ÷ 12 · 20+ 최소 2 ·
+        //   32+ 최소 3). 「32+ 는 얕은 자리에」가 위쪽만 갈라 아래 20칸이 민짜로 남던 것의 처방.
+        //   각 선반의 자리·폭은 여전히 불규칙 (구간 해시).
+        int[] shelves = shelfPlan(ex, ez, faceH0, steps);   // 오름차순 k 목록 (빌 수 있다)
         int shelfW = shelfWidth(ex, ez);
         for (int k = 1; k <= steps; k++) {
             int x = ex + dx * k;
@@ -943,12 +945,19 @@ public final class TerraceForge {
             if (onOtherPad(plan, pad, x, z) || laneCovered(plan, x, z)) {
                 return;
             }
-            int top = pad.y() - 3 * k;
-            if (shelfK > 0 && k > shelfK && k <= shelfK + shelfW) {
-                top = pad.y() - 3 * shelfK;        // 선반 — 폭 shelfW 만큼 같은 높이로 편다
-            } else if (shelfK > 0 && k > shelfK + shelfW) {
-                top = pad.y() - 3 * (k - shelfW);  // 선반 아래 — 다시 물매
+            // 선반 누적 — 이 열이 몇 번째 선반 위인가 / 앞선 선반들이 몇 칸을 먹었나
+            int flatten = 0;      // 지금까지 선반이 삼킨 칸수 (물매가 그만큼 늦어진다)
+            int onShelf = -1;     // 이 열이 올라앉은 선반의 k (없으면 -1)
+            for (int s : shelves) {
+                if (k > s && k <= s + shelfW) {
+                    onShelf = s;
+                    break;
+                }
+                if (k > s + shelfW) {
+                    flatten += shelfW;
+                }
             }
+            int top = onShelf >= 0 ? pad.y() - 3 * onShelf : pad.y() - 3 * (k - flatten);
             int g = groundY(world, x, z);
             if (top <= g) {
                 return;   // 산몸에 닿았다 — 여기부터는 산이 벽이다 (의도된 파묻힘)
@@ -959,11 +968,21 @@ public final class TerraceForge {
                                 : faceMaterial(x, y, z, top - y + 2), false);   // ★13b 선반 밑이 젖는다
                 tally.wallFace++;
             }
-            if (shelfK > 0 && k == shelfK + shelfW) {
+            boolean shelfEdge = false;
+            boolean shelfInner = false;
+            for (int s : shelves) {
+                if (k == s + shelfW) {
+                    shelfEdge = true;
+                }
+                if (k == s + 1) {
+                    shelfInner = true;
+                }
+            }
+            if (shelfEdge) {
                 // 선반 바깥 가장자리 — 난간 한 단 (레퍼런스의 축대 위 난간 띠)
                 world.getBlockAt(x, top + 1, z).setType(Material.STONE_BRICK_WALL, false);
                 tally.parapet++;
-            } else if (shelfK > 0 && k == shelfK + 1) {
+            } else if (shelfInner) {
                 // ★13a-2 선반 안쪽 — 중간 스케일 채움: 화단(흙+꽃) · 이끼 · 관목 (결정론 · ~1/3)
                 long sh = mix(SALT_RIB ^ 0x9A0DL, x, 0, z);
                 int r = (int) Math.floorMod(sh, 100);
@@ -988,22 +1007,46 @@ public final class TerraceForge {
      * 0 = 선반 없음 (구간의 ~45%) · 그 밖은 몇 칸째에서 선반이 나는가 (2~4).
      */
     private static int shelfDepth(int x, int z) {
-        return shelfDepth(x, z, 0);
+        int[] p = shelfPlan(x, z, 0, 7);
+        return p.length == 0 ? 0 : p[0];
     }
 
     /**
-     * @param faceH 이 구간 옹벽 면의 높이 — ★13b-③: 20+ 면은 선반이 반드시 나고(0 반환 없음),
-     *              32+ 면은 더 얕은 자리(2~3칸째)에 나 위쪽부터 갈린다. 0 = 모름(종전 확률)
+     * ★13c-① 선반 배치표 — 오름차순 k 목록 (빈 배열 = 선반 없음).
+     * 개수 = 면 높이 ÷ 12 (20+ 최소 2 · 32+ 최소 3 · 낮은 면은 종전 확률 55%로 0~1) ·
+     * 첫 자리 2~4 · 간격 2~3칸(=옹벽 6~9칸 낙차) — 자리·폭은 구간 해시로 불규칙.
+     *
+     * @param faceH 이 구간 옹벽 면의 높이 (0 = 모름 — 종전 단일 선반 문법)
+     * @param steps 배터가 나가는 최대 칸수 (선반은 그 안에 들어야 한다)
      */
-    private static int shelfDepth(int x, int z, int faceH) {
+    private static int[] shelfPlan(int x, int z, int faceH, int steps) {
         long h = mix(SALT_RIB ^ 0x5EA1FL, Math.floorDiv(x, 9), 0, Math.floorDiv(z, 9));
         int r = (int) Math.floorMod(h, 100);
-        int skip = faceH >= 20 ? 0 : 45;          // 높은 면엔 「선반 없음」이 없다
-        if (r < skip) {
-            return 0;
+        int want = faceH / 12;
+        if (faceH >= 32) {
+            want = Math.max(want, 3);
+        } else if (faceH >= 20) {
+            want = Math.max(want, 2);
+        } else {
+            want = r < 45 ? 0 : 1;                 // 낮은 면 — 종전 확률
         }
-        int k = 2 + (int) Math.floorMod(h >> 8, 3);
-        return faceH >= 32 ? Math.min(k, 3) : k;   // 아주 높은 면은 위쪽에서부터 갈린다
+        if (want <= 0) {
+            return new int[0];
+        }
+        int[] out = new int[want];
+        int n = 0;
+        int k = 2 + (int) Math.floorMod(h >> 8, 3);   // 첫 자리 2~4
+        for (int i = 0; i < want && k <= steps - 1; i++) {
+            out[n++] = k;
+            k += 2 + (int) Math.floorMod(h >> (12 + 4 * i), 2);   // 간격 2~3칸 (낙차 6~9)
+        }
+        return n == out.length ? out : java.util.Arrays.copyOf(out, n);
+    }
+
+    /** 그 구간·면 높이에서 선반이 몇 단 나는가 — 눈이 「높이 비례」 계약을 잰다 (13c) */
+    public static int shelfCountFor(int x, int z, int faceH) {
+        int steps = 6 + (faceH >= 32 ? 6 : faceH >= 20 ? 3 : 0);
+        return shelfPlan(x, z, faceH, steps).length;
     }
 
     /** 선반 폭 2~4 (불규칙) */

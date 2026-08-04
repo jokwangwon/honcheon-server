@@ -644,21 +644,26 @@ public final class HwasanCampusBuilder {
     private static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
                                   int hf, int hl, Tally tally) {
         int over = 4;   // 처마 내밈 실측 3~5 (슬라이스 8 재척도)
+        boolean big = Math.max(hf, hl) >= 12;   // ★13c-② 큰 지붕만 — 치미 솟음·내림마루·합각
         for (int i = 0; ; i++) {
             int hF = hf + over - i;
             int hL = hl + over - i;
             int y = cy + i;
             if (hF <= 0 || hL <= 0) {
-                // 용마루 — 긴 축으로 수렴 · 끝은 치미
+                // 용마루 — 긴 축으로 수렴 · ★13c-② 끝은 치미가 한 칸 더 솟는다 (선으로 갈리는
+                //   지붕: 큰 면이 평평히 읽히던 것의 처방 · 레퍼런스 1·4호)
                 boolean alongF = hF > 0;
                 int len = Math.max(alongF ? hF : hL, 0);
                 for (int k = -len; k <= len; k++) {
                     int x = alongF ? cx + k : cx;
                     int z = alongF ? cz : cz + k;
                     put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                    boolean tip = Math.abs(k) == len;
                     put(world, pad, x, y + 1, z,
-                            Math.abs(k) == len ? Material.DEEPSLATE_TILE_WALL
-                                    : Material.DEEPSLATE_TILE_SLAB, tally);
+                            tip ? Material.DEEPSLATE_TILE_WALL : Material.DEEPSLATE_TILE_SLAB, tally);
+                    if (tip && big) {
+                        put(world, pad, x, y + 2, z, Material.DEEPSLATE_TILE_WALL, tally);   // 치미 솟음
+                    }
                 }
                 return;
             }
@@ -675,7 +680,11 @@ public final class HwasanCampusBuilder {
                             put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
                         }
                     } else if (eF && eL) {
+                        // ★13c-② 내림마루 — 모서리에서 처마로 내려오는 마루 선 (면을 가른다)
                         put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                        if (big) {
+                            put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
+                        }
                     } else if (eL) {
                         putRoofStair(world, pad, x, y, z,
                                 l > 0 ? org.bukkit.block.BlockFace.NORTH
@@ -686,6 +695,21 @@ public final class HwasanCampusBuilder {
                                         : org.bukkit.block.BlockFace.EAST, tally);
                     } else {
                         put(world, pad, x, y, z, roofCube(x, y, z), tally);
+                    }
+                }
+            }
+            // ★13c-② 합각(측면 삼각 벽) — 짧은 축 끝면을 백벽으로 막아 지붕 옆이 「면」이 된다
+            //   (레퍼런스 1·4호: 팔작의 측면 삼각). 큰 지붕만·용마루 쪽 두 켜.
+            if (big && i >= 1 && hF > 0 && hL > 0 && hF != hL) {
+                boolean gableAlongF = hF < hL;          // 짧은 축이 합각면
+                int gh = gableAlongF ? hF : hL;
+                for (int k = -gh; k <= gh; k++) {
+                    for (int s : new int[]{-1, 1}) {
+                        int gx = gableAlongF ? cx + k : cx + s * (hF);
+                        int gz = gableAlongF ? cz + s * (hL) : cz + k;
+                        put(world, pad, gx, y - 1, gz,
+                                Math.abs(k) == gh ? Material.DARK_OAK_PLANKS
+                                        : Material.WHITE_TERRACOTTA, tally);
                     }
                 }
             }
