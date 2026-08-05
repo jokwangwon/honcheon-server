@@ -600,6 +600,43 @@ public final class TerraceForgeSelfTest {
             }
         }
         check("★주상절리 ㉠ 평지는 안 쪼갠다 (물매 < 문턱이면 그대로)", flatTouched == 0, flatTouched);
+        // ══════════ ★★대(臺) 옆모습 — 실루엣의 눈 (사용자 확정 2026-08-06) ══════════
+        //   레퍼런스 좌상단 절벽 실측: 벽면이 보이는 높이 전부에 걸쳐 수직이다. 원뿔이 아니다.
+        //   ★이 눈이 지키는 것은 상수 셋이 아니라 <b>모양의 성질</b>이다 — 마루가 평평한가,
+        //   높이의 대부분이 좁은 띠에서 떨어지는가, 발치에 너덜이 남는가.
+        {
+            double top = com.honcheon.mvt.forge.SpireField.mesaProfile(0.0);
+            double rim = com.honcheon.mvt.forge.SpireField.mesaProfile(
+                    com.honcheon.mvt.forge.SpireField.MESA_TOP);
+            check("★대 ㉠ 마루가 평평하다 (중심과 마루 끝이 같은 높이)",
+                    Math.abs(top - rim) < 1e-9 && top == 1.0, top + "/" + rim);
+            // ㉡ 벽 — 높이의 대부분이 마루 끝~애추 시작 사이에서 떨어진다
+            double foot = com.honcheon.mvt.forge.SpireField.mesaProfile(
+                    com.honcheon.mvt.forge.SpireField.MESA_FOOT);
+            double inWall = rim - foot;
+            check("★대 ㉡ 벽이 급하다 (높이의 ≥80%가 벽 구간에서 떨어진다)",
+                    inWall >= 0.80, String.format("%.3f", inWall));
+            // ㉢ 애추 — 발치가 절벽으로 0 이 되지 않는다 (너덜이 남는다)
+            check("★대 ㉢ 발치에 애추가 남는다 (벽이 땅까지 곧장 안 떨어진다)",
+                    foot > 0.05 && com.honcheon.mvt.forge.SpireField.mesaProfile(1.0) <= 1e-9,
+                    String.format("%.3f", foot));
+            // ㉣ 단조 — 안쪽이 늘 더 높다 (봉우리에 계단참이 생기면 대가 아니다)
+            boolean mono = true;
+            double prev = 2.0;
+            for (int i = 0; i <= 200; i++) {
+                double f = com.honcheon.mvt.forge.SpireField.mesaProfile(i / 200.0);
+                if (f > prev + 1e-12) {
+                    mono = false;
+                }
+                prev = f;
+            }
+            check("★대 ㉣ 안쪽이 늘 더 높다 (단조 감소)", mono, mono);
+            // ㉤ ★원뿔 금지 — 옛 (1−de)^0.55 는 마루 끝에서 이미 33% 를 잃는다.
+            //    대는 거기서 <b>하나도</b> 안 잃는다. 이 한 줄이 「대인가 원뿔인가」를 가른다.
+            double coneAtRim = Math.pow(1.0 - com.honcheon.mvt.forge.SpireField.MESA_TOP, 0.55);
+            check("★대 ㉤ 원뿔이 아니다 (마루 끝에서 옛 원뿔보다 확실히 높다)",
+                    rim - coneAtRim > 0.25, String.format("대 %.3f vs 원뿔 %.3f", rim, coneAtRim));
+        }
         int split = 0;
         int rows = 0;
         for (int s = 0; s < 600; s++) {
@@ -757,10 +794,18 @@ public final class TerraceForgeSelfTest {
         check("★15-㉠㉡ 표면의 결 — 파인 틈과 온전한 기둥이 공존한다 (매끈한 계단 반복이 아니다)",
                 carved > 0 && solid > carved, carved + "틈/" + solid + "기둥");
         // ★6.7 형태 계약 (§4-b) — 「바늘 침봉·원뿔 배후봉」 재발 방지
-        //   침봉 몸통 유지: 마루 열에서 3칸 비켜도 몸통(≥80%)이다 — 옛 (1−d²)^1.5 는 ~65% 라 실패한다
+        //
+        // ★2026-08-06 <b>자를 옮겼다 (문턱은 그대로)</b>. 대(臺)를 세우자 이 눈 둘이 실패했는데,
+        //   실물을 재 보니 <b>모양은 계약대로였고 자가 마루 위에 있었다</b>:
+        //     · 「최고점」을 상자 300..380 에서 찾았는데 진짜 꼭대기는 그 <b>서쪽</b>이었다
+        //       (서로 갈수록 47→57→61). 상자 모서리를 봉우리로 착각해 재고 있었다.
+        //     · 배후봉을 ±20 에서 쟀는데 마루가 ±24 까지 평평하다 — 장축 226 vs 급벽 228 로
+        //       구분이 안 됐다. ±30 에서는 장축 227 vs 급벽 70 으로 <b>또렷하다</b>.
+        //   그래서 문턱을 낮추는 대신 ㉠꼭대기를 넓게 찾고 ㉡<b>마루 끝을 눈이 스스로 찾아</b>
+        //   그 밖에서 잰다. 상수가 바뀌어도 안 썩는 자다.
         int mx = 0, mz = 0, mh = 0;
-        for (int gx = 300; gx <= 380; gx++) {
-            for (int gz = 0; gz <= 80; gz++) {
+        for (int gx = 200; gx <= 460; gx++) {
+            for (int gz = -60; gz <= 140; gz++) {
                 int hh = bare.targetH(gx, gz);
                 if (hh > mh) {
                     mh = hh;
@@ -769,16 +814,39 @@ public final class TerraceForgeSelfTest {
                 }
             }
         }
-        check("산군: 침봉 몸통 유지 — 마루 곁 3칸이 마루의 ≥80% (§4-b 실측 78% 몸통)",
-                mh > 0 && bare.targetH(mx + 3, mz) >= (int) (mh * 0.80),
-                mh + " → " + bare.targetH(mx + 3, mz));
-        //   배후봉 병풍 비대칭: Pm(축 동서) 남(+z) 급벽이 북 완사보다 낮다 · 능선 방향은 횡보다 높다
+        int bodyMin = Integer.MAX_VALUE;
+        for (int[] dir : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            int body = 0;
+            for (int k = 1; k <= 40; k++) {
+                if (bare.targetH(mx + dir[0] * k, mz + dir[1] * k) >= mh * 0.80) {
+                    body = k;
+                } else {
+                    break;
+                }
+            }
+            bodyMin = Math.min(bodyMin, body);
+        }
+        check("산군: 봉우리에 몸통이 있다 — 사방 ≥3칸이 마루의 80% (바늘 금지)",
+                mh > 0 && bodyMin >= 3, "h" + mh + " 몸통 " + bodyMin + "칸");
+        //   배후봉 병풍 비대칭 — <b>마루 밖에서</b> 잰다. 마루 끝은 눈이 찾는다.
+        int pcx = -24, pcz = -54;
+        int pc = bare.targetH(pcx, pcz);
+        int edge = 0;
+        for (int k = 1; k <= 60; k++) {
+            if (bare.targetH(pcx, pcz + k) < pc * 0.95) {
+                edge = k;
+                break;
+            }
+        }
+        int probe = edge + 6;                       // 마루 끝을 막 벗어난 자리
+        check("산군: 배후봉 마루가 실재한다 (평평한 대가 있다 — 원뿔이면 곧장 떨어진다)",
+                edge >= 8, "마루 끝 " + edge + "칸");
         check("산군: 배후봉 Pm 비대칭 (남 급벽 < 북 완사 — §4-b 0.80/1.15)",
-                bare.targetH(-24, -54 + 30) < bare.targetH(-24, -54 - 30),
-                bare.targetH(-24, -24) + " vs " + bare.targetH(-24, -84));
-        check("산군: 배후봉 Pm 능선꼴 (장축 20칸 > 급벽횡 20칸)",
-                bare.targetH(-24 + 20, -54) > bare.targetH(-24, -54 + 20),
-                bare.targetH(-4, -54) + " vs " + bare.targetH(-24, -34));
+                bare.targetH(pcx, pcz + probe) < bare.targetH(pcx, pcz - probe),
+                bare.targetH(pcx, pcz + probe) + " vs " + bare.targetH(pcx, pcz - probe));
+        check("산군: 배후봉 Pm 능선꼴 (장축 > 급벽횡 — 마루 밖에서)",
+                bare.targetH(pcx + probe, pcz) > bare.targetH(pcx, pcz + probe),
+                bare.targetH(pcx + probe, pcz) + " vs " + bare.targetH(pcx, pcz + probe));
         // ★6.5 — 기준면 프로브: 필드 밖 + 무침범 (6.0 병: 침봉 마루에서 기준을 재 캠퍼스가 54칸 떴다)
         check("산군: 프로브가 필드 밖 (PROBE_X > FIELD_R)",
                 com.honcheon.mvt.forge.SpireField.PROBE_X > com.honcheon.mvt.forge.SpireField.FIELD_R,

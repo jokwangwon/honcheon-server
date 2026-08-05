@@ -370,6 +370,48 @@ public final class SpireField {
      * 마루 = 장축 선분(길이 len) · 선분 중심에서 정확히 topH (계약) · 밖으로 요철 파임 0~5 ·
      * 급벽/완사 비대칭 (0.80/1.15) · 세로 홈(방위 로브 7·11 가닥) · 하부 사면 4칸 턱 양자화.
      */
+    // ═══════════════════════════════════════════════════════════════════
+    // ★★대(臺) 옆모습 — 원뿔을 버리고 <b>평평한 마루 + 수직 벽 + 애추</b>로 간다.
+    //
+    //   레퍼런스 1호 좌상단 절벽 실측 (2026-08-05): 벽면이 <b>보이는 높이 전부에 걸쳐 수직</b>이다.
+    //   비탈이 아니라 <b>담벼락</b>이고, 턱마다 소나무가 붙는다. 마루는 풀이 덮인 평평한 대다.
+    //
+    //   ★전에는 {@code crest·(1−de)^0.55} 였다 — 중심에서 가장자리까지 <b>고르게</b> 떨어지는
+    //   볼록 원뿔이다. 표면에 주상절리를 심어도 실루엣이 원뿔이면 원뿔로 읽힌다
+    //   (사용자 판정: 「기둥은 레퍼런스 그대로인데 전체 윤곽이 원뿔이다」).
+    //
+    //   세 토막으로 나눈다. 어디서 꺾이는지가 곧 「대인가 원뿔인가」다:
+    //     ㉠ de ≤ {@value #MESA_TOP}      마루 — 높이 그대로 (평평한 대)
+    //     ㉡ ~ {@value #MESA_FOOT}        벽  — 높이의 85%가 여기서 떨어진다
+    //     ㉢ ~ 1.0                        애추 — 발치의 너덜 (아래로 완만)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 마루의 끝 — 이 안은 평평하다 (반경 비) */
+    public static final double MESA_TOP = 0.55;
+
+    /** 벽의 끝 = 애추의 시작 (반경 비) */
+    public static final double MESA_FOOT = 0.78;
+
+    /** 벽이 끝나는 높이 비 — 여기부터 아래는 애추다 */
+    public static final double MESA_TALUS = 0.15;
+
+    /**
+     * 대(臺)의 옆모습 — 반경 비 {@code de}∈[0,1] 에서의 높이 비 [0,1].
+     *
+     * <p>★조성과 눈의 공동 정본. 순수 함수라 눈이 직접 부른다.
+     */
+    public static double mesaProfile(double de) {
+        if (de <= MESA_TOP) {
+            return 1.0;                                  // ㉠ 마루 — 평평한 대
+        }
+        if (de <= MESA_FOOT) {                           // ㉡ 벽 — 위가 더 급하다
+            double t = (de - MESA_TOP) / (MESA_FOOT - MESA_TOP);
+            return 1.0 - (1.0 - MESA_TALUS) * Math.pow(t, 0.65);
+        }
+        double t = (de - MESA_FOOT) / (1.0 - MESA_FOOT); // ㉢ 애추 — 발치로 갈수록 완만
+        return MESA_TALUS * Math.pow(1.0 - t, 1.6);
+    }
+
     private static int ridgeH(Ridge c, int x, int z) {
         double rad = Math.toRadians(c.axisDeg());
         double ax = Math.sin(rad), az = Math.cos(rad);          // 남축(+z) 기준 시계
@@ -396,12 +438,15 @@ public final class SpireField {
         }
         // 마루 요철 — 능선을 따라 3칸 단위 파임 0~7 (★11-②: 탁상 꼭대기 손질 — 원경에서도
         //   마루가 평평히 읽히지 않게 진폭 상향). ★선분 중심 ±1 은 파임 0 (topH 계약)
+        // ★마루 파임을 0~7 에서 <b>0~3</b> 으로 줄였다. 그 진폭은 「원경에서 마루가 평평히
+        //   읽히지 않게」 올린 것이었는데, 레퍼런스의 마루는 <b>평평한 게 맞다</b> (풀 덮인 대).
+        //   대를 세우기로 한 이상 그 처방은 목표와 싸운다.
         double crest = c.topH();
         if (Math.abs(u) > 1.0) {
             long ph = mix(SALT ^ 0xB1DF, c.cx(), (int) Math.floor(u / 3.0), c.cz());
-            crest -= Math.floorMod(ph, 8);
+            crest -= Math.floorMod(ph, 4);
         }
-        int hh = (int) (crest * Math.pow(1.0 - de, 0.55));
+        int hh = (int) (crest * mesaProfile(de));
         if (steep && hh < crest * 0.85) {
             // ★12-② 급벽면 계단짐 — 턱 간격 4~7 · 깊이 1~2 (배후봉 하부 문법의 강화판 ·
             //   마루·계약은 무변경 — v>2 밖·상부 15% 는 손대지 않는다)
