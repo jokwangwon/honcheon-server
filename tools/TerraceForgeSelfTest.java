@@ -583,6 +583,52 @@ public final class TerraceForgeSelfTest {
             }
         }
         check("★팔레트 — 암벽 몸은 한 종 (밝기 결은 면 방향이 낸다)", rockSeen.size() == 1, rockSeen);
+        // ══════════ ★★주상절리 — 형태의 눈 (사용자 확정 2026-08-05) ══════════
+        //   레퍼런스 절벽 실측: 기둥 폭 1칸 · 이웃 마루 높이차 2~6 · 둘셋이 무리 짓는다.
+        //   ★이 눈이 지키는 것은 「오늘의 진폭」이 아니라 <b>세 성질</b>이다:
+        //     ㉠ 평지는 안 쪼갠다 (물매 없으면 손대지 않는다)
+        //     ㉡ 급한 면은 열마다 갈린다 (한 줄만 파는 게 아니다 — 옛 faceRelief 의 병)
+        //     ㉢ 무리 짓는다 (전부 제각각이면 자갈밭이지 절벽이 아니다)
+        int flatTouched = 0;
+        for (int s = 0; s < 2000; s++) {
+            int px = s * 13 % 977;
+            int pz = s * 29 % 883;
+            for (int dp = 0; dp < com.honcheon.mvt.forge.SpireField.JOINT_MIN_DROP; dp++) {
+                if (com.honcheon.mvt.forge.SpireField.jointed(60, dp, px, pz) != 60) {
+                    flatTouched++;
+                }
+            }
+        }
+        check("★주상절리 ㉠ 평지는 안 쪼갠다 (물매 < 문턱이면 그대로)", flatTouched == 0, flatTouched);
+        int split = 0;
+        int rows = 0;
+        for (int s = 0; s < 600; s++) {
+            int px = 400 + s % 37;
+            int pz = 900 + s / 37;
+            if (com.honcheon.mvt.forge.SpireField.jointed(80, 9, px, pz)
+                    != com.honcheon.mvt.forge.SpireField.jointed(80, 9, px + 1, pz)) {
+                split++;
+            }
+            rows++;
+        }
+        check("★주상절리 ㉡ 급한 면은 열마다 갈린다 (이웃과 다른 높이 ≥45%)",
+                split * 100 / rows >= 45, split * 100 / rows + "%");
+        // ㉢ 무리 — 이웃이 <b>같은</b> 높이인 일도 흔해야 한다 (전부 다르면 자갈밭이다)
+        check("★주상절리 ㉢ 무리 짓는다 (이웃과 같은 높이도 ≥20%)",
+                (rows - split) * 100 / rows >= 20, (rows - split) * 100 / rows + "%");
+        // ㉣ 파임의 깊이 — 목표의 높이차 2~6 을 담되 산에 구멍은 안 뚫는다
+        int deepest = 0;
+        long dsum = 0;
+        int dn = 0;
+        for (int s = 0; s < 3000; s++) {
+            int cut = 80 - com.honcheon.mvt.forge.SpireField.jointed(80, 9, s * 7 % 991, s * 11 % 887);
+            deepest = Math.max(deepest, cut);
+            dsum += cut;
+            dn++;
+        }
+        check("★주상절리 ㉣ 파임 평균이 실측 폭(2~6칸) 안", dsum / dn >= 2 && dsum / dn <= 8, dsum / dn);
+        check("★주상절리 ㉣ 가장 깊은 파임도 상한 안 (산에 구멍이 안 뚫린다)",
+                deepest <= com.honcheon.mvt.forge.SpireField.JOINT_MAX + 2, deepest);
         check("★팔레트 — 암벽 마루는 두 종 이하 (돌·이끼)", capSeen.size() <= 2, capSeen);
         check("★10-② 금지 재료 없음 (barrel·light)", !bannedStone, bannedStone);
         // 석축·포장도 같은 자로 잰다 — 둘 다 순수 함수라 눈이 직접 부른다
@@ -980,7 +1026,7 @@ public final class TerraceForgeSelfTest {
             int natSamples = 0;
             long natSum = 0;
             for (int t = 0; t < 400; t++) {
-                int h = com.honcheon.mvt.forge.SpireField.faceRelief(100, 3000 + t, 3000);
+                int h = com.honcheon.mvt.forge.SpireField.jointed(100, 8, 3000 + t, 3000);
                 natSum += Math.abs(h - 100);
                 natSamples++;
             }
@@ -998,11 +1044,17 @@ public final class TerraceForgeSelfTest {
             //   ㉠아래: 매끈하면(전부 3칸 고정) 결이 없다 = 슬라이스 15 판정의 그 병.
             //   ㉡위:   너무 흔들리면 축대가 아니라 <b>무너진 폐허</b>다 — 사람이 쌓은 것으로
             //           안 읽힌다. 열마다 평균 2칸 넘게 벗어나면 실패.
-            check("★16-④ 축대 면에 결이 실재한다 (매끈하면 실패 — 15 판정의 병)",
-                    batter >= natural * 0.5,
-                    String.format("축대 %.2f vs 산면 %.2f", batter, natural));
+            // ★2026-08-05 — 이 눈의 <b>전제가 뒤집혔다</b>. 전에는 「축대 ≥ 산면 × 0.5」를
+            //   요구했다. 산면이 거의 매끈하던 시절엔 그게 「축대가 매끈하다」를 잡는 자였다.
+            //   주상절리를 심자 산면이 5.22 로 거칠어졌고, 같은 식이 이제는 <b>축대더러 절벽만큼
+            //   깨지라고</b> 요구한다 — 레퍼런스는 정반대다. 다듬은 축대와 깨진 절벽이 나란히 선다.
+            //   ★문턱을 낮춰 통과시키지 않는다. 재는 <b>관계</b>를 실측이 말하는 대로 다시 세운다.
+            check("★16-④ 축대 면에 결이 실재한다 (전부 3칸 고정이면 0 — 15 판정의 병)",
+                    batter >= 0.5, String.format("%.2f", batter));
             check("★16-④ 그러나 무너지지는 않았다 (열 평균 2칸 이내 — 폐허 방지)",
                     batter <= 2.0, String.format("%.3f", batter));
+            check("★16-④ 산면이 축대보다 거칠다 (다듬은 것과 깨진 것이 나란히 선다)",
+                    natural > batter, String.format("산면 %.2f > 축대 %.2f", natural, batter));
 
             // ★16-㉡㉢ 구간마다 다르게 나간다 — 돌출·기준·홈이 공존해야 발치 선이 반듯하지 않다
             java.util.Set<Integer> reaches = new java.util.HashSet<>();

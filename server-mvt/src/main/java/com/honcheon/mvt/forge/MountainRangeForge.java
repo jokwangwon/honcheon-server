@@ -92,13 +92,30 @@ public final class MountainRangeForge {
         preload(world, minX, minZ, maxX, maxZ);
         int base = spec.baseY();
         int ceiling = base + spec.lift() + CLEAR_ABOVE;
+        // ★주상절리를 쪼개려면 이웃 높이를 알아야 한다. 열마다 딱 한 번만 재 둔다 —
+        //   이웃마다 surfaceY 를 다시 부르면 다섯 곱이 되어 조성이 몇 배로 길어진다.
+        int w = maxX - minX + 3;
+        int d = maxZ - minZ + 3;
+        int[][] bare = new int[w][d];
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < d; j++) {
+                bare[i][j] = field.surfaceY(minX - 1 + i, minZ - 1 + j);
+            }
+        }
         for (int x = minX; x <= maxX; x++) {
             for (int z = minZ; z <= maxZ; z++) {
                 RangeZone zone = field.zoneAt(x, z);
                 if (zone == RangeZone.OUTSIDE) {
                     continue;   // 회랑·야생 — 노선 조성기의 몫
                 }
-                int target = field.surfaceY(x, z);
+                // ★주상절리 — 급한 면을 1칸 폭 기둥으로 쪼갠다 ({@link SpireField#jointed} 와
+                //   같은 함수 · 산군과 본산의 결이 갈라지면 이음매가 드러난다).
+                int i = x - minX + 1;
+                int j = z - minZ + 1;
+                int h0 = bare[i][j];
+                int low = Math.min(Math.min(bare[i - 1][j], bare[i + 1][j]),
+                        Math.min(bare[i][j - 1], bare[i][j + 1]));
+                int target = base + SpireField.jointed(h0 - base, h0 - low, x, z);
                 clearAbove(world, x, z, target, ceiling);
                 if (target > base) {
                     fillColumn(world, field, x, z, base, target, zone);

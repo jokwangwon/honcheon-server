@@ -1952,9 +1952,24 @@ public final class MvtCommand implements CommandExecutor {
             int x0 = -SpireField.FIELD_R + (tile % tilesX) * SANSE_TILE;
             int z0 = -SpireField.FIELD_R + (tile / tilesX) * SANSE_TILE;
             if (!vegPhase) {
+                // ★주상절리 — 이웃 높이를 알아야 쪼갤 수 있다. 타일 + 테두리 한 칸을 한 번에
+                //   재 두고(열마다 딱 한 번) 그 배열로 물매를 구한다. targetH 를 이웃마다 다시
+                //   부르면 다섯 곱이 되어 조성이 몇 배로 길어진다.
+                int n = SANSE_TILE + 2;
+                int[][] bare = new int[n][n];
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < n; j++) {
+                        bare[i][j] = field.targetH(x0 - 1 + i, z0 - 1 + j);
+                    }
+                }
                 for (int x = x0; x < x0 + SANSE_TILE; x++) {
                     for (int z = z0; z < z0 + SANSE_TILE; z++) {
-                        int h = field.targetH(x, z);
+                        int i = x - x0 + 1;
+                        int j = z - z0 + 1;
+                        int h0 = bare[i][j];
+                        int low = Math.min(Math.min(bare[i - 1][j], bare[i + 1][j]),
+                                Math.min(bare[i][j - 1], bare[i][j + 1]));
+                        int h = SpireField.jointed(h0, h0 - low, x, z);
                         if (h < 4) {
                             continue;   // 4 미만은 소음
                         }
