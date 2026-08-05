@@ -579,7 +579,7 @@ public final class TerraceForgeSelfTest {
         // 그러나 건물 전용 재료는 여전히 잡혀야 한다 — 「빼기」가 스캔을 무력화하면 안 된다
         check("★15 건물 전용 재료는 스캔에 남는다 (백벽·기와·유리)",
                 leakTbl.contains(Material.WHITE_TERRACOTTA)
-                        && leakTbl.contains(Material.DEEPSLATE_TILES)
+                        && leakTbl.contains(Material.COBBLED_DEEPSLATE)   // ★D-26 회색 기와
                         && leakTbl.contains(Material.GLASS_PANE), leakTbl.size());
         // ★15 표면에 심을 수 있는가 — 암벽 재료가 「못 심는 땅」이면 산이 조용히 민둥이 된다
         //   (실기동: 석전 섞임 뒤 산 표면 ~12%가 식생에서 빠졌다)
@@ -726,9 +726,12 @@ public final class TerraceForgeSelfTest {
             int jongParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jong).size();
             check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
                     plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
-            check("★9 재료 — 기와 혼합(벽돌·균열)과 암반 늑재(자갈돌)가 팔레트에",
-                    bPal.contains(Material.DEEPSLATE_BRICKS)
-                            && bPal.contains(Material.CRACKED_DEEPSLATE_TILES)
+            check("★D-25·26 재료 — 단청(금빛·청록·적목)과 회색 기와 결이 팔레트에",
+                    bPal.contains(Material.HONEYCOMB_BLOCK)
+                            && bPal.contains(Material.WAXED_OXIDIZED_CUT_COPPER)
+                            && bPal.contains(Material.STRIPPED_MANGROVE_WOOD)
+                            && bPal.contains(Material.DEEPSLATE_BRICKS)
+                            && bPal.contains(Material.GRAY_TERRACOTTA)
                             && palette.contains(Material.COBBLESTONE), "9 재료");
             // ★9b — 단구 표고 분할: 같은 통단 안 칸이 ±4 로 갈렸다 (원경 스카이라인 요철)
             check("★9b 단구 — B2 표고가 갈렸다 (연무장하 62 > 외원 58 > 생활하 54 · 척도 되돌림)",
@@ -807,10 +810,11 @@ public final class TerraceForgeSelfTest {
                     TerraceForge.shelfCountFor(0, 0, 12) <= 1,
                     TerraceForge.shelfCountFor(0, 0, 12));
             // ★13c-② 큰 지붕 — 치미 솟음·내림마루가 면을 선으로 가른다 (본전 지붕 높이가 자란다)
-            // ★척도 되돌림 — 월대 3 + 층 12 + 수렴 + 치미 = 23 (치미 솟음 문법은 그대로)
+            // ★D-26 처마 내밈 2→3 — 내밈이 한 칸 커지면 수렴이 한 켜 늘어 지붕이 한 칸 자란다
+            //   (월대 3 + 층 12 + 수렴 + 치미 = 24). 앵커는 실측을 따라간다.
             int mainTopY = com.honcheon.mvt.forge.HwasanCampusBuilder.structureTopY(main2) - main2.y();
-            check("★13c-② 본전 지붕 — 치미가 한 칸 더 솟는다 (총고 23 · 척도 되돌림)",
-                    mainTopY == 23, mainTopY);
+            check("★13c-② 본전 지붕 — 치미가 한 칸 더 솟는다 (총고 24 · D-26 내밈 3)",
+                    mainTopY == 24, mainTopY);
         }
 
         // ══════════ ⑪ 슬라이스 14 — 대결에서 배운 기법의 이식 ══════════
@@ -895,7 +899,37 @@ public final class TerraceForgeSelfTest {
                     reaches.size() >= 3, reaches);
 
             // ★16 결정론 — 두 번 물어도 같은 답 (난수 0)
-            check("★16 결정론 — 같은 자리는 같은 결",
+            // ── ★D-25 단청 띠 — 이번 회차의 본체 (목표 1호의 화려함은 거의 전부 여기서 온다) ──
+        {
+            int gold = 0;
+            int red = 0;
+            int teal = 0;
+            for (int f = -20; f <= 20; f++) {
+                for (int l = -3; l <= 3; l++) {
+                    Material m = com.honcheon.mvt.forge.HwasanCampusBuilder.dancheong(f, l);
+                    if (m == Material.HONEYCOMB_BLOCK) {
+                        gold++;
+                    } else if (m == Material.STRIPPED_MANGROVE_WOOD) {
+                        red++;
+                    } else if (m == Material.WAXED_OXIDIZED_CUT_COPPER) {
+                        teal++;
+                    }
+                }
+            }
+            int tot = gold + red + teal;
+            check("★D-25 단청 — 금빛이 바탕 (>55%)", gold * 100 / tot > 55, gold * 100 / tot + "%");
+            check("★D-25 단청 — 붉은 주두가 끊는다 (15~35%)",
+                    red * 100 / tot >= 15 && red * 100 / tot <= 35, red * 100 / tot + "%");
+            check("★D-25 단청 — 청록은 드물게 (0<x<15%)",
+                    teal > 0 && teal * 100 / tot < 15, teal * 100 / tot + "%");
+            java.util.Set<Material> pal2 = com.honcheon.mvt.forge.HwasanCampusBuilder.palette();
+            check("★D-25 단청 — 세 색이 팔레트에 신고됐다",
+                    pal2.contains(Material.HONEYCOMB_BLOCK)
+                            && pal2.contains(Material.STRIPPED_MANGROVE_WOOD)
+                            && pal2.contains(Material.WAXED_OXIDIZED_CUT_COPPER), "");
+        }
+
+        check("★16 결정론 — 같은 자리는 같은 결",
                     TerraceForge.batterRoughness(120, 77, -31, 1, 0, 10)
                             == TerraceForge.batterRoughness(120, 77, -31, 1, 0, 10),
                     "동일");

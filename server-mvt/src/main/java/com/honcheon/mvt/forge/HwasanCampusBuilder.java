@@ -434,11 +434,11 @@ public final class HwasanCampusBuilder {
         }
         for (int l = -half - 1; l <= half + 1; l++) {
             put(world, pad, cx + l, y + 7, cz, Material.POLISHED_ANDESITE, tally);
-            put(world, pad, cx + l, y + 8, cz, Material.DEEPSLATE_TILES, tally);
+            put(world, pad, cx + l, y + 8, cz, Material.COBBLED_DEEPSLATE, tally);
         }
         for (int l = -half - 2; l <= half + 2; l++) {
-            put(world, pad, cx + l, y + 8, cz - 1, Material.DEEPSLATE_TILE_SLAB, tally);
-            put(world, pad, cx + l, y + 8, cz + 1, Material.DEEPSLATE_TILE_SLAB, tally);
+            put(world, pad, cx + l, y + 8, cz - 1, Material.COBBLED_DEEPSLATE_SLAB, tally);
+            put(world, pad, cx + l, y + 8, cz + 1, Material.COBBLED_DEEPSLATE_SLAB, tally);
         }
         // 현판 자리 — 빈 판 (글자는 사용자 몫)
         put(world, pad, cx, y + 6, cz, Material.DARK_OAK_PLANKS, tally);
@@ -497,7 +497,7 @@ public final class HwasanCampusBuilder {
         for (int f = -5; f <= 5; f++) {
             for (int d = 3; d <= 4; d++) {
                 put(world, pad, gx + f, y + 6, gz + d,
-                        d == 4 || Math.abs(f) == 5 ? Material.DEEPSLATE_TILE_SLAB
+                        d == 4 || Math.abs(f) == 5 ? Material.COBBLED_DEEPSLATE_SLAB
                                 : roofCube(gx + f, y + 6, gz + d), tally);
             }
         }
@@ -601,7 +601,7 @@ public final class HwasanCampusBuilder {
             for (int dy = 1; dy <= 3; dy++) {
                 put(world, pad, gx, y + dy, z, Material.STONE_BRICKS, tally);
             }
-            put(world, pad, gx, y + 4, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            put(world, pad, gx, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
         }
     }
 
@@ -675,7 +675,15 @@ public final class HwasanCampusBuilder {
      */
     private static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
                                   int hf, int hl, Tally tally) {
-        int over = 2;   // 처마 내밈 (★척도 되돌림)
+        // 처마 내밈 — ★D-26 (목표 실측 3~5 · 그늘이 깊어져 단청 띠가 산다).
+        // ★패드에 맞춰 스스로 죈다: 내밈이 커지면 발자국이 커지고 좁은 패드(측문 등)에서는
+        //   「건물 블록이 패드 밖」으로 터진다. 미리 줄여 두면 앞으로 어떤 치수 변경에도 안전하다
+        //   (계단·통로가 우선이라 패드를 넓히는 쪽은 안 쓴다).
+        int over = 3;
+        while (over > 2 && !(pad.contains(cx - hf - over, cz - hl - over)
+                && pad.contains(cx + hf + over, cz + hl + over))) {
+            over--;
+        }
         boolean big = Math.max(hf, hl) >= 12;   // ★13c-② 큰 지붕만 — 치미 솟음·내림마루·합각
         for (int i = 0; ; i++) {
             int hF = hf + over - i;
@@ -689,12 +697,12 @@ public final class HwasanCampusBuilder {
                 for (int k = -len; k <= len; k++) {
                     int x = alongF ? cx + k : cx;
                     int z = alongF ? cz : cz + k;
-                    put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                    put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE, tally);
                     boolean tip = Math.abs(k) == len;
                     put(world, pad, x, y + 1, z,
-                            tip ? Material.DEEPSLATE_TILE_WALL : Material.DEEPSLATE_TILE_SLAB, tally);
+                            tip ? Material.COBBLED_DEEPSLATE_WALL : Material.COBBLED_DEEPSLATE_SLAB, tally);
                     if (tip && big) {
-                        put(world, pad, x, y + 2, z, Material.DEEPSLATE_TILE_WALL, tally);   // 치미 솟음
+                        put(world, pad, x, y + 2, z, Material.COBBLED_DEEPSLATE_WALL, tally);   // 치미 솟음
                     }
                 }
                 return;
@@ -706,13 +714,13 @@ public final class HwasanCampusBuilder {
                     boolean eF = Math.abs(f) == hF;
                     boolean eL = Math.abs(l) == hL;
                     if (i == 0) {                          // 처마 끝 — 반블록 (귀솟음은 아래에서 한 벌)
-                        put(world, pad, x, y, z, eF || eL ? Material.DEEPSLATE_TILE_SLAB
+                        put(world, pad, x, y, z, eF || eL ? Material.COBBLED_DEEPSLATE_SLAB
                                 : roofCube(x, y, z), tally);
                     } else if (eF && eL) {
                         // ★13c-② 내림마루 — 모서리에서 처마로 내려오는 마루 선 (면을 가른다)
-                        put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
+                        put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE, tally);
                         if (big) {
-                            put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);
+                            put(world, pad, x, y + 1, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
                         }
                     } else if (eL) {
                         putRoofStair(world, pad, x, y, z,
@@ -769,15 +777,15 @@ public final class HwasanCampusBuilder {
                         continue;
                     }
                     if (d == 0) {
-                        put(world, pad, gx, y + 1, gz, Material.DEEPSLATE_TILES, tally);       // 귀 — 솟음의 몸
-                        put(world, pad, gx, y + rise, gz, Material.DEEPSLATE_TILE_WALL, tally); // 귀 끝 — 하늘로 꺾인다
+                        put(world, pad, gx, y + 1, gz, Material.COBBLED_DEEPSLATE, tally);       // 귀 — 솟음의 몸
+                        put(world, pad, gx, y + rise, gz, Material.COBBLED_DEEPSLATE_WALL, tally); // 귀 끝 — 하늘로 꺾인다
                         continue;
                     }
                     if (hf > d) {   // 점층 — 중앙으로 갈수록 낮아진다 (귀솟음의 결)
-                        put(world, pad, gx - sf * d, y + rise, gz, Material.DEEPSLATE_TILE_SLAB, tally);
+                        put(world, pad, gx - sf * d, y + rise, gz, Material.COBBLED_DEEPSLATE_SLAB, tally);
                     }
                     if (hl > d) {
-                        put(world, pad, gx, y + rise, gz - sl * d, Material.DEEPSLATE_TILE_SLAB, tally);
+                        put(world, pad, gx, y + rise, gz - sl * d, Material.COBBLED_DEEPSLATE_SLAB, tally);
                     }
                 }
             }
@@ -818,9 +826,9 @@ public final class HwasanCampusBuilder {
                 int z = cz + l;
                 int ry = y + (2 - Math.min(ring, 2));    // 안쪽이 높다 — 1켜=+1 · 2켜=+0
                 if (ring == 2) {
-                    put(world, pad, x, ry, z, Material.DEEPSLATE_TILE_SLAB, tally);
+                    put(world, pad, x, ry, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
                 } else if (aF > hf && aL > hl) {
-                    put(world, pad, x, ry, z, Material.DEEPSLATE_TILES, tally);   // 모서리 대각
+                    put(world, pad, x, ry, z, Material.COBBLED_DEEPSLATE, tally);   // 모서리 대각
                 } else if (aL > hl && aL - hl >= aF - hf) {
                     putRoofStair(world, pad, x, ry, z,
                             l > 0 ? org.bukkit.block.BlockFace.NORTH
@@ -848,7 +856,7 @@ public final class HwasanCampusBuilder {
         }
         // ★슬라이스 9 — 기와 결 혼합 (코덱스 §④: 「검은 단일 덩어리」의 처방 · 결정론)
         Material mat = Math.floorMod(hash(0x5EA9L, x, y, z), 100) < 72
-                ? Material.DEEPSLATE_TILE_STAIRS : Material.DEEPSLATE_BRICK_STAIRS;
+                ? Material.COBBLED_DEEPSLATE_STAIRS : Material.DEEPSLATE_BRICK_STAIRS;
         org.bukkit.block.data.type.Stairs data =
                 (org.bukkit.block.data.type.Stairs) mat.createBlockData();
         data.setFacing(ascent);
@@ -857,43 +865,72 @@ public final class HwasanCampusBuilder {
     }
 
     /**
-     * 기와 면 결 — 심층암 타일 60 / 벽돌 22 / 균열 타일 13 / 균열 벽돌 5 (코덱스 §④ 배합 ·
-     * 결정론). 처마 끝 반블록·용마루는 <b>안 섞는다</b> — 윤곽선은 또렷해야 한다.
+     * 기와 면 결 — <b>★D-26 회색 기와</b> (목표 1호 실측: 지붕은 순검정이 아니라 <b>중간 회색</b>이고
+     * 밝고 어두운 골이 섞인다). 조약 심층암 60 / 심층암 벽돌 22 / 연마 안산암 13 / 회색 테라코타 5.
+     * 처마 끝 반블록·용마루는 <b>안 섞는다</b> — 윤곽선은 또렷해야 한다.
+     *
+     * <p>★재료 선택의 계약: <b>암벽 재료를 지붕에 쓰면 안 된다</b>. 조약돌·안산암·돌·석전·사암은
+     * {@code SpireField.rockMats()} 라서 유출 스캔에서 <b>빠진다</b> (늑재 오탐을 막으려 뺀 것 —
+     * 슬라이스 15). 그 계열로 지붕을 이면 <b>지붕이 패드를 넘어도 눈이 못 본다.</b> 그래서
+     * 회색을 심층암 계열(조약 심층암)·연마 안산암·회색 테라코타에서 골랐다.
      */
     private static Material roofCube(int x, int y, int z) {
         int r = Math.floorMod((int) hash(0x5EA9L ^ 0xF00FL, x, y, z), 100);
         if (r < 60) {
-            return Material.DEEPSLATE_TILES;
+            return Material.COBBLED_DEEPSLATE;
         }
         if (r < 82) {
             return Material.DEEPSLATE_BRICKS;
         }
         if (r < 95) {
-            return Material.CRACKED_DEEPSLATE_TILES;
+            return Material.POLISHED_ANDESITE;
         }
-        return Material.CRACKED_DEEPSLATE_BRICKS;
+        return Material.GRAY_TERRACOTTA;
     }
 
     /**
-     * 공포층 — 처마 밑 받침 띠 (코덱스 §② — 입면 깊이 세 겹의 가운데 층 · 실측표 §3-b).
-     * 벽선 한 칸 밖 y 에 다크오크 반블록이 돌고, 세 칸마다 통판(주두)이 박힌다.
+     * <b>★D-25 단청 띠</b> — 처마 밑 두 켜 (목표 1호의 화려함은 <b>거의 전부 여기서 온다</b>).
+     *
+     * <p>실측 (1호 문루 4배 확대): 지붕 바로 아래에 <b>붉은 도리</b>가 한 켜 돌고, 그 아래
+     * <b>금빛 단청 패널</b>이 <b>거의 한 칸마다</b> 촘촘히 늘어서며, 네 칸마다 붉은 주두가 끊는다.
+     * 아래층 문 둘레에는 청록이 섞인다. 종전 우리 것은 다크오크 반블록 한 켜뿐이라
+     * <b>처마 밑이 비어</b> 밋밋했다 (재판정 1순위).
+     *
+     * <p>두 켜 모두 <b>벽선 밖</b>이다 (호출부가 hf+1·hl+1 로 부른다) — 그래서 아래 켜를 더해도
+     * 벽 안(창·문)을 덮지 않는다.
+     *
+     * @param y 위 켜(붉은 도리)의 높이 — 금빛 패널은 그 한 칸 아래
      */
     private static void bracketRing(World world, TerraceForge.Pad pad, int cx, int y, int cz,
                                     int hf, int hl, Tally tally) {
         for (int f = -hf; f <= hf; f++) {
             for (int l : new int[]{-hl, hl}) {
-                put(world, pad, cx + f, y, cz + l,
-                        Math.floorMod(f, 3) == 0 ? Material.DARK_OAK_PLANKS
-                                : Material.DARK_OAK_SLAB, tally);
+                put(world, pad, cx + f, y, cz + l, Material.STRIPPED_MANGROVE_WOOD, tally);   // 붉은 도리
+                put(world, pad, cx + f, y - 1, cz + l, dancheong(f, l), tally);               // 금빛 단청
             }
         }
         for (int l = -hl + 1; l <= hl - 1; l++) {
             for (int f : new int[]{-hf, hf}) {
-                put(world, pad, cx + f, y, cz + l,
-                        Math.floorMod(l, 3) == 0 ? Material.DARK_OAK_PLANKS
-                                : Material.DARK_OAK_SLAB, tally);
+                put(world, pad, cx + f, y, cz + l, Material.STRIPPED_MANGROVE_WOOD, tally);
+                put(world, pad, cx + f, y - 1, cz + l, dancheong(f, l), tally);
             }
         }
+    }
+
+    /**
+     * 단청 패널 한 칸 — 금빛이 바탕이고 <b>네 칸마다 붉은 주두</b>가 끊으며, 드물게 청록이 섞인다
+     * (목표 1호 실측 배분). 결정론 — 자리로만 정해진다.
+     *
+     * <p>★눈이 이 함수를 직접 읽는다 (조성과 눈이 한 식 — 배분을 두 번 적으면 어긋난다).
+     */
+    public static Material dancheong(int f, int l) {
+        if (Math.floorMod(f + l, 4) == 0) {
+            return Material.STRIPPED_MANGROVE_WOOD;            // 붉은 주두 (기둥 머리)
+        }
+        if (Math.floorMod(f * 7 + l * 13, 11) == 0) {
+            return Material.WAXED_OXIDIZED_CUT_COPPER;         // 청록 — 드물게 (1호 하층의 결)
+        }
+        return Material.HONEYCOMB_BLOCK;                       // 금빛 무늬 패널
     }
 
     /**
@@ -1077,13 +1114,13 @@ public final class HwasanCampusBuilder {
                 }
                 boolean edge = Math.abs(f) == 2 || Math.abs(l) == 1;
                 put(world, pad, cx + f, base + 14, cz + l,
-                        edge ? Material.DEEPSLATE_TILE_SLAB : roofCube(cx + f, base + 14, cz + l), tally);
+                        edge ? Material.COBBLED_DEEPSLATE_SLAB : roofCube(cx + f, base + 14, cz + l), tally);
             }
         }
         for (int f = -2; f <= 2; f++) {
             put(world, pad, cx + f, base + 15, cz,
-                    Math.abs(f) == 2 ? Material.DEEPSLATE_TILE_WALL
-                            : Material.DEEPSLATE_TILE_SLAB, tally);   // 중앙 용마루 + 치미
+                    Math.abs(f) == 2 ? Material.COBBLED_DEEPSLATE_WALL
+                            : Material.COBBLED_DEEPSLATE_SLAB, tally);   // 중앙 용마루 + 치미
         }
         put(world, pad, cx - hf, base + 5, cz + hl + 2, Material.LANTERN, tally);
         put(world, pad, cx + hf, base + 5, cz + hl + 2, Material.LANTERN, tally);
@@ -1110,14 +1147,14 @@ public final class HwasanCampusBuilder {
             }
             // 맞배 지붕 — ★12-③ 두 겹 (원거리에서 「선」으로 읽히던 것의 처방): 처마 내밈
             //   반블록(y+4) → 가장자리 반블록 + 물매 계단(y+5) → 중심 통기와 + 용마루 반블록(y+6)
-            put(world, pad, x0 - 1, y + 4, z, Material.DEEPSLATE_TILE_SLAB, tally);
-            put(world, pad, x1 + 1, y + 4, z, Material.DEEPSLATE_TILE_SLAB, tally);
-            put(world, pad, x0, y + 5, z, Material.DEEPSLATE_TILE_SLAB, tally);
-            put(world, pad, x1, y + 5, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            put(world, pad, x0 - 1, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
+            put(world, pad, x1 + 1, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
+            put(world, pad, x0, y + 5, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
+            put(world, pad, x1, y + 5, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
             putRoofStair(world, pad, x0 + 1, y + 5, z, org.bukkit.block.BlockFace.EAST, tally);
             putRoofStair(world, pad, x1 - 1, y + 5, z, org.bukkit.block.BlockFace.WEST, tally);
             put(world, pad, x0 + 2, y + 5, z, roofCube(x0 + 2, y + 5, z), tally);
-            put(world, pad, x0 + 2, y + 6, z, Material.DEEPSLATE_TILE_SLAB, tally);
+            put(world, pad, x0 + 2, y + 6, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
             if (Math.floorMod(z - z0, 8) == 4) {
                 put(world, pad, x0 + 2, y + 3, z, Material.LANTERN, tally);   // 복도 등롱
             }
@@ -1589,10 +1626,12 @@ public final class HwasanCampusBuilder {
                 Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
                 Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
                 Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
-                Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
-                Material.DEEPSLATE_TILE_WALL, Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
-                Material.DEEPSLATE_BRICKS, Material.CRACKED_DEEPSLATE_TILES,          // ★9 — 기와 결 혼합
-                Material.CRACKED_DEEPSLATE_BRICKS, Material.DEEPSLATE_BRICK_STAIRS,
+                Material.COBBLED_DEEPSLATE, Material.COBBLED_DEEPSLATE_SLAB, Material.COBBLED_DEEPSLATE_STAIRS,
+                Material.COBBLED_DEEPSLATE_WALL, Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
+                Material.DEEPSLATE_BRICKS, Material.GRAY_TERRACOTTA,            // ★D-26 회색 기와 결
+                Material.DEEPSLATE_BRICK_STAIRS,
+                Material.STRIPPED_MANGROVE_WOOD, Material.HONEYCOMB_BLOCK,      // ★D-25 단청 띠
+                Material.WAXED_OXIDIZED_CUT_COPPER,
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
                 Material.CHEST, Material.LANTERN, Material.AIR);
@@ -1604,10 +1643,12 @@ public final class HwasanCampusBuilder {
             Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
             Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
             Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
-            Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
-            Material.DEEPSLATE_TILE_WALL, Material.GLASS_PANE,
-            Material.DEEPSLATE_BRICKS, Material.CRACKED_DEEPSLATE_TILES,          // ★9 — 기와 결 혼합
-            Material.CRACKED_DEEPSLATE_BRICKS, Material.DEEPSLATE_BRICK_STAIRS,
+            Material.COBBLED_DEEPSLATE, Material.COBBLED_DEEPSLATE_SLAB, Material.COBBLED_DEEPSLATE_STAIRS,
+            Material.COBBLED_DEEPSLATE_WALL, Material.GLASS_PANE,
+            Material.DEEPSLATE_BRICKS, Material.GRAY_TERRACOTTA,            // ★D-26 회색 기와 결
+            Material.DEEPSLATE_BRICK_STAIRS, Material.POLISHED_ANDESITE,
+            Material.STRIPPED_MANGROVE_WOOD, Material.HONEYCOMB_BLOCK,      // ★D-25 단청 띠
+            Material.WAXED_OXIDIZED_CUT_COPPER,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 
     /**
