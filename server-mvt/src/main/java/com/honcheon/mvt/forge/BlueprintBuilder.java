@@ -86,23 +86,41 @@ public final class BlueprintBuilder {
             if (rf.hasUpper()) {
                 // 상층 누각 — 하층 지붕 위에 몸체를 세우고 그 위에 다시 지붕
                 int upBase = oy + rf.baseY() + 3;   // 하층 지붕 두께만큼 올린다
-                for (int r2 = b[1] + 2; r2 <= b[3] - 2; r2++) {
-                    for (int c2 = b[0] + 2; c2 <= b[2] - 2; c2++) {
-                        boolean edge = r2 == b[1] + 2 || r2 == b[3] - 2 || c2 == b[0] + 2 || c2 == b[2] - 2;
+                // ★상층이 얼마나 물러나는가는 **도면이 정한다** — 코드에 2 로 박혀 있던 값이다.
+                //   7호 실측: 본전은 하층:상층 = 38:25 (0.66) 라 좌우 5칸씩 물러나야 하고,
+                //   2 로는 0.87 이 되어 상층이 하층만큼 넓은 다른 건물이 선다.
+                //   (산문은 2 가 맞았다 — 그래서 한 상수로 둘을 다 지을 수 없다)
+                int ix = rf.insetX();
+                int iz = rf.insetZ();
+                for (int r2 = b[1] + iz; r2 <= b[3] - iz; r2++) {
+                    for (int c2 = b[0] + ix; c2 <= b[2] - ix; c2++) {
+                        boolean edge = r2 == b[1] + iz || r2 == b[3] - iz || c2 == b[0] + ix || c2 == b[2] - ix;
                         if (!edge) {
                             continue;
                         }
                         boolean post = ((c2 - b[0]) % 3 == 0) || ((r2 - b[1]) % 3 == 0);
                         for (int k = 0; k < rf.upperWall(); k++) {
-                            world.getBlockAt(ox + c2, upBase + k, oz + r2).setType(
-                                    post ? Material.STRIPPED_MANGROVE_LOG
-                                            : HwasanCampusBuilder.plaster(ox + c2, upBase + k, oz + r2), false);
+                            // ★기둥 사이를 무엇으로 채우는가는 **도면이 정한다** — 7호 실측이
+                            //   「본전 상층은 창이 띠를 이루고 회벽이 없다」를 밝혔고, 산문은
+                            //   그 반대다. 코드가 한 가지로만 채우면 둘 중 하나는 반드시 틀린다.
+                            //   ※격자는 위·아래 한 켜를 인방(planks)으로 끊어 「창」이 되게 한다 —
+                            //     통짜 trapdoor 는 블라인드로 읽힌다 (문짝 교정에서 배운 것).
+                            Material fill;
+                            if (post) {
+                                fill = Material.STRIPPED_MANGROVE_LOG;
+                            } else if (rf.upperLattice()) {
+                                boolean rail = k == 0 || k == rf.upperWall() - 1;
+                                fill = rail ? Material.DARK_OAK_PLANKS : Material.DARK_OAK_TRAPDOOR;
+                            } else {
+                                fill = HwasanCampusBuilder.plaster(ox + c2, upBase + k, oz + r2);
+                            }
+                            world.getBlockAt(ox + c2, upBase + k, oz + r2).setType(fill, false);
                             n.blocks++;
                         }
                     }
                 }
                 HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
-                        hf - 2, hl - 2, tally);
+                        hf - ix, hl - iz, tally);
                 n.roofs++;
             }
         }

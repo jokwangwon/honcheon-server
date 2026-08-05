@@ -1202,6 +1202,152 @@ public final class TerraceForgeSelfTest {
             check("★설계도 산문 구역", false, e.getClass().getSimpleName() + ": " + e.getMessage());
         }
 
+        // ══════════ ⑰ ★설계도 본전 구역 — 7호 실측 (2026-08-05) ══════════
+        //   ★★이 절이 지키는 발견: **산문과 본전은 벽의 문법이 서로 반대다.**
+        //     산문은 「기둥+문짝」이 하층을 지배하고, 본전은 하층을 **회벽**이 지배하고
+        //     상층을 **격자창**이 지배한다. 코드가 둘을 한 문법으로 지으면 반드시 하나가 틀린다 —
+        //     그 되돌아감을 여기서 잡는다.
+        try {
+            java.util.Map<String, Object> raw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+            Blueprint hj = Blueprint.of(raw);
+            check("★설계도 본전 구역이 읽힌다 (평면 " + hj.width() + "×" + hj.depth() + ")",
+                    hj.width() == 38 && hj.depth() == 32, hj.width() + "×" + hj.depth());
+
+            hj.validate();
+            check("★설계도 본전 자기 계약을 지킨다 (통행 개구·축선 시야·자리·지붕 상자)", true, "통과");
+
+            // ★도면은 패드를 넘지 않는다 — BlueprintBuilder 가 던지기 **전에** 여기서 죽는다.
+            //   (패드 치수는 TerraceForge 가 정본이므로 손으로 적은 38×32 를 안 믿고 물어본다)
+            TerraceForge.PadSpec p9 = TerraceForge.hwasanCampus().pads().stream()
+                    .filter(s -> s.zone() == hj.pad()).findFirst().orElse(null);
+            check("★본전 도면이 앉을 패드(구역 " + hj.pad() + ")가 있다", p9 != null, p9);
+            if (p9 != null) {
+                check("★본전 도면이 패드를 안 넘는다 (도면 " + hj.width() + "×" + hj.depth()
+                                + " ≤ 패드 " + p9.width() + "×" + p9.depth() + ")",
+                        hj.width() <= p9.width() && hj.depth() <= p9.depth(),
+                        hj.width() + "×" + hj.depth() + " vs " + p9.width() + "×" + p9.depth());
+            }
+
+            // 중앙 대문 — 목표 실측대로 폭 5, 그리고 걸어 지날 수 있어야 한다
+            int frontRow = hj.depth() - 13;          // 정면 벽 (row 19) — 도면 뒤에서 13번째
+            int gateCols = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                for (Blueprint.Course cs : hj.columnOf(hj.at(c, frontRow))) {
+                    if ("air".equals(cs.material()) && cs.count() >= 5) {
+                        gateCols++;
+                        break;
+                    }
+                }
+            }
+            check("★본전 중앙 대문 폭 5 (걸어 지나는 개구)", gateCols == 5, gateCols);
+
+            // ★★핵심 — 본전 **하층은 회벽이 지배**한다 (산문의 정반대)
+            int hjWalls = 0;
+            int hjDoors = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                char ch = hj.at(c, frontRow);
+                if (ch == 'W') {
+                    hjWalls++;
+                }
+                if (ch == 'D') {
+                    hjDoors++;
+                }
+            }
+            check("★★본전 하층은 회벽이 지배한다 (회벽 " + hjWalls + " > 문짝 " + hjDoors + ")",
+                    hjWalls > hjDoors, hjWalls + "/" + hjDoors);
+            check("★본전 하층에 문짝이 점점이 박힌다 (전부 회벽이 아니다)", hjDoors >= 4, hjDoors);
+
+            // ★★핵심 — 본전 **상층은 창이 지배**한다 (회벽이 없다). 코드 기본값은 회벽이므로
+            //   도면이 lattice 라 말하지 않으면 상층이 통짜 백벽이 되어 목표와 어긋난다.
+            Blueprint.Roof hjRoof = hj.roofs().stream()
+                    .filter(r -> r.hasUpper()).findFirst().orElse(null);
+            check("★본전에 상층 누각이 있다", hjRoof != null, hj.roofs());
+            if (hjRoof != null) {
+                check("★★본전 상층은 격자창이 띠를 이룬다 (회벽 아님 — infill=lattice)",
+                        hjRoof.upperLattice(), hjRoof.upperInfill());
+                // ★★하층:상층 폭 비 — 7호 실측 38:25 = **0.66**. 코드에 물러남이 2 로 박혀
+                //   있던 동안 이 값은 0.87 이었다 (상층이 하층만큼 넓은 다른 건물). 이제
+                //   도면이 물러남을 정하므로, 그 값이 실측 비를 내는지 여기서 잰다.
+                int lower = hjRoof.box()[2] - hjRoof.box()[0] + 1;
+                int upper = lower - 2 * hjRoof.insetX();
+                double ratio = (double) upper / lower;
+                check("★본전 하층:상층 폭 비가 실측(0.66)에 든다 (" + lower + ":" + upper
+                                + " = " + String.format("%.2f", ratio) + ")",
+                        ratio >= 0.60 && ratio <= 0.75, ratio);
+            }
+
+            // ★월대 — 본전은 맨땅에 서지 않는다. 몸체 **앞**에 기단면이 깔려야 한다.
+            int podium = 0;
+            for (int r = frontRow + 1; r < hj.depth(); r++) {
+                for (int c = 0; c < hj.width(); c++) {
+                    if (hj.at(c, r) == 'M') {
+                        podium++;
+                    }
+                }
+            }
+            check("★본전 앞에 월대가 깔린다 (기단 " + podium + "칸)", podium > 0, podium);
+
+            // 금지 재료·살구색 회벽 — 도면에도 같은 계율이 걸린다
+            boolean hjBanned = hj.materials().stream()
+                    .anyMatch(m -> m.contains("barrel") || m.contains("light") || m.contains("chain"));
+            check("★본전 설계도에 금지 재료가 없다 (barrel·light·chain)", !hjBanned, hj.materials());
+            check("★본전 설계도에 살구색 회벽(white_terracotta)이 없다",
+                    !hj.materials().contains("white_terracotta"), hj.materials());
+
+            // ★★두 도면을 나란히 — **문법이 서로 반대여야 한다.** 누가 「통일」하면 여기서 짖는다.
+            java.util.Map<String, Object> graw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_gate.yml")));
+            Blueprint gate = Blueprint.of(graw);
+            int gWalls = 0;
+            int gDoors = 0;
+            for (int c = 0; c < gate.width(); c++) {
+                char ch = gate.at(c, 18);
+                if (ch == 'W') {
+                    gWalls++;
+                }
+                if (ch == 'D' || ch == 'I') {
+                    gDoors++;
+                }
+            }
+            check("★★산문과 본전의 하층 문법이 서로 반대다 (산문 문짝 " + gDoors + ">회벽 " + gWalls
+                            + " · 본전 회벽 " + hjWalls + ">문짝 " + hjDoors + ")",
+                    gDoors > gWalls && hjWalls > hjDoors,
+                    "산문 " + gDoors + "/" + gWalls + " · 본전 " + hjDoors + "/" + hjWalls);
+
+            // ★물러남 문법이 생겨도 **산문은 그대로 서야 한다** — 안 적은 도면의 기본값이 2 다
+            //   (예전 값). 기본값이 바뀌면 이미 선 것이 조용히 달라진다.
+            Blueprint.Roof gRoof = gate.roofs().stream().filter(r -> r.hasUpper()).findFirst().orElse(null);
+            check("★물러남을 안 적은 도면(산문)의 기본값이 예전 값 2 다",
+                    gRoof != null && gRoof.insetX() == 2 && gRoof.insetZ() == 2,
+                    gRoof == null ? "상층 없음" : gRoof.insetX() + "/" + gRoof.insetZ());
+
+            // ★상층이 물러나다 못해 사라지면 **죽어야 한다** (조용한 실종 금지 — 세 번 당했다)
+            //   ※변이는 **읽은 지도**를 고친다 — 글자를 찾아 바꾸면 도면의 물러남 값이 달라진
+            //     순간 눈이 조용히 아무것도 안 재게 된다 (변이시험에서 실제로 그랬다).
+            boolean vanishBarks = false;
+            java.util.Map<String, Object> probeRaw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> probeRoofs =
+                    (java.util.Map<String, Object>) probeRaw.get("roof");
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> probeUpper = (java.util.Map<String, Object>)
+                    ((java.util.Map<String, Object>) probeRoofs.values().iterator().next()).get("upper");
+            probeUpper.put("inset", java.util.List.of(15, 2));
+            try {
+                Blueprint.of(probeRaw).validate();
+            } catch (IllegalStateException vanishEx) {
+                vanishBarks = true;
+            }
+            check("★상층이 다 물러나 사라지면 도면이 죽는다 (지붕만 뜨는 것 방지)", vanishBarks, vanishBarks);
+        } catch (Exception e) {
+            check("★설계도 본전 구역", false, e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+
         // ══════════ 결산 ══════════
         System.out.println();
         if (failures.isEmpty()) {

@@ -32,10 +32,33 @@ public final class Blueprint {
     public record Course(String material, int count) {
     }
 
-    /** 지붕 한 채 — 압출이 못 만드는 것. box=[col0,row0,col1,row1] */
-    public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave) {
+    /**
+     * 지붕 한 채 — 압출이 못 만드는 것. box=[col0,row0,col1,row1]
+     *
+     * <p>{@code upperInfill} — 상층 몸체의 기둥 <b>사이</b>를 무엇으로 채우는가.
+     * ★7호 실측이 드러낸 것: <b>산문과 본전은 벽의 문법이 다르다.</b> 산문 상층은 회벽이
+     * 지배하지만 <b>본전 상층은 격자창이 띠를 이루고 회벽이 없다</b>. 코드가 한 가지로만
+     * 채우면 둘 중 하나는 반드시 틀리므로, <b>도면이 고르게</b> 했다.
+     */
+    public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
+                       String upperInfill, int[] upperInset) {
         public boolean hasUpper() {
             return upperWall > 0;
+        }
+
+        /** 상층이 좌우로 물러나는 칸 수 (x) — ★코드 상수가 아니라 <b>도면이 정한다</b> */
+        public int insetX() {
+            return upperInset[0];
+        }
+
+        /** 상층이 앞뒤로 물러나는 칸 수 (z) */
+        public int insetZ() {
+            return upperInset[1];
+        }
+
+        /** 상층 기둥 사이가 창인가 (도면이 {@code infill: lattice} 라 적었는가) */
+        public boolean upperLattice() {
+            return "lattice".equalsIgnoreCase(upperInfill);
         }
     }
 
@@ -170,11 +193,26 @@ public final class Blueprint {
                     ((Number) b.get(0)).intValue(), ((Number) b.get(1)).intValue(),
                     ((Number) b.get(2)).intValue(), ((Number) b.get(3)).intValue()};
             Map<String, Object> up = (Map<String, Object>) m.get("upper");
+            // ★상층 물러남 — 스칼라 하나든 [x, z] 둘이든 받는다. 안 적으면 2 (산문의 값이
+            //   기본이 되어, 이 문법이 생기기 전 도면들이 그대로 선다)
+            int[] inset = {2, 2};
+            if (up != null && up.get("inset") != null) {
+                Object iv = up.get("inset");
+                if (iv instanceof List<?> il && il.size() >= 2) {
+                    inset = new int[]{((Number) il.get(0)).intValue(), ((Number) il.get(1)).intValue()};
+                } else if (iv instanceof Number num) {
+                    inset = new int[]{num.intValue(), num.intValue()};
+                } else {
+                    throw new IllegalStateException("설계도 " + rn + " 의 upper.inset 은 수 하나이거나 [x, z] 다: " + iv);
+                }
+            }
             roofs.add(new Roof(rn, box,
                     ((Number) req(m, "base_y")).intValue(),
                     ((Number) m.getOrDefault("eave", 2)).intValue(),
                     up == null ? 0 : ((Number) up.getOrDefault("wall", 0)).intValue(),
-                    up == null ? 0 : ((Number) up.getOrDefault("eave", 2)).intValue()));
+                    up == null ? 0 : ((Number) up.getOrDefault("eave", 2)).intValue(),
+                    up == null ? "plaster" : String.valueOf(up.getOrDefault("infill", "plaster")),
+                    inset));
         });
 
         Map<String, int[]> spots = new LinkedHashMap<>();
@@ -239,6 +277,18 @@ public final class Blueprint {
             }
             if (b[0] < 0 || b[2] >= width || b[1] < 0 || b[3] >= depth) {
                 throw new IllegalStateException("설계도 " + name + " — 지붕 " + rf.name() + " 상자가 도면 밖");
+            }
+            // ★상층이 물러나다 못해 사라지지 않는다. 물러남이 반폭을 넘으면 상층 루프가
+            //   한 칸도 안 돌아 **지붕만 공중에 뜬다** — 조용히 없어지는 대신 여기서 죽는다
+            //   (계율: 조용한 실종은 세 번 당했다).
+            if (rf.hasUpper()) {
+                int uw = (b[2] - b[0]) - 2 * rf.insetX() + 1;
+                int ud = (b[3] - b[1]) - 2 * rf.insetZ() + 1;
+                if (uw < 3 || ud < 3) {
+                    throw new IllegalStateException("설계도 " + name + " — 지붕 " + rf.name()
+                            + " 상층이 너무 물러났다 (" + uw + "×" + ud + " · 물러남 "
+                            + rf.insetX() + "/" + rf.insetZ() + ")");
+                }
             }
         }
         // ④ ★축선 시야 — 통로 앞(남쪽)에 서면 문이 보여야 한다. 축선 열의 남쪽 구간에
