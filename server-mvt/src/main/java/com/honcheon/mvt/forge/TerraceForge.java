@@ -541,6 +541,43 @@ public final class TerraceForge {
         return i;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // ★★접근로 폭 전이 — 「입구는 넓고, 문 안쪽에서 기존 축으로 수렴한다」
+    //   (사용자 확정 2026-08-06)
+    //
+    //   외부 접근 9 → 산문 전면 참 11 → 산문 통로 7 → 기존 주축 7
+    //
+    //   ★폭을 갑자기 줄이지 않고 <b>참에서</b> 처리한다. 참은 걸음이 멈추는 자리라
+    //   폭이 바뀌어도 발이 안 걸린다. 전이 참은 주기 0 의 참(i 18~21)이다 —
+    //   산문 바로 앞이다 (i=0 이 산문, i 가 클수록 아래).
+    //
+    //   ★계단 폭을 한 번 크게 잘못 잡은 적이 있다 (20 으로 읽고 전 캠퍼스를 ×2.2 로
+    //   키웠다가 되돌렸다). 그래서 <b>기존 7 축은 안 건드리고</b> 아래쪽만 넓힌다.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** 전이 참의 첫 행 — 주기 0 의 디딤이 끝나는 자리 */
+    public static final int WIDEN_FROM = STAIR_RUN * STAIR_TREAD;          // 18
+
+    /** 전이 참의 끝(배타) — 여기부터 아래는 넓은 계단 */
+    public static final int WIDEN_TO = WIDEN_FROM + STAIR_LANDING;         // 22
+
+    /**
+     * 그 행의 보행 반폭 — 폭 = 2·half + 1.
+     *
+     * <p>i 0~17 : 3 (폭 7 — 산문 통로·기존 축과 같다)<br>
+     * i 18~21 : 5 (폭 11 — 전이 참)<br>
+     * i 22~   : 4 (폭 9 — 외부 접근 계단)
+     */
+    public static int approachHalf(int i) {
+        if (i < WIDEN_FROM) {
+            return STAIR_HALF;                 // 7 — 문 안쪽 축과 수렴
+        }
+        if (i < WIDEN_TO) {
+            return STAIR_HALF + 2;             // 11 — 전이 참 (폭이 바뀌는 자리)
+        }
+        return STAIR_HALF + 1;                 // 9 — 입구는 넓다
+    }
+
     /** 그 행이 참인가 — 디딤 18행이 끝난 뒤부터 주기 끝까지 */
     public static boolean isLanding(int i) {
         for (int c = 0; c < APPROACH_CYCLES; c++) {
@@ -741,7 +778,8 @@ public final class TerraceForge {
             int z = a.z0() + i;
             int by = a.blockYAt(i);
             boolean slab = a.isSlabAt(i);
-            for (int o = -STAIR_HALF; o <= STAIR_HALF; o++) {
+            int half = approachHalf(i);        // ★폭 전이 — 입구 9 · 전이 참 11 · 문 앞 7
+            for (int o = -half; o <= half; o++) {
                 int x = a.x() + o;
                 clearAbove(world, x, by, z, tally);
                 fillDown(world, x, by - 1, z, tally);

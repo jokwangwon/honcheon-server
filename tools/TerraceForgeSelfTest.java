@@ -600,6 +600,33 @@ public final class TerraceForgeSelfTest {
             }
         }
         check("★주상절리 ㉠ 평지는 안 쪼갠다 (물매 < 문턱이면 그대로)", flatTouched == 0, flatTouched);
+        // ══════════ ★접근로 폭 전이 (사용자 확정 2026-08-06) ══════════
+        //   외부 9 → 전이 참 11 → 문 앞 7. ★폭이 <b>참에서만</b> 바뀌어야 한다 —
+        //   디딤 도중에 바뀌면 걷다가 발밑이 넓어졌다 좁아진다.
+        check("★접근로 — 문 앞은 폭 7 (기존 축과 수렴)",
+                TerraceForge.approachHalf(0) * 2 + 1 == 7, TerraceForge.approachHalf(0));
+        check("★접근로 — 입구는 폭 9 (웅장하게)",
+                TerraceForge.approachHalf(TerraceForge.APPROACH_LEN - 1) * 2 + 1 == 9,
+                TerraceForge.approachHalf(TerraceForge.APPROACH_LEN - 1));
+        check("★접근로 — 전이 참은 폭 11 (9~13 안)",
+                TerraceForge.approachHalf(TerraceForge.WIDEN_FROM) * 2 + 1 >= 9
+                        && TerraceForge.approachHalf(TerraceForge.WIDEN_FROM) * 2 + 1 <= 13,
+                TerraceForge.approachHalf(TerraceForge.WIDEN_FROM) * 2 + 1);
+        int widthJumpsOffLanding = 0;
+        for (int i = 1; i < TerraceForge.APPROACH_LEN; i++) {
+            if (TerraceForge.approachHalf(i) != TerraceForge.approachHalf(i - 1)
+                    && !(TerraceForge.isLanding(i) || TerraceForge.isLanding(i - 1))) {
+                widthJumpsOffLanding++;
+            }
+        }
+        check("★접근로 — 폭은 참에서만 바뀐다 (디딤 도중에 안 바뀐다)",
+                widthJumpsOffLanding == 0, widthJumpsOffLanding);
+        // 폭이 실제로 세 단계여야 한다 — 한 값으로 눌러 놓고 통과시키는 것을 막는다
+        java.util.Set<Integer> widths = new java.util.HashSet<>();
+        for (int i = 0; i < TerraceForge.APPROACH_LEN; i++) {
+            widths.add(TerraceForge.approachHalf(i) * 2 + 1);
+        }
+        check("★접근로 — 폭이 세 단계다 (7 · 9 · 11)", widths.size() == 3, widths);
         // ══════════ ★★대(臺) 옆모습 — 실루엣의 눈 (사용자 확정 2026-08-06) ══════════
         //   레퍼런스 좌상단 절벽 실측: 벽면이 보이는 높이 전부에 걸쳐 수직이다. 원뿔이 아니다.
         //   ★이 눈이 지키는 것은 상수 셋이 아니라 <b>모양의 성질</b>이다 — 마루가 평평한가,
@@ -1316,7 +1343,10 @@ public final class TerraceForgeSelfTest {
                     openCols++;
                 }
             }
-            check("★설계도 중앙 개구 폭 5 (목표 실측)", openCols == 5, openCols);
+            // ★2026-08-06 사용자 확정 — 5 → 7. 「5블록은 대문보다 내부 출입문처럼 보인다」.
+            //   실측값(5)을 뒤집은 <b>설계 결정</b>이다. 레퍼런스가 AI 생성 이미지임이 확인된
+            //   뒤라 「실측값이 정답」은 아니다 — 도면의 design_intent 에 까닭이 남아 있다.
+            check("★설계도 중앙 개구 폭 7 (사용자 확정 — 대문의 위계)", openCols == 7, openCols);
 
             // ★하층은 「기둥 + 격자 문짝」의 반복이다 (실측의 핵심 — 넓은 백벽이 아니다).
             //   남면(row 18)에서 문짝 칸이 회벽 칸보다 많아야 한다.
@@ -1347,9 +1377,24 @@ public final class TerraceForgeSelfTest {
                             || cs.material().contains("pane"));
             check("★문살이 세로 부품이다 (울타리·창살 계열)", mullionVertical,
                     blueprint.columnOf('I'));
-            boolean midRail = blueprint.columnOf('D').stream()
-                    .anyMatch(cs -> cs.material().contains("planks"));
-            check("★문짝 가운데를 중인방이 가로로 끊는다", midRail, blueprint.columnOf('D'));
+            // ★2026-08-06 — 중인방(planks)이 <b>적색 가로보</b>(log)로 바뀌었다. 3단 위계에서
+            //   그 자리는 「문짝 4켜 → 가로보 → 고창」의 경계다. 재는 것은 <b>재료가 아니라
+            //   성질</b>이다: 문짝 켜가 가로 부재로 끊기는가 (안 끊기면 블라인드다).
+            java.util.List<Blueprint.Course> dcol = blueprint.columnOf('D');
+            int doorRuns = 0;
+            boolean prevDoor = false;
+            for (Blueprint.Course cs : dcol) {
+                boolean isDoor = cs.material().contains("trapdoor");
+                if (isDoor && !prevDoor) {
+                    doorRuns++;
+                }
+                prevDoor = isDoor;
+            }
+            check("★문짝이 가로 부재로 끊긴다 (한 덩어리면 블라인드 — 토막 " + doorRuns + ")",
+                    doorRuns >= 2, dcol);
+            boolean hasBeam = dcol.stream().anyMatch(cs -> cs.material().contains("log")
+                    || cs.material().contains("planks"));
+            check("★그 가로 부재가 실재한다 (가로보 또는 중인방)", hasBeam, dcol);
 
             // 금지 재료 — 도면에도 계율이 걸린다
             boolean banned = blueprint.materials().stream()

@@ -1,15 +1,15 @@
 # 화산파 산문 구역 — 블록 팔레트 (도면에서 **센** 것)
 
-총 3514칸 · 9종
+총 3428칸 · 9종
 
 | 재료 | 칸 | 비율 |
 |---|---:|---:|
-| `stone_bricks` | 1140 | 32.4% |
-| `plaster` | 1052 | 29.9% |
-| `stripped_mangrove_log` | 587 | 16.7% |
-| `cut_sandstone` | 303 | 8.6% |
-| `smooth_stone` | 298 | 8.5% |
-| `stone_brick_wall` | 62 | 1.8% |
-| `dark_oak_fence` | 36 | 1.0% |
-| `dark_oak_trapdoor` | 30 | 0.9% |
-| `dark_oak_planks` | 6 | 0.2% |
+| `stone_bricks` | 1070 | 31.2% |
+| `plaster` | 940 | 27.4% |
+| `stripped_mangrove_log` | 559 | 16.3% |
+| `smooth_stone` | 318 | 9.3% |
+| `cut_sandstone` | 307 | 9.0% |
+| `dark_oak_planks` | 96 | 2.8% |
+| `stone_brick_wall` | 58 | 1.7% |
+| `dark_oak_trapdoor` | 40 | 1.2% |
+| `dark_oak_fence` | 40 | 1.2% |

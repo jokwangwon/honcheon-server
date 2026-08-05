@@ -72,6 +72,7 @@ class Bp:
     def __init__(self, name):
         self.name = name
         d = yaml.safe_load((BP / f"{name}.yml").read_text())
+        self.raw = d
         self.meta = d["meta"]
         self.cols = {k: expand(v) for k, v in d["columns"].items()}
         self.plan = [ln for ln in d["plan"].splitlines() if ln.strip()]
@@ -170,6 +171,73 @@ def to_png(grid, path, cell=8, grid_every=5):
     return im.size
 
 
+# ── 화면에 실제로 덮이는 두께 (블록 한 칸 = 1.0) ─────────────────────────
+#   ★2026-08-06 D-39 의 진범: 도면 칸수와 화면 면적이 다르다. 트랩도어는 3/16 이라
+#     한 칸을 차지하고도 화면의 5분의 1만 덮고, 나머지로 뒤가 비친다. 세 회차를
+#     「문짝이 적다」로 오진한 원인이다. lint 는 <b>화면 면적</b>으로 잰다.
+THICK = {
+    "dark_oak_trapdoor": 3 / 16,
+    "dark_oak_fence": 2 / 16,
+    "stone_brick_wall": 8 / 16,
+    "glass_pane": 2 / 16,
+    "lantern": 6 / 16,
+}
+TIMBER = {"stripped_mangrove_log", "dark_oak_trapdoor", "dark_oak_fence",
+          "dark_oak_planks", "spruce_log", "spruce_planks"}
+PLASTER = {"plaster", "bone_block"}
+
+
+def thickness(m):
+    if m is None:
+        return 0.0
+    return THICK.get(m, 1.0)
+
+
+def lint(bp, grid):
+    """입면 lint — 「대형 백면이 다시 생기는가」를 탐지한다.
+
+    ★건축 정답이 아니다. 되돌아가는 것을 잡는 자다 (사용자 확정 2026-08-06).
+    """
+    spec = (bp.raw.get("lint") or {}).get("facade")
+    if not spec:
+        return []
+    c0, c1 = spec.get("box", [0, bp.w - 1])
+    rows = [[ln[c] for c in range(c0, c1 + 1)] for ln in grid]
+    tot = sum(len(r) for r in rows)
+    op = sum(1 for r in rows for m in r if m is None)
+    tim = sum(thickness(m) for r in rows for m in r if m in TIMBER)
+    # 이어진 회벽 — 가로/세로 최장
+    runw = runh = 0
+    for r in rows:
+        run = 0
+        for m in r:
+            run = run + 1 if m in PLASTER else 0
+            runw = max(runw, run)
+    for c in range(len(rows[0])):
+        run = 0
+        for r in rows:
+            run = run + 1 if r[c] in PLASTER else 0
+            runh = max(runh, run)
+    out = []
+
+    def judge(name, got, ok, want):
+        out.append((ok, f"{name}: {got} ({want})"))
+
+    judge("가로로 이어진 회벽", runw,
+          runw <= spec["max_contiguous_plaster_width"],
+          f"상한 {spec['max_contiguous_plaster_width']}")
+    judge("세로로 이어진 회벽", runh,
+          runh <= spec["max_contiguous_plaster_height"],
+          f"상한 {spec['max_contiguous_plaster_height']}")
+    judge("개구 비율", f"{op / tot * 100:.1f}%",
+          op / tot >= spec["min_opening_ratio"],
+          f"하한 {spec['min_opening_ratio'] * 100:.0f}%")
+    judge("목재 입면 (★화면 면적)", f"{tim / tot * 100:.1f}%",
+          tim / tot >= spec["min_timber_facade_ratio"],
+          f"하한 {spec['min_timber_facade_ratio'] * 100:.0f}%")
+    return out
+
+
 def palette(bp):
     """실제로 쓰는 재료와 칸수 — 신고가 아니라 <b>센 것</b>이다."""
     cnt = {}
@@ -208,6 +276,20 @@ def main():
         f"# {bp.meta.get('name', name)} — 블록 팔레트 (도면에서 **센** 것)\n\n"
         f"총 {tot}칸 · {len(pal)}종\n\n" + "\n".join(lines) + "\n")
     print(f"  블록 팔레트           {len(pal)}종 · {tot}칸  → palette_counted.md")
+    rep = lint(bp, views["front_view"][1])
+    if rep:
+        print("  ── 입면 lint (대형 백면 탐지) ──")
+        bad = 0
+        for ok, line in rep:
+            print(f"    {'OK ' if ok else '★위반'} {line}")
+            bad += 0 if ok else 1
+        (out / "facade_lint.md").write_text(
+            "# 입면 lint — 「대형 백면이 다시 생기는가」\n\n"
+            "★건축 정답이 아니라 되돌아가는 것을 잡는 자다.\n"
+            "★★비율은 도면 칸이 아니라 **화면에 덮이는 면적**으로 잰다 (얇은 블록은 두께로 깎인다).\n\n"
+            + "\n".join(f"- {'OK' if ok else '**위반**'} {l}" for ok, l in rep) + "\n")
+        if bad:
+            print(f"    → 위반 {bad}건")
     if bp.roof:
         rl = ["# 지붕 층별 (도면 roof 절 — 코드 문법 호출)", ""]
         for rname, spec in bp.roof.items():
