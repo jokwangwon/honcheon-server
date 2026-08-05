@@ -562,20 +562,59 @@ public final class TerraceForgeSelfTest {
         }
         check("★10 침봉 변주 — 가는 놈(≤9)과 굵은 놈(≥13)이 공존 (파이프오르간 금지)",
                 thin && thickR, thin + "/" + thickR);
-        // ★10-② 웜톤 암질 — 점적석(따뜻한 갈빛)이 섞이고 금지 재료가 없다
-        boolean warm = false;
+        // ══════════ ★★팔레트 상한 — 「한 면에 몇 종을 쓰는가」 (사용자 확정 2026-08-05) ══════════
+        //   근거: 목표 사진의 어느 면이든 색 무리로 가르면 여러 무리가 나오지만 <b>색도가 다 같고
+        //   밝기만 다르다</b> (지붕 24·45·68 / 석축 54·93·131·182 / 계단 57·90·125·167).
+        //   한 재료가 여러 밝기로 앉은 것이다 — 밝기는 마인크래프트가 면 방향과 그늘로 거저 준다.
+        //   ★이 눈이 지키는 것은 「오늘의 색 고름」이 아니라 <b>종류의 수</b>다. 어떤 돌을 고를지는
+        //   바뀔 수 있어도, 한 면에 여럿을 흩뿌리지 않는다는 계약은 남는다.
+        java.util.Set<Material> rockSeen = java.util.EnumSet.noneOf(Material.class);
+        java.util.Set<Material> capSeen = java.util.EnumSet.noneOf(Material.class);
         boolean bannedStone = false;
-        for (int s = 0; s < 400; s++) {
-            Material m = com.honcheon.mvt.forge.SpireField.stone(s * 13, (s % 40) * 3, s * 7, false);
-            if (m == Material.DRIPSTONE_BLOCK) {
-                warm = true;
-            }
+        for (int s = 0; s < 4000; s++) {
+            int px = (s * 13) % 977 - 400;
+            int py = (s * 7) % 131;
+            int pz = (s * 29) % 883 - 400;
+            Material m = com.honcheon.mvt.forge.SpireField.stone(px, py, pz, false);
+            rockSeen.add(m);
+            capSeen.add(com.honcheon.mvt.forge.SpireField.stone(px, py, pz, true));
             if (m == Material.BARREL || m == Material.LIGHT) {
                 bannedStone = true;
             }
         }
-        check("★10-② 웜톤 — 점적석 섞임 · barrel/light 없음", warm && !bannedStone,
-                warm + "/" + bannedStone);
+        check("★팔레트 — 암벽 몸은 한 종 (밝기 결은 면 방향이 낸다)", rockSeen.size() == 1, rockSeen);
+        check("★팔레트 — 암벽 마루는 두 종 이하 (돌·이끼)", capSeen.size() <= 2, capSeen);
+        check("★10-② 금지 재료 없음 (barrel·light)", !bannedStone, bannedStone);
+        // 석축·포장도 같은 자로 잰다 — 둘 다 순수 함수라 눈이 직접 부른다
+        java.util.Set<Material> faceSeen = java.util.EnumSet.noneOf(Material.class);
+        java.util.Set<Material> paveSeen = java.util.EnumSet.noneOf(Material.class);
+        for (int s = 0; s < 4000; s++) {
+            int px = (s * 13) % 977 - 400;
+            int py = (s * 7) % 131;
+            int pz = (s * 29) % 883 - 400;
+            faceSeen.add(com.honcheon.mvt.forge.TerraceForge.faceMaterial(px, py, pz, Integer.MAX_VALUE));
+            paveSeen.add(com.honcheon.mvt.forge.TerraceForge.paveMaterial(px, pz));
+        }
+        check("★팔레트 — 석축은 두 종 이하 (석전 + 층대 띠)", faceSeen.size() <= 2, faceSeen);
+        check("★팔레트 — 포장은 한 종 (누런 바둑판 금지 · D-43)", paveSeen.size() == 1, paveSeen);
+        java.util.Set<Material> roofSeen = java.util.EnumSet.noneOf(Material.class);
+        for (int s = 0; s < 4000; s++) {
+            roofSeen.add(com.honcheon.mvt.forge.HwasanCampusBuilder.roofCube(
+                    (s * 13) % 977 - 400, (s * 7) % 131, (s * 29) % 883 - 400));
+        }
+        check("★팔레트 — 지붕은 한 종 (연마 안산암이 들뜨게 하지 않는다 · D-15/26)",
+                roofSeen.size() == 1, roofSeen);
+        // ★층대 띠는 <b>구조</b>다 — 위치(y)가 정하지 해시가 정하지 않는다. 같은 y면 늘 같아야 한다.
+        boolean bandByPosition = true;
+        for (int s = 0; s < 500; s++) {
+            int py = 4 * (s % 20);      // y%4==0 인 켜
+            if (com.honcheon.mvt.forge.TerraceForge.faceMaterial(s * 3, py, s * 5, Integer.MAX_VALUE)
+                    != com.honcheon.mvt.forge.TerraceForge.faceMaterial(s * 7 + 11, py, s * 2, Integer.MAX_VALUE)) {
+                bandByPosition = false;
+            }
+        }
+        check("★층대 띠 — 같은 켜는 어디서나 같다 (위치가 정하면 구조, 해시가 정하면 잡티)",
+                bandByPosition, bandByPosition);
         // ══════════ ★★슬라이스 15 — 암벽 표면의 질 (사용자 판정 「산의 퀄리티」) ══════════
         // ①-㉢ 얼룩 — 같은 재료가 뭉쳐야 한다. 이웃한 두 열이 같은 재료일 확률이 「점점이」
         //   (한 블록마다 굴림 ≈ 12%) 보다 확실히 높아야 얼룩으로 읽힌다.
@@ -593,15 +632,13 @@ public final class TerraceForgeSelfTest {
         }
         check("★15-㉢ 얼룩 — 이웃 열이 같은 재료일 확률 ≥30% (점점이 노이즈가 아니다)",
                 same * 100 / pairs >= 30, same * 100 / pairs + "%");
-        // ②-이음매 — 산의 암질에 석전 계열이 섞여야 옹벽과 경계가 흐려진다
-        boolean brickInRock = false;
-        for (int s = 0; s < 900; s++) {
-            Material m = com.honcheon.mvt.forge.SpireField.stone(s * 7, (s % 30) * 4, s * 11, false);
-            if (m == Material.STONE_BRICKS || m == Material.MOSSY_STONE_BRICKS) {
-                brickInRock = true;
-            }
-        }
-        check("★15-② 이음매 흐림 — 암벽에 석전 계열이 섞인다 (축대와 한 계열)", brickInRock, brickInRock);
+        // ②-이음매 — 산과 옹벽의 경계가 흐려야 한다. 전에는 <b>암벽에 석전을 섞어</b> 그 모호함을
+        //   냈다 (열한 종의 명분 중 하나였다). 이제는 <b>밝기로</b> 낸다 — 섞지 않고도 두 재료가
+        //   충분히 가까우면 눈이 못 가른다 (돌 126 · 석전 122 — 차이 4).
+        int rockL = lumaOf(com.honcheon.mvt.forge.SpireField.stone(400, 40, 120, false));
+        int wallL = lumaOf(com.honcheon.mvt.forge.TerraceForge.faceMaterial(400, 41, 120, Integer.MAX_VALUE));
+        check("★15-② 이음매 흐림 — 암벽과 석축의 밝기 차 ≤12 (섞지 않고 붙인다)",
+                Math.abs(rockL - wallL) <= 12, rockL + " vs " + wallL);
         // ★15 유출 오탐의 계약 — 늑재는 「산의 것」이라 스캔 밖이어야 한다 (조경 표와 같은 문법).
         //   실기동 오탐 8건(사암)의 처방: 암벽 재료 ∩ 유출 스캔 = ∅.
         java.util.Set<Material> rockMats = com.honcheon.mvt.forge.SpireField.rockMats();
@@ -786,12 +823,15 @@ public final class TerraceForgeSelfTest {
             int jongParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jong).size();
             check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
                     plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
-            check("★D-25·26 재료 — 단청(금빛·적목)과 회색 기와 결이 팔레트에",
+            check("★D-25 재료 — 단청(금빛·적목)이 팔레트에",
                     bPal.contains(Material.CUT_SANDSTONE)
-                            && bPal.contains(Material.STRIPPED_MANGROVE_WOOD)
-                            && bPal.contains(Material.DEEPSLATE_BRICKS)
-                            && bPal.contains(Material.GRAY_TERRACOTTA)
-                            && palette.contains(Material.COBBLESTONE), "9 재료");
+                            && bPal.contains(Material.STRIPPED_MANGROVE_WOOD), bPal);
+            // ★D-26 <b>뒤집힌 눈</b> — 전에는 「회색 기와 결」로 심층암 벽돌·회색 테라코타가
+            //   팔레트에 있기를 요구했다. 지붕은 이제 한 종이다. 요구를 반대로 세운다.
+            check("★D-26 기와 결 폐기 — 지붕 혼합재가 실제로 안 나온다 (신고표가 아니라 실물)",
+                    !roofSeen.contains(Material.DEEPSLATE_BRICKS)
+                            && !roofSeen.contains(Material.GRAY_TERRACOTTA)
+                            && !roofSeen.contains(Material.POLISHED_ANDESITE), roofSeen);
             // ★9b — 단구 표고 분할: 같은 통단 안 칸이 ±4 로 갈렸다 (원경 스카이라인 요철)
             check("★9b 단구 — B2 표고가 갈렸다 (연무장하 62 > 외원 58 > 생활하 54 · 척도 되돌림)",
                     heightOf(campus, 3) == 62 && heightOf(campus, 2) == 58
@@ -850,9 +890,24 @@ public final class TerraceForgeSelfTest {
             }
             check("★13a-1 옹벽 선반 — 구간마다 나거나 안 난다 (불규칙 테라스)",
                     someShelf && somePlain, someShelf + "/" + somePlain);
-            check("★13a-3 팔레트 웜톤 분화 — 축대 점적석·포장 사암이 표에 있다",
-                    palette.contains(Material.DRIPSTONE_BLOCK)
-                            && palette.contains(Material.SMOOTH_SANDSTONE), "웜톤");
+            // ★13a-3 <b>폐기된 눈의 자리</b> — 「축대 점적석·포장 사암이 표에 있다」를 요구했다.
+            //   웜톤을 재료로 흉내 내려던 처방이었고, 그 처방이 오진이었다 (온기는 햇빛이다 —
+            //   밝기·색온도 상관 +0.94). 이제 반대를 잰다: <b>표에 없어야 한다.</b>
+            //   ★신고표(palette)가 실물보다 넓으면 눈이 헛것을 지킨다 — 신고와 실물을 맞춘다.
+            check("★13a-3 웜톤 흉내 폐기 — 점적석·사암이 팔레트에서 빠졌다 (D-42·43)",
+                    !palette.contains(Material.DRIPSTONE_BLOCK)
+                            && !palette.contains(Material.SMOOTH_SANDSTONE), palette);
+            // 신고표가 실물을 덮는가 — 석축·포장이 내는 것은 전부 표 안이어야 한다
+            java.util.Set<Material> made = java.util.EnumSet.noneOf(Material.class);
+            for (int s = 0; s < 2000; s++) {
+                made.add(TerraceForge.faceMaterial(s * 13 % 977, s * 7 % 131, s * 29 % 883,
+                        Integer.MAX_VALUE));
+                made.add(TerraceForge.paveMaterial(s * 13 % 977, s * 29 % 883));
+            }
+            java.util.Set<Material> undeclared = java.util.EnumSet.copyOf(made);
+            undeclared.removeAll(palette);
+            check("★신고표가 실물을 덮는다 (내는 재료는 전부 팔레트 안)",
+                    undeclared.isEmpty(), undeclared);
             // ★13b-② 정면 요철 — 본전 남면이 포치만큼 앞으로 나온다 (평평한 긴 벽의 처방)
             int mcz = main2.zN() + main2.spec().depth() / 2;
             check("★13b-② 본전 현관 포치 — 남면 발자국이 몸체보다 앞선다 (중앙 돌출)",
@@ -1676,6 +1731,28 @@ public final class TerraceForgeSelfTest {
         } catch (IllegalArgumentException e) {
             check(what, true, e.getMessage());
         }
+    }
+
+    /**
+     * 바닐라 텍스처의 평균 밝기 (0~255) — 클라이언트 jar 를 실측한 값
+     * ({@code run/client/client-1.21.11.jar} · 불투명 화소 평균 · 0.299R+0.587G+0.114B).
+     * ★리소스팩이 아니라 <b>바닐라</b>다 — 테스트 서버는 팩을 끄고 본다.
+     */
+    private static int lumaOf(Material m) {
+        return switch (m) {
+            case STONE -> 126;
+            case STONE_BRICKS -> 122;
+            case CRACKED_STONE_BRICKS -> 118;
+            case ANDESITE -> 136;
+            case POLISHED_ANDESITE -> 133;
+            case TUFF -> 108;
+            case COBBLED_DEEPSLATE -> 78;
+            case DEEPSLATE_BRICKS -> 71;
+            case MOSS_BLOCK -> 100;
+            case BONE_BLOCK -> 225;
+            default -> throw new IllegalArgumentException("밝기 실측이 없는 재료: " + m
+                    + " — run/client 의 바닐라 텍스처를 재서 이 표에 더하라");
+        };
     }
 
     private static void check(String what, boolean ok, Object got) {

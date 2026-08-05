@@ -2162,20 +2162,27 @@ public final class TerraceForge {
     // 팔레트 — 결정론 섞음 (난수 없음 · 재실행 멱등)
     // ═══════════════════════════════════════════════════════════════════
 
-    /** 이 기계가 쓰는 재료 전부 — 눈이 금지 재료(B-195: barrel·light)를 이 표로 잰다. */
+    /**
+     * 이 기계가 쓰는 재료 전부 — 눈이 금지 재료(B-195: barrel·light)를 이 표로 잰다.
+     *
+     * <p>★<b>신고표는 실물보다 넓으면 안 된다</b> (2026-08-05). 전에는 여기에 점적석·매끈 사암·
+     * 금 간 석전·이끼 석전·조약돌·이끼 조약돌이 있었는데, 팔레트를 줄인 뒤에도 <b>표에만</b>
+     * 남아 있었다. 그러면 「축대 점적석이 표에 있다」 같은 눈이 <b>실물은 안 보고 표만 보고</b>
+     * 통과한다 — 폐기된 처방을 눈이 계속 지키게 된다. 눈({@code ★신고표가 실물을 덮는다})이
+     * 이제 양쪽을 맞춘다.
+     */
     public static Set<Material> palette() {
         return EnumSet.of(
-                Material.STONE, Material.STONE_BRICKS, Material.CRACKED_STONE_BRICKS,
-                Material.MOSSY_STONE_BRICKS, Material.ANDESITE, Material.POLISHED_ANDESITE,
-                Material.TUFF, Material.STONE_BRICK_STAIRS, Material.STONE_BRICK_WALL,
-                Material.COBBLESTONE, Material.MOSSY_COBBLESTONE,   // ★슬라이스 9 — 암반 늑재
+                Material.STONE, Material.STONE_BRICKS,                    // ★암벽 몸 · 석축/포장
+                Material.TUFF,                                            // ★석축 층대 띠 (구조)
+                Material.POLISHED_ANDESITE,                               //   기초 켜
+                Material.STONE_BRICK_STAIRS, Material.STONE_BRICK_WALL,
                 Material.DARK_OAK_PLANKS, Material.DEEPSLATE_TILE_SLAB,   // ★9b — 소문 보·갓
                 Material.SPRUCE_WOOD, Material.SPRUCE_LEAVES,             // ★9b — 접근로 소나무
                 Material.AZALEA_LEAVES, Material.FLOWERING_AZALEA_LEAVES, // ★12.6 잎 톤
-                Material.DRIPSTONE_BLOCK, Material.SMOOTH_SANDSTONE,      // ★13a-3 웜톤 분화
                 Material.COARSE_DIRT, Material.FERN, Material.SHORT_GRASS,
                 Material.MOSS_BLOCK, Material.AZALEA,                     // ★13a-2 선반 화단
-                Material.GLOWSTONE, Material.DEEPSLATE_TILE_SLAB,         // ★D-22 석등 (등롱·갓)
+                Material.GLOWSTONE,                                       // ★D-22 석등 (등롱·갓)
                 Material.DARK_OAK_FENCE, Material.DARK_OAK_LOG,           // ★D-21 깃대 (기둥·가로대·마디)
                 Material.BLACK_WALL_BANNER,                               //   짙은 배너 (무지 · 실측 최근접)
                 Material.LANTERN, Material.AIR);
@@ -2186,7 +2193,7 @@ public final class TerraceForge {
      * 층대 띠(4단마다)는 응회암, 몸은 석전 바탕에 응회암·점적석(웜톤)·균열·이끼가 섞인다 —
      * 산의 웜톤(SpireField.stone)과 같은 계열이 되게.
      */
-    private static Material faceMaterial(int x, int y, int z) {
+    public static Material faceMaterial(int x, int y, int z) {
         return faceMaterial(x, y, z, Integer.MAX_VALUE);
     }
 
@@ -2198,60 +2205,39 @@ public final class TerraceForge {
      * @param below 그 열이 선반·상단에서 몇 칸 아래인가 (클수록 아래 — 젖음이 는다).
      *              {@link Integer#MAX_VALUE} = 모름 (기본 결)
      */
-    private static Material faceMaterial(int x, int y, int z, int below) {
+    /**
+     * 석축 면 — <b>★두 재료</b>: 석전 한 장 + 네 켜마다 도는 응회암 층대 띠.
+     * 사용자 확정 (2026-08-05) 「블록 수를 줄여 일관성을 높인다」.
+     *
+     * <p>★전에는 일곱이었다 (점적석·이끼 석전·이끼 조약돌·응회암·석전·안산암·금 간 석전 —
+     * 「젖은 셀」과 「마른 면」으로 갈라 굴렸다). 목표 사진의 석축을 색 무리로 가르면 네 무리가
+     * 나오지만 <b>색도가 넷 다 같고 밝기만 다르다</b> (54 · 93 · 131 · 182). 한 재료다.
+     * 우리가 일곱으로 낸 것은 목표에 없는 잡티였다 (D-42 「석축이 헐어 보인다」).
+     *
+     * <p>남긴 띠는 잡티가 아니라 <b>구조</b>다 — 목표 석축에도 네 켜마다 가로 결이 돈다.
+     * 「무엇을 남기는가」의 자: <b>위치가 정하면 구조, 해시가 정하면 잡티다.</b>
+     */
+    public static Material faceMaterial(int x, int y, int z, int below) {
         if (y % 4 == 0) {
-            return Material.TUFF;       // 층대 띠 — 레퍼런스 석축의 가로 결 (웜톤으로 교체)
+            return Material.TUFF;       // 층대 띠 — 위치가 정한다 (구조)
         }
-        // ① 젖은 셀 — 3칸 뭉치 격자. 아래쪽일수록 셀이 젖을 확률이 는다 (물이 흘러내린다)
-        int wetBias = below == Integer.MAX_VALUE ? 12 : Math.min(34, 6 + below * 3);
-        boolean wetCell = Math.floorMod(mix(SALT_FACE ^ 0x5DE7L,
-                Math.floorDiv(x, 3), Math.floorDiv(y, 3), Math.floorDiv(z, 3)), 100) < wetBias;
-        int r = (int) Math.floorMod(mix(SALT_FACE, x, y, z), 100);
-        if (wetCell) {
-            // 뭉치 안 — 젖은 결이 이어진다 (점이 아니라 얼룩)
-            if (r < 46) {
-                return Material.DRIPSTONE_BLOCK;
-            }
-            if (r < 72) {
-                return Material.MOSSY_STONE_BRICKS;
-            }
-            if (r < 84) {
-                return Material.MOSSY_COBBLESTONE;
-            }
-            return Material.TUFF;
-        }
-        // 마른 면 — 석전·응회암·안산암만 (점적석·이끼 없음: 무늬가 안 생긴다)
-        if (r < 56) {
-            return Material.STONE_BRICKS;
-        }
-        if (r < 76) {
-            return Material.TUFF;
-        }
-        if (r < 90) {
-            return Material.ANDESITE;
-        }
-        return Material.CRACKED_STONE_BRICKS;
+        return Material.STONE_BRICKS;
     }
 
     /**
      * 포장 결 — ★13a-3: 광장 바닥은 <b>따뜻한 베이지</b>를 섞는다 (축대의 거친 회갈과 갈린다).
      * 박석(연마 안산암) 바탕 + 매끈 사암·석전.
      */
-    private static Material paveMaterial(int x, int z) {
-        int r = (int) Math.floorMod(mix(SALT_PAVE, x, 0, z), 100);
-        if (r < 42) {
-            return Material.POLISHED_ANDESITE;
-        }
-        if (r < 62) {
-            return Material.STONE_BRICKS;
-        }
-        if (r < 80) {
-            return Material.SMOOTH_SANDSTONE;   // 베이지 — 산의 웜톤과 한 계열
-        }
-        if (r < 92) {
-            return Material.ANDESITE;
-        }
-        return Material.CRACKED_STONE_BRICKS;
+    /**
+     * 월대·마당 포장 — <b>★단일 재료</b>. 사용자 확정 (2026-08-05).
+     *
+     * <p>★전에는 다섯이었다 (연마 안산암 42 / 석전 20 / 매끈 사암 18 / 안산암 12 / 금 간 석전 8).
+     * 사암 18%가 <b>누런 바둑판</b>으로 읽혔다 (D-43). 「베이지 — 산의 웜톤과 한 계열」이라 적어
+     * 넣은 것인데, 목표의 온기는 재료가 아니라 <b>햇빛</b>이었다 (밝기와 색온도의 상관 +0.94 —
+     * 같은 면 안에서도 밝은 무리일수록 따뜻하다). 웜톤을 재료로 흉내 내려던 것이 오진이었다.
+     */
+    public static Material paveMaterial(int x, int z) {
+        return Material.STONE_BRICKS;
     }
 
     private static long mix(long salt, int x, int y, int z) {

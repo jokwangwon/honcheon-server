@@ -457,53 +457,34 @@ public final class SpireField {
     }
 
     /**
-     * ★암질 — 슬라이스 10-② 색 온도: 차가운 회색 일색 → 웜톤 (레퍼런스 1·8·12호의 베이지 끼
-     * 석재). 점적석(따뜻한 갈빛)·사암을 섞고 응회암 비중을 올렸다 — y-띠(6칸)·해시 결정론.
-     * 마루(cap)엔 이끼가 앉는다 (기존 결 유지).
+     * 암질 — <b>★몸은 돌 한 장, 마루엔 이끼</b>. 사용자 확정 (2026-08-05)
+     * 「블록 수를 줄여 일관성을 높인다」 + 「옛 산 로직이 색과 형태를 더 잘 잡았다」.
+     *
+     * <p>★전에는 <b>열한 종</b>이었다 (돌·석전·이끼 석전·조약돌·이끼 조약돌·안산암·응회암·
+     * 방해석·점적석·사암·이끼). 그때의 명분은 「웜톤을 낸다」와 「옹벽과의 이음매를 흐린다」였다.
+     * 둘 다 오진이었다:
+     *
+     * <ul>
+     *   <li><b>웜톤은 재료가 아니라 햇빛이다.</b> 목표 사진에서 밝기와 색온도의 상관이 <b>+0.94</b> —
+     *       같은 면 안에서도 밝은 무리일수록 따뜻하다. 그늘 무리의 색도는 거의 무채다.
+     *       사암·점적석을 섞어 낸 것은 목표에 없는 <b>얼룩</b>이었다 (D-42).</li>
+     *   <li><b>열한 종을 섞으면 멀리서 한 덩어리 회색으로 뭉갠다.</b> 계율 「픽셀은 섞이지만
+     *       블록은 안 섞인다」가 산 규모에서 그대로 되풀이됐다.</li>
+     * </ul>
+     *
+     * <p>옛 산 문법({@code MountainRangeForge.skin})은 <b>한 자리에 최대 두 종</b>만 놓고,
+     * 그 둘을 <b>구역과 물매</b>가 골랐다 — 절벽이면 암반, 완만하면 풀. 무엇을 놓을지 <b>산의
+     * 형태가 정했다.</b> 얼룩도 해시가 아니라 파장 9·7·19 의 사인파라 수십 칸 덩어리로 앉았다.
+     * 그 문법으로 되돌린다.
      */
     public static org.bukkit.Material stone(int x, int y, int z, boolean cap) {
-        // ★★15-㉢ <b>얼룩(뭉치)으로 섞는다</b> — 한 블록마다 굴리면 「점점이 노이즈」가 되어
-        //   멀리서 균질한 회색으로 뭉개진다 (실측 9호: 재료가 3~5칸 얼룩으로 뭉쳐 있다).
-        //   3칸 셀로 굴려 같은 재료가 덩어리지게 하고, 셀 안에서만 잔결을 준다.
-        long cell = (Math.floorDiv(x, 3) * 0x9E3779B97F4A7C15L)
-                ^ (Math.floorDiv(y, 3) * 0xC2B2AE3D27D4EB4FL)
-                ^ (Math.floorDiv(z, 3) * 0x165667B19E3779F9L);
-        cell ^= cell >>> 31;
-        int r = (int) Math.floorMod(cell, 100);
-        long fine = (x * 0x27D4EB2F165667C5L) ^ (y * 0x9E3779B97F4A7C15L) ^ (z * 0xC2B2AE3D27D4EB4FL);
-        fine ^= fine >>> 29;
-        boolean grain = Math.floorMod(fine, 100) < 22;      // 셀 안 잔결 — 얼룩의 경계를 허문다
-        if (cap) {
-            return r < 45 ? org.bukkit.Material.MOSS_BLOCK : org.bukkit.Material.STONE;
+        if (!cap) {
+            return org.bukkit.Material.STONE;        // 몸은 한 장 — 밝기 결은 면 방향과 그늘이 낸다
         }
-        // ★★15-② <b>산·건축의 이음매를 흐린다</b>: 레퍼런스 9호의 절벽은 그 자체가 석전
-        //   계열(석전·이끼 석전·조약돌)로 쌓여 있다 — 그래서 옹벽이 어디서 끝나고 산이 어디서
-        //   시작하는지 눈이 못 가른다. 우리 축대와 같은 계열을 암벽에 섞어 그 모호함을 만든다.
-        if (r < 12) {
-            return grain ? org.bukkit.Material.MOSSY_STONE_BRICKS : org.bukkit.Material.STONE_BRICKS;
-        }
-        if (r < 20) {
-            return grain ? org.bukkit.Material.MOSSY_COBBLESTONE : org.bukkit.Material.COBBLESTONE;
-        }
-        if (r < 34) {
-            return grain ? org.bukkit.Material.ANDESITE : org.bukkit.Material.STONE;
-        }
-        if (r < 46) {
-            return org.bukkit.Material.ANDESITE;
-        }
-        if (r < 62) {
-            return grain ? org.bukkit.Material.STONE : org.bukkit.Material.TUFF;
-        }
-        if (r < 72) {
-            return org.bukkit.Material.CALCITE;
-        }
-        if (r < 90) {
-            return grain ? org.bukkit.Material.TUFF : org.bukkit.Material.DRIPSTONE_BLOCK;   // 웜톤 몸통
-        }
-        if (r < 96) {
-            return org.bukkit.Material.SANDSTONE;
-        }
-        return org.bukkit.Material.MOSSY_COBBLESTONE;
+        // 마루의 이끼 — <b>저주파 사인 얼룩</b> (옛 산 문법 {@code MountainRangeForge.skin} 계승).
+        // 해시 셀이 아니라 파장 9·7·19 의 큰 물결이라 수십 칸짜리 덩어리로 앉는다.
+        double patch = Math.sin(x / 9.0) * Math.sin(z / 7.0) + Math.sin((x + z) / 19.0) * 0.7;
+        return patch > 0.15 ? org.bukkit.Material.MOSS_BLOCK : org.bukkit.Material.STONE;
     }
 
     /**
@@ -515,13 +496,7 @@ public final class SpireField {
      * 불교집합을 세운다. ★{@code stone} 에 재료를 더하면 <b>이 표에도 더한다</b> (눈이 잰다).
      */
     public static java.util.Set<org.bukkit.Material> rockMats() {
-        return java.util.EnumSet.of(
-                org.bukkit.Material.MOSS_BLOCK, org.bukkit.Material.STONE,
-                org.bukkit.Material.STONE_BRICKS, org.bukkit.Material.MOSSY_STONE_BRICKS,
-                org.bukkit.Material.COBBLESTONE, org.bukkit.Material.MOSSY_COBBLESTONE,
-                org.bukkit.Material.ANDESITE, org.bukkit.Material.TUFF,
-                org.bukkit.Material.CALCITE, org.bukkit.Material.DRIPSTONE_BLOCK,
-                org.bukkit.Material.SANDSTONE);
+        return java.util.EnumSet.of(org.bukkit.Material.STONE, org.bukkit.Material.MOSS_BLOCK);
     }
 
     /** 셀의 침봉 반경 (0 = 없음 — 밀도·회랑·본산권 반영 · 발치 가드는 targetH 의 몫) — 변주 눈용 */

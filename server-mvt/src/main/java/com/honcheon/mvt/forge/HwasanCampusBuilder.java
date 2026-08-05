@@ -871,38 +871,35 @@ public final class HwasanCampusBuilder {
             tally.print.take(x, y, z);
             return;
         }
-        // ★슬라이스 9 — 기와 결 혼합 (코덱스 §④: 「검은 단일 덩어리」의 처방 · 결정론)
-        Material mat = Math.floorMod(hash(0x5EA9L, x, y, z), 100) < 72
-                ? Material.COBBLED_DEEPSLATE_STAIRS : Material.DEEPSLATE_BRICK_STAIRS;
+        // ★기와 결 혼합 폐기 (2026-08-05) — 「검은 단일 덩어리」의 처방으로 조약 심층암 72 /
+        //   심층암 벽돌 28 로 섞었으나, 목표 지붕은 <b>한 재료가 세 밝기로</b> 앉은 것이었다
+        //   ({@link #roofCube} 주석). 섞음은 결이 아니라 잡티였다. 면 방향이 결을 낸다.
         org.bukkit.block.data.type.Stairs data =
-                (org.bukkit.block.data.type.Stairs) mat.createBlockData();
+                (org.bukkit.block.data.type.Stairs) Material.COBBLED_DEEPSLATE_STAIRS.createBlockData();
         data.setFacing(ascent);
         world.getBlockAt(x, y, z).setBlockData(data, false);
         tally.blocks++;
     }
 
     /**
-     * 기와 면 결 — <b>★D-26 회색 기와</b> (목표 1호 실측: 지붕은 순검정이 아니라 <b>중간 회색</b>이고
-     * 밝고 어두운 골이 섞인다). 조약 심층암 60 / 심층암 벽돌 22 / 연마 안산암 13 / 회색 테라코타 5.
-     * 처마 끝 반블록·용마루는 <b>안 섞는다</b> — 윤곽선은 또렷해야 한다.
+     * 기와 면 — <b>★단일 재료</b> (사용자 확정 2026-08-05: 「색상을 표현하는 데 쓰는 블록의 수를
+     * 줄여 일관성을 높인다」).
+     *
+     * <p>★그 전에는 조약 심층암 60 / 심층암 벽돌 22 / 연마 안산암 13 / 회색 테라코타 5 로 섞었다.
+     * 목표 1호를 「지붕은 순검정이 아니라 중간 회색이고 밝고 어두운 골이 섞인다」로 읽은 처방이었다.
+     * <b>그 읽기가 틀렸다.</b> 목표 사진의 지붕을 색 무리로 가르면 세 무리가 나오는데
+     * (밝기 24 · 45 · 68) <b>색도가 셋 다 같다</b> — 한 재료가 세 밝기로 앉은 것이지 세 재료가 아니다.
+     * 밝기 차는 마인크래프트가 면 방향과 그늘로 <b>거저 준다</b>. 우리가 섞어서 낸 것은 결이 아니라
+     * 잡티였고, 연마 안산암(밝기 132)이 13%나 끼어 지붕을 들뜨게 했다 (재판정: 「우리 지붕이 목표보다
+     * 밝고 푸르다」).
      *
      * <p>★재료 선택의 계약: <b>암벽 재료를 지붕에 쓰면 안 된다</b>. 조약돌·안산암·돌·석전·사암은
      * {@code SpireField.rockMats()} 라서 유출 스캔에서 <b>빠진다</b> (늑재 오탐을 막으려 뺀 것 —
-     * 슬라이스 15). 그 계열로 지붕을 이면 <b>지붕이 패드를 넘어도 눈이 못 본다.</b> 그래서
-     * 회색을 심층암 계열(조약 심층암)·연마 안산암·회색 테라코타에서 골랐다.
+     * 슬라이스 15). 그 계열로 지붕을 이면 <b>지붕이 패드를 넘어도 눈이 못 본다.</b>
+     * 조약 심층암은 그 표 밖이라 스캔에 남는다.
      */
-    private static Material roofCube(int x, int y, int z) {
-        int r = Math.floorMod((int) hash(0x5EA9L ^ 0xF00FL, x, y, z), 100);
-        if (r < 60) {
-            return Material.COBBLED_DEEPSLATE;
-        }
-        if (r < 82) {
-            return Material.DEEPSLATE_BRICKS;
-        }
-        if (r < 95) {
-            return Material.POLISHED_ANDESITE;
-        }
-        return Material.GRAY_TERRACOTTA;
+    public static Material roofCube(int x, int y, int z) {
+        return Material.COBBLED_DEEPSLATE;
     }
 
     /**
