@@ -676,7 +676,10 @@ public final class HwasanCampusBuilder {
      * 처마가 벽선 밖 2칸 내밀고(반블록 끝), 모서리는 1단 들리며, 계단 블록이 물매를 만들고,
      * 용마루는 큐브+반블록, 마루 끝은 담장 블록(치미)이 솟는다.
      */
-    private static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
+    // ★2026-08-05 package-private 로 넓혔다 — 설계도({@link Blueprint})가 이 지붕 문법을
+    //   그대로 부른다. 도면은 「어디에·몇 층」만 정하고 지붕의 결(귀솟음·겹처마·치미)은
+    //   여기 한 곳에 남는다 (두 번 적으면 어긋난다 — 7.5 계율).
+    static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
                                   int hf, int hl, Tally tally) {
         // 처마 내밈 — ★D-26 (목표 실측 3~5 · 그늘이 깊어져 단청 띠가 산다).
         // ★패드에 맞춰 스스로 죈다: 내밈이 커지면 발자국이 커지고 좁은 패드(측문 등)에서는

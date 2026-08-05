@@ -1,5 +1,6 @@
 package com.honcheon.mvt;
 
+import com.honcheon.mvt.forge.Blueprint;
 import com.honcheon.mvt.forge.TerraceForge;
 import org.bukkit.Material;
 
@@ -1083,6 +1084,60 @@ public final class TerraceForgeSelfTest {
                     TerraceForge.batterRoughness(120, 77, -31, 1, 0, 10)
                             == TerraceForge.batterRoughness(120, 77, -31, 1, 0, 10),
                     "동일");
+        }
+
+        // ══════════ ⑯ ★설계도 — 도면이 좌표의 정본이다 (사용자 확정 2026-08-05) ══════════
+        //   「레퍼런스를 토대로 설계도를 그리고 그걸 바탕으로 건축하는 형태를 취해봅시다」
+        //   ★눈이 재는 것: 도면이 **스스로 지켜야 하는 계약**이다. 조성이 아니라 도면을 잰다 —
+        //     틀린 도면으로 지으면 틀린 것이 서므로, 도면에서 먼저 죽어야 한다.
+        try {
+            java.util.Map<String, Object> raw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_gate.yml")));
+            Blueprint blueprint = Blueprint.of(raw);
+            check("★설계도 산문 구역이 읽힌다 (평면 " + blueprint.width() + "×" + blueprint.depth() + ")",
+                    blueprint.width() == 60 && blueprint.depth() == 22, blueprint.width() + "×" + blueprint.depth());
+
+            blueprint.validate();
+            check("★설계도 자기 계약을 지킨다 (통행 개구·축선 시야·자리·지붕 상자)", true, "통과");
+
+            // 중앙 통행 개구 — 목표 실측 폭 5
+            int openCols = 0;
+            for (int c = 0; c < blueprint.width(); c++) {
+                boolean air = false;
+                for (Blueprint.Course cs : blueprint.columnOf(blueprint.at(c, 18))) {
+                    if ("air".equals(cs.material()) && cs.count() >= 5) {
+                        air = true;
+                    }
+                }
+                if (air) {
+                    openCols++;
+                }
+            }
+            check("★설계도 중앙 개구 폭 5 (목표 실측)", openCols == 5, openCols);
+
+            // ★하층은 「기둥 + 격자 문짝」의 반복이다 (실측의 핵심 — 넓은 백벽이 아니다).
+            //   남면(row 18)에서 문짝 칸이 회벽 칸보다 많아야 한다.
+            int doors = 0;
+            int walls = 0;
+            for (int c = 16; c <= 44; c++) {
+                char ch = blueprint.at(c, 18);
+                if (ch == 'D') {
+                    doors++;
+                }
+                if (ch == 'W') {
+                    walls++;
+                }
+            }
+            check("★설계도 하층이 「기둥+문짝」이다 (문짝 " + doors + " > 회벽 " + walls + ")",
+                    doors > walls, doors + "/" + walls);
+
+            // 금지 재료 — 도면에도 계율이 걸린다
+            boolean banned = blueprint.materials().stream()
+                    .anyMatch(m -> m.contains("barrel") || m.contains("light") || m.contains("chain"));
+            check("★설계도에 금지 재료가 없다 (barrel·light·chain)", !banned, blueprint.materials());
+        } catch (Exception e) {
+            check("★설계도 산문 구역", false, e.getClass().getSimpleName() + ": " + e.getMessage());
         }
 
         // ══════════ 결산 ══════════

@@ -224,6 +224,7 @@ public final class MvtCommand implements CommandExecutor {
                 case "산세시험" -> sanseTest(sender, args);      // ★ 버리는 FLAT 월드에 광역 산세를 세워 도보로 본다 (프로덕션 무접촉)
                 case "식생시험" -> floraTest(sender, args);      // ★ 산세시험 월드에 구역별 식생을 심는다 (매화림→벚꽃 등 · 프로덕션 무접촉)
                 case "도보길" -> trailBuild(sender, args);        // ★ 완성된 험산 위에 걸을 수 있는 계단길(천계단·잔도)을 짓는다 — 산기슭→정상 (프로덕션 무접촉)
+                case "도면시험" -> blueprintTest(sender, args);   // ★★설계도(config/blueprints/*.yml) 대로 짓는다 — 도면이 좌표의 정본
                 case "캠퍼스시험" -> campusTest(sender, args);    // ★ 산세시험 월드에 마스터플랜 캠퍼스 패드·계단을 앉힌다 — B-146 처방 시험 (프로덕션 무접촉)
                 case "대결시험" -> gateContest(sender, args);   // ★ 산문 문루 대결 — 클로드/코덱스 산출물을 나란히 (중립 배선 · 프로덕션 무접촉)
                 case "산군시험" -> spireTest(sender, args);       // ★ 산세 위에 산군(배후봉 증고+침봉 켜 3)을 얹는다 — 실측표 §4 (프로덕션 무접촉)
@@ -4435,4 +4436,66 @@ public final class MvtCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * ★★★<b>설계도 시험</b> — {@code config/blueprints/<id>.yml} 을 읽어 그대로 짓는다.
+     *
+     * <p><b>사용자 확정 (2026-08-05)</b>: 「레퍼런스를 토대로 <b>설계도를 그리고 그걸 바탕으로
+     * 건축</b>하는 형태를 취해봅시다」. 그러므로 여기서 하는 일은 <b>해석이 아니라 옮기기</b>다 —
+     * 무엇이 어떻게 설지는 도면이 정하고, 이 명령은 그것을 블록으로 옮길 뿐이다.
+     *
+     * <p>대상은 <b>버리는 sanse_test_ 월드</b>뿐이다 (프로덕션 보호 — B-126 정신).
+     * 캠퍼스가 먼저 서 있어야 한다 — 도면은 그 <b>패드 위</b>에 앉기 때문이다.
+     */
+    private boolean blueprintTest(org.bukkit.command.CommandSender sender, String[] args) {
+        if (!(sender instanceof org.bukkit.command.ConsoleCommandSender) && !sender.isOp()) {
+            Announce.fail(plugin, sender, "[도면시험] 관리자만 쓸 수 있다.");
+            return true;
+        }
+        String id = args.length > 1 ? args[1] : "hwasan_gate";
+        String worldName = "sanse_test_" + (args.length > 2 ? args[2] : "hwasan");
+        if (!worldName.startsWith("sanse_test_")) {
+            Announce.fail(plugin, sender, "[도면시험] sanse_test_ 접두 월드만 — 거부 (프로덕션 보호).");
+            return true;
+        }
+        World world = loadOrCreateSanseWorld(worldName);
+        if (world == null || !world.getName().startsWith("sanse_test_")) {
+            Announce.warn(plugin, sender, "[도면시험] " + worldName + " 을(를) 열 수 없다.");
+            return true;
+        }
+        try {
+            java.nio.file.Path f = plugin.configPath().resolve("blueprints").resolve(id + ".yml");
+            java.util.Map<String, Object> raw = com.honcheon.core.rules.RulesConfig.load(f);
+            com.honcheon.mvt.forge.Blueprint bp = com.honcheon.mvt.forge.Blueprint.of(raw);
+            bp.validate();                     // ★도면이 먼저 자기 계약을 지킨다 (틀린 도면으로 짓지 않는다)
+
+            int baseY = probeBaseY(world, sender, plugin, "도면시험");
+            if (baseY == -9999) {
+                return true;
+            }
+            TerraceForge.Plan plan = TerraceForge.plan(world, RangeSpec.hwasan(0, 0, baseY));
+            TerraceForge.Pad pad = plan.pads().stream()
+                    .filter(pp -> pp.spec().zone() == bp.pad()).findFirst().orElse(null);
+            if (pad == null) {
+                Announce.fail(plugin, sender, "[도면시험] 도면이 앉을 패드(구역 " + bp.pad() + ")를 못 찾았다.");
+                return true;
+            }
+            Announce.say(plugin, sender, ChatColor.GRAY + "[도면시험] " + bp.name()
+                    + " — 평면 " + bp.width() + "×" + bp.depth() + " · 패드 " + pad.spec().name()
+                    + " (y" + pad.y() + ") · 지붕 " + bp.roofs().size() + " · 자리 " + bp.spots().size());
+            com.honcheon.mvt.forge.BlueprintBuilder.Count n =
+                    com.honcheon.mvt.forge.BlueprintBuilder.build(world, bp, pad);
+            Announce.say(plugin, sender, ChatColor.GOLD + "[도면시험] 도면대로 섰다 — 칸 " + n.cells
+                    + " · 블록 " + n.blocks + " · 비운 켜 " + n.cleared + " · 지붕 " + n.roofs);
+            int[] front = bp.spots().get("문_앞");
+            if (front != null) {
+                int ox = pad.x0() + (pad.x1() - pad.x0() + 1 - bp.width()) / 2;
+                int oz = pad.zN() + (pad.zS() - pad.zN() + 1 - bp.depth()) / 2;
+                Announce.say(plugin, sender, ChatColor.GRAY + "  문 앞: /tp " + (ox + front[0])
+                        + " " + (pad.y() + 2) + " " + (oz + front[1]) + " (콘솔 — 좌표만 안내)");
+            }
+        } catch (Throwable e) {
+            Announce.fail(plugin, sender, "[도면시험] " + e.getClass().getSimpleName() + " — " + e.getMessage());
+        }
+        return true;
+    }
 }

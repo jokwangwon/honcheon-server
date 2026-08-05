@@ -436,6 +436,19 @@ public final class TerraceForge {
      */
     public static boolean GREEN = false;
 
+    /**
+     * <b>소품 스위치</b> — 꺼져 있으면 깃대·석등·비석을 세우지 않는다 (기본 <b>꺼짐</b>).
+     *
+     * <p>★사용자 지시 (2026-08-05): 「계단 주위 깃대 이런 거 <b>다 나중에</b> 세우자.
+     * <b>제거 후 전체 건축부터</b> 진행」 — 전체 구조를 먼저 세우고 장식은 그 위에 얹는다.
+     * {@link #GREEN} 과 같은 문법이라 이 한 줄을 {@code true} 로 바꾸면 되살아난다.
+     *
+     * <p>★<b>가르는 자 — 「구조인가 장식인가」</b>: 계단·난간벽·소문(문루)은 <b>구조</b>라
+     * 스위치와 무관하게 남는다 (걷는 길이고 통과하는 문이다). 깃대·석등·비석은 그 위에
+     * 얹히는 <b>표지</b>이므로 이 스위치를 탄다.
+     */
+    public static boolean PROPS = false;
+
     // ═══════════════════════════════════════════════════════════════════
     // 계단 문법 — 반 칸 하강 (★사용자 확정 2026-08-05)
     // ═══════════════════════════════════════════════════════════════════
@@ -751,10 +764,10 @@ public final class TerraceForge {
                 fillDown(world, x, by, z, tally);
                 world.getBlockAt(x, by, z).setType(Material.STONE_BRICKS, false);
                 boolean left = side < 0;
-                if (isFlagpoleRow(i) ) {
+                if (PROPS && isFlagpoleRow(i)) {
                     // ★D-21 깃대 — 난간 캡 위, 좌우 쌍 (목표 1호의 자리)
                     flagpole(world, x, by, z, tally);
-                } else if (isLanternRow(i, left)) {
+                } else if (PROPS && isLanternRow(i, left)) {
                     // ★D-22 석등 — 난간 캡 위, 좌우 번갈아 (목표 실측 간격 10~12)
                     stoneLantern(world, x, by, z, tally);
                 } else {
@@ -767,7 +780,7 @@ public final class TerraceForge {
                 //   그 행들의 조성(clearAbove)이 끝난 뒤여야 한다 (마당이 평탄이라 y 동일)
                 approachGate(world, a.x(), a.blockYAt(GATE_I), a.z0() + GATE_I, tally);
             }
-            if (i == STELE_A || i == STELE_B) {
+            if (PROPS && (i == STELE_A || i == STELE_B)) {
                 // ★2026-08-05 — 비석을 <b>축선 시야 회랑</b> 밖으로 밀었다. 옛 자리(±RAIL_OFF+3
                 //   = ±7)는 통행은 안 막지만, 계단 아래 축선에 선 눈에는 <b>가까운 비석이 멀리 있는
                 //   문루 정면을 세로로 가로질렀다</b> (사용자 지적 — stair_1정면). 목표 사진(1호)은
