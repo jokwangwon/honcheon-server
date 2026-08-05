@@ -610,10 +610,16 @@ public final class TerraceForgeSelfTest {
         both.retainAll(leakTbl);
         check("★15 암벽 ∩ 유출 스캔 = ∅ (늑재를 건물로 오인하지 않는다)", both.isEmpty(), both);
         // 그러나 건물 전용 재료는 여전히 잡혀야 한다 — 「빼기」가 스캔을 무력화하면 안 된다
-        check("★15 건물 전용 재료는 스캔에 남는다 (백벽·기와·유리)",
-                leakTbl.contains(Material.WHITE_TERRACOTTA)
+        check("★15 건물 전용 재료는 스캔에 남는다 (회벽·기와·유리)",
+                leakTbl.contains(Material.SMOOTH_QUARTZ)                  // ★회벽 (살구색 교정 후)
                         && leakTbl.contains(Material.COBBLED_DEEPSLATE)   // ★D-26 회색 기와
                         && leakTbl.contains(Material.GLASS_PANE), leakTbl.size());
+        // ★★회벽은 「팩이 덮어 흰색으로 보이던」 재료를 쓰지 않는다 (2026-08-05 실증).
+        //   바닐라 white_terracotta 는 RGB(210,178,161) 살구색이고, 우리가 흰 벽으로 알던 것은
+        //   팩 텍스처(201,203,205)였다. 팩을 끄면 드러나므로 **바닐라 색이 목표인 재료만** 쓴다.
+        check("★회벽에 살구색 재료(white_terracotta)를 안 쓴다",
+                !com.honcheon.mvt.forge.HwasanCampusBuilder.palette().contains(Material.WHITE_TERRACOTTA),
+                com.honcheon.mvt.forge.HwasanCampusBuilder.palette().contains(Material.WHITE_TERRACOTTA));
         // ★15 표면에 심을 수 있는가 — 암벽 재료가 「못 심는 땅」이면 산이 조용히 민둥이 된다
         //   (실기동: 석전 섞임 뒤 산 표면 ~12%가 식생에서 빠졌다)
         java.util.Set<Material> plantable = java.util.EnumSet.of(
@@ -1136,6 +1142,24 @@ public final class TerraceForgeSelfTest {
             boolean banned = blueprint.materials().stream()
                     .anyMatch(m -> m.contains("barrel") || m.contains("light") || m.contains("chain"));
             check("★설계도에 금지 재료가 없다 (barrel·light·chain)", !banned, blueprint.materials());
+
+            // ★★도면도 살구색 회벽을 못 쓴다 — 팩이 덮던 재료로 색을 판단하지 마라 (2026-08-05).
+            check("★설계도에 살구색 회벽(white_terracotta)이 없다",
+                    !blueprint.materials().contains("white_terracotta"), blueprint.materials());
+
+            // ★문짝은 벽 높이의 대부분을 차지한다 — 목표는 통짜 격자 문짝이고,
+            //   첫 판처럼 가운데를 회벽으로 끊으면 「작은 창」으로 읽힌다.
+            int doorLattice = 0;
+            int doorWall = 0;
+            for (Blueprint.Course cs : blueprint.columnOf('D')) {
+                if (cs.material().contains("trapdoor")) {
+                    doorLattice += cs.count();
+                } else if (cs.material().contains("quartz") || cs.material().contains("terracotta")) {
+                    doorWall += cs.count();
+                }
+            }
+            check("★문짝이 통짜다 (격자 " + doorLattice + "켜 · 사이 회벽 " + doorWall + "켜)",
+                    doorLattice >= 5 && doorWall == 0, doorLattice + "/" + doorWall);
         } catch (Exception e) {
             check("★설계도 산문 구역", false, e.getClass().getSimpleName() + ": " + e.getMessage());
         }

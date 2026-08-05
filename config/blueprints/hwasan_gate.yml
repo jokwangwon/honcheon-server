@@ -27,6 +27,17 @@
 #   · 성벽 : 높이 5 + 여장 1 · 두께 3 【D-30 낮고 두껍다】
 #   · 곁채 : 성벽 **위에 올라탄다** — 성벽이 기단 노릇 【D-29】
 #   ※ 【추정】 = 사진에 안 보여 대칭·건축 논리로 채운 값 (몸체 깊이·북면).
+#
+# ── ★★★회벽 교정 (2026-08-05 · 팩을 끄니 드러났다) ──────────────────────
+#   첫 판은 회벽을 `white_terracotta` 로 썼다. 팩을 켠 채로는 **흰 회벽**으로 보였는데,
+#   팩을 끄니 **살구색**이 드러났다 — 우리가 「흰 벽」이라 여긴 것은 **팩 텍스처**였다.
+#     · 바닐라 white_terracotta : RGB(210,178,161) S23% ← 살구/분홍
+#     · 팩    white_terracotta : RGB(201,203,205) S 2% ← 우리가 보던 흰 벽
+#   목표(1호)의 회벽을 실제로 재니 **lit face RGB(229,216,194) H38 S15% V90%** 이고,
+#   바닐라 후보와의 거리는 bone_block 17 · calcite 29 · smooth_quartz 33 ·
+#   **white_terracotta 54** 였다. bone_block 이 색은 가장 가까우나 **세로 줄무늬**가
+#   벽 크기에서 「뼈」로 읽혀 회벽이 못 된다 — 그래서 **smooth_quartz**(따뜻한 near-white ·
+#   무늬 거의 없음)를 골랐다. ★계율: **팩이 덮는 재료로 색을 판단하지 마라.**
 
 meta:
   name: 화산파 산문 구역
@@ -43,15 +54,15 @@ columns:
   "B": ["smooth_stone"]                                       # 문루 발치 기단
   "P": ["smooth_stone", "stripped_mangrove_log*6",
         "stripped_mangrove_log", "cut_sandstone"]             # 적주 + 도리 + 단청 패널
-  "D": ["smooth_stone", "dark_oak_trapdoor*2", "white_terracotta*2",
-        "dark_oak_trapdoor*2", "stripped_mangrove_log", "cut_sandstone"]   # ★격자 문짝 칸
-  "W": ["smooth_stone", "white_terracotta*6",
+  "D": ["smooth_stone", "dark_oak_trapdoor*6",
+        "stripped_mangrove_log", "cut_sandstone"]             # ★격자 문짝 칸 — 벽 높이 전부
+  "W": ["smooth_stone", "smooth_quartz*6",
         "stripped_mangrove_log", "cut_sandstone"]             # 기둥 사이 좁은 회벽 띠
   "O": ["smooth_stone", "air*6",
         "stripped_mangrove_log", "cut_sandstone"]             # ★중앙 통행 개구 (걸어 지난다)
   "S": ["stone_bricks*5", "stone_brick_wall"]                 # 성벽 + 여장
   "s": ["stone_bricks*5", "stone_bricks"]                     # 성벽 속 (걷는 면 · 여장 없음)
-  "K": ["stone_bricks*5", "white_terracotta*4",
+  "K": ["stone_bricks*5", "smooth_quartz*4",
         "stripped_mangrove_log", "cut_sandstone"]             # ★곁채 벽 — 성벽 위에 올라탄다
   "k": ["stone_bricks*5", "stripped_mangrove_log*4",
         "stripped_mangrove_log", "cut_sandstone"]             # 곁채 적주

@@ -95,7 +95,7 @@ public final class BlueprintBuilder {
                         boolean post = ((c2 - b[0]) % 3 == 0) || ((r2 - b[1]) % 3 == 0);
                         for (int k = 0; k < rf.upperWall(); k++) {
                             world.getBlockAt(ox + c2, upBase + k, oz + r2).setType(
-                                    post ? Material.STRIPPED_MANGROVE_LOG : Material.WHITE_TERRACOTTA, false);
+                                    post ? Material.STRIPPED_MANGROVE_LOG : Material.SMOOTH_QUARTZ, false);
                             n.blocks++;
                         }
                     }

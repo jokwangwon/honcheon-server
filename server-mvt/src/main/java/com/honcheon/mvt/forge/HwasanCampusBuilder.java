@@ -491,7 +491,7 @@ public final class HwasanCampusBuilder {
                             : shell && dy >= 5 ? Material.RED_TERRACOTTA                        // ★14-② 상단 적 띠
                             : shell && Math.floorMod(f, 3) == 1 && (dy == 2 || dy == 3)
                                     ? Material.GLASS_PANE                                       // 창 리듬 3칸
-                            : Material.WHITE_TERRACOTTA;
+                            : Material.SMOOTH_QUARTZ;
                     put(world, pad, x, y + dy, z, m, tally);
                 }
             }
@@ -522,7 +522,7 @@ public final class HwasanCampusBuilder {
                     Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
                             : (dy == 7 ? Material.STRIPPED_MANGROVE_LOG                  // ★14-② 하인방 적목
                             : dy == 9 ? Material.DARK_OAK_PLANKS                         // 중방
-                            : dy >= 11 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : dy >= 11 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
                     put(world, pad, gx + f, y + dy, gz + d, m, tally);
                 }
                 if (!pillar && Math.abs(d) == 2 && Math.floorMod(f, 3) == 1) {   // 창 리듬 3칸
@@ -548,7 +548,7 @@ public final class HwasanCampusBuilder {
                     for (int dy = 13; dy <= 16; dy++) {
                         Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
                                 : (dy == 13 ? Material.STRIPPED_MANGROVE_LOG              // ★14-② 하인방 적목
-                                : dy >= 16 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                                : dy >= 16 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
                         put(world, pad, gx + f, y + dy, gz + d, m, tally);
                     }
                     if (!pillar && Math.abs(d) == 1 && Math.floorMod(f, 3) == 1) {
@@ -636,7 +636,7 @@ public final class HwasanCampusBuilder {
                             : dy == 2 ? Material.STRIPPED_MANGROVE_LOG
                             : dy == 5 ? Material.DARK_OAK_PLANKS
                             : (red && dy >= wallH - 1 ? Material.RED_TERRACOTTA
-                            : dy == wallH ? Material.DARK_OAK_PLANKS : Material.WHITE_TERRACOTTA));
+                            : dy == wallH ? Material.DARK_OAK_PLANKS : Material.SMOOTH_QUARTZ));
                     put(world, pad, x, y + dy, z, m, tally);
                 }
                 // ★이중 창 리듬 — 3칸마다 (인간 단위 칸이 누적된다 · 코덱스 §⑤)
@@ -755,7 +755,7 @@ public final class HwasanCampusBuilder {
                         int gz = gableAlongF ? cz + s * (hL) : cz + k;
                         put(world, pad, gx, y - 1, gz,
                                 Math.abs(k) == gh ? Material.DARK_OAK_PLANKS
-                                        : Material.WHITE_TERRACOTTA, tally);
+                                        : Material.SMOOTH_QUARTZ, tally);
                     }
                 }
             }
@@ -971,7 +971,7 @@ public final class HwasanCampusBuilder {
                                 pillar ? Material.STRIPPED_MANGROVE_LOG
                                         : (dy == 1 ? Material.POLISHED_ANDESITE
                                         : dy == 5 ? Material.DARK_OAK_PLANKS
-                                        : Material.WHITE_TERRACOTTA), tally);
+                                        : Material.SMOOTH_QUARTZ), tally);
                     }
                 }
             }
@@ -1056,7 +1056,7 @@ public final class HwasanCampusBuilder {
                     Material m = corner ? Material.MANGROVE_LOG
                             : (dy == 1 ? Material.POLISHED_ANDESITE
                             : dy == 3 ? Material.DARK_OAK_PLANKS
-                            : dy >= 6 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : dy >= 6 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
                     put(world, pad, x, base + dy, z, m, tally);
                 }
                 int along = Math.abs(l) == hl ? f : l;
@@ -1108,7 +1108,7 @@ public final class HwasanCampusBuilder {
                 boolean corner = Math.abs(f) == hf2 && Math.abs(l) == hl2;
                 for (int dy = 7; dy <= 11; dy++) {
                     Material m = corner ? Material.MANGROVE_LOG
-                            : (dy >= 11 ? Material.RED_TERRACOTTA : Material.WHITE_TERRACOTTA);
+                            : (dy >= 11 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
                     put(world, pad, x, base + dy, z, m, tally);
                 }
                 if (!corner && Math.floorMod(f * 3 + l * 5, 4) == 0) {
@@ -1303,7 +1303,7 @@ public final class HwasanCampusBuilder {
                     boolean corner = Math.abs(f) == half && Math.abs(l) == half;
                     for (int dy = 1; dy <= wallH; dy++) {
                         put(world, pad, x, base + dy, z,
-                                corner ? Material.SPRUCE_LOG : Material.WHITE_TERRACOTTA, tally);
+                                corner ? Material.SPRUCE_LOG : Material.SMOOTH_QUARTZ, tally);
                     }
                 }
             }
@@ -1669,7 +1669,7 @@ public final class HwasanCampusBuilder {
     /** 배치기의 재료 전부 — 눈이 금지 재료(B-195: barrel·light)를 이 표로 잰다. */
     public static Set<Material> palette() {
         return EnumSet.of(
-                Material.WHITE_TERRACOTTA, Material.RED_TERRACOTTA,
+                Material.SMOOTH_QUARTZ, Material.RED_TERRACOTTA,
                 Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
                 Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
                 Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
@@ -1686,7 +1686,7 @@ public final class HwasanCampusBuilder {
 
     /** 패드 밖 유출 검수가 찾는 건물 재료 — 테라스 제 것(석전 벽·등롱)은 뺀다 */
     private static final Set<Material> BUILDING_MATS = EnumSet.of(
-            Material.WHITE_TERRACOTTA, Material.RED_TERRACOTTA,
+            Material.SMOOTH_QUARTZ, Material.RED_TERRACOTTA,
             Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
             Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
             Material.STRIPPED_DARK_OAK_LOG, Material.MANGROVE_LOG, Material.STRIPPED_MANGROVE_LOG,
