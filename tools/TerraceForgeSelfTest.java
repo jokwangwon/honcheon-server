@@ -975,8 +975,44 @@ public final class TerraceForgeSelfTest {
                     tPal.contains(Material.GLOWSTONE), "");
             check("★D-21 깃대 — 기둥·가로대·배너가 팔레트에 신고됐다",
                     tPal.contains(Material.DARK_OAK_FENCE)
-                            && tPal.contains(Material.STRIPPED_MANGROVE_WOOD)
-                            && tPal.contains(Material.BLUE_BANNER), "");
+                            && tPal.contains(Material.DARK_OAK_LOG)
+                            && tPal.contains(Material.BLACK_WALL_BANNER), "");
+            // ★★조립 계약 3 (2026-08-05 실기동 판정) — 「3재료가 신고됐다」만 재면 조립이
+            //   틀려도 통과한다. 첫 판은 재료는 다 있었는데 ①가로대가 통짜 큐브 ②배너가
+            //   로열블루 ③배너가 가로대 위 였다. 그래서 굵기·색·순서를 각각 못 박는다.
+            Material[] fp = TerraceForge.flagpoleParts();
+            Material fPole = fp[0];
+            Material fCross = fp[1];
+            Material fBanner = fp[2];
+            // ① 가로대가 배너보다 굵지 않다 — 울타리·담장·반블록·트랩도어는 가는 부품이고,
+            //    통짜 큐브(원목·판재 등)는 굵다. 배너는 얇은 천이라 가장 가는 축이다.
+            java.util.Set<Material> slimParts = java.util.EnumSet.of(
+                    Material.DARK_OAK_FENCE, Material.SPRUCE_FENCE, Material.MANGROVE_FENCE,
+                    Material.STONE_BRICK_WALL, Material.COBBLED_DEEPSLATE_WALL,
+                    Material.DARK_OAK_SLAB, Material.DARK_OAK_TRAPDOOR);
+            check("★D-21 조립① 가로대가 배너보다 굵지 않다 (통짜 큐브 금지)",
+                    slimParts.contains(fCross), fCross);
+            check("★D-21 조립① 기둥도 가는 부품이다", slimParts.contains(fPole), fPole);
+            // ② 배너가 어두운 계열 — 목표 실측 H222 S24% V21% (밝은 상위 10%도 V25%).
+            //    바닐라 배너 바탕색 RGB 거리: BLACK 29.0 · GRAY 53.3 · BLUE 119.8.
+            //    ★밝은 염료(로열블루·하늘·청록 등)를 쓰면 원경에서 점으로 튄다.
+            java.util.Set<Material> darkBanner = java.util.EnumSet.of(
+                    Material.BLACK_WALL_BANNER, Material.BLACK_BANNER,
+                    Material.GRAY_WALL_BANNER, Material.GRAY_BANNER);
+            check("★D-21 조립② 배너가 어두운 계열이다 (실측 V21% — 밝은 염료 금지)",
+                    darkBanner.contains(fBanner), fBanner);
+            check("★D-21 조립② 밝은 배너를 안 쓴다 (로열블루·하늘·청록)",
+                    !tPal.contains(Material.BLUE_BANNER)
+                            && !tPal.contains(Material.BLUE_WALL_BANNER)
+                            && !tPal.contains(Material.LIGHT_BLUE_WALL_BANNER)
+                            && !tPal.contains(Material.CYAN_WALL_BANNER), "");
+            // ③ 배너가 가로대보다 아래 — 벽걸이 배너는 제 자리에서 아래로 드리운다.
+            check("★D-21 조립③ 배너가 가로대보다 아래에 있다 (늘어진 형태)",
+                    TerraceForge.FLAG_BANNER_Y < TerraceForge.FLAG_CROSS_Y,
+                    "배너 y" + TerraceForge.FLAG_BANNER_Y + " · 가로대 y" + TerraceForge.FLAG_CROSS_Y);
+            check("★D-21 조립③ 기둥이 배너 아래를 받친다",
+                    TerraceForge.FLAG_POLE_TOP < TerraceForge.FLAG_BANNER_Y,
+                    "기둥 " + TerraceForge.FLAG_POLE_TOP);
             check("★D-21 깃대 — 세로 간격이 목표 실측 창(8~10) 안",
                     TerraceForge.BANNER_EVERY >= 8 && TerraceForge.BANNER_EVERY <= 10,
                     TerraceForge.BANNER_EVERY);

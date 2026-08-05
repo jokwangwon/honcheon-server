@@ -4,7 +4,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.data.Rotatable;
+import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.type.Slab;
 import org.bukkit.block.data.type.Stairs;
 
@@ -568,6 +568,21 @@ public final class TerraceForge {
     /** 석등 첫 자리 — 깃대 행과 겹치지 않게 어긋난 위상에서 시작한다 */
     public static final int LANTERN_FROM = 2;
 
+    /**
+     * 깃대 조립 — <b>눈이 이 표로 잰다</b> (조성과 한 식. 두 번 적으면 어긋난다).
+     * 기둥(가는 울타리) → 마디(배너 매다는 자리) → 가로대(울타리 팔)가 <b>아래에서 위로</b>.
+     * ★배너는 마디에 걸려 <b>아래로 늘어지므로</b> 가로대보다 낮다 — 목표 1호의 형태다.
+     */
+    public static final int FLAG_POLE_TOP = 5;       // 기둥 꼭대기 (상대 높이)
+    public static final int FLAG_BANNER_Y = 6;       // 마디·배너
+    public static final int FLAG_CROSS_Y = 7;        // 가로대 — 배너보다 위
+
+    /** 깃대 부품 — {기둥, 가로대, 배너}. 눈이 굵기·색을 이 표로 잰다 */
+    public static Material[] flagpoleParts() {
+        return new Material[]{Material.DARK_OAK_FENCE, Material.DARK_OAK_FENCE,
+                Material.BLACK_WALL_BANNER};
+    }
+
     /** 그 행에 깃대가 서는가 (좌우 쌍) */
     public static boolean isFlagpoleRow(int i) {
         return i >= BANNER_FROM && (i - BANNER_FROM) % BANNER_EVERY == 0;
@@ -803,15 +818,40 @@ public final class TerraceForge {
      * (±{@link #AXIS_CLEAR})은 <b>두꺼운</b> 소품만 막는다 — 깃대 기둥은 1칸 울타리라
      * 원근으로도 가늘게 보이고, 목표 사진에서도 깃대가 계단 양옆에 촘촘한데 문루가 잘 보인다.
      * <b>가리는 정도는 높이가 아니라 두께가 정한다</b> (2026-08-05 계약 교정).
+     *
+     * <p>★★조립 교정 (2026-08-05 실기동 판정 — {@code banner_2근경.png}). 첫 판은 셋이 틀렸다:
+     * <ul>
+     *   <li><b>가로대가 통짜 큐브</b>라 배너보다 먼저 눈에 들어왔다 (붉은 맹그로브 원목).
+     *       목표의 가로대는 <b>가늘고 어둡다</b> → 울타리 팔로 갈았다 (기둥과 같은 어두운
+     *       재료 · 울타리는 굵기가 블록의 1/4 이라 원경에서 선으로 읽힌다).</li>
+     *   <li><b>배너가 로열블루</b>라 원경에서 파란 점으로 튀었다 → {@link Material#BLACK_BANNER}.
+     *       ★색을 <b>쟀다</b>: 목표 배너 RGB(41,45,54) <b>H222 S24% V21%</b> (밝은 상위 10%조차
+     *       V25% — 그늘 속 짙은 남색). 우리 BLUE 는 렌더 RGB(44,49,121) <b>S64% V47%</b> 로
+     *       채도·명도가 3배였다. 바닐라 배너 바탕색과의 RGB 거리: <b>BLACK 29.0</b> ·
+     *       GRAY 53.3 · BLUE 119.8 — 검정이 압도적으로 가깝다 (짙은 남색 염료는 없다).
+     *       단청 꿀집 때와 같은 종류의 어긋남이라, 같은 방법(픽셀 측정)으로 골랐다.</li>
+     *   <li><b>배너가 가로대 위에 얹혀</b> 있었다 → 가로대 <b>아래</b>로 늘어뜨렸다 (벽걸이
+     *       배너를 마디의 옆면에 매단다 — 벽걸이는 제 자리에서 아래로 드리운다).</li>
+     * </ul>
+     *
+     * <p>★배너를 <b>북면</b>(z-1)에 매다는 까닭: {@link #clearAbove} 가 그 행의 {@code by+1}
+     * 위를 전부 지우므로, <b>아직 처리 안 된 남쪽 행</b>(z+1)에 걸면 뒤이어 조용히 지워진다.
+     * 북쪽 행은 이미 지나갔다. 무지 배너라 앞뒤 모습이 같아 방향은 무해하다.
      */
     private static void flagpole(World world, int x, int by, int z, Tally tally) {
-        for (int dy = 1; dy <= 4; dy++) {
-            world.getBlockAt(x, by + dy, z).setType(Material.DARK_OAK_FENCE, false);  // 가는 기둥
+        for (int dy = 1; dy <= FLAG_POLE_TOP; dy++) {
+            world.getBlockAt(x, by + dy, z).setType(Material.DARK_OAK_FENCE, false);   // 가는 기둥
         }
-        world.getBlockAt(x, by + 5, z).setType(Material.STRIPPED_MANGROVE_WOOD, false);   // 붉은 가로대
-        Rotatable banner = (Rotatable) Material.BLUE_BANNER.createBlockData();
-        banner.setRotation(BlockFace.SOUTH);                    // 계단 아래(남)를 본다
-        world.getBlockAt(x, by + 6, z).setBlockData(banner, false);
+        // 마디 — 배너를 매다는 solid 한 칸 (어두워 기둥의 연장으로 읽힌다)
+        world.getBlockAt(x, by + FLAG_BANNER_Y, z).setType(Material.DARK_OAK_LOG, false);
+        // 가로대 — 울타리 팔 (가늘다 · 배너보다 위)
+        for (int arm = -1; arm <= 1; arm++) {
+            world.getBlockAt(x + arm, by + FLAG_CROSS_Y, z).setType(Material.DARK_OAK_FENCE, false);
+        }
+        // 배너 — 마디의 북면에 걸어 아래로 늘어뜨린다
+        Directional banner = (Directional) Material.BLACK_WALL_BANNER.createBlockData();
+        banner.setFacing(BlockFace.NORTH);
+        world.getBlockAt(x, by + FLAG_BANNER_Y, z - 1).setBlockData(banner, false);
         tally.banners++;
     }
 
@@ -2071,8 +2111,8 @@ public final class TerraceForge {
                 Material.COARSE_DIRT, Material.FERN, Material.SHORT_GRASS,
                 Material.MOSS_BLOCK, Material.AZALEA,                     // ★13a-2 선반 화단
                 Material.GLOWSTONE, Material.DEEPSLATE_TILE_SLAB,         // ★D-22 석등 (등롱·갓)
-                Material.DARK_OAK_FENCE, Material.STRIPPED_MANGROVE_WOOD, // ★D-21 깃대 (기둥·가로대)
-                Material.BLUE_BANNER,                                     //   짙은 남색 배너 (무지)
+                Material.DARK_OAK_FENCE, Material.DARK_OAK_LOG,           // ★D-21 깃대 (기둥·가로대·마디)
+                Material.BLACK_WALL_BANNER,                               //   짙은 배너 (무지 · 실측 최근접)
                 Material.LANTERN, Material.AIR);
     }
 
