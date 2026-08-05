@@ -491,7 +491,7 @@ public final class HwasanCampusBuilder {
                             : shell && dy >= 5 ? Material.RED_TERRACOTTA                        // ★14-② 상단 적 띠
                             : shell && Math.floorMod(f, 3) == 1 && (dy == 2 || dy == 3)
                                     ? Material.GLASS_PANE                                       // 창 리듬 3칸
-                            : Material.SMOOTH_QUARTZ;
+                            : plaster(x, y + dy, z);
                     put(world, pad, x, y + dy, z, m, tally);
                 }
             }
@@ -522,7 +522,7 @@ public final class HwasanCampusBuilder {
                     Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
                             : (dy == 7 ? Material.STRIPPED_MANGROVE_LOG                  // ★14-② 하인방 적목
                             : dy == 9 ? Material.DARK_OAK_PLANKS                         // 중방
-                            : dy >= 11 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
+                            : dy >= 11 ? Material.RED_TERRACOTTA : plaster(gx + f, y + dy, gz + d));
                     put(world, pad, gx + f, y + dy, gz + d, m, tally);
                 }
                 if (!pillar && Math.abs(d) == 2 && Math.floorMod(f, 3) == 1) {   // 창 리듬 3칸
@@ -548,7 +548,7 @@ public final class HwasanCampusBuilder {
                     for (int dy = 13; dy <= 16; dy++) {
                         Material m = pillar ? Material.STRIPPED_MANGROVE_LOG
                                 : (dy == 13 ? Material.STRIPPED_MANGROVE_LOG              // ★14-② 하인방 적목
-                                : dy >= 16 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
+                                : dy >= 16 ? Material.RED_TERRACOTTA : plaster(gx + f, y + dy, gz + d));
                         put(world, pad, gx + f, y + dy, gz + d, m, tally);
                     }
                     if (!pillar && Math.abs(d) == 1 && Math.floorMod(f, 3) == 1) {
@@ -636,7 +636,7 @@ public final class HwasanCampusBuilder {
                             : dy == 2 ? Material.STRIPPED_MANGROVE_LOG
                             : dy == 5 ? Material.DARK_OAK_PLANKS
                             : (red && dy >= wallH - 1 ? Material.RED_TERRACOTTA
-                            : dy == wallH ? Material.DARK_OAK_PLANKS : Material.SMOOTH_QUARTZ));
+                            : dy == wallH ? Material.DARK_OAK_PLANKS : plaster(x, y + dy, z)));
                     put(world, pad, x, y + dy, z, m, tally);
                 }
                 // ★이중 창 리듬 — 3칸마다 (인간 단위 칸이 누적된다 · 코덱스 §⑤)
@@ -755,7 +755,7 @@ public final class HwasanCampusBuilder {
                         int gz = gableAlongF ? cz + s * (hL) : cz + k;
                         put(world, pad, gx, y - 1, gz,
                                 Math.abs(k) == gh ? Material.DARK_OAK_PLANKS
-                                        : Material.SMOOTH_QUARTZ, tally);
+                                        : plaster(gx, y - 1, gz), tally);
                     }
                 }
             }
@@ -948,6 +948,42 @@ public final class HwasanCampusBuilder {
     }
 
     /**
+     * ★★<b>회벽</b> — 목표의 「따뜻한 오프화이트」를 두 재료의 결로 맞춘다 (2026-08-05).
+     *
+     * <p><b>경위</b>: 팩을 끄자 {@code white_terracotta} 가 살구색으로 드러나 {@code smooth_quartz}
+     * 로 갈았는데, 이번엔 <b>중립을 지나쳤다</b> — 목표는 따뜻한데 석영만으로는 거의 무채색이다.
+     *
+     * <pre>
+     *   목표(1호 lit face)  RGB(229,216,194)  S15.3%  H38
+     *   smooth_quartz       RGB(237,230,224)  S 5.5%  H30   ← 밝지만 차다
+     *   smooth_sandstone    RGB(224,214,170)  S23.9%  H49   ← 따뜻하지만 짙다
+     * </pre>
+     *
+     * <p><b>비율의 근거</b>: 렌더는 채도를 대체로 보존한다 — 아는 두 점으로 검산했다
+     * ({@code white_terracotta} 텍스처 S23.0 → 인게임 S21.7, 비 0.94 ·
+     * {@code smooth_quartz} 5.5 → 4.0. 뒤엣것은 채도가 낮아 잡음이 커 앞엣것을 믿는다).
+     * 그러면 목표 S15.3 을 내려면 <b>텍스처 혼합 S ≈ 16~17%</b> 이어야 하고, 사암 비율로 풀면
+     * 0.60~0.67 이다. <b>2 : 1 (사암 67%)</b> 을 골랐다 — 계산 창 안이면서 석영이 1/3 로 적어
+     * <b>얼룩이 덜 눈에 띈다</b> (3:2 는 계산상 더 정확하나 반반에 가까워 바둑판으로 읽힌다).
+     * 합성 RGB(228,220,190) S17.4% → 인게임 S~16%.
+     *
+     * <p>★남는 어긋남: 색상(H)은 합성 47° 로 목표 38° 보다 노랗다. 더 붉히려면
+     * {@code white_terracotta} 를 섞어야 하는데 <b>그것이 애초의 살구색 범인</b>이고 눈이 막고 있다 —
+     * 채도를 맞추는 편이 색상을 맞추는 것보다 이득이라 여기서 멈춘다.
+     *
+     * <p>★{@code SMOOTH_SANDSTONE} 은 {@code SANDSTONE} 과 <b>다른 재료</b>다 —
+     * {@link SpireField#rockMats()} 에 든 것은 후자뿐이라 회벽은 <b>유출 스캔에 남는다</b>
+     * (지붕이 피했던 덫 — {@link #roofCube} 주석).
+     *
+     * <p>★눈이 이 함수를 직접 읽는다 (조성과 눈이 한 식).
+     */
+    public static Material plaster(int x, int y, int z) {
+        return Math.floorMod((int) hash(0x5A11L ^ 0x9E37L, x, y, z), 3) == 0
+                ? Material.SMOOTH_QUARTZ                       // 1/3 — 사암의 노랑을 식힌다
+                : Material.SMOOTH_SANDSTONE;                   // 2/3 — 온기의 본체
+    }
+
+    /**
      * ★13b-② 현관 포치 — <b>정면 3단 요철</b>의 중심 (조율자 판정 「평평한 긴 벽」의 처방).
      * 레퍼런스의 전각은 중앙이 앞으로 나오고(자체 지붕을 인 현관) 좌우 끝이 물러난다.
      * 중앙 폭 2·ph+1 이 앞으로 {@code out} 칸 내밀고, 적주 열과 맞배 지붕을 인다.
@@ -971,7 +1007,7 @@ public final class HwasanCampusBuilder {
                                 pillar ? Material.STRIPPED_MANGROVE_LOG
                                         : (dy == 1 ? Material.POLISHED_ANDESITE
                                         : dy == 5 ? Material.DARK_OAK_PLANKS
-                                        : Material.SMOOTH_QUARTZ), tally);
+                                        : plaster(cx + f, y + dy, cz + d)), tally);
                     }
                 }
             }
@@ -1056,7 +1092,7 @@ public final class HwasanCampusBuilder {
                     Material m = corner ? Material.MANGROVE_LOG
                             : (dy == 1 ? Material.POLISHED_ANDESITE
                             : dy == 3 ? Material.DARK_OAK_PLANKS
-                            : dy >= 6 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
+                            : dy >= 6 ? Material.RED_TERRACOTTA : plaster(x, base + dy, z));
                     put(world, pad, x, base + dy, z, m, tally);
                 }
                 int along = Math.abs(l) == hl ? f : l;
@@ -1108,7 +1144,7 @@ public final class HwasanCampusBuilder {
                 boolean corner = Math.abs(f) == hf2 && Math.abs(l) == hl2;
                 for (int dy = 7; dy <= 11; dy++) {
                     Material m = corner ? Material.MANGROVE_LOG
-                            : (dy >= 11 ? Material.RED_TERRACOTTA : Material.SMOOTH_QUARTZ);
+                            : (dy >= 11 ? Material.RED_TERRACOTTA : plaster(x, base + dy, z));
                     put(world, pad, x, base + dy, z, m, tally);
                 }
                 if (!corner && Math.floorMod(f * 3 + l * 5, 4) == 0) {
@@ -1303,7 +1339,7 @@ public final class HwasanCampusBuilder {
                     boolean corner = Math.abs(f) == half && Math.abs(l) == half;
                     for (int dy = 1; dy <= wallH; dy++) {
                         put(world, pad, x, base + dy, z,
-                                corner ? Material.SPRUCE_LOG : Material.SMOOTH_QUARTZ, tally);
+                                corner ? Material.SPRUCE_LOG : plaster(x, base + dy, z), tally);
                     }
                 }
             }

@@ -620,6 +620,37 @@ public final class TerraceForgeSelfTest {
         check("★회벽에 살구색 재료(white_terracotta)를 안 쓴다",
                 !com.honcheon.mvt.forge.HwasanCampusBuilder.palette().contains(Material.WHITE_TERRACOTTA),
                 com.honcheon.mvt.forge.HwasanCampusBuilder.palette().contains(Material.WHITE_TERRACOTTA));
+        // ★★회벽의 온기 — 석영만 쓰면 S4% 로 **중립을 지나친다** (목표 S15%). 사암을 섞어
+        //   합성 채도를 목표 창에 넣는다. 배분을 눈이 직접 세어 조성과 한 식이 되게 한다.
+        //   바닐라 텍스처 평균: smooth_quartz (236.8,230.4,223.9) · smooth_sandstone (223.8,214.2,170.3)
+        int quartzN = 0;
+        int sandN = 0;
+        for (int px = 0; px < 24; px++) {
+            for (int py = 0; py < 8; py++) {
+                for (int pz = 0; pz < 24; pz++) {
+                    Material m = com.honcheon.mvt.forge.HwasanCampusBuilder.plaster(px, py, pz);
+                    if (m == Material.SMOOTH_QUARTZ) {
+                        quartzN++;
+                    } else if (m == Material.SMOOTH_SANDSTONE) {
+                        sandN++;
+                    }
+                }
+            }
+        }
+        int plasterTot = quartzN + sandN;
+        double sandFrac = plasterTot == 0 ? 0 : (double) sandN / plasterTot;
+        double mixR = 236.8 + (223.8 - 236.8) * sandFrac;
+        double mixB = 223.9 + (170.3 - 223.9) * sandFrac;
+        double mixSat = (mixR - mixB) / mixR * 100.0;
+        check("★회벽이 두 재료의 결이다 (석영·사암 말고 다른 것이 안 섞인다)",
+                plasterTot == 24 * 8 * 24, plasterTot);
+        check(String.format("★회벽 합성 채도가 목표 창 안 (사암 %.0f%% · 합성 S%.1f%% · 목표 S15%%)",
+                        sandFrac * 100, mixSat),
+                mixSat >= 14.0 && mixSat <= 20.0, String.format("S%.1f%%", mixSat));
+        check("★회벽이 유출 스캔에 남는다 (사암도 — SMOOTH_SANDSTONE 은 rockMats 가 아니다)",
+                leakTbl.contains(Material.SMOOTH_SANDSTONE)
+                        && !rockMats.contains(Material.SMOOTH_SANDSTONE),
+                leakTbl.contains(Material.SMOOTH_SANDSTONE));
         // ★15 표면에 심을 수 있는가 — 암벽 재료가 「못 심는 땅」이면 산이 조용히 민둥이 된다
         //   (실기동: 석전 섞임 뒤 산 표면 ~12%가 식생에서 빠졌다)
         java.util.Set<Material> plantable = java.util.EnumSet.of(
@@ -1126,17 +1157,34 @@ public final class TerraceForgeSelfTest {
             //   남면(row 18)에서 문짝 칸이 회벽 칸보다 많아야 한다.
             int doors = 0;
             int walls = 0;
+            int mullions = 0;
             for (int c = 16; c <= 44; c++) {
                 char ch = blueprint.at(c, 18);
                 if (ch == 'D') {
                     doors++;
                 }
+                if (ch == 'I') {
+                    mullions++;              // 문살도 문짝 칸이다 (판과 살이 한 짝)
+                }
                 if (ch == 'W') {
                     walls++;
                 }
             }
-            check("★설계도 하층이 「기둥+문짝」이다 (문짝 " + doors + " > 회벽 " + walls + ")",
-                    doors > walls, doors + "/" + walls);
+            check("★설계도 하층이 「기둥+문짝」이다 (문짝 " + (doors + mullions) + " > 회벽 " + walls + ")",
+                    doors + mullions > walls, (doors + mullions) + "/" + walls);
+
+            // ★★문짝은 격자다 — 세로 문살이 없으면 가로 슬랫만 남아 **블라인드**로 읽힌다
+            //   (2026-08-05 실증). 1호의 문짝은 세로 살 + 가로 중인방이 짜인 격자다.
+            check("★문짝에 세로 문살이 있다 (블라인드 방지 · 살 " + mullions + "칸)",
+                    mullions > 0, mullions);
+            boolean mullionVertical = blueprint.columnOf('I').stream()
+                    .anyMatch(cs -> cs.material().contains("fence") || cs.material().contains("bars")
+                            || cs.material().contains("pane"));
+            check("★문살이 세로 부품이다 (울타리·창살 계열)", mullionVertical,
+                    blueprint.columnOf('I'));
+            boolean midRail = blueprint.columnOf('D').stream()
+                    .anyMatch(cs -> cs.material().contains("planks"));
+            check("★문짝 가운데를 중인방이 가로로 끊는다", midRail, blueprint.columnOf('D'));
 
             // 금지 재료 — 도면에도 계율이 걸린다
             boolean banned = blueprint.materials().stream()

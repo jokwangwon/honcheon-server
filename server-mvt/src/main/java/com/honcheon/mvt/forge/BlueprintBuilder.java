@@ -95,7 +95,8 @@ public final class BlueprintBuilder {
                         boolean post = ((c2 - b[0]) % 3 == 0) || ((r2 - b[1]) % 3 == 0);
                         for (int k = 0; k < rf.upperWall(); k++) {
                             world.getBlockAt(ox + c2, upBase + k, oz + r2).setType(
-                                    post ? Material.STRIPPED_MANGROVE_LOG : Material.SMOOTH_QUARTZ, false);
+                                    post ? Material.STRIPPED_MANGROVE_LOG
+                                            : HwasanCampusBuilder.plaster(ox + c2, upBase + k, oz + r2), false);
                             n.blocks++;
                         }
                     }
@@ -109,6 +110,13 @@ public final class BlueprintBuilder {
     }
 
     private static void stamp(World world, int x, int y, int z, String mat) {
+        // ★「plaster」는 재료 이름이 아니라 <b>처방</b>이다 — 회벽은 한 재료가 아니라 두 재료의
+        //   결이라서다 (석영 1 : 사암 2 · 근거는 HwasanCampusBuilder.plaster javadoc).
+        //   도면에 두 재료를 손으로 흩뿌리면 조성과 눈이 두 식이 되므로 이름 하나로 부른다.
+        if ("plaster".equals(mat)) {
+            world.getBlockAt(x, y, z).setType(HwasanCampusBuilder.plaster(x, y, z), false);
+            return;
+        }
         if (mat.indexOf('[') >= 0 || mat.indexOf(':') >= 0) {
             BlockData d = Bukkit.createBlockData(mat);
             world.getBlockAt(x, y, z).setBlockData(d, false);

@@ -38,6 +38,26 @@
 #   **white_terracotta 54** 였다. bone_block 이 색은 가장 가까우나 **세로 줄무늬**가
 #   벽 크기에서 「뼈」로 읽혀 회벽이 못 된다 — 그래서 **smooth_quartz**(따뜻한 near-white ·
 #   무늬 거의 없음)를 골랐다. ★계율: **팩이 덮는 재료로 색을 판단하지 마라.**
+#
+# ── ★회벽 2차 교정 (2026-08-05 · 중립을 지나쳤다) ────────────────────────
+#   석영으로 갈고 재니 **S4%** — 살구색은 없앴는데 **온기까지 없앴다** (목표 S15%).
+#     · 인게임 측정: 전 white_terracotta (157,135,123) S22  →  후 smooth_quartz (177,173,170) S4
+#   렌더가 채도를 대체로 보존하므로(터라코타 텍스처 S23 → 인게임 S21.7 · 비 0.94),
+#   목표 S15 를 내려면 **텍스처 혼합 S 16~17%** 여야 하고 사암 비율로 풀면 0.60~0.67 이다.
+#   → **plaster = smooth_sandstone 2 : smooth_quartz 1** (합성 S17.4% → 인게임 S~16%).
+#   3:2 가 계산상 더 정확하나 반반에 가까워 **바둑판**으로 읽혀 2:1 을 골랐다.
+#   ※ 「plaster」는 재료가 아니라 **처방**이다 — 코드의 HwasanCampusBuilder.plaster 가 정본이고
+#     캠퍼스 전체(9곳)가 같은 식을 쓴다. 도면만 갈면 산문만 따뜻하고 나머지는 차다.
+#
+# ── ★문짝 교정 (2026-08-05 · 블라인드였다) ──────────────────────────────
+#   trapdoor 6켜를 세로로 쌓으니 **가로 슬랫만 반복돼 블라인드**로 읽혔다.
+#   1호를 8배로 확대해 보니 문짝은 **세로 문살과 가로 중인방이 짜인 격자**다 —
+#   세로 살이 판을 4칸쯤으로 가르고, 가로 살이 2~3단으로 끊는다 (한 칸 ≈ 한 블록).
+#   → 세로는 문살 칸 **"I"**(dark_oak_fence)를 새로 두어 기둥 사이마다 세우고,
+#     가로는 "D" 한가운데에 **중인방**(dark_oak_planks)을 끼웠다.
+#     평면의 한 칸(P·D·I)이 곧 기둥·판·살이라 **도면만 보고도 격자가 읽힌다.**
+#   ※ 문짝 폭이 2칸(적주 간격 3 = 기둥 1 + 문짝 2)이라 한 칸은 판, 한 칸은 살이다.
+#     축선 기준으로 좌우 대칭이 되게 서편 "DI" / 동편 "ID" 로 뒤집었다.
 
 meta:
   name: 화산파 산문 구역
@@ -54,15 +74,18 @@ columns:
   "B": ["smooth_stone"]                                       # 문루 발치 기단
   "P": ["smooth_stone", "stripped_mangrove_log*6",
         "stripped_mangrove_log", "cut_sandstone"]             # 적주 + 도리 + 단청 패널
-  "D": ["smooth_stone", "dark_oak_trapdoor*6",
-        "stripped_mangrove_log", "cut_sandstone"]             # ★격자 문짝 칸 — 벽 높이 전부
-  "W": ["smooth_stone", "smooth_quartz*6",
+  "D": ["smooth_stone", "dark_oak_trapdoor*3", "dark_oak_planks",
+        "dark_oak_trapdoor*2",
+        "stripped_mangrove_log", "cut_sandstone"]             # ★문짝 판 — 가운데 중인방이 가로로 끊는다
+  "I": ["smooth_stone", "dark_oak_fence*6",
+        "stripped_mangrove_log", "cut_sandstone"]             # ★문살 — 세로. 이것이 없으면 블라인드다
+  "W": ["smooth_stone", "plaster*6",
         "stripped_mangrove_log", "cut_sandstone"]             # 기둥 사이 좁은 회벽 띠
   "O": ["smooth_stone", "air*6",
         "stripped_mangrove_log", "cut_sandstone"]             # ★중앙 통행 개구 (걸어 지난다)
   "S": ["stone_bricks*5", "stone_brick_wall"]                 # 성벽 + 여장
   "s": ["stone_bricks*5", "stone_bricks"]                     # 성벽 속 (걷는 면 · 여장 없음)
-  "K": ["stone_bricks*5", "smooth_quartz*4",
+  "K": ["stone_bricks*5", "plaster*4",
         "stripped_mangrove_log", "cut_sandstone"]             # ★곁채 벽 — 성벽 위에 올라탄다
   "k": ["stone_bricks*5", "stripped_mangrove_log*4",
         "stripped_mangrove_log", "cut_sandstone"]             # 곁채 적주
@@ -89,7 +112,7 @@ plan: |
     sssssskKKKKKKKKkPWWWWWWWWWWPOOOOOPWWWWWWWWWWPkKKKKKKKKksssss
     sssssskKKKKKKKKkPWWWWWWWWWWPOOOOOPWWWWWWWWWWPkKKKKKKKKksssss
     sssssskKKKKKKKKkPWWWWWWWWWWPOOOOOPWWWWWWWWWWPkKKKKKKKKksssss
-    SSSSSSSSSSSSSSSSPDDPDDPDDPWPOOOOOPWPDDPDDPDDPSSSSSSSSSSSSSSS
+    SSSSSSSSSSSSSSSSPDIPDIPDIPWPOOOOOPWPIDPIDPIDPSSSSSSSSSSSSSSS
     ................BBBBBBBBBBBBBBBBBBBBBBBBBBBBB...............
     ..............TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.............
     ..............TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.............
