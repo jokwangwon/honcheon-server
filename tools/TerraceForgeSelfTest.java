@@ -520,9 +520,32 @@ public final class TerraceForgeSelfTest {
                     java.util.Arrays.equals(prof, TerraceForge.approachProfile(hs0)), "표가 흔들린다");
         }
 
-        // ══════ ★초목 스위치 (사용자 지시 2026-08-05 「일단 나무 다 치우고」) ══════
-        check("★초목 스위치가 기본 꺼짐 — 건축을 가리는 나무가 없다",
-                !TerraceForge.GREEN, TerraceForge.GREEN);
+        // ══════ ★초목·소품 스위치 ══════
+        //   2026-08-05 「일단 나무 다 치우고」 → <b>꺼짐</b>을 눈이 지켰다.
+        //   ★2026-08-06 사용자 승인으로 <b>켠다</b>: 「산문 구조 승인·동결. 다음은 외원/입구
+        //   광장과 산문 주변 절벽·정원·난간을 함께 조성」. 「나중에 세우자」의 그 나중이다.
+        //
+        //   ★스위치가 켜졌으니 눈이 지킬 것도 바뀐다. 「나무가 없다」가 아니라
+        //   <b>「나무가 건축을 가리지 않는다」</b>가 원래 지키려던 것이다 — 그 계약을 잰다.
+        check("★초목·소품이 켜져 있다 (조경 단계)",
+                TerraceForge.GREEN && TerraceForge.PROPS,
+                TerraceForge.GREEN + "/" + TerraceForge.PROPS);
+        check("★소나무가 계단 회랑 밖에 선다 (계단을 안 덮는다 · D-16)",
+                TerraceForge.APPROACH_CLEAR + 2 > TerraceForge.STAIR_HALF + 2,
+                "소나무 ±" + (TerraceForge.APPROACH_CLEAR + 2)
+                        + " vs 가장 넓은 난간 ±" + (TerraceForge.approachHalf(
+                                TerraceForge.WIDEN_FROM) + 1));
+        check("★비석이 축선 시야 회랑 밖에 선다 (문루 정면을 안 가린다 · D-20)",
+                TerraceForge.AXIS_CLEAR > TerraceForge.APPROACH_CLEAR,
+                "비석 ±" + TerraceForge.AXIS_CLEAR + " vs 회랑 ±" + TerraceForge.APPROACH_CLEAR);
+        // ★난간은 그 행의 폭을 따라간다 — 고정 오프셋이면 넓어진 구간에서 길 한가운데 선다
+        boolean railInsideWalk = false;
+        for (int i = 0; i < TerraceForge.APPROACH_LEN; i++) {
+            if (TerraceForge.approachHalf(i) + 1 <= TerraceForge.approachHalf(i)) {
+                railInsideWalk = true;
+            }
+        }
+        check("★난간이 보행면 밖에 선다 (폭 전이 구간 포함)", !railInsideWalk, railInsideWalk);
         // ★10-① 산몸 — 「평지+기둥」이 아니라 「산+암봉」: 근경 환대에서 맨바닥(0) 비율이
         //   절반 아래로 (침봉만 있던 8.5 는 ~75% 가 맨바닥이었다) + 산체 높이대(25~95) 실재
         int zeros = 0;
@@ -600,6 +623,62 @@ public final class TerraceForgeSelfTest {
             }
         }
         check("★주상절리 ㉠ 평지는 안 쪼갠다 (물매 < 문턱이면 그대로)", flatTouched == 0, flatTouched);
+        // ══════════════════════════════════════════════════════════════
+        // ★★★B-196 산문 — <b>동결</b> (사용자 승인 2026-08-06)
+        //
+        //   「B-196 산문 구조: 승인 · 치수와 좌표: 동결 · 입면 판독 문제: 해결」
+        //
+        //   ★동결을 문서에만 적으면 표류한다. 눈으로 잠근다 — 아래 값이 바뀌면 짖는다.
+        //   바꿀 일이 생기면 <b>이 눈을 고치는 것이 곧 결정의 기록</b>이 된다.
+        //   ※최종 색·재료 판정은 리소스팩 적용 후로 <b>보류</b>다 (여기서 안 잰다).
+        // ══════════════════════════════════════════════════════════════
+        try {
+            com.honcheon.mvt.forge.Blueprint gate = com.honcheon.mvt.forge.Blueprint.of(
+                    new org.yaml.snakeyaml.Yaml().load(java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_gate.yml"))));
+            int open = 0;
+            for (int c = 0; c < 60; c++) {
+                for (com.honcheon.mvt.forge.Blueprint.Course cs : gate.columnOf(gate.at(c, 18))) {
+                    if ("air".equals(cs.material()) && cs.count() >= 5) {
+                        open++;
+                        break;
+                    }
+                }
+            }
+            check("★동결 — 산문 중앙 통로 7", open == 7, open);
+            java.util.List<Integer> pillars = new java.util.ArrayList<>();
+            for (int c = 0; c < 60; c++) {
+                if (gate.at(c, 18) == 'P') {
+                    pillars.add(c);
+                }
+            }
+            java.util.List<Integer> gaps = new java.util.ArrayList<>();
+            for (int i = 1; i < pillars.size(); i++) {
+                gaps.add(pillars.get(i) - pillars.get(i - 1));
+            }
+            check("★동결 — 적주 간격 3·3·5·(통로 7)·5·3·3",
+                    gaps.equals(java.util.List.of(3, 3, 5, 8, 5, 3, 3)), gaps);
+            boolean sym = true;
+            for (int c = 1; c < 60; c++) {
+                char a = gate.at(c, 18);
+                char b = gate.at(60 - c, 18);
+                if ("PDIONW".indexOf(a) >= 0 && a != b) {
+                    sym = false;
+                }
+            }
+            check("★동결 — 산문 정면 좌우 대칭", sym, sym);
+            check("★동결 — 계단 폭 입구 9 · 전이 참 11 · 문 앞 7",
+                    TerraceForge.approachHalf(TerraceForge.APPROACH_LEN - 1) == 4
+                            && TerraceForge.approachHalf(TerraceForge.WIDEN_FROM) == 5
+                            && TerraceForge.approachHalf(0) == 3, "9/11/7");
+        } catch (Exception e) {
+            check("★동결 — 산문 도면이 읽힌다", false, e.toString());
+        }
+        // ★동결 — 표고 (「캠퍼스 전체 표고를 콘셉트 수치에 맞춰 확대하지 않는다」)
+        check("★동결 — 산문 h46 · 본전 h116 · 정상 암자 h148 (총 102칸)",
+                heightOf(campus, 1) == 46 && heightOf(campus, 9) == 116
+                        && heightOf(campus, 13) == 148,
+                heightOf(campus, 1) + "/" + heightOf(campus, 9) + "/" + heightOf(campus, 13));
         // ══════════ ★접근로 폭 전이 (사용자 확정 2026-08-06) ══════════
         //   외부 9 → 전이 참 11 → 문 앞 7. ★폭이 <b>참에서만</b> 바뀌어야 한다 —
         //   디딤 도중에 바뀌면 걷다가 발밑이 넓어졌다 좁아진다.

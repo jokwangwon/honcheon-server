@@ -434,7 +434,10 @@ public final class TerraceForge {
      * <b>바위의 결</b>이다 — 암벽 표면의 일부이므로 스위치와 무관하게 남는다. 화단·밭의
      * 흙바닥(COARSE_DIRT·FARMLAND)도 지면이라 남고, 그 위에 서는 <b>초목만</b> 빠진다.
      */
-    public static boolean GREEN = false;
+    //   ★2026-08-06 <b>켠다</b> — 사용자 승인: 「산문 구조는 승인·동결. 다음은 외원/입구
+    //   광장과 산문 주변 절벽·정원·난간을 함께 조성하는 것」. 구조를 먼저 세우고 장식을
+    //   나중에 얹는다는 순서를 지켰고, 이제 그 「나중」이다.
+    public static boolean GREEN = true;
 
     /**
      * <b>소품 스위치</b> — 꺼져 있으면 깃대·석등·비석을 세우지 않는다 (기본 <b>꺼짐</b>).
@@ -447,7 +450,8 @@ public final class TerraceForge {
      * 스위치와 무관하게 남는다 (걷는 길이고 통과하는 문이다). 깃대·석등·비석은 그 위에
      * 얹히는 <b>표지</b>이므로 이 스위치를 탄다.
      */
-    public static boolean PROPS = false;
+    //   ★2026-08-06 <b>켠다</b> — 위와 같은 근거. 난간·등롱이 진입축을 강조한다는 판정.
+    public static boolean PROPS = true;
 
     // ═══════════════════════════════════════════════════════════════════
     // 계단 문법 — 반 칸 하강 (★사용자 확정 2026-08-05)
@@ -796,7 +800,11 @@ public final class TerraceForge {
                     tally.pavement++;
                 }
             }
-            for (int side : new int[]{-RAIL_OFF, RAIL_OFF}) {
+            // ★난간은 <b>그 행의 보행 폭 바로 밖</b>에 선다. 고정 오프셋(±RAIL_OFF)이면
+            //   폭이 9·11 로 넓어진 구간에서 난간이 <b>길 한가운데</b> 서 버린다
+            //   (2026-08-06 폭 전이를 넣으며 생긴 회귀 — 눈이 잡는다).
+            int railOff = half + 1;
+            for (int side : new int[]{-railOff, railOff}) {
                 int x = a.x() + side;
                 clearAbove(world, x, by, z, tally);
                 fillDown(world, x, by, z, tally);
