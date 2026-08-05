@@ -1419,6 +1419,174 @@ public final class TerraceForgeSelfTest {
             check("★★도면의 처마 내밈이 코드에 닿는다 (rf.eave() 를 넘긴다 — 죽은 값 방지)",
                     anchor >= 0 && callSite.contains("rf.eave()"), callSite.replace('\n', ' '));
 
+            // ══════ ★★★B-196 진범 — 도면이 **빈 자리에 앉는가** (2026-08-05) ══════
+            // 앞 회차들이 「본전 회벽이 넓다」(D-34)·「지붕이 벽을 덮는다」(D-36) 로 읽던 것의
+            // 진범: 캠퍼스시험이 같은 패드에 세운 **통짜 건물이 도면 껍데기 안에 그대로 남아**
+            // 있었다. 격자칸의 트랩도어는 바닥에 눕는 얇은 판이라 칸이 사실상 구멍이고, 그
+            // 구멍 너머로 남은 건물의 가문비 판벽·자갈심층암 지붕이 비쳐 밝은 면으로 읽혔다.
+            // ★즉 **우리가 재던 것은 도면이 아니라 두 건물이 겹친 자리였다.** 실측으로 확인:
+            //   sanse_test_hwasan (x-12,y58,z52~46) = spruce_planks — 도면에 없는 재료.
+            // ★이 눈이 지키는 것은 「오늘의 판단」이 아니라 **판단이 가능한 조건**이다.
+            int hjClear = com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(hj);
+            int hjTallest = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                for (int r = 0; r < hj.depth(); r++) {
+                    hjTallest = Math.max(hjTallest, hj.heightAt(c, r));
+                }
+            }
+            check("★[눈의 눈] 본전 도면에서 가장 높은 기둥 켜를 셌다", hjTallest > 0, hjTallest);
+            check("★★비우는 높이가 가장 높은 기둥보다 높다 (벽이 자라도 안 파묻힌다 — 기둥 "
+                            + hjTallest + " · 비움 " + hjClear + ")",
+                    hjClear > hjTallest, hjTallest + " vs " + hjClear);
+            int hjRoofTop = 0;
+            for (Blueprint.Roof rf : hj.roofs()) {
+                int[] rb = rf.box();
+                int rhf = (rb[2] - rb[0]) / 2;
+                int rhl = (rb[3] - rb[1]) / 2;
+                hjRoofTop = Math.max(hjRoofTop, rf.baseY() + Math.max(rhf, rhl) + rf.eave());
+                if (rf.hasUpper()) {
+                    hjRoofTop = Math.max(hjRoofTop, rf.baseY() + 3 + rf.upperWall()
+                            + Math.max(rhf - rf.insetX(), rhl - rf.insetZ()) + rf.upperEave());
+                }
+            }
+            check("★[눈의 눈] 본전 지붕 꼭대기를 셌다", hjRoofTop > 0, hjRoofTop);
+            check("★★비우는 높이가 지붕 꼭대기까지 닿는다 (남은 건물의 윗도리가 지붕 위로 "
+                            + "삐져나오지 않게 — 지붕 " + hjRoofTop + " · 비움 " + hjClear + ")",
+                    hjClear > hjRoofTop, hjRoofTop + " vs " + hjClear);
+            // ★비움 높이는 **도면을 따라 움직여야** 한다 — 상수를 박으면 도면이 자랄 때 조용히
+            //   낮아진다. 산문(다른 치수)에 대고 값이 **달라지는지** 재어 상수 박기를 잡는다.
+            //   ※이 눈이 없으면 clearHeight 가 `return 64;` 여도 위 두 눈은 통과한다.
+            int gateClear = com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(gate);
+            check("★★비우는 높이가 **도면을 따라 움직인다** (산문 " + gateClear + " ≠ 본전 "
+                            + hjClear + " — 상수를 박으면 여기서 짖는다)",
+                    gateClear != hjClear, gateClear + " vs " + hjClear);
+
+            // ★조성이 실제로 **비우고 나서** 찍는가 — 순서가 뒤집히면 도면을 지운다.
+            int clearCall = bb.indexOf("clearHeight(bp)");
+            int stampLoop = bb.indexOf("for (Blueprint.Course course : bp.columnOf");
+            check("★[눈의 눈] BlueprintBuilder 에서 비움 부름과 찍는 고리를 둘 다 찾았다",
+                    clearCall >= 0 && stampLoop >= 0, clearCall + " / " + stampLoop);
+            check("★★조성이 **비우고 나서** 찍는다 (순서가 뒤집히면 제 도면을 지운다)",
+                    clearCall >= 0 && stampLoop >= 0 && clearCall < stampLoop,
+                    clearCall + " < " + stampLoop);
+
+            // ══════ ★★B-196 둘째 진범 — 격자창이 **창인가 구멍인가** (2026-08-05) ══════
+            // 트랩도어를 setType 으로 놓으면 half=bottom·open=false 라 **바닥에 눕는다.**
+            // 그러면 칸은 살창이 아니라 구멍이고, 벽 너머 바깥 포장이 훤히 비친다
+            // (실물 확인: 자리 비움 뒤 찍은 clear_1 에서 칸마다 바깥이 보였다 — 「선반」).
+            // ★눈은 글자가 아니라 **조성이 쓰는 그 함수**(outward)를 불러 방향을 실제로 잰다.
+            int frontR = hj.depth() - 13;                 // 정면 벽 (row 19)
+            int latSouth = 0;
+            int latOther = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                if (hj.at(c, frontR) != 'D') {
+                    continue;
+                }
+                if (com.honcheon.mvt.forge.BlueprintBuilder.outward(hj, c, frontR)
+                        == org.bukkit.block.BlockFace.SOUTH) {
+                    latSouth++;
+                } else {
+                    latOther++;
+                }
+            }
+            check("★[눈의 눈] 본전 정면에서 격자칸을 찾았다", latSouth + latOther > 0, latSouth + latOther);
+            check("★★본전 정면 격자창이 **남(바깥)을 본다** (안쪽을 보면 살창이 뒤집힌다 — 남 "
+                            + latSouth + " · 그 밖 " + latOther + ")",
+                    latOther == 0 && latSouth > 0, latSouth + " / " + latOther);
+            // ★서쪽 벽은 서를 봐야 한다 — 한 처방(D)이 네 벽에 다 쓰이므로 **자리가** 방향을
+            //   정하는지 확인한다. 방향을 도면에 적으면 세 벽이 틀린다.
+            int westWall = -1;
+            for (int r2 = 0; r2 < hj.depth(); r2++) {
+                if (hj.at(4, r2) == 'D') {
+                    westWall = r2;
+                    break;
+                }
+            }
+            check("★[눈의 눈] 본전 서쪽 벽에서 격자칸을 찾았다", westWall >= 0, westWall);
+            check("★★같은 처방이 서쪽 벽에서는 **서를 본다** (자리가 방향을 정한다)",
+                    westWall >= 0 && com.honcheon.mvt.forge.BlueprintBuilder.outward(hj, 4, westWall)
+                            == org.bukkit.block.BlockFace.WEST,
+                    westWall < 0 ? "없음"
+                            : com.honcheon.mvt.forge.BlueprintBuilder.outward(hj, 4, westWall).toString());
+            // ★뒷벽(북)은 북을 본다 — 남북 대칭이 무너지면 여기서 짖는다
+            int backR = frontR - 13;
+            int backCol = -1;
+            for (int c = 0; c < hj.width(); c++) {
+                if (hj.at(c, backR) == 'D') {
+                    backCol = c;
+                    break;
+                }
+            }
+            check("★★뒷벽 격자창이 **북(바깥)을 본다**",
+                    backCol >= 0 && com.honcheon.mvt.forge.BlueprintBuilder.outward(hj, backCol, backR)
+                            == org.bukkit.block.BlockFace.NORTH,
+                    backCol < 0 ? "없음"
+                            : com.honcheon.mvt.forge.BlueprintBuilder.outward(hj, backCol, backR).toString());
+            // ★그리고 **세워서** 놓는가 — 방향만 맞고 눕혀 놓으면 여전히 구멍이다.
+            //   ※Bukkit.createBlockData 는 서버가 떠 있어야 해서 눈이 직접 못 만든다.
+            //     그래서 stand() 의 본문을 읽되, **앵커를 찾았는지 먼저 짖게** 해 둔다.
+            int standAt = bb.indexOf("static BlockData stand(");
+            check("★[눈의 눈] BlueprintBuilder.stand 를 찾았다", standAt >= 0, standAt);
+            String standBody = standAt < 0 ? ""
+                    : bb.substring(standAt, Math.min(bb.length(), standAt + 420));
+            check("★★격자창을 **세운다** (stand 가 setOpen(true) 한다 — 눕히면 칸이 구멍이 된다)",
+                    standAt >= 0 && standBody.contains("setOpen(true)"), standBody.replace('\n', ' '));
+            check("★★세우는 손이 **조성에 닿는다** (stamp 가 stand 를 부른다 — 죽은 함수 방지)",
+                    bb.indexOf("stand(d, face)") >= 0, bb.indexOf("stand(d, face)"));
+            check("★★상층 살창도 세운다 (하층만 고치면 위층이 구멍으로 남는다)",
+                    bb.indexOf("stand(Bukkit.createBlockData(fill), uf)") >= 0,
+                    bb.indexOf("stand(Bukkit.createBlockData(fill), uf)"));
+
+            // ══════ ★★D-34 — 정면 벽의 **재료 비율** (2026-08-05 · 오염 걷힌 뒤 첫 실측) ══════
+            // 앞의 눈들은 「회벽 켜열이 붙었나」·「격자가 회벽만큼 있나」처럼 **칸의 수**만 셌다.
+            // 그래서 회벽·격자가 둘 다 5켜 통짜여도 조용히 통과했다 — 한 주기의 재료가
+            // 붉은 5 : 회벽 5 : 나무 5 로 **똑같이 셋**인 채로. 목표(7호 정밀 크롭)는
+            // 붉은 64.0 / 회벽 22.8 / 나무 13.1 이라 **붉은색이 3분의 2**다.
+            // ★★★그런데 **비율에 문턱을 두는 눈은 못 쓴다.** 처음엔 「붉은 ≥50% · 회벽 ≤35%」로
+            //   적었는데, 고치기 **전** 상태(회벽 통짜 5켜)가 붉은 60%·회벽 24% 로 **그 문턱을
+            //   통과했다** (변이시험에서 확인). 칸을 세는 자와 화소를 재는 자가 다르기 때문이다 —
+            //   밝은 회벽은 실제보다 넓게, 좁은 붉은 기둥은 좁게 읽힌다.
+            //   문턱을 조여 통과시키면 그건 **오늘의 처방을 지키는 눈**이지 실측을 지키는 눈이 아니다.
+            //   그래서 실측이 실제로 뒷받침하는 **구조 규칙**만 남긴다: 「통짜 빈 판이 없다」.
+            int cCream = 0;
+            int noLintel = 0;
+            int checked = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                char ch = hj.at(c, frontR);
+                if (ch == '.' || ch == 'M' || ch == 'P' || ch == 'O') {
+                    continue;
+                }
+                checked++;
+                java.util.List<Blueprint.Course> col = hj.columnOf(ch);
+                // 벽 켜 = 기단(맨 아래 한 켜)과 도리·단청(맨 위 두 켜)을 뺀 가운데
+                java.util.List<String> wallCourses = new java.util.ArrayList<>();
+                for (Blueprint.Course cs : col) {
+                    for (int k = 0; k < cs.count(); k++) {
+                        wallCourses.add(cs.material());
+                    }
+                }
+                if (wallCourses.size() < 4) {
+                    continue;
+                }
+                java.util.List<String> mid = wallCourses.subList(1, wallCourses.size() - 2);
+                for (String m : mid) {
+                    if (m.contains("plaster")) {
+                        cCream++;
+                    }
+                }
+                // ★인방 — 칸의 벽 켜는 **위·아래가 붉은 켜로 끊겨야** 한다. 안 끊기면 회벽은
+                //   통짜 빈 판이 되고 격자는 바닥부터 천장까지 이어져 「사다리」로 읽힌다.
+                if (!mid.get(0).contains("mangrove") || !mid.get(mid.size() - 1).contains("mangrove")) {
+                    noLintel++;
+                }
+            }
+            check("★[눈의 눈] 본전 정면에서 기둥 아닌 칸을 찾았다", checked > 0, checked);
+            check("★★칸마다 위·아래가 **붉은 인방으로 끊긴다** (안 끊기면 회벽은 통짜 빈 판이, "
+                            + "격자는 사다리가 된다 — 안 끊긴 칸 " + noLintel + "/" + checked + ")",
+                    noLintel == 0, noLintel + "/" + checked);
+            check("★회벽이 사라지지는 않는다 (하층은 회벽이 **있는** 벽이다 — 상층과 다르다)",
+                    cCream > 0, cCream);
+
             // ══════ ★★D-35 — 망루가 본전보다 눈에 먼저 든다 ══════
             // 진범은 높이가 아니라 **흰 면의 넓이**다. 눈이 소스 글자가 아니라 **조성이 쓰는
             // 그 함수**(towerWall)를 불러 한 면의 회벽 칸을 실제로 센다.
