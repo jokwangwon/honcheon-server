@@ -410,6 +410,37 @@ public final class TerraceForgeSelfTest {
                 TerraceForge.AXIS_CLEAR >= TerraceForge.APPROACH_CLEAR + 2,
                 "비석 오프셋 ±" + TerraceForge.AXIS_CLEAR);
 
+        // ★2026-08-05 눈을 넓힌다 — 「비석만」 재던 것이 등롱 열주를 놓쳤다 (실기동 재발).
+        //   축선 회랑 안에는 <b>어떤 수직 소품도</b> 서지 않는다. 산문·외원 패드의 실제 부품
+        //   발자국을 훑어 회랑 안에 선 기둥이 있는지 센다 (조성이 낳은 상자를 그대로 읽는다).
+        //   ★상자 형식은 {x0, x1, z0, z1} 이다 (y 는 없다) — 처음 이 눈을 6원소로 읽었더니
+        //   폭 계산이 어긋나 <b>모든 상자를 건너뛰고 조용히 통과</b>했다 (뮤테이션이 잡았다).
+        //   기둥은 폭 1~2, 정자는 7, 문루는 29 — <b>폭으로 소품과 건물을 가른다</b>.
+        {
+            java.util.List<TerraceForge.Pad> axPads = TerraceForge.resolvePads(
+                    TerraceForge.hwasanCampus(), 0, 0, 0);
+            int intruders = 0;
+            String worst = "";
+            for (TerraceForge.Pad p : axPads) {
+                if (p.spec().zone() != 1 && p.spec().zone() != 2) {
+                    continue;   // 축선이 지나는 패드 (산문·외원)
+                }
+                int cx = p.x0() + p.spec().width() / 2;
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(p)) {
+                    int w = b[1] - b[0] + 1;
+                    if (w > 2) {
+                        continue;   // 기둥이 아니다 (정자·행각·문루)
+                    }
+                    if (b[0] > cx - TerraceForge.AXIS_CLEAR && b[1] < cx + TerraceForge.AXIS_CLEAR) {
+                        intruders++;
+                        worst = p.spec().name() + " x" + b[0] + " (축선 " + cx + ")";
+                    }
+                }
+            }
+            check("★D-20 축선 회랑에 수직 소품 0 (등롱 열주·석등·깃대 전부)",
+                    intruders == 0, intruders + "건 " + worst);
+        }
+
         // 비석 둘이 서로 다른 참에 선다 (겹치면 한 쌍이 사라진 것과 같다)
         check("★비석 두 쌍이 서로 다른 참 (하나가 조용히 사라지지 않는다)",
                 TerraceForge.STELE_A != TerraceForge.STELE_B
@@ -727,8 +758,8 @@ public final class TerraceForgeSelfTest {
             check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
                     plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
             check("★D-25·26 재료 — 단청(금빛·청록·적목)과 회색 기와 결이 팔레트에",
-                    bPal.contains(Material.HONEYCOMB_BLOCK)
-                            && bPal.contains(Material.WAXED_OXIDIZED_CUT_COPPER)
+                    bPal.contains(Material.CUT_SANDSTONE)
+                            && bPal.contains(Material.DARK_PRISMARINE)
                             && bPal.contains(Material.STRIPPED_MANGROVE_WOOD)
                             && bPal.contains(Material.DEEPSLATE_BRICKS)
                             && bPal.contains(Material.GRAY_TERRACOTTA)
@@ -907,11 +938,11 @@ public final class TerraceForgeSelfTest {
             for (int f = -20; f <= 20; f++) {
                 for (int l = -3; l <= 3; l++) {
                     Material m = com.honcheon.mvt.forge.HwasanCampusBuilder.dancheong(f, l);
-                    if (m == Material.HONEYCOMB_BLOCK) {
+                    if (m == Material.CUT_SANDSTONE) {
                         gold++;
                     } else if (m == Material.STRIPPED_MANGROVE_WOOD) {
                         red++;
-                    } else if (m == Material.WAXED_OXIDIZED_CUT_COPPER) {
+                    } else if (m == Material.DARK_PRISMARINE) {
                         teal++;
                     }
                 }
@@ -920,13 +951,19 @@ public final class TerraceForgeSelfTest {
             check("★D-25 단청 — 금빛이 바탕 (>55%)", gold * 100 / tot > 55, gold * 100 / tot + "%");
             check("★D-25 단청 — 붉은 주두가 끊는다 (15~35%)",
                     red * 100 / tot >= 15 && red * 100 / tot <= 35, red * 100 / tot + "%");
-            check("★D-25 단청 — 청록은 드물게 (0<x<15%)",
-                    teal > 0 && teal * 100 / tot < 15, teal * 100 / tot + "%");
+            // ★실기동 판정 ② — 민트가 눈에 띄어 목적을 배반했다. 이제 짙은 청록이고 더 드물다.
+            check("★D-25 단청 — 청록은 아주 드물게 (0<x<9%)",
+                    teal > 0 && teal * 100 / tot < 9, teal * 100 / tot + "%");
             java.util.Set<Material> pal2 = com.honcheon.mvt.forge.HwasanCampusBuilder.palette();
-            check("★D-25 단청 — 세 색이 팔레트에 신고됐다",
-                    pal2.contains(Material.HONEYCOMB_BLOCK)
+            check("★D-25 단청 — 세 색이 팔레트에 신고됐다 (반블록 변종까지)",
+                    pal2.contains(Material.CUT_SANDSTONE)
+                            && pal2.contains(Material.CUT_SANDSTONE_SLAB)
                             && pal2.contains(Material.STRIPPED_MANGROVE_WOOD)
-                            && pal2.contains(Material.WAXED_OXIDIZED_CUT_COPPER), "");
+                            && pal2.contains(Material.DARK_PRISMARINE), "");
+            // ★실기동 판정 ① — 채도가 높으면 형광으로 튄다. 꿀집·밀랍구리는 이제 안 쓴다.
+            check("★D-25 단청 — 형광 재료(꿀집·밀랍 산화 구리)를 안 쓴다",
+                    !pal2.contains(Material.HONEYCOMB_BLOCK)
+                            && !pal2.contains(Material.WAXED_OXIDIZED_CUT_COPPER), "");
         }
 
         check("★16 결정론 — 같은 자리는 같은 결",

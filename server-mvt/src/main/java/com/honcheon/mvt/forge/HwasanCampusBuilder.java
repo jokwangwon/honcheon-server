@@ -142,8 +142,11 @@ public final class HwasanCampusBuilder {
         //   ★되돌리는 것은 척도뿐 — 9~16 의 문법(행각 중앙 개구·등롱 열·포치·귀솟음)은 남는다.
         return switch (pad.spec().zone()) {
             case 1 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 1, 14, t),   // 산문 29 — 처마(±2)가 램프 줄을 비킨다
-                    (w, p, t) -> lanternRow(w, p, cx - 6, p.zN() + p.spec().depth() / 2 + 6, p.zS() - 2, t),   // ★9 — 접근 축선 등롱 열
-                    (w, p, t) -> lanternRow(w, p, cx + 6, p.zN() + p.spec().depth() / 2 + 6, p.zS() - 2, t));
+                    // ★9 — 접근 축선 등롱 열. ★2026-08-05: ±6 은 축선 시야 회랑(AXIS_CLEAR) 안이라
+                    //   계단 아래에서 보면 가까운 기둥이 먼 문루 정면을 세로로 가로질렀다 (비석과 같은 병).
+                    //   수직 소품은 전부 회랑 밖에 선다 — 통행의 폭이 아니라 시야의 폭이 기준이다.
+                    (w, p, t) -> lanternRow(w, p, cx - TerraceForge.AXIS_CLEAR, p.zN() + p.spec().depth() / 2 + 6, p.zS() - 2, t),
+                    (w, p, t) -> lanternRow(w, p, cx + TerraceForge.AXIS_CLEAR, p.zN() + p.spec().depth() / 2 + 6, p.zS() - 2, t));
             case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 7, cz + 6, 3, t),  // 외원 — 대칭 정자 · 중앙 여백 (원작 11호)
                     (w, p, t) -> pavilion(w, p, cx + 7, cz + 6, 3, t),
                     // ★9b — 행각은 칸 중앙 통로(cz±5)에서 갈린다: 소계단 착지의 보행 연장선이
@@ -152,8 +155,8 @@ public final class HwasanCampusBuilder {
                     (w, p, t) -> cloister(w, p, p.x0() + 4, cz + 6, p.zS() - 4, t),
                     (w, p, t) -> cloister(w, p, p.x1() - 5, p.zN() + 4, cz - 6, t),
                     (w, p, t) -> cloister(w, p, p.x1() - 5, cz + 6, p.zS() - 4, t),
-                    (w, p, t) -> lanternRow(w, p, cx - 7, p.zN() + 3, cz - 3, t),
-                    (w, p, t) -> lanternRow(w, p, cx + 7, p.zN() + 3, cz - 3, t));
+                    (w, p, t) -> lanternRow(w, p, cx - TerraceForge.AXIS_CLEAR, p.zN() + 3, cz - 3, t),
+                    (w, p, t) -> lanternRow(w, p, cx + TerraceForge.AXIS_CLEAR, p.zN() + 3, cz - 3, t));
             case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 7, 10, t),   // 종문 21 (9b — 중층 마감 · 산문<)
                     (w, p, t) -> cloister(w, p, p.x0() + 4, p.zN() + 4, cz - 6, t),
                     (w, p, t) -> cloister(w, p, p.x0() + 4, cz + 6, p.zS() - 4, t),
@@ -906,13 +909,13 @@ public final class HwasanCampusBuilder {
         for (int f = -hf; f <= hf; f++) {
             for (int l : new int[]{-hl, hl}) {
                 put(world, pad, cx + f, y, cz + l, Material.STRIPPED_MANGROVE_WOOD, tally);   // 붉은 도리
-                put(world, pad, cx + f, y - 1, cz + l, dancheong(f, l), tally);               // 금빛 단청
+                putTopHalf(world, pad, cx + f, y - 1, cz + l, dancheong(f, l), tally);        // 금빛 단청
             }
         }
         for (int l = -hl + 1; l <= hl - 1; l++) {
             for (int f : new int[]{-hf, hf}) {
                 put(world, pad, cx + f, y, cz + l, Material.STRIPPED_MANGROVE_WOOD, tally);
-                put(world, pad, cx + f, y - 1, cz + l, dancheong(f, l), tally);
+                putTopHalf(world, pad, cx + f, y - 1, cz + l, dancheong(f, l), tally);
             }
         }
     }
@@ -921,16 +924,23 @@ public final class HwasanCampusBuilder {
      * 단청 패널 한 칸 — 금빛이 바탕이고 <b>네 칸마다 붉은 주두</b>가 끊으며, 드물게 청록이 섞인다
      * (목표 1호 실측 배분). 결정론 — 자리로만 정해진다.
      *
+     * <p>★재료의 근거 — <b>목표 1호의 금빛 띠를 픽셀로 쟀다</b>: 밝은 부분 RGB(197,174,145)
+     * <b>H33° S26% V77%</b> · 금빛 평균 S33% (띠 전체는 처마 그늘에 잠겨 V27%). 즉 그 금빛은
+     * <b>채도 26~33%의 은은한 탄색</b>이지 포화 노랑이 아니다. 첫 판에 쓴 꿀집 블록은 S≈80% 라
+     * <b>형광 주황으로 튀어</b> 벌집 무늬가 벽면을 지배했다 (실기동 판정). 새김 사암은 S≈26% 로
+     * 실측과 맞고, 새겨진 테두리가 <b>단청 패널의 틀</b>로 읽힌다.
+     * 청록도 같은 이유로 밀랍 산화 구리(민트)를 버리고 짙은 프리즈머린으로 갈고 더 드물게 했다.
+     *
      * <p>★눈이 이 함수를 직접 읽는다 (조성과 눈이 한 식 — 배분을 두 번 적으면 어긋난다).
      */
     public static Material dancheong(int f, int l) {
         if (Math.floorMod(f + l, 4) == 0) {
             return Material.STRIPPED_MANGROVE_WOOD;            // 붉은 주두 (기둥 머리)
         }
-        if (Math.floorMod(f * 7 + l * 13, 11) == 0) {
-            return Material.WAXED_OXIDIZED_CUT_COPPER;         // 청록 — 드물게 (1호 하층의 결)
+        if (Math.floorMod(f * 7 + l * 13, 17) == 0) {
+            return Material.DARK_PRISMARINE;                   // 짙은 청록 — 아주 드물게
         }
-        return Material.HONEYCOMB_BLOCK;                       // 금빛 무늬 패널
+        return Material.CUT_SANDSTONE;                         // 은은한 금빛 — 새김 판
     }
 
     /**
@@ -1619,6 +1629,40 @@ public final class HwasanCampusBuilder {
         tally.blocks++;
     }
 
+    /**
+     * <b>윗반블록</b>으로 놓는다 — 단청 켜를 <b>반 칸으로 얇게</b> 하려는 것 (실기동 판정 ③:
+     * 「띠가 두꺼워 벽면을 먹는다」). 윗칸에 붙으므로 <b>붉은 도리 바로 밑에 금빛 선</b>이 걸리고
+     * 그 아래는 처마 그늘이 남는다 — 목표 1호의 「그늘 속에 잠긴 은은한 금빛 선」이 그 모양이다.
+     *
+     * <p>반블록 변종이 없는 재료는 통짜로 놓는다 (붉은 주두처럼 통판이 옳은 것도 있다).
+     * 패드 검사·마른 조성 계약은 {@link #put} 과 같다 — 두 길이 갈리면 상자가 어긋난다.
+     */
+    private static void putTopHalf(World world, TerraceForge.Pad pad, int x, int y, int z,
+                                   Material m, Tally tally) {
+        Material slab = switch (m) {
+            case CUT_SANDSTONE -> Material.CUT_SANDSTONE_SLAB;
+            case DARK_PRISMARINE -> Material.DARK_PRISMARINE_SLAB;
+            default -> null;
+        };
+        if (slab == null) {
+            put(world, pad, x, y, z, m, tally);
+            return;
+        }
+        if (!pad.contains(x, z)) {
+            throw new IllegalStateException("건물 블록이 패드 밖: " + pad.spec().name()
+                    + " (" + x + "," + y + "," + z + ") " + slab);
+        }
+        if (tally.print != null) {
+            tally.print.take(x, y, z);
+            return;
+        }
+        org.bukkit.block.data.type.Slab d =
+                (org.bukkit.block.data.type.Slab) slab.createBlockData();
+        d.setType(org.bukkit.block.data.type.Slab.Type.TOP);
+        world.getBlockAt(x, y, z).setBlockData(d, false);
+        tally.blocks++;
+    }
+
     /** 배치기의 재료 전부 — 눈이 금지 재료(B-195: barrel·light)를 이 표로 잰다. */
     public static Set<Material> palette() {
         return EnumSet.of(
@@ -1630,8 +1674,9 @@ public final class HwasanCampusBuilder {
                 Material.COBBLED_DEEPSLATE_WALL, Material.STONE_BRICKS, Material.POLISHED_ANDESITE, Material.GLASS_PANE,
                 Material.DEEPSLATE_BRICKS, Material.GRAY_TERRACOTTA,            // ★D-26 회색 기와 결
                 Material.DEEPSLATE_BRICK_STAIRS,
-                Material.STRIPPED_MANGROVE_WOOD, Material.HONEYCOMB_BLOCK,      // ★D-25 단청 띠
-                Material.WAXED_OXIDIZED_CUT_COPPER,
+                Material.STRIPPED_MANGROVE_WOOD,                                // ★D-25 단청 띠
+                Material.CUT_SANDSTONE, Material.CUT_SANDSTONE_SLAB,            //   은은한 금빛 (실측 S26%)
+                Material.DARK_PRISMARINE, Material.DARK_PRISMARINE_SLAB,        //   짙은 청록 — 아주 드물게
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
                 Material.CHEST, Material.LANTERN, Material.AIR);
@@ -1647,8 +1692,9 @@ public final class HwasanCampusBuilder {
             Material.COBBLED_DEEPSLATE_WALL, Material.GLASS_PANE,
             Material.DEEPSLATE_BRICKS, Material.GRAY_TERRACOTTA,            // ★D-26 회색 기와 결
             Material.DEEPSLATE_BRICK_STAIRS, Material.POLISHED_ANDESITE,
-            Material.STRIPPED_MANGROVE_WOOD, Material.HONEYCOMB_BLOCK,      // ★D-25 단청 띠
-            Material.WAXED_OXIDIZED_CUT_COPPER,
+            Material.STRIPPED_MANGROVE_WOOD,                                // ★D-25 단청 띠
+            Material.CUT_SANDSTONE, Material.CUT_SANDSTONE_SLAB,
+            Material.DARK_PRISMARINE, Material.DARK_PRISMARINE_SLAB,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 
     /**
