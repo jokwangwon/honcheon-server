@@ -1001,6 +1001,22 @@ public final class TerraceForgeSelfTest {
                     Material.GRAY_WALL_BANNER, Material.GRAY_BANNER);
             check("★D-21 조립② 배너가 어두운 계열이다 (실측 V21% — 밝은 염료 금지)",
                     darkBanner.contains(fBanner), fBanner);
+            // ★★조립④ (2026-08-05 판정) — 「어두운 계열이다」만 재면 <b>무지 검정</b>이 통과하고,
+            //   그러면 배너가 어두운 기둥과 붙어 그림자로 읽혀 <b>형태가 사라진다</b>.
+            //   계율: 「튀지 않게」와 「안 보이게」는 다르다 — 배너는 보여야 하는 표지다.
+            check("★D-21 조립④ 배너에 문양이 있다 (무지 금지 — 짙은 바탕에선 형태가 사라진다)",
+                    !TerraceForge.bannerPatternColors().isEmpty(),
+                    TerraceForge.bannerPatternColors().size() + "개");
+            boolean brightPat = TerraceForge.bannerPatternColors().stream().anyMatch(c -> {
+                org.bukkit.Color rgb = c.getColor();
+                return (rgb.getRed() + rgb.getGreen() + rgb.getBlue()) / 3 > 160;   // 밝은 염료
+            });
+            check("★D-21 조립④ 문양이 밝다 (짙은 바탕과 대비되어 읽힌다)", brightPat,
+                    TerraceForge.bannerPatternColors().get(0));
+            check("★D-21 조립④ 바탕은 어둡다 (문양 포함 합성이 목표 V24% 에 맞는다)",
+                    TerraceForge.bannerBase() == org.bukkit.DyeColor.BLACK
+                            || TerraceForge.bannerBase() == org.bukkit.DyeColor.GRAY,
+                    TerraceForge.bannerBase());
             check("★D-21 조립② 밝은 배너를 안 쓴다 (로열블루·하늘·청록)",
                     !tPal.contains(Material.BLUE_BANNER)
                             && !tPal.contains(Material.BLUE_WALL_BANNER)

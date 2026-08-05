@@ -4,6 +4,9 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.DyeColor;
+import org.bukkit.block.banner.Pattern;
+import org.bukkit.block.banner.PatternType;
 import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.type.Slab;
 import org.bukkit.block.data.type.Stairs;
@@ -583,6 +586,47 @@ public final class TerraceForge {
                 Material.BLACK_WALL_BANNER};
     }
 
+    /**
+     * 배너 문양 — <b>눈이 이 표로 잰다</b> (조성과 한 식).
+     *
+     * <p>★계율 (2026-08-05): <b>「튀지 않게」와 「안 보이게」는 다르다.</b> 채도를 낮추는 것이
+     * 옳을 때도 <b>형태가 사라지면 그 요소는 없는 것과 같다</b> — 단청 청록은 없애는 게 답이었지만
+     * 깃대 배너는 <b>보여야 하는 표지</b>다. 무지 검정 배너는 어두운 기둥과 붙어 그림자로 읽혔고
+     * 원경에서 아예 사라졌다.
+     *
+     * <p>★바탕을 검정으로 둔 근거 — <b>문양까지 넣은 합성 평균</b>을 목표와 맞췄다:
+     * 목표 배너(문양 포함) RGB(62,61,62) V24% · 밝은 문양이 면적의 <b>14%</b>.
+     * 마크 {@code CIRCLE} 패턴(면적 ≈22%) 합성 예측은 BLACK+흰원 RGB(77,79,82) V32%
+     * <b>거리 30.8</b> · GRAY+흰원 94.4 · BLUE+흰원 140.6 — 검정 바탕이 여전히 최근접이다.
+     * 목표 문양은 <b>가운데 원 하나</b>이고 (위아래 띠는 없다 — 위쪽 흰 것은 가로대 장식이다),
+     * 그래서 패턴도 하나다.
+     */
+    public static DyeColor bannerBase() {
+        return DyeColor.BLACK;
+    }
+
+    /**
+     * 배너 문양의 <b>색</b> — 가운데 흰 원 하나 (목표 1호 실측).
+     *
+     * <p>★문양 <b>종류</b>({@link PatternType})와 <b>색</b>을 갈라 둔 까닭: {@code PatternType}
+     * 은 서버 레지스트리를 물어야 풀리는 값이라 <b>월드 없는 눈에서는 못 읽는다</b>
+     * (정적 초기화가 {@code No RegistryAccess implementation found} 로 터진다).
+     * 색·개수는 평범한 enum 이라 눈이 읽을 수 있으므로, <b>계약을 그쪽에 둔다</b> —
+     * 눈이 재는 것은 「문양이 있는가 · 밝은가」이고 그 둘은 색으로 판정된다.
+     */
+    public static java.util.List<DyeColor> bannerPatternColors() {
+        return java.util.List.of(DyeColor.WHITE);
+    }
+
+    /** 배너 문양 — 가운데 흰 원 하나. 조성 때만 부른다 (레지스트리가 필요하다) */
+    public static java.util.List<Pattern> bannerPatterns() {
+        java.util.List<Pattern> out = new ArrayList<>();
+        for (DyeColor c : bannerPatternColors()) {
+            out.add(new Pattern(c, PatternType.CIRCLE));
+        }
+        return out;
+    }
+
     /** 그 행에 깃대가 서는가 (좌우 쌍) */
     public static boolean isFlagpoleRow(int i) {
         return i >= BANNER_FROM && (i - BANNER_FROM) % BANNER_EVERY == 0;
@@ -851,7 +895,15 @@ public final class TerraceForge {
         // 배너 — 마디의 북면에 걸어 아래로 늘어뜨린다
         Directional banner = (Directional) Material.BLACK_WALL_BANNER.createBlockData();
         banner.setFacing(BlockFace.NORTH);
-        world.getBlockAt(x, by + FLAG_BANNER_Y, z - 1).setBlockData(banner, false);
+        Block bb = world.getBlockAt(x, by + FLAG_BANNER_Y, z - 1);
+        bb.setBlockData(banner, false);
+        // ★★흰 원 문양 — 짙은 바탕에서 <b>형태를 읽히게 하는</b> 것 (2026-08-05 판정).
+        //   무지 검정은 어두운 기둥과 붙어 그림자와 구별되지 않았고, 원경에서는 배너가
+        //   아예 사라졌다. 목표 1호의 배너에는 <b>가운데 흰 원</b>이 있고 그것이 표지다.
+        if (bb.getState() instanceof org.bukkit.block.Banner state) {
+            state.setPatterns(bannerPatterns());
+            state.update(true, false);
+        }
         tally.banners++;
     }
 
