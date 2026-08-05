@@ -921,7 +921,7 @@ public final class HwasanCampusBuilder {
     }
 
     /**
-     * 단청 패널 한 칸 — 금빛이 바탕이고 <b>네 칸마다 붉은 주두</b>가 끊으며, 드물게 청록이 섞인다
+     * 단청 패널 한 칸 — 금빛이 바탕이고 <b>네 칸마다 붉은 주두</b>가 끊는다
      * (목표 1호 실측 배분). 결정론 — 자리로만 정해진다.
      *
      * <p>★재료의 근거 — <b>목표 1호의 금빛 띠를 픽셀로 쟀다</b>: 밝은 부분 RGB(197,174,145)
@@ -929,16 +929,17 @@ public final class HwasanCampusBuilder {
      * <b>채도 26~33%의 은은한 탄색</b>이지 포화 노랑이 아니다. 첫 판에 쓴 꿀집 블록은 S≈80% 라
      * <b>형광 주황으로 튀어</b> 벌집 무늬가 벽면을 지배했다 (실기동 판정). 새김 사암은 S≈26% 로
      * 실측과 맞고, 새겨진 테두리가 <b>단청 패널의 틀</b>로 읽힌다.
-     * 청록도 같은 이유로 밀랍 산화 구리(민트)를 버리고 짙은 프리즈머린으로 갈고 더 드물게 했다.
+     *
+     * <p>★★청록은 <b>아예 뺐다</b> (2026-08-05 · 사용자 지적). 민트빛 밀랍 산화 구리를 짙은
+     * 프리즈머린으로 갈고 빈도도 6% 로 낮췄는데도, <b>붉은 벽과 보색이라 여전히 눈에 먼저
+     * 들어왔다</b> (근경 좌측 두 곳). 목표에선 「거의 안 보이는」 수준인데 <b>있어서 튀면
+     * 목적을 배반한다</b> — 드물게 두는 것보다 없는 편이 목표에 가깝다. 금빛·붉은 주두 둘뿐이다.
      *
      * <p>★눈이 이 함수를 직접 읽는다 (조성과 눈이 한 식 — 배분을 두 번 적으면 어긋난다).
      */
     public static Material dancheong(int f, int l) {
         if (Math.floorMod(f + l, 4) == 0) {
             return Material.STRIPPED_MANGROVE_WOOD;            // 붉은 주두 (기둥 머리)
-        }
-        if (Math.floorMod(f * 7 + l * 13, 17) == 0) {
-            return Material.DARK_PRISMARINE;                   // 짙은 청록 — 아주 드물게
         }
         return Material.CUT_SANDSTONE;                         // 은은한 금빛 — 새김 판
     }
@@ -1641,7 +1642,6 @@ public final class HwasanCampusBuilder {
                                    Material m, Tally tally) {
         Material slab = switch (m) {
             case CUT_SANDSTONE -> Material.CUT_SANDSTONE_SLAB;
-            case DARK_PRISMARINE -> Material.DARK_PRISMARINE_SLAB;
             default -> null;
         };
         if (slab == null) {
@@ -1676,7 +1676,6 @@ public final class HwasanCampusBuilder {
                 Material.DEEPSLATE_BRICK_STAIRS,
                 Material.STRIPPED_MANGROVE_WOOD,                                // ★D-25 단청 띠
                 Material.CUT_SANDSTONE, Material.CUT_SANDSTONE_SLAB,            //   은은한 금빛 (실측 S26%)
-                Material.DARK_PRISMARINE, Material.DARK_PRISMARINE_SLAB,        //   짙은 청록 — 아주 드물게
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
                 Material.CHEST, Material.LANTERN, Material.AIR);
@@ -1694,7 +1693,6 @@ public final class HwasanCampusBuilder {
             Material.DEEPSLATE_BRICK_STAIRS, Material.POLISHED_ANDESITE,
             Material.STRIPPED_MANGROVE_WOOD,                                // ★D-25 단청 띠
             Material.CUT_SANDSTONE, Material.CUT_SANDSTONE_SLAB,
-            Material.DARK_PRISMARINE, Material.DARK_PRISMARINE_SLAB,
             Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE, Material.CHEST);
 
     /**

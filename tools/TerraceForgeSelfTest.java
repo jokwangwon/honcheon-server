@@ -410,12 +410,13 @@ public final class TerraceForgeSelfTest {
                 TerraceForge.AXIS_CLEAR >= TerraceForge.APPROACH_CLEAR + 2,
                 "비석 오프셋 ±" + TerraceForge.AXIS_CLEAR);
 
-        // ★2026-08-05 눈을 넓힌다 — 「비석만」 재던 것이 등롱 열주를 놓쳤다 (실기동 재발).
-        //   축선 회랑 안에는 <b>어떤 수직 소품도</b> 서지 않는다. 산문·외원 패드의 실제 부품
-        //   발자국을 훑어 회랑 안에 선 기둥이 있는지 센다 (조성이 낳은 상자를 그대로 읽는다).
+        // ★2026-08-05 계약 교정 — <b>가리는 정도는 높이가 아니라 두께가 정한다</b>.
+        //   처음엔 「축선 회랑에 수직 소품 0」이었으나 그것이 과했다: 목표 사진 1호는 계단 양옆에
+        //   깃대가 촘촘히 섰는데도 문루가 잘 보인다 — 1칸 기둥은 원근으로도 가늘기 때문이다.
+        //   그래서 <b>두꺼운 소품(폭 ≥2)</b>만 회랑 밖으로 민다. 가는 것(폭 1)은 난간 위까지 허용.
         //   ★상자 형식은 {x0, x1, z0, z1} 이다 (y 는 없다) — 처음 이 눈을 6원소로 읽었더니
         //   폭 계산이 어긋나 <b>모든 상자를 건너뛰고 조용히 통과</b>했다 (뮤테이션이 잡았다).
-        //   기둥은 폭 1~2, 정자는 7, 문루는 29 — <b>폭으로 소품과 건물을 가른다</b>.
+        //   비석은 폭 2~3, 정자는 7, 문루는 29 — 문루는 표적이지 장애물이 아니므로 뺀다.
         {
             java.util.List<TerraceForge.Pad> axPads = TerraceForge.resolvePads(
                     TerraceForge.hwasanCampus(), 0, 0, 0);
@@ -428,16 +429,16 @@ public final class TerraceForgeSelfTest {
                 int cx = p.x0() + p.spec().width() / 2;
                 for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(p)) {
                     int w = b[1] - b[0] + 1;
-                    if (w > 2) {
-                        continue;   // 기둥이 아니다 (정자·행각·문루)
+                    if (w < 2 || w > 10) {
+                        continue;   // 폭 1 = 가는 소품(허용) · 폭 >10 = 건물(표적이지 장애물이 아니다)
                     }
                     if (b[0] > cx - TerraceForge.AXIS_CLEAR && b[1] < cx + TerraceForge.AXIS_CLEAR) {
                         intruders++;
-                        worst = p.spec().name() + " x" + b[0] + " (축선 " + cx + ")";
+                        worst = p.spec().name() + " x" + b[0] + " 폭" + w + " (축선 " + cx + ")";
                     }
                 }
             }
-            check("★D-20 축선 회랑에 수직 소품 0 (등롱 열주·석등·깃대 전부)",
+            check("★D-20 축선 회랑에 <b>두꺼운</b> 소품 0 (가는 기둥은 난간까지 허용)",
                     intruders == 0, intruders + "건 " + worst);
         }
 
@@ -757,9 +758,8 @@ public final class TerraceForgeSelfTest {
             int jongParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jong).size();
             check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
                     plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
-            check("★D-25·26 재료 — 단청(금빛·청록·적목)과 회색 기와 결이 팔레트에",
+            check("★D-25·26 재료 — 단청(금빛·적목)과 회색 기와 결이 팔레트에",
                     bPal.contains(Material.CUT_SANDSTONE)
-                            && bPal.contains(Material.DARK_PRISMARINE)
                             && bPal.contains(Material.STRIPPED_MANGROVE_WOOD)
                             && bPal.contains(Material.DEEPSLATE_BRICKS)
                             && bPal.contains(Material.GRAY_TERRACOTTA)
@@ -934,7 +934,7 @@ public final class TerraceForgeSelfTest {
         {
             int gold = 0;
             int red = 0;
-            int teal = 0;
+            int other = 0;
             for (int f = -20; f <= 20; f++) {
                 for (int l = -3; l <= 3; l++) {
                     Material m = com.honcheon.mvt.forge.HwasanCampusBuilder.dancheong(f, l);
@@ -942,28 +942,89 @@ public final class TerraceForgeSelfTest {
                         gold++;
                     } else if (m == Material.STRIPPED_MANGROVE_WOOD) {
                         red++;
-                    } else if (m == Material.DARK_PRISMARINE) {
-                        teal++;
+                    } else {
+                        other++;
                     }
                 }
             }
-            int tot = gold + red + teal;
+            int tot = gold + red + other;
             check("★D-25 단청 — 금빛이 바탕 (>55%)", gold * 100 / tot > 55, gold * 100 / tot + "%");
             check("★D-25 단청 — 붉은 주두가 끊는다 (15~35%)",
                     red * 100 / tot >= 15 && red * 100 / tot <= 35, red * 100 / tot + "%");
-            // ★실기동 판정 ② — 민트가 눈에 띄어 목적을 배반했다. 이제 짙은 청록이고 더 드물다.
-            check("★D-25 단청 — 청록은 아주 드물게 (0<x<9%)",
-                    teal > 0 && teal * 100 / tot < 9, teal * 100 / tot + "%");
+            // ★실기동 판정 (2026-08-05) — 청록은 짙게·드물게 해도 붉은 벽과 보색이라 눈에 먼저
+            //   들어왔다. 「거의 안 보여야」 하는 것이 목적이므로 아예 뺐다. 두 색뿐이다.
+            check("★D-25 단청 — 금빛과 붉은 주두 둘뿐이다 (청록 없음)", other == 0, other);
             java.util.Set<Material> pal2 = com.honcheon.mvt.forge.HwasanCampusBuilder.palette();
-            check("★D-25 단청 — 세 색이 팔레트에 신고됐다 (반블록 변종까지)",
+            check("★D-25 단청 — 두 색이 팔레트에 신고됐다 (반블록 변종까지)",
                     pal2.contains(Material.CUT_SANDSTONE)
                             && pal2.contains(Material.CUT_SANDSTONE_SLAB)
-                            && pal2.contains(Material.STRIPPED_MANGROVE_WOOD)
-                            && pal2.contains(Material.DARK_PRISMARINE), "");
+                            && pal2.contains(Material.STRIPPED_MANGROVE_WOOD), "");
+            check("★D-25 단청 — 청록이 팔레트에서도 빠졌다",
+                    !pal2.contains(Material.DARK_PRISMARINE)
+                            && !pal2.contains(Material.DARK_PRISMARINE_SLAB), "");
             // ★실기동 판정 ① — 채도가 높으면 형광으로 튄다. 꿀집·밀랍구리는 이제 안 쓴다.
             check("★D-25 단청 — 형광 재료(꿀집·밀랍 산화 구리)를 안 쓴다",
                     !pal2.contains(Material.HONEYCOMB_BLOCK)
                             && !pal2.contains(Material.WAXED_OXIDIZED_CUT_COPPER), "");
+        }
+
+        // ── ★D-21 깃대 · ★D-22 석등 (2026-08-05) — 목표 1호의 계단 소품 ──
+        {
+            java.util.Set<Material> tPal = TerraceForge.palette();
+            check("★D-22 석등 — 등롱이 1×1 발광 고체다 (글로우스톤 · 실측 RGB(255,199,104))",
+                    tPal.contains(Material.GLOWSTONE), "");
+            check("★D-21 깃대 — 기둥·가로대·배너가 팔레트에 신고됐다",
+                    tPal.contains(Material.DARK_OAK_FENCE)
+                            && tPal.contains(Material.STRIPPED_MANGROVE_WOOD)
+                            && tPal.contains(Material.BLUE_BANNER), "");
+            check("★D-21 깃대 — 세로 간격이 목표 실측 창(8~10) 안",
+                    TerraceForge.BANNER_EVERY >= 8 && TerraceForge.BANNER_EVERY <= 10,
+                    TerraceForge.BANNER_EVERY);
+            // ★자리 — 난간 캡 위(±RAIL_OFF). 목표 사진 그대로다. 가는 기둥(폭 1)이라
+            //   축선 회랑(두꺼운 소품 전용)에 걸리지 않는다 — 2026-08-05 계약 교정.
+            check("★D-21 깃대 — 난간 캡 위에 선다 (목표 자리 · 가는 기둥이라 시야를 안 막는다)",
+                    TerraceForge.RAIL_OFF < TerraceForge.AXIS_CLEAR, TerraceForge.RAIL_OFF);
+            // ★D-22 석등 — 실측 간격 10~12 · 좌우 번갈아
+            check("★D-22 석등 — 간격이 목표 실측 창(10~12) 안",
+                    TerraceForge.LANTERN_EVERY >= 10 && TerraceForge.LANTERN_EVERY <= 12,
+                    TerraceForge.LANTERN_EVERY);
+            // 한 자리에 깃대와 석등을 겹쳐 세우면 뒤엣것이 앞엣것을 덮어 조용히 하나가 사라진다
+            int clash = 0;
+            for (int i = 0; i < TerraceForge.APPROACH_LEN; i++) {
+                if (TerraceForge.isFlagpoleRow(i)
+                        && (TerraceForge.isLanternRow(i, true) || TerraceForge.isLanternRow(i, false))) {
+                    clash++;
+                }
+            }
+            check("★D-21·22 깃대와 석등이 한 자리를 다투지 않는다", clash == 0, clash + "행");
+            // 석등이 좌우 번갈아 — 한쪽에만 몰리면 「열」이 아니다
+            int lf = 0;
+            int rt = 0;
+            for (int i = 0; i < TerraceForge.APPROACH_LEN; i++) {
+                if (TerraceForge.isLanternRow(i, true)) {
+                    lf++;
+                }
+                if (TerraceForge.isLanternRow(i, false)) {
+                    rt++;
+                }
+            }
+            check("★D-22 석등이 좌우 번갈아 선다 (양쪽 ≥2기)", lf >= 2 && rt >= 2, lf + "/" + rt);
+            // ★8.7 계율 — 부속 자리는 전부 길이 안이어야 한다 (조용히 사라지지 않게)
+            int outOfRange = 0;
+            for (int i : TerraceForge.approachFixtureIndices()) {
+                if (i < 0 || i >= TerraceForge.APPROACH_LEN) {
+                    outOfRange++;
+                }
+            }
+            check("★D-21 깃대까지 포함해 접근로 부속이 전부 길이 안", outOfRange == 0, outOfRange);
+            // 깃대가 실제로 여러 기 선다 (한 기만 서면 「열」이 아니다)
+            int bannerCount = 0;
+            for (int i = TerraceForge.BANNER_FROM; i < TerraceForge.APPROACH_LEN;
+                    i += TerraceForge.BANNER_EVERY) {
+                bannerCount++;
+            }
+            check("★D-21 깃대가 계단을 따라 열을 이룬다 (좌우 쌍 ≥4기)",
+                    bannerCount >= 4, bannerCount + "기(쌍)");
         }
 
         check("★16 결정론 — 같은 자리는 같은 결",

@@ -4,6 +4,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Rotatable;
 import org.bukkit.block.data.type.Slab;
 import org.bukkit.block.data.type.Stairs;
 
@@ -486,13 +487,23 @@ public final class TerraceForge {
     public static final int APPROACH_CLEAR = 10;
 
     /**
-     * <b>축선 시야 회랑</b> 반폭 — 계단 아래 축선에 선 눈이 문루를 볼 때 <b>그 사이에 아무 수직
-     * 소품도 없어야 하는</b> 폭이다 (2026-08-05 · 사용자 지적).
+     * <b>축선 시야 회랑</b> 반폭 — 계단 아래 축선에 선 눈이 문루를 볼 때 <b>그 사이에
+     * 두꺼운 소품이 없어야 하는</b> 폭이다 (2026-08-05 · 사용자 지적 → 계약 교정).
      *
      * <p>옛 비석 자리 ±7 은 <b>통행</b>은 안 막았다 — 그래서 통로 겹침 눈도 조용했다. 그러나
      * 카메라(사람)가 축선 위 계단 아래에 서면 <b>가까운 비석이 멀리 있는 문루를 가린다</b>:
      * 거리 24칸의 5칸 기둥이 거리 64칸의 21칸 문루보다 화면에서 크다. <b>통행의 폭과 시야의
-     * 폭은 다르다</b> — 목표 사진 1호는 축선이 트여 있고 소품이 좌우로 물러나 있다.
+     * 폭은 다르다</b>.
+     *
+     * <p>★★계약 교정 — <b>가리는 정도는 높이가 아니라 두께가 정한다</b>:
+     * <ul>
+     *   <li><b>두꺼운 소품 (폭 ≥2)</b> — 비석·정자·큰 기둥. 이 회랑 <b>밖</b>에 선다.
+     *       비석은 폭 2~3의 판이라 문루를 통째로 가렸다.</li>
+     *   <li><b>가는 소품 (폭 1)</b> — 깃대·석등 기둥. <b>난간 위</b>(±{@link #RAIL_OFF})까지
+     *       허용한다. 1칸 울타리는 원근으로도 가늘고, 목표 사진 1호에서도 깃대가 계단 양옆에
+     *       촘촘히 섰는데 문루가 잘 보인다.</li>
+     * </ul>
+     * 처음엔 높이로 가르려 했으나(깃대 7 > 비석 5) 그것이 틀렸다 — 목표가 반례다.
      */
     public static final int AXIS_CLEAR = 13;
 
@@ -543,17 +554,54 @@ public final class TerraceForge {
     public static final int PINE_EVERY = Math.max(8, APPROACH_LEN / 4);
 
     /**
+     * ★D-21 깃대 주기 — 목표 1호 실측 <b>세로 간격 8~10</b>. 좌우 <b>쌍</b>으로 선다
+     * (목표 사진에도 계단 양옆에 있다). 소나무처럼 번갈아 두면 열이 끊겨 시선을 못 이끈다.
+     */
+    public static final int BANNER_EVERY = 9;
+
+    /** 깃대 첫 자리 — 계단 아랫머리에서 조금 올라온 곳 (맨 아래 행은 비워 진입을 트인다) */
+    public static final int BANNER_FROM = 6;
+
+    /** ★D-22 석등 주기 — 목표 1호 실측 <b>간격 10~12</b>. 좌우 <b>번갈아</b> 선다 */
+    public static final int LANTERN_EVERY = 11;
+
+    /** 석등 첫 자리 — 깃대 행과 겹치지 않게 어긋난 위상에서 시작한다 */
+    public static final int LANTERN_FROM = 2;
+
+    /** 그 행에 깃대가 서는가 (좌우 쌍) */
+    public static boolean isFlagpoleRow(int i) {
+        return i >= BANNER_FROM && (i - BANNER_FROM) % BANNER_EVERY == 0;
+    }
+
+    /**
+     * 그 행 그 쪽에 석등이 서는가 — <b>좌우 번갈아</b>. 같은 행에 깃대가 서면 양보한다
+     * (한 자리에 둘을 세우면 뒤엣것이 앞엣것을 덮어 <b>조용히 하나가 사라진다</b>).
+     */
+    public static boolean isLanternRow(int i, boolean left) {
+        if (isFlagpoleRow(i) || i < LANTERN_FROM) {
+            return false;
+        }
+        int k = i - LANTERN_FROM;
+        return k % LANTERN_EVERY == 0 && ((k / LANTERN_EVERY) % 2 == 0) == left;
+    }
+
+    /**
      * 접근로 부속이 앉는 행 인덱스 전부 — <b>눈이 이 표로 범위를 잰다</b> (같은 식이라
      * 조성과 어긋날 수 없다). 소문·비석·소나무 순.
      */
     public static int[] approachFixtureIndices() {
         int pines = (APPROACH_LEN - 15 + PINE_EVERY - 1) / PINE_EVERY;
-        int[] out = new int[3 + Math.max(0, pines)];
+        int banners = (APPROACH_LEN - BANNER_FROM + BANNER_EVERY - 1) / BANNER_EVERY;
+        int[] out = new int[3 + Math.max(0, pines) + Math.max(0, banners)];
         out[0] = GATE_I;
         out[1] = STELE_A;
         out[2] = STELE_B;
+        int w = 3;
         for (int k = 0; k < Math.max(0, pines); k++) {
-            out[3 + k] = 15 + k * PINE_EVERY;
+            out[w++] = 15 + k * PINE_EVERY;
+        }
+        for (int k = 0; k < Math.max(0, banners); k++) {      // ★D-21 깃대도 눈이 범위를 잰다
+            out[w++] = BANNER_FROM + k * BANNER_EVERY;
         }
         return out;
     }
@@ -643,10 +691,13 @@ public final class TerraceForge {
                 clearAbove(world, x, by, z, tally);
                 fillDown(world, x, by, z, tally);
                 world.getBlockAt(x, by, z).setType(Material.STONE_BRICKS, false);
-                if (isLanding(i)) {                        // 참마다 석등 쌍 — 시선을 위로 이끈다
-                    world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICKS, false);
-                    world.getBlockAt(x, by + 2, z).setType(Material.LANTERN, false);
-                    tally.lanterns++;
+                boolean left = side < 0;
+                if (isFlagpoleRow(i) ) {
+                    // ★D-21 깃대 — 난간 캡 위, 좌우 쌍 (목표 1호의 자리)
+                    flagpole(world, x, by, z, tally);
+                } else if (isLanternRow(i, left)) {
+                    // ★D-22 석등 — 난간 캡 위, 좌우 번갈아 (목표 실측 간격 10~12)
+                    stoneLantern(world, x, by, z, tally);
                 } else {
                     world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
@@ -717,6 +768,51 @@ public final class TerraceForge {
         world.getBlockAt(ax + 4, y + 3, z + 1).setType(Material.LANTERN, false);
         world.getBlockAt(ax - 4, y + 3, z + 1).setType(Material.LANTERN, false);
         tally.lanterns += 2;
+    }
+
+    /**
+     * ★D-22 석등 — 난간 위의 <b>네모 등롱</b> (목표 1호 실측).
+     *
+     * <p>돌 기둥 2 + <b>1×1 발광 고체</b> + 갓 반블록. 종전에는 {@code LANTERN}(아이템형 소형
+     * 모델)이라 <b>부피가 목표와 달랐다</b> — 목표의 등롱은 한 칸을 꽉 채운 상자이고 창살 무늬가
+     * 있다.
+     *
+     * <p>★발광체 색의 근거 — <b>목표 1호의 등롱을 픽셀로 쟀다</b>: RGB(255,199,104)·(253,178,76)
+     * <b>S59~70% V96~100%</b>. 발광체는 단청 띠(벽면 장식)와 층위가 다르다 — <b>빛나는 것은
+     * 밝아야 한다</b>. 그래서 여기선 채도가 높은 것이 옳고, 글로우스톤(렌더 ≈RGB(255,203,111))이
+     * 실측과 거의 일치한다. 갓은 등롱을 덜 가리게 <b>반블록</b>으로 얹는다.
+     */
+    private static void stoneLantern(World world, int x, int by, int z, Tally tally) {
+        world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICKS, false);
+        world.getBlockAt(x, by + 2, z).setType(Material.STONE_BRICKS, false);
+        world.getBlockAt(x, by + 3, z).setType(Material.GLOWSTONE, false);          // 등롱 — 1×1 발광 고체
+        Slab cap = (Slab) Material.DEEPSLATE_TILE_SLAB.createBlockData();
+        cap.setType(Slab.Type.BOTTOM);
+        world.getBlockAt(x, by + 4, z).setBlockData(cap, false);                    // 갓
+        tally.lanterns++;
+    }
+
+    /**
+     * ★D-21 깃대(당간) — 계단을 따라 오르며 <b>시선을 위로 이끄는</b> 장치 (목표 1호).
+     *
+     * <p>목표 실측: 짙은 기둥 위에 <b>붉은 가로대</b>가 얹히고 그 위로 <b>짙은 남색 배너</b>가
+     * 늘어진다 (배너 RGB(34,40,50)·H223° — 처마 그늘에 잠긴 남색). 문양은 넣지 않는다 —
+     * 무지 배너다 (작명·문양은 사용자 몫).
+     *
+     * <p>★자리 — <b>난간 캡 위</b>(±{@link #RAIL_OFF}). 목표 사진 그대로다. 축선 회랑
+     * (±{@link #AXIS_CLEAR})은 <b>두꺼운</b> 소품만 막는다 — 깃대 기둥은 1칸 울타리라
+     * 원근으로도 가늘게 보이고, 목표 사진에서도 깃대가 계단 양옆에 촘촘한데 문루가 잘 보인다.
+     * <b>가리는 정도는 높이가 아니라 두께가 정한다</b> (2026-08-05 계약 교정).
+     */
+    private static void flagpole(World world, int x, int by, int z, Tally tally) {
+        for (int dy = 1; dy <= 4; dy++) {
+            world.getBlockAt(x, by + dy, z).setType(Material.DARK_OAK_FENCE, false);  // 가는 기둥
+        }
+        world.getBlockAt(x, by + 5, z).setType(Material.STRIPPED_MANGROVE_WOOD, false);   // 붉은 가로대
+        Rotatable banner = (Rotatable) Material.BLUE_BANNER.createBlockData();
+        banner.setRotation(BlockFace.SOUTH);                    // 계단 아래(남)를 본다
+        world.getBlockAt(x, by + 6, z).setBlockData(banner, false);
+        tally.banners++;
     }
 
     /** 비석 — 참 곁의 돌비 (기단 + 몸 3 + 갓) */
@@ -1046,6 +1142,7 @@ public final class TerraceForge {
         public long stairTreads;
         public long cut;
         public long lanterns;
+        public long banners;          // ★D-21 깃대
     }
 
     /**
@@ -1973,6 +2070,9 @@ public final class TerraceForge {
                 Material.DRIPSTONE_BLOCK, Material.SMOOTH_SANDSTONE,      // ★13a-3 웜톤 분화
                 Material.COARSE_DIRT, Material.FERN, Material.SHORT_GRASS,
                 Material.MOSS_BLOCK, Material.AZALEA,                     // ★13a-2 선반 화단
+                Material.GLOWSTONE, Material.DEEPSLATE_TILE_SLAB,         // ★D-22 석등 (등롱·갓)
+                Material.DARK_OAK_FENCE, Material.STRIPPED_MANGROVE_WOOD, // ★D-21 깃대 (기둥·가로대)
+                Material.BLUE_BANNER,                                     //   짙은 남색 배너 (무지)
                 Material.LANTERN, Material.AIR);
     }
 
