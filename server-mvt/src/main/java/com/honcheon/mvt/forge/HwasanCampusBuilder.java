@@ -948,39 +948,49 @@ public final class HwasanCampusBuilder {
     }
 
     /**
-     * ★★<b>회벽</b> — 목표의 「따뜻한 오프화이트」를 두 재료의 결로 맞춘다 (2026-08-05).
+     * ★★<b>회벽</b> — <b>단일 재료</b>다 (2026-08-05 재선정).
      *
-     * <p><b>경위</b>: 팩을 끄자 {@code white_terracotta} 가 살구색으로 드러나 {@code smooth_quartz}
-     * 로 갈았는데, 이번엔 <b>중립을 지나쳤다</b> — 목표는 따뜻한데 석영만으로는 거의 무채색이다.
+     * <p>★★★<b>혼합은 실패했다 — 픽셀은 섞이지만 블록은 안 섞인다.</b> 석영:사암 2:1 을
+     * 조성해 인게임에서 재니 채도 분포가 <b>저채도 58% · 중간대 1% · 고채도 42%</b> 로
+     * 갈렸다. 평균은 계산대로 나왔지만 <b>눈에는 평균이 아니라 두 색의 바둑판</b>이 보인다
+     * (목표 거리도 안 좁혀졌다 — 조명면 70.0 vs 석영 단독 72.0). 계산이 옳아도 매체가
+     * 다르면 틀린다: <b>합성 평균으로 색을 맞추는 방법은 블록 단위에서 성립하지 않는다.</b>
+     *
+     * <p><b>재선정</b> — 목표 벽을 다시 정밀 측정하고(붉은 기둥·그늘 제외) 바닐라 블록 전량을
+     * <b>색상·채도 공간</b>에서 훑었다. 명도는 렌더 조명이 좌우하므로 축에서 뺐다.
      *
      * <pre>
-     *   목표(1호 lit face)  RGB(229,216,194)  S15.3%  H38
-     *   smooth_quartz       RGB(237,230,224)  S 5.5%  H30   ← 밝지만 차다
-     *   smooth_sandstone    RGB(224,214,170)  S23.9%  H49   ← 따뜻하지만 짙다
+     *   목표 회벽            H40  S15.6  V78.7      ← 따뜻한 오프화이트
+     *   bone_block_top       H53  S14.5  V82.3   거리  7.3  요철 14.20  ← 색은 1등, 골수 무늬가 물방울로 읽힌다
+     *   ★bone_block_side     H50  S 9.4  V90.0   거리 11.3  요철  4.11  ← 채택
+     *   sandstone_top        H49  S23.9  V87.8   거리 14.2  요철  4.86
+     *   white_terracotta     H21  S23.0  V82.2   거리 15.9  ← 팩이 덮던 살구색
+     *   quartz_block_bottom  H30  S 5.5  V92.9   거리 17.1  ← 차다
      * </pre>
      *
-     * <p><b>비율의 근거</b>: 렌더는 채도를 대체로 보존한다 — 아는 두 점으로 검산했다
-     * ({@code white_terracotta} 텍스처 S23.0 → 인게임 S21.7, 비 0.94 ·
-     * {@code smooth_quartz} 5.5 → 4.0. 뒤엣것은 채도가 낮아 잡음이 커 앞엣것을 믿는다).
-     * 그러면 목표 S15.3 을 내려면 <b>텍스처 혼합 S ≈ 16~17%</b> 이어야 하고, 사암 비율로 풀면
-     * 0.60~0.67 이다. <b>2 : 1 (사암 67%)</b> 을 골랐다 — 계산 창 안이면서 석영이 1/3 로 적어
-     * <b>얼룩이 덜 눈에 띈다</b> (3:2 는 계산상 더 정확하나 반반에 가까워 바둑판으로 읽힌다).
-     * 합성 RGB(228,220,190) S17.4% → 인게임 S~16%.
+     * <p><b>왜 {@code BONE_BLOCK} 인가</b>: 무늬가 적은 후보 중 색이 가장 가깝다. 1등
+     * {@code bone_block_top}(마구리)은 채도가 목표에 더 가깝지만 <b>요철이 3.5배</b>라
+     * 벽으로 쌓으면 물방울 무늬가 된다 — 타일 대조판에서 확인했다.
      *
-     * <p>★남는 어긋남: 색상(H)은 합성 47° 로 목표 38° 보다 노랗다. 더 붉히려면
-     * {@code white_terracotta} 를 섞어야 하는데 <b>그것이 애초의 살구색 범인</b>이고 눈이 막고 있다 —
-     * 채도를 맞추는 편이 색상을 맞추는 것보다 이득이라 여기서 멈춘다.
+     * <p>★<b>축(axis)은 기본 y 로 둔다.</b> 뼈블록은 축을 가져 눕히면 벽면이 바뀐다:
+     * {@code axis=y} 면 네 옆면이 모두 {@code bone_block_side}(세로 결 · 강도 1.91 로
+     * 매우 옅다), 눕히면 <b>두 면에 마구리(물방울)가 드러난다</b>. 벽은 사방을 보므로
+     * 어느 방향에서도 물방울이 안 나오는 y 가 옳다.
      *
-     * <p>★{@code SMOOTH_SANDSTONE} 은 {@code SANDSTONE} 과 <b>다른 재료</b>다 —
-     * {@link SpireField#rockMats()} 에 든 것은 후자뿐이라 회벽은 <b>유출 스캔에 남는다</b>
-     * (지붕이 피했던 덫 — {@link #roofCube} 주석).
+     * <p>★<b>단일 재료라 바둑판이 구조적으로 불가능하다</b> — 이 함수가 한 재료만 돌려주는
+     * 한 위의 실패는 되풀이될 수 없다. 눈이 그것을 계약으로 잰다.
+     *
+     * <p>★남는 어긋남: 채도가 목표보다 6 낮다(9.4 vs 15.6). 더 따뜻하게 하려면 사암을 섞어야
+     * 하는데 <b>그것이 방금 실패한 그 길</b>이다. 단일 재료의 정직함을 택했다 — 실물을 보고
+     * 여전히 차면 <b>다른 단일 재료</b>로 갈되, 두 색을 섞어 평균을 맞추려 들지 마라.
+     *
+     * <p>★{@code BONE_BLOCK} 은 {@link SpireField#rockMats()} 에 없다 — 회벽은
+     * <b>유출 스캔에 남는다</b> (지붕이 피했던 덫 — {@link #roofCube} 주석).
      *
      * <p>★눈이 이 함수를 직접 읽는다 (조성과 눈이 한 식).
      */
     public static Material plaster(int x, int y, int z) {
-        return Math.floorMod((int) hash(0x5A11L ^ 0x9E37L, x, y, z), 3) == 0
-                ? Material.SMOOTH_QUARTZ                       // 1/3 — 사암의 노랑을 식힌다
-                : Material.SMOOTH_SANDSTONE;                   // 2/3 — 온기의 본체
+        return Material.BONE_BLOCK;   // 단일 — 좌표를 안 본다 (바둑판이 구조적으로 불가능하다)
     }
 
     /**
@@ -1705,6 +1715,7 @@ public final class HwasanCampusBuilder {
     /** 배치기의 재료 전부 — 눈이 금지 재료(B-195: barrel·light)를 이 표로 잰다. */
     public static Set<Material> palette() {
         return EnumSet.of(
+                Material.BONE_BLOCK,                                            // ★회벽 (단일 재료 — 2026-08-05 재선정)
                 Material.SMOOTH_QUARTZ, Material.RED_TERRACOTTA,
                 Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
                 Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,
@@ -1722,6 +1733,7 @@ public final class HwasanCampusBuilder {
 
     /** 패드 밖 유출 검수가 찾는 건물 재료 — 테라스 제 것(석전 벽·등롱)은 뺀다 */
     private static final Set<Material> BUILDING_MATS = EnumSet.of(
+            Material.BONE_BLOCK,                                            // ★회벽 (rockMats 밖 — 스캔에 남는다)
             Material.SMOOTH_QUARTZ, Material.RED_TERRACOTTA,
             Material.SPRUCE_LOG, Material.SPRUCE_PLANKS, Material.SPRUCE_FENCE,
             Material.DARK_OAK_PLANKS, Material.DARK_OAK_FENCE, Material.DARK_OAK_SLAB,

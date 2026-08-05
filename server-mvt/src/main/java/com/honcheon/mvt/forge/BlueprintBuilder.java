@@ -110,8 +110,9 @@ public final class BlueprintBuilder {
     }
 
     private static void stamp(World world, int x, int y, int z, String mat) {
-        // ★「plaster」는 재료 이름이 아니라 <b>처방</b>이다 — 회벽은 한 재료가 아니라 두 재료의
-        //   결이라서다 (석영 1 : 사암 2 · 근거는 HwasanCampusBuilder.plaster javadoc).
+        // ★「plaster」는 재료 이름이 아니라 <b>처방</b>이다 — 도면이 재료를 직접 적으면
+        //   회벽을 갈 때 도면과 코드 두 곳을 고쳐야 하고, 그 둘이 어긋난다.
+        //   (지금 처방은 bone_block 단일 — 근거는 HwasanCampusBuilder.plaster javadoc)
         //   도면에 두 재료를 손으로 흩뿌리면 조성과 눈이 두 식이 되므로 이름 하나로 부른다.
         if ("plaster".equals(mat)) {
             world.getBlockAt(x, y, z).setType(HwasanCampusBuilder.plaster(x, y, z), false);

@@ -611,7 +611,7 @@ public final class TerraceForgeSelfTest {
         check("★15 암벽 ∩ 유출 스캔 = ∅ (늑재를 건물로 오인하지 않는다)", both.isEmpty(), both);
         // 그러나 건물 전용 재료는 여전히 잡혀야 한다 — 「빼기」가 스캔을 무력화하면 안 된다
         check("★15 건물 전용 재료는 스캔에 남는다 (회벽·기와·유리)",
-                leakTbl.contains(Material.SMOOTH_QUARTZ)                  // ★회벽 (살구색 교정 후)
+                leakTbl.contains(Material.BONE_BLOCK)                     // ★회벽 (단일 재료 재선정 후)
                         && leakTbl.contains(Material.COBBLED_DEEPSLATE)   // ★D-26 회색 기와
                         && leakTbl.contains(Material.GLASS_PANE), leakTbl.size());
         // ★★회벽은 「팩이 덮어 흰색으로 보이던」 재료를 쓰지 않는다 (2026-08-05 실증).
@@ -620,37 +620,27 @@ public final class TerraceForgeSelfTest {
         check("★회벽에 살구색 재료(white_terracotta)를 안 쓴다",
                 !com.honcheon.mvt.forge.HwasanCampusBuilder.palette().contains(Material.WHITE_TERRACOTTA),
                 com.honcheon.mvt.forge.HwasanCampusBuilder.palette().contains(Material.WHITE_TERRACOTTA));
-        // ★★회벽의 온기 — 석영만 쓰면 S4% 로 **중립을 지나친다** (목표 S15%). 사암을 섞어
-        //   합성 채도를 목표 창에 넣는다. 배분을 눈이 직접 세어 조성과 한 식이 되게 한다.
-        //   바닐라 텍스처 평균: smooth_quartz (236.8,230.4,223.9) · smooth_sandstone (223.8,214.2,170.3)
-        int quartzN = 0;
-        int sandN = 0;
+        // ★★★회벽은 **단일 재료**다 — 혼합은 실기동에서 실패했다 (2026-08-05).
+        //   석영:사암 2:1 의 인게임 채도 분포가 저채도 58% · 중간대 1% · 고채도 42% 로 갈렸다.
+        //   합성 평균은 계산대로였지만 **눈에는 평균이 아니라 두 색의 바둑판**이 보인다.
+        //   ★옛 눈(「합성 채도가 목표 창 안」)은 이 실패를 통과시켰다 — 평균만 보고 분포를
+        //   안 봤기 때문이다. 그래서 계약을 **재료 가짓수**로 바꾼다: 하나면 바둑판이 불가능하다.
+        java.util.Set<Material> plasterMats = java.util.EnumSet.noneOf(Material.class);
         for (int px = 0; px < 24; px++) {
             for (int py = 0; py < 8; py++) {
                 for (int pz = 0; pz < 24; pz++) {
-                    Material m = com.honcheon.mvt.forge.HwasanCampusBuilder.plaster(px, py, pz);
-                    if (m == Material.SMOOTH_QUARTZ) {
-                        quartzN++;
-                    } else if (m == Material.SMOOTH_SANDSTONE) {
-                        sandN++;
-                    }
+                    plasterMats.add(com.honcheon.mvt.forge.HwasanCampusBuilder.plaster(px, py, pz));
                 }
             }
         }
-        int plasterTot = quartzN + sandN;
-        double sandFrac = plasterTot == 0 ? 0 : (double) sandN / plasterTot;
-        double mixR = 236.8 + (223.8 - 236.8) * sandFrac;
-        double mixB = 223.9 + (170.3 - 223.9) * sandFrac;
-        double mixSat = (mixR - mixB) / mixR * 100.0;
-        check("★회벽이 두 재료의 결이다 (석영·사암 말고 다른 것이 안 섞인다)",
-                plasterTot == 24 * 8 * 24, plasterTot);
-        check(String.format("★회벽 합성 채도가 목표 창 안 (사암 %.0f%% · 합성 S%.1f%% · 목표 S15%%)",
-                        sandFrac * 100, mixSat),
-                mixSat >= 14.0 && mixSat <= 20.0, String.format("S%.1f%%", mixSat));
-        check("★회벽이 유출 스캔에 남는다 (사암도 — SMOOTH_SANDSTONE 은 rockMats 가 아니다)",
-                leakTbl.contains(Material.SMOOTH_SANDSTONE)
-                        && !rockMats.contains(Material.SMOOTH_SANDSTONE),
-                leakTbl.contains(Material.SMOOTH_SANDSTONE));
+        check("★★회벽이 단일 재료다 (바둑판이 구조적으로 불가능하다 — 혼합 실패의 재발 방지)",
+                plasterMats.size() == 1, plasterMats);
+        check("★회벽 재료가 따뜻한 near-white 다 (실측 H50 S9.4 — 목표 H40 S15.6 에 최근접)",
+                plasterMats.contains(Material.BONE_BLOCK), plasterMats);
+        check("★회벽이 유출 스캔에 남는다 (BONE_BLOCK 은 rockMats 가 아니다)",
+                leakTbl.contains(Material.BONE_BLOCK)
+                        && !rockMats.contains(Material.BONE_BLOCK),
+                leakTbl.contains(Material.BONE_BLOCK));
         // ★15 표면에 심을 수 있는가 — 암벽 재료가 「못 심는 땅」이면 산이 조용히 민둥이 된다
         //   (실기동: 석전 섞임 뒤 산 표면 ~12%가 식생에서 빠졌다)
         java.util.Set<Material> plantable = java.util.EnumSet.of(
