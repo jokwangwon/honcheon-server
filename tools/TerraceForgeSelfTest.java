@@ -397,6 +397,19 @@ public final class TerraceForgeSelfTest {
                         && TerraceForge.GATE_YARD_N <= TerraceForge.GATE_I
                         && TerraceForge.GATE_I <= TerraceForge.GATE_YARD_S,
                 TerraceForge.GATE_YARD_N + "<=" + TerraceForge.GATE_I + "<=" + TerraceForge.GATE_YARD_S);
+        // ══════ ★D-20 축선 시야 회랑 (2026-08-05 · 사용자 지적) ══════
+        //   「회백색 기둥 하나가 문루 정면 중앙을 세로로 가로지른다」 — 범인은 비석이었다.
+        //   옛 자리 ±(RAIL_OFF+3)=±7 은 <b>통행</b>을 안 막아 통로 겹침 눈이 조용했다. 그러나
+        //   계단 아래 축선에 선 눈에는 <b>가까운 5칸 비석이 멀리 있는 21칸 문루를 가린다</b>.
+        //   ★통행의 폭과 시야의 폭은 다르다 — 이 눈이 후자를 잰다.
+        check("★D-20 축선 시야 회랑(±" + TerraceForge.AXIS_CLEAR + ")이 계단 통행폭보다 넓다",
+                TerraceForge.AXIS_CLEAR > TerraceForge.RAIL_OFF,
+                "AXIS_CLEAR " + TerraceForge.AXIS_CLEAR + " vs RAIL_OFF " + TerraceForge.RAIL_OFF);
+        // 비석이 그 회랑 밖에 선다 — 조성과 같은 식(±AXIS_CLEAR)을 눈이 다시 잰다
+        check("★D-20 비석이 축선 회랑 밖에 선다 (문루를 안 가린다)",
+                TerraceForge.AXIS_CLEAR >= TerraceForge.APPROACH_CLEAR + 2,
+                "비석 오프셋 ±" + TerraceForge.AXIS_CLEAR);
+
         // 비석 둘이 서로 다른 참에 선다 (겹치면 한 쌍이 사라진 것과 같다)
         check("★비석 두 쌍이 서로 다른 참 (하나가 조용히 사라지지 않는다)",
                 TerraceForge.STELE_A != TerraceForge.STELE_B

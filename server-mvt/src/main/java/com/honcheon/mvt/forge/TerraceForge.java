@@ -486,6 +486,17 @@ public final class TerraceForge {
     public static final int APPROACH_CLEAR = 10;
 
     /**
+     * <b>축선 시야 회랑</b> 반폭 — 계단 아래 축선에 선 눈이 문루를 볼 때 <b>그 사이에 아무 수직
+     * 소품도 없어야 하는</b> 폭이다 (2026-08-05 · 사용자 지적).
+     *
+     * <p>옛 비석 자리 ±7 은 <b>통행</b>은 안 막았다 — 그래서 통로 겹침 눈도 조용했다. 그러나
+     * 카메라(사람)가 축선 위 계단 아래에 서면 <b>가까운 비석이 멀리 있는 문루를 가린다</b>:
+     * 거리 24칸의 5칸 기둥이 거리 64칸의 21칸 문루보다 화면에서 크다. <b>통행의 폭과 시야의
+     * 폭은 다르다</b> — 목표 사진 1호는 축선이 트여 있고 소품이 좌우로 물러나 있다.
+     */
+    public static final int AXIS_CLEAR = 13;
+
+    /**
      * 접근로 부속의 자리 — <b>전부 {@link #APPROACH_LEN} 에서 유도한다</b>.
      *
      * <p>★2026-08-04 실증: 척도를 되돌리며 길이를 176→88 로 줄였는데 소문 몸체가 옛 인덱스
@@ -647,8 +658,12 @@ public final class TerraceForge {
                 approachGate(world, a.x(), a.blockYAt(GATE_I), a.z0() + GATE_I, tally);
             }
             if (i == STELE_A || i == STELE_B) {
-                stele(world, a.x() + RAIL_OFF + 3, z, tally);   // 비석 — 참 곁 (계단 곁에 선다)
-                stele(world, a.x() - RAIL_OFF - 3, z, tally);
+                // ★2026-08-05 — 비석을 <b>축선 시야 회랑</b> 밖으로 밀었다. 옛 자리(±RAIL_OFF+3
+                //   = ±7)는 통행은 안 막지만, 계단 아래 축선에 선 눈에는 <b>가까운 비석이 멀리 있는
+                //   문루 정면을 세로로 가로질렀다</b> (사용자 지적 — stair_1정면). 목표 사진(1호)은
+                //   축선 시야가 비어 있고 소품은 좌우로 물러나 있다. AXIS_CLEAR 가 그 계약이다.
+                stele(world, a.x() + AXIS_CLEAR, z, tally);
+                stele(world, a.x() - AXIS_CLEAR, z, tally);
             }
             if (GREEN && i >= 15 && (i - 15) % PINE_EVERY == 0) {
                 // ★계단 회랑(±APPROACH_CLEAR) 밖에 선다 — 계단을 덮지 않고 곁을 채운다 (D-16).
