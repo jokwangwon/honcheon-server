@@ -1243,7 +1243,10 @@ public final class TerraceForgeSelfTest {
             }
             check("★본전 중앙 대문 폭 5 (걸어 지나는 개구)", gateCols == 5, gateCols);
 
-            // ★★핵심 — 본전 **하층은 회벽이 지배**한다 (산문의 정반대)
+            // ★★★D-34 — 여기 있던 두 눈(「본전 하층은 회벽이 지배한다」·「산문과 문법이 반대다」)은
+            //   **틀린 결론을 지키고 있었다.** 7호를 다시 재니 하층은 붉은색 46.8% / 회벽 9.4% 로
+            //   기둥+격자가 지배했고, 적주 주기도 산문과 같은 3칸이었다. 눈이 틀린 것을 지키면
+            //   고치려는 손을 눈이 막는다 — 그래서 실측이 이기고 눈을 갈아 끼운다.
             int hjWalls = 0;
             int hjDoors = 0;
             for (int c = 0; c < hj.width(); c++) {
@@ -1255,9 +1258,37 @@ public final class TerraceForgeSelfTest {
                     hjDoors++;
                 }
             }
-            check("★★본전 하층은 회벽이 지배한다 (회벽 " + hjWalls + " > 문짝 " + hjDoors + ")",
-                    hjWalls > hjDoors, hjWalls + "/" + hjDoors);
-            check("★본전 하층에 문짝이 점점이 박힌다 (전부 회벽이 아니다)", hjDoors >= 4, hjDoors);
+            // ① 빈 회벽 판 금지 — D-34 의 진범. 회벽의 **양**보다 통짜 판이 문제였다.
+            //    목표는 모든 칸이 「회벽 판 + 그 안의 격자창」이라 흰 면이 결코 이어지지 않는다.
+            int adjacentWall = 0;
+            for (int c = 1; c < hj.width(); c++) {
+                if (hj.at(c, frontRow) == 'W' && hj.at(c - 1, frontRow) == 'W') {
+                    adjacentWall++;
+                }
+            }
+            check("★★본전 하층에 빈 회벽 판이 없다 (회벽 켜열이 이웃하는 자리 " + adjacentWall + ")",
+                    adjacentWall == 0, adjacentWall);
+            // ② 적주 주기 3 — 7호 실측(기둥 틈 33/36/37px · 주기 ≈45px = 3블록)
+            List<Integer> posts = new ArrayList<>();
+            for (int c = 0; c < hj.width(); c++) {
+                if (hj.at(c, frontRow) == 'P') {
+                    posts.add(c);
+                }
+            }
+            int badGap = 0;
+            for (int i = 1; i < posts.size(); i++) {
+                int gap = posts.get(i) - posts.get(i - 1);
+                if (gap != 3 && gap != 6) {       // 6 = 대문(폭 5)을 사이에 낀 한 짝
+                    badGap++;
+                }
+            }
+            check("★★본전 적주가 3칸 주기다 (기둥 " + posts.size() + "개 · 어긋난 틈 " + badGap + ")",
+                    posts.size() >= 8 && badGap == 0, posts + "");
+            // ③ 회벽은 소수다 — 실측 9.4%. 도면은 켜열 단위라 성기므로 3분의 1을 상한으로 둔다.
+            check("★★본전 하층을 회벽이 지배하지 **않는다** (회벽 " + hjWalls + " ≤ 몸체의 1/3)",
+                    hjWalls * 3 <= 31, hjWalls);
+            check("★본전 하층에 격자가 회벽만큼 있다 (격자 " + hjDoors + " ≥ 회벽 " + hjWalls + ")",
+                    hjDoors >= hjWalls, hjDoors + "/" + hjWalls);
 
             // ★★핵심 — 본전 **상층은 창이 지배**한다 (회벽이 없다). 코드 기본값은 회벽이므로
             //   도면이 lattice 라 말하지 않으면 상층이 통짜 백벽이 되어 목표와 어긋난다.
@@ -1312,10 +1343,15 @@ public final class TerraceForgeSelfTest {
                     gDoors++;
                 }
             }
-            check("★★산문과 본전의 하층 문법이 서로 반대다 (산문 문짝 " + gDoors + ">회벽 " + gWalls
-                            + " · 본전 회벽 " + hjWalls + ">문짝 " + hjDoors + ")",
-                    gDoors > gWalls && hjWalls > hjDoors,
+            // ★★★뒤집힌 눈 — 예전엔 「서로 반대여야 한다」였다. 7호 재실측이 그 결론을 죽였다:
+            //   두 건물 다 3칸 주기 기둥 + 격자가 지배하고 회벽은 소수다 (본전 9.4% · 산문 4.3%).
+            //   ※그래도 **똑같지는 않다** — 본전이 산문보다 회벽을 더 쓴다. 그 차이를 함께 잰다.
+            check("★★산문과 본전의 하층 문법이 **같다** (둘 다 격자가 회벽 이상 — 산문 " + gDoors + "/"
+                            + gWalls + " · 본전 " + hjDoors + "/" + hjWalls + ")",
+                    gDoors >= gWalls && hjDoors >= hjWalls,
                     "산문 " + gDoors + "/" + gWalls + " · 본전 " + hjDoors + "/" + hjWalls);
+            check("★본전이 산문보다 회벽을 더 쓴다 (실측 9.4% vs 4.3%)",
+                    hjWalls > gWalls, hjWalls + " vs " + gWalls);
 
             // ★물러남 문법이 생겨도 **산문은 그대로 서야 한다** — 안 적은 도면의 기본값이 2 다
             //   (예전 값). 기본값이 바뀌면 이미 선 것이 조용히 달라진다.
@@ -1344,6 +1380,96 @@ public final class TerraceForgeSelfTest {
                 vanishBarks = true;
             }
             check("★상층이 다 물러나 사라지면 도면이 죽는다 (지붕만 뜨는 것 방지)", vanishBarks, vanishBarks);
+
+            // ══════ ★★D-36 — 처마가 벽을 덮는다 ══════
+            // 진범은 **오프바이원**이었다. 앞 회차가 base_y 를 「벽 5 + 도리·단청 2 = 7」로 셈하며
+            // 기둥 처방 맨 아래 기단 켜(smooth_stone)를 빼먹었다. 실제 켜열은 8 이라 처마 첫 켜가
+            // 단청 띠(y7)를 그대로 덮었다. ★수치를 박지 않고 **도면에서 켜를 세어** 잰다 —
+            // 8 을 박아 두면 나중에 벽을 한 켜 올릴 때 눈이 조용히 틀린 값을 지킨다.
+            int tallest = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                char ch = hj.at(c, frontRow);
+                if (ch == '.' || ch == 'M') {
+                    continue;
+                }
+                int h = 0;
+                for (Blueprint.Course cs : hj.columnOf(ch)) {
+                    h += cs.count();
+                }
+                tallest = Math.max(tallest, h);
+            }
+            check("★[눈의 눈] 본전 정면에서 벽 켜열을 셌다", tallest > 0, tallest);
+            check("★★본전 지붕이 벽 켜열 **위**에 앉는다 (처마가 단청 띠를 안 덮는다 — 벽 "
+                            + tallest + "켜 · 지붕 base_y " + (hjRoof == null ? -1 : hjRoof.baseY()) + ")",
+                    hjRoof != null && hjRoof.baseY() >= tallest,
+                    tallest + " vs " + (hjRoof == null ? -1 : hjRoof.baseY()));
+            check("★본전 처마 내밈이 실측(한쪽 1.5칸)에 든다 — 3 은 45°에서 벽을 통째로 가린다",
+                    hjRoof != null && hjRoof.eave() >= 1 && hjRoof.eave() <= 2,
+                    hjRoof == null ? -1 : hjRoof.eave());
+
+            // ★★도면의 내밈이 **코드에 닿는가.** 이 회차 전까지 roof.eave 는 죽은 값이었다 —
+            //   sweepRoof 가 over=3 을 박아 두어 도면에 무엇을 적든 결과가 같았다.
+            //   ※글자를 뒤지는 눈은 앵커가 사라지면 조용히 아무것도 안 잰다. 그래서 **앵커를
+            //     찾았는지 먼저 짖게** 해 둔다 (눈의 눈).
+            String bb = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+            int anchor = bb.indexOf("sweepRoof(world, pad, cx, oy + rf.baseY()");
+            check("★[눈의 눈] BlueprintBuilder 의 하층 지붕 부름을 찾았다", anchor >= 0, anchor);
+            String callSite = anchor < 0 ? "" : bb.substring(anchor, Math.min(bb.length(), anchor + 160));
+            check("★★도면의 처마 내밈이 코드에 닿는다 (rf.eave() 를 넘긴다 — 죽은 값 방지)",
+                    anchor >= 0 && callSite.contains("rf.eave()"), callSite.replace('\n', ' '));
+
+            // ══════ ★★D-35 — 망루가 본전보다 눈에 먼저 든다 ══════
+            // 진범은 높이가 아니라 **흰 면의 넓이**다. 눈이 소스 글자가 아니라 **조성이 쓰는
+            // 그 함수**(towerWall)를 불러 한 면의 회벽 칸을 실제로 센다.
+            int[] tHalves = {5, 4, 3};
+            int towerFace = 0;
+            int towerWallCells = 0;
+            int towerPlaster = 0;
+            for (int s = 0; s < tHalves.length; s++) {
+                int half = tHalves[s];
+                int wallH = s == 0 ? 5 : 4;
+                for (int l = -half; l <= half; l++) {
+                    for (int dy = 1; dy <= wallH; dy++) {
+                        if (com.honcheon.mvt.forge.HwasanCampusBuilder
+                                .towerWall(-half, l, half, dy, wallH, 0, dy, l) == Material.BONE_BLOCK) {
+                            towerFace++;
+                        }
+                    }
+                }
+                for (int f = -half; f <= half; f++) {
+                    for (int l = -half; l <= half; l++) {
+                        if (Math.abs(f) != half && Math.abs(l) != half) {
+                            continue;
+                        }
+                        for (int dy = 1; dy <= wallH; dy++) {
+                            towerWallCells++;
+                            if (com.honcheon.mvt.forge.HwasanCampusBuilder
+                                    .towerWall(f, l, half, dy, wallH, f, dy, l) == Material.BONE_BLOCK) {
+                                towerPlaster++;
+                            }
+                        }
+                    }
+                }
+            }
+            check("★[눈의 눈] 망루 벽 칸을 셌다", towerWallCells > 0 && towerFace > 0,
+                    towerWallCells + "/" + towerFace);
+            // 본전 정면의 흰 면 = 회벽 켜열 수 × 벽 높이 5
+            int hallFace = hjWalls * 5;
+            check("★★망루 한 면의 흰 면이 본전 정면보다 좁다 (망루 " + towerFace
+                            + " ≤ 본전 " + hallFace + ") — 위계는 면적이 정한다",
+                    towerFace <= hallFace, towerFace + " vs " + hallFace);
+            check("★망루 벽을 회벽이 지배하지 않는다 (회벽 " + towerPlaster + "/" + towerWallCells + ")",
+                    towerPlaster * 2 <= towerWallCells, towerPlaster + "/" + towerWallCells);
+            boolean towerHasGrammar = false;
+            for (int dy = 1; dy <= 5; dy++) {
+                Material m = com.honcheon.mvt.forge.HwasanCampusBuilder
+                        .towerWall(-5, 0, 5, dy, 5, 0, dy, 0);
+                if (m == Material.DARK_OAK_TRAPDOOR) {
+                    towerHasGrammar = true;
+                }
+            }
+            check("★망루가 본전·산문과 같은 문법을 쓴다 (격자창이 있다)", towerHasGrammar, towerHasGrammar);
         } catch (Exception e) {
             check("★설계도 본전 구역", false, e.getClass().getSimpleName() + ": " + e.getMessage());
         }

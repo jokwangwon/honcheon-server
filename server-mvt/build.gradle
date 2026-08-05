@@ -40,3 +40,13 @@ jar {
     }
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 }
+
+// ── 눈(selftest) 배선 — tools/*SelfTest.java 를 조성 코드와 같은 컴파일 단위로 돌린다.
+//   ★없으면 눈이 손으로만 돌아가고, 손이 빠지면 눈이 조용히 안 돌게 된다.
+tasks.register('eyeClasspath') {
+    doLast {
+        file("$buildDir/eye-cp.txt").text =
+            ((sourceSets.main.runtimeClasspath.files + sourceSets.main.compileClasspath.files)
+                .collect { it.absolutePath }).unique().join(':')
+    }
+}

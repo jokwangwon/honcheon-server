@@ -681,12 +681,23 @@ public final class HwasanCampusBuilder {
     //   여기 한 곳에 남는다 (두 번 적으면 어긋난다 — 7.5 계율).
     static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
                                   int hf, int hl, Tally tally) {
-        // 처마 내밈 — ★D-26 (목표 실측 3~5 · 그늘이 깊어져 단청 띠가 산다).
+        sweepRoof(world, pad, cx, cy, cz, hf, hl, 3, tally);
+    }
+
+    /**
+     * 내밈을 부르는 쪽이 정하는 판. ★D-36: 도면의 {@code roof.eave} 는 이 회차 전까지
+     * <b>읽히지 않는 죽은 값</b>이었다 — 아래 {@code over} 가 3 으로 박혀 있어 도면에 무엇을
+     * 적든 결과가 같았다. 도면이 좌표의 정본이라면 이 값도 도면이 쥐어야 한다.
+     */
+    static void sweepRoof(World world, TerraceForge.Pad pad, int cx, int cy, int cz,
+                                  int hf, int hl, int eave, Tally tally) {
+        // 처마 내밈 — ★D-26 (그늘이 깊어져 단청 띠가 산다) · ★D-36 (너무 깊으면 벽을 덮는다).
         // ★패드에 맞춰 스스로 죈다: 내밈이 커지면 발자국이 커지고 좁은 패드(측문 등)에서는
         //   「건물 블록이 패드 밖」으로 터진다. 미리 줄여 두면 앞으로 어떤 치수 변경에도 안전하다
         //   (계단·통로가 우선이라 패드를 넓히는 쪽은 안 쓴다).
-        int over = 3;
-        while (over > 2 && !(pad.contains(cx - hf - over, cz - hl - over)
+        int over = Math.max(1, eave);
+        int floor = Math.min(2, over);          // ★기존 부름들(내밈 3)의 하한 2 를 그대로 지킨다
+        while (over > floor && !(pad.contains(cx - hf - over, cz - hl - over)
                 && pad.contains(cx + hf + over, cz + hl + over))) {
             over--;
         }
@@ -1329,6 +1340,45 @@ public final class HwasanCampusBuilder {
         }
     }
 
+    /**
+     * 망루 벽 한 칸의 재료 — <b>★★D-35 의 처방이자 그것을 재는 자.</b>
+     *
+     * <p>D-35 는 「망루가 본전보다 눈에 먼저 든다」였다. 진범은 높이가 아니라 <b>면적</b>이다:
+     * 네 면이 통짜 회벽이라 세 층을 합치면 흰 면이 ≈400블록, 본전 정면보다 넓은 덩어리가 된다.
+     * 높이를 깎으면 「절벽 망루」(레퍼런스 9호)가 죽으므로 <b>높이는 그대로 두고 흰 면만 쪼갠다</b> —
+     * 본전·산문과 같은 문법(3칸 주기 적주 + 격자창)으로. 회벽은 아래 두 켜만 남겨 석전 탑의
+     * 결을 지킨다.
+     *
+     * <p>★조성 루프 안에 두지 않고 <b>순수 함수로 뺀 까닭</b>: 눈이 같은 함수를 불러
+     * 흰 면의 넓이를 <b>실제로 세게</b> 하려는 것이다. 루프 안에 있으면 눈은 소스 글자를
+     * 뒤지는 수밖에 없고, 그런 눈은 글자가 바뀌는 순간 조용히 아무것도 안 잰다
+     * (물러남 눈에서 이미 당했다).
+     *
+     * @param f     중심에서의 x 오프셋   @param l 중심에서의 z 오프셋
+     * @param half  이 층의 반폭          @param dy 벽 켜 (1..wallH)
+     */
+    public static Material towerWall(int f, int l, int half, int dy, int wallH,
+                                     int x, int y, int z) {
+        boolean eF = Math.abs(f) == half;
+        boolean eL = Math.abs(l) == half;
+        if (eF && eL) {
+            return Material.SPRUCE_LOG;                 // 귀기둥
+        }
+        // 모서리에서 3칸마다 적주 — 변마다 「변하는 축」이 다르다 (여기를 뒤집으면 한 변이
+        // 통째로 기둥이 되어 흰 면이 되레 늘어난다)
+        boolean post = eF ? (l + half) % 3 == 0 : (f + half) % 3 == 0;
+        if (post) {
+            return Material.STRIPPED_MANGROVE_LOG;      // 적주
+        }
+        if (dy <= 2) {
+            return plaster(x, y, z);                    // 머름 — 남긴 회벽
+        }
+        if (dy == wallH) {
+            return Material.DARK_OAK_PLANKS;            // 인방
+        }
+        return Material.DARK_OAK_TRAPDOOR;              // 격자창
+    }
+
     /** 망루 — 3층 석전 탑 (레퍼런스 9호의 절벽 망루 · {@code SectBuilder.pagoda} 문법의 축소) */
     private static void watchtower(World world, TerraceForge.Pad pad, int cx, int cz, Tally tally) {
         int y = pad.y();
@@ -1346,10 +1396,9 @@ public final class HwasanCampusBuilder {
                     if (!edge) {
                         continue;
                     }
-                    boolean corner = Math.abs(f) == half && Math.abs(l) == half;
                     for (int dy = 1; dy <= wallH; dy++) {
                         put(world, pad, x, base + dy, z,
-                                corner ? Material.SPRUCE_LOG : plaster(x, base + dy, z), tally);
+                                towerWall(f, l, half, dy, wallH, x, base + dy, z), tally);
                     }
                 }
             }

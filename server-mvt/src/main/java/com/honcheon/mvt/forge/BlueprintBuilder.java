@@ -81,7 +81,8 @@ public final class BlueprintBuilder {
             int cz = oz + (b[1] + b[3]) / 2;
             int hf = (b[2] - b[0]) / 2;             // 반폭 (x)
             int hl = (b[3] - b[1]) / 2;             // 반깊이 (z)
-            HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl, tally);
+            HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
+                    rf.eave(), tally);
             n.roofs++;
             if (rf.hasUpper()) {
                 // 상층 누각 — 하층 지붕 위에 몸체를 세우고 그 위에 다시 지붕
@@ -120,7 +121,7 @@ public final class BlueprintBuilder {
                     }
                 }
                 HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
-                        hf - ix, hl - iz, tally);
+                        hf - ix, hl - iz, rf.upperEave(), tally);
                 n.roofs++;
             }
         }
