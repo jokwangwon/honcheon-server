@@ -1578,11 +1578,17 @@ public final class HwasanCampusBuilder {
      * 벼랑 턱 소나무 자리 【제안】 — 남쪽 접근 시야·다리에서 보이는 벼랑 위주.
      * 패드 밖 지형이라 조성 때 실지형·통로를 재고 안 맞으면 조용히 접는다 (자연은 강요하지 않는다).
      */
-    private static List<int[]> pineSpots(TerraceForge.Pad pad) {
+    public static List<int[]> pineSpots(TerraceForge.Pad pad) {
         int cx = pad.x0() + pad.spec().width() / 2;
         int cz = pad.zN() + pad.spec().depth() / 2;
+        // ★2026-08-06 산문(1) — 옛 자리 ±5·6 은 <b>산문 정면 투영 안</b>이었다. 접근로가
+        //   그 자리를 깎아도 조경이 <b>뒤에</b> 심으니 도로 섰다 (실측: 바위를 걷어내자
+        //   그 자리에 이 소나무가 남아 문루 오른쪽을 덮었다). 접근로 소나무와 <b>같은 자</b>로
+        //   민다 — TREE_CLEAR_HALF+2.
+        int gateOff = TerraceForge.TREE_CLEAR_HALF + 2;
         return switch (pad.spec().zone()) {
-            case 1 -> List.of(new int[]{cx - 6, pad.zS() + 3}, new int[]{cx + 5, pad.zS() + 4});
+            case 1 -> List.of(new int[]{cx - gateOff, pad.zS() + 3},
+                    new int[]{cx + gateOff, pad.zS() + 4});
             case 3 -> List.of(new int[]{pad.x0() - 4, cz}, new int[]{pad.x0() - 5, cz + 9});
             case 16 -> List.of(new int[]{pad.x1() + 4, cz - 3});
             case 4 -> List.of(new int[]{pad.x0() - 4, cz + 2});
@@ -1605,6 +1611,9 @@ public final class HwasanCampusBuilder {
                              int x, int z, Tally tally) {
         if (onAnyPad(plan, x, z) || laneCrosses(plan, x, z) || onBridge(plan, x, z)) {
             return;
+        }
+        if (TerraceForge.inGateFacade(plan, x, z)) {
+            return;   // ★산문 정면 투영 — 비운 자리에 도로 심지 않는다 (자리 표와 한 계약)
         }
         int g = groundTop(world, x, z, pad.y() + 24);
         if (g <= world.getMinHeight()) {

@@ -807,6 +807,45 @@ public final class TerraceForge {
     public static final int TREE_CLEAR_HALF = 14;
 
     /**
+     * 그 행에서 <b>보행면 위로 비우는 반폭</b>. <b>눈이 이 표로 잰다</b> (조성과 한 식).
+     *
+     * <p>★2026-08-06 사용자 확정 — 「정면 투영을 통째로 깎는다」. 실측이 진범을 바꿨다:
+     * 문 앞을 가로지르던 회백색 기둥은 우리 소나무가 아니라 <b>축선 +5 · i 4~9 에 선
+     * 주상절리 돌기둥</b>이었다 (포장 y−15 → 꼭대기 y+8 · 산문 지붕 마루 y+2 보다 6칸 높다).
+     * 그 꼭대기의 산군 소나무가 통로 위까지 수관을 드리웠다.
+     *
+     * <p>★<b>까닭</b>: 산세·산군이 먼저 서고 캠퍼스가 뒤에 깎는데, {@code clearAbove} 는
+     * <b>제 보행 폭만</b> 비운다. 난간 한 칸 밖의 20칸 바위는 아무도 건드리지 않았다.
+     * 「나무가 건축을 가리지 않는다」는 계약이 <b>나무만</b> 보고 있었던 것이다 —
+     * 가리는 것은 재료를 안 가린다.
+     *
+     * <p>문전 구간에서만 정면 투영(±{@link #TREE_CLEAR_HALF})을 표고까지 비우고,
+     * 그 밖에서는 종전대로 보행면+난간만 비운다 (계단 곁의 바위·나무는 그대로 남는다).
+     */
+    public static int clearHalf(int i) {
+        return i < TREE_CLEAR_DEPTH ? TREE_CLEAR_HALF : approachHalf(i) + 1;
+    }
+
+    /**
+     * 그 자리가 <b>산문 정면 투영</b> 안인가 — 여기에는 줄기가 서지 않는다.
+     *
+     * <p>★{@link #clearHalf} 로 깎는 것만으로는 모자란다: 캠퍼스 조경은 접근로 포장
+     * <b>뒤에</b> 심으므로, 깎아 놓은 자리에 도로 나무를 꽂는다 (2026-08-06 실측 —
+     * 바위를 걷어내자 그 자리에 조경 소나무가 남았다). <b>비우는 손과 심는 손이 같은 표를
+     * 읽어야</b> 어긋나지 않는다.
+     */
+    public static boolean inGateFacade(Plan plan, int x, int z) {
+        Approach a = plan.approach();
+        return a != null && inGateFacade(a.x(), a.z0(), x, z);
+    }
+
+    /** 같은 계약의 <b>순수</b> 꼴 — 월드 없이도 눈이 잰다 (축선·첫 행만 있으면 된다) */
+    public static boolean inGateFacade(int axisX, int z0, int x, int z) {
+        int i = z - z0;
+        return i >= 0 && i < TREE_CLEAR_DEPTH && Math.abs(x - axisX) <= TREE_CLEAR_HALF;
+    }
+
+    /**
      * 그 투영의 깊이 — 문전 구간과 <b>같은 경계</b>로 잡는다.
      * ★사용자 규정은 10 이었으나 <b>실제로 가리던 줄기가 i15</b> 라 10 으로는 눈이 그것을
      * 못 잡는다 (첫 소나무 자리 = i15). 규정을 <b>바닥값</b>으로 읽고 문전 구간(18)까지
@@ -942,6 +981,15 @@ public final class TerraceForge {
                     world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
                 }
+            }
+            // ★★문전 정면 투영을 비운다 — 난간 밖 ±TREE_CLEAR_HALF 까지 (사용자 확정
+            //   2026-08-06). 보행면·난간은 위 두 고리가 이미 비웠으므로 그 밖만 훑는다.
+            //   ★이 한 줄이 없으면 20칸 바위가 문루 정면을 세로로 가로지른다 (실측된 진범).
+            for (int o = -clearHalf(i); o <= clearHalf(i); o++) {
+                if (Math.abs(o) <= railOff) {
+                    continue;
+                }
+                clearAbove(world, a.x() + o, by, z, tally);
             }
             if (PROPS && isFlagpoleRow(i) && i < WIDEN_TO) {
                 // ★깃대 첫 쌍 — 11칸 전이 참의 <b>외곽 모서리</b>(±8). 난간(±6) 밖이라

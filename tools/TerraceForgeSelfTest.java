@@ -1488,6 +1488,71 @@ public final class TerraceForgeSelfTest {
                         pinesInDepth >= 1, pinesInDepth + "그루");
                 check("★그 밖의 소나무는 그대로 곁에 선다 (밀어내기만 한 것이 아니다)",
                         pinesBeside >= 2, pinesBeside + "그루");
+
+                // ══════ ★★정면 투영을 통째로 비운다 (사용자 확정 2026-08-06) ══════
+                //   ★실측이 진범을 바꿨다: 문 앞을 가로지르던 것은 소나무가 아니라 <b>축선 +5 ·
+                //   i 4~9 의 주상절리 돌기둥</b>이었다 (포장 y-15 → 꼭대기 y+8 · 지붕 마루보다
+                //   6칸 높다). clearAbove 가 <b>제 보행 폭만</b> 비우니 난간 한 칸 밖의 20칸
+                //   바위는 아무도 안 건드렸다. <b>가리는 것은 재료를 안 가린다</b> —
+                //   「나무가 건축을 가리지 않는다」는 계약이 나무만 보고 있었다.
+                check("★문전에서 비우는 반폭이 정면 투영(±" + TerraceForge.TREE_CLEAR_HALF + ")이다",
+                        TerraceForge.clearHalf(0) == TerraceForge.TREE_CLEAR_HALF,
+                        TerraceForge.clearHalf(0));
+                check("★그 비움이 난간(±" + (TerraceForge.approachHalf(0) + 1)
+                                + ")보다 넓다 — 난간 밖 바위·나무까지 걷는다",
+                        TerraceForge.clearHalf(0) > TerraceForge.approachHalf(0) + 1,
+                        TerraceForge.clearHalf(0) + " vs " + (TerraceForge.approachHalf(0) + 1));
+                // ★문전 <b>밖</b>은 안 넓힌다 — 계단 곁의 바위·나무는 이 터의 성격이다
+                boolean besideKept = true;
+                for (int i = TerraceForge.TREE_CLEAR_DEPTH; i < TerraceForge.APPROACH_LEN; i++) {
+                    if (TerraceForge.clearHalf(i) != TerraceForge.approachHalf(i) + 1) {
+                        besideKept = false;
+                    }
+                }
+                check("★문전 밖에서는 보행면+난간만 비운다 (곁의 절벽·숲을 밀지 않는다)",
+                        besideKept, besideKept);
+                // ★제 소품을 제가 지우지 않는가 — 비움과 자리가 어긋나면 조용히 사라진다
+                //   (i150 비석이 범위 밖에서 조용히 사라진 전례가 있다)
+                boolean pineSurvives = true;
+                for (int i = 15; i < TerraceForge.TREE_CLEAR_DEPTH; i += TerraceForge.PINE_EVERY) {
+                    if (TerraceForge.pineOff(i) <= TerraceForge.clearHalf(i)) {
+                        pineSurvives = false;
+                    }
+                }
+                check("★문전 소나무가 그 비움 밖에 선다 (제 손으로 안 지운다)",
+                        pineSurvives, "소나무 ±" + TerraceForge.pineOff(15)
+                                + " vs 비움 ±" + TerraceForge.clearHalf(15));
+                check("★전이 참 깃대(±" + TerraceForge.LANDING_BANNER_OFF
+                                + ")도 그 비움 밖에 선다",
+                        TerraceForge.LANDING_BANNER_OFF
+                                > TerraceForge.clearHalf(TerraceForge.BANNER_FROM),
+                        "비움 ±" + TerraceForge.clearHalf(TerraceForge.BANNER_FROM));
+
+                // ★★비우는 손과 심는 손 — 캠퍼스 조경은 접근로 포장 <b>뒤에</b> 심는다.
+                //   깎아 놓은 자리에 도로 꽂으면 비운 보람이 없다 (실측: 바위를 걷어내자
+                //   그 자리에 조경 소나무가 남아 문루 오른쪽을 덮었다 — 옛 자리 축선 ±5·6).
+                //   ★두 손이 <b>같은 표</b>(inGateFacade)를 읽는지 잰다.
+                {
+                    java.util.List<TerraceForge.Pad> gp = TerraceForge.resolvePads(campus, 0, 0, 0);
+                    TerraceForge.Pad gate1 = gp.stream().filter(p2 -> p2.spec().zone() == 1)
+                            .findFirst().orElseThrow();
+                    int cx1 = gate1.x0() + gate1.spec().width() / 2;
+                    int gz0 = gate1.zS() + 1;              // 접근로 첫 행 (approachOf 와 한 식)
+                    java.util.List<int[]> spots =
+                            com.honcheon.mvt.forge.HwasanCampusBuilder.pineSpots(gate1);
+                    int inFacade = 0;
+                    for (int[] s : spots) {
+                        if (TerraceForge.inGateFacade(cx1, gz0, s[0], s[1])) {
+                            inFacade++;
+                        }
+                    }
+                    check("★산문 조경 소나무 " + spots.size() + "그루가 정면 투영 밖에 선다"
+                                    + " (비운 자리에 도로 심지 않는다)",
+                            spots.size() >= 2 && inFacade == 0, inFacade + "그루 침범");
+                    // ★눈이 헛것을 지키지 않는가 — 옛 자리(±5·6)는 실제로 <b>침범</b>이어야 한다
+                    check("★[눈의 눈] 옛 자리(축선 +5)는 그 표가 침범이라고 답한다",
+                            TerraceForge.inGateFacade(cx1, gz0, cx1 + 5, gate1.zS() + 4), "");
+                }
             }
         }
 
