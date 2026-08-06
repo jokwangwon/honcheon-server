@@ -535,6 +535,32 @@ public final class TerraceForgeSelfTest {
                 "소나무 ±" + (TerraceForge.APPROACH_CLEAR + 2)
                         + " vs 가장 넓은 난간 ±" + (TerraceForge.approachHalf(
                                 TerraceForge.WIDEN_FROM) + 1));
+        // ══════ ★★공공 마당은 한 재료다 (2026-08-06 · 외원 실측이 잡았다) ══════
+        //   ★계율 「온기는 재료가 아니라 햇빛이다 — 한 면에는 한 재료」.
+        //   paveMaterial 은 2026-08-05 에 다섯 → 하나로 고쳤는데(D-43 「누런 바둑판」),
+        //   HwasanCampusBuilder 의 다른 손이 그 위에 사암을 30%+10% <b>도로 칠하고</b> 있었다
+        //   (외원 마당 실측: 석전 63% : 매끈사암 37%). 문전 조경 소나무와 <b>같은 병</b> —
+        //   고치는 손과 덧칠하는 손이 다른 표를 읽었다.
+        //   ★가르는 자: <b>위치가 정하면 구조, 해시가 정하면 잡티다.</b>
+        check("★공공 마당 포장이 한 재료다 (덧칠하는 손이 바탕과 같은 표를 읽는다)",
+                com.honcheon.mvt.forge.HwasanCampusBuilder.publicPaveMaterial()
+                        == TerraceForge.paveMaterial(0, 0)
+                        && TerraceForge.paveMaterial(0, 0) == TerraceForge.paveMaterial(7, 13)
+                        && TerraceForge.paveMaterial(0, 0) == TerraceForge.paveMaterial(-31, 44),
+                com.honcheon.mvt.forge.HwasanCampusBuilder.publicPaveMaterial()
+                        + " vs " + TerraceForge.paveMaterial(0, 0));
+        // ★[눈의 눈] 자리를 바꿔 가며 물었는가 — 한 자리만 물으면 해시 섞임을 못 본다
+        {
+            java.util.Set<Material> tones = new java.util.HashSet<>();
+            for (int x = -40; x <= 40; x += 3) {
+                for (int z = -40; z <= 40; z += 3) {
+                    tones.add(TerraceForge.paveMaterial(x, z));
+                }
+            }
+            check("★[눈의 눈] 포장을 " + (27 * 27) + "자리에서 물었고 재료가 하나뿐이다",
+                    tones.size() == 1, tones.toString());
+        }
+
         check("★비석이 축선 시야 회랑 밖에 선다 (문루 정면을 안 가린다 · D-20)",
                 TerraceForge.AXIS_CLEAR > TerraceForge.APPROACH_CLEAR,
                 "비석 ±" + TerraceForge.AXIS_CLEAR + " vs 회랑 ±" + TerraceForge.APPROACH_CLEAR);

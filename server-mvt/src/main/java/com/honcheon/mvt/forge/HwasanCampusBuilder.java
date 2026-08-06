@@ -116,7 +116,10 @@ public final class HwasanCampusBuilder {
         int cx = pad.x0() + pad.spec().width() / 2;
         int cz = pad.zN() + pad.spec().depth() / 2;
         switch (pad.spec().zone()) {                              // 지면 일 — 부품이 아니다
-            case 1, 2, 6, 13, 101 -> sandyRepave(world, pad, tally);   // 공공 = 모래빛
+            case 1, 2, 6, 13, 101 -> publicRepave(world, pad, tally);  // 공공 마당 — ★한 재료
+            // ★남은 잡티 하나 (03 연무장의 몫): sandField 는 모래와 매끈사암을 해시로 섞는다.
+            //   같은 계율에 걸리지만 여기 손대면 이번 회차 밖이라 <b>열어 둔다</b> —
+            //   BACKLOG 에 적었다. 「고쳤다」고 안 하는 것이 이 장부의 규약이다.
             case 3, 14 -> sandField(world, pad, tally);                // 연무장 = 모래 마당 (테두리 4 박석)
             case 16 -> wallNS(world, plan, pad, cx, cz, tally);        // 담은 laneCrosses 로 스스로 비킨다
             default -> {
@@ -1412,18 +1415,43 @@ public final class HwasanCampusBuilder {
         tally.towers++;
     }
 
-    /** 공공 구역 바닥 — 모래빛 박석을 섞는다 (조닝 「공공=모래빛」 · 테두리는 석전 그대로) */
-    private static void sandyRepave(World world, TerraceForge.Pad pad, Tally tally) {
+    /**
+     * 공공 구역 바닥 — <b>한 재료</b>로 다시 깐다 (조닝 「공공」의 자리 · 테두리는 석전 그대로).
+     *
+     * <p>★★2026-08-06 실측으로 잡은 잔재. 옛 이름은 {@code sandyRepave} 였고 해시로
+     * 사암을 <b>30% + 10%</b> 섞었다 — 외원 마당을 재 보니 석전 63% : 매끈사암 37% 의
+     * <b>누런 바둑판</b>이었다.
+     *
+     * <p>{@link TerraceForge#paveMaterial}은 2026-08-05 에 다섯 → 하나로 이미 고쳤다
+     * (D-43 · 「사암 18%가 누런 바둑판으로 읽혔다」 · 계율 「온기는 재료가 아니라 햇빛이다」).
+     * 그런데 <b>이 손이 그 위에 도로 칠하고 있었다</b> — 문전의 조경 소나무와 <b>같은 병</b>이다:
+     * 고치는 손과 덧칠하는 손이 다른 표를 읽었다.
+     *
+     * <p>★가르는 자: <b>위치가 정하면 구조, 해시가 정하면 잡티다</b>
+     * ({@link TerraceForge#faceMaterial} 의 자와 같다). 이건 해시였다.
+     *
+     * <p>조닝(공공/수련/핵심)의 <b>뜻은 남긴다</b> — 다만 재료 <b>하나</b>로 낸다.
+     * 그 하나가 무엇인지는 {@link #publicPaveMaterial()} 한 곳에서 정한다.
+     */
+    private static void publicRepave(World world, TerraceForge.Pad pad, Tally tally) {
+        Material m = publicPaveMaterial();
         for (int x = pad.x0() + 1; x <= pad.x1() - 1; x++) {
             for (int z = pad.zN() + 1; z <= pad.zS() - 1; z++) {
-                int r = Math.floorMod(x * 11 + z * 17, 10);
-                if (r < 3) {
-                    put(world, pad, x, pad.y(), z, Material.SMOOTH_SANDSTONE, tally);
-                } else if (r < 4) {
-                    put(world, pad, x, pad.y(), z, Material.SANDSTONE, tally);
-                }
+                put(world, pad, x, pad.y(), z, m, tally);
             }
         }
+    }
+
+    /**
+     * 공공 구역 마당의 <b>단일</b> 포장 재료 — 조닝의 색은 여기 한 곳에서 정한다.
+     *
+     * <p>★지금은 석전이다 (덧칠 전의 바탕과 같다). 목표 7호의 마당은 <b>밝은 회백~베이지</b>로
+     * 우리 것보다 밝고 따뜻하지만(D-31), <b>최종 색·재료 판정은 리소스팩 적용 후로 보류</b>가
+     * 사용자 확정이다. 그러니 지금 바꾸는 것은 <b>잡티뿐</b>이고, 색은 이 한 줄로 남겨 둔다 —
+     * 바꿀 때 여기만 고치면 전 공공 마당이 함께 간다.
+     */
+    public static Material publicPaveMaterial() {
+        return Material.STONE_BRICKS;
     }
 
     /**
