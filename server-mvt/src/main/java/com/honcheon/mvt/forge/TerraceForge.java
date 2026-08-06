@@ -788,9 +788,50 @@ public final class TerraceForge {
         return approachHalf(i) + 1;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // ★★★facade_projection_clearance — <b>산문 정면 투영 비움 상자</b>
+    //   (사용자 승격 2026-08-06: 「화산파 전체 생성기의 공통 규칙으로 승격할 만하다」)
+    //
+    //   ★계율: <b>가리는 것은 재료를 안 가린다.</b>
+    //   옛 이름은 tree_clearance 였고 그 이름대로 <b>나무만</b> 보고 있었다. 실측이
+    //   보여 준 진범은 바위였고, 바위를 걷어내자 그 자리에 조경이 도로 심겼다.
+    //   그래서 계약의 이름과 범위를 함께 넓힌다:
+    //
+    //     금지 — 지형(주상절리·산몸) · 산군 식생 · 캠퍼스 조경 · 높은 소품 · 깃대
+    //     허용 — 낮은 석등(≤{@link #FORECOURT_MAX_H}) · 난간 · 건축에 붙는 등롱
+    //
+    //   ★이 상자는 <b>상위 계약</b>이다 — 02 외원을 비롯한 어느 구역도 침범할 수 없다.
+    //   외원은 빈 문전을 <b>채우는</b> 공간이 아니라 그 비어 있는 중앙축의 <b>양옆</b>을
+    //   구성하는 공간이다 (사용자 확정).
+    //
+    //   ★숫자는 <b>여기 한 곳에만</b> 산다. 생성기·조경·눈이 전부 이 이름을 부른다 —
+    //   같은 값을 두 번 적으면 언젠가 갈라진다 (「신고표가 실물보다 넓으면 눈이 헛것을
+    //   지킨다」의 같은 병).
+    //   정본 문서: config/blueprints/hwasan_gate.yml 의 facade_projection_clearance 절
+    //   (아래 세 값과 <b>같은지 눈이 대조한다</b> — 문서가 조용히 늙지 않게).
+    // ══════════════════════════════════════════════════════════════════
+
+    /** 정면 투영 반폭 — 이 안에는 <b>서는 것</b>이 없다 (수관이 처마를 감싸는 것은 무관) */
+    public static final int FACADE_CLEAR_HALF = 14;
+
+    /**
+     * 정면 투영 깊이 — 문전 구간과 <b>같은 경계</b>로 잡는다.
+     * ★사용자 규정은 10 이었으나 <b>실제로 가리던 줄기가 i15</b> 라 10 으로는 눈이 그것을
+     * 못 잡는다 (첫 소나무 자리 = i15). 규정을 <b>바닥값</b>으로 읽고 문전 구간(18)까지
+     * 올렸다 — 결정을 눈이 실제로 지키게 하려면 이 깊이여야 한다.
+     */
+    public static final int FACADE_CLEAR_DEPTH = FORECOURT_TO;
+
+    /**
+     * 그 상자 <b>밖에 세울 때의 축선 오프셋</b> — 상자에 닿지 않게 두 칸 물린다.
+     * ★±16 을 여기저기 적지 않는다: 접근로 소나무도, 캠퍼스 조경 소나무도 이 이름을 부른다.
+     * 상자(±14)와 자리(±16)가 어긋나면 소품이 <b>제 손에 조용히 지워진다</b> — 눈이 그것도 잰다.
+     */
+    public static final int FACADE_STANDOFF = FACADE_CLEAR_HALF + 2;
+
     /**
      * 접근로 소나무의 축선 오프셋 — 기본은 회랑(±{@link #APPROACH_CLEAR}) 바로 밖이지만,
-     * <b>문전 구간에서는 산문 정면 투영 밖</b>으로 더 민다.
+     * <b>문전 구간에서는 정면 투영 밖</b>({@link #FACADE_STANDOFF})으로 더 민다.
      *
      * <p>★2026-08-06 사용자 지적: 「나무가 없다」가 아니라 <b>「나무가 건축을 가리지
      * 않는다」</b>가 계약인데, 기준 카메라(산문 정면)에서 오른쪽 소나무의 <b>줄기</b>가
@@ -800,11 +841,8 @@ public final class TerraceForge {
      * 것</b>이다.
      */
     public static int pineOff(int i) {
-        return i < TREE_CLEAR_DEPTH ? TREE_CLEAR_HALF + 2 : APPROACH_CLEAR + 2;
+        return i < FACADE_CLEAR_DEPTH ? FACADE_STANDOFF : APPROACH_CLEAR + 2;
     }
-
-    /** 산문 정면 투영 — 이 반폭 안에는 <b>줄기</b>가 서지 않는다 (수관은 무관) */
-    public static final int TREE_CLEAR_HALF = 14;
 
     /**
      * 그 행에서 <b>보행면 위로 비우는 반폭</b>. <b>눈이 이 표로 잰다</b> (조성과 한 식).
@@ -819,11 +857,11 @@ public final class TerraceForge {
      * 「나무가 건축을 가리지 않는다」는 계약이 <b>나무만</b> 보고 있었던 것이다 —
      * 가리는 것은 재료를 안 가린다.
      *
-     * <p>문전 구간에서만 정면 투영(±{@link #TREE_CLEAR_HALF})을 표고까지 비우고,
+     * <p>문전 구간에서만 정면 투영(±{@link #FACADE_CLEAR_HALF})을 표고까지 비우고,
      * 그 밖에서는 종전대로 보행면+난간만 비운다 (계단 곁의 바위·나무는 그대로 남는다).
      */
     public static int clearHalf(int i) {
-        return i < TREE_CLEAR_DEPTH ? TREE_CLEAR_HALF : approachHalf(i) + 1;
+        return i < FACADE_CLEAR_DEPTH ? FACADE_CLEAR_HALF : approachHalf(i) + 1;
     }
 
     /**
@@ -842,17 +880,19 @@ public final class TerraceForge {
     /** 같은 계약의 <b>순수</b> 꼴 — 월드 없이도 눈이 잰다 (축선·첫 행만 있으면 된다) */
     public static boolean inGateFacade(int axisX, int z0, int x, int z) {
         int i = z - z0;
-        return i >= 0 && i < TREE_CLEAR_DEPTH && Math.abs(x - axisX) <= TREE_CLEAR_HALF;
+        return i >= 0 && i < FACADE_CLEAR_DEPTH && Math.abs(x - axisX) <= FACADE_CLEAR_HALF;
     }
 
     /**
-     * 그 투영의 깊이 — 문전 구간과 <b>같은 경계</b>로 잡는다.
-     * ★사용자 규정은 10 이었으나 <b>실제로 가리던 줄기가 i15</b> 라 10 으로는 눈이 그것을
-     * 못 잡는다 (첫 소나무 자리 = i15). 규정을 <b>바닥값</b>으로 읽고 문전 구간(18)까지
-     * 올렸다 — 이번 회차 결정(「오른쪽 소나무 줄기: 정면 투영 밖으로 이동」)을 눈이 실제로
-     * 지키게 하려면 이 깊이여야 한다.
+     * 그 패드에서 잰 정면 투영 상자 {x0, x1, z0, z1} — <b>산군 식생 제외</b>가 이 표를 읽는다.
+     * ★식생은 캠퍼스보다 <b>먼저</b> 선다. 뒤에 깎아 없어지긴 하지만, 「먼저 심고 나중에
+     * 깎는다」에 기대면 조성 순서가 한 번 바뀌는 날 조용히 되살아난다 — 아예 안 심는다.
      */
-    public static final int TREE_CLEAR_DEPTH = FORECOURT_TO;
+    public static int[] facadeBox(Pad gate) {
+        int z0 = gate.zS() + 1;                       // approachOf 와 한 식
+        return new int[]{gate.cx() - FACADE_CLEAR_HALF, gate.cx() + FACADE_CLEAR_HALF,
+                z0, z0 + FACADE_CLEAR_DEPTH - 1};
+    }
 
     /**
      * 접근로 부속이 앉는 행 인덱스 전부 — <b>눈이 이 표로 범위를 잰다</b> (같은 식이라
@@ -982,7 +1022,7 @@ public final class TerraceForge {
                     tally.parapet++;
                 }
             }
-            // ★★문전 정면 투영을 비운다 — 난간 밖 ±TREE_CLEAR_HALF 까지 (사용자 확정
+            // ★★문전 정면 투영을 비운다 — 난간 밖 ±FACADE_CLEAR_HALF 까지 (사용자 확정
             //   2026-08-06). 보행면·난간은 위 두 고리가 이미 비웠으므로 그 밖만 훑는다.
             //   ★이 한 줄이 없으면 20칸 바위가 문루 정면을 세로로 가로지른다 (실측된 진범).
             for (int o = -clearHalf(i); o <= clearHalf(i); o++) {

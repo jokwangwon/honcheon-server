@@ -1885,6 +1885,11 @@ public final class MvtCommand implements CommandExecutor {
                 int acx = (pd.x0() + pd.x1()) / 2;      // 패드 중심 = 접근로 축선
                 ex.add(new int[]{acx - c, acx + c,
                         pd.zS() + 1, pd.zS() + 1 + TerraceForge.APPROACH_LEN + 24});
+                // ★★facade_projection_clearance (2026-08-06 · 상위 계약) — 문전만은 회랑(±10)
+                //   보다 넓게 비운다. 여기 심긴 산군 소나무는 <b>캠퍼스가 뒤에 깎아</b> 사라지긴
+                //   하지만, 「먼저 심고 나중에 깎는다」에 기대면 조성 순서가 한 번 바뀌는 날
+                //   조용히 되살아난다 — 아예 안 심는다 (같은 상자를 TerraceForge 가 낸다).
+                ex.add(TerraceForge.facadeBox(pd));
             }
             SpireField field = new SpireField(ex);
             Announce.say(plugin, sender, ChatColor.GRAY + "[산군시험] " + worldName + " — 기준면 y"

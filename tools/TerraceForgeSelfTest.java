@@ -1470,17 +1470,17 @@ public final class TerraceForgeSelfTest {
                 int pinesInDepth = 0;
                 int pinesBeside = 0;
                 for (int i = 15; i < TerraceForge.APPROACH_LEN; i += TerraceForge.PINE_EVERY) {
-                    if (i < TerraceForge.TREE_CLEAR_DEPTH) {
+                    if (i < TerraceForge.FACADE_CLEAR_DEPTH) {
                         pinesInDepth++;
-                        if (TerraceForge.pineOff(i) <= TerraceForge.TREE_CLEAR_HALF) {
+                        if (TerraceForge.pineOff(i) <= TerraceForge.FACADE_CLEAR_HALF) {
                             trunkInProjection++;
                         }
                     } else if (TerraceForge.pineOff(i) == TerraceForge.APPROACH_CLEAR + 2) {
                         pinesBeside++;
                     }
                 }
-                check("★소나무 줄기가 산문 정면 투영(반폭 " + TerraceForge.TREE_CLEAR_HALF
-                                + " · 깊이 " + TerraceForge.TREE_CLEAR_DEPTH + ") 밖에 선다",
+                check("★소나무 줄기가 산문 정면 투영(반폭 " + TerraceForge.FACADE_CLEAR_HALF
+                                + " · 깊이 " + TerraceForge.FACADE_CLEAR_DEPTH + ") 밖에 선다",
                         trunkInProjection == 0, trunkInProjection + "그루");
                 // ★헛것을 지키는 눈 막기 — 그 깊이에 소나무가 <b>실제로</b> 서야 계약이 산다
                 //   (한 그루도 안 서면 위 눈은 0 으로 조용히 통과한다. 실제로 가리던 것이 i15 다)
@@ -1495,8 +1495,8 @@ public final class TerraceForgeSelfTest {
                 //   6칸 높다). clearAbove 가 <b>제 보행 폭만</b> 비우니 난간 한 칸 밖의 20칸
                 //   바위는 아무도 안 건드렸다. <b>가리는 것은 재료를 안 가린다</b> —
                 //   「나무가 건축을 가리지 않는다」는 계약이 나무만 보고 있었다.
-                check("★문전에서 비우는 반폭이 정면 투영(±" + TerraceForge.TREE_CLEAR_HALF + ")이다",
-                        TerraceForge.clearHalf(0) == TerraceForge.TREE_CLEAR_HALF,
+                check("★문전에서 비우는 반폭이 정면 투영(±" + TerraceForge.FACADE_CLEAR_HALF + ")이다",
+                        TerraceForge.clearHalf(0) == TerraceForge.FACADE_CLEAR_HALF,
                         TerraceForge.clearHalf(0));
                 check("★그 비움이 난간(±" + (TerraceForge.approachHalf(0) + 1)
                                 + ")보다 넓다 — 난간 밖 바위·나무까지 걷는다",
@@ -1504,7 +1504,7 @@ public final class TerraceForgeSelfTest {
                         TerraceForge.clearHalf(0) + " vs " + (TerraceForge.approachHalf(0) + 1));
                 // ★문전 <b>밖</b>은 안 넓힌다 — 계단 곁의 바위·나무는 이 터의 성격이다
                 boolean besideKept = true;
-                for (int i = TerraceForge.TREE_CLEAR_DEPTH; i < TerraceForge.APPROACH_LEN; i++) {
+                for (int i = TerraceForge.FACADE_CLEAR_DEPTH; i < TerraceForge.APPROACH_LEN; i++) {
                     if (TerraceForge.clearHalf(i) != TerraceForge.approachHalf(i) + 1) {
                         besideKept = false;
                     }
@@ -1514,7 +1514,7 @@ public final class TerraceForgeSelfTest {
                 // ★제 소품을 제가 지우지 않는가 — 비움과 자리가 어긋나면 조용히 사라진다
                 //   (i150 비석이 범위 밖에서 조용히 사라진 전례가 있다)
                 boolean pineSurvives = true;
-                for (int i = 15; i < TerraceForge.TREE_CLEAR_DEPTH; i += TerraceForge.PINE_EVERY) {
+                for (int i = 15; i < TerraceForge.FACADE_CLEAR_DEPTH; i += TerraceForge.PINE_EVERY) {
                     if (TerraceForge.pineOff(i) <= TerraceForge.clearHalf(i)) {
                         pineSurvives = false;
                     }
@@ -1552,6 +1552,86 @@ public final class TerraceForgeSelfTest {
                     // ★눈이 헛것을 지키지 않는가 — 옛 자리(±5·6)는 실제로 <b>침범</b>이어야 한다
                     check("★[눈의 눈] 옛 자리(축선 +5)는 그 표가 침범이라고 답한다",
                             TerraceForge.inGateFacade(cx1, gz0, cx1 + 5, gate1.zS() + 4), "");
+
+                    // ══ ★★상위 계약 — 어느 구역도 이 상자를 침범하지 않는다 ══
+                    //   「외원은 빈 문전을 <b>채우는</b> 공간이 아니라 그 비어 있는 중앙축의
+                    //   <b>양옆</b>을 구성하는 공간이다」 (사용자 확정 2026-08-06).
+                    //   ★02 외원이 들어올 때 이 눈이 먼저 짖는다 — 그때 고치는 것이 곧 결정의 기록.
+                    int trespass = 0;
+                    String worst = "";
+                    for (TerraceForge.Pad p2 : gp) {
+                        java.util.List<int[]> spots2 =
+                                com.honcheon.mvt.forge.HwasanCampusBuilder.pineSpots(p2);
+                        for (int[] s : spots2) {
+                            if (TerraceForge.inGateFacade(cx1, gz0, s[0], s[1])) {
+                                trespass++;
+                                worst = "구역 " + p2.spec().zone() + " 소나무";
+                            }
+                        }
+                        for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.decorBoxes(p2)) {
+                            for (int bx : new int[]{b[0], b[1]}) {
+                                for (int bz : new int[]{b[2], b[3]}) {
+                                    if (TerraceForge.inGateFacade(cx1, gz0, bx, bz)) {
+                                        trespass++;
+                                        worst = "구역 " + p2.spec().zone() + " 소품";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    check("★★상위 계약 — 전 구역(" + gp.size() + ")의 조경·소품이 정면 투영을"
+                                    + " 침범하지 않는다",
+                            trespass == 0, trespass == 0 ? "0" : trespass + "건 · " + worst);
+
+                    // ★산군 식생 제외도 같은 상자를 읽는가 (조성 순서에 기대지 않는다)
+                    int[] fbox = TerraceForge.facadeBox(gate1);
+                    com.honcheon.mvt.forge.SpireField fField =
+                            new com.honcheon.mvt.forge.SpireField(java.util.List.of(fbox));
+                    boolean facadeExcluded =
+                            fField.excluded(cx1, gz0)
+                                    && fField.excluded(cx1 + TerraceForge.FACADE_CLEAR_HALF, gz0)
+                                    && fField.excluded(cx1 - TerraceForge.FACADE_CLEAR_HALF,
+                                            gz0 + TerraceForge.FACADE_CLEAR_DEPTH - 1);
+                    check("★산군 식생 제외 상자가 정면 투영을 덮는다 (먼저 심고 깎기에 기대지 않는다)",
+                            facadeExcluded, java.util.Arrays.toString(fbox));
+                    check("★그 상자 밖은 여전히 심긴다 (문전만 비운다)",
+                            !fField.excluded(cx1 + TerraceForge.FACADE_STANDOFF, gz0 + 2),
+                            "±" + TerraceForge.FACADE_STANDOFF);
+                }
+
+                // ══ ★★문서와 코드가 갈라지지 않는가 — 도면 yml 의 계약 절을 대조한다 ══
+                //   ★「신고표가 실물보다 넓으면 눈이 헛것을 지킨다」의 같은 병을 막는다.
+                //   문서에 14·18·16 을 적어 두고 코드만 바뀌면 <b>문서가 조용히 늙는다</b>.
+                try {
+                    java.util.Map<String, Object> graw = new org.yaml.snakeyaml.Yaml().load(
+                            java.nio.file.Files.readString(
+                                    java.nio.file.Path.of("config/blueprints/hwasan_gate.yml")));
+                    Object node = graw.get("facade_projection_clearance");
+                    check("★도면 정본에 facade_projection_clearance 절이 있다",
+                            node instanceof java.util.Map, node == null ? "없다" : "");
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> fc = (java.util.Map<String, Object>) node;
+                    check("★도면의 half_width 가 코드와 같다 (" + TerraceForge.FACADE_CLEAR_HALF + ")",
+                            Integer.valueOf(TerraceForge.FACADE_CLEAR_HALF).equals(fc.get("half_width")),
+                            String.valueOf(fc.get("half_width")));
+                    check("★도면의 depth 가 코드와 같다 (" + TerraceForge.FACADE_CLEAR_DEPTH + ")",
+                            Integer.valueOf(TerraceForge.FACADE_CLEAR_DEPTH).equals(fc.get("depth")),
+                            String.valueOf(fc.get("depth")));
+                    check("★도면의 standoff 가 코드와 같다 (" + TerraceForge.FACADE_STANDOFF + ")",
+                            Integer.valueOf(TerraceForge.FACADE_STANDOFF).equals(fc.get("standoff")),
+                            String.valueOf(fc.get("standoff")));
+                    // ★금지·허용 목록이 <b>비어 있지 않은지</b>도 잰다 — 이름만 남고 속이 빈 계약 방지
+                    Object forb = fc.get("forbidden");
+                    Object allow = fc.get("allowed");
+                    check("★도면이 금지·허용을 둘 다 적는다 (허용을 안 적으면 문 앞이 캄캄해진다)",
+                            forb instanceof java.util.List && ((java.util.List<?>) forb).size() >= 5
+                                    && allow instanceof java.util.List
+                                    && ((java.util.List<?>) allow).size() >= 3,
+                            "금지 " + (forb instanceof java.util.List ? ((java.util.List<?>) forb).size() : -1)
+                                    + " · 허용 " + (allow instanceof java.util.List
+                                            ? ((java.util.List<?>) allow).size() : -1));
+                } catch (Exception e) {
+                    check("★도면 정본의 계약 절이 읽힌다", false, e.toString());
                 }
             }
         }

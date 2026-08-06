@@ -4650,6 +4650,23 @@ lint 체계: 승인            최종 색·재료: 리소스팩 적용 후로 �
 - **증거**: `selftest 269/269` · 신선 월드 재조성 · 검수 깨끗(열 18002 · 유출 0) ·
   `run/stage_render/산문정면.png`(정면이 통째로 읽힌다) · `문전평면.png`(문전이 비었다)
 
+#### ★★★`facade_projection_clearance` — 상위 계약으로 승격 (사용자 2026-08-06)
+「화산파 **전체 생성기의 공통 규칙**으로 승격할 만하다」 — 이름을 계약의 넓이에 맞췄다
+(`tree_clearance` 는 그 이름대로 **나무만** 보고 있었다).
+```
+half_width 14 · depth 18 · standoff 16 · clear_to_elevation
+금지: terrain · mountain_foliage · campus_tree · tall_prop · banner_pole
+허용: low_lantern(≤3) · railing · attached_fixture
+```
+- **숫자는 한 곳에만**: `TerraceForge.FACADE_CLEAR_HALF·FACADE_CLEAR_DEPTH·FACADE_STANDOFF`.
+  생성기·조경·산군 식생 제외·눈이 전부 이 이름을 부른다 (±16 을 두 번 적던 `+2` 제거)
+- **문서 정본**: `config/blueprints/hwasan_gate.yml` 의 같은 이름 절. 눈이 세 값을 **대조**한다
+- **산군 식생 제외**가 같은 상자(`facadeBox`)를 읽는다 — 제외 사각 39 → **40**
+- ★**상위 계약**: 전 구역(20)의 조경·소품 자리를 눈이 이 상자로 훑는다. 02 외원이 들어올 때
+  이 눈이 먼저 짖는다 — 외원은 빈 문전을 채우는 곳이 아니라 그 중앙축의 **양옆**을 짓는 곳이다
+- **증거**: `selftest 277/277` · 변이 3종(문서만 늙힘 · 조경 자리 되돌림 · 깃대 자리 되돌림)에
+  전부 짖음 · 재조성 후 회귀 사진 동일 · 검수 깨끗(열 18002 · 유출 0) · 도면 lint 4/4
+
 - **분류**: 결정
 - **위치**: `docs/design/hwasan_build_enhancement_v1.md` (시안 v2) · `화산파/` (레퍼런스 13장 —
   미추적 바이너리, 마스터플랜 = `…07_55_36.png`) · `server-mvt/.../forge/TerraceForge.java` ·

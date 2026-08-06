@@ -244,7 +244,7 @@ public final class HwasanCampusBuilder {
     }
 
     /** 소품 발자국 상자 — {@link #decors} 에서 유도 (조성과 검증이 같은 자를 쓴다) */
-    static List<int[]> decorBoxes(TerraceForge.Pad pad) {
+    public static List<int[]> decorBoxes(TerraceForge.Pad pad) {
         java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
         for (Decor d : decors(pad)) {
             out.add(switch (d.kind()) {
@@ -1581,11 +1581,11 @@ public final class HwasanCampusBuilder {
     public static List<int[]> pineSpots(TerraceForge.Pad pad) {
         int cx = pad.x0() + pad.spec().width() / 2;
         int cz = pad.zN() + pad.spec().depth() / 2;
-        // ★2026-08-06 산문(1) — 옛 자리 ±5·6 은 <b>산문 정면 투영 안</b>이었다. 접근로가
+        // ★2026-08-06 산문(1) — 옛 자리 ±5·6 은 <b>정면 투영 상자 안</b>이었다. 접근로가
         //   그 자리를 깎아도 조경이 <b>뒤에</b> 심으니 도로 섰다 (실측: 바위를 걷어내자
-        //   그 자리에 이 소나무가 남아 문루 오른쪽을 덮었다). 접근로 소나무와 <b>같은 자</b>로
-        //   민다 — TREE_CLEAR_HALF+2.
-        int gateOff = TerraceForge.TREE_CLEAR_HALF + 2;
+        //   그 자리에 이 소나무가 남아 문루 오른쪽을 덮었다). 접근로 소나무와 <b>같은 이름</b>을
+        //   부른다 — 숫자를 여기 다시 적지 않는다.
+        int gateOff = TerraceForge.FACADE_STANDOFF;
         return switch (pad.spec().zone()) {
             case 1 -> List.of(new int[]{cx - gateOff, pad.zS() + 3},
                     new int[]{cx + gateOff, pad.zS() + 4});

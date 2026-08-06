@@ -119,6 +119,31 @@ i22~         : 깃대·등롱 리듬 유지 (주기 9·11 그대로 — 자리�
 
 증거: `run/stage_render/산문정면.png` (정면이 통째로 읽힌다) · `문전평면.png`
 
+#### ㉨ ★★`facade_projection_clearance` — **상위 계약으로 승격** (사용자 2026-08-06)
+사용자 승인 회차에서 승격됐다: 「화산파 **전체 생성기의 공통 규칙**으로 승격할 만하다.
+`tree_clearance` 보다 의미가 넓은 이름이 적합하다.」 이름을 계약의 넓이에 맞췄다.
+```yaml
+facade_projection_clearance:      # 정본 문서: config/blueprints/hwasan_gate.yml
+  half_width: 14   depth: 18   standoff: 16   clear_to_elevation: true
+  forbidden: [terrain, mountain_foliage, campus_tree, tall_prop, banner_pole]
+  allowed:   [low_lantern, railing, attached_fixture]
+```
+- **숫자는 한 곳에만 산다** — `TerraceForge.FACADE_CLEAR_HALF·FACADE_CLEAR_DEPTH·FACADE_STANDOFF`.
+  생성기·조경·산군 식생 제외·눈이 전부 이 이름을 부른다 (±16 을 두 번 적던 `+2` 도 없앴다).
+- **문서가 조용히 늙지 않게** 눈이 yml 의 세 값과 코드를 **대조**한다 (변이 시험으로 확인).
+- **산군 식생 제외**가 이제 같은 상자(`facadeBox`)를 읽는다 — 「먼저 심고 나중에 깎는다」에
+  기대지 않는다 (조성 순서가 한 번 바뀌면 조용히 되살아나므로). 제외 사각 39 → **40**.
+- ★**02 외원을 비롯한 어느 구역도 침범할 수 없다** — 전 구역(20)의 조경·소품 자리를 눈이
+  이 상자로 훑는다. **외원은 빈 문전을 채우는 공간이 아니라 그 비어 있는 중앙축의 양옆을
+  구성하는 공간이다** (사용자 확정). 외원이 들어올 때 이 눈이 먼저 짖는다.
+
+#### ㉩ 최종 판정 (사용자 2026-08-06)
+```
+01 산문 구조: 동결 유지     문전 투영 방해: 해결
+지형·조경 생성 순서 충돌: 해결     깃대와 조명 역할 분리: 완료
+회귀 검수: 충분             추가 산문 수정: 불필요
+```
+
 ---
 
 ## 4-도면. 2026-08-04~05 (한 세대 전 — 오염 사건과 도면 문법의 확립)

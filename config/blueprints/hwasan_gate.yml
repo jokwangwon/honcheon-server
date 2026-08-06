@@ -31,6 +31,35 @@ design_intent:
     - "산문 외곽 전체를 비례 확대하지 않는다 — 중앙 대문 모듈만 한 호 키운다."
     - "산문 패드 중심 좌표·좌우 부속 전각 외곽·석축 전체 폭을 건드리지 않는다."
 
+# ── ★★★facade_projection_clearance (사용자 승격 2026-08-06) ─────────────
+#   화산파 <b>전체 생성기의 공통 규칙</b>. 옛 이름 tree_clearance 는 그 이름대로
+#   <b>나무만</b> 보고 있었다 — 실측된 진범은 바위였고, 바위를 걷어내자 그 자리에
+#   조경이 도로 심겼다.  ★계율: <b>가리는 것은 재료를 안 가린다.</b>
+#
+#   ★이 절은 <b>문서 정본</b>이고 실제 값은 TerraceForge 가 한 곳에 든다
+#   (FACADE_CLEAR_HALF · FACADE_CLEAR_DEPTH · FACADE_STANDOFF).
+#   눈이 이 셋과 아래 숫자를 <b>대조</b>한다 — 문서가 조용히 늙지 않게.
+facade_projection_clearance:
+  half_width: 14              # TerraceForge.FACADE_CLEAR_HALF
+  depth: 18                   # TerraceForge.FACADE_CLEAR_DEPTH  (접근로 i 0~17)
+  standoff: 16                # TerraceForge.FACADE_STANDOFF     (상자 밖에 세울 자리)
+  clear_to_elevation: true    # 표고까지 비운다 (지붕 마루 위로 솟은 것도 걷는다)
+  origin: "산문 패드 남단 + 1행 (접근로 첫 행) · 축선 = 패드 중심"
+
+  forbidden:
+    - terrain                 # 주상절리·산몸 — clearHalf 가 표고까지 깎는다
+    - mountain_foliage        # 산군 식생 — 제외 사각(facadeBox)에 든다
+    - campus_tree             # 캠퍼스 조경 — pine() 이 inGateFacade 로 접는다
+    - tall_prop               # 비석·정자 등 서는 소품
+    - banner_pole             # 깃대 — 첫 자리가 i18 · ±8 로 내려갔다
+
+  allowed:
+    - low_lantern             # 높이 3 이하 · 좌우 대칭 한 쌍 (i2)
+    - railing                 # 난간 — 보행 폭 바로 밖
+    - attached_fixture        # 문루 기둥·벽에 매다는 등롱
+
+  scope: "상위 계약 — 02 외원을 비롯한 어느 구역도 침범할 수 없다. 외원은 빈 문전을 채우는 공간이 아니라 그 비어 있는 중앙축의 양옆을 구성하는 공간이다."
+
 # ── 실측 (1호 확대 · 2026-08-05) ────────────────────────────────────────
 #   ★하층은 「벽에 창을 뚫은 것」이 아니라 「기둥 + 격자 문짝」의 반복이다.
 #   · 적주 간격 3 (기둥1 + 문짝2) — ★중앙 문루만 5 로 올렸다 (사용자 확정 2026-08-06)
