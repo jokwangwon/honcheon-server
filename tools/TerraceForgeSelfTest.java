@@ -1386,6 +1386,109 @@ public final class TerraceForgeSelfTest {
             }
             check("★D-21 깃대가 계단을 따라 열을 이룬다 (좌우 쌍 ≥4기)",
                     bannerCount >= 4, bannerCount + "기(쌍)");
+
+            // ══════ ★★문전 비움 — gate_forecourt_clearance (사용자 확정 2026-08-06) ══════
+            //   「현재 문제는 실제 보행 폭이 아니라 <b>문간의 시각적 폭</b>이다」 — 통로를 7 로
+            //   넓혔는데도 정면에서는 「깃대|적주|문살|통로|적주|등롱」으로 읽혀 다시 5칸으로
+            //   압축돼 보인다. 독립 수직물이 적주보다 <b>앞에</b> 서서 문루의 위계를 나눠 먹는다.
+            //   ★이 눈은 <b>넓이가 아니라 비움</b>을 잰다 — 통행 폭을 재던 눈들과 다른 자다.
+            {
+                int tallInForecourt = 0;
+                int propRows = 0;
+                int maxH = 0;
+                boolean symmetric = true;
+                for (int i = 0; i < TerraceForge.FORECOURT_TO; i++) {
+                    int hl = TerraceForge.propHeight(i, true);
+                    int hr = TerraceForge.propHeight(i, false);
+                    if (hl != hr) {
+                        symmetric = false;                       // symmetry_required
+                    }
+                    maxH = Math.max(maxH, Math.max(hl, hr));
+                    if (hl > 0 || hr > 0) {
+                        propRows++;
+                    }
+                    if (TerraceForge.isFlagpoleRow(i)) {
+                        tallInForecourt++;                       // forbid: tall_banner_pole
+                    }
+                    if (TerraceForge.isLanternRow(i, true) || TerraceForge.isLanternRow(i, false)) {
+                        tallInForecourt++;                       // forbid: freestanding_tall_lantern
+                    }
+                }
+                check("★문전 비움 — i 0~" + (TerraceForge.FORECOURT_TO - 1)
+                                + " 에 깃대·높은 독립 등롱이 없다 (중앙축이 한 번에 뚫린다)",
+                        tallInForecourt == 0, tallInForecourt + "행");
+                check("★문전 비움 — 소품 높이 ≤ " + TerraceForge.FORECOURT_MAX_H
+                                + " (낮으면 난간의 연장으로 읽혀 축을 안 자른다)",
+                        maxH <= TerraceForge.FORECOURT_MAX_H, maxH);
+                check("★문전 비움 — 낮은 석등이 좌우 대칭 한 쌍만",
+                        symmetric && propRows == 1, propRows + "행 · 대칭 " + symmetric);
+                // ★눈이 헛것을 지키지 않는가 — 그 한 쌍이 <b>실재</b>해야 한다 (0행도 「≤3」을
+                //   통과한다. 「없음」과 「낮음」은 다르다 — 문 앞이 캄캄해지면 그것도 틀렸다)
+                check("★문전 비움 — 그 한 쌍이 실재한다 (비움이 곧 어둠은 아니다)",
+                        TerraceForge.isForecourtLanternRow(TerraceForge.FORECOURT_LANTERN_I)
+                                && TerraceForge.propHeight(TerraceForge.FORECOURT_LANTERN_I, true)
+                                        == TerraceForge.FORECOURT_MAX_H,
+                        "i" + TerraceForge.FORECOURT_LANTERN_I);
+                // min_clear_half_width — <b>시각</b>의 자다. 보행 반폭(3)보다 넓어야 뜻이 있다
+                check("★문전 시각 여유 반폭 " + TerraceForge.FORECOURT_CLEAR
+                                + " 이 보행 반폭(" + TerraceForge.STAIR_HALF + ")보다 넓다",
+                        TerraceForge.FORECOURT_CLEAR > TerraceForge.STAIR_HALF,
+                        TerraceForge.FORECOURT_CLEAR + " vs " + TerraceForge.STAIR_HALF);
+                // 첫 깃대 — 11칸 전이 참의 외곽 모서리(±LANDING_BANNER_OFF)
+                check("★깃대 첫 자리가 전이 참(i" + TerraceForge.WIDEN_FROM + "~"
+                                + (TerraceForge.WIDEN_TO - 1) + ")으로 내려왔다",
+                        TerraceForge.BANNER_FROM >= TerraceForge.FORECOURT_TO
+                                && TerraceForge.BANNER_FROM < TerraceForge.WIDEN_TO,
+                        "BANNER_FROM " + TerraceForge.BANNER_FROM);
+                check("★그 깃대가 참의 난간(±" + (TerraceForge.approachHalf(TerraceForge.WIDEN_FROM) + 1)
+                                + ") 밖 · 문간 시각 여유 밖에 선다",
+                        TerraceForge.LANDING_BANNER_OFF
+                                        > TerraceForge.approachHalf(TerraceForge.WIDEN_FROM) + 1
+                                && TerraceForge.LANDING_BANNER_OFF >= TerraceForge.FORECOURT_CLEAR,
+                        "±" + TerraceForge.LANDING_BANNER_OFF);
+                check("★조성과 눈이 한 식 — 그 행의 소품 오프셋이 ±"
+                                + TerraceForge.LANDING_BANNER_OFF,
+                        TerraceForge.propOff(TerraceForge.BANNER_FROM)
+                                == TerraceForge.LANDING_BANNER_OFF,
+                        TerraceForge.propOff(TerraceForge.BANNER_FROM));
+                // 하단 계단의 리듬은 <b>유지</b>한다 — 자리만 옮겼지 열을 지우지 않았다
+                int railProps = 0;
+                for (int i = TerraceForge.WIDEN_TO; i < TerraceForge.APPROACH_LEN; i++) {
+                    if (TerraceForge.propHeight(i, true) > 0 || TerraceForge.propHeight(i, false) > 0) {
+                        railProps++;
+                    }
+                }
+                check("★하단 계단의 깃대·등롱 리듬은 유지된다 (≥10행)", railProps >= 10, railProps + "행");
+            }
+
+            // ══════ ★★gate_facade_tree_clearance — 줄기가 문루를 안 가린다 ══════
+            //   「현재 계약은 <b>나무가 없다</b>가 아니라 <b>나무가 건축을 가리지 않는다</b>인데,
+            //   이 기준 카메라에서는 아직 가리고 있다」 (사용자 · 2026-08-06).
+            //   ★수관이 처마를 감싸는 것은 좋다 — 막는 것은 <b>줄기</b>가 문루 앞에 겹치는 것.
+            {
+                int trunkInProjection = 0;
+                int pinesInDepth = 0;
+                int pinesBeside = 0;
+                for (int i = 15; i < TerraceForge.APPROACH_LEN; i += TerraceForge.PINE_EVERY) {
+                    if (i < TerraceForge.TREE_CLEAR_DEPTH) {
+                        pinesInDepth++;
+                        if (TerraceForge.pineOff(i) <= TerraceForge.TREE_CLEAR_HALF) {
+                            trunkInProjection++;
+                        }
+                    } else if (TerraceForge.pineOff(i) == TerraceForge.APPROACH_CLEAR + 2) {
+                        pinesBeside++;
+                    }
+                }
+                check("★소나무 줄기가 산문 정면 투영(반폭 " + TerraceForge.TREE_CLEAR_HALF
+                                + " · 깊이 " + TerraceForge.TREE_CLEAR_DEPTH + ") 밖에 선다",
+                        trunkInProjection == 0, trunkInProjection + "그루");
+                // ★헛것을 지키는 눈 막기 — 그 깊이에 소나무가 <b>실제로</b> 서야 계약이 산다
+                //   (한 그루도 안 서면 위 눈은 0 으로 조용히 통과한다. 실제로 가리던 것이 i15 다)
+                check("★그 깊이에 소나무가 실재한다 (눈이 헛것을 지키지 않는다)",
+                        pinesInDepth >= 1, pinesInDepth + "그루");
+                check("★그 밖의 소나무는 그대로 곁에 선다 (밀어내기만 한 것이 아니다)",
+                        pinesBeside >= 2, pinesBeside + "그루");
+            }
         }
 
         check("★16 결정론 — 같은 자리는 같은 결",

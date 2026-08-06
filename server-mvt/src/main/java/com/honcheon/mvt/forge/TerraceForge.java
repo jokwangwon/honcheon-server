@@ -610,14 +610,59 @@ public final class TerraceForge {
     /** 소나무 주기 — 회랑 밖에 좌우 번갈아 (★{@link #GREEN} 이 꺼져 있으면 안 선다) */
     public static final int PINE_EVERY = Math.max(8, APPROACH_LEN / 4);
 
+    // ══════════════════════════════════════════════════════════════════
+    // ★★문전(門前) 비움 — <b>산문의 첫인상은 중앙축이 한 번에 뚫려 보여야 한다</b>
+    //   (사용자 확정 2026-08-06 — 인수인계 §4-표준 ㉦ 「미해결·결정 대기」의 답)
+    //
+    //   ★진단이 바뀌었다: 문제는 <b>보행 폭이 아니라 문간의 시각 폭</b>이다. 통로를 7 로
+    //   넓혔는데도 정면에서는 「깃대 | 적주 | 문살 | 통로 | 적주 | 등롱」으로 읽혀 다시
+    //   5칸으로 압축돼 보인다 — <b>독립된 수직 구조물이 적주보다 앞에 서서</b> 문루의
+    //   위계를 나눠 먹기 때문이다. 넓히는 것으로는 못 고친다. 비워야 고쳐진다.
+    //
+    //   ★역할을 가른다: <b>깃대는 계단의 리듬</b>을 맡고, <b>문 앞 조명은 산문 건축에
+    //   붙인다</b>. 그래서 문전 구간에는 독립 수직물이 서지 않고, 낮은 석등 한 쌍만 난간에
+    //   붙어 선다. 깃대의 첫 자리는 11칸 전이 참의 외곽 모서리(±8)로 내려간다.
+    //
+    //   ★비석(±AXIS_CLEAR)의 계약과 다른 자다: 저것은 <b>두께</b>가 시야를 가리는 문제였고
+    //   (「가리는 정도는 높이가 아니라 두께가 정한다」 · 2026-08-05), 이것은 <b>문간에서만</b>
+    //   가는 소품조차 위계를 나눠 먹는 문제다. 그래서 구간이 붙는다 — 문 앞에서는 가늘어도
+    //   안 되고, 계단에서는 여전히 난간 위에 선다.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** 문전 구간의 끝(배타) — i 0~17. 문 앞 폭 7 구간과 <b>같은 경계</b>다 */
+    public static final int FORECOURT_TO = WIDEN_FROM;                 // 18
+
+    /** 문전 구간 소품의 최대 높이 (선 자리 위로) — 낮은 석등 3칸 */
+    public static final int FORECOURT_MAX_H = 3;
+
+    /**
+     * 문간 <b>시각</b> 여유 반폭 — 이 안에는 높은 소품이 서지 않는다.
+     * ★보행 반폭(3)과 다른 자다: 통로가 7칸이라는 뜻이 아니라, 문간 앞에서 높은 장식물이
+     * 차지하지 않아야 할 <b>시각적</b> 여유다 (사용자 규정).
+     */
+    public static final int FORECOURT_CLEAR = 5;
+
+    /** 문 앞 낮은 석등이 서는 행 — <b>한 쌍만</b> (좌우 대칭 · 난간 부착) */
+    public static final int FORECOURT_LANTERN_I = 2;
+
+    /**
+     * 전이 참 깃대의 축선 오프셋 — 11칸 참의 <b>외곽 모서리</b>. 그 행의 난간(±6) 밖이라
+     * 보행에도, 문간 시야에도 안 든다.
+     */
+    public static final int LANDING_BANNER_OFF = 8;
+
     /**
      * ★D-21 깃대 주기 — 목표 1호 실측 <b>세로 간격 8~10</b>. 좌우 <b>쌍</b>으로 선다
      * (목표 사진에도 계단 양옆에 있다). 소나무처럼 번갈아 두면 열이 끊겨 시선을 못 이끈다.
      */
     public static final int BANNER_EVERY = 9;
 
-    /** 깃대 첫 자리 — 계단 아랫머리에서 조금 올라온 곳 (맨 아래 행은 비워 진입을 트인다) */
-    public static final int BANNER_FROM = 6;
+    /**
+     * 깃대 첫 자리 — <b>전이 참의 첫 행</b> (2026-08-06 이전: 6, 즉 문 바로 앞이었다).
+     * 문전 구간을 통째로 비우므로 열은 여기서 시작한다. 주기(9)는 그대로라 계단의 리듬은
+     * 안 흔들린다 — 자리만 아래로 옮겼다.
+     */
+    public static final int BANNER_FROM = FORECOURT_TO;
 
     /** ★D-22 석등 주기 — 목표 1호 실측 <b>간격 10~12</b>. 좌우 <b>번갈아</b> 선다 */
     public static final int LANTERN_EVERY = 11;
@@ -691,6 +736,9 @@ public final class TerraceForge {
      * (한 자리에 둘을 세우면 뒤엣것이 앞엣것을 덮어 <b>조용히 하나가 사라진다</b>).
      */
     public static boolean isLanternRow(int i, boolean left) {
+        if (i < FORECOURT_TO) {
+            return false;            // ★문전 구간 — 높은 독립 등롱은 안 선다 (낮은 한 쌍만)
+        }
         if (isFlagpoleRow(i) || i < LANTERN_FROM) {
             return false;
         }
@@ -699,17 +747,87 @@ public final class TerraceForge {
     }
 
     /**
+     * 그 행에 <b>문 앞 낮은 석등</b>이 서는가 — 문전 구간에 <b>한 쌍만</b>, 좌우 대칭.
+     * 높은 독립 등롱({@code stoneLantern})의 자리를 대신한다.
+     */
+    public static boolean isForecourtLanternRow(int i) {
+        return i == FORECOURT_LANTERN_I && i < FORECOURT_TO;
+    }
+
+    /** 높은 등롱 높이 — 기둥 2 + 발광체 1 + 갓 1 */
+    public static final int LANTERN_H = 4;
+
+    /**
+     * 그 행 그 쪽에 서는 소품의 <b>높이</b> (선 자리 위로 · 0 이면 난간 갓뿐).
+     * <b>눈이 이 표로 잰다</b> — 조성과 한 식이라 어긋날 수 없다.
+     */
+    public static int propHeight(int i, boolean left) {
+        if (!PROPS) {
+            return 0;
+        }
+        if (isFlagpoleRow(i)) {
+            return FLAG_CROSS_Y;
+        }
+        if (isLanternRow(i, left)) {
+            return LANTERN_H;
+        }
+        if (isForecourtLanternRow(i)) {
+            return FORECOURT_MAX_H;
+        }
+        return 0;
+    }
+
+    /**
+     * 그 행 소품의 <b>축선 오프셋</b> — 보통은 난간 캡 위(그 행의 보행 폭 밖)지만,
+     * 전이 참의 깃대만 난간 밖 ±{@link #LANDING_BANNER_OFF} 에 선다.
+     */
+    public static int propOff(int i) {
+        if (isFlagpoleRow(i) && i < WIDEN_TO) {
+            return LANDING_BANNER_OFF;
+        }
+        return approachHalf(i) + 1;
+    }
+
+    /**
+     * 접근로 소나무의 축선 오프셋 — 기본은 회랑(±{@link #APPROACH_CLEAR}) 바로 밖이지만,
+     * <b>문전 구간에서는 산문 정면 투영 밖</b>으로 더 민다.
+     *
+     * <p>★2026-08-06 사용자 지적: 「나무가 없다」가 아니라 <b>「나무가 건축을 가리지
+     * 않는다」</b>가 계약인데, 기준 카메라(산문 정면)에서 오른쪽 소나무의 <b>줄기</b>가
+     * 산문 정면과 처마를 가로질렀다. 회랑 ±12 는 <b>계단을 덮지 않는</b> 자였지 <b>문루를
+     * 가리지 않는</b> 자가 아니었다 — 비석 때와 같은 종류의 어긋남이다(통행 ≠ 시야).
+     * 수관이 처마를 감싸는 것은 좋다. 막아야 하는 것은 <b>줄기가 문루 앞에 수직으로 겹치는
+     * 것</b>이다.
+     */
+    public static int pineOff(int i) {
+        return i < TREE_CLEAR_DEPTH ? TREE_CLEAR_HALF + 2 : APPROACH_CLEAR + 2;
+    }
+
+    /** 산문 정면 투영 — 이 반폭 안에는 <b>줄기</b>가 서지 않는다 (수관은 무관) */
+    public static final int TREE_CLEAR_HALF = 14;
+
+    /**
+     * 그 투영의 깊이 — 문전 구간과 <b>같은 경계</b>로 잡는다.
+     * ★사용자 규정은 10 이었으나 <b>실제로 가리던 줄기가 i15</b> 라 10 으로는 눈이 그것을
+     * 못 잡는다 (첫 소나무 자리 = i15). 규정을 <b>바닥값</b>으로 읽고 문전 구간(18)까지
+     * 올렸다 — 이번 회차 결정(「오른쪽 소나무 줄기: 정면 투영 밖으로 이동」)을 눈이 실제로
+     * 지키게 하려면 이 깊이여야 한다.
+     */
+    public static final int TREE_CLEAR_DEPTH = FORECOURT_TO;
+
+    /**
      * 접근로 부속이 앉는 행 인덱스 전부 — <b>눈이 이 표로 범위를 잰다</b> (같은 식이라
      * 조성과 어긋날 수 없다). 소문·비석·소나무 순.
      */
     public static int[] approachFixtureIndices() {
         int pines = (APPROACH_LEN - 15 + PINE_EVERY - 1) / PINE_EVERY;
         int banners = (APPROACH_LEN - BANNER_FROM + BANNER_EVERY - 1) / BANNER_EVERY;
-        int[] out = new int[3 + Math.max(0, pines) + Math.max(0, banners)];
+        int[] out = new int[4 + Math.max(0, pines) + Math.max(0, banners)];
         out[0] = GATE_I;
         out[1] = STELE_A;
         out[2] = STELE_B;
-        int w = 3;
+        out[3] = FORECOURT_LANTERN_I;          // 문 앞 낮은 석등 한 쌍도 눈이 범위를 잰다
+        int w = 4;
         for (int k = 0; k < Math.max(0, pines); k++) {
             out[w++] = 15 + k * PINE_EVERY;
         }
@@ -810,15 +928,31 @@ public final class TerraceForge {
                 fillDown(world, x, by, z, tally);
                 world.getBlockAt(x, by, z).setType(Material.STONE_BRICKS, false);
                 boolean left = side < 0;
-                if (PROPS && isFlagpoleRow(i)) {
-                    // ★D-21 깃대 — 난간 캡 위, 좌우 쌍 (목표 1호의 자리)
+                if (PROPS && isFlagpoleRow(i) && i >= WIDEN_TO) {
+                    // ★D-21 깃대 — 난간 캡 위, 좌우 쌍 (목표 1호의 자리). ★문전 구간과
+                    //   전이 참은 제외한다 — 참의 깃대는 난간 밖 ±8 에 따로 선다.
                     flagpole(world, x, by, z, tally);
                 } else if (PROPS && isLanternRow(i, left)) {
                     // ★D-22 석등 — 난간 캡 위, 좌우 번갈아 (목표 실측 간격 10~12)
                     stoneLantern(world, x, by, z, tally);
+                } else if (PROPS && isForecourtLanternRow(i)) {
+                    // ★문 앞 조명 — 난간에 <b>붙는</b> 낮은 석등 한 쌍 (3칸 · 좌우 대칭)
+                    lowLantern(world, x, by, z, tally);
                 } else {
                     world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICK_WALL, false);
                     tally.parapet++;
+                }
+            }
+            if (PROPS && isFlagpoleRow(i) && i < WIDEN_TO) {
+                // ★깃대 첫 쌍 — 11칸 전이 참의 <b>외곽 모서리</b>(±8). 난간(±6) 밖이라
+                //   보행에도 문간 시야에도 안 든다. 참 높이까지 대석을 세워 앉힌다
+                //   (지형에 그냥 꽂으면 참과 높이가 갈려 기울어 보인다).
+                for (int side : new int[]{-LANDING_BANNER_OFF, LANDING_BANNER_OFF}) {
+                    int x = a.x() + side;
+                    clearAbove(world, x, by, z, tally);
+                    fillDown(world, x, by, z, tally);
+                    world.getBlockAt(x, by, z).setType(Material.STONE_BRICKS, false);
+                    flagpole(world, x, by, z, tally);
                 }
             }
             if (i == GATE_I + 2) {
@@ -836,7 +970,8 @@ public final class TerraceForge {
             }
             if (GREEN && i >= 15 && (i - 15) % PINE_EVERY == 0) {
                 // ★계단 회랑(±APPROACH_CLEAR) 밖에 선다 — 계단을 덮지 않고 곁을 채운다 (D-16).
-                int off = APPROACH_CLEAR + 2;
+                //   ★문전 구간에서는 산문 <b>정면 투영</b> 밖까지 민다 (2026-08-06 · pineOff).
+                int off = pineOff(i);
                 approachPine(world, a.x() + (((i - 15) / PINE_EVERY) % 2 == 0 ? off : -off), z, tally);
             }
         }
@@ -901,12 +1036,35 @@ public final class TerraceForge {
      * 실측과 거의 일치한다. 갓은 등롱을 덜 가리게 <b>반블록</b>으로 얹는다.
      */
     private static void stoneLantern(World world, int x, int by, int z, Tally tally) {
-        world.getBlockAt(x, by + 1, z).setType(Material.STONE_BRICKS, false);
-        world.getBlockAt(x, by + 2, z).setType(Material.STONE_BRICKS, false);
-        world.getBlockAt(x, by + 3, z).setType(Material.GLOWSTONE, false);          // 등롱 — 1×1 발광 고체
+        lanternOf(world, x, by, z, LANTERN_H, tally);
+    }
+
+    /**
+     * ★문 앞 낮은 석등 — 난간에 <b>붙는</b> {@link #FORECOURT_MAX_H}칸 등롱
+     * (사용자 확정 2026-08-06).
+     *
+     * <p>{@link #stoneLantern} 과 같은 문법이되 <b>기둥 한 켜를 뺀다</b> (4칸 → 3칸).
+     * 문전 구간에서 높이는 곧 위계라, 독립 등롱이 적주보다 앞에 서면 문루의 위계를 나눠 먹는다
+     * — 낮추면 <b>난간의 연장</b>으로 읽혀 축을 안 자른다. 좌우 <b>대칭 한 쌍</b>만 선다
+     * (번갈아 두면 문간이 한쪽으로 기운다).
+     */
+    private static void lowLantern(World world, int x, int by, int z, Tally tally) {
+        lanternOf(world, x, by, z, FORECOURT_MAX_H, tally);
+    }
+
+    /**
+     * 등롱 한 기 — <b>높이 h 를 받아</b> 기둥(h−2켜) · 발광체 · 갓으로 쌓는다.
+     * ★높은 것과 낮은 것이 <b>한 식</b>이라 갈라질 수 없다 — 눈은 {@link #propHeight}
+     * 로 같은 높이를 읽는다.
+     */
+    private static void lanternOf(World world, int x, int by, int z, int h, Tally tally) {
+        for (int dy = 1; dy <= h - 2; dy++) {
+            world.getBlockAt(x, by + dy, z).setType(Material.STONE_BRICKS, false);
+        }
+        world.getBlockAt(x, by + h - 1, z).setType(Material.GLOWSTONE, false);      // 등롱 — 1×1 발광 고체
         Slab cap = (Slab) Material.DEEPSLATE_TILE_SLAB.createBlockData();
         cap.setType(Slab.Type.BOTTOM);
-        world.getBlockAt(x, by + 4, z).setBlockData(cap, false);                    // 갓
+        world.getBlockAt(x, by + h, z).setBlockData(cap, false);                    // 갓
         tally.lanterns++;
     }
 
