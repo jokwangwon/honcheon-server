@@ -561,6 +561,76 @@ public final class TerraceForgeSelfTest {
                     tones.size() == 1, tones.toString());
         }
 
+        // ══════ ★★outer_court_axis — 의례축 (사용자 확정 2026-08-06 · E-02) ══════
+        //   「산문 → 종문을 잇는 의례축 11칸. 축 안에는 지붕·벽·정자·큰 나무 금지.」
+        //   ★사용자 지시: <b>검수는 좌표값보다 교차 여부를 본다</b> — 부품이 옮겨 다녀도
+        //   눈이 따라간다. 발자국은 structureBoxes 가 <b>마른 조성</b>으로 낸다 (선언이 아니다).
+        //   ★산문 ±14 상자를 외원까지 복제하지 <b>않는다</b>: 그것은 근거리 투영 계약이고,
+        //   전체에 늘리면 광장이 「긴 활주로」가 된다 (사용자 판단).
+        {
+            java.util.List<TerraceForge.Pad> ap2 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            int[] axis = TerraceForge.ceremonialAxisBox(ap2);
+            check("★의례축 상자가 산문·종문에서 유도된다 (폭 "
+                            + TerraceForge.CEREMONIAL_AXIS_WIDTH + ")",
+                    axis != null && axis[1] - axis[0] + 1 == TerraceForge.CEREMONIAL_AXIS_WIDTH
+                            && axis[3] > axis[2],
+                    axis == null ? "null" : java.util.Arrays.toString(axis));
+            check("★의례축이 산문 근거리 상자보다 좁다 (활주로가 되지 않는다)",
+                    TerraceForge.ceremonialAxisHalf() < TerraceForge.FACADE_CLEAR_HALF,
+                    "±" + TerraceForge.ceremonialAxisHalf()
+                            + " vs ±" + TerraceForge.FACADE_CLEAR_HALF);
+            int cross = 0;
+            String who = "";
+            for (TerraceForge.Pad p2 : ap2) {
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(p2)) {
+                    if (TerraceForge.boxesOverlap(axis, b)) {
+                        cross++;
+                        who = "구역 " + p2.spec().zone() + " " + java.util.Arrays.toString(b);
+                    }
+                }
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.decorBoxes(p2)) {
+                    if (TerraceForge.boxesOverlap(axis, b)) {
+                        cross++;
+                        who = "구역 " + p2.spec().zone() + " 소품";
+                    }
+                }
+                for (int[] s : com.honcheon.mvt.forge.HwasanCampusBuilder.pineSpots(p2)) {
+                    if (TerraceForge.boxesOverlap(axis, new int[]{s[0], s[0], s[1], s[1]})) {
+                        cross++;
+                        who = "구역 " + p2.spec().zone() + " 소나무";
+                    }
+                }
+            }
+            check("★★의례축을 가로지르는 구조물·소품·큰 나무가 없다 (교차로 잰다)",
+                    cross == 0, cross == 0 ? "0" : cross + "건 · " + who);
+            // ★[눈의 눈] 옛 정자 자리(cx±7)는 실제로 <b>교차</b>여야 한다 — 안 그러면 눈이 헛것을 지킨다
+            TerraceForge.Pad court = ap2.stream().filter(p2 -> p2.spec().zone() == 2)
+                    .findFirst().orElseThrow();
+            int ccx = court.x0() + court.spec().width() / 2;
+            int ccz = court.zN() + court.spec().depth() / 2;
+            check("★[눈의 눈] 옛 정자 자리(cx±7)는 의례축과 교차한다고 답한다",
+                    TerraceForge.boxesOverlap(axis,
+                            new int[]{ccx - 7 - 5, ccx - 7 + 5, ccz + 1, ccz + 11}), "");
+        }
+
+        // ══════ ★surface_ownership — 한 표면에 최종 재료 소유자는 하나다 ══════
+        //   (사용자 확정 2026-08-06) 이번 병의 공통 원인: 첫 생성자가 표면을 확정 →
+        //   뒤 단계가 「의미를 표현한다」며 덧칠 → 정본과 화면이 갈라진다.
+        //   ★소스를 직접 읽어 <b>사암을 도로 칠하는 손이 되살아났는지</b> 본다.
+        try {
+            String src = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            int publicCase = src.indexOf("case 1, 2, 6, 13, 101 ->");
+            String owner = publicCase < 0 ? "" : src.substring(publicCase,
+                    Math.min(src.length(), publicCase + 120));
+            check("★[눈의 눈] 공공 마당의 재료 소유자 줄을 찾았다", publicCase >= 0, "");
+            check("★공공 마당의 소유자가 publicRepave 하나다 (sandyRepave 가 안 되살아났다)",
+                    owner.contains("publicRepave") && !src.contains("sandyRepave("),
+                    owner.trim());
+        } catch (Exception e) {
+            check("★surface_ownership — 소스를 읽는다", false, e.toString());
+        }
+
         check("★비석이 축선 시야 회랑 밖에 선다 (문루 정면을 안 가린다 · D-20)",
                 TerraceForge.AXIS_CLEAR > TerraceForge.APPROACH_CLEAR,
                 "비석 ±" + TerraceForge.AXIS_CLEAR + " vs 회랑 ±" + TerraceForge.APPROACH_CLEAR);
@@ -1067,8 +1137,12 @@ public final class TerraceForgeSelfTest {
                     .filter(p -> p.spec().zone() == 6).findFirst().orElseThrow();
             int plazaParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(plaza).size();
             int jongParts = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jong).size();
-            check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
-                    plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
+            // ★2026-08-06 E-02 — 외원 8 → <b>6</b>. 정자를 의례축 밖(±11)으로 밀고, 그 자리를
+            //   내주느라 <b>남측 행각 두 토막을 뺐다</b> (원래 6행뿐이라 물리면 길이 0 이 되어
+            //   조용히 사라졌다 — 눈이 그것을 잡았다). 행각은 북측 좌우에 남는다.
+            //   구성: 정자2 + 행각2 + 등롱열2 = 6.
+            check("★9 행각 — 외원 6부품(정자2+행각2+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
+                    plazaParts == 6 && jongParts == 5, plazaParts + "/" + jongParts);
             check("★D-25 재료 — 단청(금빛·적목)이 팔레트에",
                     bPal.contains(Material.CUT_SANDSTONE)
                             && bPal.contains(Material.STRIPPED_MANGROVE_WOOD), bPal);

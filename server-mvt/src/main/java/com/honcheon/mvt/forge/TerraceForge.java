@@ -814,6 +814,58 @@ public final class TerraceForge {
     /** 정면 투영 반폭 — 이 안에는 <b>서는 것</b>이 없다 (수관이 처마를 감싸는 것은 무관) */
     public static final int FACADE_CLEAR_HALF = 14;
 
+    // ══════════════════════════════════════════════════════════════════
+    // ★★outer_court_axis — <b>의례축</b> (사용자 확정 2026-08-06)
+    //
+    //   ★위 정면 투영 상자와 <b>다른 자</b>다. 사용자 판단: 「±14 × 깊이 18 은 산문 정면을
+    //   가리지 않기 위한 <b>근거리</b> 투영 계약이라, 외원 전체에 적용하면 광장이 지나치게
+    //   비어 <b>긴 활주로</b>처럼 보인다.」 그래서 외원에는 별도 계약을 둔다:
+    //
+    //     산문 근거리 : 정면 투영 ±14 × 깊이 18 (표고까지 비움) — 그대로
+    //     외원 중앙   : 산문 → 종문을 잇는 <b>의례축 보행 11칸</b>
+    //                   축 안에 지붕·벽·정자·큰 나무 금지 / 낮은 포장 무늬·바닥 조명은 허용
+    //
+    //   ★검수는 <b>좌표값이 아니라 교차 여부</b>로 본다 (사용자 지시) — 부품이 옮겨 다녀도
+    //   눈이 따라간다. 발자국은 {@code HwasanCampusBuilder.structureBoxes} 가 마른 조성으로 낸다.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** 의례축 보행 폭 — 산문 → 종문 */
+    public static final int CEREMONIAL_AXIS_WIDTH = 11;
+
+    /** 그 반폭 (폭 = 2·half + 1) */
+    public static int ceremonialAxisHalf() {
+        return (CEREMONIAL_AXIS_WIDTH - 1) / 2;
+    }
+
+    /**
+     * 의례축 상자 {x0, x1, z0, z1} — 종문 남단부터 산문 북단까지, 축선 ±{@link #ceremonialAxisHalf}.
+     * 두 패드가 다 있어야 낸다 (없으면 {@code null} — 눈이 그것도 잰다).
+     */
+    public static int[] ceremonialAxisBox(List<Pad> pads) {
+        Pad gate = null;
+        Pad mid = null;
+        for (Pad p : pads) {
+            if (p.spec().zone() == 1) {
+                gate = p;
+            }
+            if (p.spec().zone() == 6) {
+                mid = p;
+            }
+        }
+        if (gate == null || mid == null) {
+            return null;
+        }
+        int h = ceremonialAxisHalf();
+        // 종문이 북(작은 z) · 산문이 남(큰 z) — 그 사이가 외원이다
+        return new int[]{gate.cx() - h, gate.cx() + h, mid.zS(), gate.zN()};
+    }
+
+    /** 두 상자가 겹치는가 — {x0,x1,z0,z1} (경계 포함). <b>좌표가 아니라 교차를 잰다</b> */
+    public static boolean boxesOverlap(int[] a, int[] b) {
+        return a != null && b != null
+                && a[0] <= b[1] && b[0] <= a[1] && a[2] <= b[3] && b[2] <= a[3];
+    }
+
     /**
      * 정면 투영 깊이 — 문전 구간과 <b>같은 경계</b>로 잡는다.
      * ★사용자 규정은 10 이었으나 <b>실제로 가리던 줄기가 i15</b> 라 10 으로는 눈이 그것을

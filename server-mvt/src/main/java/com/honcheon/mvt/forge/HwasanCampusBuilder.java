@@ -150,14 +150,26 @@ public final class HwasanCampusBuilder {
                     //   수직 소품은 전부 회랑 밖에 선다 — 통행의 폭이 아니라 시야의 폭이 기준이다.
                     (w, p, t) -> lanternRow(w, p, cx - TerraceForge.AXIS_CLEAR, p.zN() + p.spec().depth() / 2 + 6, p.zS() - 2, t),
                     (w, p, t) -> lanternRow(w, p, cx + TerraceForge.AXIS_CLEAR, p.zN() + p.spec().depth() / 2 + 6, p.zS() - 2, t));
-            case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 7, cz + 6, 3, t),  // 외원 — 대칭 정자 · 중앙 여백 (원작 11호)
-                    (w, p, t) -> pavilion(w, p, cx + 7, cz + 6, 3, t),
+            // ══ 외원 (2026-08-06 사용자 확정 · E-02) ══
+            //   「중앙: 비운 축과 계단 / 좌우 중간: 정원·매화·석등 / 좌우 모서리: 정자 / 외곽: 행각」
+            //   ★옛 자리 cx±7 은 <b>의례축(11) 위</b>였다 — 정자 두 채가 산문→종문 축을 나눠 먹었다.
+            //   ★띠를 넷 다 두려면 폭이 모자란다 (실측: 패드 32 = 축 11 + 행각 7×2 + 남은 7).
+            //     그래서 <b>z 로 가른다</b>: 행각 남단을 물려 <b>남쪽 두 모서리</b>를 비우고,
+            //     도착해서 처음 만나는 그 자리에 정자를 앉힌다 (정자는 축의 주인공이 아니라
+            //     둘러보거나 기다리는 곳이다 — 사용자).
+            //   ★자리를 두 번 고쳤다. 눈이 둘 다 잡았다 (실측이 배치 제약을 짚었다):
+            //     ① cx±7·half 3 → <b>동쪽 정자가 의례축 경계에 1칸 물렸다</b> (패드 폭 32 는
+            //        짝수라 동쪽 반이 서쪽보다 한 칸 좁다) → 축에서 ±11 · half 2 로.
+            //     ② 남쪽 행각을 물려 모서리를 비우려 했더니 그 토막이 <b>길이 0 이 되어
+            //        조용히 사라졌다</b> (남측 행각은 원래 6행뿐이다) → 남측 행각을 <b>뺀다</b>.
+            //        행각은 북측 좌우로 남고, 남쪽 두 모서리가 정자의 자리가 된다.
+            //   ★그래서 외원 부품이 8 → 6 이다. 그 눈을 고치는 것이 곧 이 결정의 기록이다.
+            case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 11, p.zS() - 7, 2, t),
+                    (w, p, t) -> pavilion(w, p, cx + 11, p.zS() - 7, 2, t),
                     // ★9b — 행각은 칸 중앙 통로(cz±5)에서 갈린다: 소계단 착지의 보행 연장선이
                     //   기둥 열을 밟지 않는다 (실기동 보행 2건의 처방 — 어귀는 비워 두는 것)
                     (w, p, t) -> cloister(w, p, p.x0() + 4, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> cloister(w, p, p.x0() + 4, cz + 6, p.zS() - 4, t),
                     (w, p, t) -> cloister(w, p, p.x1() - 5, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> cloister(w, p, p.x1() - 5, cz + 6, p.zS() - 4, t),
                     (w, p, t) -> lanternRow(w, p, cx - TerraceForge.AXIS_CLEAR, p.zN() + 3, cz - 3, t),
                     (w, p, t) -> lanternRow(w, p, cx + TerraceForge.AXIS_CLEAR, p.zN() + 3, cz - 3, t));
             case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 7, 10, t),   // 종문 21 (9b — 중층 마감 · 산문<)
