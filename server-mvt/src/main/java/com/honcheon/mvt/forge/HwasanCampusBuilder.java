@@ -164,14 +164,32 @@ public final class HwasanCampusBuilder {
             //        조용히 사라졌다</b> (남측 행각은 원래 6행뿐이다) → 남측 행각을 <b>뺀다</b>.
             //        행각은 북측 좌우로 남고, 남쪽 두 모서리가 정자의 자리가 된다.
             //   ★그래서 외원 부품이 8 → 6 이다. 그 눈을 고치는 것이 곧 이 결정의 기록이다.
+            //   ★★E-03 (사용자 확정): 행각은 <b>북·서·동 삼면</b>, <b>남측은 열린다</b>
+            //     (산문에서 들어서자마자 지붕·벽에 둘러싸이면 답답하고 깊이가 잘린다).
+            //     ㄷ자 한 채로 <b>합치지 않는다</b> — 네 모듈 + 모서리 <b>열린 전이칸</b>.
+            //     패드 로컬(32×32) 자리 — 의례축은 11~21 이라 북측 둘이 그 밖에서 갈린다:
+            //       북서 x1~10 z1~5 · 북동 x22~31 z1~5   (동서 방향)
+            //       서   x1~5 z8~17 · 동   x27~31 z8~17  (남북 방향)
+            //       모서리 전이칸 z6~7 (2칸) · 정자와의 이격 z18~19 (2칸)
             case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 11, p.zS() - 7, 2, t),
                     (w, p, t) -> pavilion(w, p, cx + 11, p.zS() - 7, 2, t),
-                    // ★9b — 행각은 칸 중앙 통로(cz±5)에서 갈린다: 소계단 착지의 보행 연장선이
-                    //   기둥 열을 밟지 않는다 (실기동 보행 2건의 처방 — 어귀는 비워 두는 것)
-                    (w, p, t) -> cloister(w, p, p.x0() + 4, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> cloister(w, p, p.x1() - 5, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> lanternRow(w, p, cx - TerraceForge.AXIS_CLEAR, p.zN() + 3, cz - 3, t),
-                    (w, p, t) -> lanternRow(w, p, cx + TerraceForge.AXIS_CLEAR, p.zN() + 3, cz - 3, t));
+                    // 북서·북동 — 동서로 뻗고 바깥(북)을 닫는다
+                    (w, p, t) -> corridor(w, p, p.x0() + 1, p.zN() + 1, 10, false, -1, t),
+                    (w, p, t) -> corridor(w, p, p.x0() + 22, p.zN() + 1, 10, false, -1, t),
+                    // 서·동 — 남북으로 뻗고 바깥(각 옆면)을 닫는다.
+                    //   ★★길이 6 인 까닭은 <b>실측</b>이다: 측면 계단 어귀가 <b>로컬 z16</b>(반폭 1)
+                    //     으로 들어온다 (서 world(-18,148) · 동 world(14,148)). 처음 10 으로 뻗었더니
+                    //     그 어귀를 막아 「구조물이 계단 통로를 막는다」로 눈이 짖었다.
+                    //     그래서 어귀 위쪽(z8~13)에만 선다 — 모서리 전이칸 z7 · 어귀 여유 z14.
+                    //   ★동측은 x0+26 이다 (27 이면 처마 한 칸이 패드 밖으로 나가 계율 #4 가 짖는다 —
+                    //     폭 5 + 처마 ±1 = 7 이라 x0+26~x0+31 이 마지막 자리다. 이것도 눈이 잡았다)
+                    (w, p, t) -> corridor(w, p, p.x0() + 1, p.zN() + 8, 6, true, -1, t),
+                    (w, p, t) -> corridor(w, p, p.x0() + 26, p.zN() + 8, 6, true, 1, t),
+                    // ★등롱 열도 옮긴다 — 옛 자리(cx±13)는 <b>새 행각 안</b>이었다 (서측 행각이
+                    //   로컬 x1~5 를 쓴다). 이제 <b>의례축과 행각 사이의 빈 띠</b>(로컬 x8·24)에
+                    //   선다. 남쪽은 정자 자리라 z 는 어귀 위까지만 (로컬 4~18).
+                    (w, p, t) -> lanternRow(w, p, p.x0() + 8, p.zN() + 4, p.zN() + 18, t),
+                    (w, p, t) -> lanternRow(w, p, p.x0() + 24, p.zN() + 4, p.zN() + 18, t));
             case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 7, 10, t),   // 종문 21 (9b — 중층 마감 · 산문<)
                     (w, p, t) -> cloister(w, p, p.x0() + 4, p.zN() + 4, cz - 6, t),
                     (w, p, t) -> cloister(w, p, p.x0() + 4, cz + 6, p.zS() - 4, t),
@@ -1217,6 +1235,30 @@ public final class HwasanCampusBuilder {
      * 맞배 반블록 지붕. 양쪽이 열려 있어 통행을 막지 않는다 — 이웃 칸 개구·계단 어귀와
      * 부딪치지 않게 배치는 {@link #parts} 가 정한다.
      */
+    // ══════════════════════════════════════════════════════════════════
+    // ★★★outer_court_corridor — 행각 (사용자 확정 2026-08-06 · E-03)
+    //
+    //   옛 행각은 <b>기둥 + 검은 지붕뿐</b>이라 회랑이 아니라 <b>퍼걸러</b>로 읽혔다.
+    //   사용자 판정: 회랑은 재료만이 아니라 두 조건으로 성립한다 —
+    //     ① 마당의 <b>경계를 연속</b>으로 만든다  ② 중앙축과 <b>별개의 측면 동선</b>을 준다.
+    //
+    //   ★삼면(북·서·동) · 남측 개방 · <b>ㄷ자 한 채로 합치지 않는다</b>:
+    //   낮은 맞배를 90° 로 꺾으면 접합부가 쓸데없이 복잡해지고 한 도면이 너무 많은 역할을 진다.
+    //   그래서 <b>네 모듈</b>(북서·북동·서·동)이고, 모서리에는 <b>열린 전이칸</b>을 둔다
+    //   (지붕 충돌 방지 · 산세를 보는 틈 · 등롱 자리 · 방향 전환 · 정자와의 위계 구분).
+    //
+    //   ★산문과 <b>공유</b>: 붉은 적주 · 회벽 · 짙은 격자창 · 어두운 지붕 · 석재 기단 · 적주 모듈
+    //   ★산문보다 <b>낮춤</b>: 단층 · 낮은 맞배 · 얕은 처마 · 기단 1단 · 공포 최소 · 현판 없음
+    //   ★안팎: 마당 쪽은 붉은 기둥 사이로 <b>열리고</b>, 외곽 쪽은 회벽+격자창으로 <b>닫힌다</b>.
+    //   ★반복 단위(외곽 면): <b>적주 | 회벽 | 격자창 | 회벽 |</b> (주기 4) — 긴 벽이 한 덩어리로
+    //     보이지 않게. 같은 문법을 쓰되 산문의 복사본으로 읽히지 않는다.
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * 옛 행각 — <b>개방 열주 복도</b> (기둥 + 맞배 지붕뿐). ★E-03 이 「퍼걸러로 읽힌다」로
+     * 판정한 그 형태다. <b>외원은 {@link #corridor} 로 갈아탔고</b>, 종문(6)·중정(101)은
+     * 아직 이것을 쓴다 — 그 구역의 회차에서 함께 간다. <b>「고쳤다」고 안 하는 것이 규약이다.</b>
+     */
     private static void cloister(World world, TerraceForge.Pad pad, int x0, int z0, int z1, Tally tally) {
         int y = pad.y();
         int x1 = x0 + 4;   // 폭 5
@@ -1228,8 +1270,6 @@ public final class HwasanCampusBuilder {
                     }
                 }
             }
-            // 맞배 지붕 — ★12-③ 두 겹 (원거리에서 「선」으로 읽히던 것의 처방): 처마 내밈
-            //   반블록(y+4) → 가장자리 반블록 + 물매 계단(y+5) → 중심 통기와 + 용마루 반블록(y+6)
             put(world, pad, x0 - 1, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
             put(world, pad, x1 + 1, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
             put(world, pad, x0, y + 5, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
@@ -1243,6 +1283,100 @@ public final class HwasanCampusBuilder {
             }
         }
         tally.cloisters++;
+    }
+
+    /** 행각 폭 (기둥 열 둘 + 보행 3) */
+    public static final int CORRIDOR_WIDTH = 5;
+    /** 행각 벽 높이 — 단층 (산문 하층 6 보다 낮다) */
+    public static final int CORRIDOR_WALL_H = 4;
+    /** 외곽 면 반복 주기 — 적주 | 회벽 | 격자창 | 회벽 */
+    public static final int CORRIDOR_BAY = 4;
+
+    /**
+     * 행각 한 모듈 — {@code alongZ} 면 남북으로, 아니면 동서로 뻗는다.
+     * {@code outerSide} 는 <b>닫히는</b> 쪽(외곽)의 부호(-1/+1) — 마당 쪽은 저절로 열린다.
+     */
+    private static void corridor(World world, TerraceForge.Pad pad, int x0, int z0,
+                                 int len, boolean alongZ, int outerSide, Tally tally) {
+        int y = pad.y();
+        for (int t = 0; t < len; t++) {
+            for (int w = 0; w < CORRIDOR_WIDTH; w++) {
+                int x = alongZ ? x0 + w : x0 + t;
+                int z = alongZ ? z0 + t : z0 + w;
+                put(world, pad, x, y + 1, z, Material.SMOOTH_STONE, tally);   // 기단 1단 (걷는 면)
+            }
+            int bay = Math.floorMod(t, CORRIDOR_BAY);
+            // 안쪽(마당) 기둥 열과 바깥쪽(외곽) 면 — 폭 방향의 두 끝
+            int wIn = outerSide > 0 ? 0 : CORRIDOR_WIDTH - 1;
+            int wOut = outerSide > 0 ? CORRIDOR_WIDTH - 1 : 0;
+            for (int dy = 2; dy <= CORRIDOR_WALL_H + 1; dy++) {
+                if (bay == 0) {                                   // ★적주 — 안팎 모두
+                    for (int w : new int[]{wIn, wOut}) {
+                        int x = alongZ ? x0 + w : x0 + t;
+                        int z = alongZ ? z0 + t : z0 + w;
+                        put(world, pad, x, y + dy, z, Material.STRIPPED_MANGROVE_LOG, tally);
+                    }
+                } else {                                          // ★외곽 면만 닫는다
+                    int x = alongZ ? x0 + wOut : x0 + t;
+                    int z = alongZ ? z0 + t : z0 + wOut;
+                    Material m = bay == 2 ? Material.DARK_OAK_TRAPDOOR : Material.BONE_BLOCK;
+                    if (m == Material.DARK_OAK_TRAPDOOR) {
+                        standLattice(world, pad, x, y + dy, z, alongZ, outerSide, tally);
+                    } else {
+                        put(world, pad, x, y + dy, z, m, tally);
+                    }
+                }
+            }
+            // 낮은 맞배 — 얕은 처마(반블록 한 칸) → 물매 → 용마루. 산문과 같은 어두운 계열
+            int rY = y + CORRIDOR_WALL_H + 2;
+            for (int w = -1; w <= CORRIDOR_WIDTH; w++) {
+                int x = alongZ ? x0 + w : x0 + t;
+                int z = alongZ ? z0 + t : z0 + w;
+                if (w < 0 || w >= CORRIDOR_WIDTH) {
+                    put(world, pad, x, rY, z, Material.DEEPSLATE_TILE_SLAB, tally);   // 처마 내밈
+                } else if (w == CORRIDOR_WIDTH / 2) {
+                    put(world, pad, x, rY, z, Material.DEEPSLATE_TILES, tally);
+                    put(world, pad, x, rY + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);   // 용마루
+                } else {
+                    putRoofStair(world, pad, x, rY, z, gableFace(w, alongZ), tally);
+                }
+            }
+            if (bay == 2) {                                       // 복도 등롱 — 격자칸마다
+                int x = alongZ ? x0 + CORRIDOR_WIDTH / 2 : x0 + t;
+                int z = alongZ ? z0 + t : z0 + CORRIDOR_WIDTH / 2;
+                put(world, pad, x, y + CORRIDOR_WALL_H + 1, z, Material.LANTERN, tally);
+            }
+        }
+        tally.cloisters++;
+    }
+
+    /** 맞배 물매의 면 — 폭 가운데(용마루)를 향해 오른다 */
+    private static org.bukkit.block.BlockFace gableFace(int w, boolean alongZ) {
+        boolean low = w < CORRIDOR_WIDTH / 2;
+        if (alongZ) {
+            return low ? org.bukkit.block.BlockFace.WEST : org.bukkit.block.BlockFace.EAST;
+        }
+        return low ? org.bukkit.block.BlockFace.NORTH : org.bukkit.block.BlockFace.SOUTH;
+    }
+
+    /**
+     * 격자창 한 칸 — 트랩도어를 <b>세운다</b>. ★눕히면 칸이 <b>구멍</b>이 되어 그 너머가 비친다
+     * (산문에서 이미 데인 자리 — BlueprintBuilder.stand 와 같은 처방).
+     */
+    private static void standLattice(World world, TerraceForge.Pad pad, int x, int y, int z,
+                                     boolean alongZ, int outerSide, Tally tally) {
+        put(world, pad, x, y, z, Material.DARK_OAK_TRAPDOOR, tally);
+        if (world == null) {
+            return;      // ★마른 조성 — 발자국만 센다 (put 과 같은 규약. 여기서 터진 적 있다)
+        }
+        org.bukkit.block.Block b = world.getBlockAt(x, y, z);
+        if (b.getBlockData() instanceof org.bukkit.block.data.type.TrapDoor td) {
+            td.setOpen(true);                     // 세운다 — 살창이 눕지 않는다
+            td.setFacing(alongZ
+                    ? (outerSide > 0 ? org.bukkit.block.BlockFace.WEST : org.bukkit.block.BlockFace.EAST)
+                    : (outerSide > 0 ? org.bukkit.block.BlockFace.NORTH : org.bukkit.block.BlockFace.SOUTH));
+            b.setBlockData(td, false);
+        }
     }
 
     /**
@@ -1823,6 +1957,10 @@ public final class HwasanCampusBuilder {
                 Material.CUT_SANDSTONE, Material.CUT_SANDSTONE_SLAB,            //   은은한 금빛 (실측 S26%)
                 Material.SAND, Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
+                // ★E-03 행각 — 산문과 <b>공유</b>하는 재료 (신고와 실물을 맞춘다:
+                //   「신고표가 실물보다 넓으면 눈이 헛것을 지킨다」의 반대쪽 — 좁아도 짖는다)
+                Material.DARK_OAK_TRAPDOOR, Material.SMOOTH_STONE,
+                Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
                 Material.CHEST, Material.LANTERN, Material.AIR);
     }
 

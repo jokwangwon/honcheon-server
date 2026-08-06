@@ -613,6 +613,120 @@ public final class TerraceForgeSelfTest {
                             new int[]{ccx - 7 - 5, ccx - 7 + 5, ccz + 1, ccz + 11}), "");
         }
 
+        // ══════ ★★outer_court_corridor — 행각 삼면 (사용자 확정 2026-08-06 · E-03) ══════
+        //   회랑은 재료만이 아니라 두 조건으로 성립한다 (사용자): ① 마당의 경계를 연속으로
+        //   만든다 ② 중앙축과 <b>별개의 측면 동선</b>을 준다. 옛 행각은 기둥+지붕뿐이라
+        //   <b>퍼걸러</b>였고, 북측 좌우 두 토막뿐이라 <b>작은 두 채</b>로 읽혔다.
+        //   ★남측은 <b>닫지 않는다</b> — 산문에서 들어서자마자 둘러싸이면 깊이가 잘린다.
+        {
+            java.util.List<TerraceForge.Pad> ap3 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad court = ap3.stream().filter(p2 -> p2.spec().zone() == 2)
+                    .findFirst().orElseThrow();
+            int[] axis3 = TerraceForge.ceremonialAxisBox(ap3);
+            java.util.List<int[]> boxes =
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(court);
+            int cn = court.zN();
+            int cs = court.zS();
+            boolean north = false;
+            boolean west = false;
+            boolean east = false;
+            boolean south = false;
+            int corridors = 0;
+            for (int[] b : boxes) {
+                // ★행각과 정자를 <b>가로세로 비</b>로 가른다 (길이가 아니라). 행각은 폭이 얇고
+                //   (폭 5 + 처마 2 = 7), 정자는 거의 정사각(9×9)이다. 처음엔 「긴 쪽 ≥8」로
+                //   갈랐다가 정자까지 행각으로 세어 「남측이 닫혔다」고 잘못 짖었다.
+                int ss = Math.min(b[1] - b[0] + 1, b[3] - b[2] + 1);
+                if (ss < 5 || ss > 7) {
+                    continue;         // 정자(9)도 등롱 열(1)도 행각이 아니다
+                }
+                corridors++;
+                if (b[2] <= cn + 6) {
+                    north = true;
+                }
+                if (b[3] >= cs - 6) {
+                    south = true;                                      // 남측을 닫으면 짖는다
+                }
+                // ★방향이 아니라 <b>어느 가장자리에 붙었는가</b>로 가른다. 처음엔 「z 로 긴 것」을
+                //   측면으로 읽었는데, 측면 모듈은 어귀를 피하느라 6칸이라 <b>폭(7)보다 짧다</b> —
+                //   그 자로는 영영 측면이 없다. 실측이 자를 고쳤다.
+                boolean northRow = b[2] <= cn + 6;
+                if (!northRow && b[0] <= court.x0() + 2) {
+                    west = true;
+                }
+                if (!northRow && b[1] >= court.x1() - 2) {
+                    east = true;
+                }
+            }
+            check("★행각이 북·서·동 삼면에 있다", north && west && east,
+                    "북 " + north + " · 서 " + west + " · 동 " + east);
+            check("★남측은 열린다 (산문에서 들어서는 깊이를 안 자른다)", !south, south);
+            check("★행각이 네 모듈이다 (ㄷ자 한 채로 합치지 않는다)", corridors >= 4, corridors + "토막");
+            int cross3 = 0;
+            for (int[] b : boxes) {
+                if (TerraceForge.boxesOverlap(axis3, b)) {
+                    cross3++;
+                }
+            }
+            check("★행각·정자가 의례축을 침범하지 않는다", cross3 == 0, cross3);
+            // ★모서리 전이칸과 정자 이격 — 붙으면 지붕이 꺾이고 정자가 「행각의 끝방」이 된다
+            java.util.List<int[]> longBoxes = new java.util.ArrayList<>();
+            java.util.List<int[]> pavBoxes = new java.util.ArrayList<>();
+            for (int[] b : boxes) {
+                int shortSide = Math.min(b[1] - b[0] + 1, b[3] - b[2] + 1);
+                if (shortSide >= 5 && shortSide <= 7) {
+                    longBoxes.add(b);          // 행각 — 폭 5 + 처마 2
+                } else if (shortSide >= 8) {
+                    pavBoxes.add(b);           // 정자 — 거의 정사각(9)
+                }
+                // 그 밖(등롱 열처럼 <b>얇은</b> 것)은 이격의 대상이 아니다 — 사물이지 건물이 아니다
+            }
+            int touching = 0;
+            for (int[] a : longBoxes) {
+                for (int[] b2 : pavBoxes) {
+                    if (TerraceForge.boxesOverlap(
+                            new int[]{a[0] - 1, a[1] + 1, a[2] - 1, a[3] + 1}, b2)) {
+                        touching++;
+                    }
+                }
+                for (int[] b2 : longBoxes) {
+                    if (a != b2 && TerraceForge.boxesOverlap(
+                            new int[]{a[0] - 1, a[1] + 1, a[2] - 1, a[3] + 1}, b2)) {
+                        touching++;
+                    }
+                }
+            }
+            check("★모듈끼리·정자와 붙지 않는다 (모서리 전이칸 · 정자 이격)",
+                    touching == 0, touching + "쌍");
+        }
+
+        // ══════ ★corridor_facade — 퍼걸러로 되돌아가는 것을 잡는 눈 ══════
+        //   ★수치는 건축 정답이 아니다 (사용자): 「기둥과 지붕만 남은 퍼걸러」로 회귀하는 것을
+        //   잡는 자다. 반복 단위는 <b>적주 | 회벽 | 격자창 | 회벽</b> (주기 4).
+        {
+            int bay = com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_BAY;
+            // 외곽 면: 주기 4 중 적주 1 + 회벽 2 + 격자 1 → 닫힌 칸 3/4
+            double outerClosed = (bay - 1) / (double) bay;
+            // 마당 면: 주기 4 중 적주 1 뿐 → 열린 칸 3/4
+            double courtOpen = (bay - 1) / (double) bay;
+            check("★외곽 면이 닫힌다 (회벽+격자 ≥ 0.55)", outerClosed >= 0.55,
+                    String.format("%.2f", outerClosed));
+            check("★마당 면이 열린다 (기둥 사이 ≥ 0.60)", courtOpen >= 0.60,
+                    String.format("%.2f", courtOpen));
+            check("★반복 단위가 한 덩어리 벽이 아니다 (주기 " + bay + " — 적주|회벽|격자|회벽)",
+                    bay >= 3 && bay <= 5, bay);
+            check("★행각이 산문보다 낮다 (단층 — 위계 auxiliary)",
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_WALL_H < 6,
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_WALL_H + " vs 산문 하층 6");
+            // ★[눈의 눈] 산문과 <b>공유</b>하는 재료가 실제로 팔레트에 있는가 (복사가 아니라 공유)
+            java.util.Set<Material> pal = com.honcheon.mvt.forge.HwasanCampusBuilder.palette();
+            check("★행각이 산문의 재료를 공유한다 (적주·회벽·격자·어두운 지붕·석재 기단)",
+                    pal.contains(Material.STRIPPED_MANGROVE_LOG) && pal.contains(Material.BONE_BLOCK)
+                            && pal.contains(Material.DARK_OAK_TRAPDOOR)
+                            && pal.contains(Material.DEEPSLATE_TILES)
+                            && pal.contains(Material.SMOOTH_STONE), "");
+        }
+
         // ══════ ★surface_ownership — 한 표면에 최종 재료 소유자는 하나다 ══════
         //   (사용자 확정 2026-08-06) 이번 병의 공통 원인: 첫 생성자가 표면을 확정 →
         //   뒤 단계가 「의미를 표현한다」며 덧칠 → 정본과 화면이 갈라진다.
@@ -1140,9 +1254,9 @@ public final class TerraceForgeSelfTest {
             // ★2026-08-06 E-02 — 외원 8 → <b>6</b>. 정자를 의례축 밖(±11)으로 밀고, 그 자리를
             //   내주느라 <b>남측 행각 두 토막을 뺐다</b> (원래 6행뿐이라 물리면 길이 0 이 되어
             //   조용히 사라졌다 — 눈이 그것을 잡았다). 행각은 북측 좌우에 남는다.
-            //   구성: 정자2 + 행각2 + 등롱열2 = 6.
-            check("★9 행각 — 외원 6부품(정자2+행각2+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
-                    plazaParts == 6 && jongParts == 5, plazaParts + "/" + jongParts);
+            //   ★E-03 (2026-08-06): 행각을 삼면 네 모듈로 → 외원 8부품 (정자2 + 행각4 + 등롱열2).
+            check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
+                    plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
             check("★D-25 재료 — 단청(금빛·적목)이 팔레트에",
                     bPal.contains(Material.CUT_SANDSTONE)
                             && bPal.contains(Material.STRIPPED_MANGROVE_WOOD), bPal);
