@@ -17,13 +17,17 @@
    `config/blueprints/hwasan_gate.yml` (좌표의 정본 · `design_intent` 절을 꼭 읽어라)
 2. **산문은 동결이다.** 치수·좌표를 건드리지 마라 — selftest 에 「★동결」 눈 5건이 박혀 있다.
    바꿀 일이 생기면 **그 눈을 고치는 것이 곧 결정의 기록**이다.
-3. **다음 일**: `02_외원` 도면화 (산문과 같은 문법) + 산문 주변 절벽·정원·옹벽 분절.
+3. **다음 일**: `02_외원` — E-01·02·03·08 은 닫혔다 (BACKLOG B-196 §02 외원).
+   남은 것: **E-07 정자 문법**(아직 옛 언어) · **E-06 종문·중정 행각** · **E-04 연무장 모래**.
+   ★도면 기계가 이제 **자리·방향(`instances`)** 과 **부속급 위계(`rank: auxiliary`)** ·
+   **낮은 맞배(`type: low_gable`)** 를 안다 — 다음 구역은 이 문법을 쓰면 된다.
 4. **사용자 결정 대기 1건**: 문 앞을 가리는 것은 소나무가 아니라 **바위 기둥**이다 (아래 ㉧).
    ㉦(깃대·등롱)는 **닫혔다** — 문전을 비웠다.
 
 ### 재현 (테스트 서버 25566 · RCON 25576 · 라이브 무접촉)
 `혼천 산세시험 hwasan` → `혼천 산군시험 hwasan` → `혼천 캠퍼스시험 hwasan` →
-`혼천 도면시험 hwasan_gate hwasan` · `혼천 도면시험 hwasan_honjeon hwasan`
+`혼천 도면시험 hwasan_gate hwasan` · `혼천 도면시험 hwasan_honjeon hwasan` ·
+`혼천 도면시험 hwasan_outer_corridor hwasan` (★02 외원 행각 — 한 도면이 네 모듈)
 
 촬영: `python3 scripts/stage_shot.py sanse_test_hwasan overworld "이름=x,y,z,yaw,pitch"`
 ★같은 좌표로 회귀 검사한다: 산문 정면 `(-7,-9,203) yaw -172.6 pitch -7.4` ·

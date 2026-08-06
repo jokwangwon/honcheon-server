@@ -57,17 +57,40 @@ public final class BlueprintBuilder {
             throw new IllegalStateException("설계도 " + bp.name() + " (" + bp.width() + "×" + bp.depth()
                     + ") 가 패드 " + pad.spec().name() + " (" + padW + "×" + padD + ") 를 넘는다");
         }
-        // 좌상단(col0,row0) = 패드 북서 모서리에서 가운데 맞춤 — 축선이 패드 중심에 오게
-        int ox = pad.x0() + (padW - bp.width()) / 2;
-        int oz = pad.zN() + (padD - bp.depth()) / 2;
+        // ★2026-08-07 (E-08) — 자리가 여럿일 수 있다. 안 적은 도면은 <b>가운데 한 장</b>이라
+        //   산문·본전은 종전 그대로다 (좌상단 = 패드 북서 모서리에서 가운데 맞춤).
+        java.util.List<Blueprint.Placement> places = bp.placements();
+        if (places.isEmpty()) {
+            places = java.util.List.of(new Blueprint.Placement("(가운데)",
+                    (padW - bp.width()) / 2, (padD - bp.depth()) / 2, 0));
+        }
+        for (Blueprint.Placement place : places) {
+            stampAt(world, bp, pad, place, padW, padD, n);
+        }
+        return n;
+    }
+
+    /** 도면 한 장을 그 자리에 · 그 방향으로 찍는다 */
+    private static void stampAt(World world, Blueprint bp, TerraceForge.Pad pad,
+                                Blueprint.Placement place, int padW, int padD, Count n) {
+        int fw = place.widthOf(bp);
+        int fd = place.depthOf(bp);
+        if (place.col() < 0 || place.row() < 0
+                || place.col() + fw > padW || place.row() + fd > padD) {
+            throw new IllegalStateException("설계도 " + bp.name() + " 의 자리 " + place.id()
+                    + " (" + place.col() + "," + place.row() + " · " + place.rotate() + "도 · "
+                    + fw + "×" + fd + ") 가 패드 " + pad.spec().name() + " 밖으로 나간다");
+        }
+        int ox = pad.x0() + place.col();
+        int oz = pad.zN() + place.row();
         int oy = pad.y() + 1;                       // 포장면 위 한 칸이 도면의 y0
 
         // ★★자리를 먼저 비운다 — 클래스 주석의 B-196. 도면이 앉는 부피는 도면의 것이다.
         //   여기가 없으면 앞서 선 건물이 도면 껍데기 **안에** 남아, 격자칸 너머로 비쳐
         //   「회벽이 넓다」로 잘못 읽힌다. 판정 회차 전체가 거짓이 된다.
         int clearH = clearHeight(bp);
-        for (int r = 0; r < bp.depth(); r++) {
-            for (int c = 0; c < bp.width(); c++) {
+        for (int r = 0; r < fd; r++) {
+            for (int c = 0; c < fw; c++) {
                 for (int k = 0; k < clearH; k++) {
                     if (world.getBlockAt(ox + c, oy + k, oz + r).getType() != Material.AIR) {
                         world.getBlockAt(ox + c, oy + k, oz + r).setType(Material.AIR, false);
@@ -79,8 +102,9 @@ public final class BlueprintBuilder {
 
         for (int r = 0; r < bp.depth(); r++) {
             for (int c = 0; c < bp.width(); c++) {
-                int x = ox + c;
-                int z = oz + r;
+                int[] d = place.map(bp, c, r);      // ★회전 — 도면 (c,r) 이 어디로 가는가
+                int x = ox + d[0];
+                int z = oz + d[1];
                 int y = oy;
                 n.cells++;
                 for (Blueprint.Course course : bp.columnOf(bp.at(c, r))) {
@@ -90,7 +114,8 @@ public final class BlueprintBuilder {
                             world.getBlockAt(x, y, z).setType(Material.AIR, false);
                             n.cleared++;
                         } else {
-                            stamp(world, x, y, z, course.material(), outward(bp, c, r));
+                            stamp(world, x, y, z, course.material(),
+                                    place.turn(outward(bp, c, r)));
                             n.blocks++;
                         }
                     }
@@ -102,10 +127,24 @@ public final class BlueprintBuilder {
         HwasanCampusBuilder.Tally tally = new HwasanCampusBuilder.Tally();
         for (Blueprint.Roof rf : bp.roofs()) {
             int[] b = rf.box();
-            int cx = ox + (b[0] + b[2]) / 2;
-            int cz = oz + (b[1] + b[3]) / 2;
-            int hf = (b[2] - b[0]) / 2;             // 반폭 (x)
-            int hl = (b[3] - b[1]) / 2;             // 반깊이 (z)
+            // ★상자도 돌린다 — 두 모서리를 옮겨 다시 최소·최대를 잡는다
+            int[] p0 = place.map(bp, b[0], b[1]);
+            int[] p1 = place.map(bp, b[2], b[3]);
+            int bx0 = Math.min(p0[0], p1[0]);
+            int bx1 = Math.max(p0[0], p1[0]);
+            int bz0 = Math.min(p0[1], p1[1]);
+            int bz1 = Math.max(p0[1], p1[1]);
+            int cx = ox + (bx0 + bx1) / 2;
+            int cz = oz + (bz0 + bz1) / 2;
+            int hf = (bx1 - bx0) / 2;               // 반폭 (x)
+            int hl = (bz1 - bz0) / 2;               // 반깊이 (z)
+            if (rf.lowGable()) {
+                // ★부속급 — 낮은 맞배. 결은 코드 한 곳에 남는다 (7.5 계율)
+                HwasanCampusBuilder.gableRoof(world, pad, ox + bx0, ox + bx1,
+                        oy + rf.baseY(), oz + bz0, oz + bz1, rf.eave(), tally);
+                n.roofs++;
+                continue;                            // 맞배에는 상층이 없다 (부속급)
+            }
             HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
                     rf.eave(), tally);
             n.roofs++;
@@ -118,13 +157,13 @@ public final class BlueprintBuilder {
                 //   (산문은 2 가 맞았다 — 그래서 한 상수로 둘을 다 지을 수 없다)
                 int ix = rf.insetX();
                 int iz = rf.insetZ();
-                for (int r2 = b[1] + iz; r2 <= b[3] - iz; r2++) {
-                    for (int c2 = b[0] + ix; c2 <= b[2] - ix; c2++) {
-                        boolean edge = r2 == b[1] + iz || r2 == b[3] - iz || c2 == b[0] + ix || c2 == b[2] - ix;
+                for (int r2 = bz0 + iz; r2 <= bz1 - iz; r2++) {
+                    for (int c2 = bx0 + ix; c2 <= bx1 - ix; c2++) {
+                        boolean edge = r2 == bz0 + iz || r2 == bz1 - iz || c2 == bx0 + ix || c2 == bx1 - ix;
                         if (!edge) {
                             continue;
                         }
-                        boolean post = ((c2 - b[0]) % 3 == 0) || ((r2 - b[1]) % 3 == 0);
+                        boolean post = ((c2 - bx0) % 3 == 0) || ((r2 - bz0) % 3 == 0);
                         for (int k = 0; k < rf.upperWall(); k++) {
                             // ★기둥 사이를 무엇으로 채우는가는 **도면이 정한다** — 7호 실측이
                             //   「본전 상층은 창이 띠를 이루고 회벽이 없다」를 밝혔고, 산문은
@@ -143,10 +182,10 @@ public final class BlueprintBuilder {
                             // ★상층 살창도 세운다 — 하층과 같은 병 (눕히면 구멍). 상층은 사각
                             //   테두리라 바깥이 자명하다: 어느 변에 앉았는가가 곧 법선이다.
                             if (fill == Material.DARK_OAK_TRAPDOOR) {
-                                org.bukkit.block.BlockFace uf = r2 == b[1] + iz
+                                org.bukkit.block.BlockFace uf = r2 == bz0 + iz
                                         ? org.bukkit.block.BlockFace.NORTH
-                                        : r2 == b[3] - iz ? org.bukkit.block.BlockFace.SOUTH
-                                        : c2 == b[0] + ix ? org.bukkit.block.BlockFace.WEST
+                                        : r2 == bz1 - iz ? org.bukkit.block.BlockFace.SOUTH
+                                        : c2 == bx0 + ix ? org.bukkit.block.BlockFace.WEST
                                         : org.bukkit.block.BlockFace.EAST;
                                 world.getBlockAt(ox + c2, upBase + k, oz + r2)
                                         .setBlockData(stand(Bukkit.createBlockData(fill), uf), false);
@@ -162,7 +201,6 @@ public final class BlueprintBuilder {
                 n.roofs++;
             }
         }
-        return n;
     }
 
     /**

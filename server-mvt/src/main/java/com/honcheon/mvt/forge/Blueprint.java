@@ -41,7 +41,16 @@ public final class Blueprint {
      * 채우면 둘 중 하나는 반드시 틀리므로, <b>도면이 고르게</b> 했다.
      */
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
-                       String upperInfill, int[] upperInset) {
+                       String upperInfill, int[] upperInset, String type) {
+
+        /**
+         * 지붕의 <b>종류</b> — 안 적으면 {@code sweep}(귀솟음 팔작). 산문·본전이 그것이다.
+         * ★{@code low_gable} 은 <b>부속급</b>의 낮은 맞배다 (E-03 행각 · 사용자 확정 2026-08-06):
+         * 정문급과 부속급은 지붕으로 갈린다 — 같은 어두운 계열을 쓰되 결이 다르다.
+         */
+        public boolean lowGable() {
+            return "low_gable".equalsIgnoreCase(type);
+        }
         public boolean hasUpper() {
             return upperWall > 0;
         }
@@ -62,6 +71,50 @@ public final class Blueprint {
         }
     }
 
+    /**
+     * 도면 한 채가 <b>어디에 · 어느 방향으로</b> 앉는가 (패드 로컬 좌표 · 도수는 90 배수).
+     *
+     * <p>★2026-08-07 (E-08 · 사용자 확정): 「네 모듈 모두를 같은 yml 에서 뽑는 것이 가장
+     * 자연스럽다」. 그 전까지 도면은 <b>패드 한가운데 한 장</b>만 찍을 수 있어서, 행각처럼
+     * <b>같은 모듈이 방향만 달리 네 번</b> 서는 것을 도면으로 못 그렸다 (그래서 코드가 정본이었다).
+     * {@code instances} 를 안 적은 도면(산문·본전)은 <b>종전대로</b> 가운데 한 장이다.
+     */
+    public record Placement(String id, int col, int row, int rotate) {
+
+        /** 회전 뒤의 폭 (도수가 90·270 이면 도면의 깊이가 폭이 된다) */
+        public int widthOf(Blueprint bp) {
+            return rotate % 180 == 0 ? bp.width() : bp.depth();
+        }
+
+        /** 회전 뒤의 깊이 */
+        public int depthOf(Blueprint bp) {
+            return rotate % 180 == 0 ? bp.depth() : bp.width();
+        }
+
+        /** 도면 좌표 (c, r) 이 회전 뒤 어디로 가는가 — {dx, dz} */
+        public int[] map(Blueprint bp, int c, int r) {
+            return switch (rotate) {
+                case 90 -> new int[]{bp.depth() - 1 - r, c};
+                case 180 -> new int[]{bp.width() - 1 - c, bp.depth() - 1 - r};
+                case 270 -> new int[]{r, bp.width() - 1 - c};
+                default -> new int[]{c, r};
+            };
+        }
+
+        /** 도면 안에서의 방향을 그만큼 돌린다 (살창 법선이 회전을 안 따라가면 뒤집힌다) */
+        public org.bukkit.block.BlockFace turn(org.bukkit.block.BlockFace f) {
+            org.bukkit.block.BlockFace[] cw = {org.bukkit.block.BlockFace.NORTH,
+                    org.bukkit.block.BlockFace.EAST, org.bukkit.block.BlockFace.SOUTH,
+                    org.bukkit.block.BlockFace.WEST};
+            for (int i = 0; i < 4; i++) {
+                if (cw[i] == f) {
+                    return cw[(i + rotate / 90) % 4];
+                }
+            }
+            return f;
+        }
+    }
+
     private final String name;
     private final int pad;
     private final int width;
@@ -71,10 +124,17 @@ public final class Blueprint {
     private final Map<Character, List<Course>> columns;
     private final List<Roof> roofs;
     private final Map<String, int[]> spots;
+    private final List<Placement> placements;
+    private final String rank;
+    private final int courtyardRow;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
-                      List<Roof> roofs, Map<String, int[]> spots) {
+                      List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
+                      String rank, int courtyardRow) {
+        this.placements = placements;
+        this.rank = rank;
+        this.courtyardRow = courtyardRow;
         this.name = name;
         this.pad = pad;
         this.width = width;
@@ -116,6 +176,31 @@ public final class Blueprint {
 
     public List<Roof> roofs() {
         return roofs;
+    }
+
+    /**
+     * 도면의 <b>위계</b> — {@code principal}(정문·본전 급) 또는 {@code auxiliary}(행각 급).
+     * ★계약이 갈린다: 정문급은 「축선에 통행 개구가 있는가」를 지켜야 하지만, 부속급은
+     * <b>문이 아니다</b> — 대신 「마당 쪽이 열렸는가 · 외곽 쪽이 닫혔는가」를 지킨다.
+     * 안 적으면 정문급이라 <b>이 문법이 생기기 전 도면들이 그대로 선다</b>.
+     */
+    public String rank() {
+        return rank;
+    }
+
+    /** 부속급이 지키는 계약인가 */
+    public boolean auxiliary() {
+        return "auxiliary".equalsIgnoreCase(rank);
+    }
+
+    /** 마당(열리는) 쪽 행 — {@code meta.south_row} */
+    public int courtyardRow() {
+        return courtyardRow;
+    }
+
+    /** 이 도면이 앉는 자리들 — <b>비어 있으면</b> 패드 한가운데 한 장 (종전 문법) */
+    public List<Placement> placements() {
+        return placements;
     }
 
     public Map<String, int[]> spots() {
@@ -212,7 +297,8 @@ public final class Blueprint {
                     up == null ? 0 : ((Number) up.getOrDefault("wall", 0)).intValue(),
                     up == null ? 0 : ((Number) up.getOrDefault("eave", 2)).intValue(),
                     up == null ? "plaster" : String.valueOf(up.getOrDefault("infill", "plaster")),
-                    inset));
+                    inset,
+                    String.valueOf(m.getOrDefault("type", "sweep"))));
         });
 
         Map<String, int[]> spots = new LinkedHashMap<>();
@@ -221,7 +307,28 @@ public final class Blueprint {
             spots.put(k, new int[]{((Number) cr.get(0)).intValue(), ((Number) cr.get(1)).intValue()});
         });
 
-        return new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots);
+        // ★자리들 — 안 적으면 비운다 (그러면 종전대로 패드 한가운데 한 장이다)
+        List<Placement> places = new ArrayList<>();
+        Object inst = root.get("instances");
+        if (inst instanceof List<?> il) {
+            for (Object o : il) {
+                Map<String, Object> m = (Map<String, Object>) o;
+                List<Object> at = (List<Object>) req(m, "at");
+                int rot = ((Number) m.getOrDefault("rotate", 0)).intValue();
+                if (Math.floorMod(rot, 90) != 0) {
+                    throw new IllegalStateException("설계도 " + nm + " — rotate 는 90 의 배수다: " + rot);
+                }
+                places.add(new Placement(String.valueOf(m.getOrDefault("id", "(이름 없음)")),
+                        ((Number) at.get(0)).intValue(), ((Number) at.get(1)).intValue(),
+                        Math.floorMod(rot, 360)));
+            }
+            if (places.isEmpty()) {
+                throw new IllegalStateException("설계도 " + nm + " — instances 를 적었는데 비어 있다");
+            }
+        }
+        return new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots, places,
+                String.valueOf(meta.getOrDefault("rank", "principal")),
+                ((Number) meta.getOrDefault("south_row", d - 1)).intValue());
     }
 
     private static Object req(Map<String, Object> m, String k) {
@@ -243,6 +350,10 @@ public final class Blueprint {
      * 여기서 재는 것은 <b>뜻</b>이다: 통행이 되는가, 축선이 비었는가, 자리가 도면 안인가.
      */
     public void validate() {
+        if (auxiliary()) {
+            validateCorridor();
+            return;
+        }
         // ① 중앙 통로 — 축선에 걸어서 지나는 개구가 있어야 한다 (문은 지나는 것이다)
         boolean walkable = false;
         for (int r = 0; r < depth; r++) {
@@ -308,6 +419,68 @@ public final class Blueprint {
             if (solid > 3 && !isGateRow(r)) {
                 throw new IllegalStateException("설계도 " + name + " — 축선 r" + r
                         + " 이 시야를 막는다 (실한 켜 " + solid + "). 통행의 폭과 시야의 폭은 다르다.");
+            }
+        }
+    }
+
+    /**
+     * ★부속급(행각)의 자기 계약 — {@code corridor_facade} (사용자 확정 2026-08-06).
+     *
+     * <p>수치는 건축 정답이 아니다: <b>「기둥과 지붕만 남은 퍼걸러」로 되돌아가는 것을 잡는
+     * 자</b>다. 문이 아니므로 「축선 통행 개구」는 안 재고, 대신 <b>안팎</b>을 잰다.
+     */
+    private void validateCorridor() {
+        int open = 0;
+        int closed = 0;
+        for (int c = 0; c < width; c++) {
+            int air = 0;
+            int solid = 0;
+            for (Course cs : columnOf(plan[courtyardRow][c])) {
+                if ("air".equals(cs.material())) {
+                    air += cs.count();
+                } else {
+                    solid += cs.count();
+                }
+            }
+            if (air > solid) {
+                open++;
+            }
+            int oAir = 0;
+            int oSolid = 0;
+            for (Course cs : columnOf(plan[0][c])) {
+                if ("air".equals(cs.material())) {
+                    oAir += cs.count();
+                } else {
+                    oSolid += cs.count();
+                }
+            }
+            if (oSolid > oAir) {
+                closed++;
+            }
+        }
+        double openRatio = open / (double) width;
+        double closedRatio = closed / (double) width;
+        if (openRatio < 0.60) {
+            throw new IllegalStateException("설계도 " + name + " — 마당 쪽이 안 열렸다 ("
+                    + String.format("%.2f", openRatio) + " < 0.60). 다 막으면 회랑의 개방감을 잃는다.");
+        }
+        if (closedRatio < 0.55) {
+            throw new IllegalStateException("설계도 " + name + " — 외곽 쪽이 안 닫혔다 ("
+                    + String.format("%.2f", closedRatio) + " < 0.55). 기둥과 지붕만 남으면 퍼걸러다.");
+        }
+        // ★긴 벽이 한 덩어리로 보이지 않게 — 같은 문자가 셋 이상 잇달지 않는다
+        int run = 1;
+        for (int c = 1; c < width; c++) {
+            run = plan[0][c] == plan[0][c - 1] ? run + 1 : 1;
+            if (run >= 3) {
+                throw new IllegalStateException("설계도 " + name + " — 외곽 면에 같은 칸이 "
+                        + run + "개 잇달았다 (col " + c + "). 반복 단위는 적주|회벽|격자창|회벽 이다.");
+            }
+        }
+        for (Roof rf : roofs) {
+            if (!rf.lowGable()) {
+                throw new IllegalStateException("설계도 " + name + " — 부속급의 지붕은 low_gable 이다: "
+                        + rf.name() + " (" + rf.type() + "). 정문급 팔작은 위계를 흐린다.");
             }
         }
     }

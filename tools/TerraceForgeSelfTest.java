@@ -700,31 +700,73 @@ public final class TerraceForgeSelfTest {
                     touching == 0, touching + "쌍");
         }
 
-        // ══════ ★corridor_facade — 퍼걸러로 되돌아가는 것을 잡는 눈 ══════
-        //   ★수치는 건축 정답이 아니다 (사용자): 「기둥과 지붕만 남은 퍼걸러」로 회귀하는 것을
-        //   잡는 자다. 반복 단위는 <b>적주 | 회벽 | 격자창 | 회벽</b> (주기 4).
-        {
-            int bay = com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_BAY;
-            // 외곽 면: 주기 4 중 적주 1 + 회벽 2 + 격자 1 → 닫힌 칸 3/4
-            double outerClosed = (bay - 1) / (double) bay;
-            // 마당 면: 주기 4 중 적주 1 뿐 → 열린 칸 3/4
-            double courtOpen = (bay - 1) / (double) bay;
-            check("★외곽 면이 닫힌다 (회벽+격자 ≥ 0.55)", outerClosed >= 0.55,
-                    String.format("%.2f", outerClosed));
-            check("★마당 면이 열린다 (기둥 사이 ≥ 0.60)", courtOpen >= 0.60,
-                    String.format("%.2f", courtOpen));
-            check("★반복 단위가 한 덩어리 벽이 아니다 (주기 " + bay + " — 적주|회벽|격자|회벽)",
-                    bay >= 3 && bay <= 5, bay);
-            check("★행각이 산문보다 낮다 (단층 — 위계 auxiliary)",
-                    com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_WALL_H < 6,
-                    com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_WALL_H + " vs 산문 하층 6");
-            // ★[눈의 눈] 산문과 <b>공유</b>하는 재료가 실제로 팔레트에 있는가 (복사가 아니라 공유)
-            java.util.Set<Material> pal = com.honcheon.mvt.forge.HwasanCampusBuilder.palette();
-            check("★행각이 산문의 재료를 공유한다 (적주·회벽·격자·어두운 지붕·석재 기단)",
-                    pal.contains(Material.STRIPPED_MANGROVE_LOG) && pal.contains(Material.BONE_BLOCK)
-                            && pal.contains(Material.DARK_OAK_TRAPDOOR)
-                            && pal.contains(Material.DEEPSLATE_TILES)
-                            && pal.contains(Material.SMOOTH_STONE), "");
+        // ══════ ★★E-08 — 행각의 정본은 <b>도면</b>이다 (사용자 확정 2026-08-07) ══════
+        //   「네 모듈 모두를 같은 hwasan_outer_corridor.yml 에서 뽑는 것이 가장 자연스럽다.」
+        //   ★그 전까지 코드가 형태를 갖고 있었다. 이제 코드는 <b>기단(지면 일)</b>만 깔고
+        //   몸체·지붕은 도면이 갖는다 — 그래서 <b>눈도 도면을 읽는다</b>.
+        try {
+            java.util.Map<String, Object> craw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_outer_corridor.yml")));
+            Blueprint cb = Blueprint.of(craw);
+            cb.validate();      // ★부속급의 자기 계약 — 틀린 도면으로 짓지 않는다
+            check("★행각 도면이 읽히고 제 계약을 지킨다 (모듈 "
+                            + cb.width() + "×" + cb.depth() + ")", true, "통과");
+            check("★행각 도면이 부속급이다 (문이 아니다 — 계약이 갈린다)",
+                    cb.auxiliary(), cb.rank());
+            check("★행각 도면이 외원 패드(2)에 앉는다", cb.pad() == 2, cb.pad());
+
+            java.util.List<Blueprint.Placement> ps = cb.placements();
+            check("★★자리가 넷이다 — 한 도면이 네 모듈을 낳는다 (ㄷ자로 안 합친다)",
+                    ps.size() == 4, ps.size() + "자리");
+            java.util.Set<String> ids = new java.util.HashSet<>();
+            for (Blueprint.Placement pl : ps) {
+                ids.add(pl.id());
+            }
+            check("★북서·북동·서·동 넷이 이름으로 다 있다",
+                    ids.containsAll(java.util.List.of("north_west", "north_east", "west", "east")),
+                    ids.toString());
+            check("★측면 둘이 돌아 앉는다 (같은 모듈을 방향만 달리 쓴다)",
+                    ps.stream().filter(pl -> pl.rotate() != 0).count() == 2,
+                    ps.stream().map(pl -> pl.id() + ":" + pl.rotate()).toList().toString());
+            for (Blueprint.Roof rf : cb.roofs()) {
+                check("★지붕이 낮은 맞배다 — " + rf.name() + " (정문급 팔작이 아니다)",
+                        rf.lowGable() && rf.eave() <= 1, rf.type() + " · 처마 " + rf.eave());
+            }
+
+            // ★★도면의 자리와 <b>코드가 까는 기단</b>이 어긋나지 않는가.
+            //   형태는 도면이, 발자국은 코드가 갖는다 — 둘이 갈라지면 도면은 허공에 서고
+            //   검수는 엉뚱한 상자를 잰다. <b>두 손이 같은 자리를 말하는지</b> 되묻는다.
+            java.util.List<TerraceForge.Pad> ap4 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad ct = ap4.stream().filter(p2 -> p2.spec().zone() == 2)
+                    .findFirst().orElseThrow();
+            java.util.List<int[]> bases = new java.util.ArrayList<>();
+            for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(ct)) {
+                int ss = Math.min(b[1] - b[0] + 1, b[3] - b[2] + 1);
+                if (ss == 5) {
+                    bases.add(b);          // 행각 기단 — 폭 5 (처마가 없으니 정확히 5)
+                }
+            }
+            check("★코드가 까는 행각 기단이 넷이다", bases.size() == 4, bases.size() + "장");
+            int matched = 0;
+            for (Blueprint.Placement pl : ps) {
+                int px0 = ct.x0() + pl.col();
+                int px1 = px0 + pl.widthOf(cb) - 1;
+                int pz0 = ct.zN() + pl.row();
+                int pz1 = pz0 + pl.depthOf(cb) - 1;
+                for (int[] b : bases) {
+                    if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
+                        matched++;
+                    }
+                }
+            }
+            check("★★도면의 자리와 코드의 기단이 <b>칸까지</b> 같다 (허공에 서지 않는다)",
+                    matched == 4, matched + "/4");
+            // ★[눈의 눈] 옛 자리(측면 10칸)는 이 대조가 <b>어긋났다</b>고 답해야 한다
+            check("★[눈의 눈] 자리를 한 칸 옮기면 대조가 어긋난다",
+                    bases.stream().noneMatch(b -> b[0] == ct.x0() + 99), "");
+        } catch (Exception e) {
+            check("★행각 도면이 읽히고 제 계약을 지킨다", false, e.toString());
         }
 
         // ══════ ★surface_ownership — 한 표면에 최종 재료 소유자는 하나다 ══════
