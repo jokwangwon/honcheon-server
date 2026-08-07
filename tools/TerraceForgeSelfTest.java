@@ -805,8 +805,15 @@ public final class TerraceForgeSelfTest {
             check("★정자가 부속급이되 쓰임이 <b>행각과 다르다</b> (계약이 갈린다)",
                     pb.auxiliary() && "pavilion".equalsIgnoreCase(pb.usage()),
                     pb.rank() + "/" + pb.usage());
-            check("★자리가 둘이다 — 남서·남동 모서리", pb.placements().size() == 2,
-                    pb.placements().stream().map(Blueprint.Placement::id).toList().toString());
+            // ★E-07b — 정자 도면도 두 구역에 앉는다 (외원 2 · 중정 2). <b>복제본을 안 만든다</b>.
+            //   ★사용자 원칙: 「도면은 재사용하지만 <b>배치는 공간이 결정한다</b>」 —
+            //   「외원에 둘이니 중정도 둘」이 아니라, 중정 패드를 훑어 남쪽 띠에 둘이 들어갔다.
+            java.util.Map<Integer, Integer> pavPer = new java.util.TreeMap<>();
+            for (Blueprint.Placement pl : pb.placements()) {
+                pavPer.merge(pl.padOr(pb.pad()), 1, Integer::sum);
+            }
+            check("★정자 도면이 두 구역에 앉는다 — 외원 2 · 중정 2 (복제본 없음)",
+                    pavPer.equals(java.util.Map.of(2, 2, 101, 2)), pavPer.toString());
             for (Blueprint.Roof rf : pb.roofs()) {
                 check("★정자 지붕이 사모다 — " + rf.name() + " (맞배는 방향성을 만든다)",
                         rf.hipPyramid(), rf.type());
@@ -843,23 +850,65 @@ public final class TerraceForgeSelfTest {
                     pbase.add(b);
                 }
             }
-            check("★코드가 까는 정자 기단이 둘이다 (5×5)", pbase.size() == 2, pbase.size() + "장");
+            check("★코드가 까는 외원 정자 기단이 둘이다 (5×5)", pbase.size() == 2, pbase.size() + "장");
             int pm = 0;
             int[] axis5 = TerraceForge.ceremonialAxisBox(ap5);
+            java.util.List<TerraceForge.StairLane> lanes5 =
+                    TerraceForge.resolveLanes(campus, ap5);
+            int laneHit = 0;
+            int spill = 0;
             for (Blueprint.Placement pl : pb.placements()) {
-                int px0 = ct2.x0() + pl.col();
+                int zone = pl.padOr(pb.pad());
+                TerraceForge.Pad host = ap5.stream().filter(p2 -> p2.spec().zone() == zone)
+                        .findFirst().orElseThrow();
+                int px0 = host.x0() + pl.col();
                 int px1 = px0 + pl.widthOf(pb) - 1;
-                int pz0 = ct2.zN() + pl.row();
+                int pz0 = host.zN() + pl.row();
                 int pz1 = pz0 + pl.depthOf(pb) - 1;
-                for (int[] b : pbase) {
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(host)) {
                     if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
                         pm++;
+                    }
+                }
+                // ★유출 — 지붕 처마(±eave)까지 패드 안이어야 한다
+                int ev = pb.roofs().get(0).eave();
+                if (px0 - ev < host.x0() || px1 + ev > host.x1()
+                        || pz0 - ev < host.zN() || pz1 + ev > host.zS()) {
+                    spill++;
+                }
+                // ★계단 봉투 — 검수와 같은 자 (rail + 앞뒤 1). ★단 <b>처마는 뺀다</b>:
+                //   이 저장소는 통로 겹침을 <b>지상 발자국</b>으로 본다 (groundBoxes 의 규약
+                //   「처마 제외」). 머리 위 처마는 걷는 것을 막지 않는다 — 처음 처마까지
+                //   넣었더니 외원 정자가 서측 어귀를 1칸 스쳐 짖었는데, 그건 <b>자가 과한</b>
+                //   것이었다. 유출(패드 밖)은 반대로 처마까지 본다 — 그건 블록이 실제로 나간다.
+                for (TerraceForge.StairLane l : lanes5) {
+                    int qx = l.dirZ() != 0 ? 1 : 0;
+                    int qz = l.dirZ() != 0 ? 0 : 1;
+                    for (int t = 0; t <= l.length() && laneHit == 0; t++) {
+                        for (int o = -l.rail(); o <= l.rail(); o++) {
+                            int lx = l.startX() + l.dirX() * (t - 1) + qx * o;
+                            int lz = l.startZ() + l.dirZ() * (t - 1) + qz * o;
+                            if (lx >= px0 && lx <= px1 && lz >= pz0 && lz <= pz1) {
+                                laneHit++;
+                            }
+                        }
                     }
                 }
                 check("★정자 " + pl.id() + " 가 의례축을 침범하지 않는다",
                         !TerraceForge.boxesOverlap(axis5, new int[]{px0, px1, pz0, pz1}), "");
             }
-            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다", pm == 2, pm + "/2");
+            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다 (두 구역)", pm == 4, pm + "/4");
+            check("★정자가 계단 봉투를 침범하지 않는다 (지상 발자국 — 처마는 뺀다)",
+                    laneHit == 0, laneHit + "칸");
+            check("★정자 처마가 패드 밖으로 안 샌다", spill == 0, spill + "채");
+            // ★옛 코드가 남아 있지 않은가 — 중정이 아직 pavilion() 을 부르면 두 언어가 공존한다
+            String hcb = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            int c101 = hcb.indexOf("case 101 ->");
+            String body101 = c101 < 0 ? "" : hcb.substring(c101, hcb.indexOf("case 10 ->", c101));
+            check("★[눈의 눈] 중정 부품 줄을 찾았다", c101 >= 0 && !body101.isEmpty(), "");
+            check("★★중정이 옛 pavilion() 을 안 부른다 (같은 역할이 두 언어로 공존하지 않는다)",
+                    !body101.contains("pavilion(w, p,"), body101.trim());
 
             // ★회전 계약 — 사모는 정사각이라 겉보기엔 회전이 무의미해 보이지만, 장식·개구가
             //   붙으면 방향이 생긴다. <b>지붕 빌더에서 회전을 생략하지 않는다</b>가 계약이다.

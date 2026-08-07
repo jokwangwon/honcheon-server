@@ -218,8 +218,10 @@ public final class HwasanCampusBuilder {
             case 19 -> List.of((w, p, t) -> pavilion(w, p, cx + 1, cz, 2, t));    // 절벽 전망대 (처마가 패드 안)
             case 20 -> List.of((w, p, t) -> plasterHall(w, p, cx + 1, cz, 4, 3, true, false, t));  // 부속 암자 (처마가 다리 어귀를 비킨다)
             // ★E-06 — 중정도 같은 도면. 패드가 30 폭이라 동쪽 열만 두 칸 안이다
-            case 101 -> List.of((w, p, t) -> pavilion(w, p, cx - 7, cz + 7, 2, t),   // 중정 정자 한 쌍 (★9 — 행각 몫으로 안쪽)
-                    (w, p, t) -> pavilion(w, p, cx + 7, cz + 7, 2, t),
+            // ★E-07b — 중정 정자도 <b>도면</b>이 갖는다 (외원과 같은 hwasan_pavilion.yml).
+            //   자리는 패드 실측이 정했다: 남쪽 띠 z19~23 · 중앙 통로와 계단 봉투를 비운다.
+            case 101 -> List.of((w, p, t) -> pavilionBase(w, p, p.x0() + 2, p.zN() + 19, 5, t),
+                    (w, p, t) -> pavilionBase(w, p, p.x0() + 23, p.zN() + 19, 5, t),
                     (w, p, t) -> corridorBase(w, p, p.x0() + 2, p.zN() + 1, 6, false, t),
                     (w, p, t) -> corridorBase(w, p, p.x0() + 24, p.zN() + 1, 6, false, t));
             case 10 -> List.of((w, p, t) -> gardenPond(w, p, cx, cz, t),          // 정원 — 연못·정자·매화 세 부품
