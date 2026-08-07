@@ -203,7 +203,8 @@ public final class HwasanCampusBuilder {
                     (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
             case 7 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 2, 4, t),      // 훈련장 중 (박석 마당)
                     (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
-            case 4 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 2, 8, 5, true, false, t),   // 강당 17×11
+            // ★강당(4) — 모임 유형의 첫 도면 (hwasan_hall.yml). 캠퍼스는 기단만 깐다
+            case 4 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 11, p.zN() + 9, 17, 11, t),
                     (w, p, t) -> rack(w, p, cx - 3, y, cz + 2, 3, t));
             case 5 -> List.of((w, p, t) -> plasterHall(w, p, cx - 3, cz + 2, 5, 4, true, false, t),   // 생활 두 채 11×9
                     // ★서편은 계단 2→5 의 통로다 — 두 채가 동으로 물러난다 (통로가 먼저)
@@ -1333,12 +1334,21 @@ public final class HwasanCampusBuilder {
      */
     private static void pavilionBase(World world, TerraceForge.Pad pad, int x0, int z0,
                                      int side, Tally tally) {
-        for (int dx = 0; dx < side; dx++) {
-            for (int dz = 0; dz < side; dz++) {
+        padBase(world, pad, x0, z0, side, side, tally);
+        tally.pavilions++;
+    }
+
+    /**
+     * 기단 한 장 — <b>지면 일</b>. 도면이 그 위에 선다 (포장면에 깔므로 BlueprintBuilder 가
+     * 안 지운다). 이 발자국이 검수(통로 겹침·축 교차·이격)의 입력이 된다.
+     */
+    private static void padBase(World world, TerraceForge.Pad pad, int x0, int z0,
+                                int w, int d, Tally tally) {
+        for (int dx = 0; dx < w; dx++) {
+            for (int dz = 0; dz < d; dz++) {
                 put(world, pad, x0 + dx, pad.y(), z0 + dz, Material.SMOOTH_STONE, tally);
             }
         }
-        tally.pavilions++;
     }
 
     /**

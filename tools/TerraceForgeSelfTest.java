@@ -976,6 +976,83 @@ public final class TerraceForgeSelfTest {
             check("★공통 계약 한 장이 있다 (contract.md)", false, e.toString());
         }
 
+        // ══════ ★★모임 유형 — 강당 도면 (hwasan_hall.yml · 2026-08-07) ══════
+        //   전수 조사가 드러낸 것: plasterHall 하나가 <b>세 쓰임</b>을 다 맡고 있었다.
+        //   첫 일은 옛 코드 교체가 아니라 <b>유형을 가르는 것</b>이다 — 이것이 첫 유형.
+        try {
+            java.util.Map<String, Object> hraw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_hall.yml")));
+            Blueprint hb = Blueprint.of(hraw);
+            hb.validate();      // ★정문급 계약 — 축선에 통행 개구가 있어야 한다
+            check("★강당 도면이 읽히고 제 계약을 지킨다 (" + hb.width() + "×" + hb.depth() + ")",
+                    true, "통과");
+            check("★모임 유형은 <b>지나 들어가는 집</b>이다 (rank principal · usage assembly)",
+                    !hb.auxiliary() && "assembly".equalsIgnoreCase(hb.usage()),
+                    hb.rank() + "/" + hb.usage());
+            check("★강당이 옛 몸체(17×11)를 그대로 쓴다 (줄이는 것은 마지막 선택)",
+                    hb.width() == 17 && hb.depth() == 11, hb.width() + "×" + hb.depth());
+            for (Blueprint.Roof rf : hb.roofs()) {
+                check("★강당 지붕이 팔작이다 — " + rf.name() + " (단층 · 중층은 본전의 것)",
+                        !rf.lowGable() && !rf.hipPyramid() && !rf.hasUpper(), rf.type());
+            }
+            // ★자리·유출·계단 봉투 — 정자와 같은 자로 잰다
+            java.util.List<TerraceForge.Pad> ap6 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            java.util.List<TerraceForge.StairLane> lanes6 = TerraceForge.resolveLanes(campus, ap6);
+            int hm = 0;
+            int hSpill = 0;
+            int hLane = 0;
+            for (Blueprint.Placement pl : hb.placements()) {
+                int zone = pl.padOr(hb.pad());
+                TerraceForge.Pad host = ap6.stream().filter(p2 -> p2.spec().zone() == zone)
+                        .findFirst().orElseThrow();
+                int px0 = host.x0() + pl.col();
+                int px1 = px0 + pl.widthOf(hb) - 1;
+                int pz0 = host.zN() + pl.row();
+                int pz1 = pz0 + pl.depthOf(hb) - 1;
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(host)) {
+                    if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
+                        hm++;
+                    }
+                }
+                int ev = hb.roofs().get(0).eave();
+                int hf = (hb.width() - 1) / 2;
+                int hl = (hb.depth() - 1) / 2;
+                // 팔작은 반폭+내밈 만큼 퍼진다 — 유출은 <b>처마까지</b> 본다
+                if (px0 - ev < host.x0() || px1 + ev > host.x1()
+                        || pz0 - ev < host.zN() || pz1 + ev > host.zS()) {
+                    hSpill++;
+                }
+                for (TerraceForge.StairLane l : lanes6) {
+                    int qx = l.dirZ() != 0 ? 1 : 0;
+                    int qz = l.dirZ() != 0 ? 0 : 1;
+                    for (int t = 0; t <= l.length(); t++) {
+                        for (int o = -l.rail(); o <= l.rail(); o++) {
+                            int lx = l.startX() + l.dirX() * (t - 1) + qx * o;
+                            int lz = l.startZ() + l.dirZ() * (t - 1) + qz * o;
+                            if (lx >= px0 && lx <= px1 && lz >= pz0 && lz <= pz1) {
+                                hLane++;
+                            }
+                        }
+                    }
+                }
+            }
+            check("★★강당 도면의 자리와 코드의 기단이 칸까지 같다",
+                    hm == hb.placements().size(), hm + "/" + hb.placements().size());
+            check("★강당이 계단 봉투를 침범하지 않는다 (지상 발자국)", hLane == 0, hLane + "칸");
+            check("★강당 처마가 패드 밖으로 안 샌다", hSpill == 0, hSpill + "채");
+            // ★옛 코드가 남았는가 — 강당이 아직 plasterHall 을 부르면 두 언어가 공존한다
+            String hcb3 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            int c4 = hcb3.indexOf("case 4 ->");
+            String body4 = c4 < 0 ? "" : hcb3.substring(c4, hcb3.indexOf("case 5 ->", c4));
+            check("★[눈의 눈] 강당 부품 줄을 찾았다", c4 >= 0 && !body4.isEmpty(), "");
+            check("★★강당이 옛 plasterHall 을 안 부른다 (유형이 갈렸다)",
+                    !body4.contains("plasterHall(w, p,"), body4.trim());
+        } catch (Exception e) {
+            check("★강당 도면이 읽히고 제 계약을 지킨다", false, e.toString());
+        }
+
         // ══════ ★전수 조사가 실물과 같은가 (plasterhall_census.md) ══════
         //   ★조사는 <b>신고가 아니라 센 것</b>이어야 한다. 호출부가 늘거나 줄면 표가 늙는다 —
         //   소스에서 직접 세어 문서의 수와 맞춘다.
