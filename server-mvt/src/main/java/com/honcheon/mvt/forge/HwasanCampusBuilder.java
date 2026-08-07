@@ -206,10 +206,11 @@ public final class HwasanCampusBuilder {
             // ★강당(4) — 모임 유형의 첫 도면 (hwasan_hall.yml). 캠퍼스는 기단만 깐다
             case 4 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 11, p.zN() + 9, 17, 11, t),
                     (w, p, t) -> rack(w, p, cx - 3, y, cz + 2, 3, t));
-            case 5 -> List.of((w, p, t) -> plasterHall(w, p, cx - 3, cz + 2, 5, 4, true, false, t),   // 생활 두 채 11×9
-                    // ★서편은 계단 2→5 의 통로다 — 두 채가 동으로 물러난다 (통로가 먼저)
-                    (w, p, t) -> plasterHall(w, p, cx + 10, cz + 2, 5, 4, true, false, t));
-            case 8 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz, 4, 2, true, false, t));
+            // ★생활(5·8) — 거처 유형 도면 (hwasan_residence.yml). 캠퍼스는 기단만 깐다.
+            //   ★서편 어귀(x0~2)는 계단 2→5 의 통로다 — 두 채가 그 밖에 선다 (통로가 먼저)
+            case 5 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 4, p.zN() + 16, 13, 7, t),
+                    (w, p, t) -> padBase(w, p, p.x0() + 20, p.zN() + 16, 13, 7, t));
+            case 8 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 10, p.zN() + 14, 13, 7, t));
             case 17 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 2, 7, 5, false, false, t),  // 창고 15×11
                     (w, p, t) -> chests(w, p, cx, y, cz + 2, t));
             case 9 -> List.of((w, p, t) -> mainHall(w, p, cx, cz + 2, t));        // 본전 — 33폭 2층 중루

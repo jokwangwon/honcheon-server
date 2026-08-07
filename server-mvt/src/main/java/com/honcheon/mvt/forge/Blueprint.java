@@ -386,6 +386,8 @@ public final class Blueprint {
         if (auxiliary()) {
             if ("pavilion".equalsIgnoreCase(usage)) {
                 validatePavilion();
+            } else if ("residence".equalsIgnoreCase(usage)) {
+                validateResidence();
             } else {
                 validateCorridor();
             }
@@ -576,6 +578,70 @@ public final class Blueprint {
             if (rf.rise() < 2) {
                 throw new IllegalStateException("설계도 " + name + " — 사모의 오름(rise)이 "
                         + rf.rise() + " 이라 지붕이 안 선다");
+            }
+        }
+    }
+
+    /**
+     * ★거처(생활관)의 자기 계약 (사용자 확정 2026-08-08 · 생활 5·8).
+     *
+     * <p>★<b>강당의 축소판을 만들지 않는다.</b> 두 집은 동선이 다르다:
+     * <pre>
+     *   강당   : 밖 → <b>중앙 문</b> → 큰 내부 공간
+     *   생활관 : 밖 → <b>여러 작은 출입구</b> → 반복되는 생활 단위
+     * </pre>
+     * 그래서 「축선 통행 개구」(모임·정문급의 계약)를 <b>안 잰다</b>. 대신 재는 것은
+     * <b>출입구가 여럿인가</b> · <b>큰 문이 아닌가</b> · <b>긴 정면에 리듬이 있는가</b>다.
+     *
+     * <p>★지붕·재료는 행각과 공유해도 <b>{@code usage} 계약은 공유하지 않는다</b> —
+     * 그러지 않으면 하나가 다시 여러 쓰임을 먹기 시작한다 ({@code plasterHall} 이 그랬다).
+     */
+    private void validateResidence() {
+        int doors = 0;
+        int run = 0;
+        int worstRun = 0;
+        for (int c = 0; c < width; c++) {
+            int air = 0;
+            int solid = 0;
+            for (Course cs : columnOf(plan[courtyardRow][c])) {
+                if ("air".equals(cs.material())) {
+                    air += cs.count();
+                } else {
+                    solid += cs.count();
+                }
+            }
+            boolean open = air > solid;
+            if (open) {
+                doors++;
+                run++;
+                worstRun = Math.max(worstRun, run);
+            } else {
+                run = 0;
+            }
+        }
+        if (doors < 2) {
+            throw new IllegalStateException("설계도 " + name + " — 거처의 출입구가 " + doors
+                    + "곳이다. 생활관은 <b>여러 작은 출입구</b>로 드나든다 (중앙 대문은 모임의 것).");
+        }
+        if (worstRun > 2) {
+            throw new IllegalStateException("설계도 " + name + " — 개구가 " + worstRun
+                    + "칸 잇달았다. 그건 <b>대문</b>이다 — 거처는 작은 문 여럿이다.");
+        }
+        // ★긴 정면의 리듬 — 같은 칸이 셋 잇달면 한 덩어리로 읽힌다 (행각과 같은 자)
+        for (int r : new int[]{0, courtyardRow}) {
+            int same = 1;
+            for (int c = 1; c < width; c++) {
+                same = plan[r][c] == plan[r][c - 1] ? same + 1 : 1;
+                if (same >= 3) {
+                    throw new IllegalStateException("설계도 " + name + " — 정면 r" + r
+                            + " 에 같은 칸이 " + same + "개 잇달았다 (col " + c + "). 리듬이 죽는다.");
+                }
+            }
+        }
+        for (Roof rf : roofs) {
+            if (!rf.lowGable()) {
+                throw new IllegalStateException("설계도 " + name + " — 거처의 지붕은 low_gable 이다: "
+                        + rf.name() + " (" + rf.type() + "). sweep 는 핵심 전각의 것이라 위계가 죽는다.");
             }
         }
     }
