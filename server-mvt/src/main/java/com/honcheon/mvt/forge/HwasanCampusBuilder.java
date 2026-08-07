@@ -171,8 +171,10 @@ public final class HwasanCampusBuilder {
             //       북서 x1~10 z1~5 · 북동 x22~31 z1~5   (동서 방향)
             //       서   x1~5 z8~17 · 동   x27~31 z8~17  (남북 방향)
             //       모서리 전이칸 z6~7 (2칸) · 정자와의 이격 z18~19 (2칸)
-            case 2 -> List.of((w, p, t) -> pavilion(w, p, cx - 11, p.zS() - 7, 2, t),
-                    (w, p, t) -> pavilion(w, p, cx + 11, p.zS() - 7, 2, t),
+            //   ★★E-07 (2026-08-07): 정자도 <b>도면</b>이 갖는다 (hwasan_pavilion.yml).
+            //     캠퍼스는 기단만 깔고, 몸체·사모지붕은 도면이 세운다 — 행각과 같은 규약.
+            case 2 -> List.of((w, p, t) -> pavilionBase(w, p, p.x0() + 3, p.zN() + 20, 5, t),
+                    (w, p, t) -> pavilionBase(w, p, p.x0() + 24, p.zN() + 20, 5, t),
                     // 북서·북동 — 동서로 뻗고 바깥(북)을 닫는다
                     (w, p, t) -> corridorBase(w, p, p.x0() + 2, p.zN() + 1, 6, false, t),
                     (w, p, t) -> corridorBase(w, p, p.x0() + 24, p.zN() + 1, 6, false, t),
@@ -1338,11 +1340,13 @@ public final class HwasanCampusBuilder {
             for (int w = c0 - eave; w <= c1 + eave; w++) {
                 int x = ridgeAlongX ? t : w;
                 int z = ridgeAlongX ? w : t;
+                // ★한 면에 한 재료 (계율) — E-03 때 심층암<b>타일</b>과 조약 심층암을 섞었다.
+                //   지붕 결은 roofCube/putRoofStair 가 쓰는 <b>조약 심층암</b> 한 계열이다.
                 if (w < c0 || w > c1) {
-                    put(world, pad, x, y, z, Material.DEEPSLATE_TILE_SLAB, tally);      // 얕은 처마
+                    put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE_SLAB, tally);   // 얕은 처마
                 } else if (Math.abs(w - mid) < 0.9) {
-                    put(world, pad, x, y, z, Material.DEEPSLATE_TILES, tally);
-                    put(world, pad, x, y + 1, z, Material.DEEPSLATE_TILE_SLAB, tally);  // 용마루
+                    put(world, pad, x, y, z, roofCube(x, y, z), tally);
+                    put(world, pad, x, y + 1, z, Material.COBBLED_DEEPSLATE_SLAB, tally);  // 용마루
                 } else {
                     org.bukkit.block.BlockFace f = ridgeAlongX
                             ? (w < mid ? org.bukkit.block.BlockFace.NORTH : org.bukkit.block.BlockFace.SOUTH)
@@ -1350,6 +1354,95 @@ public final class HwasanCampusBuilder {
                     putRoofStair(world, pad, x, y, z, f, tally);
                 }
             }
+        }
+    }
+
+    /**
+     * 정자 한 채의 <b>기단</b> — 지면 일이다. 몸체·사모지붕은 도면이 갖는다
+     * ({@code config/blueprints/hwasan_pavilion.yml} · E-07). 행각과 같은 규약:
+     * 캠퍼스는 <b>땅</b>을, 도면은 <b>건축</b>을 맡고, 이 발자국이 검수의 입력이 된다.
+     */
+    private static void pavilionBase(World world, TerraceForge.Pad pad, int x0, int z0,
+                                     int side, Tally tally) {
+        for (int dx = 0; dx < side; dx++) {
+            for (int dz = 0; dz < side; dz++) {
+                put(world, pad, x0 + dx, pad.y(), z0 + dz, Material.SMOOTH_STONE, tally);
+            }
+        }
+        tally.pavilions++;
+    }
+
+    /**
+     * ★★사모지붕 — 네 면이 한 꼭지로 수렴한다 (E-07 · 사용자 확정 2026-08-07).
+     *
+     * <p>화산파 지붕 문법의 <b>셋째</b>다: {@code low_gable}(행각·생활 부속) ·
+     * <b>{@code hip_pyramid}(정자·망루)</b> · {@code sweep}(산문·본전 등 핵심 전각).
+     * 이 분류가 <b>건물 역할과 실루엣을 동시에</b> 가른다.
+     *
+     * <p>★<b>같은 타입이되 같은 지붕을 복사하지 않는다</b> (사용자): 정자는 <b>낮고 넓은</b>
+     * 사모(rise 3 · 처마 2), 망루는 <b>높고 급한</b> 사모(rise 5 · 처마 1)다. 비례는 도면이 준다.
+     *
+     * <p>★1호는 <b>정사각 전용</b>이다 — 자유형 다각형 지붕 엔진을 지금 만들 까닭이 없다
+     * (도면의 {@code validate} 가 정사각을 강제한다).
+     *
+     * <p>★계단식 피라미드로 끝내지 <b>않는다</b>: 네 모서리의 <b>추녀</b>를 한 칸 내밀어야
+     * 동양식 사모로 읽힌다. 그 한 칸이 없으면 그냥 돌무더기다.
+     */
+    public static void hipRoof(World world, TerraceForge.Pad pad, int x0, int x1, int y,
+                               int z0, int z1, int eave, int rise, int cap, Tally tally) {
+        for (int k = 0; k <= rise; k++) {
+            int in = k == 0 ? -eave : k - 1;          // 0층은 처마만큼 밖으로, 그 위는 한 켜씩 안으로
+            int ax0 = x0 + in;
+            int ax1 = x1 - in;
+            int az0 = z0 + in;
+            int az1 = z1 - in;
+            if (ax0 > ax1 || az0 > az1) {
+                break;
+            }
+            // ★<b>고리띠</b>로 채운다 — 이 켜의 사각에서 <b>다음 켜가 덮을 사각</b>을 뺀 만큼.
+            //   처음엔 켜마다 <b>테두리 한 줄</b>만 놓았는데, 처마(2)와 몸체 사이가 두 칸이라
+            //   그 사이에 <b>구멍</b>이 남았다 (실측: y3 의 x-15~-11 이 전부 air 였다).
+            //   지붕은 껍질이되 <b>새지 않는 껍질</b>이어야 한다.
+            int nin = (k + 1 == 0 ? -eave : k);
+            int nx0 = x0 + nin;
+            int nx1 = x1 - nin;
+            int nz0 = z0 + nin;
+            int nz1 = z1 - nin;
+            boolean last = k == rise || nx0 > nx1 || nz0 > nz1;
+            int yy = y + k;
+            for (int x = ax0; x <= ax1; x++) {
+                for (int z = az0; z <= az1; z++) {
+                    if (!last && x >= nx0 && x <= nx1 && z >= nz0 && z <= nz1) {
+                        continue;                      // 위 켜가 덮는다
+                    }
+                    boolean corner = (x == ax0 || x == ax1) && (z == az0 || z == az1);
+                    if (k == 0) {
+                        put(world, pad, x, yy, z, Material.COBBLED_DEEPSLATE_SLAB, tally);   // 처마
+                    } else if (corner || last) {
+                        put(world, pad, x, yy, z, roofCube(x, yy, z), tally);                // 추녀·꼭지
+                    } else {
+                        org.bukkit.block.BlockFace f = x == ax0 ? org.bukkit.block.BlockFace.WEST
+                                : x == ax1 ? org.bukkit.block.BlockFace.EAST
+                                : z == az0 ? org.bukkit.block.BlockFace.NORTH
+                                : org.bukkit.block.BlockFace.SOUTH;
+                        putRoofStair(world, pad, x, yy, z, f, tally);
+                    }
+                }
+            }
+            if (k == 1) {
+                // ★추녀 — 네 모서리를 한 칸 <b>대각으로</b> 내민다 (이것이 사모로 읽히게 한다)
+                for (int px : new int[]{ax0 - 1, ax1 + 1}) {
+                    for (int pz : new int[]{az0 - 1, az1 + 1}) {
+                        put(world, pad, px, yy, pz, Material.COBBLED_DEEPSLATE_SLAB, tally);
+                    }
+                }
+            }
+        }
+        // 정상 캡 — 꼭지 (없으면 마지막 켜가 밋밋하다)
+        int mx = (x0 + x1) / 2;
+        int mz = (z0 + z1) / 2;
+        for (int k = 0; k < Math.max(0, cap); k++) {
+            put(world, pad, mx, y + rise + 1 + k, mz, Material.COBBLED_DEEPSLATE_WALL, tally);
         }
     }
 
@@ -1933,8 +2026,10 @@ public final class HwasanCampusBuilder {
                 Material.CHERRY_LOG, Material.CHERRY_LEAVES, Material.WATER,
                 // ★E-03 행각 — 산문과 <b>공유</b>하는 재료 (신고와 실물을 맞춘다:
                 //   「신고표가 실물보다 넓으면 눈이 헛것을 지킨다」의 반대쪽 — 좁아도 짖는다)
+                // ★지붕은 <b>조약 심층암</b> 한 계열이다 (이미 표에 있다) — E-03 때 잠깐 심층암
+                //   타일을 섞었다가 「한 면에 한 재료」로 되돌렸고, <b>신고표에서도 걷었다</b>.
+                //   신고가 실물보다 넓으면 눈이 헛것을 지킨다 (2026-08-06 계율).
                 Material.DARK_OAK_TRAPDOOR, Material.SMOOTH_STONE,
-                Material.DEEPSLATE_TILES, Material.DEEPSLATE_TILE_SLAB, Material.DEEPSLATE_TILE_STAIRS,
                 Material.CHEST, Material.LANTERN, Material.AIR);
     }
 

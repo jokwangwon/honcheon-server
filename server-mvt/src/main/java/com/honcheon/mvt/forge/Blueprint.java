@@ -41,7 +41,13 @@ public final class Blueprint {
      * 채우면 둘 중 하나는 반드시 틀리므로, <b>도면이 고르게</b> 했다.
      */
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
-                       String upperInfill, int[] upperInset, String type) {
+                       String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
+                       String profile) {
+
+        /** 사모지붕인가 — 네 면이 한 꼭지로 수렴한다 (정자·망루) */
+        public boolean hipPyramid() {
+            return "hip_pyramid".equalsIgnoreCase(type);
+        }
 
         /**
          * 지붕의 <b>종류</b> — 안 적으면 {@code sweep}(귀솟음 팔작). 산문·본전이 그것이다.
@@ -127,14 +133,16 @@ public final class Blueprint {
     private final List<Placement> placements;
     private final String rank;
     private final int courtyardRow;
+    private final String usage;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
                       List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
-                      String rank, int courtyardRow) {
+                      String rank, int courtyardRow, String usage) {
         this.placements = placements;
         this.rank = rank;
         this.courtyardRow = courtyardRow;
+        this.usage = usage;
         this.name = name;
         this.pad = pad;
         this.width = width;
@@ -191,6 +199,15 @@ public final class Blueprint {
     /** 부속급이 지키는 계약인가 */
     public boolean auxiliary() {
         return "auxiliary".equalsIgnoreCase(rank);
+    }
+
+    /**
+     * 쓰임 — {@code corridor}(행각) · {@code pavilion}(정자). <b>부속급 안에서도 계약이 갈린다</b>:
+     * 행각은 「마당 쪽이 열리고 외곽 쪽이 닫혔는가」를, 정자는 「사방이 열렸는가」를 지킨다.
+     * ★안 적으면 지붕에서 유추한다 (사모면 정자, 아니면 행각) — 조용히 틀린 계약을 재는 대신.
+     */
+    public String usage() {
+        return usage;
     }
 
     /** 마당(열리는) 쪽 행 — {@code meta.south_row} */
@@ -298,7 +315,15 @@ public final class Blueprint {
                     up == null ? 0 : ((Number) up.getOrDefault("eave", 2)).intValue(),
                     up == null ? "plaster" : String.valueOf(up.getOrDefault("infill", "plaster")),
                     inset,
-                    String.valueOf(m.getOrDefault("type", "sweep"))));
+                    String.valueOf(m.getOrDefault("type", "sweep")),
+                    // ★사모의 비례 — <b>같은 타입이되 같은 지붕을 복사하지 않는다</b>
+                    //   (사용자 확정 2026-08-07: 정자는 낮고 넓게, 망루는 높고 급하게).
+                    //   profile 이 기본값을 고르고, 적어 준 값이 있으면 그것이 이긴다.
+                    ((Number) m.getOrDefault("rise",
+                            "tower".equals(String.valueOf(m.getOrDefault("profile", "pavilion")))
+                                    ? 5 : 3)).intValue(),
+                    ((Number) m.getOrDefault("ridge_cap", 1)).intValue(),
+                    String.valueOf(m.getOrDefault("profile", "pavilion"))));
         });
 
         Map<String, int[]> spots = new LinkedHashMap<>();
@@ -326,9 +351,11 @@ public final class Blueprint {
                 throw new IllegalStateException("설계도 " + nm + " — instances 를 적었는데 비어 있다");
             }
         }
+        String usage = String.valueOf(meta.getOrDefault("usage",
+                roofs.stream().anyMatch(Roof::hipPyramid) ? "pavilion" : "corridor"));
         return new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots, places,
                 String.valueOf(meta.getOrDefault("rank", "principal")),
-                ((Number) meta.getOrDefault("south_row", d - 1)).intValue());
+                ((Number) meta.getOrDefault("south_row", d - 1)).intValue(), usage);
     }
 
     private static Object req(Map<String, Object> m, String k) {
@@ -351,7 +378,11 @@ public final class Blueprint {
      */
     public void validate() {
         if (auxiliary()) {
-            validateCorridor();
+            if ("pavilion".equalsIgnoreCase(usage)) {
+                validatePavilion();
+            } else {
+                validateCorridor();
+            }
             return;
         }
         // ① 중앙 통로 — 축선에 걸어서 지나는 개구가 있어야 한다 (문은 지나는 것이다)
@@ -481,6 +512,64 @@ public final class Blueprint {
             if (!rf.lowGable()) {
                 throw new IllegalStateException("설계도 " + name + " — 부속급의 지붕은 low_gable 이다: "
                         + rf.name() + " (" + rf.type() + "). 정문급 팔작은 위계를 흐린다.");
+            }
+        }
+    }
+
+    /**
+     * ★정자의 자기 계약 (사용자 확정 2026-08-07 · E-07).
+     *
+     * <p>정자는 <b>사방이 열린 독립 건물</b>이다 — 행각과 계약이 다르다. 행각은 「마당 쪽이
+     * 열리고 외곽 쪽이 닫혔는가」를 지키지만, 정자를 그 자로 재면 <b>닫으라고 요구</b>하게 된다.
+     *
+     * <p>★사모지붕을 <b>맞배로 통일하지 않는</b> 까닭 (사용자): 맞배는 두 방향의 처마가 강하고
+     * 두 면에 박공이 생겨 <b>방향성</b>이 붙는다. 외원의 역할이 「중앙=이동 · 행각=측면 이동 ·
+     * 정자=머무름」으로 갈렸는데, 정자까지 맞배로 만들면 행각과 실루엣이 가까워져 그 차이가
+     * 약해진다.
+     */
+    private void validatePavilion() {
+        int openSides = 0;
+        for (int side = 0; side < 4; side++) {
+            int cells = 0;
+            int open = 0;
+            for (int i = 0; i < (side < 2 ? width : depth); i++) {
+                int c = side == 0 ? i : side == 1 ? i : side == 2 ? 0 : width - 1;
+                int r = side == 0 ? 0 : side == 1 ? depth - 1 : i;
+                int air = 0;
+                int solid = 0;
+                for (Course cs : columnOf(plan[r][c])) {
+                    if ("air".equals(cs.material())) {
+                        air += cs.count();
+                    } else {
+                        solid += cs.count();
+                    }
+                }
+                cells++;
+                if (air >= solid) {
+                    open++;
+                }
+            }
+            if (open * 2 > cells) {          // 그 면의 절반 넘게 열렸으면 「열린 면」
+                openSides++;
+            }
+        }
+        if (openSides < 3) {
+            throw new IllegalStateException("설계도 " + name + " — 정자가 사방으로 안 열렸다 (열린 면 "
+                    + openSides + " < 3). 정자는 머무는 곳이지 방 안이 아니다.");
+        }
+        for (Roof rf : roofs) {
+            if (!rf.hipPyramid()) {
+                throw new IllegalStateException("설계도 " + name + " — 정자의 지붕은 hip_pyramid 다: "
+                        + rf.name() + " (" + rf.type() + "). 맞배는 방향성을 만든다.");
+            }
+            int[] b = rf.box();
+            if ((b[2] - b[0]) != (b[3] - b[1])) {
+                throw new IllegalStateException("설계도 " + name + " — 사모지붕 1호는 <b>정사각</b>만 받는다: "
+                        + rf.name() + " (" + (b[2] - b[0] + 1) + "×" + (b[3] - b[1] + 1) + ")");
+            }
+            if (rf.rise() < 2) {
+                throw new IllegalStateException("설계도 " + name + " — 사모의 오름(rise)이 "
+                        + rf.rise() + " 이라 지붕이 안 선다");
             }
         }
     }

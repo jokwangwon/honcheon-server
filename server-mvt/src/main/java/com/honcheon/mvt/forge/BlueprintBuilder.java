@@ -138,6 +138,15 @@ public final class BlueprintBuilder {
             int cz = oz + (bz0 + bz1) / 2;
             int hf = (bx1 - bx0) / 2;               // 반폭 (x)
             int hl = (bz1 - bz0) / 2;               // 반깊이 (z)
+            if (rf.hipPyramid()) {
+                // ★사모 — 정자·망루. <b>회전 상자를 그대로</b> 넘긴다: 정사각이라 겉보기엔
+                //   회전이 무의미해 보여도, 장식·개구가 붙으면 방향이 생긴다 (사용자 지적).
+                //   지붕 빌더에서 회전을 생략하지 않는 것이 계약이다.
+                HwasanCampusBuilder.hipRoof(world, pad, ox + bx0, ox + bx1, oy + rf.baseY(),
+                        oz + bz0, oz + bz1, rf.eave(), rf.rise(), rf.ridgeCap(), tally);
+                n.roofs++;
+                continue;                            // 사모에는 상층이 없다 (1호)
+            }
             if (rf.lowGable()) {
                 // ★부속급 — 낮은 맞배. 결은 코드 한 곳에 남는다 (7.5 계율)
                 HwasanCampusBuilder.gableRoof(world, pad, ox + bx0, ox + bx1,
@@ -225,6 +234,15 @@ public final class BlueprintBuilder {
             int[] b = rf.box();
             int hf = (b[2] - b[0]) / 2;
             int hl = (b[3] - b[1]) / 2;
+            if (rf.hipPyramid()) {
+                // 사모 — 오름 + 정상 캡 (반폭이 아니라 도면이 준 rise 가 높이를 정한다)
+                top = Math.max(top, rf.baseY() + rf.rise() + Math.max(1, rf.ridgeCap()) + 1);
+                continue;
+            }
+            if (rf.lowGable()) {
+                top = Math.max(top, rf.baseY() + 2);   // 용마루 한 켜 + 여유
+                continue;
+            }
             // 하층 지붕 — 처마 끝에서 용마루까지 (반폭 + 내밈) 오르고 치미가 두 켜 더
             top = Math.max(top, rf.baseY() + Math.max(hf, hl) + rf.eave() + 2);
             if (rf.hasUpper()) {

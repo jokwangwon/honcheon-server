@@ -424,8 +424,15 @@ public final class TerraceForgeSelfTest {
             int intruders = 0;
             String worst = "";
             for (TerraceForge.Pad p : axPads) {
-                if (p.spec().zone() != 1 && p.spec().zone() != 2) {
-                    continue;   // 축선이 지나는 패드 (산문·외원)
+                // ★2026-08-07 <b>자를 좁혔다</b> (문턱을 낮춘 것이 아니다): 이 눈은 <b>산문</b>의
+                //   시야 회랑이다 — 계단 아래에서 문루를 볼 때 그 사이가 비어야 한다는 계약.
+                //   외원은 산문 <b>너머·위</b>라 그 시선에 들지 않고, E-02 로 <b>제 축 계약</b>
+                //   (outer_court_axis 11 · 교차로 잰다)을 따로 갖게 됐다. 두 자로 겹쳐 재면
+                //   외원의 정자가 「산문을 가린다」는 <b>있지도 않은 죄</b>로 걸린다.
+                //   ※옛 정자(9칸)는 상자가 회랑 밖으로 삐져나가 <b>우연히</b> 통과하고 있었다 —
+                //     이 눈은 외원에 대해 실제로는 아무것도 지키지 않고 있었다.
+                if (p.spec().zone() != 1) {
+                    continue;   // 산문 패드만
                 }
                 int cx = p.x0() + p.spec().width() / 2;
                 for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(p)) {
@@ -743,8 +750,9 @@ public final class TerraceForgeSelfTest {
             java.util.List<int[]> bases = new java.util.ArrayList<>();
             for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(ct)) {
                 int ss = Math.min(b[1] - b[0] + 1, b[3] - b[2] + 1);
-                if (ss == 5) {
-                    bases.add(b);          // 행각 기단 — 폭 5 (처마가 없으니 정확히 5)
+                int ls = Math.max(b[1] - b[0] + 1, b[3] - b[2] + 1);
+                if (ss == 5 && ls == 6) {
+                    bases.add(b);          // 행각 기단 — 5×6 (정자 기단 5×5 와 갈린다)
                 }
             }
             check("★코드가 까는 행각 기단이 넷이다", bases.size() == 4, bases.size() + "장");
@@ -767,6 +775,92 @@ public final class TerraceForgeSelfTest {
                     bases.stream().noneMatch(b -> b[0] == ct.x0() + 99), "");
         } catch (Exception e) {
             check("★행각 도면이 읽히고 제 계약을 지킨다", false, e.toString());
+        }
+
+        // ══════ ★★E-07 — 정자의 정본도 도면이다 · 사모지붕 (사용자 확정 2026-08-07) ══════
+        //   「정자를 low_gable 에 억지로 맞추는 것보다 지금이 지붕 문법을 하나 늘릴 적절한 시점」.
+        //   ★지붕 문법 셋이 완성된다: low_gable(행각) · hip_pyramid(정자·망루) · sweep(핵심 전각).
+        //     이 분류가 <b>건물 역할과 실루엣을 동시에</b> 가른다.
+        try {
+            java.util.Map<String, Object> praw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_pavilion.yml")));
+            Blueprint pb = Blueprint.of(praw);
+            pb.validate();      // ★정자의 자기 계약 — 사방 개방 · 사모 · 정사각
+            check("★정자 도면이 읽히고 제 계약을 지킨다 (" + pb.width() + "×" + pb.depth() + ")",
+                    true, "통과");
+            check("★정자가 부속급이되 쓰임이 <b>행각과 다르다</b> (계약이 갈린다)",
+                    pb.auxiliary() && "pavilion".equalsIgnoreCase(pb.usage()),
+                    pb.rank() + "/" + pb.usage());
+            check("★자리가 둘이다 — 남서·남동 모서리", pb.placements().size() == 2,
+                    pb.placements().stream().map(Blueprint.Placement::id).toList().toString());
+            for (Blueprint.Roof rf : pb.roofs()) {
+                check("★정자 지붕이 사모다 — " + rf.name() + " (맞배는 방향성을 만든다)",
+                        rf.hipPyramid(), rf.type());
+                check("★사모가 정사각이다 (1호의 계약 — 자유형 다각형 엔진은 안 만든다)",
+                        (rf.box()[2] - rf.box()[0]) == (rf.box()[3] - rf.box()[1]),
+                        (rf.box()[2] - rf.box()[0] + 1) + "×" + (rf.box()[3] - rf.box()[1] + 1));
+                check("★정자는 <b>낮고 넓은</b> 사모다 (망루의 높고 급한 것과 다르다)",
+                        rf.rise() <= 3 && rf.eave() >= 2 && "pavilion".equals(rf.profile()),
+                        "rise " + rf.rise() + " · 처마 " + rf.eave() + " · " + rf.profile());
+            }
+            // ★[눈의 눈] 망루 비례(tower)를 넣으면 <b>다른 지붕</b>이 나와야 한다 —
+            //   같은 타입이되 같은 지붕을 복사하지 않는다는 계약이 값에 실려 있는가
+            java.util.Map<String, Object> tw = new java.util.LinkedHashMap<>(
+                    (java.util.Map<String, Object>) ((java.util.Map<String, Object>)
+                            praw.get("roof")).get("사모"));
+            tw.put("profile", "tower");
+            tw.remove("rise");
+            tw.remove("eave");
+            java.util.Map<String, Object> traw = new java.util.LinkedHashMap<>(praw);
+            traw.put("roof", java.util.Map.of("사모", tw));
+            Blueprint towerBp = Blueprint.of(traw);
+            Blueprint.Roof trf = towerBp.roofs().get(0);
+            check("★[눈의 눈] profile: tower 는 더 높고 급한 사모를 낸다 (복사가 아니다)",
+                    trf.rise() > pb.roofs().get(0).rise(),
+                    "정자 rise " + pb.roofs().get(0).rise() + " vs 망루 rise " + trf.rise());
+
+            // ★도면의 자리와 코드의 기단이 칸까지 같은가 (행각과 같은 대조)
+            java.util.List<TerraceForge.Pad> ap5 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad ct2 = ap5.stream().filter(p2 -> p2.spec().zone() == 2)
+                    .findFirst().orElseThrow();
+            java.util.List<int[]> pbase = new java.util.ArrayList<>();
+            for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(ct2)) {
+                if (b[1] - b[0] + 1 == 5 && b[3] - b[2] + 1 == 5) {
+                    pbase.add(b);
+                }
+            }
+            check("★코드가 까는 정자 기단이 둘이다 (5×5)", pbase.size() == 2, pbase.size() + "장");
+            int pm = 0;
+            int[] axis5 = TerraceForge.ceremonialAxisBox(ap5);
+            for (Blueprint.Placement pl : pb.placements()) {
+                int px0 = ct2.x0() + pl.col();
+                int px1 = px0 + pl.widthOf(pb) - 1;
+                int pz0 = ct2.zN() + pl.row();
+                int pz1 = pz0 + pl.depthOf(pb) - 1;
+                for (int[] b : pbase) {
+                    if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
+                        pm++;
+                    }
+                }
+                check("★정자 " + pl.id() + " 가 의례축을 침범하지 않는다",
+                        !TerraceForge.boxesOverlap(axis5, new int[]{px0, px1, pz0, pz1}), "");
+            }
+            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다", pm == 2, pm + "/2");
+
+            // ★회전 계약 — 사모는 정사각이라 겉보기엔 회전이 무의미해 보이지만, 장식·개구가
+            //   붙으면 방향이 생긴다. <b>지붕 빌더에서 회전을 생략하지 않는다</b>가 계약이다.
+            Blueprint.Placement spin = new Blueprint.Placement("시험", 0, 0, 90);
+            int[] c0 = spin.map(pb, 0, 0);
+            int[] c1 = spin.map(pb, pb.width() - 1, 0);
+            check("★[눈의 눈] 사모도 회전 계약을 탄다 (평면 모서리가 90도로 옮겨간다)",
+                    c0[0] == pb.depth() - 1 && c0[1] == 0 && c1[1] == pb.width() - 1,
+                    java.util.Arrays.toString(c0) + " " + java.util.Arrays.toString(c1));
+            check("★[눈의 눈] 회전이 살창 법선도 돌린다",
+                    spin.turn(org.bukkit.block.BlockFace.NORTH) == org.bukkit.block.BlockFace.EAST,
+                    spin.turn(org.bukkit.block.BlockFace.NORTH).toString());
+        } catch (Exception e) {
+            check("★정자 도면이 읽히고 제 계약을 지킨다", false, e.toString());
         }
 
         // ══════ ★surface_ownership — 한 표면에 최종 재료 소유자는 하나다 ══════
