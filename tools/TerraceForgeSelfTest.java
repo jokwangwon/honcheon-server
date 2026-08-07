@@ -976,6 +976,28 @@ public final class TerraceForgeSelfTest {
             check("★공통 계약 한 장이 있다 (contract.md)", false, e.toString());
         }
 
+        // ══════ ★전수 조사가 실물과 같은가 (plasterhall_census.md) ══════
+        //   ★조사는 <b>신고가 아니라 센 것</b>이어야 한다. 호출부가 늘거나 줄면 표가 늙는다 —
+        //   소스에서 직접 세어 문서의 수와 맞춘다.
+        try {
+            String hcb2 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            String census = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "docs/design/hwasan/plasterhall_census.md"));
+            int halls = hcb2.split("plasterHall\\(w, p,", -1).length - 1;
+            int pavs = hcb2.split("pavilion\\(w, p,", -1).length - 1;
+            check("★전수 조사 문서가 있다 (plasterhall_census.md)", census.length() > 800,
+                    census.length() + "자");
+            check("★★조사의 plasterHall 수가 실물과 같다 (" + halls + "곳)",
+                    census.contains("**" + halls + "곳**"), halls + " vs 문서");
+            check("★★조사의 옛 pavilion 수가 실물과 같다 (" + pavs + "곳)",
+                    census.contains("**" + pavs + "곳**"), pavs + " vs 문서");
+            check("★조사가 다음 순서를 적는다 (강당부터)",
+                    census.contains("강당(4) → 생활(5·8) → 창고(17) → 장로회(12) → 정상 암자(13)"), "");
+        } catch (Exception e) {
+            check("★전수 조사 문서가 있다 (plasterhall_census.md)", false, e.toString());
+        }
+
         // ══════ ★surface_ownership — 한 표면에 최종 재료 소유자는 하나다 ══════
         //   (사용자 확정 2026-08-06) 이번 병의 공통 원인: 첫 생성자가 표면을 확정 →
         //   뒤 단계가 「의미를 표현한다」며 덧칠 → 정본과 화면이 갈라진다.
