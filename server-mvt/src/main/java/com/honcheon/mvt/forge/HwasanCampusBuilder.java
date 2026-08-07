@@ -1357,7 +1357,11 @@ public final class HwasanCampusBuilder {
      */
     public static void hipRoof(World world, TerraceForge.Pad pad, int x0, int x1, int y,
                                int z0, int z1, int eave, int rise, int cap, Tally tally) {
-        for (int k = 0; k <= rise; k++) {
+        // ★<b>꼭지는 발자국이 정한다</b>: 7칸 상자는 아무리 rise 를 올려도 네 켜에서 닫힌다.
+        //   그걸 모르면 망루처럼 급한 비례(rise 5)에서 <b>캡이 한 칸 떠</b> 공중에 박힌다.
+        //   rise 는 「얼마나 급한가」이고, 실제 꼭지는 <b>둘 중 작은 쪽</b>이다.
+        int top = Math.min(rise, Math.min(x1 - x0, z1 - z0) / 2 + 1);
+        for (int k = 0; k <= top; k++) {
             int in = k == 0 ? -eave : k - 1;          // 0층은 처마만큼 밖으로, 그 위는 한 켜씩 안으로
             int ax0 = x0 + in;
             int ax1 = x1 - in;
@@ -1370,12 +1374,12 @@ public final class HwasanCampusBuilder {
             //   처음엔 켜마다 <b>테두리 한 줄</b>만 놓았는데, 처마(2)와 몸체 사이가 두 칸이라
             //   그 사이에 <b>구멍</b>이 남았다 (실측: y3 의 x-15~-11 이 전부 air 였다).
             //   지붕은 껍질이되 <b>새지 않는 껍질</b>이어야 한다.
-            int nin = (k + 1 == 0 ? -eave : k);
+            int nin = k;
             int nx0 = x0 + nin;
             int nx1 = x1 - nin;
             int nz0 = z0 + nin;
             int nz1 = z1 - nin;
-            boolean last = k == rise || nx0 > nx1 || nz0 > nz1;
+            boolean last = k == top || nx0 > nx1 || nz0 > nz1;
             int yy = y + k;
             for (int x = ax0; x <= ax1; x++) {
                 for (int z = az0; z <= az1; z++) {
@@ -1409,7 +1413,7 @@ public final class HwasanCampusBuilder {
         int mx = (x0 + x1) / 2;
         int mz = (z0 + z1) / 2;
         for (int k = 0; k < Math.max(0, cap); k++) {
-            put(world, pad, mx, y + rise + 1 + k, mz, Material.COBBLED_DEEPSLATE_WALL, tally);
+            put(world, pad, mx, y + top + 1 + k, mz, Material.COBBLED_DEEPSLATE_WALL, tally);
         }
     }
 
@@ -1619,7 +1623,13 @@ public final class HwasanCampusBuilder {
             put(world, pad, cx - half, base + 1, cz + half + 1, Material.LANTERN, tally);
             base += wallH + 1;
         }
-        sweepRoof(world, pad, cx, base, cz, halves[2], halves[2], tally);
+        // ★★11 망루 — 팔작에서 <b>사모</b>로 (2026-08-07 · 사용자 순서 확정).
+        //   E-07 에서 만든 hip_pyramid 를 <b>tower 비례</b>로 쓴다: 처마 1(얕다) · 오름 5(급하다) ·
+        //   정상 캡 2. 정자(처마 2 · 오름 3 · 캡 1)와 <b>같은 계열이되 실루엣이 다르다</b> —
+        //   「같은 타입이되 같은 지붕을 복사하지 않는다」가 여기서 실물이 된다.
+        //   ★망루는 단지에서 가장 멀리서 보이는 실루엣이라, 이 한 채가 원경을 바꾼다.
+        int th = halves[2];
+        hipRoof(world, pad, cx - th, cx + th, base, cz - th, cz + th, 1, 5, 2, tally);
         tally.towers++;
     }
 

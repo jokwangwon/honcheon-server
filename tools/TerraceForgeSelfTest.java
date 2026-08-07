@@ -890,6 +890,17 @@ public final class TerraceForgeSelfTest {
             // ══ ★E-04 — 수련 구역도 한 재료다. 다만 <b>공공과 같은 재료면 안 된다</b> ══
             //   사용자: 「외원이 석전 100% 가 됐다는 이유로 연무장도 돌바닥으로 만들면 안 된다」.
             //   조닝은 <b>표면 자체가 다른 재료</b>인 것으로 드러난다 — 덧칠이 아니라.
+            // ══ ★11 망루 — 팔작에서 사모로 (2026-08-07) ══
+            //   E-07 이 만든 문법을 <b>tower 비례</b>로 쓴다. 정자와 같은 계열이되 실루엣이 다르다.
+            //   망루는 단지에서 <b>가장 멀리서 보이는</b> 실루엣이라 이 한 채가 원경을 바꾼다.
+            int wt = src.indexOf("private static void watchtower");
+            String wtBody = wt < 0 ? "" : src.substring(wt, Math.min(src.length(), wt + 2400));
+            check("★[눈의 눈] 망루 조성부를 찾았다", wt >= 0, "");
+            check("★★망루 지붕이 사모다 (팔작이 아니다 — 위계가 지붕으로 갈린다)",
+                    wtBody.contains("hipRoof(") && !wtBody.contains("sweepRoof("), "");
+            check("★망루는 <b>급한</b> 사모다 (정자의 낮고 넓은 것과 다르다)",
+                    wtBody.contains("base, cz - th, cz + th, 1, 5, 2"),
+                    "처마 1 · 오름 5 · 캡 2");
             check("★연무장 바닥이 한 재료다 (해시 얼룩 없음)",
                     !src.contains("Math.floorMod(x * 7 + z * 13, 5)"), "");
             check("★★수련 바닥이 공공 마당과 <b>다른 재료</b>다 (조닝이 표면으로 드러난다)",
