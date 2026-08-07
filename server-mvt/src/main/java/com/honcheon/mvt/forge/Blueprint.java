@@ -85,7 +85,12 @@ public final class Blueprint {
      * <b>같은 모듈이 방향만 달리 네 번</b> 서는 것을 도면으로 못 그렸다 (그래서 코드가 정본이었다).
      * {@code instances} 를 안 적은 도면(산문·본전)은 <b>종전대로</b> 가운데 한 장이다.
      */
-    public record Placement(String id, int col, int row, int rotate) {
+    public record Placement(String id, int col, int row, int rotate, int pad) {
+
+        /** 이 자리가 앉을 패드 — 0 이면 도면의 {@code meta.origin_pad} (E-06 · 2026-08-07) */
+        public int padOr(int fallback) {
+            return pad == 0 ? fallback : pad;
+        }
 
         /** 회전 뒤의 폭 (도수가 90·270 이면 도면의 깊이가 폭이 된다) */
         public int widthOf(Blueprint bp) {
@@ -345,7 +350,8 @@ public final class Blueprint {
                 }
                 places.add(new Placement(String.valueOf(m.getOrDefault("id", "(이름 없음)")),
                         ((Number) at.get(0)).intValue(), ((Number) at.get(1)).intValue(),
-                        Math.floorMod(rot, 360)));
+                        Math.floorMod(rot, 360),
+                        ((Number) m.getOrDefault("pad", 0)).intValue()));
             }
             if (places.isEmpty()) {
                 throw new IllegalStateException("설계도 " + nm + " — instances 를 적었는데 비어 있다");

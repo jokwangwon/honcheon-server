@@ -192,11 +192,10 @@ public final class HwasanCampusBuilder {
                     //   선다. 남쪽은 정자 자리라 z 는 어귀 위까지만 (로컬 4~18).
                     (w, p, t) -> lanternRow(w, p, p.x0() + 8, p.zN() + 4, p.zN() + 18, t),
                     (w, p, t) -> lanternRow(w, p, p.x0() + 24, p.zN() + 4, p.zN() + 18, t));
+            // ★E-06 — 종문도 외원과 <b>같은 행각 도면</b>을 쓴다 (기단만 캠퍼스가 깐다)
             case 6 -> List.of((w, p, t) -> gateGrand(w, p, cx, cz + 7, 10, t),   // 종문 21 (9b — 중층 마감 · 산문<)
-                    (w, p, t) -> cloister(w, p, p.x0() + 4, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> cloister(w, p, p.x0() + 4, cz + 6, p.zS() - 4, t),
-                    (w, p, t) -> cloister(w, p, p.x1() - 5, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> cloister(w, p, p.x1() - 5, cz + 6, p.zS() - 4, t));
+                    (w, p, t) -> corridorBase(w, p, p.x0() + 2, p.zN() + 1, 6, false, t),
+                    (w, p, t) -> corridorBase(w, p, p.x0() + 24, p.zN() + 1, 6, false, t));
             case 16 -> List.of((w, p, t) -> gateEW(w, p, cx, cz, 2, t));          // 동향 문루 (담은 지면 일)
             case 3 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 2, 6, t),      // 연무장 하 — 목인 6
                     (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
@@ -218,12 +217,11 @@ public final class HwasanCampusBuilder {
                     (w, p, t) -> pavilion(w, p, cx + 5, cz + 2, 3, t));
             case 19 -> List.of((w, p, t) -> pavilion(w, p, cx + 1, cz, 2, t));    // 절벽 전망대 (처마가 패드 안)
             case 20 -> List.of((w, p, t) -> plasterHall(w, p, cx + 1, cz, 4, 3, true, false, t));  // 부속 암자 (처마가 다리 어귀를 비킨다)
+            // ★E-06 — 중정도 같은 도면. 패드가 30 폭이라 동쪽 열만 두 칸 안이다
             case 101 -> List.of((w, p, t) -> pavilion(w, p, cx - 7, cz + 7, 2, t),   // 중정 정자 한 쌍 (★9 — 행각 몫으로 안쪽)
                     (w, p, t) -> pavilion(w, p, cx + 7, cz + 7, 2, t),
-                    (w, p, t) -> cloister(w, p, p.x0() + 4, p.zN() + 4, cz - 6, t),   // 9b — 중앙 통로 개구
-                    (w, p, t) -> cloister(w, p, p.x0() + 4, cz + 6, p.zS() - 4, t),
-                    (w, p, t) -> cloister(w, p, p.x1() - 5, p.zN() + 4, cz - 6, t),
-                    (w, p, t) -> cloister(w, p, p.x1() - 5, cz + 6, p.zS() - 4, t));
+                    (w, p, t) -> corridorBase(w, p, p.x0() + 2, p.zN() + 1, 6, false, t),
+                    (w, p, t) -> corridorBase(w, p, p.x0() + 24, p.zN() + 1, 6, false, t));
             case 10 -> List.of((w, p, t) -> gardenPond(w, p, cx, cz, t),          // 정원 — 연못·정자·매화 세 부품
                     (w, p, t) -> pavilion(w, p, cx + 6, cz + 6, 2, t),
                     (w, p, t) -> gardenPlum(w, p, cx - 2, cz - 6, t));
@@ -1255,37 +1253,6 @@ public final class HwasanCampusBuilder {
     //   ★반복 단위(외곽 면): <b>적주 | 회벽 | 격자창 | 회벽 |</b> (주기 4) — 긴 벽이 한 덩어리로
     //     보이지 않게. 같은 문법을 쓰되 산문의 복사본으로 읽히지 않는다.
     // ══════════════════════════════════════════════════════════════════
-
-    /**
-     * 옛 행각 — <b>개방 열주 복도</b> (기둥 + 맞배 지붕뿐). ★E-03 이 「퍼걸러로 읽힌다」로
-     * 판정한 그 형태다. <b>외원은 {@link #corridor} 로 갈아탔고</b>, 종문(6)·중정(101)은
-     * 아직 이것을 쓴다 — 그 구역의 회차에서 함께 간다. <b>「고쳤다」고 안 하는 것이 규약이다.</b>
-     */
-    private static void cloister(World world, TerraceForge.Pad pad, int x0, int z0, int z1, Tally tally) {
-        int y = pad.y();
-        int x1 = x0 + 4;   // 폭 5
-        for (int z = z0; z <= z1; z++) {
-            if (Math.floorMod(z - z0, 4) == 0) {
-                for (int x : new int[]{x0, x1}) {
-                    for (int dy = 1; dy <= 4; dy++) {
-                        put(world, pad, x, y + dy, z, Material.SPRUCE_LOG, tally);
-                    }
-                }
-            }
-            put(world, pad, x0 - 1, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
-            put(world, pad, x1 + 1, y + 4, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
-            put(world, pad, x0, y + 5, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
-            put(world, pad, x1, y + 5, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
-            putRoofStair(world, pad, x0 + 1, y + 5, z, org.bukkit.block.BlockFace.EAST, tally);
-            putRoofStair(world, pad, x1 - 1, y + 5, z, org.bukkit.block.BlockFace.WEST, tally);
-            put(world, pad, x0 + 2, y + 5, z, roofCube(x0 + 2, y + 5, z), tally);
-            put(world, pad, x0 + 2, y + 6, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
-            if (Math.floorMod(z - z0, 8) == 4) {
-                put(world, pad, x0 + 2, y + 3, z, Material.LANTERN, tally);   // 복도 등롱
-            }
-        }
-        tally.cloisters++;
-    }
 
     /** 행각 폭 (기둥 열 둘 + 보행 3) */
     public static final int CORRIDOR_WIDTH = 5;

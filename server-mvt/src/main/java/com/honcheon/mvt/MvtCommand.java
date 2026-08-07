@@ -4503,7 +4503,8 @@ public final class MvtCommand implements CommandExecutor {
                     + " — 평면 " + bp.width() + "×" + bp.depth() + " · 패드 " + pad.spec().name()
                     + " (y" + pad.y() + ") · 지붕 " + bp.roofs().size() + " · 자리 " + bp.spots().size());
             com.honcheon.mvt.forge.BlueprintBuilder.Count n =
-                    com.honcheon.mvt.forge.BlueprintBuilder.build(world, bp, pad);
+                    // ★E-06 — 자리마다 패드가 다를 수 있다 (한 도면이 여러 구역에 앉는다)
+                    com.honcheon.mvt.forge.BlueprintBuilder.build(world, bp, plan.pads());
             Announce.say(plugin, sender, ChatColor.GOLD + "[도면시험] 도면대로 섰다 — 칸 " + n.cells
                     + " · 블록 " + n.blocks + " · 비운 켜 " + n.cleared + " · 지붕 " + n.roofs);
             int[] front = bp.spots().get("문_앞");

@@ -724,18 +724,25 @@ public final class TerraceForgeSelfTest {
             check("★행각 도면이 외원 패드(2)에 앉는다", cb.pad() == 2, cb.pad());
 
             java.util.List<Blueprint.Placement> ps = cb.placements();
-            check("★★자리가 넷이다 — 한 도면이 네 모듈을 낳는다 (ㄷ자로 안 합친다)",
-                    ps.size() == 4, ps.size() + "자리");
+            // ★E-06 — 한 도면이 <b>세 구역</b>에 앉는다 (외원 4 · 종문 2 · 중정 2).
+            //   구역마다 세어야 한다 — 합계만 보면 어느 구역이 비었는지 안 보인다.
+            java.util.Map<Integer, Integer> perPad = new java.util.TreeMap<>();
+            for (Blueprint.Placement pl : ps) {
+                perPad.merge(pl.padOr(cb.pad()), 1, Integer::sum);
+            }
+            check("★★한 도면이 세 구역에 앉는다 — 외원 4 · 종문 2 · 중정 2 (문법 재사용)",
+                    perPad.equals(java.util.Map.of(2, 4, 6, 2, 101, 2)), perPad.toString());
             java.util.Set<String> ids = new java.util.HashSet<>();
             for (Blueprint.Placement pl : ps) {
                 ids.add(pl.id());
             }
-            check("★북서·북동·서·동 넷이 이름으로 다 있다",
+            check("★외원의 북서·북동·서·동 넷이 이름으로 다 있다",
                     ids.containsAll(java.util.List.of("north_west", "north_east", "west", "east")),
                     ids.toString());
-            check("★측면 둘이 돌아 앉는다 (같은 모듈을 방향만 달리 쓴다)",
-                    ps.stream().filter(pl -> pl.rotate() != 0).count() == 2,
-                    ps.stream().map(pl -> pl.id() + ":" + pl.rotate()).toList().toString());
+            check("★외원 측면 둘이 돌아 앉는다 (같은 모듈을 방향만 달리 쓴다)",
+                    ps.stream().filter(pl -> pl.padOr(cb.pad()) == 2 && pl.rotate() != 0).count() == 2,
+                    ps.stream().filter(pl -> pl.padOr(cb.pad()) == 2)
+                            .map(pl -> pl.id() + ":" + pl.rotate()).toList().toString());
             for (Blueprint.Roof rf : cb.roofs()) {
                 check("★지붕이 낮은 맞배다 — " + rf.name() + " (정문급 팔작이 아니다)",
                         rf.lowGable() && rf.eave() <= 1, rf.type() + " · 처마 " + rf.eave());
@@ -756,20 +763,26 @@ public final class TerraceForgeSelfTest {
                 }
             }
             check("★코드가 까는 행각 기단이 넷이다", bases.size() == 4, bases.size() + "장");
+            // ★세 구역 전부에서 대조한다 — 도면의 자리와 코드의 기단이 칸까지 같은가
             int matched = 0;
+            int wanted = 0;
             for (Blueprint.Placement pl : ps) {
-                int px0 = ct.x0() + pl.col();
+                int zone = pl.padOr(cb.pad());
+                TerraceForge.Pad host = ap4.stream().filter(p2 -> p2.spec().zone() == zone)
+                        .findFirst().orElseThrow();
+                int px0 = host.x0() + pl.col();
                 int px1 = px0 + pl.widthOf(cb) - 1;
-                int pz0 = ct.zN() + pl.row();
+                int pz0 = host.zN() + pl.row();
                 int pz1 = pz0 + pl.depthOf(cb) - 1;
-                for (int[] b : bases) {
+                wanted++;
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(host)) {
                     if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
                         matched++;
                     }
                 }
             }
-            check("★★도면의 자리와 코드의 기단이 <b>칸까지</b> 같다 (허공에 서지 않는다)",
-                    matched == 4, matched + "/4");
+            check("★★도면의 자리와 코드의 기단이 <b>칸까지</b> 같다 (세 구역 전부)",
+                    matched == wanted, matched + "/" + wanted);
             // ★[눈의 눈] 옛 자리(측면 10칸)는 이 대조가 <b>어긋났다</b>고 답해야 한다
             check("★[눈의 눈] 자리를 한 칸 옮기면 대조가 어긋난다",
                     bases.stream().noneMatch(b -> b[0] == ct.x0() + 99), "");
@@ -850,7 +863,7 @@ public final class TerraceForgeSelfTest {
 
             // ★회전 계약 — 사모는 정사각이라 겉보기엔 회전이 무의미해 보이지만, 장식·개구가
             //   붙으면 방향이 생긴다. <b>지붕 빌더에서 회전을 생략하지 않는다</b>가 계약이다.
-            Blueprint.Placement spin = new Blueprint.Placement("시험", 0, 0, 90);
+            Blueprint.Placement spin = new Blueprint.Placement("시험", 0, 0, 90, 0);
             int[] c0 = spin.map(pb, 0, 0);
             int[] c1 = spin.map(pb, pb.width() - 1, 0);
             check("★[눈의 눈] 사모도 회전 계약을 탄다 (평면 모서리가 90도로 옮겨간다)",
@@ -1391,8 +1404,10 @@ public final class TerraceForgeSelfTest {
             //   내주느라 <b>남측 행각 두 토막을 뺐다</b> (원래 6행뿐이라 물리면 길이 0 이 되어
             //   조용히 사라졌다 — 눈이 그것을 잡았다). 행각은 북측 좌우에 남는다.
             //   ★E-03 (2026-08-06): 행각을 삼면 네 모듈로 → 외원 8부품 (정자2 + 행각4 + 등롱열2).
-            check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 5부품(문+행각4) — 9b 중앙 통로 갈림",
-                    plazaParts == 8 && jongParts == 5, plazaParts + "/" + jongParts);
+            //   ★E-06 (2026-08-07): 종문도 옛 퍼걸러를 버리고 같은 도면을 쓴다 → 5 → <b>3</b>
+            //     (문 + 행각 2). 측면 둘은 어귀 실측 회차의 몫이라 아직 안 선다 (E-06b).
+            check("★9 행각 — 외원 8부품(정자2+행각4+등롱열2) · 종문 3부품(문+행각2) — 9b 중앙 통로 갈림",
+                    plazaParts == 8 && jongParts == 3, plazaParts + "/" + jongParts);
             check("★D-25 재료 — 단청(금빛·적목)이 팔레트에",
                     bPal.contains(Material.CUT_SANDSTONE)
                             && bPal.contains(Material.STRIPPED_MANGROVE_WOOD), bPal);

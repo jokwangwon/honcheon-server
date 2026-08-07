@@ -49,6 +49,35 @@ public final class BlueprintBuilder {
      * @param pad 도면이 앉는 패드 — 원점(좌상단)과 바닥 높이를 여기서 얻는다.
      *            도면 크기와 패드 크기가 다르면 던진다 (도면은 패드를 넘지 않는다).
      */
+    /**
+     * ★E-06 (2026-08-07) — <b>한 도면이 여러 패드에 앉는다</b>. 외원에서 확정한 행각 문법을
+     * 종문·중정에 <b>재사용</b>하려면 자리마다 패드가 달라야 한다 (사용자: 「외원에서 확정한
+     * hwasan_common / low_gable 재사용」). 자리에 {@code pad} 를 안 적으면 종전대로
+     * {@code meta.origin_pad} 다 — 옛 도면은 그대로 선다.
+     */
+    public static Count build(World world, Blueprint bp, java.util.List<TerraceForge.Pad> pads) {
+        Count n = new Count();
+        java.util.List<Blueprint.Placement> places = bp.placements();
+        if (places.isEmpty()) {
+            TerraceForge.Pad only = padOf(pads, bp.pad(), bp);
+            return build(world, bp, only);
+        }
+        for (Blueprint.Placement place : places) {
+            TerraceForge.Pad pad = padOf(pads, place.padOr(bp.pad()), bp);
+            int padW = pad.x1() - pad.x0() + 1;
+            int padD = pad.zS() - pad.zN() + 1;
+            stampAt(world, bp, pad, place, padW, padD, n);
+        }
+        return n;
+    }
+
+    private static TerraceForge.Pad padOf(java.util.List<TerraceForge.Pad> pads, int zone,
+                                          Blueprint bp) {
+        return pads.stream().filter(p -> p.spec().zone() == zone).findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "설계도 " + bp.name() + " 가 앉을 패드(구역 " + zone + ")를 못 찾았다"));
+    }
+
     public static Count build(World world, Blueprint bp, TerraceForge.Pad pad) {
         Count n = new Count();
         int padW = pad.x1() - pad.x0() + 1;
@@ -62,7 +91,7 @@ public final class BlueprintBuilder {
         java.util.List<Blueprint.Placement> places = bp.placements();
         if (places.isEmpty()) {
             places = java.util.List.of(new Blueprint.Placement("(가운데)",
-                    (padW - bp.width()) / 2, (padD - bp.depth()) / 2, 0));
+                    (padW - bp.width()) / 2, (padD - bp.depth()) / 2, 0, 0));
         }
         for (Blueprint.Placement place : places) {
             stampAt(world, bp, pad, place, padW, padD, n);
