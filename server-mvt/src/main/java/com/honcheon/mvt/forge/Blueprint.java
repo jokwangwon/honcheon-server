@@ -388,6 +388,8 @@ public final class Blueprint {
                 validatePavilion();
             } else if ("residence".equalsIgnoreCase(usage)) {
                 validateResidence();
+            } else if ("storage".equalsIgnoreCase(usage)) {
+                validateStorage();
             } else {
                 validateCorridor();
             }
@@ -642,6 +644,118 @@ public final class Blueprint {
             if (!rf.lowGable()) {
                 throw new IllegalStateException("설계도 " + name + " — 거처의 지붕은 low_gable 이다: "
                         + rf.name() + " (" + rf.type() + "). sweep 는 핵심 전각의 것이라 위계가 죽는다.");
+            }
+        }
+    }
+
+    /**
+     * ★저장(창고)의 자기 계약 (사용자 확정 2026-08-08 · 창고 17).
+     *
+     * <p>★<b>지붕·재료는 생활관과 공유해도 평면 계약은 공유하지 않는다.</b> 사용자가 짚은 함정:
+     * 「생활용 low_gable 하나 만듦 → 창고도 비슷하니 그대로 사용 → 다시 하나가 여러 쓰임을
+     * 먹기 시작」. 그래서 두 계약은 <b>서로 어긋나게</b> 세운다:
+     * <pre>
+     *   생활 : 작은 문 여럿 (연속 ≤2) · 창 많음 · 같은 칸 3연속 금지
+     *   저장 : <b>큰 문</b> (연속 ≥3) · 창 적음(≤20%) · 벽 면적 큼(≥50%)
+     * </pre>
+     * 한 도면이 둘 다 통과하면 그건 계약이 아니라 <b>같은 말을 두 번 적은 것</b>이다.
+     */
+    private void validateStorage() {
+        // ★문은 <b>정면</b>에서 재고, 벽·창 비율은 <b>둘레 전체</b>에서 잰다.
+        //   처음 둘 다 정면에서 쟀더니 「큰 문이 벽을 먹어」 벽 면적이 0.40 으로 떨어졌다 —
+        //   자가 틀린 것이다. 큰 문은 이 집의 <b>정의</b>이지 벽이 적다는 뜻이 아니다.
+        int lattice = 0;
+        int plasterCells = 0;
+        int cells = 0;
+        for (int r = 0; r < depth; r++) {
+            for (int c = 0; c < width; c++) {
+                boolean edge = r == 0 || r == depth - 1 || c == 0 || c == width - 1;
+                if (!edge || columnOf(plan[r][c]).isEmpty()) {
+                    continue;
+                }
+                cells++;
+                boolean hasLattice = false;
+                boolean hasPlaster = false;
+                for (Course cs : columnOf(plan[r][c])) {
+                    if (cs.material().contains("trapdoor")) {
+                        hasLattice = true;
+                    }
+                    if ("plaster".equals(cs.material())) {
+                        hasPlaster = true;
+                    }
+                }
+                if (hasLattice) {
+                    lattice++;
+                }
+                if (hasPlaster) {
+                    plasterCells++;
+                }
+            }
+        }
+        int bestOpen = 0;
+        int run = 0;
+        for (int c = 0; c < width; c++) {
+            int air = 0;
+            for (Course cs : columnOf(plan[courtyardRow][c])) {
+                if ("air".equals(cs.material())) {
+                    air += cs.count();
+                }
+            }
+            if (air >= 4) {
+                run++;
+                bestOpen = Math.max(bestOpen, run);
+            } else {
+                run = 0;
+            }
+        }
+        if (bestOpen < 3) {
+            throw new IllegalStateException("설계도 " + name + " — 창고의 문이 " + bestOpen
+                    + "칸이다. 물자가 드나들려면 <b>큰 문</b>이어야 한다 (작은 문 여럿은 거처의 것).");
+        }
+        double win = lattice / (double) cells;
+        double wall = plasterCells / (double) cells;
+        if (win > 0.20) {
+            throw new IllegalStateException("설계도 " + name + " — 창고에 창이 많다 ("
+                    + String.format("%.2f", win) + " > 0.20). 저장은 벽이 많고 창이 적다.");
+        }
+        if (wall < 0.50) {
+            throw new IllegalStateException("설계도 " + name + " — 창고의 벽 면적이 적다 ("
+                    + String.format("%.2f", wall) + " < 0.50).");
+        }
+        // ★벽이 많아도 <b>통짜 백면</b>은 안 된다 — 적주가 끊는다 (거처보다 느슨한 자: 5).
+        //   ★단 <b>실한 칸만</b> 센다: 처음 개구까지 세었더니 다섯 칸 큰 문이 「통짜 백면」으로
+        //   걸렸다 — 그 다섯 칸은 이 집의 <b>정의</b>다. 자가 과했다.
+        for (int r : new int[]{0, courtyardRow}) {
+            int same = 0;
+            char prev = 0;
+            for (int c = 0; c < width; c++) {
+                char ch = plan[r][c];
+                int air = 0;
+                int solid = 0;
+                for (Course cs : columnOf(ch)) {
+                    if ("air".equals(cs.material())) {
+                        air += cs.count();
+                    } else {
+                        solid += cs.count();
+                    }
+                }
+                if (air > solid) {            // 개구는 벽이 아니다 — 세지 않는다
+                    same = 0;
+                    prev = 0;
+                    continue;
+                }
+                same = ch == prev ? same + 1 : 1;
+                prev = ch;
+                if (same >= 5) {
+                    throw new IllegalStateException("설계도 " + name + " — r" + r + " 에 같은 벽칸이 "
+                            + same + "개 잇달았다 (col " + c + "). 벽이 많아도 통짜 백면은 안 된다.");
+                }
+            }
+        }
+        for (Roof rf : roofs) {
+            if (!rf.lowGable()) {
+                throw new IllegalStateException("설계도 " + name + " — 창고의 지붕은 low_gable 이다: "
+                        + rf.name() + " (" + rf.type() + ").");
             }
         }
     }

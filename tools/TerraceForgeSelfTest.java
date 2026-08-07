@@ -1145,6 +1145,104 @@ public final class TerraceForgeSelfTest {
             check("★생활관 도면이 읽히고 제 계약을 지킨다", false, e.toString());
         }
 
+        // ══════ ★★저장 유형 — 창고 도면 (hwasan_storage.yml · 2026-08-08) ══════
+        //   ★사용자가 짚은 함정: 「생활용 하나 만듦 → 창고도 비슷하니 그대로 사용 →
+        //   다시 하나가 여러 쓰임을 먹는다」. 그래서 두 계약을 <b>서로 어긋나게</b> 세웠고,
+        //   여기서 <b>정말 어긋나는지</b> 되묻는다 — 서로의 자로 재면 둘 다 떨어져야 한다.
+        try {
+            java.util.Map<String, Object> sraw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_storage.yml")));
+            Blueprint sb2 = Blueprint.of(sraw);
+            sb2.validate();
+            check("★창고 도면이 읽히고 제 계약을 지킨다 (" + sb2.width() + "×" + sb2.depth() + ")",
+                    true, "통과");
+            check("★저장은 부속급이고 쓰임이 생활관과 다르다",
+                    sb2.auxiliary() && "storage".equalsIgnoreCase(sb2.usage()),
+                    sb2.rank() + "/" + sb2.usage());
+            check("★창고가 생활관과 <b>지붕을 공유한다</b> (같은 문파다)",
+                    sb2.roofs().stream().allMatch(Blueprint.Roof::lowGable), "");
+            check("★창고가 옛 몸체(15×11)를 그대로 쓴다",
+                    sb2.width() == 15 && sb2.depth() == 11, sb2.width() + "×" + sb2.depth());
+
+            // ★★[눈의 눈] 서로의 자로 재면 <b>둘 다 떨어진다</b> — 계약이 정말 갈렸는가
+            java.util.Map<String, Object> rraw2 = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_residence.yml")));
+            boolean storeAsRes = false;
+            boolean resAsStore = false;
+            try {
+                java.util.Map<String, Object> m1 = new java.util.LinkedHashMap<>(sraw);
+                java.util.Map<String, Object> mm1 = new java.util.LinkedHashMap<>(
+                        (java.util.Map<String, Object>) sraw.get("meta"));
+                mm1.put("usage", "residence");
+                m1.put("meta", mm1);
+                Blueprint.of(m1).validate();
+                storeAsRes = true;
+            } catch (IllegalStateException ok) {
+                storeAsRes = false;
+            }
+            try {
+                java.util.Map<String, Object> m2 = new java.util.LinkedHashMap<>(rraw2);
+                java.util.Map<String, Object> mm2 = new java.util.LinkedHashMap<>(
+                        (java.util.Map<String, Object>) rraw2.get("meta"));
+                mm2.put("usage", "storage");
+                m2.put("meta", mm2);
+                Blueprint.of(m2).validate();
+                resAsStore = true;
+            } catch (IllegalStateException ok) {
+                resAsStore = false;
+            }
+            check("★★[눈의 눈] 창고를 <b>거처의 자</b>로 재면 떨어진다",
+                    !storeAsRes, storeAsRes ? "그냥 통과했다 — 계약이 같다는 뜻" : "떨어졌다");
+            check("★★[눈의 눈] 생활관을 <b>저장의 자</b>로 재면 떨어진다",
+                    !resAsStore, resAsStore ? "그냥 통과했다 — 계약이 같다는 뜻" : "떨어졌다");
+
+            // 자리·기단·봉투·유출
+            java.util.List<TerraceForge.Pad> ap8 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad st = ap8.stream().filter(p2 -> p2.spec().zone() == 17)
+                    .findFirst().orElseThrow();
+            Blueprint.Placement sp = sb2.placements().get(0);
+            int sx0 = st.x0() + sp.col();
+            int sx1 = sx0 + sp.widthOf(sb2) - 1;
+            int sz0 = st.zN() + sp.row();
+            int sz1 = sz0 + sp.depthOf(sb2) - 1;
+            boolean sMatch = false;
+            for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(st)) {
+                if (b[0] == sx0 && b[1] == sx1 && b[2] == sz0 && b[3] == sz1) {
+                    sMatch = true;
+                }
+            }
+            check("★★창고 도면의 자리와 코드의 기단이 칸까지 같다", sMatch, "");
+            int ev3 = sb2.roofs().get(0).eave();
+            check("★창고 처마가 패드 밖으로 안 샌다",
+                    sx0 - ev3 >= st.x0() && sx1 + ev3 <= st.x1()
+                            && sz0 - ev3 >= st.zN() && sz1 + ev3 <= st.zS(), "");
+            int sLane = 0;
+            for (TerraceForge.StairLane l : TerraceForge.resolveLanes(campus, ap8)) {
+                int qx = l.dirZ() != 0 ? 1 : 0;
+                int qz = l.dirZ() != 0 ? 0 : 1;
+                for (int t3 = 0; t3 <= l.length(); t3++) {
+                    for (int o = -l.rail(); o <= l.rail(); o++) {
+                        int lx = l.startX() + l.dirX() * (t3 - 1) + qx * o;
+                        int lz = l.startZ() + l.dirZ() * (t3 - 1) + qz * o;
+                        if (lx >= sx0 && lx <= sx1 && lz >= sz0 && lz <= sz1) {
+                            sLane++;
+                        }
+                    }
+                }
+            }
+            check("★창고가 계단 봉투를 침범하지 않는다 (서편 어귀)", sLane == 0, sLane + "칸");
+            String hcb5 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            int c17 = hcb5.indexOf("case 17 ->");
+            String body17 = c17 < 0 ? "" : hcb5.substring(c17, hcb5.indexOf("case 9 ->", c17));
+            check("★★창고가 옛 plasterHall 을 안 부른다",
+                    !body17.isEmpty() && !body17.contains("plasterHall(w, p,"), "");
+        } catch (Exception e) {
+            check("★창고 도면이 읽히고 제 계약을 지킨다", false, e.toString());
+        }
+
         // ══════ ★전수 조사가 실물과 같은가 (plasterhall_census.md) ══════
         //   ★조사는 <b>신고가 아니라 센 것</b>이어야 한다. 호출부가 늘거나 줄면 표가 늙는다 —
         //   소스에서 직접 세어 문서의 수와 맞춘다.

@@ -211,7 +211,8 @@ public final class HwasanCampusBuilder {
             case 5 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 4, p.zN() + 16, 13, 7, t),
                     (w, p, t) -> padBase(w, p, p.x0() + 20, p.zN() + 16, 13, 7, t));
             case 8 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 10, p.zN() + 14, 13, 7, t));
-            case 17 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 2, 7, 5, false, false, t),  // 창고 15×11
+            // ★창고(17) — 저장 유형 도면 (hwasan_storage.yml). 캠퍼스는 기단만 깐다
+            case 17 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 10, p.zN() + 5, 15, 11, t),
                     (w, p, t) -> chests(w, p, cx, y, cz + 2, t));
             case 9 -> List.of((w, p, t) -> mainHall(w, p, cx, cz + 2, t));        // 본전 — 33폭 2층 중루
             case 12 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 6, 8, 3, true, false, t));  // 장로회 17×7
