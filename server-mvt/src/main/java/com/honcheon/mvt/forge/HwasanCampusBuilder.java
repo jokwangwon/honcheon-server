@@ -1442,16 +1442,44 @@ public final class HwasanCampusBuilder {
         tally.pavilions++;
     }
 
-    /** 모래 마당 — 안쪽을 모래로 재포장 (테두리 4칸은 박석 그대로 · 지면 일이라 부품이 아니다) */
+    /**
+     * 모래 마당 — 연무장 안쪽을 <b>한 재료</b>로 재포장 (테두리는 박석 그대로 · 지면 일).
+     *
+     * <p>★★E-04 (2026-08-07). 사용자 주의를 먼저 적는다: 「<b>외원이 석전 100% 가 됐다는
+     * 이유로 연무장도 돌바닥으로 만들면 안 된다.</b> sandField 가 의도된 수련 재료인지,
+     * 아니면 사암 해시와 섞여 잡티가 된 것인지를 다시 <b>블록으로 재는</b> 회차가 되어야 한다.」
+     *
+     * <p><b>실측</b> (연무장 하 · 표본 112칸): 모래 80% : 매끈사암 <b>20%</b>.
+     * 그 20% 는 {@code floorMod(x*7 + z*13, 5)} 가 뿌린 것이다 — 외원 마당을 누렇게 만들던
+     * {@code sandyRepave} 와 <b>같은 꼴의 해시</b>다.
+     *
+     * <p>★가르는 자는 그대로다: <b>위치가 정하면 구조, 해시가 정하면 잡티다.</b>
+     * 그러므로 판정은 둘로 갈린다 —
+     * <ul>
+     *   <li><b>모래는 남는다.</b> 연무장의 모래는 조닝이 아니라 <b>쓰임</b>이다 (밟고 구르는 바닥).
+     *       공공 마당과 <b>표면 자체가 다른 재료</b>인 것이 조닝의 옳은 표현이고,
+     *       다른 재료를 위에 덧칠하는 것이 틀린 표현이다.</li>
+     *   <li><b>얼룩은 걷는다.</b> 20% 사암은 구조가 아니라 잡티였다.</li>
+     * </ul>
+     */
     private static void sandField(World world, TerraceForge.Pad pad, Tally tally) {
-        int y = pad.y();
+        Material m = trainingPaveMaterial();
         for (int x = pad.x0() + 8; x <= pad.x1() - 8; x++) {
             for (int z = pad.zN() + 8; z <= pad.zS() - 8; z++) {
-                put(world, pad, x, y, z,
-                        Math.floorMod(x * 7 + z * 13, 5) == 0 ? Material.SMOOTH_SANDSTONE
-                                : Material.SAND, tally);
+                put(world, pad, x, pad.y(), z, m, tally);
             }
         }
+    }
+
+    /**
+     * 수련 구역 바닥의 <b>단일</b> 재료 — 모래.
+     *
+     * <p>★{@link #publicPaveMaterial()} 과 <b>달라야 한다</b>: 조닝(공공/수련/핵심)은
+     * <b>표면 자체가 다른 재료</b>인 것으로 드러난다. 둘이 같아지면 연무장이 광장이 된다 —
+     * 눈이 그것을 잰다.
+     */
+    public static Material trainingPaveMaterial() {
+        return Material.SAND;
     }
 
     /** 목인 줄 — 동서로 5칸씩 벌린다 (줄의 남북 자리는 구역이 정한다 — 계단 통로 회피) */

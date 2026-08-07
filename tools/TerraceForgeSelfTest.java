@@ -887,6 +887,19 @@ public final class TerraceForgeSelfTest {
             String owner = publicCase < 0 ? "" : src.substring(publicCase,
                     Math.min(src.length(), publicCase + 120));
             check("★[눈의 눈] 공공 마당의 재료 소유자 줄을 찾았다", publicCase >= 0, "");
+            // ══ ★E-04 — 수련 구역도 한 재료다. 다만 <b>공공과 같은 재료면 안 된다</b> ══
+            //   사용자: 「외원이 석전 100% 가 됐다는 이유로 연무장도 돌바닥으로 만들면 안 된다」.
+            //   조닝은 <b>표면 자체가 다른 재료</b>인 것으로 드러난다 — 덧칠이 아니라.
+            check("★연무장 바닥이 한 재료다 (해시 얼룩 없음)",
+                    !src.contains("Math.floorMod(x * 7 + z * 13, 5)"), "");
+            check("★★수련 바닥이 공공 마당과 <b>다른 재료</b>다 (조닝이 표면으로 드러난다)",
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.trainingPaveMaterial()
+                            != com.honcheon.mvt.forge.HwasanCampusBuilder.publicPaveMaterial(),
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.trainingPaveMaterial()
+                            + " vs " + com.honcheon.mvt.forge.HwasanCampusBuilder.publicPaveMaterial());
+            check("★모래를 없애지 않았다 (연무장의 모래는 조닝이 아니라 쓰임이다)",
+                    com.honcheon.mvt.forge.HwasanCampusBuilder.trainingPaveMaterial()
+                            == Material.SAND, "");
             check("★공공 마당의 소유자가 publicRepave 하나다 (sandyRepave 가 안 되살아났다)",
                     owner.contains("publicRepave") && !src.contains("sandyRepave("),
                     owner.trim());
