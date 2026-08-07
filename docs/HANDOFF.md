@@ -11,7 +11,10 @@
 다음은 산문을 더 고치는 것이 **아니라** ② 외원/입구 광장 + 산문 주변 절벽·정원이다.
 
 ### ★★ 다음 세션 첫 걸음
-1. **먼저 읽어라**: `docs/design/hwasan/README.md` (체계·시선 고정) ·
+0. ★★★**먼저 읽어라**: `docs/design/hwasan/contract.md` — **새 구역이 반드시 따라야 하는
+   공통 계약 한 장** (2026-08-07 · 바닥·축·행각·정자·지붕·인스턴스·투영 비움·표면 소유권).
+   맨 아래 「새 구역을 세울 때의 순서」가 다음 회차의 첫 걸음이다.
+1. **그다음**: `docs/design/hwasan/README.md` (체계·시선 고정) ·
    `docs/design/hwasan/module.md` (공통 모듈 + 갈리는 숫자) ·
    `docs/design/hwasan/01_산문/` (도면 5종 — 첫 정본) ·
    `config/blueprints/hwasan_gate.yml` (좌표의 정본 · `design_intent` 절을 꼭 읽어라)

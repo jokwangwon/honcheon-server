@@ -925,6 +925,57 @@ public final class TerraceForgeSelfTest {
             check("★정자 도면이 읽히고 제 계약을 지킨다", false, e.toString());
         }
 
+        // ══════ ★★★공통 계약 한 장 — docs/design/hwasan/contract.md 를 대조한다 ══════
+        //   (사용자 확정 2026-08-07 · 02~101 정리) 「이제부터 새 구역이 반드시 따라야 하는 계약」.
+        //   ★문서는 <b>신고서</b>다. 숫자를 적어 두고 코드만 바꾸면 문서가 조용히 늙는다 —
+        //   여기서 <b>글자 그대로</b> 찾는다 (facade_projection_clearance 때와 같은 처방).
+        try {
+            String doc = java.nio.file.Files.readString(
+                    java.nio.file.Path.of("docs/design/hwasan/contract.md"));
+            check("★공통 계약 한 장이 있다 (contract.md)", doc.length() > 2000, doc.length() + "자");
+            record Claim(String what, String needle) { }
+            java.util.List<Claim> claims = java.util.List.of(
+                    new Claim("바닥 공공", "`stone_bricks`"),
+                    new Claim("바닥 수련", "`sand`"),
+                    new Claim("정면 투영 반폭", "반폭 **" + TerraceForge.FACADE_CLEAR_HALF + "**"),
+                    new Claim("정면 투영 깊이", "깊이 **" + TerraceForge.FACADE_CLEAR_DEPTH + "**"),
+                    new Claim("상자 밖 자리", "**" + TerraceForge.FACADE_STANDOFF + "** 하나로"),
+                    new Claim("의례축 폭", "보행 **" + TerraceForge.CEREMONIAL_AXIS_WIDTH + "**"),
+                    new Claim("행각 몸체", "몸체 **6×5**"),
+                    new Claim("행각 벽높이", "벽 높이 **"
+                            + com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_WALL_H + "**"),
+                    new Claim("행각 주기", "(주기 " + com.honcheon.mvt.forge.HwasanCampusBuilder.CORRIDOR_BAY + ")"),
+                    new Claim("정자 몸체", "몸체 **5×5**"),
+                    new Claim("지붕 셋", "`hip_pyramid`"),
+                    new Claim("꼭지 식", "짧은변/2 + 1"),
+                    new Claim("계단 봉투 자", "`lane.rail`(=half+1)"),
+                    new Claim("처마 규약", "처마는 뺀다"));
+            int missing = 0;
+            String lost = "";
+            for (Claim c : claims) {
+                if (!doc.contains(c.needle())) {
+                    missing++;
+                    lost = c.what() + " (" + c.needle() + ")";
+                }
+            }
+            check("★★계약 문서의 수치가 코드와 같다 (" + claims.size() + "항)",
+                    missing == 0, missing == 0 ? "대조 통과" : missing + "항 어긋남 · " + lost);
+            // ★여덟 묶음이 다 있는가 — 하나가 빠지면 새 구역이 그것만 안 지킨다
+            int groups = 0;
+            for (String g : new String[]{"① 바닥", "② 축", "③ 행각", "④ 정자",
+                    "⑤ 지붕", "⑥ 인스턴스", "⑦ 투영 비움", "⑧ 표면 소유권"}) {
+                if (doc.contains(g)) {
+                    groups++;
+                }
+            }
+            check("★계약이 여덟 묶음으로 닫힌다 (바닥·축·행각·정자·지붕·인스턴스·투영·소유권)",
+                    groups == 8, groups + "/8");
+            check("★새 구역을 세울 때의 순서가 적혀 있다 (패드를 훑는 것부터)",
+                    doc.contains("패드를 훑는다") && doc.contains("마지막 선택"), "");
+        } catch (Exception e) {
+            check("★공통 계약 한 장이 있다 (contract.md)", false, e.toString());
+        }
+
         // ══════ ★surface_ownership — 한 표면에 최종 재료 소유자는 하나다 ══════
         //   (사용자 확정 2026-08-06) 이번 병의 공통 원인: 첫 생성자가 표면을 확정 →
         //   뒤 단계가 「의미를 표현한다」며 덧칠 → 정본과 화면이 갈라진다.
