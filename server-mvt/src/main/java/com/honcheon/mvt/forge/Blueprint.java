@@ -42,7 +42,12 @@ public final class Blueprint {
      */
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
-                       String profile) {
+                       String profile, boolean rafters) {
+
+        /** ★D2 ③ 처마 밑에 서까래를 넣는가 — 근경 디테일이라 <b>도면이 고른다</b> (LOD) */
+        public boolean rafters() {
+            return rafters;
+        }
 
         /** 사모지붕인가 — 네 면이 한 꼭지로 수렴한다 (정자·망루) */
         public boolean hipPyramid() {
@@ -140,16 +145,21 @@ public final class Blueprint {
     private final int courtyardRow;
     private final String usage;
     private final String family;
+    private final Map<Character, Integer> depths;
+    private final int foundation;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
                       List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
-                      String rank, int courtyardRow, String usage, String family) {
+                      String rank, int courtyardRow, String usage, String family,
+                      Map<Character, Integer> depths, int foundation) {
         this.placements = placements;
         this.rank = rank;
         this.courtyardRow = courtyardRow;
         this.usage = usage;
         this.family = family;
+        this.depths = depths;
+        this.foundation = foundation;
         this.name = name;
         this.pad = pad;
         this.width = width;
@@ -230,6 +240,28 @@ public final class Blueprint {
      */
     public String family() {
         return family;
+    }
+
+    /**
+     * ★<b>입면 깊이</b> — 그 칸이 벽면에서 앞뒤로 몇 칸인가 (바깥이 +). D2 모델링 계약 ①.
+     *
+     * <p>색이 아무리 좋아도 <b>한 평면에 다 붙어 있으면 평평하다</b>. 적주는 나오고
+     * 격자창은 들어가야 입면에 그림자가 생긴다. 방향은 도면이 적지 않는다 —
+     * {@link BlueprintBuilder#outward} 가 <b>자리에서</b> 읽는다 (한 처방이 네 벽에 다 쓰이므로).
+     */
+    public int depthOf(char ch) {
+        return depths.getOrDefault(ch, 0);
+    }
+
+    /**
+     * ★D2 ⑤ <b>기단 층수</b> — 도면이 그 위에 선다 (안 적으면 1 · 옛 도면은 그대로).
+     *
+     * <p>이걸 도면이 알아야 하는 까닭: {@link BlueprintBuilder} 는 앉기 전에 제 부피를
+     * <b>비운다</b>. 기단을 두 단 쌓아 놓고 도면이 한 단 위에 앉으면 <b>윗단을 제가 지운다</b>.
+     * 위계가 기단을 정하므로(auxiliary 1 · principal 2 · ceremonial 3), 그 값이 여기 온다.
+     */
+    public int foundation() {
+        return foundation;
     }
 
     /** 이 도면이 앉는 자리들 — <b>비어 있으면</b> 패드 한가운데 한 장 (종전 문법) */
@@ -340,7 +372,8 @@ public final class Blueprint {
                             "tower".equals(String.valueOf(m.getOrDefault("profile", "pavilion")))
                                     ? 5 : 3)).intValue(),
                     ((Number) m.getOrDefault("ridge_cap", 1)).intValue(),
-                    String.valueOf(m.getOrDefault("profile", "pavilion"))));
+                    String.valueOf(m.getOrDefault("profile", "pavilion")),
+                    Boolean.parseBoolean(String.valueOf(m.getOrDefault("rafters", "false")))));
         });
 
         Map<String, int[]> spots = new LinkedHashMap<>();
@@ -369,12 +402,25 @@ public final class Blueprint {
                 throw new IllegalStateException("설계도 " + nm + " — instances 를 적었는데 비어 있다");
             }
         }
+        Map<Character, Integer> depths = new LinkedHashMap<>();
+        ((Map<String, Object>) root.getOrDefault("depth", Map.of())).forEach((k, v) -> {
+            if (k.length() != 1) {
+                throw new IllegalStateException("설계도 " + nm + " — depth 의 열쇠는 한 글자여야 한다: " + k);
+            }
+            int dep = ((Number) v).intValue();
+            if (dep < -1 || dep > 1) {
+                throw new IllegalStateException("설계도 " + nm + " — 입면 깊이는 -1..+1 이다: "
+                        + k + "=" + dep + " (더 나오면 벽이 아니라 다른 건물이 된다)");
+            }
+            depths.put(k.charAt(0), dep);
+        });
         String usage = String.valueOf(meta.getOrDefault("usage",
                 roofs.stream().anyMatch(Roof::hipPyramid) ? "pavilion" : "corridor"));
         return new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots, places,
                 String.valueOf(meta.getOrDefault("rank", "principal")),
                 ((Number) meta.getOrDefault("south_row", d - 1)).intValue(), usage,
-                String.valueOf(meta.getOrDefault("family", usage)));
+                String.valueOf(meta.getOrDefault("family", usage)), depths,
+                ((Number) meta.getOrDefault("foundation", 1)).intValue());
     }
 
     private static Object req(Map<String, Object> m, String k) {

@@ -49,6 +49,7 @@ meta:
   rank: principal
   usage: assembly
   south_row: 10
+  foundation: 2            # ★D2 ⑤ 기단 2단 (principal) — 아래가 한 칸 넓다
 
 instances:
   - id: gangdang
@@ -58,11 +59,22 @@ instances:
 # ── 기둥 처방 (아래→위 · y0 = 패드 포장면 위 한 칸) ──────────────────────
 columns:
   ".": []                                                    # 내부 — 비운다
-  "P": ["stripped_mangrove_log*5", "dark_oak_planks"]        # 붉은 적주 + 도리
+  # ★D2 ② 기둥은 막대기가 아니라 <b>구조체</b>다 — 주초 · 기둥 · 창방 · 도리
+  "P": ["smooth_stone", "stripped_mangrove_log*4",
+        "dark_oak_planks", "dark_oak_planks"]                # 주초 + 적주 + 창방 + 도리
   "W": ["plaster*5", "dark_oak_planks"]                      # 회벽
   "L": ["dark_oak_planks", "dark_oak_trapdoor*3",
         "dark_oak_planks", "dark_oak_planks"]                # 격자창 — 위아래를 인방으로 끊는다
   "O": ["air*5", "dark_oak_planks"]                          # 중앙 통행 개구
+
+# ── ★D2 ① 입면 깊이 — 한 면에 다 붙이지 않는다 (바깥이 +) ──────────────
+#   적주가 나오고 격자창이 들어가야 입면에 <b>그림자</b>가 생긴다.
+#   방향은 도면이 안 적는다 — 자리가 정한다 (한 처방이 네 벽에 다 쓰이므로).
+depth:
+  "P": 1
+  "W": 0
+  "L": -1
+  "O": 0
 
 # ── 평면 (17×11 · 위=북 · 아래(row 10)=남 정면) ─────────────────────────
 #   변마다 적주│회벽│격자창│회벽 (주기 4) — 긴 벽이 한 덩어리로 안 보이게
@@ -86,3 +98,4 @@ roof:
     box: [0, 0, 16, 10]
     base_y: 6
     eave: 2
+    rafters: true          # ★D2 ③ 처마 밑 서까래 — 올려다보면 보인다 (근경 LOD)

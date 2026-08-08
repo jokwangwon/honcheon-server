@@ -112,7 +112,9 @@ public final class BlueprintBuilder {
         }
         int ox = pad.x0() + place.col();
         int oz = pad.zN() + place.row();
-        int oy = pad.y() + 1;                       // 포장면 위 한 칸이 도면의 y0
+        // ★D2 ⑤ — 도면은 <b>기단 위</b>에 선다. 안 적으면 1 (포장면 위 한 칸 · 옛 도면 그대로).
+        //   이걸 안 맞추면 도면이 앉으며 <b>제가 기단 윗단을 지운다</b>.
+        int oy = pad.y() + bp.foundation();
 
         // ★★자리를 먼저 비운다 — 클래스 주석의 B-196. 도면이 앉는 부피는 도면의 것이다.
         //   여기가 없으면 앞서 선 건물이 도면 껍데기 **안에** 남아, 격자칸 너머로 비쳐
@@ -134,6 +136,14 @@ public final class BlueprintBuilder {
                 int[] d = place.map(bp, c, r);      // ★회전 — 도면 (c,r) 이 어디로 가는가
                 int x = ox + d[0];
                 int z = oz + d[1];
+                // ★입면 깊이 (D2 ①) — 그 칸을 법선 방향으로 밀거나 당긴다. 방향은
+                //   자리가 정한다 (outward). 회전도 함께 탄다.
+                int dep = bp.depthOf(bp.at(c, r));
+                if (dep != 0) {
+                    org.bukkit.block.BlockFace nf = place.turn(outward(bp, c, r));
+                    x += nf.getModX() * dep;
+                    z += nf.getModZ() * dep;
+                }
                 int y = oy;
                 n.cells++;
                 for (Blueprint.Course course : bp.columnOf(bp.at(c, r))) {
@@ -185,6 +195,13 @@ public final class BlueprintBuilder {
             }
             HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
                     rf.eave(), tally);
+            // ★D2 ③ 처마 밑 서까래 — 지붕이 「검은 덩어리」로 읽히지 않게.
+            //   도면이 rafters: true 라 적은 지붕에만 넣는다 (LOD — 모든 곳에 넣지 않는다).
+            if (rf.rafters()) {
+                HwasanCampusBuilder.rafters(world, pad,
+                        ox + bx0 - rf.eave(), ox + bx1 + rf.eave(), oy + rf.baseY(),
+                        oz + bz0 - rf.eave(), oz + bz1 + rf.eave(), tally);
+            }
             n.roofs++;
             if (rf.hasUpper()) {
                 // 상층 누각 — 하층 지붕 위에 몸체를 세우고 그 위에 다시 지붕

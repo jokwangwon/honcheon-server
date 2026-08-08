@@ -1010,8 +1010,11 @@ public final class TerraceForgeSelfTest {
                 int px1 = px0 + pl.widthOf(hb) - 1;
                 int pz0 = host.zN() + pl.row();
                 int pz1 = pz0 + pl.depthOf(hb) - 1;
+                // ★D2 ⑤ — 기단이 두 단이면 아래 단이 한 칸 넓다. 대조도 그만큼 넓힌다
+                int fo = hb.foundation() - 1;
                 for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(host)) {
-                    if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
+                    if (b[0] == px0 - fo && b[1] == px1 + fo
+                            && b[2] == pz0 - fo && b[3] == pz1 + fo) {
                         hm++;
                     }
                 }
@@ -1041,6 +1044,30 @@ public final class TerraceForgeSelfTest {
                     hm == hb.placements().size(), hm + "/" + hb.placements().size());
             check("★강당이 계단 봉투를 침범하지 않는다 (지상 발자국)", hLane == 0, hLane + "칸");
             check("★강당 처마가 패드 밖으로 안 샌다", hSpill == 0, hSpill + "채");
+            // ══ ★★D2 모델링 계약 — 강당이 시험체다 (2026-08-09) ══
+            //   ★「예쁘게 해라」는 못 재지만 이건 잰다: 창이 벽보다 들어갔는가 ·
+            //   기둥 아래 주초가 있는가 · 처마 밑에 서까래가 있는가 · 기단이 위계만큼인가.
+            check("★★D2① 입면에 깊이가 있다 — 적주는 나오고 격자창은 들어간다",
+                    hb.depthOf('P') == 1 && hb.depthOf('L') == -1 && hb.depthOf('W') == 0,
+                    "적주 " + hb.depthOf('P') + " · 회벽 " + hb.depthOf('W')
+                            + " · 격자 " + hb.depthOf('L'));
+            check("★★D2② 기둥 아래 <b>주초</b>가 있다 (막대기가 아니라 구조체다)",
+                    hb.columnOf('P').get(0).material().contains("stone"),
+                    hb.columnOf('P').get(0).material());
+            check("★D2② 기둥 위에 창방·도리가 얹힌다 (판재 두 켜)",
+                    hb.columnOf('P').stream()
+                            .filter(cs -> cs.material().contains("planks")).count() >= 2, "");
+            check("★★D2③ 처마 밑에 <b>서까래</b>가 있다 (올려다보면 보인다)",
+                    hb.roofs().get(0).rafters(), "");
+            check("★★D2⑤ 기단이 위계만큼이다 (principal → 2단)",
+                    hb.foundation() == 2 && "principal".equalsIgnoreCase(hb.rank()),
+                    hb.foundation() + "단 · " + hb.rank());
+            // ★[눈의 눈] 깊이가 <b>실제로 자리를 옮기는가</b> — 선언만 하고 안 쓰면 헛것이다
+            check("★[눈의 눈] 깊이가 도면 기계에 닿는다 (BlueprintBuilder 가 법선으로 민다)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"))
+                            .contains("bp.depthOf(bp.at(c, r))"), "");
+
             // ★옛 코드가 남았는가 — 강당이 아직 plasterHall 을 부르면 두 언어가 공존한다
             String hcb3 = java.nio.file.Files.readString(java.nio.file.Path.of(
                     "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));

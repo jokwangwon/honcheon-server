@@ -204,7 +204,8 @@ public final class HwasanCampusBuilder {
             case 7 -> List.of((w, p, t) -> dummyRow(w, p, cx, cz - 2, 4, t),      // 훈련장 중 (박석 마당)
                     (w, p, t) -> rack(w, p, cx - 3, y, zS - 3, 3, t));
             // ★강당(4) — 모임 유형의 첫 도면 (hwasan_hall.yml). 캠퍼스는 기단만 깐다
-            case 4 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 11, p.zN() + 9, 17, 11, t),
+            //   ★D2 ⑤ 기단 2단 (principal) — 아래가 한 칸 넓다
+            case 4 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 11, p.zN() + 9, 17, 11, 2, t),
                     (w, p, t) -> rack(w, p, cx - 3, y, cz + 2, 3, t));
             // ★생활(5·8) — 거처 유형 도면 (hwasan_residence.yml). 캠퍼스는 기단만 깐다.
             //   ★서편 어귀(x0~2)는 계단 2→5 의 통로다 — 두 채가 그 밖에 선다 (통로가 먼저)
@@ -1351,9 +1352,28 @@ public final class HwasanCampusBuilder {
      */
     private static void padBase(World world, TerraceForge.Pad pad, int x0, int z0,
                                 int w, int d, Tally tally) {
-        for (int dx = 0; dx < w; dx++) {
-            for (int dz = 0; dz < d; dz++) {
-                put(world, pad, x0 + dx, pad.y(), z0 + dz, Material.SMOOTH_STONE, tally);
+        padBase(world, pad, x0, z0, w, d, 1, tally);
+    }
+
+    /**
+     * ★D2 ⑤ <b>기단</b> — 무게감은 여기서 온다 (2026-08-09 · 모델링 계약).
+     *
+     * <p>「벽 · 벽 · 벽 · 바닥」이면 건물이 종이처럼 선다. <b>한 단 돌출한 석재 기단</b>을 두면
+     * 같은 몸체가 갑자기 무겁게 앉는다. 층수는 <b>위계</b>가 정한다
+     * (auxiliary 1 · principal 2 · ceremonial 3).
+     *
+     * <p>★기단은 포장면 <b>아래로</b> 쌓지 않고 <b>위로</b> 올린다. 도면은 그 위에 서므로
+     * BlueprintBuilder 가 비우는 높이(oy)도 함께 올라가야 한다 — 그건 도면 쪽 몫이다.
+     * 여기서는 <b>돌출 단</b>만 만든다: 아래가 넓고 위가 좁다.
+     */
+    private static void padBase(World world, TerraceForge.Pad pad, int x0, int z0,
+                                int w, int d, int steps, Tally tally) {
+        for (int s = 0; s < Math.max(1, steps); s++) {
+            int m = Math.max(0, steps - 1 - s);      // 아래 단일수록 한 칸씩 넓다
+            for (int dx = -m; dx < w + m; dx++) {
+                for (int dz = -m; dz < d + m; dz++) {
+                    put(world, pad, x0 + dx, pad.y() + s, z0 + dz, Material.SMOOTH_STONE, tally);
+                }
             }
         }
     }
@@ -1433,6 +1453,33 @@ public final class HwasanCampusBuilder {
         int mz = (z0 + z1) / 2;
         for (int k = 0; k < Math.max(0, cap); k++) {
             put(world, pad, mx, y + top + 1 + k, mz, Material.COBBLED_DEEPSLATE_WALL, tally);
+        }
+    }
+
+    /**
+     * ★D2 ③ <b>처마 밑</b> — 지붕을 「검은 덩어리」에서 나눈다 (2026-08-09 · 모델링 계약).
+     *
+     * <p>가장 크게 갈리는 곳이다: <b>아래에서 올려다봤을 때 서까래가 보여야 한다.</b>
+     * 처마 끝 한 칸 안쪽에 <b>서까래 결</b>(어두운 목재)을 한 칸 걸러 놓고, 그 안쪽에
+     * <b>도리</b>를 한 줄 돌린다. 지붕 자체는 그대로 두고 <b>밑면만</b> 손댄다.
+     *
+     * @param eaveY 처마 켜의 y (지붕 첫 켜) — 서까래는 그 <b>한 칸 아래</b>에 놓인다
+     */
+    public static void rafters(World world, TerraceForge.Pad pad, int x0, int x1, int eaveY,
+                               int z0, int z1, Tally tally) {
+        int y = eaveY - 1;
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                boolean edge = x == x0 || x == x1 || z == z0 || z == z1;
+                if (!edge) {
+                    continue;                       // 처마 밑 띠만 (안쪽은 실내다)
+                }
+                boolean corner = (x == x0 || x == x1) && (z == z0 || z == z1);
+                // 한 칸 걸러 서까래 — 나머지는 도리(판)로 이어 「빗살」이 보이게
+                boolean rafter = corner || Math.floorMod(x + z, 2) == 0;
+                put(world, pad, x, y, z,
+                        rafter ? Material.DARK_OAK_LOG : Material.DARK_OAK_PLANKS, tally);
+            }
         }
     }
 
