@@ -148,6 +148,22 @@ public final class BlueprintBuilder {
                 n.cells++;
                 for (Blueprint.Course course : bp.columnOf(bp.at(c, r))) {
                     for (int k = 0; k < course.count(); k++, y++) {
+                        if ("lattice".equals(course.material())) {
+                            // ★D2 ④ — 「lattice」는 재료가 아니라 <b>처방</b>이다. 모양은
+                            //   창호 family 가 정한다 (그림 하나를 박지 않는다):
+                            //     W1 세로살만 · W2 세로+가로 · W3 + 중앙 강조 한 켜
+                            boolean mid = course.count() >= 3 && k == course.count() / 2;
+                            Material lm = switch (bp.windowFamily().toUpperCase()) {
+                                case "W1" -> Material.DARK_OAK_FENCE;
+                                case "W3" -> mid ? Material.DARK_OAK_PLANKS : Material.DARK_OAK_TRAPDOOR;
+                                default -> Material.DARK_OAK_TRAPDOOR;
+                            };
+                            BlockData ld = Bukkit.createBlockData(lm);
+                            world.getBlockAt(x, y, z).setBlockData(
+                                    stand(ld, place.turn(outward(bp, c, r))), false);
+                            n.blocks++;
+                            continue;
+                        }
                         if ("air".equals(course.material())) {
                             // ★빈 켜도 찍는다 — 개구는 「안 짓는 것」이 아니라 「비우는 것」이다
                             world.getBlockAt(x, y, z).setType(Material.AIR, false);
@@ -155,6 +171,47 @@ public final class BlueprintBuilder {
                         } else {
                             stamp(world, x, y, z, course.material(),
                                     place.turn(outward(bp, c, r)));
+                            n.blocks++;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ★D2 ⑥ 공포 — <b>적주의 머리 위에서만</b> 시작한다 (자리 계약이 이름보다 먼저다).
+        //   ★1차 medium 은 작게: 기둥 머리 위 2단 · 밖으로 1 · 좌우 1. 강당엔 이미
+        //   깊이·주초·창방·도리·서까래·2단 기단이 들어갔다 — 공포는 <b>마지막 리듬</b>이면 된다.
+        int brk = switch (bp.bracket().toLowerCase()) {
+            case "simple" -> 1;
+            case "medium" -> 2;
+            case "elaborate" -> 3;
+            default -> 0;
+        };
+        if (brk > 0) {
+            for (int r = 0; r < bp.depth(); r++) {
+                for (int c = 0; c < bp.width(); c++) {
+                    boolean post = bp.columnOf(bp.at(c, r)).stream()
+                            .anyMatch(cs -> cs.material().contains("mangrove_log"));
+                    if (!post) {
+                        continue;                    // ★적주가 아니면 공포도 없다
+                    }
+                    int[] d2 = place.map(bp, c, r);
+                    org.bukkit.block.BlockFace nf = place.turn(outward(bp, c, r));
+                    // ★공포는 <b>처마를 받친다</b> — 기둥 머리 <b>위</b>가 아니라 지붕 <b>바로 아래</b>다.
+                    //   처음 기둥 머리 위에 놓았더니 지붕 위로 튀어나갔다 (눈이 잡았다).
+                    int roofBase = bp.roofs().isEmpty() ? bp.heightAt(c, r)
+                            : bp.roofs().get(0).baseY();
+                    int top = oy + roofBase - brk;
+                    for (int s2 = 0; s2 < brk; s2++) {
+                        int reach = s2 + 1;                  // 위 단일수록 한 칸 더 나온다
+                        for (int side = -1; side <= 1; side++) {
+                            int bx = ox + d2[0] + nf.getModX() * reach - nf.getModZ() * side;
+                            int bz = oz + d2[1] + nf.getModZ() * reach + nf.getModX() * side;
+                            if (side != 0 && s2 == 0) {
+                                continue;            // 아래 단은 가운데만 (좌우는 위 단에서)
+                            }
+                            world.getBlockAt(bx, top + s2, bz)
+                                    .setType(Material.DARK_OAK_PLANKS, false);
                             n.blocks++;
                         }
                     }

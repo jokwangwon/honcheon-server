@@ -147,12 +147,16 @@ public final class Blueprint {
     private final String family;
     private final Map<Character, Integer> depths;
     private final int foundation;
+    private final String winFamily;
+    private final String winDensity;
+    private final String bracket;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
                       List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
                       String rank, int courtyardRow, String usage, String family,
-                      Map<Character, Integer> depths, int foundation) {
+                      Map<Character, Integer> depths, int foundation,
+                      String winFamily, String winDensity, String bracket) {
         this.placements = placements;
         this.rank = rank;
         this.courtyardRow = courtyardRow;
@@ -160,6 +164,9 @@ public final class Blueprint {
         this.family = family;
         this.depths = depths;
         this.foundation = foundation;
+        this.winFamily = winFamily;
+        this.winDensity = winDensity;
+        this.bracket = bracket;
         this.name = name;
         this.pad = pad;
         this.width = width;
@@ -262,6 +269,36 @@ public final class Blueprint {
      */
     public int foundation() {
         return foundation;
+    }
+
+    /**
+     * ★D2 ④ 창호의 <b>모양</b> — {@code W1}(세로살) · {@code W2}(세로+가로) · {@code W3}(복합).
+     *
+     * <p>★<b>모양과 개수를 가른다</b> (사용자 2026-08-09): 둘을 한 규칙으로 묶으면 생활관과
+     * 창고가 둘 다 W1 이라는 이유로 다시 비슷해진다. 모양은 여기, 개수는 {@link #windowDensity}.
+     *
+     * <p>★블록 그림 하나로 박지 않고 <b>규칙</b>으로 둔다: 세로 분할만(W1) · 세로+가로(W2) ·
+     * 바깥 틀 + 내부 격자 + 중앙 강조(W3). 개구 크기가 바뀌어도 새 유형을 안 만든다.
+     * ★해시는 어디에도 안 낀다 — {@code usage} → {@code rank} → 칸의 역할이 정한다.
+     */
+    public String windowFamily() {
+        return winFamily;
+    }
+
+    /** 창이 얼마나 자주 나오는가 — {@code none·low·medium·high} */
+    public String windowDensity() {
+        return winDensity;
+    }
+
+    /**
+     * ★D2 ⑥ 공포 — {@code none · simple · medium · elaborate}.
+     *
+     * <p>★<b>이름만 검사하면 부족하다</b> (사용자): 자리 계약이 먼저다 —
+     * <b>공포는 적주의 머리 위에서만 시작한다.</b> 적주가 없는 곳에 붙으면 그건 공포가 아니라
+     * 「처마 밑에 블록을 막 붙여놓은 것」이다.
+     */
+    public String bracket() {
+        return bracket;
     }
 
     /** 이 도면이 앉는 자리들 — <b>비어 있으면</b> 패드 한가운데 한 장 (종전 문법) */
@@ -402,6 +439,7 @@ public final class Blueprint {
                 throw new IllegalStateException("설계도 " + nm + " — instances 를 적었는데 비어 있다");
             }
         }
+        Map<String, Object> win = (Map<String, Object>) meta.getOrDefault("window", Map.of());
         Map<Character, Integer> depths = new LinkedHashMap<>();
         ((Map<String, Object>) root.getOrDefault("depth", Map.of())).forEach((k, v) -> {
             if (k.length() != 1) {
@@ -420,7 +458,10 @@ public final class Blueprint {
                 String.valueOf(meta.getOrDefault("rank", "principal")),
                 ((Number) meta.getOrDefault("south_row", d - 1)).intValue(), usage,
                 String.valueOf(meta.getOrDefault("family", usage)), depths,
-                ((Number) meta.getOrDefault("foundation", 1)).intValue());
+                ((Number) meta.getOrDefault("foundation", 1)).intValue(),
+                String.valueOf(win.getOrDefault("family", "W2")),
+                String.valueOf(win.getOrDefault("density", "medium")),
+                String.valueOf(meta.getOrDefault("bracket", "none")));
     }
 
     private static Object req(Map<String, Object> m, String k) {

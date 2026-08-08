@@ -50,6 +50,11 @@ meta:
   usage: assembly
   south_row: 10
   foundation: 2            # ★D2 ⑤ 기단 2단 (principal) — 아래가 한 칸 넓다
+  # ★D2 ④ 창호 — <b>모양(family)</b>과 <b>개수(density)</b>를 가른다
+  window:
+    family: W2             #   세로 + 가로 분할 (강당·행각의 결)
+    density: medium
+  bracket: medium          # ★D2 ⑥ 공포 — 적주 머리 위 2단 · 밖으로 1 · 좌우 1 (작게 시작)
 
 instances:
   - id: gangdang
@@ -63,8 +68,8 @@ columns:
   "P": ["smooth_stone", "stripped_mangrove_log*4",
         "dark_oak_planks", "dark_oak_planks"]                # 주초 + 적주 + 창방 + 도리
   "W": ["plaster*5", "dark_oak_planks"]                      # 회벽
-  "L": ["dark_oak_planks", "dark_oak_trapdoor*3",
-        "dark_oak_planks", "dark_oak_planks"]                # 격자창 — 위아래를 인방으로 끊는다
+  "L": ["dark_oak_planks", "lattice*3",
+        "dark_oak_planks", "dark_oak_planks"]                # 격자창 — 결은 family 가 정한다
   "O": ["air*5", "dark_oak_planks"]                          # 중앙 통행 개구
 
 # ── ★D2 ① 입면 깊이 — 한 면에 다 붙이지 않는다 (바깥이 +) ──────────────

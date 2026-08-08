@@ -1062,6 +1062,30 @@ public final class TerraceForgeSelfTest {
             check("★★D2⑤ 기단이 위계만큼이다 (principal → 2단)",
                     hb.foundation() == 2 && "principal".equalsIgnoreCase(hb.rank()),
                     hb.foundation() + "단 · " + hb.rank());
+            check("★★D2④ 창호의 <b>모양과 개수를 가른다</b> (family ≠ density)",
+                    "W2".equalsIgnoreCase(hb.windowFamily())
+                            && "medium".equalsIgnoreCase(hb.windowDensity()),
+                    hb.windowFamily() + " · " + hb.windowDensity());
+            check("★D2④ 도면이 격자를 <b>처방</b>으로 부른다 (그림을 박지 않는다)",
+                    hb.columnOf('L').stream().anyMatch(cs -> "lattice".equals(cs.material())), "");
+            check("★★D2⑥ 공포가 medium 이다 (principal — 작게 시작한다)",
+                    "medium".equalsIgnoreCase(hb.bracket()), hb.bracket());
+            // ★★공포의 <b>자리 계약</b> — 이름만 검사하면 부족하다
+            String bbSrc = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+            check("★★D2⑥ 공포가 <b>적주 머리 위에서만</b> 시작한다 (자리 계약)",
+                    bbSrc.contains("cs.material().contains(\"mangrove_log\")")
+                            && bbSrc.contains("★적주가 아니면 공포도 없다"), "");
+            check("★★D2⑥ 공포가 <b>처마를 받친다</b> (지붕 바로 아래 · 위로 안 튄다)",
+                    bbSrc.contains("int top = oy + roofBase - brk;")
+                            && hb.roofs().get(0).baseY() - 2 >= 0,
+                    "지붕 " + hb.roofs().get(0).baseY() + " − 공포 2단");
+            check("★D2⑥ 공포가 개구를 침범하지 않는다 (개구 칸엔 적주가 없다)",
+                    hb.columnOf('O').stream().noneMatch(cs -> cs.material().contains("mangrove_log")),
+                    "");
+            // ★창호 셋이 <b>규칙으로</b> 다 정의됐는가 (강당은 W2 만 쓰지만 체계는 있다)
+            check("★D2④ 창호 셋(W1·W2·W3)이 규칙으로 다 있다",
+                    bbSrc.contains("case \"W1\"") && bbSrc.contains("case \"W3\""), "");
             // ★[눈의 눈] 깊이가 <b>실제로 자리를 옮기는가</b> — 선언만 하고 안 쓰면 헛것이다
             check("★[눈의 눈] 깊이가 도면 기계에 닿는다 (BlueprintBuilder 가 법선으로 민다)",
                     java.nio.file.Files.readString(java.nio.file.Path.of(
