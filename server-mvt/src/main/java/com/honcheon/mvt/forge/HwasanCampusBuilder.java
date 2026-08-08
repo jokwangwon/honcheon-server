@@ -215,7 +215,9 @@ public final class HwasanCampusBuilder {
             case 17 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 10, p.zN() + 5, 15, 11, t),
                     (w, p, t) -> chests(w, p, cx, y, cz + 2, t));
             case 9 -> List.of((w, p, t) -> mainHall(w, p, cx, cz + 2, t));        // 본전 — 33폭 2층 중루
-            case 12 -> List.of((w, p, t) -> plasterHall(w, p, cx, cz + 6, 8, 3, true, false, t));  // 장로회 17×7
+            // ★장로회(12) — 모임 계열의 얕은 변형 (hwasan_council.yml). 두 채가 축을 비켜 앉는다
+            case 12 -> List.of((w, p, t) -> padBase(w, p, p.x0() + 2, p.zN() + 14, 15, 7, t),
+                    (w, p, t) -> padBase(w, p, p.x0() + 28, p.zN() + 14, 15, 7, t));
             case 13 -> List.of((w, p, t) -> plasterHall(w, p, cx - 5, cz + 2, 4, 3, false, false, t),  // 정상 사당+정자
                     (w, p, t) -> pavilion(w, p, cx + 5, cz + 2, 3, t));
             case 19 -> List.of((w, p, t) -> pavilion(w, p, cx + 1, cz, 2, t));    // 절벽 전망대 (처마가 패드 안)

@@ -1,0 +1,83 @@
+# ★★★ 화산파 12 장로회 — 모임 계열의 얕은 변형 (2026-08-08)
+#   계약: docs/design/hwasan/contract.md · 유형: assembly (family) · 쓰임: council
+#
+# ★★이 도면이 좌표의 정본이다. 코드의 수치가 도면과 다르면 **도면이 이긴다.**
+#
+# ── 강당을 찌그러뜨리지 않는다 (사용자 확정 2026-08-08) ─────────────────
+#   「강당이 들어가지 않는다 → 강당을 억지로 찌그러뜨린다」가 아니라
+#   「같은 계열의 모임 공간이지만 <b>다른 평면 변형</b>이 필요하다」로 간다.
+#     family: assembly · variant: shallow
+#   ★그리고 <b>숫자를 미리 정하지 않고</b> 이 회차에서 자유 영역부터 쟀다.
+#
+# ── 실측 (패드 44×24) ───────────────────────────────────────────────────
+#   중앙 계단 봉투 x18~26 이 <b>남북을 잇는다</b> (북 z0~11 · 남 z23) — 척추가 여기서 끊기면
+#   안 된다. 다리 어귀 x0~1 · x42~43 (z2~6).
+#   → <b>자유 띠는 z12~22 (11칸)</b> 뿐이고, 그 띠를 축이 가로지른다.
+#
+#   그래서 <b>한 채가 축 위에 앉지 않는다</b>. 장로회는 마주 앉는 자리이므로
+#   <b>두 채가 축을 사이에 두고 마주 본다</b> — 척추는 그대로 지나간다.
+#
+#       [서 채 x2~16]   ‖ 축 x18~26 ‖   [동 채 x28~42]      z14~20
+#
+#   ★처마를 2 → 1 로 줄인 것도 실측이 정했다: 팔작은 반폭+내밈만큼 퍼지는데,
+#     처마 2 면 지붕이 x0~18 까지 뻗어 <b>축을 9칸에서 7칸으로 좁힌다</b>.
+#     얕은 변형에는 얕은 처마가 어울리기도 한다 (강당 2 · 여기 1).
+
+design_intent:
+  role: "장로들이 마주 앉는 두 채 — 척추 축은 그 사이로 지나간다"
+  rank: principal
+  usage: council
+  family: assembly
+  variant: shallow
+  style_module: hwasan_common
+  roof_type: sweep
+  decisions:
+    - "축 위에 앉지 않는다 — 두 채가 마주 보고 그 사이로 척추가 지난다."
+    - "강당과 같은 계열이되 깊이 7 · 처마 1 로 얕다 (강당 11 · 처마 2)."
+  non_goals:
+    - "강당을 찌그러뜨려 쓰지 않는다."
+    - "축을 막지 않는다 — 여기서 끊기면 정상 암자로 가는 길이 사라진다."
+
+meta:
+  name: 화산파 장로회
+  origin_pad: 12
+  size: [15, 7]
+  axis_col: 7
+  rank: principal
+  usage: council
+  family: assembly
+  south_row: 6
+
+instances:
+  - id: west_wing
+    at: [2, 14]
+    rotate: 0
+  - id: east_wing
+    at: [28, 14]
+    rotate: 0
+
+# ── 기둥 처방 — 벽 5 + 도리 1 (강당과 같은 켜) ──────────────────────────
+columns:
+  ".": []
+  "P": ["stripped_mangrove_log*5", "dark_oak_planks"]
+  "W": ["plaster*5", "dark_oak_planks"]
+  "L": ["dark_oak_planks", "dark_oak_trapdoor*3",
+        "dark_oak_planks", "dark_oak_planks"]
+  "O": ["air*5", "dark_oak_planks"]
+
+# ── 평면 (15×7 · row 6 = 남 정면 · 적주 주기 7) ─────────────────────────
+plan: |
+    PWLWWLWPWLWWLWP
+    L.............L
+    W.............W
+    L.............L
+    W.............W
+    L.............L
+    PWLWWLOOOLWWLWP
+
+# ── 지붕 — 귀솟음 팔작 (강당과 같은 계열) · 얕은 처마 ───────────────────
+roof:
+  팔작:
+    box: [0, 0, 14, 6]
+    base_y: 6
+    eave: 1

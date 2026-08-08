@@ -1243,6 +1243,83 @@ public final class TerraceForgeSelfTest {
             check("★창고 도면이 읽히고 제 계약을 지킨다", false, e.toString());
         }
 
+        // ══════ ★★장로회 — 모임 계열의 얕은 변형 (hwasan_council.yml · 2026-08-08) ══════
+        //   사용자: 「강당이 안 들어간다 → 찌그러뜨린다」가 아니라 「같은 계열의 <b>다른 평면
+        //   변형</b>이 필요하다」. 그리고 <b>숫자를 미리 정하지 않고</b> 자유 영역부터 쟀다.
+        try {
+            java.util.Map<String, Object> craw2 = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_council.yml")));
+            Blueprint cb2 = Blueprint.of(craw2);
+            cb2.validate();
+            check("★장로회 도면이 읽히고 제 계약을 지킨다 (" + cb2.width() + "×" + cb2.depth() + ")",
+                    true, "통과");
+            check("★★장로회가 <b>강당과 같은 계열</b>이다 (family assembly · 쓰임만 다르다)",
+                    "assembly".equalsIgnoreCase(cb2.family())
+                            && "council".equalsIgnoreCase(cb2.usage()),
+                    cb2.family() + "/" + cb2.usage());
+            java.util.Map<String, Object> hraw2 = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_hall.yml")));
+            Blueprint hb2 = Blueprint.of(hraw2);
+            check("★★<b>얕은</b> 변형이다 — 강당보다 얕고 처마도 얕다 (찌그러뜨린 게 아니다)",
+                    cb2.depth() < hb2.depth()
+                            && cb2.roofs().get(0).eave() < hb2.roofs().get(0).eave(),
+                    "깊이 " + cb2.depth() + "<" + hb2.depth()
+                            + " · 처마 " + cb2.roofs().get(0).eave()
+                            + "<" + hb2.roofs().get(0).eave());
+            check("★장로회도 팔작이다 (계열이 같으니 지붕이 같다)",
+                    cb2.roofs().stream().noneMatch(r -> r.lowGable() || r.hipPyramid()), "");
+
+            // ★★척추가 그 사이로 지나간다 — 두 채가 축을 비켜 앉았는가
+            java.util.List<TerraceForge.Pad> ap9 = TerraceForge.resolvePads(campus, 0, 0, 0);
+            TerraceForge.Pad el = ap9.stream().filter(p2 -> p2.spec().zone() == 12)
+                    .findFirst().orElseThrow();
+            int ev4 = cb2.roofs().get(0).eave();
+            int hfW = (cb2.width() - 1) / 2;
+            int gapLo = Integer.MIN_VALUE;
+            int gapHi = Integer.MAX_VALUE;
+            int cm = 0;
+            for (Blueprint.Placement pl : cb2.placements()) {
+                int px0 = el.x0() + pl.col();
+                int px1 = px0 + pl.widthOf(cb2) - 1;
+                int pz0 = el.zN() + pl.row();
+                int pz1 = pz0 + pl.depthOf(cb2) - 1;
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(el)) {
+                    if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
+                        cm++;
+                    }
+                }
+                // 팔작은 반폭+내밈만큼 퍼진다 — 축의 틈은 <b>지붕</b> 기준으로 잰다
+                int cxw = (px0 + px1) / 2;
+                int roofLo = cxw - hfW - ev4;
+                int roofHi = cxw + hfW + ev4;
+                if (roofHi < el.x0() + el.spec().width() / 2) {
+                    gapLo = Math.max(gapLo, roofHi + 1);
+                } else {
+                    gapHi = Math.min(gapHi, roofLo - 1);
+                }
+                if (roofLo < el.x0() || roofHi > el.x1()) {
+                    check("★장로회 지붕이 패드 밖으로 안 샌다", false, pl.id());
+                }
+            }
+            check("★★장로회 도면의 자리와 코드의 기단이 칸까지 같다", cm == 2, cm + "/2");
+            int gap = gapHi - gapLo + 1;
+            check("★★두 채 사이로 척추가 지나간다 (틈 " + gap + " ≥ 계단 봉투 9)",
+                    gap >= 9, "x" + gapLo + ".." + gapHi);
+            check("★그 틈이 축선을 품는다 (한쪽으로 치우치지 않았다)",
+                    gapLo <= el.x0() + el.spec().width() / 2
+                            && gapHi >= el.x0() + el.spec().width() / 2, "");
+            String hcb6 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            int c12 = hcb6.indexOf("case 12 ->");
+            String body12 = c12 < 0 ? "" : hcb6.substring(c12, hcb6.indexOf("case 13 ->", c12));
+            check("★★장로회가 옛 plasterHall 을 안 부른다",
+                    !body12.isEmpty() && !body12.contains("plasterHall(w, p,"), "");
+        } catch (Exception e) {
+            check("★장로회 도면이 읽히고 제 계약을 지킨다", false, e.toString());
+        }
+
         // ══════ ★전수 조사가 실물과 같은가 (plasterhall_census.md) ══════
         //   ★조사는 <b>신고가 아니라 센 것</b>이어야 한다. 호출부가 늘거나 줄면 표가 늙는다 —
         //   소스에서 직접 세어 문서의 수와 맞춘다.
@@ -1772,18 +1849,29 @@ public final class TerraceForgeSelfTest {
         // 7.0 의 병(장로회 처마 링이 상자 밖)과 5.6 의 병(정원 매화 한 칸 어긋남)을 값으로 재현해 잰다.
         {
             java.util.List<TerraceForge.Pad> allPads = TerraceForge.resolvePads(campus, 0, 0, 0);
+            // ★2026-08-08 — <b>표본을 옮겼다</b>. 이 눈이 재는 것은 「전고 상자 ⊃ 지상 상자」
+            //   (처마는 전고에만 든다)인데, 장로회는 이제 <b>기단만</b> 깔아 두 상자가 같다.
+            //   계약은 그대로이므로 <b>아직 코드가 지붕을 얹는</b> 망루(11)로 표본을 옮긴다 —
+            //   눈을 지우는 게 아니라 재는 자리를 옮기는 것이다.
+            TerraceForge.Pad tower11 = allPads.stream()
+                    .filter(p -> p.spec().zone() == 11).findFirst().orElseThrow();
+            int[] fb = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(tower11).get(0);
+            int[] gb = com.honcheon.mvt.forge.HwasanCampusBuilder.groundBoxes(tower11).get(0);
+            check("★전고 상자가 처마를 덮는다 (망루 · 지붕이 몸체보다 넓다)",
+                    fb[1] - fb[0] > gb[1] - gb[0] && fb[3] - fb[2] > gb[3] - gb[2],
+                    "전고 " + (fb[1] - fb[0] + 1) + "×" + (fb[3] - fb[2] + 1)
+                            + " · 지상 " + (gb[1] - gb[0] + 1) + "×" + (gb[3] - gb[2] + 1));
+            check("★지상 상자는 처마를 뺀다 (통로 검증은 걷는 몸높이만)",
+                    gb[0] >= fb[0] && gb[1] <= fb[1] && gb[2] >= fb[2] && gb[3] <= fb[3],
+                    "지상 ⊂ 전고");
+            // ★장로회는 이제 기단만이라 두 상자가 같다 — 그 사실도 적어 둔다
             TerraceForge.Pad jangno = allPads.stream()
                     .filter(p -> p.spec().zone() == 12).findFirst().orElseThrow();
-            java.util.List<int[]> full = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jangno);
-            java.util.List<int[]> ground = com.honcheon.mvt.forge.HwasanCampusBuilder.groundBoxes(jangno);
-            int[] fb = full.get(0);
-            int[] gb = ground.get(0);
-            check("★장로회 전고 상자가 처마를 덮는다 (17×7 홀 + 처마 → 21×11 · 척도 되돌림)",
-                    fb[1] - fb[0] == 20 && fb[3] - fb[2] == 10,
-                    (fb[1] - fb[0] + 1) + "×" + (fb[3] - fb[2] + 1));
-            check("★장로회 지상 상자는 처마를 뺀다 (벽 19×9 — 통로 검증은 걷는 몸높이만)",
-                    gb[1] - gb[0] == 18 && gb[3] - gb[2] == 8,
-                    (gb[1] - gb[0] + 1) + "×" + (gb[3] - gb[2] + 1));
+            int[] jf = com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(jangno).get(0);
+            int[] jg = com.honcheon.mvt.forge.HwasanCampusBuilder.groundBoxes(jangno).get(0);
+            check("★장로회는 기단만이라 전고=지상이다 (지붕은 도면이 갖는다)",
+                    java.util.Arrays.equals(jf, jg),
+                    (jf[1] - jf[0] + 1) + "×" + (jf[3] - jf[2] + 1));
             TerraceForge.Pad garden = allPads.stream()
                     .filter(p -> p.spec().zone() == 10).findFirst().orElseThrow();
             int gcx = garden.x0() + garden.spec().width() / 2;

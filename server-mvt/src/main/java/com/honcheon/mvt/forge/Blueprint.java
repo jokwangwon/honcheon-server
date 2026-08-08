@@ -139,15 +139,17 @@ public final class Blueprint {
     private final String rank;
     private final int courtyardRow;
     private final String usage;
+    private final String family;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
                       List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
-                      String rank, int courtyardRow, String usage) {
+                      String rank, int courtyardRow, String usage, String family) {
         this.placements = placements;
         this.rank = rank;
         this.courtyardRow = courtyardRow;
         this.usage = usage;
+        this.family = family;
         this.name = name;
         this.pad = pad;
         this.width = width;
@@ -218,6 +220,16 @@ public final class Blueprint {
     /** 마당(열리는) 쪽 행 — {@code meta.south_row} */
     public int courtyardRow() {
         return courtyardRow;
+    }
+
+    /**
+     * 유형의 <b>계열</b> — 같은 계약을 쓰되 크기·비례가 다른 변형을 묶는다.
+     * ★장로회는 강당과 <b>같은 assembly 계열</b>의 <b>얕은 변형</b>이다 (사용자 2026-08-08):
+     * 「별도의 완전히 새로운 건물 유형보다는 assembly 계열의 얕은 변형으로 가는 것이 자연스럽다」.
+     * 안 적으면 {@code usage} 와 같다.
+     */
+    public String family() {
+        return family;
     }
 
     /** 이 도면이 앉는 자리들 — <b>비어 있으면</b> 패드 한가운데 한 장 (종전 문법) */
@@ -361,7 +373,8 @@ public final class Blueprint {
                 roofs.stream().anyMatch(Roof::hipPyramid) ? "pavilion" : "corridor"));
         return new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots, places,
                 String.valueOf(meta.getOrDefault("rank", "principal")),
-                ((Number) meta.getOrDefault("south_row", d - 1)).intValue(), usage);
+                ((Number) meta.getOrDefault("south_row", d - 1)).intValue(), usage,
+                String.valueOf(meta.getOrDefault("family", usage)));
     }
 
     private static Object req(Map<String, Object> m, String k) {
