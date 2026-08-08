@@ -812,8 +812,8 @@ public final class TerraceForgeSelfTest {
             for (Blueprint.Placement pl : pb.placements()) {
                 pavPer.merge(pl.padOr(pb.pad()), 1, Integer::sum);
             }
-            check("★정자 도면이 <b>네 구역</b>에 앉는다 — 외원 2 · 중정 2 · 정상 1 · 전망대 1",
-                    pavPer.equals(java.util.Map.of(2, 2, 101, 2, 13, 1, 19, 1)), pavPer.toString());
+            check("★정자 도면이 <b>다섯 구역</b>에 앉는다 — 외원2 · 중정2 · 정상1 · 전망대1 · 정원1",
+                    pavPer.equals(java.util.Map.of(2, 2, 101, 2, 13, 1, 19, 1, 10, 1)), pavPer.toString());
             for (Blueprint.Roof rf : pb.roofs()) {
                 check("★정자 지붕이 사모다 — " + rf.name() + " (맞배는 방향성을 만든다)",
                         rf.hipPyramid(), rf.type());
@@ -897,7 +897,7 @@ public final class TerraceForgeSelfTest {
                 check("★정자 " + pl.id() + " 가 의례축을 침범하지 않는다",
                         !TerraceForge.boxesOverlap(axis5, new int[]{px0, px1, pz0, pz1}), "");
             }
-            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다 (네 구역)", pm == 6, pm + "/6");
+            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다 (다섯 구역)", pm == 7, pm + "/7");
             check("★정자가 계단 봉투를 침범하지 않는다 (지상 발자국 — 처마는 뺀다)",
                     laneHit == 0, laneHit + "칸");
             check("★정자 처마가 패드 밖으로 안 샌다", spill == 0, spill + "채");
@@ -1391,8 +1391,8 @@ public final class TerraceForgeSelfTest {
             String hcb7 = java.nio.file.Files.readString(java.nio.file.Path.of(
                     "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
             int pavLeft = hcb7.split("pavilion\\(w, p,", -1).length - 1;
-            check("★★옛 pavilion() 이 <b>정원 하나</b>만 남았다 (13·19 는 도면으로 갔다)",
-                    pavLeft == 1, pavLeft + "곳");
+            check("★★옛 pavilion() 이 <b>전부</b> 사라졌다 (정원 정자까지 도면으로)",
+                    pavLeft == 0, pavLeft + "곳");
             int hallLeft = hcb7.split("plasterHall\\(w, p,", -1).length - 1;
             check("★★옛 plasterHall 이 <b>전부</b> 사라졌다", hallLeft == 0, hallLeft + "곳");
         } catch (Exception e) {

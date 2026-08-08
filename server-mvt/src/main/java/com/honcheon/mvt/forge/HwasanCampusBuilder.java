@@ -230,8 +230,10 @@ public final class HwasanCampusBuilder {
                     (w, p, t) -> pavilionBase(w, p, p.x0() + 23, p.zN() + 19, 5, t),
                     (w, p, t) -> corridorBase(w, p, p.x0() + 2, p.zN() + 1, 6, false, t),
                     (w, p, t) -> corridorBase(w, p, p.x0() + 24, p.zN() + 1, 6, false, t));
-            case 10 -> List.of((w, p, t) -> gardenPond(w, p, cx, cz, t),          // 정원 — 연못·정자·매화 세 부품
-                    (w, p, t) -> pavilion(w, p, cx + 6, cz + 6, 2, t),
+            // ★정원(10) — <b>정자만</b> 도면으로 넘긴다 (2026-08-09 사용자 확정).
+            //   연못·매화는 건물이 아니라 <b>장면</b>이라 그대로 둔다 — 조경 문법은 별도(S-01).
+            case 10 -> List.of((w, p, t) -> gardenPond(w, p, cx, cz, t),
+                    (w, p, t) -> padBase(w, p, p.x0() + 20, p.zN() + 20, 5, 5, t),
                     (w, p, t) -> gardenPlum(w, p, cx - 2, cz - 6, t));
             case 11 -> List.of((w, p, t) -> watchtower(w, p, cx, cz, t));         // 망루 11/9/7
             default -> List.of();                                                 // 계단참 102·103 — 지나는 자리
