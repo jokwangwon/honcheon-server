@@ -812,8 +812,8 @@ public final class TerraceForgeSelfTest {
             for (Blueprint.Placement pl : pb.placements()) {
                 pavPer.merge(pl.padOr(pb.pad()), 1, Integer::sum);
             }
-            check("★정자 도면이 두 구역에 앉는다 — 외원 2 · 중정 2 (복제본 없음)",
-                    pavPer.equals(java.util.Map.of(2, 2, 101, 2)), pavPer.toString());
+            check("★정자 도면이 <b>네 구역</b>에 앉는다 — 외원 2 · 중정 2 · 정상 1 · 전망대 1",
+                    pavPer.equals(java.util.Map.of(2, 2, 101, 2, 13, 1, 19, 1)), pavPer.toString());
             for (Blueprint.Roof rf : pb.roofs()) {
                 check("★정자 지붕이 사모다 — " + rf.name() + " (맞배는 방향성을 만든다)",
                         rf.hipPyramid(), rf.type());
@@ -897,7 +897,7 @@ public final class TerraceForgeSelfTest {
                 check("★정자 " + pl.id() + " 가 의례축을 침범하지 않는다",
                         !TerraceForge.boxesOverlap(axis5, new int[]{px0, px1, pz0, pz1}), "");
             }
-            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다 (두 구역)", pm == 4, pm + "/4");
+            check("★★정자 도면의 자리와 코드의 기단이 칸까지 같다 (네 구역)", pm == 6, pm + "/6");
             check("★정자가 계단 봉투를 침범하지 않는다 (지상 발자국 — 처마는 뺀다)",
                     laneHit == 0, laneHit + "칸");
             check("★정자 처마가 패드 밖으로 안 샌다", spill == 0, spill + "채");
@@ -1318,6 +1318,85 @@ public final class TerraceForgeSelfTest {
                     !body12.isEmpty() && !body12.contains("plasterHall(w, p,"), "");
         } catch (Exception e) {
             check("★장로회 도면이 읽히고 제 계약을 지킨다", false, e.toString());
+        }
+
+        // ══════ ★★암자 — 은거 유형 (hwasan_hermitage.yml · 2026-08-08) ══════
+        //   분류표에서 마지막까지 「미정」이던 유형. 같은 low_gable 지붕·재료를 쓰는 집이
+        //   셋(생활·창고·암자)이고, 갈리는 것은 <b>문의 수와 폭</b> 그리고 <b>크기</b>다.
+        try {
+            java.util.Map<String, Object> mraw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_hermitage.yml")));
+            Blueprint mb = Blueprint.of(mraw);
+            mb.validate();
+            check("★암자 도면이 읽히고 제 계약을 지킨다 (" + mb.width() + "×" + mb.depth() + ")",
+                    true, "통과");
+            check("★암자가 작다 (≤ 9×7 — 산정의 집은 크지 않다)",
+                    mb.width() <= 9 && mb.depth() <= 7, mb.width() + "×" + mb.depth());
+            check("★암자가 생활·창고와 지붕을 공유한다",
+                    mb.roofs().stream().allMatch(Blueprint.Roof::lowGable), "");
+
+            // ★★[눈의 눈] 셋이 서로의 자로 재면 <b>전부</b> 떨어진다
+            java.util.Map<String, Object> rr = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_residence.yml")));
+            java.util.Map<String, Object> ss2 = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_storage.yml")));
+            record Cross(String what, java.util.Map<String, Object> raw, String as) { }
+            java.util.List<Cross> crosses = java.util.List.of(
+                    new Cross("암자를 거처의 자로", mraw, "residence"),
+                    new Cross("암자를 저장의 자로", mraw, "storage"),
+                    new Cross("거처를 은거의 자로", rr, "hermitage"),
+                    new Cross("저장을 은거의 자로", ss2, "hermitage"));
+            int slipped = 0;
+            String who2 = "";
+            for (Cross cr : crosses) {
+                try {
+                    java.util.Map<String, Object> mm = new java.util.LinkedHashMap<>(cr.raw());
+                    java.util.Map<String, Object> me = new java.util.LinkedHashMap<>(
+                            (java.util.Map<String, Object>) cr.raw().get("meta"));
+                    me.put("usage", cr.as());
+                    mm.put("meta", me);
+                    Blueprint.of(mm).validate();
+                    slipped++;
+                    who2 = cr.what();
+                } catch (IllegalStateException ok) {
+                    // 떨어져야 맞다
+                }
+            }
+            check("★★[눈의 눈] 생활·창고·암자가 <b>서로의 자로 재면 전부 떨어진다</b> (4쌍)",
+                    slipped == 0, slipped == 0 ? "전부 떨어졌다" : slipped + "쌍 통과 · " + who2);
+
+            // 자리·기단 대조 (암자 둘 + 정자 넷)
+            java.util.List<TerraceForge.Pad> apA = TerraceForge.resolvePads(campus, 0, 0, 0);
+            int hmM = 0;
+            for (Blueprint.Placement pl : mb.placements()) {
+                int zone = pl.padOr(mb.pad());
+                TerraceForge.Pad host = apA.stream().filter(p2 -> p2.spec().zone() == zone)
+                        .findFirst().orElseThrow();
+                int px0 = host.x0() + pl.col();
+                int px1 = px0 + pl.widthOf(mb) - 1;
+                int pz0 = host.zN() + pl.row();
+                int pz1 = pz0 + pl.depthOf(mb) - 1;
+                for (int[] b : com.honcheon.mvt.forge.HwasanCampusBuilder.structureBoxes(host)) {
+                    if (b[0] == px0 && b[1] == px1 && b[2] == pz0 && b[3] == pz1) {
+                        hmM++;
+                    }
+                }
+            }
+            check("★★암자 도면의 자리와 코드의 기단이 칸까지 같다", hmM == 2, hmM + "/2");
+
+            // ★옛 pavilion() 이 정원(10) 하나만 남았는가
+            String hcb7 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            int pavLeft = hcb7.split("pavilion\\(w, p,", -1).length - 1;
+            check("★★옛 pavilion() 이 <b>정원 하나</b>만 남았다 (13·19 는 도면으로 갔다)",
+                    pavLeft == 1, pavLeft + "곳");
+            int hallLeft = hcb7.split("plasterHall\\(w, p,", -1).length - 1;
+            check("★★옛 plasterHall 이 <b>전부</b> 사라졌다", hallLeft == 0, hallLeft + "곳");
+        } catch (Exception e) {
+            check("★암자 도면이 읽히고 제 계약을 지킨다", false, e.toString());
         }
 
         // ══════ ★전수 조사가 실물과 같은가 (plasterhall_census.md) ══════

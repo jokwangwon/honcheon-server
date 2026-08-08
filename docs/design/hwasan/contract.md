@@ -103,7 +103,7 @@ instances:
 | `corridor` | 행각 | 마당 열림 / 외곽 닫힘 | `low_gable` |
 | `pavilion` | 정자 · 전망대 | 사방 개방 | `hip_pyramid` |
 | `watchtower` | 망루 | 다층 · 급한 사모 | `hip_pyramid` |
-| `hermitage` | 암자 | (미정 — 그 회차에서) | (미정) |
+| `hermitage` | 암자 | **문 하나 · 작다(≤9×7)** | `low_gable` |
 
 ★**지붕과 재료는 공유해도 `usage` 계약은 공유하지 않는다** (사용자 2026-08-08).
 생활관과 창고가 같은 `low_gable` 을 써도 평면 계약은 달라야 한다 —

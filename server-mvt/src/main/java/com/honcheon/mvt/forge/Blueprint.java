@@ -403,6 +403,8 @@ public final class Blueprint {
                 validateResidence();
             } else if ("storage".equalsIgnoreCase(usage)) {
                 validateStorage();
+            } else if ("hermitage".equalsIgnoreCase(usage)) {
+                validateHermitage();
             } else {
                 validateCorridor();
             }
@@ -768,6 +770,62 @@ public final class Blueprint {
         for (Roof rf : roofs) {
             if (!rf.lowGable()) {
                 throw new IllegalStateException("설계도 " + name + " — 창고의 지붕은 low_gable 이다: "
+                        + rf.name() + " (" + rf.type() + ").");
+            }
+        }
+    }
+
+    /**
+     * ★암자의 자기 계약 (2026-08-08 · 정상 13 · 부속 20).
+     *
+     * <p>암자는 <b>홀로 사는 작은 집</b>이다. 거처(생활관)와 무엇이 다른가로 갈린다:
+     * <pre>
+     *   생활관 : 작은 문 <b>여럿</b> — 생활 단위가 반복된다 (여러 사람)
+     *   암자   : 문 <b>하나</b>      — 한 사람이 든다
+     *   창고   : <b>큰 문</b> 하나   — 물자가 든다 (문 폭으로 갈린다)
+     * </pre>
+     * 셋이 같은 {@code low_gable} 지붕과 재료를 쓰되 <b>문의 수와 폭</b>, 그리고 <b>크기</b>로
+     * 갈린다 — 그래서 서로의 자로 재면 셋 다 떨어진다.
+     */
+    private void validateHermitage() {
+        int groups = 0;
+        int widest = 0;
+        int run = 0;
+        for (int c = 0; c < width; c++) {
+            int air = 0;
+            int solid = 0;
+            for (Course cs : columnOf(plan[courtyardRow][c])) {
+                if ("air".equals(cs.material())) {
+                    air += cs.count();
+                } else {
+                    solid += cs.count();
+                }
+            }
+            if (air > solid) {
+                run++;
+                widest = Math.max(widest, run);
+                if (run == 1) {
+                    groups++;
+                }
+            } else {
+                run = 0;
+            }
+        }
+        if (groups != 1) {
+            throw new IllegalStateException("설계도 " + name + " — 암자의 문이 " + groups
+                    + "곳이다. 암자는 <b>홀로 사는 집</b>이라 문이 하나다 (여럿은 생활관의 것).");
+        }
+        if (widest > 2) {
+            throw new IllegalStateException("설계도 " + name + " — 암자의 문이 " + widest
+                    + "칸이다. 그건 <b>큰 문</b>이라 창고의 것이다.");
+        }
+        if (width > 9 || depth > 7) {
+            throw new IllegalStateException("설계도 " + name + " — 암자가 " + width + "×" + depth
+                    + " 다. 산정의 암자는 <b>작다</b> (≤ 9×7).");
+        }
+        for (Roof rf : roofs) {
+            if (!rf.lowGable()) {
+                throw new IllegalStateException("설계도 " + name + " — 암자의 지붕은 low_gable 이다: "
                         + rf.name() + " (" + rf.type() + ").");
             }
         }
