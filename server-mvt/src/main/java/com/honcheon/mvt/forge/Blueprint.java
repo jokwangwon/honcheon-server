@@ -44,7 +44,16 @@ public final class Blueprint {
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
                        String profile, boolean rafters,
                        int eaveX, int eaveZ, int upperEaveX, int upperEaveZ,
-                       int upperRidge) {
+                       int upperRidge, String materialFamily) {
+
+        /**
+         * ★★REF-2A — 지붕 <b>외피</b>가 기와 계열인가 (사용자 확정 2026-08-09).
+         * 안 적으면 종전대로 조약 심층암이다 — <b>산문·다른 도면은 한 칸도 안 바뀐다.</b>
+         */
+        public boolean roofTiles() {
+            return "deepslate_tiles".equalsIgnoreCase(materialFamily);
+        }
+
 
         /**
          * ★★REF-1 (사용자 확정 2026-08-09) — <b>좌우 내밈과 앞뒤 내밈이 다를 수 있다.</b>
@@ -470,7 +479,8 @@ public final class Blueprint {
                             up.getOrDefault("eave", 2))).intValue(),
                     // ★REF-1c-B — 대지붕 용마루 길이. 0 이면 없다 (층간 지붕은 상층 몸체가
                     //   가운데를 차지해 중앙 용마루를 만들 구조가 아니다 — 사용자).
-                    up == null ? 0 : ((Number) up.getOrDefault("ridge", 0)).intValue()));
+                    up == null ? 0 : ((Number) up.getOrDefault("ridge", 0)).intValue(),
+                    String.valueOf(m.getOrDefault("material_family", "cobbled_deepslate"))));
         });
 
         List<Trim> trims = new ArrayList<>();

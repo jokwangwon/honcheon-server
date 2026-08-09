@@ -3421,7 +3421,10 @@ public final class TerraceForgeSelfTest {
                             + "닫히면 「잘 만든 지붕」이 아니라 「검은 경사지붕」이다)",
                     rf1.upperRidge() == 17, rf1.upperRidge());
             check("★★층간 지붕에는 <b>중앙 용마루를 안 만든다</b> (가운데를 상층 몸체가 차지한다)",
-                    bbSrc2.contains("rf.eaveZ(), 0, tally)"), "");
+                    // ★자를 넓혔다 (REF-2A): 부름 끝에 재료 계열 인자가 붙어 옛 글자가 어긋났다.
+                    //   물어야 할 것은 <b>층간에 용마루 길이 0 을 넘기는가</b>다.
+                    bbSrc2.contains("rf.eaveZ(), 0,")
+                            && bbSrc2.contains("rf.upperRidge()"), "");
             {
                 java.util.Map<String, Blueprint.Trim> tm = new java.util.HashMap<>();
                 for (Blueprint.Trim tr : hj.trims()) {

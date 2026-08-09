@@ -281,7 +281,7 @@ public final class BlueprintBuilder {
             if (rf.grand()) {
                 // ★층간 지붕에는 용마루를 안 얹는다 — 가운데를 상층 몸체가 차지한다 (사용자)
                 HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0, ox + bx1,
-                        oy + rf.baseY(), oz + bz0, oz + bz1, rf.eaveX(), rf.eaveZ(), 0, tally);
+                        oy + rf.baseY(), oz + bz0, oz + bz1, rf.eaveX(), rf.eaveZ(), 0, rf.roofTiles(), tally);
             } else {
                 HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
                         rf.eave(), tally);
@@ -360,7 +360,7 @@ public final class BlueprintBuilder {
                 if (rf.grand()) {
                     HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0 + ix, ox + bx1 - ix,
                             upBase + rf.upperWall(), oz + bz0 + iz, oz + bz1 - iz,
-                            rf.upperEaveX(), rf.upperEaveZ(), rf.upperRidge(), tally);
+                            rf.upperEaveX(), rf.upperEaveZ(), rf.upperRidge(), rf.roofTiles(), tally);
                 } else {
                     HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
                             hf - ix, hl - iz, rf.upperEave(), tally);

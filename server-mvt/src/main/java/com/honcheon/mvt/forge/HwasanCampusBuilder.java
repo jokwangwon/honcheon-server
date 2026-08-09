@@ -746,7 +746,7 @@ public final class HwasanCampusBuilder {
             over--;
         }
         sweepRoofBounds(world, pad, cx - hf - over, cx + hf + over, cy,
-                cz - hl - over, cz + hl + over, Math.max(hf, hl) >= 12, false, tally);
+                cz - hl - over, cz + hl + over, Math.max(hf, hl) >= 12, false, false, tally);
     }
 
     /**
@@ -767,13 +767,13 @@ public final class HwasanCampusBuilder {
      * ※기존 {@code sweepRoof} 는 손대지 않는다 — 산문 회귀를 만들지 않기 위해서다 (사용자).
      */
     static void sweepRoofGrand(World world, TerraceForge.Pad pad, int bx0, int bx1, int cy,
-                               int bz0, int bz1, int eaveX, int eaveZ, int ridgeLen, Tally tally) {
+                               int bz0, int bz1, int eaveX, int eaveZ, int ridgeLen, boolean tiles, Tally tally) {
         int x0 = bx0 - eaveX;
         int x1 = bx1 + eaveX;
         int z0 = bz0 - eaveZ;
         int z1 = bz1 + eaveZ;
         sweepRoofBounds(world, pad, x0, x1, cy, z0, z1,
-                Math.max(bx1 - bx0, bz1 - bz0) / 2 >= 12, true, tally);
+                Math.max(bx1 - bx0, bz1 - bz0) / 2 >= 12, true, tiles, tally);
         if (ridgeLen > 0) {
             ridgeTrim(world, pad, x0, x1, cy, z0, z1, ridgeLen, tally);
         }
@@ -823,7 +823,7 @@ public final class HwasanCampusBuilder {
      * 귀솟음·내림마루·치미·합각이 전부 여기 한 곳에 남는다 (7.5 계율).
      */
     private static void sweepRoofBounds(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
-                                        int z0, int z1, boolean big, boolean grand, Tally tally) {
+                                        int z0, int z1, boolean big, boolean grand, boolean tiles, Tally tally) {
         int steps = Math.min(x1 - x0, z1 - z0) / 2 + 1;      // 수렴까지의 켜 수
         for (int i = 0; ; i++) {
             int ax0 = x0 + i;
@@ -847,12 +847,12 @@ public final class HwasanCampusBuilder {
                 for (int k = r0; k <= r1; k++) {
                     int x = alongF ? k : cx;
                     int z = alongF ? cz : k;
-                    put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE, tally);
+                    put(world, pad, x, y, z, roofSkin(tiles), tally);
                     boolean tip = k == r0 || k == r1;
                     put(world, pad, x, y + 1, z,
-                            tip ? Material.COBBLED_DEEPSLATE_WALL : Material.COBBLED_DEEPSLATE_SLAB, tally);
+                            tip ? roofSkinWall(tiles) : roofSkinSlab(tiles), tally);
                     if (tip && big) {
-                        put(world, pad, x, y + 2, z, Material.COBBLED_DEEPSLATE_WALL, tally);   // 치미 솟음
+                        put(world, pad, x, y + 2, z, roofSkinWall(tiles), tally);   // 치미 솟음
                     }
                 }
                 return;
@@ -864,38 +864,38 @@ public final class HwasanCampusBuilder {
                     boolean eF = x == ax0 || x == ax1;
                     boolean eL = z == az0 || z == az1;
                     if (i == 0) {                          // 처마 끝 — 반블록 (귀솟음은 아래에서 한 벌)
-                        put(world, pad, x, y, z, eF || eL ? Material.COBBLED_DEEPSLATE_SLAB
-                                : roofCube(x, y, z), tally);
+                        put(world, pad, x, y, z, eF || eL ? roofSkinSlab(tiles)
+                                : roofCube(x, y, z, tiles), tally);
                     } else if (grand && flatRun && (eF || eL)) {
                         // ★평탄 구간의 바깥 켜 — 반블록. 여기에 full block 을 놓으면 그 켜가
                         //   통째로 <b>테라스 한 단</b>이 되어 계단식 피라미드로 읽힌다.
-                        put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
+                        put(world, pad, x, y, z, roofSkinSlab(tiles), tally);
                     } else if (eF && eL) {
                         // ★13c-② 내림마루 — 모서리에서 처마로 내려오는 마루 선 (면을 가른다)
                         //   ★REF-1c-A: 물매가 평탄한 구간에서는 <b>모서리도 반블록</b>이다.
                         //     여기에 full block 을 두면 그 켜가 통째로 노출된 테라스 턱이 된다.
                         put(world, pad, x, y, z, grand && flatRun
-                                ? Material.COBBLED_DEEPSLATE_SLAB : Material.COBBLED_DEEPSLATE, tally);
+                                ? roofSkinSlab(tiles) : roofSkin(tiles), tally);
                         if (big && !(grand && flatRun)) {
-                            put(world, pad, x, y + 1, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
+                            put(world, pad, x, y + 1, z, roofSkinSlab(tiles), tally);
                         }
                     } else if (eL) {
                         putRoofStair(world, pad, x, y, z,
                                 l > 0 ? org.bukkit.block.BlockFace.NORTH
-                                        : org.bukkit.block.BlockFace.SOUTH, tally);
+                                        : org.bukkit.block.BlockFace.SOUTH, tiles, tally);
                     } else if (eF) {
                         putRoofStair(world, pad, x, y, z,
                                 f > 0 ? org.bukkit.block.BlockFace.WEST
-                                        : org.bukkit.block.BlockFace.EAST, tally);
+                                        : org.bukkit.block.BlockFace.EAST, tiles, tally);
                     } else {
-                        put(world, pad, x, y, z, roofCube(x, y, z), tally);
+                        put(world, pad, x, y, z, roofCube(x, y, z, tiles), tally);
                     }
                 }
             }
             if (i == 0) {   // ★14-① 귀솟음 — 처마 끝 네 귀가 들린다 (대결에서 배운 기법)
                 //   ★네 귀는 <b>경계 상자의 모서리</b>다. 중심±반폭으로 집으면 짝수 축에서
                 //     한 칸 안쪽을 들어 올려 귀가 처마 끝에 안 앉는다.
-                eaveUpturnBox(world, pad, ax0, ax1, y, az0, az1, tally);
+                eaveUpturnBox(world, pad, ax0, ax1, y, az0, az1, tiles, tally);
             }
             // ★13c-② 합각(측면 삼각 벽) — 짧은 축 끝면을 백벽으로 막아 지붕 옆이 「면」이 된다
             //   (레퍼런스 1·4호: 팔작의 측면 삼각). 큰 지붕만·용마루 쪽 두 켜.
@@ -949,11 +949,11 @@ public final class HwasanCampusBuilder {
     private static void eaveUpturn(World world, TerraceForge.Pad pad, int cx, int y, int cz,
                                    int hf, int hl, Tally tally) {
         // ★옛 부름(중심±반폭) — 산문 차양·겹처마 스커트가 쓴다. 그대로 둔다 (회귀 금지).
-        eaveUpturnBox(world, pad, cx - hf, cx + hf, y, cz - hl, cz + hl, tally);
+        eaveUpturnBox(world, pad, cx - hf, cx + hf, y, cz - hl, cz + hl, false, tally);
     }
 
     private static void eaveUpturnBox(World world, TerraceForge.Pad pad, int x0, int x1, int y,
-                                      int z0, int z1, Tally tally) {
+                                      int z0, int z1, boolean tiles, Tally tally) {
         for (int sf : new int[]{-1, 1}) {
             for (int sl : new int[]{-1, 1}) {
                 int gx = sf < 0 ? x0 : x1;
@@ -964,15 +964,15 @@ public final class HwasanCampusBuilder {
                         continue;
                     }
                     if (d == 0) {
-                        put(world, pad, gx, y + 1, gz, Material.COBBLED_DEEPSLATE, tally);       // 귀 — 솟음의 몸
-                        put(world, pad, gx, y + rise, gz, Material.COBBLED_DEEPSLATE_WALL, tally); // 귀 끝 — 하늘로 꺾인다
+                        put(world, pad, gx, y + 1, gz, roofSkin(tiles), tally);       // 귀 — 솟음의 몸
+                        put(world, pad, gx, y + rise, gz, roofSkinWall(tiles), tally); // 귀 끝 — 하늘로 꺾인다
                         continue;
                     }
                     if ((x1 - x0) / 2 > d) {   // 점층 — 중앙으로 갈수록 낮아진다 (귀솟음의 결)
-                        put(world, pad, gx - sf * d, y + rise, gz, Material.COBBLED_DEEPSLATE_SLAB, tally);
+                        put(world, pad, gx - sf * d, y + rise, gz, roofSkinSlab(tiles), tally);
                     }
                     if ((z1 - z0) / 2 > d) {
-                        put(world, pad, gx, y + rise, gz - sl * d, Material.COBBLED_DEEPSLATE_SLAB, tally);
+                        put(world, pad, gx, y + rise, gz - sl * d, roofSkinSlab(tiles), tally);
                     }
                 }
             }
@@ -1019,11 +1019,11 @@ public final class HwasanCampusBuilder {
                 } else if (aL > hl && aL - hl >= aF - hf) {
                     putRoofStair(world, pad, x, ry, z,
                             l > 0 ? org.bukkit.block.BlockFace.NORTH
-                                    : org.bukkit.block.BlockFace.SOUTH, tally);
+                                    : org.bukkit.block.BlockFace.SOUTH, false, tally);
                 } else {
                     putRoofStair(world, pad, x, ry, z,
                             f > 0 ? org.bukkit.block.BlockFace.WEST
-                                    : org.bukkit.block.BlockFace.EAST, tally);
+                                    : org.bukkit.block.BlockFace.EAST, false, tally);
                 }
             }
         }
@@ -1031,8 +1031,38 @@ public final class HwasanCampusBuilder {
     }
 
     /** 지붕 계단 한 장 — 오름이 용마루를 향한다 (facing = 오름 방향 · 도보길 결) */
+
+    /**
+     * ★★★REF-2A <b>지붕 외피 재료 계열</b> (사용자 확정 2026-08-09) — 형태는 그대로 두고
+     * <b>보이는 껍질만</b> 간다. 목적은 <b>재질의 역할 분리</b>다:
+     *
+     * <pre>
+     *   절벽 = 자연석  ·  석축·기단 = 가공 석재  ·  지붕 = <b>기와</b>
+     * </pre>
+     *
+     * 조약 심층암은 절벽·석축과 질감 언어가 같아, 화면에서 지붕이 산과 한 재료군으로 뭉친다.
+     * ★<b>속은 안 바꾼다</b> — 카메라가 못 보는 채움은 종전 재료다 (사용자 허용).
+     * ★기존 {@code sweep}(산문 등)은 이 갈래를 안 탄다 — 기본이 조약 심층암이다.
+     */
+    private static Material roofSkin(boolean tiles) {
+        return tiles ? Material.DEEPSLATE_TILES : Material.COBBLED_DEEPSLATE;
+    }
+
+    private static Material roofSkinSlab(boolean tiles) {
+        return tiles ? Material.DEEPSLATE_TILE_SLAB : Material.COBBLED_DEEPSLATE_SLAB;
+    }
+
+    private static Material roofSkinWall(boolean tiles) {
+        return tiles ? Material.DEEPSLATE_TILE_WALL : Material.COBBLED_DEEPSLATE_WALL;
+    }
+
+    private static Material roofSkinStair(boolean tiles) {
+        return tiles ? Material.DEEPSLATE_TILE_STAIRS : Material.COBBLED_DEEPSLATE_STAIRS;
+    }
+
     private static void putRoofStair(World world, TerraceForge.Pad pad, int x, int y, int z,
-                                     org.bukkit.block.BlockFace ascent, Tally tally) {
+                                     org.bukkit.block.BlockFace ascent, boolean tiles,
+                                     Tally tally) {
         if (!pad.contains(x, z)) {
             throw new IllegalStateException("건물 블록이 패드 밖: " + pad.spec().name()
                     + " (" + x + "," + y + "," + z + ") 지붕 계단");
@@ -1045,7 +1075,7 @@ public final class HwasanCampusBuilder {
         //   심층암 벽돌 28 로 섞었으나, 목표 지붕은 <b>한 재료가 세 밝기로</b> 앉은 것이었다
         //   ({@link #roofCube} 주석). 섞음은 결이 아니라 잡티였다. 면 방향이 결을 낸다.
         org.bukkit.block.data.type.Stairs data =
-                (org.bukkit.block.data.type.Stairs) Material.COBBLED_DEEPSLATE_STAIRS.createBlockData();
+                (org.bukkit.block.data.type.Stairs) roofSkinStair(tiles).createBlockData();
         data.setFacing(ascent);
         world.getBlockAt(x, y, z).setBlockData(data, false);
         tally.blocks++;
@@ -1070,6 +1100,15 @@ public final class HwasanCampusBuilder {
      */
     public static Material roofCube(int x, int y, int z) {
         return Material.COBBLED_DEEPSLATE;
+    }
+
+    /**
+     * ★★REF-2A — 채움도 계열을 따른다. 「속은 안 보이니 둬도 된다」(사용자 허용)에 기대지 않는다:
+     * 실측해 보니 채움 열셋이 <b>위에서 볼 때 맨 위</b>로 드러났고, 그러면 지붕 한 면에
+     * 두 재료가 서게 된다 — 이 저장소가 이미 한 번 당한 <b>「한 면에 한 재료」</b> 위반이다.
+     */
+    private static Material roofCube(int x, int y, int z, boolean tiles) {
+        return tiles ? Material.DEEPSLATE_TILES : roofCube(x, y, z);
     }
 
     /**
@@ -1455,7 +1494,7 @@ public final class HwasanCampusBuilder {
                     org.bukkit.block.BlockFace f = ridgeAlongX
                             ? (w < mid ? org.bukkit.block.BlockFace.NORTH : org.bukkit.block.BlockFace.SOUTH)
                             : (w < mid ? org.bukkit.block.BlockFace.WEST : org.bukkit.block.BlockFace.EAST);
-                    putRoofStair(world, pad, x, y, z, f, tally);
+                    putRoofStair(world, pad, x, y, z, f, false, tally);
                 }
             }
         }
@@ -1561,7 +1600,7 @@ public final class HwasanCampusBuilder {
                                 : x == ax1 ? org.bukkit.block.BlockFace.EAST
                                 : z == az0 ? org.bukkit.block.BlockFace.NORTH
                                 : org.bukkit.block.BlockFace.SOUTH;
-                        putRoofStair(world, pad, x, yy, z, f, tally);
+                        putRoofStair(world, pad, x, yy, z, f, false, tally);
                     }
                 }
             }
