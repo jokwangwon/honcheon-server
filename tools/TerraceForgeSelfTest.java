@@ -3493,9 +3493,23 @@ public final class TerraceForgeSelfTest {
                         roofCall > 0 && brkCall > 0, roofCall + "/" + brkCall);
                 check("★★공포가 <b>지붕 뒤에</b> 놓인다 (앞서면 서까래가 맨 윗단을 덮는다)",
                         brkCall > roofCall, brkCall + " > " + roofCall);
+                // ★★★프로파일 분리 (Codex Q3 · 사용자 원칙) — 본전에서 만든 조형을 다른 건물에
+                //   복붙하지 않는다. 공포를 「지붕 뒤에 · 계단 윤곽」으로 바꾼 것이 공유 코드라
+                //   <b>강당까지 따라 바뀌었다</b> (실측: 강당 서까래 줄이 공포 반블록에 끊겼다).
+                //   D2 로 이미 승인된 건물이 본전 회차마다 움직이면 무엇이 승인된 것인지 알 수 없다.
+                Blueprint hallBp = Blueprint.of(new org.yaml.snakeyaml.Yaml().load(
+                        java.nio.file.Files.readString(
+                                java.nio.file.Path.of("config/blueprints/hwasan_hall.yml"))));
+                check("★★계단 윤곽 공포는 <b>본전만</b> 켠다 (강당은 D2 승인 상태 그대로)",
+                        hj.bracketContour() && !hallBp.bracketContour(),
+                        hj.bracketContour() + "/" + hallBp.bracketContour());
+                check("★★flat 프로파일은 <b>서까래 자리를 안 뺏는다</b> (승인된 처마선 보존)",
+                        bb4.contains("if (top + s2 >= oy + roofBase - 1)")
+                                && bb4.contains("서까래 자리를 안 뺏는다"), "");
+                check("★★두 축 모서리도 <b>본전 전용</b>이다 (프로파일이 켠다)",
+                        bb4.contains("if (bp.bracketContour() && !ewRun && !nsRun)"), "");
                 check("★★모서리 적주는 <b>두 축</b>을 받는다 (한 면만 받으면 굵은 기둥일 뿐이다)",
-                        bb4.contains("if (!ewRun && !nsRun)") && bb4.contains("faces.add(other)"),
-                        "");
+                        bb4.contains("!ewRun && !nsRun") && bb4.contains("faces.add(other)"), "");
                 // ★중앙문 — 문두 양 끝이 <b>꺾인다</b>
                 java.util.Map<String, Blueprint.Trim> tm2 = new java.util.HashMap<>();
                 for (Blueprint.Trim tr : hj.trims()) {

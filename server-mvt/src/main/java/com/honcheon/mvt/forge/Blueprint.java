@@ -171,6 +171,7 @@ public final class Blueprint {
     private final String winFamily;
     private final String winDensity;
     private final String bracket;
+    private final String bracketShape;
     private final List<Trim> trims;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
@@ -178,7 +179,9 @@ public final class Blueprint {
                       List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
                       String rank, int courtyardRow, String usage, String family,
                       Map<Character, Integer> depths, int foundation,
-                      String winFamily, String winDensity, String bracket, List<Trim> trims) {
+                      String winFamily, String winDensity, String bracket, String bracketShape,
+                      List<Trim> trims) {
+        this.bracketShape = bracketShape;
         this.trims = trims;
         this.placements = placements;
         this.rank = rank;
@@ -356,6 +359,21 @@ public final class Blueprint {
      * <b>공포는 적주의 머리 위에서만 시작한다.</b> 적주가 없는 곳에 붙으면 그건 공포가 아니라
      * 「처마 밑에 블록을 막 붙여놓은 것」이다.
      */
+    /**
+     * ★★★REF-3B 뒤 프로파일 분리 (사용자 원칙 · Codex Q3 지적 2026-08-10) —
+     * <b>본전에서 만든 조형을 다른 건물에 복붙하지 않는다.</b>
+     *
+     * <p>공포를 「지붕 뒤에 · 계단 윤곽으로」 바꾼 것이 <b>공유 코드</b>라, {@code bracket} 을 쓰는
+     * 다른 도면(강당)까지 조용히 따라 바뀌었다 — 실측: 강당 서까래 줄이 공포 반블록에 끊겼다.
+     * D2 로 <b>이미 승인된 건물</b>이 본전 회차마다 움직이면 무엇이 승인된 것인지 알 수 없다.
+     *
+     * <p>안 적으면 {@code flat} — 옛 동작 그대로다 (판재 더미 · 서까래 켜는 서까래가 갖는다).
+     * {@code contour} 는 REF-3B 의 계단 윤곽·두 축 모서리·서까래 신발을 켠다.
+     */
+    public boolean bracketContour() {
+        return "contour".equalsIgnoreCase(bracketShape);
+    }
+
     public String bracket() {
         return bracket;
     }
@@ -543,7 +561,8 @@ public final class Blueprint {
                 ((Number) meta.getOrDefault("foundation", 1)).intValue(),
                 String.valueOf(win.getOrDefault("family", "W2")),
                 String.valueOf(win.getOrDefault("density", "medium")),
-                String.valueOf(meta.getOrDefault("bracket", "none")), trims);
+                String.valueOf(meta.getOrDefault("bracket", "none")),
+                String.valueOf(meta.getOrDefault("bracket_shape", "flat")), trims);
     }
 
     private static Object req(Map<String, Object> m, String k) {

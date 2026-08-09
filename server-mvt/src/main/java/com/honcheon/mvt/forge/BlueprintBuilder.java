@@ -341,7 +341,7 @@ public final class BlueprintBuilder {
                     boolean nsRun = tall(bp, c, r - 1) && tall(bp, c, r + 1);
                     java.util.List<org.bukkit.block.BlockFace> faces = new java.util.ArrayList<>();
                     faces.add(place.turn(outward(bp, c, r)));
-                    if (!ewRun && !nsRun) {
+                    if (bp.bracketContour() && !ewRun && !nsRun) {
                         org.bukkit.block.BlockFace other =
                                 place.turn(outward(bp, c, r) == org.bukkit.block.BlockFace.NORTH
                                         || outward(bp, c, r) == org.bukkit.block.BlockFace.SOUTH
@@ -390,6 +390,16 @@ public final class BlueprintBuilder {
                             //   계단으로 두어 <b>위로 갈수록 밖으로 받쳐 나가는 윤곽</b>을 만든다.
                             //   ★S1R — <b>첫 단이 곧 주두다</b>: 적주와 같은 붉은 목재 계단으로
                             //     기둥 머리에서 벌어지고, 그 위 두 단이 어두운 목재로 처마를 받는다.
+                            // ★flat — 옛 판재 더미. 서까래 켜는 <b>서까래가 갖는다</b>.
+                            if (!bp.bracketContour()) {
+                                if (top + s2 >= oy + roofBase - 1) {
+                                    continue;      // 서까래 자리를 안 뺏는다 (강당 D2 승인 상태)
+                                }
+                                world.getBlockAt(bx, top + s2, bz)
+                                        .setType(Material.DARK_OAK_PLANKS, false);
+                                n.blocks++;
+                                continue;
+                            }
                             BlockData bd = Bukkit.createBlockData(
                                     s2 == 0 ? Material.MANGROVE_STAIRS
                                             : s2 == 1 ? Material.DARK_OAK_SLAB
