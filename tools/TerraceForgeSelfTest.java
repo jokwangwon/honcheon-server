@@ -3363,8 +3363,12 @@ public final class TerraceForgeSelfTest {
                             .anyMatch(cs -> "air".equals(cs.material()) && cs.count() >= 4);
                     if (through) {
                         open++;
-                    } else if (hj.columnOf(fc).stream()
-                            .anyMatch(cs -> cs.material().contains("mangrove_log"))) {
+                    } else if (hj.columnOf(fc).stream().anyMatch(cs ->
+                            cs.material().endsWith("_log") && cs.count() >= 3)) {
+                        // ★★자를 고쳤다 (REF-2B): 전에는 「mangrove_log 를 포함하는가」로 문설주를
+                        //   골랐다. 목재 팔레트를 역할대로 가르자 문설주가 어두운 참나무만 남아
+                        //   조성은 멀쩡한데 눈이 0 을 셌다. 문설주는 <b>재료 이름</b>이 아니라
+                        //   <b>세로로 이어진 통짜 기둥</b>이라는 구조로 골라야 한다.
                         jamb++;
                     }
                 }
@@ -3395,9 +3399,41 @@ public final class TerraceForgeSelfTest {
                         realPosts++;
                     }
                 }
-                check("★★공포가 앉는 칸 = <b>적주 수</b> (넓은 자 " + bracketed + "칸 · 바른 자 "
-                                + realPosts + "칸 — 넓은 자면 전 폭이 띠가 된다)",
-                        realPosts == 10 && bracketed > realPosts, realPosts + "/" + bracketed);
+                check("★★공포가 앉는 칸 = <b>적주 수</b> (" + realPosts + "칸)",
+                        realPosts == 10, realPosts + "/" + bracketed);
+                // ★★[눈의 눈] 넓은 자가 왜 못 쓰는지를 <b>변이로</b> 보인다.
+                //   전에는 「오늘의 도면에서 넓은 자가 더 많이 고른다」로 증명했는데,
+                //   REF-2B 로 인방이 mangrove_planks 가 되자 그 차이가 사라져 눈이 짖었다 —
+                //   <b>증명이 오늘의 팔레트에 얹혀 있었다.</b> 이제 회벽에 한 켜짜리 붉은 통나무를
+                //   <b>일부러 끼워</b> 넓은 자가 무너지는 것을 직접 보인다.
+                java.util.Map<String, Object> postRaw = new org.yaml.snakeyaml.Yaml().load(
+                        java.nio.file.Files.readString(
+                                java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> postCols =
+                        (java.util.Map<String, Object>) postRaw.get("columns");
+                @SuppressWarnings("unchecked")
+                java.util.List<Object> mutW = new java.util.ArrayList<>(
+                        (java.util.List<Object>) postCols.get("W"));
+                mutW.add(1, "stripped_mangrove_log");        // 인방 한 켜를 붉은 통나무로
+                postCols.put("W", mutW);
+                Blueprint mut = Blueprint.of(postRaw);
+                int mutWide = 0;
+                int mutTight = 0;
+                for (int c = 0; c < mut.width(); c++) {
+                    java.util.List<Blueprint.Course> col = mut.columnOf(mut.at(c, frontR));
+                    if (col.stream().anyMatch(cs -> cs.material().contains("mangrove_log"))) {
+                        mutWide++;
+                    }
+                    if (col.stream().anyMatch(cs -> cs.material().contains("mangrove_log")
+                            && cs.count() >= com.honcheon.mvt.forge
+                            .BlueprintBuilder.POST_MIN_COURSES)) {
+                        mutTight++;
+                    }
+                }
+                check("★★[눈의 눈] 한 켜짜리 인방을 끼우면 <b>넓은 자만 무너진다</b> (넓은 "
+                                + mutWide + " · 바른 " + mutTight + ")",
+                        mutWide > mutTight && mutTight == realPosts, mutWide + "/" + mutTight);
             }
             // ★진범 — 공포가 좌우로 번지면 3칸 주기 적주에서 <b>이웃끼리 이어져 띠가 된다</b>.
             check("★★공포가 <b>좌우로 번지지 않는다</b> (번지면 적주 리듬을 스스로 지운다)",
@@ -3413,6 +3449,54 @@ public final class TerraceForgeSelfTest {
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"
                                     + "BlueprintBuilder.java"))
                             .contains("Math.min(s2 + 1, Math.max(1, eave))"), "");
+
+            // ══════ ★★★REF-2B 목구조 — <b>세 역할을 색으로 가른다</b> (2026-08-10) ══════
+            //   더 붉게 만드는 회차가 아니다. 지붕이 기와가 된 뒤에도 목재가 한 갈색 덩어리로
+            //   뭉쳤기에, 역할마다 재료를 뗀다:
+            //     적주·프레임 = 붉은색 / 창방·인방 = 어두운 적갈색 / 도리·서까래·창호 = 매우 어두운 갈색
+            {
+                java.util.List<Blueprint.Course> post = hj.columnOf('P');
+                boolean postRed = post.stream().anyMatch(cs ->
+                        cs.material().equals("stripped_mangrove_log") && cs.count() >= 3);
+                check("★★적주는 <b>붉은색</b>이다 (가장 밝은 붉은 목재가 세로로 이어진다)",
+                        postRed, postRed);
+                // 정면 벽 칸의 인방·창방 = 어두운 적갈색 · 도리와 그 위 = 매우 어두운 갈색
+                int redBeam = 0;
+                int darkBeam = 0;
+                int wrong = 0;
+                for (char ch : new char[]{'W', 'D'}) {
+                    java.util.List<Blueprint.Course> col = hj.columnOf(ch);
+                    for (int i = 0; i < col.size(); i++) {
+                        String m = col.get(i).material();
+                        if (m.contains("stone") || "lattice".equals(m) || m.contains("plaster")) {
+                            continue;
+                        }
+                        boolean top2 = i >= col.size() - 2;
+                        if (top2) {
+                            if (m.startsWith("dark_oak")) {
+                                darkBeam++;
+                            } else {
+                                wrong++;             // 도리·긴 보가 붉으면 위가 안 가라앉는다
+                            }
+                        } else if (m.equals("mangrove_planks")) {
+                            redBeam++;
+                        } else {
+                            wrong++;                 // 인방·창방이 적주와 같은 재료면 색이 뭉친다
+                        }
+                    }
+                }
+                check("★★인방·창방은 <b>어두운 적갈색</b>이고 도리·긴 보는 <b>매우 어두운 갈색</b>이다 "
+                                + "(적갈 " + redBeam + " · 짙은 갈 " + darkBeam + " · 어긋남 " + wrong + ")",
+                        wrong == 0 && redBeam > 0 && darkBeam > 0, redBeam + "/" + darkBeam + "/" + wrong);
+                // ★적주와 보가 <b>같은 재료면 안 된다</b> — 그게 「한 갈색 덩어리」의 정의다
+                boolean beamIsPost = hj.columnOf('W').stream()
+                        .anyMatch(cs -> cs.material().equals("stripped_mangrove_log"));
+                check("★★보가 적주와 <b>같은 재료를 쓰지 않는다</b> (같으면 정면이 한 덩어리로 뭉친다)",
+                        !beamIsPost, beamIsPost);
+                check("★★창호·서까래는 여전히 가장 어둡다 (dark_oak 계열)",
+                        hj.columnOf('J').stream().anyMatch(cs -> cs.material().startsWith("dark_oak")),
+                        "");
+            }
 
             // ══════ ★★★REF-1c-B — 실루엣 마감 · 중앙 위계 ══════
             String bbSrc2 = java.nio.file.Files.readString(java.nio.file.Path.of(

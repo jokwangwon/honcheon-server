@@ -482,3 +482,65 @@ cobbled_deepslate         0
 
 도면 한 줄이다 — `roof.본전.material_family` 를 지우거나 `cobbled_deepslate` 로 되돌린다.
 ★기본값이 `cobbled_deepslate` 라 **산문·행각·정자 등 다른 도면은 한 칸도 안 바뀐다.**
+
+---
+
+# REF-2A 확정 · REF-2B 목구조 (2026-08-10 · 사용자 확정)
+
+## REF-2A — B 채택
+
+```
+A cobbled_deepslate  →  superseded
+B deepslate_tiles    →  <b>본전 정본</b>
+```
+근거(사용자): 원경에서 지붕이 절벽·석축에서 한 단계 떨어져 **「산의 일부」가 아니라
+「가공된 건축 지붕」**으로 읽힌다. 정면에서는 처마가 돌덩어리로 뭉치지 않고 **얇은 기와선**이 된다.
+33×14 에서 결이 잡티로 튀지도 않았다 — 원경에서는 하나의 어두운 면으로 합쳐진다.
+
+★**화산파 모든 지붕의 기본값으로 승격하지 않는다** (사용자). 본전 도면이
+`material_family` 를 쥐는 현재 구조를 유지한다 — 산문·강당·정자는 제 실루엣과 규모를 보고
+**따로 판정한다.**
+
+## REF-2B — 목구조: 더 붉게가 아니라 **역할을 가른다**
+
+지붕이 기와가 된 뒤에도 목재가 한 갈색 덩어리로 뭉쳤다. 세 역할을 색으로 뗐다.
+
+| 역할 | 재료 | 밝기 |
+|---|---|---|
+| 주요 적주 · 프레임 | `stripped_mangrove_log` | **붉은색** |
+| 인방 · 창방 · 보조 보 | `mangrove_planks` | **어두운 적갈색** |
+| 도리 · 긴 보 · 서까래 · 창호 | `dark_oak` 계열 | **매우 어두운 갈색** |
+
+★밝은 사암은 여전히 **적주 머리 한 점**뿐이다 (띠가 아니라 점 — REF-1c-A).
+★지붕 B판은 **완전히 동결**한 채 목재만 갔다 — 무엇이 색 때문인지 갈리게.
+
+## 실측 — 정면이 네 층으로 갈리는가
+
+```
+회벽칸 (기준면)                     적주칸 (덧댐면)
+ y67  기와 (deepslate tiles)         y67  기와
+ y66  dark_oak_log      긴 보        y66  dark_oak_log
+ y65  dark_oak_planks   도리         y65  dark_oak_planks
+ y64  mangrove_planks   창방         y64  cut_sandstone    ← 밝은 점 (주두)
+ y63  mangrove_planks   인방         y63  dark_oak_planks  ← 공포
+ y62  bone_block        회벽         y62  stripped_mangrove_log  ┐
+ y61  bone_block                     y61  stripped_mangrove_log  │ 붉은 적주
+ y60  bone_block                     y60  stripped_mangrove_log  │
+ y59  mangrove_planks   인방         y59  stripped_mangrove_log  ┘
+ y58  smooth_stone      기단         y58  smooth_stone
+```
+격자칸 안쪽: `dark_oak_trapdoor` / `dark_oak_planks` — **창호가 가장 어둡다.**
+
+지붕 상자 불변: 층간 **37×18** · 대지붕 **33×14**. 눈 **437/437** · 유출 0.
+
+## ★자가 두 번 더 낡았다 — 팔레트에 얹힌 눈
+
+목재를 역할대로 가르자 **재료 이름으로 구조를 고르던 눈 둘**이 헛짚었다.
+
+1. **문설주 판정**이 「`mangrove_log` 를 포함하는가」였다 → 문설주가 어두운 참나무만 남자 0 을 셌다.
+   → **세로로 이어진 통짜 기둥**이라는 구조로 고른다.
+2. **공포 「넓은 자 vs 바른 자」** 증명이 「오늘의 도면에서 넓은 자가 더 고른다」였다 →
+   인방이 `mangrove_planks` 가 되며 차이가 사라져 짖었다. **증명이 오늘의 팔레트에 얹혀 있었다.**
+   → 이제 회벽에 한 켜짜리 붉은 통나무를 **일부러 끼워** 넓은 자가 무너지는 것을 직접 보인다.
+
+**재료 이름으로 구조를 고르지 마라.** 팔레트는 바뀌고 구조는 안 바뀐다.
