@@ -201,9 +201,16 @@ public final class BlueprintBuilder {
                     //   처음 기둥 머리 위에 놓았더니 지붕 위로 튀어나갔다 (눈이 잡았다).
                     int roofBase = bp.roofs().isEmpty() ? bp.heightAt(c, r)
                             : bp.roofs().get(0).baseY();
+                    // ★★D2 전파가 드러낸 것 (2026-08-09 · 본전) — <b>내밈은 처마를 넘을 수 없다.</b>
+                    //   본전은 위계가 가장 높으니 elaborate(3단) 인데 처마는 실측이 2 로 묶여 있다
+                    //   (「3 은 45° 시선에서 벽면을 통째로 가린다」 — D-36). 3 을 그대로 내밀면
+                    //   공포가 처마 <b>밖</b>으로 나가 하늘 아래 드러난다 —「공포는 처마를 받친다」가 깨진다.
+                    //   → 위계는 <b>더 멀리</b>가 아니라 <b>더 높이·더 촘촘히</b>로 표현한다 (다포).
+                    //     단 수는 그대로 3, 내밈만 처마에서 멈춘다.
+                    int eave = bp.roofs().isEmpty() ? brk : bp.roofs().get(0).eave();
                     int top = oy + roofBase - brk;
                     for (int s2 = 0; s2 < brk; s2++) {
-                        int reach = s2 + 1;                  // 위 단일수록 한 칸 더 나온다
+                        int reach = Math.min(s2 + 1, Math.max(1, eave));   // 처마에서 멈춘다
                         for (int side = -1; side <= 1; side++) {
                             int bx = ox + d2[0] + nf.getModX() * reach - nf.getModZ() * side;
                             int bz = oz + d2[1] + nf.getModZ() * reach + nf.getModX() * side;
@@ -250,14 +257,23 @@ public final class BlueprintBuilder {
                 n.roofs++;
                 continue;                            // 맞배에는 상층이 없다 (부속급)
             }
-            HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
-                    rf.eave(), tally);
+            // ★★REF-1 — <b>본전만</b> 새 판을 탄다 (사용자: 「기존 sweep 코드는 수정하지 않는다」).
+            //   grand 는 좌우≠앞뒤 내밈이고 <b>말없는 축소가 없다</b>.
+            if (rf.grand()) {
+                HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0, ox + bx1,
+                        oy + rf.baseY(), oz + bz0, oz + bz1, rf.eaveX(), rf.eaveZ(), tally);
+            } else {
+                HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
+                        rf.eave(), tally);
+            }
             // ★D2 ③ 처마 밑 서까래 — 지붕이 「검은 덩어리」로 읽히지 않게.
             //   도면이 rafters: true 라 적은 지붕에만 넣는다 (LOD — 모든 곳에 넣지 않는다).
             if (rf.rafters()) {
+                int rex = rf.grand() ? rf.eaveX() : rf.eave();
+                int rez = rf.grand() ? rf.eaveZ() : rf.eave();
                 HwasanCampusBuilder.rafters(world, pad,
-                        ox + bx0 - rf.eave(), ox + bx1 + rf.eave(), oy + rf.baseY(),
-                        oz + bz0 - rf.eave(), oz + bz1 + rf.eave(), tally);
+                        ox + bx0 - rex, ox + bx1 + rex, oy + rf.baseY(),
+                        oz + bz0 - rez, oz + bz1 + rez, tally);
             }
             n.roofs++;
             if (rf.hasUpper()) {
@@ -308,8 +324,14 @@ public final class BlueprintBuilder {
                         }
                     }
                 }
-                HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
-                        hf - ix, hl - iz, rf.upperEave(), tally);
+                if (rf.grand()) {
+                    HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0 + ix, ox + bx1 - ix,
+                            upBase + rf.upperWall(), oz + bz0 + iz, oz + bz1 - iz,
+                            rf.upperEaveX(), rf.upperEaveZ(), tally);
+                } else {
+                    HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
+                            hf - ix, hl - iz, rf.upperEave(), tally);
+                }
                 n.roofs++;
             }
         }
@@ -388,8 +410,25 @@ public final class BlueprintBuilder {
         return col > cx ? org.bukkit.block.BlockFace.EAST : org.bukkit.block.BlockFace.WEST;
     }
 
+    /**
+     * <b>기단·바닥은 벽이 아니다.</b> ★★2026-08-09 · D2 를 본전에 전파하다 드러난 것.
+     *
+     * <p>{@link #outward} 는 「이웃에 벽이 있는가」로 면의 법선을 정한다. 그런데 판정이
+     * {@code heightAt > 0} 이었다 — 그러면 <b>한 켜짜리 월대도 벽으로 세어진다.</b>
+     * 본전에 월대 두름(1켜)과 몸체 바닥(2켜)을 넣자 정면 벽의 남·북 이웃이 둘 다 「벽」이 되어
+     * 법선이 <b>남에서 서로 뒤집혔고</b>, 격자창 세 눈이 한꺼번에 짖었다 (남 1 · 그 밖 7).
+     *
+     * <p>고침은 문턱을 낮추는 쪽이 아니라 <b>자를 바로잡는</b> 쪽이다:
+     * <b>사람이 지나갈 수 없는 높이는 가리는 것이 아니라 딛는 것이다.</b>
+     * 4켜 미만(월대·기단·툇마루)은 바닥으로 세고, 그 이상만 벽으로 센다.
+     * 이 자로 재면 산문의 성벽(6켜)·문루 벽(9켜)은 그대로 벽이고, 앞 기단 {@code T}·
+     * 문루 발치 {@code B}(각 1켜)만 바닥으로 빠진다.
+     */
+    public static final int WALL_MIN_COURSES = 4;
+
     private static boolean tall(Blueprint bp, int col, int row) {
-        return col >= 0 && col < bp.width() && row >= 0 && row < bp.depth() && bp.heightAt(col, row) > 0;
+        return col >= 0 && col < bp.width() && row >= 0 && row < bp.depth()
+                && bp.heightAt(col, row) >= WALL_MIN_COURSES;
     }
 
     /**

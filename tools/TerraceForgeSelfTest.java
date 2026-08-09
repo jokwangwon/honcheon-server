@@ -2841,15 +2841,19 @@ public final class TerraceForgeSelfTest {
             if (hjRoof != null) {
                 check("★★본전 상층은 격자창이 띠를 이룬다 (회벽 아님 — infill=lattice)",
                         hjRoof.upperLattice(), hjRoof.upperInfill());
-                // ★★하층:상층 폭 비 — 7호 실측 38:25 = **0.66**. 코드에 물러남이 2 로 박혀
-                //   있던 동안 이 값은 0.87 이었다 (상층이 하층만큼 넓은 다른 건물). 이제
-                //   도면이 물러남을 정하므로, 그 값이 실측 비를 내는지 여기서 잰다.
+                // ★★하층:상층 폭 비.
+                //   ┌ 구 목표 0.66  근거: 목표 7호 이미지            → **superseded**
+                //   └ 신 목표 0.806 근거: mainhall_ref.png (REF-1 · 사용자 확정 2026-08-09)
+                //   ★틀려서 지우는 게 아니다. <b>시각 정답이 옮겨졌다.</b> 7호 시절의 0.66 은
+                //     그때의 정본을 정확히 지키던 값이고, 지금 지키라는 것은 다른 그림이다.
+                //     레퍼런스 원본 비는 37/45 = 0.822 이고, 패드 38 안에서 그 느낌을 가장 잘
+                //     보존하는 정수가 25 (0.806) 다 — 26 은 좌우 대칭·홀수 축을 깬다.
                 int lower = hjRoof.box()[2] - hjRoof.box()[0] + 1;
                 int upper = lower - 2 * hjRoof.insetX();
                 double ratio = (double) upper / lower;
-                check("★본전 하층:상층 폭 비가 실측(0.66)에 든다 (" + lower + ":" + upper
-                                + " = " + String.format("%.2f", ratio) + ")",
-                        ratio >= 0.60 && ratio <= 0.75, ratio);
+                check("★본전 하층:상층 폭 비가 mainhall_ref.png(0.806)에 든다 (" + lower + ":" + upper
+                                + " = " + String.format("%.3f", ratio) + " — 7호의 0.66 은 superseded)",
+                        ratio >= 0.78 && ratio <= 0.83, ratio);
             }
 
             // ★월대 — 본전은 맨땅에 서지 않는다. 몸체 **앞**에 기단면이 깔려야 한다.
@@ -2875,6 +2879,50 @@ public final class TerraceForgeSelfTest {
                     java.nio.file.Files.readString(
                             java.nio.file.Path.of("config/blueprints/hwasan_gate.yml")));
             Blueprint gate = Blueprint.of(graw);
+
+            // ══════ ★★★산문 문루 정면 <b>법선</b> 회귀 (2026-08-09) ══════
+            //   ★이것은 디자인 변경이 아니라 <b>구현 오류의 교정</b>이다 (사용자 판정).
+            //   {@code outward()} 는 「이웃에 벽이 있는가」로 면의 법선을 정하는데, 판정이
+            //   {@code heightAt > 0} 이라 <b>한 켜짜리 기단(T·B)까지 벽으로 셌다.</b>
+            //   그래서 문루 정면(row 18)의 남·북 이웃이 둘 다 「벽」이 되어 법선이 남이 아니라
+            //   <b>동·서로 떨어졌고, 정면 살창 13칸이 옆을 보고 있었다.</b>
+            //   자를 「4켜 미만은 딛는 것이지 가리는 것이 아니다」로 바로잡아 교정했다.
+            //   ★동결은 오류까지 영구 보존하라는 뜻이 아니다 — 다만 치수·좌표·입면 배열은
+            //     한 글자도 안 건드렸으므로, <b>다시 돌아가지 않게 눈을 박는다.</b>
+            int gFrontSouth = 0;
+            int gFrontOther = 0;
+            for (int c = 0; c < gate.width(); c++) {
+                char ch = gate.at(c, 18);
+                if (ch != 'D' && ch != 'I') {
+                    continue;                       // 살창(트랩도어·살) 칸만 — 성벽은 딴 면이다
+                }
+                if (com.honcheon.mvt.forge.BlueprintBuilder.outward(gate, c, 18)
+                        == org.bukkit.block.BlockFace.SOUTH) {
+                    gFrontSouth++;
+                } else {
+                    gFrontOther++;
+                }
+            }
+            check("★[눈의 눈] 산문 문루 정면에서 살창칸을 찾았다", gFrontSouth + gFrontOther > 0,
+                    gFrontSouth + gFrontOther);
+            check("★★산문 문루 정면 살창이 **남(바깥)을 본다** (옆을 보면 살창이 뒤집힌다 — 남 "
+                            + gFrontSouth + " · 그 밖 " + gFrontOther + ")",
+                    gFrontOther == 0 && gFrontSouth >= 5, gFrontSouth + " / " + gFrontOther);
+            // ★같은 자가 측면에서는 동·서를 가리켜야 한다 — 남쪽으로 다 돌려 버리면 그것도 틀렸다
+            org.bukkit.block.BlockFace gWestFace =
+                    com.honcheon.mvt.forge.BlueprintBuilder.outward(gate, 6, 15);
+            org.bukkit.block.BlockFace gEastFace =
+                    com.honcheon.mvt.forge.BlueprintBuilder.outward(gate, gate.width() - 7, 15);
+            check("★★산문 곁채 측면은 여전히 동·서를 본다 (자리가 방향을 정한다 — 서 "
+                            + gWestFace + " · 동 " + gEastFace + ")",
+                    gWestFace == org.bukkit.block.BlockFace.WEST
+                            && gEastFace == org.bukkit.block.BlockFace.EAST,
+                    gWestFace + "/" + gEastFace);
+            // ★눈의 눈 — 자가 옛 값(1켜)으로 돌아가면 정면이 다시 옆을 본다
+            check("★★[눈의 눈] 「기단은 벽이 아니다」 자가 살아 있다 (4켜 미만은 딛는 것)",
+                    com.honcheon.mvt.forge.BlueprintBuilder.WALL_MIN_COURSES >= 4,
+                    com.honcheon.mvt.forge.BlueprintBuilder.WALL_MIN_COURSES);
+
             int gWalls = 0;
             int gDoors = 0;
             for (int c = 0; c < gate.width(); c++) {
@@ -2997,12 +3045,31 @@ public final class TerraceForgeSelfTest {
                             + "삐져나오지 않게 — 지붕 " + hjRoofTop + " · 비움 " + hjClear + ")",
                     hjClear > hjRoofTop, hjRoofTop + " vs " + hjClear);
             // ★비움 높이는 **도면을 따라 움직여야** 한다 — 상수를 박으면 도면이 자랄 때 조용히
-            //   낮아진다. 산문(다른 치수)에 대고 값이 **달라지는지** 재어 상수 박기를 잡는다.
-            //   ※이 눈이 없으면 clearHeight 가 `return 64;` 여도 위 두 눈은 통과한다.
-            int gateClear = com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(gate);
-            check("★★비우는 높이가 **도면을 따라 움직인다** (산문 " + gateClear + " ≠ 본전 "
-                            + hjClear + " — 상수를 박으면 여기서 짖는다)",
-                    gateClear != hjClear, gateClear + " vs " + hjClear);
+            //   낮아진다.
+            //   ★★자를 고쳤다 (2026-08-09 · REF-1). 전에는 <b>산문과 본전의 값이 다른가</b>로
+            //     재고 있었다. 그런데 본전이 REF-1 로 자라 두 값이 <b>우연히 35 로 같아지자</b>
+            //     눈이 짖었다 — 조성은 멀쩡한데 자가 틀린 것이다.
+            //     「두 건물이 다르다」는 「도면을 따라 움직인다」의 <b>대용품</b>일 뿐이었다.
+            //     이제 도면을 실제로 <b>한 켜 키워서</b> 값이 따라 오르는지 직접 묻는다 —
+            //     상수(`return 64;`)라면 안 오르고, 대용품과 달리 우연히 통과할 수도 없다.
+            java.util.Map<String, Object> growRaw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+            //   ※무엇을 키울지도 자다: 기둥 켜를 키우면 지붕이 안 따라 올라 값이 안 변한다
+            //     (지붕 꼭대기가 더 높아 그쪽이 답을 지배한다 — 실제로 35→35 였다).
+            //     <b>지붕을 올려야</b> 이 눈이 재려던 것을 잰다.
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> growRoofs =
+                    (java.util.Map<String, Object>) growRaw.get("roof");
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> growRoof = (java.util.Map<String, Object>)
+                    growRoofs.values().iterator().next();
+            growRoof.put("base_y", ((Number) growRoof.get("base_y")).intValue() + 4);
+            int grownClear = com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(
+                    Blueprint.of(growRaw));
+            check("★★비우는 높이가 **도면을 따라 움직인다** (지붕을 4켜 올리니 " + hjClear + " → "
+                            + grownClear + " — 상수를 박으면 여기서 짖는다)",
+                    grownClear > hjClear, hjClear + " → " + grownClear);
 
             // ★조성이 실제로 **비우고 나서** 찍는가 — 순서가 뒤집히면 도면을 지운다.
             int clearCall = bb.indexOf("clearHeight(bp)");
@@ -3096,12 +3163,11 @@ public final class TerraceForgeSelfTest {
             int checked = 0;
             for (int c = 0; c < hj.width(); c++) {
                 char ch = hj.at(c, frontR);
-                if (ch == '.' || ch == 'M' || ch == 'P' || ch == 'O') {
+                if (ch == '.' || ch == 'M' || ch == 'F' || ch == 'P' || ch == 'O') {
                     continue;
                 }
                 checked++;
                 java.util.List<Blueprint.Course> col = hj.columnOf(ch);
-                // 벽 켜 = 기단(맨 아래 한 켜)과 도리·단청(맨 위 두 켜)을 뺀 가운데
                 java.util.List<String> wallCourses = new java.util.ArrayList<>();
                 for (Blueprint.Course cs : col) {
                     for (int k = 0; k < cs.count(); k++) {
@@ -3111,15 +3177,34 @@ public final class TerraceForgeSelfTest {
                 if (wallCourses.size() < 4) {
                     continue;
                 }
-                java.util.List<String> mid = wallCourses.subList(1, wallCourses.size() - 2);
-                for (String m : mid) {
-                    if (m.contains("plaster")) {
-                        cCream++;
+                // ★★자를 고쳤다 (2026-08-09 · D2 전파). 전에는 「맨 아래 한 켜 = 기단 ·
+                //   맨 위 두 켜 = 도리·단청」이라고 **자리를 박아** 가운데를 오려 냈다.
+                //   D2 로 기단이 1→2켜, 창방이 한 켜 늘자 그 오림이 통째로 어긋나 16/16 이
+                //   짖었다 — <b>처방이 틀린 게 아니라 자가 틀렸다.</b>
+                //   이제 자리를 세지 않고 <b>채움(회벽·살창)이 실제로 어디서 시작해 어디서
+                //   끝나는지</b>를 찾아, 그 바로 위·아래 켜가 붉은 인방인지만 본다.
+                int lo = -1;
+                int hi = -1;
+                for (int k = 0; k < wallCourses.size(); k++) {
+                    String m = wallCourses.get(k);
+                    boolean fill = m.contains("plaster") || m.contains("lattice")
+                            || m.contains("trapdoor") || m.contains("fence");
+                    if (fill) {
+                        if (lo < 0) {
+                            lo = k;
+                        }
+                        hi = k;
+                        if (m.contains("plaster")) {
+                            cCream++;
+                        }
                     }
                 }
-                // ★인방 — 칸의 벽 켜는 **위·아래가 붉은 켜로 끊겨야** 한다. 안 끊기면 회벽은
+                // ★인방 — 채움의 위·아래가 **붉은 켜로 끊겨야** 한다. 안 끊기면 회벽은
                 //   통짜 빈 판이 되고 격자는 바닥부터 천장까지 이어져 「사다리」로 읽힌다.
-                if (!mid.get(0).contains("mangrove") || !mid.get(mid.size() - 1).contains("mangrove")) {
+                boolean below = lo > 0 && wallCourses.get(lo - 1).contains("mangrove");
+                boolean above = hi >= 0 && hi + 1 < wallCourses.size()
+                        && wallCourses.get(hi + 1).contains("mangrove");
+                if (lo < 0 || !below || !above) {
                     noLintel++;
                 }
             }
@@ -3129,6 +3214,71 @@ public final class TerraceForgeSelfTest {
                     noLintel == 0, noLintel + "/" + checked);
             check("★회벽이 사라지지는 않는다 (하층은 회벽이 **있는** 벽이다 — 상층과 다르다)",
                     cCream > 0, cCream);
+
+            // ══════ ★★★REF-1 — 본전 가로 비례 (사용자 확정 2026-08-09) ══════
+            //   새 시각 정본 = mainhall_ref.png. 목표는 <b>가로로 넓고 장중한 실루엣</b>.
+            //   ★여기서 재는 것은 <b>선언값이 아니라 실현 상자</b>다. 옛 sweep 은 패드에 안
+            //     들어가면 내밈을 스스로 줄였고, 그러면 정본에 4 라 적고 실물이 2 가 된다 —
+            //     그것이 바로 이 저장소가 몇 번을 당한 <b>「신고표가 실물보다 넓다」</b>이다.
+            //     그래서 눈은 ① 상자 크기와 ② <b>그 상자가 패드 안에 온전히 드는가</b>를 함께
+            //     묻는다. 패드 밖은 put() 이 조용히 버리므로, 밖이면 실현 ≠ 선언이다.
+            Blueprint.Roof rf1 = hj.roofs().get(0);
+            int[] rbx = rf1.box();
+            check("★[눈의 눈] 본전 지붕 상자를 읽었다", rbx.length == 4, java.util.Arrays.toString(rbx));
+            check("★★본전만 새 판을 탄다 (profile main_hall_grand — 옛 sweep 은 안 건드린다)",
+                    rf1.grand(), rf1.profile());
+
+            int ix0 = rbx[0] - rf1.eaveX();
+            int ix1 = rbx[2] + rf1.eaveX();
+            int iz0 = rbx[1] - rf1.eaveZ();
+            int iz1 = rbx[3] + rf1.eaveZ();
+            String interBox = (ix1 - ix0 + 1) + "×" + (iz1 - iz0 + 1);
+            check("★★층간 지붕 실현 상자 = **37×18** (좌우 내밈 3 · 앞뒤 2 — " + interBox + ")",
+                    (ix1 - ix0 + 1) == 37 && (iz1 - iz0 + 1) == 18, interBox);
+            check("★★층간 지붕이 패드 안에 온전히 든다 (밖이면 조용히 작아진다 = 신고표 거짓말)",
+                    ix0 >= 0 && ix1 < hj.width() && iz0 >= 0 && iz1 < hj.depth(),
+                    ix0 + ".." + ix1 + " / " + iz0 + ".." + iz1);
+
+            int ux0 = rbx[0] + rf1.insetX() - rf1.upperEaveX();
+            int ux1 = rbx[2] - rf1.insetX() + rf1.upperEaveX();
+            int uz0 = rbx[1] + rf1.insetZ() - rf1.upperEaveZ();
+            int uz1 = rbx[3] - rf1.insetZ() + rf1.upperEaveZ();
+            String upBox = (ux1 - ux0 + 1) + "×" + (uz1 - uz0 + 1);
+            check("★★대지붕 실현 상자 = **33×14** (좌우 내밈 4 · 앞뒤 2 — " + upBox + ")",
+                    (ux1 - ux0 + 1) == 33 && (uz1 - uz0 + 1) == 14, upBox);
+            check("★★대지붕이 패드 안에 온전히 든다",
+                    ux0 >= 0 && ux1 < hj.width() && uz0 >= 0 && uz1 < hj.depth(),
+                    ux0 + ".." + ux1 + " / " + uz0 + ".." + uz1);
+
+            // ★상층 폭비 — 7호의 0.66 은 **superseded**. 틀려서가 아니라 시각 정본이 바뀌어서다.
+            int lowW = rbx[2] - rbx[0] + 1;
+            int upW = lowW - 2 * rf1.insetX();
+            check("★★상층 폭 **25** (하층 " + lowW + " 대비 "
+                            + String.format("%.3f", upW / (double) lowW)
+                            + " — 7호의 0.66 은 mainhall_ref.png 로 superseded)",
+                    upW == 25, upW + "/" + lowW);
+            check("★★지붕이 좌우로 더 뻗는다 (가로 실루엣 — 좌우 내밈 > 앞뒤 내밈)",
+                    rf1.eaveX() > rf1.eaveZ() && rf1.upperEaveX() > rf1.upperEaveZ(),
+                    rf1.eaveX() + "/" + rf1.eaveZ() + " · "
+                            + rf1.upperEaveX() + "/" + rf1.upperEaveZ());
+
+            // ★REF-1 ⑤ — 3단 가시 기단. 세 켜 수가 <b>1·2·3 으로 갈려야</b> 세 단으로 읽힌다.
+            //   ★한 칸씩 세 번 올라야 걸어 오른다 — 두 칸이 한 번이라도 있으면 대문이 막힌다.
+            int tier1 = hj.columnOf('M').stream().mapToInt(Blueprint.Course::count).sum();
+            int tier2 = hj.columnOf('N').stream().mapToInt(Blueprint.Course::count).sum();
+            int tier3 = hj.columnOf('F').stream().mapToInt(Blueprint.Course::count).sum();
+            check("★★기단이 **3단**이고 한 칸씩 오른다 (" + tier1 + "→" + tier2 + "→" + tier3 + ")",
+                    tier1 == 1 && tier2 == 2 && tier3 == 3, tier1 + "/" + tier2 + "/" + tier3);
+            // ★몸체 기둥의 밑동이 맨 윗단과 같은 높이여야 문지방과 방바닥이 맞는다
+            int doorBase = 0;
+            for (Blueprint.Course cs : hj.columnOf('O')) {
+                if (!"smooth_stone".equals(cs.material())) {
+                    break;
+                }
+                doorBase += cs.count();
+            }
+            check("★★대문 문지방이 기단 맨 윗단과 같다 (어긋나면 문 앞에 턱이 생긴다)",
+                    doorBase == tier3, doorBase + " vs " + tier3);
 
             // ══════ ★★D-35 — 망루가 본전보다 눈에 먼저 든다 ══════
             // 진범은 높이가 아니라 **흰 면의 넓이**다. 눈이 소스 글자가 아니라 **조성이 쓰는

@@ -42,7 +42,18 @@ public final class Blueprint {
      */
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
-                       String profile, boolean rafters) {
+                       String profile, boolean rafters,
+                       int eaveX, int eaveZ, int upperEaveX, int upperEaveZ) {
+
+        /**
+         * ★★REF-1 (사용자 확정 2026-08-09) — <b>좌우 내밈과 앞뒤 내밈이 다를 수 있다.</b>
+         * {@code mainhall_ref.png} 의 본전은 지붕이 몸체보다 <b>가로로</b> 크게 뻗어 실루엣을
+         * 만든다. 한 값({@code eave})으로는 그 횡적 비례가 안 나온다.
+         * 안 적으면 {@code eave} 를 그대로 쓴다 — <b>기존 도면은 한 글자도 안 바뀐다.</b>
+         */
+        public boolean grand() {
+            return "main_hall_grand".equalsIgnoreCase(profile);
+        }
 
         /** ★D2 ③ 처마 밑에 서까래를 넣는가 — 근경 디테일이라 <b>도면이 고른다</b> (LOD) */
         public boolean rafters() {
@@ -410,7 +421,14 @@ public final class Blueprint {
                                     ? 5 : 3)).intValue(),
                     ((Number) m.getOrDefault("ridge_cap", 1)).intValue(),
                     String.valueOf(m.getOrDefault("profile", "pavilion")),
-                    Boolean.parseBoolean(String.valueOf(m.getOrDefault("rafters", "false")))));
+                    Boolean.parseBoolean(String.valueOf(m.getOrDefault("rafters", "false"))),
+                    // ★REF-1 — 안 적으면 eave 를 그대로 쓴다 (기존 도면 무변경)
+                    ((Number) m.getOrDefault("eave_x", m.getOrDefault("eave", 2))).intValue(),
+                    ((Number) m.getOrDefault("eave_z", m.getOrDefault("eave", 2))).intValue(),
+                    up == null ? 2 : ((Number) up.getOrDefault("eave_x",
+                            up.getOrDefault("eave", 2))).intValue(),
+                    up == null ? 2 : ((Number) up.getOrDefault("eave_z",
+                            up.getOrDefault("eave", 2))).intValue()));
         });
 
         Map<String, int[]> spots = new LinkedHashMap<>();

@@ -745,21 +745,60 @@ public final class HwasanCampusBuilder {
                 && pad.contains(cx + hf + over, cz + hl + over))) {
             over--;
         }
-        boolean big = Math.max(hf, hl) >= 12;   // ★13c-② 큰 지붕만 — 치미 솟음·내림마루·합각
+        sweepRoofBounds(world, pad, cx - hf - over, cx + hf + over, cy,
+                cz - hl - over, cz + hl + over, Math.max(hf, hl) >= 12, tally);
+    }
+
+    /**
+     * ★★★<b>{@code main_hall_grand}</b> — 본전 전용 판 (REF-1 · 사용자 확정 2026-08-09).
+     * {@code mainhall_ref.png} 가 새 시각 정본이 되면서 <b>가로로 넓은 실루엣</b>이 목표가 됐다.
+     * 기존 {@link #sweepRoof} 와 갈리는 것 둘 —
+     *
+     * <ol>
+     *   <li><b>좌우와 앞뒤의 내밈이 다르다</b> ({@code eaveX} ≠ {@code eaveZ}). 한 값으로는
+     *       「넓은 횡적 실루엣」이 안 나온다. 그래서 중심±반폭이 아니라 <b>경계 상자</b>로 짓는다 —
+     *       ★몸체 깊이가 짝수(14)라 반폭 셈이 남쪽 처마를 <b>한 칸 깎아 먹던</b> 병도 여기서 낫는다
+     *       (옛 경로의 실현 깊이는 18 이 아니라 17 이었다).</li>
+     *   <li><b>말없는 축소가 없다.</b> 옛 경로는 패드에 안 들어가면 내밈을 스스로 줄였다 —
+     *       편하지만 역설계에는 못 쓴다. 정본에 4 라 적고 실물이 2 면 그것이 바로
+     *       <b>「신고표가 실물보다 넓다」</b>이다. 여기서는 줄이지 않는다. 안 들어가면
+     *       <b>조용히 작아지는 대신 검수가 짖어야 한다</b> (눈이 실현 상자를 잰다).</li>
+     * </ol>
+     * ※기존 {@code sweepRoof} 는 손대지 않는다 — 산문 회귀를 만들지 않기 위해서다 (사용자).
+     */
+    static void sweepRoofGrand(World world, TerraceForge.Pad pad, int bx0, int bx1, int cy,
+                               int bz0, int bz1, int eaveX, int eaveZ, Tally tally) {
+        sweepRoofBounds(world, pad, bx0 - eaveX, bx1 + eaveX, cy, bz0 - eaveZ, bz1 + eaveZ,
+                Math.max(bx1 - bx0, bz1 - bz0) / 2 >= 12, tally);
+    }
+
+    /**
+     * 지붕의 결 — <b>발자국 상자</b>를 받아 한 켜에 사방 한 칸씩 좁혀 올린다.
+     * 귀솟음·내림마루·치미·합각이 전부 여기 한 곳에 남는다 (7.5 계율).
+     */
+    private static void sweepRoofBounds(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
+                                        int z0, int z1, boolean big, Tally tally) {
         for (int i = 0; ; i++) {
-            int hF = hf + over - i;
-            int hL = hl + over - i;
+            int ax0 = x0 + i;
+            int ax1 = x1 - i;
+            int az0 = z0 + i;
+            int az1 = z1 - i;
+            int hF = (ax1 - ax0) / 2;
+            int hL = (az1 - az0) / 2;
+            int cx = (ax0 + ax1) / 2;
+            int cz = (az0 + az1) / 2;
             int y = cy + i;
-            if (hF <= 0 || hL <= 0) {
+            if (ax1 - ax0 <= 0 || az1 - az0 <= 0) {
                 // 용마루 — 긴 축으로 수렴 · ★13c-② 끝은 치미가 한 칸 더 솟는다 (선으로 갈리는
                 //   지붕: 큰 면이 평평히 읽히던 것의 처방 · 레퍼런스 1·4호)
-                boolean alongF = hF > 0;
-                int len = Math.max(alongF ? hF : hL, 0);
-                for (int k = -len; k <= len; k++) {
-                    int x = alongF ? cx + k : cx;
-                    int z = alongF ? cz : cz + k;
+                boolean alongF = ax1 - ax0 > 0;
+                int r0 = alongF ? ax0 : az0;
+                int r1 = alongF ? ax1 : az1;
+                for (int k = r0; k <= r1; k++) {
+                    int x = alongF ? k : cx;
+                    int z = alongF ? cz : k;
                     put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE, tally);
-                    boolean tip = Math.abs(k) == len;
+                    boolean tip = k == r0 || k == r1;
                     put(world, pad, x, y + 1, z,
                             tip ? Material.COBBLED_DEEPSLATE_WALL : Material.COBBLED_DEEPSLATE_SLAB, tally);
                     if (tip && big) {
@@ -768,12 +807,12 @@ public final class HwasanCampusBuilder {
                 }
                 return;
             }
-            for (int f = -hF; f <= hF; f++) {
-                for (int l = -hL; l <= hL; l++) {
-                    int x = cx + f;
-                    int z = cz + l;
-                    boolean eF = Math.abs(f) == hF;
-                    boolean eL = Math.abs(l) == hL;
+            for (int x = ax0; x <= ax1; x++) {
+                for (int z = az0; z <= az1; z++) {
+                    int f = x - cx;
+                    int l = z - cz;
+                    boolean eF = x == ax0 || x == ax1;
+                    boolean eL = z == az0 || z == az1;
                     if (i == 0) {                          // 처마 끝 — 반블록 (귀솟음은 아래에서 한 벌)
                         put(world, pad, x, y, z, eF || eL ? Material.COBBLED_DEEPSLATE_SLAB
                                 : roofCube(x, y, z), tally);
@@ -797,19 +836,22 @@ public final class HwasanCampusBuilder {
                 }
             }
             if (i == 0) {   // ★14-① 귀솟음 — 처마 끝 네 귀가 들린다 (대결에서 배운 기법)
-                eaveUpturn(world, pad, cx, y, cz, hF, hL, tally);
+                //   ★네 귀는 <b>경계 상자의 모서리</b>다. 중심±반폭으로 집으면 짝수 축에서
+                //     한 칸 안쪽을 들어 올려 귀가 처마 끝에 안 앉는다.
+                eaveUpturnBox(world, pad, ax0, ax1, y, az0, az1, tally);
             }
             // ★13c-② 합각(측면 삼각 벽) — 짧은 축 끝면을 백벽으로 막아 지붕 옆이 「면」이 된다
             //   (레퍼런스 1·4호: 팔작의 측면 삼각). 큰 지붕만·용마루 쪽 두 켜.
             if (big && i >= 1 && hF > 0 && hL > 0 && hF != hL) {
                 boolean gableAlongF = hF < hL;          // 짧은 축이 합각면
-                int gh = gableAlongF ? hF : hL;
-                for (int k = -gh; k <= gh; k++) {
-                    for (int s : new int[]{-1, 1}) {
-                        int gx = gableAlongF ? cx + k : cx + s * (hF);
-                        int gz = gableAlongF ? cz + s * (hL) : cz + k;
+                int g0 = gableAlongF ? ax0 : az0;
+                int g1 = gableAlongF ? ax1 : az1;
+                for (int k = g0; k <= g1; k++) {
+                    for (int s : new int[]{0, 1}) {
+                        int gx = gableAlongF ? k : (s == 0 ? ax0 : ax1);
+                        int gz = gableAlongF ? (s == 0 ? az0 : az1) : k;
                         put(world, pad, gx, y - 1, gz,
-                                Math.abs(k) == gh ? Material.DARK_OAK_PLANKS
+                                k == g0 || k == g1 ? Material.DARK_OAK_PLANKS
                                         : plaster(gx, y - 1, gz), tally);
                     }
                 }
@@ -828,10 +870,16 @@ public final class HwasanCampusBuilder {
      */
     private static void eaveUpturn(World world, TerraceForge.Pad pad, int cx, int y, int cz,
                                    int hf, int hl, Tally tally) {
+        // ★옛 부름(중심±반폭) — 산문 차양·겹처마 스커트가 쓴다. 그대로 둔다 (회귀 금지).
+        eaveUpturnBox(world, pad, cx - hf, cx + hf, y, cz - hl, cz + hl, tally);
+    }
+
+    private static void eaveUpturnBox(World world, TerraceForge.Pad pad, int x0, int x1, int y,
+                                      int z0, int z1, Tally tally) {
         for (int sf : new int[]{-1, 1}) {
             for (int sl : new int[]{-1, 1}) {
-                int gx = cx + sf * hf;
-                int gz = cz + sl * hl;
+                int gx = sf < 0 ? x0 : x1;
+                int gz = sl < 0 ? z0 : z1;
                 for (int d = 0; d <= 1; d++) {
                     int rise = upturnRise(d);
                     if (rise == 0) {
@@ -842,10 +890,10 @@ public final class HwasanCampusBuilder {
                         put(world, pad, gx, y + rise, gz, Material.COBBLED_DEEPSLATE_WALL, tally); // 귀 끝 — 하늘로 꺾인다
                         continue;
                     }
-                    if (hf > d) {   // 점층 — 중앙으로 갈수록 낮아진다 (귀솟음의 결)
+                    if ((x1 - x0) / 2 > d) {   // 점층 — 중앙으로 갈수록 낮아진다 (귀솟음의 결)
                         put(world, pad, gx - sf * d, y + rise, gz, Material.COBBLED_DEEPSLATE_SLAB, tally);
                     }
-                    if (hl > d) {
+                    if ((z1 - z0) / 2 > d) {
                         put(world, pad, gx, y + rise, gz - sl * d, Material.COBBLED_DEEPSLATE_SLAB, tally);
                     }
                 }
