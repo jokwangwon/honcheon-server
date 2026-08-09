@@ -826,8 +826,11 @@ public final class HwasanCampusBuilder {
                         put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
                     } else if (eF && eL) {
                         // ★13c-② 내림마루 — 모서리에서 처마로 내려오는 마루 선 (면을 가른다)
-                        put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE, tally);
-                        if (big) {
+                        //   ★REF-1c-A: 물매가 평탄한 구간에서는 <b>모서리도 반블록</b>이다.
+                        //     여기에 full block 을 두면 그 켜가 통째로 노출된 테라스 턱이 된다.
+                        put(world, pad, x, y, z, grand && flatRun
+                                ? Material.COBBLED_DEEPSLATE_SLAB : Material.COBBLED_DEEPSLATE, tally);
+                        if (big && !(grand && flatRun)) {
                             put(world, pad, x, y + 1, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
                         }
                     } else if (eL) {

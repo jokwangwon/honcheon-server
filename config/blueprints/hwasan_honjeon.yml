@@ -119,9 +119,16 @@ columns:
   "F": ["smooth_stone*3"]                                    # 몸체 안 바닥 = 기단 3단 (맨 위)
   # ★D2 ② 기둥은 막대기가 아니라 구조체다 — 기단·주초 / 적주 / <b>창방</b> / 도리 / 단청
   #   창방(昌枋)은 강당에도 들어간 켜다. 본전은 그 위에 <b>단청 띠</b>가 한 켜 더 얹힌다.
+  # ★★★REF-1c-A (사용자 확정 2026-08-09) — <b>밝은 가로띠를 폐기한다.</b>
+  #   정면 사진에서 시선을 제일 먼저 잡는 것이 건물 구조가 아니라 <b>밝은 갈색 3단 띠</b>였다.
+  #   레퍼런스의 그 자리는 밝은 판 하나가 아니라 <b>어두운 처마 밑에서 붉은 목구조와 공포가
+  #   되풀이되는 영역</b>이다. 그래서 재료를 위계로 다시 갈랐다:
+  #       상단 긴 보 = dark_oak 계열   (전 폭을 지나가도 어두워서 안 튄다)
+  #       아래 가로보 = mangrove 계열  (붉은 창방·도리)
+  #       밝은 사암   = <b>적주 머리에만</b> — 띠가 아니라 <b>점</b>이다 (10 자리)
   "P": ["smooth_stone*3", "stripped_mangrove_log*5",
-        "dark_oak_planks",
-        "stripped_mangrove_log", "cut_sandstone"]            # 적주 + 창방 + 도리 + 단청 패널
+        "cut_sandstone",
+        "stripped_mangrove_log", "dark_oak_log"]             # 적주 + 주두(밝은 점) + 도리 + 긴 보
   # ★★인방(引枋) — 칸의 위·아래를 붉은 켜로 끊는다 (2026-08-05 · B-196 셋째 교정).
   #   까닭은 아래 【실측 비율】 절. 회벽·격자 둘 다 5켜 통짜였고, 그래서 한 주기(3칸)의
   #   재료가 붉은 5 : 회벽 5 : 나무 5 로 **똑같이 셋**이었다. 목표는 붉은색이 3분의 2다.
@@ -132,16 +139,24 @@ columns:
   #     그러면 위쪽에도 기둥의 세로 리듬이 이어진다 (공포가 그 위에 또 한 벌 얹힌다).
   "W": ["smooth_stone*3", "stripped_mangrove_log", "plaster*3", "stripped_mangrove_log",
         "dark_oak_planks",
-        "stripped_mangrove_log", "stripped_mangrove_log"]    # 회벽 — 인방 사이 3켜만
+        "stripped_mangrove_log", "dark_oak_log"]             # 회벽 — 인방 사이 3켜만
   # ★D2 ④ — 「lattice」는 <b>재료가 아니라 처방</b>이다. 모양은 meta.window.family 가 정한다.
   #   전에는 dark_oak_trapdoor 를 도면이 직접 박았다 → 그러면 family 를 바꿔도 안 바뀐다.
   "D": ["smooth_stone*3", "stripped_mangrove_log", "lattice*3",
         "stripped_mangrove_log",
         "dark_oak_planks",
-        "stripped_mangrove_log", "stripped_mangrove_log"]    # 격자창 — 인방이 문틀을 이룬다
+        "stripped_mangrove_log", "dark_oak_log"]             # 격자창 — 인방이 문틀을 이룬다
+  # ★★REF-1c-A 문설주 — 중앙 5칸을 <b>개구 3 + 좌우 문틀 1+1</b> 로 가른다.
+  #   ★<b>적주(P)를 쓰지 않는다.</b> 처음엔 P 로 세웠더니 col16·17 과 21·22 가 붙어
+  #     <b>7호 실측의 3칸 주기가 깨졌고</b> (기둥 12개 · 어긋난 틈 3) 눈이 잡았다.
+  #     문틀은 <b>어두운 목재</b>다 — 앞으로 한 칸 나가므로 문이 그만큼 뒤에 앉아
+  #     관통 터널이 아니라 <b>들어간 입구</b>가 된다.
+  "J": ["smooth_stone*3", "dark_oak_log*5",
+        "dark_oak_planks",
+        "stripped_mangrove_log", "dark_oak_log"]             # 문설주 (어두운 문틀)
   "O": ["smooth_stone*3", "air*5",
         "dark_oak_planks",
-        "stripped_mangrove_log", "cut_sandstone"]            # ★중앙 대문 (걸어 지난다)
+        "stripped_mangrove_log", "dark_oak_log"]             # ★중앙 대문 (걸어 지난다)
 
 # ── ★D2 ① 입면 깊이 (profile full · 바깥이 +) ───────────────────────────
 #   적주가 나오고 격자창이 들어간다. 방향은 도면이 안 적는다 — <b>자리가 정한다</b>.
@@ -149,6 +164,7 @@ columns:
 #     그래서 적주가 월대를 밟고 서고, 그 뒤로 회벽이 물러난다 — 툇간처럼 읽힌다.
 depth:
   "P": 1
+  "J": 1
   "W": 0
   "D": -1
   "O": 0
@@ -185,7 +201,7 @@ plan: |
     ..MNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNM.
     ..MNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNM.
     ..MNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNM.
-    ..MNPWDPWDPWDPWDPOOOOOPDWPDWPDWPDWPNM.
+    ..MNPWDPWDPWDPWDPJOOOJPDWPDWPDWPDWPNM.
     ..MNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNM.
     ..MNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNM.
     ..MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM.

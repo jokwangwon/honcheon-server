@@ -1073,13 +1073,24 @@ public final class TerraceForgeSelfTest {
             // ★★공포의 <b>자리 계약</b> — 이름만 검사하면 부족하다
             String bbSrc = java.nio.file.Files.readString(java.nio.file.Path.of(
                     "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+            // ★★자를 고쳤다 (REF-1c-A): 전에는 <b>소스에 그 조건이 적혀 있는가</b>만 봤다.
+            //   조건은 적혀 있었지만 <b>너무 넓었다</b> — 본전은 회벽·격자의 인방도 mangrove
+            //   한 켜라 모든 벽 칸이 적주로 세어졌고, 공포가 정면 전 폭에 깔려 「밝은 띠」가 됐다.
+            //   ★이제 <b>실제로 몇 칸이 골라지는지를 센다.</b> 글자가 아니라 <b>결과</b>를 묻는다.
             check("★★D2⑥ 공포가 <b>적주 머리 위에서만</b> 시작한다 (자리 계약)",
-                    bbSrc.contains("cs.material().contains(\"mangrove_log\")")
+                    bbSrc.contains("cs.count() >= POST_MIN_COURSES")
                             && bbSrc.contains("★적주가 아니면 공포도 없다"), "");
-            check("★★D2⑥ 공포가 <b>처마를 받친다</b> (지붕 바로 아래 · 위로 안 튄다)",
-                    bbSrc.contains("int top = oy + roofBase - brk;")
-                            && hb.roofs().get(0).baseY() - 2 >= 0,
-                    "지붕 " + hb.roofs().get(0).baseY() + " − 공포 2단");
+            // ★★자를 고쳤다 (REF-1c-A): 전에는 {@code int top = oy + roofBase - brk;} 라는
+            //   <b>한 줄 그대로</b>를 찾았다. 처마 밑에 <b>그림자 골</b> 한 켜를 내면서 그 줄이
+            //   바뀌자 조성은 멀쩡한데 눈이 짖었다 — 물어야 할 것은 글자가 아니라
+            //   <b>「공포 머리가 지붕 밑에 있는가」</b>다.
+            check("★★D2⑥ 공포가 <b>처마를 받친다</b> (지붕 바로 아래 · 위로 안 튄다 — 지붕 "
+                            + hb.roofs().get(0).baseY() + " · 공포 2단 + 골 "
+                            + com.honcheon.mvt.forge.BlueprintBuilder.GROOVE + ")",
+                    bbSrc.contains("int top = oy + roofBase - brk - groove;")
+                            && hb.roofs().get(0).baseY()
+                            - 2 - com.honcheon.mvt.forge.BlueprintBuilder.GROOVE >= 0,
+                    hb.roofs().get(0).baseY());
             check("★D2⑥ 공포가 개구를 침범하지 않는다 (개구 칸엔 적주가 없다)",
                     hb.columnOf('O').stream().noneMatch(cs -> cs.material().contains("mangrove_log")),
                     "");
@@ -2786,7 +2797,17 @@ public final class TerraceForgeSelfTest {
                     }
                 }
             }
-            check("★본전 중앙 대문 폭 5 (걸어 지나는 개구)", gateCols == 5, gateCols);
+            // ★★자를 고쳤다 (REF-1c-A · 사용자 확정): 중앙 <b>칸</b>은 여전히 5 지만
+            //   <b>개구</b>는 3 이고 좌우 한 칸씩을 문틀이 감싼다. 5칸이 통째로 뚫리면
+            //   본전 대문이 아니라 <b>관통 터널</b>로 읽힌다 (정면 사진 판정).
+            int jambCols = 0;
+            for (int c = hj.axisCol() - 2; c <= hj.axisCol() + 2; c++) {
+                if (hj.at(c, frontRow) == 'J') {
+                    jambCols++;
+                }
+            }
+            check("★본전 중앙 칸 5 = 개구 3 + 문틀 1+1 (걸어 지나되 터널이 아니다)",
+                    gateCols == 3 && jambCols == 2, gateCols + "+" + jambCols);
 
             // ★★★D-34 — 여기 있던 두 눈(「본전 하층은 회벽이 지배한다」·「산문과 문법이 반대다」)은
             //   **틀린 결론을 지키고 있었다.** 7호를 다시 재니 하층은 붉은색 46.8% / 회벽 9.4% 로
@@ -3165,7 +3186,18 @@ public final class TerraceForgeSelfTest {
             int checked = 0;
             for (int c = 0; c < hj.width(); c++) {
                 char ch = hj.at(c, frontR);
-                if (ch == '.' || ch == 'M' || ch == 'F' || ch == 'P' || ch == 'O') {
+                if (ch == '.' || ch == 'M' || ch == 'N' || ch == 'F' || ch == 'P' || ch == 'O') {
+                    continue;
+                }
+                // ★★REF-1c-A — <b>채움이 없는 칸은 「칸」이 아니다</b> (문설주 J 처럼 통짜 기둥).
+                //   인방 계약은 회벽·격자처럼 <b>채워진 칸</b>의 위아래를 끊으라는 규칙이다.
+                //   ※그렇다고 조용히 빠져나가지는 못한다 — 아래 [눈의 눈] 이 <b>몇 칸을 실제로
+                //     쟀는지</b>를 세므로, 회벽이 통째로 사라지면 그쪽이 먼저 짖는다.
+                boolean hasFill = hj.columnOf(ch).stream().anyMatch(cs ->
+                        cs.material().contains("plaster") || "lattice".equals(cs.material())
+                                || cs.material().contains("trapdoor")
+                                || cs.material().contains("fence"));
+                if (!hasFill) {
                     continue;
                 }
                 checked++;
@@ -3210,7 +3242,9 @@ public final class TerraceForgeSelfTest {
                     noLintel++;
                 }
             }
-            check("★[눈의 눈] 본전 정면에서 기둥 아닌 칸을 찾았다", checked > 0, checked);
+            check("★[눈의 눈] 본전 정면에서 채워진 칸을 <b>넉넉히</b> 찾았다 (" + checked
+                            + " ≥ 15 — 회벽이 통째로 사라지면 여기서 먼저 짖는다)",
+                    checked >= 15, checked);
             check("★★칸마다 위·아래가 **붉은 인방으로 끊긴다** (안 끊기면 회벽은 통짜 빈 판이, "
                             + "격자는 사다리가 된다 — 안 끊긴 칸 " + noLintel + "/" + checked + ")",
                     noLintel == 0, noLintel + "/" + checked);
@@ -3297,20 +3331,106 @@ public final class TerraceForgeSelfTest {
                             + holes + "/" + (closed + holes) + ")",
                     holes == 0, holes + "/" + (closed + holes));
 
+            // ══════ ★★★REF-1c-A — 큰 면 셋 (사용자 확정 2026-08-09) ══════
+            //   ①밝은 가로띠 ②관통 터널 ③계단식 검은 지붕 — 작은 장식보다 <b>면적</b>이 크다.
+            //   ★①밝은 재료는 <b>띠가 아니라 점</b>이어야 한다: 정면 한 켜에서 밝은 칸이
+            //     연속으로 몇 칸까지 이어지는가를 잰다 (연속 2 이상이면 띠다).
+            {
+                int run = 0;
+                int longest = 0;
+                for (int c = 0; c < hj.width(); c++) {
+                    char fc = hj.at(c, frontR);
+                    java.util.List<Blueprint.Course> col = hj.columnOf(fc);
+                    boolean bright = false;
+                    for (Blueprint.Course cs : col) {
+                        if (cs.material().contains("sandstone")) {
+                            bright = true;
+                        }
+                    }
+                    run = bright ? run + 1 : 0;
+                    longest = Math.max(longest, run);
+                }
+                check("★★밝은 재료가 <b>가로띠를 이루지 않는다</b> (정면 최장 연속 " + longest
+                                + "칸 — 2 이상이면 띠다)", longest <= 1, longest);
+            }
+            // ★②중앙 — 5칸 통짜 개구가 아니라 <b>개구 3 + 좌우 문설주</b>여야 한다.
+            {
+                int open = 0;
+                int jamb = 0;
+                for (int c = hj.axisCol() - 2; c <= hj.axisCol() + 2; c++) {
+                    char fc = hj.at(c, frontR);
+                    boolean through = hj.columnOf(fc).stream()
+                            .anyMatch(cs -> "air".equals(cs.material()) && cs.count() >= 4);
+                    if (through) {
+                        open++;
+                    } else if (hj.columnOf(fc).stream()
+                            .anyMatch(cs -> cs.material().contains("mangrove_log"))) {
+                        jamb++;
+                    }
+                }
+                check("★★중앙 개구가 **3칸**이고 좌우를 문설주가 감싼다 (개구 " + open
+                                + " · 문설주 " + jamb + ")", open == 3 && jamb == 2, open + "/" + jamb);
+                check("★★문설주가 앞으로 나온다 = 문이 한 칸 뒤에 앉는다 (터널이 아니다)",
+                        hj.depthOf(hj.at(hj.axisCol() - 2, frontR)) > 0,
+                        hj.depthOf(hj.at(hj.axisCol() - 2, frontR)));
+            }
+            // ★③그림자 홈 — 공포 머리가 처마 밑에 바로 붙으면 한 덩어리 띠가 된다
+            // ★★진범 둘 — ①판정이 넓어 모든 벽 칸이 적주로 세어졌다 ②좌우로 번져 이어졌다.
+            //   ①을 <b>실제 개수로</b> 센다: 본전 정면에서 공포가 앉는 칸은 <b>적주 수</b>여야 한다.
+            {
+                int bracketed = 0;
+                int realPosts = 0;
+                for (int c = 0; c < hj.width(); c++) {
+                    java.util.List<Blueprint.Course> col = hj.columnOf(hj.at(c, frontR));
+                    boolean wide = col.stream().anyMatch(cs ->
+                            cs.material().contains("mangrove_log"));
+                    boolean tight = col.stream().anyMatch(cs ->
+                            cs.material().contains("mangrove_log")
+                                    && cs.count() >= com.honcheon.mvt.forge
+                                    .BlueprintBuilder.POST_MIN_COURSES);
+                    if (wide) {
+                        bracketed++;
+                    }
+                    if (tight) {
+                        realPosts++;
+                    }
+                }
+                check("★★공포가 앉는 칸 = <b>적주 수</b> (넓은 자 " + bracketed + "칸 · 바른 자 "
+                                + realPosts + "칸 — 넓은 자면 전 폭이 띠가 된다)",
+                        realPosts == 10 && bracketed > realPosts, realPosts + "/" + bracketed);
+            }
+            // ★진범 — 공포가 좌우로 번지면 3칸 주기 적주에서 <b>이웃끼리 이어져 띠가 된다</b>.
+            check("★★공포가 <b>좌우로 번지지 않는다</b> (번지면 적주 리듬을 스스로 지운다)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                    + "BlueprintBuilder.java"))
+                            .contains("for (int side = 0; side <= 0; side++)"), "");
+            check("★★공포와 처마 사이에 <b>그림자 골</b>이 한 켜 있다",
+                    com.honcheon.mvt.forge.BlueprintBuilder.GROOVE >= 1,
+                    com.honcheon.mvt.forge.BlueprintBuilder.GROOVE);
+            check("★★그래도 공포는 처마를 <b>넘지 않는다</b> (골은 아래로 내는 것이지 밖으로가 아니다)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                    + "BlueprintBuilder.java"))
+                            .contains("Math.min(s2 + 1, Math.max(1, eave))"), "");
+
             // ★REF-1b — 밝은 단청은 <b>적주 머리에만</b>. 정면 전체를 가로지르면 한 덩어리로 읽힌다.
             int brightTop = 0;
             int postTop = 0;
             for (char fc : new char[]{'P', 'W', 'D'}) {
-                java.util.List<Blueprint.Course> col = hj.columnOf(fc);
-                String top = col.get(col.size() - 1).material();
-                if (top.contains("sandstone")) {
+                // ★★자를 고쳤다 (REF-1c-A): 전에는 <b>맨 위 켜</b>만 봤다. 밝은 사암이
+                //   맨 위(단청)에서 <b>주두</b>로 내려가자 눈이 「밝은 것이 없다」고 읽었다.
+                //   물어야 할 것은 자리가 아니라 <b>어느 열에 있는가</b>다.
+                boolean bright = hj.columnOf(fc).stream()
+                        .anyMatch(cs -> cs.material().contains("sandstone"));
+                if (bright) {
                     brightTop++;
                     if (fc == 'P') {
                         postTop++;
                     }
                 }
             }
-            check("★★밝은 단청이 <b>적주 머리에만</b> 얹힌다 (띠가 한 덩어리로 안 읽히게 — 밝은 "
+            check("★★밝은 단청이 <b>적주 열에만</b> 있다 (회벽·격자 위엔 없다 — 밝은 "
                             + brightTop + "종 중 적주 " + postTop + ")",
                     brightTop == 1 && postTop == 1, brightTop + "/" + postTop);
 

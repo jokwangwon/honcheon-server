@@ -179,8 +179,16 @@ public final class BlueprintBuilder {
         if (brk > 0) {
             for (int r = 0; r < bp.depth(); r++) {
                 for (int c = 0; c < bp.width(); c++) {
+                    // ★★★REF-1c-A 진범 (2026-08-09) — <b>「적주」 판정이 너무 넓었다.</b>
+                    //   전에는 「기둥 처방에 mangrove_log 가 <b>들어 있는가</b>」로 골랐다.
+                    //   그런데 본전은 회벽·격자의 <b>인방</b>도 mangrove 한 켜다 —
+                    //   그래서 <b>모든 벽 칸이 적주로 세어져</b> 공포가 정면 전 폭에 깔렸고,
+                    //   그것이 「밝은 갈색 3단 띠」였다. 재료를 세 번 바꿔도 안 없어진 까닭이다.
+                    //   ★강당은 회벽에 목재가 없어 우연히 멀쩡했다 — <b>우연은 계약이 아니다.</b>
+                    //   → 적주는 <b>세로로 이어진 기둥</b>이다: 한 켜짜리 인방은 기둥이 아니다.
                     boolean post = bp.columnOf(bp.at(c, r)).stream()
-                            .anyMatch(cs -> cs.material().contains("mangrove_log"));
+                            .anyMatch(cs -> cs.material().contains("mangrove_log")
+                                    && cs.count() >= POST_MIN_COURSES);
                     if (!post) {
                         continue;                    // ★적주가 아니면 공포도 없다
                     }
@@ -197,15 +205,25 @@ public final class BlueprintBuilder {
                     //   → 위계는 <b>더 멀리</b>가 아니라 <b>더 높이·더 촘촘히</b>로 표현한다 (다포).
                     //     단 수는 그대로 3, 내밈만 처마에서 멈춘다.
                     int eave = bp.roofs().isEmpty() ? brk : bp.roofs().get(0).eave();
-                    int top = oy + roofBase - brk;
+                    // ★★★REF-1c-A 그림자 홈 (사용자 확정 2026-08-09) — 공포 머리가 처마 밑에
+                    //   <b>바로 붙어</b> 있으면 처마·공포·도리가 한 덩어리 띠로 읽힌다.
+                    //   한 켜를 비워 <b>어두운 골</b>을 만든다: 처마 밑 y−1 이 벽 밖에서 비고,
+                    //   그 그늘이 위의 지붕과 아래의 목구조를 갈라 준다.
+                    //   ★공포는 여전히 적주 머리에만 앉고 처마를 넘지 않는다 (계약 불변).
+                    int groove = GROOVE;
+                    int top = oy + roofBase - brk - groove;
                     for (int s2 = 0; s2 < brk; s2++) {
                         int reach = Math.min(s2 + 1, Math.max(1, eave));   // 처마에서 멈춘다
-                        for (int side = -1; side <= 1; side++) {
+                        // ★★★REF-1c-A 진범 (2026-08-09) — <b>공포는 좌우로 번지지 않는다.</b>
+                        //   전에는 위 단이 좌우 ±1 로 퍼졌다. 그런데 본전 적주는 <b>3칸 주기</b>라
+                        //   ±1 이면 3칸을 다 덮어 <b>이웃 공포끼리 손을 잡고</b> 정면 전체를
+                        //   가로지르는 <b>연속 띠</b>가 됐다. 「밝은 갈색 3단 띠」의 진범이 이것이다 —
+                        //   재료(단청·도리)를 세 번 바꿔도 안 없어졌던 까닭이다.
+                        //   ★공포는 <b>적주 위에서만</b> 있어야 리듬이 산다. 번지면 그 리듬을
+                        //     스스로 지운다.
+                        for (int side = 0; side <= 0; side++) {
                             int bx = ox + d2[0] + nf.getModX() * reach - nf.getModZ() * side;
                             int bz = oz + d2[1] + nf.getModZ() * reach + nf.getModX() * side;
-                            if (side != 0 && s2 == 0) {
-                                continue;            // 아래 단은 가운데만 (좌우는 위 단에서)
-                            }
                             world.getBlockAt(bx, top + s2, bz)
                                     .setType(Material.DARK_OAK_PLANKS, false);
                             n.blocks++;
@@ -465,6 +483,12 @@ public final class BlueprintBuilder {
      * 문루 발치 {@code B}(각 1켜)만 바닥으로 빠진다.
      */
     public static final int WALL_MIN_COURSES = 4;
+
+    /** ★REF-1c-A — 처마 밑과 공포 머리 사이에 비우는 켜 (어두운 그림자 골) */
+    public static final int GROOVE = 1;
+
+    /** ★REF-1c-A — 적주로 세려면 목재가 세로로 이어져야 하는 켜 수 (인방 한 켜는 기둥이 아니다) */
+    public static final int POST_MIN_COURSES = 3;
 
     private static boolean tall(Blueprint bp, int col, int row) {
         return col >= 0 && col < bp.width() && row >= 0 && row < bp.depth()
