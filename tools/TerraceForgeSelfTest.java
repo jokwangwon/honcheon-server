@@ -3450,6 +3450,69 @@ public final class TerraceForgeSelfTest {
                                     + "BlueprintBuilder.java"))
                             .contains("Math.min(s2 + 1, Math.max(1, eave))"), "");
 
+            // ══════ ★★★REF-2.5 <b>블록 조형</b> (사용자 2026-08-10) ══════
+            //   「지금 그냥 색으로 나눈 것 같은데?」 — 맞는 감각이었다. 색만 갈면 흑백으로
+            //   봤을 때 전·후가 거의 같다. 지붕이 좋아진 까닭은 재료가 아니라 <b>계단·반블록·
+            //   담장·귀솟음·용마루로 형태를 썼기 때문</b>이다. 몸체에도 그것이 필요하다.
+            //
+            //   ★성공 조건: <b>흑백으로 봐도</b> 기둥·창·보·공포·기단이 서로 다른 부재로 읽힌다.
+            //     그래서 눈은 색이 아니라 <b>통짜 블록이 아닌 부재가 몇이나 되는가</b>를 센다.
+            {
+                String bbSrc3 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                        "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+                java.util.Set<String> shaped = new java.util.LinkedHashSet<>();
+                int cube = 0;
+                int shape = 0;
+                for (char ch : new char[]{'P', 'W', 'D', 'J', 'O', 'M', 'N', 'F', 's'}) {
+                    for (Blueprint.Course cs : hj.columnOf(ch)) {
+                        String m = cs.material();
+                        if ("air".equals(m) || "lattice".equals(m)) {
+                            continue;
+                        }
+                        if (m.endsWith("_slab") || m.endsWith("_stairs") || m.endsWith("_wall")
+                                || m.endsWith("_fence")) {
+                            shape++;
+                            shaped.add(ch + ":" + m);
+                        } else {
+                            cube++;
+                        }
+                    }
+                }
+                check("★[눈의 눈] 본전 처방의 켜를 재료 모양별로 셌다", cube + shape > 0, cube + shape);
+                check("★★몸체가 <b>통짜 정육면체만</b>으로 서 있지 않다 (모양 있는 켜 " + shape
+                                + " · 통짜 " + cube + ")", shape >= 5, shape + "/" + cube);
+                check("★★S1 기둥에 <b>주초</b>가 있다 (담장 블록 — 통나무보다 가늘어 발치가 잘록해진다)",
+                        hj.columnOf('P').stream().anyMatch(cs -> cs.material().endsWith("_wall")),
+                        shaped.toString());
+                check("★★S2 창에 <b>창턱</b>이 있다 (살창 바로 아래가 반블록 — 턱과 그늘)",
+                        hj.columnOf('D').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
+                        "");
+                check("★★S3 긴 도리가 <b>반블록</b>이다 (통짜 판이면 흑백에서 그냥 띠다)",
+                        hj.columnOf('W').stream().anyMatch(cs ->
+                                cs.material().startsWith("dark_oak") && cs.material().endsWith("_slab")),
+                        "");
+                check("★★S5 기단에 <b>몰딩 치마</b>가 있다 (full block 케이크 3단 방지)",
+                        hj.columnOf('s').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
+                        "");
+                // S4 공포 — 계단 + 반블록 윤곽
+                check("★★S4 공포가 <b>계단형 윤곽</b>이다 (판재 더미가 아니다)",
+                        bbSrc3.contains("Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS"), "");
+                check("★★계단의 방향도 <b>자리가 정한다</b> (도면은 네 벽에 다 쓰인다)",
+                        bbSrc3.contains("st.setFacing(face.getOppositeFace())"), "");
+                // S6 중앙 — 벽 0 · 문설주 +1 · 문두 +2 세 겹
+                java.util.Set<Integer> depths = new java.util.TreeSet<>();
+                depths.add(0);
+                depths.add(hj.depthOf('J'));
+                for (Blueprint.Trim tr : hj.trims()) {
+                    if (tr.row() == frontR && tr.cols()[0] <= hj.axisCol()
+                            && tr.cols()[1] >= hj.axisCol()) {
+                        depths.add(tr.depth());
+                    }
+                }
+                check("★★S6 중앙이 <b>세 겹 깊이</b>다 (벽 0 · 문설주 +1 · 문두 +2 — " + depths + ")",
+                        depths.size() >= 3 && depths.contains(2), depths.toString());
+            }
+
             // ══════ ★★★REF-2B 목구조 — <b>세 역할을 색으로 가른다</b> (2026-08-10) ══════
             //   더 붉게 만드는 회차가 아니다. 지붕이 기와가 된 뒤에도 목재가 한 갈색 덩어리로
             //   뭉쳤기에, 역할마다 재료를 뗀다:
@@ -3478,7 +3541,7 @@ public final class TerraceForgeSelfTest {
                             } else {
                                 wrong++;             // 도리·긴 보가 붉으면 위가 안 가라앉는다
                             }
-                        } else if (m.equals("mangrove_planks")) {
+                        } else if (m.startsWith("mangrove_")) {
                             redBeam++;
                         } else {
                             wrong++;                 // 인방·창방이 적주와 같은 재료면 색이 뭉친다

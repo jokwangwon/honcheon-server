@@ -236,8 +236,14 @@ public final class BlueprintBuilder {
                         for (int side = 0; side <= 0; side++) {
                             int bx = ox + d2[0] + nf.getModX() * reach - nf.getModZ() * side;
                             int bz = oz + d2[1] + nf.getModZ() * reach + nf.getModX() * side;
+                            // ★★★REF-2.5 S4 — 공포는 <b>블록 더미가 아니라 계단형 받침</b>이다.
+                            //   같은 판재를 세 켜 쌓으면 흑백으로 보면 그냥 네모다. 아래 단은
+                            //   계단(벽에 붙어 밖으로 낮아진다) · 가운데는 반블록 · 위는 다시
+                            //   계단으로 두어 <b>위로 갈수록 밖으로 받쳐 나가는 윤곽</b>을 만든다.
+                            BlockData bd = Bukkit.createBlockData(
+                                    s2 == 1 ? Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS);
                             world.getBlockAt(bx, top + s2, bz)
-                                    .setType(Material.DARK_OAK_PLANKS, false);
+                                    .setBlockData(stand(bd, nf), false);
                             n.blocks++;
                         }
                     }
@@ -522,6 +528,14 @@ public final class BlueprintBuilder {
             td.setOpen(true);
             td.setFacing(face);
             td.setHalf(org.bukkit.block.data.Bisected.Half.BOTTOM);
+            return d;
+        }
+        // ★★★REF-2.5 (사용자 2026-08-10) — <b>계단도 자리가 방향을 정한다.</b>
+        //   도면 한 장이 네 벽에 다 쓰이므로 도면은 방향을 못 적는다. 살창과 같은 규약으로,
+        //   계단은 <b>오르는 쪽이 안쪽</b>을 향한다 — 그래야 높은 면이 벽에 붙고 낮은 단이
+        //   밖으로 나와 <b>처마 밑에 그늘이 지는 몰딩</b>이 된다 (지붕의 putRoofStair 와 같은 규약).
+        if (d instanceof org.bukkit.block.data.type.Stairs st) {
+            st.setFacing(face.getOppositeFace());
         }
         return d;
     }
