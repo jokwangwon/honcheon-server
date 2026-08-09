@@ -3508,6 +3508,18 @@ public final class TerraceForgeSelfTest {
                                 && bb4.contains("서까래 자리를 안 뺏는다"), "");
                 check("★★두 축 모서리도 <b>본전 전용</b>이다 (프로파일이 켠다)",
                         bb4.contains("if (bp.bracketContour() && !ewRun && !nsRun)"), "");
+                // ★★★REF-3B-Q1 — 입구 옆이 <b>중앙으로</b> 뻗는다 (Codex 가 내 「불가」를 반박했다).
+                check("★★역할 글자를 <b>도면이 선언</b>한다 (코드가 글자를 알면 옛 병으로 되돌아간다)",
+                        hj.bayRole("entrance_adjacent") == 'A' && hj.bayRole("corner") == 'C',
+                        hj.bayRole("corner") + "/" + hj.bayRole("entrance_adjacent"));
+                check("★★입구 옆이 <b>축을 향해</b> 한 칸 뻗는다 (좌표에 방향을 안 박는다)",
+                        bb4.contains("int toward = -Integer.signum(bp.axisCol() - c)")
+                                && bb4.contains("sd.setFacing(lat)"), "");
+                // ★부딪치지 않는 까닭 — 문설주는 적주 평면(+1), 대각은 처마 평면(+eave)이다
+                Blueprint.Roof r0 = hj.roofs().get(0);
+                check("★★대각이 <b>문설주와 다른 평면</b>에 있다 (문설주 +" + hj.depthOf('J')
+                                + " · 대각 +" + r0.eaveZ() + " — 같으면 겹친다)",
+                        r0.eaveZ() > hj.depthOf('J'), hj.depthOf('J') + " vs " + r0.eaveZ());
                 check("★★모서리 적주는 <b>두 축</b>을 받는다 (한 면만 받으면 굵은 기둥일 뿐이다)",
                         bb4.contains("!ewRun && !nsRun") && bb4.contains("faces.add(other)"), "");
                 // ★중앙문 — 문두 양 끝이 <b>꺾인다</b>

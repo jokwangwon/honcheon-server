@@ -172,6 +172,7 @@ public final class Blueprint {
     private final String winDensity;
     private final String bracket;
     private final String bracketShape;
+    private final Map<String, Character> bayRoles;
     private final List<Trim> trims;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
@@ -180,7 +181,8 @@ public final class Blueprint {
                       String rank, int courtyardRow, String usage, String family,
                       Map<Character, Integer> depths, int foundation,
                       String winFamily, String winDensity, String bracket, String bracketShape,
-                      List<Trim> trims) {
+                      Map<String, Character> bayRoles, List<Trim> trims) {
+        this.bayRoles = bayRoles;
         this.bracketShape = bracketShape;
         this.trims = trims;
         this.placements = placements;
@@ -370,6 +372,17 @@ public final class Blueprint {
      * <p>안 적으면 {@code flat} — 옛 동작 그대로다 (판재 더미 · 서까래 켜는 서까래가 갖는다).
      * {@code contour} 는 REF-3B 의 계단 윤곽·두 축 모서리·서까래 신발을 켠다.
      */
+    /**
+     * ★★★REF-3B-Q1 — <b>역할 글자는 도면이 선언한다.</b> 코드가 {@code 'A'} 를 알면 그것은
+     * 「이름으로 구조를 고르는」 옛 병으로 되돌아가는 길이다 (이 저장소에서 네 번 났다).
+     * 도면이 {@code meta.bay_roles} 로 어느 글자가 어느 역할인지 알려 주고,
+     * 코드는 <b>역할</b>만 안다.
+     */
+    public char bayRole(String role) {
+        Character c = bayRoles.get(role);
+        return c == null ? 0 : c;
+    }
+
     public boolean bracketContour() {
         return "contour".equalsIgnoreCase(bracketShape);
     }
@@ -501,6 +514,14 @@ public final class Blueprint {
                     String.valueOf(m.getOrDefault("material_family", "cobbled_deepslate"))));
         });
 
+        Map<String, Character> bayRoles = new LinkedHashMap<>();
+        ((Map<String, Object>) meta.getOrDefault("bay_roles", Map.of())).forEach((k, v) -> {
+            String sv = String.valueOf(v);
+            if (!sv.isEmpty()) {
+                bayRoles.put(k, sv.charAt(0));
+            }
+        });
+
         List<Trim> trims = new ArrayList<>();
         for (Object o : (List<Object>) root.getOrDefault("trim", List.of())) {
             Map<String, Object> m = (Map<String, Object>) o;
@@ -562,7 +583,7 @@ public final class Blueprint {
                 String.valueOf(win.getOrDefault("family", "W2")),
                 String.valueOf(win.getOrDefault("density", "medium")),
                 String.valueOf(meta.getOrDefault("bracket", "none")),
-                String.valueOf(meta.getOrDefault("bracket_shape", "flat")), trims);
+                String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles, trims);
     }
 
     private static Object req(Map<String, Object> m, String k) {

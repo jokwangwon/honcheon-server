@@ -413,6 +413,33 @@ public final class BlueprintBuilder {
                             n.blocks++;
                         }
                     }
+                    // ★★★REF-3B-Q1 (Codex 반박 · 2026-08-10) — <b>입구 옆은 중앙으로 뻗는다.</b>
+                    //   내가 「뻗을 칸이 없다」고 판단했던 것은 <b>같은 평면에서만</b> 참이었다.
+                    //   문설주(+1)는 적주 평면에 있으므로, <b>처마 평면(+eave)으로 한 칸 비킨 뒤</b>
+                    //   중앙 쪽으로 꺾으면 부딪치지 않는다.
+                    //   ★방향은 좌표에 안 박는다 — <b>축을 향해</b> 계산한다 (도면이 회전해도 산다).
+                    //   ★역할 글자는 도면이 선언한다 (meta.bay_roles) — 코드는 역할만 안다.
+                    char adjCh = bp.bayRole("entrance_adjacent");
+                    if (bp.bracketContour() && adjCh != 0 && bp.at(c, r) == adjCh && brk >= 2) {
+                        int toward = -Integer.signum(bp.axisCol() - c);
+                        org.bukkit.block.BlockFace nf0 = place.turn(outward(bp, c, r));
+                        int reach = Math.max(1, eave);
+                        int dx = nf0.getModX() * reach - nf0.getModZ() * toward;
+                        int dz = nf0.getModZ() * reach + nf0.getModX() * toward;
+                        int lx = -nf0.getModZ() * toward;
+                        int lz = nf0.getModX() * toward;
+                        org.bukkit.block.BlockFace lat = lx > 0 ? org.bukkit.block.BlockFace.EAST
+                                : lx < 0 ? org.bukkit.block.BlockFace.WEST
+                                : lz > 0 ? org.bukkit.block.BlockFace.SOUTH
+                                        : org.bukkit.block.BlockFace.NORTH;
+                        org.bukkit.block.data.type.Stairs sd =
+                                (org.bukkit.block.data.type.Stairs)
+                                        Bukkit.createBlockData(Material.MANGROVE_STAIRS);
+                        sd.setFacing(lat);          // 축을 향해 기운다
+                        world.getBlockAt(ox + d2[0] + dx, top + 1, oz + d2[1] + dz)
+                                .setBlockData(sd, false);
+                        n.blocks++;
+                    }
                     }
                 }
             }
