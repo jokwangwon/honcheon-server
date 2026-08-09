@@ -136,44 +136,33 @@ public final class BlueprintBuilder {
                 int[] d = place.map(bp, c, r);      // ★회전 — 도면 (c,r) 이 어디로 가는가
                 int x = ox + d[0];
                 int z = oz + d[1];
-                // ★입면 깊이 (D2 ①) — 그 칸을 법선 방향으로 밀거나 당긴다. 방향은
-                //   자리가 정한다 (outward). 회전도 함께 탄다.
-                int dep = bp.depthOf(bp.at(c, r));
-                if (dep != 0) {
-                    org.bukkit.block.BlockFace nf = place.turn(outward(bp, c, r));
-                    x += nf.getModX() * dep;
-                    z += nf.getModZ() * dep;
-                }
-                int y = oy;
+                char ch = bp.at(c, r);
+                org.bukkit.block.BlockFace nf = place.turn(outward(bp, c, r));
+                int dep = bp.depthOf(ch);
                 n.cells++;
-                for (Blueprint.Course course : bp.columnOf(bp.at(c, r))) {
-                    for (int k = 0; k < course.count(); k++, y++) {
-                        if ("lattice".equals(course.material())) {
-                            // ★D2 ④ — 「lattice」는 재료가 아니라 <b>처방</b>이다. 모양은
-                            //   창호 family 가 정한다 (그림 하나를 박지 않는다):
-                            //     W1 세로살만 · W2 세로+가로 · W3 + 중앙 강조 한 켜
-                            boolean mid = course.count() >= 3 && k == course.count() / 2;
-                            Material lm = switch (bp.windowFamily().toUpperCase()) {
-                                case "W1" -> Material.DARK_OAK_FENCE;
-                                case "W3" -> mid ? Material.DARK_OAK_PLANKS : Material.DARK_OAK_TRAPDOOR;
-                                default -> Material.DARK_OAK_TRAPDOOR;
-                            };
-                            BlockData ld = Bukkit.createBlockData(lm);
-                            world.getBlockAt(x, y, z).setBlockData(
-                                    stand(ld, place.turn(outward(bp, c, r))), false);
-                            n.blocks++;
-                            continue;
-                        }
-                        if ("air".equals(course.material())) {
-                            // ★빈 켜도 찍는다 — 개구는 「안 짓는 것」이 아니라 「비우는 것」이다
-                            world.getBlockAt(x, y, z).setType(Material.AIR, false);
-                            n.cleared++;
-                        } else {
-                            stamp(world, x, y, z, course.material(),
-                                    place.turn(outward(bp, c, r)));
-                            n.blocks++;
-                        }
+                // ★★★REF-1b (사용자 확정 2026-08-09) — <b>깊이는 「옮기는 양」이 아니다.</b>
+                //   본전을 정면에서 찍고서야 드러났다: {@code +1} 을 <b>이동</b>으로 구현하니
+                //   적주가 나가면서 <b>벽면에 제 폭만큼 세로 구멍</b>을 남겼고, 정면 평면의
+                //   세 칸 중 둘이 비어 하층이 <b>폐쇄 전각이 아니라 주랑</b>으로 읽혔다.
+                //   레퍼런스의 하층은 「붉은 목구조가 흰 회벽·창호 <b>앞에 덧대어진</b> 폐쇄 전각」이다.
+                //   → 부호가 <b>방식</b>을 정한다 (도면에 새 글자를 안 늘린다):
+                //       +  overlay : 기준면은 <b>배경(회벽)으로 채우고</b> 한 칸 밖에 덧댄다
+                //       0  base    : 기준면 그대로
+                //       −  recess  : 기준면엔 <b>창틀만</b> 남기고 채움 켜만 안으로 물린다
+                //     개구(air 켜)는 종전대로 스스로 판다 — carve 는 처방이 이미 갖고 있다.
+                if (dep > 0) {
+                    char back = bp.backingChar();
+                    if (back != 0) {
+                        stampColumn(world, bp, back, x, oy, z, nf, n, 0);
                     }
+                    stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
+                            z + nf.getModZ() * dep, nf, n, 0);
+                } else if (dep < 0) {
+                    stampColumn(world, bp, ch, x, oy, z, nf, n, 1);           // 기준면 = 창틀
+                    stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
+                            z + nf.getModZ() * dep, nf, n, 2);                // 안쪽 = 살창만
+                } else {
+                    stampColumn(world, bp, ch, x, oy, z, nf, n, 0);
                 }
             }
         }
@@ -317,6 +306,14 @@ public final class BlueprintBuilder {
                                         : org.bukkit.block.BlockFace.EAST;
                                 world.getBlockAt(ox + c2, upBase + k, oz + r2)
                                         .setBlockData(stand(Bukkit.createBlockData(fill), uf), false);
+                                // ★★REF-1b — 살창 <b>뒤에 회벽</b>을 댄다. 안 대면 상층이
+                                //   「적주 | 검은 빈칸」의 되풀이로 읽힌다 (사용자 지적).
+                                //   레퍼런스의 상층은 창호가 <b>꽉 찬 벽체</b>다 — 살은 그 앞의 격자다.
+                                world.getBlockAt(ox + c2 - uf.getModX(), upBase + k,
+                                                oz + r2 - uf.getModZ())
+                                        .setType(HwasanCampusBuilder.plaster(ox + c2, upBase + k,
+                                                oz + r2), false);
+                                n.blocks++;
                             } else {
                                 world.getBlockAt(ox + c2, upBase + k, oz + r2).setType(fill, false);
                             }
@@ -333,6 +330,49 @@ public final class BlueprintBuilder {
                             hf - ix, hl - iz, rf.upperEave(), tally);
                 }
                 n.roofs++;
+            }
+        }
+    }
+
+    /**
+     * 기둥 처방 한 벌을 그 자리에 찍는다.
+     *
+     * @param mode 0 = 그대로 · 1 = <b>창틀만</b> (채움 켜를 비운다) · 2 = <b>채움 켜만</b>
+     */
+    private static void stampColumn(World world, Blueprint bp, char ch, int x, int oy, int z,
+                                    org.bukkit.block.BlockFace nf, Count n, int mode) {
+        int y = oy;
+        for (Blueprint.Course course : bp.columnOf(ch)) {
+            for (int k = 0; k < course.count(); k++, y++) {
+                boolean fill = "lattice".equals(course.material());
+                if (mode == 2 && !fill) {
+                    continue;                        // 채움만 옮긴다 — 벽은 기준면에 남는다
+                }
+                if (mode == 1 && fill) {
+                    world.getBlockAt(x, y, z).setType(Material.AIR, false);
+                    n.cleared++;                     // 창은 기준면에서 <b>뚫린다</b>
+                    continue;
+                }
+                if (fill) {
+                    // ★D2 ④ — 「lattice」는 재료가 아니라 <b>처방</b>이다. 모양은
+                    //   창호 family 가 정한다: W1 세로살만 · W2 세로+가로 · W3 + 중앙 강조 한 켜
+                    boolean mid = course.count() >= 3 && k == course.count() / 2;
+                    Material lm = switch (bp.windowFamily().toUpperCase()) {
+                        case "W1" -> Material.DARK_OAK_FENCE;
+                        case "W3" -> mid ? Material.DARK_OAK_PLANKS : Material.DARK_OAK_TRAPDOOR;
+                        default -> Material.DARK_OAK_TRAPDOOR;
+                    };
+                    world.getBlockAt(x, y, z)
+                            .setBlockData(stand(Bukkit.createBlockData(lm), nf), false);
+                    n.blocks++;
+                } else if ("air".equals(course.material())) {
+                    // ★빈 켜도 찍는다 — 개구는 「안 짓는 것」이 아니라 「비우는 것」이다
+                    world.getBlockAt(x, y, z).setType(Material.AIR, false);
+                    n.cleared++;
+                } else {
+                    stamp(world, x, y, z, course.material(), nf);
+                    n.blocks++;
+                }
             }
         }
     }

@@ -278,6 +278,27 @@ public final class Blueprint {
      * <b>비운다</b>. 기단을 두 단 쌓아 놓고 도면이 한 단 위에 앉으면 <b>윗단을 제가 지운다</b>.
      * 위계가 기단을 정하므로(auxiliary 1 · principal 2 · ceremonial 3), 그 값이 여기 온다.
      */
+    /**
+     * ★★REF-1b — <b>덧댐(overlay)의 배경이 되는 글자</b>. 적주가 한 칸 나가면 그 자리에
+     * 무엇이 남는가. 답은 <b>회벽</b>이다 (레퍼런스의 하층은 폐쇄 전각이다).
+     *
+     * <p>도면에 새 글자를 안 늘린다 — <b>깊이 0 이면서 회벽을 쓰는 처방</b>을 찾아 쓴다.
+     * 못 찾으면 {@code 0} 을 돌려주고, 그러면 덧댐은 배경 없이 옛 동작(이동)과 같아진다.
+     */
+    public char backingChar() {
+        for (Map.Entry<Character, List<Course>> e : columns.entrySet()) {
+            if (depthOf(e.getKey()) != 0) {
+                continue;
+            }
+            for (Course cs : e.getValue()) {
+                if (cs.material().contains("plaster")) {
+                    return e.getKey();
+                }
+            }
+        }
+        return 0;
+    }
+
     public int foundation() {
         return foundation;
     }

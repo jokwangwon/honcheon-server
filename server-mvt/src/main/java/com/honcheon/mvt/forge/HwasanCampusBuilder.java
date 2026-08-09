@@ -746,7 +746,7 @@ public final class HwasanCampusBuilder {
             over--;
         }
         sweepRoofBounds(world, pad, cx - hf - over, cx + hf + over, cy,
-                cz - hl - over, cz + hl + over, Math.max(hf, hl) >= 12, tally);
+                cz - hl - over, cz + hl + over, Math.max(hf, hl) >= 12, false, tally);
     }
 
     /**
@@ -769,7 +769,7 @@ public final class HwasanCampusBuilder {
     static void sweepRoofGrand(World world, TerraceForge.Pad pad, int bx0, int bx1, int cy,
                                int bz0, int bz1, int eaveX, int eaveZ, Tally tally) {
         sweepRoofBounds(world, pad, bx0 - eaveX, bx1 + eaveX, cy, bz0 - eaveZ, bz1 + eaveZ,
-                Math.max(bx1 - bx0, bz1 - bz0) / 2 >= 12, tally);
+                Math.max(bx1 - bx0, bz1 - bz0) / 2 >= 12, true, tally);
     }
 
     /**
@@ -777,7 +777,8 @@ public final class HwasanCampusBuilder {
      * 귀솟음·내림마루·치미·합각이 전부 여기 한 곳에 남는다 (7.5 계율).
      */
     private static void sweepRoofBounds(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
-                                        int z0, int z1, boolean big, Tally tally) {
+                                        int z0, int z1, boolean big, boolean grand, Tally tally) {
+        int steps = Math.min(x1 - x0, z1 - z0) / 2 + 1;      // 수렴까지의 켜 수
         for (int i = 0; ; i++) {
             int ax0 = x0 + i;
             int ax1 = x1 - i;
@@ -787,7 +788,10 @@ public final class HwasanCampusBuilder {
             int hL = (az1 - az0) / 2;
             int cx = (ax0 + ax1) / 2;
             int cz = (az0 + az1) / 2;
-            int y = cy + i;
+            int y = cy + (grand ? grandRise(i, steps) : i);
+            // ★REF-1b — 물매가 완만한 구간에서는 한 켜에 두 칸이 나가므로, 밖 켜와 같은 높이에
+            //   서는 칸이 생긴다. 그 칸은 <b>반블록</b>으로 둬야 외피가 평평한 단으로 안 읽힌다.
+            boolean flatRun = grand && i + 1 < steps && grandRise(i + 1, steps) == grandRise(i, steps);
             if (ax1 - ax0 <= 0 || az1 - az0 <= 0) {
                 // 용마루 — 긴 축으로 수렴 · ★13c-② 끝은 치미가 한 칸 더 솟는다 (선으로 갈리는
                 //   지붕: 큰 면이 평평히 읽히던 것의 처방 · 레퍼런스 1·4호)
@@ -816,6 +820,10 @@ public final class HwasanCampusBuilder {
                     if (i == 0) {                          // 처마 끝 — 반블록 (귀솟음은 아래에서 한 벌)
                         put(world, pad, x, y, z, eF || eL ? Material.COBBLED_DEEPSLATE_SLAB
                                 : roofCube(x, y, z), tally);
+                    } else if (grand && flatRun && (eF || eL)) {
+                        // ★평탄 구간의 바깥 켜 — 반블록. 여기에 full block 을 놓으면 그 켜가
+                        //   통째로 <b>테라스 한 단</b>이 되어 계단식 피라미드로 읽힌다.
+                        put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE_SLAB, tally);
                     } else if (eF && eL) {
                         // ★13c-② 내림마루 — 모서리에서 처마로 내려오는 마루 선 (면을 가른다)
                         put(world, pad, x, y, z, Material.COBBLED_DEEPSLATE, tally);
@@ -857,6 +865,27 @@ public final class HwasanCampusBuilder {
                 }
             }
         }
+    }
+
+    /**
+     * ★★REF-1b — <b>{@code main_hall_grand} 의 물매는 오목하다.</b> (사용자 확정 2026-08-09)
+     *
+     * <p>REF-1 로 지붕 <b>상자</b>는 맞췄는데 화면은 여전히 달랐다. 까닭은 물매다:
+     * 한 켜에 한 칸씩 곧게 좁히면(1:1) 외피가 <b>계단식 피라미드</b>로 읽힌다.
+     * {@code mainhall_ref.png} 의 지붕은 <b>처마 쪽이 완만하고 용마루로 갈수록 급하다</b> —
+     * 한옥 지붕의 오목한 물매다. 그래서 켜 번호를 높이로 <b>그대로</b> 쓰지 않는다:
+     *
+     * <pre>
+     *   바깥 1/3 : 두 칸에 한 켜   (넓고 완만한 처마)
+     *   그 안    : 한 칸에 한 켜   (용마루로 갈수록 급해진다)
+     * </pre>
+     *
+     * ★한 켜에 <b>두 칸 이상 뛰지 않는다</b> — 뛰면 외피에 세로 구멍이 생긴다.
+     * ★기존 {@code sweep}(산문 등)은 이 식을 안 탄다. 그대로 1:1 이다.
+     */
+    public static int grandRise(int i, int steps) {
+        int soft = Math.max(1, steps / 3);          // 완만한 처마 구간
+        return i <= soft ? i / 2 : soft / 2 + (i - soft);
     }
 
     /**

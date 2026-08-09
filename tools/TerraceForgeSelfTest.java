@@ -1086,11 +1086,13 @@ public final class TerraceForgeSelfTest {
             // ★창호 셋이 <b>규칙으로</b> 다 정의됐는가 (강당은 W2 만 쓰지만 체계는 있다)
             check("★D2④ 창호 셋(W1·W2·W3)이 규칙으로 다 있다",
                     bbSrc.contains("case \"W1\"") && bbSrc.contains("case \"W3\""), "");
-            // ★[눈의 눈] 깊이가 <b>실제로 자리를 옮기는가</b> — 선언만 하고 안 쓰면 헛것이다
-            check("★[눈의 눈] 깊이가 도면 기계에 닿는다 (BlueprintBuilder 가 법선으로 민다)",
-                    java.nio.file.Files.readString(java.nio.file.Path.of(
-                            "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"))
-                            .contains("bp.depthOf(bp.at(c, r))"), "");
+            // ★[눈의 눈] 깊이가 <b>실제로 조성에 닿는가</b> — 선언만 하고 안 쓰면 헛것이다.
+            //   ★★자를 고쳤다 (REF-1b): 전에는 {@code bp.depthOf(bp.at(c, r))} 라는 <b>한 줄
+            //     그대로</b>를 찾고 있었다. 깊이가 「이동」에서 「덧댐/물림」으로 바뀌며 그 줄이
+            //     사라지자 조성은 멀쩡한데 눈이 짖었다 — <b>글자가 아니라 쓰임</b>을 물어야 한다.
+            check("★[눈의 눈] 깊이가 도면 기계에 닿는다 (덧댐·물림 두 갈래로 실제로 쓴다)",
+                    bbSrc.contains("bp.depthOf(ch)") && bbSrc.contains("bp.backingChar()")
+                            && bbSrc.contains("stampColumn("), "");
 
             // ★옛 코드가 남았는가 — 강당이 아직 plasterHall 을 부르면 두 언어가 공존한다
             String hcb3 = java.nio.file.Files.readString(java.nio.file.Path.of(
@@ -3261,6 +3263,86 @@ public final class TerraceForgeSelfTest {
                     rf1.eaveX() > rf1.eaveZ() && rf1.upperEaveX() > rf1.upperEaveZ(),
                     rf1.eaveX() + "/" + rf1.eaveZ() + " · "
                             + rf1.upperEaveX() + "/" + rf1.upperEaveZ());
+
+            // ══════ ★★★REF-1b — 적주는 <b>옮기는 것이 아니라 덧대는 것</b> ══════
+            //   본전 정면 사진이 드러낸 것: {@code +1} 을 이동으로 구현하면 적주가 나가면서
+            //   벽면에 세로 구멍을 남기고, 하층이 <b>폐쇄 전각이 아니라 주랑</b>으로 읽힌다.
+            //   ★눈은 <b>기준면에 구멍이 남는가</b>를 묻는다 — 정면의 모든 비개구 칸은 닫혀야 한다.
+            check("★★덧댐의 배경 글자가 있다 (적주가 나가도 그 자리를 회벽이 메운다)",
+                    hj.backingChar() != 0, hj.backingChar());
+            int holes = 0;
+            int closed = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                char fc = hj.at(c, frontR);
+                if (fc == '.' || fc == 'M' || fc == 'N' || fc == 'F' || fc == 'O') {
+                    continue;                       // 마당·기단·중앙 개구는 뚫려야 맞다
+                }
+                // 기준면에 실제로 서는 처방 — 덧댐(+)이면 배경, 그 밖이면 제 처방
+                char plane = hj.depthOf(fc) > 0 ? hj.backingChar() : fc;
+                boolean planeSolid = false;
+                for (Blueprint.Course cs : hj.columnOf(plane)) {
+                    if (!"air".equals(cs.material()) && !"lattice".equals(cs.material())) {
+                        planeSolid = true;
+                        break;
+                    }
+                }
+                if (planeSolid) {
+                    closed++;
+                } else {
+                    holes++;
+                }
+            }
+            check("★[눈의 눈] 본전 정면의 비개구 칸을 셌다", closed + holes > 0, closed + holes);
+            check("★★정면 기준면에 <b>세로 구멍이 없다</b> (하층은 폐쇄 전각이다 — 구멍 "
+                            + holes + "/" + (closed + holes) + ")",
+                    holes == 0, holes + "/" + (closed + holes));
+
+            // ★REF-1b — 밝은 단청은 <b>적주 머리에만</b>. 정면 전체를 가로지르면 한 덩어리로 읽힌다.
+            int brightTop = 0;
+            int postTop = 0;
+            for (char fc : new char[]{'P', 'W', 'D'}) {
+                java.util.List<Blueprint.Course> col = hj.columnOf(fc);
+                String top = col.get(col.size() - 1).material();
+                if (top.contains("sandstone")) {
+                    brightTop++;
+                    if (fc == 'P') {
+                        postTop++;
+                    }
+                }
+            }
+            check("★★밝은 단청이 <b>적주 머리에만</b> 얹힌다 (띠가 한 덩어리로 안 읽히게 — 밝은 "
+                            + brightTop + "종 중 적주 " + postTop + ")",
+                    brightTop == 1 && postTop == 1, brightTop + "/" + postTop);
+
+            // ★REF-1b — grand 물매는 <b>오목</b>하다. 곧은 1:1 이면 계단식 피라미드로 읽힌다.
+            int st = 9;
+            int[] rise = new int[st];
+            for (int i = 0; i < st; i++) {
+                rise[i] = com.honcheon.mvt.forge.HwasanCampusBuilder.grandRise(i, st);
+            }
+            boolean monotone = true;
+            boolean noJump = true;
+            boolean hasFlat = false;
+            for (int i = 1; i < st; i++) {
+                if (rise[i] < rise[i - 1]) {
+                    monotone = false;
+                }
+                if (rise[i] - rise[i - 1] > 1) {
+                    noJump = false;
+                }
+                if (rise[i] == rise[i - 1]) {
+                    hasFlat = true;
+                }
+            }
+            check("★★grand 물매가 오름만 한다 · 한 켜에 두 칸을 안 뛴다 (뛰면 외피에 구멍)",
+                    monotone && noJump, java.util.Arrays.toString(rise));
+            check("★★grand 물매가 <b>오목하다</b> (처마 쪽이 완만 — 평탄 구간이 있다)",
+                    hasFlat && rise[st - 1] < st - 1, java.util.Arrays.toString(rise));
+            check("★★[눈의 눈] 옛 sweep 은 이 식을 안 탄다 (산문 회귀 금지 — 곧은 1:1 그대로)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                    + "HwasanCampusBuilder.java"))
+                            .contains("grand ? grandRise(i, steps) : i"), true);
 
             // ★REF-1 ⑤ — 3단 가시 기단. 세 켜 수가 <b>1·2·3 으로 갈려야</b> 세 단으로 읽힌다.
             //   ★한 칸씩 세 번 올라야 걸어 오른다 — 두 칸이 한 번이라도 있으면 대문이 막힌다.

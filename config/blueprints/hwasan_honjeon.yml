@@ -125,15 +125,20 @@ columns:
   # ★★인방(引枋) — 칸의 위·아래를 붉은 켜로 끊는다 (2026-08-05 · B-196 셋째 교정).
   #   까닭은 아래 【실측 비율】 절. 회벽·격자 둘 다 5켜 통짜였고, 그래서 한 주기(3칸)의
   #   재료가 붉은 5 : 회벽 5 : 나무 5 로 **똑같이 셋**이었다. 목표는 붉은색이 3분의 2다.
+  # ★★REF-1b — <b>단청 띠를 끊는다</b> (사용자 2026-08-09). 전에는 W·D·P 가 모두 맨 위에
+  #   cut_sandstone 을 얹어, 정면 전체를 <b>밝은 갈색 판 한 줄</b>이 가로질렀다. 레퍼런스의
+  #   그 자리는 한 덩어리가 아니라 <b>어두운 가로보 + 적주 머리마다 되풀이되는 장식</b>이다.
+  #   → 밝은 사암은 <b>적주(P) 머리에만</b> 남기고, 회벽·격자 위는 어두운 도리로 잇는다.
+  #     그러면 위쪽에도 기둥의 세로 리듬이 이어진다 (공포가 그 위에 또 한 벌 얹힌다).
   "W": ["smooth_stone*3", "stripped_mangrove_log", "plaster*3", "stripped_mangrove_log",
         "dark_oak_planks",
-        "stripped_mangrove_log", "cut_sandstone"]            # 회벽 — 인방 사이 3켜만
+        "stripped_mangrove_log", "stripped_mangrove_log"]    # 회벽 — 인방 사이 3켜만
   # ★D2 ④ — 「lattice」는 <b>재료가 아니라 처방</b>이다. 모양은 meta.window.family 가 정한다.
   #   전에는 dark_oak_trapdoor 를 도면이 직접 박았다 → 그러면 family 를 바꿔도 안 바뀐다.
   "D": ["smooth_stone*3", "stripped_mangrove_log", "lattice*3",
         "stripped_mangrove_log",
         "dark_oak_planks",
-        "stripped_mangrove_log", "cut_sandstone"]            # 격자창 — 인방이 문틀을 이룬다
+        "stripped_mangrove_log", "stripped_mangrove_log"]    # 격자창 — 인방이 문틀을 이룬다
   "O": ["smooth_stone*3", "air*5",
         "dark_oak_planks",
         "stripped_mangrove_log", "cut_sandstone"]            # ★중앙 대문 (걸어 지난다)
