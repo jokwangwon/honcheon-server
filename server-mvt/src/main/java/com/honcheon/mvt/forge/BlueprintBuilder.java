@@ -240,8 +240,12 @@ public final class BlueprintBuilder {
                             //   같은 판재를 세 켜 쌓으면 흑백으로 보면 그냥 네모다. 아래 단은
                             //   계단(벽에 붙어 밖으로 낮아진다) · 가운데는 반블록 · 위는 다시
                             //   계단으로 두어 <b>위로 갈수록 밖으로 받쳐 나가는 윤곽</b>을 만든다.
+                            //   ★S1R — <b>첫 단이 곧 주두다</b>: 적주와 같은 붉은 목재 계단으로
+                            //     기둥 머리에서 벌어지고, 그 위 두 단이 어두운 목재로 처마를 받는다.
                             BlockData bd = Bukkit.createBlockData(
-                                    s2 == 1 ? Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS);
+                                    s2 == 0 ? Material.MANGROVE_STAIRS
+                                            : s2 == 1 ? Material.DARK_OAK_SLAB
+                                            : Material.DARK_OAK_STAIRS);
                             world.getBlockAt(bx, top + s2, bz)
                                     .setBlockData(stand(bd, nf), false);
                             n.blocks++;
@@ -508,8 +512,18 @@ public final class BlueprintBuilder {
      */
     public static final int WALL_MIN_COURSES = 4;
 
-    /** ★REF-1c-A — 처마 밑과 공포 머리 사이에 비우는 켜 (어두운 그림자 골) */
-    public static final int GROOVE = 1;
+    /**
+     * ★REF-1c-A — 처마 밑과 공포 머리 사이의 그림자 골.
+     *
+     * <p>★★S1R (2026-08-10) — <b>0 으로 내렸다.</b> 1 이던 동안 공포의 아랫단이 적주 평면(+1)에
+     * 앉으면서 <b>적주 몸통의 맨 윗칸을 먹었다</b> (5켜 중 4켜만 붉게 남았다). 레퍼런스의 차례는
+     * <b>적주 → 주두 → 공포 → 도리</b>인데 우리 것은 적주 → 공포 → 주두로 뒤집혀 있었다.
+     * 이제 아랫단이 <b>주두 자리</b>에 앉는다 — 그래서 공포의 첫 단이 곧 주두다.
+     * <p>골은 사라지지 않는다: 아랫단만 적주 평면(+1)이고 위 두 단은 처마 평면(+2)이라,
+     * 처마 평면의 그 아래 칸이 <b>비어 그늘이 진다</b> — 골을 켜로 비우는 대신
+     * <b>윤곽이 스스로 만든다.</b>
+     */
+    public static final int GROOVE = 0;
 
     /** ★REF-1c-A — 적주로 세려면 목재가 세로로 이어져야 하는 켜 수 (인방 한 켜는 기둥이 아니다) */
     public static final int POST_MIN_COURSES = 3;

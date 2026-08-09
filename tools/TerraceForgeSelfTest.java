@@ -3441,8 +3441,15 @@ public final class TerraceForgeSelfTest {
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"
                                     + "BlueprintBuilder.java"))
                             .contains("for (int side = 0; side <= 0; side++)"), "");
-            check("★★공포와 처마 사이에 <b>그림자 골</b>이 한 켜 있다",
-                    com.honcheon.mvt.forge.BlueprintBuilder.GROOVE >= 1,
+            // ★★S1R — 골을 <b>켜로 비우지 않고 윤곽이 만든다</b>. 아랫단만 적주 평면(+1)이고
+            //   위 두 단이 처마 평면(+2)이라, 처마 평면의 그 아래 칸이 비어 그늘이 진다.
+            //   ★골을 켜로 비우던 동안 공포 아랫단이 <b>적주 몸통을 먹었다</b> (5켜 중 4켜만 남았다).
+            check("★★공포가 <b>밖으로 계단지며</b> 그늘을 만든다 (골을 켜로 비우지 않는다)",
+                    com.honcheon.mvt.forge.BlueprintBuilder.GROOVE == 0
+                            && java.nio.file.Files.readString(java.nio.file.Path.of(
+                                    "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                            + "BlueprintBuilder.java"))
+                                    .contains("Math.min(s2 + 1, Math.max(1, eave))"),
                     com.honcheon.mvt.forge.BlueprintBuilder.GROOVE);
             check("★★그래도 공포는 처마를 <b>넘지 않는다</b> (골은 아래로 내는 것이지 밖으로가 아니다)",
                     java.nio.file.Files.readString(java.nio.file.Path.of(
@@ -3481,9 +3488,30 @@ public final class TerraceForgeSelfTest {
                 check("★[눈의 눈] 본전 처방의 켜를 재료 모양별로 셌다", cube + shape > 0, cube + shape);
                 check("★★몸체가 <b>통짜 정육면체만</b>으로 서 있지 않다 (모양 있는 켜 " + shape
                                 + " · 통짜 " + cube + ")", shape >= 5, shape + "/" + cube);
-                check("★★S1 기둥에 <b>주초</b>가 있다 (담장 블록 — 통나무보다 가늘어 발치가 잘록해진다)",
-                        hj.columnOf('P').stream().anyMatch(cs -> cs.material().endsWith("_wall")),
-                        shaped.toString());
+                // ★★S1R (2026-08-10) — 자를 뒤집었다. 앞 눈은 「담장 블록이 있는가」를 물었는데,
+                //   그 담장이 바로 <b>기둥을 촛대로 만든 범인</b>이었다. 눈이 틀린 조형을 지키고
+                //   있었던 것이다. 물어야 할 것은 <b>주초가 몸통보다 가늘지 않은가</b>다.
+                //   ★교훈: 흑백에서 달라진다 ≠ 레퍼런스와 닮았다.
+                java.util.List<Blueprint.Course> s1p = hj.columnOf('P');
+                boolean thinFoot = s1p.stream().anyMatch(cs ->
+                        cs.material().endsWith("_wall") || cs.material().endsWith("_fence"));
+                int shaftAt = -1;
+                for (int i = 0; i < s1p.size(); i++) {
+                    if (s1p.get(i).material().contains("mangrove_log") && s1p.get(i).count() >= 3) {
+                        shaftAt = i;
+                    }
+                }
+                boolean stoneFoot = shaftAt > 0 && (s1p.get(shaftAt - 1).material().contains("stone")
+                        || s1p.get(shaftAt - 1).material().contains("andesite"));
+                check("★★S1R 주초가 <b>몸통보다 가늘지 않다</b> (담장·울타리 받침 금지 — 촛대가 된다)",
+                        !thinFoot, thinFoot);
+                check("★★S1R 적주가 <b>석재 주초</b> 위에 바로 선다 (굵기 그대로 내려온다)",
+                        stoneFoot, shaftAt);
+                check("★★S1R 주두가 <b>목재</b>다 (밝은 석재 캡이 아니라 목구조가 처마를 받는다)",
+                        shaftAt >= 0 && shaftAt + 1 < s1p.size()
+                                && (s1p.get(shaftAt + 1).material().startsWith("mangrove")
+                                    || s1p.get(shaftAt + 1).material().startsWith("dark_oak")),
+                        shaftAt + 1 < s1p.size() ? s1p.get(shaftAt + 1).material() : "-");
                 check("★★S2 창에 <b>창턱</b>이 있다 (살창 바로 아래가 반블록 — 턱과 그늘)",
                         hj.columnOf('D').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
                         "");
@@ -3496,7 +3524,7 @@ public final class TerraceForgeSelfTest {
                         "");
                 // S4 공포 — 계단 + 반블록 윤곽
                 check("★★S4 공포가 <b>계단형 윤곽</b>이다 (판재 더미가 아니다)",
-                        bbSrc3.contains("Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS"), "");
+                        bbSrc3.contains("s2 == 0 ? Material.MANGROVE_STAIRS"), "");
                 check("★★계단의 방향도 <b>자리가 정한다</b> (도면은 네 벽에 다 쓰인다)",
                         bbSrc3.contains("st.setFacing(face.getOppositeFace())"), "");
                 // S6 중앙 — 벽 0 · 문설주 +1 · 문두 +2 세 겹
@@ -3624,9 +3652,11 @@ public final class TerraceForgeSelfTest {
                     }
                 }
             }
-            check("★★밝은 단청이 <b>적주 열에만</b> 있다 (회벽·격자 위엔 없다 — 밝은 "
-                            + brightTop + "종 중 적주 " + postTop + ")",
-                    brightTop == 1 && postTop == 1, brightTop + "/" + postTop);
+            // ★S1R (2026-08-10) — 밝은 사암 주두를 걷어냈으므로 <b>없어도 통과</b>한다.
+            //   다만 남긴다면 회벽·격자 위엔 못 온다 (띠가 되면 REF-1c-A 로 되돌아간다).
+            check("★★밝은 사암은 <b>있어도 적주 열에만</b> 있다 (밝은 " + brightTop
+                            + "종 중 적주 " + postTop + ")",
+                    brightTop == postTop, brightTop + "/" + postTop);
 
             // ★REF-1b — grand 물매는 <b>오목</b>하다. 곧은 1:1 이면 계단식 피라미드로 읽힌다.
             int st = 9;
