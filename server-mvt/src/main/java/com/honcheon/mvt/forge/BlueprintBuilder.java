@@ -179,81 +179,6 @@ public final class BlueprintBuilder {
             }
         }
 
-        // ★D2 ⑥ 공포 — <b>적주의 머리 위에서만</b> 시작한다 (자리 계약이 이름보다 먼저다).
-        //   ★1차 medium 은 작게: 기둥 머리 위 2단 · 밖으로 1 · 좌우 1. 강당엔 이미
-        //   깊이·주초·창방·도리·서까래·2단 기단이 들어갔다 — 공포는 <b>마지막 리듬</b>이면 된다.
-        int brk = switch (bp.bracket().toLowerCase()) {
-            case "simple" -> 1;
-            case "medium" -> 2;
-            case "elaborate" -> 3;
-            default -> 0;
-        };
-        if (brk > 0) {
-            for (int r = 0; r < bp.depth(); r++) {
-                for (int c = 0; c < bp.width(); c++) {
-                    // ★★★REF-1c-A 진범 (2026-08-09) — <b>「적주」 판정이 너무 넓었다.</b>
-                    //   전에는 「기둥 처방에 mangrove_log 가 <b>들어 있는가</b>」로 골랐다.
-                    //   그런데 본전은 회벽·격자의 <b>인방</b>도 mangrove 한 켜다 —
-                    //   그래서 <b>모든 벽 칸이 적주로 세어져</b> 공포가 정면 전 폭에 깔렸고,
-                    //   그것이 「밝은 갈색 3단 띠」였다. 재료를 세 번 바꿔도 안 없어진 까닭이다.
-                    //   ★강당은 회벽에 목재가 없어 우연히 멀쩡했다 — <b>우연은 계약이 아니다.</b>
-                    //   → 적주는 <b>세로로 이어진 기둥</b>이다: 한 켜짜리 인방은 기둥이 아니다.
-                    boolean post = bp.columnOf(bp.at(c, r)).stream()
-                            .anyMatch(cs -> cs.material().contains("mangrove_log")
-                                    && cs.count() >= POST_MIN_COURSES);
-                    if (!post) {
-                        continue;                    // ★적주가 아니면 공포도 없다
-                    }
-                    int[] d2 = place.map(bp, c, r);
-                    org.bukkit.block.BlockFace nf = place.turn(outward(bp, c, r));
-                    // ★공포는 <b>처마를 받친다</b> — 기둥 머리 <b>위</b>가 아니라 지붕 <b>바로 아래</b>다.
-                    //   처음 기둥 머리 위에 놓았더니 지붕 위로 튀어나갔다 (눈이 잡았다).
-                    int roofBase = bp.roofs().isEmpty() ? bp.heightAt(c, r)
-                            : bp.roofs().get(0).baseY();
-                    // ★★D2 전파가 드러낸 것 (2026-08-09 · 본전) — <b>내밈은 처마를 넘을 수 없다.</b>
-                    //   본전은 위계가 가장 높으니 elaborate(3단) 인데 처마는 실측이 2 로 묶여 있다
-                    //   (「3 은 45° 시선에서 벽면을 통째로 가린다」 — D-36). 3 을 그대로 내밀면
-                    //   공포가 처마 <b>밖</b>으로 나가 하늘 아래 드러난다 —「공포는 처마를 받친다」가 깨진다.
-                    //   → 위계는 <b>더 멀리</b>가 아니라 <b>더 높이·더 촘촘히</b>로 표현한다 (다포).
-                    //     단 수는 그대로 3, 내밈만 처마에서 멈춘다.
-                    int eave = bp.roofs().isEmpty() ? brk : bp.roofs().get(0).eave();
-                    // ★★★REF-1c-A 그림자 홈 (사용자 확정 2026-08-09) — 공포 머리가 처마 밑에
-                    //   <b>바로 붙어</b> 있으면 처마·공포·도리가 한 덩어리 띠로 읽힌다.
-                    //   한 켜를 비워 <b>어두운 골</b>을 만든다: 처마 밑 y−1 이 벽 밖에서 비고,
-                    //   그 그늘이 위의 지붕과 아래의 목구조를 갈라 준다.
-                    //   ★공포는 여전히 적주 머리에만 앉고 처마를 넘지 않는다 (계약 불변).
-                    int groove = GROOVE;
-                    int top = oy + roofBase - brk - groove;
-                    for (int s2 = 0; s2 < brk; s2++) {
-                        int reach = Math.min(s2 + 1, Math.max(1, eave));   // 처마에서 멈춘다
-                        // ★★★REF-1c-A 진범 (2026-08-09) — <b>공포는 좌우로 번지지 않는다.</b>
-                        //   전에는 위 단이 좌우 ±1 로 퍼졌다. 그런데 본전 적주는 <b>3칸 주기</b>라
-                        //   ±1 이면 3칸을 다 덮어 <b>이웃 공포끼리 손을 잡고</b> 정면 전체를
-                        //   가로지르는 <b>연속 띠</b>가 됐다. 「밝은 갈색 3단 띠」의 진범이 이것이다 —
-                        //   재료(단청·도리)를 세 번 바꿔도 안 없어졌던 까닭이다.
-                        //   ★공포는 <b>적주 위에서만</b> 있어야 리듬이 산다. 번지면 그 리듬을
-                        //     스스로 지운다.
-                        for (int side = 0; side <= 0; side++) {
-                            int bx = ox + d2[0] + nf.getModX() * reach - nf.getModZ() * side;
-                            int bz = oz + d2[1] + nf.getModZ() * reach + nf.getModX() * side;
-                            // ★★★REF-2.5 S4 — 공포는 <b>블록 더미가 아니라 계단형 받침</b>이다.
-                            //   같은 판재를 세 켜 쌓으면 흑백으로 보면 그냥 네모다. 아래 단은
-                            //   계단(벽에 붙어 밖으로 낮아진다) · 가운데는 반블록 · 위는 다시
-                            //   계단으로 두어 <b>위로 갈수록 밖으로 받쳐 나가는 윤곽</b>을 만든다.
-                            //   ★S1R — <b>첫 단이 곧 주두다</b>: 적주와 같은 붉은 목재 계단으로
-                            //     기둥 머리에서 벌어지고, 그 위 두 단이 어두운 목재로 처마를 받는다.
-                            BlockData bd = Bukkit.createBlockData(
-                                    s2 == 0 ? Material.MANGROVE_STAIRS
-                                            : s2 == 1 ? Material.DARK_OAK_SLAB
-                                            : Material.DARK_OAK_STAIRS);
-                            world.getBlockAt(bx, top + s2, bz)
-                                    .setBlockData(stand(bd, nf), false);
-                            n.blocks++;
-                        }
-                    }
-                }
-            }
-        }
 
         // 지붕 — 도면이 자리를, 코드가 결을 안다
         HwasanCampusBuilder.Tally tally = new HwasanCampusBuilder.Tally();
@@ -376,6 +301,110 @@ public final class BlueprintBuilder {
                             hf - ix, hl - iz, rf.upperEave(), tally);
                 }
                 n.roofs++;
+            }
+        }
+
+        // ★★REF-3B — 공포는 <b>지붕 뒤에</b> 놓는다. 앞서 놓으면 서까래가
+        //   맨 윗단을 덮어 elaborate 3단이 <b>2단으로만 보였다</b> (실측 0/8).
+
+        // ★D2 ⑥ 공포 — <b>적주의 머리 위에서만</b> 시작한다 (자리 계약이 이름보다 먼저다).
+        //   ★1차 medium 은 작게: 기둥 머리 위 2단 · 밖으로 1 · 좌우 1. 강당엔 이미
+        //   깊이·주초·창방·도리·서까래·2단 기단이 들어갔다 — 공포는 <b>마지막 리듬</b>이면 된다.
+        int brk = switch (bp.bracket().toLowerCase()) {
+            case "simple" -> 1;
+            case "medium" -> 2;
+            case "elaborate" -> 3;
+            default -> 0;
+        };
+        if (brk > 0) {
+            for (int r = 0; r < bp.depth(); r++) {
+                for (int c = 0; c < bp.width(); c++) {
+                    // ★★★REF-1c-A 진범 (2026-08-09) — <b>「적주」 판정이 너무 넓었다.</b>
+                    //   전에는 「기둥 처방에 mangrove_log 가 <b>들어 있는가</b>」로 골랐다.
+                    //   그런데 본전은 회벽·격자의 <b>인방</b>도 mangrove 한 켜다 —
+                    //   그래서 <b>모든 벽 칸이 적주로 세어져</b> 공포가 정면 전 폭에 깔렸고,
+                    //   그것이 「밝은 갈색 3단 띠」였다. 재료를 세 번 바꿔도 안 없어진 까닭이다.
+                    //   ★강당은 회벽에 목재가 없어 우연히 멀쩡했다 — <b>우연은 계약이 아니다.</b>
+                    //   → 적주는 <b>세로로 이어진 기둥</b>이다: 한 켜짜리 인방은 기둥이 아니다.
+                    boolean post = bp.columnOf(bp.at(c, r)).stream()
+                            .anyMatch(cs -> cs.material().contains("mangrove_log")
+                                    && cs.count() >= POST_MIN_COURSES);
+                    if (!post) {
+                        continue;                    // ★적주가 아니면 공포도 없다
+                    }
+                    int[] d2 = place.map(bp, c, r);
+                    // ★★★REF-3B — <b>모서리 적주는 두 축을 받는다</b> (사용자 2026-08-10).
+                    //   모서리는 「굵은 기둥」이 아니라 <b>두 지붕 방향의 하중이 모이는 곳</b>이다.
+                    //   {@link #outward} 가 한 방향만 주므로, 모서리에서는 <b>두 면 모두</b>에 얹는다.
+                    //   판정은 이름이 아니라 자리다 — 가로로도 세로로도 벽이 이어지지 않는 칸.
+                    boolean ewRun = tall(bp, c - 1, r) && tall(bp, c + 1, r);
+                    boolean nsRun = tall(bp, c, r - 1) && tall(bp, c, r + 1);
+                    java.util.List<org.bukkit.block.BlockFace> faces = new java.util.ArrayList<>();
+                    faces.add(place.turn(outward(bp, c, r)));
+                    if (!ewRun && !nsRun) {
+                        org.bukkit.block.BlockFace other =
+                                place.turn(outward(bp, c, r) == org.bukkit.block.BlockFace.NORTH
+                                        || outward(bp, c, r) == org.bukkit.block.BlockFace.SOUTH
+                                        ? (c > (bp.width() - 1) / 2.0
+                                                ? org.bukkit.block.BlockFace.EAST
+                                                : org.bukkit.block.BlockFace.WEST)
+                                        : (r > (bp.depth() - 1) / 2.0
+                                                ? org.bukkit.block.BlockFace.SOUTH
+                                                : org.bukkit.block.BlockFace.NORTH));
+                        faces.add(other);
+                    }
+                    for (org.bukkit.block.BlockFace nf : faces) {
+                    // ★공포는 <b>처마를 받친다</b> — 기둥 머리 <b>위</b>가 아니라 지붕 <b>바로 아래</b>다.
+                    //   처음 기둥 머리 위에 놓았더니 지붕 위로 튀어나갔다 (눈이 잡았다).
+                    int roofBase = bp.roofs().isEmpty() ? bp.heightAt(c, r)
+                            : bp.roofs().get(0).baseY();
+                    // ★★D2 전파가 드러낸 것 (2026-08-09 · 본전) — <b>내밈은 처마를 넘을 수 없다.</b>
+                    //   본전은 위계가 가장 높으니 elaborate(3단) 인데 처마는 실측이 2 로 묶여 있다
+                    //   (「3 은 45° 시선에서 벽면을 통째로 가린다」 — D-36). 3 을 그대로 내밀면
+                    //   공포가 처마 <b>밖</b>으로 나가 하늘 아래 드러난다 —「공포는 처마를 받친다」가 깨진다.
+                    //   → 위계는 <b>더 멀리</b>가 아니라 <b>더 높이·더 촘촘히</b>로 표현한다 (다포).
+                    //     단 수는 그대로 3, 내밈만 처마에서 멈춘다.
+                    int eave = bp.roofs().isEmpty() ? brk : bp.roofs().get(0).eave();
+                    // ★★★REF-1c-A 그림자 홈 (사용자 확정 2026-08-09) — 공포 머리가 처마 밑에
+                    //   <b>바로 붙어</b> 있으면 처마·공포·도리가 한 덩어리 띠로 읽힌다.
+                    //   한 켜를 비워 <b>어두운 골</b>을 만든다: 처마 밑 y−1 이 벽 밖에서 비고,
+                    //   그 그늘이 위의 지붕과 아래의 목구조를 갈라 준다.
+                    //   ★공포는 여전히 적주 머리에만 앉고 처마를 넘지 않는다 (계약 불변).
+                    int groove = GROOVE;
+                    int top = oy + roofBase - brk - groove;
+                    for (int s2 = 0; s2 < brk; s2++) {
+                        int reach = Math.min(s2 + 1, Math.max(1, eave));   // 처마에서 멈춘다
+                        // ★★★REF-1c-A 진범 (2026-08-09) — <b>공포는 좌우로 번지지 않는다.</b>
+                        //   전에는 위 단이 좌우 ±1 로 퍼졌다. 그런데 본전 적주는 <b>3칸 주기</b>라
+                        //   ±1 이면 3칸을 다 덮어 <b>이웃 공포끼리 손을 잡고</b> 정면 전체를
+                        //   가로지르는 <b>연속 띠</b>가 됐다. 「밝은 갈색 3단 띠」의 진범이 이것이다 —
+                        //   재료(단청·도리)를 세 번 바꿔도 안 없어졌던 까닭이다.
+                        //   ★공포는 <b>적주 위에서만</b> 있어야 리듬이 산다. 번지면 그 리듬을
+                        //     스스로 지운다.
+                        for (int side = 0; side <= 0; side++) {
+                            int bx = ox + d2[0] + nf.getModX() * reach - nf.getModZ() * side;
+                            int bz = oz + d2[1] + nf.getModZ() * reach + nf.getModX() * side;
+                            // ★★★REF-2.5 S4 — 공포는 <b>블록 더미가 아니라 계단형 받침</b>이다.
+                            //   같은 판재를 세 켜 쌓으면 흑백으로 보면 그냥 네모다. 아래 단은
+                            //   계단(벽에 붙어 밖으로 낮아진다) · 가운데는 반블록 · 위는 다시
+                            //   계단으로 두어 <b>위로 갈수록 밖으로 받쳐 나가는 윤곽</b>을 만든다.
+                            //   ★S1R — <b>첫 단이 곧 주두다</b>: 적주와 같은 붉은 목재 계단으로
+                            //     기둥 머리에서 벌어지고, 그 위 두 단이 어두운 목재로 처마를 받는다.
+                            BlockData bd = Bukkit.createBlockData(
+                                    s2 == 0 ? Material.MANGROVE_STAIRS
+                                            : s2 == 1 ? Material.DARK_OAK_SLAB
+                                            //   ★REF-3B 3단째 = <b>서까래 신발</b>. 처마를 키우지
+                                            //     않는다. 3단이 세로로 세 켜일 필요는 없다 —
+                                            //     기둥→주두→받침→받침→서까래로 이어지는
+                                            //     <b>윤곽</b>이 보이면 된다 (사용자).
+                                            : Material.DARK_OAK_STAIRS);
+                            world.getBlockAt(bx, top + s2, bz)
+                                    .setBlockData(stand(bd, nf), false);
+                            n.blocks++;
+                        }
+                    }
+                    }
+                }
             }
         }
     }

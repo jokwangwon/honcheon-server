@@ -41,6 +41,24 @@ public final class TerraceForgeSelfTest {
     private static int passed;
     private static final List<String> failures = new ArrayList<>();
 
+    /** 적주 몸통 위 · 도리 아래에 몇 켜가 있는가 = <b>주두의 두께</b> (REF-3B 밀도 사다리) */
+    private static int capitalCourses(Blueprint bp, char ch) {
+        java.util.List<Blueprint.Course> col = bp.columnOf(ch);
+        int shaft = -1;
+        for (int i = 0; i < col.size(); i++) {
+            if (col.get(i).material().contains("mangrove_log") && col.get(i).count() >= 3) {
+                shaft = i;
+            }
+        }
+        if (shaft < 0) {
+            return 0;
+        }
+        // ★★자를 고쳤다 (REF-3B): 처음엔 「dark_oak 이 나오면 도리」로 끊었는데, 모서리 주두의
+        //   둘째 켜가 어두운 목재라 <b>주두를 도리로 세어</b> 1 로 읽혔다. 재료가 아니라
+        //   <b>자리</b>로 끊는다 — 맨 위 두 켜가 도리·긴 보이고, 그 사이가 주두다.
+        return Math.max(0, (col.size() - 2) - (shaft + 1));
+    }
+
     public static void main(String[] args) {
         // ══════════ ① 기본 캠퍼스가 순수 검증을 통과한다 ══════════
         TerraceForge.Campus campus = TerraceForge.hwasanCampus();
@@ -3463,6 +3481,58 @@ public final class TerraceForgeSelfTest {
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"
                                     + "BlueprintBuilder.java"))
                             .contains("Math.min(s2 + 1, Math.max(1, eave))"), "");
+
+            // ══════ ★★★REF-3B <b>위계를 원경까지</b> (사용자 2026-08-10) ══════
+            {
+                String bb4 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                        "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+                // ★공포가 <b>지붕 뒤</b>에 놓여야 서까래에게 맨 윗단을 안 뺏긴다 (실측 0/8 이었다)
+                int roofCall = bb4.indexOf("sweepRoofGrand");
+                int brkCall = bb4.indexOf("★적주가 아니면 공포도 없다");
+                check("★[눈의 눈] 지붕 부름과 공포 고리를 둘 다 찾았다",
+                        roofCall > 0 && brkCall > 0, roofCall + "/" + brkCall);
+                check("★★공포가 <b>지붕 뒤에</b> 놓인다 (앞서면 서까래가 맨 윗단을 덮는다)",
+                        brkCall > roofCall, brkCall + " > " + roofCall);
+                check("★★모서리 적주는 <b>두 축</b>을 받는다 (한 면만 받으면 굵은 기둥일 뿐이다)",
+                        bb4.contains("if (!ewRun && !nsRun)") && bb4.contains("faces.add(other)"),
+                        "");
+                // ★중앙문 — 문두 양 끝이 <b>꺾인다</b>
+                java.util.Map<String, Blueprint.Trim> tm2 = new java.util.HashMap<>();
+                for (Blueprint.Trim tr : hj.trims()) {
+                    tm2.put(tr.id(), tr);
+                }
+                Blueprint.Trim hw = tm2.get("door_head_w");
+                Blueprint.Trim he = tm2.get("door_head_e");
+                Blueprint.Trim hc = tm2.get("door_head");
+                check("★★문두 양 끝이 <b>계단으로 꺾인다</b> (90도 네모면 크기만 클 뿐이다)",
+                        hw != null && he != null && hc != null
+                                && hw.material().endsWith("_stairs")
+                                && he.material().endsWith("_stairs")
+                                && hc.material().endsWith("_slab"),
+                        hw == null ? "-" : hw.material());
+                check("★★문두 꺾임이 <b>좌우 대칭</b>이다 (축에서 같은 거리)",
+                        hw != null && he != null
+                                && hj.axisCol() - hw.cols()[0] == he.cols()[1] - hj.axisCol(),
+                        hw == null ? "-" : (hw.cols()[0] + "·" + he.cols()[1]));
+                // ★내부 문틀 어깨도 좌우 대칭
+                Blueprint.Trim jw = tm2.get("door_jamb_head_w");
+                Blueprint.Trim je = tm2.get("door_jamb_head_e");
+                check("★★내부 문틀 <b>어깨</b>가 좌우 대칭으로 있다 (문두와 개구 사이 한 단)",
+                        jw != null && je != null
+                                && hj.axisCol() - jw.cols()[0] == je.cols()[1] - hj.axisCol()
+                                && jw.depth() == 1 && je.depth() == 1,
+                        jw == null ? "-" : (jw.cols()[0] + "·" + je.cols()[1]));
+                // ★밀도 사다리 — 일반 < 모서리·입구 옆 < 중앙. <b>주두 켜 수</b>로 잰다.
+                int capP = capitalCourses(hj, 'P');
+                int capC = capitalCourses(hj, 'C');
+                int capA = capitalCourses(hj, 'A');
+                check("★★주두 밀도가 <b>일반 < 모서리·입구 옆</b> 이다 (일반 " + capP + " · 모서리 "
+                                + capC + " · 입구 옆 " + capA + ")",
+                        capP < capC && capP < capA, capP + "/" + capC + "/" + capA);
+                check("★★모서리와 입구 옆은 <b>형태는 같고 결이 다르다</b> (둘 다 두 켜지만 재료가 갈린다)",
+                        capC == capA && !hj.columnOf('C').equals(hj.columnOf('A')),
+                        capC + "/" + capA);
+            }
 
             // ══════ ★★★REF-3A <b>bay 역할</b> (사용자 확정 2026-08-10) ══════
             //   정면이 `A A A A | 중앙 | A A A A` 로 <b>모든 칸이 똑같았다</b>. 반복을 깨되

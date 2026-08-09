@@ -175,10 +175,14 @@ columns:
         "stripped_mangrove_log*4",
         "mangrove_stairs", "dark_oak_slab",
         "dark_oak_planks", "dark_oak_log"]                   # 모서리 — 주두 두 켜
+  # ★★REF-3B — 입구 옆은 <b>중앙으로 뻗을 칸이 없다</b> (17·21 이 이미 문설주다).
+  #   그래서 가로가 아니라 <b>세로로</b> 밀도를 올린다: 주두를 두 켜로 하되 <b>둘 다 붉은 목재</b>로
+  #   두어, 어두운 두 켜인 모서리(C)와 형태는 같고 <b>결이 다르게</b> 한다.
+  #   밀도 순서:  일반 P  <  모서리 C  <  입구 옆 A  <  중앙
   "A": ["smooth_stone*2", "polished_andesite",
         "stripped_mangrove_log*4",
-        "mangrove_planks", "mangrove_stairs",
-        "dark_oak_planks", "dark_oak_log"]                   # 입구 옆 — 보조 인방
+        "mangrove_stairs", "mangrove_slab",
+        "dark_oak_planks", "dark_oak_log"]                   # 입구 옆 — 붉은 주두 두 켜
   "W": ["smooth_stone*3", "mangrove_planks", "plaster*3", "mangrove_planks",
         "mangrove_planks",
         "dark_oak_slab", "dark_oak_log"]                     # 회벽 — 인방 사이 3켜만
@@ -339,12 +343,39 @@ trim:
     y: 8                     # 대문 개구 y3~7 위의 창방 켜
     depth: 1
     material: dark_oak_log
-  - id: door_head            # ★REF-2.5 S6 — 문두 처마 (+2). 중앙에 <b>세 겹 깊이</b>를 만든다
+  # ★★★REF-3B 중앙문 (사용자 2026-08-10) — 문두가 <b>90도 네모</b>면 크기만 클 뿐이다.
+  #   양 끝을 계단으로 한 번 꺾어 「┌─┘   └─┐」 를 만든다. 이 작은 꺾임 하나가 중앙을 세운다.
+  #   ★crown·현판 자리 크기는 <b>안 키운다</b> (사용자).
+  - id: door_head_w          # 문두 왼쪽 끝 — 꺾임
     row: 19
-    cols: [16, 22]
+    cols: [16, 16]
+    y: 8
+    depth: 2
+    material: dark_oak_stairs
+  - id: door_head            # 문두 가운데 — 곧은 처마
+    row: 19
+    cols: [17, 21]
     y: 8
     depth: 2
     material: dark_oak_slab
+  - id: door_head_e          # 문두 오른쪽 끝 — 꺾임
+    row: 19
+    cols: [22, 22]
+    y: 8
+    depth: 2
+    material: dark_oak_stairs
+  - id: door_jamb_head_w     # 내부 문틀 어깨 (+1) — 문두와 개구 사이 한 단
+    row: 19
+    cols: [17, 17]
+    y: 7
+    depth: 1
+    material: dark_oak_stairs
+  - id: door_jamb_head_e
+    row: 19
+    cols: [21, 21]
+    y: 7
+    depth: 1
+    material: dark_oak_stairs
   - id: crown_base           # 중앙 관 아랫단 — 중앙 칸 5 폭
     row: 19
     cols: [17, 21]
