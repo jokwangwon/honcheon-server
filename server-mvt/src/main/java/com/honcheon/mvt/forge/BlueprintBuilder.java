@@ -167,6 +167,18 @@ public final class BlueprintBuilder {
             }
         }
 
+        // ★★REF-1c-B 마감 조각 — 현판 자리 · 중앙 관. 도면이 좌표를 직접 쥔다.
+        for (Blueprint.Trim tr : bp.trims()) {
+            for (int c = tr.cols()[0]; c <= tr.cols()[1]; c++) {
+                int[] d3 = place.map(bp, c, tr.row());
+                org.bukkit.block.BlockFace tf = place.turn(outward(bp, c, tr.row()));
+                int tx = ox + d3[0] + tf.getModX() * tr.depth();
+                int tz = oz + d3[1] + tf.getModZ() * tr.depth();
+                stamp(world, tx, oy + tr.y(), tz, tr.material(), tf);
+                n.blocks++;
+            }
+        }
+
         // ★D2 ⑥ 공포 — <b>적주의 머리 위에서만</b> 시작한다 (자리 계약이 이름보다 먼저다).
         //   ★1차 medium 은 작게: 기둥 머리 위 2단 · 밖으로 1 · 좌우 1. 강당엔 이미
         //   깊이·주초·창방·도리·서까래·2단 기단이 들어갔다 — 공포는 <b>마지막 리듬</b>이면 된다.
@@ -267,8 +279,9 @@ public final class BlueprintBuilder {
             // ★★REF-1 — <b>본전만</b> 새 판을 탄다 (사용자: 「기존 sweep 코드는 수정하지 않는다」).
             //   grand 는 좌우≠앞뒤 내밈이고 <b>말없는 축소가 없다</b>.
             if (rf.grand()) {
+                // ★층간 지붕에는 용마루를 안 얹는다 — 가운데를 상층 몸체가 차지한다 (사용자)
                 HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0, ox + bx1,
-                        oy + rf.baseY(), oz + bz0, oz + bz1, rf.eaveX(), rf.eaveZ(), tally);
+                        oy + rf.baseY(), oz + bz0, oz + bz1, rf.eaveX(), rf.eaveZ(), 0, tally);
             } else {
                 HwasanCampusBuilder.sweepRoof(world, pad, cx, oy + rf.baseY(), cz, hf, hl,
                         rf.eave(), tally);
@@ -309,8 +322,13 @@ public final class BlueprintBuilder {
                             if (post) {
                                 fill = Material.STRIPPED_MANGROVE_LOG;
                             } else if (rf.upperLattice()) {
-                                boolean rail = k == 0 || k == rf.upperWall() - 1;
-                                fill = rail ? Material.DARK_OAK_PLANKS : Material.DARK_OAK_TRAPDOOR;
+                                // ★★REF-1c-B 상층 창턱 — 창 <b>아래</b>에 어두운 수평선 한 켜.
+                                //   ★반드시 <b>적주에서 끊긴다</b> (post 칸은 여기 안 온다) —
+                                //     전 폭 연속 판을 만들면 「밝은 띠」를 다시 짓는 셈이다.
+                                //   반블록이라 위 절반이 그늘로 남아 창 밑이 가라앉는다.
+                                fill = k == 0 ? Material.DARK_OAK_SLAB
+                                        : k == rf.upperWall() - 1 ? Material.DARK_OAK_PLANKS
+                                        : Material.DARK_OAK_TRAPDOOR;
                             } else {
                                 fill = HwasanCampusBuilder.plaster(ox + c2, upBase + k, oz + r2);
                             }
@@ -342,7 +360,7 @@ public final class BlueprintBuilder {
                 if (rf.grand()) {
                     HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0 + ix, ox + bx1 - ix,
                             upBase + rf.upperWall(), oz + bz0 + iz, oz + bz1 - iz,
-                            rf.upperEaveX(), rf.upperEaveZ(), tally);
+                            rf.upperEaveX(), rf.upperEaveZ(), rf.upperRidge(), tally);
                 } else {
                     HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
                             hf - ix, hl - iz, rf.upperEave(), tally);

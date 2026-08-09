@@ -3414,6 +3414,50 @@ public final class TerraceForgeSelfTest {
                                     + "BlueprintBuilder.java"))
                             .contains("Math.min(s2 + 1, Math.max(1, eave))"), "");
 
+            // ══════ ★★★REF-1c-B — 실루엣 마감 · 중앙 위계 ══════
+            String bbSrc2 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+            check("★★대지붕에 용마루가 있다 (길이 " + rf1.upperRidge() + " — 정상부가 검은 면으로 "
+                            + "닫히면 「잘 만든 지붕」이 아니라 「검은 경사지붕」이다)",
+                    rf1.upperRidge() == 17, rf1.upperRidge());
+            check("★★층간 지붕에는 <b>중앙 용마루를 안 만든다</b> (가운데를 상층 몸체가 차지한다)",
+                    bbSrc2.contains("rf.eaveZ(), 0, tally)"), "");
+            {
+                java.util.Map<String, Blueprint.Trim> tm = new java.util.HashMap<>();
+                for (Blueprint.Trim tr : hj.trims()) {
+                    tm.put(tr.id(), tr);
+                }
+                Blueprint.Trim sign = tm.get("sign_anchor");
+                Blueprint.Trim cb = tm.get("crown_base");
+                Blueprint.Trim ct = tm.get("crown_top");
+                check("★[눈의 눈] 마감 조각 셋을 도면에서 찾았다 (현판 자리 · 관 두 단)",
+                        sign != null && cb != null && ct != null, hj.trims().size());
+                check("★★현판 <b>자리</b>가 문 개구(3칸) 바로 위에 · 한 칸 나와 있다",
+                        sign.cols()[1] - sign.cols()[0] + 1 == 3 && sign.depth() == 1,
+                        (sign.cols()[1] - sign.cols()[0] + 1) + "칸 · +" + sign.depth());
+                check("★★현판 <b>글자·소품은 아직 없다</b> (D3 — 자리만 만든다)",
+                        !sign.material().contains("sign") && !sign.material().contains("item"),
+                        sign.material());
+                check("★★중앙 관이 <b>중앙 칸 5 안에서만</b> 있다 (밖으로 나가면 입면을 깬다)",
+                        cb.cols()[0] >= hj.axisCol() - 2 && cb.cols()[1] <= hj.axisCol() + 2
+                                && ct.cols()[0] >= hj.axisCol() - 2
+                                && ct.cols()[1] <= hj.axisCol() + 2,
+                        cb.cols()[0] + ".." + cb.cols()[1]);
+                check("★★중앙 관 높이가 <b>2</b>다 (독립 지붕이 아니라 문두 장식)",
+                        ct.y() - cb.y() == 1, (ct.y() - cb.y() + 1));
+                // ★위계 — 관이 용마루보다 먼저 눈에 띄면 과하다. 관 꼭대기가 층간 처마보다 낮아야 한다.
+                check("★★관이 용마루와 <b>경쟁하지 않는다</b> (관 꼭대기 " + ct.y()
+                                + " < 층간 처마 " + rf1.baseY() + ")",
+                        ct.y() < rf1.baseY(), ct.y() + " vs " + rf1.baseY());
+            }
+            check("★★귀마루는 <b>지붕을 새로 들어 올리지 않는다</b> (귀솟음이 쥔 첫 칸을 안 건드린다)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                    + "HwasanCampusBuilder.java"))
+                            .contains("for (int k = 1; k <= 5; k++)"), "");
+            check("★★상층 창턱이 <b>적주에서 끊긴다</b> (전 폭 연속이면 「밝은 띠」를 다시 짓는 셈)",
+                    bbSrc2.contains("k == 0 ? Material.DARK_OAK_SLAB"), "");
+
             // ★REF-1b — 밝은 단청은 <b>적주 머리에만</b>. 정면 전체를 가로지르면 한 덩어리로 읽힌다.
             int brightTop = 0;
             int postTop = 0;

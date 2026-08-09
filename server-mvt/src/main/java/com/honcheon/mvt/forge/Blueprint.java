@@ -43,7 +43,8 @@ public final class Blueprint {
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
                        String profile, boolean rafters,
-                       int eaveX, int eaveZ, int upperEaveX, int upperEaveZ) {
+                       int eaveX, int eaveZ, int upperEaveX, int upperEaveZ,
+                       int upperRidge) {
 
         /**
          * ★★REF-1 (사용자 확정 2026-08-09) — <b>좌우 내밈과 앞뒤 내밈이 다를 수 있다.</b>
@@ -161,13 +162,15 @@ public final class Blueprint {
     private final String winFamily;
     private final String winDensity;
     private final String bracket;
+    private final List<Trim> trims;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
                       List<Roof> roofs, Map<String, int[]> spots, List<Placement> placements,
                       String rank, int courtyardRow, String usage, String family,
                       Map<Character, Integer> depths, int foundation,
-                      String winFamily, String winDensity, String bracket) {
+                      String winFamily, String winDensity, String bracket, List<Trim> trims) {
+        this.trims = trims;
         this.placements = placements;
         this.rank = rank;
         this.courtyardRow = courtyardRow;
@@ -278,6 +281,21 @@ public final class Blueprint {
      * <b>비운다</b>. 기단을 두 단 쌓아 놓고 도면이 한 단 위에 앉으면 <b>윗단을 제가 지운다</b>.
      * 위계가 기단을 정하므로(auxiliary 1 · principal 2 · ceremonial 3), 그 값이 여기 온다.
      */
+    /**
+     * ★★★REF-1c-B <b>마감 조각</b> (사용자 확정 2026-08-09) — 평면·기둥 처방으로는 못 그리는
+     * <b>국소 장식</b>이다 (현판 자리 · 중앙 관). 압출이 아니라 <b>한 자리에 몇 칸</b>이라
+     * 도면이 좌표를 직접 쥔다.
+     *
+     * @param row  평면의 줄 · {@code cols} 는 [처음, 끝] · {@code y} 는 {@code oy} 기준
+     * @param depth 법선 방향으로 몇 칸 나가는가 (기준면이 0)
+     */
+    public record Trim(String id, int row, int[] cols, int y, int depth, String material) {
+    }
+
+    public List<Trim> trims() {
+        return trims;
+    }
+
     /**
      * ★★REF-1b — <b>덧댐(overlay)의 배경이 되는 글자</b>. 적주가 한 칸 나가면 그 자리에
      * 무엇이 남는가. 답은 <b>회벽</b>이다 (레퍼런스의 하층은 폐쇄 전각이다).
@@ -449,8 +467,23 @@ public final class Blueprint {
                     up == null ? 2 : ((Number) up.getOrDefault("eave_x",
                             up.getOrDefault("eave", 2))).intValue(),
                     up == null ? 2 : ((Number) up.getOrDefault("eave_z",
-                            up.getOrDefault("eave", 2))).intValue()));
+                            up.getOrDefault("eave", 2))).intValue(),
+                    // ★REF-1c-B — 대지붕 용마루 길이. 0 이면 없다 (층간 지붕은 상층 몸체가
+                    //   가운데를 차지해 중앙 용마루를 만들 구조가 아니다 — 사용자).
+                    up == null ? 0 : ((Number) up.getOrDefault("ridge", 0)).intValue()));
         });
+
+        List<Trim> trims = new ArrayList<>();
+        for (Object o : (List<Object>) root.getOrDefault("trim", List.of())) {
+            Map<String, Object> m = (Map<String, Object>) o;
+            List<Object> cs = (List<Object>) m.get("cols");
+            trims.add(new Trim(String.valueOf(m.getOrDefault("id", "?")),
+                    ((Number) req(m, "row")).intValue(),
+                    new int[]{((Number) cs.get(0)).intValue(), ((Number) cs.get(1)).intValue()},
+                    ((Number) req(m, "y")).intValue(),
+                    ((Number) m.getOrDefault("depth", 0)).intValue(),
+                    String.valueOf(req(m, "material"))));
+        }
 
         Map<String, int[]> spots = new LinkedHashMap<>();
         ((Map<String, Object>) root.getOrDefault("spots", Map.of())).forEach((k, v) -> {
@@ -500,7 +533,7 @@ public final class Blueprint {
                 ((Number) meta.getOrDefault("foundation", 1)).intValue(),
                 String.valueOf(win.getOrDefault("family", "W2")),
                 String.valueOf(win.getOrDefault("density", "medium")),
-                String.valueOf(meta.getOrDefault("bracket", "none")));
+                String.valueOf(meta.getOrDefault("bracket", "none")), trims);
     }
 
     private static Object req(Map<String, Object> m, String k) {

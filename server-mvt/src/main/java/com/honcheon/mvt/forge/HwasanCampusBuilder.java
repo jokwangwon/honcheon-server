@@ -767,9 +767,55 @@ public final class HwasanCampusBuilder {
      * ※기존 {@code sweepRoof} 는 손대지 않는다 — 산문 회귀를 만들지 않기 위해서다 (사용자).
      */
     static void sweepRoofGrand(World world, TerraceForge.Pad pad, int bx0, int bx1, int cy,
-                               int bz0, int bz1, int eaveX, int eaveZ, Tally tally) {
-        sweepRoofBounds(world, pad, bx0 - eaveX, bx1 + eaveX, cy, bz0 - eaveZ, bz1 + eaveZ,
+                               int bz0, int bz1, int eaveX, int eaveZ, int ridgeLen, Tally tally) {
+        int x0 = bx0 - eaveX;
+        int x1 = bx1 + eaveX;
+        int z0 = bz0 - eaveZ;
+        int z1 = bz1 + eaveZ;
+        sweepRoofBounds(world, pad, x0, x1, cy, z0, z1,
                 Math.max(bx1 - bx0, bz1 - bz0) / 2 >= 12, true, tally);
+        if (ridgeLen > 0) {
+            ridgeTrim(world, pad, x0, x1, cy, z0, z1, ridgeLen, tally);
+        }
+    }
+
+    /**
+     * ★★★REF-1c-B <b>용마루·귀마루</b> (사용자 확정 2026-08-09) — 지붕의 <b>마감선</b>이다.
+     *
+     * <p>물매와 귀솟음이 잡힌 뒤에도 정상부가 그냥 검은 면으로 닫혀 있으면
+     * 「잘 만든 큰 지붕」이 아니라 「검은 경사지붕」으로 읽힌다. 그 차이가 <b>선</b>이다.
+     *
+     * <ul>
+     *   <li><b>용마루</b> — 가운데 {@code len} 칸. 가운데는 평평하고 <b>양 끝 한 칸만</b> 솟는다.</li>
+     *   <li><b>귀마루</b> — 네 귀에서 안으로 5칸. <b>이미 올라간 모서리를 따라가는 선</b>이라
+     *       <b>지붕을 새로 들어 올리지 않는다</b> (귀솟음은 그대로 두고 그 안쪽부터 얹는다).</li>
+     * </ul>
+     * ★재료는 지붕 본체가 아니라 <b>마루 장식 계층</b>이라 이번 회차에 정해도 된다 (사용자).
+     */
+    private static void ridgeTrim(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
+                                  int z0, int z1, int len, Tally tally) {
+        int steps = Math.min(x1 - x0, z1 - z0) / 2 + 1;
+        int apex = cy + grandRise(steps, steps);
+        int cx = (x0 + x1) / 2;
+        int cz = (z0 + z1) / 2;
+        int half = len / 2;
+        for (int k = -half; k <= half; k++) {
+            put(world, pad, cx + k, apex + 1, cz, Material.STONE_BRICK_SLAB, tally);
+            // ★사용자 후보는 polished_andesite_wall 이었으나 <b>그런 블록이 없다</b>
+            //   (연마안산암은 반블록·계단만 있다). 같은 밝은 회색 계열인 andesite_wall 로 간다.
+            if (Math.abs(k) == half) {      // ★양 끝만 한 단 — 가운데는 평평한 마루선이다
+                put(world, pad, cx + k, apex + 2, cz, Material.ANDESITE_WALL, tally);
+            }
+        }
+        // 귀마루 — 귀솟음이 쥔 첫 칸(k=0)은 건드리지 않고 그 안쪽 다섯 칸에 선을 얹는다
+        for (int k = 1; k <= 5; k++) {
+            int y = cy + grandRise(k, steps) + 1;
+            for (int sx : new int[]{x0 + k, x1 - k}) {
+                for (int sz : new int[]{z0 + k, z1 - k}) {
+                    put(world, pad, sx, y, sz, Material.STONE_BRICK_SLAB, tally);
+                }
+            }
+        }
     }
 
     /**
