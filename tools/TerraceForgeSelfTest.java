@@ -2837,7 +2837,14 @@ public final class TerraceForgeSelfTest {
             // ② 적주 주기 3 — 7호 실측(기둥 틈 33/36/37px · 주기 ≈45px = 3블록)
             List<Integer> posts = new ArrayList<>();
             for (int c = 0; c < hj.width(); c++) {
-                if (hj.at(c, frontRow) == 'P') {
+                // ★★자를 고쳤다 (REF-3A): 전에는 <b>글자 'P'</b> 를 셌다. bay 역할을 나누며
+                //   모서리 C · 입구 옆 A 가 생기자 기둥이 10 → 6 으로 줄어 보였다 —
+                //   조성은 멀쩡한데 눈이 글자를 세고 있었던 것이다.
+                //   ★이 저장소에서 <b>세 번째</b> 같은 병이다 (공포 판정 · 문설주 판정 · 여기).
+                //   <b>이름이 아니라 구조로 센다</b>: 세로로 이어진 통나무가 곧 적주다.
+                if (hj.columnOf(hj.at(c, frontRow)).stream().anyMatch(cs ->
+                        cs.material().contains("mangrove_log") && cs.count()
+                                >= com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES)) {
                     posts.add(c);
                 }
             }
@@ -3456,6 +3463,75 @@ public final class TerraceForgeSelfTest {
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"
                                     + "BlueprintBuilder.java"))
                             .contains("Math.min(s2 + 1, Math.max(1, eave))"), "");
+
+            // ══════ ★★★REF-3A <b>bay 역할</b> (사용자 확정 2026-08-10) ══════
+            //   정면이 `A A A A | 중앙 | A A A A` 로 <b>모든 칸이 똑같았다</b>. 반복을 깨되
+            //   <b>랜덤이 아니라 자리</b>가 깬다 — 모서리 · 입구 옆 · 일반 · 중앙.
+            //   ★해시는 어디에도 안 낀다 (「위치가 정하면 구조, 해시가 정하면 잡티」).
+            {
+                java.util.List<Integer> corner = new java.util.ArrayList<>();
+                java.util.List<Integer> adj = new java.util.ArrayList<>();
+                java.util.List<Integer> plain = new java.util.ArrayList<>();
+                java.util.List<Integer> jamb2 = new java.util.ArrayList<>();
+                for (int c = 0; c < hj.width(); c++) {
+                    switch (hj.at(c, frontR)) {
+                        case 'C' -> corner.add(c);
+                        case 'A' -> adj.add(c);
+                        case 'P' -> plain.add(c);
+                        case 'J' -> jamb2.add(c);
+                        default -> { }
+                    }
+                }
+                check("★★정면에 <b>네 역할</b>이 다 있다 (모서리 " + corner.size() + " · 입구 옆 "
+                                + adj.size() + " · 일반 " + plain.size() + " · 문설주 "
+                                + jamb2.size() + ")",
+                        corner.size() == 2 && adj.size() == 2 && plain.size() >= 6
+                                && jamb2.size() == 2,
+                        corner + "/" + adj + "/" + plain.size());
+                // ★모서리는 <b>양 끝</b>에만 — 가운데 어디에 있으면 그건 역할이 아니라 무늬다
+                int bodyL = Integer.MAX_VALUE;
+                int bodyR = -1;
+                for (int c = 0; c < hj.width(); c++) {
+                    if (hj.at(c, frontR) != '.' && hj.at(c, frontR) != 's'
+                            && hj.at(c, frontR) != 'M' && hj.at(c, frontR) != 'N') {
+                        bodyL = Math.min(bodyL, c);
+                        bodyR = Math.max(bodyR, c);
+                    }
+                }
+                check("★★모서리 역할이 <b>몸체의 양 끝</b>에만 있다 (자리가 정한다 — "
+                                + corner + " vs 끝 " + bodyL + "·" + bodyR + ")",
+                        corner.size() == 2 && corner.get(0) == bodyL && corner.get(1) == bodyR,
+                        corner + " / " + bodyL + "," + bodyR);
+                // ★입구 옆은 <b>문설주 바로 바깥</b>에만
+                check("★★입구 옆 역할이 <b>문설주 바로 바깥</b>에만 있다 (" + adj + " vs 문설주 "
+                                + jamb2 + ")",
+                        adj.size() == 2 && jamb2.size() == 2
+                                && adj.get(0) == jamb2.get(0) - 1 && adj.get(1) == jamb2.get(1) + 1,
+                        adj + " / " + jamb2);
+                // ★역할이 달라도 <b>켜 수는 같아야</b> 한다 — 지붕이 앉는 높이는 하나다
+                int hP = hj.columnOf('P').stream().mapToInt(Blueprint.Course::count).sum();
+                int hC = hj.columnOf('C').stream().mapToInt(Blueprint.Course::count).sum();
+                int hA = hj.columnOf('A').stream().mapToInt(Blueprint.Course::count).sum();
+                check("★★역할이 달라도 <b>켜 수는 같다</b> (일반 " + hP + " · 모서리 " + hC
+                                + " · 입구 옆 " + hA + " — 다르면 지붕이 기운다)",
+                        hP == hC && hC == hA, hP + "/" + hC + "/" + hA);
+                // ★그래도 <b>형태는 달라야</b> 한다 — 같으면 역할을 나눈 뜻이 없다
+                check("★★세 역할의 <b>처방이 서로 다르다</b> (같으면 나눈 뜻이 없다)",
+                        !hj.columnOf('C').equals(hj.columnOf('P'))
+                                && !hj.columnOf('A').equals(hj.columnOf('P'))
+                                && !hj.columnOf('A').equals(hj.columnOf('C')), "");
+                // ★셋 다 공포가 걸려야 한다 (몸통 3켜 이상)
+                int anchored = 0;
+                for (char ch : new char[]{'P', 'C', 'A'}) {
+                    if (hj.columnOf(ch).stream().anyMatch(cs ->
+                            cs.material().contains("mangrove_log") && cs.count()
+                                    >= com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES)) {
+                        anchored++;
+                    }
+                }
+                check("★★세 역할 모두 <b>적주로 세어진다</b> (공포가 셋 다에 앉는다)",
+                        anchored == 3, anchored);
+            }
 
             // ══════ ★★★REF-2.5 <b>블록 조형</b> (사용자 2026-08-10) ══════
             //   「지금 그냥 색으로 나눈 것 같은데?」 — 맞는 감각이었다. 색만 갈면 흑백으로

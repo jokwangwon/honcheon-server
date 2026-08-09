@@ -162,6 +162,23 @@ columns:
   #     그러면 위쪽에도 기둥의 세로 리듬이 이어진다 (공포가 그 위에 또 한 벌 얹힌다).
   # ★REF-2.5 S3 — 도리를 <b>반블록</b>으로. 통짜 판 세 켜는 흑백에서 그냥 띠다.
   #   반블록이면 그 아래 반 칸이 비어 <b>기하가 만든 그림자 골</b>이 정면을 가로지른다.
+  # ★★★REF-3A 역할별 기둥 (사용자 확정 2026-08-10) — <b>반복을 자리가 깬다.</b>
+  #   지금까지 정면은 `A A A A | 중앙 | A A A A` 로 <b>모든 칸이 똑같았다.</b> 랜덤으로 깨면
+  #   잡티가 되므로, <b>건축 역할</b>로 깬다:
+  #       C 모서리     주두를 <b>두 켜</b>로 — 머리가 굵어 귀마루로 이어지는 끝을 잡는다
+  #       A 입구 옆    <b>보조 인방</b> 한 켜 — 중앙으로 갈수록 켜가 늘어 중심을 예고한다
+  #       P 일반       REF-2.5-S1R 기본형
+  #       중앙        J 문설주 · 문두 · 현판 자리 · 관 (이미 있다)
+  #   ★셋 다 켜 수는 11 로 같다 — 지붕이 앉는 높이는 하나여야 한다.
+  #   ★몸통은 넷 다 3켜 이상이라 공포 계약(적주 판정)이 그대로 걸린다.
+  "C": ["smooth_stone*2", "polished_andesite",
+        "stripped_mangrove_log*4",
+        "mangrove_stairs", "dark_oak_slab",
+        "dark_oak_planks", "dark_oak_log"]                   # 모서리 — 주두 두 켜
+  "A": ["smooth_stone*2", "polished_andesite",
+        "stripped_mangrove_log*4",
+        "mangrove_planks", "mangrove_stairs",
+        "dark_oak_planks", "dark_oak_log"]                   # 입구 옆 — 보조 인방
   "W": ["smooth_stone*3", "mangrove_planks", "plaster*3", "mangrove_planks",
         "mangrove_planks",
         "dark_oak_slab", "dark_oak_log"]                     # 회벽 — 인방 사이 3켜만
@@ -191,6 +208,8 @@ columns:
 #     그래서 적주가 월대를 밟고 서고, 그 뒤로 회벽이 물러난다 — 툇간처럼 읽힌다.
 depth:
   "P": 1
+  "C": 1
+  "A": 1
   "J": 1
   "W": 0
   "D": -1
@@ -216,7 +235,7 @@ plan: |
     .sssssssssssssssssssssssssssssssssssss
     .sMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMs
     .sMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMs
-    .sMNPWDPWDPWDPWDPWDPDWPDWPDWPDWPDWPNMs
+    .sMNCWDPWDPWDPWDPWDPDWPDWPDWPDWPDWCNMs
     .sMNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNMs
     .sMNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNMs
     .sMNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNMs
@@ -229,7 +248,7 @@ plan: |
     .sMNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNMs
     .sMNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNMs
     .sMNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNMs
-    .sMNPWDPWDPWDPWDPJOOOJPDWPDWPDWPDWPNMs
+    .sMNCWDPWDPWDPWDAJOOOJADWPDWPDWPDWCNMs
     .sMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMs
     .sMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMs
     .sMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMs
