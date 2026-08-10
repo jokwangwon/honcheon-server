@@ -35,12 +35,58 @@ public final class BlueprintBuilder {
     private BlueprintBuilder() {
     }
 
-    /** 조성 결과 — 로그가 읽는다 */
+    /**
+     * 조성 결과 — 로그가 읽는다.
+     *
+     * <p>★★★<b>덮임 감사</b> (Codex 권고 2026-08-10) — 「482/482 와 유출 0 은 <b>생성 성공</b>이지
+     * <b>최종 생존</b>을 보증하지 않는다」. 실제로 공포의 첫 단이 적주 몸통의 맨 윗 통나무를
+     * <b>덮고</b> 있었고, 도면 신고 7켜와 실물 6켜가 어긋났는데 <b>아무 눈도 못 잡았다</b>.
+     *
+     * <p>그래서 이제 <b>좌표마다 누가 썼는지</b>를 적고, <b>다른 부재</b>가 덮으면 센다.
+     * 신고는 숫자 하나가 아니라 <b>생성 / 생존 / 덮임</b> 셋이다.
+     */
     public static final class Count {
         public int cells;
         public int blocks;
         public int cleared;
         public int roofs;
+        /** 좌표 → 그 자리를 마지막으로 쓴 부재 */
+        public final java.util.Map<Long, String> claim = new java.util.HashMap<>();
+        /** 「다른 부재가 덮었다」 — 부재쌍별 횟수 */
+        public final java.util.Map<String, Integer> covered = new java.util.TreeMap<>();
+
+        void mark(int x, int y, int z, String member) {
+            long k = (((long) x & 0x3FFFFFF) << 38) | (((long) y & 0xFFF) << 26)
+                    | ((long) z & 0x3FFFFFF);
+            String prev = claim.put(k, member);
+            if (prev != null && !prev.equals(member)) {
+                covered.merge(prev + " ← " + member, 1, Integer::sum);
+            }
+        }
+
+        /**
+         * ★<b>의도된 결합</b> — 깊이 문법이 만드는 필연적 겹침이다 (문제가 아니다):
+         * 기단 단(N·F)과 몸체 칸이 같은 바닥 켜를 쓰고, 마감 조각이 문설주 위에 앉는다.
+         * 그 밖의 겹침은 <b>도면이 신고한 블록을 다른 부재가 덮은 것</b>이라 문제다.
+         */
+        private static boolean joined(String pair) {
+            return pair.contains("칸:N") || pair.contains("칸:F") || pair.contains("마감:");
+        }
+
+        /** 덮임 보고 — 신고는 숫자 하나가 아니라 <b>생성 / 결합 / 덮임</b> 셋이다 */
+        public String coverReport() {
+            int join = 0;
+            java.util.List<String> bad = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<String, Integer> e : covered.entrySet()) {
+                if (joined(e.getKey())) {
+                    join += e.getValue();
+                } else {
+                    bad.add(e.getKey() + " " + e.getValue());
+                }
+            }
+            return "결합 " + join + " · 덮임 "
+                    + (bad.isEmpty() ? "0" : String.join(" · ", bad));
+        }
     }
 
     /**
@@ -191,6 +237,7 @@ public final class BlueprintBuilder {
                 int tz = oz + d3[1] + tf.getModZ() * tr.depth();
                 stamp(world, tx, oy + tr.y(), tz, tr.material(), tf);
                 n.blocks++;
+                n.mark(tx, oy + tr.y(), tz, "마감:" + tr.id());
             }
         }
 
@@ -387,8 +434,16 @@ public final class BlueprintBuilder {
                     //   ★공포는 여전히 적주 머리에만 앉고 처마를 넘지 않는다 (계약 불변).
                     int groove = GROOVE;
                     int top = oy + roofBase - brk - groove;
+                    int postDep = bp.depthOf(bp.at(c, r));
                     for (int s2 = 0; s2 < brk; s2++) {
                         int reach = Math.min(s2 + 1, Math.max(1, eave));   // 처마에서 멈춘다
+                        // ★★덮임 감사가 잡은 것 (2026-08-10): 첫 단이 <b>적주가 이미 선 자리</b>에
+                        //   겹쳐 쓰고 있었다 (23회). 재료를 같게 해 눈에는 안 보였지만
+                        //   <b>도면이 신고한 블록을 다른 부재가 덮는</b> 상태였다.
+                        //   → 겹치면 <b>아예 안 쓴다.</b> 그 칸은 적주의 것이다.
+                        if (reach == postDep) {
+                            continue;
+                        }
                         // ★★★REF-1c-A 진범 (2026-08-09) — <b>공포는 좌우로 번지지 않는다.</b>
                         //   전에는 위 단이 좌우 ±1 로 퍼졌다. 그런데 본전 적주는 <b>3칸 주기</b>라
                         //   ±1 이면 3칸을 다 덮어 <b>이웃 공포끼리 손을 잡고</b> 정면 전체를
@@ -413,6 +468,7 @@ public final class BlueprintBuilder {
                                 world.getBlockAt(bx, top + s2, bz)
                                         .setType(Material.DARK_OAK_PLANKS, false);
                                 n.blocks++;
+                                n.mark(bx, top + s2, bz, "공포");
                                 continue;
                             }
                             //   ★★★기둥에 <b>선반이 붙어 보이던</b> 진범 (사용자 2026-08-10):
@@ -440,6 +496,7 @@ public final class BlueprintBuilder {
                             world.getBlockAt(bx, top + s2, bz)
                                     .setBlockData(stand(bd, nf), false);
                             n.blocks++;
+                            n.mark(bx, top + s2, bz, "공포");
                         }
                     }
                     // ★★★REF-3B-Q1 (Codex 반박 · 2026-08-10) — <b>입구 옆은 중앙으로 뻗는다.</b>
@@ -483,6 +540,7 @@ public final class BlueprintBuilder {
      */
     private static void stampColumn(World world, Blueprint bp, char ch, int x, int oy, int z,
                                     org.bukkit.block.BlockFace nf, Count n, int mode) {
+        String member = mode == 3 ? "바닥" : "칸:" + ch;
         int y = oy;
         for (Blueprint.Course course : bp.columnOf(ch)) {
             if (mode == 3 && !(course.material().contains("stone")
@@ -511,6 +569,7 @@ public final class BlueprintBuilder {
                     world.getBlockAt(x, y, z)
                             .setBlockData(stand(Bukkit.createBlockData(lm), nf), false);
                     n.blocks++;
+                    n.mark(x, y, z, member);
                 } else if ("air".equals(course.material())) {
                     // ★빈 켜도 찍는다 — 개구는 「안 짓는 것」이 아니라 「비우는 것」이다
                     world.getBlockAt(x, y, z).setType(Material.AIR, false);
@@ -518,6 +577,7 @@ public final class BlueprintBuilder {
                 } else {
                     stamp(world, x, y, z, course.material(), nf);
                     n.blocks++;
+                    n.mark(x, y, z, member);
                 }
             }
         }
