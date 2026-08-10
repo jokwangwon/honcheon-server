@@ -468,7 +468,7 @@ public final class BlueprintBuilder {
                                 world.getBlockAt(bx, top + s2, bz)
                                         .setType(Material.DARK_OAK_PLANKS, false);
                                 n.blocks++;
-                                n.mark(bx, top + s2, bz, "공포");
+                                n.mark(bx, top + s2, bz, "공포@" + nf.name().charAt(0));
                                 continue;
                             }
                             //   ★★★기둥에 <b>선반이 붙어 보이던</b> 진범 (사용자 2026-08-10):
@@ -496,7 +496,7 @@ public final class BlueprintBuilder {
                             world.getBlockAt(bx, top + s2, bz)
                                     .setBlockData(stand(bd, nf), false);
                             n.blocks++;
-                            n.mark(bx, top + s2, bz, "공포");
+                            n.mark(bx, top + s2, bz, "공포@" + nf.name().charAt(0));
                         }
                     }
                     // ★★★REF-3B-Q1 (Codex 반박 · 2026-08-10) — <b>입구 옆은 중앙으로 뻗는다.</b>
@@ -540,7 +540,9 @@ public final class BlueprintBuilder {
      */
     private static void stampColumn(World world, Blueprint bp, char ch, int x, int oy, int z,
                                     org.bukkit.block.BlockFace nf, Count n, int mode) {
-        String member = mode == 3 ? "바닥" : "칸:" + ch;
+        // ★★Codex 2026-08-10 — 부재 이름에 <b>면 방향</b>을 붙인다. 안 붙이면
+        //   서로 다른 면의 같은 글자가 부딪친 것(D@남 ← D@서)이 「D ← D」로 <b>숨는다</b>.
+        String member = mode == 3 ? "바닥" : "칸:" + ch + "@" + nf.name().charAt(0);
         int y = oy;
         for (Blueprint.Course course : bp.columnOf(ch)) {
             if (mode == 3 && !(course.material().contains("stone")

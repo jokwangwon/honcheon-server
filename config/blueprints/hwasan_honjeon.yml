@@ -217,6 +217,12 @@ columns:
   #   그래서 W 와 D 는 창턱(3켜째)·상인방(8켜째)을 <b>공유</b>하고 가운데 채움만 다르다.
   # ★창턱을 <b>통짜</b>로 (2026-08-10) — 반블록이면 툇간 앞에서 <b>떠 있는 선반</b>처럼 보인다.
   #   벽의 밑동은 <b>이어지는 하방</b>이어야 한다 (레퍼런스).
+  # ★★★Codex 처방 (2026-08-10) — 창호를 −1 로 전진시키자 네 면의 물러난 평면이
+  #   <b>모서리에서 만나</b> 벽이 창을 덮었다 (덮임 21). 장변(정면·후면)의 후퇴 창면은
+  #   그대로 잇고, <b>단변(측면)만 깊이 0 의 닫힌 되받이</b>로 끝낸다.
+  "Q": ["smooth_stone*3", "mangrove_planks", "plaster*4", "mangrove_planks",
+        "mangrove_planks",
+        "dark_oak_slab", "dark_oak_log"]                     # 측면 되받이 — 깊이 0
   "W": ["smooth_stone*3", "mangrove_planks", "plaster*4", "mangrove_planks",
         "mangrove_planks",
         "dark_oak_slab", "dark_oak_log"]                     # 회벽 — 인방 사이 3켜만
@@ -265,6 +271,7 @@ depth:
   "C": 1
   "A": 1
   "J": 1
+  "Q": 0
   "W": -1
   "D": -1
   "O": -1
@@ -291,19 +298,19 @@ plan: |
     .sssssssssssssssssssssssssssssssssssss
     .sRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
-    .sRNCDDDPDDDPDDDPWWWWWPDDDPDDDPDDDCNRs
-    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
+    .sRNCDDDPDDDPDDDPDDDDDPDDDPDDDPDDDCNRs
+    .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
-    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
-    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
-    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
     .sRNCDDDPDDDPDDDAJOOOJADDDPDDDPDDDCNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
