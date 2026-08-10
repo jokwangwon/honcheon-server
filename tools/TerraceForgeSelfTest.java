@@ -3809,7 +3809,24 @@ public final class TerraceForgeSelfTest {
                 int wrong = 0;
                 for (char ch : new char[]{'W', 'D'}) {
                     java.util.List<Blueprint.Course> col = hj.columnOf(ch);
+                    // ★★자를 넓혔다 (벽 6켜 · 2026-08-10) — 창호가 층으로 나뉘며
+                    //   <b>하부판</b>이 생겼다. 하부판은 가로보가 아니라 <b>창호의 일부</b>라
+                    //   dark_oak 계열이 맞다 (창살·창틀과 같은 무리).
+                    //   그래서 살창 언저리는 이 자가 안 잰다 — 재려면 「창호 안인가」를 먼저 묻는다.
+                    int fLo = -1;
+                    int fHi = -1;
                     for (int i = 0; i < col.size(); i++) {
+                        if ("lattice".equals(col.get(i).material())) {
+                            if (fLo < 0) {
+                                fLo = i;
+                            }
+                            fHi = i;
+                        }
+                    }
+                    for (int i = 0; i < col.size(); i++) {
+                        if (fLo >= 0 && i >= fLo - 2 && i <= fHi + 1) {
+                            continue;                    // 창호 조 안 — 이 자의 몫이 아니다
+                        }
                         String m = col.get(i).material();
                         if (m.contains("stone") || "lattice".equals(m) || m.contains("plaster")) {
                             continue;
