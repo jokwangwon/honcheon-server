@@ -3336,8 +3336,10 @@ public final class TerraceForgeSelfTest {
                 if (fc == '.' || fc == 'M' || fc == 'N' || fc == 'F' || fc == 'O') {
                     continue;                       // 마당·기단·중앙 개구는 뚫려야 맞다
                 }
-                // 기준면에 실제로 서는 처방 — 덧댐(+)이면 배경, 그 밖이면 제 처방
-                char plane = hj.depthOf(fc) > 0 ? hj.backingChar() : fc;
+                // ★★자를 고쳤다 (툇간 · 2026-08-10): 전에는 <b>기준면</b>이 닫혔는지 물었다.
+                //   툇간이 생기며 <b>기준면은 일부러 비운다</b> (기둥과 벽 사이의 빈 칸이 곧 툇간).
+                //   닫혀야 하는 것은 <b>물러난 벽 평면</b>이다 — 거기서 물어야 한다.
+                char plane = fc;
                 boolean planeSolid = false;
                 for (Blueprint.Course cs : hj.columnOf(plane)) {
                     if (!"air".equals(cs.material()) && !"lattice".equals(cs.material())) {
@@ -3352,9 +3354,21 @@ public final class TerraceForgeSelfTest {
                 }
             }
             check("★[눈의 눈] 본전 정면의 비개구 칸을 셌다", closed + holes > 0, closed + holes);
-            check("★★정면 기준면에 <b>세로 구멍이 없다</b> (하층은 폐쇄 전각이다 — 구멍 "
+            check("★★<b>물러난 벽 평면</b>에 세로 구멍이 없다 (툇간 뒤는 폐쇄 전각이다 — 구멍 "
                             + holes + "/" + (closed + holes) + ")",
                     holes == 0, holes + "/" + (closed + holes));
+            // ★툇간의 계약 — Codex 가 좌표로 적어 준 것
+            int postD = hj.depthOf('P');
+            int wallD = hj.depthOf('W');
+            int latD = hj.depthOf('D');
+            Blueprint.Roof rv = hj.roofs().get(0);
+            check("★★적주와 벽 사이가 <b>2</b> 다 (사이에 실제 빈 칸 하나 — 그것이 툇간)",
+                    postD - wallD >= 2, postD + " − " + wallD);
+            check("★★세 평면이다 (살창 < 회벽 < 적주 — " + latD + " < " + wallD + " < " + postD + ")",
+                    latD < wallD && wallD < postD, latD + "<" + wallD + "<" + postD);
+            check("★★공포가 밖으로 나갈 자리가 남는다 (처마 " + rv.eaveZ() + " − 적주 " + postD
+                            + " ≥ 1 — 기둥을 더 내보내면 이게 깨진다)",
+                    rv.eaveZ() - postD >= 1, rv.eaveZ() - postD);
 
             // ══════ ★★★REF-1c-A — 큰 면 셋 (사용자 확정 2026-08-09) ══════
             //   ①밝은 가로띠 ②관통 터널 ③계단식 검은 지붕 — 작은 장식보다 <b>면적</b>이 크다.

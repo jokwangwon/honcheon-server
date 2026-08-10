@@ -158,9 +158,24 @@ public final class BlueprintBuilder {
                     stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
                             z + nf.getModZ() * dep, nf, n, 0);
                 } else if (dep < 0) {
-                    stampColumn(world, bp, ch, x, oy, z, nf, n, 1);           // 기준면 = 창틀
-                    stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
-                            z + nf.getModZ() * dep, nf, n, 2);                // 안쪽 = 살창만
+                    // ★★★툇간 (사용자 2026-08-10 · Codex 검토) — 「앞으로 튀어나온 기둥이 벽과
+                    //   붙어 있어 튀어나옴은 보이지만 형태가 명확하지 않다. 오히려 한 칸 띄워져
+                    //   있는 게 낫지 않나」. 레퍼런스의 적주는 <b>돌바닥 위에 홀로 서고 벽이
+                    //   한 겹 물러나</b> 있다 — 자립 열주 + 물러난 벽 = <b>툇간</b>이다.
+                    //   ★기둥을 <b>내보내지</b> 않는다 (Codex 반론): 처마가 2 라 기둥을 +2 로
+                    //     빼면 공포가 밖으로 나갈 자리가 없어진다. 대신 <b>벽을 물린다</b> —
+                    //     적주 +1 · 툇간 0 · 회벽 −1 · 살창 −2 로 <b>세 평면 + 실제 빈 칸</b>.
+                    //   기준면에는 <b>바닥만</b> 남는다 (딛는 자리) — 벽은 통째로 안으로 간다.
+                    stampColumn(world, bp, ch, x, oy, z, nf, n, 3);           // 기준면 = 툇간 바닥
+                    if (dep <= -2) {
+                        stampColumn(world, bp, ch, x + nf.getModX(), oy,
+                                z + nf.getModZ(), nf, n, 1);                  // 벽 평면 = 창틀
+                        stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
+                                z + nf.getModZ() * dep, nf, n, 2);            // 그 뒤 = 살창만
+                    } else {
+                        stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
+                                z + nf.getModZ() * dep, nf, n, 0);            // 물러난 벽
+                    }
                 } else {
                     stampColumn(world, bp, ch, x, oy, z, nf, n, 0);
                 }
@@ -450,11 +465,16 @@ public final class BlueprintBuilder {
      * 기둥 처방 한 벌을 그 자리에 찍는다.
      *
      * @param mode 0 = 그대로 · 1 = <b>창틀만</b> (채움 켜를 비운다) · 2 = <b>채움 켜만</b>
+     *             · 3 = <b>바닥만</b> (맨 아래 석재 켜까지 — 툇간처럼 딛는 자리만 남긴다)
      */
     private static void stampColumn(World world, Blueprint bp, char ch, int x, int oy, int z,
                                     org.bukkit.block.BlockFace nf, Count n, int mode) {
         int y = oy;
         for (Blueprint.Course course : bp.columnOf(ch)) {
+            if (mode == 3 && !(course.material().contains("stone")
+                    || course.material().contains("andesite"))) {
+                return;                          // 바닥까지만 — 그 위는 물러난 벽의 것이다
+            }
             for (int k = 0; k < course.count(); k++, y++) {
                 boolean fill = "lattice".equals(course.material());
                 if (mode == 2 && !fill) {

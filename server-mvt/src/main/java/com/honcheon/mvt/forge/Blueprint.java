@@ -318,6 +318,12 @@ public final class Blueprint {
      * 못 찾으면 {@code 0} 을 돌려주고, 그러면 덧댐은 배경 없이 옛 동작(이동)과 같아진다.
      */
     public char backingChar() {
+        // ★★툇간이 생기며 뜻이 바뀌었다 (2026-08-10): 적주가 나간 자리 뒤는 이제 <b>벽이 아니라
+        //   바닥</b>이다 (기둥과 벽 사이가 비어 있어야 툇간이다). 그래서 도면이 직접 선언한다.
+        Character declared = bayRoles.get("overlay_backing");
+        if (declared != null) {
+            return declared;
+        }
         for (Map.Entry<Character, List<Course>> e : columns.entrySet()) {
             if (depthOf(e.getKey()) != 0) {
                 continue;
@@ -567,8 +573,14 @@ public final class Blueprint {
                 throw new IllegalStateException("설계도 " + nm + " — depth 의 열쇠는 한 글자여야 한다: " + k);
             }
             int dep = ((Number) v).intValue();
-            if (dep < -1 || dep > 1) {
-                throw new IllegalStateException("설계도 " + nm + " — 입면 깊이는 -1..+1 이다: "
+            // ★★자를 고쳤다 (툇간 · 2026-08-10) — 전에는 −1..+1 로 <b>양쪽을 같게</b> 묶었다.
+            //   그 자의 까닭은 「더 나오면 벽이 아니라 다른 건물이 된다」 — <b>바깥</b> 이야기다.
+            //   안으로 물리는 것은 건물을 키우지 않는다. 오히려 레퍼런스의
+            //   <b>적주 / 회벽 / 살창 세 평면</b>은 −2 가 있어야 선다 (툇간).
+            //   → 바깥은 그대로 +1, 안쪽만 −2 까지 연다.
+            if (dep < -2 || dep > 1) {
+                throw new IllegalStateException("설계도 " + nm + " — 입면 깊이는 -2..+1 이다"
+                        + " (바깥으로 더 나오면 다른 건물이 되고, 안으로는 툇간이 세 평면을 쓴다): "
                         + k + "=" + dep + " (더 나오면 벽이 아니라 다른 건물이 된다)");
             }
             depths.put(k.charAt(0), dep);
