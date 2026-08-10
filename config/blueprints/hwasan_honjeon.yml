@@ -121,8 +121,13 @@ meta:
   #   이 항목을 안 적은 도면은 한 블록도 안 바뀐다 — 기본값이 종전 값이다.
   palette:
     post: red_terracotta          # 적주 — 인방(갈색)에서 <b>먼저</b> 떨어져 나와야 한다
-    lattice: spruce_trapdoor      # 살창 — 검은 구멍이 아니라 <b>어두운 창호</b>로 읽히게
-    lattice_accent: spruce_planks # W3 중앙 강조켜
+    #   ★1차(spruce)는 Codex 불합격 — 「검은 구멍은 사라졌지만 격자가 인방·가로살과
+    #     합쳐져 <b>밝은 판벽</b>처럼 읽힌다」. 반대편으로 넘어간 것이다.
+    #     명도를 한 단계만 내리되 dark_oak 의 구멍 효과는 피하는 중간값으로 간다.
+    lattice: jungle_trapdoor      # 살창 — 인방보다 <b>한 단계 어둡되</b> 구멍은 아니게
+    #   ★강조는 <b>남기되 어둡게</b> (Codex) — 없애면 W3 가 W2 와 같아진다
+    #     (중앙 강조 한 켜가 W3 를 W2 와 가르는 유일한 것이다).
+    lattice_accent: dark_oak_slab # W3 중앙 강조켜 — 구분은 남기고 밝은 띠만 누른다
   bracket_shape: contour
   bracket: elaborate         # ★D2 ⑥ 3단 — 강당 2단보다 <b>높다</b>. 더 나오지는 않는다
 
