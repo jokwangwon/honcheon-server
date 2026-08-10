@@ -127,6 +127,14 @@ columns:
   # ★REF-2.5 S5 — 기단이 <b>full block 케이크 3단</b>으로 보이지 않게 맨 밖에
   #   <b>반블록 몰딩</b> 한 바퀴를 두른다. 단 높이·문지방은 건드리지 않는다.
   "s": ["stone_brick_slab"]                                  # 기단 몰딩 (맨 바깥 치마)
+  # ★★★기단 난간 (사용자 「의도」 · Codex 검토 2026-08-10) — <b>사람이 걷는 자리라
+  #   가장자리가 분절된다.</b> 장식이 아니라 <b>낙차가 있는 가장자리</b>에 서는 부재다.
+  #   ★어느 단인가 (Codex): <b>M</b> 이다. M 바깥선이 월대와 마당 사이의 <b>실제 외곽 경계</b>다.
+  #     N 바깥선은 아래 M 으로 이어지는 <b>내부 단차</b>라, 거기 난간을 두면 월대 횡단을 가른다.
+  #   ★중앙 전면은 <b>끊는다</b> — 계단이 올라올 자리이고, 축선을 막으면 안 된다.
+  "R": ["smooth_stone", "stone_brick_wall"]                  # 난간 — 기단 M 의 바깥 테두리
+  "E": ["smooth_stone", "stone_brick_wall",
+        "polished_andesite_slab"]                            # 엄지기둥 — 난간이 끊기는 두 끝
   "M": ["smooth_stone"]                                      # 기단 1단 (맨 아래·가장 넓다)
   "N": ["smooth_stone*2"]                                    # 기단 2단 (가운데)
   "F": ["smooth_stone*3"]                                    # 몸체 안 바닥 = 기단 3단 (맨 위)
@@ -209,9 +217,13 @@ columns:
   #     <b>7호 실측의 3칸 주기가 깨졌고</b> (기둥 12개 · 어긋난 틈 3) 눈이 잡았다.
   #     문틀은 <b>어두운 목재</b>다 — 앞으로 한 칸 나가므로 문이 그만큼 뒤에 앉아
   #     관통 터널이 아니라 <b>들어간 입구</b>가 된다.
-  "J": ["smooth_stone*3", "dark_oak_log*5",
-        "mangrove_planks",
-        "dark_oak_slab", "dark_oak_log"]                     # 문설주 (어두운 문틀)
+  # ★★A+J 결속 (Codex 2026-08-10) — 새 겹기둥은 필요 없다. `A16+J17` · `J21+A22` 가
+  #   이미 <b>정확한 구조적 쌍</b>이다. 다만 한 쌍으로 읽히려면 <b>재료가 아니라 윤곽</b>을
+  #   맞춰야 한다 — 밑동·머리 높이와 <b>주두 윤곽</b>을 A 와 같게 (계단 + 반블록 두 켜).
+  #   ★J 의 암색은 유지한다. 붉게 만들면 7호 실측의 <b>3칸 주기</b>가 다시 깨진다 (한 번 물렸다).
+  "J": ["smooth_stone*3", "dark_oak_log*4",
+        "dark_oak_stairs", "dark_oak_slab",
+        "dark_oak_planks", "dark_oak_log"]                   # 문설주 — A 와 같은 주두 윤곽
   "O": ["smooth_stone*3", "air*5",
         "mangrove_planks",
         "dark_oak_slab", "dark_oak_log"]                     # ★중앙 대문 (걸어 지난다)
@@ -237,6 +249,8 @@ depth:
   "O": -1
   "M": 0
   "s": 0
+  "R": 0
+  "E": 0
   "N": 0
   "F": 0
 
@@ -254,27 +268,27 @@ plan: |
     ......................................
     ......................................
     .sssssssssssssssssssssssssssssssssssss
-    .sMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMs
-    .sMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMs
-    .sMNCWDPWDPWDPWDPWDPDWPDWPDWPDWPDWCNMs
-    .sMNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNMs
-    .sMNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNMs
-    .sMNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNMs
-    .sMNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNMs
-    .sMNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNMs
-    .sMNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNMs
-    .sMNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNMs
-    .sMNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNMs
-    .sMNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNMs
-    .sMNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNMs
-    .sMNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNMs
-    .sMNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNMs
-    .sMNCWDPWDPWDPWDAJOOOJADWPDWPDWPDWCNMs
-    .sMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMs
-    .sMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMs
-    .sMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMs
-    .sMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMs
-    .sMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMs
+    .sRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRs
+    .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
+    .sRNCWDPWDPWDPWDPWDPDWPDWPDWPDWPDWCNRs
+    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNCWDPWDPWDPWDAJOOOJADWPDWPDWPDWCNRs
+    .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
+    .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
+    .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs
+    .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs
+    .sRRRRRRRRRRRRRREMMMMMERRRRRRRRRRRRRRs
     .sssssssssssssssssssssssssssssssssssss
     ......................................
     ......................................

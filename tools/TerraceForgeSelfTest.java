@@ -46,7 +46,10 @@ public final class TerraceForgeSelfTest {
         java.util.List<Blueprint.Course> col = bp.columnOf(ch);
         int shaft = -1;
         for (int i = 0; i < col.size(); i++) {
-            if (col.get(i).material().contains("mangrove_log") && col.get(i).count() >= 3) {
+            // ★★자를 고쳤다 — 이 저장소에서 <b>다섯 번째</b> 같은 병이다.
+            //   「mangrove_log 인가」로 몸통을 찾으니 어두운 참나무 문설주(J)의 몸통을 못 봤다
+            //   (주두를 0 으로 셌다). 물어야 할 것은 재료가 아니라 <b>세로로 이어진 통나무</b>다.
+            if (col.get(i).material().endsWith("_log") && col.get(i).count() >= 3) {
                 shaft = i;
             }
         }
@@ -3357,6 +3360,67 @@ public final class TerraceForgeSelfTest {
             check("★★<b>물러난 벽 평면</b>에 세로 구멍이 없다 (툇간 뒤는 폐쇄 전각이다 — 구멍 "
                             + holes + "/" + (closed + holes) + ")",
                     holes == 0, holes + "/" + (closed + holes));
+            // ══════ ★★★기단 난간 · 겹기둥 결속 (Codex 좌표 계약 2026-08-10) ══════
+            {
+                java.util.List<int[]> rail = new java.util.ArrayList<>();
+                java.util.List<int[]> newel = new java.util.ArrayList<>();
+                for (int r2 = 0; r2 < hj.depth(); r2++) {
+                    for (int c2 = 0; c2 < hj.width(); c2++) {
+                        if (hj.at(c2, r2) == 'R') {
+                            rail.add(new int[]{c2, r2});
+                        }
+                        if (hj.at(c2, r2) == 'E') {
+                            newel.add(new int[]{c2, r2});
+                        }
+                    }
+                }
+                check("★[눈의 눈] 난간 칸을 찾았다", rail.size() > 40, rail.size());
+                // ★난간은 <b>낙차가 있는 가장자리</b>에만 — 바깥이 더 낮아야 한다
+                int bad = 0;
+                for (int[] rc : rail) {
+                    int c2 = rc[0];
+                    int r2 = rc[1];
+                    boolean onDrop = false;
+                    for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                        int nx = c2 + d[0];
+                        int ny = r2 + d[1];
+                        char o = nx < 0 || ny < 0 || nx >= hj.width() || ny >= hj.depth()
+                                ? '.' : hj.at(nx, ny);
+                        if (o == 's' || o == '.') {
+                            onDrop = true;             // 바깥에 더 낮은 몰딩/마당이 있다
+                        }
+                    }
+                    if (!onDrop) {
+                        bad++;
+                    }
+                }
+                check("★★난간이 <b>낙차가 있는 가장자리</b>에만 선다 (안쪽에 두면 월대 횡단을 "
+                                + "가른다 — 어긋난 칸 " + bad + ")", bad == 0, bad);
+                // ★중앙 진입대는 <b>안 막는다</b> — 계단이 올라올 자리이고 축선이다
+                int block = 0;
+                for (int c2 = hj.axisCol() - 2; c2 <= hj.axisCol() + 2; c2++) {
+                    for (int r2 = 20; r2 <= 25; r2++) {
+                        if (r2 < hj.depth() && hj.at(c2, r2) == 'R') {
+                            block++;
+                        }
+                    }
+                }
+                check("★★난간이 <b>중앙 축선을 막지 않는다</b> (계단이 올라올 자리 — 막은 칸 "
+                                + block + ")", block == 0, block);
+                check("★★난간이 끊기는 두 끝에 <b>엄지기둥</b>이 있다 (끊긴 자리가 그냥 "
+                                + "잘린 것처럼 보이지 않게 — " + newel.size() + "개)",
+                        newel.size() == 2, newel.size());
+                // ★겹기둥 결속 — 재료는 안 맞추되 <b>주두 윤곽</b>과 켜 수가 같아야 한다
+                int capA = capitalCourses(hj, 'A');
+                int capJ = capitalCourses(hj, 'J');
+                check("★★A+J 가 <b>같은 주두 윤곽</b>이다 (한 쌍으로 읽히려면 재료가 아니라 "
+                                + "윤곽을 맞춘다 — A " + capA + " · J " + capJ + ")",
+                        capA == capJ && capA == 2, capA + "/" + capJ);
+                check("★★그래도 <b>J 의 암색은 유지</b>한다 (붉게 만들면 3칸 주기가 다시 깨진다)",
+                        hj.columnOf('J').stream().noneMatch(cs ->
+                                cs.material().contains("mangrove_log")), "");
+            }
+
             // ★툇간의 계약 — Codex 가 좌표로 적어 준 것
             int postD = hj.depthOf('P');
             int wallD = hj.depthOf('W');
@@ -3602,8 +3666,10 @@ public final class TerraceForgeSelfTest {
                 int bodyL = Integer.MAX_VALUE;
                 int bodyR = -1;
                 for (int c = 0; c < hj.width(); c++) {
-                    if (hj.at(c, frontR) != '.' && hj.at(c, frontR) != 's'
-                            && hj.at(c, frontR) != 'M' && hj.at(c, frontR) != 'N') {
+                    // ★난간(R)·엄지기둥(E) 은 <b>기단</b> 부재다 — 몸체의 끝이 아니다
+                    char bc = hj.at(c, frontR);
+                    if (bc != '.' && bc != 's' && bc != 'M' && bc != 'N'
+                            && bc != 'R' && bc != 'E') {
                         bodyL = Math.min(bodyL, c);
                         bodyR = Math.max(bodyR, c);
                     }
