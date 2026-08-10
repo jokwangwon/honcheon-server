@@ -250,6 +250,158 @@ def main():
     print('※ 문턱은 여기 없다. 수치·순위·효과량만 찍는다 — 판정은 사람이 한다.')
 
 
+def diff_mask(with_p, without_p, thr=14):
+    """★★★<b>게임에게 직접 실루엣을 묻는다</b> (2026-08-10).
+
+    해석 투영으로 실루엣을 만들려던 것은 <b>실패했다</b> — 모형이 렌더와 안 맞았고
+    (겹쳐 보니 빨간 선이 건물이 아니라 절벽을 지났다), FOV·피치·요를 한 장에 맞추는 것은
+    계측기가 아니라 <b>곡선 맞추기</b>다. Codex 경고 그대로 「계측기는 결정론적으로 틀릴 수 있다」.
+
+    그래서 카메라를 흉내 내지 않는다. <b>건물이 있는 컷과 지운 컷을 같은 자리에서 찍어
+    화소로 뺀다.</b> 달라진 화소가 곧 실루엣이다 — 투영식이 필요 없고, 오차가 0 이다."""
+    a = Image.open(with_p).convert('RGB')
+    b = Image.open(without_p).convert('RGB').resize(a.size)
+    pa, pb = a.load(), b.load()
+    m = Image.new('1', a.size, 0)
+    pm = m.load()
+    n = 0
+    for y in range(a.size[1]):
+        for x in range(a.size[0]):
+            r1, g1, b1 = pa[x, y]
+            r2, g2, b2 = pb[x, y]
+            if abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2) > thr * 3:
+                pm[x, y] = 1
+                n += 1
+    return largest_blob(m), n
+
+
+def largest_blob(m):
+    """★두 컷 사이엔 건물 말고도 <b>구름이 움직인다</b>. 그래서 뺀 화소에 하늘이 섞인다
+    (조밀 구간이 y0 부터 잡혔다 — 실측으로 드러났다).
+    건물은 <b>한 덩어리</b>이고 구름은 흩어진 줄무늬다 → 가장 큰 연결 덩어리만 남긴다."""
+    w, h = m.size
+    pm = m.load()
+    seen = bytearray(w * h)
+    best, bestn = None, 0
+    for sy in range(h):
+        for sx in range(w):
+            if not pm[sx, sy] or seen[sy * w + sx]:
+                continue
+            stack = [(sx, sy)]
+            seen[sy * w + sx] = 1
+            cur = []
+            while stack:
+                x, y = stack.pop()
+                cur.append((x, y))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h and pm[nx, ny] and not seen[ny * w + nx]:
+                        seen[ny * w + nx] = 1
+                        stack.append((nx, ny))
+            if len(cur) > bestn:
+                best, bestn = cur, len(cur)
+    out = Image.new('1', m.size, 0)
+    po = out.load()
+    for x, y in best or []:
+        po[x, y] = 1
+    return out
+
+
+def contrast_diff(with_p, without_p):
+    """실루엣 안(건물)과 <b>그 자리에 원래 있던 배경</b>의 명도를 견준다.
+    ★배경 표본을 옆에서 뜨지 않는다 — <b>지운 컷의 같은 화소</b>가 진짜 배경이다."""
+    m, _raw = diff_mask(with_p, without_p)
+    pmc = m.load()
+    n = sum(1 for yy in range(m.size[1]) for xx in range(m.size[0]) if pmc[xx, yy])
+    a = Image.open(with_p).convert('L')
+    b = Image.open(without_p).convert('L').resize(a.size)
+    pa, pb, pm = a.load(), b.load(), m.load()
+    ins, bgs = [], []
+    for y in range(a.size[1]):
+        for x in range(a.size[0]):
+            if pm[x, y]:
+                ins.append(pa[x, y])
+                bgs.append(pb[x, y])
+    import statistics as st
+    mi, mb = sum(ins) / len(ins), sum(bgs) / len(bgs)
+    print(f'== 배경 대비 (게임이 직접 낸 실루엣 · {n:,} 화소) ==')
+    print(f'   건물 명도        {mi:6.1f}  (편차 {st.pstdev(ins):.1f})')
+    print(f'   그 자리 배경 명도 {mb:6.1f}  (편차 {st.pstdev(bgs):.1f})')
+    print(f'   ─ 차이 {abs(mi - mb):.1f}/255 · <b>Michelson {abs(mi - mb) / (mi + mb):.3f}</b>')
+    # ★성긴 화소를 걷어낸다 — 렌더 잡음 몇 점이 얇은 대역을 통째로 흔든다
+    dense = [y for y in range(a.size[1])
+             if sum(1 for x in range(a.size[0]) if pm[x, y]) >= 30]
+    lo, hi = min(dense), max(dense)
+    print(f'   (조밀 구간 y {lo}~{hi} — 성긴 줄은 뺀다)')
+    print('   높이대별 (위→아래)')
+    for k in range(5):
+        y0 = lo + (hi - lo) * k // 5
+        y1 = lo + (hi - lo) * (k + 1) // 5
+        i2 = [pa[x, y] for y in range(y0, y1) for x in range(a.size[0]) if pm[x, y]]
+        b2 = [pb[x, y] for y in range(y0, y1) for x in range(a.size[0]) if pm[x, y]]
+        if i2:
+            print(f'      {k + 1}/5  건물 {sum(i2)/len(i2):5.1f} · 배경 {sum(b2)/len(b2):5.1f}'
+                  f' · 차 {abs(sum(i2)/len(i2) - sum(b2)/len(b2)):5.1f}')
+    return 0
+
+
+def contrast(path):
+    """★제3 원인 — <b>가림·배경 대비</b>. 계측기가 이미 실루엣을 알고 있으므로,
+    실제 렌더에서 그 <b>경계 안팎</b>의 명도를 직접 견준다 (분할이 필요 없다).
+
+    바깥 표본은 실루엣에서 <b>여러 칸 떨어진</b> 곳을 쓴다 — 경계 바로 밖은 처마 그늘이라
+    「배경」이 아니라 건물의 일부처럼 읽힌다."""
+    im = Image.open(path).convert('L').resize((W, H), Image.LANCZOS)
+    px = im.load()
+    mk = mask_of(honjeon()).load()
+    ins, out = [], []
+    for y in range(H):
+        xs = [x for x in range(W) if mk[x, y]]
+        if not xs:
+            continue
+        lo, hi = min(xs), max(xs)
+        for d in (1, 2, 3):                      # 안쪽 — 실루엣 가장자리 바로 안
+            if lo + d <= hi:
+                ins.append(px[lo + d, y])
+                ins.append(px[hi - d, y])
+        for d in (6, 9, 12):                     # 바깥 — 그늘을 피해 충분히 떨어져서
+            if lo - d >= 0:
+                out.append(px[lo - d, y])
+            if hi + d < W:
+                out.append(px[hi + d, y])
+    if not ins or not out:
+        print('   표본을 못 잡았다')
+        return 1
+    mi, mo = sum(ins) / len(ins), sum(out) / len(out)
+    import statistics as st
+    print(f'== 배경 대비 ({path}) ==')
+    print(f'   실루엣 안쪽 명도  {mi:6.1f}  (표본 {len(ins):,} · 편차 {st.pstdev(ins):.1f})')
+    print(f'   바깥 배경 명도    {mo:6.1f}  (표본 {len(out):,} · 편차 {st.pstdev(out):.1f})')
+    print(f'   ─ 차이 {abs(mi - mo):.1f} / 255  ·  <b>Michelson 대비 '
+          f'{abs(mi - mo) / max(1e-9, (mi + mo)):.3f}</b>')
+    # 켜별로 — 어디가 특히 묻히는가
+    print('   높이대별 (위→아래 · 지붕에서 기단까지)')
+    rows = [y for y in range(H) if any(mk[x, y] for x in range(W))]
+    band = max(1, len(rows) // 5)
+    for b in range(5):
+        seg = rows[b * band:(b + 1) * band] or [rows[-1]]
+        i2, o2 = [], []
+        for y in seg:
+            xs = [x for x in range(W) if mk[x, y]]
+            if not xs:
+                continue
+            lo, hi = min(xs), max(xs)
+            i2 += [px[min(W - 1, lo + 2), y], px[max(0, hi - 2), y]]
+            if lo - 9 >= 0:
+                o2.append(px[lo - 9, y])
+            if hi + 9 < W:
+                o2.append(px[hi + 9, y])
+        if i2 and o2:
+            a, c = sum(i2) / len(i2), sum(o2) / len(o2)
+            print(f'      {b + 1}/5  안 {a:5.1f} · 밖 {c:5.1f} · 차 {abs(a - c):5.1f}')
+    return 0
+
+
 def selftest():
     """★★<b>눈을 시험하는 눈</b> — 미학 문턱이 아니라 <b>계측기</b>를 잰다 (Codex 권고).
     「계측기는 아주 결정론적으로 틀릴 수 있다」 — 통짜 지붕 오류가 그것이었다."""
@@ -324,4 +476,11 @@ def selftest():
 
 
 if __name__ == '__main__':
-    sys.exit(selftest() if '--selftest' in sys.argv else main())
+    if '--selftest' in sys.argv:
+        sys.exit(selftest())
+    if '--diff' in sys.argv:
+        i = sys.argv.index('--diff')
+        sys.exit(contrast_diff(sys.argv[i + 1], sys.argv[i + 2]))
+    if '--contrast' in sys.argv:
+        sys.exit(contrast(sys.argv[sys.argv.index('--contrast') + 1]))
+    sys.exit(main())
