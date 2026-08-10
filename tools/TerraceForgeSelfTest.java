@@ -3781,8 +3781,9 @@ public final class TerraceForgeSelfTest {
                         hj.columnOf('s').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
                         "");
                 // S4 공포 — 계단 + 반블록 윤곽
-                check("★★S4 공포 첫 단은 <b>통짜</b>다 (계단이면 기둥에 선반이 붙어 보인다)",
-                        bbSrc3.contains("s2 == 0 ? Material.MANGROVE_PLANKS"), "");
+                check("★★S4 공포 첫 단이 <b>몸통과 같은 재료</b>다 (다르면 기둥에 블럭이 붙어 보이고 "
+                            + "신고한 몸통 켜 수가 실물과 어긋난다)",
+                        bbSrc3.contains("s2 == 0 ? Material.STRIPPED_MANGROVE_LOG"), "");
                 check("★★계단의 방향도 <b>자리가 정한다</b> (도면은 네 벽에 다 쓰인다)",
                         bbSrc3.contains("st.setFacing(face.getOppositeFace())"), "");
                 // S6 중앙 — 벽 0 · 문설주 +1 · 문두 +2 세 겹
