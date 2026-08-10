@@ -415,8 +415,13 @@ public final class BlueprintBuilder {
                                 n.blocks++;
                                 continue;
                             }
+                            //   ★★★기둥에 <b>선반이 붙어 보이던</b> 진범 (사용자 2026-08-10):
+                            //     첫 단이 <b>계단</b>이라 적주 머리에서 옆으로 튀어나왔다.
+                            //     레퍼런스의 공포는 기둥 위 <b>보 구역</b>에 있지 몸통에 붙지 않는다.
+                            //     → 첫 단은 <b>통짜</b>로 둔다 (기둥이 그대로 이어져 보이게).
+                            //     벌어짐은 처마 평면에 있는 위 두 단이 맡는다.
                             BlockData bd = Bukkit.createBlockData(
-                                    s2 == 0 ? Material.MANGROVE_STAIRS
+                                    s2 == 0 ? Material.MANGROVE_PLANKS
                                             : s2 == 1 ? Material.DARK_OAK_SLAB
                                             //   ★REF-3B 3단째 = <b>서까래 신발</b>. 처마를 키우지
                                             //     않는다. 3단이 세로로 세 켜일 필요는 없다 —

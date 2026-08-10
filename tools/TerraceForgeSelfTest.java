@@ -3415,7 +3415,11 @@ public final class TerraceForgeSelfTest {
                 int capJ = capitalCourses(hj, 'J');
                 check("★★A+J 가 <b>같은 주두 윤곽</b>이다 (한 쌍으로 읽히려면 재료가 아니라 "
                                 + "윤곽을 맞춘다 — A " + capA + " · J " + capJ + ")",
-                        capA == capJ && capA == 2, capA + "/" + capJ);
+                        // ★★자를 고쳤다 (기둥 재설계 2026-08-10): 「두 켜여야 한다」는
+                        //   그때의 <b>처방</b>이지 계약이 아니었다. 기둥에서 튀어나오는 켜를
+                        //   걷어내며 주두가 한 켜가 됐다 — 계약은 <b>A 와 J 가 같은가</b>이지
+                        //   <b>몇 켜인가</b>가 아니다.
+                        capA == capJ && capA >= 1, capA + "/" + capJ);
                 check("★★그래도 <b>J 의 암색은 유지</b>한다 (붉게 만들면 3칸 주기가 다시 깨진다)",
                         hj.columnOf('J').stream().noneMatch(cs ->
                                 cs.material().contains("mangrove_log")), "");
@@ -3722,7 +3726,9 @@ public final class TerraceForgeSelfTest {
                 java.util.Set<String> shaped = new java.util.LinkedHashSet<>();
                 int cube = 0;
                 int shape = 0;
-                for (char ch : new char[]{'P', 'W', 'D', 'J', 'O', 'M', 'N', 'F', 's'}) {
+                // ★자를 넓혔다 (2026-08-10): 난간 R·엄지기둥 E 가 생겼는데 목록에 없어
+                //   「모양 있는 켜」를 덜 셌다. 난간도 몸체가 아니라 <b>형태 언어</b>의 일부다.
+                for (char ch : new char[]{'P', 'W', 'D', 'J', 'O', 'M', 'N', 'F', 's', 'R', 'E'}) {
                     for (Blueprint.Course cs : hj.columnOf(ch)) {
                         String m = cs.material();
                         if ("air".equals(m) || "lattice".equals(m)) {
@@ -3775,8 +3781,8 @@ public final class TerraceForgeSelfTest {
                         hj.columnOf('s').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
                         "");
                 // S4 공포 — 계단 + 반블록 윤곽
-                check("★★S4 공포가 <b>계단형 윤곽</b>이다 (판재 더미가 아니다)",
-                        bbSrc3.contains("s2 == 0 ? Material.MANGROVE_STAIRS"), "");
+                check("★★S4 공포 첫 단은 <b>통짜</b>다 (계단이면 기둥에 선반이 붙어 보인다)",
+                        bbSrc3.contains("s2 == 0 ? Material.MANGROVE_PLANKS"), "");
                 check("★★계단의 방향도 <b>자리가 정한다</b> (도면은 네 벽에 다 쓰인다)",
                         bbSrc3.contains("st.setFacing(face.getOppositeFace())"), "");
                 // S6 중앙 — 벽 0 · 문설주 +1 · 문두 +2 세 겹
