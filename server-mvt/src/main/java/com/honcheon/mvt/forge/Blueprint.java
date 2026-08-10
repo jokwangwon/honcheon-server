@@ -173,6 +173,7 @@ public final class Blueprint {
     private final String bracket;
     private final String bracketShape;
     private final Map<String, Character> bayRoles;
+    private final int postPeriod;
     private final List<Trim> trims;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
@@ -181,7 +182,9 @@ public final class Blueprint {
                       String rank, int courtyardRow, String usage, String family,
                       Map<Character, Integer> depths, int foundation,
                       String winFamily, String winDensity, String bracket, String bracketShape,
-                      Map<String, Character> bayRoles, List<Trim> trims) {
+                      Map<String, Character> bayRoles, int postPeriod,
+                      List<Trim> trims) {
+        this.postPeriod = postPeriod;
         this.bayRoles = bayRoles;
         this.bracketShape = bracketShape;
         this.trims = trims;
@@ -384,6 +387,11 @@ public final class Blueprint {
      * 도면이 {@code meta.bay_roles} 로 어느 글자가 어느 역할인지 알려 주고,
      * 코드는 <b>역할</b>만 안다.
      */
+    /** ★적주 주기 — <b>도면이 신고한다</b>. 안 적으면 0 (신고 없음). */
+    public int postPeriod() {
+        return postPeriod;
+    }
+
     public char bayRole(String role) {
         Character c = bayRoles.get(role);
         return c == null ? 0 : c;
@@ -595,7 +603,8 @@ public final class Blueprint {
                 String.valueOf(win.getOrDefault("family", "W2")),
                 String.valueOf(win.getOrDefault("density", "medium")),
                 String.valueOf(meta.getOrDefault("bracket", "none")),
-                String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles, trims);
+                String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles,
+                ((Number) meta.getOrDefault("post_period", 0)).intValue(), trims);
     }
 
     private static Object req(Map<String, Object> m, String k) {

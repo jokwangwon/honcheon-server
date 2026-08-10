@@ -106,6 +106,9 @@ meta:
   #   공유 코드라 강당까지 따라 바뀌고 있었다 (강당 서까래 줄이 공포에 끊겼다 — 실측).
   #   D2 로 승인된 건물은 본전 회차에 따라 움직이면 안 된다.
   # ★REF-3B-Q1 — 역할 글자를 <b>도면이 선언</b>한다. 코드는 역할만 알고 글자는 모른다.
+  # ★주기를 도면이 <b>선언</b>한다 (Codex 2026-08-10) — 눈이 최빈값을 읽으면
+  #   「균일하기만 하면」 어떤 주기도 통과한다. 신고한 값과 실물이 같은지를 물어야 한다.
+  post_period: 4
   bay_roles:
     corner: "C"
     entrance_adjacent: "A"
@@ -223,10 +226,14 @@ columns:
   #   창턱이 반블록이라 창 아래에 <b>턱과 그늘</b>이 생긴다.
   # ★창호를 <b>층으로 나눈다</b> — 아래에서 위로: 창턱 · 하부판 · 중방 · 살창 2 · 상인방.
   #   전에는 5켜라 살창 3켜뿐이었고 나머지를 인방 둘이 다 먹었다.
-  "D": ["smooth_stone*3", "mangrove_planks", "dark_oak_planks", "mangrove_planks",
-        "lattice*2", "mangrove_planks",
+  # ★★★Codex 디자인 판정 (2026-08-10 · 디자인 평가 전담) — 레퍼런스와 가장 크게 다른 것:
+  #   <b>우리는 「회벽이 넓고 창이 작다」, 레퍼런스는 「창이 넓고 회벽이 작다」.</b>
+  #   처방 그대로: 하부판·중방을 걷고 <b>창을 2켜 → 4켜</b>로, 회벽은 <b>위 한 켜 띠</b>만,
+  #   창호를 −2 에서 <b>−1 로 전진</b>시킨다 (벽 높이를 안 늘리고 창 면적을 두 배로).
+  "D": ["smooth_stone*3", "mangrove_planks",
+        "lattice*4", "plaster",
         "mangrove_planks",
-        "dark_oak_slab", "dark_oak_log"]                     # 격자창 — 창턱·인방이 문틀을 이룬다
+        "dark_oak_slab", "dark_oak_log"]                     # 창호 — 칸을 거의 다 채운다
   # ★★REF-1c-A 문설주 — 중앙 5칸을 <b>개구 3 + 좌우 문틀 1+1</b> 로 가른다.
   #   ★<b>적주(P)를 쓰지 않는다.</b> 처음엔 P 로 세웠더니 col16·17 과 21·22 가 붙어
   #     <b>7호 실측의 3칸 주기가 깨졌고</b> (기둥 12개 · 어긋난 틈 3) 눈이 잡았다.
@@ -259,7 +266,7 @@ depth:
   "A": 1
   "J": 1
   "W": -1
-  "D": -2
+  "D": -1
   "O": -1
   "M": 0
   "s": 0
@@ -284,7 +291,7 @@ plan: |
     .sssssssssssssssssssssssssssssssssssss
     .sRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
-    .sRNCWDPWDPWDPWDPWDPDWPDWPDWPDWPDWCNRs
+    .sRNCDDDPDDDPDDDPWWWWWPDDDPDDDPDDDCNRs
     .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
@@ -297,7 +304,7 @@ plan: |
     .sRNWFFFFFFFFFFFFFFFFFFFFFFFFFFFFFWNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
-    .sRNCWDPWDPWDPWDAJOOOJADWPDWPDWPDWCNRs
+    .sRNCDDDPDDDPDDDAJOOOJADDDPDDDPDDDCNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs

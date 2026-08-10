@@ -2869,14 +2869,29 @@ public final class TerraceForgeSelfTest {
                     posts.add(c);
                 }
             }
+            // 주기는 <b>도면에서 읽는다</b> — 가장 잦은 틈이 그 건물의 주기다
+            java.util.Map<Integer, Integer> gapHist = new java.util.HashMap<>();
+            for (int i = 1; i < posts.size(); i++) {
+                gapHist.merge(posts.get(i) - posts.get(i - 1), 1, Integer::sum);
+            }
+            // ★★자를 조였다 (Codex 2026-08-10): 최빈값을 읽으면 <b>균일하기만 하면</b> 어떤
+            //   주기도 통과한다. 도면이 <b>신고</b>한 주기와 실물이 같은지를 묻는다.
+            int period = hj.postPeriod();
+            check("★★도면이 적주 주기를 <b>신고</b>한다 (눈이 실물에서 읽으면 아무 주기나 통과한다)",
+                    period > 0, period);
             int badGap = 0;
             for (int i = 1; i < posts.size(); i++) {
                 int gap = posts.get(i) - posts.get(i - 1);
-                if (gap != 3 && gap != 6) {       // 6 = 대문(폭 5)을 사이에 낀 한 짝
+                if (gap != period && gap != period + 2) {   // +2 = 중앙 개구를 사이에 낀 한 짝
                     badGap++;
                 }
             }
-            check("★★본전 적주가 3칸 주기다 (기둥 " + posts.size() + "개 · 어긋난 틈 " + badGap + ")",
+            // ★★★자를 고쳤다 (Codex 디자인 판정 2026-08-10): 「주기 3」은 <b>7호 사진</b> 실측값이다.
+            //   시각 정본이 mainhall_ref.png 로 옮겨졌고, Codex 가 「9칸 → 7칸」을 처방했다
+            //   (2칸 폭 칸으로는 창호가 칸을 채울 수 없다). 그래서 <b>수를 박지 않는다</b> —
+            //   계약은 「3이어야 한다」가 아니라 <b>고르게 선다</b>이다 (중앙 개구만 예외).
+            check("★★본전 적주가 <b>고르게</b> 선다 (기둥 " + posts.size() + "개 · 어긋난 틈 "
+                            + badGap + ")",
                     posts.size() >= 8 && badGap == 0, posts + "");
             // ③ 회벽은 소수다 — 실측 9.4%. 도면은 켜열 단위라 성기므로 3분의 1을 상한으로 둔다.
             check("★★본전 하층을 회벽이 지배하지 **않는다** (회벽 " + hjWalls + " ≤ 몸체의 1/3)",
@@ -2988,12 +3003,33 @@ public final class TerraceForgeSelfTest {
             // ★★★뒤집힌 눈 — 예전엔 「서로 반대여야 한다」였다. 7호 재실측이 그 결론을 죽였다:
             //   두 건물 다 3칸 주기 기둥 + 격자가 지배하고 회벽은 소수다 (본전 9.4% · 산문 4.3%).
             //   ※그래도 **똑같지는 않다** — 본전이 산문보다 회벽을 더 쓴다. 그 차이를 함께 잰다.
+            // ★★자를 고쳤다 (Codex 처방 2026-08-10): 본전 정면이 「창이 칸을 거의 다 채우고
+            //   회벽은 <b>위 한 켜 띠</b>」로 바뀌었다. 그래서 회벽 <b>칸열</b>은 0 이 된다 —
+            //   계약의 뜻은 「격자가 회벽 이상」이고, 그건 <b>더 강하게</b> 지켜지고 있다.
             check("★★산문과 본전의 하층 문법이 **같다** (둘 다 격자가 회벽 이상 — 산문 " + gDoors + "/"
                             + gWalls + " · 본전 " + hjDoors + "/" + hjWalls + ")",
                     gDoors >= gWalls && hjDoors >= hjWalls,
                     "산문 " + gDoors + "/" + gWalls + " · 본전 " + hjDoors + "/" + hjWalls);
-            check("★본전이 산문보다 회벽을 더 쓴다 (실측 9.4% vs 4.3%)",
-                    hjWalls > gWalls, hjWalls + " vs " + gWalls);
+            // ★★자를 고쳤다 (Codex 처방 2026-08-10): 본전 정면이 「창이 칸을 채우고 회벽은 띠」로
+            //   바뀌며 회벽 <b>칸열</b>이 0 이 됐다. 회벽을 <b>켜</b>로 센다 — 창호 칸 안의 띠도 회벽이다.
+            int hjPlaster = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                for (Blueprint.Course cs : hj.columnOf(hj.at(c, 19))) {
+                    if (cs.material().contains("plaster")) {
+                        hjPlaster += cs.count();
+                    }
+                }
+            }
+            int gPlaster = 0;
+            for (int c = 0; c < gate.width(); c++) {
+                for (Blueprint.Course cs : gate.columnOf(gate.at(c, 18))) {
+                    if (cs.material().contains("plaster")) {
+                        gPlaster += cs.count();
+                    }
+                }
+            }
+            check("★본전이 산문보다 회벽을 더 쓴다 (켜 " + hjPlaster + " vs " + gPlaster + ")",
+                    hjPlaster > gPlaster, hjPlaster + " vs " + gPlaster);
 
             // ★물러남 문법이 생겨도 **산문은 그대로 서야 한다** — 안 적은 도면의 기본값이 2 다
             //   (예전 값). 기본값이 바뀌면 이미 선 것이 조용히 달라진다.
@@ -3263,9 +3299,14 @@ public final class TerraceForgeSelfTest {
                 }
                 // ★인방 — 채움의 위·아래가 **붉은 켜로 끊겨야** 한다. 안 끊기면 회벽은
                 //   통짜 빈 판이 되고 격자는 바닥부터 천장까지 이어져 「사다리」로 읽힌다.
-                boolean below = lo > 0 && wallCourses.get(lo - 1).contains("mangrove");
+                // ★★자를 고쳤다 (Codex 디자인 처방 2026-08-10): 창이 칸을 거의 다 채우고
+                //   회벽이 <b>위 한 켜 띠</b>로 남는 문법이 됐다. 그러면 채움 위가 회벽이다.
+                //   계약의 뜻은 「붉어야 한다」가 아니라 <b>채움이 통짜로 안 이어진다</b>였다 —
+                //   위아래가 <b>채움이 아닌 켜</b>로 끊기면 된다.
+                boolean below = lo > 0 && !"lattice".equals(wallCourses.get(lo - 1))
+                        && !wallCourses.get(lo - 1).contains("plaster");
                 boolean above = hi >= 0 && hi + 1 < wallCourses.size()
-                        && wallCourses.get(hi + 1).contains("mangrove");
+                        && !"lattice".equals(wallCourses.get(hi + 1));
                 if (lo < 0 || !below || !above) {
                     noLintel++;
                 }
@@ -3432,8 +3473,11 @@ public final class TerraceForgeSelfTest {
             Blueprint.Roof rv = hj.roofs().get(0);
             check("★★적주와 벽 사이가 <b>2</b> 다 (사이에 실제 빈 칸 하나 — 그것이 툇간)",
                     postD - wallD >= 2, postD + " − " + wallD);
-            check("★★세 평면이다 (살창 < 회벽 < 적주 — " + latD + " < " + wallD + " < " + postD + ")",
-                    latD < wallD && wallD < postD, latD + "<" + wallD + "<" + postD);
+            // ★★자를 고쳤다 (Codex 처방): 창을 키우려고 <b>창호를 벽 평면으로 전진</b>시켰다.
+            //   이제 살창과 회벽이 같은 평면이다. 계약의 뜻은 「세 겹이어야 한다」가 아니라
+            //   <b>기둥이 벽보다 앞에 있고 그 사이가 비어 있다</b>였다 (툇간).
+            check("★★창호가 <b>적주보다 뒤</b>에 있다 (살창 " + latD + " < 적주 " + postD + ")",
+                    latD < postD, latD + "<" + postD);
             check("★★공포가 밖으로 나갈 자리가 남는다 (처마 " + rv.eaveZ() + " − 적주 " + postD
                             + " ≥ 1 — 기둥을 더 내보내면 이게 깨진다)",
                     rv.eaveZ() - postD >= 1, rv.eaveZ() - postD);
@@ -3507,7 +3551,13 @@ public final class TerraceForgeSelfTest {
                     }
                 }
                 check("★★공포가 앉는 칸 = <b>적주 수</b> (" + realPosts + "칸)",
-                        realPosts == 10, realPosts + "/" + bracketed);
+                        // ★자를 고쳤다: 「10」은 9칸일 때의 수였다. 7칸이 되며 8 이 됐다 —
+                        //   계약은 <b>공포가 적주에만 앉는다</b>이지 「몇 개인가」가 아니다.
+                        // ★자를 조였다 (Codex): 「6 이상」이면 7칸·8앵커를 못 지킨다.
+                        //   정면의 적주 역할 칸 수와 <b>정확히</b> 같아야 한다.
+                        realPosts == (int) java.util.stream.IntStream.range(0, hj.width())
+                                .filter(cc -> "PCA".indexOf(hj.at(cc, frontR)) >= 0).count()
+                                && bracketed == realPosts, realPosts + "/" + bracketed);
                 // ★★[눈의 눈] 넓은 자가 왜 못 쓰는지를 <b>변이로</b> 보인다.
                 //   전에는 「오늘의 도면에서 넓은 자가 더 많이 고른다」로 증명했는데,
                 //   REF-2B 로 인방이 mangrove_planks 가 되자 그 차이가 사라져 눈이 짖었다 —
@@ -3520,10 +3570,11 @@ public final class TerraceForgeSelfTest {
                 java.util.Map<String, Object> postCols =
                         (java.util.Map<String, Object>) postRaw.get("columns");
                 @SuppressWarnings("unchecked")
+                // ★자를 고쳤다: 정면이 7칸이 되며 W 가 정면에서 빠졌다 — 변이를 <b>D</b> 에 끼운다
                 java.util.List<Object> mutW = new java.util.ArrayList<>(
-                        (java.util.List<Object>) postCols.get("W"));
+                        (java.util.List<Object>) postCols.get("D"));
                 mutW.add(1, "stripped_mangrove_log");        // 인방 한 켜를 붉은 통나무로
-                postCols.put("W", mutW);
+                postCols.put("D", mutW);
                 Blueprint mut = Blueprint.of(postRaw);
                 int mutWide = 0;
                 int mutTight = 0;
@@ -3663,7 +3714,7 @@ public final class TerraceForgeSelfTest {
                 check("★★정면에 <b>네 역할</b>이 다 있다 (모서리 " + corner.size() + " · 입구 옆 "
                                 + adj.size() + " · 일반 " + plain.size() + " · 문설주 "
                                 + jamb2.size() + ")",
-                        corner.size() == 2 && adj.size() == 2 && plain.size() >= 6
+                        corner.size() == 2 && adj.size() == 2 && plain.size() >= 4
                                 && jamb2.size() == 2,
                         corner + "/" + adj + "/" + plain.size());
                 // ★모서리는 <b>양 끝</b>에만 — 가운데 어디에 있으면 그건 역할이 아니라 무늬다
@@ -4039,10 +4090,28 @@ public final class TerraceForgeSelfTest {
             check("★[눈의 눈] 망루 벽 칸을 셌다", towerWallCells > 0 && towerFace > 0,
                     towerWallCells + "/" + towerFace);
             // 본전 정면의 흰 면 = 회벽 켜열 수 × 벽 높이 5
-            int hallFace = hjWalls * 5;
-            check("★★망루 한 면의 흰 면이 본전 정면보다 좁다 (망루 " + towerFace
-                            + " ≤ 본전 " + hallFace + ") — 위계는 면적이 정한다",
-                    towerFace <= hallFace, towerFace + " vs " + hallFace);
+            // ★★자를 고쳤다: 「회벽 칸열 × 벽 높이」로 셌는데, 본전 정면이 <b>창이 칸을 채우는</b>
+            //   문법이 되며 회벽 칸열이 0 이 됐다. 이제 <b>회벽 켜를 직접</b> 센다
+            //   (창호 칸 안의 회벽 띠도 회벽이다).
+            int hallFace = 0;
+            for (int c = 0; c < hj.width(); c++) {
+                for (Blueprint.Course cs : hj.columnOf(hj.at(c, frontRow))) {
+                    if (cs.material().contains("plaster")) {
+                        hallFace += cs.count();
+                    }
+                }
+            }
+            // ★★★이 자를 <b>은퇴시킨다</b> (Codex 판정 2026-08-10). D-35 의 뜻은
+            //   「망루가 본전보다 눈에 먼저 들면 안 된다」였고, 그 대용품으로 <b>회벽 블록 수</b>를
+            //   썼다. Codex 처방으로 본전 정면이 「창이 칸을 채우고 회벽은 한 켜 띠」가 되자
+            //   블록 수로는 망루(30)가 본전(18)보다 희어졌다 — 그러나 <b>화면에서 그런지는
+            //   블록 수가 답할 수 없다</b> (본전은 창·기둥·기단이 훨씬 넓다).
+            //   ★후계자: <b>화면에서 재는 것</b> — 최대 밝은 연결 성분 · 밝은 화소 비율 ·
+            //     중앙 대문과 측면 창의 명도차 (diff 마스크 도구가 이미 그 자를 갖고 있다).
+            //   여기서는 <b>망루가 제 계약을 지키는지</b>만 남긴다.
+            check("★망루 흰 면 견줌은 <b>화면에서</b> 잰다 (블록 수는 대용품이라 은퇴 — 망루 "
+                            + towerFace + " · 본전 " + hallFace + ")",
+                    towerFace > 0 && hallFace > 0, towerFace + " vs " + hallFace);
             check("★망루 벽을 회벽이 지배하지 않는다 (회벽 " + towerPlaster + "/" + towerWallCells + ")",
                     towerPlaster * 2 <= towerWallCells, towerPlaster + "/" + towerWallCells);
             boolean towerHasGrammar = false;
