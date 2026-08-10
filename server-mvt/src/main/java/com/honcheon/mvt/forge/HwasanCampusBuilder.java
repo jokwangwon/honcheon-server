@@ -777,6 +777,45 @@ public final class HwasanCampusBuilder {
         if (ridgeLen > 0) {
             ridgeTrim(world, pad, x0, x1, cy, z0, z1, ridgeLen, tally);
         }
+        cornerTail(world, pad, x0, x1, cy, z0, z1, tally);
+    }
+
+    /**
+     * ★★★REF-3B-Q2 <b>추녀 꼬리</b> (사용자 확정 · Codex 권고 2026-08-10).
+     *
+     * <p>지붕을 키우지 않고 <b>모서리 끝 윤곽만</b> 세운다. 수평으로 뚝 끊긴 처마 끝이 아니라,
+     * 네 귀에서 <b>부재가 한 번 더 내려앉는</b> 모습이 아래·옆에서 보여야 한다.
+     *
+     * <p>★<b>어느 좌표계에 붙이는가가 회귀를 가른다</b> (Codex): 몸체 모서리에 붙이면
+     * 처마 돌출이 바뀔 때마다 연쇄로 어긋난다. 그래서 <b>지붕의 실현 외곽 링</b>
+     * {@code (x0,z0)-(x1,z1)} 에 붙인다 — 층간(37×18)과 대지붕(33×14)은 <b>각각 제 링</b>을 쓴다.
+     *
+     * <p>★<b>추가 돌출 0.</b> 두 칸 모두 실현 상자 <b>안</b>이다 (모서리 자신과 한 칸 안쪽 대각).
+     * 밖으로 나가면 {@link #put} 이 던진다 — 경계에 맞추는 silent clamp 는 쓰지 않는다.
+     */
+    private static void cornerTail(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
+                                   int z0, int z1, Tally tally) {
+        if (x1 - x0 < 4 || z1 - z0 < 4) {
+            return;                      // 꼬리를 놓을 자리가 없는 작은 지붕
+        }
+        for (int sx : new int[]{-1, 1}) {
+            for (int sz : new int[]{-1, 1}) {
+                int cx = sx < 0 ? x0 : x1;
+                int cz = sz < 0 ? z0 : z1;
+                // ① 꼬리 머리 — 처마 모서리 바로 아래 (서까래 자리를 <b>추녀가 가져간다</b>)
+                org.bukkit.block.data.type.Stairs st =
+                        (org.bukkit.block.data.type.Stairs)
+                                Material.DARK_OAK_STAIRS.createBlockData();
+                st.setFacing(sx < 0 ? org.bukkit.block.BlockFace.EAST
+                        : org.bukkit.block.BlockFace.WEST);   // 오르는 쪽이 안쪽 (규약 그대로)
+                if (pad.contains(cx, cz)) {
+                    world.getBlockAt(cx, cy - 1, cz).setBlockData(st, false);
+                    tally.blocks++;
+                }
+                // ② 꼬리 끝 — 한 칸 안쪽 대각 · 한 켜 아래로 내려앉는다
+                put(world, pad, cx - sx, cy - 2, cz - sz, Material.DARK_OAK_SLAB, tally);
+            }
+        }
     }
 
     /**
@@ -1632,6 +1671,17 @@ public final class HwasanCampusBuilder {
      */
     public static void rafters(World world, TerraceForge.Pad pad, int x0, int x1, int eaveY,
                                int z0, int z1, Tally tally) {
+        rafters(world, pad, x0, x1, eaveY, z0, z1, false, tally);
+    }
+
+    /**
+     * @param cornerTail 네 귀를 <b>추녀에게 넘기는가</b>. ★REF-3B-Q2 — 모서리는 서까래가 아니라
+     *                   <b>추녀의 자리</b>다. 처음엔 서까래가 나중에 놓여 꼬리 머리를 덮었다
+     *                   (층간 0/4). 다만 이 양보는 <b>추녀를 놓는 지붕만</b> 한다 — 안 그러면
+     *                   강당처럼 추녀가 없는 건물의 모서리 서까래가 <b>사라진다.</b>
+     */
+    public static void rafters(World world, TerraceForge.Pad pad, int x0, int x1, int eaveY,
+                               int z0, int z1, boolean cornerTail, Tally tally) {
         int y = eaveY - 1;
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {
@@ -1640,6 +1690,9 @@ public final class HwasanCampusBuilder {
                     continue;                       // 처마 밑 띠만 (안쪽은 실내다)
                 }
                 boolean corner = (x == x0 || x == x1) && (z == z0 || z == z1);
+                if (corner && cornerTail) {
+                    continue;                       // ★모서리는 추녀의 자리다
+                }
                 // 한 칸 걸러 서까래 — 나머지는 도리(판)로 이어 「빗살」이 보이게
                 boolean rafter = corner || Math.floorMod(x + z, 2) == 0;
                 put(world, pad, x, y, z,

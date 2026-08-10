@@ -3800,6 +3800,27 @@ public final class TerraceForgeSelfTest {
                                 + " < 층간 처마 " + rf1.baseY() + ")",
                         ct.y() < rf1.baseY(), ct.y() + " vs " + rf1.baseY());
             }
+            // ★★★REF-3B-Q2 추녀 꼬리 — <b>어느 좌표계에 붙였는가</b>가 회귀를 가른다 (Codex).
+            String hcb5 = java.nio.file.Files.readString(java.nio.file.Path.of(
+                    "server-mvt/src/main/java/com/honcheon/mvt/forge/HwasanCampusBuilder.java"));
+            check("★★추녀 꼬리가 <b>지붕 실현 외곽 링</b>에 붙는다 (몸체 모서리에 붙이면 "
+                            + "처마가 바뀔 때 연쇄로 어긋난다)",
+                    hcb5.contains("cornerTail(world, pad, x0, x1, cy, z0, z1, tally)")
+                            && hcb5.contains("int cx = sx < 0 ? x0 : x1;"), "");
+            check("★★추녀 꼬리가 <b>추가 돌출 0</b> 이다 (두 칸 모두 실현 상자 안 — 모서리와 "
+                            + "한 칸 안쪽 대각)",
+                    hcb5.contains("cx - sx, cy - 2, cz - sz"), "");
+            check("★★층간·대지붕이 <b>각각 제 링</b>을 쓴다 (sweepRoofGrand 안에서 부른다)",
+                    hcb5.indexOf("cornerTail") > hcb5.indexOf("sweepRoofGrand"), "");
+            // ★모서리는 서까래가 아니라 <b>추녀의 자리</b>다 — 다만 추녀를 놓는 지붕만 양보한다
+            check("★★모서리를 <b>추녀에게 넘긴다</b> (안 넘기면 서까래가 꼬리 머리를 덮는다)",
+                    hcb5.contains("if (corner && cornerTail)")
+                            && hcb5.contains("★모서리는 추녀의 자리다"), "");
+            check("★★그 양보는 <b>추녀를 놓는 지붕만</b> 한다 (강당 모서리 서까래가 사라지면 안 된다)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                    + "BlueprintBuilder.java")).contains("rez, rf.grand(), tally)"),
+                    "");
             check("★★귀마루는 <b>지붕을 새로 들어 올리지 않는다</b> (귀솟음이 쥔 첫 칸을 안 건드린다)",
                     java.nio.file.Files.readString(java.nio.file.Path.of(
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"

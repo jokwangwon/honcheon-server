@@ -228,7 +228,7 @@ public final class BlueprintBuilder {
                 int rez = rf.grand() ? rf.eaveZ() : rf.eave();
                 HwasanCampusBuilder.rafters(world, pad,
                         ox + bx0 - rex, ox + bx1 + rex, oy + rf.baseY(),
-                        oz + bz0 - rez, oz + bz1 + rez, tally);
+                        oz + bz0 - rez, oz + bz1 + rez, rf.grand(), tally);
             }
             n.roofs++;
             if (rf.hasUpper()) {
