@@ -175,6 +175,7 @@ public final class Blueprint {
     private final Map<String, Character> bayRoles;
     private final int postPeriod;
     private final List<Trim> trims;
+    private final Map<String, String> palette;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
@@ -183,7 +184,8 @@ public final class Blueprint {
                       Map<Character, Integer> depths, int foundation,
                       String winFamily, String winDensity, String bracket, String bracketShape,
                       Map<String, Character> bayRoles, int postPeriod,
-                      List<Trim> trims) {
+                      List<Trim> trims, Map<String, String> palette) {
+        this.palette = palette;
         this.postPeriod = postPeriod;
         this.bayRoles = bayRoles;
         this.bracketShape = bracketShape;
@@ -397,6 +399,76 @@ public final class Blueprint {
         return c == null ? 0 : c;
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ★★★REF-2C 팔레트 (Codex 판정 · 2026-08-10)
+    // ═══════════════════════════════════════════════════════════════════
+    /**
+     * <b>도면이 선언하는 재료</b> — 코드가 건물 이름을 보고 고르지 않는다.
+     *
+     * <p>Codex 가 「본전에만」 색을 갈라고 했을 때, 코드에 <code>if (본전)</code> 을
+     * 심는 길과 도면에 <code>meta.palette</code> 를 여는 길이 있었다. 앞의 길은
+     * 「이름·재료로 구조를 고르지 마라」는 이 프로젝트의 계율을 정면으로 어긴다 —
+     * 이름은 바뀌고 팔레트도 바뀌지만 <b>구조는 안 바뀌기</b> 때문이다.
+     *
+     * <p>기본값은 <b>지금까지의 값 그대로</b>다. 그래서 이 항목을 안 적은 도면
+     * (산문·강당·생활관·암자·창고…)은 한 블록도 안 바뀐다 — 전파는 Codex 가
+     * 따로 지시할 때 도면마다 연다.
+     *
+     * @param role {@code post} 적주 몸통 · {@code lattice} 살창 · {@code lattice_accent}
+     *             W3 중앙 강조켜
+     */
+    public String palette(String role, String fallback) {
+        String v = palette.get(role);
+        return v == null || v.isBlank() ? fallback : v;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ★★★적주의 <b>구조적</b> 정의 — 한 곳에만 둔다 (2026-08-10 · REF-2C)
+    // ═══════════════════════════════════════════════════════════════════
+    /**
+     * <b>몸통</b>이 앉은 켜의 자리 — 재료 이름이 아니라 <b>런</b>으로 찾는다.
+     *
+     * <p>이 저장소에서 같은 병이 <b>여섯 번</b> 났다. 마지막이 가장 컸다: REF-2C 로 적주가
+     * {@code stripped_mangrove_log} → {@code red_terracotta} 가 되자, 「mangrove_log 를
+     * 포함하는가」로 적주를 고르던 <b>빌더 자신</b>이 눈멀어 공포가 한 칸도 안 앉게 됐다.
+     * 자가 아니라 <b>조성이</b> 재료 이름에 얹혀 있었던 것이다.
+     *
+     * <p>정의: 세로로 {@link BlueprintBuilder#POST_MIN_COURSES} 켜 이상 이어진 한 재료의 런 중,
+     * <b>기단(석재)도 아니고 처방(회벽·살창·빈칸)도 아닌</b> 가장 위의 것.
+     * 팔레트는 바뀌고 구조는 안 바뀐다.
+     *
+     * @return 몸통 켜의 자리, 없으면 −1
+     */
+    public static int shaftIndex(List<Course> col) {
+        int at = -1;
+        for (int i = 0; i < col.size(); i++) {
+            Course cs = col.get(i);
+            if (cs.count() < BlueprintBuilder.POST_MIN_COURSES) {
+                continue;
+            }
+            String m = cs.material();
+            if (m.contains("stone") || m.contains("andesite")) {
+                continue;                                   // 기단·주초는 몸통이 아니다
+            }
+            if ("air".equals(m) || "plaster".equals(m) || "lattice".equals(m)) {
+                continue;                                   // 처방이지 재료가 아니다
+            }
+            at = i;
+        }
+        return at;
+    }
+
+    /** 이 글자의 칸이 <b>적주</b>인가 — 몸통이 있으면 적주다 (글자도 재료도 안 본다) */
+    public boolean isPost(char ch) {
+        return shaftIndex(columnOf(ch)) >= 0;
+    }
+
+    /** 이 글자의 <b>몸통 재료</b> — 도면에서 읽는다 (자·조성 어디에도 이름을 안 박기 위해) */
+    public String shaftMaterial(char ch) {
+        int i = shaftIndex(columnOf(ch));
+        return i < 0 ? "" : columnOf(ch).get(i).material();
+    }
+
     public boolean bracketContour() {
         return "contour".equalsIgnoreCase(bracketShape);
     }
@@ -528,6 +600,10 @@ public final class Blueprint {
                     String.valueOf(m.getOrDefault("material_family", "cobbled_deepslate"))));
         });
 
+        Map<String, String> palette = new LinkedHashMap<>();
+        ((Map<String, Object>) meta.getOrDefault("palette", Map.of()))
+                .forEach((k, v) -> palette.put(k, String.valueOf(v)));
+
         Map<String, Character> bayRoles = new LinkedHashMap<>();
         ((Map<String, Object>) meta.getOrDefault("bay_roles", Map.of())).forEach((k, v) -> {
             String sv = String.valueOf(v);
@@ -604,7 +680,7 @@ public final class Blueprint {
                 String.valueOf(win.getOrDefault("density", "medium")),
                 String.valueOf(meta.getOrDefault("bracket", "none")),
                 String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles,
-                ((Number) meta.getOrDefault("post_period", 0)).intValue(), trims);
+                ((Number) meta.getOrDefault("post_period", 0)).intValue(), trims, palette);
     }
 
     private static Object req(Map<String, Object> m, String k) {

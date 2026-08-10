@@ -41,18 +41,70 @@ public final class TerraceForgeSelfTest {
     private static int passed;
     private static final List<String> failures = new ArrayList<>();
 
+    /**
+     * <b>적주 몸통</b>이 앉은 켜의 자리 — 재료 이름이 아니라 <b>구조</b>로 찾는다.
+     *
+     * <p>★이 저장소에서 <b>여섯 번째</b> 같은 병이었다. REF-2C 로 적주가
+     * {@code stripped_mangrove_log} → {@code red_terracotta} 가 되자
+     * 「mangrove_log 인가」·「_log 로 끝나는가」로 몸통을 찾던 자 여섯이 한꺼번에 눈멀었다.
+     * 조성은 멀쩡한데 <b>자가 팔레트에 얹혀 있었다.</b>
+     *
+     * <p>몸통의 구조적 정의: 세로로 {@code POST_MIN_COURSES} 켜 이상 이어진 한 재료의 런 중,
+     * <b>기단(석재)도 아니고 처방(회벽·살창·빈칸)도 아닌</b> 가장 위의 것.
+     * 팔레트를 몇 번 갈아도 이 정의는 안 바뀐다 — <b>팔레트는 바뀌고 구조는 안 바뀐다.</b>
+     *
+     * @return 몸통 켜의 자리, 없으면 −1
+     */
+    private static int shaftIndex(java.util.List<Blueprint.Course> col) {
+        // ★자는 조성과 <b>같은 정의</b>를 써야 한다. 두 벌을 두면 언젠가 어긋나고,
+        //   그때 자는 <b>실물이 아닌 자기 자신</b>을 지키게 된다.
+        return Blueprint.shaftIndex(col);
+    }
+
+    /** 이 칸이 <b>적주</b>인가 — 몸통이 있으면 적주다 (글자도 재료도 안 본다) */
+    private static boolean isPost(java.util.List<Blueprint.Course> col) {
+        return shaftIndex(col) >= 0;
+    }
+
+    /** 이 칸의 몸통 재료 — <b>도면에서 읽는다</b>. 자 안에 재료 이름을 안 박기 위해서다 */
+    private static String shaftMaterial(java.util.List<Blueprint.Course> col) {
+        int i = shaftIndex(col);
+        return i < 0 ? "" : col.get(i).material();
+    }
+
+    /**
+     * 이 적주 런이 <b>중앙 대문에 바로 접한</b> 겹기둥인가.
+     *
+     * <p>이름(`J`)으로도 <b>축에서 몇 칸</b>으로도 묻지 않는다. 거리로 물으면 개구 폭이
+     * 3 에서 5 로 바뀌는 순간 자가 죽는다 — 그건 또 하나의 「오늘의 값에 얹힌 자」다.
+     * 물어야 할 것은 <b>이 런과 축 사이에 다른 적주가 없는가</b>다. 없으면 이 런은
+     * 대문을 바로 끼고 선 것이고, 있으면 대문과 무관한 자리에서 겹친 것이다.
+     */
+    private static boolean flanksAxis(Blueprint bp, int row, int a, int b) {
+        int axis = bp.axisCol();
+        if (a <= axis && axis <= b) {
+            return false;                       // 축을 걸친 런은 「양측 인접쌍」이 아니다
+        }
+        int inner = axis > b ? b : a;           // 축을 향한 끝
+        int lo = Math.min(inner, axis);
+        int hi = Math.max(inner, axis);
+        for (int c = lo + 1; c < hi; c++) {
+            if (bp.isPost(bp.at(c, row))) {
+                return false;                   // 사이에 다른 적주가 있다 = 대문에 접하지 않는다
+            }
+        }
+        return true;
+    }
+
+    private static final int POST_MIN = com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES;
+
     /** 적주 몸통 위 · 도리 아래에 몇 켜가 있는가 = <b>주두의 두께</b> (REF-3B 밀도 사다리) */
     private static int capitalCourses(Blueprint bp, char ch) {
         java.util.List<Blueprint.Course> col = bp.columnOf(ch);
-        int shaft = -1;
-        for (int i = 0; i < col.size(); i++) {
-            // ★★자를 고쳤다 — 이 저장소에서 <b>다섯 번째</b> 같은 병이다.
-            //   「mangrove_log 인가」로 몸통을 찾으니 어두운 참나무 문설주(J)의 몸통을 못 봤다
-            //   (주두를 0 으로 셌다). 물어야 할 것은 재료가 아니라 <b>세로로 이어진 통나무</b>다.
-            if (col.get(i).material().endsWith("_log") && col.get(i).count() >= 3) {
-                shaft = i;
-            }
-        }
+        // ★★자를 고쳤다 — 다섯 번째엔 「mangrove_log 인가」를 「_log 로 끝나는가」로 넓혔고,
+        //   여섯 번째(REF-2C)에 적주가 통나무가 아니게 되자 그것마저 눈멀었다.
+        //   이제 {@link #shaftIndex} 하나로 모은다 — 재료가 아니라 <b>런</b>을 본다.
+        int shaft = shaftIndex(col);
         if (shaft < 0) {
             return 0;
         }
@@ -1099,7 +1151,10 @@ public final class TerraceForgeSelfTest {
             //   한 켜라 모든 벽 칸이 적주로 세어졌고, 공포가 정면 전 폭에 깔려 「밝은 띠」가 됐다.
             //   ★이제 <b>실제로 몇 칸이 골라지는지를 센다.</b> 글자가 아니라 <b>결과</b>를 묻는다.
             check("★★D2⑥ 공포가 <b>적주 머리 위에서만</b> 시작한다 (자리 계약)",
-                    bbSrc.contains("cs.count() >= POST_MIN_COURSES")
+                    // ★자를 고쳤다 (REF-2C): 조성이 적주 판정을 Blueprint#isPost 하나로
+                    //   옮기면서 이 문자열이 조성에서 사라졌다. 물어야 할 것은 <b>어떤 식으로
+                    //   쓰였나</b>가 아니라 <b>구조적 적주 판정을 부르는가</b>다.
+                    bbSrc.contains("bp.isPost(bp.at(c, r))")
                             && bbSrc.contains("★적주가 아니면 공포도 없다"), "");
             // ★★자를 고쳤다 (REF-1c-A): 전에는 {@code int top = oy + roofBase - brk;} 라는
             //   <b>한 줄 그대로</b>를 찾았다. 처마 밑에 <b>그림자 골</b> 한 켜를 내면서 그 줄이
@@ -2863,9 +2918,7 @@ public final class TerraceForgeSelfTest {
                 //   조성은 멀쩡한데 눈이 글자를 세고 있었던 것이다.
                 //   ★이 저장소에서 <b>세 번째</b> 같은 병이다 (공포 판정 · 문설주 판정 · 여기).
                 //   <b>이름이 아니라 구조로 센다</b>: 세로로 이어진 통나무가 곧 적주다.
-                if (hj.columnOf(hj.at(c, frontRow)).stream().anyMatch(cs ->
-                        cs.material().contains("mangrove_log") && cs.count()
-                                >= com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES)) {
+                if (isPost(hj.columnOf(hj.at(c, frontRow)))) {
                     posts.add(c);
                 }
             }
@@ -2879,9 +2932,18 @@ public final class TerraceForgeSelfTest {
             int period = hj.postPeriod();
             check("★★도면이 적주 주기를 <b>신고</b>한다 (눈이 실물에서 읽으면 아무 주기나 통과한다)",
                     period > 0, period);
+            // ★★★자를 넓혔다 (Codex 판정 2026-08-10 · REF-2C) — 적주 판정이 구조로 바뀌자
+            //   중앙 대문의 <b>문설주 J 도 적주로</b> 세어졌다 (8 → 10). 지금까지 J 에 공포가
+            //   안 앉았던 것은 <b>결정이 아니라 사고</b>였다 — 재료가 mangrove 가 아니어서
+            //   우연히 걸러졌을 뿐이다. Codex 판정: 「J 도 적주이며 공포를 받는다.
+            //   겹기둥으로 합산하지 말고 <b>각각의 적주로 센다</b>. 중앙 대문 인접쌍의 내부 틈
+            //   1 만 명시적 예외로 두고, 나머지 연속 적주 간격은 4 로 판정하라.」
             int badGap = 0;
             for (int i = 1; i < posts.size(); i++) {
                 int gap = posts.get(i) - posts.get(i - 1);
+                if (gap == 1 && flanksAxis(hj, frontRow, posts.get(i - 1), posts.get(i))) {
+                    continue;                    // 중앙 대문 인접쌍의 안쪽 틈 — 명시적 예외
+                }
                 if (gap != period && gap != period + 2) {   // +2 = 중앙 개구를 사이에 낀 한 짝
                     badGap++;
                 }
@@ -3461,9 +3523,13 @@ public final class TerraceForgeSelfTest {
                         //   걷어내며 주두가 한 켜가 됐다 — 계약은 <b>A 와 J 가 같은가</b>이지
                         //   <b>몇 켜인가</b>가 아니다.
                         capA == capJ && capA >= 1, capA + "/" + capJ);
-                check("★★그래도 <b>J 의 암색은 유지</b>한다 (붉게 만들면 3칸 주기가 다시 깨진다)",
-                        hj.columnOf('J').stream().noneMatch(cs ->
-                                cs.material().contains("mangrove_log")), "");
+                // ★자를 고쳤다 (REF-2C): 「mangrove_log 가 없다」가 아니라
+                //   <b>적주와 다른 재료다</b> — 그것이 이 계약의 실제 내용이다.
+                String postMat = shaftMaterial(hj.columnOf('P'));
+                String jambMat = shaftMaterial(hj.columnOf('J'));
+                check("★★그래도 <b>J 의 암색은 유지</b>한다 (적주와 같은 재료면 3칸 주기가 다시 깨진다 — "
+                                + jambMat + " vs 적주 " + postMat + ")",
+                        !jambMat.isEmpty() && !jambMat.equals(postMat), jambMat);
             }
 
             // ★툇간의 계약 — Codex 가 좌표로 적어 준 것
@@ -3533,16 +3599,15 @@ public final class TerraceForgeSelfTest {
             // ★★진범 둘 — ①판정이 넓어 모든 벽 칸이 적주로 세어졌다 ②좌우로 번져 이어졌다.
             //   ①을 <b>실제 개수로</b> 센다: 본전 정면에서 공포가 앉는 칸은 <b>적주 수</b>여야 한다.
             {
+                // 몸통 재료는 <b>도면에서 읽는다</b> — 자 안에 이름을 박으면 팔레트를 갈 때 또 눈먼다
+                String shaftMat = shaftMaterial(hj.columnOf('P'));
                 int bracketed = 0;
                 int realPosts = 0;
                 for (int c = 0; c < hj.width(); c++) {
                     java.util.List<Blueprint.Course> col = hj.columnOf(hj.at(c, frontR));
-                    boolean wide = col.stream().anyMatch(cs ->
-                            cs.material().contains("mangrove_log"));
-                    boolean tight = col.stream().anyMatch(cs ->
-                            cs.material().contains("mangrove_log")
-                                    && cs.count() >= com.honcheon.mvt.forge
-                                    .BlueprintBuilder.POST_MIN_COURSES);
+                    // 넓은 자 = <b>켜 수를 안 보는</b> 자 (몸통 재료가 한 켜만 있어도 적주로 센다)
+                    boolean wide = col.stream().anyMatch(cs -> cs.material().equals(shaftMat));
+                    boolean tight = isPost(col);
                     if (wide) {
                         bracketed++;
                     }
@@ -3550,14 +3615,17 @@ public final class TerraceForgeSelfTest {
                         realPosts++;
                     }
                 }
+                // ★★★자를 고쳤다 (Codex 판정 2026-08-10): 「정면의 PCA 글자 수」로 세던 자다.
+                //   또 <b>글자</b>였다. 계약은 「공포는 모든 구조적 적주에 앉는다」이므로
+                //   기대값도 <b>구조에서</b> 나와야 한다.
+                int structuralPosts = (int) java.util.stream.IntStream.range(0, hj.width())
+                        .filter(cc -> hj.isPost(hj.at(cc, frontR))).count();
                 check("★★공포가 앉는 칸 = <b>적주 수</b> (" + realPosts + "칸)",
                         // ★자를 고쳤다: 「10」은 9칸일 때의 수였다. 7칸이 되며 8 이 됐다 —
                         //   계약은 <b>공포가 적주에만 앉는다</b>이지 「몇 개인가」가 아니다.
                         // ★자를 조였다 (Codex): 「6 이상」이면 7칸·8앵커를 못 지킨다.
                         //   정면의 적주 역할 칸 수와 <b>정확히</b> 같아야 한다.
-                        realPosts == (int) java.util.stream.IntStream.range(0, hj.width())
-                                .filter(cc -> "PCA".indexOf(hj.at(cc, frontR)) >= 0).count()
-                                && bracketed == realPosts, realPosts + "/" + bracketed);
+                        realPosts == structuralPosts, realPosts + "/" + structuralPosts);
                 // ★★[눈의 눈] 넓은 자가 왜 못 쓰는지를 <b>변이로</b> 보인다.
                 //   전에는 「오늘의 도면에서 넓은 자가 더 많이 고른다」로 증명했는데,
                 //   REF-2B 로 인방이 mangrove_planks 가 되자 그 차이가 사라져 눈이 짖었다 —
@@ -3573,25 +3641,89 @@ public final class TerraceForgeSelfTest {
                 // ★자를 고쳤다: 정면이 7칸이 되며 W 가 정면에서 빠졌다 — 변이를 <b>D</b> 에 끼운다
                 java.util.List<Object> mutW = new java.util.ArrayList<>(
                         (java.util.List<Object>) postCols.get("D"));
-                mutW.add(1, "stripped_mangrove_log");        // 인방 한 켜를 붉은 통나무로
+                mutW.add(1, shaftMat);                       // 인방 한 켜를 <b>몸통 재료</b>로
                 postCols.put("D", mutW);
                 Blueprint mut = Blueprint.of(postRaw);
                 int mutWide = 0;
                 int mutTight = 0;
                 for (int c = 0; c < mut.width(); c++) {
                     java.util.List<Blueprint.Course> col = mut.columnOf(mut.at(c, frontR));
-                    if (col.stream().anyMatch(cs -> cs.material().contains("mangrove_log"))) {
+                    if (col.stream().anyMatch(cs -> cs.material().equals(shaftMat))) {
                         mutWide++;
                     }
-                    if (col.stream().anyMatch(cs -> cs.material().contains("mangrove_log")
-                            && cs.count() >= com.honcheon.mvt.forge
-                            .BlueprintBuilder.POST_MIN_COURSES)) {
+                    if (isPost(col)) {
                         mutTight++;
                     }
                 }
                 check("★★[눈의 눈] 한 켜짜리 인방을 끼우면 <b>넓은 자만 무너진다</b> (넓은 "
                                 + mutWide + " · 바른 " + mutTight + ")",
                         mutWide > mutTight && mutTight == realPosts, mutWide + "/" + mutTight);
+            }
+            // ══════ ★★★공포 런 계약 (Codex 2026-08-10 · REF-2C) ══════
+            //   「공포는 모든 shaftIndex 적주에 놓는다. 단, 중앙 대문 양측의 인접 적주쌍에서는
+            //     길이 2 의 연속 공포를 허용한다. 연속 길이 3 이상은 금지하며,
+            //     좌우가 대칭이어야 한다.」
+            {
+                java.util.List<int[]> runs = new java.util.ArrayList<>();
+                int c = 0;
+                while (c < hj.width()) {
+                    if (!hj.isPost(hj.at(c, frontR))) {
+                        c++;
+                        continue;
+                    }
+                    int s = c;
+                    while (c < hj.width() && hj.isPost(hj.at(c, frontR))) {
+                        c++;
+                    }
+                    runs.add(new int[]{s, c - 1});
+                }
+                int longest = runs.stream().mapToInt(rr -> rr[1] - rr[0] + 1).max().orElse(0);
+                java.util.List<int[]> bkPairs = runs.stream()
+                        .filter(rr -> rr[1] - rr[0] + 1 == 2).toList();
+                check("★★공포 런이 <b>3 이상으로 안 이어진다</b> (가장 긴 런 " + longest + ")",
+                        longest <= 2, longest);
+                check("★★길이-2 런은 <b>중앙 대문 양측</b>에만 있다 (" + bkPairs.size() + "쌍)",
+                        bkPairs.size() == 2 && bkPairs.stream().allMatch(rr ->
+                                flanksAxis(hj, frontR, rr[0], rr[1])), bkPairs.size());
+                // 대칭 — 축에서 잰 거리가 좌우 같아야 한다
+                boolean sym = bkPairs.size() == 2
+                        && Math.abs(hj.axisCol() - bkPairs.get(0)[0])
+                            == Math.abs(bkPairs.get(1)[1] - hj.axisCol())
+                        && Math.abs(hj.axisCol() - bkPairs.get(0)[1])
+                            == Math.abs(bkPairs.get(1)[0] - hj.axisCol());
+                check("★★중앙 겹기둥 두 쌍이 <b>축에 대칭</b>이다 (축 " + hj.axisCol() + ")",
+                        sym, bkPairs.stream().map(java.util.Arrays::toString).toList().toString());
+                // ★[눈의 눈] 축에서 먼 자리에 적주를 하나 더 붙이면 이 자가 <b>무너져야</b> 한다
+                java.util.Map<String, Object> runRaw = new org.yaml.snakeyaml.Yaml().load(
+                        java.nio.file.Files.readString(
+                                java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+                @SuppressWarnings("unchecked")
+                java.util.List<String> runPlan = new java.util.ArrayList<>(java.util.Arrays.asList(
+                        String.valueOf(runRaw.get("plan")).split("\n")));
+                String fr = runPlan.get(frontR);
+                // 왼쪽 끝 적주(col 4) 옆에 하나 더 — 축에서 먼 길이-2 런을 만든다
+                runPlan.set(frontR, fr.substring(0, 5) + 'P' + fr.substring(6));
+                runRaw.put("plan", String.join("\n", runPlan));
+                Blueprint runMut = Blueprint.of(runRaw);
+                java.util.List<int[]> mutRuns = new java.util.ArrayList<>();
+                int c2 = 0;
+                while (c2 < runMut.width()) {
+                    if (!runMut.isPost(runMut.at(c2, frontR))) {
+                        c2++;
+                        continue;
+                    }
+                    int s = c2;
+                    while (c2 < runMut.width() && runMut.isPost(runMut.at(c2, frontR))) {
+                        c2++;
+                    }
+                    mutRuns.add(new int[]{s, c2 - 1});
+                }
+                long mutPairs = mutRuns.stream().filter(rr -> rr[1] - rr[0] + 1 == 2)
+                        .filter(rr -> flanksAxis(runMut, frontR, rr[0], rr[1])).count();
+                long mutAll = mutRuns.stream().filter(rr -> rr[1] - rr[0] + 1 == 2).count();
+                check("★★[눈의 눈] 축에서 먼 겹기둥을 만들면 <b>이 자가 무너진다</b> (쌍 "
+                                + mutAll + " 중 중앙 " + mutPairs + ")",
+                        mutAll == 3 && mutPairs == 2, mutAll + "/" + mutPairs);
             }
             // ★진범 — 공포가 좌우로 번지면 3칸 주기 적주에서 <b>이웃끼리 이어져 띠가 된다</b>.
             check("★★공포가 <b>좌우로 번지지 않는다</b> (번지면 적주 리듬을 스스로 지운다)",
@@ -3754,9 +3886,7 @@ public final class TerraceForgeSelfTest {
                 // ★셋 다 공포가 걸려야 한다 (몸통 3켜 이상)
                 int anchored = 0;
                 for (char ch : new char[]{'P', 'C', 'A'}) {
-                    if (hj.columnOf(ch).stream().anyMatch(cs ->
-                            cs.material().contains("mangrove_log") && cs.count()
-                                    >= com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES)) {
+                    if (isPost(hj.columnOf(ch))) {
                         anchored++;
                     }
                 }
@@ -3804,23 +3934,21 @@ public final class TerraceForgeSelfTest {
                 java.util.List<Blueprint.Course> s1p = hj.columnOf('P');
                 boolean thinFoot = s1p.stream().anyMatch(cs ->
                         cs.material().endsWith("_wall") || cs.material().endsWith("_fence"));
-                int shaftAt = -1;
-                for (int i = 0; i < s1p.size(); i++) {
-                    if (s1p.get(i).material().contains("mangrove_log") && s1p.get(i).count() >= 3) {
-                        shaftAt = i;
-                    }
-                }
+                int shaftAt = shaftIndex(s1p);
                 boolean stoneFoot = shaftAt > 0 && (s1p.get(shaftAt - 1).material().contains("stone")
                         || s1p.get(shaftAt - 1).material().contains("andesite"));
                 check("★★S1R 주초가 <b>몸통보다 가늘지 않다</b> (담장·울타리 받침 금지 — 촛대가 된다)",
                         !thinFoot, thinFoot);
                 check("★★S1R 적주가 <b>석재 주초</b> 위에 바로 선다 (굵기 그대로 내려온다)",
                         stoneFoot, shaftAt);
-                check("★★S1R 주두가 <b>목재</b>다 (밝은 석재 캡이 아니라 목구조가 처마를 받는다)",
-                        shaftAt >= 0 && shaftAt + 1 < s1p.size()
-                                && (s1p.get(shaftAt + 1).material().startsWith("mangrove")
-                                    || s1p.get(shaftAt + 1).material().startsWith("dark_oak")),
-                        shaftAt + 1 < s1p.size() ? s1p.get(shaftAt + 1).material() : "-");
+                // ★자를 고쳤다 (REF-2C): 「mangrove 나 dark_oak 로 시작하는가」가 아니라
+                //   <b>석재가 아닌가</b>다. 계약의 내용은 「밝은 석재 캡이 처마를 받지 않는다」이지
+                //   「특정 목재다」가 아니다.
+                String capMat = shaftAt >= 0 && shaftAt + 1 < s1p.size()
+                        ? s1p.get(shaftAt + 1).material() : "-";
+                check("★★S1R 주두가 <b>석재가 아니다</b> (밝은 석재 캡이 아니라 목구조가 처마를 받는다)",
+                        shaftAt >= 0 && !capMat.contains("stone") && !capMat.contains("andesite")
+                                && !capMat.equals("-"), capMat);
                 check("★★S2 창에 <b>창턱</b>이 있다 (살창 바로 아래가 반블록 — 턱과 그늘)",
                         hj.columnOf('D').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
                         "");
@@ -3834,7 +3962,9 @@ public final class TerraceForgeSelfTest {
                 // S4 공포 — 계단 + 반블록 윤곽
                 check("★★S4 공포 첫 단이 <b>몸통과 같은 재료</b>다 (다르면 기둥에 블럭이 붙어 보이고 "
                             + "신고한 몸통 켜 수가 실물과 어긋난다)",
-                        bbSrc3.contains("s2 == 0 ? Material.STRIPPED_MANGROVE_LOG"), "");
+                        // ★자를 고쳤다 (REF-2C): 특정 재료 이름을 찾던 자였다. 계약은
+                        //   「몸통과 <b>같은 것</b>」이므로, 원문도 <b>같은 팔레트를 부르는가</b>를 본다.
+                        bbSrc3.contains("s2 == 0 ? mat(bp.palette(\"post\""), "");
                 check("★★계단의 방향도 <b>자리가 정한다</b> (도면은 네 벽에 다 쓰인다)",
                         bbSrc3.contains("st.setFacing(face.getOppositeFace())"), "");
                 // S6 중앙 — 벽 0 · 문설주 +1 · 문두 +2 세 겹
@@ -3857,10 +3987,16 @@ public final class TerraceForgeSelfTest {
             //     적주·프레임 = 붉은색 / 창방·인방 = 어두운 적갈색 / 도리·서까래·창호 = 매우 어두운 갈색
             {
                 java.util.List<Blueprint.Course> post = hj.columnOf('P');
-                boolean postRed = post.stream().anyMatch(cs ->
-                        cs.material().equals("stripped_mangrove_log") && cs.count() >= 3);
-                check("★★적주는 <b>붉은색</b>이다 (가장 밝은 붉은 목재가 세로로 이어진다)",
-                        postRed, postRed);
+                // ★이것만은 <b>색 주장</b>이라 이름을 본다 — 구조가 아니라 색이 계약이기 때문이다.
+                //   대신 재료 하나를 박지 않고 <b>붉은 재료의 목록</b>으로 둔다: 팔레트를 갈아도
+                //   「붉은가」는 물을 수 있어야 한다 (REF-2C 로 통나무 → 테라코타가 됐다).
+                java.util.Set<String> reds = java.util.Set.of(
+                        "stripped_mangrove_log", "mangrove_log", "red_terracotta",
+                        "red_concrete", "red_nether_bricks", "crimson_planks");
+                String postShaft = shaftMaterial(post);
+                boolean postRed = reds.contains(postShaft);
+                check("★★적주는 <b>붉은색</b>이다 (붉은 재료가 세로로 이어진다 — " + postShaft + ")",
+                        postRed, postShaft);
                 // 정면 벽 칸의 인방·창방 = 어두운 적갈색 · 도리와 그 위 = 매우 어두운 갈색
                 int redBeam = 0;
                 int darkBeam = 0;
@@ -3908,7 +4044,7 @@ public final class TerraceForgeSelfTest {
                         wrong == 0 && redBeam > 0 && darkBeam > 0, redBeam + "/" + darkBeam + "/" + wrong);
                 // ★적주와 보가 <b>같은 재료면 안 된다</b> — 그게 「한 갈색 덩어리」의 정의다
                 boolean beamIsPost = hj.columnOf('W').stream()
-                        .anyMatch(cs -> cs.material().equals("stripped_mangrove_log"));
+                        .anyMatch(cs -> cs.material().equals(postShaft));
                 check("★★보가 적주와 <b>같은 재료를 쓰지 않는다</b> (같으면 정면이 한 덩어리로 뭉친다)",
                         !beamIsPost, beamIsPost);
                 check("★★창호·서까래는 여전히 가장 어둡다 (dark_oak 계열)",

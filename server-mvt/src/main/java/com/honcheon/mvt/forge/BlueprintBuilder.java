@@ -317,7 +317,7 @@ public final class BlueprintBuilder {
                             //     통짜 trapdoor 는 블라인드로 읽힌다 (문짝 교정에서 배운 것).
                             Material fill;
                             if (post) {
-                                fill = Material.STRIPPED_MANGROVE_LOG;
+                                fill = mat(bp.palette("post", "stripped_mangrove_log"));
                             } else if (rf.upperLattice()) {
                                 // ★★REF-1c-B 상층 창턱 — 창 <b>아래</b>에 어두운 수평선 한 켜.
                                 //   ★반드시 <b>적주에서 끊긴다</b> (post 칸은 여기 안 온다) —
@@ -325,13 +325,14 @@ public final class BlueprintBuilder {
                                 //   반블록이라 위 절반이 그늘로 남아 창 밑이 가라앉는다.
                                 fill = k == 0 ? Material.DARK_OAK_SLAB
                                         : k == rf.upperWall() - 1 ? Material.DARK_OAK_PLANKS
-                                        : Material.DARK_OAK_TRAPDOOR;
+                                        : mat(bp.palette("lattice", "dark_oak_trapdoor"));
                             } else {
                                 fill = HwasanCampusBuilder.plaster(ox + c2, upBase + k, oz + r2);
                             }
                             // ★상층 살창도 세운다 — 하층과 같은 병 (눕히면 구멍). 상층은 사각
                             //   테두리라 바깥이 자명하다: 어느 변에 앉았는가가 곧 법선이다.
-                            if (fill == Material.DARK_OAK_TRAPDOOR) {
+                            if (Bukkit.createBlockData(fill)
+                                    instanceof org.bukkit.block.data.type.TrapDoor) {
                                 org.bukkit.block.BlockFace uf = r2 == bz0 + iz
                                         ? org.bukkit.block.BlockFace.NORTH
                                         : r2 == bz1 - iz ? org.bukkit.block.BlockFace.SOUTH
@@ -388,10 +389,11 @@ public final class BlueprintBuilder {
                     //   그것이 「밝은 갈색 3단 띠」였다. 재료를 세 번 바꿔도 안 없어진 까닭이다.
                     //   ★강당은 회벽에 목재가 없어 우연히 멀쩡했다 — <b>우연은 계약이 아니다.</b>
                     //   → 적주는 <b>세로로 이어진 기둥</b>이다: 한 켜짜리 인방은 기둥이 아니다.
-                    boolean post = bp.columnOf(bp.at(c, r)).stream()
-                            .anyMatch(cs -> cs.material().contains("mangrove_log")
-                                    && cs.count() >= POST_MIN_COURSES);
-                    if (!post) {
+                    //   ★★★그리고 <b>여섯 번째</b> (REF-2C · 2026-08-10): 「mangrove_log 를
+                    //     포함하는가」는 팔레트가 붉은 <b>테라코타</b>로 바뀌자 그 자리에서 죽었다.
+                    //     자가 아니라 <b>조성이</b> 재료 이름에 얹혀 있었던 것이다 — 공포가
+                    //     한 칸도 안 앉는다. 정의는 이제 {@link Blueprint#shaftIndex} 하나뿐이다.
+                    if (!bp.isPost(bp.at(c, r))) {
                         continue;                    // ★적주가 아니면 공포도 없다
                     }
                     int[] d2 = place.map(bp, c, r);
@@ -486,7 +488,11 @@ public final class BlueprintBuilder {
                             //     공포는 <b>처마 평면으로 나온 두 단</b>으로만 보인다
                             //     (레퍼런스도 공포는 기둥 위 보 구역에서 앞으로 나온다).
                             BlockData bd = Bukkit.createBlockData(
-                                    s2 == 0 ? Material.STRIPPED_MANGROVE_LOG
+                                    //   ★REF-2C — 「몸통과 같은 재료」는 <b>재료 이름</b>이 아니라
+                                    //     <b>약속</b>이다. 팔레트를 갈면 여기도 같이 갈려야
+                                    //     기둥이 보까지 한 줄로 이어진다 (안 그러면 색 마감이
+                                    //     그때 그 병 — 첫 단이 다시 「기둥에 붙은 딴 블록」이 된다).
+                                    s2 == 0 ? mat(bp.palette("post", "stripped_mangrove_log"))
                                             : s2 == 1 ? Material.DARK_OAK_SLAB
                                             //   ★REF-3B 3단째 = <b>서까래 신발</b>. 처마를 키우지
                                             //     않는다. 3단이 세로로 세 켜일 필요는 없다 —
@@ -563,10 +569,11 @@ public final class BlueprintBuilder {
                     // ★D2 ④ — 「lattice」는 재료가 아니라 <b>처방</b>이다. 모양은
                     //   창호 family 가 정한다: W1 세로살만 · W2 세로+가로 · W3 + 중앙 강조 한 켜
                     boolean mid = course.count() >= 3 && k == course.count() / 2;
+                    Material lat = mat(bp.palette("lattice", "dark_oak_trapdoor"));
                     Material lm = switch (bp.windowFamily().toUpperCase()) {
                         case "W1" -> Material.DARK_OAK_FENCE;
-                        case "W3" -> mid ? Material.DARK_OAK_PLANKS : Material.DARK_OAK_TRAPDOOR;
-                        default -> Material.DARK_OAK_TRAPDOOR;
+                        case "W3" -> mid ? mat(bp.palette("lattice_accent", "dark_oak_planks")) : lat;
+                        default -> lat;
                     };
                     world.getBlockAt(x, y, z)
                             .setBlockData(stand(Bukkit.createBlockData(lm), nf), false);
@@ -714,6 +721,15 @@ public final class BlueprintBuilder {
             st.setFacing(face.getOppositeFace());
         }
         return d;
+    }
+
+    /** 도면이 부른 이름을 재료로 — 모르면 <b>거기서</b> 죽는다 (빌드 뒤에 조용히 틀리지 않게) */
+    private static Material mat(String name) {
+        Material m = Material.matchMaterial(name.toUpperCase());
+        if (m == null) {
+            throw new IllegalStateException("도면 팔레트의 재질을 모른다: " + name);
+        }
+        return m;
     }
 
     private static void stamp(World world, int x, int y, int z, String mat,
