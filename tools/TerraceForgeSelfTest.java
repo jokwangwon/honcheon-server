@@ -3006,6 +3006,18 @@ public final class TerraceForgeSelfTest {
                 if (gap == 1 && flanksAxis(hj, frontRow, posts.get(i - 1), posts.get(i))) {
                     continue;                    // 중앙 대문 인접쌍의 안쪽 틈 — 명시적 예외
                 }
+                // ★자를 넓혔다 (칸 넓힘 · 2026-08-11): 두 문설주 <b>사이</b>는 칸이 아니라
+                //   <b>대문 개구</b>다. 그 폭은 개구가 정하지 주기가 정하지 않는다.
+                //   전에는 개구 3 + 문설주가 마침 주기 4 와 같아 우연히 통과했다 —
+                //   주기를 6 으로 넓히자 그 우연이 깨졌다. <b>우연은 계약이 아니다.</b>
+                boolean allOpen = true;
+                for (int oc = posts.get(i - 1) + 1; oc < posts.get(i); oc++) {
+                    allOpen &= hj.columnOf(hj.at(oc, frontRow)).stream()
+                            .anyMatch(cs -> "air".equals(cs.material()));
+                }
+                if (allOpen && gap > 1) {
+                    continue;                    // 사이가 전부 개구 — 대문이다
+                }
                 if (gap != period && gap != period + 2) {   // +2 = 중앙 개구를 사이에 낀 한 짝
                     badGap++;
                 }
@@ -3799,9 +3811,13 @@ public final class TerraceForgeSelfTest {
                 //   문선(L)이 서면서 그 자리가 이미 적주가 되어 <b>변이가 안 먹혔다</b>.
                 //   왼쪽 끝 적주 <b>바로 옆의 채움 칸</b>을 찾아 거기에 적주를 끼운다.
                 int mutAt = -1;
-                for (int mc = hj.roofs().get(0).box()[0] + 1; mc < hj.axisCol(); mc++) {
-                    if (!hj.isPost(hj.at(mc, frontR)) && hj.isPost(hj.at(mc - 1, frontR))) {
-                        mutAt = mc;
+                // ★자를 고쳤다 (칸 넓힘 · 2026-08-11): 아무 빈 칸에나 끼우면 <b>런 2</b> 밖에
+                //   안 된다. 증명할 계약은 「런이 3 이상이면 안 된다」이므로,
+                //   <b>이미 있는 겹기둥 바로 옆</b>에 끼워 런 3 을 만든다.
+                for (int[] pr2 : bkPairs) {
+                    if (pr2[0] - 1 > hj.roofs().get(0).box()[0]
+                            && !hj.isPost(hj.at(pr2[0] - 1, frontR))) {
+                        mutAt = pr2[0] - 1;
                         break;
                     }
                 }
@@ -3952,7 +3968,11 @@ public final class TerraceForgeSelfTest {
                 check("★★정면에 <b>네 역할</b>이 다 있다 (모서리 " + corner.size() + " · 입구 옆 "
                                 + adj.size() + " · 일반 " + plain.size() + " · 문설주 "
                                 + jamb2.size() + ")",
-                        corner.size() == 2 && adj.size() == 2 && plain.size() >= 4
+                        // ★자를 고쳤다 (칸 넓힘): 「일반 4 이상」은 <b>7칸 시절의 수</b>다.
+                        //   칸이 5 로 줄자 일반 적주는 2 가 됐다 — 조성은 멀쩡한데 자가
+                        //   어제의 값을 외웠다. 계약은 「네 역할이 <b>다 있다</b>」이지
+                        //   「몇 개인가」가 아니다.
+                        corner.size() == 2 && adj.size() == 2 && !plain.isEmpty()
                                 && jamb2.size() == 2,
                         corner + "/" + adj + "/" + plain.size());
                 // ★모서리는 <b>양 끝</b>에만 — 가운데 어디에 있으면 그건 역할이 아니라 무늬다

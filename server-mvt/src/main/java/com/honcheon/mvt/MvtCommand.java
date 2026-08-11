@@ -4523,20 +4523,23 @@ public final class MvtCommand implements CommandExecutor {
                 // 서버의 작업 폴더(run/mvt-test) 아래 — 예측 가능한 한 자리
                 java.nio.file.Path dumpDir = java.nio.file.Path.of("dump");
                 java.nio.file.Files.createDirectories(dumpDir);
-                java.nio.file.Path out = dumpDir.resolve(id + ".csv");
+                // ★★<b>블록 상태까지</b> 적는다 (2026-08-11) — 이름만으로는 3D 가
+                //   계단·반블록·트랩도어를 <b>정육면체</b>로 그릴 수밖에 없다.
+                //   상태 문자열에 쉼표가 들어가므로 <b>탭</b>으로 가른다.
+                java.nio.file.Path out = dumpDir.resolve(id + ".tsv");
                 int top = pad.y() + com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(bp) + 6;
                 int wrote = 0;
-                StringBuilder sb = new StringBuilder("x,y,z,block\n");
+                StringBuilder sb = new StringBuilder("x\ty\tz\tdata\n");
                 for (int x = pad.x0(); x <= pad.x1(); x++) {
                     for (int z = pad.zN(); z <= pad.zS(); z++) {
                         for (int y = pad.y(); y <= top; y++) {
-                            org.bukkit.Material m = world.getBlockAt(x, y, z).getType();
-                            if (m == org.bukkit.Material.AIR) {
+                            org.bukkit.block.Block bl = world.getBlockAt(x, y, z);
+                            if (bl.getType() == org.bukkit.Material.AIR) {
                                 continue;
                             }
-                            sb.append(x - pad.x0()).append(',').append(y - pad.y()).append(',')
-                                    .append(z - pad.zN()).append(',')
-                                    .append(m.getKey().getKey()).append('\n');
+                            sb.append(x - pad.x0()).append('\t').append(y - pad.y()).append('\t')
+                                    .append(z - pad.zN()).append('\t')
+                                    .append(bl.getBlockData().getAsString()).append('\n');
                             wrote++;
                         }
                     }

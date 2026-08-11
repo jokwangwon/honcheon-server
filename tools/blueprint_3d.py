@@ -38,10 +38,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 from block_palette import color_of          # noqa: E402
+import blockshape                            # noqa: E402
 DUMP = ROOT / "run" / "mvt-test" / "dump"
 TABLE = ROOT / "config" / "block_colors.json"
 
-TW, TH, VH = 6, 3, 6        # 반너비 · 반깊이 · 켜 높이 (화소)
+# ★한 블록을 <b>16 등분</b>으로 잡는다 — 마크 모델과 같은 단위라 반블록·계단이 딱 떨어진다.
+#   화소가 커야 3px 트랩도어가 보인다: 블록당 16 화소면 1 단위 = 1 화소.
+U = 1                       # 한 단위(1/16 블록)의 화소 수
+TW, TH, VH = 8 * U, 4 * U, 8 * U   # 반너비 · 반깊이 · 켜 높이
 SHADE = {"top": 1.00, "right": 0.78, "left": 0.58}
 BG = (250, 248, 243)
 UNKNOWN_COLOR = (255, 0, 255)
@@ -51,14 +55,19 @@ VIEWS = {"se": (False, False), "sw": (True, False), "ne": (False, True), "nw": (
 
 
 def load_dump(name: str):
-    f = DUMP / f"{name}.csv"
+    """덤프를 읽는다 — <b>블록 상태까지</b> (탭으로 갈린다)."""
+    f = DUMP / f"{name}.tsv"
     if not f.exists():
+        old = DUMP / f"{name}.csv"
+        if old.exists():
+            raise SystemExit(f"옛 덤프({old.name})다 — 상태가 없어 형태를 못 그린다.\n"
+                             f"  다시 뽑아라: 혼천 도면시험 {name} hwasan")
         raise SystemExit(f"덤프가 없다: {f}\n  먼저 인게임에서: 혼천 도면시험 {name} hwasan")
     out = []
     for line in f.read_text().splitlines()[1:]:
         if not line:
             continue
-        x, y, z, b = line.split(",")
+        x, y, z, b = line.split("\t")
         out.append((int(x), int(y), int(z), b))
     return out
 
@@ -67,56 +76,78 @@ def shade(rgb, k):
     return tuple(max(0, min(255, round(c * k))) for c in rgb)
 
 
+def _prism(dr, ox, oy, box, rgb, bx, by, bz):
+    """상자 하나 → 등각 여섯 모서리. 윗면·좌면·우면 셋만 보인다."""
+    x0, y0, z0, x1, y1, z1 = box
+    # 블록 안 좌표(0..16) 를 세계 단위로 옮긴다
+    wx0, wx1 = bx * 16 + x0, bx * 16 + x1
+    wy0, wy1 = by * 16 + y0, by * 16 + y1
+    wz0, wz1 = bz * 16 + z0, bz * 16 + z1
+
+    def pt(wx, wy, wz):
+        return ((wx - wz) * TW / 16 + ox, (wx + wz) * TH / 16 - wy * VH / 16 + oy)
+
+    top = [pt(wx0, wy1, wz0), pt(wx1, wy1, wz0), pt(wx1, wy1, wz1), pt(wx0, wy1, wz1)]
+    left = [pt(wx0, wy1, wz1), pt(wx1, wy1, wz1), pt(wx1, wy0, wz1), pt(wx0, wy0, wz1)]
+    right = [pt(wx1, wy1, wz0), pt(wx1, wy1, wz1), pt(wx1, wy0, wz1), pt(wx1, wy0, wz0)]
+    dr.polygon(top, fill=shade(rgb, SHADE["top"]))
+    dr.polygon(left, fill=shade(rgb, SHADE["left"]))
+    dr.polygon(right, fill=shade(rgb, SHADE["right"]))
+
+
 def render(voxels, table, flip_x=False, flip_z=False, cut=None):
+    """실물 덤프 → 등각 도해. <b>블록의 실제 형태</b>로 그린다."""
     from PIL import Image, ImageDraw
 
     unknown = {}
-    occupied = {(x, y, z) for x, y, z, _ in voxels}
+    blockshape.UNKNOWN.clear()
     if cut:
         axis, val = cut[0], int(cut[1:])
         voxels = [v for v in voxels
                   if (v[0] if axis == "x" else v[2] if axis == "z" else v[1]) <= val]
-        occupied = {(x, y, z) for x, y, z, _ in voxels}
+    occupied = {(x, y, z) for x, y, z, _ in voxels}
 
     mx = max(v[0] for v in voxels)
     mz = max(v[2] for v in voxels)
     put = []
     for x, y, z, b in voxels:
-        # ★가려진 칸은 안 그린다 — 보이는 세 면이 모두 막혔으면 화면에 한 화소도 못 낸다
-        if ((x + 1, y, z) in occupied and (x, y, z + 1) in occupied
-                and (x, y + 1, z) in occupied):
+        bs = blockshape.boxes(b)
+        if not bs:
+            continue
+        # ★가림 컬링은 <b>풀블록에만</b> 쓴다 — 반블록·계단은 이웃이 있어도 제 모양이 보인다
+        if bs == blockshape.FULL and (x + 1, y, z) in occupied \
+                and (x, y, z + 1) in occupied and (x, y + 1, z) in occupied:
             continue
         vx = (mx - x) if flip_x else x
         vz = (mz - z) if flip_z else z
-        put.append((vx, y, vz, b))
+        # 뒤집으면 블록 안 좌표도 뒤집어야 한다 — 안 그러면 계단이 <b>반대로</b> 선다
+        if flip_x or flip_z:
+            bs = [((16 - x1 if flip_x else x0), y0, (16 - z1 if flip_z else z0),
+                   (16 - x0 if flip_x else x1), y1, (16 - z0 if flip_z else z1))
+                  for x0, y0, z0, x1, y1, z1 in bs]
+        put.append((vx, y, vz, b, bs))
 
-    sxs = [(vx - vz) * TW for vx, _, vz, _ in put]
-    sys_ = [(vx + vz) * TH - y * VH for vx, y, vz, _ in put]
-    ox = -min(sxs) + TW + 4
-    oy = -min(sys_) + 4
-    w = max(sxs) - min(sxs) + 2 * TW + 8
-    h = max(sys_) - min(sys_) + 2 * TH + VH + 8
+    sxs = [(vx - vz) * TW for vx, _, vz, _, _ in put]
+    sys_ = [(vx + vz) * TH - y * VH for vx, y, vz, _, _ in put]
+    ox = -min(sxs) + TW + 6
+    oy = -min(sys_) + 6
+    w = int(max(sxs) - min(sxs) + 2 * TW + 12)
+    h = int(max(sys_) - min(sys_) + 2 * TH + VH + 12)
 
     im = Image.new("RGB", (w, h), BG)
     dr = ImageDraw.Draw(im)
-    # 화가 알고리즘 — 뒤에서 앞으로. 등각에서는 (x+z+y) 오름차순이 곧 원근이다
-    for vx, y, vz, b in sorted(put, key=lambda v: (v[0] + v[2] + v[1])):
-        ent = color_of(table, b)
+    for vx, y, vz, b, bs in sorted(put, key=lambda v: (v[0] + v[2] + v[1])):
+        ent = color_of(table, blockshape.parse(b)[0])
         if ent is None:
-            unknown[b] = unknown.get(b, 0) + 1
+            unknown[blockshape.parse(b)[0]] = unknown.get(blockshape.parse(b)[0], 0) + 1
             rgb = UNKNOWN_COLOR
         else:
             rgb = tuple(ent["rgb"])
-        sx = (vx - vz) * TW + ox
-        sy = (vx + vz) * TH - y * VH + oy
-        dr.polygon([(sx, sy), (sx + TW, sy + TH), (sx, sy + 2 * TH), (sx - TW, sy + TH)],
-                   fill=shade(rgb, SHADE["top"]))
-        dr.polygon([(sx - TW, sy + TH), (sx, sy + 2 * TH),
-                    (sx, sy + 2 * TH + VH), (sx - TW, sy + TH + VH)],
-                   fill=shade(rgb, SHADE["left"]))
-        dr.polygon([(sx, sy + 2 * TH), (sx + TW, sy + TH),
-                    (sx + TW, sy + TH + VH), (sx, sy + 2 * TH + VH)],
-                   fill=shade(rgb, SHADE["right"]))
+        # 한 블록 안의 상자도 뒤에서 앞으로
+        for box in sorted(bs, key=lambda q: q[0] + q[2] + q[1]):
+            _prism(dr, ox, oy, box, rgb, vx, y, vz)
+    for k, v in blockshape.UNKNOWN.items():
+        unknown["형태모름:" + k] = v
     return im, unknown
 
 
@@ -130,21 +161,21 @@ def _selftest() -> int:
         if not cond:
             fails.append(name)
 
-    tbl = {"a": {"rgb": [200, 100, 50]}, "b": {"rgb": [40, 40, 40]}}
+    tbl = {"stone": {"rgb": [200, 100, 50]}, "dark_oak_planks": {"rgb": [40, 40, 40]}}
 
     # ① 한 칸은 세 면을 그린다 — 명도 셋이 나와야 입체다
-    im, unk = render([(0, 0, 0, "a")], tbl)
+    im, unk = render([(0, 0, 0, "minecraft:stone")], tbl)
     cols = {c for c in im.getdata() if c != BG}
     check("한 칸이 <b>세 면</b>으로 그려진다 (윗면·좌·우)", len(cols) == 3, sorted(cols))
     check("모르는 블록이 없다", not unk, unk)
 
     # ② 모르는 블록은 <b>자홍색 + 이름</b> — 조용히 안 넘어간다
-    im, unk = render([(0, 0, 0, "없는블록")], tbl)
+    im, unk = render([(0, 0, 0, "minecraft:없는블록")], tbl)
     check("모르는 블록을 자홍색으로 칠하고 <b>이름을 센다</b>",
-          unk == {"없는블록": 1} and UNKNOWN_COLOR in set(im.getdata()), unk)
+          unk.get("없는블록") == 1 and UNKNOWN_COLOR in set(im.getdata()), unk)
 
     # ③ ★가려진 칸은 안 그린다 — 안 그러면 1만 칸이 전부 겹쳐 그려진다
-    solid = [(x, y, z, "a") for x in range(3) for y in range(3) for z in range(3)]
+    solid = [(x, y, z, "minecraft:stone") for x in range(3) for y in range(3) for z in range(3)]
     im, _ = render(solid, tbl)
     inner_hidden = all(((1, 1, 1) != (x, y, z)) for x, y, z, _ in solid if False)
     # 3×3×3 에서 (0,0,0) 은 세 이웃이 다 있으므로 안 그려져야 한다
@@ -154,12 +185,12 @@ def _selftest() -> int:
           list(im.getdata()) == list(im2.getdata()), "")
 
     # ④ 자른 면 — 경계 밖이 사라진다
-    im, _ = render([(0, 0, 0, "a"), (0, 0, 5, "a")], tbl, cut="z0")
-    im_one, _ = render([(0, 0, 0, "a")], tbl)
+    im, _ = render([(0, 0, 0, "minecraft:stone"), (0, 0, 5, "minecraft:stone")], tbl, cut="z0")
+    im_one, _ = render([(0, 0, 0, "minecraft:stone")], tbl)
     check("자르면 그 너머가 <b>사라진다</b>", im.size == im_one.size, f"{im.size} vs {im_one.size}")
 
     # ⑤ 네 귀가 서로 다른 그림이다 (뒤집기가 실제로 듣는다)
-    two = [(0, 0, 0, "a"), (4, 0, 0, "b")]
+    two = [(0, 0, 0, "minecraft:stone"), (4, 0, 0, "minecraft:dark_oak_planks")]
     a, _ = render(two, tbl, *VIEWS["se"])
     b, _ = render(two, tbl, *VIEWS["sw"])
     check("네 귀가 <b>서로 다른 그림</b>이다", list(a.getdata()) != list(b.getdata()), "")
