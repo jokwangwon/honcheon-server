@@ -110,7 +110,14 @@ meta:
   #   「균일하기만 하면」 어떤 주기도 통과한다. 신고한 값과 실물이 같은지를 물어야 한다.
   # ★문선이 서면서 세로 부재의 주기가 <b>4 → 2</b> 가 됐다 (기둥·문선이 번갈아 선다).
   #   레퍼런스 세로선 14개 · 우리도 <b>14개</b>가 됐다 (전 8개).
-  post_period: 2
+  #   ★★★근본으로 (2026-08-11 · 사용자) — 문선을 넣자 밀도는 레퍼런스와 같아졌는데
+  #     최빈색이 21.7 → 35.0 으로 <b>더 거칠어졌다</b>. 까닭은 <b>축척</b>이었다:
+  #     레퍼런스의 여분 세로선은 큰 판을 두르는 <b>가는 틀</b>(칸 폭의 1/4)인데,
+  #     우리 칸이 3칸이라 문선 하나가 칸의 <b>1/3</b>을 먹고 판이 1칸 조각이 됐다.
+  #     → 칸을 넓힌다. <b>주기 4 → 6 · 정면 7칸 → 5칸</b>. 31 = 6×5 + 1 로 딱 떨어진다.
+  #       칸 안이 «판2 · 문선 · 판2» 가 되어 <b>판이 살아난다</b>.
+  #     ★중앙 어칸(5칸 속)에 «문설주 · 개구3 · 문설주» 가 <b>정확히</b> 들어간다.
+  post_period: 6
   bay_roles:
     corner: "C"
     entrance_adjacent: "A"
@@ -315,8 +322,11 @@ columns:
   #     구조 기둥이 아니라 <b>창틀</b>이기 때문이다.
   #   ★글자는 <b>L</b> 이다 — `E` 는 이미 <b>엄지기둥</b>(월대 난간 끝)이 쓰고 있었고,
   #     겹쳐 쓰자 난간 눈이 문선 12개를 엄지기둥으로 세어 짖었다 (실제로 잡혔다).
+  #   ★★문선은 <b>기둥이 아니다</b> — 문틀이다. 붉은 켜를 <b>가운데서 한 번 끊어</b>
+  #     세로 3켜 런을 안 만든다. 그러면 구조적 적주 판정(shaftIndex)에 안 걸리고,
+  #     공포도 안 앉으며, 간포 자리도 안 뺏는다. 끊긴 자리는 <b>문틀의 중간 살</b>로 읽힌다.
   "L": ["smooth_stone*3", "mangrove_planks",
-        "red_terracotta*5",
+        "red_terracotta*2", "dark_oak_planks", "red_terracotta*2",
         "mangrove_planks", "dark_oak_slab", "dark_oak_log"]   # 문선 — 칸을 가른다
   "D": ["smooth_stone*3",
         "lattice*5", "plaster",
@@ -387,7 +397,7 @@ plan: |
     .sssssssssssssssssssssssssssssssssssss
     .sRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
-    .sRNCDLDPDLDPDLDPDLDLDPDLDPDLDPDLDCNRs
+    .sRNCDDLDDPDDLDDPDDLDDPDDLDDPDDLDDCNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
@@ -406,7 +416,7 @@ plan: |
     .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
-    .sRNCDLDPDLDPDLDAJOOOJADLDPDLDPDLDCNRs
+    .sRNCDDLDDPDDLDDAJOOOJADDLDDPDDLDDCNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs
