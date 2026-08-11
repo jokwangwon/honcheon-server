@@ -4514,6 +4514,41 @@ public final class MvtCommand implements CommandExecutor {
                     + (n.curveSkipped > 0 ? " · ★안허리곡 못 놓음 " + n.curveSkipped : "")
                     + (n.propFailed > 0 ? " · ★소품 못 놓음 " + n.propFailed : "")
                     + (n.yielded > 0 ? " · 양보 " + n.yielded : ""));
+            // ★★★<b>실물 덤프</b> (2026-08-11) — 도면을 다시 그리는 대신, <b>조성기가 실제로
+            //   놓은 블록</b>을 그대로 적는다. 도면과 실물이 갈라질 여지가 <b>구조적으로 없다</b>.
+            //   (도면 도구는 plan+columns 만 그려 지붕·공포·간포·소품이 안 보였다 —
+            //    실루엣의 절반이 지붕인데. 그래서 도면으로는 형태 문제를 못 잡았다.)
+            //   ★패드 상자 전체를 훑는다: 조성기가 어디에 놓았는지를 <b>안 믿고 직접 본다</b>.
+            try {
+                // 서버의 작업 폴더(run/mvt-test) 아래 — 예측 가능한 한 자리
+                java.nio.file.Path dumpDir = java.nio.file.Path.of("dump");
+                java.nio.file.Files.createDirectories(dumpDir);
+                java.nio.file.Path out = dumpDir.resolve(id + ".csv");
+                int top = pad.y() + com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(bp) + 6;
+                int wrote = 0;
+                StringBuilder sb = new StringBuilder("x,y,z,block\n");
+                for (int x = pad.x0(); x <= pad.x1(); x++) {
+                    for (int z = pad.zN(); z <= pad.zS(); z++) {
+                        for (int y = pad.y(); y <= top; y++) {
+                            org.bukkit.Material m = world.getBlockAt(x, y, z).getType();
+                            if (m == org.bukkit.Material.AIR) {
+                                continue;
+                            }
+                            sb.append(x - pad.x0()).append(',').append(y - pad.y()).append(',')
+                                    .append(z - pad.zN()).append(',')
+                                    .append(m.getKey().getKey()).append('\n');
+                            wrote++;
+                        }
+                    }
+                }
+                java.nio.file.Files.writeString(out, sb.toString());
+                Announce.say(plugin, sender, ChatColor.GRAY + "  덤프 " + wrote + "칸 → "
+                        + out + "  (패드 원점 기준 상대 좌표 · y0 = 포장면)");
+            } catch (Throwable de) {
+                Announce.warn(plugin, sender, "  덤프 실패: " + de.getClass().getSimpleName()
+                        + " — " + de.getMessage());
+            }
+
             int[] front = bp.spots().get("문_앞");
             if (front != null) {
                 int ox = pad.x0() + (pad.x1() - pad.x0() + 1 - bp.width()) / 2;

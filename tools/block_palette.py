@@ -139,9 +139,51 @@ def build() -> dict:
     return out
 
 
+# 파생 접미 — 「무엇의 계단인가」를 <b>규칙으로</b> 푼다 (손으로 다 적지 않는다)
+_SUFFIX = ("_stairs", "_slab", "_wall", "_fence", "_fence_gate", "_trapdoor", "_button",
+           "_pressure_plate", "_door", "_sign", "_wall_sign", "_hanging_sign")
+
+
 def color_of(table: dict, block: str):
-    """도면이 쓰는 이름 → 색. 모르면 {@code None} (그리고 <b>부르는 쪽이 짖는다</b>)."""
-    return table.get(texture_name(block))
+    """도면·실물이 쓰는 이름 → 색. 모르면 {@code None} (부르는 쪽이 <b>짖는다</b>).
+
+    ★파생을 <b>규칙으로</b> 푼다. 2026-08-11 실측: 실물 덤프의 블록 이름은 도면의 것과
+    다르다 (`deepslate_tile_stairs`·`stone_brick_wall`…). 손으로 적은 표는 14종을 몰랐다.
+    """
+    for cand in _derive(block):
+        got = table.get(cand)
+        if got is not None:
+            return got
+    return None
+
+
+def _derive(block: str):
+    """이름 하나에서 <b>시도할 텍스처 이름들</b>을 순서대로 낸다."""
+    seen = []
+
+    def add(v):
+        if v and v not in seen:
+            seen.append(v)
+
+    add(texture_name(block))
+    add(block)
+    # 배너·깃발 — 천이다. 같은 색 양털로 읽는다
+    if block.endswith("_banner"):
+        add(block.replace("_wall_banner", "_wool").replace("_banner", "_wool"))
+    base = block
+    for suf in _SUFFIX:
+        if base.endswith(suf):
+            base = base[: -len(suf)]
+            break
+    if base != block:
+        add(base)
+        add(base + "s")                       # deepslate_tile → deepslate_tiles
+        add(base + "_planks")                 # dark_oak → dark_oak_planks
+        add(base.replace("_tile", "_tiles").replace("_brick", "_bricks"))
+        add(base + "_block")
+    add(block + "_side")                      # bone_block → bone_block_side
+    add(block + "_top")
+    return seen
 
 
 # ───────────────────────── 눈을 시험하는 눈 ─────────────────────────
