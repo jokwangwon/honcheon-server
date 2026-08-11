@@ -234,6 +234,22 @@ columns:
   # ★★★Codex 처방 (2026-08-10) — 창호를 −1 로 전진시키자 네 면의 물러난 평면이
   #   <b>모서리에서 만나</b> 벽이 창을 덮었다 (덮임 21). 장변(정면·후면)의 후퇴 창면은
   #   그대로 잇고, <b>단변(측면)만 깊이 0 의 닫힌 되받이</b>로 끝낸다.
+  # ★★★고주 (Codex 승인 2026-08-11) — <b>상층을 받치는 것은 둘레 평주가 아니다.</b>
+  #   상층 둘레 66칸 중 하층 적주 위에 서는 것이 <b>0</b> 이었다. 주기가 3 이라서가
+  #   아니라 하층 몸체 안쪽이 맨바닥('F' 하나뿐)이라 <b>받칠 것이 아예 없어서</b>다.
+  #   실제 중층 불전(금산사 미륵전·화엄사 각황전)에서 상층을 받치는 것은 두 층을
+  #   관통해 올라가는 <b>고주</b>다. 그것을 넣는다.
+  #   ★15켜 = 하층 12 + 하층 지붕 두께 3 → 꼭대기가 <b>상층 바닥</b>이다.
+  #   ★★상층 폭 25 는 <b>사용자가 REF-1 에서 확정</b>한 값이라 못 건드린다. 그래서
+  #     상층을 고주에 맞추는 게 아니라 <b>고주를 상층 둘레에 맞춘다</b> — 고주는 새로
+  #     넣는 기둥이라 좌표가 자유롭고, 하층 평주는 한 칸도 안 움직인다.
+  #     x 7·11·15 | 23·27·31 (주기 4, 축 19 는 <b>비운다</b> — 어칸 8칸이 대문 위로 뚫린다)
+  #     z 8·11·14·17 (주기 3, 상하 대칭)
+  #   ★정면(row 19)은 한 글자도 안 건드린다 — 고주는 rows 7~18 안쪽에 서고,
+  #     바깥에서는 중앙 대문 개구로만 보인다 (오히려 깊이가 생긴다).
+  "G": ["smooth_stone*2", "polished_andesite",
+        "red_terracotta*10",
+        "dark_oak_planks", "dark_oak_log"]                   # 고주 — 15켜
   "Q": ["smooth_stone*3", "mangrove_planks", "plaster*4", "mangrove_planks",
         "mangrove_planks",
         "dark_oak_slab", "dark_oak_log"]                     # 측면 되받이 — 깊이 0
@@ -285,6 +301,7 @@ depth:
   "C": 1
   "A": 1
   "J": 1
+  "G": 0
   "Q": 0
   "W": -1
   "D": -1
@@ -314,16 +331,16 @@ plan: |
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNCDDDPDDDPDDDPDDDDDPDDDPDDDPDDDCNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
-    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
-    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNDFFGFFFFFFFFFFFFFFFFFFFFFFFGFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFGFFFFFFFFFFFFFFFFFFFFFFFGFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
     .sRNCDDDPDDDPDDDAJOOOJADDDPDDDPDDDCNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
@@ -383,6 +400,58 @@ roof:
       #     구조가 아니다 (사용자). 층간은 귀솟음만 유지한다.
       ridge: 17
       infill: lattice                # ★상층은 창이 띠를 이룬다 — 회벽이 아니다 (실측)
+      # ★★★상층 평면 (2026-08-11 · Codex 판정 B) — <b>하층과 같은 좌표계</b>를 쓴다.
+      #   부분 격자에 오프셋을 두면 「상층 적주가 고주 <b>같은 칸</b>에 서는가」가 산수가 되고,
+      #   산수는 틀린다. 몸체 밖은 '.' 이다.
+      #     K 모서리 · T 적주 · V 살창 · B 회벽(살창 뒤를 받친다 — 안 대면 「적주 | 검은 빈칸」)
+      #   적주 자리는 <b>고주 좌표 그대로</b>다: x 7·11·15|23·27·31 · z 8·11·14·17
+      plan: |
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        .......KVVVTVVVTVVVVVVVTVVVTVVVK......
+        .......VBBBBBBBBBBBBBBBBBBBBBBBV......
+        .......VB.....................BV......
+        .......TB.....................BT......
+        .......VB.....................BV......
+        .......VB.....................BV......
+        .......TB.....................BT......
+        .......VB.....................BV......
+        .......VBBBBBBBBBBBBBBBBBBBBBBBV......
+        .......KVVVTVVVTVVVVVVVTVVVTVVVK......
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+        ......................................
+      columns:
+        "K": ["red_terracotta*3", "dark_oak_log"]      # 모서리 — 도리를 통나무로 받는다
+        "T": ["red_terracotta*3", "dark_oak_planks"]   # 적주 — 3켜여야 적주로 세어진다
+        "V": ["dark_oak_slab", "lattice*2", "dark_oak_planks"]   # 창턱·살창2·인방
+        "B": ["plaster*4"]                             # 살창 뒤 회벽
+      depth:
+        "K": 0
+        "T": 0
+        "V": 0
+        "B": 0
+      # ★공포는 <b>가볍게</b> — 하층 elaborate(3단)를 그대로 복제하지 않는다 (Codex).
+      #   위계는 「더 멀리」가 아니라 「더 높이」로 이미 났다.
+      bracket: simple
+      trim: []
       # ★★상층이 물러나는 칸 — 코드에 2 로 박혀 있던 값을 도면이 되찾았다.
       #   실측 하층:상층 = 38:25 = 0.66 인데 물러남 2 면 31→27 (0.87) 로 상층이 하층만큼
       #   넓어져 **다른 건물**이 선다. 5 면 31→21 (0.68) 로 실측 안에 든다.

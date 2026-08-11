@@ -177,69 +177,8 @@ public final class BlueprintBuilder {
             }
         }
 
-        for (int r = 0; r < bp.depth(); r++) {
-            for (int c = 0; c < bp.width(); c++) {
-                int[] d = place.map(bp, c, r);      // ★회전 — 도면 (c,r) 이 어디로 가는가
-                int x = ox + d[0];
-                int z = oz + d[1];
-                char ch = bp.at(c, r);
-                org.bukkit.block.BlockFace nf = place.turn(outward(bp, c, r));
-                int dep = bp.depthOf(ch);
-                n.cells++;
-                // ★★★REF-1b (사용자 확정 2026-08-09) — <b>깊이는 「옮기는 양」이 아니다.</b>
-                //   본전을 정면에서 찍고서야 드러났다: {@code +1} 을 <b>이동</b>으로 구현하니
-                //   적주가 나가면서 <b>벽면에 제 폭만큼 세로 구멍</b>을 남겼고, 정면 평면의
-                //   세 칸 중 둘이 비어 하층이 <b>폐쇄 전각이 아니라 주랑</b>으로 읽혔다.
-                //   레퍼런스의 하층은 「붉은 목구조가 흰 회벽·창호 <b>앞에 덧대어진</b> 폐쇄 전각」이다.
-                //   → 부호가 <b>방식</b>을 정한다 (도면에 새 글자를 안 늘린다):
-                //       +  overlay : 기준면은 <b>배경(회벽)으로 채우고</b> 한 칸 밖에 덧댄다
-                //       0  base    : 기준면 그대로
-                //       −  recess  : 기준면엔 <b>창틀만</b> 남기고 채움 켜만 안으로 물린다
-                //     개구(air 켜)는 종전대로 스스로 판다 — carve 는 처방이 이미 갖고 있다.
-                if (dep > 0) {
-                    char back = bp.backingChar();
-                    if (back != 0) {
-                        stampColumn(world, bp, back, x, oy, z, nf, n, 0);
-                    }
-                    stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
-                            z + nf.getModZ() * dep, nf, n, 0);
-                } else if (dep < 0) {
-                    // ★★★툇간 (사용자 2026-08-10 · Codex 검토) — 「앞으로 튀어나온 기둥이 벽과
-                    //   붙어 있어 튀어나옴은 보이지만 형태가 명확하지 않다. 오히려 한 칸 띄워져
-                    //   있는 게 낫지 않나」. 레퍼런스의 적주는 <b>돌바닥 위에 홀로 서고 벽이
-                    //   한 겹 물러나</b> 있다 — 자립 열주 + 물러난 벽 = <b>툇간</b>이다.
-                    //   ★기둥을 <b>내보내지</b> 않는다 (Codex 반론): 처마가 2 라 기둥을 +2 로
-                    //     빼면 공포가 밖으로 나갈 자리가 없어진다. 대신 <b>벽을 물린다</b> —
-                    //     적주 +1 · 툇간 0 · 회벽 −1 · 살창 −2 로 <b>세 평면 + 실제 빈 칸</b>.
-                    //   기준면에는 <b>바닥만</b> 남는다 (딛는 자리) — 벽은 통째로 안으로 간다.
-                    stampColumn(world, bp, ch, x, oy, z, nf, n, 3);           // 기준면 = 툇간 바닥
-                    if (dep <= -2) {
-                        stampColumn(world, bp, ch, x + nf.getModX(), oy,
-                                z + nf.getModZ(), nf, n, 1);                  // 벽 평면 = 창틀
-                        stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
-                                z + nf.getModZ() * dep, nf, n, 2);            // 그 뒤 = 살창만
-                    } else {
-                        stampColumn(world, bp, ch, x + nf.getModX() * dep, oy,
-                                z + nf.getModZ() * dep, nf, n, 0);            // 물러난 벽
-                    }
-                } else {
-                    stampColumn(world, bp, ch, x, oy, z, nf, n, 0);
-                }
-            }
-        }
-
-        // ★★REF-1c-B 마감 조각 — 현판 자리 · 중앙 관. 도면이 좌표를 직접 쥔다.
-        for (Blueprint.Trim tr : bp.trims()) {
-            for (int c = tr.cols()[0]; c <= tr.cols()[1]; c++) {
-                int[] d3 = place.map(bp, c, tr.row());
-                org.bukkit.block.BlockFace tf = place.turn(outward(bp, c, tr.row()));
-                int tx = ox + d3[0] + tf.getModX() * tr.depth();
-                int tz = oz + d3[1] + tf.getModZ() * tr.depth();
-                stamp(world, tx, oy + tr.y(), tz, tr.material(), tf);
-                n.blocks++;
-                n.mark(tx, oy + tr.y(), tz, "마감:" + tr.id());
-            }
-        }
+        stampLevel(world, bp, bp, place, ox, oy, oz, n);
+        trims(world, bp, bp, bp.trims(), place, ox, oy, oz, n);
 
 
         // 지붕 — 도면이 자리를, 코드가 결을 안다
@@ -302,59 +241,18 @@ public final class BlueprintBuilder {
                 //   (산문은 2 가 맞았다 — 그래서 한 상수로 둘을 다 지을 수 없다)
                 int ix = rf.insetX();
                 int iz = rf.insetZ();
-                for (int r2 = bz0 + iz; r2 <= bz1 - iz; r2++) {
-                    for (int c2 = bx0 + ix; c2 <= bx1 - ix; c2++) {
-                        boolean edge = r2 == bz0 + iz || r2 == bz1 - iz || c2 == bx0 + ix || c2 == bx1 - ix;
-                        if (!edge) {
-                            continue;
-                        }
-                        boolean post = ((c2 - bx0) % 3 == 0) || ((r2 - bz0) % 3 == 0);
-                        for (int k = 0; k < rf.upperWall(); k++) {
-                            // ★기둥 사이를 무엇으로 채우는가는 **도면이 정한다** — 7호 실측이
-                            //   「본전 상층은 창이 띠를 이루고 회벽이 없다」를 밝혔고, 산문은
-                            //   그 반대다. 코드가 한 가지로만 채우면 둘 중 하나는 반드시 틀린다.
-                            //   ※격자는 위·아래 한 켜를 인방(planks)으로 끊어 「창」이 되게 한다 —
-                            //     통짜 trapdoor 는 블라인드로 읽힌다 (문짝 교정에서 배운 것).
-                            Material fill;
-                            if (post) {
-                                fill = mat(bp.palette("post", "stripped_mangrove_log"));
-                            } else if (rf.upperLattice()) {
-                                // ★★REF-1c-B 상층 창턱 — 창 <b>아래</b>에 어두운 수평선 한 켜.
-                                //   ★반드시 <b>적주에서 끊긴다</b> (post 칸은 여기 안 온다) —
-                                //     전 폭 연속 판을 만들면 「밝은 띠」를 다시 짓는 셈이다.
-                                //   반블록이라 위 절반이 그늘로 남아 창 밑이 가라앉는다.
-                                fill = k == 0 ? Material.DARK_OAK_SLAB
-                                        : k == rf.upperWall() - 1 ? Material.DARK_OAK_PLANKS
-                                        : mat(bp.palette("lattice", "dark_oak_trapdoor"));
-                            } else {
-                                fill = HwasanCampusBuilder.plaster(ox + c2, upBase + k, oz + r2);
-                            }
-                            // ★상층 살창도 세운다 — 하층과 같은 병 (눕히면 구멍). 상층은 사각
-                            //   테두리라 바깥이 자명하다: 어느 변에 앉았는가가 곧 법선이다.
-                            if (Bukkit.createBlockData(fill)
-                                    instanceof org.bukkit.block.data.type.TrapDoor) {
-                                org.bukkit.block.BlockFace uf = r2 == bz0 + iz
-                                        ? org.bukkit.block.BlockFace.NORTH
-                                        : r2 == bz1 - iz ? org.bukkit.block.BlockFace.SOUTH
-                                        : c2 == bx0 + ix ? org.bukkit.block.BlockFace.WEST
-                                        : org.bukkit.block.BlockFace.EAST;
-                                world.getBlockAt(ox + c2, upBase + k, oz + r2)
-                                        .setBlockData(stand(Bukkit.createBlockData(fill), uf), false);
-                                // ★★REF-1b — 살창 <b>뒤에 회벽</b>을 댄다. 안 대면 상층이
-                                //   「적주 | 검은 빈칸」의 되풀이로 읽힌다 (사용자 지적).
-                                //   레퍼런스의 상층은 창호가 <b>꽉 찬 벽체</b>다 — 살은 그 앞의 격자다.
-                                world.getBlockAt(ox + c2 - uf.getModX(), upBase + k,
-                                                oz + r2 - uf.getModZ())
-                                        .setType(HwasanCampusBuilder.plaster(ox + c2, upBase + k,
-                                                oz + r2), false);
-                                n.blocks++;
-                            } else {
-                                world.getBlockAt(ox + c2, upBase + k, oz + r2).setType(fill, false);
-                            }
-                            n.blocks++;
-                        }
-                    }
-                }
+                // ★★★상층이 <b>문법</b>을 받았다 (2026-08-11 · Codex 판정 B).
+                //   여기 있던 사각 루프는 <b>사라졌다</b>: 테두리를 돌며 {@code (c2-bx0)%3==0}
+                //   으로 기둥을 찍던 코드다. 그 %3 때문에 상층 기둥 아홉 중 <b>일곱이</b>
+                //   하층 창 위에 섰다 (하층 주기는 4 였다 — 최소공배수 12 에서만 만난다).
+                //   이제 상층도 제 평면을 갖고 하층과 <b>같은 세 줄</b>을 지난다.
+                //   ※평면을 안 적은 옛 도면은 {@link Blueprint} 가 옛 규칙대로 <b>합성</b>해
+                //     준다 — 조성에는 층이 한 갈래뿐이다.
+                Level up = bp.upperLevel();
+                stampLevel(world, bp, up, place, ox, upBase, oz, n);
+                trims(world, bp, up, bp.upperLevel().trims(), place, ox, upBase, oz, n);
+                brackets(world, bp, up, place, ox, upBase, oz, n,
+                        rf.upperWall(), Math.max(rf.upperEaveX(), rf.upperEaveZ()));
                 if (rf.grand()) {
                     HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0 + ix, ox + bx1 - ix,
                             upBase + rf.upperWall(), oz + bz0 + iz, oz + bz1 - iz,
@@ -370,18 +268,116 @@ public final class BlueprintBuilder {
         // ★★REF-3B — 공포는 <b>지붕 뒤에</b> 놓는다. 앞서 놓으면 서까래가
         //   맨 윗단을 덮어 elaborate 3단이 <b>2단으로만 보였다</b> (실측 0/8).
 
+        brackets(world, bp, bp, place, ox, oy, oz, n,
+                bp.roofs().isEmpty() ? 0 : bp.roofs().get(0).baseY(),
+                bp.roofs().isEmpty() ? 1 : bp.roofs().get(0).eave());
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ★★★층 — 하층도 상층도 <b>같은 파이프라인</b>을 탄다 (2026-08-11 · Codex 판정 B)
+    // ═══════════════════════════════════════════════════════════════════
+    /**
+     * 도면 한 층을 찍는다 — {@code plan} → {@code columns} → {@code depth}.
+     *
+     * <p>전에는 상층이 이 파이프라인 <b>밖</b>에 있었다: {@code BlueprintBuilder} 안의
+     * 사각 루프가 테두리를 돌며 {@code (c-bx0)%3==0} 으로 기둥을 찍었다. 그래서 상층은
+     * 깊이도 공포도 bay 역할도 마감도 <b>가질 수 없었고</b>, 주기 3 이 코드에 박혀
+     * 하층 주기 4 와 어긋나 상층 기둥 아홉 중 일곱이 하층 창 위에 섰다.
+     * 이제 층은 자기 {@code plan} 을 갖고, 나머지는 전부 하층과 같은 코드를 지난다.
+     */
+    private static void stampLevel(World world, Blueprint bp, Level lv,
+                                   Blueprint.Placement place, int ox, int oy, int oz, Count n) {
+        for (int r = 0; r < lv.depth(); r++) {
+            for (int c = 0; c < lv.width(); c++) {
+                int[] d = place.map(bp, c, r);      // ★회전 — 도면 (c,r) 이 어디로 가는가
+                int x = ox + d[0];
+                int z = oz + d[1];
+                char ch = lv.at(c, r);
+                org.bukkit.block.BlockFace nf = place.turn(faceOf(lv, c, r));
+                int dep = lv.depthOf(ch);
+                n.cells++;
+                // ★★★REF-1b (사용자 확정 2026-08-09) — <b>깊이는 「옮기는 양」이 아니다.</b>
+                //   본전을 정면에서 찍고서야 드러났다: {@code +1} 을 <b>이동</b>으로 구현하니
+                //   적주가 나가면서 <b>벽면에 제 폭만큼 세로 구멍</b>을 남겼고, 정면 평면의
+                //   세 칸 중 둘이 비어 하층이 <b>폐쇄 전각이 아니라 주랑</b>으로 읽혔다.
+                //   레퍼런스의 하층은 「붉은 목구조가 흰 회벽·창호 <b>앞에 덧대어진</b> 폐쇄 전각」이다.
+                //   → 부호가 <b>방식</b>을 정한다 (도면에 새 글자를 안 늘린다):
+                //       +  overlay : 기준면은 <b>배경(회벽)으로 채우고</b> 한 칸 밖에 덧댄다
+                //       0  base    : 기준면 그대로
+                //       −  recess  : 기준면엔 <b>창틀만</b> 남기고 채움 켜만 안으로 물린다
+                //     개구(air 켜)는 종전대로 스스로 판다 — carve 는 처방이 이미 갖고 있다.
+                if (dep > 0) {
+                    char back = lv.backingChar();
+                    if (back != 0) {
+                        stampColumn(world, bp, lv, back, x, oy, z, nf, n, 0);
+                    }
+                    stampColumn(world, bp, lv, ch, x + nf.getModX() * dep, oy,
+                            z + nf.getModZ() * dep, nf, n, 0);
+                } else if (dep < 0) {
+                    // ★★★툇간 (사용자 2026-08-10 · Codex 검토) — 「앞으로 튀어나온 기둥이 벽과
+                    //   붙어 있어 튀어나옴은 보이지만 형태가 명확하지 않다. 오히려 한 칸 띄워져
+                    //   있는 게 낫지 않나」. 레퍼런스의 적주는 <b>돌바닥 위에 홀로 서고 벽이
+                    //   한 겹 물러나</b> 있다 — 자립 열주 + 물러난 벽 = <b>툇간</b>이다.
+                    //   ★기둥을 <b>내보내지</b> 않는다 (Codex 반론): 처마가 2 라 기둥을 +2 로
+                    //     빼면 공포가 밖으로 나갈 자리가 없어진다. 대신 <b>벽을 물린다</b> —
+                    //     적주 +1 · 툇간 0 · 회벽 −1 · 살창 −2 로 <b>세 평면 + 실제 빈 칸</b>.
+                    //   기준면에는 <b>바닥만</b> 남는다 (딛는 자리) — 벽은 통째로 안으로 간다.
+                    stampColumn(world, bp, lv, ch, x, oy, z, nf, n, 3);           // 기준면 = 툇간 바닥
+                    if (dep <= -2) {
+                        stampColumn(world, bp, lv, ch, x + nf.getModX(), oy,
+                                z + nf.getModZ(), nf, n, 1);                  // 벽 평면 = 창틀
+                        stampColumn(world, bp, lv, ch, x + nf.getModX() * dep, oy,
+                                z + nf.getModZ() * dep, nf, n, 2);            // 그 뒤 = 살창만
+                    } else {
+                        stampColumn(world, bp, lv, ch, x + nf.getModX() * dep, oy,
+                                z + nf.getModZ() * dep, nf, n, 0);            // 물러난 벽
+                    }
+                } else {
+                    stampColumn(world, bp, lv, ch, x, oy, z, nf, n, 0);
+                }
+            }
+        }
+    }
+
+    /** 마감 조각 — 층이 선언한 것만. 빈 목록도 정상이다 (Codex) */
+    private static void trims(World world, Blueprint bp, Level lv,
+                              java.util.List<Blueprint.Trim> list, Blueprint.Placement place,
+                              int ox, int oy, int oz, Count n) {
+        for (Blueprint.Trim tr : list) {
+        
+            for (int c = tr.cols()[0]; c <= tr.cols()[1]; c++) {
+                int[] d3 = place.map(bp, c, tr.row());
+                org.bukkit.block.BlockFace tf = place.turn(faceOf(lv, c, tr.row()));
+                int tx = ox + d3[0] + tf.getModX() * tr.depth();
+                int tz = oz + d3[1] + tf.getModZ() * tr.depth();
+                stamp(world, tx, oy + tr.y(), tz, tr.material(), tf);
+                n.blocks++;
+                n.mark(tx, oy + tr.y(), tz, "마감:" + tr.id());
+            }
+        }
+    }
+
+    /**
+     * 공포 — 층이 제 지붕 값을 준다.
+     *
+     * @param roofBaseY 이 층 지붕의 밑면 (도면 y)
+     * @param eaveOut   이 층 처마의 내밈 — 공포는 <b>여기서 멈춘다</b>
+     */
+    private static void brackets(World world, Blueprint bp, Level lv,
+                                 Blueprint.Placement place, int ox, int oy, int oz, Count n,
+                                 int roofBaseY, int eaveOut) {
         // ★D2 ⑥ 공포 — <b>적주의 머리 위에서만</b> 시작한다 (자리 계약이 이름보다 먼저다).
         //   ★1차 medium 은 작게: 기둥 머리 위 2단 · 밖으로 1 · 좌우 1. 강당엔 이미
         //   깊이·주초·창방·도리·서까래·2단 기단이 들어갔다 — 공포는 <b>마지막 리듬</b>이면 된다.
-        int brk = switch (bp.bracket().toLowerCase()) {
+        int brk = switch (lv.bracket().toLowerCase()) {
             case "simple" -> 1;
             case "medium" -> 2;
             case "elaborate" -> 3;
             default -> 0;
         };
         if (brk > 0) {
-            for (int r = 0; r < bp.depth(); r++) {
-                for (int c = 0; c < bp.width(); c++) {
+            for (int r = 0; r < lv.depth(); r++) {
+                for (int c = 0; c < lv.width(); c++) {
                     // ★★★REF-1c-A 진범 (2026-08-09) — <b>「적주」 판정이 너무 넓었다.</b>
                     //   전에는 「기둥 처방에 mangrove_log 가 <b>들어 있는가</b>」로 골랐다.
                     //   그런데 본전은 회벽·격자의 <b>인방</b>도 mangrove 한 켜다 —
@@ -393,26 +389,37 @@ public final class BlueprintBuilder {
                     //     포함하는가」는 팔레트가 붉은 <b>테라코타</b>로 바뀌자 그 자리에서 죽었다.
                     //     자가 아니라 <b>조성이</b> 재료 이름에 얹혀 있었던 것이다 — 공포가
                     //     한 칸도 안 앉는다. 정의는 이제 {@link Blueprint#shaftIndex} 하나뿐이다.
-                    if (!bp.isPost(bp.at(c, r))) {
+                    if (!lv.isPost(lv.at(c, r))) {
                         continue;                    // ★적주가 아니면 공포도 없다
+                    }
+                    // ★★고주(실내 기둥)에는 공포를 안 얹는다 — 공포는 <b>처마를 받치는</b>
+                    //   부재라 처마가 있는 자리, 곧 몸체 <b>둘레</b>에만 뜻이 있다.
+                    //   글자 `G` 로 거르지 않는다: 글자는 바뀌고 자리는 안 바뀐다.
+                    if (!lv.onBodyEdge(c, r)) {
+                        continue;
                     }
                     int[] d2 = place.map(bp, c, r);
                     // ★★★REF-3B — <b>모서리 적주는 두 축을 받는다</b> (사용자 2026-08-10).
                     //   모서리는 「굵은 기둥」이 아니라 <b>두 지붕 방향의 하중이 모이는 곳</b>이다.
                     //   {@link #outward} 가 한 방향만 주므로, 모서리에서는 <b>두 면 모두</b>에 얹는다.
                     //   판정은 이름이 아니라 자리다 — 가로로도 세로로도 벽이 이어지지 않는 칸.
-                    boolean ewRun = tall(bp, c - 1, r) && tall(bp, c + 1, r);
-                    boolean nsRun = tall(bp, c, r - 1) && tall(bp, c, r + 1);
+                    //   ★★자를 고쳤다 (상층 문법 · 2026-08-11): 이 두 줄이 아직 <b>하층</b>
+                    //     평면을 보고 있었다. 상층 기둥의 이웃은 하층에선 맨바닥(3켜)이라
+                    //     <b>상층 기둥이 전부 모서리로</b> 세어졌고, 저마다 곁가지 공포를
+                    //     하나씩 더 뻗어 <b>이웃 창을 덮었다</b> (덮임 12건).
+                    //     모서리인지는 <b>그 층에서</b> 물어야 한다.
+                    boolean ewRun = tall(lv, c - 1, r) && tall(lv, c + 1, r);
+                    boolean nsRun = tall(lv, c, r - 1) && tall(lv, c, r + 1);
                     java.util.List<org.bukkit.block.BlockFace> faces = new java.util.ArrayList<>();
-                    faces.add(place.turn(outward(bp, c, r)));
+                    faces.add(place.turn(faceOf(lv, c, r)));
                     if (bp.bracketContour() && !ewRun && !nsRun) {
                         org.bukkit.block.BlockFace other =
-                                place.turn(outward(bp, c, r) == org.bukkit.block.BlockFace.NORTH
-                                        || outward(bp, c, r) == org.bukkit.block.BlockFace.SOUTH
-                                        ? (c > (bp.width() - 1) / 2.0
+                                place.turn(faceOf(lv, c, r) == org.bukkit.block.BlockFace.NORTH
+                                        || faceOf(lv, c, r) == org.bukkit.block.BlockFace.SOUTH
+                                        ? (c > (lv.width() - 1) / 2.0
                                                 ? org.bukkit.block.BlockFace.EAST
                                                 : org.bukkit.block.BlockFace.WEST)
-                                        : (r > (bp.depth() - 1) / 2.0
+                                        : (r > (lv.depth() - 1) / 2.0
                                                 ? org.bukkit.block.BlockFace.SOUTH
                                                 : org.bukkit.block.BlockFace.NORTH));
                         faces.add(other);
@@ -420,15 +427,14 @@ public final class BlueprintBuilder {
                     for (org.bukkit.block.BlockFace nf : faces) {
                     // ★공포는 <b>처마를 받친다</b> — 기둥 머리 <b>위</b>가 아니라 지붕 <b>바로 아래</b>다.
                     //   처음 기둥 머리 위에 놓았더니 지붕 위로 튀어나갔다 (눈이 잡았다).
-                    int roofBase = bp.roofs().isEmpty() ? bp.heightAt(c, r)
-                            : bp.roofs().get(0).baseY();
+                    int roofBase = roofBaseY;                 // ← 층이 준다
                     // ★★D2 전파가 드러낸 것 (2026-08-09 · 본전) — <b>내밈은 처마를 넘을 수 없다.</b>
                     //   본전은 위계가 가장 높으니 elaborate(3단) 인데 처마는 실측이 2 로 묶여 있다
                     //   (「3 은 45° 시선에서 벽면을 통째로 가린다」 — D-36). 3 을 그대로 내밀면
                     //   공포가 처마 <b>밖</b>으로 나가 하늘 아래 드러난다 —「공포는 처마를 받친다」가 깨진다.
                     //   → 위계는 <b>더 멀리</b>가 아니라 <b>더 높이·더 촘촘히</b>로 표현한다 (다포).
                     //     단 수는 그대로 3, 내밈만 처마에서 멈춘다.
-                    int eave = bp.roofs().isEmpty() ? brk : bp.roofs().get(0).eave();
+                    int eave = eaveOut;                       // ← 층이 준다
                     // ★★★REF-1c-A 그림자 홈 (사용자 확정 2026-08-09) — 공포 머리가 처마 밑에
                     //   <b>바로 붙어</b> 있으면 처마·공포·도리가 한 덩어리 띠로 읽힌다.
                     //   한 켜를 비워 <b>어두운 골</b>을 만든다: 처마 밑 y−1 이 벽 밖에서 비고,
@@ -436,7 +442,7 @@ public final class BlueprintBuilder {
                     //   ★공포는 여전히 적주 머리에만 앉고 처마를 넘지 않는다 (계약 불변).
                     int groove = GROOVE;
                     int top = oy + roofBase - brk - groove;
-                    int postDep = bp.depthOf(bp.at(c, r));
+                    int postDep = lv.depthOf(lv.at(c, r));
                     for (int s2 = 0; s2 < brk; s2++) {
                         int reach = Math.min(s2 + 1, Math.max(1, eave));   // 처마에서 멈춘다
                         // ★★덮임 감사가 잡은 것 (2026-08-10): 첫 단이 <b>적주가 이미 선 자리</b>에
@@ -511,10 +517,10 @@ public final class BlueprintBuilder {
                     //   중앙 쪽으로 꺾으면 부딪치지 않는다.
                     //   ★방향은 좌표에 안 박는다 — <b>축을 향해</b> 계산한다 (도면이 회전해도 산다).
                     //   ★역할 글자는 도면이 선언한다 (meta.bay_roles) — 코드는 역할만 안다.
-                    char adjCh = bp.bayRole("entrance_adjacent");
-                    if (bp.bracketContour() && adjCh != 0 && bp.at(c, r) == adjCh && brk >= 2) {
-                        int toward = -Integer.signum(bp.axisCol() - c);
-                        org.bukkit.block.BlockFace nf0 = place.turn(outward(bp, c, r));
+                    char adjCh = lv.bayRole("entrance_adjacent");
+                    if (bp.bracketContour() && adjCh != 0 && lv.at(c, r) == adjCh && brk >= 2) {
+                        int toward = -Integer.signum(lv.axisCol() - c);
+                        org.bukkit.block.BlockFace nf0 = place.turn(faceOf(lv, c, r));
                         int reach = Math.max(1, eave);
                         int dx = nf0.getModX() * reach - nf0.getModZ() * toward;
                         int dz = nf0.getModZ() * reach + nf0.getModX() * toward;
@@ -544,13 +550,14 @@ public final class BlueprintBuilder {
      * @param mode 0 = 그대로 · 1 = <b>창틀만</b> (채움 켜를 비운다) · 2 = <b>채움 켜만</b>
      *             · 3 = <b>바닥만</b> (맨 아래 석재 켜까지 — 툇간처럼 딛는 자리만 남긴다)
      */
-    private static void stampColumn(World world, Blueprint bp, char ch, int x, int oy, int z,
+    private static void stampColumn(World world, Blueprint bp, Level lv, char ch,
+                                    int x, int oy, int z,
                                     org.bukkit.block.BlockFace nf, Count n, int mode) {
         // ★★Codex 2026-08-10 — 부재 이름에 <b>면 방향</b>을 붙인다. 안 붙이면
         //   서로 다른 면의 같은 글자가 부딪친 것(D@남 ← D@서)이 「D ← D」로 <b>숨는다</b>.
         String member = mode == 3 ? "바닥" : "칸:" + ch + "@" + nf.name().charAt(0);
         int y = oy;
-        for (Blueprint.Course course : bp.columnOf(ch)) {
+        for (Blueprint.Course course : lv.columnOf(ch)) {
             if (mode == 3 && !(course.material().contains("stone")
                     || course.material().contains("andesite"))) {
                 return;                          // 바닥까지만 — 그 위는 물러난 벽의 것이다
@@ -648,11 +655,17 @@ public final class BlueprintBuilder {
      * ★한 칸의 처방(예 {@code D})이 네 벽에 다 쓰이므로 도면에 방향을 적을 수 없다 —
      * 적으면 세 벽이 틀린다. 그래서 <b>자리가</b> 방향을 정한다.
      */
-    public static org.bukkit.block.BlockFace outward(Blueprint bp, int col, int row) {
-        boolean ew = tall(bp, col - 1, row) && tall(bp, col + 1, row);
-        boolean ns = tall(bp, col, row - 1) && tall(bp, col, row + 1);
-        double cx = (bp.width() - 1) / 2.0;
-        double cz = (bp.depth() - 1) / 2.0;
+    /** 층이 제 자리로 방향을 안다면 그것을 쓴다 — 모르면 이웃의 높이로 짐작한다 */
+    static org.bukkit.block.BlockFace faceOf(Level lv, int col, int row) {
+        org.bukkit.block.BlockFace f = lv.outwardFace(col, row);
+        return f != null ? f : outward(lv, col, row);
+    }
+
+    public static org.bukkit.block.BlockFace outward(Level lv, int col, int row) {
+        boolean ew = tall(lv, col - 1, row) && tall(lv, col + 1, row);
+        boolean ns = tall(lv, col, row - 1) && tall(lv, col, row + 1);
+        double cx = (lv.width() - 1) / 2.0;
+        double cz = (lv.depth() - 1) / 2.0;
         boolean useNs;
         if (ew != ns) {
             useNs = ew;                                     // 동서로 달리는 벽 → 법선은 남북
@@ -697,9 +710,9 @@ public final class BlueprintBuilder {
     /** ★REF-1c-A — 적주로 세려면 목재가 세로로 이어져야 하는 켜 수 (인방 한 켜는 기둥이 아니다) */
     public static final int POST_MIN_COURSES = 3;
 
-    private static boolean tall(Blueprint bp, int col, int row) {
-        return col >= 0 && col < bp.width() && row >= 0 && row < bp.depth()
-                && bp.heightAt(col, row) >= WALL_MIN_COURSES;
+    private static boolean tall(Level lv, int col, int row) {
+        return col >= 0 && col < lv.width() && row >= 0 && row < lv.depth()
+                && lv.heightAt(col, row) >= WALL_MIN_COURSES;
     }
 
     /**

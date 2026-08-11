@@ -26,7 +26,7 @@ import java.util.Map;
  * <p>★1문자 = 1칸이므로 <b>평면은 ASCII 만 쓴다</b> — 한글은 폭이 둘로 보여 정렬이 깨진다
  * (첫 판에서 실제로 「곁적」 두 글자가 한 칸을 차지해 폭이 어긋났다).
  */
-public final class Blueprint {
+public final class Blueprint implements Level {
 
     /** 한 켜 — 재료 한 종류가 몇 켜 (「air*6」 처럼 빈 켜도 센다: 개구를 비우는 데 쓴다) */
     public record Course(String material, int count) {
@@ -40,6 +40,89 @@ public final class Blueprint {
      * 지배하지만 <b>본전 상층은 격자창이 띠를 이루고 회벽이 없다</b>. 코드가 한 가지로만
      * 채우면 둘 중 하나는 반드시 틀리므로, <b>도면이 고르게</b> 했다.
      */
+    /**
+     * 상층 — 제 {@code plan}·{@code columns}·{@code depth}·{@code bracket} 을 갖는다.
+     *
+     * <p>평면은 <b>하층과 같은 좌표계</b>(같은 폭·깊이)를 쓴다. 몸체 밖은 {@code '.'} 이다.
+     * 그래야 「상층 적주가 하층 고주 <b>같은 칸</b>에 서는가」를 좌표로 바로 잴 수 있다 —
+     * 부분 격자에 오프셋을 두면 그 검사가 산수가 되고, 산수는 틀린다.
+     */
+    public record UpperLevel(char[][] plan, Map<Character, List<Course>> columns,
+                             Map<Character, Integer> depths, char backing, String bracket,
+                             int axis, int[] box, List<Trim> trims) implements Level {
+        @Override
+        public char at(int col, int row) {
+            return row < 0 || row >= plan.length || col < 0 || col >= plan[row].length
+                    ? '.' : plan[row][col];
+        }
+
+        @Override
+        public int width() {
+            return plan.length == 0 ? 0 : plan[0].length;
+        }
+
+        @Override
+        public int depth() {
+            return plan.length;
+        }
+
+        @Override
+        public List<Course> columnOf(char ch) {
+            return columns.getOrDefault(ch, List.of());
+        }
+
+        @Override
+        public int depthOf(char ch) {
+            return depths.getOrDefault(ch, 0);
+        }
+
+        @Override
+        public int heightAt(int col, int row) {
+            int h = 0;
+            for (Course cs : columnOf(at(col, row))) {
+                h += cs.count();
+            }
+            return h;
+        }
+
+        @Override
+        public char backingChar() {
+            return backing;
+        }
+
+        @Override
+        public int axisCol() {
+            return axis;
+        }
+
+        @Override
+        public char bayRole(String role) {
+            return 0;                    // 상층엔 대문이 없다 — 입구 옆 역할도 없다 (Codex)
+        }
+
+        @Override
+        public boolean onBodyEdge(int col, int row) {
+            return col >= box[0] && col <= box[2] && row >= box[1] && row <= box[3]
+                    && (col == box[0] || col == box[2] || row == box[1] || row == box[3]);
+        }
+
+        /** 사각 테두리 — 어느 변에 앉았는가가 곧 법선이다 (앞뒤가 좌우보다 앞선다: 옛 규약) */
+        @Override
+        public org.bukkit.block.BlockFace outwardFace(int col, int row) {
+            if (!onBodyEdge(col, row)) {
+                return null;
+            }
+            if (row == box[1]) {
+                return org.bukkit.block.BlockFace.NORTH;
+            }
+            if (row == box[3]) {
+                return org.bukkit.block.BlockFace.SOUTH;
+            }
+            return col == box[0] ? org.bukkit.block.BlockFace.WEST
+                    : org.bukkit.block.BlockFace.EAST;
+        }
+    }
+
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
                        String profile, boolean rafters,
@@ -176,6 +259,7 @@ public final class Blueprint {
     private final int postPeriod;
     private final List<Trim> trims;
     private final Map<String, String> palette;
+    private UpperLevel upperLevel;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
@@ -417,6 +501,11 @@ public final class Blueprint {
      * @param role {@code post} 적주 몸통 · {@code lattice} 살창 · {@code lattice_accent}
      *             W3 중앙 강조켜
      */
+    /** 상층 — 도면이 {@code roof.*.upper.plan} 을 적었을 때만 있다 (없으면 {@code null}) */
+    public UpperLevel upperLevel() {
+        return upperLevel;
+    }
+
     public String palette(String role, String fallback) {
         String v = palette.get(role);
         return v == null || v.isBlank() ? fallback : v;
@@ -469,6 +558,31 @@ public final class Blueprint {
         return i < 0 ? "" : columnOf(ch).get(i).material();
     }
 
+    /**
+     * 이 칸이 <b>몸체의 둘레</b>에 있는가 — 지붕 상자의 테두리면 그렇다.
+     *
+     * <p>고주(실내 기둥)를 공포에서 빼기 위한 자다. 글자 `G` 로 묻지 않는다 —
+     * 글자는 바뀌고 <b>자리는 안 바뀐다</b>. 공포는 처마를 받치는 부재이므로
+     * <b>처마가 있는 자리</b>, 곧 몸체 둘레에만 뜻이 있다.
+     * (Codex 2026-08-11: 「고주에는 하층 공포를 생략한다 — 이 축척에서는 구조 효과 없이
+     * 복잡도만 늘어난다」)
+     *
+     * <p>지붕이 없는 도면은 <b>참</b>을 준다 — 종전대로 선다.
+     */
+    public boolean onBodyEdge(int col, int row) {
+        if (roofs.isEmpty()) {
+            return true;
+        }
+        for (Roof rf : roofs) {
+            int[] bx = rf.box();
+            boolean in = col >= bx[0] && col <= bx[2] && row >= bx[1] && row <= bx[3];
+            if (in && (col == bx[0] || col == bx[2] || row == bx[1] || row == bx[3])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean bracketContour() {
         return "contour".equalsIgnoreCase(bracketShape);
     }
@@ -499,6 +613,47 @@ public final class Blueprint {
     // 읽기 — RulesConfig 가 푼 Map 을 받는다 (파일 입출력은 부르는 쪽)
     // ═══════════════════════════════════════════════════════════════════
 
+    /** {@code "재료*n"} 목록을 켜 목록으로 — <b>하층·상층이 같은 파서를 지난다</b> */
+    @SuppressWarnings("unchecked")
+    private static Map<Character, List<Course>> parseColumns(String nm, Map<String, Object> raw) {
+        Map<Character, List<Course>> out = new LinkedHashMap<>();
+        raw.forEach((k, v) -> {
+            if (k.length() != 1) {
+                throw new IllegalStateException("설계도 " + nm + " — 기둥 처방의 열쇠는 한 글자여야 한다: \"" + k
+                        + "\" (한글은 폭이 둘로 보여 평면 정렬이 깨진다)");
+            }
+            List<Course> courses = new ArrayList<>();
+            for (Object o : (List<Object>) v) {
+                String s = String.valueOf(o).trim();
+                int star = s.indexOf('*');
+                courses.add(star < 0 ? new Course(s, 1)
+                        : new Course(s.substring(0, star).trim(),
+                                Integer.parseInt(s.substring(star + 1).trim())));
+            }
+            out.put(k.charAt(0), courses);
+        });
+        return out;
+    }
+
+    /** 평면 글자판 — 폭·행 수를 자로 잰다 (어긋나면 <b>여기서</b> 죽는다) */
+    private static char[][] parsePlan(String nm, String src, int w, int d, String what) {
+        String[] rows = src.stripTrailing().split("\n");
+        if (rows.length != d) {
+            throw new IllegalStateException("설계도 " + nm + " — " + what + " 행 " + rows.length
+                    + " ≠ 도면 깊이 " + d);
+        }
+        char[][] out = new char[d][w];
+        for (int r = 0; r < d; r++) {
+            String row = rows[r].strip();
+            if (row.length() != w) {
+                throw new IllegalStateException("설계도 " + nm + " — " + what + " " + r
+                        + "행 폭 " + row.length() + " ≠ " + w);
+            }
+            out[r] = row.toCharArray();
+        }
+        return out;
+    }
+
     @SuppressWarnings("unchecked")
     public static Blueprint of(Map<String, Object> root) {
         Map<String, Object> meta = (Map<String, Object>) req(root, "meta");
@@ -510,8 +665,9 @@ public final class Blueprint {
         int axis = ((Number) meta.getOrDefault("axis_col", w / 2)).intValue();
 
         // 기둥 처방 — "재료*n" 을 켜 목록으로
-        Map<Character, List<Course>> cols = new LinkedHashMap<>();
-        ((Map<String, Object>) req(root, "columns")).forEach((k, v) -> {
+        Map<Character, List<Course>> cols = parseColumns(nm, (Map<String, Object>) req(root, "columns"));
+        if (false) {
+            ((Map<String, Object>) req(root, "columns")).forEach((k, v) -> {
             if (k.length() != 1) {
                 throw new IllegalStateException("설계도 " + nm + " — 기둥 처방의 열쇠는 한 글자여야 한다: \"" + k
                         + "\" (한글은 폭이 둘로 보여 평면 정렬이 깨진다)");
@@ -525,7 +681,8 @@ public final class Blueprint {
                         : new Course(s.substring(0, star).trim(), Integer.parseInt(s.substring(star + 1).trim())));
             }
             cols.put(k.charAt(0), courses);
-        });
+            });
+        }
 
         // 평면 — 폭·행 수를 자로 잰다 (어긋나면 여기서 죽는다: 조성 중에 죽는 것보다 낫다)
         String[] rows = String.valueOf(req(root, "plan")).stripTrailing().split("\n");
@@ -669,9 +826,136 @@ public final class Blueprint {
             }
             depths.put(k.charAt(0), dep);
         });
+        // ★★★상층 층 — 도면이 제 평면을 적었으면 <b>하층과 같은 파이프라인</b>을 탄다
+        //   (Codex 판정 B · 2026-08-11). 안 적은 도면은 종전 코드 루프로 선다.
+        UpperLevel upLevel = null;
+        for (Object rv : ((Map<String, Object>) root.getOrDefault("roof", Map.of())).values()) {
+            Map<String, Object> m2 = (Map<String, Object>) rv;
+            Map<String, Object> up2 = (Map<String, Object>) m2.get("upper");
+            if (up2 == null || up2.get("plan") == null) {
+                continue;
+            }
+            List<Object> b2 = (List<Object>) req(m2, "box");
+            int[] bb = new int[]{((Number) b2.get(0)).intValue(), ((Number) b2.get(1)).intValue(),
+                    ((Number) b2.get(2)).intValue(), ((Number) b2.get(3)).intValue()};
+            Object ins = up2.getOrDefault("inset", 2);
+            int uix;
+            int uiz;
+            if (ins instanceof List<?> li) {
+                uix = ((Number) li.get(0)).intValue();
+                uiz = ((Number) li.get(1)).intValue();
+            } else {
+                uix = ((Number) ins).intValue();
+                uiz = uix;
+            }
+            Map<Character, List<Course>> ucols =
+                    parseColumns(nm + " 상층", (Map<String, Object>) req(up2, "columns"));
+            Map<Character, Integer> udep = new LinkedHashMap<>();
+            ((Map<String, Object>) up2.getOrDefault("depth", Map.of())).forEach((k, v) -> {
+                int dv = ((Number) v).intValue();
+                if (dv < -1 || dv > 1) {
+                    // Codex: 「상층 깊이는 최대 ±1」 — 상층은 가벼워야 한다
+                    throw new IllegalStateException("설계도 " + nm + " 상층 — 깊이는 −1..+1 이어야 한다: "
+                            + k + "=" + dv);
+                }
+                udep.put(k.charAt(0), dv);
+            });
+            char[][] uplan = parsePlan(nm, String.valueOf(up2.get("plan")), w, d, "상층 평면");
+            for (char[] rr : uplan) {
+                for (char ch : rr) {
+                    if (ch != '.' && !ucols.containsKey(ch)) {
+                        throw new IllegalStateException("설계도 " + nm
+                                + " 상층 — 처방에 없는 문자: '" + ch + "'");
+                    }
+                }
+            }
+            List<Trim> utrims = new ArrayList<>();
+            for (Object o : (List<Object>) up2.getOrDefault("trim", List.of())) {
+                Map<String, Object> m3 = (Map<String, Object>) o;
+                List<Object> cs3 = (List<Object>) m3.get("cols");
+                utrims.add(new Trim(String.valueOf(m3.getOrDefault("id", "?")),
+                        ((Number) req(m3, "row")).intValue(),
+                        new int[]{((Number) cs3.get(0)).intValue(),
+                                ((Number) cs3.get(1)).intValue()},
+                        ((Number) req(m3, "y")).intValue(),
+                        ((Number) m3.getOrDefault("depth", 0)).intValue(),
+                        String.valueOf(req(m3, "material"))));
+            }
+            String ubk = String.valueOf(up2.getOrDefault("bracket", "none"));
+            char uback = String.valueOf(up2.getOrDefault("backing", " ")).charAt(0);
+            upLevel = new UpperLevel(uplan, ucols, udep, uback == ' ' ? 0 : uback, ubk, axis,
+                    new int[]{bb[0] + uix, bb[1] + uiz, bb[2] - uix, bb[3] - uiz}, utrims);
+            break;
+        }
+
+        // ★★옛 도면 호환 — {@code upper.plan} 을 안 적은 도면(산문)은 <b>여기서</b> 평면을
+        //   합성한다. 규칙은 종전 조성 루프 그대로다: 테두리 칸 · {@code %3} 이면 적주.
+        //   ★조성에서 이리로 옮긴 까닭: 조성에 층이 <b>두 갈래</b>로 있으면 상층은 영영
+        //     하층과 같은 문법이 못 된다. 규칙을 도면 쪽으로 내리면 조성은 한 갈래가 되고,
+        //     산문은 <b>한 블록도 안 바뀐다</b> (합성 결과가 옛 루프와 같기 때문).
+        //   ※산문에 진짜 평면을 적는 것은 전파 회차의 일이다 — 그때 이 합성은 안 쓰이게 된다.
+        if (upLevel == null) {
+            for (Object rv : ((Map<String, Object>) root.getOrDefault("roof", Map.of())).values()) {
+                Map<String, Object> m2 = (Map<String, Object>) rv;
+                Map<String, Object> up2 = (Map<String, Object>) m2.get("upper");
+                if (up2 == null) {
+                    continue;
+                }
+                List<Object> b2 = (List<Object>) req(m2, "box");
+                int[] bb = new int[]{((Number) b2.get(0)).intValue(), ((Number) b2.get(1)).intValue(),
+                        ((Number) b2.get(2)).intValue(), ((Number) b2.get(3)).intValue()};
+                Object ins = up2.getOrDefault("inset", 2);
+                int uix;
+                int uiz;
+                if (ins instanceof List<?> li) {
+                    uix = ((Number) li.get(0)).intValue();
+                    uiz = ((Number) li.get(1)).intValue();
+                } else {
+                    uix = ((Number) ins).intValue();
+                    uiz = uix;
+                }
+                int wall = ((Number) up2.getOrDefault("wall", 4)).intValue();
+                boolean lat = "lattice".equalsIgnoreCase(
+                        String.valueOf(up2.getOrDefault("infill", "plaster")));
+                String postMat = String.valueOf(((Map<String, Object>) meta
+                        .getOrDefault("palette", Map.of()))
+                        .getOrDefault("post", "stripped_mangrove_log"));
+                Map<Character, List<Course>> uc = new LinkedHashMap<>();
+                uc.put('T', List.of(new Course(postMat, wall)));
+                if (lat) {
+                    List<Course> v = new ArrayList<>();
+                    v.add(new Course("dark_oak_slab", 1));
+                    if (wall > 2) {
+                        v.add(new Course("lattice", wall - 2));
+                    }
+                    v.add(new Course("dark_oak_planks", 1));
+                    uc.put('V', v);
+                } else {
+                    uc.put('V', List.of(new Course("plaster", wall)));
+                }
+                char[][] gp = new char[d][w];
+                for (char[] row : gp) {
+                    java.util.Arrays.fill(row, '.');
+                }
+                for (int r2 = bb[1] + uiz; r2 <= bb[3] - uiz; r2++) {
+                    for (int c2 = bb[0] + uix; c2 <= bb[2] - uix; c2++) {
+                        boolean edge = r2 == bb[1] + uiz || r2 == bb[3] - uiz
+                                || c2 == bb[0] + uix || c2 == bb[2] - uix;
+                        if (!edge || r2 < 0 || r2 >= d || c2 < 0 || c2 >= w) {
+                            continue;
+                        }
+                        gp[r2][c2] = ((c2 - bb[0]) % 3 == 0) || ((r2 - bb[1]) % 3 == 0) ? 'T' : 'V';
+                    }
+                }
+                upLevel = new UpperLevel(gp, uc, Map.of(), (char) 0, "none", axis,
+                        new int[]{bb[0] + uix, bb[1] + uiz, bb[2] - uix, bb[3] - uiz}, List.of());
+                break;
+            }
+        }
+
         String usage = String.valueOf(meta.getOrDefault("usage",
                 roofs.stream().anyMatch(Roof::hipPyramid) ? "pavilion" : "corridor"));
-        return new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots, places,
+        Blueprint bpOut = new Blueprint(nm, pad, w, d, axis, plan, cols, roofs, spots, places,
                 String.valueOf(meta.getOrDefault("rank", "principal")),
                 ((Number) meta.getOrDefault("south_row", d - 1)).intValue(), usage,
                 String.valueOf(meta.getOrDefault("family", usage)), depths,
@@ -681,6 +965,8 @@ public final class Blueprint {
                 String.valueOf(meta.getOrDefault("bracket", "none")),
                 String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles,
                 ((Number) meta.getOrDefault("post_period", 0)).intValue(), trims, palette);
+        bpOut.upperLevel = upLevel;
+        return bpOut;
     }
 
     private static Object req(Map<String, Object> m, String k) {

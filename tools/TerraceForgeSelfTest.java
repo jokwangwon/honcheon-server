@@ -99,6 +99,28 @@ public final class TerraceForgeSelfTest {
     private static final int POST_MIN = com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES;
 
     /** 적주 몸통 위 · 도리 아래에 몇 켜가 있는가 = <b>주두의 두께</b> (REF-3B 밀도 사다리) */
+    private static int firstColOf(com.honcheon.mvt.forge.Level lv, char ch) {
+        for (int r = 0; r < lv.depth(); r++) {
+            for (int c = 0; c < lv.width(); c++) {
+                if (lv.at(c, r) == ch) {
+                    return c;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private static int firstRowOf(com.honcheon.mvt.forge.Level lv, char ch) {
+        for (int r = 0; r < lv.depth(); r++) {
+            for (int c = 0; c < lv.width(); c++) {
+                if (lv.at(c, r) == ch) {
+                    return r;
+                }
+            }
+        }
+        return 0;
+    }
+
     private static int capitalCourses(Blueprint bp, char ch) {
         java.util.List<Blueprint.Course> col = bp.columnOf(ch);
         // ★★자를 고쳤다 — 다섯 번째엔 「mangrove_log 인가」를 「_log 로 끝나는가」로 넓혔고,
@@ -1154,7 +1176,9 @@ public final class TerraceForgeSelfTest {
                     // ★자를 고쳤다 (REF-2C): 조성이 적주 판정을 Blueprint#isPost 하나로
                     //   옮기면서 이 문자열이 조성에서 사라졌다. 물어야 할 것은 <b>어떤 식으로
                     //   쓰였나</b>가 아니라 <b>구조적 적주 판정을 부르는가</b>다.
-                    bbSrc.contains("bp.isPost(bp.at(c, r))")
+                    // ★자를 고쳤다 (상층 문법 · 2026-08-11): 층을 하층·상층 둘로 가르며
+                    //   조성의 <b>글자</b>가 bp → lv 로 옮겼다. 계약은 안 바뀌었다.
+                    bbSrc.contains("lv.isPost(lv.at(c, r))")
                             && bbSrc.contains("★적주가 아니면 공포도 없다"), "");
             // ★★자를 고쳤다 (REF-1c-A): 전에는 {@code int top = oy + roofBase - brk;} 라는
             //   <b>한 줄 그대로</b>를 찾았다. 처마 밑에 <b>그림자 골</b> 한 켜를 내면서 그 줄이
@@ -1178,7 +1202,7 @@ public final class TerraceForgeSelfTest {
             //     그대로</b>를 찾고 있었다. 깊이가 「이동」에서 「덧댐/물림」으로 바뀌며 그 줄이
             //     사라지자 조성은 멀쩡한데 눈이 짖었다 — <b>글자가 아니라 쓰임</b>을 물어야 한다.
             check("★[눈의 눈] 깊이가 도면 기계에 닿는다 (덧댐·물림 두 갈래로 실제로 쓴다)",
-                    bbSrc.contains("bp.depthOf(ch)") && bbSrc.contains("bp.backingChar()")
+                    bbSrc.contains("lv.depthOf(ch)") && bbSrc.contains("lv.backingChar()")
                             && bbSrc.contains("stampColumn("), "");
 
             // ★옛 코드가 남았는가 — 강당이 아직 plasterHall 을 부르면 두 언어가 공존한다
@@ -3222,7 +3246,7 @@ public final class TerraceForgeSelfTest {
 
             // ★조성이 실제로 **비우고 나서** 찍는가 — 순서가 뒤집히면 도면을 지운다.
             int clearCall = bb.indexOf("clearHeight(bp)");
-            int stampLoop = bb.indexOf("for (Blueprint.Course course : bp.columnOf");
+            int stampLoop = bb.indexOf("for (Blueprint.Course course : lv.columnOf");
             check("★[눈의 눈] BlueprintBuilder 에서 비움 부름과 찍는 고리를 둘 다 찾았다",
                     clearCall >= 0 && stampLoop >= 0, clearCall + " / " + stampLoop);
             check("★★조성이 **비우고 나서** 찍는다 (순서가 뒤집히면 제 도면을 지운다)",
@@ -3292,9 +3316,23 @@ public final class TerraceForgeSelfTest {
                     standAt >= 0 && standBody.contains("setOpen(true)"), standBody.replace('\n', ' '));
             check("★★세우는 손이 **조성에 닿는다** (stamp 가 stand 를 부른다 — 죽은 함수 방지)",
                     bb.indexOf("stand(d, face)") >= 0, bb.indexOf("stand(d, face)"));
-            check("★★상층 살창도 세운다 (하층만 고치면 위층이 구멍으로 남는다)",
-                    bb.indexOf("stand(Bukkit.createBlockData(fill), uf)") >= 0,
-                    bb.indexOf("stand(Bukkit.createBlockData(fill), uf)"));
+            // ★★자를 고쳤다 (상층 문법 · 2026-08-11): 상층에 <b>제 세우는 손</b>이 따로
+            //   있는지를 원문에서 찾던 자였다. 이제 상층은 하층과 <b>같은 손</b>을 쓴다 —
+            //   물어야 할 것은 「상층 전용 코드가 있는가」가 아니라
+            //   <b>상층이 살창 처방을 쓰고, 그 처방이 세워지는가</b>다.
+            {
+                com.honcheon.mvt.forge.Level u0 = hj.upperLevel();
+                boolean upLat = false;
+                for (int r = 0; u0 != null && r < u0.depth(); r++) {
+                    for (int c = 0; c < u0.width(); c++) {
+                        for (Blueprint.Course cs : u0.columnOf(u0.at(c, r))) {
+                            upLat |= "lattice".equals(cs.material());
+                        }
+                    }
+                }
+                check("★★상층 살창도 세운다 (상층이 살창 처방을 쓰고, 세우는 손은 하층과 하나다)",
+                        upLat && bb.contains("stand(Bukkit.createBlockData(lm), nf)"), upLat);
+            }
 
             // ══════ ★★D-34 — 정면 벽의 **재료 비율** (2026-08-05 · 오염 걷힌 뒤 첫 실측) ══════
             // 앞의 눈들은 「회벽 켜열이 붙었나」·「격자가 회벽만큼 있나」처럼 **칸의 수**만 셌다.
@@ -3778,7 +3816,7 @@ public final class TerraceForgeSelfTest {
                         hj.bayRole("entrance_adjacent") == 'A' && hj.bayRole("corner") == 'C',
                         hj.bayRole("corner") + "/" + hj.bayRole("entrance_adjacent"));
                 check("★★입구 옆이 <b>축을 향해</b> 한 칸 뻗는다 (좌표에 방향을 안 박는다)",
-                        bb4.contains("int toward = -Integer.signum(bp.axisCol() - c)")
+                        bb4.contains("int toward = -Integer.signum(lv.axisCol() - c)")
                                 && bb4.contains("sd.setFacing(lat)"), "");
                 // ★부딪치지 않는 까닭 — 문설주는 적주 평면(+1), 대각은 처마 평면(+eave)이다
                 Blueprint.Roof r0 = hj.roofs().get(0);
@@ -4052,6 +4090,99 @@ public final class TerraceForgeSelfTest {
                         "");
             }
 
+            // ══════ ★★★상층이 하층과 <b>같은 문법</b>을 쓴다 (2026-08-11 · Codex 판정 B) ══════
+            //   Codex 합격 기준 셋을 그대로 눈으로 옮긴다.
+            {
+                String bbU = java.nio.file.Files.readString(java.nio.file.Path.of(
+                        "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
+                // ① 사각 루프와 % 3 이 사라졌는가
+                check("★★①상층 사각 루프의 <b>주기 3</b> 이 조성에서 사라졌다 "
+                                + "(코드가 기둥 자리를 정하면 도면이 못 정한다)",
+                        !bbU.contains("(c2 - bx0) % 3 == 0"), "");
+                check("★★①상층이 <b>같은 파이프라인</b>을 지난다 (stampLevel·trims·brackets)",
+                        bbU.contains("stampLevel(world, bp, up, place, ox, upBase, oz, n)")
+                                && bbU.contains("brackets(world, bp, up, place"), "");
+                com.honcheon.mvt.forge.Level upv = hj.upperLevel();
+                check("★★상층이 제 <b>평면</b>을 갖는다 (도면이 짓는다)", upv != null, upv);
+                if (upv != null) {
+                    // ② 상층 적주가 <b>전부</b> 하층 적주(고주) 좌표에 선다
+                    java.util.List<String> orphan = new java.util.ArrayList<>();
+                    int upPosts = 0;
+                    for (int r = 0; r < upv.depth(); r++) {
+                        for (int c = 0; c < upv.width(); c++) {
+                            if (!upv.isPost(upv.at(c, r))) {
+                                continue;
+                            }
+                            upPosts++;
+                            if (!hj.isPost(hj.at(c, r))) {
+                                orphan.add("(" + c + "," + r + ")");
+                            }
+                        }
+                    }
+                    check("★★②상층 적주 " + upPosts + "개가 <b>모두</b> 하층 적주 위에 선다 "
+                                    + "(허공에 선 것 " + orphan.size() + ")",
+                            upPosts > 0 && orphan.isEmpty(), orphan.toString());
+                    // ★[눈의 눈] 상층 기둥 하나를 옆으로 한 칸 밀면 이 자가 <b>무너져야</b> 한다
+                    java.util.Map<String, Object> upRaw = new org.yaml.snakeyaml.Yaml().load(
+                            java.nio.file.Files.readString(java.nio.file.Path.of(
+                                    "config/blueprints/hwasan_honjeon.yml")));
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> upRoof = (java.util.Map<String, Object>)
+                            ((java.util.Map<String, Object>) upRaw.get("roof")).values()
+                                    .iterator().next();
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> upBlk =
+                            (java.util.Map<String, Object>) upRoof.get("upper");
+                    java.util.List<String> ul = new java.util.ArrayList<>(java.util.Arrays.asList(
+                            String.valueOf(upBlk.get("plan")).split("\n")));
+                    int frow = -1;
+                    for (int i = 0; i < ul.size(); i++) {
+                        if (ul.get(i).indexOf('T') >= 0) {
+                            frow = i;
+                            break;
+                        }
+                    }
+                    String fl = ul.get(frow);
+                    int tAt = fl.indexOf('T');
+                    // 적주 하나를 이웃 칸(창)과 <b>맞바꾼다</b> — 수는 그대로, 자리만 어긋난다
+                    ul.set(frow, fl.substring(0, tAt) + 'V' + 'T' + fl.substring(tAt + 2));
+                    upBlk.put("plan", String.join("\n", ul));
+                    com.honcheon.mvt.forge.Level mutU = Blueprint.of(upRaw).upperLevel();
+                    int mutOrphan = 0;
+                    for (int r = 0; r < mutU.depth(); r++) {
+                        for (int c = 0; c < mutU.width(); c++) {
+                            if (mutU.isPost(mutU.at(c, r)) && !hj.isPost(hj.at(c, r))) {
+                                mutOrphan++;
+                            }
+                        }
+                    }
+                    check("★★[눈의 눈] 상층 기둥을 한 칸 밀면 <b>이 자가 무너진다</b> (허공 "
+                                    + mutOrphan + ")", mutOrphan == 1, mutOrphan);
+                    // ③ 선언된 요소가 실제로 나타난다 — 4켜 · 경량 공포 · 모서리 역할
+                    java.util.Set<Character> chs = new java.util.TreeSet<>();
+                    for (int r = 0; r < upv.depth(); r++) {
+                        for (int c = 0; c < upv.width(); c++) {
+                            if (upv.at(c, r) != '.') {
+                                chs.add(upv.at(c, r));
+                            }
+                        }
+                    }
+                    int maxH = chs.stream().mapToInt(ch -> upv.heightAt(
+                            firstColOf(upv, ch), firstRowOf(upv, ch))).max().orElse(0);
+                    check("★★③상층 처방이 <b>4켜</b>다 (12켜용 처방을 그대로 못 쓴다 — " + maxH + ")",
+                            maxH == 4, maxH);
+                    check("★★③상층 공포가 <b>가볍다</b> (하층 " + hj.bracket() + " → 상층 "
+                                    + upv.bracket() + " — 무조건 복제 금지)",
+                            !upv.bracket().equalsIgnoreCase(hj.bracket())
+                                    && !"none".equalsIgnoreCase(upv.bracket()), upv.bracket());
+                    check("★★③상층에 <b>모서리 역할</b>이 따로 있다 (네 귀가 일반 적주와 다르다)",
+                            upv.at(7, 8) != upv.at(11, 8) && upv.at(7, 8) == upv.at(31, 17),
+                            "" + upv.at(7, 8) + upv.at(11, 8));
+                    check("★★③상층에 <b>대문 역할이 없다</b> (상층엔 대문이 없다 — Codex)",
+                            upv.bayRole("entrance_adjacent") == 0, "");
+                }
+            }
+
             // ══════ ★★★REF-1c-B — 실루엣 마감 · 중앙 위계 ══════
             String bbSrc2 = java.nio.file.Files.readString(java.nio.file.Path.of(
                     "server-mvt/src/main/java/com/honcheon/mvt/forge/BlueprintBuilder.java"));
@@ -4117,8 +4248,35 @@ public final class TerraceForgeSelfTest {
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"
                                     + "HwasanCampusBuilder.java"))
                             .contains("for (int k = 1; k <= 5; k++)"), "");
-            check("★★상층 창턱이 <b>적주에서 끊긴다</b> (전 폭 연속이면 「밝은 띠」를 다시 짓는 셈)",
-                    bbSrc2.contains("k == 0 ? Material.DARK_OAK_SLAB"), "");
+            // ★★자를 고쳤다 (상층 문법 · 2026-08-11): 원문의 삼항식을 찾던 자였다.
+            //   이제 창턱은 <b>도면의 창 처방</b>에 있다. 계약은 「창턱이 전 폭으로 안 이어진다」이므로,
+            //   <b>적주 처방에 창턱이 없다</b>는 것을 도면에서 직접 잰다 — 없으면 못 이어진다.
+            {
+                com.honcheon.mvt.forge.Level u1 = hj.upperLevel();
+                boolean sillInWindow = false;
+                boolean sillInPost = false;
+                for (int r = 0; u1 != null && r < u1.depth(); r++) {
+                    for (int c = 0; c < u1.width(); c++) {
+                        char ch = u1.at(c, r);
+                        if (ch == '.') {
+                            continue;
+                        }
+                        for (Blueprint.Course cs : u1.columnOf(ch)) {
+                            if (!cs.material().endsWith("_slab")) {
+                                continue;
+                            }
+                            if (u1.isPost(ch)) {
+                                sillInPost = true;
+                            } else {
+                                sillInWindow = true;
+                            }
+                        }
+                    }
+                }
+                check("★★상층 창턱이 <b>적주에서 끊긴다</b> (창엔 있고 적주엔 없다 — 전 폭 연속이면"
+                                + " 「밝은 띠」를 다시 짓는 셈)",
+                        sillInWindow && !sillInPost, sillInWindow + "/" + sillInPost);
+            }
 
             // ★REF-1b — 밝은 단청은 <b>적주 머리에만</b>. 정면 전체를 가로지르면 한 덩어리로 읽힌다.
             int brightTop = 0;
