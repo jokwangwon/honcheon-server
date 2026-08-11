@@ -3451,9 +3451,16 @@ public final class TerraceForgeSelfTest {
                     noLintel++;
                 }
             }
+            // ★★자를 고쳤다 (문선 · 2026-08-11): 「15 이상」은 <b>옛 평면의 수</b>였다.
+            //   칸 안에 문선(L)이 서면서 채움 칸이 3 → 2 로 줄어 12 가 됐다 —
+            //   조성은 멀쩡한데 자가 <b>어제의 값</b>을 외우고 있었다 (유형 ①).
+            //   계약은 「몇 칸이냐」가 아니라 <b>「정면이 비어 있지 않다」</b>이므로
+            //   몸체 폭에 견준 <b>비율</b>로 묻는다.
+            int bodyW = hj.roofs().get(0).box()[2] - hj.roofs().get(0).box()[0] + 1;
             check("★[눈의 눈] 본전 정면에서 채워진 칸을 <b>넉넉히</b> 찾았다 (" + checked
-                            + " ≥ 15 — 회벽이 통째로 사라지면 여기서 먼저 짖는다)",
-                    checked >= 15, checked);
+                            + " ≥ 몸체 폭 " + bodyW + " 의 1/3 — 회벽이 통째로 사라지면 "
+                            + "여기서 먼저 짖는다)",
+                    checked * 3 >= bodyW, checked + "/" + bodyW);
             check("★★칸마다 위·아래가 **붉은 인방으로 끊긴다** (안 끊기면 회벽은 통짜 빈 판이, "
                             + "격자는 사다리가 된다 — 안 끊긴 칸 " + noLintel + "/" + checked + ")",
                     noLintel == 0, noLintel + "/" + checked);
@@ -3788,8 +3795,17 @@ public final class TerraceForgeSelfTest {
                 java.util.List<String> runPlan = new java.util.ArrayList<>(java.util.Arrays.asList(
                         String.valueOf(runRaw.get("plan")).split("\n")));
                 String fr = runPlan.get(frontR);
-                // 왼쪽 끝 적주(col 4) 옆에 하나 더 — 축에서 먼 길이-2 런을 만든다
-                runPlan.set(frontR, fr.substring(0, 5) + 'P' + fr.substring(6));
+                // ★변이 자리를 <b>찾아서</b> 넣는다 (2026-08-11): 전에는 col 5 에 박아 넣었는데
+                //   문선(L)이 서면서 그 자리가 이미 적주가 되어 <b>변이가 안 먹혔다</b>.
+                //   왼쪽 끝 적주 <b>바로 옆의 채움 칸</b>을 찾아 거기에 적주를 끼운다.
+                int mutAt = -1;
+                for (int mc = hj.roofs().get(0).box()[0] + 1; mc < hj.axisCol(); mc++) {
+                    if (!hj.isPost(hj.at(mc, frontR)) && hj.isPost(hj.at(mc - 1, frontR))) {
+                        mutAt = mc;
+                        break;
+                    }
+                }
+                runPlan.set(frontR, fr.substring(0, mutAt) + 'P' + fr.substring(mutAt + 1));
                 runRaw.put("plan", String.join("\n", runPlan));
                 Blueprint runMut = Blueprint.of(runRaw);
                 java.util.List<int[]> mutRuns = new java.util.ArrayList<>();
@@ -3805,12 +3821,15 @@ public final class TerraceForgeSelfTest {
                     }
                     mutRuns.add(new int[]{s, c2 - 1});
                 }
-                long mutPairs = mutRuns.stream().filter(rr -> rr[1] - rr[0] + 1 == 2)
-                        .filter(rr -> flanksAxis(runMut, frontR, rr[0], rr[1])).count();
-                long mutAll = mutRuns.stream().filter(rr -> rr[1] - rr[0] + 1 == 2).count();
-                check("★★[눈의 눈] 축에서 먼 겹기둥을 만들면 <b>이 자가 무너진다</b> (쌍 "
-                                + mutAll + " 중 중앙 " + mutPairs + ")",
-                        mutAll == 3 && mutPairs == 2, mutAll + "/" + mutPairs);
+                int mutLongest = mutRuns.stream().mapToInt(rr -> rr[1] - rr[0] + 1)
+                        .max().orElse(0);
+                // ★★자를 고쳤다 (문선 · 2026-08-11): 전에는 「축에서 먼 <b>길이-2 런</b>을
+                //   만들면 잡힌다」로 증명했다. 그런데 문선이 서면서 모든 틈이 1 이 되어
+                //   적주를 하나 더 끼우면 <b>길이 3 런</b>이 된다 — 길이-2 는 못 만든다.
+                //   계약의 뜻은 그대로다: <b>「런이 3 이상으로 안 이어진다」</b>.
+                //   그러므로 변이가 증명할 것도 그것이다.
+                check("★★[눈의 눈] 적주를 하나 더 끼우면 <b>런이 3 이 된다</b> (그래서 잡힌다 — "
+                                + mutLongest + ")", mutLongest >= 3, mutLongest);
             }
             // ★진범 — 공포가 좌우로 번지면 3칸 주기 적주에서 <b>이웃끼리 이어져 띠가 된다</b>.
             check("★★공포가 <b>좌우로 번지지 않는다</b> (번지면 적주 리듬을 스스로 지운다)",

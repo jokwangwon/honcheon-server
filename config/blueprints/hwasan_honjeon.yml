@@ -108,7 +108,9 @@ meta:
   # ★REF-3B-Q1 — 역할 글자를 <b>도면이 선언</b>한다. 코드는 역할만 알고 글자는 모른다.
   # ★주기를 도면이 <b>선언</b>한다 (Codex 2026-08-10) — 눈이 최빈값을 읽으면
   #   「균일하기만 하면」 어떤 주기도 통과한다. 신고한 값과 실물이 같은지를 물어야 한다.
-  post_period: 4
+  # ★문선이 서면서 세로 부재의 주기가 <b>4 → 2</b> 가 됐다 (기둥·문선이 번갈아 선다).
+  #   레퍼런스 세로선 14개 · 우리도 <b>14개</b>가 됐다 (전 8개).
+  post_period: 2
   bay_roles:
     corner: "C"
     entrance_adjacent: "A"
@@ -304,6 +306,18 @@ columns:
   #   ★6 은 <b>지나쳤다</b>: 정면에서 회벽이 통째로 사라져 「하층은 회벽이 있는 벽이다」가
   #     깨졌고 눈 셋이 짖었다. 레퍼런스에도 칸 사이에 <b>가는 밝은 띠</b>가 있다.
   #     → 살창 <b>5</b>, 회벽 한 켜(y8)는 남긴다. 내주는 것은 밑의 <b>인방(밝은 갈색)</b>이다.
+  # ★★★문선 (2026-08-11 · 사진 자가 준 답) — 칸 <b>한가운데</b> 서는 세로재.
+  #   `tools/ref_measure.py` 로 레퍼런스 정면을 재니 세로선이 <b>14개</b>인데 우리는 8개였다.
+  #   사진의 14 는 구조 기둥과 <b>문틀</b>이 섞인 수다 — 레퍼런스의 칸 안에는
+  #   흰 판과 어두운 문짝을 가르는 <b>붉은 틀</b>이 서 있다.
+  #   그 밀도가 곧 「우리 정면이 2.4배 거칠다」의 정체였다.
+  #   ★기둥과 같은 붉은 재료다 (레퍼런스의 틀도 붉다). 다만 <b>기단이 아니라 머름 위</b>에 선다 —
+  #     구조 기둥이 아니라 <b>창틀</b>이기 때문이다.
+  #   ★글자는 <b>L</b> 이다 — `E` 는 이미 <b>엄지기둥</b>(월대 난간 끝)이 쓰고 있었고,
+  #     겹쳐 쓰자 난간 눈이 문선 12개를 엄지기둥으로 세어 짖었다 (실제로 잡혔다).
+  "L": ["smooth_stone*3", "mangrove_planks",
+        "red_terracotta*5",
+        "mangrove_planks", "dark_oak_slab", "dark_oak_log"]   # 문선 — 칸을 가른다
   "D": ["smooth_stone*3",
         "lattice*5", "plaster",
         "mangrove_planks",
@@ -347,6 +361,7 @@ depth:
   #   <b>감실의 천장·바닥면</b>이었다 (문이 한 칸 물러나 생긴 알코브가 빛을 받는다).
   #   레퍼런스의 문짝은 <b>틀과 같은 면</b>에 있어 그 밝은 띠가 없다.
   #   ★툇간은 안 사라진다 — 회벽 W 는 여전히 −1 이고, 적주(+1)와의 차는 2 그대로다.
+  "L": 0
   "D": 0
   "O": -1
   "M": 0
@@ -372,7 +387,7 @@ plan: |
     .sssssssssssssssssssssssssssssssssssss
     .sRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
-    .sRNCDDDPDDDPDDDPDDDDDPDDDPDDDPDDDCNRs
+    .sRNCDLDPDLDPDLDPDLDLDPDLDPDLDPDLDCNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
@@ -391,7 +406,7 @@ plan: |
     .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
-    .sRNCDDDPDDDPDDDAJOOOJADDDPDDDPDDDCNRs
+    .sRNCDLDPDLDPDLDAJOOOJADLDPDLDPDLDCNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs
