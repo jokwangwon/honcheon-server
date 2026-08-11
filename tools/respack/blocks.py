@@ -533,6 +533,84 @@ SCROLL_MOTIFS = {          # 12행 × 16열 — 위아래 축(軸) 2행씩을 �
 }
 
 
+# ─── 현판(懸板) — <b>2×1 그림</b>. 레퍼런스 본전의 금색 편액을 그대로 옮긴다 ───
+# ★왜 블록이 아니라 그림인가 (사용자 2026-08-11: 「블록이 아닐 수도 있다 — 그림 블럭을 통해
+#   표현하는 방법이나 다른 방법을 택해도 됨」):
+#   레퍼런스 편액을 재니 <b>131 × 76 화소 · 가로세로비 1.72</b> 다. 마크의 2×1 그림이
+#   정확히 2.0 이라 거의 맞는다. 블록으로 짜면 액자·판·글씨가 각각 한 칸씩 들어 세 칸이 되고,
+#   그 축척에서는 글씨가 들어갈 자리가 없다. 그림 한 장이면 <b>테두리·판·글씨가 한 면</b>이다.
+# ★팩 없는 눈에게는 <b>벽에 걸린 그림</b>이다 — 등록부의 팩없음_폴백 그대로다.
+PLAQUE_GOLD = (198, 158, 62, 255)         # 금박 테두리
+PLAQUE_GOLD_HI = (232, 198, 104, 255)     # 금박이 빛을 받는 결
+PLAQUE_GOLD_LO = (146, 112, 40, 255)      # 금박 그늘 — 테두리에 두께를 준다
+PLAQUE_LACQUER = (26, 18, 16, 255)        # 옻칠 판 (검은 데 붉은 기가 돈다)
+PLAQUE_LACQUER_LIT = (44, 30, 26, 255)
+
+
+# 편액의 글씨 — 11×11 두 자. <b>매화 문장은 여기 안 쓴다</b>:
+#   5잎 꽃은 지름 11화소에서 잎이 안 갈라져 덩어리(또는 방사능 표식)로 읽힌다. 실측으로 확인했다.
+#   레퍼런스 편액도 문장이 아니라 <b>글씨</b>다. 족자(SCROLL_MOTIFS)와 같은 어법으로 획을 놓는다.
+#   왼쪽은 획이 빽빽한 한 자(華의 인상), 오른쪽은 <b>山</b> — 이건 이 크기에서도 정직하게 읽힌다.
+PLAQUE_GLYPHS = [
+    [                      # 華 — 가로획 셋에 세로획이 꿰뚫는 인상
+        "..#.....#..",
+        ".#########.",
+        "..#.....#..",
+        "###########",
+        "..#.....#..",
+        ".#########.",
+        "..#..#..#..",
+        "###########",
+        ".....#.....",
+        ".....#.....",
+        ".....#.....",
+    ],
+    [                      # 山 — 가운데가 높고 밑이 받는다
+        "...........",
+        ".....#.....",
+        "..#..#..#..",
+        "..#..#..#..",
+        "..#..#..#..",
+        "..#..#..#..",
+        "..#..#..#..",
+        "..#..#..#..",
+        "..#######..",
+        "...........",
+        "...........",
+    ],
+]
+
+
+def plaque_rows():
+    """현판 32×16 — 금 테두리 · 옻칠 판 · 금 글씨 두 자."""
+    ink = {}
+    for g, art in enumerate(PLAQUE_GLYPHS):
+        ox = 3 + g * 14                              # 2(테) + 1 + 11 + 2 + 11 + 2 + 1 = 30
+        for y, row in enumerate(art):
+            for x, c in enumerate(row):
+                if c == "#":
+                    ink[(ox + x, 3 + y)] = True
+    rows = []
+    for y in range(16):
+        row = []
+        for x in range(32):
+            edge = min(x, 31 - x, y, 15 - y)
+            if edge == 0:
+                row.append(PLAQUE_GOLD_LO)           # 바깥 테 — 그늘
+            elif edge == 1:
+                row.append(PLAQUE_GOLD_HI if y <= 1 else PLAQUE_GOLD)
+            elif ink.get((x, y)):
+                # 획도 붓이다 — 위쪽이 밝고 아래로 갈수록 가라앉는다
+                row.append(PLAQUE_GOLD_HI if not ink.get((x, y - 1)) else PLAQUE_GOLD)
+            elif ink.get((x, y - 1)):
+                row.append(PLAQUE_GOLD_LO)           # 획 밑의 그림자 — 판에 새겨진 깊이
+            else:
+                row.append(mix(PLAQUE_LACQUER, PLAQUE_LACQUER_LIT,
+                               0.5 + smooth_octave(x, y, 5, 0x5A, 0.5)))
+        rows.append(row)
+    return rows
+
+
 def scroll_rows(motif):
     """수묵 족자 — 먹은 종이 위에 얹히지 않고 '스민다'."""
     art = SCROLL_MOTIFS[motif]
@@ -3894,6 +3972,8 @@ def write_block_textures() -> int:
         write_json(BLOCK_DIR / f"{name}.png.mcmeta", {"animation": anim})
     for name in SCROLL_MOTIFS:
         write_png(PAINTING_DIR / f"{name}.png", scroll_rows(name))
+    # ★현판 — 2×1 변종 하나만 징발한다 (sea). 나머지 2×1 은 바닐라 그대로다.
+    write_png(PAINTING_DIR / "sea.png", plaque_rows())
     # 현판·주기 — 블록이되 텍스처는 entity/signs/ 아래 산다 (궤·항아리와 같은 문법).
     #   resourcepack_design.yml 이 dark_oak_hanging_sign 을 「징발」로 등록해 두고도 팩에는
     #   그 PNG 가 없었다 — 축 ⑪ 이 잡아냈다 (등록부가 팩을 앞질러 있었다).

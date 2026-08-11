@@ -133,6 +133,19 @@ public final class Blueprint implements Level {
         }
     }
 
+    /**
+     * <b>소품</b> — 등롱 · 배너 · 현판. 인상을 만드는 것은 이것이다.
+     *
+     * <p>레퍼런스를 우리 것과 같은 자로 재니 「가장 흔한 색 하나의 점유율」이
+     * 레퍼런스 7.3% · 우리 17.5% 였다. 레퍼런스 정면은 어느 색도 7% 를 못 넘는다 —
+     * <b>잘게 쪼개져 있다</b>. 그 잘음은 큰 형태가 아니라 <b>작은 것들의 누적</b>에서 온다.
+     *
+     * @param every 몇 칸마다 놓는가 (0 이면 {@code cols} 전 구간)
+     */
+    public record Prop(String id, String type, int row, int[] cols, int every,
+                       int y, int depth) {
+    }
+
     public record Roof(String name, int[] box, int baseY, int eave, int upperWall, int upperEave,
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
                        String profile, boolean rafters,
@@ -268,6 +281,7 @@ public final class Blueprint implements Level {
     private final Map<String, Character> bayRoles;
     private final int postPeriod;
     private final List<Trim> trims;
+    private List<Prop> props = List.of();
     private final Map<String, String> palette;
     private UpperLevel upperLevel;
     private boolean intercolumnar;
@@ -605,6 +619,11 @@ public final class Blueprint implements Level {
     }
 
     /** 이 도면이 쓰는 기둥 글자 전부 — 자가 「모든 칸」을 훑을 때 쓴다 */
+    /** 소품 — 도면이 적은 것만. 안 적으면 빈 목록이다 (옛 도면은 한 칸도 안 바뀐다) */
+    public List<Prop> props() {
+        return props;
+    }
+
     public java.util.Set<Character> columnKeys() {
         return columns.keySet();
     }
@@ -993,6 +1012,20 @@ public final class Blueprint implements Level {
                 String.valueOf(meta.getOrDefault("bracket", "none")),
                 String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles,
                 ((Number) meta.getOrDefault("post_period", 0)).intValue(), trims, palette);
+        List<Prop> propList = new ArrayList<>();
+        for (Object o : (List<Object>) root.getOrDefault("props", List.of())) {
+            Map<String, Object> m4 = (Map<String, Object>) o;
+            List<Object> cs4 = (List<Object>) req(m4, "cols");
+            propList.add(new Prop(String.valueOf(m4.getOrDefault("id", "?")),
+                    String.valueOf(req(m4, "type")),
+                    ((Number) req(m4, "row")).intValue(),
+                    new int[]{((Number) cs4.get(0)).intValue(),
+                            ((Number) cs4.get(1)).intValue()},
+                    ((Number) m4.getOrDefault("every", 0)).intValue(),
+                    ((Number) req(m4, "y")).intValue(),
+                    ((Number) m4.getOrDefault("depth", 0)).intValue()));
+        }
+        bpOut.props = propList;
         bpOut.upperLevel = upLevel;
         bpOut.intercolumnar = Boolean.TRUE.equals(meta.get("intercolumnar_bracket"));
         return bpOut;

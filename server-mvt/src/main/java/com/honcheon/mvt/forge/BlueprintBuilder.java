@@ -53,6 +53,8 @@ public final class BlueprintBuilder {
         /** 좌표 → 그 자리를 마지막으로 쓴 부재 */
         /** 안허리곡이 <b>패드 밖이라 못 놓은</b> 칸 — 「했다 치고」 넘어가지 않기 위해 센다 */
         public int curveSkipped;
+        /** 소품이 <b>자리를 못 잡은</b> 수 — 「놓았다 치고」 넘어가지 않기 위해 센다 */
+        public int propFailed;
         public final java.util.Map<Long, String> claim = new java.util.HashMap<>();
         /** 「다른 부재가 덮었다」 — 부재쌍별 횟수 */
         public final java.util.Map<String, Integer> covered = new java.util.TreeMap<>();
@@ -272,6 +274,7 @@ public final class BlueprintBuilder {
         // ★★REF-3B — 공포는 <b>지붕 뒤에</b> 놓는다. 앞서 놓으면 서까래가
         //   맨 윗단을 덮어 elaborate 3단이 <b>2단으로만 보였다</b> (실측 0/8).
 
+        props(world, bp, place, ox, oy, oz, n);
         n.curveSkipped += tally.curveSkipped;   // 안허리곡이 못 나간 칸 — 장부로 올린다
         brackets(world, bp, bp, place, ox, oy, oz, n,
                 bp.roofs().isEmpty() ? 0 : bp.roofs().get(0).baseY(),
@@ -738,6 +741,100 @@ public final class BlueprintBuilder {
             }
         }
         return out;
+    }
+
+    /**
+     * ★★★<b>소품</b> — 등롱 · 배너 · 현판 (2026-08-11).
+     *
+     * <p>레퍼런스와 우리를 같은 자로 재니 「가장 흔한 색 하나의 점유율」이 7.3% 대 17.5% 였다.
+     * 레퍼런스 정면은 <b>잘게 쪼개져</b> 있고, 그 잘음은 큰 형태가 아니라
+     * <b>작은 것들의 누적</b>에서 온다. 우리에겐 그것이 전부 0개였다.
+     *
+     * <p>★<b>블록이 아닌 것도 쓴다</b> (사용자): 현판은 2×1 <b>그림</b>이다 —
+     * 레퍼런스 편액 실측 가로세로비 1.72 가 마크 2×1(2.0)과 맞고, 블록으로 짜면
+     * 액자·판·글씨가 각각 한 칸이라 <b>글씨 자리가 없다</b>.
+     * ★팩 없는 눈에게도 다 보인다: 매단 등 · 남색 깃발 · 벽에 걸린 그림.
+     */
+    private static void props(World world, Blueprint bp, Blueprint.Placement place,
+                              int ox, int oy, int oz, Count n) {
+        for (Blueprint.Prop pr : bp.props()) {
+            int step = pr.every() > 0 ? pr.every() : 1;
+            for (int c = pr.cols()[0]; c <= pr.cols()[1]; c += step) {
+                int[] d5 = place.map(bp, c, pr.row());
+                org.bukkit.block.BlockFace nf = place.turn(faceOf(bp, c, pr.row()));
+                int x = ox + d5[0] + nf.getModX() * pr.depth();
+                int z = oz + d5[1] + nf.getModZ() * pr.depth();
+                int y = oy + pr.y();
+                switch (pr.type()) {
+                    case "hanging_lantern" -> {
+                        // ★매다는 등롱 — 위에 붙는다. 위가 비면 그냥 세운 등이 되므로
+                        //   hanging 을 명시한다 (도리 밑에 걸린 것으로 읽혀야 한다).
+                        org.bukkit.block.data.BlockData ld =
+                                Bukkit.createBlockData(Material.LANTERN);
+                        if (ld instanceof org.bukkit.block.data.type.Lantern la) {
+                            la.setHanging(true);
+                        }
+                        world.getBlockAt(x, y, z).setBlockData(ld, false);
+                        n.blocks++;
+                        n.mark(x, y, z, "소품:" + pr.id());
+                    }
+                    case "lantern_post" -> {
+                        // 주초 → 대 → 등 → 갓. <b>사람 키의 기준</b>이 되는 물건이다.
+                        world.getBlockAt(x, y, z).setType(Material.POLISHED_ANDESITE, false);
+                        for (int k = 1; k <= 2; k++) {
+                            world.getBlockAt(x, y + k, z).setType(Material.DARK_OAK_FENCE, false);
+                        }
+                        world.getBlockAt(x, y + 4, z).setType(Material.DARK_OAK_SLAB, false);
+                        org.bukkit.block.data.BlockData ld2 =
+                                Bukkit.createBlockData(Material.LANTERN);
+                        if (ld2 instanceof org.bukkit.block.data.type.Lantern la2) {
+                            la2.setHanging(true);
+                        }
+                        world.getBlockAt(x, y + 3, z).setBlockData(ld2, false);
+                        n.blocks += 5;
+                        n.mark(x, y + 3, z, "소품:" + pr.id());
+                    }
+                    case "banner" -> {
+                        // 벽걸이 남색 깃발 + 흰 꽃 무늬. ★매화 문장은 아직 없다 —
+                        //   21화소에서 다섯 잎이 안 갈라져 (나도 Codex 도 실패) 다음 회차로 미뤘다.
+                        //   바닐라 flower 무늬는 <b>남색 위 흰 꽃</b>이라 레퍼런스와 같은 인상이다.
+                        org.bukkit.block.data.BlockData bd2 =
+                                Bukkit.createBlockData(Material.BLUE_WALL_BANNER);
+                        if (bd2 instanceof org.bukkit.block.data.Directional dir) {
+                            dir.setFacing(nf);
+                        }
+                        world.getBlockAt(x, y, z).setBlockData(bd2, false);
+                        if (world.getBlockAt(x, y, z).getState()
+                                instanceof org.bukkit.block.Banner ban) {
+                            ban.addPattern(new org.bukkit.block.banner.Pattern(
+                                    org.bukkit.DyeColor.WHITE,
+                                    org.bukkit.block.banner.PatternType.FLOWER));
+                            ban.update(true, false);
+                        }
+                        n.blocks++;
+                        n.mark(x, y, z, "소품:" + pr.id());
+                    }
+                    case "plaque" -> {
+                        // ★그림은 <b>엔티티</b>다 — 벽에 붙일 자리가 막혀 있으면 못 산다.
+                        //   실패해도 건물은 서야 하므로 삼키고 <b>수를 센다</b>.
+                        try {
+                            org.bukkit.Location loc = new org.bukkit.Location(world, x, y, z);
+                            org.bukkit.block.BlockFace face = nf;
+                            world.spawn(loc, org.bukkit.entity.Painting.class, pt -> {
+                                pt.setFacingDirection(face, true);
+                                pt.setArt(org.bukkit.Art.SEA, true);   // 2×1 — 현판 텍스처
+                            });
+                            n.blocks++;
+                            n.mark(x, y, z, "소품:" + pr.id());
+                        } catch (RuntimeException e) {
+                            n.propFailed++;
+                        }
+                    }
+                    default -> throw new IllegalStateException(
+                            "도면이 모르는 소품 종류: " + pr.type());
+                }
+            }
+        }
     }
 
     /** 층이 제 자리로 방향을 안다면 그것을 쓴다 — 모르면 이웃의 높이로 짐작한다 */
