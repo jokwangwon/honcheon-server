@@ -504,15 +504,15 @@ public final class BlueprintBuilder {
                                     //     기둥이 보까지 한 줄로 이어진다 (안 그러면 색 마감이
                                     //     그때 그 병 — 첫 단이 다시 「기둥에 붙은 딴 블록」이 된다).
                                     s2 == 0 ? mat(bp.palette("post", "stripped_mangrove_log"))
-                                            //   ★★★동양풍 (2026-08-11) — 화북은 「기둥 위에
-                                            //     올라가는 <b>부재들</b>을 파란 계열로」 한다.
-                                            //     단청이 창방 한 줄에 갇히면 안 된다 (Codex).
-                                            : s2 == 1 ? Material.WARPED_SLAB
+                                            //   ★청색은 <b>철회됐다</b> (사용자 2026-08-11):
+                                            //     「레퍼런스에도 청색은 없었다. 레퍼런스 위주의
+                                            //      건축이 되어야 한다 — 조사는 형태 참고만.」
+                                            : s2 == 1 ? Material.DARK_OAK_SLAB
                                             //   ★REF-3B 3단째 = <b>서까래 신발</b>. 처마를 키우지
                                             //     않는다. 3단이 세로로 세 켜일 필요는 없다 —
                                             //     기둥→주두→받침→받침→서까래로 이어지는
                                             //     <b>윤곽</b>이 보이면 된다 (사용자).
-                                            : Material.WARPED_STAIRS);
+                                            : Material.DARK_OAK_STAIRS);
                             world.getBlockAt(bx, top + s2, bz)
                                     .setBlockData(stand(bd, nf), false);
                             n.blocks++;
@@ -578,7 +578,7 @@ public final class BlueprintBuilder {
                         int bx = ox + d4[0] + nf2.getModX() * reach;
                         int bz = oz + d4[1] + nf2.getModZ() * reach;
                         BlockData bd = Bukkit.createBlockData(
-                                s2 == 1 ? Material.WARPED_SLAB : Material.WARPED_STAIRS);
+                                s2 == 1 ? Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS);
                         world.getBlockAt(bx, top2 + s2, bz).setBlockData(stand(bd, nf2), false);
                         n.blocks++;
                         n.mark(bx, top2 + s2, bz, "간포@" + nf2.name().charAt(0));

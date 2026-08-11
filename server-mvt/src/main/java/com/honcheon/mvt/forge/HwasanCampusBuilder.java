@@ -862,11 +862,12 @@ public final class HwasanCampusBuilder {
     }
 
     /**
-     * ★유광테라코타는 <b>여기에만</b> 쓴다 (Codex 상한 2026-08-11):
-     * 「처마 모서리·공포 핵심점에만, 가시 외장 블록의 <b>1% 이하</b>.
-     *  연속 띠·넓은 면 채움은 금지」. 네 귀 × 두 지붕 = <b>8칸</b>이 전부다.
+     * ★★★<b>철회됨</b> — 유광테라코타(청록)를 추녀 끝 8칸에 넣었다가 뺐다 (사용자 2026-08-11).
+     * 「레퍼런스에도 청색은 없었다. <b>레퍼런스 위주의 건축</b>이 되어야 한다 —
+     *  조사는 <b>형태 참고만</b>.」 상수는 남기되 값은 레퍼런스 팔레트로 되돌린다:
+     * 추녀 끝은 <b>다시 어두운 목재</b>다.
      */
-    static final Material GLAZE = Material.CYAN_GLAZED_TERRACOTTA;
+    static final Material GLAZE = Material.DARK_OAK_SLAB;
 
     private static void cornerTail(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
                                    int z0, int z1, Tally tally) {
@@ -1795,8 +1796,9 @@ public final class HwasanCampusBuilder {
                 if (twoTier) {
                     int ix = x == x0 ? 1 : x == x1 ? -1 : 0;
                     int iz = z == z0 ? 1 : z == z1 ? -1 : 0;
+                    //   ★부연도 <b>서까래와 같은 결</b>이다 — 청색은 철회됐다 (사용자 2026-08-11).
                     put(world, pad, x + ix, y - 1, z + iz,
-                            rafter ? Material.DARK_OAK_SLAB : Material.WARPED_SLAB, tally);
+                            rafter ? Material.DARK_OAK_SLAB : Material.SPRUCE_SLAB, tally);
                 }
             }
         }
