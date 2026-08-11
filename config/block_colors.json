@@ -1,5 +1,7 @@
 {
 "acacia_door_bottom": {
+"grain": 0.451,
+"grain_strength": 0.063,
 "lum": 112.0,
 "rgb": [
 167,
@@ -10,6 +12,8 @@
 "src": "vanilla"
 },
 "acacia_door_top": {
+"grain": 0.4,
+"grain_strength": 0.07,
 "lum": 116.1,
 "rgb": [
 172,
@@ -20,6 +24,8 @@
 "src": "vanilla"
 },
 "acacia_leaves": {
+"grain": 0.008,
+"grain_strength": 0.0976,
 "lum": 152.0,
 "rgb": [
 152,
@@ -30,6 +36,8 @@
 "src": "vanilla"
 },
 "acacia_log": {
+"grain": 0.514,
+"grain_strength": 0.0518,
 "lum": 99.0,
 "rgb": [
 105,
@@ -40,6 +48,8 @@
 "src": "vanilla"
 },
 "acacia_log_top": {
+"grain": -0.026,
+"grain_strength": 0.0448,
 "lum": 105.7,
 "rgb": [
 157,
@@ -50,6 +60,8 @@
 "src": "vanilla"
 },
 "acacia_planks": {
+"grain": -0.553,
+"grain_strength": 0.0466,
 "lum": 110.1,
 "rgb": [
 170,
@@ -60,6 +72,8 @@
 "src": "vanilla"
 },
 "acacia_sapling": {
+"grain": 0.066,
+"grain_strength": 0.0596,
 "lum": 109.8,
 "rgb": [
 120,
@@ -70,6 +84,8 @@
 "src": "vanilla"
 },
 "acacia_shelf": {
+"grain": -0.293,
+"grain_strength": 0.0323,
 "lum": 103.9,
 "rgb": [
 158,
@@ -80,6 +96,8 @@
 "src": "vanilla"
 },
 "acacia_trapdoor": {
+"grain": 0.236,
+"grain_strength": 0.0427,
 "lum": 106.2,
 "rgb": [
 160,
@@ -90,6 +108,8 @@
 "src": "vanilla"
 },
 "activator_rail": {
+"grain": 0.34,
+"grain_strength": 0.1363,
 "lum": 111.2,
 "rgb": [
 123,
@@ -100,6 +120,8 @@
 "src": "vanilla"
 },
 "activator_rail_on": {
+"grain": 0.316,
+"grain_strength": 0.1174,
 "lum": 119.3,
 "rgb": [
 150,
@@ -110,6 +132,8 @@
 "src": "vanilla"
 },
 "allium": {
+"grain": 0.137,
+"grain_strength": 0.1325,
 "lum": 158.6,
 "rgb": [
 171,
@@ -120,6 +144,8 @@
 "src": "vanilla"
 },
 "amethyst_block": {
+"grain": 0.029,
+"grain_strength": 0.0982,
 "lum": 125.0,
 "rgb": [
 140,
@@ -130,6 +156,8 @@
 "src": "vanilla"
 },
 "amethyst_cluster": {
+"grain": 0.175,
+"grain_strength": 0.1156,
 "lum": 156.4,
 "rgb": [
 174,
@@ -140,6 +168,8 @@
 "src": "vanilla"
 },
 "ancient_debris_side": {
+"grain": -0.196,
+"grain_strength": 0.0785,
 "lum": 78.6,
 "rgb": [
 99,
@@ -150,6 +180,8 @@
 "src": "vanilla"
 },
 "ancient_debris_top": {
+"grain": 0.017,
+"grain_strength": 0.1595,
 "lum": 86.1,
 "rgb": [
 103,
@@ -160,6 +192,8 @@
 "src": "vanilla"
 },
 "andesite": {
+"grain": 0.166,
+"grain_strength": 0.0229,
 "lum": 149.0,
 "rgb": [
 150,
@@ -170,6 +204,8 @@
 "src": "pack"
 },
 "anvil": {
+"grain": 0.027,
+"grain_strength": 0.0328,
 "lum": 95.6,
 "rgb": [
 98,
@@ -180,6 +216,8 @@
 "src": "pack"
 },
 "anvil_top": {
+"grain": 0.025,
+"grain_strength": 0.0263,
 "lum": 96.1,
 "rgb": [
 98,
@@ -190,6 +228,8 @@
 "src": "pack"
 },
 "attached_melon_stem": {
+"grain": 0.12,
+"grain_strength": 0.1283,
 "lum": 147.0,
 "rgb": [
 147,
@@ -200,6 +240,8 @@
 "src": "vanilla"
 },
 "attached_pumpkin_stem": {
+"grain": 0.083,
+"grain_strength": 0.1531,
 "lum": 146.0,
 "rgb": [
 146,
@@ -210,6 +252,8 @@
 "src": "vanilla"
 },
 "azalea_leaves": {
+"grain": -0.075,
+"grain_strength": 0.0624,
 "lum": 102.1,
 "rgb": [
 93,
@@ -220,6 +264,8 @@
 "src": "vanilla"
 },
 "azalea_plant": {
+"grain": 0.169,
+"grain_strength": 0.0726,
 "lum": 99.7,
 "rgb": [
 93,
@@ -230,6 +276,8 @@
 "src": "vanilla"
 },
 "azalea_side": {
+"grain": 0.182,
+"grain_strength": 0.0731,
 "lum": 104.4,
 "rgb": [
 96,
@@ -240,6 +288,8 @@
 "src": "vanilla"
 },
 "azalea_top": {
+"grain": -0.001,
+"grain_strength": 0.0539,
 "lum": 110.2,
 "rgb": [
 103,
@@ -250,6 +300,8 @@
 "src": "vanilla"
 },
 "azure_bluet": {
+"grain": -0.273,
+"grain_strength": 0.0832,
 "lum": 139.0,
 "rgb": [
 136,
@@ -260,6 +312,8 @@
 "src": "pack"
 },
 "bamboo_block": {
+"grain": 0.482,
+"grain_strength": 0.072,
 "lum": 131.9,
 "rgb": [
 130,
@@ -270,6 +324,8 @@
 "src": "vanilla"
 },
 "bamboo_block_top": {
+"grain": -0.0,
+"grain_strength": 0.101,
 "lum": 136.7,
 "rgb": [
 145,
@@ -280,6 +336,8 @@
 "src": "vanilla"
 },
 "bamboo_door_bottom": {
+"grain": 0.105,
+"grain_strength": 0.0762,
 "lum": 175.7,
 "rgb": [
 201,
@@ -290,6 +348,8 @@
 "src": "vanilla"
 },
 "bamboo_door_top": {
+"grain": 0.149,
+"grain_strength": 0.0791,
 "lum": 169.6,
 "rgb": [
 194,
@@ -300,6 +360,8 @@
 "src": "vanilla"
 },
 "bamboo_fence": {
+"grain": 0.345,
+"grain_strength": 0.0267,
 "lum": 138.7,
 "rgb": [
 149,
@@ -310,6 +372,8 @@
 "src": "pack"
 },
 "bamboo_fence_gate": {
+"grain": -0.085,
+"grain_strength": 0.057,
 "lum": 181.1,
 "rgb": [
 207,
@@ -320,6 +384,8 @@
 "src": "vanilla"
 },
 "bamboo_fence_gate_particle": {
+"grain": 0.218,
+"grain_strength": 0.044,
 "lum": 180.8,
 "rgb": [
 207,
@@ -330,6 +396,8 @@
 "src": "vanilla"
 },
 "bamboo_fence_particle": {
+"grain": 0.218,
+"grain_strength": 0.044,
 "lum": 180.8,
 "rgb": [
 207,
@@ -340,6 +408,8 @@
 "src": "vanilla"
 },
 "bamboo_large_leaves": {
+"grain": 0.113,
+"grain_strength": 0.092,
 "lum": 97.9,
 "rgb": [
 76,
@@ -350,6 +420,8 @@
 "src": "vanilla"
 },
 "bamboo_mosaic": {
+"grain": 0.014,
+"grain_strength": 0.0728,
 "lum": 167.7,
 "rgb": [
 193,
@@ -360,6 +432,8 @@
 "src": "vanilla"
 },
 "bamboo_planks": {
+"grain": 0.345,
+"grain_strength": 0.0244,
 "lum": 161.0,
 "rgb": [
 172,
@@ -370,6 +444,8 @@
 "src": "pack"
 },
 "bamboo_shelf": {
+"grain": 0.224,
+"grain_strength": 0.0346,
 "lum": 140.0,
 "rgb": [
 150,
@@ -380,6 +456,8 @@
 "src": "pack"
 },
 "bamboo_singleleaf": {
+"grain": 0.407,
+"grain_strength": 0.042,
 "lum": 130.2,
 "rgb": [
 128,
@@ -390,6 +468,8 @@
 "src": "pack"
 },
 "bamboo_small_leaves": {
+"grain": 0.079,
+"grain_strength": 0.0727,
 "lum": 96.5,
 "rgb": [
 75,
@@ -400,6 +480,8 @@
 "src": "vanilla"
 },
 "bamboo_stage0": {
+"grain": 0.044,
+"grain_strength": 0.1613,
 "lum": 93.3,
 "rgb": [
 99,
@@ -410,6 +492,8 @@
 "src": "vanilla"
 },
 "bamboo_stalk": {
+"grain": 0.118,
+"grain_strength": 0.0466,
 "lum": 128.6,
 "rgb": [
 127,
@@ -420,6 +504,8 @@
 "src": "pack"
 },
 "bamboo_trapdoor": {
+"grain": 0.065,
+"grain_strength": 0.0772,
 "lum": 176.3,
 "rgb": [
 201,
@@ -430,6 +516,8 @@
 "src": "vanilla"
 },
 "barrel_bottom": {
+"grain": -0.211,
+"grain_strength": 0.0446,
 "lum": 135.3,
 "rgb": [
 148,
@@ -440,6 +528,8 @@
 "src": "pack"
 },
 "barrel_side": {
+"grain": -0.124,
+"grain_strength": 0.0219,
 "lum": 155.2,
 "rgb": [
 171,
@@ -450,6 +540,8 @@
 "src": "pack"
 },
 "barrel_top": {
+"grain": -0.211,
+"grain_strength": 0.0446,
 "lum": 135.3,
 "rgb": [
 148,
@@ -460,6 +552,8 @@
 "src": "pack"
 },
 "barrel_top_open": {
+"grain": -0.04,
+"grain_strength": 0.0657,
 "lum": 114.1,
 "rgb": [
 125,
@@ -470,6 +564,8 @@
 "src": "pack"
 },
 "basalt_side": {
+"grain": 0.2,
+"grain_strength": 0.0482,
 "lum": 75.8,
 "rgb": [
 76,
@@ -480,6 +576,8 @@
 "src": "vanilla"
 },
 "basalt_top": {
+"grain": -0.027,
+"grain_strength": 0.0961,
 "lum": 86.3,
 "rgb": [
 86,
@@ -490,6 +588,8 @@
 "src": "vanilla"
 },
 "beacon": {
+"grain": -0.022,
+"grain_strength": 0.0731,
 "lum": 199.9,
 "rgb": [
 148,
@@ -500,6 +600,8 @@
 "src": "vanilla"
 },
 "bedrock": {
+"grain": -0.255,
+"grain_strength": 0.1546,
 "lum": 95.0,
 "rgb": [
 95,
@@ -510,6 +612,8 @@
 "src": "vanilla"
 },
 "bee_nest_bottom": {
+"grain": -0.007,
+"grain_strength": 0.0964,
 "lum": 138.9,
 "rgb": [
 166,
@@ -520,6 +624,8 @@
 "src": "vanilla"
 },
 "bee_nest_front": {
+"grain": -0.602,
+"grain_strength": 0.1193,
 "lum": 156.9,
 "rgb": [
 194,
@@ -530,6 +636,8 @@
 "src": "vanilla"
 },
 "bee_nest_front_honey": {
+"grain": -0.554,
+"grain_strength": 0.1237,
 "lum": 165.3,
 "rgb": [
 204,
@@ -540,6 +648,8 @@
 "src": "vanilla"
 },
 "bee_nest_side": {
+"grain": -0.822,
+"grain_strength": 0.1051,
 "lum": 163.4,
 "rgb": [
 203,
@@ -550,6 +660,8 @@
 "src": "vanilla"
 },
 "bee_nest_top": {
+"grain": -0.006,
+"grain_strength": 0.1515,
 "lum": 174.5,
 "rgb": [
 211,
@@ -560,6 +672,8 @@
 "src": "vanilla"
 },
 "beehive_end": {
+"grain": -0.396,
+"grain_strength": 0.0295,
 "lum": 150.8,
 "rgb": [
 181,
@@ -570,6 +684,8 @@
 "src": "vanilla"
 },
 "beehive_front": {
+"grain": -0.463,
+"grain_strength": 0.063,
 "lum": 134.9,
 "rgb": [
 163,
@@ -580,6 +696,8 @@
 "src": "vanilla"
 },
 "beehive_front_honey": {
+"grain": -0.393,
+"grain_strength": 0.0738,
 "lum": 139.7,
 "rgb": [
 172,
@@ -590,6 +708,8 @@
 "src": "vanilla"
 },
 "beehive_side": {
+"grain": -0.449,
+"grain_strength": 0.0612,
 "lum": 133.5,
 "rgb": [
 161,
@@ -600,6 +720,8 @@
 "src": "vanilla"
 },
 "beetroots_stage0": {
+"grain": 0.329,
+"grain_strength": 0.111,
 "lum": 109.8,
 "rgb": [
 113,
@@ -610,6 +732,8 @@
 "src": "pack"
 },
 "beetroots_stage1": {
+"grain": 0.506,
+"grain_strength": 0.1094,
 "lum": 112.6,
 "rgb": [
 116,
@@ -620,6 +744,8 @@
 "src": "pack"
 },
 "beetroots_stage2": {
+"grain": 0.462,
+"grain_strength": 0.0929,
 "lum": 119.0,
 "rgb": [
 124,
@@ -630,6 +756,8 @@
 "src": "pack"
 },
 "beetroots_stage3": {
+"grain": 0.423,
+"grain_strength": 0.1109,
 "lum": 122.8,
 "rgb": [
 128,
@@ -640,6 +768,8 @@
 "src": "pack"
 },
 "bell_bottom": {
+"grain": 0.0,
+"grain_strength": 0.1309,
 "lum": 158.3,
 "rgb": [
 199,
@@ -650,6 +780,8 @@
 "src": "vanilla"
 },
 "bell_side": {
+"grain": -0.342,
+"grain_strength": 0.0595,
 "lum": 223.8,
 "rgb": [
 253,
@@ -660,6 +792,8 @@
 "src": "vanilla"
 },
 "bell_top": {
+"grain": 0.0,
+"grain_strength": 0.0399,
 "lum": 228.1,
 "rgb": [
 253,
@@ -670,6 +804,8 @@
 "src": "vanilla"
 },
 "big_dripleaf_side": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 85.9,
 "rgb": [
 76,
@@ -680,6 +816,8 @@
 "src": "vanilla"
 },
 "big_dripleaf_stem": {
+"grain": 0.119,
+"grain_strength": 0.0366,
 "lum": 102.6,
 "rgb": [
 94,
@@ -690,6 +828,8 @@
 "src": "vanilla"
 },
 "big_dripleaf_tip": {
+"grain": -0.364,
+"grain_strength": 0.0858,
 "lum": 111.5,
 "rgb": [
 101,
@@ -700,6 +840,8 @@
 "src": "vanilla"
 },
 "big_dripleaf_top": {
+"grain": 0.079,
+"grain_strength": 0.0531,
 "lum": 126.0,
 "rgb": [
 115,
@@ -710,6 +852,8 @@
 "src": "vanilla"
 },
 "birch_door_bottom": {
+"grain": 0.113,
+"grain_strength": 0.0651,
 "lum": 195.9,
 "rgb": [
 211,
@@ -720,6 +864,8 @@
 "src": "vanilla"
 },
 "birch_door_top": {
+"grain": 0.204,
+"grain_strength": 0.0751,
 "lum": 214.4,
 "rgb": [
 224,
@@ -730,6 +876,8 @@
 "src": "vanilla"
 },
 "birch_leaves": {
+"grain": 0.059,
+"grain_strength": 0.0612,
 "lum": 171.6,
 "rgb": [
 156,
@@ -740,6 +888,8 @@
 "src": "pack"
 },
 "birch_log": {
+"grain": 0.424,
+"grain_strength": 0.0201,
 "lum": 191.2,
 "rgb": [
 195,
@@ -750,6 +900,8 @@
 "src": "pack"
 },
 "birch_log_top": {
+"grain": -0.016,
+"grain_strength": 0.0231,
 "lum": 194.2,
 "rgb": [
 198,
@@ -760,6 +912,8 @@
 "src": "pack"
 },
 "birch_planks": {
+"grain": -0.543,
+"grain_strength": 0.0685,
 "lum": 175.8,
 "rgb": [
 194,
@@ -770,6 +924,8 @@
 "src": "vanilla"
 },
 "birch_sapling": {
+"grain": -0.0,
+"grain_strength": 0.1407,
 "lum": 149.8,
 "rgb": [
 139,
@@ -780,6 +936,8 @@
 "src": "vanilla"
 },
 "birch_shelf": {
+"grain": -0.214,
+"grain_strength": 0.0493,
 "lum": 158.0,
 "rgb": [
 177,
@@ -790,6 +948,8 @@
 "src": "vanilla"
 },
 "birch_trapdoor": {
+"grain": -0.025,
+"grain_strength": 0.0773,
 "lum": 200.6,
 "rgb": [
 212,
@@ -800,6 +960,8 @@
 "src": "vanilla"
 },
 "black_candle": {
+"grain": 0.075,
+"grain_strength": 0.043,
 "lum": 42.2,
 "rgb": [
 41,
@@ -810,6 +972,8 @@
 "src": "vanilla"
 },
 "black_candle_lit": {
+"grain": -0.095,
+"grain_strength": 0.0685,
 "lum": 71.0,
 "rgb": [
 106,
@@ -820,6 +984,8 @@
 "src": "vanilla"
 },
 "black_concrete": {
+"grain": -0.031,
+"grain_strength": 0.0045,
 "lum": 10.0,
 "rgb": [
 8,
@@ -830,6 +996,8 @@
 "src": "vanilla"
 },
 "black_concrete_powder": {
+"grain": -0.032,
+"grain_strength": 0.0311,
 "lum": 28.3,
 "rgb": [
 27,
@@ -840,6 +1008,8 @@
 "src": "vanilla"
 },
 "black_glazed_terracotta": {
+"grain": -0.006,
+"grain_strength": 0.0831,
 "lum": 50.1,
 "rgb": [
 89,
@@ -850,6 +1020,8 @@
 "src": "vanilla"
 },
 "black_shulker_box": {
+"grain": -0.001,
+"grain_strength": 0.0136,
 "lum": 26.5,
 "rgb": [
 26,
@@ -860,6 +1032,8 @@
 "src": "vanilla"
 },
 "black_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 25.0,
 "rgb": [
 25,
@@ -870,6 +1044,8 @@
 "src": "vanilla"
 },
 "black_stained_glass_pane_top": {
+"grain": 0.429,
+"grain_strength": 0.0034,
 "lum": 24.0,
 "rgb": [
 24,
@@ -880,6 +1056,8 @@
 "src": "vanilla"
 },
 "black_terracotta": {
+"grain": -0.172,
+"grain_strength": 0.0031,
 "lum": 26.4,
 "rgb": [
 37,
@@ -890,6 +1068,8 @@
 "src": "vanilla"
 },
 "black_wool": {
+"grain": -0.262,
+"grain_strength": 0.0331,
 "lum": 22.6,
 "rgb": [
 22,
@@ -900,6 +1080,8 @@
 "src": "vanilla"
 },
 "blackstone": {
+"grain": -0.074,
+"grain_strength": 0.0443,
 "lum": 41.3,
 "rgb": [
 44,
@@ -910,6 +1092,8 @@
 "src": "vanilla"
 },
 "blackstone_top": {
+"grain": -0.018,
+"grain_strength": 0.0517,
 "lum": 41.4,
 "rgb": [
 44,
@@ -920,6 +1104,8 @@
 "src": "vanilla"
 },
 "blast_furnace_front": {
+"grain": -0.174,
+"grain_strength": 0.0547,
 "lum": 106.0,
 "rgb": [
 108,
@@ -930,6 +1116,8 @@
 "src": "pack"
 },
 "blast_furnace_front_on": {
+"grain": -0.186,
+"grain_strength": 0.0544,
 "lum": 125.7,
 "rgb": [
 145,
@@ -940,6 +1128,8 @@
 "src": "pack"
 },
 "blast_furnace_side": {
+"grain": 0.005,
+"grain_strength": 0.0353,
 "lum": 120.3,
 "rgb": [
 123,
@@ -950,6 +1140,8 @@
 "src": "pack"
 },
 "blast_furnace_top": {
+"grain": -0.088,
+"grain_strength": 0.0319,
 "lum": 120.0,
 "rgb": [
 122,
@@ -960,6 +1152,8 @@
 "src": "pack"
 },
 "blue_candle": {
+"grain": -0.069,
+"grain_strength": 0.0301,
 "lum": 81.8,
 "rgb": [
 58,
@@ -970,6 +1164,8 @@
 "src": "vanilla"
 },
 "blue_candle_lit": {
+"grain": -0.307,
+"grain_strength": 0.0428,
 "lum": 94.2,
 "rgb": [
 69,
@@ -980,6 +1176,8 @@
 "src": "vanilla"
 },
 "blue_concrete": {
+"grain": 0.013,
+"grain_strength": 0.0023,
 "lum": 57.3,
 "rgb": [
 45,
@@ -990,6 +1188,8 @@
 "src": "vanilla"
 },
 "blue_concrete_powder": {
+"grain": -0.01,
+"grain_strength": 0.0266,
 "lum": 83.4,
 "rgb": [
 70,
@@ -1000,6 +1200,8 @@
 "src": "vanilla"
 },
 "blue_glazed_terracotta": {
+"grain": -0.024,
+"grain_strength": 0.1035,
 "lum": 77.6,
 "rgb": [
 50,
@@ -1010,6 +1212,8 @@
 "src": "vanilla"
 },
 "blue_ice": {
+"grain": 0.027,
+"grain_strength": 0.0136,
 "lum": 182.1,
 "rgb": [
 171,
@@ -1020,6 +1224,8 @@
 "src": "pack"
 },
 "blue_orchid": {
+"grain": -0.073,
+"grain_strength": 0.0705,
 "lum": 134.5,
 "rgb": [
 52,
@@ -1030,6 +1236,8 @@
 "src": "vanilla"
 },
 "blue_shulker_box": {
+"grain": -0.003,
+"grain_strength": 0.0199,
 "lum": 56.2,
 "rgb": [
 44,
@@ -1040,6 +1248,8 @@
 "src": "vanilla"
 },
 "blue_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 80.2,
 "rgb": [
 51,
@@ -1050,6 +1260,8 @@
 "src": "vanilla"
 },
 "blue_stained_glass_pane_top": {
+"grain": 0.413,
+"grain_strength": 0.0092,
 "lum": 77.7,
 "rgb": [
 49,
@@ -1060,6 +1272,8 @@
 "src": "vanilla"
 },
 "blue_terracotta": {
+"grain": -0.188,
+"grain_strength": 0.0048,
 "lum": 67.7,
 "rgb": [
 74,
@@ -1070,6 +1284,8 @@
 "src": "vanilla"
 },
 "blue_wool": {
+"grain": -0.258,
+"grain_strength": 0.0309,
 "lum": 67.9,
 "rgb": [
 53,
@@ -1080,6 +1296,8 @@
 "src": "vanilla"
 },
 "bone_block_side": {
+"grain": 0.243,
+"grain_strength": 0.0221,
 "lum": 165.6,
 "rgb": [
 169,
@@ -1090,6 +1308,8 @@
 "src": "pack"
 },
 "bone_block_top": {
+"grain": -0.001,
+"grain_strength": 0.0207,
 "lum": 163.8,
 "rgb": [
 167,
@@ -1100,6 +1320,8 @@
 "src": "pack"
 },
 "bookshelf": {
+"grain": -0.194,
+"grain_strength": 0.1099,
 "lum": 112.4,
 "rgb": [
 134,
@@ -1110,6 +1332,8 @@
 "src": "vanilla"
 },
 "brain_coral": {
+"grain": 0.045,
+"grain_strength": 0.1482,
 "lum": 132.1,
 "rgb": [
 200,
@@ -1120,6 +1344,8 @@
 "src": "vanilla"
 },
 "brain_coral_block": {
+"grain": -0.094,
+"grain_strength": 0.0732,
 "lum": 137.2,
 "rgb": [
 209,
@@ -1130,6 +1356,8 @@
 "src": "vanilla"
 },
 "brain_coral_fan": {
+"grain": 0.029,
+"grain_strength": 0.0938,
 "lum": 130.3,
 "rgb": [
 204,
@@ -1140,6 +1368,8 @@
 "src": "vanilla"
 },
 "brewing_stand": {
+"grain": -0.167,
+"grain_strength": 0.0846,
 "lum": 99.3,
 "rgb": [
 102,
@@ -1150,6 +1380,8 @@
 "src": "pack"
 },
 "brewing_stand_base": {
+"grain": 0.064,
+"grain_strength": 0.0329,
 "lum": 113.4,
 "rgb": [
 117,
@@ -1160,6 +1392,8 @@
 "src": "pack"
 },
 "bricks": {
+"grain": -0.197,
+"grain_strength": 0.03,
 "lum": 139.4,
 "rgb": [
 147,
@@ -1170,6 +1404,8 @@
 "src": "pack"
 },
 "brown_candle": {
+"grain": -0.005,
+"grain_strength": 0.0424,
 "lum": 81.4,
 "rgb": [
 115,
@@ -1180,6 +1416,8 @@
 "src": "vanilla"
 },
 "brown_candle_lit": {
+"grain": -0.354,
+"grain_strength": 0.0685,
 "lum": 120.4,
 "rgb": [
 165,
@@ -1190,6 +1428,8 @@
 "src": "vanilla"
 },
 "brown_concrete": {
+"grain": 0.03,
+"grain_strength": 0.0023,
 "lum": 67.6,
 "rgb": [
 96,
@@ -1200,6 +1440,8 @@
 "src": "vanilla"
 },
 "brown_concrete_powder": {
+"grain": -0.008,
+"grain_strength": 0.0318,
 "lum": 93.7,
 "rgb": [
 126,
@@ -1210,6 +1452,8 @@
 "src": "vanilla"
 },
 "brown_glazed_terracotta": {
+"grain": 0.001,
+"grain_strength": 0.088,
 "lum": 116.8,
 "rgb": [
 138,
@@ -1220,6 +1464,8 @@
 "src": "vanilla"
 },
 "brown_mushroom": {
+"grain": 0.0,
+"grain_strength": 0.0429,
 "lum": 123.7,
 "rgb": [
 137,
@@ -1230,6 +1476,8 @@
 "src": "pack"
 },
 "brown_mushroom_block": {
+"grain": 0.138,
+"grain_strength": 0.0104,
 "lum": 119.5,
 "rgb": [
 149,
@@ -1240,6 +1488,8 @@
 "src": "vanilla"
 },
 "brown_shulker_box": {
+"grain": -0.01,
+"grain_strength": 0.0156,
 "lum": 74.8,
 "rgb": [
 107,
@@ -1250,6 +1500,8 @@
 "src": "vanilla"
 },
 "brown_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 80.9,
 "rgb": [
 102,
@@ -1260,6 +1512,8 @@
 "src": "vanilla"
 },
 "brown_stained_glass_pane_top": {
+"grain": 0.41,
+"grain_strength": 0.0095,
 "lum": 78.3,
 "rgb": [
 98,
@@ -1270,6 +1524,8 @@
 "src": "vanilla"
 },
 "brown_terracotta": {
+"grain": -0.176,
+"grain_strength": 0.0047,
 "lum": 57.1,
 "rgb": [
 77,
@@ -1280,6 +1536,8 @@
 "src": "vanilla"
 },
 "brown_wool": {
+"grain": -0.011,
+"grain_strength": 0.0277,
 "lum": 109.9,
 "rgb": [
 122,
@@ -1290,6 +1548,8 @@
 "src": "pack"
 },
 "bubble_coral": {
+"grain": 0.026,
+"grain_strength": 0.078,
 "lum": 85.1,
 "rgb": [
 166,
@@ -1300,6 +1560,8 @@
 "src": "vanilla"
 },
 "bubble_coral_block": {
+"grain": 0.051,
+"grain_strength": 0.0534,
 "lum": 86.0,
 "rgb": [
 168,
@@ -1310,6 +1572,8 @@
 "src": "vanilla"
 },
 "bubble_coral_fan": {
+"grain": 0.011,
+"grain_strength": 0.1159,
 "lum": 91.9,
 "rgb": [
 165,
@@ -1320,6 +1584,8 @@
 "src": "vanilla"
 },
 "budding_amethyst": {
+"grain": 0.023,
+"grain_strength": 0.1395,
 "lum": 125.9,
 "rgb": [
 142,
@@ -1330,6 +1596,8 @@
 "src": "vanilla"
 },
 "bush": {
+"grain": 0.028,
+"grain_strength": 0.0877,
 "lum": 124.0,
 "rgb": [
 124,
@@ -1340,6 +1608,8 @@
 "src": "vanilla"
 },
 "cactus_bottom": {
+"grain": -0.009,
+"grain_strength": 0.1142,
 "lum": 166.8,
 "rgb": [
 168,
@@ -1350,6 +1620,8 @@
 "src": "vanilla"
 },
 "cactus_flower": {
+"grain": 0.067,
+"grain_strength": 0.0849,
 "lum": 153.0,
 "rgb": [
 214,
@@ -1360,6 +1632,8 @@
 "src": "vanilla"
 },
 "cactus_side": {
+"grain": 0.355,
+"grain_strength": 0.0716,
 "lum": 112.2,
 "rgb": [
 94,
@@ -1370,6 +1644,8 @@
 "src": "vanilla"
 },
 "cactus_top": {
+"grain": 0.067,
+"grain_strength": 0.0588,
 "lum": 108.8,
 "rgb": [
 90,
@@ -1380,6 +1656,8 @@
 "src": "vanilla"
 },
 "cake_bottom": {
+"grain": -0.023,
+"grain_strength": 0.0197,
 "lum": 80.8,
 "rgb": [
 134,
@@ -1390,6 +1668,8 @@
 "src": "vanilla"
 },
 "cake_inner": {
+"grain": -0.23,
+"grain_strength": 0.1023,
 "lum": 124.9,
 "rgb": [
 148,
@@ -1400,6 +1680,8 @@
 "src": "vanilla"
 },
 "cake_side": {
+"grain": -0.312,
+"grain_strength": 0.0858,
 "lum": 186.6,
 "rgb": [
 210,
@@ -1410,6 +1692,8 @@
 "src": "vanilla"
 },
 "cake_top": {
+"grain": -0.005,
+"grain_strength": 0.1094,
 "lum": 237.5,
 "rgb": [
 249,
@@ -1420,6 +1704,8 @@
 "src": "vanilla"
 },
 "calcite": {
+"grain": -0.042,
+"grain_strength": 0.0196,
 "lum": 201.9,
 "rgb": [
 204,
@@ -1430,6 +1716,8 @@
 "src": "pack"
 },
 "calibrated_sculk_sensor_amethyst": {
+"grain": 0.232,
+"grain_strength": 0.0904,
 "lum": 186.7,
 "rgb": [
 206,
@@ -1440,6 +1728,8 @@
 "src": "vanilla"
 },
 "calibrated_sculk_sensor_input_side": {
+"grain": -0.056,
+"grain_strength": 0.1223,
 "lum": 99.5,
 "rgb": [
 103,
@@ -1450,6 +1740,8 @@
 "src": "vanilla"
 },
 "calibrated_sculk_sensor_top": {
+"grain": 0.06,
+"grain_strength": 0.0676,
 "lum": 84.3,
 "rgb": [
 70,
@@ -1460,6 +1752,8 @@
 "src": "vanilla"
 },
 "campfire_fire": {
+"grain": -0.083,
+"grain_strength": 0.0768,
 "lum": 176.9,
 "rgb": [
 204,
@@ -1470,6 +1764,8 @@
 "src": "pack"
 },
 "campfire_log": {
+"grain": -0.237,
+"grain_strength": 0.03,
 "lum": 120.8,
 "rgb": [
 139,
@@ -1480,6 +1776,8 @@
 "src": "pack"
 },
 "campfire_log_lit": {
+"grain": -0.078,
+"grain_strength": 0.0629,
 "lum": 130.5,
 "rgb": [
 158,
@@ -1490,6 +1788,8 @@
 "src": "pack"
 },
 "candle": {
+"grain": 0.444,
+"grain_strength": 0.0933,
 "lum": 194.8,
 "rgb": [
 200,
@@ -1500,6 +1800,8 @@
 "src": "pack"
 },
 "candle_lit": {
+"grain": 0.239,
+"grain_strength": 0.0977,
 "lum": 191.6,
 "rgb": [
 203,
@@ -1510,6 +1812,8 @@
 "src": "pack"
 },
 "carrots_stage0": {
+"grain": 0.329,
+"grain_strength": 0.111,
 "lum": 109.8,
 "rgb": [
 113,
@@ -1520,6 +1824,8 @@
 "src": "pack"
 },
 "carrots_stage1": {
+"grain": 0.506,
+"grain_strength": 0.1094,
 "lum": 112.6,
 "rgb": [
 116,
@@ -1530,6 +1836,8 @@
 "src": "pack"
 },
 "carrots_stage2": {
+"grain": 0.462,
+"grain_strength": 0.0929,
 "lum": 119.0,
 "rgb": [
 124,
@@ -1540,6 +1848,8 @@
 "src": "pack"
 },
 "carrots_stage3": {
+"grain": 0.423,
+"grain_strength": 0.1109,
 "lum": 122.8,
 "rgb": [
 128,
@@ -1550,6 +1860,8 @@
 "src": "pack"
 },
 "cartography_table_side1": {
+"grain": 0.001,
+"grain_strength": 0.0612,
 "lum": 67.2,
 "rgb": [
 79,
@@ -1560,6 +1872,8 @@
 "src": "vanilla"
 },
 "cartography_table_side2": {
+"grain": 0.003,
+"grain_strength": 0.1077,
 "lum": 85.6,
 "rgb": [
 99,
@@ -1570,6 +1884,8 @@
 "src": "vanilla"
 },
 "cartography_table_side3": {
+"grain": 0.243,
+"grain_strength": 0.0405,
 "lum": 49.7,
 "rgb": [
 70,
@@ -1580,6 +1896,8 @@
 "src": "vanilla"
 },
 "cartography_table_top": {
+"grain": 0.0,
+"grain_strength": 0.1129,
 "lum": 121.3,
 "rgb": [
 130,
@@ -1590,6 +1908,8 @@
 "src": "vanilla"
 },
 "carved_pumpkin": {
+"grain": 0.14,
+"grain_strength": 0.141,
 "lum": 113.4,
 "rgb": [
 168,
@@ -1600,6 +1920,8 @@
 "src": "vanilla"
 },
 "cauldron_bottom": {
+"grain": -0.035,
+"grain_strength": 0.0203,
 "lum": 96.3,
 "rgb": [
 98,
@@ -1610,6 +1932,8 @@
 "src": "pack"
 },
 "cauldron_inner": {
+"grain": -0.004,
+"grain_strength": 0.0186,
 "lum": 89.0,
 "rgb": [
 90,
@@ -1620,6 +1944,8 @@
 "src": "pack"
 },
 "cauldron_side": {
+"grain": -0.555,
+"grain_strength": 0.0196,
 "lum": 107.1,
 "rgb": [
 109,
@@ -1630,6 +1956,8 @@
 "src": "pack"
 },
 "cauldron_top": {
+"grain": -0.004,
+"grain_strength": 0.0187,
 "lum": 106.1,
 "rgb": [
 108,
@@ -1640,6 +1968,8 @@
 "src": "pack"
 },
 "cave_vines": {
+"grain": 0.135,
+"grain_strength": 0.0724,
 "lum": 99.5,
 "rgb": [
 93,
@@ -1650,6 +1980,8 @@
 "src": "vanilla"
 },
 "cave_vines_lit": {
+"grain": 0.082,
+"grain_strength": 0.0858,
 "lum": 108.7,
 "rgb": [
 115,
@@ -1660,6 +1992,8 @@
 "src": "vanilla"
 },
 "cave_vines_plant": {
+"grain": -0.029,
+"grain_strength": 0.0659,
 "lum": 93.7,
 "rgb": [
 90,
@@ -1670,6 +2004,8 @@
 "src": "vanilla"
 },
 "cave_vines_plant_lit": {
+"grain": -0.027,
+"grain_strength": 0.0879,
 "lum": 106.2,
 "rgb": [
 117,
@@ -1680,6 +2016,8 @@
 "src": "vanilla"
 },
 "chain_command_block_back": {
+"grain": -0.004,
+"grain_strength": 0.1391,
 "lum": 155.3,
 "rgb": [
 139,
@@ -1690,6 +2028,8 @@
 "src": "vanilla"
 },
 "chain_command_block_conditional": {
+"grain": 0.082,
+"grain_strength": 0.1478,
 "lum": 157.4,
 "rgb": [
 138,
@@ -1700,6 +2040,8 @@
 "src": "vanilla"
 },
 "chain_command_block_front": {
+"grain": -0.012,
+"grain_strength": 0.1371,
 "lum": 160.1,
 "rgb": [
 140,
@@ -1710,6 +2052,8 @@
 "src": "vanilla"
 },
 "chain_command_block_side": {
+"grain": 0.035,
+"grain_strength": 0.1425,
 "lum": 157.1,
 "rgb": [
 139,
@@ -1720,6 +2064,8 @@
 "src": "vanilla"
 },
 "cherry_door_bottom": {
+"grain": 0.348,
+"grain_strength": 0.0494,
 "lum": 191.0,
 "rgb": [
 226,
@@ -1730,6 +2076,8 @@
 "src": "vanilla"
 },
 "cherry_door_top": {
+"grain": 0.224,
+"grain_strength": 0.0513,
 "lum": 187.6,
 "rgb": [
 224,
@@ -1740,6 +2088,8 @@
 "src": "vanilla"
 },
 "cherry_leaves": {
+"grain": 0.043,
+"grain_strength": 0.1401,
 "lum": 176.0,
 "rgb": [
 220,
@@ -1750,6 +2100,8 @@
 "src": "pack"
 },
 "cherry_log": {
+"grain": 0.469,
+"grain_strength": 0.0228,
 "lum": 122.4,
 "rgb": [
 141,
@@ -1760,6 +2112,8 @@
 "src": "pack"
 },
 "cherry_log_top": {
+"grain": -0.045,
+"grain_strength": 0.0289,
 "lum": 126.6,
 "rgb": [
 146,
@@ -1770,6 +2124,8 @@
 "src": "pack"
 },
 "cherry_planks": {
+"grain": -0.572,
+"grain_strength": 0.0525,
 "lum": 193.4,
 "rgb": [
 227,
@@ -1780,6 +2136,8 @@
 "src": "vanilla"
 },
 "cherry_sapling": {
+"grain": 0.341,
+"grain_strength": 0.0582,
 "lum": 160.8,
 "rgb": [
 210,
@@ -1790,6 +2148,8 @@
 "src": "pack"
 },
 "cherry_shelf": {
+"grain": 0.115,
+"grain_strength": 0.0412,
 "lum": 126.7,
 "rgb": [
 146,
@@ -1800,6 +2160,8 @@
 "src": "pack"
 },
 "cherry_trapdoor": {
+"grain": 0.01,
+"grain_strength": 0.0449,
 "lum": 193.4,
 "rgb": [
 227,
@@ -1810,6 +2172,8 @@
 "src": "vanilla"
 },
 "chipped_anvil_top": {
+"grain": -0.056,
+"grain_strength": 0.0513,
 "lum": 74.3,
 "rgb": [
 75,
@@ -1820,6 +2184,8 @@
 "src": "vanilla"
 },
 "chiseled_bookshelf_empty": {
+"grain": 0.195,
+"grain_strength": 0.114,
 "lum": 121.2,
 "rgb": [
 139,
@@ -1830,6 +2196,8 @@
 "src": "pack"
 },
 "chiseled_bookshelf_occupied": {
+"grain": 0.085,
+"grain_strength": 0.1229,
 "lum": 149.5,
 "rgb": [
 171,
@@ -1840,6 +2208,8 @@
 "src": "pack"
 },
 "chiseled_bookshelf_side": {
+"grain": 0.393,
+"grain_strength": 0.0506,
 "lum": 154.1,
 "rgb": [
 177,
@@ -1850,6 +2220,8 @@
 "src": "pack"
 },
 "chiseled_bookshelf_top": {
+"grain": -0.492,
+"grain_strength": 0.0667,
 "lum": 153.8,
 "rgb": [
 176,
@@ -1860,6 +2232,8 @@
 "src": "pack"
 },
 "chiseled_copper": {
+"grain": 0.006,
+"grain_strength": 0.0711,
 "lum": 125.0,
 "rgb": [
 187,
@@ -1870,6 +2244,8 @@
 "src": "vanilla"
 },
 "chiseled_deepslate": {
+"grain": -0.333,
+"grain_strength": 0.0363,
 "lum": 57.1,
 "rgb": [
 57,
@@ -1880,6 +2256,8 @@
 "src": "vanilla"
 },
 "chiseled_nether_bricks": {
+"grain": -0.08,
+"grain_strength": 0.0364,
 "lum": 32.0,
 "rgb": [
 49,
@@ -1890,6 +2268,8 @@
 "src": "vanilla"
 },
 "chiseled_polished_blackstone": {
+"grain": -0.027,
+"grain_strength": 0.0683,
 "lum": 55.2,
 "rgb": [
 57,
@@ -1900,6 +2280,8 @@
 "src": "vanilla"
 },
 "chiseled_quartz_block": {
+"grain": -0.105,
+"grain_strength": 0.0226,
 "lum": 227.5,
 "rgb": [
 232,
@@ -1910,6 +2292,8 @@
 "src": "vanilla"
 },
 "chiseled_quartz_block_top": {
+"grain": 0.047,
+"grain_strength": 0.0295,
 "lum": 227.5,
 "rgb": [
 232,
@@ -1920,6 +2304,8 @@
 "src": "vanilla"
 },
 "chiseled_red_sandstone": {
+"grain": -0.25,
+"grain_strength": 0.054,
 "lum": 116.0,
 "rgb": [
 184,
@@ -1930,6 +2316,8 @@
 "src": "vanilla"
 },
 "chiseled_resin_bricks": {
+"grain": -0.167,
+"grain_strength": 0.0876,
 "lum": 117.3,
 "rgb": [
 203,
@@ -1940,6 +2328,8 @@
 "src": "vanilla"
 },
 "chiseled_sandstone": {
+"grain": -0.321,
+"grain_strength": 0.0629,
 "lum": 202.6,
 "rgb": [
 217,
@@ -1950,6 +2340,8 @@
 "src": "vanilla"
 },
 "chiseled_stone_bricks": {
+"grain": -0.166,
+"grain_strength": 0.023,
 "lum": 142.3,
 "rgb": [
 145,
@@ -1960,6 +2352,8 @@
 "src": "pack"
 },
 "chiseled_tuff": {
+"grain": -0.239,
+"grain_strength": 0.0625,
 "lum": 94.7,
 "rgb": [
 92,
@@ -1970,6 +2364,8 @@
 "src": "vanilla"
 },
 "chiseled_tuff_bricks": {
+"grain": -0.176,
+"grain_strength": 0.0628,
 "lum": 103.3,
 "rgb": [
 102,
@@ -1980,6 +2376,8 @@
 "src": "vanilla"
 },
 "chiseled_tuff_bricks_top": {
+"grain": 0.01,
+"grain_strength": 0.0345,
 "lum": 113.6,
 "rgb": [
 113,
@@ -1990,6 +2388,8 @@
 "src": "vanilla"
 },
 "chiseled_tuff_top": {
+"grain": 0.013,
+"grain_strength": 0.0561,
 "lum": 99.0,
 "rgb": [
 97,
@@ -2000,6 +2400,8 @@
 "src": "vanilla"
 },
 "chorus_flower": {
+"grain": -0.043,
+"grain_strength": 0.1431,
 "lum": 157.7,
 "rgb": [
 170,
@@ -2010,6 +2412,8 @@
 "src": "vanilla"
 },
 "chorus_flower_dead": {
+"grain": -0.085,
+"grain_strength": 0.0849,
 "lum": 84.6,
 "rgb": [
 102,
@@ -2020,6 +2424,8 @@
 "src": "vanilla"
 },
 "chorus_plant": {
+"grain": -0.095,
+"grain_strength": 0.0784,
 "lum": 78.6,
 "rgb": [
 98,
@@ -2030,6 +2436,8 @@
 "src": "vanilla"
 },
 "clay": {
+"grain": -0.05,
+"grain_strength": 0.0229,
 "lum": 130.3,
 "rgb": [
 132,
@@ -2040,6 +2448,8 @@
 "src": "pack"
 },
 "closed_eyeblossom": {
+"grain": 0.0,
+"grain_strength": 0.0778,
 "lum": 111.4,
 "rgb": [
 118,
@@ -2050,6 +2460,8 @@
 "src": "vanilla"
 },
 "coal_block": {
+"grain": -0.173,
+"grain_strength": 0.0274,
 "lum": 17.3,
 "rgb": [
 18,
@@ -2060,6 +2472,8 @@
 "src": "vanilla"
 },
 "coal_ore": {
+"grain": -0.176,
+"grain_strength": 0.0872,
 "lum": 110.9,
 "rgb": [
 111,
@@ -2070,6 +2484,8 @@
 "src": "vanilla"
 },
 "coarse_dirt": {
+"grain": 0.01,
+"grain_strength": 0.0275,
 "lum": 121.7,
 "rgb": [
 131,
@@ -2080,6 +2496,8 @@
 "src": "pack"
 },
 "cobbled_deepslate": {
+"grain": -0.003,
+"grain_strength": 0.0293,
 "lum": 69.4,
 "rgb": [
 70,
@@ -2090,6 +2508,8 @@
 "src": "pack"
 },
 "cobblestone": {
+"grain": -0.004,
+"grain_strength": 0.0333,
 "lum": 138.8,
 "rgb": [
 140,
@@ -2100,6 +2520,8 @@
 "src": "pack"
 },
 "cobweb": {
+"grain": 0.265,
+"grain_strength": 0.0642,
 "lum": 178.9,
 "rgb": [
 181,
@@ -2110,6 +2532,8 @@
 "src": "pack"
 },
 "cocoa_stage0": {
+"grain": 0.143,
+"grain_strength": 0.0945,
 "lum": 129.9,
 "rgb": [
 137,
@@ -2120,6 +2544,8 @@
 "src": "vanilla"
 },
 "cocoa_stage1": {
+"grain": 0.079,
+"grain_strength": 0.0973,
 "lum": 122.9,
 "rgb": [
 154,
@@ -2130,6 +2556,8 @@
 "src": "vanilla"
 },
 "cocoa_stage2": {
+"grain": 0.107,
+"grain_strength": 0.1007,
 "lum": 114.4,
 "rgb": [
 162,
@@ -2140,6 +2568,8 @@
 "src": "vanilla"
 },
 "command_block_back": {
+"grain": -0.005,
+"grain_strength": 0.1356,
 "lum": 149.4,
 "rgb": [
 179,
@@ -2150,6 +2580,8 @@
 "src": "vanilla"
 },
 "command_block_conditional": {
+"grain": 0.071,
+"grain_strength": 0.1431,
 "lum": 150.8,
 "rgb": [
 183,
@@ -2160,6 +2592,8 @@
 "src": "vanilla"
 },
 "command_block_front": {
+"grain": -0.012,
+"grain_strength": 0.136,
 "lum": 152.7,
 "rgb": [
 185,
@@ -2170,6 +2604,8 @@
 "src": "vanilla"
 },
 "command_block_side": {
+"grain": 0.029,
+"grain_strength": 0.1392,
 "lum": 151.3,
 "rgb": [
 182,
@@ -2180,6 +2616,8 @@
 "src": "vanilla"
 },
 "comparator": {
+"grain": -0.291,
+"grain_strength": 0.092,
 "lum": 171.0,
 "rgb": [
 172,
@@ -2190,6 +2628,8 @@
 "src": "vanilla"
 },
 "comparator_on": {
+"grain": -0.262,
+"grain_strength": 0.0873,
 "lum": 171.6,
 "rgb": [
 179,
@@ -2200,6 +2640,8 @@
 "src": "vanilla"
 },
 "composter_bottom": {
+"grain": -0.536,
+"grain_strength": 0.0169,
 "lum": 107.0,
 "rgb": [
 120,
@@ -2210,6 +2652,8 @@
 "src": "pack"
 },
 "composter_compost": {
+"grain": 0.018,
+"grain_strength": 0.0324,
 "lum": 108.1,
 "rgb": [
 121,
@@ -2220,6 +2664,8 @@
 "src": "pack"
 },
 "composter_ready": {
+"grain": 0.013,
+"grain_strength": 0.0374,
 "lum": 89.2,
 "rgb": [
 98,
@@ -2230,6 +2676,8 @@
 "src": "pack"
 },
 "composter_side": {
+"grain": 0.224,
+"grain_strength": 0.0505,
 "lum": 114.2,
 "rgb": [
 128,
@@ -2240,6 +2688,8 @@
 "src": "pack"
 },
 "composter_top": {
+"grain": -0.032,
+"grain_strength": 0.0704,
 "lum": 117.3,
 "rgb": [
 132,
@@ -2250,6 +2700,8 @@
 "src": "pack"
 },
 "conduit": {
+"grain": -0.013,
+"grain_strength": 0.1316,
 "lum": 148.9,
 "rgb": [
 165,
@@ -2260,6 +2712,8 @@
 "src": "vanilla"
 },
 "copper_bars": {
+"grain": 0.392,
+"grain_strength": 0.0689,
 "lum": 102.6,
 "rgb": [
 158,
@@ -2270,6 +2724,8 @@
 "src": "vanilla"
 },
 "copper_block": {
+"grain": 0.092,
+"grain_strength": 0.0513,
 "lum": 131.3,
 "rgb": [
 194,
@@ -2280,6 +2736,8 @@
 "src": "vanilla"
 },
 "copper_bulb": {
+"grain": 0.036,
+"grain_strength": 0.0904,
 "lum": 110.4,
 "rgb": [
 164,
@@ -2290,6 +2748,8 @@
 "src": "vanilla"
 },
 "copper_bulb_lit": {
+"grain": 0.037,
+"grain_strength": 0.1082,
 "lum": 176.4,
 "rgb": [
 220,
@@ -2300,6 +2760,8 @@
 "src": "vanilla"
 },
 "copper_bulb_lit_powered": {
+"grain": 0.036,
+"grain_strength": 0.11,
 "lum": 176.0,
 "rgb": [
 221,
@@ -2310,6 +2772,8 @@
 "src": "vanilla"
 },
 "copper_bulb_powered": {
+"grain": 0.035,
+"grain_strength": 0.0923,
 "lum": 110.2,
 "rgb": [
 165,
@@ -2320,6 +2784,8 @@
 "src": "vanilla"
 },
 "copper_chain": {
+"grain": -0.241,
+"grain_strength": 0.0533,
 "lum": 99.1,
 "rgb": [
 153,
@@ -2330,6 +2796,8 @@
 "src": "vanilla"
 },
 "copper_door_bottom": {
+"grain": 0.108,
+"grain_strength": 0.0645,
 "lum": 126.3,
 "rgb": [
 186,
@@ -2340,6 +2808,8 @@
 "src": "vanilla"
 },
 "copper_door_top": {
+"grain": -0.079,
+"grain_strength": 0.0657,
 "lum": 133.5,
 "rgb": [
 196,
@@ -2350,6 +2820,8 @@
 "src": "vanilla"
 },
 "copper_grate": {
+"grain": 0.035,
+"grain_strength": 0.0547,
 "lum": 131.2,
 "rgb": [
 194,
@@ -2360,6 +2832,8 @@
 "src": "vanilla"
 },
 "copper_lantern": {
+"grain": 0.023,
+"grain_strength": 0.0773,
 "lum": 133.4,
 "rgb": [
 164,
@@ -2370,6 +2844,8 @@
 "src": "vanilla"
 },
 "copper_ore": {
+"grain": -0.175,
+"grain_strength": 0.068,
 "lum": 127.3,
 "rgb": [
 130,
@@ -2380,6 +2856,8 @@
 "src": "vanilla"
 },
 "copper_torch": {
+"grain": 0.195,
+"grain_strength": 0.1786,
 "lum": 124.4,
 "rgb": [
 129,
@@ -2390,6 +2868,8 @@
 "src": "vanilla"
 },
 "copper_trapdoor": {
+"grain": 0.082,
+"grain_strength": 0.0757,
 "lum": 130.5,
 "rgb": [
 193,
@@ -2400,6 +2880,8 @@
 "src": "vanilla"
 },
 "cornflower": {
+"grain": -0.009,
+"grain_strength": 0.0428,
 "lum": 96.2,
 "rgb": [
 86,
@@ -2410,6 +2892,8 @@
 "src": "pack"
 },
 "cracked_deepslate_bricks": {
+"grain": -0.247,
+"grain_strength": 0.0112,
 "lum": 54.0,
 "rgb": [
 54,
@@ -2420,6 +2904,8 @@
 "src": "pack"
 },
 "cracked_deepslate_tiles": {
+"grain": 0.247,
+"grain_strength": 0.0112,
 "lum": 54.0,
 "rgb": [
 54,
@@ -2430,6 +2916,8 @@
 "src": "pack"
 },
 "cracked_nether_bricks": {
+"grain": -0.147,
+"grain_strength": 0.0338,
 "lum": 28.0,
 "rgb": [
 43,
@@ -2440,6 +2928,8 @@
 "src": "vanilla"
 },
 "cracked_polished_blackstone_bricks": {
+"grain": -0.076,
+"grain_strength": 0.059,
 "lum": 44.4,
 "rgb": [
 47,
@@ -2450,6 +2940,8 @@
 "src": "vanilla"
 },
 "cracked_stone_bricks": {
+"grain": -0.162,
+"grain_strength": 0.0332,
 "lum": 138.0,
 "rgb": [
 140,
@@ -2460,6 +2952,8 @@
 "src": "pack"
 },
 "crafter_bottom": {
+"grain": -0.182,
+"grain_strength": 0.0391,
 "lum": 80.0,
 "rgb": [
 80,
@@ -2470,6 +2964,8 @@
 "src": "vanilla"
 },
 "crafter_east": {
+"grain": -0.376,
+"grain_strength": 0.1001,
 "lum": 124.0,
 "rgb": [
 136,
@@ -2480,6 +2976,8 @@
 "src": "vanilla"
 },
 "crafter_east_crafting": {
+"grain": -0.385,
+"grain_strength": 0.099,
 "lum": 124.3,
 "rgb": [
 137,
@@ -2490,6 +2988,8 @@
 "src": "vanilla"
 },
 "crafter_east_triggered": {
+"grain": -0.382,
+"grain_strength": 0.0985,
 "lum": 124.3,
 "rgb": [
 137,
@@ -2500,6 +3000,8 @@
 "src": "vanilla"
 },
 "crafter_north": {
+"grain": -0.334,
+"grain_strength": 0.1054,
 "lum": 116.1,
 "rgb": [
 121,
@@ -2510,6 +3012,8 @@
 "src": "vanilla"
 },
 "crafter_north_crafting": {
+"grain": -0.402,
+"grain_strength": 0.096,
 "lum": 107.5,
 "rgb": [
 114,
@@ -2520,6 +3024,8 @@
 "src": "vanilla"
 },
 "crafter_south": {
+"grain": -0.327,
+"grain_strength": 0.0863,
 "lum": 120.7,
 "rgb": [
 130,
@@ -2530,6 +3036,8 @@
 "src": "vanilla"
 },
 "crafter_south_triggered": {
+"grain": -0.324,
+"grain_strength": 0.0844,
 "lum": 121.6,
 "rgb": [
 133,
@@ -2540,6 +3048,8 @@
 "src": "vanilla"
 },
 "crafter_top": {
+"grain": -0.045,
+"grain_strength": 0.1515,
 "lum": 115.5,
 "rgb": [
 119,
@@ -2550,6 +3060,8 @@
 "src": "vanilla"
 },
 "crafter_top_crafting": {
+"grain": -0.043,
+"grain_strength": 0.1246,
 "lum": 124.0,
 "rgb": [
 145,
@@ -2560,6 +3072,8 @@
 "src": "vanilla"
 },
 "crafter_top_triggered": {
+"grain": -0.038,
+"grain_strength": 0.1492,
 "lum": 116.1,
 "rgb": [
 121,
@@ -2570,6 +3084,8 @@
 "src": "vanilla"
 },
 "crafter_west": {
+"grain": -0.415,
+"grain_strength": 0.1006,
 "lum": 125.4,
 "rgb": [
 138,
@@ -2580,6 +3096,8 @@
 "src": "vanilla"
 },
 "crafter_west_crafting": {
+"grain": -0.425,
+"grain_strength": 0.0999,
 "lum": 125.7,
 "rgb": [
 139,
@@ -2590,6 +3108,8 @@
 "src": "vanilla"
 },
 "crafter_west_triggered": {
+"grain": -0.423,
+"grain_strength": 0.0993,
 "lum": 125.7,
 "rgb": [
 139,
@@ -2600,6 +3120,8 @@
 "src": "vanilla"
 },
 "crafting_table_front": {
+"grain": -0.08,
+"grain_strength": 0.0195,
 "lum": 156.2,
 "rgb": [
 172,
@@ -2610,6 +3132,8 @@
 "src": "pack"
 },
 "crafting_table_side": {
+"grain": 0.357,
+"grain_strength": 0.0287,
 "lum": 158.2,
 "rgb": [
 174,
@@ -2620,6 +3144,8 @@
 "src": "pack"
 },
 "crafting_table_top": {
+"grain": -0.588,
+"grain_strength": 0.053,
 "lum": 160.2,
 "rgb": [
 176,
@@ -2630,6 +3156,8 @@
 "src": "pack"
 },
 "creaking_heart": {
+"grain": 0.106,
+"grain_strength": 0.0755,
 "lum": 76.4,
 "rgb": [
 86,
@@ -2640,6 +3168,8 @@
 "src": "vanilla"
 },
 "creaking_heart_awake": {
+"grain": 0.125,
+"grain_strength": 0.0936,
 "lum": 107.4,
 "rgb": [
 160,
@@ -2650,6 +3180,8 @@
 "src": "vanilla"
 },
 "creaking_heart_dormant": {
+"grain": 0.112,
+"grain_strength": 0.0872,
 "lum": 80.7,
 "rgb": [
 106,
@@ -2660,6 +3192,8 @@
 "src": "vanilla"
 },
 "creaking_heart_top": {
+"grain": 0.014,
+"grain_strength": 0.0689,
 "lum": 66.4,
 "rgb": [
 76,
@@ -2670,6 +3204,8 @@
 "src": "vanilla"
 },
 "creaking_heart_top_awake": {
+"grain": 0.002,
+"grain_strength": 0.1061,
 "lum": 108.4,
 "rgb": [
 166,
@@ -2680,6 +3216,8 @@
 "src": "vanilla"
 },
 "creaking_heart_top_dormant": {
+"grain": 0.021,
+"grain_strength": 0.0805,
 "lum": 78.1,
 "rgb": [
 106,
@@ -2690,6 +3228,8 @@
 "src": "vanilla"
 },
 "crimson_door_bottom": {
+"grain": -0.159,
+"grain_strength": 0.0392,
 "lum": 77.7,
 "rgb": [
 119,
@@ -2700,6 +3240,8 @@
 "src": "vanilla"
 },
 "crimson_door_top": {
+"grain": -0.12,
+"grain_strength": 0.0415,
 "lum": 77.4,
 "rgb": [
 118,
@@ -2710,6 +3252,8 @@
 "src": "vanilla"
 },
 "crimson_fungus": {
+"grain": -0.14,
+"grain_strength": 0.1042,
 "lum": 88.3,
 "rgb": [
 158,
@@ -2720,6 +3264,8 @@
 "src": "vanilla"
 },
 "crimson_nylium": {
+"grain": -0.001,
+"grain_strength": 0.0676,
 "lum": 66.4,
 "rgb": [
 133,
@@ -2730,6 +3276,8 @@
 "src": "vanilla"
 },
 "crimson_nylium_side": {
+"grain": -0.048,
+"grain_strength": 0.0521,
 "lum": 55.9,
 "rgb": [
 112,
@@ -2740,6 +3288,8 @@
 "src": "vanilla"
 },
 "crimson_planks": {
+"grain": -0.569,
+"grain_strength": 0.0529,
 "lum": 69.1,
 "rgb": [
 105,
@@ -2750,6 +3300,8 @@
 "src": "vanilla"
 },
 "crimson_roots": {
+"grain": 0.26,
+"grain_strength": 0.057,
 "lum": 49.1,
 "rgb": [
 132,
@@ -2760,6 +3312,8 @@
 "src": "vanilla"
 },
 "crimson_roots_pot": {
+"grain": 0.247,
+"grain_strength": 0.0519,
 "lum": 49.8,
 "rgb": [
 133,
@@ -2770,6 +3324,8 @@
 "src": "vanilla"
 },
 "crimson_shelf": {
+"grain": -0.25,
+"grain_strength": 0.0318,
 "lum": 79.9,
 "rgb": [
 131,
@@ -2780,6 +3336,8 @@
 "src": "vanilla"
 },
 "crimson_stem": {
+"grain": 0.085,
+"grain_strength": 0.0316,
 "lum": 50.5,
 "rgb": [
 98,
@@ -2790,6 +3348,8 @@
 "src": "vanilla"
 },
 "crimson_stem_top": {
+"grain": -0.021,
+"grain_strength": 0.0454,
 "lum": 73.1,
 "rgb": [
 116,
@@ -2800,6 +3360,8 @@
 "src": "vanilla"
 },
 "crimson_trapdoor": {
+"grain": -0.272,
+"grain_strength": 0.0565,
 "lum": 71.3,
 "rgb": [
 108,
@@ -2810,6 +3372,8 @@
 "src": "vanilla"
 },
 "crying_obsidian": {
+"grain": -0.057,
+"grain_strength": 0.0867,
 "lum": 32.8,
 "rgb": [
 49,
@@ -2820,6 +3384,8 @@
 "src": "vanilla"
 },
 "cut_copper": {
+"grain": 0.03,
+"grain_strength": 0.0716,
 "lum": 131.2,
 "rgb": [
 193,
@@ -2830,6 +3396,8 @@
 "src": "vanilla"
 },
 "cut_red_sandstone": {
+"grain": -0.268,
+"grain_strength": 0.0374,
 "lum": 121.0,
 "rgb": [
 190,
@@ -2840,6 +3408,8 @@
 "src": "vanilla"
 },
 "cut_sandstone": {
+"grain": -0.262,
+"grain_strength": 0.0454,
 "lum": 205.2,
 "rgb": [
 218,
@@ -2850,6 +3420,8 @@
 "src": "vanilla"
 },
 "cyan_candle": {
+"grain": -0.048,
+"grain_strength": 0.0513,
 "lum": 94.7,
 "rgb": [
 17,
@@ -2860,6 +3432,8 @@
 "src": "vanilla"
 },
 "cyan_candle_lit": {
+"grain": -0.299,
+"grain_strength": 0.0675,
 "lum": 128.7,
 "rgb": [
 67,
@@ -2870,6 +3444,8 @@
 "src": "vanilla"
 },
 "cyan_concrete": {
+"grain": -0.019,
+"grain_strength": 0.0028,
 "lum": 91.6,
 "rgb": [
 21,
@@ -2880,6 +3456,8 @@
 "src": "vanilla"
 },
 "cyan_concrete_powder": {
+"grain": -0.018,
+"grain_strength": 0.0322,
 "lum": 116.4,
 "rgb": [
 37,
@@ -2890,6 +3468,8 @@
 "src": "vanilla"
 },
 "cyan_glazed_terracotta": {
+"grain": 0.014,
+"grain_strength": 0.0817,
 "lum": 115.4,
 "rgb": [
 79,
@@ -2900,6 +3480,8 @@
 "src": "vanilla"
 },
 "cyan_shulker_box": {
+"grain": -0.005,
+"grain_strength": 0.0262,
 "lum": 93.7,
 "rgb": [
 20,
@@ -2910,6 +3492,8 @@
 "src": "vanilla"
 },
 "cyan_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 114.7,
 "rgb": [
 76,
@@ -2920,6 +3504,8 @@
 "src": "vanilla"
 },
 "cyan_stained_glass_pane_top": {
+"grain": 0.41,
+"grain_strength": 0.0139,
 "lum": 111.1,
 "rgb": [
 74,
@@ -2930,6 +3516,8 @@
 "src": "vanilla"
 },
 "cyan_terracotta": {
+"grain": -0.172,
+"grain_strength": 0.0066,
 "lum": 89.8,
 "rgb": [
 87,
@@ -2940,6 +3528,8 @@
 "src": "vanilla"
 },
 "cyan_wool": {
+"grain": -0.001,
+"grain_strength": 0.0285,
 "lum": 144.1,
 "rgb": [
 120,
@@ -2950,6 +3540,8 @@
 "src": "pack"
 },
 "damaged_anvil_top": {
+"grain": -0.041,
+"grain_strength": 0.0639,
 "lum": 74.0,
 "rgb": [
 74,
@@ -2960,6 +3552,8 @@
 "src": "vanilla"
 },
 "dandelion": {
+"grain": -0.147,
+"grain_strength": 0.0514,
 "lum": 124.4,
 "rgb": [
 135,
@@ -2970,6 +3564,8 @@
 "src": "pack"
 },
 "dark_oak_door_bottom": {
+"grain": 0.312,
+"grain_strength": 0.0435,
 "lum": 56.6,
 "rgb": [
 77,
@@ -2980,6 +3576,8 @@
 "src": "vanilla"
 },
 "dark_oak_door_top": {
+"grain": 0.317,
+"grain_strength": 0.0438,
 "lum": 60.3,
 "rgb": [
 81,
@@ -2990,6 +3588,8 @@
 "src": "vanilla"
 },
 "dark_oak_leaves": {
+"grain": -0.106,
+"grain_strength": 0.1101,
 "lum": 154.6,
 "rgb": [
 154,
@@ -3000,6 +3600,8 @@
 "src": "vanilla"
 },
 "dark_oak_log": {
+"grain": 0.416,
+"grain_strength": 0.0259,
 "lum": 109.0,
 "rgb": [
 124,
@@ -3010,6 +3612,8 @@
 "src": "pack"
 },
 "dark_oak_log_top": {
+"grain": -0.015,
+"grain_strength": 0.024,
 "lum": 114.0,
 "rgb": [
 129,
@@ -3020,6 +3624,8 @@
 "src": "pack"
 },
 "dark_oak_planks": {
+"grain": -0.508,
+"grain_strength": 0.017,
 "lum": 114.5,
 "rgb": [
 132,
@@ -3030,6 +3636,8 @@
 "src": "pack"
 },
 "dark_oak_sapling": {
+"grain": 0.027,
+"grain_strength": 0.085,
 "lum": 82.6,
 "rgb": [
 71,
@@ -3040,6 +3648,8 @@
 "src": "vanilla"
 },
 "dark_oak_shelf": {
+"grain": 0.141,
+"grain_strength": 0.0361,
 "lum": 113.0,
 "rgb": [
 128,
@@ -3050,6 +3660,8 @@
 "src": "pack"
 },
 "dark_oak_trapdoor": {
+"grain": 0.019,
+"grain_strength": 0.0351,
 "lum": 56.0,
 "rgb": [
 78,
@@ -3060,6 +3672,8 @@
 "src": "vanilla"
 },
 "dark_prismarine": {
+"grain": -0.029,
+"grain_strength": 0.0708,
 "lum": 80.5,
 "rgb": [
 53,
@@ -3070,6 +3684,8 @@
 "src": "vanilla"
 },
 "daylight_detector_inverted_top": {
+"grain": -0.0,
+"grain_strength": 0.145,
 "lum": 127.9,
 "rgb": [
 121,
@@ -3080,6 +3696,8 @@
 "src": "vanilla"
 },
 "daylight_detector_side": {
+"grain": -0.0,
+"grain_strength": 0.027,
 "lum": 57.3,
 "rgb": [
 68,
@@ -3090,6 +3708,8 @@
 "src": "vanilla"
 },
 "daylight_detector_top": {
+"grain": 0.001,
+"grain_strength": 0.1585,
 "lum": 139.1,
 "rgb": [
 151,
@@ -3100,6 +3720,8 @@
 "src": "vanilla"
 },
 "dead_brain_coral": {
+"grain": -0.022,
+"grain_strength": 0.0839,
 "lum": 128.9,
 "rgb": [
 135,
@@ -3110,6 +3732,8 @@
 "src": "vanilla"
 },
 "dead_brain_coral_block": {
+"grain": -0.105,
+"grain_strength": 0.067,
 "lum": 121.6,
 "rgb": [
 127,
@@ -3120,6 +3744,8 @@
 "src": "vanilla"
 },
 "dead_brain_coral_fan": {
+"grain": 0.026,
+"grain_strength": 0.0882,
 "lum": 129.6,
 "rgb": [
 135,
@@ -3130,6 +3756,8 @@
 "src": "vanilla"
 },
 "dead_bubble_coral": {
+"grain": 0.031,
+"grain_strength": 0.0761,
 "lum": 128.9,
 "rgb": [
 135,
@@ -3140,6 +3768,8 @@
 "src": "vanilla"
 },
 "dead_bubble_coral_block": {
+"grain": 0.053,
+"grain_strength": 0.0606,
 "lum": 126.9,
 "rgb": [
 133,
@@ -3150,6 +3780,8 @@
 "src": "vanilla"
 },
 "dead_bubble_coral_fan": {
+"grain": 0.024,
+"grain_strength": 0.0989,
 "lum": 138.3,
 "rgb": [
 143,
@@ -3160,6 +3792,8 @@
 "src": "vanilla"
 },
 "dead_bush": {
+"grain": 0.221,
+"grain_strength": 0.0408,
 "lum": 100.5,
 "rgb": [
 112,
@@ -3170,6 +3804,8 @@
 "src": "pack"
 },
 "dead_fire_coral": {
+"grain": -0.032,
+"grain_strength": 0.057,
 "lum": 131.9,
 "rgb": [
 138,
@@ -3180,6 +3816,8 @@
 "src": "vanilla"
 },
 "dead_fire_coral_block": {
+"grain": 0.158,
+"grain_strength": 0.0749,
 "lum": 127.5,
 "rgb": [
 133,
@@ -3190,6 +3828,8 @@
 "src": "vanilla"
 },
 "dead_fire_coral_fan": {
+"grain": 0.178,
+"grain_strength": 0.1171,
 "lum": 122.6,
 "rgb": [
 128,
@@ -3200,6 +3840,8 @@
 "src": "vanilla"
 },
 "dead_horn_coral": {
+"grain": 0.0,
+"grain_strength": 0.0531,
 "lum": 137.5,
 "rgb": [
 143,
@@ -3210,6 +3852,8 @@
 "src": "vanilla"
 },
 "dead_horn_coral_block": {
+"grain": 0.023,
+"grain_strength": 0.0832,
 "lum": 130.6,
 "rgb": [
 136,
@@ -3220,6 +3864,8 @@
 "src": "vanilla"
 },
 "dead_horn_coral_fan": {
+"grain": 0.072,
+"grain_strength": 0.0737,
 "lum": 129.8,
 "rgb": [
 136,
@@ -3230,6 +3876,8 @@
 "src": "vanilla"
 },
 "dead_tube_coral": {
+"grain": -0.105,
+"grain_strength": 0.079,
 "lum": 114.8,
 "rgb": [
 120,
@@ -3240,6 +3888,8 @@
 "src": "vanilla"
 },
 "dead_tube_coral_block": {
+"grain": -0.06,
+"grain_strength": 0.0832,
 "lum": 127.0,
 "rgb": [
 133,
@@ -3250,6 +3900,8 @@
 "src": "vanilla"
 },
 "dead_tube_coral_fan": {
+"grain": -0.031,
+"grain_strength": 0.1066,
 "lum": 126.3,
 "rgb": [
 131,
@@ -3260,6 +3912,8 @@
 "src": "vanilla"
 },
 "debug": {
+"grain": -0.003,
+"grain_strength": 0.4011,
 "lum": 186.5,
 "rgb": [
 179,
@@ -3270,6 +3924,8 @@
 "src": "vanilla"
 },
 "debug2": {
+"grain": 0.039,
+"grain_strength": 0.4146,
 "lum": 176.2,
 "rgb": [
 174,
@@ -3280,6 +3936,8 @@
 "src": "vanilla"
 },
 "deepslate": {
+"grain": -0.065,
+"grain_strength": 0.0173,
 "lum": 69.0,
 "rgb": [
 69,
@@ -3290,6 +3948,8 @@
 "src": "pack"
 },
 "deepslate_bricks": {
+"grain": -0.217,
+"grain_strength": 0.0085,
 "lum": 54.3,
 "rgb": [
 55,
@@ -3300,6 +3960,8 @@
 "src": "pack"
 },
 "deepslate_coal_ore": {
+"grain": -0.2,
+"grain_strength": 0.1042,
 "lum": 81.1,
 "rgb": [
 81,
@@ -3310,6 +3972,8 @@
 "src": "vanilla"
 },
 "deepslate_copper_ore": {
+"grain": -0.166,
+"grain_strength": 0.0908,
 "lum": 99.2,
 "rgb": [
 102,
@@ -3320,6 +3984,8 @@
 "src": "vanilla"
 },
 "deepslate_diamond_ore": {
+"grain": -0.158,
+"grain_strength": 0.1251,
 "lum": 111.2,
 "rgb": [
 91,
@@ -3330,6 +3996,8 @@
 "src": "vanilla"
 },
 "deepslate_emerald_ore": {
+"grain": -0.06,
+"grain_strength": 0.1267,
 "lum": 108.4,
 "rgb": [
 90,
@@ -3340,6 +4008,8 @@
 "src": "vanilla"
 },
 "deepslate_gold_ore": {
+"grain": -0.122,
+"grain_strength": 0.1249,
 "lum": 117.1,
 "rgb": [
 133,
@@ -3350,6 +4020,8 @@
 "src": "vanilla"
 },
 "deepslate_iron_ore": {
+"grain": -0.167,
+"grain_strength": 0.0991,
 "lum": 108.8,
 "rgb": [
 118,
@@ -3360,6 +4032,8 @@
 "src": "vanilla"
 },
 "deepslate_lapis_ore": {
+"grain": -0.1,
+"grain_strength": 0.0942,
 "lum": 96.4,
 "rgb": [
 87,
@@ -3370,6 +4044,8 @@
 "src": "vanilla"
 },
 "deepslate_redstone_ore": {
+"grain": -0.162,
+"grain_strength": 0.0853,
 "lum": 93.1,
 "rgb": [
 121,
@@ -3380,6 +4056,8 @@
 "src": "vanilla"
 },
 "deepslate_tiles": {
+"grain": 0.217,
+"grain_strength": 0.0085,
 "lum": 54.3,
 "rgb": [
 55,
@@ -3390,6 +4068,8 @@
 "src": "pack"
 },
 "deepslate_top": {
+"grain": 0.185,
+"grain_strength": 0.0231,
 "lum": 69.4,
 "rgb": [
 70,
@@ -3400,6 +4080,8 @@
 "src": "pack"
 },
 "destroy_stage_0": {
+"grain": 0.0,
+"grain_strength": 0.3686,
 "lum": 120.0,
 "rgb": [
 120,
@@ -3410,6 +4092,8 @@
 "src": "vanilla"
 },
 "destroy_stage_1": {
+"grain": 0.2,
+"grain_strength": 0.3072,
 "lum": 111.0,
 "rgb": [
 111,
@@ -3420,6 +4104,8 @@
 "src": "vanilla"
 },
 "destroy_stage_2": {
+"grain": 0.058,
+"grain_strength": 0.2489,
 "lum": 110.0,
 "rgb": [
 110,
@@ -3430,6 +4116,8 @@
 "src": "vanilla"
 },
 "destroy_stage_3": {
+"grain": -0.145,
+"grain_strength": 0.2463,
 "lum": 114.0,
 "rgb": [
 114,
@@ -3440,6 +4128,8 @@
 "src": "vanilla"
 },
 "destroy_stage_4": {
+"grain": -0.189,
+"grain_strength": 0.248,
 "lum": 115.0,
 "rgb": [
 115,
@@ -3450,6 +4140,8 @@
 "src": "vanilla"
 },
 "destroy_stage_5": {
+"grain": -0.2,
+"grain_strength": 0.2458,
 "lum": 114.0,
 "rgb": [
 114,
@@ -3460,6 +4152,8 @@
 "src": "vanilla"
 },
 "destroy_stage_6": {
+"grain": -0.202,
+"grain_strength": 0.2369,
 "lum": 114.0,
 "rgb": [
 114,
@@ -3470,6 +4164,8 @@
 "src": "vanilla"
 },
 "destroy_stage_7": {
+"grain": -0.227,
+"grain_strength": 0.2466,
 "lum": 115.0,
 "rgb": [
 115,
@@ -3480,6 +4176,8 @@
 "src": "vanilla"
 },
 "destroy_stage_8": {
+"grain": -0.19,
+"grain_strength": 0.2493,
 "lum": 114.0,
 "rgb": [
 114,
@@ -3490,6 +4188,8 @@
 "src": "vanilla"
 },
 "destroy_stage_9": {
+"grain": -0.184,
+"grain_strength": 0.2446,
 "lum": 114.0,
 "rgb": [
 114,
@@ -3500,6 +4200,8 @@
 "src": "vanilla"
 },
 "detector_rail": {
+"grain": 0.266,
+"grain_strength": 0.1188,
 "lum": 119.8,
 "rgb": [
 128,
@@ -3510,6 +4212,8 @@
 "src": "vanilla"
 },
 "detector_rail_on": {
+"grain": 0.265,
+"grain_strength": 0.106,
 "lum": 123.2,
 "rgb": [
 144,
@@ -3520,6 +4224,8 @@
 "src": "vanilla"
 },
 "diamond_block": {
+"grain": -0.017,
+"grain_strength": 0.0631,
 "lum": 199.6,
 "rgb": [
 113,
@@ -3530,6 +4236,8 @@
 "src": "vanilla"
 },
 "diamond_ore": {
+"grain": -0.154,
+"grain_strength": 0.0965,
 "lum": 140.6,
 "rgb": [
 126,
@@ -3540,6 +4248,8 @@
 "src": "vanilla"
 },
 "diorite": {
+"grain": -0.019,
+"grain_strength": 0.0175,
 "lum": 187.1,
 "rgb": [
 188,
@@ -3550,6 +4260,8 @@
 "src": "pack"
 },
 "dirt": {
+"grain": -0.001,
+"grain_strength": 0.0201,
 "lum": 110.6,
 "rgb": [
 120,
@@ -3560,6 +4272,8 @@
 "src": "pack"
 },
 "dirt_path_side": {
+"grain": -0.556,
+"grain_strength": 0.0439,
 "lum": 113.0,
 "rgb": [
 123,
@@ -3570,6 +4284,8 @@
 "src": "pack"
 },
 "dirt_path_top": {
+"grain": 0.029,
+"grain_strength": 0.0197,
 "lum": 151.5,
 "rgb": [
 161,
@@ -3580,6 +4296,8 @@
 "src": "pack"
 },
 "dispenser_front": {
+"grain": 0.008,
+"grain_strength": 0.1041,
 "lum": 132.3,
 "rgb": [
 133,
@@ -3590,6 +4308,8 @@
 "src": "vanilla"
 },
 "dispenser_front_vertical": {
+"grain": -0.011,
+"grain_strength": 0.0721,
 "lum": 104.0,
 "rgb": [
 104,
@@ -3600,6 +4320,8 @@
 "src": "vanilla"
 },
 "dragon_egg": {
+"grain": 0.129,
+"grain_strength": 0.0121,
 "lum": 12.4,
 "rgb": [
 15,
@@ -3610,6 +4332,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_bottom": {
+"grain": 0.0,
+"grain_strength": 0.0155,
 "lum": 140.0,
 "rgb": [
 147,
@@ -3620,6 +4344,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_east": {
+"grain": -0.314,
+"grain_strength": 0.0383,
 "lum": 150.2,
 "rgb": [
 160,
@@ -3630,6 +4356,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_north": {
+"grain": -0.196,
+"grain_strength": 0.0364,
 "lum": 149.5,
 "rgb": [
 160,
@@ -3640,6 +4368,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_south": {
+"grain": 0.194,
+"grain_strength": 0.032,
 "lum": 150.5,
 "rgb": [
 161,
@@ -3650,6 +4380,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_tentacles": {
+"grain": -0.189,
+"grain_strength": 0.0161,
 "lum": 117.9,
 "rgb": [
 120,
@@ -3660,6 +4392,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_top": {
+"grain": 0.382,
+"grain_strength": 0.0252,
 "lum": 150.2,
 "rgb": [
 160,
@@ -3670,6 +4404,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_0_west": {
+"grain": -0.091,
+"grain_strength": 0.0283,
 "lum": 152.5,
 "rgb": [
 163,
@@ -3680,6 +4416,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_bottom": {
+"grain": 0.0,
+"grain_strength": 0.0157,
 "lum": 162.4,
 "rgb": [
 168,
@@ -3690,6 +4428,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_east": {
+"grain": -0.319,
+"grain_strength": 0.0348,
 "lum": 172.3,
 "rgb": [
 180,
@@ -3700,6 +4440,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_north": {
+"grain": -0.238,
+"grain_strength": 0.0315,
 "lum": 172.3,
 "rgb": [
 180,
@@ -3710,6 +4452,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_south": {
+"grain": 0.182,
+"grain_strength": 0.0338,
 "lum": 170.3,
 "rgb": [
 178,
@@ -3720,6 +4464,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_tentacles": {
+"grain": -0.184,
+"grain_strength": 0.0146,
 "lum": 143.9,
 "rgb": [
 146,
@@ -3730,6 +4476,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_top": {
+"grain": 0.38,
+"grain_strength": 0.0242,
 "lum": 172.3,
 "rgb": [
 180,
@@ -3740,6 +4488,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_1_west": {
+"grain": -0.093,
+"grain_strength": 0.0257,
 "lum": 174.6,
 "rgb": [
 183,
@@ -3750,6 +4500,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_bottom": {
+"grain": 0.0,
+"grain_strength": 0.0151,
 "lum": 185.8,
 "rgb": [
 190,
@@ -3760,6 +4512,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_east": {
+"grain": -0.318,
+"grain_strength": 0.0318,
 "lum": 195.1,
 "rgb": [
 200,
@@ -3770,6 +4524,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_north": {
+"grain": -0.34,
+"grain_strength": 0.0312,
 "lum": 194.4,
 "rgb": [
 200,
@@ -3780,6 +4536,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_south": {
+"grain": 0.222,
+"grain_strength": 0.0319,
 "lum": 193.1,
 "rgb": [
 198,
@@ -3790,6 +4548,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_tentacles": {
+"grain": -0.186,
+"grain_strength": 0.0128,
 "lum": 169.9,
 "rgb": [
 172,
@@ -3800,6 +4560,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_top": {
+"grain": 0.372,
+"grain_strength": 0.0232,
 "lum": 195.1,
 "rgb": [
 200,
@@ -3810,6 +4572,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_2_west": {
+"grain": -0.093,
+"grain_strength": 0.0236,
 "lum": 197.4,
 "rgb": [
 203,
@@ -3820,6 +4584,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_bottom": {
+"grain": 0.0,
+"grain_strength": 0.0127,
 "lum": 233.6,
 "rgb": [
 235,
@@ -3830,6 +4596,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_east": {
+"grain": -0.328,
+"grain_strength": 0.026,
 "lum": 241.0,
 "rgb": [
 241,
@@ -3840,6 +4608,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_north": {
+"grain": -0.25,
+"grain_strength": 0.0355,
 "lum": 240.0,
 "rgb": [
 240,
@@ -3850,6 +4620,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_south": {
+"grain": 0.129,
+"grain_strength": 0.0278,
 "lum": 239.3,
 "rgb": [
 240,
@@ -3860,6 +4632,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_tentacles": {
+"grain": -0.181,
+"grain_strength": 0.0099,
 "lum": 221.9,
 "rgb": [
 224,
@@ -3870,6 +4644,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_top": {
+"grain": 0.394,
+"grain_strength": 0.019,
 "lum": 241.0,
 "rgb": [
 241,
@@ -3880,6 +4656,8 @@
 "src": "vanilla"
 },
 "dried_ghast_hydration_3_west": {
+"grain": -0.098,
+"grain_strength": 0.0194,
 "lum": 243.0,
 "rgb": [
 243,
@@ -3890,6 +4668,8 @@
 "src": "vanilla"
 },
 "dried_kelp_bottom": {
+"grain": 0.192,
+"grain_strength": 0.0748,
 "lum": 65.5,
 "rgb": [
 64,
@@ -3900,6 +4680,8 @@
 "src": "vanilla"
 },
 "dried_kelp_side": {
+"grain": 0.265,
+"grain_strength": 0.0489,
 "lum": 51.7,
 "rgb": [
 48,
@@ -3910,6 +4692,8 @@
 "src": "vanilla"
 },
 "dried_kelp_top": {
+"grain": 0.192,
+"grain_strength": 0.0748,
 "lum": 65.5,
 "rgb": [
 64,
@@ -3920,6 +4704,8 @@
 "src": "vanilla"
 },
 "dripstone_block": {
+"grain": -0.208,
+"grain_strength": 0.0665,
 "lum": 115.9,
 "rgb": [
 136,
@@ -3930,6 +4716,8 @@
 "src": "vanilla"
 },
 "dropper_front": {
+"grain": -0.057,
+"grain_strength": 0.107,
 "lum": 132.3,
 "rgb": [
 133,
@@ -3940,6 +4728,8 @@
 "src": "vanilla"
 },
 "dropper_front_vertical": {
+"grain": -0.058,
+"grain_strength": 0.0691,
 "lum": 103.3,
 "rgb": [
 104,
@@ -3950,6 +4740,8 @@
 "src": "vanilla"
 },
 "emerald_block": {
+"grain": 0.02,
+"grain_strength": 0.0987,
 "lum": 149.3,
 "rgb": [
 57,
@@ -3960,6 +4752,8 @@
 "src": "vanilla"
 },
 "emerald_ore": {
+"grain": -0.068,
+"grain_strength": 0.0977,
 "lum": 133.1,
 "rgb": [
 118,
@@ -3970,6 +4764,8 @@
 "src": "vanilla"
 },
 "enchanting_table_bottom": {
+"grain": -0.09,
+"grain_strength": 0.0525,
 "lum": 18.5,
 "rgb": [
 21,
@@ -3980,6 +4776,8 @@
 "src": "vanilla"
 },
 "enchanting_table_side": {
+"grain": -0.094,
+"grain_strength": 0.0813,
 "lum": 98.3,
 "rgb": [
 84,
@@ -3990,6 +4788,8 @@
 "src": "vanilla"
 },
 "enchanting_table_top": {
+"grain": -0.0,
+"grain_strength": 0.0713,
 "lum": 130.0,
 "rgb": [
 137,
@@ -4000,6 +4800,8 @@
 "src": "vanilla"
 },
 "end_portal_frame_eye": {
+"grain": 0.218,
+"grain_strength": 0.092,
 "lum": 74.3,
 "rgb": [
 53,
@@ -4010,6 +4812,8 @@
 "src": "vanilla"
 },
 "end_portal_frame_side": {
+"grain": -0.485,
+"grain_strength": 0.1264,
 "lum": 174.1,
 "rgb": [
 177,
@@ -4020,6 +4824,8 @@
 "src": "vanilla"
 },
 "end_portal_frame_top": {
+"grain": 0.101,
+"grain_strength": 0.1525,
 "lum": 131.1,
 "rgb": [
 122,
@@ -4030,6 +4836,8 @@
 "src": "vanilla"
 },
 "end_rod": {
+"grain": 0.376,
+"grain_strength": 0.0792,
 "lum": 209.0,
 "rgb": [
 216,
@@ -4040,6 +4848,8 @@
 "src": "vanilla"
 },
 "end_stone": {
+"grain": -0.068,
+"grain_strength": 0.0678,
 "lum": 215.4,
 "rgb": [
 220,
@@ -4050,6 +4860,8 @@
 "src": "vanilla"
 },
 "end_stone_bricks": {
+"grain": -0.309,
+"grain_strength": 0.0531,
 "lum": 217.1,
 "rgb": [
 220,
@@ -4060,6 +4872,8 @@
 "src": "vanilla"
 },
 "exposed_chiseled_copper": {
+"grain": 0.016,
+"grain_strength": 0.061,
 "lum": 129.3,
 "rgb": [
 158,
@@ -4070,6 +4884,8 @@
 "src": "vanilla"
 },
 "exposed_copper": {
+"grain": 0.072,
+"grain_strength": 0.0469,
 "lum": 135.0,
 "rgb": [
 164,
@@ -4080,6 +4896,8 @@
 "src": "vanilla"
 },
 "exposed_copper_bars": {
+"grain": 0.392,
+"grain_strength": 0.0579,
 "lum": 115.6,
 "rgb": [
 138,
@@ -4090,6 +4908,8 @@
 "src": "vanilla"
 },
 "exposed_copper_bulb": {
+"grain": 0.025,
+"grain_strength": 0.0774,
 "lum": 117.6,
 "rgb": [
 142,
@@ -4100,6 +4920,8 @@
 "src": "vanilla"
 },
 "exposed_copper_bulb_lit": {
+"grain": 0.043,
+"grain_strength": 0.0839,
 "lum": 161.0,
 "rgb": [
 201,
@@ -4110,6 +4932,8 @@
 "src": "vanilla"
 },
 "exposed_copper_bulb_lit_powered": {
+"grain": 0.041,
+"grain_strength": 0.0861,
 "lum": 161.3,
 "rgb": [
 202,
@@ -4120,6 +4944,8 @@
 "src": "vanilla"
 },
 "exposed_copper_bulb_powered": {
+"grain": 0.024,
+"grain_strength": 0.0796,
 "lum": 117.9,
 "rgb": [
 143,
@@ -4130,6 +4956,8 @@
 "src": "vanilla"
 },
 "exposed_copper_chain": {
+"grain": -0.167,
+"grain_strength": 0.0602,
 "lum": 108.6,
 "rgb": [
 129,
@@ -4140,6 +4968,8 @@
 "src": "vanilla"
 },
 "exposed_copper_door_bottom": {
+"grain": 0.096,
+"grain_strength": 0.0617,
 "lum": 129.0,
 "rgb": [
 157,
@@ -4150,6 +4980,8 @@
 "src": "vanilla"
 },
 "exposed_copper_door_top": {
+"grain": -0.086,
+"grain_strength": 0.0611,
 "lum": 135.9,
 "rgb": [
 168,
@@ -4160,6 +4992,8 @@
 "src": "vanilla"
 },
 "exposed_copper_grate": {
+"grain": 0.139,
+"grain_strength": 0.0524,
 "lum": 136.0,
 "rgb": [
 165,
@@ -4170,6 +5004,8 @@
 "src": "vanilla"
 },
 "exposed_copper_lantern": {
+"grain": -0.005,
+"grain_strength": 0.0703,
 "lum": 142.6,
 "rgb": [
 155,
@@ -4180,6 +5016,8 @@
 "src": "vanilla"
 },
 "exposed_copper_trapdoor": {
+"grain": 0.085,
+"grain_strength": 0.0605,
 "lum": 135.4,
 "rgb": [
 165,
@@ -4190,6 +5028,8 @@
 "src": "vanilla"
 },
 "exposed_cut_copper": {
+"grain": -0.008,
+"grain_strength": 0.0608,
 "lum": 131.2,
 "rgb": [
 158,
@@ -4200,6 +5040,8 @@
 "src": "vanilla"
 },
 "exposed_lightning_rod": {
+"grain": -0.064,
+"grain_strength": 0.0691,
 "lum": 132.1,
 "rgb": [
 164,
@@ -4210,6 +5052,8 @@
 "src": "vanilla"
 },
 "farmland": {
+"grain": -0.205,
+"grain_strength": 0.0228,
 "lum": 112.0,
 "rgb": [
 122,
@@ -4220,6 +5064,8 @@
 "src": "pack"
 },
 "farmland_moist": {
+"grain": -0.245,
+"grain_strength": 0.0214,
 "lum": 86.7,
 "rgb": [
 95,
@@ -4230,6 +5076,8 @@
 "src": "pack"
 },
 "fern": {
+"grain": 0.181,
+"grain_strength": 0.0497,
 "lum": 155.6,
 "rgb": [
 155,
@@ -4240,6 +5088,8 @@
 "src": "pack"
 },
 "fire_0": {
+"grain": -0.095,
+"grain_strength": 0.1164,
 "lum": 170.2,
 "rgb": [
 215,
@@ -4250,6 +5100,8 @@
 "src": "vanilla"
 },
 "fire_1": {
+"grain": -0.133,
+"grain_strength": 0.1272,
 "lum": 174.1,
 "rgb": [
 218,
@@ -4260,6 +5112,8 @@
 "src": "vanilla"
 },
 "fire_coral": {
+"grain": -0.047,
+"grain_strength": 0.0549,
 "lum": 80.3,
 "rgb": [
 172,
@@ -4270,6 +5124,8 @@
 "src": "vanilla"
 },
 "fire_coral_block": {
+"grain": 0.145,
+"grain_strength": 0.058,
 "lum": 76.4,
 "rgb": [
 167,
@@ -4280,6 +5136,8 @@
 "src": "vanilla"
 },
 "fire_coral_fan": {
+"grain": 0.16,
+"grain_strength": 0.0799,
 "lum": 75.4,
 "rgb": [
 164,
@@ -4290,6 +5148,8 @@
 "src": "vanilla"
 },
 "firefly_bush": {
+"grain": 0.203,
+"grain_strength": 0.0836,
 "lum": 86.8,
 "rgb": [
 98,
@@ -4300,6 +5160,8 @@
 "src": "vanilla"
 },
 "firefly_bush_emissive": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 151.3,
 "rgb": [
 160,
@@ -4310,6 +5172,8 @@
 "src": "vanilla"
 },
 "fletching_table_front": {
+"grain": -0.012,
+"grain_strength": 0.1461,
 "lum": 165.3,
 "rgb": [
 182,
@@ -4320,6 +5184,8 @@
 "src": "vanilla"
 },
 "fletching_table_side": {
+"grain": -0.039,
+"grain_strength": 0.1759,
 "lum": 181.3,
 "rgb": [
 197,
@@ -4330,6 +5196,8 @@
 "src": "vanilla"
 },
 "fletching_table_top": {
+"grain": -0.102,
+"grain_strength": 0.0927,
 "lum": 183.2,
 "rgb": [
 200,
@@ -4340,6 +5208,8 @@
 "src": "vanilla"
 },
 "flower_pot": {
+"grain": -0.123,
+"grain_strength": 0.0248,
 "lum": 119.0,
 "rgb": [
 138,
@@ -4350,6 +5220,8 @@
 "src": "pack"
 },
 "flowering_azalea_leaves": {
+"grain": -0.072,
+"grain_strength": 0.0807,
 "lum": 108.6,
 "rgb": [
 108,
@@ -4360,6 +5232,8 @@
 "src": "vanilla"
 },
 "flowering_azalea_side": {
+"grain": 0.116,
+"grain_strength": 0.1008,
 "lum": 115.4,
 "rgb": [
 120,
@@ -4370,6 +5244,8 @@
 "src": "vanilla"
 },
 "flowering_azalea_top": {
+"grain": 0.024,
+"grain_strength": 0.0654,
 "lum": 117.5,
 "rgb": [
 117,
@@ -4380,6 +5256,8 @@
 "src": "vanilla"
 },
 "frogspawn": {
+"grain": -0.047,
+"grain_strength": 0.1614,
 "lum": 104.7,
 "rgb": [
 116,
@@ -4390,6 +5268,8 @@
 "src": "vanilla"
 },
 "frosted_ice_0": {
+"grain": 0.147,
+"grain_strength": 0.0186,
 "lum": 198.7,
 "rgb": [
 191,
@@ -4400,6 +5280,8 @@
 "src": "pack"
 },
 "frosted_ice_1": {
+"grain": -0.064,
+"grain_strength": 0.0325,
 "lum": 190.7,
 "rgb": [
 183,
@@ -4410,6 +5292,8 @@
 "src": "pack"
 },
 "frosted_ice_2": {
+"grain": 0.005,
+"grain_strength": 0.0346,
 "lum": 182.7,
 "rgb": [
 175,
@@ -4420,6 +5304,8 @@
 "src": "pack"
 },
 "frosted_ice_3": {
+"grain": 0.032,
+"grain_strength": 0.047,
 "lum": 187.7,
 "rgb": [
 180,
@@ -4430,6 +5316,8 @@
 "src": "pack"
 },
 "furnace_front": {
+"grain": -0.258,
+"grain_strength": 0.1098,
 "lum": 108.3,
 "rgb": [
 109,
@@ -4440,6 +5328,8 @@
 "src": "vanilla"
 },
 "furnace_front_on": {
+"grain": -0.228,
+"grain_strength": 0.1446,
 "lum": 133.9,
 "rgb": [
 145,
@@ -4450,6 +5340,8 @@
 "src": "vanilla"
 },
 "furnace_side": {
+"grain": -0.189,
+"grain_strength": 0.0713,
 "lum": 127.3,
 "rgb": [
 128,
@@ -4460,6 +5352,8 @@
 "src": "vanilla"
 },
 "furnace_top": {
+"grain": -0.079,
+"grain_strength": 0.0693,
 "lum": 114.0,
 "rgb": [
 114,
@@ -4470,6 +5364,8 @@
 "src": "vanilla"
 },
 "gilded_blackstone": {
+"grain": -0.034,
+"grain_strength": 0.0857,
 "lum": 59.4,
 "rgb": [
 72,
@@ -4480,6 +5376,8 @@
 "src": "vanilla"
 },
 "glass": {
+"grain": 0.258,
+"grain_strength": 0.2253,
 "lum": 164.7,
 "rgb": [
 175,
@@ -4490,6 +5388,8 @@
 "src": "pack"
 },
 "glass_pane_top": {
+"grain": 0.007,
+"grain_strength": 0.0367,
 "lum": 67.5,
 "rgb": [
 81,
@@ -4500,6 +5400,8 @@
 "src": "pack"
 },
 "glow_item_frame": {
+"grain": -0.021,
+"grain_strength": 0.0633,
 "lum": 131.8,
 "rgb": [
 168,
@@ -4510,6 +5412,8 @@
 "src": "vanilla"
 },
 "glow_lichen": {
+"grain": -0.039,
+"grain_strength": 0.0933,
 "lum": 124.6,
 "rgb": [
 113,
@@ -4520,6 +5424,8 @@
 "src": "pack"
 },
 "glowstone": {
+"grain": -0.049,
+"grain_strength": 0.1992,
 "lum": 156.3,
 "rgb": [
 184,
@@ -4530,6 +5436,8 @@
 "src": "vanilla"
 },
 "gold_block": {
+"grain": -0.019,
+"grain_strength": 0.0518,
 "lum": 205.6,
 "rgb": [
 247,
@@ -4540,6 +5448,8 @@
 "src": "vanilla"
 },
 "gold_ore": {
+"grain": -0.111,
+"grain_strength": 0.0876,
 "lum": 140.6,
 "rgb": [
 153,
@@ -4550,6 +5460,8 @@
 "src": "vanilla"
 },
 "granite": {
+"grain": 0.026,
+"grain_strength": 0.0238,
 "lum": 124.1,
 "rgb": [
 137,
@@ -4560,6 +5472,8 @@
 "src": "pack"
 },
 "grass_block_side": {
+"grain": -0.432,
+"grain_strength": 0.0346,
 "lum": 107.0,
 "rgb": [
 117,
@@ -4570,6 +5484,8 @@
 "src": "pack"
 },
 "grass_block_side_overlay": {
+"grain": -0.093,
+"grain_strength": 0.038,
 "lum": 170.6,
 "rgb": [
 170,
@@ -4580,6 +5496,8 @@
 "src": "pack"
 },
 "grass_block_snow": {
+"grain": 0.019,
+"grain_strength": 0.0173,
 "lum": 213.7,
 "rgb": [
 211,
@@ -4590,6 +5508,8 @@
 "src": "pack"
 },
 "grass_block_top": {
+"grain": 0.021,
+"grain_strength": 0.0239,
 "lum": 166.6,
 "rgb": [
 166,
@@ -4600,6 +5520,8 @@
 "src": "pack"
 },
 "gravel": {
+"grain": 0.049,
+"grain_strength": 0.0293,
 "lum": 141.0,
 "rgb": [
 143,
@@ -4610,6 +5532,8 @@
 "src": "pack"
 },
 "gray_candle": {
+"grain": -0.08,
+"grain_strength": 0.0332,
 "lum": 92.0,
 "rgb": [
 82,
@@ -4620,6 +5544,8 @@
 "src": "vanilla"
 },
 "gray_candle_lit": {
+"grain": -0.398,
+"grain_strength": 0.0663,
 "lum": 132.4,
 "rgb": [
 139,
@@ -4630,6 +5556,8 @@
 "src": "vanilla"
 },
 "gray_concrete": {
+"grain": 0.023,
+"grain_strength": 0.002,
 "lum": 57.6,
 "rgb": [
 55,
@@ -4640,6 +5568,8 @@
 "src": "vanilla"
 },
 "gray_concrete_powder": {
+"grain": 0.001,
+"grain_strength": 0.0242,
 "lum": 80.3,
 "rgb": [
 77,
@@ -4650,6 +5580,8 @@
 "src": "vanilla"
 },
 "gray_glazed_terracotta": {
+"grain": -0.022,
+"grain_strength": 0.0886,
 "lum": 96.1,
 "rgb": [
 91,
@@ -4660,6 +5592,8 @@
 "src": "vanilla"
 },
 "gray_shulker_box": {
+"grain": -0.003,
+"grain_strength": 0.018,
 "lum": 58.6,
 "rgb": [
 56,
@@ -4670,6 +5604,8 @@
 "src": "vanilla"
 },
 "gray_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 76.0,
 "rgb": [
 76,
@@ -4680,6 +5616,8 @@
 "src": "vanilla"
 },
 "gray_stained_glass_pane_top": {
+"grain": 0.417,
+"grain_strength": 0.0088,
 "lum": 74.0,
 "rgb": [
 74,
@@ -4690,6 +5628,8 @@
 "src": "vanilla"
 },
 "gray_terracotta": {
+"grain": -0.167,
+"grain_strength": 0.0036,
 "lum": 46.1,
 "rgb": [
 58,
@@ -4700,6 +5640,8 @@
 "src": "vanilla"
 },
 "gray_wool": {
+"grain": -0.269,
+"grain_strength": 0.0267,
 "lum": 67.5,
 "rgb": [
 63,
@@ -4710,6 +5652,8 @@
 "src": "vanilla"
 },
 "green_candle": {
+"grain": 0.005,
+"grain_strength": 0.0457,
 "lum": 83.6,
 "rgb": [
 75,
@@ -4720,6 +5664,8 @@
 "src": "vanilla"
 },
 "green_candle_lit": {
+"grain": -0.179,
+"grain_strength": 0.064,
 "lum": 110.1,
 "rgb": [
 116,
@@ -4730,6 +5676,8 @@
 "src": "vanilla"
 },
 "green_concrete": {
+"grain": 0.036,
+"grain_strength": 0.0026,
 "lum": 79.3,
 "rgb": [
 73,
@@ -4740,6 +5688,8 @@
 "src": "vanilla"
 },
 "green_concrete_powder": {
+"grain": 0.012,
+"grain_strength": 0.0294,
 "lum": 104.6,
 "rgb": [
 97,
@@ -4750,6 +5700,8 @@
 "src": "vanilla"
 },
 "green_glazed_terracotta": {
+"grain": 0.008,
+"grain_strength": 0.1075,
 "lum": 136.8,
 "rgb": [
 127,
@@ -4760,6 +5712,8 @@
 "src": "vanilla"
 },
 "green_shulker_box": {
+"grain": -0.005,
+"grain_strength": 0.0135,
 "lum": 86.6,
 "rgb": [
 79,
@@ -4770,6 +5724,8 @@
 "src": "vanilla"
 },
 "green_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 110.9,
 "rgb": [
 102,
@@ -4780,6 +5736,8 @@
 "src": "vanilla"
 },
 "green_stained_glass_pane_top": {
+"grain": 0.405,
+"grain_strength": 0.0135,
 "lum": 107.1,
 "rgb": [
 98,
@@ -4790,6 +5748,8 @@
 "src": "vanilla"
 },
 "green_terracotta": {
+"grain": -0.187,
+"grain_strength": 0.0046,
 "lum": 76.2,
 "rgb": [
 76,
@@ -4800,6 +5760,8 @@
 "src": "vanilla"
 },
 "green_wool": {
+"grain": -0.009,
+"grain_strength": 0.027,
 "lum": 126.1,
 "rgb": [
 116,
@@ -4810,6 +5772,8 @@
 "src": "pack"
 },
 "grindstone_pivot": {
+"grain": 0.042,
+"grain_strength": 0.0228,
 "lum": 52.4,
 "rgb": [
 75,
@@ -4820,6 +5784,8 @@
 "src": "vanilla"
 },
 "grindstone_round": {
+"grain": 0.29,
+"grain_strength": 0.0699,
 "lum": 144.0,
 "rgb": [
 144,
@@ -4830,6 +5796,8 @@
 "src": "vanilla"
 },
 "grindstone_side": {
+"grain": 0.007,
+"grain_strength": 0.0629,
 "lum": 142.0,
 "rgb": [
 142,
@@ -4840,6 +5808,8 @@
 "src": "vanilla"
 },
 "hanging_roots": {
+"grain": 0.205,
+"grain_strength": 0.0786,
 "lum": 129.6,
 "rgb": [
 163,
@@ -4850,6 +5820,8 @@
 "src": "vanilla"
 },
 "hay_block_side": {
+"grain": -0.168,
+"grain_strength": 0.0282,
 "lum": 150.5,
 "rgb": [
 163,
@@ -4860,6 +5832,8 @@
 "src": "pack"
 },
 "hay_block_top": {
+"grain": -0.045,
+"grain_strength": 0.0228,
 "lum": 151.5,
 "rgb": [
 164,
@@ -4870,6 +5844,8 @@
 "src": "pack"
 },
 "heavy_core": {
+"grain": 0.049,
+"grain_strength": 0.1067,
 "lum": 95.6,
 "rgb": [
 91,
@@ -4880,6 +5856,8 @@
 "src": "vanilla"
 },
 "honey_block_bottom": {
+"grain": 0.023,
+"grain_strength": 0.0403,
 "lum": 162.3,
 "rgb": [
 242,
@@ -4890,6 +5868,8 @@
 "src": "vanilla"
 },
 "honey_block_side": {
+"grain": -0.236,
+"grain_strength": 0.0406,
 "lum": 194.6,
 "rgb": [
 251,
@@ -4900,6 +5880,8 @@
 "src": "vanilla"
 },
 "honey_block_top": {
+"grain": -0.045,
+"grain_strength": 0.0357,
 "lum": 192.1,
 "rgb": [
 251,
@@ -4910,6 +5892,8 @@
 "src": "vanilla"
 },
 "honeycomb_block": {
+"grain": -0.025,
+"grain_strength": 0.0959,
 "lum": 165.9,
 "rgb": [
 231,
@@ -4920,6 +5904,8 @@
 "src": "vanilla"
 },
 "hopper_inside": {
+"grain": 0.007,
+"grain_strength": 0.0316,
 "lum": 85.4,
 "rgb": [
 88,
@@ -4930,6 +5916,8 @@
 "src": "pack"
 },
 "hopper_outside": {
+"grain": 0.007,
+"grain_strength": 0.0302,
 "lum": 98.1,
 "rgb": [
 100,
@@ -4940,6 +5928,8 @@
 "src": "pack"
 },
 "hopper_top": {
+"grain": 0.018,
+"grain_strength": 0.0247,
 "lum": 100.6,
 "rgb": [
 103,
@@ -4950,6 +5940,8 @@
 "src": "pack"
 },
 "horn_coral": {
+"grain": 0.042,
+"grain_strength": 0.0927,
 "lum": 181.6,
 "rgb": [
 210,
@@ -4960,6 +5952,8 @@
 "src": "vanilla"
 },
 "horn_coral_block": {
+"grain": 0.032,
+"grain_strength": 0.0779,
 "lum": 191.7,
 "rgb": [
 217,
@@ -4970,6 +5964,8 @@
 "src": "vanilla"
 },
 "horn_coral_fan": {
+"grain": 0.07,
+"grain_strength": 0.0765,
 "lum": 177.6,
 "rgb": [
 207,
@@ -4980,6 +5976,8 @@
 "src": "vanilla"
 },
 "ice": {
+"grain": 0.0,
+"grain_strength": 0.0291,
 "lum": 190.7,
 "rgb": [
 183,
@@ -4990,6 +5988,8 @@
 "src": "pack"
 },
 "iron_bars": {
+"grain": 0.534,
+"grain_strength": 0.0737,
 "lum": 107.8,
 "rgb": [
 109,
@@ -5000,6 +6000,8 @@
 "src": "pack"
 },
 "iron_block": {
+"grain": -0.396,
+"grain_strength": 0.0375,
 "lum": 221.0,
 "rgb": [
 221,
@@ -5010,6 +6012,8 @@
 "src": "vanilla"
 },
 "iron_chain": {
+"grain": -0.066,
+"grain_strength": 0.0559,
 "lum": 105.1,
 "rgb": [
 107,
@@ -5020,6 +6024,8 @@
 "src": "pack"
 },
 "iron_door_bottom": {
+"grain": 0.024,
+"grain_strength": 0.0721,
 "lum": 197.3,
 "rgb": [
 198,
@@ -5030,6 +6036,8 @@
 "src": "vanilla"
 },
 "iron_door_top": {
+"grain": 0.099,
+"grain_strength": 0.0772,
 "lum": 195.3,
 "rgb": [
 196,
@@ -5040,6 +6048,8 @@
 "src": "vanilla"
 },
 "iron_ore": {
+"grain": -0.176,
+"grain_strength": 0.0618,
 "lum": 133.0,
 "rgb": [
 140,
@@ -5050,6 +6060,8 @@
 "src": "vanilla"
 },
 "iron_trapdoor": {
+"grain": 0.001,
+"grain_strength": 0.0259,
 "lum": 203.0,
 "rgb": [
 203,
@@ -5060,6 +6072,8 @@
 "src": "vanilla"
 },
 "item_frame": {
+"grain": -0.084,
+"grain_strength": 0.0313,
 "lum": 82.8,
 "rgb": [
 125,
@@ -5070,6 +6084,8 @@
 "src": "vanilla"
 },
 "jack_o_lantern": {
+"grain": 0.127,
+"grain_strength": 0.1018,
 "lum": 170.1,
 "rgb": [
 219,
@@ -5080,6 +6096,8 @@
 "src": "vanilla"
 },
 "jigsaw_bottom": {
+"grain": -0.0,
+"grain_strength": 0.0163,
 "lum": 32.2,
 "rgb": [
 36,
@@ -5090,6 +6108,8 @@
 "src": "vanilla"
 },
 "jigsaw_lock": {
+"grain": 0.352,
+"grain_strength": 0.0516,
 "lum": 63.8,
 "rgb": [
 69,
@@ -5100,6 +6120,8 @@
 "src": "vanilla"
 },
 "jigsaw_side": {
+"grain": 0.12,
+"grain_strength": 0.1137,
 "lum": 86.8,
 "rgb": [
 95,
@@ -5110,6 +6132,8 @@
 "src": "vanilla"
 },
 "jigsaw_top": {
+"grain": -0.005,
+"grain_strength": 0.1149,
 "lum": 107.6,
 "rgb": [
 117,
@@ -5120,6 +6144,8 @@
 "src": "vanilla"
 },
 "jukebox_side": {
+"grain": 0.04,
+"grain_strength": 0.1042,
 "lum": 71.3,
 "rgb": [
 98,
@@ -5130,6 +6156,8 @@
 "src": "vanilla"
 },
 "jukebox_top": {
+"grain": 0.27,
+"grain_strength": 0.0439,
 "lum": 76.3,
 "rgb": [
 103,
@@ -5140,6 +6168,8 @@
 "src": "vanilla"
 },
 "jungle_door_bottom": {
+"grain": 0.236,
+"grain_strength": 0.0761,
 "lum": 126.5,
 "rgb": [
 162,
@@ -5150,6 +6180,8 @@
 "src": "vanilla"
 },
 "jungle_door_top": {
+"grain": 0.104,
+"grain_strength": 0.0921,
 "lum": 133.1,
 "rgb": [
 168,
@@ -5160,6 +6192,8 @@
 "src": "vanilla"
 },
 "jungle_leaves": {
+"grain": 0.09,
+"grain_strength": 0.0869,
 "lum": 156.9,
 "rgb": [
 160,
@@ -5170,6 +6204,8 @@
 "src": "vanilla"
 },
 "jungle_log": {
+"grain": -0.429,
+"grain_strength": 0.0486,
 "lum": 69.5,
 "rgb": [
 87,
@@ -5180,6 +6216,8 @@
 "src": "vanilla"
 },
 "jungle_log_top": {
+"grain": -0.03,
+"grain_strength": 0.0713,
 "lum": 121.3,
 "rgb": [
 155,
@@ -5190,6 +6228,8 @@
 "src": "vanilla"
 },
 "jungle_planks": {
+"grain": -0.57,
+"grain_strength": 0.0792,
 "lum": 127.9,
 "rgb": [
 164,
@@ -5200,6 +6240,8 @@
 "src": "vanilla"
 },
 "jungle_sapling": {
+"grain": -0.07,
+"grain_strength": 0.0836,
 "lum": 67.5,
 "rgb": [
 48,
@@ -5210,6 +6252,8 @@
 "src": "vanilla"
 },
 "jungle_shelf": {
+"grain": -0.202,
+"grain_strength": 0.0501,
 "lum": 127.8,
 "rgb": [
 157,
@@ -5220,6 +6264,8 @@
 "src": "vanilla"
 },
 "jungle_trapdoor": {
+"grain": -0.059,
+"grain_strength": 0.0601,
 "lum": 123.0,
 "rgb": [
 157,
@@ -5230,6 +6276,8 @@
 "src": "vanilla"
 },
 "kelp": {
+"grain": 0.591,
+"grain_strength": 0.0628,
 "lum": 128.0,
 "rgb": [
 96,
@@ -5240,6 +6288,8 @@
 "src": "pack"
 },
 "kelp_plant": {
+"grain": 0.576,
+"grain_strength": 0.0481,
 "lum": 128.9,
 "rgb": [
 97,
@@ -5250,6 +6300,8 @@
 "src": "pack"
 },
 "ladder": {
+"grain": -0.398,
+"grain_strength": 0.0555,
 "lum": 90.9,
 "rgb": [
 105,
@@ -5260,6 +6312,8 @@
 "src": "pack"
 },
 "lantern": {
+"grain": 0.056,
+"grain_strength": 0.0846,
 "lum": 136.7,
 "rgb": [
 151,
@@ -5270,6 +6324,8 @@
 "src": "pack"
 },
 "lapis_block": {
+"grain": 0.043,
+"grain_strength": 0.028,
 "lum": 65.8,
 "rgb": [
 31,
@@ -5280,6 +6336,8 @@
 "src": "vanilla"
 },
 "lapis_ore": {
+"grain": -0.127,
+"grain_strength": 0.0999,
 "lum": 123.1,
 "rgb": [
 116,
@@ -5290,6 +6348,8 @@
 "src": "vanilla"
 },
 "large_amethyst_bud": {
+"grain": 0.132,
+"grain_strength": 0.1484,
 "lum": 157.4,
 "rgb": [
 173,
@@ -5300,6 +6360,8 @@
 "src": "vanilla"
 },
 "large_fern_bottom": {
+"grain": 0.357,
+"grain_strength": 0.0457,
 "lum": 156.6,
 "rgb": [
 156,
@@ -5310,6 +6372,8 @@
 "src": "pack"
 },
 "large_fern_top": {
+"grain": 0.102,
+"grain_strength": 0.0545,
 "lum": 156.6,
 "rgb": [
 156,
@@ -5320,6 +6384,8 @@
 "src": "pack"
 },
 "lava_flow": {
+"grain": -0.013,
+"grain_strength": 0.0403,
 "lum": 114.5,
 "rgb": [
 154,
@@ -5330,6 +6396,8 @@
 "src": "pack"
 },
 "lava_still": {
+"grain": -0.142,
+"grain_strength": 0.0558,
 "lum": 113.2,
 "rgb": [
 152,
@@ -5340,6 +6408,8 @@
 "src": "pack"
 },
 "leaf_litter": {
+"grain": -0.006,
+"grain_strength": 0.0731,
 "lum": 174.0,
 "rgb": [
 174,
@@ -5350,6 +6420,8 @@
 "src": "vanilla"
 },
 "lectern_base": {
+"grain": -0.491,
+"grain_strength": 0.041,
 "lum": 126.8,
 "rgb": [
 145,
@@ -5360,6 +6432,8 @@
 "src": "pack"
 },
 "lectern_front": {
+"grain": -0.522,
+"grain_strength": 0.0451,
 "lum": 137.8,
 "rgb": [
 156,
@@ -5370,6 +6444,8 @@
 "src": "pack"
 },
 "lectern_sides": {
+"grain": 0.535,
+"grain_strength": 0.0422,
 "lum": 135.5,
 "rgb": [
 153,
@@ -5380,6 +6456,8 @@
 "src": "pack"
 },
 "lectern_top": {
+"grain": -0.66,
+"grain_strength": 0.0407,
 "lum": 138.5,
 "rgb": [
 156,
@@ -5390,6 +6468,8 @@
 "src": "pack"
 },
 "lever": {
+"grain": 0.541,
+"grain_strength": 0.1183,
 "lum": 101.9,
 "rgb": [
 118,
@@ -5400,6 +6480,8 @@
 "src": "vanilla"
 },
 "light_blue_candle": {
+"grain": -0.157,
+"grain_strength": 0.0344,
 "lum": 116.0,
 "rgb": [
 35,
@@ -5410,6 +6492,8 @@
 "src": "vanilla"
 },
 "light_blue_candle_lit": {
+"grain": -0.367,
+"grain_strength": 0.0709,
 "lum": 152.8,
 "rgb": [
 97,
@@ -5420,6 +6504,8 @@
 "src": "vanilla"
 },
 "light_blue_concrete": {
+"grain": -0.062,
+"grain_strength": 0.0039,
 "lum": 113.9,
 "rgb": [
 36,
@@ -5430,6 +6516,8 @@
 "src": "vanilla"
 },
 "light_blue_concrete_powder": {
+"grain": 0.047,
+"grain_strength": 0.0517,
 "lum": 153.1,
 "rgb": [
 75,
@@ -5440,6 +6528,8 @@
 "src": "vanilla"
 },
 "light_blue_glazed_terracotta": {
+"grain": 0.007,
+"grain_strength": 0.1468,
 "lum": 168.5,
 "rgb": [
 129,
@@ -5450,6 +6540,8 @@
 "src": "vanilla"
 },
 "light_blue_shulker_box": {
+"grain": -0.005,
+"grain_strength": 0.0303,
 "lum": 136.0,
 "rgb": [
 50,
@@ -5460,6 +6552,8 @@
 "src": "vanilla"
 },
 "light_blue_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 144.9,
 "rgb": [
 102,
@@ -5470,6 +6564,8 @@
 "src": "vanilla"
 },
 "light_blue_stained_glass_pane_top": {
+"grain": 0.412,
+"grain_strength": 0.0168,
 "lum": 139.4,
 "rgb": [
 98,
@@ -5480,6 +6576,8 @@
 "src": "vanilla"
 },
 "light_blue_terracotta": {
+"grain": -0.162,
+"grain_strength": 0.0051,
 "lum": 113.8,
 "rgb": [
 114,
@@ -5490,6 +6588,8 @@
 "src": "vanilla"
 },
 "light_blue_wool": {
+"grain": 0.009,
+"grain_strength": 0.032,
 "lum": 159.9,
 "rgb": [
 143,
@@ -5500,6 +6600,8 @@
 "src": "pack"
 },
 "light_gray_candle": {
+"grain": -0.076,
+"grain_strength": 0.057,
 "lum": 122.4,
 "rgb": [
 122,
@@ -5510,6 +6612,8 @@
 "src": "vanilla"
 },
 "light_gray_candle_lit": {
+"grain": -0.32,
+"grain_strength": 0.0763,
 "lum": 158.2,
 "rgb": [
 167,
@@ -5520,6 +6624,8 @@
 "src": "vanilla"
 },
 "light_gray_concrete": {
+"grain": 0.01,
+"grain_strength": 0.0032,
 "lum": 123.9,
 "rgb": [
 125,
@@ -5530,6 +6636,8 @@
 "src": "vanilla"
 },
 "light_gray_concrete_powder": {
+"grain": -0.01,
+"grain_strength": 0.0415,
 "lum": 154.3,
 "rgb": [
 155,
@@ -5540,6 +6648,8 @@
 "src": "vanilla"
 },
 "light_gray_glazed_terracotta": {
+"grain": 0.004,
+"grain_strength": 0.1426,
 "lum": 168.6,
 "rgb": [
 160,
@@ -5550,6 +6660,8 @@
 "src": "vanilla"
 },
 "light_gray_shulker_box": {
+"grain": -0.005,
+"grain_strength": 0.041,
 "lum": 125.0,
 "rgb": [
 126,
@@ -5560,6 +6672,8 @@
 "src": "vanilla"
 },
 "light_gray_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 153.0,
 "rgb": [
 153,
@@ -5570,6 +6684,8 @@
 "src": "vanilla"
 },
 "light_gray_stained_glass_pane_top": {
+"grain": 0.417,
+"grain_strength": 0.0176,
 "lum": 147.0,
 "rgb": [
 147,
@@ -5580,6 +6696,8 @@
 "src": "vanilla"
 },
 "light_gray_terracotta": {
+"grain": -0.025,
+"grain_strength": 0.0205,
 "lum": 175.6,
 "rgb": [
 174,
@@ -5590,6 +6708,8 @@
 "src": "pack"
 },
 "light_gray_wool": {
+"grain": -0.013,
+"grain_strength": 0.0287,
 "lum": 177.0,
 "rgb": [
 179,
@@ -5600,6 +6720,8 @@
 "src": "pack"
 },
 "lightning_rod": {
+"grain": 0.055,
+"grain_strength": 0.0564,
 "lum": 135.2,
 "rgb": [
 198,
@@ -5610,6 +6732,8 @@
 "src": "vanilla"
 },
 "lightning_rod_on": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 255.0,
 "rgb": [
 255,
@@ -5620,6 +6744,8 @@
 "src": "vanilla"
 },
 "lilac_bottom": {
+"grain": -0.006,
+"grain_strength": 0.0978,
 "lum": 138.3,
 "rgb": [
 156,
@@ -5630,6 +6756,8 @@
 "src": "vanilla"
 },
 "lilac_top": {
+"grain": 0.043,
+"grain_strength": 0.1045,
 "lum": 144.3,
 "rgb": [
 169,
@@ -5640,6 +6768,8 @@
 "src": "vanilla"
 },
 "lily_of_the_valley": {
+"grain": 0.295,
+"grain_strength": 0.1038,
 "lum": 166.7,
 "rgb": [
 148,
@@ -5650,6 +6780,8 @@
 "src": "vanilla"
 },
 "lily_pad": {
+"grain": 0.037,
+"grain_strength": 0.0532,
 "lum": 190.3,
 "rgb": [
 202,
@@ -5660,6 +6792,8 @@
 "src": "pack"
 },
 "lime_candle": {
+"grain": -0.148,
+"grain_strength": 0.0469,
 "lum": 136.2,
 "rgb": [
 101,
@@ -5670,6 +6804,8 @@
 "src": "vanilla"
 },
 "lime_candle_lit": {
+"grain": -0.292,
+"grain_strength": 0.053,
 "lum": 153.8,
 "rgb": [
 136,
@@ -5680,6 +6816,8 @@
 "src": "vanilla"
 },
 "lime_concrete": {
+"grain": -0.041,
+"grain_strength": 0.0043,
 "lum": 130.2,
 "rgb": [
 94,
@@ -5690,6 +6828,8 @@
 "src": "vanilla"
 },
 "lime_concrete_powder": {
+"grain": -0.054,
+"grain_strength": 0.0334,
 "lum": 154.0,
 "rgb": [
 126,
@@ -5700,6 +6840,8 @@
 "src": "vanilla"
 },
 "lime_glazed_terracotta": {
+"grain": 0.006,
+"grain_strength": 0.1172,
 "lum": 179.3,
 "rgb": [
 177,
@@ -5710,6 +6852,8 @@
 "src": "vanilla"
 },
 "lime_shulker_box": {
+"grain": -0.006,
+"grain_strength": 0.0374,
 "lum": 135.0,
 "rgb": [
 101,
@@ -5720,6 +6864,8 @@
 "src": "vanilla"
 },
 "lime_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 160.6,
 "rgb": [
 127,
@@ -5730,6 +6876,8 @@
 "src": "vanilla"
 },
 "lime_stained_glass_pane_top": {
+"grain": 0.409,
+"grain_strength": 0.0195,
 "lum": 155.2,
 "rgb": [
 123,
@@ -5740,6 +6888,8 @@
 "src": "vanilla"
 },
 "lime_terracotta": {
+"grain": -0.166,
+"grain_strength": 0.0073,
 "lum": 106.4,
 "rgb": [
 104,
@@ -5750,6 +6900,8 @@
 "src": "vanilla"
 },
 "lime_wool": {
+"grain": 0.031,
+"grain_strength": 0.031,
 "lum": 158.1,
 "rgb": [
 152,
@@ -5760,6 +6912,8 @@
 "src": "pack"
 },
 "lodestone_side": {
+"grain": -0.023,
+"grain_strength": 0.1126,
 "lum": 126.0,
 "rgb": [
 125,
@@ -5770,6 +6924,8 @@
 "src": "vanilla"
 },
 "lodestone_top": {
+"grain": -0.025,
+"grain_strength": 0.0746,
 "lum": 151.6,
 "rgb": [
 149,
@@ -5780,6 +6936,8 @@
 "src": "vanilla"
 },
 "loom_bottom": {
+"grain": -0.498,
+"grain_strength": 0.0163,
 "lum": 110.8,
 "rgb": [
 126,
@@ -5790,6 +6948,8 @@
 "src": "pack"
 },
 "loom_front": {
+"grain": 0.393,
+"grain_strength": 0.1032,
 "lum": 144.0,
 "rgb": [
 156,
@@ -5800,6 +6960,8 @@
 "src": "pack"
 },
 "loom_side": {
+"grain": -0.33,
+"grain_strength": 0.0335,
 "lum": 120.8,
 "rgb": [
 137,
@@ -5810,6 +6972,8 @@
 "src": "pack"
 },
 "loom_top": {
+"grain": -0.493,
+"grain_strength": 0.0173,
 "lum": 110.8,
 "rgb": [
 126,
@@ -5820,6 +6984,8 @@
 "src": "pack"
 },
 "magenta_candle": {
+"grain": -0.064,
+"grain_strength": 0.0347,
 "lum": 94.4,
 "rgb": [
 164,
@@ -5830,6 +6996,8 @@
 "src": "vanilla"
 },
 "magenta_candle_lit": {
+"grain": -0.323,
+"grain_strength": 0.0623,
 "lum": 125.8,
 "rgb": [
 191,
@@ -5840,6 +7008,8 @@
 "src": "vanilla"
 },
 "magenta_concrete": {
+"grain": 0.026,
+"grain_strength": 0.004,
 "lum": 96.8,
 "rgb": [
 169,
@@ -5850,6 +7020,8 @@
 "src": "vanilla"
 },
 "magenta_concrete_powder": {
+"grain": -0.023,
+"grain_strength": 0.0445,
 "lum": 128.7,
 "rgb": [
 193,
@@ -5860,6 +7032,8 @@
 "src": "vanilla"
 },
 "magenta_glazed_terracotta": {
+"grain": 0.132,
+"grain_strength": 0.0995,
 "lum": 150.5,
 "rgb": [
 210,
@@ -5870,6 +7044,8 @@
 "src": "vanilla"
 },
 "magenta_shulker_box": {
+"grain": -0.006,
+"grain_strength": 0.0232,
 "lum": 103.3,
 "rgb": [
 175,
@@ -5880,6 +7056,8 @@
 "src": "vanilla"
 },
 "magenta_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 122.5,
 "rgb": [
 178,
@@ -5890,6 +7068,8 @@
 "src": "vanilla"
 },
 "magenta_stained_glass_pane_top": {
+"grain": 0.411,
+"grain_strength": 0.0143,
 "lum": 118.7,
 "rgb": [
 172,
@@ -5900,6 +7080,8 @@
 "src": "vanilla"
 },
 "magenta_terracotta": {
+"grain": -0.18,
+"grain_strength": 0.0076,
 "lum": 108.9,
 "rgb": [
 150,
@@ -5910,6 +7092,8 @@
 "src": "vanilla"
 },
 "magenta_wool": {
+"grain": -0.256,
+"grain_strength": 0.0556,
 "lum": 118.5,
 "rgb": [
 190,
@@ -5920,6 +7104,8 @@
 "src": "vanilla"
 },
 "magma": {
+"grain": -0.002,
+"grain_strength": 0.1529,
 "lum": 97.6,
 "rgb": [
 162,
@@ -5930,6 +7116,8 @@
 "src": "vanilla"
 },
 "mangrove_door_bottom": {
+"grain": 0.244,
+"grain_strength": 0.0458,
 "lum": 68.6,
 "rgb": [
 113,
@@ -5940,6 +7128,8 @@
 "src": "vanilla"
 },
 "mangrove_door_top": {
+"grain": 0.234,
+"grain_strength": 0.0494,
 "lum": 70.1,
 "rgb": [
 114,
@@ -5950,6 +7140,8 @@
 "src": "vanilla"
 },
 "mangrove_leaves": {
+"grain": 0.35,
+"grain_strength": 0.1181,
 "lum": 135.3,
 "rgb": [
 136,
@@ -5960,6 +7152,8 @@
 "src": "vanilla"
 },
 "mangrove_log": {
+"grain": -0.39,
+"grain_strength": 0.0315,
 "lum": 70.0,
 "rgb": [
 85,
@@ -5970,6 +7164,8 @@
 "src": "vanilla"
 },
 "mangrove_log_top": {
+"grain": 0.031,
+"grain_strength": 0.0361,
 "lum": 65.9,
 "rgb": [
 104,
@@ -5980,6 +7176,8 @@
 "src": "vanilla"
 },
 "mangrove_planks": {
+"grain": -0.56,
+"grain_strength": 0.0473,
 "lum": 74.2,
 "rgb": [
 119,
@@ -5990,6 +7188,8 @@
 "src": "vanilla"
 },
 "mangrove_propagule": {
+"grain": 0.064,
+"grain_strength": 0.0764,
 "lum": 143.3,
 "rgb": [
 99,
@@ -6000,6 +7200,8 @@
 "src": "vanilla"
 },
 "mangrove_propagule_hanging": {
+"grain": -0.111,
+"grain_strength": 0.0725,
 "lum": 132.6,
 "rgb": [
 122,
@@ -6010,6 +7212,8 @@
 "src": "vanilla"
 },
 "mangrove_roots_side": {
+"grain": 0.125,
+"grain_strength": 0.0271,
 "lum": 63.0,
 "rgb": [
 76,
@@ -6020,6 +7224,8 @@
 "src": "vanilla"
 },
 "mangrove_roots_top": {
+"grain": -0.009,
+"grain_strength": 0.0361,
 "lum": 63.0,
 "rgb": [
 76,
@@ -6030,6 +7236,8 @@
 "src": "vanilla"
 },
 "mangrove_shelf": {
+"grain": -0.237,
+"grain_strength": 0.0317,
 "lum": 65.4,
 "rgb": [
 110,
@@ -6040,6 +7248,8 @@
 "src": "vanilla"
 },
 "mangrove_trapdoor": {
+"grain": -0.038,
+"grain_strength": 0.0539,
 "lum": 67.9,
 "rgb": [
 112,
@@ -6050,6 +7260,8 @@
 "src": "vanilla"
 },
 "medium_amethyst_bud": {
+"grain": 0.034,
+"grain_strength": 0.1187,
 "lum": 151.1,
 "rgb": [
 170,
@@ -6060,6 +7272,8 @@
 "src": "vanilla"
 },
 "melon_side": {
+"grain": 0.706,
+"grain_strength": 0.0824,
 "lum": 127.4,
 "rgb": [
 124,
@@ -6070,6 +7284,8 @@
 "src": "vanilla"
 },
 "melon_stem": {
+"grain": 0.604,
+"grain_strength": 0.1743,
 "lum": 160.0,
 "rgb": [
 160,
@@ -6080,6 +7296,8 @@
 "src": "vanilla"
 },
 "melon_top": {
+"grain": 0.005,
+"grain_strength": 0.1007,
 "lum": 125.7,
 "rgb": [
 120,
@@ -6090,6 +7308,8 @@
 "src": "vanilla"
 },
 "moss_block": {
+"grain": 0.008,
+"grain_strength": 0.0329,
 "lum": 78.4,
 "rgb": [
 77,
@@ -6100,6 +7320,8 @@
 "src": "pack"
 },
 "mossy_cobblestone": {
+"grain": 0.003,
+"grain_strength": 0.0343,
 "lum": 135.8,
 "rgb": [
 137,
@@ -6110,6 +7332,8 @@
 "src": "pack"
 },
 "mossy_stone_bricks": {
+"grain": -0.182,
+"grain_strength": 0.0319,
 "lum": 136.0,
 "rgb": [
 138,
@@ -6120,6 +7344,8 @@
 "src": "pack"
 },
 "mud": {
+"grain": 0.022,
+"grain_strength": 0.0133,
 "lum": 92.9,
 "rgb": [
 100,
@@ -6130,6 +7356,8 @@
 "src": "pack"
 },
 "mud_bricks": {
+"grain": -0.191,
+"grain_strength": 0.0302,
 "lum": 137.4,
 "rgb": [
 147,
@@ -6140,6 +7368,8 @@
 "src": "pack"
 },
 "muddy_mangrove_roots_side": {
+"grain": 0.107,
+"grain_strength": 0.0293,
 "lum": 61.3,
 "rgb": [
 70,
@@ -6150,6 +7380,8 @@
 "src": "vanilla"
 },
 "muddy_mangrove_roots_top": {
+"grain": -0.022,
+"grain_strength": 0.0342,
 "lum": 61.2,
 "rgb": [
 71,
@@ -6160,6 +7392,8 @@
 "src": "vanilla"
 },
 "mushroom_block_inside": {
+"grain": -0.051,
+"grain_strength": 0.0324,
 "lum": 173.9,
 "rgb": [
 202,
@@ -6170,6 +7404,8 @@
 "src": "vanilla"
 },
 "mushroom_stem": {
+"grain": -0.289,
+"grain_strength": 0.0141,
 "lum": 197.5,
 "rgb": [
 203,
@@ -6180,6 +7416,8 @@
 "src": "vanilla"
 },
 "mycelium_side": {
+"grain": -0.457,
+"grain_strength": 0.0337,
 "lum": 105.4,
 "rgb": [
 115,
@@ -6190,6 +7428,8 @@
 "src": "pack"
 },
 "mycelium_top": {
+"grain": -0.031,
+"grain_strength": 0.0172,
 "lum": 87.9,
 "rgb": [
 94,
@@ -6200,6 +7440,8 @@
 "src": "pack"
 },
 "nether_bricks": {
+"grain": -0.318,
+"grain_strength": 0.0289,
 "lum": 30.3,
 "rgb": [
 46,
@@ -6210,6 +7452,8 @@
 "src": "vanilla"
 },
 "nether_gold_ore": {
+"grain": 0.002,
+"grain_strength": 0.1102,
 "lum": 89.2,
 "rgb": [
 127,
@@ -6220,6 +7464,8 @@
 "src": "vanilla"
 },
 "nether_portal": {
+"grain": -0.02,
+"grain_strength": 0.0659,
 "lum": 60.7,
 "rgb": [
 94,
@@ -6230,6 +7476,8 @@
 "src": "vanilla"
 },
 "nether_quartz_ore": {
+"grain": -0.022,
+"grain_strength": 0.1268,
 "lum": 100.4,
 "rgb": [
 127,
@@ -6240,6 +7488,8 @@
 "src": "vanilla"
 },
 "nether_sprouts": {
+"grain": 0.42,
+"grain_strength": 0.0427,
 "lum": 111.0,
 "rgb": [
 20,
@@ -6250,6 +7500,8 @@
 "src": "vanilla"
 },
 "nether_wart_block": {
+"grain": 0.087,
+"grain_strength": 0.0295,
 "lum": 37.7,
 "rgb": [
 117,
@@ -6260,6 +7512,8 @@
 "src": "vanilla"
 },
 "nether_wart_stage0": {
+"grain": 0.104,
+"grain_strength": 0.0651,
 "lum": 53.5,
 "rgb": [
 124,
@@ -6270,6 +7524,8 @@
 "src": "vanilla"
 },
 "nether_wart_stage1": {
+"grain": 0.139,
+"grain_strength": 0.0611,
 "lum": 52.1,
 "rgb": [
 122,
@@ -6280,6 +7536,8 @@
 "src": "vanilla"
 },
 "nether_wart_stage2": {
+"grain": 0.227,
+"grain_strength": 0.0582,
 "lum": 51.2,
 "rgb": [
 119,
@@ -6290,6 +7548,8 @@
 "src": "vanilla"
 },
 "netherite_block": {
+"grain": -0.015,
+"grain_strength": 0.0381,
 "lum": 65.4,
 "rgb": [
 68,
@@ -6300,6 +7560,8 @@
 "src": "vanilla"
 },
 "netherrack": {
+"grain": 0.008,
+"grain_strength": 0.0475,
 "lum": 57.6,
 "rgb": [
 99,
@@ -6310,6 +7572,8 @@
 "src": "vanilla"
 },
 "note_block": {
+"grain": 0.04,
+"grain_strength": 0.1042,
 "lum": 71.3,
 "rgb": [
 98,
@@ -6320,6 +7584,8 @@
 "src": "vanilla"
 },
 "oak_door_bottom": {
+"grain": -0.033,
+"grain_strength": 0.0828,
 "lum": 115.3,
 "rgb": [
 143,
@@ -6330,6 +7596,8 @@
 "src": "vanilla"
 },
 "oak_door_top": {
+"grain": 0.038,
+"grain_strength": 0.0854,
 "lum": 118.3,
 "rgb": [
 145,
@@ -6340,6 +7608,8 @@
 "src": "vanilla"
 },
 "oak_leaves": {
+"grain": -0.039,
+"grain_strength": 0.0438,
 "lum": 150.6,
 "rgb": [
 150,
@@ -6350,6 +7620,8 @@
 "src": "pack"
 },
 "oak_log": {
+"grain": 0.422,
+"grain_strength": 0.0245,
 "lum": 149.4,
 "rgb": [
 161,
@@ -6360,6 +7632,8 @@
 "src": "pack"
 },
 "oak_log_top": {
+"grain": 0.005,
+"grain_strength": 0.024,
 "lum": 154.4,
 "rgb": [
 166,
@@ -6370,6 +7644,8 @@
 "src": "pack"
 },
 "oak_planks": {
+"grain": -0.498,
+"grain_strength": 0.0174,
 "lum": 163.7,
 "rgb": [
 178,
@@ -6380,6 +7656,8 @@
 "src": "pack"
 },
 "oak_sapling": {
+"grain": 0.045,
+"grain_strength": 0.0937,
 "lum": 98.2,
 "rgb": [
 84,
@@ -6390,6 +7668,8 @@
 "src": "vanilla"
 },
 "oak_shelf": {
+"grain": 0.139,
+"grain_strength": 0.0351,
 "lum": 153.4,
 "rgb": [
 165,
@@ -6400,6 +7680,8 @@
 "src": "pack"
 },
 "oak_trapdoor": {
+"grain": -0.197,
+"grain_strength": 0.0434,
 "lum": 156.5,
 "rgb": [
 170,
@@ -6410,6 +7692,8 @@
 "src": "pack"
 },
 "observer_back": {
+"grain": -0.396,
+"grain_strength": 0.0682,
 "lum": 77.3,
 "rgb": [
 78,
@@ -6420,6 +7704,8 @@
 "src": "vanilla"
 },
 "observer_back_on": {
+"grain": -0.396,
+"grain_strength": 0.0671,
 "lum": 78.3,
 "rgb": [
 86,
@@ -6430,6 +7716,8 @@
 "src": "vanilla"
 },
 "observer_front": {
+"grain": -0.363,
+"grain_strength": 0.1167,
 "lum": 120.0,
 "rgb": [
 120,
@@ -6440,6 +7728,8 @@
 "src": "vanilla"
 },
 "observer_side": {
+"grain": -0.473,
+"grain_strength": 0.058,
 "lum": 75.3,
 "rgb": [
 76,
@@ -6450,6 +7740,8 @@
 "src": "vanilla"
 },
 "observer_top": {
+"grain": 0.061,
+"grain_strength": 0.0868,
 "lum": 107.0,
 "rgb": [
 107,
@@ -6460,6 +7752,8 @@
 "src": "vanilla"
 },
 "obsidian": {
+"grain": -0.09,
+"grain_strength": 0.0525,
 "lum": 18.5,
 "rgb": [
 21,
@@ -6470,6 +7764,8 @@
 "src": "vanilla"
 },
 "ochre_froglight_side": {
+"grain": 0.175,
+"grain_strength": 0.0392,
 "lum": 233.0,
 "rgb": [
 246,
@@ -6480,6 +7776,8 @@
 "src": "vanilla"
 },
 "ochre_froglight_top": {
+"grain": -0.012,
+"grain_strength": 0.0242,
 "lum": 243.5,
 "rgb": [
 251,
@@ -6490,6 +7788,8 @@
 "src": "vanilla"
 },
 "open_eyeblossom": {
+"grain": -0.064,
+"grain_strength": 0.138,
 "lum": 151.5,
 "rgb": [
 156,
@@ -6500,6 +7800,8 @@
 "src": "vanilla"
 },
 "open_eyeblossom_emissive": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 158.6,
 "rgb": [
 238,
@@ -6510,6 +7812,8 @@
 "src": "vanilla"
 },
 "orange_candle": {
+"grain": -0.076,
+"grain_strength": 0.0562,
 "lum": 129.9,
 "rgb": [
 225,
@@ -6520,6 +7824,8 @@
 "src": "vanilla"
 },
 "orange_candle_lit": {
+"grain": -0.178,
+"grain_strength": 0.0761,
 "lum": 159.3,
 "rgb": [
 233,
@@ -6530,6 +7836,8 @@
 "src": "vanilla"
 },
 "orange_concrete": {
+"grain": -0.026,
+"grain_strength": 0.0039,
 "lum": 124.0,
 "rgb": [
 224,
@@ -6540,6 +7848,8 @@
 "src": "vanilla"
 },
 "orange_concrete_powder": {
+"grain": 0.003,
+"grain_strength": 0.0409,
 "lum": 149.8,
 "rgb": [
 227,
@@ -6550,6 +7860,8 @@
 "src": "vanilla"
 },
 "orange_glazed_terracotta": {
+"grain": 0.007,
+"grain_strength": 0.0853,
 "lum": 162.6,
 "rgb": [
 193,
@@ -6560,6 +7872,8 @@
 "src": "vanilla"
 },
 "orange_shulker_box": {
+"grain": -0.007,
+"grain_strength": 0.0269,
 "lum": 134.1,
 "rgb": [
 235,
@@ -6570,6 +7884,8 @@
 "src": "vanilla"
 },
 "orange_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 144.9,
 "rgb": [
 216,
@@ -6580,6 +7896,8 @@
 "src": "vanilla"
 },
 "orange_stained_glass_pane_top": {
+"grain": 0.408,
+"grain_strength": 0.0172,
 "lum": 140.3,
 "rgb": [
 209,
@@ -6590,6 +7908,8 @@
 "src": "vanilla"
 },
 "orange_terracotta": {
+"grain": -0.183,
+"grain_strength": 0.0074,
 "lum": 102.1,
 "rgb": [
 162,
@@ -6600,6 +7920,8 @@
 "src": "vanilla"
 },
 "orange_tulip": {
+"grain": 0.355,
+"grain_strength": 0.0922,
 "lum": 125.3,
 "rgb": [
 123,
@@ -6610,6 +7932,8 @@
 "src": "vanilla"
 },
 "orange_wool": {
+"grain": -0.008,
+"grain_strength": 0.0296,
 "lum": 149.3,
 "rgb": [
 189,
@@ -6620,6 +7944,8 @@
 "src": "pack"
 },
 "oxeye_daisy": {
+"grain": -0.278,
+"grain_strength": 0.0754,
 "lum": 154.7,
 "rgb": [
 157,
@@ -6630,6 +7956,8 @@
 "src": "pack"
 },
 "oxidized_chiseled_copper": {
+"grain": 0.017,
+"grain_strength": 0.078,
 "lum": 137.7,
 "rgb": [
 85,
@@ -6640,6 +7968,8 @@
 "src": "vanilla"
 },
 "oxidized_copper": {
+"grain": 0.082,
+"grain_strength": 0.0563,
 "lum": 137.4,
 "rgb": [
 84,
@@ -6650,6 +7980,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_bars": {
+"grain": 0.434,
+"grain_strength": 0.0542,
 "lum": 104.4,
 "rgb": [
 65,
@@ -6660,6 +7992,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_bulb": {
+"grain": 0.019,
+"grain_strength": 0.0888,
 "lum": 117.1,
 "rgb": [
 73,
@@ -6670,6 +8004,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_bulb_lit": {
+"grain": 0.034,
+"grain_strength": 0.0716,
 "lum": 151.3,
 "rgb": [
 153,
@@ -6680,6 +8016,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_bulb_lit_powered": {
+"grain": 0.032,
+"grain_strength": 0.074,
 "lum": 151.2,
 "rgb": [
 155,
@@ -6690,6 +8028,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_bulb_powered": {
+"grain": 0.019,
+"grain_strength": 0.0912,
 "lum": 117.6,
 "rgb": [
 77,
@@ -6700,6 +8040,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_chain": {
+"grain": -0.154,
+"grain_strength": 0.0465,
 "lum": 99.8,
 "rgb": [
 62,
@@ -6710,6 +8052,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_door_bottom": {
+"grain": 0.123,
+"grain_strength": 0.0718,
 "lum": 131.2,
 "rgb": [
 81,
@@ -6720,6 +8064,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_door_top": {
+"grain": -0.108,
+"grain_strength": 0.0764,
 "lum": 136.8,
 "rgb": [
 84,
@@ -6730,6 +8076,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_grate": {
+"grain": 0.126,
+"grain_strength": 0.0688,
 "lum": 136.7,
 "rgb": [
 84,
@@ -6740,6 +8088,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_lantern": {
+"grain": 0.012,
+"grain_strength": 0.0765,
 "lum": 127.9,
 "rgb": [
 92,
@@ -6750,6 +8100,8 @@
 "src": "vanilla"
 },
 "oxidized_copper_trapdoor": {
+"grain": 0.062,
+"grain_strength": 0.0766,
 "lum": 137.1,
 "rgb": [
 85,
@@ -6760,6 +8112,8 @@
 "src": "vanilla"
 },
 "oxidized_cut_copper": {
+"grain": 0.032,
+"grain_strength": 0.0733,
 "lum": 131.4,
 "rgb": [
 82,
@@ -6770,6 +8124,8 @@
 "src": "vanilla"
 },
 "oxidized_lightning_rod": {
+"grain": -0.001,
+"grain_strength": 0.0721,
 "lum": 131.8,
 "rgb": [
 81,
@@ -6780,6 +8136,8 @@
 "src": "vanilla"
 },
 "packed_ice": {
+"grain": 0.1,
+"grain_strength": 0.022,
 "lum": 199.7,
 "rgb": [
 192,
@@ -6790,6 +8148,8 @@
 "src": "pack"
 },
 "packed_mud": {
+"grain": -0.06,
+"grain_strength": 0.0224,
 "lum": 103.2,
 "rgb": [
 111,
@@ -6800,6 +8160,8 @@
 "src": "pack"
 },
 "pale_hanging_moss": {
+"grain": 0.238,
+"grain_strength": 0.0604,
 "lum": 103.7,
 "rgb": [
 101,
@@ -6810,6 +8172,8 @@
 "src": "vanilla"
 },
 "pale_hanging_moss_tip": {
+"grain": 0.139,
+"grain_strength": 0.0643,
 "lum": 107.7,
 "rgb": [
 105,
@@ -6820,6 +8184,8 @@
 "src": "vanilla"
 },
 "pale_moss_block": {
+"grain": 0.007,
+"grain_strength": 0.0799,
 "lum": 111.3,
 "rgb": [
 108,
@@ -6830,6 +8196,8 @@
 "src": "vanilla"
 },
 "pale_moss_carpet": {
+"grain": 0.007,
+"grain_strength": 0.0799,
 "lum": 111.3,
 "rgb": [
 108,
@@ -6840,6 +8208,8 @@
 "src": "vanilla"
 },
 "pale_moss_carpet_side_small": {
+"grain": 0.197,
+"grain_strength": 0.083,
 "lum": 117.9,
 "rgb": [
 114,
@@ -6850,6 +8220,8 @@
 "src": "vanilla"
 },
 "pale_moss_carpet_side_tall": {
+"grain": 0.131,
+"grain_strength": 0.0779,
 "lum": 107.7,
 "rgb": [
 105,
@@ -6860,6 +8232,8 @@
 "src": "vanilla"
 },
 "pale_oak_door_bottom": {
+"grain": 0.024,
+"grain_strength": 0.1196,
 "lum": 201.5,
 "rgb": [
 208,
@@ -6870,6 +8244,8 @@
 "src": "vanilla"
 },
 "pale_oak_door_top": {
+"grain": -0.025,
+"grain_strength": 0.097,
 "lum": 217.6,
 "rgb": [
 224,
@@ -6880,6 +8256,8 @@
 "src": "vanilla"
 },
 "pale_oak_leaves": {
+"grain": 0.237,
+"grain_strength": 0.1031,
 "lum": 124.6,
 "rgb": [
 122,
@@ -6890,6 +8268,8 @@
 "src": "vanilla"
 },
 "pale_oak_log": {
+"grain": 0.297,
+"grain_strength": 0.058,
 "lum": 82.6,
 "rgb": [
 90,
@@ -6900,6 +8280,8 @@
 "src": "vanilla"
 },
 "pale_oak_log_top": {
+"grain": -0.017,
+"grain_strength": 0.119,
 "lum": 203.3,
 "rgb": [
 209,
@@ -6910,6 +8292,8 @@
 "src": "vanilla"
 },
 "pale_oak_planks": {
+"grain": -0.54,
+"grain_strength": 0.0816,
 "lum": 221.9,
 "rgb": [
 229,
@@ -6920,6 +8304,8 @@
 "src": "vanilla"
 },
 "pale_oak_sapling": {
+"grain": 0.11,
+"grain_strength": 0.0845,
 "lum": 110.8,
 "rgb": [
 113,
@@ -6930,6 +8316,8 @@
 "src": "vanilla"
 },
 "pale_oak_shelf": {
+"grain": -0.158,
+"grain_strength": 0.0565,
 "lum": 221.9,
 "rgb": [
 229,
@@ -6940,6 +8328,8 @@
 "src": "vanilla"
 },
 "pale_oak_trapdoor": {
+"grain": 0.186,
+"grain_strength": 0.0817,
 "lum": 225.9,
 "rgb": [
 233,
@@ -6950,6 +8340,8 @@
 "src": "vanilla"
 },
 "pearlescent_froglight_side": {
+"grain": 0.187,
+"grain_strength": 0.0452,
 "lum": 230.9,
 "rgb": [
 237,
@@ -6960,6 +8352,8 @@
 "src": "vanilla"
 },
 "pearlescent_froglight_top": {
+"grain": -0.011,
+"grain_strength": 0.0294,
 "lum": 242.5,
 "rgb": [
 246,
@@ -6970,6 +8364,8 @@
 "src": "vanilla"
 },
 "peony_bottom": {
+"grain": -0.02,
+"grain_strength": 0.1516,
 "lum": 123.4,
 "rgb": [
 131,
@@ -6980,6 +8376,8 @@
 "src": "vanilla"
 },
 "peony_top": {
+"grain": -0.056,
+"grain_strength": 0.1307,
 "lum": 154.0,
 "rgb": [
 169,
@@ -6990,6 +8388,8 @@
 "src": "vanilla"
 },
 "pink_candle": {
+"grain": -0.071,
+"grain_strength": 0.0645,
 "lum": 142.4,
 "rgb": [
 213,
@@ -7000,6 +8400,8 @@
 "src": "vanilla"
 },
 "pink_candle_lit": {
+"grain": -0.191,
+"grain_strength": 0.0776,
 "lum": 169.8,
 "rgb": [
 224,
@@ -7010,6 +8412,8 @@
 "src": "vanilla"
 },
 "pink_concrete": {
+"grain": 0.021,
+"grain_strength": 0.0037,
 "lum": 139.6,
 "rgb": [
 214,
@@ -7020,6 +8424,8 @@
 "src": "vanilla"
 },
 "pink_concrete_powder": {
+"grain": 0.007,
+"grain_strength": 0.0576,
 "lum": 180.2,
 "rgb": [
 229,
@@ -7030,6 +8436,8 @@
 "src": "vanilla"
 },
 "pink_glazed_terracotta": {
+"grain": 0.001,
+"grain_strength": 0.0717,
 "lum": 184.2,
 "rgb": [
 236,
@@ -7040,6 +8448,8 @@
 "src": "vanilla"
 },
 "pink_petals": {
+"grain": -0.001,
+"grain_strength": 0.0803,
 "lum": 207.5,
 "rgb": [
 247,
@@ -7050,6 +8460,8 @@
 "src": "vanilla"
 },
 "pink_petals_stem": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 170.0,
 "rgb": [
 170,
@@ -7060,6 +8472,8 @@
 "src": "vanilla"
 },
 "pink_shulker_box": {
+"grain": -0.007,
+"grain_strength": 0.0359,
 "lum": 159.3,
 "rgb": [
 231,
@@ -7070,6 +8484,8 @@
 "src": "vanilla"
 },
 "pink_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 165.7,
 "rgb": [
 242,
@@ -7080,6 +8496,8 @@
 "src": "vanilla"
 },
 "pink_stained_glass_pane_top": {
+"grain": 0.41,
+"grain_strength": 0.0199,
 "lum": 160.1,
 "rgb": [
 233,
@@ -7090,6 +8508,8 @@
 "src": "vanilla"
 },
 "pink_terracotta": {
+"grain": -0.179,
+"grain_strength": 0.0078,
 "lum": 103.2,
 "rgb": [
 162,
@@ -7100,6 +8520,8 @@
 "src": "vanilla"
 },
 "pink_tulip": {
+"grain": 0.252,
+"grain_strength": 0.0838,
 "lum": 148.5,
 "rgb": [
 131,
@@ -7110,6 +8532,8 @@
 "src": "vanilla"
 },
 "pink_wool": {
+"grain": -0.257,
+"grain_strength": 0.0756,
 "lum": 175.4,
 "rgb": [
 238,
@@ -7120,6 +8544,8 @@
 "src": "vanilla"
 },
 "piston_bottom": {
+"grain": -0.021,
+"grain_strength": 0.0788,
 "lum": 101.3,
 "rgb": [
 102,
@@ -7130,6 +8556,8 @@
 "src": "vanilla"
 },
 "piston_inner": {
+"grain": -0.023,
+"grain_strength": 0.0924,
 "lum": 104.3,
 "rgb": [
 105,
@@ -7140,6 +8568,8 @@
 "src": "vanilla"
 },
 "piston_side": {
+"grain": -0.252,
+"grain_strength": 0.0893,
 "lum": 112.2,
 "rgb": [
 118,
@@ -7150,6 +8580,8 @@
 "src": "vanilla"
 },
 "piston_top": {
+"grain": -0.38,
+"grain_strength": 0.1145,
 "lum": 138.4,
 "rgb": [
 159,
@@ -7160,6 +8592,8 @@
 "src": "vanilla"
 },
 "piston_top_sticky": {
+"grain": -0.224,
+"grain_strength": 0.1344,
 "lum": 145.1,
 "rgb": [
 134,
@@ -7170,6 +8604,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_bottom": {
+"grain": -0.237,
+"grain_strength": 0.0248,
 "lum": 69.5,
 "rgb": [
 102,
@@ -7180,6 +8616,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_bottom_stage_1": {
+"grain": 0.271,
+"grain_strength": 0.0887,
 "lum": 147.4,
 "rgb": [
 149,
@@ -7190,6 +8628,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_bottom_stage_2": {
+"grain": -0.063,
+"grain_strength": 0.1103,
 "lum": 127.4,
 "rgb": [
 126,
@@ -7200,6 +8640,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_bottom_stage_3": {
+"grain": -0.058,
+"grain_strength": 0.1069,
 "lum": 119.4,
 "rgb": [
 115,
@@ -7210,6 +8652,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_bottom_stage_4": {
+"grain": -0.103,
+"grain_strength": 0.1105,
 "lum": 122.2,
 "rgb": [
 111,
@@ -7220,6 +8664,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_side": {
+"grain": -0.538,
+"grain_strength": 0.0598,
 "lum": 140.2,
 "rgb": [
 180,
@@ -7230,6 +8676,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_top": {
+"grain": -0.03,
+"grain_strength": 0.0273,
 "lum": 167.6,
 "rgb": [
 195,
@@ -7240,6 +8688,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_top_stage_3": {
+"grain": -0.113,
+"grain_strength": 0.1084,
 "lum": 173.5,
 "rgb": [
 147,
@@ -7250,6 +8700,8 @@
 "src": "vanilla"
 },
 "pitcher_crop_top_stage_4": {
+"grain": 0.069,
+"grain_strength": 0.0877,
 "lum": 151.2,
 "rgb": [
 125,
@@ -7260,6 +8712,8 @@
 "src": "vanilla"
 },
 "podzol_side": {
+"grain": -0.412,
+"grain_strength": 0.035,
 "lum": 105.7,
 "rgb": [
 115,
@@ -7270,6 +8724,8 @@
 "src": "pack"
 },
 "podzol_top": {
+"grain": -0.01,
+"grain_strength": 0.0258,
 "lum": 81.8,
 "rgb": [
 90,
@@ -7280,6 +8736,8 @@
 "src": "pack"
 },
 "pointed_dripstone_down_base": {
+"grain": -0.204,
+"grain_strength": 0.0389,
 "lum": 112.1,
 "rgb": [
 132,
@@ -7290,6 +8748,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_down_frustum": {
+"grain": -0.161,
+"grain_strength": 0.0409,
 "lum": 111.8,
 "rgb": [
 131,
@@ -7300,6 +8760,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_down_middle": {
+"grain": -0.212,
+"grain_strength": 0.039,
 "lum": 112.8,
 "rgb": [
 132,
@@ -7310,6 +8772,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_down_tip": {
+"grain": 0.069,
+"grain_strength": 0.0391,
 "lum": 117.8,
 "rgb": [
 138,
@@ -7320,6 +8784,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_down_tip_merge": {
+"grain": 0.136,
+"grain_strength": 0.0447,
 "lum": 119.7,
 "rgb": [
 140,
@@ -7330,6 +8796,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_up_base": {
+"grain": -0.204,
+"grain_strength": 0.0389,
 "lum": 112.1,
 "rgb": [
 132,
@@ -7340,6 +8808,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_up_frustum": {
+"grain": -0.161,
+"grain_strength": 0.0409,
 "lum": 111.8,
 "rgb": [
 131,
@@ -7350,6 +8820,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_up_middle": {
+"grain": -0.212,
+"grain_strength": 0.039,
 "lum": 112.8,
 "rgb": [
 132,
@@ -7360,6 +8832,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_up_tip": {
+"grain": 0.069,
+"grain_strength": 0.0391,
 "lum": 117.8,
 "rgb": [
 138,
@@ -7370,6 +8844,8 @@
 "src": "vanilla"
 },
 "pointed_dripstone_up_tip_merge": {
+"grain": 0.136,
+"grain_strength": 0.0447,
 "lum": 119.7,
 "rgb": [
 140,
@@ -7380,6 +8856,8 @@
 "src": "vanilla"
 },
 "polished_andesite": {
+"grain": -0.123,
+"grain_strength": 0.0087,
 "lum": 154.8,
 "rgb": [
 156,
@@ -7390,6 +8868,8 @@
 "src": "pack"
 },
 "polished_basalt_side": {
+"grain": 0.551,
+"grain_strength": 0.0439,
 "lum": 92.2,
 "rgb": [
 92,
@@ -7400,6 +8880,8 @@
 "src": "vanilla"
 },
 "polished_basalt_top": {
+"grain": 0.042,
+"grain_strength": 0.087,
 "lum": 102.5,
 "rgb": [
 103,
@@ -7410,6 +8892,8 @@
 "src": "vanilla"
 },
 "polished_blackstone": {
+"grain": 0.025,
+"grain_strength": 0.0524,
 "lum": 53.2,
 "rgb": [
 55,
@@ -7420,6 +8904,8 @@
 "src": "vanilla"
 },
 "polished_blackstone_bricks": {
+"grain": -0.163,
+"grain_strength": 0.0481,
 "lum": 48.5,
 "rgb": [
 51,
@@ -7430,6 +8916,8 @@
 "src": "vanilla"
 },
 "polished_deepslate": {
+"grain": -0.181,
+"grain_strength": 0.0639,
 "lum": 76.0,
 "rgb": [
 76,
@@ -7440,6 +8928,8 @@
 "src": "vanilla"
 },
 "polished_diorite": {
+"grain": -0.015,
+"grain_strength": 0.1004,
 "lum": 197.1,
 "rgb": [
 197,
@@ -7450,6 +8940,8 @@
 "src": "vanilla"
 },
 "polished_granite": {
+"grain": -0.136,
+"grain_strength": 0.0679,
 "lum": 121.1,
 "rgb": [
 156,
@@ -7460,6 +8952,8 @@
 "src": "vanilla"
 },
 "polished_tuff": {
+"grain": -0.135,
+"grain_strength": 0.0357,
 "lum": 102.7,
 "rgb": [
 99,
@@ -7470,6 +8964,8 @@
 "src": "vanilla"
 },
 "poppy": {
+"grain": -0.114,
+"grain_strength": 0.0582,
 "lum": 89.6,
 "rgb": [
 125,
@@ -7480,6 +8976,8 @@
 "src": "pack"
 },
 "potatoes_stage0": {
+"grain": 0.329,
+"grain_strength": 0.111,
 "lum": 109.8,
 "rgb": [
 113,
@@ -7490,6 +8988,8 @@
 "src": "pack"
 },
 "potatoes_stage1": {
+"grain": 0.506,
+"grain_strength": 0.1094,
 "lum": 112.6,
 "rgb": [
 116,
@@ -7500,6 +9000,8 @@
 "src": "pack"
 },
 "potatoes_stage2": {
+"grain": 0.462,
+"grain_strength": 0.0929,
 "lum": 119.0,
 "rgb": [
 124,
@@ -7510,6 +9012,8 @@
 "src": "pack"
 },
 "potatoes_stage3": {
+"grain": 0.423,
+"grain_strength": 0.1109,
 "lum": 122.8,
 "rgb": [
 128,
@@ -7520,6 +9024,8 @@
 "src": "pack"
 },
 "potted_azalea_bush_plant": {
+"grain": 0.18,
+"grain_strength": 0.0695,
 "lum": 98.9,
 "rgb": [
 94,
@@ -7530,6 +9036,8 @@
 "src": "vanilla"
 },
 "potted_azalea_bush_side": {
+"grain": 0.177,
+"grain_strength": 0.0686,
 "lum": 105.4,
 "rgb": [
 97,
@@ -7540,6 +9048,8 @@
 "src": "vanilla"
 },
 "potted_azalea_bush_top": {
+"grain": -0.042,
+"grain_strength": 0.0479,
 "lum": 108.5,
 "rgb": [
 101,
@@ -7550,6 +9060,8 @@
 "src": "vanilla"
 },
 "potted_flowering_azalea_bush_plant": {
+"grain": 0.125,
+"grain_strength": 0.0838,
 "lum": 103.9,
 "rgb": [
 106,
@@ -7560,6 +9072,8 @@
 "src": "vanilla"
 },
 "potted_flowering_azalea_bush_side": {
+"grain": 0.156,
+"grain_strength": 0.0865,
 "lum": 113.7,
 "rgb": [
 117,
@@ -7570,6 +9084,8 @@
 "src": "vanilla"
 },
 "potted_flowering_azalea_bush_top": {
+"grain": 0.04,
+"grain_strength": 0.0753,
 "lum": 117.9,
 "rgb": [
 121,
@@ -7580,6 +9096,8 @@
 "src": "vanilla"
 },
 "powder_snow": {
+"grain": -0.128,
+"grain_strength": 0.0213,
 "lum": 213.0,
 "rgb": [
 212,
@@ -7590,6 +9108,8 @@
 "src": "pack"
 },
 "powered_rail": {
+"grain": 0.465,
+"grain_strength": 0.1624,
 "lum": 129.5,
 "rgb": [
 150,
@@ -7600,6 +9120,8 @@
 "src": "vanilla"
 },
 "powered_rail_on": {
+"grain": 0.463,
+"grain_strength": 0.1451,
 "lum": 133.4,
 "rgb": [
 163,
@@ -7610,6 +9132,8 @@
 "src": "vanilla"
 },
 "prismarine": {
+"grain": -0.042,
+"grain_strength": 0.114,
 "lum": 145.1,
 "rgb": [
 104,
@@ -7620,6 +9144,8 @@
 "src": "vanilla"
 },
 "prismarine_bricks": {
+"grain": 0.137,
+"grain_strength": 0.0705,
 "lum": 150.4,
 "rgb": [
 102,
@@ -7630,6 +9156,8 @@
 "src": "vanilla"
 },
 "pumpkin_side": {
+"grain": 0.478,
+"grain_strength": 0.0722,
 "lum": 132.5,
 "rgb": [
 199,
@@ -7640,6 +9168,8 @@
 "src": "vanilla"
 },
 "pumpkin_stem": {
+"grain": 0.587,
+"grain_strength": 0.1662,
 "lum": 159.0,
 "rgb": [
 159,
@@ -7650,6 +9180,8 @@
 "src": "vanilla"
 },
 "pumpkin_top": {
+"grain": 0.006,
+"grain_strength": 0.0904,
 "lum": 135.0,
 "rgb": [
 201,
@@ -7660,6 +9192,8 @@
 "src": "vanilla"
 },
 "purple_candle": {
+"grain": -0.029,
+"grain_strength": 0.029,
 "lum": 71.3,
 "rgb": [
 108,
@@ -7670,6 +9204,8 @@
 "src": "vanilla"
 },
 "purple_candle_lit": {
+"grain": 0.058,
+"grain_strength": 0.0447,
 "lum": 76.9,
 "rgb": [
 134,
@@ -7680,6 +9216,8 @@
 "src": "vanilla"
 },
 "purple_concrete": {
+"grain": -0.014,
+"grain_strength": 0.0025,
 "lum": 66.5,
 "rgb": [
 100,
@@ -7690,6 +9228,8 @@
 "src": "vanilla"
 },
 "purple_concrete_powder": {
+"grain": 0.006,
+"grain_strength": 0.0275,
 "lum": 92.6,
 "rgb": [
 132,
@@ -7700,6 +9240,8 @@
 "src": "vanilla"
 },
 "purple_glazed_terracotta": {
+"grain": -0.001,
+"grain_strength": 0.0896,
 "lum": 84.0,
 "rgb": [
 118,
@@ -7710,6 +9252,8 @@
 "src": "vanilla"
 },
 "purple_shulker_box": {
+"grain": -0.009,
+"grain_strength": 0.0193,
 "lum": 68.4,
 "rgb": [
 104,
@@ -7720,6 +9264,8 @@
 "src": "vanilla"
 },
 "purple_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 95.2,
 "rgb": [
 127,
@@ -7730,6 +9276,8 @@
 "src": "vanilla"
 },
 "purple_stained_glass_pane_top": {
+"grain": 0.402,
+"grain_strength": 0.0111,
 "lum": 92.2,
 "rgb": [
 123,
@@ -7740,6 +9288,8 @@
 "src": "vanilla"
 },
 "purple_terracotta": {
+"grain": -0.179,
+"grain_strength": 0.0077,
 "lum": 86.2,
 "rgb": [
 118,
@@ -7750,6 +9300,8 @@
 "src": "vanilla"
 },
 "purple_wool": {
+"grain": -0.255,
+"grain_strength": 0.0432,
 "lum": 81.7,
 "rgb": [
 123,
@@ -7760,6 +9312,8 @@
 "src": "vanilla"
 },
 "purpur_block": {
+"grain": 0.054,
+"grain_strength": 0.0499,
 "lum": 145.8,
 "rgb": [
 171,
@@ -7770,6 +9324,8 @@
 "src": "vanilla"
 },
 "purpur_pillar": {
+"grain": 0.392,
+"grain_strength": 0.0664,
 "lum": 148.9,
 "rgb": [
 173,
@@ -7780,6 +9336,8 @@
 "src": "vanilla"
 },
 "purpur_pillar_top": {
+"grain": 0.008,
+"grain_strength": 0.0547,
 "lum": 147.6,
 "rgb": [
 173,
@@ -7790,6 +9348,8 @@
 "src": "vanilla"
 },
 "quartz_block_bottom": {
+"grain": -0.469,
+"grain_strength": 0.0074,
 "lum": 231.4,
 "rgb": [
 237,
@@ -7800,6 +9360,8 @@
 "src": "vanilla"
 },
 "quartz_block_side": {
+"grain": -0.22,
+"grain_strength": 0.0152,
 "lum": 231.0,
 "rgb": [
 236,
@@ -7810,6 +9372,8 @@
 "src": "vanilla"
 },
 "quartz_block_top": {
+"grain": -0.22,
+"grain_strength": 0.0152,
 "lum": 231.0,
 "rgb": [
 236,
@@ -7820,6 +9384,8 @@
 "src": "vanilla"
 },
 "quartz_bricks": {
+"grain": -0.205,
+"grain_strength": 0.0205,
 "lum": 230.0,
 "rgb": [
 235,
@@ -7830,6 +9396,8 @@
 "src": "vanilla"
 },
 "quartz_pillar": {
+"grain": 0.74,
+"grain_strength": 0.0291,
 "lum": 231.7,
 "rgb": [
 236,
@@ -7840,6 +9408,8 @@
 "src": "vanilla"
 },
 "quartz_pillar_top": {
+"grain": 0.003,
+"grain_strength": 0.0244,
 "lum": 230.7,
 "rgb": [
 235,
@@ -7850,6 +9420,8 @@
 "src": "vanilla"
 },
 "rail": {
+"grain": 0.291,
+"grain_strength": 0.1006,
 "lum": 119.8,
 "rgb": [
 130,
@@ -7860,6 +9432,8 @@
 "src": "vanilla"
 },
 "rail_corner": {
+"grain": 0.021,
+"grain_strength": 0.1389,
 "lum": 122.9,
 "rgb": [
 134,
@@ -7870,6 +9444,8 @@
 "src": "vanilla"
 },
 "raw_copper_block": {
+"grain": -0.047,
+"grain_strength": 0.0779,
 "lum": 122.2,
 "rgb": [
 163,
@@ -7880,6 +9456,8 @@
 "src": "vanilla"
 },
 "raw_gold_block": {
+"grain": -0.029,
+"grain_strength": 0.1071,
 "lum": 177.8,
 "rgb": [
 224,
@@ -7890,6 +9468,8 @@
 "src": "vanilla"
 },
 "raw_iron_block": {
+"grain": -0.11,
+"grain_strength": 0.1121,
 "lum": 148.3,
 "rgb": [
 173,
@@ -7900,6 +9480,8 @@
 "src": "vanilla"
 },
 "red_candle": {
+"grain": -0.048,
+"grain_strength": 0.0307,
 "lum": 74.6,
 "rgb": [
 157,
@@ -7910,6 +9492,8 @@
 "src": "vanilla"
 },
 "red_candle_lit": {
+"grain": -0.361,
+"grain_strength": 0.06,
 "lum": 110.6,
 "rgb": [
 191,
@@ -7920,6 +9504,8 @@
 "src": "vanilla"
 },
 "red_concrete": {
+"grain": -0.039,
+"grain_strength": 0.0037,
 "lum": 65.6,
 "rgb": [
 142,
@@ -7930,6 +9516,8 @@
 "src": "vanilla"
 },
 "red_concrete_powder": {
+"grain": -0.024,
+"grain_strength": 0.0244,
 "lum": 88.0,
 "rgb": [
 169,
@@ -7940,6 +9528,8 @@
 "src": "vanilla"
 },
 "red_glazed_terracotta": {
+"grain": -0.009,
+"grain_strength": 0.0538,
 "lum": 101.1,
 "rgb": [
 184,
@@ -7950,6 +9540,8 @@
 "src": "vanilla"
 },
 "red_mushroom": {
+"grain": -0.049,
+"grain_strength": 0.0409,
 "lum": 124.6,
 "rgb": [
 163,
@@ -7960,6 +9552,8 @@
 "src": "pack"
 },
 "red_mushroom_block": {
+"grain": -0.051,
+"grain_strength": 0.0324,
 "lum": 99.8,
 "rgb": [
 201,
@@ -7970,6 +9564,8 @@
 "src": "vanilla"
 },
 "red_nether_bricks": {
+"grain": -0.321,
+"grain_strength": 0.0382,
 "lum": 28.0,
 "rgb": [
 74,
@@ -7980,6 +9576,8 @@
 "src": "vanilla"
 },
 "red_sand": {
+"grain": -0.138,
+"grain_strength": 0.0197,
 "lum": 133.0,
 "rgb": [
 152,
@@ -7990,6 +9588,8 @@
 "src": "pack"
 },
 "red_sandstone": {
+"grain": -0.127,
+"grain_strength": 0.0222,
 "lum": 128.8,
 "rgb": [
 148,
@@ -8000,6 +9600,8 @@
 "src": "pack"
 },
 "red_sandstone_bottom": {
+"grain": -0.08,
+"grain_strength": 0.0205,
 "lum": 131.1,
 "rgb": [
 151,
@@ -8010,6 +9612,8 @@
 "src": "pack"
 },
 "red_sandstone_top": {
+"grain": -0.046,
+"grain_strength": 0.0191,
 "lum": 132.1,
 "rgb": [
 152,
@@ -8020,6 +9624,8 @@
 "src": "pack"
 },
 "red_shulker_box": {
+"grain": -0.009,
+"grain_strength": 0.0207,
 "lum": 64.7,
 "rgb": [
 142,
@@ -8030,6 +9636,8 @@
 "src": "vanilla"
 },
 "red_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 81.5,
 "rgb": [
 153,
@@ -8040,6 +9648,8 @@
 "src": "vanilla"
 },
 "red_stained_glass_pane_top": {
+"grain": 0.414,
+"grain_strength": 0.0091,
 "lum": 78.3,
 "rgb": [
 147,
@@ -8050,6 +9660,8 @@
 "src": "vanilla"
 },
 "red_terracotta": {
+"grain": -0.184,
+"grain_strength": 0.0074,
 "lum": 83.9,
 "rgb": [
 143,
@@ -8060,6 +9672,8 @@
 "src": "vanilla"
 },
 "red_tulip": {
+"grain": 0.319,
+"grain_strength": 0.0841,
 "lum": 119.0,
 "rgb": [
 115,
@@ -8070,6 +9684,8 @@
 "src": "vanilla"
 },
 "red_wool": {
+"grain": -0.01,
+"grain_strength": 0.023,
 "lum": 93.4,
 "rgb": [
 150,
@@ -8080,6 +9696,8 @@
 "src": "pack"
 },
 "redstone_block": {
+"grain": -0.033,
+"grain_strength": 0.0299,
 "lum": 70.2,
 "rgb": [
 182,
@@ -8090,6 +9708,8 @@
 "src": "vanilla"
 },
 "redstone_dust_dot": {
+"grain": 0.277,
+"grain_strength": 0.0729,
 "lum": 241.0,
 "rgb": [
 241,
@@ -8100,6 +9720,8 @@
 "src": "vanilla"
 },
 "redstone_dust_line0": {
+"grain": 0.273,
+"grain_strength": 0.0855,
 "lum": 241.0,
 "rgb": [
 241,
@@ -8110,6 +9732,8 @@
 "src": "vanilla"
 },
 "redstone_dust_line1": {
+"grain": 0.084,
+"grain_strength": 0.0561,
 "lum": 241.0,
 "rgb": [
 241,
@@ -8120,6 +9744,8 @@
 "src": "vanilla"
 },
 "redstone_lamp": {
+"grain": -0.008,
+"grain_strength": 0.0793,
 "lum": 72.1,
 "rgb": [
 107,
@@ -8130,6 +9756,8 @@
 "src": "vanilla"
 },
 "redstone_lamp_on": {
+"grain": -0.003,
+"grain_strength": 0.1626,
 "lum": 134.7,
 "rgb": [
 170,
@@ -8140,6 +9768,8 @@
 "src": "vanilla"
 },
 "redstone_ore": {
+"grain": -0.201,
+"grain_strength": 0.0781,
 "lum": 126.0,
 "rgb": [
 147,
@@ -8150,6 +9780,8 @@
 "src": "vanilla"
 },
 "redstone_torch": {
+"grain": 0.206,
+"grain_strength": 0.1581,
 "lum": 119.7,
 "rgb": [
 202,
@@ -8160,6 +9792,8 @@
 "src": "vanilla"
 },
 "redstone_torch_off": {
+"grain": 0.324,
+"grain_strength": 0.1366,
 "lum": 88.1,
 "rgb": [
 110,
@@ -8170,6 +9804,8 @@
 "src": "vanilla"
 },
 "reinforced_deepslate_bottom": {
+"grain": -0.167,
+"grain_strength": 0.0564,
 "lum": 89.8,
 "rgb": [
 87,
@@ -8180,6 +9816,8 @@
 "src": "vanilla"
 },
 "reinforced_deepslate_side": {
+"grain": -0.056,
+"grain_strength": 0.1111,
 "lum": 121.2,
 "rgb": [
 118,
@@ -8190,6 +9828,8 @@
 "src": "vanilla"
 },
 "reinforced_deepslate_top": {
+"grain": -0.08,
+"grain_strength": 0.0731,
 "lum": 93.5,
 "rgb": [
 91,
@@ -8200,6 +9840,8 @@
 "src": "vanilla"
 },
 "repeater": {
+"grain": 0.061,
+"grain_strength": 0.0853,
 "lum": 164.9,
 "rgb": [
 165,
@@ -8210,6 +9852,8 @@
 "src": "vanilla"
 },
 "repeater_on": {
+"grain": 0.019,
+"grain_strength": 0.0791,
 "lum": 167.3,
 "rgb": [
 173,
@@ -8220,6 +9864,8 @@
 "src": "vanilla"
 },
 "repeating_command_block_back": {
+"grain": -0.004,
+"grain_strength": 0.136,
 "lum": 132.8,
 "rgb": [
 136,
@@ -8230,6 +9876,8 @@
 "src": "vanilla"
 },
 "repeating_command_block_conditional": {
+"grain": 0.064,
+"grain_strength": 0.1442,
 "lum": 131.8,
 "rgb": [
 135,
@@ -8240,6 +9888,8 @@
 "src": "vanilla"
 },
 "repeating_command_block_front": {
+"grain": -0.011,
+"grain_strength": 0.1343,
 "lum": 133.4,
 "rgb": [
 137,
@@ -8250,6 +9900,8 @@
 "src": "vanilla"
 },
 "repeating_command_block_side": {
+"grain": 0.028,
+"grain_strength": 0.1384,
 "lum": 132.6,
 "rgb": [
 136,
@@ -8260,6 +9912,8 @@
 "src": "vanilla"
 },
 "resin_block": {
+"grain": -0.035,
+"grain_strength": 0.0913,
 "lum": 130.5,
 "rgb": [
 219,
@@ -8270,6 +9924,8 @@
 "src": "vanilla"
 },
 "resin_bricks": {
+"grain": -0.361,
+"grain_strength": 0.0937,
 "lum": 121.1,
 "rgb": [
 208,
@@ -8280,6 +9936,8 @@
 "src": "vanilla"
 },
 "resin_clump": {
+"grain": -0.111,
+"grain_strength": 0.1893,
 "lum": 141.4,
 "rgb": [
 225,
@@ -8290,6 +9948,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_bottom": {
+"grain": -0.057,
+"grain_strength": 0.0867,
 "lum": 32.8,
 "rgb": [
 49,
@@ -8300,6 +9960,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_side0": {
+"grain": -0.163,
+"grain_strength": 0.0798,
 "lum": 42.6,
 "rgb": [
 50,
@@ -8310,6 +9972,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_side1": {
+"grain": -0.142,
+"grain_strength": 0.0927,
 "lum": 52.0,
 "rgb": [
 59,
@@ -8320,6 +9984,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_side2": {
+"grain": -0.196,
+"grain_strength": 0.0972,
 "lum": 56.9,
 "rgb": [
 65,
@@ -8330,6 +9996,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_side3": {
+"grain": -0.131,
+"grain_strength": 0.0996,
 "lum": 60.9,
 "rgb": [
 70,
@@ -8340,6 +10008,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_side4": {
+"grain": -0.124,
+"grain_strength": 0.0969,
 "lum": 64.6,
 "rgb": [
 74,
@@ -8350,6 +10020,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_top": {
+"grain": -0.009,
+"grain_strength": 0.0766,
 "lum": 63.0,
 "rgb": [
 84,
@@ -8360,6 +10032,8 @@
 "src": "vanilla"
 },
 "respawn_anchor_top_off": {
+"grain": 0.0,
+"grain_strength": 0.0445,
 "lum": 39.8,
 "rgb": [
 46,
@@ -8370,6 +10044,8 @@
 "src": "vanilla"
 },
 "rooted_dirt": {
+"grain": 0.156,
+"grain_strength": 0.0212,
 "lum": 114.9,
 "rgb": [
 125,
@@ -8380,6 +10056,8 @@
 "src": "pack"
 },
 "rose_bush_bottom": {
+"grain": 0.123,
+"grain_strength": 0.1035,
 "lum": 98.2,
 "rgb": [
 127,
@@ -8390,6 +10068,8 @@
 "src": "vanilla"
 },
 "rose_bush_top": {
+"grain": -0.056,
+"grain_strength": 0.0972,
 "lum": 96.6,
 "rgb": [
 159,
@@ -8400,6 +10080,8 @@
 "src": "vanilla"
 },
 "sand": {
+"grain": -0.14,
+"grain_strength": 0.0177,
 "lum": 161.4,
 "rgb": [
 171,
@@ -8410,6 +10092,8 @@
 "src": "pack"
 },
 "sandstone": {
+"grain": -0.093,
+"grain_strength": 0.0265,
 "lum": 150.3,
 "rgb": [
 160,
@@ -8420,6 +10104,8 @@
 "src": "pack"
 },
 "sandstone_bottom": {
+"grain": -0.101,
+"grain_strength": 0.0265,
 "lum": 151.6,
 "rgb": [
 162,
@@ -8430,6 +10116,8 @@
 "src": "pack"
 },
 "sandstone_top": {
+"grain": -0.095,
+"grain_strength": 0.0249,
 "lum": 152.6,
 "rgb": [
 163,
@@ -8440,6 +10128,8 @@
 "src": "pack"
 },
 "scaffolding_bottom": {
+"grain": 0.238,
+"grain_strength": 0.034,
 "lum": 145.4,
 "rgb": [
 156,
@@ -8450,6 +10140,8 @@
 "src": "pack"
 },
 "scaffolding_side": {
+"grain": 0.179,
+"grain_strength": 0.0351,
 "lum": 145.7,
 "rgb": [
 157,
@@ -8460,6 +10152,8 @@
 "src": "pack"
 },
 "scaffolding_top": {
+"grain": 0.061,
+"grain_strength": 0.0424,
 "lum": 143.4,
 "rgb": [
 154,
@@ -8470,6 +10164,8 @@
 "src": "pack"
 },
 "sculk": {
+"grain": 0.016,
+"grain_strength": 0.0297,
 "lum": 26.3,
 "rgb": [
 13,
@@ -8480,6 +10176,8 @@
 "src": "vanilla"
 },
 "sculk_catalyst_bottom": {
+"grain": -0.004,
+"grain_strength": 0.1009,
 "lum": 113.6,
 "rgb": [
 102,
@@ -8490,6 +10188,8 @@
 "src": "vanilla"
 },
 "sculk_catalyst_side": {
+"grain": 0.018,
+"grain_strength": 0.115,
 "lum": 114.7,
 "rgb": [
 107,
@@ -8500,6 +10200,8 @@
 "src": "vanilla"
 },
 "sculk_catalyst_side_bloom": {
+"grain": -0.123,
+"grain_strength": 0.1343,
 "lum": 119.1,
 "rgb": [
 107,
@@ -8510,6 +10212,8 @@
 "src": "vanilla"
 },
 "sculk_catalyst_top": {
+"grain": 0.011,
+"grain_strength": 0.0545,
 "lum": 39.0,
 "rgb": [
 18,
@@ -8520,6 +10224,8 @@
 "src": "vanilla"
 },
 "sculk_catalyst_top_bloom": {
+"grain": 0.009,
+"grain_strength": 0.0601,
 "lum": 41.7,
 "rgb": [
 18,
@@ -8530,6 +10236,8 @@
 "src": "vanilla"
 },
 "sculk_sensor_bottom": {
+"grain": 0.016,
+"grain_strength": 0.0297,
 "lum": 26.3,
 "rgb": [
 13,
@@ -8540,6 +10248,8 @@
 "src": "vanilla"
 },
 "sculk_sensor_side": {
+"grain": -0.165,
+"grain_strength": 0.0413,
 "lum": 39.3,
 "rgb": [
 11,
@@ -8550,6 +10260,8 @@
 "src": "vanilla"
 },
 "sculk_sensor_tendril_active": {
+"grain": -0.066,
+"grain_strength": 0.127,
 "lum": 104.9,
 "rgb": [
 14,
@@ -8560,6 +10272,8 @@
 "src": "vanilla"
 },
 "sculk_sensor_tendril_inactive": {
+"grain": 0.097,
+"grain_strength": 0.0452,
 "lum": 55.2,
 "rgb": [
 16,
@@ -8570,6 +10284,8 @@
 "src": "vanilla"
 },
 "sculk_sensor_top": {
+"grain": 0.003,
+"grain_strength": 0.0314,
 "lum": 56.9,
 "rgb": [
 16,
@@ -8580,6 +10296,8 @@
 "src": "vanilla"
 },
 "sculk_shrieker_bottom": {
+"grain": 0.016,
+"grain_strength": 0.0297,
 "lum": 26.3,
 "rgb": [
 13,
@@ -8590,6 +10308,8 @@
 "src": "vanilla"
 },
 "sculk_shrieker_can_summon_inner_top": {
+"grain": -0.021,
+"grain_strength": 0.1229,
 "lum": 84.8,
 "rgb": [
 68,
@@ -8600,6 +10320,8 @@
 "src": "vanilla"
 },
 "sculk_shrieker_inner_top": {
+"grain": -0.014,
+"grain_strength": 0.0967,
 "lum": 76.9,
 "rgb": [
 68,
@@ -8610,6 +10332,8 @@
 "src": "vanilla"
 },
 "sculk_shrieker_side": {
+"grain": 0.049,
+"grain_strength": 0.1198,
 "lum": 120.3,
 "rgb": [
 113,
@@ -8620,6 +10344,8 @@
 "src": "vanilla"
 },
 "sculk_shrieker_top": {
+"grain": 0.0,
+"grain_strength": 0.0272,
 "lum": 199.8,
 "rgb": [
 199,
@@ -8630,6 +10356,8 @@
 "src": "vanilla"
 },
 "sculk_vein": {
+"grain": -0.025,
+"grain_strength": 0.0701,
 "lum": 45.8,
 "rgb": [
 9,
@@ -8640,6 +10368,8 @@
 "src": "vanilla"
 },
 "sea_lantern": {
+"grain": -0.0,
+"grain_strength": 0.054,
 "lum": 198.4,
 "rgb": [
 184,
@@ -8650,6 +10380,8 @@
 "src": "vanilla"
 },
 "sea_pickle": {
+"grain": -0.331,
+"grain_strength": 0.0474,
 "lum": 134.2,
 "rgb": [
 127,
@@ -8660,6 +10392,8 @@
 "src": "pack"
 },
 "seagrass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 128.0,
 "rgb": [
 96,
@@ -8670,6 +10404,8 @@
 "src": "pack"
 },
 "short_dry_grass": {
+"grain": 0.253,
+"grain_strength": 0.0952,
 "lum": 164.6,
 "rgb": [
 189,
@@ -8680,6 +10416,8 @@
 "src": "vanilla"
 },
 "short_grass": {
+"grain": 0.183,
+"grain_strength": 0.0402,
 "lum": 157.6,
 "rgb": [
 157,
@@ -8690,6 +10428,8 @@
 "src": "pack"
 },
 "shroomlight": {
+"grain": -0.049,
+"grain_strength": 0.1216,
 "lum": 175.1,
 "rgb": [
 242,
@@ -8700,6 +10440,8 @@
 "src": "vanilla"
 },
 "shulker_box": {
+"grain": -0.013,
+"grain_strength": 0.0243,
 "lum": 114.8,
 "rgb": [
 140,
@@ -8710,6 +10452,8 @@
 "src": "vanilla"
 },
 "slime_block": {
+"grain": -0.034,
+"grain_strength": 0.0308,
 "lum": 156.8,
 "rgb": [
 112,
@@ -8720,6 +10464,8 @@
 "src": "vanilla"
 },
 "small_amethyst_bud": {
+"grain": 0.131,
+"grain_strength": 0.1009,
 "lum": 123.5,
 "rgb": [
 136,
@@ -8730,6 +10476,8 @@
 "src": "vanilla"
 },
 "small_dripleaf_side": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 113.0,
 "rgb": [
 108,
@@ -8740,6 +10488,8 @@
 "src": "vanilla"
 },
 "small_dripleaf_stem_bottom": {
+"grain": 0.549,
+"grain_strength": 0.0854,
 "lum": 107.5,
 "rgb": [
 97,
@@ -8750,6 +10500,8 @@
 "src": "vanilla"
 },
 "small_dripleaf_stem_top": {
+"grain": 0.462,
+"grain_strength": 0.0664,
 "lum": 107.0,
 "rgb": [
 99,
@@ -8760,6 +10512,8 @@
 "src": "vanilla"
 },
 "small_dripleaf_top": {
+"grain": 0.0,
+"grain_strength": 0.0407,
 "lum": 105.9,
 "rgb": [
 97,
@@ -8770,6 +10524,8 @@
 "src": "vanilla"
 },
 "smithing_table_bottom": {
+"grain": -0.508,
+"grain_strength": 0.0187,
 "lum": 114.8,
 "rgb": [
 133,
@@ -8780,6 +10536,8 @@
 "src": "pack"
 },
 "smithing_table_front": {
+"grain": 0.02,
+"grain_strength": 0.0229,
 "lum": 96.6,
 "rgb": [
 99,
@@ -8790,6 +10548,8 @@
 "src": "pack"
 },
 "smithing_table_side": {
+"grain": -0.48,
+"grain_strength": 0.0176,
 "lum": 114.8,
 "rgb": [
 133,
@@ -8800,6 +10560,8 @@
 "src": "pack"
 },
 "smithing_table_top": {
+"grain": 0.019,
+"grain_strength": 0.0242,
 "lum": 96.6,
 "rgb": [
 99,
@@ -8810,6 +10572,8 @@
 "src": "pack"
 },
 "smoker_bottom": {
+"grain": 0.045,
+"grain_strength": 0.0295,
 "lum": 114.0,
 "rgb": [
 116,
@@ -8820,6 +10584,8 @@
 "src": "pack"
 },
 "smoker_front": {
+"grain": -0.174,
+"grain_strength": 0.0547,
 "lum": 106.0,
 "rgb": [
 108,
@@ -8830,6 +10596,8 @@
 "src": "pack"
 },
 "smoker_front_on": {
+"grain": -0.186,
+"grain_strength": 0.0544,
 "lum": 125.7,
 "rgb": [
 145,
@@ -8840,6 +10608,8 @@
 "src": "pack"
 },
 "smoker_side": {
+"grain": 0.094,
+"grain_strength": 0.0359,
 "lum": 117.9,
 "rgb": [
 120,
@@ -8850,6 +10620,8 @@
 "src": "pack"
 },
 "smoker_top": {
+"grain": 0.12,
+"grain_strength": 0.0297,
 "lum": 117.0,
 "rgb": [
 119,
@@ -8860,6 +10632,8 @@
 "src": "pack"
 },
 "smooth_basalt": {
+"grain": 0.011,
+"grain_strength": 0.048,
 "lum": 75.5,
 "rgb": [
 75,
@@ -8870,6 +10644,8 @@
 "src": "vanilla"
 },
 "smooth_stone": {
+"grain": -0.006,
+"grain_strength": 0.0247,
 "lum": 160.8,
 "rgb": [
 162,
@@ -8880,6 +10656,8 @@
 "src": "pack"
 },
 "smooth_stone_slab_side": {
+"grain": -0.055,
+"grain_strength": 0.0321,
 "lum": 160.4,
 "rgb": [
 161,
@@ -8890,6 +10668,8 @@
 "src": "pack"
 },
 "sniffer_egg_not_cracked_bottom": {
+"grain": 0.06,
+"grain_strength": 0.0133,
 "lum": 47.0,
 "rgb": [
 79,
@@ -8900,6 +10680,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_not_cracked_east": {
+"grain": -0.088,
+"grain_strength": 0.0374,
 "lum": 89.7,
 "rgb": [
 106,
@@ -8910,6 +10692,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_not_cracked_north": {
+"grain": 0.011,
+"grain_strength": 0.0389,
 "lum": 91.4,
 "rgb": [
 103,
@@ -8920,6 +10704,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_not_cracked_south": {
+"grain": -0.049,
+"grain_strength": 0.0396,
 "lum": 92.3,
 "rgb": [
 104,
@@ -8930,6 +10716,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_not_cracked_top": {
+"grain": -0.105,
+"grain_strength": 0.0319,
 "lum": 120.7,
 "rgb": [
 146,
@@ -8940,6 +10728,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_not_cracked_west": {
+"grain": 0.066,
+"grain_strength": 0.0347,
 "lum": 91.2,
 "rgb": [
 102,
@@ -8950,6 +10740,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_slightly_cracked_bottom": {
+"grain": 0.019,
+"grain_strength": 0.0171,
 "lum": 46.3,
 "rgb": [
 77,
@@ -8960,6 +10752,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_slightly_cracked_east": {
+"grain": 0.008,
+"grain_strength": 0.0539,
 "lum": 85.8,
 "rgb": [
 101,
@@ -8970,6 +10764,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_slightly_cracked_north": {
+"grain": -0.034,
+"grain_strength": 0.0546,
 "lum": 87.7,
 "rgb": [
 101,
@@ -8980,6 +10776,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_slightly_cracked_south": {
+"grain": -0.043,
+"grain_strength": 0.0497,
 "lum": 88.7,
 "rgb": [
 102,
@@ -8990,6 +10788,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_slightly_cracked_top": {
+"grain": 0.018,
+"grain_strength": 0.0622,
 "lum": 113.9,
 "rgb": [
 141,
@@ -9000,6 +10800,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_slightly_cracked_west": {
+"grain": 0.056,
+"grain_strength": 0.0505,
 "lum": 90.2,
 "rgb": [
 101,
@@ -9010,6 +10812,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_very_cracked_bottom": {
+"grain": -0.001,
+"grain_strength": 0.0177,
 "lum": 46.0,
 "rgb": [
 76,
@@ -9020,6 +10824,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_very_cracked_east": {
+"grain": 0.011,
+"grain_strength": 0.0734,
 "lum": 83.6,
 "rgb": [
 98,
@@ -9030,6 +10836,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_very_cracked_north": {
+"grain": -0.01,
+"grain_strength": 0.0712,
 "lum": 85.2,
 "rgb": [
 97,
@@ -9040,6 +10848,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_very_cracked_south": {
+"grain": 0.003,
+"grain_strength": 0.0656,
 "lum": 84.9,
 "rgb": [
 96,
@@ -9050,6 +10860,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_very_cracked_top": {
+"grain": -0.017,
+"grain_strength": 0.0991,
 "lum": 108.9,
 "rgb": [
 133,
@@ -9060,6 +10872,8 @@
 "src": "vanilla"
 },
 "sniffer_egg_very_cracked_west": {
+"grain": 0.008,
+"grain_strength": 0.0689,
 "lum": 86.0,
 "rgb": [
 95,
@@ -9070,6 +10884,8 @@
 "src": "vanilla"
 },
 "snow": {
+"grain": -0.176,
+"grain_strength": 0.0231,
 "lum": 213.7,
 "rgb": [
 212,
@@ -9080,6 +10896,8 @@
 "src": "pack"
 },
 "soul_campfire_fire": {
+"grain": -0.082,
+"grain_strength": 0.0827,
 "lum": 181.3,
 "rgb": [
 154,
@@ -9090,6 +10908,8 @@
 "src": "pack"
 },
 "soul_campfire_log_lit": {
+"grain": -0.045,
+"grain_strength": 0.104,
 "lum": 131.4,
 "rgb": [
 141,
@@ -9100,6 +10920,8 @@
 "src": "pack"
 },
 "soul_fire_0": {
+"grain": -0.133,
+"grain_strength": 0.1265,
 "lum": 179.3,
 "rgb": [
 108,
@@ -9110,6 +10932,8 @@
 "src": "vanilla"
 },
 "soul_fire_1": {
+"grain": -0.095,
+"grain_strength": 0.1158,
 "lum": 175.0,
 "rgb": [
 112,
@@ -9120,6 +10944,8 @@
 "src": "vanilla"
 },
 "soul_lantern": {
+"grain": 0.056,
+"grain_strength": 0.0858,
 "lum": 134.6,
 "rgb": [
 126,
@@ -9130,6 +10956,8 @@
 "src": "pack"
 },
 "soul_sand": {
+"grain": 0.098,
+"grain_strength": 0.061,
 "lum": 68.7,
 "rgb": [
 84,
@@ -9140,6 +10968,8 @@
 "src": "vanilla"
 },
 "soul_soil": {
+"grain": 0.013,
+"grain_strength": 0.0342,
 "lum": 63.4,
 "rgb": [
 78,
@@ -9150,6 +10980,8 @@
 "src": "vanilla"
 },
 "soul_torch": {
+"grain": 0.215,
+"grain_strength": 0.1778,
 "lum": 131.2,
 "rgb": [
 125,
@@ -9160,6 +10992,8 @@
 "src": "vanilla"
 },
 "spawner": {
+"grain": -0.06,
+"grain_strength": 0.0464,
 "lum": 49.9,
 "rgb": [
 39,
@@ -9170,6 +11004,8 @@
 "src": "vanilla"
 },
 "sponge": {
+"grain": 0.03,
+"grain_strength": 0.0685,
 "lum": 181.3,
 "rgb": [
 197,
@@ -9180,6 +11016,8 @@
 "src": "vanilla"
 },
 "spore_blossom": {
+"grain": 0.018,
+"grain_strength": 0.0811,
 "lum": 142.7,
 "rgb": [
 214,
@@ -9190,6 +11028,8 @@
 "src": "vanilla"
 },
 "spore_blossom_base": {
+"grain": 0.008,
+"grain_strength": 0.0683,
 "lum": 124.4,
 "rgb": [
 114,
@@ -9200,6 +11040,8 @@
 "src": "vanilla"
 },
 "spruce_door_bottom": {
+"grain": 0.419,
+"grain_strength": 0.0642,
 "lum": 87.3,
 "rgb": [
 108,
@@ -9210,6 +11052,8 @@
 "src": "vanilla"
 },
 "spruce_door_top": {
+"grain": 0.456,
+"grain_strength": 0.0622,
 "lum": 87.2,
 "rgb": [
 109,
@@ -9220,6 +11064,8 @@
 "src": "vanilla"
 },
 "spruce_leaves": {
+"grain": -0.084,
+"grain_strength": 0.0632,
 "lum": 170.2,
 "rgb": [
 152,
@@ -9230,6 +11076,8 @@
 "src": "pack"
 },
 "spruce_log": {
+"grain": 0.432,
+"grain_strength": 0.0288,
 "lum": 129.7,
 "rgb": [
 143,
@@ -9240,6 +11088,8 @@
 "src": "pack"
 },
 "spruce_log_top": {
+"grain": -0.033,
+"grain_strength": 0.0245,
 "lum": 134.7,
 "rgb": [
 148,
@@ -9250,6 +11100,8 @@
 "src": "pack"
 },
 "spruce_planks": {
+"grain": -0.485,
+"grain_strength": 0.0179,
 "lum": 138.2,
 "rgb": [
 154,
@@ -9260,6 +11112,8 @@
 "src": "pack"
 },
 "spruce_sapling": {
+"grain": 0.024,
+"grain_strength": 0.0706,
 "lum": 56.8,
 "rgb": [
 47,
@@ -9270,6 +11124,8 @@
 "src": "vanilla"
 },
 "spruce_shelf": {
+"grain": 0.082,
+"grain_strength": 0.0379,
 "lum": 134.7,
 "rgb": [
 148,
@@ -9280,6 +11136,8 @@
 "src": "pack"
 },
 "spruce_trapdoor": {
+"grain": -0.113,
+"grain_strength": 0.0382,
 "lum": 132.0,
 "rgb": [
 147,
@@ -9290,6 +11148,8 @@
 "src": "pack"
 },
 "stone": {
+"grain": 0.028,
+"grain_strength": 0.0172,
 "lum": 140.0,
 "rgb": [
 141,
@@ -9300,6 +11160,8 @@
 "src": "pack"
 },
 "stone_bricks": {
+"grain": -0.207,
+"grain_strength": 0.0305,
 "lum": 138.3,
 "rgb": [
 141,
@@ -9310,6 +11172,8 @@
 "src": "pack"
 },
 "stonecutter_bottom": {
+"grain": -0.195,
+"grain_strength": 0.0339,
 "lum": 120.0,
 "rgb": [
 120,
@@ -9320,6 +11184,8 @@
 "src": "vanilla"
 },
 "stonecutter_saw": {
+"grain": -0.022,
+"grain_strength": 0.1246,
 "lum": 225.0,
 "rgb": [
 225,
@@ -9330,6 +11196,8 @@
 "src": "vanilla"
 },
 "stonecutter_side": {
+"grain": -0.169,
+"grain_strength": 0.0591,
 "lum": 100.6,
 "rgb": [
 109,
@@ -9340,6 +11208,8 @@
 "src": "vanilla"
 },
 "stonecutter_top": {
+"grain": -0.282,
+"grain_strength": 0.0468,
 "lum": 121.7,
 "rgb": [
 125,
@@ -9350,6 +11220,8 @@
 "src": "vanilla"
 },
 "stripped_acacia_log": {
+"grain": 0.326,
+"grain_strength": 0.0136,
 "lum": 113.8,
 "rgb": [
 175,
@@ -9360,6 +11232,8 @@
 "src": "vanilla"
 },
 "stripped_acacia_log_top": {
+"grain": -0.038,
+"grain_strength": 0.0297,
 "lum": 109.3,
 "rgb": [
 167,
@@ -9370,6 +11244,8 @@
 "src": "vanilla"
 },
 "stripped_bamboo_block": {
+"grain": 0.607,
+"grain_strength": 0.0765,
 "lum": 170.7,
 "rgb": [
 196,
@@ -9380,6 +11256,8 @@
 "src": "vanilla"
 },
 "stripped_bamboo_block_top": {
+"grain": 0.0,
+"grain_strength": 0.1191,
 "lum": 160.1,
 "rgb": [
 184,
@@ -9390,6 +11268,8 @@
 "src": "vanilla"
 },
 "stripped_birch_log": {
+"grain": 0.238,
+"grain_strength": 0.0258,
 "lum": 176.4,
 "rgb": [
 197,
@@ -9400,6 +11280,8 @@
 "src": "vanilla"
 },
 "stripped_birch_log_top": {
+"grain": -0.034,
+"grain_strength": 0.0535,
 "lum": 172.4,
 "rgb": [
 192,
@@ -9410,6 +11292,8 @@
 "src": "vanilla"
 },
 "stripped_cherry_log": {
+"grain": -0.142,
+"grain_strength": 0.0186,
 "lum": 166.4,
 "rgb": [
 215,
@@ -9420,6 +11304,8 @@
 "src": "vanilla"
 },
 "stripped_cherry_log_top": {
+"grain": -0.028,
+"grain_strength": 0.0561,
 "lum": 182.3,
 "rgb": [
 221,
@@ -9430,6 +11316,8 @@
 "src": "vanilla"
 },
 "stripped_crimson_stem": {
+"grain": 0.295,
+"grain_strength": 0.0195,
 "lum": 85.6,
 "rgb": [
 138,
@@ -9440,6 +11328,8 @@
 "src": "vanilla"
 },
 "stripped_crimson_stem_top": {
+"grain": -0.029,
+"grain_strength": 0.0287,
 "lum": 79.7,
 "rgb": [
 123,
@@ -9450,6 +11340,8 @@
 "src": "vanilla"
 },
 "stripped_dark_oak_log": {
+"grain": 0.295,
+"grain_strength": 0.0203,
 "lum": 113.0,
 "rgb": [
 128,
@@ -9460,6 +11352,8 @@
 "src": "pack"
 },
 "stripped_dark_oak_log_top": {
+"grain": -0.038,
+"grain_strength": 0.0242,
 "lum": 113.0,
 "rgb": [
 128,
@@ -9470,6 +11364,8 @@
 "src": "pack"
 },
 "stripped_jungle_log": {
+"grain": -0.278,
+"grain_strength": 0.032,
 "lum": 139.2,
 "rgb": [
 172,
@@ -9480,6 +11376,8 @@
 "src": "vanilla"
 },
 "stripped_jungle_log_top": {
+"grain": -0.077,
+"grain_strength": 0.0364,
 "lum": 131.9,
 "rgb": [
 166,
@@ -9490,6 +11388,8 @@
 "src": "vanilla"
 },
 "stripped_mangrove_log": {
+"grain": -0.21,
+"grain_strength": 0.0148,
 "lum": 73.6,
 "rgb": [
 120,
@@ -9500,6 +11400,8 @@
 "src": "vanilla"
 },
 "stripped_mangrove_log_top": {
+"grain": -0.054,
+"grain_strength": 0.0305,
 "lum": 64.3,
 "rgb": [
 110,
@@ -9510,6 +11412,8 @@
 "src": "vanilla"
 },
 "stripped_oak_log": {
+"grain": 0.307,
+"grain_strength": 0.0195,
 "lum": 150.7,
 "rgb": [
 163,
@@ -9520,6 +11424,8 @@
 "src": "pack"
 },
 "stripped_oak_log_top": {
+"grain": 0.116,
+"grain_strength": 0.0237,
 "lum": 153.7,
 "rgb": [
 166,
@@ -9530,6 +11436,8 @@
 "src": "pack"
 },
 "stripped_pale_oak_log": {
+"grain": 0.248,
+"grain_strength": 0.0269,
 "lum": 240.3,
 "rgb": [
 246,
@@ -9540,6 +11448,8 @@
 "src": "vanilla"
 },
 "stripped_pale_oak_log_top": {
+"grain": -0.024,
+"grain_strength": 0.0506,
 "lum": 230.3,
 "rgb": [
 236,
@@ -9550,6 +11460,8 @@
 "src": "vanilla"
 },
 "stripped_spruce_log": {
+"grain": 0.272,
+"grain_strength": 0.0199,
 "lum": 133.7,
 "rgb": [
 147,
@@ -9560,6 +11472,8 @@
 "src": "pack"
 },
 "stripped_spruce_log_top": {
+"grain": -0.041,
+"grain_strength": 0.0235,
 "lum": 134.7,
 "rgb": [
 148,
@@ -9570,6 +11484,8 @@
 "src": "pack"
 },
 "stripped_warped_stem": {
+"grain": 0.3,
+"grain_strength": 0.0249,
 "lum": 122.9,
 "rgb": [
 58,
@@ -9580,6 +11496,8 @@
 "src": "vanilla"
 },
 "stripped_warped_stem_top": {
+"grain": -0.027,
+"grain_strength": 0.0437,
 "lum": 107.2,
 "rgb": [
 53,
@@ -9590,6 +11508,8 @@
 "src": "vanilla"
 },
 "structure_block": {
+"grain": -0.01,
+"grain_strength": 0.1695,
 "lum": 110.3,
 "rgb": [
 122,
@@ -9600,6 +11520,8 @@
 "src": "vanilla"
 },
 "structure_block_corner": {
+"grain": -0.003,
+"grain_strength": 0.1648,
 "lum": 88.6,
 "rgb": [
 98,
@@ -9610,6 +11532,8 @@
 "src": "vanilla"
 },
 "structure_block_data": {
+"grain": -0.004,
+"grain_strength": 0.1449,
 "lum": 100.8,
 "rgb": [
 112,
@@ -9620,6 +11544,8 @@
 "src": "vanilla"
 },
 "structure_block_load": {
+"grain": -0.008,
+"grain_strength": 0.1856,
 "lum": 88.4,
 "rgb": [
 99,
@@ -9630,6 +11556,8 @@
 "src": "vanilla"
 },
 "structure_block_save": {
+"grain": -0.003,
+"grain_strength": 0.152,
 "lum": 103.8,
 "rgb": [
 116,
@@ -9640,6 +11568,8 @@
 "src": "vanilla"
 },
 "sugar_cane": {
+"grain": 0.269,
+"grain_strength": 0.043,
 "lum": 159.6,
 "rgb": [
 159,
@@ -9650,6 +11580,8 @@
 "src": "pack"
 },
 "sunflower_back": {
+"grain": 0.0,
+"grain_strength": 0.0574,
 "lum": 99.1,
 "rgb": [
 60,
@@ -9660,6 +11592,8 @@
 "src": "vanilla"
 },
 "sunflower_bottom": {
+"grain": -0.02,
+"grain_strength": 0.051,
 "lum": 103.2,
 "rgb": [
 63,
@@ -9670,6 +11604,8 @@
 "src": "vanilla"
 },
 "sunflower_front": {
+"grain": -0.018,
+"grain_strength": 0.0793,
 "lum": 198.3,
 "rgb": [
 247,
@@ -9680,6 +11616,8 @@
 "src": "vanilla"
 },
 "sunflower_top": {
+"grain": 0.05,
+"grain_strength": 0.067,
 "lum": 97.3,
 "rgb": [
 56,
@@ -9690,6 +11628,8 @@
 "src": "vanilla"
 },
 "suspicious_gravel_0": {
+"grain": -0.088,
+"grain_strength": 0.0797,
 "lum": 128.1,
 "rgb": [
 131,
@@ -9700,6 +11640,8 @@
 "src": "vanilla"
 },
 "suspicious_gravel_1": {
+"grain": -0.049,
+"grain_strength": 0.0849,
 "lum": 127.2,
 "rgb": [
 130,
@@ -9710,6 +11652,8 @@
 "src": "vanilla"
 },
 "suspicious_gravel_2": {
+"grain": -0.037,
+"grain_strength": 0.0863,
 "lum": 125.1,
 "rgb": [
 128,
@@ -9720,6 +11664,8 @@
 "src": "vanilla"
 },
 "suspicious_gravel_3": {
+"grain": -0.04,
+"grain_strength": 0.0877,
 "lum": 123.5,
 "rgb": [
 127,
@@ -9730,6 +11676,8 @@
 "src": "vanilla"
 },
 "suspicious_sand_0": {
+"grain": -0.053,
+"grain_strength": 0.0567,
 "lum": 203.9,
 "rgb": [
 218,
@@ -9740,6 +11688,8 @@
 "src": "vanilla"
 },
 "suspicious_sand_1": {
+"grain": -0.03,
+"grain_strength": 0.0601,
 "lum": 202.6,
 "rgb": [
 217,
@@ -9750,6 +11700,8 @@
 "src": "vanilla"
 },
 "suspicious_sand_2": {
+"grain": -0.032,
+"grain_strength": 0.0663,
 "lum": 198.9,
 "rgb": [
 214,
@@ -9760,6 +11712,8 @@
 "src": "vanilla"
 },
 "suspicious_sand_3": {
+"grain": -0.039,
+"grain_strength": 0.0706,
 "lum": 194.4,
 "rgb": [
 211,
@@ -9770,6 +11724,8 @@
 "src": "vanilla"
 },
 "sweet_berry_bush_stage0": {
+"grain": 0.577,
+"grain_strength": 0.0398,
 "lum": 94.7,
 "rgb": [
 105,
@@ -9780,6 +11736,8 @@
 "src": "pack"
 },
 "sweet_berry_bush_stage1": {
+"grain": 0.41,
+"grain_strength": 0.0449,
 "lum": 97.3,
 "rgb": [
 109,
@@ -9790,6 +11748,8 @@
 "src": "pack"
 },
 "sweet_berry_bush_stage2": {
+"grain": 0.449,
+"grain_strength": 0.0504,
 "lum": 103.7,
 "rgb": [
 117,
@@ -9800,6 +11760,8 @@
 "src": "pack"
 },
 "sweet_berry_bush_stage3": {
+"grain": 0.205,
+"grain_strength": 0.0344,
 "lum": 107.2,
 "rgb": [
 122,
@@ -9810,6 +11772,8 @@
 "src": "pack"
 },
 "tall_dry_grass": {
+"grain": 0.36,
+"grain_strength": 0.0848,
 "lum": 176.5,
 "rgb": [
 198,
@@ -9820,6 +11784,8 @@
 "src": "vanilla"
 },
 "tall_grass_bottom": {
+"grain": 0.236,
+"grain_strength": 0.0407,
 "lum": 162.6,
 "rgb": [
 162,
@@ -9830,6 +11796,8 @@
 "src": "pack"
 },
 "tall_grass_top": {
+"grain": 0.113,
+"grain_strength": 0.0502,
 "lum": 158.6,
 "rgb": [
 158,
@@ -9840,6 +11808,8 @@
 "src": "pack"
 },
 "tall_seagrass_bottom": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 129.0,
 "rgb": [
 97,
@@ -9850,6 +11820,8 @@
 "src": "pack"
 },
 "tall_seagrass_top": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 127.0,
 "rgb": [
 95,
@@ -9860,6 +11832,8 @@
 "src": "pack"
 },
 "target_side": {
+"grain": 0.076,
+"grain_strength": 0.2094,
 "lum": 208.2,
 "rgb": [
 231,
@@ -9870,6 +11844,8 @@
 "src": "vanilla"
 },
 "target_top": {
+"grain": 0.004,
+"grain_strength": 0.199,
 "lum": 201.8,
 "rgb": [
 228,
@@ -9880,6 +11856,8 @@
 "src": "vanilla"
 },
 "terracotta": {
+"grain": -0.037,
+"grain_strength": 0.0176,
 "lum": 144.3,
 "rgb": [
 150,
@@ -9890,6 +11868,8 @@
 "src": "pack"
 },
 "test_block_accept": {
+"grain": -0.197,
+"grain_strength": 0.0964,
 "lum": 173.8,
 "rgb": [
 145,
@@ -9900,6 +11880,8 @@
 "src": "vanilla"
 },
 "test_block_fail": {
+"grain": -0.234,
+"grain_strength": 0.105,
 "lum": 139.5,
 "rgb": [
 140,
@@ -9910,6 +11892,8 @@
 "src": "vanilla"
 },
 "test_block_log": {
+"grain": -0.1,
+"grain_strength": 0.1089,
 "lum": 184.0,
 "rgb": [
 167,
@@ -9920,6 +11904,8 @@
 "src": "vanilla"
 },
 "test_block_start": {
+"grain": -0.04,
+"grain_strength": 0.1215,
 "lum": 175.2,
 "rgb": [
 195,
@@ -9930,6 +11916,8 @@
 "src": "vanilla"
 },
 "test_instance_block": {
+"grain": 0.088,
+"grain_strength": 0.0931,
 "lum": 142.1,
 "rgb": [
 145,
@@ -9940,6 +11928,8 @@
 "src": "vanilla"
 },
 "tinted_glass": {
+"grain": 0.048,
+"grain_strength": 0.0164,
 "lum": 40.6,
 "rgb": [
 47,
@@ -9950,6 +11940,8 @@
 "src": "vanilla"
 },
 "tnt_bottom": {
+"grain": -0.006,
+"grain_strength": 0.0823,
 "lum": 108.6,
 "rgb": [
 171,
@@ -9960,6 +11952,8 @@
 "src": "vanilla"
 },
 "tnt_side": {
+"grain": -0.092,
+"grain_strength": 0.1313,
 "lum": 143.9,
 "rgb": [
 191,
@@ -9970,6 +11964,8 @@
 "src": "vanilla"
 },
 "tnt_top": {
+"grain": -0.058,
+"grain_strength": 0.1322,
 "lum": 102.1,
 "rgb": [
 163,
@@ -9980,6 +11976,8 @@
 "src": "vanilla"
 },
 "torch": {
+"grain": 0.436,
+"grain_strength": 0.1079,
 "lum": 115.1,
 "rgb": [
 138,
@@ -9990,6 +11988,8 @@
 "src": "pack"
 },
 "torchflower": {
+"grain": -0.042,
+"grain_strength": 0.0862,
 "lum": 118.9,
 "rgb": [
 138,
@@ -10000,6 +12000,8 @@
 "src": "vanilla"
 },
 "torchflower_crop_stage0": {
+"grain": 0.114,
+"grain_strength": 0.0667,
 "lum": 76.8,
 "rgb": [
 30,
@@ -10010,6 +12012,8 @@
 "src": "vanilla"
 },
 "torchflower_crop_stage1": {
+"grain": -0.016,
+"grain_strength": 0.0919,
 "lum": 106.8,
 "rgb": [
 93,
@@ -10020,6 +12024,8 @@
 "src": "vanilla"
 },
 "trial_spawner_bottom": {
+"grain": 0.073,
+"grain_strength": 0.0668,
 "lum": 60.0,
 "rgb": [
 44,
@@ -10030,6 +12036,8 @@
 "src": "vanilla"
 },
 "trial_spawner_side_active": {
+"grain": -0.149,
+"grain_strength": 0.0974,
 "lum": 76.8,
 "rgb": [
 80,
@@ -10040,6 +12048,8 @@
 "src": "vanilla"
 },
 "trial_spawner_side_active_ominous": {
+"grain": -0.155,
+"grain_strength": 0.0811,
 "lum": 72.6,
 "rgb": [
 59,
@@ -10050,6 +12060,8 @@
 "src": "vanilla"
 },
 "trial_spawner_side_inactive": {
+"grain": -0.149,
+"grain_strength": 0.095,
 "lum": 73.5,
 "rgb": [
 58,
@@ -10060,6 +12072,8 @@
 "src": "vanilla"
 },
 "trial_spawner_side_inactive_ominous": {
+"grain": -0.161,
+"grain_strength": 0.0668,
 "lum": 59.5,
 "rgb": [
 43,
@@ -10070,6 +12084,8 @@
 "src": "vanilla"
 },
 "trial_spawner_top_active": {
+"grain": 0.045,
+"grain_strength": 0.0936,
 "lum": 88.4,
 "rgb": [
 85,
@@ -10080,6 +12096,8 @@
 "src": "vanilla"
 },
 "trial_spawner_top_active_ominous": {
+"grain": 0.048,
+"grain_strength": 0.0911,
 "lum": 84.0,
 "rgb": [
 53,
@@ -10090,6 +12108,8 @@
 "src": "vanilla"
 },
 "trial_spawner_top_ejecting_reward": {
+"grain": 0.061,
+"grain_strength": 0.0853,
 "lum": 73.9,
 "rgb": [
 78,
@@ -10100,6 +12120,8 @@
 "src": "vanilla"
 },
 "trial_spawner_top_ejecting_reward_ominous": {
+"grain": 0.065,
+"grain_strength": 0.0828,
 "lum": 69.5,
 "rgb": [
 41,
@@ -10110,6 +12132,8 @@
 "src": "vanilla"
 },
 "trial_spawner_top_inactive": {
+"grain": 0.041,
+"grain_strength": 0.0928,
 "lum": 84.9,
 "rgb": [
 65,
@@ -10120,6 +12144,8 @@
 "src": "vanilla"
 },
 "trial_spawner_top_inactive_ominous": {
+"grain": 0.049,
+"grain_strength": 0.0831,
 "lum": 73.9,
 "rgb": [
 53,
@@ -10130,6 +12156,8 @@
 "src": "vanilla"
 },
 "tripwire": {
+"grain": -0.774,
+"grain_strength": 0.1544,
 "lum": 112.7,
 "rgb": [
 116,
@@ -10140,6 +12168,8 @@
 "src": "pack"
 },
 "tripwire_hook": {
+"grain": -0.389,
+"grain_strength": 0.1032,
 "lum": 119.6,
 "rgb": [
 123,
@@ -10150,6 +12180,8 @@
 "src": "pack"
 },
 "tube_coral": {
+"grain": -0.081,
+"grain_strength": 0.0879,
 "lum": 89.0,
 "rgb": [
 50,
@@ -10160,6 +12192,8 @@
 "src": "vanilla"
 },
 "tube_coral_block": {
+"grain": -0.065,
+"grain_strength": 0.073,
 "lum": 91.9,
 "rgb": [
 51,
@@ -10170,6 +12204,8 @@
 "src": "vanilla"
 },
 "tube_coral_fan": {
+"grain": -0.017,
+"grain_strength": 0.0865,
 "lum": 95.4,
 "rgb": [
 52,
@@ -10180,6 +12216,8 @@
 "src": "vanilla"
 },
 "tuff": {
+"grain": 0.215,
+"grain_strength": 0.0184,
 "lum": 134.6,
 "rgb": [
 136,
@@ -10190,6 +12228,8 @@
 "src": "pack"
 },
 "tuff_bricks": {
+"grain": -0.241,
+"grain_strength": 0.0492,
 "lum": 103.3,
 "rgb": [
 102,
@@ -10200,6 +12240,8 @@
 "src": "vanilla"
 },
 "turtle_egg": {
+"grain": -0.017,
+"grain_strength": 0.0987,
 "lum": 226.8,
 "rgb": [
 235,
@@ -10210,6 +12252,8 @@
 "src": "vanilla"
 },
 "turtle_egg_slightly_cracked": {
+"grain": 0.004,
+"grain_strength": 0.1617,
 "lum": 217.0,
 "rgb": [
 226,
@@ -10220,6 +12264,8 @@
 "src": "vanilla"
 },
 "turtle_egg_very_cracked": {
+"grain": 0.026,
+"grain_strength": 0.2229,
 "lum": 207.9,
 "rgb": [
 217,
@@ -10230,6 +12276,8 @@
 "src": "vanilla"
 },
 "twisting_vines": {
+"grain": 0.332,
+"grain_strength": 0.0544,
 "lum": 106.6,
 "rgb": [
 20,
@@ -10240,6 +12288,8 @@
 "src": "vanilla"
 },
 "twisting_vines_plant": {
+"grain": 0.215,
+"grain_strength": 0.0509,
 "lum": 102.3,
 "rgb": [
 20,
@@ -10250,6 +12300,8 @@
 "src": "vanilla"
 },
 "vault_bottom": {
+"grain": 0.01,
+"grain_strength": 0.0247,
 "lum": 46.4,
 "rgb": [
 45,
@@ -10260,6 +12312,8 @@
 "src": "vanilla"
 },
 "vault_bottom_ominous": {
+"grain": 0.01,
+"grain_strength": 0.0247,
 "lum": 46.4,
 "rgb": [
 45,
@@ -10270,6 +12324,8 @@
 "src": "vanilla"
 },
 "vault_front_ejecting": {
+"grain": -0.14,
+"grain_strength": 0.0939,
 "lum": 79.0,
 "rgb": [
 91,
@@ -10280,6 +12336,8 @@
 "src": "vanilla"
 },
 "vault_front_ejecting_ominous": {
+"grain": -0.111,
+"grain_strength": 0.0921,
 "lum": 75.5,
 "rgb": [
 61,
@@ -10290,6 +12348,8 @@
 "src": "vanilla"
 },
 "vault_front_off": {
+"grain": -0.157,
+"grain_strength": 0.0867,
 "lum": 74.9,
 "rgb": [
 65,
@@ -10300,6 +12360,8 @@
 "src": "vanilla"
 },
 "vault_front_off_ominous": {
+"grain": -0.158,
+"grain_strength": 0.0946,
 "lum": 75.4,
 "rgb": [
 68,
@@ -10310,6 +12372,8 @@
 "src": "vanilla"
 },
 "vault_front_on": {
+"grain": -0.12,
+"grain_strength": 0.1006,
 "lum": 79.1,
 "rgb": [
 91,
@@ -10320,6 +12384,8 @@
 "src": "vanilla"
 },
 "vault_front_on_ominous": {
+"grain": -0.058,
+"grain_strength": 0.1028,
 "lum": 77.5,
 "rgb": [
 64,
@@ -10330,6 +12396,8 @@
 "src": "vanilla"
 },
 "vault_side_off": {
+"grain": -0.333,
+"grain_strength": 0.0846,
 "lum": 78.5,
 "rgb": [
 69,
@@ -10340,6 +12408,8 @@
 "src": "vanilla"
 },
 "vault_side_off_ominous": {
+"grain": -0.333,
+"grain_strength": 0.0846,
 "lum": 78.5,
 "rgb": [
 69,
@@ -10350,6 +12420,8 @@
 "src": "vanilla"
 },
 "vault_side_on": {
+"grain": -0.326,
+"grain_strength": 0.085,
 "lum": 81.0,
 "rgb": [
 92,
@@ -10360,6 +12432,8 @@
 "src": "vanilla"
 },
 "vault_side_on_ominous": {
+"grain": -0.306,
+"grain_strength": 0.0813,
 "lum": 77.4,
 "rgb": [
 56,
@@ -10370,6 +12444,8 @@
 "src": "vanilla"
 },
 "vault_top": {
+"grain": 0.012,
+"grain_strength": 0.0859,
 "lum": 74.7,
 "rgb": [
 64,
@@ -10380,6 +12456,8 @@
 "src": "vanilla"
 },
 "vault_top_ejecting": {
+"grain": 0.021,
+"grain_strength": 0.0767,
 "lum": 62.4,
 "rgb": [
 57,
@@ -10390,6 +12468,8 @@
 "src": "vanilla"
 },
 "vault_top_ejecting_ominous": {
+"grain": 0.031,
+"grain_strength": 0.0626,
 "lum": 61.7,
 "rgb": [
 59,
@@ -10400,6 +12480,8 @@
 "src": "vanilla"
 },
 "vault_top_ominous": {
+"grain": 0.02,
+"grain_strength": 0.0684,
 "lum": 76.5,
 "rgb": [
 74,
@@ -10410,6 +12492,8 @@
 "src": "vanilla"
 },
 "verdant_froglight_side": {
+"grain": 0.196,
+"grain_strength": 0.0464,
 "lum": 227.1,
 "rgb": [
 215,
@@ -10420,6 +12504,8 @@
 "src": "vanilla"
 },
 "verdant_froglight_top": {
+"grain": -0.012,
+"grain_strength": 0.0315,
 "lum": 239.2,
 "rgb": [
 231,
@@ -10430,6 +12516,8 @@
 "src": "vanilla"
 },
 "vine": {
+"grain": 0.368,
+"grain_strength": 0.103,
 "lum": 161.5,
 "rgb": [
 161,
@@ -10440,6 +12528,8 @@
 "src": "pack"
 },
 "warped_door_bottom": {
+"grain": 0.098,
+"grain_strength": 0.0772,
 "lum": 99.0,
 "rgb": [
 45,
@@ -10450,6 +12540,8 @@
 "src": "vanilla"
 },
 "warped_door_top": {
+"grain": 0.058,
+"grain_strength": 0.0772,
 "lum": 105.5,
 "rgb": [
 46,
@@ -10460,6 +12552,8 @@
 "src": "vanilla"
 },
 "warped_fungus": {
+"grain": -0.182,
+"grain_strength": 0.0548,
 "lum": 119.3,
 "rgb": [
 121,
@@ -10470,6 +12564,8 @@
 "src": "vanilla"
 },
 "warped_nylium": {
+"grain": -0.013,
+"grain_strength": 0.0596,
 "lum": 95.8,
 "rgb": [
 51,
@@ -10480,6 +12576,8 @@
 "src": "vanilla"
 },
 "warped_nylium_side": {
+"grain": -0.099,
+"grain_strength": 0.0546,
 "lum": 76.9,
 "rgb": [
 81,
@@ -10490,6 +12588,8 @@
 "src": "vanilla"
 },
 "warped_planks": {
+"grain": -0.539,
+"grain_strength": 0.0819,
 "lum": 89.3,
 "rgb": [
 45,
@@ -10500,6 +12600,8 @@
 "src": "vanilla"
 },
 "warped_roots": {
+"grain": -0.0,
+"grain_strength": 0.0525,
 "lum": 103.7,
 "rgb": [
 20,
@@ -10510,6 +12612,8 @@
 "src": "vanilla"
 },
 "warped_roots_pot": {
+"grain": -0.053,
+"grain_strength": 0.0572,
 "lum": 103.3,
 "rgb": [
 21,
@@ -10520,6 +12624,8 @@
 "src": "vanilla"
 },
 "warped_shelf": {
+"grain": -0.185,
+"grain_strength": 0.0424,
 "lum": 114.4,
 "rgb": [
 52,
@@ -10530,6 +12636,8 @@
 "src": "vanilla"
 },
 "warped_stem": {
+"grain": 0.115,
+"grain_strength": 0.0541,
 "lum": 68.6,
 "rgb": [
 63,
@@ -10540,6 +12648,8 @@
 "src": "vanilla"
 },
 "warped_stem_top": {
+"grain": -0.019,
+"grain_strength": 0.0711,
 "lum": 98.2,
 "rgb": [
 55,
@@ -10550,6 +12660,8 @@
 "src": "vanilla"
 },
 "warped_trapdoor": {
+"grain": 0.005,
+"grain_strength": 0.0667,
 "lum": 99.8,
 "rgb": [
 48,
@@ -10560,6 +12672,8 @@
 "src": "vanilla"
 },
 "warped_wart_block": {
+"grain": 0.089,
+"grain_strength": 0.0405,
 "lum": 92.4,
 "rgb": [
 23,
@@ -10570,6 +12684,8 @@
 "src": "vanilla"
 },
 "water_flow": {
+"grain": 0.24,
+"grain_strength": 0.0404,
 "lum": 198.1,
 "rgb": [
 201,
@@ -10580,6 +12696,8 @@
 "src": "pack"
 },
 "water_overlay": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 165.0,
 "rgb": [
 165,
@@ -10590,6 +12708,8 @@
 "src": "vanilla"
 },
 "water_still": {
+"grain": -0.114,
+"grain_strength": 0.0495,
 "lum": 198.1,
 "rgb": [
 201,
@@ -10600,6 +12720,8 @@
 "src": "pack"
 },
 "weathered_chiseled_copper": {
+"grain": 0.006,
+"grain_strength": 0.0705,
 "lum": 135.2,
 "rgb": [
 106,
@@ -10610,6 +12732,8 @@
 "src": "vanilla"
 },
 "weathered_copper": {
+"grain": 0.086,
+"grain_strength": 0.0436,
 "lum": 136.5,
 "rgb": [
 109,
@@ -10620,6 +12744,8 @@
 "src": "vanilla"
 },
 "weathered_copper_bars": {
+"grain": 0.417,
+"grain_strength": 0.0696,
 "lum": 111.1,
 "rgb": [
 88,
@@ -10630,6 +12756,8 @@
 "src": "vanilla"
 },
 "weathered_copper_bulb": {
+"grain": 0.04,
+"grain_strength": 0.0755,
 "lum": 117.6,
 "rgb": [
 95,
@@ -10640,6 +12768,8 @@
 "src": "vanilla"
 },
 "weathered_copper_bulb_lit": {
+"grain": 0.045,
+"grain_strength": 0.0737,
 "lum": 157.2,
 "rgb": [
 172,
@@ -10650,6 +12780,8 @@
 "src": "vanilla"
 },
 "weathered_copper_bulb_lit_powered": {
+"grain": 0.044,
+"grain_strength": 0.076,
 "lum": 157.4,
 "rgb": [
 173,
@@ -10660,6 +12792,8 @@
 "src": "vanilla"
 },
 "weathered_copper_bulb_powered": {
+"grain": 0.039,
+"grain_strength": 0.0777,
 "lum": 118.5,
 "rgb": [
 98,
@@ -10670,6 +12804,8 @@
 "src": "vanilla"
 },
 "weathered_copper_chain": {
+"grain": 0.017,
+"grain_strength": 0.0564,
 "lum": 97.5,
 "rgb": [
 75,
@@ -10680,6 +12816,8 @@
 "src": "vanilla"
 },
 "weathered_copper_door_bottom": {
+"grain": 0.098,
+"grain_strength": 0.0584,
 "lum": 130.3,
 "rgb": [
 109,
@@ -10690,6 +12828,8 @@
 "src": "vanilla"
 },
 "weathered_copper_door_top": {
+"grain": -0.11,
+"grain_strength": 0.0592,
 "lum": 136.0,
 "rgb": [
 111,
@@ -10700,6 +12840,8 @@
 "src": "vanilla"
 },
 "weathered_copper_grate": {
+"grain": 0.151,
+"grain_strength": 0.0506,
 "lum": 136.0,
 "rgb": [
 107,
@@ -10710,6 +12852,8 @@
 "src": "vanilla"
 },
 "weathered_copper_lantern": {
+"grain": 0.073,
+"grain_strength": 0.0811,
 "lum": 128.8,
 "rgb": [
 107,
@@ -10720,6 +12864,8 @@
 "src": "vanilla"
 },
 "weathered_copper_trapdoor": {
+"grain": 0.091,
+"grain_strength": 0.0609,
 "lum": 136.9,
 "rgb": [
 110,
@@ -10730,6 +12876,8 @@
 "src": "vanilla"
 },
 "weathered_cut_copper": {
+"grain": -0.006,
+"grain_strength": 0.0545,
 "lum": 132.6,
 "rgb": [
 111,
@@ -10740,6 +12888,8 @@
 "src": "vanilla"
 },
 "weathered_lightning_rod": {
+"grain": -0.097,
+"grain_strength": 0.0717,
 "lum": 127.9,
 "rgb": [
 100,
@@ -10750,6 +12900,8 @@
 "src": "vanilla"
 },
 "weeping_vines": {
+"grain": 0.114,
+"grain_strength": 0.014,
 "lum": 32.3,
 "rgb": [
 106,
@@ -10760,6 +12912,8 @@
 "src": "vanilla"
 },
 "weeping_vines_plant": {
+"grain": 0.074,
+"grain_strength": 0.0547,
 "lum": 62.0,
 "rgb": [
 142,
@@ -10770,6 +12924,8 @@
 "src": "vanilla"
 },
 "wet_sponge": {
+"grain": 0.071,
+"grain_strength": 0.0697,
 "lum": 167.2,
 "rgb": [
 173,
@@ -10780,6 +12936,8 @@
 "src": "vanilla"
 },
 "wheat_stage0": {
+"grain": 0.289,
+"grain_strength": 0.1257,
 "lum": 109.4,
 "rgb": [
 112,
@@ -10790,6 +12948,8 @@
 "src": "pack"
 },
 "wheat_stage1": {
+"grain": 0.329,
+"grain_strength": 0.111,
 "lum": 109.8,
 "rgb": [
 113,
@@ -10800,6 +12960,8 @@
 "src": "pack"
 },
 "wheat_stage2": {
+"grain": 0.489,
+"grain_strength": 0.1094,
 "lum": 111.7,
 "rgb": [
 115,
@@ -10810,6 +12972,8 @@
 "src": "pack"
 },
 "wheat_stage3": {
+"grain": 0.506,
+"grain_strength": 0.1094,
 "lum": 112.6,
 "rgb": [
 116,
@@ -10820,6 +12984,8 @@
 "src": "pack"
 },
 "wheat_stage4": {
+"grain": 0.37,
+"grain_strength": 0.0964,
 "lum": 119.6,
 "rgb": [
 124,
@@ -10830,6 +12996,8 @@
 "src": "pack"
 },
 "wheat_stage5": {
+"grain": 0.462,
+"grain_strength": 0.0929,
 "lum": 119.0,
 "rgb": [
 124,
@@ -10840,6 +13008,8 @@
 "src": "pack"
 },
 "wheat_stage6": {
+"grain": 0.412,
+"grain_strength": 0.0961,
 "lum": 120.9,
 "rgb": [
 126,
@@ -10850,6 +13020,8 @@
 "src": "pack"
 },
 "wheat_stage7": {
+"grain": 0.423,
+"grain_strength": 0.1109,
 "lum": 122.8,
 "rgb": [
 128,
@@ -10860,6 +13032,8 @@
 "src": "pack"
 },
 "white_candle": {
+"grain": -0.228,
+"grain_strength": 0.0654,
 "lum": 220.2,
 "rgb": [
 216,
@@ -10870,6 +13044,8 @@
 "src": "vanilla"
 },
 "white_candle_lit": {
+"grain": -0.191,
+"grain_strength": 0.0573,
 "lum": 221.3,
 "rgb": [
 224,
@@ -10880,6 +13056,8 @@
 "src": "vanilla"
 },
 "white_concrete": {
+"grain": -0.023,
+"grain_strength": 0.0033,
 "lum": 211.3,
 "rgb": [
 207,
@@ -10890,6 +13068,8 @@
 "src": "vanilla"
 },
 "white_concrete_powder": {
+"grain": -0.028,
+"grain_strength": 0.0371,
 "lum": 227.4,
 "rgb": [
 226,
@@ -10900,6 +13080,8 @@
 "src": "vanilla"
 },
 "white_glazed_terracotta": {
+"grain": -0.006,
+"grain_strength": 0.1416,
 "lum": 216.8,
 "rgb": [
 213,
@@ -10910,6 +13092,8 @@
 "src": "vanilla"
 },
 "white_shulker_box": {
+"grain": -0.006,
+"grain_strength": 0.0369,
 "lum": 219.6,
 "rgb": [
 216,
@@ -10920,6 +13104,8 @@
 "src": "vanilla"
 },
 "white_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 255.0,
 "rgb": [
 255,
@@ -10930,6 +13116,8 @@
 "src": "vanilla"
 },
 "white_stained_glass_pane_top": {
+"grain": 0.41,
+"grain_strength": 0.0299,
 "lum": 246.0,
 "rgb": [
 246,
@@ -10940,6 +13128,8 @@
 "src": "vanilla"
 },
 "white_terracotta": {
+"grain": -0.025,
+"grain_strength": 0.0207,
 "lum": 202.6,
 "rgb": [
 201,
@@ -10950,6 +13140,8 @@
 "src": "pack"
 },
 "white_tulip": {
+"grain": -0.144,
+"grain_strength": 0.0585,
 "lum": 142.6,
 "rgb": [
 143,
@@ -10960,6 +13152,8 @@
 "src": "pack"
 },
 "white_wool": {
+"grain": -0.009,
+"grain_strength": 0.0271,
 "lum": 217.4,
 "rgb": [
 221,
@@ -10970,6 +13164,8 @@
 "src": "pack"
 },
 "wildflowers": {
+"grain": 0.0,
+"grain_strength": 0.0815,
 "lum": 215.6,
 "rgb": [
 239,
@@ -10980,6 +13176,8 @@
 "src": "vanilla"
 },
 "wildflowers_stem": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 170.0,
 "rgb": [
 170,
@@ -10990,6 +13188,8 @@
 "src": "vanilla"
 },
 "wither_rose": {
+"grain": 0.122,
+"grain_strength": 0.0514,
 "lum": 44.2,
 "rgb": [
 44,
@@ -11000,6 +13200,8 @@
 "src": "vanilla"
 },
 "yellow_candle": {
+"grain": -0.099,
+"grain_strength": 0.0708,
 "lum": 170.0,
 "rgb": [
 215,
@@ -11010,6 +13212,8 @@
 "src": "vanilla"
 },
 "yellow_candle_lit": {
+"grain": -0.147,
+"grain_strength": 0.0723,
 "lum": 190.2,
 "rgb": [
 223,
@@ -11020,6 +13224,8 @@
 "src": "vanilla"
 },
 "yellow_concrete": {
+"grain": 0.007,
+"grain_strength": 0.0042,
 "lum": 177.2,
 "rgb": [
 241,
@@ -11030,6 +13236,8 @@
 "src": "vanilla"
 },
 "yellow_concrete_powder": {
+"grain": -0.032,
+"grain_strength": 0.0345,
 "lum": 193.0,
 "rgb": [
 233,
@@ -11040,6 +13248,8 @@
 "src": "vanilla"
 },
 "yellow_glazed_terracotta": {
+"grain": -0.003,
+"grain_strength": 0.1211,
 "lum": 200.0,
 "rgb": [
 237,
@@ -11050,6 +13260,8 @@
 "src": "vanilla"
 },
 "yellow_shulker_box": {
+"grain": -0.007,
+"grain_strength": 0.0193,
 "lum": 188.5,
 "rgb": [
 248,
@@ -11060,6 +13272,8 @@
 "src": "vanilla"
 },
 "yellow_stained_glass": {
+"grain": 0.0,
+"grain_strength": 0.0,
 "lum": 208.7,
 "rgb": [
 229,
@@ -11070,6 +13284,8 @@
 "src": "vanilla"
 },
 "yellow_stained_glass_pane_top": {
+"grain": 0.407,
+"grain_strength": 0.0241,
 "lum": 201.4,
 "rgb": [
 221,
@@ -11080,6 +13296,8 @@
 "src": "vanilla"
 },
 "yellow_terracotta": {
+"grain": -0.172,
+"grain_strength": 0.0077,
 "lum": 137.7,
 "rgb": [
 186,
@@ -11090,6 +13308,8 @@
 "src": "vanilla"
 },
 "yellow_wool": {
+"grain": 0.0,
+"grain_strength": 0.0324,
 "lum": 165.3,
 "rgb": [
 183,

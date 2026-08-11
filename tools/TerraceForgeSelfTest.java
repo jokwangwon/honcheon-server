@@ -99,6 +99,40 @@ public final class TerraceForgeSelfTest {
     private static final int POST_MIN = com.honcheon.mvt.forge.BlueprintBuilder.POST_MIN_COURSES;
 
     /** 적주 몸통 위 · 도리 아래에 몇 켜가 있는가 = <b>주두의 두께</b> (REF-3B 밀도 사다리) */
+    /** 색표에서 한 재료를 꺼낸다 — 파생 이름(`_slab`·`_wall`)은 본체로 되짚는다 */
+    @SuppressWarnings("unchecked")
+    private static java.util.Map<String, Object> grainEntry(
+            java.util.Map<String, Object> table, String mat) {
+        if (table.isEmpty() || mat == null || mat.isEmpty()) {
+            return null;
+        }
+        String[] alias = {mat, mat.replace("plaster", "bone_block_side")
+                .replace("lattice", "dark_oak_trapdoor")};
+        for (String a : alias) {
+            Object v = table.get(a);
+            if (v != null) {
+                return (java.util.Map<String, Object>) v;
+            }
+        }
+        for (String suf : new String[]{"_stairs", "_slab", "_wall", "_fence", "_trapdoor"}) {
+            if (mat.endsWith(suf)) {
+                String base = mat.substring(0, mat.length() - suf.length());
+                for (String cand : new String[]{base, base + "s", base + "_planks"}) {
+                    Object v = table.get(cand);
+                    if (v != null) {
+                        return (java.util.Map<String, Object>) v;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static double grainLum(java.util.Map<String, Object> table, String mat) {
+        java.util.Map<String, Object> e = grainEntry(table, mat);
+        return e == null ? 0 : ((Number) e.getOrDefault("lum", 0)).doubleValue();
+    }
+
     private static int firstColOf(com.honcheon.mvt.forge.Level lv, char ch) {
         for (int r = 0; r < lv.depth(); r++) {
             for (int c = 0; c < lv.width(); c++) {
@@ -4104,6 +4138,79 @@ public final class TerraceForgeSelfTest {
                 check("★★창호·서까래는 여전히 가장 어둡다 (dark_oak 계열)",
                         hj.columnOf('J').stream().anyMatch(cs -> cs.material().startsWith("dark_oak")),
                         "");
+            }
+
+            // ══════════════════════════════════════════════════════════════
+            // ★★★<b>읽힘 자</b> (2026-08-11) — 「무엇으로 읽히는가」를 잰다
+            // ══════════════════════════════════════════════════════════════
+            //   이 저장소의 눈이 실패하는 유형은 셋이다:
+            //     ① 오늘의 값을 외운 자 (깊이−13 · 37×18) — 도면이 바뀌면 죽는다
+            //     ② 이름으로 구조를 고르는 자 (contains("mangrove_log")) — 팔레트가 바뀌면 죽는다
+            //     ③ <b>색만 재는 자</b> — 「무엇으로 읽히는가」를 못 잰다
+            //   ①②는 <b>헛짖어서</b> 티가 난다. ③은 <b>안 짖는다</b> — 잘못 만든 것에 최고점을 준다.
+            //   2026-08-11: 기둥을 red_nether_bricks 로 갈았더니 색 지표가 만점이었고
+            //   실물은 <b>조적 기둥</b>이었다. 목조 기둥은 세로결이어야 하는데 가로 줄눈이 뚜렷했다.
+            //
+            //   ★그래서 <b>재료의 결</b>을 잰다 — 텍스처에서 직접. 사진도 카메라도 필요 없다.
+            //     Ex(가로로 갈 때의 변화) − Ey(세로로 갈 때의 변화) 의 치우침이 <b>방향</b>이고,
+            //     둘의 평균이 <b>세기</b>다. 세기가 약하면 방향은 뜻이 없다 (민판).
+            //     굽는 곳: tools/block_palette.py  ·  표: config/block_colors.json
+            {
+                java.util.Map<String, Object> grainTable;
+                java.nio.file.Path gp = java.nio.file.Path.of("config/block_colors.json");
+                if (!java.nio.file.Files.exists(gp)) {
+                    check("★★읽힘 자의 색표가 있다 (python3 tools/block_palette.py)", false, gp);
+                    grainTable = java.util.Map.of();
+                } else {
+                    grainTable = new org.yaml.snakeyaml.Yaml()
+                            .load(java.nio.file.Files.readString(gp));
+                    check("★★읽힘 자의 색표가 있다", grainTable.size() > 500, grainTable.size());
+                }
+
+                java.util.function.Function<String, String> readsAs = mat -> {
+                    java.util.Map<String, Object> e = grainEntry(grainTable, mat);
+                    if (e == null) {
+                        return "모름";
+                    }
+                    double s = ((Number) e.getOrDefault("grain_strength", 0)).doubleValue();
+                    double g = ((Number) e.getOrDefault("grain", 0)).doubleValue();
+                    return s < 0.012 ? "민판" : g > 0.15 ? "세로결" : g < -0.15 ? "가로줄눈" : "격자";
+                };
+
+                if (!grainTable.isEmpty()) {
+                    // ★① 적주는 <b>조적으로 읽히면 안 된다</b> — 2026-08-11 의 그 실패
+                    String shaft = hj.shaftMaterial('P');
+                    String how = readsAs.apply(shaft);
+                    check("★★★적주가 <b>조적으로 안 읽힌다</b> (목조 기둥에 가로 줄눈은 없다 — "
+                                    + shaft + " = " + how + ")",
+                            !"가로줄눈".equals(how), shaft + " " + how);
+
+                    // ★[눈의 눈] 벽돌을 기둥에 끼우면 <b>이 자가 잡는다</b>
+                    check("★★[눈의 눈] red_nether_bricks 를 기둥에 쓰면 잡힌다",
+                            "가로줄눈".equals(readsAs.apply("red_nether_bricks")),
+                            readsAs.apply("red_nether_bricks"));
+                    check("★★[눈의 눈] 통나무는 <b>안</b> 잡힌다 (헛짖지 않는다)",
+                            !"가로줄눈".equals(readsAs.apply("dark_oak_log")),
+                            readsAs.apply("dark_oak_log"));
+
+                    // ★② 살창은 <b>무늬가 있어야</b> 창이다 — 민판이면 그냥 판이다
+                    String lat = hj.palette("lattice", "dark_oak_trapdoor");
+                    java.util.Map<String, Object> le = grainEntry(grainTable, lat);
+                    double lstr = le == null ? 0
+                            : ((Number) le.getOrDefault("grain_strength", 0)).doubleValue();
+                    check("★★살창에 <b>결이 있다</b> (민판이면 창이 아니라 판이다 — "
+                                    + lat + " 세기 " + lstr + ")", lstr >= 0.02, lstr);
+
+                    // ★③ 부재가 <b>이웃과 명도로 갈린다</b> — 같은 색이면 만들어도 안 보인다
+                    //    (공포·간포를 다 만들어 놓고도 창방과 같은 색이라 통짜 판으로 뭉쳤다)
+                    double bracketLum = grainLum(grainTable, "dark_oak_planks");
+                    double beamLum = grainLum(grainTable, "mangrove_planks");
+                    check("★★공포와 창방이 <b>명도로 갈린다</b> (같으면 만들어도 안 보인다 — 공포 "
+                                    + bracketLum + " · 창방 " + beamLum + " · 차 "
+                                    + Math.round(Math.abs(bracketLum - beamLum)) + ")",
+                            Math.abs(bracketLum - beamLum) >= 20,
+                            Math.abs(bracketLum - beamLum));
+                }
             }
 
             // ══════ ★★★청색 철회 (사용자 2026-08-11) ══════

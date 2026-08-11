@@ -106,6 +106,57 @@ def average(png_bytes: bytes) -> tuple[tuple[int, int, int], float] | None:
     return (tuple(_linear_to_srgb(c / n) for c in acc), n / total)
 
 
+def grain(png_bytes: bytes):
+    """<b>결</b> — 무늬가 어느 쪽으로 흐르는가. 「무엇으로 읽히는가」의 첫 조각이다.
+
+    2026-08-11 의 실패: 기둥을 `red_nether_bricks` 로 갈았더니 <b>색 지표는 만점</b>인데
+    실물은 <b>조적 기둥</b>이었다. 목조 기둥은 세로결이어야 하는데 가로 줄눈이 뚜렷했다.
+    색만 재는 자는 이것을 <b>영영 못 잡는다</b> — 색 분포가 같아도 무늬가 다르기 때문이다.
+
+    그래서 <b>변화의 방향</b>을 잰다. 텍스처는 타일링되므로 가장자리는 <b>감싸서</b> 잇는다.
+
+    * {@code Ex} = 가로로 갈 때의 변화량 → <b>세로선</b>이 만든다 (나무결·세로살)
+    * {@code Ey} = 세로로 갈 때의 변화량 → <b>가로선</b>이 만든다 (벽돌 줄눈·단 이음)
+    * {@code 방향} = (Ex−Ey)/(Ex+Ey) ∈ [−1, +1] — <b>+ 세로결 · − 가로 줄눈</b>
+    * {@code 세기} = (Ex+Ey)/2 / 255 — 0 이면 민판, 크면 무늬가 세다
+
+    ★이것은 <b>재료의 성질</b>이라 사진도 카메라도 필요 없다. 눈이 즉석에서 부를 수 있다.
+    """
+    from PIL import Image
+
+    im = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    if im.height > im.width and im.height % im.width == 0:
+        im = im.crop((0, 0, im.width, im.width))
+    w, h = im.size
+    px = im.load()
+
+    def lum(x, y):
+        r, g, b, a = px[x % w, y % h]
+        return (0.299 * r + 0.587 * g + 0.114 * b) if a >= 128 else None
+
+    ex = ey = 0.0
+    nx = ny = 0
+    for y in range(h):
+        for x in range(w):
+            c = lum(x, y)
+            if c is None:
+                continue
+            r = lum(x + 1, y)
+            if r is not None:
+                ex += abs(c - r)
+                nx += 1
+            d = lum(x, y + 1)
+            if d is not None:
+                ey += abs(c - d)
+                ny += 1
+    if nx == 0 or ny == 0:
+        return 0.0, 0.0
+    ex /= nx
+    ey /= ny
+    tot = ex + ey
+    return (round((ex - ey) / tot, 3) if tot > 1e-9 else 0.0), round(tot / 2 / 255, 4)
+
+
 def texture_name(block: str) -> str:
     block = ALIAS.get(block, block)
     if block in FACE:
@@ -134,8 +185,11 @@ def build() -> dict:
             if got is None:
                 continue
             (r, g, b), solid = got
+            gdir, gstr = grain(data)
             out[stem] = {"rgb": [r, g, b], "solid": round(solid, 3), "src": src,
-                         "lum": round(0.299 * r + 0.587 * g + 0.114 * b, 1)}
+                         "lum": round(0.299 * r + 0.587 * g + 0.114 * b, 1),
+                         # ★결 — 「무엇으로 읽히는가」의 첫 조각 (색만 재는 자가 못 보던 것)
+                         "grain": gdir, "grain_strength": gstr}
     return out
 
 
@@ -155,6 +209,31 @@ def color_of(table: dict, block: str):
         if got is not None:
             return got
     return None
+
+
+# 결을 <b>말</b>로 옮기는 문턱 — 자가 뭐라고 읽는지 사람이 알아야 고칠 수 있다
+GRAIN_PLAIN = 0.012        # 이보다 약하면 무늬가 없는 것이다 (방향을 안 묻는다)
+GRAIN_DIR = 0.15           # 이보다 치우치면 방향이 있다
+
+
+def reads_as(entry) -> str:
+    """이 재료는 <b>무엇으로 읽히는가</b> — 민판 · 세로결 · 가로줄눈 · 격자.
+
+    ★세기를 <b>먼저</b> 본다. 무늬가 약하면 방향은 뜻이 없다
+    (`red_terracotta` 는 방향이 −0.184 지만 세기가 0.007 이라 <b>민판</b>이다 —
+     이걸 「가로줄눈」이라 부르면 자가 헛짖는다).
+    """
+    if entry is None:
+        return "모름"
+    s = entry.get("grain_strength", 0.0)
+    g = entry.get("grain", 0.0)
+    if s < GRAIN_PLAIN:
+        return "민판"
+    if g > GRAIN_DIR:
+        return "세로결"
+    if g < -GRAIN_DIR:
+        return "가로줄눈"
+    return "격자"
 
 
 def _derive(block: str):
@@ -265,6 +344,16 @@ def _selftest() -> int:
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(_selftest())
+    if "--read" in sys.argv:
+        tb = json.loads(OUT.read_text())
+        for b in sys.argv[sys.argv.index("--read") + 1:]:
+            e = color_of(tb, b)
+            if e is None:
+                print(f"{b:26s} 모름")
+            else:
+                print(f"{b:26s} {e['grain']:+7.3f} {e['grain_strength']:7.4f} "
+                      f"명도 {e['lum']:5.1f}  <b>{reads_as(e)}</b>")
+        sys.exit(0)
     table = build()
     OUT.write_text(json.dumps(table, ensure_ascii=False, indent=0, sort_keys=True))
     packed = sum(1 for v in table.values() if v["src"] == "pack")
