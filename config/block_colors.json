@@ -1,0 +1,11102 @@
+{
+"acacia_door_bottom": {
+"lum": 112.0,
+"rgb": [
+167,
+94,
+60
+],
+"solid": 0.719,
+"src": "vanilla"
+},
+"acacia_door_top": {
+"lum": 116.1,
+"rgb": [
+172,
+98,
+63
+],
+"solid": 0.719,
+"src": "vanilla"
+},
+"acacia_leaves": {
+"lum": 152.0,
+"rgb": [
+152,
+152,
+152
+],
+"solid": 0.578,
+"src": "vanilla"
+},
+"acacia_log": {
+"lum": 99.0,
+"rgb": [
+105,
+98,
+88
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"acacia_log_top": {
+"lum": 105.7,
+"rgb": [
+157,
+89,
+57
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"acacia_planks": {
+"lum": 110.1,
+"rgb": [
+170,
+91,
+51
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"acacia_sapling": {
+"lum": 109.8,
+"rgb": [
+120,
+121,
+25
+],
+"solid": 0.434,
+"src": "vanilla"
+},
+"acacia_shelf": {
+"lum": 103.9,
+"rgb": [
+158,
+86,
+54
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"acacia_trapdoor": {
+"lum": 106.2,
+"rgb": [
+160,
+89,
+54
+],
+"solid": 0.766,
+"src": "vanilla"
+},
+"activator_rail": {
+"lum": 111.2,
+"rgb": [
+123,
+108,
+97
+],
+"solid": 0.609,
+"src": "vanilla"
+},
+"activator_rail_on": {
+"lum": 119.3,
+"rgb": [
+150,
+108,
+97
+],
+"solid": 0.609,
+"src": "vanilla"
+},
+"allium": {
+"lum": 158.6,
+"rgb": [
+171,
+143,
+206
+],
+"solid": 0.148,
+"src": "vanilla"
+},
+"amethyst_block": {
+"lum": 125.0,
+"rgb": [
+140,
+104,
+194
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"amethyst_cluster": {
+"lum": 156.4,
+"rgb": [
+174,
+137,
+210
+],
+"solid": 0.547,
+"src": "vanilla"
+},
+"ancient_debris_side": {
+"lum": 78.6,
+"rgb": [
+99,
+71,
+64
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"ancient_debris_top": {
+"lum": 86.1,
+"rgb": [
+103,
+80,
+73
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"andesite": {
+"lum": 149.0,
+"rgb": [
+150,
+149,
+146
+],
+"solid": 1.0,
+"src": "pack"
+},
+"anvil": {
+"lum": 95.6,
+"rgb": [
+98,
+95,
+92
+],
+"solid": 1.0,
+"src": "pack"
+},
+"anvil_top": {
+"lum": 96.1,
+"rgb": [
+98,
+96,
+92
+],
+"solid": 1.0,
+"src": "pack"
+},
+"attached_melon_stem": {
+"lum": 147.0,
+"rgb": [
+147,
+147,
+147
+],
+"solid": 0.129,
+"src": "vanilla"
+},
+"attached_pumpkin_stem": {
+"lum": 146.0,
+"rgb": [
+146,
+146,
+146
+],
+"solid": 0.129,
+"src": "vanilla"
+},
+"azalea_leaves": {
+"lum": 102.1,
+"rgb": [
+93,
+118,
+44
+],
+"solid": 0.77,
+"src": "vanilla"
+},
+"azalea_plant": {
+"lum": 99.7,
+"rgb": [
+93,
+114,
+44
+],
+"solid": 0.742,
+"src": "vanilla"
+},
+"azalea_side": {
+"lum": 104.4,
+"rgb": [
+96,
+120,
+46
+],
+"solid": 0.602,
+"src": "vanilla"
+},
+"azalea_top": {
+"lum": 110.2,
+"rgb": [
+103,
+126,
+48
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"azure_bluet": {
+"lum": 139.0,
+"rgb": [
+136,
+141,
+137
+],
+"solid": 0.133,
+"src": "pack"
+},
+"bamboo_block": {
+"lum": 131.9,
+"rgb": [
+130,
+147,
+59
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bamboo_block_top": {
+"lum": 136.7,
+"rgb": [
+145,
+146,
+67
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bamboo_door_bottom": {
+"lum": 175.7,
+"rgb": [
+201,
+180,
+87
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bamboo_door_top": {
+"lum": 169.6,
+"rgb": [
+194,
+174,
+83
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"bamboo_fence": {
+"lum": 138.7,
+"rgb": [
+149,
+138,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bamboo_fence_gate": {
+"lum": 181.1,
+"rgb": [
+207,
+186,
+88
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"bamboo_fence_gate_particle": {
+"lum": 180.8,
+"rgb": [
+207,
+186,
+85
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bamboo_fence_particle": {
+"lum": 180.8,
+"rgb": [
+207,
+186,
+85
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bamboo_large_leaves": {
+"lum": 97.9,
+"rgb": [
+76,
+123,
+26
+],
+"solid": 0.727,
+"src": "vanilla"
+},
+"bamboo_mosaic": {
+"lum": 167.7,
+"rgb": [
+193,
+172,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bamboo_planks": {
+"lum": 161.0,
+"rgb": [
+172,
+160,
+137
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bamboo_shelf": {
+"lum": 140.0,
+"rgb": [
+150,
+139,
+119
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bamboo_singleleaf": {
+"lum": 130.2,
+"rgb": [
+128,
+136,
+106
+],
+"solid": 0.125,
+"src": "pack"
+},
+"bamboo_small_leaves": {
+"lum": 96.5,
+"rgb": [
+75,
+121,
+27
+],
+"solid": 0.324,
+"src": "vanilla"
+},
+"bamboo_stage0": {
+"lum": 93.3,
+"rgb": [
+99,
+100,
+44
+],
+"solid": 0.215,
+"src": "vanilla"
+},
+"bamboo_stalk": {
+"lum": 128.6,
+"rgb": [
+127,
+134,
+105
+],
+"solid": 0.066,
+"src": "pack"
+},
+"bamboo_trapdoor": {
+"lum": 176.3,
+"rgb": [
+201,
+181,
+87
+],
+"solid": 0.828,
+"src": "vanilla"
+},
+"barrel_bottom": {
+"lum": 135.3,
+"rgb": [
+148,
+133,
+114
+],
+"solid": 1.0,
+"src": "pack"
+},
+"barrel_side": {
+"lum": 155.2,
+"rgb": [
+171,
+152,
+130
+],
+"solid": 1.0,
+"src": "pack"
+},
+"barrel_top": {
+"lum": 135.3,
+"rgb": [
+148,
+133,
+114
+],
+"solid": 1.0,
+"src": "pack"
+},
+"barrel_top_open": {
+"lum": 114.1,
+"rgb": [
+125,
+112,
+96
+],
+"solid": 1.0,
+"src": "pack"
+},
+"basalt_side": {
+"lum": 75.8,
+"rgb": [
+76,
+75,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"basalt_top": {
+"lum": 86.3,
+"rgb": [
+86,
+86,
+89
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"beacon": {
+"lum": 199.9,
+"rgb": [
+148,
+223,
+217
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bedrock": {
+"lum": 95.0,
+"rgb": [
+95,
+95,
+95
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bee_nest_bottom": {
+"lum": 138.9,
+"rgb": [
+166,
+134,
+93
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bee_nest_front": {
+"lum": 156.9,
+"rgb": [
+194,
+153,
+80
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bee_nest_front_honey": {
+"lum": 165.3,
+"rgb": [
+204,
+162,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bee_nest_side": {
+"lum": 163.4,
+"rgb": [
+203,
+159,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bee_nest_top": {
+"lum": 174.5,
+"rgb": [
+211,
+174,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"beehive_end": {
+"lum": 150.8,
+"rgb": [
+181,
+147,
+91
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"beehive_front": {
+"lum": 134.9,
+"rgb": [
+163,
+131,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"beehive_front_honey": {
+"lum": 139.7,
+"rgb": [
+172,
+135,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"beehive_side": {
+"lum": 133.5,
+"rgb": [
+161,
+130,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"beetroots_stage0": {
+"lum": 109.8,
+"rgb": [
+113,
+115,
+75
+],
+"solid": 0.117,
+"src": "pack"
+},
+"beetroots_stage1": {
+"lum": 112.6,
+"rgb": [
+116,
+118,
+76
+],
+"solid": 0.188,
+"src": "pack"
+},
+"beetroots_stage2": {
+"lum": 119.0,
+"rgb": [
+124,
+124,
+80
+],
+"solid": 0.281,
+"src": "pack"
+},
+"beetroots_stage3": {
+"lum": 122.8,
+"rgb": [
+128,
+128,
+82
+],
+"solid": 0.352,
+"src": "pack"
+},
+"bell_bottom": {
+"lum": 158.3,
+"rgb": [
+199,
+158,
+53
+],
+"solid": 0.25,
+"src": "vanilla"
+},
+"bell_side": {
+"lum": 223.8,
+"rgb": [
+253,
+231,
+110
+],
+"solid": 0.227,
+"src": "vanilla"
+},
+"bell_top": {
+"lum": 228.1,
+"rgb": [
+253,
+236,
+122
+],
+"solid": 0.25,
+"src": "vanilla"
+},
+"big_dripleaf_side": {
+"lum": 85.9,
+"rgb": [
+76,
+99,
+44
+],
+"solid": 0.012,
+"src": "vanilla"
+},
+"big_dripleaf_stem": {
+"lum": 102.6,
+"rgb": [
+94,
+118,
+46
+],
+"solid": 0.328,
+"src": "vanilla"
+},
+"big_dripleaf_tip": {
+"lum": 111.5,
+"rgb": [
+101,
+129,
+49
+],
+"solid": 0.156,
+"src": "vanilla"
+},
+"big_dripleaf_top": {
+"lum": 126.0,
+"rgb": [
+115,
+146,
+52
+],
+"solid": 0.906,
+"src": "vanilla"
+},
+"birch_door_bottom": {
+"lum": 195.9,
+"rgb": [
+211,
+197,
+151
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"birch_door_top": {
+"lum": 214.4,
+"rgb": [
+224,
+215,
+186
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"birch_leaves": {
+"lum": 171.6,
+"rgb": [
+156,
+179,
+174
+],
+"solid": 0.73,
+"src": "pack"
+},
+"birch_log": {
+"lum": 191.2,
+"rgb": [
+195,
+191,
+182
+],
+"solid": 1.0,
+"src": "pack"
+},
+"birch_log_top": {
+"lum": 194.2,
+"rgb": [
+198,
+194,
+185
+],
+"solid": 1.0,
+"src": "pack"
+},
+"birch_planks": {
+"lum": 175.8,
+"rgb": [
+194,
+177,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"birch_sapling": {
+"lum": 149.8,
+"rgb": [
+139,
+166,
+95
+],
+"solid": 0.383,
+"src": "vanilla"
+},
+"birch_shelf": {
+"lum": 158.0,
+"rgb": [
+177,
+158,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"birch_trapdoor": {
+"lum": 200.6,
+"rgb": [
+212,
+201,
+169
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"black_candle": {
+"lum": 42.2,
+"rgb": [
+41,
+39,
+62
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"black_candle_lit": {
+"lum": 71.0,
+"rgb": [
+106,
+56,
+56
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"black_concrete": {
+"lum": 10.0,
+"rgb": [
+8,
+10,
+15
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"black_concrete_powder": {
+"lum": 28.3,
+"rgb": [
+27,
+28,
+33
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"black_glazed_terracotta": {
+"lum": 50.1,
+"rgb": [
+89,
+33,
+36
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"black_shulker_box": {
+"lum": 26.5,
+"rgb": [
+26,
+26,
+30
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"black_stained_glass": {
+"lum": 25.0,
+"rgb": [
+25,
+25,
+25
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"black_stained_glass_pane_top": {
+"lum": 24.0,
+"rgb": [
+24,
+24,
+24
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"black_terracotta": {
+"lum": 26.4,
+"rgb": [
+37,
+23,
+16
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"black_wool": {
+"lum": 22.6,
+"rgb": [
+22,
+22,
+27
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blackstone": {
+"lum": 41.3,
+"rgb": [
+44,
+39,
+46
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blackstone_top": {
+"lum": 41.4,
+"rgb": [
+44,
+39,
+47
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blast_furnace_front": {
+"lum": 106.0,
+"rgb": [
+108,
+106,
+101
+],
+"solid": 1.0,
+"src": "pack"
+},
+"blast_furnace_front_on": {
+"lum": 125.7,
+"rgb": [
+145,
+120,
+104
+],
+"solid": 1.0,
+"src": "pack"
+},
+"blast_furnace_side": {
+"lum": 120.3,
+"rgb": [
+123,
+120,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"blast_furnace_top": {
+"lum": 120.0,
+"rgb": [
+122,
+120,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"blue_candle": {
+"lum": 81.8,
+"rgb": [
+58,
+78,
+164
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"blue_candle_lit": {
+"lum": 94.2,
+"rgb": [
+69,
+89,
+187
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"blue_concrete": {
+"lum": 57.3,
+"rgb": [
+45,
+47,
+143
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blue_concrete_powder": {
+"lum": 83.4,
+"rgb": [
+70,
+74,
+167
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blue_glazed_terracotta": {
+"lum": 77.6,
+"rgb": [
+50,
+77,
+153
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blue_ice": {
+"lum": 182.1,
+"rgb": [
+171,
+185,
+196
+],
+"solid": 1.0,
+"src": "pack"
+},
+"blue_orchid": {
+"lum": 134.5,
+"rgb": [
+52,
+164,
+199
+],
+"solid": 0.172,
+"src": "vanilla"
+},
+"blue_shulker_box": {
+"lum": 56.2,
+"rgb": [
+44,
+46,
+141
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blue_stained_glass": {
+"lum": 80.2,
+"rgb": [
+51,
+76,
+178
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"blue_stained_glass_pane_top": {
+"lum": 77.7,
+"rgb": [
+49,
+74,
+172
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"blue_terracotta": {
+"lum": 67.7,
+"rgb": [
+74,
+60,
+91
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"blue_wool": {
+"lum": 67.9,
+"rgb": [
+53,
+58,
+158
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bone_block_side": {
+"lum": 165.6,
+"rgb": [
+169,
+166,
+155
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bone_block_top": {
+"lum": 163.8,
+"rgb": [
+167,
+164,
+154
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bookshelf": {
+"lum": 112.4,
+"rgb": [
+134,
+108,
+78
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brain_coral": {
+"lum": 132.1,
+"rgb": [
+200,
+93,
+155
+],
+"solid": 0.438,
+"src": "vanilla"
+},
+"brain_coral_block": {
+"lum": 137.2,
+"rgb": [
+209,
+96,
+161
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brain_coral_fan": {
+"lum": 130.3,
+"rgb": [
+204,
+88,
+155
+],
+"solid": 0.371,
+"src": "vanilla"
+},
+"brewing_stand": {
+"lum": 99.3,
+"rgb": [
+102,
+99,
+94
+],
+"solid": 0.195,
+"src": "pack"
+},
+"brewing_stand_base": {
+"lum": 113.4,
+"rgb": [
+117,
+113,
+106
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bricks": {
+"lum": 139.4,
+"rgb": [
+147,
+138,
+127
+],
+"solid": 1.0,
+"src": "pack"
+},
+"brown_candle": {
+"lum": 81.4,
+"rgb": [
+115,
+72,
+42
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"brown_candle_lit": {
+"lum": 120.4,
+"rgb": [
+165,
+110,
+57
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"brown_concrete": {
+"lum": 67.6,
+"rgb": [
+96,
+60,
+32
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brown_concrete_powder": {
+"lum": 93.7,
+"rgb": [
+126,
+85,
+54
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brown_glazed_terracotta": {
+"lum": 116.8,
+"rgb": [
+138,
+110,
+96
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brown_mushroom": {
+"lum": 123.7,
+"rgb": [
+137,
+121,
+103
+],
+"solid": 0.18,
+"src": "pack"
+},
+"brown_mushroom_block": {
+"lum": 119.5,
+"rgb": [
+149,
+112,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brown_shulker_box": {
+"lum": 74.8,
+"rgb": [
+107,
+66,
+36
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brown_stained_glass": {
+"lum": 80.9,
+"rgb": [
+102,
+76,
+51
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"brown_stained_glass_pane_top": {
+"lum": 78.3,
+"rgb": [
+98,
+74,
+49
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"brown_terracotta": {
+"lum": 57.1,
+"rgb": [
+77,
+51,
+36
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"brown_wool": {
+"lum": 109.9,
+"rgb": [
+122,
+108,
+88
+],
+"solid": 1.0,
+"src": "pack"
+},
+"bubble_coral": {
+"lum": 85.1,
+"rgb": [
+166,
+29,
+162
+],
+"solid": 0.52,
+"src": "vanilla"
+},
+"bubble_coral_block": {
+"lum": 86.0,
+"rgb": [
+168,
+29,
+164
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bubble_coral_fan": {
+"lum": 91.9,
+"rgb": [
+165,
+41,
+162
+],
+"solid": 0.438,
+"src": "vanilla"
+},
+"budding_amethyst": {
+"lum": 125.9,
+"rgb": [
+142,
+105,
+191
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"bush": {
+"lum": 124.0,
+"rgb": [
+124,
+124,
+124
+],
+"solid": 0.496,
+"src": "vanilla"
+},
+"cactus_bottom": {
+"lum": 166.8,
+"rgb": [
+168,
+180,
+96
+],
+"solid": 0.766,
+"src": "vanilla"
+},
+"cactus_flower": {
+"lum": 153.0,
+"rgb": [
+214,
+125,
+137
+],
+"solid": 0.359,
+"src": "vanilla"
+},
+"cactus_side": {
+"lum": 112.2,
+"rgb": [
+94,
+133,
+53
+],
+"solid": 0.891,
+"src": "vanilla"
+},
+"cactus_top": {
+"lum": 108.8,
+"rgb": [
+90,
+130,
+49
+],
+"solid": 0.766,
+"src": "vanilla"
+},
+"cake_bottom": {
+"lum": 80.8,
+"rgb": [
+134,
+63,
+33
+],
+"solid": 0.766,
+"src": "vanilla"
+},
+"cake_inner": {
+"lum": 124.9,
+"rgb": [
+148,
+118,
+100
+],
+"solid": 0.438,
+"src": "vanilla"
+},
+"cake_side": {
+"lum": 186.6,
+"rgb": [
+210,
+179,
+164
+],
+"solid": 0.438,
+"src": "vanilla"
+},
+"cake_top": {
+"lum": 237.5,
+"rgb": [
+249,
+234,
+225
+],
+"solid": 0.766,
+"src": "vanilla"
+},
+"calcite": {
+"lum": 201.9,
+"rgb": [
+204,
+202,
+196
+],
+"solid": 1.0,
+"src": "pack"
+},
+"calibrated_sculk_sensor_amethyst": {
+"lum": 186.7,
+"rgb": [
+206,
+169,
+227
+],
+"solid": 0.25,
+"src": "vanilla"
+},
+"calibrated_sculk_sensor_input_side": {
+"lum": 99.5,
+"rgb": [
+103,
+91,
+134
+],
+"solid": 0.5,
+"src": "vanilla"
+},
+"calibrated_sculk_sensor_top": {
+"lum": 84.3,
+"rgb": [
+70,
+86,
+113
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"campfire_fire": {
+"lum": 176.9,
+"rgb": [
+204,
+173,
+126
+],
+"solid": 0.352,
+"src": "pack"
+},
+"campfire_log": {
+"lum": 120.8,
+"rgb": [
+139,
+116,
+98
+],
+"solid": 1.0,
+"src": "pack"
+},
+"campfire_log_lit": {
+"lum": 130.5,
+"rgb": [
+158,
+123,
+97
+],
+"solid": 1.0,
+"src": "pack"
+},
+"candle": {
+"lum": 194.8,
+"rgb": [
+200,
+195,
+180
+],
+"solid": 0.086,
+"src": "pack"
+},
+"candle_lit": {
+"lum": 191.6,
+"rgb": [
+203,
+190,
+170
+],
+"solid": 0.086,
+"src": "pack"
+},
+"carrots_stage0": {
+"lum": 109.8,
+"rgb": [
+113,
+115,
+75
+],
+"solid": 0.117,
+"src": "pack"
+},
+"carrots_stage1": {
+"lum": 112.6,
+"rgb": [
+116,
+118,
+76
+],
+"solid": 0.188,
+"src": "pack"
+},
+"carrots_stage2": {
+"lum": 119.0,
+"rgb": [
+124,
+124,
+80
+],
+"solid": 0.281,
+"src": "pack"
+},
+"carrots_stage3": {
+"lum": 122.8,
+"rgb": [
+128,
+128,
+82
+],
+"solid": 0.352,
+"src": "pack"
+},
+"cartography_table_side1": {
+"lum": 67.2,
+"rgb": [
+79,
+61,
+68
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cartography_table_side2": {
+"lum": 85.6,
+"rgb": [
+99,
+81,
+74
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cartography_table_side3": {
+"lum": 49.7,
+"rgb": [
+70,
+45,
+21
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cartography_table_top": {
+"lum": 121.3,
+"rgb": [
+130,
+119,
+110
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"carved_pumpkin": {
+"lum": 113.4,
+"rgb": [
+168,
+103,
+24
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cauldron_bottom": {
+"lum": 96.3,
+"rgb": [
+98,
+96,
+93
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cauldron_inner": {
+"lum": 89.0,
+"rgb": [
+90,
+89,
+86
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cauldron_side": {
+"lum": 107.1,
+"rgb": [
+109,
+107,
+103
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cauldron_top": {
+"lum": 106.1,
+"rgb": [
+108,
+106,
+102
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cave_vines": {
+"lum": 99.5,
+"rgb": [
+93,
+114,
+42
+],
+"solid": 0.559,
+"src": "vanilla"
+},
+"cave_vines_lit": {
+"lum": 108.7,
+"rgb": [
+115,
+118,
+44
+],
+"solid": 0.582,
+"src": "vanilla"
+},
+"cave_vines_plant": {
+"lum": 93.7,
+"rgb": [
+90,
+106,
+40
+],
+"solid": 0.562,
+"src": "vanilla"
+},
+"cave_vines_plant_lit": {
+"lum": 106.2,
+"rgb": [
+117,
+113,
+43
+],
+"solid": 0.625,
+"src": "vanilla"
+},
+"chain_command_block_back": {
+"lum": 155.3,
+"rgb": [
+139,
+164,
+153
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chain_command_block_conditional": {
+"lum": 157.4,
+"rgb": [
+138,
+168,
+154
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chain_command_block_front": {
+"lum": 160.1,
+"rgb": [
+140,
+171,
+157
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chain_command_block_side": {
+"lum": 157.1,
+"rgb": [
+139,
+167,
+154
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cherry_door_bottom": {
+"lum": 191.0,
+"rgb": [
+226,
+177,
+171
+],
+"solid": 0.992,
+"src": "vanilla"
+},
+"cherry_door_top": {
+"lum": 187.6,
+"rgb": [
+224,
+173,
+167
+],
+"solid": 0.859,
+"src": "vanilla"
+},
+"cherry_leaves": {
+"lum": 176.0,
+"rgb": [
+220,
+155,
+169
+],
+"solid": 0.766,
+"src": "pack"
+},
+"cherry_log": {
+"lum": 122.4,
+"rgb": [
+141,
+115,
+112
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cherry_log_top": {
+"lum": 126.6,
+"rgb": [
+146,
+119,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cherry_planks": {
+"lum": 193.4,
+"rgb": [
+227,
+180,
+174
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cherry_sapling": {
+"lum": 160.8,
+"rgb": [
+210,
+137,
+154
+],
+"solid": 0.383,
+"src": "pack"
+},
+"cherry_shelf": {
+"lum": 126.7,
+"rgb": [
+146,
+119,
+116
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cherry_trapdoor": {
+"lum": 193.4,
+"rgb": [
+227,
+180,
+174
+],
+"solid": 0.859,
+"src": "vanilla"
+},
+"chipped_anvil_top": {
+"lum": 74.3,
+"rgb": [
+75,
+74,
+74
+],
+"solid": 0.625,
+"src": "vanilla"
+},
+"chiseled_bookshelf_empty": {
+"lum": 121.2,
+"rgb": [
+139,
+118,
+91
+],
+"solid": 1.0,
+"src": "pack"
+},
+"chiseled_bookshelf_occupied": {
+"lum": 149.5,
+"rgb": [
+171,
+146,
+111
+],
+"solid": 1.0,
+"src": "pack"
+},
+"chiseled_bookshelf_side": {
+"lum": 154.1,
+"rgb": [
+177,
+150,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"chiseled_bookshelf_top": {
+"lum": 153.8,
+"rgb": [
+176,
+150,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"chiseled_copper": {
+"lum": 125.0,
+"rgb": [
+187,
+103,
+76
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_deepslate": {
+"lum": 57.1,
+"rgb": [
+57,
+57,
+58
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_nether_bricks": {
+"lum": 32.0,
+"rgb": [
+49,
+24,
+29
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_polished_blackstone": {
+"lum": 55.2,
+"rgb": [
+57,
+53,
+62
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_quartz_block": {
+"lum": 227.5,
+"rgb": [
+232,
+227,
+218
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_quartz_block_top": {
+"lum": 227.5,
+"rgb": [
+232,
+227,
+218
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_red_sandstone": {
+"lum": 116.0,
+"rgb": [
+184,
+98,
+30
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_resin_bricks": {
+"lum": 117.3,
+"rgb": [
+203,
+91,
+28
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_sandstone": {
+"lum": 202.6,
+"rgb": [
+217,
+204,
+158
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_stone_bricks": {
+"lum": 142.3,
+"rgb": [
+145,
+142,
+137
+],
+"solid": 1.0,
+"src": "pack"
+},
+"chiseled_tuff": {
+"lum": 94.7,
+"rgb": [
+92,
+97,
+90
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_tuff_bricks": {
+"lum": 103.3,
+"rgb": [
+102,
+105,
+98
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_tuff_bricks_top": {
+"lum": 113.6,
+"rgb": [
+113,
+115,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chiseled_tuff_top": {
+"lum": 99.0,
+"rgb": [
+97,
+101,
+94
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chorus_flower": {
+"lum": 157.7,
+"rgb": [
+170,
+149,
+170
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chorus_flower_dead": {
+"lum": 84.6,
+"rgb": [
+102,
+73,
+99
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"chorus_plant": {
+"lum": 78.6,
+"rgb": [
+98,
+65,
+98
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"clay": {
+"lum": 130.3,
+"rgb": [
+132,
+130,
+127
+],
+"solid": 1.0,
+"src": "pack"
+},
+"closed_eyeblossom": {
+"lum": 111.4,
+"rgb": [
+118,
+108,
+112
+],
+"solid": 0.195,
+"src": "vanilla"
+},
+"coal_block": {
+"lum": 17.3,
+"rgb": [
+18,
+17,
+17
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"coal_ore": {
+"lum": 110.9,
+"rgb": [
+111,
+111,
+110
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"coarse_dirt": {
+"lum": 121.7,
+"rgb": [
+131,
+120,
+106
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cobbled_deepslate": {
+"lum": 69.4,
+"rgb": [
+70,
+69,
+70
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cobblestone": {
+"lum": 138.8,
+"rgb": [
+140,
+139,
+135
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cobweb": {
+"lum": 178.9,
+"rgb": [
+181,
+179,
+173
+],
+"solid": 0.352,
+"src": "pack"
+},
+"cocoa_stage0": {
+"lum": 129.9,
+"rgb": [
+137,
+139,
+64
+],
+"solid": 0.184,
+"src": "vanilla"
+},
+"cocoa_stage1": {
+"lum": 122.9,
+"rgb": [
+154,
+119,
+61
+],
+"solid": 0.348,
+"src": "vanilla"
+},
+"cocoa_stage2": {
+"lum": 114.4,
+"rgb": [
+162,
+102,
+53
+],
+"solid": 0.574,
+"src": "vanilla"
+},
+"command_block_back": {
+"lum": 149.4,
+"rgb": [
+179,
+139,
+125
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"command_block_conditional": {
+"lum": 150.8,
+"rgb": [
+183,
+140,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"command_block_front": {
+"lum": 152.7,
+"rgb": [
+185,
+142,
+123
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"command_block_side": {
+"lum": 151.3,
+"rgb": [
+182,
+141,
+124
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"comparator": {
+"lum": 171.0,
+"rgb": [
+172,
+171,
+168
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"comparator_on": {
+"lum": 171.6,
+"rgb": [
+179,
+169,
+166
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"composter_bottom": {
+"lum": 107.0,
+"rgb": [
+120,
+105,
+83
+],
+"solid": 1.0,
+"src": "pack"
+},
+"composter_compost": {
+"lum": 108.1,
+"rgb": [
+121,
+107,
+80
+],
+"solid": 1.0,
+"src": "pack"
+},
+"composter_ready": {
+"lum": 89.2,
+"rgb": [
+98,
+88,
+72
+],
+"solid": 1.0,
+"src": "pack"
+},
+"composter_side": {
+"lum": 114.2,
+"rgb": [
+128,
+112,
+89
+],
+"solid": 1.0,
+"src": "pack"
+},
+"composter_top": {
+"lum": 117.3,
+"rgb": [
+132,
+115,
+91
+],
+"solid": 0.438,
+"src": "pack"
+},
+"conduit": {
+"lum": 148.9,
+"rgb": [
+165,
+146,
+122
+],
+"solid": 0.562,
+"src": "vanilla"
+},
+"copper_bars": {
+"lum": 102.6,
+"rgb": [
+158,
+83,
+58
+],
+"solid": 0.453,
+"src": "vanilla"
+},
+"copper_block": {
+"lum": 131.3,
+"rgb": [
+194,
+109,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_bulb": {
+"lum": 110.4,
+"rgb": [
+164,
+92,
+65
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_bulb_lit": {
+"lum": 176.4,
+"rgb": [
+220,
+165,
+121
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_bulb_lit_powered": {
+"lum": 176.0,
+"rgb": [
+221,
+164,
+120
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_bulb_powered": {
+"lum": 110.2,
+"rgb": [
+165,
+91,
+65
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_chain": {
+"lum": 99.1,
+"rgb": [
+153,
+80,
+56
+],
+"solid": 0.219,
+"src": "vanilla"
+},
+"copper_door_bottom": {
+"lum": 126.3,
+"rgb": [
+186,
+105,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_door_top": {
+"lum": 133.5,
+"rgb": [
+196,
+111,
+85
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"copper_grate": {
+"lum": 131.2,
+"rgb": [
+194,
+109,
+81
+],
+"solid": 0.699,
+"src": "vanilla"
+},
+"copper_lantern": {
+"lum": 133.4,
+"rgb": [
+164,
+126,
+91
+],
+"solid": 0.414,
+"src": "vanilla"
+},
+"copper_ore": {
+"lum": 127.3,
+"rgb": [
+130,
+127,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"copper_torch": {
+"lum": 124.4,
+"rgb": [
+129,
+128,
+94
+],
+"solid": 0.078,
+"src": "vanilla"
+},
+"copper_trapdoor": {
+"lum": 130.5,
+"rgb": [
+193,
+108,
+82
+],
+"solid": 0.797,
+"src": "vanilla"
+},
+"cornflower": {
+"lum": 96.2,
+"rgb": [
+86,
+98,
+114
+],
+"solid": 0.141,
+"src": "pack"
+},
+"cracked_deepslate_bricks": {
+"lum": 54.0,
+"rgb": [
+54,
+54,
+54
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cracked_deepslate_tiles": {
+"lum": 54.0,
+"rgb": [
+54,
+54,
+54
+],
+"solid": 1.0,
+"src": "pack"
+},
+"cracked_nether_bricks": {
+"lum": 28.0,
+"rgb": [
+43,
+21,
+25
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cracked_polished_blackstone_bricks": {
+"lum": 44.4,
+"rgb": [
+47,
+42,
+50
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cracked_stone_bricks": {
+"lum": 138.0,
+"rgb": [
+140,
+138,
+133
+],
+"solid": 1.0,
+"src": "pack"
+},
+"crafter_bottom": {
+"lum": 80.0,
+"rgb": [
+80,
+80,
+80
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_east": {
+"lum": 124.0,
+"rgb": [
+136,
+122,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_east_crafting": {
+"lum": 124.3,
+"rgb": [
+137,
+122,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_east_triggered": {
+"lum": 124.3,
+"rgb": [
+137,
+122,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_north": {
+"lum": 116.1,
+"rgb": [
+121,
+115,
+109
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_north_crafting": {
+"lum": 107.5,
+"rgb": [
+114,
+106,
+98
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_south": {
+"lum": 120.7,
+"rgb": [
+130,
+119,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_south_triggered": {
+"lum": 121.6,
+"rgb": [
+133,
+119,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_top": {
+"lum": 115.5,
+"rgb": [
+119,
+114,
+114
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_top_crafting": {
+"lum": 124.0,
+"rgb": [
+145,
+115,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_top_triggered": {
+"lum": 116.1,
+"rgb": [
+121,
+114,
+114
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_west": {
+"lum": 125.4,
+"rgb": [
+138,
+123,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_west_crafting": {
+"lum": 125.7,
+"rgb": [
+139,
+123,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafter_west_triggered": {
+"lum": 125.7,
+"rgb": [
+139,
+123,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crafting_table_front": {
+"lum": 156.2,
+"rgb": [
+172,
+153,
+131
+],
+"solid": 1.0,
+"src": "pack"
+},
+"crafting_table_side": {
+"lum": 158.2,
+"rgb": [
+174,
+155,
+133
+],
+"solid": 1.0,
+"src": "pack"
+},
+"crafting_table_top": {
+"lum": 160.2,
+"rgb": [
+176,
+157,
+135
+],
+"solid": 1.0,
+"src": "pack"
+},
+"creaking_heart": {
+"lum": 76.4,
+"rgb": [
+86,
+73,
+69
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"creaking_heart_awake": {
+"lum": 107.4,
+"rgb": [
+160,
+90,
+59
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"creaking_heart_dormant": {
+"lum": 80.7,
+"rgb": [
+106,
+72,
+59
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"creaking_heart_top": {
+"lum": 66.4,
+"rgb": [
+76,
+63,
+59
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"creaking_heart_top_awake": {
+"lum": 108.4,
+"rgb": [
+166,
+90,
+52
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"creaking_heart_top_dormant": {
+"lum": 78.1,
+"rgb": [
+106,
+69,
+52
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_door_bottom": {
+"lum": 77.7,
+"rgb": [
+119,
+56,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_door_top": {
+"lum": 77.4,
+"rgb": [
+118,
+56,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_fungus": {
+"lum": 88.3,
+"rgb": [
+158,
+62,
+41
+],
+"solid": 0.234,
+"src": "vanilla"
+},
+"crimson_nylium": {
+"lum": 66.4,
+"rgb": [
+133,
+38,
+38
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_nylium_side": {
+"lum": 55.9,
+"rgb": [
+112,
+32,
+32
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_planks": {
+"lum": 69.1,
+"rgb": [
+105,
+50,
+73
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_roots": {
+"lum": 49.1,
+"rgb": [
+132,
+8,
+43
+],
+"solid": 0.355,
+"src": "vanilla"
+},
+"crimson_roots_pot": {
+"lum": 49.8,
+"rgb": [
+133,
+9,
+42
+],
+"solid": 0.234,
+"src": "vanilla"
+},
+"crimson_shelf": {
+"lum": 79.9,
+"rgb": [
+131,
+53,
+84
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_stem": {
+"lum": 50.5,
+"rgb": [
+98,
+29,
+37
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_stem_top": {
+"lum": 73.1,
+"rgb": [
+116,
+51,
+74
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"crimson_trapdoor": {
+"lum": 71.3,
+"rgb": [
+108,
+52,
+74
+],
+"solid": 0.844,
+"src": "vanilla"
+},
+"crying_obsidian": {
+"lum": 32.8,
+"rgb": [
+49,
+13,
+92
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cut_copper": {
+"lum": 131.2,
+"rgb": [
+193,
+109,
+83
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cut_red_sandstone": {
+"lum": 121.0,
+"rgb": [
+190,
+103,
+33
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cut_sandstone": {
+"lum": 205.2,
+"rgb": [
+218,
+207,
+162
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cyan_candle": {
+"lum": 94.7,
+"rgb": [
+17,
+128,
+127
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"cyan_candle_lit": {
+"lum": 128.7,
+"rgb": [
+67,
+158,
+140
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"cyan_concrete": {
+"lum": 91.6,
+"rgb": [
+21,
+119,
+136
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cyan_concrete_powder": {
+"lum": 116.4,
+"rgb": [
+37,
+149,
+157
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cyan_glazed_terracotta": {
+"lum": 115.4,
+"rgb": [
+79,
+130,
+136
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cyan_shulker_box": {
+"lum": 93.7,
+"rgb": [
+20,
+123,
+136
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cyan_stained_glass": {
+"lum": 114.7,
+"rgb": [
+76,
+127,
+153
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"cyan_stained_glass_pane_top": {
+"lum": 111.1,
+"rgb": [
+74,
+123,
+147
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"cyan_terracotta": {
+"lum": 89.8,
+"rgb": [
+87,
+91,
+91
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"cyan_wool": {
+"lum": 144.1,
+"rgb": [
+120,
+154,
+156
+],
+"solid": 1.0,
+"src": "pack"
+},
+"damaged_anvil_top": {
+"lum": 74.0,
+"rgb": [
+74,
+74,
+74
+],
+"solid": 0.625,
+"src": "vanilla"
+},
+"dandelion": {
+"lum": 124.4,
+"rgb": [
+135,
+127,
+83
+],
+"solid": 0.141,
+"src": "pack"
+},
+"dark_oak_door_bottom": {
+"lum": 56.6,
+"rgb": [
+77,
+52,
+27
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dark_oak_door_top": {
+"lum": 60.3,
+"rgb": [
+81,
+56,
+28
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dark_oak_leaves": {
+"lum": 154.6,
+"rgb": [
+154,
+155,
+154
+],
+"solid": 0.699,
+"src": "vanilla"
+},
+"dark_oak_log": {
+"lum": 109.0,
+"rgb": [
+124,
+105,
+90
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dark_oak_log_top": {
+"lum": 114.0,
+"rgb": [
+129,
+110,
+95
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dark_oak_planks": {
+"lum": 114.5,
+"rgb": [
+132,
+110,
+92
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dark_oak_sapling": {
+"lum": 82.6,
+"rgb": [
+71,
+98,
+34
+],
+"solid": 0.43,
+"src": "vanilla"
+},
+"dark_oak_shelf": {
+"lum": 113.0,
+"rgb": [
+128,
+109,
+94
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dark_oak_trapdoor": {
+"lum": 56.0,
+"rgb": [
+78,
+51,
+24
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dark_prismarine": {
+"lum": 80.5,
+"rgb": [
+53,
+95,
+78
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"daylight_detector_inverted_top": {
+"lum": 127.9,
+"rgb": [
+121,
+129,
+140
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"daylight_detector_side": {
+"lum": 57.3,
+"rgb": [
+68,
+56,
+36
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"daylight_detector_top": {
+"lum": 139.1,
+"rgb": [
+151,
+137,
+119
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dead_brain_coral": {
+"lum": 128.9,
+"rgb": [
+135,
+127,
+123
+],
+"solid": 0.438,
+"src": "vanilla"
+},
+"dead_brain_coral_block": {
+"lum": 121.6,
+"rgb": [
+127,
+120,
+116
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dead_brain_coral_fan": {
+"lum": 129.6,
+"rgb": [
+135,
+128,
+124
+],
+"solid": 0.371,
+"src": "vanilla"
+},
+"dead_bubble_coral": {
+"lum": 128.9,
+"rgb": [
+135,
+127,
+123
+],
+"solid": 0.52,
+"src": "vanilla"
+},
+"dead_bubble_coral_block": {
+"lum": 126.9,
+"rgb": [
+133,
+125,
+121
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dead_bubble_coral_fan": {
+"lum": 138.3,
+"rgb": [
+143,
+137,
+133
+],
+"solid": 0.438,
+"src": "vanilla"
+},
+"dead_bush": {
+"lum": 100.5,
+"rgb": [
+112,
+99,
+78
+],
+"solid": 0.152,
+"src": "pack"
+},
+"dead_fire_coral": {
+"lum": 131.9,
+"rgb": [
+138,
+130,
+126
+],
+"solid": 0.426,
+"src": "vanilla"
+},
+"dead_fire_coral_block": {
+"lum": 127.5,
+"rgb": [
+133,
+126,
+121
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dead_fire_coral_fan": {
+"lum": 122.6,
+"rgb": [
+128,
+121,
+117
+],
+"solid": 0.41,
+"src": "vanilla"
+},
+"dead_horn_coral": {
+"lum": 137.5,
+"rgb": [
+143,
+136,
+131
+],
+"solid": 0.391,
+"src": "vanilla"
+},
+"dead_horn_coral_block": {
+"lum": 130.6,
+"rgb": [
+136,
+129,
+125
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dead_horn_coral_fan": {
+"lum": 129.8,
+"rgb": [
+136,
+128,
+123
+],
+"solid": 0.367,
+"src": "vanilla"
+},
+"dead_tube_coral": {
+"lum": 114.8,
+"rgb": [
+120,
+113,
+110
+],
+"solid": 0.598,
+"src": "vanilla"
+},
+"dead_tube_coral_block": {
+"lum": 127.0,
+"rgb": [
+133,
+125,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dead_tube_coral_fan": {
+"lum": 126.3,
+"rgb": [
+131,
+125,
+121
+],
+"solid": 0.309,
+"src": "vanilla"
+},
+"debug": {
+"lum": 186.5,
+"rgb": [
+179,
+189,
+193
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"debug2": {
+"lum": 176.2,
+"rgb": [
+174,
+177,
+178
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate": {
+"lum": 69.0,
+"rgb": [
+69,
+69,
+69
+],
+"solid": 1.0,
+"src": "pack"
+},
+"deepslate_bricks": {
+"lum": 54.3,
+"rgb": [
+55,
+54,
+54
+],
+"solid": 1.0,
+"src": "pack"
+},
+"deepslate_coal_ore": {
+"lum": 81.1,
+"rgb": [
+81,
+81,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_copper_ore": {
+"lum": 99.2,
+"rgb": [
+102,
+99,
+93
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_diamond_ore": {
+"lum": 111.2,
+"rgb": [
+91,
+120,
+119
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_emerald_ore": {
+"lum": 108.4,
+"rgb": [
+90,
+120,
+97
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_gold_ore": {
+"lum": 117.1,
+"rgb": [
+133,
+115,
+86
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_iron_ore": {
+"lum": 108.8,
+"rgb": [
+118,
+106,
+99
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_lapis_ore": {
+"lum": 96.4,
+"rgb": [
+87,
+95,
+128
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_redstone_ore": {
+"lum": 93.1,
+"rgb": [
+121,
+81,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"deepslate_tiles": {
+"lum": 54.3,
+"rgb": [
+55,
+54,
+54
+],
+"solid": 1.0,
+"src": "pack"
+},
+"deepslate_top": {
+"lum": 69.4,
+"rgb": [
+70,
+69,
+70
+],
+"solid": 1.0,
+"src": "pack"
+},
+"destroy_stage_0": {
+"lum": 120.0,
+"rgb": [
+120,
+120,
+120
+],
+"solid": 0.016,
+"src": "vanilla"
+},
+"destroy_stage_1": {
+"lum": 111.0,
+"rgb": [
+111,
+111,
+111
+],
+"solid": 0.039,
+"src": "vanilla"
+},
+"destroy_stage_2": {
+"lum": 110.0,
+"rgb": [
+110,
+110,
+110
+],
+"solid": 0.07,
+"src": "vanilla"
+},
+"destroy_stage_3": {
+"lum": 114.0,
+"rgb": [
+114,
+114,
+114
+],
+"solid": 0.109,
+"src": "vanilla"
+},
+"destroy_stage_4": {
+"lum": 115.0,
+"rgb": [
+115,
+115,
+115
+],
+"solid": 0.16,
+"src": "vanilla"
+},
+"destroy_stage_5": {
+"lum": 114.0,
+"rgb": [
+114,
+114,
+114
+],
+"solid": 0.215,
+"src": "vanilla"
+},
+"destroy_stage_6": {
+"lum": 114.0,
+"rgb": [
+114,
+114,
+114
+],
+"solid": 0.273,
+"src": "vanilla"
+},
+"destroy_stage_7": {
+"lum": 115.0,
+"rgb": [
+115,
+115,
+115
+],
+"solid": 0.391,
+"src": "vanilla"
+},
+"destroy_stage_8": {
+"lum": 114.0,
+"rgb": [
+114,
+114,
+114
+],
+"solid": 0.504,
+"src": "vanilla"
+},
+"destroy_stage_9": {
+"lum": 114.0,
+"rgb": [
+114,
+114,
+114
+],
+"solid": 0.566,
+"src": "vanilla"
+},
+"detector_rail": {
+"lum": 119.8,
+"rgb": [
+128,
+118,
+108
+],
+"solid": 0.609,
+"src": "vanilla"
+},
+"detector_rail_on": {
+"lum": 123.2,
+"rgb": [
+144,
+116,
+106
+],
+"solid": 0.609,
+"src": "vanilla"
+},
+"diamond_block": {
+"lum": 199.6,
+"rgb": [
+113,
+238,
+229
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"diamond_ore": {
+"lum": 140.6,
+"rgb": [
+126,
+147,
+146
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"diorite": {
+"lum": 187.1,
+"rgb": [
+188,
+187,
+185
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dirt": {
+"lum": 110.6,
+"rgb": [
+120,
+109,
+94
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dirt_path_side": {
+"lum": 113.0,
+"rgb": [
+123,
+111,
+97
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dirt_path_top": {
+"lum": 151.5,
+"rgb": [
+161,
+150,
+134
+],
+"solid": 1.0,
+"src": "pack"
+},
+"dispenser_front": {
+"lum": 132.3,
+"rgb": [
+133,
+132,
+132
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dispenser_front_vertical": {
+"lum": 104.0,
+"rgb": [
+104,
+104,
+104
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dragon_egg": {
+"lum": 12.4,
+"rgb": [
+15,
+10,
+18
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_bottom": {
+"lum": 140.0,
+"rgb": [
+147,
+137,
+137
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_east": {
+"lum": 150.2,
+"rgb": [
+160,
+146,
+146
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_north": {
+"lum": 149.5,
+"rgb": [
+160,
+145,
+145
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_south": {
+"lum": 150.5,
+"rgb": [
+161,
+146,
+146
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_tentacles": {
+"lum": 117.9,
+"rgb": [
+120,
+117,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_top": {
+"lum": 150.2,
+"rgb": [
+160,
+146,
+146
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_0_west": {
+"lum": 152.5,
+"rgb": [
+163,
+148,
+148
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_bottom": {
+"lum": 162.4,
+"rgb": [
+168,
+160,
+160
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_east": {
+"lum": 172.3,
+"rgb": [
+180,
+169,
+169
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_north": {
+"lum": 172.3,
+"rgb": [
+180,
+169,
+169
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_south": {
+"lum": 170.3,
+"rgb": [
+178,
+167,
+167
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_tentacles": {
+"lum": 143.9,
+"rgb": [
+146,
+143,
+143
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_top": {
+"lum": 172.3,
+"rgb": [
+180,
+169,
+169
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_1_west": {
+"lum": 174.6,
+"rgb": [
+183,
+171,
+171
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_bottom": {
+"lum": 185.8,
+"rgb": [
+190,
+184,
+184
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_east": {
+"lum": 195.1,
+"rgb": [
+200,
+193,
+193
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_north": {
+"lum": 194.4,
+"rgb": [
+200,
+192,
+192
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_south": {
+"lum": 193.1,
+"rgb": [
+198,
+191,
+191
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_tentacles": {
+"lum": 169.9,
+"rgb": [
+172,
+169,
+169
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_top": {
+"lum": 195.1,
+"rgb": [
+200,
+193,
+193
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_2_west": {
+"lum": 197.4,
+"rgb": [
+203,
+195,
+195
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_bottom": {
+"lum": 233.6,
+"rgb": [
+235,
+233,
+233
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_east": {
+"lum": 241.0,
+"rgb": [
+241,
+241,
+241
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_north": {
+"lum": 240.0,
+"rgb": [
+240,
+240,
+240
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_south": {
+"lum": 239.3,
+"rgb": [
+240,
+239,
+239
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_tentacles": {
+"lum": 221.9,
+"rgb": [
+224,
+221,
+221
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_top": {
+"lum": 241.0,
+"rgb": [
+241,
+241,
+241
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_ghast_hydration_3_west": {
+"lum": 243.0,
+"rgb": [
+243,
+243,
+243
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_kelp_bottom": {
+"lum": 65.5,
+"rgb": [
+64,
+69,
+51
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_kelp_side": {
+"lum": 51.7,
+"rgb": [
+48,
+56,
+39
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dried_kelp_top": {
+"lum": 65.5,
+"rgb": [
+64,
+69,
+51
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dripstone_block": {
+"lum": 115.9,
+"rgb": [
+136,
+110,
+94
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dropper_front": {
+"lum": 132.3,
+"rgb": [
+133,
+132,
+132
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"dropper_front_vertical": {
+"lum": 103.3,
+"rgb": [
+104,
+103,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"emerald_block": {
+"lum": 149.3,
+"rgb": [
+57,
+206,
+99
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"emerald_ore": {
+"lum": 133.1,
+"rgb": [
+118,
+143,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"enchanting_table_bottom": {
+"lum": 18.5,
+"rgb": [
+21,
+14,
+35
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"enchanting_table_side": {
+"lum": 98.3,
+"rgb": [
+84,
+105,
+101
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"enchanting_table_top": {
+"lum": 130.0,
+"rgb": [
+137,
+128,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"end_portal_frame_eye": {
+"lum": 74.3,
+"rgb": [
+53,
+86,
+70
+],
+"solid": 0.375,
+"src": "vanilla"
+},
+"end_portal_frame_side": {
+"lum": 174.1,
+"rgb": [
+177,
+181,
+131
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"end_portal_frame_top": {
+"lum": 131.1,
+"rgb": [
+122,
+140,
+109
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"end_rod": {
+"lum": 209.0,
+"rgb": [
+216,
+208,
+196
+],
+"solid": 0.227,
+"src": "vanilla"
+},
+"end_stone": {
+"lum": 215.4,
+"rgb": [
+220,
+224,
+159
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"end_stone_bricks": {
+"lum": 217.1,
+"rgb": [
+220,
+226,
+164
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_chiseled_copper": {
+"lum": 129.3,
+"rgb": [
+158,
+120,
+102
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper": {
+"lum": 135.0,
+"rgb": [
+164,
+126,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper_bars": {
+"lum": 115.6,
+"rgb": [
+138,
+109,
+91
+],
+"solid": 0.453,
+"src": "vanilla"
+},
+"exposed_copper_bulb": {
+"lum": 117.6,
+"rgb": [
+142,
+110,
+93
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper_bulb_lit": {
+"lum": 161.0,
+"rgb": [
+201,
+151,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper_bulb_lit_powered": {
+"lum": 161.3,
+"rgb": [
+202,
+151,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper_bulb_powered": {
+"lum": 117.9,
+"rgb": [
+143,
+110,
+93
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper_chain": {
+"lum": 108.6,
+"rgb": [
+129,
+103,
+84
+],
+"solid": 0.219,
+"src": "vanilla"
+},
+"exposed_copper_door_bottom": {
+"lum": 129.0,
+"rgb": [
+157,
+120,
+102
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_copper_door_top": {
+"lum": 135.9,
+"rgb": [
+168,
+125,
+108
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"exposed_copper_grate": {
+"lum": 136.0,
+"rgb": [
+165,
+127,
+106
+],
+"solid": 0.699,
+"src": "vanilla"
+},
+"exposed_copper_lantern": {
+"lum": 142.6,
+"rgb": [
+155,
+142,
+113
+],
+"solid": 0.414,
+"src": "vanilla"
+},
+"exposed_copper_trapdoor": {
+"lum": 135.4,
+"rgb": [
+165,
+126,
+106
+],
+"solid": 0.797,
+"src": "vanilla"
+},
+"exposed_cut_copper": {
+"lum": 131.2,
+"rgb": [
+158,
+123,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"exposed_lightning_rod": {
+"lum": 132.1,
+"rgb": [
+164,
+121,
+106
+],
+"solid": 0.156,
+"src": "vanilla"
+},
+"farmland": {
+"lum": 112.0,
+"rgb": [
+122,
+110,
+96
+],
+"solid": 1.0,
+"src": "pack"
+},
+"farmland_moist": {
+"lum": 86.7,
+"rgb": [
+95,
+85,
+74
+],
+"solid": 1.0,
+"src": "pack"
+},
+"fern": {
+"lum": 155.6,
+"rgb": [
+155,
+157,
+150
+],
+"solid": 0.219,
+"src": "pack"
+},
+"fire_0": {
+"lum": 170.2,
+"rgb": [
+215,
+159,
+110
+],
+"solid": 0.57,
+"src": "vanilla"
+},
+"fire_1": {
+"lum": 174.1,
+"rgb": [
+218,
+165,
+106
+],
+"solid": 0.613,
+"src": "vanilla"
+},
+"fire_coral": {
+"lum": 80.3,
+"rgb": [
+172,
+40,
+47
+],
+"solid": 0.426,
+"src": "vanilla"
+},
+"fire_coral_block": {
+"lum": 76.4,
+"rgb": [
+167,
+36,
+47
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"fire_coral_fan": {
+"lum": 75.4,
+"rgb": [
+164,
+36,
+46
+],
+"solid": 0.41,
+"src": "vanilla"
+},
+"firefly_bush": {
+"lum": 86.8,
+"rgb": [
+98,
+89,
+46
+],
+"solid": 0.602,
+"src": "vanilla"
+},
+"firefly_bush_emissive": {
+"lum": 151.3,
+"rgb": [
+160,
+154,
+115
+],
+"solid": 0.008,
+"src": "vanilla"
+},
+"fletching_table_front": {
+"lum": 165.3,
+"rgb": [
+182,
+165,
+123
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"fletching_table_side": {
+"lum": 181.3,
+"rgb": [
+197,
+180,
+147
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"fletching_table_top": {
+"lum": 183.2,
+"rgb": [
+200,
+183,
+140
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"flower_pot": {
+"lum": 119.0,
+"rgb": [
+138,
+114,
+95
+],
+"solid": 1.0,
+"src": "pack"
+},
+"flowering_azalea_leaves": {
+"lum": 108.6,
+"rgb": [
+108,
+114,
+82
+],
+"solid": 0.801,
+"src": "vanilla"
+},
+"flowering_azalea_side": {
+"lum": 115.4,
+"rgb": [
+120,
+116,
+100
+],
+"solid": 0.602,
+"src": "vanilla"
+},
+"flowering_azalea_top": {
+"lum": 117.5,
+"rgb": [
+117,
+124,
+85
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"frogspawn": {
+"lum": 104.7,
+"rgb": [
+116,
+101,
+94
+],
+"solid": 0.316,
+"src": "vanilla"
+},
+"frosted_ice_0": {
+"lum": 198.7,
+"rgb": [
+191,
+201,
+207
+],
+"solid": 1.0,
+"src": "pack"
+},
+"frosted_ice_1": {
+"lum": 190.7,
+"rgb": [
+183,
+193,
+199
+],
+"solid": 1.0,
+"src": "pack"
+},
+"frosted_ice_2": {
+"lum": 182.7,
+"rgb": [
+175,
+185,
+191
+],
+"solid": 1.0,
+"src": "pack"
+},
+"frosted_ice_3": {
+"lum": 187.7,
+"rgb": [
+180,
+190,
+196
+],
+"solid": 1.0,
+"src": "pack"
+},
+"furnace_front": {
+"lum": 108.3,
+"rgb": [
+109,
+108,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"furnace_front_on": {
+"lum": 133.9,
+"rgb": [
+145,
+132,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"furnace_side": {
+"lum": 127.3,
+"rgb": [
+128,
+127,
+127
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"furnace_top": {
+"lum": 114.0,
+"rgb": [
+114,
+114,
+114
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gilded_blackstone": {
+"lum": 59.4,
+"rgb": [
+72,
+56,
+44
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"glass": {
+"lum": 164.7,
+"rgb": [
+175,
+164,
+141
+],
+"solid": 1.0,
+"src": "pack"
+},
+"glass_pane_top": {
+"lum": 67.5,
+"rgb": [
+81,
+65,
+45
+],
+"solid": 1.0,
+"src": "pack"
+},
+"glow_item_frame": {
+"lum": 131.8,
+"rgb": [
+168,
+124,
+77
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"glow_lichen": {
+"lum": 124.6,
+"rgb": [
+113,
+131,
+122
+],
+"solid": 0.293,
+"src": "pack"
+},
+"glowstone": {
+"lum": 156.3,
+"rgb": [
+184,
+151,
+111
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gold_block": {
+"lum": 205.6,
+"rgb": [
+247,
+211,
+69
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gold_ore": {
+"lum": 140.6,
+"rgb": [
+153,
+139,
+116
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"granite": {
+"lum": 124.1,
+"rgb": [
+137,
+120,
+111
+],
+"solid": 1.0,
+"src": "pack"
+},
+"grass_block_side": {
+"lum": 107.0,
+"rgb": [
+117,
+105,
+91
+],
+"solid": 1.0,
+"src": "pack"
+},
+"grass_block_side_overlay": {
+"lum": 170.6,
+"rgb": [
+170,
+172,
+165
+],
+"solid": 0.371,
+"src": "pack"
+},
+"grass_block_snow": {
+"lum": 213.7,
+"rgb": [
+211,
+214,
+219
+],
+"solid": 1.0,
+"src": "pack"
+},
+"grass_block_top": {
+"lum": 166.6,
+"rgb": [
+166,
+168,
+161
+],
+"solid": 1.0,
+"src": "pack"
+},
+"gravel": {
+"lum": 141.0,
+"rgb": [
+143,
+141,
+136
+],
+"solid": 1.0,
+"src": "pack"
+},
+"gray_candle": {
+"lum": 92.0,
+"rgb": [
+82,
+96,
+98
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"gray_candle_lit": {
+"lum": 132.4,
+"rgb": [
+139,
+133,
+112
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"gray_concrete": {
+"lum": 57.6,
+"rgb": [
+55,
+58,
+62
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gray_concrete_powder": {
+"lum": 80.3,
+"rgb": [
+77,
+81,
+85
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gray_glazed_terracotta": {
+"lum": 96.1,
+"rgb": [
+91,
+98,
+100
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gray_shulker_box": {
+"lum": 58.6,
+"rgb": [
+56,
+59,
+63
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gray_stained_glass": {
+"lum": 76.0,
+"rgb": [
+76,
+76,
+76
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"gray_stained_glass_pane_top": {
+"lum": 74.0,
+"rgb": [
+74,
+74,
+74
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"gray_terracotta": {
+"lum": 46.1,
+"rgb": [
+58,
+42,
+36
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"gray_wool": {
+"lum": 67.5,
+"rgb": [
+63,
+69,
+72
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"green_candle": {
+"lum": 83.6,
+"rgb": [
+75,
+100,
+22
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"green_candle_lit": {
+"lum": 110.1,
+"rgb": [
+116,
+124,
+23
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"green_concrete": {
+"lum": 79.3,
+"rgb": [
+73,
+91,
+36
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"green_concrete_powder": {
+"lum": 104.6,
+"rgb": [
+97,
+120,
+45
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"green_glazed_terracotta": {
+"lum": 136.8,
+"rgb": [
+127,
+149,
+100
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"green_shulker_box": {
+"lum": 86.6,
+"rgb": [
+79,
+101,
+32
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"green_stained_glass": {
+"lum": 110.9,
+"rgb": [
+102,
+127,
+51
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"green_stained_glass_pane_top": {
+"lum": 107.1,
+"rgb": [
+98,
+123,
+49
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"green_terracotta": {
+"lum": 76.2,
+"rgb": [
+76,
+83,
+42
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"green_wool": {
+"lum": 126.1,
+"rgb": [
+116,
+136,
+102
+],
+"solid": 1.0,
+"src": "pack"
+},
+"grindstone_pivot": {
+"lum": 52.4,
+"rgb": [
+75,
+47,
+21
+],
+"solid": 0.234,
+"src": "vanilla"
+},
+"grindstone_round": {
+"lum": 144.0,
+"rgb": [
+144,
+144,
+144
+],
+"solid": 0.375,
+"src": "vanilla"
+},
+"grindstone_side": {
+"lum": 142.0,
+"rgb": [
+142,
+142,
+142
+],
+"solid": 0.562,
+"src": "vanilla"
+},
+"hanging_roots": {
+"lum": 129.6,
+"rgb": [
+163,
+119,
+97
+],
+"solid": 0.293,
+"src": "vanilla"
+},
+"hay_block_side": {
+"lum": 150.5,
+"rgb": [
+163,
+150,
+120
+],
+"solid": 1.0,
+"src": "pack"
+},
+"hay_block_top": {
+"lum": 151.5,
+"rgb": [
+164,
+151,
+121
+],
+"solid": 1.0,
+"src": "pack"
+},
+"heavy_core": {
+"lum": 95.6,
+"rgb": [
+91,
+96,
+106
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"honey_block_bottom": {
+"lum": 162.3,
+"rgb": [
+242,
+149,
+22
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"honey_block_side": {
+"lum": 194.6,
+"rgb": [
+251,
+190,
+70
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"honey_block_top": {
+"lum": 192.1,
+"rgb": [
+251,
+187,
+64
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"honeycomb_block": {
+"lum": 165.9,
+"rgb": [
+231,
+155,
+51
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"hopper_inside": {
+"lum": 85.4,
+"rgb": [
+88,
+85,
+81
+],
+"solid": 1.0,
+"src": "pack"
+},
+"hopper_outside": {
+"lum": 98.1,
+"rgb": [
+100,
+98,
+94
+],
+"solid": 1.0,
+"src": "pack"
+},
+"hopper_top": {
+"lum": 100.6,
+"rgb": [
+103,
+100,
+97
+],
+"solid": 1.0,
+"src": "pack"
+},
+"horn_coral": {
+"lum": 181.6,
+"rgb": [
+210,
+190,
+64
+],
+"solid": 0.391,
+"src": "vanilla"
+},
+"horn_coral_block": {
+"lum": 191.7,
+"rgb": [
+217,
+203,
+67
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"horn_coral_fan": {
+"lum": 177.6,
+"rgb": [
+207,
+185,
+62
+],
+"solid": 0.367,
+"src": "vanilla"
+},
+"ice": {
+"lum": 190.7,
+"rgb": [
+183,
+193,
+199
+],
+"solid": 1.0,
+"src": "pack"
+},
+"iron_bars": {
+"lum": 107.8,
+"rgb": [
+109,
+108,
+104
+],
+"solid": 0.453,
+"src": "pack"
+},
+"iron_block": {
+"lum": 221.0,
+"rgb": [
+221,
+221,
+221
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"iron_chain": {
+"lum": 105.1,
+"rgb": [
+107,
+105,
+101
+],
+"solid": 0.219,
+"src": "pack"
+},
+"iron_door_bottom": {
+"lum": 197.3,
+"rgb": [
+198,
+197,
+197
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"iron_door_top": {
+"lum": 195.3,
+"rgb": [
+196,
+195,
+195
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"iron_ore": {
+"lum": 133.0,
+"rgb": [
+140,
+131,
+125
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"iron_trapdoor": {
+"lum": 203.0,
+"rgb": [
+203,
+203,
+203
+],
+"solid": 0.859,
+"src": "vanilla"
+},
+"item_frame": {
+"lum": 82.8,
+"rgb": [
+125,
+69,
+43
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jack_o_lantern": {
+"lum": 170.1,
+"rgb": [
+219,
+164,
+73
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jigsaw_bottom": {
+"lum": 32.2,
+"rgb": [
+36,
+29,
+39
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jigsaw_lock": {
+"lum": 63.8,
+"rgb": [
+69,
+60,
+70
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jigsaw_side": {
+"lum": 86.8,
+"rgb": [
+95,
+81,
+95
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jigsaw_top": {
+"lum": 107.6,
+"rgb": [
+117,
+101,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jukebox_side": {
+"lum": 71.3,
+"rgb": [
+98,
+63,
+44
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jukebox_top": {
+"lum": 76.3,
+"rgb": [
+103,
+68,
+49
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jungle_door_bottom": {
+"lum": 126.5,
+"rgb": [
+162,
+117,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jungle_door_top": {
+"lum": 133.1,
+"rgb": [
+168,
+124,
+88
+],
+"solid": 0.883,
+"src": "vanilla"
+},
+"jungle_leaves": {
+"lum": 156.9,
+"rgb": [
+160,
+157,
+148
+],
+"solid": 0.695,
+"src": "vanilla"
+},
+"jungle_log": {
+"lum": 69.5,
+"rgb": [
+87,
+69,
+26
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jungle_log_top": {
+"lum": 121.3,
+"rgb": [
+155,
+113,
+76
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jungle_planks": {
+"lum": 127.9,
+"rgb": [
+164,
+118,
+84
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jungle_sapling": {
+"lum": 67.5,
+"rgb": [
+48,
+87,
+18
+],
+"solid": 0.336,
+"src": "vanilla"
+},
+"jungle_shelf": {
+"lum": 127.8,
+"rgb": [
+157,
+123,
+76
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"jungle_trapdoor": {
+"lum": 123.0,
+"rgb": [
+157,
+114,
+80
+],
+"solid": 0.836,
+"src": "vanilla"
+},
+"kelp": {
+"lum": 128.0,
+"rgb": [
+96,
+150,
+99
+],
+"solid": 0.168,
+"src": "pack"
+},
+"kelp_plant": {
+"lum": 128.9,
+"rgb": [
+97,
+151,
+99
+],
+"solid": 0.172,
+"src": "pack"
+},
+"ladder": {
+"lum": 90.9,
+"rgb": [
+105,
+88,
+69
+],
+"solid": 0.438,
+"src": "pack"
+},
+"lantern": {
+"lum": 136.7,
+"rgb": [
+151,
+135,
+108
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lapis_block": {
+"lum": 65.8,
+"rgb": [
+31,
+69,
+141
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lapis_ore": {
+"lum": 123.1,
+"rgb": [
+116,
+122,
+147
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"large_amethyst_bud": {
+"lum": 157.4,
+"rgb": [
+173,
+140,
+206
+],
+"solid": 0.305,
+"src": "vanilla"
+},
+"large_fern_bottom": {
+"lum": 156.6,
+"rgb": [
+156,
+158,
+151
+],
+"solid": 0.297,
+"src": "pack"
+},
+"large_fern_top": {
+"lum": 156.6,
+"rgb": [
+156,
+158,
+151
+],
+"solid": 0.238,
+"src": "pack"
+},
+"lava_flow": {
+"lum": 114.5,
+"rgb": [
+154,
+105,
+60
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lava_still": {
+"lum": 113.2,
+"rgb": [
+152,
+104,
+59
+],
+"solid": 1.0,
+"src": "pack"
+},
+"leaf_litter": {
+"lum": 174.0,
+"rgb": [
+174,
+174,
+174
+],
+"solid": 0.457,
+"src": "vanilla"
+},
+"lectern_base": {
+"lum": 126.8,
+"rgb": [
+145,
+122,
+104
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lectern_front": {
+"lum": 137.8,
+"rgb": [
+156,
+133,
+115
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lectern_sides": {
+"lum": 135.5,
+"rgb": [
+153,
+131,
+113
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lectern_top": {
+"lum": 138.5,
+"rgb": [
+156,
+134,
+116
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lever": {
+"lum": 101.9,
+"rgb": [
+118,
+99,
+75
+],
+"solid": 0.078,
+"src": "vanilla"
+},
+"light_blue_candle": {
+"lum": 116.0,
+"rgb": [
+35,
+141,
+200
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"light_blue_candle_lit": {
+"lum": 152.8,
+"rgb": [
+97,
+171,
+205
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"light_blue_concrete": {
+"lum": 113.9,
+"rgb": [
+36,
+137,
+199
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_blue_concrete_powder": {
+"lum": 153.1,
+"rgb": [
+75,
+181,
+214
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_blue_glazed_terracotta": {
+"lum": 168.5,
+"rgb": [
+129,
+180,
+213
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_blue_shulker_box": {
+"lum": 136.0,
+"rgb": [
+50,
+165,
+212
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_blue_stained_glass": {
+"lum": 144.9,
+"rgb": [
+102,
+153,
+216
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"light_blue_stained_glass_pane_top": {
+"lum": 139.4,
+"rgb": [
+98,
+147,
+209
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"light_blue_terracotta": {
+"lum": 113.8,
+"rgb": [
+114,
+109,
+138
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_blue_wool": {
+"lum": 159.9,
+"rgb": [
+143,
+165,
+178
+],
+"solid": 1.0,
+"src": "pack"
+},
+"light_gray_candle": {
+"lum": 122.4,
+"rgb": [
+122,
+124,
+115
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"light_gray_candle_lit": {
+"lum": 158.2,
+"rgb": [
+167,
+159,
+131
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"light_gray_concrete": {
+"lum": 123.9,
+"rgb": [
+125,
+125,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_gray_concrete_powder": {
+"lum": 154.3,
+"rgb": [
+155,
+155,
+149
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_gray_glazed_terracotta": {
+"lum": 168.6,
+"rgb": [
+160,
+172,
+174
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_gray_shulker_box": {
+"lum": 125.0,
+"rgb": [
+126,
+126,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"light_gray_stained_glass": {
+"lum": 153.0,
+"rgb": [
+153,
+153,
+153
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"light_gray_stained_glass_pane_top": {
+"lum": 147.0,
+"rgb": [
+147,
+147,
+147
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"light_gray_terracotta": {
+"lum": 175.6,
+"rgb": [
+174,
+176,
+178
+],
+"solid": 1.0,
+"src": "pack"
+},
+"light_gray_wool": {
+"lum": 177.0,
+"rgb": [
+179,
+177,
+172
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lightning_rod": {
+"lum": 135.2,
+"rgb": [
+198,
+113,
+85
+],
+"solid": 0.156,
+"src": "vanilla"
+},
+"lightning_rod_on": {
+"lum": 255.0,
+"rgb": [
+255,
+255,
+255
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lilac_bottom": {
+"lum": 138.3,
+"rgb": [
+156,
+126,
+155
+],
+"solid": 0.352,
+"src": "vanilla"
+},
+"lilac_top": {
+"lum": 144.3,
+"rgb": [
+169,
+127,
+169
+],
+"solid": 0.293,
+"src": "vanilla"
+},
+"lily_of_the_valley": {
+"lum": 166.7,
+"rgb": [
+148,
+182,
+137
+],
+"solid": 0.203,
+"src": "vanilla"
+},
+"lily_pad": {
+"lum": 190.3,
+"rgb": [
+202,
+182,
+202
+],
+"solid": 0.602,
+"src": "pack"
+},
+"lime_candle": {
+"lum": 136.2,
+"rgb": [
+101,
+176,
+24
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"lime_candle_lit": {
+"lum": 153.8,
+"rgb": [
+136,
+186,
+35
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"lime_concrete": {
+"lum": 130.2,
+"rgb": [
+94,
+169,
+25
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lime_concrete_powder": {
+"lum": 154.0,
+"rgb": [
+126,
+190,
+42
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lime_glazed_terracotta": {
+"lum": 179.3,
+"rgb": [
+177,
+200,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lime_shulker_box": {
+"lum": 135.0,
+"rgb": [
+101,
+174,
+23
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lime_stained_glass": {
+"lum": 160.6,
+"rgb": [
+127,
+204,
+25
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"lime_stained_glass_pane_top": {
+"lum": 155.2,
+"rgb": [
+123,
+197,
+24
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"lime_terracotta": {
+"lum": 106.4,
+"rgb": [
+104,
+118,
+53
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lime_wool": {
+"lum": 158.1,
+"rgb": [
+152,
+169,
+118
+],
+"solid": 1.0,
+"src": "pack"
+},
+"lodestone_side": {
+"lum": 126.0,
+"rgb": [
+125,
+126,
+129
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"lodestone_top": {
+"lum": 151.6,
+"rgb": [
+149,
+152,
+156
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"loom_bottom": {
+"lum": 110.8,
+"rgb": [
+126,
+108,
+85
+],
+"solid": 1.0,
+"src": "pack"
+},
+"loom_front": {
+"lum": 144.0,
+"rgb": [
+156,
+142,
+123
+],
+"solid": 1.0,
+"src": "pack"
+},
+"loom_side": {
+"lum": 120.8,
+"rgb": [
+137,
+118,
+93
+],
+"solid": 1.0,
+"src": "pack"
+},
+"loom_top": {
+"lum": 110.8,
+"rgb": [
+126,
+108,
+85
+],
+"solid": 1.0,
+"src": "pack"
+},
+"magenta_candle": {
+"lum": 94.4,
+"rgb": [
+164,
+47,
+156
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"magenta_candle_lit": {
+"lum": 125.8,
+"rgb": [
+191,
+85,
+165
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"magenta_concrete": {
+"lum": 96.8,
+"rgb": [
+169,
+48,
+159
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"magenta_concrete_powder": {
+"lum": 128.7,
+"rgb": [
+193,
+85,
+185
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"magenta_glazed_terracotta": {
+"lum": 150.5,
+"rgb": [
+210,
+112,
+193
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"magenta_shulker_box": {
+"lum": 103.3,
+"rgb": [
+175,
+55,
+164
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"magenta_stained_glass": {
+"lum": 122.5,
+"rgb": [
+178,
+76,
+216
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"magenta_stained_glass_pane_top": {
+"lum": 118.7,
+"rgb": [
+172,
+74,
+209
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"magenta_terracotta": {
+"lum": 108.9,
+"rgb": [
+150,
+88,
+109
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"magenta_wool": {
+"lum": 118.5,
+"rgb": [
+190,
+70,
+181
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"magma": {
+"lum": 97.6,
+"rgb": [
+162,
+77,
+35
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_door_bottom": {
+"lum": 68.6,
+"rgb": [
+113,
+50,
+48
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_door_top": {
+"lum": 70.1,
+"rgb": [
+114,
+52,
+48
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_leaves": {
+"lum": 135.3,
+"rgb": [
+136,
+135,
+135
+],
+"solid": 0.828,
+"src": "vanilla"
+},
+"mangrove_log": {
+"lum": 70.0,
+"rgb": [
+85,
+68,
+41
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_log_top": {
+"lum": 65.9,
+"rgb": [
+104,
+51,
+43
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_planks": {
+"lum": 74.2,
+"rgb": [
+119,
+56,
+50
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_propagule": {
+"lum": 143.3,
+"rgb": [
+99,
+177,
+86
+],
+"solid": 0.129,
+"src": "vanilla"
+},
+"mangrove_propagule_hanging": {
+"lum": 132.6,
+"rgb": [
+122,
+148,
+81
+],
+"solid": 0.211,
+"src": "vanilla"
+},
+"mangrove_roots_side": {
+"lum": 63.0,
+"rgb": [
+76,
+61,
+39
+],
+"solid": 0.547,
+"src": "vanilla"
+},
+"mangrove_roots_top": {
+"lum": 63.0,
+"rgb": [
+76,
+61,
+39
+],
+"solid": 0.691,
+"src": "vanilla"
+},
+"mangrove_shelf": {
+"lum": 65.4,
+"rgb": [
+110,
+47,
+43
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mangrove_trapdoor": {
+"lum": 67.9,
+"rgb": [
+112,
+50,
+44
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"medium_amethyst_bud": {
+"lum": 151.1,
+"rgb": [
+170,
+131,
+205
+],
+"solid": 0.199,
+"src": "vanilla"
+},
+"melon_side": {
+"lum": 127.4,
+"rgb": [
+124,
+148,
+30
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"melon_stem": {
+"lum": 160.0,
+"rgb": [
+160,
+160,
+160
+],
+"solid": 0.137,
+"src": "vanilla"
+},
+"melon_top": {
+"lum": 125.7,
+"rgb": [
+120,
+147,
+31
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"moss_block": {
+"lum": 78.4,
+"rgb": [
+77,
+80,
+74
+],
+"solid": 1.0,
+"src": "pack"
+},
+"mossy_cobblestone": {
+"lum": 135.8,
+"rgb": [
+137,
+136,
+132
+],
+"solid": 1.0,
+"src": "pack"
+},
+"mossy_stone_bricks": {
+"lum": 136.0,
+"rgb": [
+138,
+136,
+131
+],
+"solid": 1.0,
+"src": "pack"
+},
+"mud": {
+"lum": 92.9,
+"rgb": [
+100,
+92,
+79
+],
+"solid": 1.0,
+"src": "pack"
+},
+"mud_bricks": {
+"lum": 137.4,
+"rgb": [
+147,
+136,
+119
+],
+"solid": 1.0,
+"src": "pack"
+},
+"muddy_mangrove_roots_side": {
+"lum": 61.3,
+"rgb": [
+70,
+59,
+50
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"muddy_mangrove_roots_top": {
+"lum": 61.2,
+"rgb": [
+71,
+59,
+47
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mushroom_block_inside": {
+"lum": 173.9,
+"rgb": [
+202,
+170,
+120
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mushroom_stem": {
+"lum": 197.5,
+"rgb": [
+203,
+197,
+186
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"mycelium_side": {
+"lum": 105.4,
+"rgb": [
+115,
+103,
+93
+],
+"solid": 1.0,
+"src": "pack"
+},
+"mycelium_top": {
+"lum": 87.9,
+"rgb": [
+94,
+84,
+92
+],
+"solid": 1.0,
+"src": "pack"
+},
+"nether_bricks": {
+"lum": 30.3,
+"rgb": [
+46,
+23,
+27
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"nether_gold_ore": {
+"lum": 89.2,
+"rgb": [
+127,
+78,
+48
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"nether_portal": {
+"lum": 60.7,
+"rgb": [
+94,
+18,
+193
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"nether_quartz_ore": {
+"lum": 100.4,
+"rgb": [
+127,
+90,
+84
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"nether_sprouts": {
+"lum": 111.0,
+"rgb": [
+20,
+153,
+133
+],
+"solid": 0.121,
+"src": "vanilla"
+},
+"nether_wart_block": {
+"lum": 37.7,
+"rgb": [
+117,
+4,
+3
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"nether_wart_stage0": {
+"lum": 53.5,
+"rgb": [
+124,
+23,
+26
+],
+"solid": 0.172,
+"src": "vanilla"
+},
+"nether_wart_stage1": {
+"lum": 52.1,
+"rgb": [
+122,
+22,
+24
+],
+"solid": 0.465,
+"src": "vanilla"
+},
+"nether_wart_stage2": {
+"lum": 51.2,
+"rgb": [
+119,
+22,
+24
+],
+"solid": 0.625,
+"src": "vanilla"
+},
+"netherite_block": {
+"lum": 65.4,
+"rgb": [
+68,
+64,
+66
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"netherrack": {
+"lum": 57.6,
+"rgb": [
+99,
+40,
+40
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"note_block": {
+"lum": 71.3,
+"rgb": [
+98,
+63,
+44
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oak_door_bottom": {
+"lum": 115.3,
+"rgb": [
+143,
+111,
+65
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oak_door_top": {
+"lum": 118.3,
+"rgb": [
+145,
+114,
+70
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"oak_leaves": {
+"lum": 150.6,
+"rgb": [
+150,
+152,
+145
+],
+"solid": 0.773,
+"src": "pack"
+},
+"oak_log": {
+"lum": 149.4,
+"rgb": [
+161,
+148,
+126
+],
+"solid": 1.0,
+"src": "pack"
+},
+"oak_log_top": {
+"lum": 154.4,
+"rgb": [
+166,
+153,
+131
+],
+"solid": 1.0,
+"src": "pack"
+},
+"oak_planks": {
+"lum": 163.7,
+"rgb": [
+178,
+162,
+135
+],
+"solid": 1.0,
+"src": "pack"
+},
+"oak_sapling": {
+"lum": 98.2,
+"rgb": [
+84,
+116,
+44
+],
+"solid": 0.434,
+"src": "vanilla"
+},
+"oak_shelf": {
+"lum": 153.4,
+"rgb": [
+165,
+152,
+130
+],
+"solid": 1.0,
+"src": "pack"
+},
+"oak_trapdoor": {
+"lum": 156.5,
+"rgb": [
+170,
+155,
+129
+],
+"solid": 1.0,
+"src": "pack"
+},
+"observer_back": {
+"lum": 77.3,
+"rgb": [
+78,
+77,
+77
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"observer_back_on": {
+"lum": 78.3,
+"rgb": [
+86,
+75,
+75
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"observer_front": {
+"lum": 120.0,
+"rgb": [
+120,
+120,
+120
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"observer_side": {
+"lum": 75.3,
+"rgb": [
+76,
+75,
+75
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"observer_top": {
+"lum": 107.0,
+"rgb": [
+107,
+107,
+107
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"obsidian": {
+"lum": 18.5,
+"rgb": [
+21,
+14,
+35
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"ochre_froglight_side": {
+"lum": 233.0,
+"rgb": [
+246,
+235,
+189
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"ochre_froglight_top": {
+"lum": 243.5,
+"rgb": [
+251,
+246,
+211
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"open_eyeblossom": {
+"lum": 151.5,
+"rgb": [
+156,
+149,
+153
+],
+"solid": 0.211,
+"src": "vanilla"
+},
+"open_eyeblossom_emissive": {
+"lum": 158.6,
+"rgb": [
+238,
+141,
+41
+],
+"solid": 0.016,
+"src": "vanilla"
+},
+"orange_candle": {
+"lum": 129.9,
+"rgb": [
+225,
+104,
+14
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"orange_candle_lit": {
+"lum": 159.3,
+"rgb": [
+233,
+145,
+40
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"orange_concrete": {
+"lum": 124.0,
+"rgb": [
+224,
+97,
+1
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"orange_concrete_powder": {
+"lum": 149.8,
+"rgb": [
+227,
+133,
+34
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"orange_glazed_terracotta": {
+"lum": 162.6,
+"rgb": [
+193,
+154,
+127
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"orange_shulker_box": {
+"lum": 134.1,
+"rgb": [
+235,
+107,
+9
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"orange_stained_glass": {
+"lum": 144.9,
+"rgb": [
+216,
+127,
+51
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"orange_stained_glass_pane_top": {
+"lum": 140.3,
+"rgb": [
+209,
+123,
+49
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"orange_terracotta": {
+"lum": 102.1,
+"rgb": [
+162,
+84,
+38
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"orange_tulip": {
+"lum": 125.3,
+"rgb": [
+123,
+144,
+35
+],
+"solid": 0.16,
+"src": "vanilla"
+},
+"orange_wool": {
+"lum": 149.3,
+"rgb": [
+189,
+140,
+93
+],
+"solid": 1.0,
+"src": "pack"
+},
+"oxeye_daisy": {
+"lum": 154.7,
+"rgb": [
+157,
+156,
+142
+],
+"solid": 0.164,
+"src": "pack"
+},
+"oxidized_chiseled_copper": {
+"lum": 137.7,
+"rgb": [
+85,
+165,
+135
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper": {
+"lum": 137.4,
+"rgb": [
+84,
+165,
+135
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper_bars": {
+"lum": 104.4,
+"rgb": [
+65,
+125,
+102
+],
+"solid": 0.453,
+"src": "vanilla"
+},
+"oxidized_copper_bulb": {
+"lum": 117.1,
+"rgb": [
+73,
+140,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper_bulb_lit": {
+"lum": 151.3,
+"rgb": [
+153,
+158,
+112
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper_bulb_lit_powered": {
+"lum": 151.2,
+"rgb": [
+155,
+157,
+111
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper_bulb_powered": {
+"lum": 117.6,
+"rgb": [
+77,
+139,
+114
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper_chain": {
+"lum": 99.8,
+"rgb": [
+62,
+119,
+100
+],
+"solid": 0.219,
+"src": "vanilla"
+},
+"oxidized_copper_door_bottom": {
+"lum": 131.2,
+"rgb": [
+81,
+157,
+130
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_copper_door_top": {
+"lum": 136.8,
+"rgb": [
+84,
+164,
+135
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"oxidized_copper_grate": {
+"lum": 136.7,
+"rgb": [
+84,
+164,
+134
+],
+"solid": 0.699,
+"src": "vanilla"
+},
+"oxidized_copper_lantern": {
+"lum": 127.9,
+"rgb": [
+92,
+148,
+119
+],
+"solid": 0.414,
+"src": "vanilla"
+},
+"oxidized_copper_trapdoor": {
+"lum": 137.1,
+"rgb": [
+85,
+164,
+135
+],
+"solid": 0.797,
+"src": "vanilla"
+},
+"oxidized_cut_copper": {
+"lum": 131.4,
+"rgb": [
+82,
+157,
+129
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"oxidized_lightning_rod": {
+"lum": 131.8,
+"rgb": [
+81,
+158,
+130
+],
+"solid": 0.156,
+"src": "vanilla"
+},
+"packed_ice": {
+"lum": 199.7,
+"rgb": [
+192,
+202,
+208
+],
+"solid": 1.0,
+"src": "pack"
+},
+"packed_mud": {
+"lum": 103.2,
+"rgb": [
+111,
+102,
+89
+],
+"solid": 1.0,
+"src": "pack"
+},
+"pale_hanging_moss": {
+"lum": 103.7,
+"rgb": [
+101,
+106,
+99
+],
+"solid": 0.477,
+"src": "vanilla"
+},
+"pale_hanging_moss_tip": {
+"lum": 107.7,
+"rgb": [
+105,
+110,
+103
+],
+"solid": 0.32,
+"src": "vanilla"
+},
+"pale_moss_block": {
+"lum": 111.3,
+"rgb": [
+108,
+114,
+106
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_moss_carpet": {
+"lum": 111.3,
+"rgb": [
+108,
+114,
+106
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_moss_carpet_side_small": {
+"lum": 117.9,
+"rgb": [
+114,
+121,
+112
+],
+"solid": 0.195,
+"src": "vanilla"
+},
+"pale_moss_carpet_side_tall": {
+"lum": 107.7,
+"rgb": [
+105,
+110,
+103
+],
+"solid": 0.523,
+"src": "vanilla"
+},
+"pale_oak_door_bottom": {
+"lum": 201.5,
+"rgb": [
+208,
+199,
+197
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_oak_door_top": {
+"lum": 217.6,
+"rgb": [
+224,
+215,
+214
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_oak_leaves": {
+"lum": 124.6,
+"rgb": [
+122,
+127,
+119
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"pale_oak_log": {
+"lum": 82.6,
+"rgb": [
+90,
+80,
+77
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_oak_log_top": {
+"lum": 203.3,
+"rgb": [
+209,
+201,
+200
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_oak_planks": {
+"lum": 221.9,
+"rgb": [
+229,
+219,
+218
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_oak_sapling": {
+"lum": 110.8,
+"rgb": [
+113,
+111,
+104
+],
+"solid": 0.402,
+"src": "vanilla"
+},
+"pale_oak_shelf": {
+"lum": 221.9,
+"rgb": [
+229,
+219,
+218
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pale_oak_trapdoor": {
+"lum": 225.9,
+"rgb": [
+233,
+223,
+222
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pearlescent_froglight_side": {
+"lum": 230.9,
+"rgb": [
+237,
+228,
+230
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pearlescent_froglight_top": {
+"lum": 242.5,
+"rgb": [
+246,
+241,
+241
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"peony_bottom": {
+"lum": 123.4,
+"rgb": [
+131,
+116,
+142
+],
+"solid": 0.551,
+"src": "vanilla"
+},
+"peony_top": {
+"lum": 154.0,
+"rgb": [
+169,
+141,
+182
+],
+"solid": 0.43,
+"src": "vanilla"
+},
+"pink_candle": {
+"lum": 142.4,
+"rgb": [
+213,
+106,
+145
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"pink_candle_lit": {
+"lum": 169.8,
+"rgb": [
+224,
+145,
+155
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"pink_concrete": {
+"lum": 139.6,
+"rgb": [
+214,
+101,
+143
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pink_concrete_powder": {
+"lum": 180.2,
+"rgb": [
+229,
+155,
+182
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pink_glazed_terracotta": {
+"lum": 184.2,
+"rgb": [
+236,
+158,
+183
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pink_petals": {
+"lum": 207.5,
+"rgb": [
+247,
+185,
+220
+],
+"solid": 0.402,
+"src": "vanilla"
+},
+"pink_petals_stem": {
+"lum": 170.0,
+"rgb": [
+170,
+170,
+170
+],
+"solid": 0.012,
+"src": "vanilla"
+},
+"pink_shulker_box": {
+"lum": 159.3,
+"rgb": [
+231,
+123,
+158
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pink_stained_glass": {
+"lum": 165.7,
+"rgb": [
+242,
+127,
+165
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"pink_stained_glass_pane_top": {
+"lum": 160.1,
+"rgb": [
+233,
+123,
+160
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"pink_terracotta": {
+"lum": 103.2,
+"rgb": [
+162,
+78,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pink_tulip": {
+"lum": 148.5,
+"rgb": [
+131,
+161,
+130
+],
+"solid": 0.16,
+"src": "vanilla"
+},
+"pink_wool": {
+"lum": 175.4,
+"rgb": [
+238,
+144,
+173
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"piston_bottom": {
+"lum": 101.3,
+"rgb": [
+102,
+101,
+101
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"piston_inner": {
+"lum": 104.3,
+"rgb": [
+105,
+104,
+104
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"piston_side": {
+"lum": 112.2,
+"rgb": [
+118,
+111,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"piston_top": {
+"lum": 138.4,
+"rgb": [
+159,
+135,
+102
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"piston_top_sticky": {
+"lum": 145.1,
+"rgb": [
+134,
+158,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pitcher_crop_bottom": {
+"lum": 69.5,
+"rgb": [
+102,
+59,
+38
+],
+"solid": 0.562,
+"src": "vanilla"
+},
+"pitcher_crop_bottom_stage_1": {
+"lum": 147.4,
+"rgb": [
+149,
+158,
+89
+],
+"solid": 0.18,
+"src": "vanilla"
+},
+"pitcher_crop_bottom_stage_2": {
+"lum": 127.4,
+"rgb": [
+126,
+137,
+82
+],
+"solid": 0.332,
+"src": "vanilla"
+},
+"pitcher_crop_bottom_stage_3": {
+"lum": 119.4,
+"rgb": [
+115,
+130,
+76
+],
+"solid": 0.277,
+"src": "vanilla"
+},
+"pitcher_crop_bottom_stage_4": {
+"lum": 122.2,
+"rgb": [
+111,
+131,
+106
+],
+"solid": 0.32,
+"src": "vanilla"
+},
+"pitcher_crop_side": {
+"lum": 140.2,
+"rgb": [
+180,
+131,
+83
+],
+"solid": 0.234,
+"src": "vanilla"
+},
+"pitcher_crop_top": {
+"lum": 167.6,
+"rgb": [
+195,
+166,
+104
+],
+"solid": 0.391,
+"src": "vanilla"
+},
+"pitcher_crop_top_stage_3": {
+"lum": 173.5,
+"rgb": [
+147,
+192,
+148
+],
+"solid": 0.258,
+"src": "vanilla"
+},
+"pitcher_crop_top_stage_4": {
+"lum": 151.2,
+"rgb": [
+125,
+156,
+195
+],
+"solid": 0.465,
+"src": "vanilla"
+},
+"podzol_side": {
+"lum": 105.7,
+"rgb": [
+115,
+104,
+90
+],
+"solid": 1.0,
+"src": "pack"
+},
+"podzol_top": {
+"lum": 81.8,
+"rgb": [
+90,
+80,
+70
+],
+"solid": 1.0,
+"src": "pack"
+},
+"pointed_dripstone_down_base": {
+"lum": 112.1,
+"rgb": [
+132,
+106,
+91
+],
+"solid": 0.898,
+"src": "vanilla"
+},
+"pointed_dripstone_down_frustum": {
+"lum": 111.8,
+"rgb": [
+131,
+106,
+91
+],
+"solid": 0.648,
+"src": "vanilla"
+},
+"pointed_dripstone_down_middle": {
+"lum": 112.8,
+"rgb": [
+132,
+107,
+92
+],
+"solid": 0.727,
+"src": "vanilla"
+},
+"pointed_dripstone_down_tip": {
+"lum": 117.8,
+"rgb": [
+138,
+112,
+95
+],
+"solid": 0.207,
+"src": "vanilla"
+},
+"pointed_dripstone_down_tip_merge": {
+"lum": 119.7,
+"rgb": [
+140,
+114,
+96
+],
+"solid": 0.336,
+"src": "vanilla"
+},
+"pointed_dripstone_up_base": {
+"lum": 112.1,
+"rgb": [
+132,
+106,
+91
+],
+"solid": 0.898,
+"src": "vanilla"
+},
+"pointed_dripstone_up_frustum": {
+"lum": 111.8,
+"rgb": [
+131,
+106,
+91
+],
+"solid": 0.648,
+"src": "vanilla"
+},
+"pointed_dripstone_up_middle": {
+"lum": 112.8,
+"rgb": [
+132,
+107,
+92
+],
+"solid": 0.727,
+"src": "vanilla"
+},
+"pointed_dripstone_up_tip": {
+"lum": 117.8,
+"rgb": [
+138,
+112,
+95
+],
+"solid": 0.207,
+"src": "vanilla"
+},
+"pointed_dripstone_up_tip_merge": {
+"lum": 119.7,
+"rgb": [
+140,
+114,
+96
+],
+"solid": 0.336,
+"src": "vanilla"
+},
+"polished_andesite": {
+"lum": 154.8,
+"rgb": [
+156,
+155,
+151
+],
+"solid": 1.0,
+"src": "pack"
+},
+"polished_basalt_side": {
+"lum": 92.2,
+"rgb": [
+92,
+92,
+94
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_basalt_top": {
+"lum": 102.5,
+"rgb": [
+103,
+102,
+104
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_blackstone": {
+"lum": 53.2,
+"rgb": [
+55,
+51,
+60
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_blackstone_bricks": {
+"lum": 48.5,
+"rgb": [
+51,
+46,
+55
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_deepslate": {
+"lum": 76.0,
+"rgb": [
+76,
+76,
+76
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_diorite": {
+"lum": 197.1,
+"rgb": [
+197,
+197,
+198
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_granite": {
+"lum": 121.1,
+"rgb": [
+156,
+109,
+92
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"polished_tuff": {
+"lum": 102.7,
+"rgb": [
+99,
+105,
+101
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"poppy": {
+"lum": 89.6,
+"rgb": [
+125,
+77,
+62
+],
+"solid": 0.164,
+"src": "pack"
+},
+"potatoes_stage0": {
+"lum": 109.8,
+"rgb": [
+113,
+115,
+75
+],
+"solid": 0.117,
+"src": "pack"
+},
+"potatoes_stage1": {
+"lum": 112.6,
+"rgb": [
+116,
+118,
+76
+],
+"solid": 0.188,
+"src": "pack"
+},
+"potatoes_stage2": {
+"lum": 119.0,
+"rgb": [
+124,
+124,
+80
+],
+"solid": 0.281,
+"src": "pack"
+},
+"potatoes_stage3": {
+"lum": 122.8,
+"rgb": [
+128,
+128,
+82
+],
+"solid": 0.352,
+"src": "pack"
+},
+"potted_azalea_bush_plant": {
+"lum": 98.9,
+"rgb": [
+94,
+112,
+44
+],
+"solid": 0.305,
+"src": "vanilla"
+},
+"potted_azalea_bush_side": {
+"lum": 105.4,
+"rgb": [
+97,
+121,
+47
+],
+"solid": 0.227,
+"src": "vanilla"
+},
+"potted_azalea_bush_top": {
+"lum": 108.5,
+"rgb": [
+101,
+124,
+48
+],
+"solid": 0.25,
+"src": "vanilla"
+},
+"potted_flowering_azalea_bush_plant": {
+"lum": 103.9,
+"rgb": [
+106,
+108,
+77
+],
+"solid": 0.305,
+"src": "vanilla"
+},
+"potted_flowering_azalea_bush_side": {
+"lum": 113.7,
+"rgb": [
+117,
+116,
+93
+],
+"solid": 0.227,
+"src": "vanilla"
+},
+"potted_flowering_azalea_bush_top": {
+"lum": 117.9,
+"rgb": [
+121,
+121,
+94
+],
+"solid": 0.25,
+"src": "vanilla"
+},
+"powder_snow": {
+"lum": 213.0,
+"rgb": [
+212,
+213,
+216
+],
+"solid": 1.0,
+"src": "pack"
+},
+"powered_rail": {
+"lum": 129.5,
+"rgb": [
+150,
+126,
+94
+],
+"solid": 0.672,
+"src": "vanilla"
+},
+"powered_rail_on": {
+"lum": 133.4,
+"rgb": [
+163,
+126,
+94
+],
+"solid": 0.672,
+"src": "vanilla"
+},
+"prismarine": {
+"lum": 145.1,
+"rgb": [
+104,
+165,
+150
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"prismarine_bricks": {
+"lum": 150.4,
+"rgb": [
+102,
+173,
+161
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pumpkin_side": {
+"lum": 132.5,
+"rgb": [
+199,
+119,
+28
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"pumpkin_stem": {
+"lum": 159.0,
+"rgb": [
+159,
+159,
+159
+],
+"solid": 0.137,
+"src": "vanilla"
+},
+"pumpkin_top": {
+"lum": 135.0,
+"rgb": [
+201,
+122,
+29
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purple_candle": {
+"lum": 71.3,
+"rgb": [
+108,
+35,
+162
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"purple_candle_lit": {
+"lum": 76.9,
+"rgb": [
+134,
+34,
+148
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"purple_concrete": {
+"lum": 66.5,
+"rgb": [
+100,
+32,
+156
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purple_concrete_powder": {
+"lum": 92.6,
+"rgb": [
+132,
+56,
+178
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purple_glazed_terracotta": {
+"lum": 84.0,
+"rgb": [
+118,
+51,
+165
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purple_shulker_box": {
+"lum": 68.4,
+"rgb": [
+104,
+33,
+157
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purple_stained_glass": {
+"lum": 95.2,
+"rgb": [
+127,
+63,
+178
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"purple_stained_glass_pane_top": {
+"lum": 92.2,
+"rgb": [
+123,
+61,
+172
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"purple_terracotta": {
+"lum": 86.2,
+"rgb": [
+118,
+70,
+86
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purple_wool": {
+"lum": 81.7,
+"rgb": [
+123,
+43,
+173
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purpur_block": {
+"lum": 145.8,
+"rgb": [
+171,
+128,
+171
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purpur_pillar": {
+"lum": 148.9,
+"rgb": [
+173,
+132,
+173
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"purpur_pillar_top": {
+"lum": 147.6,
+"rgb": [
+173,
+130,
+172
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"quartz_block_bottom": {
+"lum": 231.4,
+"rgb": [
+237,
+230,
+224
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"quartz_block_side": {
+"lum": 231.0,
+"rgb": [
+236,
+230,
+223
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"quartz_block_top": {
+"lum": 231.0,
+"rgb": [
+236,
+230,
+223
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"quartz_bricks": {
+"lum": 230.0,
+"rgb": [
+235,
+229,
+222
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"quartz_pillar": {
+"lum": 231.7,
+"rgb": [
+236,
+231,
+224
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"quartz_pillar_top": {
+"lum": 230.7,
+"rgb": [
+235,
+230,
+223
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"rail": {
+"lum": 119.8,
+"rgb": [
+130,
+118,
+102
+],
+"solid": 0.562,
+"src": "vanilla"
+},
+"rail_corner": {
+"lum": 122.9,
+"rgb": [
+134,
+121,
+104
+],
+"solid": 0.422,
+"src": "vanilla"
+},
+"raw_copper_block": {
+"lum": 122.2,
+"rgb": [
+163,
+109,
+83
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"raw_gold_block": {
+"lum": 177.8,
+"rgb": [
+224,
+177,
+61
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"raw_iron_block": {
+"lum": 148.3,
+"rgb": [
+173,
+142,
+116
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_candle": {
+"lum": 74.6,
+"rgb": [
+157,
+40,
+37
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"red_candle_lit": {
+"lum": 110.6,
+"rgb": [
+191,
+81,
+52
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"red_concrete": {
+"lum": 65.6,
+"rgb": [
+142,
+33,
+33
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_concrete_powder": {
+"lum": 88.0,
+"rgb": [
+169,
+54,
+51
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_glazed_terracotta": {
+"lum": 101.1,
+"rgb": [
+184,
+67,
+59
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_mushroom": {
+"lum": 124.6,
+"rgb": [
+163,
+110,
+99
+],
+"solid": 0.18,
+"src": "pack"
+},
+"red_mushroom_block": {
+"lum": 99.8,
+"rgb": [
+201,
+57,
+55
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_nether_bricks": {
+"lum": 28.0,
+"rgb": [
+74,
+8,
+10
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_sand": {
+"lum": 133.0,
+"rgb": [
+152,
+128,
+109
+],
+"solid": 1.0,
+"src": "pack"
+},
+"red_sandstone": {
+"lum": 128.8,
+"rgb": [
+148,
+124,
+103
+],
+"solid": 1.0,
+"src": "pack"
+},
+"red_sandstone_bottom": {
+"lum": 131.1,
+"rgb": [
+151,
+126,
+105
+],
+"solid": 1.0,
+"src": "pack"
+},
+"red_sandstone_top": {
+"lum": 132.1,
+"rgb": [
+152,
+127,
+106
+],
+"solid": 1.0,
+"src": "pack"
+},
+"red_shulker_box": {
+"lum": 64.7,
+"rgb": [
+142,
+32,
+30
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_stained_glass": {
+"lum": 81.5,
+"rgb": [
+153,
+51,
+51
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"red_stained_glass_pane_top": {
+"lum": 78.3,
+"rgb": [
+147,
+49,
+49
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"red_terracotta": {
+"lum": 83.9,
+"rgb": [
+143,
+61,
+47
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"red_tulip": {
+"lum": 119.0,
+"rgb": [
+115,
+137,
+37
+],
+"solid": 0.191,
+"src": "vanilla"
+},
+"red_wool": {
+"lum": 93.4,
+"rgb": [
+150,
+71,
+60
+],
+"solid": 1.0,
+"src": "pack"
+},
+"redstone_block": {
+"lum": 70.2,
+"rgb": [
+182,
+26,
+5
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"redstone_dust_dot": {
+"lum": 241.0,
+"rgb": [
+241,
+241,
+241
+],
+"solid": 0.113,
+"src": "vanilla"
+},
+"redstone_dust_line0": {
+"lum": 241.0,
+"rgb": [
+241,
+241,
+241
+],
+"solid": 0.078,
+"src": "vanilla"
+},
+"redstone_dust_line1": {
+"lum": 241.0,
+"rgb": [
+241,
+241,
+241
+],
+"solid": 0.086,
+"src": "vanilla"
+},
+"redstone_lamp": {
+"lum": 72.1,
+"rgb": [
+107,
+62,
+33
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"redstone_lamp_on": {
+"lum": 134.7,
+"rgb": [
+170,
+127,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"redstone_ore": {
+"lum": 126.0,
+"rgb": [
+147,
+117,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"redstone_torch": {
+"lum": 119.7,
+"rgb": [
+202,
+87,
+72
+],
+"solid": 0.117,
+"src": "vanilla"
+},
+"redstone_torch_off": {
+"lum": 88.1,
+"rgb": [
+110,
+84,
+52
+],
+"solid": 0.078,
+"src": "vanilla"
+},
+"reinforced_deepslate_bottom": {
+"lum": 89.8,
+"rgb": [
+87,
+92,
+86
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"reinforced_deepslate_side": {
+"lum": 121.2,
+"rgb": [
+118,
+125,
+110
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"reinforced_deepslate_top": {
+"lum": 93.5,
+"rgb": [
+91,
+96,
+87
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"repeater": {
+"lum": 164.9,
+"rgb": [
+165,
+165,
+164
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"repeater_on": {
+"lum": 167.3,
+"rgb": [
+173,
+165,
+164
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"repeating_command_block_back": {
+"lum": 132.8,
+"rgb": [
+136,
+123,
+175
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"repeating_command_block_conditional": {
+"lum": 131.8,
+"rgb": [
+135,
+121,
+179
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"repeating_command_block_front": {
+"lum": 133.4,
+"rgb": [
+137,
+122,
+183
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"repeating_command_block_side": {
+"lum": 132.6,
+"rgb": [
+136,
+122,
+178
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"resin_block": {
+"lum": 130.5,
+"rgb": [
+219,
+105,
+30
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"resin_bricks": {
+"lum": 121.1,
+"rgb": [
+208,
+95,
+28
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"resin_clump": {
+"lum": 141.4,
+"rgb": [
+225,
+120,
+32
+],
+"solid": 0.109,
+"src": "vanilla"
+},
+"respawn_anchor_bottom": {
+"lum": 32.8,
+"rgb": [
+49,
+13,
+92
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_side0": {
+"lum": 42.6,
+"rgb": [
+50,
+31,
+83
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_side1": {
+"lum": 52.0,
+"rgb": [
+59,
+42,
+85
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_side2": {
+"lum": 56.9,
+"rgb": [
+65,
+47,
+87
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_side3": {
+"lum": 60.9,
+"rgb": [
+70,
+51,
+88
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_side4": {
+"lum": 64.6,
+"rgb": [
+74,
+55,
+89
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_top": {
+"lum": 63.0,
+"rgb": [
+84,
+33,
+162
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"respawn_anchor_top_off": {
+"lum": 39.8,
+"rgb": [
+46,
+30,
+74
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"rooted_dirt": {
+"lum": 114.9,
+"rgb": [
+125,
+113,
+98
+],
+"solid": 1.0,
+"src": "pack"
+},
+"rose_bush_bottom": {
+"lum": 98.2,
+"rgb": [
+127,
+95,
+39
+],
+"solid": 0.699,
+"src": "vanilla"
+},
+"rose_bush_top": {
+"lum": 96.6,
+"rgb": [
+159,
+76,
+39
+],
+"solid": 0.363,
+"src": "vanilla"
+},
+"sand": {
+"lum": 161.4,
+"rgb": [
+171,
+161,
+138
+],
+"solid": 1.0,
+"src": "pack"
+},
+"sandstone": {
+"lum": 150.3,
+"rgb": [
+160,
+150,
+126
+],
+"solid": 1.0,
+"src": "pack"
+},
+"sandstone_bottom": {
+"lum": 151.6,
+"rgb": [
+162,
+151,
+127
+],
+"solid": 1.0,
+"src": "pack"
+},
+"sandstone_top": {
+"lum": 152.6,
+"rgb": [
+163,
+152,
+128
+],
+"solid": 1.0,
+"src": "pack"
+},
+"scaffolding_bottom": {
+"lum": 145.4,
+"rgb": [
+156,
+145,
+120
+],
+"solid": 0.344,
+"src": "pack"
+},
+"scaffolding_side": {
+"lum": 145.7,
+"rgb": [
+157,
+145,
+120
+],
+"solid": 0.344,
+"src": "pack"
+},
+"scaffolding_top": {
+"lum": 143.4,
+"rgb": [
+154,
+143,
+118
+],
+"solid": 1.0,
+"src": "pack"
+},
+"sculk": {
+"lum": 26.3,
+"rgb": [
+13,
+31,
+37
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_catalyst_bottom": {
+"lum": 113.6,
+"rgb": [
+102,
+119,
+116
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_catalyst_side": {
+"lum": 114.7,
+"rgb": [
+107,
+120,
+108
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_catalyst_side_bloom": {
+"lum": 119.1,
+"rgb": [
+107,
+126,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_catalyst_top": {
+"lum": 39.0,
+"rgb": [
+18,
+47,
+53
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_catalyst_top_bloom": {
+"lum": 41.7,
+"rgb": [
+18,
+51,
+56
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_sensor_bottom": {
+"lum": 26.3,
+"rgb": [
+13,
+31,
+37
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_sensor_side": {
+"lum": 39.3,
+"rgb": [
+11,
+50,
+58
+],
+"solid": 0.5,
+"src": "vanilla"
+},
+"sculk_sensor_tendril_active": {
+"lum": 104.9,
+"rgb": [
+14,
+143,
+147
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"sculk_sensor_tendril_inactive": {
+"lum": 55.2,
+"rgb": [
+16,
+70,
+82
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"sculk_sensor_top": {
+"lum": 56.9,
+"rgb": [
+16,
+72,
+86
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_shrieker_bottom": {
+"lum": 26.3,
+"rgb": [
+13,
+31,
+37
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_shrieker_can_summon_inner_top": {
+"lum": 84.8,
+"rgb": [
+68,
+93,
+87
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_shrieker_inner_top": {
+"lum": 76.9,
+"rgb": [
+68,
+82,
+74
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sculk_shrieker_side": {
+"lum": 120.3,
+"rgb": [
+113,
+126,
+110
+],
+"solid": 0.758,
+"src": "vanilla"
+},
+"sculk_shrieker_top": {
+"lum": 199.8,
+"rgb": [
+199,
+206,
+170
+],
+"solid": 0.203,
+"src": "vanilla"
+},
+"sculk_vein": {
+"lum": 45.8,
+"rgb": [
+9,
+60,
+69
+],
+"solid": 0.691,
+"src": "vanilla"
+},
+"sea_lantern": {
+"lum": 198.4,
+"rgb": [
+184,
+206,
+197
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sea_pickle": {
+"lum": 134.2,
+"rgb": [
+127,
+142,
+113
+],
+"solid": 0.094,
+"src": "pack"
+},
+"seagrass": {
+"lum": 128.0,
+"rgb": [
+96,
+150,
+99
+],
+"solid": 0.094,
+"src": "pack"
+},
+"short_dry_grass": {
+"lum": 164.6,
+"rgb": [
+189,
+162,
+114
+],
+"solid": 0.188,
+"src": "vanilla"
+},
+"short_grass": {
+"lum": 157.6,
+"rgb": [
+157,
+159,
+152
+],
+"solid": 0.285,
+"src": "pack"
+},
+"shroomlight": {
+"lum": 175.1,
+"rgb": [
+242,
+157,
+93
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"shulker_box": {
+"lum": 114.8,
+"rgb": [
+140,
+97,
+140
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"slime_block": {
+"lum": 156.8,
+"rgb": [
+112,
+192,
+93
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"small_amethyst_bud": {
+"lum": 123.5,
+"rgb": [
+136,
+103,
+196
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"small_dripleaf_side": {
+"lum": 113.0,
+"rgb": [
+108,
+128,
+49
+],
+"solid": 0.016,
+"src": "vanilla"
+},
+"small_dripleaf_stem_bottom": {
+"lum": 107.5,
+"rgb": [
+97,
+125,
+45
+],
+"solid": 0.168,
+"src": "vanilla"
+},
+"small_dripleaf_stem_top": {
+"lum": 107.0,
+"rgb": [
+99,
+123,
+46
+],
+"solid": 0.137,
+"src": "vanilla"
+},
+"small_dripleaf_top": {
+"lum": 105.9,
+"rgb": [
+97,
+122,
+46
+],
+"solid": 0.25,
+"src": "vanilla"
+},
+"smithing_table_bottom": {
+"lum": 114.8,
+"rgb": [
+133,
+110,
+92
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smithing_table_front": {
+"lum": 96.6,
+"rgb": [
+99,
+96,
+93
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smithing_table_side": {
+"lum": 114.8,
+"rgb": [
+133,
+110,
+92
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smithing_table_top": {
+"lum": 96.6,
+"rgb": [
+99,
+96,
+93
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smoker_bottom": {
+"lum": 114.0,
+"rgb": [
+116,
+114,
+109
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smoker_front": {
+"lum": 106.0,
+"rgb": [
+108,
+106,
+101
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smoker_front_on": {
+"lum": 125.7,
+"rgb": [
+145,
+120,
+104
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smoker_side": {
+"lum": 117.9,
+"rgb": [
+120,
+118,
+112
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smoker_top": {
+"lum": 117.0,
+"rgb": [
+119,
+117,
+112
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smooth_basalt": {
+"lum": 75.5,
+"rgb": [
+75,
+75,
+79
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"smooth_stone": {
+"lum": 160.8,
+"rgb": [
+162,
+161,
+157
+],
+"solid": 1.0,
+"src": "pack"
+},
+"smooth_stone_slab_side": {
+"lum": 160.4,
+"rgb": [
+161,
+161,
+156
+],
+"solid": 1.0,
+"src": "pack"
+},
+"sniffer_egg_not_cracked_bottom": {
+"lum": 47.0,
+"rgb": [
+79,
+33,
+35
+],
+"solid": 0.656,
+"src": "vanilla"
+},
+"sniffer_egg_not_cracked_east": {
+"lum": 89.7,
+"rgb": [
+106,
+88,
+56
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"sniffer_egg_not_cracked_north": {
+"lum": 91.4,
+"rgb": [
+103,
+92,
+58
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"sniffer_egg_not_cracked_south": {
+"lum": 92.3,
+"rgb": [
+104,
+93,
+58
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"sniffer_egg_not_cracked_top": {
+"lum": 120.7,
+"rgb": [
+146,
+117,
+73
+],
+"solid": 0.656,
+"src": "vanilla"
+},
+"sniffer_egg_not_cracked_west": {
+"lum": 91.2,
+"rgb": [
+102,
+92,
+59
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"sniffer_egg_slightly_cracked_bottom": {
+"lum": 46.3,
+"rgb": [
+77,
+33,
+34
+],
+"solid": 0.656,
+"src": "vanilla"
+},
+"sniffer_egg_slightly_cracked_east": {
+"lum": 85.8,
+"rgb": [
+101,
+84,
+55
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"sniffer_egg_slightly_cracked_north": {
+"lum": 87.7,
+"rgb": [
+101,
+87,
+56
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"sniffer_egg_slightly_cracked_south": {
+"lum": 88.7,
+"rgb": [
+102,
+88,
+57
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"sniffer_egg_slightly_cracked_top": {
+"lum": 113.9,
+"rgb": [
+141,
+109,
+68
+],
+"solid": 0.656,
+"src": "vanilla"
+},
+"sniffer_egg_slightly_cracked_west": {
+"lum": 90.2,
+"rgb": [
+101,
+91,
+58
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"sniffer_egg_very_cracked_bottom": {
+"lum": 46.0,
+"rgb": [
+76,
+33,
+34
+],
+"solid": 0.656,
+"src": "vanilla"
+},
+"sniffer_egg_very_cracked_east": {
+"lum": 83.6,
+"rgb": [
+98,
+82,
+54
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"sniffer_egg_very_cracked_north": {
+"lum": 85.2,
+"rgb": [
+97,
+85,
+55
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"sniffer_egg_very_cracked_south": {
+"lum": 84.9,
+"rgb": [
+96,
+85,
+55
+],
+"solid": 0.875,
+"src": "vanilla"
+},
+"sniffer_egg_very_cracked_top": {
+"lum": 108.9,
+"rgb": [
+133,
+105,
+66
+],
+"solid": 0.656,
+"src": "vanilla"
+},
+"sniffer_egg_very_cracked_west": {
+"lum": 86.0,
+"rgb": [
+95,
+87,
+57
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"snow": {
+"lum": 213.7,
+"rgb": [
+212,
+214,
+217
+],
+"solid": 1.0,
+"src": "pack"
+},
+"soul_campfire_fire": {
+"lum": 181.3,
+"rgb": [
+154,
+191,
+203
+],
+"solid": 0.352,
+"src": "pack"
+},
+"soul_campfire_log_lit": {
+"lum": 131.4,
+"rgb": [
+141,
+129,
+119
+],
+"solid": 1.0,
+"src": "pack"
+},
+"soul_fire_0": {
+"lum": 179.3,
+"rgb": [
+108,
+209,
+213
+],
+"solid": 0.613,
+"src": "vanilla"
+},
+"soul_fire_1": {
+"lum": 175.0,
+"rgb": [
+112,
+201,
+206
+],
+"solid": 0.57,
+"src": "vanilla"
+},
+"soul_lantern": {
+"lum": 134.6,
+"rgb": [
+126,
+137,
+145
+],
+"solid": 1.0,
+"src": "pack"
+},
+"soul_sand": {
+"lum": 68.7,
+"rgb": [
+84,
+64,
+53
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"soul_soil": {
+"lum": 63.4,
+"rgb": [
+78,
+59,
+48
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"soul_torch": {
+"lum": 131.2,
+"rgb": [
+125,
+136,
+123
+],
+"solid": 0.078,
+"src": "vanilla"
+},
+"spawner": {
+"lum": 49.9,
+"rgb": [
+39,
+52,
+68
+],
+"solid": 0.688,
+"src": "vanilla"
+},
+"sponge": {
+"lum": 181.3,
+"rgb": [
+197,
+194,
+75
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"spore_blossom": {
+"lum": 142.7,
+"rgb": [
+214,
+102,
+165
+],
+"solid": 0.484,
+"src": "vanilla"
+},
+"spore_blossom_base": {
+"lum": 124.4,
+"rgb": [
+114,
+144,
+51
+],
+"solid": 0.621,
+"src": "vanilla"
+},
+"spruce_door_bottom": {
+"lum": 87.3,
+"rgb": [
+108,
+83,
+55
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"spruce_door_top": {
+"lum": 87.2,
+"rgb": [
+109,
+83,
+52
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"spruce_leaves": {
+"lum": 170.2,
+"rgb": [
+152,
+183,
+152
+],
+"solid": 0.77,
+"src": "pack"
+},
+"spruce_log": {
+"lum": 129.7,
+"rgb": [
+143,
+127,
+109
+],
+"solid": 1.0,
+"src": "pack"
+},
+"spruce_log_top": {
+"lum": 134.7,
+"rgb": [
+148,
+132,
+114
+],
+"solid": 1.0,
+"src": "pack"
+},
+"spruce_planks": {
+"lum": 138.2,
+"rgb": [
+154,
+135,
+113
+],
+"solid": 1.0,
+"src": "pack"
+},
+"spruce_sapling": {
+"lum": 56.8,
+"rgb": [
+47,
+65,
+40
+],
+"solid": 0.324,
+"src": "vanilla"
+},
+"spruce_shelf": {
+"lum": 134.7,
+"rgb": [
+148,
+132,
+114
+],
+"solid": 1.0,
+"src": "pack"
+},
+"spruce_trapdoor": {
+"lum": 132.0,
+"rgb": [
+147,
+129,
+108
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stone": {
+"lum": 140.0,
+"rgb": [
+141,
+140,
+137
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stone_bricks": {
+"lum": 138.3,
+"rgb": [
+141,
+138,
+133
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stonecutter_bottom": {
+"lum": 120.0,
+"rgb": [
+120,
+120,
+120
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stonecutter_saw": {
+"lum": 225.0,
+"rgb": [
+225,
+225,
+225
+],
+"solid": 0.32,
+"src": "vanilla"
+},
+"stonecutter_side": {
+"lum": 100.6,
+"rgb": [
+109,
+98,
+92
+],
+"solid": 0.562,
+"src": "vanilla"
+},
+"stonecutter_top": {
+"lum": 121.7,
+"rgb": [
+125,
+121,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_acacia_log": {
+"lum": 113.8,
+"rgb": [
+175,
+93,
+60
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_acacia_log_top": {
+"lum": 109.3,
+"rgb": [
+167,
+91,
+52
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_bamboo_block": {
+"lum": 170.7,
+"rgb": [
+196,
+175,
+82
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_bamboo_block_top": {
+"lum": 160.1,
+"rgb": [
+184,
+164,
+77
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_birch_log": {
+"lum": 176.4,
+"rgb": [
+197,
+177,
+119
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_birch_log_top": {
+"lum": 172.4,
+"rgb": [
+192,
+173,
+118
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_cherry_log": {
+"lum": 166.4,
+"rgb": [
+215,
+145,
+149
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_cherry_log_top": {
+"lum": 182.3,
+"rgb": [
+221,
+167,
+160
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_crimson_stem": {
+"lum": 85.6,
+"rgb": [
+138,
+58,
+90
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_crimson_stem_top": {
+"lum": 79.7,
+"rgb": [
+123,
+57,
+83
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_dark_oak_log": {
+"lum": 113.0,
+"rgb": [
+128,
+109,
+94
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stripped_dark_oak_log_top": {
+"lum": 113.0,
+"rgb": [
+128,
+109,
+94
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stripped_jungle_log": {
+"lum": 139.2,
+"rgb": [
+172,
+133,
+85
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_jungle_log_top": {
+"lum": 131.9,
+"rgb": [
+166,
+124,
+83
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_mangrove_log": {
+"lum": 73.6,
+"rgb": [
+120,
+55,
+48
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_mangrove_log_top": {
+"lum": 64.3,
+"rgb": [
+110,
+45,
+44
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_oak_log": {
+"lum": 150.7,
+"rgb": [
+163,
+149,
+127
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stripped_oak_log_top": {
+"lum": 153.7,
+"rgb": [
+166,
+152,
+130
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stripped_pale_oak_log": {
+"lum": 240.3,
+"rgb": [
+246,
+238,
+237
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_pale_oak_log_top": {
+"lum": 230.3,
+"rgb": [
+236,
+228,
+227
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_spruce_log": {
+"lum": 133.7,
+"rgb": [
+147,
+131,
+113
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stripped_spruce_log_top": {
+"lum": 134.7,
+"rgb": [
+148,
+132,
+114
+],
+"solid": 1.0,
+"src": "pack"
+},
+"stripped_warped_stem": {
+"lum": 122.9,
+"rgb": [
+58,
+151,
+148
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"stripped_warped_stem_top": {
+"lum": 107.2,
+"rgb": [
+53,
+131,
+127
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"structure_block": {
+"lum": 110.3,
+"rgb": [
+122,
+102,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"structure_block_corner": {
+"lum": 88.6,
+"rgb": [
+98,
+82,
+98
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"structure_block_data": {
+"lum": 100.8,
+"rgb": [
+112,
+93,
+112
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"structure_block_load": {
+"lum": 88.4,
+"rgb": [
+99,
+81,
+99
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"structure_block_save": {
+"lum": 103.8,
+"rgb": [
+116,
+95,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sugar_cane": {
+"lum": 159.6,
+"rgb": [
+159,
+161,
+154
+],
+"solid": 0.273,
+"src": "pack"
+},
+"sunflower_back": {
+"lum": 99.1,
+"rgb": [
+60,
+131,
+37
+],
+"solid": 0.203,
+"src": "vanilla"
+},
+"sunflower_bottom": {
+"lum": 103.2,
+"rgb": [
+63,
+137,
+35
+],
+"solid": 0.223,
+"src": "vanilla"
+},
+"sunflower_front": {
+"lum": 198.3,
+"rgb": [
+247,
+201,
+57
+],
+"solid": 0.203,
+"src": "vanilla"
+},
+"sunflower_top": {
+"lum": 97.3,
+"rgb": [
+56,
+131,
+32
+],
+"solid": 0.121,
+"src": "vanilla"
+},
+"suspicious_gravel_0": {
+"lum": 128.1,
+"rgb": [
+131,
+127,
+126
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_gravel_1": {
+"lum": 127.2,
+"rgb": [
+130,
+126,
+126
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_gravel_2": {
+"lum": 125.1,
+"rgb": [
+128,
+124,
+123
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_gravel_3": {
+"lum": 123.5,
+"rgb": [
+127,
+122,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_sand_0": {
+"lum": 203.9,
+"rgb": [
+218,
+205,
+161
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_sand_1": {
+"lum": 202.6,
+"rgb": [
+217,
+204,
+158
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_sand_2": {
+"lum": 198.9,
+"rgb": [
+214,
+200,
+154
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"suspicious_sand_3": {
+"lum": 194.4,
+"rgb": [
+211,
+195,
+148
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"sweet_berry_bush_stage0": {
+"lum": 94.7,
+"rgb": [
+105,
+94,
+71
+],
+"solid": 0.133,
+"src": "pack"
+},
+"sweet_berry_bush_stage1": {
+"lum": 97.3,
+"rgb": [
+109,
+96,
+73
+],
+"solid": 0.16,
+"src": "pack"
+},
+"sweet_berry_bush_stage2": {
+"lum": 103.7,
+"rgb": [
+117,
+102,
+78
+],
+"solid": 0.238,
+"src": "pack"
+},
+"sweet_berry_bush_stage3": {
+"lum": 107.2,
+"rgb": [
+122,
+105,
+80
+],
+"solid": 0.32,
+"src": "pack"
+},
+"tall_dry_grass": {
+"lum": 176.5,
+"rgb": [
+198,
+175,
+128
+],
+"solid": 0.418,
+"src": "vanilla"
+},
+"tall_grass_bottom": {
+"lum": 162.6,
+"rgb": [
+162,
+164,
+157
+],
+"solid": 0.301,
+"src": "pack"
+},
+"tall_grass_top": {
+"lum": 158.6,
+"rgb": [
+158,
+160,
+153
+],
+"solid": 0.227,
+"src": "pack"
+},
+"tall_seagrass_bottom": {
+"lum": 129.0,
+"rgb": [
+97,
+151,
+100
+],
+"solid": 0.164,
+"src": "pack"
+},
+"tall_seagrass_top": {
+"lum": 127.0,
+"rgb": [
+95,
+149,
+98
+],
+"solid": 0.121,
+"src": "pack"
+},
+"target_side": {
+"lum": 208.2,
+"rgb": [
+231,
+200,
+191
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"target_top": {
+"lum": 201.8,
+"rgb": [
+228,
+193,
+178
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"terracotta": {
+"lum": 144.3,
+"rgb": [
+150,
+143,
+136
+],
+"solid": 1.0,
+"src": "pack"
+},
+"test_block_accept": {
+"lum": 173.8,
+"rgb": [
+145,
+196,
+135
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"test_block_fail": {
+"lum": 139.5,
+"rgb": [
+140,
+132,
+177
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"test_block_log": {
+"lum": 184.0,
+"rgb": [
+167,
+186,
+218
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"test_block_start": {
+"lum": 175.2,
+"rgb": [
+195,
+170,
+150
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"test_instance_block": {
+"lum": 142.1,
+"rgb": [
+145,
+141,
+140
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"tinted_glass": {
+"lum": 40.6,
+"rgb": [
+47,
+35,
+53
+],
+"solid": 0.234,
+"src": "vanilla"
+},
+"tnt_bottom": {
+"lum": 108.6,
+"rgb": [
+171,
+83,
+77
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"tnt_side": {
+"lum": 143.9,
+"rgb": [
+191,
+124,
+123
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"tnt_top": {
+"lum": 102.1,
+"rgb": [
+163,
+77,
+72
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"torch": {
+"lum": 115.1,
+"rgb": [
+138,
+111,
+76
+],
+"solid": 0.078,
+"src": "pack"
+},
+"torchflower": {
+"lum": 118.9,
+"rgb": [
+138,
+116,
+84
+],
+"solid": 0.379,
+"src": "vanilla"
+},
+"torchflower_crop_stage0": {
+"lum": 76.8,
+"rgb": [
+30,
+102,
+70
+],
+"solid": 0.102,
+"src": "vanilla"
+},
+"torchflower_crop_stage1": {
+"lum": 106.8,
+"rgb": [
+93,
+119,
+80
+],
+"solid": 0.266,
+"src": "vanilla"
+},
+"trial_spawner_bottom": {
+"lum": 60.0,
+"rgb": [
+44,
+64,
+81
+],
+"solid": 0.75,
+"src": "vanilla"
+},
+"trial_spawner_side_active": {
+"lum": 76.8,
+"rgb": [
+80,
+74,
+83
+],
+"solid": 0.758,
+"src": "vanilla"
+},
+"trial_spawner_side_active_ominous": {
+"lum": 72.6,
+"rgb": [
+59,
+76,
+91
+],
+"solid": 0.758,
+"src": "vanilla"
+},
+"trial_spawner_side_inactive": {
+"lum": 73.5,
+"rgb": [
+58,
+78,
+91
+],
+"solid": 0.758,
+"src": "vanilla"
+},
+"trial_spawner_side_inactive_ominous": {
+"lum": 59.5,
+"rgb": [
+43,
+64,
+80
+],
+"solid": 0.758,
+"src": "vanilla"
+},
+"trial_spawner_top_active": {
+"lum": 88.4,
+"rgb": [
+85,
+88,
+99
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"trial_spawner_top_active_ominous": {
+"lum": 84.0,
+"rgb": [
+53,
+95,
+109
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"trial_spawner_top_ejecting_reward": {
+"lum": 73.9,
+"rgb": [
+78,
+71,
+78
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"trial_spawner_top_ejecting_reward_ominous": {
+"lum": 69.5,
+"rgb": [
+41,
+80,
+90
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"trial_spawner_top_inactive": {
+"lum": 84.9,
+"rgb": [
+65,
+91,
+106
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"trial_spawner_top_inactive_ominous": {
+"lum": 73.9,
+"rgb": [
+53,
+80,
+97
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"tripwire": {
+"lum": 112.7,
+"rgb": [
+116,
+112,
+108
+],
+"solid": 0.125,
+"src": "pack"
+},
+"tripwire_hook": {
+"lum": 119.6,
+"rgb": [
+123,
+119,
+114
+],
+"solid": 0.094,
+"src": "pack"
+},
+"tube_coral": {
+"lum": 89.0,
+"rgb": [
+50,
+87,
+202
+],
+"solid": 0.598,
+"src": "vanilla"
+},
+"tube_coral_block": {
+"lum": 91.9,
+"rgb": [
+51,
+90,
+209
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"tube_coral_fan": {
+"lum": 95.4,
+"rgb": [
+52,
+95,
+211
+],
+"solid": 0.309,
+"src": "vanilla"
+},
+"tuff": {
+"lum": 134.6,
+"rgb": [
+136,
+135,
+129
+],
+"solid": 1.0,
+"src": "pack"
+},
+"tuff_bricks": {
+"lum": 103.3,
+"rgb": [
+102,
+105,
+98
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"turtle_egg": {
+"lum": 226.8,
+"rgb": [
+235,
+229,
+194
+],
+"solid": 0.52,
+"src": "vanilla"
+},
+"turtle_egg_slightly_cracked": {
+"lum": 217.0,
+"rgb": [
+226,
+219,
+183
+],
+"solid": 0.52,
+"src": "vanilla"
+},
+"turtle_egg_very_cracked": {
+"lum": 207.9,
+"rgb": [
+217,
+210,
+173
+],
+"solid": 0.52,
+"src": "vanilla"
+},
+"twisting_vines": {
+"lum": 106.6,
+"rgb": [
+20,
+147,
+126
+],
+"solid": 0.277,
+"src": "vanilla"
+},
+"twisting_vines_plant": {
+"lum": 102.3,
+"rgb": [
+20,
+140,
+124
+],
+"solid": 0.352,
+"src": "vanilla"
+},
+"vault_bottom": {
+"lum": 46.4,
+"rgb": [
+45,
+45,
+57
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"vault_bottom_ominous": {
+"lum": 46.4,
+"rgb": [
+45,
+45,
+57
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"vault_front_ejecting": {
+"lum": 79.0,
+"rgb": [
+91,
+74,
+73
+],
+"solid": 0.859,
+"src": "vanilla"
+},
+"vault_front_ejecting_ominous": {
+"lum": 75.5,
+"rgb": [
+61,
+81,
+85
+],
+"solid": 0.945,
+"src": "vanilla"
+},
+"vault_front_off": {
+"lum": 74.9,
+"rgb": [
+65,
+78,
+85
+],
+"solid": 0.859,
+"src": "vanilla"
+},
+"vault_front_off_ominous": {
+"lum": 75.4,
+"rgb": [
+68,
+78,
+81
+],
+"solid": 0.945,
+"src": "vanilla"
+},
+"vault_front_on": {
+"lum": 79.1,
+"rgb": [
+91,
+74,
+74
+],
+"solid": 0.859,
+"src": "vanilla"
+},
+"vault_front_on_ominous": {
+"lum": 77.5,
+"rgb": [
+64,
+83,
+85
+],
+"solid": 0.945,
+"src": "vanilla"
+},
+"vault_side_off": {
+"lum": 78.5,
+"rgb": [
+69,
+82,
+85
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"vault_side_off_ominous": {
+"lum": 78.5,
+"rgb": [
+69,
+82,
+85
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"vault_side_on": {
+"lum": 81.0,
+"rgb": [
+92,
+77,
+73
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"vault_side_on_ominous": {
+"lum": 77.4,
+"rgb": [
+56,
+86,
+89
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"vault_top": {
+"lum": 74.7,
+"rgb": [
+64,
+78,
+86
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"vault_top_ejecting": {
+"lum": 62.4,
+"rgb": [
+57,
+64,
+68
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"vault_top_ejecting_ominous": {
+"lum": 61.7,
+"rgb": [
+59,
+63,
+62
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"vault_top_ominous": {
+"lum": 76.5,
+"rgb": [
+74,
+78,
+75
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"verdant_froglight_side": {
+"lum": 227.1,
+"rgb": [
+215,
+236,
+213
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"verdant_froglight_top": {
+"lum": 239.2,
+"rgb": [
+231,
+245,
+231
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"vine": {
+"lum": 161.5,
+"rgb": [
+161,
+163,
+155
+],
+"solid": 0.25,
+"src": "pack"
+},
+"warped_door_bottom": {
+"lum": 99.0,
+"rgb": [
+45,
+123,
+117
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_door_top": {
+"lum": 105.5,
+"rgb": [
+46,
+132,
+125
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_fungus": {
+"lum": 119.3,
+"rgb": [
+121,
+122,
+101
+],
+"solid": 0.195,
+"src": "vanilla"
+},
+"warped_nylium": {
+"lum": 95.8,
+"rgb": [
+51,
+117,
+104
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_nylium_side": {
+"lum": 76.9,
+"rgb": [
+81,
+76,
+71
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_planks": {
+"lum": 89.3,
+"rgb": [
+45,
+109,
+104
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_roots": {
+"lum": 103.7,
+"rgb": [
+20,
+142,
+126
+],
+"solid": 0.359,
+"src": "vanilla"
+},
+"warped_roots_pot": {
+"lum": 103.3,
+"rgb": [
+21,
+141,
+125
+],
+"solid": 0.277,
+"src": "vanilla"
+},
+"warped_shelf": {
+"lum": 114.4,
+"rgb": [
+52,
+142,
+136
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_stem": {
+"lum": 68.6,
+"rgb": [
+63,
+69,
+81
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_stem_top": {
+"lum": 98.2,
+"rgb": [
+55,
+117,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"warped_trapdoor": {
+"lum": 99.8,
+"rgb": [
+48,
+123,
+116
+],
+"solid": 0.785,
+"src": "vanilla"
+},
+"warped_wart_block": {
+"lum": 92.4,
+"rgb": [
+23,
+122,
+122
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"water_flow": {
+"lum": 198.1,
+"rgb": [
+201,
+209,
+134
+],
+"solid": 1.0,
+"src": "pack"
+},
+"water_overlay": {
+"lum": 165.0,
+"rgb": [
+165,
+165,
+165
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"water_still": {
+"lum": 198.1,
+"rgb": [
+201,
+209,
+134
+],
+"solid": 1.0,
+"src": "pack"
+},
+"weathered_chiseled_copper": {
+"lum": 135.2,
+"rgb": [
+106,
+154,
+115
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper": {
+"lum": 136.5,
+"rgb": [
+109,
+155,
+113
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper_bars": {
+"lum": 111.1,
+"rgb": [
+88,
+126,
+95
+],
+"solid": 0.453,
+"src": "vanilla"
+},
+"weathered_copper_bulb": {
+"lum": 117.6,
+"rgb": [
+95,
+132,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper_bulb_lit": {
+"lum": 157.2,
+"rgb": [
+172,
+160,
+104
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper_bulb_lit_powered": {
+"lum": 157.4,
+"rgb": [
+173,
+160,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper_bulb_powered": {
+"lum": 118.5,
+"rgb": [
+98,
+132,
+103
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper_chain": {
+"lum": 97.5,
+"rgb": [
+75,
+110,
+92
+],
+"solid": 0.219,
+"src": "vanilla"
+},
+"weathered_copper_door_bottom": {
+"lum": 130.3,
+"rgb": [
+109,
+146,
+105
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_copper_door_top": {
+"lum": 136.0,
+"rgb": [
+111,
+153,
+114
+],
+"solid": 0.812,
+"src": "vanilla"
+},
+"weathered_copper_grate": {
+"lum": 136.0,
+"rgb": [
+107,
+155,
+114
+],
+"solid": 0.699,
+"src": "vanilla"
+},
+"weathered_copper_lantern": {
+"lum": 128.8,
+"rgb": [
+107,
+144,
+108
+],
+"solid": 0.414,
+"src": "vanilla"
+},
+"weathered_copper_trapdoor": {
+"lum": 136.9,
+"rgb": [
+110,
+155,
+114
+],
+"solid": 0.797,
+"src": "vanilla"
+},
+"weathered_cut_copper": {
+"lum": 132.6,
+"rgb": [
+111,
+148,
+110
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"weathered_lightning_rod": {
+"lum": 127.9,
+"rgb": [
+100,
+146,
+108
+],
+"solid": 0.156,
+"src": "vanilla"
+},
+"weeping_vines": {
+"lum": 32.3,
+"rgb": [
+106,
+1,
+0
+],
+"solid": 0.109,
+"src": "vanilla"
+},
+"weeping_vines_plant": {
+"lum": 62.0,
+"rgb": [
+142,
+29,
+22
+],
+"solid": 0.449,
+"src": "vanilla"
+},
+"wet_sponge": {
+"lum": 167.2,
+"rgb": [
+173,
+183,
+71
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"wheat_stage0": {
+"lum": 109.4,
+"rgb": [
+112,
+115,
+74
+],
+"solid": 0.094,
+"src": "pack"
+},
+"wheat_stage1": {
+"lum": 109.8,
+"rgb": [
+113,
+115,
+75
+],
+"solid": 0.117,
+"src": "pack"
+},
+"wheat_stage2": {
+"lum": 111.7,
+"rgb": [
+115,
+117,
+76
+],
+"solid": 0.164,
+"src": "pack"
+},
+"wheat_stage3": {
+"lum": 112.6,
+"rgb": [
+116,
+118,
+76
+],
+"solid": 0.188,
+"src": "pack"
+},
+"wheat_stage4": {
+"lum": 119.6,
+"rgb": [
+124,
+125,
+80
+],
+"solid": 0.234,
+"src": "pack"
+},
+"wheat_stage5": {
+"lum": 119.0,
+"rgb": [
+124,
+124,
+80
+],
+"solid": 0.281,
+"src": "pack"
+},
+"wheat_stage6": {
+"lum": 120.9,
+"rgb": [
+126,
+126,
+81
+],
+"solid": 0.305,
+"src": "pack"
+},
+"wheat_stage7": {
+"lum": 122.8,
+"rgb": [
+128,
+128,
+82
+],
+"solid": 0.352,
+"src": "pack"
+},
+"white_candle": {
+"lum": 220.2,
+"rgb": [
+216,
+222,
+222
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"white_candle_lit": {
+"lum": 221.3,
+"rgb": [
+224,
+222,
+211
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"white_concrete": {
+"lum": 211.3,
+"rgb": [
+207,
+213,
+214
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"white_concrete_powder": {
+"lum": 227.4,
+"rgb": [
+226,
+228,
+228
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"white_glazed_terracotta": {
+"lum": 216.8,
+"rgb": [
+213,
+219,
+215
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"white_shulker_box": {
+"lum": 219.6,
+"rgb": [
+216,
+221,
+222
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"white_stained_glass": {
+"lum": 255.0,
+"rgb": [
+255,
+255,
+255
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"white_stained_glass_pane_top": {
+"lum": 246.0,
+"rgb": [
+246,
+246,
+246
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"white_terracotta": {
+"lum": 202.6,
+"rgb": [
+201,
+203,
+205
+],
+"solid": 1.0,
+"src": "pack"
+},
+"white_tulip": {
+"lum": 142.6,
+"rgb": [
+143,
+144,
+134
+],
+"solid": 0.141,
+"src": "pack"
+},
+"white_wool": {
+"lum": 217.4,
+"rgb": [
+221,
+217,
+210
+],
+"solid": 1.0,
+"src": "pack"
+},
+"wildflowers": {
+"lum": 215.6,
+"rgb": [
+239,
+216,
+152
+],
+"solid": 0.238,
+"src": "vanilla"
+},
+"wildflowers_stem": {
+"lum": 170.0,
+"rgb": [
+170,
+170,
+170
+],
+"solid": 0.012,
+"src": "vanilla"
+},
+"wither_rose": {
+"lum": 44.2,
+"rgb": [
+44,
+48,
+25
+],
+"solid": 0.145,
+"src": "vanilla"
+},
+"yellow_candle": {
+"lum": 170.0,
+"rgb": [
+215,
+170,
+52
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"yellow_candle_lit": {
+"lum": 190.2,
+"rgb": [
+223,
+193,
+90
+],
+"solid": 0.082,
+"src": "vanilla"
+},
+"yellow_concrete": {
+"lum": 177.2,
+"rgb": [
+241,
+175,
+21
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"yellow_concrete_powder": {
+"lum": 193.0,
+"rgb": [
+233,
+199,
+57
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"yellow_glazed_terracotta": {
+"lum": 200.0,
+"rgb": [
+237,
+198,
+113
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"yellow_shulker_box": {
+"lum": 188.5,
+"rgb": [
+248,
+189,
+30
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"yellow_stained_glass": {
+"lum": 208.7,
+"rgb": [
+229,
+229,
+51
+],
+"solid": 0.254,
+"src": "vanilla"
+},
+"yellow_stained_glass_pane_top": {
+"lum": 201.4,
+"rgb": [
+221,
+221,
+49
+],
+"solid": 0.125,
+"src": "vanilla"
+},
+"yellow_terracotta": {
+"lum": 137.7,
+"rgb": [
+186,
+133,
+35
+],
+"solid": 1.0,
+"src": "vanilla"
+},
+"yellow_wool": {
+"lum": 165.3,
+"rgb": [
+183,
+167,
+110
+],
+"solid": 1.0,
+"src": "pack"
+}
+}

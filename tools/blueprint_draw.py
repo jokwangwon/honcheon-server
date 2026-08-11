@@ -24,27 +24,37 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 BP = ROOT / "config" / "blueprints"
 
-# ── 재료 색 — 바닐라 텍스처 평균 (run/client 클라이언트 jar 실측) ──────────
-#   ★리소스팩이 아니라 바닐라다. 테스트 서버는 팩을 끄고 본다.
-MAT = {
-    "air":                    None,
-    "smooth_stone":           (159, 159, 159),
-    "stone":                  (126, 126, 126),
-    "stone_bricks":           (122, 122, 122),
-    "stone_brick_wall":       (122, 122, 122),
-    "tuff":                   (108, 109, 103),
-    "cobbled_deepslate":      (77, 77, 81),
-    "deepslate_bricks":       (71, 71, 71),
-    "plaster":                (229, 226, 208),      # bone_block_side
-    "bone_block":             (229, 226, 208),
-    "cut_sandstone":          (216, 203, 155),
-    "stripped_mangrove_log":  (118, 54, 46),
-    "dark_oak_planks":        (66, 43, 20),
-    "dark_oak_trapdoor":      (74, 48, 23),
-    "dark_oak_fence":         (66, 43, 20),
-    "lantern":                (216, 174, 96),
-    "glass_pane":             (200, 220, 226),
-}
+# ── 재료 색 — <b>텍스처에서 자동으로 뽑는다</b> (tools/block_palette.py) ──────────
+#   ★2026-08-11: 여기 <b>손으로 적은 17종짜리 표</b>가 있었다. 그 사이 팔레트가 여러 번
+#     바뀌었고, 재 보니 본전이 쓰는 재료 14종 중 <b>9종(64%)을 몰라</b> 정면도가 통째로
+#     `?` 였다. <b>도면 도구가 고장난 채 몇 회차를 지났다.</b>
+#     표가 틀린 게 아니라 <b>손으로 유지하는 표</b>가 문제였다 — 안 따라 적어도 아무도
+#     안 죽으니 조용히 낡는다. 이제 클라이언트 jar 의 실제 텍스처에서 뽑고,
+#     리소스팩이 덮은 블록은 <b>팩 것을 쓴다</b> (게임에서 보이는 것이 그것이다).
+#   ★모르는 재료가 나오면 <b>자홍색으로 칠하고 세어 보고한다</b> — 조용히 넘어가지 않는다.
+import json as _json
+
+_TABLE_PATH = ROOT / "config" / "block_colors.json"
+if not _TABLE_PATH.exists():
+    raise SystemExit("색표가 없다 — 먼저 굽는다: python3 tools/block_palette.py")
+_TABLE = _json.loads(_TABLE_PATH.read_text())
+
+sys.path.insert(0, str(ROOT / "tools"))
+from block_palette import color_of as _color_of      # noqa: E402
+
+UNKNOWN = {}
+
+
+def mat_color(m):
+    """재료 → 색. 모르면 자홍색을 주고 <b>이름을 적어 둔다</b>."""
+    if not m or m == "air":
+        return None
+    got = _color_of(_TABLE, m)
+    if got is None:
+        UNKNOWN[m] = UNKNOWN.get(m, 0) + 1
+        return (255, 0, 255)
+    return tuple(got["rgb"])
+
 
 # 도면에 쓰는 한 글자 — ASCII 도면용 (1문자 = 1칸)
 GLYPH = {
@@ -160,7 +170,9 @@ def to_png(grid, path, cell=8, grid_every=5):
         for x, m in enumerate(ln):
             if not m:
                 continue
-            c = MAT.get(m, (255, 0, 255))
+            c = mat_color(m)
+            if c is None:
+                continue
             dr.rectangle([x * cell, y * cell, x * cell + cell - 1, y * cell + cell - 1], fill=c)
     # 5칸 눈금 — 치수를 눈으로 세게 (도면의 자)
     for x in range(0, w + 1, grid_every):
@@ -304,6 +316,11 @@ def main():
             rl.append("")
         (out / "roof_layers.md").write_text("\n".join(rl))
         print(f"  지붕 층별             {len(bp.roof)}채  → roof_layers.md")
+    if UNKNOWN:
+        print("  ★모르는 재료 " + str(len(UNKNOWN)) + "종 (자홍색으로 칠했다): "
+              + ", ".join(sorted(UNKNOWN)))
+    else:
+        print("  색표가 재료를 <b>전부</b> 안다")
     print(f"→ {out}")
 
 
