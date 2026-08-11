@@ -120,7 +120,11 @@ meta:
   #   그래서 <b>켜 배분은 안 건드리고</b>(정면 재작성 종료는 유지) 재료만 가른다.
   #   이 항목을 안 적은 도면은 한 블록도 안 바뀐다 — 기본값이 종전 값이다.
   palette:
-    post: red_terracotta          # 적주 — 인방(갈색)에서 <b>먼저</b> 떨어져 나와야 한다
+    #   ★★어둡게 (2026-08-11 · 레퍼런스 실측) — 레퍼런스 기둥 대표색은 <b>#401010</b> 인데
+    #     red_terracotta 는 <b>#703020</b> 이다. 우리 정면의 <b>52%</b> 가 이 색이라,
+    #     이것 하나가 「우리가 레퍼런스보다 밝다」(69.2 대 57.3)의 절반을 만든다.
+    #     red_nether_bricks 는 화면색이 #401010 에 가장 가깝다.
+    post: red_nether_bricks       # 적주 — 짙은 주칠
     #   ★1차(spruce)는 Codex 불합격 — 「검은 구멍은 사라졌지만 격자가 인방·가로살과
     #     합쳐져 <b>밝은 판벽</b>처럼 읽힌다」. 반대편으로 넘어간 것이다.
     #     명도를 한 단계만 내리되 dark_oak 의 구멍 효과는 피하는 중간값으로 간다.
@@ -216,7 +220,7 @@ columns:
   #   → 주두를 <b>따로 두지 않는다.</b> 붉은 몸통이 어두운 보에 바로 닿고,
   #     벌어짐은 그 <b>위의 공포</b>가 맡는다 (레퍼런스도 그렇다).
   "P": ["smooth_stone*2", "polished_andesite",
-        "red_terracotta*7",
+        "red_nether_bricks*7",
         "dark_oak_planks", "dark_oak_log"]                   # 주초 + 적주 + 주두 + 도리 + 긴 보
   # ★★인방(引枋) — 칸의 위·아래를 붉은 켜로 끊는다 (2026-08-05 · B-196 셋째 교정).
   #   까닭은 아래 【실측 비율】 절. 회벽·격자 둘 다 5켜 통짜였고, 그래서 한 주기(3칸)의
@@ -240,14 +244,14 @@ columns:
   # ★역할 차이는 이제 <b>공포</b>가 진다 (C 는 두 축 · A 는 축을 향한 대각) — 몸통은 안 건드린다.
   #   다만 머리 한 켜로 결을 남긴다: C 는 어두운 보를 겹으로, A 는 붉은 보조 인방으로.
   "C": ["smooth_stone*2", "polished_andesite",
-        "red_terracotta*6", "dark_oak_planks",
+        "red_nether_bricks*6", "dark_oak_planks",
         "dark_oak_planks", "dark_oak_log"]                   # 모서리 — 주두 두 켜
   # ★★REF-3B — 입구 옆은 <b>중앙으로 뻗을 칸이 없다</b> (17·21 이 이미 문설주다).
   #   그래서 가로가 아니라 <b>세로로</b> 밀도를 올린다: 주두를 두 켜로 하되 <b>둘 다 붉은 목재</b>로
   #   두어, 어두운 두 켜인 모서리(C)와 형태는 같고 <b>결이 다르게</b> 한다.
   #   밀도 순서:  일반 P  <  모서리 C  <  입구 옆 A  <  중앙
   "A": ["smooth_stone*2", "polished_andesite",
-        "red_terracotta*6", "mangrove_planks",
+        "red_nether_bricks*6", "mangrove_planks",
         "dark_oak_planks", "dark_oak_log"]                   # 입구 옆 — 붉은 주두 두 켜
   # ★★가로 부재는 <b>칸을 가로질러 이어진다</b> (레퍼런스) — 창턱과 상인방이 회벽칸·격자칸
   #   <b>같은 높이</b>에 있어야 한 줄로 읽힌다. 한 칸에만 두면 <b>선반</b>처럼 튀어나온다.
@@ -271,7 +275,7 @@ columns:
   #   ★정면(row 19)은 한 글자도 안 건드린다 — 고주는 rows 7~18 안쪽에 서고,
   #     바깥에서는 중앙 대문 개구로만 보인다 (오히려 깊이가 생긴다).
   "G": ["smooth_stone*2", "polished_andesite",
-        "red_terracotta*10",
+        "red_nether_bricks*10",
         "dark_oak_planks", "dark_oak_log"]                   # 고주 — 15켜
   "Q": ["smooth_stone*3", "mangrove_planks", "plaster*4", "mangrove_planks",
         "mangrove_planks",
@@ -336,7 +340,12 @@ depth:
   "G": 0
   "Q": 0
   "W": -1
-  "D": -1
+  # ★★★문짝을 <b>벽면으로 올린다</b> (2026-08-11) — −1 → 0.
+  #   격자를 얹은 정면 사진을 재니, 문짝 <b>위아래의 밝은 띠</b>가 재료가 아니라
+  #   <b>감실의 천장·바닥면</b>이었다 (문이 한 칸 물러나 생긴 알코브가 빛을 받는다).
+  #   레퍼런스의 문짝은 <b>틀과 같은 면</b>에 있어 그 밝은 띠가 없다.
+  #   ★툇간은 안 사라진다 — 회벽 W 는 여전히 −1 이고, 적주(+1)와의 차는 2 그대로다.
+  "D": 0
   "O": -1
   "M": 0
   "s": 0
@@ -476,8 +485,8 @@ roof:
         ......................................
         ......................................
       columns:
-        "K": ["red_terracotta*3", "dark_oak_log"]      # 모서리 — 도리를 통나무로 받는다
-        "T": ["red_terracotta*3", "dark_oak_planks"]   # 적주 — 3켜여야 적주로 세어진다
+        "K": ["red_nether_bricks*3", "dark_oak_log"]      # 모서리 — 도리를 통나무로 받는다
+        "T": ["red_nether_bricks*3", "dark_oak_planks"]   # 적주 — 3켜여야 적주로 세어진다
         "V": ["dark_oak_slab", "lattice*2", "dark_oak_planks"]   # 창턱·살창2·인방
         "B": ["plaster*4"]                             # 살창 뒤 회벽
       depth:
