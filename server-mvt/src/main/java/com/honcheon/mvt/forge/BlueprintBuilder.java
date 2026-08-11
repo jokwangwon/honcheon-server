@@ -55,16 +55,46 @@ public final class BlueprintBuilder {
         public int curveSkipped;
         /** 소품이 <b>자리를 못 잡은</b> 수 — 「놓았다 치고」 넘어가지 않기 위해 센다 */
         public int propFailed;
+        /** 채움재가 <b>남의 자리를 보고 물러난</b> 수 — 덮임이 아니라 양보다 */
+        public int yielded;
         public final java.util.Map<Long, String> claim = new java.util.HashMap<>();
         /** 「다른 부재가 덮었다」 — 부재쌍별 횟수 */
         public final java.util.Map<String, Integer> covered = new java.util.TreeMap<>();
+
+        /**
+         * <b>비어 있을 때만</b> 맡는다 — 채움재(살창 뒤 판 등)를 위한 것이다.
+         *
+         * <p>받침은 <b>주인공이 아니다.</b> 남이 이미 쓰는 자리면 물러난다.
+         * (네 귀에서 두 면의 문짝 판이 부딪쳐 덮임 40 이 났다 — 2026-08-11.
+         *  J-5 때 벽이 겪은 것과 같은 병이고, 그때는 되받이 칸으로 풀었다.
+         *  받침은 도면이 신고한 부재가 아니므로 <b>양보</b>가 옳은 답이다.)
+         *
+         * @return 맡았으면 참 · 이미 남이 쓰면 거짓
+         */
+        boolean claimIfFree(int x, int y, int z, String member) {
+            long k = (((long) x & 0x3FFFFFF) << 38) | (((long) y & 0xFFF) << 26)
+                    | ((long) z & 0x3FFFFFF);
+            if (claim.containsKey(k)) {
+                yielded++;
+                return false;
+            }
+            claim.put(k, member);
+            return true;
+        }
 
         void mark(int x, int y, int z, String member) {
             long k = (((long) x & 0x3FFFFFF) << 38) | (((long) y & 0xFFF) << 26)
                     | ((long) z & 0x3FFFFFF);
             String prev = claim.put(k, member);
             if (prev != null && !prev.equals(member)) {
-                covered.merge(prev + " ← " + member, 1, Integer::sum);
+                // ★<b>채움재가 밀린 것은 덮임이 아니다</b> — 양보다. 받침은 도면이 신고한
+                //   부재가 아니므로, 진짜 부재가 그 자리를 쓰면 물러나는 것이 옳다.
+                //   (자리를 <b>먼저</b> 맡았을 때도 마찬가지다 — 순서는 계약이 아니다.)
+                if (prev.startsWith("문짝판")) {
+                    yielded++;
+                } else {
+                    covered.merge(prev + " ← " + member, 1, Integer::sum);
+                }
             }
         }
 
@@ -633,6 +663,22 @@ public final class BlueprintBuilder {
                             .setBlockData(stand(Bukkit.createBlockData(lm), nf), false);
                     n.blocks++;
                     n.mark(x, y, z, member);
+                    // ★★★살창 <b>뒤를 받친다</b> (2026-08-11) — 안 받치면 문짝이 아니라
+                    //   <b>구멍</b>이다. 살 뒤로 실내의 밝은 바닥이 비쳐, 문짝을 늘릴수록
+                    //   정면이 오히려 밝아졌다 (실측 75.2 → 77.1).
+                    //   레퍼런스의 문짝은 어두운 <b>판</b>이고 살은 그 앞에 걸린 격자다.
+                    //   ★<b>물러난 칸에만</b> 받친다. 안 좁히면 상층 살창(깊이 0)이
+                    //     이미 가진 회벽 받침과 겹치고, 모서리에서 두 면의 판이 부딪친다
+                    //     (덮임 감사가 151칸으로 잡았다).
+                    String back = lv.depthOf(ch) < 0 ? bp.latticeBacking() : "";
+                    if (!back.isEmpty()) {
+                        int bxx = x - nf.getModX();
+                        int bzz = z - nf.getModZ();
+                        if (n.claimIfFree(bxx, y, bzz, "문짝판@" + nf.name().charAt(0))) {
+                            world.getBlockAt(bxx, y, bzz).setType(mat(back), false);
+                            n.blocks++;
+                        }
+                    }
                 } else if ("air".equals(course.material())) {
                     // ★빈 켜도 찍는다 — 개구는 「안 짓는 것」이 아니라 「비우는 것」이다
                     world.getBlockAt(x, y, z).setType(Material.AIR, false);

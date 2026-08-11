@@ -531,6 +531,18 @@ public final class Blueprint implements Level {
         return upperLevel;
     }
 
+    /**
+     * <b>살창 뒤를 무엇으로 받치는가</b> — 안 적으면 안 받친다 (옛 도면은 한 칸도 안 바뀐다).
+     *
+     * <p>2026-08-11 실측: 하층 문짝을 4켜 → 5켜로 늘렸는데 정면이 <b>오히려 밝아졌다</b>
+     * (75.2 → 77.1). 까닭은 살창이 <b>판이 아니라 구멍</b>이라서다 — 살 뒤로 실내의
+     * 밝은 바닥이 비친다. 레퍼런스의 문짝은 <b>어두운 판</b>이고 그 앞에 살이 걸린 것이다.
+     * 상층은 이미 REF-1b 에서 같은 이유로 회벽을 받쳤다 — 하층만 안 받치고 있었다.
+     */
+    public String latticeBacking() {
+        return palette("lattice_backing", "");
+    }
+
     public String palette(String role, String fallback) {
         String v = palette.get(role);
         return v == null || v.isBlank() ? fallback : v;
