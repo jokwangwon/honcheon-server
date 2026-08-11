@@ -4078,6 +4078,11 @@ public final class TerraceForgeSelfTest {
                         if (m.contains("stone") || "lattice".equals(m) || m.contains("plaster")) {
                             continue;
                         }
+                        // ★자를 넓혔다 (단청 · 2026-08-11): 창방 한 켜가 <b>푸른 계열</b>이 됐다.
+                        //   그것은 적갈도 짙은 갈도 아닌 <b>제 갈래</b>다 — 어긋남으로 세면 안 된다.
+                        if (m.startsWith("warped")) {
+                            continue;
+                        }
                         boolean top2 = i >= col.size() - 2;
                         if (top2) {
                             if (m.startsWith("dark_oak")) {
@@ -4103,6 +4108,91 @@ public final class TerraceForgeSelfTest {
                 check("★★창호·서까래는 여전히 가장 어둡다 (dark_oak 계열)",
                         hj.columnOf('J').stream().anyMatch(cs -> cs.material().startsWith("dark_oak")),
                         "");
+            }
+
+            // ══════ ★★★단청 계약 (Codex 2026-08-11 · 마크 한옥 관습) ══════
+            //   「단청은 <b>3블록 이상 이어지는 창방의 완결된 수평 띠</b>에만 적용한다.
+            //     1블록 끝칠·교대무늬·유광테라코타 점식은 금지.」
+            {
+                java.util.Map<Integer, Integer> atY = new java.util.TreeMap<>();
+                java.util.Set<Character> chs = new java.util.TreeSet<>();
+                int woodTop = 0;
+                for (char ch : hj.columnKeys()) {
+                    int y = 0;
+                    boolean has = false;
+                    for (Blueprint.Course cs : hj.columnOf(ch)) {
+                        for (int k = 0; k < cs.count(); k++, y++) {
+                            if (cs.material().startsWith("warped")) {
+                                atY.merge(y, 1, Integer::sum);
+                                has = true;
+                            }
+                        }
+                    }
+                    if (has) {
+                        chs.add(ch);
+                    }
+                    if (y >= 12) {
+                        woodTop++;
+                    }
+                }
+                check("★★단청이 <b>한 높이</b>에만 있다 (여러 켜면 띠가 아니라 무늬가 된다 — "
+                                + atY.keySet() + ")", atY.size() == 1, atY.toString());
+                // 정면에서 실제로 <b>이어지는가</b> — 끊기면 끝칠이지 띠가 아니다
+                int frontD = hj.roofs().get(0).box()[3];
+                int run = 0;
+                int longest = 0;
+                int gaps = 0;
+                boolean prev = false;
+                for (int c = hj.roofs().get(0).box()[0]; c <= hj.roofs().get(0).box()[2]; c++) {
+                    boolean on = chs.contains(hj.at(c, frontD));
+                    if (on) {
+                        run++;
+                        longest = Math.max(longest, run);
+                    } else {
+                        if (prev) {
+                            gaps++;
+                        }
+                        run = 0;
+                    }
+                    prev = on;
+                }
+                check("★★단청이 정면에서 <b>완결된 수평 띠</b>다 (가장 긴 연속 " + longest
+                                + " · 끊김 " + gaps + ")", longest >= 3 && gaps == 0, longest + "/" + gaps);
+                check("★★단청은 <b>창방 한 켜뿐</b>이다 (도리·기둥은 안 물들인다)",
+                        hj.columnOf('P').stream().filter(cs -> cs.material().startsWith("warped"))
+                                .mapToInt(Blueprint.Course::count).sum() == 1, "");
+                check("★★유광테라코타 점식이 <b>없다</b> (무늬가 세면 단청이 아니라 타일이 된다)",
+                        hj.columnKeys().stream().flatMap(ch -> hj.columnOf(ch).stream())
+                                .noneMatch(cs -> cs.material().contains("glazed")), "");
+                // ★[눈의 눈] 단청을 한 칸만 남기면 「완결된 띠」 자가 무너져야 한다
+                java.util.Map<String, Object> dRaw = new org.yaml.snakeyaml.Yaml().load(
+                        java.nio.file.Files.readString(
+                                java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> dCols =
+                        (java.util.Map<String, Object>) dRaw.get("columns");
+                @SuppressWarnings("unchecked")
+                java.util.List<Object> mutD = new java.util.ArrayList<>(
+                        (java.util.List<Object>) dCols.get("D"));
+                for (int i = 0; i < mutD.size(); i++) {
+                    if (String.valueOf(mutD.get(i)).startsWith("warped")) {
+                        mutD.set(i, "dark_oak_planks");     // 창 칸만 단청을 벗긴다
+                    }
+                }
+                dCols.put("D", mutD);
+                Blueprint dMut = Blueprint.of(dRaw);
+                int mutGaps = 0;
+                boolean p2 = false;
+                for (int c = dMut.roofs().get(0).box()[0]; c <= dMut.roofs().get(0).box()[2]; c++) {
+                    boolean on = dMut.columnOf(dMut.at(c, frontD)).stream()
+                            .anyMatch(cs -> cs.material().startsWith("warped"));
+                    if (p2 && !on) {
+                        mutGaps++;
+                    }
+                    p2 = on;
+                }
+                check("★★[눈의 눈] 창 칸의 단청을 벗기면 <b>띠가 끊긴다</b> (끊김 " + mutGaps + ")",
+                        mutGaps > 0, mutGaps);
             }
 
             // ══════ ★★★상층이 하층과 <b>같은 문법</b>을 쓴다 (2026-08-11 · Codex 판정 B) ══════

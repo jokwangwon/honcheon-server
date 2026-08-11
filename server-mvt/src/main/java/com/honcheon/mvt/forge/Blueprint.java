@@ -604,6 +604,11 @@ public final class Blueprint implements Level {
         return intercolumnar;
     }
 
+    /** 이 도면이 쓰는 기둥 글자 전부 — 자가 「모든 칸」을 훑을 때 쓴다 */
+    public java.util.Set<Character> columnKeys() {
+        return columns.keySet();
+    }
+
     public boolean bracketContour() {
         return "contour".equalsIgnoreCase(bracketShape);
     }
