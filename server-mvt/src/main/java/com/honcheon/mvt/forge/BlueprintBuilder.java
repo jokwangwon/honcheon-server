@@ -229,9 +229,11 @@ public final class BlueprintBuilder {
             if (rf.rafters()) {
                 int rex = rf.grand() ? rf.eaveX() : rf.eave();
                 int rez = rf.grand() ? rf.eaveZ() : rf.eave();
+                // ★겹처마는 <b>격이 높은 전각만</b> — 본전 전용 판(grand)이 곧 그 격이다.
+                //   강당·산문은 홑처마 그대로다 (한 블록도 안 바뀐다).
                 HwasanCampusBuilder.rafters(world, pad,
                         ox + bx0 - rex, ox + bx1 + rex, oy + rf.baseY(),
-                        oz + bz0 - rez, oz + bz1 + rez, rf.grand(), tally);
+                        oz + bz0 - rez, oz + bz1 + rez, rf.grand(), rf.grand(), tally);
             }
             n.roofs++;
             if (rf.hasUpper()) {
@@ -502,12 +504,15 @@ public final class BlueprintBuilder {
                                     //     기둥이 보까지 한 줄로 이어진다 (안 그러면 색 마감이
                                     //     그때 그 병 — 첫 단이 다시 「기둥에 붙은 딴 블록」이 된다).
                                     s2 == 0 ? mat(bp.palette("post", "stripped_mangrove_log"))
-                                            : s2 == 1 ? Material.DARK_OAK_SLAB
+                                            //   ★★★동양풍 (2026-08-11) — 화북은 「기둥 위에
+                                            //     올라가는 <b>부재들</b>을 파란 계열로」 한다.
+                                            //     단청이 창방 한 줄에 갇히면 안 된다 (Codex).
+                                            : s2 == 1 ? Material.WARPED_SLAB
                                             //   ★REF-3B 3단째 = <b>서까래 신발</b>. 처마를 키우지
                                             //     않는다. 3단이 세로로 세 켜일 필요는 없다 —
                                             //     기둥→주두→받침→받침→서까래로 이어지는
                                             //     <b>윤곽</b>이 보이면 된다 (사용자).
-                                            : Material.DARK_OAK_STAIRS);
+                                            : Material.WARPED_STAIRS);
                             world.getBlockAt(bx, top + s2, bz)
                                     .setBlockData(stand(bd, nf), false);
                             n.blocks++;
@@ -573,7 +578,7 @@ public final class BlueprintBuilder {
                         int bx = ox + d4[0] + nf2.getModX() * reach;
                         int bz = oz + d4[1] + nf2.getModZ() * reach;
                         BlockData bd = Bukkit.createBlockData(
-                                s2 == 1 ? Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS);
+                                s2 == 1 ? Material.WARPED_SLAB : Material.WARPED_STAIRS);
                         world.getBlockAt(bx, top2 + s2, bz).setBlockData(stand(bd, nf2), false);
                         n.blocks++;
                         n.mark(bx, top2 + s2, bz, "간포@" + nf2.name().charAt(0));

@@ -208,7 +208,7 @@ columns:
   "P": ["smooth_stone*2", "polished_andesite",
         "red_terracotta*6",
         "warped_planks",   # ★단청 창방
-        "dark_oak_planks", "dark_oak_log"]                   # 주초 + 적주 + 주두 + 도리 + 긴 보
+        "warped_planks", "dark_oak_log"]                   # 주초 + 적주 + 주두 + 도리 + 긴 보
   # ★★인방(引枋) — 칸의 위·아래를 붉은 켜로 끊는다 (2026-08-05 · B-196 셋째 교정).
   #   까닭은 아래 【실측 비율】 절. 회벽·격자 둘 다 5켜 통짜였고, 그래서 한 주기(3칸)의
   #   재료가 붉은 5 : 회벽 5 : 나무 5 로 **똑같이 셋**이었다. 목표는 붉은색이 3분의 2다.
@@ -233,7 +233,7 @@ columns:
   "C": ["smooth_stone*2", "polished_andesite",
         "red_terracotta*5", "dark_oak_planks",
         "warped_planks",   # ★단청 창방 (y9 — 전 구간 한 높이)
-        "dark_oak_planks", "dark_oak_log"]                   # 모서리 — 주두 두 켜
+        "warped_planks", "dark_oak_log"]                   # 모서리 — 주두 두 켜
   # ★★REF-3B — 입구 옆은 <b>중앙으로 뻗을 칸이 없다</b> (17·21 이 이미 문설주다).
   #   그래서 가로가 아니라 <b>세로로</b> 밀도를 올린다: 주두를 두 켜로 하되 <b>둘 다 붉은 목재</b>로
   #   두어, 어두운 두 켜인 모서리(C)와 형태는 같고 <b>결이 다르게</b> 한다.
@@ -241,7 +241,7 @@ columns:
   "A": ["smooth_stone*2", "polished_andesite",
         "red_terracotta*5", "mangrove_planks",
         "warped_planks",   # ★단청 창방 (y9 — 전 구간 한 높이)
-        "dark_oak_planks", "dark_oak_log"]                   # 입구 옆 — 붉은 주두 두 켜
+        "warped_planks", "dark_oak_log"]                   # 입구 옆 — 붉은 주두 두 켜
   # ★★가로 부재는 <b>칸을 가로질러 이어진다</b> (레퍼런스) — 창턱과 상인방이 회벽칸·격자칸
   #   <b>같은 높이</b>에 있어야 한 줄로 읽힌다. 한 칸에만 두면 <b>선반</b>처럼 튀어나온다.
   #   그래서 W 와 D 는 창턱(3켜째)·상인방(8켜째)을 <b>공유</b>하고 가운데 채움만 다르다.
@@ -265,13 +265,13 @@ columns:
   #     바깥에서는 중앙 대문 개구로만 보인다 (오히려 깊이가 생긴다).
   "G": ["smooth_stone*2", "polished_andesite",
         "red_terracotta*10",
-        "dark_oak_planks", "dark_oak_log"]                   # 고주 — 15켜
+        "warped_planks", "dark_oak_log"]                   # 고주 — 15켜
   "Q": ["smooth_stone*3", "mangrove_planks", "plaster*4", "mangrove_planks",
         "warped_planks",   # ★단청 창방
-        "dark_oak_slab", "dark_oak_log"]                     # 측면 되받이 — 깊이 0
+        "warped_slab", "dark_oak_log"]                     # 측면 되받이 — 깊이 0
   "W": ["smooth_stone*3", "mangrove_planks", "plaster*4", "mangrove_planks",
         "warped_planks",   # ★단청 창방
-        "dark_oak_slab", "dark_oak_log"]                     # 회벽 — 인방 사이 3켜만
+        "warped_slab", "dark_oak_log"]                     # 회벽 — 인방 사이 3켜만
   # ★D2 ④ — 「lattice」는 <b>재료가 아니라 처방</b>이다. 모양은 meta.window.family 가 정한다.
   #   전에는 dark_oak_trapdoor 를 도면이 직접 박았다 → 그러면 family 를 바꿔도 안 바뀐다.
   # ★REF-2.5 S2 — 창은 <b>네모 구멍</b>이 아니다: 창턱(반블록) → 살창 → 상인방.
@@ -285,7 +285,7 @@ columns:
   "D": ["smooth_stone*3", "mangrove_planks",
         "lattice*4", "plaster",
         "warped_planks",   # ★단청 창방
-        "dark_oak_slab", "dark_oak_log"]                     # 창호 — 칸을 거의 다 채운다
+        "warped_slab", "dark_oak_log"]                     # 창호 — 칸을 거의 다 채운다
   # ★★REF-1c-A 문설주 — 중앙 5칸을 <b>개구 3 + 좌우 문틀 1+1</b> 로 가른다.
   #   ★<b>적주(P)를 쓰지 않는다.</b> 처음엔 P 로 세웠더니 col16·17 과 21·22 가 붙어
   #     <b>7호 실측의 3칸 주기가 깨졌고</b> (기둥 12개 · 어긋난 틈 3) 눈이 잡았다.
@@ -297,10 +297,10 @@ columns:
   #   ★J 의 암색은 유지한다. 붉게 만들면 7호 실측의 <b>3칸 주기</b>가 다시 깨진다 (한 번 물렸다).
   "J": ["smooth_stone*3", "dark_oak_log*5", "dark_oak_planks",
         "warped_planks",   # ★단청 창방 (y9 — 전 구간 한 높이)
-        "dark_oak_planks", "dark_oak_log"]                   # 문설주 — A 와 같은 주두 윤곽
+        "warped_planks", "dark_oak_log"]                   # 문설주 — A 와 같은 주두 윤곽
   "O": ["smooth_stone*3", "air*6",
         "warped_planks",   # ★단청 창방
-        "dark_oak_slab", "dark_oak_log"]                     # ★중앙 대문 (걸어 지난다)
+        "warped_slab", "dark_oak_log"]                     # ★중앙 대문 (걸어 지난다)
 
 # ── ★D2 ① 입면 깊이 (profile full · 바깥이 +) ───────────────────────────
 #   적주가 나오고 격자창이 들어간다. 방향은 도면이 안 적는다 — <b>자리가 정한다</b>.

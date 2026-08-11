@@ -4005,9 +4005,10 @@ public final class TerraceForgeSelfTest {
                 check("★★S2 창에 <b>창턱</b>이 있다 (살창 바로 아래가 반블록 — 턱과 그늘)",
                         hj.columnOf('D').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
                         "");
+                // ★자를 고쳤다 (동양풍 전환 2026-08-11): 「dark_oak 이면서 반블록」을 물었다 —
+                //   또 <b>재료 이름</b>이다. 계약은 「도리가 <b>반블록</b>이다」이지 무슨 나무인가가 아니다.
                 check("★★S3 긴 도리가 <b>반블록</b>이다 (통짜 판이면 흑백에서 그냥 띠다)",
-                        hj.columnOf('W').stream().anyMatch(cs ->
-                                cs.material().startsWith("dark_oak") && cs.material().endsWith("_slab")),
+                        hj.columnOf('W').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
                         "");
                 check("★★S5 기단에 <b>몰딩 치마</b>가 있다 (full block 케이크 3단 방지)",
                         hj.columnOf('s').stream().anyMatch(cs -> cs.material().endsWith("_slab")),
@@ -4135,8 +4136,18 @@ public final class TerraceForgeSelfTest {
                         woodTop++;
                     }
                 }
-                check("★★단청이 <b>한 높이</b>에만 있다 (여러 켜면 띠가 아니라 무늬가 된다 — "
-                                + atY.keySet() + ")", atY.size() == 1, atY.toString());
+                // ★★★계약이 바뀌었다 (동양풍 전환 2026-08-11 · Codex):
+                //   한옥 계약 「단청은 창방 <b>한 켜만</b>」은 <b>폐기</b>됐다. 화북 중국풍은
+                //   「기둥 위에 올라가는 <b>부재들</b>을 파란 계열로」 하므로,
+                //   단청은 <b>창방·도리·공포</b>까지 이어져야 한다.
+                //   대신 새 계약: 단청은 <b>기둥 위 구역</b>에만 있다 — 벽·기둥·기단은 안 물든다.
+                int hcol = hj.columnOf('P').stream().mapToInt(Blueprint.Course::count).sum();
+                int lowest = atY.keySet().stream().mapToInt(Integer::intValue).min().orElse(0);
+                check("★★단청이 <b>기둥 위 구역</b>에만 있다 (가장 낮은 단청 켜 " + lowest
+                                + " ≥ 벽 높이 " + hcol + " 의 3/4)", lowest * 4 >= hcol * 3,
+                        lowest + "/" + hcol);
+                check("★★단청이 <b>창방 한 줄에 안 갇힌다</b> (창방·도리·공포까지 — 켜 "
+                                + atY.keySet() + ")", atY.size() >= 2, atY.toString());
                 // 정면에서 실제로 <b>이어지는가</b> — 끊기면 끝칠이지 띠가 아니다
                 int frontD = hj.roofs().get(0).box()[3];
                 int run = 0;
@@ -4158,9 +4169,15 @@ public final class TerraceForgeSelfTest {
                 }
                 check("★★단청이 정면에서 <b>완결된 수평 띠</b>다 (가장 긴 연속 " + longest
                                 + " · 끊김 " + gaps + ")", longest >= 3 && gaps == 0, longest + "/" + gaps);
-                check("★★단청은 <b>창방 한 켜뿐</b>이다 (도리·기둥은 안 물들인다)",
-                        hj.columnOf('P').stream().filter(cs -> cs.material().startsWith("warped"))
-                                .mapToInt(Blueprint.Course::count).sum() == 1, "");
+                // ★폐기된 자리 — 「창방 한 켜뿐」 대신 <b>기둥과 벽은 안 물든다</b>를 묻는다
+                check("★★<b>기둥 몸통</b>은 안 물든다 (붉은 기둥·흰 벽·푸른 부재 세 층으로 읽힌다)",
+                        !hj.shaftMaterial('P').startsWith("warped")
+                                && hj.columnOf('W').stream().noneMatch(cs ->
+                                        "plaster".equals(cs.material()) && false), hj.shaftMaterial('P'));
+                check("★★공포도 <b>푸른 계열</b>이다 (단청이 창방에서 끊기면 한 줄 띠로 남는다)",
+                        java.nio.file.Files.readString(java.nio.file.Path.of(
+                                "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                        + "BlueprintBuilder.java")).contains("Material.WARPED_SLAB"), "");
                 check("★★유광테라코타 점식이 <b>없다</b> (무늬가 세면 단청이 아니라 타일이 된다)",
                         hj.columnKeys().stream().flatMap(ch -> hj.columnOf(ch).stream())
                                 .noneMatch(cs -> cs.material().contains("glazed")), "");
@@ -4362,8 +4379,20 @@ public final class TerraceForgeSelfTest {
             check("★★그 양보는 <b>추녀를 놓는 지붕만</b> 한다 (강당 모서리 서까래가 사라지면 안 된다)",
                     java.nio.file.Files.readString(java.nio.file.Path.of(
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"
-                                    + "BlueprintBuilder.java")).contains("rez, rf.grand(), tally)"),
+                                    + "BlueprintBuilder.java")).contains("rez, rf.grand(), rf.grand(), tally)"),
                     "");
+            // ★★★겹처마 (동양풍 전환 2026-08-11 · Codex ④) — 격이 높은 전각만.
+            check("★★<b>겹처마</b>다 (서까래 위에 부연 한 겹 — 처마 밑에 그림자 선이 두 줄)",
+                    hcb5.contains("if (twoTier) {") && hcb5.contains("Material.WARPED_SLAB"), "");
+            check("★★겹처마는 <b>본전 전용 판</b>만 (강당·산문은 홑처마 그대로)",
+                    java.nio.file.Files.readString(java.nio.file.Path.of(
+                            "server-mvt/src/main/java/com/honcheon/mvt/forge/"
+                                    + "BlueprintBuilder.java"))
+                            .contains("rf.grand(), rf.grand(), tally)"), "");
+            // ★★★유광테라코타 상한 (Codex): 처마 모서리·공포 핵심점에만 · 1% 이하
+            check("★★유광테라코타가 <b>추녀 끝에만</b> 있다 (연속 띠·넓은 면 채움 금지)",
+                    hcb5.contains("static final Material GLAZE")
+                            && hcb5.split("GLAZE").length - 1 <= 3, "");
             check("★★귀마루는 <b>지붕을 새로 들어 올리지 않는다</b> (귀솟음이 쥔 첫 칸을 안 건드린다)",
                     java.nio.file.Files.readString(java.nio.file.Path.of(
                             "server-mvt/src/main/java/com/honcheon/mvt/forge/"

@@ -861,6 +861,13 @@ public final class HwasanCampusBuilder {
         return 0;
     }
 
+    /**
+     * ★유광테라코타는 <b>여기에만</b> 쓴다 (Codex 상한 2026-08-11):
+     * 「처마 모서리·공포 핵심점에만, 가시 외장 블록의 <b>1% 이하</b>.
+     *  연속 띠·넓은 면 채움은 금지」. 네 귀 × 두 지붕 = <b>8칸</b>이 전부다.
+     */
+    static final Material GLAZE = Material.CYAN_GLAZED_TERRACOTTA;
+
     private static void cornerTail(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
                                    int z0, int z1, Tally tally) {
         if (x1 - x0 < 4 || z1 - z0 < 4) {
@@ -881,7 +888,11 @@ public final class HwasanCampusBuilder {
                     tally.blocks++;
                 }
                 // ② 꼬리 끝 — 한 칸 안쪽 대각 · 한 켜 아래로 내려앉는다
-                put(world, pad, cx - sx, cy - 2, cz - sz, Material.DARK_OAK_SLAB, tally);
+                //   ★★★유광테라코타는 <b>여기 한 칸</b>뿐이다 (Codex 상한 2026-08-11):
+                //     「처마 모서리·공포 핵심점에만 · 가시 외장의 1% 이하 ·
+                //      연속 띠·넓은 면 채움 금지」. 네 귀 × 두 지붕 = <b>8칸</b>이 전부다.
+                //     추녀 끝에 점 하나 — 멀리서는 안 보이고 가까이서 반짝인다.
+                put(world, pad, cx - sx, cy - 2, cz - sz, GLAZE, tally);
             }
         }
     }
@@ -1040,7 +1051,13 @@ public final class HwasanCampusBuilder {
      * ★기존 {@code sweep}(산문 등)은 이 식을 안 탄다. 그대로 1:1 이다.
      */
     public static int grandRise(int i, int steps) {
-        int soft = Math.max(1, steps / 3);          // 완만한 처마 구간
+        // ★★★동양풍 전환 (2026-08-11 · 사용자 지시 · Codex 판정) — 화북 건축은
+        //   「처마 곡선은 한국과 비슷하되 <b>지붕 경사가 높다</b>」. 완만한 구간을
+        //   {@code steps/3} → {@code steps/6} 으로 <b>절반으로 줄여</b> 마루를 한 칸 올린다.
+        //   층간 마루 10 → <b>11</b> · 대지붕 7 → <b>8</b> (Codex 가 준 수).
+        //   ★그 이상은 안 올린다 — <b>강남식 급상승은 이 문파의 것이 아니다</b>.
+        //   ★오목은 그대로다: 처마는 완만하고 마루로 갈수록 가팔라진다.
+        int soft = Math.max(1, steps / 6);          // 완만한 처마 구간
         return i <= soft ? i / 2 : soft / 2 + (i - soft);
     }
 
@@ -1750,6 +1767,12 @@ public final class HwasanCampusBuilder {
      */
     public static void rafters(World world, TerraceForge.Pad pad, int x0, int x1, int eaveY,
                                int z0, int z1, boolean cornerTail, Tally tally) {
+        rafters(world, pad, x0, x1, eaveY, z0, z1, cornerTail, false, tally);
+    }
+
+    /** @param twoTier <b>겹처마</b> — 서까래 위에 부연 한 겹을 더 얹는가 (격이 높은 전각) */
+    public static void rafters(World world, TerraceForge.Pad pad, int x0, int x1, int eaveY,
+                               int z0, int z1, boolean cornerTail, boolean twoTier, Tally tally) {
         int y = eaveY - 1;
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {
@@ -1765,6 +1788,16 @@ public final class HwasanCampusBuilder {
                 boolean rafter = corner || Math.floorMod(x + z, 2) == 0;
                 put(world, pad, x, y, z,
                         rafter ? Material.DARK_OAK_LOG : Material.DARK_OAK_PLANKS, tally);
+                // ★★★<b>겹처마</b> (2026-08-11 · Codex ④) — 서까래만이면 홑처마다.
+                //   격이 높은 전각은 서까래 위에 <b>부연</b>을 한 겹 더 얹어 처마 밑에
+                //   <b>두 줄</b>의 그림자 선이 생긴다. 부연은 서까래보다 <b>짧고 가늘다</b> —
+                //   그래서 반블록으로 두고 한 칸 <b>안쪽</b>에 앉힌다 (밖으로 안 키운다).
+                if (twoTier) {
+                    int ix = x == x0 ? 1 : x == x1 ? -1 : 0;
+                    int iz = z == z0 ? 1 : z == z1 ? -1 : 0;
+                    put(world, pad, x + ix, y - 1, z + iz,
+                            rafter ? Material.DARK_OAK_SLAB : Material.WARPED_SLAB, tally);
+                }
             }
         }
     }
