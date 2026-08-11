@@ -49,7 +49,17 @@ public final class Blueprint implements Level {
      */
     public record UpperLevel(char[][] plan, Map<Character, List<Course>> columns,
                              Map<Character, Integer> depths, char backing, String bracket,
-                             int axis, int[] box, List<Trim> trims) implements Level {
+                             int axis, int[] box, List<Trim> trims, boolean inter) implements Level {
+        @Override
+        public int[] bodyBox() {
+            return box;
+        }
+
+        @Override
+        public boolean intercolumnar() {
+            return inter;
+        }
+
         @Override
         public char at(int col, int row) {
             return row < 0 || row >= plan.length || col < 0 || col >= plan[row].length
@@ -260,6 +270,7 @@ public final class Blueprint implements Level {
     private final List<Trim> trims;
     private final Map<String, String> palette;
     private UpperLevel upperLevel;
+    private boolean intercolumnar;
 
     private Blueprint(String name, int pad, int width, int depth, int axisCol,
                       char[][] plan, Map<Character, List<Course>> columns,
@@ -583,6 +594,16 @@ public final class Blueprint implements Level {
         return false;
     }
 
+    @Override
+    public int[] bodyBox() {
+        return roofs.isEmpty() ? null : roofs.get(0).box();
+    }
+
+    @Override
+    public boolean intercolumnar() {
+        return intercolumnar;
+    }
+
     public boolean bracketContour() {
         return "contour".equalsIgnoreCase(bracketShape);
     }
@@ -884,7 +905,8 @@ public final class Blueprint implements Level {
             String ubk = String.valueOf(up2.getOrDefault("bracket", "none"));
             char uback = String.valueOf(up2.getOrDefault("backing", " ")).charAt(0);
             upLevel = new UpperLevel(uplan, ucols, udep, uback == ' ' ? 0 : uback, ubk, axis,
-                    new int[]{bb[0] + uix, bb[1] + uiz, bb[2] - uix, bb[3] - uiz}, utrims);
+                    new int[]{bb[0] + uix, bb[1] + uiz, bb[2] - uix, bb[3] - uiz}, utrims,
+                    Boolean.TRUE.equals(up2.get("intercolumnar")));
             break;
         }
 
@@ -948,7 +970,8 @@ public final class Blueprint implements Level {
                     }
                 }
                 upLevel = new UpperLevel(gp, uc, Map.of(), (char) 0, "none", axis,
-                        new int[]{bb[0] + uix, bb[1] + uiz, bb[2] - uix, bb[3] - uiz}, List.of());
+                        new int[]{bb[0] + uix, bb[1] + uiz, bb[2] - uix, bb[3] - uiz}, List.of(),
+                        false);
                 break;
             }
         }
@@ -966,6 +989,7 @@ public final class Blueprint implements Level {
                 String.valueOf(meta.getOrDefault("bracket_shape", "flat")), bayRoles,
                 ((Number) meta.getOrDefault("post_period", 0)).intValue(), trims, palette);
         bpOut.upperLevel = upLevel;
+        bpOut.intercolumnar = Boolean.TRUE.equals(meta.get("intercolumnar_bracket"));
         return bpOut;
     }
 

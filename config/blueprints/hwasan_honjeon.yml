@@ -128,6 +128,12 @@ meta:
     #   ★강조는 <b>남기되 어둡게</b> (Codex) — 없애면 W3 가 W2 와 같아진다
     #     (중앙 강조 한 켜가 W3 를 W2 와 가르는 유일한 것이다).
     lattice_accent: dark_oak_slab # W3 중앙 강조켜 — 구분은 남기고 밝은 띠만 누른다
+  # ★★★다포 (Codex 2026-08-11 · 실물 대조) — 포를 기둥 <b>사이</b>에도 둔다.
+  #   지금까지 우리 본전은 principal·elaborate 로 다포를 <b>의도</b>하면서 포를 기둥 위에만
+  #   얹어 형식상 <b>주심포계</b>였다. 화엄사 각황전 같은 주불전은 다포계다.
+  #   ★수는 안 적는다 — 계약이 「기둥에서 2칸·간포끼리 2칸」이라 칸 너비가 스스로 정한다
+  #     (협칸 4 → 1 · 어칸 6 → 2 · 3칸 → 0).
+  intercolumnar_bracket: true
   bracket_shape: contour
   bracket: elaborate         # ★D2 ⑥ 3단 — 강당 2단보다 <b>높다</b>. 더 나오지는 않는다
 
@@ -331,35 +337,34 @@ plan: |
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNCDDDPDDDPDDDPDDDDDPDDDPDDDPDDDCNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
+    .sRNDFFGFFFFFFFFFFFFFFFFFFFFFFFGFFDNRs
+    .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
     .sRNDFFGFFFFFFFFFFFFFFFFFFFFFFFGFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
-    .sRNDFFGFFFFFFFFFFFFFFFFFFFFFFFGFFDNRs
     .sRNPFFFFFFFFFFFFFFFFFFFFFFFFFFFFFPNRs
-    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNDFFGFFFGFFFGFFFFFFFGFFFGFFFGFFDNRs
+    .sRNDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDNRs
     .sRNQFFFFFFFFFFFFFFFFFFFFFFFFFFFFFQNRs
     .sRNCDDDPDDDPDDDAJOOOJADDDPDDDPDDDCNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRs
     .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs
-    .sRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRs
     .sRRRRRRRRRRRRRREMMMMMERRRRRRRRRRRRRRs
     .sssssssssssssssssssssssssssssssssssss
     ......................................
-    ......................................
-    ......................................
-    ......................................
-    ......................................
-    ......................................
-
 # ── 지붕 — 압출로 못 만드는 것. 코드가 몸체 상자를 읽어 얹는다 ──────────
 roof:
   본전:
-    box: [4, 6, 34, 19]              # 몸체 발자국 (폭 31 · 깊이 14)
+    box: [4, 6, 34, 25]              # 몸체 발자국 (폭 31 · 깊이 14)
     # ★★D-36 진범 — 오프바이원. 앞 회차는 「하층 벽 5 + 도리·단청 2 = 7」로 셈했는데
     #   기둥 처방의 맨 아래 **기단 켜(smooth_stone)를 빼먹었다.** 실제 켜열은
     #   smooth_stone(y0) + 5(y1~5) + 도리(y6) + 단청(y7) = **8켜**다.
@@ -414,21 +419,21 @@ roof:
         ......................................
         ......................................
         ......................................
+        ......................................
         .......KVVVTVVVTVVVVVVVTVVVTVVVK......
         .......VBBBBBBBBBBBBBBBBBBBBBBBV......
+        .......VB.....................BV......
         .......VB.....................BV......
         .......TB.....................BT......
         .......VB.....................BV......
         .......VB.....................BV......
+        .......VB.....................BV......
+        .......VB.....................BV......
         .......TB.....................BT......
+        .......VB.....................BV......
         .......VB.....................BV......
         .......VBBBBBBBBBBBBBBBBBBBBBBBV......
         .......KVVVTVVVTVVVVVVVTVVVTVVVK......
-        ......................................
-        ......................................
-        ......................................
-        ......................................
-        ......................................
         ......................................
         ......................................
         ......................................
@@ -462,13 +467,13 @@ roof:
       #       구 목표 0.66 (근거: 목표 7호 이미지)  →  신 목표 0.806 (근거: mainhall_ref.png)
       #     레퍼런스 원본 비는 37/45 = 0.822 이고, 패드 38 안에서 그 느낌을 가장 잘 보존하는
       #     정수가 25 다 (26 은 홀수 중심축·좌우 대칭이 깨진다 — 사용자).
-      inset: [3, 2]
+      inset: [3, 3]
 
 # ── 자리 — 판정·촬영·배선이 부르는 이름 [col, row] ─────────────────────
 spots:
-  대문_앞: [19, 21]        # 월대 위, 대문을 올려다보는 자리
+  대문_앞: [19, 27]        # 월대 위, 대문을 올려다보는 자리
   대문_안: [19, 15]        # 본전 안 한가운데
-  월대_남단: [19, 24]      # 월대가 앞마당에 닿는 자리
+  월대_남단: [19, 29]      # 월대가 앞마당에 닿는 자리
 
 # ── ★★★REF-1c-B 마감 조각 — 중앙 위계 (사용자 확정 2026-08-09) ─────────────
 #   평면·기둥 처방으로는 못 그리는 <b>국소 장식</b>이다. 압출이 아니라 「한 자리에 몇 칸」이라
@@ -480,7 +485,7 @@ spots:
 #     ★용마루와 경쟁하면 안 된다 — REF 카메라에서 관이 용마루보다 먼저 보이면 과한 것이다.
 trim:
   - id: sign_anchor          # 현판 자리 — 문 개구(3칸) 바로 위
-    row: 19
+    row: 25
     cols: [18, 20]
     y: 9                     # 대문 개구 y3~7 위의 창방 켜
     depth: 1
@@ -489,43 +494,43 @@ trim:
   #   양 끝을 계단으로 한 번 꺾어 「┌─┘   └─┐」 를 만든다. 이 작은 꺾임 하나가 중앙을 세운다.
   #   ★crown·현판 자리 크기는 <b>안 키운다</b> (사용자).
   - id: door_head_w          # 문두 왼쪽 끝 — 꺾임
-    row: 19
+    row: 25
     cols: [16, 16]
     y: 9
     depth: 2
     material: dark_oak_stairs
   - id: door_head            # 문두 가운데 — 곧은 처마
-    row: 19
+    row: 25
     cols: [17, 21]
     y: 9
     depth: 2
     material: dark_oak_slab
   - id: door_head_e          # 문두 오른쪽 끝 — 꺾임
-    row: 19
+    row: 25
     cols: [22, 22]
     y: 9
     depth: 2
     material: dark_oak_stairs
   - id: door_jamb_head_w     # 내부 문틀 어깨 (+1) — 문두와 개구 사이 한 단
-    row: 19
+    row: 25
     cols: [17, 17]
     y: 8
     depth: 1
     material: dark_oak_stairs
   - id: door_jamb_head_e
-    row: 19
+    row: 25
     cols: [21, 21]
     y: 8
     depth: 1
     material: dark_oak_stairs
   - id: crown_base           # 중앙 관 아랫단 — 중앙 칸 5 폭
-    row: 19
+    row: 25
     cols: [17, 21]
     y: 10
     depth: 1
     material: stone_brick_slab
   - id: crown_top            # 중앙 관 윗단 — 3칸으로 좁혀 얹는다
-    row: 19
+    row: 25
     cols: [18, 20]
     y: 11
     depth: 1

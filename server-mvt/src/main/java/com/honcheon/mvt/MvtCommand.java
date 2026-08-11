@@ -4510,7 +4510,8 @@ public final class MvtCommand implements CommandExecutor {
                     // ★★덮임 감사 (Codex 2026-08-10) — 신고는 숫자 하나가 아니라
                     //   <b>생성 / 생존 / 덮임</b> 셋이다. 「다른 부재가 덮었다」가 있으면
                     //   도면 신고와 실물이 어긋난 것이다 (공포가 적주 몸통을 먹은 그 병).
-                    + " · " + n.coverReport());
+                    + " · " + n.coverReport()
+                    + (n.curveSkipped > 0 ? " · ★안허리곡 못 놓음 " + n.curveSkipped : ""));
             int[] front = bp.spots().get("문_앞");
             if (front != null) {
                 int ox = pad.x0() + (pad.x1() - pad.x0() + 1 - bp.width()) / 2;

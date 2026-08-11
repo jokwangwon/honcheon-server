@@ -2887,7 +2887,11 @@ public final class TerraceForgeSelfTest {
             }
 
             // 중앙 대문 — 목표 실측대로 폭 5, 그리고 걸어 지날 수 있어야 한다
-            int frontRow = hj.depth() - 13;          // 정면 벽 (row 19) — 도면 뒤에서 13번째
+            // ★★자를 고쳤다 (깊이 20 · 2026-08-11): 「도면 뒤에서 13번째」였다 —
+            //   <b>몸체 깊이가 바뀌면 그 자리에서 죽는</b> 셈이다 (실제로 죽었다: 깊이 14 → 20
+            //   으로 늘리자 자 열넷이 한꺼번에 짖었다). 정면은 <b>지붕 상자의 남쪽 변</b>이다 —
+            //   그것은 도면이 신고하고, 깊이가 바뀌면 같이 움직인다.
+            int frontRow = hj.roofs().get(0).box()[3];
             int gateCols = 0;
             for (int c = 0; c < hj.width(); c++) {
                 for (Blueprint.Course cs : hj.columnOf(hj.at(c, frontRow))) {
@@ -3258,7 +3262,7 @@ public final class TerraceForgeSelfTest {
             // 그러면 칸은 살창이 아니라 구멍이고, 벽 너머 바깥 포장이 훤히 비친다
             // (실물 확인: 자리 비움 뒤 찍은 clear_1 에서 칸마다 바깥이 보였다 — 「선반」).
             // ★눈은 글자가 아니라 **조성이 쓰는 그 함수**(outward)를 불러 방향을 실제로 잰다.
-            int frontR = hj.depth() - 13;                 // 정면 벽 (row 19)
+            int frontR = hj.roofs().get(0).box()[3];      // 정면 = 지붕 상자의 남쪽 변
             int latSouth = 0;
             int latOther = 0;
             for (int c = 0; c < hj.width(); c++) {
@@ -3292,7 +3296,9 @@ public final class TerraceForgeSelfTest {
                     westWall < 0 ? "없음"
                             : com.honcheon.mvt.forge.BlueprintBuilder.outward(hj, 4, westWall).toString());
             // ★뒷벽(북)은 북을 본다 — 남북 대칭이 무너지면 여기서 짖는다
-            int backR = frontR - 13;
+            // ★자를 고쳤다 (깊이 20): 「정면 − 13」은 깊이 14 시절의 상수다.
+            //   뒷벽은 <b>지붕 상자의 북쪽 변</b>이다 — 도면이 신고한다.
+            int backR = hj.roofs().get(0).box()[1];
             int backCol = -1;
             for (int c = 0; c < hj.width(); c++) {
                 if (hj.at(c, backR) == 'D') {
@@ -3438,8 +3444,14 @@ public final class TerraceForgeSelfTest {
             int iz0 = rbx[1] - rf1.eaveZ();
             int iz1 = rbx[3] + rf1.eaveZ();
             String interBox = (ix1 - ix0 + 1) + "×" + (iz1 - iz0 + 1);
-            check("★★층간 지붕 실현 상자 = **37×18** (좌우 내밈 3 · 앞뒤 2 — " + interBox + ")",
-                    (ix1 - ix0 + 1) == 37 && (iz1 - iz0 + 1) == 18, interBox);
+            // ★★자를 고쳤다 (깊이 20 · 2026-08-11): 37×18 은 <b>깊이 14 시절의 값</b>이라
+            //   몸체를 깊게 하자 그 자리에서 죽었다. 계약은 「37×18 이다」가 아니라
+            //   <b>「몸체 + 내밈 × 2 다」</b> — 값이 아니라 <b>규칙</b>을 묻는다.
+            int wantW = (rbx[2] - rbx[0] + 1) + rf1.eaveX() * 2;
+            int wantD = (rbx[3] - rbx[1] + 1) + rf1.eaveZ() * 2;
+            check("★★층간 지붕 실현 상자 = <b>몸체 + 내밈×2</b> (" + wantW + "×" + wantD
+                            + " — 실제 " + interBox + ")",
+                    (ix1 - ix0 + 1) == wantW && (iz1 - iz0 + 1) == wantD, interBox);
             check("★★층간 지붕이 패드 안에 온전히 든다 (밖이면 조용히 작아진다 = 신고표 거짓말)",
                     ix0 >= 0 && ix1 < hj.width() && iz0 >= 0 && iz1 < hj.depth(),
                     ix0 + ".." + ix1 + " / " + iz0 + ".." + iz1);
@@ -3449,8 +3461,11 @@ public final class TerraceForgeSelfTest {
             int uz0 = rbx[1] + rf1.insetZ() - rf1.upperEaveZ();
             int uz1 = rbx[3] - rf1.insetZ() + rf1.upperEaveZ();
             String upBox = (ux1 - ux0 + 1) + "×" + (uz1 - uz0 + 1);
-            check("★★대지붕 실현 상자 = **33×14** (좌우 내밈 4 · 앞뒤 2 — " + upBox + ")",
-                    (ux1 - ux0 + 1) == 33 && (uz1 - uz0 + 1) == 14, upBox);
+            int wantUW = (rbx[2] - rbx[0] + 1) - rf1.insetX() * 2 + rf1.upperEaveX() * 2;
+            int wantUD = (rbx[3] - rbx[1] + 1) - rf1.insetZ() * 2 + rf1.upperEaveZ() * 2;
+            check("★★대지붕 실현 상자 = <b>상층 몸체 + 내밈×2</b> (" + wantUW + "×" + wantUD
+                            + " — 실제 " + upBox + ")",
+                    (ux1 - ux0 + 1) == wantUW && (uz1 - uz0 + 1) == wantUD, upBox);
             check("★★대지붕이 패드 안에 온전히 든다",
                     ux0 >= 0 && ux1 < hj.width() && uz0 >= 0 && uz1 < hj.depth(),
                     ux0 + ".." + ux1 + " / " + uz0 + ".." + uz1);
@@ -4175,9 +4190,25 @@ public final class TerraceForgeSelfTest {
                                     + upv.bracket() + " — 무조건 복제 금지)",
                             !upv.bracket().equalsIgnoreCase(hj.bracket())
                                     && !"none".equalsIgnoreCase(upv.bracket()), upv.bracket());
-                    check("★★③상층에 <b>모서리 역할</b>이 따로 있다 (네 귀가 일반 적주와 다르다)",
-                            upv.at(7, 8) != upv.at(11, 8) && upv.at(7, 8) == upv.at(31, 17),
-                            "" + upv.at(7, 8) + upv.at(11, 8));
+                    // ★자를 고쳤다 (깊이 20): 좌표 (7,8)·(31,17) 을 박고 있었다.
+                    //   네 귀는 <b>상층 몸체 상자</b>가 안다 — 몸체가 움직이면 같이 움직인다.
+                    int[] ub = {rbx[0] + rf1.insetX(), rbx[1] + rf1.insetZ(),
+                            rbx[2] - rf1.insetX(), rbx[3] - rf1.insetZ()};
+                    char nw = upv.at(ub[0], ub[1]);
+                    char se = upv.at(ub[2], ub[3]);
+                    char ne = upv.at(ub[2], ub[1]);
+                    char sw = upv.at(ub[0], ub[3]);
+                    char other = 0;
+                    for (int c = ub[0] + 1; c < ub[2]; c++) {
+                        if (upv.isPost(upv.at(c, ub[1]))) {
+                            other = upv.at(c, ub[1]);
+                            break;
+                        }
+                    }
+                    check("★★③상층에 <b>모서리 역할</b>이 따로 있다 (네 귀가 일반 적주와 다르다 — 귀 "
+                                    + nw + " · 일반 " + other + ")",
+                            nw == se && nw == ne && nw == sw && other != 0 && nw != other,
+                            "" + nw + ne + sw + se + "/" + other);
                     check("★★③상층에 <b>대문 역할이 없다</b> (상층엔 대문이 없다 — Codex)",
                             upv.bayRole("entrance_adjacent") == 0, "");
                 }

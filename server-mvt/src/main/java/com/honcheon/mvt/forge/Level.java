@@ -43,6 +43,23 @@ public interface Level {
         return null;
     }
 
+    /** 이 층의 <b>몸체 상자</b> {@code [x0,z0,x1,z1]} — 모르면 {@code null} */
+    default int[] bodyBox() {
+        return null;
+    }
+
+    /**
+     * <b>다포</b>인가 — 기둥 위(주상포)뿐 아니라 <b>기둥 사이</b>에도 포(간포)를 두는가.
+     *
+     * <p>주심포는 기둥 위에만, 다포는 창방 위 기둥 사이에도 포가 놓인다. 다포는 하중 분산이
+     * 좋아 <b>건물의 대형화</b>에 적합하고 장엄한 팔작지붕에 쓰인다 — 주불전의 격식이다.
+     * 우리 본전은 {@code rank: principal · bracket: elaborate} 로 다포를 <b>의도</b>하면서
+     * 실제로는 기둥 위에만 얹어 주심포계로 서 있었다 (2026-08-11 실물 대조에서 드러남).
+     */
+    default boolean intercolumnar() {
+        return false;
+    }
+
     default boolean isPost(char ch) {
         return Blueprint.shaftIndex(columnOf(ch)) >= 0;
     }

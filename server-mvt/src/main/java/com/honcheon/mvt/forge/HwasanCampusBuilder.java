@@ -47,6 +47,7 @@ public final class HwasanCampusBuilder {
         public int racks;
         public int towers;
         public int plums;      // 매화
+        public int curveSkipped;   // 안허리곡이 패드 밖이라 못 놓은 칸
         public int pines;      // 절벽 소나무
         public long vines;     // 덩굴·이끼·지의
         public int props;      // 깃발·화로·상자·빨래줄·밭
@@ -777,6 +778,8 @@ public final class HwasanCampusBuilder {
         if (ridgeLen > 0) {
             ridgeTrim(world, pad, x0, x1, cy, z0, z1, ridgeLen, tally);
         }
+        // ★안허리곡·앙곡 — 정·배면 양끝 3칸 · 측면 양끝 2칸 (Codex 2026-08-11)
+        tally.curveSkipped += eaveCurve(world, pad, x0, x1, cy, z0, z1, 3, 2, tiles, tally);
         cornerTail(world, pad, x0, x1, cy, z0, z1, tally);
     }
 
@@ -793,6 +796,71 @@ public final class HwasanCampusBuilder {
      * <p>★<b>추가 돌출 0.</b> 두 칸 모두 실현 상자 <b>안</b>이다 (모서리 자신과 한 칸 안쪽 대각).
      * 밖으로 나가면 {@link #put} 이 던진다 — 경계에 맞추는 silent clamp 는 쓰지 않는다.
      */
+    /**
+     * ★★★<b>안허리곡 · 앙곡</b> (Codex 2026-08-11 · 실물 대조).
+     *
+     * <p>실물 한옥의 처마는 직사각이 아니다 — 「처마 가운데에서 <b>추녀로 갈수록 점점
+     * 바깥으로 나오는</b> 곡선」이 <b>안허리곡</b>이고, 「추녀로 갈수록 <b>들어 올려지는</b>
+     * 곡선」이 <b>앙곡</b>이다. 우리 지붕은 사방 같은 오프셋(x3·z2)이라 둘 다 없었다.
+     *
+     * <p>처방(Codex): 기본 내밈은 그대로 두고, <b>양 끝 구간만</b> 한 칸 더 내민다.
+     * 그중 <b>모서리 쪽 마지막 두 칸</b>은 높이도 한 칸 든다.
+     * 두 방향이 만나는 모서리에서도 <b>누적하지 않는다</b> (최대 내밈 +1 · 높이 +1).
+     *
+     * <p>★<b>패드 밖은 안 넘본다.</b> {@link #put} 은 패드 밖이면 던지고, 우리는 조용한 축소를
+     * 금지했다. 그래서 나갈 자리가 없는 변은 <b>통째로 건너뛰고 그 수를 센다</b> —
+     * 「했다 치고 넘어가는」 대신 장부에 남긴다.
+     *
+     * @param spanH 정·배면(가로 변) 양 끝에서 몇 칸을 더 내밀 것인가
+     * @param spanV 측면(세로 변) 양 끝에서 몇 칸
+     * @return 자리가 없어 <b>못 놓은</b> 칸 수
+     */
+    static int eaveCurve(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
+                         int z0, int z1, int spanH, int spanV, boolean tiles, Tally tally) {
+        int skipped = 0;
+        java.util.Set<Long> done = new java.util.HashSet<>();
+        // 가로 변(북·남) — z 로 한 칸 더 나간다
+        for (int end = 0; end < 2; end++) {
+            int z = end == 0 ? z0 - 1 : z1 + 1;
+            for (int side = 0; side < 2; side++) {
+                for (int k = 0; k < spanH; k++) {
+                    int x = side == 0 ? x0 + k : x1 - k;
+                    boolean lift = k < 2;                 // 모서리 쪽 마지막 두 칸 = 앙곡
+                    skipped += curveCell(world, pad, x, cy, z, lift, tiles, tally, done);
+                }
+            }
+        }
+        // 세로 변(서·동) — x 로 한 칸 더 나간다
+        for (int end = 0; end < 2; end++) {
+            int x = end == 0 ? x0 - 1 : x1 + 1;
+            for (int side = 0; side < 2; side++) {
+                for (int k = 0; k < spanV; k++) {
+                    int z = side == 0 ? z0 + k : z1 - k;
+                    boolean lift = k < 2;
+                    skipped += curveCell(world, pad, x, cy, z, lift, tiles, tally, done);
+                }
+            }
+        }
+        return skipped;
+    }
+
+    private static int curveCell(World world, TerraceForge.Pad pad, int x, int cy, int z,
+                                 boolean lift, boolean tiles, Tally tally,
+                                 java.util.Set<Long> done) {
+        if (!pad.contains(x, z)) {
+            return 1;                                     // 나갈 자리가 없다 — 장부에 적힌다
+        }
+        long key = ((long) x << 32) ^ (z & 0xffffffffL);
+        if (!done.add(key)) {
+            return 0;                                     // 두 방향이 만나는 모서리 — 안 겹친다
+        }
+        put(world, pad, x, cy, z, roofSkinSlab(tiles), tally);
+        if (lift) {
+            put(world, pad, x, cy + 1, z, roofSkinSlab(tiles), tally);
+        }
+        return 0;
+    }
+
     private static void cornerTail(World world, TerraceForge.Pad pad, int x0, int x1, int cy,
                                    int z0, int z1, Tally tally) {
         if (x1 - x0 < 4 || z1 - z0 < 4) {

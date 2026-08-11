@@ -51,6 +51,8 @@ public final class BlueprintBuilder {
         public int cleared;
         public int roofs;
         /** 좌표 → 그 자리를 마지막으로 쓴 부재 */
+        /** 안허리곡이 <b>패드 밖이라 못 놓은</b> 칸 — 「했다 치고」 넘어가지 않기 위해 센다 */
+        public int curveSkipped;
         public final java.util.Map<Long, String> claim = new java.util.HashMap<>();
         /** 「다른 부재가 덮었다」 — 부재쌍별 횟수 */
         public final java.util.Map<String, Integer> covered = new java.util.TreeMap<>();
@@ -268,6 +270,7 @@ public final class BlueprintBuilder {
         // ★★REF-3B — 공포는 <b>지붕 뒤에</b> 놓는다. 앞서 놓으면 서까래가
         //   맨 윗단을 덮어 elaborate 3단이 <b>2단으로만 보였다</b> (실측 0/8).
 
+        n.curveSkipped += tally.curveSkipped;   // 안허리곡이 못 나간 칸 — 장부로 올린다
         brackets(world, bp, bp, place, ox, oy, oz, n,
                 bp.roofs().isEmpty() ? 0 : bp.roofs().get(0).baseY(),
                 bp.roofs().isEmpty() ? 1 : bp.roofs().get(0).eave());
@@ -542,6 +545,42 @@ public final class BlueprintBuilder {
                 }
             }
         }
+
+        // ══════ ★★★간포 (다포) — Codex 2026-08-11 ══════
+        if (brk > 1 && lv.intercolumnar() && lv.bodyBox() != null) {
+            int[] bb = lv.bodyBox();
+            for (int side = 0; side < 4; side++) {
+                boolean horiz = side < 2;                 // 0 북 · 1 남 · 2 서 · 3 동
+                int fixed = side == 0 ? bb[1] : side == 1 ? bb[3] : side == 2 ? bb[0] : bb[2];
+                int from = horiz ? bb[0] : bb[1];
+                int to = horiz ? bb[2] : bb[3];
+                java.util.List<Integer> posts = new java.util.ArrayList<>();
+                for (int k = from; k <= to; k++) {
+                    int c2 = horiz ? k : fixed;
+                    int r2 = horiz ? fixed : k;
+                    if (lv.isPost(lv.at(c2, r2))) {
+                        posts.add(k);
+                    }
+                }
+                for (int k : midBays(lv, posts)) {
+                    int c2 = horiz ? k : fixed;
+                    int r2 = horiz ? fixed : k;
+                    int[] d4 = place.map(bp, c2, r2);
+                    org.bukkit.block.BlockFace nf2 = place.turn(faceOf(lv, c2, r2));
+                    int top2 = oy + roofBaseY - brk - GROOVE;
+                    for (int s2 = 1; s2 < brk; s2++) {     // ★첫 단(주두)은 안 갖는다
+                        int reach = Math.min(s2 + 1, Math.max(1, eaveOut));
+                        int bx = ox + d4[0] + nf2.getModX() * reach;
+                        int bz = oz + d4[1] + nf2.getModZ() * reach;
+                        BlockData bd = Bukkit.createBlockData(
+                                s2 == 1 ? Material.DARK_OAK_SLAB : Material.DARK_OAK_STAIRS);
+                        world.getBlockAt(bx, top2 + s2, bz).setBlockData(stand(bd, nf2), false);
+                        n.blocks++;
+                        n.mark(bx, top2 + s2, bz, "간포@" + nf2.name().charAt(0));
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -655,6 +694,47 @@ public final class BlueprintBuilder {
      * ★한 칸의 처방(예 {@code D})이 네 벽에 다 쓰이므로 도면에 방향을 적을 수 없다 —
      * 적으면 세 벽이 틀린다. 그래서 <b>자리가</b> 방향을 정한다.
      */
+    /**
+     * <b>간포</b> — 기둥 <b>사이</b>의 포. 이것이 있어야 <b>다포</b>다.
+     *
+     * <p>2026-08-11 실물 대조에서 드러난 것: 우리 본전은 {@code rank: principal ·
+     * bracket: elaborate} 로 다포를 의도하면서 포를 <b>기둥 위에만</b> 얹어
+     * 형식상 <b>주심포계</b>로 서 있었다. 화엄사 각황전 같은 주불전은 다포계다 —
+     * 「공포가 기둥 위뿐 아니라 <b>기둥 사이에도</b> 있다」.
+     *
+     * <p>★예전에 죽인 병(REF-1c-A 「공포가 좌우로 번져 정면을 가로지르는 띠」)과 <b>다르다</b>:
+     * 그건 <b>같은 공포가 옆으로 퍼진</b> 것이고, 간포는 칸 한가운데 서는 <b>독립 단위</b>라
+     * 양옆이 비어 있다. 그래서 계약을 <b>틈</b>으로 적는다 (Codex 2026-08-11):
+     *
+     * <blockquote>간포 중심은 기둥에서 최소 2칸 떨어지고, 간포끼리도 2칸 이상 떨어진다.
+     * 같은 높이에서 공포 블록 사이에는 반드시 공기가 한 칸 이상 남는다.</blockquote>
+     *
+     * <p>그 규칙이 칸 너비를 스스로 읽는다: 협칸 4 → 1개 · 어칸 6 → 2개 ·
+     * 3칸 → <b>0개</b>(넣을 자리가 없다). 수를 도면에 안 적는다.
+     *
+     * <p>간포는 <b>주두 단(첫 단)을 안 갖는다</b> — 첫 단은 기둥 몸통의 연장이고,
+     * 간포 밑에는 기둥이 아니라 창방이 있기 때문이다.
+     */
+    private static java.util.List<Integer> midBays(Level lv, java.util.List<Integer> posts) {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        for (int i = 1; i < posts.size(); i++) {
+            int a = posts.get(i - 1);
+            int b = posts.get(i);
+            if (b - a < 4) {
+                continue;                       // 3칸 이하 · 겹기둥 — 넣을 자리가 없다
+            }
+            int lo = a + 2;
+            int hi = b - 2;
+            int n = (hi - lo) / 2 + 1;
+            int span = (n - 1) * 2;
+            int start = lo + (hi - lo - span) / 2;   // 칸 한가운데로 모은다
+            for (int k = 0; k < n; k++) {
+                out.add(start + k * 2);
+            }
+        }
+        return out;
+    }
+
     /** 층이 제 자리로 방향을 안다면 그것을 쓴다 — 모르면 이웃의 높이로 짐작한다 */
     static org.bukkit.block.BlockFace faceOf(Level lv, int col, int row) {
         org.bukkit.block.BlockFace f = lv.outwardFace(col, row);
