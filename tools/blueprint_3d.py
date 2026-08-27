@@ -68,6 +68,12 @@ def load_dump(name: str):
         if not line:
             continue
         x, y, z, b = line.split("\t")
+        # ★air 는 칸이 아니다 — 도면시험 덤프에는 air 행이 없지만 코퍼스 TSV 에는 있다.
+        #   air 를 남기면 컬링의 occupied 에 들어가 「위가 막혔다」가 되어,
+        #   위에 하늘이 있는 모든 풀블록(바닥 전체·통벽)이 지워진다 (2026-08-28 실증 —
+        #   한옥마을 도해가 붕 떠 보인 원인. 지붕은 계단·반블록이라 살아남아 더 감쪽같았다).
+        if b.split("[")[0] in ("minecraft:air", "minecraft:cave_air", "minecraft:void_air"):
+            continue
         out.append((int(x), int(y), int(z), b))
     return out
 
@@ -197,6 +203,25 @@ def _selftest() -> int:
 
     # ⑥ 위가 밝고 옆이 어둡다 — 입체감의 방향이 뒤집히면 안 된다
     check("윗면이 가장 밝다", SHADE["top"] > SHADE["right"] > SHADE["left"], SHADE)
+
+    # ⑦ ★air 위의 바닥은 그려진다 — 코퍼스 TSV 의 air 행이 컬링을 오염시켰던 회귀
+    import tempfile as _tf
+    from pathlib import Path as _P
+    with _tf.TemporaryDirectory() as td:
+        p = _P(td) / "eye.tsv"
+        p.write_text("x\ty\tz\tdata\n"
+                     "0\t0\t0\tminecraft:stone\n"
+                     "0\t1\t0\tminecraft:air\n")
+        global DUMP
+        old_dump, DUMP = DUMP, _P(td)
+        try:
+            vox = load_dump("eye")
+        finally:
+            DUMP = old_dump
+    im_air, _ = render(vox, tbl)
+    im_bare, _ = render([(0, 0, 0, "minecraft:stone")], tbl)
+    check("★air 아래 바닥이 <b>그려진다</b> (air 는 칸이 아니다)",
+          list(im_air.getdata()) == list(im_bare.getdata()), "")
 
     print(f"\n3D 미리보기의 눈 — {'통과' if not fails else f'실패 {len(fails)}: {fails}'}")
     return 1 if fails else 0
