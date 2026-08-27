@@ -47,19 +47,56 @@ def find_posts(cols: dict, bodies: dict) -> set[tuple[int, int]]:
     return posts
 
 
+CLUSTER_R = 8   # 기둥 사이가 이보다 멀면 딴 건물이다 (코퍼스 최빈 주기 4~6 의 위)
+ROW_MIN = 3     # 행이라 부르려면 한 줄에 기둥이 이만큼은 서야 한다 (둘은 우연이다)
+
+
+def cluster_points(points: set, radius: int = CLUSTER_R) -> list[set]:
+    """가까운 점끼리 무리 짓는다 (체비셰프 거리 ≤ radius) — 건물 단위 분리."""
+    buckets: dict = collections.defaultdict(set)
+    for p in points:
+        buckets[(p[0] // radius, p[1] // radius)].add(p)
+    seen: set = set()
+    out = []
+    for p in points:
+        if p in seen:
+            continue
+        comp = {p}
+        seen.add(p)
+        todo = [p]
+        while todo:
+            x, z = todo.pop()
+            for dbx in (-1, 0, 1):
+                for dbz in (-1, 0, 1):
+                    for q in buckets.get((x // radius + dbx, z // radius + dbz), ()):
+                        if q not in seen and abs(q[0] - x) <= radius and abs(q[1] - z) <= radius:
+                            seen.add(q)
+                            comp.add(q)
+                            todo.append(q)
+        out.append(comp)
+    return out
+
+
 def spacing_hist(posts: set[tuple[int, int]]) -> collections.Counter:
-    """같은 축 위에서 다음 기둥까지의 거리 — 양 축을 함께 센다."""
+    """기둥 간격 — ★건물 무리 안에서, 기둥 셋 이상 선 행(같은 축)만 잰다.
+
+    1차의 병 둘을 고친 자다: 마당 건너 건물 사이 거리(112·106)가 끼었고,
+    둘만 선 우연한 줄이 행으로 세어졌다.
+    """
     hist: collections.Counter = collections.Counter()
-    by_z: dict[int, list[int]] = collections.defaultdict(list)
-    by_x: dict[int, list[int]] = collections.defaultdict(list)
-    for x, z in posts:
-        by_z[z].append(x)
-        by_x[x].append(z)
-    for seq in list(by_z.values()) + list(by_x.values()):
-        seq.sort()
-        for a, b in zip(seq, seq[1:]):
-            if b - a > 1:  # 붙은 것은 겹기둥·굵은 기둥이다 — 간격이 아니다
-                hist[b - a] += 1
+    for comp in cluster_points(posts):
+        by_z: dict[int, list[int]] = collections.defaultdict(list)
+        by_x: dict[int, list[int]] = collections.defaultdict(list)
+        for x, z in comp:
+            by_z[z].append(x)
+            by_x[x].append(z)
+        for seq in list(by_z.values()) + list(by_x.values()):
+            if len(seq) < ROW_MIN:
+                continue
+            seq.sort()
+            for a, b in zip(seq, seq[1:]):
+                if b - a > 1:  # 붙은 것은 겹기둥·굵은 기둥이다 — 간격이 아니다
+                    hist[b - a] += 1
     return hist
 
 
@@ -88,23 +125,36 @@ def adjacency(cells: dict) -> tuple[collections.Counter, dict]:
 
 # ── ③ 지붕 곡선 ────────────────────────────────────────────────────────────
 
-def roof_profile(cols: dict, yg: int) -> list[tuple[int, float, int]]:
-    """처마 가장자리 거리 d → 꼭대기 높이(지면 기준)의 중앙값. (d, 높이, 표본수)"""
-    tops = {}
-    for key, col in cols.items():
-        for y in sorted(col, reverse=True):
-            if col[y] != "air":
-                tops[key] = y
-                break
-    roofed = {k for k, y in tops.items() if y >= yg + ROOF_MIN}
-    if not roofed:
-        return []
-    # 다중 시작 BFS — 지붕이 아닌 이웃까지의 거리 (4방)
+MIN_ROOF_AREA = 40  # 이보다 작은 지붕 조각(정자 꼭대기·나무)은 건물이 아니다 — 세어서 버린다
+
+
+def _components4(cells: set) -> list[set]:
+    seen: set = set()
+    out = []
+    for p in cells:
+        if p in seen:
+            continue
+        comp = {p}
+        seen.add(p)
+        todo = [p]
+        while todo:
+            x, z = todo.pop()
+            for nb in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
+                if nb in cells and nb not in seen:
+                    seen.add(nb)
+                    comp.add(nb)
+                    todo.append(nb)
+        out.append(comp)
+    return out
+
+
+def _profile_of(comp: set, tops: dict, yg: int) -> list[tuple[int, float, int]]:
+    """한 건물의 처마 가장자리 거리 d → 꼭대기 높이 중앙값. (d, 높이, 표본수)"""
     dist = {}
     frontier = []
-    for (x, z) in roofed:
+    for (x, z) in comp:
         for nb in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
-            if nb not in roofed:
+            if nb not in comp:
                 dist[(x, z)] = 0
                 frontier.append((x, z))
                 break
@@ -112,7 +162,7 @@ def roof_profile(cols: dict, yg: int) -> list[tuple[int, float, int]]:
         nxt = []
         for (x, z) in frontier:
             for nb in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
-                if nb in roofed and nb not in dist:
+                if nb in comp and nb not in dist:
                     dist[nb] = dist[(x, z)] + 1
                     nxt.append(nb)
         frontier = nxt
@@ -120,6 +170,42 @@ def roof_profile(cols: dict, yg: int) -> list[tuple[int, float, int]]:
     for k, d in dist.items():
         by_d[d].append(tops[k] - yg)
     return [(d, statistics.median(hs), len(hs)) for d, hs in sorted(by_d.items())]
+
+
+def _pitch(curve: list[tuple[int, float, int]]) -> float | None:
+    """물매 = d 에 대한 높이의 기울기 (표본 3 이상인 d 만 · 최소제곱)."""
+    pts = [(d, h) for d, h, n in curve if n >= 3]
+    if len(pts) < 3:
+        return None
+    md = statistics.mean(d for d, _ in pts)
+    mh = statistics.mean(h for _, h in pts)
+    den = sum((d - md) ** 2 for d, _ in pts)
+    return sum((d - md) * (h - mh) for d, h in pts) / den if den else None
+
+
+def roof_buildings(cols: dict, yg: int) -> tuple[list[dict], int]:
+    """지붕을 건물별(4방 연결 성분)로 갈라 곡선·물매를 잰다. (건물 목록, 버린 조각 수)
+
+    1차의 병을 고친 자다: 한 상자의 지붕을 통째로 섞어 회랑(6~7)과 정전(15~21)이
+    한 곡선에 겹쳤다.
+    """
+    tops = {}
+    for key, col in cols.items():
+        for y in sorted(col, reverse=True):
+            if col[y] != "air":
+                tops[key] = y
+                break
+    roofed = {k for k, y in tops.items() if y >= yg + ROOF_MIN}
+    buildings = []
+    dropped = 0
+    for comp in _components4(roofed):
+        if len(comp) < MIN_ROOF_AREA:
+            dropped += 1
+            continue
+        curve = _profile_of(comp, tops, yg)
+        buildings.append({"area": len(comp), "curve": curve, "pitch": _pitch(curve)})
+    buildings.sort(key=lambda b: -b["area"])
+    return buildings, dropped
 
 
 # ── 실행 ───────────────────────────────────────────────────────────────────
@@ -156,13 +242,15 @@ def run(paths: list[Path], auto: bool) -> None:
         print("   뭉침도 상위 (1.0 = 언제나 저희끼리):"
               + " · ".join(f"{m} {v:.2f}" for m, v in top_clump))
 
-        prof = roof_profile(cols, yg)
-        if prof:
-            print("③ 지붕 곡선 — 처마 끝(d0)에서 안쪽으로 · 중앙값 높이(지면 기준):")
-            row = " · ".join(f"d{d}:{h:.0f}({n})" for d, h, n in prof[:10])
-            print(f"    {row}")
+        if auto:
+            builds, dropped = roof_buildings(cols, yg)
+            print(f"③ 지붕 — 건물 {len(builds)}채 · 작은 조각 {dropped} 버림 (건물별 곡선·물매):")
+            for b in builds[:6]:
+                row = " ".join(f"d{d}:{h:.0f}" for d, h, _n in b["curve"][:9])
+                pit = f"물매 {b['pitch']:.2f}/칸" if b["pitch"] is not None else "물매 — "
+                print(f"    {b['area']:5d}칸 · {pit} · {row}")
         else:
-            print("③ 지붕 곡선 — 지붕 기둥이 없다 (사전 모드는 yg=0 이라 못 잰다 — --auto 로)")
+            print("③ 지붕 — 사전 모드는 지면을 모른다 · --auto 가 서는 상자로 재라")
 
 
 # ── 눈 (selftest) ──────────────────────────────────────────────────────────
@@ -195,22 +283,33 @@ def selftest() -> int:
     _, clump2 = adjacency(slab)
     eye("단일 판: 뭉침도 1", clump2.get("c") == 1.0)
 
-    # ③ 지붕 곡선 — 피라미드 지붕: 가장자리에서 안으로 갈수록 높다
+    # ① 두 건물이 마당을 사이에 두면 그 거리는 간격이 아니다
+    two = {(0, 0), (4, 0), (8, 0), (40, 0), (44, 0), (48, 0)}
+    eye("무리 밖 거리(32)는 안 센다", spacing_hist(two) == {4: 4})
+    eye("무리 짓기: 두 건물", len(cluster_points(two)) == 2)
+
+    # ③ 지붕 곡선 — 피라미드 지붕 두 채 + 작은 조각 하나
     cols = {}
-    for x in range(9):
-        for z in range(9):
-            d = min(x, z, 8 - x, 8 - z)
-            h = 6 + d  # 처마 6, 안쪽으로 1 씩 오른다
-            cols[(x, z)] = {0: "stone", h: "tile"}
-    for x in range(-3, 12):  # 지붕 아닌 둘레 땅
+    def pyramid(ox):
+        for x in range(9):
+            for z in range(9):
+                d = min(x, z, 8 - x, 8 - z)
+                cols[(ox + x, z)] = {0: "stone", 6 + d: "tile"}  # 처마 6 · 물매 1/칸
+    pyramid(0)
+    pyramid(30)
+    for i in range(4):
+        cols[(60 + i, 0)] = {0: "stone", 7: "tile"}  # 4칸짜리 조각 — 건물이 아니다
+    for x in range(-3, 70):
         for z in (-1, 9):
             cols[(x, z)] = {0: "stone"}
-            cols[(z, x)] = {0: "stone"}
-    prof = roof_profile(cols, 0)
-    heights = [h for _, h, _ in prof]
-    eye("피라미드: d 가 커질수록 높이가 는다 (단조)",
-        len(heights) >= 4 and all(a < b for a, b in zip(heights, heights[1:])))
-    eye("피라미드: 처마 끝 d0 높이 = 6", prof and prof[0][1] == 6)
+    builds, dropped = roof_buildings(cols, 0)
+    eye("지붕이 건물별로 갈린다 (2채 · 조각 1 버림)",
+        len(builds) == 2 and dropped == 1)
+    heights = [h for _, h, _ in builds[0]["curve"]]
+    eye("피라미드: d 가 커질수록 높이가 는다 · 처마 끝 6",
+        all(a < b for a, b in zip(heights, heights[1:])) and builds[0]["curve"][0][1] == 6)
+    eye("피라미드: 물매 ≈ 1.0/칸",
+        builds[0]["pitch"] is not None and abs(builds[0]["pitch"] - 1.0) < 0.05)
 
     print(f"\n눈 {ran[0]}종 · 실패 {len(fails)}")
     return 1 if fails else 0
