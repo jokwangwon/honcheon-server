@@ -89,6 +89,10 @@ def body_of(col: dict[int, str], base: set[str], plate: set[str]) -> tuple[str, 
     seg = blocks[lo : plate_i + 1]
     if not seg:
         return None
+    return _runs(seg)
+
+
+def _runs(seg: list[str]) -> tuple[str, ...]:
     runs: list[list] = []
     for b in seg:
         if runs and runs[-1][0] == b:
@@ -98,15 +102,95 @@ def body_of(col: dict[int, str], base: set[str], plate: set[str]) -> tuple[str, 
     return tuple(f"{b}*{n}" if n > 1 else b for b, n in runs)
 
 
-def mine(paths: list[Path]) -> tuple[collections.Counter, int, int]:
-    base, plate, abstract = load_boundaries()
-    if abstract:
-        print(f"[고지] 사전의 실블록 아닌 재료 (경계에 못 쓴다): {', '.join(abstract)}")
+# ── 경계 자동 탐지 — 이름을 묻지 않고 구조를 묻는다 (E-2 확장 · 2026-08-28) ──
+#   외부 코퍼스는 우리 사전의 재료를 안 쓴다 (한옥마을에서 몸통 0 실측).
+#   그래서 경계를 코퍼스 스스로에게 묻는다:
+#     지면  = 기둥 꼭대기 높이의 최빈값 (탁 트인 땅이 가장 넓다)
+#     기단  = 지면 이하 층에서 넓게 깔린 재료 (한 층의 30% 이상)
+#     지붕  = 지면보다 ROOF_MIN 이상 솟은 기둥들의 꼭대기 재료 (누적 90%)
+#   ★한계 (정직하게): 상자가 건물로 꽉 차면 최빈 높이가 지붕이 된다 —
+#     상자는 건물 둘레의 땅을 여유 있게 포함해야 한다. 탐지값을 항상 인쇄한다.
+
+ROOF_MIN = 4        # 지면보다 이만큼 솟아야 「지붕 있는 기둥」이다
+BASE_COVER = 0.30   # 한 층의 이 비율 이상 깔리면 기단·지반 재료다
+ROOF_CUM = 0.90     # 지붕 재료는 꼭대기 재료의 누적 이 비율까지
+ROOF_SHARE = 0.02   # 그리고 낱개로 이 비율은 넘어야 한다 (나무 한 그루가 안 들어오게)
+GROUND_SHARE = 0.05  # 지붕 없는 기둥의 꼭대기에서 이 비율을 넘으면 땅 표면 재료다
+#   (거리 포장이 andesite·stone·cobble 로 갈려 층 점유 30% 에 못 미쳐도,
+#    「트인 기둥의 꼭대기」로는 흔하다 — 한옥마을 실측에서 잡은 소음)
+
+
+def detect_boundaries(cols: dict) -> tuple[int, set[str], set[str]]:
+    tops = {}
+    for key, col in cols.items():
+        for y in sorted(col, reverse=True):
+            if col[y] != "air":
+                tops[key] = (y, col[y])
+                break
+    if not tops:
+        sys.exit("빈 덤프다 — 기둥 꼭대기가 하나도 없다")
+    n = len(tops)
+
+    yg = collections.Counter(t[0] for t in tops.values()).most_common(1)[0][0]
+
+    layer: dict[int, collections.Counter] = collections.defaultdict(collections.Counter)
+    for col in cols.values():
+        for y, b in col.items():
+            if y <= yg and b != "air":
+                layer[y][b] += 1
+    base = {b for cnt in layer.values() for b, c in cnt.items() if c >= BASE_COVER * n}
+
+    roofed = collections.Counter(m for y, m in tops.values() if y >= yg + ROOF_MIN)
+    roof: set[str] = set()
+    if roofed:
+        total = sum(roofed.values())
+        cum = 0
+        for m, c in roofed.most_common():
+            if cum >= ROOF_CUM * total or c < ROOF_SHARE * total:
+                break
+            roof.add(m)
+            cum += c
+
+    # 트인 기둥(지붕 없음)의 꼭대기 재료 = 땅 표면 — 기단에 더한다.
+    # 포장이 여러 갈래(안산암·돌·자갈)로 갈려 층 점유 30% 에 못 미쳐도 여기서 잡힌다.
+    open_tops = collections.Counter(m for y, m in tops.values() if y < yg + ROOF_MIN)
+    if open_tops:
+        total = sum(open_tops.values())
+        base |= {m for m, c in open_tops.items() if c >= GROUND_SHARE * total}
+    return yg, base, roof
+
+
+def body_of_auto(col: dict[int, str], base: set[str], roof: set[str]) -> tuple[str, ...] | None:
+    """지붕을 위에서 걷고, 기단을 아래에서 걷고, 남은 몸통을 돌려준다."""
+    ys = sorted(col)
+    blocks = [col[y] for y in ys]
+    hi = len(blocks) - 1
+    while hi >= 0 and (blocks[hi] == "air" or blocks[hi] in roof):
+        hi -= 1
+    lo = 0
+    while lo <= hi and blocks[lo] in base:
+        lo += 1
+    if lo > hi:
+        return None
+    return _runs(blocks[lo : hi + 1])
+
+
+def mine(paths: list[Path], auto: bool = False) -> tuple[collections.Counter, int, int]:
     counter: collections.Counter = collections.Counter()
     bodies = terrain = 0
+    if not auto:
+        base, plate, abstract = load_boundaries()
+        if abstract:
+            print(f"[고지] 사전의 실블록 아닌 재료 (경계에 못 쓴다): {', '.join(abstract)}")
     for p in paths:
-        for _key, col in read_dump(p).items():
-            s = body_of(col, base, plate)
+        cols = read_dump(p)
+        if auto:
+            yg, base, roof = detect_boundaries(cols)
+            print(f"[{p.stem} 탐지] 지면 y{yg} · 기단 {len(base)}종 "
+                  f"{sorted(base)[:6]}{'…' if len(base) > 6 else ''} · "
+                  f"지붕 {len(roof)}종 {sorted(roof)[:6]}{'…' if len(roof) > 6 else ''}")
+        for _key, col in cols.items():
+            s = body_of_auto(col, base, roof) if auto else body_of(col, base, plate)
             if s is None:
                 terrain += 1
             else:
@@ -159,6 +243,30 @@ def selftest() -> int:
     eye("걷는 것은 base 뿐이다 (앞머리 air 보존)",
         body_of(c, base, plate) == ("air", "plaster_block", "air", "dark_oak_log"))
 
+    # ⑧~⑪ 경계 자동 탐지 — 합성 세계: 트인 땅 6 · 건물 4
+    ground = [_col("stone") for _ in range(6)]
+    bldg = [_col("stone", "plank", "plank", "plank", "tile") for _ in range(4)]
+    world = {(i, 0): c for i, c in enumerate(ground + bldg)}
+    yg, abase, aroof = detect_boundaries(world)
+    eye("자동: 지면=최빈 꼭대기 · 기단=깔린 재료 · 지붕=솟은 꼭대기",
+        yg == 0 and "stone" in abase and aroof == {"tile"})
+    eye("자동: 몸통 = 지붕·기단을 걷은 것",
+        body_of_auto(bldg[0], abase, aroof) == ("plank*3",))
+    eye("자동: 트인 땅은 몸통이 아니다",
+        body_of_auto(ground[0], abase, aroof) is None)
+    eye("자동: 처마 밑 공기는 지붕과 함께 걷힌다",
+        body_of_auto(_col("stone", "plank", "air", "air", "tile"), abase, aroof)
+        == ("plank",))
+
+    # ⑫ 포장이 여러 갈래라 층 점유에 못 미쳐도 트인 땅은 몸통이 아니다
+    pavs = [_col("stone", p) for p in ("a1", "a2", "a3", "a4") for _ in range(3)]
+    tall = [_col("stone", "plank", "plank", "plank", "plank", "tile") for _ in range(4)]
+    world2 = {(i, 1): c for i, c in enumerate(pavs + tall)}
+    yg2, base2, roof2 = detect_boundaries(world2)
+    eye("자동: 갈린 포장도 땅 표면으로 걷힌다",
+        body_of_auto(pavs[0], base2, roof2) is None
+        and body_of_auto(tall[0], base2, roof2) == ("plank*4",))
+
     # ⑥ 상태 문자열은 본체 이름으로 접힌다
     import io
     tsv = "x\ty\tz\tdata\n0\t0\t0\tminecraft:dark_oak_log[axis=y]\n"
@@ -175,6 +283,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("dumps", nargs="*", help="덤프 .tsv (여러 개 = 코퍼스로 합산)")
     ap.add_argument("--top", type=int, default=25)
+    ap.add_argument("--auto", action="store_true",
+                    help="경계를 사전이 아니라 코퍼스 스스로에게 묻는다 (외부 코퍼스용)")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
@@ -183,7 +293,7 @@ def main() -> int:
     if not args.dumps:
         ap.error("덤프를 다오 (또는 --selftest)")
 
-    counter, bodies, terrain = mine([Path(p) for p in args.dumps])
+    counter, bodies, terrain = mine([Path(p) for p in args.dumps], auto=args.auto)
     total = bodies + terrain
     print(f"\n기둥 {total}개 = 몸통 {bodies} + 몸통 없음(지형·지붕뿐·소품) {terrain}")
     print(f"고유 쌓임 {len(counter)}종 — 빈도 상위 {args.top}:\n")
