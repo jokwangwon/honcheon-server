@@ -111,7 +111,11 @@ def render(voxels, table, flip_x=False, flip_z=False, cut=None):
         axis, val = cut[0], int(cut[1:])
         voxels = [v for v in voxels
                   if (v[0] if axis == "x" else v[2] if axis == "z" else v[1]) <= val]
-    occupied = {(x, y, z) for x, y, z, _ in voxels}
+    # ★가리는 것은 풀블록뿐이다 — 계단·반블록·트랩도어를 「막힘」으로 세면
+    #   그 밑·옆의 풀블록이 지워져 지붕 속이 뚫린 것처럼 보인다 (2026-08-28 실증 —
+    #   한옥 지붕 「붕 뜬 공간」 오인의 한 축. air 사건과 같은 병의 다른 얼굴이다)
+    occupied = {(x, y, z) for x, y, z, b in voxels
+                if blockshape.boxes(b) == blockshape.FULL}
 
     mx = max(v[0] for v in voxels)
     mz = max(v[2] for v in voxels)
@@ -222,6 +226,18 @@ def _selftest() -> int:
     im_bare, _ = render([(0, 0, 0, "minecraft:stone")], tbl)
     check("★air 아래 바닥이 <b>그려진다</b> (air 는 칸이 아니다)",
           list(im_air.getdata()) == list(im_bare.getdata()), "")
+
+    # ⑧ ★계단·반블록은 가리지 못한다 — 세 이웃이 계단이어도 풀블록은 그려진다
+    tbl2 = {"stone": {"rgb": [200, 100, 50]}, "oak_stairs": {"rgb": [40, 40, 40]},
+            "oak": {"rgb": [40, 40, 40]}}
+    core = [(0, 0, 0, "minecraft:stone"),
+            (1, 0, 0, "minecraft:oak_stairs[facing=east,half=bottom]"),
+            (0, 1, 0, "minecraft:oak_stairs[facing=east,half=bottom]"),
+            (0, 0, 1, "minecraft:oak_stairs[facing=east,half=bottom]")]
+    im_st, _ = render(core, tbl2)
+    im_no, _ = render(core[1:], tbl2)
+    check("★계단 이웃은 가리지 못한다 (돌이 보인다)",
+          list(im_st.getdata()) != list(im_no.getdata()), "")
 
     print(f"\n3D 미리보기의 눈 — {'통과' if not fails else f'실패 {len(fails)}: {fails}'}")
     return 1 if fails else 0
