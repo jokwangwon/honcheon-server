@@ -289,12 +289,21 @@ public final class BlueprintBuilder {
                 trims(world, bp, up, bp.upperLevel().trims(), place, ox, upBase, oz, n);
                 brackets(world, bp, up, place, ox, upBase, oz, n,
                         rf.upperWall(), Math.max(rf.upperEaveX(), rf.upperEaveZ()));
+                // ★★뜬 껍질 (사용자 채택 2026-08-28 · hanok_layout_analysis §지붕 얹힘) —
+                //   대지붕이 몸통에 앉지 않고 lift 만큼 뜬다. 들면 상층 벽 꼭대기에
+                //   천장을 닫는다 (다락) — 안 닫으면 든 지붕 밑으로 속이 뚫려 보인다.
+                //   lift 0(기본)이면 천장도 안 깔린다 — 기존 도면 무변경.
+                if (rf.upperLift() > 0) {
+                    HwasanCampusBuilder.atticCeiling(world, pad, ox + bx0 + ix, ox + bx1 - ix,
+                            upBase + rf.upperWall(), oz + bz0 + iz, oz + bz1 - iz, tally);
+                }
+                int upRoofY = upBase + rf.upperWall() + rf.upperLift();
                 if (rf.grand()) {
                     HwasanCampusBuilder.sweepRoofGrand(world, pad, ox + bx0 + ix, ox + bx1 - ix,
-                            upBase + rf.upperWall(), oz + bz0 + iz, oz + bz1 - iz,
+                            upRoofY, oz + bz0 + iz, oz + bz1 - iz,
                             rf.upperEaveX(), rf.upperEaveZ(), rf.upperRidge(), rf.roofTiles(), tally);
                 } else {
-                    HwasanCampusBuilder.sweepRoof(world, pad, cx, upBase + rf.upperWall(), cz,
+                    HwasanCampusBuilder.sweepRoof(world, pad, cx, upRoofY, cz,
                             hf - ix, hl - iz, rf.upperEave(), tally);
                 }
                 n.roofs++;
@@ -726,7 +735,9 @@ public final class BlueprintBuilder {
             // 하층 지붕 — 처마 끝에서 용마루까지 (반폭 + 내밈) 오르고 치미가 두 켜 더
             top = Math.max(top, rf.baseY() + Math.max(hf, hl) + rf.eave() + 2);
             if (rf.hasUpper()) {
-                int up = rf.baseY() + 3 + rf.upperWall();
+                // ★뜬 껍질 — 대지붕이 lift 만큼 떠 있으면 비움도 그만큼 높아야 한다.
+                //   (상자와 실물이 별도 손으로 적히면 어긋난다 — 같은 병의 예방)
+                int up = rf.baseY() + 3 + rf.upperWall() + rf.upperLift();
                 int uhf = hf - rf.insetX();
                 int uhl = hl - rf.insetZ();
                 top = Math.max(top, up + Math.max(uhf, uhl) + rf.upperEave() + 2);

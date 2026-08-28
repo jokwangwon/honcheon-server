@@ -3303,6 +3303,35 @@ public final class TerraceForgeSelfTest {
                     clearCall >= 0 && stampLoop >= 0 && clearCall < stampLoop,
                     clearCall + " < " + stampLoop);
 
+            // ══════ ★★뜬 껍질 (사용자 채택 2026-08-28 · 한옥마을 코퍼스 실측) ══════
+            //   hanok_layout_analysis §지붕 얹힘: 지붕은 몸통에 앉지 않고 **껍질로 뜬다**
+            //   (저택 지붕 기둥 59%가 다락 공백 1~8칸). 본전 대지붕이 첫 적용이다.
+            check("★본전 대지붕이 **떠 있다** (upper.lift 2 — 코퍼스 최빈 틈의 작은 쪽)",
+                    hj.roofs().get(0).upperLift() == 2, hj.roofs().get(0).upperLift());
+            java.util.Map<String, Object> gateRaw2 = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_gate.yml")));
+            Blueprint gate2 = Blueprint.of(gateRaw2);
+            check("★★뜬 껍질이 **기본으로 새지 않는다** — 산문(동결)은 lift 0",
+                    gate2.roofs().get(0).upperLift() == 0, gate2.roofs().get(0).upperLift());
+            // ★비움이 **든 지붕을 안다** — lift 를 3 키우면 비우는 높이가 정확히 따라 오른다.
+            //   clearHeight 가 lift 를 모르면 든 지붕 꼭대기가 비움 밖에 남는다 (상자≠실물 병).
+            java.util.Map<String, Object> liftRaw = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/blueprints/hwasan_honjeon.yml")));
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> liftRoof = (java.util.Map<String, Object>)
+                    ((java.util.Map<String, Object>) liftRaw.get("roof")).values().iterator().next();
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> liftUp =
+                    (java.util.Map<String, Object>) liftRoof.get("upper");
+            int clearNow = com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(Blueprint.of(liftRaw));
+            liftUp.put("lift", ((Number) liftUp.getOrDefault("lift", 0)).intValue() + 3);
+            int clearLift = com.honcheon.mvt.forge.BlueprintBuilder.clearHeight(Blueprint.of(liftRaw));
+            check("★★비움이 **든 지붕을 안다** (lift +3 → 비우는 높이 "
+                            + clearNow + " → " + clearLift + ")",
+                    clearLift == clearNow + 3, clearNow + " → " + clearLift);
+
             // ══════ ★★B-196 둘째 진범 — 격자창이 **창인가 구멍인가** (2026-08-05) ══════
             // 트랩도어를 setType 으로 놓으면 half=bottom·open=false 라 **바닥에 눕는다.**
             // 그러면 칸은 살창이 아니라 구멍이고, 벽 너머 바깥 포장이 훤히 비친다

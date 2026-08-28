@@ -784,6 +784,27 @@ public final class HwasanCampusBuilder {
     }
 
     /**
+     * ★★<b>뜬 껍질의 천장</b> (사용자 채택 2026-08-28 · 한옥마을 코퍼스 실측 —
+     * {@code docs/design/hwasan/hanok_layout_analysis.md} §지붕 얹힘 문법).
+     *
+     * <p>코퍼스 실측: 저택 지붕 기둥의 59%가 몸통과 지붕 사이에 <b>다락 공백(1~8칸)</b>을 둔다 —
+     * 지붕은 몸통에 앉지 않고 <b>별도 껍질로 뜬다</b>. 방은 낮은 천장으로 닫고, 그 위 빈 다락
+     * 위로 껍질이 솟는다. <b>벽을 안 높이고 지붕 존재감을 키우는 수단</b>이다.
+     *
+     * <p>이 판은 그 문법의 천장이다: 벽 꼭대기 높이에 몸체 상자를 덮는다.
+     * 안 닫으면 든 지붕 밑으로 속이 훤히 뚫려 보인다. {@link #put} 깔때기를 지나므로
+     * 마른 조성(발자국)과 실물이 같은 식이다.
+     */
+    static void atticCeiling(World world, TerraceForge.Pad pad, int bx0, int bx1, int cy,
+                             int bz0, int bz1, Tally tally) {
+        for (int x = bx0; x <= bx1; x++) {
+            for (int z = bz0; z <= bz1; z++) {
+                put(world, pad, x, cy, z, Material.DARK_OAK_PLANKS, tally);
+            }
+        }
+    }
+
+    /**
      * ★★★REF-3B-Q2 <b>추녀 꼬리</b> (사용자 확정 · Codex 권고 2026-08-10).
      *
      * <p>지붕을 키우지 않고 <b>모서리 끝 윤곽만</b> 세운다. 수평으로 뚝 끊긴 처마 끝이 아니라,

@@ -150,7 +150,7 @@ public final class Blueprint implements Level {
                        String upperInfill, int[] upperInset, String type, int rise, int ridgeCap,
                        String profile, boolean rafters,
                        int eaveX, int eaveZ, int upperEaveX, int upperEaveZ,
-                       int upperRidge, String materialFamily) {
+                       int upperRidge, String materialFamily, int upperLift) {
 
         /**
          * ★★REF-2A — 지붕 <b>외피</b>가 기와 계열인가 (사용자 확정 2026-08-09).
@@ -811,7 +811,11 @@ public final class Blueprint implements Level {
                     // ★REF-1c-B — 대지붕 용마루 길이. 0 이면 없다 (층간 지붕은 상층 몸체가
                     //   가운데를 차지해 중앙 용마루를 만들 구조가 아니다 — 사용자).
                     up == null ? 0 : ((Number) up.getOrDefault("ridge", 0)).intValue(),
-                    String.valueOf(m.getOrDefault("material_family", "cobbled_deepslate"))));
+                    String.valueOf(m.getOrDefault("material_family", "cobbled_deepslate")),
+                    // ★★뜬 껍질 (사용자 채택 2026-08-28 · 한옥마을 코퍼스 실측) — 대지붕을
+                    //   벽 위에 이만큼 <b>띄운다</b> (다락 공백). 안 적으면 0 —
+                    //   산문을 비롯한 기존 도면은 <b>한 칸도 안 바뀐다</b>.
+                    up == null ? 0 : ((Number) up.getOrDefault("lift", 0)).intValue()));
         });
 
         Map<String, String> palette = new LinkedHashMap<>();
