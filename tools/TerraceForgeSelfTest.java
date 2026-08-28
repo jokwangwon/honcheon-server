@@ -3332,6 +3332,23 @@ public final class TerraceForgeSelfTest {
                             + clearNow + " → " + clearLift + ")",
                     clearLift == clearNow + 3, clearNow + " → " + clearLift);
 
+            // ══════ ★★조선풍 물매 (사용자 확정 2026-08-28) — 문턱은 분포 정본에서 ══════
+            //   화북 결정(경사 1.0)을 은퇴시켰다. 눈은 오늘의 값을 안 외운다 —
+            //   corpus_priors.json (한옥마을 실측 p10~p90) 을 읽어 grand 물매가 그 안인지 잰다.
+            //   코퍼스가 자라 분포가 바뀌면 이 눈이 스스로 따라온다.
+            java.util.Map<String, Object> priors = new org.yaml.snakeyaml.Yaml().load(
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of("config/corpus_priors.json")));
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> pitchPr =
+                    (java.util.Map<String, Object>) priors.get("pitch");
+            double p10 = ((Number) pitchPr.get("p10")).doubleValue();
+            double p90 = ((Number) pitchPr.get("p90")).doubleValue();
+            double grandPitch = com.honcheon.mvt.forge.HwasanCampusBuilder.grandRise(8, 8) / 8.0;
+            check("★★grand 물매가 **코퍼스 분포 안**이다 (" + grandPitch + " ∈ "
+                            + p10 + "~" + p90 + " — 분포가 자라면 눈이 따라온다)",
+                    p10 <= grandPitch && grandPitch <= p90, grandPitch + " / " + p10 + "~" + p90);
+
             // ══════ ★★B-196 둘째 진범 — 격자창이 **창인가 구멍인가** (2026-08-05) ══════
             // 트랩도어를 setType 으로 놓으면 half=bottom·open=false 라 **바닥에 눕는다.**
             // 그러면 칸은 살창이 아니라 구멍이고, 벽 너머 바깥 포장이 훤히 비친다

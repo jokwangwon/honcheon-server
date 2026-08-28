@@ -208,6 +208,43 @@ def roof_buildings(cols: dict, yg: int) -> tuple[list[dict], int]:
     return buildings, dropped
 
 
+# ── ④ 처마 내밈 — 지붕이 몸통보다 얼마나 나가는가 ─────────────────────────
+
+def eave_overhangs(cols: dict, bodies: dict, yg: int) -> collections.Counter:
+    """건물(지붕 성분)마다 행·열을 훑어 「지붕 끝 − 몸통 끝」 거리를 센다.
+
+    몸통 = 몸통 있는 기둥(body ≠ None). 행에 몸통이 없으면(지붕 귀퉁이 밖) 안 센다.
+    네 변을 다 모은다 — 향을 모르므로 정·측면은 안 가른다 (분포로만 쓴다).
+    """
+    tops = {}
+    for key, col in cols.items():
+        for y in sorted(col, reverse=True):
+            if col[y] != "air":
+                tops[key] = y
+                break
+    roofed = {k for k, y in tops.items() if y >= yg + ROOF_MIN}
+    solid = {k for k, b in bodies.items() if b is not None}
+    hist: collections.Counter = collections.Counter()
+    for comp in _components4(roofed):
+        if len(comp) < MIN_ROOF_AREA:
+            continue
+        by_z: dict[int, list[int]] = collections.defaultdict(list)
+        by_x: dict[int, list[int]] = collections.defaultdict(list)
+        for x, z in comp:
+            by_z[z].append(x)
+            by_x[x].append(z)
+        for rows, axis in ((by_z, 0), (by_x, 1)):
+            for key2, seq in rows.items():
+                line = [(v, key2) if axis == 0 else (key2, v) for v in seq]
+                bs = [p[axis] for p in line if p in solid]
+                if not bs:
+                    continue
+                rs = [p[axis] for p in line]
+                hist[min(bs) - min(rs)] += 1
+                hist[max(rs) - max(bs)] += 1
+    return hist
+
+
 # ── 실행 ───────────────────────────────────────────────────────────────────
 
 def run(paths: list[Path], auto: bool) -> None:
@@ -251,6 +288,13 @@ def run(paths: list[Path], auto: bool) -> None:
                 print(f"    {b['area']:5d}칸 · {pit} · {row}")
         else:
             print("③ 지붕 — 사전 모드는 지면을 모른다 · --auto 가 서는 상자로 재라")
+
+        if auto:
+            eh = eave_overhangs(cols, bodies, yg)
+            n4 = sum(eh.values())
+            top4 = sorted(eh.items(), key=lambda kv: -kv[1])[:6]
+            print(f"④ 처마 내밈 (지붕 끝−몸통 끝 · 네 변 합산 · 표본 {n4}): "
+                  + " · ".join(f"{d}칸 {c}" for d, c in top4))
 
 
 # ── 눈 (selftest) ──────────────────────────────────────────────────────────
@@ -310,6 +354,20 @@ def selftest() -> int:
         all(a < b for a, b in zip(heights, heights[1:])) and builds[0]["curve"][0][1] == 6)
     eye("피라미드: 물매 ≈ 1.0/칸",
         builds[0]["pitch"] is not None and abs(builds[0]["pitch"] - 1.0) < 0.05)
+
+    # ④ 처마 내밈 — 몸통 5×5 위에 지붕 9×9 → 사방 내밈 2
+    cols4 = {}
+    for x in range(9):
+        for z in range(9):
+            cols4[(x, z)] = {0: "stone", 6: "tile"}
+    for x in range(-2, 11):
+        for z in (-1, 9):
+            cols4[(x, z)] = {0: "stone"}
+            cols4[(z, x)] = {0: "stone"}
+    bodies4 = {(x, z): ("w*4",) for x in range(2, 7) for z in range(2, 7)}
+    eh = eave_overhangs(cols4, bodies4, 0)
+    eye("처마 내밈: 지붕9−몸통5 → 내밈 2 만 나온다",
+        set(eh) == {2} and eh[2] == 20)
 
     print(f"\n눈 {ran[0]}종 · 실패 {len(fails)}")
     return 1 if fails else 0
