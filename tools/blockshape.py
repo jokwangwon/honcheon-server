@@ -179,6 +179,7 @@ _KNOWN_FULL = {
     "stripped_mangrove_log", "jungle_planks", "spruce_planks", "warped_planks",
     "red_nether_bricks", "dirt_path", "grass_block", "dirt", "cobblestone",
     "gravel", "sand", "water", "lava", "cherry_leaves", "cherry_log", "moss_block",
+    "azalea_leaves", "gray_terracotta",     # D3 관목 · 문짝 뒤판 (2026-08-29 확인)
 }
 
 

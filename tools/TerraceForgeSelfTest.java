@@ -3349,6 +3349,26 @@ public final class TerraceForgeSelfTest {
                             + p10 + "~" + p90 + " — 분포가 자라면 눈이 따라온다)",
                     p10 <= grandPitch && grandPitch <= p90, grandPitch + " / " + p10 + "~" + p90);
 
+            // ══════ ★D3 소품 증축 (2026-08-29 · 조선풍 확정 뒤 첫 소품) ══════
+            //   기준 그림의 「잘음」은 소품의 누적이다 — 분홍(매화 쌍) + 초록(관목 줄).
+            java.util.Map<String, Long> propKinds = hj.props().stream()
+                    .collect(java.util.stream.Collectors.groupingBy(
+                            Blueprint.Prop::type, java.util.stream.Collectors.counting()));
+            check("★본전에 매화가 **한 항목**(좌우 한 쌍) · 관목이 **두 줄** 있다",
+                    propKinds.getOrDefault("plum_tree", 0L) == 1
+                            && propKinds.getOrDefault("shrub", 0L) == 2, propKinds.toString());
+            Blueprint.Prop plum = hj.props().stream()
+                    .filter(p -> "plum_tree".equals(p.type())).findFirst().orElseThrow();
+            check("★매화가 좌우 **대칭**이고 중앙축(19) 밖이다 (c5·c33 — 수관 ±2 가 처마등 열 6~33·every4 와 안 겹친다)",
+                    plum.cols()[0] + plum.cols()[1] == 38 && plum.every() > 28 - 1
+                            && plum.cols()[0] < 6, java.util.Arrays.toString(plum.cols()));
+            for (Blueprint.Prop sh : hj.props().stream()
+                    .filter(p -> "shrub".equals(p.type())).toList()) {
+                check("★관목 줄(" + sh.id() + ")이 중앙 계단(17~21)을 비킨다",
+                        sh.cols()[1] < 17 || sh.cols()[0] > 21,
+                        java.util.Arrays.toString(sh.cols()));
+            }
+
             // ══════ ★★B-196 둘째 진범 — 격자창이 **창인가 구멍인가** (2026-08-05) ══════
             // 트랩도어를 setType 으로 놓으면 half=bottom·open=false 라 **바닥에 눕는다.**
             // 그러면 칸은 살창이 아니라 구멍이고, 벽 너머 바깥 포장이 훤히 비친다

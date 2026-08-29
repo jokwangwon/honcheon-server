@@ -313,7 +313,7 @@ public final class BlueprintBuilder {
         // ★★REF-3B — 공포는 <b>지붕 뒤에</b> 놓는다. 앞서 놓으면 서까래가
         //   맨 윗단을 덮어 elaborate 3단이 <b>2단으로만 보였다</b> (실측 0/8).
 
-        props(world, bp, place, ox, oy, oz, n);
+        props(world, pad, bp, place, ox, oy, oz, n, tally);
         n.curveSkipped += tally.curveSkipped;   // 안허리곡이 못 나간 칸 — 장부로 올린다
         brackets(world, bp, bp, place, ox, oy, oz, n,
                 bp.roofs().isEmpty() ? 0 : bp.roofs().get(0).baseY(),
@@ -812,8 +812,10 @@ public final class BlueprintBuilder {
      * 액자·판·글씨가 각각 한 칸이라 <b>글씨 자리가 없다</b>.
      * ★팩 없는 눈에게도 다 보인다: 매단 등 · 남색 깃발 · 벽에 걸린 그림.
      */
-    private static void props(World world, Blueprint bp, Blueprint.Placement place,
-                              int ox, int oy, int oz, Count n) {
+    private static void props(World world, TerraceForge.Pad pad, Blueprint bp,
+                              Blueprint.Placement place,
+                              int ox, int oy, int oz, Count n,
+                              HwasanCampusBuilder.Tally tally) {
         for (Blueprint.Prop pr : bp.props()) {
             int step = pr.every() > 0 ? pr.every() : 1;
             for (int c = pr.cols()[0]; c <= pr.cols()[1]; c += step) {
@@ -886,6 +888,27 @@ public final class BlueprintBuilder {
                         } catch (RuntimeException e) {
                             n.propFailed++;
                         }
+                    }
+                    case "plum_tree" -> {
+                        // ★D3 (2026-08-29) — 기준 그림의 본전 좌우 <b>분홍 포인트</b>.
+                        //   마당 매화(수관 ±2) — 정원 매화(±4)는 처마등과 겹쳐 못 쓴다.
+                        HwasanCampusBuilder.courtPlum(world, pad, x, y - 1, z, tally);
+                        n.mark(x, y, z, "소품:" + pr.id());
+                    }
+                    case "shrub" -> {
+                        // ★D3 — 마당 가장자리 <b>초록 관목</b> (기준 그림의 석축가 군락).
+                        //   잎 두 켜 — 지피가 아니라 덩어리로 읽혀야 한다.
+                        //   ★통나무가 없는 잎은 <b>persistent 를 명시</b>해야 한다 — setType 으로
+                        //     놓으면 몇 틱 뒤 삭아 없어진다 (거리 조건 밖의 잎).
+                        org.bukkit.block.data.BlockData lv =
+                                Bukkit.createBlockData(Material.AZALEA_LEAVES);
+                        if (lv instanceof org.bukkit.block.data.type.Leaves le) {
+                            le.setPersistent(true);
+                        }
+                        world.getBlockAt(x, y, z).setBlockData(lv, false);
+                        world.getBlockAt(x, y + 1, z).setBlockData(lv, false);
+                        n.blocks += 2;
+                        n.mark(x, y, z, "소품:" + pr.id());
                     }
                     default -> throw new IllegalStateException(
                             "도면이 모르는 소품 종류: " + pr.type());

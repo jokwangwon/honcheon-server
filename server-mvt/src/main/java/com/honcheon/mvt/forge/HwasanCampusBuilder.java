@@ -1943,6 +1943,30 @@ public final class HwasanCampusBuilder {
     }
 
     /** 정원 매화 — 벚 원목+벚잎 한 그루 (사용자 표: Cherry = 매화 대체 · 군락이 아니라 점) */
+    /**
+     * ★D3 <b>마당 매화</b> (2026-08-29) — 도면 {@code props} 의 {@code plum_tree}.
+     * 기준 그림(ref/09)의 본전 좌우 분홍 포인트가 이것이다.
+     *
+     * <p>★정원 매화(수관 ±4)의 축소가 아니라 <b>다른 부품</b>이다: 마당은 처마등(y9)·
+     * 월대등·지붕 내밈이 든 좁은 자리라, ±4 수관은 실측에서 처마등과 겹쳤다.
+     * 수관 ±2 · 수고 6 — 월대 곁에 서는 사람 키 두 배의 나무.
+     */
+    static void courtPlum(World world, TerraceForge.Pad pad, int tx, int y, int tz, Tally tally) {
+        for (int dy = 1; dy <= 4; dy++) {
+            put(world, pad, tx, y + dy, tz, Material.CHERRY_LOG, tally);
+        }
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = 4; dy <= 6; dy++) {
+                    if (Math.abs(dx) + Math.abs(dz) + (dy - 4) <= 3
+                            && (dx != 0 || dz != 0 || dy > 4)) {
+                        put(world, pad, tx + dx, y + dy, tz + dz, Material.CHERRY_LEAVES, tally);
+                    }
+                }
+            }
+        }
+    }
+
     private static void gardenPlum(World world, TerraceForge.Pad pad, int tx, int tz, Tally tally) {
         // ★재척도 — 수관 ±4 (지름 9) · 수고 ~10 (실측 12~16 의 정원 소형)
         int y = pad.y();
