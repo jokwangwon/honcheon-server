@@ -1,8 +1,0 @@
--nowarn
--cp
-run/mvt/paper-1.21.11.jar:core/build/libs/core-1.0.0.jar:/home/delangi/.gradle/caches/modules-2/files-2.1/org.yaml/snakeyaml/2.2/3af797a25458550a16bf89acc8e4ab2b7f2bfce0/snakeyaml-2.2.jar
--sourcepath
-server-mvt/src/main/java:core/src/main/java
--d
-/tmp/claude-1000/-home-delangi----project-category-honcheon-server/ef12eabd-a2a0-4c63-9ede-96ab0b5a09e1/scratchpad/tfc
-server-mvt/src/main/java/com/honcheon/mvt/TerrainForge.java

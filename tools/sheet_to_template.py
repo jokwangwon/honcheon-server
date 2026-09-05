@@ -25,7 +25,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SHEET = ROOT / "2db88914-39b2-4e7d-a322-1c6ac80ca6de.jpg"
+SHEET = ROOT / "docs" / "assets" / "2db88914-39b2-4e7d-a322-1c6ac80ca6de.jpg"
 
 # 등록부 잉크 (docs/design/vfx_primitives.md 와 같은 값)
 PALETTE = {

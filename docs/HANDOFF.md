@@ -1542,7 +1542,7 @@ HEAD = bfa1179 언저리 (전부 커밋·빌드 통과) · .orig 4파일은 PG �
 
 ### 파이프라인 지도 (전부 커밋됨)
 
-- `2db88914-….jpg`(루트) = 컨셉 시트 정본 — `tools/sheet_to_template.py` 가 여기서 추출
+- `docs/assets/2db88914-….jpg` = 컨셉 시트 정본 — `tools/sheet_to_template.py` 가 여기서 추출
   → `config/kigi_template_{tps,fps,peak}.json` (관전자/1인칭/대조) → `QiTemplate`(mtime 핫리로드)
   → `QiGeometry.emitTemplate`(관전자=베기면 데칼+먹선 백킹, 시전자=빌보드, y순 스윕 공개)
   → 발동 조건: `kigi_slash.geom_template` 키 (없으면 v5 밴드 — 기존 불변)

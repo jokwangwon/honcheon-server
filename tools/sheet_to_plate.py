@@ -5,7 +5,7 @@
   일러스트(판)는 스윙당 엔티티 1장 — 그림 복잡도가 서버 비용 0 이다 (예산 비교 §대화 기록).
   "일러스트 방식으로 공격 디자인 변경 시도 + 1차 친구 피드백(시트 「저대로」) 반영".
 
-입력: 2db88914-….jpg (루트 — 시트 정본. sheet_to_template.py 와 같은 원본·같은 crop)
+입력: docs/assets/2db88914-….jpg (시트 정본. sheet_to_template.py 와 같은 원본·같은 crop)
 출력: resourcepack/assets/honcheon/textures/item/kigi/sheet_a1..3.png (+모델·아이템 정의)
       sheet_b1..3 = 수평 반전 (B 스윙 — 올려베기 교대용)
       1 = 피크(시트 그대로) · 2 = 빈짐(α55%·먹 30%) · 3 = 소멸(α28%·먹 60%)
@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SHEET = ROOT / "2db88914-39b2-4e7d-a322-1c6ac80ca6de.jpg"
+SHEET = ROOT / "docs" / "assets" / "2db88914-39b2-4e7d-a322-1c6ac80ca6de.jpg"
 PACK = ROOT / "resourcepack"
 TEX = PACK / "assets" / "honcheon" / "textures" / "item"
 MODEL = PACK / "assets" / "honcheon" / "models" / "item"

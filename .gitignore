@@ -132,3 +132,5 @@ run/mvt-test/
 *.mkv
 # 병합 도구가 남긴 백업
 *.orig
+# javac 인자 덤프 — 로컬 절대경로가 담긴 빌드 산물
+javac.*.args
