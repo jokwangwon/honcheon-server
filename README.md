@@ -1,138 +1,73 @@
-# 🗡 혼천 (混天)
+# 혼천 — Minecraft 기반 무협 RPG 오픈월드
 
-> 강호의 균형이 무너진 시대. 플레이어의 행동이 세계에 흔적을 남기는 무협 RPG 프로젝트.
+**Active Development** · AI-assisted world generation · 게임 규칙 / 세계 상태 / 저장 계층
 
-**현재 구조**: `server-mvt`(Paper 플러그인 — 마인크래프트 서버 구현) / `server-bot`(디스코드 봇) / `core`(룰 엔진 14종). 게임 시스템의 수치 설계와 검증 과정은 [`docs/design/`](docs/design/)에 문서로 남아 있다.
+플레이어의 행동이 세계에 누적되는 무협 RPG를 개발합니다.
+게임 규칙과 서버 표현을 분리하고, 개발자가 의도한 건축·지형을 AI와 생성 도구로 만든 뒤 실제 게임 화면과 검증 도구로 반복 확인합니다.
 
-## 📘 프로젝트 개요
+## 지금 확인할 수 있는 범위
 
-혼천은 **텍스트 기반 무협 RPG를 먼저 만들고, 이후 온라인 멀티플레이 MMORPG로 확장**하는 것을 목표로 하는 게임 프로젝트입니다.
+아래의 “구현”은 공개 저장소에 코드와 검증 진입점이 있다는 뜻입니다. 전체 오픈월드 완성이나 상용 운영 완료를 뜻하지 않습니다.
 
-그래픽·실시간 전투·액션 조작부터 만드는 것이 아니라, 텍스트 단계에서 다음 요소들이 실제로 재미있게 작동하는지 먼저 검증합니다.
+| 단계 | 범위 | 근거 |
+| --- | --- | --- |
+| **구현 완료 — 개별 모듈** | 순수 Java 게임 규칙, Paper 테스트 서버 플러그인, Discord 플레이 어댑터 | [core](core/src/main/java/com/honcheon/core/rules), [server-mvt](server-mvt/src/main/java/com/honcheon/mvt), [server-bot](server-bot/src/main/java/com/honcheon/bot) |
+| **구현 완료 — 저장·상태 계층** | 세계 시계·지역·세력 반응, SQLite/PostgreSQL 저장 구현과 스키마 | [세계 시계](server-bot/src/main/java/com/honcheon/bot/WorldClockEngine.java), [세계 저장](server-bot/src/main/java/com/honcheon/bot/WorldStore.java), [DB 스키마](db) |
+| **실험 중** | AI-assisted world generation, 건축 형태·바닥·지형의 분리 생성, 레퍼런스 기반 반복 개선 | [조성 코드](server-mvt/src/main/java/com/honcheon/mvt/forge), [화산 조성 기록](docs/design/hwasan/README.md) |
+| **실험 중** | 접속 중인 봇/클라이언트 확인, 촬영·측정·시각효과 검토 자동화 | [사전 점검](scripts/vfx_preflight.py), [검토 루프](scripts/vfx_loop.py), [촬영 도구](scripts/kigi_cam_test.py) |
+| **설계 완료 — 문서 범위** | 세계 반응·지속 세계의 목표와 규칙을 문서화 | [설계 문서](docs/design) — 이후 수정과 구현 검증이 필요 |
+| **예정** | 전체 월드 콘텐츠 통합 및 장기·다중 플레이 검증 | 개별 모듈의 구현을 전체 완료로 간주하지 않음 |
 
-- 플레이어 자유 행동
-- 지역 상태 변화 / NPC 영속성
-- 소문 전달 / 세력 반응
-- 문파 입문 및 정파·사파·상단·의원·낭인·히든 루트 분기
-- 플레이어 선택이 세계에 남기는 흔적
+## 문제와 내가 한 일
 
-핵심 방향은 **"플레이어가 반드시 강해지는 것만을 목표로 하지 않아도 되는 무협 RPG"**입니다.
+설정이 많은 RPG에서 규칙·서버 표현·세계 상태가 뒤섞이면 한 변경이 어디에 영향을 주는지 확인하기 어렵습니다.
+게임 규칙을 `core`에 두고 Paper와 Discord를 어댑터로 연결하며 저장 계층과 설정 파일을 분리했습니다.
 
-```text
-내 행동이 세계에 흔적을 남기고,
-그 흔적이 다른 플레이어의 세계에도 영향을 주며,
-각 플레이어가 강호 속에서 자기만의 삶을 살아가는 것.
+AI가 생성한 건축·연출은 의도와 게임 안에서 보이는 결과가 다를 수 있습니다.
+건축물과 바닥·지형 생성 단계를 나누고 레퍼런스와 인게임 결과를 비교하면서 조성 코드와 검토 도구를 함께 개선했습니다.
+공개 코드의 시각효과 검토 루프를 **모든 건축물의 생성→봇 접속→시각 평가가 완전 자동화된 기능**으로 확대해 설명하지 않습니다.
+
+## Architecture · 기술 선택
+
+```mermaid
+flowchart TD
+    Config[YAML 규칙·월드 설정] --> Core[core: Java 게임 규칙]
+    Core --> Paper[server-mvt: Paper 어댑터]
+    Core --> Bot[server-bot: Discord 어댑터]
+    Bot --> Domain[domain: 세계·세력 도메인]
+    Bot --> Store[저장 계층]
+    Store --> DB[(SQLite / PostgreSQL)]
+    Forge[건축·지형 조성 도구] --> Paper
+    Paper --> Check[촬영·측정·수동 인게임 검토]
+    Check --> Forge
 ```
 
-여러 플레이어가 각자 다른 채팅방에서 플레이하더라도 **하나의 공유 세계 상태**를 사용합니다.
+- **Java / Paper**: Minecraft 이벤트와 표현을 게임 규칙에서 분리합니다.
+- **YAML**: 규칙·월드 설정을 코드와 별도로 관리하고 패리티 테스트에서 읽습니다.
+- **SQLite / PostgreSQL**: 저장 구현과 전환 검증 코드를 함께 둡니다. 두 DB를 모두 대규모 운영했다는 뜻은 아닙니다.
+- **Python 도구**: 조성 결과·설정·영속화 경계를 검사하고 반복 작업을 자동화합니다.
 
-## 📚 기준 문서
+## 테스트와 실행 조건
 
-| 문서 | 내용 |
-|------|------|
-| [`docs/design/text_rpg_design.md`](docs/design/text_rpg_design.md) | **프로젝트 기준 기획 문서** — 세계 구조, 세력, 성장/무공/판정/소문/세력 반응 시스템, 청하현 첫 10턴 테스트 전체 |
-| [`docs/design/judgment_system.md`](docs/design/judgment_system.md) | 판정 수치 계산식 — 실행력/저항값 공식, 결과 등급, 보정표, 첫 10턴 재계산 검증, 실패 분기 예시 |
-| [`docs/design/character_creation.md`](docs/design/character_creation.md) | 캐릭터 생성 — 능력치 배분 규칙, 성향 7종 프리셋, 시작 신분 8종 |
-| [`docs/design/design_review.md`](docs/design/design_review.md) | 설계 검토 보고서 — 판정 밸런스 정량 검증, 3갈래 분기 스트레스 테스트, 공백 목록(G1~G8), 퀄리티 평가 |
-| [`docs/design/world_reaction_system.md`](docs/design/world_reaction_system.md) | 세계 반응 시스템 — 소문 수치화, 세력 반응 전이표, 지역 상태 변화량, 시간 5구간제, 경로 B 기계 재생 검증 |
-| [`docs/design/gm_modifier_guide.md`](docs/design/gm_modifier_guide.md) | GM 보정 예시집 — 상황 보정 부여 가드레일 (LLM GM 프롬프트 자료) |
-| [`docs/design/fortune_and_wanderer.md`](docs/design/fortune_and_wanderer.md) | 낭인 생태계 + 범인(凡人) 시작 + 기연(奇緣) 시스템 — 일반인이 문파에 닿는 세 경로 |
-| [`docs/design/combat_system.md`](docs/design/combat_system.md) | 전투 상세 규칙 — 라운드/공방/피해/부상/내력/도주/살상 선택, NPC간 약식 규칙, 기존 테스트 재계산 검증 |
-| [`docs/design/minecraft_port_feasibility.md`](docs/design/minecraft_port_feasibility.md) | 마인크래프트 이식 타당성 — 시스템별 이식 지도, 3대 전환(액션 전투/프롤로그 인스턴스/템플릿 서사), 로드맵 |
-| [`docs/design/training_and_time.md`](docs/design/training_and_time.md) | 수련과 시간 — 자동 세계 달력에서의 압축 성장(수련 상태=몽타주), F7 환산표, 수련 중 세계 개입 |
-| [`docs/design/map_generation.md`](docs/design/map_generation.md) | AI 맵 생성 파이프라인 — "맵은 컴파일한다", 4계층(지형/구조/배치/바인딩), AI 역할 분담, 로드맵 |
-| [`docs/design/platform_decision.md`](docs/design/platform_decision.md) | 플랫폼 결정 — Paper 1.21.4 + 서버 리소스팩(바닐라 접속), 자체 모드는 후순위 선택 옵션 |
-| [`docs/design/performance_and_netcode.md`](docs/design/performance_and_netcode.md) | 성능·통신 품질 — 장애 유형 예측 15종(F-목록)과 방어책, 스킬 8단계 파이프라인, 예산·부하 테스트 기준 |
-| [`docs/design/world_capacity.md`](docs/design/world_capacity.md) | 세계 정원 — 동접 상한(기술)과 세계 정원(디자인)의 분리, 평행 강호, 인구-사건 스케일링 |
-| [`docs/design/skill_mechanics.md`](docs/design/skill_mechanics.md) | 스킬 메커니즘 — 히트박스 6유형, 회피 3단 체계, 무적 상한·상성 삼각, 프레임 데이터 예시 6종 |
-| [`docs/design/internal_energy.md`](docs/design/internal_energy.md) | 내공 시스템 v2 — 삼원 구조: 선천진기(수명 100년 균등)·원기(생명력, 역혈=원기 증폭)·후천진기(내력), 두 개의 죽음, 마공 분류 기준 |
-| [`docs/design/dantian_and_simbeop.md`](docs/design/dantian_and_simbeop.md) | 단전 시각화와 심법 — 그릇 모델(용량·순도·결), 축기 방식 6종 분리, 정순 내공의 정화력(배독·도인도기·해주), 겸수·전환 |
-| [`docs/design/balance_audit_cliffs.md`](docs/design/balance_audit_cliffs.md) | 저수치 절벽 감사 — 판정은 정수/자원은 실수/벽은 벽 대원칙, 파생치 전수 처분표 |
-| [`docs/design/ultimate_arts.md`](docs/design/ultimate_arts.md) | 오의 시스템 — 경지 4계단(개안→완성→자재→창작), 발동권(흐름), 오의 격돌, 창작 오의 예산 12점+명명, 전승 오의 4종 |
-| [`docs/design/age_and_lifepath.md`](docs/design/age_and_lifepath.md) | 시작 나이와 인생 진행 v2 — 전원 유년/소년 시작, 집안·발단 사건 생성, 장(章) 단위 시간 도약(사건이 나이를 먹인다) |
-| [`docs/gm/gm_master_prompt.md`](docs/gm/gm_master_prompt.md) | GM 마스터 프롬프트 v2 — 통합 런타임: 생성 절차, 턴 13단계, 전문 절차(전투/독/정화/오의/장 종결/기연), 절대 규칙 |
-| [`docs/playtests/PT-001.md`](docs/playtests/PT-001.md) | 첫 실주사위 플레이 테스트 — 턴 3에서 각본과 분기, 실패 연쇄에서도 진행 유지 검증, 발견 과제 F1~F4 |
-| [`docs/playtests/PT-002.md`](docs/playtests/PT-002.md) / [`PT-003.md`](docs/playtests/PT-003.md) | 유년 시작·발단·시간 도약 검증(F5~F7) / 내공·심법 규칙 스모크 테스트(F8~F10) |
-| [`docs/playtests/PT-004.md`](docs/playtests/PT-004.md) / [`PT-005.md`](docs/playtests/PT-005.md) | 고경지 통합 검증(F11~F12) / 첫 사용자 인터랙티브 세션(F13~F16, 재개 정보 포함) |
-| [`docs/playtests/PT-006.md`](docs/playtests/PT-006.md) | 1막 「생존과 첫 실전」 — 실전 화후·생계 경제 루프 실주사위 검증, 엔진 수치 대조 (F17~F19) |
-| [`docs/playtests/PT-007.md`](docs/playtests/PT-007.md) | 2막 「강호의 관계」 — 동행 협력 판정·협공·NPC 계절 정산(은혜가 문턱을 넘긴다) 검증 (F20~F21) |
-| [`docs/playtests/PT-008.md`](docs/playtests/PT-008.md) | 2인 동시 세션 「북산의 영물」 — 장면 잠금·경쟁 판정·격상의 협력 압력 실측, PvP 판정식 신설 (F22~F23) |
-| [`docs/mvt/admin_test_guide.md`](docs/mvt/admin_test_guide.md) | MVT 관리자 테스트 가이드 — 로컬 Paper 1.21.4 원커맨드 기동(scripts/run_mvt_server.sh), 인게임 배선표·체크리스트 10항 |
-| [`docs/bot/bot_alpha_guide.md`](docs/bot/bot_alpha_guide.md) | 디스코드 봇 알파 가이드 — 토큰 발급·초대·원커맨드 기동(scripts/run_bot.sh), 생성 문답→서장 스레드→판정 턴 루프 검증 8항 |
-| [`docs/design/llm_runtime_policy.md`](docs/design/llm_runtime_policy.md) | LLM 런타임 정책 — 역할별 모델 사다리(렌더러/GM/배치/심사), 지연·비용 예산, 프롬프트 캐싱 설계, 텍스트 생성 7계, 폴백, 실테스트 준비도 |
-| [`docs/design/resourcepack_design.md`](docs/design/resourcepack_design.md) | 리소스팩 디자인 규정 — 무협 수묵 디자인 언어, 글리프 슬롯 등록제(코드포인트 = 계약), 픽셀 스펙(2값 규율), 제작 경로·승격 절차 |
-| [`docs/design/gap_audit.md`](docs/design/gap_audit.md) | 실플레이 공백 감사 — 플레이어 여정 지도(설계/config/엔진/검증 4단 판정), P0~P3 공백 10건(G1~G10)과 권고 순서 |
-| [`docs/design/interface_decision.md`](docs/design/interface_decision.md) | 플레이 인터페이스 결정(G4) — 디스코드 봇: 채널=지역/스레드=장면/버튼=선택지(프리페치 결합), Java 단일 스택, 단계 I~IV |
-| [`docs/design/death_and_legacy.md`](docs/design/death_and_legacy.md) | 죽음과 유산(G3) — 패배 기본값=제압, 사망 확정 파이프, 유산 3갈래, 세계의 기억(피의 장부·favor 승계), 새 캐릭터(혈연/무관) |
-| [`docs/design/persistence.md`](docs/design/persistence.md) | 영속화(G5) — SQLite 단일 작성자·WAL, 3군 11테이블(db/schema.sql), registry UNIQUE = 세계 유일 등록제 집행자 |
-| [`docs/design/quest_generation.md`](docs/design/quest_generation.md) | 의뢰 생성기(G1) — 발생원 4종(지역 임계/NPC 생애/시세/세력), 자정 배치 파이프, 방치=세계 악화 루프, 비독점 수주·검수 |
-| [`docs/design/sect_life.md`](docs/design/sect_life.md) | 문파 생활(G2) — 신분 사다리(외문→진전), 공적 내부 통화, 비급각 4층, 문규 3진·파문(낙인·복권), 사형제, NPC 대칭 |
-| [`docs/design/npc_dialogue_interaction.md`](docs/design/npc_dialogue_interaction.md) | NPC 대화 상호작용 — 3층(잡담/판정/세계), 의도 분류(LLM 경계선), 디스코드 웹훅 페르소나·MC 채팅 대화창, 동시 대화 중재 |
-| [`docs/design/runtime_architecture.md`](docs/design/runtime_architecture.md) | 런타임 아키텍처 — 2단 파이프라인(엔진 계산→LLM 렌더)·프리페치, 실시간 판정=이벤트 훅, 서장·출도·공유 세계 시간축 합류 모델 |
-| [`docs/design/mc_action_mapping.md`](docs/design/mc_action_mapping.md) | MC 행동 전수 매핑 — 바닐라 입력 예산 내 전 행동 구현 (입력·HUD 재해석·판정 12종·전투·내공·생활), 우선순위 P1~P6 |
-| [`docs/design/skill_lifecycle.md`](docs/design/skill_lifecycle.md) | 무공 생애주기 — 습득 4경로(사사/비급/견식/기연), 숙련 5단계, MC 로드아웃 7칸, 사용 규칙 색인 |
-| [`docs/design/npc_combat_and_dialogue.md`](docs/design/npc_combat_and_dialogue.md) | NPC 전투·모션·대화 — 대칭 원칙, AI 등급제, 모션 대체 언어(궤적·예고), 태세 스펙트럼(전투 중 대화), 전의 시스템 |
-| [`docs/design/qi_manifestation.md`](docs/design/qi_manifestation.md) | 기 발현 체계 — 형태 4종(두름/쏨/두름-몸/부림) × 격 사다리(발경<검기<강기<어검<심검), 격 상성 3원칙, 무기 내구·파괴 규칙, 이기어검 상세 |
-| [`docs/design/equipment_system.md`](docs/design/equipment_system.md) | 장비 체계 — 무기 4등급 구체화(캡 +2 원칙), 방어구(갑옷은 회피를 판다)·기물·특수 속성, 애병 성장 3단계, 혈교 마병(힘과 침식) |
-| [`docs/design/stats_and_progression.md`](docs/design/stats_and_progression.md) | 스탯·성장 통합 — 시트 4층 구조, 성장 4원천(실전 가속 수치), 경지 승급 관문표(요건+계기, 실전·사선 마크), cultivation.yml v2 교체 |
-| [`docs/design/economy_system.md`](docs/design/economy_system.md) | 경제 체계 — 화폐 4종(문/냥/금/전표), 전낭 vs 전장(예치), 물가 기준표·수입/싱크, 지역 경제 배율·품목 시세 이벤트, 비매품 원칙 |
-| [`docs/design/npc_lifecycle.md`](docs/design/npc_lifecycle.md) | NPC 일과·생애 — 5구간 스케줄(오버라이드 3종), 계절 정산 생애 사다리(상인/무인/관인의 길), 은혜·원한 장기 회수, 창발 상호작용 부하 통제(접점 판정·밸브 4종) |
-| [`docs/design/party_and_cooperation.md`](docs/design/party_and_cooperation.md) | 동행·협동 — 3층위(동행/결의/사제), 협력 판정 3형(조력/전원형/분담), 협공·합격진, 파티 시계, 분배(무경험치 귀결·버스 차단), 배신 청구 |
-| [`docs/story_summary.md`](docs/story_summary.md) | 세계관 및 메인 스토리 요약 (정파/사파/마교/혈교) |
+Java 21 환경과 의존성 다운로드가 가능한 네트워크가 필요합니다.
 
-## ⚔ 핵심 시스템 요약
-
-- **세력 구조**: 정파(구파일방·오대세가) / 사파·흑도(하오문·녹림·장강수로채·살막) / 사교·금기(마교·혈교) / 관군·관청 / 상단·민간·정보상 — 단순 정사 대립이 아닌 5계열 이해관계 구도
-- **경지**: 삼류 → 이류 → 일류 → 절정 → 초절정 → 화경 → 현경 → 생사경
-- **성장 4축**: 신체 성장 / 무공 성장 / 사회적 성장 / 세계 영향 성장
-- **무공**: 데이터 단위 관리. 무공은 전투 기술이자 신분과 출신을 드러내는 장치 (공개 사용 → 소문 → 세력 반응)
-- **판정**: 위험·저항·숨겨진 정보가 있을 때만. 플레이어 실행력 vs NPC 저항값 비교
-- **시간**: 개인 시간 / 지역 누적 시간 / 세계 공통 시간 3계층
-- **시작 지역**: 청하현 — 묵삼 사건, 북쪽 산길 도적, 열병 소문 3개 초기 사건
-
-## 🏗 저장소 구조
-
-```plaintext
-honcheon-server/
-├── docs/
-│   ├── design/text_rpg_design.md   # ★ 기준 기획 문서
-│   └── story_summary.md            # 세계관 요약
-├── config/
-│   ├── factions.yml                # 5계열 세력 구조 + 세력 반응 단계
-│   ├── cultivation.yml             # 경지 체계 (삼류 ~ 생사경)
-│   ├── skills.yml                  # 무공 카탈로그 (스키마 + 예시)
-│   ├── judgment.yml                # 판정 계산 규칙 (공식, 등급, 보정, 행동 대응표)
-│   ├── player_creation.yml         # 캐릭터 생성 규칙 (배분, 성향 프리셋, 시작 신분)
-│   ├── rumor.yml                   # 소문 생성/전파/왜곡/소멸 + 소문망 6종 + NPC 기억 태그
-│   ├── faction_reaction.yml        # 세력 반응 점수/전이 임계값/입력표/대상 추적
-│   ├── region_state.yml            # 지역 상태 변화량/회복/임계 효과
-│   ├── time.yml                    # 하루 5구간제, 행동 시간 비용, 데드라인 규칙
-│   ├── gm_modifiers.yml            # GM 상황 보정 가드레일
-│   ├── regions/cheongha_hyeon.yml  # 청하현 지역 상태 / 장소 / 초기 사건
-│   └── npcs/cheongha_npcs.yml      # 청하현 주요 NPC + 흑랑/갈호/진운
-├── core/ server-main/ server-hub/ server-faction/
-│   # (레거시) 마인크래프트 플러그인 스캐폴딩 — MMORPG 확장 단계 검토 대상
-├── scripts/ docker/ datapack/ resources/
-│   # (레거시) 마인크래프트 서버 실행 환경
-└── auto_git/                       # AI 커밋 메시지 생성 도구 (requirements.txt는 이 도구용)
+```bash
+./gradlew :core:test
+./gradlew :server-mvt:build :server-bot:build
 ```
 
-> ⚠ **폐기된 설정**: 과거 저장소에 있던 원소 속성 4문파(청운문/화염문/태산문/수월문)와
-> 그에 딸린 스킬 설정은 잘못 생성된 것으로 폐기되었습니다. `core/`, `server-*/` 등
-> 마인크래프트 플러그인 코드에 남아 있는 관련 참조는 MMORPG 확장 단계에서
-> 기준 기획 문서에 맞게 재작성해야 합니다.
+- [core 테스트](core/src/test/java/com/honcheon/core/rules): 판정·성장·세계 반응 등 규칙 검증.
+- [검증 도구](tools): 영속화·월드·조성 관련 Python self-test와 Java SelfTest. 모든 도구가 Gradle test에 자동 포함되는 것은 아닙니다.
+- [GitHub Actions](.github/workflows/launcher.yml)는 **Windows 런처 빌드**를 다룹니다. 서버 전체의 테스트 CI로 소개하지 않습니다.
+- 서버 실행에는 Paper, 월드·리소스팩, 로컬 설정이 추가로 필요합니다. [MVT 실행 스크립트](scripts/run_mvt_server.sh)와 [봇 실행 스크립트](scripts/run_bot.sh)를 확인하세요.
+- 봇/클라이언트·RCON·촬영 환경이 필요한 검증은 실제 실행 환경에서 확인해야 합니다. 이번 README 정리에서 전체 월드 E2E를 재실행하지 않았습니다.
 
-## 🧭 개발 단계
+## AI-assisted development와 현재 한계
 
-1. **텍스트 RPG 단계 (현재)** — 자유 행동, 판정, 소문, 세력 반응, NPC 영속성, 문파 입문 루트가 재미있게 작동하는지 검증. 청하현 첫 10턴 대화형 테스트 완료.
-2. **MMORPG 확장 단계** — 검증된 구조를 서버, DB, UI, 실시간 전투, 지역 시스템, NPC 스케줄, 세력 이벤트로 이전.
+AI agent를 코드·건축 후보 생성과 반복 작업에 활용합니다.
+개발자는 요구사항·설계 판단·코드 리뷰·테스트·실제 화면 검토를 담당합니다.
 
-## 📜 라이선스
+현재는 개별 기능 구현과 월드 조성 실험을 이어가는 단계입니다.
+설계 문서의 범위, 로컬에서만 진행한 실험, 공개 기본 브랜치의 구현은 서로 구분합니다.
 
-MIT License
-
-## 👤 제작
-
-개발 및 기획: [@jokwangwon](https://github.com/jokwangwon) (Solo Dev)
-
-> "혼돈의 하늘 아래, 누가 패왕이 될 것인가."
+[전체 문서](docs) · [설정](config) · [포트폴리오](https://gwangwon.dev)
